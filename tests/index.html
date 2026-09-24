@@ -75,6 +75,11 @@ const GRID = [
   ['今天週四', '', '', '', '', ''],
 ];
 const TODAY = new Date(2026, 8, 24, 10);
+// #35 測試用的假 localStorage：測試頁跟網站同網域，不能動到志工手機上真正的「今天已溜」
+function fakeStorage() {
+  const data = {};
+  return { getItem: k => (k in data ? data[k] : null), setItem: (k, v) => { data[k] = String(v); } };
+}
 let INDEX_HTML = ''; // index.html 原始碼，#10 唯讀檢查用（其他測試會替換 fetch，所以先存下來）
 let APP_JS = '';     // js/app.js 原始碼（#30 拆檔後程式在這裡）
 let MANIFEST = {};    // manifest.webmanifest，#33 主畫面名稱檢查用
@@ -355,14 +360,18 @@ function runTests() {
       if (doc.querySelector('form')) throw new Error('頁面不應有表單');
       const symbols = [...doc.querySelectorAll('symbol')].map(el => el.id).join(' ');
       // #28 起卡片可以點開詳細資訊，所以允許右箭頭（chevron）；編輯、勾選圖示仍不行
+      // （#35「今天已溜」的打勾圖示叫 i-tick，只記在這支手機，不是編輯試算表）
       if (/edit|pencil|pen|check/i.test(symbols)) throw new Error(`不應有編輯或勾選圖示：${symbols}`);
     }),
     check('#10 唯讀：程式只有讀取，沒有寫入試算表的呼叫', () => {
       const code = APP_JS;
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
-        /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|localStorage|indexedDB/];
+        /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
       eq(hits, [], '寫入相關字眼：');
+      // #35 起「今天已溜」存在這支手機的 localStorage，只准用 WALKED_KEY 這一個欄位
+      eq([...code.matchAll(/\blocalStorage\s*[.[]|window\.localStorage/g)].length, 1, 'localStorage 只在一個地方取用：');
+      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKED_KEY', 'WALKED_KEY'], '只讀寫 WALKED_KEY：');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
       eq(urls.length, 2, 'fetch 呼叫數：');
       if (!urls.every(u => u === 'url' || u.startsWith('`dogs/'))) throw new Error(`只能讀 gviz 與 dogs/：${urls.join('、')}`);
@@ -523,7 +532,7 @@ function runTests() {
         eq(document.querySelectorAll('#main .card').length, 1, '溜狗表有狗卡：');
         tabs()[1].click();
         eq([activeTab, active()], ['today', ['today']], '點今天已溜：');
-        eq(document.querySelectorAll('#main .card').length, 0, '今天已溜目前是空殼：');
+        eq(document.querySelectorAll('#main .card').length, 0, '今天已溜沒有紀錄時是空的：');
         tabs()[2].click();
         eq([activeTab, active()], ['info', ['info']], '點相關資訊：');
         if (!document.getElementById('main').textContent.includes('編輯中')) throw new Error('相關資訊要顯示編輯中');
@@ -570,6 +579,111 @@ function runTests() {
         eq([activeTab, searchQuery], ['today', '測試'], '搜尋中也能滑，搜尋字保留：');
       } finally {
         [allDogs, groupMap, detailMap, activeTab, searchQuery] = saved;
+        render();
+      }
+    }),
+    // ── #35 今天已溜（只存在這支手機的 localStorage） ──
+    check('#35 紀錄以本地日期＋編號存；重新整理還在，隔天自動視為未勾選', () => {
+      const store = fakeStorage();
+      const saved = [walkedStorage, walkedMemory];
+      try {
+        walkedStorage = store; walkedMemory = null;
+        const day1 = new Date(2026, 8, 24, 23, 50), day2 = new Date(2026, 8, 25, 0, 5);
+        eq(localDateKey(day1), '2026-09-24', '本地日期：');
+        saveWalkedIds(['2024032902', '2'], day1);
+        eq(JSON.parse(store.getItem(WALKED_KEY)), { date: '2026-09-24', ids: ['2024032902', '2'] }, '存的內容：');
+        walkedMemory = null; // 模擬重新整理：只剩 localStorage
+        eq(loadWalkedIds(new Date(2026, 8, 24, 8)), ['2024032902', '2'], '同一天重新整理：');
+        eq(loadWalkedIds(day2), [], '隔天：');
+        eq(JSON.parse(store.getItem(WALKED_KEY)).date, '2026-09-24', '前一天的紀錄不用刪：');
+        store.setItem(WALKED_KEY, '壞掉的資料');
+        eq(loadWalkedIds(day1), [], '資料壞掉當成沒有紀錄：');
+        walkedStorage = { getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } };
+        saveWalkedIds(['9'], day1);
+        eq(loadWalkedIds(day1), ['9'], '無痕模式存不進去時，這次開著期間仍記得：');
+      } finally { [walkedStorage, walkedMemory] = saved; }
+    }),
+    check('#35 溜狗表點「溜了」加入今天已溜並從溜狗表移出，不開詳細資訊；可復原', () => {
+      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory];
+      const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.firstChild.textContent);
+      const counts = () => [...document.querySelectorAll('#tabs .n')].map(n => n.textContent);
+      try {
+        walkedStorage = fakeStorage(); walkedMemory = null;
+        allDogs = [
+          { name: '測試甲', cage: 'A01', id: '1', walkedDate: new Date(2026, 8, 1), walker: '', note: '' },
+          { name: '測試乙', cage: 'A02', id: '2', walkedDate: new Date(2026, 8, 10), walker: '', note: '' },
+          { name: '測試丙', cage: 'A03', id: '', walkedDate: null, walker: '', note: '' },
+        ];
+        groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = '';
+        render();
+        eq(document.querySelectorAll('#main [data-walk="add"]').length, 2, '有編號的狗才有「溜了」：');
+        document.querySelector('#main .card[data-dog="0"] [data-walk="add"]').click();
+        eq(document.getElementById('detailBackdrop').hidden, true, '按鈕不開詳細資訊：');
+        eq(names(), ['測試丙', '測試乙'], '溜狗表移出測試甲：');
+        eq(counts(), ['2', '1', '編輯中'], '分類數字：');
+        eq(loadWalkedIds(), ['1'], '存進紀錄：');
+        const toast = document.getElementById('toast');
+        eq(toast.hidden, false, '跳提示條：');
+        if (!toast.textContent.includes('測試甲')) throw new Error('提示條要寫狗名');
+        toast.querySelector('.toast-undo').click();
+        eq([names(), loadWalkedIds(), toast.hidden], [['測試丙', '測試甲', '測試乙'], [], true], '復原：');
+        document.querySelector('#main .card[data-dog="1"] [data-walk="add"]').click();
+        document.querySelector('#main .card[data-dog="0"] [data-walk="add"]').click();
+        switchTab('today');
+        eq(names(), ['測試甲', '測試乙'], '今天已溜最近記的在上面：');
+        if (!document.getElementById('main').textContent.includes('這支手機')) throw new Error('今天已溜要寫明是這支手機的紀錄');
+        eq(document.querySelectorAll('#main [data-walk="back"]').length, 2, '今天已溜是「移回」：');
+        document.querySelector('#main .card[data-dog="1"] [data-walk="back"]').click();
+        eq(names(), ['測試甲'], '移回後離開今天已溜：');
+        switchTab('walk');
+        eq(names(), ['測試丙', '測試乙'], '移回後回到溜狗表原本的位置：');
+        document.querySelector('#main .card[data-dog="1"] .name').click();
+        eq(document.getElementById('detailBackdrop').hidden, false, '點卡片其他地方照舊開詳細資訊：');
+      } finally {
+        hideDetail(); hideToast();
+        if (history.state && history.state.bqDetail) history.replaceState(null, '');
+        [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
+        render();
+      }
+    }),
+    check('#35 可以一起溜：勾選後按一次，連同這隻一起記；已溜的不顯示圓圈', () => {
+      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory];
+      try {
+        walkedStorage = fakeStorage(); walkedMemory = null;
+        allDogs = [
+          { name: '測試甲', cage: 'A01', id: '1', walkedDate: null, walker: '', note: '' },
+          { name: '測試乙', cage: 'A02', id: '2', walkedDate: null, walker: '', note: '' },
+          { name: '測試丙', cage: 'A03', id: '3', walkedDate: null, walker: '', note: '' },
+          { name: '測試丁', cage: 'A04', id: '', walkedDate: null, walker: '', note: '' },
+        ];
+        groupMap = { '測試甲': new Set(['測試乙', '測試丙', '測試丁']) }; detailMap = {};
+        activeTab = 'walk'; searchQuery = '';
+        render();
+        showDetail(allDogs[0]);
+        const box = document.getElementById('detail');
+        eq(box.querySelectorAll('.pick').length, 2, '有編號的才有勾選圓圈：');
+        eq(box.querySelector('#groupWalk').textContent.trim(), '測試甲 溜了', '沒勾選時只記這隻：');
+        box.querySelector('.pick[data-pick="2"]').click();
+        eq(box.querySelector('.pick[data-pick="2"]').classList.contains('on'), true, '勾選：');
+        eq(box.querySelector('#groupWalk').textContent.trim(), '測試甲 和勾選的 1 隻都溜了', '按鈕文字：');
+        box.querySelector('#groupWalk').click();
+        eq(loadWalkedIds(), ['2', '1'], '一次記兩隻：');
+        eq(document.getElementById('detailBackdrop').hidden, false, '記完詳細資訊還開著：');
+        eq(box.querySelectorAll('.pick').length, 1, '已溜的不再顯示圓圈：');
+        eq(box.querySelectorAll('.walked-tag').length, 1, '已溜的標「今天已溜」：');
+        eq(!!box.querySelector('#groupWalk'), false, '這隻已溜又沒勾選時不顯示按鈕：');
+        box.querySelector('.pick[data-pick="3"]').click();
+        eq(box.querySelector('#groupWalk').textContent.trim(), '勾選的 1 隻都溜了', '這隻已溜，只記勾選的：');
+        box.querySelector('#groupWalk').click();
+        eq(loadWalkedIds(), ['3', '2', '1'], '記下丙：');
+        document.getElementById('toast').querySelector('.toast-undo').click();
+        eq(loadWalkedIds(), ['2', '1'], '復原：');
+        box.querySelector('.buddy').click();
+        eq(document.getElementById('detailName').firstChild.textContent, '測試乙', '輕點照片照舊換看那隻：');
+      } finally {
+        hideDetail(); hideToast();
+        if (history.state && history.state.bqDetail) history.replaceState(null, '');
+        [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
         render();
       }
     }),
@@ -661,6 +775,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest'].map(u =
     const s = document.createElement('script');
     s.textContent = js;
     document.body.appendChild(s);
+    walkedStorage = fakeStorage(); // 其他測試也不碰真正的 localStorage
     return runTests();
   })
   .then(show)

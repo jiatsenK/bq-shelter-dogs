@@ -89,7 +89,7 @@ header.app {
 .tabs button.active .t { font-weight: 700; }
 .tabs button.active .n { opacity: 0.9; }
 
-main { padding: 14px 14px 50px; max-width: 480px; margin: 0 auto; }
+main { padding: 14px 14px 90px; max-width: 480px; margin: 0 auto; }
 /* 左右滑動換分類由 js/app.js 處理，瀏覽器只負責上下捲動；內容少時下方空白處也要能滑 */
 main { touch-action: pan-y; min-height: calc(100vh - 160px); }
 /* 試算表文字（備註、籠位、犬名、搜尋字）可能是一長串沒有空白的英數或網址，一律可以折行，不撐破版面 */
@@ -275,3 +275,70 @@ html.detail-open { overflow: hidden; }
 }
 .buddy .thumb { width: 64px; height: 64px; }
 .buddy .bname { font-size: 13.5px; font-weight: 700; line-height: 1.3; text-align: center; word-break: break-all; }
+
+/* 今天已溜（#35）：狗卡右側「溜了」／「移回」按鈕。按鈕夠大（48px）方便戴手套或單手按 */
+.walk-btn {
+  flex-shrink: 0;
+  width: 48px; height: 48px; border-radius: 12px;
+  border: 2px solid var(--green-text); background: var(--surface); color: var(--green-text);
+  font-family: inherit; font-size: 12.5px; font-weight: 700; line-height: 1.1;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+  padding: 0; margin-right: 2px; cursor: pointer;
+}
+.walk-btn .icon { font-size: 17px; }
+.walk-btn:active { background: var(--green-bg); }
+.walk-btn.back { border-color: var(--amber-text); color: var(--amber-text); font-size: 13.5px; }
+.walk-btn.back:active { background: var(--amber-bg); }
+.walk-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* 按鈕佔了位置，上次遛狗欄縮一點，犬名才有空間 */
+.card:has(.walk-btn) .last { width: 72px; }
+
+/* 詳細資訊「可以一起溜」：照片右上角勾選圓圈，下方按鈕一次記 */
+.buddy-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.buddy-tile .pick {
+  position: absolute; top: -6px; right: -2px;
+  width: 30px; height: 30px; border-radius: 50%;
+  border: 2px solid var(--ink-soft); background: var(--surface); color: transparent;
+  display: flex; align-items: center; justify-content: center;
+  padding: 0; font-size: 17px; cursor: pointer;
+  box-shadow: 0 1px 3px rgba(30, 42, 68, 0.15);
+}
+.buddy-tile .pick.on { background: var(--green-text); border-color: var(--green-text); color: #fff; }
+.buddy-tile .pick:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.walked-tag {
+  font-size: 11.5px; font-weight: 700; color: var(--green-text);
+  background: var(--green-bg); border-radius: 99px; padding: 0 7px;
+}
+.group-walk {
+  width: 100%; margin-top: 12px;
+  border: none; border-radius: 14px;
+  background: var(--green-text); color: #fff;
+  font-family: inherit; font-size: 16px; font-weight: 700;
+  padding: 12px; display: flex; align-items: center; justify-content: center; gap: 6px;
+  cursor: pointer;
+}
+.group-walk:active { filter: brightness(0.92); }
+.self-walked {
+  margin-top: 10px; display: flex; align-items: center; gap: 6px;
+  font-size: 14px; font-weight: 700; color: var(--green-text);
+}
+
+/* 記下／移回後的底部提示條，可按「復原」 */
+.toast {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 30;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  width: min(448px, calc(100% - 32px));
+  background: var(--ink); color: #fff;
+  border-radius: 14px; padding: 10px 10px 10px 16px;
+  display: flex; align-items: center; gap: 10px;
+  font-size: 15px; line-height: 1.4;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+.toast[hidden] { display: none; }
+.toast-text { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.toast-undo {
+  flex-shrink: 0; border: none; background: none;
+  color: #8FC0FF; font-family: inherit; font-size: 15px; font-weight: 700;
+  padding: 8px 10px; cursor: pointer;
+}
+.toast-undo[hidden] { display: none; }
