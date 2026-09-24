@@ -1,0 +1,52 @@
+# 定期把 Google 試算表同步成 data/dogs.json（#31）
+# - 每天台灣時間 9:00、13:00、21:00 各一次（GitHub 排程可能延遲幾分鐘）；也可以在 Actions 頁選「同步試算表」→「Run workflow」手動跑
+# - 資料有變才提交；讀取失敗時這次執行會顯示失敗，data/dogs.json 保留上一次成功的內容
+# - 只讀試算表，不寫入試算表
+name: 同步試算表
+
+on:
+  schedule:
+    # cron 用 UTC：台灣 9:00／13:00／21:00 ＝ UTC 1:00／5:00／13:00
+    - cron: '0 1,5,13 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+# 同一時間只跑一次，避免兩次同步同時推送
+concurrency:
+  group: sync-sheet
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: Asia/Taipei
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 讀取試算表、產生 data/dogs.json
+        run: node scripts/sync-sheet.mjs
+
+      - name: 資料有變才提交
+        run: |
+          git add data/dogs.json
+          if git diff --cached --quiet; then
+            echo "data/dogs.json 沒有變動，不提交。"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "同步試算表：更新 data/dogs.json"
+          # 期間有人推了別的提交就先接上再推，最多試三次
+          for i in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            sleep $((i * 5))
+          done
+          exit 1
