@@ -511,6 +511,7 @@ function groupLine(name) {
 function statusBadge(dog, today) {
   const s = computeStatus(dog, today);
   if (s.kind === 'dated') {
+    if (s.days < 0) return `<span class="badge muted">日期異常</span>`;
     const label = s.days === 0 ? '今天' : `${s.days} 天前`;
     return `<span class="badge ${s.level}">${label}</span>`;
   }
@@ -580,6 +581,15 @@ function render() {
   }
 }
 
+// 近期已遛：0～RECENT_DAYS 天內遛過的狗，由近到遠。未來日期（填錯）不列入。
+function recentDogs(dogs, today) {
+  return dogs
+    .map(d => ({ d, s: computeStatus(d, today) }))
+    .filter(x => x.s.kind === 'dated' && x.s.days >= 0 && x.s.days <= RECENT_DAYS)
+    .sort((a, b) => a.s.days - b.s.days)
+    .map(x => x.d);
+}
+
 function renderMain() {
   const today = new Date();
   document.getElementById('dateLabel').textContent =
@@ -599,9 +609,7 @@ function renderMain() {
     return key(sb) - key(sa);
   });
 
-  const recentList = normalList
-    .filter(d => { const s = computeStatus(d, today); return s.kind === 'dated' && s.days <= RECENT_DAYS; })
-    .sort((a, b) => computeStatus(a, today).days - computeStatus(b, today).days);
+  const recentList = recentDogs(normalList, today);
 
   buildTabs(dueList.length, recentList.length, specialList.length);
 
