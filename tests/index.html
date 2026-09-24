@@ -455,6 +455,50 @@ function runTests() {
       }
     }),
     // ── #35 今天已溜（只存在這支手機的 localStorage） ──
+    check('儲存空間滿但仍可讀取舊紀錄：新增、移回與隔日判斷仍使用最新記憶體', () => {
+      const saved = [walkedStorage, walkedMemory];
+      try {
+        const day = new Date(2026, 8, 24);
+        walkedMemory = null;
+        walkedStorage = {
+          getItem: () => JSON.stringify({ date: '2026-09-24', ids: ['old'] }),
+          setItem() { throw new Error('QuotaExceededError'); },
+        };
+        eq(loadWalkedIds(day), ['old']);
+        saveWalkedIds(['new', 'old'], day);
+        eq(loadWalkedIds(day), ['new', 'old']);
+        saveWalkedIds(['new'], day);
+        eq(loadWalkedIds(day), ['new']);
+        eq(loadWalkedIds(new Date(2026, 8, 25)), []);
+      } finally { [walkedStorage, walkedMemory] = saved; }
+    }),
+    check('詳細視窗 Tab 不跑到背景，重畫保留焦點，關閉回到原狗卡', () => {
+      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory];
+      try {
+        hideToast();
+        allDogs = [{ id: 'focus-test', name: '焦點測試', cage: 'A01', note: '', walker: '', walkedDate: null }];
+        groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = '';
+        walkedStorage = fakeStorage(); walkedMemory = null;
+        render();
+        const card = document.querySelector('#main .card');
+        card.focus();
+        showDetail(allDogs[0]);
+        const key = shiftKey => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true }));
+        document.getElementById('groupWalk').focus(); key(false);
+        eq(document.activeElement.id, 'detailClose');
+        key(true);
+        eq(document.activeElement.id, 'groupWalk');
+        renderDetail();
+        eq(document.activeElement.id, 'groupWalk');
+        hideDetail();
+        eq(document.activeElement === card, true);
+      } finally {
+        hideDetail();
+        history.replaceState(null, '');
+        [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
+        render();
+      }
+    }),
     check('#35 紀錄以本地日期＋編號存；重新整理還在，隔天自動視為未勾選', () => {
       const store = fakeStorage();
       const saved = [walkedStorage, walkedMemory];
