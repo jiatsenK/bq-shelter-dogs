@@ -195,6 +195,39 @@ function runTests() {
       eq(groupLine('金寶'), '', '金寶的同組只有離所的狗：');
       eq(groupLine('沒分組'), '', '沒有分組的狗：');
     }),
+    check('勿溜：異體字也算，住院不算', () => {
+      eq(specialFlag('勿遛，散步時勿溜太久'), { keywords: ['勿溜'], terms: ['勿溜', '勿遛'] });
+      eq(specialFlag('住院區，胸背帶放住院'), null);
+      eq(specialFlag('親人，好牽'), null);
+      eq(specialFlag(''), null);
+    }),
+    check('勿溜：備註裡每個命中的字眼都標出來，其他文字照樣跳脫', () => {
+      const note = '勿溜<先問>，下午再勿遛';
+      eq(highlightNote(note, specialFlag(note).terms), '<mark>勿溜</mark>&lt;先問&gt;，下午再<mark>勿遛</mark>');
+    }),
+    check('勿溜的狗仍留在待巡房與近期已遛，卡片有天數和紅色驚嘆號；沒有特殊狀況分頁', () => {
+      allDogs = [
+        { cage: '住院區', id: '1', name: '測試甲', walkedDate: new Date(), walker: '', note: '住院' },
+        { cage: 'A02', id: '2', name: '測試乙', walkedDate: new Date(), walker: '', note: '' },
+        { cage: 'A03', id: '3', name: '測試丙', walkedDate: new Date(), walker: '', note: '勿遛' },
+      ];
+      groupMap = { '測試丙': new Set(['測試乙']) }; detailMap = { '3': '個性親人' }; cages = ['住院區', 'A02', 'A03'];
+      searchQuery = ''; activeCage = null;
+      const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent).sort();
+      activeTab = 'due'; renderMain(); eq(names(), ['測試甲', '測試乙', '測試丙'].sort(), '待巡房：');
+      activeTab = 'recent'; renderMain(); eq(names(), ['測試甲', '測試乙', '測試丙'].sort(), '近期已遛：');
+      eq([...document.querySelectorAll('#tabs button')].map(b => b.dataset.tab), ['due', 'recent', 'cage'], '分頁：');
+      const cards = [...document.querySelectorAll('#main .card')];
+      const card = n => cards.find(c => c.querySelector('.name').textContent === n);
+      if (card('測試甲').querySelector('.badge.red')) throw new Error('住院區的測試甲不該有驚嘆號');
+      const hei = card('測試丙');
+      if (!hei.querySelector('.badge.red') || !hei.querySelector('.badge.sage')) throw new Error('測試丙要有天數和紅色驚嘆號');
+      eq(hei.querySelector('.note .text').innerHTML, '<mark>勿遛</mark>', '備註：');
+      if (!hei.querySelector('.group-inline') || !hei.querySelector('.intro')) throw new Error('卡片少了同籠或介紹');
+      searchQuery = '測試丙'; renderMain();
+      if (!document.querySelector('#main .card .badge.red')) throw new Error('搜尋結果沒有驚嘆號');
+      searchQuery = '';
+    }),
   ]);
 }
 
