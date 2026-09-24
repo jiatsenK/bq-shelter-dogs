@@ -79,6 +79,8 @@ header.app {
 .tabs button.active .n { opacity: 0.9; }
 
 main { padding: 14px 14px 50px; max-width: 480px; margin: 0 auto; }
+/* 左右滑動換分類由 js/app.js 處理，瀏覽器只負責上下捲動；內容少時下方空白處也要能滑 */
+main { touch-action: pan-y; min-height: calc(100vh - 160px); }
 /* 試算表文字（備註、籠位、犬名、搜尋字）可能是一長串沒有空白的英數或網址，一律可以折行，不撐破版面 */
 main { overflow-wrap: anywhere; }
 
@@ -120,34 +122,6 @@ main { overflow-wrap: anywhere; }
   cursor: pointer;
 }
 .alert-box .icon { font-size: 18px; margin-top: 2px; }
-
-.cage-grid { display: flex; flex-wrap: wrap; gap: 8px; }
-.cage-chip {
-  border: none;
-  background: var(--surface);
-  color: var(--ink);
-  font-family: inherit;
-  font-size: 15px;
-  font-weight: 700;
-  padding: 12px 16px;
-  border-radius: 14px;
-  box-shadow: var(--shadow-card);
-  cursor: pointer;
-}
-.cage-chip .n {
-  margin-left: 6px;
-  font-size: 13px; font-weight: 500;
-  color: var(--ink-soft);
-}
-.cage-chip.empty { background: var(--surface-soft); color: var(--muted-text); box-shadow: none; }
-.cage-back {
-  display: inline-flex; align-items: center; gap: 4px;
-  background: none; border: none;
-  color: var(--primary);
-  font-family: inherit; font-size: 15px; font-weight: 700;
-  padding: 4px 0 12px;
-  cursor: pointer;
-}
 
 /* 卡片：手機一個畫面約 6～8 隻（#28，版型照 K 給的參考圖）。
    一列：照片｜犬名＋編號｜籠位｜上次遛狗｜箭頭；備註命中警示關鍵字時多一行原文 */
