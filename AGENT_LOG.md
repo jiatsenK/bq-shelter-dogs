@@ -98,3 +98,11 @@
 - 驗證：Chromium 跑 tests/index.html 46 項全過（新增 1 項）；用 repo 內 dogs.json 在 390px 寬截圖，121 隻都有按鈕。
 - 追加（K 指示）：狗卡按鈕「溜了」改成「已遛」並拿掉勾勾圖示，字級 14px。
 - PR：#45（分支 `claude/project-thread-cm2hg0`）。
+
+## [2026-09-25] ChatGPT | 補齊 97 隻狗卡性別並接上前端顯示
+- 修正原因：前一輪 OCR 漏寫狗卡右上角的「男生／女生」。
+- 重新讀取 97 張狗卡圖片右上角性別標示，依圖片原文補入各 `dogs/{編號}.md` frontmatter 的 `sex: male/female`。
+- 依原批次規則分成 10 批提交，每批最多 10 隻。
+- 同步修改 `js/app.js`：讀取狗卡 Markdown 時解析 `sex`，既有 `sexMark()` 即可在狗卡顯示 ♂／♀。
+- 不修改 Google Sheet；性別以原始狗卡圖片為來源。
+- 分支：`fix-dog-sex-20260925`。
