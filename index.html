@@ -149,6 +149,12 @@
     box-shadow: var(--shadow-card);
     cursor: pointer;
   }
+  .cage-chip .n {
+    margin-left: 6px;
+    font-size: 13px; font-weight: 500;
+    color: var(--ink-soft);
+  }
+  .cage-chip.empty { background: var(--surface-soft); color: var(--muted-text); box-shadow: none; }
   .cage-back {
     display: inline-flex; align-items: center; gap: 4px;
     background: none; border: none;
@@ -400,7 +406,7 @@ function findHeaderRow(table) {
 // table 是用 headers=表頭列數 重讀的結果：表頭在欄位標題裡，rows 全是表頭以下的資料。
 // 這樣 gviz 推斷欄位型別時不會被表頭文字干擾，「編號」「遛狗日期」的表頭才不會被吃掉。
 // headerTexts 是第一次讀到的表頭列文字，欄位標題缺漏時拿來補。
-function parseMainList(table, headerTexts = [], today = new Date()) {
+function mainColumnMap(table, headerTexts = []) {
   const labels = (table.cols || []).map(c => String((c && c.label) || '').trim());
   const colMap = findColumns(labels);
   const fallback = findColumns(headerTexts);
@@ -409,6 +415,11 @@ function parseMainList(table, headerTexts = [], today = new Date()) {
   }
   const missing = Object.keys(MAIN_COLUMNS).filter(k => colMap[k] == null).map(k => `「${MAIN_COLUMNS[k]}」`);
   if (missing.length) throw new Error(`主清單找不到${missing.join('')}欄，請確認表頭沒有被改掉。`);
+  return colMap;
+}
+
+function parseMainList(table, headerTexts = [], today = new Date()) {
+  const colMap = mainColumnMap(table, headerTexts);
   const get = (c, key) => c[colMap[key]];
   const dogs = [];
   for (const r of table.rows || []) {
@@ -429,6 +440,26 @@ function parseMainList(table, headerTexts = [], today = new Date()) {
   return dogs;
 }
 
+// 籠位清單：主清單「籠位」欄去重，沒有狗的空籠也列出（例：舊A01）。
+// 表尾的提示文字（例：「今天週四」）籠位欄是空的，自然不會算進來。
+function parseCages(table, headerTexts = []) {
+  const idx = mainColumnMap(table, headerTexts).cage;
+  const set = new Set();
+  for (const r of table.rows || []) {
+    const cage = cellText((r.c || [])[idx]);
+    if (cage && cage.replace(/\s+/g, '') !== MAIN_COLUMNS.cage) set.add(cage);
+  }
+  return sortCages([...set]);
+}
+
+// 籠位排序：英數開頭的（A01、B12、C區41）在前，中文開頭的（母幼A、住院區、新A01、舊B02）集中在後；
+// 數字照大小排，A2 排在 A10 前面
+const CAGE_COLLATOR = new Intl.Collator('zh-Hant-TW', { numeric: true, sensitivity: 'base' });
+function sortCages(list) {
+  const group = c => /^[0-9A-Za-z]/.test(c) ? 0 : 1;
+  return list.slice().sort((a, b) => group(a) - group(b) || CAGE_COLLATOR.compare(a, b));
+}
+
 // 主清單分兩次讀：先找出表頭在第幾列，再指定表頭列數重讀
 async function loadMainList() {
   const raw = await fetchGviz('主清單', 0);
@@ -436,7 +467,9 @@ async function loadMainList() {
   if (headerIdx === -1) throw new Error('主清單裡找不到含「犬名」的表頭列，請確認分頁名稱與欄位沒有被改掉。');
   const headerTexts = ((raw.rows[headerIdx] || {}).c || []).map(cellText);
   const table = await fetchGviz('主清單', headerIdx + 1);
-  return parseMainList(table, headerTexts);
+  const dogs = parseMainList(table, headerTexts);
+  dogs.cages = parseCages(table, headerTexts); // 含空籠的籠位清單，init 取用
+  return dogs;
 }
 
 // 犬名比對時忽略空白（含全形空白），例：常遛狗群寫「小 白」也對得到主清單的「小白」
@@ -695,16 +728,21 @@ function renderMain() {
       (recentList.map(d => dogCard(d, today)).join('') || `<div class="status-msg">最近沒有已遛紀錄</div>`);
   } else if (activeTab === 'cage') {
     if (!activeCage) {
-      main.innerHTML = `<div class="cage-grid">` +
-        cages.map(c => `<button class="cage-chip" data-cage="${esc(c)}">${esc(c)}</button>`).join('') +
-        `</div>`;
+      main.innerHTML = cages.length
+        ? `<div class="section-hint">${icon('pin')}點籠位看裡面的狗</div><div class="cage-grid">` +
+          cages.map(c => {
+            const n = allDogs.filter(d => d.cage === c).length;
+            return `<button class="cage-chip${n ? '' : ' empty'}" data-cage="${esc(c)}">${esc(c)}<span class="n">${n}</span></button>`;
+          }).join('') + `</div>`
+        : `<div class="status-msg">主清單沒有籠位資料</div>`;
       main.querySelectorAll('.cage-chip').forEach(btn => {
-        btn.addEventListener('click', () => { activeCage = btn.dataset.cage; render(); });
+        btn.addEventListener('click', () => { activeCage = btn.dataset.cage; render(); window.scrollTo(0, 0); });
       });
     } else {
       const list = allDogs.filter(d => d.cage === activeCage);
       main.innerHTML = `<button class="cage-back" id="cageBack">${icon('back')}所有籠位</button>` +
-        list.map(d => dogCard(d, today)).join('');
+        `<div class="section-title">${icon('pin')}${esc(activeCage)}（${list.length} 隻）</div>` +
+        (list.map(d => dogCard(d, today)).join('') || `<div class="status-msg">這個籠位目前沒有狗</div>`);
       document.getElementById('cageBack').addEventListener('click', () => { activeCage = null; render(); });
     }
   }
@@ -741,7 +779,8 @@ async function init() {
     groupMap = {};
     loadWarning = `「常遛狗群」讀取失敗，卡片暫時不會顯示可一起遛的狗。${e.message}`;
   }
-  cages = [...new Set(allDogs.map(d => d.cage).filter(Boolean))];
+  // 籠位以主清單籠位欄為準（含空籠）；保險起見再併入狗身上的籠位
+  cages = sortCages([...new Set([...(allDogs.cages || []), ...allDogs.map(d => d.cage).filter(Boolean)])]);
   const now = new Date();
   document.getElementById('updatedLabel').textContent =
     `最後更新 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
