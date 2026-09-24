@@ -39,3 +39,11 @@
 - `tests/index.html` 補 #33 測試，44 項全過；`node --test scripts/sync-sheet.test.mjs` 5 項全過。
 - 操作原型：https://claude.ai/artifact/GvkwaY4rkotpE6FBuMbydR
 - PR：#40（`claude/project-thread-z0xgeh`）。
+
+## [2026-09-25] Claude | #34 搜尋框 X 清除鈕
+- 依據：Issue #34（V3 規格第 3 節）。
+- `index.html`：搜尋框右側加 `#searchClear` 按鈕（沿用 `i-close` 圖示），平常隱藏。
+- `css/app.css`：X 的樣式；隱藏瀏覽器內建的搜尋清除鈕，避免出現兩個 X。
+- `js/app.js`：搜尋框有字（含注音選字途中）才顯示 X；點 X 清空文字與搜尋條件、重畫目前分類，不切換分類，游標留在搜尋框。
+- `tests/index.html` 補 2 項 #34 測試（併入 #40 後改用溜狗表／相關資訊分類），46 項全過。
+- PR：#39（`claude/project-thread-mg521e`）。
