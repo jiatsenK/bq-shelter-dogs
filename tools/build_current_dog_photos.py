@@ -25,19 +25,25 @@ ready = (ROOT / "tools" / "photo_manifest_ready").read_text(encoding="utf-8")
 manifest_names = [x.strip() for x in ready.splitlines() if x.strip()]
 items = []
 for name in manifest_names:
-    path = ROOT / "tools" / name
-    items.extend(json.loads(path.read_text(encoding="utf-8")))
+    items.extend(json.loads((ROOT / "tools" / name).read_text(encoding="utf-8")))
 
 if not items:
     raise SystemExit("No photo manifest entries found")
 
+failed = []
 for i, item in enumerate(items, 1):
     dog_id = item["id"]
-    req = Request(item["url"], headers={"User-Agent": "Mozilla/5.0"})
-    raw = TMP / f"{dog_id}.jpg"
-    with urlopen(req, timeout=60) as r, raw.open("wb") as f:
-        f.write(r.read())
-    crop_photo(raw, OUT / f"{dog_id}.jpg", item["side"])
-    print(f"[{i}/{len(items)}] {dog_id}")
+    try:
+        req = Request(item["url"], headers={"User-Agent": "Mozilla/5.0"})
+        raw = TMP / f"{dog_id}.jpg"
+        with urlopen(req, timeout=30) as r, raw.open("wb") as f:
+            f.write(r.read())
+        crop_photo(raw, OUT / f"{dog_id}.jpg", item["side"])
+        print(f"[{i}/{len(items)}] OK {dog_id}")
+    except Exception as e:
+        failed.append(dog_id)
+        print(f"[{i}/{len(items)}] FAILED {dog_id}: {e}")
 
-print(f"Generated {len(items)} photos")
+print(f"Generated {len(items) - len(failed)} photos; failed {len(failed)}")
+if failed:
+    print("FAILED_IDS=" + ",".join(failed))
