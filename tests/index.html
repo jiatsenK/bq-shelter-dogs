@@ -522,7 +522,7 @@ function runTests() {
         eq(loadWalkedIds(day1), ['9'], '無痕模式存不進去時，這次開著期間仍記得：');
       } finally { [walkedStorage, walkedMemory] = saved; }
     }),
-    check('沒有編號的狗也有「溜了」，改用犬名記', () => {
+    check('沒有編號的狗也有「已遛」，改用犬名記', () => {
       const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory];
       try {
         walkedStorage = fakeStorage(); walkedMemory = null;
@@ -543,7 +543,7 @@ function runTests() {
         render();
       }
     }),
-    check('#35 溜狗表點「溜了」加入今天已溜並從溜狗表移出，不開詳細資訊；可復原', () => {
+    check('#35 溜狗表點「已遛」加入今天已溜並從溜狗表移出，不開詳細資訊；可復原', () => {
       const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory];
       const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.firstChild.textContent);
       const counts = () => [...document.querySelectorAll('#tabs .n')].map(n => n.textContent);
@@ -556,7 +556,7 @@ function runTests() {
         ];
         groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = '';
         render();
-        eq(document.querySelectorAll('#main [data-walk="add"]').length, 3, '每隻都有「溜了」：');
+        eq(document.querySelectorAll('#main [data-walk="add"]').length, 3, '每隻都有「已遛」：');
         document.querySelector('#main .card[data-dog="0"] [data-walk="add"]').click();
         eq(document.getElementById('detailBackdrop').hidden, true, '按鈕不開詳細資訊：');
         eq(names(), ['測試丙', '測試乙'], '溜狗表移出測試甲：');
