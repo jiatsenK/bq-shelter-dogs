@@ -74,6 +74,7 @@ const GRID = [
   ['今天週四', '', '', '', '', ''],
 ];
 const TODAY = new Date(2026, 8, 24, 10);
+let INDEX_HTML = ''; // index.html 原始碼，#10 唯讀檢查用（其他測試會替換 fetch，所以先存下來）
 
 function runTests() {
   return Promise.all([
@@ -404,6 +405,61 @@ function runTests() {
       const dogs = [d('甲', 3), d('乙', null, '固定志工'), d('丙', 40), d('丁', null), d('戊', 0), d('己', 12)];
       eq(dueDogs(dogs, TODAY).map(x => x.name), ['丁', '丙', '己', '甲', '戊', '乙']);
     }),
+    check('#10 唯讀：除搜尋框外沒有輸入框、勾選框、可編輯區塊；搜尋框有放大鏡與提示文字', () => {
+      const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
+      const inputs = [...doc.querySelectorAll('input, textarea, select, [contenteditable]')];
+      eq(inputs.map(el => el.id), ['searchInput'], '可輸入元素：');
+      const box = inputs[0];
+      eq(box.type, 'search', '搜尋框型別：');
+      eq(box.placeholder, '搜尋犬名', '提示文字：');
+      if (!box.parentElement.querySelector('use[href="#i-search"]')) throw new Error('搜尋框旁要有放大鏡圖示');
+      if (doc.querySelector('form')) throw new Error('頁面不應有表單');
+      const symbols = [...doc.querySelectorAll('symbol')].map(el => el.id).join(' ');
+      if (/edit|pencil|pen|check|arrow|chevron|next|right/i.test(symbols)) throw new Error(`不應有編輯、勾選或右箭頭圖示：${symbols}`);
+    }),
+    check('#10 唯讀：程式只有讀取，沒有寫入試算表的呼叫', () => {
+      const code = INDEX_HTML.match(/<script>([\s\S]*?)<\/script>/)[1];
+      const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
+        /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|localStorage|indexedDB/];
+      const hits = bad.filter(re => re.test(code)).map(String);
+      eq(hits, [], '寫入相關字眼：');
+      const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
+      eq(urls.length, 2, 'fetch 呼叫數：');
+      if (!urls.every(u => u === 'url' || u.startsWith('`dogs/'))) throw new Error(`只能讀 gviz 與 dogs/：${urls.join('、')}`);
+    }),
+    check('#10 卡片不是連結或按鈕，也沒有右箭頭', () => {
+      const box = document.createElement('div');
+      box.innerHTML = dogCard({ name: '測試狗', cage: 'A01', id: '1', walkedDate: null, walker: '', note: '勿溜' }, TODAY);
+      if (box.querySelector('a, button, [onclick], [tabindex], [role="button"], [role="link"]')) throw new Error('卡片裡不應有連結或按鈕');
+      if (/[›>→❯»]/.test(box.textContent)) throw new Error('卡片不應有右箭頭字元');
+    }),
+    check('#10 試算表文字一律跳脫：備註、犬名、籠位、編號、可一起遛、搜尋字', () => {
+      const evil = '<img src=x onerror="window.__xss=1"><b>粗</b>&amp;';
+      const dog = { name: evil, cage: evil, id: evil, walkedDate: null, walker: '', note: evil + '勿溜' };
+      const saved = [groupMap, detailMap, allDogs, cages, activeTab, activeCage, searchQuery];
+      try {
+        groupMap = { [evil]: new Set([evil]) };
+        detailMap = { [evil]: evil };
+        const box = document.createElement('div');
+        box.innerHTML = dogCard(dog, TODAY);
+        eq(box.querySelectorAll('.body img, .body b:not(.group-inline b)').length, 0, '卡片裡被當成 HTML 的元素：');
+        eq(box.querySelector('.name').textContent, evil, '犬名原文：');
+        if (!box.querySelector('.note .text').textContent.startsWith(evil)) throw new Error('備註要原樣顯示文字');
+        eq(box.querySelector('.group-inline b').textContent, evil, '可一起遛原文：');
+        allDogs = [dog]; cages = [evil]; activeTab = 'cage'; activeCage = null; searchQuery = '';
+        render();
+        eq(document.querySelector('#main .cage-chip').dataset.cage, evil, '籠位按鈕：');
+        document.querySelector('#main .cage-chip').click();
+        eq(document.querySelectorAll('#main img:not(.thumb img)').length, 0, '籠內頁被當成 HTML 的圖片：');
+        activeTab = 'due'; searchQuery = evil; render();
+        searchQuery = '<i>沒有這隻</i>'; render();
+        if (document.querySelector('#main i')) throw new Error('搜尋字不應被當成 HTML');
+        if (window.__xss) throw new Error('跳脫失敗，執行了試算表裡的程式');
+      } finally {
+        [groupMap, detailMap, allDogs, cages, activeTab, activeCage, searchQuery] = saved;
+        render();
+      }
+    }),
   ]);
 }
 
@@ -420,6 +476,7 @@ function show() {
 fetch('../index.html')
   .then(res => res.text())
   .then(html => {
+    INDEX_HTML = html;
     const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
     const s = document.createElement('script');
     s.textContent = code;
