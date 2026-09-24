@@ -149,42 +149,37 @@ function runTests() {
       const map = parseGroups(table, new Set(['宙斯', '冬冬', '比比']));
       eq([...map['宙斯']], ['比比']); eq([...map['冬冬']], []); eq(map['已離所'], undefined);
     }),
-    check('特殊狀況：命中全部關鍵字，異體字也算', () => {
-      eq(specialFlag('勿遛，上週住院'), { keywords: ['勿溜', '住院'], terms: ['勿遛', '住院'] });
-      eq(specialFlag('暫緩外出'), { keywords: ['暫緩'], terms: ['暫緩'] });
+    check('勿溜：異體字也算，住院不算', () => {
+      eq(specialFlag('勿遛，散步時勿溜太久'), { keywords: ['勿溜'], terms: ['勿溜', '勿遛'] });
+      eq(specialFlag('住院區，胸背帶放住院'), null);
       eq(specialFlag('親人，好牽'), null);
       eq(specialFlag(''), null);
     }),
-    check('特殊狀況：備註裡每個命中的字眼都標出來，其他文字照樣跳脫', () => {
-      const f = specialFlag('住院中<勿溜>，出院後再住院觀察');
-      eq(highlightNote('住院中<勿溜>，出院後再住院觀察', f.terms),
-        '<mark>住院</mark>中&lt;<mark>勿溜</mark>&gt;，出院後再<mark>住院</mark>觀察');
+    check('勿溜：備註裡每個命中的字眼都標出來，其他文字照樣跳脫', () => {
+      const note = '勿溜<先問>，下午再勿遛';
+      eq(highlightNote(note, specialFlag(note).terms), '<mark>勿溜</mark>&lt;先問&gt;，下午再<mark>勿遛</mark>');
     }),
-    check('特殊狀況：從待巡房、近期已遛排除，分頁標籤顯示隻數', () => {
+    check('勿溜的狗仍留在待巡房與近期已遛，卡片有天數和紅色驚嘆號；沒有特殊狀況分頁', () => {
       allDogs = [
-        { cage: 'A01', id: '1', name: '布布', walkedDate: new Date(), walker: '', note: '胸背帶放住院區' },
+        { cage: '住院區', id: '1', name: '布布', walkedDate: new Date(), walker: '', note: '住院' },
         { cage: 'A02', id: '2', name: '果果', walkedDate: new Date(), walker: '', note: '' },
-        { cage: 'A03', id: '3', name: '黑森林', walkedDate: null, walker: '', note: '勿遛' },
+        { cage: 'A03', id: '3', name: '黑森林', walkedDate: new Date(), walker: '', note: '勿遛' },
       ];
-      groupMap = { '布布': new Set(['果果']) }; detailMap = { '1': '個性親人' }; cages = ['A01', 'A02', 'A03'];
+      groupMap = { '黑森林': new Set(['果果']) }; detailMap = { '3': '個性親人' }; cages = ['住院區', 'A02', 'A03'];
       searchQuery = ''; activeCage = null;
-      const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
-      const count = id => document.querySelector(`#tabs [data-tab="${id}"] .n`).textContent;
-      activeTab = 'due'; renderMain(); eq(names(), ['果果'], '待巡房：');
-      activeTab = 'recent'; renderMain(); eq(names(), ['果果'], '近期已遛：');
-      activeTab = 'special'; renderMain(); eq(names(), ['布布', '黑森林'], '特殊狀況：');
-      eq([count('due'), count('recent'), count('special')], ['1', '1', '2'], '分頁隻數：');
-    }),
-    check('特殊狀況卡片：完整備註、同籠、介紹都在，搜尋結果也保留特殊徽章', () => {
-      activeTab = 'special'; renderMain();
-      const card = document.querySelector('#main .card');
-      if (!card.querySelector('.badge.red')) throw new Error('沒有紅色徽章');
-      if (!card.textContent.includes('備註含關鍵字，請確認')) throw new Error('沒有「請確認」提示');
-      eq(card.querySelector('.note .text').innerHTML, '胸背帶放<mark>住院</mark>區', '備註：');
-      if (!card.querySelector('.group-inline')) throw new Error('沒有同籠');
-      if (!card.querySelector('.intro')) throw new Error('沒有介紹');
-      searchQuery = '布布'; renderMain();
-      if (!document.querySelector('#main .card .badge.red')) throw new Error('搜尋結果沒有特殊徽章');
+      const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent).sort();
+      activeTab = 'due'; renderMain(); eq(names(), ['布布', '果果', '黑森林'].sort(), '待巡房：');
+      activeTab = 'recent'; renderMain(); eq(names(), ['布布', '果果', '黑森林'].sort(), '近期已遛：');
+      eq([...document.querySelectorAll('#tabs button')].map(b => b.dataset.tab), ['due', 'recent', 'cage'], '分頁：');
+      const cards = [...document.querySelectorAll('#main .card')];
+      const card = n => cards.find(c => c.querySelector('.name').textContent === n);
+      if (card('布布').querySelector('.badge.red')) throw new Error('住院區的布布不該有驚嘆號');
+      const hei = card('黑森林');
+      if (!hei.querySelector('.badge.red') || !hei.querySelector('.badge.sage')) throw new Error('黑森林要有天數和紅色驚嘆號');
+      eq(hei.querySelector('.note .text').innerHTML, '<mark>勿遛</mark>', '備註：');
+      if (!hei.querySelector('.group-inline') || !hei.querySelector('.intro')) throw new Error('卡片少了同籠或介紹');
+      searchQuery = '黑森林'; renderMain();
+      if (!document.querySelector('#main .card .badge.red')) throw new Error('搜尋結果沒有驚嘆號');
       searchQuery = '';
     }),
   ]);
