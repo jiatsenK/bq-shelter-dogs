@@ -189,6 +189,7 @@
   .badge.amber { background: var(--amber-bg); color: var(--amber-text); }
   .badge.sage { background: var(--green-bg); color: var(--green-text); }
   .badge.muted { background: var(--muted-bg); color: var(--muted-text); }
+  .special-hint { display: block; font-size: 12.5px; color: var(--red-text); font-weight: 500; margin-top: 4px; }
   .card .name { font-size: 18px; font-weight: 700; margin-top: 6px; line-height: 1.3; word-break: break-all; }
   .card .meta { font-size: 13.5px; color: var(--ink-soft); margin-top: 2px; }
   .card .meta .sep { color: var(--line); margin: 0 6px; }
@@ -203,7 +204,8 @@
     color: #8F3A3D;
   }
   .note .icon { color: var(--red-text); margin-top: 3px; }
-  .note .text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  /* 規格要求備註在卡片內看得完，所以不截行；保留試算表裡的換行 */
+  .note .text { white-space: pre-line; word-break: break-word; }
   .note mark { background: transparent; color: var(--red-text); font-weight: 700; }
 
   .group-inline {
@@ -263,7 +265,13 @@
 
 <script>
 const SHEET_ID = 'REMOVED_SHEET_ID';
-const SPECIAL_KEYWORDS = ['暫緩', '勿溜', '住院'];
+// 備註含這些字眼的狗歸到「特殊狀況」。每組第一個是顯示用的關鍵字，後面是常見異體寫法，一起比對。
+// 志工發現新的慣用字眼時，只要在這裡加一組（例：['禁止外出']）或在組內加異體字。
+const SPECIAL_KEYWORDS = [
+  ['暫緩', '暂缓'],
+  ['勿溜', '勿遛', '勿蹓'],
+  ['住院'],
+];
 const RECENT_DAYS = 7;
 
 let allDogs = [];
@@ -448,9 +456,29 @@ function parseGroups(table, knownNames) {
   return map;
 }
 
+// 回傳備註命中的關鍵字（顯示用）與實際出現的寫法（標示用）；沒命中回 null
 function specialFlag(note) {
-  for (const k of SPECIAL_KEYWORDS) if (note.includes(k)) return k;
-  return null;
+  const keywords = [], terms = [];
+  for (const [label, ...variants] of SPECIAL_KEYWORDS) {
+    const hit = [label, ...variants].filter(t => (note || '').includes(t));
+    if (!hit.length) continue;
+    keywords.push(label);
+    terms.push(...hit);
+  }
+  return keywords.length ? { keywords, terms } : null;
+}
+
+// 把備註原文裡所有命中的字眼標成紅色粗體；其餘文字照樣跳脫
+function highlightNote(note, terms) {
+  if (!terms || !terms.length) return esc(note);
+  const sorted = [...new Set(terms)].sort((a, b) => b.length - a.length);
+  const re = new RegExp(sorted.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+  let html = '', last = 0;
+  for (const m of note.matchAll(re)) {
+    html += esc(note.slice(last, m.index)) + `<mark>${esc(m[0])}</mark>`;
+    last = m.index + m[0].length;
+  }
+  return html + esc(note.slice(last));
 }
 
 function parseFrontmatterBody(text) {
@@ -522,32 +550,24 @@ function metaLine(dog) {
   return `<div class="meta">${esc(dog.cage)}${dog.id ? `<span class="sep">|</span>${esc(dog.id)}` : ''}</div>`;
 }
 
-function dogCard(dog, today) {
-  return `
-    <div class="card">
-      ${photoThumb(dog)}
-      <div class="body">
-        ${statusBadge(dog, today)}
-        <div class="name">${esc(dog.name)}</div>
-        ${metaLine(dog)}
-        ${dog.note ? `<div class="note">${icon('warn')}<span class="text">${esc(dog.note)}</span></div>` : ''}
-        ${groupLine(dog.name)}
-        ${detailMap[dog.id] ? `<div class="intro"><span class="label">介紹：</span>${esc(detailMap[dog.id])}</div>` : ''}
-      </div>
-    </div>
-  `;
+// 特殊狀況只是「備註含關鍵字」，不一定真的不能遛（例：「胸背帶放住院區」），所以徽章請志工確認，不直接下結論
+function specialBadge(flag) {
+  return `<span class="badge red">${icon('alert')}${flag.keywords.map(esc).join('・')}</span><span class="special-hint">備註含關鍵字，請確認</span>`;
 }
 
-function specialCard(dog, keyword) {
-  const noteHtml = esc(dog.note).split(esc(keyword)).join(`<mark>${esc(keyword)}</mark>`);
+// 所有分頁、搜尋、籠位共用這張卡片：備註含特殊關鍵字的狗一律顯示紅色徽章與標示
+function dogCard(dog, today) {
+  const flag = specialFlag(dog.note);
   return `
-    <div class="card">
+    <div class="card${flag ? ' special' : ''}">
       ${photoThumb(dog)}
       <div class="body">
-        <span class="badge red">${icon('alert')}${esc(keyword)}</span>
+        ${flag ? specialBadge(flag) : statusBadge(dog, today)}
         <div class="name">${esc(dog.name)}</div>
         ${metaLine(dog)}
-        <div class="note">${icon('warn')}<span class="text">${noteHtml}</span></div>
+        ${dog.note ? `<div class="note">${icon('warn')}<span class="text">${highlightNote(dog.note, flag && flag.terms)}</span></div>` : ''}
+        ${groupLine(dog.name)}
+        ${detailMap[dog.id] ? `<div class="intro"><span class="label">介紹：</span>${esc(detailMap[dog.id])}</div>` : ''}
       </div>
     </div>
   `;
@@ -588,8 +608,7 @@ function renderMain() {
   const specialList = [];
   const normalList = [];
   allDogs.forEach(d => {
-    const flag = specialFlag(d.note);
-    if (flag) specialList.push({ dog: d, flag });
+    if (specialFlag(d.note)) specialList.push(d);
     else normalList.push(d);
   });
 
@@ -623,8 +642,8 @@ function renderMain() {
     main.innerHTML = `<div class="section-title">${icon('paw')}近期已遛（${RECENT_DAYS} 天內）</div>` +
       (recentList.map(d => dogCard(d, today)).join('') || `<div class="status-msg">最近沒有已遛紀錄</div>`);
   } else if (activeTab === 'special') {
-    main.innerHTML = `<div class="alert-box">${icon('alert')}<span>以下為因備註包含「${SPECIAL_KEYWORDS.join('／')}」等關鍵字，已從待巡房清單中排除。請先確認牠們的狀況後再決定是否遛出。</span></div>` +
-      (specialList.map(x => specialCard(x.dog, x.flag)).join('') || `<div class="status-msg">目前沒有特殊狀況</div>`);
+    main.innerHTML = `<div class="alert-box">${icon('alert')}<span>以下狗狗的備註含「${SPECIAL_KEYWORDS.map(g => g[0]).join('／')}」等字眼，已先從待巡房、近期已遛移出。字眼可能只是舊紀錄或物品位置，請看備註原文確認狀況後再決定要不要遛。</span></div>` +
+      (specialList.map(d => dogCard(d, today)).join('') || `<div class="status-msg">目前沒有特殊狀況</div>`);
   } else if (activeTab === 'cage') {
     if (!activeCage) {
       main.innerHTML = `<div class="cage-grid">` +
