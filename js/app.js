@@ -20,6 +20,7 @@ let groupMap = {};
 let detailMap = {};
 let activeTab = 'walk';
 let detailDog = null; // 詳細資訊正在看的狗
+let detailOpener = null;
 let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（編號）
 let searchQuery = '';
 let loadWarning = '';
@@ -258,7 +259,10 @@ function saveWalkedIds(ids, today = new Date()) {
   walkedMemory = { date: localDateKey(today), ids: [...ids] };
   try {
     if (walkedStorage) walkedStorage.setItem(WALKED_KEY, JSON.stringify(walkedMemory));
-  } catch (e) { /* 存不進去（例：無痕模式空間滿），這次開著網頁期間仍有效 */ }
+  } catch (e) {
+    // 仍可讀取的舊資料不能蓋掉剛寫入記憶體的紀錄。
+    walkedStorage = null;
+  }
 }
 
 function isWalkedToday(dog, ids) {
@@ -423,6 +427,7 @@ function groupWalkButton(dog, walkedIds) {
 function renderDetail() {
   if (!detailDog) return;
   const box = document.getElementById('detail');
+  const focused = box.contains(document.activeElement) ? document.activeElement : null;
   box.innerHTML = detailHtml(detailDog, new Date());
   box.querySelector('#detailClose').addEventListener('click', closeDetail);
   box.querySelectorAll('.buddy').forEach(btn => {
@@ -442,11 +447,19 @@ function renderDetail() {
     const picked = [...pickedBuddies].map(id => allDogs.find(d => d.id === id));
     setWalked([detailDog, ...picked], true);
   });
+  if (focused) {
+    const replacement = [...box.querySelectorAll('button')].find(btn =>
+      (focused.id && btn.id === focused.id) ||
+      (focused.dataset.pick && btn.dataset.pick === focused.dataset.pick) ||
+      (focused.classList.contains('buddy') && btn.classList.contains('buddy') && btn.dataset.dog === focused.dataset.dog));
+    (replacement || box.querySelector('#detailClose')).focus({ preventScroll: true });
+  }
 }
 
 // 在詳細資訊裡點「可以一起溜的狗」會直接換成那隻，不多疊一層
 function showDetail(dog) {
   const wasOpen = !!detailDog;
+  if (!wasOpen) detailOpener = { element: document.activeElement, index: allDogs.indexOf(dog) };
   if (dog !== detailDog) pickedBuddies.clear();
   detailDog = dog;
   renderDetail();
@@ -465,6 +478,12 @@ function hideDetail() {
   document.getElementById('detailBackdrop').hidden = true;
   document.getElementById('detail').innerHTML = '';
   document.documentElement.classList.remove('detail-open');
+  if (detailOpener) {
+    const card = document.querySelector(`#main .card[data-dog="${detailOpener.index}"]`);
+    const opener = detailOpener.element;
+    (card || (opener && opener.isConnected && opener !== document.body ? opener : searchInput)).focus({ preventScroll: true });
+    detailOpener = null;
+  }
 }
 
 function closeDetail() {
@@ -478,6 +497,14 @@ document.getElementById('detailBackdrop').addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && detailDog) closeDetail();
+  if (e.key !== 'Tab' || !detailDog) return;
+  const buttons = [...document.querySelectorAll('#detail button:not(:disabled), #toast:not([hidden]) button:not([hidden])')];
+  const first = buttons[0], last = buttons[buttons.length - 1];
+  if (!first) return;
+  if (!buttons.includes(document.activeElement) || (e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
+    e.preventDefault();
+    (e.shiftKey ? last : first).focus({ preventScroll: true });
+  }
 });
 
 // 狗卡用事件委派：renderMain 每次重畫卡片都不用重新綁
