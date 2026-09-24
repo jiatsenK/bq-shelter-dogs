@@ -98,3 +98,14 @@
 - 驗證：Chromium 跑 tests/index.html 46 項全過（新增 1 項）；用 repo 內 dogs.json 在 390px 寬截圖，121 隻都有按鈕。
 - 追加（K 指示）：狗卡按鈕「溜了」改成「已遛」並拿掉勾勾圖示，字級 14px。
 - PR：#45（分支 `claude/project-thread-cm2hg0`）。
+
+## [2026-09-25] Claude | V4 照片功能：燈箱放大、前端上傳／更換照片（#46–#48）
+- 依據：K 2026-09-24「溜狗表開發 20260924 v4｜照片功能」；拆成 Issues #46（燈箱）、#47（Cloudflare Worker 上傳層）、#48（詳細資訊上傳流程），標籤 `v4`。
+- #46：狗卡照片、詳細資訊上方照片點了開燈箱，大圖不裁切、放大到填滿畫面寬或高；點關閉、點背景（含照片旁留白）、Esc、手機返回都能關，詳細資訊開著時只關燈箱。沒照片的照舊開詳細資訊；「可以一起溜」小照片維持點了換看那隻。
+- #47：`worker/src/index.js`（單檔，可直接貼到 Cloudflare 網頁編輯器）。token 只放 Worker Secret `GITHUB_TOKEN`。防護：只收 `https://jiatsenk.github.io`、編號須在 `data/dogs.json`、只收 JPEG（檢查檔頭）、2 MB 上限、每 IP 1 分鐘 5 張／1 小時 30 張（各 Worker 分身各算，盡量擋）。已有照片帶 sha 更換，sha 衝突重試一次；失敗不動原照片。
+- #48：詳細資訊「上傳照片／更換照片」→ 選照片 → 壓成長邊 1280px JPEG → 預覽 →「確認上傳」（另有小的「取消」）。成功後狗卡、詳細資訊、燈箱立刻換成新照片（這次開著網頁期間用本機圖；GitHub Pages 更新後大家都看得到）。`js/app.js` 的 `UPLOAD_URL` 留空時不顯示上傳按鈕。
+- 設定說明：`docs/PHOTO_UPLOAD_SETUP.md`（K 要在 GitHub 建 fine-grained token、在 Cloudflare 建 Worker 並設 Secret；Claude 無法代做）。
+- 驗證：Chromium 跑 tests/index.html 55 項全過（#10 唯讀測試改成只允許照片 POST 到 UPLOAD_URL，並檢查前端沒有 token／GitHub API）；node --test sync 10 項＋worker 11 項全過；用 wrangler dev（本機 workerd）＋假 GitHub 跑完整流程：CORS 預檢、壓縮（4032×3024、0.9 MB → 1280×960、約 90 KB）、更換帶 sha。雲端連不到 Cloudflare，未實際部署。
+- 截圖（模擬上傳、測試用圖）：專案檔案 previews/v4/。
+- 限制：未在實體手機測試；上傳後同一支手機重新整理，在 GitHub Pages 更新前（約幾分鐘）可能還看到舊照片。
+- PR：（分支 `claude/project-thread-wnnu1i`）。
