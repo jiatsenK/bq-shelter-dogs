@@ -15,7 +15,7 @@
 </head>
 <body>
 <h1>板收志工溜狗表：資料讀取測試</h1>
-<p>這頁不會連到真正的試算表，只用假資料檢查 js/app.js 的讀取與解析函式。</p>
+<p>這頁只用假資料檢查 js/app.js 的讀取與畫面（另外會讀 repo 裡的 data/dogs.json 檢查格式）。試算表解析的測試在 scripts/sync-sheet.test.mjs。</p>
 <div id="summary">測試中…</div>
 <ol id="results"></ol>
 
@@ -40,148 +40,17 @@ function eq(actual, expected, label = '') {
 }
 const ymd = d => d ? `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}` : null;
 
-// 模擬 gviz：依每欄多數型別推斷欄位型別，少數型別的格子回成 null；
-// headers=N 時前 N 列合併成欄位標題。這就是真實試算表「編號」「遛狗日期」表頭被吃掉的原因。
-const D = (y, m, d) => ({ t: 'date', y, m, d });
-function typeOf(v) { return typeof v === 'object' ? 'date' : typeof v === 'number' ? 'number' : 'string'; }
-function fakeGviz(grid, headers) {
-  const hdr = grid.slice(0, headers), data = grid.slice(headers);
-  const cols = grid[0].map((_, ci) => {
-    const cnt = {};
-    data.forEach(r => { if (r[ci] !== '') cnt[typeOf(r[ci])] = (cnt[typeOf(r[ci])] || 0) + 1; });
-    const type = (Object.entries(cnt).sort((a, b) => b[1] - a[1])[0] || ['string'])[0];
-    return { label: hdr.map(r => typeof r[ci] === 'string' ? r[ci] : '').filter(Boolean).join(' '), type };
-  });
-  const rows = data.map(r => ({ c: r.map((v, ci) => {
-    if (v === '') return null;
-    if (typeOf(v) !== cols[ci].type) return { v: null };
-    if (typeOf(v) === 'date') return { v: `Date(${v.y},${v.m - 1},${v.d})`, f: `${v.y}/${v.m}/${v.d}` };
-    return { v };
-  }) }));
-  return { status: 'ok', table: { cols, rows } };
-}
-// 仿真實主清單：前 6 列是標題雜訊，第 7 列是表頭，欄位順序打亂，最後一列是表尾提示
-const GRID = [
-  ['板橋收容所遛狗表', '', '', '', '', ''],
-  ['', '', '', '', '', ''], ['說明文字', '', '', '', '', ''], ['', '', '', '', '', ''], ['', '', '', '', '', ''], ['', '', '', '', '', ''],
-  ['犬名', ' 籠位 ', '編號', '遛狗日期', '備註', '誰遛的'],
-  ['宙斯', 'C03', 202101234, D(2026, 9, 16), '', '阿明'],
-  ['冬冬', 'A07', 202102345, D(2026, 9, 22), '親人', ''],
-  ['比比', 'A08', 202102346, D(2026, 9, 24), '', ''],
-  ['金寶', 'A11', '', '', '新狗，原表沒填日期', ''],
-  ['', 'A12', 999, D(2026, 9, 1), '犬名空白', ''],
-  ['   ', 'A13', 998, D(2026, 9, 1), '犬名只有空白', ''],
-  ['舊A01', '', '', '', '', ''],
-  ['今天週四', '', '', '', '', ''],
-];
 const TODAY = new Date(2026, 8, 24, 10);
 let INDEX_HTML = ''; // index.html 原始碼，#10 唯讀檢查用（其他測試會替換 fetch，所以先存下來）
 let APP_JS = '';     // js/app.js 原始碼（#30 拆檔後程式在這裡）
 let MANIFEST = {};    // manifest.webmanifest，#33 主畫面名稱檢查用
+let DOGS_JSON = null; // data/dogs.json，#32 格式檢查用
 
 function runTests() {
   return Promise.all([
-    check('找得到表頭列（表頭在第 7 列）', () => {
-      eq(findHeaderRow(fakeGviz(GRID, 0).table), 6);
-    }),
-    check('headers=0 時「編號」「遛狗日期」表頭會被吃掉（重現原本的 bug）', () => {
-      const labels = fakeGviz(GRID, 0).table.rows[6].c.map(cellText);
-      eq(labels[2], '', '編號表頭：'); eq(labels[3], '', '遛狗日期表頭：');
-    }),
-    check('headers=7 重讀後六個欄位都對得到，欄位順序打亂也可以', () => {
-      const dogs = parseMainList(fakeGviz(GRID, 7).table, [], TODAY);
-      eq(dogs[0], { cage: 'C03', id: '202101234', name: '宙斯', walkedDate: dogs[0].walkedDate, walker: '阿明', note: '' });
-      eq(ymd(dogs[0].walkedDate), '2026/9/16');
-    }),
-    check('犬名空白、只有空白、表尾提示（沒有籠位）都不算狗', () => {
-      const names = parseMainList(fakeGviz(GRID, 7).table, [], TODAY).map(d => d.name);
-      eq(names, ['宙斯', '冬冬', '比比', '金寶']);
-    }),
-    check('原表本來就空白的日期和編號，讀出來是空的（不是讀取遺失）', () => {
-      const kim = parseMainList(fakeGviz(GRID, 7).table, [], TODAY).find(d => d.name === '金寶');
-      eq(kim.walkedDate, null); eq(kim.id, '');
-    }),
-    check('缺必要欄位時顯示錯誤，不會靜默讀錯', () => {
-      const grid = GRID.map(r => r.slice(0, 3)); // 只剩犬名、籠位、編號
-      let msg = '';
-      try { parseMainList(fakeGviz(grid, 7).table, [], TODAY); } catch (e) { msg = e.message; }
-      if (!msg.includes('遛狗日期') || !msg.includes('誰遛的') || !msg.includes('備註')) throw new Error(`錯誤訊息沒列出缺的欄位：「${msg}」`);
-    }),
-    check('欄位標題缺漏時，用第一次讀到的表頭列補', () => {
-      const table = fakeGviz(GRID, 7).table;
-      table.cols[3].label = '';
-      const headerTexts = ['犬名', '籠位', '編號', '遛狗日期', '備註', '誰遛的'];
-      eq(ymd(parseMainList(table, headerTexts, TODAY)[0].walkedDate), '2026/9/16');
-    }),
-    check('主清單分兩次讀：先 headers=0，再 headers=7', async () => {
-      const calls = [];
-      const realFetch = window.fetch;
-      window.fetch = async url => {
-        const u = new URL(url);
-        const h = +u.searchParams.get('headers');
-        calls.push(`${u.searchParams.get('sheet')}:${h}`);
-        return new Response(`/*O_o*/\ngoogle.visualization.Query.setResponse(${JSON.stringify(fakeGviz(GRID, h))});`);
-      };
-      try {
-        const dogs = await loadMainList();
-        eq(calls, ['主清單:0', '主清單:7']);
-        eq(dogs.length, 4);
-      } finally { window.fetch = realFetch; }
-    }),
-    check('日期格式：Date(...)、各種文字寫法、民國年、沒寫年份', () => {
-      eq(ymd(cellDate({ v: 'Date(2026,8,16)' }, TODAY)), '2026/9/16');
-      eq(ymd(cellDate({ v: '2026/9/1' }, TODAY)), '2026/9/1');
-      eq(ymd(cellDate({ v: '2026-09-01' }, TODAY)), '2026/9/1');
-      eq(ymd(cellDate({ v: '2026.9.1' }, TODAY)), '2026/9/1');
-      eq(ymd(cellDate({ v: '2026年9月1日' }, TODAY)), '2026/9/1');
-      eq(ymd(cellDate({ v: '115/9/1' }, TODAY)), '2026/9/1');
-      eq(ymd(cellDate({ v: '9/1' }, TODAY)), '2026/9/1');
-      eq(ymd(cellDate({ v: '12/28' }, TODAY)), '2025/12/28', '沒寫年份又落在未來時算去年：');
-      eq(ymd(cellDate({ v: 46266 }, TODAY)), '2026/9/1', '試算表日期序號：');
-    }),
-    check('不存在或不合理的日期回空值', () => {
-      eq(cellDate({ v: 'Date(2026,1,30)' }, TODAY), null);
-      eq(cellDate({ v: '2026/2/30' }, TODAY), null);
-      eq(cellDate({ v: '2026/9/100' }, TODAY), null);
-      eq(cellDate({ v: '不詳' }, TODAY), null);
-      eq(cellDate(null, TODAY), null);
-    }),
-    check('常遛狗群只保留主清單上有的狗，不列自己、不重複', () => {
-      const table = { cols: [{}, {}], rows: [
-        { c: [{ v: '宙斯' }, { v: '冬冬' }] }, { c: [{ v: '比比' }, { v: '已離所' }] }, { c: [{ v: '1' }, { v: '冬冬' }] }, { c: [{ v: '宙斯' }, null] },
-      ] };
-      const map = parseGroups(table, new Set(['宙斯', '冬冬', '比比']));
-      eq([...map['宙斯']], ['比比']); eq([...map['冬冬']], []); eq(map['已離所'], undefined);
-    }),
     check('未來日期顯示「日期異常」，不顯示負的天數', () => {
       const badge = statusBadge({ name: 'x', walkedDate: new Date(2099, 0, 1), walker: '', note: '' }, TODAY);
       if (!badge.includes('日期異常') || badge.includes('-')) throw new Error(`標籤是 ${badge}`);
-    }),
-    // #8 可一起遛
-    check('一隻狗在多組時，可一起遛的名單合併去重', () => {
-      const table = { cols: [{}, {}, {}], rows: [
-        { c: [{ v: '宙斯' }, { v: '宙斯' }, { v: '冬冬' }] },
-        { c: [{ v: '冬冬' }, { v: '比比' }, { v: '金寶' }] },
-        { c: [null, { v: '冬冬' }, null] },
-      ] };
-      const map = parseGroups(table, new Set(['宙斯', '冬冬', '比比', '金寶']));
-      eq([...map['宙斯']].sort(), ['冬冬', '比比'].sort());
-      eq([...map['冬冬']].sort(), ['宙斯', '比比', '金寶'].sort());
-      eq([...map['金寶']], ['冬冬']);
-    }),
-    check('常遛狗群犬名多了空白（含全形空白）也對得到，顯示用主清單的寫法', () => {
-      const table = { cols: [{}], rows: [{ c: [{ v: '宙 斯' }] }, { c: [{ v: '冬\u3000冬 ' }] }] };
-      const map = parseGroups(table, new Set(['宙斯', '冬冬']));
-      eq([...map['宙斯']], ['冬冬']); eq([...map['冬冬']], ['宙斯']);
-    }),
-    check('卡片顯示「可一起遛：A、B」；沒有同籠狗或只剩離所狗時不顯示', () => {
-      allDogs = [{ name: '宙斯' }, { name: '冬冬' }, { name: '比比' }, { name: '金寶' }];
-      groupMap = parseGroups({ cols: [{}, {}], rows: [
-        { c: [{ v: '宙斯' }, { v: '金寶' }] }, { c: [{ v: '冬冬' }, { v: '已離所' }] }, { c: [{ v: '比比' }, null] },
-      ] }, new Set(allDogs.map(d => d.name)));
-      eq([...groupMap['宙斯']], ['冬冬', '比比'], '宙斯：');
-      eq([...(groupMap['金寶'] || [])], [], '金寶的同組只有離所的狗：');
-      eq(groupMap['沒分組'], undefined, '沒有分組的狗：');
     }),
     check('勿溜：異體字也算，住院不算', () => {
       eq(specialFlag('勿遛，散步時勿溜太久'), { keywords: ['勿溜'], terms: ['勿溜', '勿遛'] });
@@ -365,7 +234,10 @@ function runTests() {
       eq(hits, [], '寫入相關字眼：');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
       eq(urls.length, 2, 'fetch 呼叫數：');
-      if (!urls.every(u => u === 'url' || u.startsWith('`dogs/'))) throw new Error(`只能讀 gviz 與 dogs/：${urls.join('、')}`);
+      // #32 起前端只讀 data/dogs.json 與 dogs/，不直接連試算表
+      if (!urls.every(u => u.startsWith('DATA_URL,') || u.startsWith('`dogs/'))) throw new Error(`只能讀 data/dogs.json 與 dogs/：${urls.join('、')}`);
+      eq(DATA_URL, 'data/dogs.json', '資料檔：');
+      if (/docs\.google\.com|gviz/.test(code)) throw new Error('前端不應再連 Google 試算表');
     }),
     check('#10／#28 卡片沒有連結，也不會跳到別頁（點了只開詳細資訊）', () => {
       const box = document.createElement('div');
@@ -637,7 +509,150 @@ function runTests() {
         [allDogs, groupMap, detailMap, activeTab, searchQuery] = saved;
       }
     }),
+    // ── #32 前端改讀 data/dogs.json ──
+    check('#32 dogs.json 轉成畫面資料：日期是當地日期、可以一起溜變成名單、沒犬名的略過', () => {
+      const got = parseDogsData({
+        version: 1, syncedAt: '2026-09-25T08:25:26+08:00',
+        dogs: [
+          { cage: 'C03', id: '202101234', name: '測試甲', walkedDate: '2026-09-16', walker: '志工A', note: '勿溜' },
+          { cage: '住院區', id: '', name: '測試乙', walkedDate: null, walker: '', note: '' },
+          { cage: 'A01', id: '1', name: '  ', walkedDate: '2026-09-16', walker: '', note: '' },
+          null,
+          { cage: 'A02', id: 3, name: '測試丙', walkedDate: '2026-02-30', walker: null, note: null },
+        ],
+        cages: ['A01'],
+        groups: { '測試甲': ['測試乙'], '測試乙': ['測試甲'], '測試丙': [] },
+      });
+      eq(got.dogs.map(d => d.name), ['測試甲', '測試乙', '測試丙'], '犬名：');
+      const a = got.dogs[0];
+      eq([a.cage, a.id, a.walker, a.note], ['C03', '202101234', '志工A', '勿溜'], '甲的欄位：');
+      eq([ymd(a.walkedDate), a.walkedDate.getHours()], ['2026/9/16', 0], '日期是當地午夜：');
+      eq(got.dogs[1].walkedDate, null, '沒日期：');
+      eq([got.dogs[2].id, got.dogs[2].walker, got.dogs[2].note, got.dogs[2].walkedDate], ['3', '', '', null], '缺值與不合理日期：');
+      eq([...got.groups['測試甲']], ['測試乙'], '可以一起溜：');
+      eq([...got.groups['測試丙']], [], '沒有一起溜的狗：');
+      eq(got.syncedAt.toISOString(), '2026-09-25T00:25:26.000Z', '同步時間：');
+    }),
+    check('#32 dogs.json 沒有狗清單就算讀取失敗；少了可以一起溜只回空的', () => {
+      for (const bad of [null, {}, { dogs: 'x' }]) {
+        let threw = false;
+        try { parseDogsData(bad); } catch (e) { threw = true; }
+        if (!threw) throw new Error(`${JSON.stringify(bad)} 應該算失敗`);
+      }
+      const got = parseDogsData({ dogs: [{ cage: 'A01', id: '1', name: '測試甲', walkedDate: '2026-09-16', walker: '', note: '' }] });
+      eq([got.dogs.length, got.groups, got.syncedAt], [1, null, null]);
+    }),
+    check('#32 天數判斷、排序跟以前讀試算表一樣（日期當天算今天，不差一天）', () => {
+      const { dogs } = parseDogsData({ dogs: [
+        { cage: 'A', id: '1', name: '甲', walkedDate: '2026-09-21', walker: '', note: '' },
+        { cage: 'A', id: '2', name: '乙', walkedDate: null, walker: '固定志工', note: '' },
+        { cage: 'A', id: '3', name: '丙', walkedDate: '2026-08-15', walker: '', note: '' },
+        { cage: 'A', id: '4', name: '丁', walkedDate: null, walker: '', note: '' },
+        { cage: 'A', id: '5', name: '戊', walkedDate: '2026-09-24', walker: '', note: '' },
+      ] });
+      eq(dueDogs(dogs, TODAY).map(d => d.name), ['丁', '丙', '甲', '戊', '乙'], '排序：');
+      eq(dogs.map(d => computeStatus(d, TODAY).days), [3, undefined, 40, undefined, 0], '天數：');
+    }),
+    check('#32 index.html 先有標題、搜尋框、分類列，內容區只寫讀取中；沒有寫死狗狗資料', () => {
+      const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
+      if (!doc.querySelector('header h1') || !doc.getElementById('searchInput') || !doc.getElementById('tabs')) throw new Error('基本 UI 要在 index.html 裡');
+      eq(doc.getElementById('main').textContent.trim(), '讀取狗狗資料中…', '內容區：');
+      if (doc.getElementById('main').compareDocumentPosition(doc.getElementById('tabs')) & Node.DOCUMENT_POSITION_FOLLOWING) throw new Error('分類列要在內容區之前');
+    }),
+    check('#32 repo 裡的 data/dogs.json 格式前端讀得懂', () => {
+      if (!DOGS_JSON) throw new Error('讀不到 data/dogs.json');
+      const got = parseDogsData(DOGS_JSON);
+      eq(got.dogs.length, DOGS_JSON.dogs.length, '狗的數量：');
+      if (!got.dogs.length) throw new Error('dogs.json 沒有狗');
+      const badDate = DOGS_JSON.dogs.filter((d, i) => d.walkedDate && !got.dogs[i].walkedDate).map(d => d.walkedDate);
+      eq(badDate, [], '讀不懂的日期：');
+      if (!got.groups) throw new Error('dogs.json 沒有可以一起溜的資料');
+      if (!got.syncedAt) throw new Error('dogs.json 沒有同步時間');
+    }),
   ]);
+}
+
+// 會替換 fetch、呼叫 init 的測試一項一項跑，才不會跟其他測試互相干擾
+async function runSerialTests() {
+  const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, loadState, loadWarning];
+  const realFetch = window.fetch;
+  const main = document.getElementById('main');
+  const tabNames = () => [...document.querySelectorAll('#tabs button .t')].map(t => t.textContent);
+  const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.firstChild.textContent);
+  const tick = () => new Promise(r => setTimeout(r, 0));
+  const json = body => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
+  const DATA = {
+    version: 1, syncedAt: '2026-09-25T08:05:00+08:00',
+    dogs: [
+      { cage: 'A01', id: '9001', name: '讀取甲', walkedDate: null, walker: '', note: '' },
+      { cage: 'A02', id: '9002', name: '讀取乙', walkedDate: '2020-01-01', walker: '', note: '' },
+    ],
+    cages: ['A01', 'A02'],
+    groups: { '讀取甲': ['讀取乙'], '讀取乙': ['讀取甲'] },
+  };
+  // fake(url) 回傳 dogs.json 的回應；dogs/ 一律 404
+  const install = fake => {
+    const calls = [];
+    window.fetch = async (url, opts) => {
+      calls.push([String(url), opts && opts.cache]);
+      if (String(url).startsWith('dogs/')) return new Response('', { status: 404 });
+      return fake(url);
+    };
+    return calls;
+  };
+  const reset = () => { allDogs = []; groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = ''; };
+  try {
+    await check('#32 開網頁先出現分類列與「讀取中」，資料到了才畫狗卡', async () => {
+      reset();
+      let release;
+      const calls = install(() => new Promise(r => { release = () => r(json(DATA)); }));
+      const done = init();
+      eq(tabNames(), ['溜狗表', '今天已溜', '相關資訊'], '讀取中就有分類：');
+      eq(main.textContent.trim(), '讀取狗狗資料中…', '讀取中：');
+      document.querySelector('#tabs button[data-tab="info"]').click();
+      if (!main.textContent.includes('編輯中')) throw new Error('讀取中也能切到相關資訊');
+      document.querySelector('#tabs button[data-tab="walk"]').click();
+      eq(main.textContent.trim(), '讀取狗狗資料中…', '切回溜狗表仍在讀取：');
+      release(); await done; await tick();
+      eq(calls[0], ['data/dogs.json', 'no-cache'], '讀的檔案：');
+      if (calls.some(([u]) => /google|gviz/.test(u))) throw new Error('不應連試算表');
+      eq(names(), ['讀取甲', '讀取乙'], '狗卡（沒紀錄的在前）：');
+      // 顯示成這台裝置的當地時間（在台灣就是 9/25 08:05）
+      const t = new Date(DATA.syncedAt);
+      eq(document.getElementById('updatedLabel').textContent,
+        `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, '同步時間：');
+      eq([...groupMap['讀取甲']], ['讀取乙'], '可以一起溜：');
+      eq(calls.filter(([u]) => u.startsWith('dogs/')).map(([u]) => u).sort(), ['dogs/9001.md', 'dogs/9002.md'], '狗卡資訊照舊用編號讀：');
+    });
+    await check('#32 dogs.json 讀取失敗：標題、搜尋、分類都在，內容區顯示錯誤，可重新讀取', async () => {
+      reset();
+      document.getElementById('updatedLabel').textContent = '';
+      for (const fake of [() => new Response('Not Found', { status: 404 }), () => { throw new TypeError('Failed to fetch'); }, () => new Response('{壞掉')]) {
+        install(fake);
+        await init();
+        eq(tabNames(), ['溜狗表', '今天已溜', '相關資訊'], '分類：');
+        eq(main.querySelector('.status-msg').firstChild.textContent, '資料載入失敗，請稍後重新整理。', '錯誤訊息：');
+        eq(document.querySelectorAll('#main .card').length, 0, '沒有狗卡：');
+      }
+      install(() => json(DATA));
+      document.getElementById('retryBtn').click();
+      await tick(); await tick();
+      eq(names().length, 2, '按重新讀取後：');
+    });
+    await check('#32 dogs.json 少了可以一起溜：狗卡照常顯示，上方提醒', async () => {
+      reset();
+      const { groups, ...noGroups } = DATA;
+      install(() => json(noGroups));
+      await init(); await tick();
+      eq(names().length, 2, '狗卡：');
+      if (!main.querySelector('.alert-box.warn')) throw new Error('要提醒可以一起溜讀不到');
+      eq(JSON.stringify(groupMap), '{}', '可以一起溜：');
+    });
+  } finally {
+    window.fetch = realFetch;
+    [allDogs, groupMap, detailMap, activeTab, searchQuery, loadState, loadWarning] = saved;
+    render();
+  }
 }
 
 function show() {
@@ -650,19 +665,22 @@ function show() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest'].map(u => fetch(u).then(res => {
+Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest]) => {
+  .then(([html, js, manifest, dogsJson]) => {
     INDEX_HTML = html;
     MANIFEST = JSON.parse(manifest);
     APP_JS = js;
+    DOGS_JSON = JSON.parse(dogsJson);
     const s = document.createElement('script');
     s.textContent = js;
     document.body.appendChild(s);
+    loadState = 'ready'; // 測試頁不跑 init，直接當資料已讀好，各測試自己放假資料
     return runTests();
   })
+  .then(runSerialTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
