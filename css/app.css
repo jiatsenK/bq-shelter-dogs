@@ -351,3 +351,33 @@ html.detail-open { overflow: hidden; }
   padding: 8px 10px; cursor: pointer;
 }
 .toast-undo[hidden] { display: none; }
+
+/* 照片燈箱（#46）：大圖不裁切、盡量用滿畫面，點背景或右上角關閉 */
+.card .thumb:not(.no-photo) img, .thumb.zoom:not(.no-photo) { cursor: zoom-in; }
+button.thumb { padding: 0; border: none; font: inherit; color: inherit; display: block; }
+button.thumb:disabled { cursor: default; }
+button.thumb:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+html.lightbox-open { overflow: hidden; }
+.lightbox {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(12, 18, 30, 0.94);
+  display: flex; align-items: center; justify-content: center;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+  touch-action: pinch-zoom;
+}
+.lightbox[hidden] { display: none; }
+.lightbox img {
+  display: block;
+  max-width: 100%; max-height: 100%;
+  width: auto; height: auto;
+  object-fit: contain;
+}
+.lightbox-close {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top, 0px)); right: calc(12px + env(safe-area-inset-right, 0px));
+  width: 44px; height: 44px; border-radius: 50%;
+  border: none; background: rgba(255, 255, 255, 0.18); color: #fff;
+  font-size: 22px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.lightbox-close:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }

@@ -176,18 +176,77 @@ function icon(id) {
   return `<svg class="icon"><use href="#i-${id}"/></svg>`;
 }
 
-function photoThumb(dog, size = 56) {
+// 前端剛上傳成功的照片（編號 → 本機圖片網址）：GitHub Pages 要一兩分鐘才會更新，這段期間先顯示剛傳的那張（#48）
+const photoOverrides = {};
+function photoSrc(dog) {
+  return photoOverrides[dog.id] || `photos/${encodeURIComponent(dog.id)}.jpg`;
+}
+
+// zoom：詳細資訊上方的照片做成按鈕，點了用燈箱放大（#46）；照片讀不到就標 no-photo，按了不放大
+function photoThumb(dog, size = 56, zoom = false) {
   // 沒有編號就直接顯示腳掌圖示，不去抓 photos/.jpg
   if (!dog.id) {
     return `<div class="thumb"><div class="thumb-fallback" style="display:flex">${icon('paw')}</div></div>`;
   }
+  const tag = zoom ? 'button' : 'div';
+  const attrs = zoom ? ` type="button" class="thumb zoom" data-zoom aria-label="放大 ${esc(dog.name)} 的照片"` : ' class="thumb"';
   return `
-    <div class="thumb">
-      <img src="photos/${encodeURIComponent(dog.id)}.jpg" alt="" width="${size}" height="${size}" loading="lazy" decoding="async"
-           onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+    <${tag}${attrs}>
+      <img src="${esc(photoSrc(dog))}" alt="" width="${size}" height="${size}" loading="lazy" decoding="async"
+           onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'; this.parentNode.classList.add('no-photo'); this.parentNode.disabled = true;">
       <div class="thumb-fallback">${icon('paw')}</div>
-    </div>
+    </${tag}>
   `;
+}
+
+// 燈箱（#46）：大圖不裁切、盡量用滿畫面；點關閉、點背景、Esc、手機返回都能關
+let lightboxOpener = null;
+function lightboxOpen() {
+  const el = document.getElementById('lightbox');
+  return !!el && !el.hidden;
+}
+
+// opener：關掉後焦點回到哪裡（詳細資訊的照片或狗卡）
+function openLightbox(dog, opener) {
+  if (!dog || !dog.id) return;
+  let el = document.getElementById('lightbox');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'lightbox';
+    el.className = 'lightbox';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.innerHTML = `<img alt=""><button type="button" class="lightbox-close" aria-label="關閉照片">${icon('close')}</button>`;
+    el.addEventListener('click', e => {
+      if (!e.target.closest('img')) closeLightbox(); // 點背景或關閉按鈕
+    });
+    document.body.appendChild(el);
+  }
+  el.setAttribute('aria-label', `${dog.name} 的照片`);
+  el.querySelector('img').src = photoSrc(dog);
+  el.querySelector('img').alt = `${dog.name} 的照片`;
+  lightboxOpener = opener || document.activeElement;
+  el.hidden = false;
+  document.documentElement.classList.add('lightbox-open');
+  // 手機按「返回」時只關掉燈箱
+  history.pushState({ bqPhoto: true }, '');
+  el.querySelector('.lightbox-close').focus({ preventScroll: true });
+}
+
+function hideLightbox() {
+  const el = document.getElementById('lightbox');
+  if (!el || el.hidden) return;
+  el.hidden = true;
+  el.querySelector('img').removeAttribute('src');
+  document.documentElement.classList.remove('lightbox-open');
+  const opener = lightboxOpener;
+  lightboxOpener = null;
+  if (opener && opener.isConnected && opener !== document.body) opener.focus({ preventScroll: true });
+}
+
+function closeLightbox() {
+  if (history.state && history.state.bqPhoto) history.back(); // popstate 會接著 hideLightbox
+  else hideLightbox();
 }
 
 function statusBadge(dog, today) {
@@ -377,7 +436,7 @@ function detailHtml(dog, today) {
   const walkedIds = loadWalkedIds(today);
   return `
     <div class="detail-head">
-      ${photoThumb(dog, 84)}
+      ${photoThumb(dog, 84, true)}
       <div class="info">
         ${statusBadge(dog, today)}
         <div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div>
@@ -441,6 +500,10 @@ function renderDetail() {
   const focused = box.contains(document.activeElement) ? document.activeElement : null;
   box.innerHTML = detailHtml(detailDog, new Date());
   box.querySelector('#detailClose').addEventListener('click', closeDetail);
+  const zoom = box.querySelector('[data-zoom]');
+  if (zoom) zoom.addEventListener('click', () => {
+    if (!zoom.classList.contains('no-photo')) openLightbox(detailDog, zoom);
+  });
   box.querySelectorAll('.buddy').forEach(btn => {
     const d = allDogs[btn.dataset.dog];
     if (d) btn.addEventListener('click', () => showDetail(d));
@@ -502,11 +565,21 @@ function closeDetail() {
   else hideDetail();
 }
 
-window.addEventListener('popstate', hideDetail);
+// 燈箱開著時「返回」只關燈箱，詳細資訊留著
+window.addEventListener('popstate', () => {
+  if (lightboxOpen()) hideLightbox();
+  else hideDetail();
+});
 document.getElementById('detailBackdrop').addEventListener('click', e => {
   if (e.target.id === 'detailBackdrop') closeDetail();
 });
 document.addEventListener('keydown', e => {
+  if (lightboxOpen()) {
+    // 燈箱裡只有關閉按鈕：Esc 關燈箱，Tab 留在關閉按鈕上
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'Tab') { e.preventDefault(); document.querySelector('#lightbox .lightbox-close').focus({ preventScroll: true }); }
+    return;
+  }
   if (e.key === 'Escape' && detailDog) closeDetail();
   if (e.key !== 'Tab' || !detailDog) return;
   const buttons = [...document.querySelectorAll('#detail button:not(:disabled), #toast:not([hidden]) button:not([hidden])')];
@@ -523,12 +596,14 @@ function cardFromEvent(e) {
   const card = e.target.closest('#main .card[data-dog]');
   return card && allDogs[card.dataset.dog];
 }
-// 點「已遛／移回」只記錄，不開詳細資訊；點卡片其他地方才開
+// 點「已遛／移回」只記錄，不開詳細資訊；點照片開燈箱（#46，沒照片就照舊開詳細資訊）；點卡片其他地方開詳細資訊
 document.getElementById('main').addEventListener('click', e => {
   const dog = cardFromEvent(e);
   if (!dog) return;
   const btn = e.target.closest('[data-walk]');
+  const thumb = e.target.closest('.thumb');
   if (btn) setWalked([dog], btn.dataset.walk === 'add');
+  else if (thumb && dog.id && !thumb.classList.contains('no-photo')) openLightbox(dog, thumb.closest('.card'));
   else showDetail(dog);
 });
 document.getElementById('main').addEventListener('keydown', e => {
