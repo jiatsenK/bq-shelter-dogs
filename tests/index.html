@@ -168,6 +168,33 @@ function runTests() {
       const badge = statusBadge({ name: 'x', walkedDate: new Date(2099, 0, 1), walker: '', note: '' }, TODAY);
       if (!badge.includes('日期異常') || badge.includes('-')) throw new Error(`標籤是 ${badge}`);
     }),
+    // #8 可一起遛
+    check('一隻狗在多組時，可一起遛的名單合併去重', () => {
+      const table = { cols: [{}, {}, {}], rows: [
+        { c: [{ v: '宙斯' }, { v: '宙斯' }, { v: '冬冬' }] },
+        { c: [{ v: '冬冬' }, { v: '比比' }, { v: '金寶' }] },
+        { c: [null, { v: '冬冬' }, null] },
+      ] };
+      const map = parseGroups(table, new Set(['宙斯', '冬冬', '比比', '金寶']));
+      eq([...map['宙斯']].sort(), ['冬冬', '比比'].sort());
+      eq([...map['冬冬']].sort(), ['宙斯', '比比', '金寶'].sort());
+      eq([...map['金寶']], ['冬冬']);
+    }),
+    check('常遛狗群犬名多了空白（含全形空白）也對得到，顯示用主清單的寫法', () => {
+      const table = { cols: [{}], rows: [{ c: [{ v: '宙 斯' }] }, { c: [{ v: '冬\u3000冬 ' }] }] };
+      const map = parseGroups(table, new Set(['宙斯', '冬冬']));
+      eq([...map['宙斯']], ['冬冬']); eq([...map['冬冬']], ['宙斯']);
+    }),
+    check('卡片顯示「可一起遛：A、B」；沒有同籠狗或只剩離所狗時不顯示', () => {
+      allDogs = [{ name: '宙斯' }, { name: '冬冬' }, { name: '比比' }, { name: '金寶' }];
+      groupMap = parseGroups({ cols: [{}, {}], rows: [
+        { c: [{ v: '宙斯' }, { v: '金寶' }] }, { c: [{ v: '冬冬' }, { v: '已離所' }] }, { c: [{ v: '比比' }, null] },
+      ] }, new Set(allDogs.map(d => d.name)));
+      const html = groupLine('宙斯');
+      if (!html.includes('可一起遛：<b>冬冬、比比</b>')) throw new Error(`宙斯的卡片內容不對：${html}`);
+      eq(groupLine('金寶'), '', '金寶的同組只有離所的狗：');
+      eq(groupLine('沒分組'), '', '沒有分組的狗：');
+    }),
   ]);
 }
 
