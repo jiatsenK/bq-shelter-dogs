@@ -4,7 +4,6 @@ import json
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFESTS = sorted((ROOT / "tools").glob("photo_manifest_*.json"))
 OUT = ROOT / "photos"
 TMP = ROOT / ".photo_tmp"
 OUT.mkdir(exist_ok=True)
@@ -22,8 +21,11 @@ def crop_photo(src, dst, side):
     crop = crop.resize((320, 320), Image.Resampling.LANCZOS)
     crop.save(dst, "JPEG", quality=72, optimize=True, progressive=True, subsampling=2)
 
+ready = (ROOT / "tools" / "photo_manifest_ready").read_text(encoding="utf-8")
+manifest_names = [x.strip() for x in ready.splitlines() if x.strip()]
 items = []
-for path in MANIFESTS:
+for name in manifest_names:
+    path = ROOT / "tools" / name
     items.extend(json.loads(path.read_text(encoding="utf-8")))
 
 if not items:
