@@ -55,3 +55,4 @@
 - 測試：原本 `tests/index.html` 對前端試算表解析的測試移到 `scripts/sync-sheet.test.mjs`（解析只剩同步腳本在做），並改成比對「前端讀回 dogs.json」與同步前資料一致；`tests/index.html` 補 #32 測試，40 項全過；`node --test scripts/sync-sheet.test.mjs` 10 項全過。另用 repo 內真實 `data/dogs.json`（121 隻）在手機尺寸預覽確認。
 - 備註：Node 22 下 `node --test scripts/`（給資料夾）會找不到模組，要寫檔名；本票沒改。
 - PR：#41（`claude/project-thread-qfsoo2`）。
+- 合併：K 2026-09-24 說「合併」；合併前確認已含最新 main，測試頁 40 項、`node --test scripts/sync-sheet.test.mjs` 10 項全過。
