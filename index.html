@@ -495,20 +495,55 @@ function highlightNote(note, terms) {
   return html + esc(note.slice(last));
 }
 
+// 去掉開頭的 YAML frontmatter（--- 到 ---），沒有就原樣回傳
 function parseFrontmatterBody(text) {
-  const m = text.match(/^---\s*[\s\S]*?---\s*([\s\S]*)$/);
+  const m = text.replace(/^\uFEFF/, '').match(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/);
   return (m ? m[1] : text).trim();
+}
+
+// 把 Markdown 轉成純文字，卡片上不要露出 **、#、[]() 這些符號
+function markdownToText(md) {
+  return md
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/%%[\s\S]*?%%/g, '')                            // Obsidian 註解
+    .split(/\r?\n/)
+    .map(line => line
+      .replace(/^\s*(```|~~~).*$/, '')                        // 程式碼區塊的框線
+      .replace(/^\s*([-*_])(\s*\1){2,}\s*$/, '')              // 分隔線
+      .replace(/^\s{0,3}#{1,6}\s+/, '')                       // 標題
+      .replace(/^\s*(>\s*)+/, '')                             // 引用
+      .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/, '')                // 待辦清單
+      .replace(/^\s*([-*+]|\d+[.)])\s+/, '')                  // 清單符號
+      .replace(/^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-*:?\s*$/, '')    // 表格分隔列
+      .replace(/!\[\[[^\]]*\]\]/g, '')                        // Obsidian 嵌入圖片
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '')                  // 圖片
+      .replace(/\[\[([^\]|]*)\|([^\]]*)\]\]/g, '$2')           // [[頁面|顯示文字]]
+      .replace(/\[\[([^\]]*)\]\]/g, '$1')                      // [[頁面]]
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')                 // [文字](網址)
+      .replace(/<[^>]+>/g, '')                                // HTML 標籤
+      .replace(/(\*\*|__)(.+?)\1/g, '$2')                      // 粗體
+      .replace(/(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)/g, '$1$2')     // 斜體 *
+      .replace(/(^|[^_\w])_(?!\s)(.+?)_(?![\w])/g, '$1$2')      // 斜體 _
+      .replace(/~~(.+?)~~/g, '$1')
+      .replace(/==(.+?)==/g, '$1')
+      .replace(/`+([^`]*)`+/g, '$1')
+      .replace(/^\s*\||\|\s*$/g, '')                          // 表格左右框線
+      .replace(/\s*\|\s*/g, ' ')
+      .trim())
+    .filter(Boolean)
+    .join(' ');
 }
 
 async function fetchAllDetails(dogs) {
   const map = {};
-  await Promise.allSettled(dogs.map(async d => {
-    if (!d.id) return;
+  // 同一個編號只抓一次；沒有編號的狗不抓，也不改用犬名配對
+  const ids = [...new Set(dogs.map(d => d.id).filter(Boolean))];
+  await Promise.allSettled(ids.map(async id => {
     try {
-      const res = await fetch(`dogs/${encodeURIComponent(d.id)}.md`);
+      const res = await fetch(`dogs/${encodeURIComponent(id)}.md`);
       if (!res.ok) return;
-      const body = parseFrontmatterBody(await res.text());
-      if (body) map[d.id] = body;
+      const text = markdownToText(parseFrontmatterBody(await res.text()));
+      if (text) map[id] = text;
     } catch (e) { /* 沒有這隻狗的介紹檔，略過即可 */ }
   }));
   return map;
@@ -535,9 +570,13 @@ function icon(id) {
 }
 
 function photoThumb(dog) {
+  // 沒有編號就直接顯示腳掌圖示，不去抓 photos/.jpg
+  if (!dog.id) {
+    return `<div class="thumb"><div class="thumb-fallback" style="display:flex">${icon('paw')}</div></div>`;
+  }
   return `
     <div class="thumb">
-      <img src="photos/${encodeURIComponent(dog.id)}.jpg" alt="" loading="lazy"
+      <img src="photos/${encodeURIComponent(dog.id)}.jpg" alt="" width="84" height="84" loading="lazy" decoding="async"
            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
       <div class="thumb-fallback">${icon('paw')}</div>
     </div>
@@ -581,7 +620,7 @@ function dogCard(dog, today) {
         ${metaLine(dog)}
         ${dog.note ? `<div class="note">${icon('warn')}<span class="text">${highlightNote(dog.note, flag && flag.terms)}</span></div>` : ''}
         ${groupLine(dog.name)}
-        ${detailMap[dog.id] ? `<div class="intro"><span class="label">介紹：</span>${esc(detailMap[dog.id])}</div>` : ''}
+        ${dog.id && detailMap[dog.id] ? `<div class="intro"><span class="label">介紹：</span>${esc(detailMap[dog.id])}</div>` : ''}
       </div>
     </div>
   `;
