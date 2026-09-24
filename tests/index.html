@@ -149,6 +149,67 @@ function runTests() {
       const map = parseGroups(table, new Set(['宙斯', '冬冬', '比比']));
       eq([...map['宙斯']], ['比比']); eq([...map['冬冬']], []); eq(map['已離所'], undefined);
     }),
+    // ── #9 照片與介紹 ──
+    check('介紹：去掉 YAML frontmatter，只留內文', () => {
+      eq(parseFrontmatterBody('---\nname: 宙斯\ntags: [親人]\n---\n\n很黏人。\n'), '很黏人。');
+      eq(parseFrontmatterBody('\uFEFF---\r\nname: 宙斯\r\n---\r\n很黏人。'), '很黏人。', 'BOM 與 Windows 換行：');
+      eq(parseFrontmatterBody('沒有 frontmatter 的介紹'), '沒有 frontmatter 的介紹');
+      eq(parseFrontmatterBody('第一段\n\n---\n\n第二段'), '第一段\n\n---\n\n第二段', '內文中的分隔線不算 frontmatter：');
+    }),
+    check('介紹：Markdown 符號不原樣露出', () => {
+      const md = '# 宙斯\n\n**很親人**，喜歡 *散步*。\n\n- 怕機車\n- 會拉扯\n\n> 小心 __別的公狗__\n\n[領養頁](https://example.com) [[冬冬|好朋友冬冬]] ![照片](a.jpg) `暗號`\n\n---\n\n| 項目 | 說明 |\n|---|---|\n| 體重 | 20kg |';
+      const text = markdownToText(md);
+      eq(text, '宙斯 很親人，喜歡 散步。 怕機車 會拉扯 小心 別的公狗 領養頁 好朋友冬冬  暗號 項目 說明 體重 20kg');
+      if (/[*#`\[\]|>]/.test(text)) throw new Error(`還有 Markdown 符號：「${text}」`);
+    }),
+    check('介紹：底線在字中間（如 dog_01）不會被吃掉', () => {
+      eq(markdownToText('檔名 dog_01_a 保留'), '檔名 dog_01_a 保留');
+    }),
+    check('介紹：用編號抓 dogs/{編號}.md，404 安靜略過，沒編號不抓、同編號只抓一次', async () => {
+      // 其他測試可能同時換掉 fetch：不是 dogs/ 的請求交回給原本的 fetch
+      const calls = [];
+      const prevFetch = window.fetch;
+      const fakeFetch = async url => {
+        if (!String(url).startsWith('dogs/')) return prevFetch(url);
+        calls.push(String(url));
+        if (url === 'dogs/202101234.md') return new Response('---\nname: 宙斯\n---\n**很親人**');
+        if (url === 'dogs/202102345.md') throw new TypeError('Failed to fetch');
+        return new Response('Not Found', { status: 404 });
+      };
+      window.fetch = fakeFetch;
+      try {
+        const map = await fetchAllDetails([
+          { name: '宙斯', id: '202101234' }, { name: '宙斯二號', id: '202101234' },
+          { name: '冬冬', id: '202102345' }, { name: '比比', id: '202102346' }, { name: '金寶', id: '' },
+        ]);
+        eq(map, { 202101234: '很親人' });
+        eq(calls.sort(), ['dogs/202101234.md', 'dogs/202102345.md', 'dogs/202102346.md']);
+      } finally { if (window.fetch === fakeFetch) window.fetch = prevFetch; }
+    }),
+    check('照片：有編號用 photos/{編號}.jpg 縮圖且延後載入；沒編號直接顯示腳掌、不抓 photos/.jpg', () => {
+      const box = document.createElement('div');
+      box.innerHTML = photoThumb({ name: '宙斯', id: '202101234' });
+      const img = box.querySelector('img');
+      eq(img.getAttribute('src'), 'photos/202101234.jpg');
+      eq(img.getAttribute('loading'), 'lazy');
+      box.innerHTML = photoThumb({ name: '金寶', id: '' });
+      eq(box.querySelector('img'), null, '沒編號時的 img：');
+      if (!box.querySelector('.thumb-fallback')) throw new Error('沒編號時沒有腳掌圖示');
+    }),
+    check('卡片：抓到介紹才顯示介紹那一行，沒編號的狗不顯示', () => {
+      const saved = detailMap;
+      try {
+        detailMap = { 202101234: '很親人' };
+        const box = document.createElement('div');
+        box.innerHTML = dogCard({ name: '宙斯', id: '202101234', cage: 'C03', walkedDate: null, walker: '', note: '' }, TODAY);
+        eq(box.querySelector('.intro').textContent, '介紹：很親人');
+        box.innerHTML = dogCard({ name: '比比', id: '202102346', cage: 'A08', walkedDate: null, walker: '', note: '' }, TODAY);
+        eq(box.querySelector('.intro'), null, '沒介紹檔：');
+        detailMap = { '': '不該出現' };
+        box.innerHTML = dogCard({ name: '金寶', id: '', cage: 'A11', walkedDate: null, walker: '', note: '' }, TODAY);
+        eq(box.querySelector('.intro'), null, '沒編號：');
+      } finally { detailMap = saved; }
+    }),
   ]);
 }
 
