@@ -96,6 +96,8 @@
   .tabs button.active .n { opacity: 0.9; }
 
   main { padding: 14px 14px 50px; max-width: 480px; margin: 0 auto; }
+  /* 試算表文字（備註、籠位、犬名、搜尋字）可能是一長串沒有空白的英數或網址，一律可以折行，不撐破版面 */
+  main { overflow-wrap: anywhere; }
 
   .status-msg {
     text-align: center;
@@ -220,7 +222,7 @@
   .note mark { background: transparent; color: var(--red-text); font-weight: 700; }
 
   .group-inline {
-    display: inline-flex; gap: 5px; align-items: flex-start;
+    display: inline-flex; max-width: 100%; gap: 5px; align-items: flex-start;
     font-size: 13px; line-height: 1.5;
     margin-top: 8px;
     padding: 5px 9px;
@@ -264,7 +266,7 @@
     </div>
     <div class="search">
       <svg class="icon"><use href="#i-search"/></svg>
-      <input id="searchInput" type="search" placeholder="搜尋犬名" autocomplete="off">
+      <input id="searchInput" type="search" placeholder="搜尋犬名" aria-label="搜尋犬名" enterkeyhint="search" autocomplete="off">
     </div>
     <div class="tabs" id="tabs"></div>
   </div>
