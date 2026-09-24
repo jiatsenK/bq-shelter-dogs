@@ -289,6 +289,47 @@ function runTests() {
         eq(box.querySelector('.intro'), null, '沒編號：');
       } finally { detailMap = saved; }
     }),
+    // ── #6 依籠位 ──
+    check('籠位清單從主清單籠位欄去重：空籠也列出，表尾提示不算', () => {
+      const table = fakeGviz(GRID, 7).table;
+      eq(parseCages(table), ['A07', 'A08', 'A11', 'A12', 'A13', 'C03']);
+      const grid = GRID.concat([['', '舊B02', '', '', '', ''], ['', ' C區41 ', '', '', '', ''], ['', 'A07', '', '', '', '']]);
+      eq(parseCages(fakeGviz(grid, 7).table), ['A07', 'A08', 'A11', 'A12', 'A13', 'C03', 'C區41', '舊B02']);
+    }),
+    check('籠位排序：數字照大小、中文開頭的集中在後', () => {
+      const out = sortCages(['住院區', 'A10', '母幼A', 'A2', '新A01', 'B01', 'A01', '新A10', '新A2']);
+      eq(out.slice(0, 4), ['A01', 'A2', 'A10', 'B01'], '英數籠位：');
+      eq(out.filter(c => c.startsWith('新')), ['新A01', '新A2', '新A10'], '中文開頭同字首照數字：');
+      eq(out.slice(4).sort(), ['住院區', '母幼A', '新A01', '新A2', '新A10'].sort(), '中文籠位在後：');
+    }),
+    check('依籠位：點籠位看籠內的狗，空籠顯示提示，返回與切換分頁回到籠位清單', () => {
+      allDogs = [
+        { cage: 'A02', id: '2', name: '測試乙', walkedDate: new Date(), walker: '', note: '' },
+        { cage: 'A02', id: '3', name: '測試丙', walkedDate: null, walker: '', note: '勿溜' },
+        { cage: 'A05', id: '4', name: '測試丁', walkedDate: null, walker: '', note: '' },
+      ];
+      groupMap = {}; detailMap = {}; cages = ['A02', 'A05', '舊A01'];
+      searchQuery = ''; activeTab = 'cage'; activeCage = null;
+      renderMain();
+      const chips = () => [...document.querySelectorAll('#main .cage-chip')];
+      eq(chips().map(b => b.dataset.cage), ['A02', 'A05', '舊A01'], '籠位按鈕：');
+      eq(chips().map(b => b.querySelector('.n').textContent), ['2', '1', '0'], '隻數：');
+      if (!chips()[2].classList.contains('empty')) throw new Error('空籠要淡色顯示');
+      chips()[0].click();
+      eq(activeCage, 'A02');
+      const names = [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
+      eq(names, ['測試乙', '測試丙'], '籠內的狗：');
+      const flagged = [...document.querySelectorAll('#main .card')].filter(c => c.querySelector('.badge.red'));
+      eq(flagged.map(c => c.querySelector('.name').textContent), ['測試丙'], '勿溜的狗有驚嘆號：');
+      document.getElementById('cageBack').click();
+      eq(activeCage, null, '返回後：');
+      chips()[2].click();
+      if (!document.querySelector('#main .status-msg')) throw new Error('空籠要顯示「這個籠位目前沒有狗」');
+      document.querySelector('#tabs button[data-tab="due"]').click();
+      document.querySelector('#tabs button[data-tab="cage"]').click();
+      if (!document.querySelector('#main .cage-grid')) throw new Error('切換分頁後要回到籠位清單');
+      activeTab = 'due';
+    }),
     check('#3 色標邊界：0～6 天綠、第 7 天起黃、第 30 天起紅', () => {
       const daysAgo = n => ({ name: '測試狗', walkedDate: new Date(2026, 8, 24 - n), walker: '' });
       const level = n => computeStatus(daysAgo(n), TODAY).level;
