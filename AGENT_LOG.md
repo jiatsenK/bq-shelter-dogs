@@ -56,3 +56,15 @@
 - 備註：Node 22 下 `node --test scripts/`（給資料夾）會找不到模組，要寫檔名；本票沒改。
 - PR：#41（`claude/project-thread-qfsoo2`）。
 - 合併：K 2026-09-24 說「合併」；合併前確認已含最新 main，測試頁 40 項、`node --test scripts/sync-sheet.test.mjs` 10 項全過。
+
+## [2026-09-25] Claude | #35 今天已溜（只存在這支手機）
+- 依據：Issue #35（V3 規格第 4 節）；操作方式照 K 2026-09-24 試原型後的定案（#35 兩則留言）：狗卡「溜了／移回」按鈕取代右滑／左滑；「可以一起溜」用勾選一次記，取代長按＋確認。
+- `js/app.js`：紀錄存在 localStorage `bq-walked-today`，內容 `{ date: 本地日期, ids: [編號] }`；日期不是今天就視為沒有紀錄（隔天自動全部未勾選，不刪舊資料）。無痕模式存不進去時，這次開著網頁期間仍記得。
+- 溜狗表點「溜了」→ 移到今天已溜（最近記的在上面）；今天已溜點「移回」→ 回到溜狗表原排序位置。底部提示條可「復原」。沒有編號的狗沒有按鈕、不能勾選。
+- 詳細資訊「可以一起溜」：照片右上角圓圈勾選，下方按鈕「這隻和勾選的 N 隻都溜了」一次記；已溜的標「今天已溜」、不顯示圓圈。
+- 文案寫明「這支手機」「其他志工看不到」，不暗示是所有志工的紀錄。不寫試算表、不寫 GitHub。
+- `tests/index.html`：#10 唯讀測試改成允許 localStorage 但只能讀寫 `WALKED_KEY`；測試頁改用假 localStorage，不會動到同網域上真正的紀錄；新增 3 項 #35 測試，49 項全過。
+- 截圖（模擬資料）：專案檔案 previews/issue-35/。
+- K 看過勾選方式原型（https://claude.ai/artifact/ECyMLbwRAPkxAXH7cez1HF）後選「分開點」：點圓圈勾選、點照片打開；圓圈可點範圍外擴 9px。
+- 合併前併入最新 main（含 #41 改讀 dogs.json）：測試頁衝突兩邊都保留，tests/index.html 43 項、sync 測試 10 項全過；用 repo 內真實 dogs.json 試過「溜了」、重新整理後仍在。
+- PR：#42（`claude/project-thread-d3v71d`）。
