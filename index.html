@@ -166,78 +166,147 @@
     cursor: pointer;
   }
 
+  /* 卡片：手機一個畫面約 6～8 隻（#28，版型照 K 給的參考圖）。
+     一列：照片｜犬名＋編號｜籠位｜上次遛狗｜箭頭；備註命中警示關鍵字時多一行原文 */
   .card {
     background: var(--surface);
-    border-radius: var(--radius-card);
+    border-radius: 14px;
     display: flex;
-    gap: 14px;
-    padding: 12px;
-    margin-bottom: 12px;
+    align-items: center;
+    gap: 10px;
+    padding: 6px 4px 6px 6px;
+    margin-bottom: 6px;
     box-shadow: var(--shadow-card);
+    cursor: pointer;
   }
+  .card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .card:active { background: var(--surface-soft); }
 
   .thumb {
-    width: 84px; height: 84px; flex-shrink: 0;
+    width: 60px; height: 60px; flex-shrink: 0;
     border-radius: var(--radius-photo);
     overflow: hidden;
     background: var(--primary-soft);
     position: relative;
   }
+  .card .thumb { width: 64px; height: 52px; border-radius: 10px; align-self: flex-start; }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
   .thumb-fallback {
     display: none;
     position: absolute; inset: 0;
     align-items: center; justify-content: center;
     color: var(--primary); opacity: 0.55;
-    font-size: 38px;
+    font-size: 28px;
   }
 
   .card .body { flex: 1; min-width: 0; }
   .badge {
     display: inline-flex; align-items: center; gap: 4px;
     font-size: 14px; font-weight: 700;
-    padding: 2px 10px; border-radius: 8px;
+    padding: 1px 9px; border-radius: 8px;
+    white-space: nowrap;
   }
   .badge.red { background: var(--red-bg); color: var(--red-text); }
   .badge.amber { background: var(--amber-bg); color: var(--amber-text); }
   .badge.sage { background: var(--green-bg); color: var(--green-text); }
   .badge.muted { background: var(--muted-bg); color: var(--muted-text); }
-  .badges { display: flex; flex-wrap: wrap; gap: 6px; }
-  .card .name { font-size: 18px; font-weight: 700; margin-top: 6px; line-height: 1.3; word-break: break-all; }
-  .card .meta { font-size: 13.5px; color: var(--ink-soft); margin-top: 2px; }
-  .card .meta .sep { color: var(--line); margin: 0 6px; }
+  .card .row { display: flex; align-items: center; gap: 8px; }
+  .card .who { flex: 1; min-width: 0; }
+  .card .name { font-size: 18px; font-weight: 700; line-height: 1.3; word-break: break-all; }
+  /* 性別：之後補上 ♂／♀ 符號，沒有資料時不佔位 */
+  .sex { margin-left: 4px; font-size: 15px; color: var(--ink-soft); }
+  .sex:empty { display: none; }
+  /* 有一般備註（沒命中警示）時犬名旁的小圖示，內容點開看 */
+  .has-note { margin-left: 5px; color: #F0A020; font-size: 17px; vertical-align: -0.15em; }
+  .card .meta { font-size: 13.5px; color: var(--ink-soft); margin-top: 1px; line-height: 1.4; }
+  .card .meta .sep, .detail-head .meta .sep { color: #C5CFDD; margin: 0 6px; }
+  /* 上次遛狗：小標＋彩色天數（綠／黃／紅照 #3 色標） */
+  .last { flex-shrink: 0; width: 84px; line-height: 1.3; }
+  .last .lbl { display: block; font-size: 12px; color: var(--ink-soft); }
+  .last .val { display: block; font-size: 17px; font-weight: 700; white-space: nowrap; }
+  .last .val.small { font-size: 14px; }
+  .last .val.sage { color: var(--green-text); }
+  .last .val.amber { color: var(--amber-text); }
+  .last .val.red { color: var(--red-text); }
+  .last .val.muted { color: var(--muted-text); font-weight: 500; }
+  .card .more { color: #B6C1D2; font-size: 18px; flex-shrink: 0; }
 
-  .note {
+  /* 警示備註：命中關鍵字的備註原文，紅框＋三角圖示＋粗體，不只靠顏色辨識 */
+  .warn-note {
     display: flex; gap: 5px; align-items: flex-start;
-    font-size: 13px; line-height: 1.5;
-    margin-top: 8px;
-    padding: 5px 9px;
+    font-size: 13.5px; font-weight: 700; line-height: 1.45;
+    margin-top: 4px;
+    padding: 3px 8px;
     border-radius: 8px;
-    background: var(--red-bg);
-    color: #8F3A3D;
+    border: 1.5px solid var(--red-text);
+    background: #FFF7F7;
+    color: var(--red-text);
   }
-  .note .icon { color: var(--red-text); margin-top: 3px; }
-  /* 規格要求備註在卡片內看得完，所以不截行；保留試算表裡的換行 */
-  .note .text { white-space: pre-line; word-break: break-word; }
-  .note mark { background: transparent; color: var(--red-text); font-weight: 700; }
+  .warn-note .icon { margin-top: 2px; font-size: 15px; }
+  .warn-note .text, .detail .note-text { white-space: pre-line; word-break: break-word; }
+  .warn-note mark, .detail mark { background: transparent; color: inherit; font-weight: 900; text-decoration: underline; text-underline-offset: 3px; }
 
-  .group-inline {
-    display: inline-flex; max-width: 100%; gap: 5px; align-items: flex-start;
-    font-size: 13px; line-height: 1.5;
-    margin-top: 8px;
-    padding: 5px 9px;
-    border-radius: 8px;
-    background: var(--primary-soft);
-    color: #2A4F86;
+  /* 詳細資訊：點狗卡後從下方滑出，分成 備註／可以一起溜的狗／狗卡資訊 三區 */
+  html.detail-open { overflow: hidden; }
+  .detail-backdrop {
+    position: fixed; inset: 0; z-index: 20;
+    background: rgba(30, 42, 68, 0.45);
+    display: flex; align-items: flex-end; justify-content: center;
   }
-  .group-inline .icon { color: var(--primary); margin-top: 3px; }
-  .group-inline b { font-weight: 700; }
-
-  .intro {
-    font-size: 13px; color: var(--ink-soft); margin-top: 8px; line-height: 1.6;
-    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  .detail-backdrop[hidden] { display: none; }
+  .detail {
+    background: var(--bg);
+    width: 100%; max-width: 480px;
+    max-height: 90vh; max-height: 90dvh;
+    overflow-y: auto; overscroll-behavior: contain;
+    border-radius: 22px 22px 0 0;
+    padding: 14px 14px calc(24px + env(safe-area-inset-bottom, 0px));
+    overflow-wrap: anywhere;
   }
-  .intro .label { font-weight: 700; color: var(--ink); }
+  @media (min-width: 600px) {
+    .detail-backdrop { align-items: center; }
+    .detail { border-radius: 22px; max-height: 85vh; }
+  }
+  .detail-head {
+    display: flex; gap: 12px; align-items: flex-start;
+    background: var(--surface); border-radius: var(--radius-card);
+    padding: 12px; box-shadow: var(--shadow-card);
+  }
+  .detail-head .thumb { width: 84px; height: 84px; }
+  .detail-head .thumb-fallback { font-size: 38px; }
+  .detail-head .info { flex: 1; min-width: 0; }
+  .detail-head .name { font-size: 20px; font-weight: 700; line-height: 1.3; margin-top: 6px; word-break: break-all; }
+  .detail-head .meta { font-size: 13.5px; color: var(--ink-soft); margin-top: 2px; }
+  .detail-head .meta .sep { color: var(--line); margin: 0 6px; }
+  .detail-close {
+    flex-shrink: 0;
+    width: 36px; height: 36px; border-radius: 50%;
+    border: none; background: var(--surface-soft); color: var(--ink);
+    font-size: 18px; display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+  }
+  .detail-section {
+    background: var(--surface); border-radius: var(--radius-card);
+    padding: 12px 14px; margin-top: 10px; box-shadow: var(--shadow-card);
+  }
+  .detail-section h3 {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 15px; font-weight: 700; margin: 0 0 8px; color: var(--ink);
+  }
+  .detail-section h3 .icon { color: var(--primary); }
+  .detail-section .sub { font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+  .detail-section .content { font-size: 14px; line-height: 1.7; color: var(--ink); }
+  .detail-section .empty { font-size: 13.5px; color: var(--muted-text); }
+  .detail-section .warn-note { margin-top: 0; }
+  .buddies { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 10px; }
+  .buddy {
+    border: none; background: none; padding: 0;
+    font-family: inherit; color: var(--ink);
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    cursor: pointer;
+  }
+  .buddy .thumb { width: 64px; height: 64px; }
+  .buddy .bname { font-size: 13.5px; font-weight: 700; line-height: 1.3; text-align: center; word-break: break-all; }
 </style>
 </head>
 <body>
@@ -249,6 +318,11 @@
   <symbol id="i-warn" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.1"/></g></symbol>
   <symbol id="i-alert" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5.5M12 16.4v.1"/></g></symbol>
   <symbol id="i-group" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3"/><circle cx="5.5" cy="10" r="2.2"/><circle cx="18.5" cy="10" r="2.2"/><path d="M6.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5M1.8 18c0-2 1.6-3.6 3.7-3.6M22.2 18c0-2-1.6-3.6-3.7-3.6"/></g></symbol>
+  <symbol id="i-chevron" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" d="M6 6l12 12M18 6 6 18"/></symbol>
+  <symbol id="i-memo" viewBox="0 0 24 24"><path fill="currentColor" d="M6 2.5h8.5L19.5 7.5V20a1.5 1.5 0 0 1-1.5 1.5H6A1.5 1.5 0 0 1 4.5 20V4A1.5 1.5 0 0 1 6 2.5zm2.5 8.5a.9.9 0 0 0 0 1.8h7a.9.9 0 0 0 0-1.8zm0 4a.9.9 0 0 0 0 1.8h7a.9.9 0 0 0 0-1.8zm0-8a.9.9 0 0 0 0 1.8h3a.9.9 0 0 0 0-1.8z"/></symbol>
+  <symbol id="i-note" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h9l4 4v14H6z"/><path d="M9 11h7M9 15h7M9 7h4"/></g></symbol>
+  <symbol id="i-card" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2.5"/><circle cx="8.5" cy="11" r="2"/><path d="M5.5 16c.5-1.5 1.7-2.3 3-2.3s2.5.8 3 2.3M14 10h4M14 14h4"/></g></symbol>
   <symbol id="i-back" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol>
 </svg>
 
@@ -276,13 +350,23 @@
   <div class="status-msg">讀取試算表中…</div>
 </main>
 
+<!-- 狗狗詳細資訊：點狗卡開啟 -->
+<div class="detail-backdrop" id="detailBackdrop" hidden>
+  <div class="detail" id="detail" role="dialog" aria-modal="true" aria-labelledby="detailName"></div>
+</div>
+
 <script>
 const SHEET_ID = 'REMOVED_SHEET_ID';
-// 備註含這些字眼的狗，卡片加紅色驚嘆號徽章並把字眼標出來；狗照樣留在待巡房，由志工自己判斷。
-// 每組第一個是徽章上顯示的字，後面是常見異體寫法，一起比對。志工發現新的慣用字眼時，只要在這裡加一組。
+// 警示關鍵字（2026-09-24 K 定，#28）：備註含任一個，就把備註原文直接顯示在卡片第一層，字眼標紅；
+// 只用來判斷要不要顯示，不改寫原文、不另外產生標籤。狗照樣留在待巡房，由志工自己判斷。
+// 每組第一個是關鍵字，後面是常見異體寫法，一起比對。志工發現新的慣用字眼時，只要在這裡加一組。
 // 「住院」不列入：住院區只是籠位，那裡的狗照常會遛。
 const SPECIAL_KEYWORDS = [
   ['勿溜', '勿遛', '勿蹓'],
+  ['不要'],
+  ['攻擊'],
+  ['不親狗'],
+  ['不親'],
 ];
 const RECENT_DAYS = 7;
 // 天數色標（2026-09-24 K 定案）：0～6 天綠、第 7 天起黃、第 30 天起紅
@@ -295,6 +379,7 @@ let detailMap = {};
 let cages = [];
 let activeTab = 'due';
 let activeCage = null;
+let detailDog = null; // 詳細資訊正在看的狗
 let searchQuery = '';
 let loadWarning = '';
 
@@ -607,24 +692,18 @@ function icon(id) {
   return `<svg class="icon"><use href="#i-${id}"/></svg>`;
 }
 
-function photoThumb(dog) {
+function photoThumb(dog, size = 56) {
   // 沒有編號就直接顯示腳掌圖示，不去抓 photos/.jpg
   if (!dog.id) {
     return `<div class="thumb"><div class="thumb-fallback" style="display:flex">${icon('paw')}</div></div>`;
   }
   return `
     <div class="thumb">
-      <img src="photos/${encodeURIComponent(dog.id)}.jpg" alt="" width="84" height="84" loading="lazy" decoding="async"
+      <img src="photos/${encodeURIComponent(dog.id)}.jpg" alt="" width="${size}" height="${size}" loading="lazy" decoding="async"
            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
       <div class="thumb-fallback">${icon('paw')}</div>
     </div>
   `;
-}
-
-function groupLine(name) {
-  const g = groupMap[name];
-  if (!g || !g.size) return '';
-  return `<div class="group-inline">${icon('group')}<span>可一起遛：<b>${[...g].map(esc).join('、')}</b></span></div>`;
 }
 
 function statusBadge(dog, today) {
@@ -638,31 +717,156 @@ function statusBadge(dog, today) {
   return `<span class="badge muted">尚無遛狗記錄</span>`;
 }
 
+// 卡片上的「上次遛狗」：天數用 #3 的綠／黃／紅文字色
+function lastWalk(dog, today) {
+  const s = computeStatus(dog, today);
+  let text = '尚無紀錄', level = 'muted', small = false;
+  if (s.kind === 'dated') {
+    if (s.days < 0) text = '日期異常';
+    else { text = s.days === 0 ? '今天' : `${s.days} 天前`; level = s.level; }
+  } else if (s.kind === 'covered') { text = '有人固定照顧'; level = 'sage'; small = true; }
+  return `<div class="last"><span class="lbl">上次遛狗</span><span class="val ${level}${small ? ' small' : ''}">${text}</span></div>`;
+}
+
+// 卡片用「編號｜籠位」（照 K 的參考圖）；詳細資訊沿用 metaLine
+function cardMeta(dog) {
+  return `<div class="meta">${dog.id ? `${esc(dog.id)}<span class="sep">|</span>` : ''}${esc(dog.cage)}</div>`;
+}
+
 function metaLine(dog) {
   return `<div class="meta">${esc(dog.cage)}${dog.id ? `<span class="sep">|</span>${esc(dog.id)}` : ''}</div>`;
 }
 
-function specialBadge(flag) {
-  return `<span class="badge red">${icon('alert')}${flag.keywords.map(esc).join('・')}</span>`;
+// 性別：主清單目前沒有這欄，先留位置；之後有資料就顯示 ♂／♀ 符號
+function sexMark(dog) {
+  return `<span class="sex">${esc(dog.sex || '')}</span>`;
 }
 
-// 所有分頁、搜尋、籠位共用這張卡片：備註含關鍵字的狗，在天數徽章旁多一個紅色驚嘆號徽章
+// 備註命中警示關鍵字時的原文顯示；同一筆備註命中幾個關鍵字都只顯示一次
+function warnNote(note, flag) {
+  return `<div class="warn-note">${icon('warn')}<span class="text">${highlightNote(note, flag.terms)}</span></div>`;
+}
+
+// 所有分頁、搜尋、籠位共用這張卡片。第一層只放照片、犬名、天數、籠位｜編號，
+// 備註命中警示關鍵字才把原文放上來；一般備註、可一起遛、狗卡資訊點卡片看詳細資訊
 function dogCard(dog, today) {
   const flag = specialFlag(dog.note);
   return `
-    <div class="card${flag ? ' flagged' : ''}">
+    <div class="card${flag ? ' flagged' : ''}" data-dog="${allDogs.indexOf(dog)}" role="button" tabindex="0" aria-haspopup="dialog">
       ${photoThumb(dog)}
       <div class="body">
-        <div class="badges">${statusBadge(dog, today)}${flag ? specialBadge(flag) : ''}</div>
-        <div class="name">${esc(dog.name)}</div>
-        ${metaLine(dog)}
-        ${dog.note ? `<div class="note">${icon('warn')}<span class="text">${highlightNote(dog.note, flag && flag.terms)}</span></div>` : ''}
-        ${groupLine(dog.name)}
-        ${dog.id && detailMap[dog.id] ? `<div class="intro"><span class="label">介紹：</span>${esc(detailMap[dog.id])}</div>` : ''}
+        <div class="row">
+          <div class="who">
+            <div class="name">${esc(dog.name)}${sexMark(dog)}${dog.note && !flag ? `<svg class="icon has-note" role="img" aria-label="有備註"><use href="#i-memo"/></svg>` : ''}</div>
+            ${cardMeta(dog)}
+          </div>
+          ${lastWalk(dog, today)}
+          <span class="more">${icon('chevron')}</span>
+        </div>
+        ${flag ? warnNote(dog.note, flag) : ''}
       </div>
     </div>
   `;
 }
+
+// 詳細資訊：備註（志工後續補充，試算表備註欄）／可以一起溜的狗／狗卡資訊（dogs/{編號}.md 的入所原始介紹）
+function detailHtml(dog, today) {
+  const flag = specialFlag(dog.note);
+  const buddies = [...(groupMap[dog.name] || [])];
+  const byName = new Map(allDogs.map(d => [d.name, d]));
+  const intro = dog.id && detailMap[dog.id];
+  return `
+    <div class="detail-head">
+      ${photoThumb(dog, 84)}
+      <div class="info">
+        ${statusBadge(dog, today)}
+        <div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div>
+        ${metaLine(dog)}
+      </div>
+      <button class="detail-close" id="detailClose" aria-label="關閉">${icon('close')}</button>
+    </div>
+    <section class="detail-section" data-section="note">
+      <h3>${icon('note')}備註<span class="sub">志工補充的個性、互動與觀察</span></h3>
+      ${!dog.note ? `<div class="empty">目前沒有備註</div>`
+        : flag ? warnNote(dog.note, flag)
+        : `<div class="content note-text">${esc(dog.note)}</div>`}
+    </section>
+    <section class="detail-section" data-section="group">
+      <h3>${icon('group')}可以一起溜的狗</h3>
+      ${buddies.length
+        ? `<div class="buddies">${buddies.map(n => {
+            const d = byName.get(n) || { name: n, id: '' };
+            return `<button class="buddy" data-dog="${allDogs.indexOf(d)}">${photoThumb(d, 64)}<span class="bname">${esc(n)}</span></button>`;
+          }).join('')}</div>`
+        : `<div class="empty">沒有登記可以一起溜的狗</div>`}
+    </section>
+    <section class="detail-section" data-section="intro">
+      <h3>${icon('card')}狗卡資訊<span class="sub">入所時的原始狗卡</span></h3>
+      ${intro ? `<div class="content">${esc(intro)}</div>` : `<div class="empty">還沒有狗卡資訊</div>`}
+    </section>
+  `;
+}
+
+function renderDetail() {
+  if (!detailDog) return;
+  const box = document.getElementById('detail');
+  box.innerHTML = detailHtml(detailDog, new Date());
+  box.querySelector('#detailClose').addEventListener('click', closeDetail);
+  box.querySelectorAll('.buddy').forEach(btn => {
+    const d = allDogs[btn.dataset.dog];
+    if (d) btn.addEventListener('click', () => showDetail(d));
+    else btn.disabled = true;
+  });
+}
+
+// 在詳細資訊裡點「可以一起溜的狗」會直接換成那隻，不多疊一層
+function showDetail(dog) {
+  const wasOpen = !!detailDog;
+  detailDog = dog;
+  renderDetail();
+  document.getElementById('detailBackdrop').hidden = false;
+  document.documentElement.classList.add('detail-open');
+  document.getElementById('detail').scrollTop = 0;
+  // 手機按「返回」時只關掉詳細資訊，不離開網頁
+  if (!wasOpen) history.pushState({ bqDetail: true }, '');
+  document.getElementById('detailClose').focus({ preventScroll: true });
+}
+
+function hideDetail() {
+  if (!detailDog) return;
+  detailDog = null;
+  document.getElementById('detailBackdrop').hidden = true;
+  document.getElementById('detail').innerHTML = '';
+  document.documentElement.classList.remove('detail-open');
+}
+
+function closeDetail() {
+  if (history.state && history.state.bqDetail) history.back(); // popstate 會接著 hideDetail
+  else hideDetail();
+}
+
+window.addEventListener('popstate', hideDetail);
+document.getElementById('detailBackdrop').addEventListener('click', e => {
+  if (e.target.id === 'detailBackdrop') closeDetail();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && detailDog) closeDetail();
+});
+
+// 狗卡用事件委派：renderMain 每次重畫卡片都不用重新綁
+function cardFromEvent(e) {
+  const card = e.target.closest('#main .card[data-dog]');
+  return card && allDogs[card.dataset.dog];
+}
+document.getElementById('main').addEventListener('click', e => {
+  const dog = cardFromEvent(e);
+  if (dog) showDetail(dog);
+});
+document.getElementById('main').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const dog = cardFromEvent(e);
+  if (dog) { e.preventDefault(); showDetail(dog); }
+});
 
 // 搜尋比對用：去掉空白、全形轉半形、英文不分大小寫
 function searchKey(text) {
@@ -826,7 +1030,7 @@ async function init() {
   document.getElementById('updatedLabel').textContent =
     `最後更新 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
   render();
-  fetchAllDetails(allDogs).then(map => { detailMap = map; render(); });
+  fetchAllDetails(allDogs).then(map => { detailMap = map; render(); renderDetail(); });
 }
 
 // tests/index.html 會設定 __BQ_TEST__，只載入函式、不去抓試算表
