@@ -4,6 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>板收遛狗</title>
+<meta name="theme-color" content="#2F7BEA">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="板收遛狗">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
@@ -18,7 +25,6 @@
     --line: #E3EAF3;
     --primary: #2F7BEA;
     --primary-soft: #E7F0FD;
-    --danger: #E5484D;
     --red-text: #D93036;   --red-bg: #FDE7E7;
     --amber-text: #A86400; --amber-bg: #FFF0C2;
     --green-text: #2E8B45; --green-bg: #DDF4E2;
@@ -70,7 +76,7 @@
 
   .tabs {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(3, 1fr);
     gap: 6px;
   }
   .tabs button {
@@ -88,7 +94,6 @@
   .tabs button.active { background: var(--primary); color: #fff; }
   .tabs button.active .t { font-weight: 700; }
   .tabs button.active .n { opacity: 0.9; }
-  .tabs button.active[data-tab="special"] { background: var(--danger); }
 
   main { padding: 14px 14px 50px; max-width: 480px; margin: 0 auto; }
 
@@ -189,6 +194,7 @@
   .badge.amber { background: var(--amber-bg); color: var(--amber-text); }
   .badge.sage { background: var(--green-bg); color: var(--green-text); }
   .badge.muted { background: var(--muted-bg); color: var(--muted-text); }
+  .badges { display: flex; flex-wrap: wrap; gap: 6px; }
   .card .name { font-size: 18px; font-weight: 700; margin-top: 6px; line-height: 1.3; word-break: break-all; }
   .card .meta { font-size: 13.5px; color: var(--ink-soft); margin-top: 2px; }
   .card .meta .sep { color: var(--line); margin: 0 6px; }
@@ -203,7 +209,8 @@
     color: #8F3A3D;
   }
   .note .icon { color: var(--red-text); margin-top: 3px; }
-  .note .text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  /* 規格要求備註在卡片內看得完，所以不截行；保留試算表裡的換行 */
+  .note .text { white-space: pre-line; word-break: break-word; }
   .note mark { background: transparent; color: var(--red-text); font-weight: 700; }
 
   .group-inline {
@@ -263,7 +270,12 @@
 
 <script>
 const SHEET_ID = '1cxoir8K5-D5hncdQiXhogQXi8Pyk47l5cl-_gNADhqw';
-const SPECIAL_KEYWORDS = ['暫緩', '勿溜', '住院'];
+// 備註含這些字眼的狗，卡片加紅色驚嘆號徽章並把字眼標出來；狗照樣留在待巡房，由志工自己判斷。
+// 每組第一個是徽章上顯示的字，後面是常見異體寫法，一起比對。志工發現新的慣用字眼時，只要在這裡加一組。
+// 「住院」不列入：住院區只是籠位，那裡的狗照常會遛。
+const SPECIAL_KEYWORDS = [
+  ['勿溜', '勿遛', '勿蹓'],
+];
 const RECENT_DAYS = 7;
 
 let allDogs = [];
@@ -458,9 +470,29 @@ function parseGroups(table, knownNames) {
   return map;
 }
 
+// 回傳備註命中的關鍵字（顯示用）與實際出現的寫法（標示用）；沒命中回 null
 function specialFlag(note) {
-  for (const k of SPECIAL_KEYWORDS) if (note.includes(k)) return k;
-  return null;
+  const keywords = [], terms = [];
+  for (const [label, ...variants] of SPECIAL_KEYWORDS) {
+    const hit = [label, ...variants].filter(t => (note || '').includes(t));
+    if (!hit.length) continue;
+    keywords.push(label);
+    terms.push(...hit);
+  }
+  return keywords.length ? { keywords, terms } : null;
+}
+
+// 把備註原文裡所有命中的字眼標成紅色粗體；其餘文字照樣跳脫
+function highlightNote(note, terms) {
+  if (!terms || !terms.length) return esc(note);
+  const sorted = [...new Set(terms)].sort((a, b) => b.length - a.length);
+  const re = new RegExp(sorted.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+  let html = '', last = 0;
+  for (const m of note.matchAll(re)) {
+    html += esc(note.slice(last, m.index)) + `<mark>${esc(m[0])}</mark>`;
+    last = m.index + m[0].length;
+  }
+  return html + esc(note.slice(last));
 }
 
 // 去掉開頭的 YAML frontmatter（--- 到 ---），沒有就原樣回傳
@@ -572,15 +604,21 @@ function metaLine(dog) {
   return `<div class="meta">${esc(dog.cage)}${dog.id ? `<span class="sep">|</span>${esc(dog.id)}` : ''}</div>`;
 }
 
+function specialBadge(flag) {
+  return `<span class="badge red">${icon('alert')}${flag.keywords.map(esc).join('・')}</span>`;
+}
+
+// 所有分頁、搜尋、籠位共用這張卡片：備註含關鍵字的狗，在天數徽章旁多一個紅色驚嘆號徽章
 function dogCard(dog, today) {
+  const flag = specialFlag(dog.note);
   return `
-    <div class="card">
+    <div class="card${flag ? ' flagged' : ''}">
       ${photoThumb(dog)}
       <div class="body">
-        ${statusBadge(dog, today)}
+        <div class="badges">${statusBadge(dog, today)}${flag ? specialBadge(flag) : ''}</div>
         <div class="name">${esc(dog.name)}</div>
         ${metaLine(dog)}
-        ${dog.note ? `<div class="note">${icon('warn')}<span class="text">${esc(dog.note)}</span></div>` : ''}
+        ${dog.note ? `<div class="note">${icon('warn')}<span class="text">${highlightNote(dog.note, flag && flag.terms)}</span></div>` : ''}
         ${groupLine(dog.name)}
         ${dog.id && detailMap[dog.id] ? `<div class="intro"><span class="label">介紹：</span>${esc(detailMap[dog.id])}</div>` : ''}
       </div>
@@ -588,26 +626,10 @@ function dogCard(dog, today) {
   `;
 }
 
-function specialCard(dog, keyword) {
-  const noteHtml = esc(dog.note).split(esc(keyword)).join(`<mark>${esc(keyword)}</mark>`);
-  return `
-    <div class="card">
-      ${photoThumb(dog)}
-      <div class="body">
-        <span class="badge red">${icon('alert')}${esc(keyword)}</span>
-        <div class="name">${esc(dog.name)}</div>
-        ${metaLine(dog)}
-        <div class="note">${icon('warn')}<span class="text">${noteHtml}</span></div>
-      </div>
-    </div>
-  `;
-}
-
-function buildTabs(dueCount, recentCount, specialCount) {
+function buildTabs(dueCount, recentCount) {
   const tabs = [
     { id: 'due', label: '待巡房', count: dueCount },
     { id: 'recent', label: '近期已遛', count: recentCount },
-    { id: 'special', label: '特殊狀況', count: specialCount },
     { id: 'cage', label: '依籠位', count: `${cages.length} 區` },
   ];
   document.getElementById('tabs').innerHTML = tabs.map(t =>
@@ -644,23 +666,15 @@ function renderMain() {
   document.getElementById('dateLabel').textContent =
     `${today.getMonth() + 1}月${today.getDate()}日 (${'日一二三四五六'[today.getDay()]})`;
 
-  const specialList = [];
-  const normalList = [];
-  allDogs.forEach(d => {
-    const flag = specialFlag(d.note);
-    if (flag) specialList.push({ dog: d, flag });
-    else normalList.push(d);
-  });
-
-  const dueList = normalList.slice().sort((a, b) => {
+  const dueList = allDogs.slice().sort((a, b) => {
     const sa = computeStatus(a, today), sb = computeStatus(b, today);
     const key = s => s.kind === 'unknown' ? 999999 : s.kind === 'dated' ? s.days : -1;
     return key(sb) - key(sa);
   });
 
-  const recentList = recentDogs(normalList, today);
+  const recentList = recentDogs(allDogs, today);
 
-  buildTabs(dueList.length, recentList.length, specialList.length);
+  buildTabs(dueList.length, recentList.length);
 
   const main = document.getElementById('main');
 
@@ -679,9 +693,6 @@ function renderMain() {
   } else if (activeTab === 'recent') {
     main.innerHTML = `<div class="section-title">${icon('paw')}近期已遛（${RECENT_DAYS} 天內）</div>` +
       (recentList.map(d => dogCard(d, today)).join('') || `<div class="status-msg">最近沒有已遛紀錄</div>`);
-  } else if (activeTab === 'special') {
-    main.innerHTML = `<div class="alert-box">${icon('alert')}<span>以下為因備註包含「${SPECIAL_KEYWORDS.join('／')}」等關鍵字，已從待巡房清單中排除。請先確認牠們的狀況後再決定是否遛出。</span></div>` +
-      (specialList.map(x => specialCard(x.dog, x.flag)).join('') || `<div class="status-msg">目前沒有特殊狀況</div>`);
   } else if (activeTab === 'cage') {
     if (!activeCage) {
       main.innerHTML = `<div class="cage-grid">` +
