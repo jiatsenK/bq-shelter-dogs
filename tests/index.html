@@ -289,6 +289,66 @@ function runTests() {
         eq(box.querySelector('.intro'), null, '沒編號：');
       } finally { detailMap = saved; }
     }),
+    // ── #7 搜尋 ──
+    check('搜尋：犬名部分符合即可，忽略空白、全形與大小寫', () => {
+      const dog = { name: '測試 Lucky 丁' };
+      eq(matchesSearch(dog, '試'), true);
+      eq(matchesSearch(dog, 'lucky'), true, '大小寫：');
+      eq(matchesSearch(dog, 'ＬＵＣＫＹ丁'), true, '全形、空白：');
+      eq(matchesSearch(dog, '  '), true, '只有空白當作沒搜尋：');
+      eq(matchesSearch(dog, '測試戊'), false);
+    }),
+    check('搜尋：只篩選目前分頁，分頁數字跟著變，清空回到原本內容', () => {
+      const daysAgo = n => new Date(Date.now() - n * 86400000);
+      allDogs = [
+        { cage: 'B01', id: '', name: '搜尋甲', walkedDate: daysAgo(1), walker: '', note: '' },
+        { cage: 'B02', id: '', name: '搜尋乙', walkedDate: daysAgo(20), walker: '', note: '勿溜' },
+        { cage: 'B02', id: '', name: '別隻丙', walkedDate: daysAgo(2), walker: '', note: '' },
+      ];
+      groupMap = {}; detailMap = {}; cages = ['B01', 'B02']; activeCage = null;
+      const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
+      const counts = () => [...document.querySelectorAll('#tabs button .n')].map(n => n.textContent);
+      const mainText = () => document.getElementById('main').textContent;
+      try {
+        searchQuery = '搜尋';
+        activeTab = 'due'; renderMain();
+        eq(names(), ['搜尋乙', '搜尋甲'], '待巡房（久沒遛的在前）：');
+        eq(counts(), ['2', '1', '2 區'], '分頁數字：');
+        if (!mainText().includes('搜尋「搜尋」：2 隻')) throw new Error('沒有顯示搜尋結果隻數');
+        if (!document.querySelector('#main .card .badge.red')) throw new Error('勿溜的搜尋乙沒有驚嘆號');
+        activeTab = 'recent'; renderMain();
+        eq(names(), ['搜尋甲'], '近期已遛：');
+        activeTab = 'cage'; renderMain();
+        eq(names(), ['搜尋乙', '搜尋甲'], '依籠位直接列出符合的狗：');
+        searchQuery = '乙'; activeTab = 'recent'; renderMain();
+        eq(names(), [], '近期已遛沒有乙：');
+        if (!mainText().includes('近期已遛裡沒有「乙」') || !mainText().includes('待巡房有 1 隻'))
+          throw new Error(`沒提示去待巡房找：${mainText()}`);
+        searchQuery = '<b>沒這隻'; activeTab = 'due'; renderMain();
+        eq(document.querySelector('#main .status-msg').innerHTML, '找不到「&lt;b&gt;沒這隻」');
+        eq(counts(), ['0', '0', '0 區'], '查無時分頁數字：');
+        searchQuery = ''; renderMain();
+        eq(names().length, 3, '清空後：');
+        eq(counts(), ['3', '2', '2 區'], '清空後分頁數字：');
+      } finally { searchQuery = ''; activeTab = 'due'; }
+    }),
+    check('搜尋：輸入即篩選；注音選字途中不篩選，選好字才更新', () => {
+      allDogs = [{ cage: 'B01', id: '', name: '搜尋甲', walkedDate: null, walker: '', note: '' }];
+      groupMap = {}; detailMap = {}; cages = ['B01']; activeTab = 'due'; activeCage = null;
+      const input = document.getElementById('searchInput');
+      try {
+        input.value = 'ㄐ';
+        input.dispatchEvent(new InputEvent('input', { isComposing: true }));
+        eq(searchQuery, '', '選字途中：');
+        input.value = '甲';
+        input.dispatchEvent(new CompositionEvent('compositionend', { data: '甲' }));
+        eq(searchQuery, '甲', '選好字：');
+        eq(document.querySelectorAll('#main .card').length, 1);
+        input.value = '';
+        input.dispatchEvent(new InputEvent('input'));
+        eq(searchQuery, '', '清空：');
+      } finally { input.value = ''; searchQuery = ''; }
+    }),
     // ── #6 依籠位 ──
     check('籠位清單從主清單籠位欄去重：空籠也列出，表尾提示不算', () => {
       const table = fakeGviz(GRID, 7).table;
