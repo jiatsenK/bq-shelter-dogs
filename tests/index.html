@@ -592,8 +592,8 @@ function runTests() {
       eq(btn.getAttribute('aria-label'), '清除搜尋', '無障礙標籤：');
       if (!btn.querySelector('use[href="#i-close"]')) throw new Error('要用 X 圖示');
     }),
-    check('#34 有字才出現 X；點 X 清空並回到目前分頁完整內容，不換分頁', () => {
-      const saved = [allDogs, groupMap, detailMap, cages, activeTab, activeCage, searchQuery];
+    check('#34 有字才出現 X；點 X 清空並回到目前分類完整內容，不換分類', () => {
+      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery];
       const input = document.getElementById('searchInput');
       const clear = document.getElementById('searchClear');
       const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
@@ -604,10 +604,10 @@ function runTests() {
           { cage: 'B02', id: '', name: '清除乙', walkedDate: day(2), walker: '', note: '' },
           { cage: 'B03', id: '', name: '清除丙', walkedDate: null, walker: '', note: '' },
         ];
-        groupMap = {}; detailMap = {}; cages = ['B01', 'B02', 'B03']; activeCage = null;
-        activeTab = 'recent'; searchQuery = ''; input.value = ''; render();
+        groupMap = {}; detailMap = {};
+        activeTab = 'walk'; searchQuery = ''; input.value = ''; render();
         const full = names();
-        eq(full.length, 2, '近期已遛完整：');
+        eq(full.length, 3, '溜狗表完整：');
         eq(clear.hidden, true, '沒字時：');
         input.value = 'ㄐ';
         input.dispatchEvent(new InputEvent('input', { isComposing: true }));
@@ -620,16 +620,21 @@ function runTests() {
         eq(input.value, '', '文字清空：');
         eq(searchQuery, '', '搜尋條件清空：');
         eq(clear.hidden, true, 'X 隱藏：');
-        eq(activeTab, 'recent', '分頁不變：');
+        eq(activeTab, 'walk', '分類不變：');
         eq(names(), full, '恢復完整內容：');
         input.value = '乙';
         input.dispatchEvent(new InputEvent('input'));
         input.value = '';
         input.dispatchEvent(new InputEvent('input'));
         eq(clear.hidden, true, '手動刪光也隱藏：');
+        activeTab = 'info'; render();
+        input.value = '甲';
+        input.dispatchEvent(new InputEvent('input'));
+        clear.click();
+        eq(activeTab, 'info', '在相關資訊清除也不換分類：');
       } finally {
         input.value = ''; clear.hidden = true;
-        [allDogs, groupMap, detailMap, cages, activeTab, activeCage, searchQuery] = saved;
+        [allDogs, groupMap, detailMap, activeTab, searchQuery] = saved;
       }
     }),
   ]);
