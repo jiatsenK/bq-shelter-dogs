@@ -338,12 +338,12 @@ function hideToast() {
   if (el) el.hidden = true;
 }
 
-// 狗卡右側的「溜了」（溜狗表）／「移回」（今天已溜）按鈕；連犬名都沒有的狗記不了，照舊顯示箭頭
+// 狗卡右側的「已遛」（溜狗表）／「移回」（今天已溜）按鈕；連犬名都沒有的狗記不了，照舊顯示箭頭
 function walkButton(dog, walkedTab) {
   if (!walkKey(dog)) return `<span class="more">${icon('chevron')}</span>`;
   return walkedTab
     ? `<button type="button" class="walk-btn back" data-walk="back" aria-label="把 ${esc(dog.name)} 移回溜狗表">移回</button>`
-    : `<button type="button" class="walk-btn" data-walk="add" aria-label="記下今天溜了 ${esc(dog.name)}">${icon('tick')}溜了</button>`;
+    : `<button type="button" class="walk-btn" data-walk="add" aria-label="記下今天已遛 ${esc(dog.name)}">已遛</button>`;
 }
 
 // 所有分頁、搜尋、籠位共用這張卡片。第一層只放照片、犬名、天數、籠位｜編號，
@@ -523,7 +523,7 @@ function cardFromEvent(e) {
   const card = e.target.closest('#main .card[data-dog]');
   return card && allDogs[card.dataset.dog];
 }
-// 點「溜了／移回」只記錄，不開詳細資訊；點卡片其他地方才開
+// 點「已遛／移回」只記錄，不開詳細資訊；點卡片其他地方才開
 document.getElementById('main').addEventListener('click', e => {
   const dog = cardFromEvent(e);
   if (!dog) return;
@@ -683,7 +683,7 @@ function renderMain() {
   } else if (activeTab === 'today') {
     main.innerHTML = cards
       ? `<div class="section-hint">${icon('tick')}你今天在這支手機記下溜過的狗（只存在這支手機，其他志工看不到）</div>` + cards
-      : `<div class="status-msg">這裡會列出你今天用這支手機記下已溜的狗。<br>在溜狗表按狗卡右邊的「溜了」就會記到這裡。</div>`;
+      : `<div class="status-msg">這裡會列出你今天用這支手機記下已溜的狗。<br>在溜狗表按狗卡右邊的「已遛」就會記到這裡。</div>`;
   } else {
     main.innerHTML = `<div class="section-hint">${icon('pin')}依久沒遛排序（由久到近）</div>` +
       (cards || `<div class="status-msg">目前沒有狗狗資料</div>`);
