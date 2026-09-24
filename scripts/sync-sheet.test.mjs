@@ -1,5 +1,5 @@
 // 同步腳本測試：node --test scripts/
-// 用模擬 gviz 回應，不連試算表。另外把前端的解析函式載進來，確認同步結果跟前端直接讀試算表一致。
+// 用模擬 gviz 回應，不連試算表。另外把前端讀 dogs.json 的函式載進來，確認前端讀回來的資料跟同步前一致。
 process.env.TZ = 'Asia/Taipei';
 
 import test from 'node:test';
@@ -110,39 +110,76 @@ test('資料沒變不寫檔；有變才更新同步時間', async () => {
   assert.ok(sync.renderFile(data, '{壞掉', TODAY), '舊檔壞掉時直接覆蓋');
 });
 
-// 跟前端比對：載入前端原始碼（js/app.js，還沒拆檔時用 index.html 的 <script>），
-// 用同一份模擬回應分別跑前端的 loadMainList／parseGroups 與同步腳本，結果要一樣
+// 跟前端比對（#32 起前端只讀 dogs.json）：同步腳本讀到的狗，寫成 dogs.json 再交給前端的 parseDogsData，
+// 犬名、籠位、日期、可以一起溜都要跟同步前一樣，日期也不能因為存成文字而差一天
 async function loadFrontend() {
-  let src = await readFile(new URL('../js/app.js', import.meta.url), 'utf8').catch(() => null);
-  if (src == null) {
-    const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
-    src = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)].map(m => m[1]).join('\n');
-  }
-  if (!/function loadMainList/.test(src)) return null; // 前端已改讀 dogs.json，不再有解析函式
-    // 只需要函式定義；頁面上的 DOM 事件綁定用空殼擋掉
+  const src = await readFile(new URL('../js/app.js', import.meta.url), 'utf8');
+  // 只需要函式定義；頁面上的 DOM 事件綁定用空殼擋掉
   const stub = () => new Proxy(function () {}, { get: (t, k) => k in t ? t[k] : k === Symbol.toPrimitive ? () => '' : stub(), apply: () => stub() });
   const ctx = vm.createContext({ window: Object.assign(stub(), { __BQ_TEST__: true }), document: stub(), localStorage: stub(), fetch: undefined, Intl, URL, console });
-  vm.runInContext(`${src}\n;globalThis.__fe = { loadMainList, parseGroups, sortCages: typeof sortCages === 'function' ? sortCages : null };`, ctx);
-  return ctx;
+  vm.runInContext(`${src}\n;globalThis.__fe = { parseDogsData };`, ctx);
+  return ctx.__fe;
 }
 
-test('結果跟前端直接讀試算表一致', async t => {
-  const ctx = await loadFrontend();
-  if (!ctx) return t.skip('前端已不含試算表解析函式');
-  const fe = ctx.__fe;
-  // 前端的 cellDate 用當下時間判斷沒寫年份的日期；兩邊都用真實的現在時間
-  const now = new Date();
-  ctx.fetch = fakeFetch();
-  const dogs = await fe.loadMainList();
-  const groupTable = fakeGviz(GROUPS, 0).table;
-  const groupMap = fe.parseGroups(groupTable, new Set(dogs.map(d => d.name)));
-  const expected = {
-    dogs: dogs.map(d => ({ ...d, walkedDate: sync.formatDate(d.walkedDate) })),
-    groups: Object.fromEntries(Object.entries(groupMap).map(([k, v]) => [k, [...v]])),
-  };
-  const actual = await sync.buildData(fakeFetch(), now);
-  // #33 起前端拿掉依籠位分頁，沒有 sortCages 了；前端還有時才比對籠位清單
-  if (fe.sortCages) expected.cages = [...fe.sortCages([...new Set([...(dogs.cages || []), ...dogs.map(d => d.cage).filter(Boolean)])])];
-  else delete actual.cages;
-  assert.deepEqual(JSON.parse(JSON.stringify(actual)), JSON.parse(JSON.stringify(expected)));
+test('前端讀 dogs.json 的結果跟同步腳本讀試算表一致', async () => {
+  const fe = await loadFrontend();
+  const dogs = await sync.loadMainList(fakeFetch(), TODAY);
+  const groupMap = sync.parseGroups(fakeGviz(GROUPS, 0).table, new Set(dogs.map(d => d.name)));
+  const file = sync.renderFile(await sync.buildData(fakeFetch(), TODAY), '', TODAY);
+  const got = fe.parseDogsData(JSON.parse(file));
+  const plain = list => list.map(d => ({ ...d, walkedDate: d.walkedDate ? d.walkedDate.toDateString() : null }));
+  assert.deepEqual(JSON.parse(JSON.stringify(plain(got.dogs))), JSON.parse(JSON.stringify(plain([...dogs]))));
+  const sets = m => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, [...v].sort()]));
+  assert.deepEqual(JSON.parse(JSON.stringify(sets(got.groups))), sets(groupMap));
+  assert.equal(got.syncedAt.getTime(), Math.floor(TODAY.getTime() / 1000) * 1000);
+});
+
+// #32 前端改讀 dogs.json 後，試算表解析只剩同步腳本在做；原本 tests/index.html 對前端解析函式的測試移到這裡
+const ymd = d => d ? `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}` : null;
+
+test('日期格式：Date(...)、各種文字寫法、民國年、沒寫年份、日期序號', () => {
+  assert.equal(ymd(sync.cellDate({ v: 'Date(2026,8,16)' }, TODAY)), '2026/9/16');
+  assert.equal(ymd(sync.cellDate({ v: '2026/9/1' }, TODAY)), '2026/9/1');
+  assert.equal(ymd(sync.cellDate({ v: '2026-09-01' }, TODAY)), '2026/9/1');
+  assert.equal(ymd(sync.cellDate({ v: '2026.9.1' }, TODAY)), '2026/9/1');
+  assert.equal(ymd(sync.cellDate({ v: '2026年9月1日' }, TODAY)), '2026/9/1');
+  assert.equal(ymd(sync.cellDate({ v: '115/9/1' }, TODAY)), '2026/9/1');
+  assert.equal(ymd(sync.cellDate({ v: '9/1' }, TODAY)), '2026/9/1');
+  assert.equal(ymd(sync.cellDate({ v: '12/28' }, TODAY)), '2025/12/28', '沒寫年份又落在未來時算去年');
+  assert.equal(ymd(sync.cellDate({ v: 46266 }, TODAY)), '2026/9/1', '試算表日期序號');
+});
+
+test('不存在或不合理的日期回空值', () => {
+  assert.equal(sync.cellDate({ v: 'Date(2026,1,30)' }, TODAY), null);
+  assert.equal(sync.cellDate({ v: '2026/2/30' }, TODAY), null);
+  assert.equal(sync.cellDate({ v: '2026/9/100' }, TODAY), null);
+  assert.equal(sync.cellDate({ v: '不詳' }, TODAY), null);
+  assert.equal(sync.cellDate(null, TODAY), null);
+});
+
+test('headers=0 時「編號」「遛狗日期」表頭會被吃掉，所以要先找表頭列再重讀', () => {
+  const raw = fakeGviz(MAIN, 0).table;
+  assert.equal(sync.findHeaderRow(raw), 6);
+  const labels = raw.rows[6].c.map(sync.cellText);
+  assert.equal(labels[2], ''); assert.equal(labels[3], '');
+});
+
+test('欄位標題缺漏時，用第一次讀到的表頭列補', () => {
+  const table = fakeGviz(MAIN, 7).table;
+  table.cols[3].label = '';
+  const headerTexts = ['犬名', '籠位', '編號', '遛狗日期', '備註', '誰遛的'];
+  assert.equal(ymd(sync.parseMainList(table, headerTexts, TODAY)[0].walkedDate), '2026/9/16');
+});
+
+test('可以一起溜：一隻狗在多組時合併去重；犬名多了空白（含全形空白）也對得到，用主清單寫法', () => {
+  const table = { cols: [{}, {}, {}], rows: [
+    { c: [{ v: '宙斯' }, { v: '宙斯' }, { v: '冬冬' }] },
+    { c: [{ v: '冬　冬' }, { v: '比 比' }, { v: '金寶' }] },
+    { c: [null, { v: '冬冬' }, { v: '已離所' }] },
+  ] };
+  const map = sync.parseGroups(table, new Set(['宙斯', '冬冬', '比比', '金寶']));
+  assert.deepEqual([...map['宙斯']].sort(), ['冬冬', '比比'].sort());
+  assert.deepEqual([...map['冬冬']].sort(), ['宙斯', '比比', '金寶'].sort());
+  assert.deepEqual([...map['金寶']], ['冬冬']);
+  assert.equal(map['已離所'], undefined);
 });
