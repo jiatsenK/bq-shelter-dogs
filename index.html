@@ -662,11 +662,22 @@ function dogCard(dog, today) {
   `;
 }
 
-function buildTabs(dueCount, recentCount) {
+// 搜尋比對用：去掉空白、全形轉半形、英文不分大小寫
+function searchKey(text) {
+  return String(text || '').normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+}
+
+// 犬名部分符合即算；沒輸入（或只有空白）時每隻都符合
+function matchesSearch(dog, query) {
+  const q = searchKey(query);
+  return !q || searchKey(dog.name).includes(q);
+}
+
+function buildTabs(dueCount, recentCount, cageCount = cages.length) {
   const tabs = [
     { id: 'due', label: '待巡房', count: dueCount },
     { id: 'recent', label: '近期已遛', count: recentCount },
-    { id: 'cage', label: '依籠位', count: `${cages.length} 區` },
+    { id: 'cage', label: '依籠位', count: `${cageCount} 區` },
   ];
   document.getElementById('tabs').innerHTML = tabs.map(t =>
     `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}"><span class="t">${t.label}</span><span class="n">${t.count}</span></button>`
@@ -715,18 +726,31 @@ function renderMain() {
 
   const recentList = recentDogs(allDogs, today);
 
-  buildTabs(dueList.length, recentList.length);
-
   const main = document.getElementById('main');
 
-  if (searchQuery) {
-    const q = searchQuery.trim();
-    const matches = allDogs.filter(d => d.name.includes(q));
-    main.innerHTML = matches.length
-      ? matches.map(d => dogCard(d, today)).join('')
-      : `<div class="status-msg">找不到「${esc(q)}」</div>`;
+  // 搜尋時只篩選目前分頁的內容，分頁上的數字也改成各分頁符合的隻數；清空就回到原本的分頁
+  const q = searchQuery.trim();
+  if (q) {
+    const hit = d => matchesSearch(d, q);
+    const dueHits = dueList.filter(hit);
+    const recentHits = recentList.filter(hit);
+    const cageHits = [...new Set(dueHits.map(d => d.cage).filter(Boolean))];
+    buildTabs(dueHits.length, recentHits.length, cageHits.length);
+    // 依籠位分頁搜尋時直接列出符合的狗，卡片上看得到籠位
+    const list = activeTab === 'due' ? dueHits : activeTab === 'recent' ? recentHits : dueHits;
+    if (list.length) {
+      main.innerHTML = `<div class="section-hint">${icon('search')}搜尋「${esc(q)}」：${list.length} 隻</div>` +
+        list.map(d => dogCard(d, today)).join('');
+    } else if (dueHits.length) {
+      // 只會發生在近期已遛：狗有在名冊裡，只是這幾天沒遛，提示去待巡房找
+      main.innerHTML = `<div class="status-msg">近期已遛裡沒有「${esc(q)}」<br>待巡房有 ${dueHits.length} 隻</div>`;
+    } else {
+      main.innerHTML = `<div class="status-msg">找不到「${esc(q)}」</div>`;
+    }
     return;
   }
+
+  buildTabs(dueList.length, recentList.length);
 
   if (activeTab === 'due') {
     main.innerHTML = `<div class="section-hint">${icon('pin')}依久沒遛排序（由久到近）</div>` +
@@ -756,7 +780,14 @@ function renderMain() {
   }
 }
 
-document.getElementById('searchInput').addEventListener('input', e => {
+// 注音、拼音選字途中不篩選，避免一直閃「找不到『ㄉㄡ』」；選好字才更新
+const searchInput = document.getElementById('searchInput');
+searchInput.addEventListener('input', e => {
+  if (e.isComposing) return;
+  searchQuery = e.target.value;
+  render();
+});
+searchInput.addEventListener('compositionend', e => {
   searchQuery = e.target.value;
   render();
 });
