@@ -2,6 +2,12 @@
 
 板橋收容所志工用的唯讀遛狗清單網頁：一眼看出誰最久沒遛、牠的備註、以及可以跟誰一起遛。
 
+**正式網址：https://jiatsenk.github.io/bq-shelter-dogs/**
+
+手機打開後可以加到主畫面，之後一鍵開啟：
+- iPhone（Safari）：下方「分享」按鈕 →「加入主畫面」
+- Android（Chrome）：右上角「⋮」→「加到主畫面」
+
 - 規格與 v1 目標：[`docs/PROJECT_GOALS.md`](docs/PROJECT_GOALS.md)
 - 前端設計需求（細節）：[`docs/FRONTEND_REQUIREMENTS.md`](docs/FRONTEND_REQUIREMENTS.md)
 - 視覺風格指引：[`docs/DESIGN_GUIDE.md`](docs/DESIGN_GUIDE.md)
@@ -14,8 +20,16 @@ index.html        ← 整個網站（純前端、單檔）
 dogs/{編號}.md     ← 狗狗介紹（YAML frontmatter + 內文），選填
 photos/{編號}.jpg  ← 狗狗照片，選填
 docs/             ← 規格、設計指引、參考圖
+icons/            ← 網站圖示（瀏覽器分頁、手機主畫面）
+manifest.webmanifest ← 加到主畫面時的名稱、顏色、圖示
+.nojekyll         ← 讓 GitHub Pages 原樣提供 dogs/*.md，不要轉成網頁（請勿刪除）
 tests/index.html  ← 資料讀取測試（用假資料，不連試算表）
 ```
+
+## 部署
+
+網站用 GitHub Pages 從 `main` 分支的根目錄部署：PR 合併進 `main` 後，約一、兩分鐘網站就會更新，不用另外操作。
+設定位置：repo 的 Settings → Pages →「Deploy from a branch」、分支 `main`、資料夾 `/ (root)`。
 
 ## 本機預覽
 
