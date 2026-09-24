@@ -116,6 +116,14 @@ function parseFrontmatterBody(text) {
   return (m ? m[1] : text).trim();
 }
 
+// 狗卡 frontmatter 的性別：OCR 寫入 male／female，前端顯示成 ♂／♀
+function parseFrontmatterSex(text) {
+  const m = text.replace(/^\uFEFF/, '').match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
+  if (!m) return '';
+  const sex = (m[1].match(/^sex:\s*(male|female)\s*$/mi) || [])[1];
+  return sex === 'male' ? '♂' : sex === 'female' ? '♀' : '';
+}
+
 // 把 Markdown 轉成純文字，卡片上不要露出 **、#、[]() 這些符號
 function markdownToText(md) {
   return md
@@ -157,8 +165,11 @@ async function fetchAllDetails(dogs) {
     try {
       const res = await fetch(`dogs/${encodeURIComponent(id)}.md`);
       if (!res.ok) return;
-      const text = markdownToText(parseFrontmatterBody(await res.text()));
+      const raw = await res.text();
+      const text = markdownToText(parseFrontmatterBody(raw));
       if (text) map[id] = text;
+      const dog = dogs.find(d => d.id === id);
+      if (dog) dog.sex = parseFrontmatterSex(raw);
     } catch (e) { /* 沒有這隻狗的介紹檔，略過即可 */ }
   }));
   return map;
