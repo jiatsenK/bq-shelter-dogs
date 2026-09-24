@@ -199,6 +199,7 @@ main { overflow-wrap: anywhere; }
   line-height: 1.15;
   white-space: normal;
 }
+.last .val .nowrap { display: inline-block; white-space: nowrap; }
 .last .val.sage { color: var(--green-text); }
 .last .val.amber { color: var(--amber-text); }
 .last .val.red { color: var(--red-text); }
