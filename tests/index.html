@@ -149,6 +149,25 @@ function runTests() {
       const map = parseGroups(table, new Set(['宙斯', '冬冬', '比比']));
       eq([...map['宙斯']], ['比比']); eq([...map['冬冬']], []); eq(map['已離所'], undefined);
     }),
+    check('近期已遛：只列 0～7 天內遛過的狗，由近到遠，未來日期不列入', () => {
+      const dog = (name, date, walker = '') => ({ name, walkedDate: date, walker, note: '' });
+      const dogs = [
+        dog('七天前', new Date(2026, 8, 17)),
+        dog('今天', new Date(2026, 8, 24)),
+        dog('八天前', new Date(2026, 8, 16)),
+        dog('三天前', new Date(2026, 8, 21)),
+        dog('明天', new Date(2026, 8, 25)),
+        dog('2099年', new Date(2099, 0, 1)),
+        dog('沒日期', null),
+        dog('有人固定照顧', null, '阿明'),
+      ];
+      eq(recentDogs(dogs, TODAY).map(d => d.name), ['今天', '三天前', '七天前']);
+      eq(recentDogs([], TODAY), []);
+    }),
+    check('未來日期顯示「日期異常」，不顯示負的天數', () => {
+      const badge = statusBadge({ name: 'x', walkedDate: new Date(2099, 0, 1), walker: '', note: '' }, TODAY);
+      if (!badge.includes('日期異常') || badge.includes('-')) throw new Error(`標籤是 ${badge}`);
+    }),
   ]);
 }
 
