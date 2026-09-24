@@ -351,8 +351,8 @@ function dogCard(dog, today, walkedTab = false) {
           ${lastWalk(dog, today)}
           ${walkButton(dog, walkedTab)}
         </div>
-        ${flag ? warnNote(dog.note, flag) : ''}
       </div>
+      ${flag ? warnNote(dog.note, flag) : ''}
     </div>
   `;
 }

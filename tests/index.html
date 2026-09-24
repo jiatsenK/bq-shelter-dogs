@@ -83,6 +83,7 @@ function runTests() {
       const hei = card('測試丙');
       if (!hei.querySelector('.warn-note') || !hei.querySelector('.last .val.sage')) throw new Error('測試丙要有天數和警示備註');
       eq(hei.querySelector('.warn-note .text').innerHTML, '<mark>勿遛</mark>', '備註：');
+      if (hei.querySelector('.body > .warn-note') || !hei.querySelector(':scope > .warn-note')) throw new Error('警示備註要橫跨整張卡片，不可擠在照片右側');
       searchQuery = '測試丙'; renderMain();
       if (!document.querySelector('#main .card .warn-note')) throw new Error('搜尋結果沒有警示備註');
       searchQuery = '';
