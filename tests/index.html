@@ -477,6 +477,7 @@ function runTests() {
       const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory];
       try {
         hideToast();
+        document.getElementById('main').parentElement.classList.remove('hidden'); // 真瀏覽器裡 display:none 的元素不能拿到焦點
         allDogs = [{ id: 'focus-test', name: '焦點測試', cage: 'A01', note: '', walker: '', walkedDate: null }];
         groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = '';
         walkedStorage = fakeStorage(); walkedMemory = null;
@@ -495,6 +496,7 @@ function runTests() {
         eq(document.activeElement === card, true);
       } finally {
         hideDetail();
+        document.getElementById('main').parentElement.classList.add('hidden');
         history.replaceState(null, '');
         [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
         render();
