@@ -21,7 +21,7 @@ let detailMap = {};
 let activeTab = 'walk';
 let detailDog = null; // 詳細資訊正在看的狗
 let detailOpener = null;
-let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（編號）
+let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（walkKey）
 let searchQuery = '';
 let loadWarning = '';
 let loadState = 'loading'; // loading：還在讀 dogs.json；error：讀取失敗；ready：資料好了
@@ -208,7 +208,10 @@ function lastWalk(dog, today) {
   if (s.kind === 'dated') {
     if (s.days < 0) text = '日期異常';
     else { text = s.days === 0 ? '今天' : `${s.days} 天前`; level = s.level; }
-  } else if (s.kind === 'covered') { text = '有人固定照顧'; level = 'sage'; small = true; }
+  } else if (s.kind === 'covered') {
+    // 窄螢幕放不下一行時只在「有人固定｜照顧」之間換行，不會剩一個「顧」字
+    text = '<span class="nowrap">有人固定</span><span class="nowrap">照顧</span>'; level = 'sage'; small = true;
+  }
   return `<div class="last"><span class="lbl">上次遛狗</span><span class="val ${level}${small ? ' small' : ''}">${text}</span></div>`;
 }
 
@@ -265,11 +268,18 @@ function saveWalkedIds(ids, today = new Date()) {
   }
 }
 
-function isWalkedToday(dog, ids) {
-  return !!dog.id && ids.includes(dog.id);
+// 今天已溜用編號記；新來還沒有編號的狗改用犬名記（K 說不會有同名的狗）
+function walkKey(dog) {
+  if (dog.id) return dog.id;
+  return dog.name ? `名:${dog.name}` : '';
 }
 
-// 加入（on=true）或移回（on=false）今天已溜；沒有編號的狗記不了，直接略過。
+function isWalkedToday(dog, ids) {
+  const key = walkKey(dog);
+  return !!key && ids.includes(key);
+}
+
+// 加入（on=true）或移回（on=false）今天已溜；連犬名都沒有的狗記不了，直接略過。
 // 新加入的排在今天已溜最上面。記完底部跳提示條，可以按「復原」回到記之前的樣子
 function setWalked(dogs, on) {
   const today = new Date();
@@ -277,9 +287,10 @@ function setWalked(dogs, on) {
   const ids = [...before];
   const changed = [];
   for (const dog of dogs) {
-    if (!dog || !dog.id || ids.includes(dog.id) === on || changed.includes(dog)) continue;
-    if (on) ids.unshift(dog.id);
-    else ids.splice(ids.indexOf(dog.id), 1);
+    const key = dog && walkKey(dog);
+    if (!key || ids.includes(key) === on || changed.includes(dog)) continue;
+    if (on) ids.unshift(key);
+    else ids.splice(ids.indexOf(key), 1);
     changed.push(dog);
   }
   if (!changed.length) return;
@@ -327,12 +338,12 @@ function hideToast() {
   if (el) el.hidden = true;
 }
 
-// 狗卡右側的「溜了」（溜狗表）／「移回」（今天已溜）按鈕；沒有編號的狗記不了，照舊顯示箭頭
+// 狗卡右側的「已遛」（溜狗表）／「移回」（今天已溜）按鈕；連犬名都沒有的狗記不了，照舊顯示箭頭
 function walkButton(dog, walkedTab) {
-  if (!dog.id) return `<span class="more">${icon('chevron')}</span>`;
+  if (!walkKey(dog)) return `<span class="more">${icon('chevron')}</span>`;
   return walkedTab
     ? `<button type="button" class="walk-btn back" data-walk="back" aria-label="把 ${esc(dog.name)} 移回溜狗表">移回</button>`
-    : `<button type="button" class="walk-btn" data-walk="add" aria-label="記下今天溜了 ${esc(dog.name)}">${icon('tick')}溜了</button>`;
+    : `<button type="button" class="walk-btn" data-walk="add" aria-label="記下今天已遛 ${esc(dog.name)}">已遛</button>`;
 }
 
 // 所有分頁、搜尋、籠位共用這張卡片。第一層只放照片、犬名、天數、籠位｜編號，
@@ -398,22 +409,22 @@ function detailHtml(dog, today) {
 }
 
 // 可以一起溜的每一隻：輕點照片換看那隻；右上角圓圈勾選，之後用下方按鈕一起記（#35，K 選 C）。
-// 今天已溜的不顯示圓圈，改標「今天已溜」；沒有編號的記不了，也不顯示圓圈
+// 今天已溜的不顯示圓圈，改標「今天已溜」
 function buddyTile(d, name, walkedIds) {
   const walked = isWalkedToday(d, walkedIds);
-  const canPick = d.id && !walked && allDogs.includes(d);
-  const picked = canPick && pickedBuddies.has(d.id);
+  const canPick = walkKey(d) && !walked && allDogs.includes(d);
+  const picked = canPick && pickedBuddies.has(walkKey(d));
   return `<div class="buddy-tile">
     <button class="buddy" data-dog="${allDogs.indexOf(d)}">${photoThumb(d, 64)}<span class="bname">${esc(name)}</span></button>
     ${walked ? `<span class="walked-tag">今天已溜</span>` : ''}
-    ${canPick ? `<button type="button" class="pick${picked ? ' on' : ''}" data-pick="${esc(d.id)}" aria-pressed="${picked}" aria-label="勾選 ${esc(name)} 一起記">${icon('tick')}</button>` : ''}
+    ${canPick ? `<button type="button" class="pick${picked ? ' on' : ''}" data-pick="${esc(walkKey(d))}" aria-pressed="${picked}" aria-label="勾選 ${esc(name)} 一起記">${icon('tick')}</button>` : ''}
   </div>`;
 }
 
 // 「可以一起溜」下方的按鈕：把目前這隻連同勾選的狗一次記進今天已溜。
-// 目前這隻已溜（或沒有編號）又沒勾選時，就顯示目前這隻今天已溜，不放按鈕
+// 目前這隻已溜又沒勾選時，就顯示目前這隻今天已溜，不放按鈕
 function groupWalkButton(dog, walkedIds) {
-  const self = !!dog.id && !isWalkedToday(dog, walkedIds);
+  const self = !!walkKey(dog) && !isWalkedToday(dog, walkedIds);
   const n = [...pickedBuddies].length;
   if (!self && !n) {
     return isWalkedToday(dog, walkedIds) ? `<div class="self-walked">${icon('tick')}${esc(dog.name)} 今天已溜（這支手機的紀錄）</div>` : '';
@@ -444,7 +455,7 @@ function renderDetail() {
   });
   const group = box.querySelector('#groupWalk');
   if (group) group.addEventListener('click', () => {
-    const picked = [...pickedBuddies].map(id => allDogs.find(d => d.id === id));
+    const picked = [...pickedBuddies].map(id => allDogs.find(d => walkKey(d) === id));
     setWalked([detailDog, ...picked], true);
   });
   if (focused) {
@@ -512,7 +523,7 @@ function cardFromEvent(e) {
   const card = e.target.closest('#main .card[data-dog]');
   return card && allDogs[card.dataset.dog];
 }
-// 點「溜了／移回」只記錄，不開詳細資訊；點卡片其他地方才開
+// 點「已遛／移回」只記錄，不開詳細資訊；點卡片其他地方才開
 document.getElementById('main').addEventListener('click', e => {
   const dog = cardFromEvent(e);
   if (!dog) return;
@@ -626,7 +637,7 @@ function walkedTodayDogs(dogs, today) {
   const ids = loadWalkedIds(today);
   return dogs
     .filter(d => isWalkedToday(d, ids))
-    .sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+    .sort((a, b) => ids.indexOf(walkKey(a)) - ids.indexOf(walkKey(b)));
 }
 
 function renderMain() {
@@ -672,7 +683,7 @@ function renderMain() {
   } else if (activeTab === 'today') {
     main.innerHTML = cards
       ? `<div class="section-hint">${icon('tick')}你今天在這支手機記下溜過的狗（只存在這支手機，其他志工看不到）</div>` + cards
-      : `<div class="status-msg">這裡會列出你今天用這支手機記下已溜的狗。<br>在溜狗表按狗卡右邊的「溜了」就會記到這裡。</div>`;
+      : `<div class="status-msg">這裡會列出你今天用這支手機記下已溜的狗。<br>在溜狗表按狗卡右邊的「已遛」就會記到這裡。</div>`;
   } else {
     main.innerHTML = `<div class="section-hint">${icon('pin')}依久沒遛排序（由久到近）</div>` +
       (cards || `<div class="status-msg">目前沒有狗狗資料</div>`);
