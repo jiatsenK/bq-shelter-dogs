@@ -56,4 +56,5 @@
 - 文案寫明「這支手機」「其他志工看不到」，不暗示是所有志工的紀錄。不寫試算表、不寫 GitHub。
 - `tests/index.html`：#10 唯讀測試改成允許 localStorage 但只能讀寫 `WALKED_KEY`；測試頁改用假 localStorage，不會動到同網域上真正的紀錄；新增 3 項 #35 測試，49 項全過。
 - 截圖（模擬資料）：專案檔案 previews/issue-35/。
-- PR：見本分支 `claude/project-thread-d3v71d`。
+- K 看過勾選方式原型（https://claude.ai/artifact/ECyMLbwRAPkxAXH7cez1HF）後選「分開點」：點圓圈勾選、點照片打開；圓圈可點範圍外擴 9px。
+- PR：#42（`claude/project-thread-d3v71d`）。
