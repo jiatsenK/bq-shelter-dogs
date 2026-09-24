@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>板收遛狗</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #FBF8F1;
+    --paper-raised: #FFFFFF;
+    --ink: #24291F;
+    --ink-soft: #57584C;
+    --kennel: #2F4A3B;
+    --kennel-deep: #23392C;
+    --amber: #C97A22;
+    --amber-bg: #FBE9D2;
+    --red: #B03B33;
+    --red-bg: #F6DEDA;
+    --sage: #5C7A5A;
+    --sage-bg: #E4EBDF;
+    --muted: #948E7E;
+    --muted-bg: #ECE8DD;
+    --line: #E1DBC9;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  html, body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: 'Public Sans', -apple-system, sans-serif;
+    -webkit-tap-highlight-color: transparent;
+  }
+  h1, .display { font-family: 'Fraunces', serif; font-weight: 600; }
+
+  header.app {
+    position: sticky; top: 0; z-index: 10;
+    background: var(--kennel);
+    color: #F3F0E4;
+    padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 0;
+  }
+  header.app .toprow { display: flex; align-items: baseline; justify-content: space-between; }
+  header.app .date { font-size: 12px; opacity: 0.65; }
+  header.app h1 { font-size: 22px; margin: 2px 0 12px; }
+
+  .search {
+    margin-bottom: 12px;
+  }
+  .search input {
+    width: 100%;
+    border: none;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    background: rgba(255,255,255,0.14);
+    color: #fff;
+  }
+  .search input::placeholder { color: rgba(255,255,255,0.55); }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    overflow-x: auto;
+    padding-bottom: 10px;
+    -ms-overflow-style: none; scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button {
+    flex-shrink: 0;
+    border: none;
+    background: rgba(255,255,255,0.1);
+    color: #EDE9DA;
+    font-family: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    padding: 7px 12px;
+    border-radius: 20px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .tabs button.active { background: #F3F0E4; color: var(--kennel-deep); }
+
+  main { padding: 14px 14px 50px; max-width: 480px; margin: 0 auto; }
+
+  .status-msg {
+    text-align: center;
+    color: var(--ink-soft);
+    font-size: 14px;
+    padding: 40px 20px;
+    line-height: 1.7;
+  }
+
+  .cage-grid {
+    display: flex; flex-wrap: wrap; gap: 8px;
+  }
+  .cage-chip {
+    border: 1px solid var(--line);
+    background: var(--paper-raised);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 20px;
+    cursor: pointer;
+  }
+  .cage-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: none;
+    border: none;
+    color: var(--ink-soft);
+    font-family: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 4px 0 14px;
+    cursor: pointer;
+  }
+
+  .card {
+    background: var(--paper-raised);
+    border-radius: 10px;
+    display: flex;
+    margin-bottom: 8px;
+    overflow: hidden;
+    box-shadow: 0 1px 2px rgba(36,41,31,0.06);
+    border: 1px solid var(--line);
+  }
+  .card .bar { width: 6px; flex-shrink: 0; }
+  .bar.red { background: var(--red); }
+  .bar.amber { background: var(--amber); }
+  .bar.sage { background: var(--sage); }
+  .bar.muted { background: var(--muted); }
+
+  .thumb {
+    width: 56px; height: 56px; flex-shrink: 0;
+    margin: 12px 0 12px 12px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--muted-bg);
+    position: relative;
+  }
+  .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .thumb-fallback {
+    display: none;
+    position: absolute; inset: 0;
+    align-items: center; justify-content: center;
+    font-size: 22px;
+  }
+
+  .card .body { padding: 12px 14px; flex: 1; min-width: 0; }
+  .card .row1 { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .card .name { font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; }
+  .card .cage { font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; }
+
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    font-size: 12px; font-weight: 600;
+    padding: 2px 8px; border-radius: 20px; margin-top: 6px;
+  }
+  .chip.red { background: var(--red-bg); color: var(--red); }
+  .chip.amber { background: var(--amber-bg); color: var(--amber); }
+  .chip.sage { background: var(--sage-bg); color: var(--sage); }
+  .chip.muted { background: var(--muted-bg); color: var(--muted); }
+
+  .note {
+    font-size: 12.5px; color: var(--ink-soft); margin-top: 6px; line-height: 1.45;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .note mark { background: #F3D9AE; color: var(--ink); padding: 0 2px; border-radius: 3px; }
+
+  .intro {
+    font-size: 12.5px; color: var(--ink-soft); margin-top: 6px; line-height: 1.5;
+    padding-top: 6px; border-top: 1px dashed var(--line);
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .intro .label { font-weight: 600; color: var(--ink); }
+
+  .group-inline { margin-top: 6px; font-size: 12px; color: var(--ink-soft); }
+  .group-inline b { color: var(--ink); font-weight: 600; }
+
+  .special-card { background: var(--muted-bg); border-style: dashed; }
+  .special-card .name { color: var(--ink-soft); }
+
+  .section-hint {
+    font-size: 12px; color: var(--ink-soft);
+    margin: 0 2px 10px; line-height: 1.6;
+  }
+</style>
+</head>
+<body>
+
+<header class="app">
+  <div class="toprow">
+    <div class="date" id="dateLabel"></div>
+  </div>
+  <h1>板收遛狗</h1>
+  <div class="search">
+    <input id="searchInput" type="text" placeholder="搜尋犬名…">
+  </div>
+  <div class="tabs" id="tabs"></div>
+</header>
+
+<main id="main">
+  <div class="status-msg">讀取試算表中…</div>
+</main>
+
+<script>
+const SHEET_ID = 'REMOVED_SHEET_ID';
+const SPECIAL_KEYWORDS = ['暫緩', '勿溜', '住院'];
+const RECENT_DAYS = 7;
+
+let allDogs = [];
+let groupMap = {};
+let detailMap = {};
+let cages = [];
+let activeTab = 'due';
+let activeCage = null;
+let searchQuery = '';
+
+async function fetchGviz(sheetName) {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('網路連線失敗');
+  const text = await res.text();
+  const match = text.match(/setResponse\(([\s\S]*)\);?\s*$/);
+  if (!match) throw new Error('試算表回應格式異常，請確認已設定「知道連結的人可檢視」');
+  return JSON.parse(match[1]).table;
+}
+
+function cellText(cell) {
+  if (!cell || cell.v == null) return '';
+  if (typeof cell.v === 'string' && cell.v.startsWith('Date(')) return cell.f || '';
+  return String(cell.v).trim();
+}
+
+function cellDate(cell) {
+  if (!cell || cell.v == null) return null;
+  const m = String(cell.v).match(/Date\((\d+),(\d+),(\d+)\)/);
+  if (!m) return null;
+  return new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]));
+}
+
+function parseMainList(table) {
+  const rows = table.rows || [];
+  let headerIdx = -1;
+  const colMap = {};
+  for (let i = 0; i < rows.length; i++) {
+    const texts = (rows[i].c || []).map(cellText);
+    if (texts.includes('犬名')) {
+      headerIdx = i;
+      texts.forEach((t, ci) => {
+        if (t === '籠位') colMap.cage = ci;
+        if (t === '編號') colMap.id = ci;
+        if (t === '犬名') colMap.name = ci;
+        if (t === '遛狗日期') colMap.walkedDate = ci;
+        if (t === '誰遛的') colMap.walker = ci;
+        if (t === '備註') colMap.note = ci;
+      });
+      break;
+    }
+  }
+  if (headerIdx === -1) throw new Error('找不到主清單表頭列（犬名欄）');
+  const dogs = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const c = rows[i].c || [];
+    const name = cellText(c[colMap.name]);
+    if (!name) continue;
+    dogs.push({
+      cage: cellText(c[colMap.cage]),
+      id: cellText(c[colMap.id]),
+      name,
+      walkedDate: cellDate(c[colMap.walkedDate]),
+      walker: cellText(c[colMap.walker]),
+      note: cellText(c[colMap.note]),
+    });
+  }
+  return dogs;
+}
+
+function parseGroups(table) {
+  const rows = table.rows || [];
+  const colCount = (table.cols || []).length;
+  const map = {};
+  for (let col = 0; col < colCount; col++) {
+    const names = [];
+    for (let i = 0; i < rows.length; i++) {
+      const t = cellText((rows[i].c || [])[col]);
+      if (!t || /^\d+$/.test(t)) continue;
+      names.push(t);
+    }
+    names.forEach(n => {
+      if (!map[n]) map[n] = new Set();
+      names.forEach(m => { if (m !== n) map[n].add(m); });
+    });
+  }
+  return map;
+}
+
+function specialFlag(note) {
+  for (const k of SPECIAL_KEYWORDS) if (note.includes(k)) return k;
+  return null;
+}
+
+function parseFrontmatterBody(text) {
+  const m = text.match(/^---\s*[\s\S]*?---\s*([\s\S]*)$/);
+  return (m ? m[1] : text).trim();
+}
+
+async function fetchAllDetails(dogs) {
+  const map = {};
+  await Promise.allSettled(dogs.map(async d => {
+    if (!d.id) return;
+    try {
+      const res = await fetch(`dogs/${encodeURIComponent(d.id)}.md`);
+      if (!res.ok) return;
+      const body = parseFrontmatterBody(await res.text());
+      if (body) map[d.id] = body;
+    } catch (e) { /* 沒有這隻狗的介紹檔，略過即可 */ }
+  }));
+  return map;
+}
+
+function computeStatus(dog, today) {
+  if (dog.walkedDate) {
+    const days = Math.floor((today - dog.walkedDate) / 86400000);
+    let level = 'sage';
+    if (days >= 30) level = 'red';
+    else if (days >= 7) level = 'amber';
+    return { kind: 'dated', days, level };
+  }
+  if (dog.walker) return { kind: 'covered' };
+  return { kind: 'unknown' };
+}
+
+function photoThumb(dog) {
+  return `
+    <div class="thumb">
+      <img src="photos/${encodeURIComponent(dog.id)}.jpg"
+           onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+      <div class="thumb-fallback">🐾</div>
+    </div>
+  `;
+}
+
+function groupLine(name) {
+  const g = groupMap[name];
+  if (!g || !g.size) return '';
+  return `<div class="group-inline">可一起遛：<b>${[...g].join('、')}</b></div>`;
+}
+
+function statusChip(dog, today) {
+  const s = computeStatus(dog, today);
+  if (s.kind === 'dated') {
+    const label = s.days === 0 ? '今天' : `${s.days} 天前`;
+    return `<span class="chip ${s.level}">${label}</span>`;
+  }
+  if (s.kind === 'covered') return `<span class="chip sage">有人固定照顧</span>`;
+  return `<span class="chip muted">尚無遛狗記錄</span>`;
+}
+
+function dogCard(dog, today) {
+  return `
+    <div class="card">
+      <div class="bar ${cardBarLevel(dog, today)}"></div>
+      ${photoThumb(dog)}
+      <div class="body">
+        <div class="row1">
+          <span class="name">${dog.name}</span>
+          <span class="cage">${dog.cage}${dog.id ? ' · ' + dog.id : ''}</span>
+        </div>
+        ${statusChip(dog, today)}
+        ${dog.note ? `<div class="note">${dog.note}</div>` : ''}
+        ${groupLine(dog.name)}
+        ${detailMap[dog.id] ? `<div class="intro"><span class="label">介紹：</span>${detailMap[dog.id]}</div>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function cardBarLevel(dog, today) {
+  const s = computeStatus(dog, today);
+  if (s.kind === 'dated') return s.level;
+  if (s.kind === 'covered') return 'sage';
+  return 'muted';
+}
+
+function specialCard(dog, keyword) {
+  const noteHtml = dog.note.split(keyword).join(`<mark>${keyword}</mark>`);
+  return `
+    <div class="card special-card">
+      <div class="bar muted"></div>
+      ${photoThumb(dog)}
+      <div class="body">
+        <div class="row1">
+          <span class="name">${dog.name}</span>
+          <span class="cage">${dog.cage}${dog.id ? ' · ' + dog.id : ''}</span>
+        </div>
+        <span class="chip muted">${keyword}</span>
+        <div class="note">${noteHtml}</div>
+      </div>
+    </div>
+  `;
+}
+
+function buildTabs(dueCount, recentCount, specialCount) {
+  const tabs = [
+    { id: 'due', label: `待巡房 (${dueCount})` },
+    { id: 'recent', label: `近期已遛 (${recentCount})` },
+    { id: 'special', label: `特殊狀況 (${specialCount})` },
+    { id: 'cage', label: '依籠位' },
+  ];
+  document.getElementById('tabs').innerHTML = tabs.map(t =>
+    `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}">${t.label}</button>`
+  ).join('');
+  document.querySelectorAll('#tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeTab = btn.dataset.tab;
+      activeCage = null;
+      render();
+    });
+  });
+}
+
+function render() {
+  const today = new Date();
+  document.getElementById('dateLabel').textContent = today.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+
+  const specialList = [];
+  const normalList = [];
+  allDogs.forEach(d => {
+    const flag = specialFlag(d.note);
+    if (flag) specialList.push({ dog: d, flag });
+    else normalList.push(d);
+  });
+
+  const dueList = normalList.slice().sort((a, b) => {
+    const sa = computeStatus(a, today), sb = computeStatus(b, today);
+    const key = s => s.kind === 'unknown' ? 999999 : s.kind === 'dated' ? s.days : -1;
+    return key(sb) - key(sa);
+  });
+
+  const recentList = normalList
+    .filter(d => { const s = computeStatus(d, today); return s.kind === 'dated' && s.days <= RECENT_DAYS; })
+    .sort((a, b) => computeStatus(a, today).days - computeStatus(b, today).days);
+
+  buildTabs(dueList.length, recentList.length, specialList.length);
+
+  const main = document.getElementById('main');
+
+  if (searchQuery) {
+    const q = searchQuery.trim();
+    const matches = allDogs.filter(d => d.name.includes(q));
+    main.innerHTML = matches.length
+      ? matches.map(d => dogCard(d, today)).join('')
+      : `<div class="status-msg">找不到「${q}」</div>`;
+    return;
+  }
+
+  if (activeTab === 'due') {
+    main.innerHTML = dueList.map(d => dogCard(d, today)).join('') || `<div class="status-msg">目前沒有待巡房的狗</div>`;
+  } else if (activeTab === 'recent') {
+    main.innerHTML = `<div class="section-hint">最近 ${RECENT_DAYS} 天內已經遛過</div>` +
+      (recentList.map(d => dogCard(d, today)).join('') || `<div class="status-msg">最近沒有已遛紀錄</div>`);
+  } else if (activeTab === 'special') {
+    main.innerHTML = `<div class="section-hint">備註含「${SPECIAL_KEYWORDS.join('／')}」等字眼，已從待巡房中排除，請先確認狀況再決定是否遛出。</div>` +
+      (specialList.map(x => specialCard(x.dog, x.flag)).join('') || `<div class="status-msg">目前沒有特殊狀況</div>`);
+  } else if (activeTab === 'cage') {
+    if (!activeCage) {
+      main.innerHTML = `<div class="cage-grid">` +
+        cages.map(c => `<button class="cage-chip" data-cage="${c}">${c}</button>`).join('') +
+        `</div>`;
+      main.querySelectorAll('.cage-chip').forEach(btn => {
+        btn.addEventListener('click', () => { activeCage = btn.dataset.cage; render(); });
+      });
+    } else {
+      const list = allDogs.filter(d => d.cage === activeCage);
+      main.innerHTML = `<button class="cage-back" id="cageBack">← 所有籠位</button>` +
+        list.map(d => dogCard(d, today)).join('');
+      document.getElementById('cageBack').addEventListener('click', () => { activeCage = null; render(); });
+    }
+  }
+}
+
+document.getElementById('searchInput').addEventListener('input', e => {
+  searchQuery = e.target.value;
+  render();
+});
+
+async function init() {
+  try {
+    const [mainTable, groupTable] = await Promise.all([
+      fetchGviz('主清單'),
+      fetchGviz('常遛狗群'),
+    ]);
+    allDogs = parseMainList(mainTable);
+    groupMap = parseGroups(groupTable);
+    cages = [...new Set(allDogs.map(d => d.cage).filter(Boolean))];
+    render();
+    fetchAllDetails(allDogs).then(map => { detailMap = map; render(); });
+  } catch (e) {
+    document.getElementById('main').innerHTML =
+      `<div class="status-msg">讀取試算表失敗。<br>${e.message}<br><br>請確認試算表已設定「知道連結的人可檢視」，或重新整理再試一次。</div>`;
+  }
+}
+
+init();
+</script>
+</body>
+</html>
