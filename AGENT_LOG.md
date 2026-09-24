@@ -48,6 +48,15 @@
 - `tests/index.html` 補 2 項 #34 測試（併入 #40 後改用溜狗表／相關資訊分類），46 項全過。
 - PR：#39（`claude/project-thread-mg521e`）。
 
+## [2026-09-25] Claude | #32 前端改讀 data/dogs.json，基本 UI 先出現、載入失敗不白屏
+- 依據：Issue #32（V3 規格第 5.2、6、7 節）；dogs.json 格式照 #31（PR #38）。
+- `js/app.js`：拿掉直接讀 Google 試算表的程式（gviz 讀取與解析），改讀 `data/dogs.json`（`cache: 'no-cache'`，每次先確認有沒有新版）。資料載入前分類列、搜尋框照常可用，內容區顯示「讀取狗狗資料中…」；失敗時內容區顯示「資料載入失敗，請稍後重新整理。」與重新讀取鈕。可以一起溜缺資料時照舊只顯示提醒。標題下的時間改成試算表同步時間（資料更新 M/D HH:MM）。
+- 排序、天數判斷、照片、狗卡資訊、可以一起溜沿用原本函式，沒有改。
+- 測試：原本 `tests/index.html` 對前端試算表解析的測試移到 `scripts/sync-sheet.test.mjs`（解析只剩同步腳本在做），並改成比對「前端讀回 dogs.json」與同步前資料一致；`tests/index.html` 補 #32 測試，40 項全過；`node --test scripts/sync-sheet.test.mjs` 10 項全過。另用 repo 內真實 `data/dogs.json`（121 隻）在手機尺寸預覽確認。
+- 備註：Node 22 下 `node --test scripts/`（給資料夾）會找不到模組，要寫檔名；本票沒改。
+- PR：#41（`claude/project-thread-qfsoo2`）。
+- 合併：K 2026-09-24 說「合併」；合併前確認已含最新 main，測試頁 40 項、`node --test scripts/sync-sheet.test.mjs` 10 項全過。
+
 ## [2026-09-25] Claude | #35 今天已溜（只存在這支手機）
 - 依據：Issue #35（V3 規格第 4 節）；操作方式照 K 2026-09-24 試原型後的定案（#35 兩則留言）：狗卡「溜了／移回」按鈕取代右滑／左滑；「可以一起溜」用勾選一次記，取代長按＋確認。
 - `js/app.js`：紀錄存在 localStorage `bq-walked-today`，內容 `{ date: 本地日期, ids: [編號] }`；日期不是今天就視為沒有紀錄（隔天自動全部未勾選，不刪舊資料）。無痕模式存不進去時，這次開著網頁期間仍記得。
@@ -57,4 +66,5 @@
 - `tests/index.html`：#10 唯讀測試改成允許 localStorage 但只能讀寫 `WALKED_KEY`；測試頁改用假 localStorage，不會動到同網域上真正的紀錄；新增 3 項 #35 測試，49 項全過。
 - 截圖（模擬資料）：專案檔案 previews/issue-35/。
 - K 看過勾選方式原型（https://claude.ai/artifact/ECyMLbwRAPkxAXH7cez1HF）後選「分開點」：點圓圈勾選、點照片打開；圓圈可點範圍外擴 9px。
+- 合併前併入最新 main（含 #41 改讀 dogs.json）：測試頁衝突兩邊都保留，tests/index.html 43 項、sync 測試 10 項全過；用 repo 內真實 dogs.json 試過「溜了」、重新整理後仍在。
 - PR：#42（`claude/project-thread-d3v71d`）。
