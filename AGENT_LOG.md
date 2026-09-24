@@ -115,4 +115,4 @@
 - 驗證：Chromium 跑 tests/index.html 55 項全過（#10 唯讀測試改成只允許照片 POST 到 UPLOAD_URL，並檢查前端沒有 token／GitHub API）；node --test sync 10 項＋worker 11 項全過；用 wrangler dev（本機 workerd）＋假 GitHub 跑完整流程：CORS 預檢、壓縮（4032×3024、0.9 MB → 1280×960、約 90 KB）、更換帶 sha。雲端連不到 Cloudflare，未實際部署。
 - 截圖（模擬上傳、測試用圖）：專案檔案 previews/v4/。
 - 限制：未在實體手機測試；上傳後同一支手機重新整理，在 GitHub Pages 更新前（約幾分鐘）可能還看到舊照片。
-- PR：（分支 `claude/project-thread-wnnu1i`）。
+- PR：#50（分支 `claude/project-thread-wnnu1i`）。
