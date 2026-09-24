@@ -6,145 +6,159 @@
 <title>板收遛狗</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
 <style>
+  /* 視覺風格：見 docs/DESIGN_GUIDE.md（參考圖 docs/design/reference-preview.webp） */
   :root {
-    --paper: #FBF8F1;
-    --paper-raised: #FFFFFF;
-    --ink: #24291F;
-    --ink-soft: #57584C;
-    --kennel: #2F4A3B;
-    --kennel-deep: #23392C;
-    --amber: #C97A22;
-    --amber-bg: #FBE9D2;
-    --red: #B03B33;
-    --red-bg: #F6DEDA;
-    --sage: #5C7A5A;
-    --sage-bg: #E4EBDF;
-    --muted: #948E7E;
-    --muted-bg: #ECE8DD;
-    --line: #E1DBC9;
-    padding-top: env(safe-area-inset-top, 0px);
-    padding-bottom: env(safe-area-inset-bottom, 0px);
+    --bg: #EEF4FB;
+    --surface: #FFFFFF;
+    --surface-soft: #F4F7FB;
+    --ink: #1E2A44;
+    --ink-soft: #6B7890;
+    --line: #E3EAF3;
+    --primary: #2F7BEA;
+    --primary-soft: #E7F0FD;
+    --danger: #E5484D;
+    --red-text: #D93036;   --red-bg: #FDE7E7;
+    --amber-text: #A86400; --amber-bg: #FFF0C2;
+    --green-text: #2E8B45; --green-bg: #DDF4E2;
+    --muted-text: #7A8599; --muted-bg: #EEF1F5;
+    --radius-card: 18px;
+    --radius-photo: 14px;
+    --shadow-card: 0 2px 10px rgba(30, 42, 68, 0.06);
   }
   * { box-sizing: border-box; }
   html { scroll-padding-top: env(safe-area-inset-top, 0px); }
   html, body {
     margin: 0;
-    background: var(--paper);
+    background: var(--bg);
     color: var(--ink);
-    font-family: 'Public Sans', -apple-system, sans-serif;
+    font-family: 'Noto Sans TC', -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
     -webkit-tap-highlight-color: transparent;
   }
-  h1, .display { font-family: 'Fraunces', serif; font-weight: 600; }
+  svg.icon { width: 1em; height: 1em; flex-shrink: 0; vertical-align: -0.125em; }
 
   header.app {
     position: sticky; top: 0; z-index: 10;
-    background: var(--kennel);
-    color: #F3F0E4;
-    padding: calc(16px + env(safe-area-inset-top, 0px)) 16px 0;
+    background: var(--surface);
+    padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 12px;
+    box-shadow: 0 1px 0 var(--line);
   }
-  header.app .toprow { display: flex; align-items: baseline; justify-content: space-between; }
-  header.app .date { font-size: 12px; opacity: 0.65; }
-  header.app h1 { font-size: 22px; margin: 2px 0 12px; }
+  .header-inner { max-width: 480px; margin: 0 auto; }
+  .brand { display: flex; align-items: center; gap: 10px; }
+  .brand .logo { width: 34px; height: 34px; color: var(--primary); }
+  .brand h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: 0.02em; line-height: 1.2; }
+  .brand .sub { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .brand .titles { flex: 1; min-width: 0; }
+  .brand .date { font-size: 13px; color: var(--ink-soft); font-weight: 500; }
+  .brand .updated { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
 
-  .search {
-    margin-bottom: 12px;
-  }
+  .search { position: relative; margin: 12px 0 10px; }
+  .search .icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--ink-soft); font-size: 16px; }
   .search input {
     width: 100%;
     border: none;
-    border-radius: 10px;
-    padding: 10px 14px;
-    font-size: 15px;
+    border-radius: 12px;
+    padding: 10px 14px 10px 38px;
+    font-size: 16px;
     font-family: inherit;
-    background: rgba(255,255,255,0.14);
-    color: #fff;
+    background: var(--surface-soft);
+    color: var(--ink);
   }
-  .search input::placeholder { color: rgba(255,255,255,0.55); }
+  .search input::placeholder { color: #9AA5B8; }
+  .search input:focus { outline: 2px solid var(--primary-soft); }
 
   .tabs {
-    display: flex;
-    gap: 4px;
-    overflow-x: auto;
-    padding-bottom: 10px;
-    -ms-overflow-style: none; scrollbar-width: none;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 6px;
   }
-  .tabs::-webkit-scrollbar { display: none; }
   .tabs button {
-    flex-shrink: 0;
     border: none;
-    background: rgba(255,255,255,0.1);
-    color: #EDE9DA;
+    background: var(--muted-bg);
+    color: var(--ink);
     font-family: inherit;
-    font-size: 13px;
-    font-weight: 600;
-    padding: 7px 12px;
-    border-radius: 20px;
+    padding: 7px 2px;
+    border-radius: 12px;
     cursor: pointer;
-    white-space: nowrap;
+    display: flex; flex-direction: column; align-items: center; line-height: 1.3;
   }
-  .tabs button.active { background: #F3F0E4; color: var(--kennel-deep); }
+  .tabs button .t { font-size: 14px; font-weight: 500; white-space: nowrap; }
+  .tabs button .n { font-size: 12px; opacity: 0.75; }
+  .tabs button.active { background: var(--primary); color: #fff; }
+  .tabs button.active .t { font-weight: 700; }
+  .tabs button.active .n { opacity: 0.9; }
+  .tabs button.active[data-tab="special"] { background: var(--danger); }
 
   main { padding: 14px 14px 50px; max-width: 480px; margin: 0 auto; }
 
   .status-msg {
     text-align: center;
     color: var(--ink-soft);
-    font-size: 14px;
+    font-size: 15px;
     padding: 40px 20px;
     line-height: 1.7;
   }
 
-  .cage-grid {
-    display: flex; flex-wrap: wrap; gap: 8px;
+  .section-hint {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 14px; color: var(--ink-soft); font-weight: 500;
+    margin: 2px 4px 12px;
   }
+  .section-title {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 17px; font-weight: 700; color: var(--ink);
+    margin: 4px 4px 12px;
+  }
+  .section-title .icon { color: var(--green-text); }
+  .alert-box {
+    display: flex; gap: 10px; align-items: flex-start;
+    background: var(--red-bg);
+    color: var(--red-text);
+    border-radius: 14px;
+    padding: 12px 14px;
+    font-size: 13.5px; line-height: 1.6;
+    margin-bottom: 12px;
+  }
+  .alert-box .icon { font-size: 18px; margin-top: 2px; }
+
+  .cage-grid { display: flex; flex-wrap: wrap; gap: 8px; }
   .cage-chip {
-    border: 1px solid var(--line);
-    background: var(--paper-raised);
+    border: none;
+    background: var(--surface);
     color: var(--ink);
     font-family: inherit;
-    font-size: 13.5px;
-    font-weight: 600;
-    padding: 8px 14px;
-    border-radius: 20px;
+    font-size: 15px;
+    font-weight: 700;
+    padding: 12px 16px;
+    border-radius: 14px;
+    box-shadow: var(--shadow-card);
     cursor: pointer;
   }
   .cage-back {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    background: none;
-    border: none;
-    color: var(--ink-soft);
-    font-family: inherit;
-    font-size: 13.5px;
-    font-weight: 600;
-    padding: 4px 0 14px;
+    display: inline-flex; align-items: center; gap: 4px;
+    background: none; border: none;
+    color: var(--primary);
+    font-family: inherit; font-size: 15px; font-weight: 700;
+    padding: 4px 0 12px;
     cursor: pointer;
   }
 
   .card {
-    background: var(--paper-raised);
-    border-radius: 10px;
+    background: var(--surface);
+    border-radius: var(--radius-card);
     display: flex;
-    margin-bottom: 8px;
-    overflow: hidden;
-    box-shadow: 0 1px 2px rgba(36,41,31,0.06);
-    border: 1px solid var(--line);
+    gap: 14px;
+    padding: 12px;
+    margin-bottom: 12px;
+    box-shadow: var(--shadow-card);
   }
-  .card .bar { width: 6px; flex-shrink: 0; }
-  .bar.red { background: var(--red); }
-  .bar.amber { background: var(--amber); }
-  .bar.sage { background: var(--sage); }
-  .bar.muted { background: var(--muted); }
 
   .thumb {
-    width: 56px; height: 56px; flex-shrink: 0;
-    margin: 12px 0 12px 12px;
-    border-radius: 8px;
+    width: 84px; height: 84px; flex-shrink: 0;
+    border-radius: var(--radius-photo);
     overflow: hidden;
-    background: var(--muted-bg);
+    background: var(--primary-soft);
     position: relative;
   }
   .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -152,60 +166,86 @@
     display: none;
     position: absolute; inset: 0;
     align-items: center; justify-content: center;
-    font-size: 22px;
+    color: var(--primary); opacity: 0.55;
+    font-size: 38px;
   }
 
-  .card .body { padding: 12px 14px; flex: 1; min-width: 0; }
-  .card .row1 { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-  .card .name { font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; }
-  .card .cage { font-size: 11.5px; color: var(--ink-soft); white-space: nowrap; }
-
-  .chip {
+  .card .body { flex: 1; min-width: 0; }
+  .badge {
     display: inline-flex; align-items: center; gap: 4px;
-    font-size: 12px; font-weight: 600;
-    padding: 2px 8px; border-radius: 20px; margin-top: 6px;
+    font-size: 14px; font-weight: 700;
+    padding: 2px 10px; border-radius: 8px;
   }
-  .chip.red { background: var(--red-bg); color: var(--red); }
-  .chip.amber { background: var(--amber-bg); color: var(--amber); }
-  .chip.sage { background: var(--sage-bg); color: var(--sage); }
-  .chip.muted { background: var(--muted-bg); color: var(--muted); }
+  .badge.red { background: var(--red-bg); color: var(--red-text); }
+  .badge.amber { background: var(--amber-bg); color: var(--amber-text); }
+  .badge.sage { background: var(--green-bg); color: var(--green-text); }
+  .badge.muted { background: var(--muted-bg); color: var(--muted-text); }
+  .card .name { font-size: 18px; font-weight: 700; margin-top: 6px; line-height: 1.3; word-break: break-all; }
+  .card .meta { font-size: 13.5px; color: var(--ink-soft); margin-top: 2px; }
+  .card .meta .sep { color: var(--line); margin: 0 6px; }
 
   .note {
-    font-size: 12.5px; color: var(--ink-soft); margin-top: 6px; line-height: 1.45;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    display: flex; gap: 5px; align-items: flex-start;
+    font-size: 13px; line-height: 1.5;
+    margin-top: 8px;
+    padding: 5px 9px;
+    border-radius: 8px;
+    background: var(--red-bg);
+    color: #8F3A3D;
   }
-  .note mark { background: #F3D9AE; color: var(--ink); padding: 0 2px; border-radius: 3px; }
+  .note .icon { color: var(--red-text); margin-top: 3px; }
+  .note .text { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .note mark { background: transparent; color: var(--red-text); font-weight: 700; }
+
+  .group-inline {
+    display: inline-flex; gap: 5px; align-items: flex-start;
+    font-size: 13px; line-height: 1.5;
+    margin-top: 8px;
+    padding: 5px 9px;
+    border-radius: 8px;
+    background: var(--primary-soft);
+    color: #2A4F86;
+  }
+  .group-inline .icon { color: var(--primary); margin-top: 3px; }
+  .group-inline b { font-weight: 700; }
 
   .intro {
-    font-size: 12.5px; color: var(--ink-soft); margin-top: 6px; line-height: 1.5;
-    padding-top: 6px; border-top: 1px dashed var(--line);
+    font-size: 13px; color: var(--ink-soft); margin-top: 8px; line-height: 1.6;
     display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
   }
-  .intro .label { font-weight: 600; color: var(--ink); }
-
-  .group-inline { margin-top: 6px; font-size: 12px; color: var(--ink-soft); }
-  .group-inline b { color: var(--ink); font-weight: 600; }
-
-  .special-card { background: var(--muted-bg); border-style: dashed; }
-  .special-card .name { color: var(--ink-soft); }
-
-  .section-hint {
-    font-size: 12px; color: var(--ink-soft);
-    margin: 0 2px 10px; line-height: 1.6;
-  }
+  .intro .label { font-weight: 700; color: var(--ink); }
 </style>
 </head>
 <body>
 
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-paw" viewBox="0 0 24 24"><g fill="currentColor"><ellipse cx="5.5" cy="10" rx="2.3" ry="2.9" transform="rotate(-18 5.5 10)"/><ellipse cx="9.3" cy="5.6" rx="2.3" ry="3" transform="rotate(-6 9.3 5.6)"/><ellipse cx="14.7" cy="5.6" rx="2.3" ry="3" transform="rotate(6 14.7 5.6)"/><ellipse cx="18.5" cy="10" rx="2.3" ry="2.9" transform="rotate(18 18.5 10)"/><path d="M12 11c-2.7 0-6 3.6-6 6.6 0 1.8 1.3 2.9 3 2.9 1.2 0 2-.6 3-.6s1.8.6 3 .6c1.7 0 3-1.1 3-2.9 0-3-3.3-6.6-6-6.6z"/></g></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></g></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></symbol>
+  <symbol id="i-warn" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"><path d="M12 3.5 2.5 20h19z"/><path d="M12 10v4.5M12 17.2v.1"/></g></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v5.5M12 16.4v.1"/></g></symbol>
+  <symbol id="i-group" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="8" r="3"/><circle cx="5.5" cy="10" r="2.2"/><circle cx="18.5" cy="10" r="2.2"/><path d="M6.5 19c0-3 2.5-5 5.5-5s5.5 2 5.5 5M1.8 18c0-2 1.6-3.6 3.7-3.6M22.2 18c0-2-1.6-3.6-3.7-3.6"/></g></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol>
+</svg>
+
 <header class="app">
-  <div class="toprow">
-    <div class="date" id="dateLabel"></div>
+  <div class="header-inner">
+    <div class="brand">
+      <svg class="icon logo"><use href="#i-paw"/></svg>
+      <div class="titles">
+        <h1>板收遛狗</h1>
+        <div class="sub">
+          <span class="date" id="dateLabel"></span>
+          <span class="updated" id="updatedLabel"></span>
+        </div>
+      </div>
+    </div>
+    <div class="search">
+      <svg class="icon"><use href="#i-search"/></svg>
+      <input id="searchInput" type="search" placeholder="搜尋犬名" autocomplete="off">
+    </div>
+    <div class="tabs" id="tabs"></div>
   </div>
-  <h1>板收遛狗</h1>
-  <div class="search">
-    <input id="searchInput" type="text" placeholder="搜尋犬名…">
-  </div>
-  <div class="tabs" id="tabs"></div>
 </header>
 
 <main id="main">
@@ -340,12 +380,20 @@ function computeStatus(dog, today) {
   return { kind: 'unknown' };
 }
 
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function icon(id) {
+  return `<svg class="icon"><use href="#i-${id}"/></svg>`;
+}
+
 function photoThumb(dog) {
   return `
     <div class="thumb">
-      <img src="photos/${encodeURIComponent(dog.id)}.jpg"
+      <img src="photos/${encodeURIComponent(dog.id)}.jpg" alt="" loading="lazy"
            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
-      <div class="thumb-fallback">🐾</div>
+      <div class="thumb-fallback">${icon('paw')}</div>
     </div>
   `;
 }
@@ -353,58 +401,49 @@ function photoThumb(dog) {
 function groupLine(name) {
   const g = groupMap[name];
   if (!g || !g.size) return '';
-  return `<div class="group-inline">可一起遛：<b>${[...g].join('、')}</b></div>`;
+  return `<div class="group-inline">${icon('group')}<span>可一起遛：<b>${[...g].map(esc).join('、')}</b></span></div>`;
 }
 
-function statusChip(dog, today) {
+function statusBadge(dog, today) {
   const s = computeStatus(dog, today);
   if (s.kind === 'dated') {
     const label = s.days === 0 ? '今天' : `${s.days} 天前`;
-    return `<span class="chip ${s.level}">${label}</span>`;
+    return `<span class="badge ${s.level}">${label}</span>`;
   }
-  if (s.kind === 'covered') return `<span class="chip sage">有人固定照顧</span>`;
-  return `<span class="chip muted">尚無遛狗記錄</span>`;
+  if (s.kind === 'covered') return `<span class="badge sage">有人固定照顧</span>`;
+  return `<span class="badge muted">尚無遛狗記錄</span>`;
+}
+
+function metaLine(dog) {
+  return `<div class="meta">${esc(dog.cage)}${dog.id ? `<span class="sep">|</span>${esc(dog.id)}` : ''}</div>`;
 }
 
 function dogCard(dog, today) {
   return `
     <div class="card">
-      <div class="bar ${cardBarLevel(dog, today)}"></div>
       ${photoThumb(dog)}
       <div class="body">
-        <div class="row1">
-          <span class="name">${dog.name}</span>
-          <span class="cage">${dog.cage}${dog.id ? ' · ' + dog.id : ''}</span>
-        </div>
-        ${statusChip(dog, today)}
-        ${dog.note ? `<div class="note">${dog.note}</div>` : ''}
+        ${statusBadge(dog, today)}
+        <div class="name">${esc(dog.name)}</div>
+        ${metaLine(dog)}
+        ${dog.note ? `<div class="note">${icon('warn')}<span class="text">${esc(dog.note)}</span></div>` : ''}
         ${groupLine(dog.name)}
-        ${detailMap[dog.id] ? `<div class="intro"><span class="label">介紹：</span>${detailMap[dog.id]}</div>` : ''}
+        ${detailMap[dog.id] ? `<div class="intro"><span class="label">介紹：</span>${esc(detailMap[dog.id])}</div>` : ''}
       </div>
     </div>
   `;
 }
 
-function cardBarLevel(dog, today) {
-  const s = computeStatus(dog, today);
-  if (s.kind === 'dated') return s.level;
-  if (s.kind === 'covered') return 'sage';
-  return 'muted';
-}
-
 function specialCard(dog, keyword) {
-  const noteHtml = dog.note.split(keyword).join(`<mark>${keyword}</mark>`);
+  const noteHtml = esc(dog.note).split(esc(keyword)).join(`<mark>${esc(keyword)}</mark>`);
   return `
-    <div class="card special-card">
-      <div class="bar muted"></div>
+    <div class="card">
       ${photoThumb(dog)}
       <div class="body">
-        <div class="row1">
-          <span class="name">${dog.name}</span>
-          <span class="cage">${dog.cage}${dog.id ? ' · ' + dog.id : ''}</span>
-        </div>
-        <span class="chip muted">${keyword}</span>
-        <div class="note">${noteHtml}</div>
+        <span class="badge red">${icon('alert')}${esc(keyword)}</span>
+        <div class="name">${esc(dog.name)}</div>
+        ${metaLine(dog)}
+        <div class="note">${icon('warn')}<span class="text">${noteHtml}</span></div>
       </div>
     </div>
   `;
@@ -412,13 +451,13 @@ function specialCard(dog, keyword) {
 
 function buildTabs(dueCount, recentCount, specialCount) {
   const tabs = [
-    { id: 'due', label: `待巡房 (${dueCount})` },
-    { id: 'recent', label: `近期已遛 (${recentCount})` },
-    { id: 'special', label: `特殊狀況 (${specialCount})` },
-    { id: 'cage', label: '依籠位' },
+    { id: 'due', label: '待巡房', count: dueCount },
+    { id: 'recent', label: '近期已遛', count: recentCount },
+    { id: 'special', label: '特殊狀況', count: specialCount },
+    { id: 'cage', label: '依籠位', count: `${cages.length} 區` },
   ];
   document.getElementById('tabs').innerHTML = tabs.map(t =>
-    `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}">${t.label}</button>`
+    `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}"><span class="t">${t.label}</span><span class="n">${t.count}</span></button>`
   ).join('');
   document.querySelectorAll('#tabs button').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -431,7 +470,8 @@ function buildTabs(dueCount, recentCount, specialCount) {
 
 function render() {
   const today = new Date();
-  document.getElementById('dateLabel').textContent = today.toLocaleDateString('zh-TW', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'short' });
+  document.getElementById('dateLabel').textContent =
+    `${today.getMonth() + 1}月${today.getDate()}日 (${'日一二三四五六'[today.getDay()]})`;
 
   const specialList = [];
   const normalList = [];
@@ -460,29 +500,30 @@ function render() {
     const matches = allDogs.filter(d => d.name.includes(q));
     main.innerHTML = matches.length
       ? matches.map(d => dogCard(d, today)).join('')
-      : `<div class="status-msg">找不到「${q}」</div>`;
+      : `<div class="status-msg">找不到「${esc(q)}」</div>`;
     return;
   }
 
   if (activeTab === 'due') {
-    main.innerHTML = dueList.map(d => dogCard(d, today)).join('') || `<div class="status-msg">目前沒有待巡房的狗</div>`;
+    main.innerHTML = `<div class="section-hint">${icon('pin')}依久沒遛排序（由久到近）</div>` +
+      (dueList.map(d => dogCard(d, today)).join('') || `<div class="status-msg">目前沒有待巡房的狗</div>`);
   } else if (activeTab === 'recent') {
-    main.innerHTML = `<div class="section-hint">最近 ${RECENT_DAYS} 天內已經遛過</div>` +
+    main.innerHTML = `<div class="section-title">${icon('paw')}近期已遛（${RECENT_DAYS} 天內）</div>` +
       (recentList.map(d => dogCard(d, today)).join('') || `<div class="status-msg">最近沒有已遛紀錄</div>`);
   } else if (activeTab === 'special') {
-    main.innerHTML = `<div class="section-hint">備註含「${SPECIAL_KEYWORDS.join('／')}」等字眼，已從待巡房中排除，請先確認狀況再決定是否遛出。</div>` +
+    main.innerHTML = `<div class="alert-box">${icon('alert')}<span>以下為因備註包含「${SPECIAL_KEYWORDS.join('／')}」等關鍵字，已從待巡房清單中排除。請先確認牠們的狀況後再決定是否遛出。</span></div>` +
       (specialList.map(x => specialCard(x.dog, x.flag)).join('') || `<div class="status-msg">目前沒有特殊狀況</div>`);
   } else if (activeTab === 'cage') {
     if (!activeCage) {
       main.innerHTML = `<div class="cage-grid">` +
-        cages.map(c => `<button class="cage-chip" data-cage="${c}">${c}</button>`).join('') +
+        cages.map(c => `<button class="cage-chip" data-cage="${esc(c)}">${esc(c)}</button>`).join('') +
         `</div>`;
       main.querySelectorAll('.cage-chip').forEach(btn => {
         btn.addEventListener('click', () => { activeCage = btn.dataset.cage; render(); });
       });
     } else {
       const list = allDogs.filter(d => d.cage === activeCage);
-      main.innerHTML = `<button class="cage-back" id="cageBack">← 所有籠位</button>` +
+      main.innerHTML = `<button class="cage-back" id="cageBack">${icon('back')}所有籠位</button>` +
         list.map(d => dogCard(d, today)).join('');
       document.getElementById('cageBack').addEventListener('click', () => { activeCage = null; render(); });
     }
@@ -503,6 +544,9 @@ async function init() {
     allDogs = parseMainList(mainTable);
     groupMap = parseGroups(groupTable);
     cages = [...new Set(allDogs.map(d => d.cage).filter(Boolean))];
+    const now = new Date();
+    document.getElementById('updatedLabel').textContent =
+      `最後更新 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
     render();
     fetchAllDetails(allDogs).then(map => { detailMap = map; render(); });
   } catch (e) {
