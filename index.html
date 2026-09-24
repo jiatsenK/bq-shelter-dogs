@@ -275,9 +275,9 @@ let activeCage = null;
 let searchQuery = '';
 let loadWarning = '';
 
-async function fetchGviz(sheetName) {
-  // headers=0：不讓 gviz 自己猜表頭，所有列（含表頭列）都當資料列回傳，由前端自己找表頭
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&headers=0&sheet=${encodeURIComponent(sheetName)}`;
+// headers：前幾列當表頭。0 表示所有列都當資料列回傳
+async function fetchGviz(sheetName, headers = 0) {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&headers=${headers}&sheet=${encodeURIComponent(sheetName)}`;
   let res;
   try {
     res = await fetch(url);
@@ -314,13 +314,13 @@ function makeDate(y, m, d) {
 function parseDateText(text, today = new Date()) {
   const s = String(text).trim();
   if (!s) return null;
-  let m = s.match(/(\d{3,4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})/);
+  let m = s.match(/(?<!\d)(\d{3,4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})(?!\d)/);
   if (m) {
     let y = parseInt(m[1], 10);
     if (y < 1000) y += 1911; // 民國年
     return makeDate(y, parseInt(m[2], 10), parseInt(m[3], 10));
   }
-  m = s.match(/(\d{1,2})\s*[\/月]\s*(\d{1,2})/);
+  m = s.match(/(?<!\d)(\d{1,2})\s*[\/月]\s*(\d{1,2})(?!\d)/);
   if (m) {
     const month = parseInt(m[1], 10), day = parseInt(m[2], 10);
     let date = makeDate(today.getFullYear(), month, day);
@@ -337,7 +337,7 @@ function cellDate(cell, today = new Date()) {
   const v = cell.v;
   if (typeof v === 'string') {
     const m = v.match(/^Date\((\d+),(\d+),(\d+)/);
-    if (m) return new Date(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10));
+    if (m) return makeDate(parseInt(m[1], 10), parseInt(m[2], 10) + 1, parseInt(m[3], 10));
     return parseDateText(v, today);
   }
   if (typeof v === 'number') {
@@ -369,39 +369,44 @@ function findColumns(headerTexts) {
   const colMap = {};
   for (const [key, label] of Object.entries(MAIN_COLUMNS)) {
     let idx = norm.indexOf(label);
+    if (idx === -1) idx = norm.findIndex(t => t.endsWith(label));
     if (idx === -1) idx = norm.findIndex(t => t.includes(label));
     if (idx !== -1) colMap[key] = idx;
   }
   return colMap;
 }
 
-function parseMainList(table, today = new Date()) {
+// 在「所有列都當資料」的回應裡找含「犬名」的表頭列，回傳第幾列（從 0 起算）
+function findHeaderRow(table) {
   const rows = table.rows || [];
-  let headerIdx = -1;
-  let colMap = null;
   for (let i = 0; i < rows.length; i++) {
-    const texts = (rows[i].c || []).map(cellText);
-    const found = findColumns(texts);
-    if (found.name != null) {
-      headerIdx = i;
-      colMap = found;
-      break;
-    }
+    if (findColumns((rows[i].c || []).map(cellText)).name != null) return i;
   }
-  if (!colMap) {
-    // 萬一 gviz 還是把表頭吃進欄位標題，就從欄位標題找
-    const found = findColumns((table.cols || []).map(c => String((c && c.label) || '').trim()));
-    if (found.name != null) colMap = found;
+  return -1;
+}
+
+// table 是用 headers=表頭列數 重讀的結果：表頭在欄位標題裡，rows 全是表頭以下的資料。
+// 這樣 gviz 推斷欄位型別時不會被表頭文字干擾，「編號」「遛狗日期」的表頭才不會被吃掉。
+// headerTexts 是第一次讀到的表頭列文字，欄位標題缺漏時拿來補。
+function parseMainList(table, headerTexts = [], today = new Date()) {
+  const labels = (table.cols || []).map(c => String((c && c.label) || '').trim());
+  const colMap = findColumns(labels);
+  const fallback = findColumns(headerTexts);
+  for (const key of Object.keys(MAIN_COLUMNS)) {
+    if (colMap[key] == null && fallback[key] != null) colMap[key] = fallback[key];
   }
-  if (!colMap) throw new Error('主清單裡找不到含「犬名」的表頭列，請確認分頁名稱與欄位沒有被改掉。');
-  const get = (c, key) => colMap[key] == null ? undefined : c[colMap[key]];
+  const missing = Object.keys(MAIN_COLUMNS).filter(k => colMap[k] == null).map(k => `「${MAIN_COLUMNS[k]}」`);
+  if (missing.length) throw new Error(`主清單找不到${missing.join('')}欄，請確認表頭沒有被改掉。`);
+  const get = (c, key) => c[colMap[key]];
   const dogs = [];
-  for (let i = headerIdx + 1; i < rows.length; i++) {
-    const c = rows[i].c || [];
+  for (const r of table.rows || []) {
+    const c = r.c || [];
     const name = cellText(get(c, 'name'));
-    if (!name || name === MAIN_COLUMNS.name) continue;
+    const cage = cellText(get(c, 'cage'));
+    // 犬隻資料列一定有犬名和籠位；表尾的提示文字（例：「今天週四」）沒有籠位，不算狗
+    if (!name || !cage || name === MAIN_COLUMNS.name) continue;
     dogs.push({
-      cage: cellText(get(c, 'cage')),
+      cage,
       id: cellText(get(c, 'id')),
       name,
       walkedDate: cellDate(get(c, 'walkedDate'), today),
@@ -410,6 +415,16 @@ function parseMainList(table, today = new Date()) {
     });
   }
   return dogs;
+}
+
+// 主清單分兩次讀：先找出表頭在第幾列，再指定表頭列數重讀
+async function loadMainList() {
+  const raw = await fetchGviz('主清單', 0);
+  const headerIdx = findHeaderRow(raw);
+  if (headerIdx === -1) throw new Error('主清單裡找不到含「犬名」的表頭列，請確認分頁名稱與欄位沒有被改掉。');
+  const headerTexts = ((raw.rows[headerIdx] || {}).c || []).map(cellText);
+  const table = await fetchGviz('主清單', headerIdx + 1);
+  return parseMainList(table, headerTexts);
 }
 
 // 常遛狗群：每一欄是一組可同籠的狗。只保留主清單上有的犬名，離所的狗不會出現在「可一起遛」
@@ -638,12 +653,12 @@ async function init() {
   loadWarning = '';
   // 兩個分頁平行抓取；主清單是名冊，失敗就整頁說明，常遛狗群失敗只少了「可一起遛」
   const [mainResult, groupResult] = await Promise.allSettled([
-    fetchGviz('主清單'),
+    loadMainList(),
     fetchGviz('常遛狗群'),
   ]);
   try {
     if (mainResult.status === 'rejected') throw mainResult.reason;
-    allDogs = parseMainList(mainResult.value);
+    allDogs = mainResult.value;
   } catch (e) {
     main.innerHTML =
       `<div class="status-msg">讀取試算表失敗。<br>${esc(e.message)}<br><button class="retry-btn" id="retryBtn">重新讀取</button></div>`;
