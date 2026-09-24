@@ -487,7 +487,8 @@ function runTests() {
         showDetail(allDogs[0]);
         const key = shiftKey => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true }));
         document.getElementById('groupWalk').focus(); key(false);
-        eq(document.activeElement.id, 'detailClose');
+        // #46 起詳細資訊第一個按鈕是可放大的照片，接著才是關閉
+        eq(document.activeElement === document.querySelector('#detail button'), true, '回到第一個按鈕：');
         key(true);
         eq(document.activeElement.id, 'groupWalk');
         renderDetail();
@@ -837,6 +838,88 @@ async function runSerialTests() {
   }
 }
 
+// #46 照片燈箱：會開關燈箱、動到瀏覽器上一頁紀錄，所以也一項一項跑
+async function runPhotoTests() {
+  const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory];
+  const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const box = document.getElementById('main').parentElement;
+  const lb = () => document.getElementById('lightbox');
+  const isOpen = () => !!lb() && !lb().hidden;
+  // 關燈箱走「上一頁」，等 popstate 處理完
+  const popped = () => new Promise(r => window.addEventListener('popstate', () => setTimeout(r, 0), { once: true }));
+  const cardOf = i => document.querySelector(`#main .card[data-dog="${i}"]`);
+  try {
+    box.classList.remove('hidden'); // 真瀏覽器裡 display:none 的元素不能拿到焦點
+    allDogs = [
+      { id: '9101', name: '照片甲', cage: 'A01', note: '', walker: '', walkedDate: null },
+      { id: '9102', name: '照片乙', cage: 'A02', note: '', walker: '', walkedDate: null },
+      { id: '', name: '照片丙', cage: 'A03', note: '', walker: '', walkedDate: null },
+    ];
+    photoOverrides['9101'] = PX; photoOverrides['9102'] = PX;
+    groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = '';
+    walkedStorage = fakeStorage(); walkedMemory = null;
+    render();
+    await check('#46 點狗卡照片開燈箱、不開詳細資訊；點關閉按鈕關掉；點卡片其他地方照舊開詳細資訊', async () => {
+      cardOf(0).querySelector('.thumb img').click();
+      eq(isOpen(), true, '燈箱打開：');
+      eq(detailDog, null, '不開詳細資訊：');
+      eq(lb().querySelector('img').getAttribute('src'), PX, '大圖：');
+      eq(document.activeElement === lb().querySelector('.lightbox-close'), true, '焦點在關閉按鈕：');
+      const p = popped(); lb().querySelector('.lightbox-close').click(); await p;
+      eq(isOpen(), false, '按關閉後：');
+      cardOf(0).querySelector('.name').click();
+      eq(detailDog === allDogs[0], true, '點犬名開詳細資訊：');
+      hideDetail();
+    });
+    await check('#46 點背景關燈箱，點大圖本身不關；Esc 也能關', async () => {
+      cardOf(1).querySelector('.thumb img').click();
+      lb().querySelector('img').click();
+      eq(isOpen(), true, '點大圖不關：');
+      let p = popped(); lb().click(); await p;
+      eq(isOpen(), false, '點背景關：');
+      cardOf(1).querySelector('.thumb img').click();
+      p = popped(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await p;
+      eq(isOpen(), false, 'Esc 關：');
+    });
+    await check('#46 詳細資訊上方照片可放大；Esc、返回只關燈箱，詳細資訊還在', async () => {
+      showDetail(allDogs[0]);
+      const zoom = document.querySelector('#detail [data-zoom]');
+      eq(zoom && zoom.tagName, 'BUTTON', '照片是按鈕：');
+      zoom.click();
+      eq(isOpen(), true, '燈箱打開：');
+      let p = popped(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await p;
+      eq([isOpen(), detailDog === allDogs[0]], [false, true], 'Esc 後燈箱關、詳細資訊在：');
+      eq(document.activeElement === document.querySelector('#detail [data-zoom]'), true, '焦點回到照片：');
+      zoom.click();
+      p = popped(); history.back(); await p;
+      eq([isOpen(), detailDog === allDogs[0]], [false, true], '返回後燈箱關、詳細資訊在：');
+      hideDetail();
+    });
+    await check('#46 沒照片（沒編號或照片讀不到）點照片位置照舊開詳細資訊', async () => {
+      cardOf(2).querySelector('.thumb').click();
+      eq([isOpen(), detailDog === allDogs[2]], [false, true], '沒編號：');
+      hideDetail();
+      delete photoOverrides['9102'];
+      render();
+      const img = cardOf(1).querySelector('.thumb img');
+      img.dispatchEvent(new Event('error')); // 模擬 photos/9102.jpg 不存在
+      img.parentElement.click();
+      eq([isOpen(), detailDog === allDogs[1]], [false, true], '照片讀不到：');
+      const zoom = document.querySelector('#detail [data-zoom]');
+      zoom.querySelector('img').dispatchEvent(new Event('error'));
+      eq(zoom.disabled, true, '詳細資訊照片讀不到就不能按：');
+      hideDetail();
+    });
+  } finally {
+    hideLightbox(); hideDetail();
+    delete photoOverrides['9101']; delete photoOverrides['9102'];
+    box.classList.add('hidden');
+    history.replaceState(null, '');
+    [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
+    render();
+  }
+}
+
 function show() {
   const failed = results.filter(r => !r.ok);
   const summary = document.getElementById('summary');
@@ -864,6 +947,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
     return runTests();
   })
   .then(runSerialTests)
+  .then(runPhotoTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
