@@ -2,8 +2,6 @@
 
 板橋收容所志工用的唯讀遛狗清單網頁：一眼看出誰最久沒遛、牠的備註、以及可以跟誰一起遛。
 
-**正式網址：https://jiatsenk.github.io/bq-shelter-dogs/**
-
 手機打開後可以加到主畫面，之後一鍵開啟：
 - iPhone（Safari）：下方「分享」按鈕 →「加入主畫面」
 - Android（Chrome）：右上角「⋮」→「加到主畫面」
