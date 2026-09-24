@@ -1,0 +1,679 @@
+const SHEET_ID = '1cxoir8K5-D5hncdQiXhogQXi8Pyk47l5cl-_gNADhqw';
+// 警示關鍵字（2026-09-24 K 定，#28）：備註含任一個，就把備註原文直接顯示在卡片第一層，字眼標紅；
+// 只用來判斷要不要顯示，不改寫原文、不另外產生標籤。狗照樣留在待巡房，由志工自己判斷。
+// 每組第一個是關鍵字，後面是常見異體寫法，一起比對。志工發現新的慣用字眼時，只要在這裡加一組。
+// 「住院」不列入：住院區只是籠位，那裡的狗照常會遛。
+const SPECIAL_KEYWORDS = [
+  ['勿溜', '勿遛', '勿蹓'],
+  ['不要'],
+  ['攻擊'],
+  ['不親狗'],
+  ['不親'],
+];
+const RECENT_DAYS = 7;
+// 天數色標（2026-09-24 K 定案）：0～6 天綠、第 7 天起黃、第 30 天起紅
+const AMBER_DAYS = 7;
+const RED_DAYS = 30;
+
+let allDogs = [];
+let groupMap = {};
+let detailMap = {};
+let cages = [];
+let activeTab = 'due';
+let activeCage = null;
+let detailDog = null; // 詳細資訊正在看的狗
+let searchQuery = '';
+let loadWarning = '';
+
+// headers：前幾列當表頭。0 表示所有列都當資料列回傳
+async function fetchGviz(sheetName, headers = 0) {
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&headers=${headers}&sheet=${encodeURIComponent(sheetName)}`;
+  let res;
+  try {
+    res = await fetch(url);
+  } catch (e) {
+    // 試算表沒公開時，Google 會導向登入頁，瀏覽器擋下跨網域讀取，也會落到這裡
+    throw new Error(`連不到「${sheetName}」分頁：可能是網路中斷，或試算表沒有設定「知道連結的人可檢視」。`);
+  }
+  if (!res.ok) throw new Error(`讀取「${sheetName}」分頁失敗（HTTP ${res.status}），請確認試算表已設定「知道連結的人可檢視」。`);
+  const text = await res.text();
+  const match = text.match(/setResponse\(([\s\S]*)\);?\s*$/);
+  if (!match) throw new Error(`「${sheetName}」分頁回應格式異常，請確認試算表已設定「知道連結的人可檢視」。`);
+  const data = JSON.parse(match[1]);
+  if (data.status === 'error') {
+    const detail = (data.errors || []).map(e => e.detailed_message || e.message).filter(Boolean).join('；');
+    throw new Error(`讀取「${sheetName}」分頁失敗${detail ? `：${detail}` : ''}`);
+  }
+  return data.table || { cols: [], rows: [] };
+}
+
+function cellText(cell) {
+  if (!cell || cell.v == null) return '';
+  if (typeof cell.v === 'string' && cell.v.startsWith('Date(')) return cell.f || '';
+  return String(cell.v).trim();
+}
+
+// 把年月日組成日期；不合理的日期（例：2/30）回傳 null
+function makeDate(y, m, d) {
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  return date;
+}
+
+// 文字日期：2026/9/1、2026-09-01、2026.9.1、2026年9月1日、民國 115/9/1、9/1（沒寫年份）
+function parseDateText(text, today = new Date()) {
+  const s = String(text).trim();
+  if (!s) return null;
+  let m = s.match(/(?<!\d)(\d{3,4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})(?!\d)/);
+  if (m) {
+    let y = parseInt(m[1], 10);
+    if (y < 1000) y += 1911; // 民國年
+    return makeDate(y, parseInt(m[2], 10), parseInt(m[3], 10));
+  }
+  m = s.match(/(?<!\d)(\d{1,2})\s*[\/月]\s*(\d{1,2})(?!\d)/);
+  if (m) {
+    const month = parseInt(m[1], 10), day = parseInt(m[2], 10);
+    let date = makeDate(today.getFullYear(), month, day);
+    // 沒寫年份又落在未來，就是去年（例：一月看到 12/28）
+    if (date && date > today) date = makeDate(today.getFullYear() - 1, month, day);
+    return date;
+  }
+  return null;
+}
+
+// 「遛狗日期」不論存成日期格式或文字都能讀
+function cellDate(cell, today = new Date()) {
+  if (!cell || cell.v == null) return null;
+  const v = cell.v;
+  if (typeof v === 'string') {
+    const m = v.match(/^Date\((\d+),(\d+),(\d+)/);
+    if (m) return makeDate(parseInt(m[1], 10), parseInt(m[2], 10) + 1, parseInt(m[3], 10));
+    return parseDateText(v, today);
+  }
+  if (typeof v === 'number') {
+    // 欄位被當成數字時，先看顯示文字；否則視為試算表日期序號（1899/12/30 起算）
+    if (cell.f) {
+      const fromText = parseDateText(cell.f, today);
+      if (fromText) return fromText;
+    }
+    if (v > 30000 && v < 80000) {
+      const base = new Date(1899, 11, 30);
+      return new Date(base.getFullYear(), base.getMonth(), base.getDate() + Math.floor(v));
+    }
+  }
+  return null;
+}
+
+const MAIN_COLUMNS = {
+  cage: '籠位',
+  id: '編號',
+  name: '犬名',
+  walkedDate: '遛狗日期',
+  walker: '誰遛的',
+  note: '備註',
+};
+
+// 表頭文字去空白後比對：先找完全相同，再找包含（例：「備註 」、「犬名(暱稱)」）
+function findColumns(headerTexts) {
+  const norm = headerTexts.map(t => t.replace(/\s+/g, ''));
+  const colMap = {};
+  for (const [key, label] of Object.entries(MAIN_COLUMNS)) {
+    let idx = norm.indexOf(label);
+    if (idx === -1) idx = norm.findIndex(t => t.endsWith(label));
+    if (idx === -1) idx = norm.findIndex(t => t.includes(label));
+    if (idx !== -1) colMap[key] = idx;
+  }
+  return colMap;
+}
+
+// 在「所有列都當資料」的回應裡找含「犬名」的表頭列，回傳第幾列（從 0 起算）
+function findHeaderRow(table) {
+  const rows = table.rows || [];
+  for (let i = 0; i < rows.length; i++) {
+    if (findColumns((rows[i].c || []).map(cellText)).name != null) return i;
+  }
+  return -1;
+}
+
+// table 是用 headers=表頭列數 重讀的結果：表頭在欄位標題裡，rows 全是表頭以下的資料。
+// 這樣 gviz 推斷欄位型別時不會被表頭文字干擾，「編號」「遛狗日期」的表頭才不會被吃掉。
+// headerTexts 是第一次讀到的表頭列文字，欄位標題缺漏時拿來補。
+function mainColumnMap(table, headerTexts = []) {
+  const labels = (table.cols || []).map(c => String((c && c.label) || '').trim());
+  const colMap = findColumns(labels);
+  const fallback = findColumns(headerTexts);
+  for (const key of Object.keys(MAIN_COLUMNS)) {
+    if (colMap[key] == null && fallback[key] != null) colMap[key] = fallback[key];
+  }
+  const missing = Object.keys(MAIN_COLUMNS).filter(k => colMap[k] == null).map(k => `「${MAIN_COLUMNS[k]}」`);
+  if (missing.length) throw new Error(`主清單找不到${missing.join('')}欄，請確認表頭沒有被改掉。`);
+  return colMap;
+}
+
+function parseMainList(table, headerTexts = [], today = new Date()) {
+  const colMap = mainColumnMap(table, headerTexts);
+  const get = (c, key) => c[colMap[key]];
+  const dogs = [];
+  for (const r of table.rows || []) {
+    const c = r.c || [];
+    const name = cellText(get(c, 'name'));
+    const cage = cellText(get(c, 'cage'));
+    // 犬隻資料列一定有犬名和籠位；表尾的提示文字（例：「今天週四」）沒有籠位，不算狗
+    if (!name || !cage || name === MAIN_COLUMNS.name) continue;
+    dogs.push({
+      cage,
+      id: cellText(get(c, 'id')),
+      name,
+      walkedDate: cellDate(get(c, 'walkedDate'), today),
+      walker: cellText(get(c, 'walker')),
+      note: cellText(get(c, 'note')),
+    });
+  }
+  return dogs;
+}
+
+// 籠位清單：主清單「籠位」欄去重，沒有狗的空籠也列出（例：舊A01）。
+// 表尾的提示文字（例：「今天週四」）籠位欄是空的，自然不會算進來。
+function parseCages(table, headerTexts = []) {
+  const idx = mainColumnMap(table, headerTexts).cage;
+  const set = new Set();
+  for (const r of table.rows || []) {
+    const cage = cellText((r.c || [])[idx]);
+    if (cage && cage.replace(/\s+/g, '') !== MAIN_COLUMNS.cage) set.add(cage);
+  }
+  return sortCages([...set]);
+}
+
+// 籠位排序：英數開頭的（A01、B12、C區41）在前，中文開頭的（母幼A、住院區、新A01、舊B02）集中在後；
+// 數字照大小排，A2 排在 A10 前面
+const CAGE_COLLATOR = new Intl.Collator('zh-Hant-TW', { numeric: true, sensitivity: 'base' });
+function sortCages(list) {
+  const group = c => /^[0-9A-Za-z]/.test(c) ? 0 : 1;
+  return list.slice().sort((a, b) => group(a) - group(b) || CAGE_COLLATOR.compare(a, b));
+}
+
+// 主清單分兩次讀：先找出表頭在第幾列，再指定表頭列數重讀
+async function loadMainList() {
+  const raw = await fetchGviz('主清單', 0);
+  const headerIdx = findHeaderRow(raw);
+  if (headerIdx === -1) throw new Error('主清單裡找不到含「犬名」的表頭列，請確認分頁名稱與欄位沒有被改掉。');
+  const headerTexts = ((raw.rows[headerIdx] || {}).c || []).map(cellText);
+  const table = await fetchGviz('主清單', headerIdx + 1);
+  const dogs = parseMainList(table, headerTexts);
+  dogs.cages = parseCages(table, headerTexts); // 含空籠的籠位清單，init 取用
+  return dogs;
+}
+
+// 犬名比對時忽略空白（含全形空白），例：常遛狗群寫「小 白」也對得到主清單的「小白」
+function nameKey(name) {
+  return String(name).replace(/\s+/g, '');
+}
+
+// 常遛狗群：每一欄是一組可同籠的狗。只保留主清單上有的犬名，離所的狗不會出現在「可一起遛」。
+// knownNames 是主清單的犬名 Set，回傳的名單一律用主清單的寫法。
+function parseGroups(table, knownNames) {
+  const rows = table.rows || [];
+  const colCount = Math.max((table.cols || []).length, ...rows.map(r => (r.c || []).length), 0);
+  const known = knownNames ? new Map([...knownNames].map(n => [nameKey(n), n])) : null;
+  const map = {};
+  for (let col = 0; col < colCount; col++) {
+    const names = [];
+    for (let i = 0; i < rows.length; i++) {
+      let t = cellText((rows[i].c || [])[col]);
+      if (!t || /^\d+$/.test(t)) continue;
+      if (known) {
+        t = known.get(nameKey(t));
+        if (!t) continue;
+      }
+      if (!names.includes(t)) names.push(t);
+    }
+    names.forEach(n => {
+      if (!map[n]) map[n] = new Set();
+      names.forEach(m => { if (m !== n) map[n].add(m); });
+    });
+  }
+  return map;
+}
+
+// 回傳備註命中的關鍵字（顯示用）與實際出現的寫法（標示用）；沒命中回 null
+function specialFlag(note) {
+  const keywords = [], terms = [];
+  for (const [label, ...variants] of SPECIAL_KEYWORDS) {
+    const hit = [label, ...variants].filter(t => (note || '').includes(t));
+    if (!hit.length) continue;
+    keywords.push(label);
+    terms.push(...hit);
+  }
+  return keywords.length ? { keywords, terms } : null;
+}
+
+// 把備註原文裡所有命中的字眼標成紅色粗體；其餘文字照樣跳脫
+function highlightNote(note, terms) {
+  if (!terms || !terms.length) return esc(note);
+  const sorted = [...new Set(terms)].sort((a, b) => b.length - a.length);
+  const re = new RegExp(sorted.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
+  let html = '', last = 0;
+  for (const m of note.matchAll(re)) {
+    html += esc(note.slice(last, m.index)) + `<mark>${esc(m[0])}</mark>`;
+    last = m.index + m[0].length;
+  }
+  return html + esc(note.slice(last));
+}
+
+// 去掉開頭的 YAML frontmatter（--- 到 ---），沒有就原樣回傳
+function parseFrontmatterBody(text) {
+  const m = text.replace(/^\uFEFF/, '').match(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/);
+  return (m ? m[1] : text).trim();
+}
+
+// 把 Markdown 轉成純文字，卡片上不要露出 **、#、[]() 這些符號
+function markdownToText(md) {
+  return md
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/%%[\s\S]*?%%/g, '')                            // Obsidian 註解
+    .split(/\r?\n/)
+    .map(line => line
+      .replace(/^\s*(```|~~~).*$/, '')                        // 程式碼區塊的框線
+      .replace(/^\s*([-*_])(\s*\1){2,}\s*$/, '')              // 分隔線
+      .replace(/^\s{0,3}#{1,6}\s+/, '')                       // 標題
+      .replace(/^\s*(>\s*)+/, '')                             // 引用
+      .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/, '')                // 待辦清單
+      .replace(/^\s*([-*+]|\d+[.)])\s+/, '')                  // 清單符號
+      .replace(/^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-*:?\s*$/, '')    // 表格分隔列
+      .replace(/!\[\[[^\]]*\]\]/g, '')                        // Obsidian 嵌入圖片
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '')                  // 圖片
+      .replace(/\[\[([^\]|]*)\|([^\]]*)\]\]/g, '$2')           // [[頁面|顯示文字]]
+      .replace(/\[\[([^\]]*)\]\]/g, '$1')                      // [[頁面]]
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')                 // [文字](網址)
+      .replace(/<[^>]+>/g, '')                                // HTML 標籤
+      .replace(/(\*\*|__)(.+?)\1/g, '$2')                      // 粗體
+      .replace(/(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)/g, '$1$2')     // 斜體 *
+      .replace(/(^|[^_\w])_(?!\s)(.+?)_(?![\w])/g, '$1$2')      // 斜體 _
+      .replace(/~~(.+?)~~/g, '$1')
+      .replace(/==(.+?)==/g, '$1')
+      .replace(/`+([^`]*)`+/g, '$1')
+      .replace(/^\s*\||\|\s*$/g, '')                          // 表格左右框線
+      .replace(/\s*\|\s*/g, ' ')
+      .trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+async function fetchAllDetails(dogs) {
+  const map = {};
+  // 同一個編號只抓一次；沒有編號的狗不抓，也不改用犬名配對
+  const ids = [...new Set(dogs.map(d => d.id).filter(Boolean))];
+  await Promise.allSettled(ids.map(async id => {
+    try {
+      const res = await fetch(`dogs/${encodeURIComponent(id)}.md`);
+      if (!res.ok) return;
+      const text = markdownToText(parseFrontmatterBody(await res.text()));
+      if (text) map[id] = text;
+    } catch (e) { /* 沒有這隻狗的介紹檔，略過即可 */ }
+  }));
+  return map;
+}
+
+function computeStatus(dog, today) {
+  if (dog.walkedDate) {
+    const days = Math.floor((today - dog.walkedDate) / 86400000);
+    let level = 'sage';
+    if (days >= RED_DAYS) level = 'red';
+    else if (days >= AMBER_DAYS) level = 'amber';
+    return { kind: 'dated', days, level };
+  }
+  if (dog.walker) return { kind: 'covered' };
+  return { kind: 'unknown' };
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function icon(id) {
+  return `<svg class="icon"><use href="#i-${id}"/></svg>`;
+}
+
+function photoThumb(dog, size = 56) {
+  // 沒有編號就直接顯示腳掌圖示，不去抓 photos/.jpg
+  if (!dog.id) {
+    return `<div class="thumb"><div class="thumb-fallback" style="display:flex">${icon('paw')}</div></div>`;
+  }
+  return `
+    <div class="thumb">
+      <img src="photos/${encodeURIComponent(dog.id)}.jpg" alt="" width="${size}" height="${size}" loading="lazy" decoding="async"
+           onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+      <div class="thumb-fallback">${icon('paw')}</div>
+    </div>
+  `;
+}
+
+function statusBadge(dog, today) {
+  const s = computeStatus(dog, today);
+  if (s.kind === 'dated') {
+    if (s.days < 0) return `<span class="badge muted">日期異常</span>`;
+    const label = s.days === 0 ? '今天' : `${s.days} 天前`;
+    return `<span class="badge ${s.level}">${label}</span>`;
+  }
+  if (s.kind === 'covered') return `<span class="badge sage">有人固定照顧</span>`;
+  return `<span class="badge muted">尚無遛狗記錄</span>`;
+}
+
+// 卡片上的「上次遛狗」：天數用 #3 的綠／黃／紅文字色
+function lastWalk(dog, today) {
+  const s = computeStatus(dog, today);
+  let text = '尚無紀錄', level = 'muted', small = false;
+  if (s.kind === 'dated') {
+    if (s.days < 0) text = '日期異常';
+    else { text = s.days === 0 ? '今天' : `${s.days} 天前`; level = s.level; }
+  } else if (s.kind === 'covered') { text = '有人固定照顧'; level = 'sage'; small = true; }
+  return `<div class="last"><span class="lbl">上次遛狗</span><span class="val ${level}${small ? ' small' : ''}">${text}</span></div>`;
+}
+
+// 卡片用「編號｜籠位」（照 K 的參考圖）；詳細資訊沿用 metaLine
+function cardMeta(dog) {
+  return `<div class="meta">${dog.id ? `${esc(dog.id)}<span class="sep">|</span>` : ''}${esc(dog.cage)}</div>`;
+}
+
+function metaLine(dog) {
+  return `<div class="meta">${esc(dog.cage)}${dog.id ? `<span class="sep">|</span>${esc(dog.id)}` : ''}</div>`;
+}
+
+// 性別：主清單目前沒有這欄，先留位置；之後有資料就顯示 ♂／♀ 符號
+function sexMark(dog) {
+  return `<span class="sex">${esc(dog.sex || '')}</span>`;
+}
+
+// 備註命中警示關鍵字時的原文顯示；同一筆備註命中幾個關鍵字都只顯示一次
+function warnNote(note, flag) {
+  return `<div class="warn-note">${icon('warn')}<span class="text">${highlightNote(note, flag.terms)}</span></div>`;
+}
+
+// 所有分頁、搜尋、籠位共用這張卡片。第一層只放照片、犬名、天數、籠位｜編號，
+// 備註命中警示關鍵字才把原文放上來；一般備註、可一起遛、狗卡資訊點卡片看詳細資訊
+function dogCard(dog, today) {
+  const flag = specialFlag(dog.note);
+  return `
+    <div class="card${flag ? ' flagged' : ''}" data-dog="${allDogs.indexOf(dog)}" role="button" tabindex="0" aria-haspopup="dialog">
+      ${photoThumb(dog)}
+      <div class="body">
+        <div class="row">
+          <div class="who">
+            <div class="name">${esc(dog.name)}${sexMark(dog)}${dog.note && !flag ? `<svg class="icon has-note" role="img" aria-label="有備註"><use href="#i-memo"/></svg>` : ''}</div>
+            ${cardMeta(dog)}
+          </div>
+          ${lastWalk(dog, today)}
+          <span class="more">${icon('chevron')}</span>
+        </div>
+        ${flag ? warnNote(dog.note, flag) : ''}
+      </div>
+    </div>
+  `;
+}
+
+// 詳細資訊：備註（志工後續補充，試算表備註欄）／可以一起溜的狗／狗卡資訊（dogs/{編號}.md 的入所原始介紹）
+function detailHtml(dog, today) {
+  const flag = specialFlag(dog.note);
+  const buddies = [...(groupMap[dog.name] || [])];
+  const byName = new Map(allDogs.map(d => [d.name, d]));
+  const intro = dog.id && detailMap[dog.id];
+  return `
+    <div class="detail-head">
+      ${photoThumb(dog, 84)}
+      <div class="info">
+        ${statusBadge(dog, today)}
+        <div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div>
+        ${metaLine(dog)}
+      </div>
+      <button class="detail-close" id="detailClose" aria-label="關閉">${icon('close')}</button>
+    </div>
+    <section class="detail-section" data-section="note">
+      <h3>${icon('note')}備註<span class="sub">志工補充的個性、互動與觀察</span></h3>
+      ${!dog.note ? `<div class="empty">目前沒有備註</div>`
+        : flag ? warnNote(dog.note, flag)
+        : `<div class="content note-text">${esc(dog.note)}</div>`}
+    </section>
+    <section class="detail-section" data-section="group">
+      <h3>${icon('group')}可以一起溜的狗</h3>
+      ${buddies.length
+        ? `<div class="buddies">${buddies.map(n => {
+            const d = byName.get(n) || { name: n, id: '' };
+            return `<button class="buddy" data-dog="${allDogs.indexOf(d)}">${photoThumb(d, 64)}<span class="bname">${esc(n)}</span></button>`;
+          }).join('')}</div>`
+        : `<div class="empty">沒有登記可以一起溜的狗</div>`}
+    </section>
+    <section class="detail-section" data-section="intro">
+      <h3>${icon('card')}狗卡資訊<span class="sub">入所時的原始狗卡</span></h3>
+      ${intro ? `<div class="content">${esc(intro)}</div>` : `<div class="empty">還沒有狗卡資訊</div>`}
+    </section>
+  `;
+}
+
+function renderDetail() {
+  if (!detailDog) return;
+  const box = document.getElementById('detail');
+  box.innerHTML = detailHtml(detailDog, new Date());
+  box.querySelector('#detailClose').addEventListener('click', closeDetail);
+  box.querySelectorAll('.buddy').forEach(btn => {
+    const d = allDogs[btn.dataset.dog];
+    if (d) btn.addEventListener('click', () => showDetail(d));
+    else btn.disabled = true;
+  });
+}
+
+// 在詳細資訊裡點「可以一起溜的狗」會直接換成那隻，不多疊一層
+function showDetail(dog) {
+  const wasOpen = !!detailDog;
+  detailDog = dog;
+  renderDetail();
+  document.getElementById('detailBackdrop').hidden = false;
+  document.documentElement.classList.add('detail-open');
+  document.getElementById('detail').scrollTop = 0;
+  // 手機按「返回」時只關掉詳細資訊，不離開網頁
+  if (!wasOpen) history.pushState({ bqDetail: true }, '');
+  document.getElementById('detailClose').focus({ preventScroll: true });
+}
+
+function hideDetail() {
+  if (!detailDog) return;
+  detailDog = null;
+  document.getElementById('detailBackdrop').hidden = true;
+  document.getElementById('detail').innerHTML = '';
+  document.documentElement.classList.remove('detail-open');
+}
+
+function closeDetail() {
+  if (history.state && history.state.bqDetail) history.back(); // popstate 會接著 hideDetail
+  else hideDetail();
+}
+
+window.addEventListener('popstate', hideDetail);
+document.getElementById('detailBackdrop').addEventListener('click', e => {
+  if (e.target.id === 'detailBackdrop') closeDetail();
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && detailDog) closeDetail();
+});
+
+// 狗卡用事件委派：renderMain 每次重畫卡片都不用重新綁
+function cardFromEvent(e) {
+  const card = e.target.closest('#main .card[data-dog]');
+  return card && allDogs[card.dataset.dog];
+}
+document.getElementById('main').addEventListener('click', e => {
+  const dog = cardFromEvent(e);
+  if (dog) showDetail(dog);
+});
+document.getElementById('main').addEventListener('keydown', e => {
+  if (e.key !== 'Enter' && e.key !== ' ') return;
+  const dog = cardFromEvent(e);
+  if (dog) { e.preventDefault(); showDetail(dog); }
+});
+
+// 搜尋比對用：去掉空白、全形轉半形、英文不分大小寫
+function searchKey(text) {
+  return String(text || '').normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+}
+
+// 犬名部分符合即算；沒輸入（或只有空白）時每隻都符合
+function matchesSearch(dog, query) {
+  const q = searchKey(query);
+  return !q || searchKey(dog.name).includes(q);
+}
+
+function buildTabs(dueCount, recentCount, cageCount = cages.length) {
+  const tabs = [
+    { id: 'due', label: '待巡房', count: dueCount },
+    { id: 'recent', label: '近期已遛', count: recentCount },
+    { id: 'cage', label: '依籠位', count: `${cageCount} 區` },
+  ];
+  document.getElementById('tabs').innerHTML = tabs.map(t =>
+    `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}"><span class="t">${t.label}</span><span class="n">${t.count}</span></button>`
+  ).join('');
+  document.querySelectorAll('#tabs button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      activeTab = btn.dataset.tab;
+      activeCage = null;
+      render();
+    });
+  });
+}
+
+function render() {
+  renderMain();
+  if (loadWarning) {
+    document.getElementById('main').insertAdjacentHTML('afterbegin',
+      `<div class="alert-box warn">${icon('warn')}<span>${esc(loadWarning)}</span></div>`);
+  }
+}
+
+// 近期已遛：0～RECENT_DAYS 天內遛過的狗，由近到遠。未來日期（填錯）不列入。
+function recentDogs(dogs, today) {
+  return dogs
+    .map(d => ({ d, s: computeStatus(d, today) }))
+    .filter(x => x.s.kind === 'dated' && x.s.days >= 0 && x.s.days <= RECENT_DAYS)
+    .sort((a, b) => a.s.days - b.s.days)
+    .map(x => x.d);
+}
+
+// 待巡房：所有狗依幾天沒遛由久到近；沒有遛狗紀錄的排最前，有人固定照顧的排最後
+function dueDogs(dogs, today) {
+  const key = s => s.kind === 'unknown' ? Infinity : s.kind === 'dated' ? s.days : -Infinity;
+  return dogs
+    .map(d => ({ d, k: key(computeStatus(d, today)) }))
+    .sort((a, b) => (b.k === a.k ? 0 : b.k > a.k ? 1 : -1))
+    .map(x => x.d);
+}
+
+function renderMain() {
+  const today = new Date();
+  document.getElementById('dateLabel').textContent =
+    `${today.getMonth() + 1}月${today.getDate()}日 (${'日一二三四五六'[today.getDay()]})`;
+
+  const dueList = dueDogs(allDogs, today);
+
+  const recentList = recentDogs(allDogs, today);
+
+  const main = document.getElementById('main');
+
+  // 搜尋時只篩選目前分頁的內容，分頁上的數字也改成各分頁符合的隻數；清空就回到原本的分頁
+  const q = searchQuery.trim();
+  if (q) {
+    const hit = d => matchesSearch(d, q);
+    const dueHits = dueList.filter(hit);
+    const recentHits = recentList.filter(hit);
+    const cageHits = [...new Set(dueHits.map(d => d.cage).filter(Boolean))];
+    buildTabs(dueHits.length, recentHits.length, cageHits.length);
+    // 依籠位分頁搜尋時直接列出符合的狗，卡片上看得到籠位
+    const list = activeTab === 'due' ? dueHits : activeTab === 'recent' ? recentHits : dueHits;
+    if (list.length) {
+      main.innerHTML = `<div class="section-hint">${icon('search')}搜尋「${esc(q)}」：${list.length} 隻</div>` +
+        list.map(d => dogCard(d, today)).join('');
+    } else if (dueHits.length) {
+      // 只會發生在近期已遛：狗有在名冊裡，只是這幾天沒遛，提示去待巡房找
+      main.innerHTML = `<div class="status-msg">近期已遛裡沒有「${esc(q)}」<br>待巡房有 ${dueHits.length} 隻</div>`;
+    } else {
+      main.innerHTML = `<div class="status-msg">找不到「${esc(q)}」</div>`;
+    }
+    return;
+  }
+
+  buildTabs(dueList.length, recentList.length);
+
+  if (activeTab === 'due') {
+    main.innerHTML = `<div class="section-hint">${icon('pin')}依久沒遛排序（由久到近）</div>` +
+      (dueList.map(d => dogCard(d, today)).join('') || `<div class="status-msg">目前沒有待巡房的狗</div>`);
+  } else if (activeTab === 'recent') {
+    main.innerHTML = `<div class="section-title">${icon('paw')}近期已遛（${RECENT_DAYS} 天內）</div>` +
+      (recentList.map(d => dogCard(d, today)).join('') || `<div class="status-msg">最近沒有已遛紀錄</div>`);
+  } else if (activeTab === 'cage') {
+    if (!activeCage) {
+      main.innerHTML = cages.length
+        ? `<div class="section-hint">${icon('pin')}點籠位看裡面的狗</div><div class="cage-grid">` +
+          cages.map(c => {
+            const n = allDogs.filter(d => d.cage === c).length;
+            return `<button class="cage-chip${n ? '' : ' empty'}" data-cage="${esc(c)}">${esc(c)}<span class="n">${n}</span></button>`;
+          }).join('') + `</div>`
+        : `<div class="status-msg">主清單沒有籠位資料</div>`;
+      main.querySelectorAll('.cage-chip').forEach(btn => {
+        btn.addEventListener('click', () => { activeCage = btn.dataset.cage; render(); window.scrollTo(0, 0); });
+      });
+    } else {
+      const list = allDogs.filter(d => d.cage === activeCage);
+      main.innerHTML = `<button class="cage-back" id="cageBack">${icon('back')}所有籠位</button>` +
+        `<div class="section-title">${icon('pin')}${esc(activeCage)}（${list.length} 隻）</div>` +
+        (list.map(d => dogCard(d, today)).join('') || `<div class="status-msg">這個籠位目前沒有狗</div>`);
+      document.getElementById('cageBack').addEventListener('click', () => { activeCage = null; render(); });
+    }
+  }
+}
+
+// 注音、拼音選字途中不篩選，避免一直閃「找不到『ㄉㄡ』」；選好字才更新
+const searchInput = document.getElementById('searchInput');
+searchInput.addEventListener('input', e => {
+  if (e.isComposing) return;
+  searchQuery = e.target.value;
+  render();
+});
+searchInput.addEventListener('compositionend', e => {
+  searchQuery = e.target.value;
+  render();
+});
+
+async function init() {
+  const main = document.getElementById('main');
+  main.innerHTML = `<div class="status-msg">讀取試算表中…</div>`;
+  loadWarning = '';
+  // 兩個分頁平行抓取；主清單是名冊，失敗就整頁說明，常遛狗群失敗只少了「可一起遛」
+  const [mainResult, groupResult] = await Promise.allSettled([
+    loadMainList(),
+    fetchGviz('常遛狗群'),
+  ]);
+  try {
+    if (mainResult.status === 'rejected') throw mainResult.reason;
+    allDogs = mainResult.value;
+  } catch (e) {
+    main.innerHTML =
+      `<div class="status-msg">讀取試算表失敗。<br>${esc(e.message)}<br><button class="retry-btn" id="retryBtn">重新讀取</button></div>`;
+    document.getElementById('retryBtn').addEventListener('click', init);
+    return;
+  }
+  const knownNames = new Set(allDogs.map(d => d.name));
+  try {
+    if (groupResult.status === 'rejected') throw groupResult.reason;
+    groupMap = parseGroups(groupResult.value, knownNames);
+  } catch (e) {
+    groupMap = {};
+    loadWarning = `「常遛狗群」讀取失敗，卡片暫時不會顯示可一起遛的狗。${e.message}`;
+  }
+  // 籠位以主清單籠位欄為準（含空籠）；保險起見再併入狗身上的籠位
+  cages = sortCages([...new Set([...(allDogs.cages || []), ...allDogs.map(d => d.cage).filter(Boolean)])]);
+  const now = new Date();
+  document.getElementById('updatedLabel').textContent =
+    `最後更新 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  render();
+  fetchAllDetails(allDogs).then(map => { detailMap = map; render(); renderDetail(); });
+}
+
+// tests/index.html 會設定 __BQ_TEST__，只載入函式、不去抓試算表
+if (!window.__BQ_TEST__) init();
