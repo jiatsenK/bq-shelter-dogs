@@ -14,6 +14,7 @@ index.html        ← 整個網站（純前端、單檔）
 dogs/{編號}.md     ← 狗狗介紹（YAML frontmatter + 內文），選填
 photos/{編號}.jpg  ← 狗狗照片，選填
 docs/             ← 規格、設計指引、參考圖
+tests/index.html  ← 資料讀取測試（用假資料，不連試算表）
 ```
 
 ## 本機預覽
@@ -23,3 +24,8 @@ python3 -m http.server 8000
 ```
 
 然後開 http://localhost:8000 。資料即時從 Google 試算表讀取。
+
+## 測試
+
+打開 `tests/index.html` 就會自動跑資料讀取的測試，全部通過會顯示綠色「全部 N 項通過」。
+部署後網址是 https://jiatsenk.github.io/bq-shelter-dogs/tests/ ；本機請先執行上面的 `python3 -m http.server 8000`，再開 http://localhost:8000/tests/ （直接雙擊檔案打不開）。
