@@ -14,12 +14,14 @@ const DEFAULTS = {
   GITHUB_BRANCH: 'main',
   // 只接受這些網站送來的上傳（用逗號分隔）
   ALLOWED_ORIGINS: 'https://jiatsenk.github.io',
+  // 只有本機測試會換成假的 GitHub
+  GITHUB_API: 'https://api.github.com',
 };
 
 // 網站會先把照片壓成長邊約 1280px 的 JPEG（通常 100–400 KB），這裡留足空間
-export const MAX_BYTES = 2 * 1024 * 1024;
+const MAX_BYTES = 2 * 1024 * 1024;
 // 頻率限制（每個連線來源 IP）：1 分鐘最多 5 張、1 小時最多 30 張
-export const RATE_LIMITS = [
+const RATE_LIMITS = [
   { windowMs: 60 * 1000, max: 5 },
   { windowMs: 60 * 60 * 1000, max: 30 },
 ];
@@ -33,7 +35,7 @@ const ID_PATTERN = /^[0-9A-Za-z]{1,32}$/;
 const hits = new Map(); // IP → 上傳時間清單
 let dogsCache = null; // { at, dogs: Map(編號 → 犬名) }
 
-export function resetState() {
+function resetState() {
   hits.clear();
   dogsCache = null;
 }
@@ -43,6 +45,7 @@ function config(env) {
   return {
     repo: get('GITHUB_REPO'),
     branch: get('GITHUB_BRANCH'),
+    api: get('GITHUB_API').replace(/\/+$/, ''),
     origins: get('ALLOWED_ORIGINS').split(',').map(s => s.trim()).filter(Boolean),
     token: env && env.GITHUB_TOKEN,
   };
@@ -68,7 +71,7 @@ function reply(status, body, origin) {
 const fail = (status, error, origin) => reply(status, { ok: false, error }, origin);
 
 // 記一次上傳；超過任一個限制就回 false（被擋下的不算次數）
-export function allowUpload(ip, now = Date.now()) {
+function allowUpload(ip, now = Date.now()) {
   const longest = Math.max(...RATE_LIMITS.map(r => r.windowMs));
   const list = (hits.get(ip) || []).filter(t => now - t < longest);
   if (RATE_LIMITS.some(r => list.filter(t => now - t < r.windowMs).length >= r.max)) {
@@ -83,7 +86,7 @@ export function allowUpload(ip, now = Date.now()) {
 }
 
 // JPEG 檔頭是 FF D8 FF
-export function isJpeg(bytes) {
+function isJpeg(bytes) {
   return bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
 }
 
@@ -96,7 +99,7 @@ function toBase64(bytes) {
 }
 
 function github(cfg, path, init = {}) {
-  return fetch(`https://api.github.com/repos/${cfg.repo}/${path}`, {
+  return fetch(`${cfg.api}/repos/${cfg.repo}/${path}`, {
     ...init,
     headers: {
       Authorization: `Bearer ${cfg.token}`,
@@ -196,6 +199,9 @@ async function upload(request, env, origin) {
 }
 
 export default {
+  // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch
+  testing: { MAX_BYTES, resetState, allowUpload, isJpeg },
+
   async fetch(request, env) {
     const cfg = config(env);
     const origin = request.headers.get('Origin') || '';

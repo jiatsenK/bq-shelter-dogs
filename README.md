@@ -9,7 +9,8 @@
 - 規格（V3 定版）：[`docs/PROJECT_GOALS.md`](docs/PROJECT_GOALS.md)
 - 前端設計需求（細節）：[`docs/FRONTEND_REQUIREMENTS.md`](docs/FRONTEND_REQUIREMENTS.md)
 - 視覺風格指引：[`docs/DESIGN_GUIDE.md`](docs/DESIGN_GUIDE.md)
-- 工作分票：見 GitHub Issues（標籤 `v3`；舊版 `v1`）
+- 工作分票：見 GitHub Issues（標籤 `v4`、`v3`；舊版 `v1`）
+- 照片上傳服務設定：[`docs/PHOTO_UPLOAD_SETUP.md`](docs/PHOTO_UPLOAD_SETUP.md)
 
 ## 結構
 
@@ -24,6 +25,7 @@ icons/            ← 網站圖示（瀏覽器分頁、手機主畫面）
 manifest.webmanifest ← 加到主畫面時的名稱、顏色、圖示
 .nojekyll         ← 讓 GitHub Pages 原樣提供 dogs/*.md，不要轉成網頁（請勿刪除）
 tests/index.html  ← 資料讀取測試（用假資料，不連試算表）
+worker/           ← 照片上傳服務（Cloudflare Worker，部署在 Cloudflare，不是 GitHub Pages 的一部分；不含任何 token）
 ```
 
 ## 部署
