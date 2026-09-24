@@ -21,7 +21,7 @@
 
 <!-- js/app.js 在載入時會用到這幾個元素 -->
 <div class="hidden">
-  <input id="searchInput"><div id="tabs"></div><main id="main"></main>
+  <input id="searchInput"><button id="searchClear" hidden></button><div id="tabs"></div><main id="main"></main>
   <span id="dateLabel"></span><span id="updatedLabel"></span>
   <div id="detailBackdrop" hidden><div id="detail"></div></div>
 </div>
@@ -573,6 +573,56 @@ function runTests() {
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
+    }),
+    check('#34 搜尋框右側有 X 清除鈕，平常隱藏', () => {
+      const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
+      const btn = doc.querySelector('.search #searchClear');
+      if (!btn) throw new Error('搜尋框裡要有 #searchClear');
+      eq(btn.tagName, 'BUTTON', '元素：');
+      eq(btn.type, 'button', '型別：');
+      eq(btn.hasAttribute('hidden'), true, '一開始隱藏：');
+      eq(btn.getAttribute('aria-label'), '清除搜尋', '無障礙標籤：');
+      if (!btn.querySelector('use[href="#i-close"]')) throw new Error('要用 X 圖示');
+    }),
+    check('#34 有字才出現 X；點 X 清空並回到目前分頁完整內容，不換分頁', () => {
+      const saved = [allDogs, groupMap, detailMap, cages, activeTab, activeCage, searchQuery];
+      const input = document.getElementById('searchInput');
+      const clear = document.getElementById('searchClear');
+      const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
+      const day = n => new Date(new Date().getFullYear(), new Date().getMonth(), new Date().getDate() - n);
+      try {
+        allDogs = [
+          { cage: 'B01', id: '', name: '清除甲', walkedDate: day(1), walker: '', note: '' },
+          { cage: 'B02', id: '', name: '清除乙', walkedDate: day(2), walker: '', note: '' },
+          { cage: 'B03', id: '', name: '清除丙', walkedDate: null, walker: '', note: '' },
+        ];
+        groupMap = {}; detailMap = {}; cages = ['B01', 'B02', 'B03']; activeCage = null;
+        activeTab = 'recent'; searchQuery = ''; input.value = ''; render();
+        const full = names();
+        eq(full.length, 2, '近期已遛完整：');
+        eq(clear.hidden, true, '沒字時：');
+        input.value = 'ㄐ';
+        input.dispatchEvent(new InputEvent('input', { isComposing: true }));
+        eq(clear.hidden, false, '選字途中也顯示：');
+        input.value = '甲';
+        input.dispatchEvent(new InputEvent('input'));
+        eq(clear.hidden, false, '有字時：');
+        eq(names(), ['清除甲'], '搜尋結果：');
+        clear.click();
+        eq(input.value, '', '文字清空：');
+        eq(searchQuery, '', '搜尋條件清空：');
+        eq(clear.hidden, true, 'X 隱藏：');
+        eq(activeTab, 'recent', '分頁不變：');
+        eq(names(), full, '恢復完整內容：');
+        input.value = '乙';
+        input.dispatchEvent(new InputEvent('input'));
+        input.value = '';
+        input.dispatchEvent(new InputEvent('input'));
+        eq(clear.hidden, true, '手動刪光也隱藏：');
+      } finally {
+        input.value = ''; clear.hidden = true;
+        [allDogs, groupMap, detailMap, cages, activeTab, activeCage, searchQuery] = saved;
+      }
     }),
   ]);
 }
