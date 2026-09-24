@@ -512,24 +512,10 @@ function photoThumb(dog) {
   `;
 }
 
-// 常遛狗群只寫犬名、沒有編號：主清單有同名的狗時分不出是哪一隻，
-// 就照名字列出，並標「同名 N 隻」提醒志工看籠位確認
-function sameNameCount(name) {
-  return allDogs.filter(d => d.name === name).length;
-}
-
 function groupLine(name) {
   const g = groupMap[name];
   if (!g || !g.size) return '';
-  const mates = [...g].map(m => {
-    const n = sameNameCount(m);
-    return esc(m) + (n > 1 ? `（同名 ${n} 隻）` : '');
-  });
-  const selfCount = sameNameCount(name);
-  const hint = selfCount > 1
-    ? `<br><small>主清單有 ${selfCount} 隻「${esc(name)}」，常遛狗群只寫犬名，請看籠位確認是哪一隻</small>`
-    : '';
-  return `<div class="group-inline">${icon('group')}<span>可一起遛：<b>${mates.join('、')}</b>${hint}</span></div>`;
+  return `<div class="group-inline">${icon('group')}<span>可一起遛：<b>${[...g].map(esc).join('、')}</b></span></div>`;
 }
 
 function statusBadge(dog, today) {
