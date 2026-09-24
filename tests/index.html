@@ -222,7 +222,7 @@ function runTests() {
       const card = n => cards.find(c => c.querySelector('.name').textContent === n);
       if (card('測試甲').querySelector('.warn-note')) throw new Error('住院區的測試甲不該有警示');
       const hei = card('測試丙');
-      if (!hei.querySelector('.warn-note') || !hei.querySelector('.badge.sage')) throw new Error('測試丙要有天數和警示備註');
+      if (!hei.querySelector('.warn-note') || !hei.querySelector('.last .val.sage')) throw new Error('測試丙要有天數和警示備註');
       eq(hei.querySelector('.warn-note .text').innerHTML, '<mark>勿遛</mark>', '備註：');
       searchQuery = '測試丙'; renderMain();
       if (!document.querySelector('#main .card .warn-note')) throw new Error('搜尋結果沒有警示備註');
@@ -485,10 +485,11 @@ function runTests() {
       eq(box.querySelectorAll('.warn-note').length, 1, '警示數：');
       eq(box.querySelector('.warn-note .text').textContent, note);
       eq([...box.querySelectorAll('.warn-note mark')].map(m => m.textContent), ['不親狗', '不要', '攻擊'], '標出的字眼：');
-      eq(box.querySelectorAll('.badge').length, 1, '只剩天數徽章：');
+      eq(box.querySelectorAll('.badge').length, 0, '沒有固定文案的徽章：');
+      eq(box.querySelector('.last .val').textContent, '4 天前', '上次遛狗：');
       if (!box.querySelector('.warn-note use[href="#i-warn"]')) throw new Error('警示要有三角圖示，不能只靠顏色');
     }),
-    check('#28 卡片第一層：照片、犬名、性別位置、天數、籠位｜編號同一行；一般備註、可一起遛、狗卡資訊不攤開', () => {
+    check('#28 卡片第一層：照片、犬名、性別位置、上次遛狗、編號｜籠位同一行；一般備註只有小圖示，可一起遛、狗卡資訊不攤開', () => {
       const saved = [allDogs, groupMap, detailMap];
       try {
         const dog = { name: '測試狗', cage: 'A01', id: '1', walkedDate: new Date(2026, 8, 24), walker: '', note: '親人，好牽' };
@@ -497,15 +498,24 @@ function runTests() {
         const box = document.createElement('div');
         box.innerHTML = dogCard(dog, TODAY);
         const card = box.querySelector('.card');
-        eq(card.querySelector('.thumb img').getAttribute('width'), '56', '照片尺寸：');
         eq(card.querySelector('.name').firstChild.textContent, '測試狗');
         if (!card.querySelector('.name .sex')) throw new Error('要預留性別位置');
-        eq(card.querySelector('.badge').textContent, '今天');
-        eq(card.querySelector('.meta').textContent, 'A01|1', '籠位｜編號：');
+        eq(card.querySelector('.last').textContent, '上次遛狗今天');
+        eq(card.querySelector('.meta').textContent, '1|A01', '編號｜籠位：');
+        if (!card.querySelector('.has-note')) throw new Error('有一般備註要有小圖示');
         const text = card.textContent;
         for (const s of ['親人', '好朋友', '入所狗卡']) if (text.includes(s)) throw new Error(`第一層不該出現「${s}」`);
         eq(card.dataset.dog, '0', '卡片對應的狗：');
       } finally { [allDogs, groupMap, detailMap] = saved; }
+    }),
+    check('#28 上次遛狗：今天／幾天前／尚無紀錄／有人固定照顧，天數顏色照色標', () => {
+      const box = document.createElement('div');
+      const val = dog => { box.innerHTML = lastWalk(dog, TODAY); const v = box.querySelector('.val'); return [v.textContent, v.className]; };
+      eq(val({ walkedDate: new Date(2026, 8, 24), walker: '' }), ['今天', 'val sage']);
+      eq(val({ walkedDate: new Date(2026, 8, 14), walker: '' }), ['10 天前', 'val amber']);
+      eq(val({ walkedDate: new Date(2026, 7, 20), walker: '' }), ['35 天前', 'val red']);
+      eq(val({ walkedDate: null, walker: '' }), ['尚無紀錄', 'val muted']);
+      eq(val({ walkedDate: null, walker: '固定志工' }), ['有人固定照顧', 'val sage small']);
     }),
     check('#28 詳細資訊分成備註、可以一起溜的狗（照片＋犬名）、狗卡資訊三區', () => {
       const saved = [allDogs, groupMap, detailMap];
