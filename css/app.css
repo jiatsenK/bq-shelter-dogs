@@ -1,0 +1,292 @@
+/* 視覺風格：見 docs/DESIGN_GUIDE.md（參考圖 docs/design/reference-preview.webp） */
+:root {
+  --bg: #EEF4FB;
+  --surface: #FFFFFF;
+  --surface-soft: #F4F7FB;
+  --ink: #1E2A44;
+  --ink-soft: #6B7890;
+  --line: #E3EAF3;
+  --primary: #2F7BEA;
+  --primary-soft: #E7F0FD;
+  --red-text: #D93036;   --red-bg: #FDE7E7;
+  --amber-text: #A86400; --amber-bg: #FFF0C2;
+  --green-text: #2E8B45; --green-bg: #DDF4E2;
+  --muted-text: #7A8599; --muted-bg: #EEF1F5;
+  --radius-card: 18px;
+  --radius-photo: 14px;
+  --shadow-card: 0 2px 10px rgba(30, 42, 68, 0.06);
+}
+* { box-sizing: border-box; }
+html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: 'Noto Sans TC', -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+svg.icon { width: 1em; height: 1em; flex-shrink: 0; vertical-align: -0.125em; }
+
+header.app {
+  position: sticky; top: 0; z-index: 10;
+  background: var(--surface);
+  padding: calc(14px + env(safe-area-inset-top, 0px)) 16px 12px;
+  box-shadow: 0 1px 0 var(--line);
+}
+.header-inner { max-width: 480px; margin: 0 auto; }
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand .logo { width: 34px; height: 34px; color: var(--primary); }
+.brand h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: 0.02em; line-height: 1.2; }
+.brand .sub { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.brand .titles { flex: 1; min-width: 0; }
+.brand .date { font-size: 13px; color: var(--ink-soft); font-weight: 500; }
+.brand .updated { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
+
+.search { position: relative; margin: 12px 0 10px; }
+.search .icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--ink-soft); font-size: 16px; }
+.search input {
+  width: 100%;
+  border: none;
+  border-radius: 12px;
+  padding: 10px 14px 10px 38px;
+  font-size: 16px;
+  font-family: inherit;
+  background: var(--surface-soft);
+  color: var(--ink);
+}
+.search input::placeholder { color: #9AA5B8; }
+.search input:focus { outline: 2px solid var(--primary-soft); }
+
+.tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+}
+.tabs button {
+  border: none;
+  background: var(--muted-bg);
+  color: var(--ink);
+  font-family: inherit;
+  padding: 7px 2px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; line-height: 1.3;
+}
+.tabs button .t { font-size: 14px; font-weight: 500; white-space: nowrap; }
+.tabs button .n { font-size: 12px; opacity: 0.75; }
+.tabs button.active { background: var(--primary); color: #fff; }
+.tabs button.active .t { font-weight: 700; }
+.tabs button.active .n { opacity: 0.9; }
+
+main { padding: 14px 14px 50px; max-width: 480px; margin: 0 auto; }
+/* 試算表文字（備註、籠位、犬名、搜尋字）可能是一長串沒有空白的英數或網址，一律可以折行，不撐破版面 */
+main { overflow-wrap: anywhere; }
+
+.status-msg {
+  text-align: center;
+  color: var(--ink-soft);
+  font-size: 15px;
+  padding: 40px 20px;
+  line-height: 1.7;
+}
+
+.section-hint {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 14px; color: var(--ink-soft); font-weight: 500;
+  margin: 2px 4px 12px;
+}
+.section-title {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 17px; font-weight: 700; color: var(--ink);
+  margin: 4px 4px 12px;
+}
+.section-title .icon { color: var(--green-text); }
+.alert-box {
+  display: flex; gap: 10px; align-items: flex-start;
+  background: var(--red-bg);
+  color: var(--red-text);
+  border-radius: 14px;
+  padding: 12px 14px;
+  font-size: 13.5px; line-height: 1.6;
+  margin-bottom: 12px;
+}
+.alert-box.warn { background: var(--amber-bg); color: var(--amber-text); }
+.retry-btn {
+  margin-top: 16px;
+  background: var(--primary); color: #fff;
+  border: none; border-radius: 12px;
+  font-family: inherit; font-size: 15px; font-weight: 700;
+  padding: 10px 22px;
+  cursor: pointer;
+}
+.alert-box .icon { font-size: 18px; margin-top: 2px; }
+
+.cage-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.cage-chip {
+  border: none;
+  background: var(--surface);
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  padding: 12px 16px;
+  border-radius: 14px;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+}
+.cage-chip .n {
+  margin-left: 6px;
+  font-size: 13px; font-weight: 500;
+  color: var(--ink-soft);
+}
+.cage-chip.empty { background: var(--surface-soft); color: var(--muted-text); box-shadow: none; }
+.cage-back {
+  display: inline-flex; align-items: center; gap: 4px;
+  background: none; border: none;
+  color: var(--primary);
+  font-family: inherit; font-size: 15px; font-weight: 700;
+  padding: 4px 0 12px;
+  cursor: pointer;
+}
+
+/* 卡片：手機一個畫面約 6～8 隻（#28，版型照 K 給的參考圖）。
+   一列：照片｜犬名＋編號｜籠位｜上次遛狗｜箭頭；備註命中警示關鍵字時多一行原文 */
+.card {
+  background: var(--surface);
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px 6px 6px;
+  margin-bottom: 6px;
+  box-shadow: var(--shadow-card);
+  cursor: pointer;
+}
+.card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.card:active { background: var(--surface-soft); }
+
+.thumb {
+  width: 60px; height: 60px; flex-shrink: 0;
+  border-radius: var(--radius-photo);
+  overflow: hidden;
+  background: var(--primary-soft);
+  position: relative;
+}
+.card .thumb { width: 64px; height: 52px; border-radius: 10px; align-self: flex-start; }
+.thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb-fallback {
+  display: none;
+  position: absolute; inset: 0;
+  align-items: center; justify-content: center;
+  color: var(--primary); opacity: 0.55;
+  font-size: 28px;
+}
+
+.card .body { flex: 1; min-width: 0; }
+.badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 14px; font-weight: 700;
+  padding: 1px 9px; border-radius: 8px;
+  white-space: nowrap;
+}
+.badge.red { background: var(--red-bg); color: var(--red-text); }
+.badge.amber { background: var(--amber-bg); color: var(--amber-text); }
+.badge.sage { background: var(--green-bg); color: var(--green-text); }
+.badge.muted { background: var(--muted-bg); color: var(--muted-text); }
+.card .row { display: flex; align-items: center; gap: 8px; }
+.card .who { flex: 1; min-width: 0; }
+.card .name { font-size: 18px; font-weight: 700; line-height: 1.3; word-break: break-all; }
+/* 性別：之後補上 ♂／♀ 符號，沒有資料時不佔位 */
+.sex { margin-left: 4px; font-size: 15px; color: var(--ink-soft); }
+.sex:empty { display: none; }
+/* 有一般備註（沒命中警示）時犬名旁的小圖示，內容點開看 */
+.has-note { margin-left: 5px; color: #F0A020; font-size: 17px; vertical-align: -0.15em; }
+.card .meta { font-size: 13.5px; color: var(--ink-soft); margin-top: 1px; line-height: 1.4; }
+.card .meta .sep, .detail-head .meta .sep { color: #C5CFDD; margin: 0 6px; }
+/* 上次遛狗：小標＋彩色天數（綠／黃／紅照 #3 色標） */
+.last { flex-shrink: 0; width: 84px; line-height: 1.3; }
+.last .lbl { display: block; font-size: 12px; color: var(--ink-soft); }
+.last .val { display: block; font-size: 17px; font-weight: 700; white-space: nowrap; }
+.last .val.small { font-size: 14px; }
+.last .val.sage { color: var(--green-text); }
+.last .val.amber { color: var(--amber-text); }
+.last .val.red { color: var(--red-text); }
+.last .val.muted { color: var(--muted-text); font-weight: 500; }
+.card .more { color: #B6C1D2; font-size: 18px; flex-shrink: 0; }
+
+/* 警示備註：命中關鍵字的備註原文，紅框＋三角圖示＋粗體，不只靠顏色辨識 */
+.warn-note {
+  display: flex; gap: 5px; align-items: flex-start;
+  font-size: 13.5px; font-weight: 700; line-height: 1.45;
+  margin-top: 4px;
+  padding: 3px 8px;
+  border-radius: 8px;
+  border: 1.5px solid var(--red-text);
+  background: #FFF7F7;
+  color: var(--red-text);
+}
+.warn-note .icon { margin-top: 2px; font-size: 15px; }
+.warn-note .text, .detail .note-text { white-space: pre-line; word-break: break-word; }
+.warn-note mark, .detail mark { background: transparent; color: inherit; font-weight: 900; text-decoration: underline; text-underline-offset: 3px; }
+
+/* 詳細資訊：點狗卡後從下方滑出，分成 備註／可以一起溜的狗／狗卡資訊 三區 */
+html.detail-open { overflow: hidden; }
+.detail-backdrop {
+  position: fixed; inset: 0; z-index: 20;
+  background: rgba(30, 42, 68, 0.45);
+  display: flex; align-items: flex-end; justify-content: center;
+}
+.detail-backdrop[hidden] { display: none; }
+.detail {
+  background: var(--bg);
+  width: 100%; max-width: 480px;
+  max-height: 90vh; max-height: 90dvh;
+  overflow-y: auto; overscroll-behavior: contain;
+  border-radius: 22px 22px 0 0;
+  padding: 14px 14px calc(24px + env(safe-area-inset-bottom, 0px));
+  overflow-wrap: anywhere;
+}
+@media (min-width: 600px) {
+  .detail-backdrop { align-items: center; }
+  .detail { border-radius: 22px; max-height: 85vh; }
+}
+.detail-head {
+  display: flex; gap: 12px; align-items: flex-start;
+  background: var(--surface); border-radius: var(--radius-card);
+  padding: 12px; box-shadow: var(--shadow-card);
+}
+.detail-head .thumb { width: 84px; height: 84px; }
+.detail-head .thumb-fallback { font-size: 38px; }
+.detail-head .info { flex: 1; min-width: 0; }
+.detail-head .name { font-size: 20px; font-weight: 700; line-height: 1.3; margin-top: 6px; word-break: break-all; }
+.detail-head .meta { font-size: 13.5px; color: var(--ink-soft); margin-top: 2px; }
+.detail-head .meta .sep { color: var(--line); margin: 0 6px; }
+.detail-close {
+  flex-shrink: 0;
+  width: 36px; height: 36px; border-radius: 50%;
+  border: none; background: var(--surface-soft); color: var(--ink);
+  font-size: 18px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.detail-section {
+  background: var(--surface); border-radius: var(--radius-card);
+  padding: 12px 14px; margin-top: 10px; box-shadow: var(--shadow-card);
+}
+.detail-section h3 {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 15px; font-weight: 700; margin: 0 0 8px; color: var(--ink);
+}
+.detail-section h3 .icon { color: var(--primary); }
+.detail-section .sub { font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+.detail-section .content { font-size: 14px; line-height: 1.7; color: var(--ink); }
+.detail-section .empty { font-size: 13.5px; color: var(--muted-text); }
+.detail-section .warn-note { margin-top: 0; }
+.buddies { display: grid; grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); gap: 10px; }
+.buddy {
+  border: none; background: none; padding: 0;
+  font-family: inherit; color: var(--ink);
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  cursor: pointer;
+}
+.buddy .thumb { width: 64px; height: 64px; }
+.buddy .bname { font-size: 13.5px; font-weight: 700; line-height: 1.3; text-align: center; word-break: break-all; }
