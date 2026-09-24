@@ -283,6 +283,9 @@ const SPECIAL_KEYWORDS = [
   ['勿溜', '勿遛', '勿蹓'],
 ];
 const RECENT_DAYS = 7;
+// 天數色標（2026-09-24 K 定案）：0～6 天綠、第 7 天起黃、第 30 天起紅
+const AMBER_DAYS = 7;
+const RED_DAYS = 30;
 
 let allDogs = [];
 let groupMap = {};
@@ -586,8 +589,8 @@ function computeStatus(dog, today) {
   if (dog.walkedDate) {
     const days = Math.floor((today - dog.walkedDate) / 86400000);
     let level = 'sage';
-    if (days >= 30) level = 'red';
-    else if (days >= 7) level = 'amber';
+    if (days >= RED_DAYS) level = 'red';
+    else if (days >= AMBER_DAYS) level = 'amber';
     return { kind: 'dated', days, level };
   }
   if (dog.walker) return { kind: 'covered' };
@@ -694,16 +697,21 @@ function recentDogs(dogs, today) {
     .map(x => x.d);
 }
 
+// 待巡房：所有狗依幾天沒遛由久到近；沒有遛狗紀錄的排最前，有人固定照顧的排最後
+function dueDogs(dogs, today) {
+  const key = s => s.kind === 'unknown' ? Infinity : s.kind === 'dated' ? s.days : -Infinity;
+  return dogs
+    .map(d => ({ d, k: key(computeStatus(d, today)) }))
+    .sort((a, b) => (b.k === a.k ? 0 : b.k > a.k ? 1 : -1))
+    .map(x => x.d);
+}
+
 function renderMain() {
   const today = new Date();
   document.getElementById('dateLabel').textContent =
     `${today.getMonth() + 1}月${today.getDate()}日 (${'日一二三四五六'[today.getDay()]})`;
 
-  const dueList = allDogs.slice().sort((a, b) => {
-    const sa = computeStatus(a, today), sb = computeStatus(b, today);
-    const key = s => s.kind === 'unknown' ? 999999 : s.kind === 'dated' ? s.days : -1;
-    return key(sb) - key(sa);
-  });
+  const dueList = dueDogs(allDogs, today);
 
   const recentList = recentDogs(allDogs, today);
 
