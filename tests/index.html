@@ -541,7 +541,7 @@ function runTests() {
       eq(swipeStep(-80, 70), 0, '斜著捲動：');
       eq(swipeStep(5, 300), 0, '上下捲動：');
     }),
-    check('#33 內容區左右滑動換分類，頭尾不循環，標籤同步；在狗卡上滑不換分類（留給 #35）', () => {
+    check('#33 內容區左右滑動換分類，頭尾不循環，標籤同步；狗卡上滑也算', () => {
       const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery];
       const main = document.getElementById('main');
       const touch = (target, x, y) => new Touch({ identifier: 1, target, clientX: x, clientY: y });
@@ -558,9 +558,7 @@ function runTests() {
         swipe(main, 100);
         eq(activeTab, 'walk', '第一頁向右滑不循環：');
         swipe(main.querySelector('.card'), -100);
-        eq(activeTab, 'walk', '在狗卡上滑不換分類：');
-        swipe(main.querySelector('.section-hint'), -100);
-        eq([activeTab, active()], ['today', ['today']], '向左滑到今天已溜：');
+        eq([activeTab, active()], ['today', ['today']], '在狗卡上向左滑也會到今天已溜：');
         swipe(main, -100);
         eq([activeTab, active()], ['info', ['info']], '再向左滑到相關資訊：');
         swipe(main, -100);
