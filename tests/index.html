@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>板收遛狗：資料讀取測試</title>
+<title>板收志工溜狗表：資料讀取測試</title>
 <style>
   body { font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; margin: 16px; background: #EEF4FB; color: #1E2A44; }
   h1 { font-size: 20px; }
@@ -14,7 +14,7 @@
 </style>
 </head>
 <body>
-<h1>板收遛狗：資料讀取測試</h1>
+<h1>板收志工溜狗表：資料讀取測試</h1>
 <p>這頁不會連到真正的試算表，只用假資料檢查 js/app.js 的讀取與解析函式。</p>
 <div id="summary">測試中…</div>
 <ol id="results"></ol>
@@ -77,6 +77,7 @@ const GRID = [
 const TODAY = new Date(2026, 8, 24, 10);
 let INDEX_HTML = ''; // index.html 原始碼，#10 唯讀檢查用（其他測試會替換 fetch，所以先存下來）
 let APP_JS = '';     // js/app.js 原始碼（#30 拆檔後程式在這裡）
+let MANIFEST = {};    // manifest.webmanifest，#33 主畫面名稱檢查用
 
 function runTests() {
   return Promise.all([
@@ -152,21 +153,6 @@ function runTests() {
       const map = parseGroups(table, new Set(['宙斯', '冬冬', '比比']));
       eq([...map['宙斯']], ['比比']); eq([...map['冬冬']], []); eq(map['已離所'], undefined);
     }),
-    check('近期已遛：只列 0～7 天內遛過的狗，由近到遠，未來日期不列入', () => {
-      const dog = (name, date, walker = '') => ({ name, walkedDate: date, walker, note: '' });
-      const dogs = [
-        dog('七天前', new Date(2026, 8, 17)),
-        dog('今天', new Date(2026, 8, 24)),
-        dog('八天前', new Date(2026, 8, 16)),
-        dog('三天前', new Date(2026, 8, 21)),
-        dog('明天', new Date(2026, 8, 25)),
-        dog('2099年', new Date(2099, 0, 1)),
-        dog('沒日期', null),
-        dog('有人固定照顧', null, '阿明'),
-      ];
-      eq(recentDogs(dogs, TODAY).map(d => d.name), ['今天', '三天前', '七天前']);
-      eq(recentDogs([], TODAY), []);
-    }),
     check('未來日期顯示「日期異常」，不顯示負的天數', () => {
       const badge = statusBadge({ name: 'x', walkedDate: new Date(2099, 0, 1), walker: '', note: '' }, TODAY);
       if (!badge.includes('日期異常') || badge.includes('-')) throw new Error(`標籤是 ${badge}`);
@@ -207,18 +193,16 @@ function runTests() {
       const note = '勿溜<先問>，下午再勿遛';
       eq(highlightNote(note, specialFlag(note).terms), '<mark>勿溜</mark>&lt;先問&gt;，下午再<mark>勿遛</mark>');
     }),
-    check('勿溜的狗仍留在待巡房與近期已遛，卡片有天數和備註原文；沒有特殊狀況分頁', () => {
+    check('勿溜的狗仍留在溜狗表，卡片有天數和備註原文；沒有特殊狀況分頁', () => {
       allDogs = [
         { cage: '住院區', id: '1', name: '測試甲', walkedDate: new Date(), walker: '', note: '住院' },
         { cage: 'A02', id: '2', name: '測試乙', walkedDate: new Date(), walker: '', note: '' },
         { cage: 'A03', id: '3', name: '測試丙', walkedDate: new Date(), walker: '', note: '勿遛' },
       ];
-      groupMap = { '測試丙': new Set(['測試乙']) }; detailMap = { '3': '個性親人' }; cages = ['住院區', 'A02', 'A03'];
-      searchQuery = ''; activeCage = null;
+      groupMap = { '測試丙': new Set(['測試乙']) }; detailMap = { '3': '個性親人' };
+      searchQuery = '';
       const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent).sort();
-      activeTab = 'due'; renderMain(); eq(names(), ['測試甲', '測試乙', '測試丙'].sort(), '待巡房：');
-      activeTab = 'recent'; renderMain(); eq(names(), ['測試甲', '測試乙', '測試丙'].sort(), '近期已遛：');
-      eq([...document.querySelectorAll('#tabs button')].map(b => b.dataset.tab), ['due', 'recent', 'cage'], '分頁：');
+      activeTab = 'walk'; renderMain(); eq(names(), ['測試甲', '測試乙', '測試丙'].sort(), '溜狗表：');
       const cards = [...document.querySelectorAll('#main .card')];
       const card = n => cards.find(c => c.querySelector('.name').textContent === n);
       if (card('測試甲').querySelector('.warn-note')) throw new Error('住院區的測試甲不該有警示');
@@ -300,43 +284,38 @@ function runTests() {
       eq(matchesSearch(dog, '  '), true, '只有空白當作沒搜尋：');
       eq(matchesSearch(dog, '測試戊'), false);
     }),
-    check('搜尋：只篩選目前分頁，分頁數字跟著變，清空回到原本內容', () => {
+    check('搜尋：只篩選目前分類，分類數字跟著變，清空回到原本內容', () => {
       const daysAgo = n => new Date(Date.now() - n * 86400000);
       allDogs = [
         { cage: 'B01', id: '', name: '搜尋甲', walkedDate: daysAgo(1), walker: '', note: '' },
         { cage: 'B02', id: '', name: '搜尋乙', walkedDate: daysAgo(20), walker: '', note: '勿溜' },
         { cage: 'B02', id: '', name: '別隻丙', walkedDate: daysAgo(2), walker: '', note: '' },
       ];
-      groupMap = {}; detailMap = {}; cages = ['B01', 'B02']; activeCage = null;
+      groupMap = {}; detailMap = {};
       const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
       const counts = () => [...document.querySelectorAll('#tabs button .n')].map(n => n.textContent);
       const mainText = () => document.getElementById('main').textContent;
       try {
         searchQuery = '搜尋';
-        activeTab = 'due'; renderMain();
-        eq(names(), ['搜尋乙', '搜尋甲'], '待巡房（久沒遛的在前）：');
-        eq(counts(), ['2', '1', '2 區'], '分頁數字：');
+        activeTab = 'walk'; renderMain();
+        eq(names(), ['搜尋乙', '搜尋甲'], '溜狗表（久沒遛的在前）：');
+        eq(counts(), ['2', '0', '編輯中'], '分類數字：');
         if (!mainText().includes('搜尋「搜尋」：2 隻')) throw new Error('沒有顯示搜尋結果隻數');
         if (!document.querySelector('#main .card .warn-note')) throw new Error('勿溜的搜尋乙沒有警示備註');
-        activeTab = 'recent'; renderMain();
-        eq(names(), ['搜尋甲'], '近期已遛：');
-        activeTab = 'cage'; renderMain();
-        eq(names(), ['搜尋乙', '搜尋甲'], '依籠位直接列出符合的狗：');
-        searchQuery = '乙'; activeTab = 'recent'; renderMain();
-        eq(names(), [], '近期已遛沒有乙：');
-        if (!mainText().includes('近期已遛裡沒有「乙」') || !mainText().includes('待巡房有 1 隻'))
-          throw new Error(`沒提示去待巡房找：${mainText()}`);
-        searchQuery = '<b>沒這隻'; activeTab = 'due'; renderMain();
+        activeTab = 'today'; renderMain();
+        eq(names(), [], '今天已溜（空殼）：');
+        if (!mainText().includes('今天已溜裡找不到「搜尋」')) throw new Error(`今天已溜的查無提示：${mainText()}`);
+        searchQuery = '<b>沒這隻'; activeTab = 'walk'; renderMain();
         eq(document.querySelector('#main .status-msg').innerHTML, '找不到「&lt;b&gt;沒這隻」');
-        eq(counts(), ['0', '0', '0 區'], '查無時分頁數字：');
+        eq(counts(), ['0', '0', '編輯中'], '查無時分類數字：');
         searchQuery = ''; renderMain();
         eq(names().length, 3, '清空後：');
-        eq(counts(), ['3', '2', '2 區'], '清空後分頁數字：');
-      } finally { searchQuery = ''; activeTab = 'due'; }
+        eq(counts(), ['3', '0', '編輯中'], '清空後分類數字：');
+      } finally { searchQuery = ''; activeTab = 'walk'; }
     }),
     check('搜尋：輸入即篩選；注音選字途中不篩選，選好字才更新', () => {
       allDogs = [{ cage: 'B01', id: '', name: '搜尋甲', walkedDate: null, walker: '', note: '' }];
-      groupMap = {}; detailMap = {}; cages = ['B01']; activeTab = 'due'; activeCage = null;
+      groupMap = {}; detailMap = {}; activeTab = 'walk';
       const input = document.getElementById('searchInput');
       try {
         input.value = 'ㄐ';
@@ -350,47 +329,6 @@ function runTests() {
         input.dispatchEvent(new InputEvent('input'));
         eq(searchQuery, '', '清空：');
       } finally { input.value = ''; searchQuery = ''; }
-    }),
-    // ── #6 依籠位 ──
-    check('籠位清單從主清單籠位欄去重：空籠也列出，表尾提示不算', () => {
-      const table = fakeGviz(GRID, 7).table;
-      eq(parseCages(table), ['A07', 'A08', 'A11', 'A12', 'A13', 'C03']);
-      const grid = GRID.concat([['', '舊B02', '', '', '', ''], ['', ' C區41 ', '', '', '', ''], ['', 'A07', '', '', '', '']]);
-      eq(parseCages(fakeGviz(grid, 7).table), ['A07', 'A08', 'A11', 'A12', 'A13', 'C03', 'C區41', '舊B02']);
-    }),
-    check('籠位排序：數字照大小、中文開頭的集中在後', () => {
-      const out = sortCages(['住院區', 'A10', '母幼A', 'A2', '新A01', 'B01', 'A01', '新A10', '新A2']);
-      eq(out.slice(0, 4), ['A01', 'A2', 'A10', 'B01'], '英數籠位：');
-      eq(out.filter(c => c.startsWith('新')), ['新A01', '新A2', '新A10'], '中文開頭同字首照數字：');
-      eq(out.slice(4).sort(), ['住院區', '母幼A', '新A01', '新A2', '新A10'].sort(), '中文籠位在後：');
-    }),
-    check('依籠位：點籠位看籠內的狗，空籠顯示提示，返回與切換分頁回到籠位清單', () => {
-      allDogs = [
-        { cage: 'A02', id: '2', name: '測試乙', walkedDate: new Date(), walker: '', note: '' },
-        { cage: 'A02', id: '3', name: '測試丙', walkedDate: null, walker: '', note: '勿溜' },
-        { cage: 'A05', id: '4', name: '測試丁', walkedDate: null, walker: '', note: '' },
-      ];
-      groupMap = {}; detailMap = {}; cages = ['A02', 'A05', '舊A01'];
-      searchQuery = ''; activeTab = 'cage'; activeCage = null;
-      renderMain();
-      const chips = () => [...document.querySelectorAll('#main .cage-chip')];
-      eq(chips().map(b => b.dataset.cage), ['A02', 'A05', '舊A01'], '籠位按鈕：');
-      eq(chips().map(b => b.querySelector('.n').textContent), ['2', '1', '0'], '隻數：');
-      if (!chips()[2].classList.contains('empty')) throw new Error('空籠要淡色顯示');
-      chips()[0].click();
-      eq(activeCage, 'A02');
-      const names = [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
-      eq(names, ['測試乙', '測試丙'], '籠內的狗：');
-      const flagged = [...document.querySelectorAll('#main .card')].filter(c => c.querySelector('.warn-note'));
-      eq(flagged.map(c => c.querySelector('.name').textContent), ['測試丙'], '勿溜的狗有警示備註：');
-      document.getElementById('cageBack').click();
-      eq(activeCage, null, '返回後：');
-      chips()[2].click();
-      if (!document.querySelector('#main .status-msg')) throw new Error('空籠要顯示「這個籠位目前沒有狗」');
-      document.querySelector('#tabs button[data-tab="due"]').click();
-      document.querySelector('#tabs button[data-tab="cage"]').click();
-      if (!document.querySelector('#main .cage-grid')) throw new Error('切換分頁後要回到籠位清單');
-      activeTab = 'due';
     }),
     check('#3 色標邊界：0～6 天綠、第 7 天起黃、第 30 天起紅', () => {
       const daysAgo = n => ({ name: '測試狗', walkedDate: new Date(2026, 8, 24 - n), walker: '' });
@@ -437,7 +375,7 @@ function runTests() {
     check('#10 試算表文字一律跳脫：備註、犬名、籠位、編號、可一起遛、搜尋字', () => {
       const evil = '<img src=x onerror="window.__xss=1"><b>粗</b>&amp;';
       const dog = { name: evil, cage: evil, id: evil, walkedDate: null, walker: '', note: evil + '勿溜' };
-      const saved = [groupMap, detailMap, allDogs, cages, activeTab, activeCage, searchQuery];
+      const saved = [groupMap, detailMap, allDogs, activeTab, searchQuery];
       try {
         groupMap = { [evil]: new Set([evil]) };
         detailMap = { [evil]: evil };
@@ -450,17 +388,15 @@ function runTests() {
         eq(box.querySelectorAll('.info img, section img:not(.thumb img), section b').length, 0, '詳細資訊裡被當成 HTML 的元素：');
         eq(box.querySelector('.buddy .bname').textContent, evil, '可一起遛原文：');
         eq(box.querySelector('[data-section="intro"] .content').textContent, evil, '狗卡資訊原文：');
-        allDogs = [dog]; cages = [evil]; activeTab = 'cage'; activeCage = null; searchQuery = '';
+        allDogs = [dog]; activeTab = 'walk'; searchQuery = '';
         render();
-        eq(document.querySelector('#main .cage-chip').dataset.cage, evil, '籠位按鈕：');
-        document.querySelector('#main .cage-chip').click();
-        eq(document.querySelectorAll('#main img:not(.thumb img)').length, 0, '籠內頁被當成 HTML 的圖片：');
-        activeTab = 'due'; searchQuery = evil; render();
+        eq(document.querySelectorAll('#main img:not(.thumb img)').length, 0, '清單被當成 HTML 的圖片：');
+        searchQuery = evil; render();
         searchQuery = '<i>沒有這隻</i>'; render();
         if (document.querySelector('#main i')) throw new Error('搜尋字不應被當成 HTML');
         if (window.__xss) throw new Error('跳脫失敗，執行了試算表裡的程式');
       } finally {
-        [groupMap, detailMap, allDogs, cages, activeTab, activeCage, searchQuery] = saved;
+        [groupMap, detailMap, allDogs, activeTab, searchQuery] = saved;
         render();
       }
     }),
@@ -538,14 +474,14 @@ function runTests() {
       } finally { [allDogs, groupMap, detailMap] = saved; }
     }),
     check('#28 點狗卡開詳細資訊，點一起溜的狗換成那隻，關閉後回到清單', () => {
-      const saved = [allDogs, groupMap, detailMap, cages, activeTab, activeCage, searchQuery];
+      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery];
       try {
         allDogs = [
           { name: '測試甲', cage: 'A01', id: '1', walkedDate: null, walker: '', note: '' },
           { name: '測試乙', cage: 'A02', id: '2', walkedDate: null, walker: '', note: '' },
         ];
         groupMap = { '測試甲': new Set(['測試乙']), '測試乙': new Set(['測試甲']) }; detailMap = {};
-        cages = ['A01', 'A02']; activeTab = 'due'; activeCage = null; searchQuery = '';
+        activeTab = 'walk'; searchQuery = '';
         renderMain();
         const before = [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
         document.querySelector('#main .card[data-dog="0"] .name').click();
@@ -562,7 +498,81 @@ function runTests() {
       } finally {
         hideDetail();
         if (history.state && history.state.bqDetail) history.replaceState(null, '');
-        [allDogs, groupMap, detailMap, cages, activeTab, activeCage, searchQuery] = saved;
+        [allDogs, groupMap, detailMap, activeTab, searchQuery] = saved;
+      }
+    }),
+    // ── #33 網站名稱、分類與滑動切換 ──
+    check('#33 網站名稱改為「板收志工溜狗表」（標題、分頁名稱、加到主畫面）', () => {
+      const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
+      eq(doc.title, '板收志工溜狗表', '瀏覽器分頁：');
+      eq(doc.querySelector('header h1').textContent, '板收志工溜狗表', '頁面標題：');
+      eq(doc.querySelector('meta[name="apple-mobile-web-app-title"]').content, '板收志工溜狗表', 'iPhone 主畫面：');
+      eq([MANIFEST.name, MANIFEST.short_name], ['板收志工溜狗表', '板收志工溜狗表'], 'Android 主畫面：');
+    }),
+    check('#33 分類依序為溜狗表／今天已溜／相關資訊（編輯中），點分類可切換', () => {
+      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery];
+      try {
+        allDogs = [{ cage: 'A01', id: '1', name: '測試甲', walkedDate: null, walker: '', note: '' }];
+        groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = '';
+        render();
+        const tabs = () => [...document.querySelectorAll('#tabs button')];
+        eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '今天已溜', '相關資訊'], '分類：');
+        eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '0', '編輯中'], '數字：');
+        const active = () => tabs().filter(b => b.classList.contains('active')).map(b => b.dataset.tab);
+        eq(active(), ['walk'], '預設：');
+        eq(document.querySelectorAll('#main .card').length, 1, '溜狗表有狗卡：');
+        tabs()[1].click();
+        eq([activeTab, active()], ['today', ['today']], '點今天已溜：');
+        eq(document.querySelectorAll('#main .card').length, 0, '今天已溜目前是空殼：');
+        tabs()[2].click();
+        eq([activeTab, active()], ['info', ['info']], '點相關資訊：');
+        if (!document.getElementById('main').textContent.includes('編輯中')) throw new Error('相關資訊要顯示編輯中');
+        tabs()[0].click();
+        eq(active(), ['walk'], '點回溜狗表：');
+      } finally {
+        [allDogs, groupMap, detailMap, activeTab, searchQuery] = saved;
+        render();
+      }
+    }),
+    check('#33 滑動判斷：夠長的水平滑動才換分類，上下捲動不算', () => {
+      eq(swipeStep(-80, 10), 1, '向左滑＝下一個：');
+      eq(swipeStep(80, -10), -1, '向右滑＝上一個：');
+      eq(swipeStep(-40, 0), 0, '太短：');
+      eq(swipeStep(-80, 70), 0, '斜著捲動：');
+      eq(swipeStep(5, 300), 0, '上下捲動：');
+    }),
+    check('#33 內容區左右滑動換分類，頭尾不循環，標籤同步；在狗卡上滑不換分類（留給 #35）', () => {
+      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery];
+      const main = document.getElementById('main');
+      const touch = (target, x, y) => new Touch({ identifier: 1, target, clientX: x, clientY: y });
+      const swipe = (target, dx) => {
+        const start = touch(target, 200, 300), end = touch(target, 200 + dx, 305);
+        target.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, touches: [start], changedTouches: [start] }));
+        target.dispatchEvent(new TouchEvent('touchend', { bubbles: true, touches: [], changedTouches: [end] }));
+      };
+      const active = () => [...document.querySelectorAll('#tabs button.active')].map(b => b.dataset.tab);
+      try {
+        allDogs = [{ cage: 'A01', id: '1', name: '測試甲', walkedDate: null, walker: '', note: '' }];
+        groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = '';
+        render();
+        swipe(main, 100);
+        eq(activeTab, 'walk', '第一頁向右滑不循環：');
+        swipe(main.querySelector('.card'), -100);
+        eq(activeTab, 'walk', '在狗卡上滑不換分類：');
+        swipe(main.querySelector('.section-hint'), -100);
+        eq([activeTab, active()], ['today', ['today']], '向左滑到今天已溜：');
+        swipe(main, -100);
+        eq([activeTab, active()], ['info', ['info']], '再向左滑到相關資訊：');
+        swipe(main, -100);
+        eq(activeTab, 'info', '最後一頁向左滑不循環：');
+        swipe(main, 100); swipe(main, 100);
+        eq([activeTab, active()], ['walk', ['walk']], '向右滑回溜狗表：');
+        searchQuery = '測試'; render();
+        swipe(main, -100);
+        eq([activeTab, searchQuery], ['today', '測試'], '搜尋中也能滑，搜尋字保留：');
+      } finally {
+        [allDogs, groupMap, detailMap, activeTab, searchQuery] = saved;
+        render();
       }
     }),
     check('#30 檔案拆分：index.html 只有結構，樣式在 css/app.css、程式在 js/app.js', () => {
@@ -587,12 +597,13 @@ function show() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../index.html', '../js/app.js'].map(u => fetch(u).then(res => {
+Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js]) => {
+  .then(([html, js, manifest]) => {
     INDEX_HTML = html;
+    MANIFEST = JSON.parse(manifest);
     APP_JS = js;
     const s = document.createElement('script');
     s.textContent = js;
