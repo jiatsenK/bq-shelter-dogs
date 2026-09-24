@@ -10,7 +10,6 @@ const SPECIAL_KEYWORDS = [
   ['不親狗'],
   ['不親'],
 ];
-const RECENT_DAYS = 7;
 // 天數色標（2026-09-24 K 定案）：0～6 天綠、第 7 天起黃、第 30 天起紅
 const AMBER_DAYS = 7;
 const RED_DAYS = 30;
@@ -18,9 +17,7 @@ const RED_DAYS = 30;
 let allDogs = [];
 let groupMap = {};
 let detailMap = {};
-let cages = [];
-let activeTab = 'due';
-let activeCage = null;
+let activeTab = 'walk';
 let detailDog = null; // 詳細資訊正在看的狗
 let searchQuery = '';
 let loadWarning = '';
@@ -172,26 +169,6 @@ function parseMainList(table, headerTexts = [], today = new Date()) {
   return dogs;
 }
 
-// 籠位清單：主清單「籠位」欄去重，沒有狗的空籠也列出（例：舊A01）。
-// 表尾的提示文字（例：「今天週四」）籠位欄是空的，自然不會算進來。
-function parseCages(table, headerTexts = []) {
-  const idx = mainColumnMap(table, headerTexts).cage;
-  const set = new Set();
-  for (const r of table.rows || []) {
-    const cage = cellText((r.c || [])[idx]);
-    if (cage && cage.replace(/\s+/g, '') !== MAIN_COLUMNS.cage) set.add(cage);
-  }
-  return sortCages([...set]);
-}
-
-// 籠位排序：英數開頭的（A01、B12、C區41）在前，中文開頭的（母幼A、住院區、新A01、舊B02）集中在後；
-// 數字照大小排，A2 排在 A10 前面
-const CAGE_COLLATOR = new Intl.Collator('zh-Hant-TW', { numeric: true, sensitivity: 'base' });
-function sortCages(list) {
-  const group = c => /^[0-9A-Za-z]/.test(c) ? 0 : 1;
-  return list.slice().sort((a, b) => group(a) - group(b) || CAGE_COLLATOR.compare(a, b));
-}
-
 // 主清單分兩次讀：先找出表頭在第幾列，再指定表頭列數重讀
 async function loadMainList() {
   const raw = await fetchGviz('主清單', 0);
@@ -199,9 +176,7 @@ async function loadMainList() {
   if (headerIdx === -1) throw new Error('主清單裡找不到含「犬名」的表頭列，請確認分頁名稱與欄位沒有被改掉。');
   const headerTexts = ((raw.rows[headerIdx] || {}).c || []).map(cellText);
   const table = await fetchGviz('主清單', headerIdx + 1);
-  const dogs = parseMainList(table, headerTexts);
-  dogs.cages = parseCages(table, headerTexts); // 含空籠的籠位清單，init 取用
-  return dogs;
+  return parseMainList(table, headerTexts);
 }
 
 // 犬名比對時忽略空白（含全形空白），例：常遛狗群寫「小 白」也對得到主清單的「小白」
@@ -521,23 +496,71 @@ function matchesSearch(dog, query) {
   return !q || searchKey(dog.name).includes(q);
 }
 
-function buildTabs(dueCount, recentCount, cageCount = cages.length) {
-  const tabs = [
-    { id: 'due', label: '待巡房', count: dueCount },
-    { id: 'recent', label: '近期已遛', count: recentCount },
-    { id: 'cage', label: '依籠位', count: `${cageCount} 區` },
-  ];
-  document.getElementById('tabs').innerHTML = tabs.map(t =>
-    `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}"><span class="t">${t.label}</span><span class="n">${t.count}</span></button>`
-  ).join('');
-  document.querySelectorAll('#tabs button').forEach(btn => {
-    btn.addEventListener('click', () => {
-      activeTab = btn.dataset.tab;
-      activeCage = null;
-      render();
-    });
+// 主分類（V3，#33）：順序就是左右滑動切換的順序
+const TABS = [
+  { id: 'walk', label: '溜狗表' },
+  { id: 'today', label: '今天已溜' },
+  { id: 'info', label: '相關資訊', note: '編輯中' },
+];
+
+// counts：各分類要顯示的隻數；沒有數字的分類（相關資訊）顯示 note
+function buildTabs(counts) {
+  const tabsEl = document.getElementById('tabs');
+  tabsEl.innerHTML = TABS.map(t => {
+    const n = counts[t.id] != null ? counts[t.id] : t.note || '';
+    return `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}"><span class="t">${t.label}</span><span class="n">${n}</span></button>`;
+  }).join('');
+  tabsEl.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
 }
+
+// 切換分類：標籤跟著亮起，畫面回到內容最上面
+function switchTab(id) {
+  if (!TABS.some(t => t.id === id)) return;
+  const changed = id !== activeTab;
+  activeTab = id;
+  render();
+  const btn = document.querySelector(`#tabs button[data-tab="${id}"]`);
+  if (btn && btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  if (changed) window.scrollTo(0, 0);
+}
+
+// step：+1 下一個分類、-1 上一個；第一頁再往前、最後一頁再往後都不動（不循環）
+function stepTab(step) {
+  const i = TABS.findIndex(t => t.id === activeTab);
+  const next = i + step;
+  if (next < 0 || next >= TABS.length) return false;
+  switchTab(TABS[next].id);
+  return true;
+}
+
+// 判斷一次手指移動算不算換分類的滑動：水平距離夠長、而且明顯比垂直移動多（上下捲動不算）。
+// 回傳 +1（向左滑，下一個分類）、-1（向右滑，上一個分類）或 0
+const SWIPE_MIN_PX = 60;
+function swipeStep(dx, dy) {
+  if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return 0;
+  return dx < 0 ? 1 : -1;
+}
+
+// 內容區左右滑動換分類。從狗卡上開始的滑動不算：那是留給「今天已溜」的加入／移回（#35）；
+// 按鈕、輸入框上也不算，避免誤觸
+const SWIPE_IGNORE = '.card, button, input, a, textarea';
+let swipeStart = null;
+const mainEl = document.getElementById('main');
+mainEl.addEventListener('touchstart', e => {
+  swipeStart = null;
+  if (e.touches.length !== 1 || e.target.closest(SWIPE_IGNORE)) return;
+  swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+mainEl.addEventListener('touchend', e => {
+  if (!swipeStart) return;
+  const t = e.changedTouches[0];
+  const step = swipeStep(t.clientX - swipeStart.x, t.clientY - swipeStart.y);
+  swipeStart = null;
+  if (step) stepTab(step);
+});
+mainEl.addEventListener('touchcancel', () => { swipeStart = null; });
 
 function render() {
   renderMain();
@@ -547,16 +570,7 @@ function render() {
   }
 }
 
-// 近期已遛：0～RECENT_DAYS 天內遛過的狗，由近到遠。未來日期（填錯）不列入。
-function recentDogs(dogs, today) {
-  return dogs
-    .map(d => ({ d, s: computeStatus(d, today) }))
-    .filter(x => x.s.kind === 'dated' && x.s.days >= 0 && x.s.days <= RECENT_DAYS)
-    .sort((a, b) => a.s.days - b.s.days)
-    .map(x => x.d);
-}
-
-// 待巡房：所有狗依幾天沒遛由久到近；沒有遛狗紀錄的排最前，有人固定照顧的排最後
+// 溜狗表（沿用原待巡房）：所有狗依幾天沒遛由久到近；沒有遛狗紀錄的排最前，有人固定照顧的排最後
 function dueDogs(dogs, today) {
   const key = s => s.kind === 'unknown' ? Infinity : s.kind === 'dated' ? s.days : -Infinity;
   return dogs
@@ -565,66 +579,42 @@ function dueDogs(dogs, today) {
     .map(x => x.d);
 }
 
+// 今天已溜：這台裝置今天自己溜過的狗。這張票先是空殼，內容由 #35 接上本機紀錄
+function walkedTodayDogs(dogs, today) {
+  return [];
+}
+
 function renderMain() {
   const today = new Date();
   document.getElementById('dateLabel').textContent =
     `${today.getMonth() + 1}月${today.getDate()}日 (${'日一二三四五六'[today.getDay()]})`;
 
-  const dueList = dueDogs(allDogs, today);
-
-  const recentList = recentDogs(allDogs, today);
-
   const main = document.getElementById('main');
 
-  // 搜尋時只篩選目前分頁的內容，分頁上的數字也改成各分頁符合的隻數；清空就回到原本的分頁
-  const q = searchQuery.trim();
-  if (q) {
-    const hit = d => matchesSearch(d, q);
-    const dueHits = dueList.filter(hit);
-    const recentHits = recentList.filter(hit);
-    const cageHits = [...new Set(dueHits.map(d => d.cage).filter(Boolean))];
-    buildTabs(dueHits.length, recentHits.length, cageHits.length);
-    // 依籠位分頁搜尋時直接列出符合的狗，卡片上看得到籠位
-    const list = activeTab === 'due' ? dueHits : activeTab === 'recent' ? recentHits : dueHits;
-    if (list.length) {
-      main.innerHTML = `<div class="section-hint">${icon('search')}搜尋「${esc(q)}」：${list.length} 隻</div>` +
-        list.map(d => dogCard(d, today)).join('');
-    } else if (dueHits.length) {
-      // 只會發生在近期已遛：狗有在名冊裡，只是這幾天沒遛，提示去待巡房找
-      main.innerHTML = `<div class="status-msg">近期已遛裡沒有「${esc(q)}」<br>待巡房有 ${dueHits.length} 隻</div>`;
-    } else {
-      main.innerHTML = `<div class="status-msg">找不到「${esc(q)}」</div>`;
-    }
+  if (activeTab === 'info') {
+    buildTabs({});
+    main.innerHTML = `<div class="status-msg">相關資訊編輯中，之後會放在這裡。</div>`;
     return;
   }
 
-  buildTabs(dueList.length, recentList.length);
+  // 搜尋時只篩選目前分類的內容，分類上的數字也改成各分類符合的隻數；清空就回到原本的內容
+  const q = searchQuery.trim();
+  const hit = d => matchesSearch(d, q);
+  const walkList = dueDogs(allDogs, today).filter(hit);
+  const todayList = walkedTodayDogs(allDogs, today).filter(hit);
+  buildTabs({ walk: walkList.length, today: todayList.length });
+  const list = activeTab === 'today' ? todayList : walkList;
+  const cards = list.map(d => dogCard(d, today)).join('');
 
-  if (activeTab === 'due') {
+  if (q) {
+    main.innerHTML = list.length
+      ? `<div class="section-hint">${icon('search')}搜尋「${esc(q)}」：${list.length} 隻</div>` + cards
+      : `<div class="status-msg">${activeTab === 'today' ? '今天已溜裡' : ''}找不到「${esc(q)}」</div>`;
+  } else if (activeTab === 'today') {
+    main.innerHTML = cards || `<div class="status-msg">這裡會列出你今天用這支手機記下已溜的狗。<br>目前還沒有。</div>`;
+  } else {
     main.innerHTML = `<div class="section-hint">${icon('pin')}依久沒遛排序（由久到近）</div>` +
-      (dueList.map(d => dogCard(d, today)).join('') || `<div class="status-msg">目前沒有待巡房的狗</div>`);
-  } else if (activeTab === 'recent') {
-    main.innerHTML = `<div class="section-title">${icon('paw')}近期已遛（${RECENT_DAYS} 天內）</div>` +
-      (recentList.map(d => dogCard(d, today)).join('') || `<div class="status-msg">最近沒有已遛紀錄</div>`);
-  } else if (activeTab === 'cage') {
-    if (!activeCage) {
-      main.innerHTML = cages.length
-        ? `<div class="section-hint">${icon('pin')}點籠位看裡面的狗</div><div class="cage-grid">` +
-          cages.map(c => {
-            const n = allDogs.filter(d => d.cage === c).length;
-            return `<button class="cage-chip${n ? '' : ' empty'}" data-cage="${esc(c)}">${esc(c)}<span class="n">${n}</span></button>`;
-          }).join('') + `</div>`
-        : `<div class="status-msg">主清單沒有籠位資料</div>`;
-      main.querySelectorAll('.cage-chip').forEach(btn => {
-        btn.addEventListener('click', () => { activeCage = btn.dataset.cage; render(); window.scrollTo(0, 0); });
-      });
-    } else {
-      const list = allDogs.filter(d => d.cage === activeCage);
-      main.innerHTML = `<button class="cage-back" id="cageBack">${icon('back')}所有籠位</button>` +
-        `<div class="section-title">${icon('pin')}${esc(activeCage)}（${list.length} 隻）</div>` +
-        (list.map(d => dogCard(d, today)).join('') || `<div class="status-msg">這個籠位目前沒有狗</div>`);
-      document.getElementById('cageBack').addEventListener('click', () => { activeCage = null; render(); });
-    }
+      (cards || `<div class="status-msg">目前沒有狗狗資料</div>`);
   }
 }
 
@@ -666,8 +656,6 @@ async function init() {
     groupMap = {};
     loadWarning = `「常遛狗群」讀取失敗，卡片暫時不會顯示可一起遛的狗。${e.message}`;
   }
-  // 籠位以主清單籠位欄為準（含空籠）；保險起見再併入狗身上的籠位
-  cages = sortCages([...new Set([...(allDogs.cages || []), ...allDogs.map(d => d.cage).filter(Boolean)])]);
   const now = new Date();
   document.getElementById('updatedLabel').textContent =
     `最後更新 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
