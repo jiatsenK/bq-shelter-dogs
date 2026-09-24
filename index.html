@@ -120,6 +120,15 @@
     font-size: 13.5px; line-height: 1.6;
     margin-bottom: 12px;
   }
+  .alert-box.warn { background: var(--amber-bg); color: var(--amber-text); }
+  .retry-btn {
+    margin-top: 16px;
+    background: var(--primary); color: #fff;
+    border: none; border-radius: 12px;
+    font-family: inherit; font-size: 15px; font-weight: 700;
+    padding: 10px 22px;
+    cursor: pointer;
+  }
   .alert-box .icon { font-size: 18px; margin-top: 2px; }
 
   .cage-grid { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -264,15 +273,28 @@ let cages = [];
 let activeTab = 'due';
 let activeCage = null;
 let searchQuery = '';
+let loadWarning = '';
 
 async function fetchGviz(sheetName) {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${encodeURIComponent(sheetName)}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error('網路連線失敗');
+  // headers=0：不讓 gviz 自己猜表頭，所有列（含表頭列）都當資料列回傳，由前端自己找表頭
+  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&headers=0&sheet=${encodeURIComponent(sheetName)}`;
+  let res;
+  try {
+    res = await fetch(url);
+  } catch (e) {
+    // 試算表沒公開時，Google 會導向登入頁，瀏覽器擋下跨網域讀取，也會落到這裡
+    throw new Error(`連不到「${sheetName}」分頁：可能是網路中斷，或試算表沒有設定「知道連結的人可檢視」。`);
+  }
+  if (!res.ok) throw new Error(`讀取「${sheetName}」分頁失敗（HTTP ${res.status}），請確認試算表已設定「知道連結的人可檢視」。`);
   const text = await res.text();
   const match = text.match(/setResponse\(([\s\S]*)\);?\s*$/);
-  if (!match) throw new Error('試算表回應格式異常，請確認已設定「知道連結的人可檢視」');
-  return JSON.parse(match[1]).table;
+  if (!match) throw new Error(`「${sheetName}」分頁回應格式異常，請確認試算表已設定「知道連結的人可檢視」。`);
+  const data = JSON.parse(match[1]);
+  if (data.status === 'error') {
+    const detail = (data.errors || []).map(e => e.detailed_message || e.message).filter(Boolean).join('；');
+    throw new Error(`讀取「${sheetName}」分頁失敗${detail ? `：${detail}` : ''}`);
+  }
+  return data.table || { cols: [], rows: [] };
 }
 
 function cellText(cell) {
@@ -281,60 +303,127 @@ function cellText(cell) {
   return String(cell.v).trim();
 }
 
-function cellDate(cell) {
-  if (!cell || cell.v == null) return null;
-  const m = String(cell.v).match(/Date\((\d+),(\d+),(\d+)\)/);
-  if (!m) return null;
-  return new Date(parseInt(m[1]), parseInt(m[2]), parseInt(m[3]));
+// 把年月日組成日期；不合理的日期（例：2/30）回傳 null
+function makeDate(y, m, d) {
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
+  return date;
 }
 
-function parseMainList(table) {
+// 文字日期：2026/9/1、2026-09-01、2026.9.1、2026年9月1日、民國 115/9/1、9/1（沒寫年份）
+function parseDateText(text, today = new Date()) {
+  const s = String(text).trim();
+  if (!s) return null;
+  let m = s.match(/(\d{3,4})\s*[\/\-.年]\s*(\d{1,2})\s*[\/\-.月]\s*(\d{1,2})/);
+  if (m) {
+    let y = parseInt(m[1], 10);
+    if (y < 1000) y += 1911; // 民國年
+    return makeDate(y, parseInt(m[2], 10), parseInt(m[3], 10));
+  }
+  m = s.match(/(\d{1,2})\s*[\/月]\s*(\d{1,2})/);
+  if (m) {
+    const month = parseInt(m[1], 10), day = parseInt(m[2], 10);
+    let date = makeDate(today.getFullYear(), month, day);
+    // 沒寫年份又落在未來，就是去年（例：一月看到 12/28）
+    if (date && date > today) date = makeDate(today.getFullYear() - 1, month, day);
+    return date;
+  }
+  return null;
+}
+
+// 「遛狗日期」不論存成日期格式或文字都能讀
+function cellDate(cell, today = new Date()) {
+  if (!cell || cell.v == null) return null;
+  const v = cell.v;
+  if (typeof v === 'string') {
+    const m = v.match(/^Date\((\d+),(\d+),(\d+)/);
+    if (m) return new Date(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10));
+    return parseDateText(v, today);
+  }
+  if (typeof v === 'number') {
+    // 欄位被當成數字時，先看顯示文字；否則視為試算表日期序號（1899/12/30 起算）
+    if (cell.f) {
+      const fromText = parseDateText(cell.f, today);
+      if (fromText) return fromText;
+    }
+    if (v > 30000 && v < 80000) {
+      const base = new Date(1899, 11, 30);
+      return new Date(base.getFullYear(), base.getMonth(), base.getDate() + Math.floor(v));
+    }
+  }
+  return null;
+}
+
+const MAIN_COLUMNS = {
+  cage: '籠位',
+  id: '編號',
+  name: '犬名',
+  walkedDate: '遛狗日期',
+  walker: '誰遛的',
+  note: '備註',
+};
+
+// 表頭文字去空白後比對：先找完全相同，再找包含（例：「備註 」、「犬名(暱稱)」）
+function findColumns(headerTexts) {
+  const norm = headerTexts.map(t => t.replace(/\s+/g, ''));
+  const colMap = {};
+  for (const [key, label] of Object.entries(MAIN_COLUMNS)) {
+    let idx = norm.indexOf(label);
+    if (idx === -1) idx = norm.findIndex(t => t.includes(label));
+    if (idx !== -1) colMap[key] = idx;
+  }
+  return colMap;
+}
+
+function parseMainList(table, today = new Date()) {
   const rows = table.rows || [];
   let headerIdx = -1;
-  const colMap = {};
+  let colMap = null;
   for (let i = 0; i < rows.length; i++) {
     const texts = (rows[i].c || []).map(cellText);
-    if (texts.includes('犬名')) {
+    const found = findColumns(texts);
+    if (found.name != null) {
       headerIdx = i;
-      texts.forEach((t, ci) => {
-        if (t === '籠位') colMap.cage = ci;
-        if (t === '編號') colMap.id = ci;
-        if (t === '犬名') colMap.name = ci;
-        if (t === '遛狗日期') colMap.walkedDate = ci;
-        if (t === '誰遛的') colMap.walker = ci;
-        if (t === '備註') colMap.note = ci;
-      });
+      colMap = found;
       break;
     }
   }
-  if (headerIdx === -1) throw new Error('找不到主清單表頭列（犬名欄）');
+  if (!colMap) {
+    // 萬一 gviz 還是把表頭吃進欄位標題，就從欄位標題找
+    const found = findColumns((table.cols || []).map(c => String((c && c.label) || '').trim()));
+    if (found.name != null) colMap = found;
+  }
+  if (!colMap) throw new Error('主清單裡找不到含「犬名」的表頭列，請確認分頁名稱與欄位沒有被改掉。');
+  const get = (c, key) => colMap[key] == null ? undefined : c[colMap[key]];
   const dogs = [];
   for (let i = headerIdx + 1; i < rows.length; i++) {
     const c = rows[i].c || [];
-    const name = cellText(c[colMap.name]);
-    if (!name) continue;
+    const name = cellText(get(c, 'name'));
+    if (!name || name === MAIN_COLUMNS.name) continue;
     dogs.push({
-      cage: cellText(c[colMap.cage]),
-      id: cellText(c[colMap.id]),
+      cage: cellText(get(c, 'cage')),
+      id: cellText(get(c, 'id')),
       name,
-      walkedDate: cellDate(c[colMap.walkedDate]),
-      walker: cellText(c[colMap.walker]),
-      note: cellText(c[colMap.note]),
+      walkedDate: cellDate(get(c, 'walkedDate'), today),
+      walker: cellText(get(c, 'walker')),
+      note: cellText(get(c, 'note')),
     });
   }
   return dogs;
 }
 
-function parseGroups(table) {
+// 常遛狗群：每一欄是一組可同籠的狗。只保留主清單上有的犬名，離所的狗不會出現在「可一起遛」
+function parseGroups(table, knownNames) {
   const rows = table.rows || [];
-  const colCount = (table.cols || []).length;
+  const colCount = Math.max((table.cols || []).length, ...rows.map(r => (r.c || []).length), 0);
   const map = {};
   for (let col = 0; col < colCount; col++) {
     const names = [];
     for (let i = 0; i < rows.length; i++) {
       const t = cellText((rows[i].c || [])[col]);
       if (!t || /^\d+$/.test(t)) continue;
-      names.push(t);
+      if (knownNames && !knownNames.has(t)) continue;
+      if (!names.includes(t)) names.push(t);
     }
     names.forEach(n => {
       if (!map[n]) map[n] = new Set();
@@ -469,6 +558,14 @@ function buildTabs(dueCount, recentCount, specialCount) {
 }
 
 function render() {
+  renderMain();
+  if (loadWarning) {
+    document.getElementById('main').insertAdjacentHTML('afterbegin',
+      `<div class="alert-box warn">${icon('warn')}<span>${esc(loadWarning)}</span></div>`);
+  }
+}
+
+function renderMain() {
   const today = new Date();
   document.getElementById('dateLabel').textContent =
     `${today.getMonth() + 1}月${today.getDate()}日 (${'日一二三四五六'[today.getDay()]})`;
@@ -536,23 +633,37 @@ document.getElementById('searchInput').addEventListener('input', e => {
 });
 
 async function init() {
+  const main = document.getElementById('main');
+  main.innerHTML = `<div class="status-msg">讀取試算表中…</div>`;
+  loadWarning = '';
+  // 兩個分頁平行抓取；主清單是名冊，失敗就整頁說明，常遛狗群失敗只少了「可一起遛」
+  const [mainResult, groupResult] = await Promise.allSettled([
+    fetchGviz('主清單'),
+    fetchGviz('常遛狗群'),
+  ]);
   try {
-    const [mainTable, groupTable] = await Promise.all([
-      fetchGviz('主清單'),
-      fetchGviz('常遛狗群'),
-    ]);
-    allDogs = parseMainList(mainTable);
-    groupMap = parseGroups(groupTable);
-    cages = [...new Set(allDogs.map(d => d.cage).filter(Boolean))];
-    const now = new Date();
-    document.getElementById('updatedLabel').textContent =
-      `最後更新 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-    render();
-    fetchAllDetails(allDogs).then(map => { detailMap = map; render(); });
+    if (mainResult.status === 'rejected') throw mainResult.reason;
+    allDogs = parseMainList(mainResult.value);
   } catch (e) {
-    document.getElementById('main').innerHTML =
-      `<div class="status-msg">讀取試算表失敗。<br>${e.message}<br><br>請確認試算表已設定「知道連結的人可檢視」，或重新整理再試一次。</div>`;
+    main.innerHTML =
+      `<div class="status-msg">讀取試算表失敗。<br>${esc(e.message)}<br><button class="retry-btn" id="retryBtn">重新讀取</button></div>`;
+    document.getElementById('retryBtn').addEventListener('click', init);
+    return;
   }
+  const knownNames = new Set(allDogs.map(d => d.name));
+  try {
+    if (groupResult.status === 'rejected') throw groupResult.reason;
+    groupMap = parseGroups(groupResult.value, knownNames);
+  } catch (e) {
+    groupMap = {};
+    loadWarning = `「常遛狗群」讀取失敗，卡片暫時不會顯示可一起遛的狗。${e.message}`;
+  }
+  cages = [...new Set(allDogs.map(d => d.cage).filter(Boolean))];
+  const now = new Date();
+  document.getElementById('updatedLabel').textContent =
+    `最後更新 ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  render();
+  fetchAllDetails(allDogs).then(map => { detailMap = map; render(); });
 }
 
 init();
