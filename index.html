@@ -681,7 +681,8 @@ async function init() {
   fetchAllDetails(allDogs).then(map => { detailMap = map; render(); });
 }
 
-init();
+// tests/index.html 會設定 __BQ_TEST__，只載入函式、不去抓試算表
+if (!window.__BQ_TEST__) init();
 </script>
 </body>
 </html>
