@@ -187,6 +187,19 @@ function runTests() {
       if (!document.querySelector('#main .card .badge.red')) throw new Error('搜尋結果沒有特殊徽章');
       searchQuery = '';
     }),
+    check('特殊狀況：籠位寫住院區，備註沒寫也歸到特殊狀況', () => {
+      eq(dogSpecial({ cage: '住院區', note: '親人' }), { keywords: ['住院'], terms: [], inNote: false, inCage: true });
+      eq(dogSpecial({ cage: 'A01', note: '' }), null);
+      allDogs = [
+        { cage: '住院區', id: '1', name: '布布', walkedDate: new Date(), walker: '', note: '' },
+        { cage: 'A02', id: '2', name: '果果', walkedDate: new Date(), walker: '', note: '' },
+      ];
+      searchQuery = ''; activeCage = null;
+      activeTab = 'due'; renderMain();
+      eq([...document.querySelectorAll('#main .card .name')].map(n => n.textContent), ['果果'], '待巡房：');
+      activeTab = 'special'; renderMain();
+      if (!document.querySelector('#main .card').textContent.includes('籠位含關鍵字，請確認')) throw new Error('沒有「籠位含關鍵字」提示');
+    }),
   ]);
 }
 
