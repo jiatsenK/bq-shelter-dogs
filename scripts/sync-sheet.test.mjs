@@ -122,7 +122,7 @@ async function loadFrontend() {
     // 只需要函式定義；頁面上的 DOM 事件綁定用空殼擋掉
   const stub = () => new Proxy(function () {}, { get: (t, k) => k in t ? t[k] : k === Symbol.toPrimitive ? () => '' : stub(), apply: () => stub() });
   const ctx = vm.createContext({ window: Object.assign(stub(), { __BQ_TEST__: true }), document: stub(), localStorage: stub(), fetch: undefined, Intl, URL, console });
-  vm.runInContext(`${src}\n;globalThis.__fe = { loadMainList, parseGroups, sortCages };`, ctx);
+  vm.runInContext(`${src}\n;globalThis.__fe = { loadMainList, parseGroups, sortCages: typeof sortCages === 'function' ? sortCages : null };`, ctx);
   return ctx;
 }
 
@@ -136,12 +136,13 @@ test('結果跟前端直接讀試算表一致', async t => {
   const dogs = await fe.loadMainList();
   const groupTable = fakeGviz(GROUPS, 0).table;
   const groupMap = fe.parseGroups(groupTable, new Set(dogs.map(d => d.name)));
-  const cages = fe.sortCages([...new Set([...(dogs.cages || []), ...dogs.map(d => d.cage).filter(Boolean)])]);
   const expected = {
     dogs: dogs.map(d => ({ ...d, walkedDate: sync.formatDate(d.walkedDate) })),
-    cages: [...cages],
     groups: Object.fromEntries(Object.entries(groupMap).map(([k, v]) => [k, [...v]])),
   };
   const actual = await sync.buildData(fakeFetch(), now);
+  // #33 起前端拿掉依籠位分頁，沒有 sortCages 了；前端還有時才比對籠位清單
+  if (fe.sortCages) expected.cages = [...fe.sortCages([...new Set([...(dogs.cages || []), ...dogs.map(d => d.cage).filter(Boolean)])])];
+  else delete actual.cages;
   assert.deepEqual(JSON.parse(JSON.stringify(actual)), JSON.parse(JSON.stringify(expected)));
 });

@@ -30,3 +30,12 @@
 - 讀取失敗、欄位被改、讀到 0 隻狗時不寫檔，保留上一次的 `data/dogs.json`。
 - 未完成：雲端連不到 Google，只用模擬資料測過；合併後需 K 在 Actions 手動 Run workflow 驗收真實資料。前端改讀 `dogs.json` 屬 #32。
 - PR：#38（`claude/project-thread-f59fa3`）。
+
+## [2026-09-25] Claude | #33 網站改名「板收志工溜狗表」，分類改為溜狗表／今天已溜／相關資訊，可點可滑
+- 依據：Issue #33（V3 規格第 1、2 節）；K 2026-09-24 試操作原型後定案：今天已溜改用狗卡「溜了／移回」按鈕、可以一起溜用勾選一次記（已留言在 #35），所以內容區（含狗卡上）左右滑一律換分類。
+- 標題、瀏覽器分頁、加到主畫面名稱改為「板收志工溜狗表」（index.html、manifest.webmanifest、README、DESIGN_GUIDE）。
+- `js/app.js`：分類改為溜狗表（沿用原待巡房排序）／今天已溜（空殼，內容屬 #35）／相關資訊（編輯中）；點擊與左右滑動切換，頭尾不循環。移除近期已遛、依籠位分頁與 parseCages／sortCages。
+- `scripts/sync-sheet.test.mjs`：前端沒有 sortCages 後，跟前端比對的測試改成只在前端還有籠位函式時比對 cages（否則這項會失敗）。
+- `tests/index.html` 補 #33 測試，44 項全過；`node --test scripts/sync-sheet.test.mjs` 5 項全過。
+- 操作原型：https://claude.ai/artifact/GvkwaY4rkotpE6FBuMbydR
+- PR：#40（`claude/project-thread-z0xgeh`）。
