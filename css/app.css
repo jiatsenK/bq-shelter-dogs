@@ -288,13 +288,13 @@ html.detail-open { overflow: hidden; }
   flex-shrink: 0;
   width: 48px; height: 48px; border-radius: 12px;
   border: 2px solid var(--green-text); background: var(--surface); color: var(--green-text);
-  font-family: inherit; font-size: 12.5px; font-weight: 700; line-height: 1.1;
+  font-family: inherit; font-size: 14px; font-weight: 700; line-height: 1.1;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
   padding: 0; margin-right: 2px; cursor: pointer;
 }
 .walk-btn .icon { font-size: 17px; }
 .walk-btn:active { background: var(--green-bg); }
-.walk-btn.back { border-color: var(--amber-text); color: var(--amber-text); font-size: 13.5px; }
+.walk-btn.back { border-color: var(--amber-text); color: var(--amber-text); }
 .walk-btn.back:active { background: var(--amber-bg); }
 .walk-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 /* 按鈕佔了位置，上次遛狗欄縮一點，犬名才有空間 */
