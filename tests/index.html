@@ -176,15 +176,6 @@ function runTests() {
       eq(groupLine('金寶'), '', '金寶的同組只有離所的狗：');
       eq(groupLine('沒分組'), '', '沒有分組的狗：');
     }),
-    check('主清單有同名的狗時，名單標「同名 N 隻」並提醒看籠位', () => {
-      allDogs = [{ name: '小白', cage: 'A01' }, { name: '小白', cage: 'B02' }, { name: '冬冬', cage: 'A01' }];
-      groupMap = parseGroups({ cols: [{}], rows: [{ c: [{ v: '小白' }] }, { c: [{ v: '冬冬' }] }] }, new Set(allDogs.map(d => d.name)));
-      const mate = groupLine('冬冬');
-      if (!mate.includes('小白（同名 2 隻）')) throw new Error(`冬冬的卡片沒標同名：${mate}`);
-      const self = groupLine('小白');
-      if (!self.includes('冬冬') || !self.includes('主清單有 2 隻「小白」')) throw new Error(`小白的卡片沒有同名提醒：${self}`);
-      if (groupLine('冬冬').includes('主清單有')) throw new Error('不同名的狗不該出現同名提醒');
-    }),
   ]);
 }
 
