@@ -2,7 +2,9 @@
 // 執行：node --test worker/test/worker.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import worker, { resetState, allowUpload, isJpeg, MAX_BYTES } from '../src/index.js';
+import worker from '../src/index.js';
+
+const { resetState, allowUpload, isJpeg, MAX_BYTES } = worker.testing;
 
 const ORIGIN = 'https://jiatsenk.github.io';
 const ENV = { GITHUB_TOKEN: 'test-token' };
