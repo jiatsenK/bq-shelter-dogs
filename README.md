@@ -8,15 +8,17 @@
 - iPhone（Safari）：下方「分享」按鈕 →「加入主畫面」
 - Android（Chrome）：右上角「⋮」→「加到主畫面」
 
-- 規格與 v1 目標：[`docs/PROJECT_GOALS.md`](docs/PROJECT_GOALS.md)
+- 規格（V3 定版）：[`docs/PROJECT_GOALS.md`](docs/PROJECT_GOALS.md)
 - 前端設計需求（細節）：[`docs/FRONTEND_REQUIREMENTS.md`](docs/FRONTEND_REQUIREMENTS.md)
 - 視覺風格指引：[`docs/DESIGN_GUIDE.md`](docs/DESIGN_GUIDE.md)
-- 工作分票：見 GitHub Issues（標籤 `v1`）
+- 工作分票：見 GitHub Issues（標籤 `v3`；舊版 `v1`）
 
 ## 結構
 
 ```
-index.html        ← 整個網站（純前端、單檔）
+index.html        ← 頁面基本結構
+css/app.css       ← 樣式
+js/app.js         ← 程式（資料讀取、分頁、搜尋、畫面）
 dogs/{編號}.md     ← 狗狗介紹（YAML frontmatter + 內文），選填
 photos/{編號}.jpg  ← 狗狗照片，選填
 docs/             ← 規格、設計指引、參考圖

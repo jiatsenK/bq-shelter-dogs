@@ -15,11 +15,11 @@
 </head>
 <body>
 <h1>板收遛狗：資料讀取測試</h1>
-<p>這頁不會連到真正的試算表，只用假資料檢查 index.html 的讀取與解析函式。</p>
+<p>這頁不會連到真正的試算表，只用假資料檢查 js/app.js 的讀取與解析函式。</p>
 <div id="summary">測試中…</div>
 <ol id="results"></ol>
 
-<!-- index.html 的程式在載入時會用到這幾個元素 -->
+<!-- js/app.js 在載入時會用到這幾個元素 -->
 <div class="hidden">
   <input id="searchInput"><div id="tabs"></div><main id="main"></main>
   <span id="dateLabel"></span><span id="updatedLabel"></span>
@@ -76,6 +76,7 @@ const GRID = [
 ];
 const TODAY = new Date(2026, 8, 24, 10);
 let INDEX_HTML = ''; // index.html 原始碼，#10 唯讀檢查用（其他測試會替換 fetch，所以先存下來）
+let APP_JS = '';     // js/app.js 原始碼（#30 拆檔後程式在這裡）
 
 function runTests() {
   return Promise.all([
@@ -419,7 +420,7 @@ function runTests() {
       if (/edit|pencil|pen|check/i.test(symbols)) throw new Error(`不應有編輯或勾選圖示：${symbols}`);
     }),
     check('#10 唯讀：程式只有讀取，沒有寫入試算表的呼叫', () => {
-      const code = INDEX_HTML.match(/<script>([\s\S]*?)<\/script>/)[1];
+      const code = APP_JS;
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|localStorage|indexedDB/];
       const hits = bad.filter(re => re.test(code)).map(String);
@@ -564,6 +565,15 @@ function runTests() {
         [allDogs, groupMap, detailMap, cages, activeTab, activeCage, searchQuery] = saved;
       }
     }),
+    check('#30 檔案拆分：index.html 只有結構，樣式在 css/app.css、程式在 js/app.js', () => {
+      const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
+      if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
+      const scripts = [...doc.querySelectorAll('script')];
+      eq(scripts.map(s => s.getAttribute('src')), ['js/app.js'], 'script：');
+      if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
+      if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
+      if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
+    }),
   ]);
 }
 
@@ -576,14 +586,16 @@ function show() {
     `<li class="${r.ok ? 'pass' : 'fail'}">${r.ok ? '✓' : '✗'} ${esc(r.name)}${r.ok ? '' : `<br>${esc(r.msg)}`}</li>`).join('');
 }
 
-// 讀進 index.html 的程式碼後執行，函式就能在這頁直接呼叫
-fetch('../index.html')
-  .then(res => res.text())
-  .then(html => {
+// 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
+Promise.all(['../index.html', '../js/app.js'].map(u => fetch(u).then(res => {
+  if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
+  return res.text();
+})))
+  .then(([html, js]) => {
     INDEX_HTML = html;
-    const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+    APP_JS = js;
     const s = document.createElement('script');
-    s.textContent = code;
+    s.textContent = js;
     document.body.appendChild(s);
     return runTests();
   })
