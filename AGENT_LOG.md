@@ -54,4 +54,4 @@
 - 排序、天數判斷、照片、狗卡資訊、可以一起溜沿用原本函式，沒有改。
 - 測試：原本 `tests/index.html` 對前端試算表解析的測試移到 `scripts/sync-sheet.test.mjs`（解析只剩同步腳本在做），並改成比對「前端讀回 dogs.json」與同步前資料一致；`tests/index.html` 補 #32 測試，40 項全過；`node --test scripts/sync-sheet.test.mjs` 10 項全過。另用 repo 內真實 `data/dogs.json`（121 隻）在手機尺寸預覽確認。
 - 備註：Node 22 下 `node --test scripts/`（給資料夾）會找不到模組，要寫檔名；本票沒改。
-- PR：（見分支 `claude/project-thread-qfsoo2`）。
+- PR：#41（`claude/project-thread-qfsoo2`）。
