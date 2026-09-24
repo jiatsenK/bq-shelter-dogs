@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>板收遛狗：資料讀取測試</title>
+<style>
+  body { font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", sans-serif; margin: 16px; background: #EEF4FB; color: #1E2A44; }
+  h1 { font-size: 20px; }
+  #summary { font-size: 18px; font-weight: 700; margin: 12px 0; }
+  .pass { color: #2E8B45; } .fail { color: #D93036; }
+  li { margin: 4px 0; line-height: 1.5; }
+  .hidden { display: none; }
+</style>
+</head>
+<body>
+<h1>板收遛狗：資料讀取測試</h1>
+<p>這頁不會連到真正的試算表，只用假資料檢查 index.html 的讀取與解析函式。</p>
+<div id="summary">測試中…</div>
+<ol id="results"></ol>
+
+<!-- index.html 的程式在載入時會用到這幾個元素 -->
+<div class="hidden">
+  <input id="searchInput"><div id="tabs"></div><main id="main"></main>
+  <span id="dateLabel"></span><span id="updatedLabel"></span>
+</div>
+
+<script>
+window.__BQ_TEST__ = true;
+const results = [];
+function check(name, fn) {
+  return Promise.resolve().then(fn).then(
+    () => results.push({ name, ok: true }),
+    e => results.push({ name, ok: false, msg: e && e.message ? e.message : String(e) }));
+}
+function eq(actual, expected, label = '') {
+  const a = JSON.stringify(actual), b = JSON.stringify(expected);
+  if (a !== b) throw new Error(`${label}預期 ${b}，實際 ${a}`);
+}
+const ymd = d => d ? `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}` : null;
+
+// 模擬 gviz：依每欄多數型別推斷欄位型別，少數型別的格子回成 null；
+// headers=N 時前 N 列合併成欄位標題。這就是真實試算表「編號」「遛狗日期」表頭被吃掉的原因。
+const D = (y, m, d) => ({ t: 'date', y, m, d });
+function typeOf(v) { return typeof v === 'object' ? 'date' : typeof v === 'number' ? 'number' : 'string'; }
+function fakeGviz(grid, headers) {
+  const hdr = grid.slice(0, headers), data = grid.slice(headers);
+  const cols = grid[0].map((_, ci) => {
+    const cnt = {};
+    data.forEach(r => { if (r[ci] !== '') cnt[typeOf(r[ci])] = (cnt[typeOf(r[ci])] || 0) + 1; });
+    const type = (Object.entries(cnt).sort((a, b) => b[1] - a[1])[0] || ['string'])[0];
+    return { label: hdr.map(r => typeof r[ci] === 'string' ? r[ci] : '').filter(Boolean).join(' '), type };
+  });
+  const rows = data.map(r => ({ c: r.map((v, ci) => {
+    if (v === '') return null;
+    if (typeOf(v) !== cols[ci].type) return { v: null };
+    if (typeOf(v) === 'date') return { v: `Date(${v.y},${v.m - 1},${v.d})`, f: `${v.y}/${v.m}/${v.d}` };
+    return { v };
+  }) }));
+  return { status: 'ok', table: { cols, rows } };
+}
+// 仿真實主清單：前 6 列是標題雜訊，第 7 列是表頭，欄位順序打亂，最後一列是表尾提示
+const GRID = [
+  ['板橋收容所遛狗表', '', '', '', '', ''],
+  ['', '', '', '', '', ''], ['說明文字', '', '', '', '', ''], ['', '', '', '', '', ''], ['', '', '', '', '', ''], ['', '', '', '', '', ''],
+  ['犬名', ' 籠位 ', '編號', '遛狗日期', '備註', '誰遛的'],
+  ['宙斯', 'C03', 202101234, D(2026, 9, 16), '', '阿明'],
+  ['冬冬', 'A07', 202102345, D(2026, 9, 22), '親人', ''],
+  ['比比', 'A08', 202102346, D(2026, 9, 24), '', ''],
+  ['金寶', 'A11', '', '', '新狗，原表沒填日期', ''],
+  ['', 'A12', 999, D(2026, 9, 1), '犬名空白', ''],
+  ['   ', 'A13', 998, D(2026, 9, 1), '犬名只有空白', ''],
+  ['舊A01', '', '', '', '', ''],
+  ['今天週四', '', '', '', '', ''],
+];
+const TODAY = new Date(2026, 8, 24, 10);
+
+function runTests() {
+  return Promise.all([
+    check('找得到表頭列（表頭在第 7 列）', () => {
+      eq(findHeaderRow(fakeGviz(GRID, 0).table), 6);
+    }),
+    check('headers=0 時「編號」「遛狗日期」表頭會被吃掉（重現原本的 bug）', () => {
+      const labels = fakeGviz(GRID, 0).table.rows[6].c.map(cellText);
+      eq(labels[2], '', '編號表頭：'); eq(labels[3], '', '遛狗日期表頭：');
+    }),
+    check('headers=7 重讀後六個欄位都對得到，欄位順序打亂也可以', () => {
+      const dogs = parseMainList(fakeGviz(GRID, 7).table, [], TODAY);
+      eq(dogs[0], { cage: 'C03', id: '202101234', name: '宙斯', walkedDate: dogs[0].walkedDate, walker: '阿明', note: '' });
+      eq(ymd(dogs[0].walkedDate), '2026/9/16');
+    }),
+    check('犬名空白、只有空白、表尾提示（沒有籠位）都不算狗', () => {
+      const names = parseMainList(fakeGviz(GRID, 7).table, [], TODAY).map(d => d.name);
+      eq(names, ['宙斯', '冬冬', '比比', '金寶']);
+    }),
+    check('原表本來就空白的日期和編號，讀出來是空的（不是讀取遺失）', () => {
+      const kim = parseMainList(fakeGviz(GRID, 7).table, [], TODAY).find(d => d.name === '金寶');
+      eq(kim.walkedDate, null); eq(kim.id, '');
+    }),
+    check('缺必要欄位時顯示錯誤，不會靜默讀錯', () => {
+      const grid = GRID.map(r => r.slice(0, 3)); // 只剩犬名、籠位、編號
+      let msg = '';
+      try { parseMainList(fakeGviz(grid, 7).table, [], TODAY); } catch (e) { msg = e.message; }
+      if (!msg.includes('遛狗日期') || !msg.includes('誰遛的') || !msg.includes('備註')) throw new Error(`錯誤訊息沒列出缺的欄位：「${msg}」`);
+    }),
+    check('欄位標題缺漏時，用第一次讀到的表頭列補', () => {
+      const table = fakeGviz(GRID, 7).table;
+      table.cols[3].label = '';
+      const headerTexts = ['犬名', '籠位', '編號', '遛狗日期', '備註', '誰遛的'];
+      eq(ymd(parseMainList(table, headerTexts, TODAY)[0].walkedDate), '2026/9/16');
+    }),
+    check('主清單分兩次讀：先 headers=0，再 headers=7', async () => {
+      const calls = [];
+      const realFetch = window.fetch;
+      window.fetch = async url => {
+        const u = new URL(url);
+        const h = +u.searchParams.get('headers');
+        calls.push(`${u.searchParams.get('sheet')}:${h}`);
+        return new Response(`/*O_o*/\ngoogle.visualization.Query.setResponse(${JSON.stringify(fakeGviz(GRID, h))});`);
+      };
+      try {
+        const dogs = await loadMainList();
+        eq(calls, ['主清單:0', '主清單:7']);
+        eq(dogs.length, 4);
+      } finally { window.fetch = realFetch; }
+    }),
+    check('日期格式：Date(...)、各種文字寫法、民國年、沒寫年份', () => {
+      eq(ymd(cellDate({ v: 'Date(2026,8,16)' }, TODAY)), '2026/9/16');
+      eq(ymd(cellDate({ v: '2026/9/1' }, TODAY)), '2026/9/1');
+      eq(ymd(cellDate({ v: '2026-09-01' }, TODAY)), '2026/9/1');
+      eq(ymd(cellDate({ v: '2026.9.1' }, TODAY)), '2026/9/1');
+      eq(ymd(cellDate({ v: '2026年9月1日' }, TODAY)), '2026/9/1');
+      eq(ymd(cellDate({ v: '115/9/1' }, TODAY)), '2026/9/1');
+      eq(ymd(cellDate({ v: '9/1' }, TODAY)), '2026/9/1');
+      eq(ymd(cellDate({ v: '12/28' }, TODAY)), '2025/12/28', '沒寫年份又落在未來時算去年：');
+      eq(ymd(cellDate({ v: 46266 }, TODAY)), '2026/9/1', '試算表日期序號：');
+    }),
+    check('不存在或不合理的日期回空值', () => {
+      eq(cellDate({ v: 'Date(2026,1,30)' }, TODAY), null);
+      eq(cellDate({ v: '2026/2/30' }, TODAY), null);
+      eq(cellDate({ v: '2026/9/100' }, TODAY), null);
+      eq(cellDate({ v: '不詳' }, TODAY), null);
+      eq(cellDate(null, TODAY), null);
+    }),
+    check('常遛狗群只保留主清單上有的狗，不列自己、不重複', () => {
+      const table = { cols: [{}, {}], rows: [
+        { c: [{ v: '宙斯' }, { v: '冬冬' }] }, { c: [{ v: '比比' }, { v: '已離所' }] }, { c: [{ v: '1' }, { v: '冬冬' }] }, { c: [{ v: '宙斯' }, null] },
+      ] };
+      const map = parseGroups(table, new Set(['宙斯', '冬冬', '比比']));
+      eq([...map['宙斯']], ['比比']); eq([...map['冬冬']], []); eq(map['已離所'], undefined);
+    }),
+  ]);
+}
+
+function show() {
+  const failed = results.filter(r => !r.ok);
+  const summary = document.getElementById('summary');
+  summary.textContent = failed.length ? `${failed.length} 項失敗，${results.length - failed.length} 項通過` : `全部 ${results.length} 項通過`;
+  summary.className = failed.length ? 'fail' : 'pass';
+  document.getElementById('results').innerHTML = results.map(r =>
+    `<li class="${r.ok ? 'pass' : 'fail'}">${r.ok ? '✓' : '✗'} ${esc(r.name)}${r.ok ? '' : `<br>${esc(r.msg)}`}</li>`).join('');
+}
+
+// 讀進 index.html 的程式碼後執行，函式就能在這頁直接呼叫
+fetch('../index.html')
+  .then(res => res.text())
+  .then(html => {
+    const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+    const s = document.createElement('script');
+    s.textContent = code;
+    document.body.appendChild(s);
+    return runTests();
+  })
+  .then(show)
+  .catch(e => {
+    document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
+    document.getElementById('summary').className = 'fail';
+  });
+</script>
+</body>
+</html>
