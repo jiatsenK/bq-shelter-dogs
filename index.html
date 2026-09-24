@@ -427,17 +427,27 @@ async function loadMainList() {
   return parseMainList(table, headerTexts);
 }
 
-// 常遛狗群：每一欄是一組可同籠的狗。只保留主清單上有的犬名，離所的狗不會出現在「可一起遛」
+// 犬名比對時忽略空白（含全形空白），例：常遛狗群寫「小 白」也對得到主清單的「小白」
+function nameKey(name) {
+  return String(name).replace(/\s+/g, '');
+}
+
+// 常遛狗群：每一欄是一組可同籠的狗。只保留主清單上有的犬名，離所的狗不會出現在「可一起遛」。
+// knownNames 是主清單的犬名 Set，回傳的名單一律用主清單的寫法。
 function parseGroups(table, knownNames) {
   const rows = table.rows || [];
   const colCount = Math.max((table.cols || []).length, ...rows.map(r => (r.c || []).length), 0);
+  const known = knownNames ? new Map([...knownNames].map(n => [nameKey(n), n])) : null;
   const map = {};
   for (let col = 0; col < colCount; col++) {
     const names = [];
     for (let i = 0; i < rows.length; i++) {
-      const t = cellText((rows[i].c || [])[col]);
+      let t = cellText((rows[i].c || [])[col]);
       if (!t || /^\d+$/.test(t)) continue;
-      if (knownNames && !knownNames.has(t)) continue;
+      if (known) {
+        t = known.get(nameKey(t));
+        if (!t) continue;
+      }
       if (!names.includes(t)) names.push(t);
     }
     names.forEach(n => {
@@ -502,10 +512,24 @@ function photoThumb(dog) {
   `;
 }
 
+// 常遛狗群只寫犬名、沒有編號：主清單有同名的狗時分不出是哪一隻，
+// 就照名字列出，並標「同名 N 隻」提醒志工看籠位確認
+function sameNameCount(name) {
+  return allDogs.filter(d => d.name === name).length;
+}
+
 function groupLine(name) {
   const g = groupMap[name];
   if (!g || !g.size) return '';
-  return `<div class="group-inline">${icon('group')}<span>可一起遛：<b>${[...g].map(esc).join('、')}</b></span></div>`;
+  const mates = [...g].map(m => {
+    const n = sameNameCount(m);
+    return esc(m) + (n > 1 ? `（同名 ${n} 隻）` : '');
+  });
+  const selfCount = sameNameCount(name);
+  const hint = selfCount > 1
+    ? `<br><small>主清單有 ${selfCount} 隻「${esc(name)}」，常遛狗群只寫犬名，請看籠位確認是哪一隻</small>`
+    : '';
+  return `<div class="group-inline">${icon('group')}<span>可一起遛：<b>${mates.join('、')}</b>${hint}</span></div>`;
 }
 
 function statusBadge(dog, today) {
