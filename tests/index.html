@@ -289,6 +289,20 @@ function runTests() {
         eq(box.querySelector('.intro'), null, '沒編號：');
       } finally { detailMap = saved; }
     }),
+    check('#3 色標邊界：0～6 天綠、第 7 天起黃、第 30 天起紅', () => {
+      const daysAgo = n => ({ name: '測試狗', walkedDate: new Date(2026, 8, 24 - n), walker: '' });
+      const level = n => computeStatus(daysAgo(n), TODAY).level;
+      eq([0, 6, 7, 29, 30, 45].map(level), ['sage', 'sage', 'amber', 'amber', 'red', 'red']);
+      const box = document.createElement('div');
+      box.innerHTML = statusBadge(daysAgo(30), TODAY);
+      eq(box.querySelector('.badge').className, 'badge red', '30 天徽章：');
+      eq(box.querySelector('.badge').textContent, '30 天前', '30 天徽章文字：');
+    }),
+    check('#3 待巡房排序：沒紀錄最前，再由久到近，有人固定照顧最後；所有狗都在', () => {
+      const d = (name, n, walker = '') => ({ name, walkedDate: n == null ? null : new Date(2026, 8, 24 - n), walker });
+      const dogs = [d('甲', 3), d('乙', null, '固定志工'), d('丙', 40), d('丁', null), d('戊', 0), d('己', 12)];
+      eq(dueDogs(dogs, TODAY).map(x => x.name), ['丁', '丙', '己', '甲', '戊', '乙']);
+    }),
   ]);
 }
 
