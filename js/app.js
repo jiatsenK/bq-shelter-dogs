@@ -543,9 +543,9 @@ function swipeStep(dx, dy) {
   return dx < 0 ? 1 : -1;
 }
 
-// 內容區左右滑動換分類。從狗卡上開始的滑動不算：那是留給「今天已溜」的加入／移回（#35）；
-// 按鈕、輸入框上也不算，避免誤觸
-const SWIPE_IGNORE = '.card, button, input, a, textarea';
+// 內容區左右滑動換分類，狗卡上也可以滑（K 2026-09-24 定：加入／移回今天已溜改用長按，#35）；
+// 按鈕、輸入框上不算，避免誤觸
+const SWIPE_IGNORE = 'button, input, a, textarea';
 let swipeStart = null;
 const mainEl = document.getElementById('main');
 mainEl.addEventListener('touchstart', e => {
