@@ -48,7 +48,7 @@ header.app {
   width: 100%;
   border: none;
   border-radius: 12px;
-  padding: 10px 14px 10px 38px;
+  padding: 10px 44px 10px 38px;
   font-size: 16px;
   font-family: inherit;
   background: var(--surface-soft);
@@ -56,6 +56,17 @@ header.app {
 }
 .search input::placeholder { color: #9AA5B8; }
 .search input:focus { outline: 2px solid var(--primary-soft); }
+/* 用自己的 X，隱藏瀏覽器內建的清除鈕，避免出現兩個 */
+.search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.search-clear {
+  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
+  width: 36px; height: 36px; border: none; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  background: transparent; color: var(--ink-soft); font-size: 16px; cursor: pointer;
+}
+.search-clear .icon { position: static; transform: none; }
+.search-clear[hidden] { display: none; }
+.search-clear:active { background: var(--primary-soft); }
 
 .tabs {
   display: grid;

@@ -620,14 +620,29 @@ function renderMain() {
 
 // 注音、拼音選字途中不篩選，避免一直閃「找不到『ㄉㄡ』」；選好字才更新
 const searchInput = document.getElementById('searchInput');
+const searchClear = document.getElementById('searchClear');
+// 搜尋框有字就顯示 X（選字途中也算有字，才能整個清掉）
+function syncSearchClear() {
+  if (searchClear) searchClear.hidden = !searchInput.value;
+}
 searchInput.addEventListener('input', e => {
+  syncSearchClear();
   if (e.isComposing) return;
   searchQuery = e.target.value;
   render();
 });
 searchInput.addEventListener('compositionend', e => {
+  syncSearchClear();
   searchQuery = e.target.value;
   render();
+});
+// 點 X：清空文字、回到目前分頁的完整內容，不換分頁；游標留在搜尋框方便重打
+if (searchClear) searchClear.addEventListener('click', () => {
+  searchInput.value = '';
+  searchQuery = '';
+  syncSearchClear();
+  render();
+  searchInput.focus();
 });
 
 async function init() {
