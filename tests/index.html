@@ -48,6 +48,7 @@ function fakeStorage() {
 }
 let INDEX_HTML = ''; // index.html 原始碼，#10 唯讀檢查用（其他測試會替換 fetch，所以先存下來）
 let APP_JS = '';     // js/app.js 原始碼（#30 拆檔後程式在這裡）
+let ANALYSIS_JS = ''; // js/analysis.js 原始碼（#59 分析頁）
 let MANIFEST = {};    // manifest.webmanifest，#33 主畫面名稱檢查用
 let DOGS_JSON = null; // data/dogs.json，#32 格式檢查用
 
@@ -595,7 +596,7 @@ function runTests() {
       const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       const scripts = [...doc.querySelectorAll('script')];
-      eq(scripts.map(s => s.getAttribute('src')), ['js/app.js'], 'script：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/app.js', 'js/analysis.js'], 'script（#59 起多分析頁）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
@@ -1015,6 +1016,123 @@ async function runPhotoTests() {
   }
 }
 
+// ── #59 分析頁（js/analysis.js）──
+async function runAnalysisTests() {
+  const T = new Date(2026, 8, 25, 10);
+  const tick = () => new Promise(r => setTimeout(r, 0));
+  const D = (name, id, cage, walkedDaysAgo, extra = {}) => ({
+    name, id, cage, note: '', covered: false, intro: '', sex: '',
+    walkedDate: walkedDaysAgo == null ? null : new Date(2026, 8, 25 - walkedDaysAgo), ...extra });
+  const dogs = [
+    D('甲長', '2017070102', '新A07', 3, { sex: '♂', intro: '親人' }),       // 9 年
+    D('乙長', '2020010101', '新A02', 12, { sex: '♀' }),                      // 6 年多，12 天沒遛
+    D('丙長', '2025092501', '舊B04', 40, { sex: '♀', intro: 'x' }),          // 剛好滿 1 年
+    D('小一', '2025092601', 'C區11', 0, { sex: '♂' }),                       // 差一天滿 1 年
+    D('小二', '2026072001', 'C區12', 8),                                       // 2 個月
+    D('無日', '2019050501', '舊B01', null),                                    // 沒遛狗紀錄、沒人照顧
+    D('照顧', '2019050502', '舊B03', null, { covered: true }),                 // 沒日期但有人照顧
+    D('沒號', '', '新獨04', 1),
+    D('怪號', 'A123', '住院區', 2),
+    D('未來', '2027010101', '母幼A', 2),
+  ];
+  const rows = analysisRows(dogs, T);
+  const names = list => list.map(r => (r.dog || r).name);
+  await check('#59 入所日期取編號前 8 碼；非 10 碼數字、不合理或未來日期不算', () => {
+    eq(ymd(intakeDate({ id: '2024032902' }, T)), '2024/3/29');
+    eq([intakeDate({ id: '' }, T), intakeDate({ id: 'A123' }, T), intakeDate({ id: '20240230011' }, T),
+      intakeDate({ id: '2024023001' }, T), intakeDate({ id: '2027010101' }, T)], [null, null, null, null, null]);
+    eq([monthsBetween(new Date(2026, 2, 29), new Date(2026, 3, 28)), monthsBetween(new Date(2026, 2, 29), new Date(2026, 3, 29))], [0, 1], '滿月照日曆：');
+    eq([zoneOf('新A07'), zoneOf('C區12'), zoneOf('住院區'), zoneOf('')], ['新A', 'C區', '住院區', '未填籠位']);
+  });
+  await check('#59 入所多久分布、入所年度分布（中間沒狗的年份補 0）', () => {
+    eq(stayDistribution(rows).map(b => b.count), [1, 0, 1, 1, 0, 0, 4]);
+    eq(stayDistribution(rows).map(b => b.label)[6], '5 年以上');
+    eq(intakeYears(rows).map(y => `${y.label}:${y.count}`),
+      ['2017:1', '2018:0', '2019:2', '2020:1', '2021:0', '2022:0', '2023:0', '2024:0', '2025:2', '2026:1']);
+  });
+  await check('#59 在所最久 Top N：依入所日由早到晚，沒入所日期的不列', () => {
+    eq(names(longestStay(rows, 3)), ['甲長', '無日', '照顧']);
+    eq(longestStay(rows).length, 7, '只有 7 隻有入所日期：');
+  });
+  await check('#59 各區平均在所時間（由久到短）、長期在所比例（滿 1 年）', () => {
+    const z = zoneAverages(rows);
+    eq(z.map(x => `${x.zone}:${x.count}`), ['新A:2', '舊B:3', 'C區:2']);
+    const days = (y, m, d) => Math.floor((T - new Date(y, m - 1, d)) / 86400000);
+    eq(Math.round(z[0].avgDays), Math.round((days(2017, 7, 1) + days(2020, 1, 1)) / 2), '新A 平均：');
+    eq(longStayShare(rows), { long: 5, total: 7, pct: 5 / 7 * 100 });
+  });
+  await check('#59 入所時間 × 未遛天數：沒遛狗日期的不畫，分滿 1 年／未滿比較平均', () => {
+    const sv = stayVsWalk(rows);
+    eq(names(sv.points).sort(), ['甲長', '乙長', '丙長', '小一', '小二'].sort());
+    eq(sv.skipped, 2);
+    eq([sv.long.count, sv.long.avgWalkDays], [3, (3 + 12 + 40) / 3], '滿 1 年：');
+    eq([sv.short.count, sv.short.avgWalkDays], [2, 4], '未滿 1 年：');
+  });
+  await check('#59 公母在所時間差異只算有性別的狗，並顯示缺幾隻', () => {
+    const s = sexComparison(rows);
+    eq([s.male.count, s.female.count, s.missing], [2, 2, 6]);
+    eq([s.male.long, s.female.long], [1, 2], '滿 1 年：');
+    eq(s.female.medianDays, s.female.avgDays, '兩隻時中位數＝平均：');
+  });
+  await check('#59 資料完整度：各項缺幾隻、是哪幾隻；照片查完才列', () => {
+    const c = dataCompleteness(rows, null);
+    eq(c.items.map(i => `${i.label}:${names(i.dogs).join('/')}`), [
+      '沒有編號:沒號', '編號看不出入所日期:怪號/未來', '沒有遛狗日期:無日/照顧',
+      '沒有性別:小二/無日/照顧/沒號/怪號/未來', '沒有狗卡資訊:乙長/小一/小二/無日/照顧/沒號/怪號/未來']);
+    const photos = new Map(dogs.filter(d => d.id).map(d => [d.id, d.name !== '乙長']));
+    eq(names(dataCompleteness(rows, photos).items[5].dogs), ['乙長', '沒號'], '沒有照片：');
+  });
+  await check('#59 分析頁從頁首圖示打開：各項都有，點狗名開詳細資訊；不受搜尋影響；照片用 HEAD 查、不下載；返回回到原分類', async () => {
+    const saved = [allDogs, groupMap, activeTab, searchQuery, photoCheck];
+    const realFetch = window.fetch;
+    const calls = [];
+    try {
+      window.fetch = async (url, opt) => { calls.push([url, opt && opt.method]); return new Response(null, { status: url.includes('2017070102') ? 200 : 404 }); };
+      allDogs = dogs; groupMap = {}; searchQuery = '甲長'; photoCheck = null; activeTab = 'today';
+      render();
+      const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
+      const btn = doc.querySelector('header .brand #analysisBtn');
+      if (!btn || btn.getAttribute('aria-label') !== '犬隻分析' || !btn.querySelector('use[href="#i-chart"]')) throw new Error('頁首右上角要有分析圖示');
+      eq([...document.querySelectorAll('#tabs button')].map(b => b.dataset.tab), ['walk', 'today', 'info'], '分析不佔分類：');
+      showAnalysis();
+      eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [true, true, 'today'], '打開分析：');
+      const titles = [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
+      eq(titles.length, 8, '八張統計：');
+      if (titles.includes('長期在所＋近期少遛')) throw new Error('K 說長期在所＋少遛不需要');
+      ['入所多久分布', '在所最久 Top 10', '入所年度分布', '各區平均在所時間', '長期在所犬比例', '入所時間 × 最近未遛天數',
+        '公母在所時間差異', '犬隻資料完整度'].forEach(t => { if (!titles.includes(t)) throw new Error(`少了 ${t}`); });
+      eq(document.querySelectorAll('#main .a-dot').length, 5, '散布圖點數（搜尋不影響）：');
+      if (!document.getElementById('main').textContent.includes('檢查中')) throw new Error('照片還沒查完要顯示檢查中');
+      eq(calls.every(([, m]) => m === 'HEAD'), true, '只用 HEAD：');
+      eq(calls.length, 9, '每個編號查一次：');
+      await tick(); await tick(); await tick();
+      const photoRow = [...document.querySelectorAll('#main .a-miss')].find(el => el.textContent.includes('沒有照片'));
+      if (!photoRow || !photoRow.textContent.includes('9 隻')) throw new Error(`沒有照片列：${photoRow && photoRow.textContent}`);
+      document.querySelector('#main .a-dog').click();
+      eq(detailDog && detailDog.name, '甲長', '點 Top 1 開詳細資訊：');
+      hideDetail();
+      eq(analysisOpen, true, '關詳細資訊後還在分析頁：');
+      history.replaceState(null, ''); // 測試頁不真的按返回，直接關
+      document.getElementById('analysisBack').click();
+      eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [false, false, 'today'], '返回回到原本的分類：');
+      if (document.querySelector('#main .a-card')) throw new Error('返回後不該還有統計卡片');
+    } finally {
+      window.fetch = realFetch;
+      hideDetail();
+      hideAnalysis();
+      history.replaceState(null, '');
+      [allDogs, groupMap, activeTab, searchQuery, photoCheck] = saved;
+      render();
+    }
+  });
+  await check('#59 分析程式只讀：唯一的網路呼叫是 HEAD 查照片，不寫入、不存資料', () => {
+    const code = ANALYSIS_JS.replace("fetch(photoSrc({ id }), { method: 'HEAD', cache: 'no-cache' })", '');
+    const bad = [/fetch\(/, /method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /localStorage|sessionStorage|indexedDB|XMLHttpRequest|sendBeacon/];
+    eq(bad.filter(re => re.test(code)).map(String), [], '寫入相關字眼：');
+    if (!/<script src="js\/app\.js"><\/script>\s*<script src="js\/analysis\.js"><\/script>/.test(INDEX_HTML)) throw new Error('analysis.js 要在 app.js 之後載入');
+  });
+}
+
 function show() {
   const failed = results.filter(r => !r.ok);
   const summary = document.getElementById('summary');
@@ -1025,11 +1143,12 @@ function show() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json'].map(u => fetch(u).then(res => {
+Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest, dogsJson]) => {
+  .then(([html, js, manifest, dogsJson, analysisJs]) => {
+    ANALYSIS_JS = analysisJs;
     INDEX_HTML = html;
     MANIFEST = JSON.parse(manifest);
     APP_JS = js;
@@ -1037,12 +1156,16 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
     const s = document.createElement('script');
     s.textContent = js;
     document.body.appendChild(s);
+    const a = document.createElement('script');
+    a.textContent = analysisJs;
+    document.body.appendChild(a);
     walkedStorage = fakeStorage(); // 其他測試也不碰真正的 localStorage
     loadState = 'ready'; // 測試頁不跑 init，直接當資料已讀好，各測試自己放假資料
     return runTests();
   })
   .then(runSerialTests)
   .then(runPhotoTests)
+  .then(runAnalysisTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
