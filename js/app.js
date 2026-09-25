@@ -56,7 +56,8 @@ function parseDogsData(data) {
     id: text(d.id),
     name: text(d.name),
     walkedDate: parseYmd(d.walkedDate),
-    walker: text(d.walker),
+    // 同步只寫有沒有人固定照顧（covered）；舊版 dogs.json 是志工名字（walker），也當作有
+    covered: d.covered === true || text(d.walker) !== '',
     note: text(d.note),
     // 狗卡資訊與性別由同步腳本從 dogs/{編號}.md 整理好（scripts/sync-sheet.mjs 的 attachDogCards）
     sex: d.sex === 'male' ? '♂' : d.sex === 'female' ? '♀' : '',
@@ -120,7 +121,7 @@ function computeStatus(dog, today) {
     else if (days >= AMBER_DAYS) level = 'amber';
     return { kind: 'dated', days, level };
   }
-  if (dog.walker) return { kind: 'covered' };
+  if (dog.covered) return { kind: 'covered' };
   return { kind: 'unknown' };
 }
 

@@ -143,7 +143,7 @@
 - 前端：`js/app.js` 改讀 dogs.json 的 `intro`／`sex`，刪掉 `fetchAllDetails`、`markdownToText`、frontmatter 解析與 `detailMap`；開網頁只抓 dogs.json 一個檔（原本另抓每隻狗的 .md）。
 - Workflow：`dogs/**` 或同步程式推到 main 時也跑一次同步。
 - `data/dogs.json`：用 repo 現有資料加上狗卡欄位重新產生（同步時間不動，試算表內容沒重讀）；121 隻中 92 隻有狗卡資訊與性別。
-- 驗證：node 測試 25 項（原 #9 前端狗卡測試移進來）、tests/index.html 51 項全過；390px 截圖確認性別與狗卡資訊顯示、開網頁 0 個 .md 請求。截圖 previews/dog-cards-sync/detail.png。
+- 驗證：node 測試 25 項（原 #9 前端狗卡測試移進來）、tests/index.html 52 項全過；390px 截圖確認性別與狗卡資訊顯示、開網頁 0 個 .md 請求。截圖 previews/dog-cards-sync/detail.png。
 
 ## [2026-09-25] Claude | 性別符號上色、移除犬名旁橘色備註圖示
 - 依據：K「性別 男生符號要顯示藍色 女生符號顯示紅色；刪除資料 emoji（性別旁邊的橘色符號）」。
@@ -151,3 +151,12 @@
 - `css/app.css`：♂ 用 `--primary` 藍、♀ 用 `--red-text` 紅；刪掉 `.has-note`。`index.html` 刪掉沒人用的 `i-memo` 圖示。
 - 測試：tests/index.html 原本「有一般備註要有小圖示」改成「不該有」，追加一項性別 class／無備註圖示測試；52 項全過。截圖 previews/sex-color/list.png。
 - 分支 `claude/project-thread-2av7l5` 建在 PR #52 分支上，需在 #52 之後合併。
+
+## [2026-09-25] Claude | 資安：試算表 ID 移出程式、dogs.json 不再寫志工名字
+- 依據：K 貼資安檢查結果；試算表目前「知道連結的人可編輯」且 K 不是擁有者，K 選方案 A（ID 搬進 Secret、之後改寫 git 歷史）。
+- 同步：`scripts/sync-sheet.mjs` 刪掉寫死的試算表 ID，改讀環境變數 `SHEET_ID`（沒設定就失敗、不連試算表）；「誰遛的」只輸出 `covered`（有沒有人固定照顧），不再把志工名字寫進 dogs.json。
+- Workflow：同步步驟從 Actions Secret `SHEET_ID` 帶入 ID。設定步驟寫在 `docs/SHEET_SYNC_SETUP.md`。
+- 前端：`js/app.js` 改讀 `covered`（舊版 dogs.json 的 `walker` 仍相容），畫面不變。
+- `data/dogs.json`：把 `walker` 轉成 `covered`（121 隻中 120 隻為 true），其他內容與同步時間不動。
+- 驗證：node 同步測試 16 項、Worker 測試 11 項、tests/index.html 52 項全過。
+- 待辦：K 先設定 Secret 再合併；合併後另外改寫 git 歷史，清掉舊版本裡的試算表 ID 與志工名字。
