@@ -328,3 +328,196 @@ test('備註：只接受網站來的要求；預檢允許 PUT；其他方法擋'
   assert.equal(del.status, 405);
   assert.equal(calls.length, 0);
 });
+
+// ---- 相簿 ----
+
+const GALLERY_API = '/repos/jiatsenK/bq-shelter-dogs/contents/data/gallery.json';
+const PHOTO_API = '/repos/jiatsenK/bq-shelter-dogs/contents/photos/gallery/';
+
+// 假 GitHub：data/gallery.json 放在 store.text（null 表示還沒有這個檔），照片檔放在 store.files（路徑 → sha）
+function fakeGalleryGithub({ text = null, files = {}, photoStatus = [], listStatus = [], deleteStatus = 200 } = {}) {
+  const store = { text, sha: text === null ? null : 'g-0', n: 0, files };
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const u = new URL(url);
+    const method = init.method || 'GET';
+    calls.push({ path: u.pathname, method, body: init.body && JSON.parse(init.body) });
+    if (u.pathname.endsWith('/contents/data/dogs.json')) return new Response(JSON.stringify(DOGS));
+    if (u.pathname === GALLERY_API) {
+      if (method === 'GET') {
+        if (store.text === null) return new Response('{}', { status: 404 });
+        return new Response(JSON.stringify({ sha: store.sha, content: Buffer.from(store.text).toString('base64') }));
+      }
+      const status = listStatus.length ? listStatus.shift() : 200;
+      if (status !== 200) return new Response('{}', { status });
+      const body = JSON.parse(init.body);
+      if ((body.sha || null) !== store.sha) return new Response('{}', { status: 409 });
+      store.text = Buffer.from(body.content, 'base64').toString('utf8');
+      store.sha = `g-${++store.n}`;
+      return new Response(JSON.stringify({ commit: { sha: 'cafe' } }));
+    }
+    if (u.pathname.startsWith(PHOTO_API)) {
+      const path = u.pathname.slice('/repos/jiatsenK/bq-shelter-dogs/contents/'.length);
+      if (method === 'GET') return store.files[path] ? new Response(JSON.stringify({ sha: store.files[path] })) : new Response('{}', { status: 404 });
+      if (method === 'DELETE') {
+        if (deleteStatus !== 200) return new Response('{}', { status: deleteStatus });
+        delete store.files[path];
+        return new Response('{}');
+      }
+      const status = photoStatus.length ? photoStatus.shift() : 200;
+      if (status !== 200) return new Response('{}', { status });
+      store.files[path] = 'p-sha';
+      return new Response(JSON.stringify({ commit: { sha: 'f00d' } }));
+    }
+    return new Response('no', { status: 404 });
+  };
+  return { store, calls };
+}
+
+function postGallery(id, { body = JPEG.slice(), origin = ORIGIN, ip = '1.1.1.1' } = {}) {
+  const headers = { 'Content-Type': 'image/jpeg', 'CF-Connecting-IP': ip };
+  if (origin) headers.Origin = origin;
+  return new Request(`https://w.example/gallery/${id}`, { method: 'POST', headers, body });
+}
+
+function deleteGallery(id, file, { passcode = '對的通關碼', origin = ORIGIN, ip = '1.1.1.1' } = {}) {
+  const headers = { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip };
+  if (origin) headers.Origin = origin;
+  return new Request(`https://w.example/gallery/${id}/${file}`, { method: 'DELETE', headers, body: JSON.stringify(passcode ? { passcode } : {}) });
+}
+
+const F1 = '20260925-153012-ab12.jpg';
+const F2 = '20260925-153020-cd34.jpg';
+
+test('相簿新增：照片存到 photos/gallery/{編號}/，再加進 data/gallery.json，不動別隻狗', async () => {
+  const other = { '2024010101': [{ file: F1, addedAt: 'x' }] };
+  const { store, calls } = fakeGalleryGithub({ text: JSON.stringify(other) });
+  const r = await send(postGallery('2024032902'), NENV);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ok, true);
+  assert.match(r.body.photo.file, /^\d{8}-\d{6}-[0-9a-f]{4}\.jpg$/);
+  assert.ok(!Number.isNaN(Date.parse(r.body.photo.addedAt)));
+  const puts = calls.filter(c => c.method === 'PUT');
+  assert.equal(puts.length, 2);
+  assert.equal(puts[0].path, `${PHOTO_API}2024032902/${r.body.photo.file}`);
+  assert.equal(puts[0].body.sha, undefined, '新檔不帶 sha');
+  assert.equal(puts[0].body.content, Buffer.from(JPEG).toString('base64'));
+  assert.match(puts[0].body.message, /^新增相簿照片：photos\/gallery\/2024032902\/.+（測試狗）/);
+  assert.equal(puts[1].path, GALLERY_API);
+  assert.equal(puts[1].body.sha, 'g-0');
+  const saved = JSON.parse(store.text);
+  assert.deepEqual(saved['2024010101'], other['2024010101']);
+  assert.deepEqual(saved['2024032902'], [r.body.photo]);
+  assert.equal(r.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+});
+
+test('相簿新增：還沒有清單檔時新建；檔名用台灣時間', async () => {
+  const { store, calls } = fakeGalleryGithub();
+  assert.equal((await send(postGallery('2024032902'), NENV)).status, 200);
+  assert.equal(calls.filter(c => c.method === 'PUT')[1].body.sha, undefined);
+  assert.equal(Object.keys(JSON.parse(store.text)).length, 1);
+  const { galleryFileName } = worker.testing;
+  assert.match(galleryFileName(Date.UTC(2026, 8, 25, 16, 30, 5)), /^20260926-003005-[0-9a-f]{4}\.jpg$/);
+});
+
+test('相簿新增：跟主照片一樣檢查 JPEG、編號、網站來源；滿 30 張不收', async () => {
+  const { GALLERY_MAX } = worker.testing;
+  const full = { '2024032902': Array.from({ length: GALLERY_MAX }, (_, i) => ({ file: `20260925-1530${String(i).padStart(2, '0')}-0000.jpg`, addedAt: '' })) };
+  const { calls } = fakeGalleryGithub({ text: JSON.stringify(full) });
+  assert.equal((await send(postGallery('9999999999'), NENV)).status, 404);
+  assert.equal((await send(postGallery('..%2Fdata'), NENV)).status, 400);
+  assert.equal((await send(postGallery('2024032902', { body: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) }), NENV)).status, 415);
+  assert.equal((await send(postGallery('2024032902', { origin: 'https://evil.example' }), NENV)).status, 403);
+  const r = await send(postGallery('2024032902'), NENV);
+  assert.equal(r.status, 409);
+  assert.match(r.body.error, /最多 30 張/);
+  assert.equal(calls.filter(c => c.method === 'PUT').length, 0);
+});
+
+test('相簿新增：照片存不進去回錯誤、不改清單；清單同時有人改會重讀再試', async () => {
+  let g = fakeGalleryGithub({ text: '{}', photoStatus: [500] });
+  const r = await send(postGallery('2024032902'), NENV);
+  assert.equal(r.status, 502);
+  assert.match(r.body.error, /相簿不受影響/);
+  assert.equal(g.store.text, '{}');
+  g = fakeGalleryGithub({ text: '{}' });
+  const realFetch = globalThis.fetch;
+  let raced = false;
+  globalThis.fetch = async (url, init = {}) => {
+    if ((init.method || 'GET') === 'PUT' && new URL(url).pathname === GALLERY_API && !raced) {
+      raced = true;
+      g.store.text = JSON.stringify({ '2024010101': [{ file: F1, addedAt: '' }] });
+      g.store.sha = 'g-other';
+    }
+    return realFetch(url, init);
+  };
+  assert.equal((await send(postGallery('2024032902'), NENV)).status, 200);
+  const saved = JSON.parse(g.store.text);
+  assert.equal(saved['2024010101'][0].file, F1);
+  assert.equal(saved['2024032902'].length, 1);
+});
+
+test('相簿新增和主照片共用頻率限制', async () => {
+  fakeGalleryGithub({ text: '{}' });
+  for (let i = 0; i < 5; i++) assert.equal((await send(postGallery('2024032902'), NENV)).status, 200);
+  assert.equal((await send(postGallery('2024032902'), NENV)).status, 429);
+});
+
+test('相簿讀取：GET /gallery 回最新清單；格式不對的檔名濾掉；沒檔案回空的', async () => {
+  const text = JSON.stringify({ '2024032902': [{ file: F1, addedAt: 'a' }, { file: '../../data/dogs.json' }, { file: F2 }], 'bad id': [{ file: F1 }] });
+  fakeGalleryGithub({ text });
+  const r = await send(new Request('https://w.example/gallery', { headers: { Origin: ORIGIN } }), NENV);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.gallery, { '2024032902': [{ file: F1, addedAt: 'a' }, { file: F2, addedAt: '' }] });
+  assert.equal(r.headers.get('Cache-Control'), 'no-store');
+  fakeGalleryGithub();
+  assert.deepEqual((await send(new Request('https://w.example/gallery', { headers: { Origin: ORIGIN } }), NENV)).body.gallery, {});
+});
+
+test('相簿刪除：要通關碼；先從清單拿掉再刪照片檔', async () => {
+  const path = `photos/gallery/2024032902/${F1}`;
+  const { store, calls } = fakeGalleryGithub({
+    text: JSON.stringify({ '2024032902': [{ file: F1, addedAt: '' }, { file: F2, addedAt: '' }] }),
+    files: { [path]: 'old' },
+  });
+  const none = await send(deleteGallery('2024032902', F1, { passcode: '' }), NENV);
+  assert.equal([none.status, none.body.code].join(), '401,passcode');
+  const wrong = await send(deleteGallery('2024032902', F1, { passcode: '猜' }), NENV);
+  assert.match(wrong.body.error, /通關碼不對/);
+  assert.equal(calls.filter(c => c.method !== 'GET').length, 0, '通關碼不對不動任何東西');
+
+  const r = await send(deleteGallery('2024032902', F1), NENV);
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.body.removed, r.body.fileDeleted], [true, true]);
+  assert.deepEqual(JSON.parse(store.text), { '2024032902': [{ file: F2, addedAt: '' }] });
+  assert.equal(store.files[path], undefined);
+  const del = calls.find(c => c.method === 'DELETE');
+  assert.equal(del.body.sha, 'old');
+  assert.match(del.body.message, /^刪除相簿照片：photos\/gallery\/2024032902\//);
+  // 最後一張刪掉，這隻狗就從清單消失
+  await send(deleteGallery('2024032902', F2), NENV);
+  assert.deepEqual(JSON.parse(store.text), {});
+});
+
+test('相簿刪除：檔名格式不對擋；已經不在清單回成功但不產生提交；照片檔刪不掉仍算刪除成功', async () => {
+  const { calls } = fakeGalleryGithub({ text: JSON.stringify({ '2024032902': [{ file: F1, addedAt: '' }] }), deleteStatus: 500, files: { [`photos/gallery/2024032902/${F1}`]: 's' } });
+  assert.equal((await send(deleteGallery('2024032902', '..%2F..%2Fdata%2Fdogs.json'), NENV)).status, 400);
+  assert.equal((await send(deleteGallery('2024032902', 'x.jpg'), NENV)).status, 400);
+  const gone = await send(deleteGallery('2024032902', F2), NENV);
+  assert.deepEqual([gone.status, gone.body.removed], [200, false]);
+  assert.equal(calls.filter(c => c.method === 'PUT').length, 0);
+  const r = await send(deleteGallery('2024032902', F1), NENV);
+  assert.deepEqual([r.status, r.body.removed, r.body.fileDeleted], [200, true, false]);
+});
+
+test('相簿刪除：Worker 沒設 NOTES_PASSCODE 一律不能刪；預檢允許 DELETE；其他方法擋', async () => {
+  const { calls } = fakeGalleryGithub({ text: '{}' });
+  const r = await send(deleteGallery('2024032902', F1, { passcode: 'undefined' }), ENV);
+  assert.equal(r.status, 500);
+  assert.match(r.body.error, /NOTES_PASSCODE/);
+  const pre = await worker.fetch(new Request(`https://w.example/gallery/2024032902/${F1}`, { method: 'OPTIONS', headers: { Origin: ORIGIN } }), NENV);
+  assert.match(pre.headers.get('Access-Control-Allow-Methods'), /DELETE/);
+  assert.equal((await worker.fetch(new Request('https://w.example/gallery/2024032902', { method: 'PUT', headers: { Origin: ORIGIN } }), NENV)).status, 405);
+  assert.equal((await worker.fetch(new Request('https://w.example/gallery/%E0%A4%A', { method: 'POST', headers: { Origin: ORIGIN } }), NENV)).status, 500);
+  assert.equal(calls.length, 0);
+});

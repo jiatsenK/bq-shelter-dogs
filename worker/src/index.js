@@ -9,6 +9,9 @@
 //   送 JSON { text, passcode }，通關碼放在 Worker 的 Secret「NOTES_PASSCODE」
 //   （通關碼放在內容裡、不放標頭，這樣中文通關碼也能用）。
 //   repo 是公開的，備註內容任何人都看得到；通關碼只是擋住路人改掉備註
+// - 相簿：每隻狗除了主照片（photos/{編號}.jpg）還能多放幾張，存在 photos/gallery/{編號}/，
+//   清單在 data/gallery.json。GET /gallery 讀清單；POST /gallery/{編號} 新增（跟上傳主照片一樣不用登入）；
+//   DELETE /gallery/{編號}/{檔名} 刪除，要跟我的備註同一組通關碼（避免路人亂刪）
 //
 // 這個檔案可以整份貼到 Cloudflare 網頁上的程式編輯器（不需要其他檔案），設定步驟見 docs/PHOTO_UPLOAD_SETUP.md。
 
@@ -45,6 +48,11 @@ const NOTE_READ_LIMITS = [{ windowMs: 60 * 1000, max: 60 }];
 const PASSCODE_FAIL_LIMITS = [{ windowMs: 60 * 60 * 1000, max: 10 }];
 // 編號只接受英數字（目前都是 10 位數字），也順便擋掉 ../ 之類的路徑
 const ID_PATTERN = /^[0-9A-Za-z]{1,32}$/;
+// 相簿：清單位置、照片資料夾、每隻狗最多幾張；檔名是 Worker 自己取的「日期-時間-亂數.jpg」
+const GALLERY_PATH = 'data/gallery.json';
+const GALLERY_DIR = 'photos/gallery';
+const GALLERY_MAX = 30;
+const GALLERY_FILE_PATTERN = /^\d{8}-\d{6}-[0-9a-f]{4}\.jpg$/;
 
 // 注意：Cloudflare 會同時開好幾份 Worker，下面這兩個暫存各自獨立，
 // 所以頻率限制是「盡量擋」，不是精確計數；目的是擋住一直狂傳，不是算帳
@@ -71,7 +79,7 @@ function config(env) {
 function corsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': origin,
-    'Access-Control-Allow-Methods': 'GET, POST, PUT, OPTIONS',
+    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
     'Access-Control-Allow-Headers': 'Content-Type',
     'Access-Control-Max-Age': '86400',
     Vary: 'Origin',
@@ -175,6 +183,33 @@ async function currentSha(cfg, path) {
   return info.sha || null;
 }
 
+// 主照片和相簿共用的檢查：編號、JPEG、大小、頻率、編號在 dogs.json 裡。
+// 過了回 { bytes, dogs }，沒過回 { error: 回應 }
+async function checkPhoto(request, cfg, id, now, origin) {
+  if (!ID_PATTERN.test(id)) return { error: fail(400, '狗狗編號格式不對', origin) };
+
+  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'image/jpeg') return { error: fail(415, '只接受 JPEG 照片', origin) };
+  const declared = Number(request.headers.get('Content-Length') || 0);
+  if (declared > MAX_BYTES) return { error: fail(413, '照片太大', origin) };
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (!bytes.length) return { error: fail(400, '沒有收到照片', origin) };
+  if (bytes.length > MAX_BYTES) return { error: fail(413, '照片太大', origin) };
+  if (!isJpeg(bytes)) return { error: fail(415, '檔案不是 JPEG 照片', origin) };
+
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!allowUpload(ip, now)) return { error: fail(429, '上傳太頻繁，請稍等幾分鐘再試', origin) };
+
+  let dogs;
+  try {
+    dogs = await loadDogs(cfg, now);
+  } catch (e) {
+    return { error: fail(502, '暫時無法確認狗狗編號，請稍後再試', origin) };
+  }
+  if (!dogs.has(id)) return { error: fail(404, '找不到這個編號的狗狗', origin) };
+  return { bytes, dogs };
+}
+
 async function upload(request, env, origin) {
   const cfg = config(env);
   const now = Date.now();
@@ -182,27 +217,9 @@ async function upload(request, env, origin) {
 
   const m = new URL(request.url).pathname.match(/^\/photos\/([^/]+)$/);
   const id = m ? decodeURIComponent(m[1]) : '';
-  if (!ID_PATTERN.test(id)) return fail(400, '狗狗編號格式不對', origin);
-
-  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
-  if (type !== 'image/jpeg') return fail(415, '只接受 JPEG 照片', origin);
-  const declared = Number(request.headers.get('Content-Length') || 0);
-  if (declared > MAX_BYTES) return fail(413, '照片太大', origin);
-  const bytes = new Uint8Array(await request.arrayBuffer());
-  if (!bytes.length) return fail(400, '沒有收到照片', origin);
-  if (bytes.length > MAX_BYTES) return fail(413, '照片太大', origin);
-  if (!isJpeg(bytes)) return fail(415, '檔案不是 JPEG 照片', origin);
-
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (!allowUpload(ip, now)) return fail(429, '上傳太頻繁，請稍等幾分鐘再試', origin);
-
-  let dogs;
-  try {
-    dogs = await loadDogs(cfg, now);
-  } catch (e) {
-    return fail(502, '暫時無法確認狗狗編號，請稍後再試', origin);
-  }
-  if (!dogs.has(id)) return fail(404, '找不到這個編號的狗狗', origin);
+  const checked = await checkPhoto(request, cfg, id, now, origin);
+  if (checked.error) return checked.error;
+  const { bytes, dogs } = checked;
 
   const path = `photos/${id}.jpg`;
   const content = toBase64(bytes);
@@ -238,16 +255,21 @@ async function upload(request, env, origin) {
 
 // ---- 我的備註（#61）----
 
-// 讀 data/my-notes.json 的最新內容與 sha；檔案還沒建立就回空的
-async function readNotes(cfg) {
-  const res = await github(cfg, `contents/${NOTES_PATH}?ref=${encodeURIComponent(cfg.branch)}`);
-  if (res.status === 404) return { notes: {}, sha: null };
-  if (!res.ok) throw new Error(`讀備註失敗（GitHub ${res.status}）`);
+// 讀 repo 裡「編號 → 內容」的 JSON 檔（data/my-notes.json、data/gallery.json）的最新內容與 sha；
+// 檔案還沒建立就回空的
+async function readJsonMap(cfg, path) {
+  const res = await github(cfg, `contents/${path}?ref=${encodeURIComponent(cfg.branch)}`);
+  if (res.status === 404) return { data: {}, sha: null };
+  if (!res.ok) throw new Error(`讀 ${path} 失敗（GitHub ${res.status}）`);
   const info = await res.json();
   const text = new TextDecoder().decode(fromBase64(info.content));
   const data = text.trim() ? JSON.parse(text) : {};
-  const notes = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
-  return { notes, sha: info.sha || null };
+  return { data: data && typeof data === 'object' && !Array.isArray(data) ? data : {}, sha: info.sha || null };
+}
+
+async function readNotes(cfg) {
+  const { data, sha } = await readJsonMap(cfg, NOTES_PATH);
+  return { notes: data, sha };
 }
 
 // 整理成純文字：統一換行、拿掉看不見的控制字元、去頭尾空白；不是字串回 null
@@ -271,6 +293,16 @@ async function samePasscode(given, expected) {
   let diff = 0;
   for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
   return diff === 0;
+}
+
+const passcodeLocked = (ip, now) => limited(`pass:${ip}`, PASSCODE_FAIL_LIMITS, now);
+
+// 通關碼對了回 null；不對就記一次錯、回錯誤（我的備註和刪相簿照片共用）
+async function checkPasscode(input, cfg, ip, now, origin, missing) {
+  const given = input && typeof input.passcode === 'string' ? input.passcode : '';
+  if (given && (await samePasscode(given, cfg.passcode))) return null;
+  record(`pass:${ip}`, now);
+  return fail(401, given ? '通關碼不對' : missing, origin, { code: 'passcode' });
 }
 
 // 編號排序後輸出，每次存檔的差異只有改到的那隻狗
@@ -304,9 +336,7 @@ async function putNote(request, env, origin) {
   if (!ID_PATTERN.test(id)) return fail(400, '狗狗編號格式不對', origin);
 
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (limited(`pass:${ip}`, PASSCODE_FAIL_LIMITS, now)) {
-    return fail(429, '通關碼錯太多次，請一小時後再試', origin, { code: 'passcode' });
-  }
+  if (passcodeLocked(ip, now)) return fail(429, '通關碼錯太多次，請一小時後再試', origin, { code: 'passcode' });
 
   const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
   if (type !== 'application/json') return fail(415, '備註格式不對', origin);
@@ -319,11 +349,8 @@ async function putNote(request, env, origin) {
     return fail(400, '備註格式不對', origin);
   }
 
-  const given = input && typeof input.passcode === 'string' ? input.passcode : '';
-  if (!given || !(await samePasscode(given, cfg.passcode))) {
-    record(`pass:${ip}`, now);
-    return fail(401, given ? '通關碼不對' : '需要通關碼才能寫備註', origin, { code: 'passcode' });
-  }
+  const denied = await checkPasscode(input, cfg, ip, now, origin, '需要通關碼才能寫備註');
+  if (denied) return denied;
 
   const text = cleanNote(input.text);
   if (text === null) return fail(400, '備註要是文字', origin);
@@ -376,9 +403,166 @@ async function putNote(request, env, origin) {
   return fail(502, '備註沒有存進去，原本的備註不受影響', origin);
 }
 
+// ---- 相簿 ----
+
+// 整理成 編號 → [{ file, addedAt }]，只留格式對的檔名（清單被手動改壞也不會指到別的路徑）
+function cleanGallery(data) {
+  const out = {};
+  for (const [id, list] of Object.entries(data || {})) {
+    if (!ID_PATTERN.test(id) || !Array.isArray(list)) continue;
+    const photos = list
+      .filter(p => p && typeof p.file === 'string' && GALLERY_FILE_PATTERN.test(p.file))
+      .map(p => ({ file: p.file, addedAt: typeof p.addedAt === 'string' ? p.addedAt : '' }));
+    if (photos.length) out[id] = photos;
+  }
+  return out;
+}
+
+async function readGallery(cfg) {
+  const { data, sha } = await readJsonMap(cfg, GALLERY_PATH);
+  return { gallery: cleanGallery(data), sha };
+}
+
+// 檔名用台灣時間，在 GitHub 上看得出是哪天傳的；後面加 4 碼亂數，同一秒傳兩張也不會撞名
+function galleryFileName(now) {
+  const t = new Date(now + 8 * 60 * 60 * 1000).toISOString(); // 2026-09-25T15:30:12.345Z（已換成台灣時間）
+  const rand = [...crypto.getRandomValues(new Uint8Array(2))].map(b => b.toString(16).padStart(2, '0')).join('');
+  return `${t.slice(0, 10).replace(/-/g, '')}-${t.slice(11, 19).replace(/:/g, '')}-${rand}.jpg`;
+}
+
+// 改相簿清單：每次都讀最新版本再改，同時有人改（sha 對不上）就重讀再試；
+// change(清單) 回 false 表示不用改。回傳 { ok, status, changed }
+async function updateGallery(cfg, message, change) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { gallery, sha } = await readGallery(cfg);
+    if (change(gallery) === false) return { ok: true, changed: false };
+    const body = { message, content: toBase64(new TextEncoder().encode(serializeNotes(gallery))), branch: cfg.branch };
+    if (sha) body.sha = sha;
+    const res = await github(cfg, `contents/${GALLERY_PATH}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) return { ok: true, changed: true };
+    if ((res.status === 409 || res.status === 422) && attempt < 2) continue;
+    return { ok: false, status: res.status };
+  }
+  return { ok: false, status: 409 };
+}
+
+async function getGallery(request, env, origin) {
+  const cfg = config(env);
+  if (!cfg.token) return fail(500, '相簿服務還沒設定好（缺 GITHUB_TOKEN）', origin);
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!allow(`gread:${ip}`, NOTE_READ_LIMITS, Date.now())) return fail(429, '讀取太頻繁，請稍等一下再試', origin);
+  try {
+    const { gallery } = await readGallery(cfg);
+    return reply(200, { ok: true, gallery }, origin);
+  } catch (e) {
+    return fail(502, '暫時讀不到相簿，請稍後再試', origin);
+  }
+}
+
+// 新增一張：先存照片檔，再把它加進清單（兩筆提交）。清單沒更新成功時照片檔留在 repo 但網站不會顯示
+async function addGalleryPhoto(request, env, origin, id) {
+  const cfg = config(env);
+  const now = Date.now();
+  if (!cfg.token) return fail(500, '上傳服務還沒設定好（缺 GITHUB_TOKEN）', origin);
+  const checked = await checkPhoto(request, cfg, id, now, origin);
+  if (checked.error) return checked.error;
+  const name = checked.dogs.get(id);
+  const label = name ? `（${name}）` : '';
+
+  try {
+    const { gallery } = await readGallery(cfg);
+    if ((gallery[id] || []).length >= GALLERY_MAX) return fail(409, `相簿最多 ${GALLERY_MAX} 張，請先刪掉幾張`, origin);
+  } catch (e) {
+    return fail(502, '暫時讀不到相簿，請稍後再試', origin);
+  }
+
+  const file = galleryFileName(now);
+  const path = `${GALLERY_DIR}/${id}/${file}`;
+  const res = await github(cfg, `contents/${path}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message: `新增相簿照片：${path}${label}\n\n網站匿名上傳（照片上傳服務）`,
+      content: toBase64(checked.bytes),
+      branch: cfg.branch,
+    }),
+  });
+  if (!res.ok) return fail(502, `照片沒有存進去（GitHub ${res.status}），相簿不受影響`, origin);
+
+  const photo = { file, addedAt: new Date(now).toISOString() };
+  let saved;
+  try {
+    saved = await updateGallery(cfg, `相簿清單加入：${id}/${file}${label}\n\n網站匿名上傳（照片上傳服務）`, gallery => {
+      gallery[id] = [...(gallery[id] || []), photo];
+    });
+  } catch (e) {
+    saved = { ok: false, status: 502 };
+  }
+  if (!saved.ok) return fail(502, `照片存了但相簿清單沒有更新（GitHub ${saved.status}），請再傳一次`, origin);
+  return reply(200, { ok: true, id, photo }, origin);
+}
+
+// 刪除一張：先從清單拿掉（網站馬上不顯示），再刪照片檔；檔案沒刪成功也算刪除成功（git 歷史本來就留著）
+async function deleteGalleryPhoto(request, env, origin, id, file) {
+  const cfg = config(env);
+  const now = Date.now();
+  if (!cfg.token) return fail(500, '相簿服務還沒設定好（缺 GITHUB_TOKEN）', origin);
+  if (!cfg.passcode) return fail(500, '相簿服務還沒設定好（缺 NOTES_PASSCODE）', origin);
+  if (!ID_PATTERN.test(id) || !GALLERY_FILE_PATTERN.test(file)) return fail(400, '照片名稱不對', origin);
+
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (passcodeLocked(ip, now)) return fail(429, '通關碼錯太多次，請一小時後再試', origin, { code: 'passcode' });
+  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') return fail(415, '格式不對', origin);
+  const raw = await request.text();
+  if (raw.length > NOTE_MAX_BYTES) return fail(413, '格式不對', origin);
+  let input;
+  try {
+    input = JSON.parse(raw);
+  } catch (e) {
+    return fail(400, '格式不對', origin);
+  }
+  const denied = await checkPasscode(input, cfg, ip, now, origin, '需要通關碼才能刪照片');
+  if (denied) return denied;
+  if (!allow(`gdel:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '刪除太頻繁，請稍等幾分鐘再試', origin);
+
+  let saved;
+  try {
+    saved = await updateGallery(cfg, `相簿清單移除：${id}/${file}\n\n網站刪除（相簿，通關碼驗證）`, gallery => {
+      const list = gallery[id] || [];
+      if (!list.some(p => p.file === file)) return false;
+      const rest = list.filter(p => p.file !== file);
+      if (rest.length) gallery[id] = rest;
+      else delete gallery[id];
+    });
+  } catch (e) {
+    saved = { ok: false, status: 502 };
+  }
+  if (!saved.ok) return fail(502, `照片沒有刪掉（GitHub ${saved.status}），請稍後再試`, origin);
+
+  const path = `${GALLERY_DIR}/${id}/${file}`;
+  let fileDeleted = false;
+  try {
+    const sha = await currentSha(cfg, path);
+    if (sha) {
+      const res = await github(cfg, `contents/${path}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: `刪除相簿照片：${path}\n\n網站刪除（相簿，通關碼驗證）`, sha, branch: cfg.branch }),
+      });
+      fileDeleted = res.ok;
+    }
+  } catch (e) { /* 清單已拿掉，網站不會再顯示 */ }
+  return reply(200, { ok: true, id, file, removed: saved.changed, fileDeleted }, origin);
+}
+
 export default {
   // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch
-  testing: { MAX_BYTES, NOTE_MAX_CHARS, resetState, allowUpload, isJpeg, cleanNote },
+  testing: { MAX_BYTES, NOTE_MAX_CHARS, GALLERY_MAX, resetState, allowUpload, isJpeg, cleanNote, cleanGallery, galleryFileName },
 
   async fetch(request, env) {
     const cfg = config(env);
@@ -407,6 +591,18 @@ export default {
         return fail(405, '備註只能讀取（GET /notes）或寫入（PUT /notes/編號）', allowed);
       } catch (e) {
         return fail(500, '備註服務發生錯誤，原本的備註不受影響', allowed);
+      }
+    }
+
+    if (path === '/gallery' || path.startsWith('/gallery/')) {
+      try {
+        const [, id = '', file = '', extra] = path.split('/').slice(1).map(p => decodeURIComponent(p));
+        if (request.method === 'GET' && path === '/gallery') return await getGallery(request, env, allowed);
+        if (request.method === 'POST' && id && !file && extra === undefined) return await addGalleryPhoto(request, env, allowed, id);
+        if (request.method === 'DELETE' && id && file && extra === undefined) return await deleteGalleryPhoto(request, env, allowed, id, file);
+        return fail(405, '相簿只能讀取（GET /gallery）、新增（POST /gallery/編號）或刪除（DELETE /gallery/編號/檔名）', allowed);
+      } catch (e) {
+        return fail(500, '相簿服務發生錯誤，原本的照片不受影響', allowed);
       }
     }
 

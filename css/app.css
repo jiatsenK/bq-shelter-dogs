@@ -661,3 +661,81 @@ html.lightbox-open { overflow: hidden; }
 }
 .my-note-save:disabled { opacity: 0.6; cursor: default; }
 .my-note-actions .photo-cancel { margin: 0; }
+
+/* 相簿（狗卡資訊下方）：三欄正方形縮圖，最後一格「新增」；點了用燈箱看大圖、左右滑換張 */
+.gallery-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+@media (min-width: 560px) { .gallery-grid { grid-template-columns: repeat(4, 1fr); } }
+.g-tile, .g-add {
+  position: relative; aspect-ratio: 1; width: 100%;
+  border: none; border-radius: 12px; padding: 0; overflow: hidden;
+  background: var(--primary-soft); font-family: inherit; cursor: zoom-in;
+}
+.g-tile[hidden] { display: none; }
+.g-tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.g-tile:focus-visible, .g-add:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.g-tag {
+  position: absolute; left: 6px; bottom: 6px;
+  font-size: 11.5px; font-weight: 700; color: #fff;
+  background: rgba(30, 42, 68, 0.62); border-radius: 99px; padding: 1px 8px;
+}
+.g-fallback { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; color: var(--primary); opacity: 0.55; font-size: 28px; }
+.g-tile.broken { cursor: default; }
+.g-tile.broken img { display: none; }
+.g-tile.broken .g-fallback { display: flex; }
+.g-add {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+  background: var(--surface-soft); border: 2px dashed var(--line); color: var(--primary);
+  font-size: 13.5px; font-weight: 700; cursor: pointer;
+}
+.g-add .icon { font-size: 24px; }
+.g-add:active { background: var(--primary-soft); }
+.gallery-note { margin-top: 8px; }
+.photo-upload.preview.in-gallery { margin-top: 12px; padding: 0; box-shadow: none; }
+
+/* 燈箱換張：兩側箭頭、下方張數與刪除 */
+.lightbox-nav {
+  position: absolute; top: 50%; transform: translateY(-50%);
+  width: 44px; height: 44px; border-radius: 50%;
+  border: none; background: rgba(255, 255, 255, 0.18); color: #fff;
+  font-size: 22px; display: flex; align-items: center; justify-content: center;
+  cursor: pointer;
+}
+.lightbox-nav.prev { left: calc(10px + env(safe-area-inset-left, 0px)); }
+.lightbox-nav.next { right: calc(10px + env(safe-area-inset-right, 0px)); }
+.lightbox-nav[hidden] { display: none; }
+.lightbox-nav:focus-visible, .lightbox-delete:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.lightbox-bar {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  width: max-content; max-width: calc(100% - 32px);
+  display: flex; align-items: center; gap: 10px; color: #fff; font-size: 14px;
+}
+.lightbox-bar[hidden] { display: none; }
+.lightbox-count { font-variant-numeric: tabular-nums; font-weight: 700; background: rgba(255, 255, 255, 0.18); border-radius: 99px; padding: 4px 12px; }
+.lightbox-tag { opacity: 0.85; }
+.lightbox-delete {
+  display: flex; align-items: center; gap: 4px;
+  border: none; border-radius: 99px; background: rgba(255, 255, 255, 0.18); color: #fff;
+  font-family: inherit; font-size: 14px; font-weight: 700; padding: 6px 12px; cursor: pointer;
+}
+.lightbox-del {
+  width: min(360px, calc(100vw - 32px));
+  background: var(--surface); color: var(--ink); border-radius: 16px; padding: 12px 14px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
+}
+.lightbox-del-q { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
+.lightbox-del input[type="password"] {
+  width: 100%; box-sizing: border-box; font-family: inherit; font-size: 16px;
+  border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--surface-soft); color: var(--ink);
+}
+.lightbox-del .photo-error { margin-top: 8px; }
+.lightbox-del-actions { display: flex; gap: 8px; margin-top: 10px; }
+.lightbox-del-yes {
+  flex: 1; border: none; border-radius: 12px; background: var(--red-text); color: #fff;
+  font-family: inherit; font-size: 15px; font-weight: 700; padding: 10px; cursor: pointer;
+}
+.lightbox-del-yes:disabled { opacity: 0.6; cursor: default; }
+.lightbox-del-no {
+  border: none; border-radius: 12px; background: var(--muted-bg); color: var(--ink);
+  font-family: inherit; font-size: 15px; padding: 10px 16px; cursor: pointer;
+}
