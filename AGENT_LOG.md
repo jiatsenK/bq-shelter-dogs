@@ -213,3 +213,8 @@
 - 新增 `data/my-notes.json`（空的 `{}`）；`docs/PHOTO_UPLOAD_SETUP.md` 加「我的備註」啟用步驟與 API 說明。
 - 驗證：Worker 測試 22 項（新增 11 項）、同步測試 16 項全過。雲端連不到 Cloudflare／GitHub 寫入，未實際部署。
 - 待辦：合併後 K 要重新貼 Worker 程式並新增 Secret `NOTES_PASSCODE`；前端欄位在 #62。
+
+## [2026-09-25] Claude | 合併 PR #64（#61 我的備註寫回 Git）
+- 依據：K 在專案聊天說「合併」，順序 #63 → #65 → #64。
+- #63、#65 合併後把最新 main 併進分支，AGENT_LOG.md 檔尾衝突兩邊都保留；Worker 測試 22 項、同步測試 23 項、tests/index.html 61 項全過後合併。
+- 待辦：K 到 Cloudflare 重貼 `worker/src/index.js`、新增 Secret `NOTES_PASSCODE`（步驟見 docs/PHOTO_UPLOAD_SETUP.md「我的備註」）。
