@@ -161,13 +161,33 @@ function myWalkGroups(walks, dateFilter, query) {
   return groups;
 }
 
-// 狗卡照舊（點了開詳細資訊）；不在目前清單上的狗只列名字
-function myWalkCard(w, today) {
+// 同一隻狗在紀錄裡出現幾次（我總共遛過幾次）
+function myWalkCounts(walks) {
+  const counts = new Map();
+  for (const w of walks) counts.set(w.id || w.name, (counts.get(w.id || w.name) || 0) + 1);
+  return counts;
+}
+
+// 紀錄頁的精簡卡片（K 2026-09-25）：這頁是「我做過什麼」，不放備註警示、不放大家的上次遛狗天數，
+// 右邊改成我總共遛過牠幾次；點卡片照樣開詳細資訊。不在目前清單上的狗只列名字
+function myWalkCard(w, counts) {
   const dog = dogOfWalk(w);
-  if (dog) return dogCard(dog, today, 'mine');
-  return `<div class="card gone"><div class="body"><div class="row"><div class="who">
-    <div class="name">${esc(w.name)}</div><div class="meta">已不在目前的溜狗表</div>
-  </div></div></div></div>`;
+  const n = counts.get(w.id || w.name) || 1;
+  const right = `<div class="last mine-count"><span class="lbl">我遛過</span><span class="val">${n} 次</span></div>`;
+  if (!dog) {
+    return `<div class="card gone"><div class="body"><div class="row"><div class="who">
+      <div class="name">${esc(w.name)}</div><div class="meta">已不在目前的溜狗表</div>
+    </div>${right}</div></div></div>`;
+  }
+  return `
+    <div class="card" data-dog="${allDogs.indexOf(dog)}" role="button" tabindex="0" aria-haspopup="dialog">
+      ${photoThumb(dog)}
+      <div class="body"><div class="row">
+        <div class="who"><div class="name">${esc(dog.name)}${sexMark(dog)}</div>${cardMeta(dog)}</div>
+        ${right}
+        <span class="more">${icon('chevron')}</span>
+      </div></div>
+    </div>`;
 }
 
 function myWalksHtml(today, query) {
@@ -186,9 +206,10 @@ function myWalksHtml(today, query) {
     const why = query ? `找不到「${esc(query)}」` : '這天沒有你遛狗的紀錄';
     return picker + `<div class="status-msg">${mineDate ? `${esc(walkDateLabel(parseYmd(mineDate)))}：` : ''}${why}</div>`;
   }
+  const counts = myWalkCounts(myWalks);
   return picker + groups.map(g => `
     <h3 class="walk-date">${esc(walkDateLabel(g.date))}<span class="n">${g.walks.length} 隻</span></h3>
-    ${g.walks.map(w => myWalkCard(w, today)).join('')}`).join('');
+    ${g.walks.map(w => myWalkCard(w, counts)).join('')}`).join('');
 }
 
 // 回傳備註命中的關鍵字（顯示用）與實際出現的寫法（標示用）；沒命中回 null
@@ -491,7 +512,7 @@ function hideToast() {
 
 // 狗卡右側的「已遛」（溜狗表）／「移回」（今天已溜）按鈕；連犬名都沒有的狗記不了，照舊顯示箭頭
 function walkButton(dog, walkedTab) {
-  if (!walkKey(dog) || walkedTab === 'mine') return `<span class="more">${icon('chevron')}</span>`;
+  if (!walkKey(dog)) return `<span class="more">${icon('chevron')}</span>`;
   return walkedTab
     ? `<button type="button" class="walk-btn back" data-walk="back" aria-label="把 ${esc(dog.name)} 移回溜狗表">移回</button>`
     : `<button type="button" class="walk-btn" data-walk="add" aria-label="記下今天已遛 ${esc(dog.name)}">已遛</button>`;
@@ -1159,7 +1180,9 @@ function renderMain() {
     ? myWalkGroups(myWalks, mineDate, q).reduce((n, g) => n + g.walks.length, 0) : null;
   buildTabs({ walk: walkList.length, today: todayList.length, mine: mineCount });
   if (activeTab === 'mine') {
-    main.innerHTML = (q ? '' : `<div class="section-hint">${icon('tick')}試算表「誰遛的」是你的紀錄，新的在上面</div>`) + myWalksHtml(today, q);
+    const hint = myWalksState === 'ready' && myWalks.length
+      ? `你遛過 ${myWalkCounts(myWalks).size} 隻、共 ${myWalks.length} 次` : '試算表「誰遛的」是你的紀錄，新的在上面';
+    main.innerHTML = (q ? '' : `<div class="section-hint">${icon('tick')}${hint}</div>`) + myWalksHtml(today, q);
     return;
   }
   const inToday = activeTab === 'today';

@@ -1330,7 +1330,20 @@ async function runMyWalksTests() {
       eq(main.querySelector('.card.gone').textContent.includes('已不在目前的溜狗表'), true, '離所：');
       eq(document.querySelector('#tabs button[data-tab="mine"] .n').textContent, '4', '分類數字：');
       eq(main.querySelectorAll('.walk-btn').length, 0, '這頁不放已遛按鈕：');
+      eq([...main.querySelectorAll('.mine-count .val')].map(v => v.textContent), ['1 次', '1 次', '1 次', '1 次'], '右邊是我遛過幾次：');
+      if (/上次遛狗/.test(main.textContent)) throw new Error('這頁不顯示大家的上次遛狗');
+      if (!main.querySelector('.section-hint').textContent.includes('你遛過 4 隻、共 4 次')) throw new Error('上方要有總數');
       if (/紀錄丙/.test(main.textContent)) throw new Error('別人遛的不該出現');
+    });
+    await check('#58 我溜過不顯示備註（連警示備註也不放）；同一隻遛過幾次就算幾次', () => {
+      setup();
+      allDogs[0].note = '勿溜，測試用備註';
+      myWalks = parseMyWalks({ version: 1, walks: [...WALKS.walks, { id: '8001', name: '紀錄甲', date: '2026-09-26', mine: true }] });
+      render();
+      eq(main.querySelectorAll('.warn-note, .card.flagged, mark').length, 0, '備註：');
+      if (main.textContent.includes('測試用備註')) throw new Error('不該出現備註文字');
+      eq([...main.querySelectorAll('.card')].filter(c => c.textContent.includes('紀錄甲')).map(c => c.querySelector('.mine-count .val').textContent), ['2 次', '2 次'], '紀錄甲：');
+      allDogs[0].note = '';
     });
     await check('#58 選日期只看那天，清除回到全部', () => {
       setup();
