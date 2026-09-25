@@ -1,0 +1,58 @@
+# 照片有變動就自動產生縮圖（#83）
+# - 網站上傳主照片／相簿照片、設為主照片、刪相簿照片，推到 main 後都會跑一次
+# - 縮圖放 photos/thumbs/（程式見 scripts/make-thumbs.py）；有變才提交
+# - 縮圖還沒產生前，網站會自動改讀原圖，所以不影響剛上傳的照片顯示
+# - 也可以在 Actions 頁選「產生照片縮圖」→「Run workflow」手動跑
+name: 產生照片縮圖
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'photos/**'
+      - '!photos/thumbs/**'
+      - 'scripts/make-thumbs.py'
+
+permissions:
+  contents: write
+
+# 短時間連傳好幾張時排隊跑，後面那次會看到全部照片
+concurrency:
+  group: make-thumbs
+  cancel-in-progress: false
+
+jobs:
+  thumbs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 固定 Pillow 版本：同一張原圖每次產生的縮圖才會一模一樣，不會每次都提交
+      - name: 安裝 Pillow
+        run: pip install pillow==12.3.0
+
+      - name: 產生縮圖
+        run: python scripts/make-thumbs.py
+
+      - name: 縮圖有變才提交
+        run: |
+          git add -A photos/thumbs
+          if git diff --cached --quiet; then
+            echo "縮圖沒有變動，不提交。"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "產生照片縮圖：更新 photos/thumbs/"
+          # 期間有人推了別的提交（例如同步試算表、又傳了一張照片）就先接上再推，最多試三次
+          for i in 1 2 3; do
+            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
+            sleep $((i * 5))
+          done
+          exit 1
