@@ -1,9 +1,9 @@
 // 從 Google 試算表同步狗狗資料，產生 data/dogs.json（#31）。
 // 由 .github/workflows/sync-sheet.yml 定期執行；也可以在本機跑：node scripts/sync-sheet.mjs
 //
-// 解析邏輯照抄前端（index.html／js/app.js）的 fetchGviz、findHeaderRow、parseMainList、parseCages、
-// parseGroups、cellDate，結果必須跟前端直接讀試算表一模一樣；改其中一邊時兩邊一起改，
+// 試算表的解析只在這裡做（#32 起前端只讀 dogs.json）。前端讀 dogs.json 的 parseDogsData 要讀得懂這裡寫出的格式，
 // scripts/sync-sheet.test.mjs 會拿前端的函式來比對。
+// 狗卡資訊（dogs/{編號}.md）也在這裡整理成純文字和性別一起寫進 dogs.json，網站不用逐隻抓 .md。
 //
 // 讀取失敗（網路、試算表沒公開、欄位被改掉、讀到 0 隻狗）時直接失敗結束，不寫檔，
 // 保留上一次成功的 data/dogs.json。資料跟舊檔一樣時也不寫檔（連同步時間都不動），
@@ -18,6 +18,7 @@ if (!process.env.TZ) process.env.TZ = 'Asia/Taipei';
 
 export const SHEET_ID = '1cxoir8K5-D5hncdQiXhogQXi8Pyk47l5cl-_gNADhqw';
 export const OUTPUT = fileURLToPath(new URL('../data/dogs.json', import.meta.url));
+export const DOGS_DIR = fileURLToPath(new URL('../dogs/', import.meta.url));
 export const FORMAT_VERSION = 1;
 
 // headers：前幾列當表頭。0 表示所有列都當資料列回傳
@@ -164,24 +165,6 @@ export function parseMainList(table, headerTexts = [], today = new Date()) {
   return dogs;
 }
 
-// 籠位清單：主清單「籠位」欄去重，沒有狗的空籠也列出（例：舊A01）
-export function parseCages(table, headerTexts = []) {
-  const idx = mainColumnMap(table, headerTexts).cage;
-  const set = new Set();
-  for (const r of table.rows || []) {
-    const cage = cellText((r.c || [])[idx]);
-    if (cage && cage.replace(/\s+/g, '') !== MAIN_COLUMNS.cage) set.add(cage);
-  }
-  return sortCages([...set]);
-}
-
-// 籠位排序：英數開頭的在前，中文開頭的集中在後；數字照大小排，A2 排在 A10 前面
-const CAGE_COLLATOR = new Intl.Collator('zh-Hant-TW', { numeric: true, sensitivity: 'base' });
-export function sortCages(list) {
-  const group = c => /^[0-9A-Za-z]/.test(c) ? 0 : 1;
-  return list.slice().sort((a, b) => group(a) - group(b) || CAGE_COLLATOR.compare(a, b));
-}
-
 // 主清單分兩次讀：先找出表頭在第幾列，再指定表頭列數重讀
 export async function loadMainList(fetchImpl = fetch, today = new Date()) {
   const raw = await fetchGviz('主清單', 0, fetchImpl);
@@ -189,9 +172,7 @@ export async function loadMainList(fetchImpl = fetch, today = new Date()) {
   if (headerIdx === -1) throw new Error('主清單裡找不到含「犬名」的表頭列，請確認分頁名稱與欄位沒有被改掉。');
   const headerTexts = ((raw.rows[headerIdx] || {}).c || []).map(cellText);
   const table = await fetchGviz('主清單', headerIdx + 1, fetchImpl);
-  const dogs = parseMainList(table, headerTexts, today);
-  dogs.cages = parseCages(table, headerTexts);
-  return dogs;
+  return parseMainList(table, headerTexts, today);
 }
 
 // 犬名比對時忽略空白（含全形空白）
@@ -237,21 +218,90 @@ export function formatTimestamp(d) {
     `${sign}${pad(Math.floor(Math.abs(off) / 60))}:${pad(Math.abs(off) % 60)}`;
 }
 
+// ── 狗卡資訊（dogs/{編號}.md，#9）：原本在前端做，改成同步時整理好寫進 dogs.json ──
+
+// 去掉開頭的 YAML frontmatter（--- 到 ---），沒有就原樣回傳
+export function parseFrontmatterBody(text) {
+  const m = text.replace(/^\uFEFF/, '').match(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/);
+  return (m ? m[1] : text).trim();
+}
+
+// 狗卡 frontmatter 的性別：male／female，其他都當作沒寫
+export function parseFrontmatterSex(text) {
+  const m = text.replace(/^\uFEFF/, '').match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
+  if (!m) return '';
+  const sex = ((m[1].match(/^sex:\s*(male|female)\s*$/mi) || [])[1] || '').toLowerCase();
+  return sex;
+}
+
+// 把 Markdown 轉成純文字，網站上不要露出 **、#、[]() 這些符號
+export function markdownToText(md) {
+  return md
+    .replace(/<!--[\s\S]*?-->/g, '')
+    .replace(/%%[\s\S]*?%%/g, '')                            // Obsidian 註解
+    .split(/\r?\n/)
+    .map(line => line
+      .replace(/^\s*(```|~~~).*$/, '')                        // 程式碼區塊的框線
+      .replace(/^\s*([-*_])(\s*\1){2,}\s*$/, '')              // 分隔線
+      .replace(/^\s{0,3}#{1,6}\s+/, '')                       // 標題
+      .replace(/^\s*(>\s*)+/, '')                             // 引用
+      .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/, '')                // 待辦清單
+      .replace(/^\s*([-*+]|\d+[.)])\s+/, '')                  // 清單符號
+      .replace(/^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-*:?\s*$/, '')    // 表格分隔列
+      .replace(/!\[\[[^\]]*\]\]/g, '')                        // Obsidian 嵌入圖片
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '')                  // 圖片
+      .replace(/\[\[([^\]|]*)\|([^\]]*)\]\]/g, '$2')           // [[頁面|顯示文字]]
+      .replace(/\[\[([^\]]*)\]\]/g, '$1')                      // [[頁面]]
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')                 // [文字](網址)
+      .replace(/<[^>]+>/g, '')                                // HTML 標籤
+      .replace(/(\*\*|__)(.+?)\1/g, '$2')                      // 粗體
+      .replace(/(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)/g, '$1$2')     // 斜體 *
+      .replace(/(^|[^_\w])_(?!\s)(.+?)_(?![\w])/g, '$1$2')      // 斜體 _
+      .replace(/~~(.+?)~~/g, '$1')
+      .replace(/==(.+?)==/g, '$1')
+      .replace(/`+([^`]*)`+/g, '$1')
+      .replace(/^\s*\||\|\s*$/g, '')                          // 表格左右框線
+      .replace(/\s*\|\s*/g, ' ')
+      .trim())
+    .filter(Boolean)
+    .join(' ');
+}
+
+// 讀 dogs/{編號}.md；沒有這個檔回空字串。編號只接受英數字，擋掉 ../ 之類的路徑
+const CARD_ID = /^[0-9A-Za-z]+$/;
+export async function readDogCardFile(id) {
+  if (!CARD_ID.test(id)) return '';
+  try {
+    return await readFile(`${DOGS_DIR}${id}.md`, 'utf8');
+  } catch (e) {
+    if (e.code === 'ENOENT') return '';
+    throw e;
+  }
+}
+
+// 每隻狗加上 sex（male／female／空白）和 intro（狗卡資訊純文字）。沒有編號的狗不讀，也不改用犬名配對
+export async function attachDogCards(dogs, readCard = readDogCardFile) {
+  const cards = new Map();
+  for (const id of new Set(dogs.map(d => d.id).filter(Boolean))) {
+    const raw = await readCard(id);
+    cards.set(id, raw ? { sex: parseFrontmatterSex(raw), intro: markdownToText(parseFrontmatterBody(raw)) } : null);
+  }
+  return dogs.map(d => ({ ...d, sex: '', intro: '', ...(cards.get(d.id) || {}) }));
+}
+
 // 讀試算表、整理成 dogs.json 的內容（不含同步時間）。任何一個分頁讀取失敗都丟錯。
-export async function buildData(fetchImpl = fetch, today = new Date()) {
-  const [dogs, groupTable] = await Promise.all([
+export async function buildData(fetchImpl = fetch, today = new Date(), readCard = readDogCardFile) {
+  const [sheetDogs, groupTable] = await Promise.all([
     loadMainList(fetchImpl, today),
     fetchGviz('常遛狗群', 0, fetchImpl),
   ]);
-  if (!dogs.length) throw new Error('主清單讀到 0 隻狗，可能是試算表被清空或格式變了，這次不更新。');
-  const groupMap = parseGroups(groupTable, new Set(dogs.map(d => d.name)));
-  // 籠位以主清單籠位欄為準（含空籠）；再併入狗身上的籠位，跟前端一樣
-  const cages = sortCages([...new Set([...dogs.cages, ...dogs.map(d => d.cage).filter(Boolean)])]);
+  if (!sheetDogs.length) throw new Error('主清單讀到 0 隻狗，可能是試算表被清空或格式變了，這次不更新。');
+  const groupMap = parseGroups(groupTable, new Set(sheetDogs.map(d => d.name)));
   const groups = {};
   for (const [name, set] of Object.entries(groupMap)) groups[name] = [...set];
+  const dogs = await attachDogCards(sheetDogs, readCard);
   return {
     dogs: dogs.map(d => ({ ...d, walkedDate: formatDate(d.walkedDate) })),
-    cages,
     groups,
   };
 }
@@ -273,12 +323,12 @@ async function main() {
   const oldText = await readFile(OUTPUT, 'utf8').catch(() => '');
   const text = renderFile(data, oldText);
   if (!text) {
-    console.log(`資料沒有變動（${data.dogs.length} 隻狗、${data.cages.length} 個籠位），不更新 data/dogs.json。`);
+    console.log(`資料沒有變動（${data.dogs.length} 隻狗），不更新 data/dogs.json。`);
     return;
   }
   await mkdir(dirname(OUTPUT), { recursive: true });
   await writeFile(OUTPUT, text);
-  console.log(`已更新 data/dogs.json：${data.dogs.length} 隻狗、${data.cages.length} 個籠位、${Object.values(data.groups).filter(g => g.length).length} 隻有可以一起溜的狗。`);
+  console.log(`已更新 data/dogs.json：${data.dogs.length} 隻狗、${data.dogs.filter(d => d.intro).length} 隻有狗卡資訊、${Object.values(data.groups).filter(g => g.length).length} 隻有可以一起溜的狗。`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {

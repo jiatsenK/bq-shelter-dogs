@@ -24,7 +24,6 @@ const RED_DAYS = 30;
 
 let allDogs = [];
 let groupMap = {};
-let detailMap = {};
 let activeTab = 'walk';
 let detailDog = null; // 詳細資訊正在看的狗
 let detailOpener = null;
@@ -59,6 +58,9 @@ function parseDogsData(data) {
     walkedDate: parseYmd(d.walkedDate),
     walker: text(d.walker),
     note: text(d.note),
+    // 狗卡資訊與性別由同步腳本從 dogs/{編號}.md 整理好（scripts/sync-sheet.mjs 的 attachDogCards）
+    sex: d.sex === 'male' ? '♂' : d.sex === 'female' ? '♀' : '',
+    intro: text(d.intro),
   }));
   let groups = null;
   if (data.groups && typeof data.groups === 'object' && !Array.isArray(data.groups)) {
@@ -108,71 +110,6 @@ function highlightNote(note, terms) {
     last = m.index + m[0].length;
   }
   return html + esc(note.slice(last));
-}
-
-// 去掉開頭的 YAML frontmatter（--- 到 ---），沒有就原樣回傳
-function parseFrontmatterBody(text) {
-  const m = text.replace(/^\uFEFF/, '').match(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/);
-  return (m ? m[1] : text).trim();
-}
-
-// 狗卡 frontmatter 的性別：OCR 寫入 male／female，前端顯示成 ♂／♀
-function parseFrontmatterSex(text) {
-  const m = text.replace(/^\uFEFF/, '').match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
-  if (!m) return '';
-  const sex = (m[1].match(/^sex:\s*(male|female)\s*$/mi) || [])[1];
-  return sex === 'male' ? '♂' : sex === 'female' ? '♀' : '';
-}
-
-// 把 Markdown 轉成純文字，卡片上不要露出 **、#、[]() 這些符號
-function markdownToText(md) {
-  return md
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/%%[\s\S]*?%%/g, '')                            // Obsidian 註解
-    .split(/\r?\n/)
-    .map(line => line
-      .replace(/^\s*(```|~~~).*$/, '')                        // 程式碼區塊的框線
-      .replace(/^\s*([-*_])(\s*\1){2,}\s*$/, '')              // 分隔線
-      .replace(/^\s{0,3}#{1,6}\s+/, '')                       // 標題
-      .replace(/^\s*(>\s*)+/, '')                             // 引用
-      .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/, '')                // 待辦清單
-      .replace(/^\s*([-*+]|\d+[.)])\s+/, '')                  // 清單符號
-      .replace(/^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-*:?\s*$/, '')    // 表格分隔列
-      .replace(/!\[\[[^\]]*\]\]/g, '')                        // Obsidian 嵌入圖片
-      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '')                  // 圖片
-      .replace(/\[\[([^\]|]*)\|([^\]]*)\]\]/g, '$2')           // [[頁面|顯示文字]]
-      .replace(/\[\[([^\]]*)\]\]/g, '$1')                      // [[頁面]]
-      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')                 // [文字](網址)
-      .replace(/<[^>]+>/g, '')                                // HTML 標籤
-      .replace(/(\*\*|__)(.+?)\1/g, '$2')                      // 粗體
-      .replace(/(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)/g, '$1$2')     // 斜體 *
-      .replace(/(^|[^_\w])_(?!\s)(.+?)_(?![\w])/g, '$1$2')      // 斜體 _
-      .replace(/~~(.+?)~~/g, '$1')
-      .replace(/==(.+?)==/g, '$1')
-      .replace(/`+([^`]*)`+/g, '$1')
-      .replace(/^\s*\||\|\s*$/g, '')                          // 表格左右框線
-      .replace(/\s*\|\s*/g, ' ')
-      .trim())
-    .filter(Boolean)
-    .join(' ');
-}
-
-async function fetchAllDetails(dogs) {
-  const map = {};
-  // 同一個編號只抓一次；沒有編號的狗不抓，也不改用犬名配對
-  const ids = [...new Set(dogs.map(d => d.id).filter(Boolean))];
-  await Promise.allSettled(ids.map(async id => {
-    try {
-      const res = await fetch(`dogs/${encodeURIComponent(id)}.md`);
-      if (!res.ok) return;
-      const raw = await res.text();
-      const text = markdownToText(parseFrontmatterBody(raw));
-      if (text) map[id] = text;
-      const dog = dogs.find(d => d.id === id);
-      if (dog) dog.sex = parseFrontmatterSex(raw);
-    } catch (e) { /* 沒有這隻狗的介紹檔，略過即可 */ }
-  }));
-  return map;
 }
 
 function computeStatus(dog, today) {
@@ -313,7 +250,7 @@ function metaLine(dog) {
   return `<div class="meta">${esc(dog.cage)}${dog.id ? `<span class="sep">|</span>${esc(dog.id)}` : ''}</div>`;
 }
 
-// 性別：主清單目前沒有這欄，先留位置；之後有資料就顯示 ♂／♀ 符號
+// 性別：狗卡 frontmatter 有寫 sex 才顯示 ♂／♀，沒寫就留空位
 function sexMark(dog) {
   return `<span class="sex">${esc(dog.sex || '')}</span>`;
 }
@@ -457,12 +394,12 @@ function dogCard(dog, today, walkedTab = false) {
   `;
 }
 
-// 詳細資訊：備註（志工後續補充，試算表備註欄）／可以一起溜的狗／狗卡資訊（dogs/{編號}.md 的入所原始介紹）
+// 詳細資訊：備註（志工後續補充，試算表備註欄）／可以一起溜的狗／狗卡資訊（dogs/{編號}.md 的入所原始介紹，同步時已寫進 dogs.json）
 function detailHtml(dog, today) {
   const flag = specialFlag(dog.note);
   const buddies = [...(groupMap[dog.name] || [])];
   const byName = new Map(allDogs.map(d => [d.name, d]));
-  const intro = dog.id && detailMap[dog.id];
+  const intro = dog.intro;
   const walkedIds = loadWalkedIds(today);
   return `
     <div class="detail-head">
@@ -1004,7 +941,6 @@ async function init() {
     ? `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${pad2(t.getHours())}:${pad2(t.getMinutes())}` : '';
   loadState = 'ready';
   render();
-  fetchAllDetails(allDogs).then(map => { detailMap = map; render(); renderDetail(); });
 }
 
 // tests/index.html 會設定 __BQ_TEST__，只載入函式、不去讀 dogs.json
