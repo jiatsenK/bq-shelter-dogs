@@ -956,11 +956,13 @@ async function runPhotoTests() {
         const img = document.querySelector('#detail [data-zoom] img');
         if (!img.complete) await new Promise(r => img.addEventListener('load', r, { once: true }));
         await tick();
-        eq(pick.textContent.trim(), '更換照片', '已有照片：');
+        eq(pick.title, '更換照片', '已有照片：');
+        eq(pick.parentElement.className, 'photo-wrap', '相機在照片角落：');
+        eq(document.querySelector('#detail .photo-upload'), null, '還沒選照片時照片下方沒有多一行：');
         hideDetail();
         delete photoOverrides['9102'];
         showDetail(allDogs[1]);
-        eq(document.getElementById('photoPick').textContent.trim(), '上傳照片', '還沒照片：');
+        eq(document.getElementById('photoPick').title, '上傳照片', '還沒照片：');
         hideDetail();
       });
       await check('#48 選照片後壓成 JPEG（長邊 1280）並預覽，只有「確認上傳」與取消；取消回到原狀', async () => {

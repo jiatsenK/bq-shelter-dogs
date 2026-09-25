@@ -466,7 +466,7 @@ function detailHtml(dog, today) {
   const walkedIds = loadWalkedIds(today);
   return `
     <div class="detail-head">
-      ${photoThumb(dog, 84, true)}
+      <div class="photo-wrap">${photoThumb(dog, 84, true)}${photoPickButton(dog)}</div>
       <div class="info">
         ${statusBadge(dog, today)}
         <div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div>
@@ -527,13 +527,18 @@ function groupWalkButton(dog, walkedIds) {
 
 // ── 上傳／更換照片（#48）：選照片 → 預覽 → 確認上傳 → 畫面立刻換新照片 ──
 
-// 詳細資訊照片下方那一塊；沒有編號（照片檔名要用編號）或上傳服務還沒設定就不顯示
+// 詳細資訊照片右下角的相機圖示（K 2026-09-25 問業界做法，比照大頭貼）：點照片看大圖、點相機換照片。
+// 沒有編號（照片檔名要用編號）或上傳服務還沒設定就不顯示
+function photoPickButton(dog) {
+  if (!UPLOAD_URL || !dog.id) return '';
+  return `<button type="button" class="photo-pick" id="photoPick" aria-label="上傳 ${esc(dog.name)} 的照片" title="上傳照片">${icon('camera')}</button>`;
+}
+
+// 選好照片後，詳細資訊上方出現的預覽與「確認上傳」
 function photoUploadHtml(dog) {
   if (!UPLOAD_URL || !dog.id) return '';
   const up = photoUpload && photoUpload.dog === dog ? photoUpload : null;
-  if (!up) {
-    return `<div class="photo-upload"><button type="button" class="photo-pick" id="photoPick">${icon('camera')}<span>上傳照片</span></button></div>`;
-  }
+  if (!up) return '';
   const busy = up.phase === 'uploading';
   return `
     <div class="photo-upload preview">
@@ -674,7 +679,9 @@ function renderDetail() {
     pick.addEventListener('click', pickPhotoFile);
     // 已經有照片就叫「更換照片」
     const img = zoom && zoom.querySelector('img');
-    const label = () => { if (img && img.naturalWidth) pick.querySelector('span').textContent = '更換照片'; };
+    const label = () => {
+      if (img && img.naturalWidth) { pick.setAttribute('aria-label', `更換 ${detailDog.name} 的照片`); pick.title = '更換照片'; }
+    };
     if (img) { label(); img.addEventListener('load', label); }
   }
   const confirmBtn = box.querySelector('#photoConfirm');
