@@ -1168,7 +1168,7 @@ async function runMyNoteTests() {
   const json = (data, status = 200) => new Response(JSON.stringify(data), { status });
   const toastText = () => { const t = document.getElementById('toast'); return t && !t.hidden ? t.querySelector('.toast-text').textContent : ''; };
   const section = () => document.querySelector('#detail [data-section="mynote"]');
-  const typeInto = (el, value) => { el.value = value; el.dispatchEvent(new Event('input')); };
+  const typeInto = (el, value) => { el.value = value; el.dispatchEvent(new Event('input', { bubbles: true })); };
   try {
     box.classList.remove('hidden');
     UPLOAD_URL = 'https://worker.test';
@@ -1679,7 +1679,7 @@ async function runGalleryTests() {
       await tick();
       eq([calls.length, lb().querySelector('.photo-error').textContent.trim()], [0, '請輸入通關碼'], '沒填：');
       const pass = document.getElementById('galleryDeletePass');
-      pass.value = '猜'; pass.dispatchEvent(new Event('input'));
+      pass.value = '猜'; pass.dispatchEvent(new Event('input', { bubbles: true }));
       document.getElementById('galleryDeleteYes').click();
       await tick(); await tick();
       eq([calls[0][0], calls[0][1].method, JSON.parse(calls[0][1].body)], [`https://worker.test/gallery/9301/${F2}`, 'DELETE', { passcode: '猜' }], '送出：');
@@ -1688,7 +1688,7 @@ async function runGalleryTests() {
       eq([isOpen(), lb().querySelector('#galleryDeleteForm')], [true, null], 'Esc 先收起刪除確認：');
       document.getElementById('galleryDeleteBtn').click();
       const pass2 = document.getElementById('galleryDeletePass');
-      pass2.value = '對的'; pass2.dispatchEvent(new Event('input'));
+      pass2.value = '對的'; pass2.dispatchEvent(new Event('input', { bubbles: true }));
       window.fetch = async (u, o) => { calls.push([String(u), o]); return json({ ok: true, removed: true, fileDeleted: true }); };
       document.getElementById('galleryDeleteYes').click();
       await tick(); await tick();
@@ -1957,6 +1957,41 @@ async function runWalkedModuleTests() {
   }
 }
 
+// #86 詳細資訊按鈕改在外框綁一次（事件委派）
+async function runDetailWiringTests() {
+  const saved = [allDogs, groupMap, walkedStorage, walkedMemory];
+  try {
+    await check('#86 重畫很多次，按一下還是只做一次；找不到的一起溜狗按鈕不能按', () => {
+      walkedStorage = fakeStorage(); walkedMemory = null;
+      allDogs = [{ name: '委派甲', id: '9601', cage: 'A01', note: '', intro: '', sex: '' },
+        { name: '委派乙', id: '9602', cage: 'A01', note: '', intro: '', sex: '' }];
+      groupMap = { '委派甲': new Set(['委派乙', '不在名單']) };
+      pickedBuddies.clear();
+      showDetail(allDogs[0]);
+      renderDetail(); renderDetail(); renderDetail();
+      document.querySelector('#detail .pick[data-pick="9602"]').click();
+      eq([...pickedBuddies], ['9602'], '勾一次：');
+      const ghost = [...document.querySelectorAll('#detail .buddy')].find(b => b.textContent.includes('不在名單'));
+      eq(ghost.disabled, true, '不在名單的狗：');
+      document.querySelector('#detail .buddy[data-dog="1"]').click();
+      eq(detailDog, allDogs[1], '點照片換看那隻：');
+      pickedBuddies.clear();
+      hideDetail();
+    });
+    await check('#86 詳細資訊關掉後主照片才載入完，不會出錯', () => {
+      const box = document.createElement('div');
+      box.innerHTML = '<div data-zoom><img></div><button id="photoPick"></button>';
+      document.body.appendChild(box);
+      detailDog = { name: '晚到', id: '9603' };
+      labelPhotoPick(box);
+      detailDog = null; box.remove();
+      box.querySelector('img').dispatchEvent(new Event('load')); // 以前這裡會丟錯
+    });
+  } finally {
+    [allDogs, groupMap, walkedStorage, walkedMemory] = saved;
+  }
+}
+
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
 Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
@@ -1989,6 +2024,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(() => fetch('../.github/workflows/make-thumbs.yml').then(r => r.text()).then(t => { MAKE_THUMBS_YML = t; }))
   .then(runThumbTests)
   .then(runWalkedModuleTests)
+  .then(runDetailWiringTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

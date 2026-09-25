@@ -361,3 +361,9 @@
 - 依據：K 說 Matt 體檢的三項（含照片）都要處理；這是第三張。畫面與行為不變。
 - `js/app.js`：新增 `walkedToday(today)`（`has(dog)`、`dogs(list)`）與 `recordWalked(dogs, on, today)`（回傳 `changed`、`undo`），取代 `isWalkedToday`、`walkedTodayDogs` 和到處傳的編號陣列；`setWalked` 只剩重畫與提示條。通關碼那段移到今天已溜區塊後面，不再夾在中間。
 - 驗證：tests/index.html 全過（新增 3 項模組測試）。
+
+## 2026-09-25 整理詳細資訊視窗程式（Claude，分支 claude/project-thread-s2p7cy，#86）
+- 依據：K 說 Matt 體檢的三項（含照片）都要處理；這是第四張。畫面與行為不變。
+- `js/app.js`：`renderDetail` 不再每次重綁十幾個按鈕，改由 `wireDetail` 在 #detail 外框綁一次 click／input／submit，依 `DETAIL_CLICKS`（選擇器 → 動作）分派；找不到的一起溜狗按鈕改在 HTML 直接 disabled。「更換照片」標籤抽成 `labelPhotoPick`。
+- 票內 BUG 一起修：詳細資訊關掉後主照片才載入完時，標籤程式讀 `detailDog.name` 會丟錯（測試頁每次跑都出現 3 次頁面錯誤），改成記住當下那隻狗並確認按鈕還在畫面上。
+- 測試：輸入事件改成跟真的瀏覽器一樣會往上傳（`bubbles: true`）；新增 2 項。tests/index.html 全過，真實資料開詳細資訊點勾選、相簿燈箱、我的備註、關閉都正常、無頁面錯誤。
