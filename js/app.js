@@ -10,6 +10,9 @@ const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
 // 我的備註（#61／#62）：寫入與最新內容都經過同一個 Worker；讀不到 Worker 時改讀網站上的這個檔（可能晚一兩分鐘）
 const MY_NOTES_URL = 'data/my-notes.json';
 const MY_NOTE_MAX_CHARS = 1000; // 跟 Worker 的 NOTE_MAX_CHARS 一致
+// 我最近溜過（#58）：同步時累積的遛狗紀錄（#56），只看 mine（#57 判斷是不是我遛的）
+const WALKS_URL = 'data/walks.json';
+const MY_WALKS_SINCE = '2026/9/25'; // #57 上線、開始判斷是不是我遛的那天
 // 警示關鍵字（2026-09-24 K 定，#28）：備註含任一個，就把備註原文直接顯示在卡片第一層，字眼標紅；
 // 只用來判斷要不要顯示，不改寫原文、不另外產生標籤。狗照樣留在待巡房，由志工自己判斷。
 // 每組第一個是關鍵字，後面是常見異體寫法，一起比對。志工發現新的慣用字眼時，只要在這裡加一組。
@@ -38,6 +41,8 @@ let myNotes = {}; // 我的備註（#62）：編號 → { text, updatedAt }
 let myNotesState = 'loading'; // loading／worker（Worker 讀到最新）／site（退回網站上的檔）／error
 let noteEdit = null; // 正在編輯的我的備註：{ dog, text, pass, needPass, phase: 'edit'|'saving'|'error', error }
 let analysisOpen = false; // 分析頁（#59）開著嗎
+let myWalks = []; // 我遛過的紀錄（#58）：[{ id, name, date: Date, ymd }]，新到舊
+let myWalksState = 'loading'; // loading／ready／error
 let loadState = 'loading'; // loading：還在讀 dogs.json；error：讀取失敗；ready：資料好了
 
 // 把年月日組成日期；不合理的日期（例：2/30）回傳 null
@@ -93,6 +98,126 @@ async function loadDogsData() {
   let data;
   try { data = await res.json(); } catch (e) { throw new Error('dogs.json 內容壞掉了。'); }
   return parseDogsData(data);
+}
+
+// ── 我最近溜過（#58）──
+
+// walks.json 只取 mine 的紀錄，日期不合理的丟掉；同一隻狗同一天只留一筆；新到舊（同一天後記的在前）
+function parseMyWalks(data) {
+  if (!data || !Array.isArray(data.walks)) throw new Error('walks.json 格式不對');
+  const text = v => (v == null ? '' : String(v).trim());
+  const seen = new Set();
+  const list = [];
+  data.walks.forEach((w, i) => {
+    if (!w || w.mine !== true) return;
+    const date = parseYmd(w.date);
+    const id = text(w.id), name = text(w.name);
+    if (!date || (!id && !name)) return;
+    const key = `${id || name}|${w.date}`;
+    if (seen.has(key)) return;
+    seen.add(key);
+    list.push({ id, name, date, ymd: text(w.date), i });
+  });
+  return list.sort((a, b) => b.date - a.date || b.i - a.i).map(({ i, ...w }) => w);
+}
+
+async function loadMyWalks() {
+  myWalksState = 'loading';
+  try {
+    const res = await fetch(WALKS_URL, { cache: 'no-cache' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    myWalks = parseMyWalks(await res.json());
+    myWalksState = 'ready';
+  } catch (e) {
+    console.error(e);
+    myWalksState = 'error';
+  }
+  render();
+}
+
+// 紀錄對到目前清單上的狗：有編號用編號，沒有才用犬名；對不到（例：已離所）回 null
+function dogOfWalk(w) {
+  if (w.id) return allDogs.find(d => d.id === w.id) || null;
+  const key = searchKey(w.name);
+  return allDogs.find(d => !d.id && searchKey(d.name) === key) || null;
+}
+
+// 2026/09/24（四）
+function walkDateLabel(date) {
+  return `${date.getFullYear()}/${pad2(date.getMonth() + 1)}/${pad2(date.getDate())}（${'日一二三四五六'[date.getDay()]}）`;
+}
+
+// 依日期分組：[{ ymd, date, walks }]；query 用犬名篩選
+function myWalkGroups(walks, query) {
+  const groups = [];
+  for (const w of walks) {
+    if (!matchesSearch(w, query)) continue;
+    let g = groups[groups.length - 1];
+    if (!g || g.ymd !== w.ymd) groups.push(g = { ymd: w.ymd, date: w.date, walks: [] });
+    g.walks.push(w);
+  }
+  return groups;
+}
+
+// 每次到所一張卡（K 2026-09-25 看原型後，預設照 A）：K 一個月去約四次、每次遛好幾隻，
+// 所以一個日期就是一次到所，卡片裡把那天遛的狗用照片排成一排；那天是第一次遛的狗標「第一次」
+// （紀錄最早那天不標：那天之前沒有紀錄，不知道是不是第一次）。
+// 點照片開原本的詳細資訊；不在目前清單上的狗只列名字、不能點
+function myVisitCard(g, firstSeen) {
+  const tiles = g.walks.map(w => {
+    const dog = dogOfWalk(w);
+    const first = firstSeen.get(w.id || w.name) === w.ymd && w.ymd !== firstSeen.earliest;
+    const inner = `${photoThumb(dog || { name: w.name, id: '' }, 56)}<span class="bname">${esc(w.name)}</span>${first ? '<span class="first">第一次</span>' : ''}`;
+    return dog
+      ? `<button type="button" class="mine-dog" data-mine-dog="${allDogs.indexOf(dog)}" aria-label="${esc(w.name)}：看詳細資訊">${inner}</button>`
+      : `<div class="mine-dog gone" title="已不在目前的溜狗表">${inner}</div>`;
+  }).join('');
+  return `<section class="visit">
+    <h3 class="walk-date">${esc(walkDateLabel(g.date))}<span class="n">${g.walks.length} 隻</span></h3>
+    <div class="visit-dogs">${tiles}</div>
+  </section>`;
+}
+
+// 每隻狗我第一次遛的日期（看全部紀錄，不受日期選擇與搜尋影響）
+function myFirstWalks(walks) {
+  const first = new Map();
+  for (const w of walks) {
+    const k = w.id || w.name;
+    if (!first.has(k) || first.get(k) > w.ymd) first.set(k, w.ymd);
+    if (!first.earliest || first.earliest > w.ymd) first.earliest = w.ymd;
+  }
+  return first;
+}
+
+// 上方小計：這個月到所幾次、遛過幾隻、總共幾趟，並跟上個月比到所次數
+function myMonthStats(walks, today) {
+  const ym = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+  const thisMonth = ym(today);
+  const lastMonth = ym(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+  const of = m => walks.filter(w => w.ymd.startsWith(m));
+  const now = of(thisMonth);
+  const visits = list => new Set(list.map(w => w.ymd)).size;
+  return `<div class="mine-stats">
+    <div class="mine-month"><b>${today.getFullYear()} 年 ${today.getMonth() + 1} 月</b><span>上個月到所 ${visits(of(lastMonth))} 次</span></div>
+    <div class="mine-tiles">
+      <div><b>${visits(now)}</b><span>到所次數</span></div>
+      <div><b>${new Set(now.map(w => w.id || w.name)).size}</b><span>遛過幾隻</span></div>
+      <div><b>${now.length}</b><span>總共幾趟</span></div>
+    </div>
+  </div>`;
+}
+
+function myWalksHtml(today, query) {
+  if (myWalksState === 'loading') return `<div class="status-msg">讀取遛狗紀錄中…</div>`;
+  if (myWalksState === 'error') {
+    return `<div class="status-msg">遛狗紀錄讀取失敗，請稍後重新整理。<br><button class="retry-btn" id="mineRetry">重新讀取</button></div>`;
+  }
+  if (!myWalks.length) return `<div class="status-msg">從 ${MY_WALKS_SINCE} 開始記錄，目前還沒有資料。<br>試算表「誰遛的」填你的名字，同步後就會出現在這裡。</div>`;
+  // 所有到所紀錄新到舊一路往下排（K 2026-09-25：不要選日期）；搜尋時不顯示小計
+  const groups = myWalkGroups(myWalks, query);
+  if (!groups.length) return `<div class="status-msg">找不到「${esc(query)}」</div>`;
+  const firstSeen = myFirstWalks(myWalks);
+  return (query ? '' : myMonthStats(myWalks, today)) + groups.map(g => myVisitCard(g, firstSeen)).join('');
 }
 
 // 回傳備註命中的關鍵字（顯示用）與實際出現的寫法（標示用）；沒命中回 null
@@ -941,10 +1066,10 @@ function matchesSearch(dog, query) {
 const TABS = [
   { id: 'walk', label: '溜狗表' },
   { id: 'today', label: '今天已溜' },
-  { id: 'info', label: '相關資訊', note: '編輯中' },
+  { id: 'mine', label: '我溜過' }, // #58 取代原本的「相關資訊（編輯中）」
 ];
 
-// counts：各分類要顯示的隻數；沒有數字的分類（相關資訊）顯示 note
+// counts：各分類要顯示的數字；沒有數字的分類留白
 function buildTabs(counts) {
   const tabsEl = document.getElementById('tabs');
   tabsEl.innerHTML = TABS.map(t => {
@@ -1041,12 +1166,6 @@ function renderMain() {
     return;
   }
 
-  if (activeTab === 'info') {
-    buildTabs({});
-    main.innerHTML = `<div class="status-msg">相關資訊編輯中，之後會放在這裡。</div>`;
-    return;
-  }
-
   // 資料還沒好時標題、搜尋框、分類照樣能用，只有內容區顯示讀取中或失敗
   if (loadState !== 'ready') {
     buildTabs({});
@@ -1065,7 +1184,13 @@ function renderMain() {
   const walkedIds = loadWalkedIds(today);
   const walkList = dueDogs(allDogs.filter(d => !isWalkedToday(d, walkedIds)), today).filter(hit);
   const todayList = walkedTodayDogs(allDogs, today).filter(hit);
-  buildTabs({ walk: walkList.length, today: todayList.length });
+  const mineCount = myWalksState === 'ready'
+    ? myWalkGroups(myWalks, q).reduce((n, g) => n + g.walks.length, 0) : null;
+  buildTabs({ walk: walkList.length, today: todayList.length, mine: mineCount });
+  if (activeTab === 'mine') {
+    main.innerHTML = myWalksHtml(today, q);
+    return;
+  }
   const inToday = activeTab === 'today';
   const list = inToday ? todayList : walkList;
   const cards = list.map(d => dogCard(d, today, inToday)).join('');
@@ -1083,6 +1208,13 @@ function renderMain() {
       (cards || `<div class="status-msg">目前沒有狗狗資料</div>`);
   }
 }
+
+// 我溜過：點照片開詳細資訊、讀取失敗時重新讀取（內容區每次重畫，所以用事件委派）
+mainEl.addEventListener('click', e => {
+  const tile = e.target.closest('[data-mine-dog]');
+  if (tile) showDetail(allDogs[tile.dataset.mineDog]);
+  else if (e.target.closest('#mineRetry')) loadMyWalks();
+});
 
 // 注音、拼音選字途中不篩選，避免一直閃「找不到『ㄉㄡ』」；選好字才更新
 const searchInput = document.getElementById('searchInput');
@@ -1139,6 +1271,7 @@ async function init() {
   loadState = 'ready';
   render();
   loadMyNotes();
+  loadMyWalks();
 }
 
 // tests/index.html 會設定 __BQ_TEST__，只載入函式、不去讀 dogs.json
