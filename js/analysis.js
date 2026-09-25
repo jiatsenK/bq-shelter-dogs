@@ -174,23 +174,6 @@ function checkPhotos(dogs) {
 // 只拿來當第一段間隔的起點，不算進次數。所有人的遛狗都算（不看 mine），畫面不出現志工名字。
 const WALKS_URL = 'data/walks.json';
 const HISTORY_URL = 'data/history/';
-// 累積滿幾天才顯示頻率、間隔、趨勢、各區（太少天的平均會誤導）
-const HISTORY_MIN_DAYS = 14;
-const FREQ_BUCKETS = [
-  { label: '0 次', short: '0', max: 1e-9 },
-  { label: '每週不到 1 次', short: '<1', max: 1 },
-  { label: '每週 1–2 次', short: '1–2', max: 2 },
-  { label: '每週 2–3 次', short: '2–3', max: 3 },
-  { label: '每週 3 次以上', short: '3+', max: Infinity },
-];
-const GAP_BUCKETS = [
-  { label: '2 天內', short: '≤2天', max: 2 },
-  { label: '3–4 天', short: '3–4天', max: 4 },
-  { label: '5–7 天', short: '5–7天', max: 7 },
-  { label: '8–14 天', short: '8–14天', max: 14 },
-  { label: '15 天以上', short: '15天+', max: Infinity },
-];
-
 const dogKey = d => d.id || `名:${d.name}`;
 
 // walks.json → [{ key, id, name, date }]，日期不合理的略過
@@ -212,67 +195,26 @@ function historySpan(dates, today) {
   return { start, days: start ? daysBetween(start, t) + 1 : 0 };
 }
 
-// 每隻目前在所的狗：累積期間被遛幾次、平均每週幾次、平均間隔幾天（至少要兩次遛狗日期才算得出間隔）
-function dogWalkStats(dogs, walks, start, today) {
-  const byDog = new Map();
-  for (const w of walks) {
-    if (!byDog.has(w.key)) byDog.set(w.key, new Set());
-    byDog.get(w.key).add(+w.date);
+// 一隻狗的遛狗紀錄（K 2026-09-25：遛狗歷史要看每隻狗才有意義，放在詳細資訊）：
+// 最近 N 天每天有沒有遛（開始記錄前的日子標「未記錄」）、這段期間遛幾次、平均與最久隔幾天
+function dogWalkHistory(dog, walks, start, today, n = 30) {
+  const key = dogKey(dog);
+  const dates = [...new Set(walks.filter(w => w.key === key).map(w => +w.date))].sort((a, b) => a - b);
+  const t = makeDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
+  const set = new Set(dates);
+  const cells = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() - i);
+    cells.push({ date: d, walked: set.has(+d), recorded: !!start && d >= start });
   }
-  const days = Math.max(1, daysBetween(start, today) + 1);
-  return dogs.map(dog => {
-    const dates = [...(byDog.get(dogKey(dog)) || [])].sort((a, b) => a - b);
-    const count = dates.filter(t => t >= +start).length;
-    const gaps = [];
-    for (let i = 1; i < dates.length; i++) if (dates[i] >= +start) gaps.push(Math.round((dates[i] - dates[i - 1]) / 86400000));
-    return { dog, zone: zoneOf(dog.cage), count, perWeek: count / days * 7, avgGap: average(gaps) };
-  });
-}
-
-function bucketCounts(values, buckets) {
-  const out = buckets.map(b => ({ label: b.label, short: b.short, count: 0 }));
-  for (const v of values) out[buckets.findIndex(b => v <= b.max)].count++;
-  return out;
-}
-
-// 各犬遛狗頻率：每週幾次的分布
-function frequencyDistribution(stats) {
-  return bucketCounts(stats.map(s => s.perWeek), FREQ_BUCKETS);
-}
-
-// 平均多久被遛一次：有間隔的狗的分布，和全部間隔的中位數
-function gapDistribution(stats) {
-  const gaps = stats.map(s => s.avgGap).filter(v => v != null);
-  return { buckets: bucketCounts(gaps, GAP_BUCKETS), median: median(gaps), dogs: gaps.length };
-}
-
-// 每週（週一開始）／每月的遛狗次數，從開始累積那週（月）到今天，中間沒有的補 0
-function walkTrend(walks, start, today, mode = 'week') {
-  const periodStart = d => mode === 'month'
-    ? makeDate(d.getFullYear(), d.getMonth() + 1, 1)
-    : new Date(d.getFullYear(), d.getMonth(), d.getDate() - (d.getDay() + 6) % 7);
-  const next = d => mode === 'month' ? makeDate(d.getFullYear() + (d.getMonth() === 11 ? 1 : 0), d.getMonth() === 11 ? 1 : d.getMonth() + 2, 1)
-    : new Date(d.getFullYear(), d.getMonth(), d.getDate() + 7);
-  const out = [];
-  for (let p = periodStart(start); p <= today; p = next(p)) {
-    const end = next(p);
-    const seen = new Set(walks.filter(w => w.date >= start && w.date >= p && w.date < end).map(w => `${w.key}|${+w.date}`));
-    out.push({ label: mode === 'month' ? `${p.getFullYear()}/${p.getMonth() + 1}` : `${p.getMonth() + 1}/${p.getDate()}`,
-      short: mode === 'month' ? `${p.getMonth() + 1}月` : `${p.getMonth() + 1}/${p.getDate()}`, count: seen.size });
-  }
-  return out;
-}
-
-// 各區長期遛狗狀況：平均每隻每週被遛幾次（少的排上面）、平均間隔
-function zoneWalkFrequency(stats) {
-  const map = new Map();
-  for (const s of stats) {
-    if (!map.has(s.zone)) map.set(s.zone, []);
-    map.get(s.zone).push(s);
-  }
-  return [...map].map(([zone, list]) => ({ zone, count: list.length, perWeek: average(list.map(s => s.perWeek)),
-    avgGap: average(list.map(s => s.avgGap).filter(v => v != null)) }))
-    .sort((a, b) => a.perWeek - b.perWeek || a.zone.localeCompare(b.zone, 'zh-Hant'));
+  const gaps = [];
+  for (let i = 1; i < dates.length; i++) if (start && dates[i] >= +start) gaps.push(Math.round((dates[i] - dates[i - 1]) / 86400000));
+  return {
+    cells,
+    count: cells.filter(c => c.walked).length, // 開始記錄前的那筆「最後遛狗日」也是真的，一起算
+    avgGap: average(gaps),
+    maxGap: gaps.length ? Math.max(...gaps) : null,
+  };
 }
 
 // 兩天快照的差異：新進、離開、遛狗日期有變動的狗（a 是較早那天）
@@ -287,9 +229,9 @@ function snapshotDiff(a, b) {
   };
 }
 
-// 讀歷史：打開分析頁才讀，一次開網頁只讀一遍；快照選到哪天才抓那天
+// 讀歷史：打開分析頁或詳細資訊才讀，一次開網頁只讀一遍；快照選到哪天才抓那天
 let historyData = null; // { state: 'loading'|'ready'|'error', walks, dates, snaps: Map(日期 → 狗清單|'loading'|'error') }
-let historyPick = { a: null, b: null, trend: 'week' };
+let historyPick = { a: null, b: null };
 function loadHistory() {
   if (historyData) return;
   const state = historyData = { state: 'loading', walks: [], dates: [], snaps: new Map() };
@@ -298,7 +240,11 @@ function loadHistory() {
     state.walks = parseWalks(w);
     state.dates = parseHistoryIndex(idx);
     state.state = 'ready';
-  }, () => { state.state = 'error'; }).then(() => { if (analysisOpen && historyData === state) render(); });
+  }, () => { state.state = 'error'; }).then(() => {
+    if (historyData !== state) return;
+    if (analysisOpen) render();
+    if (detailDog) renderDetail(); // 詳細資訊的遛狗紀錄
+  });
 }
 
 function loadSnapshot(date) {
@@ -482,7 +428,7 @@ function analysisHtml(dogs, today) {
     (photosDone ? '' : '<div class="a-miss"><span>沒有照片</span><b class="muted">檢查中…</b></div>'), 'note'));
 
   loadHistory();
-  out.push(historyHtml(dogs, today));
+  out.push(historyHtml());
   return out.join('');
 }
 
@@ -491,53 +437,35 @@ function mdText(d) {
   return d ? `${d.getMonth() + 1}/${d.getDate()}` : '無紀錄';
 }
 
-// 資料還不夠時：四張圖併成一張，只顯示從哪天開始累積、目前幾天，不顯示數字
-function waitingHtml(span) {
-  const pct = span.days / HISTORY_MIN_DAYS * 100;
-  return section('遛狗歷史累積中', '', `<div class="a-wait">${ringSvg(pct, { size: 96, stroke: 11, label: `${span.days}`, sub: `/ ${HISTORY_MIN_DAYS} 天` })}
-    <p>從 ${span.start ? `${span.start.getFullYear()}/${mdText(span.start)}` : '同步'} 開始累積，目前 ${span.days} 天。累積滿 ${HISTORY_MIN_DAYS} 天後，這裡會出現各犬遛狗頻率、平均多久被遛一次、遛狗趨勢、各區長期遛狗狀況。</p></div>`, 'tick');
+function historyHtml() {
+  const out = [`<div class="a-divider">${icon('note')}每日快照</div>`];
+  if (!historyData || historyData.state === 'loading') return out.join('') + `<div class="status-msg">讀取快照中…</div>`;
+  if (historyData.state === 'error') return out.join('') + `<div class="status-msg">快照讀取失敗，請稍後重新整理。</div>`;
+  return out.join('') + snapshotHtml();
 }
 
-function historyHtml(dogs, today) {
-  const out = [`<div class="a-divider">${icon('tick')}遛狗歷史<small>所有人的遛狗都算，不分是誰</small></div>`];
-  if (!historyData || historyData.state === 'loading') return out.join('') + `<div class="status-msg">讀取遛狗歷史中…</div>`;
-  if (historyData.state === 'error') return out.join('') + `<div class="status-msg">遛狗歷史讀取失敗，請稍後重新整理。</div>`;
-  const span = historySpan(historyData.dates, today);
-  const enough = span.days >= HISTORY_MIN_DAYS;
-  if (!enough) return out.join('') + waitingHtml(span) + snapshotHtml();
-  const stats = dogWalkStats(dogs, historyData.walks, span.start, today);
-  const note = `${span.start.getFullYear()}/${mdText(span.start)} 起 ${span.days} 天；同一天兩次同步之間被遛兩次只記一次`;
-
-  const freq = frequencyDistribution(stats);
-  const least = [...stats].sort((a, b) => a.count - b.count || a.dog.name.localeCompare(b.dog.name, 'zh-Hant')).slice(0, 10);
-  const leastMax = Math.max(1, ...least.map(s => s.count));
-  out.push(section('各犬遛狗頻率', note,
-    `${columnChart(freq, { color: i => ['var(--red-text)', 'var(--amber-text)', '#80AEF1', 'var(--primary)', '#184A9C'][i] })}
-       <div class="a-sub">最少被遛的 10 隻</div>
-       <div class="a-list">${least.map(s => dogRow({ dog: s.dog, intake: intakeDate(s.dog, today) }, `<b>${s.count}</b><small> 次</small>`, { bar: s.count / leastMax * 100 })).join('')}</div>`, 'tick'));
-
-  const gap = gapDistribution(stats);
-  out.push(section('平均多久被遛一次', `每隻狗兩次遛狗之間平均隔幾天；${gap.dogs} 隻有兩次以上紀錄`,
-    `<div class="a-big"><b>${gap.median == null ? '–' : gap.median.toFixed(1)}</b><span>天（中位數）</span></div>${columnChart(gap.buckets, { color: i => STAY_SHADES[i + 2] })}`, 'alert'));
-
-  const mode = historyPick.trend;
-  const trend = walkTrend(historyData.walks, span.start, today, mode);
-  out.push(section('遛狗趨勢', `每${mode === 'month' ? '月' : '週（週一起算）'}被遛的狗次；最右邊一欄是這${mode === 'month' ? '個月' : '週'}，還沒過完`,
-    `<div class="a-toggle"><button type="button" data-trend="week" class="${mode === 'week' ? 'on' : ''}">每週</button><button type="button" data-trend="month" class="${mode === 'month' ? 'on' : ''}">每月</button></div>
-       ${columnChart(trend.slice(-12))}`, 'card'));
-
-  const zones = zoneWalkFrequency(stats);
-  const zMax = Math.max(0.1, ...zones.map(z => z.perWeek));
-  out.push(section('各區長期遛狗狀況', '平均每隻狗每週被遛幾次，少的排上面',
-    `<div class="a-hbars">${zones.map(z => `
-      <div class="a-hbar" title="${esc(z.zone)}：每週 ${z.perWeek.toFixed(1)} 次，平均隔 ${z.avgGap == null ? '–' : z.avgGap.toFixed(1)} 天">
-        <span class="a-hbar-l">${esc(z.zone)}</span>
-        <span class="a-hbar-track"><span class="a-hbar-fill" style="width:${Math.max(8, z.perWeek / zMax * 100)}%"><b>${z.perWeek.toFixed(1)} 次</b></span></span>
-        <span class="a-hbar-n">隔 ${z.avgGap == null ? '–' : z.avgGap.toFixed(1)} 天</span>
-      </div>`).join('')}</div>`, 'pin'));
-
-  out.push(snapshotHtml());
-  return out.join('');
+// 詳細資訊的「遛狗紀錄」：最近 30 天的格子＋三個數字
+function walkHistorySection(dog, today) {
+  loadHistory();
+  const head = `<h3>${icon('tick')}遛狗紀錄<span class="sub">所有人遛的都算</span></h3>`;
+  const wrap = body => `<section class="detail-section" data-section="walks">${head}${body}</section>`;
+  if (!historyData || historyData.state === 'loading') return wrap('<div class="empty">讀取中…</div>');
+  if (historyData.state === 'error') return wrap('<div class="empty">遛狗紀錄讀取失敗</div>');
+  const { start } = historySpan(historyData.dates, today);
+  const h = dogWalkHistory(dog, historyData.walks, start, today);
+  const first = h.cells[0].date, last = h.cells[h.cells.length - 1].date;
+  const cell = c => `<span class="${c.walked ? 'on' : c.recorded ? 'off' : 'none'}" title="${mdText(c.date)}${c.walked ? ' 有遛' : c.recorded ? ' 沒遛' : ' 還沒開始記錄'}"></span>`;
+  const num = (v, unit, label) => `<div class="w-num"><b>${v}</b><small>${unit}</small><span>${label}</span></div>`;
+  return wrap(`
+    <div class="w-grid">${h.cells.map(cell).join('')}</div>
+    <div class="w-axis"><span>${mdText(first)}</span><span>今天</span></div>
+    <div class="w-nums">
+      ${num(h.count, '次', '最近 30 天')}
+      ${num(h.avgGap == null ? '–' : h.avgGap.toFixed(1), '天', '平均隔')}
+      ${num(h.maxGap == null ? '–' : h.maxGap, '天', '最久隔')}
+    </div>
+    <div class="w-legend"><span><i class="on"></i>有遛</span><span><i class="off"></i>沒遛</span>${h.cells.some(c => !c.recorded) ? '<span><i class="none"></i>還沒開始記錄</span>' : ''}</div>
+    <div class="w-note">從 ${start ? `${start.getFullYear()}/${mdText(start)}` : '同步'} 開始記錄，一天 3 次同步；兩次同步之間被遛兩次只記一次。</div>`);
 }
 
 // 依日期看快照：選兩天，列出新進、離開、遛狗日期變動的狗
@@ -612,8 +540,6 @@ if (analysisBtn) analysisBtn.addEventListener('click', () => (analysisOpen ? clo
 // 分析頁的狗名列：點了開詳細資訊（事件委派，renderMain 重畫也不用重綁）
 document.getElementById('main').addEventListener('click', e => {
   if (e.target.closest('#analysisBack')) { closeAnalysis(); return; }
-  const trend = e.target.closest('#main [data-trend]');
-  if (trend) { historyPick.trend = trend.dataset.trend; render(); return; }
   const row = e.target.closest('#main .a-dog[data-adog]');
   const dog = row && allDogs[row.dataset.adog];
   if (dog) showDetail(dog);
