@@ -753,6 +753,8 @@ const TABS = [
   { id: 'walk', label: '溜狗表' },
   { id: 'today', label: '今天已溜' },
   { id: 'info', label: '相關資訊', note: '編輯中' },
+  // 分析（V5-4，#59）：統計與畫面在 js/analysis.js
+  { id: 'analysis', label: '分析', note: '統計' },
 ];
 
 // counts：各分類要顯示的隻數；沒有數字的分類（相關資訊）顯示 note
@@ -860,6 +862,13 @@ function renderMain() {
       : `<div class="status-msg">讀取狗狗資料中…</div>`;
     const retry = document.getElementById('retryBtn');
     if (retry) retry.addEventListener('click', init);
+    return;
+  }
+
+  // 分析頁統計全部的狗，不受搜尋影響（搜尋框只篩狗卡清單）
+  if (activeTab === 'analysis') {
+    buildTabs({});
+    main.innerHTML = analysisHtml(allDogs, today);
     return;
   }
 
