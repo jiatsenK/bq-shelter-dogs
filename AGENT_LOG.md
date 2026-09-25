@@ -218,3 +218,9 @@
 - 依據：K 在專案聊天說「合併」，順序 #63 → #65 → #64。
 - #63、#65 合併後把最新 main 併進分支，AGENT_LOG.md 檔尾衝突兩邊都保留；Worker 測試 22 項、同步測試 23 項、tests/index.html 61 項全過後合併。
 - 待辦：K 到 Cloudflare 重貼 `worker/src/index.js`、新增 Secret `NOTES_PASSCODE`（步驟見 docs/PHOTO_UPLOAD_SETUP.md「我的備註」）。
+
+## [2026-09-25] Claude | V5-7（#62）詳細資訊加「我的備註」欄位
+- 依據：issue #62；K 同意通關碼用「密碼欄位＋iPhone 鑰匙圈 Face ID 自動填入」（#61 thread）。
+- `js/app.js`：溜狗表備註下方加「我的備註」區塊，沒有顯示「新增」、有則顯示內容、更新時間與「修改」。編輯是文字框（1000 字、字數提示）＋第一次儲存才出現的通關碼欄位（`type=password`、`autocomplete=current-password`，配隱藏帳號欄位，放在 form 裡）。儲存 PUT 到 Worker `/notes/{編號}`，成功提示「已存到 Git」並把通關碼記在這支手機（localStorage `bq-notes-passcode`）；失敗保留輸入內容並顯示原因，通關碼錯就清掉重問。清空後儲存＝刪除。開網頁讀 Worker `/notes`，讀不到退回 `data/my-notes.json`。我的備註不參與警示紅框、不上狗卡。詳細資訊的 Tab 循環與重畫保留焦點也涵蓋文字框、密碼欄位。
+- `css/app.css`、`index.html`（新增 `i-write` 圖示）。
+- 測試：tests/index.html 新增 6 項（模擬 Worker），並更新 #10 唯讀、#28 區塊、#32 讀檔三項的預期；67 項全過。390px 截圖 previews/issue-62/（內容為模擬）。
