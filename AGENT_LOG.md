@@ -128,3 +128,11 @@
 - 修改：`js/app.js` 的 `UPLOAD_URL` 填入該網址，合併後詳細資訊照片角落會出現相機圖示。
 - 驗證：tests/index.html 55 項全過。雲端環境連不到 workers.dev，未能實際呼叫服務；需 K 合併後在網站上實測一張。
 - PR：#50（同一分支）。
+
+## [2026-09-25] Claude | 安裝 Matt Pocock 技能並執行 setup-matt-pocock-skills
+- 依據：K 在專案聊天輸入「setup-matt-pocock-skills」。
+- 安裝：把 mattpocock/skills（commit c55ee46，MIT）Claude Code 外掛所列的 25 個技能複製到 `.claude/skills/`（等同 skills.sh 的「檔案放進 repo、可自行修改」做法），附上授權檔。之後在這個 repo 開的 Claude Code session 都能用，例如 `/grill-me`、`/to-spec`、`/to-tickets`、`/diagnosing-bugs`、`/tdd`。
+- setup 結果：issue 放 GitHub Issues（雲端沒有 `gh`，註明改用 GitHub MCP 工具；沿用 v3／v4 版本標籤慣例）；triage 用預設五個標籤；domain 文件採單一 `CONTEXT.md` + `docs/adr/`，用到時才建立。
+- 新增：`CLAUDE.md`（含 `## Agent skills` 區塊）、`docs/agents/issue-tracker.md`、`docs/agents/triage-labels.md`、`docs/agents/domain.md`。
+- 未改動網站程式；GitHub 上尚未建立五個 triage 標籤（`/triage` 第一次用時會建立）。
+- 分支：`claude/project-thread-c3lygg`。
