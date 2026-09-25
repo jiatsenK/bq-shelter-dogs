@@ -1306,7 +1306,7 @@ async function runMyWalksTests() {
     { id: '8006', name: '日期壞', date: '2026-02-30', mine: true },
   ] };
   const heads = () => [...main.querySelectorAll('.walk-date')].map(h => h.firstChild.textContent);
-  const cardNames = () => [...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent);
+  const cardNames = () => [...main.querySelectorAll('.mine-dog .bname')].map(n => n.textContent);
   const setup = () => {
     allDogs = [dog('紀錄甲', '8001', new Date(2026, 8, 24)), dog('紀錄乙', '8002', new Date(2026, 8, 26)),
       dog('紀錄丙', '8003', null), dog('紀錄戊', '8005', new Date(2026, 8, 24))];
@@ -1323,27 +1323,36 @@ async function runMyWalksTests() {
       try { parseMyWalks({}); } catch { threw = true; }
       eq(threw, true, '格式不對要丟錯：');
     });
-    await check('#58 我溜過：同一天放在同一個日期標題下；之後別人遛過，我那筆仍在；離所的狗只列名字', () => {
+    await check('#58 每次到所一張卡（K 選 A）：同一天的狗排在同一張；之後別人遛過，我那筆仍在；離所的狗只列名字', () => {
       setup();
       eq(heads(), ['2026/09/24（四）', '2026/09/22（二）', '2026/09/18（五）'], '日期標題：');
-      eq(cardNames(), ['紀錄戊', '紀錄甲', '紀錄乙', '已離所狗'], '狗：');
-      eq(main.querySelector('.card.gone').textContent.includes('已不在目前的溜狗表'), true, '離所：');
+      eq([...main.querySelectorAll('.visit')].map(v => [...v.querySelectorAll('.bname')].map(n => n.textContent)),
+        [['紀錄戊', '紀錄甲'], ['紀錄乙'], ['已離所狗']], '每張卡的狗：');
+      eq([...main.querySelectorAll('.visit .walk-date .n')].map(n => n.textContent), ['2 隻', '1 隻', '1 隻'], '每次幾隻：');
+      eq(main.querySelectorAll('.mine-dog.gone').length, 1, '離所：');
+      eq(main.querySelector('.mine-dog.gone').tagName, 'DIV', '離所的狗不能點：');
       eq(document.querySelector('#tabs button[data-tab="mine"] .n').textContent, '4', '分類數字：');
-      eq(main.querySelectorAll('.walk-btn').length, 0, '這頁不放已遛按鈕：');
-      eq([...main.querySelectorAll('.mine-count .val')].map(v => v.textContent), ['1 次', '1 次', '1 次', '1 次'], '右邊是我遛過幾次：');
+      eq(main.querySelectorAll('.walk-btn, .card').length, 0, '這頁不放狗卡與已遛按鈕：');
       if (/上次遛狗/.test(main.textContent)) throw new Error('這頁不顯示大家的上次遛狗');
-      if (!main.querySelector('.section-hint').textContent.includes('你遛過 4 隻、共 4 次')) throw new Error('上方要有總數');
       if (/紀錄丙/.test(main.textContent)) throw new Error('別人遛的不該出現');
     });
-    await check('#58 我溜過不顯示備註（連警示備註也不放）；同一隻遛過幾次就算幾次', () => {
+    await check('#58 我溜過不顯示備註；第一次遛的狗標「第一次」；上方有這個月小計', () => {
       setup();
       allDogs[0].note = '勿溜，測試用備註';
       myWalks = parseMyWalks({ version: 1, walks: [...WALKS.walks, { id: '8001', name: '紀錄甲', date: '2026-09-26', mine: true }] });
       render();
       eq(main.querySelectorAll('.warn-note, .card.flagged, mark').length, 0, '備註：');
       if (main.textContent.includes('測試用備註')) throw new Error('不該出現備註文字');
-      eq([...main.querySelectorAll('.card')].filter(c => c.textContent.includes('紀錄甲')).map(c => c.querySelector('.mine-count .val').textContent), ['2 次', '2 次'], '紀錄甲：');
+      const firsts = [...main.querySelectorAll('.visit')].map(v => [...v.querySelectorAll('.mine-dog')].filter(t => t.querySelector('.first')).map(t => t.querySelector('.bname').textContent));
+      eq(firsts, [[], ['紀錄戊', '紀錄甲'], ['紀錄乙'], []], '第一次（紀錄甲 9/26 是第二次；最早那天不知道，不標）：');
       allDogs[0].note = '';
+      const box = document.createElement('div');
+      box.innerHTML = myMonthStats(myWalks, new Date(2026, 8, 27));
+      eq([...box.querySelectorAll('.mine-tiles b')].map(b => b.textContent), ['4', '4', '5'], '9 月：到所 4 次、4 隻、5 趟：');
+      if (!box.textContent.includes('上個月到所 0 次')) throw new Error(box.textContent);
+      box.innerHTML = myMonthStats(myWalks, new Date(2026, 9, 3));
+      eq([...box.querySelectorAll('.mine-tiles b')].map(b => b.textContent), ['0', '0', '0'], '10 月：');
+      if (!box.textContent.includes('上個月到所 4 次')) throw new Error(box.textContent);
     });
     await check('#58 選日期只看那天，清除回到全部', () => {
       setup();
@@ -1362,7 +1371,7 @@ async function runMyWalksTests() {
     });
     await check('#58 點狗開原本的詳細資訊；搜尋只篩這頁', () => {
       setup();
-      main.querySelector('.card[data-dog]').click();
+      main.querySelector('.mine-dog[data-mine-dog]').click();
       eq(detailDog && detailDog.name, '紀錄戊', '詳細資訊：');
       hideDetail();
       searchQuery = '甲'; render();

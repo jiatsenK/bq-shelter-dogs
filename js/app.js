@@ -161,33 +161,52 @@ function myWalkGroups(walks, dateFilter, query) {
   return groups;
 }
 
-// 同一隻狗在紀錄裡出現幾次（我總共遛過幾次）
-function myWalkCounts(walks) {
-  const counts = new Map();
-  for (const w of walks) counts.set(w.id || w.name, (counts.get(w.id || w.name) || 0) + 1);
-  return counts;
+// 每次到所一張卡（K 2026-09-25 看原型後，預設照 A）：K 一個月去約四次、每次遛好幾隻，
+// 所以一個日期就是一次到所，卡片裡把那天遛的狗用照片排成一排；那天是第一次遛的狗標「第一次」
+// （紀錄最早那天不標：那天之前沒有紀錄，不知道是不是第一次）。
+// 點照片開原本的詳細資訊；不在目前清單上的狗只列名字、不能點
+function myVisitCard(g, firstSeen) {
+  const tiles = g.walks.map(w => {
+    const dog = dogOfWalk(w);
+    const first = firstSeen.get(w.id || w.name) === w.ymd && w.ymd !== firstSeen.earliest;
+    const inner = `${photoThumb(dog || { name: w.name, id: '' }, 56)}<span class="bname">${esc(w.name)}</span>${first ? '<span class="first">第一次</span>' : ''}`;
+    return dog
+      ? `<button type="button" class="mine-dog" data-mine-dog="${allDogs.indexOf(dog)}" aria-label="${esc(w.name)}：看詳細資訊">${inner}</button>`
+      : `<div class="mine-dog gone" title="已不在目前的溜狗表">${inner}</div>`;
+  }).join('');
+  return `<section class="visit">
+    <h3 class="walk-date">${esc(walkDateLabel(g.date))}<span class="n">${g.walks.length} 隻</span></h3>
+    <div class="visit-dogs">${tiles}</div>
+  </section>`;
 }
 
-// 紀錄頁的精簡卡片（K 2026-09-25）：這頁是「我做過什麼」，不放備註警示、不放大家的上次遛狗天數，
-// 右邊改成我總共遛過牠幾次；點卡片照樣開詳細資訊。不在目前清單上的狗只列名字
-function myWalkCard(w, counts) {
-  const dog = dogOfWalk(w);
-  const n = counts.get(w.id || w.name) || 1;
-  const right = `<div class="last mine-count"><span class="lbl">我遛過</span><span class="val">${n} 次</span></div>`;
-  if (!dog) {
-    return `<div class="card gone"><div class="body"><div class="row"><div class="who">
-      <div class="name">${esc(w.name)}</div><div class="meta">已不在目前的溜狗表</div>
-    </div>${right}</div></div></div>`;
+// 每隻狗我第一次遛的日期（看全部紀錄，不受日期選擇與搜尋影響）
+function myFirstWalks(walks) {
+  const first = new Map();
+  for (const w of walks) {
+    const k = w.id || w.name;
+    if (!first.has(k) || first.get(k) > w.ymd) first.set(k, w.ymd);
+    if (!first.earliest || first.earliest > w.ymd) first.earliest = w.ymd;
   }
-  return `
-    <div class="card" data-dog="${allDogs.indexOf(dog)}" role="button" tabindex="0" aria-haspopup="dialog">
-      ${photoThumb(dog)}
-      <div class="body"><div class="row">
-        <div class="who"><div class="name">${esc(dog.name)}${sexMark(dog)}</div>${cardMeta(dog)}</div>
-        ${right}
-        <span class="more">${icon('chevron')}</span>
-      </div></div>
-    </div>`;
+  return first;
+}
+
+// 上方小計：這個月到所幾次、遛過幾隻、總共幾趟，並跟上個月比到所次數
+function myMonthStats(walks, today) {
+  const ym = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+  const thisMonth = ym(today);
+  const lastMonth = ym(new Date(today.getFullYear(), today.getMonth() - 1, 1));
+  const of = m => walks.filter(w => w.ymd.startsWith(m));
+  const now = of(thisMonth);
+  const visits = list => new Set(list.map(w => w.ymd)).size;
+  return `<div class="mine-stats">
+    <div class="mine-month"><b>${today.getFullYear()} 年 ${today.getMonth() + 1} 月</b><span>上個月到所 ${visits(of(lastMonth))} 次</span></div>
+    <div class="mine-tiles">
+      <div><b>${visits(now)}</b><span>到所次數</span></div>
+      <div><b>${new Set(now.map(w => w.id || w.name)).size}</b><span>遛過幾隻</span></div>
+      <div><b>${now.length}</b><span>總共幾趟</span></div>
+    </div>
+  </div>`;
 }
 
 function myWalksHtml(today, query) {
@@ -197,7 +216,8 @@ function myWalksHtml(today, query) {
   }
   if (!myWalks.length) return `<div class="status-msg">從 ${MY_WALKS_SINCE} 開始記錄，目前還沒有資料。<br>試算表「誰遛的」填你的名字，同步後就會出現在這裡。</div>`;
   const first = myWalks[myWalks.length - 1].ymd, last = myWalks[0].ymd;
-  const picker = `<div class="mine-bar">
+  const stats = query || mineDate ? '' : myMonthStats(myWalks, today);
+  const picker = stats + `<div class="mine-bar">
     <label>${icon('pin')}看哪一天<input type="date" id="mineDate" min="${first}" max="${last}" value="${esc(mineDate)}"></label>
     ${mineDate ? `<button type="button" class="mine-clear" id="mineDateClear">${icon('close')}清除</button>` : ''}
   </div>`;
@@ -206,10 +226,8 @@ function myWalksHtml(today, query) {
     const why = query ? `找不到「${esc(query)}」` : '這天沒有你遛狗的紀錄';
     return picker + `<div class="status-msg">${mineDate ? `${esc(walkDateLabel(parseYmd(mineDate)))}：` : ''}${why}</div>`;
   }
-  const counts = myWalkCounts(myWalks);
-  return picker + groups.map(g => `
-    <h3 class="walk-date">${esc(walkDateLabel(g.date))}<span class="n">${g.walks.length} 隻</span></h3>
-    ${g.walks.map(w => myWalkCard(w, counts)).join('')}`).join('');
+  const firstSeen = myFirstWalks(myWalks);
+  return picker + groups.map(g => myVisitCard(g, firstSeen)).join('');
 }
 
 // 回傳備註命中的關鍵字（顯示用）與實際出現的寫法（標示用）；沒命中回 null
@@ -1180,9 +1198,7 @@ function renderMain() {
     ? myWalkGroups(myWalks, mineDate, q).reduce((n, g) => n + g.walks.length, 0) : null;
   buildTabs({ walk: walkList.length, today: todayList.length, mine: mineCount });
   if (activeTab === 'mine') {
-    const hint = myWalksState === 'ready' && myWalks.length
-      ? `你遛過 ${myWalkCounts(myWalks).size} 隻、共 ${myWalks.length} 次` : '試算表「誰遛的」是你的紀錄，新的在上面';
-    main.innerHTML = (q ? '' : `<div class="section-hint">${icon('tick')}${hint}</div>`) + myWalksHtml(today, q);
+    main.innerHTML = myWalksHtml(today, q);
     return;
   }
   const inToday = activeTab === 'today';
@@ -1210,7 +1226,9 @@ mainEl.addEventListener('change', e => {
   render();
 });
 mainEl.addEventListener('click', e => {
-  if (e.target.closest('#mineDateClear')) { mineDate = ''; render(); }
+  const tile = e.target.closest('[data-mine-dog]');
+  if (tile) showDetail(allDogs[tile.dataset.mineDog]);
+  else if (e.target.closest('#mineDateClear')) { mineDate = ''; render(); }
   else if (e.target.closest('#mineRetry')) loadMyWalks();
 });
 

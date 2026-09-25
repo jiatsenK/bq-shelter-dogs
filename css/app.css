@@ -149,16 +149,34 @@ main { overflow-wrap: anywhere; }
   border: none; border-radius: 10px; min-height: 38px; padding: 0 12px;
   font-family: inherit; font-size: 14px; font-weight: 700; cursor: pointer;
 }
-.walk-date {
-  display: flex; align-items: baseline; gap: 8px;
-  font-size: 16px; font-weight: 700; color: var(--ink);
-  margin: 18px 4px 10px;
+.mine-stats { display: flex; flex-direction: column; gap: 8px; margin: 0 0 14px; }
+.mine-month { display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px; }
+.mine-month b { font-size: 17px; font-weight: 700; }
+.mine-month span { font-size: 13px; color: var(--ink-soft); }
+.mine-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.mine-tiles > div { background: var(--surface); border-radius: 14px; padding: 10px 6px; text-align: center; box-shadow: var(--shadow-card); }
+.mine-tiles b { display: block; font-size: 24px; font-weight: 900; color: var(--primary); font-variant-numeric: tabular-nums; line-height: 1.2; }
+.mine-tiles span { font-size: 12.5px; color: var(--ink-soft); }
+.visit {
+  background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card);
+  padding: 12px 14px 14px; margin-bottom: 12px;
 }
-.mine-bar + .walk-date { margin-top: 4px; }
+.walk-date {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+  font-size: 16px; font-weight: 700; color: var(--ink);
+  margin: 0 0 10px;
+}
 .walk-date .n { font-size: 13px; font-weight: 500; color: var(--ink-soft); }
-.mine-count .val { color: var(--primary); }
-.card.gone { opacity: 0.7; }
-.card.gone .meta { font-size: 13px; color: var(--muted-text); }
+.visit-dogs { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); gap: 12px 8px; }
+.mine-dog {
+  border: none; background: none; padding: 0; font-family: inherit; color: var(--ink);
+  display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer;
+}
+.mine-dog:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 10px; }
+.mine-dog .thumb { width: 56px; height: 56px; }
+.mine-dog .bname { font-size: 13px; font-weight: 700; line-height: 1.3; text-align: center; word-break: break-all; }
+.mine-dog .first { font-size: 11px; font-weight: 700; color: var(--green-text); background: var(--green-bg); border-radius: 6px; padding: 0 5px; }
+.mine-dog.gone { opacity: 0.55; cursor: default; }
 
 /* 卡片：手機一個畫面約 6～8 隻（#28，版型照 K 給的參考圖）。
    一列：照片｜犬名＋編號｜籠位｜上次遛狗｜箭頭；備註命中警示關鍵字時多一行原文 */
