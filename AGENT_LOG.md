@@ -288,6 +288,12 @@
 - #58 在 js/app.js 也宣告了 `WALKS_URL`，和 js/analysis.js 重複會讓 analysis.js 整個載入失敗；拿掉 analysis.js 那行，共用 app.js 的。
 - 驗證：tests/index.html 78 項全過；同步測試 31 項全過。
 
+## [2026-09-25] Claude | 改寫 git 歷史：清掉試算表 ID 與志工名字
+- 依據：K 選方案 A 並打字確認；PR #54 合併、Secret 驗證成功（合併後自動同步成功）後執行，當時沒有開著的 PR。
+- 做法：用 git filter-repo 改寫全部 31 個分支的歷史：試算表 ID 換成 `REMOVED_SHEET_ID`；所有舊版 `data/dogs.json` 的 `"walker": "名字"` 換成 `"walker": ""`。main 最新內容與改寫前完全相同（tree 雜湊一致），網站不受影響。所有提交編號都變了。
+- 注意：之前 clone 的本機副本不能再推送或合併進來（會把舊歷史帶回來），要重新 clone 或 `git fetch` 後 `git reset --hard origin/分支`。
+- GitHub 上已合併 PR（#13–#54）的頁面仍保留舊提交；K 已於 2026-09-25 向 GitHub 客服提交清除申請。
+
 ## 2026-09-25 狗卡詳細資訊加相簿（Claude，分支 claude/project-thread-wilksn）
 - 依據：K 在專案聊天說「我想在狗卡資訊下面做gallery」。預設做法（K 還沒看過）：狗卡資訊下方放相簿縮圖格，點了用燈箱左右切換；新增匿名、刪除要我的備註通關碼。
 - `worker/src/index.js`：新增 `GET /gallery`、`POST /gallery/{編號}`、`DELETE /gallery/{編號}/{檔名}`。照片存 `photos/gallery/{編號}/`，清單 `data/gallery.json`；每隻最多 30 張。主照片上傳的檢查抽成 `checkPhoto`、通關碼檢查抽成 `checkPasscode`，我的備註行為不變。
@@ -295,3 +301,7 @@
 - 新檔 `data/gallery.json`（空的 `{}`）；`index.html` 加 photos／plus／trash 圖示；`css/app.css` 相簿與燈箱樣式；`docs/PHOTO_UPLOAD_SETUP.md` 加相簿說明與啟用步驟（重新貼 Worker）。
 - 驗證：Worker 測試 31 項全過（新增 9 項）；tests/index.html 84 項全過（新增 6 項相簿測試，更新 5 項受新區塊影響的舊測試）。截圖 previews/gallery/（模擬相簿照片，用宙斯的主照片裁切出來）。
 - 上線前 K 要做：合併後重新貼 Worker 程式到 Cloudflare。
+
+## 2026-09-25 相簿併最新 main 後合併（Claude，PR #72）
+- K 說「合併」。main 併進來：AGENT_LOG 檔尾衝突兩邊都保留，其他沒衝突。
+- 驗證：Worker 測試 31 項、tests/index.html 84 項全過。
