@@ -356,3 +356,8 @@
 - `scripts/run-browser-tests.cjs`：自帶靜態伺服器，用 Playwright 無頭 Chromium 打開 tests/index.html，全部通過才結束代碼 0，失敗會列出哪幾項。
 - 驗證：本機 node 66 項、網頁全過；故意改壞一項時結束代碼 1 並列出失敗項目。
 - 發現（票外，併入 #86）：詳細資訊關掉後主照片才載入完，「更換照片」標籤的 load 事件讀 `detailDog.name` 會丟錯（畫面沒影響）。
+
+## 2026-09-25 整理「今天已溜」程式（Claude，分支 claude/project-thread-s2p7cy，#85）
+- 依據：K 說 Matt 體檢的三項（含照片）都要處理；這是第三張。畫面與行為不變。
+- `js/app.js`：新增 `walkedToday(today)`（`has(dog)`、`dogs(list)`）與 `recordWalked(dogs, on, today)`（回傳 `changed`、`undo`），取代 `isWalkedToday`、`walkedTodayDogs` 和到處傳的編號陣列；`setWalked` 只剩重畫與提示條。通關碼那段移到今天已溜區塊後面，不再夾在中間。
+- 驗證：tests/index.html 全過（新增 3 項模組測試）。

@@ -1924,6 +1924,39 @@ async function runThumbTests() {
   }
 }
 
+// #85 今天已溜模組：walkedToday（查詢）、recordWalked（記下／移回＋復原），不碰畫面
+async function runWalkedModuleTests() {
+  const saved = [walkedStorage, walkedMemory];
+  const day = new Date(2026, 8, 25), next = new Date(2026, 8, 26);
+  const a = { name: '模組甲', id: '9501' }, b = { name: '模組乙', id: '9502' }, noId = { name: '新來的', id: '' }, nobody = { name: '', id: '' };
+  try {
+    walkedStorage = fakeStorage(); walkedMemory = null;
+    check('#85 記下：新的排最上面、重複與沒名字的略過；沒有編號用犬名記', () => {
+      const r1 = recordWalked([a], true, day);
+      const r2 = recordWalked([b, a, noId, nobody, b], true, day);
+      eq([r1.changed, r2.changed].map(c => c.map(d => d.name)), [['模組甲'], ['模組乙', '新來的']], '有變的狗：');
+      const w = walkedToday(day);
+      eq([w.has(a), w.has(b), w.has(noId), w.has(nobody)], [true, true, true, false], 'has：');
+      eq(w.dogs([a, b, noId, { name: '別隻', id: '9503' }]).map(d => d.name), ['新來的', '模組乙', '模組甲'], '清單順序（同一次記的也是後面的在上）：');
+    });
+    check('#85 移回與復原；都沒變就不寫入', () => {
+      const { changed, undo } = recordWalked([b], false, day);
+      eq([changed.length, walkedToday(day).has(b)], [1, false], '移回：');
+      undo();
+      eq(walkedToday(day).dogs([a, b, noId]).map(d => d.name), ['新來的', '模組乙', '模組甲'], '復原回到原本順序：');
+      const before = walkedStorage.getItem(WALKED_KEY);
+      eq(recordWalked([a], true, day).changed.length, 0, '已經記過：');
+      eq(walkedStorage.getItem(WALKED_KEY), before, '沒變不寫入：');
+    });
+    check('#85 隔天自動清空', () => {
+      eq(walkedToday(next).has(a), false);
+      eq(walkedToday(next).dogs([a, b]).length, 0);
+    });
+  } finally {
+    [walkedStorage, walkedMemory] = saved;
+  }
+}
+
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
 Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
@@ -1955,6 +1988,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runV52Tests)
   .then(() => fetch('../.github/workflows/make-thumbs.yml').then(r => r.text()).then(t => { MAKE_THUMBS_YML = t; }))
   .then(runThumbTests)
+  .then(runWalkedModuleTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
