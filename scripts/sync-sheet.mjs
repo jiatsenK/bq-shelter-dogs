@@ -1,5 +1,9 @@
 // 從 Google 試算表同步狗狗資料，產生 data/dogs.json（#31）。
-// 由 .github/workflows/sync-sheet.yml 定期執行；也可以在本機跑：node scripts/sync-sheet.mjs
+// 由 .github/workflows/sync-sheet.yml 定期執行；也可以在本機跑：SHEET_ID=試算表ID node scripts/sync-sheet.mjs
+//
+// 試算表 ID 不寫在 repo 裡（repo 是公開的，試算表目前知道連結就能編輯）：
+// workflow 從 GitHub 的 Actions Secret「SHEET_ID」帶進來，設定方式見 docs/SHEET_SYNC_SETUP.md。
+// 「誰遛的」只輸出有沒有人固定照顧（covered），不把志工名字寫進公開的 dogs.json。
 //
 // 試算表的解析只在這裡做（#32 起前端只讀 dogs.json）。前端讀 dogs.json 的 parseDogsData 要讀得懂這裡寫出的格式，
 // scripts/sync-sheet.test.mjs 會拿前端的函式來比對。
@@ -16,14 +20,15 @@ import { fileURLToPath } from 'node:url';
 // 日期一律用台灣時間判斷（沒寫年份的日期、同步時間）
 if (!process.env.TZ) process.env.TZ = 'Asia/Taipei';
 
-export const SHEET_ID = '1cxoir8K5-D5hncdQiXhogQXi8Pyk47l5cl-_gNADhqw';
 export const OUTPUT = fileURLToPath(new URL('../data/dogs.json', import.meta.url));
 export const DOGS_DIR = fileURLToPath(new URL('../dogs/', import.meta.url));
 export const FORMAT_VERSION = 1;
 
 // headers：前幾列當表頭。0 表示所有列都當資料列回傳
 export async function fetchGviz(sheetName, headers = 0, fetchImpl = fetch) {
-  const url = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&headers=${headers}&sheet=${encodeURIComponent(sheetName)}`;
+  const sheetId = (process.env.SHEET_ID || '').trim();
+  if (!sheetId) throw new Error('沒有設定試算表 ID：請到 GitHub repo 的 Settings → Secrets and variables → Actions 新增 Secret「SHEET_ID」。');
+  const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/gviz/tq?tqx=out:json&headers=${headers}&sheet=${encodeURIComponent(sheetName)}`;
   let res;
   try {
     res = await fetchImpl(url);
@@ -158,7 +163,8 @@ export function parseMainList(table, headerTexts = [], today = new Date()) {
       id: cellText(get(c, 'id')),
       name,
       walkedDate: cellDate(get(c, 'walkedDate'), today),
-      walker: cellText(get(c, 'walker')),
+      // 只記有沒有人固定照顧，志工名字不寫進公開的 dogs.json
+      covered: cellText(get(c, 'walker')) !== '',
       note: cellText(get(c, 'note')),
     });
   }
