@@ -32,7 +32,7 @@
 
 ## 字體與字級
 
-- 字體：Noto Sans TC（Google Fonts），備援 PingFang TC／微軟正黑體。
+- 字體：手機內建中文字型（iPhone 蘋方 PingFang TC、Android 思源黑體 Noto Sans CJK、Windows 微軟正黑體）。#91 起不再載入 Google Fonts，避免大檔字型拖慢照片。
 - 標題「板收志工溜狗表」22px / 900
 - 犬名 18px / 700
 - 天數徽章 14px / 700
