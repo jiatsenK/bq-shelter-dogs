@@ -206,3 +206,15 @@
 ## [2026-09-25] Claude | 合併 PR #65（#59 分析頁）
 - 依據：K 在專案聊天回「合併」（順序 #63 → #65 → #64）。
 - 等 #63 合併後把最新 main 併進分支，AGENT_LOG.md 檔尾衝突兩邊都保留；tests/index.html 61 項、scripts/sync-sheet.test.mjs 23 項全過後合併。
+
+## [2026-09-25] Claude | V5-6（#61）我的備註寫回 Git：Worker 讀寫＋通關碼
+- 依據：issue #61。
+- Worker（`worker/src/index.js`）：新增 `GET /notes`（直接讀 GitHub 上最新的 `data/my-notes.json`，不用等網站重新部署）與 `PUT /notes/{編號}`（送 `{ text, passcode }`，先讀最新版再改，sha 對不上重讀再試，不蓋掉別隻狗）。通關碼放 Worker Secret `NOTES_PASSCODE`，放在內容裡而非標頭，中文通關碼也能用；同一 IP 1 小時錯 10 次暫停。備註上限 1000 字、只存純文字（去控制字元），空白＝刪除。新增只限 dogs.json 裡的狗，已離所的舊備註仍可改。首頁多顯示 `notesPasscode` 有沒有設定。照片上傳行為不變，仍匿名。
+- 新增 `data/my-notes.json`（空的 `{}`）；`docs/PHOTO_UPLOAD_SETUP.md` 加「我的備註」啟用步驟與 API 說明。
+- 驗證：Worker 測試 22 項（新增 11 項）、同步測試 16 項全過。雲端連不到 Cloudflare／GitHub 寫入，未實際部署。
+- 待辦：合併後 K 要重新貼 Worker 程式並新增 Secret `NOTES_PASSCODE`；前端欄位在 #62。
+
+## [2026-09-25] Claude | 合併 PR #64（#61 我的備註寫回 Git）
+- 依據：K 在專案聊天說「合併」，順序 #63 → #65 → #64。
+- #63、#65 合併後把最新 main 併進分支，AGENT_LOG.md 檔尾衝突兩邊都保留；Worker 測試 22 項、同步測試 23 項、tests/index.html 61 項全過後合併。
+- 待辦：K 到 Cloudflare 重貼 `worker/src/index.js`、新增 Secret `NOTES_PASSCODE`（步驟見 docs/PHOTO_UPLOAD_SETUP.md「我的備註」）。
