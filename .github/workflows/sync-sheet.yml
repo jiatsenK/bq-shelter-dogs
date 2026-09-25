@@ -1,5 +1,5 @@
 # 定期把 Google 試算表同步成 data/dogs.json（#31）
-# - 每天台灣時間 9:00、13:00、21:00 各一次（GitHub 排程可能延遲幾分鐘）；也可以在 Actions 頁選「同步試算表」→「Run workflow」手動跑
+# - 台灣時間每天 7:00–22:00 每小時一次（#77；GitHub 排程可能延遲幾分鐘到十幾分鐘）；也可以在 Actions 頁選「同步試算表」→「Run workflow」手動跑
 # - 資料有變才提交；讀取失敗時這次執行會顯示失敗，data/dogs.json 保留上一次成功的內容
 # - 有人改了狗卡（dogs/*.md）或這支同步程式、推到 main 時也會馬上跑一次，狗卡資訊不用等排程
 # - 另外存當天快照 data/history/YYYY-MM-DD.json 和累積遛狗紀錄 data/walks.json（#56，都不含志工名字）
@@ -9,8 +9,8 @@ name: 同步試算表
 
 on:
   schedule:
-    # cron 用 UTC：台灣 9:00／13:00／21:00 ＝ UTC 1:00／5:00／13:00
-    - cron: '0 1,5,13 * * *'
+    # cron 用 UTC：台灣 7:00–22:00 ＝ UTC 前一天 23:00 與 0:00–14:00
+    - cron: '0 23,0-14 * * *'
   workflow_dispatch:
   push:
     branches: [main]

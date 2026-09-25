@@ -310,3 +310,16 @@
 - 依據：K 重貼 Worker 後說「完成 標示第五版完成」「V5.1之類?」。K 已在網站實測新增相簿照片成功（提交 719264d、d78f89e）。
 - `docs/PROJECT_GOALS.md` 加「V5 ✅ 已完成」（#56–#62）與「V5.1 ✅ 相簿」（PR #72）。v5 標籤 issues 已全部關閉。
 - 原本想打 tag `v5`（0b0c94e）、`v5.1`（ac1641c），但這個雲端環境只能推送工作分支，tag 沒推上去；版本以規格文件的段落為準（PR #73）。
+
+## 2026-09-25 V5.2 資訊處理（Claude，分支 claude/project-thread-fn7g0z）
+- 依據：K 在專案貼「溜狗表開發 20260925 v5.2 資訊處理」。拆成 issues #75–#79（標籤 v5.2），同一個 PR。
+- #75 再次入所：狗卡 frontmatter 加 `formerIds`（`scripts/sync-sheet.mjs` 的 `parseFrontmatterFormerIds`，只有寫了的狗 dogs.json 才多這欄）；圓仔 `dogs/2026051203.md` 寫上 2018041318。前端 `js/app.js` 新增 `idDate`、`reentryLine`，詳細資訊標「第 2 次入所・首次…（舊編號…）」；`js/analysis.js` 的 `intakeDate` 取現在與舊編號最早的日期。志工說明補 formerIds。
+- #76 「備註」改叫「Google 遛狗表備註」、我的備註拿掉說明文字；分析頁 Top 10 拿掉長條、刪掉「入所時間 × 最近未遛天數」（`stayVsWalk`、`scatterSvg` 與相關 CSS 一起刪）。
+- #77 同步排程改台灣 7:00–22:00 每小時（K 還沒選，先照建議做，獨立一個提交方便改回）。
+- #78 介面細緻化：讀取中卡片骨架、往下捲頁首陰影、照片載入完淡入、數字等寬、減少動態效果。
+- #79 收起：localStorage `bq-hidden`（今天先收起隔天自動回來／一直收起），詳細資訊照片下方按鈕、溜狗表最下面「已收起 N 隻」可放回，都可復原。
+- 驗證：tests/index.html 87 項全過（新增 4 項，改 3 項受影響的舊測試）；同步測試 32 項、Worker 測試 31 項全過。截圖 previews/v5.2/（真實資料，圓仔的 formerIds 是本機暫時加進 dogs.json，合併後同步會自動寫入）。
+
+## 2026-09-25 V5.2 合併（Claude，PR #80）
+- K 說「合併」；同步頻率 K 在選項卡選「白天每小時」（台灣 7:00–22:00）。main 沒有新提交，不用解衝突。
+- 合併後同步 Action 會因 dogs/** 改動自動跑一次，把圓仔的 formerIds 寫進 data/dogs.json。

@@ -159,9 +159,10 @@ test('前端讀 dogs.json 的結果跟同步腳本讀試算表一致', async () 
   const groupMap = sync.parseGroups(fakeGviz(GROUPS, 0).table, new Set(dogs.map(d => d.name)));
   const file = sync.renderFile(await sync.buildData(fakeFetch(), TODAY, fakeCards()), '', TODAY);
   const got = fe.parseDogsData(JSON.parse(file));
-  const plain = list => list.map(({ sex, intro, myWalked, ...d }) => ({ ...d, walkedDate: d.walkedDate ? d.walkedDate.toDateString() : null }));
+  const plain = list => list.map(({ sex, intro, myWalked, formerIds, ...d }) => ({ ...d, walkedDate: d.walkedDate ? d.walkedDate.toDateString() : null }));
   assert.deepEqual(JSON.parse(JSON.stringify(plain(got.dogs))), JSON.parse(JSON.stringify(plain([...dogs]))));
   assert.deepEqual(got.dogs.map(d => [d.sex, d.intro]), [['♂', '很親人，怕機車。'], ['', ''], ['', ''], ['', '']], '性別符號與狗卡資訊：');
+  assert.equal(JSON.stringify(got.dogs.map(d => d.formerIds)), '[[],[],[],[]]', '沒寫舊編號的狗是空陣列（#75）：');
   const sets = m => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, [...v].sort()]));
   assert.deepEqual(JSON.parse(JSON.stringify(sets(got.groups))), sets(groupMap));
   assert.equal(got.syncedAt.getTime(), Math.floor(TODAY.getTime() / 1000) * 1000);
@@ -253,6 +254,20 @@ test('狗卡：同編號只讀一次；讀不到就留空；編號不是英數�
   assert.equal(await sync.readDogCardFile('../README'), '');
   assert.equal(await sync.readDogCardFile('0000000000'), '', '沒有這個檔');
   assert.match(await sync.readDogCardFile('2017070102'), /LUCY/, '讀得到 repo 裡的狗卡');
+});
+
+// ── #75 同一隻狗兩次入所：舊編號 ──
+
+test('狗卡：舊編號 formerIds 可寫多個，只收英數字、去掉跟自己相同的', async () => {
+  assert.deepEqual(sync.parseFrontmatterFormerIds('---\nid: 2026051203\nformerIds: 2018041318\n---\n'), ['2018041318']);
+  assert.deepEqual(sync.parseFrontmatterFormerIds('---\nformerIds: [2015010101, 2018041318]\n---\n'), ['2015010101', '2018041318']);
+  assert.deepEqual(sync.parseFrontmatterFormerIds('---\nformerIds: 2015010101、2018041318、../x\n---\n'), ['2015010101', '2018041318']);
+  assert.deepEqual(sync.parseFrontmatterFormerIds('---\nname: 甲\n---\n'), []);
+  assert.deepEqual(sync.parseFrontmatterFormerIds('formerIds: 2018041318'), [], '沒有 frontmatter');
+  const read = async id => id === '2026051203' ? '---\nformerIds: 2018041318, 2026051203\n---\n介紹' : '---\nsex: male\n---\n';
+  const dogs = await sync.attachDogCards([{ name: '甲', id: '2026051203' }, { name: '乙', id: '2020010101' }], read);
+  assert.deepEqual(dogs[0].formerIds, ['2018041318']);
+  assert.equal('formerIds' in dogs[1], false, '沒寫舊編號的狗 dogs.json 不多欄位');
 });
 
 // ── #56 每日快照與遛狗紀錄 ──

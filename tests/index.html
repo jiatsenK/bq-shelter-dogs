@@ -213,7 +213,7 @@ function runTests() {
       eq(tokenHits, [], 'GitHub 憑證相關字眼：');
       // #35 起「今天已溜」存在這支手機的 localStorage，只准用 WALKED_KEY；#62 加上我的備註通關碼 NOTES_PASS_KEY
       eq([...code.matchAll(/\blocalStorage\s*[.[]|window\.localStorage/g)].length, 1, 'localStorage 只在一個地方取用：');
-      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKED_KEY', 'WALKED_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY'], '只讀寫 WALKED_KEY、NOTES_PASS_KEY：');
+      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKED_KEY', 'WALKED_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'HIDDEN_KEY', 'HIDDEN_KEY'], '只讀寫 WALKED_KEY、NOTES_PASS_KEY、HIDDEN_KEY（#79 收起）：');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
       eq(urls.length, 3, 'fetch 呼叫數（上傳以外）：');
       // #32 起前端只讀 data/dogs.json，不直接連試算表；狗卡資訊也已經寫在 dogs.json 裡，不再抓 dogs/*.md
@@ -323,7 +323,7 @@ function runTests() {
         groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['備註', '我的備註', '可以一起溜的狗', '遛狗紀錄', '狗卡資訊', '相簿']);
+        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['Google 遛狗表備註', '我的備註', '可以一起溜的狗', '遛狗紀錄', '狗卡資訊', '相簿']);
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/2.jpg', '一起溜的照片：');
@@ -1080,13 +1080,6 @@ async function runAnalysisTests() {
     eq(Math.round(z[0].avgDays), Math.round((days(2017, 7, 1) + days(2020, 1, 1)) / 2), '新A 平均：');
     eq(longStayShare(rows), { long: 5, total: 7, pct: 5 / 7 * 100 });
   });
-  await check('#59 入所時間 × 未遛天數：沒遛狗日期的不畫，分滿 1 年／未滿比較平均', () => {
-    const sv = stayVsWalk(rows);
-    eq(names(sv.points).sort(), ['甲長', '乙長', '丙長', '小一', '小二'].sort());
-    eq(sv.skipped, 2);
-    eq([sv.long.count, sv.long.avgWalkDays], [3, (3 + 12 + 40) / 3], '滿 1 年：');
-    eq([sv.short.count, sv.short.avgWalkDays], [2, 4], '未滿 1 年：');
-  });
   await check('#59 公母在所時間差異只算有性別的狗，並顯示缺幾隻', () => {
     const s = sexComparison(rows);
     eq([s.male.count, s.female.count, s.missing], [2, 2, 6]);
@@ -1116,11 +1109,10 @@ async function runAnalysisTests() {
       showAnalysis();
       eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [true, true, 'today'], '打開分析：');
       const titles = [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
-      eq(titles.length, 8, '八張統計：');
+      eq(titles.length, 7, '七張統計（#76 拿掉散布圖）：');
       if (titles.includes('長期在所＋近期少遛')) throw new Error('K 說長期在所＋少遛不需要');
-      ['入所多久分布', '在所最久 Top 10', '入所年度分布', '各區平均在所時間', '長期在所犬比例', '入所時間 × 最近未遛天數',
+      ['入所多久分布', '在所最久 Top 10', '入所年度分布', '各區平均在所時間', '長期在所犬比例',
         '公母在所時間差異', '犬隻資料完整度'].forEach(t => { if (!titles.includes(t)) throw new Error(`少了 ${t}`); });
-      eq(document.querySelectorAll('#main .a-dot').length, 5, '散布圖點數（搜尋不影響）：');
       if (!document.getElementById('main').textContent.includes('檢查中')) throw new Error('照片還沒查完要顯示檢查中');
       const photoCalls = calls.filter(([u]) => u.startsWith('photos/'));
       eq(photoCalls.every(([, m]) => m === 'HEAD'), true, '照片只用 HEAD：');
@@ -1674,6 +1666,91 @@ async function runGalleryTests() {
   }
 }
 
+// ── V5.2（#75 再次入所、#76 標題精簡、#79 收起）──
+async function runV52Tests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, hiddenMemory, hiddenOpen];
+  const T = new Date(2026, 8, 25, 10);
+  try {
+    const { dogs } = parseDogsData({ dogs: [
+      { name: '再入甲', id: '2026051203', cage: '新B08', walkedDate: '2026-09-10', formerIds: ['2018041318', ''] },
+      { name: '一般乙', id: '2024010501', cage: '母幼A', walkedDate: '2026-09-01' },
+      { name: '一般丙', id: '2023040701', cage: '母幼A', walkedDate: '2026-09-20' },
+      { name: '新來丁', id: '', cage: '住院區', walkedDate: null },
+    ] });
+    allDogs = dogs; groupMap = {}; activeTab = 'walk'; searchQuery = '';
+    walkedStorage = fakeStorage(); walkedMemory = null; hiddenMemory = null; hiddenOpen = false;
+
+    await check('#75 再次入所：讀 formerIds、詳細資訊標第 2 次入所與舊編號、分析在所時間從第一次算', () => {
+      eq([dogs[0].formerIds, dogs[1].formerIds], [['2018041318'], []]);
+      eq(ymd(intakeDate(dogs[0], T)), '2018/4/13', '入所日取最早：');
+      eq(ymd(intakeDate(dogs[1], T)), '2024/1/5', '沒舊編號照舊：');
+      const html = detailHtml(dogs[0], T);
+      const box = document.createElement('div');
+      box.innerHTML = html;
+      eq(box.querySelector('.reentry').textContent, '第 2 次入所・首次 2018/4/13 （舊編號 2018041318）', '詳細資訊標舊編號：');
+      if (detailHtml(dogs[1], T).includes('次入所')) throw new Error('沒舊編號不顯示');
+    });
+
+    await check('#76 詳細資訊標題沒有說明文字；分析頁沒有散布圖、Top 10 沒有長條', () => {
+      const box = document.createElement('div');
+      box.innerHTML = detailHtml(dogs[1], T);
+      const h = sec => box.querySelector(`[data-section="${sec}"] h3`);
+      eq([h('note').textContent.trim(), h('mynote') ? h('mynote').textContent.trim() : '我的備註'], ['Google 遛狗表備註', '我的備註']);
+      eq([h('note').querySelector('.sub'), box.querySelector('[data-section="mynote"] h3 .sub')], [null, null], '沒有說明文字：');
+      const a = document.createElement('div');
+      a.innerHTML = analysisHtml(dogs, T);
+      eq([a.querySelector('.a-scatter'), a.querySelector('.a-dog-bar'), typeof stayVsWalk], [null, null, 'undefined']);
+      if (a.textContent.includes('入所時間 × 最近未遛天數')) throw new Error('散布圖要拿掉');
+      eq(a.querySelectorAll('.a-dog').length, 3, 'Top 10 仍列出有入所日期的狗：');
+    });
+
+    await check('#79 收起：今天先收起（隔天回來）、一直收起、放回；溜狗表數字不算收起的，最下面「已收起」可展開', () => {
+      render();
+      const walkNames = () => [...document.querySelectorAll('#main .card .name')].map(n => n.firstChild.textContent);
+      eq(walkNames().length, 4, '一開始：');
+      setHidden(dogs[1], 'today');
+      setHidden(dogs[3], 'always');
+      eq(walkNames(), ['再入甲', '一般丙'], '收起後：');
+      eq(document.querySelector('#tabs button[data-tab="walk"] .n').textContent, '2', '分類數字：');
+      const toggle = document.getElementById('hiddenToggle');
+      eq([toggle.textContent.trim(), document.querySelector('.hidden-list')], ['已收起 2 隻', null], '收合：');
+      toggle.click();
+      eq([...document.querySelectorAll('.hidden-name')].map(b => b.textContent), ['新來丁一直', '一般乙今天'], '展開（久沒遛的在前）：');
+      eq([...loadHidden(new Date(2026, 8, 26, 9))].map(([k, m]) => `${k}:${m}`), ['名:新來丁:always'], '隔天今天先收起的回來：');
+      document.querySelector('[data-unhide]').click();
+      eq(walkNames(), ['新來丁', '再入甲', '一般丙'], '放回：');
+      document.querySelector('.toast-undo').click();
+      eq(walkNames(), ['再入甲', '一般丙'], '復原：');
+      // 詳細資訊：收起中顯示放回；已溜的狗算今天已溜，不在已收起
+      showDetail(dogs[1]);
+      const bar = document.querySelector('#detail .hide-bar');
+      eq([bar.classList.contains('is-hidden'), bar.textContent.includes('今天先收起了')], [true, true], '詳細資訊狀態：');
+      bar.querySelector('[data-hide]').click();
+      eq(loadHidden().has('2024010501'), false, '詳細資訊放回：');
+      document.querySelector('#detail [data-hide="always"]').click();
+      eq(loadHidden().get('2024010501'), 'always', '詳細資訊一直收起：');
+      hideDetail();
+      setWalked([dogs[1]], true);
+      eq(document.getElementById('hiddenToggle').textContent.trim(), '已收起 1 隻', '記成已溜就不算收起：');
+      activeTab = 'today'; render();
+      eq([walkNames(), document.getElementById('hiddenToggle')], [['一般乙'], null], '今天已溜不顯示已收起：');
+      eq(JSON.parse(walkedStorage.getItem(HIDDEN_KEY)).always.sort(), ['2024010501', '名:新來丁'], '存在這支手機：');
+    });
+    await check('#78 讀取中顯示卡片骨架（螢幕閱讀器仍讀得到讀取中）；照片載入完才淡入', () => {
+      loadState = 'loading';
+      try { render(); } finally { loadState = 'ready'; }
+      const main = document.getElementById('main');
+      eq([main.querySelectorAll('.card.skeleton').length, main.textContent.trim()], [6, '讀取狗狗資料中…']);
+      if (!photoThumb(dogs[0]).includes(`onload="this.classList.add('loaded')"`)) throw new Error('照片要淡入');
+      render();
+    });
+  } finally {
+    hideDetail(); hideToast();
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, hiddenMemory, hiddenOpen] = saved;
+    render();
+  }
+}
+
 function show() {
   const failed = results.filter(r => !r.ok);
   const summary = document.getElementById('summary');
@@ -1711,6 +1788,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runHistoryTests)
   .then(runMyWalksTests)
   .then(runGalleryTests)
+  .then(runV52Tests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
