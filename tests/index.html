@@ -15,7 +15,7 @@
 </head>
 <body>
 <h1>板收志工溜狗表：資料讀取測試</h1>
-<p>這頁只用假資料檢查 js/app.js 的讀取與畫面（另外會讀 repo 裡的 data/dogs.json 檢查格式）。試算表解析的測試在 scripts/sync-sheet.test.mjs。</p>
+<p>這頁只用假資料檢查 js/app.js 的讀取與畫面（另外會讀 repo 裡的 data/dogs.json 檢查格式）。試算表解析與狗卡資訊（dogs/*.md）整理的測試在 scripts/sync-sheet.test.mjs。</p>
 <div id="summary">測試中…</div>
 <ol id="results"></ol>
 
@@ -73,7 +73,7 @@ function runTests() {
         { cage: 'A02', id: '2', name: '測試乙', walkedDate: new Date(), walker: '', note: '' },
         { cage: 'A03', id: '3', name: '測試丙', walkedDate: new Date(), walker: '', note: '勿遛' },
       ];
-      groupMap = { '測試丙': new Set(['測試乙']) }; detailMap = { '3': '個性親人' };
+      groupMap = { '測試丙': new Set(['測試乙']) };
       searchQuery = '';
       const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent).sort();
       activeTab = 'walk'; renderMain(); eq(names(), ['測試甲', '測試乙', '測試丙'].sort(), '溜狗表：');
@@ -89,42 +89,6 @@ function runTests() {
       searchQuery = '';
     }),
     // ── #9 照片與介紹 ──
-    check('介紹：去掉 YAML frontmatter，只留內文', () => {
-      eq(parseFrontmatterBody('---\nname: 宙斯\ntags: [親人]\n---\n\n很黏人。\n'), '很黏人。');
-      eq(parseFrontmatterBody('\uFEFF---\r\nname: 宙斯\r\n---\r\n很黏人。'), '很黏人。', 'BOM 與 Windows 換行：');
-      eq(parseFrontmatterBody('沒有 frontmatter 的介紹'), '沒有 frontmatter 的介紹');
-      eq(parseFrontmatterBody('第一段\n\n---\n\n第二段'), '第一段\n\n---\n\n第二段', '內文中的分隔線不算 frontmatter：');
-    }),
-    check('介紹：Markdown 符號不原樣露出', () => {
-      const md = '# 宙斯\n\n**很親人**，喜歡 *散步*。\n\n- 怕機車\n- 會拉扯\n\n> 小心 __別的公狗__\n\n[領養頁](https://example.com) [[冬冬|好朋友冬冬]] ![照片](a.jpg) `暗號`\n\n---\n\n| 項目 | 說明 |\n|---|---|\n| 體重 | 20kg |';
-      const text = markdownToText(md);
-      eq(text, '宙斯 很親人，喜歡 散步。 怕機車 會拉扯 小心 別的公狗 領養頁 好朋友冬冬  暗號 項目 說明 體重 20kg');
-      if (/[*#`\[\]|>]/.test(text)) throw new Error(`還有 Markdown 符號：「${text}」`);
-    }),
-    check('介紹：底線在字中間（如 dog_01）不會被吃掉', () => {
-      eq(markdownToText('檔名 dog_01_a 保留'), '檔名 dog_01_a 保留');
-    }),
-    check('介紹：用編號抓 dogs/{編號}.md，404 安靜略過，沒編號不抓、同編號只抓一次', async () => {
-      // 其他測試可能同時換掉 fetch：不是 dogs/ 的請求交回給原本的 fetch
-      const calls = [];
-      const prevFetch = window.fetch;
-      const fakeFetch = async url => {
-        if (!String(url).startsWith('dogs/')) return prevFetch(url);
-        calls.push(String(url));
-        if (url === 'dogs/202101234.md') return new Response('---\nname: 宙斯\n---\n**很親人**');
-        if (url === 'dogs/202102345.md') throw new TypeError('Failed to fetch');
-        return new Response('Not Found', { status: 404 });
-      };
-      window.fetch = fakeFetch;
-      try {
-        const map = await fetchAllDetails([
-          { name: '宙斯', id: '202101234' }, { name: '宙斯二號', id: '202101234' },
-          { name: '冬冬', id: '202102345' }, { name: '比比', id: '202102346' }, { name: '金寶', id: '' },
-        ]);
-        eq(map, { 202101234: '很親人' });
-        eq(calls.sort(), ['dogs/202101234.md', 'dogs/202102345.md', 'dogs/202102346.md']);
-      } finally { if (window.fetch === fakeFetch) window.fetch = prevFetch; }
-    }),
     check('照片：有編號用 photos/{編號}.jpg 縮圖且延後載入；沒編號直接顯示腳掌、不抓 photos/.jpg', () => {
       const box = document.createElement('div');
       box.innerHTML = photoThumb({ name: '宙斯', id: '202101234' });
@@ -135,20 +99,14 @@ function runTests() {
       eq(box.querySelector('img'), null, '沒編號時的 img：');
       if (!box.querySelector('.thumb-fallback')) throw new Error('沒編號時沒有腳掌圖示');
     }),
-    check('詳細資訊：抓到介紹才顯示在狗卡資訊，沒編號的狗不顯示', () => {
-      const saved = detailMap;
+    check('詳細資訊：dogs.json 有狗卡資訊才顯示，沒有就顯示提示', () => {
       const intro = dog => {
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
         return box.querySelector('[data-section="intro"] .content');
       };
-      try {
-        detailMap = { 202101234: '很親人' };
-        eq(intro({ name: '宙斯', id: '202101234', cage: 'C03', walkedDate: null, walker: '', note: '' }).textContent, '很親人');
-        eq(intro({ name: '比比', id: '202102346', cage: 'A08', walkedDate: null, walker: '', note: '' }), null, '沒介紹檔：');
-        detailMap = { '': '不該出現' };
-        eq(intro({ name: '金寶', id: '', cage: 'A11', walkedDate: null, walker: '', note: '' }), null, '沒編號：');
-      } finally { detailMap = saved; }
+      eq(intro({ name: '宙斯', id: '202101234', cage: 'C03', walkedDate: null, walker: '', note: '', intro: '很親人' }).textContent, '很親人');
+      eq(intro({ name: '比比', id: '202102346', cage: 'A08', walkedDate: null, walker: '', note: '', intro: '' }), null, '沒狗卡：');
     }),
     // ── #7 搜尋 ──
     check('搜尋：犬名部分符合即可，忽略空白、全形與大小寫', () => {
@@ -166,7 +124,7 @@ function runTests() {
         { cage: 'B02', id: '', name: '搜尋乙', walkedDate: daysAgo(20), walker: '', note: '勿溜' },
         { cage: 'B02', id: '', name: '別隻丙', walkedDate: daysAgo(2), walker: '', note: '' },
       ];
-      groupMap = {}; detailMap = {};
+      groupMap = {};
       const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
       const counts = () => [...document.querySelectorAll('#tabs button .n')].map(n => n.textContent);
       const mainText = () => document.getElementById('main').textContent;
@@ -190,7 +148,7 @@ function runTests() {
     }),
     check('搜尋：輸入即篩選；注音選字途中不篩選，選好字才更新', () => {
       allDogs = [{ cage: 'B01', id: '', name: '搜尋甲', walkedDate: null, walker: '', note: '' }];
-      groupMap = {}; detailMap = {}; activeTab = 'walk';
+      groupMap = {}; activeTab = 'walk';
       const input = document.getElementById('searchInput');
       try {
         input.value = 'ㄐ';
@@ -249,9 +207,9 @@ function runTests() {
       eq([...code.matchAll(/\blocalStorage\s*[.[]|window\.localStorage/g)].length, 1, 'localStorage 只在一個地方取用：');
       eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKED_KEY', 'WALKED_KEY'], '只讀寫 WALKED_KEY：');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
-      eq(urls.length, 2, 'fetch 呼叫數（上傳以外）：');
-      // #32 起前端只讀 data/dogs.json 與 dogs/，不直接連試算表
-      if (!urls.every(u => u.startsWith('DATA_URL,') || u.startsWith('`dogs/'))) throw new Error(`只能讀 data/dogs.json 與 dogs/：${urls.join('、')}`);
+      eq(urls.length, 1, 'fetch 呼叫數（上傳以外）：');
+      // #32 起前端只讀 data/dogs.json，不直接連試算表；狗卡資訊也已經寫在 dogs.json 裡，不再抓 dogs/*.md
+      if (!urls.every(u => u.startsWith('DATA_URL,'))) throw new Error(`只能讀 data/dogs.json：${urls.join('、')}`);
       eq(DATA_URL, 'data/dogs.json', '資料檔：');
       if (/docs\.google\.com|gviz/.test(APP_JS)) throw new Error('前端不應再連 Google 試算表');
     }),
@@ -262,11 +220,10 @@ function runTests() {
     }),
     check('#10 試算表文字一律跳脫：備註、犬名、籠位、編號、可一起遛、搜尋字', () => {
       const evil = '<img src=x onerror="window.__xss=1"><b>粗</b>&amp;';
-      const dog = { name: evil, cage: evil, id: evil, walkedDate: null, walker: '', note: evil + '勿溜' };
-      const saved = [groupMap, detailMap, allDogs, activeTab, searchQuery];
+      const dog = { name: evil, cage: evil, id: evil, walkedDate: null, walker: '', note: evil + '勿溜', intro: evil };
+      const saved = [groupMap, allDogs, activeTab, searchQuery];
       try {
         groupMap = { [evil]: new Set([evil]) };
-        detailMap = { [evil]: evil };
         const box = document.createElement('div');
         box.innerHTML = dogCard(dog, TODAY);
         eq(box.querySelectorAll('.body img, .body b').length, 0, '卡片裡被當成 HTML 的元素：');
@@ -284,7 +241,7 @@ function runTests() {
         if (document.querySelector('#main i')) throw new Error('搜尋字不應被當成 HTML');
         if (window.__xss) throw new Error('跳脫失敗，執行了試算表裡的程式');
       } finally {
-        [groupMap, detailMap, allDogs, activeTab, searchQuery] = saved;
+        [groupMap, allDogs, activeTab, searchQuery] = saved;
         render();
       }
     }),
@@ -315,11 +272,11 @@ function runTests() {
       if (!box.querySelector('.warn-note use[href="#i-warn"]')) throw new Error('警示要有三角圖示，不能只靠顏色');
     }),
     check('#28 卡片第一層：照片、犬名、性別位置、上次遛狗、編號｜籠位同一行；一般備註只有小圖示，可一起遛、狗卡資訊不攤開', () => {
-      const saved = [allDogs, groupMap, detailMap];
+      const saved = [allDogs, groupMap];
       try {
-        const dog = { name: '測試狗', cage: 'A01', id: '1', walkedDate: new Date(2026, 8, 24), walker: '', note: '親人，好牽' };
+        const dog = { name: '測試狗', cage: 'A01', id: '1', walkedDate: new Date(2026, 8, 24), walker: '', note: '親人，好牽', intro: '入所狗卡' };
         allDogs = [dog, { name: '好朋友', cage: 'A02', id: '2', walkedDate: null, walker: '', note: '' }];
-        groupMap = { '測試狗': new Set(['好朋友']) }; detailMap = { 1: '入所狗卡' };
+        groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = dogCard(dog, TODAY);
         const card = box.querySelector('.card');
@@ -331,7 +288,7 @@ function runTests() {
         const text = card.textContent;
         for (const s of ['親人', '好朋友', '入所狗卡']) if (text.includes(s)) throw new Error(`第一層不該出現「${s}」`);
         eq(card.dataset.dog, '0', '卡片對應的狗：');
-      } finally { [allDogs, groupMap, detailMap] = saved; }
+      } finally { [allDogs, groupMap] = saved; }
     }),
     check('#28 上次遛狗：今天／幾天前／尚無紀錄／有人固定照顧，天數顏色照色標', () => {
       const box = document.createElement('div');
@@ -343,11 +300,11 @@ function runTests() {
       eq(val({ walkedDate: null, walker: '固定志工' }), ['有人固定照顧', 'val sage small']);
     }),
     check('#28 詳細資訊分成備註、可以一起溜的狗（照片＋犬名）、狗卡資訊三區', () => {
-      const saved = [allDogs, groupMap, detailMap];
+      const saved = [allDogs, groupMap];
       try {
-        const dog = { name: '測試狗', cage: 'A01', id: '1', walkedDate: null, walker: '', note: '親人，好牽\n怕機車' };
+        const dog = { name: '測試狗', cage: 'A01', id: '1', walkedDate: null, walker: '', note: '親人，好牽\n怕機車', intro: '入所狗卡' };
         allDogs = [dog, { name: '好朋友', cage: 'A02', id: '2', walkedDate: null, walker: '', note: '' }];
-        groupMap = { '測試狗': new Set(['好朋友']) }; detailMap = { 1: '入所狗卡' };
+        groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
         eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['備註', '可以一起溜的狗', '狗卡資訊']);
@@ -356,19 +313,19 @@ function runTests() {
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/2.jpg', '一起溜的照片：');
         eq(buddy.querySelector('.bname').textContent, '好朋友');
         eq(box.querySelector('[data-section="intro"] .content').textContent, '入所狗卡');
-        dog.note = ''; groupMap = {}; detailMap = {};
+        dog.note = ''; dog.intro = ''; groupMap = {};
         box.innerHTML = detailHtml(dog, TODAY);
         eq([...box.querySelectorAll('section .empty')].length, 3, '都沒有資料時顯示提示：');
-      } finally { [allDogs, groupMap, detailMap] = saved; }
+      } finally { [allDogs, groupMap] = saved; }
     }),
     check('#28 點狗卡開詳細資訊，點一起溜的狗換成那隻，關閉後回到清單', () => {
-      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery];
+      const saved = [allDogs, groupMap, activeTab, searchQuery];
       try {
         allDogs = [
           { name: '測試甲', cage: 'A01', id: '1', walkedDate: null, walker: '', note: '' },
           { name: '測試乙', cage: 'A02', id: '2', walkedDate: null, walker: '', note: '' },
         ];
-        groupMap = { '測試甲': new Set(['測試乙']), '測試乙': new Set(['測試甲']) }; detailMap = {};
+        groupMap = { '測試甲': new Set(['測試乙']), '測試乙': new Set(['測試甲']) };
         activeTab = 'walk'; searchQuery = '';
         renderMain();
         const before = [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
@@ -386,7 +343,7 @@ function runTests() {
       } finally {
         hideDetail();
         if (history.state && history.state.bqDetail) history.replaceState(null, '');
-        [allDogs, groupMap, detailMap, activeTab, searchQuery] = saved;
+        [allDogs, groupMap, activeTab, searchQuery] = saved;
       }
     }),
     // ── #33 網站名稱、分類與滑動切換 ──
@@ -398,10 +355,10 @@ function runTests() {
       eq([MANIFEST.name, MANIFEST.short_name], ['板收志工溜狗表', '板收志工溜狗表'], 'Android 主畫面：');
     }),
     check('#33 分類依序為溜狗表／今天已溜／相關資訊（編輯中），點分類可切換', () => {
-      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery];
+      const saved = [allDogs, groupMap, activeTab, searchQuery];
       try {
         allDogs = [{ cage: 'A01', id: '1', name: '測試甲', walkedDate: null, walker: '', note: '' }];
-        groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = '';
+        groupMap = {}; activeTab = 'walk'; searchQuery = '';
         render();
         const tabs = () => [...document.querySelectorAll('#tabs button')];
         eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '今天已溜', '相關資訊'], '分類：');
@@ -418,7 +375,7 @@ function runTests() {
         tabs()[0].click();
         eq(active(), ['walk'], '點回溜狗表：');
       } finally {
-        [allDogs, groupMap, detailMap, activeTab, searchQuery] = saved;
+        [allDogs, groupMap, activeTab, searchQuery] = saved;
         render();
       }
     }),
@@ -430,7 +387,7 @@ function runTests() {
       eq(swipeStep(5, 300), 0, '上下捲動：');
     }),
     check('#33 內容區左右滑動換分類，頭尾不循環，標籤同步；狗卡上滑也算', () => {
-      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery];
+      const saved = [allDogs, groupMap, activeTab, searchQuery];
       const main = document.getElementById('main');
       const touch = (target, x, y) => new Touch({ identifier: 1, target, clientX: x, clientY: y });
       const swipe = (target, dx) => {
@@ -441,7 +398,7 @@ function runTests() {
       const active = () => [...document.querySelectorAll('#tabs button.active')].map(b => b.dataset.tab);
       try {
         allDogs = [{ cage: 'A01', id: '1', name: '測試甲', walkedDate: null, walker: '', note: '' }];
-        groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = '';
+        groupMap = {}; activeTab = 'walk'; searchQuery = '';
         render();
         swipe(main, 100);
         eq(activeTab, 'walk', '第一頁向右滑不循環：');
@@ -457,7 +414,7 @@ function runTests() {
         swipe(main, -100);
         eq([activeTab, searchQuery], ['today', '測試'], '搜尋中也能滑，搜尋字保留：');
       } finally {
-        [allDogs, groupMap, detailMap, activeTab, searchQuery] = saved;
+        [allDogs, groupMap, activeTab, searchQuery] = saved;
         render();
       }
     }),
@@ -480,12 +437,12 @@ function runTests() {
       } finally { [walkedStorage, walkedMemory] = saved; }
     }),
     check('詳細視窗 Tab 不跑到背景，重畫保留焦點，關閉回到原狗卡', () => {
-      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory];
+      const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory];
       try {
         hideToast();
         document.getElementById('main').parentElement.classList.remove('hidden'); // 真瀏覽器裡 display:none 的元素不能拿到焦點
         allDogs = [{ id: 'focus-test', name: '焦點測試', cage: 'A01', note: '', walker: '', walkedDate: null }];
-        groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = '';
+        groupMap = {}; activeTab = 'walk'; searchQuery = '';
         walkedStorage = fakeStorage(); walkedMemory = null;
         render();
         const card = document.querySelector('#main .card');
@@ -505,7 +462,7 @@ function runTests() {
         hideDetail();
         document.getElementById('main').parentElement.classList.add('hidden');
         history.replaceState(null, '');
-        [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
+        [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
         render();
       }
     }),
@@ -530,14 +487,14 @@ function runTests() {
       } finally { [walkedStorage, walkedMemory] = saved; }
     }),
     check('沒有編號的狗也有「已遛」，改用犬名記', () => {
-      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory];
+      const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory];
       try {
         walkedStorage = fakeStorage(); walkedMemory = null;
         allDogs = [
           { name: '新來甲', cage: 'B04', id: '', walkedDate: null, walker: '', note: '' },
           { name: '', cage: 'B05', id: '', walkedDate: null, walker: '', note: '' },
         ];
-        groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = '';
+        groupMap = {}; activeTab = 'walk'; searchQuery = '';
         render();
         eq(document.querySelectorAll('#main [data-walk="add"]').length, 1, '有犬名就有按鈕，連犬名都沒有才沒有：');
         document.querySelector('#main .card[data-dog="0"] [data-walk="add"]').click();
@@ -546,12 +503,12 @@ function runTests() {
         eq(document.querySelectorAll('#main [data-walk="back"]').length, 1, '今天已溜看得到、可移回：');
       } finally {
         hideToast();
-        [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
+        [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
         render();
       }
     }),
     check('#35 溜狗表點「已遛」加入今天已溜並從溜狗表移出，不開詳細資訊；可復原', () => {
-      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory];
+      const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory];
       const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.firstChild.textContent);
       const counts = () => [...document.querySelectorAll('#tabs .n')].map(n => n.textContent);
       try {
@@ -561,7 +518,7 @@ function runTests() {
           { name: '測試乙', cage: 'A02', id: '2', walkedDate: new Date(2026, 8, 10), walker: '', note: '' },
           { name: '測試丙', cage: 'A03', id: '', walkedDate: null, walker: '', note: '' },
         ];
-        groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = '';
+        groupMap = {}; activeTab = 'walk'; searchQuery = '';
         render();
         eq(document.querySelectorAll('#main [data-walk="add"]').length, 3, '每隻都有「已遛」：');
         document.querySelector('#main .card[data-dog="0"] [data-walk="add"]').click();
@@ -589,12 +546,12 @@ function runTests() {
       } finally {
         hideDetail(); hideToast();
         if (history.state && history.state.bqDetail) history.replaceState(null, '');
-        [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
+        [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
         render();
       }
     }),
     check('#35 可以一起溜：勾選後按一次，連同這隻一起記；已溜的不顯示圓圈', () => {
-      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory];
+      const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory];
       try {
         walkedStorage = fakeStorage(); walkedMemory = null;
         allDogs = [
@@ -603,7 +560,7 @@ function runTests() {
           { name: '測試丙', cage: 'A03', id: '3', walkedDate: null, walker: '', note: '' },
           { name: '測試丁', cage: 'A04', id: '', walkedDate: null, walker: '', note: '' },
         ];
-        groupMap = { '測試甲': new Set(['測試乙', '測試丙', '測試丁']) }; detailMap = {};
+        groupMap = { '測試甲': new Set(['測試乙', '測試丙', '測試丁']) };
         activeTab = 'walk'; searchQuery = '';
         render();
         showDetail(allDogs[0]);
@@ -630,7 +587,7 @@ function runTests() {
       } finally {
         hideDetail(); hideToast();
         if (history.state && history.state.bqDetail) history.replaceState(null, '');
-        [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
+        [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
         render();
       }
     }),
@@ -654,7 +611,7 @@ function runTests() {
       if (!btn.querySelector('use[href="#i-close"]')) throw new Error('要用 X 圖示');
     }),
     check('#34 有字才出現 X；點 X 清空並回到目前分類完整內容，不換分類', () => {
-      const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery];
+      const saved = [allDogs, groupMap, activeTab, searchQuery];
       const input = document.getElementById('searchInput');
       const clear = document.getElementById('searchClear');
       const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
@@ -665,7 +622,7 @@ function runTests() {
           { cage: 'B02', id: '', name: '清除乙', walkedDate: day(2), walker: '', note: '' },
           { cage: 'B03', id: '', name: '清除丙', walkedDate: null, walker: '', note: '' },
         ];
-        groupMap = {}; detailMap = {};
+        groupMap = {};
         activeTab = 'walk'; searchQuery = ''; input.value = ''; render();
         const full = names();
         eq(full.length, 3, '溜狗表完整：');
@@ -695,7 +652,7 @@ function runTests() {
         eq(activeTab, 'info', '在相關資訊清除也不換分類：');
       } finally {
         input.value = ''; clear.hidden = true;
-        [allDogs, groupMap, detailMap, activeTab, searchQuery] = saved;
+        [allDogs, groupMap, activeTab, searchQuery] = saved;
       }
     }),
     // ── #32 前端改讀 data/dogs.json ──
@@ -703,18 +660,18 @@ function runTests() {
       const got = parseDogsData({
         version: 1, syncedAt: '2026-09-25T08:25:26+08:00',
         dogs: [
-          { cage: 'C03', id: '202101234', name: '測試甲', walkedDate: '2026-09-16', walker: '志工A', note: '勿溜' },
+          { cage: 'C03', id: '202101234', name: '測試甲', walkedDate: '2026-09-16', walker: '志工A', note: '勿溜', sex: 'female', intro: ' 很親人 ' },
           { cage: '住院區', id: '', name: '測試乙', walkedDate: null, walker: '', note: '' },
           { cage: 'A01', id: '1', name: '  ', walkedDate: '2026-09-16', walker: '', note: '' },
           null,
           { cage: 'A02', id: 3, name: '測試丙', walkedDate: '2026-02-30', walker: null, note: null },
         ],
-        cages: ['A01'],
         groups: { '測試甲': ['測試乙'], '測試乙': ['測試甲'], '測試丙': [] },
       });
       eq(got.dogs.map(d => d.name), ['測試甲', '測試乙', '測試丙'], '犬名：');
       const a = got.dogs[0];
-      eq([a.cage, a.id, a.walker, a.note], ['C03', '202101234', '志工A', '勿溜'], '甲的欄位：');
+      eq([a.cage, a.id, a.walker, a.note, a.sex, a.intro], ['C03', '202101234', '志工A', '勿溜', '♀', '很親人'], '甲的欄位：');
+      eq([got.dogs[1].sex, got.dogs[1].intro], ['', ''], '沒有狗卡：');
       eq([ymd(a.walkedDate), a.walkedDate.getHours()], ['2026/9/16', 0], '日期是當地午夜：');
       eq(got.dogs[1].walkedDate, null, '沒日期：');
       eq([got.dogs[2].id, got.dogs[2].walker, got.dogs[2].note, got.dogs[2].walkedDate], ['3', '', '', null], '缺值與不合理日期：');
@@ -757,13 +714,15 @@ function runTests() {
       eq(badDate, [], '讀不懂的日期：');
       if (!got.groups) throw new Error('dogs.json 沒有可以一起溜的資料');
       if (!got.syncedAt) throw new Error('dogs.json 沒有同步時間');
+      if (!got.dogs.some(d => d.intro)) throw new Error('dogs.json 沒有狗卡資訊');
+      if (!got.dogs.some(d => d.sex)) throw new Error('dogs.json 沒有性別');
     }),
   ]);
 }
 
 // 會替換 fetch、呼叫 init 的測試一項一項跑，才不會跟其他測試互相干擾
 async function runSerialTests() {
-  const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, loadState, loadWarning];
+  const saved = [allDogs, groupMap, activeTab, searchQuery, loadState, loadWarning];
   const realFetch = window.fetch;
   const main = document.getElementById('main');
   const tabNames = () => [...document.querySelectorAll('#tabs button .t')].map(t => t.textContent);
@@ -776,20 +735,18 @@ async function runSerialTests() {
       { cage: 'A01', id: '9001', name: '讀取甲', walkedDate: null, walker: '', note: '' },
       { cage: 'A02', id: '9002', name: '讀取乙', walkedDate: '2020-01-01', walker: '', note: '' },
     ],
-    cages: ['A01', 'A02'],
     groups: { '讀取甲': ['讀取乙'], '讀取乙': ['讀取甲'] },
   };
-  // fake(url) 回傳 dogs.json 的回應；dogs/ 一律 404
+  // fake(url) 回傳 dogs.json 的回應
   const install = fake => {
     const calls = [];
     window.fetch = async (url, opts) => {
       calls.push([String(url), opts && opts.cache]);
-      if (String(url).startsWith('dogs/')) return new Response('', { status: 404 });
       return fake(url);
     };
     return calls;
   };
-  const reset = () => { allDogs = []; groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = ''; };
+  const reset = () => { allDogs = []; groupMap = {}; activeTab = 'walk'; searchQuery = ''; };
   try {
     await check('#32 開網頁先出現分類列與「讀取中」，資料到了才畫狗卡', async () => {
       reset();
@@ -811,7 +768,7 @@ async function runSerialTests() {
       eq(document.getElementById('updatedLabel').textContent,
         `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, '同步時間：');
       eq([...groupMap['讀取甲']], ['讀取乙'], '可以一起溜：');
-      eq(calls.filter(([u]) => u.startsWith('dogs/')).map(([u]) => u).sort(), ['dogs/9001.md', 'dogs/9002.md'], '狗卡資訊照舊用編號讀：');
+      eq(calls.map(([u]) => u), ['data/dogs.json'], '只讀 dogs.json，不再逐隻抓 dogs/*.md：');
     });
     await check('#32 dogs.json 讀取失敗：標題、搜尋、分類都在，內容區顯示錯誤，可重新讀取', async () => {
       reset();
@@ -839,14 +796,14 @@ async function runSerialTests() {
     });
   } finally {
     window.fetch = realFetch;
-    [allDogs, groupMap, detailMap, activeTab, searchQuery, loadState, loadWarning] = saved;
+    [allDogs, groupMap, activeTab, searchQuery, loadState, loadWarning] = saved;
     render();
   }
 }
 
 // #46 照片燈箱：會開關燈箱、動到瀏覽器上一頁紀錄，所以也一項一項跑
 async function runPhotoTests() {
-  const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory];
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory];
   const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
   const box = document.getElementById('main').parentElement;
   const lb = () => document.getElementById('lightbox');
@@ -862,7 +819,7 @@ async function runPhotoTests() {
       { id: '', name: '照片丙', cage: 'A03', note: '', walker: '', walkedDate: null },
     ];
     photoOverrides['9101'] = PX; photoOverrides['9102'] = PX;
-    groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = '';
+    groupMap = {}; activeTab = 'walk'; searchQuery = '';
     walkedStorage = fakeStorage(); walkedMemory = null;
     render();
     await check('#46 點狗卡照片開燈箱、不開詳細資訊；點關閉按鈕關掉；點卡片其他地方照舊開詳細資訊', async () => {
@@ -1044,7 +1001,7 @@ async function runPhotoTests() {
     delete photoOverrides['9101']; delete photoOverrides['9102'];
     box.classList.add('hidden');
     history.replaceState(null, '');
-    [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
     render();
   }
 }

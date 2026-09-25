@@ -1,4 +1,4 @@
-// 同步腳本測試：node --test scripts/
+// 同步腳本測試：node --test scripts/sync-sheet.test.mjs
 // 用模擬 gviz 回應，不連試算表。另外把前端讀 dogs.json 的函式載進來，確認前端讀回來的資料跟同步前一致。
 process.env.TZ = 'Asia/Taipei';
 
@@ -64,17 +64,28 @@ function fakeFetch({ main = MAIN, groups = GROUPS, fail } = {}) {
   return fn;
 }
 
-test('產生 dogs.json：狗、籠位（含空籠）、可以一起溜', async () => {
+// 模擬 dogs/{編號}.md：甲有狗卡（含性別），其他沒有
+const CARDS = { 202101234: '---\nname: 測試狗甲\nid: 202101234\nsex: male\n---\n**很親人**，怕機車。\n' };
+function fakeCards() {
+  const calls = [];
+  const fn = async id => { calls.push(id); return CARDS[id] || ''; };
+  fn.calls = calls;
+  return fn;
+}
+
+test('產生 dogs.json：狗（含狗卡資訊與性別）、可以一起溜；不再輸出籠位清單', async () => {
   const f = fakeFetch();
-  const data = await sync.buildData(f, TODAY);
+  const cards = fakeCards();
+  const data = await sync.buildData(f, TODAY, cards);
   assert.deepEqual(f.calls.sort(), ['主清單:0', '主清單:7', '常遛狗群:0']);
+  assert.deepEqual(cards.calls.sort(), ['202101234', '202102345', '202102346'], '沒編號的狗不讀狗卡');
   assert.deepEqual(data.dogs, [
-    { cage: 'C03', id: '202101234', name: '測試狗甲', walkedDate: '2026-09-16', walker: '志工A', note: '' },
-    { cage: 'A10', id: '202102345', name: '測試狗乙', walkedDate: '2026-09-22', walker: '', note: '親人' },
-    { cage: 'A2', id: '202102346', name: '測試狗丙', walkedDate: '2026-09-20', walker: '', note: '勿溜' },
-    { cage: '住院區', id: '', name: '測試狗丁', walkedDate: null, walker: '', note: '新狗，原表沒填日期' },
+    { cage: 'C03', id: '202101234', name: '測試狗甲', walkedDate: '2026-09-16', walker: '志工A', note: '', sex: 'male', intro: '很親人，怕機車。' },
+    { cage: 'A10', id: '202102345', name: '測試狗乙', walkedDate: '2026-09-22', walker: '', note: '親人', sex: '', intro: '' },
+    { cage: 'A2', id: '202102346', name: '測試狗丙', walkedDate: '2026-09-20', walker: '', note: '勿溜', sex: '', intro: '' },
+    { cage: '住院區', id: '', name: '測試狗丁', walkedDate: null, walker: '', note: '新狗，原表沒填日期', sex: '', intro: '' },
   ]);
-  assert.deepEqual(data.cages, ['A2', 'A10', 'A12', 'C03', '住院區', '舊A01']);
+  assert.equal('cages' in data, false);
   assert.deepEqual(data.groups, {
     '測試狗甲': ['測試狗丙'],
     '測試狗丙': ['測試狗甲'],
@@ -98,7 +109,7 @@ test('欄位被改掉、讀到 0 隻狗時丟錯', async () => {
 });
 
 test('資料沒變不寫檔；有變才更新同步時間', async () => {
-  const data = await sync.buildData(fakeFetch(), TODAY);
+  const data = await sync.buildData(fakeFetch(), TODAY, fakeCards());
   const first = sync.renderFile(data, '', new Date(2026, 8, 24, 16, 30));
   const parsed = JSON.parse(first);
   assert.equal(parsed.version, 1);
@@ -125,10 +136,11 @@ test('前端讀 dogs.json 的結果跟同步腳本讀試算表一致', async () 
   const fe = await loadFrontend();
   const dogs = await sync.loadMainList(fakeFetch(), TODAY);
   const groupMap = sync.parseGroups(fakeGviz(GROUPS, 0).table, new Set(dogs.map(d => d.name)));
-  const file = sync.renderFile(await sync.buildData(fakeFetch(), TODAY), '', TODAY);
+  const file = sync.renderFile(await sync.buildData(fakeFetch(), TODAY, fakeCards()), '', TODAY);
   const got = fe.parseDogsData(JSON.parse(file));
-  const plain = list => list.map(d => ({ ...d, walkedDate: d.walkedDate ? d.walkedDate.toDateString() : null }));
+  const plain = list => list.map(({ sex, intro, ...d }) => ({ ...d, walkedDate: d.walkedDate ? d.walkedDate.toDateString() : null }));
   assert.deepEqual(JSON.parse(JSON.stringify(plain(got.dogs))), JSON.parse(JSON.stringify(plain([...dogs]))));
+  assert.deepEqual(got.dogs.map(d => [d.sex, d.intro]), [['♂', '很親人，怕機車。'], ['', ''], ['', ''], ['', '']], '性別符號與狗卡資訊：');
   const sets = m => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, [...v].sort()]));
   assert.deepEqual(JSON.parse(JSON.stringify(sets(got.groups))), sets(groupMap));
   assert.equal(got.syncedAt.getTime(), Math.floor(TODAY.getTime() / 1000) * 1000);
@@ -182,4 +194,42 @@ test('可以一起溜：一隻狗在多組時合併去重；犬名多了空白�
   assert.deepEqual([...map['冬冬']].sort(), ['宙斯', '比比', '金寶'].sort());
   assert.deepEqual([...map['金寶']], ['冬冬']);
   assert.equal(map['已離所'], undefined);
+});
+
+// ── 狗卡資訊（dogs/{編號}.md）：原本在 tests/index.html 測前端，改成同步時整理後移到這裡 ──
+
+test('狗卡：去掉 YAML frontmatter，只留內文', () => {
+  assert.equal(sync.parseFrontmatterBody('---\nname: 宙斯\ntags: [親人]\n---\n\n很黏人。\n'), '很黏人。');
+  assert.equal(sync.parseFrontmatterBody('\uFEFF---\r\nname: 宙斯\r\n---\r\n很黏人。'), '很黏人。', 'BOM 與 Windows 換行');
+  assert.equal(sync.parseFrontmatterBody('沒有 frontmatter 的介紹'), '沒有 frontmatter 的介紹');
+  assert.equal(sync.parseFrontmatterBody('第一段\n\n---\n\n第二段'), '第一段\n\n---\n\n第二段', '內文中的分隔線不算 frontmatter');
+});
+
+test('狗卡：性別只認 frontmatter 的 male／female', () => {
+  assert.equal(sync.parseFrontmatterSex('---\nname: 宙斯\nsex: male\n---\n內文'), 'male');
+  assert.equal(sync.parseFrontmatterSex('---\nsex: Female\n---\n'), 'female');
+  assert.equal(sync.parseFrontmatterSex('---\nsex: 不詳\n---\n'), '');
+  assert.equal(sync.parseFrontmatterSex('sex: male'), '', '沒有 frontmatter');
+});
+
+test('狗卡：Markdown 符號不原樣露出', () => {
+  const md = '# 宙斯\n\n**很親人**，喜歡 *散步*。\n\n- 怕機車\n- 會拉扯\n\n> 小心 __別的公狗__\n\n[領養頁](https://example.com) [[冬冬|好朋友冬冬]] ![照片](a.jpg) `暗號`\n\n---\n\n| 項目 | 說明 |\n|---|---|\n| 體重 | 20kg |';
+  const text = sync.markdownToText(md);
+  assert.equal(text, '宙斯 很親人，喜歡 散步。 怕機車 會拉扯 小心 別的公狗 領養頁 好朋友冬冬  暗號 項目 說明 體重 20kg');
+  assert.doesNotMatch(text, /[*#`\[\]|>]/);
+  assert.equal(sync.markdownToText('檔名 dog_01_a 保留'), '檔名 dog_01_a 保留', '底線在字中間不會被吃掉');
+});
+
+test('狗卡：同編號只讀一次；讀不到就留空；編號不是英數字不去讀檔', async () => {
+  const cards = fakeCards();
+  const dogs = await sync.attachDogCards([
+    { name: '宙斯', id: '202101234' }, { name: '宙斯二號', id: '202101234' }, { name: '金寶', id: '' },
+  ], cards);
+  assert.deepEqual(cards.calls, ['202101234']);
+  assert.deepEqual(dogs.map(d => [d.name, d.sex, d.intro]), [
+    ['宙斯', 'male', '很親人，怕機車。'], ['宙斯二號', 'male', '很親人，怕機車。'], ['金寶', '', ''],
+  ]);
+  assert.equal(await sync.readDogCardFile('../README'), '');
+  assert.equal(await sync.readDogCardFile('0000000000'), '', '沒有這個檔');
+  assert.match(await sync.readDogCardFile('2017070102'), /LUCY/, '讀得到 repo 裡的狗卡');
 });
