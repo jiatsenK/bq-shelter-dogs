@@ -246,3 +246,9 @@
 - 截圖：previews/issue-58/mine.png、mine-date.png（390px，repo 現有真資料 5 筆）。
 - 票外觀察（未修）：詳細資訊的照片載入完成前就關掉視窗時，console 會出現一個錯誤（`renderDetail` 裡照片 load 事件讀 `detailDog.name`），畫面不受影響；main 上本來就有。
 - 分支：`claude/project-thread-z1ne7o`（從最新 main 重開）。
+
+## [2026-09-25] Claude | #58 我溜過改成精簡紀錄卡片
+- 依據：K 在 thread 說「我溜過就不用出現備註了，上次遛狗一天前是不是也可以改」。
+- 前端：我溜過頁改用自己的精簡卡片：照片、犬名、編號｜籠位，右邊「我遛過 N 次」，不放備註警示、不放大家的上次遛狗天數；點卡片照樣開詳細資訊。上方提示改成「你遛過 N 隻、共 N 次」。
+- 測試：tests/index.html 75 項全過（新增：警示備註不出現、同一隻遛過幾次）。截圖 previews/issue-58/ 已更新。
+- PR：#70（同一分支）。
