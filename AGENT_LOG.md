@@ -287,3 +287,9 @@
 - K 說「合併」，順序 #70 → #71。#70 合併後把 main 併進來：tests/index.html 衝突兩邊都保留（#58 我溜過測試＋#60 遛狗紀錄測試），AGENT_LOG 兩邊都保留。
 - #58 在 js/app.js 也宣告了 `WALKS_URL`，和 js/analysis.js 重複會讓 analysis.js 整個載入失敗；拿掉 analysis.js 那行，共用 app.js 的。
 - 驗證：tests/index.html 78 項全過；同步測試 31 項全過。
+
+## [2026-09-25] Claude | 改寫 git 歷史：清掉試算表 ID 與志工名字
+- 依據：K 選方案 A 並打字確認；PR #54 合併、Secret 驗證成功（合併後自動同步成功）後執行，當時沒有開著的 PR。
+- 做法：用 git filter-repo 改寫全部 31 個分支的歷史：試算表 ID 換成 `REMOVED_SHEET_ID`；所有舊版 `data/dogs.json` 的 `"walker": "名字"` 換成 `"walker": ""`。main 最新內容與改寫前完全相同（tree 雜湊一致），網站不受影響。所有提交編號都變了。
+- 注意：之前 clone 的本機副本不能再推送或合併進來（會把舊歷史帶回來），要重新 clone 或 `git fetch` 後 `git reset --hard origin/分支`。
+- GitHub 上已合併 PR（#13–#54）的頁面仍保留舊提交；K 已於 2026-09-25 向 GitHub 客服提交清除申請。
