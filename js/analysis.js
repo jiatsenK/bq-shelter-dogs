@@ -172,7 +172,7 @@ function checkPhotos(dogs) {
 // ── 遛狗歷史（V5-5，#60）：讀 #56 的 data/walks.json 與 data/history/ ──
 // 試算表每隻狗只記最後一次遛狗，所以歷史從第一份快照那天才開始累積；walks.json 在那之前的紀錄是建立時的「最後一次」，
 // 只拿來當第一段間隔的起點，不算進次數。所有人的遛狗都算（不看 mine），畫面不出現志工名字。
-const WALKS_URL = 'data/walks.json';
+// WALKS_URL 在 js/app.js（#58 我溜過也讀同一個檔）
 const HISTORY_URL = 'data/history/';
 const dogKey = d => d.id || `名:${d.name}`;
 
