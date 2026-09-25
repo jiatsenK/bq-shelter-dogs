@@ -31,6 +31,7 @@ let photoUpload = null; // 詳細資訊正在上傳的照片：{ dog, blob, url,
 let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（walkKey）
 let searchQuery = '';
 let loadWarning = '';
+let analysisOpen = false; // 分析頁（#59）開著嗎
 let loadState = 'loading'; // loading：還在讀 dogs.json；error：讀取失敗；ready：資料好了
 
 // 把年月日組成日期；不合理的日期（例：2/30）回傳 null
@@ -692,7 +693,8 @@ function closeDetail() {
 // 燈箱開著時「返回」只關燈箱，詳細資訊留著
 window.addEventListener('popstate', () => {
   if (lightboxOpen()) hideLightbox();
-  else hideDetail();
+  else if (detailDog) hideDetail();
+  else if (analysisOpen) hideAnalysis();
 });
 document.getElementById('detailBackdrop').addEventListener('click', e => {
   if (e.target.id === 'detailBackdrop') closeDetail();
@@ -806,7 +808,7 @@ mainEl.addEventListener('touchstart', e => {
   swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 }, { passive: true });
 mainEl.addEventListener('touchend', e => {
-  if (!swipeStart) return;
+  if (!swipeStart || analysisOpen) return; // 分析頁不是分類，滑動不換頁
   const t = e.changedTouches[0];
   const step = swipeStep(t.clientX - swipeStart.x, t.clientY - swipeStart.y);
   swipeStart = null;
@@ -845,6 +847,12 @@ function renderMain() {
     `${today.getMonth() + 1}月${today.getDate()}日 (${'日一二三四五六'[today.getDay()]})`;
 
   const main = document.getElementById('main');
+
+  // 分析頁（#59）：頁首右上角的圖示打開，蓋住分類清單；統計與畫面在 js/analysis.js
+  if (analysisOpen) {
+    main.innerHTML = analysisPageHtml(today);
+    return;
+  }
 
   if (activeTab === 'info') {
     buildTabs({});
