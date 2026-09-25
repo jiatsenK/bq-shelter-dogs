@@ -12,6 +12,8 @@ const MY_NOTES_URL = 'data/my-notes.json';
 const MY_NOTE_MAX_CHARS = 1000; // 跟 Worker 的 NOTE_MAX_CHARS 一致
 // 相簿：每隻狗除了主照片還能多放幾張（photos/gallery/{編號}/），清單在這個檔；最新清單一樣先問 Worker
 const GALLERY_URL = 'data/gallery.json';
+// 手機第一屏大約看得到幾張狗卡：這幾張的照片不延後載入、優先下載（#91）
+const FIRST_SCREEN_CARDS = 8;
 const GALLERY_MAX = 30; // 跟 Worker 的 GALLERY_MAX 一致
 const GALLERY_BATCH_MAX = 10; // 相簿一次最多選幾張（一張一張依序傳，Worker 相簿頻率限制 1 分鐘 12 張）
 // 我最近溜過（#58）：同步時累積的遛狗紀錄（#56），只看 mine（#57 判斷是不是我遛的）
@@ -144,7 +146,14 @@ async function loadMyWalks() {
     console.error(e);
     myWalksState = 'error';
   }
-  render();
+  // 不在「我溜過」就只更新分類上的數字（#91）：整頁重畫會把第一屏正在載入的照片換掉
+  const n = document.querySelector('#tabs [data-tab="mine"] .n');
+  if (activeTab !== 'mine' && !analysisOpen && n) {
+    n.textContent = myWalksState === 'ready'
+      ? myWalkGroups(myWalks, searchQuery.trim()).reduce((k, g) => k + g.walks.length, 0) : '';
+  } else {
+    render();
+  }
 }
 
 // 紀錄對到目前清單上的狗：有編號用編號，沒有才用犬名；對不到（例：已離所）回 null
@@ -307,7 +316,7 @@ function thumbAttrs(thumb, full) {
 }
 
 // zoom：詳細資訊上方的照片做成按鈕，點了用燈箱放大（#46）；照片讀不到就標 no-photo，按了不放大
-function photoThumb(dog, size = 56, zoom = false) {
+function photoThumb(dog, size = 56, zoom = false, eager = false) {
   // 沒有編號就直接顯示腳掌圖示，不去抓 photos/.jpg
   if (!dog.id) {
     return `<div class="thumb"><div class="thumb-fallback" style="display:flex">${icon('paw')}</div></div>`;
@@ -316,7 +325,7 @@ function photoThumb(dog, size = 56, zoom = false) {
   const attrs = zoom ? ` type="button" class="thumb zoom" data-zoom aria-label="放大 ${esc(dog.name)} 的照片"` : ' class="thumb"';
   return `
     <${tag}${attrs}>
-      <img ${thumbAttrs(photoThumbSrc(dog), photoSrc(dog))} alt="" width="${size}" height="${size}" loading="lazy" decoding="async"
+      <img ${thumbAttrs(photoThumbSrc(dog), photoSrc(dog))} alt="" width="${size}" height="${size}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"
            onload="this.classList.add('loaded')"
            onerror="${thumbFallback} this.style.display='none'; this.nextElementSibling.style.display='flex'; this.parentNode.classList.add('no-photo'); this.parentNode.disabled = true;">
       <div class="thumb-fallback">${icon('paw')}</div>
@@ -741,11 +750,12 @@ function walkButton(dog, walkedTab) {
 
 // 所有分頁、搜尋、籠位共用這張卡片。第一層只放照片、犬名、天數、籠位｜編號，
 // 備註命中警示關鍵字才把原文放上來；一般備註、可一起遛、狗卡資訊點卡片看詳細資訊
-function dogCard(dog, today, walkedTab = false) {
+// eager：第一屏的卡片（#91），照片不等延後載入、優先下載
+function dogCard(dog, today, walkedTab = false, eager = false) {
   const flag = specialFlag(dog.note);
   return `
     <div class="card${flag ? ' flagged' : ''}" data-dog="${allDogs.indexOf(dog)}" role="button" tabindex="0" aria-haspopup="dialog">
-      ${photoThumb(dog)}
+      ${photoThumb(dog, 56, false, eager)}
       <div class="body">
         <div class="row">
           <div class="who">
@@ -2094,7 +2104,7 @@ function renderMain() {
   }
   const inToday = activeTab === 'today';
   const list = inToday ? todayList : walkList;
-  const cards = list.map(d => dogCard(d, today, inToday)).join('');
+  const cards = list.map((d, i) => dogCard(d, today, inToday, i < FIRST_SCREEN_CARDS)).join('');
   const hiddenBox = inToday ? '' : hiddenBoxHtml(hiddenList, hidden);
 
   if (q) {
