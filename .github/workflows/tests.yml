@@ -1,0 +1,47 @@
+# 自動跑測試（#84）：開 PR、推到 main 時跑，PR 上會顯示綠勾或紅叉
+# - node 測試：試算表同步（scripts/sync-sheet.test.mjs）、Worker（worker/test/worker.test.mjs）
+# - 網頁測試：用無頭瀏覽器打開 tests/index.html（scripts/run-browser-tests.cjs），全部通過才算過
+# - 只讀 repo 裡的檔案和假資料，不碰試算表、Worker 或任何密鑰
+name: 測試
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    # 網站自己寫入的資料（同步、照片、備註、縮圖）不用跑測試
+    paths-ignore:
+      - 'data/**'
+      - 'photos/**'
+
+permissions:
+  contents: read
+
+# 同一個 PR 推了新的提交，就取消舊的那次
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: Asia/Taipei
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # node --test 要寫檔名：寫資料夾在 Node 22 會失敗
+      - name: node 測試（試算表同步、Worker）
+        run: node --test scripts/sync-sheet.test.mjs worker/test/worker.test.mjs
+
+      - name: 安裝無頭瀏覽器
+        run: |
+          npm install --no-save --no-package-lock playwright@1.56.1
+          npx playwright install --with-deps chromium
+
+      - name: 網頁測試（tests/index.html）
+        run: node scripts/run-browser-tests.cjs
