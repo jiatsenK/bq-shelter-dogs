@@ -1289,7 +1289,7 @@ async function runMyNoteTests() {
 
 // #58 我最近溜過：會切分類、開詳細資訊、替換 fetch，所以一項一項跑
 async function runMyWalksTests() {
-  const saved = [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState, mineDate];
+  const saved = [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState];
   const realFetch = window.fetch;
   const main = document.getElementById('main');
   const tick = () => new Promise(r => setTimeout(r, 0));
@@ -1310,7 +1310,7 @@ async function runMyWalksTests() {
   const setup = () => {
     allDogs = [dog('紀錄甲', '8001', new Date(2026, 8, 24)), dog('紀錄乙', '8002', new Date(2026, 8, 26)),
       dog('紀錄丙', '8003', null), dog('紀錄戊', '8005', new Date(2026, 8, 24))];
-    groupMap = {}; searchQuery = ''; mineDate = '';
+    groupMap = {}; searchQuery = '';
     myWalks = parseMyWalks(WALKS); myWalksState = 'ready';
     activeTab = 'mine'; render();
   };
@@ -1354,20 +1354,12 @@ async function runMyWalksTests() {
       eq([...box.querySelectorAll('.mine-tiles b')].map(b => b.textContent), ['0', '0', '0'], '10 月：');
       if (!box.textContent.includes('上個月到所 4 次')) throw new Error(box.textContent);
     });
-    await check('#58 選日期只看那天，清除回到全部', () => {
+    await check('#58 不選日期：所有到所紀錄一路往下排（跨月也是）', () => {
       setup();
-      const input = document.getElementById('mineDate');
-      eq([input.min, input.max], ['2026-09-18', '2026-09-24'], '可選範圍：');
-      input.value = '2026-09-22';
-      input.dispatchEvent(new Event('change', { bubbles: true }));
-      eq([heads(), cardNames()], [['2026/09/22（二）'], ['紀錄乙']], '選 9/22：');
-      eq(document.querySelector('#tabs button[data-tab="mine"] .n').textContent, '1', '分類數字跟著篩：');
-      const again = document.getElementById('mineDate');
-      again.value = '2026-09-20';
-      again.dispatchEvent(new Event('change', { bubbles: true }));
-      if (!main.textContent.includes('這天沒有你遛狗的紀錄')) throw new Error('沒紀錄的日子要說明');
-      document.getElementById('mineDateClear').click();
-      eq([mineDate, cardNames().length], ['', 4], '清除後：');
+      eq(document.getElementById('mineDate'), null, '沒有日期選擇：');
+      myWalks = parseMyWalks({ version: 1, walks: [...WALKS.walks, { id: '8002', name: '紀錄乙', date: '2026-08-05', mine: true }] });
+      render();
+      eq(heads(), ['2026/09/24（四）', '2026/09/22（二）', '2026/09/18（五）', '2026/08/05（三）'], '日期標題：');
     });
     await check('#58 點狗開原本的詳細資訊；搜尋只篩這頁', () => {
       setup();
@@ -1408,7 +1400,7 @@ async function runMyWalksTests() {
   } finally {
     window.fetch = realFetch;
     hideDetail();
-    [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState, mineDate] = saved;
+    [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState] = saved;
     render();
   }
 }

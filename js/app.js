@@ -43,7 +43,6 @@ let noteEdit = null; // 正在編輯的我的備註：{ dog, text, pass, needPas
 let analysisOpen = false; // 分析頁（#59）開著嗎
 let myWalks = []; // 我遛過的紀錄（#58）：[{ id, name, date: Date, ymd }]，新到舊
 let myWalksState = 'loading'; // loading／ready／error
-let mineDate = ''; // 我最近溜過只看哪一天（YYYY-MM-DD）；空白＝全部
 let loadState = 'loading'; // loading：還在讀 dogs.json；error：讀取失敗；ready：資料好了
 
 // 把年月日組成日期；不合理的日期（例：2/30）回傳 null
@@ -148,11 +147,10 @@ function walkDateLabel(date) {
   return `${date.getFullYear()}/${pad2(date.getMonth() + 1)}/${pad2(date.getDate())}（${'日一二三四五六'[date.getDay()]}）`;
 }
 
-// 依日期分組：[{ ymd, date, walks }]；dateFilter 有值只留那一天，query 用犬名篩選
-function myWalkGroups(walks, dateFilter, query) {
+// 依日期分組：[{ ymd, date, walks }]；query 用犬名篩選
+function myWalkGroups(walks, query) {
   const groups = [];
   for (const w of walks) {
-    if (dateFilter && w.ymd !== dateFilter) continue;
     if (!matchesSearch(w, query)) continue;
     let g = groups[groups.length - 1];
     if (!g || g.ymd !== w.ymd) groups.push(g = { ymd: w.ymd, date: w.date, walks: [] });
@@ -215,19 +213,11 @@ function myWalksHtml(today, query) {
     return `<div class="status-msg">遛狗紀錄讀取失敗，請稍後重新整理。<br><button class="retry-btn" id="mineRetry">重新讀取</button></div>`;
   }
   if (!myWalks.length) return `<div class="status-msg">從 ${MY_WALKS_SINCE} 開始記錄，目前還沒有資料。<br>試算表「誰遛的」填你的名字，同步後就會出現在這裡。</div>`;
-  const first = myWalks[myWalks.length - 1].ymd, last = myWalks[0].ymd;
-  const stats = query || mineDate ? '' : myMonthStats(myWalks, today);
-  const picker = stats + `<div class="mine-bar">
-    <label>${icon('pin')}看哪一天<input type="date" id="mineDate" min="${first}" max="${last}" value="${esc(mineDate)}"></label>
-    ${mineDate ? `<button type="button" class="mine-clear" id="mineDateClear">${icon('close')}清除</button>` : ''}
-  </div>`;
-  const groups = myWalkGroups(myWalks, mineDate, query);
-  if (!groups.length) {
-    const why = query ? `找不到「${esc(query)}」` : '這天沒有你遛狗的紀錄';
-    return picker + `<div class="status-msg">${mineDate ? `${esc(walkDateLabel(parseYmd(mineDate)))}：` : ''}${why}</div>`;
-  }
+  // 所有到所紀錄新到舊一路往下排（K 2026-09-25：不要選日期）；搜尋時不顯示小計
+  const groups = myWalkGroups(myWalks, query);
+  if (!groups.length) return `<div class="status-msg">找不到「${esc(query)}」</div>`;
   const firstSeen = myFirstWalks(myWalks);
-  return picker + groups.map(g => myVisitCard(g, firstSeen)).join('');
+  return (query ? '' : myMonthStats(myWalks, today)) + groups.map(g => myVisitCard(g, firstSeen)).join('');
 }
 
 // 回傳備註命中的關鍵字（顯示用）與實際出現的寫法（標示用）；沒命中回 null
@@ -1195,7 +1185,7 @@ function renderMain() {
   const walkList = dueDogs(allDogs.filter(d => !isWalkedToday(d, walkedIds)), today).filter(hit);
   const todayList = walkedTodayDogs(allDogs, today).filter(hit);
   const mineCount = myWalksState === 'ready'
-    ? myWalkGroups(myWalks, mineDate, q).reduce((n, g) => n + g.walks.length, 0) : null;
+    ? myWalkGroups(myWalks, q).reduce((n, g) => n + g.walks.length, 0) : null;
   buildTabs({ walk: walkList.length, today: todayList.length, mine: mineCount });
   if (activeTab === 'mine') {
     main.innerHTML = myWalksHtml(today, q);
@@ -1219,16 +1209,10 @@ function renderMain() {
   }
 }
 
-// 我最近溜過的日期選擇與清除（內容區每次重畫，所以用事件委派）
-mainEl.addEventListener('change', e => {
-  if (e.target.id !== 'mineDate') return;
-  mineDate = e.target.value;
-  render();
-});
+// 我溜過：點照片開詳細資訊、讀取失敗時重新讀取（內容區每次重畫，所以用事件委派）
 mainEl.addEventListener('click', e => {
   const tile = e.target.closest('[data-mine-dog]');
   if (tile) showDetail(allDogs[tile.dataset.mineDog]);
-  else if (e.target.closest('#mineDateClear')) { mineDate = ''; render(); }
   else if (e.target.closest('#mineRetry')) loadMyWalks();
 });
 
