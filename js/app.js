@@ -3,7 +3,7 @@ const DATA_URL = 'data/dogs.json';
 // 照片上傳服務（Cloudflare Worker，#47／#48）的網址，例：https://bq-shelter-photos.xxx.workers.dev
 // 還沒部署就留空：詳細資訊不顯示上傳按鈕。這裡只放網址，GitHub 寫入權限只在 Worker 裡，網站碰不到
 // （用 let 是讓 tests/index.html 能換成測試網址）
-let UPLOAD_URL = '';
+let UPLOAD_URL = 'https://bq-shelter-photos.jiatsen-k.workers.dev';
 // 上傳前先在手機上壓成 JPEG：長邊最多 1280px，避免 repo 堆滿手機原圖；上限要跟 Worker 的 MAX_BYTES 一致
 const PHOTO_MAX_EDGE = 1280;
 const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
