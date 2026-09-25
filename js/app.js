@@ -10,6 +10,9 @@ const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
 // 我的備註（#61／#62）：寫入與最新內容都經過同一個 Worker；讀不到 Worker 時改讀網站上的這個檔（可能晚一兩分鐘）
 const MY_NOTES_URL = 'data/my-notes.json';
 const MY_NOTE_MAX_CHARS = 1000; // 跟 Worker 的 NOTE_MAX_CHARS 一致
+// 相簿：每隻狗除了主照片還能多放幾張（photos/gallery/{編號}/），清單在這個檔；最新清單一樣先問 Worker
+const GALLERY_URL = 'data/gallery.json';
+const GALLERY_MAX = 30; // 跟 Worker 的 GALLERY_MAX 一致
 // 我最近溜過（#58）：同步時累積的遛狗紀錄（#56），只看 mine（#57 判斷是不是我遛的）
 const WALKS_URL = 'data/walks.json';
 const MY_WALKS_SINCE = '2026/9/25'; // #57 上線、開始判斷是不是我遛的那天
@@ -33,7 +36,10 @@ let groupMap = {};
 let activeTab = 'walk';
 let detailDog = null; // 詳細資訊正在看的狗
 let detailOpener = null;
-let photoUpload = null; // 詳細資訊正在上傳的照片：{ dog, blob, url, phase: 'preview'|'uploading'|'error', error }
+let photoUpload = null; // 詳細資訊正在上傳的照片：{ dog, target: 'main'|'gallery', blob, url, phase: 'preview'|'uploading'|'error', error }
+let gallery = {}; // 相簿：編號 → [{ file, addedAt }]，舊到新
+let galleryState = 'loading'; // loading／worker／site／error（同我的備註）
+let galleryDelete = null; // 燈箱裡正在刪的相簿照片：{ dog, file, pass, needPass, phase: 'confirm'|'deleting'|'error', error }
 let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（walkKey）
 let searchQuery = '';
 let loadWarning = '';
@@ -271,6 +277,15 @@ function photoSrc(dog) {
   return photoOverrides[dog.id] || `photos/${encodeURIComponent(dog.id)}.jpg`;
 }
 
+// 相簿照片：清單舊到新，畫面上新的在前；剛傳的那張同樣先用本機圖片（編號/檔名 → 本機圖片網址）
+const galleryOverrides = {};
+function galleryList(dog) {
+  return dog && dog.id ? [...(gallery[dog.id] || [])].reverse() : [];
+}
+function gallerySrc(dog, file) {
+  return galleryOverrides[`${dog.id}/${file}`] || `photos/gallery/${encodeURIComponent(dog.id)}/${encodeURIComponent(file)}`;
+}
+
 // zoom：詳細資訊上方的照片做成按鈕，點了用燈箱放大（#46）；照片讀不到就標 no-photo，按了不放大
 function photoThumb(dog, size = 56, zoom = false) {
   // 沒有編號就直接顯示腳掌圖示，不去抓 photos/.jpg
@@ -288,8 +303,10 @@ function photoThumb(dog, size = 56, zoom = false) {
   `;
 }
 
-// 燈箱（#46）：大圖不裁切、盡量用滿畫面；點關閉、點背景、Esc、手機返回都能關
+// 燈箱（#46）：大圖不裁切、盡量用滿畫面；點關閉、點背景、Esc、手機返回都能關。
+// 有相簿時主照片和相簿照片排成一串，左右滑（或按兩側箭頭、鍵盤左右鍵）換張
 let lightboxOpener = null;
+let lightboxView = null; // { dog, items: [{ src, file }], index }
 function lightboxOpen() {
   const el = document.getElementById('lightbox');
   return !!el && !el.hidden;
@@ -306,9 +323,17 @@ function insidePhoto(e) {
   return e.clientX >= left && e.clientX <= left + w && e.clientY >= top && e.clientY <= top + h;
 }
 
-// opener：關掉後焦點回到哪裡（詳細資訊的照片或狗卡）
-function openLightbox(dog, opener) {
+// 燈箱要翻的照片：主照片（withMain：知道有主照片才放）＋相簿，相簿新的在前
+function photoItems(dog, withMain) {
+  const items = withMain ? [{ src: photoSrc(dog), file: null }] : [];
+  return items.concat(galleryList(dog).map(p => ({ src: gallerySrc(dog, p.file), file: p.file })));
+}
+
+// opener：關掉後焦點回到哪裡（詳細資訊的照片或狗卡）；start：從第幾張開始
+function openLightbox(dog, opener, start = 0, withMain = true) {
   if (!dog || !dog.id) return;
+  const items = photoItems(dog, withMain);
+  if (!items.length) return;
   let el = document.getElementById('lightbox');
   if (!el) {
     el = document.createElement('div');
@@ -316,15 +341,35 @@ function openLightbox(dog, opener) {
     el.className = 'lightbox';
     el.setAttribute('role', 'dialog');
     el.setAttribute('aria-modal', 'true');
-    el.innerHTML = `<img alt=""><button type="button" class="lightbox-close" aria-label="關閉照片">${icon('close')}</button>`;
+    el.innerHTML = `<img alt="">
+      <button type="button" class="lightbox-close" aria-label="關閉照片">${icon('close')}</button>
+      <button type="button" class="lightbox-nav prev" data-step="-1" aria-label="上一張">${icon('back')}</button>
+      <button type="button" class="lightbox-nav next" data-step="1" aria-label="下一張">${icon('chevron')}</button>
+      <div class="lightbox-bar"></div>`;
     el.addEventListener('click', e => {
-      if (!insidePhoto(e)) closeLightbox(); // 點背景（含照片旁的留白）或關閉按鈕
+      if (e.target.closest('.lightbox-close')) { closeLightbox(); return; }
+      const nav = e.target.closest('[data-step]');
+      if (nav) { stepLightbox(Number(nav.dataset.step)); return; }
+      // 張數、刪除都在下方列，點了不關；按了「刪除」後下方列會重畫，按鈕已經不在畫面上也不能當成點背景
+      if (!e.target.isConnected || e.target.closest('.lightbox-bar')) return;
+      if (!insidePhoto(e)) closeLightbox(); // 點背景（含照片旁的留白）
+    });
+    // 左右滑換張（只看明顯的水平滑動，兩指縮放不算）
+    let touch = null;
+    el.addEventListener('touchstart', e => { touch = e.touches.length === 1 ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null; }, { passive: true });
+    el.addEventListener('touchend', e => {
+      if (!touch || e.target.closest('.lightbox-bar')) { touch = null; return; }
+      const t = e.changedTouches[0];
+      const dx = t.clientX - touch.x, dy = t.clientY - touch.y;
+      touch = null;
+      if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) stepLightbox(dx < 0 ? 1 : -1);
     });
     document.body.appendChild(el);
   }
+  lightboxView = { dog, items, index: Math.max(0, Math.min(start, items.length - 1)) };
+  if (!galleryDelete || galleryDelete.phase !== 'deleting') galleryDelete = null;
   el.setAttribute('aria-label', `${dog.name} 的照片`);
-  el.querySelector('img').src = photoSrc(dog);
-  el.querySelector('img').alt = `${dog.name} 的照片`;
+  showLightboxPhoto();
   lightboxOpener = opener || document.activeElement;
   el.hidden = false;
   document.documentElement.classList.add('lightbox-open');
@@ -333,11 +378,43 @@ function openLightbox(dog, opener) {
   el.querySelector('.lightbox-close').focus({ preventScroll: true });
 }
 
+// 畫出目前這張，和下方列（第幾張、刪除）
+function showLightboxPhoto() {
+  const el = document.getElementById('lightbox');
+  const v = lightboxView;
+  if (!el || !v) return;
+  const item = v.items[v.index];
+  const img = el.querySelector('img');
+  img.src = item.src;
+  img.alt = `${v.dog.name} 的照片${v.items.length > 1 ? `（第 ${v.index + 1} 張，共 ${v.items.length} 張）` : ''}`;
+  const many = v.items.length > 1;
+  el.querySelectorAll('.lightbox-nav').forEach(b => { b.hidden = !many; });
+  const bar = el.querySelector('.lightbox-bar');
+  const del = galleryDelete && galleryDelete.dog === v.dog && galleryDelete.file === item.file ? galleryDelete : null;
+  const canDelete = !!(UPLOAD_URL && item.file);
+  bar.innerHTML = del ? galleryDeleteForm(del) : `
+    ${many ? `<span class="lightbox-count">${v.index + 1} / ${v.items.length}</span>` : ''}
+    ${!item.file && many ? `<span class="lightbox-tag">主照片</span>` : ''}
+    ${canDelete ? `<button type="button" class="lightbox-delete" id="galleryDeleteBtn">${icon('trash')}刪除</button>` : ''}`;
+  bar.hidden = !bar.textContent.trim() && !bar.querySelector('button');
+  bindGalleryDelete(bar);
+}
+
+function stepLightbox(step) {
+  const v = lightboxView;
+  if (!v || v.items.length < 2 || (galleryDelete && galleryDelete.phase === 'deleting')) return;
+  galleryDelete = null;
+  v.index = (v.index + step + v.items.length) % v.items.length;
+  showLightboxPhoto();
+}
+
 function hideLightbox() {
   const el = document.getElementById('lightbox');
   if (!el || el.hidden) return;
   el.hidden = true;
   el.querySelector('img').removeAttribute('src');
+  lightboxView = null;
+  if (!galleryDelete || galleryDelete.phase !== 'deleting') galleryDelete = null;
   document.documentElement.classList.remove('lightbox-open');
   const opener = lightboxOpener;
   lightboxOpener = null;
@@ -588,7 +665,159 @@ function detailHtml(dog, today) {
       <h3>${icon('card')}狗卡資訊<span class="sub">入所時的原始狗卡</span></h3>
       ${intro ? `<div class="content">${esc(intro)}</div>` : `<div class="empty">還沒有狗卡資訊</div>`}
     </section>
+    ${gallerySection(dog)}
   `;
+}
+
+// 相簿（狗卡資訊下方）：主照片＋另外上傳的照片排成縮圖格，點了用燈箱看大圖、左右滑換張；最後一格「新增」。
+// 主照片讀不到就把那格藏起來
+function gallerySection(dog) {
+  if (!dog.id) return '';
+  const list = galleryList(dog);
+  const canAdd = !!UPLOAD_URL && list.length < GALLERY_MAX;
+  const up = photoUpload && photoUpload.dog === dog && photoUpload.target === 'gallery';
+  // 相簿照片讀不到（例：別人剛傳、網站還沒更新）就顯示腳掌、不能點；主照片讀不到整格藏起來
+  const tile = (src, attrs, main = false) => `
+    <button type="button" class="g-tile" ${attrs}>
+      <img src="${esc(src)}" alt="" loading="lazy" decoding="async" onerror="this.parentNode.classList.add('broken'); this.parentNode.disabled = true;${main ? ' this.parentNode.hidden = true;' : ''}">
+      ${main ? `<span class="g-tag">主照片</span>` : `<span class="g-fallback">${icon('paw')}</span>`}
+    </button>`;
+  const tiles = [
+    tile(photoSrc(dog), `data-g-main aria-label="放大 ${esc(dog.name)} 的主照片"`, true),
+    ...list.map((p, i) => tile(gallerySrc(dog, p.file), `data-g-file="${esc(p.file)}" aria-label="放大 ${esc(dog.name)} 的相簿照片（第 ${i + 1} 張）"`)),
+  ];
+  const note = galleryState === 'loading' ? '讀取中…' : galleryState === 'error' ? '相簿清單暫時讀不到' : '';
+  return `
+    <section class="detail-section" data-section="gallery">
+      <h3>${icon('photos')}相簿<span class="sub">${list.length ? `另外 ${list.length} 張，` : ''}點照片看大圖</span></h3>
+      <div class="gallery-grid">
+        ${tiles.join('')}
+        ${canAdd && !up ? `<button type="button" class="g-add" id="galleryAdd" aria-label="新增 ${esc(dog.name)} 的相簿照片">${icon('plus')}<span>新增</span></button>` : ''}
+      </div>
+      ${note ? `<div class="empty gallery-note">${note}</div>` : ''}
+      ${up ? photoUploadHtml(dog, 'gallery') : ''}
+    </section>`;
+}
+
+// 燈箱下方的刪除確認：通關碼跟我的備註同一組，這支手機記過就不用再輸入
+function galleryDeleteForm(del) {
+  const busy = del.phase === 'deleting';
+  return `
+    <form class="lightbox-del" id="galleryDeleteForm" autocomplete="on">
+      <div class="lightbox-del-q">從相簿刪掉這張照片？</div>
+      ${del.needPass ? `
+        <input type="text" name="username" autocomplete="username" value="板收志工溜狗表" hidden readonly>
+        <input type="password" id="galleryDeletePass" name="password" autocomplete="current-password" placeholder="通關碼（同我的備註）" aria-label="通關碼" value="${esc(del.pass)}"${busy ? ' disabled' : ''}>` : ''}
+      ${del.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(del.error)}</span></div>` : ''}
+      <div class="lightbox-del-actions">
+        <button type="submit" class="lightbox-del-yes" id="galleryDeleteYes"${busy ? ' disabled' : ''}>${busy ? '刪除中…' : '刪除'}</button>
+        ${busy ? '' : `<button type="button" class="lightbox-del-no" id="galleryDeleteNo">取消</button>`}
+      </div>
+    </form>`;
+}
+
+function bindGalleryDelete(bar) {
+  const btn = bar.querySelector('#galleryDeleteBtn');
+  if (btn) btn.addEventListener('click', () => {
+    const v = lightboxView;
+    galleryDelete = { dog: v.dog, file: v.items[v.index].file, pass: '', needPass: !loadNotesPass(), phase: 'confirm', error: '' };
+    showLightboxPhoto();
+    const first = document.getElementById('galleryDeletePass') || document.getElementById('galleryDeleteYes');
+    if (first) first.focus({ preventScroll: true });
+  });
+  const form = bar.querySelector('#galleryDeleteForm');
+  if (!form) return;
+  const pass = form.querySelector('#galleryDeletePass');
+  if (pass) pass.addEventListener('input', () => { galleryDelete.pass = pass.value; });
+  form.addEventListener('submit', e => { e.preventDefault(); deleteGalleryPhoto(); });
+  const no = form.querySelector('#galleryDeleteNo');
+  if (no) no.addEventListener('click', () => {
+    galleryDelete = null;
+    showLightboxPhoto();
+    const b = document.getElementById('galleryDeleteBtn');
+    if (b) b.focus({ preventScroll: true });
+  });
+}
+
+// 刪除：送到 Worker（要通關碼）；成功後燈箱換到下一張（沒有了就關掉），相簿格重畫
+async function deleteGalleryPhoto() {
+  const del = galleryDelete;
+  if (!del || del.phase === 'deleting') return;
+  const pass = del.needPass ? del.pass : loadNotesPass();
+  if (!pass) {
+    del.needPass = true; del.phase = 'error'; del.error = '請輸入通關碼'; showLightboxPhoto();
+    const input = document.getElementById('galleryDeletePass');
+    if (input) input.focus({ preventScroll: true });
+    return;
+  }
+  del.phase = 'deleting';
+  del.error = '';
+  showLightboxPhoto();
+  let out = null, error = '';
+  try {
+    const res = await fetch(`${UPLOAD_URL}/gallery/${encodeURIComponent(del.dog.id)}/${encodeURIComponent(del.file)}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passcode: pass }),
+    });
+    out = await res.json().catch(() => null);
+    if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有刪掉（${res.status}），請稍後再試`;
+  } catch (e) {
+    error = '沒有刪掉，請確認網路後再試';
+  }
+  if (galleryDelete !== del) return;
+  if (error) {
+    if (out && out.code === 'passcode') { saveNotesPass(''); del.needPass = true; del.pass = ''; }
+    del.phase = 'error';
+    del.error = error;
+    if (lightboxOpen()) showLightboxPhoto();
+    else { galleryDelete = null; showToast(`照片沒有刪掉：${error}`); }
+    return;
+  }
+  saveNotesPass(pass);
+  galleryDelete = null;
+  const rest = (gallery[del.dog.id] || []).filter(p => p.file !== del.file);
+  if (rest.length) gallery[del.dog.id] = rest;
+  else delete gallery[del.dog.id];
+  delete galleryOverrides[`${del.dog.id}/${del.file}`];
+  const v = lightboxView;
+  if (v && v.dog === del.dog) {
+    const at = v.items.findIndex(it => it.file === del.file);
+    if (at >= 0) v.items.splice(at, 1);
+    if (!v.items.length) closeLightbox();
+    else { v.index = Math.min(at < 0 ? v.index : at, v.items.length - 1); showLightboxPhoto(); }
+  }
+  if (detailDog) renderDetail();
+  showToast(`已從 ${del.dog.name} 的相簿刪除這張照片`);
+}
+
+// 開網頁時讀相簿清單：先問 Worker（新傳的馬上看得到），不行再讀網站上的 data/gallery.json
+async function loadGallery() {
+  galleryState = 'loading';
+  let data = null;
+  if (UPLOAD_URL) {
+    try {
+      data = await readJsonObject(`${UPLOAD_URL}/gallery`, d => d && d.ok ? d.gallery : null);
+      galleryState = 'worker';
+    } catch (e) { data = null; }
+  }
+  if (!data) {
+    try {
+      data = await readJsonObject(GALLERY_URL, d => d);
+      galleryState = 'site';
+    } catch (e) {
+      data = {};
+      galleryState = 'error';
+    }
+  }
+  gallery = {};
+  for (const [id, list] of Object.entries(data)) {
+    if (!Array.isArray(list)) continue;
+    const photos = list.filter(p => p && typeof p.file === 'string' && /^[\w-]+\.jpg$/.test(p.file))
+      .map(p => ({ file: p.file, addedAt: p.addedAt || '' }));
+    if (photos.length) gallery[id] = photos;
+  }
+  if (detailDog && !(noteEdit && noteEdit.dog === detailDog)) renderDetail();
 }
 
 // 可以一起溜的每一隻：輕點照片換看那隻；右上角圓圈勾選，之後用下方按鈕一起記（#35，K 選 C）。
@@ -627,15 +856,15 @@ function photoPickButton(dog) {
   return `<button type="button" class="photo-pick" id="photoPick" aria-label="上傳 ${esc(dog.name)} 的照片" title="上傳照片">${icon('camera')}</button>`;
 }
 
-// 選好照片後，詳細資訊上方出現的預覽與「確認上傳」
-function photoUploadHtml(dog) {
+// 選好照片後出現的預覽與「確認上傳」：換主照片在詳細資訊上方，加進相簿在相簿區塊裡
+function photoUploadHtml(dog, target = 'main') {
   if (!UPLOAD_URL || !dog.id) return '';
-  const up = photoUpload && photoUpload.dog === dog ? photoUpload : null;
+  const up = photoUpload && photoUpload.dog === dog && photoUpload.target === target ? photoUpload : null;
   if (!up) return '';
   const busy = up.phase === 'uploading';
   return `
-    <div class="photo-upload preview">
-      <div class="photo-preview-hint">預覽（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
+    <div class="photo-upload preview${target === 'gallery' ? ' in-gallery' : ''}">
+      <div class="photo-preview-hint">${target === 'gallery' ? '加進相簿' : '預覽'}（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
       <img class="photo-preview" src="${esc(up.url)}" alt="${esc(dog.name)} 的新照片預覽">
       ${up.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(up.error)}</span></div>` : ''}
       <button type="button" class="photo-confirm" id="photoConfirm"${busy ? ' disabled' : ''}>${busy ? '上傳中…' : '確認上傳'}</button>
@@ -643,8 +872,10 @@ function photoUploadHtml(dog) {
     </div>`;
 }
 
-// 手機或電腦選照片：隱藏的檔案選擇框，按「上傳照片」時才打開
-function pickPhotoFile() {
+// 手機或電腦選照片：隱藏的檔案選擇框，按「上傳照片」（或相簿的「新增」）時才打開
+let photoPickTarget = 'main';
+function pickPhotoFile(target = 'main') {
+  photoPickTarget = target === 'gallery' ? 'gallery' : 'main';
   let input = document.getElementById('photoFile');
   if (!input) {
     input = document.createElement('input');
@@ -655,7 +886,7 @@ function pickPhotoFile() {
     input.addEventListener('change', () => {
       const file = input.files && input.files[0];
       input.value = ''; // 同一張再選一次也會觸發
-      if (file && detailDog) preparePhoto(detailDog, file);
+      if (file && detailDog) preparePhoto(detailDog, file, photoPickTarget);
     });
     document.body.appendChild(input);
   }
@@ -689,7 +920,7 @@ async function compressPhoto(file) {
   }
 }
 
-async function preparePhoto(dog, file) {
+async function preparePhoto(dog, file, target = 'main') {
   if (photoUpload && photoUpload.phase === 'uploading') {
     showToast('上一張照片還在上傳，請稍等一下');
     return;
@@ -703,7 +934,7 @@ async function preparePhoto(dog, file) {
   }
   if (detailDog !== dog) return; // 壓縮途中換看別隻或關掉了
   clearPhotoUpload();
-  photoUpload = { dog, blob, url: URL.createObjectURL(blob), phase: 'preview', error: '' };
+  photoUpload = { dog, target, blob, url: URL.createObjectURL(blob), phase: 'preview', error: '' };
   renderDetail();
   const confirm = document.getElementById('photoConfirm');
   if (confirm) {
@@ -725,15 +956,16 @@ async function uploadPhoto() {
   up.phase = 'uploading';
   up.error = '';
   renderDetail();
-  let error = '';
+  let error = '', out = null;
   try {
-    const res = await fetch(`${UPLOAD_URL}/photos/${encodeURIComponent(up.dog.id)}`, {
+    const res = await fetch(`${UPLOAD_URL}/${up.target === 'gallery' ? 'gallery' : 'photos'}/${encodeURIComponent(up.dog.id)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'image/jpeg' },
       body: up.blob,
     });
-    const out = await res.json().catch(() => null);
+    out = await res.json().catch(() => null);
     if (!res.ok || !out || !out.ok) error = (out && out.error) || `上傳失敗（${res.status}），原本的照片不受影響`;
+    else if (up.target === 'gallery' && !(out.photo && typeof out.photo.file === 'string')) error = '上傳服務回應不對，請重新整理後再看看';
   } catch (e) {
     error = '上傳失敗，請確認網路後再試；原本的照片不受影響';
   }
@@ -750,11 +982,28 @@ async function uploadPhoto() {
     return;
   }
   up.phase = 'done';
-  photoOverrides[up.dog.id] = up.url;
   photoUpload = null;
+  if (up.target === 'gallery') {
+    const id = up.dog.id;
+    gallery[id] = [...(gallery[id] || []).filter(p => p.file !== out.photo.file), { file: out.photo.file, addedAt: out.photo.addedAt || '' }];
+    galleryOverrides[`${id}/${out.photo.file}`] = up.url;
+    renderDetail();
+    showToast(`已加進 ${up.dog.name} 的相簿（其他志工幾分鐘內會看到）`);
+    return;
+  }
+  photoOverrides[up.dog.id] = up.url;
   render();
   renderDetail();
   showToast(`${up.dog.name} 的照片已更新（其他志工幾分鐘內會看到）`);
+}
+
+// 讀一個「編號 → 內容」的 JSON（我的備註、相簿清單共用）；pick 從回應挑出要的物件，不是物件就算失敗
+async function readJsonObject(url, pick) {
+  const res = await fetch(url, { cache: 'no-store' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = pick(await res.json());
+  if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('格式不對');
+  return data;
 }
 
 // ── 我的備註（#62）：溜狗表備註下方的獨立區塊，存在 Git（經 Worker），不參與警示關鍵字、不上狗卡 ──
@@ -762,23 +1011,16 @@ async function uploadPhoto() {
 // 開網頁時讀最新的我的備註：先問 Worker（直接讀 GitHub，不用等網站更新），不行再讀網站上的 data/my-notes.json
 async function loadMyNotes() {
   myNotesState = 'loading';
-  const tryRead = async (url, pick) => {
-    const res = await fetch(url, { cache: 'no-store' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = pick(await res.json());
-    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('格式不對');
-    return data;
-  };
   let notes = null;
   if (UPLOAD_URL) {
     try {
-      notes = await tryRead(`${UPLOAD_URL}/notes`, d => d && d.ok ? d.notes : null);
+      notes = await readJsonObject(`${UPLOAD_URL}/notes`, d => d && d.ok ? d.notes : null);
       myNotesState = 'worker';
     } catch (e) { notes = null; }
   }
   if (!notes) {
     try {
-      notes = await tryRead(MY_NOTES_URL, d => d);
+      notes = await readJsonObject(MY_NOTES_URL, d => d);
       myNotesState = 'site';
     } catch (e) {
       notes = {};
@@ -908,9 +1150,18 @@ function renderDetail() {
   if (zoom) zoom.addEventListener('click', () => {
     if (!zoom.classList.contains('no-photo')) openLightbox(detailDog, zoom);
   });
+  // 相簿：點哪張就從哪張開燈箱；主照片讀不到就只翻相簿
+  const tiles = [...box.querySelectorAll('.g-tile')];
+  tiles.forEach(t => t.addEventListener('click', () => {
+    const hasMain = tiles.some(x => x.hasAttribute('data-g-main') && !x.hidden && !x.classList.contains('broken'));
+    const index = tiles.filter(x => hasMain || !x.hasAttribute('data-g-main')).indexOf(t);
+    openLightbox(detailDog, t, Math.max(0, index), hasMain);
+  }));
+  const addBtn = box.querySelector('#galleryAdd');
+  if (addBtn) addBtn.addEventListener('click', () => pickPhotoFile('gallery'));
   const pick = box.querySelector('#photoPick');
   if (pick) {
-    pick.addEventListener('click', pickPhotoFile);
+    pick.addEventListener('click', () => pickPhotoFile('main'));
     // 已經有照片就叫「更換照片」
     const img = zoom && zoom.querySelector('img');
     const label = () => {
@@ -961,7 +1212,9 @@ function renderDetail() {
     const replacement = [...box.querySelectorAll('button, textarea, input:not([hidden])')].find(btn =>
       (focused.id && btn.id === focused.id) ||
       (focused.dataset.pick && btn.dataset.pick === focused.dataset.pick) ||
-      (focused.classList.contains('buddy') && btn.classList.contains('buddy') && btn.dataset.dog === focused.dataset.dog));
+      (focused.classList.contains('buddy') && btn.classList.contains('buddy') && btn.dataset.dog === focused.dataset.dog) ||
+      (focused.dataset.gFile && btn.dataset.gFile === focused.dataset.gFile) ||
+      (focused.hasAttribute('data-g-main') && btn.hasAttribute('data-g-main')));
     (replacement || box.querySelector('#detailClose')).focus({ preventScroll: true });
   }
 }
@@ -1013,9 +1266,21 @@ document.getElementById('detailBackdrop').addEventListener('click', e => {
 });
 document.addEventListener('keydown', e => {
   if (lightboxOpen()) {
-    // 燈箱裡只有關閉按鈕：Esc 關燈箱，Tab 留在關閉按鈕上
-    if (e.key === 'Escape') closeLightbox();
-    if (e.key === 'Tab') { e.preventDefault(); document.querySelector('#lightbox .lightbox-close').focus({ preventScroll: true }); }
+    // Esc 關燈箱（刪除確認開著時先收起確認），左右鍵換張，Tab 只在燈箱裡的按鈕間移動
+    const typing = e.target.closest && e.target.closest('#lightbox input');
+    if (e.key === 'Escape') {
+      if (galleryDelete && galleryDelete.phase !== 'deleting') { galleryDelete = null; showLightboxPhoto(); document.querySelector('#lightbox .lightbox-close').focus({ preventScroll: true }); }
+      else if (!galleryDelete) closeLightbox();
+    }
+    if (!typing && (e.key === 'ArrowLeft' || e.key === 'ArrowRight')) stepLightbox(e.key === 'ArrowLeft' ? -1 : 1);
+    if (e.key === 'Tab') {
+      const items = [...document.querySelectorAll('#lightbox button:not([hidden]):not(:disabled), #lightbox input:not([hidden]):not(:disabled)')]
+        .filter(b => !b.closest('[hidden]'));
+      const at = items.indexOf(document.activeElement);
+      e.preventDefault();
+      const next = items[(at + (e.shiftKey ? -1 : 1) + items.length) % items.length] || items[0];
+      if (next) next.focus({ preventScroll: true });
+    }
     return;
   }
   if (e.key === 'Escape' && detailDog) closeDetail();
@@ -1272,6 +1537,7 @@ async function init() {
   loadState = 'ready';
   render();
   loadMyNotes();
+  loadGallery();
   loadMyWalks();
 }
 
