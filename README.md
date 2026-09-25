@@ -20,7 +20,7 @@ css/app.css       ← 樣式
 js/app.js         ← 程式（資料讀取、分頁、搜尋、畫面）
 data/dogs.json    ← 網站讀的資料（GitHub Action 由試算表＋dogs/*.md 產生，請勿手改）
 data/history/     ← 每天一份 dogs.json 快照 YYYY-MM-DD.json（同步時自動存，請勿手改）
-data/walks.json   ← 累積的遛狗紀錄 {編號, 犬名, 日期}（同步時自動追加，不含志工名字，請勿手改）
+data/walks.json   ← 累積的遛狗紀錄 {編號, 犬名, 日期, 是不是我遛的}（同步時自動追加，不含志工名字，請勿手改）
 dogs/{編號}.md     ← 狗狗介紹（YAML frontmatter + 內文），選填；同步時整理進 data/dogs.json
 scripts/          ← 同步程式 sync-sheet.mjs 與它的測試
 photos/{編號}.jpg  ← 狗狗照片，選填
