@@ -159,9 +159,10 @@ test('前端讀 dogs.json 的結果跟同步腳本讀試算表一致', async () 
   const groupMap = sync.parseGroups(fakeGviz(GROUPS, 0).table, new Set(dogs.map(d => d.name)));
   const file = sync.renderFile(await sync.buildData(fakeFetch(), TODAY, fakeCards()), '', TODAY);
   const got = fe.parseDogsData(JSON.parse(file));
-  const plain = list => list.map(({ sex, intro, myWalked, ...d }) => ({ ...d, walkedDate: d.walkedDate ? d.walkedDate.toDateString() : null }));
+  const plain = list => list.map(({ sex, intro, myWalked, formerIds, ...d }) => ({ ...d, walkedDate: d.walkedDate ? d.walkedDate.toDateString() : null }));
   assert.deepEqual(JSON.parse(JSON.stringify(plain(got.dogs))), JSON.parse(JSON.stringify(plain([...dogs]))));
   assert.deepEqual(got.dogs.map(d => [d.sex, d.intro]), [['♂', '很親人，怕機車。'], ['', ''], ['', ''], ['', '']], '性別符號與狗卡資訊：');
+  assert.equal(JSON.stringify(got.dogs.map(d => d.formerIds)), '[[],[],[],[]]', '沒寫舊編號的狗是空陣列（#75）：');
   const sets = m => Object.fromEntries(Object.entries(m).map(([k, v]) => [k, [...v].sort()]));
   assert.deepEqual(JSON.parse(JSON.stringify(sets(got.groups))), sets(groupMap));
   assert.equal(got.syncedAt.getTime(), Math.floor(TODAY.getTime() / 1000) * 1000);
