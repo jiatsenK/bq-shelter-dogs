@@ -49,6 +49,7 @@ function fakeStorage() {
 let INDEX_HTML = ''; // index.html 原始碼，#10 唯讀檢查用（其他測試會替換 fetch，所以先存下來）
 let APP_JS = '';     // js/app.js 原始碼（#30 拆檔後程式在這裡）
 let ANALYSIS_JS = ''; // js/analysis.js 原始碼（#59 分析頁）
+let MAKE_THUMBS_YML = ''; // .github/workflows/make-thumbs.yml（#83 縮圖 Action）
 let MANIFEST = {};    // manifest.webmanifest，#33 主畫面名稱檢查用
 let DOGS_JSON = null; // data/dogs.json，#32 格式檢查用
 
@@ -90,11 +91,12 @@ function runTests() {
       searchQuery = '';
     }),
     // ── #9 照片與介紹 ──
-    check('照片：有編號用 photos/{編號}.jpg 縮圖且延後載入；沒編號直接顯示腳掌、不抓 photos/.jpg', () => {
+    check('照片：有編號用 photos/thumbs/{編號}.jpg 縮圖（原圖放 data-full 備用）且延後載入；沒編號直接顯示腳掌、不抓 photos/.jpg', () => {
       const box = document.createElement('div');
       box.innerHTML = photoThumb({ name: '宙斯', id: '202101234' });
       const img = box.querySelector('img');
-      eq(img.getAttribute('src'), 'photos/202101234.jpg');
+      eq(img.getAttribute('src'), 'photos/thumbs/202101234.jpg');
+      eq(img.dataset.full, 'photos/202101234.jpg', '備用原圖：');
       eq(img.getAttribute('loading'), 'lazy');
       box.innerHTML = photoThumb({ name: '金寶', id: '' });
       eq(box.querySelector('img'), null, '沒編號時的 img：');
@@ -331,7 +333,7 @@ function runTests() {
         eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['Google 遛狗表備註', '我的備註', '可以一起溜的狗', '遛狗紀錄', '狗卡資訊', '相簿']);
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
-        eq(buddy.querySelector('img').getAttribute('src'), 'photos/2.jpg', '一起溜的照片：');
+        eq(buddy.querySelector('img').getAttribute('src'), 'photos/thumbs/2.jpg', '一起溜的照片：');
         eq(buddy.querySelector('.bname').textContent, '好朋友');
         eq(box.querySelector('[data-section="intro"] .content').textContent, '入所狗卡');
         dog.note = ''; dog.intro = ''; groupMap = {};
@@ -910,10 +912,12 @@ async function runPhotoTests() {
       delete photoOverrides['9102'];
       render();
       const img = cardOf(1).querySelector('.thumb img');
-      img.dispatchEvent(new Event('error')); // 模擬 photos/9102.jpg 不存在
+      img.dispatchEvent(new Event('error')); // 模擬縮圖、原圖 photos/9102.jpg 都不存在
+      img.dispatchEvent(new Event('error'));
       img.parentElement.click();
       eq([isOpen(), detailDog === allDogs[1]], [false, true], '照片讀不到：');
       const zoom = document.querySelector('#detail [data-zoom]');
+      zoom.querySelector('img').dispatchEvent(new Event('error'));
       zoom.querySelector('img').dispatchEvent(new Event('error'));
       eq(zoom.disabled, true, '詳細資訊照片讀不到就不能按：');
       hideDetail();
@@ -1557,7 +1561,8 @@ async function runGalleryTests() {
       delete gallery['9302'];
       renderDetail();
       const main = tiles()[0];
-      main.querySelector('img').dispatchEvent(new Event('error')); // photos/9302.jpg 不存在
+      main.querySelector('img').dispatchEvent(new Event('error')); // 縮圖、原圖 photos/9302.jpg 都不存在
+      main.querySelector('img').dispatchEvent(new Event('error'));
       eq([main.hidden, tiles().length, !!document.getElementById('galleryAdd')], [true, 1, true], '主照片讀不到就藏起來，還是能新增：');
       hideDetail();
     });
@@ -1879,6 +1884,46 @@ function show() {
     `<li class="${r.ok ? 'pass' : 'fail'}">${r.ok ? '✓' : '✗'} ${esc(r.name)}${r.ok ? '' : `<br>${esc(r.msg)}`}</li>`).join('');
 }
 
+// #83 照片縮圖：清單、相簿格子讀 photos/thumbs/，燈箱讀原圖；縮圖讀不到先換原圖
+async function runThumbTests() {
+  const dog = { name: '縮圖狗', id: '9401' };
+  const saved = [gallery['9401'], photoOverrides['9401']];
+  try {
+    await check('#83 相簿格子用縮圖、燈箱用原圖；剛上傳的照片直接用本機圖片', () => {
+      gallery['9401'] = [{ file: '20260925-100000-aaaa.jpg', addedAt: '' }];
+      const box = document.createElement('div');
+      box.innerHTML = gallerySection(dog);
+      const imgs = [...box.querySelectorAll('.g-tile img')];
+      eq(imgs.map(i => i.getAttribute('src')), ['photos/thumbs/9401.jpg', 'photos/thumbs/gallery/9401/20260925-100000-aaaa.jpg'], '格子：');
+      eq(imgs.map(i => i.dataset.full), ['photos/9401.jpg', 'photos/gallery/9401/20260925-100000-aaaa.jpg'], '備用原圖：');
+      eq(photoItems(dog, true).map(it => it.src), ['photos/9401.jpg', 'photos/gallery/9401/20260925-100000-aaaa.jpg'], '燈箱：');
+      photoOverrides['9401'] = 'blob:local-photo';
+      box.innerHTML = photoThumb(dog);
+      eq([box.querySelector('img').getAttribute('src'), box.querySelector('img').dataset.full], ['blob:local-photo', undefined], '剛上傳：');
+    });
+    await check('#83 縮圖還沒產生：第一次讀不到改讀原圖、不顯示腳掌；原圖也讀不到才顯示腳掌', () => {
+      delete photoOverrides['9401'];
+      const box = document.createElement('div');
+      document.body.appendChild(box);
+      box.innerHTML = photoThumb(dog);
+      const img = box.querySelector('img');
+      img.dispatchEvent(new Event('error'));
+      eq([img.getAttribute('src'), img.dataset.full, img.style.display], ['photos/9401.jpg', undefined, ''], '換原圖：');
+      img.dispatchEvent(new Event('error'));
+      eq([img.style.display, box.querySelector('.thumb').classList.contains('no-photo')], ['none', true], '都讀不到：');
+      box.remove();
+    });
+    check('#83 Action：照片有變就產生縮圖，縮圖資料夾本身的提交不會再觸發', () => {
+      if (!MAKE_THUMBS_YML.includes("- 'photos/**'") || !MAKE_THUMBS_YML.includes("- '!photos/thumbs/**'")) throw new Error('觸發條件不對');
+      if (!MAKE_THUMBS_YML.includes('python scripts/make-thumbs.py')) throw new Error('沒跑縮圖程式');
+    });
+  } finally {
+    [gallery['9401'], photoOverrides['9401']] = saved;
+    if (!saved[0]) delete gallery['9401'];
+    if (!saved[1]) delete photoOverrides['9401'];
+  }
+}
+
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
 Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
@@ -1908,6 +1953,8 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runMyWalksTests)
   .then(runGalleryTests)
   .then(runV52Tests)
+  .then(() => fetch('../.github/workflows/make-thumbs.yml').then(r => r.text()).then(t => { MAKE_THUMBS_YML = t; }))
+  .then(runThumbTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

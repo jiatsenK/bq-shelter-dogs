@@ -341,3 +341,11 @@
 - 依據：K 實測相簿批次上傳、設為主照片、裁切成功後說「完成定版」。
 - `docs/PROJECT_GOALS.md` 加「V5.2 ✅ 定版」段落（#75–#79、PR #80、#81），標題改為「目前定版：V5.2」。
 - 雲端環境推不了 git tag，版本以規格文件段落為準；要 tag 可由 K 在 GitHub 網頁建 Release。
+
+## 2026-09-25 照片縮圖（Claude，分支 claude/project-thread-s2p7cy，#83）
+- 依據：K 問「Matt 有無可優化」後回報「現在圖片跑出來好慢」，並說「這三個含圖片都要處理」。開 #83–#86，一張票一個 PR，先做 #83。
+- 原因：清單 56px 頭像、相簿格子都載入 1280px 原圖（主照片 117 張約 12MB）。
+- `scripts/make-thumbs.py`（Pillow）：原圖 → `photos/thumbs/{編號}.jpg`、`photos/thumbs/gallery/{編號}/{檔名}`，短邊 300px、品質 72；原圖刪了縮圖也刪。
+- `.github/workflows/make-thumbs.yml`：photos/**（不含 thumbs）推到 main 就跑，有變才提交；Pillow 固定 12.3.0 讓輸出一致。先把現有 151 張縮圖一起提交。
+- `js/app.js`：`photoThumbSrc`、`galleryThumbSrc`、`thumbAttrs`、`thumbFallback`；清單、今天已溜、可以一起溜、詳細資訊頭像、相簿格子用縮圖，燈箱仍用原圖；縮圖讀不到先改讀 `data-full` 原圖，原圖也讀不到才顯示腳掌。
+- 驗證：tests/index.html 94 項全過（新增 3 項，改 4 項受影響的舊測試）。真實資料捲完整個溜狗表：照片流量 12.4MB → 2.0MB。截圖 previews/thumbs/list.png。
