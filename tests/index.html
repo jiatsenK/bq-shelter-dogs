@@ -133,7 +133,7 @@ function runTests() {
         searchQuery = '搜尋';
         activeTab = 'walk'; renderMain();
         eq(names(), ['搜尋乙', '搜尋甲'], '溜狗表（久沒遛的在前）：');
-        eq(counts(), ['2', '0', '編輯中'], '分類數字：');
+        eq(counts(), ['2', '0', ''], '分類數字：');
         if (!mainText().includes('搜尋「搜尋」：2 隻')) throw new Error('沒有顯示搜尋結果隻數');
         if (!document.querySelector('#main .card .warn-note')) throw new Error('勿溜的搜尋乙沒有警示備註');
         activeTab = 'today'; renderMain();
@@ -141,10 +141,10 @@ function runTests() {
         if (!mainText().includes('今天已溜裡找不到「搜尋」')) throw new Error(`今天已溜的查無提示：${mainText()}`);
         searchQuery = '<b>沒這隻'; activeTab = 'walk'; renderMain();
         eq(document.querySelector('#main .status-msg').innerHTML, '找不到「&lt;b&gt;沒這隻」');
-        eq(counts(), ['0', '0', '編輯中'], '查無時分類數字：');
+        eq(counts(), ['0', '0', ''], '查無時分類數字：');
         searchQuery = ''; renderMain();
         eq(names().length, 3, '清空後：');
-        eq(counts(), ['3', '0', '編輯中'], '清空後分類數字：');
+        eq(counts(), ['3', '0', ''], '清空後分類數字：');
       } finally { searchQuery = ''; activeTab = 'walk'; }
     }),
     check('搜尋：輸入即篩選；注音選字途中不篩選，選好字才更新', () => {
@@ -211,14 +211,16 @@ function runTests() {
       eq([...code.matchAll(/\blocalStorage\s*[.[]|window\.localStorage/g)].length, 1, 'localStorage 只在一個地方取用：');
       eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKED_KEY', 'WALKED_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY'], '只讀寫 WALKED_KEY、NOTES_PASS_KEY：');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
-      eq(urls.length, 2, 'fetch 呼叫數（上傳以外）：');
+      eq(urls.length, 3, 'fetch 呼叫數（上傳以外）：');
       // #32 起前端只讀 data/dogs.json，不直接連試算表；狗卡資訊也已經寫在 dogs.json 裡，不再抓 dogs/*.md
       // #62 另外讀我的備註：只從 Worker 的 /notes 或網站上的 data/my-notes.json 讀
-      if (!urls.every(u => u.startsWith('DATA_URL,') || u === "url, { cache: 'no-store' }")) throw new Error(`只能讀 data/dogs.json 與我的備註：${urls.join('、')}`);
+      // #58 我最近溜過另外讀 data/walks.json
+      if (!urls.every(u => u.startsWith('DATA_URL,') || u.startsWith('WALKS_URL,') || u === "url, { cache: 'no-store' }")) throw new Error(`只能讀 data/dogs.json、data/walks.json 與我的備註：${urls.join('、')}`);
       const noteReads = [...APP_JS.matchAll(/tryRead\(([^,]+),/g)].map(m => m[1]);
       eq(noteReads, ['`${UPLOAD_URL}/notes`', 'MY_NOTES_URL'], '我的備註讀取來源：');
       eq(MY_NOTES_URL, 'data/my-notes.json', '我的備註檔：');
       eq(DATA_URL, 'data/dogs.json', '資料檔：');
+      eq(WALKS_URL, 'data/walks.json', '遛狗紀錄檔：');
       if (/docs\.google\.com|gviz/.test(APP_JS)) throw new Error('前端不應再連 Google 試算表');
     }),
     check('#10／#28 卡片沒有連結，也不會跳到別頁（點了只開詳細資訊）', () => {
@@ -307,7 +309,7 @@ function runTests() {
       eq(val({ walkedDate: null, covered: false }), ['尚無紀錄', 'val muted']);
       eq(val({ walkedDate: null, covered: true }), ['有人固定照顧', 'val sage small']);
     }),
-    check('#28 詳細資訊分成備註、（#62 我的備註、）可以一起溜的狗（照片＋犬名）、狗卡資訊', () => {
+    check('#28 詳細資訊分成備註、（#62 我的備註、）可以一起溜的狗（照片＋犬名）、（#60 遛狗紀錄、）狗卡資訊', () => {
       const saved = [allDogs, groupMap];
       try {
         const dog = { name: '測試狗', cage: 'A01', id: '1', walkedDate: null, covered: false, note: '親人，好牽\n怕機車', intro: '入所狗卡' };
@@ -315,7 +317,7 @@ function runTests() {
         groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['備註', '我的備註', '可以一起溜的狗', '狗卡資訊']);
+        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['備註', '我的備註', '可以一起溜的狗', '遛狗紀錄', '狗卡資訊']);
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/2.jpg', '一起溜的照片：');
@@ -323,7 +325,7 @@ function runTests() {
         eq(box.querySelector('[data-section="intro"] .content').textContent, '入所狗卡');
         dog.note = ''; dog.intro = ''; groupMap = {};
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section .empty')].length, 4, '都沒有資料時顯示提示：');
+        eq([...box.querySelectorAll('section .empty')].length, 5, '都沒有資料時顯示提示（#60 遛狗紀錄讀取中也算）：');
       } finally { [allDogs, groupMap] = saved; }
     }),
     check('#28 點狗卡開詳細資訊，點一起溜的狗換成那隻，關閉後回到清單', () => {
@@ -362,15 +364,15 @@ function runTests() {
       eq(doc.querySelector('meta[name="apple-mobile-web-app-title"]').content, '板收志工溜狗表', 'iPhone 主畫面：');
       eq([MANIFEST.name, MANIFEST.short_name], ['板收志工溜狗表', '板收志工溜狗表'], 'Android 主畫面：');
     }),
-    check('#33 分類依序為溜狗表／今天已溜／相關資訊（編輯中），點分類可切換', () => {
+    check('#33／#58 分類依序為溜狗表／今天已溜／我溜過，點分類可切換', () => {
       const saved = [allDogs, groupMap, activeTab, searchQuery];
       try {
         allDogs = [{ cage: 'A01', id: '1', name: '測試甲', walkedDate: null, covered: false, note: '' }];
         groupMap = {}; activeTab = 'walk'; searchQuery = '';
         render();
         const tabs = () => [...document.querySelectorAll('#tabs button')];
-        eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '今天已溜', '相關資訊'], '分類：');
-        eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '0', '編輯中'], '數字：');
+        eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '今天已溜', '我溜過'], '分類：');
+        eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '0', ''], '數字（遛狗紀錄還沒讀）：');
         const active = () => tabs().filter(b => b.classList.contains('active')).map(b => b.dataset.tab);
         eq(active(), ['walk'], '預設：');
         eq(document.querySelectorAll('#main .card').length, 1, '溜狗表有狗卡：');
@@ -378,8 +380,7 @@ function runTests() {
         eq([activeTab, active()], ['today', ['today']], '點今天已溜：');
         eq(document.querySelectorAll('#main .card').length, 0, '今天已溜沒有紀錄時是空的：');
         tabs()[2].click();
-        eq([activeTab, active()], ['info', ['info']], '點相關資訊：');
-        if (!document.getElementById('main').textContent.includes('編輯中')) throw new Error('相關資訊要顯示編輯中');
+        eq([activeTab, active()], ['mine', ['mine']], '點我溜過：');
         tabs()[0].click();
         eq(active(), ['walk'], '點回溜狗表：');
       } finally {
@@ -413,9 +414,9 @@ function runTests() {
         swipe(main.querySelector('.card'), -100);
         eq([activeTab, active()], ['today', ['today']], '在狗卡上向左滑也會到今天已溜：');
         swipe(main, -100);
-        eq([activeTab, active()], ['info', ['info']], '再向左滑到相關資訊：');
+        eq([activeTab, active()], ['mine', ['mine']], '再向左滑到我溜過：');
         swipe(main, -100);
-        eq(activeTab, 'info', '最後一頁向左滑不循環：');
+        eq(activeTab, 'mine', '最後一頁向左滑不循環：');
         swipe(main, 100); swipe(main, 100);
         eq([activeTab, active()], ['walk', ['walk']], '向右滑回溜狗表：');
         searchQuery = '測試'; render();
@@ -532,7 +533,7 @@ function runTests() {
         document.querySelector('#main .card[data-dog="0"] [data-walk="add"]').click();
         eq(document.getElementById('detailBackdrop').hidden, true, '按鈕不開詳細資訊：');
         eq(names(), ['測試丙', '測試乙'], '溜狗表移出測試甲：');
-        eq(counts(), ['2', '1', '編輯中'], '分類數字：');
+        eq(counts(), ['2', '1', ''], '分類數字：');
         eq(loadWalkedIds(), ['1'], '存進紀錄：');
         const toast = document.getElementById('toast');
         eq(toast.hidden, false, '跳提示條：');
@@ -653,11 +654,11 @@ function runTests() {
         input.value = '';
         input.dispatchEvent(new InputEvent('input'));
         eq(clear.hidden, true, '手動刪光也隱藏：');
-        activeTab = 'info'; render();
+        activeTab = 'mine'; render();
         input.value = '甲';
         input.dispatchEvent(new InputEvent('input'));
         clear.click();
-        eq(activeTab, 'info', '在相關資訊清除也不換分類：');
+        eq(activeTab, 'mine', '在我溜過清除也不換分類：');
       } finally {
         input.value = ''; clear.hidden = true;
         [allDogs, groupMap, activeTab, searchQuery] = saved;
@@ -770,10 +771,10 @@ async function runSerialTests() {
       let release;
       const calls = install(() => new Promise(r => { release = () => r(json(DATA)); }));
       const done = init();
-      eq(tabNames(), ['溜狗表', '今天已溜', '相關資訊'], '讀取中就有分類：');
+      eq(tabNames(), ['溜狗表', '今天已溜', '我溜過'], '讀取中就有分類：');
       eq(main.textContent.trim(), '讀取狗狗資料中…', '讀取中：');
-      document.querySelector('#tabs button[data-tab="info"]').click();
-      if (!main.textContent.includes('編輯中')) throw new Error('讀取中也能切到相關資訊');
+      document.querySelector('#tabs button[data-tab="mine"]').click();
+      eq(activeTab, 'mine', '讀取中也能切到我溜過：');
       document.querySelector('#tabs button[data-tab="walk"]').click();
       eq(main.textContent.trim(), '讀取狗狗資料中…', '切回溜狗表仍在讀取：');
       release(); await done; await tick();
@@ -786,7 +787,7 @@ async function runSerialTests() {
         `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, '同步時間：');
       eq([...groupMap['讀取甲']], ['讀取乙'], '可以一起溜：');
       // #62 起讀完狗狗資料後另外讀我的備註（Worker 的 /notes、不行再讀 data/my-notes.json），不算在內
-      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$/.test(u)), ['data/dogs.json'], '只讀 dogs.json，不再逐隻抓 dogs/*.md：');
+      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$|walks\.json$/.test(u)), ['data/dogs.json'], '只讀 dogs.json，不再逐隻抓 dogs/*.md：');
     });
     await check('#32 dogs.json 讀取失敗：標題、搜尋、分類都在，內容區顯示錯誤，可重新讀取', async () => {
       reset();
@@ -794,7 +795,7 @@ async function runSerialTests() {
       for (const fake of [() => new Response('Not Found', { status: 404 }), () => { throw new TypeError('Failed to fetch'); }, () => new Response('{壞掉')]) {
         install(fake);
         await init();
-        eq(tabNames(), ['溜狗表', '今天已溜', '相關資訊'], '分類：');
+        eq(tabNames(), ['溜狗表', '今天已溜', '我溜過'], '分類：');
         eq(main.querySelector('.status-msg').firstChild.textContent, '資料載入失敗，請稍後重新整理。', '錯誤訊息：');
         eq(document.querySelectorAll('#main .card').length, 0, '沒有狗卡：');
       }
@@ -1091,17 +1092,17 @@ async function runAnalysisTests() {
     eq(names(dataCompleteness(rows, photos).items[5].dogs), ['乙長', '沒號'], '沒有照片：');
   });
   await check('#59 分析頁從頁首圖示打開：各項都有，點狗名開詳細資訊；不受搜尋影響；照片用 HEAD 查、不下載；返回回到原分類', async () => {
-    const saved = [allDogs, groupMap, activeTab, searchQuery, photoCheck];
+    const saved = [allDogs, groupMap, activeTab, searchQuery, photoCheck, historyData];
     const realFetch = window.fetch;
     const calls = [];
     try {
       window.fetch = async (url, opt) => { calls.push([url, opt && opt.method]); return new Response(null, { status: url.includes('2017070102') ? 200 : 404 }); };
-      allDogs = dogs; groupMap = {}; searchQuery = '甲長'; photoCheck = null; activeTab = 'today';
+      allDogs = dogs; groupMap = {}; searchQuery = '甲長'; photoCheck = null; historyData = null; activeTab = 'today';
       render();
       const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
       const btn = doc.querySelector('header .brand #analysisBtn');
       if (!btn || btn.getAttribute('aria-label') !== '犬隻分析' || !btn.querySelector('use[href="#i-chart"]')) throw new Error('頁首右上角要有分析圖示');
-      eq([...document.querySelectorAll('#tabs button')].map(b => b.dataset.tab), ['walk', 'today', 'info'], '分析不佔分類：');
+      eq([...document.querySelectorAll('#tabs button')].map(b => b.dataset.tab), ['walk', 'today', 'mine'], '分析不佔分類：');
       showAnalysis();
       eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [true, true, 'today'], '打開分析：');
       const titles = [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
@@ -1111,8 +1112,10 @@ async function runAnalysisTests() {
         '公母在所時間差異', '犬隻資料完整度'].forEach(t => { if (!titles.includes(t)) throw new Error(`少了 ${t}`); });
       eq(document.querySelectorAll('#main .a-dot').length, 5, '散布圖點數（搜尋不影響）：');
       if (!document.getElementById('main').textContent.includes('檢查中')) throw new Error('照片還沒查完要顯示檢查中');
-      eq(calls.every(([, m]) => m === 'HEAD'), true, '只用 HEAD：');
-      eq(calls.length, 9, '每個編號查一次：');
+      const photoCalls = calls.filter(([u]) => u.startsWith('photos/'));
+      eq(photoCalls.every(([, m]) => m === 'HEAD'), true, '照片只用 HEAD：');
+      eq(photoCalls.length, 9, '每個編號查一次：');
+      eq(calls.filter(([u]) => !u.startsWith('photos/')).length, 0, '分析頁不讀其他檔：');
       await tick(); await tick(); await tick();
       const photoRow = [...document.querySelectorAll('#main .a-miss')].find(el => el.textContent.includes('沒有照片'));
       if (!photoRow || !photoRow.textContent.includes('9 隻')) throw new Error(`沒有照片列：${photoRow && photoRow.textContent}`);
@@ -1129,12 +1132,15 @@ async function runAnalysisTests() {
       hideDetail();
       hideAnalysis();
       history.replaceState(null, '');
-      [allDogs, groupMap, activeTab, searchQuery, photoCheck] = saved;
+      [allDogs, groupMap, activeTab, searchQuery, photoCheck, historyData] = saved;
       render();
     }
   });
-  await check('#59 分析程式只讀：唯一的網路呼叫是 HEAD 查照片，不寫入、不存資料', () => {
-    const code = ANALYSIS_JS.replace("fetch(photoSrc({ id }), { method: 'HEAD', cache: 'no-cache' })", '');
+  await check('#59 分析程式只讀：網路呼叫只有 HEAD 查照片與讀 data/ 歷史（#60），不寫入、不存資料', () => {
+    const code = ANALYSIS_JS.replace("fetch(photoSrc({ id }), { method: 'HEAD', cache: 'no-cache' })", '')
+      // #60 讀遛狗歷史與快照：只 GET 同網站的 data/ 檔案
+      .replace("fetch(url, { cache: 'no-cache' })", '').replace("fetch(`${HISTORY_URL}${encodeURIComponent(date)}.json`, { cache: 'no-cache' })", '');
+    eq([WALKS_URL, HISTORY_URL], ['data/walks.json', 'data/history/'], '#60 歷史檔位置：');
     const bad = [/fetch\(/, /method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /localStorage|sessionStorage|indexedDB|XMLHttpRequest|sendBeacon/];
     eq(bad.filter(re => re.test(code)).map(String), [], '寫入相關字眼：');
     if (!/<script src="js\/app\.js"><\/script>\s*<script src="js\/analysis\.js"><\/script>/.test(INDEX_HTML)) throw new Error('analysis.js 要在 app.js 之後載入');
@@ -1286,6 +1292,197 @@ async function runMyNoteTests() {
   }
 }
 
+// ── #60 分析頁：遛狗歷史（模擬 28 天的資料）──
+async function runHistoryTests() {
+  const T = new Date(2026, 9, 22, 10);
+  const W = (id, name, date) => ({ id, name, date });
+  const every2 = []; for (let d = new Date(2026, 8, 26); d <= new Date(2026, 9, 22); d.setDate(d.getDate() + 2)) every2.push(`2026-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`);
+  const walks = parseWalks({ walks: [
+    W('2020010101', '歷甲', '2026-09-20'), W('2020010102', '歷乙', '2026-09-10'), // 開始累積前的「最後一次」
+    ...every2.map(d => W('2020010101', '歷甲', d)), W('2020010101', '歷甲', '2026-10-22'), // 同一天兩筆只算一次
+    W('2020010102', '歷乙', '2026-10-01'), W('2020010102', '歷乙', '2026-10-15'),
+    W('', '歷無號', '2026-09-25'), W('', '歷無號', '2026-10-02'), W('', '歷無號', '2026-10-09'),
+    W('2019010101', '已離所', '2026-09-30'), W('x', 'x', '日期壞掉'),
+  ] });
+  const dog = (name, id, cage, walked) => ({ name, id, cage, note: '', covered: false, intro: '', sex: '', walkedDate: walked ? parseYmd(walked) : null });
+  const dogs = [dog('歷甲', '2020010101', '新A01', '2026-10-22'), dog('歷乙', '2020010102', '新A02', '2026-10-15'),
+    dog('歷丙', '2020010103', '舊B01', null), dog('歷無號', '', 'C區11', '2026-10-09')];
+  const dates = parseHistoryIndex({ dates: ['2026-10-22', '2026-09-25', '壞掉', '2026-10-22'] });
+  const span = historySpan(dates, T);
+  await check('#60 快照目錄與累積天數：日期排序去重，從第一份快照算起', () => {
+    eq(dates, ['2026-09-25', '2026-10-22']);
+    eq([ymd(span.start), span.days], ['2026/9/25', 28]);
+    eq(historySpan(['2026-09-25'], new Date(2026, 8, 30, 21)).days, 6, '一週內：');
+    eq(walks.length, 23, '日期壞掉的略過：');
+  });
+  await check('#60 每隻狗的遛狗紀錄：最近 30 天每天有沒有遛、開始記錄前標未記錄；同一天只算一次；沒編號用犬名', () => {
+    const h = dogWalkHistory(dogs[0], walks, span.start, T);
+    eq(h.cells.length, 30);
+    eq([ymd(h.cells[0].date), ymd(h.cells[29].date)], ['2026/9/23', '2026/10/22'], '範圍：');
+    eq(h.cells.filter(c => !c.recorded).map(c => ymd(c.date)), ['2026/9/23', '2026/9/24'], '開始記錄前：');
+    eq([h.count, +h.avgGap.toFixed(3), h.maxGap], [14, +(32 / 14).toFixed(3), 6], '歷甲：');
+    const b = dogWalkHistory(dogs[1], walks, span.start, T);
+    eq([b.count, b.avgGap, b.maxGap], [2, 17.5, 21], '歷乙（9/10 那筆只當第一段間隔起點）：');
+    eq(Object.values(dogWalkHistory(dogs[2], walks, span.start, T)).slice(1), [0, null, null], '沒遛過：');
+    const d = dogWalkHistory(dogs[3], walks, span.start, T);
+    eq([d.count, d.avgGap, d.maxGap], [3, 7, 7], '沒編號：');
+  });
+  await check('#60 分析頁不放歷史與快照；詳細資訊有這隻狗最近 30 天的遛狗紀錄；不出現志工名字', async () => {
+    const saved = [allDogs, groupMap, activeTab, searchQuery, photoCheck, historyData];
+    const realFetch = window.fetch;
+    const realDate = Date;
+    try {
+      window.fetch = async () => new Response(null, { status: 404 });
+      window.Date = class extends realDate { constructor(...a) { super(...(a.length ? a : [2026, 9, 22, 10])); } static now() { return +new realDate(2026, 9, 22, 10); } };
+      photoCheck = { done: true, map: new Map() };
+      allDogs = dogs; groupMap = {}; searchQuery = ''; activeTab = 'walk';
+      const titles = () => [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
+      historyData = { state: 'ready', walks, dates };
+      showAnalysis();
+      ['依日期看快照', '各犬遛狗頻率', '平均多久被遛一次', '遛狗趨勢', '各區長期遛狗狀況'].forEach(t => { if (titles().includes(t)) throw new Error(`K 說不要 ${t}`); });
+      if (document.querySelector('#main select, #main .a-divider')) throw new Error('分析頁不要快照選單');
+      if (/志工|walker/.test(document.getElementById('main').innerHTML)) throw new Error('不能出現志工');
+      hideAnalysis(); history.replaceState(null, '');
+      // 詳細資訊
+      showDetail(dogs[0]);
+      const sec = document.querySelector('#detail [data-section="walks"]');
+      if (!sec) throw new Error('詳細資訊要有遛狗紀錄');
+      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-2), ['walks', 'intro'], '位置在狗卡資訊前：');
+      eq([sec.querySelectorAll('.w-grid .on').length, sec.querySelectorAll('.w-grid .none').length, sec.querySelectorAll('.w-grid span').length], [14, 2, 30], '格子：');
+      eq([...sec.querySelectorAll('.w-num b')].map(b => b.textContent), ['14', '2.3', '6'], '數字：');
+      if (!sec.textContent.includes('從 2026/9/25 開始記錄')) throw new Error('要寫從哪天開始記錄');
+      hideDetail(); history.replaceState(null, '');
+      historyData = { state: 'loading', walks: [], dates: [] };
+      showDetail(dogs[0]);
+      eq(document.querySelector('#detail [data-section="walks"] .empty').textContent, '讀取中…', '還沒讀到：');
+      hideDetail(); history.replaceState(null, '');
+    } finally {
+      window.fetch = realFetch; window.Date = realDate;
+      hideAnalysis(); hideDetail(); history.replaceState(null, '');
+      [allDogs, groupMap, activeTab, searchQuery, photoCheck, historyData] = saved;
+      render();
+    }
+  });
+}
+
+// #58 我最近溜過：會切分類、開詳細資訊、替換 fetch，所以一項一項跑
+async function runMyWalksTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState];
+  const realFetch = window.fetch;
+  const main = document.getElementById('main');
+  const tick = () => new Promise(r => setTimeout(r, 0));
+  const dog = (name, id, walked) => ({ cage: 'A01', id, name, walkedDate: walked, covered: true, note: '', sex: '', intro: '' });
+  const WALKS = { version: 1, walks: [
+    { id: '8001', name: '紀錄甲', date: '2026-09-22' },                 // #56 舊紀錄，沒有 mine
+    { id: '8001', name: '紀錄甲', date: '2026-09-24', mine: true },
+    { id: '8002', name: '紀錄乙', date: '2026-09-22', mine: true },
+    { id: '8003', name: '紀錄丙', date: '2026-09-24', mine: false },    // 別人遛的
+    { id: '8002', name: '紀錄乙', date: '2026-09-26', mine: false },    // 之後別人遛了乙
+    { id: '8004', name: '已離所狗', date: '2026-09-18', mine: true },
+    { id: '8005', name: '紀錄戊', date: '2026-09-24', mine: true },
+    { id: '8001', name: '紀錄甲', date: '2026-09-24', mine: true },     // 重複
+    { id: '8006', name: '日期壞', date: '2026-02-30', mine: true },
+  ] };
+  const heads = () => [...main.querySelectorAll('.walk-date')].map(h => h.firstChild.textContent);
+  const cardNames = () => [...main.querySelectorAll('.mine-dog .bname')].map(n => n.textContent);
+  const setup = () => {
+    allDogs = [dog('紀錄甲', '8001', new Date(2026, 8, 24)), dog('紀錄乙', '8002', new Date(2026, 8, 26)),
+      dog('紀錄丙', '8003', null), dog('紀錄戊', '8005', new Date(2026, 8, 24))];
+    groupMap = {}; searchQuery = '';
+    myWalks = parseMyWalks(WALKS); myWalksState = 'ready';
+    activeTab = 'mine'; render();
+  };
+  try {
+    await check('#58 只取我遛的紀錄：去重、丟掉不合理日期，新到舊', () => {
+      eq(parseMyWalks(WALKS).map(w => `${w.ymd} ${w.name}`),
+        ['2026-09-24 紀錄戊', '2026-09-24 紀錄甲', '2026-09-22 紀錄乙', '2026-09-18 已離所狗']);
+      eq(parseMyWalks({ version: 1, walks: [] }), []);
+      let threw = false;
+      try { parseMyWalks({}); } catch { threw = true; }
+      eq(threw, true, '格式不對要丟錯：');
+    });
+    await check('#58 每次到所一張卡（K 選 A）：同一天的狗排在同一張；之後別人遛過，我那筆仍在；離所的狗只列名字', () => {
+      setup();
+      eq(heads(), ['2026/09/24（四）', '2026/09/22（二）', '2026/09/18（五）'], '日期標題：');
+      eq([...main.querySelectorAll('.visit')].map(v => [...v.querySelectorAll('.bname')].map(n => n.textContent)),
+        [['紀錄戊', '紀錄甲'], ['紀錄乙'], ['已離所狗']], '每張卡的狗：');
+      eq([...main.querySelectorAll('.visit .walk-date .n')].map(n => n.textContent), ['2 隻', '1 隻', '1 隻'], '每次幾隻：');
+      eq(main.querySelectorAll('.mine-dog.gone').length, 1, '離所：');
+      eq(main.querySelector('.mine-dog.gone').tagName, 'DIV', '離所的狗不能點：');
+      eq(document.querySelector('#tabs button[data-tab="mine"] .n').textContent, '4', '分類數字：');
+      eq(main.querySelectorAll('.walk-btn, .card').length, 0, '這頁不放狗卡與已遛按鈕：');
+      if (/上次遛狗/.test(main.textContent)) throw new Error('這頁不顯示大家的上次遛狗');
+      if (/紀錄丙/.test(main.textContent)) throw new Error('別人遛的不該出現');
+    });
+    await check('#58 我溜過不顯示備註；第一次遛的狗標「第一次」；上方有這個月小計', () => {
+      setup();
+      allDogs[0].note = '勿溜，測試用備註';
+      myWalks = parseMyWalks({ version: 1, walks: [...WALKS.walks, { id: '8001', name: '紀錄甲', date: '2026-09-26', mine: true }] });
+      render();
+      eq(main.querySelectorAll('.warn-note, .card.flagged, mark').length, 0, '備註：');
+      if (main.textContent.includes('測試用備註')) throw new Error('不該出現備註文字');
+      const firsts = [...main.querySelectorAll('.visit')].map(v => [...v.querySelectorAll('.mine-dog')].filter(t => t.querySelector('.first')).map(t => t.querySelector('.bname').textContent));
+      eq(firsts, [[], ['紀錄戊', '紀錄甲'], ['紀錄乙'], []], '第一次（紀錄甲 9/26 是第二次；最早那天不知道，不標）：');
+      allDogs[0].note = '';
+      const box = document.createElement('div');
+      box.innerHTML = myMonthStats(myWalks, new Date(2026, 8, 27));
+      eq([...box.querySelectorAll('.mine-tiles b')].map(b => b.textContent), ['4', '4', '5'], '9 月：到所 4 次、4 隻、5 趟：');
+      if (!box.textContent.includes('上個月到所 0 次')) throw new Error(box.textContent);
+      box.innerHTML = myMonthStats(myWalks, new Date(2026, 9, 3));
+      eq([...box.querySelectorAll('.mine-tiles b')].map(b => b.textContent), ['0', '0', '0'], '10 月：');
+      if (!box.textContent.includes('上個月到所 4 次')) throw new Error(box.textContent);
+    });
+    await check('#58 不選日期：所有到所紀錄一路往下排（跨月也是）', () => {
+      setup();
+      eq(document.getElementById('mineDate'), null, '沒有日期選擇：');
+      myWalks = parseMyWalks({ version: 1, walks: [...WALKS.walks, { id: '8002', name: '紀錄乙', date: '2026-08-05', mine: true }] });
+      render();
+      eq(heads(), ['2026/09/24（四）', '2026/09/22（二）', '2026/09/18（五）', '2026/08/05（三）'], '日期標題：');
+    });
+    await check('#58 點狗開原本的詳細資訊；搜尋只篩這頁', () => {
+      setup();
+      main.querySelector('.mine-dog[data-mine-dog]').click();
+      eq(detailDog && detailDog.name, '紀錄戊', '詳細資訊：');
+      hideDetail();
+      searchQuery = '甲'; render();
+      eq(cardNames(), ['紀錄甲'], '搜尋：');
+      searchQuery = '';
+    });
+    await check('#58 還沒有紀錄：顯示從哪天開始記錄', () => {
+      setup();
+      myWalks = []; render();
+      if (!main.textContent.includes('從 2026/9/25 開始記錄，目前還沒有資料')) throw new Error(main.textContent);
+    });
+    await check('#58 讀 data/walks.json；讀不到顯示錯誤，可重新讀取', async () => {
+      setup();
+      const calls = [];
+      window.fetch = async url => { calls.push(String(url)); return new Response('Not Found', { status: 404 }); };
+      await loadMyWalks();
+      eq(calls, ['data/walks.json'], '讀的檔案：');
+      if (!main.textContent.includes('遛狗紀錄讀取失敗')) throw new Error('要顯示讀取失敗');
+      window.fetch = async () => new Response(JSON.stringify(WALKS), { headers: { 'Content-Type': 'application/json' } });
+      document.getElementById('mineRetry').click();
+      await tick(); await tick();
+      eq(cardNames().length, 4, '重新讀取後：');
+    });
+    await check('#58 repo 裡的 data/walks.json 讀得懂，畫面不出現其他志工名字', async () => {
+      const res = await realFetch('../data/walks.json', { cache: 'no-store' });
+      const data = await res.json();
+      const list = parseMyWalks(data);
+      if (!Array.isArray(data.walks)) throw new Error('walks.json 沒有 walks');
+      // walks.json 每筆只能有編號、犬名、日期、是不是我遛的
+      const extra = data.walks.flatMap(w => Object.keys(w)).filter(k => !['id', 'name', 'date', 'mine'].includes(k));
+      eq([...new Set(extra)], [], 'walks.json 多出的欄位：');
+      eq(list.every(w => w.ymd && w.date), true, '日期：');
+    });
+  } finally {
+    window.fetch = realFetch;
+    hideDetail();
+    [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState] = saved;
+    render();
+  }
+}
+
 function show() {
   const failed = results.filter(r => !r.ok);
   const summary = document.getElementById('summary');
@@ -1320,6 +1517,8 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runPhotoTests)
   .then(runMyNoteTests)
   .then(runAnalysisTests)
+  .then(runHistoryTests)
+  .then(runMyWalksTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

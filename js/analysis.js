@@ -1,4 +1,4 @@
-// 分析分頁（V5-4，#59）：只用目前 dogs.json 就能算的犬隻統計。
+// 分析頁（V5-4 #59、V5-5 #60）：目前 dogs.json 就能算的犬隻統計，加上 #56 累積的遛狗歷史與每日快照。
 // 統計都寫成純函式（輸入狗清單與今天日期，輸出數字），tests/index.html 直接測；畫面只負責把結果畫成 CSS／SVG 資訊圖表（大數字、圓環、直條圖）。
 // 頁首右上角的圖示打開（不佔分類：分類只放每天遛狗會用的）。
 // 會用到 js/app.js 的 makeDate、computeStatus、esc、icon、photoSrc、showDetail、allDogs、analysisOpen，所以要在 app.js 之後載入。
@@ -167,6 +167,70 @@ function checkPhotos(dogs) {
       state.done = true;
       if (analysisOpen && photoCheck === state) render();
     });
+}
+
+// ── 遛狗歷史（V5-5，#60）：讀 #56 的 data/walks.json 與 data/history/ ──
+// 試算表每隻狗只記最後一次遛狗，所以歷史從第一份快照那天才開始累積；walks.json 在那之前的紀錄是建立時的「最後一次」，
+// 只拿來當第一段間隔的起點，不算進次數。所有人的遛狗都算（不看 mine），畫面不出現志工名字。
+// WALKS_URL 在 js/app.js（#58 我溜過也讀同一個檔）
+const HISTORY_URL = 'data/history/';
+const dogKey = d => d.id || `名:${d.name}`;
+
+// walks.json → [{ key, id, name, date }]，日期不合理的略過
+function parseWalks(data) {
+  if (!data || !Array.isArray(data.walks)) return [];
+  return data.walks.map(w => ({ id: String(w.id || ''), name: String(w.name || ''), date: parseYmd(w.date) }))
+    .filter(w => w.date && (w.id || w.name)).map(w => ({ ...w, key: dogKey(w) }));
+}
+
+// 快照目錄 → 日期字串（由舊到新）
+function parseHistoryIndex(data) {
+  return data && Array.isArray(data.dates) ? [...new Set(data.dates.filter(d => parseYmd(d)))].sort() : [];
+}
+
+// 開始累積的日期與目前累積幾天（含今天）
+function historySpan(dates, today) {
+  const start = dates.length ? parseYmd(dates[0]) : null;
+  const t = makeDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
+  return { start, days: start ? daysBetween(start, t) + 1 : 0 };
+}
+
+// 一隻狗的遛狗紀錄（K 2026-09-25：遛狗歷史要看每隻狗才有意義，放在詳細資訊）：
+// 最近 N 天每天有沒有遛（開始記錄前的日子標「未記錄」）、這段期間遛幾次、平均與最久隔幾天
+function dogWalkHistory(dog, walks, start, today, n = 30) {
+  const key = dogKey(dog);
+  const dates = [...new Set(walks.filter(w => w.key === key).map(w => +w.date))].sort((a, b) => a - b);
+  const t = makeDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
+  const set = new Set(dates);
+  const cells = [];
+  for (let i = n - 1; i >= 0; i--) {
+    const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() - i);
+    cells.push({ date: d, walked: set.has(+d), recorded: !!start && d >= start });
+  }
+  const gaps = [];
+  for (let i = 1; i < dates.length; i++) if (start && dates[i] >= +start) gaps.push(Math.round((dates[i] - dates[i - 1]) / 86400000));
+  return {
+    cells,
+    count: cells.filter(c => c.walked).length, // 開始記錄前的那筆「最後遛狗日」也是真的，一起算
+    avgGap: average(gaps),
+    maxGap: gaps.length ? Math.max(...gaps) : null,
+  };
+}
+
+// 讀遛狗紀錄：打開詳細資訊才讀，一次開網頁只讀一遍（快照目錄只用來知道從哪天開始記錄）
+let historyData = null; // { state: 'loading'|'ready'|'error', walks, dates }
+function loadHistory() {
+  if (historyData) return;
+  const state = historyData = { state: 'loading', walks: [], dates: [] };
+  const get = url => fetch(url, { cache: 'no-cache' }).then(res => { if (!res.ok) throw new Error(res.status); return res.json(); });
+  Promise.all([get(WALKS_URL), get(`${HISTORY_URL}index.json`)]).then(([w, idx]) => {
+    state.walks = parseWalks(w);
+    state.dates = parseHistoryIndex(idx);
+    state.state = 'ready';
+  }, () => { state.state = 'error'; }).then(() => {
+    if (historyData !== state) return;
+    if (detailDog) renderDetail();
+  });
 }
 
 // ── 畫面（資訊圖表風格：大數字、圓環、直條圖；顏色只用 css/app.css 的色票）──
@@ -342,6 +406,35 @@ function analysisHtml(dogs, today) {
   return out.join('');
 }
 
+// ── 詳細資訊的遛狗紀錄 ──
+function mdText(d) {
+  return d ? `${d.getMonth() + 1}/${d.getDate()}` : '無紀錄';
+}
+
+// 詳細資訊的「遛狗紀錄」：最近 30 天的格子＋三個數字
+function walkHistorySection(dog, today) {
+  loadHistory();
+  const head = `<h3>${icon('tick')}遛狗紀錄<span class="sub">所有人遛的都算</span></h3>`;
+  const wrap = body => `<section class="detail-section" data-section="walks">${head}${body}</section>`;
+  if (!historyData || historyData.state === 'loading') return wrap('<div class="empty">讀取中…</div>');
+  if (historyData.state === 'error') return wrap('<div class="empty">遛狗紀錄讀取失敗</div>');
+  const { start } = historySpan(historyData.dates, today);
+  const h = dogWalkHistory(dog, historyData.walks, start, today);
+  const first = h.cells[0].date, last = h.cells[h.cells.length - 1].date;
+  const cell = c => `<span class="${c.walked ? 'on' : c.recorded ? 'off' : 'none'}" title="${mdText(c.date)}${c.walked ? ' 有遛' : c.recorded ? ' 沒遛' : ' 還沒開始記錄'}"></span>`;
+  const num = (v, unit, label) => `<div class="w-num"><b>${v}</b><small>${unit}</small><span>${label}</span></div>`;
+  return wrap(`
+    <div class="w-grid">${h.cells.map(cell).join('')}</div>
+    <div class="w-axis"><span>${mdText(first)}</span><span>今天</span></div>
+    <div class="w-nums">
+      ${num(h.count, '次', '最近 30 天')}
+      ${num(h.avgGap == null ? '–' : h.avgGap.toFixed(1), '天', '平均隔')}
+      ${num(h.maxGap == null ? '–' : h.maxGap, '天', '最久隔')}
+    </div>
+    <div class="w-legend"><span><i class="on"></i>有遛</span><span><i class="off"></i>沒遛</span>${h.cells.some(c => !c.recorded) ? '<span><i class="none"></i>還沒開始記錄</span>' : ''}</div>
+    <div class="w-note">從 ${start ? `${start.getFullYear()}/${mdText(start)}` : '同步'} 開始記錄，一天 3 次同步；兩次同步之間被遛兩次只記一次。</div>`);
+}
+
 // 分析頁整頁：上方「‹ 返回」＋標題；資料還沒好時顯示讀取中或失敗
 function analysisPageHtml(today) {
   const top = `<div class="a-top"><button type="button" class="a-back" id="analysisBack">${icon('back')}返回</button><h2>犬隻分析</h2></div>`;
@@ -382,3 +475,4 @@ document.getElementById('main').addEventListener('click', e => {
   const dog = row && allDogs[row.dataset.adog];
   if (dog) showDetail(dog);
 });
+
