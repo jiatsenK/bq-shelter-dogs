@@ -1,5 +1,12 @@
 // 狗狗資料：試算表由 GitHub Action 每天同步成這個檔（#31），前端只讀它、不直接連試算表（#32）
 const DATA_URL = 'data/dogs.json';
+// 照片上傳服務（Cloudflare Worker，#47／#48）的網址，例：https://bq-shelter-photos.xxx.workers.dev
+// 還沒部署就留空：詳細資訊不顯示上傳按鈕。這裡只放網址，GitHub 寫入權限只在 Worker 裡，網站碰不到
+// （用 let 是讓 tests/index.html 能換成測試網址）
+let UPLOAD_URL = 'https://bq-shelter-photos.jiatsen-k.workers.dev';
+// 上傳前先在手機上壓成 JPEG：長邊最多 1280px，避免 repo 堆滿手機原圖；上限要跟 Worker 的 MAX_BYTES 一致
+const PHOTO_MAX_EDGE = 1280;
+const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
 // 警示關鍵字（2026-09-24 K 定，#28）：備註含任一個，就把備註原文直接顯示在卡片第一層，字眼標紅；
 // 只用來判斷要不要顯示，不改寫原文、不另外產生標籤。狗照樣留在待巡房，由志工自己判斷。
 // 每組第一個是關鍵字，後面是常見異體寫法，一起比對。志工發現新的慣用字眼時，只要在這裡加一組。
@@ -21,6 +28,7 @@ let detailMap = {};
 let activeTab = 'walk';
 let detailDog = null; // 詳細資訊正在看的狗
 let detailOpener = null;
+let photoUpload = null; // 詳細資訊正在上傳的照片：{ dog, blob, url, phase: 'preview'|'uploading'|'error', error }
 let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（walkKey）
 let searchQuery = '';
 let loadWarning = '';
@@ -187,18 +195,88 @@ function icon(id) {
   return `<svg class="icon"><use href="#i-${id}"/></svg>`;
 }
 
-function photoThumb(dog, size = 56) {
+// 前端剛上傳成功的照片（編號 → 本機圖片網址）：GitHub Pages 要一兩分鐘才會更新，這段期間先顯示剛傳的那張（#48）
+const photoOverrides = {};
+function photoSrc(dog) {
+  return photoOverrides[dog.id] || `photos/${encodeURIComponent(dog.id)}.jpg`;
+}
+
+// zoom：詳細資訊上方的照片做成按鈕，點了用燈箱放大（#46）；照片讀不到就標 no-photo，按了不放大
+function photoThumb(dog, size = 56, zoom = false) {
   // 沒有編號就直接顯示腳掌圖示，不去抓 photos/.jpg
   if (!dog.id) {
     return `<div class="thumb"><div class="thumb-fallback" style="display:flex">${icon('paw')}</div></div>`;
   }
+  const tag = zoom ? 'button' : 'div';
+  const attrs = zoom ? ` type="button" class="thumb zoom" data-zoom aria-label="放大 ${esc(dog.name)} 的照片"` : ' class="thumb"';
   return `
-    <div class="thumb">
-      <img src="photos/${encodeURIComponent(dog.id)}.jpg" alt="" width="${size}" height="${size}" loading="lazy" decoding="async"
-           onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+    <${tag}${attrs}>
+      <img src="${esc(photoSrc(dog))}" alt="" width="${size}" height="${size}" loading="lazy" decoding="async"
+           onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'; this.parentNode.classList.add('no-photo'); this.parentNode.disabled = true;">
       <div class="thumb-fallback">${icon('paw')}</div>
-    </div>
+    </${tag}>
   `;
+}
+
+// 燈箱（#46）：大圖不裁切、盡量用滿畫面；點關閉、點背景、Esc、手機返回都能關
+let lightboxOpener = null;
+function lightboxOpen() {
+  const el = document.getElementById('lightbox');
+  return !!el && !el.hidden;
+}
+
+// 燈箱的 img 撐滿整個畫面、照片等比縮放置中，所以要算出照片實際畫在哪裡，點在照片上才不關
+function insidePhoto(e) {
+  const img = e.target.closest && e.target.closest('.lightbox img');
+  if (!img || !img.naturalWidth) return false;
+  const box = img.getBoundingClientRect();
+  const scale = Math.min(box.width / img.naturalWidth, box.height / img.naturalHeight);
+  const w = img.naturalWidth * scale, h = img.naturalHeight * scale;
+  const left = box.left + (box.width - w) / 2, top = box.top + (box.height - h) / 2;
+  return e.clientX >= left && e.clientX <= left + w && e.clientY >= top && e.clientY <= top + h;
+}
+
+// opener：關掉後焦點回到哪裡（詳細資訊的照片或狗卡）
+function openLightbox(dog, opener) {
+  if (!dog || !dog.id) return;
+  let el = document.getElementById('lightbox');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'lightbox';
+    el.className = 'lightbox';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.innerHTML = `<img alt=""><button type="button" class="lightbox-close" aria-label="關閉照片">${icon('close')}</button>`;
+    el.addEventListener('click', e => {
+      if (!insidePhoto(e)) closeLightbox(); // 點背景（含照片旁的留白）或關閉按鈕
+    });
+    document.body.appendChild(el);
+  }
+  el.setAttribute('aria-label', `${dog.name} 的照片`);
+  el.querySelector('img').src = photoSrc(dog);
+  el.querySelector('img').alt = `${dog.name} 的照片`;
+  lightboxOpener = opener || document.activeElement;
+  el.hidden = false;
+  document.documentElement.classList.add('lightbox-open');
+  // 手機按「返回」時只關掉燈箱
+  history.pushState({ bqPhoto: true }, '');
+  el.querySelector('.lightbox-close').focus({ preventScroll: true });
+}
+
+function hideLightbox() {
+  const el = document.getElementById('lightbox');
+  if (!el || el.hidden) return;
+  el.hidden = true;
+  el.querySelector('img').removeAttribute('src');
+  document.documentElement.classList.remove('lightbox-open');
+  const opener = lightboxOpener;
+  lightboxOpener = null;
+  if (opener && opener.isConnected && opener !== document.body) opener.focus({ preventScroll: true });
+}
+
+function closeLightbox() {
+  if (history.state && history.state.bqPhoto) history.back(); // popstate 會接著 hideLightbox
+  else hideLightbox();
 }
 
 function statusBadge(dog, today) {
@@ -388,7 +466,7 @@ function detailHtml(dog, today) {
   const walkedIds = loadWalkedIds(today);
   return `
     <div class="detail-head">
-      ${photoThumb(dog, 84)}
+      <div class="photo-wrap">${photoThumb(dog, 84, true)}${photoPickButton(dog)}</div>
       <div class="info">
         ${statusBadge(dog, today)}
         <div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div>
@@ -396,6 +474,7 @@ function detailHtml(dog, today) {
       </div>
       <button class="detail-close" id="detailClose" aria-label="關閉">${icon('close')}</button>
     </div>
+    ${photoUploadHtml(dog)}
     <section class="detail-section" data-section="note">
       <h3>${icon('note')}備註<span class="sub">志工補充的個性、互動與觀察</span></h3>
       ${!dog.note ? `<div class="empty">目前沒有備註</div>`
@@ -446,12 +525,169 @@ function groupWalkButton(dog, walkedIds) {
   return `<button type="button" class="group-walk" id="groupWalk">${icon('tick')}${label}</button>`;
 }
 
+// ── 上傳／更換照片（#48）：選照片 → 預覽 → 確認上傳 → 畫面立刻換新照片 ──
+
+// 詳細資訊照片右下角的相機圖示（K 2026-09-25 問業界做法，比照大頭貼）：點照片看大圖、點相機換照片。
+// 沒有編號（照片檔名要用編號）或上傳服務還沒設定就不顯示
+function photoPickButton(dog) {
+  if (!UPLOAD_URL || !dog.id) return '';
+  return `<button type="button" class="photo-pick" id="photoPick" aria-label="上傳 ${esc(dog.name)} 的照片" title="上傳照片">${icon('camera')}</button>`;
+}
+
+// 選好照片後，詳細資訊上方出現的預覽與「確認上傳」
+function photoUploadHtml(dog) {
+  if (!UPLOAD_URL || !dog.id) return '';
+  const up = photoUpload && photoUpload.dog === dog ? photoUpload : null;
+  if (!up) return '';
+  const busy = up.phase === 'uploading';
+  return `
+    <div class="photo-upload preview">
+      <div class="photo-preview-hint">預覽（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
+      <img class="photo-preview" src="${esc(up.url)}" alt="${esc(dog.name)} 的新照片預覽">
+      ${up.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(up.error)}</span></div>` : ''}
+      <button type="button" class="photo-confirm" id="photoConfirm"${busy ? ' disabled' : ''}>${busy ? '上傳中…' : '確認上傳'}</button>
+      ${busy ? '' : `<button type="button" class="photo-cancel" id="photoCancel">取消</button>`}
+    </div>`;
+}
+
+// 手機或電腦選照片：隱藏的檔案選擇框，按「上傳照片」時才打開
+function pickPhotoFile() {
+  let input = document.getElementById('photoFile');
+  if (!input) {
+    input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.id = 'photoFile';
+    input.hidden = true;
+    input.addEventListener('change', () => {
+      const file = input.files && input.files[0];
+      input.value = ''; // 同一張再選一次也會觸發
+      if (file && detailDog) preparePhoto(detailDog, file);
+    });
+    document.body.appendChild(input);
+  }
+  input.click();
+}
+
+// 壓成 JPEG；太大就再降一點畫質。讀不了的格式（例：電腦上的 HEIC）丟錯
+async function compressPhoto(file) {
+  // 有些手機相簿給的檔案沒有類型，就交給下面實際讀讀看
+  if (file.type && !/^image\//.test(file.type)) throw new Error('請選擇照片檔（JPG、PNG 等圖片）');
+  const src = URL.createObjectURL(file);
+  try {
+    const img = new Image();
+    img.src = src;
+    try { await img.decode(); } catch (e) { throw new Error('這張照片的格式無法讀取，請改選 JPG 或 PNG'); }
+    const scale = Math.min(1, PHOTO_MAX_EDGE / Math.max(img.naturalWidth, img.naturalHeight));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.max(1, Math.round(img.naturalWidth * scale));
+    canvas.height = Math.max(1, Math.round(img.naturalHeight * scale));
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = '#fff'; // 透明背景的 PNG 轉 JPEG 時補白底
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+    for (const quality of [0.82, 0.7, 0.55]) {
+      const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', quality));
+      if (blob && blob.size <= PHOTO_MAX_BYTES) return blob;
+    }
+    throw new Error('照片太大，請換一張');
+  } finally {
+    URL.revokeObjectURL(src);
+  }
+}
+
+async function preparePhoto(dog, file) {
+  if (photoUpload && photoUpload.phase === 'uploading') {
+    showToast('上一張照片還在上傳，請稍等一下');
+    return;
+  }
+  let blob;
+  try {
+    blob = await compressPhoto(file);
+  } catch (e) {
+    showToast(e.message);
+    return;
+  }
+  if (detailDog !== dog) return; // 壓縮途中換看別隻或關掉了
+  clearPhotoUpload();
+  photoUpload = { dog, blob, url: URL.createObjectURL(blob), phase: 'preview', error: '' };
+  renderDetail();
+  const confirm = document.getElementById('photoConfirm');
+  if (confirm) {
+    confirm.focus({ preventScroll: true });
+    if (confirm.scrollIntoView) confirm.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+// 取消預覽（或換看別隻）時丟掉還沒上傳的照片
+function clearPhotoUpload() {
+  if (photoUpload && photoUpload.phase !== 'done') URL.revokeObjectURL(photoUpload.url);
+  photoUpload = null;
+}
+
+// 送到 Worker；成功後這支手機馬上改顯示新照片（GitHub Pages 要幾分鐘才更新），失敗時原本照片不動
+async function uploadPhoto() {
+  const up = photoUpload;
+  if (!up || up.phase === 'uploading') return;
+  up.phase = 'uploading';
+  up.error = '';
+  renderDetail();
+  let error = '';
+  try {
+    const res = await fetch(`${UPLOAD_URL}/photos/${encodeURIComponent(up.dog.id)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'image/jpeg' },
+      body: up.blob,
+    });
+    const out = await res.json().catch(() => null);
+    if (!res.ok || !out || !out.ok) error = (out && out.error) || `上傳失敗（${res.status}），原本的照片不受影響`;
+  } catch (e) {
+    error = '上傳失敗，請確認網路後再試；原本的照片不受影響';
+  }
+  if (photoUpload !== up) return; // 保險：上傳中不會被清掉（見 preparePhoto、hideDetail）
+  if (error) {
+    if (detailDog !== up.dog) { // 上傳途中關掉或換看別隻：用提示條告訴結果
+      clearPhotoUpload();
+      showToast(`${up.dog.name} 的照片沒有上傳成功：${error}`);
+      return;
+    }
+    up.phase = 'error';
+    up.error = error;
+    renderDetail();
+    return;
+  }
+  up.phase = 'done';
+  photoOverrides[up.dog.id] = up.url;
+  photoUpload = null;
+  render();
+  renderDetail();
+  showToast(`${up.dog.name} 的照片已更新（其他志工幾分鐘內會看到）`);
+}
+
 function renderDetail() {
   if (!detailDog) return;
   const box = document.getElementById('detail');
   const focused = box.contains(document.activeElement) ? document.activeElement : null;
   box.innerHTML = detailHtml(detailDog, new Date());
   box.querySelector('#detailClose').addEventListener('click', closeDetail);
+  const zoom = box.querySelector('[data-zoom]');
+  if (zoom) zoom.addEventListener('click', () => {
+    if (!zoom.classList.contains('no-photo')) openLightbox(detailDog, zoom);
+  });
+  const pick = box.querySelector('#photoPick');
+  if (pick) {
+    pick.addEventListener('click', pickPhotoFile);
+    // 已經有照片就叫「更換照片」
+    const img = zoom && zoom.querySelector('img');
+    const label = () => {
+      if (img && img.naturalWidth) { pick.setAttribute('aria-label', `更換 ${detailDog.name} 的照片`); pick.title = '更換照片'; }
+    };
+    if (img) { label(); img.addEventListener('load', label); }
+  }
+  const confirmBtn = box.querySelector('#photoConfirm');
+  if (confirmBtn) confirmBtn.addEventListener('click', uploadPhoto);
+  const cancelBtn = box.querySelector('#photoCancel');
+  if (cancelBtn) cancelBtn.addEventListener('click', () => { clearPhotoUpload(); renderDetail(); });
   box.querySelectorAll('.buddy').forEach(btn => {
     const d = allDogs[btn.dataset.dog];
     if (d) btn.addEventListener('click', () => showDetail(d));
@@ -482,7 +718,7 @@ function renderDetail() {
 function showDetail(dog) {
   const wasOpen = !!detailDog;
   if (!wasOpen) detailOpener = { element: document.activeElement, index: allDogs.indexOf(dog) };
-  if (dog !== detailDog) pickedBuddies.clear();
+  if (dog !== detailDog) { pickedBuddies.clear(); if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload(); }
   detailDog = dog;
   renderDetail();
   document.getElementById('detailBackdrop').hidden = false;
@@ -497,6 +733,7 @@ function hideDetail() {
   if (!detailDog) return;
   detailDog = null;
   pickedBuddies.clear();
+  if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
   document.getElementById('detailBackdrop').hidden = true;
   document.getElementById('detail').innerHTML = '';
   document.documentElement.classList.remove('detail-open');
@@ -513,11 +750,21 @@ function closeDetail() {
   else hideDetail();
 }
 
-window.addEventListener('popstate', hideDetail);
+// 燈箱開著時「返回」只關燈箱，詳細資訊留著
+window.addEventListener('popstate', () => {
+  if (lightboxOpen()) hideLightbox();
+  else hideDetail();
+});
 document.getElementById('detailBackdrop').addEventListener('click', e => {
   if (e.target.id === 'detailBackdrop') closeDetail();
 });
 document.addEventListener('keydown', e => {
+  if (lightboxOpen()) {
+    // 燈箱裡只有關閉按鈕：Esc 關燈箱，Tab 留在關閉按鈕上
+    if (e.key === 'Escape') closeLightbox();
+    if (e.key === 'Tab') { e.preventDefault(); document.querySelector('#lightbox .lightbox-close').focus({ preventScroll: true }); }
+    return;
+  }
   if (e.key === 'Escape' && detailDog) closeDetail();
   if (e.key !== 'Tab' || !detailDog) return;
   const buttons = [...document.querySelectorAll('#detail button:not(:disabled), #toast:not([hidden]) button:not([hidden])')];
@@ -534,12 +781,14 @@ function cardFromEvent(e) {
   const card = e.target.closest('#main .card[data-dog]');
   return card && allDogs[card.dataset.dog];
 }
-// 點「已遛／移回」只記錄，不開詳細資訊；點卡片其他地方才開
+// 點「已遛／移回」只記錄，不開詳細資訊；點照片開燈箱（#46，沒照片就照舊開詳細資訊）；點卡片其他地方開詳細資訊
 document.getElementById('main').addEventListener('click', e => {
   const dog = cardFromEvent(e);
   if (!dog) return;
   const btn = e.target.closest('[data-walk]');
+  const thumb = e.target.closest('.thumb');
   if (btn) setWalked([dog], btn.dataset.walk === 'add');
+  else if (thumb && dog.id && !thumb.classList.contains('no-photo')) openLightbox(dog, thumb.closest('.card'));
   else showDetail(dog);
 });
 document.getElementById('main').addEventListener('keydown', e => {
