@@ -32,6 +32,11 @@ const RATE_LIMITS = [
   { windowMs: 60 * 1000, max: 5 },
   { windowMs: 60 * 60 * 1000, max: 30 },
 ];
+// 相簿可以一次選好幾張、網站一張一張依序傳，所以另外算：1 分鐘最多 12 張、1 小時最多 60 張
+const GALLERY_RATE_LIMITS = [
+  { windowMs: 60 * 1000, max: 12 },
+  { windowMs: 60 * 60 * 1000, max: 60 },
+];
 // 讀過的 dogs.json 暫存 5 分鐘，不用每張照片都去 GitHub 讀一次
 const DOGS_CACHE_MS = 5 * 60 * 1000;
 // 我的備註：存放位置、長度上限（字數）、一次送來的資料上限
@@ -123,6 +128,7 @@ function allow(key, limits, now) {
 }
 
 const allowUpload = (ip, now = Date.now()) => allow(`photo:${ip}`, RATE_LIMITS, now);
+const allowGalleryUpload = (ip, now = Date.now()) => allow(`gallery:${ip}`, GALLERY_RATE_LIMITS, now);
 
 // JPEG 檔頭是 FF D8 FF
 function isJpeg(bytes) {
@@ -183,9 +189,9 @@ async function currentSha(cfg, path) {
   return info.sha || null;
 }
 
-// 主照片和相簿共用的檢查：編號、JPEG、大小、頻率、編號在 dogs.json 裡。
+// 主照片和相簿共用的檢查：編號、JPEG、大小、頻率（主照片、相簿各算各的）、編號在 dogs.json 裡。
 // 過了回 { bytes, dogs }，沒過回 { error: 回應 }
-async function checkPhoto(request, cfg, id, now, origin) {
+async function checkPhoto(request, cfg, id, now, origin, allowFn = allowUpload) {
   if (!ID_PATTERN.test(id)) return { error: fail(400, '狗狗編號格式不對', origin) };
 
   const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
@@ -198,7 +204,7 @@ async function checkPhoto(request, cfg, id, now, origin) {
   if (!isJpeg(bytes)) return { error: fail(415, '檔案不是 JPEG 照片', origin) };
 
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (!allowUpload(ip, now)) return { error: fail(429, '上傳太頻繁，請稍等幾分鐘再試', origin) };
+  if (!allowFn(ip, now)) return { error: fail(429, '上傳太頻繁，請稍等幾分鐘再試', origin) };
 
   let dogs;
   try {
@@ -468,7 +474,7 @@ async function addGalleryPhoto(request, env, origin, id) {
   const cfg = config(env);
   const now = Date.now();
   if (!cfg.token) return fail(500, '上傳服務還沒設定好（缺 GITHUB_TOKEN）', origin);
-  const checked = await checkPhoto(request, cfg, id, now, origin);
+  const checked = await checkPhoto(request, cfg, id, now, origin, allowGalleryUpload);
   if (checked.error) return checked.error;
   const name = checked.dogs.get(id);
   const label = name ? `（${name}）` : '';
@@ -562,7 +568,7 @@ async function deleteGalleryPhoto(request, env, origin, id, file) {
 
 export default {
   // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch
-  testing: { MAX_BYTES, NOTE_MAX_CHARS, GALLERY_MAX, resetState, allowUpload, isJpeg, cleanNote, cleanGallery, galleryFileName },
+  testing: { MAX_BYTES, NOTE_MAX_CHARS, GALLERY_MAX, resetState, allowUpload, allowGalleryUpload, isJpeg, cleanNote, cleanGallery, galleryFileName },
 
   async fetch(request, env) {
     const cfg = config(env);

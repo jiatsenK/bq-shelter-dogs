@@ -457,10 +457,20 @@ test('相簿新增：照片存不進去回錯誤、不改清單；清單同時�
   assert.equal(saved['2024032902'].length, 1);
 });
 
-test('相簿新增和主照片共用頻率限制', async () => {
+test('相簿頻率限制跟主照片分開：1 分鐘 12 張（網站一次最多選 10 張），1 小時 60 張', async () => {
   fakeGalleryGithub({ text: '{}' });
-  for (let i = 0; i < 5; i++) assert.equal((await send(postGallery('2024032902'), NENV)).status, 200);
-  assert.equal((await send(postGallery('2024032902'), NENV)).status, 429);
+  for (let i = 0; i < 5; i++) assert.equal(allowUpload('1.1.1.1'), true, '先把主照片的 5 張用完');
+  assert.equal(allowUpload('1.1.1.1'), false);
+  for (let i = 0; i < 12; i++) assert.equal((await send(postGallery('2024032902'), NENV)).status, 200, `相簿第 ${i + 1} 張`);
+  const r = await send(postGallery('2024032902'), NENV);
+  assert.equal(r.status, 429);
+  assert.match(r.body.error, /太頻繁/);
+  assert.equal((await send(postGallery('2024032902', { ip: '2.2.2.2' }), NENV)).status, 200, '別的 IP 不受影響');
+  const { allowGalleryUpload } = worker.testing;
+  resetState();
+  let t = 0;
+  for (let i = 0; i < 60; i++, t += 6 * 1000) assert.equal(allowGalleryUpload('3.3.3.3', t), true);
+  assert.equal(allowGalleryUpload('3.3.3.3', t), false);
 });
 
 test('相簿讀取：GET /gallery 回最新清單；格式不對的檔名濾掉；沒檔案回空的', async () => {
