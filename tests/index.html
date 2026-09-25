@@ -44,7 +44,7 @@ const TODAY = new Date(2026, 8, 24, 10);
 // #35 測試用的假 localStorage：測試頁跟網站同網域，不能動到志工手機上真正的「今天已溜」
 function fakeStorage() {
   const data = {};
-  return { getItem: k => (k in data ? data[k] : null), setItem: (k, v) => { data[k] = String(v); } };
+  return { getItem: k => (k in data ? data[k] : null), setItem: (k, v) => { data[k] = String(v); }, removeItem: k => { delete data[k]; } };
 }
 let INDEX_HTML = ''; // index.html 原始碼，#10 唯讀檢查用（其他測試會替換 fetch，所以先存下來）
 let APP_JS = '';     // js/app.js 原始碼（#30 拆檔後程式在這裡）
@@ -196,7 +196,10 @@ function runTests() {
       // #48 起唯一的寫入是把照片 POST 到 UPLOAD_URL（Cloudflare Worker），先把那一段拿掉再檢查其他地方
       const uploadCall = /fetch\(`\$\{UPLOAD_URL\}\/photos\/\$\{encodeURIComponent\(up\.dog\.id\)\}`, \{\s*method: 'POST',/;
       if (!uploadCall.test(APP_JS)) throw new Error('找不到照片上傳的呼叫');
-      const code = APP_JS.replace(uploadCall, '');
+      // #62 起「我的備註」PUT 到同一個 Worker 的 /notes/{編號}（寫進 Git，不是試算表），也先拿掉
+      const noteCall = /fetch\(`\$\{UPLOAD_URL\}\/notes\/\$\{encodeURIComponent\(edit\.dog\.id\)\}`, \{\s*method: 'PUT',/;
+      if (!noteCall.test(APP_JS)) throw new Error('找不到我的備註儲存的呼叫');
+      const code = APP_JS.replace(uploadCall, '').replace(noteCall, '');
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
@@ -204,13 +207,17 @@ function runTests() {
       // #48 GitHub 寫入權限只在 Worker：網站程式不能有 token 或直接連 GitHub API
       const tokenHits = [/ghp_|gho_|github_pat_/, /api\.github\.com/, /Authorization|Bearer/i, /GITHUB_TOKEN/].filter(re => re.test(APP_JS)).map(String);
       eq(tokenHits, [], 'GitHub 憑證相關字眼：');
-      // #35 起「今天已溜」存在這支手機的 localStorage，只准用 WALKED_KEY 這一個欄位
+      // #35 起「今天已溜」存在這支手機的 localStorage，只准用 WALKED_KEY；#62 加上我的備註通關碼 NOTES_PASS_KEY
       eq([...code.matchAll(/\blocalStorage\s*[.[]|window\.localStorage/g)].length, 1, 'localStorage 只在一個地方取用：');
-      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKED_KEY', 'WALKED_KEY'], '只讀寫 WALKED_KEY：');
+      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKED_KEY', 'WALKED_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY'], '只讀寫 WALKED_KEY、NOTES_PASS_KEY：');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
-      eq(urls.length, 1, 'fetch 呼叫數（上傳以外）：');
+      eq(urls.length, 2, 'fetch 呼叫數（上傳以外）：');
       // #32 起前端只讀 data/dogs.json，不直接連試算表；狗卡資訊也已經寫在 dogs.json 裡，不再抓 dogs/*.md
-      if (!urls.every(u => u.startsWith('DATA_URL,'))) throw new Error(`只能讀 data/dogs.json：${urls.join('、')}`);
+      // #62 另外讀我的備註：只從 Worker 的 /notes 或網站上的 data/my-notes.json 讀
+      if (!urls.every(u => u.startsWith('DATA_URL,') || u === "url, { cache: 'no-store' }")) throw new Error(`只能讀 data/dogs.json 與我的備註：${urls.join('、')}`);
+      const noteReads = [...APP_JS.matchAll(/tryRead\(([^,]+),/g)].map(m => m[1]);
+      eq(noteReads, ['`${UPLOAD_URL}/notes`', 'MY_NOTES_URL'], '我的備註讀取來源：');
+      eq(MY_NOTES_URL, 'data/my-notes.json', '我的備註檔：');
       eq(DATA_URL, 'data/dogs.json', '資料檔：');
       if (/docs\.google\.com|gviz/.test(APP_JS)) throw new Error('前端不應再連 Google 試算表');
     }),
@@ -300,7 +307,7 @@ function runTests() {
       eq(val({ walkedDate: null, covered: false }), ['尚無紀錄', 'val muted']);
       eq(val({ walkedDate: null, covered: true }), ['有人固定照顧', 'val sage small']);
     }),
-    check('#28 詳細資訊分成備註、可以一起溜的狗（照片＋犬名）、狗卡資訊三區', () => {
+    check('#28 詳細資訊分成備註、（#62 我的備註、）可以一起溜的狗（照片＋犬名）、狗卡資訊', () => {
       const saved = [allDogs, groupMap];
       try {
         const dog = { name: '測試狗', cage: 'A01', id: '1', walkedDate: null, covered: false, note: '親人，好牽\n怕機車', intro: '入所狗卡' };
@@ -308,7 +315,7 @@ function runTests() {
         groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['備註', '可以一起溜的狗', '狗卡資訊']);
+        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['備註', '我的備註', '可以一起溜的狗', '狗卡資訊']);
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/2.jpg', '一起溜的照片：');
@@ -316,7 +323,7 @@ function runTests() {
         eq(box.querySelector('[data-section="intro"] .content').textContent, '入所狗卡');
         dog.note = ''; dog.intro = ''; groupMap = {};
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section .empty')].length, 3, '都沒有資料時顯示提示：');
+        eq([...box.querySelectorAll('section .empty')].length, 4, '都沒有資料時顯示提示：');
       } finally { [allDogs, groupMap] = saved; }
     }),
     check('#28 點狗卡開詳細資訊，點一起溜的狗換成那隻，關閉後回到清單', () => {
@@ -778,7 +785,8 @@ async function runSerialTests() {
       eq(document.getElementById('updatedLabel').textContent,
         `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, '同步時間：');
       eq([...groupMap['讀取甲']], ['讀取乙'], '可以一起溜：');
-      eq(calls.map(([u]) => u), ['data/dogs.json'], '只讀 dogs.json，不再逐隻抓 dogs/*.md：');
+      // #62 起讀完狗狗資料後另外讀我的備註（Worker 的 /notes、不行再讀 data/my-notes.json），不算在內
+      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$/.test(u)), ['data/dogs.json'], '只讀 dogs.json，不再逐隻抓 dogs/*.md：');
     });
     await check('#32 dogs.json 讀取失敗：標題、搜尋、分類都在，內容區顯示錯誤，可重新讀取', async () => {
       reset();
@@ -1133,6 +1141,151 @@ async function runAnalysisTests() {
   });
 }
 
+// ── #62 我的備註：用假的 Worker（改寫 fetch），不會真的寫進 Git ──
+async function runMyNoteTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, myNotes, myNotesState];
+  const realFetch = window.fetch;
+  const box = document.getElementById('main').parentElement;
+  const tick = () => new Promise(r => setTimeout(r, 0));
+  const json = (data, status = 200) => new Response(JSON.stringify(data), { status });
+  const toastText = () => { const t = document.getElementById('toast'); return t && !t.hidden ? t.querySelector('.toast-text').textContent : ''; };
+  const section = () => document.querySelector('#detail [data-section="mynote"]');
+  const typeInto = (el, value) => { el.value = value; el.dispatchEvent(new Event('input')); };
+  try {
+    box.classList.remove('hidden');
+    UPLOAD_URL = 'https://worker.test';
+    allDogs = [
+      { id: '9201', name: '備註甲', cage: 'A01', note: '溜狗表的備註：勿溜', covered: false, walkedDate: null },
+      { id: '9202', name: '備註乙', cage: 'A02', note: '', covered: false, walkedDate: null },
+    ];
+    groupMap = {}; activeTab = 'walk'; searchQuery = '';
+    walkedStorage = fakeStorage(); walkedMemory = null; notesPassMemory = '';
+    noteEdit = null;
+    render();
+    await check('#62 開網頁從 Worker 讀最新的我的備註；Worker 讀不到改讀網站上的 data/my-notes.json；都讀不到顯示提示', async () => {
+      const calls = [];
+      window.fetch = async (u, o) => { calls.push([String(u), o && o.cache]); return json({ ok: true, notes: { '9201': { text: 'Worker 最新', updatedAt: '2026-09-25T02:00:00.000Z' } } }); };
+      await loadMyNotes();
+      eq([calls, myNotesState, myNotes['9201'].text], [[['https://worker.test/notes', 'no-store']], 'worker', 'Worker 最新'], 'Worker：');
+      calls.length = 0;
+      window.fetch = async u => { calls.push([String(u)]); return String(u).includes('worker') ? json({ ok: false }, 502) : json({ '9201': { text: '網站上的', updatedAt: '' } }); };
+      await loadMyNotes();
+      eq([calls.map(c => c[0]), myNotesState, myNotes['9201'].text], [['https://worker.test/notes', 'data/my-notes.json'], 'site', '網站上的'], '退回網站檔：');
+      window.fetch = async () => { throw new TypeError('Failed to fetch'); };
+      await loadMyNotes();
+      eq([myNotesState, myNotes], ['error', {}], '都讀不到：');
+      showDetail(allDogs[1]);
+      eq(section().querySelector('.empty').textContent, '我的備註暫時讀不到', '提示：');
+      hideDetail();
+    });
+    await check('#62 詳細資訊：溜狗表備註照舊，我的備註獨立一區；沒有顯示「新增」、有顯示內容與「修改」；不上狗卡、不參與警示紅框', async () => {
+      myNotes = { '9201': { text: '牽繩要短，攻擊性低', updatedAt: '2026-09-25T02:00:00.000Z' } }; myNotesState = 'worker';
+      render();
+      showDetail(allDogs[0]);
+      eq(document.querySelector('#detail [data-section="note"] .warn-note .text').textContent.includes('溜狗表的備註'), true, '溜狗表備註：');
+      eq(section().querySelector('.my-note-text').textContent, '牽繩要短，攻擊性低', '我的備註：');
+      eq(section().querySelector('.warn-note'), null, '我的備註不做警示紅框：');
+      if (!/更新於 2026\/9\/25/.test(section().querySelector('.my-note-time').textContent)) throw new Error('要顯示更新時間');
+      eq(document.getElementById('myNoteEdit').textContent.trim(), '修改', '按鈕：');
+      if (document.querySelector('#main').textContent.includes('牽繩要短')) throw new Error('我的備註不該出現在狗卡上');
+      showDetail(allDogs[1]);
+      eq([section().querySelector('.empty').textContent, document.getElementById('myNoteEdit').textContent.trim()], ['還沒有我的備註', '新增'], '沒有備註：');
+      hideDetail();
+      UPLOAD_URL = '';
+      showDetail(allDogs[0]);
+      eq(document.getElementById('myNoteEdit'), null, '沒設定 Worker 網址不能編輯：');
+      hideDetail();
+      UPLOAD_URL = 'https://worker.test';
+    });
+    await check('#62 第一次儲存要通關碼：密碼欄位（可給 iPhone 鑰匙圈用 Face ID 填入）；沒填不送出', async () => {
+      myNotes = {};
+      showDetail(allDogs[1]);
+      document.getElementById('myNoteEdit').click();
+      const form = document.getElementById('myNoteForm');
+      eq(document.activeElement.id, 'myNoteText', '焦點在文字框：');
+      const pass = form.querySelector('#myNotePass');
+      eq([pass.type, pass.autocomplete], ['password', 'current-password'], '密碼欄位：');
+      eq(form.querySelector('input[autocomplete="username"]').hidden, true, '隱藏的帳號欄位：');
+      const calls = [];
+      window.fetch = async (...a) => { calls.push(a); return json({ ok: true }); };
+      typeInto(document.getElementById('myNoteText'), '第一筆');
+      document.getElementById('myNoteSave').click();
+      await tick();
+      eq([calls.length, section().querySelector('.photo-error').textContent.trim()], [0, '請輸入通關碼'], '沒填通關碼：');
+      eq(document.getElementById('myNoteText').value, '第一筆', '內容保留：');
+      noteEdit = null; hideDetail();
+    });
+    await check('#62 儲存：PUT 到 Worker 的 /notes/{編號}，成功顯示「已存到 Git」，記住通關碼，下次不用再輸入', async () => {
+      myNotes = {};
+      showDetail(allDogs[1]);
+      document.getElementById('myNoteEdit').click();
+      typeInto(document.getElementById('myNoteText'), '  怕機車\n走河堤  ');
+      typeInto(document.getElementById('myNotePass'), '對的通關碼');
+      const calls = [];
+      let release;
+      window.fetch = (u, o) => { calls.push([u, o]); return new Promise(r => { release = () => r(json({ ok: true, id: '9202', note: { text: '怕機車\n走河堤', updatedAt: '2026-09-25T03:00:00.000Z' }, commit: 'c0ffee' })); }); };
+      document.getElementById('myNoteSave').click();
+      await tick();
+      eq([document.getElementById('myNoteSave').disabled, document.getElementById('myNoteSave').textContent.trim()], [true, '儲存中…'], '儲存中：');
+      release(); await tick(); await tick();
+      eq(calls[0][0], 'https://worker.test/notes/9202', '網址：');
+      eq([calls[0][1].method, calls[0][1].headers['Content-Type'], JSON.parse(calls[0][1].body)], ['PUT', 'application/json', { text: '怕機車\n走河堤', passcode: '對的通關碼' }], '內容：');
+      eq([myNotes['9202'].text, section().querySelector('.my-note-text').textContent], ['怕機車\n走河堤', '怕機車\n走河堤'], '畫面：');
+      if (!toastText().includes('已存到 Git')) throw new Error(`提示：${toastText()}`);
+      eq(walkedStorage.getItem(NOTES_PASS_KEY), '對的通關碼', '記住通關碼：');
+      document.getElementById('myNoteEdit').click();
+      eq([document.getElementById('myNoteText').value, document.getElementById('myNotePass')], ['怕機車\n走河堤', null], '第二次不問通關碼：');
+      noteEdit = null; hideToast(); hideDetail();
+    });
+    await check('#62 失敗保留輸入內容：通關碼錯就清掉記住的通關碼並重問；網路錯誤顯示原因', async () => {
+      walkedStorage.setItem(NOTES_PASS_KEY, '舊的通關碼');
+      myNotes = { '9202': { text: '原本的', updatedAt: '' } };
+      showDetail(allDogs[1]);
+      document.getElementById('myNoteEdit').click();
+      typeInto(document.getElementById('myNoteText'), '改過的');
+      window.fetch = async () => json({ ok: false, error: '通關碼不對', code: 'passcode' }, 401);
+      await saveMyNote();
+      eq(section().querySelector('.photo-error').textContent.trim(), '通關碼不對', '錯誤：');
+      eq([document.getElementById('myNoteText').value, walkedStorage.getItem(NOTES_PASS_KEY), !!document.getElementById('myNotePass')], ['改過的', null, true], '保留內容、重問通關碼：');
+      eq(myNotes['9202'].text, '原本的', '原本的備註不變：');
+      typeInto(document.getElementById('myNotePass'), '新的');
+      window.fetch = async () => { throw new TypeError('Failed to fetch'); };
+      await saveMyNote();
+      if (!section().querySelector('.photo-error').textContent.includes('請確認網路')) throw new Error('網路錯誤要提示');
+      eq(document.getElementById('myNoteText').value, '改過的', '內容仍保留：');
+      document.getElementById('myNoteCancel').click();
+      eq([noteEdit, section().querySelector('.my-note-text').textContent], [null, '原本的'], '取消：');
+      hideDetail();
+    });
+    await check('#62 超過 1000 字不送出；清空後儲存＝刪掉我的備註；重新載入顯示最新內容', async () => {
+      walkedStorage.setItem(NOTES_PASS_KEY, '對的通關碼');
+      myNotes = { '9202': { text: '要刪的', updatedAt: '' } };
+      showDetail(allDogs[1]);
+      document.getElementById('myNoteEdit').click();
+      const calls = [];
+      window.fetch = async (u, o) => { calls.push(JSON.parse(o.body)); return json({ ok: true, id: '9202', note: null, commit: 'x' }); };
+      typeInto(document.getElementById('myNoteText'), '字'.repeat(1001));
+      eq(document.getElementById('myNoteCount').classList.contains('over'), true, '字數變紅：');
+      await saveMyNote();
+      eq(calls.length, 0, '太長不送：');
+      typeInto(document.getElementById('myNoteText'), '');
+      await saveMyNote();
+      eq([calls[0].text, myNotes['9202'], section().querySelector('.empty').textContent], ['', undefined, '還沒有我的備註'], '刪除：');
+      window.fetch = async () => json({ ok: true, notes: { '9202': { text: '別支手機剛寫的', updatedAt: '' } } });
+      await loadMyNotes();
+      eq(section().querySelector('.my-note-text').textContent, '別支手機剛寫的', '重新讀取後更新：');
+      hideToast(); hideDetail();
+    });
+  } finally {
+    window.fetch = realFetch;
+    noteEdit = null; hideToast(); hideDetail();
+    box.classList.add('hidden');
+    history.replaceState(null, '');
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, myNotes, myNotesState] = saved;
+    render();
+  }
+}
+
 function show() {
   const failed = results.filter(r => !r.ok);
   const summary = document.getElementById('summary');
@@ -1165,6 +1318,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   })
   .then(runSerialTests)
   .then(runPhotoTests)
+  .then(runMyNoteTests)
   .then(runAnalysisTests)
   .then(show)
   .catch(e => {
