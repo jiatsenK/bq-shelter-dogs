@@ -548,6 +548,55 @@ function saveWalkedIds(ids, today = new Date()) {
 }
 
 // 今天已溜用編號記；新來還沒有編號的狗改用犬名記（K 說不會有同名的狗）
+function walkKey(dog) {
+  if (dog.id) return dog.id;
+  return dog.name ? `名:${dog.name}` : '';
+}
+
+// 今天已溜的查詢入口（#85）：讀一次這支手機今天的紀錄，之後問「這隻溜了沒」、排今天已溜清單都用它，
+// 不用再把編號陣列傳來傳去
+function walkedToday(today = new Date()) {
+  const ids = loadWalkedIds(today);
+  const has = dog => { const key = walkKey(dog); return !!key && ids.includes(key); };
+  return {
+    has,
+    // 今天已溜清單：最近記的排最上面
+    dogs: list => list.filter(has).sort((a, b) => ids.indexOf(walkKey(a)) - ids.indexOf(walkKey(b))),
+  };
+}
+
+// 加入（on=true）或移回（on=false）今天已溜；連犬名都沒有的狗記不了，直接略過，新加入的排在最上面。
+// 回傳真的有變的狗和 undo（回到記之前的樣子）；都沒變就不寫入
+function recordWalked(dogs, on, today = new Date()) {
+  const before = loadWalkedIds(today);
+  const ids = [...before];
+  const changed = [];
+  for (const dog of dogs) {
+    const key = dog && walkKey(dog);
+    if (!key || ids.includes(key) === on || changed.includes(dog)) continue;
+    if (on) ids.unshift(key);
+    else ids.splice(ids.indexOf(key), 1);
+    changed.push(dog);
+  }
+  if (changed.length) saveWalkedIds(ids, today);
+  return { changed, undo: () => saveWalkedIds(before, today) };
+}
+
+// 按「溜了」、一起記、移回：記下後重畫，底部跳提示條，可以按「復原」
+function setWalked(dogs, on) {
+  const { changed, undo } = recordWalked(dogs, on);
+  if (!changed.length) return;
+  pickedBuddies.clear();
+  render();
+  renderDetail();
+  const names = changed.map(d => d.name).join('、');
+  showToast(on ? `已記下今天溜了：${names}` : `${names} 移回溜狗表`, () => {
+    undo();
+    render();
+    renderDetail();
+  });
+}
+
 // 我的備註的通關碼（#62）：第一次儲存成功後記在這支手機，之後不用再輸入；被拒絕就清掉重問。
 // 和今天已溜用同一個 localStorage；讀寫不了（無痕模式）就這次開著網頁的期間記在記憶體
 const NOTES_PASS_KEY = 'bq-notes-passcode';
@@ -566,43 +615,6 @@ function saveNotesPass(pass) {
     if (pass) walkedStorage.setItem(NOTES_PASS_KEY, pass);
     else walkedStorage.removeItem(NOTES_PASS_KEY);
   } catch (e) { /* 存不了就只記在記憶體 */ }
-}
-
-function walkKey(dog) {
-  if (dog.id) return dog.id;
-  return dog.name ? `名:${dog.name}` : '';
-}
-
-function isWalkedToday(dog, ids) {
-  const key = walkKey(dog);
-  return !!key && ids.includes(key);
-}
-
-// 加入（on=true）或移回（on=false）今天已溜；連犬名都沒有的狗記不了，直接略過。
-// 新加入的排在今天已溜最上面。記完底部跳提示條，可以按「復原」回到記之前的樣子
-function setWalked(dogs, on) {
-  const today = new Date();
-  const before = loadWalkedIds(today);
-  const ids = [...before];
-  const changed = [];
-  for (const dog of dogs) {
-    const key = dog && walkKey(dog);
-    if (!key || ids.includes(key) === on || changed.includes(dog)) continue;
-    if (on) ids.unshift(key);
-    else ids.splice(ids.indexOf(key), 1);
-    changed.push(dog);
-  }
-  if (!changed.length) return;
-  saveWalkedIds(ids, today);
-  pickedBuddies.clear();
-  render();
-  renderDetail();
-  const names = changed.map(d => d.name).join('、');
-  showToast(on ? `已記下今天溜了：${names}` : `${names} 移回溜狗表`, () => {
-    saveWalkedIds(before, today);
-    render();
-    renderDetail();
-  });
 }
 
 // ── 收起（#79）──
@@ -755,7 +767,7 @@ function detailHtml(dog, today) {
   const buddies = [...(groupMap[dog.name] || [])];
   const byName = new Map(allDogs.map(d => [d.name, d]));
   const intro = dog.intro;
-  const walkedIds = loadWalkedIds(today);
+  const walked = walkedToday(today);
   return `
     <div class="detail-head">
       <div class="photo-wrap">${photoThumb(dog, 84, true)}${photoPickButton(dog)}</div>
@@ -780,10 +792,10 @@ function detailHtml(dog, today) {
       ${buddies.length
         ? `<div class="buddies">${buddies.map(n => {
             const d = byName.get(n) || { name: n, id: '' };
-            return buddyTile(d, n, walkedIds);
+            return buddyTile(d, n, walked);
           }).join('')}</div>`
         : `<div class="empty">沒有登記可以一起溜的狗</div>`}
-      ${groupWalkButton(dog, walkedIds)}
+      ${groupWalkButton(dog, walked)}
     </section>
     ${walkHistorySection(dog, today)}
     <section class="detail-section" data-section="intro">
@@ -1010,8 +1022,8 @@ async function loadGallery() {
 
 // 可以一起溜的每一隻：輕點照片換看那隻；右上角圓圈勾選，之後用下方按鈕一起記（#35，K 選 C）。
 // 今天已溜的不顯示圓圈，改標「今天已溜」
-function buddyTile(d, name, walkedIds) {
-  const walked = isWalkedToday(d, walkedIds);
+function buddyTile(d, name, walkedNow) {
+  const walked = walkedNow.has(d);
   const canPick = walkKey(d) && !walked && allDogs.includes(d);
   const picked = canPick && pickedBuddies.has(walkKey(d));
   return `<div class="buddy-tile">
@@ -1023,11 +1035,11 @@ function buddyTile(d, name, walkedIds) {
 
 // 「可以一起溜」下方的按鈕：把目前這隻連同勾選的狗一次記進今天已溜。
 // 目前這隻已溜又沒勾選時，就顯示目前這隻今天已溜，不放按鈕
-function groupWalkButton(dog, walkedIds) {
-  const self = !!walkKey(dog) && !isWalkedToday(dog, walkedIds);
+function groupWalkButton(dog, walked) {
+  const self = !!walkKey(dog) && !walked.has(dog);
   const n = [...pickedBuddies].length;
   if (!self && !n) {
-    return isWalkedToday(dog, walkedIds) ? `<div class="self-walked">${icon('tick')}${esc(dog.name)} 今天已溜（這支手機的紀錄）</div>` : '';
+    return walked.has(dog) ? `<div class="self-walked">${icon('tick')}${esc(dog.name)} 今天已溜（這支手機的紀錄）</div>` : '';
   }
   const label = !n ? `${esc(dog.name)} 溜了`
     : self ? `${esc(dog.name)} 和勾選的 ${n} 隻都溜了`
@@ -2025,14 +2037,6 @@ function dueDogs(dogs, today) {
     .map(x => x.d);
 }
 
-// 今天已溜：這支手機今天自己記下溜過的狗，最近記的排最上面
-function walkedTodayDogs(dogs, today) {
-  const ids = loadWalkedIds(today);
-  return dogs
-    .filter(d => isWalkedToday(d, ids))
-    .sort((a, b) => ids.indexOf(walkKey(a)) - ids.indexOf(walkKey(b)));
-}
-
 function renderMain() {
   const today = new Date();
   document.getElementById('dateLabel').textContent =
@@ -2061,13 +2065,13 @@ function renderMain() {
   const q = searchQuery.trim();
   const hit = d => matchesSearch(d, q);
   // 記進今天已溜的狗就從溜狗表移出，移回後回到原本的排序位置
-  const walkedIds = loadWalkedIds(today);
+  const walked = walkedToday(today);
   // 收起的狗（#79）不在溜狗表，排在最下面「已收起」；已經記進今天已溜的就算在今天已溜
   const hidden = loadHidden(today);
-  const notWalked = allDogs.filter(d => !isWalkedToday(d, walkedIds));
+  const notWalked = allDogs.filter(d => !walked.has(d));
   const walkList = dueDogs(notWalked.filter(d => !hidden.has(walkKey(d))), today).filter(hit);
   const hiddenList = dueDogs(notWalked.filter(d => hidden.has(walkKey(d))), today).filter(hit);
-  const todayList = walkedTodayDogs(allDogs, today).filter(hit);
+  const todayList = walked.dogs(allDogs).filter(hit);
   const mineCount = myWalksState === 'ready'
     ? myWalkGroups(myWalks, q).reduce((n, g) => n + g.walks.length, 0) : null;
   buildTabs({ walk: walkList.length, today: todayList.length, mine: mineCount });
