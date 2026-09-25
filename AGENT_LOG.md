@@ -245,3 +245,9 @@
 - `css/app.css` 加歷史區樣式。
 - 驗證：tests/index.html 73 項全過（新增 6 項，模擬 28 天資料）；同步測試 31 項全過。截圖 previews/issue-60/：real-accumulating.png 是目前真實資料（1 天，累積中），sim-*.png 是模擬 28 天、狗名「模擬N」。
 - 分支：`claude/project-thread-ib011o`（#65 合併後從最新 main 重開）。
+
+## 2026-09-25 #60 改成以每隻狗看遛狗紀錄（Claude，PR #71）
+- K 回饋全體的遛狗歷史圖看不出意義，「應該是要用狗才有意義」：拿掉分析頁的四張歷史圖（頻率、間隔、趨勢、各區）。
+- 每隻狗的詳細資訊加「遛狗紀錄」（放在狗卡資訊上面）：最近 30 天哪幾天有遛（格子）、次數、平均隔幾天、最久隔幾天；開始記錄前的日子用斜線格。
+- 分析頁只留「每日快照／依日期看快照」。
+- 驗證：tests/index.html 71 項全過；截圖 previews/issue-60/ 換成 detail-walks-real.png、detail-walks-sim.png、snapshot-sim.png。

@@ -564,25 +564,35 @@ html.lightbox-open { overflow: hidden; }
 .a-miss.ok { cursor: default; }
 .a-miss.ok b { color: var(--green-text); }
 .a-miss .muted { color: var(--muted-text); }
-/* 遛狗歷史（#60） */
-.a-divider { display: flex; align-items: baseline; gap: 8px; font-size: 19px; font-weight: 900; margin: 22px 4px 12px; }
-.a-divider .icon { color: var(--green-text); align-self: center; }
-.a-divider small { font-size: 12.5px; font-weight: 500; color: var(--ink-soft); }
-.a-wait { display: flex; align-items: center; gap: 14px; }
-.a-wait p { margin: 0; font-size: 13.5px; color: var(--ink-soft); line-height: 1.6; }
+/* 每日快照（#60） */
+.a-divider { display: flex; align-items: center; gap: 8px; font-size: 19px; font-weight: 900; margin: 22px 4px 12px; }
+.a-divider .icon { color: var(--primary); }
 .a-sub { font-size: 13.5px; font-weight: 700; color: var(--ink-soft); margin: 14px 0 4px; }
-.a-toggle { display: inline-flex; background: var(--surface-soft); border-radius: 10px; padding: 3px; margin-bottom: 10px; }
-.a-toggle button { border: none; background: none; font-family: inherit; font-size: 13.5px; color: var(--ink-soft); padding: 5px 14px; border-radius: 8px; cursor: pointer; }
-.a-toggle button.on { background: var(--surface); color: var(--primary); font-weight: 700; box-shadow: var(--shadow-card); }
 .a-picks { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 12px; }
 .a-picks label { flex: 1; display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--ink-soft); }
 .a-picks select { font-family: inherit; font-size: 16px; color: var(--ink); background: var(--surface-soft); border: none; border-radius: 10px; padding: 8px 10px; }
 .a-arrow { color: var(--ink-soft); padding-bottom: 9px; }
 .a-miss b.pos { color: var(--green-text); }
 .a-miss b.neg { color: var(--red-text); }
-.a-big { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
-.a-big b { font-size: 34px; font-weight: 900; color: var(--primary); }
-.a-big span { font-size: 14px; color: var(--ink-soft); }
+
+/* 詳細資訊的遛狗紀錄（#60）：最近 30 天一天一格 */
+.w-grid { display: grid; grid-template-columns: repeat(15, 1fr); gap: 4px; }
+.w-grid span { aspect-ratio: 1; border-radius: 4px; }
+.w-grid .on { background: var(--green-text); }
+.w-grid .off { background: var(--muted-bg); }
+.w-grid .none { background: repeating-linear-gradient(45deg, var(--surface-soft) 0 3px, var(--line) 3px 5px); }
+.w-axis { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-soft); margin: 4px 0 10px; }
+.w-nums { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.w-num { background: var(--surface-soft); border-radius: 12px; padding: 8px 10px; }
+.w-num b { font-size: 22px; font-weight: 900; color: var(--primary); }
+.w-num small { font-size: 12px; color: var(--ink-soft); margin-left: 2px; }
+.w-num span { display: block; font-size: 12px; color: var(--ink-soft); }
+.w-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--ink-soft); margin: 10px 0 4px; }
+.w-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: -1px; }
+.w-legend i.on { background: var(--green-text); }
+.w-legend i.off { background: var(--muted-bg); }
+.w-legend i.none { background: repeating-linear-gradient(45deg, var(--surface-soft) 0 3px, var(--line) 3px 5px); }
+.w-note { font-size: 12px; color: var(--muted-text); line-height: 1.5; }
 
 /* 頁首右上角的分析圖示（#59）：偶爾才看的功能不佔分類，點了開分析頁 */
 .analysis-btn {
