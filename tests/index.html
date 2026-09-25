@@ -284,7 +284,7 @@ function runTests() {
         if (!card.querySelector('.name .sex')) throw new Error('要預留性別位置');
         eq(card.querySelector('.last').textContent, '上次遛狗今天');
         eq(card.querySelector('.meta').textContent, '1|A01', '編號｜籠位：');
-        if (!card.querySelector('.has-note')) throw new Error('有一般備註要有小圖示');
+        if (card.querySelector('.has-note')) throw new Error('犬名旁不再顯示備註小圖示');
         const text = card.textContent;
         for (const s of ['親人', '好朋友', '入所狗卡']) if (text.includes(s)) throw new Error(`第一層不該出現「${s}」`);
         eq(card.dataset.dog, '0', '卡片對應的狗：');
@@ -716,6 +716,15 @@ function runTests() {
       if (!got.syncedAt) throw new Error('dogs.json 沒有同步時間');
       if (!got.dogs.some(d => d.intro)) throw new Error('dogs.json 沒有狗卡資訊');
       if (!got.dogs.some(d => d.sex)) throw new Error('dogs.json 沒有性別');
+    }),
+    check('性別符號 ♂ 藍色、♀ 紅色；犬名旁不再有橘色備註圖示', () => {
+      const box = document.createElement('div');
+      const mark = sex => { box.innerHTML = sexMark({ sex }); return box.querySelector('.sex'); };
+      eq(mark('♂').className, 'sex male', '♂ 的 class：');
+      eq(mark('♀').className, 'sex female', '♀ 的 class：');
+      eq(mark('').className, 'sex', '沒有性別：');
+      if (INDEX_HTML.includes('i-memo')) throw new Error('index.html 還留著備註圖示');
+      if (APP_JS.includes('has-note')) throw new Error('js/app.js 還會畫備註圖示');
     }),
   ]);
 }

@@ -144,3 +144,10 @@
 - Workflow：`dogs/**` 或同步程式推到 main 時也跑一次同步。
 - `data/dogs.json`：用 repo 現有資料加上狗卡欄位重新產生（同步時間不動，試算表內容沒重讀）；121 隻中 92 隻有狗卡資訊與性別。
 - 驗證：node 測試 25 項（原 #9 前端狗卡測試移進來）、tests/index.html 51 項全過；390px 截圖確認性別與狗卡資訊顯示、開網頁 0 個 .md 請求。截圖 previews/dog-cards-sync/detail.png。
+
+## [2026-09-25] Claude | 性別符號上色、移除犬名旁橘色備註圖示
+- 依據：K「性別 男生符號要顯示藍色 女生符號顯示紅色；刪除資料 emoji（性別旁邊的橘色符號）」。
+- `js/app.js`：`sexMark` 依 ♂／♀ 加 `male`／`female` class；狗卡犬名旁不再畫 `has-note` 備註圖示（備註內容仍在詳細資訊看，命中警示關鍵字的紅框不變）。
+- `css/app.css`：♂ 用 `--primary` 藍、♀ 用 `--red-text` 紅；刪掉 `.has-note`。`index.html` 刪掉沒人用的 `i-memo` 圖示。
+- 測試：tests/index.html 原本「有一般備註要有小圖示」改成「不該有」，追加一項性別 class／無備註圖示測試；52 項全過。截圖 previews/sex-color/list.png。
+- 分支 `claude/project-thread-2av7l5` 建在 PR #52 分支上，需在 #52 之後合併。
