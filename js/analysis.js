@@ -217,24 +217,11 @@ function dogWalkHistory(dog, walks, start, today, n = 30) {
   };
 }
 
-// 兩天快照的差異：新進、離開、遛狗日期有變動的狗（a 是較早那天）
-function snapshotDiff(a, b) {
-  const mapA = new Map(a.map(d => [dogKey(d), d])), mapB = new Map(b.map(d => [dogKey(d), d]));
-  const t = d => (d.walkedDate ? +d.walkedDate : null);
-  return {
-    added: b.filter(d => !mapA.has(dogKey(d))),
-    removed: a.filter(d => !mapB.has(dogKey(d))),
-    walkChanged: b.filter(d => mapA.has(dogKey(d)) && t(mapA.get(dogKey(d))) !== t(d))
-      .map(d => ({ dog: d, from: mapA.get(dogKey(d)).walkedDate, to: d.walkedDate })),
-  };
-}
-
-// 讀歷史：打開分析頁或詳細資訊才讀，一次開網頁只讀一遍；快照選到哪天才抓那天
-let historyData = null; // { state: 'loading'|'ready'|'error', walks, dates, snaps: Map(日期 → 狗清單|'loading'|'error') }
-let historyPick = { a: null, b: null };
+// 讀遛狗紀錄：打開詳細資訊才讀，一次開網頁只讀一遍（快照目錄只用來知道從哪天開始記錄）
+let historyData = null; // { state: 'loading'|'ready'|'error', walks, dates }
 function loadHistory() {
   if (historyData) return;
-  const state = historyData = { state: 'loading', walks: [], dates: [], snaps: new Map() };
+  const state = historyData = { state: 'loading', walks: [], dates: [] };
   const get = url => fetch(url, { cache: 'no-cache' }).then(res => { if (!res.ok) throw new Error(res.status); return res.json(); });
   Promise.all([get(WALKS_URL), get(`${HISTORY_URL}index.json`)]).then(([w, idx]) => {
     state.walks = parseWalks(w);
@@ -242,19 +229,8 @@ function loadHistory() {
     state.state = 'ready';
   }, () => { state.state = 'error'; }).then(() => {
     if (historyData !== state) return;
-    if (analysisOpen) render();
-    if (detailDog) renderDetail(); // 詳細資訊的遛狗紀錄
+    if (detailDog) renderDetail();
   });
-}
-
-function loadSnapshot(date) {
-  const state = historyData;
-  if (!state || state.snaps.has(date)) return;
-  state.snaps.set(date, 'loading');
-  fetch(`${HISTORY_URL}${encodeURIComponent(date)}.json`, { cache: 'no-cache' })
-    .then(res => { if (!res.ok) throw new Error(res.status); return res.json(); })
-    .then(data => state.snaps.set(date, parseDogsData(data).dogs), () => state.snaps.set(date, 'error'))
-    .then(() => { if (analysisOpen && historyData === state) render(); });
 }
 
 // ── 畫面（資訊圖表風格：大數字、圓環、直條圖；顏色只用 css/app.css 的色票）──
@@ -427,21 +403,12 @@ function analysisHtml(dogs, today) {
     `<div class="a-comps">${rings}</div>` + compRows +
     (photosDone ? '' : '<div class="a-miss"><span>沒有照片</span><b class="muted">檢查中…</b></div>'), 'note'));
 
-  loadHistory();
-  out.push(historyHtml());
   return out.join('');
 }
 
-// ── 遛狗歷史的畫面 ──
+// ── 詳細資訊的遛狗紀錄 ──
 function mdText(d) {
   return d ? `${d.getMonth() + 1}/${d.getDate()}` : '無紀錄';
-}
-
-function historyHtml() {
-  const out = [`<div class="a-divider">${icon('note')}每日快照</div>`];
-  if (!historyData || historyData.state === 'loading') return out.join('') + `<div class="status-msg">讀取快照中…</div>`;
-  if (historyData.state === 'error') return out.join('') + `<div class="status-msg">快照讀取失敗，請稍後重新整理。</div>`;
-  return out.join('') + snapshotHtml();
 }
 
 // 詳細資訊的「遛狗紀錄」：最近 30 天的格子＋三個數字
@@ -466,42 +433,6 @@ function walkHistorySection(dog, today) {
     </div>
     <div class="w-legend"><span><i class="on"></i>有遛</span><span><i class="off"></i>沒遛</span>${h.cells.some(c => !c.recorded) ? '<span><i class="none"></i>還沒開始記錄</span>' : ''}</div>
     <div class="w-note">從 ${start ? `${start.getFullYear()}/${mdText(start)}` : '同步'} 開始記錄，一天 3 次同步；兩次同步之間被遛兩次只記一次。</div>`);
-}
-
-// 依日期看快照：選兩天，列出新進、離開、遛狗日期變動的狗
-function snapshotHtml() {
-  const dates = historyData.dates;
-  if (!dates.length) return section('依日期看快照', '', '<p class="a-empty">還沒有快照</p>', 'note');
-  let { a, b } = historyPick;
-  if (!dates.includes(b)) b = dates[dates.length - 1];
-  // 「從」要比「到」早；選到最早那天就只看當天快照
-  if (!dates.includes(a) || a >= b) a = dates.indexOf(b) > 0 ? dates[dates.indexOf(b) - 1] : null;
-  historyPick.a = a; historyPick.b = b;
-  const opts = (sel, list) => list.map(d => `<option value="${d}"${d === sel ? ' selected' : ''}>${d.replace(/-/g, '/')}</option>`).join('');
-  const pickers = `<div class="a-picks">
-    ${a ? `<label><span>從</span><select data-snap="a">${opts(a, dates.filter(d => d < b))}</select></label><span class="a-arrow">→</span>` : ''}
-    <label><span>${a ? '到' : '日期'}</span><select data-snap="b">${opts(b, dates)}</select></label></div>`;
-  [a, b].filter(Boolean).forEach(loadSnapshot);
-  const snapB = historyData.snaps.get(b), snapA = a ? historyData.snaps.get(a) : null;
-  if (snapB === 'error' || snapA === 'error') return section('依日期看快照', '', pickers + '<p class="a-empty">快照讀取失敗，請稍後再試</p>', 'note');
-  if (!Array.isArray(snapB) || (a && !Array.isArray(snapA))) return section('依日期看快照', '', pickers + '<p class="a-empty">讀取快照中…</p>', 'note');
-  const walked7 = snapB.filter(d => d.walkedDate && daysBetween(d.walkedDate, parseYmd(b)) < AMBER_DAYS).length;
-  let body = `<div class="a-minis">
-    <div class="a-mini"><div class="a-mini-l">${b.replace(/-/g, '/')} 在所</div><div class="a-mini-v">${snapB.length}<small> 隻</small></div></div>
-    <div class="a-mini"><div class="a-mini-l">當天 7 天內有遛</div><div class="a-mini-v">${walked7}<small> 隻</small></div></div></div>`;
-  if (a) {
-    const diff = snapshotDiff(snapA, snapB);
-    const list = (label, items, fmt, tone) => items.length
-      ? `<details class="a-miss"><summary><span>${label}</span><b class="${tone}">${items.length} 隻</b></summary><p>${items.map(fmt).join('、')}</p></details>`
-      : `<div class="a-miss ok"><span>${label}</span><b>0 隻</b></div>`;
-    body += `<div class="a-sub">${a.replace(/-/g, '/')} → ${b.replace(/-/g, '/')} 的變化</div>` +
-      list('新進', diff.added, d => esc(d.name), 'pos') +
-      list('離開', diff.removed, d => esc(d.name), 'neg') +
-      list('遛狗日期有變動', diff.walkChanged, c => `${esc(c.dog.name)}（${mdText(c.from)}→${mdText(c.to)}）`, '');
-  } else {
-    body += `<p class="a-empty">${dates.length > 1 ? '這是最早的快照；選較晚的日期就能比較兩天的變化。' : '目前只有一天的快照，之後就能選兩天比較。'}</p>`;
-  }
-  return section('依日期看快照', '看某一天的資料，或比較兩天之間的變化', pickers + body, 'note');
 }
 
 // 分析頁整頁：上方「‹ 返回」＋標題；資料還沒好時顯示讀取中或失敗
@@ -545,10 +476,3 @@ document.getElementById('main').addEventListener('click', e => {
   if (dog) showDetail(dog);
 });
 
-// 依日期看快照的日期選單
-document.getElementById('main').addEventListener('change', e => {
-  const sel = e.target.closest('#main select[data-snap]');
-  if (!sel) return;
-  historyPick[sel.dataset.snap] = sel.value;
-  render();
-});
