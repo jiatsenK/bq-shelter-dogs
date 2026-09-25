@@ -92,6 +92,33 @@ https://bq-shelter-photos.你的帳號名稱.workers.dev
 
 之後如果 `worker/src/index.js` 有修改（PR 會寫明），照步驟 3 的 4–7 再貼一次新程式、Deploy 就好；Secret 不用重設。
 
+## 我的備註（V5，#61）
+
+同一個服務也負責「我的備註」：網站把備註送到服務，服務寫進 repo 的 `data/my-notes.json`（每隻狗一筆，格式 `{ "犬隻編號": { "text": "備註內容", "updatedAt": "時間" } }`），網站再從服務讀回最新內容。
+
+- **repo 是公開的，備註內容任何人都看得到**，網站上只是不特別標出是誰寫的。不要寫志工名字、電話等個資。
+- **寫備註要通關碼**，讀不用。通關碼放在 Cloudflare 的 Secret，網站程式和 repo 裡都沒有。第一次寫備註時在手機輸入，之後記在那支手機。
+- 每則備註最多 1000 字，只存純文字。每次寫入都是 repo 的一筆提交（「更新我的備註」／「刪除我的備註」加犬名），寫錯或被亂改都能從 `data/my-notes.json` 的 **History** 還原。
+- 同一個人 1 小時內通關碼錯 10 次，會暫停 1 小時不給試。
+
+### 啟用步驟（這次 PR 合併後做一次）
+
+1. **重新貼程式**：照上面「步驟 3」的 4–7，打開 Cloudflare 的 `bq-shelter-photos` → **Edit code**，把內容全部換成 https://github.com/jiatsenK/bq-shelter-dogs/blob/main/worker/src/index.js 的最新版（右上角 **Copy raw file**），按 **Deploy**。
+2. **設定通關碼**：Worker 頁面 → **Settings** → **Variables and Secrets** → **Add**：
+   - **Type**：**Secret**
+   - **Variable name**：`NOTES_PASSCODE`
+   - **Value**：自己想一組通關碼（建議 8 個字以上，可以用中文；不要跟其他帳號密碼一樣）
+   
+   按 **Deploy**（或 Save）。`GITHUB_TOKEN` 不用動，現在這把 token 就能寫 `data/my-notes.json`。
+3. **確認**：打開服務網址（例：https://bq-shelter-photos.jiatsen-k.workers.dev/ ），看到 `"token":"已設定"` 和 `"notesPasscode":"已設定"` 就完成了。
+
+想換通關碼：到同一個地方把 `NOTES_PASSCODE` 的值改掉、Deploy；舊手機下次寫備註時會被要求重新輸入。想暫停寫備註：把 `NOTES_PASSCODE` 刪掉（讀備註和上傳照片不受影響）。
+
+### 服務的網址（給寫網站程式的人）
+
+- 讀取：`GET /notes` → `{ "ok": true, "notes": { ...data/my-notes.json 的內容 } }`，直接讀 GitHub 上的最新版，不用等網站重新部署。
+- 寫入：`PUT /notes/{編號}`，內容 `{ "text": "備註", "passcode": "通關碼" }`（`Content-Type: application/json`）。`text` 是空的就刪掉這隻的備註。通關碼錯或沒帶回 401、錯太多次回 429，兩者都帶 `"code": "passcode"`。成功回 `{ "ok": true, "id": "...", "note": { "text", "updatedAt" } 或 null, "commit": "..." }`。
+
 ## 給用命令列的人
 
 `worker/wrangler.toml` 已經設定好，在 `worker/` 資料夾執行：
@@ -99,6 +126,7 @@ https://bq-shelter-photos.你的帳號名稱.workers.dev
 ```
 npx wrangler deploy
 npx wrangler secret put GITHUB_TOKEN
+npx wrangler secret put NOTES_PASSCODE
 ```
 
 自動測試（模擬 GitHub，不會真的上傳）：`node --test worker/test/worker.test.mjs`
