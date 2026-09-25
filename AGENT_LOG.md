@@ -187,3 +187,9 @@
 - 目前資料的發現：母幼A 平均 7.4 天沒遛（全所 2.1 天）；C區 6/12 隻有警示備註；半年內入所 10 隻有 7 隻沒照片；63/121 隻沒有一起溜的夥伴。
 - 驗證：tests/index.html 63 項全過；截圖 previews/issue-59/insights.png、zone-walk.png。
 - PR：#65（同一分支）。
+
+## [2026-09-25] Claude | 分析頁：回到資訊圖表版，只拿掉長期在所＋少遛（#59）
+- 依據：K「不要自動發現 我只要有乾淨的圖表；上一版的比較好 我只要剔除久在所*少遛」。
+- `js/analysis.js`、`css/app.css`、`tests/index.html` 回到資訊圖表那版（5a063f6），再刪掉 `longStayNeglected` 與那張卡；不做自動發現、各區遛狗狀況。總覽第四格改「超過 7 天沒遛」；散布圖淡紅區改成整排「超過 7 天沒遛」。
+- 驗證：tests/index.html 61 項全過；截圖 previews/issue-59/infographic-*.png。
+- PR：#65（同一分支）。
