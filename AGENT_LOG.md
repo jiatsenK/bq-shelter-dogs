@@ -167,3 +167,11 @@
 - 新增 `data/my-notes.json`（空的 `{}`）；`docs/PHOTO_UPLOAD_SETUP.md` 加「我的備註」啟用步驟與 API 說明。
 - 驗證：Worker 測試 22 項（新增 11 項）、同步測試 16 項全過。雲端連不到 Cloudflare／GitHub 寫入，未實際部署。
 - 待辦：合併後 K 要重新貼 Worker 程式並新增 Secret `NOTES_PASSCODE`；前端欄位在 #62。
+
+## [2026-09-25] Claude | #66 狗卡資訊區顯示原始狗卡圖（可從網站上傳）
+- 依據：K 在 #61 thread 問「入所時的原始狗卡能不能也放在頁面上、可以插照片嗎」，選項卡選「原始狗卡圖」；開票 #66。
+- 前端（`js/app.js`、`css/app.css`）：狗卡資訊區文字下方顯示 `cards/{編號}.jpg`，點了用燈箱放大；讀不到就藏起來，只留「上傳狗卡圖」（有圖時叫「更換狗卡圖」，有圖時不再顯示「還沒有狗卡資訊」）。上傳沿用 #48 流程，加上 `kind`（photo／card），狗卡圖長邊壓到 2000px，預覽出現在狗卡資訊區。詳細資訊 Tab 循環跳過藏起來的按鈕。
+- Worker：`POST /cards/{編號}` 存到 `cards/{編號}.jpg`，檢查與照片相同；其他資料夾一律 400。
+- 文件：`docs/VOLUNTEER_GUIDE.md` 加 `cards/` 規定；`docs/PHOTO_UPLOAD_SETUP.md` 加說明（只要重貼 Worker，不用新 Secret）。
+- 驗證：tests/index.html 55 項（新增 3 項）、Worker 23 項（新增 1 項）全過；390px 截圖 previews/issue-66/（狗卡圖為模擬圖）。
+- 分支 `claude/dog-card-image` 建在 #61 的 PR #64 分支上，需在 #64 之後合併。

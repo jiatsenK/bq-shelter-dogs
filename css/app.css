@@ -426,3 +426,22 @@ html.lightbox-open { overflow: hidden; }
   border: none; background: none; color: var(--ink-soft);
   font-family: inherit; font-size: 14px; padding: 6px 12px; cursor: pointer;
 }
+
+/* 原始狗卡圖（#66）：狗卡資訊區文字下方，整張看得到、點了放大 */
+.card-image-wrap { margin-top: 10px; }
+.card-image {
+  display: block; width: 100%; padding: 0; border: none;
+  border-radius: 12px; overflow: hidden;
+  background: var(--surface-soft); cursor: zoom-in;
+}
+.card-image[hidden] { display: none; }
+.card-image img { display: block; width: 100%; max-height: 240px; object-fit: contain; }
+.card-image:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.card-pick {
+  display: inline-flex; align-items: center; gap: 6px;
+  margin-top: 8px; padding: 8px 12px;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface); color: var(--primary);
+  font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+}
+.card-pick:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }

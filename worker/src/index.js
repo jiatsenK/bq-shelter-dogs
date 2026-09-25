@@ -1,6 +1,7 @@
 // 板收志工溜狗表：照片上傳＋我的備註服務（Cloudflare Worker，#47、#61）
 //
-// 網站（GitHub Pages）→ 這個 Worker → GitHub API → photos/{編號}.jpg、data/my-notes.json
+// 網站（GitHub Pages）→ 這個 Worker → GitHub API → photos/{編號}.jpg、cards/{編號}.jpg、data/my-notes.json
+// - POST /photos/{編號}：狗狗照片；POST /cards/{編號}：入所時的原始狗卡圖（#66），檢查方式相同
 // - GitHub 寫入權限（token）只放在 Worker 的 Secret「GITHUB_TOKEN」，不在網站、也不在 repo
 // - 任何人都能上傳（不用登入），所以這裡做基本防護：只收網站來的要求、編號要在 data/dogs.json 裡、
 //   只收 JPEG、限制大小、同一個人短時間內不能一直傳
@@ -43,6 +44,11 @@ const NOTE_WRITE_LIMITS = [
 const NOTE_READ_LIMITS = [{ windowMs: 60 * 1000, max: 60 }];
 // 通關碼打錯：1 小時最多 10 次，超過就先不給試（擋住一直猜）
 const PASSCODE_FAIL_LIMITS = [{ windowMs: 60 * 60 * 1000, max: 10 }];
+// 可以上傳的圖片種類：網址第一段 → repo 裡的資料夾與提交說明用的名稱
+const UPLOAD_KINDS = {
+  photos: { dir: 'photos', label: '照片' },
+  cards: { dir: 'cards', label: '狗卡圖' },
+};
 // 編號只接受英數字（目前都是 10 位數字），也順便擋掉 ../ 之類的路徑
 const ID_PATTERN = /^[0-9A-Za-z]{1,32}$/;
 
@@ -180,8 +186,9 @@ async function upload(request, env, origin) {
   const now = Date.now();
   if (!cfg.token) return fail(500, '上傳服務還沒設定好（缺 GITHUB_TOKEN）', origin);
 
-  const m = new URL(request.url).pathname.match(/^\/photos\/([^/]+)$/);
-  const id = m ? decodeURIComponent(m[1]) : '';
+  const m = new URL(request.url).pathname.match(/^\/([a-z]+)\/([^/]+)$/);
+  const kind = m && Object.prototype.hasOwnProperty.call(UPLOAD_KINDS, m[1]) ? UPLOAD_KINDS[m[1]] : null;
+  const id = m && kind ? decodeURIComponent(m[2]) : '';
   if (!ID_PATTERN.test(id)) return fail(400, '狗狗編號格式不對', origin);
 
   const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
@@ -204,7 +211,7 @@ async function upload(request, env, origin) {
   }
   if (!dogs.has(id)) return fail(404, '找不到這個編號的狗狗', origin);
 
-  const path = `photos/${id}.jpg`;
+  const path = `${kind.dir}/${id}.jpg`;
   const content = toBase64(bytes);
   // 有人同時換同一張照片時 sha 會對不上，重讀一次再試
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -216,7 +223,7 @@ async function upload(request, env, origin) {
     }
     const name = dogs.get(id);
     const body = {
-      message: `${sha ? '更換' : '上傳'}照片：${path}${name ? `（${name}）` : ''}\n\n網站匿名上傳（照片上傳服務）`,
+      message: `${sha ? '更換' : '上傳'}${kind.label}：${path}${name ? `（${name}）` : ''}\n\n網站匿名上傳（照片上傳服務）`,
       content,
       branch: cfg.branch,
     };

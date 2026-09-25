@@ -193,7 +193,8 @@ function runTests() {
     }),
     check('#10 唯讀：程式只有讀取，沒有寫入試算表的呼叫；唯一的上傳只送到照片上傳服務（#48）', () => {
       // #48 起唯一的寫入是把照片 POST 到 UPLOAD_URL（Cloudflare Worker），先把那一段拿掉再檢查其他地方
-      const uploadCall = /fetch\(`\$\{UPLOAD_URL\}\/photos\/\$\{encodeURIComponent\(up\.dog\.id\)\}`, \{\s*method: 'POST',/;
+      // #66 起同一段也送狗卡圖（/cards/），網址只在 photos 和 cards 兩個之間選
+      const uploadCall = /fetch\(`\$\{UPLOAD_URL\}\/\$\{up\.kind === 'card' \? 'cards' : 'photos'\}\/\$\{encodeURIComponent\(up\.dog\.id\)\}`, \{\s*method: 'POST',/;
       if (!uploadCall.test(APP_JS)) throw new Error('找不到照片上傳的呼叫');
       const code = APP_JS.replace(uploadCall, '');
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
@@ -230,7 +231,7 @@ function runTests() {
         eq(box.querySelector('.name').textContent, evil, '犬名原文：');
         if (!box.querySelector('.warn-note .text').textContent.startsWith(evil)) throw new Error('備註要原樣顯示文字');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq(box.querySelectorAll('.info img, section img:not(.thumb img), section b').length, 0, '詳細資訊裡被當成 HTML 的元素：');
+        eq(box.querySelectorAll('.info img, section img:not(.thumb img):not(.card-image img), section b').length, 0, '詳細資訊裡被當成 HTML 的元素：');
         eq(box.querySelector('.buddy .bname').textContent, evil, '可一起遛原文：');
         eq(box.querySelector('[data-section="intro"] .content').textContent, evil, '狗卡資訊原文：');
         allDogs = [dog]; activeTab = 'walk'; searchQuery = '';
@@ -449,11 +450,15 @@ function runTests() {
         card.focus();
         showDetail(allDogs[0]);
         const key = shiftKey => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true }));
-        document.getElementById('groupWalk').focus(); key(false);
+        // #66 起狗卡資訊區在最後，最後一個按鈕是「上傳狗卡圖」；狗卡圖讀不到時藏起來的按鈕不算
+        document.querySelector('#detail [data-card-zoom]').hidden = true;
+        const lastBtn = document.getElementById('cardPick') || document.getElementById('groupWalk');
+        lastBtn.focus(); key(false);
         // #46 起詳細資訊第一個按鈕是可放大的照片，接著才是關閉
         eq(document.activeElement === document.querySelector('#detail button'), true, '回到第一個按鈕：');
         key(true);
-        eq(document.activeElement.id, 'groupWalk');
+        eq(document.activeElement === lastBtn, true, '倒回最後一個按鈕：');
+        document.getElementById('groupWalk').focus();
         renderDetail();
         eq(document.activeElement.id, 'groupWalk');
         hideDetail();
@@ -1000,6 +1005,57 @@ async function runPhotoTests() {
         eq(photoOverrides['9101'], PX, '原照片仍不變：');
         hideDetail();
       });
+      // ── #66 原始狗卡圖 ──
+      await check('#66 有狗卡圖：顯示在狗卡資訊區、按鈕叫「更換狗卡圖」、點了用燈箱放大', async () => {
+        cardOverrides['9101'] = PX;
+        showDetail(allDogs[0]);
+        const zoom = document.querySelector('#detail [data-section="intro"] [data-card-zoom]');
+        if (!zoom) throw new Error('狗卡資訊區要有狗卡圖');
+        const img = zoom.querySelector('img');
+        if (!img.complete) await new Promise(r => img.addEventListener('load', r, { once: true }));
+        await tick();
+        eq([zoom.hidden, img.getAttribute('src')], [false, PX], '狗卡圖：');
+        eq(document.getElementById('cardPick').textContent.trim(), '更換狗卡圖', '按鈕：');
+        zoom.click();
+        eq([isOpen(), lb().querySelector('img').getAttribute('src'), lb().getAttribute('aria-label')], [true, PX, `${allDogs[0].name} 的原始狗卡`], '燈箱：');
+        const p = popped(); closeLightbox(); await p;
+        eq(document.activeElement, document.querySelector('#detail [data-card-zoom]'), '關掉燈箱回到狗卡圖：');
+        hideDetail();
+      });
+      await check('#66 沒有狗卡圖：藏起圖片，只留「上傳狗卡圖」；沒有編號或上傳服務沒設定時不顯示按鈕', async () => {
+        delete cardOverrides['9102'];
+        showDetail(allDogs[1]);
+        const zoom = document.querySelector('#detail [data-card-zoom]');
+        eq(zoom.querySelector('img').getAttribute('src'), 'cards/9102.jpg', '檔案位置：');
+        zoom.querySelector('img').dispatchEvent(new Event('error'));
+        eq([zoom.hidden, document.getElementById('cardPick').textContent.trim()], [true, '上傳狗卡圖'], '讀不到：');
+        hideDetail();
+        showDetail(allDogs[2]);
+        eq([document.querySelector('#detail [data-card-zoom]'), document.getElementById('cardPick')], [null, null], '沒編號：');
+        hideDetail();
+        UPLOAD_URL = '';
+        showDetail(allDogs[1]);
+        eq(document.getElementById('cardPick'), null, '沒網址：');
+        hideDetail();
+        UPLOAD_URL = 'https://upload.test';
+      });
+      await check('#66 上傳狗卡圖：長邊 2000、預覽在狗卡資訊區、送到 /cards/{編號}，成功後只換狗卡圖', async () => {
+        photoOverrides['9101'] = PX;
+        delete cardOverrides['9101'];
+        showDetail(allDogs[0]);
+        await preparePhoto(allDogs[0], await makeFile(3000, 1500), 'card');
+        eq(await blobSize(photoUpload.blob), [2000, 1000], '尺寸：');
+        eq([!!document.querySelector('#detail [data-section="intro"] .photo-preview'), document.querySelectorAll('#detail .photo-preview').length], [true, 1], '預覽位置：');
+        const url = photoUpload.url;
+        const calls = [];
+        window.fetch = async (u, opts) => { calls.push([u, opts]); return new Response(JSON.stringify({ ok: true, id: '9101', replaced: false })); };
+        await uploadPhoto();
+        eq(calls.map(c => [c[0], c[1].method]), [['https://upload.test/cards/9101', 'POST']], '呼叫：');
+        eq([cardOverrides['9101'], photoOverrides['9101']], [url, PX], '只換狗卡圖：');
+        eq(document.querySelector('#detail [data-card-zoom] img').getAttribute('src'), url, '詳細資訊：');
+        if (!toastText().includes('狗卡圖已更新')) throw new Error(`提示：${toastText()}`);
+        hideToast(); hideDetail();
+      });
     } finally {
       window.fetch = realFetch;
       UPLOAD_URL = savedUrl;
@@ -1008,6 +1064,7 @@ async function runPhotoTests() {
   } finally {
     hideLightbox(); hideDetail();
     delete photoOverrides['9101']; delete photoOverrides['9102'];
+    delete cardOverrides['9101']; delete cardOverrides['9102'];
     box.classList.add('hidden');
     history.replaceState(null, '');
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;

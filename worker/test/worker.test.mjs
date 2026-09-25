@@ -328,3 +328,27 @@ test('備註：只接受網站來的要求；預檢允許 PUT；其他方法擋'
   assert.equal(del.status, 405);
   assert.equal(calls.length, 0);
 });
+
+// ---- 原始狗卡圖（#66）----
+
+test('狗卡圖：POST /cards/{編號} 寫到 cards/{編號}.jpg，檢查與照片相同', async () => {
+  const calls = fakeGithub({ files: { 'cards/2024032902.jpg': 'old-card' } });
+  const req = id => new Request(`https://w.example/cards/${id}`, {
+    method: 'POST',
+    headers: { Origin: ORIGIN, 'Content-Type': 'image/jpeg', 'CF-Connecting-IP': '9.9.9.9' },
+    body: JPEG.slice(),
+  });
+  const r = await send(req('2024032902'));
+  assert.equal(r.status, 200);
+  assert.equal(r.body.replaced, true);
+  const put = calls.find(c => c.method === 'PUT');
+  assert.equal(put.path, '/repos/jiatsenK/bq-shelter-dogs/contents/cards/2024032902.jpg');
+  assert.equal(put.body.sha, 'old-card');
+  assert.match(put.body.message, /^更換狗卡圖：cards\/2024032902\.jpg（測試狗）/);
+  assert.equal((await send(req('9999999999'))).status, 404);
+  const other = await send(new Request('https://w.example/secrets/2024032902', {
+    method: 'POST', headers: { Origin: ORIGIN, 'Content-Type': 'image/jpeg' }, body: JPEG.slice(),
+  }));
+  assert.equal(other.status, 400, '其他資料夾不收');
+  assert.equal(calls.filter(c => c.method === 'PUT').length, 1);
+});
