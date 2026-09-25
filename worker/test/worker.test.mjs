@@ -150,3 +150,181 @@ test('isJpeg 看檔頭', () => {
   assert.equal(isJpeg(JPEG), true);
   assert.equal(isJpeg(new Uint8Array([0xff, 0xd8])), false);
 });
+
+// ---- 我的備註（#61）----
+
+const NENV = { GITHUB_TOKEN: 'test-token', NOTES_PASSCODE: '對的通關碼' };
+const NOTES_API = '/repos/jiatsenK/bq-shelter-dogs/contents/data/my-notes.json';
+
+// 假 GitHub：data/my-notes.json 放在 store（text 是檔案內容，null 表示還沒有這個檔）
+function fakeNotesGithub({ text = null, putStatus = [], getStatus = 200 } = {}) {
+  const store = { text, sha: text === null ? null : 'sha-0', n: 0 };
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const u = new URL(url);
+    const method = init.method || 'GET';
+    calls.push({ path: u.pathname, method, body: init.body && JSON.parse(init.body) });
+    if (u.pathname.endsWith('/contents/data/dogs.json')) return new Response(JSON.stringify(DOGS));
+    if (u.pathname !== NOTES_API) return new Response('no', { status: 404 });
+    if (method === 'GET') {
+      if (getStatus !== 200) return new Response('{}', { status: getStatus });
+      if (store.text === null) return new Response('{}', { status: 404 });
+      return new Response(JSON.stringify({ sha: store.sha, content: Buffer.from(store.text).toString('base64') }));
+    }
+    const status = putStatus.length ? putStatus.shift() : 200;
+    if (status !== 200) return new Response('{}', { status });
+    const body = JSON.parse(init.body);
+    if ((body.sha || null) !== store.sha) return new Response('{}', { status: 409 });
+    store.text = Buffer.from(body.content, 'base64').toString('utf8');
+    store.sha = `sha-${++store.n}`;
+    return new Response(JSON.stringify({ commit: { sha: 'beef' } }));
+  };
+  return { store, calls };
+}
+
+function putNote(id, text, { passcode = '對的通關碼', origin = ORIGIN, ip = '1.1.1.1', raw } = {}) {
+  const headers = { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip };
+  if (origin) headers.Origin = origin;
+  const body = passcode ? { text, passcode } : { text };
+  return new Request(`https://w.example/notes/${id}`, { method: 'PUT', headers, body: raw ?? JSON.stringify(body) });
+}
+
+const getNotes = (origin = ORIGIN) => new Request('https://w.example/notes', { headers: origin ? { Origin: origin } : {} });
+
+test('備註：有通關碼寫入，存成 data/my-notes.json（編號 → text、updatedAt），不動其他狗的備註', async () => {
+  const other = { '2024010101': { text: '別隻狗的備註', updatedAt: '2026-09-01T00:00:00.000Z' } };
+  const { store, calls } = fakeNotesGithub({ text: JSON.stringify(other) });
+  const r = await send(putNote('2024032902', '  牽繩要短\r\n怕機車  '), NENV);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.ok, true);
+  assert.equal(r.body.note.text, '牽繩要短\n怕機車');
+  assert.equal(r.body.commit, 'beef');
+  const saved = JSON.parse(store.text);
+  assert.deepEqual(saved['2024010101'], other['2024010101']);
+  assert.equal(saved['2024032902'].text, '牽繩要短\n怕機車');
+  assert.ok(!Number.isNaN(Date.parse(saved['2024032902'].updatedAt)));
+  const put = calls.find(c => c.method === 'PUT');
+  assert.equal(put.body.sha, 'sha-0');
+  assert.equal(put.body.branch, 'main');
+  assert.match(put.body.message, /^更新我的備註：2024032902（測試狗）/);
+  assert.equal(r.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+});
+
+test('備註：還沒有檔案時新建（不帶 sha）；送空白＝刪掉這隻的備註', async () => {
+  const { store, calls } = fakeNotesGithub();
+  assert.equal((await send(putNote('2024032902', '第一筆'), NENV)).status, 200);
+  assert.equal(calls.find(c => c.method === 'PUT').body.sha, undefined);
+  const r = await send(putNote('2024032902', '   '), NENV);
+  assert.equal(r.status, 200);
+  assert.equal(r.body.note, null);
+  assert.deepEqual(JSON.parse(store.text), {});
+  assert.match(calls.filter(c => c.method === 'PUT')[1].body.message, /^刪除我的備註/);
+  // 本來就沒有備註又送空白：不產生提交
+  const again = await send(putNote('2024032902', ''), NENV);
+  assert.equal(again.status, 200);
+  assert.equal(calls.filter(c => c.method === 'PUT').length, 2);
+});
+
+test('備註：沒通關碼或通關碼錯都被拒絕，不寫入；錯太多次暫停', async () => {
+  const { calls } = fakeNotesGithub();
+  const none = await send(putNote('2024032902', 'x', { passcode: '' }), NENV);
+  assert.equal(none.status, 401);
+  assert.equal(none.body.code, 'passcode');
+  const wrong = await send(putNote('2024032902', 'x', { passcode: '猜猜看' }), NENV);
+  assert.equal(wrong.status, 401);
+  assert.match(wrong.body.error, /通關碼不對/);
+  for (let i = 0; i < 8; i++) await send(putNote('2024032902', 'x', { passcode: `錯${i}` }), NENV);
+  const locked = await send(putNote('2024032902', 'x'), NENV);
+  assert.equal(locked.status, 429, '錯滿 10 次後連對的也先不給試');
+  assert.equal((await send(putNote('2024032902', 'x', { ip: '2.2.2.2' }), NENV)).status, 200, '別的 IP 不受影響');
+  assert.equal(calls.filter(c => c.method === 'PUT').length, 1);
+});
+
+test('備註：Worker 沒設 NOTES_PASSCODE 時一律不能寫', async () => {
+  const { calls } = fakeNotesGithub();
+  const r = await send(putNote('2024032902', 'x', { passcode: 'undefined' }), ENV);
+  assert.equal(r.status, 500);
+  assert.match(r.body.error, /NOTES_PASSCODE/);
+  assert.equal(calls.length, 0);
+  const home = await send(new Request('https://w.example/'), NENV);
+  assert.equal(home.body.notesPasscode, '已設定');
+  assert.ok(!JSON.stringify(home.body).includes('對的通關碼'));
+});
+
+test('備註：超過 1000 字、不是文字、格式不對、編號不對都擋', async () => {
+  const { calls } = fakeNotesGithub();
+  assert.equal((await send(putNote('2024032902', '字'.repeat(1000)), NENV)).status, 200);
+  const long = await send(putNote('2024032902', '字'.repeat(1001)), NENV);
+  assert.equal(long.status, 413);
+  assert.match(long.body.error, /1000/);
+  assert.equal((await send(putNote('2024032902', 123), NENV)).status, 400);
+  assert.equal((await send(putNote('2024032902', null, { raw: '不是 JSON' }), NENV)).status, 400);
+  assert.equal((await send(putNote('9999999999', 'x'), NENV)).status, 404);
+  assert.equal((await send(putNote('..%2Fdogs', 'x'), NENV)).status, 400);
+  assert.equal(calls.filter(c => c.method === 'PUT').length, 1);
+});
+
+test('備註：只存純文字，控制字元拿掉、換行保留', () => {
+  const { cleanNote } = worker.testing;
+  assert.equal(cleanNote('a\u0000b\u001bc\td\r\ne'), 'abc\td\ne');
+  assert.equal(cleanNote('<b>粗體</b>'), '<b>粗體</b>', '原樣存成文字，前端用文字顯示');
+  assert.equal(cleanNote(5), null);
+});
+
+test('備註：已離開收容所（不在 dogs.json）的狗，舊備註仍可修改', async () => {
+  const { store } = fakeNotesGithub({ text: JSON.stringify({ '2023000001': { text: '舊的', updatedAt: 'x' } }) });
+  assert.equal((await send(putNote('2023000001', '改過'), NENV)).status, 200);
+  assert.equal(JSON.parse(store.text)['2023000001'].text, '改過');
+});
+
+test('備註：同時有人寫入（sha 對不上）會重讀最新版再試，不蓋掉對方', async () => {
+  const { store, calls } = fakeNotesGithub({ text: '{}' });
+  // 第一次讀完後，別人搶先寫了另一隻狗
+  const realFetch = globalThis.fetch;
+  let raced = false;
+  globalThis.fetch = async (url, init = {}) => {
+    if ((init.method || 'GET') === 'PUT' && !raced) {
+      raced = true;
+      store.text = JSON.stringify({ '2024010101': { text: '別人剛寫的', updatedAt: 'y' } });
+      store.sha = 'sha-other';
+    }
+    return realFetch(url, init);
+  };
+  const r = await send(putNote('2024032902', '我的'), NENV);
+  assert.equal(r.status, 200);
+  const saved = JSON.parse(store.text);
+  assert.equal(saved['2024010101'].text, '別人剛寫的');
+  assert.equal(saved['2024032902'].text, '我的');
+  assert.equal(calls.filter(c => c.method === 'PUT').length, 2);
+});
+
+test('備註：GitHub 寫入失敗回錯誤，說原本的備註不受影響', async () => {
+  fakeNotesGithub({ text: '{}', putStatus: [500] });
+  const r = await send(putNote('2024032902', 'x'), NENV);
+  assert.equal(r.status, 502);
+  assert.match(r.body.error, /原本的備註不受影響/);
+});
+
+test('備註讀取：GET /notes 直接回 GitHub 上的最新內容；沒檔案回空的；不用通關碼', async () => {
+  fakeNotesGithub({ text: JSON.stringify({ '2024032902': { text: '最新', updatedAt: 'z' } }) });
+  const r = await send(getNotes(), NENV);
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.notes, { '2024032902': { text: '最新', updatedAt: 'z' } });
+  assert.equal(r.headers.get('Cache-Control'), 'no-store');
+  fakeNotesGithub();
+  assert.deepEqual((await send(getNotes(), NENV)).body.notes, {});
+  fakeNotesGithub({ getStatus: 500 });
+  assert.equal((await send(getNotes(), NENV)).status, 502);
+});
+
+test('備註：只接受網站來的要求；預檢允許 PUT；其他方法擋', async () => {
+  const { calls } = fakeNotesGithub({ text: '{}' });
+  assert.equal((await send(getNotes('https://evil.example'), NENV)).status, 403);
+  assert.equal((await send(putNote('2024032902', 'x', { origin: 'https://evil.example' }), NENV)).status, 403);
+  const pre = await worker.fetch(new Request('https://w.example/notes/2024032902', { method: 'OPTIONS', headers: { Origin: ORIGIN } }), NENV);
+  assert.equal(pre.status, 204);
+  assert.match(pre.headers.get('Access-Control-Allow-Methods'), /PUT/);
+  const del = await worker.fetch(new Request('https://w.example/notes/2024032902', { method: 'DELETE', headers: { Origin: ORIGIN } }), NENV);
+  assert.equal(del.status, 405);
+  assert.equal(calls.length, 0);
+});

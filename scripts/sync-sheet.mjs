@@ -4,6 +4,7 @@
 // 試算表 ID 不寫在 repo 裡（repo 是公開的，試算表目前知道連結就能編輯）：
 // workflow 從 GitHub 的 Actions Secret「SHEET_ID」帶進來，設定方式見 docs/SHEET_SYNC_SETUP.md。
 // 「誰遛的」只輸出有沒有人固定照顧（covered），不把志工名字寫進公開的 dogs.json。
+// 「是不是我遛的」（#57）：比對用的名字放 Actions Secret「MY_NAME」，公開檔案只寫 myWalked（true／false）。
 //
 // 試算表的解析只在這裡做（#32 起前端只讀 dogs.json）。前端讀 dogs.json 的 parseDogsData 要讀得懂這裡寫出的格式，
 // scripts/sync-sheet.test.mjs 會拿前端的函式來比對。
@@ -12,6 +13,13 @@
 // 讀取失敗（網路、試算表沒公開、欄位被改掉、讀到 0 隻狗）時直接失敗結束，不寫檔，
 // 保留上一次成功的 data/dogs.json。資料跟舊檔一樣時也不寫檔（連同步時間都不動），
 // workflow 看到沒有變動就不提交。
+//
+// 歷史（#56）：試算表每隻狗只有一列、只記最後一次遛狗，所以每次同步另外存：
+// - data/history/YYYY-MM-DD.json：當天快照，內容跟 dogs.json 一樣（同一天多次同步覆蓋成最後一次）
+// - data/walks.json：遛狗紀錄 { id, name, date }，某隻狗的遛狗日期比上一次同步新就追加一筆；只追加、不改舊紀錄
+// 兩者都不含志工名字。同一天兩次同步之間被遛兩次只會記一筆。
+// #57 起每筆多一個 mine（是不是我遛的）；同一天從別人換成我（或反過來）也會追加一筆。
+// #57 之前的舊紀錄沒有 mine，原樣保留、不回填。
 
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
@@ -21,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 if (!process.env.TZ) process.env.TZ = 'Asia/Taipei';
 
 export const OUTPUT = fileURLToPath(new URL('../data/dogs.json', import.meta.url));
+export const DATA_DIR = fileURLToPath(new URL('../data/', import.meta.url));
 export const DOGS_DIR = fileURLToPath(new URL('../dogs/', import.meta.url));
 export const FORMAT_VERSION = 1;
 
@@ -148,7 +157,18 @@ function mainColumnMap(table, headerTexts = []) {
   return colMap;
 }
 
-export function parseMainList(table, headerTexts = [], today = new Date()) {
+// 「誰遛的」格子裡有沒有我的名字。MY_NAME 可以寫好幾種寫法，用逗號或頓號隔開（例：本名、暱稱）；
+// 格子裡有好幾個人時（例：「甲、乙」）逐一比對，要整個名字相同才算，不算部分符合
+const NAME_SEP = /[、,，\/／&＆+＋\s]+/;
+export function myNames(env = process.env.MY_NAME) {
+  return String(env || '').split(NAME_SEP).map(nameKey).filter(Boolean);
+}
+export function isMine(walkerText, names = myNames()) {
+  if (!names.length) return false;
+  return String(walkerText || '').split(NAME_SEP).map(nameKey).some(n => n && names.includes(n));
+}
+
+export function parseMainList(table, headerTexts = [], today = new Date(), names = myNames()) {
   const colMap = mainColumnMap(table, headerTexts);
   const get = (c, key) => c[colMap[key]];
   const dogs = [];
@@ -165,6 +185,8 @@ export function parseMainList(table, headerTexts = [], today = new Date()) {
       walkedDate: cellDate(get(c, 'walkedDate'), today),
       // 只記有沒有人固定照顧，志工名字不寫進公開的 dogs.json
       covered: cellText(get(c, 'walker')) !== '',
+      // 最後一次是不是我遛的；名字本身不寫出去
+      myWalked: isMine(cellText(get(c, 'walker')), names),
       note: cellText(get(c, 'note')),
     });
   }
@@ -324,22 +346,118 @@ export function renderFile(data, oldText, now = new Date()) {
   return JSON.stringify({ version: FORMAT_VERSION, syncedAt: formatTimestamp(now), ...data }, null, 2) + '\n';
 }
 
+// ── 歷史（#56）──
+
+export const WALKS_VERSION = 1;
+
+// 比對同一隻狗：有編號用編號，沒編號才用犬名
+const dogKey = d => d.id ? `id:${d.id}` : `name:${nameKey(d.name)}`;
+const walkKey = (d, date, mine) => `${dogKey(d)}|${date}|${mine === true}`;
+
+// 從舊檔讀出遛狗紀錄；沒有或壞掉回傳 null（當作第一次建立）
+export function parseWalks(text) {
+  if (!text) return null;
+  try {
+    const old = JSON.parse(text);
+    return Array.isArray(old.walks) ? old.walks : null;
+  } catch { return null; }
+}
+
+// 算出這次要追加的紀錄。
+// - 已經有紀錄檔：遛狗日期比上一次同步（prevDogs）新的狗才記；日期被改早、被清空都不記，也不刪舊紀錄
+// - 同一天換人：日期沒變但「是不是我遛的」跟上一次不同，也記一筆（上一次沒有 myWalked 欄位時當作不是我）
+// - 第一次建立（walks 為 null）：每隻有遛狗日期的狗都記目前的最後一次，當作起點
+// 同一隻狗同一天、同樣是不是我遛的，已經記過就不重複記。
+export function newWalks(dogs, prevDogs, walks) {
+  const seen = new Set((walks || []).map(w => walkKey(w, w.date, w.mine)));
+  const prev = new Map((prevDogs || []).map(d => [dogKey(d), d]));
+  const added = [];
+  for (const d of dogs) {
+    if (!d.walkedDate) continue;
+    const mine = d.myWalked === true;
+    if (walks) {
+      const before = prev.get(dogKey(d));
+      if (before && before.walkedDate) {
+        if (before.walkedDate > d.walkedDate) continue;
+        if (before.walkedDate === d.walkedDate && (before.myWalked === true) === mine) continue;
+      }
+    }
+    const key = walkKey(d, d.walkedDate, mine);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    added.push({ id: d.id, name: d.name, date: d.walkedDate, mine });
+  }
+  return added;
+}
+
+// 每隻狗我最後一次遛的日期：遛狗紀錄裡 mine 的最新日期；目前最後一次是我遛的也算
+export function attachMyWalkedDate(dogs, walks) {
+  const latest = new Map();
+  for (const w of walks || []) {
+    if (w.mine !== true || !w.date) continue;
+    const k = dogKey(w);
+    if (!latest.has(k) || latest.get(k) < w.date) latest.set(k, w.date);
+  }
+  return dogs.map(d => {
+    let date = latest.get(dogKey(d)) || null;
+    if (d.myWalked && d.walkedDate && (!date || date < d.walkedDate)) date = d.walkedDate;
+    return { ...d, myWalkedDate: date };
+  });
+}
+
+// 一筆紀錄一行，檔案變大後 git 的差異也只有新增的那幾行
+export function renderWalks(walks) {
+  // #57 之前的舊紀錄沒有 mine，照原樣寫回
+  const lines = walks.map(w => '    ' + JSON.stringify({ id: w.id, name: w.name, date: w.date, ...('mine' in w ? { mine: w.mine === true } : {}) }));
+  return `{\n  "version": ${WALKS_VERSION},\n  "walks": [\n${lines.join(',\n')}${lines.length ? '\n' : ''}  ]\n}\n`;
+}
+
+// 同步一次要寫哪些檔：回傳 { 相對 data/ 的路徑: 內容 }，沒變的檔不列。
+// oldDogsText／oldWalksText／oldSnapshotText 是 dogs.json、walks.json、今天快照的舊內容（沒有就空字串）
+export function planWrites(data, { oldDogsText = '', oldWalksText = '', oldSnapshotText = '' } = {}, now = new Date()) {
+  const writes = {};
+  let prevDogs = null;
+  try { prevDogs = JSON.parse(oldDogsText).dogs; } catch { /* 沒有舊檔：只能靠 walks.json 去重 */ }
+  const walks = parseWalks(oldWalksText);
+  const added = newWalks(data.dogs, prevDogs, walks);
+  const allWalks = [...(walks || []), ...added];
+  if (added.length || !walks) writes['walks.json'] = renderWalks(allWalks);
+
+  // dogs.json 的 myWalkedDate 要看整份遛狗紀錄，所以先算紀錄再寫 dogs.json
+  data = { ...data, dogs: attachMyWalkedDate(data.dogs, allWalks) };
+  const dogsText = renderFile(data, oldDogsText, now);
+  if (dogsText) writes['dogs.json'] = dogsText;
+  const current = dogsText || oldDogsText;
+  if (current !== oldSnapshotText) writes[`history/${formatDate(now)}.json`] = current;
+  return { writes, added };
+}
+
 async function main() {
   const data = await buildData();
-  const oldText = await readFile(OUTPUT, 'utf8').catch(() => '');
-  const text = renderFile(data, oldText);
-  if (!text) {
-    console.log(`資料沒有變動（${data.dogs.length} 隻狗），不更新 data/dogs.json。`);
-    return;
+  const now = new Date();
+  const read = path => readFile(`${DATA_DIR}${path}`, 'utf8').catch(() => '');
+  const { writes, added } = planWrites(data, {
+    oldDogsText: await read('dogs.json'),
+    oldWalksText: await read('walks.json'),
+    oldSnapshotText: await read(`history/${formatDate(now)}.json`),
+  }, now);
+  for (const [path, text] of Object.entries(writes)) {
+    await mkdir(dirname(`${DATA_DIR}${path}`), { recursive: true });
+    await writeFile(`${DATA_DIR}${path}`, text);
   }
-  await mkdir(dirname(OUTPUT), { recursive: true });
-  await writeFile(OUTPUT, text);
-  console.log(`已更新 data/dogs.json：${data.dogs.length} 隻狗、${data.dogs.filter(d => d.intro).length} 隻有狗卡資訊、${Object.values(data.groups).filter(g => g.length).length} 隻有可以一起溜的狗。`);
+  if (writes['dogs.json']) {
+    console.log(`已更新 data/dogs.json：${data.dogs.length} 隻狗、${data.dogs.filter(d => d.intro).length} 隻有狗卡資訊、${Object.values(data.groups).filter(g => g.length).length} 隻有可以一起溜的狗。`);
+  } else {
+    console.log(`資料沒有變動（${data.dogs.length} 隻狗），不更新 data/dogs.json。`);
+  }
+  const snapshot = Object.keys(writes).find(p => p.startsWith('history/'));
+  if (snapshot) console.log(`已存當天快照 data/${snapshot}。`);
+  if (writes['walks.json']) console.log(`data/walks.json 追加 ${added.length} 筆遛狗紀錄。`);
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   main().catch(e => {
-    console.error(`同步失敗，保留原本的 data/dogs.json：${e.message}`);
+    console.error(`同步失敗，保留原本的 data/dogs.json、歷史與遛狗紀錄：${e.message}`);
     process.exit(1);
   });
 }
