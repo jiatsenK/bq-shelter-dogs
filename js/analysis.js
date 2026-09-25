@@ -129,12 +129,78 @@ function stayVsWalk(rows) {
   };
 }
 
-// 7. 長期在所＋近期少遛：在所滿 1 年，而且超過 7 天沒遛（或沒有遛狗紀錄、也沒人固定照顧），最久沒遛的排前面
-function longStayNeglected(rows) {
-  return dated(rows)
-    .filter(r => r.stayMonths >= LONG_STAY_MONTHS &&
-      (r.walkDays != null ? r.walkDays > AMBER_DAYS : !r.dog.walkedDate && !r.dog.covered))
-    .sort((a, b) => (b.walkDays ?? Infinity) - (a.walkDays ?? Infinity) || a.intake - b.intake);
+// 7. 各區遛狗狀況（K 2026-09-25：大部分狗都長期在所，「長期在所＋少遛」沒意義，改看哪一區常被漏掉）
+// 每區分成 2 天內有遛／3–6 天／7 天以上／沒有遛狗日期，平均沒遛天數最久的區排前面
+const FRESH_DAYS = 2;
+function zoneWalkStatus(rows) {
+  const map = new Map();
+  for (const r of rows) {
+    if (!map.has(r.zone)) map.set(r.zone, []);
+    map.get(r.zone).push(r);
+  }
+  return [...map].map(([zone, list]) => {
+    const days = list.map(r => r.walkDays).filter(v => v != null);
+    return {
+      zone, count: list.length,
+      fresh: days.filter(v => v <= FRESH_DAYS).length,
+      mid: days.filter(v => v > FRESH_DAYS && v < AMBER_DAYS).length,
+      stale: days.filter(v => v >= AMBER_DAYS).length,
+      none: list.length - days.length,
+      avgWalkDays: average(days),
+    };
+  }).sort((a, b) => (b.avgWalkDays ?? -1) - (a.avgWalkDays ?? -1) || a.zone.localeCompare(b.zone, 'zh-Hant'));
+}
+
+// 自動發現：用數字比較找出畫面上一眼看不出來的事，只列真的明顯的（門檻寫在各條旁邊）
+// groups：可以一起溜（犬名 → Set）；hasPhoto：照片檢查結果（還沒查完是 null）
+function findInsights(rows, { groups = {}, hasPhoto = null } = {}) {
+  const out = [];
+  const allDays = rows.map(r => r.walkDays).filter(v => v != null);
+  const overall = average(allDays);
+
+  // 某一區平均沒遛天數是全所的 1.5 倍以上、而且至少 3 天
+  const zones = zoneWalkStatus(rows).filter(z => z.avgWalkDays != null);
+  const worst = zones[0];
+  if (worst && overall != null && worst.avgWalkDays >= 3 && worst.avgWalkDays >= overall * 1.5) {
+    out.push({ key: 'zone-walk', tone: 'warn',
+      text: `${worst.zone}平均 ${worst.avgWalkDays.toFixed(1)} 天沒遛，是全所平均（${overall.toFixed(1)} 天）的 ${(worst.avgWalkDays / overall).toFixed(1)} 倍；${worst.count} 隻裡有 ${worst.stale} 隻超過 ${AMBER_DAYS} 天沒遛。` });
+  }
+
+  // 警示備註（勿溜、攻擊…）集中在某一區：該區比例是全所的 2 倍以上，而且至少 3 隻
+  const warned = rows.filter(r => specialFlag(r.dog.note));
+  if (warned.length) {
+    const share = warned.length / rows.length;
+    const byZone = new Map();
+    for (const r of warned) byZone.set(r.zone, (byZone.get(r.zone) || 0) + 1);
+    const top = [...byZone].map(([zone, n]) => ({ zone, n, total: rows.filter(r => r.zone === zone).length }))
+      .sort((a, b) => b.n / b.total - a.n / a.total)[0];
+    if (top.n >= 3 && top.n / top.total >= share * 2) {
+      out.push({ key: 'zone-warn', tone: 'warn',
+        text: `${top.zone}有 ${top.n} / ${top.total} 隻的備註有警示字眼（勿溜、攻擊、不親等），比例是全所的 ${(top.n / top.total / share).toFixed(1)} 倍，去之前先看備註。` });
+    }
+  }
+
+  // 新進犬（入所未滿 6 個月）缺照片或狗卡的比例，比住滿 1 年的狗高 20 個百分點以上
+  const recent = rows.filter(r => r.intake && r.stayMonths < 6);
+  const settled = rows.filter(r => r.intake && r.stayMonths >= LONG_STAY_MONTHS);
+  const gap = (label, missing) => {
+    if (recent.length < 3 || !settled.length) return;
+    const a = recent.filter(missing).length / recent.length, b = settled.filter(missing).length / settled.length;
+    if (a - b >= 0.2) out.push({ key: `new-${label}`, tone: 'info',
+      text: `入所未滿半年的 ${recent.length} 隻裡，${recent.filter(missing).length} 隻還沒有${label}（${Math.round(a * 100)}%），住滿 1 年的狗只有 ${Math.round(b * 100)}% 沒有。新狗最需要補${label}，也最有機會被領養。` });
+  };
+  if (hasPhoto) gap('照片', r => hasPhoto.get(r.dog.id) === false);
+  gap('狗卡資訊', r => !r.dog.intro);
+
+  // 沒有任何「可以一起溜」夥伴的狗（自己不在名單、也不在別隻的名單裡）：只能單獨遛
+  const paired = new Set();
+  for (const [name, set] of Object.entries(groups)) { if (set.size) { paired.add(name); set.forEach(n => paired.add(n)); } }
+  const alone = rows.filter(r => !paired.has(r.dog.name));
+  if (Object.keys(groups).length && alone.length) {
+    out.push({ key: 'alone', tone: 'info',
+      text: `${alone.length} / ${rows.length} 隻沒有登記「可以一起溜」的夥伴，只能一次牽一隻；人手少的時候，先安排這些狗。` });
+  }
+  return out;
 }
 
 // 8. 公母在所時間差異：只算有性別資料、也有入所日期的狗；missing 是沒有性別資料的隻數
@@ -227,7 +293,7 @@ function section(title, hint, body, iconId) {
 }
 
 // 入所時間 × 最近未遛天數的散布圖：x 在所年數、y 幾天沒遛，點的顏色沿用天數色標；
-// 右上角（滿 1 年又超過 7 天沒遛）塗淡紅底，就是「長期在所＋近期少遛」那一區
+// 超過 7 天沒遛的上半部塗淡紅底
 function scatterSvg(points) {
   const W = 340, H = 220, L = 30, R = 10, T = 12, B = 26;
   const maxYears = Math.max(1, Math.ceil(Math.max(...points.map(p => p.stayDays / 365.25), 1)));
@@ -239,8 +305,8 @@ function scatterSvg(points) {
   const yTicks = []; for (let v = 0; v <= yTop; v += step) yTicks.push(v);
   const level = d => d >= RED_DAYS ? 'red' : d >= AMBER_DAYS ? 'amber' : 'sage';
   return `<svg class="a-scatter" viewBox="0 0 ${W} ${H}" role="img" aria-label="入所年數與幾天沒遛的散布圖">
-    <rect class="a-zone" x="${x(365.25)}" y="${T}" width="${W - R - x(365.25)}" height="${y(AMBER_DAYS) - T}" rx="6"/>
-    <text class="a-zone-t" x="${W - R - 6}" y="${T + 14}" text-anchor="end">需要多關心</text>
+    <rect class="a-zone" x="${L}" y="${T}" width="${W - R - L}" height="${y(AMBER_DAYS) - T}" rx="6"/>
+    <text class="a-zone-t" x="${W - R - 6}" y="${T + 14}" text-anchor="end">超過 ${AMBER_DAYS} 天沒遛</text>
     ${yTicks.map(v => `<line class="a-grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="a-axis" x="${L - 5}" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join('')}
     <line class="a-ref" x1="${L}" x2="${W - R}" y1="${y(AMBER_DAYS)}" y2="${y(AMBER_DAYS)}"/>
     <line class="a-ref" x1="${x(365.25)}" x2="${x(365.25)}" y1="${T}" y2="${H - B}"/>
@@ -263,7 +329,9 @@ function analysisHtml(dogs, today) {
   const rows = analysisRows(dogs, today);
   const noIntake = rows.filter(r => !r.intake);
   const share = longStayShare(rows);
-  const neglected = longStayNeglected(rows);
+  const walkZones = zoneWalkStatus(rows);
+  const insights = findInsights(rows, { groups: groupMap, hasPhoto: photoCheck && photoCheck.done ? photoCheck.map : null });
+  const stale = rows.filter(r => r.walkDays != null && r.walkDays >= AMBER_DAYS).length;
   const avgStay = average(rows.filter(r => r.intake).map(r => r.stayDays));
   const out = [];
 
@@ -274,10 +342,15 @@ function analysisHtml(dogs, today) {
       ${kpi(rows.length, '隻', '目前在所')}
       ${kpi(avgStay == null ? '–' : yearsText(avgStay), '年', '平均在所')}
       ${kpi(share.pct.toFixed(0), '%', '在所滿 1 年')}
-      ${kpi(neglected.length, '隻', '長期在所又少遛', neglected.length ? 'warn' : '')}
+      ${kpi(stale, '隻', `超過 ${AMBER_DAYS} 天沒遛`, stale ? 'warn' : '')}
     </div>
     <div class="a-hero-note">入所日期取編號前 8 碼${noIntake.length ? `；${noIntake.length} 隻編號看不出入所日期，不列入時間統計（${dogNames(noIntake.map(r => r.dog))}）` : ''}</div>
   </section>`);
+
+  out.push(section('自動發現', '把數字互相比較後，畫面上一眼看不出來的事',
+    insights.length
+      ? `<ul class="a-insights">${insights.map(it => `<li class="${it.tone}">${icon(it.tone === 'warn' ? 'warn' : 'alert')}<span>${esc(it.text)}</span></li>`).join('')}</ul>`
+      : '<p class="a-empty">目前沒有特別突出的發現</p>', 'search'));
 
   out.push(section('長期在所犬比例', '',
     `<div class="a-ring-row">${ringSvg(share.pct, { label: `${share.pct.toFixed(0)}%`, sub: '滿 1 年' })}
@@ -321,10 +394,16 @@ function analysisHtml(dogs, today) {
      <div class="a-legend"><span><i class="a-key sage"></i>0–6 天</span><span><i class="a-key amber"></i>7–29 天</span><span><i class="a-key red"></i>30 天以上</span></div>
      <div class="a-minis">${avgTile('在所滿 1 年', sv.long)}${avgTile('未滿 1 年', sv.short)}</div>`, 'search'));
 
-  out.push(section('長期在所＋近期少遛', `在所滿 1 年，而且超過 ${AMBER_DAYS} 天沒遛：${neglected.length} 隻`,
-    neglected.length
-      ? `<div class="a-list">${neglected.map(r => dogRow(r, r.walkDays != null ? `<span class="a-pill ${r.walkDays >= RED_DAYS ? 'red' : 'amber'}">${r.walkDays} 天沒遛</span>` : '<span class="a-pill muted">沒有紀錄</span>')).join('')}</div>`
-      : `<p class="a-empty ok">${icon('tick')}目前沒有，大家都有照顧到</p>`, 'warn'));
+  const segs = z => [['fresh', z.fresh, `${FRESH_DAYS} 天內`], ['mid', z.mid, `3–${AMBER_DAYS - 1} 天`], ['stale', z.stale, `${AMBER_DAYS} 天以上`], ['none', z.none, '沒有紀錄']];
+  out.push(section('各區遛狗狀況', '每一條是一區的狗，依上次遛狗分顏色；平均最久沒遛的區排最上面',
+    `<div class="a-stacks">${walkZones.map(z => `
+      <div class="a-stack-row">
+        <span class="a-stack-l">${esc(z.zone)}</span>
+        <span class="a-stack">${segs(z).filter(([, n]) => n).map(([cls, n, label]) => `<span class="${cls}" style="flex:${n}" title="${esc(z.zone)}：${label} ${n} 隻">${n}</span>`).join('')}</span>
+        <span class="a-stack-v">${z.avgWalkDays == null ? '–' : `${z.avgWalkDays.toFixed(1)} 天`}</span>
+      </div>`).join('')}</div>
+     <div class="a-legend"><span><i class="a-key sage"></i>${FRESH_DAYS} 天內</span><span><i class="a-key primary"></i>3–${AMBER_DAYS - 1} 天</span><span><i class="a-key amber"></i>${AMBER_DAYS} 天以上</span><span><i class="a-key none"></i>沒有紀錄</span></div>
+     <p class="a-foot">右邊是平均幾天沒遛</p>`, 'pin'));
 
   const sex = sexComparison(rows);
   const known = sex.male.count + sex.female.count;
