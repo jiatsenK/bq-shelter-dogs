@@ -1027,7 +1027,7 @@ function buddyTile(d, name, walkedNow) {
   const canPick = walkKey(d) && !walked && allDogs.includes(d);
   const picked = canPick && pickedBuddies.has(walkKey(d));
   return `<div class="buddy-tile">
-    <button class="buddy" data-dog="${allDogs.indexOf(d)}">${photoThumb(d, 64)}<span class="bname">${esc(name)}</span></button>
+    <button class="buddy" data-dog="${allDogs.indexOf(d)}"${allDogs.includes(d) ? '' : ' disabled'}>${photoThumb(d, 64)}<span class="bname">${esc(name)}</span></button>
     ${walked ? `<span class="walked-tag">今天已溜</span>` : ''}
     ${canPick ? `<button type="button" class="pick${picked ? ' on' : ''}" data-pick="${esc(walkKey(d))}" aria-pressed="${picked}" aria-label="勾選 ${esc(name)} 一起記">${icon('tick')}</button>` : ''}
   </div>`;
@@ -1715,89 +1715,102 @@ async function saveMyNote() {
   if (btn) btn.focus({ preventScroll: true });
 }
 
-function renderDetail() {
-  if (!detailDog) return;
-  const box = document.getElementById('detail');
-  const focused = box.contains(document.activeElement) ? document.activeElement : null;
-  box.innerHTML = detailHtml(detailDog, new Date());
-  box.querySelector('#detailClose').addEventListener('click', closeDetail);
-  const zoom = box.querySelector('[data-zoom]');
-  if (zoom) zoom.addEventListener('click', () => {
-    if (!zoom.classList.contains('no-photo')) openLightbox(detailDog, zoom);
-  });
+// 詳細資訊的按鈕（#86）：在外框綁一次，依按下的是哪個按鈕分派，每次重畫內容不用重新綁。
+// 由上往下找第一個符合的，所以同一個按鈕只會做一件事
+const DETAIL_CLICKS = [
+  ['#detailClose', () => closeDetail()],
+  ['[data-zoom]', el => { if (!el.classList.contains('no-photo')) openLightbox(detailDog, el); }],
   // 相簿：點哪張就從哪張開燈箱；主照片讀不到就只翻相簿
-  const tiles = [...box.querySelectorAll('.g-tile')];
-  tiles.forEach(t => t.addEventListener('click', () => {
+  ['.g-tile', el => {
+    const tiles = [...el.parentNode.querySelectorAll('.g-tile')];
     const hasMain = tiles.some(x => x.hasAttribute('data-g-main') && !x.hidden && !x.classList.contains('broken'));
-    const index = tiles.filter(x => hasMain || !x.hasAttribute('data-g-main')).indexOf(t);
-    openLightbox(detailDog, t, Math.max(0, index), hasMain);
-  }));
-  const addBtn = box.querySelector('#galleryAdd');
-  if (addBtn) addBtn.addEventListener('click', () => pickPhotoFile('gallery'));
-  const batchBtn = box.querySelector('#galleryUpload');
-  if (batchBtn) batchBtn.addEventListener('click', uploadGalleryBatch);
-  const batchCancel = box.querySelector('#galleryBatchCancel');
-  if (batchCancel) batchCancel.addEventListener('click', () => {
+    const index = tiles.filter(x => hasMain || !x.hasAttribute('data-g-main')).indexOf(el);
+    openLightbox(detailDog, el, Math.max(0, index), hasMain);
+  }],
+  ['#galleryAdd', () => pickPhotoFile('gallery')],
+  ['#galleryUpload', () => uploadGalleryBatch()],
+  ['#galleryBatchCancel', () => {
     clearGalleryBatch(); renderDetail();
     const b = document.getElementById('galleryAdd');
     if (b) b.focus({ preventScroll: true });
-  });
-  box.querySelectorAll('[data-gb-remove]').forEach(b => b.addEventListener('click', () => removeGalleryBatchItem(Number(b.dataset.gbRemove))));
-  box.querySelectorAll('[data-gb-crop]').forEach(b => b.addEventListener('click', () => cropGalleryBatchItem(Number(b.dataset.gbCrop))));
-  const cropBtn = box.querySelector('#photoCrop');
-  if (cropBtn) cropBtn.addEventListener('click', cropPhotoUpload);
-  const pick = box.querySelector('#photoPick');
-  if (pick) {
-    pick.addEventListener('click', () => pickPhotoFile('main'));
-    // 已經有照片就叫「更換照片」
-    const img = zoom && zoom.querySelector('img');
-    const label = () => {
-      if (img && img.naturalWidth) { pick.setAttribute('aria-label', `更換 ${detailDog.name} 的照片`); pick.title = '更換照片'; }
-    };
-    if (img) { label(); img.addEventListener('load', label); }
-  }
-  const confirmBtn = box.querySelector('#photoConfirm');
-  if (confirmBtn) confirmBtn.addEventListener('click', uploadPhoto);
-  const cancelBtn = box.querySelector('#photoCancel');
-  if (cancelBtn) cancelBtn.addEventListener('click', () => { clearPhotoUpload(); renderDetail(); });
-  box.querySelectorAll('.buddy').forEach(btn => {
-    const d = allDogs[btn.dataset.dog];
-    if (d) btn.addEventListener('click', () => showDetail(d));
-    else btn.disabled = true;
-  });
-  box.querySelectorAll('.pick').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const id = btn.dataset.pick;
-      if (pickedBuddies.has(id)) pickedBuddies.delete(id); else pickedBuddies.add(id);
-      renderDetail();
-    });
-  });
-  box.querySelectorAll('[data-hide]').forEach(btn => {
-    btn.addEventListener('click', () => setHidden(detailDog, btn.dataset.hide || null));
-  });
-  const noteBtn = box.querySelector('#myNoteEdit');
-  if (noteBtn) noteBtn.addEventListener('click', () => startNoteEdit(detailDog));
-  const form = box.querySelector('#myNoteForm');
-  if (form) {
-    const ta = form.querySelector('#myNoteText');
-    const counter = form.querySelector('#myNoteCount');
-    ta.addEventListener('input', () => {
-      noteEdit.text = ta.value;
-      const n = [...ta.value].length;
-      counter.textContent = `${n} / ${MY_NOTE_MAX_CHARS} 字`;
-      counter.classList.toggle('over', n > MY_NOTE_MAX_CHARS);
-    });
-    const pass = form.querySelector('#myNotePass');
-    if (pass) pass.addEventListener('input', () => { noteEdit.pass = pass.value; });
-    form.addEventListener('submit', e => { e.preventDefault(); saveMyNote(); });
-    const cancel = form.querySelector('#myNoteCancel');
-    if (cancel) cancel.addEventListener('click', () => { noteEdit = null; renderDetail(); const b = document.getElementById('myNoteEdit'); if (b) b.focus({ preventScroll: true }); });
-  }
-  const group = box.querySelector('#groupWalk');
-  if (group) group.addEventListener('click', () => {
+  }],
+  ['[data-gb-remove]', el => removeGalleryBatchItem(Number(el.dataset.gbRemove))],
+  ['[data-gb-crop]', el => cropGalleryBatchItem(Number(el.dataset.gbCrop))],
+  ['#photoCrop', () => cropPhotoUpload()],
+  ['#photoPick', () => pickPhotoFile('main')],
+  ['#photoConfirm', () => uploadPhoto()],
+  ['#photoCancel', () => { clearPhotoUpload(); renderDetail(); }],
+  ['.buddy', el => { const d = allDogs[el.dataset.dog]; if (d) showDetail(d); }],
+  ['.pick', el => {
+    const id = el.dataset.pick;
+    if (pickedBuddies.has(id)) pickedBuddies.delete(id); else pickedBuddies.add(id);
+    renderDetail();
+  }],
+  ['[data-hide]', el => setHidden(detailDog, el.dataset.hide || null)],
+  ['#myNoteEdit', () => startNoteEdit(detailDog)],
+  ['#myNoteCancel', () => {
+    noteEdit = null; renderDetail();
+    const b = document.getElementById('myNoteEdit');
+    if (b) b.focus({ preventScroll: true });
+  }],
+  ['#groupWalk', () => {
     const picked = [...pickedBuddies].map(id => allDogs.find(d => walkKey(d) === id));
     setWalked([detailDog, ...picked], true);
+  }],
+];
+
+function wireDetail(box) {
+  if (box.bqWired) return;
+  box.bqWired = true;
+  box.addEventListener('click', e => {
+    if (!detailDog || !e.target.closest) return;
+    for (const [sel, run] of DETAIL_CLICKS) {
+      const el = e.target.closest(sel);
+      if (!el || !box.contains(el)) continue;
+      if (!el.disabled) run(el);
+      return;
+    }
   });
+  // 我的備註：打字時更新字數與暫存內容；按儲存（或在輸入框按 Enter 送出）就存
+  box.addEventListener('input', e => {
+    if (!noteEdit) return;
+    if (e.target.id === 'myNoteText') {
+      noteEdit.text = e.target.value;
+      const n = [...e.target.value].length;
+      const counter = box.querySelector('#myNoteCount');
+      counter.textContent = `${n} / ${MY_NOTE_MAX_CHARS} 字`;
+      counter.classList.toggle('over', n > MY_NOTE_MAX_CHARS);
+    } else if (e.target.id === 'myNotePass') {
+      noteEdit.pass = e.target.value;
+    }
+  });
+  box.addEventListener('submit', e => {
+    if (e.target.id !== 'myNoteForm') return;
+    e.preventDefault();
+    saveMyNote();
+  });
+}
+
+// 已經有照片就把相機按鈕叫「更換照片」；照片晚一點才載入完也會改（詳細資訊已關就不管）
+function labelPhotoPick(box) {
+  const pick = box.querySelector('#photoPick');
+  const img = box.querySelector('[data-zoom] img');
+  if (!pick || !img) return;
+  const dog = detailDog;
+  const label = () => {
+    if (img.naturalWidth && pick.isConnected) { pick.setAttribute('aria-label', `更換 ${dog.name} 的照片`); pick.title = '更換照片'; }
+  };
+  label();
+  img.addEventListener('load', label);
+}
+
+function renderDetail() {
+  if (!detailDog) return;
+  const box = document.getElementById('detail');
+  wireDetail(box);
+  const focused = box.contains(document.activeElement) ? document.activeElement : null;
+  box.innerHTML = detailHtml(detailDog, new Date());
+  labelPhotoPick(box);
   if (focused) {
     const replacement = [...box.querySelectorAll('button, textarea, input:not([hidden])')].find(btn =>
       (focused.id && btn.id === focused.id) ||
