@@ -42,6 +42,7 @@ let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, u
 let galleryBatch = null;
 let gallery = {}; // 相簿：編號 → [{ file, addedAt }]，舊到新
 let galleryState = 'loading'; // loading／worker／site／error（同我的備註）
+let gallerySwap = null; // 燈箱裡正在設為主照片的相簿照片：{ dog, file }
 let galleryDelete = null; // 燈箱裡正在刪的相簿照片：{ dog, file, pass, needPass, phase: 'confirm'|'deleting'|'error', error }
 let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（walkKey）
 let searchQuery = '';
@@ -397,18 +398,25 @@ function showLightboxPhoto() {
   el.querySelectorAll('.lightbox-nav').forEach(b => { b.hidden = !many; });
   const bar = el.querySelector('.lightbox-bar');
   const del = galleryDelete && galleryDelete.dog === v.dog && galleryDelete.file === item.file ? galleryDelete : null;
-  const canDelete = !!(UPLOAD_URL && item.file);
+  const canEdit = !!(UPLOAD_URL && item.file);
+  const swapping = gallerySwap && gallerySwap.dog === v.dog;
   bar.innerHTML = del ? galleryDeleteForm(del) : `
     ${many ? `<span class="lightbox-count">${v.index + 1} / ${v.items.length}</span>` : ''}
     ${!item.file && many ? `<span class="lightbox-tag">主照片</span>` : ''}
-    ${canDelete ? `<button type="button" class="lightbox-delete" id="galleryDeleteBtn">${icon('trash')}刪除</button>` : ''}`;
+    ${UPLOAD_URL && !item.file && detailDog === v.dog ? `<button type="button" class="lightbox-delete" id="mainCropBtn">${icon('crop')}裁切</button>` : ''}
+    ${canEdit ? `<button type="button" class="lightbox-delete" id="galleryMainBtn"${swapping ? ' disabled' : ''}>${icon('photos')}${swapping ? '設定中…' : '設為主照片'}</button>` : ''}
+    ${canEdit && !swapping ? `<button type="button" class="lightbox-delete" id="galleryDeleteBtn">${icon('trash')}刪除</button>` : ''}`;
   bar.hidden = !bar.textContent.trim() && !bar.querySelector('button');
   bindGalleryDelete(bar);
+  const mainBtn = bar.querySelector('#galleryMainBtn');
+  if (mainBtn) mainBtn.addEventListener('click', setGalleryAsMain);
+  const cropBtn = bar.querySelector('#mainCropBtn');
+  if (cropBtn) cropBtn.addEventListener('click', () => cropMainPhoto(v.dog));
 }
 
 function stepLightbox(step) {
   const v = lightboxView;
-  if (!v || v.items.length < 2 || (galleryDelete && galleryDelete.phase === 'deleting')) return;
+  if (!v || v.items.length < 2 || gallerySwap || (galleryDelete && galleryDelete.phase === 'deleting')) return;
   galleryDelete = null;
   v.index = (v.index + step + v.items.length) % v.items.length;
   showLightboxPhoto();
@@ -842,6 +850,69 @@ function bindGalleryDelete(bar) {
   });
 }
 
+// 已經顯示過的照片畫成這支手機上的本機圖片（網站要幾分鐘才更新，換好後先用這個顯示）；讀不到回 null
+async function imageToLocal(src) {
+  try {
+    const img = new Image();
+    img.src = src;
+    await img.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    canvas.getContext('2d').drawImage(img, 0, 0);
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
+    return blob ? URL.createObjectURL(blob) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// 燈箱裡相簿照片的「設為主照片」：跟主照片互換（原本的主照片放進相簿同一格），不用通關碼（跟換主照片一樣）
+async function setGalleryAsMain() {
+  const v = lightboxView;
+  if (!v || gallerySwap) return;
+  const item = v.items[v.index];
+  if (!item || !item.file) return;
+  const dog = v.dog, file = item.file;
+  const hadMain = !v.items[0].file;
+  gallerySwap = { dog, file };
+  showLightboxPhoto();
+  const [pickedUrl, oldMainUrl] = await Promise.all([imageToLocal(item.src), hadMain ? imageToLocal(v.items[0].src) : null]);
+  let out = null, error = '';
+  try {
+    const res = await fetch(`${UPLOAD_URL}/gallery/${encodeURIComponent(dog.id)}/${encodeURIComponent(file)}/main`, { method: 'POST' });
+    out = await res.json().catch(() => null);
+    if (!res.ok || !out || !out.ok) error = (out && out.error) || `主照片沒有換成（${res.status}），照片都沒動`;
+  } catch (e) {
+    error = '主照片沒有換成，請確認網路後再試；照片都沒動';
+  }
+  gallerySwap = null;
+  if (error) {
+    [pickedUrl, oldMainUrl].forEach(u => { if (u) URL.revokeObjectURL(u); });
+    if (lightboxOpen()) showLightboxPhoto();
+    showToast(error);
+    return;
+  }
+  photoOverrides[dog.id] = pickedUrl || item.src;
+  if (out.swapped) {
+    if (oldMainUrl) galleryOverrides[`${dog.id}/${file}`] = oldMainUrl;
+  } else {
+    const rest = (gallery[dog.id] || []).filter(p => p.file !== file);
+    if (rest.length) gallery[dog.id] = rest; else delete gallery[dog.id];
+    delete galleryOverrides[`${dog.id}/${file}`];
+    if (oldMainUrl) URL.revokeObjectURL(oldMainUrl);
+  }
+  // 燈箱改看新的主照片（第一張）
+  if (lightboxView && lightboxView.dog === dog) {
+    lightboxView.items = photoItems(dog, true);
+    lightboxView.index = 0;
+    showLightboxPhoto();
+  }
+  render();
+  if (detailDog) renderDetail();
+  showToast(out.swapped ? `已設為 ${dog.name} 的主照片，原本的主照片放進相簿` : `已設為 ${dog.name} 的主照片`);
+}
+
 // 刪除：送到 Worker（要通關碼）；成功後燈箱換到下一張（沒有了就關掉），相簿格重畫
 async function deleteGalleryPhoto() {
   const del = galleryDelete;
@@ -970,9 +1041,247 @@ function photoUploadHtml(dog) {
       <div class="photo-preview-hint">預覽（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
       <img class="photo-preview" src="${esc(up.url)}" alt="${esc(dog.name)} 的新照片預覽">
       ${up.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(up.error)}</span></div>` : ''}
+      ${busy ? '' : `<button type="button" class="photo-crop" id="photoCrop">${icon('crop')}裁切</button>`}
       <button type="button" class="photo-confirm" id="photoConfirm"${busy ? ' disabled' : ''}>${busy ? '上傳中…' : '確認上傳'}</button>
       ${busy ? '' : `<button type="button" class="photo-cancel" id="photoCancel">取消</button>`}
     </div>`;
+}
+
+// ── 裁切：照片放在固定的框後面，拖曳移動、兩指（或滑桿、滑鼠滾輪）放大，框裡的部分就是裁好的照片 ──
+// 主照片預設正方形（清單上的小照片是正方形），相簿預設原比例；也可以換直式、橫式
+const CROP_ASPECTS = [
+  { id: 'square', label: '正方形', ratio: 1 },
+  { id: 'portrait', label: '直式 3:4', ratio: 3 / 4 },
+  { id: 'landscape', label: '橫式 4:3', ratio: 4 / 3 },
+  { id: 'original', label: '原比例', ratio: 0 },
+];
+let cropView = null; // { img, aspect, scale, minScale, tx, ty, frame: { x, y, w, h }, resolve, pointers: Map }
+
+function cropOpen() {
+  const el = document.getElementById('cropper');
+  return !!el && !el.hidden;
+}
+
+// 開裁切畫面；完成回傳裁好的 JPEG（長邊最多 PHOTO_MAX_EDGE），取消回傳 null
+async function openCropper(src, aspect = 'square') {
+  const img = new Image();
+  img.src = src;
+  try { await img.decode(); } catch (e) { showToast('這張照片讀不到，沒辦法裁切'); return null; }
+  let el = document.getElementById('cropper');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'cropper';
+    el.className = 'cropper';
+    el.setAttribute('role', 'dialog');
+    el.setAttribute('aria-modal', 'true');
+    el.setAttribute('aria-label', '裁切照片');
+    el.innerHTML = `
+      <div class="crop-stage"><img alt="要裁切的照片" draggable="false"><div class="crop-frame"></div></div>
+      <div class="crop-panel">
+        <div class="crop-aspects">${CROP_ASPECTS.map(a => `<button type="button" data-aspect="${a.id}">${a.label}</button>`).join('')}</div>
+        <label class="crop-zoom">${icon('search')}<input type="range" id="cropZoom" min="1" max="4" step="0.01" value="1" aria-label="放大"></label>
+        <div class="crop-actions">
+          <button type="button" class="crop-cancel" id="cropCancel">取消</button>
+          <button type="button" class="crop-done" id="cropDone">完成</button>
+        </div>
+      </div>`;
+    const stage = el.querySelector('.crop-stage');
+    stage.addEventListener('pointerdown', e => {
+      if (!cropView) return;
+      stage.setPointerCapture(e.pointerId);
+      cropView.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    });
+    stage.addEventListener('pointermove', e => {
+      const v = cropView;
+      if (!v || !v.pointers.has(e.pointerId)) return;
+      const prev = v.pointers.get(e.pointerId);
+      const pts = [...v.pointers.values()];
+      if (pts.length === 1) {
+        v.tx += e.clientX - prev.x;
+        v.ty += e.clientY - prev.y;
+      } else if (pts.length === 2) {
+        const other = pts.find(p => p !== prev);
+        const before = Math.hypot(prev.x - other.x, prev.y - other.y);
+        const after = Math.hypot(e.clientX - other.x, e.clientY - other.y);
+        const box = stage.getBoundingClientRect();
+        if (before > 0) zoomCropAt(v.scale * after / before, (e.clientX + other.x) / 2 - box.left, (e.clientY + other.y) / 2 - box.top);
+      }
+      v.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      drawCrop();
+    });
+    const up = e => { if (cropView) cropView.pointers.delete(e.pointerId); };
+    stage.addEventListener('pointerup', up);
+    stage.addEventListener('pointercancel', up);
+    stage.addEventListener('wheel', e => {
+      if (!cropView) return;
+      e.preventDefault();
+      const box = stage.getBoundingClientRect();
+      zoomCropAt(cropView.scale * (e.deltaY < 0 ? 1.08 : 1 / 1.08), e.clientX - box.left, e.clientY - box.top);
+      drawCrop();
+    }, { passive: false });
+    el.querySelector('#cropZoom').addEventListener('input', e => {
+      const v = cropView;
+      if (!v) return;
+      zoomCropAt(v.minScale * Number(e.target.value), v.frame.x + v.frame.w / 2, v.frame.y + v.frame.h / 2);
+      drawCrop();
+    });
+    el.querySelectorAll('[data-aspect]').forEach(b => b.addEventListener('click', () => { setCropAspect(b.dataset.aspect); }));
+    el.querySelector('#cropCancel').addEventListener('click', () => closeCropper(null));
+    el.querySelector('#cropDone').addEventListener('click', finishCrop);
+    window.addEventListener('resize', () => { if (cropOpen()) setCropAspect(cropView.aspect); });
+    document.body.appendChild(el);
+  }
+  if (cropView) cropView.resolve(null);
+  el.querySelector('img').src = src;
+  el.hidden = false;
+  document.documentElement.classList.add('lightbox-open');
+  history.pushState({ bqCrop: true }, '');
+  return new Promise(resolve => {
+    cropView = { img, aspect, scale: 1, minScale: 1, tx: 0, ty: 0, frame: null, resolve, pointers: new Map(), opener: document.activeElement };
+    setCropAspect(aspect);
+    el.querySelector('#cropDone').focus({ preventScroll: true });
+  });
+}
+
+// 換比例：框重新置中，照片縮到剛好蓋滿框
+function setCropAspect(aspect) {
+  const v = cropView;
+  const el = document.getElementById('cropper');
+  if (!v || !el) return;
+  const a = CROP_ASPECTS.find(x => x.id === aspect) || CROP_ASPECTS[0];
+  v.aspect = a.id;
+  const ratio = a.ratio || v.img.naturalWidth / v.img.naturalHeight;
+  const stage = el.querySelector('.crop-stage');
+  const W = stage.clientWidth || 360, H = stage.clientHeight || 360;
+  let w = W * 0.88, h = w / ratio;
+  if (h > H * 0.88) { h = H * 0.88; w = h * ratio; }
+  v.frame = { x: (W - w) / 2, y: (H - h) / 2, w, h };
+  v.minScale = Math.max(w / v.img.naturalWidth, h / v.img.naturalHeight);
+  v.scale = v.minScale;
+  v.tx = v.frame.x + (w - v.img.naturalWidth * v.scale) / 2;
+  v.ty = v.frame.y + (h - v.img.naturalHeight * v.scale) / 2;
+  el.querySelectorAll('[data-aspect]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.aspect === a.id)));
+  drawCrop();
+}
+
+// 以畫面上的 (cx, cy) 為中心放大縮小；最小剛好蓋滿框，最大 4 倍
+function zoomCropAt(scale, cx, cy) {
+  const v = cropView;
+  const next = Math.min(v.minScale * 4, Math.max(v.minScale, scale));
+  v.tx = cx - (cx - v.tx) * next / v.scale;
+  v.ty = cy - (cy - v.ty) * next / v.scale;
+  v.scale = next;
+}
+
+// 照片不能拖到露出框外的空白
+function drawCrop() {
+  const v = cropView;
+  const el = document.getElementById('cropper');
+  if (!v || !el) return;
+  const { frame: f } = v;
+  const w = v.img.naturalWidth * v.scale, h = v.img.naturalHeight * v.scale;
+  v.tx = Math.min(f.x, Math.max(f.x + f.w - w, v.tx));
+  v.ty = Math.min(f.y, Math.max(f.y + f.h - h, v.ty));
+  const img = el.querySelector('.crop-stage img');
+  img.style.width = `${w}px`;
+  img.style.height = `${h}px`;
+  img.style.transform = `translate(${v.tx}px, ${v.ty}px)`;
+  Object.assign(el.querySelector('.crop-frame').style, { left: `${f.x}px`, top: `${f.y}px`, width: `${f.w}px`, height: `${f.h}px` });
+  el.querySelector('#cropZoom').value = String(v.scale / v.minScale);
+}
+
+// 框裡的範圍畫成 JPEG；太大就再降一點畫質
+async function cropToBlob(v) {
+  const { frame: f } = v;
+  const sx = (f.x - v.tx) / v.scale, sy = (f.y - v.ty) / v.scale, sw = f.w / v.scale, sh = f.h / v.scale;
+  const k = Math.min(1, PHOTO_MAX_EDGE / Math.max(sw, sh));
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.max(1, Math.round(sw * k));
+  canvas.height = Math.max(1, Math.round(sh * k));
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(v.img, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+  for (const quality of [0.85, 0.7, 0.55]) {
+    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', quality));
+    if (blob && blob.size <= PHOTO_MAX_BYTES) return blob;
+  }
+  return null;
+}
+
+async function finishCrop() {
+  const v = cropView;
+  if (!v) return;
+  const blob = await cropToBlob(v);
+  if (!blob) { showToast('裁好的照片太大，請再放大一點'); return; }
+  closeCropper(blob);
+}
+
+function hideCropper() {
+  const el = document.getElementById('cropper');
+  if (!el || el.hidden) return;
+  el.hidden = true;
+  el.querySelector('.crop-stage img').removeAttribute('src');
+  if (!lightboxOpen()) document.documentElement.classList.remove('lightbox-open');
+  const v = cropView;
+  cropView = null;
+  if (v) {
+    v.resolve(v.result || null);
+    if (v.opener && v.opener.isConnected && v.opener !== document.body) v.opener.focus({ preventScroll: true });
+  }
+}
+
+// 關掉走「上一頁」，手機返回鍵也等於取消
+function closeCropper(result) {
+  if (cropView) cropView.result = result;
+  if (history.state && history.state.bqCrop) history.back(); // popstate 會接著 hideCropper
+  else hideCropper();
+}
+
+// 主照片預覽的「裁切」：裁好的換掉預覽
+async function cropPhotoUpload() {
+  const up = photoUpload;
+  if (!up || up.phase === 'uploading') return;
+  const blob = await openCropper(up.url, 'square');
+  if (!blob || photoUpload !== up || up.phase === 'uploading') return;
+  URL.revokeObjectURL(up.url);
+  up.blob = blob;
+  up.url = URL.createObjectURL(blob);
+  up.phase = 'preview';
+  up.error = '';
+  renderDetail();
+  const btn = document.getElementById('photoConfirm');
+  if (btn) btn.focus({ preventScroll: true });
+}
+
+// 相簿預覽格每張的「裁切」
+async function cropGalleryBatchItem(index) {
+  const batch = galleryBatch;
+  const it = batch && batch.items[index];
+  if (!it || batch.phase === 'uploading' || it.state === 'done') return;
+  const blob = await openCropper(it.url, 'original');
+  if (!blob || galleryBatch !== batch || batch.phase === 'uploading' || !batch.items.includes(it)) return;
+  URL.revokeObjectURL(it.url);
+  it.blob = blob;
+  it.url = URL.createObjectURL(blob);
+  renderDetail();
+}
+
+// 燈箱裡主照片的「裁切」：裁好後跟換主照片一樣先預覽、再按確認上傳
+async function cropMainPhoto(dog) {
+  const src = photoSrc(dog);
+  closeLightbox();
+  const blob = await openCropper(src, 'square');
+  if (!blob || detailDog !== dog) return;
+  if (photoUpload && photoUpload.phase === 'uploading') { showToast('上一張照片還在上傳，請稍等一下'); return; }
+  clearPhotoUpload();
+  photoUpload = { dog, blob, url: URL.createObjectURL(blob), phase: 'preview', error: '' };
+  renderDetail();
+  const btn = document.getElementById('photoConfirm');
+  if (btn) {
+    btn.focus({ preventScroll: true });
+    if (btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest' });
+  }
 }
 
 // 手機或電腦選照片：隱藏的檔案選擇框，按「上傳照片」（或相簿的「新增」）時才打開
@@ -1120,6 +1429,7 @@ function galleryBatchHtml(batch) {
           <div class="gb-item ${it.state}">
             <img src="${esc(it.url)}" alt="第 ${i + 1} 張預覽">
             ${badge(it)}
+            ${!busy && it.state !== 'done' ? `<button type="button" class="gb-crop" data-gb-crop="${i}" aria-label="裁切第 ${i + 1} 張">${icon('crop')}</button>` : ''}
             ${!busy && it.state !== 'done' && left.length > 1 ? `<button type="button" class="gb-remove" data-gb-remove="${i}" aria-label="不要傳第 ${i + 1} 張">${icon('close')}</button>` : ''}
           </div>`).join('')}
       </div>
@@ -1407,6 +1717,9 @@ function renderDetail() {
     if (b) b.focus({ preventScroll: true });
   });
   box.querySelectorAll('[data-gb-remove]').forEach(b => b.addEventListener('click', () => removeGalleryBatchItem(Number(b.dataset.gbRemove))));
+  box.querySelectorAll('[data-gb-crop]').forEach(b => b.addEventListener('click', () => cropGalleryBatchItem(Number(b.dataset.gbCrop))));
+  const cropBtn = box.querySelector('#photoCrop');
+  if (cropBtn) cropBtn.addEventListener('click', cropPhotoUpload);
   const pick = box.querySelector('#photoPick');
   if (pick) {
     pick.addEventListener('click', () => pickPhotoFile('main'));
@@ -1513,7 +1826,8 @@ function closeDetail() {
 
 // 燈箱開著時「返回」只關燈箱，詳細資訊留著
 window.addEventListener('popstate', () => {
-  if (lightboxOpen()) hideLightbox();
+  if (cropOpen()) hideCropper();
+  else if (lightboxOpen()) hideLightbox();
   else if (detailDog) hideDetail();
   else if (analysisOpen) hideAnalysis();
 });
@@ -1521,6 +1835,17 @@ document.getElementById('detailBackdrop').addEventListener('click', e => {
   if (e.target.id === 'detailBackdrop') closeDetail();
 });
 document.addEventListener('keydown', e => {
+  if (cropOpen()) {
+    // 裁切畫面：Esc 取消，Tab 只在裁切畫面的按鈕間移動
+    if (e.key === 'Escape') closeCropper(null);
+    if (e.key === 'Tab') {
+      const items = [...document.querySelectorAll('#cropper button, #cropper input')];
+      const at = items.indexOf(document.activeElement);
+      e.preventDefault();
+      items[(at + (e.shiftKey ? -1 : 1) + items.length) % items.length].focus({ preventScroll: true });
+    }
+    return;
+  }
   if (lightboxOpen()) {
     // Esc 關燈箱（刪除確認開著時先收起確認），左右鍵換張，Tab 只在燈箱裡的按鈕間移動
     const typing = e.target.closest && e.target.closest('#lightbox input');

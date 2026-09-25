@@ -531,3 +531,88 @@ test('相簿刪除：Worker 沒設 NOTES_PASSCODE 一律不能刪；預檢允許
   assert.equal((await worker.fetch(new Request('https://w.example/gallery/%E0%A4%A', { method: 'POST', headers: { Origin: ORIGIN } }), NENV)).status, 500);
   assert.equal(calls.length, 0);
 });
+
+// ---- 相簿照片設為主照片 ----
+
+// 假 GitHub：照片放在 files（路徑 → { sha, bytes }），清單放在 gallery 物件
+function fakeSwapGithub({ gallery = {}, files = {}, putStatus = {} } = {}) {
+  const store = { gallery: JSON.stringify(gallery), gsha: 'g-0', files, n: 0 };
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const u = new URL(url);
+    const method = init.method || 'GET';
+    const headers = init.headers || {};
+    calls.push({ path: u.pathname, method, body: init.body && JSON.parse(init.body) });
+    if (u.pathname.endsWith('/contents/data/dogs.json')) return new Response(JSON.stringify(DOGS));
+    const path = u.pathname.replace('/repos/jiatsenK/bq-shelter-dogs/contents/', '');
+    if (path === 'data/gallery.json') {
+      if (method === 'GET') return new Response(JSON.stringify({ sha: store.gsha, content: Buffer.from(store.gallery).toString('base64') }));
+      const body = JSON.parse(init.body);
+      store.gallery = Buffer.from(body.content, 'base64').toString('utf8');
+      store.gsha = `g-${++store.n}`;
+      return new Response('{}');
+    }
+    if (method === 'GET') {
+      const f = store.files[path];
+      if (!f) return new Response('{}', { status: 404 });
+      return headers.Accept === 'application/vnd.github.raw+json' ? new Response(f.bytes) : new Response(JSON.stringify({ sha: f.sha }));
+    }
+    if (method === 'DELETE') { delete store.files[path]; return new Response('{}'); }
+    if (putStatus[path]) return new Response('{}', { status: putStatus[path] });
+    const body = JSON.parse(init.body);
+    if ((body.sha || null) !== (store.files[path] ? store.files[path].sha : null)) return new Response('{}', { status: 409 });
+    store.files[path] = { sha: `s-${++store.n}`, bytes: Buffer.from(body.content, 'base64') };
+    return new Response('{}');
+  };
+  return { store, calls };
+}
+
+const setMain = (id, file, { origin = ORIGIN, ip = '1.1.1.1' } = {}) =>
+  new Request(`https://w.example/gallery/${id}/${file}/main`, { method: 'POST', headers: { Origin: origin, 'CF-Connecting-IP': ip } });
+
+const MAIN = 'photos/2024032902.jpg';
+const G1 = `photos/gallery/2024032902/${F1}`;
+const OLD = Buffer.from([0xff, 0xd8, 0xff, 1]), NEW = Buffer.from([0xff, 0xd8, 0xff, 2]);
+
+test('設為主照片：相簿那張換成主照片，原本的主照片放進相簿同一格，清單不用改', async () => {
+  const { store, calls } = fakeSwapGithub({
+    gallery: { '2024032902': [{ file: F1, addedAt: 'a' }] },
+    files: { [MAIN]: { sha: 'm', bytes: OLD }, [G1]: { sha: 'p', bytes: NEW } },
+  });
+  const r = await send(setMain('2024032902', F1), NENV);
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.body.swapped, r.body.oldMainKept], [true, true]);
+  assert.deepEqual([...store.files[MAIN].bytes], [...NEW]);
+  assert.deepEqual([...store.files[G1].bytes], [...OLD]);
+  assert.deepEqual(JSON.parse(store.gallery), { '2024032902': [{ file: F1, addedAt: 'a' }] });
+  const puts = calls.filter(c => c.method === 'PUT');
+  assert.deepEqual(puts.map(c => [c.path.split('/contents/')[1], c.body.sha]), [[MAIN, 'm'], [G1, 'p']]);
+  assert.match(puts[0].body.message, /^相簿照片設為主照片：.+（測試狗）/);
+  assert.equal(r.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+});
+
+test('設為主照片：原本沒有主照片就搬過去，相簿少一張', async () => {
+  const { store } = fakeSwapGithub({
+    gallery: { '2024032902': [{ file: F1, addedAt: '' }, { file: F2, addedAt: '' }] },
+    files: { [G1]: { sha: 'p', bytes: NEW } },
+  });
+  const r = await send(setMain('2024032902', F1), NENV);
+  assert.deepEqual([r.status, r.body.swapped], [200, false]);
+  assert.deepEqual([...store.files[MAIN].bytes], [...NEW]);
+  assert.equal(store.files[G1], undefined);
+  assert.deepEqual(JSON.parse(store.gallery), { '2024032902': [{ file: F2, addedAt: '' }] });
+});
+
+test('設為主照片：不在清單、檔名不對、別的網站都擋；主照片寫入失敗就什麼都不動', async () => {
+  const files = { [MAIN]: { sha: 'm', bytes: OLD }, [G1]: { sha: 'p', bytes: NEW } };
+  let g = fakeSwapGithub({ gallery: {}, files });
+  assert.equal((await send(setMain('2024032902', F1), NENV)).status, 404);
+  assert.equal((await send(setMain('2024032902', 'x.jpg'), NENV)).status, 400);
+  assert.equal((await send(setMain('2024032902', F1, { origin: 'https://evil.example' }), NENV)).status, 403);
+  assert.equal(g.calls.filter(c => c.method !== 'GET').length, 0);
+  g = fakeSwapGithub({ gallery: { '2024032902': [{ file: F1, addedAt: '' }] }, files, putStatus: { [MAIN]: 500 } });
+  const r = await send(setMain('2024032902', F1), NENV);
+  assert.equal(r.status, 502);
+  assert.match(r.body.error, /照片都沒動/);
+  assert.deepEqual([...g.store.files[G1].bytes], [...NEW]);
+});
