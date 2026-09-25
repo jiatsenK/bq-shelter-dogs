@@ -202,3 +202,7 @@
 - `js/analysis.js`、`css/app.css`、`tests/index.html` 回到資訊圖表那版（5a063f6），再刪掉 `longStayNeglected` 與那張卡；不做自動發現、各區遛狗狀況。總覽第四格改「超過 7 天沒遛」；散布圖淡紅區改成整排「超過 7 天沒遛」。
 - 驗證：tests/index.html 61 項全過；截圖 previews/issue-59/infographic-*.png。
 - PR：#65（同一分支）。
+
+## [2026-09-25] Claude | 合併 PR #65（#59 分析頁）
+- 依據：K 在專案聊天回「合併」（順序 #63 → #65 → #64）。
+- 等 #63 合併後把最新 main 併進分支，AGENT_LOG.md 檔尾衝突兩邊都保留；tests/index.html 61 項、scripts/sync-sheet.test.mjs 23 項全過後合併。
