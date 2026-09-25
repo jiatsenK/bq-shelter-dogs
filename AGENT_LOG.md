@@ -160,3 +160,9 @@
 - `data/dogs.json`：把 `walker` 轉成 `covered`（121 隻中 120 隻為 true），其他內容與同步時間不動。
 - 驗證：node 同步測試 16 項、Worker 測試 11 項、tests/index.html 52 項全過。
 - 待辦：K 先設定 Secret 再合併；合併後另外改寫 git 歷史，清掉舊版本裡的試算表 ID 與志工名字。
+
+## [2026-09-25] Claude | 改寫 git 歷史：清掉試算表 ID 與志工名字
+- 依據：K 選方案 A 並打字確認；PR #54 合併、Secret 驗證成功（合併後自動同步成功）後執行，當時沒有開著的 PR。
+- 做法：用 git filter-repo 改寫全部 31 個分支的歷史：試算表 ID 換成 `REMOVED_SHEET_ID`；所有舊版 `data/dogs.json` 的 `"walker": "名字"` 換成 `"walker": ""`。main 最新內容與改寫前完全相同（tree 雜湊一致），網站不受影響。所有提交編號都變了。
+- 注意：之前 clone 的本機副本不能再推送或合併進來（會把舊歷史帶回來），要重新 clone 或 `git fetch` 後 `git reset --hard origin/分支`。
+- 未完成：GitHub 上已合併 PR（#13–#54）的頁面仍保留舊提交，需 K 向 GitHub 客服申請清除。
