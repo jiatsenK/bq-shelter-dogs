@@ -219,6 +219,14 @@
 - #63、#65 合併後把最新 main 併進分支，AGENT_LOG.md 檔尾衝突兩邊都保留；Worker 測試 22 項、同步測試 23 項、tests/index.html 61 項全過後合併。
 - 待辦：K 到 Cloudflare 重貼 `worker/src/index.js`、新增 Secret `NOTES_PASSCODE`（步驟見 docs/PHOTO_UPLOAD_SETUP.md「我的備註」）。
 
+## [2026-09-25] Claude | V5-2（#57）同步時判斷「是不是我遛的」
+- 依據：issue #57；K 在專案聊天回「開始」。
+- 同步：`scripts/sync-sheet.mjs` 讀環境變數 `MY_NAME`（可用頓號／逗號寫多種寫法），比對「誰遛的」格子（多人時逐一比、要完全相同）。`dogs.json` 每隻狗加 `myWalked` 與 `myWalkedDate`（遛狗紀錄裡我最後一次的日期，別人之後遛了也保留）；`walks.json` 新紀錄加 `mine`，同一天從別人換成我（或反過來）也追加一筆。#56 的舊紀錄沒有 `mine`，原樣保留不回填。
+- Workflow：同步步驟從 Actions Secret `MY_NAME` 帶入。沒設定時同步照常，`myWalked` 都是 false。
+- 文件：docs/SHEET_SYNC_SETUP.md 加設定步驟；README、docs/PROJECT_GOALS.md 補欄位說明。前端未改（`myWalked` 由 #58 使用）。
+- 驗證：`node --test scripts/sync-sheet.test.mjs` 30 項全過（新增 7 項：我遛→別人遛、同一天換人、沒設定、名字比對、無名字、舊紀錄升級、workflow）。雲端連不到 Google，只用模擬資料與假名字測。
+- 分支：`claude/project-thread-z1ne7o`（#56 合併後從最新 main 重開）。
+
 ## [2026-09-25] Claude | V5-7（#62）詳細資訊加「我的備註」欄位
 - 依據：issue #62；K 同意通關碼用「密碼欄位＋iPhone 鑰匙圈 Face ID 自動填入」（#61 thread）。
 - `js/app.js`：溜狗表備註下方加「我的備註」區塊，沒有顯示「新增」、有則顯示內容、更新時間與「修改」。編輯是文字框（1000 字、字數提示）＋第一次儲存才出現的通關碼欄位（`type=password`、`autocomplete=current-password`，配隱藏帳號欄位，放在 form 裡）。儲存 PUT 到 Worker `/notes/{編號}`，成功提示「已存到 Git」並把通關碼記在這支手機（localStorage `bq-notes-passcode`）；失敗保留輸入內容並顯示原因，通關碼錯就清掉重問。清空後儲存＝刪除。開網頁讀 Worker `/notes`，讀不到退回 `data/my-notes.json`。我的備註不參與警示紅框、不上狗卡。詳細資訊的 Tab 循環與重畫保留焦點也涵蓋文字框、密碼欄位。
