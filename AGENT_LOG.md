@@ -323,3 +323,16 @@
 ## 2026-09-25 V5.2 合併（Claude，PR #80）
 - K 說「合併」；同步頻率 K 在選項卡選「白天每小時」（台灣 7:00–22:00）。main 沒有新提交，不用解衝突。
 - 合併後同步 Action 會因 dogs/** 改動自動跑一次，把圓仔的 formerIds 寫進 data/dogs.json。
+
+## 2026-09-25 相簿批次上傳（Claude，分支 claude/project-thread-wilksn）
+- 依據：K 在專案聊天說「相簿照片要增加批次上傳功能」。
+- `js/app.js`：相簿「新增」的選檔可以複選（主照片仍只能一張）。選好的照片全部壓成 JPEG 後在相簿區排成預覽格，可拿掉幾張，按「上傳 N 張」一張一張依序送；每張傳成馬上出現在相簿格。一次最多 10 張、不超過相簿剩下格數；被頻率限制（429）或相簿滿（409）就停，剩下的可按「重新上傳」。相簿上傳從主照片的 `photoUpload` 拆出來，改用 `galleryBatch`。
+- `worker/src/index.js`：相簿上傳頻率跟主照片分開算，1 分鐘 12 張、1 小時 60 張（主照片維持 5／30）。
+- `css/app.css` 預覽格樣式；`docs/PHOTO_UPLOAD_SETUP.md` 補說明。
+- 驗證：Worker 測試 31 項全過（頻率測試改寫）；tests/index.html 88 項全過（相簿新增測試改成批次、加一項上限與重傳）。截圖 previews/gallery-batch/（模擬照片）。
+- 上線前 K 要做：合併後重貼 Worker 到 Cloudflare（不重貼也能用，只是 1 分鐘超過 5 張會被擋）。
+- 追加（K 編輯需求「跟主照片更換功能」、再說「還要加上裁切功能」）：
+  - Worker 新增 `POST /gallery/{編號}/{檔名}/main`：相簿照片設為主照片，跟主照片互換內容（相簿清單不用改）；原本沒主照片就搬過去、相簿少一張。不用通關碼，共用主照片頻率限制。
+  - 燈箱的相簿照片加「設為主照片」；主照片加「裁切」。換主照片預覽、相簿預覽格每張都能裁切（正方形／直式 3:4／橫式 4:3／原比例，拖曳、兩指或滑桿放大）。裁切在手機上做，Worker 不用為此改。
+  - 驗證：Worker 測試 34 項、tests/index.html 91 項全過（新增設為主照片 1 項、裁切 2 項）。截圖 previews/gallery-batch/ 加 lightbox-set-main.png、crop.png、crop-done-preview.png。
+- K 說「合併」：併最新 main（只有相簿照片、主照片、我的備註的網站提交，沒衝突），Worker 34 項、tests/index.html 91 項全過後合併 PR #81。合併後 K 要重貼 Worker。
