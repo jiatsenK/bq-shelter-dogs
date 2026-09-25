@@ -42,6 +42,8 @@ jobs:
       - name: 讀取試算表與狗卡、產生 data/dogs.json、當天快照與遛狗紀錄
         env:
           SHEET_ID: ${{ secrets.SHEET_ID }}
+          # 判斷「是不是我遛的」用的名字（#57）；沒設定也能同步，只是 myWalked 都是 false
+          MY_NAME: ${{ secrets.MY_NAME }}
         run: node scripts/sync-sheet.mjs
 
       - name: 資料有變才提交
