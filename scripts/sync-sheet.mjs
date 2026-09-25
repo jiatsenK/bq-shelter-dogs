@@ -263,6 +263,15 @@ export function parseFrontmatterSex(text) {
   return sex;
 }
 
+// 狗卡 frontmatter 的舊編號（#75）：同一隻狗再次入所會拿到新編號，舊的寫在 formerIds，多個用逗號／頓號／空白分開。
+// 只收英數字，跟檔名的編號規則一樣
+export function parseFrontmatterFormerIds(text) {
+  const m = text.replace(/^\uFEFF/, '').match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
+  if (!m) return [];
+  const line = (m[1].match(/^formerIds:[ \t]*(.*)$/mi) || [])[1] || '';
+  return [...new Set(line.replace(/[\[\]"']/g, '').split(/[\s,，、]+/).filter(id => /^[0-9A-Za-z]+$/.test(id)))];
+}
+
 // 把 Markdown 轉成純文字，網站上不要露出 **、#、[]() 這些符號
 export function markdownToText(md) {
   return md
@@ -308,12 +317,17 @@ export async function readDogCardFile(id) {
   }
 }
 
-// 每隻狗加上 sex（male／female／空白）和 intro（狗卡資訊純文字）。沒有編號的狗不讀，也不改用犬名配對
+// 每隻狗加上 sex（male／female／空白）和 intro（狗卡資訊純文字）。沒有編號的狗不讀，也不改用犬名配對。
+// 狗卡有寫舊編號才多一個 formerIds（#75），其他狗的 dogs.json 不變
 export async function attachDogCards(dogs, readCard = readDogCardFile) {
   const cards = new Map();
   for (const id of new Set(dogs.map(d => d.id).filter(Boolean))) {
     const raw = await readCard(id);
-    cards.set(id, raw ? { sex: parseFrontmatterSex(raw), intro: markdownToText(parseFrontmatterBody(raw)) } : null);
+    if (!raw) { cards.set(id, null); continue; }
+    const card = { sex: parseFrontmatterSex(raw), intro: markdownToText(parseFrontmatterBody(raw)) };
+    const formerIds = parseFrontmatterFormerIds(raw).filter(f => f !== id);
+    if (formerIds.length) card.formerIds = formerIds;
+    cards.set(id, card);
   }
   return dogs.map(d => ({ ...d, sex: '', intro: '', ...(cards.get(d.id) || {}) }));
 }
