@@ -1,6 +1,8 @@
 // 同步腳本測試：node --test scripts/sync-sheet.test.mjs
 // 用模擬 gviz 回應，不連試算表。另外把前端讀 dogs.json 的函式載進來，確認前端讀回來的資料跟同步前一致。
 process.env.TZ = 'Asia/Taipei';
+// 真的試算表 ID 只放在 GitHub Secret；測試用假的
+process.env.SHEET_ID = 'TEST_SHEET_ID';
 
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -80,10 +82,10 @@ test('產生 dogs.json：狗（含狗卡資訊與性別）、可以一起溜；�
   assert.deepEqual(f.calls.sort(), ['主清單:0', '主清單:7', '常遛狗群:0']);
   assert.deepEqual(cards.calls.sort(), ['202101234', '202102345', '202102346'], '沒編號的狗不讀狗卡');
   assert.deepEqual(data.dogs, [
-    { cage: 'C03', id: '202101234', name: '測試狗甲', walkedDate: '2026-09-16', walker: '志工A', note: '', sex: 'male', intro: '很親人，怕機車。' },
-    { cage: 'A10', id: '202102345', name: '測試狗乙', walkedDate: '2026-09-22', walker: '', note: '親人', sex: '', intro: '' },
-    { cage: 'A2', id: '202102346', name: '測試狗丙', walkedDate: '2026-09-20', walker: '', note: '勿溜', sex: '', intro: '' },
-    { cage: '住院區', id: '', name: '測試狗丁', walkedDate: null, walker: '', note: '新狗，原表沒填日期', sex: '', intro: '' },
+    { cage: 'C03', id: '202101234', name: '測試狗甲', walkedDate: '2026-09-16', covered: true, note: '', sex: 'male', intro: '很親人，怕機車。' },
+    { cage: 'A10', id: '202102345', name: '測試狗乙', walkedDate: '2026-09-22', covered: false, note: '親人', sex: '', intro: '' },
+    { cage: 'A2', id: '202102346', name: '測試狗丙', walkedDate: '2026-09-20', covered: false, note: '勿溜', sex: '', intro: '' },
+    { cage: '住院區', id: '', name: '測試狗丁', walkedDate: null, covered: false, note: '新狗，原表沒填日期', sex: '', intro: '' },
   ]);
   assert.equal('cages' in data, false);
   assert.deepEqual(data.groups, {
@@ -98,6 +100,25 @@ test('讀取失敗時丟錯（不產生資料）', async () => {
   await assert.rejects(sync.buildData(fakeFetch({ fail: '常遛狗群' }), TODAY), /常遛狗群/);
   await assert.rejects(sync.buildData(async () => { throw new Error('ENOTFOUND'); }, TODAY), /連不到/);
   await assert.rejects(sync.buildData(async () => new Response('', { status: 404 }), TODAY), /HTTP 404/);
+});
+
+test('沒設定 SHEET_ID 時丟錯、不去連試算表', async () => {
+  const saved = process.env.SHEET_ID;
+  delete process.env.SHEET_ID;
+  try {
+    let called = false;
+    await assert.rejects(sync.buildData(async () => { called = true; }, TODAY), /SHEET_ID/);
+    assert.equal(called, false);
+  } finally { process.env.SHEET_ID = saved; }
+});
+
+test('試算表 ID 從環境變數帶入，志工名字不寫進 dogs.json', async () => {
+  const f = fakeFetch();
+  const urls = [];
+  await sync.buildData(async (url, ...rest) => { urls.push(url); return f(url, ...rest); }, TODAY, fakeCards());
+  assert.ok(urls.every(u => u.includes('/d/TEST_SHEET_ID/')), '網址用環境變數的 ID');
+  const data = await sync.buildData(fakeFetch(), TODAY, fakeCards());
+  assert.ok(!JSON.stringify(data).includes('志工A'), 'dogs.json 裡沒有志工名字');
 });
 
 test('欄位被改掉、讀到 0 隻狗時丟錯', async () => {
@@ -115,7 +136,7 @@ test('資料沒變不寫檔；有變才更新同步時間', async () => {
   assert.equal(parsed.version, 1);
   assert.equal(parsed.syncedAt, '2026-09-24T16:30:00+08:00');
   assert.equal(sync.renderFile(data, first, new Date(2026, 8, 24, 17)), null);
-  const changed = { ...data, dogs: data.dogs.map((d, i) => i ? d : { ...d, walker: '志工B' }) };
+  const changed = { ...data, dogs: data.dogs.map((d, i) => i ? d : { ...d, note: '改過' }) };
   const second = sync.renderFile(changed, first, new Date(2026, 8, 24, 17));
   assert.equal(JSON.parse(second).syncedAt, '2026-09-24T17:00:00+08:00');
   assert.ok(sync.renderFile(data, '{壞掉', TODAY), '舊檔壞掉時直接覆蓋');
