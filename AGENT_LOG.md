@@ -226,3 +226,14 @@
 - 文件：docs/SHEET_SYNC_SETUP.md 加設定步驟；README、docs/PROJECT_GOALS.md 補欄位說明。前端未改（`myWalked` 由 #58 使用）。
 - 驗證：`node --test scripts/sync-sheet.test.mjs` 30 項全過（新增 7 項：我遛→別人遛、同一天換人、沒設定、名字比對、無名字、舊紀錄升級、workflow）。雲端連不到 Google，只用模擬資料與假名字測。
 - 分支：`claude/project-thread-z1ne7o`（#56 合併後從最新 main 重開）。
+
+## [2026-09-25] Claude | V5-7（#62）詳細資訊加「我的備註」欄位
+- 依據：issue #62；K 同意通關碼用「密碼欄位＋iPhone 鑰匙圈 Face ID 自動填入」（#61 thread）。
+- `js/app.js`：溜狗表備註下方加「我的備註」區塊，沒有顯示「新增」、有則顯示內容、更新時間與「修改」。編輯是文字框（1000 字、字數提示）＋第一次儲存才出現的通關碼欄位（`type=password`、`autocomplete=current-password`，配隱藏帳號欄位，放在 form 裡）。儲存 PUT 到 Worker `/notes/{編號}`，成功提示「已存到 Git」並把通關碼記在這支手機（localStorage `bq-notes-passcode`）；失敗保留輸入內容並顯示原因，通關碼錯就清掉重問。清空後儲存＝刪除。開網頁讀 Worker `/notes`，讀不到退回 `data/my-notes.json`。我的備註不參與警示紅框、不上狗卡。詳細資訊的 Tab 循環與重畫保留焦點也涵蓋文字框、密碼欄位。
+- `css/app.css`、`index.html`（新增 `i-write` 圖示）。
+- 測試：tests/index.html 新增 6 項（模擬 Worker），並更新 #10 唯讀、#28 區塊、#32 讀檔三項的預期；67 項全過。390px 截圖 previews/issue-62/（內容為模擬）。
+
+## [2026-09-25] Claude | 合併 PR #69（#62 我的備註欄位）
+- 依據：K 在專案聊天說「合併」，順序 #68 → #69。
+- #68 合併後把最新 main 併進分支，AGENT_LOG.md 檔尾衝突兩邊都保留；tests/index.html 67 項、同步測試 30 項、Worker 測試 22 項全過後合併。
+- 待辦：K 在手機上實際存一筆我的備註驗收（雲端連不到 Worker）。
