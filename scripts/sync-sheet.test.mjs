@@ -255,6 +255,20 @@ test('狗卡：同編號只讀一次；讀不到就留空；編號不是英數�
   assert.match(await sync.readDogCardFile('2017070102'), /LUCY/, '讀得到 repo 裡的狗卡');
 });
 
+// ── #75 同一隻狗兩次入所：舊編號 ──
+
+test('狗卡：舊編號 formerIds 可寫多個，只收英數字、去掉跟自己相同的', async () => {
+  assert.deepEqual(sync.parseFrontmatterFormerIds('---\nid: 2026051203\nformerIds: 2018041318\n---\n'), ['2018041318']);
+  assert.deepEqual(sync.parseFrontmatterFormerIds('---\nformerIds: [2015010101, 2018041318]\n---\n'), ['2015010101', '2018041318']);
+  assert.deepEqual(sync.parseFrontmatterFormerIds('---\nformerIds: 2015010101、2018041318、../x\n---\n'), ['2015010101', '2018041318']);
+  assert.deepEqual(sync.parseFrontmatterFormerIds('---\nname: 甲\n---\n'), []);
+  assert.deepEqual(sync.parseFrontmatterFormerIds('formerIds: 2018041318'), [], '沒有 frontmatter');
+  const read = async id => id === '2026051203' ? '---\nformerIds: 2018041318, 2026051203\n---\n介紹' : '---\nsex: male\n---\n';
+  const dogs = await sync.attachDogCards([{ name: '甲', id: '2026051203' }, { name: '乙', id: '2020010101' }], read);
+  assert.deepEqual(dogs[0].formerIds, ['2018041318']);
+  assert.equal('formerIds' in dogs[1], false, '沒寫舊編號的狗 dogs.json 不多欄位');
+});
+
 // ── #56 每日快照與遛狗紀錄 ──
 
 // 模擬主清單換日期：name → 新的遛狗日期（null 表示清空）、walker 換人
