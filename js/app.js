@@ -13,6 +13,7 @@ const MY_NOTE_MAX_CHARS = 1000; // 跟 Worker 的 NOTE_MAX_CHARS 一致
 // 相簿：每隻狗除了主照片還能多放幾張（photos/gallery/{編號}/），清單在這個檔；最新清單一樣先問 Worker
 const GALLERY_URL = 'data/gallery.json';
 const GALLERY_MAX = 30; // 跟 Worker 的 GALLERY_MAX 一致
+const GALLERY_BATCH_MAX = 10; // 相簿一次最多選幾張（一張一張依序傳，Worker 相簿頻率限制 1 分鐘 12 張）
 // 我最近溜過（#58）：同步時累積的遛狗紀錄（#56），只看 mine（#57 判斷是不是我遛的）
 const WALKS_URL = 'data/walks.json';
 const MY_WALKS_SINCE = '2026/9/25'; // #57 上線、開始判斷是不是我遛的那天
@@ -36,7 +37,9 @@ let groupMap = {};
 let activeTab = 'walk';
 let detailDog = null; // 詳細資訊正在看的狗
 let detailOpener = null;
-let photoUpload = null; // 詳細資訊正在上傳的照片：{ dog, target: 'main'|'gallery', blob, url, phase: 'preview'|'uploading'|'error', error }
+let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, url, phase: 'preview'|'uploading'|'error', error }
+// 相簿一次加好幾張：{ dog, phase: 'preview'|'uploading'|'error', items: [{ blob, url, state: 'ready'|'uploading'|'done'|'error', error }] }
+let galleryBatch = null;
 let gallery = {}; // 相簿：編號 → [{ file, addedAt }]，舊到新
 let galleryState = 'loading'; // loading／worker／site／error（同我的備註）
 let galleryDelete = null; // 燈箱裡正在刪的相簿照片：{ dog, file, pass, needPass, phase: 'confirm'|'deleting'|'error', error }
@@ -775,7 +778,7 @@ function gallerySection(dog) {
   if (!dog.id) return '';
   const list = galleryList(dog);
   const canAdd = !!UPLOAD_URL && list.length < GALLERY_MAX;
-  const up = photoUpload && photoUpload.dog === dog && photoUpload.target === 'gallery';
+  const up = galleryBatch && galleryBatch.dog === dog;
   // 相簿照片讀不到（例：別人剛傳、網站還沒更新）就顯示腳掌、不能點；主照片讀不到整格藏起來
   const tile = (src, attrs, main = false) => `
     <button type="button" class="g-tile" ${attrs}>
@@ -795,7 +798,7 @@ function gallerySection(dog) {
         ${canAdd && !up ? `<button type="button" class="g-add" id="galleryAdd" aria-label="新增 ${esc(dog.name)} 的相簿照片">${icon('plus')}<span>新增</span></button>` : ''}
       </div>
       ${note ? `<div class="empty gallery-note">${note}</div>` : ''}
-      ${up ? photoUploadHtml(dog, 'gallery') : ''}
+      ${up ? galleryBatchHtml(galleryBatch) : ''}
     </section>`;
 }
 
@@ -956,15 +959,15 @@ function photoPickButton(dog) {
   return `<button type="button" class="photo-pick" id="photoPick" aria-label="上傳 ${esc(dog.name)} 的照片" title="上傳照片">${icon('camera')}</button>`;
 }
 
-// 選好照片後出現的預覽與「確認上傳」：換主照片在詳細資訊上方，加進相簿在相簿區塊裡
-function photoUploadHtml(dog, target = 'main') {
+// 選好照片後，詳細資訊上方出現的預覽與「確認上傳」
+function photoUploadHtml(dog) {
   if (!UPLOAD_URL || !dog.id) return '';
-  const up = photoUpload && photoUpload.dog === dog && photoUpload.target === target ? photoUpload : null;
+  const up = photoUpload && photoUpload.dog === dog ? photoUpload : null;
   if (!up) return '';
   const busy = up.phase === 'uploading';
   return `
-    <div class="photo-upload preview${target === 'gallery' ? ' in-gallery' : ''}">
-      <div class="photo-preview-hint">${target === 'gallery' ? '加進相簿' : '預覽'}（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
+    <div class="photo-upload preview">
+      <div class="photo-preview-hint">預覽（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
       <img class="photo-preview" src="${esc(up.url)}" alt="${esc(dog.name)} 的新照片預覽">
       ${up.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(up.error)}</span></div>` : ''}
       <button type="button" class="photo-confirm" id="photoConfirm"${busy ? ' disabled' : ''}>${busy ? '上傳中…' : '確認上傳'}</button>
@@ -984,12 +987,15 @@ function pickPhotoFile(target = 'main') {
     input.id = 'photoFile';
     input.hidden = true;
     input.addEventListener('change', () => {
-      const file = input.files && input.files[0];
+      const files = [...(input.files || [])];
       input.value = ''; // 同一張再選一次也會觸發
-      if (file && detailDog) preparePhoto(detailDog, file, photoPickTarget);
+      if (!files.length || !detailDog) return;
+      if (photoPickTarget === 'gallery') prepareGalleryPhotos(detailDog, files);
+      else preparePhoto(detailDog, files[0]);
     });
     document.body.appendChild(input);
   }
+  input.multiple = photoPickTarget === 'gallery'; // 相簿可以一次選好幾張，主照片只能一張
   input.click();
 }
 
@@ -1020,7 +1026,7 @@ async function compressPhoto(file) {
   }
 }
 
-async function preparePhoto(dog, file, target = 'main') {
+async function preparePhoto(dog, file) {
   if (photoUpload && photoUpload.phase === 'uploading') {
     showToast('上一張照片還在上傳，請稍等一下');
     return;
@@ -1034,7 +1040,7 @@ async function preparePhoto(dog, file, target = 'main') {
   }
   if (detailDog !== dog) return; // 壓縮途中換看別隻或關掉了
   clearPhotoUpload();
-  photoUpload = { dog, target, blob, url: URL.createObjectURL(blob), phase: 'preview', error: '' };
+  photoUpload = { dog, blob, url: URL.createObjectURL(blob), phase: 'preview', error: '' };
   renderDetail();
   const confirm = document.getElementById('photoConfirm');
   if (confirm) {
@@ -1056,16 +1062,15 @@ async function uploadPhoto() {
   up.phase = 'uploading';
   up.error = '';
   renderDetail();
-  let error = '', out = null;
+  let error = '';
   try {
-    const res = await fetch(`${UPLOAD_URL}/${up.target === 'gallery' ? 'gallery' : 'photos'}/${encodeURIComponent(up.dog.id)}`, {
+    const res = await fetch(`${UPLOAD_URL}/photos/${encodeURIComponent(up.dog.id)}`, {
       method: 'POST',
       headers: { 'Content-Type': 'image/jpeg' },
       body: up.blob,
     });
-    out = await res.json().catch(() => null);
+    const out = await res.json().catch(() => null);
     if (!res.ok || !out || !out.ok) error = (out && out.error) || `上傳失敗（${res.status}），原本的照片不受影響`;
-    else if (up.target === 'gallery' && !(out.photo && typeof out.photo.file === 'string')) error = '上傳服務回應不對，請重新整理後再看看';
   } catch (e) {
     error = '上傳失敗，請確認網路後再試；原本的照片不受影響';
   }
@@ -1083,18 +1088,152 @@ async function uploadPhoto() {
   }
   up.phase = 'done';
   photoUpload = null;
-  if (up.target === 'gallery') {
-    const id = up.dog.id;
-    gallery[id] = [...(gallery[id] || []).filter(p => p.file !== out.photo.file), { file: out.photo.file, addedAt: out.photo.addedAt || '' }];
-    galleryOverrides[`${id}/${out.photo.file}`] = up.url;
-    renderDetail();
-    showToast(`已加進 ${up.dog.name} 的相簿（其他志工幾分鐘內會看到）`);
-    return;
-  }
   photoOverrides[up.dog.id] = up.url;
   render();
   renderDetail();
   showToast(`${up.dog.name} 的照片已更新（其他志工幾分鐘內會看到）`);
+}
+
+// ── 相簿一次加好幾張：選照片 → 每張壓成 JPEG、排成預覽格（可拿掉幾張）→ 「上傳 N 張」一張一張依序送 ──
+
+// 相簿還能放幾張（滿 30 張就是 0）
+function galleryRoom(dog) {
+  return Math.max(0, GALLERY_MAX - (gallery[dog.id] || []).length);
+}
+
+function galleryBatchHtml(batch) {
+  const { dog, items } = batch;
+  const busy = batch.phase === 'uploading';
+  const left = items.filter(it => it.state !== 'done');
+  const doneCount = items.length - left.length;
+  const badge = it => it.state === 'uploading' ? `<span class="gb-state busy">上傳中</span>`
+    : it.state === 'done' ? `<span class="gb-state ok">${icon('tick')}</span>`
+    : it.state === 'error' ? `<span class="gb-state bad">${icon('alert')}</span>` : '';
+  const firstError = (items.find(it => it.state === 'error') || {}).error;
+  const label = busy ? `上傳中 ${Math.min(doneCount + 1, items.length)} / ${items.length}…`
+    : batch.phase === 'error' ? `重新上傳沒傳成的 ${left.length} 張` : `上傳 ${items.length} 張`;
+  return `
+    <div class="photo-upload preview in-gallery gallery-batch">
+      <div class="photo-preview-hint">加進相簿：${items.length} 張（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
+      <div class="gb-grid">
+        ${items.map((it, i) => `
+          <div class="gb-item ${it.state}">
+            <img src="${esc(it.url)}" alt="第 ${i + 1} 張預覽">
+            ${badge(it)}
+            ${!busy && it.state !== 'done' && left.length > 1 ? `<button type="button" class="gb-remove" data-gb-remove="${i}" aria-label="不要傳第 ${i + 1} 張">${icon('close')}</button>` : ''}
+          </div>`).join('')}
+      </div>
+      ${firstError ? `<div class="photo-error" role="alert">${icon('alert')}<span>${doneCount ? `已傳 ${doneCount} 張，另外 ${left.length} 張沒傳成：` : ''}${esc(firstError)}</span></div>` : ''}
+      <button type="button" class="photo-confirm" id="galleryUpload"${busy ? ' disabled' : ''}>${label}</button>
+      ${busy ? '' : `<button type="button" class="photo-cancel" id="galleryBatchCancel">${doneCount ? '不傳了' : '取消'}</button>`}
+    </div>`;
+}
+
+// 選好的照片先全部壓好再一起預覽；一次最多 10 張，也不超過相簿剩下的格數
+async function prepareGalleryPhotos(dog, files) {
+  if (galleryBatch && galleryBatch.phase === 'uploading') {
+    showToast('上一批照片還在上傳，請稍等一下');
+    return;
+  }
+  const limit = Math.min(GALLERY_BATCH_MAX, galleryRoom(dog));
+  if (!limit) { showToast(`相簿最多 ${GALLERY_MAX} 張，請先刪掉幾張`); return; }
+  const picked = files.slice(0, limit);
+  const items = [];
+  let failed = '';
+  for (const file of picked) {
+    try {
+      const blob = await compressPhoto(file);
+      items.push({ blob, url: URL.createObjectURL(blob), state: 'ready', error: '' });
+    } catch (e) {
+      failed = failed || e.message;
+    }
+  }
+  if (detailDog !== dog) { items.forEach(it => URL.revokeObjectURL(it.url)); return; } // 壓縮途中換看別隻或關掉了
+  const notes = [];
+  if (files.length > limit) notes.push(limit < GALLERY_BATCH_MAX ? `相簿只剩 ${limit} 格，只取前 ${limit} 張` : `一次最多 ${GALLERY_BATCH_MAX} 張，只取前 ${GALLERY_BATCH_MAX} 張`);
+  if (failed) notes.push(items.length ? `有 ${picked.length - items.length} 張讀不了，已略過（${failed}）` : failed);
+  if (notes.length) showToast(notes.join('；'));
+  if (!items.length) return;
+  clearGalleryBatch();
+  galleryBatch = { dog, phase: 'preview', items };
+  renderDetail();
+  const btn = document.getElementById('galleryUpload');
+  if (btn) {
+    btn.focus({ preventScroll: true });
+    if (btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+// 取消（或換看別隻）時丟掉還沒上傳的照片；上傳好的那幾張本機圖片還要給相簿格用，不收回
+function clearGalleryBatch() {
+  if (galleryBatch) galleryBatch.items.forEach(it => { if (it.state !== 'done') URL.revokeObjectURL(it.url); });
+  galleryBatch = null;
+}
+
+function removeGalleryBatchItem(index) {
+  const batch = galleryBatch;
+  if (!batch || batch.phase === 'uploading') return;
+  const [it] = batch.items.splice(index, 1);
+  if (it) URL.revokeObjectURL(it.url);
+  if (!batch.items.some(x => x.state !== 'done')) clearGalleryBatch();
+  renderDetail();
+}
+
+// 一張一張依序送到 Worker（同時送會讓相簿清單互相搶著改）；傳成的馬上出現在相簿格。
+// 被頻率限制或相簿滿了就停下來，剩下的留著可以重傳
+async function uploadGalleryBatch() {
+  const batch = galleryBatch;
+  if (!batch || batch.phase === 'uploading') return;
+  batch.phase = 'uploading';
+  batch.items.forEach(it => { if (it.state === 'error') { it.state = 'ready'; it.error = ''; } });
+  const shown = () => detailDog === batch.dog && galleryBatch === batch;
+  if (shown()) renderDetail();
+  const id = batch.dog.id;
+  for (const it of batch.items) {
+    if (it.state === 'done') continue;
+    if (it.state === 'error') continue; // 前面已經停下來、整批標成沒傳成
+    it.state = 'uploading';
+    if (shown()) renderDetail();
+    let out = null, status = 0, error = '';
+    try {
+      const res = await fetch(`${UPLOAD_URL}/gallery/${encodeURIComponent(id)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'image/jpeg' },
+        body: it.blob,
+      });
+      status = res.status;
+      out = await res.json().catch(() => null);
+      if (!res.ok || !out || !out.ok) error = (out && out.error) || `上傳失敗（${res.status}）`;
+      else if (!(out.photo && typeof out.photo.file === 'string')) error = '上傳服務回應不對，請重新整理後再看看';
+    } catch (e) {
+      error = '上傳失敗，請確認網路後再試';
+    }
+    if (error) {
+      it.state = 'error';
+      it.error = error;
+      // 太頻繁、相簿滿了：後面的也不用試了
+      if (status === 429 || status === 409) batch.items.forEach(x => { if (x.state === 'ready') { x.state = 'error'; x.error = error; } });
+      continue;
+    }
+    it.state = 'done';
+    gallery[id] = [...(gallery[id] || []).filter(p => p.file !== out.photo.file), { file: out.photo.file, addedAt: out.photo.addedAt || '' }];
+    galleryOverrides[`${id}/${out.photo.file}`] = it.url;
+  }
+  const done = batch.items.filter(it => it.state === 'done').length;
+  const left = batch.items.length - done;
+  if (galleryBatch !== batch) return;
+  if (!left) {
+    galleryBatch = null;
+    if (detailDog === batch.dog) renderDetail();
+    showToast(`已加進 ${done} 張到 ${batch.dog.name} 的相簿（其他志工幾分鐘內會看到）`);
+    return;
+  }
+  batch.phase = 'error';
+  if (shown()) { renderDetail(); return; }
+  // 上傳途中關掉或換看別隻：用提示條告訴結果，沒傳成的丟掉
+  const error = (batch.items.find(it => it.state === 'error') || {}).error;
+  clearGalleryBatch();
+  showToast(`${batch.dog.name} 的相簿${done ? `已加進 ${done} 張，` : ''}${left} 張沒有上傳成功：${error}`);
 }
 
 // 讀一個「編號 → 內容」的 JSON（我的備註、相簿清單共用）；pick 從回應挑出要的物件，不是物件就算失敗
@@ -1259,6 +1398,15 @@ function renderDetail() {
   }));
   const addBtn = box.querySelector('#galleryAdd');
   if (addBtn) addBtn.addEventListener('click', () => pickPhotoFile('gallery'));
+  const batchBtn = box.querySelector('#galleryUpload');
+  if (batchBtn) batchBtn.addEventListener('click', uploadGalleryBatch);
+  const batchCancel = box.querySelector('#galleryBatchCancel');
+  if (batchCancel) batchCancel.addEventListener('click', () => {
+    clearGalleryBatch(); renderDetail();
+    const b = document.getElementById('galleryAdd');
+    if (b) b.focus({ preventScroll: true });
+  });
+  box.querySelectorAll('[data-gb-remove]').forEach(b => b.addEventListener('click', () => removeGalleryBatchItem(Number(b.dataset.gbRemove))));
   const pick = box.querySelector('#photoPick');
   if (pick) {
     pick.addEventListener('click', () => pickPhotoFile('main'));
@@ -1326,7 +1474,11 @@ function renderDetail() {
 function showDetail(dog) {
   const wasOpen = !!detailDog;
   if (!wasOpen) detailOpener = { element: document.activeElement, index: allDogs.indexOf(dog) };
-  if (dog !== detailDog) { pickedBuddies.clear(); if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload(); }
+  if (dog !== detailDog) {
+    pickedBuddies.clear();
+    if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
+    if (!galleryBatch || galleryBatch.phase !== 'uploading') clearGalleryBatch();
+  }
   detailDog = dog;
   renderDetail();
   document.getElementById('detailBackdrop').hidden = false;
@@ -1342,6 +1494,7 @@ function hideDetail() {
   detailDog = null;
   pickedBuddies.clear();
   if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
+  if (!galleryBatch || galleryBatch.phase !== 'uploading') clearGalleryBatch();
   document.getElementById('detailBackdrop').hidden = true;
   document.getElementById('detail').innerHTML = '';
   document.documentElement.classList.remove('detail-open');
