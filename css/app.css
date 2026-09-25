@@ -569,6 +569,25 @@ html.lightbox-open { overflow: hidden; }
 .a-miss.ok { cursor: default; }
 .a-miss.ok b { color: var(--green-text); }
 .a-miss .muted { color: var(--muted-text); }
+/* 自動發現、各區遛狗狀況 */
+.a-insights { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.a-insights li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.6; padding: 10px 12px; border-radius: 12px; background: var(--primary-soft); color: var(--ink); }
+.a-insights li .icon { font-size: 18px; margin-top: 2px; color: var(--primary); }
+.a-insights li.warn { background: var(--amber-bg); }
+.a-insights li.warn .icon { color: var(--amber-text); }
+.a-stacks { display: grid; grid-template-columns: max-content 1fr max-content; gap: 8px; align-items: center; }
+.a-stack-row { display: contents; }
+.a-stack-l { font-size: 14px; font-weight: 500; }
+.a-stack { display: flex; gap: 2px; height: 24px; border-radius: 8px; overflow: hidden; }
+.a-stack span { display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; color: #fff; min-width: 16px; }
+.a-stack .fresh { background: var(--green-text); }
+.a-stack .mid { background: var(--primary); }
+.a-stack .stale { background: var(--amber-text); }
+.a-stack .none { background: var(--muted-bg); color: var(--muted-text); }
+.a-stack-v { font-size: 13px; font-weight: 700; white-space: nowrap; min-width: 48px; text-align: right; }
+.a-key.none { background: var(--muted-bg); border: 1px solid var(--line); }
+.a-foot { font-size: 12px; color: var(--ink-soft); margin: 0; }
+
 /* 頁首右上角的分析圖示（#59）：偶爾才看的功能不佔分類，點了開分析頁 */
 .analysis-btn {
   width: 40px; height: 40px; flex-shrink: 0; align-self: flex-start;
