@@ -233,21 +233,27 @@ function runTests() {
       // （#35「今天已溜」的打勾圖示叫 i-tick，只記在這支手機，不是編輯試算表）
       if (/edit|pencil|pen|check/i.test(symbols)) throw new Error(`不應有編輯或勾選圖示：${symbols}`);
     }),
-    check('#10 唯讀：程式只有讀取，沒有寫入試算表的呼叫', () => {
-      const code = APP_JS;
+    check('#10 唯讀：程式只有讀取，沒有寫入試算表的呼叫；唯一的上傳只送到照片上傳服務（#48）', () => {
+      // #48 起唯一的寫入是把照片 POST 到 UPLOAD_URL（Cloudflare Worker），先把那一段拿掉再檢查其他地方
+      const uploadCall = /fetch\(`\$\{UPLOAD_URL\}\/photos\/\$\{encodeURIComponent\(up\.dog\.id\)\}`, \{\s*method: 'POST',/;
+      if (!uploadCall.test(APP_JS)) throw new Error('找不到照片上傳的呼叫');
+      const code = APP_JS.replace(uploadCall, '');
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
       eq(hits, [], '寫入相關字眼：');
+      // #48 GitHub 寫入權限只在 Worker：網站程式不能有 token 或直接連 GitHub API
+      const tokenHits = [/ghp_|gho_|github_pat_/, /api\.github\.com/, /Authorization|Bearer/i, /GITHUB_TOKEN/].filter(re => re.test(APP_JS)).map(String);
+      eq(tokenHits, [], 'GitHub 憑證相關字眼：');
       // #35 起「今天已溜」存在這支手機的 localStorage，只准用 WALKED_KEY 這一個欄位
       eq([...code.matchAll(/\blocalStorage\s*[.[]|window\.localStorage/g)].length, 1, 'localStorage 只在一個地方取用：');
       eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKED_KEY', 'WALKED_KEY'], '只讀寫 WALKED_KEY：');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
-      eq(urls.length, 2, 'fetch 呼叫數：');
+      eq(urls.length, 2, 'fetch 呼叫數（上傳以外）：');
       // #32 起前端只讀 data/dogs.json 與 dogs/，不直接連試算表
       if (!urls.every(u => u.startsWith('DATA_URL,') || u.startsWith('`dogs/'))) throw new Error(`只能讀 data/dogs.json 與 dogs/：${urls.join('、')}`);
       eq(DATA_URL, 'data/dogs.json', '資料檔：');
-      if (/docs\.google\.com|gviz/.test(code)) throw new Error('前端不應再連 Google 試算表');
+      if (/docs\.google\.com|gviz/.test(APP_JS)) throw new Error('前端不應再連 Google 試算表');
     }),
     check('#10／#28 卡片沒有連結，也不會跳到別頁（點了只開詳細資訊）', () => {
       const box = document.createElement('div');
@@ -487,7 +493,8 @@ function runTests() {
         showDetail(allDogs[0]);
         const key = shiftKey => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true }));
         document.getElementById('groupWalk').focus(); key(false);
-        eq(document.activeElement.id, 'detailClose');
+        // #46 起詳細資訊第一個按鈕是可放大的照片，接著才是關閉
+        eq(document.activeElement === document.querySelector('#detail button'), true, '回到第一個按鈕：');
         key(true);
         eq(document.activeElement.id, 'groupWalk');
         renderDetail();
@@ -837,6 +844,211 @@ async function runSerialTests() {
   }
 }
 
+// #46 照片燈箱：會開關燈箱、動到瀏覽器上一頁紀錄，所以也一項一項跑
+async function runPhotoTests() {
+  const saved = [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory];
+  const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const box = document.getElementById('main').parentElement;
+  const lb = () => document.getElementById('lightbox');
+  const isOpen = () => !!lb() && !lb().hidden;
+  // 關燈箱走「上一頁」，等 popstate 處理完
+  const popped = () => new Promise(r => window.addEventListener('popstate', () => setTimeout(r, 0), { once: true }));
+  const cardOf = i => document.querySelector(`#main .card[data-dog="${i}"]`);
+  try {
+    box.classList.remove('hidden'); // 真瀏覽器裡 display:none 的元素不能拿到焦點
+    allDogs = [
+      { id: '9101', name: '照片甲', cage: 'A01', note: '', walker: '', walkedDate: null },
+      { id: '9102', name: '照片乙', cage: 'A02', note: '', walker: '', walkedDate: null },
+      { id: '', name: '照片丙', cage: 'A03', note: '', walker: '', walkedDate: null },
+    ];
+    photoOverrides['9101'] = PX; photoOverrides['9102'] = PX;
+    groupMap = {}; detailMap = {}; activeTab = 'walk'; searchQuery = '';
+    walkedStorage = fakeStorage(); walkedMemory = null;
+    render();
+    await check('#46 點狗卡照片開燈箱、不開詳細資訊；點關閉按鈕關掉；點卡片其他地方照舊開詳細資訊', async () => {
+      cardOf(0).querySelector('.thumb img').click();
+      eq(isOpen(), true, '燈箱打開：');
+      eq(detailDog, null, '不開詳細資訊：');
+      eq(lb().querySelector('img').getAttribute('src'), PX, '大圖：');
+      eq(document.activeElement === lb().querySelector('.lightbox-close'), true, '焦點在關閉按鈕：');
+      const p = popped(); lb().querySelector('.lightbox-close').click(); await p;
+      eq(isOpen(), false, '按關閉後：');
+      cardOf(0).querySelector('.name').click();
+      eq(detailDog === allDogs[0], true, '點犬名開詳細資訊：');
+      hideDetail();
+    });
+    await check('#46 點背景關燈箱，點大圖本身不關；Esc 也能關', async () => {
+      cardOf(1).querySelector('.thumb img').click();
+      const big = lb().querySelector('img');
+      if (!big.complete) await new Promise(r => big.addEventListener('load', r, { once: true }));
+      const r = big.getBoundingClientRect();
+      const at = (x, y) => big.dispatchEvent(new MouseEvent('click', { bubbles: true, clientX: x, clientY: y }));
+      at(r.left + r.width / 2, r.top + r.height / 2); // 正方形照片畫在正中間
+      eq(isOpen(), true, '點大圖不關：');
+      if (Math.abs(r.width - r.height) > 20) { // 畫面不是正方形時，照片旁邊的留白算背景
+        const p0 = popped();
+        r.width > r.height ? at(r.left + 5, r.top + r.height / 2) : at(r.left + r.width / 2, r.top + 5);
+        await p0;
+        eq(isOpen(), false, '點照片旁留白關：');
+        cardOf(1).querySelector('.thumb img').click();
+      }
+      let p = popped(); lb().click(); await p;
+      eq(isOpen(), false, '點背景關：');
+      cardOf(1).querySelector('.thumb img').click();
+      p = popped(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await p;
+      eq(isOpen(), false, 'Esc 關：');
+    });
+    await check('#46 詳細資訊上方照片可放大；Esc、返回只關燈箱，詳細資訊還在', async () => {
+      showDetail(allDogs[0]);
+      const zoom = document.querySelector('#detail [data-zoom]');
+      eq(zoom && zoom.tagName, 'BUTTON', '照片是按鈕：');
+      zoom.click();
+      eq(isOpen(), true, '燈箱打開：');
+      let p = popped(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await p;
+      eq([isOpen(), detailDog === allDogs[0]], [false, true], 'Esc 後燈箱關、詳細資訊在：');
+      eq(document.activeElement === document.querySelector('#detail [data-zoom]'), true, '焦點回到照片：');
+      zoom.click();
+      p = popped(); history.back(); await p;
+      eq([isOpen(), detailDog === allDogs[0]], [false, true], '返回後燈箱關、詳細資訊在：');
+      hideDetail();
+    });
+    await check('#46 沒照片（沒編號或照片讀不到）點照片位置照舊開詳細資訊', async () => {
+      cardOf(2).querySelector('.thumb').click();
+      eq([isOpen(), detailDog === allDogs[2]], [false, true], '沒編號：');
+      hideDetail();
+      delete photoOverrides['9102'];
+      render();
+      const img = cardOf(1).querySelector('.thumb img');
+      img.dispatchEvent(new Event('error')); // 模擬 photos/9102.jpg 不存在
+      img.parentElement.click();
+      eq([isOpen(), detailDog === allDogs[1]], [false, true], '照片讀不到：');
+      const zoom = document.querySelector('#detail [data-zoom]');
+      zoom.querySelector('img').dispatchEvent(new Event('error'));
+      eq(zoom.disabled, true, '詳細資訊照片讀不到就不能按：');
+      hideDetail();
+    });
+    // ── #48 上傳／更換照片 ──
+    const realFetch = window.fetch;
+    const savedUrl = UPLOAD_URL;
+    const tick = () => new Promise(r => setTimeout(r, 0));
+    // 做一張測試用照片檔（寬 w、高 h）
+    const makeFile = (w, h, type = 'image/png') => new Promise(r => {
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const ctx = c.getContext('2d'); ctx.fillStyle = '#3a7'; ctx.fillRect(0, 0, w, h);
+      c.toBlob(b => r(new File([b], 'dog.png', { type })), type);
+    });
+    const blobSize = blob => new Promise((r, j) => { const img = new Image(); img.onload = () => r([img.naturalWidth, img.naturalHeight]); img.onerror = j; img.src = URL.createObjectURL(blob); });
+    const toastText = () => { const t = document.getElementById('toast'); return t && !t.hidden ? t.querySelector('.toast-text').textContent : ''; };
+    try {
+      await check('#48 上傳服務沒設定網址時不顯示上傳按鈕；設定後有編號的狗才有', async () => {
+        UPLOAD_URL = '';
+        showDetail(allDogs[0]);
+        eq(document.getElementById('photoPick'), null, '沒網址：');
+        hideDetail();
+        UPLOAD_URL = 'https://upload.test';
+        showDetail(allDogs[2]);
+        eq(document.getElementById('photoPick'), null, '沒編號：');
+        hideDetail();
+        photoOverrides['9101'] = PX;
+        showDetail(allDogs[0]);
+        const pick = document.getElementById('photoPick');
+        if (!pick) throw new Error('有編號要有上傳按鈕');
+        const img = document.querySelector('#detail [data-zoom] img');
+        if (!img.complete) await new Promise(r => img.addEventListener('load', r, { once: true }));
+        await tick();
+        eq(pick.title, '更換照片', '已有照片：');
+        eq(pick.parentElement.className, 'photo-wrap', '相機在照片角落：');
+        eq(document.querySelector('#detail .photo-upload'), null, '還沒選照片時照片下方沒有多一行：');
+        hideDetail();
+        delete photoOverrides['9102'];
+        showDetail(allDogs[1]);
+        eq(document.getElementById('photoPick').title, '上傳照片', '還沒照片：');
+        hideDetail();
+      });
+      await check('#48 選照片後壓成 JPEG（長邊 1280）並預覽，只有「確認上傳」與取消；取消回到原狀', async () => {
+        showDetail(allDogs[0]);
+        await preparePhoto(allDogs[0], await makeFile(3000, 1500));
+        eq(photoUpload && photoUpload.blob.type, 'image/jpeg', '格式：');
+        eq(await blobSize(photoUpload.blob), [1280, 640], '尺寸：');
+        const preview = document.querySelector('#detail .photo-preview');
+        eq(preview && preview.getAttribute('src'), photoUpload.url, '預覽：');
+        eq([...document.querySelectorAll('#detail .photo-upload button')].map(b => b.textContent.trim()), ['確認上傳', '取消'], '按鈕：');
+        eq(document.activeElement.id, 'photoConfirm', '焦點在確認上傳：');
+        document.getElementById('photoCancel').click();
+        eq([photoUpload, !!document.getElementById('photoPick')], [null, true], '取消後：');
+        await preparePhoto(allDogs[0], await makeFile(200, 300));
+        eq(await blobSize(photoUpload.blob), [200, 300], '小照片不放大：');
+        hideDetail();
+        eq(photoUpload, null, '關掉詳細資訊就丟掉預覽：');
+      });
+      await check('#48 不是圖片的檔案：顯示錯誤、不出現預覽', async () => {
+        showDetail(allDogs[0]);
+        await preparePhoto(allDogs[0], new File(['hello'], 'a.txt', { type: 'text/plain' }));
+        eq(photoUpload, null, '沒有預覽：');
+        if (!toastText().includes('請選擇照片檔')) throw new Error(`提示：${toastText()}`);
+        hideToast(); hideDetail();
+      });
+      await check('#48 確認上傳：用編號送到上傳服務，成功後狗卡、詳細資訊、燈箱立刻換新照片', async () => {
+        photoOverrides['9101'] = PX;
+        render();
+        showDetail(allDogs[0]);
+        await preparePhoto(allDogs[0], await makeFile(800, 600));
+        const url = photoUpload.url, blob = photoUpload.blob;
+        const calls = [];
+        let release;
+        window.fetch = (u, opts) => { calls.push([u, opts]); return new Promise(r => { release = () => r(new Response(JSON.stringify({ ok: true, id: '9101', replaced: true }))); }); };
+        document.getElementById('photoConfirm').click();
+        await tick();
+        const btn = document.getElementById('photoConfirm');
+        eq([btn.disabled, btn.textContent.trim(), document.getElementById('photoCancel')], [true, '上傳中…', null], '上傳中：');
+        release(); await tick(); await tick();
+        eq(calls.length, 1, '呼叫次數：');
+        eq(calls[0][0], 'https://upload.test/photos/9101', '網址：');
+        eq([calls[0][1].method, calls[0][1].headers['Content-Type'], calls[0][1].body === blob], ['POST', 'image/jpeg', true], '內容：');
+        eq(photoOverrides['9101'], url, '記下新照片：');
+        eq(cardOf(0).querySelector('.thumb img').getAttribute('src'), url, '狗卡：');
+        eq(document.querySelector('#detail [data-zoom] img').getAttribute('src'), url, '詳細資訊：');
+        if (!toastText().includes('照片已更新')) throw new Error(`提示：${toastText()}`);
+        document.querySelector('#detail [data-zoom]').click();
+        eq(lb().querySelector('img').getAttribute('src'), url, '燈箱：');
+        const p = popped(); closeLightbox(); await p;
+        hideToast(); hideDetail();
+      });
+      await check('#48 上傳失敗：顯示錯誤，原本的照片不變，可以再按確認上傳重試', async () => {
+        photoOverrides['9101'] = PX;
+        render();
+        showDetail(allDogs[0]);
+        await preparePhoto(allDogs[0], await makeFile(400, 300));
+        window.fetch = async () => new Response(JSON.stringify({ ok: false, error: '找不到這個編號的狗狗' }), { status: 404 });
+        await uploadPhoto();
+        eq(document.querySelector('#detail .photo-error').textContent.trim(), '找不到這個編號的狗狗', '服務回的錯誤：');
+        eq(photoOverrides['9101'], PX, '原照片不變：');
+        eq(cardOf(0).querySelector('.thumb img').getAttribute('src'), PX, '狗卡照片不變：');
+        window.fetch = async () => { throw new TypeError('Failed to fetch'); };
+        document.getElementById('photoConfirm').click();
+        await tick(); await tick();
+        if (!document.querySelector('#detail .photo-error').textContent.includes('請確認網路')) throw new Error('網路錯誤要提示');
+        window.fetch = async () => new Response('<html>502</html>', { status: 502 });
+        await uploadPhoto();
+        if (!document.querySelector('#detail .photo-error').textContent.includes('原本的照片不受影響')) throw new Error('非 JSON 錯誤也要說原照片沒事');
+        eq(photoOverrides['9101'], PX, '原照片仍不變：');
+        hideDetail();
+      });
+    } finally {
+      window.fetch = realFetch;
+      UPLOAD_URL = savedUrl;
+      clearPhotoUpload(); hideToast();
+    }
+  } finally {
+    hideLightbox(); hideDetail();
+    delete photoOverrides['9101']; delete photoOverrides['9102'];
+    box.classList.add('hidden');
+    history.replaceState(null, '');
+    [allDogs, groupMap, detailMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
+    render();
+  }
+}
+
 function show() {
   const failed = results.filter(r => !r.ok);
   const summary = document.getElementById('summary');
@@ -864,6 +1076,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
     return runTests();
   })
   .then(runSerialTests)
+  .then(runPhotoTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
