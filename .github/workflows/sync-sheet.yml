@@ -3,6 +3,7 @@
 # - 資料有變才提交；讀取失敗時這次執行會顯示失敗，data/dogs.json 保留上一次成功的內容
 # - 有人改了狗卡（dogs/*.md）或這支同步程式、推到 main 時也會馬上跑一次，狗卡資訊不用等排程
 # - 只讀試算表，不寫入試算表
+# - 試算表 ID 放在 repo 的 Actions Secret「SHEET_ID」，不寫在程式裡（設定方式見 docs/SHEET_SYNC_SETUP.md）
 name: 同步試算表
 
 on:
@@ -38,6 +39,8 @@ jobs:
           node-version: 22
 
       - name: 讀取試算表與狗卡、產生 data/dogs.json
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
         run: node scripts/sync-sheet.mjs
 
       - name: 資料有變才提交
