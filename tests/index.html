@@ -194,12 +194,16 @@ function runTests() {
     }),
     check('#10 唯讀：程式只有讀取，沒有寫入試算表的呼叫；唯一的上傳只送到照片上傳服務（#48）', () => {
       // #48 起唯一的寫入是把照片 POST 到 UPLOAD_URL（Cloudflare Worker），先把那一段拿掉再檢查其他地方
-      const uploadCall = /fetch\(`\$\{UPLOAD_URL\}\/photos\/\$\{encodeURIComponent\(up\.dog\.id\)\}`, \{\s*method: 'POST',/;
+      // 相簿起主照片和相簿照片共用這個呼叫（/photos/編號 或 /gallery/編號）
+      const uploadCall = /fetch\(`\$\{UPLOAD_URL\}\/\$\{up\.target === 'gallery' \? 'gallery' : 'photos'\}\/\$\{encodeURIComponent\(up\.dog\.id\)\}`, \{\s*method: 'POST',/;
       if (!uploadCall.test(APP_JS)) throw new Error('找不到照片上傳的呼叫');
       // #62 起「我的備註」PUT 到同一個 Worker 的 /notes/{編號}（寫進 Git，不是試算表），也先拿掉
       const noteCall = /fetch\(`\$\{UPLOAD_URL\}\/notes\/\$\{encodeURIComponent\(edit\.dog\.id\)\}`, \{\s*method: 'PUT',/;
       if (!noteCall.test(APP_JS)) throw new Error('找不到我的備註儲存的呼叫');
-      const code = APP_JS.replace(uploadCall, '').replace(noteCall, '');
+      // 相簿刪除照片：DELETE 到同一個 Worker 的 /gallery/{編號}/{檔名}（要通關碼），也先拿掉
+      const galleryDeleteCall = /fetch\(`\$\{UPLOAD_URL\}\/gallery\/\$\{encodeURIComponent\(del\.dog\.id\)\}\/\$\{encodeURIComponent\(del\.file\)\}`, \{\s*method: 'DELETE',/;
+      if (!galleryDeleteCall.test(APP_JS)) throw new Error('找不到相簿刪除照片的呼叫');
+      const code = APP_JS.replace(uploadCall, '').replace(noteCall, '').replace(galleryDeleteCall, '');
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
@@ -216,9 +220,11 @@ function runTests() {
       // #62 另外讀我的備註：只從 Worker 的 /notes 或網站上的 data/my-notes.json 讀
       // #58 我最近溜過另外讀 data/walks.json
       if (!urls.every(u => u.startsWith('DATA_URL,') || u.startsWith('WALKS_URL,') || u === "url, { cache: 'no-store' }")) throw new Error(`只能讀 data/dogs.json、data/walks.json 與我的備註：${urls.join('、')}`);
-      const noteReads = [...APP_JS.matchAll(/tryRead\(([^,]+),/g)].map(m => m[1]);
-      eq(noteReads, ['`${UPLOAD_URL}/notes`', 'MY_NOTES_URL'], '我的備註讀取來源：');
+      // 相簿清單也一樣：只從 Worker 的 /gallery 或網站上的 data/gallery.json 讀
+      const noteReads = [...APP_JS.matchAll(/await readJsonObject\(([^,]+),/g)].map(m => m[1]);
+      eq(noteReads, ['`${UPLOAD_URL}/gallery`', 'GALLERY_URL', '`${UPLOAD_URL}/notes`', 'MY_NOTES_URL'], '我的備註、相簿清單讀取來源：');
       eq(MY_NOTES_URL, 'data/my-notes.json', '我的備註檔：');
+      eq(GALLERY_URL, 'data/gallery.json', '相簿清單檔：');
       eq(DATA_URL, 'data/dogs.json', '資料檔：');
       eq(WALKS_URL, 'data/walks.json', '遛狗紀錄檔：');
       if (/docs\.google\.com|gviz/.test(APP_JS)) throw new Error('前端不應再連 Google 試算表');
@@ -240,7 +246,7 @@ function runTests() {
         eq(box.querySelector('.name').textContent, evil, '犬名原文：');
         if (!box.querySelector('.warn-note .text').textContent.startsWith(evil)) throw new Error('備註要原樣顯示文字');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq(box.querySelectorAll('.info img, section img:not(.thumb img), section b').length, 0, '詳細資訊裡被當成 HTML 的元素：');
+        eq(box.querySelectorAll('.info img, section img:not(.thumb img):not(.g-tile img), section b').length, 0, '詳細資訊裡被當成 HTML 的元素：');
         eq(box.querySelector('.buddy .bname').textContent, evil, '可一起遛原文：');
         eq(box.querySelector('[data-section="intro"] .content').textContent, evil, '狗卡資訊原文：');
         allDogs = [dog]; activeTab = 'walk'; searchQuery = '';
@@ -317,7 +323,7 @@ function runTests() {
         groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['備註', '我的備註', '可以一起溜的狗', '遛狗紀錄', '狗卡資訊']);
+        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['備註', '我的備註', '可以一起溜的狗', '遛狗紀錄', '狗卡資訊', '相簿']);
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/2.jpg', '一起溜的照片：');
@@ -325,7 +331,7 @@ function runTests() {
         eq(box.querySelector('[data-section="intro"] .content').textContent, '入所狗卡');
         dog.note = ''; dog.intro = ''; groupMap = {};
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section .empty')].length, 5, '都沒有資料時顯示提示（#60 遛狗紀錄讀取中也算）：');
+        eq([...box.querySelectorAll('section .empty')].length, 6, '都沒有資料時顯示提示（#60 遛狗紀錄、相簿清單讀取中也算）：');
       } finally { [allDogs, groupMap] = saved; }
     }),
     check('#28 點狗卡開詳細資訊，點一起溜的狗換成那隻，關閉後回到清單', () => {
@@ -458,13 +464,16 @@ function runTests() {
         card.focus();
         showDetail(allDogs[0]);
         const key = shiftKey => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true }));
-        document.getElementById('groupWalk').focus(); key(false);
+        // 相簿起最後一個按鈕是相簿的「新增」
+        document.getElementById('galleryAdd').focus(); key(false);
         // #46 起詳細資訊第一個按鈕是可放大的照片，接著才是關閉
         eq(document.activeElement === document.querySelector('#detail button'), true, '回到第一個按鈕：');
         key(true);
-        eq(document.activeElement.id, 'groupWalk');
+        eq(document.activeElement.id, 'galleryAdd');
         renderDetail();
-        eq(document.activeElement.id, 'groupWalk');
+        eq(document.activeElement.id, 'galleryAdd');
+        document.getElementById('groupWalk').focus(); renderDetail();
+        eq(document.activeElement.id, 'groupWalk', '重畫保留焦點：');
         hideDetail();
         eq(document.activeElement === card, true);
       } finally {
@@ -787,7 +796,8 @@ async function runSerialTests() {
         `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, '同步時間：');
       eq([...groupMap['讀取甲']], ['讀取乙'], '可以一起溜：');
       // #62 起讀完狗狗資料後另外讀我的備註（Worker 的 /notes、不行再讀 data/my-notes.json），不算在內
-      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$|walks\.json$/.test(u)), ['data/dogs.json'], '只讀 dogs.json，不再逐隻抓 dogs/*.md：');
+      // 相簿起也另外讀相簿清單（Worker 的 /gallery、不行再讀 data/gallery.json）
+      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$|walks\.json$|\/gallery$|gallery\.json$/.test(u)), ['data/dogs.json'], '只讀 dogs.json，不再逐隻抓 dogs/*.md：');
     });
     await check('#32 dogs.json 讀取失敗：標題、搜尋、分類都在，內容區顯示錯誤，可重新讀取', async () => {
       reset();
@@ -1347,7 +1357,7 @@ async function runHistoryTests() {
       showDetail(dogs[0]);
       const sec = document.querySelector('#detail [data-section="walks"]');
       if (!sec) throw new Error('詳細資訊要有遛狗紀錄');
-      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-2), ['walks', 'intro'], '位置在狗卡資訊前：');
+      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-3, -1), ['walks', 'intro'], '位置在狗卡資訊前（相簿在最後）：');
       eq([sec.querySelectorAll('.w-grid .on').length, sec.querySelectorAll('.w-grid .none').length, sec.querySelectorAll('.w-grid span').length], [14, 2, 30], '格子：');
       eq([...sec.querySelectorAll('.w-num b')].map(b => b.textContent), ['14', '2.3', '6'], '數字：');
       if (!sec.textContent.includes('從 2026/9/25 開始記錄')) throw new Error('要寫從哪天開始記錄');
@@ -1483,6 +1493,187 @@ async function runMyWalksTests() {
   }
 }
 
+// ── 相簿（狗卡資訊下方）：用假的 Worker（改寫 fetch），不會真的寫進 Git ──
+async function runGalleryTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, gallery, galleryState];
+  const realFetch = window.fetch;
+  const box = document.getElementById('main').parentElement;
+  const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const tick = () => new Promise(r => setTimeout(r, 0));
+  const json = (data, status = 200) => new Response(JSON.stringify(data), { status });
+  const lb = () => document.getElementById('lightbox');
+  const isOpen = () => !!lb() && !lb().hidden;
+  const popped = () => new Promise(r => window.addEventListener('popstate', () => setTimeout(r, 0), { once: true }));
+  const section = () => document.querySelector('#detail [data-section="gallery"]');
+  const tiles = () => [...section().querySelectorAll('.g-tile')];
+  const bigSrc = () => lb().querySelector('img').getAttribute('src');
+  const count = () => { const c = lb().querySelector('.lightbox-count'); return c ? c.textContent : ''; };
+  const key = k => document.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
+  const toastText = () => { const t = document.getElementById('toast'); return t && !t.hidden ? t.querySelector('.toast-text').textContent : ''; };
+  const F1 = '20260925-100000-aaaa.jpg', F2 = '20260925-110000-bbbb.jpg';
+  const makeFile = () => new Promise(r => {
+    const c = document.createElement('canvas'); c.width = 60; c.height = 40;
+    c.getContext('2d').fillRect(0, 0, 60, 40);
+    c.toBlob(b => r(new File([b], 'dog.png', { type: 'image/png' })), 'image/png');
+  });
+  try {
+    box.classList.remove('hidden');
+    UPLOAD_URL = 'https://worker.test';
+    allDogs = [
+      { id: '9301', name: '相簿甲', cage: 'A01', note: '', covered: false, walkedDate: null },
+      { id: '9302', name: '相簿乙', cage: 'A02', note: '', covered: false, walkedDate: null },
+    ];
+    groupMap = {}; activeTab = 'walk'; searchQuery = '';
+    walkedStorage = fakeStorage(); walkedMemory = null; notesPassMemory = '';
+    photoOverrides['9301'] = PX;
+    render();
+    await check('相簿：開網頁從 Worker 讀最新清單；讀不到改讀網站上的 data/gallery.json；檔名不對的濾掉', async () => {
+      const calls = [];
+      window.fetch = async (u, o) => { calls.push([String(u), o && o.cache]); return json({ ok: true, gallery: { '9301': [{ file: F1, addedAt: 'a' }] } }); };
+      await loadGallery();
+      eq([calls, galleryState, gallery['9301']], [[['https://worker.test/gallery', 'no-store']], 'worker', [{ file: F1, addedAt: 'a' }]], 'Worker：');
+      calls.length = 0;
+      window.fetch = async u => { calls.push([String(u)]); return String(u).includes('worker') ? json({ ok: false }, 502) : json({ '9301': [{ file: F2 }, { file: '../x.jpg' }, { nope: 1 }], '9302': 'x' }); };
+      await loadGallery();
+      eq([calls.map(c => c[0]), galleryState, gallery], [['https://worker.test/gallery', 'data/gallery.json'], 'site', { '9301': [{ file: F2, addedAt: '' }] }], '退回網站檔：');
+      window.fetch = async () => { throw new TypeError('Failed to fetch'); };
+      await loadGallery();
+      eq([galleryState, gallery], ['error', {}], '都讀不到：');
+    });
+    await check('相簿：在狗卡資訊下方，主照片在第一格、新傳的在前，最後一格「新增」；沒上傳服務或滿 30 張不能新增', async () => {
+      gallery = { '9301': [{ file: F1, addedAt: '' }, { file: F2, addedAt: '' }] }; galleryState = 'worker';
+      galleryOverrides[`9301/${F1}`] = PX; galleryOverrides[`9301/${F2}`] = PX;
+      showDetail(allDogs[0]);
+      const order = [...document.querySelectorAll('#detail .detail-section')].map(x => x.dataset.section);
+      eq(order.slice(-2), ['intro', 'gallery'], '位置：');
+      eq(tiles().map(t => t.dataset.gFile || 'main'), ['main', F2, F1], '順序：');
+      eq(tiles()[0].querySelector('.g-tag').textContent, '主照片', '主照片標籤：');
+      eq(section().querySelector('.gallery-grid').lastElementChild.id, 'galleryAdd', '最後一格新增：');
+      eq(section().querySelector('.sub').textContent, '另外 2 張，點照片看大圖', '張數：');
+      UPLOAD_URL = ''; renderDetail();
+      eq(document.getElementById('galleryAdd'), null, '沒上傳服務：');
+      UPLOAD_URL = 'https://worker.test';
+      gallery['9302'] = Array.from({ length: GALLERY_MAX }, (_, i) => ({ file: `20260925-10${String(i).padStart(4, '0')}-cccc.jpg`, addedAt: '' }));
+      showDetail(allDogs[1]);
+      eq(document.getElementById('galleryAdd'), null, '滿 30 張：');
+      delete gallery['9302'];
+      renderDetail();
+      const main = tiles()[0];
+      main.querySelector('img').dispatchEvent(new Event('error')); // photos/9302.jpg 不存在
+      eq([main.hidden, tiles().length, !!document.getElementById('galleryAdd')], [true, 1, true], '主照片讀不到就藏起來，還是能新增：');
+      hideDetail();
+    });
+    await check('相簿：點哪張從哪張開燈箱，左右鍵、箭頭按鈕、左右滑都能換張，頭尾相接', async () => {
+      showDetail(allDogs[0]);
+      tiles()[1].click();
+      eq([isOpen(), bigSrc(), count()], [true, gallerySrc(allDogs[0], F2), '2 / 3'], '從第 2 張開：');
+      key('ArrowRight');
+      eq(count(), '3 / 3', '右鍵：');
+      lb().querySelector('.lightbox-nav.next').click();
+      eq([count(), bigSrc(), isOpen()], ['1 / 3', PX, true], '下一張頭尾相接、點箭頭不關燈箱：');
+      eq(lb().querySelector('.lightbox-tag').textContent, '主照片', '主照片標示：');
+      eq(lb().querySelector('#galleryDeleteBtn'), null, '主照片不能從這裡刪：');
+      lb().querySelector('.lightbox-nav.prev').click();
+      eq(count(), '3 / 3', '上一張：');
+      const swipe = dx => {
+        const t = (x) => new Touch({ identifier: 1, target: lb(), clientX: x, clientY: 300 });
+        lb().dispatchEvent(new TouchEvent('touchstart', { touches: [t(200)], bubbles: true }));
+        lb().dispatchEvent(new TouchEvent('touchend', { changedTouches: [t(200 + dx)], bubbles: true }));
+      };
+      swipe(-120); eq(count(), '1 / 3', '往左滑下一張：');
+      swipe(120); eq(count(), '3 / 3', '往右滑上一張：');
+      swipe(20); eq(count(), '3 / 3', '滑太短不算：');
+      eq([activeTab, detailDog === allDogs[0]], ['walk', true], '不會換分類、詳細資訊還在：');
+      const p = popped(); key('Escape'); await p;
+      eq([isOpen(), document.activeElement === tiles()[1]], [false, true], 'Esc 關燈箱、焦點回到點的那張：');
+      hideDetail();
+    });
+    await check('相簿：狗卡照片和詳細資訊上方照片開燈箱也能翻到相簿；沒有相簿時不顯示張數和箭頭', async () => {
+      document.querySelector('#main .card[data-dog="0"] .thumb img').click();
+      eq([isOpen(), count(), bigSrc()], [true, '1 / 3', PX], '狗卡照片：');
+      let p = popped(); closeLightbox(); await p;
+      photoOverrides['9302'] = PX; render();
+      document.querySelector('#main .card[data-dog="1"] .thumb img').click();
+      eq([count(), lb().querySelector('.lightbox-nav.next').hidden, lb().querySelector('.lightbox-bar').hidden], ['', true, true], '只有一張：');
+      p = popped(); closeLightbox(); await p;
+      delete photoOverrides['9302'];
+    });
+    await check('相簿新增：選照片後在相簿區預覽，確認後送到 /gallery/編號，成功馬上出現在第二格', async () => {
+      showDetail(allDogs[0]);
+      // 「新增」會打開選檔視窗，這裡直接模擬選好照片
+      await preparePhoto(allDogs[0], await makeFile(), 'gallery');
+      eq([photoUpload.target, !!section().querySelector('.photo-upload .photo-preview'), document.querySelector('.detail-head + .photo-upload')], ['gallery', true, null], '預覽在相簿區、上方沒有：');
+      eq(document.getElementById('galleryAdd'), null, '預覽時藏起新增：');
+      if (!section().querySelector('.photo-preview-hint').textContent.startsWith('加進相簿')) throw new Error('提示要說加進相簿');
+      const url = photoUpload.url, blob = photoUpload.blob;
+      const calls = [];
+      window.fetch = async (u, o) => { calls.push([String(u), o]); return json({ ok: true, id: '9301', photo: { file: '20260925-120000-dddd.jpg', addedAt: 'z' } }); };
+      document.getElementById('photoConfirm').click();
+      await tick(); await tick();
+      eq([calls.length, calls[0][0], calls[0][1].method, calls[0][1].body === blob], [1, 'https://worker.test/gallery/9301', 'POST', true], '送出：');
+      eq(gallery['9301'].map(p => p.file), [F1, F2, '20260925-120000-dddd.jpg'], '清單：');
+      eq([tiles()[1].dataset.gFile, tiles()[1].querySelector('img').getAttribute('src')], ['20260925-120000-dddd.jpg', url], '第二格是剛傳的：');
+      eq(photoOverrides['9301'], PX, '主照片不變：');
+      if (!toastText().includes('已加進 相簿甲 的相簿')) throw new Error(`提示：${toastText()}`);
+      hideToast();
+      await preparePhoto(allDogs[0], await makeFile(), 'gallery');
+      window.fetch = async () => json({ ok: false, error: '相簿最多 30 張，請先刪掉幾張' }, 409);
+      await uploadPhoto();
+      eq([section().querySelector('.photo-error').textContent.trim(), gallery['9301'].length], ['相簿最多 30 張，請先刪掉幾張', 3], '失敗：');
+      document.getElementById('photoCancel').click();
+      hideDetail();
+    });
+    await check('相簿刪除：燈箱下方「刪除」要通關碼（同我的備註），刪掉後換下一張、相簿格少一張', async () => {
+      gallery = { '9301': [{ file: F1, addedAt: '' }, { file: F2, addedAt: '' }] };
+      showDetail(allDogs[0]);
+      tiles()[1].click(); // F2
+      document.getElementById('galleryDeleteBtn').click();
+      eq([!!document.getElementById('galleryDeletePass'), document.activeElement.id], [true, 'galleryDeletePass'], '沒記過通關碼要輸入：');
+      const calls = [];
+      window.fetch = async (u, o) => { calls.push([String(u), o]); return json({ ok: false, code: 'passcode', error: '通關碼不對' }, 401); };
+      document.getElementById('galleryDeleteYes').click();
+      await tick();
+      eq([calls.length, lb().querySelector('.photo-error').textContent.trim()], [0, '請輸入通關碼'], '沒填：');
+      const pass = document.getElementById('galleryDeletePass');
+      pass.value = '猜'; pass.dispatchEvent(new Event('input'));
+      document.getElementById('galleryDeleteYes').click();
+      await tick(); await tick();
+      eq([calls[0][0], calls[0][1].method, JSON.parse(calls[0][1].body)], [`https://worker.test/gallery/9301/${F2}`, 'DELETE', { passcode: '猜' }], '送出：');
+      eq([lb().querySelector('.photo-error').textContent.trim(), loadNotesPass(), gallery['9301'].length], ['通關碼不對', '', 2], '通關碼錯：');
+      key('Escape');
+      eq([isOpen(), lb().querySelector('#galleryDeleteForm')], [true, null], 'Esc 先收起刪除確認：');
+      document.getElementById('galleryDeleteBtn').click();
+      const pass2 = document.getElementById('galleryDeletePass');
+      pass2.value = '對的'; pass2.dispatchEvent(new Event('input'));
+      window.fetch = async (u, o) => { calls.push([String(u), o]); return json({ ok: true, removed: true, fileDeleted: true }); };
+      document.getElementById('galleryDeleteYes').click();
+      await tick(); await tick();
+      eq([gallery['9301'].map(p => p.file), loadNotesPass(), count(), bigSrc()], [[F1], '對的', '2 / 2', gallerySrc(allDogs[0], F1)], '刪掉後：');
+      eq(tiles().map(t => t.dataset.gFile || 'main'), ['main', F1], '相簿格：');
+      if (!toastText().includes('已從 相簿甲 的相簿刪除')) throw new Error(`提示：${toastText()}`);
+      // 記住通關碼後不用再輸入；最後一張刪掉後只剩主照片
+      document.getElementById('galleryDeleteBtn').click();
+      eq(document.getElementById('galleryDeletePass'), null, '記住通關碼：');
+      document.getElementById('galleryDeleteYes').click();
+      await tick(); await tick();
+      eq([gallery['9301'], isOpen(), count(), tiles().length], [undefined, true, '', 1], '刪光後：');
+      const p = popped(); closeLightbox(); await p;
+      hideToast(); hideDetail();
+    });
+  } finally {
+    window.fetch = realFetch;
+    hideLightbox(); hideDetail(); clearPhotoUpload(); hideToast();
+    galleryDelete = null;
+    delete photoOverrides['9301'];
+    Object.keys(galleryOverrides).forEach(k => delete galleryOverrides[k]);
+    box.classList.add('hidden');
+    history.replaceState(null, '');
+    saveNotesPass('');
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, gallery, galleryState] = saved;
+    render();
+  }
+}
+
 function show() {
   const failed = results.filter(r => !r.ok);
   const summary = document.getElementById('summary');
@@ -1519,6 +1710,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runAnalysisTests)
   .then(runHistoryTests)
   .then(runMyWalksTests)
+  .then(runGalleryTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
