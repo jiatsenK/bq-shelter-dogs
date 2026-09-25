@@ -275,6 +275,8 @@ async function syncOnce(disk, main, now) {
     oldDogsText: disk['dogs.json'] || '',
     oldWalksText: disk['walks.json'] || '',
     oldSnapshotText: disk[`history/${sync.formatDate(now)}.json`] || '',
+    oldIndexText: disk['history/index.json'] || '',
+    historyDates: Object.keys(disk).filter(k => /^history\/\d{4}-\d{2}-\d{2}\.json$/.test(k)).map(k => k.slice(8, -5)),
   }, now);
   Object.assign(disk, writes);
   return writes;
@@ -285,7 +287,8 @@ test('#56 第一次同步：存當天快照、用目前每隻狗的最後一次�
   const disk = {};
   const now = new Date(2026, 8, 25, 9);
   const writes = await syncOnce(disk, MAIN, now);
-  assert.deepEqual(Object.keys(writes).sort(), ['dogs.json', 'history/2026-09-25.json', 'walks.json']);
+  assert.deepEqual(Object.keys(writes).sort(), ['dogs.json', 'history/2026-09-25.json', 'history/index.json', 'walks.json']);
+  assert.deepEqual(JSON.parse(writes['history/index.json']).dates, ['2026-09-25'], '#60 快照目錄');
   assert.equal(writes['history/2026-09-25.json'], writes['dogs.json'], '快照內容跟 dogs.json 一樣');
   assert.deepEqual(walksOf(disk), [
     { id: '202101234', name: '測試狗甲', date: '2026-09-16', mine: false },
@@ -331,7 +334,8 @@ test('#56 資料沒變：同一天不寫任何檔；換天只補當天快照', a
   await syncOnce(disk, MAIN, new Date(2026, 8, 25, 9));
   assert.deepEqual(await syncOnce(disk, MAIN, new Date(2026, 8, 25, 13)), {});
   const writes = await syncOnce(disk, MAIN, new Date(2026, 8, 26, 9));
-  assert.deepEqual(Object.keys(writes), ['history/2026-09-26.json']);
+  assert.deepEqual(Object.keys(writes).sort(), ['history/2026-09-26.json', 'history/index.json']);
+  assert.deepEqual(JSON.parse(writes['history/index.json']).dates, ['2026-09-25', '2026-09-26'], '#60 換天時快照目錄多一天：');
   assert.equal(writes['history/2026-09-26.json'], disk['dogs.json'], '換天的快照就是目前的 dogs.json（同步時間不動）');
 });
 
@@ -447,4 +451,13 @@ test('#57 升級：#56 的舊紀錄（沒有 mine）原樣保留；目前最後�
 test('#57 workflow 從 Secret 帶入 MY_NAME', async () => {
   const yml = await readFile(new URL('../.github/workflows/sync-sheet.yml', import.meta.url), 'utf8');
   assert.match(yml, /MY_NAME: \$\{\{ secrets\.MY_NAME \}\}/);
+});
+
+test('#60 快照目錄：日期排序去重、忽略不是日期的檔名；已有快照但還沒有目錄時補上', () => {
+  const eq_ = assert.deepEqual;
+  eq_(JSON.parse(sync.renderHistoryIndex(['2026-09-27', 'index', '2026-09-25', '2026-09-27'])).dates, ['2026-09-25', '2026-09-27']);
+  const data = { syncedAt: '', dogs: [], groups: {} };
+  const now = new Date(2026, 8, 27, 9);
+  const { writes } = sync.planWrites(data, { oldDogsText: 'x', oldWalksText: '{"version":1,"walks":[]}', oldSnapshotText: 'x', historyDates: ['2026-09-25', '2026-09-27'] }, now);
+  eq_(JSON.parse(writes['history/index.json']).dates, ['2026-09-25', '2026-09-27']);
 });

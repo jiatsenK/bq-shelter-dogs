@@ -564,6 +564,26 @@ html.lightbox-open { overflow: hidden; }
 .a-miss.ok { cursor: default; }
 .a-miss.ok b { color: var(--green-text); }
 .a-miss .muted { color: var(--muted-text); }
+/* 遛狗歷史（#60） */
+.a-divider { display: flex; align-items: baseline; gap: 8px; font-size: 19px; font-weight: 900; margin: 22px 4px 12px; }
+.a-divider .icon { color: var(--green-text); align-self: center; }
+.a-divider small { font-size: 12.5px; font-weight: 500; color: var(--ink-soft); }
+.a-wait { display: flex; align-items: center; gap: 14px; }
+.a-wait p { margin: 0; font-size: 13.5px; color: var(--ink-soft); line-height: 1.6; }
+.a-sub { font-size: 13.5px; font-weight: 700; color: var(--ink-soft); margin: 14px 0 4px; }
+.a-toggle { display: inline-flex; background: var(--surface-soft); border-radius: 10px; padding: 3px; margin-bottom: 10px; }
+.a-toggle button { border: none; background: none; font-family: inherit; font-size: 13.5px; color: var(--ink-soft); padding: 5px 14px; border-radius: 8px; cursor: pointer; }
+.a-toggle button.on { background: var(--surface); color: var(--primary); font-weight: 700; box-shadow: var(--shadow-card); }
+.a-picks { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 12px; }
+.a-picks label { flex: 1; display: flex; flex-direction: column; gap: 3px; font-size: 12.5px; color: var(--ink-soft); }
+.a-picks select { font-family: inherit; font-size: 16px; color: var(--ink); background: var(--surface-soft); border: none; border-radius: 10px; padding: 8px 10px; }
+.a-arrow { color: var(--ink-soft); padding-bottom: 9px; }
+.a-miss b.pos { color: var(--green-text); }
+.a-miss b.neg { color: var(--red-text); }
+.a-big { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.a-big b { font-size: 34px; font-weight: 900; color: var(--primary); }
+.a-big span { font-size: 14px; color: var(--ink-soft); }
+
 /* 頁首右上角的分析圖示（#59）：偶爾才看的功能不佔分類，點了開分析頁 */
 .analysis-btn {
   width: 40px; height: 40px; flex-shrink: 0; align-self: flex-start;
