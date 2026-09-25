@@ -335,3 +335,4 @@
   - Worker 新增 `POST /gallery/{編號}/{檔名}/main`：相簿照片設為主照片，跟主照片互換內容（相簿清單不用改）；原本沒主照片就搬過去、相簿少一張。不用通關碼，共用主照片頻率限制。
   - 燈箱的相簿照片加「設為主照片」；主照片加「裁切」。換主照片預覽、相簿預覽格每張都能裁切（正方形／直式 3:4／橫式 4:3／原比例，拖曳、兩指或滑桿放大）。裁切在手機上做，Worker 不用為此改。
   - 驗證：Worker 測試 34 項、tests/index.html 91 項全過（新增設為主照片 1 項、裁切 2 項）。截圖 previews/gallery-batch/ 加 lightbox-set-main.png、crop.png、crop-done-preview.png。
+- K 說「合併」：併最新 main（只有相簿照片、主照片、我的備註的網站提交，沒衝突），Worker 34 項、tests/index.html 91 項全過後合併 PR #81。合併後 K 要重貼 Worker。
