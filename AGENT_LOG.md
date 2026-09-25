@@ -160,3 +160,13 @@
 - `data/dogs.json`：把 `walker` 轉成 `covered`（121 隻中 120 隻為 true），其他內容與同步時間不動。
 - 驗證：node 同步測試 16 項、Worker 測試 11 項、tests/index.html 52 項全過。
 - 待辦：K 先設定 Secret 再合併；合併後另外改寫 git 歷史，清掉舊版本裡的試算表 ID 與志工名字。
+
+## [2026-09-25] Claude | V5-1（#56）同步時存每日快照與遛狗紀錄
+- 依據：issue #56；K 決定公開資料只存匿名紀錄（不做代號、不做私人試算表）。
+- 同步：`scripts/sync-sheet.mjs` 新增 `planWrites`，每次同步除了 `data/dogs.json`，另存當天快照 `data/history/YYYY-MM-DD.json`（同一天覆蓋；資料沒變但換天時也補一份），並把遛狗日期比上一次同步新的狗追加進 `data/walks.json`（`{ id, name, date }`，一筆一行，只追加）。日期沒變、被改早或清空都不追加、不刪舊紀錄；同一隻狗同一天不重複記。沒編號的狗用犬名比對。
+- 第一次建立 walks.json 時，用每隻狗目前的最後一次遛狗日期當起點（用 repo 現有 dogs.json 試算：114 筆）。
+- Workflow：提交步驟改成 `git add data/dogs.json data/history data/walks.json`。
+- 文件：README、docs/PROJECT_GOALS.md 補上兩個新檔。
+- 限制：公開檔案不含志工名字，同一天換人遛看不出來；兩次同步之間被遛兩次只記一筆。名字相關欄位留給 #57。
+- 驗證：`node --test scripts/sync-sheet.test.mjs` 23 項全過（新增 7 項：連續兩次同步、換人遛、改早／清空、換天補快照、無名字等）；tests/index.html 52 項全過（前端未改）。雲端連不到 Google，只用模擬資料測。
+- 分支：`claude/project-thread-z1ne7o`。
