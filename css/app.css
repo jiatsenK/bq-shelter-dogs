@@ -719,13 +719,14 @@ html.lightbox-open { overflow: hidden; }
 }
 
 /* 再次入所（#75）：詳細資訊編號下面一行小字 */
-.detail-head .reentry { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; line-height: 1.45; }
+.detail-head .reentry { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; line-height: 1.5; }
+.detail-head .reentry span { white-space: nowrap; }
 
 /* 收起（#79）：詳細資訊照片下方的按鈕列、溜狗表最下面的「已收起」 */
 .hide-bar {
   display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
   background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card);
-  padding: 10px 14px; margin-bottom: 12px; font-size: 14px; color: var(--ink-soft);
+  padding: 10px 14px; margin-top: 10px; font-size: 14px; color: var(--ink-soft);
 }
 .hide-bar .hide-q { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--ink); margin-right: auto; }
 .hide-bar.is-hidden { background: var(--muted-bg); box-shadow: none; }
@@ -755,3 +756,28 @@ html.lightbox-open { overflow: hidden; }
   font-family: inherit; font-size: 15.5px; font-weight: 700; color: var(--ink); padding: 6px 0;
 }
 .hidden-name small { font-size: 12px; font-weight: 500; color: var(--ink-soft); background: var(--muted-bg); border-radius: 99px; padding: 2px 8px; margin-left: 8px; }
+
+/* 介面細緻化（#78） */
+.sr-only { position: absolute !important; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+/* 讀取中的卡片骨架：淡淡的光從左掃到右 */
+.card.skeleton { display: flex; align-items: center; gap: 12px; cursor: default; }
+.sk { background: linear-gradient(90deg, var(--surface-soft) 0%, #E6EDF6 40%, var(--surface-soft) 80%); background-size: 300% 100%; animation: sk-shine 1.4s ease-in-out infinite; border-radius: 8px; }
+.sk-thumb { width: 64px; height: 52px; border-radius: 10px; flex-shrink: 0; }
+.sk-lines { flex: 1; min-width: 0; }
+.sk-name { width: 45%; height: 18px; }
+.sk-meta { width: 70%; height: 12px; margin-top: 8px; }
+.sk-btn { width: 48px; height: 48px; border-radius: 12px; flex-shrink: 0; }
+@keyframes sk-shine { from { background-position: 100% 0; } to { background-position: 0 0; } }
+/* 頁首：內容捲到下面時多一條柔和陰影 */
+header.app { transition: box-shadow 0.2s; }
+header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 68, 0.08); }
+/* 照片載入完才淡入，不會一格一格突然跳出來 */
+.thumb img { opacity: 0; transition: opacity 0.25s; }
+.thumb img.loaded { opacity: 1; }
+/* 數字等寬：天數、編號、分類數字上下對齊 */
+.card .meta, .detail-head .meta, .last .val, .tabs .n, .a-dog-right, .a-col-v { font-variant-numeric: tabular-nums; }
+/* 手機設定「減少動態效果」時關掉動畫 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+  .thumb img { opacity: 1; }
+}

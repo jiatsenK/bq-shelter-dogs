@@ -1685,7 +1685,9 @@ async function runV52Tests() {
       eq(ymd(intakeDate(dogs[0], T)), '2018/4/13', '入所日取最早：');
       eq(ymd(intakeDate(dogs[1], T)), '2024/1/5', '沒舊編號照舊：');
       const html = detailHtml(dogs[0], T);
-      if (!html.includes('第 2 次入所・首次 2018/4/13（舊編號 2018041318）')) throw new Error('詳細資訊要標舊編號');
+      const box = document.createElement('div');
+      box.innerHTML = html;
+      eq(box.querySelector('.reentry').textContent, '第 2 次入所・首次 2018/4/13 （舊編號 2018041318）', '詳細資訊標舊編號：');
       if (detailHtml(dogs[1], T).includes('次入所')) throw new Error('沒舊編號不顯示');
     });
 
@@ -1733,6 +1735,14 @@ async function runV52Tests() {
       activeTab = 'today'; render();
       eq([walkNames(), document.getElementById('hiddenToggle')], [['一般乙'], null], '今天已溜不顯示已收起：');
       eq(JSON.parse(walkedStorage.getItem(HIDDEN_KEY)).always.sort(), ['2024010501', '名:新來丁'], '存在這支手機：');
+    });
+    await check('#78 讀取中顯示卡片骨架（螢幕閱讀器仍讀得到讀取中）；照片載入完才淡入', () => {
+      loadState = 'loading';
+      try { render(); } finally { loadState = 'ready'; }
+      const main = document.getElementById('main');
+      eq([main.querySelectorAll('.card.skeleton').length, main.textContent.trim()], [6, '讀取狗狗資料中…']);
+      if (!photoThumb(dogs[0]).includes(`onload="this.classList.add('loaded')"`)) throw new Error('照片要淡入');
+      render();
     });
   } finally {
     hideDetail(); hideToast();

@@ -299,6 +299,7 @@ function photoThumb(dog, size = 56, zoom = false) {
   return `
     <${tag}${attrs}>
       <img src="${esc(photoSrc(dog))}" alt="" width="${size}" height="${size}" loading="lazy" decoding="async"
+           onload="this.classList.add('loaded')"
            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'; this.parentNode.classList.add('no-photo'); this.parentNode.disabled = true;">
       <div class="thumb-fallback">${icon('paw')}</div>
     </${tag}>
@@ -473,7 +474,7 @@ function reentryLine(dog) {
   if (!dog.formerIds || !dog.formerIds.length) return '';
   const first = dog.formerIds.map(idDate).filter(Boolean).sort((a, b) => a - b)[0];
   const firstText = first ? `・首次 ${first.getFullYear()}/${first.getMonth() + 1}/${first.getDate()}` : '';
-  return `<div class="reentry">第 ${dog.formerIds.length + 1} 次入所${firstText}（舊編號 ${dog.formerIds.map(esc).join('、')}）</div>`;
+  return `<div class="reentry"><span>第 ${dog.formerIds.length + 1} 次入所${firstText}</span> <span>（舊編號 ${dog.formerIds.map(esc).join('、')}）</span></div>`;
 }
 
 // 性別：狗卡 frontmatter 有寫 sex 才顯示 ♂／♀，沒寫就留空位；♂ 藍色、♀ 紅色
@@ -1510,6 +1511,19 @@ function render() {
   }
 }
 
+// 讀取中（#78）：先畫幾張灰色卡片骨架，版面不會等資料來才突然跳出來；文字留給螢幕閱讀器
+function skeletonHtml() {
+  const card = `<div class="card skeleton" aria-hidden="true"><div class="sk sk-thumb"></div><div class="sk-lines"><div class="sk sk-name"></div><div class="sk sk-meta"></div></div><div class="sk sk-btn"></div></div>`;
+  return `<div class="status-msg sr-only" role="status">讀取狗狗資料中…</div>` + card.repeat(6);
+}
+
+// 往下捲時頁首加陰影（#78），看得出內容捲到頁首下面
+const appHeader = document.querySelector('header.app');
+function syncHeaderShadow() {
+  if (appHeader) appHeader.classList.toggle('scrolled', window.scrollY > 4);
+}
+window.addEventListener('scroll', syncHeaderShadow, { passive: true });
+
 // 溜狗表（沿用原待巡房）：所有狗依幾天沒遛由久到近；沒有遛狗紀錄的排最前，有人固定照顧的排最後
 function dueDogs(dogs, today) {
   const key = s => s.kind === 'unknown' ? Infinity : s.kind === 'dated' ? s.days : -Infinity;
@@ -1545,7 +1559,7 @@ function renderMain() {
     buildTabs({});
     main.innerHTML = loadState === 'error'
       ? `<div class="status-msg">資料載入失敗，請稍後重新整理。<br><button class="retry-btn" id="retryBtn">重新讀取</button></div>`
-      : `<div class="status-msg">讀取狗狗資料中…</div>`;
+      : skeletonHtml();
     const retry = document.getElementById('retryBtn');
     if (retry) retry.addEventListener('click', init);
     return;
