@@ -7,6 +7,9 @@ let UPLOAD_URL = 'https://bq-shelter-photos.jiatsen-k.workers.dev';
 // 上傳前先在手機上壓成 JPEG：長邊最多 1280px，避免 repo 堆滿手機原圖；上限要跟 Worker 的 MAX_BYTES 一致
 const PHOTO_MAX_EDGE = 1280;
 const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
+// 我的備註（#61／#62）：寫入與最新內容都經過同一個 Worker；讀不到 Worker 時改讀網站上的這個檔（可能晚一兩分鐘）
+const MY_NOTES_URL = 'data/my-notes.json';
+const MY_NOTE_MAX_CHARS = 1000; // 跟 Worker 的 NOTE_MAX_CHARS 一致
 // 警示關鍵字（2026-09-24 K 定，#28）：備註含任一個，就把備註原文直接顯示在卡片第一層，字眼標紅；
 // 只用來判斷要不要顯示，不改寫原文、不另外產生標籤。狗照樣留在待巡房，由志工自己判斷。
 // 每組第一個是關鍵字，後面是常見異體寫法，一起比對。志工發現新的慣用字眼時，只要在這裡加一組。
@@ -31,6 +34,10 @@ let photoUpload = null; // 詳細資訊正在上傳的照片：{ dog, blob, url,
 let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（walkKey）
 let searchQuery = '';
 let loadWarning = '';
+let myNotes = {}; // 我的備註（#62）：編號 → { text, updatedAt }
+let myNotesState = 'loading'; // loading／worker（Worker 讀到最新）／site（退回網站上的檔）／error
+let noteEdit = null; // 正在編輯的我的備註：{ dog, text, pass, needPass, phase: 'edit'|'saving'|'error', error }
+let analysisOpen = false; // 分析頁（#59）開著嗎
 let loadState = 'loading'; // loading：還在讀 dogs.json；error：讀取失敗；ready：資料好了
 
 // 把年月日組成日期；不合理的日期（例：2/30）回傳 null
@@ -297,6 +304,26 @@ function saveWalkedIds(ids, today = new Date()) {
 }
 
 // 今天已溜用編號記；新來還沒有編號的狗改用犬名記（K 說不會有同名的狗）
+// 我的備註的通關碼（#62）：第一次儲存成功後記在這支手機，之後不用再輸入；被拒絕就清掉重問。
+// 和今天已溜用同一個 localStorage；讀寫不了（無痕模式）就這次開著網頁的期間記在記憶體
+const NOTES_PASS_KEY = 'bq-notes-passcode';
+let notesPassMemory = '';
+function loadNotesPass() {
+  try {
+    return (walkedStorage && walkedStorage.getItem(NOTES_PASS_KEY)) || notesPassMemory;
+  } catch (e) {
+    return notesPassMemory;
+  }
+}
+function saveNotesPass(pass) {
+  notesPassMemory = pass;
+  try {
+    if (!walkedStorage) return;
+    if (pass) walkedStorage.setItem(NOTES_PASS_KEY, pass);
+    else walkedStorage.removeItem(NOTES_PASS_KEY);
+  } catch (e) { /* 存不了就只記在記憶體 */ }
+}
+
 function walkKey(dog) {
   if (dog.id) return dog.id;
   return dog.name ? `名:${dog.name}` : '';
@@ -420,6 +447,7 @@ function detailHtml(dog, today) {
         : flag ? warnNote(dog.note, flag)
         : `<div class="content note-text">${esc(dog.note)}</div>`}
     </section>
+    ${myNoteSection(dog)}
     <section class="detail-section" data-section="group">
       <h3>${icon('group')}可以一起溜的狗</h3>
       ${buddies.length
@@ -603,6 +631,147 @@ async function uploadPhoto() {
   showToast(`${up.dog.name} 的照片已更新（其他志工幾分鐘內會看到）`);
 }
 
+// ── 我的備註（#62）：溜狗表備註下方的獨立區塊，存在 Git（經 Worker），不參與警示關鍵字、不上狗卡 ──
+
+// 開網頁時讀最新的我的備註：先問 Worker（直接讀 GitHub，不用等網站更新），不行再讀網站上的 data/my-notes.json
+async function loadMyNotes() {
+  myNotesState = 'loading';
+  const tryRead = async (url, pick) => {
+    const res = await fetch(url, { cache: 'no-store' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = pick(await res.json());
+    if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('格式不對');
+    return data;
+  };
+  let notes = null;
+  if (UPLOAD_URL) {
+    try {
+      notes = await tryRead(`${UPLOAD_URL}/notes`, d => d && d.ok ? d.notes : null);
+      myNotesState = 'worker';
+    } catch (e) { notes = null; }
+  }
+  if (!notes) {
+    try {
+      notes = await tryRead(MY_NOTES_URL, d => d);
+      myNotesState = 'site';
+    } catch (e) {
+      notes = {};
+      myNotesState = 'error';
+    }
+  }
+  myNotes = {};
+  for (const [id, n] of Object.entries(notes)) {
+    if (n && typeof n.text === 'string' && n.text.trim()) myNotes[id] = { text: n.text, updatedAt: n.updatedAt || '' };
+  }
+  if (detailDog && !(noteEdit && noteEdit.dog === detailDog)) renderDetail();
+}
+
+function noteTime(iso) {
+  const t = new Date(iso);
+  if (!iso || isNaN(t)) return '';
+  return `${t.getFullYear()}/${t.getMonth() + 1}/${t.getDate()} ${pad2(t.getHours())}:${pad2(t.getMinutes())}`;
+}
+
+function myNoteSection(dog) {
+  const note = dog.id ? myNotes[dog.id] : null;
+  const canEdit = !!(UPLOAD_URL && dog.id);
+  const edit = noteEdit && noteEdit.dog === dog ? noteEdit : null;
+  const head = `<h3>${icon('write')}我的備註<span class="sub">存在 Git，任何人都看得到</span></h3>`;
+  if (edit) return `<section class="detail-section" data-section="mynote">${head}${myNoteForm(dog, edit)}</section>`;
+  const body = note
+    ? `<div class="content note-text my-note-text">${esc(note.text)}</div>${noteTime(note.updatedAt) ? `<div class="my-note-time">更新於 ${noteTime(note.updatedAt)}</div>` : ''}`
+    : `<div class="empty">${myNotesState === 'loading' ? '讀取中…' : myNotesState === 'error' ? '我的備註暫時讀不到' : '還沒有我的備註'}</div>`;
+  const btn = canEdit && myNotesState !== 'loading'
+    ? `<button type="button" class="my-note-edit" id="myNoteEdit">${icon('write')}${note ? '修改' : '新增'}</button>` : '';
+  return `<section class="detail-section" data-section="mynote">${head}${body}${btn}</section>`;
+}
+
+// 編輯表單。通關碼欄位是真的密碼欄位（放在 form 裡、配一個隱藏的帳號欄位），
+// iPhone 會問要不要存進鑰匙圈，之後用 Face ID 自動填入（K 2026-09-25 同意）
+function myNoteForm(dog, edit) {
+  const busy = edit.phase === 'saving';
+  const count = [...edit.text].length;
+  return `
+    <form class="my-note-form" id="myNoteForm" autocomplete="on">
+      <textarea id="myNoteText" rows="4" maxlength="${MY_NOTE_MAX_CHARS * 2}" aria-label="${esc(dog.name)} 的我的備註"
+        placeholder="寫給自己看的備註，例如怎麼牽比較好走"${busy ? ' disabled' : ''}>${esc(edit.text)}</textarea>
+      <div class="my-note-count${count > MY_NOTE_MAX_CHARS ? ' over' : ''}" id="myNoteCount">${count} / ${MY_NOTE_MAX_CHARS} 字</div>
+      ${edit.needPass ? `
+        <input type="text" name="username" autocomplete="username" value="板收志工溜狗表" hidden readonly>
+        <label class="my-note-pass-label" for="myNotePass">通關碼（第一次儲存要輸入，之後這支手機會記住）</label>
+        <input type="password" id="myNotePass" name="password" autocomplete="current-password" value="${esc(edit.pass)}"${busy ? ' disabled' : ''}>` : ''}
+      ${edit.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(edit.error)}</span></div>` : ''}
+      <div class="my-note-actions">
+        <button type="submit" class="my-note-save" id="myNoteSave"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存'}</button>
+        ${busy ? '' : `<button type="button" class="photo-cancel" id="myNoteCancel">取消</button>`}
+      </div>
+    </form>`;
+}
+
+function startNoteEdit(dog) {
+  const note = myNotes[dog.id];
+  noteEdit = { dog, text: note ? note.text : '', pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
+  renderDetail();
+  const ta = document.getElementById('myNoteText');
+  if (ta) {
+    ta.focus({ preventScroll: true });
+    ta.setSelectionRange(ta.value.length, ta.value.length);
+    if (ta.scrollIntoView) ta.scrollIntoView({ block: 'nearest' });
+  }
+}
+
+// 儲存：送到 Worker；成功顯示「已存到 Git」，失敗保留輸入的內容並顯示原因
+async function saveMyNote() {
+  const edit = noteEdit;
+  if (!edit || edit.phase === 'saving') return;
+  const text = edit.text.trim();
+  if ([...text].length > MY_NOTE_MAX_CHARS) {
+    edit.phase = 'error'; edit.error = `我的備註最多 ${MY_NOTE_MAX_CHARS} 字`; renderDetail(); return;
+  }
+  const pass = edit.needPass ? edit.pass : loadNotesPass();
+  if (!pass) {
+    edit.needPass = true; edit.phase = 'error'; edit.error = '請輸入通關碼'; renderDetail();
+    const input = document.getElementById('myNotePass');
+    if (input) input.focus({ preventScroll: true });
+    return;
+  }
+  edit.phase = 'saving';
+  edit.error = '';
+  renderDetail();
+  let out = null, status = 0, error = '';
+  try {
+    const res = await fetch(`${UPLOAD_URL}/notes/${encodeURIComponent(edit.dog.id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text, passcode: pass }),
+    });
+    status = res.status;
+    out = await res.json().catch(() => null);
+    if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），原本的備註不受影響`;
+  } catch (e) {
+    error = '沒有存進去，請確認網路後再試；原本的備註不受影響';
+  }
+  if (noteEdit !== edit) return;
+  const shown = detailDog === edit.dog;
+  if (error) {
+    // 通關碼錯（或錯太多次）：清掉這支手機記的通關碼，下次重問
+    if (out && out.code === 'passcode') { saveNotesPass(''); edit.needPass = true; edit.pass = ''; }
+    edit.phase = 'error';
+    edit.error = error;
+    if (shown) renderDetail();
+    else showToast(`${edit.dog.name} 的我的備註沒有存進去：${error}`);
+    return;
+  }
+  saveNotesPass(pass);
+  if (out.note && out.note.text) myNotes[edit.dog.id] = { text: out.note.text, updatedAt: out.note.updatedAt || '' };
+  else delete myNotes[edit.dog.id];
+  noteEdit = null;
+  if (shown) renderDetail();
+  showToast(`${edit.dog.name} 的我的備註已存到 Git`);
+  const btn = shown && document.getElementById('myNoteEdit');
+  if (btn) btn.focus({ preventScroll: true });
+}
+
 function renderDetail() {
   if (!detailDog) return;
   const box = document.getElementById('detail');
@@ -639,13 +808,31 @@ function renderDetail() {
       renderDetail();
     });
   });
+  const noteBtn = box.querySelector('#myNoteEdit');
+  if (noteBtn) noteBtn.addEventListener('click', () => startNoteEdit(detailDog));
+  const form = box.querySelector('#myNoteForm');
+  if (form) {
+    const ta = form.querySelector('#myNoteText');
+    const counter = form.querySelector('#myNoteCount');
+    ta.addEventListener('input', () => {
+      noteEdit.text = ta.value;
+      const n = [...ta.value].length;
+      counter.textContent = `${n} / ${MY_NOTE_MAX_CHARS} 字`;
+      counter.classList.toggle('over', n > MY_NOTE_MAX_CHARS);
+    });
+    const pass = form.querySelector('#myNotePass');
+    if (pass) pass.addEventListener('input', () => { noteEdit.pass = pass.value; });
+    form.addEventListener('submit', e => { e.preventDefault(); saveMyNote(); });
+    const cancel = form.querySelector('#myNoteCancel');
+    if (cancel) cancel.addEventListener('click', () => { noteEdit = null; renderDetail(); const b = document.getElementById('myNoteEdit'); if (b) b.focus({ preventScroll: true }); });
+  }
   const group = box.querySelector('#groupWalk');
   if (group) group.addEventListener('click', () => {
     const picked = [...pickedBuddies].map(id => allDogs.find(d => walkKey(d) === id));
     setWalked([detailDog, ...picked], true);
   });
   if (focused) {
-    const replacement = [...box.querySelectorAll('button')].find(btn =>
+    const replacement = [...box.querySelectorAll('button, textarea, input:not([hidden])')].find(btn =>
       (focused.id && btn.id === focused.id) ||
       (focused.dataset.pick && btn.dataset.pick === focused.dataset.pick) ||
       (focused.classList.contains('buddy') && btn.classList.contains('buddy') && btn.dataset.dog === focused.dataset.dog));
@@ -692,7 +879,8 @@ function closeDetail() {
 // 燈箱開著時「返回」只關燈箱，詳細資訊留著
 window.addEventListener('popstate', () => {
   if (lightboxOpen()) hideLightbox();
-  else hideDetail();
+  else if (detailDog) hideDetail();
+  else if (analysisOpen) hideAnalysis();
 });
 document.getElementById('detailBackdrop').addEventListener('click', e => {
   if (e.target.id === 'detailBackdrop') closeDetail();
@@ -706,7 +894,8 @@ document.addEventListener('keydown', e => {
   }
   if (e.key === 'Escape' && detailDog) closeDetail();
   if (e.key !== 'Tab' || !detailDog) return;
-  const buttons = [...document.querySelectorAll('#detail button:not(:disabled), #toast:not([hidden]) button:not([hidden])')];
+  // 我的備註編輯時（#62）文字框和通關碼欄位也要能用 Tab 走到
+  const buttons = [...document.querySelectorAll('#detail button:not(:disabled), #detail textarea:not(:disabled), #detail input:not([hidden]):not(:disabled), #toast:not([hidden]) button:not([hidden])')];
   const first = buttons[0], last = buttons[buttons.length - 1];
   if (!first) return;
   if (!buttons.includes(document.activeElement) || (e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
@@ -806,7 +995,7 @@ mainEl.addEventListener('touchstart', e => {
   swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 }, { passive: true });
 mainEl.addEventListener('touchend', e => {
-  if (!swipeStart) return;
+  if (!swipeStart || analysisOpen) return; // 分析頁不是分類，滑動不換頁
   const t = e.changedTouches[0];
   const step = swipeStep(t.clientX - swipeStart.x, t.clientY - swipeStart.y);
   swipeStart = null;
@@ -845,6 +1034,12 @@ function renderMain() {
     `${today.getMonth() + 1}月${today.getDate()}日 (${'日一二三四五六'[today.getDay()]})`;
 
   const main = document.getElementById('main');
+
+  // 分析頁（#59）：頁首右上角的圖示打開，蓋住分類清單；統計與畫面在 js/analysis.js
+  if (analysisOpen) {
+    main.innerHTML = analysisPageHtml(today);
+    return;
+  }
 
   if (activeTab === 'info') {
     buildTabs({});
@@ -943,6 +1138,7 @@ async function init() {
     ? `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${pad2(t.getHours())}:${pad2(t.getMinutes())}` : '';
   loadState = 'ready';
   render();
+  loadMyNotes();
 }
 
 // tests/index.html 會設定 __BQ_TEST__，只載入函式、不去讀 dogs.json

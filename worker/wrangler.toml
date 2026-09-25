@@ -1,6 +1,7 @@
-# 照片上傳服務（Cloudflare Worker，#47）
+# 照片上傳＋我的備註服務（Cloudflare Worker，#47、#61）
 # 用 Cloudflare 網頁設定的話不需要這個檔；習慣用命令列的人可以在 worker/ 資料夾執行 `npx wrangler deploy`。
 # GitHub token 不寫在這裡：用 `npx wrangler secret put GITHUB_TOKEN` 或在 Cloudflare 網頁設成 Secret。
+# 備註通關碼同理：`npx wrangler secret put NOTES_PASSCODE`。
 name = "bq-shelter-photos"
 main = "src/index.js"
 compatibility_date = "2026-09-01"

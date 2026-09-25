@@ -2,6 +2,7 @@
 # - 每天台灣時間 9:00、13:00、21:00 各一次（GitHub 排程可能延遲幾分鐘）；也可以在 Actions 頁選「同步試算表」→「Run workflow」手動跑
 # - 資料有變才提交；讀取失敗時這次執行會顯示失敗，data/dogs.json 保留上一次成功的內容
 # - 有人改了狗卡（dogs/*.md）或這支同步程式、推到 main 時也會馬上跑一次，狗卡資訊不用等排程
+# - 另外存當天快照 data/history/YYYY-MM-DD.json 和累積遛狗紀錄 data/walks.json（#56，都不含志工名字）
 # - 只讀試算表，不寫入試算表
 # - 試算表 ID 放在 repo 的 Actions Secret「SHEET_ID」，不寫在程式裡（設定方式見 docs/SHEET_SYNC_SETUP.md）
 name: 同步試算表
@@ -38,21 +39,23 @@ jobs:
         with:
           node-version: 22
 
-      - name: 讀取試算表與狗卡、產生 data/dogs.json
+      - name: 讀取試算表與狗卡、產生 data/dogs.json、當天快照與遛狗紀錄
         env:
           SHEET_ID: ${{ secrets.SHEET_ID }}
+          # 判斷「是不是我遛的」用的名字（#57）；沒設定也能同步，只是 myWalked 都是 false
+          MY_NAME: ${{ secrets.MY_NAME }}
         run: node scripts/sync-sheet.mjs
 
       - name: 資料有變才提交
         run: |
-          git add data/dogs.json
+          git add data/dogs.json data/history data/walks.json
           if git diff --cached --quiet; then
-            echo "data/dogs.json 沒有變動，不提交。"
+            echo "資料沒有變動，不提交。"
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "同步試算表：更新 data/dogs.json"
+          git commit -m "同步試算表：更新 data/dogs.json、當天快照與遛狗紀錄"
           # 期間有人推了別的提交就先接上再推，最多試三次
           for i in 1 2 3; do
             git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0

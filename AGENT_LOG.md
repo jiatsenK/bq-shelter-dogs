@@ -161,8 +161,85 @@
 - 驗證：node 同步測試 16 項、Worker 測試 11 項、tests/index.html 52 項全過。
 - 待辦：K 先設定 Secret 再合併；合併後另外改寫 git 歷史，清掉舊版本裡的試算表 ID 與志工名字。
 
+## [2026-09-25] Claude | V5-1（#56）同步時存每日快照與遛狗紀錄
+- 依據：issue #56；K 決定公開資料只存匿名紀錄（不做代號、不做私人試算表）。
+- 同步：`scripts/sync-sheet.mjs` 新增 `planWrites`，每次同步除了 `data/dogs.json`，另存當天快照 `data/history/YYYY-MM-DD.json`（同一天覆蓋；資料沒變但換天時也補一份），並把遛狗日期比上一次同步新的狗追加進 `data/walks.json`（`{ id, name, date }`，一筆一行，只追加）。日期沒變、被改早或清空都不追加、不刪舊紀錄；同一隻狗同一天不重複記。沒編號的狗用犬名比對。
+- 第一次建立 walks.json 時，用每隻狗目前的最後一次遛狗日期當起點（用 repo 現有 dogs.json 試算：114 筆）。
+- Workflow：提交步驟改成 `git add data/dogs.json data/history data/walks.json`。
+- 文件：README、docs/PROJECT_GOALS.md 補上兩個新檔。
+- 限制：公開檔案不含志工名字，同一天換人遛看不出來；兩次同步之間被遛兩次只記一筆。名字相關欄位留給 #57。
+- 驗證：`node --test scripts/sync-sheet.test.mjs` 23 項全過（新增 7 項：連續兩次同步、換人遛、改早／清空、換天補快照、無名字等）；tests/index.html 52 項全過（前端未改）。雲端連不到 Google，只用模擬資料測。
+- 分支：`claude/project-thread-z1ne7o`。
+## [2026-09-25] Claude | V5-4 分析頁（#59）
+- 依據：issue #59（V5 規格，K 貼於專案聊天）；預設照票內「做法」。
+- 新增 `js/analysis.js`：九項統計寫成純函式（入所多久分布、在所最久 Top 10、入所年度分布、各區平均在所時間、長期在所比例、入所時間 × 未遛天數散布圖、長期在所＋近期少遛、公母差異、資料完整度），畫面用純 CSS／SVG，不加套件。入所日期取編號前 8 碼，編號不是 10 碼數字的 3 隻不列入時間項目；照片有無用 HEAD 查 `photos/{編號}.jpg`，不下載圖片。
+- `js/app.js`：分類加第四格「分析」（相關資訊暫留第三格，等 #58 換成「我溜過」）；分析頁不受搜尋影響。`index.html` 在 app.js 之後載入 analysis.js；`css/app.css` 分類改四欄、加分析頁樣式。
+- 驗證：tests/index.html 62 項全過（新增 10 項 #59，原本 3 分類的測試改成 4 分類）；另用 node 獨立重算 repo 的 dogs.json（長期在所 106/118、各年度、各區平均、公母平均、少遛 3 隻）與畫面一致。390px 截圖 previews/issue-59/。
+- 分支：`claude/project-thread-ib011o`。
+
+## [2026-09-25] Claude | 分析頁改由頁首圖示打開（#59）
+- 依據：K「分析可不可以用個小小icon在頁面上就好了」。
+- 分類回到三格；頁首右上角加長條圖圖示（`index.html` 的 `i-chart`），點了開分析頁，頁首收起搜尋框與分類，左上「‹ 返回」；手機返回鍵也會關（history）。分析頁不參與左右滑動換分類。`docs/DESIGN_GUIDE.md` 頁首一條補上。
+- 測試：原本改成四分類的測試改回三分類；#59 畫面測試改成從圖示打開、返回回到原分類；測試狗名避開真實狗名。tests/index.html 62 項全過。截圖 previews/issue-59/。
+- PR：#65（同一分支）。
+
+## [2026-09-25] Claude | 分析頁改成資訊圖表風格（#59）
+- 依據：K「圖表可以帥一點嗎 就是那種資訊圖表」。
+- `js/analysis.js` 只改畫面部分（統計函式不動）：最上面藍色總覽卡四個大數字（在所隻數、平均在所年數、滿 1 年比例、長期在所又少遛）；長期在所比例改圓環；入所多久分布、入所年度改直條圖（在所越久藍色越深、最多那年標亮）；各區改粗橫條、數字寫在條內；Top 10 前三名金銀銅；散布圖右上塗淡紅「需要多關心」區；公母改比例條＋大數字；資料完整度加圓環。顏色都用既有色票。
+- `css/app.css` 換掉分析頁樣式。
+- 驗證：tests/index.html 62 項全過；390px 截圖無橫向捲動，截圖 previews/issue-59/infographic-*.png。
+- PR：#65（同一分支）。
+
+## [2026-09-25] Claude | 分析頁：拿掉長期在所＋少遛，改放看不出來的發現（#59）
+- 依據：K「大部分都長期入所 所以長期入所*少遛不太必要；我是想要沒算或是圖表沒顯示可能沒辦法知道的資料」。
+- `js/analysis.js`：刪掉 `longStayNeglected` 與那張卡；新增 `zoneWalkStatus`（各區分 2 天內／3–6 天／7 天以上／沒紀錄，堆疊橫條）與 `findInsights`（自動發現：某區平均沒遛是全所 1.5 倍以上、警示備註集中某區 2 倍以上、新進犬缺照片／狗卡比住滿 1 年的高 20 個百分點以上、沒有「可以一起溜」夥伴的狗；不明顯就不列）。總覽第四格改成「超過 7 天沒遛」；散布圖淡紅區改成整排「超過 7 天沒遛」。
+- 目前資料的發現：母幼A 平均 7.4 天沒遛（全所 2.1 天）；C區 6/12 隻有警示備註；半年內入所 10 隻有 7 隻沒照片；63/121 隻沒有一起溜的夥伴。
+- 驗證：tests/index.html 63 項全過；截圖 previews/issue-59/insights.png、zone-walk.png。
+- PR：#65（同一分支）。
+
+## [2026-09-25] Claude | 分析頁：回到資訊圖表版，只拿掉長期在所＋少遛（#59）
+- 依據：K「不要自動發現 我只要有乾淨的圖表；上一版的比較好 我只要剔除久在所*少遛」。
+- `js/analysis.js`、`css/app.css`、`tests/index.html` 回到資訊圖表那版（5a063f6），再刪掉 `longStayNeglected` 與那張卡；不做自動發現、各區遛狗狀況。總覽第四格改「超過 7 天沒遛」；散布圖淡紅區改成整排「超過 7 天沒遛」。
+- 驗證：tests/index.html 61 項全過；截圖 previews/issue-59/infographic-*.png。
+- PR：#65（同一分支）。
+
+## [2026-09-25] Claude | 合併 PR #65（#59 分析頁）
+- 依據：K 在專案聊天回「合併」（順序 #63 → #65 → #64）。
+- 等 #63 合併後把最新 main 併進分支，AGENT_LOG.md 檔尾衝突兩邊都保留；tests/index.html 61 項、scripts/sync-sheet.test.mjs 23 項全過後合併。
+
+## [2026-09-25] Claude | V5-6（#61）我的備註寫回 Git：Worker 讀寫＋通關碼
+- 依據：issue #61。
+- Worker（`worker/src/index.js`）：新增 `GET /notes`（直接讀 GitHub 上最新的 `data/my-notes.json`，不用等網站重新部署）與 `PUT /notes/{編號}`（送 `{ text, passcode }`，先讀最新版再改，sha 對不上重讀再試，不蓋掉別隻狗）。通關碼放 Worker Secret `NOTES_PASSCODE`，放在內容裡而非標頭，中文通關碼也能用；同一 IP 1 小時錯 10 次暫停。備註上限 1000 字、只存純文字（去控制字元），空白＝刪除。新增只限 dogs.json 裡的狗，已離所的舊備註仍可改。首頁多顯示 `notesPasscode` 有沒有設定。照片上傳行為不變，仍匿名。
+- 新增 `data/my-notes.json`（空的 `{}`）；`docs/PHOTO_UPLOAD_SETUP.md` 加「我的備註」啟用步驟與 API 說明。
+- 驗證：Worker 測試 22 項（新增 11 項）、同步測試 16 項全過。雲端連不到 Cloudflare／GitHub 寫入，未實際部署。
+- 待辦：合併後 K 要重新貼 Worker 程式並新增 Secret `NOTES_PASSCODE`；前端欄位在 #62。
+
+## [2026-09-25] Claude | 合併 PR #64（#61 我的備註寫回 Git）
+- 依據：K 在專案聊天說「合併」，順序 #63 → #65 → #64。
+- #63、#65 合併後把最新 main 併進分支，AGENT_LOG.md 檔尾衝突兩邊都保留；Worker 測試 22 項、同步測試 23 項、tests/index.html 61 項全過後合併。
+- 待辦：K 到 Cloudflare 重貼 `worker/src/index.js`、新增 Secret `NOTES_PASSCODE`（步驟見 docs/PHOTO_UPLOAD_SETUP.md「我的備註」）。
+
+## [2026-09-25] Claude | V5-2（#57）同步時判斷「是不是我遛的」
+- 依據：issue #57；K 在專案聊天回「開始」。
+- 同步：`scripts/sync-sheet.mjs` 讀環境變數 `MY_NAME`（可用頓號／逗號寫多種寫法），比對「誰遛的」格子（多人時逐一比、要完全相同）。`dogs.json` 每隻狗加 `myWalked` 與 `myWalkedDate`（遛狗紀錄裡我最後一次的日期，別人之後遛了也保留）；`walks.json` 新紀錄加 `mine`，同一天從別人換成我（或反過來）也追加一筆。#56 的舊紀錄沒有 `mine`，原樣保留不回填。
+- Workflow：同步步驟從 Actions Secret `MY_NAME` 帶入。沒設定時同步照常，`myWalked` 都是 false。
+- 文件：docs/SHEET_SYNC_SETUP.md 加設定步驟；README、docs/PROJECT_GOALS.md 補欄位說明。前端未改（`myWalked` 由 #58 使用）。
+- 驗證：`node --test scripts/sync-sheet.test.mjs` 30 項全過（新增 7 項：我遛→別人遛、同一天換人、沒設定、名字比對、無名字、舊紀錄升級、workflow）。雲端連不到 Google，只用模擬資料與假名字測。
+- 分支：`claude/project-thread-z1ne7o`（#56 合併後從最新 main 重開）。
+
+## [2026-09-25] Claude | V5-7（#62）詳細資訊加「我的備註」欄位
+- 依據：issue #62；K 同意通關碼用「密碼欄位＋iPhone 鑰匙圈 Face ID 自動填入」（#61 thread）。
+- `js/app.js`：溜狗表備註下方加「我的備註」區塊，沒有顯示「新增」、有則顯示內容、更新時間與「修改」。編輯是文字框（1000 字、字數提示）＋第一次儲存才出現的通關碼欄位（`type=password`、`autocomplete=current-password`，配隱藏帳號欄位，放在 form 裡）。儲存 PUT 到 Worker `/notes/{編號}`，成功提示「已存到 Git」並把通關碼記在這支手機（localStorage `bq-notes-passcode`）；失敗保留輸入內容並顯示原因，通關碼錯就清掉重問。清空後儲存＝刪除。開網頁讀 Worker `/notes`，讀不到退回 `data/my-notes.json`。我的備註不參與警示紅框、不上狗卡。詳細資訊的 Tab 循環與重畫保留焦點也涵蓋文字框、密碼欄位。
+- `css/app.css`、`index.html`（新增 `i-write` 圖示）。
+- 測試：tests/index.html 新增 6 項（模擬 Worker），並更新 #10 唯讀、#28 區塊、#32 讀檔三項的預期；67 項全過。390px 截圖 previews/issue-62/（內容為模擬）。
+
+## [2026-09-25] Claude | 合併 PR #69（#62 我的備註欄位）
+- 依據：K 在專案聊天說「合併」，順序 #68 → #69。
+- #68 合併後把最新 main 併進分支，AGENT_LOG.md 檔尾衝突兩邊都保留；tests/index.html 67 項、同步測試 30 項、Worker 測試 22 項全過後合併。
+- 待辦：K 在手機上實際存一筆我的備註驗收（雲端連不到 Worker）。
+
 ## [2026-09-25] Claude | 改寫 git 歷史：清掉試算表 ID 與志工名字
 - 依據：K 選方案 A 並打字確認；PR #54 合併、Secret 驗證成功（合併後自動同步成功）後執行，當時沒有開著的 PR。
 - 做法：用 git filter-repo 改寫全部 31 個分支的歷史：試算表 ID 換成 `REMOVED_SHEET_ID`；所有舊版 `data/dogs.json` 的 `"walker": "名字"` 換成 `"walker": ""`。main 最新內容與改寫前完全相同（tree 雜湊一致），網站不受影響。所有提交編號都變了。
 - 注意：之前 clone 的本機副本不能再推送或合併進來（會把舊歷史帶回來），要重新 clone 或 `git fetch` 後 `git reset --hard origin/分支`。
-- 未完成：GitHub 上已合併 PR（#13–#54）的頁面仍保留舊提交，需 K 向 GitHub 客服申請清除。
+- GitHub 上已合併 PR（#13–#54）的頁面仍保留舊提交；K 已於 2026-09-25 向 GitHub 客服提交清除申請。
