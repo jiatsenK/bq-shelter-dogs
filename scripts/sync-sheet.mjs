@@ -20,8 +20,9 @@
 // 兩者都不含志工名字。同一天兩次同步之間被遛兩次只會記一筆。
 // #57 起每筆多一個 mine（是不是我遛的）；同一天從別人換成我（或反過來）也會追加一筆。
 // #57 之前的舊紀錄沒有 mine，原樣保留、不回填。
+// #60：另存 data/history/index.json（{ dates: [...] }，有哪幾天的快照），網站才知道能選哪些日期（GitHub Pages 不能列資料夾）。
 
-import { readFile, writeFile, mkdir } from 'node:fs/promises';
+import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -413,8 +414,9 @@ export function renderWalks(walks) {
 }
 
 // 同步一次要寫哪些檔：回傳 { 相對 data/ 的路徑: 內容 }，沒變的檔不列。
-// oldDogsText／oldWalksText／oldSnapshotText 是 dogs.json、walks.json、今天快照的舊內容（沒有就空字串）
-export function planWrites(data, { oldDogsText = '', oldWalksText = '', oldSnapshotText = '' } = {}, now = new Date()) {
+// oldDogsText／oldWalksText／oldSnapshotText／oldIndexText 是 dogs.json、walks.json、今天快照、快照目錄的舊內容（沒有就空字串）；
+// historyDates 是 data/history/ 裡已經有的快照日期
+export function planWrites(data, { oldDogsText = '', oldWalksText = '', oldSnapshotText = '', oldIndexText = '', historyDates = [] } = {}, now = new Date()) {
   const writes = {};
   let prevDogs = null;
   try { prevDogs = JSON.parse(oldDogsText).dogs; } catch { /* 沒有舊檔：只能靠 walks.json 去重 */ }
@@ -429,7 +431,15 @@ export function planWrites(data, { oldDogsText = '', oldWalksText = '', oldSnaps
   if (dogsText) writes['dogs.json'] = dogsText;
   const current = dogsText || oldDogsText;
   if (current !== oldSnapshotText) writes[`history/${formatDate(now)}.json`] = current;
+  const indexText = renderHistoryIndex([...historyDates, formatDate(now)]);
+  if (indexText !== oldIndexText) writes['history/index.json'] = indexText;
   return { writes, added };
+}
+
+// 快照目錄：日期由舊到新、不重複
+export function renderHistoryIndex(dates) {
+  const list = [...new Set(dates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
+  return `{\n  "version": 1,\n  "dates": [${list.map(d => JSON.stringify(d)).join(', ')}]\n}\n`;
 }
 
 async function main() {
@@ -440,6 +450,8 @@ async function main() {
     oldDogsText: await read('dogs.json'),
     oldWalksText: await read('walks.json'),
     oldSnapshotText: await read(`history/${formatDate(now)}.json`),
+    oldIndexText: await read('history/index.json'),
+    historyDates: (await readdir(`${DATA_DIR}history`).catch(() => [])).map(f => f.replace(/\.json$/, '')),
   }, now);
   for (const [path, text] of Object.entries(writes)) {
     await mkdir(dirname(`${DATA_DIR}${path}`), { recursive: true });
