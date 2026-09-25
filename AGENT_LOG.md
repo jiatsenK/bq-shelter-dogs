@@ -136,3 +136,11 @@
 - 新增：`CLAUDE.md`（含 `## Agent skills` 區塊）、`docs/agents/issue-tracker.md`、`docs/agents/triage-labels.md`、`docs/agents/domain.md`。
 - 未改動網站程式；GitHub 上尚未建立五個 triage 標籤（`/triage` 第一次用時會建立）。
 - 分支：`claude/project-thread-c3lygg`。
+
+## [2026-09-25] Claude | 程式體檢（ask matt）＋狗卡資訊併進每天同步
+- 依據：K「@ask matt 我要整理檢視本專案的程式碼」→ 走 improve-codebase-architecture 流程，報告 https://claude.ai/artifact/8hVWwRouTP3MBDdY4ztFWk ；K 在決定卡片選「狗卡資訊併同步」（含順便刪掉沒在用的籠位清單）。
+- 同步：`scripts/sync-sheet.mjs` 讀 `dogs/{編號}.md`，把狗卡內文轉純文字（`intro`）和 frontmatter 性別（`sex`: male／female）寫進每隻狗；Markdown 處理從前端原樣搬過來。編號只接受英數字才讀檔。刪掉 `cages`、`parseCages`、`sortCages`（V3 拿掉依籠位分頁後沒人讀）。
+- 前端：`js/app.js` 改讀 dogs.json 的 `intro`／`sex`，刪掉 `fetchAllDetails`、`markdownToText`、frontmatter 解析與 `detailMap`；開網頁只抓 dogs.json 一個檔（原本另抓每隻狗的 .md）。
+- Workflow：`dogs/**` 或同步程式推到 main 時也跑一次同步。
+- `data/dogs.json`：用 repo 現有資料加上狗卡欄位重新產生（同步時間不動，試算表內容沒重讀）；121 隻中 92 隻有狗卡資訊與性別。
+- 驗證：node 測試 25 項（原 #9 前端狗卡測試移進來）、tests/index.html 51 項全過；390px 截圖確認性別與狗卡資訊顯示、開網頁 0 個 .md 請求。截圖 previews/dog-cards-sync/detail.png。

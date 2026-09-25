@@ -18,12 +18,14 @@
 index.html        ← 頁面基本結構
 css/app.css       ← 樣式
 js/app.js         ← 程式（資料讀取、分頁、搜尋、畫面）
-dogs/{編號}.md     ← 狗狗介紹（YAML frontmatter + 內文），選填
+data/dogs.json    ← 網站讀的資料（GitHub Action 由試算表＋dogs/*.md 產生，請勿手改）
+dogs/{編號}.md     ← 狗狗介紹（YAML frontmatter + 內文），選填；同步時整理進 data/dogs.json
+scripts/          ← 同步程式 sync-sheet.mjs 與它的測試
 photos/{編號}.jpg  ← 狗狗照片，選填
 docs/             ← 規格、設計指引、參考圖
 icons/            ← 網站圖示（瀏覽器分頁、手機主畫面）
 manifest.webmanifest ← 加到主畫面時的名稱、顏色、圖示
-.nojekyll         ← 讓 GitHub Pages 原樣提供 dogs/*.md，不要轉成網頁（請勿刪除）
+.nojekyll         ← 讓 GitHub Pages 原樣提供檔案，不經 Jekyll 轉換（請勿刪除）
 tests/index.html  ← 資料讀取測試（用假資料，不連試算表）
 worker/           ← 照片上傳服務（Cloudflare Worker，部署在 Cloudflare，不是 GitHub Pages 的一部分；不含任何 token）
 ```
