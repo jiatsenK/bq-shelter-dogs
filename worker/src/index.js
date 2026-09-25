@@ -512,6 +512,82 @@ async function addGalleryPhoto(request, env, origin, id) {
   return reply(200, { ok: true, id, photo }, origin);
 }
 
+// 讀 repo 裡一個檔案的原始內容與 sha；沒有這個檔回 null
+async function readFile(cfg, path) {
+  const sha = await currentSha(cfg, path);
+  if (!sha) return null;
+  const res = await github(cfg, `contents/${path}?ref=${encodeURIComponent(cfg.branch)}`, {
+    headers: { Accept: 'application/vnd.github.raw+json' },
+  });
+  if (!res.ok) throw new Error(`讀 ${path} 失敗（GitHub ${res.status}）`);
+  return { bytes: new Uint8Array(await res.arrayBuffer()), sha };
+}
+
+// 相簿裡的一張設為主照片：跟主照片互換（相簿那格改放原本的主照片，什麼都不會不見）；
+// 原本沒有主照片就直接搬過去，相簿少一張。跟換主照片一樣不用登入、共用頻率限制
+async function setMainFromGallery(request, env, origin, id, file) {
+  const cfg = config(env);
+  const now = Date.now();
+  if (!cfg.token) return fail(500, '上傳服務還沒設定好（缺 GITHUB_TOKEN）', origin);
+  if (!ID_PATTERN.test(id) || !GALLERY_FILE_PATTERN.test(file)) return fail(400, '照片名稱不對', origin);
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!allowUpload(ip, now)) return fail(429, '更換太頻繁，請稍等幾分鐘再試', origin);
+
+  let dogs, picked, current;
+  const galleryPath = `${GALLERY_DIR}/${id}/${file}`;
+  const mainPath = `photos/${id}.jpg`;
+  try {
+    dogs = await loadDogs(cfg, now);
+    const { gallery } = await readGallery(cfg);
+    if (!(gallery[id] || []).some(p => p.file === file)) return fail(404, '相簿裡找不到這張照片', origin);
+    picked = await readFile(cfg, galleryPath);
+    current = await readFile(cfg, mainPath);
+  } catch (e) {
+    return fail(502, '暫時無法連到 GitHub，請稍後再試，照片都沒動', origin);
+  }
+  if (!picked) return fail(404, '相簿裡找不到這張照片', origin);
+  const name = dogs.get(id);
+  const label = name ? `（${name}）` : '';
+
+  const put = (path, bytes, sha, message) => github(cfg, `contents/${path}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message, content: toBase64(bytes), branch: cfg.branch, ...(sha ? { sha } : {}) }),
+  });
+  const res = await put(mainPath, picked.bytes, current && current.sha,
+    `相簿照片設為主照片：${galleryPath} → ${mainPath}${label}
+
+網站匿名操作（照片上傳服務）`);
+  if (!res.ok) return fail(502, `主照片沒有換成（GitHub ${res.status}），照片都沒動`, origin);
+
+  // 原本的主照片放進相簿那一格（同一個檔名，相簿清單不用改）
+  if (current) {
+    const back = await put(galleryPath, current.bytes, picked.sha,
+      `原本的主照片移到相簿：${mainPath} → ${galleryPath}${label}
+
+網站匿名操作（照片上傳服務）`).catch(() => null);
+    return reply(200, { ok: true, id, file, swapped: true, oldMainKept: !!(back && back.ok) }, origin);
+  }
+  // 原本沒有主照片：相簿拿掉這一張
+  try {
+    await updateGallery(cfg, `相簿清單移除（已設為主照片）：${id}/${file}${label}
+
+網站匿名操作（照片上傳服務）`, gallery => {
+      const list = gallery[id] || [];
+      if (!list.some(p => p.file === file)) return false;
+      const rest = list.filter(p => p.file !== file);
+      if (rest.length) gallery[id] = rest;
+      else delete gallery[id];
+    });
+    await github(cfg, `contents/${galleryPath}`, {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: `刪除相簿照片（已設為主照片）：${galleryPath}`, sha: picked.sha, branch: cfg.branch }),
+    });
+  } catch (e) { /* 主照片已經換好；相簿多留一張一樣的照片，不影響使用 */ }
+  return reply(200, { ok: true, id, file, swapped: false }, origin);
+}
+
 // 刪除一張：先從清單拿掉（網站馬上不顯示），再刪照片檔；檔案沒刪成功也算刪除成功（git 歷史本來就留著）
 async function deleteGalleryPhoto(request, env, origin, id, file) {
   const cfg = config(env);
@@ -602,11 +678,13 @@ export default {
 
     if (path === '/gallery' || path.startsWith('/gallery/')) {
       try {
-        const [, id = '', file = '', extra] = path.split('/').slice(1).map(p => decodeURIComponent(p));
+        const parts = path.split('/').slice(2).map(p => decodeURIComponent(p));
+        const [id = '', file = '', action] = parts;
         if (request.method === 'GET' && path === '/gallery') return await getGallery(request, env, allowed);
-        if (request.method === 'POST' && id && !file && extra === undefined) return await addGalleryPhoto(request, env, allowed, id);
-        if (request.method === 'DELETE' && id && file && extra === undefined) return await deleteGalleryPhoto(request, env, allowed, id, file);
-        return fail(405, '相簿只能讀取（GET /gallery）、新增（POST /gallery/編號）或刪除（DELETE /gallery/編號/檔名）', allowed);
+        if (request.method === 'POST' && id && parts.length === 1) return await addGalleryPhoto(request, env, allowed, id);
+        if (request.method === 'POST' && id && file && action === 'main' && parts.length === 3) return await setMainFromGallery(request, env, allowed, id, file);
+        if (request.method === 'DELETE' && id && file && parts.length === 2) return await deleteGalleryPhoto(request, env, allowed, id, file);
+        return fail(405, '相簿只能讀取（GET /gallery）、新增（POST /gallery/編號）、設為主照片（POST /gallery/編號/檔名/main）或刪除（DELETE /gallery/編號/檔名）', allowed);
       } catch (e) {
         return fail(500, '相簿服務發生錯誤，原本的照片不受影響', allowed);
       }

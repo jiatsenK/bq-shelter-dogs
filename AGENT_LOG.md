@@ -331,3 +331,7 @@
 - `css/app.css` 預覽格樣式；`docs/PHOTO_UPLOAD_SETUP.md` 補說明。
 - 驗證：Worker 測試 31 項全過（頻率測試改寫）；tests/index.html 88 項全過（相簿新增測試改成批次、加一項上限與重傳）。截圖 previews/gallery-batch/（模擬照片）。
 - 上線前 K 要做：合併後重貼 Worker 到 Cloudflare（不重貼也能用，只是 1 分鐘超過 5 張會被擋）。
+- 追加（K 編輯需求「跟主照片更換功能」、再說「還要加上裁切功能」）：
+  - Worker 新增 `POST /gallery/{編號}/{檔名}/main`：相簿照片設為主照片，跟主照片互換內容（相簿清單不用改）；原本沒主照片就搬過去、相簿少一張。不用通關碼，共用主照片頻率限制。
+  - 燈箱的相簿照片加「設為主照片」；主照片加「裁切」。換主照片預覽、相簿預覽格每張都能裁切（正方形／直式 3:4／橫式 4:3／原比例，拖曳、兩指或滑桿放大）。裁切在手機上做，Worker 不用為此改。
+  - 驗證：Worker 測試 34 項、tests/index.html 91 項全過（新增設為主照片 1 項、裁切 2 項）。截圖 previews/gallery-batch/ 加 lightbox-set-main.png、crop.png、crop-done-preview.png。
