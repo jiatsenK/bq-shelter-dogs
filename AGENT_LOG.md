@@ -349,3 +349,10 @@
 - `.github/workflows/make-thumbs.yml`：photos/**（不含 thumbs）推到 main 就跑，有變才提交；Pillow 固定 12.3.0 讓輸出一致。先把現有 151 張縮圖一起提交。
 - `js/app.js`：`photoThumbSrc`、`galleryThumbSrc`、`thumbAttrs`、`thumbFallback`；清單、今天已溜、可以一起溜、詳細資訊頭像、相簿格子用縮圖，燈箱仍用原圖；縮圖讀不到先改讀 `data-full` 原圖，原圖也讀不到才顯示腳掌。
 - 驗證：tests/index.html 94 項全過（新增 3 項，改 4 項受影響的舊測試）。真實資料捲完整個溜狗表：照片流量 12.4MB → 2.0MB。截圖 previews/thumbs/list.png。
+
+## 2026-09-25 PR 自動跑測試（Claude，分支 claude/project-thread-s2p7cy，#84）
+- 依據：K 說 Matt 體檢的三項（含照片）都要處理；這是第二張。
+- `.github/workflows/tests.yml`：開 PR、推到 main（不含 data/**、photos/** 的網站寫入）時跑 node 測試（sync-sheet、Worker）與網頁測試；只讀 repo，不用任何密鑰。
+- `scripts/run-browser-tests.cjs`：自帶靜態伺服器，用 Playwright 無頭 Chromium 打開 tests/index.html，全部通過才結束代碼 0，失敗會列出哪幾項。
+- 驗證：本機 node 66 項、網頁全過；故意改壞一項時結束代碼 1 並列出失敗項目。
+- 發現（票外，併入 #86）：詳細資訊關掉後主照片才載入完，「更換照片」標籤的 load 事件讀 `detailDog.name` 會丟錯（畫面沒影響）。
