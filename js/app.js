@@ -583,6 +583,7 @@ function detailHtml(dog, today) {
         : `<div class="empty">沒有登記可以一起溜的狗</div>`}
       ${groupWalkButton(dog, walkedIds)}
     </section>
+    ${walkHistorySection(dog, today)}
     <section class="detail-section" data-section="intro">
       <h3>${icon('card')}狗卡資訊<span class="sub">入所時的原始狗卡</span></h3>
       ${intro ? `<div class="content">${esc(intro)}</div>` : `<div class="empty">還沒有狗卡資訊</div>`}
