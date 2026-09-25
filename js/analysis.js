@@ -1,5 +1,5 @@
 // 分析分頁（V5-4，#59）：只用目前 dogs.json 就能算的犬隻統計。
-// 統計都寫成純函式（輸入狗清單與今天日期，輸出數字），tests/index.html 直接測；畫面只負責把結果畫成 CSS／SVG 長條圖。
+// 統計都寫成純函式（輸入狗清單與今天日期，輸出數字），tests/index.html 直接測；畫面只負責把結果畫成 CSS／SVG 資訊圖表（大數字、圓環、直條圖）。
 // 頁首右上角的圖示打開（不佔分類：分類只放每天遛狗會用的）。
 // 會用到 js/app.js 的 makeDate、computeStatus、esc、icon、photoSrc、showDetail、allDogs、analysisOpen，所以要在 app.js 之後載入。
 
@@ -177,50 +177,75 @@ function checkPhotos(dogs) {
     });
 }
 
-// ── 畫面 ──
+// ── 畫面（資訊圖表風格：大數字、圓環、直條圖；顏色只用 css/app.css 的色票）──
 
-function barChart(items, { unit = '隻', value = it => it.count, text } = {}) {
-  const max = Math.max(1, ...items.map(value));
-  return `<div class="a-bars">${items.map(it => {
-    const v = value(it);
-    const label = text ? text(it) : `${v} ${unit}`;
-    return `<div class="a-bar-row" title="${esc(it.label)}：${esc(label)}">
-      <span class="a-bar-label">${esc(it.label)}</span>
-      <span class="a-bar-track"><span class="a-bar-fill" style="width:${v ? Math.max(2, v / max * 100) : 0}%"></span></span>
-      <span class="a-bar-value">${esc(label)}</span>
-    </div>`;
-  }).join('')}</div>`;
+// 在所越久顏色越深（同一個藍色由淺到深），入所多久分布用
+const STAY_SHADES = ['#CFE0FA', '#A9C8F6', '#80AEF1', '#5794EC', '#2F7BEA', '#2262C7', '#184A9C'];
+const STAY_SHORT = ['<3月', '3–6月', '6–12月', '1–2年', '2–3年', '3–5年', '5年+'];
+
+function yearsText(days) {
+  return (days / 365.25).toFixed(1);
 }
 
-// 狗的一列：點了開詳細資訊（data-adog 是 allDogs 的索引）
-function dogRow(r, right) {
+// 直條圖：每根柱子上方標數字，下方標名稱；hi 是要特別標出的柱子（例：最多的那年）
+function columnChart(items, { color = () => 'var(--primary)', hi = -1 } = {}) {
+  const max = Math.max(1, ...items.map(it => it.count));
+  return `<div class="a-cols" style="--n:${items.length}">${items.map((it, i) => `
+    <div class="a-col${i === hi ? ' hi' : ''}" title="${esc(it.label)}：${it.count} 隻">
+      <span class="a-col-v">${it.count}</span>
+      <span class="a-col-bar" style="height:${it.count ? Math.max(3, it.count / max * 100) : 0}%;background:${color(i)}"></span>
+      <span class="a-col-l">${esc(it.short || it.label)}</span>
+    </div>`).join('')}</div>`;
+}
+
+// 圓環：pct 0–100，中間放大數字
+function ringSvg(pct, { size = 120, stroke = 14, color = 'var(--primary)', label = '', sub = '' } = {}) {
+  const r = (size - stroke) / 2, c = 2 * Math.PI * r;
+  const len = Math.max(0, Math.min(100, pct)) / 100 * c;
+  return `<svg class="a-ring" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="${esc(label)} ${esc(sub)}">
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--primary-soft)" stroke-width="${stroke}"/>
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round"
+      stroke-dasharray="${len.toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${size / 2} ${size / 2})"/>
+    <text x="50%" y="${sub ? '47%' : '53%'}" text-anchor="middle" dominant-baseline="middle" class="a-ring-v">${esc(label)}</text>
+    ${sub ? `<text x="50%" y="66%" text-anchor="middle" class="a-ring-s">${esc(sub)}</text>` : ''}
+  </svg>`;
+}
+
+// 狗的一列：點了開詳細資訊（data-adog 是 allDogs 的索引）；bar 是這隻在清單裡的相對長度（0–100）
+function dogRow(r, right, { rank, bar } = {}) {
   return `<button type="button" class="a-dog" data-adog="${allDogs.indexOf(r.dog)}">
+    ${rank ? `<span class="a-rank r${rank}">${rank}</span>` : ''}
     <span class="a-dog-name">${esc(r.dog.name)}</span>
     <span class="a-dog-meta">${esc(r.dog.cage || '')}${r.intake ? `｜${r.intake.getFullYear()}/${r.intake.getMonth() + 1}/${r.intake.getDate()} 入所` : ''}</span>
     <span class="a-dog-right">${right}</span>
+    ${bar != null ? `<span class="a-dog-bar"><i style="width:${bar}%"></i></span>` : ''}
   </button>`;
 }
 
-function section(title, hint, body) {
-  return `<section class="a-card"><h2>${esc(title)}</h2>${hint ? `<p class="a-hint">${hint}</p>` : ''}${body}</section>`;
+function section(title, hint, body, iconId) {
+  return `<section class="a-card"><h2>${iconId ? `<span class="a-h-icon">${icon(iconId)}</span>` : ''}${esc(title)}</h2>${hint ? `<p class="a-hint">${hint}</p>` : ''}${body}</section>`;
 }
 
-// 入所時間 × 最近未遛天數的散布圖：x 在所年數、y 幾天沒遛，點的顏色沿用天數色標
+// 入所時間 × 最近未遛天數的散布圖：x 在所年數、y 幾天沒遛，點的顏色沿用天數色標；
+// 右上角（滿 1 年又超過 7 天沒遛）塗淡紅底，就是「長期在所＋近期少遛」那一區
 function scatterSvg(points) {
-  const W = 340, H = 220, L = 34, R = 10, T = 10, B = 28;
+  const W = 340, H = 220, L = 30, R = 10, T = 12, B = 26;
   const maxYears = Math.max(1, Math.ceil(Math.max(...points.map(p => p.stayDays / 365.25), 1)));
-  const maxWalk = Math.max(10, ...points.map(p => p.walkDays));
-  const yTop = Math.ceil(maxWalk / 10) * 10;
+  const yTop = Math.ceil(Math.max(10, ...points.map(p => p.walkDays)) / 10) * 10;
   const x = d => L + (d / 365.25) / maxYears * (W - L - R);
   const y = d => T + (1 - d / yTop) * (H - T - B);
-  const xTicks = []; for (let i = 0; i <= maxYears; i++) xTicks.push(i);
-  const yTicks = [0, AMBER_DAYS, ...[10, 20, 30, 40, 50, 60, 80, 100, 150, 200].filter(v => v < yTop && v > AMBER_DAYS && (yTop <= 60 || v % 20 === 0 || v >= 100)), yTop];
+  const xTicks = []; for (let i = 0; i <= maxYears; i += maxYears > 6 ? 2 : 1) xTicks.push(i);
+  const step = yTop <= 20 ? 5 : yTop <= 60 ? 10 : 30;
+  const yTicks = []; for (let v = 0; v <= yTop; v += step) yTicks.push(v);
   const level = d => d >= RED_DAYS ? 'red' : d >= AMBER_DAYS ? 'amber' : 'sage';
   return `<svg class="a-scatter" viewBox="0 0 ${W} ${H}" role="img" aria-label="入所年數與幾天沒遛的散布圖">
-    ${yTicks.map(v => `<line class="${v === AMBER_DAYS ? 'a-ref' : 'a-grid'}" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="a-axis" x="${L - 5}" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join('')}
+    <rect class="a-zone" x="${x(365.25)}" y="${T}" width="${W - R - x(365.25)}" height="${y(AMBER_DAYS) - T}" rx="6"/>
+    <text class="a-zone-t" x="${W - R - 6}" y="${T + 14}" text-anchor="end">需要多關心</text>
+    ${yTicks.map(v => `<line class="a-grid" x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}"/><text class="a-axis" x="${L - 5}" y="${y(v) + 4}" text-anchor="end">${v}</text>`).join('')}
+    <line class="a-ref" x1="${L}" x2="${W - R}" y1="${y(AMBER_DAYS)}" y2="${y(AMBER_DAYS)}"/>
     <line class="a-ref" x1="${x(365.25)}" x2="${x(365.25)}" y1="${T}" y2="${H - B}"/>
     ${xTicks.map(v => `<text class="a-axis" x="${x(v * 365.25)}" y="${H - B + 16}" text-anchor="middle">${v}年</text>`).join('')}
-    ${points.map(p => `<circle class="a-dot ${level(p.walkDays)}" cx="${x(p.stayDays).toFixed(1)}" cy="${y(p.walkDays).toFixed(1)}" r="4.5"><title>${esc(p.dog.name)}：在所 ${formatStay(p.stayDays)}，${p.walkDays} 天沒遛</title></circle>`).join('')}
+    ${points.map(p => `<circle class="a-dot ${level(p.walkDays)}" cx="${x(p.stayDays).toFixed(1)}" cy="${y(p.walkDays).toFixed(1)}" r="5"><title>${esc(p.dog.name)}：在所 ${formatStay(p.stayDays)}，${p.walkDays} 天沒遛</title></circle>`).join('')}
   </svg>`;
 }
 
@@ -228,56 +253,104 @@ function dogNames(dogs) {
   return dogs.map(d => esc(d.name)).join('、');
 }
 
+function kpi(value, unit, label, tone = '') {
+  return `<div class="a-kpi ${tone}"><div class="a-kpi-v">${value}<small>${unit}</small></div><div class="a-kpi-l">${label}</div></div>`;
+}
+
 function analysisHtml(dogs, today) {
   if (!dogs.length) return `<div class="status-msg">目前沒有狗狗資料</div>`;
   checkPhotos(dogs);
   const rows = analysisRows(dogs, today);
   const noIntake = rows.filter(r => !r.intake);
-  const skipNote = noIntake.length ? `（${noIntake.length} 隻編號看不出入所日期，不列入：${dogNames(noIntake.map(r => r.dog))}）` : '';
+  const share = longStayShare(rows);
+  const neglected = longStayNeglected(rows);
+  const avgStay = average(rows.filter(r => r.intake).map(r => r.stayDays));
   const out = [];
 
-  out.push(`<div class="section-hint">${icon('pin')}共 ${rows.length} 隻；入所日期取編號前 8 碼${skipNote}</div>`);
+  // 最上面一張藍色總覽：四個大數字
+  out.push(`<section class="a-hero">
+    <div class="a-hero-title">${icon('paw')}板收犬隻總覽</div>
+    <div class="a-kpis">
+      ${kpi(rows.length, '隻', '目前在所')}
+      ${kpi(avgStay == null ? '–' : yearsText(avgStay), '年', '平均在所')}
+      ${kpi(share.pct.toFixed(0), '%', '在所滿 1 年')}
+      ${kpi(neglected.length, '隻', '長期在所又少遛', neglected.length ? 'warn' : '')}
+    </div>
+    <div class="a-hero-note">入所日期取編號前 8 碼${noIntake.length ? `；${noIntake.length} 隻編號看不出入所日期，不列入時間統計（${dogNames(noIntake.map(r => r.dog))}）` : ''}</div>
+  </section>`);
 
-  const share = longStayShare(rows);
-  out.push(section('長期在所犬比例', '在所滿 1 年的狗',
-    `<div class="a-big"><b>${share.pct.toFixed(0)}%</b><span>${share.long} / ${share.total} 隻</span></div>
-     <div class="a-bar-track a-share"><span class="a-bar-fill" style="width:${share.pct}%"></span></div>`));
+  out.push(section('長期在所犬比例', '',
+    `<div class="a-ring-row">${ringSvg(share.pct, { label: `${share.pct.toFixed(0)}%`, sub: '滿 1 年' })}
+      <div class="a-ring-legend">
+        <div><i class="a-key primary"></i>在所滿 1 年<b>${share.long} 隻</b></div>
+        <div><i class="a-key soft"></i>未滿 1 年<b>${share.total - share.long} 隻</b></div>
+        <p>每 10 隻狗裡，約有 ${Math.round(share.pct / 10)} 隻已經在收容所住超過一年。</p>
+      </div></div>`, 'alert'));
 
-  out.push(section('入所多久分布', '', barChart(stayDistribution(rows))));
+  const dist = stayDistribution(rows).map((b, i) => ({ ...b, short: STAY_SHORT[i] }));
+  const topBucket = dist.reduce((m, b, i) => (b.count > dist[m].count ? i : m), 0);
+  out.push(section('入所多久分布', `最多的是「${dist[topBucket].label}」，共 ${dist[topBucket].count} 隻`,
+    columnChart(dist, { color: i => STAY_SHADES[i] }), 'pin'));
 
+  const top = longestStay(rows);
+  const topMax = top.length ? top[0].stayDays : 1;
   out.push(section('在所最久 Top 10', '點狗名看詳細資訊',
-    `<div class="a-list">${longestStay(rows).map((r, i) => dogRow(r, `<b>${formatStay(r.stayDays)}</b>`).replace('<span class="a-dog-name">', `<span class="a-rank">${i + 1}</span><span class="a-dog-name">`)).join('')}</div>`));
+    `<div class="a-list">${top.map((r, i) => dogRow(r, `<b>${yearsText(r.stayDays)}</b><small> 年</small>`, { rank: i + 1, bar: r.stayDays / topMax * 100 })).join('')}</div>`, 'paw'));
 
-  out.push(section('入所年度分布', '', barChart(intakeYears(rows))));
+  const years = intakeYears(rows);
+  const peak = years.reduce((m, y, i) => (y.count > years[m].count ? i : m), 0);
+  out.push(section('入所年度分布', years.length ? `${years[peak].label} 年入所最多，共 ${years[peak].count} 隻` : '',
+    columnChart(years.map(y => ({ ...y, short: `'${y.label.slice(2)}` })), { hi: peak }), 'card'));
 
+  const zones = zoneAverages(rows);
+  const zMax = Math.max(1, ...zones.map(z => z.avgDays));
   out.push(section('各區平均在所時間', '區＝籠位去掉數字',
-    barChart(zoneAverages(rows).map(z => ({ ...z, label: z.zone })), { value: z => z.avgDays, text: z => `${formatStay(Math.round(z.avgDays))}（${z.count} 隻）` })));
+    `<div class="a-hbars">${zones.map(z => `
+      <div class="a-hbar" title="${esc(z.zone)}：平均 ${formatStay(Math.round(z.avgDays))}，${z.count} 隻">
+        <span class="a-hbar-l">${esc(z.zone)}</span>
+        <span class="a-hbar-track"><span class="a-hbar-fill" style="width:${Math.max(8, z.avgDays / zMax * 100)}%"><b>${yearsText(z.avgDays)} 年</b></span></span>
+        <span class="a-hbar-n">${z.count} 隻</span>
+      </div>`).join('')}</div>`, 'pin'));
 
   const sv = stayVsWalk(rows);
-  const avgText = g => g.count ? `平均 ${g.avgWalkDays.toFixed(1)} 天沒遛（${g.count} 隻）` : '沒有資料';
-  out.push(section('入所時間 × 最近未遛天數', `每個點是一隻狗；虛線是 1 年與 7 天${sv.skipped ? `。${sv.skipped} 隻沒有遛狗日期，不畫` : ''}`,
+  const avgTile = (label, g) => `<div class="a-mini"><div class="a-mini-l">${label}</div>${g.count
+    ? `<div class="a-mini-v">${g.avgWalkDays.toFixed(1)}<small> 天</small></div><div class="a-mini-s">平均沒遛・${g.count} 隻</div>`
+    : '<div class="a-mini-s">沒有資料</div>'}</div>`;
+  out.push(section('入所時間 × 最近未遛天數', `每個點是一隻狗${sv.skipped ? `；${sv.skipped} 隻沒有遛狗日期，不畫` : ''}`,
     `${sv.points.length ? scatterSvg(sv.points) : '<p class="a-empty">沒有資料</p>'}
      <div class="a-legend"><span><i class="a-key sage"></i>0–6 天</span><span><i class="a-key amber"></i>7–29 天</span><span><i class="a-key red"></i>30 天以上</span></div>
-     <dl class="a-pair"><dt>在所滿 1 年</dt><dd>${avgText(sv.long)}</dd><dt>未滿 1 年</dt><dd>${avgText(sv.short)}</dd></dl>`));
+     <div class="a-minis">${avgTile('在所滿 1 年', sv.long)}${avgTile('未滿 1 年', sv.short)}</div>`, 'search'));
 
-  const neglected = longStayNeglected(rows);
   out.push(section('長期在所＋近期少遛', `在所滿 1 年，而且超過 ${AMBER_DAYS} 天沒遛：${neglected.length} 隻`,
     neglected.length
-      ? `<div class="a-list">${neglected.map(r => dogRow(r, r.walkDays != null ? `<b class="${r.walkDays >= RED_DAYS ? 'red' : 'amber'}">${r.walkDays} 天沒遛</b>` : '<b class="muted">沒有紀錄</b>')).join('')}</div>`
-      : '<p class="a-empty">目前沒有</p>'));
+      ? `<div class="a-list">${neglected.map(r => dogRow(r, r.walkDays != null ? `<span class="a-pill ${r.walkDays >= RED_DAYS ? 'red' : 'amber'}">${r.walkDays} 天沒遛</span>` : '<span class="a-pill muted">沒有紀錄</span>')).join('')}</div>`
+      : `<p class="a-empty ok">${icon('tick')}目前沒有，大家都有照顧到</p>`, 'warn'));
 
   const sex = sexComparison(rows);
-  const sexCol = (mark, cls, g) => `<div class="a-sex"><div class="a-sex-head"><span class="sex ${cls}">${mark}</span>${g.count} 隻</div>
-    ${g.count ? `<div>平均 <b>${formatStay(Math.round(g.avgDays))}</b></div><div>中位數 ${formatStay(Math.round(g.medianDays))}</div><div>滿 1 年 ${g.long} 隻</div>` : '<div>沒有資料</div>'}</div>`;
+  const known = sex.male.count + sex.female.count;
+  const mPct = known ? sex.male.count / known * 100 : 50;
+  const sexCol = (mark, cls, g) => `<div class="a-sex ${cls}"><div class="a-sex-mark">${mark}</div>
+    ${g.count ? `<div class="a-sex-v">${yearsText(g.avgDays)}<small> 年</small></div><div class="a-sex-s">平均在所</div>
+      <div class="a-sex-row"><span>中位數</span><b>${yearsText(g.medianDays)} 年</b></div><div class="a-sex-row"><span>滿 1 年</span><b>${g.long} 隻</b></div>` : '<div class="a-sex-s">沒有資料</div>'}</div>`;
   out.push(section('公母在所時間差異', `只算有性別資料的狗；${sex.missing} 隻沒有性別資料`,
-    `<div class="a-sex-grid">${sexCol('♂', 'male', sex.male)}${sexCol('♀', 'female', sex.female)}</div>`));
+    `<div class="a-split" title="公 ${sex.male.count} 隻、母 ${sex.female.count} 隻">
+       <span class="male" style="width:${mPct}%">♂ ${sex.male.count}</span><span class="female" style="width:${100 - mPct}%">♀ ${sex.female.count}</span>
+     </div>
+     <div class="a-sex-grid">${sexCol('♂', 'male', sex.male)}${sexCol('♀', 'female', sex.female)}</div>`, 'group'));
 
-  const comp = dataCompleteness(rows, photoCheck && photoCheck.done ? photoCheck.map : null);
+  const photosDone = photoCheck && photoCheck.done;
+  const comp = dataCompleteness(rows, photosDone ? photoCheck.map : null);
+  const ringItems = comp.items.filter(it => it.label !== '編號看不出入所日期');
+  const rings = ringItems.map(it => {
+    const pct = (comp.total - it.dogs.length) / comp.total * 100;
+    return `<div class="a-comp">${ringSvg(pct, { size: 78, stroke: 9, color: pct >= 95 ? 'var(--green-text)' : 'var(--primary)', label: `${Math.floor(pct)}%` })}<span>${esc(it.label.replace('沒有', ''))}</span></div>`;
+  }).join('') + (photosDone ? '' : `<div class="a-comp">${ringSvg(0, { size: 78, stroke: 9, label: '…' })}<span>照片</span></div>`);
   const compRows = comp.items.map(it => it.dogs.length
     ? `<details class="a-miss"><summary><span>${esc(it.label)}</span><b>${it.dogs.length} 隻</b></summary><p>${dogNames(it.dogs)}</p></details>`
     : `<div class="a-miss ok"><span>${esc(it.label)}</span><b>0 隻</b></div>`).join('');
-  out.push(section('犬隻資料完整度', `共 ${comp.total} 隻；點項目看是哪幾隻`,
-    compRows + (photoCheck && photoCheck.done ? '' : '<div class="a-miss"><span>沒有照片</span><b class="muted">檢查中…</b></div>')));
+  out.push(section('犬隻資料完整度', `共 ${comp.total} 隻；圓環是資料齊全的比例，點下面項目看缺哪幾隻`,
+    `<div class="a-comps">${rings}</div>` + compRows +
+    (photosDone ? '' : '<div class="a-miss"><span>沒有照片</span><b class="muted">檢查中…</b></div>'), 'note'));
 
   return out.join('');
 }
