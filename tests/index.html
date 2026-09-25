@@ -2013,6 +2013,9 @@ async function runFirstScreenTests() {
       eq(document.querySelector('#main .card .thumb img'), first, '同一個照片元素：');
       eq(document.querySelector('#tabs [data-tab="mine"] .n').textContent, '1', '我溜過數字：');
     });
+    check('#91 不載入 Google Fonts，改用手機內建字型', () => {
+      if (/fonts\.googleapis|fonts\.gstatic/.test(INDEX_HTML)) throw new Error('index.html 還在載入 Google Fonts');
+    });
   } finally {
     window.fetch = realFetch;
     [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState, walkedStorage, walkedMemory] = saved;

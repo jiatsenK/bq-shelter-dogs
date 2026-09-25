@@ -367,3 +367,9 @@
 - `js/app.js`：`renderDetail` 不再每次重綁十幾個按鈕，改由 `wireDetail` 在 #detail 外框綁一次 click／input／submit，依 `DETAIL_CLICKS`（選擇器 → 動作）分派；找不到的一起溜狗按鈕改在 HTML 直接 disabled。「更換照片」標籤抽成 `labelPhotoPick`。
 - 票內 BUG 一起修：詳細資訊關掉後主照片才載入完時，標籤程式讀 `detailDog.name` 會丟錯（測試頁每次跑都出現 3 次頁面錯誤），改成記住當下那隻狗並確認按鈕還在畫面上。
 - 測試：輸入事件改成跟真的瀏覽器一樣會往上傳（`bubbles: true`）；新增 2 項。tests/index.html 全過，真實資料開詳細資訊點勾選、相簿燈箱、我的備註、關閉都正常、無頁面錯誤。
+
+## 2026-09-25 首頁照片還是慢（Claude，分支 claude/project-thread-s2p7cy，#91）
+- 依據：K 在 #87 縮圖合併後回報「首頁圖片載入還是很慢」。查證：Pages 已部署縮圖版（make-thumbs、pages build 都成功）；雲端連不到正式網站，以下原因為推斷。
+- `js/app.js`：溜狗表／今天已溜前 8 張卡片（`FIRST_SCREEN_CARDS`）照片不延後載入、`fetchpriority="high"`；`loadMyWalks` 不在「我溜過」時只更新分類數字，不整頁重畫（原本會把第一屏正在載入的照片元素換掉）。
+- 字型：拿掉 Google Fonts（Noto Sans TC 四種粗細，中文切片多、瀏覽器優先下載），改手機內建字型；`css/app.css` 字型順序與 `docs/DESIGN_GUIDE.md` 一起改。K 的選項卡還沒回，先照推薦做，獨立一個提交方便改回。
+- 驗證：tests/index.html 102 項全過（新增 3 項）；本機模擬慢速網路，第一屏第 8 張照片出現時間 3.3 秒 → 2.8 秒（本機本來就連不到 Google Fonts，字型的效果量不到）。

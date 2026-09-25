@@ -22,7 +22,8 @@ html, body {
   margin: 0;
   background: var(--bg);
   color: var(--ink);
-  font-family: 'Noto Sans TC', -apple-system, 'PingFang TC', 'Microsoft JhengHei', sans-serif;
+  /* 用手機內建中文字型（#91）：不再下載 Google Fonts，照片不用排在大檔字型後面。Android 內建就是 Noto，iPhone 是蘋方 */
+  font-family: -apple-system, 'PingFang TC', 'Noto Sans TC', 'Noto Sans CJK TC', 'Microsoft JhengHei', sans-serif;
   -webkit-tap-highlight-color: transparent;
 }
 svg.icon { width: 1em; height: 1em; flex-shrink: 0; vertical-align: -0.125em; }
