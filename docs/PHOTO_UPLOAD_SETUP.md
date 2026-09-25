@@ -119,6 +119,25 @@ https://bq-shelter-photos.你的帳號名稱.workers.dev
 - 讀取：`GET /notes` → `{ "ok": true, "notes": { ...data/my-notes.json 的內容 } }`，直接讀 GitHub 上的最新版，不用等網站重新部署。
 - 寫入：`PUT /notes/{編號}`，內容 `{ "text": "備註", "passcode": "通關碼" }`（`Content-Type: application/json`）。`text` 是空的就刪掉這隻的備註。通關碼錯或沒帶回 401、錯太多次回 429，兩者都帶 `"code": "passcode"`。成功回 `{ "ok": true, "id": "...", "note": { "text", "updatedAt" } 或 null, "commit": "..." }`。
 
+## 相簿
+
+每隻狗的詳細資訊最下面（狗卡資訊下方）有「相簿」：主照片之外可以再放幾張，點照片用燈箱看大圖、左右滑換張。
+
+- 照片存在 `photos/gallery/{犬隻編號}/`，檔名是上傳時間（台灣時間）加 4 碼亂數，例：`20260925-153012-ab12.jpg`；清單在 `data/gallery.json`（`{ "犬隻編號": [{ "file": "檔名", "addedAt": "時間" }] }`，舊到新）。
+- **新增不用登入**（跟換主照片一樣），和換主照片共用頻率限制；每隻狗最多 30 張。每張是兩筆提交：先存照片檔，再更新清單。
+- **刪除要通關碼**，跟「我的備註」同一組 `NOTES_PASSCODE`（手機記過就不用再輸入）。刪除會先從清單拿掉、再刪照片檔；刪錯可以從 `data/gallery.json` 和照片檔的 **History** 還原。
+- 主照片（`photos/{編號}.jpg`）不能從相簿刪，要換主照片照舊按詳細資訊照片角落的相機。
+
+### 啟用步驟（這次 PR 合併後做一次）
+
+只要**重新貼程式**：照上面「步驟 3」的 4–7，打開 Cloudflare 的 `bq-shelter-photos` → **Edit code**，把內容全部換成 https://github.com/jiatsenK/bq-shelter-dogs/blob/main/worker/src/index.js 的最新版（右上角 **Copy raw file**），按 **Deploy**。token 和通關碼都不用動。沒重新貼之前，網站的相簿只會顯示主照片，按「新增」會失敗。
+
+### 服務的網址（給寫網站程式的人）
+
+- 讀取：`GET /gallery` → `{ "ok": true, "gallery": { ...data/gallery.json 的內容 } }`。
+- 新增：`POST /gallery/{編號}`，內容是 JPEG（`Content-Type: image/jpeg`）。成功回 `{ "ok": true, "id": "...", "photo": { "file", "addedAt" } }`；滿 30 張回 409。
+- 刪除：`DELETE /gallery/{編號}/{檔名}`，內容 `{ "passcode": "通關碼" }`（`Content-Type: application/json`）。通關碼錯的回應同我的備註。成功回 `{ "ok": true, "removed": true/false, "fileDeleted": true/false }`。
+
 ## 給用命令列的人
 
 `worker/wrangler.toml` 已經設定好，在 `worker/` 資料夾執行：

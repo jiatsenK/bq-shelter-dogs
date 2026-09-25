@@ -287,3 +287,11 @@
 - K 說「合併」，順序 #70 → #71。#70 合併後把 main 併進來：tests/index.html 衝突兩邊都保留（#58 我溜過測試＋#60 遛狗紀錄測試），AGENT_LOG 兩邊都保留。
 - #58 在 js/app.js 也宣告了 `WALKS_URL`，和 js/analysis.js 重複會讓 analysis.js 整個載入失敗；拿掉 analysis.js 那行，共用 app.js 的。
 - 驗證：tests/index.html 78 項全過；同步測試 31 項全過。
+
+## 2026-09-25 狗卡詳細資訊加相簿（Claude，分支 claude/project-thread-wilksn）
+- 依據：K 在專案聊天說「我想在狗卡資訊下面做gallery」。預設做法（K 還沒看過）：狗卡資訊下方放相簿縮圖格，點了用燈箱左右切換；新增匿名、刪除要我的備註通關碼。
+- `worker/src/index.js`：新增 `GET /gallery`、`POST /gallery/{編號}`、`DELETE /gallery/{編號}/{檔名}`。照片存 `photos/gallery/{編號}/`，清單 `data/gallery.json`；每隻最多 30 張。主照片上傳的檢查抽成 `checkPhoto`、通關碼檢查抽成 `checkPasscode`，我的備註行為不變。
+- `js/app.js`：詳細資訊最下面「相簿」區（主照片＋相簿，新傳的在前，最後一格「新增」）；燈箱可左右滑、箭頭、鍵盤左右鍵換張，顯示張數，相簿照片有「刪除」。狗卡照片開燈箱也能翻相簿。我的備註與相簿清單共用 `readJsonObject`。修掉「按刪除後下方列重畫、點擊被當成點背景而關燈箱」的問題（新功能內）。
+- 新檔 `data/gallery.json`（空的 `{}`）；`index.html` 加 photos／plus／trash 圖示；`css/app.css` 相簿與燈箱樣式；`docs/PHOTO_UPLOAD_SETUP.md` 加相簿說明與啟用步驟（重新貼 Worker）。
+- 驗證：Worker 測試 31 項全過（新增 9 項）；tests/index.html 84 項全過（新增 6 項相簿測試，更新 5 項受新區塊影響的舊測試）。截圖 previews/gallery/（模擬相簿照片，用宙斯的主照片裁切出來）。
+- 上線前 K 要做：合併後重新貼 Worker 程式到 Cloudflare。
