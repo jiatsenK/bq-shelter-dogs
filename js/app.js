@@ -250,9 +250,10 @@ function metaLine(dog) {
   return `<div class="meta">${esc(dog.cage)}${dog.id ? `<span class="sep">|</span>${esc(dog.id)}` : ''}</div>`;
 }
 
-// 性別：狗卡 frontmatter 有寫 sex 才顯示 ♂／♀，沒寫就留空位
+// 性別：狗卡 frontmatter 有寫 sex 才顯示 ♂／♀，沒寫就留空位；♂ 藍色、♀ 紅色
 function sexMark(dog) {
-  return `<span class="sex">${esc(dog.sex || '')}</span>`;
+  const cls = dog.sex === '♂' ? ' male' : dog.sex === '♀' ? ' female' : '';
+  return `<span class="sex${cls}">${esc(dog.sex || '')}</span>`;
 }
 
 // 備註命中警示關鍵字時的原文顯示；同一筆備註命中幾個關鍵字都只顯示一次
@@ -382,7 +383,7 @@ function dogCard(dog, today, walkedTab = false) {
       <div class="body">
         <div class="row">
           <div class="who">
-            <div class="name">${esc(dog.name)}${sexMark(dog)}${dog.note && !flag ? `<svg class="icon has-note" role="img" aria-label="有備註"><use href="#i-memo"/></svg>` : ''}</div>
+            <div class="name">${esc(dog.name)}${sexMark(dog)}</div>
             ${cardMeta(dog)}
           </div>
           ${lastWalk(dog, today)}
