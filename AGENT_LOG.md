@@ -122,3 +122,9 @@
 - 修正：詳細資訊照片右下角放相機圖示（點照片看大圖、點相機選照片），拿掉照片下方那一行按鈕；選好照片後預覽與「確認上傳」照舊出現在照片下方。
 - 驗證：Chromium 跑 tests/index.html 55 項全過；390px 截圖確認相機開選檔、照片開燈箱。截圖 previews/v4/camera-detail.png。
 - PR：#50（同一分支）。
+
+## [2026-09-25] Claude | V4：接上 K 部署好的照片上傳服務
+- 依據：K 提供 Worker 網址 https://bq-shelter-photos.jiatsen-k.workers.dev/ 。
+- 修改：`js/app.js` 的 `UPLOAD_URL` 填入該網址，合併後詳細資訊照片角落會出現相機圖示。
+- 驗證：tests/index.html 55 項全過。雲端環境連不到 workers.dev，未能實際呼叫服務；需 K 合併後在網站上實測一張。
+- PR：#50（同一分支）。
