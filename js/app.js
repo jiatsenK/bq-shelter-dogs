@@ -292,6 +292,20 @@ function gallerySrc(dog, file) {
   return galleryOverrides[`${dog.id}/${file}`] || `photos/gallery/${encodeURIComponent(dog.id)}/${encodeURIComponent(file)}`;
 }
 
+// 縮圖（#83）：清單、相簿格子只載 photos/thumbs/ 的小圖，燈箱才看原圖；縮圖由 Action 產生（scripts/make-thumbs.py）
+// 剛上傳的照片先用本機圖片；縮圖還沒產生就在 img 的 onerror 改讀 data-full 的原圖（thumbFallback）
+function photoThumbSrc(dog) {
+  return photoOverrides[dog.id] || `photos/thumbs/${encodeURIComponent(dog.id)}.jpg`;
+}
+function galleryThumbSrc(dog, file) {
+  return galleryOverrides[`${dog.id}/${file}`] || `photos/thumbs/gallery/${encodeURIComponent(dog.id)}/${encodeURIComponent(file)}`;
+}
+// 放在 img 的 onerror 最前面：還有原圖可試就換原圖、這次不算讀取失敗
+const thumbFallback = "if (this.dataset.full) { this.src = this.dataset.full; this.removeAttribute('data-full'); return; }";
+function thumbAttrs(thumb, full) {
+  return thumb === full ? `src="${esc(full)}"` : `src="${esc(thumb)}" data-full="${esc(full)}"`;
+}
+
 // zoom：詳細資訊上方的照片做成按鈕，點了用燈箱放大（#46）；照片讀不到就標 no-photo，按了不放大
 function photoThumb(dog, size = 56, zoom = false) {
   // 沒有編號就直接顯示腳掌圖示，不去抓 photos/.jpg
@@ -302,9 +316,9 @@ function photoThumb(dog, size = 56, zoom = false) {
   const attrs = zoom ? ` type="button" class="thumb zoom" data-zoom aria-label="放大 ${esc(dog.name)} 的照片"` : ' class="thumb"';
   return `
     <${tag}${attrs}>
-      <img src="${esc(photoSrc(dog))}" alt="" width="${size}" height="${size}" loading="lazy" decoding="async"
+      <img ${thumbAttrs(photoThumbSrc(dog), photoSrc(dog))} alt="" width="${size}" height="${size}" loading="lazy" decoding="async"
            onload="this.classList.add('loaded')"
-           onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'; this.parentNode.classList.add('no-photo'); this.parentNode.disabled = true;">
+           onerror="${thumbFallback} this.style.display='none'; this.nextElementSibling.style.display='flex'; this.parentNode.classList.add('no-photo'); this.parentNode.disabled = true;">
       <div class="thumb-fallback">${icon('paw')}</div>
     </${tag}>
   `;
@@ -788,14 +802,14 @@ function gallerySection(dog) {
   const canAdd = !!UPLOAD_URL && list.length < GALLERY_MAX;
   const up = galleryBatch && galleryBatch.dog === dog;
   // 相簿照片讀不到（例：別人剛傳、網站還沒更新）就顯示腳掌、不能點；主照片讀不到整格藏起來
-  const tile = (src, attrs, main = false) => `
+  const tile = (thumb, src, attrs, main = false) => `
     <button type="button" class="g-tile" ${attrs}>
-      <img src="${esc(src)}" alt="" loading="lazy" decoding="async" onerror="this.parentNode.classList.add('broken'); this.parentNode.disabled = true;${main ? ' this.parentNode.hidden = true;' : ''}">
+      <img ${thumbAttrs(thumb, src)} alt="" loading="lazy" decoding="async" onerror="${thumbFallback} this.parentNode.classList.add('broken'); this.parentNode.disabled = true;${main ? ' this.parentNode.hidden = true;' : ''}">
       ${main ? `<span class="g-tag">主照片</span>` : `<span class="g-fallback">${icon('paw')}</span>`}
     </button>`;
   const tiles = [
-    tile(photoSrc(dog), `data-g-main aria-label="放大 ${esc(dog.name)} 的主照片"`, true),
-    ...list.map((p, i) => tile(gallerySrc(dog, p.file), `data-g-file="${esc(p.file)}" aria-label="放大 ${esc(dog.name)} 的相簿照片（第 ${i + 1} 張）"`)),
+    tile(photoThumbSrc(dog), photoSrc(dog), `data-g-main aria-label="放大 ${esc(dog.name)} 的主照片"`, true),
+    ...list.map((p, i) => tile(galleryThumbSrc(dog, p.file), gallerySrc(dog, p.file), `data-g-file="${esc(p.file)}" aria-label="放大 ${esc(dog.name)} 的相簿照片（第 ${i + 1} 張）"`)),
   ];
   const note = galleryState === 'loading' ? '讀取中…' : galleryState === 'error' ? '相簿清單暫時讀不到' : '';
   return `
