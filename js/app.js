@@ -31,6 +31,7 @@ let photoUpload = null; // 詳細資訊正在上傳的照片：{ dog, blob, url,
 let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（walkKey）
 let searchQuery = '';
 let loadWarning = '';
+let analysisOpen = false; // 分析頁（#59）開著嗎
 let loadState = 'loading'; // loading：還在讀 dogs.json；error：讀取失敗；ready：資料好了
 
 // 把年月日組成日期；不合理的日期（例：2/30）回傳 null
@@ -692,7 +693,8 @@ function closeDetail() {
 // 燈箱開著時「返回」只關燈箱，詳細資訊留著
 window.addEventListener('popstate', () => {
   if (lightboxOpen()) hideLightbox();
-  else hideDetail();
+  else if (detailDog) hideDetail();
+  else if (analysisOpen) hideAnalysis();
 });
 document.getElementById('detailBackdrop').addEventListener('click', e => {
   if (e.target.id === 'detailBackdrop') closeDetail();
@@ -753,8 +755,6 @@ const TABS = [
   { id: 'walk', label: '溜狗表' },
   { id: 'today', label: '今天已溜' },
   { id: 'info', label: '相關資訊', note: '編輯中' },
-  // 分析（V5-4，#59）：統計與畫面在 js/analysis.js
-  { id: 'analysis', label: '分析', note: '統計' },
 ];
 
 // counts：各分類要顯示的隻數；沒有數字的分類（相關資訊）顯示 note
@@ -808,7 +808,7 @@ mainEl.addEventListener('touchstart', e => {
   swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 }, { passive: true });
 mainEl.addEventListener('touchend', e => {
-  if (!swipeStart) return;
+  if (!swipeStart || analysisOpen) return; // 分析頁不是分類，滑動不換頁
   const t = e.changedTouches[0];
   const step = swipeStep(t.clientX - swipeStart.x, t.clientY - swipeStart.y);
   swipeStart = null;
@@ -848,6 +848,12 @@ function renderMain() {
 
   const main = document.getElementById('main');
 
+  // 分析頁（#59）：頁首右上角的圖示打開，蓋住分類清單；統計與畫面在 js/analysis.js
+  if (analysisOpen) {
+    main.innerHTML = analysisPageHtml(today);
+    return;
+  }
+
   if (activeTab === 'info') {
     buildTabs({});
     main.innerHTML = `<div class="status-msg">相關資訊編輯中，之後會放在這裡。</div>`;
@@ -862,13 +868,6 @@ function renderMain() {
       : `<div class="status-msg">讀取狗狗資料中…</div>`;
     const retry = document.getElementById('retryBtn');
     if (retry) retry.addEventListener('click', init);
-    return;
-  }
-
-  // 分析頁統計全部的狗，不受搜尋影響（搜尋框只篩狗卡清單）
-  if (activeTab === 'analysis') {
-    buildTabs({});
-    main.innerHTML = analysisHtml(allDogs, today);
     return;
   }
 
