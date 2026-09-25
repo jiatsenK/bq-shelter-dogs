@@ -1068,26 +1068,6 @@ async function runAnalysisTests() {
     eq([sv.long.count, sv.long.avgWalkDays], [3, (3 + 12 + 40) / 3], '滿 1 年：');
     eq([sv.short.count, sv.short.avgWalkDays], [2, 4], '未滿 1 年：');
   });
-  await check('#59 各區遛狗狀況：分 2 天內／3–6 天／7 天以上／沒紀錄，平均最久沒遛的區排前面', () => {
-    eq(zoneWalkStatus(rows).map(z => `${z.zone}:${z.fresh}/${z.mid}/${z.stale}/${z.none}:${z.avgWalkDays}`),
-      ['舊B:0/0/1/2:40', '新A:0/1/1/0:7.5', 'C區:1/0/1/0:4', '母幼A:1/0/0/0:2', '住院區:1/0/0/0:2', '新獨:1/0/0/0:1']);
-  });
-  await check('#59 自動發現：只列明顯的（某區特別久沒遛、警示集中、新狗缺照片／狗卡、沒有一起溜的夥伴）', () => {
-    const W = (name, zone, days, extra = {}) => D(name, '2020010101', zone + '01', days, extra);
-    const many = [
-      W('區甲', '新A', 1), W('區乙', '新A', 1), W('區丙', '新A', 2), W('區丁', '新A', 1),
-      W('慢甲', '母幼A', 9), W('慢乙', '母幼A', 9, { note: '勿溜' }), W('慢丙', '母幼A', 7, { note: '會攻擊' }), W('慢丁', '母幼A', 3, { note: '不親狗' }),
-      D('新甲', '2026080101', 'C區11', 1), D('新乙', '2026080102', 'C區12', 1), D('新丙', '2026080103', 'C區13', 1, { intro: 'x' }),
-    ].map(d => (d.intro || d.name.startsWith('新') ? d : { ...d, intro: '有' }));
-    const r = analysisRows(many, T);
-    const got = findInsights(r, { groups: { '區甲': new Set(['區乙']) }, hasPhoto: new Map(many.map(d => [d.id, !d.name.startsWith('新')])) });
-    eq(got.map(g => g.key), ['zone-walk', 'zone-warn', 'new-照片', 'new-狗卡資訊', 'alone']);
-    if (!got[0].text.startsWith('母幼A平均 7.0 天沒遛')) throw new Error(got[0].text);
-    if (!got[1].text.startsWith('母幼A有 3 / 4 隻')) throw new Error(got[1].text);
-    if (!got[2].text.includes('3 隻還沒有照片（100%）')) throw new Error(got[2].text);
-    if (!got[4].text.startsWith('9 / 11 隻')) throw new Error(got[4].text);
-    eq(findInsights(analysisRows(many.slice(0, 4), T), {}).map(g => g.key), [], '都差不多時不硬湊：');
-  });
   await check('#59 公母在所時間差異只算有性別的狗，並顯示缺幾隻', () => {
     const s = sexComparison(rows);
     eq([s.male.count, s.female.count, s.missing], [2, 2, 6]);
@@ -1117,10 +1097,10 @@ async function runAnalysisTests() {
       showAnalysis();
       eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [true, true, 'today'], '打開分析：');
       const titles = [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
-      eq(titles.length, 10, '十張統計：');
+      eq(titles.length, 8, '八張統計：');
       if (titles.includes('長期在所＋近期少遛')) throw new Error('K 說長期在所＋少遛不需要');
-      ['自動發現', '入所多久分布', '在所最久 Top 10', '入所年度分布', '各區平均在所時間', '長期在所犬比例', '入所時間 × 最近未遛天數',
-        '各區遛狗狀況', '公母在所時間差異', '犬隻資料完整度'].forEach(t => { if (!titles.includes(t)) throw new Error(`少了 ${t}`); });
+      ['入所多久分布', '在所最久 Top 10', '入所年度分布', '各區平均在所時間', '長期在所犬比例', '入所時間 × 最近未遛天數',
+        '公母在所時間差異', '犬隻資料完整度'].forEach(t => { if (!titles.includes(t)) throw new Error(`少了 ${t}`); });
       eq(document.querySelectorAll('#main .a-dot').length, 5, '散布圖點數（搜尋不影響）：');
       if (!document.getElementById('main').textContent.includes('檢查中')) throw new Error('照片還沒查完要顯示檢查中');
       eq(calls.every(([, m]) => m === 'HEAD'), true, '只用 HEAD：');
