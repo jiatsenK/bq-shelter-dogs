@@ -1,6 +1,7 @@
 // 分析分頁（V5-4，#59）：只用目前 dogs.json 就能算的犬隻統計。
 // 統計都寫成純函式（輸入狗清單與今天日期，輸出數字），tests/index.html 直接測；畫面只負責把結果畫成 CSS／SVG 長條圖。
-// 會用到 js/app.js 的 makeDate、computeStatus、esc、icon、photoSrc、showDetail、allDogs，所以要在 app.js 之後載入。
+// 頁首右上角的圖示打開（不佔分類：分類只放每天遛狗會用的）。
+// 會用到 js/app.js 的 makeDate、computeStatus、esc、icon、photoSrc、showDetail、allDogs、analysisOpen，所以要在 app.js 之後載入。
 
 // 長期在所＝在所滿 1 年；近期少遛＝超過 7 天沒遛（沿用溜狗表的黃色門檻 AMBER_DAYS）
 const LONG_STAY_MONTHS = 12;
@@ -172,7 +173,7 @@ function checkPhotos(dogs) {
     .then(res => state.map.set(id, res.ok), () => state.map.set(id, false))))
     .then(() => {
       state.done = true;
-      if (activeTab === 'analysis' && photoCheck === state) render();
+      if (analysisOpen && photoCheck === state) render();
     });
 }
 
@@ -281,8 +282,42 @@ function analysisHtml(dogs, today) {
   return out.join('');
 }
 
+// 分析頁整頁：上方「‹ 返回」＋標題；資料還沒好時顯示讀取中或失敗
+function analysisPageHtml(today) {
+  const top = `<div class="a-top"><button type="button" class="a-back" id="analysisBack">${icon('back')}返回</button><h2>犬隻分析</h2></div>`;
+  if (loadState === 'ready') return top + analysisHtml(allDogs, today);
+  return top + `<div class="status-msg">${loadState === 'error' ? '資料載入失敗，請稍後重新整理。' : '讀取狗狗資料中…'}</div>`;
+}
+
+// 打開分析頁：手機按「返回」會回到原本的分類（跟詳細資訊一樣用 history）
+function showAnalysis() {
+  if (analysisOpen) return;
+  analysisOpen = true;
+  document.documentElement.classList.add('analysis-open');
+  history.pushState({ bqAnalysis: true }, '');
+  render();
+  window.scrollTo(0, 0);
+}
+
+function hideAnalysis() {
+  if (!analysisOpen) return;
+  analysisOpen = false;
+  document.documentElement.classList.remove('analysis-open');
+  render();
+  window.scrollTo(0, 0);
+}
+
+function closeAnalysis() {
+  if (history.state && history.state.bqAnalysis) history.back(); // popstate 會接著 hideAnalysis
+  else hideAnalysis();
+}
+
+const analysisBtn = document.getElementById('analysisBtn');
+if (analysisBtn) analysisBtn.addEventListener('click', () => (analysisOpen ? closeAnalysis() : showAnalysis()));
+
 // 分析頁的狗名列：點了開詳細資訊（事件委派，renderMain 重畫也不用重綁）
 document.getElementById('main').addEventListener('click', e => {
+  if (e.target.closest('#analysisBack')) { closeAnalysis(); return; }
   const row = e.target.closest('#main .a-dog[data-adog]');
   const dog = row && allDogs[row.dataset.adog];
   if (dog) showDetail(dog);
