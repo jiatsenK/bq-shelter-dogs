@@ -165,6 +165,32 @@ main { overflow-wrap: anywhere; }
 .mine-dog .first { font-size: 11px; font-weight: 700; color: var(--green-text); background: var(--green-bg); border-radius: 6px; padding: 0 5px; }
 .mine-dog.gone { opacity: 0.55; cursor: default; }
 
+/* 我是誰（#96）：還沒設定時「我溜過」先顯示這個框；設定好後上方一行可以修改 */
+.who-box {
+  background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card);
+  padding: 16px 16px 14px; margin-bottom: 12px;
+}
+.who-box h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 17px; font-weight: 700; }
+.who-box h3 .icon { color: var(--primary); }
+.who-box p { margin: 0 0 10px; font-size: 14px; line-height: 1.65; color: var(--ink); }
+.who-box p.who-note { margin: 8px 0 0; font-size: 12.5px; color: var(--ink-soft); }
+.who-box input {
+  display: block; width: 100%; box-sizing: border-box;
+  border: 1px solid var(--line); border-radius: 12px;
+  background: var(--surface-soft); color: var(--ink);
+  font-family: inherit; font-size: 16px; padding: 10px 12px;
+}
+.who-box input:focus { outline: 2px solid var(--primary); outline-offset: 0; background: var(--surface); }
+.who-clear {
+  display: block; margin: 10px auto 0; border: none; background: none;
+  color: var(--red-text); font-family: inherit; font-size: 13.5px; padding: 6px 12px; cursor: pointer;
+}
+.who-hint { justify-content: flex-start; }
+.who-edit {
+  margin-left: auto; border: none; background: var(--primary-soft); color: var(--primary);
+  font-family: inherit; font-size: 13px; font-weight: 700; border-radius: 10px; padding: 4px 10px; cursor: pointer;
+}
+
 /* 卡片：手機一個畫面約 6～8 隻（#28，版型照 K 給的參考圖）。
    一列：照片｜犬名＋編號｜籠位｜上次遛狗｜箭頭；備註命中警示關鍵字時多一行原文 */
 .card {

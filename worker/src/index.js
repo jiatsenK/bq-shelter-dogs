@@ -12,6 +12,8 @@
 // - 相簿：每隻狗除了主照片（photos/{編號}.jpg）還能多放幾張，存在 photos/gallery/{編號}/，
 //   清單在 data/gallery.json。GET /gallery 讀清單；POST /gallery/{編號} 新增（跟上傳主照片一樣不用登入）；
 //   DELETE /gallery/{編號}/{檔名} 刪除，要跟我的備註同一組通關碼（避免路人亂刪）
+// - 誰遛的代號（#95）：POST /walker-code 送 { names: [...] }，回 { codes: [...] }。
+//   用 Worker 的 Secret「WALKER_KEY」（跟 GitHub Actions 的同一組）算，網站拿不到密鑰；名字不存、不寫進任何紀錄
 //
 // 這個檔案可以整份貼到 Cloudflare 網頁上的程式編輯器（不需要其他檔案），設定步驟見 docs/PHOTO_UPLOAD_SETUP.md。
 
@@ -58,6 +60,14 @@ const GALLERY_PATH = 'data/gallery.json';
 const GALLERY_DIR = 'photos/gallery';
 const GALLERY_MAX = 30;
 const GALLERY_FILE_PATTERN = /^\d{8}-\d{6}-[0-9a-f]{4}\.jpg$/;
+// 誰遛的代號：一次最多幾個名字、每個名字最多幾個字、送來的資料上限；1 分鐘最多 20 次
+const WALKER_MAX_NAMES = 8;
+const WALKER_NAME_MAX_CHARS = 20;
+const WALKER_MAX_BYTES = 2 * 1024;
+const WALKER_LIMITS = [{ windowMs: 60 * 1000, max: 20 }];
+const WALKER_CODE_LENGTH = 12;
+// 跟 scripts/sync-sheet.mjs 的 NAME_SEP 一樣：一格寫好幾個名字時用這些符號或空白隔開
+const WALKER_NAME_SEP = /[、,，\/／&＆+＋\s]+/;
 
 // 注意：Cloudflare 會同時開好幾份 Worker，下面這兩個暫存各自獨立，
 // 所以頻率限制是「盡量擋」，不是精確計數；目的是擋住一直狂傳，不是算帳
@@ -78,6 +88,7 @@ function config(env) {
     origins: get('ALLOWED_ORIGINS').split(',').map(s => s.trim()).filter(Boolean),
     token: env && env.GITHUB_TOKEN,
     passcode: env && env.NOTES_PASSCODE ? String(env.NOTES_PASSCODE) : '',
+    walkerKey: env && env.WALKER_KEY ? String(env.WALKER_KEY) : '',
   };
 }
 
@@ -642,9 +653,55 @@ async function deleteGalleryPhoto(request, env, origin, id, file) {
   return reply(200, { ok: true, id, file, removed: saved.changed, fileDeleted }, origin);
 }
 
+// ── 誰遛的代號（#95）──
+// 算法要跟 scripts/sync-sheet.mjs 的 walkerCode 完全一樣：名字全形半形統一（NFKC）、去空白、轉小寫，
+// HMAC-SHA256(WALKER_KEY, 名字) 取前 12 碼十六進位。兩邊用同一組測試向量（WALKER_VECTORS）確認。
+function walkerNameKey(name) {
+  return String(name || '').normalize('NFKC').replace(/\s+/g, '').toLowerCase();
+}
+async function walkerCode(name, key) {
+  const k = walkerNameKey(name);
+  if (!k || !key) return '';
+  const enc = new TextEncoder();
+  const hmacKey = await crypto.subtle.importKey('raw', enc.encode(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', hmacKey, enc.encode(k)));
+  return [...sig].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, WALKER_CODE_LENGTH);
+}
+
+// 輸入的每個名字再照試算表的規則拆開（例：「小明 明明」算兩個），這樣跟同步時拆出來的代號對得上
+async function walkerCodes(request, env, origin) {
+  const cfg = config(env);
+  if (!cfg.walkerKey) return fail(500, '代號服務還沒設定好（缺 WALKER_KEY）', origin);
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!allow(`walker:${ip}`, WALKER_LIMITS, Date.now())) return fail(429, '太頻繁了，請稍等一下再試', origin);
+
+  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') return fail(415, '格式不對', origin);
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).length > WALKER_MAX_BYTES) return fail(413, '名字太長了', origin);
+  let input;
+  try {
+    input = JSON.parse(raw);
+  } catch (e) {
+    return fail(400, '格式不對', origin);
+  }
+  if (!input || !Array.isArray(input.names) || input.names.some(n => typeof n !== 'string')) return fail(400, '請送名字清單', origin);
+  const names = [...new Set(input.names.flatMap(n => n.split(WALKER_NAME_SEP)).map(n => n.trim()).filter(Boolean))];
+  if (!names.length) return fail(400, '請輸入名字', origin);
+  if (names.length > WALKER_MAX_NAMES) return fail(400, `最多 ${WALKER_MAX_NAMES} 個名字`, origin);
+  if (names.some(n => [...n].length > WALKER_NAME_MAX_CHARS)) return fail(400, `每個名字最多 ${WALKER_NAME_MAX_CHARS} 個字`, origin);
+
+  const codes = [];
+  for (const n of names) {
+    const c = await walkerCode(n, cfg.walkerKey);
+    if (c && !codes.includes(c)) codes.push(c);
+  }
+  return reply(200, { ok: true, codes }, origin);
+}
+
 export default {
   // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch
-  testing: { MAX_BYTES, NOTE_MAX_CHARS, GALLERY_MAX, resetState, allowUpload, allowGalleryUpload, isJpeg, cleanNote, cleanGallery, galleryFileName },
+  testing: { MAX_BYTES, NOTE_MAX_CHARS, GALLERY_MAX, resetState, allowUpload, allowGalleryUpload, isJpeg, cleanNote, cleanGallery, galleryFileName, walkerCode },
 
   async fetch(request, env) {
     const cfg = config(env);
@@ -660,6 +717,7 @@ export default {
         service: '板收志工溜狗表 照片上傳服務',
         token: cfg.token ? '已設定' : '未設定',
         notesPasscode: cfg.passcode ? '已設定' : '未設定',
+        walkerKey: cfg.walkerKey ? '已設定' : '未設定',
       });
     }
     // 其他網站送來的一律不收（瀏覽器會擋掉沒有 CORS 回應的要求）
@@ -673,6 +731,15 @@ export default {
         return fail(405, '備註只能讀取（GET /notes）或寫入（PUT /notes/編號）', allowed);
       } catch (e) {
         return fail(500, '備註服務發生錯誤，原本的備註不受影響', allowed);
+      }
+    }
+
+    if (path === '/walker-code') {
+      if (request.method !== 'POST') return fail(405, '代號只能用 POST /walker-code 換', allowed);
+      try {
+        return await walkerCodes(request, env, allowed);
+      } catch (e) {
+        return fail(500, '代號服務發生錯誤', allowed);
       }
     }
 
