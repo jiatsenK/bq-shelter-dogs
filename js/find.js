@@ -22,9 +22,10 @@ const FIND_FACILITIES = [
 // 'cw' 順時針、'ccw' 逆時針、'' 不轉
 const FIND_MAP_TURN = 'cw';
 const FIND_MAP_W = 380, FIND_MAP_H = 600; // 看板直的時候的寬高
+let findTurnNow = FIND_MAP_TURN; // 這次畫圖用的方向：全螢幕放大（#102）改畫直的，比較貼合手機直立的螢幕
 function findTurn([x, y, w, h]) {
-  if (FIND_MAP_TURN === 'cw') return [FIND_MAP_H - y - h, x, h, w];
-  if (FIND_MAP_TURN === 'ccw') return [y, FIND_MAP_W - x - w, h, w];
+  if (findTurnNow === 'ccw') return [y, FIND_MAP_W - x - w, h, w];
+  if (findTurnNow === 'cw') return [FIND_MAP_H - y - h, x, h, w];
   return [x, y, w, h];
 }
 // 區名：放得下就橫排、放不下就直排（一個字一行）；sub 是隻數，底下畫一條短線（K 2026-09-26 給的看板樣式）
@@ -127,14 +128,17 @@ function findGridHtml(list, query) {
     <div class="find-grid">${g.items.map(d => findCard(d, query, n++ < 6)).join('')}</div>`).join('');
 }
 
-// 平面圖：mini＝詳細資訊裡的小地圖（不寫字、不能點，選到的區放紅點）
 // 平面圖：墨藍底、米白線的看板樣式（K 2026-09-26 給參考圖，選 A 墨藍看板、橫的）。
 // 建築外框是 L 形（左上角空出來，放「園區平面圖」標題），畫兩條線；每區往內縮一點，區與區之間留縫。
 // mini＝詳細資訊裡的小地圖：不寫字、不能點，所在的區塗成米白
 const FIND_MAP_GAP = 6;
 const FIND_MAP_PAD = 22;
 const FIND_OUTLINE = [[140, 0], [380, 0], [380, 600], [0, 600], [0, 270], [140, 270]]; // 看板直的時候的建築外框
-function findMapSvg(selected, query = '', mini = false) {
+function findMapSvg(selected, query = '', mini = false, turn = FIND_MAP_TURN) {
+  findTurnNow = turn;
+  try { return findMapSvgNow(selected, query, mini); } finally { findTurnNow = FIND_MAP_TURN; }
+}
+function findMapSvgNow(selected, query, mini) {
   const count = key => allDogs.filter(d => findZoneOf(d) === key && findMatches(d, query)).length;
   const [, , vw, vh] = findTurn([0, 0, FIND_MAP_W, FIND_MAP_H]);
   const P = FIND_MAP_PAD, G = FIND_MAP_GAP;
@@ -190,8 +194,12 @@ function findMapTitle() {
 function findMapHtml(query) {
   const unmapped = allDogs.some(d => findZoneOf(d) === 'other') ? [findZoneInfo('other')] : [];
   const selected = findZone === 'all' ? null : findZone;
-  let html = `<div class="find-map-card">${findMapSvg(selected, query)}
-    <p class="find-map-hint">點一個區域，下面列出那區的狗。圖是照所內看板重畫的相對位置。</p>
+  let html = `<div class="find-map-card">
+    ${findMapSvg(selected, query)}
+    <div class="find-map-foot">
+      <p class="find-map-hint">點一個區域，下面列出那區的狗。圖是照所內看板重畫的相對位置。</p>
+      <button type="button" class="find-zoom-btn" id="findZoomOpen" aria-label="全螢幕放大平面圖">${icon('zoom')}放大</button>
+    </div>
     ${unmapped.length ? `<div class="find-unmapped">這些籠位還不知道在圖上哪裡：${unmapped.map(z =>
       `<button type="button" data-find-zone="${z.key}" aria-pressed="${findZone === z.key}">${esc(z.name)} ${allDogs.filter(d => findZoneOf(d) === z.key && findMatches(d, query)).length} 隻</button>`).join('')}</div>` : ''}
   </div>`;
@@ -225,7 +233,7 @@ function findLocationSection(dog) {
   return `<section class="detail-section" data-section="where">
     <h3>${icon('pin')}在哪裡</h3>
     <div class="find-where">
-      ${findMapSvg(z.key, '', true)}
+      <button type="button" class="find-where-map" id="findMiniZoom" aria-label="放大平面圖，看${esc(z.name)}在哪裡">${findMapSvg(z.key, '', true)}</button>
       <div><b>${esc(z.name)}</b>・${esc(dog.cage)}
         <button type="button" class="find-where-btn" id="findWhere">${icon('map')}看同區的狗</button>
       </div>
@@ -248,6 +256,7 @@ function findShowZone(dog) {
 // 找狗頁的點擊（內容區每次重畫，所以用事件委派）
 document.getElementById('main').addEventListener('click', e => {
   if (activeTab !== 'find') return;
+  if (e.target.closest('#findZoomOpen')) { findZoomShow(findZone === 'all' ? null : findZone); return; }
   const view = e.target.closest('[data-find-view]');
   if (view) { findView = view.dataset.findView; render(); return; }
   const zone = e.target.closest('[data-find-zone]');
@@ -270,3 +279,110 @@ document.getElementById('main').addEventListener('keydown', e => {
   const again = document.querySelector(`#main g[data-find-zone="${zone.dataset.findZone}"]`);
   if (again) again.focus({ preventScroll: true });
 });
+
+// ── 平面圖全螢幕放大（#102，K 2026-09-27「平面圖應該要可以放大」）──
+// 找狗平面圖的「放大」、詳細資訊的小地圖都能開。全螢幕改畫直的（貼合手機直立螢幕），
+// 右上角 －／＋ 調大小（100%～300%），放大後上下左右捲動；點區域就關掉、到找狗平面圖選那一區。
+// 手機「返回」、Esc、右上角 X 都能關（app.js 的 popstate 先處理這層）。
+const FIND_ZOOM_STEPS = [1, 1.5, 2, 3];
+let findZoomState = null; // { selected, step, opener }
+
+function findZoomOpen() {
+  return !!findZoomState;
+}
+
+function findZoomRender() {
+  const box = document.getElementById('findZoom');
+  if (!box || !findZoomState) return;
+  const { selected, step } = findZoomState;
+  const scale = FIND_ZOOM_STEPS[step];
+  box.querySelector('.find-zoom-scroll').innerHTML =
+    `<div class="find-zoom-map" style="width:${scale * 100}%">${findMapSvg(selected, '', false, '')}</div>`;
+  box.querySelector('[data-zoom-step="-1"]').disabled = step === 0;
+  box.querySelector('[data-zoom-step="1"]').disabled = step === FIND_ZOOM_STEPS.length - 1;
+  box.querySelector('.find-zoom-pct').textContent = `${Math.round(scale * 100)}%`;
+}
+
+function findZoomShow(selected) {
+  let box = document.getElementById('findZoom');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'findZoom';
+    box.className = 'find-zoom';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-label', '園區平面圖');
+    box.innerHTML = `
+      <div class="find-zoom-bar">
+        <span class="find-zoom-title">點區域看那區的狗</span>
+        <button type="button" data-zoom-step="-1" aria-label="縮小">－</button>
+        <span class="find-zoom-pct"></span>
+        <button type="button" data-zoom-step="1" aria-label="放大">＋</button>
+        <button type="button" class="find-zoom-close" aria-label="關閉平面圖">${icon('close')}</button>
+      </div>
+      <div class="find-zoom-scroll"></div>`;
+    document.body.appendChild(box);
+    box.addEventListener('click', e => {
+      if (e.target.closest('.find-zoom-close')) { findZoomClose(); return; }
+      const stepBtn = e.target.closest('[data-zoom-step]');
+      if (stepBtn) {
+        findZoomState.step = Math.max(0, Math.min(FIND_ZOOM_STEPS.length - 1, findZoomState.step + Number(stepBtn.dataset.zoomStep)));
+        findZoomRender();
+        return;
+      }
+      const zone = e.target.closest('g[data-find-zone]');
+      if (zone) findZoomPick(zone.dataset.findZone);
+    });
+    box.addEventListener('keydown', e => {
+      const zone = e.target.closest('g[data-find-zone]');
+      if (zone && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); findZoomPick(zone.dataset.findZone); }
+    });
+  }
+  findZoomState = { selected, step: 0, opener: document.activeElement };
+  findZoomRender();
+  box.hidden = false;
+  document.documentElement.classList.add('find-zoom-open');
+  history.pushState({ bqFindZoom: true }, '');
+  box.querySelector('.find-zoom-close').focus({ preventScroll: true });
+}
+
+// 關掉全螢幕（popstate 呼叫，或 findZoomClose 經由 history.back 間接呼叫）
+function findZoomHide() {
+  if (!findZoomState) return;
+  const { opener } = findZoomState;
+  findZoomState = null;
+  const box = document.getElementById('findZoom');
+  if (box) { box.hidden = true; box.querySelector('.find-zoom-scroll').innerHTML = ''; }
+  document.documentElement.classList.remove('find-zoom-open');
+  if (opener && opener.isConnected) opener.focus({ preventScroll: true });
+}
+
+function findZoomClose() {
+  if (history.state && history.state.bqFindZoom) history.back(); // popstate 會接著 findZoomHide
+  else findZoomHide();
+}
+
+// 在全螢幕點區域：關掉放大（從詳細資訊開的也一起關），到找狗平面圖選那一區
+function findZoomPick(key) {
+  findZoomHide();
+  if (history.state && history.state.bqFindZoom) history.replaceState(null, '');
+  if (detailDog) closeDetail();
+  findView = 'map';
+  findZone = key;
+  if (searchQuery) {
+    const input = document.getElementById('searchInput');
+    if (input) { input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true })); }
+  }
+  switchTab('find');
+  render();
+  window.scrollTo(0, 0);
+}
+
+// 詳細資訊的小地圖：點了全螢幕放大，選好這隻狗那一區
+document.addEventListener('click', e => {
+  if (!e.target.closest || !e.target.closest('#findMiniZoom') || !detailDog) return;
+  findZoomShow(findZoneOf(detailDog));
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && findZoomState) { e.stopImmediatePropagation(); findZoomClose(); }
+}, true);
