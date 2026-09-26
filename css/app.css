@@ -15,6 +15,13 @@
   --radius-card: 18px;
   --radius-photo: 14px;
   --shadow-card: 0 2px 10px rgba(30, 42, 68, 0.06);
+  /* 找狗平面圖的分區色（#99）：沿用所內看板的色系，調淡；文字用同色系深色 */
+  --z-new: #CFE8F6; --z-new-ink: #1F6E9A;
+  --z-iso: #F6D6D6; --z-iso-ink: #A33A3A;
+  --z-mom: #F3D9EC; --z-mom-ink: #9A3F80;
+  --z-pup: #DCE0F5; --z-pup-ink: #4B55A0;
+  --z-old: #E4EEDC; --z-old-ink: #4D7A34;
+  --z-fac: #F2F2EC; --z-fac-ink: #8A8A7A;
 }
 * { box-sizing: border-box; }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
@@ -71,7 +78,7 @@ header.app {
 
 .tabs {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 6px;
 }
 .tabs button {
@@ -858,3 +865,94 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
   font-size: 14px; padding: 0; cursor: pointer;
 }
 .gb-crop::after { content: ''; position: absolute; inset: -6px; }
+
+/* ── 找狗（#99）：照片圖鑑＋平面圖 ── */
+.find-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
+.find-view { display: inline-flex; flex-shrink: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+.find-view button {
+  border: none; background: transparent; font-family: inherit; font-size: 13px; font-weight: 700; color: var(--ink-soft);
+  padding: 7px 10px; display: flex; align-items: center; gap: 4px; cursor: pointer;
+}
+.find-view button.on { background: var(--primary-soft); color: var(--primary); }
+.find-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; padding-block: 2px; }
+.find-chips::-webkit-scrollbar { display: none; }
+.find-chip {
+  border: none; background: var(--muted-bg); color: var(--ink); border-radius: 999px; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 700; padding: 6px 11px; white-space: nowrap;
+}
+.find-chip small { font-weight: 500; color: var(--ink-soft); margin-left: 3px; font-variant-numeric: tabular-nums; }
+.find-chip.on { background: var(--primary); color: #fff; }
+.find-chip.on small { color: rgba(255, 255, 255, 0.85); }
+.find-zone-head { display: flex; align-items: baseline; gap: 8px; margin: 18px 4px 10px; }
+.find-bar + .find-zone-head, .section-hint + .find-zone-head { margin-top: 4px; }
+.find-zone-head h2 { font-size: 16px; font-weight: 800; margin: 0; }
+.find-zone-head span { font-size: 13px; color: var(--ink-soft); }
+.find-dot { width: 10px; height: 10px; border-radius: 3px; align-self: center; background: var(--muted-bg); }
+.find-dot.z-new { background: var(--z-new-ink); } .find-dot.z-iso { background: var(--z-iso-ink); }
+.find-dot.z-mom { background: var(--z-mom-ink); } .find-dot.z-pup { background: var(--z-pup-ink); }
+.find-dot.z-old { background: var(--z-old-ink); }
+.find-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
+@media (min-width: 440px) { .find-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+.find-dog {
+  border: none; background: none; padding: 0; font-family: inherit; color: var(--ink); text-align: left; cursor: pointer;
+  display: flex; flex-direction: column; gap: 5px; min-width: 0;
+}
+.find-dog:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 14px; }
+.find-photo { position: relative; display: block; }
+.find-photo .thumb { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--radius-photo); }
+.find-photo .thumb-fallback { font-size: 40px; }
+.find-dog:active .thumb { opacity: 0.85; }
+.find-warn {
+  position: absolute; top: 7px; left: 7px; display: flex; align-items: center; gap: 3px;
+  background: var(--red-text); color: #fff; border-radius: 999px; font-size: 11.5px; font-weight: 700; padding: 2px 8px 2px 6px;
+}
+.find-name { display: flex; align-items: flex-start; font-size: 16px; font-weight: 800; line-height: 1.3; padding: 0 2px; min-width: 0; }
+.find-name .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.find-meta { display: flex; flex-wrap: wrap; gap: 0 8px; font-size: 13px; color: var(--ink-soft); padding: 0 2px; font-variant-numeric: tabular-nums; }
+.find-meta b { color: var(--ink); font-weight: 700; }
+.find-dog mark, .find-meta mark { background: #FFE58A; color: inherit; border-radius: 3px; padding: 0 1px; }
+
+.find-map-card { background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 12px; }
+.find-map { display: block; width: 100%; max-width: 640px; height: auto; max-height: 62vh; margin: 0 auto; }
+.find-map .fm-bg { fill: var(--surface-soft); stroke: var(--line); stroke-width: 2; }
+.find-map .fm-fac { fill: var(--z-fac); stroke: #fff; stroke-width: 3; }
+.find-map .fm-fac-t { fill: var(--z-fac-ink); font-size: 15px; font-weight: 600; }
+.fm-zone rect { stroke: #fff; stroke-width: 3; }
+.find-map:not(.mini) .fm-zone { cursor: pointer; }
+.fm-zone.dim { opacity: 0.35; }
+.fm-zone.sel rect { stroke: var(--ink); }
+.fm-zone:focus-visible { outline: none; }
+.fm-zone:focus-visible rect { stroke: var(--primary); stroke-width: 4; }
+.fm-zone text { pointer-events: none; }
+.fm-t { font-size: 17px; font-weight: 800; }
+.fm-t.big { font-size: 19px; }
+.fm-n { font-size: 14px; }
+.fm-zone.z-new rect { fill: var(--z-new); } .fm-zone.z-new text { fill: var(--z-new-ink); }
+.fm-zone.z-iso rect { fill: var(--z-iso); } .fm-zone.z-iso text { fill: var(--z-iso-ink); }
+.fm-zone.z-mom rect { fill: var(--z-mom); } .fm-zone.z-mom text { fill: var(--z-mom-ink); }
+.fm-zone.z-pup rect { fill: var(--z-pup); } .fm-zone.z-pup text { fill: var(--z-pup-ink); }
+.fm-zone.z-old rect { fill: var(--z-old); } .fm-zone.z-old text { fill: var(--z-old-ink); }
+.find-map .fm-pin { fill: var(--red-text); }
+.find-map .fm-pin-in { fill: #fff; }
+.find-map-hint { font-size: 13px; color: var(--ink-soft); margin: 10px 2px 0; }
+.find-unmapped { margin-top: 10px; background: var(--amber-bg); color: var(--amber-text); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.6; }
+.find-unmapped button {
+  border: none; background: rgba(255, 255, 255, 0.7); color: var(--amber-text); border-radius: 999px; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 700; padding: 3px 10px; margin: 4px 4px 0 0;
+}
+.find-map-card + .find-zone-head { margin-top: 18px; }
+
+/* 詳細資訊「在哪裡」：小地圖＋區名＋跳到平面圖 */
+.find-where { display: flex; gap: 12px; align-items: center; font-size: 15px; line-height: 1.5; }
+.find-where .find-map.mini { width: 104px; flex-shrink: 0; margin: 0; }
+.find-where-btn {
+  display: flex; align-items: center; gap: 5px; margin-top: 6px;
+  border: none; background: var(--primary-soft); color: var(--primary); border-radius: 10px; cursor: pointer;
+  font-family: inherit; font-size: 14px; font-weight: 700; padding: 7px 12px;
+}
+/* 可以一起溜換過狗之後，回到上一隻 */
+.detail-back {
+  display: flex; align-items: center; gap: 4px; margin: 10px 0 0;
+  border: none; background: var(--surface); color: var(--primary); border-radius: 12px; cursor: pointer;
+  font-family: inherit; font-size: 14px; font-weight: 700; padding: 8px 12px; box-shadow: var(--shadow-card);
+}
