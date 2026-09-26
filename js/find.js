@@ -281,7 +281,7 @@ document.getElementById('main').addEventListener('keydown', e => {
 });
 
 // ── 平面圖全螢幕放大（#102，K 2026-09-27「平面圖應該要可以放大」）──
-// 找狗平面圖的「放大」、詳細資訊的小地圖都能開。全螢幕改畫直的（貼合手機直立螢幕），
+// 找狗平面圖的「放大」、詳細資訊的小地圖都能開。全螢幕跟頁面一樣畫橫的（K 2026-09-27「點開是橫的」），
 // 右上角 －／＋ 調大小（100%～300%），放大後上下左右捲動；點區域就關掉、到找狗平面圖選那一區。
 // 手機「返回」、Esc、右上角 X 都能關（app.js 的 popstate 先處理這層）。
 const FIND_ZOOM_STEPS = [1, 1.5, 2, 3];
@@ -297,7 +297,7 @@ function findZoomRender() {
   const { selected, step } = findZoomState;
   const scale = FIND_ZOOM_STEPS[step];
   box.querySelector('.find-zoom-scroll').innerHTML =
-    `<div class="find-zoom-map" style="width:${scale * 100}%">${findMapSvg(selected, '', false, '')}</div>`;
+    `<div class="find-zoom-map" style="width:${scale * 100}%">${findMapSvg(selected)}</div>`;
   box.querySelector('[data-zoom-step="-1"]').disabled = step === 0;
   box.querySelector('[data-zoom-step="1"]').disabled = step === FIND_ZOOM_STEPS.length - 1;
   box.querySelector('.find-zoom-pct').textContent = `${Math.round(scale * 100)}%`;
