@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-09-27T00:07:37+08:00",
+  "syncedAt": "2026-09-27T01:46:41+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -9,7 +9,9 @@
       "walkedDate": null,
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "e9c69473e76f"
+      ],
       "note": "9／16<羊噴火訓練>移至母幼A5",
       "sex": "",
       "intro": "",
@@ -22,7 +24,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "",
       "sex": "male",
       "intro": "2024年1月5日,從板橋被民眾拾獲進來,剛來有配戴項圈+牽繩,但是沒晶片,是個帥氣的小男生,個性比較慢熟,需要時間增進感情..",
@@ -35,7 +39,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "",
       "sex": "male",
       "intro": "2023年4月7日,從樹林進來,說在路上追人,個性比較慢熟,要多花點時間互動鼓勵,出籠放鬆表情開心許多,繼續陪伴,希望幸福也會靠近.",
@@ -48,7 +54,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "",
       "sex": "",
       "intro": "",
@@ -61,7 +69,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "",
       "sex": "female",
       "intro": "2021年2月17日迷路進來,被通報進來說會追車,一身漂亮長毛好有氣質,個性害羞多鼓勵就開心..",
@@ -74,7 +84,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "",
       "sex": "",
       "intro": "",
@@ -87,7 +99,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "21120f797f52"
+      ],
       "note": "後肢癱瘓114/9/24起每週一次針灸復健。4/12洗澡。7月底開始會慢慢自主起身行走",
       "sex": "",
       "intro": "",
@@ -100,7 +114,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2025/9/9血尿（俐葶）;2025/9/18沒看到血尿; 後來仍可能看到尿帶血，最常在末段尿看到血色(嘉文)、洗澡及左前腳狼爪指甲嵌進肉內已化膿（淑萍2026/07/19）、脖子有傷請穿黃色胸背帶外出（在住院區箱子裡）",
       "sex": "female",
       "intro": "2024年11月18日,從樹林被拾獲,個性親人慢熟,穩定安靜,喜歡散步和摸摸,散步會停下沈思,給她時間就會往前走,入所有戴小白花項圈,找不到主人領回..",
@@ -113,7 +129,9 @@
       "walkedDate": "2026-09-18",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "dcda49f5b985"
+      ],
       "note": "",
       "sex": "male",
       "intro": "2025年06月11日,從樹林被通報,個性溫和親人,後腳無力走路緩慢,喜歡親近人會發出小雞嘰嘰聲,喜歡零食會用專注眼神看著你,是個貼心的大孩子^^",
@@ -126,7 +144,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "20260913，右嘴流血，疑似息肉破裂。2026/4/5 籠內疑似護食，咬了歐疼，暫時搬到獨立籠 7/22洗澡msi",
       "sex": "male",
       "intro": "2018年6月24日迷路進來,剛來嘴巴有被套過痕跡,坎坷的孩子個性超好,短短鼻子超親人撒嬌..",
@@ -139,7 +159,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/9/12洗澡（嘉文）",
       "sex": "male",
       "intro": "2023年3月28日,從樹林進來,有晶片沒人領回,個性很主動的親人,散步超開心,很友善,摸摸頭說說話,更開心,很想要再度有個家,可以被疼愛..",
@@ -152,7 +174,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "不親狗、護食",
       "sex": "",
       "intro": "",
@@ -165,7 +189,9 @@
       "walkedDate": null,
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "e9c69473e76f"
+      ],
       "note": "從母幼區移出；2025/9/18左右咬藍衣志工打洞(嘉文）",
       "sex": "",
       "intro": "",
@@ -178,7 +204,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "7/16洗澡、2026/4/19領養退回; 2026/9/9,9/17服用drontal plus(嘉文）",
       "sex": "male",
       "intro": "2024年10月7日從板橋被通報,沒晶片,有漂亮的棕黑色,外型帥氣迷人,個性非常親人,笑咪咪,會主動討摸摸,值得推薦的乖小孩..",
@@ -191,7 +219,9 @@
       "walkedDate": null,
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "f1a5fbf59cae"
+      ],
       "note": "",
       "sex": "male",
       "intro": "2023年9月7日,從三峽迷路來,個性溫和害羞,需要多點鼓勵會慢慢進步,剛來偏瘦要慢慢調養,讓身體狀況和心情一起越來越好^^",
@@ -204,7 +234,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "6/28後腳無力（旭昇）2026/8/29洗澡（旭昇）",
       "sex": "",
       "intro": "",
@@ -217,7 +249,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "不要跟阿信放ㄧ起、籠內經常尿在自己飲水盆（嘉文）",
       "sex": "male",
       "intro": "2019年12月11日迷路進來,被山豬吊傷過腳,現在已經痊癒,個性溫和膽小,需要多多鼓勵,只要多給點愛..",
@@ -230,7 +264,9 @@
       "walkedDate": null,
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "f1a5fbf59cae"
+      ],
       "note": "",
       "sex": "male",
       "intro": "2021年7月27日迷路進來,因為追車被通報,右眼萎縮,看來之前的日子很坎坷,個性有點害羞,需多陪伴鼓勵,你願意一起來撫慰他的心嗎..",
@@ -243,7 +279,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/4/18，咬Kobe(嘉文）；5/28發現褥瘡（巧芸） 7/22洗澡msi",
       "sex": "male",
       "intro": "2022年4月26日,被帶來棄養,又是搬去新家無法養....狗已經八歲,個性穩定乖巧,可惜被主人帶來遺棄了,很親人,但也很想念家...",
@@ -256,7 +294,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "不親狗",
       "sex": "female",
       "intro": "2019年10月7日迷路進來,混到米格魯花色的害羞狗,個性溫和慢熟,是各熟了就會翻肚肚的驚喜包..",
@@ -269,7 +309,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "<羊噴火訓練>",
       "sex": "",
       "intro": "",
@@ -282,7 +324,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/8/15疑似咬傷室友果果（巧芸）",
       "sex": "female",
       "intro": "2017年7月19日從淡水收容所轉來,個性溫和乖巧,喜歡散步也愛摸摸,是個惹人疼的孩子..",
@@ -295,7 +339,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "4/1胸下腫瘤切除，移至住院區。4/29出所治療住院，5/13回所(巧芸)",
       "sex": "male",
       "intro": "2018年5月23日迷路進來,腳受過傷已經痊癒,對人信任,第一次互動就會翻肚肚,個性溫柔大力推..",
@@ -308,7 +354,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "",
       "sex": "male",
       "intro": "2022年4月26日,三峽迷路來,又後腳無腳掌,傷口已痊癒,外型帥氣腿修長,個性超親人,散步超開心一直笑咪咪,真希望誰帶你回家秀秀..",
@@ -321,7 +369,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "",
       "sex": "male",
       "intro": "2019年3月29日才一歲多就被主人棄養,因為主人年紀大無法照顧,本狗就是小孩子超撒嬌超可愛超活潑..",
@@ -334,7 +384,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/4/10洗澡 7/22洗澡msi",
       "sex": "male",
       "intro": "2021年11月27日迷路進來,有帥氣白胸毛和白腳,會主動親人真是乖小孩,還會挑零食,應該有人養過,誰來把這穩定的孩子帶回家..",
@@ -347,7 +399,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2025/8/15洗澡; 2026/4/19左上唇有一點流血（嘉文） 7/22洗澡msi",
       "sex": "male",
       "intro": "2021年12月14日,迷路進來,有項圈沒晶片,白胸毛/白腳毛,有明顯的特徵,個性溫和乖巧,體型修長,是個迷人的小帥哥,期待被認養的機會出現..",
@@ -360,7 +414,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "不要推他身體移位，會兇想咬人(嘉文);2026/5/23洗澡（嘉文）",
       "sex": "female",
       "intro": "2017年6月6日被主人棄養,棄養時2歲,說狗太吵,其實多散步陪伴,每次出籠都是開心不亂叫的..",
@@ -373,7 +429,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/5/23洗澡（嘉文）",
       "sex": "male",
       "intro": "2018年4月13日從狗園轉來,俊美臉蛋笑咪咪單眼皮,個性溫和多摸散步就開心,獨一無二的乖小孩..",
@@ -386,7 +444,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/6/4洗澡（嘉文）",
       "sex": "male",
       "intro": "2022年1月11日,被通報進來,因為追車追人,剛來脖子上還有鐵鍊,可惜又沒晶片,個性溫和慢熟,多陪伴就會敞開心房,是個立耳帥氣的小弟弟..",
@@ -399,7 +459,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "",
       "sex": "female",
       "intro": "2021年1月21日迷路進來,有晶片但沒登記資料,害羞的孩子需要多鼓勵,是個年輕的孩子..",
@@ -412,7 +474,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "咬傷領養人9/1 移入母幼區;9/16移回C區;2026/2/10試驗與布布同籠（嘉文）",
       "sex": "male",
       "intro": "2024年1月10日,從鶯歌被通報,堅強的孩子,少了右後腳,活動力一樣很好,親人的好個性,小害羞小靦腆,主動靠近想要更多秀秀,樂觀的孩子推起來...",
@@ -425,7 +489,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/7/22洗澡(msi)；2026/9/2 吃一錠除（俐葶）",
       "sex": "female",
       "intro": "2021年7月22日因工廠拆遷棄養8歲乖小孩,親人活潑好撒嬌,愛磨蹭會握手,很值得推薦的乖小孩..",
@@ -438,7 +504,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "不親狗，曾咬過蘇打（秀玉）；會從小活動區草地區跳欄出來去咬其他狗（俐葶）, 2026/7/22洗澡(msi)",
       "sex": "female",
       "intro": "2021年9月2日迷路進來,有項圈可惜沒晶片,配戴著項圈,代表曾經有人照顧過你,難怪摸摸套繩散步都OK,是個個性溫和,對人友善的乖小孩~~",
@@ -451,7 +519,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/9/18洗澡",
       "sex": "female",
       "intro": "2017年7月1日才一歲就被棄養,因吠叫吵到鄰居,本狗超親人還是小孩子,渴望摸摸想要再度有個家..",
@@ -464,7 +534,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/5/9 斑斑要晚出籠 先進籠 2026/9/18洗澡",
       "sex": "male",
       "intro": "2018年6月26日因家人生病,棄養還是幼犬的小斑斑,個性活潑超親人,是個天真樂觀的孩子,期待有個家..",
@@ -477,7 +549,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "",
       "sex": "male",
       "intro": "2019年5月20日迷路進來,性情溫溫馴帶點害羞,慢慢有自信期待摸摸散步,只要多稱讚就更開心..",
@@ -490,7 +564,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/4/18因為對奶茶及仲基較強勢，調到獨立籠（嘉文)",
       "sex": "female",
       "intro": "2016年8月23日迷路進來，個性有點害羞，出籠散步都不成問題，只要多點耐心和鼓勵就開心..",
@@ -503,7 +579,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/4/10洗澡(msi)",
       "sex": "male",
       "intro": "2016年10月28日迷路進來,剛入所腳受過傷都已痊癒,現在跑跑跳跳沒問題,雖然外貌普通,但個性溫和乖巧,需要大推被看見..",
@@ -516,7 +594,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "約1.5歲(嘉文）; 2026/7/5炸醬麵在場內，本來要讓那卡西入場，但是那卡西呲牙咧嘴很兇（嘉文）",
       "sex": "male",
       "intro": "2026年4月21日,從板橋被拾獲,個性親人好活潑,皮毛黑得發亮,是個年輕有活力的孩子,會對著你笑咪咪,耳朵一垂一立是特色,希望有人認識你,給你一個家..",
@@ -529,7 +609,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "會想跳小區圍籬（俐葶）",
       "sex": "female",
       "intro": "2020年4月29日迷路進來,有晶片沒人領回,散步非常秀氣,不暴衝,會乖乖的跟在旁邊慢慢走,很貼心..",
@@ -542,7 +624,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2025/10/30洗澡。會翻牆出小操場圍籬，放繩散步建議在大操場（中興）",
       "sex": "male",
       "intro": "2021年8月28日因追車追人被通報進來,可惜只有項圈沒有晶片,不知道主人在哪,個性溫和有點年紀,會主動靠近人,是個貼心的孩子...",
@@ -555,7 +639,10 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
       "note": "出籠套繩時會咬牽繩",
       "sex": "male",
       "intro": "2017年9月23日迷路進來,剛來有點小暴牙,現在看來都正常了,個性還是小害羞,多互動後可慢慢摸,很溫和..",
@@ -568,7 +655,10 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
       "note": "",
       "sex": "female",
       "intro": "2018年10月12日因主人服刑家人年紀大無法養,一歲多寶英就被棄養,親人漂亮的虎斑,需要被看見被疼愛..",
@@ -581,7 +671,9 @@
       "walkedDate": "2026-09-19",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "嚴重焦慮、容易受傷，會咬斷牽繩(俐葶）",
       "sex": "male",
       "intro": "2020年2月25日迷路進來,從害羞到願意出籠散步,一路上的進步超多超感動,只要持續陪伴一定會更棒..",
@@ -594,7 +686,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2025/9/17洗澡",
       "sex": "female",
       "intro": "2020年4月21日從瑞芳動物之家轉來,超親人愛磨蹭,坐下握手樣樣行,快把迷人的虎斑寶貝帶回家疼愛..",
@@ -607,7 +701,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/4/10洗澡(msi);跟其他籠的狗在一起可能會兇狗，跟室友福嬌一起，可能護資源（人）會去兇福嬌（嘉文/中興）",
       "sex": "male",
       "intro": "2022年3月5日,被拾獲進來的,年輕有活力,個性也很親人,個性是快熟型,散步摸摸都OK,毛色特別,不是黑色,是深棕色,真是一枚驚喜包!!",
@@ -620,7 +716,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2025/8/24洗澡",
       "sex": "male",
       "intro": "2018年4月16日從狗園轉來,個性害羞慢熟,邊緣靈犬求關注,仔細看他長得其實很漂亮！",
@@ -633,7 +731,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2025/8/24洗澡",
       "sex": "male",
       "intro": "2019年9月28日迷路進來,個性憨厚溫和人人好,渾圓身材好可愛,快把這有迷人笑容的小孩帶回家..",
@@ -646,7 +746,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/5/31洗澡（秀玉)",
       "sex": "male",
       "intro": "2018年1月29日因家人生病而被主人棄養,個性親人乖巧,有帥氣外表,漂亮雙瞳,是個貼心的寶貝,散步洗澡梳毛都很棒棒聽話...",
@@ -659,7 +761,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/5/31洗澡（秀玉）",
       "sex": "male",
       "intro": "2020年5月19日迷路進來,剛來脖子上有4cm寬的傷,治療後幾乎看不到傷痕,不知道經歷了啥,還好很親人,還會聽指定坐下好聰明..",
@@ -672,7 +776,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "",
       "sex": "female",
       "intro": "2022年9月13日被拾獲進來,有晶片沒登記資料,一臉害羞無辜,不知道是誰家迷路的,摸摸散步都可以,比較慢熟,多點耐心陪伴就OK..",
@@ -685,7 +791,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/5/27身體右後方有腫塊(嘉文）",
       "sex": "male",
       "intro": "2019年3月26日,被通報進板收,虎斑外型帥氣,但個性慢熟,有被認養又退回,因有咬傷,需要多熟悉互動,才可以多摸摸,敞開心房需要花時間認識...",
@@ -698,7 +806,10 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
       "note": "2025年9月，從母幼區移出，兩後腿外側呈現脫毛白色(嘉文)",
       "sex": "male",
       "intro": "2024年9月23日,從中和被通報,有漂亮白胸毛,黑亮亮的皮毛,年輕的孩子,個性很親人活潑,摸摸就會笑得很開心,敞開心房就會大搖尾巴^^",
@@ -711,7 +822,10 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
       "note": "出籠害羞完全不敢吃東西，但回籠會吃(巧芸)",
       "sex": "male",
       "intro": "2020年12月1日被主人棄養,理由是怕生,膽小,亂叫..可憐的孩子進來時才10個月,可摸可散步只是膽小,你願意給他機會嗎..",
@@ -724,7 +838,10 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
       "note": "2026/2/10朵兒兇(黑森林或JoJo)其中一隻，那隻沒有回應閃開來。 朵兒是警戒膽小脾氣不好的狗。朵兒曾兩度和粉圓激烈汪汪叫(嘉文）",
       "sex": "female",
       "intro": "2020年7月21日迷路進來,有晶片沒登記資料的苗條小孩,個性溫和不爆衝,有點害羞需要鼓勵更需要愛..",
@@ -737,7 +854,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "",
       "sex": "male",
       "intro": "2019年8月6日,主人一次棄養八隻,蛋餅是其中一隻,親人乖巧很快熟,是個年輕又帥氣的驚喜包..",
@@ -750,7 +869,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "2026/4/10洗澡(msi);大約2026/4/18，眼睛上方受傷應該被沙沙咬(嘉文）",
       "sex": "male",
       "intro": "2021年2月22日迷路進來，剛來有項圈沒晶片，主動親近人，撒嬌討摸摸，還會撒嬌舔你，超熱情..",
@@ -763,7 +884,10 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
       "note": "會護食，9/23因吃飼料時護食和阿寶妹打架（俐葶）",
       "sex": "male",
       "intro": "2026年6月24日,從三峽被通報,活力滿滿的地迪,第一次見面,就會熱情地飛撲,撒嬌又討摸摸,電力像是用不完,年輕的狗狗就是這樣,散步跑跑放電很重要~",
@@ -776,7 +900,10 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
       "note": "龜縮在椅子底下，我伸手進去套繩沒有咬人（嘉文）2026/5/20洗澡(msi)",
       "sex": "male",
       "intro": "2019年5月3日淡水收容所轉來，當時還是幼犬，個性溫和膽小需多鼓勵，外觀美腿修長好漂亮..",
@@ -789,7 +916,10 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
       "note": "右前腳有傷口,有擦藥(嘉文）2026/5/20洗澡(msi)",
       "sex": "male",
       "intro": "2018年7月2日迷路進來,有晶片但沒人領回,個性好是個超親人的乖小孩,膝蓋關節傷口時好時壞~~希望被認養有溫暖的窩..",
@@ -802,7 +932,10 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
       "note": "2026/5/20洗澡(msi)",
       "sex": "female",
       "intro": "2018年4月13日從不良狗場轉來，個性溫和慢熟，需要多點耐心陪伴，敞開心房笑起來很迷人..",
@@ -815,7 +948,10 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
       "note": "原編號2018041318",
       "sex": "female",
       "intro": "2018年4月13日從不良狗園被沒入收容所,個性害羞慢熟,需要耐心陪伴,被認養一個月退回,因不吃飯..",
@@ -831,7 +967,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "2026/5/12洗澡(秀玉)",
       "sex": "female",
       "intro": "2015年9月10日流浪進來，一臉憨厚，個性也是真的乖，散步梳毛都很棒，配合度很高，互動過就知道有多溫柔，穩定度高的孩子大推..",
@@ -844,7 +982,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "2025/8/15羅密歐左後腳外側有凸起腫塊(嘉文）2026/5/12洗澡(秀玉)",
       "sex": "male",
       "intro": "2018年10月4日迷路進來，對人有點害羞，個性較慢熟，經過鼓勵才願意出籠，對於摸摸也是要慢慢來，才會慢慢敞開心房，更開心歐..",
@@ -857,7 +997,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "",
       "sex": "male",
       "intro": "2015年8月18日迷路進來，個性溫和有一點點膽小，但只要多鼓勵就會出籠走走，對狗也脾氣好，所以被欺負過，這樣的孩子需要被保護..",
@@ -870,7 +1012,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "龜縮在椅子底下，伸手進去解套繩沒有咬人（嘉文）",
       "sex": "male",
       "intro": "2017年11月14日從淡水收容所轉過來，漂亮的黃色毛，個性有點害羞，摸摸梳毛都ok，只要多點鼓勵，就會出現更多笑容，一起來愛歐巴吧..",
@@ -883,7 +1027,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "只喜歡在犬舍內繞（嘉文）;1/21 腳流血，醫生麻醉治療，住院區（嘉文)。2/22併入Mini籠；2026/4/28被認養;2026/5/14被送回(嘉文)",
       "sex": "female",
       "intro": "2025/3/1被主人帶來棄養,個性害羞慢熟,需要耐心陪伴,被認養一次退回,無法適應新環境,害羞的果果繼續等待春天,你願意給害羞孩子一個機會嗎..",
@@ -896,7 +1042,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "044328805855"
+      ],
       "note": "12/4右前腳紅腫有傷口，已擦藥  2026/5/20洗澡(msi);2026/8/19被煙捲咬傷（俐葶）",
       "sex": "male",
       "intro": "2020年1月30日迷路進來，小耳朵賣萌模樣超可愛，個性親人活潑好撒嬌，活力滿滿力氣大...",
@@ -909,7 +1057,9 @@
       "walkedDate": "2026-09-22",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293"
+      ],
       "note": "2025/10/26脖子處有脫毛；2025/8/24洗澡;2026/3/10在住院區，據說腳趾（狼爪)有做麻醉醫療（嘉文）；2026/3/24拆線（嘉文）",
       "sex": "male",
       "intro": "2016年6月7日迷路進來，親人又穩重的個性，帥氣外型好迷人，很適合抱緊回家好好疼愛..",
@@ -922,7 +1072,9 @@
       "walkedDate": "2026-09-22",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293"
+      ],
       "note": "2025/8/24洗澡",
       "sex": "male",
       "intro": "2019/4/24被棄養,說不親人,2023/2/23被認養,2/28退回,說不吃飼料,好坎坷的jojo,年輕有活力的好個性,繼續等待對的幸福..",
@@ -935,7 +1087,9 @@
       "walkedDate": "2026-09-18",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "dcda49f5b985"
+      ],
       "note": "<羊噴火訓練>",
       "sex": "",
       "intro": "",
@@ -948,7 +1102,9 @@
       "walkedDate": "2026-09-20",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "24bf2ad2af85"
+      ],
       "note": "<羊噴火訓練> 2026/08/30新區門口、9/13舊區門口、9/17小操場（喬筠）",
       "sex": "female",
       "intro": "2024年5月16日,因在鶯歌追車,所以被通報入所,有晶片卻沒登記,不知道家在哪,個性比較害羞,持續鼓勵陪伴,希望慢慢進步..希望慢慢敞開心房..",
@@ -961,7 +1117,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "044328805855"
+      ],
       "note": "2/4屁股左後處有腫塊，已回報所方；8/19咬了泰森；8/26散步途中突然要咬經過的路人（俐葶）；8/28右後腳微跛；8/29再觀察沒跛，近期後腳要留意（俐葶）",
       "sex": "male",
       "intro": "2024年1月2日，從板橋被通報，有晶片沒資料，只有佩戴項圈，對人友善力氣大，散步活力好，帥氣的虎斑弟迪，捲捲的尾巴好有特色，大推帥氣孩子..",
@@ -974,7 +1132,10 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
       "note": "",
       "sex": "female",
       "intro": "2018年4月13日從不良狗場轉來，花色混到米格魯，個性害羞需多鼓勵，持續摸摸鼓勵就會進步..加油!",
@@ -987,7 +1148,10 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
       "note": "套繩、解繩要小心，會回頭咬（俐葶）梳毛會生氣(秀玉)",
       "sex": "male",
       "intro": "2024年5月22日，因搬家被棄養，活潑好動，散步開心滿場跑，最愛零食，直接熱情的飛撲，發現技能感覺會坐下，是個驚喜包的帥氣小男生~",
@@ -1000,7 +1164,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "",
       "sex": "female",
       "intro": "2019年8月6日共8隻被主人遺棄，是個主動親人的活潑小孩，個性害羞又撒嬌，歡迎一起來多多鼓勵..",
@@ -1013,7 +1179,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "",
       "sex": "female",
       "intro": "2019年8月6日共8隻被主人遺棄，個性溫和撒嬌，主動親人討摸摸，真是個貼心的驚喜包，來互動吧..",
@@ -1026,7 +1194,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "2026/8/29洗澡（旭昇）",
       "sex": "",
       "intro": "",
@@ -1039,7 +1209,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "21120f797f52"
+      ],
       "note": "2026/8/29洗澡（旭昇）",
       "sex": "",
       "intro": "",
@@ -1052,7 +1224,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "2026/4/29洗澡（巧芸）",
       "sex": "male",
       "intro": "2019年12月5日迷路進來，個性親人很穩定，帥氣的四眼麻豆，坐下，握手，樣樣行.. ~個性一級棒大力推~",
@@ -1065,7 +1239,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "",
       "sex": "male",
       "intro": "2020年8月18日被通報進來,個性比較膽小的奇哥,多陪伴就知道,是個可摸摸,可以慢慢散步的溫柔小孩,只要多耐心陪伴,就可以體會歐..",
@@ -1078,7 +1254,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "2026/5/3 大腿內側腫大（嘉文）;約2026/6/3割腫瘤",
       "sex": "male",
       "intro": "2021年7月13日被通報進來就剛來還配戴胸背,可惜沒晶片,有修長美腿,尾巴有一截白毛,個性親人好動,散步滿場跑,超開心地,希望幸福快點來..",
@@ -1091,7 +1269,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "2026/4/12、7/26洗澡",
       "sex": "male",
       "intro": "2019年7月2日迷路進來，個性穩重有點年紀的孩子，摸摸散步都可以，只是眼神有一點害羞需多鼓勵..",
@@ -1104,7 +1284,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "",
       "sex": "male",
       "intro": "2019年8月6日，主人一次棄養八隻，剛來皮膚一點點差，有點害羞，現在心情好了，很會主動討摸摸..開心..",
@@ -1117,7 +1299,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "dcda49f5b985"
+      ],
       "note": "",
       "sex": "",
       "intro": "",
@@ -1130,7 +1314,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": true,
-      "walkers": [],
+      "walkers": [
+        "7fe4735e3c59"
+      ],
       "note": "4/12洗澡（佳岑）",
       "sex": "male",
       "intro": "2025年4月24日,從三峽被通報,外觀高大帥氣,站出來霸氣外露,但其實是大暖男,非常的好牽,宜動宜靜,肩並肩一起坐也ok,跟他互動會讓你愛上他哦：）",
@@ -1143,7 +1329,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "5/31洗澡（msi)、",
       "sex": "female",
       "intro": "2017年2月5日迷路進來，個性溫和，對摸摸還是會怕，需多多鼓勵加油，就會願意進步，更加相信人..",
@@ -1156,7 +1344,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "5/31洗澡（msi)、7/8洗澡（喬筠）",
       "sex": "female",
       "intro": "2019年6月27日因主人生病無法養，外型短腿個性親人，曾是家犬，所以超親人，會一直靠近討摸摸..",
@@ -1169,7 +1359,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "044328805855"
+      ],
       "note": "",
       "sex": "",
       "intro": "",
@@ -1182,7 +1374,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "",
       "sex": "male",
       "intro": "2021年7月14日因主人搬家，所以棄養8歲胖胖，剛來害羞不太理人，應該是難過想家，幸好個性溫和，散步是各穩重乖巧的孩子，一起幫推..",
@@ -1195,7 +1389,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "4/12洗澡（Vicki）、7/8洗澡（喬筠）",
       "sex": "female",
       "intro": "2020年2月12日迷路進來，害羞靦腆內心澎派的小妞，多摸摸互動就會搖小尾巴，快來互動這貼心小妞~",
@@ -1208,7 +1404,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "75aeed7c10fe"
+      ],
       "note": "2026/4/12與7/8洗澡（喬筠）、6/28右後腳左邊數來第二腳趾流血，推估是指甲斷掉(喬筠）",
       "sex": "male",
       "intro": "2020年7月14日迷路進來，是個苗條纖細的乖小孩，大大耳朵好特別，個性溫和小害羞，敞開心房更貼心了..",
@@ -1221,7 +1419,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "不親會走動的狗， 會發出低鳴不悦的聲音。 對捷運站和拉亞倒是沒有問題",
       "sex": "female",
       "intro": "2026年6月1日,從三峽被通報,雖然少了兩隻前腳,個性仍樂觀又親人,會站起來靠近討摸摸,還會用一雙眼睛笑咪咪看著你,表情也太療育..^^",
@@ -1247,7 +1447,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2025/12/07 左眼嚴重眼屎（佳星）",
       "sex": "male",
       "intro": "2021年4月30日迷路進來,有點年紀,個性害羞慢熟,要多多陪伴鼓勵,才會願意敞開心房...~需要持續鼓勵~",
@@ -1260,7 +1462,9 @@
       "walkedDate": "2026-09-20",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "24bf2ad2af85"
+      ],
       "note": "2025/8/15洗澡",
       "sex": "male",
       "intro": "2023年3月28日,主人帶來棄養,因為吠叫鄰居抗議..很年輕,才3.5歲,帥氣立耳,修長美腿,活動力很好,看到食物拿在手上會坐下,真是聰明..",
@@ -1273,7 +1477,9 @@
       "walkedDate": null,
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "a0cc282cd364"
+      ],
       "note": "<羊噴火訓練>",
       "sex": "",
       "intro": "",
@@ -1286,7 +1492,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "21120f797f52"
+      ],
       "note": "2025/8/3，咬了旭昇,上手臂後側2-3公分撕裂傷（嘉文)。9／10移至舊犬舍。會護地盤（巧芸）",
       "sex": "male",
       "intro": "2024年12月02日,從樹林被通報,笑咪咪的小眼睛迷人,個性溫和喜歡被摸摸,吃東西溫柔,漂亮秀氣的乖小孩,對人很友善,散步好開心歐~",
@@ -1299,7 +1507,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "",
       "sex": "male",
       "intro": "2021年8月30日被通報進來,掃描有晶片,卻沒人來領回,散步互動超活潑,對人熱情,會飛撲撒嬌,一臉笑咪咪..",
@@ -1312,7 +1522,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "044328805855"
+      ],
       "note": "<羊噴火訓練>興奮撲人時會咬，遛他時人不要在場內比較安全（俐葶）",
       "sex": "",
       "intro": "",
@@ -1325,7 +1537,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "可能護食，放雞腿後要等她吃完再碰她（嘉文）;2026/5/18調到舊犬舍（嘉文）",
       "sex": "female",
       "intro": "2025年7月29日,從三峽被拾獲,活力超好的黑美眉,小小的耳朵好俏麗,是年輕的孩子,超愛跑跑飛撲,皮毛也黑得發亮~~可以一起散步運動優點多多~",
@@ -1338,7 +1552,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "2026/8/29洗澡（旭昇）",
       "sex": "male",
       "intro": "2021年5月6日迷路進來,有帥氣英挺的外在,但內在有點小害羞,是個讓人疼愛的小帥哥..",
@@ -1351,7 +1567,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "044328805855"
+      ],
       "note": "陌生人有可能會咬（嘉文）;8/25剃毛",
       "sex": "",
       "intro": "",
@@ -1364,7 +1582,9 @@
       "walkedDate": "2026-09-23",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "044328805855"
+      ],
       "note": "陌生人有可能會咬（嘉文）",
       "sex": "",
       "intro": "",
@@ -1377,7 +1597,9 @@
       "walkedDate": null,
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "ea864bd3319f"
+      ],
       "note": "<羊噴火訓練>",
       "sex": "female",
       "intro": "2024年3月29日，被通報咬人，所以才來到收容所，目前個性比較害羞靦腆，人靠近會膽怯，膽子小，持續減敏中，希望可以慢慢改善，敞開心房^^..",
@@ -1390,7 +1612,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "3/8右眼有紅色條狀異物（俐葶）、4/12洗澡(巧芸+喬筠)",
       "sex": "male",
       "intro": "2024年04月02日,從樹林被拾獲,在路上追人,所以進來尋找主人,帶出散步互動很OK,對人很友善,溫柔的眼神,是否曾經有個家,是否在尋找專屬的幸福~",
@@ -1403,7 +1627,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "1/8割腫瘤;1/22拆線、4/12洗澡(巧芸+喬筠)",
       "sex": "male",
       "intro": "2021年12月23日迷路進來,有項圈沒晶片,因為追咬人被通報進來,真是坎坷,持續互動很親人,是個帥氣大孩子,希望可以再度有個家...",
@@ -1416,7 +1642,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293"
+      ],
       "note": "對狗具攻擊性（嘉文），2025/12/24咬了捷運站",
       "sex": "female",
       "intro": "2021年3月9日迷路進來,臉上有些舊傷,可能是流浪時受傷的,還好個性親人,笑起來超甜的,快帶回家當寶貝..",
@@ -1429,7 +1657,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293"
+      ],
       "note": "2025/10/7 俐葶遇到 一路攻擊丸子 ，起始原因沒看到（嘉文)",
       "sex": "male",
       "intro": "2023年8月31日,因主人棄養所以入所,個性較害羞慢熟,多多鼓勵摸摸,就會慢慢敞開心房,給你更多笑臉..需要更多被看見的機會^^",
@@ -1442,7 +1672,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "21120f797f52"
+      ],
       "note": "",
       "sex": "",
       "intro": "",
@@ -1455,7 +1687,9 @@
       "walkedDate": "2026-09-26",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "c3b400d1f468"
+      ],
       "note": "頸部有腫瘤，不要用p繩，要穿淑萍給的胸背才帶出（嘉文）註：胸背放在住院區箱子裡",
       "sex": "female",
       "intro": "2023年5月29日,從樹林迷路來,被通報在路上追人,口腔腫瘤,對人怕怕害羞慢熟,會汪汪叫,需要多點時間鼓勵陪伴,慢慢進步敞開心房^^",
@@ -1468,7 +1702,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293"
+      ],
       "note": "",
       "sex": "female",
       "intro": "2023年7月26日,從三峽迷路來,右前腳被捕獸夾夾傷,傷口恢復良好,個性極好很親人,是年輕又有活力的歐告美眉,樂觀開朗,等待幸福出現~",
@@ -1481,7 +1717,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293"
+      ],
       "note": "2025/10/7 俐葶遇到 一路攻擊丸子 ，起始原因沒看到(嘉文)；11/18 一路要攻擊松果（嘉文）；被阿信咬過（嘉文）；在小區看到外面的芽芽會跳柵欄（俐葶）",
       "sex": "male",
       "intro": "2023年12月29日,從三峽被通報,體型很中等,稍微短腿好迷人,個性比較害羞慢熟,多熟悉就可摸摸互動,笑起來也是超可愛.^^.請給帥氣小男生一個機會..",
@@ -1494,7 +1732,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293"
+      ],
       "note": "",
       "sex": "",
       "intro": "",
@@ -1507,7 +1747,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293"
+      ],
       "note": "2026/01/04肛門流血，4/12、 5/31洗澡洗澡（Msi）",
       "sex": "male",
       "intro": "2023年4月28日,從三峽被拾獲,共兩隻狗,都是因主人上天堂,所以被帶進來,個性乖巧穩重,跟人互動很好,會主動靠過來,真是貼心的乖小孩..",
@@ -1520,7 +1762,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293"
+      ],
       "note": "20260322;3/28出所代養（嘉文）；4/12回收容所，代養人說有帶去看醫生，疑十字韌帶受傷(嘉文)",
       "sex": "male",
       "intro": "2025年03月17日,從三峽被通報,白栗栗幼咪咪的白毛超好摸,個性超級可愛的,主動親人笑咪咪,年紀很輕,很有活力滿場跑,有夠亮麗搶眼的..",
@@ -1533,7 +1777,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293"
+      ],
       "note": "小屁孩炸醬麵剛去認識他時太激進，昆布會威嚇驅趕開來，但是沒有真的咬上去（嘉文）",
       "sex": "male",
       "intro": "2023年8月31日,被主人帶來棄養,體型蠻嬌小,個性也是屬於害羞,需要耐心多陪伴多點鼓勵,才會慢慢敞開心房,給你靦腆笑,希望有機會回歸家庭..",
@@ -1546,7 +1792,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "da53fbdda293"
+      ],
       "note": "對狗曾經攻擊（嘉文）",
       "sex": "male",
       "intro": "2023年2月20日,迷路進來的,有綠色項圈,可惜又沒晶片,個性溫和乖巧,是誰家迷路的乖小孩呢,不會爆衝,陪伴散步很乖巧,是個懂事的孩子^^",
@@ -1559,7 +1807,9 @@
       "walkedDate": "2026-09-24",
       "covered": true,
       "myWalked": true,
-      "walkers": [],
+      "walkers": [
+        "7fe4735e3c59"
+      ],
       "note": "約2歲、22公斤，不是像柴犬，是像秋田，應該會憋尿，出來尿尿，尿很久；力量不小，出籠套繩時，他就很努力地要衝出來要小心，回籠不願意進籠，好在沒有攻擊（嘉文）白心頸部有血，不排除被學寶咬的（嘉文)；大活動區的小隔離區差一點跳出來（嘉文）;可能對狗具攻擊性（嘉文）",
       "sex": "male",
       "intro": "2025年02月13日,從三峽被通報,一臉憨厚乖乖的大男孩,散步很乖巧會跟你的步調,個性撒嬌貼心,喜歡摸摸貼貼~根本暖男一枚~適合抱抱秀秀~",
