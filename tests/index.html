@@ -1840,7 +1840,7 @@ async function runV52Tests() {
       eq([toggle.textContent.trim(), document.querySelector('.hidden-list')], ['已收起 2 隻', null], '收合：');
       toggle.click();
       eq([...document.querySelectorAll('.hidden-name')].map(b => b.textContent), ['新來丁一直', '一般乙今天'], '展開（久沒遛的在前）：');
-      eq([...loadHidden(new Date(2026, 8, 26, 9))].map(([k, m]) => `${k}:${m}`), ['名:新來丁:always'], '隔天今天先收起的回來：');
+      eq([...loadHidden(new Date(Date.now() + 864e5))].map(([k, m]) => `${k}:${m}`), ['名:新來丁:always'], '隔天今天先收起的回來：');
       document.querySelector('[data-unhide]').click();
       eq(walkNames(), ['新來丁', '再入甲', '一般丙'], '放回：');
       document.querySelector('.toast-undo').click();
