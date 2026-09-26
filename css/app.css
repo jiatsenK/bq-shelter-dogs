@@ -940,26 +940,28 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
 
 .find-map-card { background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 12px; }
 .find-map { display: block; width: 100%; max-width: 640px; height: auto; max-height: 62vh; margin: 0 auto; }
-.find-map .fm-bg { fill: var(--surface-soft); stroke: var(--line); stroke-width: 2; }
-.find-map .fm-fac { fill: var(--z-fac); stroke: #fff; stroke-width: 3; }
-.find-map .fm-fac-t { fill: var(--z-fac-ink); font-size: 15px; font-weight: 600; }
-.fm-zone rect { stroke: #fff; stroke-width: 3; }
+.find-map .fm-bg { fill: var(--primary); }
+.find-map .fm-frame { fill: none; stroke: #fff; stroke-width: 2; opacity: 0.9; }
+.find-map rect { stroke-width: 2; }
+.fm-fac rect { fill: none; stroke: rgba(255, 255, 255, 0.5); }
+.fm-fac-t { fill: rgba(255, 255, 255, 0.75); font-size: 14px; font-weight: 600; letter-spacing: 0.15em; }
+.fm-zone rect { fill: var(--primary); stroke: #fff; transition: fill 0.15s; }
 .find-map:not(.mini) .fm-zone { cursor: pointer; }
-.fm-zone.dim { opacity: 0.35; }
-.fm-zone.sel rect { stroke: var(--ink); }
-.fm-zone:focus-visible { outline: none; }
-.fm-zone:focus-visible rect { stroke: var(--primary); stroke-width: 4; }
-.fm-zone text { pointer-events: none; }
-.fm-t { font-size: 17px; font-weight: 800; }
+.fm-zone text { fill: #fff; pointer-events: none; }
+.fm-zone .fm-u { stroke: #fff; stroke-width: 1.5; }
+.fm-t { font-size: 17px; font-weight: 700; letter-spacing: 0.18em; }
 .fm-t.big { font-size: 19px; }
-.fm-n { font-size: 14px; }
-.fm-zone.z-new rect { fill: var(--z-new); } .fm-zone.z-new text { fill: var(--z-new-ink); }
-.fm-zone.z-iso rect { fill: var(--z-iso); } .fm-zone.z-iso text { fill: var(--z-iso-ink); }
-.fm-zone.z-mom rect { fill: var(--z-mom); } .fm-zone.z-mom text { fill: var(--z-mom-ink); }
-.fm-zone.z-pup rect { fill: var(--z-pup); } .fm-zone.z-pup text { fill: var(--z-pup-ink); }
-.fm-zone.z-old rect { fill: var(--z-old); } .fm-zone.z-old text { fill: var(--z-old-ink); }
-.find-map .fm-pin { fill: var(--red-text); }
-.find-map .fm-pin-in { fill: #fff; }
+.fm-n { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.fm-zone.dim { opacity: 0.45; }
+/* 選到的區塗白、字變藍 */
+.fm-zone.sel rect { fill: #fff; }
+.fm-zone.sel text { fill: var(--primary); }
+.fm-zone.sel .fm-u { stroke: var(--primary); }
+.fm-zone:focus-visible { outline: none; }
+.fm-zone:focus-visible rect { stroke-width: 4; }
+.find-map.mini rect { stroke-width: 6; }
+.find-map.mini .fm-frame { stroke-width: 5; }
+.find-map.mini .fm-zone.dim { opacity: 1; }
 .find-map-hint { font-size: 13px; color: var(--ink-soft); margin: 10px 2px 0; }
 .find-unmapped { margin-top: 10px; background: var(--amber-bg); color: var(--amber-text); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.6; }
 .find-unmapped button {
