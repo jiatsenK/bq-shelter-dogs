@@ -49,6 +49,7 @@ function fakeStorage() {
 let INDEX_HTML = ''; // index.html 原始碼，#10 唯讀檢查用（其他測試會替換 fetch，所以先存下來）
 let APP_JS = '';     // js/app.js 原始碼（#30 拆檔後程式在這裡）
 let ANALYSIS_JS = ''; // js/analysis.js 原始碼（#59 分析頁）
+let FIND_JS = '';     // js/find.js 原始碼（#99 找狗）
 let MAKE_THUMBS_YML = ''; // .github/workflows/make-thumbs.yml（#83 縮圖 Action）
 let MANIFEST = {};    // manifest.webmanifest，#33 主畫面名稱檢查用
 let DOGS_JSON = null; // data/dogs.json，#32 格式檢查用
@@ -135,7 +136,7 @@ function runTests() {
         searchQuery = '搜尋';
         activeTab = 'walk'; renderMain();
         eq(names(), ['搜尋乙', '搜尋甲'], '溜狗表（久沒遛的在前）：');
-        eq(counts(), ['2', '0', ''], '分類數字：');
+        eq(counts(), ['2', '0', '', '2'], '分類數字（找狗搜全部）：');
         if (!mainText().includes('搜尋「搜尋」：2 隻')) throw new Error('沒有顯示搜尋結果隻數');
         if (!document.querySelector('#main .card .warn-note')) throw new Error('勿溜的搜尋乙沒有警示備註');
         activeTab = 'today'; renderMain();
@@ -143,10 +144,10 @@ function runTests() {
         if (!mainText().includes('今天已溜裡找不到「搜尋」')) throw new Error(`今天已溜的查無提示：${mainText()}`);
         searchQuery = '<b>沒這隻'; activeTab = 'walk'; renderMain();
         eq(document.querySelector('#main .status-msg').innerHTML, '找不到「&lt;b&gt;沒這隻」');
-        eq(counts(), ['0', '0', ''], '查無時分類數字：');
+        eq(counts(), ['0', '0', '', '0'], '查無時分類數字：');
         searchQuery = ''; renderMain();
         eq(names().length, 3, '清空後：');
-        eq(counts(), ['3', '0', ''], '清空後分類數字：');
+        eq(counts(), ['3', '0', '', '3'], '清空後分類數字：');
       } finally { searchQuery = ''; activeTab = 'walk'; }
     }),
     check('搜尋：輸入即篩選；注音選字途中不篩選，選好字才更新', () => {
@@ -387,8 +388,8 @@ function runTests() {
         groupMap = {}; activeTab = 'walk'; searchQuery = '';
         render();
         const tabs = () => [...document.querySelectorAll('#tabs button')];
-        eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '今天已溜', '我溜過'], '分類：');
-        eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '0', ''], '數字（遛狗紀錄還沒讀）：');
+        eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '今天已溜', '我溜過', '找狗'], '分類（#99 加找狗）：');
+        eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '0', '', '1'], '數字（遛狗紀錄還沒讀）：');
         const active = () => tabs().filter(b => b.classList.contains('active')).map(b => b.dataset.tab);
         eq(active(), ['walk'], '預設：');
         eq(document.querySelectorAll('#main .card').length, 1, '溜狗表有狗卡：');
@@ -432,8 +433,10 @@ function runTests() {
         swipe(main, -100);
         eq([activeTab, active()], ['mine', ['mine']], '再向左滑到我溜過：');
         swipe(main, -100);
-        eq(activeTab, 'mine', '最後一頁向左滑不循環：');
-        swipe(main, 100); swipe(main, 100);
+        eq([activeTab, active()], ['find', ['find']], '再向左滑到找狗（#99）：');
+        swipe(main, -100);
+        eq(activeTab, 'find', '最後一頁向左滑不循環：');
+        swipe(main, 100); swipe(main, 100); swipe(main, 100);
         eq([activeTab, active()], ['walk', ['walk']], '向右滑回溜狗表：');
         searchQuery = '測試'; render();
         swipe(main, -100);
@@ -552,7 +555,7 @@ function runTests() {
         document.querySelector('#main .card[data-dog="0"] [data-walk="add"]').click();
         eq(document.getElementById('detailBackdrop').hidden, true, '按鈕不開詳細資訊：');
         eq(names(), ['測試丙', '測試乙'], '溜狗表移出測試甲：');
-        eq(counts(), ['2', '1', ''], '分類數字：');
+        eq(counts(), ['2', '1', '', '3'], '分類數字：');
         eq(loadWalkedIds(), ['1'], '存進紀錄：');
         const toast = document.getElementById('toast');
         eq(toast.hidden, false, '跳提示條：');
@@ -623,7 +626,7 @@ function runTests() {
       const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       const scripts = [...doc.querySelectorAll('script')];
-      eq(scripts.map(s => s.getAttribute('src')), ['js/app.js', 'js/analysis.js'], 'script（#59 起多分析頁）：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/app.js', 'js/analysis.js', 'js/find.js'], 'script（#59 起多分析頁、#99 多找狗）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
@@ -790,7 +793,7 @@ async function runSerialTests() {
       let release;
       const calls = install(() => new Promise(r => { release = () => r(json(DATA)); }));
       const done = init();
-      eq(tabNames(), ['溜狗表', '今天已溜', '我溜過'], '讀取中就有分類：');
+      eq(tabNames(), ['溜狗表', '今天已溜', '我溜過', '找狗'], '讀取中就有分類：');
       eq(main.textContent.trim(), '讀取狗狗資料中…', '讀取中：');
       document.querySelector('#tabs button[data-tab="mine"]').click();
       eq(activeTab, 'mine', '讀取中也能切到我溜過：');
@@ -815,7 +818,7 @@ async function runSerialTests() {
       for (const fake of [() => new Response('Not Found', { status: 404 }), () => { throw new TypeError('Failed to fetch'); }, () => new Response('{壞掉')]) {
         install(fake);
         await init();
-        eq(tabNames(), ['溜狗表', '今天已溜', '我溜過'], '分類：');
+        eq(tabNames(), ['溜狗表', '今天已溜', '我溜過', '找狗'], '分類：');
         eq(main.querySelector('.status-msg').firstChild.textContent, '資料載入失敗，請稍後重新整理。', '錯誤訊息：');
         eq(document.querySelectorAll('#main .card').length, 0, '沒有狗卡：');
       }
@@ -1118,7 +1121,7 @@ async function runAnalysisTests() {
       const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
       const btn = doc.querySelector('header .brand #analysisBtn');
       if (!btn || btn.getAttribute('aria-label') !== '犬隻分析' || !btn.querySelector('use[href="#i-chart"]')) throw new Error('頁首右上角要有分析圖示');
-      eq([...document.querySelectorAll('#tabs button')].map(b => b.dataset.tab), ['walk', 'today', 'mine'], '分析不佔分類：');
+      eq([...document.querySelectorAll('#tabs button')].map(b => b.dataset.tab), ['walk', 'today', 'mine', 'find'], '分析不佔分類：');
       showAnalysis();
       eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [true, true, 'today'], '打開分析：');
       const titles = [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
@@ -1362,7 +1365,7 @@ async function runHistoryTests() {
       showDetail(dogs[0]);
       const sec = document.querySelector('#detail [data-section="walks"]');
       if (!sec) throw new Error('詳細資訊要有遛狗紀錄');
-      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-3, -1), ['walks', 'intro'], '位置在狗卡資訊前（相簿在最後）：');
+      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-4), ['walks', 'intro', 'where', 'gallery'], '位置在狗卡資訊前（#99 在哪裡、相簿在最後）：');
       eq([sec.querySelectorAll('.w-grid .on').length, sec.querySelectorAll('.w-grid .none').length, sec.querySelectorAll('.w-grid span').length], [14, 2, 30], '格子：');
       eq([...sec.querySelectorAll('.w-num b')].map(b => b.textContent), ['14', '2.3', '6'], '數字：');
       if (!sec.textContent.includes('從 2026/9/25 開始記錄')) throw new Error('要寫從哪天開始記錄');
@@ -2115,13 +2118,82 @@ async function runFirstScreenTests() {
   }
 }
 
+// #99 找狗：搜尋全部的狗（犬名、編號、籠位、舊編號）、籠位對到平面圖分區、區域篩選隻數
+async function runFindTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone];
+  try {
+    walkedStorage = fakeStorage(); walkedMemory = null;
+    const dog = (name, id, cage, extra = {}) => ({ name, id, cage, walkedDate: null, covered: false, note: '', intro: '', sex: '', formerIds: [], ...extra });
+    allDogs = [
+      dog('小白', '2024032902', '新A03'), dog('阿黑', '2021010101', '新獨12'), dog('花花', '2020050501', '新B10'),
+      dog('老大', '2019070701', '舊B04', { formerIds: ['2017090423'] }), dog('咪寶', '2021030913', 'C區11'),
+      dog('布布', '2022020202', '住院區'), dog('滿滿', '2025022703', '母幼A'), dog('神秘', '2023010101', '後院'),
+    ];
+    groupMap = {}; searchQuery = ''; findView = 'photo'; findZone = 'all';
+    const names = list => list.map(d => d.name);
+    await check('#99 籠位對到平面圖分區（K 2026-09-26 確認）', () => {
+      eq(allDogs.map(findZoneOf), ['new', 'new', 'new', 'old', 'pup', 'iso', 'mom', 'other']);
+    });
+    await check('#99 搜尋犬名、編號後四碼、籠位、舊編號都找得到', () => {
+      eq(names(findList('小白', 'all')), ['小白'], '犬名：');
+      eq(names(findList('2902', 'all')), ['小白'], '編號後四碼：');
+      eq(names(findList('舊b04', 'all')), ['老大'], '籠位（不分大小寫）：');
+      eq(names(findList('新 A03', 'all')), ['小白'], '籠位（忽略空白）：');
+      eq(names(findList('2017090423', 'all')), ['老大'], '舊編號：');
+      eq(names(findList('找不到', 'all')), [], '找不到：');
+    });
+    await check('#99 依區域（圖上由上到下）再依籠位排：新A、新B、新獨', () => {
+      eq(names(findList('', 'all')), ['小白', '花花', '阿黑', '布布', '滿滿', '咪寶', '老大', '神秘']);
+    });
+    await check('#99 搜尋範圍是全部的狗：今天已溜、收起的也找得到', () => {
+      recordWalked([allDogs[0]], true, TODAY);
+      eq(names(findList('小白', 'all')), ['小白']);
+    });
+    await check('#99 找狗分頁：區域按鈕的隻數跟著搜尋變，點區域只列那區', () => {
+      activeTab = 'find'; searchQuery = '新';
+      render();
+      const chip = key => document.querySelector(`#main [data-find-zone="${key}"] small`);
+      eq(chip('all').textContent, '3', '全部：');
+      eq(chip('new').textContent, '3', '新犬舍：');
+      eq(document.querySelector('#tabs [data-tab="find"] .n').textContent, '3', '分頁數字：');
+      searchQuery = '';
+      document.querySelector('#main [data-find-zone="pup"]').click();
+      eq([...document.querySelectorAll('#main .find-dog .find-name .n')].map(n => n.textContent), ['咪寶'], '幼犬舍：');
+      document.querySelector('#main [data-find-zone="pup"]').click();
+      eq(findZone, 'all', '再點一次取消：');
+    });
+    await check('#99 平面圖：每區顯示隻數，對不到的籠位放在圖下方', () => {
+      findView = 'map'; findZone = 'all'; activeTab = 'find';
+      render();
+      eq(document.querySelector('#main g[data-find-zone="iso"]').getAttribute('aria-label'), '隔離區 1 隻');
+      eq(document.querySelector('#main g[data-find-zone="new"]').getAttribute('aria-label'), '新犬舍區 3 隻');
+      if (!document.querySelector('#main .find-unmapped [data-find-zone="other"]')) throw new Error('沒有「其他籠位」按鈕');
+      for (const id of ['i-grid', 'i-map']) {
+        if (!INDEX_HTML.includes(`<symbol id="${id}"`)) throw new Error(`index.html 缺 ${id} 圖示`);
+      }
+      if (!/<script src="js\/analysis\.js"><\/script>\s*<script src="js\/find\.js"><\/script>/.test(INDEX_HTML)) throw new Error('find.js 要在 app.js、analysis.js 之後載入');
+    });
+    await check('#99 詳細資訊有「在哪裡」；對不到分區的籠位不顯示', () => {
+      if (!findLocationSection(allDogs[4]).includes('幼犬舍區')) throw new Error('C區 應該在幼犬舍區');
+      eq(findLocationSection(allDogs[7]), '', '其他籠位：');
+    });
+    await check('#99 找狗不顯示未遛天數與「已遛」按鈕', () => {
+      const html = findCard(allDogs[0], '', false);
+      if (/data-walk|上次遛狗|天前/.test(html)) throw new Error(html);
+    });
+  } finally {
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone] = saved;
+  }
+}
+
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js'].map(u => fetch(u).then(res => {
+Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js', '../js/find.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest, dogsJson, analysisJs]) => {
+  .then(([html, js, manifest, dogsJson, analysisJs, findJs]) => {
     ANALYSIS_JS = analysisJs;
+    FIND_JS = findJs;
     INDEX_HTML = html;
     MANIFEST = JSON.parse(manifest);
     APP_JS = js;
@@ -2132,6 +2204,9 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
     const a = document.createElement('script');
     a.textContent = analysisJs;
     document.body.appendChild(a);
+    const f = document.createElement('script');
+    f.textContent = findJs;
+    document.body.appendChild(f);
     walkedStorage = fakeStorage(); // 其他測試也不碰真正的 localStorage
     loadState = 'ready'; // 測試頁不跑 init，直接當資料已讀好，各測試自己放假資料
     return runTests();
@@ -2149,6 +2224,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runWalkedModuleTests)
   .then(runDetailWiringTests)
   .then(runFirstScreenTests)
+  .then(runFindTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

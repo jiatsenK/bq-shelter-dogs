@@ -41,6 +41,7 @@ let groupMap = {};
 let activeTab = 'walk';
 let detailDog = null; // 詳細資訊正在看的狗
 let detailOpener = null;
+let detailTrail = []; // 在詳細資訊裡點「可以一起溜」換過的狗（#99）：可以按「回到 ○○」一隻一隻回去
 let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, url, phase: 'preview'|'uploading'|'error', error }
 // 相簿一次加好幾張：{ dog, phase: 'preview'|'uploading'|'error', items: [{ blob, url, state: 'ready'|'uploading'|'done'|'error', error }] }
 let galleryBatch = null;
@@ -873,6 +874,7 @@ function detailHtml(dog, today) {
       </div>
       <button class="detail-close" id="detailClose" aria-label="關閉">${icon('close')}</button>
     </div>
+    ${detailTrail.length ? `<button type="button" class="detail-back" id="detailBack">${icon('back')}回到 ${esc(detailTrail[detailTrail.length - 1].name)}</button>` : ''}
     ${photoUploadHtml(dog)}
     ${hideActions(dog)}
     <section class="detail-section" data-section="note">
@@ -897,6 +899,7 @@ function detailHtml(dog, today) {
       <h3>${icon('card')}狗卡資訊<span class="sub">入所時的原始狗卡</span></h3>
       ${intro ? `<div class="content">${esc(intro)}</div>` : `<div class="empty">還沒有狗卡資訊</div>`}
     </section>
+    ${findLocationSection(dog)}
     ${gallerySection(dog)}
   `;
 }
@@ -1836,6 +1839,8 @@ const DETAIL_CLICKS = [
   ['#photoConfirm', () => uploadPhoto()],
   ['#photoCancel', () => { clearPhotoUpload(); renderDetail(); }],
   ['.buddy', el => { const d = allDogs[el.dataset.dog]; if (d) showDetail(d); }],
+  ['#detailBack', () => { const d = detailTrail.pop(); if (d) showDetail(d, false); }],
+  ['#findWhere', () => findShowZone(detailDog)],
   ['.pick', el => {
     const id = el.dataset.pick;
     if (pickedBuddies.has(id)) pickedBuddies.delete(id); else pickedBuddies.add(id);
@@ -1917,10 +1922,11 @@ function renderDetail() {
   }
 }
 
-// 在詳細資訊裡點「可以一起溜的狗」會直接換成那隻，不多疊一層
-function showDetail(dog) {
+// 在詳細資訊裡點「可以一起溜的狗」會直接換成那隻，不多疊一層；換之前的狗記在 detailTrail，可以按「回到 ○○」
+function showDetail(dog, remember = true) {
   const wasOpen = !!detailDog;
   if (!wasOpen) detailOpener = { element: document.activeElement, index: allDogs.indexOf(dog) };
+  if (wasOpen && remember && dog !== detailDog) detailTrail.push(detailDog);
   if (dog !== detailDog) {
     pickedBuddies.clear();
     if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
@@ -1939,6 +1945,7 @@ function showDetail(dog) {
 function hideDetail() {
   if (!detailDog) return;
   detailDog = null;
+  detailTrail = [];
   pickedBuddies.clear();
   if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
   if (!galleryBatch || galleryBatch.phase !== 'uploading') clearGalleryBatch();
@@ -2054,6 +2061,7 @@ const TABS = [
   { id: 'walk', label: '溜狗表' },
   { id: 'today', label: '今天已溜' },
   { id: 'mine', label: '我溜過' }, // #58 取代原本的「相關資訊（編輯中）」
+  { id: 'find', label: '找狗' }, // #99 照片圖鑑＋平面圖，程式在 js/find.js
 ];
 
 // counts：各分類要顯示的數字；沒有數字的分類留白
@@ -2181,7 +2189,13 @@ function renderMain() {
   const hiddenList = dueDogs(notWalked.filter(d => hidden.has(walkKey(d))), today).filter(hit);
   const todayList = walked.dogs(allDogs).filter(hit);
   const mineCount = myWalksCount(q);
-  buildTabs({ walk: walkList.length, today: todayList.length, mine: mineCount });
+  buildTabs({ walk: walkList.length, today: todayList.length, mine: mineCount, find: findList(q, 'all').length });
+  searchInput.placeholder = activeTab === 'find' ? '犬名、編號或籠位' : '搜尋犬名';
+  if (activeTab === 'find') {
+    // 找狗（#99）搜尋全部的狗：犬名、編號、籠位都算
+    main.innerHTML = findPageHtml(q);
+    return;
+  }
   if (activeTab === 'mine') {
     main.innerHTML = myWalksHtml(today, q);
     return;
