@@ -1967,7 +1967,8 @@ function closeDetail() {
 
 // 燈箱開著時「返回」只關燈箱，詳細資訊留著
 window.addEventListener('popstate', () => {
-  if (cropOpen()) hideCropper();
+  if (findZoomOpen()) findZoomHide(); // 找狗平面圖全螢幕（#102，js/find.js）
+  else if (cropOpen()) hideCropper();
   else if (lightboxOpen()) hideLightbox();
   else if (detailDog) hideDetail();
   else if (analysisOpen) hideAnalysis();
