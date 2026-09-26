@@ -27,19 +27,22 @@ function findTurn([x, y, w, h]) {
   if (FIND_MAP_TURN === 'ccw') return [y, FIND_MAP_W - x - w, h, w];
   return [x, y, w, h];
 }
-// 區名：窄的區域直排（一個字一行），寬的橫排；sub 是隻數，底下畫一條短線（K 2026-09-26 給的簡約看板樣式）
-function findLabel(cls, name, sub, [x, y, w, h], big) {
-  const cx = x + w / 2;
-  const count = (cy) => sub
-    ? `<text class="fm-n" x="${cx}" y="${cy}" text-anchor="middle">${sub}</text><line class="fm-u" x1="${cx - 20}" x2="${cx + 20}" y1="${cy + 7}" y2="${cy + 7}"/>`
-    : '';
-  if (w < 100) {
-    const chars = [...name];
-    const top = y + h / 2 - (chars.length - 1) * 10.5 - (sub ? 16 : 0);
-    return chars.map((ch, i) => `<text class="${cls}" x="${cx}" y="${top + i * 21 + 6}" text-anchor="middle">${ch}</text>`).join('')
-      + count(top + chars.length * 21 + 12);
+// 區名：放得下就橫排、放不下就直排（一個字一行）；sub 是隻數，底下畫一條短線（K 2026-09-26 給的看板樣式）
+function findLabel(cls, name, sub, [x, y, w, h], small) {
+  const cx = x + w / 2, cy = y + h / 2;
+  const chars = [...name];
+  const fs = small ? 14 : w > 180 ? 18 : 16;
+  const gap = fs * 0.3;
+  const count = ty => `<text class="fm-n" x="${cx}" y="${ty}" text-anchor="middle">${sub}<tspan class="fm-unit" dx="3">隻</tspan></text>`
+    + `<line class="fm-u" x1="${cx - 22}" x2="${cx + 22}" y1="${ty + 7}" y2="${ty + 7}"/>`;
+  if (chars.length * (fs + gap) < w - 18) {
+    return `<text class="${cls}" x="${cx}" y="${sub !== '' ? cy - 4 : cy + fs * 0.35}" text-anchor="middle" font-size="${fs}" letter-spacing="${gap}">${name}</text>`
+      + (sub !== '' ? count(cy + 22) : '');
   }
-  return `<text class="${cls}${big ? ' big' : ''}" x="${cx}" y="${y + h / 2 + (sub ? -6 : 5)}" text-anchor="middle">${name}</text>` + count(y + h / 2 + 20);
+  const lh = fs + 4;
+  const top = cy - (chars.length * lh + (sub !== '' ? 30 : 0)) / 2 + fs;
+  return chars.map((ch, i) => `<text class="${cls}" x="${cx}" y="${top + i * lh}" text-anchor="middle" font-size="${fs}">${ch}</text>`).join('')
+    + (sub !== '' ? count(top + chars.length * lh + 14) : '');
 }
 
 let findView = 'photo'; // photo：照片圖鑑；map：平面圖
@@ -125,31 +128,63 @@ function findGridHtml(list, query) {
 }
 
 // 平面圖：mini＝詳細資訊裡的小地圖（不寫字、不能點，選到的區放紅點）
-// 平面圖：藍底白線的簡約看板（K 2026-09-26 參考圖，色系改網站的藍白）。每區往內縮一點，區與區之間留縫。
-// mini＝詳細資訊裡的小地圖：不寫字、不能點，所在的區塗白
-const FIND_MAP_GAP = 5;
+// 平面圖：墨藍底、米白線的看板樣式（K 2026-09-26 給參考圖，選 A 墨藍看板、橫的）。
+// 建築外框是 L 形（左上角空出來，放「園區平面圖」標題），畫兩條線；每區往內縮一點，區與區之間留縫。
+// mini＝詳細資訊裡的小地圖：不寫字、不能點，所在的區塗成米白
+const FIND_MAP_GAP = 6;
+const FIND_MAP_PAD = 22;
+const FIND_OUTLINE = [[140, 0], [380, 0], [380, 600], [0, 600], [0, 270], [140, 270]]; // 看板直的時候的建築外框
 function findMapSvg(selected, query = '', mini = false) {
   const count = key => allDogs.filter(d => findZoneOf(d) === key && findMatches(d, query)).length;
   const [, , vw, vh] = findTurn([0, 0, FIND_MAP_W, FIND_MAP_H]);
-  const box = (cls, [x, y, w, h]) =>
-    `<rect class="${cls}" x="${x + FIND_MAP_GAP}" y="${y + FIND_MAP_GAP}" width="${w - FIND_MAP_GAP * 2}" height="${h - FIND_MAP_GAP * 2}"/>`;
-  let s = `<svg class="find-map${mini ? ' mini' : ''}" viewBox="-18 -18 ${vw + 36} ${vh + 36}" ${mini ? 'aria-hidden="true"' : 'role="group" aria-label="收容所平面圖"'}>`;
-  s += `<rect class="fm-bg" x="-18" y="-18" width="${vw + 36}" height="${vh + 36}" rx="${mini ? 24 : 16}"/>`;
-  s += `<rect class="fm-frame" x="-4" y="-4" width="${vw + 8}" height="${vh + 8}"/>`;
+  const P = FIND_MAP_PAD, G = FIND_MAP_GAP;
+  const box = ([x, y, w, h]) => `<rect x="${x + G}" y="${y + G}" width="${w - G * 2}" height="${h - G * 2}"/>`;
+  // 外框往外推 off：x＝0／380、y＝0／600 的點往外，轉角（140、270）往內角推，轉向後再換座標
+  const outline = (off, cls) => {
+    const pts = FIND_OUTLINE.map(([x, y]) => {
+      const nx = x === 0 ? -off : x === FIND_MAP_W ? x + off : x - off;
+      const ny = y === 0 ? -off : y === FIND_MAP_H ? y + off : y - off;
+      const [tx, ty] = findTurn([nx, ny, 0, 0]);
+      return `${tx},${ty}`;
+    });
+    return `<polygon class="${cls}" points="${pts.join(' ')}"/>`;
+  };
+  let s = `<svg class="find-map${mini ? ' mini' : ''}" viewBox="${-P} ${-P} ${vw + P * 2} ${vh + P * 2}" ${mini ? 'aria-hidden="true"' : 'role="group" aria-label="收容所平面圖"'}>`;
+  s += `<rect class="fm-bg" x="${-P}" y="${-P}" width="${vw + P * 2}" height="${vh + P * 2}" rx="${mini ? 30 : 16}"/>`;
+  s += outline(8, 'fm-frame2') + outline(2, 'fm-frame');
+  if (!mini) s += findMapTitle();
   for (const f of FIND_FACILITIES) {
     const r = findTurn(f.rect);
-    s += `<g class="fm-fac">${box('', r)}${mini ? '' : findLabel('fm-fac-t', f.name, '', r)}</g>`;
+    s += `<g class="fm-fac">${box(r)}${mini ? '' : findLabel('fm-fac-t', f.name, '', r, true)}</g>`;
   }
   for (const z of FIND_ZONES.filter(x => x.rect)) {
     const r = findTurn(z.rect);
     const n = count(z.key);
     const cls = `fm-zone${selected && selected !== z.key ? ' dim' : ''}${selected === z.key ? ' sel' : ''}`;
     s += mini ? `<g class="${cls}">` : `<g class="${cls}" data-find-zone="${z.key}" role="button" tabindex="0" aria-pressed="${selected === z.key}" aria-label="${z.name} ${n} 隻">`;
-    s += box('', r);
-    if (!mini) s += findLabel('fm-t', z.name, `${n} 隻`, r, r[2] > 140);
+    s += box(r);
+    if (!mini) s += findLabel('fm-t', z.name, n, r);
     s += `</g>`;
   }
   return s + '</svg>';
+}
+
+// 「園區平面圖」標題：放在建築外框空出來的角落；直的時候直排、橫的時候橫排
+function findMapTitle() {
+  const [x, y, w, h] = findTurn([0, 0, 140, 270]);
+  let s = '';
+  if (w < h) {
+    const cx = x + 44;
+    [...'園區平面圖'].forEach((ch, i) => { s += `<text class="fm-title" x="${cx}" y="${y + 40 + i * 34}" text-anchor="middle">${ch}</text>`; });
+    s += `<line class="fm-title-line" x1="${cx + 30}" x2="${cx + 30}" y1="${y + 14}" y2="${y + 190}"/>`;
+    ['SHELTER', 'FLOOR', 'PLAN'].forEach((word, i) => { s += `<text class="fm-sub" x="${cx - 16}" y="${y + 214 + i * 13}">${word}</text>`; });
+  } else {
+    const right = x + w - 12;
+    s += `<text class="fm-title" x="${right}" y="${y + 44}" text-anchor="end" letter-spacing="6">園區平面圖</text>`;
+    s += `<line class="fm-title-line" x1="${right - 170}" x2="${right}" y1="${y + 58}" y2="${y + 58}"/>`;
+    s += `<text class="fm-sub" x="${right}" y="${y + 78}" text-anchor="end">SHELTER FLOOR PLAN</text>`;
+  }
+  return s;
 }
 
 function findMapHtml(query) {

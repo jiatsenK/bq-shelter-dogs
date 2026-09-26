@@ -940,27 +940,33 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
 
 .find-map-card { background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 12px; }
 .find-map { display: block; width: 100%; max-width: 640px; height: auto; max-height: 62vh; margin: 0 auto; }
-.find-map .fm-bg { fill: var(--primary); }
-.find-map .fm-frame { fill: none; stroke: #fff; stroke-width: 2; opacity: 0.9; }
-.find-map rect { stroke-width: 2; }
-.fm-fac rect { fill: none; stroke: rgba(255, 255, 255, 0.5); }
-.fm-fac-t { fill: rgba(255, 255, 255, 0.75); font-size: 14px; font-weight: 600; letter-spacing: 0.15em; }
-.fm-zone rect { fill: var(--primary); stroke: #fff; transition: fill 0.15s; }
+/* 看板樣式（K 2026-09-26 選 A 墨藍看板）：墨藍底、米白線；選到的區塗米白、字變墨藍 */
+.find-map { --fm-bg: #1F3A5C; --fm-line: #EFE6D6; --fm-soft: rgba(239, 230, 214, 0.55); }
+.find-map .fm-bg { fill: var(--fm-bg); }
+.find-map .fm-frame { fill: none; stroke: var(--fm-line); stroke-width: 2.2; }
+.find-map .fm-frame2 { fill: none; stroke: var(--fm-line); stroke-width: 1; opacity: 0.6; }
+.find-map text { font-family: inherit; pointer-events: none; }
+.fm-title { fill: var(--fm-line); font-size: 26px; font-weight: 800; }
+.fm-title-line { stroke: var(--fm-line); stroke-width: 1; opacity: 0.7; }
+.fm-sub { fill: var(--fm-line); font-size: 9px; letter-spacing: 2.4px; opacity: 0.8; }
+.fm-fac rect { fill: none; stroke: var(--fm-soft); stroke-width: 1; }
+.fm-fac-t { fill: var(--fm-soft); font-weight: 700; }
+.fm-zone rect { fill: var(--fm-bg); stroke: var(--fm-line); stroke-width: 1.6; transition: fill 0.15s; }
 .find-map:not(.mini) .fm-zone { cursor: pointer; }
-.fm-zone text { fill: #fff; pointer-events: none; }
-.fm-zone .fm-u { stroke: #fff; stroke-width: 1.5; }
-.fm-t { font-size: 17px; font-weight: 700; letter-spacing: 0.18em; }
-.fm-t.big { font-size: 19px; }
-.fm-n { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.fm-zone.dim { opacity: 0.45; }
-/* 選到的區塗白、字變藍 */
-.fm-zone.sel rect { fill: #fff; }
-.fm-zone.sel text { fill: var(--primary); }
-.fm-zone.sel .fm-u { stroke: var(--primary); }
+.fm-zone text { fill: var(--fm-line); }
+.fm-t { font-weight: 700; }
+.fm-n { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.fm-unit { font-size: 12px; }
+.fm-zone .fm-u { stroke: var(--fm-line); stroke-width: 1.2; }
+.fm-zone.dim { opacity: 0.4; }
+.fm-zone.sel rect { fill: var(--fm-line); }
+.fm-zone.sel text { fill: var(--fm-bg); }
+.fm-zone.sel .fm-u { stroke: var(--fm-bg); }
 .fm-zone:focus-visible { outline: none; }
 .fm-zone:focus-visible rect { stroke-width: 4; }
-.find-map.mini rect { stroke-width: 6; }
+.find-map.mini rect { stroke-width: 5; }
 .find-map.mini .fm-frame { stroke-width: 5; }
+.find-map.mini .fm-frame2 { stroke-width: 3; }
 .find-map.mini .fm-zone.dim { opacity: 1; }
 .find-map-hint { font-size: 13px; color: var(--ink-soft); margin: 10px 2px 0; }
 .find-unmapped { margin-top: 10px; background: var(--amber-bg); color: var(--amber-text); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.6; }
