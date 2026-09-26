@@ -1019,6 +1019,6 @@ html.find-zoom-open { overflow: hidden; }
 .find-zoom-bar button:focus-visible { outline: 2px solid #EFE6D6; outline-offset: 2px; }
 .find-zoom-bar .find-zoom-close { margin-left: 6px; font-size: 18px; }
 .find-zoom-pct { min-width: 44px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
-.find-zoom-scroll { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; padding: 8px 8px calc(16px + env(safe-area-inset-bottom, 0px)); }
-.find-zoom-map { min-width: 100%; margin: 0 auto; }
+.find-zoom-scroll { flex: 1; display: flex; overflow: auto; -webkit-overflow-scrolling: touch; padding: 8px 8px calc(16px + env(safe-area-inset-bottom, 0px)); }
+.find-zoom-map { flex-shrink: 0; min-width: 100%; margin: auto; }
 .find-zoom-map .find-map { max-width: none; max-height: none; width: 100%; }
