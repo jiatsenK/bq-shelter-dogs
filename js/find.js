@@ -27,15 +27,19 @@ function findTurn([x, y, w, h]) {
   if (FIND_MAP_TURN === 'ccw') return [y, FIND_MAP_W - x - w, h, w];
   return [x, y, w, h];
 }
-// 區名：窄的區域直排（一個字一行），寬的橫排；n 是第二行的隻數文字
+// 區名：窄的區域直排（一個字一行），寬的橫排；sub 是隻數，底下畫一條短線（K 2026-09-26 給的簡約看板樣式）
 function findLabel(cls, name, sub, [x, y, w, h], big) {
+  const cx = x + w / 2;
+  const count = (cy) => sub
+    ? `<text class="fm-n" x="${cx}" y="${cy}" text-anchor="middle">${sub}</text><line class="fm-u" x1="${cx - 20}" x2="${cx + 20}" y1="${cy + 7}" y2="${cy + 7}"/>`
+    : '';
   if (w < 100) {
-    const top = y + h / 2 - ([...name].length - 1) * 11 - (sub ? 10 : 0);
-    return [...name].map((ch, i) => `<text class="${cls}" x="${x + w / 2}" y="${top + i * 22 + 6}" text-anchor="middle">${ch}</text>`).join('')
-      + (sub ? `<text class="fm-n" x="${x + w / 2}" y="${y + h - 10}" text-anchor="middle">${sub}</text>` : '');
+    const chars = [...name];
+    const top = y + h / 2 - (chars.length - 1) * 10.5 - (sub ? 16 : 0);
+    return chars.map((ch, i) => `<text class="${cls}" x="${cx}" y="${top + i * 21 + 6}" text-anchor="middle">${ch}</text>`).join('')
+      + count(top + chars.length * 21 + 12);
   }
-  return `<text class="${cls}${big ? ' big' : ''}" x="${x + w / 2}" y="${y + h / 2 + (sub ? -2 : 5)}" text-anchor="middle">${name}</text>`
-    + (sub ? `<text class="fm-n" x="${x + w / 2}" y="${y + h / 2 + 20}" text-anchor="middle">${sub}</text>` : '');
+  return `<text class="${cls}${big ? ' big' : ''}" x="${cx}" y="${y + h / 2 + (sub ? -6 : 5)}" text-anchor="middle">${name}</text>` + count(y + h / 2 + 20);
 }
 
 let findView = 'photo'; // photo：照片圖鑑；map：平面圖
@@ -121,31 +125,29 @@ function findGridHtml(list, query) {
 }
 
 // 平面圖：mini＝詳細資訊裡的小地圖（不寫字、不能點，選到的區放紅點）
+// 平面圖：藍底白線的簡約看板（K 2026-09-26 參考圖，色系改網站的藍白）。每區往內縮一點，區與區之間留縫。
+// mini＝詳細資訊裡的小地圖：不寫字、不能點，所在的區塗白
+const FIND_MAP_GAP = 5;
 function findMapSvg(selected, query = '', mini = false) {
   const count = key => allDogs.filter(d => findZoneOf(d) === key && findMatches(d, query)).length;
   const [, , vw, vh] = findTurn([0, 0, FIND_MAP_W, FIND_MAP_H]);
-  let s = `<svg class="find-map${mini ? ' mini' : ''}" viewBox="-4 -4 ${vw + 8} ${vh + 8}" ${mini ? 'aria-hidden="true"' : 'role="group" aria-label="收容所平面圖"'}>`;
-  s += `<rect class="fm-bg" x="-2" y="-2" width="${vw + 4}" height="${vh + 4}" rx="10"/>`;
+  const box = (cls, [x, y, w, h]) =>
+    `<rect class="${cls}" x="${x + FIND_MAP_GAP}" y="${y + FIND_MAP_GAP}" width="${w - FIND_MAP_GAP * 2}" height="${h - FIND_MAP_GAP * 2}"/>`;
+  let s = `<svg class="find-map${mini ? ' mini' : ''}" viewBox="-18 -18 ${vw + 36} ${vh + 36}" ${mini ? 'aria-hidden="true"' : 'role="group" aria-label="收容所平面圖"'}>`;
+  s += `<rect class="fm-bg" x="-18" y="-18" width="${vw + 36}" height="${vh + 36}" rx="${mini ? 24 : 16}"/>`;
+  s += `<rect class="fm-frame" x="-4" y="-4" width="${vw + 8}" height="${vh + 8}"/>`;
   for (const f of FIND_FACILITIES) {
     const r = findTurn(f.rect);
-    s += `<rect class="fm-fac" x="${r[0]}" y="${r[1]}" width="${r[2]}" height="${r[3]}" rx="4"/>`;
-    if (!mini) s += findLabel('fm-fac-t', f.name, '', r);
+    s += `<g class="fm-fac">${box('', r)}${mini ? '' : findLabel('fm-fac-t', f.name, '', r)}</g>`;
   }
   for (const z of FIND_ZONES.filter(x => x.rect)) {
     const r = findTurn(z.rect);
     const n = count(z.key);
-    const cls = `fm-zone z-${z.key}${selected && selected !== z.key ? ' dim' : ''}${selected === z.key ? ' sel' : ''}`;
+    const cls = `fm-zone${selected && selected !== z.key ? ' dim' : ''}${selected === z.key ? ' sel' : ''}`;
     s += mini ? `<g class="${cls}">` : `<g class="${cls}" data-find-zone="${z.key}" role="button" tabindex="0" aria-pressed="${selected === z.key}" aria-label="${z.name} ${n} 隻">`;
-    s += `<rect x="${r[0]}" y="${r[1]}" width="${r[2]}" height="${r[3]}" rx="4"/>`;
-    if (!mini) s += findLabel('fm-t', z.name, n ? `${n} 隻` : '0 隻', r, r[2] > 140);
+    s += box('', r);
+    if (!mini) s += findLabel('fm-t', z.name, `${n} 隻`, r, r[2] > 140);
     s += `</g>`;
-  }
-  if (mini && selected) {
-    const z = FIND_ZONES.find(x => x.key === selected && x.rect);
-    if (z) {
-      const [x, y, w, h] = findTurn(z.rect);
-      s += `<circle class="fm-pin" cx="${x + w / 2}" cy="${y + h / 2}" r="30"/><circle class="fm-pin-in" cx="${x + w / 2}" cy="${y + h / 2}" r="11"/>`;
-    }
   }
   return s + '</svg>';
 }
