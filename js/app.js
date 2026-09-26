@@ -512,9 +512,12 @@ function reentryLine(dog) {
 }
 
 // 性別：狗卡 frontmatter 有寫 sex 才顯示 ♂／♀，沒寫就留空位；♂ 藍色、♀ 紅色
+// 用內嵌 SVG 不用文字符號：iPhone 內建字型沒有 ♂♀，會換成基線不同的字型而下沉（#93）
 function sexMark(dog) {
-  const cls = dog.sex === '♂' ? ' male' : dog.sex === '♀' ? ' female' : '';
-  return `<span class="sex${cls}">${esc(dog.sex || '')}</span>`;
+  const kind = dog.sex === '♂' ? 'male' : dog.sex === '♀' ? 'female' : '';
+  if (!kind) return '<span class="sex"></span>';
+  const label = kind === 'male' ? '公' : '母';
+  return `<span class="sex ${kind}" role="img" aria-label="${label}" title="${label}">${icon(kind)}</span>`;
 }
 
 // 備註命中警示關鍵字時的原文顯示；同一筆備註命中幾個關鍵字都只顯示一次

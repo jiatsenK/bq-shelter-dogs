@@ -214,12 +214,20 @@ main { overflow-wrap: anywhere; }
 .card .row { display: flex; align-items: center; gap: 8px; }
 .card .who { flex: 1; min-width: 0; }
 .card .name { font-size: 18px; font-weight: 700; line-height: 1.3; word-break: break-all; }
-/* 性別：♂ 藍色、♀ 紅色，沒有資料時不佔位 */
-.sex { margin-left: 4px; font-size: 15px; color: var(--ink-soft); }
+/* 犬名＋性別排成一列：長犬名在左邊自己換行，性別圖示固定貼在第一行右邊，不會單獨掉行（#93） */
+.card .name, .detail-head .name { display: flex; align-items: flex-start; }
+/* 性別：♂ 藍色、♀ 紅色，沒有資料時不佔位；高度跟犬名一行一樣，圖示垂直置中 */
+.sex { flex-shrink: 0; display: inline-flex; align-items: center; height: 1.3em; margin-left: 4px; color: var(--ink-soft); }
+.sex .icon { width: 0.8em; height: 0.8em; }
 .sex.male { color: var(--primary); }
 .sex.female { color: var(--red-text); }
 .sex:empty { display: none; }
 .card .meta { font-size: 13.5px; color: var(--ink-soft); margin-top: 1px; line-height: 1.4; }
+/* 很窄（文字放大 200% 等於畫面只剩一半寬）：犬名＋性別獨占一行，上次遛狗和按鈕換到下一行，卡片變高但不擠壓、不裁切（#93） */
+@media (max-width: 300px) {
+  .card .row { flex-wrap: wrap; }
+  .card .who { flex-basis: 100%; }
+}
 .card .meta .sep, .detail-head .meta .sep { color: #C5CFDD; margin: 0 6px; }
 /* 上次遛狗：小標＋彩色天數（綠／黃／紅照 #3 色標） */
 .last { flex-shrink: 0; width: 84px; line-height: 1.3; }

@@ -1840,7 +1840,7 @@ async function runV52Tests() {
       eq([toggle.textContent.trim(), document.querySelector('.hidden-list')], ['已收起 2 隻', null], '收合：');
       toggle.click();
       eq([...document.querySelectorAll('.hidden-name')].map(b => b.textContent), ['新來丁一直', '一般乙今天'], '展開（久沒遛的在前）：');
-      eq([...loadHidden(new Date(2026, 8, 26, 9))].map(([k, m]) => `${k}:${m}`), ['名:新來丁:always'], '隔天今天先收起的回來：');
+      eq([...loadHidden(new Date(Date.now() + 864e5))].map(([k, m]) => `${k}:${m}`), ['名:新來丁:always'], '隔天今天先收起的回來：');
       document.querySelector('[data-unhide]').click();
       eq(walkNames(), ['新來丁', '再入甲', '一般丙'], '放回：');
       document.querySelector('.toast-undo').click();
@@ -2015,6 +2015,19 @@ async function runFirstScreenTests() {
     });
     check('#91 不載入 Google Fonts，改用手機內建字型', () => {
       if (/fonts\.googleapis|fonts\.gstatic/.test(INDEX_HTML)) throw new Error('index.html 還在載入 Google Fonts');
+    });
+    check('#93 性別用內嵌 SVG 圖示、有可讀標籤，不再用 ♂♀ 文字', () => {
+      const box = document.createElement('div');
+      const mark = sex => { box.innerHTML = sexMark({ sex }); return box.querySelector('.sex'); };
+      eq(mark('♂').querySelector('use').getAttribute('href'), '#i-male', '♂ 圖示：');
+      eq(mark('♂').getAttribute('aria-label'), '公', '♂ 標籤：');
+      eq(mark('♀').querySelector('use').getAttribute('href'), '#i-female', '♀ 圖示：');
+      eq(mark('♀').getAttribute('aria-label'), '母', '♀ 標籤：');
+      if (/[♂♀]/.test(mark('♂').textContent + mark('♀').textContent)) throw new Error('不應再用 ♂♀ 文字');
+      eq(mark('').innerHTML, '', '沒有性別不放內容：');
+      for (const id of ['i-male', 'i-female']) {
+        if (!INDEX_HTML.includes(`<symbol id="${id}"`)) throw new Error(`index.html 缺 ${id} 圖示`);
+      }
     });
   } finally {
     window.fetch = realFetch;
