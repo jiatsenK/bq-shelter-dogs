@@ -142,6 +142,26 @@ https://bq-shelter-photos.你的帳號名稱.workers.dev
 - 設為主照片：`POST /gallery/{編號}/{檔名}/main`（不用內容）。成功回 `{ "ok": true, "swapped": true/false }`；`swapped` 是 true 表示原本的主照片放進了相簿那一格。
 - 刪除：`DELETE /gallery/{編號}/{檔名}`，內容 `{ "passcode": "通關碼" }`（`Content-Type: application/json`）。通關碼錯的回應同我的備註。成功回 `{ "ok": true, "removed": true/false, "fileDeleted": true/false }`。
 
+## 誰遛的代號（V6，#95）
+
+「我溜過」要認出你是誰：志工在網站上輸入自己在試算表「誰遛的」寫的名字，網站送到這個服務換成一串代號（例：`3f9a0c1b2d4e`），代號記在那支手機，名字不存。同步試算表時也用**同一把密鑰**把「誰遛的」換成代號寫進 `data/walks.json`，兩邊代號一樣，網站才找得到你的紀錄。公開的 repo 和網站只有代號，沒有名字。
+
+- 已知限制：知道某人名字的人，也能在網站輸入他的名字，看到他遛過哪些狗。K 2026-09-26 同意先不加通關碼。
+- 密鑰一旦開始用就**不要換**：換了以後，舊紀錄的代號就對不上，大家的「我溜過」會變空。
+
+### 啟用步驟（這次 PR 合併後做一次）
+
+1. **想一把密鑰**：一串 20 個字以上、別人猜不到的英數亂碼。可以用 iPhone「密碼」App 新增密碼時產生的強密碼。先存在自己的密碼 App，第 2、3 步要貼同一串。
+2. **設定 GitHub**：repo 的 **Settings** → **Secrets and variables** → **Actions** → **New repository secret**：**Name** 填 `WALKER_KEY`，**Secret** 貼上密鑰，按 **Add secret**。
+3. **設定 Cloudflare**：Worker 頁面 → **Settings** → **Variables and Secrets** → **Add**：**Type** 選 **Secret**，**Variable name** 填 `WALKER_KEY`，**Value** 貼上**同一串**密鑰，按 **Deploy**（或 Save）。
+4. **重新貼程式**：照上面「步驟 3」的 4–7，把 Worker 程式換成最新的 `worker/src/index.js`，按 **Deploy**。
+5. **確認**：打開服務網址，看到 `"walkerKey":"已設定"`。再到 GitHub 的 **Actions** 手動跑一次「同步試算表」，之後打開網站的「我溜過」輸入你的名字（要包含 `MY_NAME` 裡的第一個寫法，你以前的紀錄才會出現）。
+
+### 服務的網址（給寫網站程式的人）
+
+- `POST /walker-code`，內容 `{ "names": ["小明、明明"] }`（`Content-Type: application/json`）。每個字串再照試算表的規則拆開（頓號、逗號、斜線、空白等），最多 8 個名字、每個 20 字。成功回 `{ "ok": true, "codes": ["...", "..."] }`（12 碼十六進位，不重複）。同一個人 1 分鐘最多 20 次。沒設定 `WALKER_KEY` 回 500。
+- 算法：名字全形半形統一（NFKC）、去掉空白、英文轉小寫，`HMAC-SHA256(WALKER_KEY, 名字)` 取前 12 碼。跟 `scripts/sync-sheet.mjs` 的 `walkerCode` 一樣，兩邊的測試用同一組測試向量確認。
+
 ## 給用命令列的人
 
 `worker/wrangler.toml` 已經設定好，在 `worker/` 資料夾執行：
@@ -150,6 +170,7 @@ https://bq-shelter-photos.你的帳號名稱.workers.dev
 npx wrangler deploy
 npx wrangler secret put GITHUB_TOKEN
 npx wrangler secret put NOTES_PASSCODE
+npx wrangler secret put WALKER_KEY
 ```
 
 自動測試（模擬 GitHub，不會真的上傳）：`node --test worker/test/worker.test.mjs`

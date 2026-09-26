@@ -16,9 +16,11 @@ const GALLERY_URL = 'data/gallery.json';
 const FIRST_SCREEN_CARDS = 8;
 const GALLERY_MAX = 30; // 跟 Worker 的 GALLERY_MAX 一致
 const GALLERY_BATCH_MAX = 10; // 相簿一次最多選幾張（一張一張依序傳，Worker 相簿頻率限制 1 分鐘 12 張）
-// 我最近溜過（#58）：同步時累積的遛狗紀錄（#56），只看 mine（#57 判斷是不是我遛的）
+// 我最近溜過（#58）：同步時累積的遛狗紀錄（#56）。#96 起每個志工看自己的：
+// 紀錄裡的 walkers 是遛的人的代號，志工在「我溜過」輸入名字、經 Worker 換成代號後記在這支手機
 const WALKS_URL = 'data/walks.json';
-const MY_WALKS_SINCE = '2026/9/25'; // #57 上線、開始判斷是不是我遛的那天
+const WALKER_CODES_KEY = 'bq-walker-codes';
+const WALKER_CODE_PATTERN = /^[0-9a-f]{12}$/; // 跟 Worker 的 WALKER_CODE_LENGTH 一致
 // 警示關鍵字（2026-09-24 K 定，#28）：備註含任一個，就把備註原文直接顯示在卡片第一層，字眼標紅；
 // 只用來判斷要不要顯示，不改寫原文、不另外產生標籤。狗照樣留在待巡房，由志工自己判斷。
 // 每組第一個是關鍵字，後面是常見異體寫法，一起比對。志工發現新的慣用字眼時，只要在這裡加一組。
@@ -55,6 +57,8 @@ let myNotesState = 'loading'; // loading／worker（Worker 讀到最新）／sit
 let noteEdit = null; // 正在編輯的我的備註：{ dog, text, pass, needPass, phase: 'edit'|'saving'|'error', error }
 let analysisOpen = false; // 分析頁（#59）開著嗎
 let myWalks = []; // 我遛過的紀錄（#58）：[{ id, name, date: Date, ymd }]，新到舊
+let walksData = null; // data/walks.json 讀回來的原始內容；換「我是誰」時不用重讀
+let walkerSetup = null; // 正在設定我是誰（#96）：{ text, phase: 'edit'|'saving'|'error', error }
 let myWalksState = 'loading'; // loading／ready／error
 let loadState = 'loading'; // loading：還在讀 dogs.json；error：讀取失敗；ready：資料好了
 
@@ -117,14 +121,15 @@ async function loadDogsData() {
 
 // ── 我最近溜過（#58）──
 
-// walks.json 只取 mine 的紀錄，日期不合理的丟掉；同一隻狗同一天只留一筆；新到舊（同一天後記的在前）
-function parseMyWalks(data) {
+// walks.json 只取 walkers 有我的代號的紀錄（#96；舊紀錄只有 mine 沒有 walkers 的不算），日期不合理的丟掉；
+// 同一隻狗同一天只留一筆；新到舊（同一天後記的在前）
+function parseMyWalks(data, codes = loadMyCodes()) {
   if (!data || !Array.isArray(data.walks)) throw new Error('walks.json 格式不對');
   const text = v => (v == null ? '' : String(v).trim());
   const seen = new Set();
   const list = [];
   data.walks.forEach((w, i) => {
-    if (!w || w.mine !== true) return;
+    if (!w || !Array.isArray(w.walkers) || !w.walkers.some(c => codes.includes(c))) return;
     const date = parseYmd(w.date);
     const id = text(w.id), name = text(w.name);
     if (!date || (!id && !name)) return;
@@ -141,7 +146,8 @@ async function loadMyWalks() {
   try {
     const res = await fetch(WALKS_URL, { cache: 'no-cache' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    myWalks = parseMyWalks(await res.json());
+    walksData = await res.json();
+    myWalks = parseMyWalks(walksData);
     myWalksState = 'ready';
   } catch (e) {
     console.error(e);
@@ -150,11 +156,85 @@ async function loadMyWalks() {
   // 不在「我溜過」就只更新分類上的數字（#91）：整頁重畫會把第一屏正在載入的照片換掉
   const n = document.querySelector('#tabs [data-tab="mine"] .n');
   if (activeTab !== 'mine' && !analysisOpen && n) {
-    n.textContent = myWalksState === 'ready'
-      ? myWalkGroups(myWalks, searchQuery.trim()).reduce((k, g) => k + g.walks.length, 0) : '';
+    const count = myWalksCount(searchQuery.trim());
+    n.textContent = count == null ? '' : count;
   } else {
     render();
   }
+}
+
+// 分類上的數字；還沒讀好或還沒設定我是誰時不顯示（null）
+function myWalksCount(query) {
+  if (myWalksState !== 'ready' || !loadMyCodes().length) return null;
+  return myWalkGroups(myWalks, query).reduce((k, g) => k + g.walks.length, 0);
+}
+
+// ── 我是誰（#96）──
+// 只把代號記在這支手機（跟今天已溜同一個 localStorage），名字本身不存；讀寫不了（無痕模式）就這次開著網頁的期間記在記憶體
+let walkerCodesMemory = null;
+function loadMyCodes() {
+  let list = walkerCodesMemory;
+  try {
+    const raw = walkedStorage && walkedStorage.getItem(WALKER_CODES_KEY);
+    if (raw) list = JSON.parse(raw);
+  } catch (e) { /* 讀不到就用記憶體裡的 */ }
+  return Array.isArray(list) ? list.filter(c => WALKER_CODE_PATTERN.test(c)) : [];
+}
+function saveMyCodes(codes) {
+  walkerCodesMemory = codes.length ? [...codes] : null;
+  try {
+    if (walkedStorage && codes.length) walkedStorage.setItem(WALKER_CODES_KEY, JSON.stringify(codes));
+    else if (walkedStorage) walkedStorage.removeItem(WALKER_CODES_KEY);
+  } catch (e) { /* 存不了就只記在記憶體 */ }
+  try { myWalks = walksData ? parseMyWalks(walksData, codes) : []; } catch (e) { myWalks = []; }
+}
+
+function walkerSetupHtml() {
+  const edit = walkerSetup || { text: '', phase: 'edit', error: '' };
+  const busy = edit.phase === 'saving';
+  const has = loadMyCodes().length > 0;
+  return `<form class="who-box" id="whoForm" autocomplete="off">
+    <h3>${icon('paw')}你是誰？</h3>
+    <p>輸入你在試算表「誰遛的」欄寫的名字，這裡就會列出你遛過的狗。有好幾種寫法（例如本名和暱稱）可以用頓號隔開。</p>
+    <input type="text" id="whoInput" maxlength="60" placeholder="例：小明、明明" aria-label="你在試算表寫的名字" value="${esc(edit.text)}"${busy ? ' disabled' : ''}>
+    <p class="who-note">名字只用來換成一串代號，代號記在這支手機，名字不會存下來，網站上也看不到。換手機或換瀏覽器要重新設定。</p>
+    ${edit.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(edit.error)}</span></div>` : ''}
+    <div class="my-note-actions">
+      <button type="submit" class="my-note-save" id="whoSave"${busy ? ' disabled' : ''}>${busy ? '設定中…' : '設定'}</button>
+      ${has && !busy ? `<button type="button" class="photo-cancel" id="whoCancel">取消</button>` : ''}
+    </div>
+    ${has && !busy ? `<button type="button" class="who-clear" id="whoClear">清除這支手機的設定</button>` : ''}
+  </form>`;
+}
+
+// 送名字到 Worker 換代號；成功就記住代號、顯示我溜過，失敗保留輸入的名字並顯示原因
+async function saveWalkerSetup() {
+  const edit = walkerSetup;
+  if (!edit || edit.phase === 'saving') return;
+  const text = edit.text.trim();
+  const failWith = msg => { edit.phase = 'error'; edit.error = msg; render(); };
+  if (!text) return failWith('請輸入你在試算表寫的名字');
+  if (!UPLOAD_URL) return failWith('代號服務還沒設定好，暫時不能設定');
+  edit.phase = 'saving';
+  render();
+  let out = null;
+  try {
+    const res = await fetch(`${UPLOAD_URL}/walker-code`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ names: [text] }),
+    });
+    out = await res.json().catch(() => null);
+    if (!res.ok) throw new Error((out && out.error) || `HTTP ${res.status}`);
+  } catch (e) {
+    console.error(e);
+    return failWith(out && out.error ? out.error : '連不上代號服務，請稍後再試');
+  }
+  const codes = out && Array.isArray(out.codes) ? out.codes.filter(c => WALKER_CODE_PATTERN.test(c)) : [];
+  if (!codes.length) return failWith('代號服務回傳的資料不對，請稍後再試');
+  saveMyCodes(codes);
+  if (walkerSetup === edit) walkerSetup = null;
+  render();
 }
 
 // 紀錄對到目前清單上的狗：有編號用編號，沒有才用犬名；對不到（例：已離所）回 null
@@ -234,12 +314,14 @@ function myWalksHtml(today, query) {
   if (myWalksState === 'error') {
     return `<div class="status-msg">遛狗紀錄讀取失敗，請稍後重新整理。<br><button class="retry-btn" id="mineRetry">重新讀取</button></div>`;
   }
-  if (!myWalks.length) return `<div class="status-msg">從 ${MY_WALKS_SINCE} 開始記錄，目前還沒有資料。<br>試算表「誰遛的」填你的名字，同步後就會出現在這裡。</div>`;
+  if (walkerSetup || !loadMyCodes().length) return walkerSetupHtml();
+  const who = query ? '' : `<div class="section-hint who-hint">${icon('paw')}這支手機已設定你是誰<button type="button" class="who-edit" id="whoEdit">修改</button></div>`;
+  if (!myWalks.length) return who + `<div class="status-msg">還沒有你的遛狗紀錄。<br>試算表「誰遛的」寫上你設定的名字，同步後就會出現在這裡。</div>`;
   // 所有到所紀錄新到舊一路往下排（K 2026-09-25：不要選日期）；搜尋時不顯示小計
   const groups = myWalkGroups(myWalks, query);
   if (!groups.length) return `<div class="status-msg">找不到「${esc(query)}」</div>`;
   const firstSeen = myFirstWalks(myWalks);
-  return (query ? '' : myMonthStats(myWalks, today)) + groups.map(g => myVisitCard(g, firstSeen)).join('');
+  return who + (query ? '' : myMonthStats(myWalks, today)) + groups.map(g => myVisitCard(g, firstSeen)).join('');
 }
 
 // 回傳備註命中的關鍵字（顯示用）與實際出現的寫法（標示用）；沒命中回 null
@@ -2106,8 +2188,7 @@ function renderMain() {
   const walkList = dueDogs(notWalked.filter(d => !hidden.has(walkKey(d))), today).filter(hit);
   const hiddenList = dueDogs(notWalked.filter(d => hidden.has(walkKey(d))), today).filter(hit);
   const todayList = walked.dogs(allDogs).filter(hit);
-  const mineCount = myWalksState === 'ready'
-    ? myWalkGroups(myWalks, q).reduce((n, g) => n + g.walks.length, 0) : null;
+  const mineCount = myWalksCount(q);
   buildTabs({ walk: walkList.length, today: todayList.length, mine: mineCount, find: findList(q, 'all').length });
   searchInput.placeholder = activeTab === 'find' ? '犬名、編號或籠位' : '搜尋犬名';
   if (activeTab === 'find') {
@@ -2143,6 +2224,32 @@ mainEl.addEventListener('click', e => {
   const tile = e.target.closest('[data-mine-dog]');
   if (tile) showDetail(allDogs[tile.dataset.mineDog]);
   else if (e.target.closest('#mineRetry')) loadMyWalks();
+  else if (e.target.closest('#whoEdit')) {
+    walkerSetup = { text: '', phase: 'edit', error: '' };
+    render();
+    const input = document.getElementById('whoInput');
+    if (input) input.focus();
+  } else if (e.target.closest('#whoCancel')) {
+    walkerSetup = null;
+    render();
+  } else if (e.target.closest('#whoClear')) {
+    saveMyCodes([]);
+    walkerSetup = null;
+    render();
+  }
+});
+// 我是誰：輸入的名字先記著（別的資料讀好重畫時才不會被清掉），送出換代號
+mainEl.addEventListener('input', e => {
+  if (e.target.id !== 'whoInput') return;
+  if (!walkerSetup) walkerSetup = { text: '', phase: 'edit', error: '' };
+  walkerSetup.text = e.target.value;
+});
+mainEl.addEventListener('submit', e => {
+  if (e.target.id !== 'whoForm') return;
+  e.preventDefault();
+  const input = document.getElementById('whoInput');
+  walkerSetup = { ...(walkerSetup || {}), text: input ? input.value : '', phase: 'edit', error: '' };
+  saveWalkerSetup();
 });
 
 // 注音、拼音選字途中不篩選，避免一直閃「找不到『ㄉㄡ』」；選好字才更新

@@ -616,3 +616,56 @@ test('設為主照片：不在清單、檔名不對、別的網站都擋；主�
   assert.match(r.body.error, /照片都沒動/);
   assert.deepEqual([...g.store.files[G1].bytes], [...NEW]);
 });
+
+// ── #95 誰遛的代號 ──
+const WALKER_ENV = { ...ENV, WALKER_KEY: 'test-walker-key' };
+// 跟 scripts/sync-sheet.test.mjs 的 WALKER_VECTORS 同一組：兩邊算出來要一樣
+const WALKER_VECTORS = [
+  ['測試志工我', 'ecdf46de08b4'],
+  ['志工 B', '2569554f699b'],
+  ['Ａｌｉｃｅ Chen', '0511a0a064fb'],
+  ['alicechen', '0511a0a064fb'],
+];
+function postCode(body, { origin = ORIGIN, ip = '3.3.3.3', type = 'application/json' } = {}) {
+  const headers = { 'Content-Type': type, 'CF-Connecting-IP': ip };
+  if (origin) headers.Origin = origin;
+  return new Request('https://bq-shelter-photos.example.workers.dev/walker-code', { method: 'POST', headers, body: typeof body === 'string' ? body : JSON.stringify(body) });
+}
+
+test('#95 代號算法跟同步腳本一樣（測試向量）', async () => {
+  for (const [name, code] of WALKER_VECTORS) assert.equal(await worker.testing.walkerCode(name, 'test-walker-key'), code, name);
+});
+
+test('#95 POST /walker-code：多個名字換代號、去重、照試算表規則拆名字；不碰 GitHub', async () => {
+  const calls = fakeGithub();
+  const r = await send(postCode({ names: ['測試志工我', 'alicechen', 'ＡＬＩＣＥＣｈｅｎ', '志工 B'] }), WALKER_ENV);
+  assert.equal(r.status, 200);
+  const code = async n => worker.testing.walkerCode(n, 'test-walker-key');
+  assert.deepEqual(r.body, { ok: true, codes: ['ecdf46de08b4', '0511a0a064fb', await code('志工'), await code('B')] });
+  assert.equal(r.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+  assert.equal(calls.length, 0);
+});
+
+test('#95 POST /walker-code 擋掉：沒設定密鑰、空名字、太多、太長、格式不對、別的網站、太頻繁', async () => {
+  fakeGithub();
+  assert.equal((await send(postCode({ names: ['甲'] }), ENV)).status, 500);
+  assert.equal((await send(postCode({ names: ['  '] }), WALKER_ENV)).status, 400);
+  assert.equal((await send(postCode({ names: ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h i'] }), WALKER_ENV)).status, 400);
+  assert.equal((await send(postCode({ names: ['名'.repeat(21)] }), WALKER_ENV)).status, 400);
+  assert.equal((await send(postCode({ names: '甲' }), WALKER_ENV)).status, 400);
+  assert.equal((await send(postCode('not json'), WALKER_ENV)).status, 400);
+  assert.equal((await send(postCode({ names: ['甲'] }, { type: 'text/plain' }), WALKER_ENV)).status, 415);
+  assert.equal((await send(postCode({ names: ['甲'] }, { origin: 'https://evil.example' }), WALKER_ENV)).status, 403);
+  const get = new Request('https://x.workers.dev/walker-code', { headers: { Origin: ORIGIN } });
+  assert.equal((await send(get, WALKER_ENV)).status, 405);
+  resetState();
+  let last;
+  for (let i = 0; i < 21; i++) last = await send(postCode({ names: ['甲'] }, { ip: '4.4.4.4' }), WALKER_ENV);
+  assert.equal(last.status, 429);
+});
+
+test('#95 首頁狀態顯示代號密鑰設了沒', async () => {
+  const r = await send(new Request('https://x.workers.dev/'), WALKER_ENV);
+  assert.equal(r.body.walkerKey, '已設定');
+  assert.equal((await send(new Request('https://x.workers.dev/'), ENV)).body.walkerKey, '未設定');
+});

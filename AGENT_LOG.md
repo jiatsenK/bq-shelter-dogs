@@ -381,6 +381,14 @@
 - 驗證：tests/index.html 新增 1 項，本機 102 項過；#79 測試寫死「隔天＝2026-09-26」，今天剛好就是那天，main 上一樣失敗；K 在決策卡選「併進 #98」，改成真正的明天（`Date.now() + 864e5`），103 項全過。本機 Chromium 截圖 320／375／390／430 寬度與放大 200%：101 隻有性別的狗圖示都和犬名第一行置中對齊、卡片沒有溢出。截圖 previews/issue-93/。iPhone 實機仍待 K 驗收。
 - 票外發現：放大 200% 時頁首日期擠成直排、「資料更新」時間被切掉、頁面橫向多出 3px。
 
+## 2026-09-26 誰遛的代號（Claude，分支 claude/project-thread-lc23xa，#94 #95 #96）
+- 依據：K 推翻「只記自己遛狗」，決策卡選「自選代號」，說「開始」。三張票同一個 PR（這個 thread 只有一個分支）；#97 清理 MY_NAME 等 K 確認後另做。
+- #94 `scripts/sync-sheet.mjs`：Secret `WALKER_KEY`，「誰遛的」每個名字 → `HMAC-SHA256` 前 12 碼（NFKC、去空白、小寫）；`dogs.json` 加 `walkers`，`walks.json` 新紀錄加 `walkers`，同一天換人也記一筆；`upgradeWalks` 把目前最後一次補上試算表的代號、舊 `mine` 紀錄補 `MY_NAME` 第一個寫法的代號，筆數不變。沒設密鑰時照舊。`mine`／`myWalked` 過渡期保留。
+- #95 `worker/src/index.js`：`POST /walker-code`（同算法、同測試向量），名字照試算表規則拆開，最多 8 個、每個 20 字，1 分鐘 20 次；首頁狀態加 `walkerKey`。
+- #96 `js/app.js`：「我溜過」沒設定時顯示「你是誰？」設定框，代號存 localStorage（WALKER_CODES_KEY），名字不存；上方「修改」、可清除；`parseMyWalks` 改看 `walkers`。
+- 文件：PHOTO_UPLOAD_SETUP（啟用步驟）、SHEET_SYNC_SETUP、VOLUNTEER_GUIDE 第 6 節、PROJECT_GOALS。
+- 驗證：node 測試（同步＋Worker）全過、tests/index.html 全過；本機截圖用真實紀錄的 mine 模擬補上代號（previews/v6-walker/）。雲端連不到 Worker 和試算表，真實同步與換代號要 K 設好密鑰後驗收。
+
 ## 2026-09-26 找狗頁：照片圖鑑、全域搜尋、平面圖（Claude，分支 claude/project-thread-j7mq5u，#99）
 - 依據：K 在「前端修改討論」串看過原型（claude.ai 私人 Artifact）後同意；籠位對照 K 確認：新A／新B／新獨＝新犬舍區、舊A／舊B＝舊犬舍區、母幼＝幼母犬舍區、C區＝幼犬舍區、住院區＝隔離區；K 要平面圖轉 90 度（先做順時針，`FIND_MAP_TURN` 可改）。
 - 新增 `js/find.js`（在 app.js、analysis.js 之後載入）：第 4 個分類「找狗」，照片兩欄／三欄、依區域分段；搜尋犬名、編號、籠位、舊編號，範圍是全部的狗；區域按鈕篩選；照片／平面圖切換，平面圖依所內看板重畫，點區域列出那區的狗。找狗不顯示未遛天數、沒有「已遛」按鈕。
