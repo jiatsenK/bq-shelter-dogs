@@ -211,7 +211,10 @@ function runTests() {
       // 相簿照片設為主照片：POST 到 /gallery/{編號}/{檔名}/main，也先拿掉
       const galleryMainCall = /fetch\(`\$\{UPLOAD_URL\}\/gallery\/\$\{encodeURIComponent\(dog\.id\)\}\/\$\{encodeURIComponent\(file\)\}\/main`, \{ method: 'POST' \}\)/;
       if (!galleryMainCall.test(APP_JS)) throw new Error('找不到設為主照片的呼叫');
-      const code = APP_JS.replace(uploadCall, '').replace(galleryCall, '').replace(noteCall, '').replace(galleryDeleteCall, '').replace(galleryMainCall, '');
+      // #96 我是誰：名字 POST 到 /walker-code 換代號（不寫任何東西），也先拿掉
+      const walkerCall = /fetch\(`\$\{UPLOAD_URL\}\/walker-code`, \{\s*method: 'POST',/;
+      if (!walkerCall.test(APP_JS)) throw new Error('找不到換代號的呼叫');
+      const code = APP_JS.replace(uploadCall, '').replace(galleryCall, '').replace(noteCall, '').replace(galleryDeleteCall, '').replace(galleryMainCall, '').replace(walkerCall, '');
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
@@ -221,7 +224,7 @@ function runTests() {
       eq(tokenHits, [], 'GitHub 憑證相關字眼：');
       // #35 起「今天已溜」存在這支手機的 localStorage，只准用 WALKED_KEY；#62 加上我的備註通關碼 NOTES_PASS_KEY
       eq([...code.matchAll(/\blocalStorage\s*[.[]|window\.localStorage/g)].length, 1, 'localStorage 只在一個地方取用：');
-      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKED_KEY', 'WALKED_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'HIDDEN_KEY', 'HIDDEN_KEY'], '只讀寫 WALKED_KEY、NOTES_PASS_KEY、HIDDEN_KEY（#79 收起）：');
+      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'HIDDEN_KEY', 'HIDDEN_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、NOTES_PASS_KEY、HIDDEN_KEY（#79 收起）：');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
       eq(urls.length, 3, 'fetch 呼叫數（上傳以外）：');
       // #32 起前端只讀 data/dogs.json，不直接連試算表；狗卡資訊也已經寫在 dogs.json 裡，不再抓 dogs/*.md
@@ -1382,36 +1385,46 @@ async function runHistoryTests() {
 
 // #58 我最近溜過：會切分類、開詳細資訊、替換 fetch，所以一項一項跑
 async function runMyWalksTests() {
-  const saved = [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState];
+  const saved = [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState, walksData, walkerSetup, UPLOAD_URL];
+  // #96 起看自己的代號：我＝ME，別人＝OTHER（假代號）；測試完把這支手機原本的設定放回去
+  const ME = 'aaaaaaaaaaaa', OTHER = 'bbbbbbbbbbbb';
+  let savedCodes = null;
+  try { savedCodes = localStorage.getItem(WALKER_CODES_KEY); } catch (e) { /* 無痕模式 */ }
   const realFetch = window.fetch;
   const main = document.getElementById('main');
   const tick = () => new Promise(r => setTimeout(r, 0));
   const dog = (name, id, walked) => ({ cage: 'A01', id, name, walkedDate: walked, covered: true, note: '', sex: '', intro: '' });
   const WALKS = { version: 1, walks: [
     { id: '8001', name: '紀錄甲', date: '2026-09-22' },                 // #56 舊紀錄，沒有 mine
-    { id: '8001', name: '紀錄甲', date: '2026-09-24', mine: true },
-    { id: '8002', name: '紀錄乙', date: '2026-09-22', mine: true },
-    { id: '8003', name: '紀錄丙', date: '2026-09-24', mine: false },    // 別人遛的
-    { id: '8002', name: '紀錄乙', date: '2026-09-26', mine: false },    // 之後別人遛了乙
-    { id: '8004', name: '已離所狗', date: '2026-09-18', mine: true },
-    { id: '8005', name: '紀錄戊', date: '2026-09-24', mine: true },
-    { id: '8001', name: '紀錄甲', date: '2026-09-24', mine: true },     // 重複
-    { id: '8006', name: '日期壞', date: '2026-02-30', mine: true },
+    { id: '8001', name: '紀錄甲', date: '2026-09-24', mine: true, walkers: [ME] },
+    { id: '8002', name: '紀錄乙', date: '2026-09-22', mine: true, walkers: [ME] },
+    { id: '8003', name: '紀錄丙', date: '2026-09-24', mine: false, walkers: [OTHER] },    // 別人遛的
+    { id: '8002', name: '紀錄乙', date: '2026-09-26', mine: false, walkers: [OTHER] },    // 之後別人遛了乙
+    { id: '8004', name: '已離所狗', date: '2026-09-18', mine: true, walkers: [ME] },
+    { id: '8005', name: '紀錄戊', date: '2026-09-24', mine: true, walkers: [ME] },
+    { id: '8001', name: '紀錄甲', date: '2026-09-24', mine: true, walkers: [ME] },     // 重複
+    { id: '8006', name: '日期壞', date: '2026-02-30', mine: true, walkers: [ME] },
+    { id: '8003', name: '紀錄丙', date: '2026-09-23', mine: true },      // #94 前的舊紀錄還沒補代號：不算
+    { id: '8003', name: '紀錄丙', date: '2026-09-21', walkers: [OTHER, ME.toUpperCase()] }, // 代號大小寫不同：不算
   ] };
   const heads = () => [...main.querySelectorAll('.walk-date')].map(h => h.firstChild.textContent);
   const cardNames = () => [...main.querySelectorAll('.mine-dog .bname')].map(n => n.textContent);
   const setup = () => {
     allDogs = [dog('紀錄甲', '8001', new Date(2026, 8, 24)), dog('紀錄乙', '8002', new Date(2026, 8, 26)),
       dog('紀錄丙', '8003', null), dog('紀錄戊', '8005', new Date(2026, 8, 24))];
-    groupMap = {}; searchQuery = '';
+    groupMap = {}; searchQuery = ''; walkerSetup = null;
+    walksData = WALKS;
+    saveMyCodes([ME]);
     myWalks = parseMyWalks(WALKS); myWalksState = 'ready';
     activeTab = 'mine'; render();
   };
   try {
-    await check('#58 只取我遛的紀錄：去重、丟掉不合理日期，新到舊', () => {
-      eq(parseMyWalks(WALKS).map(w => `${w.ymd} ${w.name}`),
+    await check('#58 只取我遛的紀錄（#96 看代號）：去重、丟掉不合理日期，新到舊', () => {
+      eq(parseMyWalks(WALKS, [ME]).map(w => `${w.ymd} ${w.name}`),
         ['2026-09-24 紀錄戊', '2026-09-24 紀錄甲', '2026-09-22 紀錄乙', '2026-09-18 已離所狗']);
-      eq(parseMyWalks({ version: 1, walks: [] }), []);
+      eq(parseMyWalks({ version: 1, walks: [] }, [ME]), []);
+      eq(parseMyWalks(WALKS, [OTHER]).map(w => `${w.ymd} ${w.name}`), ['2026-09-26 紀錄乙', '2026-09-24 紀錄丙', '2026-09-21 紀錄丙'], '別人看到的是別人的：');
+      eq(parseMyWalks(WALKS, []), [], '沒設定：');
       let threw = false;
       try { parseMyWalks({}); } catch { threw = true; }
       eq(threw, true, '格式不對要丟錯：');
@@ -1432,7 +1445,7 @@ async function runMyWalksTests() {
     await check('#58 我溜過不顯示備註；第一次遛的狗標「第一次」；上方有這個月小計', () => {
       setup();
       allDogs[0].note = '勿溜，測試用備註';
-      myWalks = parseMyWalks({ version: 1, walks: [...WALKS.walks, { id: '8001', name: '紀錄甲', date: '2026-09-26', mine: true }] });
+      myWalks = parseMyWalks({ version: 1, walks: [...WALKS.walks, { id: '8001', name: '紀錄甲', date: '2026-09-26', mine: true, walkers: [ME] }] });
       render();
       eq(main.querySelectorAll('.warn-note, .card.flagged, mark').length, 0, '備註：');
       if (main.textContent.includes('測試用備註')) throw new Error('不該出現備註文字');
@@ -1450,7 +1463,7 @@ async function runMyWalksTests() {
     await check('#58 不選日期：所有到所紀錄一路往下排（跨月也是）', () => {
       setup();
       eq(document.getElementById('mineDate'), null, '沒有日期選擇：');
-      myWalks = parseMyWalks({ version: 1, walks: [...WALKS.walks, { id: '8002', name: '紀錄乙', date: '2026-08-05', mine: true }] });
+      myWalks = parseMyWalks({ version: 1, walks: [...WALKS.walks, { id: '8002', name: '紀錄乙', date: '2026-08-05', mine: true, walkers: [ME] }] });
       render();
       eq(heads(), ['2026/09/24（四）', '2026/09/22（二）', '2026/09/18（五）', '2026/08/05（三）'], '日期標題：');
     });
@@ -1463,10 +1476,11 @@ async function runMyWalksTests() {
       eq(cardNames(), ['紀錄甲'], '搜尋：');
       searchQuery = '';
     });
-    await check('#58 還沒有紀錄：顯示從哪天開始記錄', () => {
+    await check('#58 還沒有紀錄：提示試算表要寫設定的名字', () => {
       setup();
       myWalks = []; render();
-      if (!main.textContent.includes('從 2026/9/25 開始記錄，目前還沒有資料')) throw new Error(main.textContent);
+      if (!main.textContent.includes('還沒有你的遛狗紀錄')) throw new Error(main.textContent);
+      eq(!!document.getElementById('whoEdit'), true, '可以修改我是誰：');
     });
     await check('#58 讀 data/walks.json；讀不到顯示錯誤，可重新讀取', async () => {
       setup();
@@ -1486,14 +1500,74 @@ async function runMyWalksTests() {
       const list = parseMyWalks(data);
       if (!Array.isArray(data.walks)) throw new Error('walks.json 沒有 walks');
       // walks.json 每筆只能有編號、犬名、日期、是不是我遛的
-      const extra = data.walks.flatMap(w => Object.keys(w)).filter(k => !['id', 'name', 'date', 'mine'].includes(k));
+      const extra = data.walks.flatMap(w => Object.keys(w)).filter(k => !['id', 'name', 'date', 'mine', 'walkers'].includes(k));
       eq([...new Set(extra)], [], 'walks.json 多出的欄位：');
+      // #94 walkers 只能是 12 碼代號，不能是名字
+      const bad = data.walks.filter(w => 'walkers' in w && !(Array.isArray(w.walkers) && w.walkers.every(c => /^[0-9a-f]{12}$/.test(c))));
+      eq(bad, [], 'walkers 不是代號：');
       eq(list.every(w => w.ymd && w.date), true, '日期：');
+    });
+    await check('#96 還沒設定我是誰：我溜過顯示設定框、分類不顯示數字；名字只換代號不存', async () => {
+      setup();
+      saveMyCodes([]); render();
+      eq(!!document.getElementById('whoForm'), true, '設定框：');
+      eq(document.querySelector('#tabs button[data-tab="mine"] .n').textContent, '', '分類數字：');
+      eq(main.querySelectorAll('.visit').length, 0, '不列紀錄：');
+      eq(document.getElementById('whoClear'), null, '沒設定過不顯示清除：');
+      UPLOAD_URL = 'https://worker.test';
+      const calls = [];
+      window.fetch = async (url, init) => { calls.push([String(url), init && init.method, init && JSON.parse(init.body)]); return new Response(JSON.stringify({ ok: true, codes: [ME] }), { headers: { 'Content-Type': 'application/json' } }); };
+      const input = document.getElementById('whoInput');
+      input.value = '測試志工、小測';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('whoSave').click();
+      await tick(); await tick(); await tick();
+      eq(calls, [['https://worker.test/walker-code', 'POST', { names: ['測試志工、小測'] }]], '送給 Worker：');
+      eq(loadMyCodes(), [ME], '記住代號：');
+      let stored = '';
+      try { stored = localStorage.getItem(WALKER_CODES_KEY) || ''; } catch (e) { /* 無痕模式 */ }
+      if (stored.includes('測試志工')) throw new Error('名字不該存在手機');
+      eq(cardNames().length, 4, '設定後列出我的紀錄：');
+      eq(document.querySelector('#tabs button[data-tab="mine"] .n').textContent, '4', '分類數字：');
+    });
+    await check('#96 換代號失敗：保留輸入的名字並顯示原因；沒輸入不送出', async () => {
+      setup();
+      saveMyCodes([]); render();
+      UPLOAD_URL = 'https://worker.test';
+      let n = 0;
+      window.fetch = async () => { n++; return new Response(JSON.stringify({ ok: false, error: '太頻繁了，請稍等一下再試' }), { status: 429 }); };
+      document.getElementById('whoSave').click();
+      await tick();
+      eq(n, 0, '空白不送：');
+      if (!main.textContent.includes('請輸入你在試算表寫的名字')) throw new Error(main.textContent);
+      const input = document.getElementById('whoInput');
+      input.value = '測試志工';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('whoSave').click();
+      await tick(); await tick(); await tick();
+      eq(n, 1, '送出：');
+      if (!main.textContent.includes('太頻繁了')) throw new Error(main.textContent);
+      eq(document.getElementById('whoInput').value, '測試志工', '保留名字：');
+      eq(loadMyCodes(), [], '沒記代號：');
+    });
+    await check('#96 修改、取消、清除這支手機的設定', () => {
+      setup();
+      document.getElementById('whoEdit').click();
+      eq(!!document.getElementById('whoForm'), true, '按修改出現設定框：');
+      document.getElementById('whoCancel').click();
+      eq(cardNames().length, 4, '取消回到紀錄：');
+      document.getElementById('whoEdit').click();
+      document.getElementById('whoClear').click();
+      eq(loadMyCodes(), [], '清除：');
+      eq(!!document.getElementById('whoForm'), true, '清除後回到設定框：');
+      eq(document.getElementById('whoCancel'), null, '清除後沒有取消：');
     });
   } finally {
     window.fetch = realFetch;
     hideDetail();
-    [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState] = saved;
+    [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState, walksData, walkerSetup, UPLOAD_URL] = saved;
+    walkerCodesMemory = null;
+    try { if (savedCodes == null) localStorage.removeItem(WALKER_CODES_KEY); else localStorage.setItem(WALKER_CODES_KEY, savedCodes); } catch (e) { /* 無痕模式 */ }
     render();
   }
 }
@@ -2011,8 +2085,14 @@ async function runFirstScreenTests() {
     });
     await check('#91 walks.json 讀完：在溜狗表只更新「我溜過」的數字，照片元素不換掉', async () => {
       const first = document.querySelector('#main .card .thumb img');
-      window.fetch = async () => new Response(JSON.stringify({ version: 1, walks: [{ id: '9700', name: '首屏0', date: '2026-09-24', mine: true }] }));
-      await loadMyWalks();
+      window.fetch = async () => new Response(JSON.stringify({ version: 1, walks: [{ id: '9700', name: '首屏0', date: '2026-09-24', mine: true, walkers: ['aaaaaaaaaaaa'] }] }));
+      walkerCodesMemory = ['aaaaaaaaaaaa'];
+      let savedCodes = null;
+      try { savedCodes = localStorage.getItem(WALKER_CODES_KEY); localStorage.removeItem(WALKER_CODES_KEY); } catch (e) { /* 無痕模式 */ }
+      try { await loadMyWalks(); } finally {
+        walkerCodesMemory = null;
+        try { if (savedCodes != null) localStorage.setItem(WALKER_CODES_KEY, savedCodes); } catch (e) { /* 無痕模式 */ }
+      }
       eq(document.querySelector('#main .card .thumb img'), first, '同一個照片元素：');
       eq(document.querySelector('#tabs [data-tab="mine"] .n').textContent, '1', '我溜過數字：');
     });
