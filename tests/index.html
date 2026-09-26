@@ -2016,6 +2016,19 @@ async function runFirstScreenTests() {
     check('#91 不載入 Google Fonts，改用手機內建字型', () => {
       if (/fonts\.googleapis|fonts\.gstatic/.test(INDEX_HTML)) throw new Error('index.html 還在載入 Google Fonts');
     });
+    check('#93 性別用內嵌 SVG 圖示、有可讀標籤，不再用 ♂♀ 文字', () => {
+      const box = document.createElement('div');
+      const mark = sex => { box.innerHTML = sexMark({ sex }); return box.querySelector('.sex'); };
+      eq(mark('♂').querySelector('use').getAttribute('href'), '#i-male', '♂ 圖示：');
+      eq(mark('♂').getAttribute('aria-label'), '公', '♂ 標籤：');
+      eq(mark('♀').querySelector('use').getAttribute('href'), '#i-female', '♀ 圖示：');
+      eq(mark('♀').getAttribute('aria-label'), '母', '♀ 標籤：');
+      if (/[♂♀]/.test(mark('♂').textContent + mark('♀').textContent)) throw new Error('不應再用 ♂♀ 文字');
+      eq(mark('').innerHTML, '', '沒有性別不放內容：');
+      for (const id of ['i-male', 'i-female']) {
+        if (!INDEX_HTML.includes(`<symbol id="${id}"`)) throw new Error(`index.html 缺 ${id} 圖示`);
+      }
+    });
   } finally {
     window.fetch = realFetch;
     [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState, walkedStorage, walkedMemory] = saved;
