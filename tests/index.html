@@ -2181,7 +2181,31 @@ async function runFindTests() {
       const html = findCard(allDogs[0], '', false);
       if (/data-walk|上次遛狗|天前/.test(html)) throw new Error(html);
     });
+    await check('#102 平面圖放大：全螢幕畫直的、－／＋ 調大小、點區域關掉並選那一區', () => {
+      findView = 'map'; findZone = 'all'; activeTab = 'find'; searchQuery = '';
+      render();
+      document.getElementById('findZoomOpen').click();
+      const box = document.getElementById('findZoom');
+      eq(box.hidden, false, '打開：');
+      const [, , w, h] = box.querySelector('.find-zoom-map svg').getAttribute('viewBox').split(' ').map(Number);
+      if (!(h > w)) throw new Error(`全螢幕要直的，viewBox ${w}×${h}`);
+      eq(box.querySelector('[data-zoom-step="-1"]').disabled, true, '最小時不能再縮：');
+      box.querySelector('[data-zoom-step="1"]').click();
+      eq(box.querySelector('.find-zoom-pct').textContent, '150%', '放大一級：');
+      eq(box.querySelector('.find-zoom-map').style.width, '150%', '地圖寬度：');
+      box.querySelector('g[data-find-zone="iso"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      eq([box.hidden, findZone, findView, activeTab], [true, 'iso', 'map', 'find'], '點隔離區：');
+      const pageMap = document.querySelector('#main svg.find-map');
+      if (!pageMap) throw new Error('頁面上沒有平面圖：' + document.getElementById('main').innerHTML.slice(0, 200));
+      const [, , mw, mh] = pageMap.getAttribute('viewBox').split(' ').map(Number);
+      if (!(mw > mh)) throw new Error('頁面上的平面圖仍是橫的');
+      if (!INDEX_HTML.includes('<symbol id="i-zoom"')) throw new Error('index.html 缺 i-zoom 圖示');
+    });
   } finally {
+    const box = document.getElementById('findZoom');
+    if (box) box.remove();
+    findZoomState = null;
+    document.documentElement.classList.remove('find-zoom-open');
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone] = saved;
   }
 }

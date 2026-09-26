@@ -990,3 +990,35 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
   border: none; background: var(--surface); color: var(--primary); border-radius: 12px; cursor: pointer;
   font-family: inherit; font-size: 14px; font-weight: 700; padding: 8px 12px; box-shadow: var(--shadow-card);
 }
+
+/* 平面圖放大（#102）：地圖右下角「放大」、詳細資訊小地圖可點；全螢幕跟看板同色，－／＋ 調大小 */
+.find-map-foot { display: flex; align-items: flex-start; gap: 10px; }
+.find-map-foot .find-map-hint { flex: 1; min-width: 0; }
+.find-zoom-btn {
+  flex-shrink: 0; margin-top: 8px; display: flex; align-items: center; gap: 5px;
+  border: none; background: #1F3A5C; color: #EFE6D6; border-radius: 999px; cursor: pointer;
+  font-family: inherit; font-size: 14px; font-weight: 700; padding: 8px 14px 8px 12px;
+}
+.find-zoom-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.find-where-map { border: none; background: none; padding: 0; cursor: zoom-in; flex-shrink: 0; border-radius: 12px; }
+.find-where-map:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+html.find-zoom-open { overflow: hidden; }
+.find-zoom { position: fixed; inset: 0; z-index: 60; background: #1F3A5C; color: #EFE6D6; display: flex; flex-direction: column; }
+.find-zoom[hidden] { display: none; }
+.find-zoom-bar {
+  display: flex; align-items: center; gap: 6px;
+  padding: calc(10px + env(safe-area-inset-top, 0px)) 12px 10px 16px;
+  border-bottom: 1px solid rgba(239, 230, 214, 0.25);
+}
+.find-zoom-title { flex: 1; min-width: 0; font-size: 15px; font-weight: 700; letter-spacing: 0.05em; }
+.find-zoom-bar button {
+  width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(239, 230, 214, 0.5); background: transparent; color: inherit;
+  font-family: inherit; font-size: 20px; font-weight: 700; display: flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.find-zoom-bar button:disabled { opacity: 0.35; cursor: default; }
+.find-zoom-bar button:focus-visible { outline: 2px solid #EFE6D6; outline-offset: 2px; }
+.find-zoom-bar .find-zoom-close { margin-left: 6px; font-size: 18px; }
+.find-zoom-pct { min-width: 44px; text-align: center; font-size: 13px; font-variant-numeric: tabular-nums; }
+.find-zoom-scroll { flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; padding: 8px 8px calc(16px + env(safe-area-inset-bottom, 0px)); }
+.find-zoom-map { min-width: 100%; margin: 0 auto; }
+.find-zoom-map .find-map { max-width: none; max-height: none; width: 100%; }
