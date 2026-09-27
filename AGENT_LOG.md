@@ -422,3 +422,9 @@
 - `docs/PHOTO_UPLOAD_SETUP.md` 加 K 的啟用步驟：token 多開 Actions 讀寫、重貼 Worker、Cloudflare 加 Cron Trigger、到 Actions 看 workflow_dispatch 確認。GitHub 自己的 17、47 分排程留著當備援；`sync-sheet.yml` 註解、`docs/PROJECT_GOALS.md` 同步改。
 - 驗證：`node --test scripts/sync-sheet.test.mjs worker/test/worker.test.mjs` 76 項全過（新增 1 項，用假 GitHub）。真的 Cloudflare 排程要 K 設定後看 Actions 頁確認。
 - 追加：K 問「畫面裡面可不可以有一個叫他更新的 icon」。頁首分析圖示左邊加「更新」圓箭頭：按了 POST Worker `/sync`（同一個人 2 分鐘 1 次）叫 GitHub 同步，每 15 秒讀一次 dogs.json，`syncedAt` 變新就換上資料並提示「資料已更新」，等 4 分鐘沒變就說「已是最新」。`js/app.js` 把換資料抽成 `applyDogsData`；`index.html` 加 `i-refresh`；`css/app.css` 轉圈樣式；說明檔補上。tests/index.html 新增 4 項（#10 唯讀檢查允許 `/sync`），本機 119 項全過；Worker 測試 77 項全過。截圖 previews/sync-button/。
+
+## 2026-09-27 找狗平面圖逐籠標示（Claude，分支 claude/project-thread-vtu94y）
+- 依據：K 貼手繪標註的看板圖（舊犬舍 A11–21／A1–10／B1–10／B11–21，新犬舍新B、新A、新獨三排），說籠子都一樣大、只有新獨比較窄。
+- `js/find.js`：舊犬舍、新犬舍畫出每一籠（籠號標在格子上，有狗的籠子淡色底；搜尋時只亮找到的）；區名和隻數改成一行放在籠子上方。新獨照試算表畫 12 籠。詳細資訊小地圖和從小地圖開的全螢幕，用橘色標出這隻狗的那一籠。`css/app.css` 籠子樣式。
+- 驗證：tests/index.html 新增 1 項，本機 122 項全過；本機 Chromium 390 寬度截圖在專案檔案 previews/cage-map/。
+- 追加：K 問「業界會怎麼做？」照常見的籠位圖做法再改：點一個籠子只列那籠的狗（標題「新犬舍區・新B8」，再點一次回整區；全螢幕點籠子也一樣）；搜尋時找到的籠子亮橘色、其他籠子淡掉；空籠畫虛線、有狗的實心。tests/index.html 再加 1 項，本機 123 項全過；截圖 previews/cage-map/cage-picked.png、search.png。
