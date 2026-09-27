@@ -411,6 +411,11 @@
 - 查到的原因：同步 Action 排在每個整點，但 GitHub 整點排程常被延遲或整次丟掉；9/27 台灣 7:00–13:00 只在 9:16 跑了一次（前一天也只跑了幾次）。程式本身每次都成功。
 - 處理：當下手動跑一次同步補上；`.github/workflows/sync-sheet.yml` 排程改成每小時 17 分、47 分各一次（避開整點、跳過一次還有下一次）；`docs/PROJECT_GOALS.md`、`docs/VOLUNTEER_GUIDE.md` 頻率說明同步改。
 
+## 2026-09-27 詳細資訊顯示同籠的狗（Claude，分支 claude/project-thread-ozaxl4）
+- 依據：K 說「同籠的要跟一起溜名單一樣可以顯示」。
+- `js/app.js`：詳細資訊在「可以一起溜的狗」上方加「同籠的狗」，用籠位欄位判斷（忽略空白、不含自己；住院區、C區這種「○○區」是整區不算同籠）；格子沿用一起溜的樣子，點照片換看那隻、右上角圓圈勾選後用下方按鈕一起記。沒有同籠的狗整段不顯示。
+- `tests/index.html`：追加同籠測試。截圖在專案檔案 previews/cage-mates/。
+
 ## 2026-09-27 改由 Cloudflare Worker 準時叫同步（Claude，分支 claude/project-thread-y4s4a4）
 - 依據：PR #105 合併後，14:17、14:47 兩次 GitHub 排程還是都沒跑；K 問「有沒有了」。當下手動同步一次補上（14:58）。
 - `worker/src/index.js` 加 `scheduled`：Cloudflare Cron Trigger 時間到就呼叫 GitHub `actions/workflows/sync-sheet.yml/dispatches`（main）；失敗丟錯誤，Cloudflare 紀錄看得到。`worker/wrangler.toml` 加 crons `0,30 23,0-14 * * *`（台灣 7:00–22:30 每 30 分）。

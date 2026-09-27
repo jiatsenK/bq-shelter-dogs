@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-09-27T13:24:18+08:00",
+  "syncedAt": "2026-09-27T14:58:04+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -909,12 +909,13 @@
       "cage": "新B08",
       "id": "2019121309",
       "name": "荷包蛋",
-      "walkedDate": "2026-09-23",
+      "walkedDate": "2026-09-27",
       "covered": true,
       "myWalked": false,
       "walkers": [
         "da53fbdda293",
-        "044328805855"
+        "044328805855",
+        "a2b179095490"
       ],
       "note": "龜縮在椅子底下，我伸手進去套繩沒有咬人（嘉文）2026/5/20洗澡(msi)",
       "sex": "male",
@@ -925,12 +926,13 @@
       "cage": "新B08",
       "id": "2022030205",
       "name": "小偉",
-      "walkedDate": "2026-09-23",
+      "walkedDate": "2026-09-27",
       "covered": true,
       "myWalked": false,
       "walkers": [
         "da53fbdda293",
-        "044328805855"
+        "044328805855",
+        "a2b179095490"
       ],
       "note": "右前腳有傷口,有擦藥(嘉文）2026/5/20洗澡(msi)",
       "sex": "male",
@@ -941,12 +943,13 @@
       "cage": "新B08",
       "id": "2018041304",
       "name": "小惠",
-      "walkedDate": "2026-09-23",
+      "walkedDate": "2026-09-27",
       "covered": true,
       "myWalked": false,
       "walkers": [
         "da53fbdda293",
-        "044328805855"
+        "044328805855",
+        "a2b179095490"
       ],
       "note": "2026/5/20洗澡(msi)",
       "sex": "female",
@@ -957,12 +960,13 @@
       "cage": "新B08",
       "id": "2026051203",
       "name": "圓仔",
-      "walkedDate": "2026-09-23",
+      "walkedDate": "2026-09-27",
       "covered": true,
       "myWalked": false,
       "walkers": [
         "da53fbdda293",
-        "044328805855"
+        "044328805855",
+        "a2b179095490"
       ],
       "note": "原編號2018041318",
       "sex": "female",
@@ -1066,11 +1070,12 @@
       "cage": "舊A03",
       "id": "2017090505",
       "name": "黑森林",
-      "walkedDate": "2026-09-22",
+      "walkedDate": "2026-09-27",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "044328805855",
+        "a2b179095490"
       ],
       "note": "2025/10/26脖子處有脫毛；2025/8/24洗澡;2026/3/10在住院區，據說腳趾（狼爪)有做麻醉醫療（嘉文）；2026/3/24拆線（嘉文）",
       "sex": "male",
@@ -1081,11 +1086,12 @@
       "cage": "舊A03",
       "id": "2024022801",
       "name": "JOJO",
-      "walkedDate": "2026-09-22",
+      "walkedDate": "2026-09-27",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "044328805855",
+        "a2b179095490"
       ],
       "note": "2025/8/24洗澡",
       "sex": "male",
@@ -1141,12 +1147,12 @@
       "cage": "舊A07",
       "id": "2018041317",
       "name": "IU",
-      "walkedDate": "2026-09-23",
+      "walkedDate": "2026-09-27",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293",
-        "044328805855"
+        "044328805855",
+        "a2b179095490"
       ],
       "note": "",
       "sex": "female",
@@ -1157,12 +1163,12 @@
       "cage": "舊A08",
       "id": "2024052201",
       "name": "太郎",
-      "walkedDate": "2026-09-23",
+      "walkedDate": "2026-09-27",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293",
-        "044328805855"
+        "044328805855",
+        "a2b179095490"
       ],
       "note": "套繩、解繩要小心，會回頭咬（俐葶）梳毛會生氣(秀玉)",
       "sex": "male",
@@ -1368,11 +1374,11 @@
       "cage": "舊A20",
       "id": "2025072001",
       "name": "天狼星",
-      "walkedDate": "2026-09-23",
+      "walkedDate": "2026-09-27",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "044328805855"
+        "da53fbdda293"
       ],
       "note": "",
       "sex": "",
@@ -1531,7 +1537,7 @@
       "cage": "舊B14",
       "id": "2020112402",
       "name": "小新",
-      "walkedDate": "2026-09-23",
+      "walkedDate": "2026-09-27",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1651,7 +1657,7 @@
       "cage": "C區11",
       "id": "2021030913",
       "name": "咪寶",
-      "walkedDate": "2026-09-24",
+      "walkedDate": "2026-09-27",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1696,11 +1702,11 @@
       "cage": "C區21",
       "id": "2023052902",
       "name": "妙麗",
-      "walkedDate": "2026-09-26",
+      "walkedDate": "2026-09-27",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "a2b179095490"
       ],
       "note": "頸部有腫瘤，不要用p繩，要穿淑萍給的胸背才帶出（嘉文）註：胸背放在住院區箱子裡",
       "sex": "female",
