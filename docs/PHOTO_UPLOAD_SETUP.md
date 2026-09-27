@@ -162,6 +162,24 @@ https://bq-shelter-photos.你的帳號名稱.workers.dev
 - `POST /walker-code`，內容 `{ "names": ["小明、明明"] }`（`Content-Type: application/json`）。每個字串再照試算表的規則拆開（頓號、逗號、斜線、空白等），最多 8 個名字、每個 20 字。成功回 `{ "ok": true, "codes": ["...", "..."] }`（12 碼十六進位，不重複）。同一個人 1 分鐘最多 20 次。沒設定 `WALKER_KEY` 回 500。
 - 算法：名字全形半形統一（NFKC）、去掉空白、英文轉小寫，`HMAC-SHA256(WALKER_KEY, 名字)` 取前 12 碼。跟 `scripts/sync-sheet.mjs` 的 `walkerCode` 一樣，兩邊的測試用同一組測試向量確認。
 
+## 準時同步試算表（Cloudflare 定時叫 GitHub）
+
+GitHub 自己的定時同步常被跳過（2026-09-27 從早上到下午只跑了一次），網站就一直是舊的。所以改由這個 Worker 當鬧鐘：台灣時間 7:00–22:30 每 30 分鐘叫 GitHub 跑一次「同步試算表」。GitHub 原本的排程（每小時 17、47 分）留著當備援。
+
+### 啟用步驟（這次 PR 合併後做一次）
+
+1. **讓 token 可以叫同步**：GitHub 右上角頭像 → **Settings** → 左邊最下面 **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → 點 `板收照片上傳` → **Edit**。
+   在 **Repository permissions** 找到 **Actions**，改成 **Read and write**，拉到最下面按 **Update**。token 那串字不會變，Cloudflare 的 `GITHUB_TOKEN` 不用動。
+2. **重新貼程式**：照上面「步驟 3」的 4–7，把 Worker 程式換成最新的 `worker/src/index.js`，按 **Deploy**。
+3. **設定鬧鐘**：Cloudflare 的 `bq-shelter-photos` → **Settings** → **Trigger Events**（舊版畫面叫 **Triggers**）→ **Add** → **Cron Triggers**。
+   選自訂寫法（Cron expression），貼上下面這串，按 **Add**（或 Deploy）：
+   ```
+   0,30 23,0-14 * * *
+   ```
+   這串是 UTC 時間，換成台灣時間就是每天 7:00–22:30、每個整點和半點。
+4. **確認**：等到下一個整點或半點過後幾分鐘，打開 GitHub repo 的 **Actions** → **同步試算表**，最上面應該有一筆新的綠勾勾，觸發方式寫 `workflow_dispatch`。
+   如果是紅叉叉或沒有出現：Cloudflare 的 Worker 頁面 → **Logs**／**Cron Events** 會看到「叫同步失敗（GitHub 403）」之類的訊息，多半是第 1 步的 Actions 權限沒存到，回去再檢查一次。
+
 ## 給用命令列的人
 
 `worker/wrangler.toml` 已經設定好，在 `worker/` 資料夾執行：

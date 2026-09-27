@@ -669,3 +669,21 @@ test('#95 首頁狀態顯示代號密鑰設了沒', async () => {
   assert.equal(r.body.walkerKey, '已設定');
   assert.equal((await send(new Request('https://x.workers.dev/'), ENV)).body.walkerKey, '未設定');
 });
+
+test('定時叫同步：POST workflow dispatch（main），GitHub 不是 204 或沒 token 就丟錯', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    calls.push({ path: new URL(url).pathname, method: init.method, headers: init.headers, body: JSON.parse(init.body) });
+    return new Response(null, { status: 204 });
+  };
+  const waits = [];
+  await worker.scheduled({}, ENV, { waitUntil: p => waits.push(p) });
+  assert.equal(await waits[0], 204);
+  assert.deepEqual(calls.map(c => [c.method, c.path]), [['POST', '/repos/jiatsenK/bq-shelter-dogs/actions/workflows/sync-sheet.yml/dispatches']]);
+  assert.deepEqual(calls[0].body, { ref: 'main' });
+  assert.equal(calls[0].headers.Authorization, 'Bearer test-token');
+
+  globalThis.fetch = async () => new Response('{}', { status: 403 });
+  await assert.rejects(worker.testing.triggerSync(ENV), /GitHub 403/);
+  await assert.rejects(worker.testing.triggerSync({}), /GITHUB_TOKEN/);
+});

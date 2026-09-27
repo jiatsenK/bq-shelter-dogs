@@ -410,3 +410,9 @@
 - 依據：K 說今天已經有人遛狗，網站都沒更新。
 - 查到的原因：同步 Action 排在每個整點，但 GitHub 整點排程常被延遲或整次丟掉；9/27 台灣 7:00–13:00 只在 9:16 跑了一次（前一天也只跑了幾次）。程式本身每次都成功。
 - 處理：當下手動跑一次同步補上；`.github/workflows/sync-sheet.yml` 排程改成每小時 17 分、47 分各一次（避開整點、跳過一次還有下一次）；`docs/PROJECT_GOALS.md`、`docs/VOLUNTEER_GUIDE.md` 頻率說明同步改。
+
+## 2026-09-27 改由 Cloudflare Worker 準時叫同步（Claude，分支 claude/project-thread-y4s4a4）
+- 依據：PR #105 合併後，14:17、14:47 兩次 GitHub 排程還是都沒跑；K 問「有沒有了」。當下手動同步一次補上（14:58）。
+- `worker/src/index.js` 加 `scheduled`：Cloudflare Cron Trigger 時間到就呼叫 GitHub `actions/workflows/sync-sheet.yml/dispatches`（main）；失敗丟錯誤，Cloudflare 紀錄看得到。`worker/wrangler.toml` 加 crons `0,30 23,0-14 * * *`（台灣 7:00–22:30 每 30 分）。
+- `docs/PHOTO_UPLOAD_SETUP.md` 加 K 的啟用步驟：token 多開 Actions 讀寫、重貼 Worker、Cloudflare 加 Cron Trigger、到 Actions 看 workflow_dispatch 確認。GitHub 自己的 17、47 分排程留著當備援；`sync-sheet.yml` 註解、`docs/PROJECT_GOALS.md` 同步改。
+- 驗證：`node --test scripts/sync-sheet.test.mjs worker/test/worker.test.mjs` 76 項全過（新增 1 項，用假 GitHub）。真的 Cloudflare 排程要 K 設定後看 Actions 頁確認。
