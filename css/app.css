@@ -974,6 +974,15 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
 .find-map.mini .fm-frame { stroke-width: 5; }
 .find-map.mini .fm-frame2 { stroke-width: 3; }
 .find-map.mini .fm-zone.dim { opacity: 1; }
+.fm-zone rect.fm-cage { fill: none; stroke: var(--fm-soft); stroke-width: 0.8; }
+.fm-zone rect.fm-cage.has { fill: rgba(239, 230, 214, 0.16); }
+.fm-zone.sel rect.fm-cage { stroke: rgba(31, 58, 92, 0.45); }
+.fm-zone.sel rect.fm-cage.has { fill: rgba(31, 58, 92, 0.12); }
+.find-map .fm-zone rect.fm-cage.on { fill: #F0A73C; stroke: #F0A73C; stroke-width: 1.5; }
+.find-map.mini .fm-zone rect.fm-cage.on { stroke-width: 10; }
+.fm-zone .fm-cn { font-size: 8px; font-weight: 600; opacity: 0.75; }
+.fm-zone .fm-cn.on { fill: var(--fm-bg); opacity: 1; }
+.fm-n-s { font-size: 15px; }
 .find-map-hint { font-size: 13px; color: var(--ink-soft); margin: 10px 2px 0; }
 .find-unmapped { margin-top: 10px; background: var(--amber-bg); color: var(--amber-text); border-radius: 12px; padding: 10px 12px; font-size: 13px; line-height: 1.6; }
 .find-unmapped button {
