@@ -271,7 +271,7 @@ function findMapHtml(query) {
   let html = `<div class="find-map-card">
     ${findMapSvg(selected, query, false, FIND_MAP_TURN, findCage)}
     <div class="find-map-foot">
-      <p class="find-map-hint">點一個區域或一個籠子，下面列出那裡的狗。圖是照所內看板重畫的相對位置。</p>
+      <p class="find-map-hint">點區域或籠子，下面會列出那裡的狗。</p>
       <button type="button" class="find-zoom-btn" id="findZoomOpen" aria-label="全螢幕放大平面圖">${icon('zoom')}放大</button>
     </div>
     ${unmapped.length ? `<div class="find-unmapped">這些籠位還不知道在圖上哪裡：${unmapped.map(z =>
@@ -295,10 +295,10 @@ function findPageHtml(query) {
   const list = findList(query);
   if (!list.length) {
     return bar + `<div class="status-msg">${query
-      ? `找不到「${esc(query)}」<br>試試犬名的一個字、編號後四碼，或籠位（例：新A03）。`
+      ? `找不到「${esc(query)}」<br>試試狗名的一個字、編號後四碼，或籠位（例：新A03）。`
       : '這區目前沒有狗'}</div>`;
   }
-  const hint = query ? `<div class="section-hint">${icon('search')}搜尋「${esc(query)}」：${list.length} 隻（找全部的狗，包含今天已溜和收起的）</div>` : '';
+  const hint = query ? `<div class="section-hint">${icon('search')}「${esc(query)}」找到 ${list.length} 隻（含今天已溜、已收起）</div>` : '';
   return bar + hint + findGridHtml(list, query);
 }
 
