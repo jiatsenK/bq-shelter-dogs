@@ -2158,9 +2158,12 @@ async function runSyncButtonTests() {
       eq(toast(), '試算表沒有新的紀錄，目前已是最新');
       const calls = fakeNet(502, [dogsFile('2026-09-27T16:00:00+08:00', '不該換')]);
       await requestSync(btn, { pollMs: 0, tries: 3 });
-      eq(toast(), '更新失敗，請稍後再試');
+      eq(toast(), '更新失敗：HTTP 502', '沒有原因只顯示狀態碼：');
       eq(calls, ['POST W/sync'], '失敗不讀 dogs.json：');
       eq(allDogs.map(d => d.name), ['新狗']);
+      window.fetch = async () => new Response(JSON.stringify({ ok: false, error: '叫同步失敗（GitHub 403）' }), { status: 502 });
+      await requestSync(btn, { pollMs: 0, tries: 1 });
+      eq(toast(), '更新失敗：叫同步失敗（GitHub 403）', 'Worker 說的原因：');
     });
     await check('更新按鈕：剛按過（429）還是會等新資料', async () => {
       fakeNet(429, [dogsFile('2026-09-27T16:30:00+08:00', '再新')]);
