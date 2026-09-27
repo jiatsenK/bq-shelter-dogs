@@ -2258,6 +2258,27 @@ async function runFindTests() {
       if (!(mw > mh)) throw new Error('頁面上的平面圖仍是橫的');
       if (!INDEX_HTML.includes('<symbol id="i-zoom"')) throw new Error('index.html 缺 i-zoom 圖示');
     });
+    await check('逐籠平面圖（K 2026-09-27 手繪標註）：舊犬舍四排、新犬舍三排，詳細資訊小地圖標出那一籠', () => {
+      eq(allDogs.map(findCageOf), ['新A3', '新獨12', '新B10', '舊B4', null, null, null, null], '籠位對到籠子：');
+      const ids = FIND_CAGES.cages.map(c => c.id);
+      eq([ids.filter(i => i.startsWith('舊')).length, ids.filter(i => i.startsWith('新')).length], [42, 32], '籠子數：');
+      // 橫的看板座標：x 由左到右、y 由上到下
+      const land = id => findToLand(FIND_CAGES.cages.find(c => c.id === id).rect);
+      const [a11, a21, a1, a10, b1, b11, b21] = ['舊A11', '舊A21', '舊A1', '舊A10', '舊B1', '舊B11', '舊B21'].map(land);
+      if (!(a21[1] < a11[1] && a10[1] < a1[1] && b21[1] < b11[1])) throw new Error('舊犬舍每排應該 1 號在下、往上數');
+      if (!(a11[0] < a1[0] && a1[0] < b1[0] && b1[0] < b11[0])) throw new Error('舊犬舍由左到右應該是 A11–21、A1–10、B1–10、B11–21');
+      const [nb1, nb10, na1, d1, d12] = ['新B1', '新B10', '新A1', '新獨1', '新獨12'].map(land);
+      if (!(nb1[1] < na1[1] && na1[1] < d1[1])) throw new Error('新犬舍由上到下應該是新B、新A、新獨');
+      if (!(nb1[0] < nb10[0] && d1[0] < d12[0])) throw new Error('新犬舍應該左到右 1 號起');
+      if (!(d1[2] < nb1[2])) throw new Error('新獨應該比較窄');
+      findView = 'map'; findZone = 'all'; activeTab = 'find'; searchQuery = '';
+      render();
+      eq(document.querySelectorAll('#main rect.fm-cage').length, 74, '頁面平面圖畫出每個籠子：');
+      eq(document.querySelectorAll('#main rect.fm-cage.has').length, 4, '有狗的籠子：');
+      const mini = findLocationSection(allDogs[0]);
+      eq((mini.match(/fm-cage/g) || []).length, 1, '小地圖只畫那一籠：');
+      if (!mini.includes('fm-cage has on') && !mini.includes('fm-cage on')) throw new Error('小地圖沒標出籠子');
+    });
   } finally {
     const box = document.getElementById('findZoom');
     if (box) box.remove();
