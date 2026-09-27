@@ -2359,7 +2359,10 @@ async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES
     }
     // 429 表示同一支手機剛按過，同步已經在跑，一樣等新資料
     if (!res.ok && res.status !== 429) {
-      showToast('更新失敗，請稍後再試');
+      // 附上 Worker 說的原因（例：GitHub 403＝token 沒開 Actions 權限），設定出錯時才查得到
+      let why = '';
+      try { why = String((await res.json()).error || ''); } catch (e) { /* 沒有內容就只顯示狀態碼 */ }
+      showToast(`更新失敗：${why || `HTTP ${res.status}`}`);
       return;
     }
     showToast('正在更新，約 1–2 分鐘');
