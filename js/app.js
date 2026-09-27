@@ -572,7 +572,12 @@ function lastWalk(dog, today) {
 }
 
 // 卡片用「編號｜籠位」（照 K 的參考圖）；詳細資訊沿用 metaLine
+// V7（#111）：平面圖上找得到的籠位做成橘色膠囊，點了跳「在哪」面板（js/find.js 的 whereOpen）
 function cardMeta(dog) {
+  if (typeof whereKnown === 'function' && whereKnown(dog)) {
+    // 籠位膠囊放前面（最常點），編號放後面、放不下就換行
+    return `<div class="meta has-pill"><button type="button" class="cage-pill" data-where aria-label="${esc(dog.name)} 在哪：${esc(dog.cage)}">${icon('pin')}${esc(dog.cage)}</button>${dog.id ? `<span class="id">${esc(dog.id)}</span>` : ''}</div>`;
+  }
   return `<div class="meta">${dog.id ? `${esc(dog.id)}<span class="sep">|</span>` : ''}${esc(dog.cage)}</div>`;
 }
 
@@ -1989,6 +1994,7 @@ window.addEventListener('popstate', () => {
   if (findZoomOpen()) findZoomHide(); // 找狗平面圖全螢幕（#102，js/find.js）
   else if (cropOpen()) hideCropper();
   else if (lightboxOpen()) hideLightbox();
+  else if (whereDog) whereHide(); // 在哪面板（#111，js/find.js）
   else if (detailDog) hideDetail();
   else if (analysisOpen) hideAnalysis();
 });
@@ -2054,7 +2060,8 @@ document.getElementById('main').addEventListener('click', e => {
   if (!dog) return;
   const btn = e.target.closest('[data-walk]');
   const thumb = e.target.closest('.thumb');
-  if (btn) setWalked([dog], btn.dataset.walk === 'add');
+  if (e.target.closest('[data-where]')) whereOpen(dog, e.target.closest('[data-where]'));
+  else if (btn) setWalked([dog], btn.dataset.walk === 'add');
   else if (thumb && dog.id && !thumb.classList.contains('no-photo')) openLightbox(dog, thumb.closest('.card'));
   else showDetail(dog);
 });
@@ -2078,10 +2085,10 @@ function matchesSearch(dog, query) {
 
 // 主分類（V3，#33）：順序就是左右滑動切換的順序
 const TABS = [
-  { id: 'walk', label: '溜狗表' },
-  { id: 'today', label: '今天已溜' },
-  { id: 'mine', label: '我溜過' }, // #58 取代原本的「相關資訊（編輯中）」
-  { id: 'find', label: '找狗' }, // #99 照片圖鑑＋平面圖，程式在 js/find.js
+  { id: 'walk', label: '溜狗表', icon: 'list' },
+  { id: 'today', label: '今天已溜', icon: 'tick' },
+  { id: 'mine', label: '我溜過', icon: 'paw' }, // #58 取代原本的「相關資訊（編輯中）」
+  { id: 'find', label: '找狗', icon: 'map' }, // #99 照片圖鑑＋平面圖，程式在 js/find.js
 ];
 
 // counts：各分類要顯示的數字；沒有數字的分類留白
@@ -2089,7 +2096,7 @@ function buildTabs(counts) {
   const tabsEl = document.getElementById('tabs');
   tabsEl.innerHTML = TABS.map(t => {
     const n = counts[t.id] != null ? counts[t.id] : t.note || '';
-    return `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}"><span class="t">${t.label}</span><span class="n">${n}</span></button>`;
+    return `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}"${activeTab === t.id ? ' aria-current="page"' : ''}>${icon(t.icon)}<span class="t">${t.label}</span><span class="n">${n}</span></button>`;
   }).join('');
   tabsEl.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
@@ -2179,6 +2186,8 @@ function renderMain() {
     `${today.getMonth() + 1}月${today.getDate()}日 (${'日一二三四五六'[today.getDay()]})`;
 
   const main = document.getElementById('main');
+  // 分析頁開著時底部列收起來（分析頁有自己的「返回」）
+  document.documentElement.classList.toggle('analysis-open', analysisOpen);
 
   // 分析頁（#59）：頁首右上角的圖示打開，蓋住分類清單；統計與畫面在 js/analysis.js
   if (analysisOpen) {
