@@ -214,7 +214,10 @@ function runTests() {
       // #96 我是誰：名字 POST 到 /walker-code 換代號（不寫任何東西），也先拿掉
       const walkerCall = /fetch\(`\$\{UPLOAD_URL\}\/walker-code`, \{\s*method: 'POST',/;
       if (!walkerCall.test(APP_JS)) throw new Error('找不到換代號的呼叫');
-      const code = APP_JS.replace(uploadCall, '').replace(galleryCall, '').replace(noteCall, '').replace(galleryDeleteCall, '').replace(galleryMainCall, '').replace(walkerCall, '');
+      // 頁首「更新」：POST 到 /sync 請 Worker 叫 GitHub 同步（只讀試算表），也先拿掉
+      const syncCall = /fetch\(`\$\{UPLOAD_URL\}\/sync`, \{ method: 'POST' \}\)/;
+      if (!syncCall.test(APP_JS)) throw new Error('找不到更新的呼叫');
+      const code = APP_JS.replace(uploadCall, '').replace(galleryCall, '').replace(noteCall, '').replace(galleryDeleteCall, '').replace(galleryMainCall, '').replace(walkerCall, '').replace(syncCall, '');
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
@@ -2119,6 +2122,60 @@ async function runFirstScreenTests() {
 }
 
 // #99 找狗：搜尋全部的狗（犬名、編號、籠位、舊編號）、籠位對到平面圖分區、區域篩選隻數
+// 頁首「更新」按鈕：POST Worker /sync，等 dogs.json 的 syncedAt 變新才換上資料
+async function runSyncButtonTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, window.fetch, dataSyncedAt];
+  const btn = document.createElement('button');
+  const toast = () => (document.querySelector('#toast .toast-text') || {}).textContent;
+  const dogsFile = (at, name) => ({ version: 1, syncedAt: at, groups: {}, dogs: [{ name, id: '2024032902', cage: '新A03', walkedDate: null }] });
+  // 假網路：/sync 回 status；dogs.json 依序回 files 的內容（用完就一直回最後一個）
+  const fakeNet = (status, files) => {
+    const calls = [];
+    window.fetch = async (url, init = {}) => {
+      calls.push(`${init.method || 'GET'} ${String(url).replace(UPLOAD_URL, 'W')}`);
+      if (String(url).endsWith('/sync')) return new Response(JSON.stringify({ ok: status === 200 }), { status });
+      if (String(url).includes('dogs.json')) return new Response(JSON.stringify(files.length > 1 ? files.shift() : files[0]));
+      return new Response('{}', { status: 404 });
+    };
+    return calls;
+  };
+  try {
+    activeTab = 'walk'; searchQuery = '';
+    dataSyncedAt = new Date('2026-09-27T13:24:18+08:00');
+    await check('更新按鈕：叫同步後等到 syncedAt 變新才換上資料、顯示更新時間', async () => {
+      const calls = fakeNet(200, [dogsFile('2026-09-27T13:24:18+08:00', '舊'), dogsFile('2026-09-27T15:02:00+08:00', '新狗')]);
+      await requestSync(btn, { pollMs: 0, tries: 5 });
+      eq(calls.slice(0, 1), ['POST W/sync']);
+      eq(allDogs.map(d => d.name), ['新狗']);
+      const t = new Date('2026-09-27T15:02:00+08:00'); // 測試機器時區不一定是台灣
+      eq(document.getElementById('updatedLabel').textContent, `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${pad2(t.getHours())}:${pad2(t.getMinutes())}`);
+      eq(toast(), '資料已更新');
+      eq(btn.classList.contains('syncing'), false, '轉圈停了：');
+    });
+    await check('更新按鈕：試算表沒新東西就說已是最新；Worker 失敗不去等', async () => {
+      fakeNet(200, [dogsFile('2026-09-27T15:02:00+08:00', '新狗')]);
+      await requestSync(btn, { pollMs: 0, tries: 3 });
+      eq(toast(), '試算表沒有新的紀錄，目前已是最新');
+      const calls = fakeNet(502, [dogsFile('2026-09-27T16:00:00+08:00', '不該換')]);
+      await requestSync(btn, { pollMs: 0, tries: 3 });
+      eq(toast(), '更新失敗，請稍後再試');
+      eq(calls, ['POST W/sync'], '失敗不讀 dogs.json：');
+      eq(allDogs.map(d => d.name), ['新狗']);
+    });
+    await check('更新按鈕：剛按過（429）還是會等新資料', async () => {
+      fakeNet(429, [dogsFile('2026-09-27T16:30:00+08:00', '再新')]);
+      await requestSync(btn, { pollMs: 0, tries: 2 });
+      eq(allDogs.map(d => d.name), ['再新']);
+    });
+    await check('更新按鈕在頁首', () => {
+      if (!/id="syncBtn"[^>]*aria-label="更新資料"/.test(INDEX_HTML)) throw new Error('index.html 沒有更新按鈕');
+    });
+  } finally {
+    [allDogs, groupMap, activeTab, searchQuery, window.fetch, dataSyncedAt] = saved;
+    hideToast();
+  }
+}
+
 async function runFindTests() {
   const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone];
   try {
@@ -2249,6 +2306,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runDetailWiringTests)
   .then(runFirstScreenTests)
   .then(runFindTests)
+  .then(runSyncButtonTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

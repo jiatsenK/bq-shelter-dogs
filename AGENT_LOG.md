@@ -416,3 +416,4 @@
 - `worker/src/index.js` 加 `scheduled`：Cloudflare Cron Trigger 時間到就呼叫 GitHub `actions/workflows/sync-sheet.yml/dispatches`（main）；失敗丟錯誤，Cloudflare 紀錄看得到。`worker/wrangler.toml` 加 crons `0,30 23,0-14 * * *`（台灣 7:00–22:30 每 30 分）。
 - `docs/PHOTO_UPLOAD_SETUP.md` 加 K 的啟用步驟：token 多開 Actions 讀寫、重貼 Worker、Cloudflare 加 Cron Trigger、到 Actions 看 workflow_dispatch 確認。GitHub 自己的 17、47 分排程留著當備援；`sync-sheet.yml` 註解、`docs/PROJECT_GOALS.md` 同步改。
 - 驗證：`node --test scripts/sync-sheet.test.mjs worker/test/worker.test.mjs` 76 項全過（新增 1 項，用假 GitHub）。真的 Cloudflare 排程要 K 設定後看 Actions 頁確認。
+- 追加：K 問「畫面裡面可不可以有一個叫他更新的 icon」。頁首分析圖示左邊加「更新」圓箭頭：按了 POST Worker `/sync`（同一個人 2 分鐘 1 次）叫 GitHub 同步，每 15 秒讀一次 dogs.json，`syncedAt` 變新就換上資料並提示「資料已更新」，等 4 分鐘沒變就說「已是最新」。`js/app.js` 把換資料抽成 `applyDogsData`；`index.html` 加 `i-refresh`；`css/app.css` 轉圈樣式；說明檔補上。tests/index.html 新增 4 項（#10 唯讀檢查允許 `/sync`），本機 119 項全過；Worker 測試 77 項全過。截圖 previews/sync-button/。
