@@ -2210,6 +2210,43 @@ async function runFindTests() {
   }
 }
 
+// 同籠的狗（K 2026-09-27）：跟「可以一起溜」一樣的格子，可勾選一起記
+async function runCageMateTests() {
+  const saved = [allDogs, groupMap, walkedStorage, walkedMemory];
+  try {
+    walkedStorage = fakeStorage(); walkedMemory = null;
+    const dog = (name, id, cage) => ({ name, id, cage, walkedDate: null, covered: false, note: '', intro: '', sex: '', formerIds: [] });
+    allDogs = [
+      dog('小白', '2024032901', '新A03'), dog('阿黑', '2024032902', '新A03'), dog('花花', '2024032903', '新 A03'),
+      dog('老大', '2024032904', '新A04'), dog('布布', '2024032905', '住院區'), dog('咪寶', '2024032906', '住院區'),
+    ];
+    groupMap = {};
+    await check('同籠：籠位一樣（忽略空白）才算，不含自己；「○○區」不算同籠', () => {
+      eq(cageMates(allDogs[0]).map(d => d.name), ['阿黑', '花花'], '新A03：');
+      eq(cageMates(allDogs[3]), [], '獨自一籠：');
+      eq(cageMates(allDogs[4]), [], '住院區：');
+      eq(cageMatesSection(allDogs[3], new Set()), '', '沒有同籠就不顯示：');
+    });
+    await check('同籠：詳細資訊顯示同籠的狗，勾選後用下方按鈕一起記', () => {
+      const html = detailHtml(allDogs[0], TODAY);
+      const box = document.createElement('div');
+      box.innerHTML = html;
+      const sec = box.querySelector('[data-section="cage"]');
+      if (!sec) throw new Error('沒有同籠的狗這一段');
+      eq([...sec.querySelectorAll('.bname')].map(n => n.textContent), ['阿黑', '花花']);
+      eq(sec.querySelectorAll('.pick').length, 2, '勾選圓圈：');
+      if (html.indexOf('data-section="cage"') > html.indexOf('data-section="group"')) throw new Error('同籠要放在可以一起溜上面');
+      recordWalked([allDogs[1]], true, TODAY);
+      const box2 = document.createElement('div');
+      box2.innerHTML = cageMatesSection(allDogs[0], walkedToday(TODAY));
+      eq(box2.querySelectorAll('.pick').length, 1, '今天已溜的不顯示圓圈：');
+      if (!box2.querySelector('.walked-tag')) throw new Error('今天已溜的要標「今天已溜」');
+    });
+  } finally {
+    [allDogs, groupMap, walkedStorage, walkedMemory] = saved;
+  }
+}
+
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
 Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js', '../js/find.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
@@ -2249,6 +2286,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runDetailWiringTests)
   .then(runFirstScreenTests)
   .then(runFindTests)
+  .then(runCageMateTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

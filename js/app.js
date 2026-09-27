@@ -884,6 +884,7 @@ function detailHtml(dog, today) {
         : `<div class="content note-text">${esc(dog.note)}</div>`}
     </section>
     ${myNoteSection(dog)}
+    ${cageMatesSection(dog, walked)}
     <section class="detail-section" data-section="group">
       <h3>${icon('group')}可以一起溜的狗</h3>
       ${buddies.length
@@ -1129,6 +1130,24 @@ function buddyTile(d, name, walkedNow) {
     ${walked ? `<span class="walked-tag">今天已溜</span>` : ''}
     ${canPick ? `<button type="button" class="pick${picked ? ' on' : ''}" data-pick="${esc(walkKey(d))}" aria-pressed="${picked}" aria-label="勾選 ${esc(name)} 一起記">${icon('tick')}</button>` : ''}
   </div>`;
+}
+
+// 同籠的狗（K 2026-09-27）：籠位欄位一樣的其他狗，跟「可以一起溜」同一種格子，也能勾選一起記。
+// 「○○區」（住院區、C區）是整區不是一籠，不算同籠；沒有同籠的狗整段不顯示
+function cageMates(dog) {
+  const cage = String(dog.cage || '').replace(/\s+/g, '');
+  if (!cage || /區$/.test(cage)) return [];
+  return allDogs.filter(d => d !== dog && String(d.cage || '').replace(/\s+/g, '') === cage);
+}
+
+function cageMatesSection(dog, walked) {
+  const mates = cageMates(dog);
+  if (!mates.length) return '';
+  return `
+    <section class="detail-section" data-section="cage">
+      <h3>${icon('pin')}同籠的狗<span class="sub">${esc(dog.cage)}</span></h3>
+      <div class="buddies">${mates.map(d => buddyTile(d, d.name, walked)).join('')}</div>
+    </section>`;
 }
 
 // 「可以一起溜」下方的按鈕：把目前這隻連同勾選的狗一次記進今天已溜。
