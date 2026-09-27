@@ -669,3 +669,40 @@ test('#95 首頁狀態顯示代號密鑰設了沒', async () => {
   assert.equal(r.body.walkerKey, '已設定');
   assert.equal((await send(new Request('https://x.workers.dev/'), ENV)).body.walkerKey, '未設定');
 });
+
+test('定時叫同步：POST workflow dispatch（main），GitHub 不是 204 或沒 token 就丟錯', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    calls.push({ path: new URL(url).pathname, method: init.method, headers: init.headers, body: JSON.parse(init.body) });
+    return new Response(null, { status: 204 });
+  };
+  const waits = [];
+  await worker.scheduled({}, ENV, { waitUntil: p => waits.push(p) });
+  assert.equal(await waits[0], 204);
+  assert.deepEqual(calls.map(c => [c.method, c.path]), [['POST', '/repos/jiatsenK/bq-shelter-dogs/actions/workflows/sync-sheet.yml/dispatches']]);
+  assert.deepEqual(calls[0].body, { ref: 'main' });
+  assert.equal(calls[0].headers.Authorization, 'Bearer test-token');
+
+  globalThis.fetch = async () => new Response('{}', { status: 403 });
+  await assert.rejects(worker.testing.triggerSync(ENV), /GitHub 403/);
+  await assert.rejects(worker.testing.triggerSync({}), /GITHUB_TOKEN/);
+});
+
+test('POST /sync：網站按「更新」叫同步；同一個人 2 分鐘 1 次；GitHub 失敗回 502；別的網站、GET 擋掉', async () => {
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => { calls.push([init.method, new URL(url).pathname]); return new Response(null, { status: 204 }); };
+  const req = (ip = '5.5.5.5', method = 'POST', origin = ORIGIN) => new Request('https://x.workers.dev/sync', { method, headers: { Origin: origin, 'CF-Connecting-IP': ip } });
+  let r = await send(req());
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body, { ok: true });
+  assert.equal(r.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+  assert.deepEqual(calls, [['POST', '/repos/jiatsenK/bq-shelter-dogs/actions/workflows/sync-sheet.yml/dispatches']]);
+  assert.equal((await send(req())).status, 429);
+  assert.equal(calls.length, 1, '太頻繁不叫 GitHub');
+  assert.equal((await send(req('6.6.6.6', 'GET'))).status, 405);
+  assert.equal((await send(req('6.6.6.6', 'POST', 'https://evil.example'))).status, 403);
+  globalThis.fetch = async () => new Response('{}', { status: 403 });
+  r = await send(req('7.7.7.7'));
+  assert.equal(r.status, 502);
+  assert.match(r.body.error || r.body.message || JSON.stringify(r.body), /GitHub 403/);
+});
