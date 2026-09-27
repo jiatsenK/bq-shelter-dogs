@@ -14,6 +14,9 @@
 //   DELETE /gallery/{編號}/{檔名} 刪除，要跟我的備註同一組通關碼（避免路人亂刪）
 // - 誰遛的代號（#95）：POST /walker-code 送 { names: [...] }，回 { codes: [...] }。
 //   用 Worker 的 Secret「WALKER_KEY」（跟 GitHub Actions 的同一組）算，網站拿不到密鑰；名字不存、不寫進任何紀錄
+// - 定時叫同步：GitHub 自己的排程常被跳過（2026-09-27 一整天只跑一次），所以在 Cloudflare 設 Cron Trigger，
+//   時間到就請 GitHub 跑「同步試算表」（.github/workflows/sync-sheet.yml）。token 要多開 Actions 寫入權限。
+//   網站頁首的「更新」按鈕也可以叫：POST /sync（同一個人 2 分鐘 1 次）
 //
 // 這個檔案可以整份貼到 Cloudflare 網頁上的程式編輯器（不需要其他檔案），設定步驟見 docs/PHOTO_UPLOAD_SETUP.md。
 
@@ -66,6 +69,8 @@ const WALKER_NAME_MAX_CHARS = 20;
 const WALKER_MAX_BYTES = 2 * 1024;
 const WALKER_LIMITS = [{ windowMs: 60 * 1000, max: 20 }];
 const WALKER_CODE_LENGTH = 12;
+// 網站「更新」按鈕：同一個人 2 分鐘 1 次；同步本身要跑約 1 分鐘，按再多次也沒用
+const SYNC_LIMITS = [{ windowMs: 2 * 60 * 1000, max: 1 }];
 // 跟 scripts/sync-sheet.mjs 的 NAME_SEP 一樣：一格寫好幾個名字時用這些符號或空白隔開
 const WALKER_NAME_SEP = /[、,，\/／&＆+＋\s]+/;
 
@@ -172,6 +177,21 @@ function github(cfg, path, init = {}) {
       ...(init.headers || {}),
     },
   });
+}
+
+// 定時叫 GitHub 跑同步試算表；成功時 GitHub 回 204
+const SYNC_WORKFLOW = 'sync-sheet.yml';
+async function triggerSync(env) {
+  const cfg = config(env);
+  if (!cfg.token) throw new Error('沒有設定 GITHUB_TOKEN，無法叫同步');
+  const res = await github(cfg, `actions/workflows/${SYNC_WORKFLOW}/dispatches`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ref: cfg.branch }),
+  });
+  // 403／404 多半是 token 沒開 Actions 寫入權限；丟錯誤讓 Cloudflare 的 Cron 紀錄顯示失敗
+  if (res.status !== 204) throw new Error(`叫同步失敗（GitHub ${res.status}）`);
+  return res.status;
 }
 
 // 從 repo 讀 data/dogs.json，回傳 編號 → 犬名
@@ -700,8 +720,13 @@ async function walkerCodes(request, env, origin) {
 }
 
 export default {
-  // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch
-  testing: { MAX_BYTES, NOTE_MAX_CHARS, GALLERY_MAX, resetState, allowUpload, allowGalleryUpload, isJpeg, cleanNote, cleanGallery, galleryFileName, walkerCode },
+  // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch 和 scheduled
+  testing: { MAX_BYTES, NOTE_MAX_CHARS, GALLERY_MAX, resetState, allowUpload, allowGalleryUpload, isJpeg, cleanNote, cleanGallery, galleryFileName, walkerCode, triggerSync },
+
+  // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 Cloudflare 的 Triggers 設定，見 docs/PHOTO_UPLOAD_SETUP.md）
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(triggerSync(env));
+  },
 
   async fetch(request, env) {
     const cfg = config(env);
@@ -740,6 +765,18 @@ export default {
         return await walkerCodes(request, env, allowed);
       } catch (e) {
         return fail(500, '代號服務發生錯誤', allowed);
+      }
+    }
+
+    if (path === '/sync') {
+      if (request.method !== 'POST') return fail(405, '更新只能用 POST /sync', allowed);
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      if (!allow(`sync:${ip}`, SYNC_LIMITS, Date.now())) return fail(429, '剛剛已經在更新了，請稍等一下', allowed);
+      try {
+        await triggerSync(env);
+        return reply(200, { ok: true }, allowed);
+      } catch (e) {
+        return fail(502, e.message || '叫同步失敗', allowed);
       }
     }
 

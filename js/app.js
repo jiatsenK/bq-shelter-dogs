@@ -2317,19 +2317,73 @@ async function init() {
     render();
     return;
   }
+  applyDogsData(data);
+  loadMyNotes();
+  loadGallery();
+}
+
+// 換上讀到的 dogs.json（打開網頁時、按「更新」拿到新資料時）
+let dataSyncedAt = null;
+function applyDogsData(data) {
   allDogs = data.dogs;
   groupMap = data.groups || {};
-  if (!data.groups) loadWarning = '「可以一起溜」的資料讀取失敗，詳細資訊暫時不會顯示可以一起溜的狗。';
+  loadWarning = data.groups ? '' : '「可以一起溜」的資料讀取失敗，詳細資訊暫時不會顯示可以一起溜的狗。';
   // 顯示試算表最後同步的時間（不是打開網頁的時間），志工才知道資料有多新
   const t = data.syncedAt;
+  dataSyncedAt = t;
   document.getElementById('updatedLabel').textContent = t
     ? `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${pad2(t.getHours())}:${pad2(t.getMinutes())}` : '';
   loadState = 'ready';
   render();
-  loadMyNotes();
-  loadGallery();
   loadMyWalks();
 }
+
+// ── 頁首「更新」按鈕：請 Worker 叫 GitHub 同步試算表，再等網站上的 dogs.json 換新 ──
+// 同步約 1 分鐘、網站重新部署再約 1 分鐘；試算表沒有新東西時 dogs.json 不會變，等滿就告訴志工已經是最新
+const SYNC_POLL_MS = 15 * 1000;
+const SYNC_POLL_TRIES = 16; // 15 秒 × 16 ＝ 最多等 4 分鐘
+let syncing = false;
+
+async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES } = {}) {
+  if (syncing) return;
+  syncing = true;
+  btn.classList.add('syncing');
+  btn.setAttribute('aria-busy', 'true');
+  try {
+    let res = null;
+    try {
+      res = await fetch(`${UPLOAD_URL}/sync`, { method: 'POST' });
+    } catch (e) {
+      showToast('連不到更新服務，請檢查網路');
+      return;
+    }
+    // 429 表示同一支手機剛按過，同步已經在跑，一樣等新資料
+    if (!res.ok && res.status !== 429) {
+      showToast('更新失敗，請稍後再試');
+      return;
+    }
+    showToast('正在更新，約 1–2 分鐘');
+    const before = dataSyncedAt ? dataSyncedAt.getTime() : 0;
+    for (let i = 0; i < tries; i++) {
+      await new Promise(r => setTimeout(r, pollMs));
+      let data;
+      try { data = await loadDogsData(); } catch (e) { continue; }
+      if (data.syncedAt && data.syncedAt.getTime() > before) {
+        applyDogsData(data);
+        showToast('資料已更新');
+        return;
+      }
+    }
+    showToast('試算表沒有新的紀錄，目前已是最新');
+  } finally {
+    syncing = false;
+    btn.classList.remove('syncing');
+    btn.removeAttribute('aria-busy');
+  }
+}
+
+const syncBtn = document.getElementById('syncBtn');
+if (syncBtn) syncBtn.addEventListener('click', () => requestSync(syncBtn));
 
 // tests/index.html 會設定 __BQ_TEST__，只載入函式、不去讀 dogs.json
 if (!window.__BQ_TEST__) init();

@@ -634,13 +634,19 @@ html.lightbox-open { overflow: hidden; }
 .w-note { font-size: 12px; color: var(--muted-text); line-height: 1.5; }
 
 /* 頁首右上角的分析圖示（#59）：偶爾才看的功能不佔分類，點了開分析頁 */
-.analysis-btn {
+.analysis-btn, .sync-btn {
   width: 40px; height: 40px; flex-shrink: 0; align-self: flex-start;
   border: none; border-radius: 12px; cursor: pointer;
   background: var(--surface-soft); color: var(--primary);
   display: flex; align-items: center; justify-content: center; font-size: 22px;
 }
 .analysis-btn:active, .analysis-open .analysis-btn { background: var(--primary); color: #fff; }
+/* 更新按鈕：按了叫同步，等新資料時圖示一直轉 */
+.sync-btn:active { background: var(--primary); color: #fff; }
+.sync-btn.syncing .icon { animation: sync-spin 1s linear infinite; }
+.analysis-open .sync-btn { display: none; }
+@keyframes sync-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .sync-btn.syncing .icon { animation-duration: 3s; } }
 /* 分析頁開著時收起搜尋框與分類，頁首只留標題 */
 .analysis-open header.app .search, .analysis-open header.app .tabs { display: none; }
 .a-top { display: flex; align-items: center; gap: 6px; margin: 0 0 12px; }

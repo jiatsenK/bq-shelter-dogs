@@ -11,3 +11,7 @@ compatibility_date = "2026-09-01"
 GITHUB_REPO = "jiatsenK/bq-shelter-dogs"
 GITHUB_BRANCH = "main"
 ALLOWED_ORIGINS = "https://jiatsenk.github.io"
+
+# 定時叫 GitHub 跑同步試算表（UTC；台灣 7:00–22:30 每 30 分鐘）
+[triggers]
+crons = ["0,30 23,0-14 * * *"]
