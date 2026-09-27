@@ -405,3 +405,8 @@
 ## 2026-09-27 找狗平面圖放大改橫的（Claude，分支 claude/project-thread-j7mq5u，#102 追加）
 - 依據：K 說「我希望點開是橫的 幫我修改後直接合併」。
 - `js/find.js`：全螢幕平面圖改用頁面同一個方向（橫的）；`css/app.css` 地圖在全螢幕裡上下置中，放大後仍可捲動。測試改成檢查橫的。
+
+## 2026-09-27 同步排程常被 GitHub 跳過（Claude，分支 claude/project-thread-y4s4a4）
+- 依據：K 說今天已經有人遛狗，網站都沒更新。
+- 查到的原因：同步 Action 排在每個整點，但 GitHub 整點排程常被延遲或整次丟掉；9/27 台灣 7:00–13:00 只在 9:16 跑了一次（前一天也只跑了幾次）。程式本身每次都成功。
+- 處理：當下手動跑一次同步補上；`.github/workflows/sync-sheet.yml` 排程改成每小時 17 分、47 分各一次（避開整點、跳過一次還有下一次）；`docs/PROJECT_GOALS.md`、`docs/VOLUNTEER_GUIDE.md` 頻率說明同步改。
