@@ -48,6 +48,7 @@ function findLabel(cls, name, sub, [x, y, w, h], small) {
 
 let findView = 'photo'; // photo：照片圖鑑；map：平面圖
 let findZone = 'all';   // 篩選的區域 key；all＝全部
+let findCage = null;    // 平面圖上點選的籠子（findCageOf 的 id）；null＝看整區
 
 function findZoneOf(dog) {
   const cage = searchKey(dog.cage).toUpperCase();
@@ -199,6 +200,8 @@ function findMapSvg(selected, query = '', mini = false, turn = FIND_MAP_TURN, ca
 function findMapSvgNow(selected, query, mini, cage) {
   const count = key => allDogs.filter(d => findZoneOf(d) === key && findMatches(d, query)).length;
   const lit = new Set(allDogs.filter(d => findMatches(d, query)).map(findCageOf)); // 有狗（搜尋時只算找到的）的籠子
+  const dogsIn = id => allDogs.filter(d => findCageOf(d) === id && findMatches(d, query)).length;
+  const searching = !!searchKey(query);
   const [, , vw, vh] = findTurn([0, 0, FIND_MAP_W, FIND_MAP_H]);
   const P = FIND_MAP_PAD, G = FIND_MAP_GAP;
   const box = ([x, y, w, h]) => `<rect x="${x + G}" y="${y + G}" width="${w - G * 2}" height="${h - G * 2}"/>`;
@@ -229,9 +232,14 @@ function findMapSvgNow(selected, query, mini, cage) {
     const band = FIND_CAGES.bands[z.key];
     for (const c of FIND_CAGES.cages.filter(c => c.zone === z.key && (!mini || c.id === cage))) {
       const [x, y, w, h] = findTurn(c.rect);
-      const on = c.id === cage;
-      s += `<rect class="fm-cage${lit.has(c.id) ? ' has' : ''}${on ? ' on' : ''}" x="${x + 1}" y="${y + 1}" width="${w - 2}" height="${h - 2}" rx="1.5"/>`;
-      if (!mini) s += `<text class="fm-cn${on ? ' on' : ''}" x="${x + w / 2}" y="${y + h / 2 + 3}" text-anchor="middle">${c.label}</text>`;
+      // 常見的籠位圖做法：有狗實心、空籠虛線；點選的籠子（或搜尋找到的）用橘色，其他籠子淡掉
+      const on = c.id === cage || (searching && lit.has(c.id));
+      const fade = (searching || cage) && !on ? ' fade' : '';
+      const cls = `fm-cage${lit.has(c.id) ? ' has' : ''}${on ? ' on' : ''}${fade}`;
+      const rect = `<rect class="${cls}" x="${x + 1}" y="${y + 1}" width="${w - 2}" height="${h - 2}" rx="1.5"/>`;
+      if (mini) { s += rect; continue; }
+      s += `<g class="fm-cg" data-find-cage="${c.id}" role="button" tabindex="0" aria-pressed="${c.id === cage}" aria-label="${c.id} ${dogsIn(c.id)} 隻">${rect}`
+        + `<text class="fm-cn${on ? ' on' : ''}${fade}" x="${x + w / 2}" y="${y + h / 2 + 3}" text-anchor="middle">${c.label}</text></g>`;
     }
     if (!mini) s += band ? findBandLabel(z.name, n, findTurn(band)) : findLabel('fm-t', z.name, n, r);
     s += `</g>`;
@@ -261,20 +269,22 @@ function findMapHtml(query) {
   const unmapped = allDogs.some(d => findZoneOf(d) === 'other') ? [findZoneInfo('other')] : [];
   const selected = findZone === 'all' ? null : findZone;
   let html = `<div class="find-map-card">
-    ${findMapSvg(selected, query)}
+    ${findMapSvg(selected, query, false, FIND_MAP_TURN, findCage)}
     <div class="find-map-foot">
-      <p class="find-map-hint">點一個區域，下面列出那區的狗。圖是照所內看板重畫的相對位置。</p>
+      <p class="find-map-hint">點一個區域或一個籠子，下面列出那裡的狗。圖是照所內看板重畫的相對位置。</p>
       <button type="button" class="find-zoom-btn" id="findZoomOpen" aria-label="全螢幕放大平面圖">${icon('zoom')}放大</button>
     </div>
     ${unmapped.length ? `<div class="find-unmapped">這些籠位還不知道在圖上哪裡：${unmapped.map(z =>
       `<button type="button" data-find-zone="${z.key}" aria-pressed="${findZone === z.key}">${esc(z.name)} ${allDogs.filter(d => findZoneOf(d) === z.key && findMatches(d, query)).length} 隻</button>`).join('')}</div>` : ''}
   </div>`;
   if (selected) {
-    const list = findList(query);
+    const list = findList(query).filter(d => !findCage || findCageOf(d) === findCage);
     const z = findZoneInfo(selected);
-    html += `<div class="find-zone-head"><i class="find-dot z-${z.key}"></i><h2>${esc(z.name)}</h2><span>${list.length} 隻</span></div>`;
+    const title = findCage ? `${z.name}・${findCage}` : z.name;
+    const where = findCage ? '這籠' : '這區';
+    html += `<div class="find-zone-head"><i class="find-dot z-${z.key}"></i><h2>${esc(title)}</h2><span>${list.length} 隻</span></div>`;
     html += list.length ? `<div class="find-grid">${list.map((d, i) => findCard(d, query, i < 6)).join('')}</div>`
-      : `<div class="status-msg">${query ? `這區找不到「${esc(query)}」` : '這區目前沒有對應的籠位'}</div>`;
+      : `<div class="status-msg">${query ? `${where}找不到「${esc(query)}」` : findCage ? '這籠目前沒有狗' : '這區目前沒有對應的籠位'}</div>`;
   }
   return html;
 }
@@ -313,6 +323,7 @@ function findShowZone(dog) {
   closeDetail();
   findView = 'map';
   findZone = key;
+  findCage = null;
   const input = document.getElementById('searchInput');
   if (input) { input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true })); }
   switchTab('find');
@@ -322,25 +333,45 @@ function findShowZone(dog) {
 // 找狗頁的點擊（內容區每次重畫，所以用事件委派）
 document.getElementById('main').addEventListener('click', e => {
   if (activeTab !== 'find') return;
-  if (e.target.closest('#findZoomOpen')) { findZoomShow(findZone === 'all' ? null : findZone); return; }
+  if (e.target.closest('#findZoomOpen')) { findZoomShow(findZone === 'all' ? null : findZone, findCage); return; }
   const view = e.target.closest('[data-find-view]');
   if (view) { findView = view.dataset.findView; render(); return; }
+  const cageEl = e.target.closest('[data-find-cage]');
+  if (cageEl) { findPickCage(cageEl.dataset.findCage); return; }
   const zone = e.target.closest('[data-find-zone]');
   if (zone) {
     const key = zone.dataset.findZone;
-    findZone = key !== 'all' && findZone === key ? 'all' : key; // 再點一次取消
+    findZone = key !== 'all' && findZone === key && !findCage ? 'all' : key; // 再點一次取消
+    findCage = null;
     render();
     return;
   }
   const card = e.target.closest('.find-dog[data-dog]');
   if (card && allDogs[card.dataset.dog]) showDetail(allDogs[card.dataset.dog]);
 });
+// 點籠子：選那一籠（再點一次回到整區），下面只列那籠的狗
+function findPickCage(id) {
+  const c = FIND_CAGES.cages.find(x => x.id === id);
+  if (!c) return;
+  findZone = c.zone;
+  findCage = findCage === id ? null : id;
+  render();
+}
 document.getElementById('main').addEventListener('keydown', e => {
   if (activeTab !== 'find' || (e.key !== 'Enter' && e.key !== ' ')) return;
+  const cageEl = e.target.closest('g[data-find-cage]');
+  if (cageEl) {
+    e.preventDefault();
+    findPickCage(cageEl.dataset.findCage);
+    const again = document.querySelector(`#main g[data-find-cage="${cageEl.dataset.findCage}"]`);
+    if (again) again.focus({ preventScroll: true });
+    return;
+  }
   const zone = e.target.closest('g[data-find-zone]');
   if (!zone) return;
   e.preventDefault();
-  findZone = findZone === zone.dataset.findZone ? 'all' : zone.dataset.findZone;
+  findZone = findZone === zone.dataset.findZone && !findCage ? 'all' : zone.dataset.findZone;
+  findCage = null;
   render();
   const again = document.querySelector(`#main g[data-find-zone="${zone.dataset.findZone}"]`);
   if (again) again.focus({ preventScroll: true });
@@ -380,7 +411,7 @@ function findZoomShow(selected, cage = null) {
     box.setAttribute('aria-label', '園區平面圖');
     box.innerHTML = `
       <div class="find-zoom-bar">
-        <span class="find-zoom-title">點區域看那區的狗</span>
+        <span class="find-zoom-title">點區域或籠子看狗</span>
         <button type="button" data-zoom-step="-1" aria-label="縮小">－</button>
         <span class="find-zoom-pct"></span>
         <button type="button" data-zoom-step="1" aria-label="放大">＋</button>
@@ -396,12 +427,17 @@ function findZoomShow(selected, cage = null) {
         findZoomRender();
         return;
       }
+      const cageEl = e.target.closest('g[data-find-cage]');
+      if (cageEl) { findZoomPick(null, cageEl.dataset.findCage); return; }
       const zone = e.target.closest('g[data-find-zone]');
       if (zone) findZoomPick(zone.dataset.findZone);
     });
     box.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const cageEl = e.target.closest('g[data-find-cage]');
       const zone = e.target.closest('g[data-find-zone]');
-      if (zone && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); findZoomPick(zone.dataset.findZone); }
+      if (cageEl) { e.preventDefault(); findZoomPick(null, cageEl.dataset.findCage); }
+      else if (zone) { e.preventDefault(); findZoomPick(zone.dataset.findZone); }
     });
   }
   findZoomState = { selected, cage, step: 0, opener: document.activeElement };
@@ -428,13 +464,15 @@ function findZoomClose() {
   else findZoomHide();
 }
 
-// 在全螢幕點區域：關掉放大（從詳細資訊開的也一起關），到找狗平面圖選那一區
-function findZoomPick(key) {
+// 在全螢幕點區域或籠子：關掉放大（從詳細資訊開的也一起關），到找狗平面圖選那一區／那一籠
+function findZoomPick(key, cage = null) {
+  if (cage) key = FIND_CAGES.cages.find(c => c.id === cage).zone;
   findZoomHide();
   if (history.state && history.state.bqFindZoom) history.replaceState(null, '');
   if (detailDog) closeDetail();
   findView = 'map';
   findZone = key;
+  findCage = cage;
   if (searchQuery) {
     const input = document.getElementById('searchInput');
     if (input) { input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true })); }

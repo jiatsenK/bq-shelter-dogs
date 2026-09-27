@@ -974,12 +974,16 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
 .find-map.mini .fm-frame { stroke-width: 5; }
 .find-map.mini .fm-frame2 { stroke-width: 3; }
 .find-map.mini .fm-zone.dim { opacity: 1; }
-.fm-zone rect.fm-cage { fill: none; stroke: var(--fm-soft); stroke-width: 0.8; }
-.fm-zone rect.fm-cage.has { fill: rgba(239, 230, 214, 0.16); }
-.fm-zone.sel rect.fm-cage { stroke: rgba(31, 58, 92, 0.45); }
-.fm-zone.sel rect.fm-cage.has { fill: rgba(31, 58, 92, 0.12); }
-.find-map .fm-zone rect.fm-cage.on { fill: #F0A73C; stroke: #F0A73C; stroke-width: 1.5; }
+.fm-zone rect.fm-cage { fill: none; stroke: var(--fm-soft); stroke-width: 0.8; stroke-dasharray: 2 2; }
+.fm-zone rect.fm-cage.has { fill: rgba(239, 230, 214, 0.2); stroke-dasharray: none; }
+.fm-zone.sel rect.fm-cage { stroke: rgba(31, 58, 92, 0.5); }
+.fm-zone.sel rect.fm-cage.has { fill: rgba(31, 58, 92, 0.16); }
+.find-map .fm-zone rect.fm-cage.on { fill: #F0A73C; stroke: #F0A73C; stroke-width: 1.5; stroke-dasharray: none; }
 .find-map.mini .fm-zone rect.fm-cage.on { stroke-width: 10; }
+.fm-zone rect.fm-cage.fade, .fm-zone .fm-cn.fade { opacity: 0.35; }
+.find-map:not(.mini) .fm-cg { cursor: pointer; }
+.fm-cg:focus-visible { outline: none; }
+.fm-cg:focus-visible rect.fm-cage { stroke: #F0A73C; stroke-width: 2; stroke-dasharray: none; }
 .fm-zone .fm-cn { font-size: 8px; font-weight: 600; opacity: 0.75; }
 .fm-zone .fm-cn.on { fill: var(--fm-bg); opacity: 1; }
 .fm-n-s { font-size: 15px; }

@@ -2177,7 +2177,7 @@ async function runSyncButtonTests() {
 }
 
 async function runFindTests() {
-  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone];
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone, findCage];
   try {
     walkedStorage = fakeStorage(); walkedMemory = null;
     const dog = (name, id, cage, extra = {}) => ({ name, id, cage, walkedDate: null, covered: false, note: '', intro: '', sex: '', formerIds: [], ...extra });
@@ -2279,12 +2279,31 @@ async function runFindTests() {
       eq((mini.match(/fm-cage/g) || []).length, 1, '小地圖只畫那一籠：');
       if (!mini.includes('fm-cage has on') && !mini.includes('fm-cage on')) throw new Error('小地圖沒標出籠子');
     });
+    await check('逐籠平面圖：點籠子只列那籠的狗、再點回整區；搜尋時找到的籠子亮橘色、其他淡掉', () => {
+      findView = 'map'; findZone = 'all'; findCage = null; activeTab = 'find'; searchQuery = '';
+      render();
+      const heads = () => [...document.querySelectorAll('#main .find-dog .find-name .n')].map(n => n.textContent);
+      document.querySelector('#main g[data-find-cage="新B10"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      eq([findZone, findCage, heads()], ['new', '新B10', ['花花']], '點新B10：');
+      eq(document.querySelector('#main .find-zone-head h2').textContent, '新犬舍區・新B10', '標題：');
+      if (!document.querySelector('#main g[data-find-cage="新B10"] rect').classList.contains('on')) throw new Error('點的籠子沒亮');
+      document.querySelector('#main g[data-find-cage="新B1"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      eq(document.querySelector('#main .status-msg').textContent, '這籠目前沒有狗', '空籠：');
+      document.querySelector('#main g[data-find-cage="新B1"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      eq([findZone, findCage, heads().length], ['new', null, 3], '再點一次回整區：');
+      findZone = 'all'; searchQuery = '小白';
+      render();
+      eq([...document.querySelectorAll('#main rect.fm-cage.on')].length, 1, '搜尋找到一籠：');
+      if (!document.querySelector('#main g[data-find-cage="新A3"] rect').classList.contains('on')) throw new Error('搜尋的籠子沒亮');
+      if (!document.querySelector('#main g[data-find-cage="舊B4"] rect').classList.contains('fade')) throw new Error('其他籠子沒淡掉');
+      searchQuery = '';
+    });
   } finally {
     const box = document.getElementById('findZoom');
     if (box) box.remove();
     findZoomState = null;
     document.documentElement.classList.remove('find-zoom-open');
-    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone] = saved;
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone, findCage] = saved;
   }
 }
 
