@@ -129,7 +129,7 @@ function findGridHtml(list, query) {
     <div class="find-grid">${g.items.map(d => findCard(d, query, n++ < 6)).join('')}</div>`).join('');
 }
 
-// 平面圖：墨藍底、米白線的看板樣式（K 2026-09-26 給參考圖，選 A 墨藍看板、橫的）。
+// 平面圖：照所內看板重畫、橫的（K 2026-09-26）；V7（#113）起改成淺色，顏色在 css/app.css .find-map。
 // 建築外框是 L 形（左上角空出來，放「園區平面圖」標題），畫兩條線；每區往內縮一點，區與區之間留縫。
 // mini＝詳細資訊裡的小地圖：不寫字、不能點，所在的區塗成米白
 const FIND_MAP_GAP = 6;
@@ -268,7 +268,11 @@ function findMapTitle() {
 function findMapHtml(query) {
   const unmapped = allDogs.some(d => findZoneOf(d) === 'other') ? [findZoneInfo('other')] : [];
   const selected = findZone === 'all' ? null : findZone;
-  const box = findMapBox(selected);
+  const searching = !!searchKey(query);
+  const hits = searching && !selected ? findList(query, 'all') : [];
+  // 搜尋找到的狗都在同一區時，平面圖直接放大到那一區
+  const hitZones = new Set(hits.map(findZoneOf));
+  const box = findMapBox(selected || (hitZones.size === 1 ? [...hitZones][0] : null));
   const from = findMapShown || findMapBox(null); // 從上一次看到的範圍開始，畫好後動畫移到這次的範圍
   let svg = findMapSvg(selected, query, false, FIND_MAP_TURN, findCage)
     .replace(/viewBox="[^"]*"/, `viewBox="${from.join(' ')}" data-to="${box.join(' ')}"`);
@@ -292,6 +296,11 @@ function findMapHtml(query) {
     html += `<div class="find-zone-head"><i class="find-dot z-${z.key}"></i><h2>${esc(title)}</h2><span>${list.length} 隻</span></div>`;
     html += list.length ? `<div class="find-grid">${list.map((d, i) => findCard(d, query, i < 6)).join('')}</div>`
       : `<div class="status-msg">${query ? `${where}找不到「${esc(query)}」` : findCage ? '這籠目前沒有狗' : '這區目前沒有對應的籠位'}</div>`;
+  } else if (searching) {
+    // 搜尋（#113）：上面平面圖標出找到的籠子，下面列出找到的狗
+    html += hits.length
+      ? `<div class="section-hint">${icon('search')}「${esc(query)}」找到 ${hits.length} 隻，點一隻看在哪</div>` + findGridHtml(hits, query)
+      : `<div class="status-msg">找不到「${esc(query)}」<br>試試狗名的一個字、編號後四碼，或籠位（例：新A03）。</div>`;
   }
   return html;
 }
@@ -336,16 +345,11 @@ function findMapAnimate() {
 
 function findPageHtml(query) {
   const bar = findChipsHtml(query);
-  if (findView === 'map') return bar + findMapHtml(query);
+  if (findView === 'map' || searchKey(query)) return bar + findMapHtml(query); // 搜尋時照片、平面圖都是地圖在上、結果在下
   findMapShown = null; // 下次切回平面圖，從整張圖放大過去
   const list = findList(query);
-  if (!list.length) {
-    return bar + `<div class="status-msg">${query
-      ? `找不到「${esc(query)}」<br>試試狗名的一個字、編號後四碼，或籠位（例：新A03）。`
-      : '這區目前沒有狗'}</div>`;
-  }
-  const hint = query ? `<div class="section-hint">${icon('search')}「${esc(query)}」找到 ${list.length} 隻（含今天已溜、已收起）</div>` : '';
-  return bar + hint + findGridHtml(list, query);
+  if (!list.length) return bar + '<div class="status-msg">這區目前沒有狗</div>';
+  return bar + findGridHtml(list, query);
 }
 
 // 詳細資訊的「在哪裡」：小地圖標出所在的區，按鈕跳到找狗的平面圖、選好那一區
@@ -396,7 +400,10 @@ document.getElementById('main').addEventListener('click', e => {
     return;
   }
   const card = e.target.closest('.find-dog[data-dog]');
-  if (card && allDogs[card.dataset.dog]) showDetail(allDogs[card.dataset.dog]);
+  const dog = card && allDogs[card.dataset.dog];
+  if (!dog) return;
+  // 搜尋結果點一隻開「在哪」面板（#113），面板上有「詳細資訊」；平面圖上沒有的籠位直接開詳細資訊
+  if (searchKey(searchQuery) && whereKnown(dog)) whereOpen(dog, card); else showDetail(dog);
 });
 // 點籠子：選那一籠（再點一次回到整區），下面只列那籠的狗
 function findPickCage(id) {
