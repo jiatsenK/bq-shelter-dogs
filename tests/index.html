@@ -2438,7 +2438,7 @@ async function runFindV7Tests() {
   try {
     walkedStorage = fakeStorage(); walkedMemory = null;
     const dog = (name, id, cage) => ({ name, id, cage, walkedDate: null, covered: false, note: '', intro: '', sex: '', formerIds: [] });
-    allDogs = [dog('測試甲', '2024032901', '舊A03'), dog('測試乙', '2024032902', '新A05'), dog('測試丙', '2024032903', '住院區')];
+    allDogs = [dog('測試甲', '2024032901', '舊A03'), dog('測試乙', '2024032902', '新A05'), dog('測試丙', '2024032903', '後院')];
     groupMap = {}; searchQuery = ''; activeTab = 'find'; findView = 'photo'; findZone = 'all'; findCage = null;
     await check('#113 找狗：照片／平面圖一排、區域一排（K 2026-09-28）', () => {
       render();
@@ -2470,7 +2470,31 @@ async function runFindV7Tests() {
       eq(vb(), full, '縮回整張：');
       eq(!!document.querySelector('#main .find-map-all'), false, '整張時不顯示看全圖：');
     });
+    await check('#113 找狗搜尋：地圖在上、結果在下，都在同一區就放大過去，點一隻開在哪', async () => {
+      findView = 'photo'; findZone = 'all'; findCage = null; searchQuery = '測試甲'; render();
+      const main = document.getElementById('main');
+      const map = main.querySelector('.find-map-card'), grid = main.querySelector('.find-grid');
+      if (!map || !grid) throw new Error('照片模式搜尋也要有地圖和結果');
+      if (!(map.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING)) throw new Error('地圖要在結果上面');
+      if (!main.querySelector('g[data-find-cage="舊A3"] rect').classList.contains('on')) throw new Error('找到的籠子沒亮');
+      eq(main.querySelector('svg.find-map').dataset.to, findMapBox('old').join(' '), '只在舊犬舍就放大到舊犬舍：');
+      main.querySelector('.find-dog').click();
+      eq([whereDog && whereDog.name, detailDog], ['測試甲', null], '點一隻開在哪、不開詳細資訊：');
+      whereHide();
+      searchQuery = '測試'; render();
+      eq(document.querySelector('#main svg.find-map').dataset.to, findMapBox(null).join(' '), '不同區就看整張：');
+      searchQuery = '測試丙'; render();
+      document.querySelector('#main .find-dog').click();
+      eq([whereDog, detailDog && detailDog.name], [null, '測試丙'], '平面圖上沒有的籠位開詳細資訊：');
+      hideDetail();
+      searchQuery = '沒有這隻'; render();
+      if (!document.querySelector('#main .status-msg').textContent.includes('找不到「沒有這隻」')) throw new Error('找不到的說明不見了');
+      searchQuery = ''; findView = 'photo'; render();
+      eq(!!document.querySelector('#main .find-map-card'), false, '沒搜尋的照片模式不放地圖：');
+    });
   } finally {
+    if (whereDog) whereHide();
+    if (detailDog) hideDetail();
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone, findCage] = saved;
   }
 }
