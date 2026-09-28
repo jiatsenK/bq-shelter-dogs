@@ -2431,6 +2431,50 @@ async function runWhereTests() {
   }
 }
 
+async function runFindV7Tests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone, findCage];
+  const frame = () => new Promise(r => requestAnimationFrame(() => r()));
+  const later = ms => new Promise(r => setTimeout(r, ms));
+  try {
+    walkedStorage = fakeStorage(); walkedMemory = null;
+    const dog = (name, id, cage) => ({ name, id, cage, walkedDate: null, covered: false, note: '', intro: '', sex: '', formerIds: [] });
+    allDogs = [dog('測試甲', '2024032901', '舊A03'), dog('測試乙', '2024032902', '新A05'), dog('測試丙', '2024032903', '住院區')];
+    groupMap = {}; searchQuery = ''; activeTab = 'find'; findView = 'photo'; findZone = 'all'; findCage = null;
+    await check('#113 找狗：照片／平面圖一排、區域一排（K 2026-09-28）', () => {
+      render();
+      const bar = document.querySelector('#main .find-bar');
+      eq([...bar.children].map(el => el.className), ['find-view', 'find-chips'], '兩排：');
+    });
+    await check('#113 平面圖：選一區就放大到那一區，「看全圖」回到整張', async () => {
+      findView = 'map'; findZone = 'all'; render();
+      const full = findMapBox(null);
+      const vb = () => document.querySelector('#main svg.find-map').getAttribute('viewBox').split(' ').map(Number);
+      await frame(); await later(520);
+      eq(vb(), full, '沒選區是整張：');
+      document.querySelector('#main g[data-find-zone="old"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      const box = findMapBox('old');
+      eq(vb(), full, '剛點下去還是整張（接著動畫放大）：');
+      if (!(box[2] < full[2] && box[3] < full[3])) throw new Error('放大範圍沒有比較小');
+      if (Math.abs(box[2] / box[3] - full[2] / full[3]) > 0.01) throw new Error('放大範圍長寬比要跟整張一樣，地圖框才不會跳');
+      const [zx, zy, zw, zh] = findTurn(FIND_ZONES.find(z => z.key === 'old').rect);
+      if (box[0] > zx || box[1] > zy || box[0] + box[2] < zx + zw || box[1] + box[3] < zy + zh) throw new Error('放大範圍沒包住整區');
+      await frame(); await later(520);
+      eq(vb(), box, '動畫結束停在那一區：');
+      document.querySelector('#main g[data-find-zone="old"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      eq(findZone, 'old', '放大後點圖上的區不會取消：');
+      document.querySelector('#main g[data-find-cage="舊A3"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      eq([findZone, findCage, vb()], ['old', '舊A3', box], '點籠子維持放大：');
+      document.querySelector('#main .find-map-all').click();
+      eq([findZone, findCage], ['all', null], '看全圖：');
+      await frame(); await later(520);
+      eq(vb(), full, '縮回整張：');
+      eq(!!document.querySelector('#main .find-map-all'), false, '整張時不顯示看全圖：');
+    });
+  } finally {
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone, findCage] = saved;
+  }
+}
+
 async function runCageMateTests() {
   const saved = [allDogs, groupMap, walkedStorage, walkedMemory];
   try {
@@ -2510,6 +2554,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runSyncButtonTests)
   .then(runTermTests)
   .then(runWhereTests)
+  .then(runFindV7Tests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
