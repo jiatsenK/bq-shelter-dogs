@@ -2206,7 +2206,7 @@ async function runFindTests() {
       eq(names(findList('', 'all')), ['小白', '花花', '阿黑', '布布', '滿滿', '咪寶', '老大', '神秘']);
     });
     await check('#99 搜尋範圍是全部的狗：今天已溜、收起的也找得到', () => {
-      recordWalked([allDogs[0]], true, TODAY);
+      recordWalked([allDogs[0]], true);
       eq(names(findList('小白', 'all')), ['小白']);
     });
     await check('#99 找狗分頁：區域按鈕的隻數跟著搜尋變，點區域只列那區', () => {
@@ -2218,7 +2218,7 @@ async function runFindTests() {
       eq(document.querySelector('#tabs [data-tab="find"] .n').textContent, '3', '分頁數字：');
       searchQuery = '';
       document.querySelector('#main [data-find-zone="pup"]').click();
-      eq([...document.querySelectorAll('#main .find-dog .find-name .n')].map(n => n.textContent), ['咪寶'], '幼犬舍：');
+      eq([...document.querySelectorAll('#main .find-dog .find-name .n')].map(n => n.textContent), ['咪寶'], 'C區：');
       document.querySelector('#main [data-find-zone="pup"]').click();
       eq(findZone, 'all', '再點一次取消：');
     });
@@ -2234,7 +2234,7 @@ async function runFindTests() {
       if (!/<script src="js\/analysis\.js"><\/script>\s*<script src="js\/find\.js"><\/script>/.test(INDEX_HTML)) throw new Error('find.js 要在 app.js、analysis.js 之後載入');
     });
     await check('#99 詳細資訊有「在哪裡」；對不到分區的籠位不顯示', () => {
-      if (!findLocationSection(allDogs[4]).includes('幼犬舍區')) throw new Error('C區 應該在幼犬舍區');
+      if (!findLocationSection(allDogs[4]).includes('C區')) throw new Error('C區11 應該在 C區');
       eq(findLocationSection(allDogs[7]), '', '其他籠位：');
     });
     await check('#99 找狗不顯示未遛天數與「已遛」按鈕', () => {
@@ -2499,6 +2499,61 @@ async function runFindV7Tests() {
   }
 }
 
+async function runV7PagesTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, myWalks, myWalksState, analysisOpen];
+  try {
+    walkedStorage = fakeStorage(); walkedMemory = null;
+    const now = new Date(); // 畫面用今天的日期算天數，這裡也用今天，測試不會隔天就壞
+    const day = n => new Date(now.getFullYear(), now.getMonth(), now.getDate() - n);
+    const dog = (name, id, cage, days) => ({ name, id, cage, walkedDate: days == null ? null : day(days), covered: false, note: '', intro: '', sex: '', formerIds: [] });
+    allDogs = [
+      dog('測試甲', '2024032901', '舊A03', 40), dog('測試乙', '2024032902', '舊A03', 12), dog('測試丙', '2024032903', '新A05', 2),
+      dog('測試丁', '2024032904', '新B01', 8), dog('測試戊', '2024032905', '新B02', null),
+    ];
+    groupMap = { '測試甲': new Set(['測試丁']) };
+    searchQuery = ''; analysisOpen = false;
+    await check('#114 溜狗表最上面三格：30 天以上／7–29 天／6 天內', () => {
+      activeTab = 'walk'; render();
+      const tiles = [...document.querySelectorAll('#main .stat-tile')].map(t => [t.className.replace('stat-tile ', ''), t.querySelector('b').textContent, t.querySelector('span').textContent]);
+      eq(tiles, [['red', '1', '30 天以上沒溜'], ['amber', '2', '7–29 天沒溜'], ['sage', '1', '6 天內溜過']]);
+      searchQuery = '測試'; render();
+      eq(document.querySelectorAll('#main .stat-tile').length, 0, '搜尋時不顯示：');
+      searchQuery = '';
+    });
+    await check('#114 今天已溜：大數字，下面列可以順便帶的（同籠、可以一起溜）', () => {
+      recordWalked([allDogs[0]], true);
+      activeTab = 'today'; render();
+      const hero = document.querySelector('#main .today-hero');
+      eq([hero.querySelector('b').textContent, hero.querySelector('strong').textContent], ['1', '今天溜了 1 隻']);
+      if (!document.querySelector('#main .along-hint')) throw new Error('沒有「可以順便帶的」');
+      const names = [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
+      eq(names, ['測試甲', '測試乙', '測試丁'], '今天溜的在上面，同籠（測試乙）和可以一起溜（測試丁）在下面：');
+      eq(document.querySelectorAll('#main .card [data-walk="add"]').length, 2, '順便帶的可以直接按溜了：');
+      recordWalked([allDogs[1], allDogs[3]], true); render();
+      eq(!!document.querySelector('#main .along-hint'), false, '都溜了就不顯示：');
+    });
+    await check('#114 我溜過：在所的狗，你溜過 N／總數', () => {
+      myWalksState = 'ready';
+      myWalks = [
+        { id: '2024032901', name: '測試甲', date: day(1), ymd: 'a' }, { id: '2024032901', name: '測試甲', date: day(3), ymd: 'b' },
+        { id: '2024032903', name: '測試丙', date: day(3), ymd: 'b' }, { id: '1999010101', name: '已離所', date: day(5), ymd: 'c' },
+      ];
+      const html = myProgressHtml(myWalks);
+      const box = document.createElement('div'); box.innerHTML = html;
+      eq(box.querySelector('.row b').textContent, '2 / 5 隻', '已離所的不算、同一隻只算一次：');
+      eq(box.querySelector('.bar i').style.width, '40%');
+    });
+    await check('#114 分析頁：白底四格，不再是整塊藍底', async () => {
+      const css = await fetch('../css/app.css').then(r => r.text());
+      if (!/\.a-hero\s*\{/.test(css)) throw new Error('找不到 .a-hero');
+      if (/\.a-hero\s*\{[^}]*gradient/.test(css)) throw new Error('分析頁還有藍色漸層');
+      if (!/\.a-kpi\s*\{[^}]*background:\s*var\(--surface\)/.test(css)) throw new Error('四格要白底');
+    });
+  } finally {
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, myWalks, myWalksState, analysisOpen] = saved;
+  }
+}
+
 async function runCageMateTests() {
   const saved = [allDogs, groupMap, walkedStorage, walkedMemory];
   try {
@@ -2579,6 +2634,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runTermTests)
   .then(runWhereTests)
   .then(runFindV7Tests)
+  .then(runV7PagesTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

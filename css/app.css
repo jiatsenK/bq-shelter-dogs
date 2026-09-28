@@ -241,7 +241,7 @@ main { overflow-wrap: anywhere; }
   background: var(--primary-soft);
   position: relative;
 }
-.card .thumb { width: 64px; height: 52px; border-radius: 10px; align-self: flex-start; }
+.card .thumb { width: 72px; height: 64px; border-radius: 12px; align-self: flex-start; } /* V7（#114）照片放大 */
 .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .thumb-fallback {
   display: none;
@@ -283,7 +283,7 @@ main { overflow-wrap: anywhere; }
 /* 上次遛狗：小標＋彩色天數（綠／黃／紅照 #3 色標） */
 .last { flex-shrink: 0; width: 84px; line-height: 1.3; }
 .last .lbl { display: block; font-size: 12px; color: var(--ink-soft); }
-.last .val { display: block; font-size: 17px; font-weight: 700; white-space: nowrap; }
+.last .val { display: block; font-size: 19px; font-weight: 800; white-space: nowrap; } /* V7（#114）天數放大 */
 .last .val.small {
   font-size: 13px;
   line-height: 1.15;
@@ -388,7 +388,7 @@ html.detail-open { overflow: hidden; }
 .walk-btn.back:active { background: var(--amber-bg); }
 .walk-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 /* 按鈕佔了位置，上次遛狗欄縮一點，犬名才有空間 */
-.card:has(.walk-btn) .last { width: 72px; }
+.card:has(.walk-btn) .last { width: 76px; }
 
 /* 詳細資訊「可以一起溜」：照片右上角勾選圓圈，下方按鈕一次記 */
 .buddy-tile { position: relative; display: flex; flex-direction: column; align-items: center; gap: 2px; }
@@ -518,21 +518,17 @@ html.lightbox-open { overflow: hidden; }
 }
 
 /* 分析頁（V5-4，#59）：資訊圖表風格。白色圓角卡片，大數字、圓環、直條圖都是純 CSS／SVG */
-.a-hero {
-  background: linear-gradient(135deg, #2F7BEA 0%, #1F5FC4 100%);
-  color: #fff; border-radius: var(--radius-card);
-  box-shadow: 0 6px 18px rgba(47, 123, 234, 0.28);
-  padding: 16px 16px 14px; margin-bottom: 14px;
-}
-.a-hero-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; opacity: 0.95; margin-bottom: 12px; }
-.a-hero-title .icon { font-size: 20px; }
-.a-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-.a-kpi { background: rgba(255, 255, 255, 0.14); border-radius: 14px; padding: 10px 12px; }
-.a-kpi-v { font-size: 30px; font-weight: 900; line-height: 1.1; letter-spacing: -0.01em; }
-.a-kpi-v small { font-size: 14px; font-weight: 700; margin-left: 3px; opacity: 0.85; }
-.a-kpi-l { font-size: 13px; opacity: 0.9; margin-top: 2px; }
-.a-kpi.warn { background: #fff; color: var(--red-text); }
-.a-hero-note { font-size: 12px; opacity: 0.8; margin-top: 10px; line-height: 1.5; }
+/* V7（#114）：最上面拿掉整塊藍底，改成白底四格大數字 */
+.a-hero { margin-bottom: 14px; }
+.a-hero-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--ink-soft); margin: 0 4px 10px; }
+.a-hero-title .icon { font-size: 20px; color: var(--primary); }
+.a-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.a-kpi { background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 12px 14px; }
+.a-kpi-v { font-size: 32px; font-weight: 900; line-height: 1.1; letter-spacing: -0.01em; color: var(--ink); font-variant-numeric: tabular-nums; }
+.a-kpi-v small { font-size: 14px; font-weight: 700; margin-left: 3px; color: var(--ink-soft); }
+.a-kpi-l { font-size: 13px; color: var(--ink-soft); margin-top: 2px; }
+.a-kpi.warn .a-kpi-v, .a-kpi.warn .a-kpi-l, .a-kpi.warn .a-kpi-v small { color: var(--red-text); }
+.a-hero-note { font-size: 12px; color: var(--ink-soft); margin: 10px 4px 0; line-height: 1.5; }
 
 .a-card {
   background: var(--surface);
@@ -986,17 +982,17 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
 .fm-sub { fill: var(--fm-ink); font-size: 9px; letter-spacing: 2.4px; opacity: 0.8; }
 .fm-fac rect { fill: none; stroke: var(--fm-soft); stroke-width: 1; }
 .fm-fac-t { fill: var(--fm-soft); font-weight: 700; }
+.fm-fac-i { stroke: var(--fm-line); color: var(--fm-line); }
+.fm-fac-i rect { fill: none; stroke: var(--fm-line); stroke-width: 1.8; }
 .fm-zone rect { fill: var(--fm-zone); stroke: var(--fm-line); stroke-width: 1.6; transition: fill 0.15s; }
 .find-map:not(.mini) .fm-zone { cursor: pointer; }
 .fm-zone text { fill: var(--fm-ink); }
 .fm-t { font-weight: 700; }
 .fm-n { font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .fm-unit { font-size: 12px; }
-.fm-zone .fm-u { stroke: var(--fm-ink); stroke-width: 1.2; }
 .fm-zone.dim { opacity: 0.4; }
 .fm-zone.sel rect { fill: var(--fm-sel); stroke: var(--fm-sel-line); }
 .fm-zone.sel text { fill: var(--fm-sel-line); }
-.fm-zone.sel .fm-u { stroke: var(--fm-sel-line); }
 .fm-zone:focus-visible { outline: none; }
 .fm-zone:focus-visible rect { stroke-width: 4; }
 .find-map.mini rect { stroke-width: 5; }
@@ -1168,3 +1164,26 @@ html.find-zoom-open { overflow: hidden; }
 .detail-bar .group-walk { flex: 1.6; width: auto; margin: 0; min-height: 50px; }
 .detail-bar .self-walked { flex: 1.6; margin: 0; justify-content: center; background: var(--green-bg); border-radius: 14px; }
 .detail-bar button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* ── V7（#114）各頁美術：溜狗表三格、今天已溜大數字、我溜過進度條 ── */
+.stat-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 12px; }
+.stat-tile { background: var(--surface); border-radius: 14px; box-shadow: var(--shadow-card); padding: 10px 8px 9px; text-align: center; }
+.stat-tile b { display: block; font-size: 28px; font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.stat-tile span { font-size: 12.5px; color: var(--ink-soft); }
+.stat-tile.red b { color: var(--red-text); }
+.stat-tile.amber b { color: var(--amber-text); }
+.stat-tile.sage b { color: var(--green-text); }
+.today-hero {
+  display: flex; align-items: center; gap: 14px; margin: 0 0 12px;
+  background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 14px 16px;
+}
+.today-hero > b { font-size: 48px; font-weight: 900; line-height: 1; color: var(--green-text); font-variant-numeric: tabular-nums; min-width: 1.2em; text-align: center; }
+.today-hero strong { display: block; font-size: 18px; font-weight: 800; }
+.today-hero span { display: block; font-size: 13px; color: var(--ink-soft); margin-top: 2px; line-height: 1.45; }
+.along-hint { margin-top: 18px; }
+.mine-progress { background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 14px 16px; margin: 0 0 12px; }
+.mine-progress .row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 15px; font-weight: 700; }
+.mine-progress .row b { font-size: 26px; font-weight: 900; color: var(--primary); font-variant-numeric: tabular-nums; }
+.mine-progress .row small { font-size: 14px; font-weight: 700; color: var(--ink-soft); }
+.mine-progress .bar { height: 10px; border-radius: 999px; background: var(--primary-soft); margin-top: 8px; overflow: hidden; }
+.mine-progress .bar i { display: block; height: 100%; border-radius: inherit; background: var(--primary); }

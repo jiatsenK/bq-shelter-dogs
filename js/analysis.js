@@ -284,7 +284,7 @@ function analysisHtml(dogs, today) {
   const avgStay = average(rows.filter(r => r.intake).map(r => r.stayDays));
   const out = [];
 
-  // 最上面一張藍色總覽：四個大數字
+  // 最上面四格大數字（V7 #114 改成白底四格）
   out.push(`<section class="a-hero">
     <div class="a-hero-title">${icon('paw')}板收在所的狗</div>
     <div class="a-kpis">
