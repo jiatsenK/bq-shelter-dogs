@@ -309,6 +309,17 @@ function myMonthStats(walks, today) {
   </div>`;
 }
 
+// V7（#114）我溜過最上面：目前在所的狗裡，你溜過幾隻（已離所的不算）
+function myProgressHtml(walks) {
+  const seen = new Set(walks.map(dogOfWalk).filter(Boolean));
+  const total = allDogs.length;
+  const pct = total ? Math.round(seen.size / total * 100) : 0;
+  return `<div class="mine-progress">
+    <div class="row"><span>在所的狗，你溜過</span><b>${seen.size}<small> / ${total} 隻</small></b></div>
+    <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="${total}" aria-valuenow="${seen.size}" aria-label="在所的狗，你溜過 ${seen.size} 隻，共 ${total} 隻"><i style="width:${pct}%"></i></div>
+  </div>`;
+}
+
 function myWalksHtml(today, query) {
   if (myWalksState === 'loading') return `<div class="status-msg">讀取溜狗紀錄中…</div>`;
   if (myWalksState === 'error') {
@@ -321,7 +332,7 @@ function myWalksHtml(today, query) {
   const groups = myWalkGroups(myWalks, query);
   if (!groups.length) return `<div class="status-msg">找不到「${esc(query)}」</div>`;
   const firstSeen = myFirstWalks(myWalks);
-  return who + (query ? '' : myMonthStats(myWalks, today)) + groups.map(g => myVisitCard(g, firstSeen)).join('');
+  return who + (query ? '' : myProgressHtml(myWalks) + myMonthStats(myWalks, today)) + groups.map(g => myVisitCard(g, firstSeen)).join('');
 }
 
 // 回傳備註命中的關鍵字（顯示用）與實際出現的寫法（標示用）；沒命中回 null
@@ -2196,6 +2207,32 @@ function dueDogs(dogs, today) {
     .map(x => x.d);
 }
 
+// V7（#114）溜狗表最上面三格：溜狗表上的狗依天數色標分三堆，一眼看出有多少該溜
+function walkTilesHtml(list, today) {
+  const n = { red: 0, amber: 0, sage: 0 };
+  for (const d of list) {
+    const s = computeStatus(d, today);
+    if (s.kind === 'dated' && s.days >= 0) n[s.level]++;
+  }
+  const tile = (level, label) => `<div class="stat-tile ${level}"><b>${n[level]}</b><span>${label}</span></div>`;
+  return `<div class="stat-tiles">${tile('red', `${RED_DAYS} 天以上沒溜`)}${tile('amber', `${AMBER_DAYS}–${RED_DAYS - 1} 天沒溜`)}${tile('sage', `${AMBER_DAYS - 1} 天內溜過`)}</div>`;
+}
+
+// V7（#114）今天已溜最上面：大數字
+function todayHeroHtml(n) {
+  return `<div class="today-hero"><b>${n}</b><div><strong>今天溜了 ${n} 隻</strong><span>只記在這支手機，其他志工看不到；明天自動清空</span></div></div>`;
+}
+
+// V7（#114）今天已溜下面：可以順便帶的狗＝跟今天溜過的狗同籠、或試算表登記可以一起溜，還在溜狗表上的
+function alongHtml(walked, walkList, today) {
+  const cages = new Set(walked.map(d => typeof findCageOf === 'function' ? findCageOf(d) : null).filter(Boolean));
+  const names = new Set(walked.flatMap(d => [...(groupMap[d.name] || [])]));
+  const list = walkList.filter(d => names.has(d.name) || (typeof findCageOf === 'function' && cages.has(findCageOf(d))));
+  if (!list.length) return '';
+  return `<div class="section-hint along-hint">${icon('group')}可以順便帶的（同籠、可以一起溜）</div>`
+    + list.map(d => dogCard(d, today)).join('');
+}
+
 function renderMain() {
   const today = new Date();
   document.getElementById('dateLabel').textContent =
@@ -2256,10 +2293,10 @@ function renderMain() {
       : `<div class="status-msg">${activeTab === 'today' ? '今天已溜裡' : ''}找不到「${esc(q)}」</div>`) + hiddenBox;
   } else if (activeTab === 'today') {
     main.innerHTML = cards
-      ? `<div class="section-hint">${icon('tick')}你今天在這支手機記下溜過的狗（只存在這支手機，其他志工看不到）</div>` + cards
+      ? todayHeroHtml(list.length) + cards + alongHtml(list, walkList, today)
       : `<div class="status-msg">今天還沒有溜狗。<br>在溜狗表按狗卡右邊的「溜了」，就會出現在這裡。</div>`;
   } else {
-    main.innerHTML = `<div class="section-hint">${icon('pin')}最久沒溜的排前面</div>` +
+    main.innerHTML = walkTilesHtml(walkList, today) + `<div class="section-hint">${icon('pin')}最久沒溜的排前面</div>` +
       (cards || `<div class="status-msg">${hiddenList.length ? '全部都收起了' : '目前沒有狗'}</div>`) + hiddenBox;
   }
 }
