@@ -917,14 +917,15 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
 .gb-crop::after { content: ''; position: absolute; inset: -6px; }
 
 /* ── 找狗（#99）：照片圖鑑＋平面圖 ── */
-.find-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
-.find-view { display: inline-flex; flex-shrink: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+/* K 2026-09-28：照片／平面圖一排、區域一排，分開兩排 */
+.find-bar { display: flex; flex-direction: column; gap: 10px; margin: 0 0 12px; }
+.find-view { display: flex; padding: 3px; border-radius: 12px; background: var(--muted-bg); }
 .find-view button {
-  border: none; background: transparent; font-family: inherit; font-size: 13px; font-weight: 700; color: var(--ink-soft);
-  padding: 7px 10px; display: flex; align-items: center; gap: 4px; cursor: pointer;
+  flex: 1; border: none; background: transparent; font-family: inherit; font-size: 14px; font-weight: 700; color: var(--ink-soft);
+  padding: 7px 10px; display: flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer; border-radius: 9px;
 }
-.find-view button.on { background: var(--primary-soft); color: var(--primary); }
-.find-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; padding-block: 2px; }
+.find-view button.on { background: var(--surface); color: var(--primary); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.find-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; min-width: 0; padding-block: 2px; }
 .find-chips::-webkit-scrollbar { display: none; }
 .find-chip {
   border: none; background: var(--muted-bg); color: var(--ink); border-radius: 999px; cursor: pointer;
@@ -963,6 +964,13 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
 .find-dog mark, .find-meta mark { background: #FFE58A; color: inherit; border-radius: 3px; padding: 0 1px; }
 
 .find-map-card { background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 12px; }
+/* 放大到一區時，圖下左邊「看全圖」回到整張（取代提示字） */
+.find-map-all {
+  margin-top: 8px; margin-right: auto; display: flex; align-items: center; gap: 5px;
+  border: 1px solid #1F3A5C; background: var(--surface); color: #1F3A5C; border-radius: 999px; cursor: pointer;
+  font-family: inherit; font-size: 14px; font-weight: 700; padding: 7px 14px 7px 12px;
+}
+.find-map-all:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .find-map { display: block; width: 100%; max-width: 640px; height: auto; max-height: 62vh; margin: 0 auto; }
 /* 看板樣式（K 2026-09-26 選 A 墨藍看板）：墨藍底、米白線；選到的區塗米白、字變墨藍 */
 .find-map { --fm-bg: #1F3A5C; --fm-line: #EFE6D6; --fm-soft: rgba(239, 230, 214, 0.55); }
