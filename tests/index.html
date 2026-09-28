@@ -737,7 +737,8 @@ function runTests() {
       const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
       if (!doc.querySelector('header h1') || !doc.getElementById('searchInput') || !doc.getElementById('tabs')) throw new Error('基本 UI 要在 index.html 裡');
       eq(doc.getElementById('main').textContent.trim(), '讀取中…', '內容區：');
-      if (doc.getElementById('main').compareDocumentPosition(doc.getElementById('tabs')) & Node.DOCUMENT_POSITION_FOLLOWING) throw new Error('分類列要在內容區之前');
+      // V7（#111）起分類列和搜尋框在畫面最下面的底部列
+      if (!doc.querySelector('#bottomBar #tabs') || !doc.querySelector('#bottomBar #searchInput')) throw new Error('分類列和搜尋框要在底部列裡');
     }),
     check('#32 repo 裡的 data/dogs.json 格式前端讀得懂', () => {
       if (!DOGS_JSON) throw new Error('讀不到 data/dogs.json');
@@ -2325,6 +2326,81 @@ async function runTermTests() {
   });
 }
 
+// V7 #111：分類和搜尋在底部列；狗卡上的籠位點了跳「在哪」面板（平面圖放大到那一區、那一籠橘框、找路的話）
+async function runWhereTests() {
+  const saved = [allDogs, groupMap, walkedStorage, walkedMemory, activeTab, searchQuery];
+  const wait = () => new Promise(r => setTimeout(r, 60));
+  try {
+    walkedStorage = fakeStorage(); walkedMemory = null;
+    const dog = (name, id, cage, days) => ({ name, id, cage, walkedDate: days == null ? null : new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() - days), covered: false, note: '', intro: '', sex: '', formerIds: [] });
+    allDogs = [
+      dog('測試甲', '2024032901', '舊A03', 12), dog('測試乙', '2024032902', '舊A03', 3), dog('測試丙', '2024032903', '新獨11', 40),
+      dog('測試丁', '2024032904', '住院區', 2), dog('測試戊', '2024032905', '後院', 1),
+    ];
+    groupMap = {};
+    await check('#111 底部列：搜尋框和分類列在畫面最下面，分類有圖示', () => {
+      const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
+      const bar = doc.getElementById('bottomBar');
+      if (!bar || bar.compareDocumentPosition(doc.getElementById('main')) & Node.DOCUMENT_POSITION_FOLLOWING) throw new Error('底部列要在內容區後面');
+      if (doc.querySelector('header #tabs, header #searchInput')) throw new Error('頁首不再放分類和搜尋');
+      buildTabs({});
+      eq([...document.querySelectorAll('#tabs button')].map(b => !!b.querySelector('svg.icon')), [true, true, true, true], '每個分類都有圖示：');
+    });
+    await check('#111 找路的話：舊犬舍由下往上數、新犬舍由左往右數，不分籠的區說進去找', () => {
+      const how = cage => whereDirections({ cage }).how;
+      eq(how('舊A3'), '進舊犬舍走左邊第二排，從下面數第 3 籠', '舊A3：');
+      eq(how('舊A15'), '進舊犬舍走最左排，從下面數第 5 籠', '舊A15：');
+      eq(how('舊B07'), '進舊犬舍走右邊第二排，從下面數第 7 籠', '舊B07：');
+      eq(how('舊B12'), '進舊犬舍走最右排，從下面數第 2 籠', '舊B12：');
+      eq(how('新B04'), '新犬舍上排，從左邊數第 4 籠', '新B04：');
+      eq(how('新A2'), '新犬舍中間排，從左邊數第 2 籠', '新A2：');
+      eq(how('新獨11'), '新犬舍下排小籠，從左邊數第 11 籠', '新獨11：');
+      eq(how('住院區'), '隔離區不分籠，進去找「住院區」', '住院區：');
+    });
+    await check('#111 狗卡籠位：平面圖上有的做成「在哪」膠囊按鈕放在編號前面，對不到的照舊只寫字', () => {
+      activeTab = 'walk'; searchQuery = ''; render();
+      const card = i => document.querySelector(`#main .card[data-dog="${i}"]`);
+      eq(!!card(0).querySelector('[data-where]'), true, '舊A03：');
+      eq(!!card(3).querySelector('[data-where]'), true, '住院區：');
+      eq(!!card(4).querySelector('[data-where]'), false, '後院：');
+      eq([card(0).querySelector('.meta').firstElementChild.textContent, card(0).querySelector('.meta .id').textContent], ['舊A03', '2024032901'], '籠位膠囊在前、編號在後：');
+    });
+    await check('#111 點籠位開在哪面板：放大那一區、那一籠橘框、同籠的狗，不開詳細資訊', async () => {
+      activeTab = 'walk'; render();
+      document.querySelector('#main .card[data-dog="0"] [data-where]').click();
+      const box = document.getElementById('whereBackdrop');
+      eq([whereDog === allDogs[0], box.hidden, detailDog], [true, false, null], '開面板、沒開詳細資訊：');
+      eq(box.querySelector('#whereTitle').textContent, '舊犬舍區・舊A03', '標題：');
+      eq(box.querySelector('.where-how').textContent, '進舊犬舍走左邊第二排，從下面數第 3 籠', '找路：');
+      eq(box.querySelectorAll('.where-ring').length, 1, '那一籠橘框：');
+      eq(box.querySelector('.mates').textContent, '同籠還有 測試乙', '同籠：');
+      eq(box.querySelector('.where-days').textContent, `${computeStatus(allDogs[0], new Date()).days} 天沒溜`, '天數：');
+      box.querySelector('#whereClose').click();
+      await wait();
+      eq([whereDog, box.hidden], [null, true], '關閉：');
+    });
+    await check('#111 在哪面板按「溜了」記進今天已溜並關掉；按「詳細資訊」換開詳細資訊', async () => {
+      activeTab = 'walk'; render();
+      document.querySelector('#main .card[data-dog="2"] [data-where]').click();
+      const box = document.getElementById('whereBackdrop');
+      eq(box.querySelector('.mates').textContent, '這籠只有牠', '獨自一籠：');
+      box.querySelector('[data-where-walk="add"]').click();
+      await wait();
+      eq([whereDog, box.hidden, walkedToday().has(allDogs[2])], [null, true, true], '溜了：');
+      document.querySelector('#main .card[data-dog="3"] [data-where]').click();
+      eq(document.querySelectorAll('#whereBackdrop .where-ring').length, 0, '住院區不分籠，沒有橘框：');
+      document.getElementById('whereDetail').click();
+      eq([whereDog, detailDog === allDogs[3]], [null, true], '詳細資訊：');
+      closeDetail();
+      await wait();
+    });
+  } finally {
+    if (whereDog) whereHide();
+    if (detailDog) hideDetail();
+    [allDogs, groupMap, walkedStorage, walkedMemory, activeTab, searchQuery] = saved;
+  }
+}
+
 async function runCageMateTests() {
   const saved = [allDogs, groupMap, walkedStorage, walkedMemory];
   try {
@@ -2403,6 +2479,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runCageMateTests)
   .then(runSyncButtonTests)
   .then(runTermTests)
+  .then(runWhereTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

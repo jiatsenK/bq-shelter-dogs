@@ -490,3 +490,148 @@ document.addEventListener('click', e => {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && findZoomState) { e.stopImmediatePropagation(); findZoomClose(); }
 }, true);
+
+// ── 在哪（V7 #111）：狗卡上的籠位點了，從下面跳出這一區的平面圖、那一籠橘框、找路的話 ──
+// 志工一手牽狗，要馬上知道狗在哪；面板在畫面下半部，按鈕大拇指搆得到。
+let whereDog = null;    // 面板正在看的狗
+let whereOpener = null; // 關掉後焦點回到哪個按鈕
+
+// index.html 已經放好面板；沒有的話（例：測試頁）就自己補一個
+function whereBackdropEl() {
+  let el = document.getElementById('whereBackdrop');
+  if (!el) {
+    document.body.insertAdjacentHTML('beforeend', '<div class="where-backdrop" id="whereBackdrop" hidden><div class="where-sheet" id="whereSheet" role="dialog" aria-modal="true" aria-labelledby="whereTitle"></div></div>');
+    el = document.getElementById('whereBackdrop');
+  }
+  return el;
+}
+
+// 平面圖上有這一區才開得了面板（「其他籠位」不在圖上）
+function whereKnown(dog) {
+  return !!(dog && dog.cage && findZoneInfo(findZoneOf(dog)).rect);
+}
+
+// 找路的話（K 2026-09-27 手繪標註）：舊犬舍四排由下往上數、新犬舍三排由左往右數；不分籠的區只說進去找
+function whereDirections(dog) {
+  const z = findZoneInfo(findZoneOf(dog));
+  const m = searchKey(dog.cage).toUpperCase().match(/^(舊|新)(A|B|獨)0*(\d+)$/);
+  if (!m || !findCageOf(dog)) return { title: `${z.name}・${dog.cage}`, how: `${z.name}不分籠，進去找「${dog.cage}」` };
+  const n = Number(m[3]);
+  if (m[1] === '舊') {
+    const col = m[2] === 'A' ? (n > 10 ? '最左排' : '左邊第二排') : (n > 10 ? '最右排' : '右邊第二排');
+    return { title: `${z.name}・${dog.cage}`, how: `進舊犬舍走${col}，從下面數第 ${n > 10 ? n - 10 : n} 籠` };
+  }
+  const row = m[2] === 'B' ? '上排' : m[2] === 'A' ? '中間排' : '下排小籠';
+  return { title: `${z.name}・${dog.cage}`, how: `新犬舍${row}，從左邊數第 ${n} 籠` };
+}
+
+// 放大到那一區的平面圖：沿用 findMapSvg 畫整張，再把 viewBox 縮到那一區，那一籠外面加橘框
+function whereMapSvg(dog) {
+  const key = findZoneOf(dog), cage = findCageOf(dog);
+  let s = findMapSvg(key, '', false, FIND_MAP_TURN, cage);
+  const [x, y, w, h] = findTurn(FIND_ZONES.find(z => z.key === key).rect);
+  s = s.replace(/viewBox="[^"]*"/, `viewBox="${x - 8} ${y - 8} ${w + 16} ${h + 16}"`)
+    .replace(/ role="(group|button)"| tabindex="0"| aria-pressed="[^"]*"| aria-label="[^"]*"/g, '');
+  const c = cage && FIND_CAGES.cages.find(v => v.id === cage);
+  if (c) {
+    const [cx, cy, cw, ch] = findTurn(c.rect);
+    s = s.replace(/<\/svg>$/, `<rect class="where-ring" x="${cx - 4}" y="${cy - 4}" width="${cw + 8}" height="${ch + 8}" rx="4"/></svg>`);
+  }
+  return s;
+}
+
+function whereHtml(dog) {
+  const d = whereDirections(dog);
+  const mates = cageMates(dog);
+  const walked = walkedToday().has(dog);
+  const status = computeStatus(dog, new Date());
+  const days = walked ? '今天已溜'
+    : status.kind === 'dated' && status.days >= 0 ? (status.days === 0 ? '今天有人溜' : `${status.days} 天沒溜`)
+    : status.kind === 'covered' ? '有人固定照顧' : '沒有紀錄';
+  const tone = walked ? 'sage' : status.kind === 'dated' && status.days >= 0 ? status.level : status.kind === 'covered' ? 'sage' : 'muted';
+  const walkBtn = !walkKey(dog) ? ''
+    : walked ? `<button type="button" class="where-btn" data-where-walk="back">放回</button>`
+    : `<button type="button" class="where-btn primary" data-where-walk="add">${icon('tick')}溜了</button>`;
+  return `<div class="where-grab" aria-hidden="true"></div>
+    <div class="where-head">
+      <h2 id="whereTitle">${icon('pin')}${esc(d.title)}</h2>
+      <button type="button" class="where-close" id="whereClose" aria-label="關閉">${icon('close')}</button>
+    </div>
+    <div class="where-map" aria-hidden="true" inert>${whereMapSvg(dog)}</div>
+    <p class="where-how">${esc(d.how)}</p>
+    <div class="where-dog">
+      ${photoThumb(dog, 48)}
+      <div class="who">
+        <div class="name">${esc(dog.name)}${sexMark(dog)}</div>
+        <div class="mates">${mates.length ? `同籠還有 ${mates.map(m => esc(m.name)).join('、')}` : findCageOf(dog) ? '這籠只有牠' : ''}</div>
+      </div>
+      <span class="where-days ${tone}">${days}</span>
+    </div>
+    <div class="where-actions">
+      <button type="button" class="where-btn" id="whereDetail">詳細資訊</button>
+      ${walkBtn}
+    </div>`;
+}
+
+function whereRender() {
+  if (whereDog) whereBackdropEl().querySelector('.where-sheet').innerHTML = whereHtml(whereDog);
+}
+
+function whereOpen(dog, opener) {
+  if (!whereKnown(dog)) return;
+  whereDog = dog;
+  whereOpener = opener || null;
+  whereRender();
+  whereBackdropEl().hidden = false;
+  document.documentElement.classList.add('where-open');
+  history.pushState({ bqWhere: true }, '');
+  const first = document.querySelector('#whereSheet .where-btn.primary') || document.getElementById('whereDetail');
+  if (first) first.focus({ preventScroll: true });
+}
+
+function whereHide() {
+  if (!whereDog) return;
+  const dog = whereDog;
+  whereDog = null;
+  const box = whereBackdropEl();
+  box.hidden = true;
+  box.querySelector('.where-sheet').innerHTML = '';
+  document.documentElement.classList.remove('where-open');
+  const card = document.querySelector(`#main .card[data-dog="${allDogs.indexOf(dog)}"] [data-where]`);
+  const back = card || (whereOpener && whereOpener.isConnected ? whereOpener : null);
+  if (back) back.focus({ preventScroll: true });
+  whereOpener = null;
+}
+
+function whereClose() {
+  if (history.state && history.state.bqWhere) history.back(); // popstate 會接著 whereHide
+  else whereHide();
+}
+
+whereBackdropEl().addEventListener('click', e => {
+  if (e.target.id === 'whereBackdrop') { whereClose(); return; }
+  const dog = whereDog;
+  if (!dog) return;
+  if (e.target.closest('#whereClose')) { whereClose(); return; }
+  if (e.target.closest('#whereDetail')) {
+    // 先換掉在哪的歷史紀錄再開詳細資訊，按返回直接回到清單
+    whereHide();
+    if (history.state && history.state.bqWhere) history.replaceState(null, '');
+    showDetail(dog);
+    return;
+  }
+  const walk = e.target.closest('[data-where-walk]');
+  if (walk) {
+    whereClose();
+    setWalked([dog], walk.dataset.whereWalk === 'add');
+  }
+});
+document.addEventListener('keydown', e => {
+  if (!whereDog) return;
+  if (e.key === 'Escape') { whereClose(); return; }
+  if (e.key !== 'Tab') return;
+  const items = [...document.querySelectorAll('#whereSheet button')];
+  const at = items.indexOf(document.activeElement);
+  e.preventDefault();
+  items[(at + (e.shiftKey ? -1 : 1) + items.length) % items.length].focus({ preventScroll: true });
+});
