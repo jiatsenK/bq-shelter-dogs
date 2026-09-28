@@ -4,18 +4,18 @@
 // showDetail、closeDetail、switchTab、render、activeTab，所以要在 app.js 之後載入。
 
 // 籠位 → 平面圖分區（K 2026-09-26 確認：新A／新B／新獨＝新犬舍區，舊A／舊B＝舊犬舍區，母幼＝幼母犬舍區，
-// C區＝幼犬舍區，住院區＝隔離區）。對不到的籠位歸「其他籠位」（沒有 rect），放在圖下方的提示框。
+// C區（原本叫幼犬舍區，K 2026-09-28 改成跟後台一樣叫 C區），住院區＝隔離區）。對不到的籠位歸「其他籠位」（沒有 rect），放在圖下方的提示框。
 // rect 是平面圖上的位置 [x, y, 寬, 高]，照所內看板重畫（viewBox 380×600）；順序＝照片分段的順序（圖上由上到下）
 const FIND_ZONES = [
   { key: 'new', name: '新犬舍區', short: '新犬舍', test: c => /^新/.test(c), rect: [230, 0, 150, 240] },
   { key: 'iso', name: '隔離區', short: '隔離', test: c => /^住院/.test(c), rect: [140, 40, 90, 200] },
   { key: 'mom', name: '幼母犬舍區', short: '幼母犬舍', test: c => /^母幼/.test(c), rect: [0, 270, 250, 80] },
-  { key: 'pup', name: '幼犬舍區', short: '幼犬舍', test: c => /^C/.test(c), rect: [250, 270, 130, 80] },
+  { key: 'pup', name: 'C區', short: 'C區', test: c => /^C/.test(c), rect: [250, 270, 130, 80] },
   { key: 'old', name: '舊犬舍區', short: '舊犬舍', test: c => /^舊/.test(c), rect: [0, 350, 250, 250] },
 ];
 const FIND_FACILITIES = [
-  { name: '醫療室', rect: [250, 350, 130, 60] },
-  { name: '辦公室', rect: [250, 410, 130, 190] },
+  { name: '醫療室', icon: 'medical', rect: [250, 350, 130, 60] },
+  { name: '辦公室', icon: 'office', rect: [250, 410, 130, 190] },
 ];
 
 // K 2026-09-26：平面圖轉 90 度變橫的（手機上比較不佔高度）。rect 照看板直的座標寫，畫的時候再轉；
@@ -34,8 +34,8 @@ function findLabel(cls, name, sub, [x, y, w, h], small) {
   const chars = [...name];
   const fs = small ? 14 : w > 180 ? 18 : 16;
   const gap = fs * 0.3;
-  const count = ty => `<text class="fm-n" x="${cx}" y="${ty}" text-anchor="middle">${sub}<tspan class="fm-unit" dx="3">隻</tspan></text>`
-    + `<line class="fm-u" x1="${cx - 22}" x2="${cx + 22}" y1="${ty + 7}" y2="${ty + 7}"/>`;
+  // K 2026-09-28：隻數下面不畫底線，跟有逐籠的區一致
+  const count = ty => `<text class="fm-n" x="${cx}" y="${ty}" text-anchor="middle">${sub}<tspan class="fm-unit" dx="3">隻</tspan></text>`;
   if (chars.length * (fs + gap) < w - 18) {
     return `<text class="${cls}" x="${cx}" y="${sub !== '' ? cy - 4 : cy + fs * 0.35}" text-anchor="middle" font-size="${fs}" letter-spacing="${gap}">${name}</text>`
       + (sub !== '' ? count(cy + 22) : '');
@@ -185,6 +185,20 @@ function findCageOf(dog) {
   return FIND_CAGES.cages.some(c => c.id === id) ? id : null;
 }
 
+// 辦公室、醫療室用圖示表示（K 2026-09-28），不寫字；螢幕閱讀器讀 title
+const FIND_FAC_ICONS = {
+  // 醫療：圓角方框裡一個十字
+  medical: '<rect x="2" y="2" width="20" height="20" rx="5" fill="none" stroke-width="1.8"/><path d="M12 7v10M7 12h10" stroke-width="2.6" stroke-linecap="round"/>',
+  // 辦公室：一棟樓，門和窗
+  office: '<path d="M4 21V4.5A1.5 1.5 0 0 1 5.5 3h9A1.5 1.5 0 0 1 16 4.5V21M16 9h3.5A1.5 1.5 0 0 1 21 10.5V21M2.5 21h19" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'
+    + '<path d="M7.5 7h1M11.5 7h1M7.5 11h1M11.5 11h1M7.5 15h1M11.5 15h1" stroke-width="2" stroke-linecap="round"/>',
+};
+function findFacIcon(f, [x, y, w, h]) {
+  const size = Math.min(34, Math.min(w, h) * 0.5);
+  const k = size / 24;
+  return `<g class="fm-fac-i" transform="translate(${x + w / 2 - size / 2} ${y + h / 2 - size / 2}) scale(${k})"><title>${f.name}</title>${FIND_FAC_ICONS[f.icon]}</g>`;
+}
+
 // 有逐籠的區：區名和隻數擠成一行，放在籠子上方留白那條
 function findBandLabel(name, n, r) {
   const [x, y, w, h] = r;
@@ -221,7 +235,7 @@ function findMapSvgNow(selected, query, mini, cage) {
   if (!mini) s += findMapTitle();
   for (const f of FIND_FACILITIES) {
     const r = findTurn(f.rect);
-    s += `<g class="fm-fac">${box(r)}${mini ? '' : findLabel('fm-fac-t', f.name, '', r, true)}</g>`;
+    s += `<g class="fm-fac">${box(r)}${mini ? '' : findFacIcon(f, r)}</g>`;
   }
   for (const z of FIND_ZONES.filter(x => x.rect)) {
     const r = findTurn(z.rect);
