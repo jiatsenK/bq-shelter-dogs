@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-09-28T00:57:55+08:00",
+  "syncedAt": "2026-09-28T15:38:54+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -1123,7 +1123,7 @@
       "cage": "舊A04",
       "id": "2022030902",
       "name": "哈拉",
-      "walkedDate": "2026-09-18",
+      "walkedDate": "2026-09-28",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1335,7 +1335,7 @@
       "cage": "舊A16",
       "id": "2020122507",
       "name": "馬克",
-      "walkedDate": "2026-09-24",
+      "walkedDate": "2026-09-28",
       "covered": true,
       "myWalked": false,
       "walkers": [
