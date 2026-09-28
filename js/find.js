@@ -311,6 +311,7 @@ function findLocationSection(dog) {
     <div class="find-where">
       <button type="button" class="find-where-map" id="findMiniZoom" aria-label="放大平面圖，看${esc(z.name)}在哪裡">${findMapSvg(z.key, '', true, FIND_MAP_TURN, findCageOf(dog))}</button>
       <div><b>${esc(z.name)}</b>・${esc(dog.cage)}
+        <div class="find-where-how">${esc(whereDirections(dog).how)}</div>
         <button type="button" class="find-where-btn" id="findWhere">${icon('map')}看同區的狗</button>
       </div>
     </div>
@@ -598,7 +599,7 @@ function whereHide() {
   box.querySelector('.where-sheet').innerHTML = '';
   document.documentElement.classList.remove('where-open');
   const card = document.querySelector(`#main .card[data-dog="${allDogs.indexOf(dog)}"] [data-where]`);
-  const back = card || (whereOpener && whereOpener.isConnected ? whereOpener : null);
+  const back = whereOpener && whereOpener.isConnected ? whereOpener : card;
   if (back) back.focus({ preventScroll: true });
   whereOpener = null;
 }
