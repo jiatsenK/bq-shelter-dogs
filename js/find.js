@@ -268,10 +268,17 @@ function findMapTitle() {
 function findMapHtml(query) {
   const unmapped = allDogs.some(d => findZoneOf(d) === 'other') ? [findZoneInfo('other')] : [];
   const selected = findZone === 'all' ? null : findZone;
+  const box = findMapBox(selected);
+  const from = findMapShown || findMapBox(null); // 從上一次看到的範圍開始，畫好後動畫移到這次的範圍
+  let svg = findMapSvg(selected, query, false, FIND_MAP_TURN, findCage)
+    .replace(/viewBox="[^"]*"/, `viewBox="${from.join(' ')}" data-to="${box.join(' ')}"`);
+  findMapShown = box;
+  requestAnimationFrame(findMapAnimate);
   let html = `<div class="find-map-card">
-    ${findMapSvg(selected, query, false, FIND_MAP_TURN, findCage)}
+    ${svg}
     <div class="find-map-foot">
-      <p class="find-map-hint">點區域或籠子，下面會列出那裡的狗。</p>
+      ${selected ? `<button type="button" class="find-map-all" data-find-zone="all">${icon('map')}看全圖</button>`
+        : '<p class="find-map-hint">點一區放大，點籠子看那籠的狗。</p>'}
       <button type="button" class="find-zoom-btn" id="findZoomOpen" aria-label="全螢幕放大平面圖">${icon('zoom')}放大</button>
     </div>
     ${unmapped.length ? `<div class="find-unmapped">這些籠位還不知道在圖上哪裡：${unmapped.map(z =>
@@ -289,9 +296,48 @@ function findMapHtml(query) {
   return html;
 }
 
+// 選了一區就把平面圖放大到那一區（K 2026-09-28：選位置之後動畫放大）。
+// 範圍補成跟整張圖一樣的長寬比，地圖框大小不變、只有裡面放大；超出整張圖的部分往回推。
+let findMapShown = null; // 上一次畫面上的範圍 [x, y, w, h]
+let findMapAnim = 0;
+function findMapBox(selected) {
+  const P = FIND_MAP_PAD;
+  const [, , vw, vh] = findTurn([0, 0, FIND_MAP_W, FIND_MAP_H]);
+  const full = [-P, -P, vw + P * 2, vh + P * 2];
+  const zone = selected && FIND_ZONES.find(z => z.key === selected && z.rect);
+  if (!zone) return full;
+  const [zx, zy, zw, zh] = findTurn(zone.rect);
+  let w = zw + 24, h = zh + 24;
+  const ratio = full[2] / full[3];
+  if (w / h < ratio) w = h * ratio; else h = w / ratio;
+  w = Math.min(w, full[2]); h = Math.min(h, full[3]);
+  const fit = (c, size, lo, span) => Math.max(lo, Math.min(lo + span - size, c - size / 2));
+  const r = n => Math.round(n * 10) / 10;
+  return [r(fit(zx + zw / 2, w, full[0], full[2])), r(fit(zy + zh / 2, h, full[1], full[3])), r(w), r(h)];
+}
+function findMapAnimate() {
+  const svg = document.querySelector('#main svg.find-map[data-to]');
+  if (!svg) return;
+  const from = svg.getAttribute('viewBox').split(' ').map(Number);
+  const to = svg.dataset.to.split(' ').map(Number);
+  const id = ++findMapAnim;
+  const still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (still || from.every((v, i) => v === to[i])) { svg.setAttribute('viewBox', to.join(' ')); return; }
+  const start = performance.now(), ms = 420;
+  const step = now => {
+    if (id !== findMapAnim || !svg.isConnected) return;
+    const t = Math.min(1, (now - start) / ms);
+    const e = 1 - Math.pow(1 - t, 3); // 先快後慢
+    svg.setAttribute('viewBox', from.map((v, i) => (v + (to[i] - v) * e).toFixed(1)).join(' '));
+    if (t < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
 function findPageHtml(query) {
   const bar = findChipsHtml(query);
   if (findView === 'map') return bar + findMapHtml(query);
+  findMapShown = null; // 下次切回平面圖，從整張圖放大過去
   const list = findList(query);
   if (!list.length) {
     return bar + `<div class="status-msg">${query
@@ -311,6 +357,7 @@ function findLocationSection(dog) {
     <div class="find-where">
       <button type="button" class="find-where-map" id="findMiniZoom" aria-label="放大平面圖，看${esc(z.name)}在哪裡">${findMapSvg(z.key, '', true, FIND_MAP_TURN, findCageOf(dog))}</button>
       <div><b>${esc(z.name)}</b>・${esc(dog.cage)}
+        <div class="find-where-how">${esc(whereDirections(dog).how)}</div>
         <button type="button" class="find-where-btn" id="findWhere">${icon('map')}看同區的狗</button>
       </div>
     </div>
@@ -341,7 +388,9 @@ document.getElementById('main').addEventListener('click', e => {
   const zone = e.target.closest('[data-find-zone]');
   if (zone) {
     const key = zone.dataset.findZone;
-    findZone = key !== 'all' && findZone === key && !findCage ? 'all' : key; // 再點一次取消
+    // 再點一次取消；平面圖放大後整個框都是那一區，點圖上的區不取消，用「看全圖」回去
+    const onMap = zone.tagName.toLowerCase() === 'g';
+    findZone = key !== 'all' && findZone === key && !findCage && !onMap ? 'all' : key;
     findCage = null;
     render();
     return;
@@ -370,7 +419,7 @@ document.getElementById('main').addEventListener('keydown', e => {
   const zone = e.target.closest('g[data-find-zone]');
   if (!zone) return;
   e.preventDefault();
-  findZone = findZone === zone.dataset.findZone && !findCage ? 'all' : zone.dataset.findZone;
+  findZone = zone.dataset.findZone;
   findCage = null;
   render();
   const again = document.querySelector(`#main g[data-find-zone="${zone.dataset.findZone}"]`);
@@ -598,7 +647,7 @@ function whereHide() {
   box.querySelector('.where-sheet').innerHTML = '';
   document.documentElement.classList.remove('where-open');
   const card = document.querySelector(`#main .card[data-dog="${allDogs.indexOf(dog)}"] [data-where]`);
-  const back = card || (whereOpener && whereOpener.isConnected ? whereOpener : null);
+  const back = whereOpener && whereOpener.isConnected ? whereOpener : card;
   if (back) back.focus({ preventScroll: true });
   whereOpener = null;
 }

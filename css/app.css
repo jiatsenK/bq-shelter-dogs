@@ -917,14 +917,15 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
 .gb-crop::after { content: ''; position: absolute; inset: -6px; }
 
 /* ── 找狗（#99）：照片圖鑑＋平面圖 ── */
-.find-bar { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; }
-.find-view { display: inline-flex; flex-shrink: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--surface); }
+/* K 2026-09-28：照片／平面圖一排、區域一排，分開兩排 */
+.find-bar { display: flex; flex-direction: column; gap: 10px; margin: 0 0 12px; }
+.find-view { display: flex; padding: 3px; border-radius: 12px; background: var(--muted-bg); }
 .find-view button {
-  border: none; background: transparent; font-family: inherit; font-size: 13px; font-weight: 700; color: var(--ink-soft);
-  padding: 7px 10px; display: flex; align-items: center; gap: 4px; cursor: pointer;
+  flex: 1; border: none; background: transparent; font-family: inherit; font-size: 14px; font-weight: 700; color: var(--ink-soft);
+  padding: 7px 10px; display: flex; align-items: center; justify-content: center; gap: 5px; cursor: pointer; border-radius: 9px;
 }
-.find-view button.on { background: var(--primary-soft); color: var(--primary); }
-.find-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; flex: 1; min-width: 0; padding-block: 2px; }
+.find-view button.on { background: var(--surface); color: var(--primary); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.find-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; min-width: 0; padding-block: 2px; }
 .find-chips::-webkit-scrollbar { display: none; }
 .find-chip {
   border: none; background: var(--muted-bg); color: var(--ink); border-radius: 999px; cursor: pointer;
@@ -963,6 +964,13 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
 .find-dog mark, .find-meta mark { background: #FFE58A; color: inherit; border-radius: 3px; padding: 0 1px; }
 
 .find-map-card { background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 12px; }
+/* 放大到一區時，圖下左邊「看全圖」回到整張（取代提示字） */
+.find-map-all {
+  margin-top: 8px; margin-right: auto; display: flex; align-items: center; gap: 5px;
+  border: 1px solid #1F3A5C; background: var(--surface); color: #1F3A5C; border-radius: 999px; cursor: pointer;
+  font-family: inherit; font-size: 14px; font-weight: 700; padding: 7px 14px 7px 12px;
+}
+.find-map-all:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .find-map { display: block; width: 100%; max-width: 640px; height: auto; max-height: 62vh; margin: 0 auto; }
 /* 看板樣式（K 2026-09-26 選 A 墨藍看板）：墨藍底、米白線；選到的區塗米白、字變墨藍 */
 .find-map { --fm-bg: #1F3A5C; --fm-line: #EFE6D6; --fm-soft: rgba(239, 230, 214, 0.55); }
@@ -1126,3 +1134,34 @@ html.find-zoom-open { overflow: hidden; }
 .where-btn.primary { flex: 1.4; background: var(--green-text); border-color: var(--green-text); color: #fff; }
 .where-btn:active { filter: brightness(0.94); }
 .where-btn:focus-visible, .where-close:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* 詳細資訊 V7（#112）：上面大照片，狗名和標籤在下；關閉／在哪／溜了固定在最下面 */
+.detail { padding-bottom: 0; }
+.detail-head { flex-direction: column; gap: 10px; padding: 8px; }
+.detail-head .photo-wrap.hero { width: 100%; }
+.detail-head .photo-wrap.hero .thumb { width: 100%; height: auto; aspect-ratio: 4 / 3; border-radius: 14px; }
+.detail-head .photo-wrap.hero .thumb img { width: 100%; height: 100%; object-fit: cover; object-position: center top; }
+.detail-head .photo-wrap.hero .thumb-fallback { font-size: 64px; }
+.detail-head .photo-wrap.hero .photo-pick { right: 10px; bottom: 10px; width: 42px; height: 42px; font-size: 20px; }
+.detail-head .info { padding: 0 6px 4px; }
+.detail-head .name { font-size: 24px; font-weight: 900; margin-top: 0; }
+.detail-head .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
+.badge.plain { background: var(--surface-soft); color: var(--ink-soft); display: inline-flex; align-items: center; gap: 3px; }
+.badge.plain .icon { color: #E8730C; }
+.find-where-how { font-size: 14.5px; font-weight: 700; margin: 4px 0 6px; color: var(--ink); }
+.detail-bar {
+  position: sticky; bottom: 0; z-index: 2;
+  display: flex; gap: 8px; align-items: stretch;
+  margin: 12px -14px 0; padding: 10px 14px calc(10px + env(safe-area-inset-bottom, 0px));
+  background: rgba(255, 255, 255, 0.96); box-shadow: 0 -1px 0 var(--line);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+}
+.detail-bar .bar-btn {
+  flex: 1; min-height: 50px; border-radius: 14px; border: 1.5px solid var(--line);
+  background: var(--surface); color: var(--ink); font-family: inherit; font-size: 15px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center; gap: 4px; cursor: pointer;
+}
+.detail-bar .bar-btn .icon { color: #E8730C; }
+.detail-bar .group-walk { flex: 1.6; width: auto; margin: 0; min-height: 50px; }
+.detail-bar .self-walked { flex: 1.6; margin: 0; justify-content: center; background: var(--green-bg); border-radius: 14px; }
+.detail-bar button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
