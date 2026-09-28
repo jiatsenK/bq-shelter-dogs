@@ -2218,7 +2218,7 @@ async function runFindTests() {
       eq(document.querySelector('#tabs [data-tab="find"] .n').textContent, '3', '分頁數字：');
       searchQuery = '';
       document.querySelector('#main [data-find-zone="pup"]').click();
-      eq([...document.querySelectorAll('#main .find-dog .find-name .n')].map(n => n.textContent), ['咪寶'], '幼犬舍：');
+      eq([...document.querySelectorAll('#main .find-dog .find-name .n')].map(n => n.textContent), ['咪寶'], 'C區：');
       document.querySelector('#main [data-find-zone="pup"]').click();
       eq(findZone, 'all', '再點一次取消：');
     });
@@ -2234,7 +2234,7 @@ async function runFindTests() {
       if (!/<script src="js\/analysis\.js"><\/script>\s*<script src="js\/find\.js"><\/script>/.test(INDEX_HTML)) throw new Error('find.js 要在 app.js、analysis.js 之後載入');
     });
     await check('#99 詳細資訊有「在哪裡」；對不到分區的籠位不顯示', () => {
-      if (!findLocationSection(allDogs[4]).includes('幼犬舍區')) throw new Error('C區 應該在幼犬舍區');
+      if (!findLocationSection(allDogs[4]).includes('C區')) throw new Error('C區11 應該在 C區');
       eq(findLocationSection(allDogs[7]), '', '其他籠位：');
     });
     await check('#99 找狗不顯示未遛天數與「已遛」按鈕', () => {
