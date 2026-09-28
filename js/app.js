@@ -399,7 +399,8 @@ function thumbAttrs(thumb, full) {
 }
 
 // zoom：詳細資訊上方的照片做成按鈕，點了用燈箱放大（#46）；照片讀不到就標 no-photo，按了不放大
-function photoThumb(dog, size = 56, zoom = false, eager = false) {
+// big：詳細資訊的大照片（#112）直接用原圖，縮圖放大會糊
+function photoThumb(dog, size = 56, zoom = false, eager = false, big = false) {
   // 沒有編號就直接顯示腳掌圖示，不去抓 photos/.jpg
   if (!dog.id) {
     return `<div class="thumb"><div class="thumb-fallback" style="display:flex">${icon('paw')}</div></div>`;
@@ -408,7 +409,7 @@ function photoThumb(dog, size = 56, zoom = false, eager = false) {
   const attrs = zoom ? ` type="button" class="thumb zoom" data-zoom aria-label="放大 ${esc(dog.name)} 的照片"` : ' class="thumb"';
   return `
     <${tag}${attrs}>
-      <img ${thumbAttrs(photoThumbSrc(dog), photoSrc(dog))} alt="" width="${size}" height="${size}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"
+      <img ${thumbAttrs(big ? photoSrc(dog) : photoThumbSrc(dog), photoSrc(dog))} alt="" width="${size}" height="${size}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"
            onload="this.classList.add('loaded')"
            onerror="${thumbFallback} this.style.display='none'; this.nextElementSibling.style.display='flex'; this.parentNode.classList.add('no-photo'); this.parentNode.disabled = true;">
       <div class="thumb-fallback">${icon('paw')}</div>
@@ -581,8 +582,9 @@ function cardMeta(dog) {
   return `<div class="meta">${dog.id ? `${esc(dog.id)}<span class="sep">|</span>` : ''}${esc(dog.cage)}</div>`;
 }
 
+// 詳細資訊：籠位已經在標籤上（#112），這裡只寫編號和再入所
 function metaLine(dog) {
-  return `<div class="meta">${esc(dog.cage)}${dog.id ? `<span class="sep">|</span>${esc(dog.id)}` : ''}</div>${reentryLine(dog)}`;
+  return `${dog.id ? `<div class="meta">編號 ${esc(dog.id)}</div>` : ''}${reentryLine(dog)}`;
 }
 
 // 編號前 8 碼是入所日期（例：2024032902 → 2024/03/29）；看不出來回 null
@@ -869,19 +871,19 @@ function detailHtml(dog, today) {
   const byName = new Map(allDogs.map(d => [d.name, d]));
   const intro = dog.intro;
   const walked = walkedToday(today);
+  // V7（#112）：上面大照片，下面狗名和天數／籠位／入所標籤；在哪裡放前面；關閉、在哪、溜了在底部固定列
   return `
     <div class="detail-head">
-      <div class="photo-wrap">${photoThumb(dog, 84, true)}${photoPickButton(dog)}</div>
+      <div class="photo-wrap hero">${photoThumb(dog, 480, true, true, true)}${photoPickButton(dog)}</div>
       <div class="info">
-        ${statusBadge(dog, today)}
         <div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div>
+        <div class="chips">${statusBadge(dog, today)}${detailChips(dog)}</div>
         ${metaLine(dog)}
       </div>
-      <button class="detail-close" id="detailClose" aria-label="關閉">${icon('close')}</button>
     </div>
     ${detailTrail.length ? `<button type="button" class="detail-back" id="detailBack">${icon('back')}回到 ${esc(detailTrail[detailTrail.length - 1].name)}</button>` : ''}
     ${photoUploadHtml(dog)}
-    ${hideActions(dog)}
+    ${findLocationSection(dog)}
     <section class="detail-section" data-section="note">
       <h3>${icon('note')}試算表備註</h3>
       ${!dog.note ? `<div class="empty">目前沒有備註</div>`
@@ -898,16 +900,27 @@ function detailHtml(dog, today) {
             return buddyTile(d, n, walked);
           }).join('')}</div>`
         : `<div class="empty">沒有登記可以一起溜的狗</div>`}
-      ${groupWalkButton(dog, walked)}
     </section>
     ${walkHistorySection(dog, today)}
     <section class="detail-section" data-section="intro">
       <h3>${icon('card')}入所介紹<span class="sub">收容所在入所時寫的</span></h3>
       ${intro ? `<div class="content">${esc(intro)}</div>` : `<div class="empty">還沒有入所介紹</div>`}
     </section>
-    ${findLocationSection(dog)}
+    ${hideActions(dog)}
     ${gallerySection(dog)}
+    <div class="detail-bar">
+      <button type="button" class="bar-btn" id="detailClose">關閉</button>
+      ${typeof whereKnown === 'function' && whereKnown(dog) ? `<button type="button" class="bar-btn" id="detailWhere">${icon('pin')}在哪</button>` : ''}
+      ${groupWalkButton(dog, walked)}
+    </div>
   `;
+}
+
+// 詳細資訊狗名下面的標籤：籠位、入所年月（天數標籤是 statusBadge）
+function detailChips(dog) {
+  const since = idDate(dog.id);
+  return (dog.cage ? `<span class="badge plain">${icon('pin')}${esc(dog.cage)}</span>` : '')
+    + (since ? `<span class="badge plain">入所 ${since.getFullYear()}/${since.getMonth() + 1}</span>` : '');
 }
 
 // 相簿（狗卡資訊下方）：主照片＋另外上傳的照片排成縮圖格，點了用燈箱看大圖、左右滑換張；最後一格「新增」。
@@ -1161,10 +1174,11 @@ function groupWalkButton(dog, walked) {
   const self = !!walkKey(dog) && !walked.has(dog);
   const n = [...pickedBuddies].length;
   if (!self && !n) {
-    return walked.has(dog) ? `<div class="self-walked">${icon('tick')}${esc(dog.name)} 今天已溜</div>` : '';
+    return walked.has(dog) ? `<div class="self-walked">${icon('tick')}今天已溜</div>` : '';
   }
-  const label = !n ? `${esc(dog.name)} 溜了`
-    : self ? `${esc(dog.name)} 和勾選的 ${n} 隻都溜了`
+  // 底部列空間小（#112）：只有自己寫「溜了」，有勾選才寫幾隻
+  const label = !n ? '溜了'
+    : self ? `和勾選的 ${n} 隻都溜了`
     : `勾選的 ${n} 隻都溜了`;
   return `<button type="button" class="group-walk" id="groupWalk">${icon('tick')}${label}</button>`;
 }
@@ -1865,6 +1879,7 @@ const DETAIL_CLICKS = [
   ['.buddy', el => { const d = allDogs[el.dataset.dog]; if (d) showDetail(d); }],
   ['#detailBack', () => { const d = detailTrail.pop(); if (d) showDetail(d, false); }],
   ['#findWhere', () => findShowZone(detailDog)],
+  ['#detailWhere', el => whereOpen(detailDog, el)],
   ['.pick', el => {
     const id = el.dataset.pick;
     if (pickedBuddies.has(id)) pickedBuddies.delete(id); else pickedBuddies.add(id);
@@ -2002,6 +2017,7 @@ document.getElementById('detailBackdrop').addEventListener('click', e => {
   if (e.target.id === 'detailBackdrop') closeDetail();
 });
 document.addEventListener('keydown', e => {
+  if (typeof whereDog !== 'undefined' && whereDog) return; // 在哪面板（#111）自己處理 Esc、Tab
   if (cropOpen()) {
     // 裁切畫面：Esc 取消，Tab 只在裁切畫面的按鈕間移動
     if (e.key === 'Escape') closeCropper(null);

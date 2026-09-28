@@ -480,12 +480,13 @@ function runTests() {
         card.focus();
         showDetail(allDogs[0]);
         const key = shiftKey => document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey, bubbles: true, cancelable: true }));
-        // 相簿起最後一個按鈕是相簿的「新增」
-        document.getElementById('galleryAdd').focus(); key(false);
-        // #46 起詳細資訊第一個按鈕是可放大的照片，接著才是關閉
+        // V7（#112）起最後一個按鈕是底部列的「溜了」
+        document.getElementById('groupWalk').focus(); key(false);
+        // #46 起詳細資訊第一個按鈕是可放大的照片
         eq(document.activeElement === document.querySelector('#detail button'), true, '回到第一個按鈕：');
         key(true);
-        eq(document.activeElement.id, 'galleryAdd');
+        eq(document.activeElement.id, 'groupWalk');
+        document.getElementById('galleryAdd').focus();
         renderDetail();
         eq(document.activeElement.id, 'galleryAdd');
         document.getElementById('groupWalk').focus(); renderDetail();
@@ -600,10 +601,10 @@ function runTests() {
         showDetail(allDogs[0]);
         const box = document.getElementById('detail');
         eq(box.querySelectorAll('.pick').length, 3, '沒編號的也有勾選圓圈：');
-        eq(box.querySelector('#groupWalk').textContent.trim(), '測試甲 溜了', '沒勾選時只記這隻：');
+        eq(box.querySelector('#groupWalk').textContent.trim(), '溜了', '沒勾選時只記這隻：');
         box.querySelector('.pick[data-pick="2"]').click();
         eq(box.querySelector('.pick[data-pick="2"]').classList.contains('on'), true, '勾選：');
-        eq(box.querySelector('#groupWalk').textContent.trim(), '測試甲 和勾選的 1 隻都溜了', '按鈕文字：');
+        eq(box.querySelector('#groupWalk').textContent.trim(), '和勾選的 1 隻都溜了', '按鈕文字：');
         box.querySelector('#groupWalk').click();
         eq(loadWalkedIds(), ['2', '1'], '一次記兩隻：');
         eq(document.getElementById('detailBackdrop').hidden, false, '記完詳細資訊還開著：');
@@ -962,7 +963,7 @@ async function runPhotoTests() {
         if (!img.complete) await new Promise(r => img.addEventListener('load', r, { once: true }));
         await tick();
         eq(pick.title, '更換照片', '已有照片：');
-        eq(pick.parentElement.className, 'photo-wrap', '相機在照片角落：');
+        eq(pick.parentElement.classList.contains('photo-wrap'), true, '相機在照片角落：');
         eq(document.querySelector('#detail .photo-upload'), null, '還沒選照片時照片下方沒有多一行：');
         hideDetail();
         delete photoOverrides['9102'];
@@ -1369,7 +1370,8 @@ async function runHistoryTests() {
       showDetail(dogs[0]);
       const sec = document.querySelector('#detail [data-section="walks"]');
       if (!sec) throw new Error('詳細資訊要有遛狗紀錄');
-      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-4), ['walks', 'intro', 'where', 'gallery'], '位置在狗卡資訊前（#99 在哪裡、相簿在最後）：');
+      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-3), ['walks', 'intro', 'gallery'], '位置在入所介紹前（相簿在最後）：');
+      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section)[0], 'where', 'V7 #112 在哪裡在最前面：');
       eq([sec.querySelectorAll('.w-grid .on').length, sec.querySelectorAll('.w-grid .none').length, sec.querySelectorAll('.w-grid span').length], [14, 2, 30], '格子：');
       eq([...sec.querySelectorAll('.w-num b')].map(b => b.textContent), ['14', '2.3', '6'], '數字：');
       if (!sec.textContent.includes('從 2026/9/25 開始記錄')) throw new Error('要寫從哪天開始記錄');
@@ -2393,6 +2395,34 @@ async function runWhereTests() {
       eq([whereDog, detailDog === allDogs[3]], [null, true], '詳細資訊：');
       closeDetail();
       await wait();
+    });
+    await check('#112 詳細資訊：上面大照片，下面狗名、天數／籠位／入所標籤；在哪裡放第一段、有找路的話', () => {
+      showDetail(allDogs[0]);
+      const box = document.getElementById('detail');
+      const head = box.querySelector('.detail-head');
+      eq(head.firstElementChild.classList.contains('hero'), true, '照片在最上面：');
+      eq([...head.querySelectorAll('.chips .badge')].map(b => b.textContent.trim()).slice(1), ['舊A03', '入所 2024/3'], '籠位、入所標籤：');
+      const first = box.querySelector('.detail-section');
+      eq(first.dataset.section, 'where', '第一段：');
+      eq(first.querySelector('.find-where-how').textContent, '進舊犬舍走左邊第二排，從下面數第 3 籠', '找路：');
+      hideDetail();
+    });
+    await check('#112 詳細資訊底部固定列：關閉、在哪、溜了；在哪開面板、Esc 只關面板', async () => {
+      showDetail(allDogs[1]);
+      const bar = document.querySelector('#detail .detail-bar');
+      eq([...bar.querySelectorAll('button')].map(b => b.id), ['detailClose', 'detailWhere', 'groupWalk'], '按鈕：');
+      if (document.querySelector('.detail-head #detailClose')) throw new Error('右上角不再放關閉');
+      bar.querySelector('#detailWhere').click();
+      eq([whereDog === allDogs[1], detailDog === allDogs[1]], [true, true], '面板開在詳細資訊上面：');
+      document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      await wait();
+      eq([whereDog, detailDog === allDogs[1]], [null, true], 'Esc 只關面板：');
+      document.getElementById('detailClose').click();
+      await wait();
+      eq(detailDog, null, '關閉：');
+      showDetail(allDogs[4]);
+      eq(!!document.getElementById('detailWhere'), false, '平面圖上沒有的籠位不顯示在哪：');
+      hideDetail();
     });
   } finally {
     if (whereDog) whereHide();
