@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-09-29T17:03:32+08:00",
+  "syncedAt": "2026-09-29T23:51:14+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -896,7 +896,7 @@
       "cage": "新B07",
       "id": "2026062404",
       "name": "史酷比",
-      "walkedDate": "2026-09-27",
+      "walkedDate": "2026-09-29",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1272,11 +1272,11 @@
       "cage": "舊A14",
       "id": "2020081808",
       "name": "奇哥",
-      "walkedDate": "2026-09-27",
+      "walkedDate": "2026-09-29",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "24bf2ad2af85"
+        "75aeed7c10fe"
       ],
       "note": "",
       "sex": "male",
@@ -1287,11 +1287,11 @@
       "cage": "舊A14",
       "id": "2021071301",
       "name": "白尾",
-      "walkedDate": "2026-09-27",
+      "walkedDate": "2026-09-29",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "24bf2ad2af85"
+        "75aeed7c10fe"
       ],
       "note": "2026/5/3 大腿內側腫大（嘉文）;約2026/6/3割腫瘤",
       "sex": "male",
@@ -1302,11 +1302,11 @@
       "cage": "舊A15",
       "id": "2019070219",
       "name": "黑豆漿",
-      "walkedDate": "2026-09-27",
+      "walkedDate": "2026-09-29",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "a2b179095490"
+        "75aeed7c10fe"
       ],
       "note": "2026/4/12、7/26洗澡",
       "sex": "male",
@@ -1317,11 +1317,11 @@
       "cage": "舊A15",
       "id": "2019080608",
       "name": "可麗餅",
-      "walkedDate": "2026-09-27",
+      "walkedDate": "2026-09-29",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "7deb7b3c46bf"
+        "75aeed7c10fe"
       ],
       "note": "",
       "sex": "male",
@@ -1347,11 +1347,11 @@
       "cage": "舊A18",
       "id": "2025042401",
       "name": "浩南",
-      "walkedDate": "2026-09-27",
+      "walkedDate": "2026-09-29",
       "covered": true,
-      "myWalked": true,
+      "myWalked": false,
       "walkers": [
-        "7fe4735e3c59"
+        "75aeed7c10fe"
       ],
       "note": "4/12洗澡（佳岑）",
       "sex": "male",
@@ -1722,11 +1722,11 @@
       "cage": "C區21",
       "id": "2023052902",
       "name": "妙麗",
-      "walkedDate": "2026-09-27",
+      "walkedDate": "2026-09-29",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "a2b179095490"
+        "044328805855"
       ],
       "note": "頸部有腫瘤，不要用p繩，要穿淑萍給的胸背才帶出（嘉文）註：胸背放在住院區箱子裡",
       "sex": "female",

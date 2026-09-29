@@ -315,6 +315,13 @@
     {"id":"2026032402","name":"雪糕","date":"2026-09-29","mine":false,"walkers":["3c0459316acf"]},
     {"id":"2023083106","name":"昆布","date":"2026-09-29","mine":false,"walkers":["da53fbdda293","044328805855"]},
     {"id":"2023022001","name":"寶弟","date":"2026-09-29","mine":false,"walkers":["3c0459316acf"]},
-    {"id":"2026021301","name":"雪寶","date":"2026-09-29","mine":false,"walkers":["3c0459316acf"]}
+    {"id":"2026021301","name":"雪寶","date":"2026-09-29","mine":false,"walkers":["3c0459316acf"]},
+    {"id":"2026062404","name":"史酷比","date":"2026-09-29","mine":false,"walkers":["da53fbdda293","044328805855"]},
+    {"id":"2020081808","name":"奇哥","date":"2026-09-29","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2021071301","name":"白尾","date":"2026-09-29","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2019070219","name":"黑豆漿","date":"2026-09-29","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2019080608","name":"可麗餅","date":"2026-09-29","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2025042401","name":"浩南","date":"2026-09-29","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2023052902","name":"妙麗","date":"2026-09-29","mine":false,"walkers":["044328805855"]}
   ]
 }
