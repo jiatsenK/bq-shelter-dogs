@@ -366,35 +366,6 @@ function findPageHtml(query) {
   return bar + findGridHtml(list, query);
 }
 
-// 詳細資訊的「在哪裡」：小地圖標出所在的區，按鈕跳到找狗的平面圖、選好那一區
-function findLocationSection(dog) {
-  const z = findZoneInfo(findZoneOf(dog));
-  if (!z.rect) return '';
-  return `<section class="detail-section" data-section="where">
-    <h3>${icon('pin')}在哪裡</h3>
-    <div class="find-where">
-      <button type="button" class="find-where-map" id="findMiniZoom" aria-label="放大平面圖，看${esc(z.name)}在哪裡">${findMapSvg(z.key, '', true, FIND_MAP_TURN, findCageOf(dog))}</button>
-      <div><b>${esc(z.name)}</b>・${esc(dog.cage)}
-        <div class="find-where-how">${esc(whereDirections(dog).how)}</div>
-        <button type="button" class="find-where-btn" id="findWhere">${icon('map')}看同區的狗</button>
-      </div>
-    </div>
-  </section>`;
-}
-
-// 從詳細資訊跳到平面圖：關掉詳細資訊、切到找狗、選那一區、清掉搜尋
-function findShowZone(dog) {
-  const key = findZoneOf(dog);
-  closeDetail();
-  findView = 'map';
-  findZone = key;
-  findCage = null;
-  const input = document.getElementById('searchInput');
-  if (input) { input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true })); }
-  switchTab('find');
-  window.scrollTo(0, 0);
-}
-
 // 找狗頁的點擊（內容區每次重畫，所以用事件委派）
 document.getElementById('main').addEventListener('click', e => {
   if (activeTab !== 'find') return;
@@ -552,11 +523,6 @@ function findZoomPick(key, cage = null) {
   window.scrollTo(0, 0);
 }
 
-// 詳細資訊的小地圖：點了全螢幕放大，選好這隻狗那一區
-document.addEventListener('click', e => {
-  if (!e.target.closest || !e.target.closest('#findMiniZoom') || !detailDog) return;
-  findZoomShow(findZoneOf(detailDog), findCageOf(detailDog));
-});
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && findZoomState) { e.stopImmediatePropagation(); findZoomClose(); }
 }, true);
