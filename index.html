@@ -11,6 +11,9 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
+<!-- 手機開啟加速：狗的資料不等 js 下載完，跟 css、js 同時開始抓；js/app.js 的 loadDogsData() 第一次會接手用這個；
+     放在 css 前面，不然要等 css 下載完才會執行 -->
+<script>try { window.__dogsEarly = fetch('data/dogs.json', { cache: 'no-cache' }); window.__dogsEarly.catch(function () {}); } catch (e) {}</script>
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
