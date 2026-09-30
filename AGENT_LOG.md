@@ -492,3 +492,9 @@
 - `js/find.js`、`js/app.js`：拿掉詳細資訊的「在哪裡」卡片（小地圖、區名、找路的話、「看同區的狗」按鈕）和它的點擊處理；底部「在哪」按鈕照舊開在哪面板（面板本來就不靠這張卡片）。
 - `css/app.css`：拿掉只給這張卡片用的樣式。`docs/PROJECT_GOALS.md`：找狗那行改成用底部「在哪」。
 - `tests/index.html`：拿掉舊的卡片測試，改測第一段變成試算表備註；新增 1 項測試確認卡片不見、底部「在哪」還能開面板。本機 138 項全過。
+
+## 2026-09-30 新增 AGENTS.md，CLAUDE.md 改成指向它（Claude，分支 claude/project-thread-vvdqb4）
+- 依據：K「改善以上問題」（Codex 系列讀本第 2 篇：本 repo 只有 CLAUDE.md，Codex 不讀，會漏掉「寫入後記 AGENT_LOG.md」這條）。
+- `AGENTS.md`：搬入原 `CLAUDE.md` 全部內容，加上「指令」一節（照 `tests.yml` 的兩條測試指令），註明 Codex 不掃 `.claude/skills/`。
+- `CLAUDE.md`：改成一行 `@AGENTS.md`，跟其他 repo 一樣兩個工具共用一份。
+- 只動文件，沒改程式。
