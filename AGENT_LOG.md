@@ -502,3 +502,8 @@
 ## 2026-09-27 「更新」失敗時顯示原因（Claude，分支 claude/project-thread-y4s4a4）
 - 依據：K 設完 Cloudflare 三步後按「更新」跳出「更新失敗」，17:30、18:00 鬧鐘也沒叫到同步，要知道是哪一步沒生效。
 - `js/app.js`：失敗提示改成「更新失敗：{Worker 回的原因}」（例：叫同步失敗（GitHub 403）＝token 沒開 Actions 權限；沒有內容就顯示 HTTP 狀態碼）。tests/index.html 更新測試，本機 123 項全過。
+
+## 2026-10-01 PR #109 解合併衝突（Claude，分支 claude/project-thread-y4s4a4）
+- 依據：K「把本專案 衝突的合併解掉」。
+- 把最新 main merge 進來，只有 `AGENT_LOG.md` 檔尾衝突，兩筆都保留（main 的在前）。`js/app.js`、`tests/index.html` 自動合併，改動仍只在「更新」失敗訊息那段。
+- node 測試 77 項、網頁測試 138 項全過。
