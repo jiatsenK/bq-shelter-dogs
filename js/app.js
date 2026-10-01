@@ -882,7 +882,7 @@ function detailHtml(dog, today) {
   const byName = new Map(allDogs.map(d => [d.name, d]));
   const intro = dog.intro;
   const walked = walkedToday(today);
-  // V7（#112）：上面大照片，下面狗名和天數／籠位／入所標籤；在哪裡放前面；關閉、在哪、溜了在底部固定列
+  // V7（#112）：上面大照片，下面狗名和天數／籠位／入所標籤；關閉、在哪、溜了在底部固定列（在哪裡卡片 V7 小修正拿掉，改用底部「在哪」）
   return `
     <div class="detail-head">
       <div class="photo-wrap hero">${photoThumb(dog, 480, true, true, true)}${photoPickButton(dog)}</div>
@@ -894,7 +894,6 @@ function detailHtml(dog, today) {
     </div>
     ${detailTrail.length ? `<button type="button" class="detail-back" id="detailBack">${icon('back')}回到 ${esc(detailTrail[detailTrail.length - 1].name)}</button>` : ''}
     ${photoUploadHtml(dog)}
-    ${findLocationSection(dog)}
     <section class="detail-section" data-section="note">
       <h3>${icon('note')}試算表備註</h3>
       ${!dog.note ? `<div class="empty">目前沒有備註</div>`
@@ -1889,7 +1888,6 @@ const DETAIL_CLICKS = [
   ['#photoCancel', () => { clearPhotoUpload(); renderDetail(); }],
   ['.buddy', el => { const d = allDogs[el.dataset.dog]; if (d) showDetail(d); }],
   ['#detailBack', () => { const d = detailTrail.pop(); if (d) showDetail(d, false); }],
-  ['#findWhere', () => findShowZone(detailDog)],
   ['#detailWhere', el => whereOpen(detailDog, el)],
   ['.pick', el => {
     const id = el.dataset.pick;

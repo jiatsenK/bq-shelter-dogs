@@ -1020,14 +1020,6 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
 }
 .find-map-card + .find-zone-head { margin-top: 18px; }
 
-/* 詳細資訊「在哪裡」：小地圖＋區名＋跳到平面圖 */
-.find-where { display: flex; gap: 12px; align-items: center; font-size: 15px; line-height: 1.5; }
-.find-where .find-map.mini { width: 104px; flex-shrink: 0; margin: 0; }
-.find-where-btn {
-  display: flex; align-items: center; gap: 5px; margin-top: 6px;
-  border: none; background: var(--primary-soft); color: var(--primary); border-radius: 10px; cursor: pointer;
-  font-family: inherit; font-size: 14px; font-weight: 700; padding: 7px 12px;
-}
 /* 可以一起溜換過狗之後，回到上一隻 */
 .detail-back {
   display: flex; align-items: center; gap: 4px; margin: 10px 0 0;
@@ -1035,7 +1027,7 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
   font-family: inherit; font-size: 14px; font-weight: 700; padding: 8px 12px; box-shadow: var(--shadow-card);
 }
 
-/* 平面圖放大（#102）：地圖右下角「放大」、詳細資訊小地圖可點；全螢幕跟看板同色，－／＋ 調大小 */
+/* 平面圖放大（#102）：地圖右下角「放大」；全螢幕跟看板同色，－／＋ 調大小 */
 .find-map-foot { display: flex; align-items: flex-start; gap: 10px; }
 .find-map-foot .find-map-hint { flex: 1; min-width: 0; }
 .find-zoom-btn {
@@ -1044,8 +1036,6 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
   font-family: inherit; font-size: 14px; font-weight: 700; padding: 8px 14px 8px 12px;
 }
 .find-zoom-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.find-where-map { border: none; background: none; padding: 0; cursor: zoom-in; flex-shrink: 0; border-radius: 12px; }
-.find-where-map:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 html.find-zoom-open { overflow: hidden; }
 .find-zoom { position: fixed; inset: 0; z-index: 60; background: #F4F7FB; color: var(--ink); display: flex; flex-direction: column; }
 .find-zoom[hidden] { display: none; }
@@ -1147,7 +1137,6 @@ html.find-zoom-open { overflow: hidden; }
 .detail-head .chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 4px; }
 .badge.plain { background: var(--surface-soft); color: var(--ink-soft); display: inline-flex; align-items: center; gap: 3px; }
 .badge.plain .icon { color: #E8730C; }
-.find-where-how { font-size: 14.5px; font-weight: 700; margin: 4px 0 6px; color: var(--ink); }
 .detail-bar {
   position: sticky; bottom: 0; z-index: 2;
   display: flex; gap: 8px; align-items: stretch;
