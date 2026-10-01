@@ -506,3 +506,8 @@
 - `index.html`：頁首（css 前面）提早開始抓 dogs.json；`js/app.js` 的 `loadDogsData()` 第一次接手用這份，init 改等 DOMContentLoaded（資料可能比 find.js 先到）；分類數字算找狗隻數時不再排序。
 - 結果：狗卡出現 2.2 秒 → 1.4 秒，開網頁時卡住的時間 0.9 秒 → 0.3 秒；換到找狗 0.45 → 0.15 秒、回溜狗表 0.65 → 0.1 秒。
 - `tests/index.html`：新增 3 項、#30 檔案拆分改成允許這一段內嵌程式。本機 141 項全過。
+
+## 2026-10-01 PR #121 解合併衝突（Claude，分支 claude/project-thread-d90g61）
+- 依據：K「把本專案 衝突的合併解掉」。
+- 把最新 main merge 進來，只有 `AGENT_LOG.md` 檔尾衝突，兩筆都保留（main 的在前）。程式沒有衝突。
+- node 測試 77 項、網頁測試 141 項全過。
