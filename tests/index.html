@@ -1371,7 +1371,7 @@ async function runHistoryTests() {
       const sec = document.querySelector('#detail [data-section="walks"]');
       if (!sec) throw new Error('詳細資訊要有遛狗紀錄');
       eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-3), ['walks', 'intro', 'gallery'], '位置在入所介紹前（相簿在最後）：');
-      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section)[0], 'where', 'V7 #112 在哪裡在最前面：');
+      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section)[0], 'note', 'V7 小修正拿掉在哪裡，試算表備註在最前面：');
       eq([sec.querySelectorAll('.w-grid .on').length, sec.querySelectorAll('.w-grid .none').length, sec.querySelectorAll('.w-grid span').length], [14, 2, 30], '格子：');
       eq([...sec.querySelectorAll('.w-num b')].map(b => b.textContent), ['14', '2.3', '6'], '數字：');
       if (!sec.textContent.includes('從 2026/9/25 開始記錄')) throw new Error('要寫從哪天開始記錄');
@@ -2233,10 +2233,6 @@ async function runFindTests() {
       }
       if (!/<script src="js\/analysis\.js"><\/script>\s*<script src="js\/find\.js"><\/script>/.test(INDEX_HTML)) throw new Error('find.js 要在 app.js、analysis.js 之後載入');
     });
-    await check('#99 詳細資訊有「在哪裡」；對不到分區的籠位不顯示', () => {
-      if (!findLocationSection(allDogs[4]).includes('C區')) throw new Error('C區11 應該在 C區');
-      eq(findLocationSection(allDogs[7]), '', '其他籠位：');
-    });
     await check('#99 找狗不顯示未遛天數與「已遛」按鈕', () => {
       const html = findCard(allDogs[0], '', false);
       if (/data-walk|上次遛狗|天前/.test(html)) throw new Error(html);
@@ -2261,7 +2257,7 @@ async function runFindTests() {
       if (!(mw > mh)) throw new Error('頁面上的平面圖仍是橫的');
       if (!INDEX_HTML.includes('<symbol id="i-zoom"')) throw new Error('index.html 缺 i-zoom 圖示');
     });
-    await check('逐籠平面圖（K 2026-09-27 手繪標註）：舊犬舍四排、新犬舍三排，詳細資訊小地圖標出那一籠', () => {
+    await check('逐籠平面圖（K 2026-09-27 手繪標註）：舊犬舍四排、新犬舍三排', () => {
       eq(allDogs.map(findCageOf), ['新A3', '新獨12', '新B10', '舊B4', null, null, null, null], '籠位對到籠子：');
       const ids = FIND_CAGES.cages.map(c => c.id);
       eq([ids.filter(i => i.startsWith('舊')).length, ids.filter(i => i.startsWith('新')).length], [42, 32], '籠子數：');
@@ -2278,9 +2274,6 @@ async function runFindTests() {
       render();
       eq(document.querySelectorAll('#main rect.fm-cage').length, 74, '頁面平面圖畫出每個籠子：');
       eq(document.querySelectorAll('#main rect.fm-cage.has').length, 4, '有狗的籠子：');
-      const mini = findLocationSection(allDogs[0]);
-      eq((mini.match(/fm-cage/g) || []).length, 1, '小地圖只畫那一籠：');
-      if (!mini.includes('fm-cage has on') && !mini.includes('fm-cage on')) throw new Error('小地圖沒標出籠子');
     });
     await check('逐籠平面圖：點籠子只列那籠的狗、再點回整區；搜尋時找到的籠子亮橘色、其他淡掉', () => {
       findView = 'map'; findZone = 'all'; findCage = null; activeTab = 'find'; searchQuery = '';
@@ -2396,15 +2389,12 @@ async function runWhereTests() {
       closeDetail();
       await wait();
     });
-    await check('#112 詳細資訊：上面大照片，下面狗名、天數／籠位／入所標籤；在哪裡放第一段、有找路的話', () => {
+    await check('#112 詳細資訊：上面大照片，下面狗名、天數／籠位／入所標籤', () => {
       showDetail(allDogs[0]);
       const box = document.getElementById('detail');
       const head = box.querySelector('.detail-head');
       eq(head.firstElementChild.classList.contains('hero'), true, '照片在最上面：');
       eq([...head.querySelectorAll('.chips .badge')].map(b => b.textContent.trim()).slice(1), ['舊A03', '入所 2024/3'], '籠位、入所標籤：');
-      const first = box.querySelector('.detail-section');
-      eq(first.dataset.section, 'where', '第一段：');
-      eq(first.querySelector('.find-where-how').textContent, '進舊犬舍走左邊第二排，從下面數第 3 籠', '找路：');
       hideDetail();
     });
     await check('#112 詳細資訊底部固定列：關閉、在哪、溜了；在哪開面板、Esc 只關面板', async () => {
@@ -2584,6 +2574,16 @@ async function runCageMateTests() {
       box2.innerHTML = cageMatesSection(allDogs[0], walkedToday(TODAY));
       eq(box2.querySelectorAll('.pick').length, 1, '今天已溜的不顯示圓圈：');
       if (!box2.querySelector('.walked-tag')) throw new Error('今天已溜的要標「今天已溜」');
+    });
+    await check('V7 小修正：詳細資訊不再有中間的「在哪裡」卡片，底部「在哪」照樣開面板', () => {
+      const html = detailHtml(allDogs[0], TODAY);
+      if (/data-section="where"|find-where|findMiniZoom|看同區的狗/.test(html)) throw new Error('「在哪裡」卡片還在');
+      showDetail(allDogs[0]);
+      document.getElementById('detailWhere').click();
+      eq(whereDog === allDogs[0], true, '底部在哪開面板：');
+      whereHide();
+      if (history.state && history.state.bqWhere) history.replaceState(null, '');
+      hideDetail();
     });
   } finally {
     [allDogs, groupMap, walkedStorage, walkedMemory] = saved;

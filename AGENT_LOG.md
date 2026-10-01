@@ -487,6 +487,18 @@
 - `tests/index.html`：兩項舊測試跟著改名。本機 138 項全過。
 - 跟 PR #118（#114）同一個分支，一起合併。
 
+## 2026-09-29 V7 小修正：詳細資訊拿掉中間的「在哪裡」卡片（Claude，分支 claude/remove-detail-where-card-ljgd7e）
+- 依據：K「V7小修正 移除狗卡中間藍色在哪裡 留下下方的橘色按鈕就好」（附詳細資訊截圖）。
+- `js/find.js`、`js/app.js`：拿掉詳細資訊的「在哪裡」卡片（小地圖、區名、找路的話、「看同區的狗」按鈕）和它的點擊處理；底部「在哪」按鈕照舊開在哪面板（面板本來就不靠這張卡片）。
+- `css/app.css`：拿掉只給這張卡片用的樣式。`docs/PROJECT_GOALS.md`：找狗那行改成用底部「在哪」。
+- `tests/index.html`：拿掉舊的卡片測試，改測第一段變成試算表備註；新增 1 項測試確認卡片不見、底部「在哪」還能開面板。本機 138 項全過。
+
+## 2026-09-30 新增 AGENTS.md，CLAUDE.md 改成指向它（Claude，分支 claude/project-thread-vvdqb4）
+- 依據：K「改善以上問題」（Codex 系列讀本第 2 篇：本 repo 只有 CLAUDE.md，Codex 不讀，會漏掉「寫入後記 AGENT_LOG.md」這條）。
+- `AGENTS.md`：搬入原 `CLAUDE.md` 全部內容，加上「指令」一節（照 `tests.yml` 的兩條測試指令），註明 Codex 不掃 `.claude/skills/`。
+- `CLAUDE.md`：改成一行 `@AGENTS.md`，跟其他 repo 一樣兩個工具共用一份。
+- 只動文件，沒改程式。
+
 ## 2026-09-28 V7 定版紀錄（Claude，分支 claude/project-thread-2h9d33）
 - 依據：K 在專案聊天說「本版定版喔」（V7 四張票 #111–#114 都已合併）。
 - `docs/PROJECT_GOALS.md`：標題改「目前定版：V7」，新增「V7 ✅ 定版」一節（固定名詞、底部分類列＋在哪面板、詳細資訊、找狗、各頁美術、平面圖名稱與圖示）；V6 改成「前一次定版」。
