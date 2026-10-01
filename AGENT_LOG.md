@@ -498,3 +498,15 @@
 - `AGENTS.md`：搬入原 `CLAUDE.md` 全部內容，加上「指令」一節（照 `tests.yml` 的兩條測試指令），註明 Codex 不掃 `.claude/skills/`。
 - `CLAUDE.md`：改成一行 `@AGENTS.md`，跟其他 repo 一樣兩個工具共用一份。
 - 只動文件，沒改程式。
+
+## 2026-09-28 V7 定版紀錄（Claude，分支 claude/project-thread-2h9d33）
+- 依據：K 在專案聊天說「本版定版喔」（V7 四張票 #111–#114 都已合併）。
+- `docs/PROJECT_GOALS.md`：標題改「目前定版：V7」，新增「V7 ✅ 定版」一節（固定名詞、底部分類列＋在哪面板、詳細資訊、找狗、各頁美術、平面圖名稱與圖示）；V6 改成「前一次定版」。
+- `docs/DESIGN_GUIDE.md`：單手操作一節改成「2026-09-28 定版」，列出各 PR，提案原文保留當設計理由。
+- 只改文件，沒動程式。
+
+## 2026-10-01 PR #119 解合併衝突（Claude，分支 claude/project-thread-2h9d33）
+- 依據：K「把本專案 衝突的合併解掉」。
+- 把最新 main merge 進來，只有 `AGENT_LOG.md` 檔尾衝突，兩筆都保留（main 的在前）。
+- `docs/PROJECT_GOALS.md`：V7 #112 那行原本寫「在哪裡」放第一段，main 已由 PR #120 拿掉這張卡片，改成註明已拿掉，避免定版文件跟現況不符。
+- node 測試 77 項、網頁測試 138 項全過。
