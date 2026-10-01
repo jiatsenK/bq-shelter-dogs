@@ -493,6 +493,12 @@
 - `css/app.css`：拿掉只給這張卡片用的樣式。`docs/PROJECT_GOALS.md`：找狗那行改成用底部「在哪」。
 - `tests/index.html`：拿掉舊的卡片測試，改測第一段變成試算表備註；新增 1 項測試確認卡片不見、底部「在哪」還能開面板。本機 138 項全過。
 
+## 2026-09-30 新增 AGENTS.md，CLAUDE.md 改成指向它（Claude，分支 claude/project-thread-vvdqb4）
+- 依據：K「改善以上問題」（Codex 系列讀本第 2 篇：本 repo 只有 CLAUDE.md，Codex 不讀，會漏掉「寫入後記 AGENT_LOG.md」這條）。
+- `AGENTS.md`：搬入原 `CLAUDE.md` 全部內容，加上「指令」一節（照 `tests.yml` 的兩條測試指令），註明 Codex 不掃 `.claude/skills/`。
+- `CLAUDE.md`：改成一行 `@AGENTS.md`，跟其他 repo 一樣兩個工具共用一份。
+- 只動文件，沒改程式。
+
 ## 2026-09-30 手機開啟加速：畫面外的狗卡先不排版、狗的資料提早抓（Claude，分支 claude/project-thread-d90g61）
 - 依據：K「開啟手機畫面還是跑很慢耶」。
 - 量測（本機模擬慢速 4G＋手機 CPU 慢 4 倍、gzip）：主因是溜狗表一次排版 117 張狗卡，卡住畫面約 0.8–1 秒；另外 dogs.json 要等三個 js 下載執行完才開始抓。
