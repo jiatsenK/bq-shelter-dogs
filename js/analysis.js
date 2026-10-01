@@ -131,9 +131,9 @@ function dataCompleteness(rows, hasPhoto) {
   const items = [
     { label: '沒有編號', dogs: pick(r => !r.dog.id) },
     { label: '編號看不出入所日期', dogs: pick(r => r.dog.id && !r.intake) },
-    { label: '沒有遛狗日期', dogs: pick(r => !r.dog.walkedDate) },
+    { label: '沒有溜狗日期', dogs: pick(r => !r.dog.walkedDate) },
     { label: '沒有性別', dogs: pick(r => !r.dog.sex) },
-    { label: '沒有狗卡資訊', dogs: pick(r => !r.dog.intro) },
+    { label: '沒有入所介紹', dogs: pick(r => !r.dog.intro) },
   ];
   if (hasPhoto) items.push({ label: '沒有照片', dogs: pick(r => !r.dog.id || hasPhoto.get(r.dog.id) === false) });
   return { total: rows.length, items };
@@ -275,7 +275,7 @@ function kpi(value, unit, label, tone = '') {
 }
 
 function analysisHtml(dogs, today) {
-  if (!dogs.length) return `<div class="status-msg">目前沒有狗狗資料</div>`;
+  if (!dogs.length) return `<div class="status-msg">目前沒有狗</div>`;
   checkPhotos(dogs);
   const rows = analysisRows(dogs, today);
   const noIntake = rows.filter(r => !r.intake);
@@ -284,14 +284,14 @@ function analysisHtml(dogs, today) {
   const avgStay = average(rows.filter(r => r.intake).map(r => r.stayDays));
   const out = [];
 
-  // 最上面一張藍色總覽：四個大數字
+  // 最上面四格大數字（V7 #114 改成白底四格）
   out.push(`<section class="a-hero">
-    <div class="a-hero-title">${icon('paw')}板收犬隻總覽</div>
+    <div class="a-hero-title">${icon('paw')}板收在所的狗</div>
     <div class="a-kpis">
       ${kpi(rows.length, '隻', '目前在所')}
       ${kpi(avgStay == null ? '–' : yearsText(avgStay), '年', '平均在所')}
       ${kpi(share.pct.toFixed(0), '%', '在所滿 1 年')}
-      ${kpi(stale, '隻', `超過 ${AMBER_DAYS} 天沒遛`, stale ? 'warn' : '')}
+      ${kpi(stale, '隻', `超過 ${AMBER_DAYS} 天沒溜`, stale ? 'warn' : '')}
     </div>
     <div class="a-hero-note">入所日期取編號前 8 碼${noIntake.length ? `；${noIntake.length} 隻編號看不出入所日期，不列入時間統計（${dogNames(noIntake.map(r => r.dog))}）` : ''}</div>
   </section>`);
@@ -350,7 +350,7 @@ function analysisHtml(dogs, today) {
   const compRows = comp.items.map(it => it.dogs.length
     ? `<details class="a-miss"><summary><span>${esc(it.label)}</span><b>${it.dogs.length} 隻</b></summary><p>${dogNames(it.dogs)}</p></details>`
     : `<div class="a-miss ok"><span>${esc(it.label)}</span><b>0 隻</b></div>`).join('');
-  out.push(section('犬隻資料完整度', `共 ${comp.total} 隻；圓環是資料齊全的比例，點下面項目看缺哪幾隻`,
+  out.push(section('狗的資料完整度', `共 ${comp.total} 隻；圓環是資料齊全的比例，點下面項目看缺哪幾隻`,
     `<div class="a-comps">${rings}</div>` + compRows +
     (photosDone ? '' : '<div class="a-miss"><span>沒有照片</span><b class="muted">檢查中…</b></div>'), 'note'));
 
@@ -359,38 +359,38 @@ function analysisHtml(dogs, today) {
 
 // ── 詳細資訊的遛狗紀錄 ──
 function mdText(d) {
-  return d ? `${d.getMonth() + 1}/${d.getDate()}` : '無紀錄';
+  return d ? `${d.getMonth() + 1}/${d.getDate()}` : '沒有紀錄';
 }
 
 // 詳細資訊的「遛狗紀錄」：最近 30 天的格子＋三個數字
 function walkHistorySection(dog, today) {
   loadHistory();
-  const head = `<h3>${icon('tick')}遛狗紀錄<span class="sub">所有人遛的都算</span></h3>`;
+  const head = `<h3>${icon('tick')}溜狗紀錄<span class="sub">所有人溜的都算</span></h3>`;
   const wrap = body => `<section class="detail-section" data-section="walks">${head}${body}</section>`;
   if (!historyData || historyData.state === 'loading') return wrap('<div class="empty">讀取中…</div>');
-  if (historyData.state === 'error') return wrap('<div class="empty">遛狗紀錄讀取失敗</div>');
+  if (historyData.state === 'error') return wrap('<div class="empty">溜狗紀錄讀不到</div>');
   const { start } = historySpan(historyData.dates, today);
   const h = dogWalkHistory(dog, historyData.walks, start, today);
   const first = h.cells[0].date, last = h.cells[h.cells.length - 1].date;
-  const cell = c => `<span class="${c.walked ? 'on' : c.recorded ? 'off' : 'none'}" title="${mdText(c.date)}${c.walked ? ' 有遛' : c.recorded ? ' 沒遛' : ' 還沒開始記錄'}"></span>`;
+  const cell = c => `<span class="${c.walked ? 'on' : c.recorded ? 'off' : 'none'}" title="${mdText(c.date)}${c.walked ? ' 有溜' : c.recorded ? ' 沒溜' : ' 還沒開始記錄'}"></span>`;
   const num = (v, unit, label) => `<div class="w-num"><b>${v}</b><small>${unit}</small><span>${label}</span></div>`;
   return wrap(`
     <div class="w-grid">${h.cells.map(cell).join('')}</div>
     <div class="w-axis"><span>${mdText(first)}</span><span>今天</span></div>
     <div class="w-nums">
       ${num(h.count, '次', '最近 30 天')}
-      ${num(h.avgGap == null ? '–' : h.avgGap.toFixed(1), '天', '平均隔')}
-      ${num(h.maxGap == null ? '–' : h.maxGap, '天', '最久隔')}
+      ${num(h.avgGap == null ? '–' : h.avgGap.toFixed(1), '天', '平均幾天溜一次')}
+      ${num(h.maxGap == null ? '–' : h.maxGap, '天', '最久幾天沒溜')}
     </div>
-    <div class="w-legend"><span><i class="on"></i>有遛</span><span><i class="off"></i>沒遛</span>${h.cells.some(c => !c.recorded) ? '<span><i class="none"></i>還沒開始記錄</span>' : ''}</div>
-    <div class="w-note">從 ${start ? `${start.getFullYear()}/${mdText(start)}` : '同步'} 開始記錄，一天 3 次同步；兩次同步之間被遛兩次只記一次。</div>`);
+    <div class="w-legend"><span><i class="on"></i>有溜</span><span><i class="off"></i>沒溜</span>${h.cells.some(c => !c.recorded) ? '<span><i class="none"></i>還沒開始記錄</span>' : ''}</div>
+    <div class="w-note">從 ${start ? `${start.getFullYear()}/${mdText(start)}` : '同步'} 開始記錄，同一天溜幾次都算一格。</div>`);
 }
 
 // 分析頁整頁：上方「‹ 返回」＋標題；資料還沒好時顯示讀取中或失敗
 function analysisPageHtml(today) {
-  const top = `<div class="a-top"><button type="button" class="a-back" id="analysisBack">${icon('back')}返回</button><h2>犬隻分析</h2></div>`;
+  const top = `<div class="a-top"><button type="button" class="a-back" id="analysisBack">${icon('back')}返回</button><h2>分析</h2></div>`;
   if (loadState === 'ready') return top + analysisHtml(allDogs, today);
-  return top + `<div class="status-msg">${loadState === 'error' ? '資料載入失敗，請稍後重新整理。' : '讀取狗狗資料中…'}</div>`;
+  return top + `<div class="status-msg">${loadState === 'error' ? '狗的資料讀不到，請確認網路後重新整理。' : '讀取中…'}</div>`;
 }
 
 // 打開分析頁：手機按「返回」會回到原本的分類（跟詳細資訊一樣用 history）
