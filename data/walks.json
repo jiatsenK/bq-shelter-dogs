@@ -407,6 +407,25 @@
     {"id":"2026032402","name":"雪糕","date":"2026-10-01","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2023083106","name":"昆布","date":"2026-10-01","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2023022001","name":"寶弟","date":"2026-10-01","mine":false,"walkers":["da53fbdda293"]},
-    {"id":"2025021801","name":"阿湯","date":"2026-10-01","mine":false,"walkers":["21120f797f52"]}
+    {"id":"2025021801","name":"阿湯","date":"2026-10-01","mine":false,"walkers":["21120f797f52"]},
+    {"id":"","name":"福星","date":"2026-10-01","mine":false,"walkers":["8786042066d4"]},
+    {"id":"2022042601","name":"黑皮","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2019032912","name":"瓜瓜","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2017070102","name":"LUCY","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2018062601","name":"斑斑","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2019052004","name":"巴迪","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2017090423","name":"暴牙斑","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2018101206","name":"寶英","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2018041609","name":"小煤炭","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2019092801","name":"黃老爺","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2019080604","name":"蛋餅","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2021022202","name":"KOBE","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2019080606","name":"蔥抓餅","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2019080607","name":"胡椒餅","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2020081808","name":"奇哥","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2021071301","name":"白尾","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2019070219","name":"黑豆漿","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2019080608","name":"可麗餅","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2020122507","name":"馬克","date":"2026-10-01","mine":false,"walkers":["21120f797f52"]}
   ]
 }
