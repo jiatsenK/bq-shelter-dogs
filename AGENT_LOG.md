@@ -499,6 +499,19 @@
 - `CLAUDE.md`：改成一行 `@AGENTS.md`，跟其他 repo 一樣兩個工具共用一份。
 - 只動文件，沒改程式。
 
+## 2026-09-30 手機開啟加速：畫面外的狗卡先不排版、狗的資料提早抓（Claude，分支 claude/project-thread-d90g61）
+- 依據：K「開啟手機畫面還是跑很慢耶」。
+- 量測（本機模擬慢速 4G＋手機 CPU 慢 4 倍、gzip）：主因是溜狗表一次排版 117 張狗卡，卡住畫面約 0.8–1 秒；另外 dogs.json 要等三個 js 下載執行完才開始抓。
+- `css/app.css`：`.card`、`.find-dog` 加 `content-visibility: auto`，畫面外的卡捲到附近才排版。
+- `index.html`：頁首（css 前面）提早開始抓 dogs.json；`js/app.js` 的 `loadDogsData()` 第一次接手用這份，init 改等 DOMContentLoaded（資料可能比 find.js 先到）；分類數字算找狗隻數時不再排序。
+- 結果：狗卡出現 2.2 秒 → 1.4 秒，開網頁時卡住的時間 0.9 秒 → 0.3 秒；換到找狗 0.45 → 0.15 秒、回溜狗表 0.65 → 0.1 秒。
+- `tests/index.html`：新增 3 項、#30 檔案拆分改成允許這一段內嵌程式。本機 141 項全過。
+
+## 2026-10-01 PR #121 解合併衝突（Claude，分支 claude/project-thread-d90g61）
+- 依據：K「把本專案 衝突的合併解掉」。
+- 把最新 main merge 進來，只有 `AGENT_LOG.md` 檔尾衝突，兩筆都保留（main 的在前）。程式沒有衝突。
+- node 測試 77 項、網頁測試 141 項全過。
+
 ## 2026-10-02 更新寶妮狗卡資訊（Claude，分支 claude/project-thread-ovzdfh）
 - 依據：K「更新資料」並附寶妮（2026082607）的狗卡圖片。
 - `dogs/2026082607.md`：名字從暫用的「（梗奶奶）」改成寶妮，加上 `sex: female`，填入狗卡文字。原始狗卡圖片沒有放進 repo。
