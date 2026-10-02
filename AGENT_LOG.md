@@ -541,6 +541,13 @@
 - `js/app.js`：`parseDogsData` 讀 `photoVersions`、`versioned()` 幫主照片、縮圖、相簿、相簿縮圖網址加 `?v=`；沒有版本（舊網址、剛上傳）照舊。
 - 測試：新增 `scripts/photo-versions.test.mjs`（3 項，`tests.yml` 和 `AGENTS.md` 的 node 測試指令加上它）、網頁 3 項。本機 `wrangler dev` 實測：照片回 `max-age=2592000, immutable`、dogs.json 照舊每次問；第二次打開，帶版本號的照片 0 位元組走網路。
 
+## 2026-10-02 V8-4 Cloudflare 瀏覽統計（#128，Claude，分支 claude/project-thread-ovzdfh）
+- 依據：K 說「合併」PR #134 後，問要不要接 #128（原建議 Codex），K 回「接著做」。
+- 查 Cloudflare 文件：`*.workers.dev` 不是走 Cloudflare 代理的網域，後台不能自動開，要放官方 JS beacon。
+- `scripts/analytics-beacon.mjs`（新）：部署前把 beacon 插進要上傳的 `index.html` 的 `</body>` 前（token 來自 GitHub Secret `CF_ANALYTICS_TOKEN`，要是 32 個英數字；沒設就跳過；不提交）。只加在 `deploy-cloudflare.yml`，所以 github.io 和 PR 預覽版都不載入。
+- `docs/CLOUDFLARE_SETUP.md`：加「瀏覽統計」一節（K 要按的 6 步）；`docs/PROJECT_GOALS.md`：補一句只看人數、不記個人資料。
+- 測試：新增 `scripts/analytics-beacon.test.mjs`（4 項，`tests.yml` 和 `AGENTS.md` 的 node 測試指令加上它）。
+
 ## 2026-10-02 V8-5 舊網址（github.io）轉到新網址（#129，Claude，分支 claude/project-thread-ovzdfh-v8-5）
 - 依據：K 說 PR #135（#128 瀏覽統計）之後再合併、「先繼續做下一個」。#135 還占著 `claude/project-thread-ovzdfh`，所以這張另開分支。**K 說「切換」之前不合併。**
 - `index.html`、`tests/index.html`：`<head>` 最前面加一行，`location.hostname === 'jiatsenk.github.io'` 時 `location.replace` 到新網址，帶上路徑（去掉 `/bq-shelter-dogs`）、`?` 和 `#`；新網址、預覽版、本機不轉。

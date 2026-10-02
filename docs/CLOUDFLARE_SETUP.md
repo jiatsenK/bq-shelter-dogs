@@ -110,6 +110,19 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
 - 「我溜過」等手機上記的東西，預覽網址也要重新輸入一次（每個預覽網址都算不同網站）。
 - 不用另外設定，用的是步驟 4 已經設好的 Cloudflare Secret。
 
+## 瀏覽統計（#128）
+
+看每天有幾個人用、用什麼手機。Cloudflare 免費，不放 cookie、不記個人資料。只要設一次：
+
+1. 打開 https://dash.cloudflare.com ，左邊選單找 **Web Analytics**（可能在 **Analytics & Logs** 底下）。
+2. 按 **Add a site**。
+3. **Hostname** 填 `bq-shelter-dogs.jiatsen-k.workers.dev` → 按 **Done**。
+4. 畫面會出現一段程式碼，裡面有 `"token": "一串 32 個英數字"`。**只複製引號裡那串英數字**（如果畫面跳掉了，在 Web Analytics 清單點這個網址 → **Manage site** 就看得到）。
+5. 打開 https://github.com/jiatsenK/bq-shelter-dogs/settings/secrets/actions → **New repository secret**，**Name** 填 `CF_ANALYTICS_TOKEN`，**Secret** 貼上那串 → **Add secret**。
+6. 照步驟 5 手動部署一次（或等下一次同步，會自動部署）。
+
+用手機開新網址逛一下，過幾分鐘回 Cloudflare **Web Analytics** 點這個網址，就看得到今天的瀏覽數。這串 token 本來就會出現在網頁裡，不是密碼，放 Secret 只是方便跟其他設定放一起。
+
 ## 刪掉舊的照片上傳服務（#129 之後）
 
 舊網址轉到新網址以後，舊的 `bq-shelter-photos` Worker 應該就沒人用了。切換後過一週再看：
@@ -131,4 +144,5 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
 - API 在 `/api` 底下（`/api/photos/{編號}`、`/api/notes`、`/api/gallery`、`/api/walker-code`、`/api/sync`），網站在 `*.workers.dev` 上會自動改用同網址的 `/api`（`js/app.js` 的 `uploadUrlFor`）。同一份 `worker/src/index.js` 也還能照舊部署成沒有 `/api` 前綴的單獨 Worker（`worker/wrangler.toml`）。
 - 本機試跑：在 repo 根目錄 `npx wrangler dev --persist-to /tmp/wrangler-state`（`--persist-to` 放 repo 外面，不然暫存寫進網站資料夾會一直重新載入）。
 - 照片快取（#127）：`_headers` 讓 `photos/` 在手機上快取 30 天；部署前 `scripts/photo-versions.mjs` 把每張照片的內容雜湊寫進要上傳的 `data/dogs.json`（`photoVersions`，不提交），網站組照片網址加 `?v=雜湊`，換照片網址就變。
+- 瀏覽統計（#128）：部署前 `scripts/analytics-beacon.mjs` 把 Cloudflare Web Analytics 的 beacon 插進要上傳的 `index.html`（token 來自 Secret `CF_ANALYTICS_TOKEN`，不提交）；預覽版和舊網址沒有。
 - 部署：`.github/workflows/deploy-cloudflare.yml`。同步試算表、產生縮圖這兩個 Action 用 GitHub 內建 token 提交，不會觸發推送事件，所以用 `workflow_run` 接著部署。
