@@ -1,6 +1,8 @@
 // 板收志工溜狗表：照片上傳＋我的備註服務（Cloudflare Worker，#47、#61）
 //
 // 網站（GitHub Pages）→ 這個 Worker → GitHub API → photos/{編號}.jpg、data/my-notes.json
+// #125 起網站也可以放在這個 Worker 裡（設定見 repo 根目錄的 wrangler.jsonc）：網頁是靜態檔案，API 在 /api 底下；
+// 同一份程式也能照舊單獨部署成照片上傳 Worker（worker/wrangler.toml，路徑沒有 /api）
 // - GitHub 寫入權限（token）只放在 Worker 的 Secret「GITHUB_TOKEN」，不在網站、也不在 repo
 // - 任何人都能上傳（不用登入），所以這裡做基本防護：只收網站來的要求、編號要在 data/dogs.json 裡、
 //   只收 JPEG、限制大小、同一個人短時間內不能一直傳
@@ -730,12 +732,27 @@ export default {
 
   async fetch(request, env) {
     const cfg = config(env);
+    const url = new URL(request.url);
     const origin = request.headers.get('Origin') || '';
-    const allowed = cfg.origins.includes(origin) ? origin : '';
+    // 網站跟 Worker 同一個網址時（#125）：送資料的要求帶自己的 Origin；讀取（GET）瀏覽器不帶 Origin，
+    // 改看 Sec-Fetch-Site。同網址不需要 CORS，回 CORS 標頭也無妨
+    const sameSite = origin ? origin === url.origin : request.headers.get('Sec-Fetch-Site') === 'same-origin';
+    const allowed = cfg.origins.includes(origin) || sameSite ? (origin || url.origin) : '';
 
-    const path = new URL(request.url).pathname;
+    // 網站和 Worker 合在一起時（#125），API 都在 /api 底下，其他路徑是網站的檔案（Cloudflare 會先找檔案，
+    // 找不到才進來這裡）；單獨的照片上傳 Worker 沒有 /api 前綴，兩種都認
+    let path = url.pathname;
+    if (path === '/api' || path.startsWith('/api/')) {
+      path = path.slice(4) || '/';
+      // 下面各功能自己會再讀網址裡的編號，所以整個要求換成沒有 /api 的網址
+      const plain = new URL(url);
+      plain.pathname = path;
+      request = new Request(plain, request);
+    } else if (env && env.ASSETS && (request.method === 'GET' || request.method === 'HEAD')) {
+      return env.ASSETS.fetch(request);
+    }
 
-    // 打開 Worker 網址就能看到服務有沒有在跑、token 和通關碼設了沒（不會顯示內容）
+    // 打開 Worker 網址（合在一起時是 /api/）就能看到服務有沒有在跑、token 和通關碼設了沒（不會顯示內容）
     if (request.method === 'GET' && path === '/') {
       return reply(200, {
         ok: true,

@@ -1,0 +1,13 @@
+# 網站（Cloudflare Worker 靜態檔案，#125）不公開的檔案；語法跟 .gitignore 一樣
+# .github 要公開：測試頁（tests/）會讀 workflow 檔檢查設定
+.git
+.claude
+.wrangler
+node_modules
+worker
+scripts
+wrangler.jsonc
+.assetsignore
+AGENT_LOG.md
+AGENTS.md
+CLAUDE.md

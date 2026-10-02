@@ -2592,6 +2592,29 @@ async function runCageMateTests() {
 }
 
 // 手機開啟加速：dogs.json 提早抓、畫面外的卡不排版、等全部 js 載入完才開始
+// #125 網站搬到 Cloudflare：同一個網址的 /api 是 Worker；舊網址和本機照舊用原本的照片上傳 Worker
+async function runCloudflareTests() {
+  await check('#125 照片上傳服務網址：*.workers.dev 上用同網址 /api，其他網址用舊 Worker', () => {
+    eq(uploadUrlFor({ hostname: 'bq-shelter-dogs.jiatsen-k.workers.dev', origin: 'https://bq-shelter-dogs.jiatsen-k.workers.dev' }),
+      'https://bq-shelter-dogs.jiatsen-k.workers.dev/api', '新網址：');
+    eq(uploadUrlFor({ hostname: 'pr-12-bq-shelter-dogs.jiatsen-k.workers.dev', origin: 'https://pr-12-bq-shelter-dogs.jiatsen-k.workers.dev' }),
+      'https://pr-12-bq-shelter-dogs.jiatsen-k.workers.dev/api', '預覽網址：');
+    eq(uploadUrlFor({ hostname: 'jiatsenk.github.io', origin: 'https://jiatsenk.github.io' }), OLD_UPLOAD_URL, '舊網址：');
+    eq(uploadUrlFor({ hostname: 'localhost', origin: 'http://localhost:8000' }), OLD_UPLOAD_URL, '本機：');
+    eq(OLD_UPLOAD_URL, 'https://bq-shelter-photos.jiatsen-k.workers.dev', '舊 Worker：');
+  });
+  await check('#125 部署設定：網站檔案不公開 Worker 程式、同步腳本、交接紀錄', async () => {
+    const ignore = await fetch('../.assetsignore').then(r => r.ok ? r.text() : '');
+    // 部署到 Cloudflare 後 .assetsignore 本身不公開，讀不到就跳過（本機和 GitHub Pages 讀得到）
+    if (!ignore) return;
+    const lines = ignore.split('\n').map(l => l.trim());
+    ['worker', 'scripts', 'AGENT_LOG.md', '.git', '.claude', 'wrangler.jsonc'].forEach(n => {
+      if (!lines.includes(n)) throw new Error(`.assetsignore 少了 ${n}`);
+    });
+    if (lines.includes('.github')) throw new Error('.github 要公開，測試頁會讀 workflow 檔');
+  });
+}
+
 async function runFastOpenTests() {
   const css = await fetch('../css/app.css').then(r => r.text());
   const rule = sel => (css.match(new RegExp(`\\n${sel.replace('.', '\\.')} \\{([^}]*)\\}`)) || [])[1] || '';
@@ -2674,6 +2697,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runFindV7Tests)
   .then(runV7PagesTests)
   .then(runFastOpenTests)
+  .then(runCloudflareTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

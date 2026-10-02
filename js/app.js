@@ -1,9 +1,14 @@
 // 狗狗資料：試算表由 GitHub Action 每天同步成這個檔（#31），前端只讀它、不直接連試算表（#32）
 const DATA_URL = 'data/dogs.json';
-// 照片上傳服務（Cloudflare Worker，#47／#48）的網址，例：https://bq-shelter-photos.xxx.workers.dev
-// 還沒部署就留空：詳細資訊不顯示上傳按鈕。這裡只放網址，GitHub 寫入權限只在 Worker 裡，網站碰不到
-// （用 let 是讓 tests/index.html 能換成測試網址）
-let UPLOAD_URL = 'https://bq-shelter-photos.jiatsen-k.workers.dev';
+// 照片上傳服務（Cloudflare Worker，#47／#48）的網址。這裡只放網址，GitHub 寫入權限只在 Worker 裡，網站碰不到
+// - 網站放在 Cloudflare（*.workers.dev，#125）：Worker 就在同一個網址的 /api 底下
+// - 舊網址（GitHub Pages）和本機測試：用原本單獨的照片上傳 Worker
+// 留空的話詳細資訊不顯示上傳按鈕（用 let 是讓 tests/index.html 能換成測試網址）
+const OLD_UPLOAD_URL = 'https://bq-shelter-photos.jiatsen-k.workers.dev';
+function uploadUrlFor(loc) {
+  return loc && /\.workers\.dev$/.test(loc.hostname) ? `${loc.origin}/api` : OLD_UPLOAD_URL;
+}
+let UPLOAD_URL = uploadUrlFor(globalThis.location); // 同步腳本的測試在 Node 裡讀這個檔，沒有 location
 // 上傳前先在手機上壓成 JPEG：長邊最多 1280px，避免 repo 堆滿手機原圖；上限要跟 Worker 的 MAX_BYTES 一致
 const PHOTO_MAX_EDGE = 1280;
 const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
