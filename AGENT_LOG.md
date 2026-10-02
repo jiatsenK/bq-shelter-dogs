@@ -525,3 +525,11 @@
 - `.github/workflows/deploy-cloudflare.yml`（新）：main 推送、同步試算表／產生縮圖跑完後部署；沒設 Cloudflare Secret 就跳過；Worker 密碼從 GitHub Secrets 帶上去（`WORKER_GITHUB_TOKEN`、`NOTES_PASSCODE`、`WALKER_KEY`）。
 - `docs/CLOUDFLARE_SETUP.md`（新）：K 要做的 7 步；`docs/PHOTO_UPLOAD_SETUP.md` 加一段指過去。
 - 測試：Worker 新增 4 項（node 測試 81 項全過）；`tests/index.html` 新增 2 項（143 項全過）。本機 `wrangler dev` 實跑：網站、照片、`/api/` 都正常，測試頁在合併版上也 143 項全過。真的 Cloudflare 網址要等 K 設好 Secret 後用手機驗收。
+
+## 2026-10-02 V8-2 每個 PR 自動產生預覽網址（#126，Claude，分支 claude/project-thread-ovzdfh）
+- 依據：K 在新網址 https://bq-shelter-dogs.jiatsen-k.workers.dev 手機驗收完成、刪了舊 Worker 的鬧鐘，接著做 #126。
+- `.github/workflows/preview-cloudflare.yml`（新）：PR 開啟／推送時 `wrangler versions upload --preview-alias pr-<編號> --var PREVIEW:1`（只上傳版本，不換正式網站），在 PR 留一則預覽網址留言、再推送時更新同一則；fork 的 PR、沒設 Cloudflare Secret 時跳過。
+- `worker/src/index.js`：有 PREVIEW 時，GET 以外（換代號除外）一律回 403「這是預覽版，不能存」；`/api/` 狀態多顯示預覽版。前端原本就會顯示 Worker 回的錯誤訊息，不用改。
+- `wrangler.jsonc`：開 `preview_urls`；`keep_vars` 改成 false，確保正式部署不會帶到預覽版的 PREVIEW（Secret 不受影響）。
+- `docs/CLOUDFLARE_SETUP.md`：加「PR 預覽網址」一節。
+- 測試：Worker 新增 1 項、網頁新增 2 項。真的預覽網址要等這個 PR 自己跑出來才能驗（雲端連不到 Cloudflare）。
