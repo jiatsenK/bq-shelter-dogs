@@ -426,6 +426,21 @@
     {"id":"2021071301","name":"白尾","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
     {"id":"2019070219","name":"黑豆漿","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
     {"id":"2019080608","name":"可麗餅","date":"2026-10-01","mine":false,"walkers":["75aeed7c10fe"]},
-    {"id":"2020122507","name":"馬克","date":"2026-10-01","mine":false,"walkers":["21120f797f52"]}
+    {"id":"2020122507","name":"馬克","date":"2026-10-01","mine":false,"walkers":["21120f797f52"]},
+    {"id":"2026032605","name":"小七","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2026041903","name":"哈囉","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2019121105","name":"冬粉","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2026082501","name":"米香","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2021030913","name":"咪寶","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2023083107","name":"丸子","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2026082607","name":"寶妮","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2023052902","name":"妙麗","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2023072604","name":"小梅子","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2023122901","name":"一路","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2026092401","name":"豆花","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2023042803","name":"奈威","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2026032402","name":"雪糕","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2023083106","name":"昆布","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2023022001","name":"寶弟","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]}
   ]
 }

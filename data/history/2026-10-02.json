@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-02T00:26:42+08:00",
+  "syncedAt": "2026-10-02T13:12:30+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -156,7 +156,7 @@
       "cage": "新獨02",
       "id": "2026032605",
       "name": "小七",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -201,7 +201,7 @@
       "cage": "新獨05",
       "id": "2026041903",
       "name": "哈囉",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -246,7 +246,7 @@
       "cage": "新獨08",
       "id": "2019121105",
       "name": "冬粉",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -306,7 +306,7 @@
       "cage": "新獨12",
       "id": "2026082501",
       "name": "米香",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1658,7 +1658,7 @@
       "cage": "C區11",
       "id": "2021030913",
       "name": "咪寶",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1673,7 +1673,7 @@
       "cage": "C區12",
       "id": "2023083107",
       "name": "丸子",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1688,26 +1688,26 @@
       "cage": "C區13",
       "id": "2026082607",
       "name": "寶妮",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "21120f797f52"
+        "da53fbdda293"
       ],
       "note": "",
-      "sex": "",
-      "intro": "",
+      "sex": "female",
+      "intro": "2026年8月26日,從板橋大遠百被拾獲,好漂亮的梗犬妹妹,走路慢慢好優雅,個性也是超好,根本漂亮寶貝,好貼心好秀氣,等待你的疼愛~",
       "myWalkedDate": null
     },
     {
       "cage": "C區21",
       "id": "2023052902",
       "name": "妙麗",
-      "walkedDate": "2026-09-30",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "044328805855"
+        "da53fbdda293"
       ],
       "note": "頸部有腫瘤，不要用p繩，要穿淑萍給的胸背才帶出（嘉文）註：胸背放在住院區箱子裡",
       "sex": "female",
@@ -1718,7 +1718,7 @@
       "cage": "C區22",
       "id": "2023072604",
       "name": "小梅子",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1733,7 +1733,7 @@
       "cage": "C區23",
       "id": "2023122901",
       "name": "一路",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1748,7 +1748,7 @@
       "cage": "C區24",
       "id": "2026092401",
       "name": "豆花",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1763,7 +1763,7 @@
       "cage": "C區31",
       "id": "2023042803",
       "name": "奈威",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1778,7 +1778,7 @@
       "cage": "C區32",
       "id": "2026032402",
       "name": "雪糕",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1793,7 +1793,7 @@
       "cage": "C區33",
       "id": "2023083106",
       "name": "昆布",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1808,7 +1808,7 @@
       "cage": "C區34",
       "id": "2023022001",
       "name": "寶弟",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
