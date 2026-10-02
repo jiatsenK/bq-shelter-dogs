@@ -533,3 +533,10 @@
 - `wrangler.jsonc`：開 `preview_urls`；`keep_vars` 改成 false，確保正式部署不會帶到預覽版的 PREVIEW（Secret 不受影響）。
 - `docs/CLOUDFLARE_SETUP.md`：加「PR 預覽網址」一節。
 - 測試：Worker 新增 1 項、網頁新增 2 項。真的預覽網址要等這個 PR 自己跑出來才能驗（雲端連不到 Cloudflare）。
+
+## 2026-10-02 V8-3 照片長時間快取＋換照片立即生效（#127，Claude，分支 claude/project-thread-ovzdfh）
+- 依據：K 說「合併」PR #133 後，總表下一張是 #127（原建議 Codex）；Claude 照推薦接著做，同時用選項卡片問 K 要不要改交給 Codex。
+- `_headers`（新）：`/photos/*` 快取 30 天（immutable）；其他檔案照 Cloudflare 預設每次先問。
+- `scripts/photo-versions.mjs`（新）：部署前算 photos/ 底下每張 .jpg 的 sha256 前 8 碼，寫進部署用的 `data/dogs.json` 的 `photoVersions`（不提交，不會多出提交）。`deploy-cloudflare.yml`、`preview-cloudflare.yml` 在上傳前跑它。
+- `js/app.js`：`parseDogsData` 讀 `photoVersions`、`versioned()` 幫主照片、縮圖、相簿、相簿縮圖網址加 `?v=`；沒有版本（舊網址、剛上傳）照舊。
+- 測試：新增 `scripts/photo-versions.test.mjs`（3 項，`tests.yml` 和 `AGENTS.md` 的 node 測試指令加上它）、網頁 3 項。本機 `wrangler dev` 實測：照片回 `max-age=2592000, immutable`、dogs.json 照舊每次問；第二次打開，帶版本號的照片 0 位元組走網路。

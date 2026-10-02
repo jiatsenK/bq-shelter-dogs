@@ -107,7 +107,14 @@ function parseDogsData(data) {
     }
   }
   const synced = data.syncedAt ? new Date(data.syncedAt) : null;
-  return { dogs, groups, syncedAt: synced && !isNaN(synced) ? synced : null };
+  // 照片版本（#127）：部署到 Cloudflare 時才加（scripts/photo-versions.mjs），照片路徑 → 內容雜湊；repo 裡的 dogs.json 沒有
+  const versions = {};
+  if (data.photoVersions && typeof data.photoVersions === 'object' && !Array.isArray(data.photoVersions)) {
+    for (const [path, v] of Object.entries(data.photoVersions)) {
+      if (typeof v === 'string' && /^[0-9a-f]{1,16}$/.test(v)) versions[path] = v;
+    }
+  }
+  return { dogs, groups, syncedAt: synced && !isNaN(synced) ? synced : null, photoVersions: versions };
 }
 
 // 瀏覽器可能拿快取的舊檔；no-cache 讓它每次都先問 GitHub Pages 有沒有新版（沒變只回 304，很省）
@@ -388,10 +395,18 @@ function icon(id) {
   return `<svg class="icon"><use href="#i-${id}"/></svg>`;
 }
 
-// 前端剛上傳成功的照片（編號 → 本機圖片網址）：GitHub Pages 要一兩分鐘才會更新，這段期間先顯示剛傳的那張（#48）
+// 照片網址加版本號（#127）：Cloudflare 讓照片在手機上快取 30 天（_headers），換了照片內容雜湊就變、網址跟著變，
+// 手機就會抓新的。沒有版本（舊網址 GitHub Pages、剛上傳還沒部署）就不加，照舊用原本的短快取
+let photoVersions = {}; // 照片路徑（photos/...）→ 內容雜湊，來自 dogs.json 的 photoVersions
+function versioned(path) {
+  const v = photoVersions[path];
+  return v ? `${path}?v=${v}` : path;
+}
+
+// 前端剛上傳成功的照片（編號 → 本機圖片網址）：網站要一兩分鐘才會更新，這段期間先顯示剛傳的那張（#48）
 const photoOverrides = {};
 function photoSrc(dog) {
-  return photoOverrides[dog.id] || `photos/${encodeURIComponent(dog.id)}.jpg`;
+  return photoOverrides[dog.id] || versioned(`photos/${encodeURIComponent(dog.id)}.jpg`);
 }
 
 // 相簿照片：清單舊到新，畫面上新的在前；剛傳的那張同樣先用本機圖片（編號/檔名 → 本機圖片網址）
@@ -400,16 +415,16 @@ function galleryList(dog) {
   return dog && dog.id ? [...(gallery[dog.id] || [])].reverse() : [];
 }
 function gallerySrc(dog, file) {
-  return galleryOverrides[`${dog.id}/${file}`] || `photos/gallery/${encodeURIComponent(dog.id)}/${encodeURIComponent(file)}`;
+  return galleryOverrides[`${dog.id}/${file}`] || versioned(`photos/gallery/${encodeURIComponent(dog.id)}/${encodeURIComponent(file)}`);
 }
 
 // 縮圖（#83）：清單、相簿格子只載 photos/thumbs/ 的小圖，燈箱才看原圖；縮圖由 Action 產生（scripts/make-thumbs.py）
 // 剛上傳的照片先用本機圖片；縮圖還沒產生就在 img 的 onerror 改讀 data-full 的原圖（thumbFallback）
 function photoThumbSrc(dog) {
-  return photoOverrides[dog.id] || `photos/thumbs/${encodeURIComponent(dog.id)}.jpg`;
+  return photoOverrides[dog.id] || versioned(`photos/thumbs/${encodeURIComponent(dog.id)}.jpg`);
 }
 function galleryThumbSrc(dog, file) {
-  return galleryOverrides[`${dog.id}/${file}`] || `photos/thumbs/gallery/${encodeURIComponent(dog.id)}/${encodeURIComponent(file)}`;
+  return galleryOverrides[`${dog.id}/${file}`] || versioned(`photos/thumbs/gallery/${encodeURIComponent(dog.id)}/${encodeURIComponent(file)}`);
 }
 // 放在 img 的 onerror 最前面：還有原圖可試就換原圖、這次不算讀取失敗
 const thumbFallback = "if (this.dataset.full) { this.src = this.dataset.full; this.removeAttribute('data-full'); return; }";
@@ -2395,6 +2410,7 @@ async function init() {
 let dataSyncedAt = null;
 function applyDogsData(data) {
   allDogs = data.dogs;
+  photoVersions = data.photoVersions || {};
   groupMap = data.groups || {};
   loadWarning = data.groups ? '' : '「可以一起溜」暫時讀不到，其他資訊正常。';
   // 顯示試算表最後同步的時間（不是打開網頁的時間），志工才知道資料有多新

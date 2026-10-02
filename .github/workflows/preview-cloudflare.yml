@@ -39,6 +39,11 @@ jobs:
         with:
           node-version: 22
 
+      # 照片網址的版本號（#127）：只寫進這次要上傳的 data/dogs.json，不提交
+      - name: 照片版本號
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: node scripts/photo-versions.mjs
+
       - name: 上傳預覽版本
         id: upload
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
