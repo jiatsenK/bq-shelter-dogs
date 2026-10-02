@@ -2592,6 +2592,28 @@ async function runCageMateTests() {
 }
 
 // 手機開啟加速：dogs.json 提早抓、畫面外的卡不排版、等全部 js 載入完才開始
+// #126 PR 預覽網址：預覽版帶 PREVIEW、不碰正式網站；正式部署不保留網頁上加的變數，PREVIEW 不會被帶進正式版
+async function runPreviewTests() {
+  const get = p => fetch(p).then(r => r.ok ? r.text() : '');
+  const preview = await get('../.github/workflows/preview-cloudflare.yml');
+  await check('#126 預覽 Action：只上傳版本（不部署正式版）、帶 PREVIEW、別人 fork 的 PR 不跑、在 PR 更新同一則留言', () => {
+    if (!preview) throw new Error('讀不到 preview-cloudflare.yml');
+    if (!/wrangler@4 versions upload/.test(preview)) throw new Error('要用 versions upload');
+    if (/wrangler@4 deploy/.test(preview)) throw new Error('預覽不能用 deploy，會換掉正式網站');
+    if (!/--var PREVIEW:1/.test(preview)) throw new Error('預覽版要帶 PREVIEW');
+    if (!/--preview-alias "pr-\$\{PR\}"/.test(preview)) throw new Error('網址要固定成 pr-編號');
+    if (!/head\.repo\.full_name == github\.repository/.test(preview)) throw new Error('fork 的 PR 不能跑');
+    if (!/updateComment/.test(preview)) throw new Error('再推送要更新同一則留言');
+  });
+  // 部署到 Cloudflare 後 wrangler.jsonc 不公開，讀不到就跳過（本機和 GitHub Pages 讀得到）
+  const cfg = await get('../wrangler.jsonc');
+  await check('#126 wrangler.jsonc：開預覽網址、正式部署不保留網頁上加的變數', () => {
+    if (!cfg) return;
+    if (!/"preview_urls": true/.test(cfg)) throw new Error('要開 preview_urls');
+    if (!/"keep_vars": false/.test(cfg)) throw new Error('keep_vars 要是 false，免得 PREVIEW 被帶進正式版');
+  });
+}
+
 // #125 網站搬到 Cloudflare：同一個網址的 /api 是 Worker；舊網址和本機照舊用原本的照片上傳 Worker
 async function runCloudflareTests() {
   await check('#125 照片上傳服務網址：*.workers.dev 上用同網址 /api，其他網址用舊 Worker', () => {
@@ -2698,6 +2720,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runV7PagesTests)
   .then(runFastOpenTests)
   .then(runCloudflareTests)
+  .then(runPreviewTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

@@ -760,11 +760,17 @@ export default {
         token: cfg.token ? '已設定' : '未設定',
         notesPasscode: cfg.passcode ? '已設定' : '未設定',
         walkerKey: cfg.walkerKey ? '已設定' : '未設定',
+        ...(env && env.PREVIEW ? { preview: '預覽版，不能存' } : {}),
       });
     }
     // 其他網站送來的一律不收（瀏覽器會擋掉沒有 CORS 回應的要求）
     if (!allowed) return fail(403, '不接受這個網站的要求', '');
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(allowed) });
+    // PR 預覽版（#126，部署時帶 PREVIEW 變數）：可以看、可以讀，但不能改正式資料（上傳、設主照片、刪除、備註、更新）。
+    // 換代號只是計算、不寫任何東西，照常可以用
+    if (env && env.PREVIEW && request.method !== 'GET' && path !== '/walker-code') {
+      return fail(403, '這是預覽版，不能存，正式資料不受影響。要改請到正式網址', allowed);
+    }
 
     if (path === '/notes' || path.startsWith('/notes/')) {
       try {
