@@ -12,7 +12,7 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 - 以後改了 Worker 程式**不用再手動貼**，合併後 Action 會自動部署。
 - 密碼（token、通關碼、代號密鑰）**全部設在 GitHub 的 Secrets**，部署時自動帶到 Cloudflare。
 - 費用 NT$0（Cloudflare Workers 免費方案）。
-- 舊網址 https://jiatsenk.github.io/bq-shelter-dogs/ 照常可以用，舊的照片上傳服務（`bq-shelter-photos`）也先留著；等新網址驗收沒問題、說「切換」後，#129 再把舊網址導過來。
+- 舊網址 https://jiatsenk.github.io/bq-shelter-dogs/ 從 #129 起一打開就轉到新網址同一頁（舊的書籤、主畫面捷徑都還能用）。舊的照片上傳服務（`bq-shelter-photos`）先留著，什麼時候可以刪見下面「刪掉舊的照片上傳服務」。
 
 > Cloudflare 和 GitHub 的網頁偶爾會改版，按鈕名稱可能跟這裡寫的略有不同，找意思相近的就可以。
 
@@ -122,6 +122,16 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
 6. 照步驟 5 手動部署一次（或等下一次同步，會自動部署）。
 
 用手機開新網址逛一下，過幾分鐘回 Cloudflare **Web Analytics** 點這個網址，就看得到今天的瀏覽數。這串 token 本來就會出現在網頁裡，不是密碼，放 Secret 只是方便跟其他設定放一起。
+
+## 刪掉舊的照片上傳服務（#129 之後）
+
+舊網址轉到新網址以後，舊的 `bq-shelter-photos` Worker 應該就沒人用了。切換後過一週再看：
+
+1. Cloudflare → **Workers & Pages** → 點 `bq-shelter-photos`。
+2. 看 **Metrics**（或 **Observability**）最近 7 天的 **Requests**。
+3. 是 0（或只有零星幾筆）就可以刪：**Settings** 拉到最下面 → **Delete** → 輸入名稱確認。
+
+還有很多流量的話先不要刪，跟 Claude 說，查是哪裡還在用舊的。
 
 ## token 到期時
 

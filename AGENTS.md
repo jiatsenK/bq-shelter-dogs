@@ -2,7 +2,7 @@
 
 `CLAUDE.md` 只有一行 `@AGENTS.md`，Claude Code 和 Codex 讀的是同一份，只改這裡。
 
-「板收志工溜狗表」：GitHub Pages 上的純前端唯讀網站。規格見 `docs/PROJECT_GOALS.md`，視覺見 `docs/DESIGN_GUIDE.md`。
+「板收志工溜狗表」：放在 Cloudflare Worker（https://bq-shelter-dogs.jiatsen-k.workers.dev ，V8 起）的純前端網站，後端 API 在同一個 Worker 的 `/api`。舊網址 GitHub Pages 只剩轉址（#129）。規格見 `docs/PROJECT_GOALS.md`，視覺見 `docs/DESIGN_GUIDE.md`。
 
 - 與 K 溝通用繁體中文（台灣用語）。
 - 任何 Agent 寫入 repo 後，都要在 `AGENT_LOG.md` 檔尾追加一筆紀錄。

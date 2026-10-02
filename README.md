@@ -27,15 +27,18 @@ photos/{編號}.jpg  ← 狗狗照片，選填
 docs/             ← 規格、設計指引、參考圖
 icons/            ← 網站圖示（瀏覽器分頁、手機主畫面）
 manifest.webmanifest ← 加到主畫面時的名稱、顏色、圖示
-.nojekyll         ← 讓 GitHub Pages 原樣提供檔案，不經 Jekyll 轉換（請勿刪除）
+.nojekyll         ← 讓舊網址 GitHub Pages 原樣提供檔案（轉址要用，請勿刪除）
 tests/index.html  ← 資料讀取測試（用假資料，不連試算表）
-worker/           ← 照片上傳服務（Cloudflare Worker，部署在 Cloudflare，不是 GitHub Pages 的一部分；不含任何 token）
+worker/           ← 後端 API（上傳照片、備註、相簿、代號、更新；跟網站一起部署成同一個 Cloudflare Worker，不含任何 token）
 ```
 
 ## 部署
 
-網站用 GitHub Pages 從 `main` 分支的根目錄部署：PR 合併進 `main` 後，約一、兩分鐘網站就會更新，不用另外操作。
-設定位置：repo 的 Settings → Pages →「Deploy from a branch」、分支 `main`、資料夾 `/ (root)`。
+網站和後端 API 部署成同一個 Cloudflare Worker：https://bq-shelter-dogs.jiatsen-k.workers.dev 。`main` 有變動（合併 PR、同步試算表、網站上傳照片）時 GitHub Action「部署到 Cloudflare」會自動部署，一、兩分鐘網站就會更新，不用另外操作。設定和第一次怎麼開見 `docs/CLOUDFLARE_SETUP.md`。
+
+每個 PR 會自動部署一份預覽版，網址貼在 PR 留言（`https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev`）。
+
+舊網址 https://jiatsenk.github.io/bq-shelter-dogs/ 還是由 GitHub Pages 從 `main` 根目錄提供，但每一頁打開就轉到新網址同一頁（#129），不要關掉 Pages，不然舊的書籤和主畫面捷徑會打不開。
 
 ## 本機預覽
 
@@ -48,4 +51,4 @@ python3 -m http.server 8000
 ## 測試
 
 打開 `tests/index.html` 就會自動跑資料讀取的測試，全部通過會顯示綠色「全部 N 項通過」。
-部署後網址是 https://jiatsenk.github.io/bq-shelter-dogs/tests/ ；本機請先執行上面的 `python3 -m http.server 8000`，再開 http://localhost:8000/tests/ （直接雙擊檔案打不開）。
+部署後網址是 https://bq-shelter-dogs.jiatsen-k.workers.dev/tests/ ；本機請先執行上面的 `python3 -m http.server 8000`，再開 http://localhost:8000/tests/ （直接雙擊檔案打不開）。

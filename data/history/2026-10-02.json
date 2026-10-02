@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-02T16:01:02+08:00",
+  "syncedAt": "2026-10-02T21:00:41+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -237,7 +237,7 @@
       "walkers": [
         "7219f133cd3c"
       ],
-      "note": "6/28後腳無力（旭昇）2026/8/29洗澡（旭昇）",
+      "note": "6/28後腳無力（旭昇）; 2026/10/2洗澡（旭昇）",
       "sex": "",
       "intro": "",
       "myWalkedDate": null
@@ -411,12 +411,12 @@
       "cage": "新A04",
       "id": "2017122515",
       "name": "KIWI",
-      "walkedDate": "2026-09-30",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
         "da53fbdda293",
-        "044328805855"
+        "e783d443558c"
       ],
       "note": "不要推他身體移位，會兇想咬人(嘉文);2026/5/23洗澡（嘉文）",
       "sex": "female",
@@ -427,12 +427,12 @@
       "cage": "新A04",
       "id": "2018041328",
       "name": "鍾碩",
-      "walkedDate": "2026-09-30",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
         "da53fbdda293",
-        "044328805855"
+        "e783d443558c"
       ],
       "note": "2026/5/23洗澡（嘉文）",
       "sex": "male",
@@ -443,12 +443,12 @@
       "cage": "新A04",
       "id": "2026080201",
       "name": "多多",
-      "walkedDate": "2026-09-30",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
         "da53fbdda293",
-        "044328805855"
+        "e783d443558c"
       ],
       "note": "2026/6/4洗澡（嘉文）",
       "sex": "male",
@@ -1206,7 +1206,7 @@
       "walkers": [
         "7219f133cd3c"
       ],
-      "note": "2026/8/29洗澡（旭昇）",
+      "note": "2026/10/2洗澡（旭昇）",
       "sex": "",
       "intro": "",
       "myWalkedDate": null
@@ -1540,19 +1540,6 @@
       "myWalkedDate": "2026-09-24"
     },
     {
-      "cage": "舊B16",
-      "id": "2026082601",
-      "name": "開多",
-      "walkedDate": null,
-      "covered": false,
-      "myWalked": false,
-      "walkers": [],
-      "note": "",
-      "sex": "",
-      "intro": "",
-      "myWalkedDate": null
-    },
-    {
       "cage": "舊B17",
       "id": "2021050602",
       "name": "保羅",
@@ -1730,6 +1717,19 @@
       "note": "2025/10/7 俐葶遇到 一路攻擊丸子 ，起始原因沒看到(嘉文)；11/18 一路要攻擊松果（嘉文）；被阿信咬過（嘉文）；在小區看到外面的芽芽會跳柵欄（俐葶）",
       "sex": "male",
       "intro": "2023年12月29日,從三峽被通報,體型很中等,稍微短腿好迷人,個性比較害羞慢熟,多熟悉就可摸摸互動,笑起來也是超可愛.^^.請給帥氣小男生一個機會..",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "C區24",
+      "id": "2026082601",
+      "name": "開多",
+      "walkedDate": null,
+      "covered": false,
+      "myWalked": false,
+      "walkers": [],
+      "note": "",
+      "sex": "",
+      "intro": "",
       "myWalkedDate": null
     },
     {

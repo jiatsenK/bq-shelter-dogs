@@ -455,6 +455,9 @@
     {"id":"2021050602","name":"保羅","date":"2026-10-02","mine":false,"walkers":["7219f133cd3c"]},
     {"id":"2024092303","name":"松果","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2020120106","name":"布萊克","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
-    {"id":"2020072102","name":"朵兒","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]}
+    {"id":"2020072102","name":"朵兒","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2017122515","name":"KIWI","date":"2026-10-02","mine":false,"walkers":["da53fbdda293","e783d443558c"]},
+    {"id":"2018041328","name":"鍾碩","date":"2026-10-02","mine":false,"walkers":["da53fbdda293","e783d443558c"]},
+    {"id":"2026080201","name":"多多","date":"2026-10-02","mine":false,"walkers":["da53fbdda293","e783d443558c"]}
   ]
 }

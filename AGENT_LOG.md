@@ -547,3 +547,10 @@
 - `scripts/analytics-beacon.mjs`（新）：部署前把 beacon 插進要上傳的 `index.html` 的 `</body>` 前（token 來自 GitHub Secret `CF_ANALYTICS_TOKEN`，要是 32 個英數字；沒設就跳過；不提交）。只加在 `deploy-cloudflare.yml`，所以 github.io 和 PR 預覽版都不載入。
 - `docs/CLOUDFLARE_SETUP.md`：加「瀏覽統計」一節（K 要按的 6 步）；`docs/PROJECT_GOALS.md`：補一句只看人數、不記個人資料。
 - 測試：新增 `scripts/analytics-beacon.test.mjs`（4 項，`tests.yml` 和 `AGENTS.md` 的 node 測試指令加上它）。
+
+## 2026-10-02 V8-5 舊網址（github.io）轉到新網址（#129，Claude，分支 claude/project-thread-ovzdfh-v8-5）
+- 依據：K 說 PR #135（#128 瀏覽統計）之後再合併、「先繼續做下一個」。#135 還占著 `claude/project-thread-ovzdfh`，所以這張另開分支。**K 說「切換」之前不合併。**
+- `index.html`、`tests/index.html`：`<head>` 最前面加一行，`location.hostname === 'jiatsenk.github.io'` 時 `location.replace` 到新網址，帶上路徑（去掉 `/bq-shelter-dogs`）、`?` 和 `#`；新網址、預覽版、本機不轉。
+- 手機上記的東西（代號、今天已溜、隱藏、備註通關碼）存在 localStorage，換網域讀不到，不搬過去（主畫面捷徑的儲存空間和瀏覽器本來就分開，搬了也只搬到一半）；通知志工重新加入主畫面、「我溜過」重新輸入名字。
+- 文件換成新網址：`README.md`（部署一節改寫）、`AGENTS.md`、`docs/PROJECT_GOALS.md`、`docs/VOLUNTEER_GUIDE.md`、`docs/CLOUDFLARE_SETUP.md`（加「刪掉舊的照片上傳服務」：切換一週後看 `bq-shelter-photos` 流量）。`ALLOWED_ORIGINS`、`OLD_UPLOAD_URL` 給舊網址的判斷照票保留。
+- 測試：網頁新增 3 項（舊網址各頁轉到新網址同一頁、新網址不轉、轉址在最前面），#30 檔案拆分測試允許這段內嵌轉址。
