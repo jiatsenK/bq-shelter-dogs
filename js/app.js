@@ -106,10 +106,13 @@ function parseDogsData(data) {
 }
 
 // 瀏覽器可能拿快取的舊檔；no-cache 讓它每次都先問 GitHub Pages 有沒有新版（沒變只回 304，很省）
+// 開網頁的第一次改用 index.html 頁首提早開始抓的那一份（手機開啟加速），之後（重新讀取、更新）照常抓
 async function loadDogsData() {
+  const early = window.__dogsEarly;
+  window.__dogsEarly = null;
   let res;
   try {
-    res = await fetch(DATA_URL, { cache: 'no-cache' });
+    res = await (early || fetch(DATA_URL, { cache: 'no-cache' }));
   } catch (e) {
     throw new Error('連不到網站，可能是網路中斷。');
   }
@@ -2269,7 +2272,8 @@ function renderMain() {
   const hiddenList = dueDogs(notWalked.filter(d => hidden.has(walkKey(d))), today).filter(hit);
   const todayList = walked.dogs(allDogs).filter(hit);
   const mineCount = myWalksCount(q);
-  buildTabs({ walk: walkList.length, today: todayList.length, mine: mineCount, find: findList(q, 'all').length });
+  // 找狗只要隻數，不用排序（每次重畫都排一百多隻很慢）
+  buildTabs({ walk: walkList.length, today: todayList.length, mine: mineCount, find: allDogs.filter(d => findMatches(d, q)).length });
   searchInput.placeholder = activeTab === 'find' ? '狗名、編號或籠位' : '搜尋狗名';
   if (activeTab === 'find') {
     // 找狗（#99）搜尋全部的狗：犬名、編號、籠位都算
@@ -2446,4 +2450,8 @@ const syncBtn = document.getElementById('syncBtn');
 if (syncBtn) syncBtn.addEventListener('click', () => requestSync(syncBtn));
 
 // tests/index.html 會設定 __BQ_TEST__，只載入函式、不去讀 dogs.json
-if (!window.__BQ_TEST__) init();
+// 等 find.js、analysis.js 也載入完才開始：dogs.json 提早抓（手機開啟加速）可能比它們先到，畫面要用到它們的函式
+if (!window.__BQ_TEST__) {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+}
