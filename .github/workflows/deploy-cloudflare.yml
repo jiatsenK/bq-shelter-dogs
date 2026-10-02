@@ -1,0 +1,69 @@
+# 把網站＋API 部署到 Cloudflare（#125，設定在 repo 根目錄的 wrangler.jsonc）
+# - main 有推送就部署：程式、狗卡、網站上傳的照片和備註（Worker 用 GitHub token 提交）都算
+# - 同步試算表、產生照片縮圖這兩個 Action 自己提交的資料不會觸發推送事件（GitHub 的規定），
+#   所以它們跑完也接著部署一次
+# - 還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID 時直接跳過，不會失敗；設定步驟見 docs/CLOUDFLARE_SETUP.md
+# - Worker 要用的密碼也從 GitHub Secret 一起帶上去（有設才帶，沒設的保留 Cloudflare 上原本的）：
+#   WORKER_GITHUB_TOKEN → Worker 的 GITHUB_TOKEN（GitHub 不准 Secret 用 GITHUB_ 開頭，所以換個名字）、
+#   NOTES_PASSCODE、WALKER_KEY（同步試算表本來就在用這一個）
+# - 也可以在 Actions 頁選「部署到 Cloudflare」→「Run workflow」手動跑
+name: 部署到 Cloudflare
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+  workflow_run:
+    workflows: [同步試算表, 產生照片縮圖]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+# 連續推送時只部署最後一次（正在部署的那次被取消，網站維持上一版，下一次就是最新的）
+concurrency:
+  group: deploy-cloudflare
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    # 同步或縮圖失敗就不用部署（沒有新資料）
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: 還沒設定 Cloudflare 就跳過
+        if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
+        run: echo "還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID，這次不部署（步驟見 docs/CLOUDFLARE_SETUP.md）。"
+
+      # workflow_run 觸發時要拿 main 最新的內容（含剛剛同步的資料），不是觸發那一刻的版本
+      - uses: actions/checkout@v4
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        with:
+          node-version: 22
+
+      - name: 部署
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        env:
+          WORKER_GITHUB_TOKEN: ${{ secrets.WORKER_GITHUB_TOKEN }}
+          NOTES_PASSCODE: ${{ secrets.NOTES_PASSCODE }}
+          WALKER_KEY: ${{ secrets.WALKER_KEY }}
+        run: |
+          # 密碼寫進暫存檔交給 wrangler，不印出來；沒設的不放（不會蓋掉 Cloudflare 上原本的）
+          node -e '
+            const s = { GITHUB_TOKEN: process.env.WORKER_GITHUB_TOKEN, NOTES_PASSCODE: process.env.NOTES_PASSCODE, WALKER_KEY: process.env.WALKER_KEY };
+            for (const k of Object.keys(s)) if (!s[k]) delete s[k];
+            require("fs").writeFileSync(process.argv[1], JSON.stringify(s), { mode: 0o600 });
+            console.log("帶上去的密碼：" + (Object.keys(s).join("、") || "沒有"));
+          ' "$RUNNER_TEMP/worker-secrets.json"
+          npx --yes wrangler@4 deploy --secrets-file "$RUNNER_TEMP/worker-secrets.json"
+          rm -f "$RUNNER_TEMP/worker-secrets.json"

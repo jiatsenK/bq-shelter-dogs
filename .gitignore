@@ -1,0 +1,4 @@
+# wrangler dev 的本機暫存（#125 起 wrangler.jsonc 在 repo 根目錄）
+.wrangler/
+node_modules/
+.dev.vars

@@ -516,3 +516,12 @@
 - 依據：K「更新資料」並附寶妮（2026082607）的狗卡圖片。
 - `dogs/2026082607.md`：名字從暫用的「（梗奶奶）」改成寶妮，加上 `sex: female`，填入狗卡文字。原始狗卡圖片沒有放進 repo。
 - 只動狗卡檔，沒改程式；合併後同步 Action 會自動把性別和狗卡資訊寫進 `data/dogs.json`。
+
+## 2026-10-02 V8-1 網站與 Worker 合併成一個 Cloudflare Worker（#125，Claude，分支 claude/project-thread-ovzdfh）
+- 依據：K 同意 Cloudflare 搬家並開票（總表 #124），說「同意」後開始做 #125。開工前依序合併了 PR #121、#123。
+- `wrangler.jsonc`（新，repo 根目錄）：Worker `bq-shelter-dogs`，整個 repo 當靜態檔案，`/api` 先進 Worker，Cron 每 30 分鐘叫同步。`.assetsignore` 排除 `worker/`、`scripts/`、`AGENT_LOG.md` 等；`.github` 保留（測試頁要讀）。根目錄新增 `.gitignore`（`.wrangler/`）。
+- `worker/src/index.js`：認 `/api` 前綴（去掉後交給原本的處理，舊路徑照舊）；同網址的要求（Origin 是自己，或 GET 只有 `Sec-Fetch-Site: same-origin`）也接受；合在一起時不是 `/api` 的 GET 交給網站檔案。
+- `js/app.js`：`uploadUrlFor(location)`，`*.workers.dev` 用同網址 `/api`，其他（舊網址、本機）用舊 Worker。
+- `.github/workflows/deploy-cloudflare.yml`（新）：main 推送、同步試算表／產生縮圖跑完後部署；沒設 Cloudflare Secret 就跳過；Worker 密碼從 GitHub Secrets 帶上去（`WORKER_GITHUB_TOKEN`、`NOTES_PASSCODE`、`WALKER_KEY`）。
+- `docs/CLOUDFLARE_SETUP.md`（新）：K 要做的 7 步；`docs/PHOTO_UPLOAD_SETUP.md` 加一段指過去。
+- 測試：Worker 新增 4 項（node 測試 81 項全過）；`tests/index.html` 新增 2 項（143 項全過）。本機 `wrangler dev` 實跑：網站、照片、`/api/` 都正常，測試頁在合併版上也 143 項全過。真的 Cloudflare 網址要等 K 設好 Secret 後用手機驗收。
