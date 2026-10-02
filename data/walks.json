@@ -441,6 +441,8 @@
     {"id":"2023042803","name":"奈威","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2026032402","name":"雪糕","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2023083106","name":"昆布","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
-    {"id":"2023022001","name":"寶弟","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]}
+    {"id":"2023022001","name":"寶弟","date":"2026-10-02","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2021082803","name":"大米","date":"2026-10-02","mine":false,"walkers":["7219f133cd3c"]},
+    {"id":"2018121202","name":"笑笑","date":"2026-10-02","mine":false,"walkers":["7219f133cd3c"]}
   ]
 }

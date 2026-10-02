@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-02T14:01:47+08:00",
+  "syncedAt": "2026-10-02T15:01:02+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -231,11 +231,11 @@
       "cage": "新獨07",
       "id": "2021082803",
       "name": "大米",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "21120f797f52"
+        "7219f133cd3c"
       ],
       "note": "6/28後腳無力（旭昇）2026/8/29洗澡（旭昇）",
       "sex": "",
@@ -1212,11 +1212,11 @@
       "cage": "舊A12",
       "id": "2018121202",
       "name": "笑笑",
-      "walkedDate": "2026-09-30",
+      "walkedDate": "2026-10-02",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "7219f133cd3c"
       ],
       "note": "2026/8/29洗澡（旭昇）",
       "sex": "",
