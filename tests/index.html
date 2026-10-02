@@ -2,6 +2,8 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
+<!-- 舊網址轉址（#129）：GitHub Pages 不能設伺服器轉址，舊網址 jiatsenk.github.io 一打開就換到新網址同一頁（含 # 分類）；新網址、預覽版、本機不受影響 -->
+<script>if (location.hostname === 'jiatsenk.github.io') location.replace('https://bq-shelter-dogs.jiatsen-k.workers.dev' + location.pathname.replace(/^\/bq-shelter-dogs(?=\/|$)/, '') + location.search + location.hash);</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>板收志工溜狗表：資料讀取測試</title>
 <style>
@@ -629,8 +631,8 @@ function runTests() {
     check('#30 檔案拆分：index.html 只有結構，樣式在 css/app.css、程式在 js/app.js', () => {
       const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
-      // 手機開啟加速起，頁首唯一一段內嵌程式是提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
-      const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly'));
+      // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
+      const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
       eq(scripts.map(s => s.getAttribute('src')), ['js/app.js', 'js/analysis.js', 'js/find.js'], 'script（#59 起多分析頁、#99 多找狗）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
@@ -2710,6 +2712,37 @@ async function runFastOpenTests() {
   });
 }
 
+async function runOldUrlTests() {
+  const testHtml = await fetch('index.html').then(r => r.text());
+  // 把頁面裡的轉址程式拿出來，用假的 location 跑
+  const redirectOf = (html, loc) => {
+    const code = (html.match(/<script>(if \(location\.hostname === 'jiatsenk\.github\.io'\)[^<]*)<\/script>/) || [])[1];
+    if (!code) throw new Error('找不到舊網址轉址程式');
+    let to = null;
+    new Function('location', code)({ search: '', hash: '', ...loc, replace: u => { to = u; } });
+    return to;
+  };
+  const NEW = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
+  await check('#129 舊網址（首頁、# 分類、/tests/）換到新網址同一頁', () => {
+    for (const [name, html] of [['index.html', INDEX_HTML], ['tests/index.html', testHtml]]) {
+      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs/' }), `${NEW}/`, `${name} 首頁：`);
+      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs/', hash: '#find' }), `${NEW}/#find`, `${name} 分類：`);
+      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs/index.html', search: '?a=1' }), `${NEW}/index.html?a=1`, `${name} 帶參數：`);
+      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs/tests/' }), `${NEW}/tests/`, `${name} 測試頁：`);
+      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs' }), NEW, `${name} 沒有結尾斜線：`);
+    }
+  });
+  await check('#129 新網址、預覽版、本機不轉址（沒有轉址迴圈）', () => {
+    for (const hostname of ['bq-shelter-dogs.jiatsen-k.workers.dev', 'pr-12-bq-shelter-dogs.jiatsen-k.workers.dev', 'localhost']) {
+      eq(redirectOf(INDEX_HTML, { hostname, pathname: '/' }), null, `${hostname}：`);
+    }
+  });
+  await check('#129 轉址放在 index.html 最前面（比提早抓 dogs.json 早）', () => {
+    const at = INDEX_HTML.indexOf("location.hostname === 'jiatsenk.github.io'");
+    if (at < 0 || at > INDEX_HTML.indexOf('window.__dogsEarly')) throw new Error('轉址要在其他程式前面');
+  });
+}
+
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
 Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js', '../js/find.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
@@ -2759,6 +2792,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runCloudflareTests)
   .then(runPreviewTests)
   .then(runPhotoVersionTests)
+  .then(runOldUrlTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
