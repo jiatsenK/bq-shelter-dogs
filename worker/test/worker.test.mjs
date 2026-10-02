@@ -706,3 +706,58 @@ test('POST /sync：網站按「更新」叫同步；同一個人 2 分鐘 1 次�
   assert.equal(r.status, 502);
   assert.match(r.body.error || r.body.message || JSON.stringify(r.body), /GitHub 403/);
 });
+
+// ---- 網站和 Worker 合在一起（#125）：API 在 /api 底下，其他路徑交給網站檔案 ----
+
+const SITE = 'https://bq-shelter-dogs.example.workers.dev';
+const fakeAssets = () => {
+  const seen = [];
+  return { seen, fetch: async req => { seen.push(new URL(req.url).pathname); return new Response('檔案', { status: 200 }); } };
+};
+
+test('#125 /api 前綴：/api/ 顯示服務狀態、/api/notes 跟 /notes 一樣；沒前綴的舊路徑照舊能用', async () => {
+  fakeNotesGithub({ text: JSON.stringify({ '2024032902': { text: '最新', updatedAt: 'z' } }) });
+  const home = await send(new Request(`${SITE}/api/`), NENV);
+  assert.equal(home.body.ok, true);
+  assert.equal(home.body.notesPasscode, '已設定');
+  assert.equal((await send(new Request(`${SITE}/api`), NENV)).body.ok, true);
+  const viaApi = await send(new Request(`${SITE}/api/notes`, { headers: { Origin: ORIGIN } }), NENV);
+  assert.deepEqual(viaApi.body.notes, { '2024032902': { text: '最新', updatedAt: 'z' } });
+  const old = await send(getNotes(), NENV);
+  assert.deepEqual(old.body.notes, viaApi.body.notes);
+});
+
+test('#125 同網址：送資料帶自己的 Origin、讀取只帶 Sec-Fetch-Site 都接受；別的網站、什麼都沒帶照樣擋', async () => {
+  fakeNotesGithub({ text: '{}' });
+  const read = await send(new Request(`${SITE}/api/notes`, { headers: { 'Sec-Fetch-Site': 'same-origin' } }), NENV);
+  assert.equal(read.status, 200);
+  const write = await send(new Request(`${SITE}/api/notes/2024032902`, {
+    method: 'PUT', headers: { Origin: SITE, 'Content-Type': 'application/json' }, body: JSON.stringify({ text: '同網址', passcode: '對的通關碼' }),
+  }), NENV);
+  assert.equal(write.status, 200);
+  assert.equal((await send(new Request(`${SITE}/api/notes`), NENV)).status, 403);
+  assert.equal((await send(new Request(`${SITE}/api/notes`, { headers: { 'Sec-Fetch-Site': 'cross-site' } }), NENV)).status, 403);
+  assert.equal((await send(new Request(`${SITE}/api/notes`, { headers: { Origin: 'https://evil.example' } }), NENV)).status, 403);
+  // 別的網站假裝 Sec-Fetch-Site 也沒用：有 Origin 就看 Origin
+  assert.equal((await send(new Request(`${SITE}/api/notes`, { headers: { Origin: 'https://evil.example', 'Sec-Fetch-Site': 'same-origin' } }), NENV)).status, 403);
+});
+
+test('#125 合在一起時：不是 /api 的 GET 交給網站檔案（找不到的 404 也由網站處理），不當成 API', async () => {
+  const assets = fakeAssets();
+  const env = { ...NENV, ASSETS: assets };
+  const res = await worker.fetch(new Request(`${SITE}/nope.html`), env);
+  assert.equal(await res.text(), '檔案');
+  assert.deepEqual(assets.seen, ['/nope.html']);
+  // /api 底下照樣是 API
+  const home = await send(new Request(`${SITE}/api/`), env);
+  assert.equal(home.body.ok, true);
+  assert.deepEqual(assets.seen, ['/nope.html']);
+});
+
+test('#125 /api/photos/{編號}：跟舊路徑一樣寫到 photos/{編號}.jpg', async () => {
+  const calls = fakeGithub();
+  const req = new Request(`${SITE}/api/photos/2024032902`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'image/jpeg', 'CF-Connecting-IP': '9.9.9.9' }, body: JPEG.slice() });
+  const r = await send(req);
+  assert.equal(r.status, 200);
+  assert.ok(calls.some(c => c.method === 'PUT' && c.path.endsWith('/contents/photos/2024032902.jpg')));
+});

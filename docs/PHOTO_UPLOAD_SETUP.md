@@ -12,6 +12,8 @@ GitHub 的寫入權限（token）只放在 Cloudflare 裡，網站程式和 repo
 
 還沒做完這些步驟前，網站不會出現上傳按鈕，其他功能照常。
 
+> **V8（#125）起網站可以搬到 Cloudflare**，照片上傳服務跟網站合在同一個 Worker、自動部署，設定見 [`CLOUDFLARE_SETUP.md`](CLOUDFLARE_SETUP.md)。這份說明的是舊網址（GitHub Pages）在用的單獨 Worker `bq-shelter-photos`，切換完成前不要刪。
+
 ---
 
 ## 步驟 1：在 GitHub 建立只能改這個 repo 的 token

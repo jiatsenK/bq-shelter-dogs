@@ -1,0 +1,29 @@
+// 網站＋API 合在一起的 Cloudflare Worker（#125）
+// - 網頁、data/、photos/ 是靜態檔案（assets），API 在 /api 底下（worker/src/index.js）
+// - main 有推送就由 GitHub Action 自動部署（.github/workflows/deploy-cloudflare.yml），不用手動貼程式
+// - Secret（GITHUB_TOKEN、NOTES_PASSCODE、WALKER_KEY）不寫在這裡：設在 GitHub Secrets，部署時一起帶上去，步驟見 docs/CLOUDFLARE_SETUP.md
+// - 不公開的檔案列在 .assetsignore
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "bq-shelter-dogs",
+  "main": "worker/src/index.js",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": ".",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/api"]
+  },
+  "vars": {
+    "GITHUB_REPO": "jiatsenK/bq-shelter-dogs",
+    "GITHUB_BRANCH": "main",
+    // 舊網址（GitHub Pages）在切換前（#129）也可能叫這個 Worker；同網址的要求不用列
+    "ALLOWED_ORIGINS": "https://jiatsenk.github.io"
+  },
+  // 定時叫 GitHub 跑同步試算表（UTC；台灣 7:00–22:30 每 30 分鐘）。
+  // 舊的照片上傳 Worker（bq-shelter-photos）的 Cron Trigger 要刪掉，不然會一次叫兩次
+  "triggers": {
+    "crons": ["0,30 23,0-14 * * *"]
+  },
+  // 在 Cloudflare 網頁加的變數，部署時保留、不清掉
+  "keep_vars": true
+}
