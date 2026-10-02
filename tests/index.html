@@ -629,7 +629,8 @@ function runTests() {
     check('#30 檔案拆分：index.html 只有結構，樣式在 css/app.css、程式在 js/app.js', () => {
       const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
-      const scripts = [...doc.querySelectorAll('script')];
+      // 手機開啟加速起，頁首唯一一段內嵌程式是提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
+      const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly'));
       eq(scripts.map(s => s.getAttribute('src')), ['js/app.js', 'js/analysis.js', 'js/find.js'], 'script（#59 起多分析頁、#99 多找狗）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
@@ -2590,6 +2591,43 @@ async function runCageMateTests() {
   }
 }
 
+// 手機開啟加速：dogs.json 提早抓、畫面外的卡不排版、等全部 js 載入完才開始
+async function runFastOpenTests() {
+  const css = await fetch('../css/app.css').then(r => r.text());
+  const rule = sel => (css.match(new RegExp(`\\n${sel.replace('.', '\\.')} \\{([^}]*)\\}`)) || [])[1] || '';
+  await check('手機開啟加速：index.html 在 css 前面就開始抓 dogs.json', () => {
+    const at = INDEX_HTML.indexOf("window.__dogsEarly = fetch('data/dogs.json'");
+    if (at < 0) throw new Error('index.html 沒有提早抓 dogs.json');
+    if (at > INDEX_HTML.indexOf('<link rel="stylesheet" href="css/app.css">')) throw new Error('要放在 css 前面，不然會等 css 下載完才執行');
+    if (!/document\.addEventListener\('DOMContentLoaded', init\)/.test(APP_JS)) throw new Error('init 要等 find.js、analysis.js 也載入完才開始');
+  });
+  await check('手機開啟加速：loadDogsData 第一次用提早抓的那份，之後照常抓', async () => {
+    const realFetch = window.fetch;
+    const body = JSON.stringify({ syncedAt: '2026-09-30T00:00:00Z', dogs: [{ name: '提早', id: '9800', cage: 'A01' }] });
+    let calls = 0;
+    window.fetch = async () => { calls++; return new Response(body); };
+    try {
+      window.__dogsEarly = Promise.resolve(new Response(body));
+      eq((await loadDogsData()).dogs.map(d => d.name), ['提早'], '第一次：');
+      eq([calls, window.__dogsEarly], [0, null], '第一次不再抓、用完清掉：');
+      await loadDogsData();
+      eq(calls, 1, '第二次（更新）照常抓：');
+      window.__dogsEarly = Promise.reject(new TypeError('offline'));
+      let msg = '';
+      try { await loadDogsData(); } catch (e) { msg = e.message; }
+      eq(msg, '連不到網站，可能是網路中斷。', '提早抓失敗一樣顯示連不到：');
+    } finally {
+      window.fetch = realFetch; window.__dogsEarly = null;
+    }
+  });
+  await check('手機開啟加速：狗卡、找狗照片卡在畫面外先不排版', () => {
+    for (const sel of ['.card', '.find-dog']) {
+      if (!/content-visibility: auto;/.test(rule(sel))) throw new Error(`${sel} 沒有 content-visibility: auto`);
+      if (!/contain-intrinsic-size: auto \d+px;/.test(rule(sel))) throw new Error(`${sel} 沒有 contain-intrinsic-size（捲動會跳）`);
+    }
+  });
+}
+
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
 Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js', '../js/find.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
@@ -2635,6 +2673,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runWhereTests)
   .then(runFindV7Tests)
   .then(runV7PagesTests)
+  .then(runFastOpenTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

@@ -228,6 +228,8 @@ main { overflow-wrap: anywhere; }
   margin-bottom: 6px;
   box-shadow: var(--shadow-card);
   cursor: pointer;
+  /* 手機開啟加速：一百多張狗卡一次排版要半秒以上，畫面外的先不排，捲到附近才畫；auto 會記住畫過的高度 */
+  content-visibility: auto; contain-intrinsic-size: auto 76px;
 }
 .card.flagged { flex-wrap: wrap; }
 .card.flagged > .warn-note { flex: 0 0 100%; }
@@ -943,6 +945,8 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
 .find-dog {
   border: none; background: none; padding: 0; font-family: inherit; color: var(--ink); text-align: left; cursor: pointer;
   display: flex; flex-direction: column; gap: 5px; min-width: 0;
+  /* 畫面外的照片卡先不排版（手機開啟加速），捲到附近才畫；auto 會記住畫過的高度，捲動不跳 */
+  content-visibility: auto; contain-intrinsic-size: auto 220px;
 }
 .find-dog:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 14px; }
 .find-photo { position: relative; display: block; }
