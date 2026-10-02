@@ -120,4 +120,5 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
 - 設定：repo 根目錄的 `wrangler.jsonc`（Worker 名稱、靜態檔案、Cron）；不公開的檔案列在 `.assetsignore`。
 - API 在 `/api` 底下（`/api/photos/{編號}`、`/api/notes`、`/api/gallery`、`/api/walker-code`、`/api/sync`），網站在 `*.workers.dev` 上會自動改用同網址的 `/api`（`js/app.js` 的 `uploadUrlFor`）。同一份 `worker/src/index.js` 也還能照舊部署成沒有 `/api` 前綴的單獨 Worker（`worker/wrangler.toml`）。
 - 本機試跑：在 repo 根目錄 `npx wrangler dev --persist-to /tmp/wrangler-state`（`--persist-to` 放 repo 外面，不然暫存寫進網站資料夾會一直重新載入）。
+- 照片快取（#127）：`_headers` 讓 `photos/` 在手機上快取 30 天；部署前 `scripts/photo-versions.mjs` 把每張照片的內容雜湊寫進要上傳的 `data/dogs.json`（`photoVersions`，不提交），網站組照片網址加 `?v=雜湊`，換照片網址就變。
 - 部署：`.github/workflows/deploy-cloudflare.yml`。同步試算表、產生縮圖這兩個 Action 用 GitHub 內建 token 提交，不會觸發推送事件，所以用 `workflow_run` 接著部署。

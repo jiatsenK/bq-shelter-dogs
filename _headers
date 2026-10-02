@@ -1,0 +1,5 @@
+# Cloudflare 回應標頭（#127）：照片在手機上快取 30 天
+# 網站組照片網址會加 ?v=內容雜湊（部署時 scripts/photo-versions.mjs 算好寫進 dogs.json），換了照片網址就變，
+# 所以可以放心快取很久。網頁、程式、data/*.json 不在這裡，照 Cloudflare 預設每次先問有沒有新版
+/photos/*
+  Cache-Control: public, max-age=2592000, immutable
