@@ -11,7 +11,7 @@
 
 跟 `.github/workflows/tests.yml` 一樣，PR 要全過：
 
-- node 測試：`node --test scripts/sync-sheet.test.mjs worker/test/worker.test.mjs scripts/photo-versions.test.mjs`（要寫檔名，寫資料夾在 Node 22 會失敗）
+- node 測試：`node --test scripts/sync-sheet.test.mjs worker/test/worker.test.mjs scripts/photo-versions.test.mjs scripts/analytics-beacon.test.mjs`（要寫檔名，寫資料夾在 Node 22 會失敗）
 - 網頁測試：`node scripts/run-browser-tests.cjs`（需要 Playwright 的 Chromium）
 
 ## Agent skills
