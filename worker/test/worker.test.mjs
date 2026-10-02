@@ -761,3 +761,30 @@ test('#125 /api/photos/{編號}：跟舊路徑一樣寫到 photos/{編號}.jpg',
   assert.equal(r.status, 200);
   assert.ok(calls.some(c => c.method === 'PUT' && c.path.endsWith('/contents/photos/2024032902.jpg')));
 });
+
+// ---- PR 預覽版（#126）：可以看、可以讀，不能改正式資料 ----
+
+test('#126 預覽版：上傳、相簿、備註、更新都回 403 且不碰 GitHub；讀取和換代號照常', async () => {
+  const PENV = { ...NENV, WALKER_KEY: 'k', PREVIEW: '1' };
+  const { calls } = fakeNotesGithub({ text: '{}' });
+  const h = { Origin: SITE, 'Content-Type': 'application/json' };
+  const writes = [
+    new Request(`${SITE}/api/photos/2024032902`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'image/jpeg' }, body: JPEG.slice() }),
+    new Request(`${SITE}/api/gallery/2024032902`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'image/jpeg' }, body: JPEG.slice() }),
+    new Request(`${SITE}/api/gallery/2024032902/20260101-000000-abcd.jpg`, { method: 'DELETE', headers: h, body: '{}' }),
+    new Request(`${SITE}/api/gallery/2024032902/20260101-000000-abcd.jpg/main`, { method: 'POST', headers: h }),
+    new Request(`${SITE}/api/notes/2024032902`, { method: 'PUT', headers: h, body: JSON.stringify({ text: 'x', passcode: '對的通關碼' }) }),
+    new Request(`${SITE}/api/sync`, { method: 'POST', headers: h }),
+  ];
+  for (const req of writes) {
+    const r = await send(req, PENV);
+    assert.equal(r.status, 403, req.url);
+    assert.match(r.body.error, /預覽版/);
+  }
+  assert.equal(calls.length, 0);
+  assert.equal((await send(new Request(`${SITE}/api/notes`, { headers: { Origin: SITE } }), PENV)).status, 200);
+  const codes = await send(new Request(`${SITE}/api/walker-code`, { method: 'POST', headers: h, body: JSON.stringify({ names: ['測試'] }) }), PENV);
+  assert.equal(codes.status, 200);
+  assert.equal((await send(new Request(`${SITE}/api/`), PENV)).body.preview, '預覽版，不能存');
+  assert.equal((await send(new Request(`${SITE}/api/`), NENV)).body.preview, undefined);
+});

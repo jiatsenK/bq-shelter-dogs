@@ -24,6 +24,9 @@
   "triggers": {
     "crons": ["0,30 23,0-14 * * *"]
   },
-  // 在 Cloudflare 網頁加的變數，部署時保留、不清掉
-  "keep_vars": true
+  // 每個 PR 的預覽網址（#126，.github/workflows/preview-cloudflare.yml）：https://pr-<編號>-bq-shelter-dogs.<帳號>.workers.dev
+  "preview_urls": true,
+  // 不保留 Cloudflare 網頁上另外加的變數：正式部署只用這裡的 vars，確保預覽版的 PREVIEW 不會被帶進正式版。
+  // Secret（GITHUB_TOKEN 等）不受影響，部署時一律保留
+  "keep_vars": false
 }
