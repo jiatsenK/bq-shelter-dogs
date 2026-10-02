@@ -498,3 +498,8 @@
 - `AGENTS.md`：搬入原 `CLAUDE.md` 全部內容，加上「指令」一節（照 `tests.yml` 的兩條測試指令），註明 Codex 不掃 `.claude/skills/`。
 - `CLAUDE.md`：改成一行 `@AGENTS.md`，跟其他 repo 一樣兩個工具共用一份。
 - 只動文件，沒改程式。
+
+## 2026-10-02 更新寶妮狗卡資訊（Claude，分支 claude/project-thread-ovzdfh）
+- 依據：K「更新資料」並附寶妮（2026082607）的狗卡圖片。
+- `dogs/2026082607.md`：名字從暫用的「（梗奶奶）」改成寶妮，加上 `sex: female`，填入狗卡文字。原始狗卡圖片沒有放進 repo。
+- 只動狗卡檔，沒改程式；合併後同步 Action 會自動把性別和狗卡資訊寫進 `data/dogs.json`。
