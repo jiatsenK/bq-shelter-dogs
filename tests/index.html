@@ -2592,6 +2592,43 @@ async function runCageMateTests() {
 }
 
 // 手機開啟加速：dogs.json 提早抓、畫面外的卡不排版、等全部 js 載入完才開始
+// #127 照片網址加版本號：有版本就加 ?v=，沒有（舊網址、剛上傳）照舊；照片快取 30 天只套在 photos/
+async function runPhotoVersionTests() {
+  const saved = photoVersions;
+  await check('#127 dogs.json 的 photoVersions：只收路徑 → 英數雜湊，格式不對的丟掉；沒有就是空的', () => {
+    const got = parseDogsData({ dogs: [], photoVersions: { 'photos/1.jpg': 'ab12cd34', 'photos/2.jpg': 5, 'photos/3.jpg': '<x>' } });
+    eq(got.photoVersions, { 'photos/1.jpg': 'ab12cd34' }, '版本：');
+    eq(parseDogsData({ dogs: [] }).photoVersions, {}, '沒有：');
+    eq(parseDogsData({ dogs: [], photoVersions: ['x'] }).photoVersions, {}, '格式不對：');
+  });
+  await check('#127 主照片、縮圖、相簿、相簿縮圖都加版本號；沒有版本的不加；剛上傳的本機圖片不受影響', () => {
+    const dog = { id: '9901' };
+    const file = '20260101-000000-abcd.jpg';
+    photoVersions = {
+      'photos/9901.jpg': 'aaaa1111',
+      'photos/thumbs/9901.jpg': 'bbbb2222',
+      [`photos/gallery/9901/${file}`]: 'cccc3333',
+      [`photos/thumbs/gallery/9901/${file}`]: 'dddd4444',
+    };
+    eq(photoSrc(dog), 'photos/9901.jpg?v=aaaa1111', '主照片：');
+    eq(photoThumbSrc(dog), 'photos/thumbs/9901.jpg?v=bbbb2222', '縮圖：');
+    eq(gallerySrc(dog, file), `photos/gallery/9901/${file}?v=cccc3333`, '相簿：');
+    eq(galleryThumbSrc(dog, file), `photos/thumbs/gallery/9901/${file}?v=dddd4444`, '相簿縮圖：');
+    eq(photoSrc({ id: '9902' }), 'photos/9902.jpg', '沒有版本：');
+    photoOverrides['9901'] = 'blob:local';
+    eq(photoSrc(dog), 'blob:local', '剛上傳：');
+    delete photoOverrides['9901'];
+  });
+  photoVersions = saved;
+  const headers = await fetch('../_headers').then(r => r.ok ? r.text() : '');
+  await check('#127 _headers：照片快取 30 天，其他檔案不設長快取', () => {
+    // 部署到 Cloudflare 後 _headers 不公開，讀不到就跳過（本機和 GitHub Pages 讀得到）
+    if (!headers) return;
+    const rules = headers.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+    eq(rules.map(l => l.trim()), ['/photos/*', 'Cache-Control: public, max-age=2592000, immutable'], '規則：');
+  });
+}
+
 // #126 PR 預覽網址：預覽版帶 PREVIEW、不碰正式網站；正式部署不保留網頁上加的變數，PREVIEW 不會被帶進正式版
 async function runPreviewTests() {
   const get = p => fetch(p).then(r => r.ok ? r.text() : '');
@@ -2721,6 +2758,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runFastOpenTests)
   .then(runCloudflareTests)
   .then(runPreviewTests)
+  .then(runPhotoVersionTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
