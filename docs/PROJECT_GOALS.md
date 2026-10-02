@@ -144,6 +144,8 @@ K 2026-09-25 實測後說「完成定版」（2026-09-27 由 V6 接替）。
 
 **架構**：兩個獨立資料源，沒有中介伺服器、沒有資料庫。（V3 起試算表改由 GitHub Action 同步成 `data/dogs.json`，前端不再即時讀試算表。）
 
+**瀏覽統計（V8，#128）**：新網址用 Cloudflare Web Analytics，只看每天幾個人用、用什麼手機；不放 cookie、不記個人資料。只有正式部署時才放進網頁（GitHub Secret `CF_ANALYTICS_TOKEN`），舊網址和 PR 預覽版不算。
+
 ### 資料源一：Google 試算表（唯讀）
 - 志工非管理者，無編輯權限，只能讀。
 - 透過 Google Visualization API（gviz）讀取，免金鑰（V3 起由 GitHub Action 讀）：
