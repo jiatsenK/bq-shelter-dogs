@@ -2924,6 +2924,10 @@ async function runWalkerChipTests() {
   } finally {
     hideDetail(); hideToast(); withSheet = null; renderWithSheet();
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList, sheetWritesMemory, sheetWriteState, walkerNameMemory, walkerCodesMemory, myWalks, myWalksState] = saved;
+    render();
+  }
+}
+
 // ── #146 選了照片時底部換成取消／確認上傳（K 2026-10-04 選方案一）──
 async function runPhotoBarTests() {
   const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, photoUpload, galleryBatch];
@@ -2957,6 +2961,9 @@ async function runPhotoBarTests() {
     hideDetail();
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, photoUpload, galleryBatch] = saved;
     render();
+  }
+}
+
 // #154 找狗改成列表＋平面圖，拿掉照片格子（K 2026-10-04：找狗靠文字與位置，認狗靠小照片）
 async function runFindListTests() {
   const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone, findCage];
