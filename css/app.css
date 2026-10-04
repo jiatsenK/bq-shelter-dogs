@@ -50,7 +50,7 @@ header.app {
 .brand .date { font-size: 13px; color: var(--ink-soft); font-weight: 500; }
 .brand .updated { font-size: 12px; color: var(--ink-soft); white-space: nowrap; }
 
-/* V7 單手操作（#111）：搜尋和分類固定在畫面最下面 */
+/* V7 單手操作（#111）：分類固定在畫面最下面（搜尋框 2026-10-04 搬回頁首） */
 .bottom-bar {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 15;
   background: rgba(255, 255, 255, 0.96);
@@ -60,7 +60,7 @@ header.app {
 }
 .bottom-inner { max-width: 480px; margin: 0 auto; }
 .analysis-open .bottom-bar { display: none; }
-.search { position: relative; margin: 0 0 4px; }
+.search { position: relative; margin: 10px 0 0; }
 .search .icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--ink-soft); font-size: 16px; }
 .search input {
   width: 100%;
@@ -115,7 +115,7 @@ header.app {
 .tabs button.active .n { background: var(--primary); color: #fff; }
 .tabs button:active { background: var(--primary-soft); }
 
-main { padding: 14px 14px calc(150px + env(safe-area-inset-bottom, 0px)); max-width: 480px; margin: 0 auto; }
+main { padding: 14px 14px calc(96px + env(safe-area-inset-bottom, 0px)); max-width: 480px; margin: 0 auto; }
 /* 左右滑動換分類由 js/app.js 處理，瀏覽器只負責上下捲動；內容少時下方空白處也要能滑 */
 main { touch-action: pan-y; min-height: calc(100vh - 160px); }
 /* 試算表文字（備註、籠位、犬名、搜尋字）可能是一長串沒有空白的英數或網址，一律可以折行，不撐破版面 */
@@ -427,7 +427,7 @@ html.detail-open { overflow: hidden; }
 /* 記下／移回後的底部提示條，可按「復原」 */
 .toast {
   position: fixed; left: 50%; transform: translateX(-50%); z-index: 30;
-  bottom: calc(130px + env(safe-area-inset-bottom, 0px)); /* 底部列上面（#111） */
+  bottom: calc(80px + env(safe-area-inset-bottom, 0px)); /* 底部列上面（#111；2026-10-04 搜尋框搬到頁首後底部列變矮） */
   width: min(448px, calc(100% - 32px));
   background: var(--ink); color: #fff;
   border-radius: 14px; padding: 10px 10px 10px 16px;
@@ -495,10 +495,18 @@ html.lightbox-open { overflow: hidden; }
   padding: 12px 14px; box-shadow: var(--shadow-card);
 }
 .photo-preview-hint { font-size: 13.5px; color: var(--ink-soft); margin-bottom: 8px; }
-.photo-preview {
-  display: block; width: 100%; max-height: 50vh; max-height: 50dvh;
-  object-fit: contain; border-radius: 12px; background: var(--surface-soft);
+/* 新照片預覽直接放在大照片的位置（2026-10-04），樣式沿用 .photo-wrap.hero .thumb，裁切方式跟上傳後一樣 */
+.photo-wrap.hero.pending { position: relative; }
+.photo-wrap.hero.pending .thumb img, .photo-preview-row .thumb img { opacity: 1; } /* 本機照片不用等下載的淡入 */
+.hero-tag {
+  position: absolute; left: 10px; top: 10px;
+  font-size: 13px; font-weight: 700; color: #fff;
+  background: rgba(30, 42, 68, 0.72); border-radius: 99px; padding: 3px 10px;
 }
+.detail-head .photo-upload.preview { margin: 10px 0 4px; padding: 0; box-shadow: none; background: none; }
+.photo-preview-row { display: flex; align-items: center; gap: 12px; }
+.photo-preview-row .photo-preview-hint { margin: 0; line-height: 1.5; }
+.photo-preview-row .card-thumb { width: 72px; height: 64px; border-radius: 12px; }
 .photo-error {
   display: flex; gap: 6px; align-items: flex-start;
   margin-top: 10px; padding: 8px 10px; border-radius: 10px;
@@ -732,6 +740,9 @@ html.lightbox-open { overflow: hidden; }
 .g-add .icon { font-size: 24px; }
 .g-add:active { background: var(--primary-soft); }
 .gallery-note { margin-top: 8px; }
+/* 相簿選好的照片：放在相簿格裡「新增」那格的位置，大小跟其他格一樣 */
+.gallery-grid .gb-item { border-radius: 12px; }
+.gallery-grid .gb-item .g-tag { top: 6px; bottom: auto; }
 .photo-upload.preview.in-gallery { margin-top: 12px; padding: 0; box-shadow: none; }
 
 /* 燈箱換張：兩側箭頭、下方張數與刪除 */
@@ -1180,3 +1191,15 @@ html.find-zoom-open { overflow: hidden; }
 .mine-progress .row small { font-size: 14px; font-weight: 700; color: var(--ink-soft); }
 .mine-progress .bar { height: 10px; border-radius: 999px; background: var(--primary-soft); margin-top: 8px; overflow: hidden; }
 .mine-progress .bar i { display: block; height: 100%; border-radius: inherit; background: var(--primary); }
+
+/* 溜狗表排序（2026-10-04）：三顆小按鈕，選到的那顆填色 */
+.walk-sort { display: flex; align-items: center; gap: 6px; margin: 2px 4px 12px; }
+.walk-sort-label { font-size: 14px; color: var(--ink-soft); font-weight: 500; margin-right: 2px; }
+.walk-sort-btn {
+  border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface); color: var(--ink);
+  font-family: inherit; font-size: 14px; font-weight: 600;
+  padding: 6px 12px; min-height: 34px; cursor: pointer;
+}
+.walk-sort-btn.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.walk-sort-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }

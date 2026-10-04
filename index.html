@@ -64,6 +64,12 @@
       <button type="button" class="sync-btn" id="syncBtn" aria-label="更新資料" title="更新資料"><svg class="icon"><use href="#i-refresh"/></svg></button>
       <button type="button" class="analysis-btn" id="analysisBtn" aria-label="分析" title="分析"><svg class="icon"><use href="#i-chart"/></svg></button>
     </div>
+    <!-- 搜尋框在畫面上方（2026-10-04 K：放上面比較好），頁首捲動時固定在上面 -->
+    <div class="search">
+      <svg class="icon"><use href="#i-search"/></svg>
+      <input id="searchInput" type="search" placeholder="搜尋狗名" aria-label="搜尋狗名" enterkeyhint="search" autocomplete="off">
+      <button type="button" class="search-clear" id="searchClear" aria-label="清除搜尋" hidden><svg class="icon"><use href="#i-close"/></svg></button>
+    </div>
   </div>
 </header>
 
@@ -71,14 +77,9 @@
   <div class="status-msg">讀取中…</div>
 </main>
 
-<!-- V7 單手操作（#111）：搜尋和分類放在畫面最下面，大拇指搆得到 -->
-<nav class="bottom-bar" id="bottomBar" aria-label="分類與搜尋">
+<!-- V7 單手操作（#111）：分類放在畫面最下面，大拇指搆得到；搜尋框 2026-10-04 K 要求搬回頁首 -->
+<nav class="bottom-bar" id="bottomBar" aria-label="分類">
   <div class="bottom-inner">
-    <div class="search">
-      <svg class="icon"><use href="#i-search"/></svg>
-      <input id="searchInput" type="search" placeholder="搜尋狗名" aria-label="搜尋狗名" enterkeyhint="search" autocomplete="off">
-      <button type="button" class="search-clear" id="searchClear" aria-label="清除搜尋" hidden><svg class="icon"><use href="#i-close"/></svg></button>
-    </div>
     <div class="tabs" id="tabs"></div>
   </div>
 </nav>
