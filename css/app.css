@@ -1,20 +1,21 @@
 /* 視覺風格：見 docs/DESIGN_GUIDE.md（參考圖 docs/design/reference-preview.webp） */
 :root {
-  --bg: #EEF4FB;
+  /* V9（#141 第 3 項）：顏色參考 Apple（iOS 系統色）：灰底白卡、一個藍色主色，紅黃綠只用在天數 */
+  --bg: #F2F2F7;
   --surface: #FFFFFF;
-  --surface-soft: #F4F7FB;
-  --ink: #1E2A44;
-  --ink-soft: #6B7890;
-  --line: #E3EAF3;
-  --primary: #2F7BEA;
-  --primary-soft: #E7F0FD;
-  --red-text: #D93036;   --red-bg: #FDE7E7;
-  --amber-text: #A86400; --amber-bg: #FFF0C2;
-  --green-text: #2E8B45; --green-bg: #DDF4E2;
-  --muted-text: #7A8599; --muted-bg: #EEF1F5;
-  --radius-card: 18px;
-  --radius-photo: 14px;
-  --shadow-card: 0 2px 10px rgba(30, 42, 68, 0.06);
+  --surface-soft: #EFEFF4;
+  --ink: #1C1C1E;
+  --ink-soft: #8A8A8E;
+  --line: #E5E5EA;
+  --primary: #007AFF;
+  --primary-soft: #E8F1FF;
+  --red-text: #D70015;   --red-bg: #FFE9EA;
+  --amber-text: #B25000; --amber-bg: #FFF1E0;
+  --green-text: #248A3D; --green-bg: #E5F5E9;
+  --muted-text: #8E8E93; --muted-bg: #EFEFF4;
+  --radius-card: 14px;
+  --radius-photo: 10px;
+  --shadow-card: none;
   /* 找狗平面圖的分區色（#99）：沿用所內看板的色系，調淡；文字用同色系深色 */
   --z-new: #CFE8F6; --z-new-ink: #1F6E9A;
   --z-iso: #F6D6D6; --z-iso-ink: #A33A3A;
@@ -1204,3 +1205,151 @@ html.find-zoom-open { overflow: hidden; }
 .walk-sort-btn .icon { color: var(--primary); font-size: 16px; }
 .walk-sort-btn:active { background: var(--primary-soft); }
 .walk-sort-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* ── V9 正式上線版（#141）──
+   顏色參考 Apple：灰底白卡、沒有陰影、一個藍色主色；籠位、按鈕不用彩色框，紅黃綠只留給天數和警示 */
+header.app { background: rgba(255, 255, 255, 0.92); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); box-shadow: 0 0.5px 0 rgba(60, 60, 67, 0.29); }
+.brand .logo { width: 28px; height: 28px; }
+.brand h1 { font-size: 20px; font-weight: 700; letter-spacing: 0; }
+.sync-btn, .analysis-btn { background: transparent !important; color: var(--primary) !important; }
+.bottom-bar { box-shadow: 0 -0.5px 0 rgba(60, 60, 67, 0.29); background: rgba(249, 249, 249, 0.94); }
+.tabs { grid-template-columns: repeat(3, 1fr); }
+.tabs button .n { background: transparent; color: var(--ink-soft); font-weight: 500; }
+.tabs button.active .n { background: transparent; color: var(--primary); }
+.tabs button:active { background: transparent; opacity: .6; }
+.card { border-radius: 12px; padding: 8px 8px 8px 8px; gap: 12px; margin-bottom: 8px; }
+.card .thumb { width: 64px; height: 64px; border-radius: 10px; }
+.card .name { font-size: 17px; font-weight: 600; }
+.card .meta .id { display: none; } /* 編號放詳細資訊，卡片上少一行字 */
+.cage-pill { background: var(--surface-soft) !important; color: var(--ink-soft) !important; font-weight: 500 !important; }
+.cage-pill .icon { color: var(--ink-soft) !important; }
+.last .lbl { font-size: 12px; }
+.last .val { font-size: 17px; font-weight: 600; }
+.walk-btn {
+  width: 58px; height: 34px; border-radius: 17px; border: none;
+  background: var(--primary-soft); color: var(--primary); font-size: 15px; font-weight: 600;
+  flex-direction: row; gap: 2px;
+}
+.walk-btn:active { background: #D3E5FF; }
+.walk-btn.done { background: var(--green-bg); color: var(--green-text); }
+.walk-btn.done .icon { font-size: 13px; }
+.card:has(.walk-btn) .last { width: 70px; }
+.warn-note { border-width: 0; background: var(--red-bg); font-weight: 600; }
+.badge { font-weight: 600; }
+.badge.plain { background: var(--surface-soft) !important; color: var(--ink-soft) !important; }
+.detail-section h3 .icon { color: var(--ink-soft); }
+.section-hint .icon { color: var(--ink-soft); }
+
+/* 溜狗表上面：幾天以上沒溜（橫向捲動）＋排序＋照片／列表切換 */
+.chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 0 -14px 10px; padding: 2px 14px; }
+.chips::-webkit-scrollbar { display: none; }
+.chip {
+  flex-shrink: 0; border: none; border-radius: 16px; padding: 6px 12px;
+  background: var(--surface); color: var(--ink); font-family: inherit; font-size: 14px; font-weight: 500; cursor: pointer;
+}
+.chip small { margin-left: 4px; color: var(--ink-soft); font-size: 13px; font-variant-numeric: tabular-nums; }
+.chip.on { background: var(--ink); color: #fff; }
+.chip.on small { color: rgba(255, 255, 255, 0.7); }
+.walk-tools { display: flex; align-items: center; justify-content: space-between; margin: 0 2px 10px; }
+.walk-tools .walk-sort { margin: 0; }
+.walk-sort-btn { background: transparent !important; border: none !important; box-shadow: none !important; color: var(--primary) !important; font-weight: 500 !important; padding: 4px 2px !important; }
+.seg { display: flex; padding: 2px; border-radius: 9px; background: #E3E3E8; }
+.seg button { border: none; background: none; width: 40px; height: 28px; border-radius: 7px; color: var(--ink); font-size: 16px; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+.seg button.on { background: var(--surface); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+
+/* 列表模式（收起照片）：一列一隻，跟試算表一樣 籠位｜犬名｜日期｜誰遛的 */
+.rows { background: var(--surface); border-radius: 12px; overflow: hidden; }
+.row-dog {
+  display: grid; grid-template-columns: 50px minmax(0, 1fr) 40px minmax(0, 1.1fr) auto; align-items: center; gap: 8px;
+  padding: 7px 8px 7px 12px; min-height: 48px; font-size: 15px; cursor: pointer;
+  border-bottom: 0.5px solid var(--line);
+  content-visibility: auto; contain-intrinsic-size: auto 48px;
+}
+.row-dog:last-child { border-bottom: none; }
+.row-dog:active { background: var(--surface-soft); }
+.r-cage { color: var(--ink-soft); font-size: 13px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.r-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 3px; }
+.r-name .icon { color: var(--red-text); font-size: 13px; }
+.r-date { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.r-date.sage { color: var(--green-text); } .r-date.amber { color: var(--amber-text); } .r-date.red { color: var(--red-text); } .r-date.muted { color: var(--muted-text); font-weight: 400; }
+.r-who { font-size: 13px; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.row-dog .walk-btn { width: 52px; height: 30px; font-size: 14px; margin: 0; }
+
+/* 詳細資訊：上次溜／溜狗人 */
+.last-walk { padding: 4px 14px; }
+.lw-row { display: flex; align-items: center; gap: 12px; min-height: 40px; font-size: 15px; }
+.lw-row + .lw-row { border-top: 0.5px solid var(--line); }
+.lw-k { width: 52px; flex-shrink: 0; color: var(--ink-soft); font-size: 14px; }
+.lw-v { display: flex; flex-wrap: wrap; gap: 6px; font-weight: 500; }
+.who-chip { background: var(--surface-soft); border-radius: 12px; padding: 2px 10px; font-size: 14px; }
+.lw-none { color: var(--muted-text); }
+
+/* 我溜過：名字＋統計按鈕；統計展開才看到 */
+.who-hint .who-name { font-weight: 600; color: var(--ink); }
+.who-hint .who-edit { margin-left: 0; display: inline-flex; align-items: center; gap: 4px; background: var(--surface); color: var(--primary); font-weight: 500; }
+.who-hint .who-name + .who-edit { margin-left: auto; }
+.who-hint .who-edit.on { background: var(--primary); color: #fff; }
+.mine-stats-box { margin-bottom: 12px; }
+.mine-tiles b { font-weight: 700; }
+
+/* 找狗照片：小一點，一排 3 隻（寬一點 4 隻） */
+.find-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 12px 8px !important; }
+@media (min-width: 440px) { .find-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; } }
+.find-name { font-size: 14px; font-weight: 600; }
+.find-meta { font-size: 11.5px; }
+.find-meta span { display: none; } /* 編號點進去看 */
+.find-chip.on { background: var(--ink) !important; }
+.find-map-all { margin-left: auto; flex-shrink: 0; }
+
+/* 開頭畫面（#141 第 2 項） */
+html.onboard-open { overflow: hidden; }
+.onboard { position: fixed; inset: 0; z-index: 50; background: var(--surface); overflow-y: auto; }
+.ob-page {
+  min-height: 100%; max-width: 440px; margin: 0 auto; box-sizing: border-box;
+  display: flex; flex-direction: column; padding: calc(56px + env(safe-area-inset-top, 0px)) 28px calc(28px + env(safe-area-inset-bottom, 0px));
+}
+.ob-hero { width: 72px; height: 72px; border-radius: 18px; background: var(--primary); color: #fff; font-size: 40px; display: flex; align-items: center; justify-content: center; }
+.ob-name h1 { font-size: 30px; font-weight: 700; margin: 22px 0 6px; }
+.ob-lead { font-size: 17px; color: var(--ink-soft); margin: 0 0 30px; }
+.ob-label { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+.ob-page input { width: 100%; box-sizing: border-box; border: none; border-radius: 12px; background: var(--surface-soft); font-family: inherit; font-size: 17px; padding: 14px 14px; color: var(--ink); }
+.ob-page input:focus { outline: 2px solid var(--primary); }
+.ob-help { font-size: 14px; line-height: 1.6; color: var(--ink-soft); margin: 10px 0 0; }
+.ob-foot { align-self: stretch; margin-top: auto; padding-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.ob-next { width: 100%; border: none; border-radius: 14px; background: var(--primary); color: #fff; font-family: inherit; font-size: 17px; font-weight: 600; padding: 15px; cursor: pointer; }
+.ob-next:disabled { opacity: .5; }
+.ob-small { font-size: 12.5px; color: var(--ink-soft); margin: 0; text-align: center; }
+.ob-slide { align-items: center; text-align: center; }
+.ob-skip { align-self: flex-end; border: none; background: none; color: var(--primary); font-family: inherit; font-size: 16px; margin: -36px -8px 0 0; padding: 8px; cursor: pointer; }
+.ob-art { margin-top: 12vh; width: 120px; height: 120px; border-radius: 32px; background: var(--primary-soft); color: var(--primary); font-size: 60px; display: flex; align-items: center; justify-content: center; }
+.ob-slide h2 { font-size: 26px; font-weight: 700; margin: 30px 0 12px; }
+.ob-slide p { font-size: 17px; line-height: 1.6; color: var(--ink-soft); margin: 0; }
+.ob-dots { display: flex; gap: 8px; }
+.ob-dots i { width: 7px; height: 7px; border-radius: 50%; background: #D1D1D6; }
+.ob-dots i.on { background: var(--ink); }
+.who-hint .who-edit .icon { color: inherit; }
+.find-chip { background: var(--surface) !important; }
+.find-chip.on { background: var(--ink) !important; color: #fff !important; }
+.find-view { background: #E3E3E8 !important; }
+.badge.plain .icon { color: var(--ink-soft); }
+.detail-bar .bar-btn { border: none !important; background: var(--surface-soft) !important; color: var(--ink) !important; font-weight: 600 !important; }
+.detail-bar .bar-btn .icon { color: var(--ink-soft); }
+.group-walk { background: var(--primary) !important; font-weight: 600 !important; }
+
+/* 一起溜的人（#141 第 1 項）：溜了之後從提示條打開，從下面滑出 */
+.toast-extra { flex-shrink: 0; border: none; background: rgba(255, 255, 255, 0.14); color: #fff; font-family: inherit; font-size: 14px; font-weight: 600; border-radius: 10px; padding: 7px 10px; cursor: pointer; }
+.toast-extra[hidden] { display: none; }
+.with-backdrop { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.35); display: flex; align-items: flex-end; justify-content: center; }
+.with-sheet { background: var(--surface); width: 100%; max-width: 480px; border-radius: 18px 18px 0 0; padding: 18px 16px calc(14px + env(safe-area-inset-bottom, 0px)); }
+.with-sheet h3 { font-size: 17px; font-weight: 600; margin: 0 0 14px; }
+.with-names { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.with-name { border: none; border-radius: 18px; padding: 8px 14px; background: var(--surface-soft); color: var(--ink); font-family: inherit; font-size: 15px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.with-name.on { background: var(--primary); color: #fff; }
+.with-add { display: flex; gap: 8px; }
+.with-add input { flex: 1; min-width: 0; border: none; border-radius: 12px; background: var(--surface-soft); font-family: inherit; font-size: 16px; padding: 11px 12px; color: var(--ink); }
+.with-add button { border: none; background: none; color: var(--primary); font-family: inherit; font-size: 16px; font-weight: 600; padding: 0 6px; cursor: pointer; }
+.with-bar { display: flex; gap: 8px; margin-top: 16px; }
+.with-bar .bar-btn { flex: 1; min-height: 48px; border: none; border-radius: 14px; background: var(--surface-soft); font-family: inherit; font-size: 16px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.with-ok { flex: 1.6; min-height: 48px; border: none; border-radius: 14px; background: var(--primary); color: #fff; font-family: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
+.with-ok:disabled { opacity: 0.4; }
+.ob-names { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; max-height: 40vh; overflow-y: auto; }
