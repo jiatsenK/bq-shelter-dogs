@@ -133,21 +133,30 @@ function planSheetWrites(values, req, today, ymd) {
     if (r === -1) return Object.assign(base, { status: 'notFound' });
     var dateCell = values[r][cols.date];
     var walkerNow = cellText(values[r][cols.walker]);
-    var isToday = isDate(dateCell) ? ymd(dateCell) === today : cellText(dateCell).replace(/\//g, '-') === today;
+    var dateNow = isDate(dateCell) ? ymd(dateCell) : cellText(dateCell).replace(/\//g, '-').replace(/-(\d)(?=-|$)/g, '-0$1');
+    var isToday = dateNow === today;
     if (req.action === 'walk') {
       var me = cellText(req.walker);
       var prev = { date: serializeCell(dateCell, ymd), walker: walkerNow };
       var walker = me;
       if (isToday && walkerNow) {
-        if (namesIn(walkerNow).indexOf(me) !== -1) return Object.assign(base, { status: 'already' });
-        walker = walkerNow + '、' + me;
+        var added = namesIn(me).filter(function (n) { return namesIn(walkerNow).indexOf(n) === -1; });
+        if (!added.length) return Object.assign(base, { status: 'already', current: { date: today, walker: walkerNow } });
+        walker = walkerNow + '、' + added.join('、');
       }
       if (!isToday) cells.push({ row: r, col: cols.date, date: today });
       cells.push({ row: r, col: cols.walker, value: walker });
       return Object.assign(base, { status: 'written', prev: prev, wrote: { walker: walker } });
     }
+    if (req.action === 'edit') {
+      if (!isToday || walkerNow !== cellText(dog.expected)) return Object.assign(base, { status: 'changed', current: { date: dateNow, walker: walkerNow } });
+      var replacement = namesIn(req.walker).filter(function (n, i, list) { return list.indexOf(n) === i; }).join('、');
+      if (!replacement) return Object.assign(base, { status: 'badAction' });
+      cells.push({ row: r, col: cols.walker, value: replacement });
+      return Object.assign(base, { status: 'written', prev: { date: serializeCell(dateCell, ymd), walker: walkerNow }, wrote: { walker: replacement } });
+    }
     if (req.action === 'undo') {
-      if (!dog.prev || !dog.wrote || !isToday || walkerNow !== cellText(dog.wrote.walker)) return Object.assign(base, { status: 'changed' });
+      if (!dog.prev || !dog.wrote || !isToday || walkerNow !== cellText(dog.wrote.walker)) return Object.assign(base, { status: 'changed', current: { date: dateNow, walker: walkerNow } });
       var p = dog.prev.date || {};
       if (p.date) cells.push({ row: r, col: cols.date, date: p.date });
       else cells.push({ row: r, col: cols.date, value: p.text || '' });
