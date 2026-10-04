@@ -1352,3 +1352,4 @@ html.onboard-open { overflow: hidden; }
 .with-bar .bar-btn { flex: 1; min-height: 48px; border: none; border-radius: 14px; background: var(--surface-soft); font-family: inherit; font-size: 16px; font-weight: 600; color: var(--ink); cursor: pointer; }
 .with-ok { flex: 1.6; min-height: 48px; border: none; border-radius: 14px; background: var(--primary); color: #fff; font-family: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
 .with-ok:disabled { opacity: 0.4; }
+.ob-names { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; max-height: 40vh; overflow-y: auto; }

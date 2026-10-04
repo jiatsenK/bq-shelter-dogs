@@ -767,6 +767,7 @@ let sheetQueue = Promise.resolve();
 // 名字不放進公開的 repo（dogs.json 只有代號）：打開網頁時跟 Worker 拿（GET /api/walkers，Worker 直接讀試算表），
 // 只在畫面上顯示。{ 狗的 key: '嘉文+俐葶+岑' }；拿不到就不顯示名字，其他照常
 let walkerNames = {};
+let walkerNameList = []; // 表上出現過的名字（開頭畫面讓志工點選自己，#141）
 async function loadWalkerNames() {
   if (!UPLOAD_URL) return;
   try {
@@ -775,8 +776,10 @@ async function loadWalkerNames() {
     const out = await res.json();
     if (out && out.walkers && typeof out.walkers === 'object') {
       walkerNames = out.walkers;
+      walkerNameList = Array.isArray(out.names) ? out.names.map(String).filter(Boolean) : [];
       render();
       renderDetail();
+      if (onboard && onboard.step === 0 && onboard.phase !== 'saving') renderOnboard();
     }
   } catch (e) { console.error(e); }
 }
@@ -2556,9 +2559,10 @@ function onboardHtml() {
       <div class="ob-hero">${icon('paw')}</div>
       <h1>板收志工溜狗表</h1>
       <p class="ob-lead">歡迎！先告訴我們你是誰。</p>
-      <label class="ob-label" for="obInput">你在溜狗表「誰遛的」寫的名字</label>
-      <input type="text" id="obInput" maxlength="60" placeholder="例：小明" value="${esc(o.text)}"${busy ? ' disabled' : ''} enterkeyhint="done">
-      <p class="ob-help">一格寫好幾個人（例如「小明+小華」）也認得出你。</p>
+      <label class="ob-label" for="obInput">${walkerNameList.length ? '點選你在溜狗表上的名字' : '你在溜狗表「誰遛的」寫的名字'}</label>
+      ${obNamesHtml(o, busy)}
+      <input type="text" id="obInput" maxlength="60" placeholder="${walkerNameList.length ? '找不到？自己輸入' : '例：小明'}" value="${esc(o.text)}"${busy ? ' disabled' : ''} enterkeyhint="done">
+      <p class="ob-help">表上有好幾種寫法的話，可以都點起來。一格寫好幾個人（例如「小明+小華」）也認得出你。</p>
       ${o.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(o.error)}</span></div>` : ''}
       <div class="ob-foot">
         <button type="submit" class="ob-next"${busy ? ' disabled' : ''}>${busy ? '設定中…' : '下一步'}</button>
@@ -2580,6 +2584,13 @@ function onboardHtml() {
     </div>
   </div>`;
 }
+// 開頭畫面的名字按鈕（K 2026-10-04：入口的名字要能從表上已有的人選）：點了就加進輸入框，再點一次拿掉
+function obNamesHtml(o, busy) {
+  if (!walkerNameList.length) return '';
+  const picked = new Set(splitWalkers(o.text));
+  return `<div class="ob-names">${walkerNameList.map(n =>
+    `<button type="button" class="with-name${picked.has(n) ? ' on' : ''}" data-ob-name="${esc(n)}" aria-pressed="${picked.has(n)}"${busy ? ' disabled' : ''}>${picked.has(n) ? icon('tick') : ''}${esc(n)}</button>`).join('')}</div>`;
+}
 function renderOnboard() {
   let box = document.getElementById('onboard');
   if (!onboard) { if (box) box.remove(); document.documentElement.classList.remove('onboard-open'); return; }
@@ -2592,6 +2603,15 @@ function renderOnboard() {
     box.setAttribute('aria-label', '開始使用');
     document.body.appendChild(box);
     box.addEventListener('click', e => {
+      const nameBtn = e.target.closest('[data-ob-name]');
+      if (nameBtn) {
+        const n = nameBtn.dataset.obName;
+        const list = splitWalkers(onboard.text);
+        onboard.text = (list.includes(n) ? list.filter(x => x !== n) : [...list, n]).join('、');
+        if (onboard.phase === 'error') onboard.phase = 'edit';
+        renderOnboard();
+        return;
+      }
       const b = e.target.closest('[data-ob]');
       if (!b) return;
       if (b.dataset.ob === 'next') onboard.step++;
@@ -2614,7 +2634,8 @@ function renderOnboard() {
   document.documentElement.classList.add('onboard-open');
   box.innerHTML = onboardHtml();
   const input = box.querySelector('#obInput');
-  if (input && onboard.phase !== 'saving') input.focus({ preventScroll: true });
+  // 有名字可以點時不自動叫出鍵盤，免得蓋住名字
+  if (input && onboard.phase !== 'saving' && !walkerNameList.length) input.focus({ preventScroll: true });
 }
 function startOnboard() {
   if (onboard || !needOnboard()) return;
@@ -2625,6 +2646,7 @@ function startOnboard() {
 // 先畫出分類列與內容區的讀取中（標題、搜尋框本來就在 index.html），再背景讀 dogs.json
 async function init() {
   startOnboard();
+  loadWalkerNames(); // 開頭畫面的名字按鈕也要用，不等狗的資料
   loadState = 'loading';
   loadWarning = '';
   render();
@@ -2639,7 +2661,6 @@ async function init() {
   }
   applyDogsData(data);
   loadGallery();
-  loadWalkerNames();
 }
 
 // 換上讀到的 dogs.json（打開網頁時、按「更新」拿到新資料時）
