@@ -745,11 +745,13 @@ function setWalked(dogs, on) {
   const text = on ? `${names} 今天溜了` : `${names} 取消今天溜了`;
   const undoFn = () => {
     undo();
+    if (on) clearWalkWith(changed);
     render();
     renderDetail();
     queueSheetWrite(changed, !on);
   };
-  showToast(text, undoFn);
+  const extra = on && loadWalkerName() ? { label: '＋一起溜的人', fn: () => openWithSheet(changed) } : null;
+  showToast(text, undoFn, extra);
   queueSheetWrite(changed, on, text, undoFn);
 }
 
@@ -789,11 +791,109 @@ function splitWalkers(text) {
 }
 // 上次是誰溜的：這支手機今天按過溜了就是自己；否則用試算表的「誰遛的」
 function walkerList(dog, today = new Date()) {
-  if (walkedNow(dog, today)) return [loadWalkerName() || '你'];
+  if (walkedNow(dog, today)) return [loadWalkerName() || '你', ...(loadWalkWith(today)[walkKey(dog)] || [])];
   return splitWalkers(walkerNames[walkKey(dog)]);
 }
 function walkerText(dog, today) {
   return walkerList(dog, today).join('、');
+}
+
+// ── 一起溜的人（#141 第 1 項，K：溜了要怎麼寫除了我以外的人）──
+// 按溜了先寫自己；提示條「＋一起溜的人」選名字，再寫進試算表同一格（小程式用「、」接在後面）。
+// 最近一起溜過的名字記在這支手機，下次排在前面一點就加；今天每隻狗加了誰也記著，畫面上顯示用
+const COMPANIONS_KEY = 'bq-companions';
+const WALK_WITH_KEY = 'bq-walk-with';
+const COMPANIONS_MAX = 8;
+function readJsonKey(key) {
+  try { const raw = walkedStorage && walkedStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+}
+function writeJsonKey(key, v) {
+  try { if (walkedStorage) walkedStorage.setItem(key, JSON.stringify(v)); } catch (e) { /* 存不了就算了 */ }
+}
+function loadCompanions() {
+  const v = readJsonKey(COMPANIONS_KEY);
+  return Array.isArray(v) ? v.map(String).filter(Boolean).slice(0, COMPANIONS_MAX) : [];
+}
+function loadWalkWith(today = new Date()) {
+  const v = readJsonKey(WALK_WITH_KEY);
+  return v && v.date === localDateKey(today) && v.map && typeof v.map === 'object' ? v.map : {};
+}
+function addWalkWith(dogs, names, today = new Date()) {
+  const map = loadWalkWith(today);
+  for (const d of dogs) { const k = walkKey(d); if (k) map[k] = [...new Set([...(map[k] || []), ...names])]; }
+  writeJsonKey(WALK_WITH_KEY, { date: localDateKey(today), map });
+  writeJsonKey(COMPANIONS_KEY, [...new Set([...names, ...loadCompanions()])].slice(0, COMPANIONS_MAX));
+}
+function clearWalkWith(dogs, today = new Date()) {
+  const map = loadWalkWith(today);
+  for (const d of dogs) delete map[walkKey(d)];
+  writeJsonKey(WALK_WITH_KEY, { date: localDateKey(today), map });
+}
+let withSheet = null; // { dogs, picked: Set, text }
+function openWithSheet(dogs) {
+  const already = new Set(dogs.flatMap(d => loadWalkWith()[walkKey(d)] || []));
+  withSheet = { dogs, picked: new Set(), text: '', already };
+  renderWithSheet();
+}
+function withSheetHtml() {
+  const w = withSheet;
+  const me = loadWalkerName();
+  const names = [...new Set([...loadCompanions(), ...w.picked])].filter(n => n !== me && !w.already.has(n));
+  return `<div class="with-sheet" role="dialog" aria-modal="true" aria-labelledby="withTitle">
+    <h3 id="withTitle">誰跟你一起溜 ${esc(w.dogs.map(d => d.name).join('、'))}？</h3>
+    ${names.length ? `<div class="with-names">${names.map(n => `<button type="button" class="with-name${w.picked.has(n) ? ' on' : ''}" data-with="${esc(n)}" aria-pressed="${w.picked.has(n)}">${w.picked.has(n) ? icon('tick') : ''}${esc(n)}</button>`).join('')}</div>` : ''}
+    <form class="with-add" id="withAdd" autocomplete="off">
+      <input type="text" id="withInput" maxlength="20" placeholder="${names.length ? '其他人：輸入名字' : '輸入名字，例：嘉文'}" value="${esc(w.text)}" enterkeyhint="done">
+      <button type="submit">加入</button>
+    </form>
+    <div class="with-bar">
+      <button type="button" class="bar-btn" data-with-cancel>取消</button>
+      <button type="button" class="with-ok" data-with-ok${w.picked.size ? '' : ' disabled'}>寫進試算表${w.picked.size ? `（${w.picked.size} 人）` : ''}</button>
+    </div>
+  </div>`;
+}
+function renderWithSheet() {
+  let box = document.getElementById('withBackdrop');
+  if (!withSheet) { if (box) box.remove(); return; }
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'withBackdrop';
+    box.className = 'with-backdrop';
+    document.body.appendChild(box);
+    box.addEventListener('click', e => {
+      if (e.target === box || e.target.closest('[data-with-cancel]')) { withSheet = null; renderWithSheet(); return; }
+      const nameBtn = e.target.closest('[data-with]');
+      if (nameBtn) {
+        const n = nameBtn.dataset.with;
+        if (withSheet.picked.has(n)) withSheet.picked.delete(n); else withSheet.picked.add(n);
+        renderWithSheet();
+        return;
+      }
+      if (e.target.closest('[data-with-ok]')) finishWithSheet();
+    });
+    box.addEventListener('input', e => { if (e.target.id === 'withInput') withSheet.text = e.target.value; });
+    box.addEventListener('submit', e => {
+      e.preventDefault();
+      splitWalkers(withSheet.text).forEach(n => withSheet.picked.add(n));
+      withSheet.text = '';
+      renderWithSheet();
+    });
+  }
+  box.innerHTML = withSheetHtml();
+}
+function finishWithSheet() {
+  const w = withSheet;
+  splitWalkers(w.text).forEach(n => w.picked.add(n));
+  const names = [...w.picked];
+  withSheet = null;
+  renderWithSheet();
+  if (!names.length) return;
+  addWalkWith(w.dogs, names);
+  render();
+  renderDetail();
+  const text = `已加上 ${names.join('、')}`;
+  showToast(text);
+  queueSheetWrite(w.dogs, true, text, null, names.join('、'));
 }
 
 function firstWalkerName(text) {
@@ -829,8 +929,8 @@ function saveSheetWrites(items, today = new Date()) {
 }
 
 // 一個一個送，按了溜了馬上復原時，復原會等溜了寫完才送（才知道要改回什麼）
-function queueSheetWrite(dogs, on, toastText, toastUndo) {
-  sheetQueue = sheetQueue.then(() => sheetWrite(dogs, on, toastText, toastUndo)).catch(e => console.error(e));
+function queueSheetWrite(dogs, on, toastText, toastUndo, walker) {
+  sheetQueue = sheetQueue.then(() => sheetWrite(dogs, on, toastText, toastUndo, walker)).catch(e => console.error(e));
   return sheetQueue;
 }
 
@@ -842,15 +942,16 @@ function addToToast(text, undo, extra) {
   return true;
 }
 
-async function sheetWrite(dogs, on, toastText, toastUndo) {
+// walker：加「一起溜的人」時傳那幾個名字（試算表那格已經有今天的名字，小程式會用「、」接在後面）
+async function sheetWrite(dogs, on, toastText, toastUndo, walker = null) {
   if (!UPLOAD_URL || sheetWriteState === 'off') return;
   const today = new Date();
   const withKey = dogs.map(d => ({ d, key: walkKey(d) })).filter(x => x.key);
   let payload;
   if (on) {
-    const walker = loadWalkerName();
-    if (!walker) return; // 還沒在「我溜過」設定名字（提醒放在我溜過頁）
-    payload = { action: 'walk', walker, dogs: withKey.map(({ d }) => ({ id: d.id || '', name: d.name })) };
+    const who = walker || loadWalkerName();
+    if (!who) return; // 還沒在「我溜過」設定名字（提醒放在我溜過頁）
+    payload = { action: 'walk', walker: who, dogs: withKey.map(({ d }) => ({ id: d.id || '', name: d.name })) };
   } else {
     const items = loadSheetWrites(today);
     const list = withKey.filter(x => items[x.key]).map(x => items[x.key]);
@@ -879,7 +980,8 @@ async function sheetWrite(dogs, on, toastText, toastUndo) {
   for (const r of out.results || []) {
     const key = keyOf(r);
     if (!key) continue;
-    if (on && r.status === 'written') items[key] = { id: r.id || '', name: r.name, prev: r.prev, wrote: r.wrote };
+    // 後來加一起溜的人：復原要回到按溜了之前的樣子，所以留第一次記下的 prev
+    if (on && r.status === 'written') items[key] = { id: r.id || '', name: r.name, prev: items[key] ? items[key].prev : r.prev, wrote: r.wrote };
     if (!on) delete items[key];
     if (r.status === 'notFound' || (!on && r.status === 'changed')) missed.push(r.name);
   }
@@ -995,14 +1097,21 @@ function hiddenBoxHtml(list, hidden) {
 
 let toastTimer = null;
 let toastUndo = null;
-function showToast(text, undo) {
+let toastExtra = null;
+// extra：{ label, fn } 提示條上多一顆按鈕（例：溜了之後「＋一起溜的人」）
+function showToast(text, undo, extra) {
   let el = document.getElementById('toast');
   if (!el) {
     el = document.createElement('div');
     el.id = 'toast';
     el.className = 'toast';
     el.setAttribute('role', 'status');
-    el.innerHTML = `<span class="toast-text"></span><button type="button" class="toast-undo">復原</button>`;
+    el.innerHTML = `<span class="toast-text"></span><button type="button" class="toast-extra" hidden></button><button type="button" class="toast-undo">復原</button>`;
+    el.querySelector('.toast-extra').addEventListener('click', () => {
+      const fn = toastExtra;
+      hideToast();
+      if (fn) fn();
+    });
     el.querySelector('.toast-undo').addEventListener('click', () => {
       const fn = toastUndo;
       hideToast();
@@ -1013,6 +1122,10 @@ function showToast(text, undo) {
   el.querySelector('.toast-text').textContent = text;
   toastUndo = undo || null;
   el.querySelector('.toast-undo').hidden = !undo;
+  toastExtra = extra ? extra.fn : null;
+  const ex = el.querySelector('.toast-extra');
+  ex.hidden = !extra;
+  ex.textContent = extra ? extra.label : '';
   el.hidden = false;
   clearTimeout(toastTimer);
   toastTimer = setTimeout(hideToast, 5000);
@@ -1021,6 +1134,7 @@ function showToast(text, undo) {
 function hideToast() {
   clearTimeout(toastTimer);
   toastUndo = null;
+  toastExtra = null;
   const el = document.getElementById('toast');
   if (el) el.hidden = true;
 }
