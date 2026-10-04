@@ -606,3 +606,10 @@
 - `apps-script/sheet-write.gs`：沒設 `WRITE_KEY` 就照常寫；有設才檢查。`worker/src/index.js`：只要有 `SHEET_WRITE_URL` 就算已設定，有 `SHEET_WRITE_KEY` 才帶過去。
 - 文件：`docs/SHEET_WRITE_SETUP.md` 拿掉通關碼步驟，改放在「出問題時」當作可選的保護；`docs/PROJECT_GOALS.md` 同步。
 - 測試：node 新增 2 項（小程式沒設／有設通關碼、Worker 不帶通關碼）。
+
+## 2026-10-04 寫入試算表的錯誤訊息不帶試算表 ID（Claude，分支 claude/sheet-write，#138 後續）
+- 依據：K 實機測試時，提示條把 Google 的原始錯誤（含試算表 ID）顯示出來；試算表 ID 只能放在 Secret。
+- `worker/src/index.js`：小程式的錯誤改成白話（ID 不對／沒有權限／去看執行紀錄），長串英數字一律遮掉。
+- `apps-script/sheet-write.gs`：`SHEET_ID` 貼成整個網址或多了空白也認得。
+- `docs/SHEET_WRITE_SETUP.md`：「出問題時」加 401 和 ID 不對的處理。
+- 測試：node 新增 2 項。

@@ -37,7 +37,7 @@ function handleRequest(req) {
   var lock = LockService.getScriptLock();
   lock.waitLock(15000); // 兩個人同時按，一個一個來，免得互相蓋掉
   try {
-    var sheet = SpreadsheetApp.openById(props.getProperty('SHEET_ID')).getSheetByName(SHEET_NAME);
+    var sheet = SpreadsheetApp.openById(sheetIdOf(props.getProperty('SHEET_ID'))).getSheetByName(SHEET_NAME);
     if (!sheet) return { ok: false, error: '找不到「' + SHEET_NAME + '」分頁' };
     var values = sheet.getDataRange().getValues();
     var today = Utilities.formatDate(new Date(), TIME_ZONE, 'yyyy-MM-dd');
@@ -63,6 +63,13 @@ function toSheetDate(ymd) {
 }
 
 // ── 下面不碰 Google 的東西，Node 測試也跑得到（worker/test/sheet-write.test.mjs）──
+
+// SHEET_ID 貼成整個網址、或前後多了空白也沒關係
+function sheetIdOf(v) {
+  var text = String(v || '').trim();
+  var m = text.match(/\/d\/([A-Za-z0-9_-]+)/);
+  return m ? m[1] : text;
+}
 
 function isDate(v) {
   return Object.prototype.toString.call(v) === '[object Date]';
