@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-04T15:30:35+08:00",
+  "syncedAt": "2026-10-04T16:00:36+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -324,11 +324,12 @@
       "cage": "新獨12",
       "id": "2026082501",
       "name": "米香",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "da53fbdda293",
+        "044328805855"
       ],
       "note": "<羊噴火訓練>",
       "sex": "",
