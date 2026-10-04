@@ -174,9 +174,21 @@ async function loadMyWalks() {
 }
 
 // 分類上的數字；還沒讀好或還沒設定我是誰時不顯示（null）
+function currentMyWalks(today = new Date()) {
+  const list = [...myWalks];
+  const date = localDateKey(today);
+  for (const item of Object.values(loadSheetWrites(today))) {
+    if (!item.current) continue;
+    const at = list.findIndex(w => (item.id ? w.id === item.id : !w.id && w.name === item.name) && w.ymd === date);
+    if (at !== -1) list.splice(at, 1);
+    if (item.current.date === date && splitWalkers(item.current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName()))) list.unshift({ id: item.id, name: item.name, date: parseYmd(date), ymd: date });
+  }
+  return list.sort((a, b) => b.date - a.date);
+}
+
 function myWalksCount(query) {
-  if (myWalksState !== 'ready' || !loadMyCodes().length) return null;
-  return myWalkGroups(myWalks, query).reduce((k, g) => k + g.walks.length, 0);
+  if (!loadMyCodes().length || (myWalksState !== 'ready' && !Object.values(loadSheetWrites()).some(item => item.mine))) return null;
+  return myWalkGroups(currentMyWalks(), query).reduce((k, g) => k + g.walks.length, 0);
 }
 
 // ── 我是誰（#96）──
@@ -241,7 +253,7 @@ async function setWalkerName(raw) {
     const res = await fetch(`${UPLOAD_URL}/walker-code`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ names: [text] }),
+      body: JSON.stringify({ names: [...new Set(splitWalkers(text).map(canonicalWalker).filter(Boolean).flatMap(n => n === '佳岑' ? [n, '岑'] : [n]))] }),
     });
     out = await res.json().catch(() => null);
     if (!res.ok) throw new Error((out && out.error) || `HTTP ${res.status}`);
@@ -252,7 +264,7 @@ async function setWalkerName(raw) {
   const codes = out && Array.isArray(out.codes) ? out.codes.filter(c => WALKER_CODE_PATTERN.test(c)) : [];
   if (!codes.length) return '設定沒有成功，請稍後再試';
   saveMyCodes(codes);
-  saveWalkerName(firstWalkerName(text));
+  saveWalkerName(canonicalWalker(firstWalkerName(text)));
   return '';
 }
 
@@ -330,21 +342,22 @@ function myProgressHtml(walks) {
 
 let mineStatsOpen = false;
 function myWalksHtml(today, query) {
-  if (myWalksState === 'loading') return `<div class="status-msg">讀取溜狗紀錄中…</div>`;
-  if (myWalksState === 'error') {
+  const visibleWalks = currentMyWalks(today);
+  if (myWalksState === 'loading' && !visibleWalks.length) return `<div class="status-msg">讀取溜狗紀錄中…</div>`;
+  if (myWalksState === 'error' && !visibleWalks.length) {
     return `<div class="status-msg">溜狗紀錄讀不到，請確認網路後按「重新讀取」。<br><button class="retry-btn" id="mineRetry">重新讀取</button></div>`;
   }
   if (walkerSetup || !loadMyCodes().length) return walkerSetupHtml();
   // #138 之前設定的只有代號、沒記名字：請他再輸入一次，按溜了才能寫進試算表
   const named = !!loadWalkerName();
   // V9（#141 第 11 項）：小計收進「統計」按鈕，按了才展開
-  const statsBtn = myWalks.length ? `<button type="button" class="who-edit${mineStatsOpen ? ' on' : ''}" id="mineStats" aria-expanded="${mineStatsOpen}">${icon('chart')}統計</button>` : '';
+  const statsBtn = visibleWalks.length ? `<button type="button" class="who-edit${mineStatsOpen ? ' on' : ''}" id="mineStats" aria-expanded="${mineStatsOpen}">${icon('chart')}統計</button>` : '';
   const who = query ? '' : `<div class="section-hint who-hint">${icon('paw')}<span class="who-name">${named ? esc(loadWalkerName()) : '再按「修改」輸入一次名字'}</span>${statsBtn}<button type="button" class="who-edit" id="whoEdit">修改</button></div>`;
-  if (!myWalks.length) return who + `<div class="status-msg">還沒有你的溜狗紀錄。<br>試算表「誰遛的」寫上你設定的名字，同步後就會出現在這裡。</div>`;
+  if (!visibleWalks.length) return who + `<div class="status-msg">還沒有你的溜狗紀錄。<br>試算表「誰遛的」寫上你設定的名字，同步後就會出現在這裡。</div>`;
   // 所有到所紀錄新到舊一路往下排（K 2026-09-25：不要選日期）；搜尋時不顯示小計
-  const groups = myWalkGroups(myWalks, query);
+  const groups = myWalkGroups(currentMyWalks(), query);
   if (!groups.length) return `<div class="status-msg">找不到「${esc(query)}」</div>`;
-  const stats = !query && mineStatsOpen ? `<div class="mine-stats-box">${myProgressHtml(myWalks)}${myMonthStats(myWalks, today)}</div>` : '';
+  const stats = !query && mineStatsOpen ? `<div class="mine-stats-box">${myProgressHtml(visibleWalks)}${myMonthStats(visibleWalks, today)}</div>` : '';
   return who + stats + groups.map(g => myVisitCard(g)).join('');
 }
 
@@ -373,11 +386,17 @@ function highlightNote(note, terms) {
   return html + esc(note.slice(last));
 }
 
+function effectiveWalkDate(dog, today = new Date()) {
+  const item = loadSheetWrites(today)[walkKey(dog)];
+  return item && item.current ? parseYmd(item.current.date) : dog.walkedDate;
+}
+
 function computeStatus(dog, today) {
   // V9（#141）拿掉今天已溜分類：這支手機今天按過溜了的狗（也寫進試算表了）直接當作今天溜的
   if (walkedNow(dog, today)) return { kind: 'dated', days: 0, level: 'sage', mine: true };
-  if (dog.walkedDate) {
-    const days = Math.floor((today - dog.walkedDate) / 86400000);
+  const date = effectiveWalkDate(dog, today);
+  if (date) {
+    const days = Math.floor((today - date) / 86400000);
     let level = 'sage';
     if (days >= RED_DAYS) level = 'red';
     else if (days >= AMBER_DAYS) level = 'amber';
@@ -776,7 +795,7 @@ async function loadWalkerNames() {
     const out = await res.json();
     if (out && out.walkers && typeof out.walkers === 'object') {
       walkerNames = out.walkers;
-      walkerNameList = Array.isArray(out.names) ? out.names.map(String).filter(Boolean) : [];
+      walkerNameList = [...new Set((Array.isArray(out.names) ? out.names : []).map(canonicalWalker).filter(Boolean))];
       render();
       renderDetail();
       if (onboard && onboard.step === 0 && onboard.phase !== 'saving') renderOnboard();
@@ -784,12 +803,18 @@ async function loadWalkerNames() {
   } catch (e) { console.error(e); }
 }
 // 一格好幾個名字（「嘉文+俐葶+岑」「維芬。佳岑」）拆開，用頓號接起來，不重複
+function canonicalWalker(name) {
+  const n = String(name || '').trim().replace(/經常帶.*$/, '').trim();
+  return n === '岑' ? '佳岑' : n;
+}
 function splitWalkers(text) {
   return [...new Set(String(text || '').split(WALKER_NAME_SEP).map(n => n.trim()).filter(Boolean))];
 }
 // 上次是誰溜的：這支手機今天按過溜了就是自己；否則用試算表的「誰遛的」
 function walkerList(dog, today = new Date()) {
-  if (walkedNow(dog, today)) return [loadWalkerName() || '你', ...(loadWalkWith(today)[walkKey(dog)] || [])];
+  const item = loadSheetWrites(today)[walkKey(dog)];
+  if (item && item.current) return splitWalkers(item.current.walker);
+  if (walkedNow(dog, today)) return [...new Set([...splitWalkers(walkerNames[walkKey(dog)]), loadWalkerName() || '你', ...(loadWalkWith(today)[walkKey(dog)] || [])])];
   return splitWalkers(walkerNames[walkKey(dog)]);
 }
 function walkerText(dog, today) {
@@ -828,25 +853,26 @@ function clearWalkWith(dogs, today = new Date()) {
   writeJsonKey(WALK_WITH_KEY, { date: localDateKey(today), map });
 }
 let withSheet = null; // { dogs, picked: Set, text }
-function openWithSheet(dogs) {
+function openWithSheet(dogs, edit = false) {
   const already = new Set(dogs.flatMap(d => loadWalkWith()[walkKey(d)] || []));
-  withSheet = { dogs, picked: new Set(), text: '', already };
+  withSheet = { dogs, picked: new Set(edit ? walkerList(dogs[0]) : []), text: '', already: edit ? new Set() : already, edit, expected: loadSheetWrites()[walkKey(dogs[0])]?.current?.walker || walkerNames[walkKey(dogs[0])] || walkerList(dogs[0]).join('、'), phase: 'edit', error: '' };
   renderWithSheet();
 }
 function withSheetHtml() {
   const w = withSheet;
   const me = loadWalkerName();
-  const names = [...new Set([...loadCompanions(), ...w.picked])].filter(n => n !== me && !w.already.has(n));
+  const names = [...new Set([...walkerNameList, ...loadCompanions(), ...w.picked])].filter(n => (w.edit || n !== me) && !w.already.has(n));
   return `<div class="with-sheet" role="dialog" aria-modal="true" aria-labelledby="withTitle">
-    <h3 id="withTitle">誰跟你一起溜 ${esc(w.dogs.map(d => d.name).join('、'))}？</h3>
+    <h3 id="withTitle">${w.edit ? '修改溜狗人：' : '誰跟你一起溜 ' }${esc(w.dogs.map(d => d.name).join('、'))}${w.edit ? '' : '？'}</h3>
     ${names.length ? `<div class="with-names">${names.map(n => `<button type="button" class="with-name${w.picked.has(n) ? ' on' : ''}" data-with="${esc(n)}" aria-pressed="${w.picked.has(n)}">${w.picked.has(n) ? icon('tick') : ''}${esc(n)}</button>`).join('')}</div>` : ''}
     <form class="with-add" id="withAdd" autocomplete="off">
       <input type="text" id="withInput" maxlength="20" placeholder="${names.length ? '其他人：輸入名字' : '輸入名字，例：嘉文'}" value="${esc(w.text)}" enterkeyhint="done">
       <button type="submit">加入</button>
     </form>
+    ${w.error ? `<p role="alert">${esc(w.error)}</p>` : ''}
     <div class="with-bar">
       <button type="button" class="bar-btn" data-with-cancel>取消</button>
-      <button type="button" class="with-ok" data-with-ok>寫進試算表${w.picked.size ? `（${w.picked.size} 人）` : ''}</button>
+      <button type="button" class="with-ok" data-with-ok${w.phase === 'saving' ? ' disabled' : ''}>${w.phase === 'saving' ? '儲存中…' : '寫進試算表'}${w.picked.size ? `（${w.picked.size} 人）` : ''}</button>
     </div>
   </div>`;
 }
@@ -859,6 +885,7 @@ function renderWithSheet() {
     box.className = 'with-backdrop';
     document.body.appendChild(box);
     box.addEventListener('click', e => {
+      if (withSheet.phase === 'saving') return;
       if (e.target === box || e.target.closest('[data-with-cancel]')) { withSheet = null; renderWithSheet(); return; }
       const nameBtn = e.target.closest('[data-with]');
       if (nameBtn) {
@@ -869,9 +896,10 @@ function renderWithSheet() {
       }
       if (e.target.closest('[data-with-ok]')) finishWithSheet();
     });
-    box.addEventListener('input', e => { if (e.target.id === 'withInput') withSheet.text = e.target.value; });
+    box.addEventListener('input', e => { if (withSheet.phase !== 'saving' && e.target.id === 'withInput') withSheet.text = e.target.value; });
     box.addEventListener('submit', e => {
       e.preventDefault();
+      if (withSheet.phase === 'saving') return;
       splitWalkers(withSheet.text).forEach(n => withSheet.picked.add(n));
       withSheet.text = '';
       renderWithSheet();
@@ -879,10 +907,17 @@ function renderWithSheet() {
   }
   box.innerHTML = withSheetHtml();
 }
-function finishWithSheet() {
+async function finishWithSheet() {
   const w = withSheet;
   splitWalkers(w.text).forEach(n => w.picked.add(n));
   const names = [...w.picked];
+  if (w.edit) {
+    if (!names.length) { w.error = '請至少保留一位溜狗人；取消登記請用復原。'; renderWithSheet(); return; }
+    w.phase = 'saving'; renderWithSheet();
+    const ok = await queueSheetWrite(w.dogs, true, null, null, names.join('、'), w.expected);
+    if (!ok) { w.phase = 'edit'; w.error = '沒有儲存，請確認錯誤提示後重試。'; renderWithSheet(); return; }
+    withSheet = null; renderWithSheet(); return;
+  }
   withSheet = null;
   renderWithSheet();
   if (!names.length) return;
@@ -899,9 +934,9 @@ function firstWalkerName(text) {
 }
 function loadWalkerName() {
   try {
-    if (walkedStorage) return walkedStorage.getItem(WALKER_NAME_KEY) || '';
+    if (walkedStorage) return canonicalWalker(walkedStorage.getItem(WALKER_NAME_KEY) || '');
   } catch (e) { /* 讀不到就用記憶體裡的 */ }
-  return walkerNameMemory;
+  return canonicalWalker(walkerNameMemory);
 }
 function saveWalkerName(name) {
   walkerNameMemory = name || '';
@@ -927,8 +962,8 @@ function saveSheetWrites(items, today = new Date()) {
 }
 
 // 一個一個送，按了溜了馬上復原時，復原會等溜了寫完才送（才知道要改回什麼）
-function queueSheetWrite(dogs, on, toastText, toastUndo, walker) {
-  sheetQueue = sheetQueue.then(() => sheetWrite(dogs, on, toastText, toastUndo, walker)).catch(e => console.error(e));
+function queueSheetWrite(dogs, on, toastText, toastUndo, walker, expected) {
+  sheetQueue = sheetQueue.then(() => sheetWrite(dogs, on, toastText, toastUndo, walker, expected)).catch(e => console.error(e));
   return sheetQueue;
 }
 
@@ -941,7 +976,7 @@ function addToToast(text, undo, extra) {
 }
 
 // walker：加「一起溜的人」時傳那幾個名字（試算表那格已經有今天的名字，小程式會用「、」接在後面）
-async function sheetWrite(dogs, on, toastText, toastUndo, walker = null) {
+async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expected = undefined) {
   if (!UPLOAD_URL || sheetWriteState === 'off') return;
   const today = new Date();
   const withKey = dogs.map(d => ({ d, key: walkKey(d) })).filter(x => x.key);
@@ -949,10 +984,10 @@ async function sheetWrite(dogs, on, toastText, toastUndo, walker = null) {
   if (on) {
     const who = walker || loadWalkerName();
     if (!who) return; // 還沒在「我溜過」設定名字（提醒放在我溜過頁）
-    payload = { action: 'walk', walker: who, dogs: withKey.map(({ d }) => ({ id: d.id || '', name: d.name })) };
+    payload = { action: expected === undefined ? 'walk' : 'edit', walker: who, dogs: withKey.map(({ d, key }) => ({ id: d.id || '', name: d.name, ...(expected === undefined ? {} : { expected }) })) };
   } else {
     const items = loadSheetWrites(today);
-    const list = withKey.filter(x => items[x.key]).map(x => items[x.key]);
+    const list = withKey.filter(x => items[x.key] && items[x.key].prev && items[x.key].wrote).map(x => items[x.key]);
     if (!list.length) return;
     payload = { action: 'undo', dogs: list.map(x => ({ id: x.id, name: x.name, prev: x.prev, wrote: x.wrote })) };
   }
@@ -978,17 +1013,46 @@ async function sheetWrite(dogs, on, toastText, toastUndo, walker = null) {
   for (const r of out.results || []) {
     const key = keyOf(r);
     if (!key) continue;
-    // 後來加一起溜的人：復原要回到按溜了之前的樣子，所以留第一次記下的 prev
-    if (on && r.status === 'written') items[key] = { id: r.id || '', name: r.name, prev: items[key] ? items[key].prev : r.prev, wrote: r.wrote };
-    if (!on) delete items[key];
-    if (r.status === 'notFound' || (!on && r.status === 'changed')) missed.push(r.name);
+    const old = items[key];
+    if (on && (r.status === 'written' || r.status === 'already')) {
+      const current = { date: out.today || localDateKey(today), walker: r.wrote ? r.wrote.walker : (r.current ? r.current.walker : walkerNames[key] || '') };
+      items[key] = { id: r.id || '', name: r.name, prev: expected !== undefined ? r.prev : (old && old.prev ? old.prev : r.prev), wrote: r.wrote || (old && old.wrote), current, mine: splitWalkers(current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())) };
+      walkerNames[key] = current.walker;
+    }
+    if (!on && r.status === 'restored' && old) {
+      const rawDate = old.prev.date || {};
+      const parsed = parseYmd(String(rawDate.text || '').replace(/\//g, '-').replace(/-(\d)(?=-|$)/g, '-0$1'));
+      const date = rawDate.date || (parsed ? localDateKey(parsed) : '');
+      items[key] = { id: old.id, name: old.name, current: { date, walker: old.prev.walker }, mine: date === localDateKey(today) && splitWalkers(old.prev.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())) };
+      walkerNames[key] = old.prev.walker;
+      clearWalkWith([withKey.find(x => x.key === key).d], today);
+    }
+    if (r.status === 'changed' && r.current) {
+      items[key] = { ...old, id: r.id || '', name: r.name, current: r.current, mine: r.current.date === localDateKey(today) && splitWalkers(r.current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())) };
+      walkerNames[key] = r.current.walker;
+    }
+    if (!['written', 'already', 'restored'].includes(r.status)) missed.push(r.name);
   }
   saveSheetWrites(items, today);
+  const ids = loadWalkedIds(today);
+  for (const { d, key } of withKey) {
+    const item = items[key];
+    if (item && item.current) {
+      const at = ids.indexOf(key);
+      if (item.mine && at === -1) ids.unshift(key);
+      if (!item.mine && at !== -1) ids.splice(at, 1);
+      d.walkedDate = parseYmd(item.current.date);
+    }
+  }
+  saveWalkedIds(ids, today);
+  render(); renderDetail();
   if (missed.length) {
-    showToast(on ? `試算表找不到 ${missed.join('、')}，請自己填` : `${missed.join('、')} 在試算表已經被改過，沒有改回去`);
+    const statuses = (out.results || []).map(r => r.status);
+    showToast(statuses.includes('badAction') ? '請先更新 Google Apps Script，再使用修改溜狗人。' : statuses.includes('changed') ? `${missed.join('、')} 在試算表已被修改，請重新開啟編輯；未覆寫他人資料` : `試算表找不到 ${missed.join('、')}，請自己填`);
   } else if (on && toastText) {
     addToToast(toastText, toastUndo, '，已寫進試算表');
   }
+  return !missed.length;
 }
 
 // 相簿刪除照片的通關碼（原本 #62 我的備註用，V9 拿掉我的備註後只剩相簿刪除用）：成功後記在這支手機，被拒絕就清掉重問
@@ -1105,6 +1169,7 @@ function detailHtml(dog, today) {
       </div>
     </div>
     ${lastWalkSection(dog, today)}
+    ${walkEditControls(dog, today)}
     ${detailTrail.length ? `<button type="button" class="detail-back" id="detailBack">${icon('back')}回到 ${esc(detailTrail[detailTrail.length - 1].name)}</button>` : ''}
     <section class="detail-section" data-section="note">
       <h3>${icon('note')}試算表備註</h3>
@@ -1136,10 +1201,19 @@ function detailHtml(dog, today) {
   `;
 }
 
+function walkEditControls(dog, today) {
+  const item = loadSheetWrites(today)[walkKey(dog)];
+  if (!item || !item.current || item.current.date !== localDateKey(today)) return '';
+  return `<section class="detail-section walk-edit"><h3>今天的登記</h3>
+    <div class="walk-edit-actions"><button type="button" id="walkAddPeople">新增溜狗人</button>
+    <button type="button" id="walkEditPeople">修改溜狗人</button>
+    ${item.prev && item.wrote ? '<button type="button" id="walkUndoSaved">復原本次登記／編輯</button>' : ''}</div></section>`;
+}
+
 // V9（#141 第 9 項）：上次溜的日期和溜狗人，放在照片和名字下面第一個
 function lastWalkSection(dog, today) {
   const s = computeStatus(dog, today);
-  const d = s.mine ? today : dog.walkedDate;
+  const d = s.mine ? today : effectiveWalkDate(dog, today);
   const date = d ? `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}（${'日一二三四五六'[d.getDay()]}）` : (s.kind === 'covered' ? '有人固定照顧' : '沒有紀錄');
   const who = walkerList(dog, today);
   return `<section class="detail-section last-walk" data-section="last">
@@ -1998,6 +2072,9 @@ const DETAIL_CLICKS = [
   ['#photoConfirm', () => uploadPhoto()],
   ['#photoCancel', () => { clearPhotoUpload(); renderDetail(); }],
   ['.buddy', el => { const d = allDogs[el.dataset.dog]; if (d) showDetail(d); }],
+  ['#walkAddPeople', () => openWithSheet([detailDog])],
+  ['#walkEditPeople', () => openWithSheet([detailDog], true)],
+  ['#walkUndoSaved', () => queueSheetWrite([detailDog], false)],
   ['#detailBack', () => { const d = detailTrail.pop(); if (d) showDetail(d, false); }],
   ['#detailWhere', el => whereOpen(detailDog, el)],
   ['.pick', el => {
@@ -2328,14 +2405,14 @@ function walkSortHtml(sort = loadWalkSort()) {
 // V9（#141 第 4 項）：溜狗表上面不再放三格，改成「幾天以上沒溜」篩選。
 // 選項照目前的資料生出來：只列有狗、而且跟上一個選項隻數不同的天數（不會出現一排一樣的數字）
 const WALK_FILTER_KEY = 'bq-walk-filter';
-const WALK_FILTER_DAYS = [3, 7, 14, 30, 60];
+const WALK_FILTER_DAYS = [7, 3, 2];
 let walkFilterMemory = 0;
 function loadWalkFilter() {
   let v = walkFilterMemory;
   try {
     if (walkedStorage) { const raw = walkedStorage.getItem(WALK_FILTER_KEY); if (raw != null) v = raw; }
   } catch (e) { /* 讀不到就用記憶體裡的 */ }
-  return v === 'none' ? 'none' : (Number(v) || 0);
+  return v === 'none' ? 'none' : (WALK_FILTER_DAYS.includes(Number(v)) ? Number(v) : 0);
 }
 function saveWalkFilter(v) {
   walkFilterMemory = v;
@@ -2351,13 +2428,7 @@ function passesWalkFilter(dog, today, f) {
   return s.kind === 'unknown' || (s.kind === 'dated' && s.days >= f);
 }
 function walkFilterOptions(list, today) {
-  const opts = [];
-  let prev = -1;
-  for (const days of WALK_FILTER_DAYS) {
-    const n = list.filter(d => passesWalkFilter(d, today, days)).length;
-    if (n && n !== prev && n < list.length) opts.push({ v: days, label: `${days} 天以上`, n });
-    if (n) prev = n;
-  }
+  const opts = WALK_FILTER_DAYS.map(days => ({ v: days, label: `${days} 天以上`, n: list.filter(d => passesWalkFilter(d, today, days)).length }));
   const none = list.filter(d => passesWalkFilter(d, today, 'none')).length;
   if (none) opts.push({ v: 'none', label: '沒有紀錄', n: none });
   return opts;
@@ -2399,7 +2470,7 @@ function walkToolsHtml(view = loadWalkView()) {
 function walkRow(dog, today) {
   const s = computeStatus(dog, today);
   const flag = specialFlag(dog.note);
-  const date = s.kind === 'dated' ? (s.days === 0 ? '今天' : shortDate(dog.walkedDate)) : s.kind === 'covered' ? '固定' : '—';
+  const date = s.kind === 'dated' ? (s.days === 0 ? '今天' : shortDate(effectiveWalkDate(dog, today))) : s.kind === 'covered' ? '固定' : '—';
   const who = walkerText(dog, today);
   return `<div class="row-dog${flag ? ' flagged' : ''}" data-dog="${allDogs.indexOf(dog)}" role="button" tabindex="0" aria-haspopup="dialog">
     <span class="r-cage">${esc(dog.cage)}</span>
@@ -2461,7 +2532,7 @@ function renderMain() {
   const list = walkList.filter(d => passesWalkFilter(d, today, filter));
   const view = loadWalkView();
   const items = view === 'list'
-    ? (list.length ? `<div class="rows">${list.map(d => walkRow(d, today)).join('')}</div>` : '')
+    ? (list.length ? `<div class="rows"><div class="row-head"><span>籠位</span><span>犬名</span><span>日期</span><span>誰遛的</span><span>登記</span></div>${list.map(d => walkRow(d, today)).join('')}</div>` : '')
     : list.map((d, i) => dogCard(d, today, i < FIRST_SCREEN_CARDS)).join('');
   const head = walkFilterHtml(walkList, today, filter) + walkToolsHtml(view);
   main.innerHTML = head + (q && list.length ? `<div class="section-hint">${icon('search')}搜尋「${esc(q)}」：${list.length} 隻</div>` : '')
@@ -2562,7 +2633,7 @@ function onboardHtml() {
       <label class="ob-label" for="obInput">${walkerNameList.length ? '點選你在溜狗表上的名字' : '你在溜狗表「誰遛的」寫的名字'}</label>
       ${obNamesHtml(o, busy)}
       <input type="text" id="obInput" maxlength="60" placeholder="${walkerNameList.length ? '找不到？自己輸入' : '例：小明'}" value="${esc(o.text)}"${busy ? ' disabled' : ''} enterkeyhint="done">
-      <p class="ob-help">表上有好幾種寫法的話，可以都點起來。一格寫好幾個人（例如「小明+小華」）也認得出你。</p>
+      <p class="ob-help">如果沒有你的名字，請自行輸入。</p>
       ${o.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(o.error)}</span></div>` : ''}
       <div class="ob-foot">
         <button type="submit" class="ob-next"${busy ? ' disabled' : ''}>${busy ? '設定中…' : '下一步'}</button>
@@ -2618,7 +2689,7 @@ function renderOnboard() {
       else { try { walkedStorage && walkedStorage.setItem(ONBOARD_KEY, '1'); } catch (err) { /* 存不了下次再看一次 */ } onboard = null; render(); }
       renderOnboard();
     });
-    box.addEventListener('input', e => { if (e.target.id === 'obInput') onboard.text = e.target.value; });
+    box.addEventListener('input', e => { if (withSheet.phase !== 'saving' && e.target.id === 'obInput') onboard.text = e.target.value; });
     box.addEventListener('submit', async e => {
       e.preventDefault();
       if (onboard.phase === 'saving') return;

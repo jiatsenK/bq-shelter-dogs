@@ -1769,7 +1769,7 @@ async function runV52Tests() {
 
 // ── V9 正式上線版（#141）──
 async function runV9Tests() {
-  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList];
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList, sheetWritesMemory, sheetWriteState, walkerNameMemory, walkerCodesMemory, myWalks, myWalksState];
   const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
   const days = n => new Date(Date.now() - n * 864e5);
   const main = document.getElementById('main');
@@ -1784,12 +1784,12 @@ async function runV9Tests() {
     walkedStorage = fakeStorage(); walkedMemory = null; walkerNameMemory = ''; sheetWriteState = 'off';
     walkerNames = {};
     render();
-    await check('#141 溜狗表篩選「幾天以上沒溜」：選項照資料生，沒紀錄的也算久沒溜；選了記在這支手機', () => {
+    await check('#141 溜狗表篩選「幾天以上沒溜」：固定 7／3／2 天，沒紀錄的也算久沒溜；選了記在這支手機', () => {
       const chips = () => [...main.querySelectorAll('[data-walk-filter]')].map(b => b.firstChild.textContent + b.querySelector('small').textContent);
-      eq(chips(), ['全部4', '3 天以上3', '14 天以上2', '60 天以上1', '沒有紀錄1'], '選項（7、30 天跟前一個一樣多，不重複列）：');
-      main.querySelector('[data-walk-filter="14"]').click();
-      eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['V9丁', 'V9甲'], '14 天以上：');
-      eq(walkedStorage.getItem(WALK_FILTER_KEY), '14', '記住：');
+      eq(chips(), ['全部4', '7 天以上3', '3 天以上3', '2 天以上3', '沒有紀錄1'], '固定選項：');
+      main.querySelector('[data-walk-filter="7"]').click();
+      eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['V9丁', 'V9甲', 'V9乙'], '7 天以上：');
+      eq(walkedStorage.getItem(WALK_FILTER_KEY), '7', '記住：');
       main.querySelector('[data-walk-filter="0"]').click();
       eq(main.querySelectorAll('.card').length, 4, '回到全部：');
       if (main.querySelector('.stat-tile')) throw new Error('不再有三格');
@@ -1801,6 +1801,7 @@ async function runV9Tests() {
       main.querySelector('[data-walk-view="list"]').click();
       const row = main.querySelector('.row-dog[data-dog="1"]');
       eq([row.querySelector('.r-cage').textContent, row.querySelector('.r-name').textContent, row.querySelector('.r-who').textContent], ['A02', 'V9乙', '嘉文、俐葶、阿明'], '一列：');
+      eq([...main.querySelectorAll('.row-head span')].map(n => n.textContent), ['籠位', '犬名', '日期', '誰遛的', '登記'], '欄位標題：');
       eq(main.querySelectorAll('.row-dog .thumb').length, 0, '沒有照片：');
       eq(walkedStorage.getItem(WALK_VIEW_KEY), 'list', '記住：');
       row.querySelector('.r-name').click();
@@ -1841,6 +1842,62 @@ async function runV9Tests() {
       eq(loadSheetWrites()[walkKey(allDogs[1])].prev.walker, '舊的', '復原回到按溜了之前：');
       hideToast();
     });
+    await check('#141 多人登記立即更新今天紀錄與統計；重新載入仍可編輯及復原，衝突不覆寫', async () => {
+      walkedStorage = fakeStorage(); sheetWritesMemory = null; walkedMemory = null;
+      saveWalkerName('志工我'); saveMyCodes(['aaaaaaaaaaaa']);
+      myWalks = []; myWalksState = 'ready'; sheetWriteState = 'unknown';
+      const dog = allDogs[0], today = localDateKey(new Date());
+      const originalDate = days(5);
+      dog.walkedDate = originalDate;
+      let current = '志工乙', lastBody;
+      window.fetch = async (u, o) => {
+        const body = JSON.parse(o.body); lastBody = body;
+        let result;
+        if (body.action === 'walk') {
+          current = '志工乙、志工我';
+          result = { status: 'written', prev: { date: { date: localDateKey(originalDate) }, walker: '志工乙' }, wrote: { walker: current } };
+        } else if (body.action === 'edit') {
+          if (body.dogs[0].expected !== current) result = { status: 'changed', current: { date: today, walker: current } };
+          else { const prev = current; current = body.walker; result = { status: 'written', prev: { date: { date: today }, walker: prev }, wrote: { walker: current } }; }
+        } else { current = body.dogs[0].prev.walker; result = { status: 'restored' }; }
+        return json({ ok: true, today, results: [{ id: dog.id, name: dog.name, ...result }] });
+      };
+      await queueSheetWrite([dog], true);
+      eq(walkerList(dog), ['志工乙', '志工我'], '完整名單：');
+      eq(currentMyWalks().map(w => w.id), [dog.id], '立即出現：');
+      eq(myWalksCount(''), 1, '數字：');
+      if (!myMonthStats(currentMyWalks(), new Date()).includes('<b>1</b>')) throw new Error('統計沒有新登記');
+      sheetWritesMemory = null; dog.walkedDate = originalDate;
+      eq(computeStatus(dog, new Date()).days, 0, '重新載入日期：');
+      if (!walkEditControls(dog, new Date()).includes('walkUndoSaved')) throw new Error('復原入口不持續');
+      openWithSheet([dog], true);
+      eq(withSheet.expected, current, '保留原始快照：');
+      withSheet.picked = new Set(['志工乙']);
+      await finishWithSheet();
+      eq([lastBody.action, lastBody.dogs[0].expected], ['edit', '志工乙、志工我'], '修改請求：');
+      eq(currentMyWalks().length, 0, '移除自己不留今日紀錄：');
+      await queueSheetWrite([dog], false);
+      eq(walkerList(dog), ['志工乙', '志工我'], '復原編輯：');
+      eq(currentMyWalks().length, 1, '復原統計：');
+      openWithSheet([dog], true); current = '志工乙、志工我、志工戊';
+      withSheet.picked = new Set(['志工我']);
+      await finishWithSheet();
+      eq(current, '志工乙、志工我、志工戊', '不蓋掉他人：');
+      eq(walkerList(dog), ['志工乙', '志工我', '志工戊'], '更新衝突名單：');
+      withSheet = null; renderWithSheet(); hideToast();
+    });
+    await check('#141 名字清理：去除經常帶敘述，岑合併佳岑，查詢含舊別名', async () => {
+      UPLOAD_URL = 'https://worker.test';
+      let payload;
+      window.fetch = async (u, o) => {
+        if (String(u).endsWith('/walkers')) return json({ ok: true, names: ['志工甲經常帶', '岑', '佳岑'], walkers: {} });
+        payload = JSON.parse(o.body); return json({ ok: true, codes: ['aaaaaaaaaaaa', 'bbbbbbbbbbbb'] });
+      };
+      await loadWalkerNames();
+      eq(walkerNameList, ['志工甲', '佳岑'], '可選人名：');
+      await setWalkerName('佳岑');
+      eq(payload.names, ['佳岑', '岑'], '舊紀錄一起查：');
+    });
     await check('#141 開頭畫面：沒設定名字先問名字，才進說明；說明看完不再出現', async () => {
       walkedStorage = fakeStorage(); walkerNameMemory = ''; walkerCodesMemory = null; onboard = null;
       UPLOAD_URL = 'https://worker.test';
@@ -1872,7 +1929,7 @@ async function runV9Tests() {
     });
   } finally {
     hideDetail(); hideToast(); onboard = null; renderOnboard(); withSheet = null; renderWithSheet();
-    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList] = saved;
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList, sheetWritesMemory, sheetWriteState, walkerNameMemory, walkerCodesMemory, myWalks, myWalksState] = saved;
     render();
   }
 }
