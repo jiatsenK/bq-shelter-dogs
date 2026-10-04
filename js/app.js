@@ -185,7 +185,8 @@ function myWalksCount(query) {
 }
 
 // ── 我是誰（#96）──
-// 只把代號記在這支手機（跟今天已溜同一個 localStorage），名字本身不存；讀寫不了（無痕模式）就這次開著網頁的期間記在記憶體
+// 代號記在這支手機（跟今天已溜同一個 localStorage）；讀寫不了（無痕模式）就這次開著網頁的期間記在記憶體。
+// #138 起名字（第一個寫法）也記在這支手機，按「溜了」時寫進試算表「誰遛的」用；不會送到 repo 或網站其他地方
 let walkerCodesMemory = null;
 function loadMyCodes() {
   let list = walkerCodesMemory;
@@ -212,7 +213,7 @@ function walkerSetupHtml() {
     <h3>${icon('paw')}你是誰？</h3>
     <p>輸入你在試算表「誰遛的」欄寫的名字，這裡就會列出你溜過的狗。有好幾種寫法（例如本名和暱稱）可以用頓號隔開。</p>
     <input type="text" id="whoInput" maxlength="60" placeholder="例：小明、明明" aria-label="你在試算表寫的名字" value="${esc(edit.text)}"${busy ? ' disabled' : ''}>
-    <p class="who-note">名字只用來換成一串代號，代號記在這支手機，名字不會存下來，網站上也看不到。換手機或換瀏覽器要重新設定。</p>
+    <p class="who-note">名字和換出來的代號只記在這支手機；按「溜了」時會用第一個名字寫進試算表「誰遛的」，網站上其他人看不到。換手機或換瀏覽器要重新設定。</p>
     ${edit.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(edit.error)}</span></div>` : ''}
     <div class="my-note-actions">
       <button type="submit" class="my-note-save" id="whoSave"${busy ? ' disabled' : ''}>${busy ? '設定中…' : '設定'}</button>
@@ -248,6 +249,7 @@ async function saveWalkerSetup() {
   const codes = out && Array.isArray(out.codes) ? out.codes.filter(c => WALKER_CODE_PATTERN.test(c)) : [];
   if (!codes.length) return failWith('設定沒有成功，請稍後再試');
   saveMyCodes(codes);
+  saveWalkerName(firstWalkerName(text));
   if (walkerSetup === edit) walkerSetup = null;
   render();
 }
@@ -341,7 +343,9 @@ function myWalksHtml(today, query) {
     return `<div class="status-msg">溜狗紀錄讀不到，請確認網路後按「重新讀取」。<br><button class="retry-btn" id="mineRetry">重新讀取</button></div>`;
   }
   if (walkerSetup || !loadMyCodes().length) return walkerSetupHtml();
-  const who = query ? '' : `<div class="section-hint who-hint">${icon('paw')}已設定你的名字<button type="button" class="who-edit" id="whoEdit">修改</button></div>`;
+  // #138 之前設定的只有代號、沒記名字：請他再輸入一次，按溜了才能寫進試算表
+  const named = !!loadWalkerName();
+  const who = query ? '' : `<div class="section-hint who-hint">${icon('paw')}${named ? `已設定你的名字：${esc(loadWalkerName())}` : '再按「修改」輸入一次名字，按溜了就會寫進試算表'}<button type="button" class="who-edit" id="whoEdit">修改</button></div>`;
   if (!myWalks.length) return who + `<div class="status-msg">還沒有你的溜狗紀錄。<br>試算表「誰遛的」寫上你設定的名字，同步後就會出現在這裡。</div>`;
   // 所有到所紀錄新到舊一路往下排（K 2026-09-25：不要選日期）；搜尋時不顯示小計
   const groups = myWalkGroups(myWalks, query);
@@ -651,7 +655,7 @@ function warnNote(note, flag) {
 
 // ── 今天已溜（V3 第 4 節，#35）──
 // 只記「這支手機、這個瀏覽器的人」今天自己溜過哪些狗，不是所有志工的紀錄。
-// 只存在瀏覽器 localStorage，不寫試算表、不寫 GitHub、不用登入。
+// 只存在瀏覽器 localStorage，不寫 GitHub、不用登入；#138 起另外寫進試算表（見 sheetWrite）。
 // 存成 { date: '2026-09-24', ids: [編號…] }（本地日期＋狗狗編號）：日期不是今天就當作沒有紀錄，
 // 所以隔天自動全部未勾選；前一天的紀錄不用刪，下次記錄時直接蓋掉。
 const WALKED_KEY = 'bq-walked-today';
@@ -718,7 +722,8 @@ function recordWalked(dogs, on, today = new Date()) {
   return { changed, undo: () => saveWalkedIds(before, today) };
 }
 
-// 按「溜了」、一起記、移回：記下後重畫，底部跳提示條，可以按「復原」
+// 按「溜了」、一起記、移回：記下後重畫，底部跳提示條，可以按「復原」。
+// #138：溜了同時寫進試算表；復原、放回就把試算表改回原本的樣子
 function setWalked(dogs, on) {
   const { changed, undo } = recordWalked(dogs, on);
   if (!changed.length) return;
@@ -726,11 +731,123 @@ function setWalked(dogs, on) {
   render();
   renderDetail();
   const names = changed.map(d => d.name).join('、');
-  showToast(on ? `${names} 今天溜了` : `${names} 放回溜狗表`, () => {
+  const text = on ? `${names} 今天溜了` : `${names} 放回溜狗表`;
+  const undoFn = () => {
     undo();
     render();
     renderDetail();
-  });
+    queueSheetWrite(changed, !on);
+  };
+  showToast(text, undoFn);
+  queueSheetWrite(changed, on, text, undoFn);
+}
+
+// ── 按「溜了」寫進試算表（#138）──
+// 經過 Worker 的 /walk 轉給 K 部署的 Google Apps Script，只改主清單的「遛狗日期」「誰遛的」。
+// 寫成功的記下試算表原本的內容（只記今天的），復原或放回時帶回去改回來；小程式只在格子還是我們寫的樣子時才改回。
+// Worker 還沒設定（回 code: 'off'）就照舊只記在手機上，不打擾
+const WALKER_NAME_KEY = 'bq-walker-name';
+const SHEET_WRITES_KEY = 'bq-sheet-writes';
+// 跟 scripts/sync-sheet.mjs 的 NAME_SEP 一樣
+const WALKER_NAME_SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
+let walkerNameMemory = '';
+let sheetWritesMemory = null;
+let sheetWriteState = 'unknown'; // unknown／on／off
+let sheetQueue = Promise.resolve();
+
+function firstWalkerName(text) {
+  return String(text || '').split(WALKER_NAME_SEP).map(n => n.trim()).filter(Boolean)[0] || '';
+}
+function loadWalkerName() {
+  try {
+    if (walkedStorage) return walkedStorage.getItem(WALKER_NAME_KEY) || '';
+  } catch (e) { /* 讀不到就用記憶體裡的 */ }
+  return walkerNameMemory;
+}
+function saveWalkerName(name) {
+  walkerNameMemory = name || '';
+  try {
+    if (walkedStorage && name) walkedStorage.setItem(WALKER_NAME_KEY, name);
+    else if (walkedStorage) walkedStorage.removeItem(WALKER_NAME_KEY);
+  } catch (e) { /* 存不了就只記在記憶體 */ }
+}
+// { date: 今天, items: { 狗的 key: { id, name, prev, wrote } } }，不是今天的就丟掉
+function loadSheetWrites(today = new Date()) {
+  let data = sheetWritesMemory;
+  try {
+    const raw = walkedStorage && walkedStorage.getItem(SHEET_WRITES_KEY);
+    if (raw) data = JSON.parse(raw);
+  } catch (e) { /* 讀不到就用記憶體裡的 */ }
+  return data && data.date === localDateKey(today) && data.items && typeof data.items === 'object' ? { ...data.items } : {};
+}
+function saveSheetWrites(items, today = new Date()) {
+  sheetWritesMemory = { date: localDateKey(today), items };
+  try {
+    if (walkedStorage) walkedStorage.setItem(SHEET_WRITES_KEY, JSON.stringify(sheetWritesMemory));
+  } catch (e) { /* 存不了就只記在記憶體 */ }
+}
+
+// 一個一個送，按了溜了馬上復原時，復原會等溜了寫完才送（才知道要改回什麼）
+function queueSheetWrite(dogs, on, toastText, toastUndo) {
+  sheetQueue = sheetQueue.then(() => sheetWrite(dogs, on, toastText, toastUndo)).catch(e => console.error(e));
+  return sheetQueue;
+}
+
+// 提示條還是剛剛那則（使用者還沒按別的）才在後面補一句，不蓋掉「復原」
+function addToToast(text, undo, extra) {
+  const el = document.getElementById('toast');
+  if (!el || el.hidden || toastUndo !== undo) return false;
+  el.querySelector('.toast-text').textContent = `${text}${extra}`;
+  return true;
+}
+
+async function sheetWrite(dogs, on, toastText, toastUndo) {
+  if (!UPLOAD_URL || sheetWriteState === 'off') return;
+  const today = new Date();
+  const withKey = dogs.map(d => ({ d, key: walkKey(d) })).filter(x => x.key);
+  let payload;
+  if (on) {
+    const walker = loadWalkerName();
+    if (!walker) return; // 還沒在「我溜過」設定名字（提醒放在我溜過頁）
+    payload = { action: 'walk', walker, dogs: withKey.map(({ d }) => ({ id: d.id || '', name: d.name })) };
+  } else {
+    const items = loadSheetWrites(today);
+    const list = withKey.filter(x => items[x.key]).map(x => items[x.key]);
+    if (!list.length) return;
+    payload = { action: 'undo', dogs: list.map(x => ({ id: x.id, name: x.name, prev: x.prev, wrote: x.wrote })) };
+  }
+  if (!payload.dogs.length) return;
+  let res = null, out = null;
+  try {
+    res = await fetch(`${UPLOAD_URL}/walk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    out = await res.json().catch(() => null);
+  } catch (e) {
+    showToast(on ? '沒寫進試算表（網路不通），請自己到試算表填' : '試算表沒改回來（網路不通），請自己到試算表改');
+    return;
+  }
+  if (res.status === 503 && out && out.code === 'off') { sheetWriteState = 'off'; return; }
+  if (!res.ok || !out || !out.ok) {
+    const why = (out && out.error) || `HTTP ${res.status}`;
+    showToast(on ? `沒寫進試算表：${why}` : `試算表沒改回來：${why}`);
+    return;
+  }
+  sheetWriteState = 'on';
+  const items = loadSheetWrites(today);
+  const keyOf = r => (withKey.find(({ d }) => (d.id || '') === (r.id || '') && d.name === r.name) || {}).key;
+  const missed = [];
+  for (const r of out.results || []) {
+    const key = keyOf(r);
+    if (!key) continue;
+    if (on && r.status === 'written') items[key] = { id: r.id || '', name: r.name, prev: r.prev, wrote: r.wrote };
+    if (!on) delete items[key];
+    if (r.status === 'notFound' || (!on && r.status === 'changed')) missed.push(r.name);
+  }
+  saveSheetWrites(items, today);
+  if (missed.length) {
+    showToast(on ? `試算表找不到 ${missed.join('、')}，請自己填` : `${missed.join('、')} 在試算表已經被改過，沒有改回去`);
+  } else if (on && toastText) {
+    addToToast(toastText, toastUndo, '，已寫進試算表');
+  }
 }
 
 // 我的備註的通關碼（#62）：第一次儲存成功後記在這支手機，之後不用再輸入；被拒絕就清掉重問。
@@ -2398,6 +2515,7 @@ mainEl.addEventListener('click', e => {
     render();
   } else if (e.target.closest('#whoClear')) {
     saveMyCodes([]);
+    saveWalkerName('');
     walkerSetup = null;
     render();
   }

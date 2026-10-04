@@ -591,3 +591,12 @@
 ## 2026-10-04 溜狗表排序改成一顆按鈕（Claude，分支 claude/five-bugs-0poyw0，PR #137 追加）
 - 依據：K 說「一個時間順的按鈕就可以了，籠位狗名就不用」。
 - `js/app.js`：拿掉籠位、狗名；排序變成一顆按鈕「最久沒溜在前 ⇅ 最近溜在前」，按一下切換，記在這支手機。`index.html` 加排序圖示 `i-sort`。
+
+## 2026-10-04 按「溜了」寫進試算表（Claude，分支 claude/sheet-write，#138）
+- 依據：K 問「我今天遛過就幫我寫入試算表」，在決定卡選「開票做」。
+- `apps-script/sheet-write.gs`（新）：K 部署在自己 Google 帳號的 Apps Script 網頁應用程式。用 WRITE_KEY 驗證、LockService 排隊。在「主清單」按編號（沒編號才用犬名）找到那一列，寫入遛狗日期＝今天、誰遛的＝名字。今天已經有別人就用「、」接在後面，不覆蓋。復原時只有格子還是網站寫的內容才改回原值，被人改過就不動。
+- `worker/src/index.js`：新增 `POST /api/walk` 轉送給 Apps Script（Secret `SHEET_WRITE_URL`／`SHEET_WRITE_KEY`；沒設定時回 off，網站照舊只記在手機）。有次數上限，預覽網址擋寫入。`GET /api/` 顯示是否已設定。
+- `js/app.js`：「我是誰」另存第一個名字在手機（`bq-walker-name`）。按溜了／復原時排隊送出，結果附在提示列；寫入結果存 `bq-sheet-writes`，只留當天的，給復原用。
+- `.github/workflows/deploy-cloudflare.yml` 帶上兩個新 Secret；`tests.yml`、`AGENTS.md` 的 node 測試指令加上 `worker/test/sheet-write.test.mjs`。
+- 文件：`docs/SHEET_WRITE_SETUP.md`（K 的設定步驟）、`docs/PROJECT_GOALS.md`、`docs/VOLUNTEER_GUIDE.md`。
+- 測試：node 新增 8 項（Apps Script 4、Worker 4）；網頁新增 4 項，並更新唯讀檢查的允許清單。截圖在專案檔案 `previews/sheet-write/`。
