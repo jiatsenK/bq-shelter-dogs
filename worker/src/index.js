@@ -797,8 +797,18 @@ async function writeWalks(request, env, origin) {
     return fail(502, '連不上試算表，請稍後再試', origin);
   }
   if (!res.ok || !out) return fail(502, `試算表沒有回應（${res.status}）`, origin);
-  if (!out.ok) return fail(502, out.code === 'key' ? '寫入試算表的通關碼不對，請 K 檢查設定' : (out.error || '試算表沒有寫進去'), origin);
+  if (!out.ok) return fail(502, out.code === 'key' ? '寫入試算表的通關碼不對，請 K 檢查設定' : scriptError(out.error), origin);
   return reply(200, { ok: true, today: out.today, results: Array.isArray(out.results) ? out.results : [] }, origin);
+}
+
+// 小程式的錯誤訊息會顯示給志工看：Google 的原始錯誤可能帶試算表 ID，換成白話、不帶 ID
+function scriptError(msg) {
+  const text = typeof msg === 'string' ? msg : '';
+  if (!text) return '試算表沒有寫進去';
+  if (/spreadsheet id|Illegal spreadsheet|找不到.*檔案|not found/i.test(text)) return '試算表 ID 不對，請 K 檢查小程式設定';
+  if (/permission|權限|access/i.test(text)) return '小程式沒有試算表的編輯權限，請 K 檢查設定';
+  if (text.startsWith('小程式發生錯誤')) return '小程式發生錯誤，請 K 查看 Apps Script 的執行紀錄';
+  return [...text.replace(/[A-Za-z0-9_-]{25,}/g, '…')].slice(0, 100).join('');
 }
 
 export default {

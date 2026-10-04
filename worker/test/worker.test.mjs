@@ -863,3 +863,21 @@ test('#138 POST /walk 太頻繁就擋', async () => {
   for (let i = 0; i < 30; i++) assert.equal((await send(postWalk(ok, { ip: '5.5.5.5' }), SHEET_ENV)).status, 200);
   assert.equal((await send(postWalk(ok, { ip: '5.5.5.5' }), SHEET_ENV)).status, 429);
 });
+
+test('#138 POST /walk：小程式的原始錯誤不把試算表 ID 顯示給志工', async () => {
+  const ok = { action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] };
+  const id = 'AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcd';
+  const cases = [
+    ['小程式發生錯誤：Illegal spreadsheet id or key: ' + id, /試算表 ID 不對/],
+    ['小程式發生錯誤：You do not have permission to access ' + id, /權限/],
+    ['小程式發生錯誤：Something odd ' + id, /執行紀錄/],
+    ['主清單找不到「誰遛的」欄', /主清單找不到「誰遛的」欄/],
+  ];
+  for (const [i, [error, want]] of cases.entries()) {
+    fakeScript(() => ({ ok: false, error }));
+    const r = await send(postWalk(ok, { ip: `7.7.7.${i}` }), SHEET_ENV);
+    assert.equal(r.status, 502);
+    assert.match(r.body.error, want);
+    assert.doesNotMatch(r.body.error, /AbCdEf/);
+  }
+});
