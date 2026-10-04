@@ -1,0 +1,36 @@
+# 照片一次性搬到 Cloudflare R2（#130）
+# - 只能手動跑：Actions 頁選「照片搬到 R2」→「Run workflow」
+# - 把 repo 裡 photos/ 的主照片、相簿、縮圖和相簿清單複製到 R2，逐檔核對大小和 sha256，結果寫在這次執行的摘要（Summary）
+# - 網站上換過、刪過的照片不會被舊檔蓋掉；可以重跑，搬過的會跳過
+# - repo 裡的舊照片不會刪，R2 驗收完成前網站讀不到 R2 的照片時還會用舊檔
+# - 要先照 docs/CLOUDFLARE_SETUP.md「照片放 R2」建好 bucket，而且部署過一次（網站 /api/ 顯示 "photos":"R2"）
+name: 照片搬到 R2
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: migrate-photos-r2
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SITE_URL: ${{ vars.SITE_URL || 'https://bq-shelter-dogs.jiatsen-k.workers.dev' }}
+      ADMIN_PASSCODE: ${{ secrets.NOTES_PASSCODE }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 搬遷並核對
+        run: node scripts/migrate-photos-r2.mjs

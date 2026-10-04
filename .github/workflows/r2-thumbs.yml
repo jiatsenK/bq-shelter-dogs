@@ -1,0 +1,38 @@
+# 照片放 R2 以後的縮圖（#130）
+# - 網站換照片、新增相簿照片後，Worker 會叫這個 Action；Cloudflare 每 30 分鐘的 Cron 發現還有沒縮圖的也會叫
+# - 問網站哪些照片還沒縮圖、下載原圖、做好縮圖傳回網站存進 R2（scripts/make-thumbs.py --site），不提交 repo
+# - 縮圖還沒好之前網站會先顯示原圖，所以不影響使用
+# - 也可以在 Actions 頁選「產生照片縮圖（R2）」→「Run workflow」手動跑
+name: 產生照片縮圖（R2）
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# 連傳好幾張時排隊跑，後面那次會看到全部照片
+concurrency:
+  group: r2-thumbs
+  cancel-in-progress: false
+
+jobs:
+  thumbs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SITE_URL: ${{ vars.SITE_URL || 'https://bq-shelter-dogs.jiatsen-k.workers.dev' }}
+      ADMIN_PASSCODE: ${{ secrets.NOTES_PASSCODE }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # 跟「產生照片縮圖」用同一個 Pillow 版本，縮圖品質一樣
+      - name: 安裝 Pillow
+        run: pip install pillow==12.3.0
+
+      - name: 產生縮圖
+        run: python scripts/make-thumbs.py --site "$SITE_URL"
