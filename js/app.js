@@ -2253,14 +2253,12 @@ function dueDogs(dogs, today) {
     .map(x => x.d);
 }
 
-// 溜狗表排序（2026-10-04 K：要可以改排序）：預設最久沒溜在前；也可以最近溜的在前（時間倒過來）、照籠位（同一區一路溜過去）或狗名。
-// 選了哪個記在這支手機（跟今天已溜同一個 localStorage），下次打開還是一樣
+// 溜狗表排序（2026-10-04 K：要可以改排序；之後 K：一個時間順序的按鈕就好，籠位、狗名不用）：
+// 一顆按鈕在「最久沒溜」（預設）和「最近溜」（時間倒過來）之間切換。選了哪個記在這支手機（跟今天已溜同一個 localStorage）
 const WALK_SORT_KEY = 'bq-walk-sort';
 const WALK_SORTS = [
-  { id: 'due', label: '最久沒溜' },
-  { id: 'recent', label: '最近溜' },
-  { id: 'cage', label: '籠位' },
-  { id: 'name', label: '狗名' },
+  { id: 'due', label: '最久沒溜在前' },
+  { id: 'recent', label: '最近溜在前' },
 ];
 let walkSortMemory = 'due';
 function loadWalkSort() {
@@ -2276,26 +2274,18 @@ function saveWalkSort(id) {
     if (walkedStorage) walkedStorage.setItem(WALK_SORT_KEY, id);
   } catch (e) { /* 存不了就這次開著網頁的期間記得 */ }
 }
-// 先照最久沒溜排好，籠位、狗名一樣的就維持最久沒溜的順序；沒寫籠位的排最後
 function sortWalkList(dogs, today, sort = loadWalkSort()) {
   const due = dueDogs(dogs, today);
-  if (sort === 'due') return due;
-  if (sort === 'recent') {
-    // 有日期的照最近溜在前；有人固定照顧、沒有紀錄的放最後（不是剛溜過）
-    const dated = due.filter(d => computeStatus(d, today).kind === 'dated');
-    return [...dated.reverse(), ...due.filter(d => computeStatus(d, today).kind !== 'dated')];
-  }
-  const rank = new Map(due.map((d, i) => [d, i]));
-  const text = d => String((sort === 'cage' ? d.cage : d.name) || '').trim();
-  return [...due].sort((a, b) => {
-    const x = text(a), y = text(b);
-    if (!x !== !y) return x ? -1 : 1;
-    return x.localeCompare(y, 'zh-Hant', { numeric: true }) || rank.get(a) - rank.get(b);
-  });
+  if (sort !== 'recent') return due;
+  // 最近溜：有日期的照最近溜在前；有人固定照顧、沒有紀錄的放最後（不是剛溜過）
+  const dated = due.filter(d => computeStatus(d, today).kind === 'dated');
+  return [...dated.reverse(), ...due.filter(d => computeStatus(d, today).kind !== 'dated')];
 }
+// 按一下換另一種；箭頭表示目前的方向
 function walkSortHtml(sort = loadWalkSort()) {
-  return `<div class="walk-sort" role="group" aria-label="溜狗表排序"><span class="walk-sort-label">排序</span>${WALK_SORTS.map(s =>
-    `<button type="button" class="walk-sort-btn${s.id === sort ? ' on' : ''}" data-walk-sort="${s.id}" aria-pressed="${s.id === sort}">${s.label}</button>`).join('')}</div>`;
+  const now = WALK_SORTS.find(s => s.id === sort);
+  const next = WALK_SORTS.find(s => s.id !== sort);
+  return `<div class="walk-sort"><button type="button" class="walk-sort-btn" id="walkSort" data-walk-sort="${next.id}" aria-label="排序：${now.label}，按一下改成${next.label}">${icon('sort')}${now.label}</button></div>`;
 }
 
 // V7（#114）溜狗表最上面三格：溜狗表上的狗依天數色標分三堆，一眼看出有多少該溜

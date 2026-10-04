@@ -1192,14 +1192,15 @@ html.find-zoom-open { overflow: hidden; }
 .mine-progress .bar { height: 10px; border-radius: 999px; background: var(--primary-soft); margin-top: 8px; overflow: hidden; }
 .mine-progress .bar i { display: block; height: 100%; border-radius: inherit; background: var(--primary); }
 
-/* 溜狗表排序（2026-10-04）：三顆小按鈕，選到的那顆填色 */
-.walk-sort { display: flex; align-items: center; gap: 6px; margin: 2px 4px 12px; }
-.walk-sort-label { font-size: 14px; color: var(--ink-soft); font-weight: 500; margin-right: 2px; }
+/* 溜狗表排序（2026-10-04）：一顆按鈕，按一下在最久沒溜／最近溜之間切換 */
+.walk-sort { display: flex; margin: 2px 4px 12px; }
 .walk-sort-btn {
+  display: inline-flex; align-items: center; gap: 6px;
   border: 1px solid var(--line); border-radius: 999px;
   background: var(--surface); color: var(--ink);
   font-family: inherit; font-size: 14px; font-weight: 600;
-  padding: 6px 12px; min-height: 34px; cursor: pointer;
+  padding: 6px 14px; min-height: 36px; cursor: pointer;
 }
-.walk-sort-btn.on { background: var(--primary); border-color: var(--primary); color: #fff; }
+.walk-sort-btn .icon { color: var(--primary); font-size: 16px; }
+.walk-sort-btn:active { background: var(--primary-soft); }
 .walk-sort-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
