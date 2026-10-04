@@ -556,3 +556,17 @@ test('#94 workflow 從 Secret 帶入 WALKER_KEY', async () => {
   const yml = await readFile(new URL('../.github/workflows/sync-sheet.yml', import.meta.url), 'utf8');
   assert.match(yml, /WALKER_KEY: \$\{\{ secrets\.WALKER_KEY \}\}/);
 });
+
+test('2026-10-04 誰遛的格子用句號、分號、冒號等隔開也拆成好幾個人；Worker 用同一組分隔符號', async () => {
+  const names = sync.myNames('測試志工乙');
+  for (const text of ['測試志工甲。測試志工乙', '測試志工甲.測試志工乙', '測試志工甲;測試志工乙', '測試志工甲；測試志工乙',
+    '測試志工甲:測試志工乙', '測試志工甲｜測試志工乙', '測試志工甲・測試志工乙', '測試志工甲 。 測試志工乙']) {
+    assert.equal(sync.isMine(text, names), true, text);
+  }
+  assert.equal(sync.isMine('測試志工乙經常', names), false, '分隔符號以外的字還是要整個名字相同');
+  assert.deepEqual(sync.walkerCodes('測試志工甲。測試志工乙', KEY), [CODE('測試志工甲'), CODE('測試志工乙')]);
+  const src = re => re.match(/NAME_SEP = (\/.*\/);/)[1];
+  const worker = await readFile(new URL('../worker/src/index.js', import.meta.url), 'utf8');
+  const script = await readFile(new URL('./sync-sheet.mjs', import.meta.url), 'utf8');
+  assert.equal(src(worker), src(script), '同步和 Worker 的分隔符號要一樣，不然換出來的代號對不上');
+});

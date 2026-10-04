@@ -908,7 +908,8 @@ function detailHtml(dog, today) {
   // V7（#112）：上面大照片，下面狗名和天數／籠位／入所標籤；關閉、在哪、溜了在底部固定列（在哪裡卡片 V7 小修正拿掉，改用底部「在哪」）
   return `
     <div class="detail-head">
-      <div class="photo-wrap hero">${photoThumb(dog, 480, true, true, true)}${photoPickButton(dog)}</div>
+      ${photoHeroHtml(dog)}
+      ${photoUploadHtml(dog)}
       <div class="info">
         <div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div>
         <div class="chips">${statusBadge(dog, today)}${detailChips(dog)}</div>
@@ -916,7 +917,6 @@ function detailHtml(dog, today) {
       </div>
     </div>
     ${detailTrail.length ? `<button type="button" class="detail-back" id="detailBack">${icon('back')}回到 ${esc(detailTrail[detailTrail.length - 1].name)}</button>` : ''}
-    ${photoUploadHtml(dog)}
     <section class="detail-section" data-section="note">
       <h3>${icon('note')}試算表備註</h3>
       ${!dog.note ? `<div class="empty">目前沒有備註</div>`
@@ -956,7 +956,8 @@ function detailChips(dog) {
     + (since ? `<span class="badge plain">入所 ${since.getFullYear()}/${since.getMonth() + 1}</span>` : '');
 }
 
-// 相簿（狗卡資訊下方）：主照片＋另外上傳的照片排成縮圖格，點了用燈箱看大圖、左右滑換張；最後一格「新增」。
+// 相簿（狗卡資訊下方）：主照片＋另外上傳的照片排成縮圖格，點了用燈箱看大圖、左右滑換張。
+// 「新增」在主照片後面第二格（新傳的排在前面）；選好的照片就在那格出現、跟上傳後的樣子一樣（2026-10-04 K：要像社群網站，出現在按的地方）。
 // 主照片讀不到就把那格藏起來
 function gallerySection(dog) {
   if (!dog.id) return '';
@@ -971,6 +972,8 @@ function gallerySection(dog) {
     </button>`;
   const tiles = [
     tile(photoThumbSrc(dog), photoSrc(dog), `data-g-main aria-label="放大 ${esc(dog.name)} 的主照片"`, true),
+    canAdd && !up ? `<button type="button" class="g-add" id="galleryAdd" aria-label="新增 ${esc(dog.name)} 的相簿照片">${icon('plus')}<span>新增</span></button>` : '',
+    up ? galleryPendingTiles(galleryBatch) : '',
     ...list.map((p, i) => tile(galleryThumbSrc(dog, p.file), gallerySrc(dog, p.file), `data-g-file="${esc(p.file)}" aria-label="放大 ${esc(dog.name)} 的相簿照片（第 ${i + 1} 張）"`)),
   ];
   const note = galleryState === 'loading' ? '讀取中…' : galleryState === 'error' ? '相簿清單暫時讀不到' : '';
@@ -979,7 +982,6 @@ function gallerySection(dog) {
       <h3>${icon('photos')}相簿<span class="sub">${list.length ? `另外 ${list.length} 張，` : ''}點照片看大圖</span></h3>
       <div class="gallery-grid">
         ${tiles.join('')}
-        ${canAdd && !up ? `<button type="button" class="g-add" id="galleryAdd" aria-label="新增 ${esc(dog.name)} 的相簿照片">${icon('plus')}<span>新增</span></button>` : ''}
       </div>
       ${note ? `<div class="empty gallery-note">${note}</div>` : ''}
       ${up ? galleryBatchHtml(galleryBatch) : ''}
@@ -1225,16 +1227,32 @@ function photoPickButton(dog) {
   return `<button type="button" class="photo-pick" id="photoPick" aria-label="上傳 ${esc(dog.name)} 的照片" title="上傳照片">${icon('camera')}</button>`;
 }
 
-// 選好照片後，詳細資訊上方出現的預覽與「確認上傳」
+// 詳細資訊最上面的大照片。選好新照片還沒上傳時，直接在這個位置換成新照片預覽（2026-10-04 K：要像社群網站，出現在按的地方），
+// 裁切方式跟上傳後一模一樣（同一個 .thumb 框）；下面再放一張狗卡上的小照片，兩個地方的樣子都看得到
+function photoPending(dog) {
+  return UPLOAD_URL && dog.id && photoUpload && photoUpload.dog === dog ? photoUpload : null;
+}
+function photoHeroHtml(dog) {
+  const up = photoPending(dog);
+  if (!up) return `<div class="photo-wrap hero">${photoThumb(dog, 480, true, true, true)}${photoPickButton(dog)}</div>`;
+  return `
+    <div class="photo-wrap hero pending">
+      <div class="thumb"><img class="photo-preview" src="${esc(up.url)}" alt="${esc(dog.name)} 的新照片預覽"></div>
+      <span class="hero-tag">預覽</span>
+    </div>`;
+}
+
+// 選好照片後，大照片下面的「裁切」「確認上傳」「取消」
 function photoUploadHtml(dog) {
-  if (!UPLOAD_URL || !dog.id) return '';
-  const up = photoUpload && photoUpload.dog === dog ? photoUpload : null;
+  const up = photoPending(dog);
   if (!up) return '';
   const busy = up.phase === 'uploading';
   return `
     <div class="photo-upload preview">
-      <div class="photo-preview-hint">預覽（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
-      <img class="photo-preview" src="${esc(up.url)}" alt="${esc(dog.name)} 的新照片預覽">
+      <div class="photo-preview-row">
+        <div class="thumb card-thumb"><img src="${esc(up.url)}" alt=""></div>
+        <div class="photo-preview-hint">上面是詳細資訊、左邊是狗卡上的樣子，按「確認上傳」才會換（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
+      </div>
       ${up.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(up.error)}</span></div>` : ''}
       ${busy ? '' : `<button type="button" class="photo-crop" id="photoCrop">${icon('crop')}裁切</button>`}
       <button type="button" class="photo-confirm" id="photoConfirm"${busy ? ' disabled' : ''}>${busy ? '上傳中…' : '確認上傳'}</button>
@@ -1605,29 +1623,33 @@ function galleryRoom(dog) {
   return Math.max(0, GALLERY_MAX - (gallery[dog.id] || []).length);
 }
 
+// 還沒傳好的照片放在相簿格「新增」那格的位置，跟傳好後一樣是正方形格子；傳好的那張已經在相簿清單裡，不重複放
+function galleryPendingTiles(batch) {
+  const busy = batch.phase === 'uploading';
+  const left = batch.items.filter(it => it.state !== 'done');
+  const badge = it => it.state === 'uploading' ? `<span class="gb-state busy">上傳中</span>`
+    : it.state === 'error' ? `<span class="gb-state bad">${icon('alert')}</span>` : '';
+  return batch.items.map((it, i) => it.state === 'done' ? '' : `
+    <div class="gb-item ${it.state}">
+      <img src="${esc(it.url)}" alt="第 ${i + 1} 張預覽">
+      <span class="g-tag">預覽</span>
+      ${badge(it)}
+      ${!busy ? `<button type="button" class="gb-crop" data-gb-crop="${i}" aria-label="裁切第 ${i + 1} 張">${icon('crop')}</button>` : ''}
+      ${!busy && left.length > 1 ? `<button type="button" class="gb-remove" data-gb-remove="${i}" aria-label="不要傳第 ${i + 1} 張">${icon('close')}</button>` : ''}
+    </div>`).join('');
+}
+
 function galleryBatchHtml(batch) {
   const { dog, items } = batch;
   const busy = batch.phase === 'uploading';
   const left = items.filter(it => it.state !== 'done');
   const doneCount = items.length - left.length;
-  const badge = it => it.state === 'uploading' ? `<span class="gb-state busy">上傳中</span>`
-    : it.state === 'done' ? `<span class="gb-state ok">${icon('tick')}</span>`
-    : it.state === 'error' ? `<span class="gb-state bad">${icon('alert')}</span>` : '';
   const firstError = (items.find(it => it.state === 'error') || {}).error;
   const label = busy ? `上傳中 ${Math.min(doneCount + 1, items.length)} / ${items.length}…`
     : batch.phase === 'error' ? `重新上傳沒傳成的 ${left.length} 張` : `上傳 ${items.length} 張`;
   return `
     <div class="photo-upload preview in-gallery gallery-batch">
-      <div class="photo-preview-hint">加進相簿：${items.length} 張（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
-      <div class="gb-grid">
-        ${items.map((it, i) => `
-          <div class="gb-item ${it.state}">
-            <img src="${esc(it.url)}" alt="第 ${i + 1} 張預覽">
-            ${badge(it)}
-            ${!busy && it.state !== 'done' ? `<button type="button" class="gb-crop" data-gb-crop="${i}" aria-label="裁切第 ${i + 1} 張">${icon('crop')}</button>` : ''}
-            ${!busy && it.state !== 'done' && left.length > 1 ? `<button type="button" class="gb-remove" data-gb-remove="${i}" aria-label="不要傳第 ${i + 1} 張">${icon('close')}</button>` : ''}
-          </div>`).join('')}
-      </div>
+      <div class="photo-preview-hint">加進相簿：${items.length} 張（${esc(dog.name)}，編號 ${esc(dog.id)}）。標「預覽」的格子就是傳好後的樣子</div>
       ${firstError ? `<div class="photo-error" role="alert">${icon('alert')}<span>${doneCount ? `已傳 ${doneCount} 張，另外 ${left.length} 張沒傳成：` : ''}${esc(firstError)}</span></div>` : ''}
       <button type="button" class="photo-confirm" id="galleryUpload"${busy ? ' disabled' : ''}>${label}</button>
       ${busy ? '' : `<button type="button" class="photo-cancel" id="galleryBatchCancel">${doneCount ? '不傳了' : '取消'}</button>`}
@@ -1685,6 +1707,7 @@ function removeGalleryBatchItem(index) {
 }
 
 // 一張一張依序送到 Worker（同時送會讓相簿清單互相搶著改）；傳成的馬上出現在相簿格。
+// 相簿新的排前面，所以從最後選的那張先傳，傳完的順序才會跟預覽時一樣、不會跳來跳去
 // 被頻率限制或相簿滿了就停下來，剩下的留著可以重傳
 async function uploadGalleryBatch() {
   const batch = galleryBatch;
@@ -1694,7 +1717,7 @@ async function uploadGalleryBatch() {
   const shown = () => detailDog === batch.dog && galleryBatch === batch;
   if (shown()) renderDetail();
   const id = batch.dog.id;
-  for (const it of batch.items) {
+  for (const it of [...batch.items].reverse()) {
     if (it.state === 'done') continue;
     if (it.state === 'error') continue; // 前面已經停下來、整批標成沒傳成
     it.state = 'uploading';
@@ -2100,6 +2123,8 @@ function cardFromEvent(e) {
 document.getElementById('main').addEventListener('click', e => {
   // 溜狗表最下面「已收起」（#79）：展開／收合、點狗名開詳細資訊、放回
   if (e.target.closest('#hiddenToggle')) { hiddenOpen = !hiddenOpen; render(); return; }
+  const sortBtn = e.target.closest('[data-walk-sort]');
+  if (sortBtn) { saveWalkSort(sortBtn.dataset.walkSort); render(); return; }
   const unhide = e.target.closest('[data-unhide]');
   if (unhide) { setHidden(allDogs[unhide.dataset.unhide], null); return; }
   const hiddenName = e.target.closest('[data-hidden-dog]');
@@ -2228,6 +2253,41 @@ function dueDogs(dogs, today) {
     .map(x => x.d);
 }
 
+// 溜狗表排序（2026-10-04 K：要可以改排序；之後 K：一個時間順序的按鈕就好，籠位、狗名不用）：
+// 一顆按鈕在「最久沒溜」（預設）和「最近溜」（時間倒過來）之間切換。選了哪個記在這支手機（跟今天已溜同一個 localStorage）
+const WALK_SORT_KEY = 'bq-walk-sort';
+const WALK_SORTS = [
+  { id: 'due', label: '最久沒溜在前' },
+  { id: 'recent', label: '最近溜在前' },
+];
+let walkSortMemory = 'due';
+function loadWalkSort() {
+  let v = walkSortMemory;
+  try {
+    if (walkedStorage) v = walkedStorage.getItem(WALK_SORT_KEY);
+  } catch (e) { /* 讀不到就用記憶體裡的 */ }
+  return WALK_SORTS.some(s => s.id === v) ? v : 'due';
+}
+function saveWalkSort(id) {
+  walkSortMemory = id;
+  try {
+    if (walkedStorage) walkedStorage.setItem(WALK_SORT_KEY, id);
+  } catch (e) { /* 存不了就這次開著網頁的期間記得 */ }
+}
+function sortWalkList(dogs, today, sort = loadWalkSort()) {
+  const due = dueDogs(dogs, today);
+  if (sort !== 'recent') return due;
+  // 最近溜：有日期的照最近溜在前；有人固定照顧、沒有紀錄的放最後（不是剛溜過）
+  const dated = due.filter(d => computeStatus(d, today).kind === 'dated');
+  return [...dated.reverse(), ...due.filter(d => computeStatus(d, today).kind !== 'dated')];
+}
+// 按一下換另一種；箭頭表示目前的方向
+function walkSortHtml(sort = loadWalkSort()) {
+  const now = WALK_SORTS.find(s => s.id === sort);
+  const next = WALK_SORTS.find(s => s.id !== sort);
+  return `<div class="walk-sort"><button type="button" class="walk-sort-btn" id="walkSort" data-walk-sort="${next.id}" aria-label="排序：${now.label}，按一下改成${next.label}">${icon('sort')}${now.label}</button></div>`;
+}
+
 // V7（#114）溜狗表最上面三格：溜狗表上的狗依天數色標分三堆，一眼看出有多少該溜
 function walkTilesHtml(list, today) {
   const n = { red: 0, amber: 0, sage: 0 };
@@ -2288,7 +2348,7 @@ function renderMain() {
   // 收起的狗（#79）不在溜狗表，排在最下面「已收起」；已經記進今天已溜的就算在今天已溜
   const hidden = loadHidden(today);
   const notWalked = allDogs.filter(d => !walked.has(d));
-  const walkList = dueDogs(notWalked.filter(d => !hidden.has(walkKey(d))), today).filter(hit);
+  const walkList = sortWalkList(notWalked.filter(d => !hidden.has(walkKey(d))), today).filter(hit);
   const hiddenList = dueDogs(notWalked.filter(d => hidden.has(walkKey(d))), today).filter(hit);
   const todayList = walked.dogs(allDogs).filter(hit);
   const mineCount = myWalksCount(q);
@@ -2318,7 +2378,7 @@ function renderMain() {
       ? todayHeroHtml(list.length) + cards + alongHtml(list, walkList, today)
       : `<div class="status-msg">今天還沒有溜狗。<br>在溜狗表按狗卡右邊的「溜了」，就會出現在這裡。</div>`;
   } else {
-    main.innerHTML = walkTilesHtml(walkList, today) + `<div class="section-hint">${icon('pin')}最久沒溜的排前面</div>` +
+    main.innerHTML = walkTilesHtml(walkList, today) + walkSortHtml() +
       (cards || `<div class="status-msg">${hiddenList.length ? '全部都收起了' : '目前沒有狗'}</div>`) + hiddenBox;
   }
 }
@@ -2444,7 +2504,10 @@ async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES
     }
     // 429 表示同一支手機剛按過，同步已經在跑，一樣等新資料
     if (!res.ok && res.status !== 429) {
-      showToast('更新失敗，請稍後再試');
+      // 附上 Worker 說的原因（例：GitHub 403＝token 沒開 Actions 權限），設定出錯時才查得到
+      let why = '';
+      try { why = String((await res.json()).error || ''); } catch (e) { /* 沒有內容就只顯示狀態碼 */ }
+      showToast(`更新失敗：${why || `HTTP ${res.status}`}`);
       return;
     }
     showToast('正在更新，約 1–2 分鐘');

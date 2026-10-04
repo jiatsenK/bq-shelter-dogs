@@ -74,7 +74,7 @@ const WALKER_CODE_LENGTH = 12;
 // 網站「更新」按鈕：同一個人 2 分鐘 1 次；同步本身要跑約 1 分鐘，按再多次也沒用
 const SYNC_LIMITS = [{ windowMs: 2 * 60 * 1000, max: 1 }];
 // 跟 scripts/sync-sheet.mjs 的 NAME_SEP 一樣：一格寫好幾個名字時用這些符號或空白隔開
-const WALKER_NAME_SEP = /[、,，\/／&＆+＋\s]+/;
+const WALKER_NAME_SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
 
 // 注意：Cloudflare 會同時開好幾份 Worker，下面這兩個暫存各自獨立，
 // 所以頻率限制是「盡量擋」，不是精確計數；目的是擋住一直狂傳，不是算帳
