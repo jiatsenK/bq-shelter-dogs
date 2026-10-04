@@ -2312,6 +2312,7 @@ function cardFromEvent(e) {
 document.getElementById('main').addEventListener('click', e => {
   const filterBtn = e.target.closest('[data-walk-filter]');
   if (filterBtn) { const v = filterBtn.dataset.walkFilter; saveWalkFilter(v === 'none' ? 'none' : Number(v)); render(); return; }
+  if (e.target.closest('[data-walk-fav]')) { saveWalkFav(!loadWalkFav()); render(); return; }
   const viewBtn = e.target.closest('[data-walk-view]');
   if (viewBtn) { saveWalkView(viewBtn.dataset.walkView); render(); return; }
   const sortBtn = e.target.closest('[data-walk-sort]');
@@ -2505,12 +2506,25 @@ function walkFilterOptions(list, today) {
   if (none) opts.push({ v: 'none', label: '沒有紀錄', n: none });
   return opts;
 }
-function walkFilterHtml(list, today, f) {
+// 我的常溜（#155，K 2026-10-04 選兩頁都放）：溜狗表的「★ 我的常溜」跟天數篩選可以一起用（例：常溜裡 7 天以上沒溜的）
+const WALK_FAV_KEY = 'bq-walk-fav';
+let walkFavMemory = false;
+function loadWalkFav() {
+  const v = readJsonKey(WALK_FAV_KEY);
+  return typeof v === 'boolean' ? v : walkFavMemory;
+}
+function saveWalkFav(on) {
+  walkFavMemory = on;
+  writeJsonKey(WALK_FAV_KEY, on);
+}
+
+function walkFilterHtml(list, today, f, fav = false, favN = 0) {
   const opts = walkFilterOptions(list, today);
   // 選的天數這次資料裡沒有了（例：大家都溜過了），照樣留著那顆，才按得掉
   if (f && !opts.some(o => o.v === f)) opts.unshift({ v: f, label: f === 'none' ? '沒有紀錄' : `${f} 天以上`, n: list.filter(d => passesWalkFilter(d, today, f)).length });
   const chip = o => `<button type="button" class="chip${o.v === f ? ' on' : ''}" data-walk-filter="${o.v}" aria-pressed="${o.v === f}">${o.label}<small>${o.n}</small></button>`;
-  return `<div class="chips" role="group" aria-label="篩選：幾天以上沒溜">${chip({ v: 0, label: '全部', n: list.length })}${opts.map(chip).join('')}</div>`;
+  const favChip = `<button type="button" class="chip fav-chip${fav ? ' on' : ''}" data-walk-fav aria-pressed="${fav}">★ 我的常溜<small>${favN}</small></button>`;
+  return `<div class="chips" role="group" aria-label="篩選：我的常溜、幾天以上沒溜">${favChip}${chip({ v: 0, label: '全部', n: list.length })}${opts.map(chip).join('')}</div>`;
 }
 
 // V9（#141 第 6 項）：照片模式／列表模式（收起照片，像試算表一列一隻）。選了哪個記在這支手機
@@ -2601,14 +2615,18 @@ function renderMain() {
     return;
   }
   const filter = loadWalkFilter();
-  const list = walkList.filter(d => passesWalkFilter(d, today, filter));
+  const fav = loadWalkFav();
+  const base = fav ? walkList.filter(isFav) : walkList;
+  const list = base.filter(d => passesWalkFilter(d, today, filter));
   const view = loadWalkView();
   const items = view === 'list'
     ? (list.length ? `<div class="rows"><div class="row-head"><span>籠位</span><span>狗名</span><span>日期</span><span>溜狗人</span><span>登記</span></div>${list.map(d => walkRow(d, today)).join('')}</div>` : '')
     : list.map((d, i) => dogCard(d, today, i < FIRST_SCREEN_CARDS)).join('');
-  const head = walkFilterHtml(walkList, today, filter) + walkToolsHtml(view);
+  const head = walkFilterHtml(base, today, filter, fav, walkList.filter(isFav).length) + walkToolsHtml(view);
+  const empty = fav && !base.length && !q ? '還沒有常溜的狗。<br>點狗打開詳細資訊，<br>按名字旁的「☆ 常溜」加進來。'
+    : q ? `找不到「${esc(q)}」` : '沒有符合的狗';
   main.innerHTML = head + (q && list.length ? `<div class="section-hint">${icon('search')}搜尋「${esc(q)}」：${list.length} 隻</div>` : '')
-    + (items || `<div class="status-msg">${q ? `找不到「${esc(q)}」` : '沒有符合的狗'}</div>`);
+    + (items || `<div class="status-msg">${empty}</div>`);
 }
 
 // 我溜過：點照片開詳細資訊、讀取失敗時重新讀取（內容區每次重畫，所以用事件委派）

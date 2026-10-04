@@ -3077,6 +3077,42 @@ async function runFavTests() {
   }
 }
 
+// #155 K 2026-10-04 選「兩頁都放」：溜狗表也有「★ 我的常溜」，可以跟天數篩選一起用
+async function runWalkFavTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, walkFilterMemory, walkFavMemory];
+  const TODAY = new Date();
+  const ymdDash = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  const d = (name, id, days) => parseDogsData({ dogs: [{ id, name, cage: '舊A01', note: '', covered: false, walkedDate: ymdDash(new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() - days)) }] }).dogs[0];
+  try {
+    walkedStorage = fakeStorage(); walkedMemory = null; walkFilterMemory = 0; walkFavMemory = false;
+    allDogs = [d('常溜一', '2024100601', 9), d('常溜二', '2024100602', 1), d('常溜三', '2024100603', 12)];
+    groupMap = {}; activeTab = 'walk'; searchQuery = '';
+    const main = document.getElementById('main');
+    const names = () => [...main.querySelectorAll('.card .name')].map(n => n.textContent.trim());
+    const favChip = () => main.querySelector('[data-walk-fav]');
+    await check('#155 溜狗表篩選最前面是「★ 我的常溜」；沒收藏時有提示', () => {
+      render();
+      eq(main.querySelector('.chips .chip'), favChip(), '最前面：');
+      eq([favChip().textContent, favChip().getAttribute('aria-pressed')], ['★ 我的常溜0', 'false'], '還沒開：');
+      favChip().click();
+      eq(favChip().getAttribute('aria-pressed'), 'true', '開了：');
+      if (!main.querySelector('.status-msg').textContent.includes('「☆ 常溜」加進來')) throw new Error('沒收藏的提示不見了');
+    });
+    await check('#155 溜狗表常溜只列收藏的，跟「7 天以上」一起用；記在這支手機', () => {
+      toggleFav(allDogs[0]); toggleFav(allDogs[1]);
+      render();
+      eq([favChip().textContent, names().sort()], ['★ 我的常溜2', ['常溜一', '常溜二']], '常溜：');
+      main.querySelector('[data-walk-filter="7"]').click();
+      eq(names(), ['常溜一'], '常溜＋7 天以上：');
+      favChip().click();
+      eq(names().sort(), ['常溜一', '常溜三'], '關掉常溜只剩 7 天以上：');
+      eq(walkedStorage.getItem('bq-walk-fav'), 'false', '存在手機：');
+    });
+  } finally {
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, walkFilterMemory, walkFavMemory] = saved;
+  }
+}
+
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
 Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js', '../js/find.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
@@ -3134,6 +3170,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runPhotoBarTests)
   .then(runFindListTests)
   .then(runFavTests)
+  .then(runWalkFavTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

@@ -1374,3 +1374,5 @@ html.onboard-open { overflow: hidden; }
 .fav-btn.on { border-color: var(--amber-text); background: var(--amber-bg); color: var(--amber-text); }
 .fav-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .fav-mark { font-style: normal; color: var(--amber-text); font-size: 13px; margin-left: 2px; }
+/* 溜狗表的「★ 我的常溜」可以跟天數篩選一起開，跟後面的天數隔開一點 */
+.chip.fav-chip { margin-right: 6px; }
