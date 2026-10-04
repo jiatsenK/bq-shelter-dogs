@@ -90,3 +90,30 @@ test('#138 SHEET_ID 貼成網址或多了空白也認得', () => {
   assert.equal(f(' abc_DEF-123 '), 'abc_DEF-123');
   assert.equal(f('https://docs.google.com/spreadsheets/d/abc_DEF-123/edit#gid=0'), 'abc_DEF-123');
 });
+
+
+test('#141 修改只改誰遛的，復原回到編輯前；過期快照不得覆寫別人的修改', () => {
+  const values = sheet();
+  const dog = { id: '9004', name: '測試丁', expected: '志工丙、志工我' };
+  const edited = plan(values, { action: 'edit', walker: '志工丙、志工戊、志工戊', dogs: [dog] });
+  assert.deepEqual(JSON.parse(JSON.stringify(edited.cells)), [{ row: 5, col: 4, value: '志工丙、志工戊' }]);
+  assert.equal(edited.results[0].prev.walker, dog.expected);
+  values[5][4] = '志工丙、志工戊';
+  const undone = plan(values, { action: 'undo', dogs: edited.results });
+  assert.equal(undone.results[0].status, 'restored');
+  assert.equal(undone.cells[1].value, dog.expected);
+  const conflict = plan(values, { action: 'edit', walker: '志工我', dogs: [dog] });
+  assert.equal(conflict.cells.length, 0);
+  assert.equal(conflict.results[0].status, 'changed');
+  assert.equal(conflict.results[0].current.walker, '志工丙、志工戊');
+});
+
+test('#141 手打日期與多人新增：今天既有姓名保留，不重複、不改日期；already 回傳完整名單', () => {
+  const values = sheet(); values[3][3] = '2026/10/4';
+  const dog = { id: '9002', name: '測試乙' };
+  const out = plan(values, { action: 'walk', walker: '志工丙、志工我、志工戊', dogs: [dog] });
+  assert.deepEqual(JSON.parse(JSON.stringify(out.cells)), [{ row: 3, col: 4, value: '志工丙、志工我、志工戊' }]);
+  const already = plan(values, { action: 'walk', walker: '志工丙', dogs: [dog] });
+  assert.equal(already.cells.length, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(already.results[0].current)), { date: '2026-10-04', walker: '志工丙' });
+});

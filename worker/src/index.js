@@ -821,6 +821,10 @@ function cleanWalkDog(d, action) {
   if (id && !ID_PATTERN.test(id)) return null;
   if (!shortText(d.name, 30) || !d.name.trim()) return null;
   const out = { id, name: d.name.trim() };
+  if (action === 'edit') {
+    if (!shortText(d.expected, 200) || !d.expected.trim()) return null;
+    out.expected = d.expected.trim();
+  }
   if (action === 'undo') {
     const p = d.prev, w = d.wrote;
     if (!p || !w || typeof p !== 'object' || typeof w !== 'object') return null;
@@ -850,14 +854,14 @@ async function writeWalks(request, env, origin) {
     return fail(400, '格式不對', origin);
   }
   const action = input && input.action;
-  if (action !== 'walk' && action !== 'undo') return fail(400, '要說是溜了還是復原', origin);
+  if (!['walk', 'undo', 'edit'].includes(action)) return fail(400, '要說是溜了、修改還是復原', origin);
   if (!Array.isArray(input.dogs) || !input.dogs.length || input.dogs.length > WALK_MAX_DOGS) return fail(400, `一次 1–${WALK_MAX_DOGS} 隻`, origin);
   const dogs = input.dogs.map(d => cleanWalkDog(d, action));
   if (dogs.some(d => !d)) return fail(400, '狗的資料不對', origin);
   const body = { action, dogs };
   if (cfg.sheetWriteKey) body.key = cfg.sheetWriteKey;
-  if (action === 'walk') {
-    if (!shortText(input.walker, WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, `名字要 1–${WALKER_NAME_MAX_CHARS} 個字`, origin);
+  if (action === 'walk' || action === 'edit') {
+    if (!shortText(input.walker, action === 'edit' ? 200 : WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, `名字要 1–${action === 'edit' ? 200 : WALKER_NAME_MAX_CHARS} 個字`, origin);
     body.walker = input.walker.trim();
   }
 
@@ -876,6 +880,7 @@ async function writeWalks(request, env, origin) {
   }
   if (!res.ok || !out) return fail(502, `試算表沒有回應（${res.status}）`, origin);
   if (!out.ok) return fail(502, out.code === 'key' ? '寫入試算表的通關碼不對，請 K 檢查設定' : scriptError(out.error), origin);
+  walkersCache = null; // 寫入後重新讀取完整名單
   return reply(200, { ok: true, today: out.today, results: Array.isArray(out.results) ? out.results : [] }, origin);
 }
 
