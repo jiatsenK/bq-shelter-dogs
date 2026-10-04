@@ -1363,7 +1363,7 @@ async function runMyWalksTests() {
       input.dispatchEvent(new Event('input', { bubbles: true }));
       document.getElementById('whoSave').click();
       await tick(); await tick(); await tick();
-      eq(calls, [['https://worker.test/walker-code', 'POST', { names: ['測試志工、小測'] }]], '送給 Worker：');
+      eq(calls, [['https://worker.test/walker-code', 'POST', { names: ['測試志工', '小測'] }]], '送給 Worker：');
       eq(loadMyCodes(), [ME], '記住代號：');
       let stored = '';
       try { stored = localStorage.getItem(WALKER_CODES_KEY) || ''; } catch (e) { /* 無痕模式 */ }
@@ -1801,7 +1801,7 @@ async function runV9Tests() {
       main.querySelector('[data-walk-view="list"]').click();
       const row = main.querySelector('.row-dog[data-dog="1"]');
       eq([row.querySelector('.r-cage').textContent, row.querySelector('.r-name').textContent, row.querySelector('.r-who').textContent], ['A02', 'V9乙', '嘉文、俐葶、阿明'], '一列：');
-      eq([...main.querySelectorAll('.row-head span')].map(n => n.textContent), ['籠位', '犬名', '日期', '誰遛的', '登記'], '欄位標題：');
+      eq([...main.querySelectorAll('.row-head span')].map(n => n.textContent), ['籠位', '狗名', '日期', '溜狗人', '登記'], '欄位標題：');
       eq(main.querySelectorAll('.row-dog .thumb').length, 0, '沒有照片：');
       eq(walkedStorage.getItem(WALK_VIEW_KEY), 'list', '記住：');
       row.querySelector('.r-name').click();
@@ -2740,7 +2740,7 @@ async function runSheetWriteTests() {
       eq(Object.keys(loadSheetWrites()), ['9801', '名:寫入乙'], '記下：');
       if (!toastText().endsWith('，已寫進試算表')) throw new Error(`提示：${toastText()}`);
     });
-    await check('#138 按復原：帶原本內容送 undo，改回後清掉紀錄；放回也一樣', async () => {
+    await check('#138 按復原：帶原本內容送 undo，改回後保留還原結果，清掉復原快照；放回也一樣', async () => {
       const calls = [];
       window.fetch = async (u, o) => { const body = JSON.parse(o.body); calls.push(body); return json({ ok: true, results: body.dogs.map(d => ({ id: d.id, name: d.name, status: 'restored' })) }); };
       document.querySelector('#toast .toast-undo').click();
@@ -2748,7 +2748,8 @@ async function runSheetWriteTests() {
       eq(calls, [{ action: 'undo', dogs: [
         { id: '9801', name: '寫入甲', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' } },
         { id: '', name: '寫入乙', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' } }] }], '復原送出：');
-      eq([loadSheetWrites(), walkedToday().has(allDogs[0])], [{}, false], '清掉、手機也移回：');
+      eq(Object.values(loadSheetWrites()).map(item => [item.current.date, item.current.walker, !!item.prev]), [['2026-10-01', '志工乙', false], ['2026-10-01', '志工乙', false]], '保留還原結果但不留復原快照：');
+      eq(walkedToday().has(allDogs[0]), false, '手機也放回：');
       hideToast();
     });
     await check('#138 別人改過就不改回並提醒；送不出去提示自己去填；Worker 沒設定就安靜不再送', async () => {
