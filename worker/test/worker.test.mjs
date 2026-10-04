@@ -929,3 +929,17 @@ test('#141 GET /walkers：沒設 SHEET_ID 回 off；讀不到回 502；只收 GE
   const res = await send(new Request('https://bq-shelter-dogs.<子網域>.workers.dev/api/walkers', { method: 'POST', headers: { Origin: 'https://bq-shelter-dogs.<子網域>.workers.dev' } }), { SHEET_ID: 'abc' });
   assert.equal(res.status, 405);
 });
+
+
+test('#141 POST /walk 修改：必須帶原始名單快照；通過既有來源與預覽限制', async () => {
+  const calls = fakeScript();
+  const body = { action: 'edit', walker: '志工我、志工乙', dogs: [{ id: '9001', name: '測試甲', expected: '志工我' }] };
+  assert.equal((await send(postWalk(body), SHEET_ENV)).status, 200);
+  assert.equal(calls[0].body.action, 'edit');
+  assert.equal(calls[0].body.dogs[0].expected, '志工我');
+  assert.equal((await send(postWalk({ ...body, dogs: [{ id: '9001', name: '測試甲' }] }), SHEET_ENV)).status, 400);
+  assert.equal((await send(postWalk(body, { origin: 'https://evil.example' }), SHEET_ENV)).status, 403);
+  const req = new Request(`${SITE}/api/walk`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  assert.equal((await send(req, { ...SHEET_ENV, PREVIEW: '1' })).status, 403);
+  assert.equal(calls.length, 1);
+});

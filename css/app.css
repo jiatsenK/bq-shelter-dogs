@@ -1353,3 +1353,8 @@ html.onboard-open { overflow: hidden; }
 .with-ok { flex: 1.6; min-height: 48px; border: none; border-radius: 14px; background: var(--primary); color: #fff; font-family: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
 .with-ok:disabled { opacity: 0.4; }
 .ob-names { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; max-height: 40vh; overflow-y: auto; }
+
+/* #141：列表欄位與持續登記入口 */
+.row-head { display:grid; grid-template-columns:50px minmax(0,1fr) 40px minmax(0,1.1fr) 52px; gap:8px; padding:10px 8px 10px 12px; font-size:12px; color:var(--ink-soft); border-bottom:1px solid var(--line); }
+.walk-edit-actions { display:flex; flex-wrap:wrap; gap:8px; }
+.walk-edit-actions button { min-height:44px; border:1px solid var(--line); border-radius:10px; padding:6px 10px; background:var(--surface); color:var(--primary); }
