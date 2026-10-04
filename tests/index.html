@@ -2166,7 +2166,7 @@ async function runFindTests() {
       dog('老大', '2019070701', '舊B04', { formerIds: ['2017090423'] }), dog('咪寶', '2021030913', 'C區11'),
       dog('布布', '2022020202', '住院區'), dog('滿滿', '2025022703', '母幼A'), dog('神秘', '2023010101', '後院'),
     ];
-    groupMap = {}; searchQuery = ''; findView = 'photo'; findZone = 'all';
+    groupMap = {}; searchQuery = ''; findView = 'list'; findZone = 'all';
     const names = list => list.map(d => d.name);
     await check('#99 籠位對到平面圖分區（K 2026-09-26 確認）', () => {
       eq(allDogs.map(findZoneOf), ['new', 'new', 'new', 'old', 'pup', 'iso', 'mom', 'other']);
@@ -2211,7 +2211,7 @@ async function runFindTests() {
       if (!/<script src="js\/analysis\.js"><\/script>\s*<script src="js\/find\.js"><\/script>/.test(INDEX_HTML)) throw new Error('find.js 要在 app.js、analysis.js 之後載入');
     });
     await check('#99 找狗不顯示未遛天數與「已遛」按鈕', () => {
-      const html = findCard(allDogs[0], '', false);
+      const html = findRowsHtml(allDogs, '');
       if (/data-walk|上次遛狗|天前/.test(html)) throw new Error(html);
     });
     await check('#102 平面圖放大：全螢幕畫橫的、－／＋ 調大小、點區域關掉並選那一區', () => {
@@ -2408,7 +2408,7 @@ async function runFindV7Tests() {
     walkedStorage = fakeStorage(); walkedMemory = null;
     const dog = (name, id, cage) => ({ name, id, cage, walkedDate: null, covered: false, note: '', intro: '', sex: '', formerIds: [] });
     allDogs = [dog('測試甲', '2024032901', '舊A03'), dog('測試乙', '2024032902', '新A05'), dog('測試丙', '2024032903', '後院')];
-    groupMap = {}; searchQuery = ''; activeTab = 'find'; findView = 'photo'; findZone = 'all'; findCage = null;
+    groupMap = {}; searchQuery = ''; activeTab = 'find'; findView = 'list'; findZone = 'all'; findCage = null;
     await check('#113 找狗：照片／平面圖一排、區域一排（K 2026-09-28）', () => {
       render();
       const bar = document.querySelector('#main .find-bar');
@@ -2440,10 +2440,10 @@ async function runFindV7Tests() {
       eq(!!document.querySelector('#main .find-map-all'), false, '整張時不顯示看全圖：');
     });
     await check('#113 找狗搜尋：地圖在上、結果在下，都在同一區就放大過去，點一隻開在哪', async () => {
-      findView = 'photo'; findZone = 'all'; findCage = null; searchQuery = '測試甲'; render();
+      findView = 'list'; findZone = 'all'; findCage = null; searchQuery = '測試甲'; render();
       const main = document.getElementById('main');
-      const map = main.querySelector('.find-map-card'), grid = main.querySelector('.find-grid');
-      if (!map || !grid) throw new Error('照片模式搜尋也要有地圖和結果');
+      const map = main.querySelector('.find-map-card'), grid = main.querySelector('.find-rows');
+      if (!map || !grid) throw new Error('列表模式搜尋也要有地圖和結果');
       if (!(map.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING)) throw new Error('地圖要在結果上面');
       if (!main.querySelector('g[data-find-cage="舊A3"] rect').classList.contains('on')) throw new Error('找到的籠子沒亮');
       eq(main.querySelector('svg.find-map').dataset.to, findMapBox('old').join(' '), '只在舊犬舍就放大到舊犬舍：');
@@ -2458,8 +2458,8 @@ async function runFindV7Tests() {
       hideDetail();
       searchQuery = '沒有這隻'; render();
       if (!document.querySelector('#main .status-msg').textContent.includes('找不到「沒有這隻」')) throw new Error('找不到的說明不見了');
-      searchQuery = ''; findView = 'photo'; render();
-      eq(!!document.querySelector('#main .find-map-card'), false, '沒搜尋的照片模式不放地圖：');
+      searchQuery = ''; findView = 'list'; render();
+      eq(!!document.querySelector('#main .find-map-card'), false, '沒搜尋的列表模式不放地圖：');
     });
   } finally {
     if (whereDog) whereHide();
@@ -2703,8 +2703,8 @@ async function runFastOpenTests() {
       window.fetch = realFetch; window.__dogsEarly = null;
     }
   });
-  await check('手機開啟加速：狗卡、找狗照片卡在畫面外先不排版', () => {
-    for (const sel of ['.card', '.find-dog']) {
+  await check('手機開啟加速：狗卡、找狗籠位列在畫面外先不排版', () => {
+    for (const sel of ['.card', '.find-row']) {
       if (!/content-visibility: auto;/.test(rule(sel))) throw new Error(`${sel} 沒有 content-visibility: auto`);
       if (!/contain-intrinsic-size: auto \d+px;/.test(rule(sel))) throw new Error(`${sel} 沒有 contain-intrinsic-size（捲動會跳）`);
     }
@@ -2957,6 +2957,62 @@ async function runPhotoBarTests() {
     hideDetail();
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, photoUpload, galleryBatch] = saved;
     render();
+// #154 找狗改成列表＋平面圖，拿掉照片格子（K 2026-10-04：找狗靠文字與位置，認狗靠小照片）
+async function runFindListTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone, findCage];
+  try {
+    walkedStorage = fakeStorage(); walkedMemory = null;
+    const dog = (name, id, cage, extra = {}) => ({ name, id, cage, walkedDate: null, covered: false, note: '', intro: '', sex: '', formerIds: [], ...extra });
+    allDogs = [
+      dog('列表甲', '2024100401', '新A03', { sex: '♀' }), dog('列表乙', '2024100402', '新A03', { sex: '♂' }),
+      dog('列表丙很長很長很長的名字', '2024100403', '新A05'), dog('列表丁', '2024100404', '舊B04', { note: '勿溜' }),
+    ];
+    groupMap = {}; searchQuery = ''; activeTab = 'find'; findView = 'list'; findZone = 'all'; findCage = null;
+    const main = document.getElementById('main');
+    await check('#154 找狗只有列表／平面圖兩種，預設列表，沒有照片格子', () => {
+      render();
+      eq([...main.querySelectorAll('[data-find-view]')].map(b => b.textContent.trim()), ['列表', '平面圖'], '顯示方式：');
+      eq(main.querySelector('[data-find-view="list"]').getAttribute('aria-pressed'), 'true', '預設列表：');
+      eq([!!main.querySelector('.find-grid'), !!main.querySelector('.find-map-card')], [false, false], '沒有照片格子、沒有地圖：');
+    });
+    await check('#154 列表一區一段、一籠一列：籠位在左，同籠的狗排在同一列', () => {
+      render();
+      eq([...main.querySelectorAll('.find-zone-head h2')].map(h => h.textContent), ['新犬舍區', '舊犬舍區'], '分段：');
+      const rows = [...main.querySelectorAll('.find-row')].map(r => [r.querySelector('.find-row-cage').textContent,
+        [...r.querySelectorAll('.find-dog .find-name .n')].map(n => n.textContent)]);
+      eq(rows, [['新A03', ['列表乙', '列表甲']], ['新A05', ['列表丙很長很長很長的名字']], ['舊B04', ['列表丁']]], '籠位列：');
+      const dogBtn = main.querySelector('.find-dog');
+      eq([!!dogBtn.querySelector('.thumb'), dogBtn.querySelector('img').getAttribute('width'), !!dogBtn.querySelector('.sex.male')], [true, '32', true], '小照片＋性別：');
+      eq(!!main.querySelectorAll('.find-row')[2].querySelector('.find-row-warn'), true, '備註有注意字眼標驚嘆號：');
+    });
+    await check('#154 名字長也不截斷（換行）', () => {
+      render();
+      const n = [...main.querySelectorAll('.find-dog .find-name .n')].find(x => x.textContent.includes('很長'));
+      const cs = getComputedStyle(n);
+      if (cs.textOverflow === 'ellipsis' || cs.whiteSpace === 'nowrap') throw new Error('名字被截斷');
+    });
+    await check('#154 點狗開詳細資訊', () => {
+      render();
+      main.querySelectorAll('.find-dog')[1].click();
+      eq(detailDog && detailDog.name, '列表甲');
+      hideDetail();
+    });
+    await check('#154 搜尋：命中的字標黃；只對到編號時把編號列出來', () => {
+      searchQuery = '列表丁'; render();
+      eq(main.querySelector('.find-rows .find-dog mark').textContent, '列表丁', '名字標黃：');
+      eq(!!main.querySelector('.find-rows .find-row-id'), false, '對到名字不列編號：');
+      searchQuery = '0402'; render();
+      eq(main.querySelector('.find-rows .find-row-id mark').textContent, '0402', '編號標黃：');
+      searchQuery = '新a05'; render();
+      eq(main.querySelector('.find-rows .find-row-cage mark').textContent, '新A05', '籠位標黃：');
+    });
+    await check('#154 平面圖選一區：下面一樣是籠位列', () => {
+      searchQuery = ''; findView = 'map'; findZone = 'new'; render();
+      eq([...main.querySelectorAll('.find-row-cage')].map(c => c.textContent), ['新A03', '新A05']);
+    });
+  } finally {
+    if (detailDog) hideDetail();
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone, findCage] = saved;
   }
 }
 
@@ -3015,6 +3071,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runR2Tests)
   .then(runWalkerChipTests)
   .then(runPhotoBarTests)
+  .then(runFindListTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
