@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-04T16:45:31+08:00",
+  "syncedAt": "2026-10-04T17:00:35+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -430,12 +430,12 @@
       "cage": "新A04",
       "id": "2017122515",
       "name": "KIWI",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
         "da53fbdda293",
-        "e783d443558c"
+        "044328805855"
       ],
       "note": "不要推他身體移位，會兇想咬人(嘉文);2026/5/23洗澡（嘉文）",
       "sex": "female",
@@ -446,12 +446,12 @@
       "cage": "新A04",
       "id": "2018041328",
       "name": "鍾碩",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
         "da53fbdda293",
-        "e783d443558c"
+        "044328805855"
       ],
       "note": "2026/5/23洗澡（嘉文）",
       "sex": "male",
@@ -462,12 +462,12 @@
       "cage": "新A04",
       "id": "2026080201",
       "name": "多多",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
         "da53fbdda293",
-        "e783d443558c"
+        "044328805855"
       ],
       "note": "2026/6/4洗澡（嘉文）",
       "sex": "male",
@@ -1668,11 +1668,11 @@
       "cage": "C區11",
       "id": "2021030913",
       "name": "咪寶",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "67c74c17be08"
       ],
       "note": "對狗具攻擊性（嘉文），2025/12/24咬了捷運站",
       "sex": "female",
@@ -1789,11 +1789,11 @@
       "cage": "C區32",
       "id": "2026032402",
       "name": "雪糕",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "67c74c17be08"
       ],
       "note": "20260322;3/28出所代養（嘉文）；4/12回收容所，代養人說有帶去看醫生，疑十字韌帶受傷(嘉文)",
       "sex": "male",
