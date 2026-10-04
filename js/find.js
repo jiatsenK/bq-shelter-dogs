@@ -111,7 +111,7 @@ function findChipsHtml(query) {
       <button type="button" data-find-view="photo" class="${findView === 'photo' ? 'on' : ''}" aria-pressed="${findView === 'photo'}">${icon('grid')}照片</button>
       <button type="button" data-find-view="map" class="${findView === 'map' ? 'on' : ''}" aria-pressed="${findView === 'map'}">${icon('map')}平面圖</button>
     </div>
-    <div class="find-chips">${chip('all', '全部', inQuery.length)}${zones.map(z => chip(z.key, z.short, count(z.key))).join('')}</div>
+    <div class="find-chips">${zones.map(z => chip(z.key, z.short, count(z.key))).join('')}</div>
   </div>`;
 }
 
@@ -295,9 +295,8 @@ function findMapHtml(query) {
   let html = `<div class="find-map-card">
     ${svg}
     <div class="find-map-foot">
-      ${selected ? `<button type="button" class="find-map-all" data-find-zone="all">${icon('map')}看全圖</button>`
-        : '<p class="find-map-hint">點一區放大，點籠子看那籠的狗。</p>'}
-      <button type="button" class="find-zoom-btn" id="findZoomOpen" aria-label="全螢幕放大平面圖">${icon('zoom')}放大</button>
+      <p class="find-map-hint">${selected ? '點籠子看那籠的狗。' : '點一區放大，點籠子看那籠的狗。'}</p>
+      ${selected ? `<button type="button" class="find-map-all" data-find-zone="all">${icon('map')}看全圖</button>` : ''}
     </div>
     ${unmapped.length ? `<div class="find-unmapped">這些籠位還不知道在圖上哪裡：${unmapped.map(z =>
       `<button type="button" data-find-zone="${z.key}" aria-pressed="${findZone === z.key}">${esc(z.name)} ${allDogs.filter(d => findZoneOf(d) === z.key && findMatches(d, query)).length} 隻</button>`).join('')}</div>` : ''}

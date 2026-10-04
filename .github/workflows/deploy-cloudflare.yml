@@ -71,10 +71,11 @@ jobs:
           WALKER_KEY: ${{ secrets.WALKER_KEY }}
           SHEET_WRITE_URL: ${{ secrets.SHEET_WRITE_URL }}
           SHEET_WRITE_KEY: ${{ secrets.SHEET_WRITE_KEY }}
+          SHEET_ID: ${{ secrets.SHEET_ID }}
         run: |
           # 密碼寫進暫存檔交給 wrangler，不印出來；沒設的不放（不會蓋掉 Cloudflare 上原本的）
           node -e '
-            const s = { GITHUB_TOKEN: process.env.WORKER_GITHUB_TOKEN, NOTES_PASSCODE: process.env.NOTES_PASSCODE, WALKER_KEY: process.env.WALKER_KEY, SHEET_WRITE_URL: process.env.SHEET_WRITE_URL, SHEET_WRITE_KEY: process.env.SHEET_WRITE_KEY };
+            const s = { GITHUB_TOKEN: process.env.WORKER_GITHUB_TOKEN, NOTES_PASSCODE: process.env.NOTES_PASSCODE, WALKER_KEY: process.env.WALKER_KEY, SHEET_WRITE_URL: process.env.SHEET_WRITE_URL, SHEET_WRITE_KEY: process.env.SHEET_WRITE_KEY, SHEET_ID: process.env.SHEET_ID };
             for (const k of Object.keys(s)) if (!s[k]) delete s[k];
             require("fs").writeFileSync(process.argv[1], JSON.stringify(s), { mode: 0o600 });
             console.log("帶上去的密碼：" + (Object.keys(s).join("、") || "沒有"));
