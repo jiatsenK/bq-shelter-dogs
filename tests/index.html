@@ -3016,6 +3016,67 @@ async function runFindListTests() {
   }
 }
 
+// #155 我的常溜：☆／★ 收藏，只存這支手機，找狗頁可直接篩
+async function runFavTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone, findCage, window.fetch];
+  try {
+    walkedStorage = fakeStorage(); walkedMemory = null;
+    const dog = (name, id, cage) => ({ name, id, cage, walkedDate: null, covered: false, note: '', intro: '', sex: '', formerIds: [] });
+    allDogs = [dog('常溜甲', '2024100501', '新A03'), dog('常溜乙', '2024100502', '舊B04'), dog('常溜丙', '', '新A05')];
+    groupMap = {}; searchQuery = ''; activeTab = 'find'; findView = 'list'; findZone = 'all'; findCage = null;
+    const main = document.getElementById('main');
+    const chip = () => main.querySelector('.find-chip[data-find-zone="fav"]');
+    await check('#155 找狗分區按鈕最前面是「★ 我的常溜」；沒收藏時有提示', () => {
+      render();
+      eq(main.querySelector('.find-chips .find-chip').dataset.findZone, 'fav', '最前面：');
+      eq(chip().textContent, '★ 我的常溜0', '按鈕字＋隻數：');
+      chip().click();
+      eq([findZone, findView], ['fav', 'list'], '篩常溜：');
+      if (!main.querySelector('.status-msg').textContent.includes('「☆ 常溜」加進來')) throw new Error('沒收藏的提示不見了');
+    });
+    await check('#155 詳細資訊按「☆ 常溜」收藏、再按取消，找狗頁立即跟著變；不送伺服器', () => {
+      const calls = [];
+      window.fetch = (...a) => { calls.push(a); return Promise.reject(new Error('不該送出')); };
+      showDetail(allDogs[1]);
+      const btn = () => document.getElementById('favToggle');
+      eq([btn().textContent, btn().getAttribute('aria-pressed')], ['☆ 常溜', 'false'], '還沒收藏：');
+      btn().click();
+      eq([btn().textContent, btn().getAttribute('aria-pressed')], ['★ 我的常溜', 'true'], '收藏後：');
+      eq([...main.querySelectorAll('.find-dog .find-name .n')].map(n => n.textContent), ['常溜乙'], '找狗頁只列收藏的：');
+      eq(chip().textContent, '★ 我的常溜1', '隻數：');
+      eq(!!main.querySelector('.find-dog .fav-mark'), true, '名字後面有小 ★：');
+      eq(JSON.parse(walkedStorage.getItem('bq-favs')), ['2024100502'], '存在這支手機：');
+      eq(calls.length, 0, '沒有送到伺服器：');
+      btn().click();
+      eq(btn().textContent, '☆ 常溜', '再按取消：');
+      eq(chip().textContent, '★ 我的常溜0', '取消後隻數：');
+      hideDetail();
+    });
+    await check('#155 沒有編號的狗用名字記；重新整理（重讀手機存的）仍保留', () => {
+      toggleFav(allDogs[2]); toggleFav(allDogs[0]);
+      eq(loadFavs(), ['2024100501', '名:常溜丙'], '存的鍵：');
+      findZone = 'all'; render();
+      eq(chip().textContent, '★ 我的常溜2', '重畫後：');
+      eq([...main.querySelectorAll('.find-dog')].filter(b => b.querySelector('.fav-mark')).map(b => b.querySelector('.n').textContent), ['常溜甲', '常溜丙'], '全部列表也標 ★：');
+    });
+    await check('#155 常溜可搜尋；切到平面圖就回到全部', () => {
+      findZone = 'fav'; searchQuery = '乙'; render();
+      eq(main.querySelector('.status-msg').textContent, '我的常溜裡找不到「乙」', '常溜裡搜尋：');
+      eq(!!main.querySelector('.find-map-card'), false, '常溜不放地圖：');
+      searchQuery = '甲'; render();
+      eq([...main.querySelectorAll('.find-dog .n')].map(n => n.textContent), ['常溜甲'], '找得到：');
+      searchQuery = ''; render();
+      main.querySelector('[data-find-view="map"]').click();
+      eq([findView, findZone], ['map', 'all'], '平面圖：');
+      chip().click();
+      eq([findView, findZone], ['list', 'fav'], '從平面圖按常溜回到列表：');
+    });
+  } finally {
+    if (detailDog) hideDetail();
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone, findCage, window.fetch] = saved;
+  }
+}
+
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
 Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js', '../js/find.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
@@ -3072,6 +3133,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runWalkerChipTests)
   .then(runPhotoBarTests)
   .then(runFindListTests)
+  .then(runFavTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

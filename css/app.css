@@ -1363,3 +1363,14 @@ html.onboard-open { overflow: hidden; }
 .who-plus { min-width: 44px; height: 36px; padding: 0 14px; border: 1.5px dashed var(--primary); border-radius: 18px; background: none; color: var(--primary); font-family: inherit; font-size: 18px; font-weight: 600; cursor: pointer; position: relative; }
 .who-plus::after { content: ''; position: absolute; inset: -4px 0; }
 .who-x:disabled, .who-plus:disabled { opacity: 0.4; cursor: default; }
+
+/* 我的常溜（#155）：詳細資訊名字旁的 ☆／★，找狗列表名字後的小 ★ */
+.detail-head .name-row { display: flex; align-items: center; gap: 10px; }
+.detail-head .name-row .name { min-width: 0; }
+.fav-btn {
+  flex-shrink: 0; min-height: 44px; padding: 0 14px; border: 1.5px solid var(--line); border-radius: 22px;
+  background: var(--surface); color: var(--ink-soft); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.fav-btn.on { border-color: var(--amber-text); background: var(--amber-bg); color: var(--amber-text); }
+.fav-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.fav-mark { font-style: normal; color: var(--amber-text); font-size: 13px; margin-left: 2px; }
