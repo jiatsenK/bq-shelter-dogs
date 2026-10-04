@@ -89,7 +89,9 @@ const WALKER_NAME_SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
 const hits = new Map(); // 種類:IP → 時間清單
 let dogsCache = null; // { at, dogs: Map(編號 → 犬名) }
 
+let walkersCache = null; // GET /walkers 的快取（#141）
 function resetState() {
+  walkersCache = null;
   hits.clear();
   dogsCache = null;
 }
@@ -106,6 +108,7 @@ function config(env) {
     walkerKey: env && env.WALKER_KEY ? String(env.WALKER_KEY) : '',
     sheetWriteUrl: env && env.SHEET_WRITE_URL ? String(env.SHEET_WRITE_URL) : '',
     sheetWriteKey: env && env.SHEET_WRITE_KEY ? String(env.SHEET_WRITE_KEY) : '',
+    sheetId: env && env.SHEET_ID ? String(env.SHEET_ID).trim() : '',
   };
 }
 
@@ -734,6 +737,81 @@ async function walkerCodes(request, env, origin) {
 // ── 按「溜了」寫進試算表（#138）──
 // 網站送 { action: 'walk' | 'undo', walker, dogs: [{ id, name, prev?, wrote? }] }，這裡檢查完帶上通關碼轉給
 // Google Apps Script 小程式（apps-script/sheet-write.gs，K 用自己的帳號部署）。小程式只改「遛狗日期」「誰遛的」兩欄。
+// ── 溜狗人名字（#141）：GET /walkers ──
+// 名字不進 repo（dogs.json 只有代號），網站打開時跟這裡拿：Worker 直接讀試算表主清單（跟同步一樣用 gviz，試算表要「知道連結的人可檢視」），
+// 回 { walkers: { 狗的 key: 「誰遛的」原文 }, names: [表上出現過的名字，出現多的在前] }；狗的 key 跟網站 walkKey 一樣（有編號用編號，沒有用「名:犬名」）。
+// 5 分鐘內重複讀用快取，免得每個人打開都去讀 Google。沒設 SHEET_ID 回 503 + code: 'off'
+const WALKERS_CACHE_MS = 5 * 60 * 1000;
+export function gvizTable(text) {
+  const m = String(text).match(/setResponse\(([\s\S]*)\);?\s*$/);
+  if (!m) throw new Error('試算表回應格式不對');
+  const data = JSON.parse(m[1]);
+  if (data.status === 'error') throw new Error('試算表回應錯誤');
+  return data.table || {};
+}
+function gvizCell(c) {
+  if (!c || c.v == null) return '';
+  if (typeof c.v === 'string' && c.v.startsWith('Date(')) return c.f || '';
+  return String(c.v).trim();
+}
+// 主清單跟同步（scripts/sync-sheet.mjs）一樣分兩次讀：gviz 會照多數決猜欄位型別，表頭文字在數字欄會變空的，
+// 所以先 headers=0 找表頭在第幾列，再指定表頭列數重讀、用欄位標題對欄（標題缺的用第一次讀到的表頭文字補）
+const WALKERS_COLUMNS = { cage: '籠位', id: '編號', name: '犬名', walker: '誰遛的' };
+function walkersColumns(texts) {
+  const norm = texts.map(t => String(t || '').replace(/\s+/g, ''));
+  const map = {};
+  for (const [key, label] of Object.entries(WALKERS_COLUMNS)) {
+    let i = norm.indexOf(label);
+    if (i === -1) i = norm.findIndex(t => t.endsWith(label));
+    if (i === -1) i = norm.findIndex(t => t.includes(label));
+    if (i !== -1) map[key] = i;
+  }
+  return map;
+}
+export function walkersHeaderRow(table) {
+  return (table.rows || []).findIndex(r => walkersColumns((r.c || []).map(gvizCell)).name != null);
+}
+// table：指定表頭列數重讀的結果；headerTexts：第一次讀到的表頭列。回 { walkers: { 狗的 key: 原文 }, names }
+export function parseWalkers(table, headerTexts = []) {
+  const map = walkersColumns((table.cols || []).map(c => (c && c.label) || ''));
+  const fallback = walkersColumns(headerTexts);
+  for (const k of Object.keys(WALKERS_COLUMNS)) if (map[k] == null && fallback[k] != null) map[k] = fallback[k];
+  if (map.name == null || map.walker == null) throw new Error('主清單找不到「犬名」或「誰遛的」欄');
+  const walkers = {};
+  const count = new Map();
+  for (const r of table.rows || []) {
+    const c = (r.c || []).map(gvizCell);
+    const name = c[map.name] || '', id = map.id == null ? '' : (c[map.id] || ''), text = c[map.walker] || '';
+    // 跟同步一樣：要有犬名和籠位才算狗（表尾的提示文字不算）
+    if (!name || (map.cage != null && !c[map.cage]) || name === WALKERS_COLUMNS.name || !text) continue;
+    walkers[id || `名:${name}`] = text;
+    for (const n of new Set(text.split(WALKER_NAME_SEP).map(x => x.trim()).filter(Boolean))) count.set(n, (count.get(n) || 0) + 1);
+  }
+  // 名字（開頭畫面讓志工點選自己）：出現次數多的在前
+  const names = [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-Hant')).map(([n]) => n);
+  return { walkers, names };
+}
+async function readWalkers(sheetId, fetchImpl = fetch) {
+  const id = (sheetId.match(/\/d\/([A-Za-z0-9_-]+)/) || [])[1] || sheetId;
+  const read = async headers => {
+    const res = await fetchImpl(`https://docs.google.com/spreadsheets/d/${encodeURIComponent(id)}/gviz/tq?tqx=out:json&headers=${headers}&sheet=${encodeURIComponent('主清單')}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return gvizTable(await res.text());
+  };
+  const raw = await read(0);
+  const h = walkersHeaderRow(raw);
+  if (h === -1) throw new Error('主清單找不到「犬名」表頭');
+  return parseWalkers(await read(h + 1), ((raw.rows[h] || {}).c || []).map(gvizCell));
+}
+async function getWalkers(env, allowed, now = Date.now()) {
+  const cfg = config(env);
+  if (!cfg.sheetId) return reply(503, { ok: false, code: 'off', error: '還沒設定試算表' }, allowed);
+  if (!walkersCache || walkersCache.id !== cfg.sheetId || now - walkersCache.at > WALKERS_CACHE_MS) {
+    walkersCache = { id: cfg.sheetId, at: now, data: await readWalkers(cfg.sheetId) };
+  }
+  return reply(200, { ok: true, ...walkersCache.data }, allowed);
+}
+
 // 沒設定 SHEET_WRITE_URL 時回 503（SHEET_WRITE_KEY 可不設） + code: 'off'，網站就照舊只記在手機上
 const shortText = (v, max) => typeof v === 'string' && [...v.trim()].length <= max && !/[\u0000-\u001f]/.test(v);
 const YMD_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
@@ -851,6 +929,7 @@ export default {
         notesPasscode: cfg.passcode ? '已設定' : '未設定',
         walkerKey: cfg.walkerKey ? '已設定' : '未設定',
         sheetWrite: cfg.sheetWriteUrl ? '已設定' : '未設定',
+        walkerNames: cfg.sheetId ? '已設定' : '未設定',
         ...(env && env.PREVIEW ? { preview: '預覽版，不能存' } : {}),
       });
     }
@@ -879,6 +958,15 @@ export default {
         return await walkerCodes(request, env, allowed);
       } catch (e) {
         return fail(500, '代號服務發生錯誤', allowed);
+      }
+    }
+
+    if (path === '/walkers') {
+      if (request.method !== 'GET') return fail(405, '溜狗人名字只能用 GET /walkers 讀', allowed);
+      try {
+        return await getWalkers(env, allowed);
+      } catch (e) {
+        return fail(502, '暫時讀不到試算表的溜狗人', allowed);
       }
     }
 

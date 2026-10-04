@@ -760,7 +760,8 @@ async function runSerialTests() {
       document.querySelector('#tabs button[data-tab="walk"]').click();
       eq(main.textContent.trim(), '讀取中…', '切回溜狗表仍在讀取：');
       release(); await done; await tick();
-      eq(calls[0], ['data/dogs.json', 'no-cache'], '讀的檔案：');
+      eq(calls.filter(c => !/\/walkers$/.test(c[0]))[0], ['data/dogs.json', 'no-cache'], '讀的檔案（#141 溜狗人名字另外跟 Worker 拿）：');
+      onboard = null; renderOnboard(); // init 會開開頭畫面，測試不需要
       if (calls.some(([u]) => /google|gviz/.test(u))) throw new Error('不應連試算表');
       eq(names(), ['讀取甲', '讀取乙'], '狗卡（沒紀錄的在前）：');
       // 顯示成這台裝置的當地時間（在台灣就是 9/25 08:05）
@@ -1768,7 +1769,7 @@ async function runV52Tests() {
 
 // ── V9 正式上線版（#141）──
 async function runV9Tests() {
-  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames];
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList];
   const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
   const days = n => new Date(Date.now() - n * 864e5);
   const main = document.getElementById('main');
@@ -1844,9 +1845,18 @@ async function runV9Tests() {
       walkedStorage = fakeStorage(); walkerNameMemory = ''; walkerCodesMemory = null; onboard = null;
       UPLOAD_URL = 'https://worker.test';
       window.fetch = async () => json({ ok: true, codes: ['aaaaaaaaaaaa'] });
+      walkerNameList = ['阿明', '阿華'];
       startOnboard();
       const box = () => document.getElementById('onboard');
       if (!box() || !box().querySelector('#obInput')) throw new Error('要先問名字');
+      eq([...box().querySelectorAll('[data-ob-name]')].map(b => b.textContent), ['阿明', '阿華'], '表上的名字可以點：');
+      box().querySelector('[data-ob-name="阿明"]').click();
+      box().querySelector('[data-ob-name="阿華"]').click();
+      eq(box().querySelector('#obInput').value, '阿明、阿華', '點了填進去：');
+      box().querySelector('[data-ob-name="阿華"]').click();
+      eq(box().querySelector('#obInput').value, '阿明', '再點一次拿掉：');
+      box().querySelector('[data-ob-name="阿明"]').click();
+      walkerNameList = [];
       box().querySelector('.ob-next').click();
       await new Promise(r => setTimeout(r, 0));
       if (!box().querySelector('#obInput')) throw new Error('沒填名字不能往下');
@@ -1862,7 +1872,7 @@ async function runV9Tests() {
     });
   } finally {
     hideDetail(); hideToast(); onboard = null; renderOnboard(); withSheet = null; renderWithSheet();
-    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames] = saved;
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList] = saved;
     render();
   }
 }
