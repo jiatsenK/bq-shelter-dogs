@@ -935,7 +935,9 @@ async function runPhotoTests() {
         const preview = document.querySelector('#detail .photo-preview');
         eq(preview && preview.getAttribute('src'), photoUpload.url, '預覽：');
         // 相簿批次上傳那次起多了「裁切」
-        eq([...document.querySelectorAll('#detail .photo-upload button')].map(b => b.textContent.trim()), ['裁切', '確認上傳', '取消'], '按鈕：');
+        eq([...document.querySelectorAll('#detail .photo-upload button')].map(b => b.textContent.trim()), ['裁切'], '照片下方：');
+        // #146：確認上傳、取消在底部那列（溜了先收起來）
+        eq([...document.querySelectorAll('#detail .detail-bar button')].map(b => b.textContent.trim()), ['取消換照片', '確認上傳'], '底部：');
         eq(document.activeElement.id, 'photoConfirm', '焦點在確認上傳：');
         document.getElementById('photoCancel').click();
         eq([photoUpload, !!document.getElementById('photoPick')], [null, true], '取消後：');
@@ -2922,6 +2924,38 @@ async function runWalkerChipTests() {
   } finally {
     hideDetail(); hideToast(); withSheet = null; renderWithSheet();
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList, sheetWritesMemory, sheetWriteState, walkerNameMemory, walkerCodesMemory, myWalks, myWalksState] = saved;
+// ── #146 選了照片時底部換成取消／確認上傳（K 2026-10-04 選方案一）──
+async function runPhotoBarTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, photoUpload, galleryBatch];
+  const barTexts = () => [...document.querySelectorAll('#detail .detail-bar button')].map(b => b.textContent.trim());
+  try {
+    allDogs = [{ id: '9951', name: '換照甲', cage: 'A01', note: '', covered: false, walkedDate: null, formerIds: [] }];
+    groupMap = {}; activeTab = 'walk'; searchQuery = '';
+    walkedStorage = fakeStorage(); walkedMemory = null; UPLOAD_URL = 'https://worker.test';
+    render();
+    showDetail(allDogs[0]);
+    await check('#146 平常底部是關閉／溜了；選了主照片：底部換成取消換照片／確認上傳（綠色），沒有溜了', () => {
+      if (!document.getElementById('groupWalk')) throw new Error('平常要有溜了');
+      photoUpload = { dog: allDogs[0], url: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=', blob: null, phase: 'ready' };
+      renderDetail();
+      eq(barTexts(), ['取消換照片', '確認上傳'], '底部：');
+      if (document.getElementById('groupWalk') || document.getElementById('detailClose')) throw new Error('溜了／關閉要收起來');
+      if (!document.querySelector('#detail .detail-bar #photoConfirm.bar-confirm')) throw new Error('確認上傳要用綠色按鈕');
+      photoUpload.phase = 'uploading'; renderDetail();
+      eq([barTexts(), document.getElementById('photoConfirm').disabled], [['上傳中…'], true], '上傳中：');
+      photoUpload = null; renderDetail();
+      if (!document.getElementById('groupWalk')) throw new Error('取消後溜了回來');
+    });
+    await check('#146 相簿選了照片：底部換成取消／上傳 N 張', () => {
+      galleryBatch = { dog: allDogs[0], phase: 'ready', items: [{ state: 'ready', url: 'data:,' }, { state: 'ready', url: 'data:,' }] };
+      renderDetail();
+      eq(barTexts(), ['取消', '上傳 2 張'], '底部：');
+      if (document.getElementById('groupWalk')) throw new Error('溜了要收起來');
+      galleryBatch = null; renderDetail();
+    });
+  } finally {
+    hideDetail();
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, photoUpload, galleryBatch] = saved;
     render();
   }
 }
@@ -2980,6 +3014,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runV9Tests)
   .then(runR2Tests)
   .then(runWalkerChipTests)
+  .then(runPhotoBarTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
