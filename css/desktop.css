@@ -51,6 +51,7 @@ main:has(> .card) > .card { margin-bottom: 0; }
 .rows { max-width: 1000px; }
 .row-dog, .row-head { grid-template-columns: 90px minmax(0, 1fr) 90px minmax(0, 1.4fr) 56px; }
 .row-dog { padding: 8px 16px; min-height: 46px; }
+.row-head { padding: 10px 16px; }
 .r-cage { font-size: 14px; }
 
 /* 我溜過：每次到所的卡排兩欄 */
