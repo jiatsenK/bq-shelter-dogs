@@ -2585,6 +2585,49 @@ async function runPhotoVersionTests() {
   });
 }
 
+// #130 照片放 R2：Worker 讀 R2（照片、dogs.json、相簿清單先經過 Worker）、部署前確認 bucket、縮圖與搬遷 Action
+async function runR2Tests() {
+  const get = p => fetch(p).then(r => r.ok ? r.text() : '');
+  // 部署到 Cloudflare 後 wrangler.jsonc、.assetsignore 不公開，讀不到就跳過（本機和 GitHub Pages 讀得到）
+  const cfg = await get('../wrangler.jsonc');
+  await check('#130 wrangler.jsonc：R2 binding PHOTOS，照片、dogs.json、相簿清單先經過 Worker', () => {
+    if (!cfg) return;
+    if (!/"r2_buckets": \[\{ "binding": "PHOTOS", "bucket_name": "bq-shelter-photos" \}\]/.test(cfg)) throw new Error('少了 R2 binding');
+    ['"/photos/*"', '"/data/dogs.json"', '"/data/gallery.json"', '"/api/*"'].forEach(p => {
+      if (!cfg.includes(p)) throw new Error(`run_worker_first 少了 ${p}`);
+    });
+  });
+  const ignore = await get('../.assetsignore');
+  await check('#130 .assetsignore：沒有 R2 時產生的部署設定不公開', () => {
+    if (!ignore) return;
+    if (!ignore.split('\n').map(l => l.trim()).includes('wrangler.no-r2.json')) throw new Error('少了 wrangler.no-r2.json');
+  });
+  const deploy = await get('../.github/workflows/deploy-cloudflare.yml');
+  const preview = await get('../.github/workflows/preview-cloudflare.yml');
+  await check('#130 部署：先確認 R2 bucket（正式部署會建、預覽不建），用確認後的設定部署', () => {
+    if (!/node scripts\/r2-bucket\.mjs --create/.test(deploy)) throw new Error('正式部署要確認／建立 bucket');
+    if (!/wrangler@4 deploy --config "\$\{\{ steps\.r2\.outputs\.config \}\}"/.test(deploy)) throw new Error('正式部署要用確認後的設定');
+    if (!/node scripts\/r2-bucket\.mjs\n/.test(preview) || /r2-bucket\.mjs --create/.test(preview)) throw new Error('預覽只確認、不建 bucket');
+    if (!/--config "\$\{\{ steps\.r2\.outputs\.config \}\}"/.test(preview)) throw new Error('預覽要用確認後的設定');
+  });
+  const thumbs = await get('../.github/workflows/r2-thumbs.yml');
+  const migrate = await get('../.github/workflows/migrate-photos-r2.yml');
+  await check('#130 縮圖（R2）與搬遷 Action：只能手動或由 Worker 叫、用通關碼、不提交 repo', () => {
+    if (!thumbs || !migrate) throw new Error('讀不到 r2-thumbs.yml 或 migrate-photos-r2.yml');
+    [thumbs, migrate].forEach(t => {
+      if (!/on:\n  workflow_dispatch:\n\n/.test(t)) throw new Error('只能用 workflow_dispatch 觸發');
+      if (!/ADMIN_PASSCODE: \$\{\{ secrets\.NOTES_PASSCODE \}\}/.test(t)) throw new Error('通關碼要用 Secret NOTES_PASSCODE');
+      if (!/contents: read/.test(t) || /git push|git commit/.test(t)) throw new Error('不能提交 repo');
+    });
+    if (!/make-thumbs\.py --site/.test(thumbs)) throw new Error('縮圖要用 make-thumbs.py --site');
+    if (!/node scripts\/migrate-photos-r2\.mjs/.test(migrate)) throw new Error('搬遷要跑 migrate-photos-r2.mjs');
+  });
+  await check('#130 換照片、加相簿的提示：照片放 R2 後馬上生效，不再說要等幾分鐘', () => {
+    if (/其他志工幾分鐘內會看到/.test(APP_JS)) throw new Error('提示還寫幾分鐘');
+    if ((APP_JS.match(/其他志工重新整理就會看到/g) || []).length !== 2) throw new Error('主照片、相簿兩個提示都要改');
+  });
+}
+
 // #126 PR 預覽網址：預覽版帶 PREVIEW、不碰正式網站；正式部署不保留網頁上加的變數，PREVIEW 不會被帶進正式版
 async function runPreviewTests() {
   const get = p => fetch(p).then(r => r.ok ? r.text() : '');
@@ -2935,6 +2978,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runWalkSortTests)
   .then(runSheetWriteTests)
   .then(runV9Tests)
+  .then(runR2Tests)
   .then(runWalkerChipTests)
   .then(show)
   .catch(e => {

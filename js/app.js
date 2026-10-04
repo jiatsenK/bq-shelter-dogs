@@ -1917,7 +1917,7 @@ async function uploadPhoto() {
   photoOverrides[up.dog.id] = up.url;
   render();
   renderDetail();
-  showToast(`${up.dog.name} 的照片已更新（其他志工幾分鐘內會看到）`);
+  showToast(`${up.dog.name} 的照片已更新（其他志工重新整理就會看到）`);
 }
 
 // ── 相簿一次加好幾張：選照片 → 每張壓成 JPEG、排成預覽格（可拿掉幾張）→ 「上傳 N 張」一張一張依序送 ──
@@ -2057,7 +2057,7 @@ async function uploadGalleryBatch() {
   if (!left) {
     galleryBatch = null;
     if (detailDog === batch.dog) renderDetail();
-    showToast(`已加進 ${done} 張到 ${batch.dog.name} 的相簿（其他志工幾分鐘內會看到）`);
+    showToast(`已加進 ${done} 張到 ${batch.dog.name} 的相簿（其他志工重新整理就會看到）`);
     return;
   }
   batch.phase = 'error';

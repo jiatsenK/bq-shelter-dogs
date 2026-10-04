@@ -11,7 +11,7 @@ import { fileURLToPath } from 'node:url';
 
 const HASH_LENGTH = 8;
 
-async function listJpgs(dir) {
+export async function listJpgs(dir) {
   let entries;
   try {
     entries = await readdir(dir, { withFileTypes: true });
