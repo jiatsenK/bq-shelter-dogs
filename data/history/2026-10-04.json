@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-04T11:01:18+08:00",
+  "syncedAt": "2026-10-04T12:01:22+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -186,11 +186,11 @@
       "cage": "新獨03",
       "id": "2023072502",
       "name": "老哥",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "21120f797f52"
+        "24bf2ad2af85"
       ],
       "note": "不親狗、護食",
       "sex": "",
@@ -246,11 +246,11 @@
       "cage": "新獨07",
       "id": "2021082803",
       "name": "大米",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "7219f133cd3c"
+        "24bf2ad2af85"
       ],
       "note": "6/28後腳無力（旭昇）; 2026/10/2洗澡（旭昇）",
       "sex": "",
@@ -291,11 +291,11 @@
       "cage": "新獨10",
       "id": "2022042602",
       "name": "沙沙",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "21120f797f52"
+        "a2b179095490"
       ],
       "note": "2026/4/18，咬Kobe(嘉文）；5/28發現褥瘡（巧芸） 7/22洗澡msi",
       "sex": "male",
@@ -306,11 +306,11 @@
       "cage": "新獨11",
       "id": "2019100711",
       "name": "小貝",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "21120f797f52"
+        "a2b179095490"
       ],
       "note": "不親狗",
       "sex": "female",
@@ -1124,7 +1124,7 @@
       "cage": "舊A06",
       "id": "2024010203",
       "name": "煙捲",
-      "walkedDate": "2026-09-29",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1199,7 +1199,7 @@
       "cage": "舊A10",
       "id": "2021112003",
       "name": "部長",
-      "walkedDate": "2026-09-30",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1214,7 +1214,7 @@
       "cage": "舊A12",
       "id": "2018121202",
       "name": "笑笑",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1229,7 +1229,7 @@
       "cage": "舊A13",
       "id": "2019120501",
       "name": "皮蛋",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [

@@ -494,6 +494,14 @@
     {"id":"2023081204","name":"福星","date":"2026-10-01","mine":false,"walkers":["8786042066d4"]},
     {"id":"2025042401","name":"浩南","date":"2026-10-04","mine":true,"walkers":["7fe4735e3c59"]},
     {"id":"2020081102","name":"滷蛋","date":"2026-10-01","mine":false,"walkers":["e3121969b2ee"]},
-    {"id":"2018062507","name":"黑狗兄","date":"2026-10-04","mine":false,"walkers":["a2b179095490"]}
+    {"id":"2018062507","name":"黑狗兄","date":"2026-10-04","mine":false,"walkers":["a2b179095490"]},
+    {"id":"2023072502","name":"老哥","date":"2026-10-04","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2021082803","name":"大米","date":"2026-10-04","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2022042602","name":"沙沙","date":"2026-10-04","mine":false,"walkers":["a2b179095490"]},
+    {"id":"2019100711","name":"小貝","date":"2026-10-04","mine":false,"walkers":["a2b179095490"]},
+    {"id":"2024010203","name":"煙捲","date":"2026-10-04","mine":false,"walkers":["044328805855"]},
+    {"id":"2021112003","name":"部長","date":"2026-10-04","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2018121202","name":"笑笑","date":"2026-10-04","mine":false,"walkers":["7219f133cd3c"]},
+    {"id":"2019120501","name":"皮蛋","date":"2026-10-04","mine":false,"walkers":["c3b400d1f468"]}
   ]
 }
