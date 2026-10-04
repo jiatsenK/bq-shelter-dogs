@@ -1196,11 +1196,11 @@ function detailHtml(dog, today) {
       ${intro ? `<div class="content">${esc(intro)}</div>` : `<div class="empty">還沒有入所介紹</div>`}
     </section>
     ${gallerySection(dog)}
-    <div class="detail-bar">
+    ${photoBarHtml(dog) || `<div class="detail-bar">
       <button type="button" class="bar-btn" id="detailClose">關閉</button>
       ${typeof whereKnown === 'function' && whereKnown(dog) ? `<button type="button" class="bar-btn" id="detailWhere">${icon('pin')}在哪</button>` : ''}
       ${groupWalkButton(dog, walked)}
-    </div>
+    </div>`}
   `;
 }
 
@@ -1555,13 +1555,33 @@ function photoUploadHtml(dog) {
     <div class="photo-upload preview">
       <div class="photo-preview-row">
         <div class="thumb card-thumb"><img src="${esc(up.url)}" alt=""></div>
-        <div class="photo-preview-hint">上面是詳細資訊、左邊是狗卡上的樣子，按「確認上傳」才會換（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
+        <div class="photo-preview-hint">上面是詳細資訊、左邊是狗卡上的樣子，按下面「確認上傳」才會換（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
       </div>
       ${up.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(up.error)}</span></div>` : ''}
       ${busy ? '' : `<button type="button" class="photo-crop" id="photoCrop">${icon('crop')}裁切</button>`}
-      <button type="button" class="photo-confirm" id="photoConfirm"${busy ? ' disabled' : ''}>${busy ? '上傳中…' : '確認上傳'}</button>
-      ${busy ? '' : `<button type="button" class="photo-cancel" id="photoCancel">取消</button>`}
     </div>`;
+}
+
+// #146：選了照片還沒上傳時，底部那列換成「取消／確認上傳（綠色）」，溜了先收起來，
+// 照片的確認跟溜了不會再是兩顆一樣的藍色大按鈕（K 2026-10-04 選方案一）。上傳中只剩確認那顆（顯示進度）
+function photoBarHtml(dog) {
+  const up = photoPending(dog);
+  const gb = galleryBatch && galleryBatch.dog === dog ? galleryBatch : null;
+  if (!up && !gb) return '';
+  const busy = (up || gb).phase === 'uploading';
+  let cancel, confirm;
+  if (up) {
+    cancel = `<button type="button" class="bar-btn" id="photoCancel">取消換照片</button>`;
+    confirm = `<button type="button" class="bar-confirm" id="photoConfirm"${busy ? ' disabled' : ''}>${busy ? '上傳中…' : '確認上傳'}</button>`;
+  } else {
+    const left = gb.items.filter(it => it.state !== 'done');
+    const doneCount = gb.items.length - left.length;
+    const label = busy ? `上傳中 ${Math.min(doneCount + 1, gb.items.length)} / ${gb.items.length}…`
+      : gb.phase === 'error' ? `重新上傳沒傳成的 ${left.length} 張` : `上傳 ${gb.items.length} 張`;
+    cancel = `<button type="button" class="bar-btn" id="galleryBatchCancel">${doneCount ? '不傳了' : '取消'}</button>`;
+    confirm = `<button type="button" class="bar-confirm" id="galleryUpload"${busy ? ' disabled' : ''}>${label}</button>`;
+  }
+  return `<div class="detail-bar photo-bar">${busy ? '' : cancel}${confirm}</div>`;
 }
 
 // ── 裁切：照片放在固定的框後面，拖曳移動、兩指（或滑桿、滑鼠滾輪）放大，框裡的部分就是裁好的照片 ──
@@ -1949,14 +1969,11 @@ function galleryBatchHtml(batch) {
   const left = items.filter(it => it.state !== 'done');
   const doneCount = items.length - left.length;
   const firstError = (items.find(it => it.state === 'error') || {}).error;
-  const label = busy ? `上傳中 ${Math.min(doneCount + 1, items.length)} / ${items.length}…`
-    : batch.phase === 'error' ? `重新上傳沒傳成的 ${left.length} 張` : `上傳 ${items.length} 張`;
+  // 上傳／取消按鈕在底部那列（#146，photoBarHtml）
   return `
     <div class="photo-upload preview in-gallery gallery-batch">
-      <div class="photo-preview-hint">加進相簿：${items.length} 張（${esc(dog.name)}，編號 ${esc(dog.id)}）。標「預覽」的格子就是傳好後的樣子</div>
+      <div class="photo-preview-hint">加進相簿：${items.length} 張（${esc(dog.name)}，編號 ${esc(dog.id)}）。標「預覽」的格子就是傳好後的樣子，按下面「上傳」才會加</div>
       ${firstError ? `<div class="photo-error" role="alert">${icon('alert')}<span>${doneCount ? `已傳 ${doneCount} 張，另外 ${left.length} 張沒傳成：` : ''}${esc(firstError)}</span></div>` : ''}
-      <button type="button" class="photo-confirm" id="galleryUpload"${busy ? ' disabled' : ''}>${label}</button>
-      ${busy ? '' : `<button type="button" class="photo-cancel" id="galleryBatchCancel">${doneCount ? '不傳了' : '取消'}</button>`}
     </div>`;
 }
 
@@ -2162,7 +2179,9 @@ function renderDetail() {
       (focused.classList.contains('buddy') && btn.classList.contains('buddy') && btn.dataset.dog === focused.dataset.dog) ||
       (focused.dataset.gFile && btn.dataset.gFile === focused.dataset.gFile) ||
       (focused.hasAttribute('data-g-main') && btn.hasAttribute('data-g-main')));
-    (replacement || box.querySelector('#detailClose')).focus({ preventScroll: true });
+    // 選了照片時底部換成取消／確認上傳（#146），沒有關閉鈕就落到那列第一顆
+    const fallback = box.querySelector('#detailClose') || box.querySelector('.photo-bar button');
+    if (replacement || fallback) (replacement || fallback).focus({ preventScroll: true });
   }
 }
 
@@ -2183,7 +2202,8 @@ function showDetail(dog, remember = true) {
   document.getElementById('detail').scrollTop = 0;
   // 手機按「返回」時只關掉詳細資訊，不離開網頁
   if (!wasOpen) history.pushState({ bqDetail: true }, '');
-  document.getElementById('detailClose').focus({ preventScroll: true });
+  const first = document.getElementById('detailClose') || document.querySelector('#detail .photo-bar button');
+  if (first) first.focus({ preventScroll: true });
 }
 
 function hideDetail() {
