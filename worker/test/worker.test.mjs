@@ -788,3 +788,69 @@ test('#126 預覽版：上傳、相簿、備註、更新都回 403 且不碰 Git
   assert.equal((await send(new Request(`${SITE}/api/`), PENV)).body.preview, '預覽版，不能存');
   assert.equal((await send(new Request(`${SITE}/api/`), NENV)).body.preview, undefined);
 });
+
+// ── #138 按「溜了」寫進試算表 ──
+const SHEET_ENV = { ...ENV, SHEET_WRITE_URL: 'https://script.example/exec', SHEET_WRITE_KEY: 'sheet-key' };
+function postWalk(body, { origin = ORIGIN, ip = '4.4.4.4', type = 'application/json' } = {}) {
+  const headers = { 'Content-Type': type, 'CF-Connecting-IP': ip };
+  if (origin) headers.Origin = origin;
+  return new Request('https://bq-shelter-photos.example.workers.dev/walk', { method: 'POST', headers, body: typeof body === 'string' ? body : JSON.stringify(body) });
+}
+function fakeScript(reply = req => ({ ok: true, today: '2026-10-04', results: req.dogs.map(d => ({ ...d, status: 'written' })) }), status = 200) {
+  const calls = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const body = JSON.parse(init.body);
+    calls.push({ url: String(url), method: init.method, body });
+    return new Response(JSON.stringify(reply(body)), { status });
+  };
+  return calls;
+}
+
+test('#138 POST /walk：帶通關碼轉給小程式，回傳每隻狗的結果；不碰 GitHub', async () => {
+  const calls = fakeScript();
+  const r = await send(postWalk({ action: 'walk', walker: ' 志工我 ', dogs: [{ id: '9001', name: '測試甲' }, { id: '', name: '測試丙' }] }), SHEET_ENV);
+  assert.equal(r.status, 200);
+  assert.deepEqual(calls.map(c => [c.url, c.method]), [['https://script.example/exec', 'POST']]);
+  assert.deepEqual(calls[0].body, { key: 'sheet-key', action: 'walk', dogs: [{ id: '9001', name: '測試甲' }, { id: '', name: '測試丙' }], walker: '志工我' });
+  assert.deepEqual(r.body.results.map(x => x.status), ['written', 'written']);
+  assert.equal(r.headers.get('Access-Control-Allow-Origin'), ORIGIN);
+});
+
+test('#138 POST /walk 復原：只帶 prev／wrote 過去，不用名字', async () => {
+  const calls = fakeScript();
+  const dog = { id: '9001', name: '測試甲', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' }, extra: 'x' };
+  const r = await send(postWalk({ action: 'undo', dogs: [dog] }), SHEET_ENV);
+  assert.equal(r.status, 200);
+  assert.deepEqual(calls[0].body, { key: 'sheet-key', action: 'undo', dogs: [{ id: '9001', name: '測試甲', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' } }] });
+});
+
+test('#138 POST /walk 擋掉：沒設定、格式不對、名字太長、太多隻、別的網站、預覽版；小程式說通關碼不對', async () => {
+  const calls = fakeScript();
+  const ok = { action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] };
+  const off = await send(postWalk(ok), ENV);
+  assert.deepEqual([off.status, off.body.code], [503, 'off']);
+  assert.equal((await send(postWalk({ ...ok, action: 'x' }), SHEET_ENV)).status, 400);
+  assert.equal((await send(postWalk({ ...ok, walker: '名'.repeat(21) }), SHEET_ENV)).status, 400);
+  assert.equal((await send(postWalk({ ...ok, walker: '' }), SHEET_ENV)).status, 400);
+  assert.equal((await send(postWalk({ ...ok, dogs: Array.from({ length: 11 }, (_, i) => ({ id: String(i), name: '甲' })) }), SHEET_ENV)).status, 400);
+  assert.equal((await send(postWalk({ ...ok, dogs: [{ id: '../x', name: '甲' }] }), SHEET_ENV)).status, 400);
+  assert.equal((await send(postWalk({ action: 'undo', dogs: [{ id: '1', name: '甲' }] }), SHEET_ENV)).status, 400);
+  assert.equal((await send(postWalk('nope'), SHEET_ENV)).status, 400);
+  assert.equal((await send(postWalk(ok, { type: 'text/plain' }), SHEET_ENV)).status, 415);
+  assert.equal((await send(postWalk(ok, { origin: 'https://evil.example' }), SHEET_ENV)).status, 403);
+  assert.equal((await send(postWalk(ok), { ...SHEET_ENV, PREVIEW: '1' })).status, 403);
+  assert.equal(calls.length, 0);
+  fakeScript(() => ({ ok: false, code: 'key', error: '通關碼不對' }));
+  const bad = await send(postWalk(ok), SHEET_ENV);
+  assert.equal(bad.status, 502);
+  assert.match(bad.body.error, /通關碼/);
+  globalThis.fetch = async () => { throw new TypeError('down'); };
+  assert.equal((await send(postWalk(ok), SHEET_ENV)).status, 502);
+});
+
+test('#138 POST /walk 太頻繁就擋', async () => {
+  fakeScript();
+  const ok = { action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] };
+  for (let i = 0; i < 30; i++) assert.equal((await send(postWalk(ok, { ip: '5.5.5.5' }), SHEET_ENV)).status, 200);
+  assert.equal((await send(postWalk(ok, { ip: '5.5.5.5' }), SHEET_ENV)).status, 429);
+});
