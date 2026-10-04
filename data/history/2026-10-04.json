@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-04T15:06:55+08:00",
+  "syncedAt": "2026-10-04T15:30:35+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -634,11 +634,12 @@
       "cage": "新A09",
       "id": "2021042904",
       "name": "土撥鼠",
-      "walkedDate": "2026-09-30",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "044328805855",
+        "fc2ae30607ef"
       ],
       "note": "會想跳小區圍籬（俐葶）",
       "sex": "female",
@@ -649,11 +650,12 @@
       "cage": "新A09",
       "id": "2021082801",
       "name": "海苔",
-      "walkedDate": "2026-09-30",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "044328805855",
+        "fc2ae30607ef"
       ],
       "note": "2025/10/30洗澡。會翻牆出小操場圍籬，放繩散步建議在大操場（中興）",
       "sex": "male",
@@ -709,11 +711,12 @@
       "cage": "新B01",
       "id": "2020042106",
       "name": "福嬌",
-      "walkedDate": "2026-09-30",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "044328805855",
+        "fc2ae30607ef"
       ],
       "note": "2025/9/17洗澡",
       "sex": "female",
@@ -724,11 +727,12 @@
       "cage": "新B01",
       "id": "2022030501",
       "name": "皮皮",
-      "walkedDate": "2026-09-30",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "044328805855",
+        "fc2ae30607ef"
       ],
       "note": "2026/4/10洗澡(msi);跟其他籠的狗在一起可能會兇狗，跟室友福嬌一起，可能護資源（人）會去兇福嬌（嘉文/中興）",
       "sex": "male",
@@ -1214,7 +1218,8 @@
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "75aeed7c10fe",
+        "07cacd070dd8"
       ],
       "note": "2026/8/29洗澡（旭昇）",
       "sex": "",
@@ -1542,7 +1547,7 @@
       "cage": "舊B14",
       "id": "2020112402",
       "name": "小新",
-      "walkedDate": "2026-09-29",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1557,11 +1562,11 @@
       "cage": "舊B15",
       "id": "2025072901",
       "name": "果凍",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "67c74c17be08"
       ],
       "note": "可能護食，放雞腿後要等她吃完再碰她（嘉文）;2026/5/18調到舊犬舍（嘉文）",
       "sex": "female",
