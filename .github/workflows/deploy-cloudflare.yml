@@ -56,6 +56,13 @@ jobs:
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         run: node scripts/photo-versions.mjs
 
+      # 瀏覽統計（#128）：只有正式網站插 Cloudflare Web Analytics 的 beacon，不提交；沒設 CF_ANALYTICS_TOKEN 就跳過
+      - name: 瀏覽統計
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        env:
+          CF_ANALYTICS_TOKEN: ${{ secrets.CF_ANALYTICS_TOKEN }}
+        run: node scripts/analytics-beacon.mjs
+
       - name: 部署
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         env:
