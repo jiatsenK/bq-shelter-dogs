@@ -20,7 +20,12 @@
 //   時間到就請 GitHub 跑「同步試算表」（.github/workflows/sync-sheet.yml）。token 要多開 Actions 寫入權限。
 //   網站頁首的「更新」按鈕也可以叫：POST /sync（同一個人 2 分鐘 1 次）
 //
-// 這個檔案可以整份貼到 Cloudflare 網頁上的程式編輯器（不需要其他檔案），設定步驟見 docs/PHOTO_UPLOAD_SETUP.md。
+// - 照片放 R2（#130）：Worker 有 R2（env.PHOTOS）時，照片、相簿、縮圖、Trash 都改存 R2，不再提交 GitHub（worker/src/r2.js）；
+//   沒有 R2 時（例如單獨部署的舊照片 Worker）照舊寫 GitHub
+//
+// 設定步驟見 docs/CLOUDFLARE_SETUP.md（舊的單獨照片 Worker 見 docs/PHOTO_UPLOAD_SETUP.md）。
+
+import * as r2 from './r2.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
@@ -109,6 +114,8 @@ function config(env) {
     sheetWriteUrl: env && env.SHEET_WRITE_URL ? String(env.SHEET_WRITE_URL) : '',
     sheetWriteKey: env && env.SHEET_WRITE_KEY ? String(env.SHEET_WRITE_KEY) : '',
     sheetId: env && env.SHEET_ID ? String(env.SHEET_ID).trim() : '',
+    // 照片放 R2 時（#130）狗的編號改讀部署上去的 data/dogs.json（每次同步完都會重新部署），照片操作就完全不用 GitHub
+    assets: r2.r2On(env) && env.ASSETS ? env.ASSETS : null,
   };
 }
 
@@ -209,12 +216,14 @@ async function triggerSync(env) {
   return res.status;
 }
 
-// 從 repo 讀 data/dogs.json，回傳 編號 → 犬名
+// 從 repo 讀 data/dogs.json（照片放 R2 時讀部署上去的那份），回傳 編號 → 犬名
 async function loadDogs(cfg, now) {
   if (dogsCache && now - dogsCache.at < DOGS_CACHE_MS) return dogsCache.dogs;
-  const res = await github(cfg, `contents/data/dogs.json?ref=${encodeURIComponent(cfg.branch)}`, {
-    headers: { Accept: 'application/vnd.github.raw+json' },
-  });
+  const res = cfg.assets
+    ? await cfg.assets.fetch(new Request('https://assets.invalid/data/dogs.json'))
+    : await github(cfg, `contents/data/dogs.json?ref=${encodeURIComponent(cfg.branch)}`, {
+      headers: { Accept: 'application/vnd.github.raw+json' },
+    });
   if (!res.ok) throw new Error(`讀 dogs.json 失敗（GitHub ${res.status}）`);
   const data = await res.json();
   const dogs = new Map();
@@ -688,6 +697,410 @@ async function deleteGalleryPhoto(request, env, origin, id, file) {
   return reply(200, { ok: true, id, file, removed: saved.changed, fileDeleted }, origin);
 }
 
+// ── 照片放 R2（#130）──
+// 檢查（編號、JPEG、大小、頻率、編號在 dogs.json）跟寫 GitHub 時一樣，只是存的地方換成 R2：
+// 不產生提交、馬上生效。換掉、刪掉之前先備份到 Trash，備份成功才動原檔
+
+const THUMBS_WORKFLOW = 'r2-thumbs.yml';
+const THUMB_MAX_BYTES = 512 * 1024;
+const MIGRATE_MAX_ITEMS = 10;
+
+// 做完回應後才跑的事（叫縮圖 Action）；測試沒有 ctx 就直接跑、不等
+function later(ctx, promise) {
+  const p = Promise.resolve(promise).catch(() => {});
+  if (ctx && ctx.waitUntil) ctx.waitUntil(p);
+}
+
+// 請 GitHub 跑「產生照片縮圖（R2）」：下載 R2 裡還沒有縮圖的照片、做好縮圖傳回來（.github/workflows/r2-thumbs.yml）。
+// 縮圖還沒好之前網站會先顯示原圖
+async function queueThumbs(env) {
+  const cfg = config(env);
+  if (!cfg.token) return;
+  await github(cfg, `actions/workflows/${THUMBS_WORKFLOW}/dispatches`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ref: cfg.branch }),
+  });
+}
+
+// 相簿清單：R2 有就用 R2；還沒有就從 repo 那份接過來（etag 是 null，第一次寫入時建立）
+async function loadGalleryR2(env, cfg, base) {
+  const meta = await r2.readGalleryMeta(env);
+  if (meta) return { gallery: cleanGallery(meta.data), etag: meta.etag };
+  if (cfg.token) return { gallery: (await readGallery(cfg)).gallery, etag: null };
+  const res = env.ASSETS ? await env.ASSETS.fetch(new Request(`${base}/${GALLERY_PATH}`)) : null;
+  return { gallery: res && res.ok ? cleanGallery(await res.json()) : {}, etag: null };
+}
+
+// 跟 updateGallery 一樣的用法：change(清單) 回 false 表示不用改；同時有人改（etag 對不上）就重讀再試
+async function updateGalleryR2(env, cfg, base, change) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { gallery, etag } = await loadGalleryR2(env, cfg, base);
+    if (change(gallery) === false) return { ok: true, changed: false };
+    if (await r2.writeGalleryMeta(env, serializeNotes(gallery), etag)) return { ok: true, changed: true };
+  }
+  return { ok: false, status: 409 };
+}
+
+async function getGalleryR2(request, env, origin) {
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!allow(`gread:${ip}`, NOTE_READ_LIMITS, Date.now())) return fail(429, '讀取太頻繁，請稍等一下再試', origin);
+  try {
+    const { gallery } = await loadGalleryR2(env, config(env), new URL(request.url).origin);
+    return reply(200, { ok: true, gallery }, origin);
+  } catch (e) {
+    return fail(502, '暫時讀不到相簿，請稍後再試', origin);
+  }
+}
+
+// Cron 順便做：清掉超過 30 天的 Trash；有照片還沒縮圖（例如上次叫 Action 失敗）就再叫一次
+async function maintenance(env, now = Date.now()) {
+  const purged = await r2.purgeTrash(env, now);
+  const pending = await r2.pendingThumbs(env);
+  if (pending.length) await queueThumbs(env);
+  return { purged, pending: pending.length };
+}
+
+const baseOf = request => new URL(request.url).origin;
+const siteMeta = now => ({ from: 'site', at: new Date(now).toISOString() });
+
+async function uploadR2(request, env, origin, ctx) {
+  const cfg = config(env);
+  const now = Date.now();
+  const base = baseOf(request);
+  const m = new URL(request.url).pathname.match(/^\/photos\/([^/]+)$/);
+  const id = m ? decodeURIComponent(m[1]) : '';
+  const checked = await checkPhoto(request, cfg, id, now, origin);
+  if (checked.error) return checked.error;
+
+  const key = `photos/${id}.jpg`;
+  let trashId;
+  try {
+    trashId = await r2.toTrash(env, base, key, { dogId: id, kind: 'main' }, now);
+  } catch (e) {
+    return fail(502, '舊照片備份失敗，這次沒有換，原本的照片不受影響', origin);
+  }
+  try {
+    await r2.putPhoto(env, key, checked.bytes, siteMeta(now));
+  } catch (e) {
+    return fail(502, '照片沒有存進去，原本的照片不受影響', origin);
+  }
+  // 舊縮圖不能再用（已經跟原圖一起備份了）；新縮圖由 Action 做，做好前網站顯示原圖
+  await r2.removePhoto(env, r2.thumbKey(key), now).catch(() => {});
+  later(ctx, queueThumbs(env));
+  return reply(200, { ok: true, id, replaced: !!trashId, commit: null, trash: trashId || null }, origin);
+}
+
+async function addGalleryPhotoR2(request, env, origin, id, ctx) {
+  const cfg = config(env);
+  const now = Date.now();
+  const base = baseOf(request);
+  const checked = await checkPhoto(request, cfg, id, now, origin, allowGalleryUpload);
+  if (checked.error) return checked.error;
+  try {
+    const { gallery } = await loadGalleryR2(env, cfg, base);
+    if ((gallery[id] || []).length >= GALLERY_MAX) return fail(409, `相簿最多 ${GALLERY_MAX} 張，請先刪掉幾張`, origin);
+  } catch (e) {
+    return fail(502, '暫時讀不到相簿，請稍後再試', origin);
+  }
+
+  const file = galleryFileName(now);
+  const key = `${GALLERY_DIR}/${id}/${file}`;
+  try {
+    await r2.putPhoto(env, key, checked.bytes, siteMeta(now));
+  } catch (e) {
+    return fail(502, '照片沒有存進去，相簿不受影響', origin);
+  }
+  const photo = { file, addedAt: new Date(now).toISOString() };
+  let saved;
+  try {
+    saved = await updateGalleryR2(env, cfg, base, gallery => {
+      gallery[id] = [...(gallery[id] || []), photo];
+    });
+  } catch (e) {
+    saved = { ok: false, status: 502 };
+  }
+  if (!saved.ok) {
+    await r2.removePhoto(env, key, now).catch(() => {});
+    return fail(502, '照片存了但相簿清單沒有更新，請再傳一次', origin);
+  }
+  later(ctx, queueThumbs(env));
+  return reply(200, { ok: true, id, photo }, origin);
+}
+
+// 相簿的一張設為主照片：跟主照片互換（縮圖也跟著換）；原本沒有主照片就直接搬過去，相簿少一張。
+// 先把原本的主照片備份到 Trash，互換到一半失敗也不會不見
+async function setMainFromGalleryR2(request, env, origin, id, file, ctx) {
+  const cfg = config(env);
+  const now = Date.now();
+  const base = baseOf(request);
+  if (!ID_PATTERN.test(id) || !GALLERY_FILE_PATTERN.test(file)) return fail(400, '照片名稱不對', origin);
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!allowUpload(ip, now)) return fail(429, '更換太頻繁，請稍等幾分鐘再試', origin);
+
+  const galleryKey = `${GALLERY_DIR}/${id}/${file}`;
+  const mainKey = `photos/${id}.jpg`;
+  let picked, pickedThumb, current, currentThumb;
+  try {
+    await loadDogs(cfg, now);
+    const { gallery } = await loadGalleryR2(env, cfg, base);
+    if (!(gallery[id] || []).some(p => p.file === file)) return fail(404, '相簿裡找不到這張照片', origin);
+    picked = await r2.readPhoto(env, base, galleryKey);
+    pickedThumb = await r2.readPhoto(env, base, r2.thumbKey(galleryKey));
+    current = await r2.readPhoto(env, base, mainKey);
+    currentThumb = await r2.readPhoto(env, base, r2.thumbKey(mainKey));
+  } catch (e) {
+    return fail(502, '暫時讀不到照片，請稍後再試，照片都沒動', origin);
+  }
+  if (!picked) return fail(404, '相簿裡找不到這張照片', origin);
+
+  try {
+    if (current) await r2.toTrash(env, base, mainKey, { dogId: id, kind: 'main' }, now);
+    await r2.putPhoto(env, mainKey, picked.bytes, siteMeta(now));
+  } catch (e) {
+    return fail(502, '主照片沒有換成，照片都沒動', origin);
+  }
+  const setThumb = (key, t) => (t ? r2.putPhoto(env, key, t.bytes, siteMeta(now)) : r2.removePhoto(env, key, now));
+
+  if (current) {
+    let oldMainKept = true;
+    try {
+      await r2.putPhoto(env, galleryKey, current.bytes, siteMeta(now));
+    } catch (e) {
+      oldMainKept = false; // 原本的主照片還在 Trash 裡
+    }
+    await Promise.all([
+      setThumb(r2.thumbKey(mainKey), pickedThumb),
+      oldMainKept ? setThumb(r2.thumbKey(galleryKey), currentThumb) : null,
+    ]).catch(() => {});
+    if (!pickedThumb || !currentThumb) later(ctx, queueThumbs(env));
+    return reply(200, { ok: true, id, file, swapped: true, oldMainKept }, origin);
+  }
+  await setThumb(r2.thumbKey(mainKey), pickedThumb).catch(() => {});
+  try {
+    await updateGalleryR2(env, cfg, base, gallery => {
+      const list = gallery[id] || [];
+      if (!list.some(p => p.file === file)) return false;
+      const rest = list.filter(p => p.file !== file);
+      if (rest.length) gallery[id] = rest;
+      else delete gallery[id];
+    });
+    await r2.removePhoto(env, galleryKey, now);
+    await r2.removePhoto(env, r2.thumbKey(galleryKey), now);
+  } catch (e) { /* 主照片已經換好；相簿多留一張一樣的照片，不影響使用 */ }
+  if (!pickedThumb) later(ctx, queueThumbs(env));
+  return reply(200, { ok: true, id, file, swapped: false }, origin);
+}
+
+// 刪除一張（要通關碼）：先備份到 Trash（含相簿資訊，可以復原），成功才從清單拿掉、放刪除標記
+async function deleteGalleryPhotoR2(request, env, origin, id, file) {
+  const cfg = config(env);
+  const now = Date.now();
+  const base = baseOf(request);
+  if (!cfg.passcode) return fail(500, '相簿服務還沒設定好（缺 NOTES_PASSCODE）', origin);
+  if (!ID_PATTERN.test(id) || !GALLERY_FILE_PATTERN.test(file)) return fail(400, '照片名稱不對', origin);
+
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (passcodeLocked(ip, now)) return fail(429, '通關碼錯太多次，請一小時後再試', origin, { code: 'passcode' });
+  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') return fail(415, '格式不對', origin);
+  const raw = await request.text();
+  if (raw.length > NOTE_MAX_BYTES) return fail(413, '格式不對', origin);
+  let input;
+  try {
+    input = JSON.parse(raw);
+  } catch (e) {
+    return fail(400, '格式不對', origin);
+  }
+  const denied = await checkPasscode(input, cfg, ip, now, origin, '需要通關碼才能刪照片');
+  if (denied) return denied;
+  if (!allow(`gdel:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '刪除太頻繁，請稍等幾分鐘再試', origin);
+
+  const key = `${GALLERY_DIR}/${id}/${file}`;
+  let entry, trashId;
+  try {
+    const { gallery } = await loadGalleryR2(env, cfg, base);
+    entry = (gallery[id] || []).find(p => p.file === file);
+    if (!entry) return reply(200, { ok: true, id, file, removed: false, fileDeleted: false }, origin);
+    trashId = await r2.toTrash(env, base, key, { dogId: id, kind: 'gallery', file, addedAt: entry.addedAt }, now);
+  } catch (e) {
+    return fail(502, '備份到 Trash 失敗，照片沒有刪掉，請稍後再試', origin);
+  }
+
+  let saved;
+  try {
+    saved = await updateGalleryR2(env, cfg, base, gallery => {
+      const list = gallery[id] || [];
+      if (!list.some(p => p.file === file)) return false;
+      const rest = list.filter(p => p.file !== file);
+      if (rest.length) gallery[id] = rest;
+      else delete gallery[id];
+    });
+  } catch (e) {
+    saved = { ok: false, status: 502 };
+  }
+  if (!saved.ok) {
+    if (trashId) await r2.deleteTrash(env, trashId).catch(() => {});
+    return fail(502, '照片沒有刪掉，請稍後再試', origin);
+  }
+  let fileDeleted = false;
+  try {
+    await r2.removePhoto(env, key, now);
+    await r2.removePhoto(env, r2.thumbKey(key), now);
+    fileDeleted = true;
+  } catch (e) { /* 清單已拿掉，網站不會再顯示 */ }
+  return reply(200, { ok: true, id, file, removed: saved.changed, fileDeleted, trash: trashId || null }, origin);
+}
+
+// ── 管理用 API（/api/admin/...）：搬遷、縮圖、Trash ──
+// 給 GitHub Action 和之後的管理後台用，不看網站來源，改看標頭 X-Admin-Passcode（跟我的備註同一組通關碼，
+// 用 encodeURIComponent 包起來，中文通關碼也能放標頭）
+async function checkAdmin(request, cfg, origin) {
+  if (!cfg.passcode) return fail(500, '還沒設定 NOTES_PASSCODE', origin);
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  const now = Date.now();
+  if (passcodeLocked(ip, now)) return fail(429, '通關碼錯太多次，請一小時後再試', origin, { code: 'passcode' });
+  let given = '';
+  try { given = decodeURIComponent(request.headers.get('X-Admin-Passcode') || ''); } catch (e) { /* 當作沒給 */ }
+  if (given && (await samePasscode(given, cfg.passcode))) return null;
+  record(`pass:${ip}`, now);
+  return fail(401, given ? '通關碼不對' : '需要通關碼', origin, { code: 'passcode' });
+}
+
+async function readJsonBody(request, maxBytes) {
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).length > maxBytes) return null;
+  try { return JSON.parse(raw); } catch (e) { return null; }
+}
+
+const cleanItems = items => Array.isArray(items) && items.length <= MIGRATE_MAX_ITEMS &&
+  items.every(i => i && r2.isPhotoKey(i.path) && /^[0-9a-f]{64}$/.test(i.sha256) && Number.isInteger(i.size) && i.size > 0)
+  ? items : null;
+
+// 一次性搬遷：Action 送 repo 裡照片的路徑、sha256、大小（一次最多 10 張），Worker 從部署上去的舊檔複製到 R2。
+// R2 已經有（網站換過、刪過）的不蓋掉；R2 寫入時用 sha256 驗證內容，跟 repo 的不一樣就不存
+async function migrate(request, env, origin) {
+  const cfg = config(env);
+  const base = baseOf(request);
+  const input = await readJsonBody(request, 16 * 1024);
+  const items = input && cleanItems(input.items || []);
+  if (!items) return fail(400, `要送 items：[{ path, sha256, size }]，一次最多 ${MIGRATE_MAX_ITEMS} 張`, origin);
+  const results = [];
+  for (const it of items) {
+    const head = await env.PHOTOS.head(it.path);
+    if (head) { results.push({ path: it.path, status: r2.isTomb(head) ? 'deleted' : 'exists' }); continue; }
+    const res = await env.ASSETS.fetch(new Request(`${base}/${it.path}`));
+    if (!res.ok) { results.push({ path: it.path, status: 'missing' }); continue; }
+    const bytes = new Uint8Array(await res.arrayBuffer());
+    if (bytes.length !== it.size) { results.push({ path: it.path, status: 'mismatch' }); continue; }
+    try {
+      await env.PHOTOS.put(it.path, bytes, { httpMetadata: { contentType: 'image/jpeg' }, customMetadata: { sha256: it.sha256, from: 'github' }, sha256: it.sha256 });
+      results.push({ path: it.path, status: 'copied' });
+    } catch (e) {
+      results.push({ path: it.path, status: 'mismatch' });
+    }
+  }
+  r2.resetR2State();
+  let gallery = null;
+  if (input.gallery) {
+    if (await r2.readGalleryMeta(env)) gallery = 'exists';
+    else {
+      const { gallery: g } = await loadGalleryR2(env, cfg, base);
+      gallery = (await r2.writeGalleryMeta(env, serializeNotes(g), null)) ? 'copied' : 'failed';
+    }
+  }
+  return reply(200, { ok: true, results, gallery }, origin);
+}
+
+// 搬完核對：R2 裡每張的大小、sha256 跟 repo 的一樣嗎（網站後來換過、刪過的分開算，不算錯）
+async function verify(request, env, origin) {
+  const input = await readJsonBody(request, 16 * 1024);
+  const items = input && cleanItems(input.items || []);
+  if (!items) return fail(400, `要送 items：[{ path, sha256, size }]，一次最多 ${MIGRATE_MAX_ITEMS} 張`, origin);
+  const results = [];
+  for (const it of items) {
+    const head = await env.PHOTOS.head(it.path);
+    const meta = (head && head.customMetadata) || {};
+    let status = 'missing';
+    if (r2.isTomb(head)) status = 'deleted';
+    else if (head && head.size === it.size && meta.sha256 === it.sha256) status = 'ok';
+    else if (head && meta.from === 'site') status = 'changed';
+    else if (head) status = 'mismatch';
+    results.push({ path: it.path, status });
+  }
+  return reply(200, { ok: true, results }, origin);
+}
+
+// 縮圖 Action 傳回來的縮圖：PUT /admin/thumbs/photos/...（原圖的路徑）
+async function putThumb(request, env, origin, key) {
+  if (!r2.isPhotoKey(key) || r2.isThumbKey(key)) return fail(400, '照片路徑不對', origin);
+  const original = await env.PHOTOS.head(key);
+  if (!original || r2.isTomb(original)) return fail(404, '原圖不在 R2（可能剛被刪掉）', origin);
+  const bytes = new Uint8Array(await request.arrayBuffer());
+  if (!bytes.length || bytes.length > THUMB_MAX_BYTES || !isJpeg(bytes)) return fail(415, '縮圖要是 512 KB 以內的 JPEG', origin);
+  await r2.putPhoto(env, r2.thumbKey(key), bytes, { from: 'thumbs' });
+  return reply(200, { ok: true, path: r2.thumbKey(key) }, origin);
+}
+
+// 從 Trash 復原到原本的狗和位置：相簿照片放回相簿（清單也加回去）；主照片換回來，現在的主照片先進 Trash
+async function restoreTrash(request, env, origin, trashId) {
+  const cfg = config(env);
+  const now = Date.now();
+  const base = baseOf(request);
+  const t = await r2.readTrash(env, trashId);
+  if (!t) return fail(404, 'Trash 裡找不到這張（可能已超過 30 天被清掉）', origin);
+  const { meta } = t;
+  const dogId = meta.dogId || '';
+  if (!ID_PATTERN.test(dogId)) return fail(400, 'Trash 資料不完整，不能自動復原', origin);
+  const putWithThumb = async key => {
+    await r2.putPhoto(env, key, t.bytes, { from: 'restore', at: new Date(now).toISOString() });
+    if (t.thumb) await r2.putPhoto(env, r2.thumbKey(key), t.thumb, { from: 'restore' });
+    else await r2.removePhoto(env, r2.thumbKey(key), now);
+  };
+
+  if (meta.kind === 'gallery') {
+    let file = GALLERY_FILE_PATTERN.test(meta.file || '') ? meta.file : galleryFileName(now);
+    const { gallery } = await loadGalleryR2(env, cfg, base);
+    const list = gallery[dogId] || [];
+    if (list.length >= GALLERY_MAX) return fail(409, `相簿最多 ${GALLERY_MAX} 張，請先刪掉幾張再復原`, origin);
+    if (list.some(p => p.file === file)) file = galleryFileName(now);
+    const key = `${GALLERY_DIR}/${dogId}/${file}`;
+    await putWithThumb(key);
+    const photo = { file, addedAt: meta.addedAt || new Date(now).toISOString() };
+    const saved = await updateGalleryR2(env, cfg, base, g => {
+      g[dogId] = [...(g[dogId] || []), photo].sort((a, b) => String(a.addedAt).localeCompare(String(b.addedAt)));
+    });
+    if (!saved.ok) return fail(502, '相簿清單沒有更新，請再試一次（Trash 裡的照片還在）', origin);
+    await r2.deleteTrash(env, trashId);
+    if (!t.thumb) await queueThumbs(env).catch(() => {});
+    return reply(200, { ok: true, kind: 'gallery', dogId, path: key }, origin);
+  }
+
+  const key = `photos/${dogId}.jpg`;
+  const backup = await r2.toTrash(env, base, key, { dogId, kind: 'main' }, now);
+  await putWithThumb(key);
+  await r2.deleteTrash(env, trashId);
+  if (!t.thumb) await queueThumbs(env).catch(() => {});
+  return reply(200, { ok: true, kind: 'main', dogId, path: key, trash: backup || null }, origin);
+}
+
+async function admin(request, env, origin, path) {
+  const cfg = config(env);
+  if (!r2.r2On(env)) return fail(503, '還沒接上 R2（照片空間），請照 docs/CLOUDFLARE_SETUP.md 設定', origin, { code: 'off' });
+  if (env.PREVIEW && request.method !== 'GET') return fail(403, '這是預覽版，不能存，正式資料不受影響。要改請到正式網址', origin);
+  const denied = await checkAdmin(request, cfg, origin);
+  if (denied) return denied;
+  const m = request.method;
+  if (m === 'POST' && path === '/admin/migrate') return migrate(request, env, origin);
+  if (m === 'POST' && path === '/admin/verify') return verify(request, env, origin);
+  if (m === 'GET' && path === '/admin/thumbs') return reply(200, { ok: true, pending: await r2.pendingThumbs(env) }, origin);
+  if (m === 'PUT' && path.startsWith('/admin/thumbs/')) return putThumb(request, env, origin, decodeURIComponent(path.slice('/admin/thumbs/'.length)));
+  if (m === 'GET' && path === '/admin/trash') return reply(200, { ok: true, days: r2.TRASH_DAYS, trash: await r2.listTrash(env) }, origin);
+  const restore = path.match(/^\/admin\/trash\/([^/]+)\/restore$/);
+  if (m === 'POST' && restore) return restoreTrash(request, env, origin, decodeURIComponent(restore[1]));
+  return fail(404, '沒有這個管理功能', origin);
+}
+
 // ── 誰遛的代號（#95）──
 // 算法要跟 scripts/sync-sheet.mjs 的 walkerCode 完全一樣：名字全形半形統一（NFKC）、去空白、轉小寫，
 // HMAC-SHA256(WALKER_KEY, 名字) 取前 12 碼十六進位。兩邊用同一組測試向量（WALKER_VECTORS）確認。
@@ -896,14 +1309,15 @@ function scriptError(msg) {
 
 export default {
   // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch 和 scheduled
-  testing: { MAX_BYTES, NOTE_MAX_CHARS, GALLERY_MAX, resetState, allowUpload, allowGalleryUpload, isJpeg, cleanNote, cleanGallery, galleryFileName, walkerCode, triggerSync },
+  testing: { r2, MAX_BYTES, NOTE_MAX_CHARS, GALLERY_MAX, resetState, allowUpload, allowGalleryUpload, isJpeg, cleanNote, cleanGallery, galleryFileName, walkerCode, triggerSync, maintenance },
 
-  // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 Cloudflare 的 Triggers 設定，見 docs/PHOTO_UPLOAD_SETUP.md）
+  // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 wrangler.jsonc 的 triggers）
   async scheduled(event, env, ctx) {
     ctx.waitUntil(triggerSync(env));
+    if (r2.r2On(env)) ctx.waitUntil(maintenance(env));
   },
 
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const cfg = config(env);
     const url = new URL(request.url);
     const origin = request.headers.get('Origin') || '';
@@ -922,6 +1336,14 @@ export default {
       plain.pathname = path;
       request = new Request(plain, request);
     } else if (env && env.ASSETS && (request.method === 'GET' || request.method === 'HEAD')) {
+      // 照片放 R2（#130）：照片、dogs.json（照片版本號）、相簿清單先經過這裡（wrangler.jsonc 的 run_worker_first）
+      if (r2.r2On(env)) {
+        try {
+          if (path.startsWith('/photos/')) return await r2.servePhoto(request, env);
+          if (path === '/data/dogs.json') return await r2.serveDogs(request, env);
+          if (path === '/data/gallery.json') return await r2.serveGalleryJson(request, env);
+        } catch (e) { /* R2 出問題就照舊給靜態檔 */ }
+      }
       return env.ASSETS.fetch(request);
     }
 
@@ -935,8 +1357,17 @@ export default {
         walkerKey: cfg.walkerKey ? '已設定' : '未設定',
         sheetWrite: cfg.sheetWriteUrl ? '已設定' : '未設定',
         walkerNames: cfg.sheetId ? '已設定' : '未設定',
+        photos: r2.r2On(env) ? 'R2' : 'GitHub',
         ...(env && env.PREVIEW ? { preview: '預覽版，不能存' } : {}),
       });
+    }
+    // 管理用（#130）：GitHub Action 呼叫、沒有網站來源，用通關碼驗證
+    if (path.startsWith('/admin/')) {
+      try {
+        return await admin(request, env, allowed, path);
+      } catch (e) {
+        return fail(500, '管理功能發生錯誤', allowed);
+      }
     }
     // 其他網站送來的一律不收（瀏覽器會擋掉沒有 CORS 回應的要求）
     if (!allowed) return fail(403, '不接受這個網站的要求', '');
@@ -1000,10 +1431,11 @@ export default {
       try {
         const parts = path.split('/').slice(2).map(p => decodeURIComponent(p));
         const [id = '', file = '', action] = parts;
-        if (request.method === 'GET' && path === '/gallery') return await getGallery(request, env, allowed);
-        if (request.method === 'POST' && id && parts.length === 1) return await addGalleryPhoto(request, env, allowed, id);
-        if (request.method === 'POST' && id && file && action === 'main' && parts.length === 3) return await setMainFromGallery(request, env, allowed, id, file);
-        if (request.method === 'DELETE' && id && file && parts.length === 2) return await deleteGalleryPhoto(request, env, allowed, id, file);
+        const onR2 = r2.r2On(env);
+        if (request.method === 'GET' && path === '/gallery') return await (onR2 ? getGalleryR2(request, env, allowed) : getGallery(request, env, allowed));
+        if (request.method === 'POST' && id && parts.length === 1) return await (onR2 ? addGalleryPhotoR2(request, env, allowed, id, ctx) : addGalleryPhoto(request, env, allowed, id));
+        if (request.method === 'POST' && id && file && action === 'main' && parts.length === 3) return await (onR2 ? setMainFromGalleryR2(request, env, allowed, id, file, ctx) : setMainFromGallery(request, env, allowed, id, file));
+        if (request.method === 'DELETE' && id && file && parts.length === 2) return await (onR2 ? deleteGalleryPhotoR2(request, env, allowed, id, file) : deleteGalleryPhoto(request, env, allowed, id, file));
         return fail(405, '相簿只能讀取（GET /gallery）、新增（POST /gallery/編號）、設為主照片（POST /gallery/編號/檔名/main）或刪除（DELETE /gallery/編號/檔名）', allowed);
       } catch (e) {
         return fail(500, '相簿服務發生錯誤，原本的照片不受影響', allowed);
@@ -1012,7 +1444,7 @@ export default {
 
     if (request.method !== 'POST') return fail(405, '只接受上傳', allowed);
     try {
-      return await upload(request, env, allowed);
+      return await (r2.r2On(env) ? uploadR2(request, env, allowed, ctx) : upload(request, env, allowed));
     } catch (e) {
       return fail(500, '上傳服務發生錯誤，原本的照片不受影響', allowed);
     }

@@ -133,6 +133,56 @@ https://pr-<PR 編號>-bq-shelter-dogs.<子網域>.workers.dev
 
 還有很多流量的話先不要刪，跟 Claude 說，查是哪裡還在用舊的。
 
+## 照片放 R2（#130）
+
+照片（主照片、相簿、縮圖）從 GitHub 搬到 Cloudflare 的檔案空間 **R2**。搬好以後：
+
+- 換照片、加相簿、設為主照片、刪相簿照片**馬上生效**，不再產生 GitHub 提交、不用等部署。
+- 換掉、刪掉的照片會先放進 **Trash（回收區）30 天**，誤刪可以復原（跟 Claude 說哪隻狗、大概什麼時候刪的）；30 天後自動清掉。
+- 網址不變，志工不用做任何事。費用 NT$0（R2 免費 10 GB，照片目前約 27 MB）。
+- repo 裡的舊照片**先不刪**：R2 讀不到的照片網站會自動改讀舊檔，等你驗收沒問題再另外處理。
+
+### 步驟 1：開通 R2、建立照片空間
+
+1. 登入 https://dash.cloudflare.com ，左邊選單找 **R2 Object Storage**（可能在 **Storage & Databases** 底下）。
+2. 第一次用會請你開通（**Purchase R2** 或 **Add R2 subscription to my account**）。Cloudflare 規定要填信用卡或 PayPal，但 **10 GB 以內免費、不會扣款**。
+3. 開通後按 **Create bucket**：
+   - **Bucket name**：`bq-shelter-photos`（一字不差）
+   - **Location**：`Automatic`
+   - 其他不用動，按 **Create bucket**。
+
+> 如果忘了建 bucket，部署時會自動試著建；建不起來網站也不會壞，照片照舊存 GitHub。
+
+### 步驟 2：部署一次，確認接上了
+
+1. 打開 https://github.com/jiatsenK/bq-shelter-dogs/actions/workflows/deploy-cloudflare.yml → **Run workflow** → 綠色 **Run workflow**，等綠勾勾。
+2. 手機打開 https://bq-shelter-dogs.<子網域>.workers.dev/api/ ，看到 `"photos":"R2"` 就是接上了。
+3. 如果看到 `"photos":"GitHub"`：點進剛剛那次部署，**Summary** 會寫原因。通常是 Cloudflare token 沒有 R2 權限：
+   右上角頭像 → **My Profile** → **API Tokens** → 找到部署用的那把 → **Edit** → **Permissions** 加一行
+   `Account`｜`Workers R2 Storage`｜`Edit` → **Continue to summary** → **Update token**，再回到第 1 步部署一次（token 字串不會變，GitHub 不用改）。
+
+### 步驟 3：把舊照片搬進 R2
+
+1. 打開 https://github.com/jiatsenK/bq-shelter-dogs/actions/workflows/migrate-photos-r2.yml → **Run workflow** → 綠色 **Run workflow**。
+2. 等綠勾勾（幾分鐘），點進去看 **Summary**：會列出 repo 裡共幾張、這次複製幾張、核對正確幾張，最下面是
+   「✅ 每一張都核對過，數量一致。」就完成了。
+3. 紅叉叉的話 Summary 會列出哪幾張不對，截圖給 Claude。可以重跑，搬過的會自動跳過。
+
+### 步驟 4：用手機驗收
+
+1. 溜狗表、詳細資訊、相簿、放大照片、找狗、分析頁的照片都正常。
+2. 選一隻狗換主照片：換完重新整理還是新照片；另一支手機（或無痕視窗）也馬上看得到。
+3. 過一兩分鐘清單上的小圖也換成新的（縮圖由「產生照片縮圖（R2）」Action 做，做好前先顯示原圖）。
+4. 相簿加一張、設為主照片、刪一張（要通關碼），重新整理都跟剛剛一樣。
+5. GitHub 的提交紀錄（https://github.com/jiatsenK/bq-shelter-dogs/commits/main ）**沒有**多出照片的提交。
+
+都沒問題跟 Claude 說，再決定什麼時候把 repo 裡的舊照片刪掉。
+
+### 要注意的地方
+
+- 照片改由 Worker 從 R2 讀，會算進 Cloudflare Workers 免費方案的**每天 10 萬次**。照片在手機上快取 30 天，正常用不會超過；Cloudflare 的 Worker 頁面 **Metrics** 看得到每天用量。
+- 管理用的功能（搬遷、縮圖、Trash 清單和復原）都要「我的備註」那組通關碼（GitHub Secret `NOTES_PASSCODE`），之後的管理後台也會用到。
+
 ## token 到期時
 
 - **Cloudflare token 到期**：照步驟 2 重建，更新 GitHub Secret `CLOUDFLARE_API_TOKEN`。網站不會壞，只是新的改動部署不上去。
@@ -146,3 +196,9 @@ https://pr-<PR 編號>-bq-shelter-dogs.<子網域>.workers.dev
 - 照片快取（#127）：`_headers` 讓 `photos/` 在手機上快取 30 天；部署前 `scripts/photo-versions.mjs` 把每張照片的內容雜湊寫進要上傳的 `data/dogs.json`（`photoVersions`，不提交），網站組照片網址加 `?v=雜湊`，換照片網址就變。
 - 瀏覽統計（#128）：部署前 `scripts/analytics-beacon.mjs` 把 Cloudflare Web Analytics 的 beacon 插進要上傳的 `index.html`（token 來自 Secret `CF_ANALYTICS_TOKEN`，不提交）；預覽版和舊網址沒有。
 - 部署：`.github/workflows/deploy-cloudflare.yml`。同步試算表、產生縮圖這兩個 Action 用 GitHub 內建 token 提交，不會觸發推送事件，所以用 `workflow_run` 接著部署。
+- 照片放 R2（#130）：`wrangler.jsonc` 的 `r2_buckets`（binding `PHOTOS`，bucket `bq-shelter-photos`），程式在 `worker/src/r2.js`。
+  `/photos/*`、`/data/dogs.json`（蓋上 R2 照片的版本號）、`/data/gallery.json`（R2 的 `meta/gallery.json`）先經過 Worker；R2 沒有的照片退回靜態檔，刪掉的照片放 0 位元組的刪除標記（`customMetadata.deleted`）擋住退回。
+  換掉、刪掉前複製到 `trash/{時間-亂數}/photo.jpg`（customMetadata 記 path、dogId、kind、file、addedAt、deletedAt）＋`thumb.jpg`，Cron 清掉超過 30 天的。
+  管理 API（標頭 `X-Admin-Passcode: encodeURIComponent(通關碼)`）：`POST /api/admin/migrate`、`POST /api/admin/verify`、`GET /api/admin/thumbs`、`PUT /api/admin/thumbs/{原圖路徑}`、`GET /api/admin/trash`、`POST /api/admin/trash/{代號}/restore`。
+  部署前 `scripts/r2-bucket.mjs` 確認 bucket，沒有就用拿掉 R2 的 `wrangler.no-r2.json` 部署（照片照舊寫 GitHub）。縮圖：`.github/workflows/r2-thumbs.yml`（`scripts/make-thumbs.py --site`）；搬遷：`.github/workflows/migrate-photos-r2.yml`（`scripts/migrate-photos-r2.mjs`）。
+  本機試跑 `npx wrangler dev --local --persist-to /tmp/wrangler-state --var NOTES_PASSCODE:測試`，再 `SITE_URL=http://localhost:8787 ADMIN_PASSCODE=測試 node scripts/migrate-photos-r2.mjs` 就能模擬搬遷。
