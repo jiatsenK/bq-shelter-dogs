@@ -1431,6 +1431,14 @@ async function runGalleryTests() {
   const key = k => document.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }));
   const toastText = () => { const t = document.getElementById('toast'); return t && !t.hidden ? t.querySelector('.toast-text').textContent : ''; };
   const F1 = '20260925-100000-aaaa.jpg', F2 = '20260925-110000-bbbb.jpg';
+  // 圖片 decode／canvas 轉檔完成時間依瀏覽器與機器負載而異；等狀態完成，不用猜固定毫秒數。
+  const waitFor = async (ready, label, timeout = 3000) => {
+    const started = performance.now();
+    while (!ready()) {
+      if (performance.now() - started > timeout) throw new Error(`等候逾時：${label}`);
+      await new Promise(r => requestAnimationFrame(r));
+    }
+  };
   const makeFile = () => new Promise(r => {
     const c = document.createElement('canvas'); c.width = 60; c.height = 40;
     c.getContext('2d').fillRect(0, 0, 60, 40);
@@ -1643,7 +1651,7 @@ async function runGalleryTests() {
       const calls = [];
       window.fetch = async (u, o) => { calls.push([String(u), o]); return json({ ok: true, swapped: true, oldMainKept: true }); };
       lb().querySelector('#galleryMainBtn').click();
-      await new Promise(r => setTimeout(r, 50));
+      await waitFor(() => !gallerySwap && calls.length === 1, '設為主照片完成');
       eq([calls.length, calls[0][0], calls[0][1].method], [1, `https://worker.test/gallery/9301/${F1}/main`, 'POST'], '送出：');
       eq([count(), bigSrc() === photoOverrides['9301'], photoOverrides['9301'] !== A], ['1 / 2', true, true], '燈箱看新的主照片：');
       eq(await blobSize(await (await realFetch(photoOverrides['9301'])).blob()), [60, 30], '主照片換成相簿那張：');
@@ -1656,7 +1664,7 @@ async function runGalleryTests() {
       lb().querySelector('.lightbox-nav.next').click();
       window.fetch = async () => json({ ok: false, error: '主照片沒有換成（GitHub 500），照片都沒動' }, 502);
       lb().querySelector('#galleryMainBtn').click();
-      await new Promise(r => setTimeout(r, 50));
+      await waitFor(() => !gallerySwap && toastText().includes('照片都沒動'), '設為主照片失敗提示');
       eq([photoOverrides['9301'], count()], [before, '2 / 2'], '失敗不動：');
       if (!toastText().includes('照片都沒動')) throw new Error(`提示：${toastText()}`);
       hideToast();
@@ -2405,7 +2413,15 @@ async function runWhereTests() {
 async function runFindV7Tests() {
   const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, findView, findZone, findCage];
   const frame = () => new Promise(r => requestAnimationFrame(() => r()));
-  const later = ms => new Promise(r => setTimeout(r, ms));
+  const waitViewBox = async (want, label, timeout = 2000) => {
+    const started = performance.now();
+    while (true) {
+      const got = document.querySelector('#main svg.find-map').getAttribute('viewBox').split(' ').map(Number);
+      if (got.length === want.length && got.every((n, i) => n === want[i])) return;
+      if (performance.now() - started > timeout) throw new Error(`等候逾時：${label}；預期 ${want.join(' ')}，實際 ${got.join(' ')}`);
+      await frame();
+    }
+  };
   try {
     walkedStorage = fakeStorage(); walkedMemory = null;
     const dog = (name, id, cage) => ({ name, id, cage, walkedDate: null, covered: false, note: '', intro: '', sex: '', formerIds: [] });
@@ -2420,7 +2436,7 @@ async function runFindV7Tests() {
       findView = 'map'; findZone = 'all'; render();
       const full = findMapBox(null);
       const vb = () => document.querySelector('#main svg.find-map').getAttribute('viewBox').split(' ').map(Number);
-      await frame(); await later(520);
+      await waitViewBox(full, '平面圖顯示全圖');
       eq(vb(), full, '沒選區是整張：');
       document.querySelector('#main g[data-find-zone="old"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
       const box = findMapBox('old');
@@ -2429,7 +2445,7 @@ async function runFindV7Tests() {
       if (Math.abs(box[2] / box[3] - full[2] / full[3]) > 0.01) throw new Error('放大範圍長寬比要跟整張一樣，地圖框才不會跳');
       const [zx, zy, zw, zh] = findTurn(FIND_ZONES.find(z => z.key === 'old').rect);
       if (box[0] > zx || box[1] > zy || box[0] + box[2] < zx + zw || box[1] + box[3] < zy + zh) throw new Error('放大範圍沒包住整區');
-      await frame(); await later(520);
+      await waitViewBox(box, '平面圖放大到選取區域');
       eq(vb(), box, '動畫結束停在那一區：');
       document.querySelector('#main g[data-find-zone="old"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
       eq(findZone, 'old', '放大後點圖上的區不會取消：');
@@ -2437,7 +2453,7 @@ async function runFindV7Tests() {
       eq([findZone, findCage, vb()], ['old', '舊A3', box], '點籠子維持放大：');
       document.querySelector('#main .find-map-all').click();
       eq([findZone, findCage], ['all', null], '看全圖：');
-      await frame(); await later(520);
+      await waitViewBox(full, '平面圖回到全圖');
       eq(vb(), full, '縮回整張：');
       eq(!!document.querySelector('#main .find-map-all'), false, '整張時不顯示看全圖：');
     });
