@@ -163,8 +163,9 @@ function mainColumnMap(table, headerTexts = []) {
 }
 
 // 「誰遛的」格子裡有沒有我的名字。MY_NAME 可以寫好幾種寫法，用逗號或頓號隔開（例：本名、暱稱）；
-// 格子裡有好幾個人時（例：「甲、乙」）逐一比對，要整個名字相同才算，不算部分符合
-const NAME_SEP = /[、,，\/／&＆+＋\s]+/;
+// 格子裡有好幾個人時（例：「甲、乙」「甲。乙」「甲;乙」）逐一比對，要整個名字相同才算，不算部分符合
+// 志工手打時常用句號、分號、冒號隔開，也都當分隔（2026-10-04 K 回報「志工甲。K」抓不到K）
+const NAME_SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
 export function myNames(env = process.env.MY_NAME) {
   return String(env || '').split(NAME_SEP).map(nameKey).filter(Boolean);
 }

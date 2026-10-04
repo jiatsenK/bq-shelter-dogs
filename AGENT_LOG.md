@@ -510,3 +510,77 @@
 - 把最新 main merge 進來，只有 `AGENT_LOG.md` 檔尾衝突，兩筆都保留（main 的在前）。
 - `docs/PROJECT_GOALS.md`：V7 #112 那行原本寫「在哪裡」放第一段，main 已由 PR #120 拿掉這張卡片，改成註明已拿掉，避免定版文件跟現況不符。
 - node 測試 77 項、網頁測試 138 項全過。
+## 2026-09-27 「更新」失敗時顯示原因（Claude，分支 claude/project-thread-y4s4a4）
+- 依據：K 設完 Cloudflare 三步後按「更新」跳出「更新失敗」，17:30、18:00 鬧鐘也沒叫到同步，要知道是哪一步沒生效。
+- `js/app.js`：失敗提示改成「更新失敗：{Worker 回的原因}」（例：叫同步失敗（GitHub 403）＝token 沒開 Actions 權限；沒有內容就顯示 HTTP 狀態碼）。tests/index.html 更新測試，本機 123 項全過。
+
+## 2026-10-01 PR #109 解合併衝突（Claude，分支 claude/project-thread-y4s4a4）
+- 依據：K「把本專案 衝突的合併解掉」。
+- 把最新 main merge 進來，只有 `AGENT_LOG.md` 檔尾衝突，兩筆都保留（main 的在前）。`js/app.js`、`tests/index.html` 自動合併，改動仍只在「更新」失敗訊息那段。
+- node 測試 77 項、網頁測試 138 項全過。
+## 2026-09-30 手機開啟加速：畫面外的狗卡先不排版、狗的資料提早抓（Claude，分支 claude/project-thread-d90g61）
+- 依據：K「開啟手機畫面還是跑很慢耶」。
+- 量測（本機模擬慢速 4G＋手機 CPU 慢 4 倍、gzip）：主因是溜狗表一次排版 117 張狗卡，卡住畫面約 0.8–1 秒；另外 dogs.json 要等三個 js 下載執行完才開始抓。
+- `css/app.css`：`.card`、`.find-dog` 加 `content-visibility: auto`，畫面外的卡捲到附近才排版。
+- `index.html`：頁首（css 前面）提早開始抓 dogs.json；`js/app.js` 的 `loadDogsData()` 第一次接手用這份，init 改等 DOMContentLoaded（資料可能比 find.js 先到）；分類數字算找狗隻數時不再排序。
+- 結果：狗卡出現 2.2 秒 → 1.4 秒，開網頁時卡住的時間 0.9 秒 → 0.3 秒；換到找狗 0.45 → 0.15 秒、回溜狗表 0.65 → 0.1 秒。
+- `tests/index.html`：新增 3 項、#30 檔案拆分改成允許這一段內嵌程式。本機 141 項全過。
+
+## 2026-10-01 PR #121 解合併衝突（Claude，分支 claude/project-thread-d90g61）
+- 依據：K「把本專案 衝突的合併解掉」。
+- 把最新 main merge 進來，只有 `AGENT_LOG.md` 檔尾衝突，兩筆都保留（main 的在前）。程式沒有衝突。
+- node 測試 77 項、網頁測試 141 項全過。
+
+## 2026-10-02 更新寶妮狗卡資訊（Claude，分支 claude/project-thread-ovzdfh）
+- 依據：K「更新資料」並附寶妮（2026082607）的狗卡圖片。
+- `dogs/2026082607.md`：名字從暫用的「（梗奶奶）」改成寶妮，加上 `sex: female`，填入狗卡文字。原始狗卡圖片沒有放進 repo。
+- 只動狗卡檔，沒改程式；合併後同步 Action 會自動把性別和狗卡資訊寫進 `data/dogs.json`。
+
+## 2026-10-02 V8-1 網站與 Worker 合併成一個 Cloudflare Worker（#125，Claude，分支 claude/project-thread-ovzdfh）
+- 依據：K 同意 Cloudflare 搬家並開票（總表 #124），說「同意」後開始做 #125。開工前依序合併了 PR #121、#123。
+- `wrangler.jsonc`（新，repo 根目錄）：Worker `bq-shelter-dogs`，整個 repo 當靜態檔案，`/api` 先進 Worker，Cron 每 30 分鐘叫同步。`.assetsignore` 排除 `worker/`、`scripts/`、`AGENT_LOG.md` 等；`.github` 保留（測試頁要讀）。根目錄新增 `.gitignore`（`.wrangler/`）。
+- `worker/src/index.js`：認 `/api` 前綴（去掉後交給原本的處理，舊路徑照舊）；同網址的要求（Origin 是自己，或 GET 只有 `Sec-Fetch-Site: same-origin`）也接受；合在一起時不是 `/api` 的 GET 交給網站檔案。
+- `js/app.js`：`uploadUrlFor(location)`，`*.workers.dev` 用同網址 `/api`，其他（舊網址、本機）用舊 Worker。
+- `.github/workflows/deploy-cloudflare.yml`（新）：main 推送、同步試算表／產生縮圖跑完後部署；沒設 Cloudflare Secret 就跳過；Worker 密碼從 GitHub Secrets 帶上去（`WORKER_GITHUB_TOKEN`、`NOTES_PASSCODE`、`WALKER_KEY`）。
+- `docs/CLOUDFLARE_SETUP.md`（新）：K 要做的 7 步；`docs/PHOTO_UPLOAD_SETUP.md` 加一段指過去。
+- 測試：Worker 新增 4 項（node 測試 81 項全過）；`tests/index.html` 新增 2 項（143 項全過）。本機 `wrangler dev` 實跑：網站、照片、`/api/` 都正常，測試頁在合併版上也 143 項全過。真的 Cloudflare 網址要等 K 設好 Secret 後用手機驗收。
+
+## 2026-10-02 V8-2 每個 PR 自動產生預覽網址（#126，Claude，分支 claude/project-thread-ovzdfh）
+- 依據：K 在新網址 https://bq-shelter-dogs.<子網域>.workers.dev 手機驗收完成、刪了舊 Worker 的鬧鐘，接著做 #126。
+- `.github/workflows/preview-cloudflare.yml`（新）：PR 開啟／推送時 `wrangler versions upload --preview-alias pr-<編號> --var PREVIEW:1`（只上傳版本，不換正式網站），在 PR 留一則預覽網址留言、再推送時更新同一則；fork 的 PR、沒設 Cloudflare Secret 時跳過。
+- `worker/src/index.js`：有 PREVIEW 時，GET 以外（換代號除外）一律回 403「這是預覽版，不能存」；`/api/` 狀態多顯示預覽版。前端原本就會顯示 Worker 回的錯誤訊息，不用改。
+- `wrangler.jsonc`：開 `preview_urls`；`keep_vars` 改成 false，確保正式部署不會帶到預覽版的 PREVIEW（Secret 不受影響）。
+- `docs/CLOUDFLARE_SETUP.md`：加「PR 預覽網址」一節。
+- 測試：Worker 新增 1 項、網頁新增 2 項。真的預覽網址要等這個 PR 自己跑出來才能驗（雲端連不到 Cloudflare）。
+
+## 2026-10-02 V8-3 照片長時間快取＋換照片立即生效（#127，Claude，分支 claude/project-thread-ovzdfh）
+- 依據：K 說「合併」PR #133 後，總表下一張是 #127（原建議 Codex）；Claude 照推薦接著做，同時用選項卡片問 K 要不要改交給 Codex。
+- `_headers`（新）：`/photos/*` 快取 30 天（immutable）；其他檔案照 Cloudflare 預設每次先問。
+- `scripts/photo-versions.mjs`（新）：部署前算 photos/ 底下每張 .jpg 的 sha256 前 8 碼，寫進部署用的 `data/dogs.json` 的 `photoVersions`（不提交，不會多出提交）。`deploy-cloudflare.yml`、`preview-cloudflare.yml` 在上傳前跑它。
+- `js/app.js`：`parseDogsData` 讀 `photoVersions`、`versioned()` 幫主照片、縮圖、相簿、相簿縮圖網址加 `?v=`；沒有版本（舊網址、剛上傳）照舊。
+- 測試：新增 `scripts/photo-versions.test.mjs`（3 項，`tests.yml` 和 `AGENTS.md` 的 node 測試指令加上它）、網頁 3 項。本機 `wrangler dev` 實測：照片回 `max-age=2592000, immutable`、dogs.json 照舊每次問；第二次打開，帶版本號的照片 0 位元組走網路。
+
+## 2026-10-02 V8-5 舊網址（github.io）轉到新網址（#129，Claude，分支 claude/project-thread-ovzdfh-v8-5）
+- 依據：K 說 PR #135（#128 瀏覽統計）之後再合併、「先繼續做下一個」。#135 還占著 `claude/project-thread-ovzdfh`，所以這張另開分支。**K 說「切換」之前不合併。**
+- `index.html`、`tests/index.html`：`<head>` 最前面加一行，`location.hostname === 'jiatsenk.github.io'` 時 `location.replace` 到新網址，帶上路徑（去掉 `/bq-shelter-dogs`）、`?` 和 `#`；新網址、預覽版、本機不轉。
+- 手機上記的東西（代號、今天已溜、隱藏、備註通關碼）存在 localStorage，換網域讀不到，不搬過去（主畫面捷徑的儲存空間和瀏覽器本來就分開，搬了也只搬到一半）；通知志工重新加入主畫面、「我溜過」重新輸入名字。
+- 文件換成新網址：`README.md`（部署一節改寫）、`AGENTS.md`、`docs/PROJECT_GOALS.md`、`docs/VOLUNTEER_GUIDE.md`、`docs/CLOUDFLARE_SETUP.md`（加「刪掉舊的照片上傳服務」：切換一週後看 `bq-shelter-photos` 流量）。`ALLOWED_ORIGINS`、`OLD_UPLOAD_URL` 給舊網址的判斷照票保留。
+- 測試：網頁新增 3 項（舊網址各頁轉到新網址同一頁、新網址不轉、轉址在最前面），#30 檔案拆分測試允許這段內嵌轉址。
+
+## 2026-10-04 K 回報五個問題（Claude，分支 claude/five-bugs-0poyw0）
+- 依據：K 在專案串回報 5 個 bug（附試算表截圖：「志工甲。K」那格的K抓不到）。一個 PR 一起修。
+- 誰遛的拆名字：`scripts/sync-sheet.mjs` 的 `NAME_SEP`、`worker/src/index.js` 的 `WALKER_NAME_SEP` 多認句號、分號、冒號、直線、間隔號（全形半形）。下次同步起這種格子會拆成好幾個人；之前已存成整串的舊紀錄補不回來。Worker 合併後由 deploy-cloudflare 自動部署。
+- 搜尋框搬回頁首（`index.html`），底部列只剩分類；內容區底部留白、提示條位置跟著調低。`docs/DESIGN_GUIDE.md` 底部固定列一條改寫。
+- 溜狗表排序：原本「最久沒溜的排前面」提示換成三顆按鈕「最久沒溜／籠位／狗名」，預設最久沒溜；選的記在這支手機 localStorage `bq-walk-sort`。
+- 主照片預覽：選好照片直接在詳細資訊大照片的位置顯示（同一個 4:3 框），下面附狗卡上 72×64 的小照片，再下面是裁切／確認上傳／取消；原本在下方另一塊、整張不裁的預覽拿掉。
+- 相簿：「新增」從最後一格移到主照片後面第二格；選好的照片就在那格出現（標「預覽」，可裁切、拿掉），從最後選的那張開始傳，傳完順序跟預覽一樣。
+- 測試：node 新增 1 項（分隔符號、同步跟 Worker 一致）；網頁新增 3 項（主照片預覽位置、排序兩項），修改相簿、底部列、唯讀檢查的既有測試。預覽截圖在專案檔案 `previews/five-bugs/`。
+
+## 2026-10-04 溜狗表排序加「最近溜」（Claude，分支 claude/five-bugs-0poyw0，PR #137 追加）
+- 依據：K 看完 PR #137 說排序「還要有一個最近，就是時間正序跟倒序」。
+- `js/app.js`：排序按鈕變成「最久沒溜／最近溜／籠位／狗名」；最近溜＝有日期的照最近在前，有人固定照顧、沒有紀錄的放最後。
+- 測試：排序測試多驗最近溜，以及有人固定照顧的不算剛溜過。
+
+## 2026-10-04 溜狗表排序改成一顆按鈕（Claude，分支 claude/five-bugs-0poyw0，PR #137 追加）
+- 依據：K 說「一個時間順的按鈕就可以了，籠位狗名就不用」。
+- `js/app.js`：拿掉籠位、狗名；排序變成一顆按鈕「最久沒溜在前 ⇅ 最近溜在前」，按一下切換，記在這支手機。`index.html` 加排序圖示 `i-sort`。
