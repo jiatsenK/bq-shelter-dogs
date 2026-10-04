@@ -502,6 +502,23 @@
     {"id":"2024010203","name":"煙捲","date":"2026-10-04","mine":false,"walkers":["044328805855"]},
     {"id":"2021112003","name":"部長","date":"2026-10-04","mine":false,"walkers":["75aeed7c10fe"]},
     {"id":"2018121202","name":"笑笑","date":"2026-10-04","mine":false,"walkers":["7219f133cd3c"]},
-    {"id":"2019120501","name":"皮蛋","date":"2026-10-04","mine":false,"walkers":["c3b400d1f468"]}
+    {"id":"2019120501","name":"皮蛋","date":"2026-10-04","mine":false,"walkers":["c3b400d1f468"]},
+    {"id":"2021111807","name":"捷運站","date":"2026-10-04","mine":false,"walkers":["ca36800987f2"]},
+    {"id":"2024111806","name":"布布","date":"2026-10-04","mine":false,"walkers":["ca36800987f2"]},
+    {"id":"2024051602","name":"花田","date":"2026-10-04","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2018121202","name":"笑笑","date":"2026-10-04","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2019120501","name":"皮蛋","date":"2026-10-04","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2018012203","name":"妍妍","date":"2026-10-04","mine":true,"walkers":["7fe4735e3c59"]},
+    {"id":"2019062703","name":"婉嬪","date":"2026-10-04","mine":true,"walkers":["7fe4735e3c59"]},
+    {"id":"2021071401","name":"胖胖","date":"2026-10-04","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2020021208","name":"靜香","date":"2026-10-04","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2020071403","name":"OPEN醬","date":"2026-10-04","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2026060101","name":"甜甜","date":"2026-10-04","mine":false,"walkers":["47114239953c"]},
+    {"id":"2023032803","name":"奧利奧","date":"2026-10-04","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2021083002","name":"栗子","date":"2026-10-04","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2024040202","name":"鐵雄","date":"2026-10-04","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2021122302","name":"大壯","date":"2026-10-04","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2026082601","name":"開多","date":"2026-10-04","mine":true,"walkers":["7fe4735e3c59"]},
+    {"id":"2025021801","name":"阿湯","date":"2026-10-04","mine":false,"walkers":["ca36800987f2"]}
   ]
 }

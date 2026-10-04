@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-04T12:01:22+08:00",
+  "syncedAt": "2026-10-04T12:31:17+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -111,11 +111,11 @@
       "cage": "住院區",
       "id": "2021111807",
       "name": "捷運站",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "21120f797f52"
+        "ca36800987f2"
       ],
       "note": "後肢癱瘓114/9/24起每週一次針灸復健。4/12洗澡。7月底開始會慢慢自主起身行走",
       "sex": "",
@@ -126,11 +126,11 @@
       "cage": "住院區",
       "id": "2024111806",
       "name": "布布",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "21120f797f52"
+        "ca36800987f2"
       ],
       "note": "2025/9/9血尿（俐葶）;2025/9/18沒看到血尿; 後來仍可能看到尿帶血，最常在末段尿看到血色(嘉文)、洗澡及左前腳狼爪指甲嵌進肉內已化膿（淑萍2026/07/19）、脖子有傷請穿黃色胸背帶外出（在住院區箱子裡）",
       "sex": "female",
@@ -1109,7 +1109,7 @@
       "cage": "舊A05",
       "id": "2024051602",
       "name": "花田",
-      "walkedDate": "2026-09-27",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1218,7 +1218,7 @@
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "7219f133cd3c"
+        "75aeed7c10fe"
       ],
       "note": "2026/10/2洗澡（旭昇）",
       "sex": "",
@@ -1233,7 +1233,7 @@
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "24bf2ad2af85"
       ],
       "note": "2026/4/29洗澡（巧芸）",
       "sex": "male",
@@ -1334,31 +1334,31 @@
       "cage": "舊A19",
       "id": "2018012203",
       "name": "妍妍",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-04",
       "covered": true,
-      "myWalked": false,
+      "myWalked": true,
       "walkers": [
-        "c3b400d1f468"
+        "7fe4735e3c59"
       ],
       "note": "5/31洗澡（msi)、",
       "sex": "female",
       "intro": "2017年2月5日迷路進來，個性溫和，對摸摸還是會怕，需多多鼓勵加油，就會願意進步，更加相信人..",
-      "myWalkedDate": null
+      "myWalkedDate": "2026-10-04"
     },
     {
       "cage": "舊A19",
       "id": "2019062703",
       "name": "婉嬪",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-04",
       "covered": true,
-      "myWalked": false,
+      "myWalked": true,
       "walkers": [
-        "c3b400d1f468"
+        "7fe4735e3c59"
       ],
       "note": "5/31洗澡（msi)、7/8洗澡（喬筠）",
       "sex": "female",
       "intro": "2019年6月27日因主人生病無法養，外型短腿個性親人，曾是家犬，所以超親人，會一直靠近討摸摸..",
-      "myWalkedDate": null
+      "myWalkedDate": "2026-10-04"
     },
     {
       "cage": "舊A20",
@@ -1379,11 +1379,11 @@
       "cage": "舊A21",
       "id": "2021071401",
       "name": "胖胖",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "24bf2ad2af85"
       ],
       "note": "",
       "sex": "male",
@@ -1394,11 +1394,11 @@
       "cage": "舊B01",
       "id": "2020021208",
       "name": "靜香",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "24bf2ad2af85"
       ],
       "note": "4/12洗澡（Vicki）、7/8洗澡（喬筠）",
       "sex": "female",
@@ -1409,11 +1409,11 @@
       "cage": "舊B01",
       "id": "2020071403",
       "name": "OPEN醬",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "24bf2ad2af85"
       ],
       "note": "2026/4/12與7/8洗澡（喬筠）、6/28右後腳左邊數來第二腳趾流血，推估是指甲斷掉(喬筠）",
       "sex": "male",
@@ -1424,11 +1424,11 @@
       "cage": "舊B03",
       "id": "2026060101",
       "name": "甜甜",
-      "walkedDate": "2026-09-26",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "47114239953c"
       ],
       "note": "不親會走動的狗， 會發出低鳴不悦的聲音。 對捷運站和拉亞倒是沒有問題",
       "sex": "female",
@@ -1467,7 +1467,7 @@
       "cage": "舊B09",
       "id": "2023032803",
       "name": "奧利奧",
-      "walkedDate": "2026-09-27",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1512,11 +1512,11 @@
       "cage": "舊B13",
       "id": "2021083002",
       "name": "栗子",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "21120f797f52"
+        "24bf2ad2af85"
       ],
       "note": "",
       "sex": "male",
@@ -1617,11 +1617,11 @@
       "cage": "舊B20",
       "id": "2024040202",
       "name": "鐵雄",
-      "walkedDate": "2026-09-30",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "24bf2ad2af85"
       ],
       "note": "3/8右眼有紅色條狀異物（俐葶）、4/12洗澡(巧芸+喬筠)",
       "sex": "male",
@@ -1632,11 +1632,11 @@
       "cage": "舊B21",
       "id": "2021122302",
       "name": "大壯",
-      "walkedDate": "2026-09-30",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "24bf2ad2af85"
       ],
       "note": "1/8割腫瘤;1/22拆線、4/12洗澡(巧芸+喬筠)",
       "sex": "male",
@@ -1737,14 +1737,16 @@
       "cage": "C區24",
       "id": "2026082601",
       "name": "開多",
-      "walkedDate": null,
-      "covered": false,
-      "myWalked": false,
-      "walkers": [],
+      "walkedDate": "2026-10-04",
+      "covered": true,
+      "myWalked": true,
+      "walkers": [
+        "7fe4735e3c59"
+      ],
       "note": "",
       "sex": "",
       "intro": "",
-      "myWalkedDate": null
+      "myWalkedDate": "2026-10-04"
     },
     {
       "cage": "C區31",
@@ -1810,11 +1812,11 @@
       "cage": "C區35",
       "id": "2025021801",
       "name": "阿湯",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "21120f797f52"
+        "ca36800987f2"
       ],
       "note": "",
       "sex": "",
