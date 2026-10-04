@@ -1335,3 +1335,20 @@ html.onboard-open { overflow: hidden; }
 .detail-bar .bar-btn { border: none !important; background: var(--surface-soft) !important; color: var(--ink) !important; font-weight: 600 !important; }
 .detail-bar .bar-btn .icon { color: var(--ink-soft); }
 .group-walk { background: var(--primary) !important; font-weight: 600 !important; }
+
+/* 一起溜的人（#141 第 1 項）：溜了之後從提示條打開，從下面滑出 */
+.toast-extra { flex-shrink: 0; border: none; background: rgba(255, 255, 255, 0.14); color: #fff; font-family: inherit; font-size: 14px; font-weight: 600; border-radius: 10px; padding: 7px 10px; cursor: pointer; }
+.toast-extra[hidden] { display: none; }
+.with-backdrop { position: fixed; inset: 0; z-index: 40; background: rgba(0, 0, 0, 0.35); display: flex; align-items: flex-end; justify-content: center; }
+.with-sheet { background: var(--surface); width: 100%; max-width: 480px; border-radius: 18px 18px 0 0; padding: 18px 16px calc(14px + env(safe-area-inset-bottom, 0px)); }
+.with-sheet h3 { font-size: 17px; font-weight: 600; margin: 0 0 14px; }
+.with-names { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.with-name { border: none; border-radius: 18px; padding: 8px 14px; background: var(--surface-soft); color: var(--ink); font-family: inherit; font-size: 15px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.with-name.on { background: var(--primary); color: #fff; }
+.with-add { display: flex; gap: 8px; }
+.with-add input { flex: 1; min-width: 0; border: none; border-radius: 12px; background: var(--surface-soft); font-family: inherit; font-size: 16px; padding: 11px 12px; color: var(--ink); }
+.with-add button { border: none; background: none; color: var(--primary); font-family: inherit; font-size: 16px; font-weight: 600; padding: 0 6px; cursor: pointer; }
+.with-bar { display: flex; gap: 8px; margin-top: 16px; }
+.with-bar .bar-btn { flex: 1; min-height: 48px; border: none; border-radius: 14px; background: var(--surface-soft); font-family: inherit; font-size: 16px; font-weight: 600; color: var(--ink); cursor: pointer; }
+.with-ok { flex: 1.6; min-height: 48px; border: none; border-radius: 14px; background: var(--primary); color: #fff; font-family: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
+.with-ok:disabled { opacity: 0.4; }
