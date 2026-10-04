@@ -13,8 +13,6 @@ let UPLOAD_URL = uploadUrlFor(globalThis.location); // 同步腳本的測試在 
 const PHOTO_MAX_EDGE = 1280;
 const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
 // 我的備註（#61／#62）：寫入與最新內容都經過同一個 Worker；讀不到 Worker 時改讀網站上的這個檔（可能晚一兩分鐘）
-const MY_NOTES_URL = 'data/my-notes.json';
-const MY_NOTE_MAX_CHARS = 1000; // 跟 Worker 的 NOTE_MAX_CHARS 一致
 // 相簿：每隻狗除了主照片還能多放幾張（photos/gallery/{編號}/），清單在這個檔；最新清單一樣先問 Worker
 const GALLERY_URL = 'data/gallery.json';
 // 手機第一屏大約看得到幾張狗卡：這幾張的照片不延後載入、優先下載（#91）
@@ -57,9 +55,6 @@ let galleryDelete = null; // 燈箱裡正在刪的相簿照片：{ dog, file, pa
 let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（walkKey）
 let searchQuery = '';
 let loadWarning = '';
-let myNotes = {}; // 我的備註（#62）：編號 → { text, updatedAt }
-let myNotesState = 'loading'; // loading／worker（Worker 讀到最新）／site（退回網站上的檔）／error
-let noteEdit = null; // 正在編輯的我的備註：{ dog, text, pass, needPass, phase: 'edit'|'saving'|'error', error }
 let analysisOpen = false; // 分析頁（#59）開著嗎
 let myWalks = []; // 我遛過的紀錄（#58）：[{ id, name, date: Date, ymd }]，新到舊
 let walksData = null; // data/walks.json 讀回來的原始內容；換「我是誰」時不用重讀
@@ -211,8 +206,8 @@ function walkerSetupHtml() {
   const has = loadMyCodes().length > 0;
   return `<form class="who-box" id="whoForm" autocomplete="off">
     <h3>${icon('paw')}你是誰？</h3>
-    <p>輸入你在溜狗表「誰遛的」欄寫的名字。表上有人寫你的簡稱或暱稱的話，用頓號隔開一起填，例如「佳岑、岑」。</p>
-    <input type="text" id="whoInput" maxlength="60" placeholder="例：佳岑、岑" aria-label="你在試算表寫的名字" value="${esc(edit.text)}"${busy ? ' disabled' : ''}>
+    <p>輸入你在溜狗表「誰遛的」欄寫的名字。有好幾種寫法的話可以用頓號隔開。</p>
+    <input type="text" id="whoInput" maxlength="60" placeholder="例：小明" aria-label="你在試算表寫的名字" value="${esc(edit.text)}"${busy ? ' disabled' : ''}>
     <p class="who-note">名字和換出來的代號只記在這支手機；按「溜了」時會用第一個名字寫進試算表「誰遛的」，網站上其他人看不到。換手機或換瀏覽器要重新設定。</p>
     ${edit.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(edit.error)}</span></div>` : ''}
     <div class="my-note-actions">
@@ -848,7 +843,7 @@ function withSheetHtml() {
     </form>
     <div class="with-bar">
       <button type="button" class="bar-btn" data-with-cancel>取消</button>
-      <button type="button" class="with-ok" data-with-ok${w.picked.size ? '' : ' disabled'}>寫進試算表${w.picked.size ? `（${w.picked.size} 人）` : ''}</button>
+      <button type="button" class="with-ok" data-with-ok>寫進試算表${w.picked.size ? `（${w.picked.size} 人）` : ''}</button>
     </div>
   </div>`;
 }
@@ -993,8 +988,7 @@ async function sheetWrite(dogs, on, toastText, toastUndo, walker = null) {
   }
 }
 
-// 我的備註的通關碼（#62）：第一次儲存成功後記在這支手機，之後不用再輸入；被拒絕就清掉重問。
-// 和今天已溜用同一個 localStorage；讀寫不了（無痕模式）就這次開著網頁的期間記在記憶體
+// 相簿刪除照片的通關碼（原本 #62 我的備註用，V9 拿掉我的備註後只剩相簿刪除用）：成功後記在這支手機，被拒絕就清掉重問
 const NOTES_PASS_KEY = 'bq-notes-passcode';
 let notesPassMemory = '';
 function loadNotesPass() {
@@ -1011,88 +1005,6 @@ function saveNotesPass(pass) {
     if (pass) walkedStorage.setItem(NOTES_PASS_KEY, pass);
     else walkedStorage.removeItem(NOTES_PASS_KEY);
   } catch (e) { /* 存不了就只記在記憶體 */ }
-}
-
-// ── 收起（#79）──
-// 暫時不想在溜狗表看到的狗（剛看到別人溜、這隻我不會溜）先收起來，溜狗表最下面「已收起」點開可以放回。
-// 跟今天已溜一樣只存在這支手機的 localStorage：{ today: { date, ids }, always: [ids] }。
-// 「今天先收起」隔天自動回來；「一直收起」要自己放回。
-const HIDDEN_KEY = 'bq-hidden';
-let hiddenMemory = null;
-let hiddenOpen = false; // 溜狗表最下面「已收起」有沒有展開
-
-function readHidden() {
-  let data = hiddenMemory;
-  try {
-    const raw = walkedStorage && walkedStorage.getItem(HIDDEN_KEY);
-    if (raw) data = JSON.parse(raw);
-  } catch (e) { /* 讀不到就用這次開網頁期間的紀錄 */ }
-  const list = v => (Array.isArray(v) ? v.map(String) : []);
-  return { today: data && data.today ? { date: String(data.today.date || ''), ids: list(data.today.ids) } : { date: '', ids: [] },
-    always: list(data && data.always) };
-}
-
-// 編號（或名:犬名）→ 'today'／'always'；「今天」過了日期就不算
-function loadHidden(today = new Date()) {
-  const data = readHidden();
-  const map = new Map();
-  for (const id of data.always) map.set(id, 'always');
-  if (data.today.date === localDateKey(today)) for (const id of data.today.ids) if (!map.has(id)) map.set(id, 'today');
-  return map;
-}
-
-function saveHidden(map, today = new Date()) {
-  const pick = mode => [...map].filter(([, m]) => m === mode).map(([id]) => id);
-  hiddenMemory = { today: { date: localDateKey(today), ids: pick('today') }, always: pick('always') };
-  try {
-    if (walkedStorage) walkedStorage.setItem(HIDDEN_KEY, JSON.stringify(hiddenMemory));
-  } catch (e) { /* 存不了就只記在記憶體 */ }
-}
-
-// mode：'today'／'always' 收起，null 放回。跳提示條可以復原
-function setHidden(dog, mode) {
-  const key = dog && walkKey(dog);
-  if (!key) return;
-  const today = new Date();
-  const before = loadHidden(today);
-  const map = new Map(before);
-  if (mode) map.set(key, mode); else map.delete(key);
-  saveHidden(map, today);
-  render();
-  renderDetail();
-  showToast(mode === 'today' ? `${dog.name} 今天收起，明天回到溜狗表`
-    : mode === 'always' ? `${dog.name} 已長期收起，要放回請到溜狗表最下面`
-    : `${dog.name} 放回溜狗表`, () => {
-    saveHidden(before, today);
-    render();
-    renderDetail();
-  });
-}
-
-// 詳細資訊的收起按鈕（照片下方）：收起中就顯示狀態和「放回」
-function hideActions(dog) {
-  if (!walkKey(dog)) return '';
-  const mode = loadHidden().get(walkKey(dog));
-  if (mode) {
-    return `<div class="hide-bar is-hidden">${icon('eyeoff')}<span>${mode === 'today' ? '今天收起，明天回到溜狗表' : '長期收起，按放回才會出現'}</span>
-      <button type="button" class="hide-btn" data-hide="">放回溜狗表</button></div>`;
-  }
-  return `<div class="hide-bar"><span class="hide-q">${icon('eyeoff')}收起</span>
-    <button type="button" class="hide-btn" data-hide="today">今天收起</button>
-    <button type="button" class="hide-btn" data-hide="always">長期收起</button></div>`;
-}
-
-// 溜狗表最下面的「已收起 N 隻」：點開列出，每隻可以放回
-function hiddenBoxHtml(list, hidden) {
-  if (!list.length) return '';
-  return `<div class="hidden-box${hiddenOpen ? ' open' : ''}">
-    <button type="button" class="hidden-toggle" id="hiddenToggle" aria-expanded="${hiddenOpen}">${icon('eyeoff')}<span>已收起 ${list.length} 隻</span>${icon('chevron')}</button>
-    ${hiddenOpen ? `<div class="hidden-list">${list.map(d => `
-      <div class="hidden-row">
-        <button type="button" class="hidden-name" data-hidden-dog="${allDogs.indexOf(d)}">${esc(d.name)}<small>${hidden.get(walkKey(d)) === 'today' ? '今天' : '長期'}</small></button>
-        <button type="button" class="hide-btn" data-unhide="${allDogs.indexOf(d)}">放回</button>
-      </div>`).join('')}</div>` : ''}
-  </div>`;
 }
 
 let toastTimer = null;
@@ -1453,7 +1365,7 @@ async function loadGallery() {
       .map(p => ({ file: p.file, addedAt: p.addedAt || '' }));
     if (photos.length) gallery[id] = photos;
   }
-  if (detailDog && !(noteEdit && noteEdit.dog === detailDog)) renderDetail();
+  if (detailDog) renderDetail();
 }
 
 // 可以一起溜的每一隻：輕點照片換看那隻；右上角圓圈勾選，之後用下方按鈕一起記（#35，K 選 C）。
@@ -2048,147 +1960,13 @@ async function uploadGalleryBatch() {
   showToast(`${batch.dog.name} 的相簿${done ? `已加進 ${done} 張，` : ''}${left} 張沒有上傳成功：${error}`);
 }
 
-// 讀一個「編號 → 內容」的 JSON（我的備註、相簿清單共用）；pick 從回應挑出要的物件，不是物件就算失敗
+// 讀一個「編號 → 內容」的 JSON（相簿清單用）；pick 從回應挑出要的物件，不是物件就算失敗
 async function readJsonObject(url, pick) {
   const res = await fetch(url, { cache: 'no-store' });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const data = pick(await res.json());
   if (!data || typeof data !== 'object' || Array.isArray(data)) throw new Error('格式不對');
   return data;
-}
-
-// ── 我的備註（#62）：溜狗表備註下方的獨立區塊，存在 Git（經 Worker），不參與警示關鍵字、不上狗卡 ──
-
-// 開網頁時讀最新的我的備註：先問 Worker（直接讀 GitHub，不用等網站更新），不行再讀網站上的 data/my-notes.json
-async function loadMyNotes() {
-  myNotesState = 'loading';
-  let notes = null;
-  if (UPLOAD_URL) {
-    try {
-      notes = await readJsonObject(`${UPLOAD_URL}/notes`, d => d && d.ok ? d.notes : null);
-      myNotesState = 'worker';
-    } catch (e) { notes = null; }
-  }
-  if (!notes) {
-    try {
-      notes = await readJsonObject(MY_NOTES_URL, d => d);
-      myNotesState = 'site';
-    } catch (e) {
-      notes = {};
-      myNotesState = 'error';
-    }
-  }
-  myNotes = {};
-  for (const [id, n] of Object.entries(notes)) {
-    if (n && typeof n.text === 'string' && n.text.trim()) myNotes[id] = { text: n.text, updatedAt: n.updatedAt || '' };
-  }
-  if (detailDog && !(noteEdit && noteEdit.dog === detailDog)) renderDetail();
-}
-
-function noteTime(iso) {
-  const t = new Date(iso);
-  if (!iso || isNaN(t)) return '';
-  return `${t.getFullYear()}/${t.getMonth() + 1}/${t.getDate()} ${pad2(t.getHours())}:${pad2(t.getMinutes())}`;
-}
-
-function myNoteSection(dog) {
-  const note = dog.id ? myNotes[dog.id] : null;
-  const canEdit = !!(UPLOAD_URL && dog.id);
-  const edit = noteEdit && noteEdit.dog === dog ? noteEdit : null;
-  const head = `<h3>${icon('write')}我的備註</h3>`;
-  if (edit) return `<section class="detail-section" data-section="mynote">${head}${myNoteForm(dog, edit)}</section>`;
-  const body = note
-    ? `<div class="content note-text my-note-text">${esc(note.text)}</div>${noteTime(note.updatedAt) ? `<div class="my-note-time">更新於 ${noteTime(note.updatedAt)}</div>` : ''}`
-    : `<div class="empty">${myNotesState === 'loading' ? '讀取中…' : myNotesState === 'error' ? '我的備註暫時讀不到' : '還沒有我的備註'}</div>`;
-  const btn = canEdit && myNotesState !== 'loading'
-    ? `<button type="button" class="my-note-edit" id="myNoteEdit">${icon('write')}${note ? '修改' : '新增'}</button>` : '';
-  return `<section class="detail-section" data-section="mynote">${head}${body}${btn}</section>`;
-}
-
-// 編輯表單。通關碼欄位是真的密碼欄位（放在 form 裡、配一個隱藏的帳號欄位），
-// iPhone 會問要不要存進鑰匙圈，之後用 Face ID 自動填入（K 2026-09-25 同意）
-function myNoteForm(dog, edit) {
-  const busy = edit.phase === 'saving';
-  const count = [...edit.text].length;
-  return `
-    <form class="my-note-form" id="myNoteForm" autocomplete="on">
-      <textarea id="myNoteText" rows="4" maxlength="${MY_NOTE_MAX_CHARS * 2}" aria-label="${esc(dog.name)} 的我的備註"
-        placeholder="寫給自己看的備註，例如怎麼牽比較好走"${busy ? ' disabled' : ''}>${esc(edit.text)}</textarea>
-      <div class="my-note-count${count > MY_NOTE_MAX_CHARS ? ' over' : ''}" id="myNoteCount">${count} / ${MY_NOTE_MAX_CHARS} 字</div>
-      ${edit.needPass ? `
-        <input type="text" name="username" autocomplete="username" value="板收志工溜狗表" hidden readonly>
-        <label class="my-note-pass-label" for="myNotePass">通關碼（第一次儲存要輸入，之後這支手機會記住）</label>
-        <input type="password" id="myNotePass" name="password" autocomplete="current-password" value="${esc(edit.pass)}"${busy ? ' disabled' : ''}>` : ''}
-      ${edit.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(edit.error)}</span></div>` : ''}
-      <div class="my-note-actions">
-        <button type="submit" class="my-note-save" id="myNoteSave"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存'}</button>
-        ${busy ? '' : `<button type="button" class="photo-cancel" id="myNoteCancel">取消</button>`}
-      </div>
-    </form>`;
-}
-
-function startNoteEdit(dog) {
-  const note = myNotes[dog.id];
-  noteEdit = { dog, text: note ? note.text : '', pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
-  renderDetail();
-  const ta = document.getElementById('myNoteText');
-  if (ta) {
-    ta.focus({ preventScroll: true });
-    ta.setSelectionRange(ta.value.length, ta.value.length);
-    if (ta.scrollIntoView) ta.scrollIntoView({ block: 'nearest' });
-  }
-}
-
-// 儲存：送到 Worker；成功顯示「已存到 Git」，失敗保留輸入的內容並顯示原因
-async function saveMyNote() {
-  const edit = noteEdit;
-  if (!edit || edit.phase === 'saving') return;
-  const text = edit.text.trim();
-  if ([...text].length > MY_NOTE_MAX_CHARS) {
-    edit.phase = 'error'; edit.error = `我的備註最多 ${MY_NOTE_MAX_CHARS} 字`; renderDetail(); return;
-  }
-  const pass = edit.needPass ? edit.pass : loadNotesPass();
-  if (!pass) {
-    edit.needPass = true; edit.phase = 'error'; edit.error = '請輸入通關碼'; renderDetail();
-    const input = document.getElementById('myNotePass');
-    if (input) input.focus({ preventScroll: true });
-    return;
-  }
-  edit.phase = 'saving';
-  edit.error = '';
-  renderDetail();
-  let out = null, status = 0, error = '';
-  try {
-    const res = await fetch(`${UPLOAD_URL}/notes/${encodeURIComponent(edit.dog.id)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, passcode: pass }),
-    });
-    status = res.status;
-    out = await res.json().catch(() => null);
-    if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），原本的備註不受影響`;
-  } catch (e) {
-    error = '沒有存進去，請確認網路後再試；原本的備註不受影響';
-  }
-  if (noteEdit !== edit) return;
-  const shown = detailDog === edit.dog;
-  if (error) {
-    // 通關碼錯（或錯太多次）：清掉這支手機記的通關碼，下次重問
-    if (out && out.code === 'passcode') { saveNotesPass(''); edit.needPass = true; edit.pass = ''; }
-    edit.phase = 'error';
-    edit.error = error;
-    if (shown) renderDetail();
-    else showToast(`${edit.dog.name} 的我的備註沒有存進去：${error}`);
-    return;
-  }
-  saveNotesPass(pass);
-  if (out.note && out.note.text) myNotes[edit.dog.id] = { text: out.note.text, updatedAt: out.note.updatedAt || '' };
-  else delete myNotes[edit.dog.id];
-  noteEdit = null;
-  if (shown) renderDetail();
-  showToast(`${edit.dog.name} 的我的備註已儲存`);
-  const btn = shown && document.getElementById('myNoteEdit');
-  if (btn) btn.focus({ preventScroll: true });
 }
 
 // 詳細資訊的按鈕（#86）：在外框綁一次，依按下的是哪個按鈕分派，每次重畫內容不用重新綁。
@@ -2224,13 +2002,6 @@ const DETAIL_CLICKS = [
     if (pickedBuddies.has(id)) pickedBuddies.delete(id); else pickedBuddies.add(id);
     renderDetail();
   }],
-  ['[data-hide]', el => setHidden(detailDog, el.dataset.hide || null)],
-  ['#myNoteEdit', () => startNoteEdit(detailDog)],
-  ['#myNoteCancel', () => {
-    noteEdit = null; renderDetail();
-    const b = document.getElementById('myNoteEdit');
-    if (b) b.focus({ preventScroll: true });
-  }],
   ['#groupWalk', () => {
     const picked = [...pickedBuddies].map(id => allDogs.find(d => walkKey(d) === id));
     setWalked([detailDog, ...picked], true);
@@ -2248,24 +2019,6 @@ function wireDetail(box) {
       if (!el.disabled) run(el);
       return;
     }
-  });
-  // 我的備註：打字時更新字數與暫存內容；按儲存（或在輸入框按 Enter 送出）就存
-  box.addEventListener('input', e => {
-    if (!noteEdit) return;
-    if (e.target.id === 'myNoteText') {
-      noteEdit.text = e.target.value;
-      const n = [...e.target.value].length;
-      const counter = box.querySelector('#myNoteCount');
-      counter.textContent = `${n} / ${MY_NOTE_MAX_CHARS} 字`;
-      counter.classList.toggle('over', n > MY_NOTE_MAX_CHARS);
-    } else if (e.target.id === 'myNotePass') {
-      noteEdit.pass = e.target.value;
-    }
-  });
-  box.addEventListener('submit', e => {
-    if (e.target.id !== 'myNoteForm') return;
-    e.preventDefault();
-    saveMyNote();
   });
 }
 
@@ -2804,8 +2557,8 @@ function onboardHtml() {
       <h1>板收志工溜狗表</h1>
       <p class="ob-lead">歡迎！先告訴我們你是誰。</p>
       <label class="ob-label" for="obInput">你在溜狗表「誰遛的」寫的名字</label>
-      <input type="text" id="obInput" maxlength="60" placeholder="例：佳岑" value="${esc(o.text)}"${busy ? ' disabled' : ''} enterkeyhint="done">
-      <p class="ob-help">表上有人寫你的簡稱或暱稱嗎？用頓號隔開一起填，例如「佳岑、岑」。一格寫好幾個人（「嘉文+俐葶+岑」）也認得出你。</p>
+      <input type="text" id="obInput" maxlength="60" placeholder="例：小明" value="${esc(o.text)}"${busy ? ' disabled' : ''} enterkeyhint="done">
+      <p class="ob-help">一格寫好幾個人（例如「小明+小華」）也認得出你。</p>
       ${o.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(o.error)}</span></div>` : ''}
       <div class="ob-foot">
         <button type="submit" class="ob-next"${busy ? ' disabled' : ''}>${busy ? '設定中…' : '下一步'}</button>
