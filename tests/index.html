@@ -2747,24 +2747,23 @@ async function runWalkSortTests() {
     allDogs = [d('排序丙', '舊A10', 3), d('排序甲', '舊A2', 9), d('排序乙', '', 40), d('排序丁', '新B01', 1), d('排序戊', '舊A2', 20)];
     groupMap = {}; activeTab = 'walk'; searchQuery = '';
     walkedStorage = fakeStorage(); walkedMemory = null;
-    await check('溜狗表排序：預設最久沒溜；最近溜是倒過來；籠位照數字排（A2 在 A10 前）、同籠照最久沒溜；狗名；沒籠位排最後', () => {
+    await check('溜狗表排序：預設最久沒溜；最近溜是時間倒過來，有人固定照顧的排最後', () => {
       const names = sort => sortWalkList(allDogs, TODAY, sort).map(x => x.name);
       eq(names('due'), ['排序乙', '排序戊', '排序甲', '排序丙', '排序丁'], '最久沒溜：');
       eq(names('recent'), ['排序丁', '排序丙', '排序甲', '排序戊', '排序乙'], '最近溜（時間倒過來）：');
       const covered = parseDogsData({ dogs: [{ id: '', name: '排序己', cage: '舊A1', note: '', covered: true, walkedDate: null }] }).dogs[0];
       eq([computeStatus(covered, TODAY).kind, sortWalkList([covered, d('排序庚', '舊A1', 0)], TODAY, 'recent').map(x => x.name)], ['covered', ['排序庚', '排序己']], '有人固定照顧的不算剛溜過：');
-
-      eq(names('cage'), ['排序丁', '排序戊', '排序甲', '排序丙', '排序乙'], '籠位：');
-      eq(names('name'), allDogs.filter(x => x.name).map(x => x.name).sort((x, y) => x.localeCompare(y, 'zh-Hant')), '狗名：');
       eq(loadWalkSort(), 'due', '沒選過就是最久沒溜：');
     });
-    await check('溜狗表排序：點按鈕換排序、記在這支手機，重畫後還是一樣', () => {
+    await check('溜狗表排序：只有一顆按鈕，按一下在最久沒溜／最近溜之間切換、記在這支手機', () => {
       render();
       const btns = () => [...document.querySelectorAll('#main [data-walk-sort]')];
-      eq(btns().map(b => [b.textContent, b.getAttribute('aria-pressed')]), [['最久沒溜', 'true'], ['最近溜', 'false'], ['籠位', 'false'], ['狗名', 'false']], '按鈕：');
-      btns()[2].click();
-      eq([walkedStorage.getItem(WALK_SORT_KEY), btns()[2].getAttribute('aria-pressed')], ['cage', 'true'], '選籠位：');
-      eq([...document.querySelectorAll('#main .card .name')].map(n => n.textContent), ['排序丁', '排序戊', '排序甲', '排序丙', '排序乙'], '狗卡順序：');
+      const cards = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
+      eq(btns().map(b => b.textContent.trim()), ['最久沒溜在前'], '一顆按鈕：');
+      btns()[0].click();
+      eq([walkedStorage.getItem(WALK_SORT_KEY), btns()[0].textContent.trim(), cards()], ['recent', '最近溜在前', ['排序丁', '排序丙', '排序甲', '排序戊', '排序乙']], '按一下改最近溜：');
+      btns()[0].click();
+      eq([walkedStorage.getItem(WALK_SORT_KEY), cards()[0]], ['due', '排序乙'], '再按回到最久沒溜：');
       walkedStorage.setItem(WALK_SORT_KEY, '亂寫');
       eq(loadWalkSort(), 'due', '存的值不認得就回到預設：');
     });
