@@ -2,6 +2,8 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
+<!-- 舊網址轉址（#129）：GitHub Pages 不能設伺服器轉址，舊網址 jiatsenk.github.io 一打開就換到新網址同一頁（含 # 分類）；新網址、預覽版、本機不受影響 -->
+<script>if (location.hostname === 'jiatsenk.github.io') location.replace('https://bq-shelter-dogs.jiatsen-k.workers.dev' + location.pathname.replace(/^\/bq-shelter-dogs(?=\/|$)/, '') + location.search + location.hash);</script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>板收志工溜狗表：資料讀取測試</title>
 <style>
@@ -227,7 +229,7 @@ function runTests() {
       eq(tokenHits, [], 'GitHub 憑證相關字眼：');
       // #35 起「今天已溜」存在這支手機的 localStorage，只准用 WALKED_KEY；#62 加上我的備註通關碼 NOTES_PASS_KEY
       eq([...code.matchAll(/\blocalStorage\s*[.[]|window\.localStorage/g)].length, 1, 'localStorage 只在一個地方取用：');
-      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'HIDDEN_KEY', 'HIDDEN_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、NOTES_PASS_KEY、HIDDEN_KEY（#79 收起）：');
+      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'HIDDEN_KEY', 'HIDDEN_KEY', 'WALK_SORT_KEY', 'WALK_SORT_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、NOTES_PASS_KEY、HIDDEN_KEY（#79 收起）、WALK_SORT_KEY（溜狗表排序）：');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
       eq(urls.length, 3, 'fetch 呼叫數（上傳以外）：');
       // #32 起前端只讀 data/dogs.json，不直接連試算表；狗卡資訊也已經寫在 dogs.json 裡，不再抓 dogs/*.md
@@ -629,7 +631,8 @@ function runTests() {
     check('#30 檔案拆分：index.html 只有結構，樣式在 css/app.css、程式在 js/app.js', () => {
       const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
-      const scripts = [...doc.querySelectorAll('script')];
+      // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
+      const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
       eq(scripts.map(s => s.getAttribute('src')), ['js/app.js', 'js/analysis.js', 'js/find.js'], 'script（#59 起多分析頁、#99 多找狗）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
@@ -738,8 +741,8 @@ function runTests() {
       const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
       if (!doc.querySelector('header h1') || !doc.getElementById('searchInput') || !doc.getElementById('tabs')) throw new Error('基本 UI 要在 index.html 裡');
       eq(doc.getElementById('main').textContent.trim(), '讀取中…', '內容區：');
-      // V7（#111）起分類列和搜尋框在畫面最下面的底部列
-      if (!doc.querySelector('#bottomBar #tabs') || !doc.querySelector('#bottomBar #searchInput')) throw new Error('分類列和搜尋框要在底部列裡');
+      // V7（#111）起分類列在畫面最下面的底部列；搜尋框 2026-10-04 搬回頁首
+      if (!doc.querySelector('#bottomBar #tabs') || !doc.querySelector('header.app #searchInput')) throw new Error('分類列要在底部列、搜尋框要在頁首');
     }),
     check('#32 repo 裡的 data/dogs.json 格式前端讀得懂', () => {
       if (!DOGS_JSON) throw new Error('讀不到 data/dogs.json');
@@ -987,6 +990,26 @@ async function runPhotoTests() {
         eq(await blobSize(photoUpload.blob), [200, 300], '小照片不放大：');
         hideDetail();
         eq(photoUpload, null, '關掉詳細資訊就丟掉預覽：');
+      });
+      await check('2026-10-04 主照片預覽就在大照片的位置、用一樣的框裁切，下面附狗卡上的小照片；取消後換回原照片', async () => {
+        showDetail(allDogs[0]);
+        await preparePhoto(allDogs[0], await makeFile(1200, 400));
+        const hero = document.querySelector('#detail .detail-head .photo-wrap.hero');
+        eq([hero.classList.contains('pending'), hero.querySelector('.photo-preview').getAttribute('src'), hero.querySelector('.hero-tag').textContent], [true, photoUpload.url, '預覽'], '大照片位置換成預覽：');
+        eq([hero.querySelector('#photoPick'), hero.querySelector('[data-zoom]')], [null, null], '預覽時沒有相機鈕、不開燈箱：');
+        // 測試頁沒載入樣式，改檢查用的是同一組樣式：大照片用 .detail-head .photo-wrap.hero .thumb（4:3、從上對齊），小照片跟狗卡一樣 72×64
+        eq(hero.querySelector('img').matches('.detail-head .photo-wrap.hero .thumb img'), true, '大照片跟上傳後同一個框：');
+        const small = document.querySelector('#detail .photo-upload .card-thumb');
+        eq([small.classList.contains('thumb'), small.querySelector('img').getAttribute('src')], [true, photoUpload.url], '狗卡小照片：');
+        const css = await fetch('../css/app.css').then(r => r.text());
+        const size = sel => (css.match(new RegExp(sel.replace(/[.]/g, '\\.') + ' \\{ width: (\\d+px); height: (\\d+px)')) || []).slice(1);
+        eq(size('.photo-preview-row .card-thumb'), size('.card .thumb'), '小照片跟狗卡一樣大：');
+        if (!size('.card .thumb').length) throw new Error('找不到狗卡照片大小');
+        eq(hero.nextElementSibling.classList.contains('photo-upload'), true, '按鈕緊接在大照片下面：');
+        document.getElementById('photoCancel').click();
+        const back = document.querySelector('#detail .photo-wrap.hero');
+        eq([back.classList.contains('pending'), !!back.querySelector('[data-zoom]'), !!document.getElementById('photoPick')], [false, true, true], '取消後換回原照片：');
+        hideDetail();
       });
       await check('#48 不是圖片的檔案：顯示錯誤、不出現預覽', async () => {
         showDetail(allDogs[0]);
@@ -1625,15 +1648,15 @@ async function runGalleryTests() {
       await loadGallery();
       eq([galleryState, gallery], ['error', {}], '都讀不到：');
     });
-    await check('相簿：在狗卡資訊下方，主照片在第一格、新傳的在前，最後一格「新增」；沒上傳服務或滿 30 張不能新增', async () => {
+    await check('相簿：在狗卡資訊下方，主照片在第一格、第二格「新增」、新傳的在前；沒上傳服務或滿 30 張不能新增', async () => {
       gallery = { '9301': [{ file: F1, addedAt: '' }, { file: F2, addedAt: '' }] }; galleryState = 'worker';
       galleryOverrides[`9301/${F1}`] = PX; galleryOverrides[`9301/${F2}`] = PX;
       showDetail(allDogs[0]);
       const order = [...document.querySelectorAll('#detail .detail-section')].map(x => x.dataset.section);
       eq(order.slice(-2), ['intro', 'gallery'], '位置：');
       eq(tiles().map(t => t.dataset.gFile || 'main'), ['main', F2, F1], '順序：');
+      eq(section().querySelector('.gallery-grid').children[1].id, 'galleryAdd', '第二格新增（2026-10-04）：');
       eq(tiles()[0].querySelector('.g-tag').textContent, '主照片', '主照片標籤：');
-      eq(section().querySelector('.gallery-grid').lastElementChild.id, 'galleryAdd', '最後一格新增：');
       eq(section().querySelector('.sub').textContent, '另外 2 張，點照片看大圖', '張數：');
       UPLOAD_URL = ''; renderDetail();
       eq(document.getElementById('galleryAdd'), null, '沒上傳服務：');
@@ -1684,18 +1707,22 @@ async function runGalleryTests() {
       p = popped(); closeLightbox(); await p;
       delete photoOverrides['9302'];
     });
-    await check('相簿新增：一次選好幾張，在相簿區排成預覽格、可拿掉幾張，按「上傳 N 張」依序送到 /gallery/編號', async () => {
+    await check('相簿新增：一次選好幾張，就在相簿格「新增」那格的位置出現預覽、可拿掉幾張，按「上傳 N 張」從最後一張開始依序送到 /gallery/編號，傳完順序跟預覽一樣', async () => {
       showDetail(allDogs[0]);
       // 「新增」會打開可複選的選檔視窗，這裡直接模擬選好 3 張
       await prepareGalleryPhotos(allDogs[0], [await makeFile(), await makeFile(), await makeFile()]);
       const batchBox = () => section().querySelector('.gallery-batch');
-      eq([galleryBatch.items.length, batchBox().querySelectorAll('.gb-item img').length, document.querySelector('.detail-head + .photo-upload')], [3, 3, null], '預覽在相簿區、上方沒有：');
+      eq([galleryBatch.items.length, batchBox().querySelectorAll('.gb-item').length, document.querySelector('.detail-head + .photo-upload')], [3, 0, null], '預覽不在下面另一區、上方也沒有：');
+      const grid = () => [...section().querySelector('.gallery-grid').children];
+      eq(grid().map(el => el.dataset.gFile || (el.hasAttribute('data-g-main') ? 'main' : el.className)), ['main', 'gb-item ready', 'gb-item ready', 'gb-item ready', F2, F1], '預覽在主照片後面、原本的相簿前面（2026-10-04）：');
+      eq(grid()[1].querySelector('.g-tag').textContent, '預覽', '標預覽：');
       eq(document.getElementById('galleryAdd'), null, '預覽時藏起新增：');
       if (!batchBox().querySelector('.photo-preview-hint').textContent.startsWith('加進相簿：3 張')) throw new Error('提示要說加進相簿幾張');
       eq(document.getElementById('galleryUpload').textContent.trim(), '上傳 3 張', '按鈕：');
-      batchBox().querySelector('[data-gb-remove="1"]').click();
+      section().querySelector('[data-gb-remove="1"]').click();
       eq([galleryBatch.items.length, document.getElementById('galleryUpload').textContent.trim()], [2, '上傳 2 張'], '拿掉一張：');
       const [a, b] = galleryBatch.items;
+      eq(grid().slice(1, 3).map(el => el.querySelector('img').getAttribute('src')), [a.url, b.url], '照選的順序排：');
       const calls = [];
       let n = 0, release;
       window.fetch = (u, o) => { calls.push([String(u), o]); n++; const file = `20260925-12000${n}-dddd.jpg`;
@@ -1704,14 +1731,15 @@ async function runGalleryTests() {
       await tick();
       const btn = document.getElementById('galleryUpload');
       eq([btn.disabled, btn.textContent.trim(), document.getElementById('galleryBatchCancel'), calls.length], [true, '上傳中 1 / 2…', null, 1], '一次只送一張：');
-      eq(batchBox().querySelectorAll('[data-gb-remove]').length, 0, '上傳中不能拿掉：');
+      eq(section().querySelectorAll('[data-gb-remove]').length, 0, '上傳中不能拿掉：');
       release(); await tick(); await tick();
-      eq([calls.length, batchBox().querySelector('.gb-item.done') !== null, document.getElementById('galleryUpload').textContent.trim()], [2, true, '上傳中 2 / 2…'], '第一張好了才送第二張：');
+      eq([calls.length, document.getElementById('galleryUpload').textContent.trim()], [2, '上傳中 2 / 2…'], '第一張好了才送第二張：');
+      eq(grid().map(el => el.dataset.gFile || (el.hasAttribute('data-g-main') ? 'main' : el.className)), ['main', 'gb-item uploading', '20260925-120001-dddd.jpg', F2, F1], '傳好的留在原位、不重複：');
       release(); await tick(); await tick();
       eq(calls.map(c => [c[0], c[1].method]), [['https://worker.test/gallery/9301', 'POST'], ['https://worker.test/gallery/9301', 'POST']], '送出：');
-      eq([calls[0][1].body === a.blob, calls[1][1].body === b.blob], [true, true], '內容：');
+      eq([calls[0][1].body === b.blob, calls[1][1].body === a.blob], [true, true], '內容（最後選的先傳）：');
       eq(gallery['9301'].map(p => p.file), [F1, F2, '20260925-120001-dddd.jpg', '20260925-120002-dddd.jpg'], '清單：');
-      eq([galleryBatch, tiles()[1].dataset.gFile, tiles()[1].querySelector('img').getAttribute('src')], [null, '20260925-120002-dddd.jpg', b.url], '最後傳的在第二格：');
+      eq([galleryBatch, tiles()[1].dataset.gFile, tiles()[1].querySelector('img').getAttribute('src'), tiles()[2].querySelector('img').getAttribute('src')], [null, '20260925-120002-dddd.jpg', a.url, b.url], '傳完順序跟預覽一樣：');
       eq(photoOverrides['9301'], PX, '主照片不變：');
       if (!toastText().includes('已加進 2 張到 相簿甲 的相簿')) throw new Error(`提示：${toastText()}`);
       hideToast(); hideDetail();
@@ -1736,7 +1764,7 @@ async function runGalleryTests() {
       window.fetch = async () => (++n === 1 ? json({ ok: true, photo: { file: '20260925-130000-eeee.jpg', addedAt: '' } })
         : json({ ok: false, error: '上傳太頻繁，請稍等幾分鐘再試' }, 429));
       await uploadGalleryBatch();
-      eq([n, galleryBatch.items.map(it => it.state), gallery['9301'].length], [2, ['done', 'error', 'error'], 2], '第二張被擋就停：');
+      eq([n, galleryBatch.items.map(it => it.state), gallery['9301'].length], [2, ['error', 'error', 'done'], 2], '第二張被擋就停（從最後一張開始傳）：');
       eq(section().querySelector('.gallery-batch .photo-error').textContent.trim(), '已傳 1 張，另外 2 張沒傳成：上傳太頻繁，請稍等幾分鐘再試', '錯誤：');
       eq([document.getElementById('galleryUpload').textContent.trim(), document.getElementById('galleryBatchCancel').textContent.trim()], ['重新上傳沒傳成的 2 張', '不傳了'], '可重傳：');
       window.fetch = async () => json({ ok: true, photo: { file: `20260925-13000${++n}-eeee.jpg`, addedAt: '' } });
@@ -2340,7 +2368,7 @@ async function runWhereTests() {
       const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
       const bar = doc.getElementById('bottomBar');
       if (!bar || bar.compareDocumentPosition(doc.getElementById('main')) & Node.DOCUMENT_POSITION_FOLLOWING) throw new Error('底部列要在內容區後面');
-      if (doc.querySelector('header #tabs, header #searchInput')) throw new Error('頁首不再放分類和搜尋');
+      if (doc.querySelector('header #tabs, #bottomBar #searchInput')) throw new Error('分類不放頁首；搜尋框 2026-10-04 起在頁首、不在底部列');
       buildTabs({});
       eq([...document.querySelectorAll('#tabs button')].map(b => !!b.querySelector('svg.icon')), [true, true, true, true], '每個分類都有圖示：');
     });
@@ -2593,6 +2621,192 @@ async function runCageMateTests() {
   }
 }
 
+// 手機開啟加速：dogs.json 提早抓、畫面外的卡不排版、等全部 js 載入完才開始
+// #127 照片網址加版本號：有版本就加 ?v=，沒有（舊網址、剛上傳）照舊；照片快取 30 天只套在 photos/
+async function runPhotoVersionTests() {
+  const saved = photoVersions;
+  await check('#127 dogs.json 的 photoVersions：只收路徑 → 英數雜湊，格式不對的丟掉；沒有就是空的', () => {
+    const got = parseDogsData({ dogs: [], photoVersions: { 'photos/1.jpg': 'ab12cd34', 'photos/2.jpg': 5, 'photos/3.jpg': '<x>' } });
+    eq(got.photoVersions, { 'photos/1.jpg': 'ab12cd34' }, '版本：');
+    eq(parseDogsData({ dogs: [] }).photoVersions, {}, '沒有：');
+    eq(parseDogsData({ dogs: [], photoVersions: ['x'] }).photoVersions, {}, '格式不對：');
+  });
+  await check('#127 主照片、縮圖、相簿、相簿縮圖都加版本號；沒有版本的不加；剛上傳的本機圖片不受影響', () => {
+    const dog = { id: '9901' };
+    const file = '20260101-000000-abcd.jpg';
+    photoVersions = {
+      'photos/9901.jpg': 'aaaa1111',
+      'photos/thumbs/9901.jpg': 'bbbb2222',
+      [`photos/gallery/9901/${file}`]: 'cccc3333',
+      [`photos/thumbs/gallery/9901/${file}`]: 'dddd4444',
+    };
+    eq(photoSrc(dog), 'photos/9901.jpg?v=aaaa1111', '主照片：');
+    eq(photoThumbSrc(dog), 'photos/thumbs/9901.jpg?v=bbbb2222', '縮圖：');
+    eq(gallerySrc(dog, file), `photos/gallery/9901/${file}?v=cccc3333`, '相簿：');
+    eq(galleryThumbSrc(dog, file), `photos/thumbs/gallery/9901/${file}?v=dddd4444`, '相簿縮圖：');
+    eq(photoSrc({ id: '9902' }), 'photos/9902.jpg', '沒有版本：');
+    photoOverrides['9901'] = 'blob:local';
+    eq(photoSrc(dog), 'blob:local', '剛上傳：');
+    delete photoOverrides['9901'];
+  });
+  photoVersions = saved;
+  const headers = await fetch('../_headers').then(r => r.ok ? r.text() : '');
+  await check('#127 _headers：照片快取 30 天，其他檔案不設長快取', () => {
+    // 部署到 Cloudflare 後 _headers 不公開，讀不到就跳過（本機和 GitHub Pages 讀得到）
+    if (!headers) return;
+    const rules = headers.split('\n').filter(l => l.trim() && !l.startsWith('#'));
+    eq(rules.map(l => l.trim()), ['/photos/*', 'Cache-Control: public, max-age=2592000, immutable'], '規則：');
+  });
+}
+
+// #126 PR 預覽網址：預覽版帶 PREVIEW、不碰正式網站；正式部署不保留網頁上加的變數，PREVIEW 不會被帶進正式版
+async function runPreviewTests() {
+  const get = p => fetch(p).then(r => r.ok ? r.text() : '');
+  const preview = await get('../.github/workflows/preview-cloudflare.yml');
+  await check('#126 預覽 Action：只上傳版本（不部署正式版）、帶 PREVIEW、別人 fork 的 PR 不跑、在 PR 更新同一則留言', () => {
+    if (!preview) throw new Error('讀不到 preview-cloudflare.yml');
+    if (!/wrangler@4 versions upload/.test(preview)) throw new Error('要用 versions upload');
+    if (/wrangler@4 deploy/.test(preview)) throw new Error('預覽不能用 deploy，會換掉正式網站');
+    if (!/--var PREVIEW:1/.test(preview)) throw new Error('預覽版要帶 PREVIEW');
+    if (!/--preview-alias "pr-\$\{PR\}"/.test(preview)) throw new Error('網址要固定成 pr-編號');
+    if (!/head\.repo\.full_name == github\.repository/.test(preview)) throw new Error('fork 的 PR 不能跑');
+    if (!/updateComment/.test(preview)) throw new Error('再推送要更新同一則留言');
+  });
+  // 部署到 Cloudflare 後 wrangler.jsonc 不公開，讀不到就跳過（本機和 GitHub Pages 讀得到）
+  const cfg = await get('../wrangler.jsonc');
+  await check('#126 wrangler.jsonc：開預覽網址、正式部署不保留網頁上加的變數', () => {
+    if (!cfg) return;
+    if (!/"preview_urls": true/.test(cfg)) throw new Error('要開 preview_urls');
+    if (!/"keep_vars": false/.test(cfg)) throw new Error('keep_vars 要是 false，免得 PREVIEW 被帶進正式版');
+  });
+}
+
+// #125 網站搬到 Cloudflare：同一個網址的 /api 是 Worker；舊網址和本機照舊用原本的照片上傳 Worker
+async function runCloudflareTests() {
+  await check('#125 照片上傳服務網址：*.workers.dev 上用同網址 /api，其他網址用舊 Worker', () => {
+    eq(uploadUrlFor({ hostname: 'bq-shelter-dogs.jiatsen-k.workers.dev', origin: 'https://bq-shelter-dogs.jiatsen-k.workers.dev' }),
+      'https://bq-shelter-dogs.jiatsen-k.workers.dev/api', '新網址：');
+    eq(uploadUrlFor({ hostname: 'pr-12-bq-shelter-dogs.jiatsen-k.workers.dev', origin: 'https://pr-12-bq-shelter-dogs.jiatsen-k.workers.dev' }),
+      'https://pr-12-bq-shelter-dogs.jiatsen-k.workers.dev/api', '預覽網址：');
+    eq(uploadUrlFor({ hostname: 'jiatsenk.github.io', origin: 'https://jiatsenk.github.io' }), OLD_UPLOAD_URL, '舊網址：');
+    eq(uploadUrlFor({ hostname: 'localhost', origin: 'http://localhost:8000' }), OLD_UPLOAD_URL, '本機：');
+    eq(OLD_UPLOAD_URL, 'https://bq-shelter-photos.jiatsen-k.workers.dev', '舊 Worker：');
+  });
+  await check('#125 部署設定：網站檔案不公開 Worker 程式、同步腳本、交接紀錄', async () => {
+    const ignore = await fetch('../.assetsignore').then(r => r.ok ? r.text() : '');
+    // 部署到 Cloudflare 後 .assetsignore 本身不公開，讀不到就跳過（本機和 GitHub Pages 讀得到）
+    if (!ignore) return;
+    const lines = ignore.split('\n').map(l => l.trim());
+    ['worker', 'scripts', 'AGENT_LOG.md', '.git', '.claude', 'wrangler.jsonc'].forEach(n => {
+      if (!lines.includes(n)) throw new Error(`.assetsignore 少了 ${n}`);
+    });
+    if (lines.includes('.github')) throw new Error('.github 要公開，測試頁會讀 workflow 檔');
+  });
+}
+
+async function runFastOpenTests() {
+  const css = await fetch('../css/app.css').then(r => r.text());
+  const rule = sel => (css.match(new RegExp(`\\n${sel.replace('.', '\\.')} \\{([^}]*)\\}`)) || [])[1] || '';
+  await check('手機開啟加速：index.html 在 css 前面就開始抓 dogs.json', () => {
+    const at = INDEX_HTML.indexOf("window.__dogsEarly = fetch('data/dogs.json'");
+    if (at < 0) throw new Error('index.html 沒有提早抓 dogs.json');
+    if (at > INDEX_HTML.indexOf('<link rel="stylesheet" href="css/app.css">')) throw new Error('要放在 css 前面，不然會等 css 下載完才執行');
+    if (!/document\.addEventListener\('DOMContentLoaded', init\)/.test(APP_JS)) throw new Error('init 要等 find.js、analysis.js 也載入完才開始');
+  });
+  await check('手機開啟加速：loadDogsData 第一次用提早抓的那份，之後照常抓', async () => {
+    const realFetch = window.fetch;
+    const body = JSON.stringify({ syncedAt: '2026-09-30T00:00:00Z', dogs: [{ name: '提早', id: '9800', cage: 'A01' }] });
+    let calls = 0;
+    window.fetch = async () => { calls++; return new Response(body); };
+    try {
+      window.__dogsEarly = Promise.resolve(new Response(body));
+      eq((await loadDogsData()).dogs.map(d => d.name), ['提早'], '第一次：');
+      eq([calls, window.__dogsEarly], [0, null], '第一次不再抓、用完清掉：');
+      await loadDogsData();
+      eq(calls, 1, '第二次（更新）照常抓：');
+      window.__dogsEarly = Promise.reject(new TypeError('offline'));
+      let msg = '';
+      try { await loadDogsData(); } catch (e) { msg = e.message; }
+      eq(msg, '連不到網站，可能是網路中斷。', '提早抓失敗一樣顯示連不到：');
+    } finally {
+      window.fetch = realFetch; window.__dogsEarly = null;
+    }
+  });
+  await check('手機開啟加速：狗卡、找狗照片卡在畫面外先不排版', () => {
+    for (const sel of ['.card', '.find-dog']) {
+      if (!/content-visibility: auto;/.test(rule(sel))) throw new Error(`${sel} 沒有 content-visibility: auto`);
+      if (!/contain-intrinsic-size: auto \d+px;/.test(rule(sel))) throw new Error(`${sel} 沒有 contain-intrinsic-size（捲動會跳）`);
+    }
+  });
+}
+
+// 2026-10-04 K 回報：溜狗表要可以改排序
+async function runWalkSortTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory];
+  const TODAY = new Date(2026, 9, 4);
+  const ymdDash = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  const d = (name, cage, days) => parseDogsData({ dogs: [{ id: '', name, cage, note: '', covered: false, walkedDate: ymdDash(new Date(2026, 9, 4 - days)) }] }).dogs[0];
+  try {
+    allDogs = [d('排序丙', '舊A10', 3), d('排序甲', '舊A2', 9), d('排序乙', '', 40), d('排序丁', '新B01', 1), d('排序戊', '舊A2', 20)];
+    groupMap = {}; activeTab = 'walk'; searchQuery = '';
+    walkedStorage = fakeStorage(); walkedMemory = null;
+    await check('溜狗表排序：預設最久沒溜；最近溜是時間倒過來，有人固定照顧的排最後', () => {
+      const names = sort => sortWalkList(allDogs, TODAY, sort).map(x => x.name);
+      eq(names('due'), ['排序乙', '排序戊', '排序甲', '排序丙', '排序丁'], '最久沒溜：');
+      eq(names('recent'), ['排序丁', '排序丙', '排序甲', '排序戊', '排序乙'], '最近溜（時間倒過來）：');
+      const covered = parseDogsData({ dogs: [{ id: '', name: '排序己', cage: '舊A1', note: '', covered: true, walkedDate: null }] }).dogs[0];
+      eq([computeStatus(covered, TODAY).kind, sortWalkList([covered, d('排序庚', '舊A1', 0)], TODAY, 'recent').map(x => x.name)], ['covered', ['排序庚', '排序己']], '有人固定照顧的不算剛溜過：');
+      eq(loadWalkSort(), 'due', '沒選過就是最久沒溜：');
+    });
+    await check('溜狗表排序：只有一顆按鈕，按一下在最久沒溜／最近溜之間切換、記在這支手機', () => {
+      render();
+      const btns = () => [...document.querySelectorAll('#main [data-walk-sort]')];
+      const cards = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
+      eq(btns().map(b => b.textContent.trim()), ['最久沒溜在前'], '一顆按鈕：');
+      btns()[0].click();
+      eq([walkedStorage.getItem(WALK_SORT_KEY), btns()[0].textContent.trim(), cards()], ['recent', '最近溜在前', ['排序丁', '排序丙', '排序甲', '排序戊', '排序乙']], '按一下改最近溜：');
+      btns()[0].click();
+      eq([walkedStorage.getItem(WALK_SORT_KEY), cards()[0]], ['due', '排序乙'], '再按回到最久沒溜：');
+      walkedStorage.setItem(WALK_SORT_KEY, '亂寫');
+      eq(loadWalkSort(), 'due', '存的值不認得就回到預設：');
+    });
+  } finally {
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
+    render();
+  }
+}
+
+async function runOldUrlTests() {
+  const testHtml = await fetch('index.html').then(r => r.text());
+  // 把頁面裡的轉址程式拿出來，用假的 location 跑
+  const redirectOf = (html, loc) => {
+    const code = (html.match(/<script>(if \(location\.hostname === 'jiatsenk\.github\.io'\)[^<]*)<\/script>/) || [])[1];
+    if (!code) throw new Error('找不到舊網址轉址程式');
+    let to = null;
+    new Function('location', code)({ search: '', hash: '', ...loc, replace: u => { to = u; } });
+    return to;
+  };
+  const NEW = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
+  await check('#129 舊網址（首頁、# 分類、/tests/）換到新網址同一頁', () => {
+    for (const [name, html] of [['index.html', INDEX_HTML], ['tests/index.html', testHtml]]) {
+      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs/' }), `${NEW}/`, `${name} 首頁：`);
+      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs/', hash: '#find' }), `${NEW}/#find`, `${name} 分類：`);
+      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs/index.html', search: '?a=1' }), `${NEW}/index.html?a=1`, `${name} 帶參數：`);
+      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs/tests/' }), `${NEW}/tests/`, `${name} 測試頁：`);
+      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs' }), NEW, `${name} 沒有結尾斜線：`);
+    }
+  });
+  await check('#129 新網址、預覽版、本機不轉址（沒有轉址迴圈）', () => {
+    for (const hostname of ['bq-shelter-dogs.jiatsen-k.workers.dev', 'pr-12-bq-shelter-dogs.jiatsen-k.workers.dev', 'localhost']) {
+      eq(redirectOf(INDEX_HTML, { hostname, pathname: '/' }), null, `${hostname}：`);
+    }
+  });
+  await check('#129 轉址放在 index.html 最前面（比提早抓 dogs.json 早）', () => {
+    const at = INDEX_HTML.indexOf("location.hostname === 'jiatsenk.github.io'");
+    if (at < 0 || at > INDEX_HTML.indexOf('window.__dogsEarly')) throw new Error('轉址要在其他程式前面');
+  });
+}
+
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
 Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js', '../js/find.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
@@ -2638,6 +2852,12 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runWhereTests)
   .then(runFindV7Tests)
   .then(runV7PagesTests)
+  .then(runFastOpenTests)
+  .then(runCloudflareTests)
+  .then(runPreviewTests)
+  .then(runPhotoVersionTests)
+  .then(runOldUrlTests)
+  .then(runWalkSortTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

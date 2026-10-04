@@ -2,6 +2,8 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
+<!-- 舊網址轉址（#129）：GitHub Pages 不能設伺服器轉址，舊網址 jiatsenk.github.io 一打開就換到新網址同一頁（含 # 分類）；新網址、預覽版、本機不受影響 -->
+<script>if (location.hostname === 'jiatsenk.github.io') location.replace('https://bq-shelter-dogs.jiatsen-k.workers.dev' + location.pathname.replace(/^\/bq-shelter-dogs(?=\/|$)/, '') + location.search + location.hash);</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>板收志工溜狗表</title>
 <meta name="theme-color" content="#2F7BEA">
@@ -11,6 +13,9 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png" sizes="192x192">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <link rel="manifest" href="manifest.webmanifest">
+<!-- 手機開啟加速：狗的資料不等 js 下載完，跟 css、js 同時開始抓；js/app.js 的 loadDogsData() 第一次會接手用這個；
+     放在 css 前面，不然要等 css 下載完才會執行 -->
+<script>try { window.__dogsEarly = fetch('data/dogs.json', { cache: 'no-cache' }); window.__dogsEarly.catch(function () {}); } catch (e) {}</script>
 <link rel="stylesheet" href="css/app.css">
 </head>
 <body>
@@ -42,6 +47,7 @@
   <symbol id="i-zoom" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></g></symbol>
   <symbol id="i-refresh" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12a8 8 0 1 1-2.35-5.65"/><path d="M20 4v5h-5"/></g></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="4.5" cy="18" r="1.2" fill="currentColor" stroke="none"/></g></symbol>
+  <symbol id="i-sort" viewBox="0 0 24 24"><g fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 4v16M4 16l4 4 4-4"/><path d="M16 20V4M12 8l4-4 4 4"/></g></symbol>
   <symbol id="i-back" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" d="M15 5l-7 7 7 7"/></symbol>
 </svg>
 
@@ -59,6 +65,12 @@
       <button type="button" class="sync-btn" id="syncBtn" aria-label="更新資料" title="更新資料"><svg class="icon"><use href="#i-refresh"/></svg></button>
       <button type="button" class="analysis-btn" id="analysisBtn" aria-label="分析" title="分析"><svg class="icon"><use href="#i-chart"/></svg></button>
     </div>
+    <!-- 搜尋框在畫面上方（2026-10-04 K：放上面比較好），頁首捲動時固定在上面 -->
+    <div class="search">
+      <svg class="icon"><use href="#i-search"/></svg>
+      <input id="searchInput" type="search" placeholder="搜尋狗名" aria-label="搜尋狗名" enterkeyhint="search" autocomplete="off">
+      <button type="button" class="search-clear" id="searchClear" aria-label="清除搜尋" hidden><svg class="icon"><use href="#i-close"/></svg></button>
+    </div>
   </div>
 </header>
 
@@ -66,14 +78,9 @@
   <div class="status-msg">讀取中…</div>
 </main>
 
-<!-- V7 單手操作（#111）：搜尋和分類放在畫面最下面，大拇指搆得到 -->
-<nav class="bottom-bar" id="bottomBar" aria-label="分類與搜尋">
+<!-- V7 單手操作（#111）：分類放在畫面最下面，大拇指搆得到；搜尋框 2026-10-04 K 要求搬回頁首 -->
+<nav class="bottom-bar" id="bottomBar" aria-label="分類">
   <div class="bottom-inner">
-    <div class="search">
-      <svg class="icon"><use href="#i-search"/></svg>
-      <input id="searchInput" type="search" placeholder="搜尋狗名" aria-label="搜尋狗名" enterkeyhint="search" autocomplete="off">
-      <button type="button" class="search-clear" id="searchClear" aria-label="清除搜尋" hidden><svg class="icon"><use href="#i-close"/></svg></button>
-    </div>
     <div class="tabs" id="tabs"></div>
   </div>
 </nav>
