@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-04T18:30:39+08:00",
+  "syncedAt": "2026-10-04T21:31:04+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -744,11 +744,11 @@
       "cage": "新B02",
       "id": "2018041609",
       "name": "小煤炭",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "f16f7d3c8784"
       ],
       "note": "2025/8/24洗澡",
       "sex": "male",
@@ -759,11 +759,11 @@
       "cage": "新B02",
       "id": "2019092801",
       "name": "黃老爺",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "f16f7d3c8784"
       ],
       "note": "2025/8/24洗澡",
       "sex": "male",
@@ -774,11 +774,11 @@
       "cage": "新B03",
       "id": "2018012903",
       "name": "比比",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "f16f7d3c8784"
       ],
       "note": "2026/5/31洗澡（秀玉)",
       "sex": "male",
@@ -789,11 +789,11 @@
       "cage": "新B03",
       "id": "2020051906",
       "name": "圈圈",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "f16f7d3c8784"
       ],
       "note": "2026/5/31洗澡（秀玉）",
       "sex": "male",
@@ -804,11 +804,11 @@
       "cage": "新B04",
       "id": "2022091301",
       "name": "沙茶",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "f16f7d3c8784"
       ],
       "note": "",
       "sex": "female",
@@ -819,11 +819,11 @@
       "cage": "新B04",
       "id": "2024082801",
       "name": "阿拉丁",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "f16f7d3c8784"
       ],
       "note": "2026/5/27身體右後方有腫塊(嘉文）10/1出所檢查",
       "sex": "male",
@@ -990,11 +990,11 @@
       "cage": "新B09",
       "id": "2017122504",
       "name": "蘇打",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "f16f7d3c8784"
       ],
       "note": "2026/5/12洗澡(秀玉)",
       "sex": "female",
@@ -1005,11 +1005,11 @@
       "cage": "新B09",
       "id": "2018121304",
       "name": "羅密歐",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "f16f7d3c8784"
       ],
       "note": "2025/8/15羅密歐左後腳外側有凸起腫塊(嘉文）2026/5/12洗澡(秀玉)",
       "sex": "male",
@@ -1715,11 +1715,11 @@
       "cage": "C區21",
       "id": "2023052902",
       "name": "妙麗",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-03",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "74402fdb5c36"
       ],
       "note": "頸部有腫瘤，不要用p繩，要穿淑萍給的胸背才帶出（嘉文）註：胸背放在住院區箱子裡",
       "sex": "female",
