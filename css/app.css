@@ -952,28 +952,30 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
 .find-dot.z-new { background: var(--z-new-ink); } .find-dot.z-iso { background: var(--z-iso-ink); }
 .find-dot.z-mom { background: var(--z-mom-ink); } .find-dot.z-pup { background: var(--z-pup-ink); }
 .find-dot.z-old { background: var(--z-old-ink); }
-.find-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 12px; }
-@media (min-width: 440px) { .find-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+/* 找狗列表（#154）：一籠一列，籠位在左、狗在右（小圓照片＋名字），名字多就換行 */
+.find-rows { background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); overflow: hidden; }
+.find-row {
+  display: flex; align-items: flex-start; gap: 10px; padding: 4px 10px; border-bottom: 0.5px solid var(--line);
+  /* 畫面外的籠位列先不排版（手機開啟加速），捲到附近才畫；auto 會記住畫過的高度，捲動不跳 */
+  content-visibility: auto; contain-intrinsic-size: auto 53px;
+}
+.find-row:last-child { border-bottom: none; }
+.find-row-cage { width: 52px; flex-shrink: 0; padding-top: 13px; font-size: 14px; font-weight: 700; color: var(--ink-soft); font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.find-row-dogs { display: flex; flex-wrap: wrap; gap: 4px 6px; flex: 1; min-width: 0; padding: 4px 0; }
 .find-dog {
-  border: none; background: none; padding: 0; font-family: inherit; color: var(--ink); text-align: left; cursor: pointer;
-  display: flex; flex-direction: column; gap: 5px; min-width: 0;
-  /* 畫面外的照片卡先不排版（手機開啟加速），捲到附近才畫；auto 會記住畫過的高度，捲動不跳 */
-  content-visibility: auto; contain-intrinsic-size: auto 220px;
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; max-width: 100%; padding: 4px 12px 4px 4px;
+  border: none; border-radius: 22px; background: var(--muted-bg); font-family: inherit; color: var(--ink); text-align: left; cursor: pointer;
 }
-.find-dog:focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; border-radius: 14px; }
-.find-photo { position: relative; display: block; }
-.find-photo .thumb { width: 100%; height: auto; aspect-ratio: 1; border-radius: var(--radius-photo); }
-.find-photo .thumb-fallback { font-size: 40px; }
-.find-dog:active .thumb { opacity: 0.85; }
-.find-warn {
-  position: absolute; top: 7px; left: 7px; display: flex; align-items: center; gap: 3px;
-  background: var(--red-text); color: #fff; border-radius: 999px; font-size: 11.5px; font-weight: 700; padding: 2px 8px 2px 6px;
-}
-.find-name { display: flex; align-items: flex-start; font-size: 16px; font-weight: 800; line-height: 1.3; padding: 0 2px; min-width: 0; }
-.find-name .n { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.find-meta { display: flex; flex-wrap: wrap; gap: 0 8px; font-size: 13px; color: var(--ink-soft); padding: 0 2px; font-variant-numeric: tabular-nums; }
-.find-meta b { color: var(--ink); font-weight: 700; }
-.find-dog mark, .find-meta mark { background: #FFE58A; color: inherit; border-radius: 3px; padding: 0 1px; }
+.find-dog:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.find-dog:active { opacity: 0.85; }
+.find-dog .thumb { width: 32px; height: 32px; flex-shrink: 0; border-radius: 50%; }
+.find-dog .thumb-fallback { font-size: 16px; }
+.find-name { display: inline-flex; align-items: center; font-size: 15px; font-weight: 700; line-height: 1.25; min-width: 0; }
+.find-name .n { overflow-wrap: anywhere; }
+.find-row-id { font-size: 12px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.find-row-warn { display: inline-flex; color: var(--red-text); }
+.find-row-warn .icon { width: 15px; height: 15px; }
+.find-dog mark, .find-row-cage mark { background: #FFE58A; color: inherit; border-radius: 3px; padding: 0 1px; }
 
 .find-map-card { background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 12px; }
 /* 放大到一區時，圖下左邊「看全圖」回到整張（取代提示字） */
@@ -1169,6 +1171,9 @@ html.find-zoom-open { overflow: hidden; }
 .detail-bar .group-walk { flex: 1.6; width: auto; margin: 0; min-height: 50px; }
 .detail-bar .self-walked { flex: 1.6; margin: 0; justify-content: center; background: var(--green-bg); border-radius: 14px; }
 .detail-bar button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* #146：選了照片時底部換成取消／確認上傳，確認用綠色，跟藍色的溜了分開 */
+.detail-bar .bar-confirm { flex: 1.6; min-height: 50px; border: none; border-radius: 14px; background: var(--green, #34C759); color: #fff; font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.detail-bar .bar-confirm:disabled { opacity: 0.6; cursor: default; }
 
 /* ── V7（#114）各頁美術：溜狗表三格、今天已溜大數字、我溜過進度條 ── */
 .stat-tiles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 0 0 12px; }
@@ -1292,12 +1297,6 @@ header.app { background: rgba(255, 255, 255, 0.92); -webkit-backdrop-filter: blu
 .mine-stats-box { margin-bottom: 12px; }
 .mine-tiles b { font-weight: 700; }
 
-/* 找狗照片：小一點，一排 3 隻（寬一點 4 隻） */
-.find-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 12px 8px !important; }
-@media (min-width: 440px) { .find-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; } }
-.find-name { font-size: 14px; font-weight: 600; }
-.find-meta { font-size: 11.5px; }
-.find-meta span { display: none; } /* 編號點進去看 */
 .find-chip.on { background: var(--ink) !important; }
 .find-map-all { margin-left: auto; flex-shrink: 0; }
 
@@ -1356,5 +1355,24 @@ html.onboard-open { overflow: hidden; }
 
 /* #141：列表欄位與持續登記入口 */
 .row-head { display:grid; grid-template-columns:50px minmax(0,1fr) 40px minmax(0,1.1fr) 52px; gap:8px; padding:10px 8px 10px 12px; font-size:12px; color:var(--ink-soft); border-bottom:1px solid var(--line); }
-.walk-edit-actions { display:flex; flex-wrap:wrap; gap:8px; }
-.walk-edit-actions button { min-height:44px; border:1px solid var(--line); border-radius:10px; padding:6px 10px; background:var(--surface); color:var(--primary); }
+/* #141：溜狗人旁直接加人（＋）、拿掉人（×）；按的範圍 44px */
+.lw-v:has(.who-plus) { gap: 8px; padding: 6px 0; align-items: center; }
+.who-chip.editable { display: inline-flex; align-items: center; height: 36px; padding: 0 0 0 12px; border-radius: 18px; }
+.who-x { width: 36px; height: 36px; padding: 0; border: none; border-radius: 50%; background: none; color: var(--ink-soft); font-size: 20px; line-height: 1; cursor: pointer; position: relative; }
+.who-x::after { content: ''; position: absolute; inset: -4px; }
+.who-plus { min-width: 44px; height: 36px; padding: 0 14px; border: 1.5px dashed var(--primary); border-radius: 18px; background: none; color: var(--primary); font-family: inherit; font-size: 18px; font-weight: 600; cursor: pointer; position: relative; }
+.who-plus::after { content: ''; position: absolute; inset: -4px 0; }
+.who-x:disabled, .who-plus:disabled { opacity: 0.4; cursor: default; }
+
+/* 我的常溜（#155）：詳細資訊名字旁的 ☆／★，找狗列表名字後的小 ★ */
+.detail-head .name-row { display: flex; align-items: center; gap: 10px; }
+.detail-head .name-row .name { min-width: 0; }
+.fav-btn {
+  flex-shrink: 0; min-height: 44px; padding: 0 14px; border: 1.5px solid var(--line); border-radius: 22px;
+  background: var(--surface); color: var(--ink-soft); font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap;
+}
+.fav-btn.on { border-color: var(--amber-text); background: var(--amber-bg); color: var(--amber-text); }
+.fav-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.fav-mark { font-style: normal; color: var(--amber-text); font-size: 13px; margin-left: 2px; }
+/* 溜狗表的「★ 我的常溜」可以跟天數篩選一起開，跟後面的天數隔開一點 */
+.chip.fav-chip { margin-right: 6px; }
