@@ -1,0 +1,84 @@
+/* 電腦版（寬 1024px 以上）：同一個網址，螢幕夠寬才套用；手機完全不讀這裡（index.html 的 media 條件）。
+   版面：頁首一列（標題｜搜尋｜按鈕）、左邊分類欄、中間狗卡排成多欄、詳細資訊從右邊滑出不蓋住列表 */
+:root { --side-w: 216px; --head-h: 68px; }
+
+/* 頁首：一列排開，搜尋框放中間 */
+header.app { padding: 0 24px; height: var(--head-h); display: flex; align-items: center; }
+.header-inner { max-width: none; width: 100%; display: flex; align-items: center; gap: 10px; }
+.brand { display: contents; }
+.brand .titles { flex: 1; }
+.brand .sub { justify-content: flex-start; gap: 14px; }
+.search { margin: 0 16px; width: 440px; flex-shrink: 0; }
+.sync-btn, .analysis-btn { order: 1; }
+
+/* 分類：手機在下面，電腦改成左邊直的一欄 */
+.bottom-bar {
+  top: var(--head-h); bottom: 0; right: auto; width: var(--side-w);
+  padding: 16px 12px; background: var(--surface);
+  -webkit-backdrop-filter: none; backdrop-filter: none;
+  box-shadow: 1px 0 0 var(--line);
+}
+.bottom-inner { max-width: none; }
+.tabs { display: flex; flex-direction: column; gap: 4px; }
+.tabs button {
+  flex-direction: row; justify-content: flex-start; gap: 12px;
+  min-height: 46px; padding: 0 14px; border-radius: 10px;
+}
+.tabs button .icon { font-size: 20px; }
+.tabs button .t { font-size: 15px; }
+.tabs button .n { position: static; margin-left: auto; font-size: 12px; line-height: 20px; padding: 0 8px; border-radius: 10px; }
+.tabs button:hover { background: var(--surface-soft); }
+.tabs button.active { background: var(--primary-soft); }
+.analysis-open .bottom-bar { display: block; }
+
+/* 內容區：讓出左邊欄，寬度放大 */
+main {
+  max-width: 1280px; margin: 0 0 0 var(--side-w);
+  padding: 20px 28px 40px; min-height: calc(100vh - var(--head-h));
+}
+@media (min-width: 1500px) { main { margin-left: calc(var(--side-w) + (100vw - var(--side-w) - 1280px) / 2); } }
+.chips { margin: 0 0 12px; padding: 2px 0; flex-wrap: wrap; overflow: visible; }
+
+/* 溜狗表照片模式：狗卡排成多欄（篩選、工具列、提示整排） */
+main:has(> .card) { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 10px 12px; align-content: start; }
+main:has(> .card) > :not(.card) { grid-column: 1 / -1; }
+main:has(> .card) > .card { margin-bottom: 0; }
+.card { padding: 8px 8px 8px 8px; }
+.card:hover, .row-dog:hover, .find-dog:hover .find-photo { background: #F7F9FC; }
+.card .thumb { width: 84px; height: 72px; }
+
+/* 列表模式：像試算表，欄位拉開（太寬眼睛跟不上一列，最寬 1000px） */
+.rows { max-width: 1000px; }
+.row-dog, .row-head { grid-template-columns: 90px minmax(0, 1fr) 90px minmax(0, 1.4fr) 56px; }
+.row-dog { padding: 8px 16px; min-height: 46px; }
+.r-cage { font-size: 14px; }
+
+/* 我溜過：每次到所的卡排兩欄 */
+main:has(> .visit) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-content: start; }
+main:has(> .visit) > :not(.visit) { grid-column: 1 / -1; }
+main:has(> .visit) > .visit { margin-bottom: 0; }
+.visit-dogs { grid-template-columns: repeat(auto-fill, minmax(76px, 1fr)); }
+
+/* 找狗：照片一排 6～8 隻 */
+.find-grid { grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)) !important; gap: 16px 12px !important; }
+.find-view { max-width: 360px; }
+.find-map-card { max-width: 980px; }
+
+/* 詳細資訊：從右邊滑出一欄，左邊列表還看得到；底色淡一點 */
+.detail-backdrop { align-items: stretch; justify-content: flex-end; background: rgba(30, 42, 68, 0.18); }
+.detail {
+  max-width: 460px; height: 100vh; max-height: 100vh;
+  border-radius: 0; box-shadow: -10px 0 40px rgba(20, 30, 50, 0.16);
+  animation: desk-slide .2s ease-out;
+}
+@keyframes desk-slide { from { transform: translateX(30px); opacity: .6; } to { transform: none; opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .detail { animation: none; } }
+
+/* 在哪、一起溜：電腦上改成畫面中間的視窗 */
+.where-backdrop, .with-backdrop { align-items: center; }
+.where-sheet { max-width: 640px; border-radius: 20px; }
+.with-sheet { border-radius: 18px; }
+.where-grab { display: none; }
+
+/* 滑鼠：可點的東西都要有手指游標 */
+.card, .row-dog, .find-dog, .chip, .seg button, .walk-btn { cursor: pointer; }

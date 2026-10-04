@@ -2719,6 +2719,36 @@ async function runSheetWriteTests() {
   }
 }
 
+// ── 電腦版（#149）：螢幕寬 1024px 以上才套用 css/desktop.css；手機版面不變 ──
+async function runDesktopTests() {
+  // 用不同寬度的 iframe 打開真的首頁，看分類列在哪裡（iframe 的寬度就是它的螢幕寬度）
+  const layoutAt = width => new Promise((resolve, reject) => {
+    const f = document.createElement('iframe');
+    f.style.cssText = `position:absolute;left:-9999px;top:0;width:${width}px;height:700px;border:0`;
+    f.onload = () => setTimeout(() => {
+      try {
+        const doc = f.contentDocument, win = f.contentWindow;
+        const bar = doc.getElementById('bottomBar').getBoundingClientRect();
+        const main = doc.getElementById('main').getBoundingClientRect();
+        resolve({ barTop: Math.round(bar.top), barWidth: Math.round(bar.width), mainLeft: Math.round(main.left), desktopSheet: [...doc.styleSheets].some(s => /desktop\.css$/.test(s.href || '') && win.matchMedia(s.media.mediaText).matches) });
+      } catch (e) { reject(e); } finally { f.remove(); }
+    }, 300);
+    f.src = '../index.html';
+    document.body.appendChild(f);
+  });
+  await check('#149 index.html 載入電腦版樣式，只在寬 1024px 以上套用（手機不用等它）', () => {
+    if (!/<link rel="stylesheet" href="css\/desktop\.css" media="\(min-width: 1024px\)">/.test(INDEX_HTML)) throw new Error('找不到 css/desktop.css 的 link');
+  });
+  await check('#149 手機寬度：分類列在最下面整排，跟以前一樣', async () => {
+    const m = await layoutAt(390);
+    eq([m.desktopSheet, m.barWidth, m.barTop > 600], [false, 390, true], '手機：');
+  });
+  await check('#149 電腦寬度：分類改成左邊一欄，內容區讓出左邊', async () => {
+    const d = await layoutAt(1280);
+    eq([d.desktopSheet, d.barWidth, d.barTop, d.mainLeft >= 216], [true, 216, 68, true], '電腦：');
+  });
+}
+
 async function runOldUrlTests() {
   const testHtml = await fetch('index.html').then(r => r.text());
   // 把頁面裡的轉址程式拿出來，用假的 location 跑
@@ -2802,6 +2832,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runWalkSortTests)
   .then(runSheetWriteTests)
   .then(runV9Tests)
+  .then(runDesktopTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
