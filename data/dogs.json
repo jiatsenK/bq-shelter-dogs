@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-04T17:30:38+08:00",
+  "syncedAt": "2026-10-04T18:00:35+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -1839,14 +1839,15 @@
       "name": "阿湯",
       "walkedDate": "2026-10-04",
       "covered": true,
-      "myWalked": false,
+      "myWalked": true,
       "walkers": [
-        "ca36800987f2"
+        "ca36800987f2",
+        "7fe4735e3c59"
       ],
       "note": "",
       "sex": "",
       "intro": "",
-      "myWalkedDate": null
+      "myWalkedDate": "2026-10-04"
     }
   ],
   "groups": {
