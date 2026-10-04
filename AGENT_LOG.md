@@ -634,3 +634,14 @@
 - 新增後端與網頁回歸測試；檢查結果將記在 PR。實機與真實 Sheet 寫入仍需正式部署後驗收。
 
 - PR #148 CI 初跑：Node 107 通過；修正 onboarding 輸入事件錯用相簿彈窗狀態、讀取歷史失敗被舊快取遮住的問題，更新與新版行為相關的既有斷言；保留固定 UI 名詞（狗名、溜狗人）。
+
+## 2026-10-04 Claude（#130 照片搬到 Cloudflare R2）
+- 依據：K 說「130」開工（原分工 Codex，改由 Claude 做）。V9 驗收串正在改前端，前端只改了換照片／加相簿的兩句提示（「其他志工重新整理就會看到」）。
+- Worker 有 R2（binding `PHOTOS`）時：主照片、相簿、設為主照片、刪相簿都只寫 R2，不產生 GitHub 提交；相簿清單改存 R2 `meta/gallery.json`（第一次寫入從 repo 的 data/gallery.json 接過來）；狗編號改讀部署上去的 dogs.json。程式在 `worker/src/r2.js`。
+- `/photos/*`、`/data/dogs.json`、`/data/gallery.json` 先經過 Worker：照片 R2 優先、讀不到退回 repo 舊檔；刪掉／換掉的放刪除標記，舊檔不會再冒出來；dogs.json 蓋上 R2 照片的版本號（前端照舊加 ?v=）。
+- Trash：換掉、刪掉前先複製到 `trash/`（記原位置、狗、相簿／主照片、刪除時間），備份成功才動原檔；Cron 清 30 天以上的；復原用管理 API（後台另開票）。
+- 管理 API 用 `NOTES_PASSCODE`（標頭 `X-Admin-Passcode`）：搬遷、核對、縮圖、Trash 清單與復原。
+- 縮圖：Worker 換照片後叫「產生照片縮圖（R2）」Action（`make-thumbs.py --site`），Cron 也會補叫；做好前網站先顯示原圖。
+- 搬遷：手動 Action「照片搬到 R2」，一次 10 張、R2 寫入用 sha256 驗證、搬完逐檔核對，結果寫在 Summary；R2 已有的不蓋掉，可重跑。repo 舊照片不刪。
+- 部署：`scripts/r2-bucket.mjs` 確認／建立 bucket，建不起來就拿掉 R2 設定部署（照片照舊存 GitHub），不會讓部署失敗。K 的步驟寫在 docs/CLOUDFLARE_SETUP.md「照片放 R2」。
+- 測試：新增 worker/test/r2.test.mjs、scripts/migrate-photos-r2.test.mjs、scripts/r2-bucket.test.mjs（加進 tests.yml、AGENTS.md）；tests/index.html 追加 #130 測試。wrangler dev 本機模擬實跑：308 張搬遷核對全對、換照片／縮圖／相簿新增刪除復原／設為主照片都正常。

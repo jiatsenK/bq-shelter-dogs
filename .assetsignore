@@ -7,6 +7,7 @@ node_modules
 worker
 scripts
 wrangler.jsonc
+wrangler.no-r2.json
 .assetsignore
 AGENT_LOG.md
 AGENTS.md
