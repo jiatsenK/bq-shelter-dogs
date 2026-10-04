@@ -853,18 +853,19 @@ function clearWalkWith(dogs, today = new Date()) {
   for (const d of dogs) delete map[walkKey(d)];
   writeJsonKey(WALK_WITH_KEY, { date: localDateKey(today), map });
 }
-let withSheet = null; // { dogs, picked: Set, text }
-function openWithSheet(dogs, edit = false) {
-  const already = new Set(dogs.flatMap(d => loadWalkWith()[walkKey(d)] || []));
-  withSheet = { dogs, picked: new Set(edit ? walkerList(dogs[0]) : []), text: '', already: edit ? new Set() : already, edit, expected: loadSheetWrites()[walkKey(dogs[0])]?.current?.walker || walkerNames[walkKey(dogs[0])] || walkerList(dogs[0]).join('、'), phase: 'edit', error: '' };
+let withSheet = null; // { dogs, picked: Set, text, add }
+// add：詳細資訊溜狗人旁的「＋」，選好的人接在目前名單後面（#141）；不是 add 就是溜了之後提示條的「＋一起溜的人」
+function openWithSheet(dogs, add = false) {
+  const already = add ? new Set(walkerList(dogs[0]).map(canonicalWalker)) : new Set(dogs.flatMap(d => loadWalkWith()[walkKey(d)] || []));
+  withSheet = { dogs, picked: new Set(), text: '', already, add, phase: 'edit', error: '' };
   renderWithSheet();
 }
 function withSheetHtml() {
   const w = withSheet;
   const me = loadWalkerName();
-  const names = [...new Set([...walkerNameList, ...loadCompanions(), ...w.picked])].filter(n => (w.edit || n !== me) && !w.already.has(n));
+  const names = [...new Set([...walkerNameList, ...loadCompanions(), ...w.picked])].filter(n => (w.add || n !== me) && !w.already.has(n));
   return `<div class="with-sheet" role="dialog" aria-modal="true" aria-labelledby="withTitle">
-    <h3 id="withTitle">${w.edit ? '修改溜狗人：' : '誰跟你一起溜 ' }${esc(w.dogs.map(d => d.name).join('、'))}${w.edit ? '' : '？'}</h3>
+    <h3 id="withTitle">${w.add ? '加入溜狗人：' : '誰跟你一起溜 ' }${esc(w.dogs.map(d => d.name).join('、'))}${w.add ? '' : '？'}</h3>
     ${names.length ? `<div class="with-names">${names.map(n => `<button type="button" class="with-name${w.picked.has(n) ? ' on' : ''}" data-with="${esc(n)}" aria-pressed="${w.picked.has(n)}">${w.picked.has(n) ? icon('tick') : ''}${esc(n)}</button>`).join('')}</div>` : ''}
     <form class="with-add" id="withAdd" autocomplete="off">
       <input type="text" id="withInput" maxlength="20" placeholder="${names.length ? '其他人：輸入名字' : '輸入名字，例：嘉文'}" value="${esc(w.text)}" enterkeyhint="done">
@@ -912,12 +913,14 @@ async function finishWithSheet() {
   const w = withSheet;
   splitWalkers(w.text).forEach(n => w.picked.add(n));
   const names = [...w.picked];
-  if (w.edit) {
-    if (!names.length) { w.error = '請至少保留一位溜狗人；取消登記請用復原。'; renderWithSheet(); return; }
-    w.phase = 'saving'; renderWithSheet();
-    const ok = await queueSheetWrite(w.dogs, true, null, null, names.join('、'), w.expected);
-    if (!ok) { w.phase = 'edit'; w.error = '沒有儲存，請確認錯誤提示後重試。'; renderWithSheet(); return; }
-    withSheet = null; renderWithSheet(); return;
+  if (w.add) {
+    withSheet = null;
+    renderWithSheet();
+    const dog = w.dogs[0];
+    const now = walkerList(dog);
+    const added = names.filter(n => !now.map(canonicalWalker).includes(canonicalWalker(n)));
+    if (added.length) editWalkers(dog, [...now, ...added], `已加入 ${added.join('、')}`);
+    return;
   }
   withSheet = null;
   renderWithSheet();
@@ -1049,7 +1052,7 @@ async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expecte
   render(); renderDetail();
   if (missed.length) {
     const statuses = (out.results || []).map(r => r.status);
-    showToast(statuses.includes('badAction') ? '請先更新 Google Apps Script，再使用修改溜狗人。' : statuses.includes('changed') ? `${missed.join('、')} 在試算表已經被改過，請重新開啟編輯；未覆寫他人資料` : `試算表找不到 ${missed.join('、')}，請自己填`);
+    showToast(statuses.includes('badAction') ? '請先更新 Google Apps Script，再使用修改溜狗人。' : statuses.includes('changed') ? `${missed.join('、')} 在試算表已經被改過，沒有蓋掉別人的，畫面已換成最新名單` : `試算表找不到 ${missed.join('、')}，請自己填`);
   } else if (on && toastText) {
     addToToast(toastText, toastUndo, '，已寫進試算表');
   }
@@ -1170,7 +1173,6 @@ function detailHtml(dog, today) {
       </div>
     </div>
     ${lastWalkSection(dog, today)}
-    ${walkEditControls(dog, today)}
     ${detailTrail.length ? `<button type="button" class="detail-back" id="detailBack">${icon('back')}回到 ${esc(detailTrail[detailTrail.length - 1].name)}</button>` : ''}
     <section class="detail-section" data-section="note">
       <h3>${icon('note')}試算表備註</h3>
@@ -1202,15 +1204,6 @@ function detailHtml(dog, today) {
   `;
 }
 
-function walkEditControls(dog, today) {
-  const item = loadSheetWrites(today)[walkKey(dog)];
-  if (!item || !item.current || item.current.date !== localDateKey(today)) return '';
-  return `<section class="detail-section walk-edit"><h3>今天的登記</h3>
-    <div class="walk-edit-actions"><button type="button" id="walkAddPeople">新增溜狗人</button>
-    <button type="button" id="walkEditPeople">修改溜狗人</button>
-    ${item.prev && item.wrote ? '<button type="button" id="walkUndoSaved">復原本次登記／編輯</button>' : ''}</div></section>`;
-}
-
 // V9（#141 第 9 項）：上次溜的日期和溜狗人，放在照片和名字下面第一個
 function lastWalkSection(dog, today) {
   const s = computeStatus(dog, today);
@@ -1219,8 +1212,45 @@ function lastWalkSection(dog, today) {
   const who = walkerList(dog, today);
   return `<section class="detail-section last-walk" data-section="last">
     <div class="lw-row"><span class="lw-k">上次溜</span><span class="lw-v">${esc(date)}</span></div>
-    <div class="lw-row"><span class="lw-k">溜狗人</span><span class="lw-v">${who.length ? who.map(n => `<span class="who-chip">${esc(n)}</span>`).join('') : '<span class="lw-none">—</span>'}</span></div>
+    <div class="lw-row"><span class="lw-k">溜狗人</span><span class="lw-v">${walkerChipsHtml(dog, who, today)}</span></div>
   </section>`;
+}
+
+// ── 溜狗人旁的＋／×（#141，K 2026-10-04 確認）──
+// 這隻狗試算表上是今天溜的，就能在名字旁直接加人（＋）、拿掉人（×），按了直接寫進試算表，提示條可以復原。
+// 寫的是整格新名單（Worker／Apps Script 的 edit），帶著目前那格的原文比對，別人先改過就不蓋掉。
+// 只剩一個人不給 ×（那格至少留一人，整筆取消用提示條的復原）；列表模式不放
+let walkerEditBusy = ''; // 正在寫的狗的 key，寫完前＋／×都不能按
+function walkerEditBase(dog, today = new Date()) {
+  if (!UPLOAD_URL || sheetWriteState === 'off') return null;
+  const key = walkKey(dog);
+  if (!key) return null;
+  const date = localDateKey(today);
+  const item = loadSheetWrites(today)[key];
+  if (item && item.current) return item.current.date === date && item.current.walker ? item.current.walker : null;
+  if (walkedNow(dog, today)) return null; // 這支手機按了溜了，試算表還沒回來
+  return dog.walkedDate && localDateKey(dog.walkedDate) === date && walkerNames[key] ? walkerNames[key] : null;
+}
+function walkerChipsHtml(dog, who, today) {
+  if (!who.length) return '<span class="lw-none">—</span>';
+  if (!walkerEditBase(dog, today)) return who.map(n => `<span class="who-chip">${esc(n)}</span>`).join('');
+  const busy = walkerEditBusy === walkKey(dog);
+  const dis = busy ? ' disabled' : '';
+  return who.map(n => `<span class="who-chip${who.length > 1 ? ' editable' : ''}">${esc(n)}${who.length > 1 ? `<button type="button" class="who-x" data-who-remove="${esc(n)}" aria-label="拿掉 ${esc(n)}"${dis}>×</button>` : ''}</span>`).join('')
+    + `<button type="button" class="who-plus" id="whoAdd" aria-label="加入溜狗人"${dis}>${busy ? '…' : '＋'}</button>`;
+}
+async function editWalkers(dog, names, text) {
+  const expected = walkerEditBase(dog);
+  const key = walkKey(dog);
+  if (!expected || walkerEditBusy) return;
+  walkerEditBusy = key;
+  renderDetail();
+  const ok = await queueSheetWrite([dog], true, null, null, [...new Set(names)].join('、'), expected);
+  walkerEditBusy = '';
+  renderDetail();
+  if (!ok) return; // 失敗、別人改過的提示 sheetWrite 已經跳了
+  const undo = () => queueSheetWrite([dog], false);
+  showToast(`${text}，已寫進試算表`, undo);
 }
 
 // 詳細資訊狗名下面的標籤：籠位、入所年月（天數標籤是 statusBadge）
@@ -2073,9 +2103,11 @@ const DETAIL_CLICKS = [
   ['#photoConfirm', () => uploadPhoto()],
   ['#photoCancel', () => { clearPhotoUpload(); renderDetail(); }],
   ['.buddy', el => { const d = allDogs[el.dataset.dog]; if (d) showDetail(d); }],
-  ['#walkAddPeople', () => openWithSheet([detailDog])],
-  ['#walkEditPeople', () => openWithSheet([detailDog], true)],
-  ['#walkUndoSaved', () => queueSheetWrite([detailDog], false)],
+  ['#whoAdd', () => openWithSheet([detailDog], true)],
+  ['[data-who-remove]', el => {
+    const n = el.dataset.whoRemove;
+    editWalkers(detailDog, walkerList(detailDog).filter(x => x !== n), `已拿掉 ${n}`);
+  }],
   ['#detailBack', () => { const d = detailTrail.pop(); if (d) showDetail(d, false); }],
   ['#detailWhere', el => whereOpen(detailDog, el)],
   ['.pick', el => {

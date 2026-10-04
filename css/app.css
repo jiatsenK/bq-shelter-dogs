@@ -1356,5 +1356,11 @@ html.onboard-open { overflow: hidden; }
 
 /* #141：列表欄位與持續登記入口 */
 .row-head { display:grid; grid-template-columns:50px minmax(0,1fr) 40px minmax(0,1.1fr) 52px; gap:8px; padding:10px 8px 10px 12px; font-size:12px; color:var(--ink-soft); border-bottom:1px solid var(--line); }
-.walk-edit-actions { display:flex; flex-wrap:wrap; gap:8px; }
-.walk-edit-actions button { min-height:44px; border:1px solid var(--line); border-radius:10px; padding:6px 10px; background:var(--surface); color:var(--primary); }
+/* #141：溜狗人旁直接加人（＋）、拿掉人（×）；按的範圍 44px */
+.lw-v:has(.who-plus) { gap: 8px; padding: 6px 0; align-items: center; }
+.who-chip.editable { display: inline-flex; align-items: center; height: 36px; padding: 0 0 0 12px; border-radius: 18px; }
+.who-x { width: 36px; height: 36px; padding: 0; border: none; border-radius: 50%; background: none; color: var(--ink-soft); font-size: 20px; line-height: 1; cursor: pointer; position: relative; }
+.who-x::after { content: ''; position: absolute; inset: -4px; }
+.who-plus { min-width: 44px; height: 36px; padding: 0 14px; border: 1.5px dashed var(--primary); border-radius: 18px; background: none; color: var(--primary); font-family: inherit; font-size: 18px; font-weight: 600; cursor: pointer; position: relative; }
+.who-plus::after { content: ''; position: absolute; inset: -4px 0; }
+.who-x:disabled, .who-plus:disabled { opacity: 0.4; cursor: default; }
