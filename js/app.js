@@ -2253,11 +2253,12 @@ function dueDogs(dogs, today) {
     .map(x => x.d);
 }
 
-// 溜狗表排序（2026-10-04 K：要可以改排序）：預設最久沒溜在前；也可以照籠位（同一區一路溜過去）或狗名。
+// 溜狗表排序（2026-10-04 K：要可以改排序）：預設最久沒溜在前；也可以最近溜的在前（時間倒過來）、照籠位（同一區一路溜過去）或狗名。
 // 選了哪個記在這支手機（跟今天已溜同一個 localStorage），下次打開還是一樣
 const WALK_SORT_KEY = 'bq-walk-sort';
 const WALK_SORTS = [
   { id: 'due', label: '最久沒溜' },
+  { id: 'recent', label: '最近溜' },
   { id: 'cage', label: '籠位' },
   { id: 'name', label: '狗名' },
 ];
@@ -2279,6 +2280,11 @@ function saveWalkSort(id) {
 function sortWalkList(dogs, today, sort = loadWalkSort()) {
   const due = dueDogs(dogs, today);
   if (sort === 'due') return due;
+  if (sort === 'recent') {
+    // 有日期的照最近溜在前；有人固定照顧、沒有紀錄的放最後（不是剛溜過）
+    const dated = due.filter(d => computeStatus(d, today).kind === 'dated');
+    return [...dated.reverse(), ...due.filter(d => computeStatus(d, today).kind !== 'dated')];
+  }
   const rank = new Map(due.map((d, i) => [d, i]));
   const text = d => String((sort === 'cage' ? d.cage : d.name) || '').trim();
   return [...due].sort((a, b) => {
