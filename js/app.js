@@ -770,6 +770,17 @@ function setWalked(dogs, on) {
   queueSheetWrite(changed, on, text, undoFn);
 }
 
+// ── 我的常溜（#155）：志工自己收藏的狗，只存這支手機，不寫試算表、不送伺服器；跟「我溜過」（歷史）分開 ──
+const FAVS_KEY = 'bq-favs';
+function loadFavs() { const v = readJsonKey(FAVS_KEY); return Array.isArray(v) ? v.map(String) : []; }
+function isFav(dog) { const k = walkKey(dog); return !!k && loadFavs().includes(k); }
+function toggleFav(dog) {
+  const k = walkKey(dog);
+  if (!k) return;
+  const favs = loadFavs();
+  writeJsonKey(FAVS_KEY, favs.includes(k) ? favs.filter(x => x !== k) : [k, ...favs]);
+}
+
 // ── 按「溜了」寫進試算表（#138）──
 // 經過 Worker 的 /walk 轉給 K 部署的 Google Apps Script，只改主清單的「遛狗日期」「誰遛的」。
 // 寫成功的記下試算表原本的內容（只記今天的），復原或放回時帶回去改回來；小程式只在格子還是我們寫的樣子時才改回。
@@ -1155,6 +1166,13 @@ function dogCard(dog, today, eager = false) {
 }
 
 // 詳細資訊：備註（志工後續補充，試算表備註欄）／可以一起溜的狗／狗卡資訊（dogs/{編號}.md 的入所原始介紹，同步時已寫進 dogs.json）
+// 詳細資訊名字旁的「☆ 常溜」／「★ 我的常溜」
+function favButtonHtml(dog) {
+  if (!walkKey(dog)) return '';
+  const on = isFav(dog);
+  return `<button type="button" class="fav-btn${on ? ' on' : ''}" id="favToggle" aria-pressed="${on}">${on ? '★ 我的常溜' : '☆ 常溜'}</button>`;
+}
+
 function detailHtml(dog, today) {
   const flag = specialFlag(dog.note);
   const buddies = [...(groupMap[dog.name] || [])];
@@ -1167,7 +1185,7 @@ function detailHtml(dog, today) {
       ${photoHeroHtml(dog)}
       ${photoUploadHtml(dog)}
       <div class="info">
-        <div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div>
+        <div class="name-row"><div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div>${favButtonHtml(dog)}</div>
         <div class="chips">${statusBadge(dog, today)}${detailChips(dog)}</div>
         ${metaLine(dog)}
       </div>
@@ -2125,6 +2143,7 @@ const DETAIL_CLICKS = [
     const n = el.dataset.whoRemove;
     editWalkers(detailDog, walkerList(detailDog).filter(x => x !== n), `已拿掉 ${n}`);
   }],
+  ['#favToggle', () => { toggleFav(detailDog); renderDetail(); render(); }],
   ['#detailBack', () => { const d = detailTrail.pop(); if (d) showDetail(d, false); }],
   ['#detailWhere', el => whereOpen(detailDog, el)],
   ['.pick', el => {
