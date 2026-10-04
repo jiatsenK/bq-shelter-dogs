@@ -84,3 +84,9 @@ test('#138 通關碼：沒設 WRITE_KEY 就照常寫；有設就要一樣', () =
   assert.deepEqual([bad.out.code, bad.writes.length], ['key', 0]);
   assert.equal(run({ SHEET_ID: 'x', WRITE_KEY: 'k' }, { ...req, key: 'k' }).out.ok, true);
 });
+
+test('#138 SHEET_ID 貼成網址或多了空白也認得', () => {
+  const f = vm.runInContext('sheetIdOf', ctx);
+  assert.equal(f(' abc_DEF-123 '), 'abc_DEF-123');
+  assert.equal(f('https://docs.google.com/spreadsheets/d/abc_DEF-123/edit#gid=0'), 'abc_DEF-123');
+});
