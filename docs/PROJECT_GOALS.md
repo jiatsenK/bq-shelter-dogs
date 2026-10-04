@@ -157,6 +157,8 @@ K 2026-09-25 實測後說「完成定版」（2026-09-27 由 V6 接替）。
 
 **架構**：兩個獨立資料源，沒有中介伺服器、沒有資料庫。（V3 起試算表改由 GitHub Action 同步成 `data/dogs.json`，前端不再即時讀試算表。）
 
+**按「溜了」寫進試算表（#138，2026-10-04 K 決定）**：原本整個網站唯讀；現在只開一個例外——志工按「溜了」時，經過 Worker 的 `/api/walk` 轉給 K 用自己帳號部署的 Google Apps Script（`apps-script/sheet-write.gs`），只改主清單的「遛狗日期」（今天）和「誰遛的」（在「我溜過」設定的第一個名字，名字只記在手機）。同一天已有別人就接在後面；復原／放回時，格子還是網站寫的樣子才改回原本內容。Worker 沒設定 `SHEET_WRITE_URL` 時照舊只記在手機；通關碼 `SHEET_WRITE_KEY`／`WRITE_KEY` 可不設（K 決定先不設）。設定步驟：`docs/SHEET_WRITE_SETUP.md`。
+
 **瀏覽統計（V8，#128）**：新網址用 Cloudflare Web Analytics，只看每天幾個人用、用什麼手機；不放 cookie、不記個人資料。只有正式部署時才放進網頁（GitHub Secret `CF_ANALYTICS_TOKEN`），舊網址和 PR 預覽版不算。
 
 ### 資料源一：Google 試算表（唯讀）

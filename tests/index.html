@@ -197,7 +197,7 @@ function runTests() {
       // （#35「今天已溜」的打勾圖示叫 i-tick，只記在這支手機，不是編輯試算表）
       if (/edit|pencil|pen|check/i.test(symbols)) throw new Error(`不應有編輯或勾選圖示：${symbols}`);
     }),
-    check('#10 唯讀：程式只有讀取，沒有寫入試算表的呼叫；唯一的上傳只送到照片上傳服務（#48）', () => {
+    check('#10 唯讀：網站不直接寫試算表；寫入都送到 Worker（照片、備註、相簿，#138 起溜了經 Worker 的 /walk 寫遛狗日期和誰遛的）', () => {
       // #48 起唯一的寫入是把照片 POST 到 UPLOAD_URL（Cloudflare Worker），先把那一段拿掉再檢查其他地方
       const uploadCall = /fetch\(`\$\{UPLOAD_URL\}\/photos\/\$\{encodeURIComponent\(up\.dog\.id\)\}`, \{\s*method: 'POST',/;
       if (!uploadCall.test(APP_JS)) throw new Error('找不到照片上傳的呼叫');
@@ -219,7 +219,10 @@ function runTests() {
       // 頁首「更新」：POST 到 /sync 請 Worker 叫 GitHub 同步（只讀試算表），也先拿掉
       const syncCall = /fetch\(`\$\{UPLOAD_URL\}\/sync`, \{ method: 'POST' \}\)/;
       if (!syncCall.test(APP_JS)) throw new Error('找不到更新的呼叫');
-      const code = APP_JS.replace(uploadCall, '').replace(galleryCall, '').replace(noteCall, '').replace(galleryDeleteCall, '').replace(galleryMainCall, '').replace(walkerCall, '').replace(syncCall, '');
+      // #138 按「溜了」：POST 到 /walk，由 Worker 轉給 K 部署的小程式寫試算表兩欄（網站本身不連 Google），也先拿掉
+      const walkCall = /fetch\(`\$\{UPLOAD_URL\}\/walk`, \{ method: 'POST',/;
+      if (!walkCall.test(APP_JS)) throw new Error('找不到寫入試算表的呼叫');
+      const code = APP_JS.replace(walkCall, '').replace(uploadCall, '').replace(galleryCall, '').replace(noteCall, '').replace(galleryDeleteCall, '').replace(galleryMainCall, '').replace(walkerCall, '').replace(syncCall, '');
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
@@ -229,7 +232,7 @@ function runTests() {
       eq(tokenHits, [], 'GitHub 憑證相關字眼：');
       // #35 起「今天已溜」存在這支手機的 localStorage，只准用 WALKED_KEY；#62 加上我的備註通關碼 NOTES_PASS_KEY
       eq([...code.matchAll(/\blocalStorage\s*[.[]|window\.localStorage/g)].length, 1, 'localStorage 只在一個地方取用：');
-      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'HIDDEN_KEY', 'HIDDEN_KEY', 'WALK_SORT_KEY', 'WALK_SORT_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、NOTES_PASS_KEY、HIDDEN_KEY（#79 收起）、WALK_SORT_KEY（溜狗表排序）：');
+      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'SHEET_WRITES_KEY', 'SHEET_WRITES_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'HIDDEN_KEY', 'HIDDEN_KEY', 'WALK_SORT_KEY', 'WALK_SORT_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、WALKER_NAME_KEY 和 SHEET_WRITES_KEY（#138 寫試算表）、NOTES_PASS_KEY、HIDDEN_KEY（#79 收起）、WALK_SORT_KEY（溜狗表排序）：');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
       eq(urls.length, 3, 'fetch 呼叫數（上傳以外）：');
       // #32 起前端只讀 data/dogs.json，不直接連試算表；狗卡資訊也已經寫在 dogs.json 裡，不再抓 dogs/*.md
@@ -2776,6 +2779,76 @@ async function runWalkSortTests() {
   }
 }
 
+// #138 按「溜了」寫進試算表（經 Worker 的 /walk）
+async function runSheetWriteTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch];
+  const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
+  const toastText = () => (document.querySelector('#toast .toast-text') || {}).textContent || '';
+  try {
+    allDogs = [{ id: '9801', name: '寫入甲', cage: 'A01', note: '', covered: false, walkedDate: null }, { id: '', name: '寫入乙', cage: 'A02', note: '', covered: false, walkedDate: null }];
+    groupMap = {}; activeTab = 'walk'; searchQuery = '';
+    walkedStorage = fakeStorage(); walkedMemory = null; sheetWritesMemory = null; walkerNameMemory = ''; sheetWriteState = 'unknown';
+    UPLOAD_URL = 'https://worker.test';
+    render();
+    await check('#138 還沒設定名字：按溜了只記在手機，不送試算表', async () => {
+      const calls = [];
+      window.fetch = async (u, o) => { calls.push(u); return json({ ok: true, results: [] }); };
+      setWalked([allDogs[0]], true);
+      await sheetQueue;
+      eq(calls, [], '不送：');
+      setWalked([allDogs[0]], false); await sheetQueue; hideToast();
+    });
+    await check('#138 設定名字時記第一個寫法；按溜了送 /walk，成功記下原本內容、提示條補「已寫進試算表」', async () => {
+      saveWalkerName(firstWalkerName(' 志工我、小我 '));
+      eq(loadWalkerName(), '志工我', '名字：');
+      const calls = [];
+      window.fetch = async (u, o) => {
+        const body = JSON.parse(o.body);
+        calls.push([u, o.method, body]);
+        return json({ ok: true, today: '2026-10-04', results: body.dogs.map(d => ({ ...d, status: 'written', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' } })) });
+      };
+      setWalked(allDogs, true);
+      await sheetQueue;
+      eq(calls.map(c => [c[0], c[1], c[2]]), [['https://worker.test/walk', 'POST', { action: 'walk', walker: '志工我', dogs: [{ id: '9801', name: '寫入甲' }, { id: '', name: '寫入乙' }] }]], '送出：');
+      eq(Object.keys(loadSheetWrites()), ['9801', '名:寫入乙'], '記下：');
+      if (!toastText().endsWith('，已寫進試算表')) throw new Error(`提示：${toastText()}`);
+    });
+    await check('#138 按復原：帶原本內容送 undo，改回後清掉紀錄；放回也一樣', async () => {
+      const calls = [];
+      window.fetch = async (u, o) => { const body = JSON.parse(o.body); calls.push(body); return json({ ok: true, results: body.dogs.map(d => ({ id: d.id, name: d.name, status: 'restored' })) }); };
+      document.querySelector('#toast .toast-undo').click();
+      await sheetQueue;
+      eq(calls, [{ action: 'undo', dogs: [
+        { id: '9801', name: '寫入甲', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' } },
+        { id: '', name: '寫入乙', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' } }] }], '復原送出：');
+      eq([loadSheetWrites(), walkedToday().has(allDogs[0])], [{}, false], '清掉、手機也移回：');
+      hideToast();
+    });
+    await check('#138 別人改過就不改回並提醒；送不出去提示自己去填；Worker 沒設定就安靜不再送', async () => {
+      saveSheetWrites({ '9801': { id: '9801', name: '寫入甲', prev: { date: { text: '' }, walker: '' }, wrote: { walker: '志工我' } } });
+      walkedStorage.setItem(WALKED_KEY, JSON.stringify({ date: localDateKey(new Date()), ids: ['9801'] }));
+      window.fetch = async (u, o) => json({ ok: true, results: [{ id: '9801', name: '寫入甲', status: 'changed' }] });
+      setWalked([allDogs[0]], false); await sheetQueue;
+      if (!toastText().includes('已經被改過')) throw new Error(`改過：${toastText()}`);
+      window.fetch = async () => { throw new TypeError('Failed to fetch'); };
+      setWalked([allDogs[0]], true); await sheetQueue;
+      if (!toastText().includes('沒寫進試算表')) throw new Error(`網路：${toastText()}`);
+      setWalked([allDogs[0]], false); await sheetQueue;
+      let n = 0;
+      window.fetch = async () => { n++; return json({ ok: false, code: 'off', error: '還沒設定' }, 503); };
+      setWalked([allDogs[0]], true); await sheetQueue;
+      setWalked([allDogs[0]], false); await sheetQueue;
+      setWalked([allDogs[0]], true); await sheetQueue;
+      eq([n, sheetWriteState, toastText()], [1, 'off', '寫入甲 今天溜了'], '沒設定：');
+      hideToast();
+    });
+  } finally {
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch] = saved;
+    sheetWritesMemory = null; walkerNameMemory = ''; sheetWriteState = 'unknown';
+    render();
+  }
+}
+
 async function runOldUrlTests() {
   const testHtml = await fetch('index.html').then(r => r.text());
   // 把頁面裡的轉址程式拿出來，用假的 location 跑
@@ -2858,6 +2931,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runPhotoVersionTests)
   .then(runOldUrlTests)
   .then(runWalkSortTests)
+  .then(runSheetWriteTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

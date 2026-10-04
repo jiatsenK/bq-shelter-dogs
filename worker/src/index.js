@@ -71,6 +71,14 @@ const WALKER_NAME_MAX_CHARS = 20;
 const WALKER_MAX_BYTES = 2 * 1024;
 const WALKER_LIMITS = [{ windowMs: 60 * 1000, max: 20 }];
 const WALKER_CODE_LENGTH = 12;
+// 按「溜了」寫進試算表（#138）：一次最多幾隻、送來的資料上限；1 分鐘最多 30 次、1 小時最多 200 次
+const WALK_MAX_DOGS = 10;
+const WALK_MAX_BYTES = 8 * 1024;
+const WALK_LIMITS = [
+  { windowMs: 60 * 1000, max: 30 },
+  { windowMs: 60 * 60 * 1000, max: 200 },
+];
+const WALK_TIMEOUT_MS = 20 * 1000;
 // 網站「更新」按鈕：同一個人 2 分鐘 1 次；同步本身要跑約 1 分鐘，按再多次也沒用
 const SYNC_LIMITS = [{ windowMs: 2 * 60 * 1000, max: 1 }];
 // 跟 scripts/sync-sheet.mjs 的 NAME_SEP 一樣：一格寫好幾個名字時用這些符號或空白隔開
@@ -96,6 +104,8 @@ function config(env) {
     token: env && env.GITHUB_TOKEN,
     passcode: env && env.NOTES_PASSCODE ? String(env.NOTES_PASSCODE) : '',
     walkerKey: env && env.WALKER_KEY ? String(env.WALKER_KEY) : '',
+    sheetWriteUrl: env && env.SHEET_WRITE_URL ? String(env.SHEET_WRITE_URL) : '',
+    sheetWriteKey: env && env.SHEET_WRITE_KEY ? String(env.SHEET_WRITE_KEY) : '',
   };
 }
 
@@ -721,6 +731,76 @@ async function walkerCodes(request, env, origin) {
   return reply(200, { ok: true, codes }, origin);
 }
 
+// ── 按「溜了」寫進試算表（#138）──
+// 網站送 { action: 'walk' | 'undo', walker, dogs: [{ id, name, prev?, wrote? }] }，這裡檢查完帶上通關碼轉給
+// Google Apps Script 小程式（apps-script/sheet-write.gs，K 用自己的帳號部署）。小程式只改「遛狗日期」「誰遛的」兩欄。
+// 沒設定 SHEET_WRITE_URL 時回 503（SHEET_WRITE_KEY 可不設） + code: 'off'，網站就照舊只記在手機上
+const shortText = (v, max) => typeof v === 'string' && [...v.trim()].length <= max && !/[\u0000-\u001f]/.test(v);
+const YMD_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+function cleanWalkDog(d, action) {
+  if (!d || typeof d !== 'object') return null;
+  const id = typeof d.id === 'string' ? d.id.trim() : '';
+  if (id && !ID_PATTERN.test(id)) return null;
+  if (!shortText(d.name, 30) || !d.name.trim()) return null;
+  const out = { id, name: d.name.trim() };
+  if (action === 'undo') {
+    const p = d.prev, w = d.wrote;
+    if (!p || !w || typeof p !== 'object' || typeof w !== 'object') return null;
+    const date = p.date || {};
+    if (date.date !== undefined && !YMD_PATTERN.test(date.date)) return null;
+    if (date.date === undefined && !shortText(date.text || '', 40)) return null;
+    if (!shortText(p.walker || '', 200) || !shortText(w.walker || '', 200)) return null;
+    out.prev = { date: date.date !== undefined ? { date: date.date } : { text: date.text || '' }, walker: p.walker || '' };
+    out.wrote = { walker: w.walker || '' };
+  }
+  return out;
+}
+
+async function writeWalks(request, env, origin) {
+  const cfg = config(env);
+  if (!cfg.sheetWriteUrl) return fail(503, '還沒設定寫入試算表', origin, { code: 'off' });
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!allow(`walk:${ip}`, WALK_LIMITS, Date.now())) return fail(429, '太頻繁了，請稍等一下再試', origin);
+  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') return fail(415, '格式不對', origin);
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).length > WALK_MAX_BYTES) return fail(413, '資料太大', origin);
+  let input;
+  try {
+    input = JSON.parse(raw);
+  } catch (e) {
+    return fail(400, '格式不對', origin);
+  }
+  const action = input && input.action;
+  if (action !== 'walk' && action !== 'undo') return fail(400, '要說是溜了還是復原', origin);
+  if (!Array.isArray(input.dogs) || !input.dogs.length || input.dogs.length > WALK_MAX_DOGS) return fail(400, `一次 1–${WALK_MAX_DOGS} 隻`, origin);
+  const dogs = input.dogs.map(d => cleanWalkDog(d, action));
+  if (dogs.some(d => !d)) return fail(400, '狗的資料不對', origin);
+  const body = { action, dogs };
+  if (cfg.sheetWriteKey) body.key = cfg.sheetWriteKey;
+  if (action === 'walk') {
+    if (!shortText(input.walker, WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, `名字要 1–${WALKER_NAME_MAX_CHARS} 個字`, origin);
+    body.walker = input.walker.trim();
+  }
+
+  let res, out = null;
+  try {
+    // Apps Script 回應會先轉址到 googleusercontent.com，fetch 會自己跟過去
+    res = await fetch(cfg.sheetWriteUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(WALK_TIMEOUT_MS),
+    });
+    out = await res.json().catch(() => null);
+  } catch (e) {
+    return fail(502, '連不上試算表，請稍後再試', origin);
+  }
+  if (!res.ok || !out) return fail(502, `試算表沒有回應（${res.status}）`, origin);
+  if (!out.ok) return fail(502, out.code === 'key' ? '寫入試算表的通關碼不對，請 K 檢查設定' : (out.error || '試算表沒有寫進去'), origin);
+  return reply(200, { ok: true, today: out.today, results: Array.isArray(out.results) ? out.results : [] }, origin);
+}
+
 export default {
   // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch 和 scheduled
   testing: { MAX_BYTES, NOTE_MAX_CHARS, GALLERY_MAX, resetState, allowUpload, allowGalleryUpload, isJpeg, cleanNote, cleanGallery, galleryFileName, walkerCode, triggerSync },
@@ -760,6 +840,7 @@ export default {
         token: cfg.token ? '已設定' : '未設定',
         notesPasscode: cfg.passcode ? '已設定' : '未設定',
         walkerKey: cfg.walkerKey ? '已設定' : '未設定',
+        sheetWrite: cfg.sheetWriteUrl ? '已設定' : '未設定',
         ...(env && env.PREVIEW ? { preview: '預覽版，不能存' } : {}),
       });
     }
@@ -788,6 +869,15 @@ export default {
         return await walkerCodes(request, env, allowed);
       } catch (e) {
         return fail(500, '代號服務發生錯誤', allowed);
+      }
+    }
+
+    if (path === '/walk') {
+      if (request.method !== 'POST') return fail(405, '寫入試算表只能用 POST /walk', allowed);
+      try {
+        return await writeWalks(request, env, allowed);
+      } catch (e) {
+        return fail(500, '寫入試算表發生錯誤', allowed);
       }
     }
 
