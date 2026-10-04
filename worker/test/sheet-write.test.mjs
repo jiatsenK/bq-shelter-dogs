@@ -58,3 +58,29 @@ test('#138 表頭找不到就不寫；分隔符號跟同步腳本一樣', async 
   const sync = await readFile(new URL('../../scripts/sync-sheet.mjs', import.meta.url), 'utf8');
   assert.equal(code.match(/NAME_SEP = (\/.*\/);/)[1], sync.match(/NAME_SEP = (\/.*\/);/)[1]);
 });
+
+test('#138 通關碼：沒設 WRITE_KEY 就照常寫；有設就要一樣', () => {
+  const run = (props, req) => {
+    const writes = [];
+    const g = {
+      PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null }) },
+      LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
+      SpreadsheetApp: { openById: () => ({ getSheetByName: () => ({
+        getDataRange: () => ({ getValues: () => sheet() }),
+        getRange: (r, c) => ({ setValue: v => writes.push([r, c, v]) }),
+      }) }) },
+      // 「今天」固定成 2026-10-04，其他日期照實轉
+      Utilities: { formatDate: d => (Math.abs(d - Date.now()) < 60000 ? '2026-10-04' : ymd(d)) },
+    };
+    vm.createContext(g);
+    vm.runInContext(code, g);
+    return { out: JSON.parse(JSON.stringify(g.handleRequest(req))), writes };
+  };
+  const req = { action: 'walk', walker: '志工我', dogs: [{ id: '9001', name: '測試甲' }] };
+  const open = run({ SHEET_ID: 'x' }, req);
+  assert.equal(open.out.ok, true);
+  assert.equal(open.writes.length, 2);
+  const bad = run({ SHEET_ID: 'x', WRITE_KEY: 'k' }, { ...req, key: 'nope' });
+  assert.deepEqual([bad.out.code, bad.writes.length], ['key', 0]);
+  assert.equal(run({ SHEET_ID: 'x', WRITE_KEY: 'k' }, { ...req, key: 'k' }).out.ok, true);
+});

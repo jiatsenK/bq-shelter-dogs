@@ -734,7 +734,7 @@ async function walkerCodes(request, env, origin) {
 // ── 按「溜了」寫進試算表（#138）──
 // 網站送 { action: 'walk' | 'undo', walker, dogs: [{ id, name, prev?, wrote? }] }，這裡檢查完帶上通關碼轉給
 // Google Apps Script 小程式（apps-script/sheet-write.gs，K 用自己的帳號部署）。小程式只改「遛狗日期」「誰遛的」兩欄。
-// 沒設定 SHEET_WRITE_URL／SHEET_WRITE_KEY 時回 503 + code: 'off'，網站就照舊只記在手機上
+// 沒設定 SHEET_WRITE_URL 時回 503（SHEET_WRITE_KEY 可不設） + code: 'off'，網站就照舊只記在手機上
 const shortText = (v, max) => typeof v === 'string' && [...v.trim()].length <= max && !/[\u0000-\u001f]/.test(v);
 const YMD_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 function cleanWalkDog(d, action) {
@@ -758,7 +758,7 @@ function cleanWalkDog(d, action) {
 
 async function writeWalks(request, env, origin) {
   const cfg = config(env);
-  if (!cfg.sheetWriteUrl || !cfg.sheetWriteKey) return fail(503, '還沒設定寫入試算表', origin, { code: 'off' });
+  if (!cfg.sheetWriteUrl) return fail(503, '還沒設定寫入試算表', origin, { code: 'off' });
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
   if (!allow(`walk:${ip}`, WALK_LIMITS, Date.now())) return fail(429, '太頻繁了，請稍等一下再試', origin);
   const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
@@ -776,7 +776,8 @@ async function writeWalks(request, env, origin) {
   if (!Array.isArray(input.dogs) || !input.dogs.length || input.dogs.length > WALK_MAX_DOGS) return fail(400, `一次 1–${WALK_MAX_DOGS} 隻`, origin);
   const dogs = input.dogs.map(d => cleanWalkDog(d, action));
   if (dogs.some(d => !d)) return fail(400, '狗的資料不對', origin);
-  const body = { key: cfg.sheetWriteKey, action, dogs };
+  const body = { action, dogs };
+  if (cfg.sheetWriteKey) body.key = cfg.sheetWriteKey;
   if (action === 'walk') {
     if (!shortText(input.walker, WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, `名字要 1–${WALKER_NAME_MAX_CHARS} 個字`, origin);
     body.walker = input.walker.trim();
@@ -839,7 +840,7 @@ export default {
         token: cfg.token ? '已設定' : '未設定',
         notesPasscode: cfg.passcode ? '已設定' : '未設定',
         walkerKey: cfg.walkerKey ? '已設定' : '未設定',
-        sheetWrite: cfg.sheetWriteUrl && cfg.sheetWriteKey ? '已設定' : '未設定',
+        sheetWrite: cfg.sheetWriteUrl ? '已設定' : '未設定',
         ...(env && env.PREVIEW ? { preview: '預覽版，不能存' } : {}),
       });
     }

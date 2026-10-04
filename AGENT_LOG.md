@@ -600,3 +600,9 @@
 - `.github/workflows/deploy-cloudflare.yml` 帶上兩個新 Secret；`tests.yml`、`AGENTS.md` 的 node 測試指令加上 `worker/test/sheet-write.test.mjs`。
 - 文件：`docs/SHEET_WRITE_SETUP.md`（K 的設定步驟）、`docs/PROJECT_GOALS.md`、`docs/VOLUNTEER_GUIDE.md`。
 - 測試：node 新增 8 項（Apps Script 4、Worker 4）；網頁新增 4 項，並更新唯讀檢查的允許清單。截圖在專案檔案 `previews/sheet-write/`。
+
+## 2026-10-04 寫入試算表通關碼改成可不設（Claude，分支 claude/sheet-write，#138 追加）
+- 依據：K 聽完通關碼的用途後說「那我就不設定」。
+- `apps-script/sheet-write.gs`：沒設 `WRITE_KEY` 就照常寫；有設才檢查。`worker/src/index.js`：只要有 `SHEET_WRITE_URL` 就算已設定，有 `SHEET_WRITE_KEY` 才帶過去。
+- 文件：`docs/SHEET_WRITE_SETUP.md` 拿掉通關碼步驟，改放在「出問題時」當作可選的保護；`docs/PROJECT_GOALS.md` 同步。
+- 測試：node 新增 2 項（小程式沒設／有設通關碼、Worker 不帶通關碼）。

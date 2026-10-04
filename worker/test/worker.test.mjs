@@ -848,6 +848,15 @@ test('#138 POST /walk 擋掉：沒設定、格式不對、名字太長、太多�
   assert.equal((await send(postWalk(ok), SHEET_ENV)).status, 502);
 });
 
+test('#138 POST /walk 沒設通關碼也能用，不帶 key 過去', async () => {
+  const calls = fakeScript();
+  const env = { ...ENV, SHEET_WRITE_URL: 'https://script.example/exec' };
+  const r = await send(postWalk({ action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] }, { ip: '6.6.6.6' }), env);
+  assert.equal(r.status, 200);
+  assert.equal('key' in calls[0].body, false);
+  assert.equal((await send(new Request('https://bq-shelter-photos.example.workers.dev/'), env)).body.sheetWrite, '已設定');
+});
+
 test('#138 POST /walk 太頻繁就擋', async () => {
   fakeScript();
   const ok = { action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] };

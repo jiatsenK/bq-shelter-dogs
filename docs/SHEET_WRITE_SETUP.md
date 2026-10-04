@@ -13,13 +13,12 @@
 2. 左上角 **新專案**，把專案名稱改成「溜狗表寫入」。
 3. 把編輯器裡原本的 `function myFunction() {}` 全部刪掉，貼上 repo 裡 [`apps-script/sheet-write.gs`](../apps-script/sheet-write.gs) 的全部內容，按 **儲存**（磁碟圖示）。
 
-## 2. 設定試算表 ID 和通關碼
+## 2. 設定試算表 ID
 
 1. 左邊齒輪 **專案設定**。
 2. 「時區」選 **(GMT+08:00) 台北**。
-3. 往下到 **指令碼屬性** → **新增指令碼屬性**，加兩個：
+3. 往下到 **指令碼屬性** → **新增指令碼屬性**，加一個：
    - `SHEET_ID`：試算表 ID（跟 GitHub Secret `SHEET_ID` 一樣，網址 `/d/` 和 `/edit` 中間那串）
-   - `WRITE_KEY`：自己想一串通關碼，越長越好（例如 30 個英數字亂打）。等一下 GitHub 也要填一樣的。
 4. 按 **儲存指令碼屬性**。
 
 ## 3. 部署成網頁應用程式
@@ -29,16 +28,15 @@
 3. 設定：
    - 說明：`溜狗表寫入`
    - 執行身分：**我**（K 的帳號）
-   - 誰可以存取：**所有人**（網站經過 Cloudflare 來呼叫，沒有 Google 登入；擋外人靠第 2 步的通關碼）
+   - 誰可以存取：**所有人**（網站經過 Cloudflare 來呼叫，沒有 Google 登入；這個網址只放在 GitHub Secret 裡，不要貼到別的地方）
 4. 按 **部署**。第一次會跳出「授權存取權」：選 K 的帳號 → 如果出現「Google 尚未驗證這個應用程式」，按 **進階** → **前往「溜狗表寫入」（不安全）** → **允許**。這是因為這個小程式是 K 自己寫的，沒有送 Google 審核，屬於正常情況。
 5. 部署完成會顯示 **網頁應用程式網址**（`https://script.google.com/macros/s/.../exec`），複製起來。
 6. 用瀏覽器打開這個網址，看到 `{"ok":true,"service":"板收志工溜狗表 寫入試算表"}` 就代表有在跑。
 
-## 4. 把網址和通關碼交給網站
+## 4. 把網址交給網站
 
-1. 打開 GitHub 上的這個 repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**，加兩個：
+1. 打開 GitHub 上的這個 repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**，加一個：
    - `SHEET_WRITE_URL`：第 3 步複製的網址
-   - `SHEET_WRITE_KEY`：第 2 步的通關碼（要一模一樣）
 2. 到 **Actions** → 「部署到 Cloudflare」→ **Run workflow** 手動跑一次，讓 Worker 拿到新的設定。
 3. 打開 <https://bq-shelter-dogs.jiatsen-k.workers.dev/api/>，看到 `"sheetWrite":"已設定"` 就完成了。
 
@@ -52,6 +50,7 @@
 
 ## 出問題時
 
-- 網站提示「寫入試算表的通關碼不對」：GitHub 的 `SHEET_WRITE_KEY` 跟小程式的 `WRITE_KEY` 不一樣，改成一樣後重跑第 4 步的部署。
+- 想多一層保護（之後再說也可以，K 2026-10-04 決定先不設）：小程式指令碼屬性加 `WRITE_KEY`，GitHub Secret 加一模一樣的 `SHEET_WRITE_KEY`，重跑第 4 步的部署。設了以後，就算小程式網址外流，沒有通關碼也改不了試算表。
+- 網站提示「寫入試算表的通關碼不對」：上一點的兩個值不一樣，改成一樣後重跑部署。
 - 提示「主清單找不到…欄」：試算表表頭被改掉了，「編號」「犬名」「遛狗日期」「誰遛的」要在。
 - 想暫時關掉：刪掉 GitHub Secret `SHEET_WRITE_URL` 不會關掉（Cloudflare 上還留著），要到小程式 **部署** → **管理部署作業** → **封存**。網站會提示沒寫進去，志工照舊手動填。
