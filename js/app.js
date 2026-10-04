@@ -343,8 +343,9 @@ function myProgressHtml(walks) {
 let mineStatsOpen = false;
 function myWalksHtml(today, query) {
   const visibleWalks = currentMyWalks(today);
-  if (myWalksState === 'loading' && !visibleWalks.length) return `<div class="status-msg">讀取溜狗紀錄中…</div>`;
-  if (myWalksState === 'error' && !visibleWalks.length) {
+  const confirmedToday = Object.values(loadSheetWrites(today)).some(item => item.current?.date === localDateKey(today) && splitWalkers(item.current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())));
+  if (myWalksState === 'loading' && !confirmedToday) return `<div class="status-msg">讀取溜狗紀錄中…</div>`;
+  if (myWalksState === 'error' && !confirmedToday) {
     return `<div class="status-msg">溜狗紀錄讀不到，請確認網路後按「重新讀取」。<br><button class="retry-btn" id="mineRetry">重新讀取</button></div>`;
   }
   if (walkerSetup || !loadMyCodes().length) return walkerSetupHtml();
@@ -1048,7 +1049,7 @@ async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expecte
   render(); renderDetail();
   if (missed.length) {
     const statuses = (out.results || []).map(r => r.status);
-    showToast(statuses.includes('badAction') ? '請先更新 Google Apps Script，再使用修改溜狗人。' : statuses.includes('changed') ? `${missed.join('、')} 在試算表已被修改，請重新開啟編輯；未覆寫他人資料` : `試算表找不到 ${missed.join('、')}，請自己填`);
+    showToast(statuses.includes('badAction') ? '請先更新 Google Apps Script，再使用修改溜狗人。' : statuses.includes('changed') ? `${missed.join('、')} 在試算表已經被改過，請重新開啟編輯；未覆寫他人資料` : `試算表找不到 ${missed.join('、')}，請自己填`);
   } else if (on && toastText) {
     addToToast(toastText, toastUndo, '，已寫進試算表');
   }
@@ -2532,7 +2533,7 @@ function renderMain() {
   const list = walkList.filter(d => passesWalkFilter(d, today, filter));
   const view = loadWalkView();
   const items = view === 'list'
-    ? (list.length ? `<div class="rows"><div class="row-head"><span>籠位</span><span>犬名</span><span>日期</span><span>誰遛的</span><span>登記</span></div>${list.map(d => walkRow(d, today)).join('')}</div>` : '')
+    ? (list.length ? `<div class="rows"><div class="row-head"><span>籠位</span><span>狗名</span><span>日期</span><span>溜狗人</span><span>登記</span></div>${list.map(d => walkRow(d, today)).join('')}</div>` : '')
     : list.map((d, i) => dogCard(d, today, i < FIRST_SCREEN_CARDS)).join('');
   const head = walkFilterHtml(walkList, today, filter) + walkToolsHtml(view);
   main.innerHTML = head + (q && list.length ? `<div class="section-hint">${icon('search')}搜尋「${esc(q)}」：${list.length} 隻</div>` : '')
@@ -2689,7 +2690,7 @@ function renderOnboard() {
       else { try { walkedStorage && walkedStorage.setItem(ONBOARD_KEY, '1'); } catch (err) { /* 存不了下次再看一次 */ } onboard = null; render(); }
       renderOnboard();
     });
-    box.addEventListener('input', e => { if (withSheet.phase !== 'saving' && e.target.id === 'obInput') onboard.text = e.target.value; });
+    box.addEventListener('input', e => { if (onboard && onboard.phase !== 'saving' && e.target.id === 'obInput') onboard.text = e.target.value; });
     box.addEventListener('submit', async e => {
       e.preventDefault();
       if (onboard.phase === 'saving') return;
