@@ -770,6 +770,17 @@ function setWalked(dogs, on) {
   queueSheetWrite(changed, on, text, undoFn);
 }
 
+// ── 我的常溜（#155）：志工自己收藏的狗，只存這支手機，不寫試算表、不送伺服器；跟「我溜過」（歷史）分開 ──
+const FAVS_KEY = 'bq-favs';
+function loadFavs() { const v = readJsonKey(FAVS_KEY); return Array.isArray(v) ? v.map(String) : []; }
+function isFav(dog) { const k = walkKey(dog); return !!k && loadFavs().includes(k); }
+function toggleFav(dog) {
+  const k = walkKey(dog);
+  if (!k) return;
+  const favs = loadFavs();
+  writeJsonKey(FAVS_KEY, favs.includes(k) ? favs.filter(x => x !== k) : [k, ...favs]);
+}
+
 // ── 按「溜了」寫進試算表（#138）──
 // 經過 Worker 的 /walk 轉給 K 部署的 Google Apps Script，只改主清單的「遛狗日期」「誰遛的」。
 // 寫成功的記下試算表原本的內容（只記今天的），復原或放回時帶回去改回來；小程式只在格子還是我們寫的樣子時才改回。
@@ -853,18 +864,19 @@ function clearWalkWith(dogs, today = new Date()) {
   for (const d of dogs) delete map[walkKey(d)];
   writeJsonKey(WALK_WITH_KEY, { date: localDateKey(today), map });
 }
-let withSheet = null; // { dogs, picked: Set, text }
-function openWithSheet(dogs, edit = false) {
-  const already = new Set(dogs.flatMap(d => loadWalkWith()[walkKey(d)] || []));
-  withSheet = { dogs, picked: new Set(edit ? walkerList(dogs[0]) : []), text: '', already: edit ? new Set() : already, edit, expected: loadSheetWrites()[walkKey(dogs[0])]?.current?.walker || walkerNames[walkKey(dogs[0])] || walkerList(dogs[0]).join('、'), phase: 'edit', error: '' };
+let withSheet = null; // { dogs, picked: Set, text, add }
+// add：詳細資訊溜狗人旁的「＋」，選好的人接在目前名單後面（#141）；不是 add 就是溜了之後提示條的「＋一起溜的人」
+function openWithSheet(dogs, add = false) {
+  const already = add ? new Set(walkerList(dogs[0]).map(canonicalWalker)) : new Set(dogs.flatMap(d => loadWalkWith()[walkKey(d)] || []));
+  withSheet = { dogs, picked: new Set(), text: '', already, add, phase: 'edit', error: '' };
   renderWithSheet();
 }
 function withSheetHtml() {
   const w = withSheet;
   const me = loadWalkerName();
-  const names = [...new Set([...walkerNameList, ...loadCompanions(), ...w.picked])].filter(n => (w.edit || n !== me) && !w.already.has(n));
+  const names = [...new Set([...walkerNameList, ...loadCompanions(), ...w.picked])].filter(n => (w.add || n !== me) && !w.already.has(n));
   return `<div class="with-sheet" role="dialog" aria-modal="true" aria-labelledby="withTitle">
-    <h3 id="withTitle">${w.edit ? '修改溜狗人：' : '誰跟你一起溜 ' }${esc(w.dogs.map(d => d.name).join('、'))}${w.edit ? '' : '？'}</h3>
+    <h3 id="withTitle">${w.add ? '加入溜狗人：' : '誰跟你一起溜 ' }${esc(w.dogs.map(d => d.name).join('、'))}${w.add ? '' : '？'}</h3>
     ${names.length ? `<div class="with-names">${names.map(n => `<button type="button" class="with-name${w.picked.has(n) ? ' on' : ''}" data-with="${esc(n)}" aria-pressed="${w.picked.has(n)}">${w.picked.has(n) ? icon('tick') : ''}${esc(n)}</button>`).join('')}</div>` : ''}
     <form class="with-add" id="withAdd" autocomplete="off">
       <input type="text" id="withInput" maxlength="20" placeholder="${names.length ? '其他人：輸入名字' : '輸入名字，例：嘉文'}" value="${esc(w.text)}" enterkeyhint="done">
@@ -912,12 +924,14 @@ async function finishWithSheet() {
   const w = withSheet;
   splitWalkers(w.text).forEach(n => w.picked.add(n));
   const names = [...w.picked];
-  if (w.edit) {
-    if (!names.length) { w.error = '請至少保留一位溜狗人；取消登記請用復原。'; renderWithSheet(); return; }
-    w.phase = 'saving'; renderWithSheet();
-    const ok = await queueSheetWrite(w.dogs, true, null, null, names.join('、'), w.expected);
-    if (!ok) { w.phase = 'edit'; w.error = '沒有儲存，請確認錯誤提示後重試。'; renderWithSheet(); return; }
-    withSheet = null; renderWithSheet(); return;
+  if (w.add) {
+    withSheet = null;
+    renderWithSheet();
+    const dog = w.dogs[0];
+    const now = walkerList(dog);
+    const added = names.filter(n => !now.map(canonicalWalker).includes(canonicalWalker(n)));
+    if (added.length) editWalkers(dog, [...now, ...added], `已加入 ${added.join('、')}`);
+    return;
   }
   withSheet = null;
   renderWithSheet();
@@ -1049,7 +1063,7 @@ async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expecte
   render(); renderDetail();
   if (missed.length) {
     const statuses = (out.results || []).map(r => r.status);
-    showToast(statuses.includes('badAction') ? '請先更新 Google Apps Script，再使用修改溜狗人。' : statuses.includes('changed') ? `${missed.join('、')} 在試算表已經被改過，請重新開啟編輯；未覆寫他人資料` : `試算表找不到 ${missed.join('、')}，請自己填`);
+    showToast(statuses.includes('badAction') ? '請先更新 Google Apps Script，再使用修改溜狗人。' : statuses.includes('changed') ? `${missed.join('、')} 在試算表已經被改過，沒有蓋掉別人的，畫面已換成最新名單` : `試算表找不到 ${missed.join('、')}，請自己填`);
   } else if (on && toastText) {
     addToToast(toastText, toastUndo, '，已寫進試算表');
   }
@@ -1152,6 +1166,13 @@ function dogCard(dog, today, eager = false) {
 }
 
 // 詳細資訊：備註（志工後續補充，試算表備註欄）／可以一起溜的狗／狗卡資訊（dogs/{編號}.md 的入所原始介紹，同步時已寫進 dogs.json）
+// 詳細資訊名字旁的「☆ 常溜」／「★ 我的常溜」
+function favButtonHtml(dog) {
+  if (!walkKey(dog)) return '';
+  const on = isFav(dog);
+  return `<button type="button" class="fav-btn${on ? ' on' : ''}" id="favToggle" aria-pressed="${on}">${on ? '★ 我的常溜' : '☆ 常溜'}</button>`;
+}
+
 function detailHtml(dog, today) {
   const flag = specialFlag(dog.note);
   const buddies = [...(groupMap[dog.name] || [])];
@@ -1164,13 +1185,12 @@ function detailHtml(dog, today) {
       ${photoHeroHtml(dog)}
       ${photoUploadHtml(dog)}
       <div class="info">
-        <div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div>
+        <div class="name-row"><div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div>${favButtonHtml(dog)}</div>
         <div class="chips">${statusBadge(dog, today)}${detailChips(dog)}</div>
         ${metaLine(dog)}
       </div>
     </div>
     ${lastWalkSection(dog, today)}
-    ${walkEditControls(dog, today)}
     ${detailTrail.length ? `<button type="button" class="detail-back" id="detailBack">${icon('back')}回到 ${esc(detailTrail[detailTrail.length - 1].name)}</button>` : ''}
     <section class="detail-section" data-section="note">
       <h3>${icon('note')}試算表備註</h3>
@@ -1194,21 +1214,12 @@ function detailHtml(dog, today) {
       ${intro ? `<div class="content">${esc(intro)}</div>` : `<div class="empty">還沒有入所介紹</div>`}
     </section>
     ${gallerySection(dog)}
-    <div class="detail-bar">
+    ${photoBarHtml(dog) || `<div class="detail-bar">
       <button type="button" class="bar-btn" id="detailClose">關閉</button>
       ${typeof whereKnown === 'function' && whereKnown(dog) ? `<button type="button" class="bar-btn" id="detailWhere">${icon('pin')}在哪</button>` : ''}
       ${groupWalkButton(dog, walked)}
-    </div>
+    </div>`}
   `;
-}
-
-function walkEditControls(dog, today) {
-  const item = loadSheetWrites(today)[walkKey(dog)];
-  if (!item || !item.current || item.current.date !== localDateKey(today)) return '';
-  return `<section class="detail-section walk-edit"><h3>今天的登記</h3>
-    <div class="walk-edit-actions"><button type="button" id="walkAddPeople">新增溜狗人</button>
-    <button type="button" id="walkEditPeople">修改溜狗人</button>
-    ${item.prev && item.wrote ? '<button type="button" id="walkUndoSaved">復原本次登記／編輯</button>' : ''}</div></section>`;
 }
 
 // V9（#141 第 9 項）：上次溜的日期和溜狗人，放在照片和名字下面第一個
@@ -1219,8 +1230,45 @@ function lastWalkSection(dog, today) {
   const who = walkerList(dog, today);
   return `<section class="detail-section last-walk" data-section="last">
     <div class="lw-row"><span class="lw-k">上次溜</span><span class="lw-v">${esc(date)}</span></div>
-    <div class="lw-row"><span class="lw-k">溜狗人</span><span class="lw-v">${who.length ? who.map(n => `<span class="who-chip">${esc(n)}</span>`).join('') : '<span class="lw-none">—</span>'}</span></div>
+    <div class="lw-row"><span class="lw-k">溜狗人</span><span class="lw-v">${walkerChipsHtml(dog, who, today)}</span></div>
   </section>`;
+}
+
+// ── 溜狗人旁的＋／×（#141，K 2026-10-04 確認）──
+// 這隻狗試算表上是今天溜的，就能在名字旁直接加人（＋）、拿掉人（×），按了直接寫進試算表，提示條可以復原。
+// 寫的是整格新名單（Worker／Apps Script 的 edit），帶著目前那格的原文比對，別人先改過就不蓋掉。
+// 只剩一個人不給 ×（那格至少留一人，整筆取消用提示條的復原）；列表模式不放
+let walkerEditBusy = ''; // 正在寫的狗的 key，寫完前＋／×都不能按
+function walkerEditBase(dog, today = new Date()) {
+  if (!UPLOAD_URL || sheetWriteState === 'off') return null;
+  const key = walkKey(dog);
+  if (!key) return null;
+  const date = localDateKey(today);
+  const item = loadSheetWrites(today)[key];
+  if (item && item.current) return item.current.date === date && item.current.walker ? item.current.walker : null;
+  if (walkedNow(dog, today)) return null; // 這支手機按了溜了，試算表還沒回來
+  return dog.walkedDate && localDateKey(dog.walkedDate) === date && walkerNames[key] ? walkerNames[key] : null;
+}
+function walkerChipsHtml(dog, who, today) {
+  if (!who.length) return '<span class="lw-none">—</span>';
+  if (!walkerEditBase(dog, today)) return who.map(n => `<span class="who-chip">${esc(n)}</span>`).join('');
+  const busy = walkerEditBusy === walkKey(dog);
+  const dis = busy ? ' disabled' : '';
+  return who.map(n => `<span class="who-chip${who.length > 1 ? ' editable' : ''}">${esc(n)}${who.length > 1 ? `<button type="button" class="who-x" data-who-remove="${esc(n)}" aria-label="拿掉 ${esc(n)}"${dis}>×</button>` : ''}</span>`).join('')
+    + `<button type="button" class="who-plus" id="whoAdd" aria-label="加入溜狗人"${dis}>${busy ? '…' : '＋'}</button>`;
+}
+async function editWalkers(dog, names, text) {
+  const expected = walkerEditBase(dog);
+  const key = walkKey(dog);
+  if (!expected || walkerEditBusy) return;
+  walkerEditBusy = key;
+  renderDetail();
+  const ok = await queueSheetWrite([dog], true, null, null, [...new Set(names)].join('、'), expected);
+  walkerEditBusy = '';
+  renderDetail();
+  if (!ok) return; // 失敗、別人改過的提示 sheetWrite 已經跳了
+  const undo = () => queueSheetWrite([dog], false);
+  showToast(`${text}，已寫進試算表`, undo);
 }
 
 // 詳細資訊狗名下面的標籤：籠位、入所年月（天數標籤是 statusBadge）
@@ -1525,13 +1573,33 @@ function photoUploadHtml(dog) {
     <div class="photo-upload preview">
       <div class="photo-preview-row">
         <div class="thumb card-thumb"><img src="${esc(up.url)}" alt=""></div>
-        <div class="photo-preview-hint">上面是詳細資訊、左邊是狗卡上的樣子，按「確認上傳」才會換（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
+        <div class="photo-preview-hint">上面是詳細資訊、左邊是狗卡上的樣子，按下面「確認上傳」才會換（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
       </div>
       ${up.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(up.error)}</span></div>` : ''}
       ${busy ? '' : `<button type="button" class="photo-crop" id="photoCrop">${icon('crop')}裁切</button>`}
-      <button type="button" class="photo-confirm" id="photoConfirm"${busy ? ' disabled' : ''}>${busy ? '上傳中…' : '確認上傳'}</button>
-      ${busy ? '' : `<button type="button" class="photo-cancel" id="photoCancel">取消</button>`}
     </div>`;
+}
+
+// #146：選了照片還沒上傳時，底部那列換成「取消／確認上傳（綠色）」，溜了先收起來，
+// 照片的確認跟溜了不會再是兩顆一樣的藍色大按鈕（K 2026-10-04 選方案一）。上傳中只剩確認那顆（顯示進度）
+function photoBarHtml(dog) {
+  const up = photoPending(dog);
+  const gb = galleryBatch && galleryBatch.dog === dog ? galleryBatch : null;
+  if (!up && !gb) return '';
+  const busy = (up || gb).phase === 'uploading';
+  let cancel, confirm;
+  if (up) {
+    cancel = `<button type="button" class="bar-btn" id="photoCancel">取消換照片</button>`;
+    confirm = `<button type="button" class="bar-confirm" id="photoConfirm"${busy ? ' disabled' : ''}>${busy ? '上傳中…' : '確認上傳'}</button>`;
+  } else {
+    const left = gb.items.filter(it => it.state !== 'done');
+    const doneCount = gb.items.length - left.length;
+    const label = busy ? `上傳中 ${Math.min(doneCount + 1, gb.items.length)} / ${gb.items.length}…`
+      : gb.phase === 'error' ? `重新上傳沒傳成的 ${left.length} 張` : `上傳 ${gb.items.length} 張`;
+    cancel = `<button type="button" class="bar-btn" id="galleryBatchCancel">${doneCount ? '不傳了' : '取消'}</button>`;
+    confirm = `<button type="button" class="bar-confirm" id="galleryUpload"${busy ? ' disabled' : ''}>${label}</button>`;
+  }
+  return `<div class="detail-bar photo-bar">${busy ? '' : cancel}${confirm}</div>`;
 }
 
 // ── 裁切：照片放在固定的框後面，拖曳移動、兩指（或滑桿、滑鼠滾輪）放大，框裡的部分就是裁好的照片 ──
@@ -1919,14 +1987,11 @@ function galleryBatchHtml(batch) {
   const left = items.filter(it => it.state !== 'done');
   const doneCount = items.length - left.length;
   const firstError = (items.find(it => it.state === 'error') || {}).error;
-  const label = busy ? `上傳中 ${Math.min(doneCount + 1, items.length)} / ${items.length}…`
-    : batch.phase === 'error' ? `重新上傳沒傳成的 ${left.length} 張` : `上傳 ${items.length} 張`;
+  // 上傳／取消按鈕在底部那列（#146，photoBarHtml）
   return `
     <div class="photo-upload preview in-gallery gallery-batch">
-      <div class="photo-preview-hint">加進相簿：${items.length} 張（${esc(dog.name)}，編號 ${esc(dog.id)}）。標「預覽」的格子就是傳好後的樣子</div>
+      <div class="photo-preview-hint">加進相簿：${items.length} 張（${esc(dog.name)}，編號 ${esc(dog.id)}）。標「預覽」的格子就是傳好後的樣子，按下面「上傳」才會加</div>
       ${firstError ? `<div class="photo-error" role="alert">${icon('alert')}<span>${doneCount ? `已傳 ${doneCount} 張，另外 ${left.length} 張沒傳成：` : ''}${esc(firstError)}</span></div>` : ''}
-      <button type="button" class="photo-confirm" id="galleryUpload"${busy ? ' disabled' : ''}>${label}</button>
-      ${busy ? '' : `<button type="button" class="photo-cancel" id="galleryBatchCancel">${doneCount ? '不傳了' : '取消'}</button>`}
     </div>`;
 }
 
@@ -2073,9 +2138,12 @@ const DETAIL_CLICKS = [
   ['#photoConfirm', () => uploadPhoto()],
   ['#photoCancel', () => { clearPhotoUpload(); renderDetail(); }],
   ['.buddy', el => { const d = allDogs[el.dataset.dog]; if (d) showDetail(d); }],
-  ['#walkAddPeople', () => openWithSheet([detailDog])],
-  ['#walkEditPeople', () => openWithSheet([detailDog], true)],
-  ['#walkUndoSaved', () => queueSheetWrite([detailDog], false)],
+  ['#whoAdd', () => openWithSheet([detailDog], true)],
+  ['[data-who-remove]', el => {
+    const n = el.dataset.whoRemove;
+    editWalkers(detailDog, walkerList(detailDog).filter(x => x !== n), `已拿掉 ${n}`);
+  }],
+  ['#favToggle', () => { toggleFav(detailDog); renderDetail(); render(); }],
   ['#detailBack', () => { const d = detailTrail.pop(); if (d) showDetail(d, false); }],
   ['#detailWhere', el => whereOpen(detailDog, el)],
   ['.pick', el => {
@@ -2130,7 +2198,9 @@ function renderDetail() {
       (focused.classList.contains('buddy') && btn.classList.contains('buddy') && btn.dataset.dog === focused.dataset.dog) ||
       (focused.dataset.gFile && btn.dataset.gFile === focused.dataset.gFile) ||
       (focused.hasAttribute('data-g-main') && btn.hasAttribute('data-g-main')));
-    (replacement || box.querySelector('#detailClose')).focus({ preventScroll: true });
+    // 選了照片時底部換成取消／確認上傳（#146），沒有關閉鈕就落到那列第一顆
+    const fallback = box.querySelector('#detailClose') || box.querySelector('.photo-bar button');
+    if (replacement || fallback) (replacement || fallback).focus({ preventScroll: true });
   }
 }
 
@@ -2151,7 +2221,8 @@ function showDetail(dog, remember = true) {
   document.getElementById('detail').scrollTop = 0;
   // 手機按「返回」時只關掉詳細資訊，不離開網頁
   if (!wasOpen) history.pushState({ bqDetail: true }, '');
-  document.getElementById('detailClose').focus({ preventScroll: true });
+  const first = document.getElementById('detailClose') || document.querySelector('#detail .photo-bar button');
+  if (first) first.focus({ preventScroll: true });
 }
 
 function hideDetail() {
@@ -2241,6 +2312,7 @@ function cardFromEvent(e) {
 document.getElementById('main').addEventListener('click', e => {
   const filterBtn = e.target.closest('[data-walk-filter]');
   if (filterBtn) { const v = filterBtn.dataset.walkFilter; saveWalkFilter(v === 'none' ? 'none' : Number(v)); render(); return; }
+  if (e.target.closest('[data-walk-fav]')) { saveWalkFav(!loadWalkFav()); render(); return; }
   const viewBtn = e.target.closest('[data-walk-view]');
   if (viewBtn) { saveWalkView(viewBtn.dataset.walkView); render(); return; }
   const sortBtn = e.target.closest('[data-walk-sort]');
@@ -2434,12 +2506,25 @@ function walkFilterOptions(list, today) {
   if (none) opts.push({ v: 'none', label: '沒有紀錄', n: none });
   return opts;
 }
-function walkFilterHtml(list, today, f) {
+// 我的常溜（#155，K 2026-10-04 選兩頁都放）：溜狗表的「★ 我的常溜」跟天數篩選可以一起用（例：常溜裡 7 天以上沒溜的）
+const WALK_FAV_KEY = 'bq-walk-fav';
+let walkFavMemory = false;
+function loadWalkFav() {
+  const v = readJsonKey(WALK_FAV_KEY);
+  return typeof v === 'boolean' ? v : walkFavMemory;
+}
+function saveWalkFav(on) {
+  walkFavMemory = on;
+  writeJsonKey(WALK_FAV_KEY, on);
+}
+
+function walkFilterHtml(list, today, f, fav = false, favN = 0) {
   const opts = walkFilterOptions(list, today);
   // 選的天數這次資料裡沒有了（例：大家都溜過了），照樣留著那顆，才按得掉
   if (f && !opts.some(o => o.v === f)) opts.unshift({ v: f, label: f === 'none' ? '沒有紀錄' : `${f} 天以上`, n: list.filter(d => passesWalkFilter(d, today, f)).length });
   const chip = o => `<button type="button" class="chip${o.v === f ? ' on' : ''}" data-walk-filter="${o.v}" aria-pressed="${o.v === f}">${o.label}<small>${o.n}</small></button>`;
-  return `<div class="chips" role="group" aria-label="篩選：幾天以上沒溜">${chip({ v: 0, label: '全部', n: list.length })}${opts.map(chip).join('')}</div>`;
+  const favChip = `<button type="button" class="chip fav-chip${fav ? ' on' : ''}" data-walk-fav aria-pressed="${fav}">★ 我的常溜<small>${favN}</small></button>`;
+  return `<div class="chips" role="group" aria-label="篩選：我的常溜、幾天以上沒溜">${favChip}${chip({ v: 0, label: '全部', n: list.length })}${opts.map(chip).join('')}</div>`;
 }
 
 // V9（#141 第 6 項）：照片模式／列表模式（收起照片，像試算表一列一隻）。選了哪個記在這支手機
@@ -2530,14 +2615,18 @@ function renderMain() {
     return;
   }
   const filter = loadWalkFilter();
-  const list = walkList.filter(d => passesWalkFilter(d, today, filter));
+  const fav = loadWalkFav();
+  const base = fav ? walkList.filter(isFav) : walkList;
+  const list = base.filter(d => passesWalkFilter(d, today, filter));
   const view = loadWalkView();
   const items = view === 'list'
     ? (list.length ? `<div class="rows"><div class="row-head"><span>籠位</span><span>狗名</span><span>日期</span><span>溜狗人</span><span>登記</span></div>${list.map(d => walkRow(d, today)).join('')}</div>` : '')
     : list.map((d, i) => dogCard(d, today, i < FIRST_SCREEN_CARDS)).join('');
-  const head = walkFilterHtml(walkList, today, filter) + walkToolsHtml(view);
+  const head = walkFilterHtml(base, today, filter, fav, walkList.filter(isFav).length) + walkToolsHtml(view);
+  const empty = fav && !base.length && !q ? '還沒有常溜的狗。<br>點狗打開詳細資訊，<br>按名字旁的「☆ 常溜」加進來。'
+    : q ? `找不到「${esc(q)}」` : '沒有符合的狗';
   main.innerHTML = head + (q && list.length ? `<div class="section-hint">${icon('search')}搜尋「${esc(q)}」：${list.length} 隻</div>` : '')
-    + (items || `<div class="status-msg">${q ? `找不到「${esc(q)}」` : '沒有符合的狗'}</div>`);
+    + (items || `<div class="status-msg">${empty}</div>`);
 }
 
 // 我溜過：點照片開詳細資訊、讀取失敗時重新讀取（內容區每次重畫，所以用事件委派）

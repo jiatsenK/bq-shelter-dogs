@@ -46,8 +46,8 @@ function findLabel(cls, name, sub, [x, y, w, h], small) {
     + (sub !== '' ? count(top + chars.length * lh + 14) : '');
 }
 
-let findView = 'photo'; // photo：照片圖鑑；map：平面圖
-let findZone = 'all';   // 篩選的區域 key；all＝全部
+let findView = 'list'; // list：列表（一籠一列）；map：平面圖（#154 拿掉照片格子）
+let findZone = 'all';   // 篩選的區域 key；all＝全部；fav＝我的常溜（#155）
 let findCage = null;    // 平面圖上點選的籠子（findCageOf 的 id）；null＝看整區
 
 function findZoneOf(dog) {
@@ -77,7 +77,7 @@ function findSorted(dogs) {
 }
 
 function findList(query, zone = findZone) {
-  return findSorted(allDogs.filter(d => findMatches(d, query) && (zone === 'all' || findZoneOf(d) === zone)));
+  return findSorted(allDogs.filter(d => findMatches(d, query) && (zone === 'all' || (zone === 'fav' ? isFav(d) : findZoneOf(d) === zone))));
 }
 
 // 搜尋命中的字標黃；比對時忽略空白、全形半形，對不回原文位置時就不標
@@ -90,13 +90,23 @@ function findMark(text, query) {
   return `${esc(s.slice(0, i))}<mark>${esc(s.slice(i, i + q.length))}</mark>${esc(s.slice(i + q.length))}`;
 }
 
-function findCard(dog, query, eager) {
+// 列表的一隻狗：小圓照片＋名字＋性別（#154：找狗靠文字與位置，認狗靠小照片）。
+// 搜尋只對到編號時把編號也列出來，才看得到標黃的字
+function findDogHtml(dog, query) {
+  const q = searchKey(query);
+  const idHit = q && dog.id && !searchKey(dog.name).includes(q) && [dog.id, ...(dog.formerIds || [])].some(v => searchKey(v).includes(q));
   const flag = specialFlag(dog.note);
-  return `<button type="button" class="find-dog" data-dog="${allDogs.indexOf(dog)}" aria-haspopup="dialog">
-    <span class="find-photo">${photoThumb(dog, 160, false, eager)}${flag ? `<span class="find-warn">${icon('warn')}注意</span>` : ''}</span>
-    <span class="find-name"><span class="n">${findMark(dog.name, query)}</span>${sexMark(dog)}</span>
-    <span class="find-meta"><b>${findMark(dog.cage, query)}</b>${dog.id ? `<span>${findMark(dog.id, query)}</span>` : ''}</span>
-  </button>`;
+  return `<button type="button" class="find-dog find-row-dog" data-dog="${allDogs.indexOf(dog)}" aria-haspopup="dialog">${photoThumb(dog, 32)}<span class="find-name"><span class="n">${findMark(dog.name, query)}</span>${sexMark(dog)}${isFav(dog) ? '<i class="fav-mark" role="img" aria-label="我的常溜">★</i>' : ''}</span>${idHit ? `<small class="find-row-id">${findMark(dog.id, query)}</small>` : ''}${flag ? `<span class="find-row-warn" role="img" aria-label="注意" title="注意">${icon('warn')}</span>` : ''}</button>`;
+}
+
+// 一個籠位一列：籠位在左、這籠的狗排在右邊，名字多就換行
+function findCageRowsHtml(list, query) {
+  const cages = [];
+  for (const d of list) {
+    const last = cages[cages.length - 1];
+    if (last && last.cage === d.cage) last.dogs.push(d); else cages.push({ cage: d.cage, dogs: [d] });
+  }
+  return `<div class="find-rows">${cages.map(c => `<div class="find-row"><b class="find-row-cage">${findMark(c.cage, query) || '—'}</b><span class="find-row-dogs">${c.dogs.map(d => findDogHtml(d, query)).join('')}</span></div>`).join('')}</div>`;
 }
 
 function findChipsHtml(query) {
@@ -108,25 +118,24 @@ function findChipsHtml(query) {
     `<button type="button" class="find-chip${findZone === key ? ' on' : ''}" data-find-zone="${key}" aria-pressed="${findZone === key}">${label}<small>${n}</small></button>`;
   return `<div class="find-bar">
     <div class="find-view" role="group" aria-label="顯示方式">
-      <button type="button" data-find-view="photo" class="${findView === 'photo' ? 'on' : ''}" aria-pressed="${findView === 'photo'}">${icon('grid')}照片</button>
+      <button type="button" data-find-view="list" class="${findView === 'list' ? 'on' : ''}" aria-pressed="${findView === 'list'}">${icon('list')}列表</button>
       <button type="button" data-find-view="map" class="${findView === 'map' ? 'on' : ''}" aria-pressed="${findView === 'map'}">${icon('map')}平面圖</button>
     </div>
-    <div class="find-chips">${zones.map(z => chip(z.key, z.short, count(z.key))).join('')}</div>
+    <div class="find-chips">${chip('fav', '★ 我的常溜', inQuery.filter(isFav).length)}${zones.map(z => chip(z.key, z.short, count(z.key))).join('')}</div>
   </div>`;
 }
 
-// 照片分段：每個區域一段，段落標題寫區名與隻數
-function findGridHtml(list, query) {
+// 列表分段：每個區域一段，段落標題寫區名與隻數，段內一籠一列
+function findRowsHtml(list, query) {
   const groups = [];
   for (const d of list) {
     const z = findZoneOf(d);
     const last = groups[groups.length - 1];
     if (last && last.z === z) last.items.push(d); else groups.push({ z, items: [d] });
   }
-  let n = 0;
   return groups.map(g => `
     <div class="find-zone-head"><i class="find-dot z-${g.z}"></i><h2>${esc(findZoneInfo(g.z).name)}</h2><span>${g.items.length} 隻</span></div>
-    <div class="find-grid">${g.items.map(d => findCard(d, query, n++ < 6)).join('')}</div>`).join('');
+    ${findCageRowsHtml(g.items, query)}`).join('');
 }
 
 // 平面圖：照所內看板重畫、橫的（K 2026-09-26）；V7（#113）起改成淺色，顏色在 css/app.css .find-map。
@@ -307,12 +316,12 @@ function findMapHtml(query) {
     const title = findCage ? `${z.name}・${findCage}` : z.name;
     const where = findCage ? '這籠' : '這區';
     html += `<div class="find-zone-head"><i class="find-dot z-${z.key}"></i><h2>${esc(title)}</h2><span>${list.length} 隻</span></div>`;
-    html += list.length ? `<div class="find-grid">${list.map((d, i) => findCard(d, query, i < 6)).join('')}</div>`
+    html += list.length ? findCageRowsHtml(list, query)
       : `<div class="status-msg">${query ? `${where}找不到「${esc(query)}」` : findCage ? '這籠目前沒有狗' : '這區目前沒有對應的籠位'}</div>`;
   } else if (searching) {
     // 搜尋（#113）：上面平面圖標出找到的籠子，下面列出找到的狗
     html += hits.length
-      ? `<div class="section-hint">${icon('search')}「${esc(query)}」找到 ${hits.length} 隻，點一隻看在哪</div>` + findGridHtml(hits, query)
+      ? `<div class="section-hint">${icon('search')}「${esc(query)}」找到 ${hits.length} 隻，點一隻看在哪</div>` + findRowsHtml(hits, query)
       : `<div class="status-msg">找不到「${esc(query)}」<br>試試狗名的一個字、編號後四碼，或籠位（例：新A03）。</div>`;
   }
   return html;
@@ -358,11 +367,17 @@ function findMapAnimate() {
 
 function findPageHtml(query) {
   const bar = findChipsHtml(query);
-  if (findView === 'map' || searchKey(query)) return bar + findMapHtml(query); // 搜尋時照片、平面圖都是地圖在上、結果在下
+  const fav = findZone === 'fav'; // 我的常溜一律用列表（#155）
+  if (!fav && (findView === 'map' || searchKey(query))) return bar + findMapHtml(query); // 搜尋時列表、平面圖都是地圖在上、結果在下
   findMapShown = null; // 下次切回平面圖，從整張圖放大過去
   const list = findList(query);
-  if (!list.length) return bar + '<div class="status-msg">這區目前沒有狗</div>';
-  return bar + findGridHtml(list, query);
+  if (!list.length) {
+    const msg = !fav ? '這區目前沒有狗'
+      : searchKey(query) ? `我的常溜裡找不到「${esc(query)}」`
+      : '還沒有常溜的狗。<br>點狗打開詳細資訊，<br>按名字旁的「☆ 常溜」加進來。';
+    return bar + `<div class="status-msg">${msg}</div>`;
+  }
+  return bar + findRowsHtml(list, query);
 }
 
 // 找狗頁的點擊（內容區每次重畫，所以用事件委派）
@@ -370,7 +385,12 @@ document.getElementById('main').addEventListener('click', e => {
   if (activeTab !== 'find') return;
   if (e.target.closest('#findZoomOpen')) { findZoomShow(findZone === 'all' ? null : findZone, findCage); return; }
   const view = e.target.closest('[data-find-view]');
-  if (view) { findView = view.dataset.findView; render(); return; }
+  if (view) {
+    findView = view.dataset.findView;
+    if (findView === 'map' && findZone === 'fav') findZone = 'all'; // 平面圖沒有常溜，回到全部
+    render();
+    return;
+  }
   const cageEl = e.target.closest('[data-find-cage]');
   if (cageEl) { findPickCage(cageEl.dataset.findCage); return; }
   const zone = e.target.closest('[data-find-zone]');
@@ -380,6 +400,7 @@ document.getElementById('main').addEventListener('click', e => {
     const onMap = zone.tagName.toLowerCase() === 'g';
     findZone = key !== 'all' && findZone === key && !findCage && !onMap ? 'all' : key;
     findCage = null;
+    if (findZone === 'fav') findView = 'list';
     render();
     return;
   }
