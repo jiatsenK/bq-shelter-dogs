@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-04T15:00:36+08:00",
+  "syncedAt": "2026-10-04T15:06:55+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -513,7 +513,7 @@
       "walkers": [
         "da53fbdda293",
         "044328805855",
-        "f3f08b5a83bd"
+        "fc2ae30607ef"
       ],
       "note": "2026/7/22洗澡(msi)；2026/9/2 吃一錠除（俐葶）",
       "sex": "female",
@@ -529,7 +529,8 @@
       "myWalked": false,
       "walkers": [
         "da53fbdda293",
-        "044328805855"
+        "044328805855",
+        "fc2ae30607ef"
       ],
       "note": "不親狗，曾咬過蘇打（秀玉）；會從小活動區草地區跳欄出來去咬其他狗（俐葶）, 2026/7/22洗澡(msi)",
       "sex": "female",
@@ -1374,11 +1375,13 @@
       "cage": "舊A20",
       "id": "2025072001",
       "name": "天狼星",
-      "walkedDate": "2026-09-29",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "044328805855"
+        "da53fbdda293",
+        "044328805855",
+        "fc2ae30607ef"
       ],
       "note": "",
       "sex": "",
@@ -1436,14 +1439,15 @@
       "name": "甜甜",
       "walkedDate": "2026-10-04",
       "covered": true,
-      "myWalked": false,
+      "myWalked": true,
       "walkers": [
-        "47114239953c"
+        "ca36800987f2",
+        "7fe4735e3c59"
       ],
       "note": "不親會走動的狗， 會發出低鳴不悦的聲音。 對捷運站和拉亞倒是沒有問題",
       "sex": "female",
       "intro": "2026年6月1日,從三峽被通報,雖然少了兩隻前腳,個性仍樂觀又親人,會站起來靠近討摸摸,還會用一雙眼睛笑咪咪看著你,表情也太療育..^^",
-      "myWalkedDate": null
+      "myWalkedDate": "2026-10-04"
     },
     {
       "cage": "舊B04",
@@ -1496,7 +1500,8 @@
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "a0cc282cd364"
+        "a533226b339a",
+        "ea864bd3319f"
       ],
       "note": "<羊噴火訓練>",
       "sex": "",
@@ -1582,11 +1587,12 @@
       "cage": "舊B18",
       "id": "2018012905",
       "name": "熊熊",
-      "walkedDate": "2026-09-29",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "044328805855"
+        "044328805855",
+        "fc2ae30607ef"
       ],
       "note": "陌生人有可能會咬（嘉文）;8/25剃毛",
       "sex": "",
@@ -1597,11 +1603,12 @@
       "cage": "舊B18",
       "id": "2018012907",
       "name": "毛毛",
-      "walkedDate": "2026-09-29",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "044328805855"
+        "044328805855",
+        "fc2ae30607ef"
       ],
       "note": "陌生人有可能會咬（嘉文）",
       "sex": "",
