@@ -1,5 +1,5 @@
 # 自動跑測試（#84）：開 PR、推到 main 時跑，PR 上會顯示綠勾或紅叉
-# - node 測試：試算表同步（scripts/sync-sheet.test.mjs）、Worker（worker/test/worker.test.mjs）
+# - node 測試：試算表同步（scripts/sync-sheet.test.mjs）、Worker（worker/test/worker.test.mjs）、照片版本號（scripts/photo-versions.test.mjs）
 # - 網頁測試：用無頭瀏覽器打開 tests/index.html（scripts/run-browser-tests.cjs），全部通過才算過
 # - 只讀 repo 裡的檔案和假資料，不碰試算表、Worker 或任何密鑰
 name: 測試
@@ -35,8 +35,8 @@ jobs:
           node-version: 22
 
       # node --test 要寫檔名：寫資料夾在 Node 22 會失敗
-      - name: node 測試（試算表同步、Worker）
-        run: node --test scripts/sync-sheet.test.mjs worker/test/worker.test.mjs
+      - name: node 測試（試算表同步、Worker、照片版本號）
+        run: node --test scripts/sync-sheet.test.mjs worker/test/worker.test.mjs scripts/photo-versions.test.mjs
 
       - name: 安裝無頭瀏覽器
         run: |
