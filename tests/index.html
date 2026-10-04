@@ -1869,19 +1869,15 @@ async function runV9Tests() {
       if (!myMonthStats(currentMyWalks(), new Date()).includes('<b>1</b>')) throw new Error('統計沒有新登記');
       sheetWritesMemory = null; dog.walkedDate = originalDate;
       eq(computeStatus(dog, new Date()).days, 0, '重新載入日期：');
-      if (!walkEditControls(dog, new Date()).includes('walkUndoSaved')) throw new Error('復原入口不持續');
-      openWithSheet([dog], true);
-      eq(withSheet.expected, current, '保留原始快照：');
-      withSheet.picked = new Set(['志工乙']);
-      await finishWithSheet();
-      eq([lastBody.action, lastBody.dogs[0].expected], ['edit', '志工乙、志工我'], '修改請求：');
+      if (walkerEditBase(dog, new Date()) !== current) throw new Error('重新載入後仍可在名字旁加減');
+      await editWalkers(dog, ['志工乙'], '已拿掉 志工我');
+      eq([lastBody.action, lastBody.dogs[0].expected, lastBody.walker], ['edit', '志工乙、志工我', '志工乙'], '修改請求：');
       eq(currentMyWalks().length, 0, '移除自己不留今日紀錄：');
       await queueSheetWrite([dog], false);
       eq(walkerList(dog), ['志工乙', '志工我'], '復原編輯：');
       eq(currentMyWalks().length, 1, '復原統計：');
-      openWithSheet([dog], true); current = '志工乙、志工我、志工戊';
-      withSheet.picked = new Set(['志工我']);
-      await finishWithSheet();
+      current = '志工乙、志工我、志工戊';
+      await editWalkers(dog, ['志工我'], '已拿掉 志工乙');
       eq(current, '志工乙、志工我、志工戊', '不蓋掉他人：');
       eq(walkerList(dog), ['志工乙', '志工我', '志工戊'], '更新衝突名單：');
       withSheet = null; renderWithSheet(); hideToast();
@@ -2808,6 +2804,85 @@ async function runOldUrlTests() {
   });
 }
 
+// ── #141 溜狗人旁＋／×（K 2026-10-04 確認）──
+async function runWalkerChipTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList, sheetWritesMemory, sheetWriteState, walkerNameMemory, walkerCodesMemory, myWalks, myWalksState];
+  const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
+  const toastText = () => { const t = document.getElementById('toast'); return t && !t.hidden ? t.querySelector('.toast-text').textContent : ''; };
+  const tick = () => new Promise(r => setTimeout(r, 0));
+  const chips = () => [...document.querySelectorAll('.last-walk .who-chip')].map(c => c.firstChild.textContent);
+  const today = localDateKey(new Date());
+  try {
+    allDogs = [
+      { id: '9901', name: '加減甲', cage: 'A01', note: '', covered: false, walkedDate: new Date(), formerIds: [] },
+      { id: '9902', name: '加減乙', cage: 'A02', note: '', covered: false, walkedDate: new Date(Date.now() - 3 * 864e5), formerIds: [] },
+    ];
+    groupMap = {}; activeTab = 'walk'; searchQuery = '';
+    walkedStorage = fakeStorage(); walkedMemory = null; walkedCache = null; sheetWritesMemory = null; sheetWriteState = 'unknown';
+    saveWalkerName('志工我'); UPLOAD_URL = 'https://worker.test';
+    walkerNames = { '9901': '志工乙+志工丙', '9902': '志工乙+志工丙' }; walkerNameList = ['志工乙', '志工丙', '志工丁'];
+    let current = '志工乙+志工丙', bodies = [];
+    window.fetch = async (u, o) => {
+      const body = JSON.parse(o.body); bodies.push(body);
+      let result;
+      if (body.action === 'edit') {
+        if (body.dogs[0].expected !== current) result = { status: 'changed', current: { date: today, walker: current } };
+        else { const prev = current; current = body.walker; result = { status: 'written', prev: { date: { date: today }, walker: prev }, wrote: { walker: current } }; }
+      } else { current = body.dogs[0].prev.walker; result = { status: 'restored' }; }
+      return json({ ok: true, today, results: [{ id: body.dogs[0].id, name: body.dogs[0].name, ...result }] });
+    };
+    render();
+    await check('#141 今天溜的狗：每個名字旁有 ×、最後有＋；不是今天的只顯示名字；沒有舊的三顆按鈕', () => {
+      showDetail(allDogs[0]);
+      eq(chips(), ['志工乙', '志工丙'], '名字：');
+      eq(document.querySelectorAll('.last-walk [data-who-remove]').length, 2, '× 數：');
+      if (!document.getElementById('whoAdd')) throw new Error('沒有＋');
+      if (document.getElementById('walkEditPeople') || document.getElementById('walkAddPeople') || document.getElementById('walkUndoSaved')) throw new Error('舊按鈕還在');
+      showDetail(allDogs[1]);
+      eq([chips(), document.querySelectorAll('.last-walk .who-x').length, !!document.getElementById('whoAdd')], [['志工乙', '志工丙'], 0, false], '三天前的：');
+    });
+    await check('#141 按 × 直接寫試算表（帶原文比對），提示條可復原；只剩一人不給 ×', async () => {
+      showDetail(allDogs[0]); bodies = [];
+      document.querySelector('.last-walk [data-who-remove="志工乙"]').click();
+      if (!document.querySelector('.last-walk .who-x:disabled')) throw new Error('寫入中要不能按');
+      await sheetQueue; await tick();
+      eq(bodies, [{ action: 'edit', walker: '志工丙', dogs: [{ id: '9901', name: '加減甲', expected: '志工乙+志工丙' }] }], '送出：');
+      eq([chips(), document.querySelectorAll('.last-walk .who-x').length, !!document.getElementById('whoAdd')], [['志工丙'], 0, true], '剩一人：');
+      eq(toastText(), '已拿掉 志工乙，已寫進試算表', '提示：');
+      document.querySelector('#toast .toast-undo').click();
+      await sheetQueue; await tick();
+      eq([current, chips()], ['志工乙+志工丙', ['志工乙', '志工丙']], '復原：');
+    });
+    await check('#141 按＋選名字，接在後面寫進試算表；已在名單上的人不列', async () => {
+      showDetail(allDogs[0]); bodies = [];
+      document.getElementById('whoAdd').click();
+      const names = [...document.querySelectorAll('#withBackdrop [data-with]')].map(b => b.dataset.with);
+      if (names.includes('志工乙') || names.includes('志工丙')) throw new Error(`已在名單：${names}`);
+      document.querySelector('#withBackdrop [data-with="志工丁"]').click();
+      document.querySelector('#withBackdrop [data-with-ok]').click();
+      await tick(); await sheetQueue; await tick();
+      eq([bodies[0].action, bodies[0].walker], ['edit', '志工乙、志工丙、志工丁'], '送出：');
+      eq(chips(), ['志工乙', '志工丙', '志工丁'], '名單：');
+      eq(toastText(), '已加入 志工丁，已寫進試算表', '提示：');
+      hideToast();
+    });
+    await check('#141 別人先改過：不蓋掉，提示並換成最新名單', async () => {
+      showDetail(allDogs[0]);
+      current = '志工乙、志工丙、志工丁、志工戊';
+      document.querySelector('.last-walk [data-who-remove="志工丁"]').click();
+      await sheetQueue; await tick();
+      eq(current, '志工乙、志工丙、志工丁、志工戊', '試算表沒被蓋：');
+      eq(chips(), ['志工乙', '志工丙', '志工丁', '志工戊'], '最新名單：');
+      if (!toastText().includes('沒有蓋掉')) throw new Error(`提示：${toastText()}`);
+      hideToast();
+    });
+  } finally {
+    hideDetail(); hideToast(); withSheet = null; renderWithSheet();
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList, sheetWritesMemory, sheetWriteState, walkerNameMemory, walkerCodesMemory, myWalks, myWalksState] = saved;
+    render();
+  }
+}
+
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
 Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js', '../js/find.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
@@ -2860,6 +2935,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runWalkSortTests)
   .then(runSheetWriteTests)
   .then(runV9Tests)
+  .then(runWalkerChipTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
