@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-03T16:01:38+08:00",
+  "syncedAt": "2026-10-04T10:38:28+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -79,7 +79,7 @@
     },
     {
       "cage": "母幼",
-      "id": "",
+      "id": "2023081204",
       "name": "福星",
       "walkedDate": "2026-10-01",
       "covered": true,
@@ -1304,16 +1304,16 @@
       "cage": "舊A18",
       "id": "2025042401",
       "name": "浩南",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-04",
       "covered": true,
-      "myWalked": false,
+      "myWalked": true,
       "walkers": [
-        "21120f797f52"
+        "7fe4735e3c59"
       ],
       "note": "4/12洗澡（佳岑）",
       "sex": "male",
       "intro": "2025年4月24日,從三峽被通報,外觀高大帥氣,站出來霸氣外露,但其實是大暖男,非常的好牽,宜動宜靜,肩並肩一起坐也ok,跟他互動會讓你愛上他哦：）",
-      "myWalkedDate": "2026-09-27"
+      "myWalkedDate": "2026-10-04"
     },
     {
       "cage": "舊A19",
