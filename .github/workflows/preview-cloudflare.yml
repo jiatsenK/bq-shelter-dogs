@@ -44,6 +44,12 @@ jobs:
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         run: node scripts/photo-versions.mjs
 
+      # 照片放 R2（#130）：預覽版讀正式的照片空間（預覽版不能寫）；還沒建 bucket 就不用 R2，預覽不建 bucket
+      - name: 確認照片空間（R2）
+        id: r2
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: node scripts/r2-bucket.mjs
+
       - name: 上傳預覽版本
         id: upload
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
@@ -52,6 +58,7 @@ jobs:
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           npx --yes wrangler@4 versions upload \
+            --config "${{ steps.r2.outputs.config }}" \
             --preview-alias "pr-${PR}" \
             --var PREVIEW:1 \
             --tag "pr-${PR}" \
