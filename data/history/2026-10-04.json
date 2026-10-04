@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-04T10:38:28+08:00",
+  "syncedAt": "2026-10-04T11:01:18+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -93,6 +93,21 @@
       "myWalkedDate": null
     },
     {
+      "cage": "母幼",
+      "id": "2020081102",
+      "name": "滷蛋",
+      "walkedDate": "2026-10-01",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "e3121969b2ee"
+      ],
+      "note": "",
+      "sex": "",
+      "intro": "",
+      "myWalkedDate": null
+    },
+    {
       "cage": "住院區",
       "id": "2021111807",
       "name": "捷運站",
@@ -141,11 +156,11 @@
       "cage": "新獨01",
       "id": "2018062507",
       "name": "黑狗兄",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "21120f797f52"
+        "a2b179095490"
       ],
       "note": "20260913，右嘴流血，疑似息肉破裂。2026/4/5 籠內疑似護食，咬了歐疼，暫時搬到獨立籠 7/22洗澡msi",
       "sex": "male",

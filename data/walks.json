@@ -492,6 +492,8 @@
     {"id":"2020071403","name":"OPEN醬","date":"2026-10-03","mine":false,"walkers":["c3b400d1f468"]},
     {"id":"2025072901","name":"果凍","date":"2026-10-03","mine":false,"walkers":["c3b400d1f468"]},
     {"id":"2023081204","name":"福星","date":"2026-10-01","mine":false,"walkers":["8786042066d4"]},
-    {"id":"2025042401","name":"浩南","date":"2026-10-04","mine":true,"walkers":["7fe4735e3c59"]}
+    {"id":"2025042401","name":"浩南","date":"2026-10-04","mine":true,"walkers":["7fe4735e3c59"]},
+    {"id":"2020081102","name":"滷蛋","date":"2026-10-01","mine":false,"walkers":["e3121969b2ee"]},
+    {"id":"2018062507","name":"黑狗兄","date":"2026-10-04","mine":false,"walkers":["a2b179095490"]}
   ]
 }
