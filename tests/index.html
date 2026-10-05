@@ -2670,14 +2670,14 @@ async function runPreviewTests() {
 
 // #125 網站搬到 Cloudflare：同一個網址的 /api 是 Worker；舊網址和本機照舊用原本的照片上傳 Worker
 async function runCloudflareTests() {
-  await check('#125 照片上傳服務網址：*.workers.dev 上用同網址 /api，其他網址用舊 Worker', () => {
+  await check('#125 照片上傳服務網址：一律用同網址 /api，舊的單獨 Worker 拿掉了', () => {
     eq(uploadUrlFor({ hostname: 'bq-shelter-dogs.<子網域>.workers.dev', origin: 'https://bq-shelter-dogs.<子網域>.workers.dev' }),
       'https://bq-shelter-dogs.<子網域>.workers.dev/api', '新網址：');
     eq(uploadUrlFor({ hostname: 'pr-12-bq-shelter-dogs.<子網域>.workers.dev', origin: 'https://pr-12-bq-shelter-dogs.<子網域>.workers.dev' }),
       'https://pr-12-bq-shelter-dogs.<子網域>.workers.dev/api', '預覽網址：');
-    eq(uploadUrlFor({ hostname: 'jiatsenk.github.io', origin: 'https://jiatsenk.github.io' }), OLD_UPLOAD_URL, '舊網址：');
-    eq(uploadUrlFor({ hostname: 'localhost', origin: 'http://localhost:8000' }), OLD_UPLOAD_URL, '本機：');
-    eq(OLD_UPLOAD_URL, 'https://bq-shelter-photos.<子網域>.workers.dev', '舊 Worker：');
+    eq(uploadUrlFor({ hostname: 'localhost', origin: 'http://localhost:8787' }), 'http://localhost:8787/api', '本機（wrangler dev）：');
+    eq([uploadUrlFor(undefined), uploadUrlFor({ origin: 'null' })], ['', ''], '沒有網址（同步腳本測試、直接開檔案）不上傳：');
+    if (/bq-shelter-photos\.jiatsen-k|OLD_UPLOAD_URL/.test(APP_JS)) throw new Error('js/app.js 不該再有舊的照片上傳服務網址');
   });
   await check('#125 部署設定：網站檔案不公開 Worker 程式、同步腳本、交接紀錄', async () => {
     const ignore = await fetch('../.assetsignore').then(r => r.ok ? r.text() : '');
