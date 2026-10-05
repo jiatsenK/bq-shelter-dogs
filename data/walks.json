@@ -576,6 +576,7 @@
     {"id":"2021020304","name":"冬冬","date":"2026-09-26","mine":false,"walkers":["dcda49f5b985"]},
     {"id":"2021021702","name":"辛巴","date":"2026-10-04","mine":false,"walkers":["dcda49f5b985"]},
     {"id":"2020081102","name":"滷蛋","date":"2026-10-03","mine":false,"walkers":["e3121969b2ee"]},
-    {"id":"2021020304","name":"冬冬","date":"2026-10-03","mine":false,"walkers":["55f305be6715"]}
+    {"id":"2021020304","name":"冬冬","date":"2026-10-03","mine":false,"walkers":["55f305be6715"]},
+    {"id":"2025021801","name":"阿湯","date":"2026-10-04","mine":false,"walkers":["ca36800987f2"]}
   ]
 }
