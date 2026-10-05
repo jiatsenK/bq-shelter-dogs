@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-05T08:01:12+08:00",
+  "syncedAt": "2026-10-05T12:01:58+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -51,11 +51,11 @@
       "cage": "母幼A",
       "id": "2021020304",
       "name": "冬冬",
-      "walkedDate": "2026-09-26",
+      "walkedDate": "2026-10-03",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "dcda49f5b985"
+        "55f305be6715"
       ],
       "note": "",
       "sex": "",
@@ -78,7 +78,7 @@
       "myWalkedDate": null
     },
     {
-      "cage": "母幼",
+      "cage": "母幼A",
       "id": "2023081204",
       "name": "福星",
       "walkedDate": "2026-10-01",
@@ -93,7 +93,7 @@
       "myWalkedDate": null
     },
     {
-      "cage": "母幼",
+      "cage": "母幼A",
       "id": "2020081102",
       "name": "滷蛋",
       "walkedDate": "2026-10-03",
@@ -1759,7 +1759,7 @@
     {
       "cage": "C區24",
       "id": "2026082601",
-      "name": "開多",
+      "name": "朵力（開多）",
       "walkedDate": "2026-10-04",
       "covered": true,
       "myWalked": true,
