@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-05T13:20:00+08:00",
+  "syncedAt": "2026-10-05T15:00:15+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -21,7 +21,7 @@
       "cage": "母幼A",
       "id": "2024010501",
       "name": "宙斯",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-05",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -36,7 +36,7 @@
       "cage": "母幼A",
       "id": "2023040701",
       "name": "莫莫",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-05",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -51,7 +51,7 @@
       "cage": "母幼A",
       "id": "2021020304",
       "name": "冬冬",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-05",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -66,7 +66,7 @@
       "cage": "母幼A",
       "id": "2021021702",
       "name": "辛巴",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-05",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -96,11 +96,12 @@
       "cage": "母幼A",
       "id": "2020081102",
       "name": "滷蛋",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-05",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "e3121969b2ee"
+        "e3121969b2ee",
+        "dcda49f5b985"
       ],
       "note": "",
       "sex": "",
@@ -1144,7 +1145,7 @@
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "044328805855"
+        "f16f7d3c8784"
       ],
       "note": "2/4屁股左後處有腫塊，已回報所方；8/19咬了泰森；8/26散步途中突然要咬經過的路人（俐葶）；8/28右後腳微跛；8/29再觀察沒跛，近期後腳要留意（俐葶）",
       "sex": "male",
