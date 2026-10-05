@@ -3136,6 +3136,82 @@ async function runWalkFavTests() {
   }
 }
 
+// K 2026-10-05 正式站回報：只有自己一人時沒有 ×（按錯要能取消）、「岑」被接成「岑、K」、別人溜的跑進我溜過
+async function runFix141Tests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList, sheetWritesMemory, sheetWriteState, walkerNameMemory, walkerCodesMemory];
+  const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
+  const tick = () => new Promise(r => setTimeout(r, 0));
+  const today = localDateKey(new Date());
+  try {
+    await check('K 2026-10-05：同一隻狗同一天以最後一筆為準，後來把我拿掉就不算我溜的', () => {
+      const walks = parseMyWalks({ version: 1, walks: [
+        { id: '9801', name: '修正甲', date: '2026-10-04', mine: false, walkers: ['bbbbbbbbbbbb'] },
+        { id: '9801', name: '修正甲', date: '2026-10-04', mine: true, walkers: ['bbbbbbbbbbbb', 'aaaaaaaaaaaa'] },
+        { id: '9801', name: '修正甲', date: '2026-10-04', mine: false, walkers: ['bbbbbbbbbbbb'] },
+        { id: '9802', name: '修正乙', date: '2026-10-04', mine: true, walkers: ['aaaaaaaaaaaa'] },
+        { id: '9801', name: '修正甲', date: '2026-10-03', mine: true, walkers: ['aaaaaaaaaaaa'] },
+      ] }, ['aaaaaaaaaaaa']);
+      eq(walks.map(w => `${w.name} ${w.ymd}`), ['修正乙 2026-10-04', '修正甲 2026-10-03']);
+    });
+    allDogs = [
+      { id: '9811', name: '修正丙', cage: 'A01', note: '', covered: false, walkedDate: new Date(), formerIds: [] },
+      { id: '9812', name: '修正丁', cage: 'A02', note: '', covered: false, walkedDate: null, formerIds: [] },
+      { id: '9813', name: '修正戊', cage: 'A03', note: '', covered: false, walkedDate: new Date(), formerIds: [] },
+    ];
+    groupMap = {}; activeTab = 'walk'; searchQuery = '';
+    walkedStorage = fakeStorage(); walkedMemory = null; walkedCache = null; sheetWritesMemory = null; sheetWriteState = 'unknown';
+    saveWalkerName('K'); UPLOAD_URL = 'https://worker.test';
+    walkerNames = { '9811': '岑', '9813': '志工乙' }; walkerNameList = [];
+    const bodies = [];
+    window.fetch = async (u, o) => {
+      const body = JSON.parse(o.body); bodies.push(body);
+      const results = body.dogs.map(d => {
+        if (body.action === 'undo') return { id: d.id, name: d.name, status: 'restored' };
+        const now = walkerNames[d.id] || '';
+        if (splitWalkers(now).includes(body.walker)) return { id: d.id, name: d.name, status: 'already', current: { date: today, walker: now } };
+        const wrote = now ? `${now}、${body.walker}` : body.walker;
+        return { id: d.id, name: d.name, status: 'written', prev: { date: { text: '' }, walker: now }, wrote: { walker: wrote } };
+      });
+      return json({ ok: true, today, results });
+    };
+    await check('K 2026-10-05：「岑」和「K」是同一人，只顯示一次', () => {
+      eq(walkerList({ id: '9890', name: '假' }), [], '沒名字：');
+      walkerNames['9890'] = '岑、K、志工乙';
+      eq(walkerList({ id: '9890', name: '假' }), ['K', '志工乙']);
+      delete walkerNames['9890'];
+    });
+    await check('K 2026-10-05：那格已經有「岑」，按溜了送「岑」（小程式不動），其他狗照常送「K」', async () => {
+      setWalked([allDogs[0], allDogs[1]], true);
+      await sheetQueue; await tick();
+      eq(bodies.map(b => [b.action, b.walker, b.dogs.map(d => d.id)]), [['walk', '岑', ['9811']], ['walk', 'K', ['9812']]], '送出：');
+      showDetail(allDogs[0]);
+      eq([...document.querySelectorAll('.last-walk .who-chip')].map(c => c.firstChild.textContent), ['K'], '顯示：');
+      hideDetail(); hideToast();
+    });
+    await check('K 2026-10-05：只有自己一人、是這支手機登記的，名字旁有 ×，按了取消這次登記', async () => {
+      showDetail(allDogs[1]);
+      const x = document.querySelector('.last-walk [data-who-undo]');
+      if (!x) throw new Error('沒有 ×');
+      bodies.length = 0;
+      x.click();
+      await sheetQueue; await tick();
+      eq(bodies.map(b => [b.action, b.dogs.map(d => d.id)]), [['undo', ['9812']]], '送出：');
+      eq(walkedNow(allDogs[1]), false, '今天已溜拿掉：');
+      hideDetail(); hideToast();
+    });
+    await check('K 2026-10-05：只有別人一人時不給 ×（不能拿掉別人唯一的登記）', () => {
+      showDetail(allDogs[2]);
+      eq([[...document.querySelectorAll('.last-walk .who-chip')].map(c => c.firstChild.textContent), document.querySelectorAll('.last-walk .who-x').length, !!document.getElementById('whoAdd')], [['志工乙'], 0, true]);
+      hideDetail();
+    });
+  } finally {
+    hideDetail(); hideToast();
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList, sheetWritesMemory, sheetWriteState, walkerNameMemory, walkerCodesMemory] = saved;
+    walkedCache = null;
+    render();
+  }
+}
+
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
 Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js', '../js/find.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
@@ -3194,6 +3270,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runFindListTests)
   .then(runFavTests)
   .then(runWalkFavTests)
+  .then(runFix141Tests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

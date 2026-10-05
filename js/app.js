@@ -136,10 +136,14 @@ async function loadDogsData() {
 function parseMyWalks(data, codes = loadMyCodes()) {
   if (!data || !Array.isArray(data.walks)) throw new Error('walks.json 格式不對');
   const text = v => (v == null ? '' : String(v).trim());
+  // 同一隻狗同一天以最後一筆為準：先記了我、後來把我拿掉（按錯、×），就不算我溜的（K 2026-10-05 阿湯）
+  const lastOf = new Map();
+  data.walks.forEach((w, i) => { if (w && Array.isArray(w.walkers)) lastOf.set(`${text(w.id) || text(w.name)}|${w.date}`, i); });
   const seen = new Set();
   const list = [];
   data.walks.forEach((w, i) => {
     if (!w || !Array.isArray(w.walkers) || !w.walkers.some(c => codes.includes(c))) return;
+    if (!data.walks[lastOf.get(`${text(w.id) || text(w.name)}|${w.date}`)].walkers.some(c => codes.includes(c))) return;
     const date = parseYmd(w.date);
     const id = text(w.id), name = text(w.name);
     if (!date || (!id && !name)) return;
@@ -823,11 +827,13 @@ function splitWalkers(text) {
   return [...new Set(String(text || '').split(WALKER_NAME_SEP).map(n => n.trim()).filter(Boolean))];
 }
 // 上次是誰溜的：這支手機今天按過溜了就是自己；否則用試算表的「誰遛的」
+// 同一個人的不同寫法只顯示一次（「岑」＝「K」，K 2026-10-05）
 function walkerList(dog, today = new Date()) {
+  const uniq = list => [...new Set(list.map(canonicalWalker).filter(Boolean))];
   const item = loadSheetWrites(today)[walkKey(dog)];
-  if (item && item.current) return splitWalkers(item.current.walker);
-  if (walkedNow(dog, today)) return [...new Set([...splitWalkers(walkerNames[walkKey(dog)]), loadWalkerName() || '你', ...(loadWalkWith(today)[walkKey(dog)] || [])])];
-  return splitWalkers(walkerNames[walkKey(dog)]);
+  if (item && item.current) return uniq(splitWalkers(item.current.walker));
+  if (walkedNow(dog, today)) return uniq([...splitWalkers(walkerNames[walkKey(dog)]), loadWalkerName() || '你', ...(loadWalkWith(today)[walkKey(dog)] || [])]);
+  return uniq(splitWalkers(walkerNames[walkKey(dog)]));
 }
 function walkerText(dog, today) {
   return walkerList(dog, today).join('、');
@@ -978,8 +984,26 @@ function saveSheetWrites(items, today = new Date()) {
 
 // 一個一個送，按了溜了馬上復原時，復原會等溜了寫完才送（才知道要改回什麼）
 function queueSheetWrite(dogs, on, toastText, toastUndo, walker, expected) {
-  sheetQueue = sheetQueue.then(() => sheetWrite(dogs, on, toastText, toastUndo, walker, expected)).catch(e => console.error(e));
-  return sheetQueue;
+  // 按溜了時，那格今天已經用別的寫法寫了我（例：「岑」），就送那格原本的寫法：小程式看到已經有我就不動，
+  // 不會接成「岑、K」（K 2026-10-05）。寫法不同的狗分開送
+  const groups = [];
+  if (on && !walker && expected === undefined) {
+    for (const d of dogs) {
+      const w = myAliasIn(d);
+      const g = groups.find(x => x.w === w);
+      if (g) g.dogs.push(d); else groups.push({ w, dogs: [d] });
+    }
+  } else groups.push({ w: walker, dogs });
+  let result = true;
+  for (const g of groups) {
+    sheetQueue = sheetQueue.then(() => sheetWrite(g.dogs, on, toastText, toastUndo, g.w, expected)).then(ok => { if (ok !== true) result = false; }).catch(e => console.error(e));
+  }
+  return sheetQueue.then(() => result);
+}
+function myAliasIn(dog, today = new Date()) {
+  const me = loadWalkerName();
+  if (!me || !dog.walkedDate || localDateKey(dog.walkedDate) !== localDateKey(today)) return null;
+  return splitWalkers(walkerNames[walkKey(dog)]).find(n => n !== me && canonicalWalker(n) === canonicalWalker(me)) || null;
 }
 
 // 提示條還是剛剛那則（使用者還沒按別的）才在後面補一句，不蓋掉「復原」
@@ -1249,12 +1273,21 @@ function walkerEditBase(dog, today = new Date()) {
   if (walkedNow(dog, today)) return null; // 這支手機按了溜了，試算表還沒回來
   return dog.walkedDate && localDateKey(dog.walkedDate) === date && walkerNames[key] ? walkerNames[key] : null;
 }
+// 只剩自己一個人、而且是這支手機今天登記的（按錯了），那個 × 是取消這次登記：日期和名字改回登記前（K 2026-10-05）
+function walkerUndoable(dog, who, today = new Date()) {
+  const item = loadSheetWrites(today)[walkKey(dog)];
+  return who.length === 1 && who[0] === canonicalWalker(loadWalkerName()) && walkedNow(dog, today)
+    && !!(item && item.mine && item.prev && item.wrote && item.current && item.current.walker === item.wrote.walker);
+}
 function walkerChipsHtml(dog, who, today) {
   if (!who.length) return '<span class="lw-none">—</span>';
   if (!walkerEditBase(dog, today)) return who.map(n => `<span class="who-chip">${esc(n)}</span>`).join('');
   const busy = walkerEditBusy === walkKey(dog);
   const dis = busy ? ' disabled' : '';
-  return who.map(n => `<span class="who-chip${who.length > 1 ? ' editable' : ''}">${esc(n)}${who.length > 1 ? `<button type="button" class="who-x" data-who-remove="${esc(n)}" aria-label="拿掉 ${esc(n)}"${dis}>×</button>` : ''}</span>`).join('')
+  const undoable = walkerUndoable(dog, who, today);
+  const x = n => who.length > 1 ? `<button type="button" class="who-x" data-who-remove="${esc(n)}" aria-label="拿掉 ${esc(n)}"${dis}>×</button>`
+    : undoable ? `<button type="button" class="who-x" data-who-undo aria-label="取消這次登記（${esc(n)}）"${dis}>×</button>` : '';
+  return who.map(n => `<span class="who-chip${x(n) ? ' editable' : ''}">${esc(n)}${x(n)}</span>`).join('')
     + `<button type="button" class="who-plus" id="whoAdd" aria-label="加入溜狗人"${dis}>${busy ? '…' : '＋'}</button>`;
 }
 async function editWalkers(dog, names, text) {
@@ -2139,6 +2172,7 @@ const DETAIL_CLICKS = [
   ['#photoCancel', () => { clearPhotoUpload(); renderDetail(); }],
   ['.buddy', el => { const d = allDogs[el.dataset.dog]; if (d) showDetail(d); }],
   ['#whoAdd', () => openWithSheet([detailDog], true)],
+  ['[data-who-undo]', () => setWalked([detailDog], false)],
   ['[data-who-remove]', el => {
     const n = el.dataset.whoRemove;
     editWalkers(detailDog, walkerList(detailDog).filter(x => x !== n), `已拿掉 ${n}`);

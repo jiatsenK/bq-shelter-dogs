@@ -570,3 +570,24 @@ test('2026-10-04 誰遛的格子用句號、分號、冒號等隔開也拆成好
   const script = await readFile(new URL('./sync-sheet.mjs', import.meta.url), 'utf8');
   assert.equal(src(worker), src(script), '同步和 Worker 的分隔符號要一樣，不然換出來的代號對不上');
 });
+
+test('K 2026-10-05 阿湯：同一天甲 → 甲＋我 → 甲，再記一筆甲，「我溜過」以最後一筆為準；舊檔漏記的也補回', () => withEnv({ WALKER_KEY: KEY, MY_NAME: ME }, async () => {
+  const disk = {};
+  await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 10, 4), walker: '志工B' } }), new Date(2026, 9, 4, 9));
+  await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 10, 4), walker: `志工B、${ME}` } }), new Date(2026, 9, 4, 10));
+  await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 10, 4), walker: '志工B' } }), new Date(2026, 9, 4, 11));
+  await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 10, 4), walker: '志工B' } }), new Date(2026, 9, 4, 12));
+  assert.deepEqual(walksOf(disk).filter(w => w.name === '測試狗甲').map(w => [w.date, w.mine, [...w.walkers].sort()]), [
+    ['2026-10-04', false, [CODE('志工B')]],
+    ['2026-10-04', true, [CODE('志工B'), CODE(ME)].sort()],
+    ['2026-10-04', false, [CODE('志工B')]],
+  ]);
+  assert.equal(dogOf(disk, '測試狗甲').myWalkedDate, null, '最後一筆不是我，myWalkedDate 不算這天');
+  // 舊檔（修好前）最後一筆停在「有我」：下次同步補一筆現在的
+  const all = walksOf(disk);
+  const lastA = all.map(w => w.name).lastIndexOf('測試狗甲');
+  const walks = all.filter((w, i) => i !== lastA);
+  const dogs = [dogOf(disk, '測試狗甲')];
+  assert.deepEqual(sync.newWalks(dogs, dogs, walks, KEY).map(w => [w.mine, w.walkers]), [[false, [CODE('志工B')]]]);
+  assert.deepEqual(sync.newWalks(dogs, dogs, walksOf(disk), KEY), [], '已經對上就不再記');
+}));
