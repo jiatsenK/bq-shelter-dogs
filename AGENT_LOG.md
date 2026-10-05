@@ -686,3 +686,9 @@
 - 岑／佳岑：畫面同一人只顯示一次（顯示佳岑）；按溜了時那格已有「岑」就送「岑」，小程式看到已有就不動，不會接成「岑、佳岑」。沒改 Apps Script。
 - 我溜過：同一隻狗同一天以 walks.json 最後一筆為準。原因：阿湯 10/4 先記了「維芬＋我」，之後改回「維芬」，同步因為「同一天同樣的人已經記過」沒再記，最後一筆停在有我。sync-sheet.mjs 改成同一天最後一筆跟現在不一樣就再記一筆（下次同步會補回阿湯），myWalkedDate 也以最後一筆為準。
 - 測試：sync-sheet.test.mjs 追加一項；tests/index.html 檔尾追加 runFix141Tests 五項。Node 132、網頁 183 全過。
+
+## 2026-10-05 拿掉程式裡的舊網址與舊照片上傳 Worker（Claude，分支 claude/project-thread-ovzdfh）
+- 依據：K 說「舊的可以刪掉了」，在選項卡選「以上全部」（程式判斷、舊 Worker、repo 舊照片）。這個 PR 只做程式判斷；舊 Worker 由 K 在 Cloudflare 刪（步驟在 `docs/CLOUDFLARE_SETUP.md`），repo 舊照片轉給 #130 照片搬家那串。
+- `js/app.js`：拿掉 `OLD_UPLOAD_URL`，`uploadUrlFor` 一律用同網址 `/api`（沒有網址時留空，不顯示上傳）。
+- `worker/src/index.js`：`ALLOWED_ORIGINS` 預設改成空白（只接受同網址）；`wrangler.jsonc` 拿掉給 github.io 的設定。刪掉舊單獨 Worker 的設定檔 `worker/wrangler.toml`；`docs/PHOTO_UPLOAD_SETUP.md` 標成過時。舊網址轉址（#129）保留。
+- 測試：Worker 測試改用 `ALLOWED_ORIGINS` 放行測試網址，新增「沒設時 github.io 一律擋」；`r2-bucket.test.mjs` 改測行內 jsonc；網頁 #125 測試改成一律同網址 `/api`。node 133 項、網頁 183 項全過。

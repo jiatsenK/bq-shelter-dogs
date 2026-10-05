@@ -10,7 +10,7 @@
 - 前端設計需求（細節）：[`docs/FRONTEND_REQUIREMENTS.md`](docs/FRONTEND_REQUIREMENTS.md)
 - 視覺風格指引：[`docs/DESIGN_GUIDE.md`](docs/DESIGN_GUIDE.md)
 - 工作分票：見 GitHub Issues（標籤 `v4`、`v3`；舊版 `v1`）
-- 照片上傳服務設定：[`docs/PHOTO_UPLOAD_SETUP.md`](docs/PHOTO_UPLOAD_SETUP.md)
+- 網站、照片上傳、R2 設定：[`docs/CLOUDFLARE_SETUP.md`](docs/CLOUDFLARE_SETUP.md)
 
 ## 結構
 
