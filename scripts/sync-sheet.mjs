@@ -413,15 +413,23 @@ export function parseWalks(text) {
 //   上一次同步還沒有 walkers 欄位（#94 剛上線）時只看 mine，免得每隻狗都多記一筆；那一次的代號由 upgradeWalks 補進原本那筆
 // - 第一次建立（walks 為 null）：每隻有遛狗日期的狗都記目前的最後一次，當作起點
 // 同一隻狗同一天、同樣是不是我遛的，已經記過就不重複記。
+// 例外：同一天的最後一筆跟現在不一樣（甲 → 甲、乙 → 甲，例如有人按錯又拿掉），再記一筆現在的，
+// 「我溜過」以同一天最後一筆為準（K 2026-10-05 阿湯）。這條也會補回之前漏記的。
 // 沒設定 WALKER_KEY 時新紀錄不加 walkers（不知道是誰，不是「沒人」），之後設定了還能由 upgradeWalks 補上
 export function newWalks(dogs, prevDogs, walks, walkerKey = process.env.WALKER_KEY) {
   const seen = new Set((walks || []).map(w => walkKey(w, w.date, w.mine, w.walkers)));
+  const lastOfDay = new Map((walks || []).map(w => [`${dogKey(w)}|${w.date}`, w]));
   const prev = new Map((prevDogs || []).map(d => [dogKey(d), d]));
   const added = [];
   for (const d of dogs) {
     if (!d.walkedDate) continue;
     const mine = d.myWalked === true;
     const walkers = d.walkers || [];
+    const last = lastOfDay.get(`${dogKey(d)}|${d.walkedDate}`);
+    if (last && walkerKey && 'walkers' in last && ((last.mine === true) !== mine || walkersKey(last.walkers) !== walkersKey(walkers))) {
+      added.push({ id: d.id, name: d.name, date: d.walkedDate, mine, walkers });
+      continue;
+    }
     if (walks) {
       const before = prev.get(dogKey(d));
       if (before && before.walkedDate) {
@@ -468,8 +476,9 @@ export function upgradeWalks(walks, dogs, { key = process.env.WALKER_KEY, names 
 
 // 每隻狗我最後一次遛的日期：遛狗紀錄裡 mine 的最新日期；目前最後一次是我遛的也算
 export function attachMyWalkedDate(dogs, walks) {
+  const lastOfDay = new Map((walks || []).map(w => [`${dogKey(w)}|${w.date}`, w])); // 同一天以最後一筆為準
   const latest = new Map();
-  for (const w of walks || []) {
+  for (const w of lastOfDay.values()) {
     if (w.mine !== true || !w.date) continue;
     const k = dogKey(w);
     if (!latest.has(k) || latest.get(k) < w.date) latest.set(k, w.date);
