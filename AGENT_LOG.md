@@ -686,3 +686,9 @@
 - 岑／佳岑：畫面同一人只顯示一次（顯示佳岑）；按溜了時那格已有「岑」就送「岑」，小程式看到已有就不動，不會接成「岑、佳岑」。沒改 Apps Script。
 - 我溜過：同一隻狗同一天以 walks.json 最後一筆為準。原因：阿湯 10/4 先記了「維芬＋我」，之後改回「維芬」，同步因為「同一天同樣的人已經記過」沒再記，最後一筆停在有我。sync-sheet.mjs 改成同一天最後一筆跟現在不一樣就再記一筆（下次同步會補回阿湯），myWalkedDate 也以最後一筆為準。
 - 測試：sync-sheet.test.mjs 追加一項；tests/index.html 檔尾追加 runFix141Tests 五項。Node 132、網頁 183 全過。
+
+## 2026-10-05 清掉舊的「只認 K」機制（Claude，分支 claude/project-thread-lc23xa，#97）
+- 依據：K 說 V6 代號「實機測試完成」；#97 原定等 K 驗收後做。動手前確認現在 main：`MY_NAME`／`myWalked`／walks 的 `mine` 只剩同步腳本在用，網站與 Worker 都不讀（V9 名字功能讀的是 Worker 的 /api/walkers 和代號），不影響已上線功能；12 筆 `mine:true` 紀錄都已有代號。
+- `scripts/sync-sheet.mjs`：拿掉 `myNames`／`isMine`／`attachMyWalkedDate`，`dogs.json` 不再有 `myWalked`／`myWalkedDate`，新紀錄不寫 `mine`；換人判斷只看代號；`upgradeWalks` 拿掉「mine 補 K 代號」那段。舊紀錄的 `mine` 原樣寫回。workflow 不再帶 `MY_NAME`。
+- 測試：刪 #57 測試，改寫 #56／#94／分隔符號／阿湯測試，新增 2 項 #97 測試；node 測試 88 項全過。
+- 文件：SHEET_SYNC_SETUP（可刪 `MY_NAME` Secret）、PROJECT_GOALS、PHOTO_UPLOAD_SETUP。

@@ -82,10 +82,10 @@ test('產生 dogs.json：狗（含狗卡資訊與性別）、可以一起溜；�
   assert.deepEqual(f.calls.sort(), ['主清單:0', '主清單:7', '常遛狗群:0']);
   assert.deepEqual(cards.calls.sort(), ['202101234', '202102345', '202102346'], '沒編號的狗不讀狗卡');
   assert.deepEqual(data.dogs, [
-    { cage: 'C03', id: '202101234', name: '測試狗甲', walkedDate: '2026-09-16', covered: true, myWalked: false, walkers: [], note: '', sex: 'male', intro: '很親人，怕機車。' },
-    { cage: 'A10', id: '202102345', name: '測試狗乙', walkedDate: '2026-09-22', covered: false, myWalked: false, walkers: [], note: '親人', sex: '', intro: '' },
-    { cage: 'A2', id: '202102346', name: '測試狗丙', walkedDate: '2026-09-20', covered: false, myWalked: false, walkers: [], note: '勿溜', sex: '', intro: '' },
-    { cage: '住院區', id: '', name: '測試狗丁', walkedDate: null, covered: false, myWalked: false, walkers: [], note: '新狗，原表沒填日期', sex: '', intro: '' },
+    { cage: 'C03', id: '202101234', name: '測試狗甲', walkedDate: '2026-09-16', covered: true, walkers: [], note: '', sex: 'male', intro: '很親人，怕機車。' },
+    { cage: 'A10', id: '202102345', name: '測試狗乙', walkedDate: '2026-09-22', covered: false, walkers: [], note: '親人', sex: '', intro: '' },
+    { cage: 'A2', id: '202102346', name: '測試狗丙', walkedDate: '2026-09-20', covered: false, walkers: [], note: '勿溜', sex: '', intro: '' },
+    { cage: '住院區', id: '', name: '測試狗丁', walkedDate: null, covered: false, walkers: [], note: '新狗，原表沒填日期', sex: '', intro: '' },
   ]);
   assert.equal('cages' in data, false);
   assert.deepEqual(data.groups, {
@@ -159,7 +159,7 @@ test('前端讀 dogs.json 的結果跟同步腳本讀試算表一致', async () 
   const groupMap = sync.parseGroups(fakeGviz(GROUPS, 0).table, new Set(dogs.map(d => d.name)));
   const file = sync.renderFile(await sync.buildData(fakeFetch(), TODAY, fakeCards()), '', TODAY);
   const got = fe.parseDogsData(JSON.parse(file));
-  const plain = list => list.map(({ sex, intro, myWalked, walkers, formerIds, ...d }) => ({ ...d, walkedDate: d.walkedDate ? d.walkedDate.toDateString() : null }));
+  const plain = list => list.map(({ sex, intro, walkers, formerIds, ...d }) => ({ ...d, walkedDate: d.walkedDate ? d.walkedDate.toDateString() : null }));
   assert.deepEqual(JSON.parse(JSON.stringify(plain(got.dogs))), JSON.parse(JSON.stringify(plain([...dogs]))));
   assert.deepEqual(got.dogs.map(d => [d.sex, d.intro]), [['♂', '很親人，怕機車。'], ['', ''], ['', ''], ['', '']], '性別符號與狗卡資訊：');
   assert.equal(JSON.stringify(got.dogs.map(d => d.formerIds)), '[[],[],[],[]]', '沒寫舊編號的狗是空陣列（#75）：');
@@ -306,9 +306,9 @@ test('#56 第一次同步：存當天快照、用目前每隻狗的最後一次�
   assert.deepEqual(JSON.parse(writes['history/index.json']).dates, ['2026-09-25'], '#60 快照目錄');
   assert.equal(writes['history/2026-09-25.json'], writes['dogs.json'], '快照內容跟 dogs.json 一樣');
   assert.deepEqual(walksOf(disk), [
-    { id: '202101234', name: '測試狗甲', date: '2026-09-16', mine: false },
-    { id: '202102345', name: '測試狗乙', date: '2026-09-22', mine: false },
-    { id: '202102346', name: '測試狗丙', date: '2026-09-20', mine: false },
+    { id: '202101234', name: '測試狗甲', date: '2026-09-16' },
+    { id: '202102345', name: '測試狗乙', date: '2026-09-22' },
+    { id: '202102346', name: '測試狗丙', date: '2026-09-20' },
   ], '沒有遛狗日期的狗（測試狗丁）不記');
 });
 
@@ -358,7 +358,7 @@ test('#56 沒編號的狗用犬名比對；walks.json 壞掉時重新建立', as
   const dogs = [{ id: '', name: '無編號狗', walkedDate: '2026-09-25' }];
   assert.deepEqual(sync.newWalks(dogs, [{ id: '', name: '無 編號狗', walkedDate: '2026-09-25' }], []), []);
   assert.deepEqual(sync.newWalks(dogs, [{ id: '', name: '無編號狗', walkedDate: '2026-09-20' }], []),
-    [{ id: '', name: '無編號狗', date: '2026-09-25', mine: false }]);
+    [{ id: '', name: '無編號狗', date: '2026-09-25' }]);
   assert.equal(sync.parseWalks('{壞掉'), null);
   assert.deepEqual(JSON.parse(sync.renderWalks([])), { version: 1, walks: [] });
 });
@@ -377,96 +377,33 @@ test('#56 workflow 提交時一併加入快照與遛狗紀錄', async () => {
   assert.match(yml, /git add data\/dogs\.json data\/history data\/walks\.json/);
 });
 
-// ── #57 是不是我遛的（myWalked） ──
-// 假名字；真名只放在 Actions Secret MY_NAME
+// 假名字（測試用）
 const ME = '測試志工我';
-async function withMyName(value, fn) {
-  const saved = process.env.MY_NAME;
-  if (value == null) delete process.env.MY_NAME; else process.env.MY_NAME = value;
-  try { return await fn(); } finally {
-    if (saved == null) delete process.env.MY_NAME; else process.env.MY_NAME = saved;
-  }
-}
 const dogOf = (disk, name) => JSON.parse(disk['dogs.json']).dogs.find(d => d.name === name);
 
-test('#57 我遛 → myWalked true；之後別人遛 → dogs.json 變 false，walks.json 我那筆仍是 mine', () => withMyName(ME, async () => {
+test('#97 不再輸出 myWalked／myWalkedDate／mine，workflow 不再帶 MY_NAME', () => withEnv({ WALKER_KEY: KEY, MY_NAME: ME }, async () => {
   const disk = {};
   await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 9, 25), walker: ME } }), new Date(2026, 8, 25, 9));
-  let d = dogOf(disk, '測試狗甲');
-  assert.equal(d.myWalked, true);
-  assert.equal(d.myWalkedDate, '2026-09-25');
-  assert.equal(dogOf(disk, '測試狗乙').myWalked, false);
-  assert.equal(dogOf(disk, '測試狗乙').myWalkedDate, null);
-
-  await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 9, 27), walker: '志工B' } }), new Date(2026, 8, 27, 9));
-  d = dogOf(disk, '測試狗甲');
-  assert.equal(d.myWalked, false);
-  assert.equal(d.myWalkedDate, '2026-09-25', '我最後一次遛的日期還在');
-  assert.deepEqual(walksOf(disk).filter(w => w.name === '測試狗甲').map(w => [w.date, w.mine]),
-    [['2026-09-25', true], ['2026-09-27', false]]);
-}));
-
-test('#57 同一天換人遛（別人 → 我、我 → 別人）也各記一筆，不重複', () => withMyName(ME, async () => {
-  const disk = {};
-  await syncOnce(disk, mainWith({ '測試狗乙': { date: D(2026, 9, 25), walker: '志工B' } }), new Date(2026, 8, 25, 9));
-  await syncOnce(disk, mainWith({ '測試狗乙': { date: D(2026, 9, 25), walker: ME } }), new Date(2026, 8, 25, 13));
-  await syncOnce(disk, mainWith({ '測試狗乙': { date: D(2026, 9, 25), walker: ME } }), new Date(2026, 8, 25, 21));
-  assert.deepEqual(walksOf(disk).filter(w => w.name === '測試狗乙').map(w => [w.date, w.mine]),
-    [['2026-09-25', false], ['2026-09-25', true]]);
-  assert.equal(dogOf(disk, '測試狗乙').myWalkedDate, '2026-09-25');
-}));
-
-test('#57 沒設定 MY_NAME：同步照常，myWalked 都是 false', () => withMyName(null, async () => {
-  const disk = {};
-  const writes = await syncOnce(disk, mainWith({ '測試狗甲': { walker: ME } }), new Date(2026, 8, 25, 9));
-  assert.ok(writes['dogs.json']);
-  assert.ok(JSON.parse(disk['dogs.json']).dogs.every(d => d.myWalked === false && d.myWalkedDate === null));
-  assert.ok(walksOf(disk).every(w => w.mine === false));
-}));
-
-test('#57 名字比對：去空白、格子裡多人、MY_NAME 多種寫法；部分符合不算', () => {
-  const names = sync.myNames(` ${ME}、小我 , `);
-  assert.deepEqual(names, [ME, '小我']);
-  assert.equal(sync.isMine(ME, names), true);
-  assert.equal(sync.isMine('測試 志工我', names), false, '中間多空白會被拆成兩個名字，不算');
-  assert.equal(sync.isMine(`志工B、${ME}`, names), true);
-  assert.equal(sync.isMine('志工B/小我', names), true);
-  assert.equal(sync.isMine('小我們', names), false);
-  assert.equal(sync.isMine(`${ME}A`, names), false);
-  assert.equal(sync.isMine(ME, []), false);
-  assert.equal(sync.isMine('', names), false);
-});
-
-test('#57 公開檔案不出現任何志工名字（包含我的）', () => withMyName(ME, async () => {
-  const disk = {};
-  await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 9, 25), walker: ME }, '測試狗乙': { date: D(2026, 9, 25), walker: '志工B' } }), new Date(2026, 8, 25, 9));
-  await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 9, 26), walker: '志工C' } }), new Date(2026, 8, 26, 9));
-  for (const [path, text] of Object.entries(disk)) {
-    for (const who of [ME, '志工A', '志工B', '志工C']) assert.ok(!text.includes(who), `${path} 不該有 ${who}`);
-  }
-}));
-
-test('#57 升級：#56 的舊紀錄（沒有 mine）原樣保留；目前最後一次是我遛的補記一筆 mine', () => withMyName(ME, async () => {
-  const disk = {};
-  await withMyName(null, () => syncOnce(disk, MAIN, new Date(2026, 8, 25, 9)));
-  // 模擬 #56 時期的檔案：dogs.json 沒有 myWalked，walks.json 沒有 mine
-  const old = JSON.parse(disk['dogs.json']);
-  old.dogs = old.dogs.map(({ myWalked, myWalkedDate, ...d }) => d);
-  disk['dogs.json'] = JSON.stringify(old, null, 2) + '\n';
-  disk['walks.json'] = sync.renderWalks(walksOf(disk).map(({ mine, ...w }) => w));
-  const oldLines = disk['walks.json'].split('\n').filter(l => l.includes('"date"'));
-
-  await syncOnce(disk, mainWith({ '測試狗甲': { walker: ME } }), new Date(2026, 8, 25, 13));
-  const lines = disk['walks.json'].split('\n').filter(l => l.includes('"date"'));
-  assert.deepEqual(lines.slice(0, oldLines.length).map(l => l.replace(/,$/, '')), oldLines.map(l => l.replace(/,$/, '')), '舊紀錄一字不改');
-  assert.deepEqual(walksOf(disk).slice(oldLines.length), [{ id: '202101234', name: '測試狗甲', date: '2026-09-16', mine: true }]);
-  assert.equal(dogOf(disk, '測試狗甲').myWalkedDate, '2026-09-16');
-}));
-
-test('#57 workflow 從 Secret 帶入 MY_NAME', async () => {
+  assert.ok(JSON.parse(disk['dogs.json']).dogs.every(d => !('myWalked' in d) && !('myWalkedDate' in d)));
+  assert.ok(walksOf(disk).every(w => !('mine' in w)));
   const yml = await readFile(new URL('../.github/workflows/sync-sheet.yml', import.meta.url), 'utf8');
-  assert.match(yml, /MY_NAME: \$\{\{ secrets\.MY_NAME \}\}/);
-});
+  assert.doesNotMatch(yml, /MY_NAME/);
+}));
+
+test('#97 舊紀錄的 mine 原樣保留、不影響換人判斷', () => withEnv({ WALKER_KEY: KEY }, async () => {
+  const disk = {};
+  await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 9, 25), walker: ME } }), new Date(2026, 8, 25, 9));
+  // 模擬 #97 之前的檔案：dogs.json 有 myWalked、紀錄有 mine
+  const old = JSON.parse(disk['dogs.json']);
+  old.dogs = old.dogs.map(d => ({ ...d, myWalked: d.name === '測試狗甲', myWalkedDate: d.name === '測試狗甲' ? '2026-09-25' : null }));
+  disk['dogs.json'] = JSON.stringify(old, null, 2) + '\n';
+  disk['walks.json'] = sync.renderWalks(walksOf(disk).map(w => ({ ...w, mine: w.name === '測試狗甲' })));
+  const before = disk['walks.json'];
+  const writes = await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 9, 25), walker: ME } }), new Date(2026, 8, 25, 13));
+  assert.equal(writes['walks.json'], undefined, '同一個人、同一天不多記');
+  assert.equal(disk['walks.json'], before);
+  assert.ok(!('myWalked' in dogOf(disk, '測試狗甲')), 'dogs.json 拿掉 myWalked');
+}));
 
 test('#60 快照目錄：日期排序去重、忽略不是日期的檔名；已有快照但還沒有目錄時補上', () => {
   const eq_ = assert.deepEqual;
@@ -505,23 +442,23 @@ test('#94 代號：測試向量、全形半形與空白大小寫視為同名、�
   assert.deepEqual(sync.walkerCodes(ME, ''), []);
 });
 
-test('#94 dogs.json 與遛狗紀錄記代號；同一天換人也記一筆；公開檔案沒有名字', () => withEnv({ WALKER_KEY: KEY, MY_NAME: ME }, async () => {
+test('#94 dogs.json 與遛狗紀錄記代號；同一天換人也記一筆；公開檔案沒有名字', () => withEnv({ WALKER_KEY: KEY }, async () => {
   const disk = {};
   await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 9, 25), walker: `${ME}、志工B` } }), new Date(2026, 8, 25, 9));
   assert.deepEqual(dogOf(disk, '測試狗甲').walkers, [CODE(ME), CODE('志工B')]);
   assert.deepEqual(dogOf(disk, '測試狗乙').walkers, []);
   await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 9, 25), walker: '志工C' } }), new Date(2026, 8, 25, 13));
   await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 9, 25), walker: '志工C' } }), new Date(2026, 8, 25, 14));
-  assert.deepEqual(walksOf(disk).filter(w => w.name === '測試狗甲').map(w => [w.date, w.mine, w.walkers]), [
-    ['2026-09-25', true, [CODE(ME), CODE('志工B')]],
-    ['2026-09-25', false, [CODE('志工C')]],
+  assert.deepEqual(walksOf(disk).filter(w => w.name === '測試狗甲').map(w => [w.date, w.walkers]), [
+    ['2026-09-25', [CODE(ME), CODE('志工B')]],
+    ['2026-09-25', [CODE('志工C')]],
   ]);
   for (const [path, text] of Object.entries(disk)) {
     for (const who of [ME, '志工A', '志工B', '志工C', KEY]) assert.ok(!text.includes(who), `${path} 不該有 ${who}`);
   }
 }));
 
-test('#94 升級：目前最後一次補上試算表的代號、舊的 mine 紀錄補我的代號、別人的舊紀錄不動；不多記、跑兩次不再改', () => withEnv({ WALKER_KEY: null, MY_NAME: ME }, async () => {
+test('#94 升級：目前最後一次補上試算表的代號、其他舊紀錄不動；不多記、跑兩次不再改', () => withEnv({ WALKER_KEY: null }, async () => {
   const disk = {};
   // #94 之前：甲 9/16 是我遛的，之後乙 9/22 志工A 遛；丙 9/20 沒人寫
   await syncOnce(disk, mainWith({ '測試狗甲': { walker: ME } }), new Date(2026, 8, 24, 9));
@@ -533,12 +470,12 @@ test('#94 升級：目前最後一次補上試算表的代號、舊的 mine 紀�
     const main = mainWith({ '測試狗甲': { date: D(2026, 9, 25), walker: '志工A' }, '測試狗乙': { walker: '志工A' } });
     const writes = await syncOnce(disk, main, new Date(2026, 8, 25, 13));
     assert.ok(writes['walks.json']);
-    assert.deepEqual(walksOf(disk).map(w => [w.name, w.date, w.mine, w.walkers]), [
-      ['測試狗甲', '2026-09-16', true, [CODE(ME)]],
-      ['測試狗乙', '2026-09-22', false, [CODE('志工A')]],
-      ['測試狗丙', '2026-09-20', false, undefined],
-      ['測試狗甲', '2026-09-25', false, [CODE('志工A')]],
-    ], '筆數不變，只補代號');
+    assert.deepEqual(walksOf(disk).map(w => [w.name, w.date, w.walkers]), [
+      ['測試狗甲', '2026-09-16', undefined],
+      ['測試狗乙', '2026-09-22', [CODE('志工A')]],
+      ['測試狗丙', '2026-09-20', undefined],
+      ['測試狗甲', '2026-09-25', [CODE('志工A')]],
+    ], '筆數不變，只補目前最後一次的代號');
     assert.equal(walksOf(disk).length, before.length);
     const again = await syncOnce(disk, main, new Date(2026, 8, 25, 14));
     assert.equal(again['walks.json'], undefined, '第二次不用再改');
@@ -558,12 +495,11 @@ test('#94 workflow 從 Secret 帶入 WALKER_KEY', async () => {
 });
 
 test('2026-10-04 誰遛的格子用句號、分號、冒號等隔開也拆成好幾個人；Worker 用同一組分隔符號', async () => {
-  const names = sync.myNames('測試志工乙');
   for (const text of ['測試志工甲。測試志工乙', '測試志工甲.測試志工乙', '測試志工甲;測試志工乙', '測試志工甲；測試志工乙',
     '測試志工甲:測試志工乙', '測試志工甲｜測試志工乙', '測試志工甲・測試志工乙', '測試志工甲 。 測試志工乙']) {
-    assert.equal(sync.isMine(text, names), true, text);
+    assert.ok(sync.walkerCodes(text, KEY).includes(CODE('測試志工乙')), text);
   }
-  assert.equal(sync.isMine('測試志工乙經常', names), false, '分隔符號以外的字還是要整個名字相同');
+  assert.ok(!sync.walkerCodes('測試志工乙經常', KEY).includes(CODE('測試志工乙')), '分隔符號以外的字還是要整個名字相同');
   assert.deepEqual(sync.walkerCodes('測試志工甲。測試志工乙', KEY), [CODE('測試志工甲'), CODE('測試志工乙')]);
   const src = re => re.match(/NAME_SEP = (\/.*\/);/)[1];
   const worker = await readFile(new URL('../worker/src/index.js', import.meta.url), 'utf8');
@@ -571,23 +507,22 @@ test('2026-10-04 誰遛的格子用句號、分號、冒號等隔開也拆成好
   assert.equal(src(worker), src(script), '同步和 Worker 的分隔符號要一樣，不然換出來的代號對不上');
 });
 
-test('K 2026-10-05 阿湯：同一天甲 → 甲＋我 → 甲，再記一筆甲，「我溜過」以最後一筆為準；舊檔漏記的也補回', () => withEnv({ WALKER_KEY: KEY, MY_NAME: ME }, async () => {
+test('K 2026-10-05 阿湯：同一天甲 → 甲＋我 → 甲，再記一筆甲，「我溜過」以最後一筆為準；舊檔漏記的也補回', () => withEnv({ WALKER_KEY: KEY }, async () => {
   const disk = {};
   await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 10, 4), walker: '志工B' } }), new Date(2026, 9, 4, 9));
   await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 10, 4), walker: `志工B、${ME}` } }), new Date(2026, 9, 4, 10));
   await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 10, 4), walker: '志工B' } }), new Date(2026, 9, 4, 11));
   await syncOnce(disk, mainWith({ '測試狗甲': { date: D(2026, 10, 4), walker: '志工B' } }), new Date(2026, 9, 4, 12));
-  assert.deepEqual(walksOf(disk).filter(w => w.name === '測試狗甲').map(w => [w.date, w.mine, [...w.walkers].sort()]), [
-    ['2026-10-04', false, [CODE('志工B')]],
-    ['2026-10-04', true, [CODE('志工B'), CODE(ME)].sort()],
-    ['2026-10-04', false, [CODE('志工B')]],
+  assert.deepEqual(walksOf(disk).filter(w => w.name === '測試狗甲').map(w => [w.date, [...w.walkers].sort()]), [
+    ['2026-10-04', [CODE('志工B')]],
+    ['2026-10-04', [CODE('志工B'), CODE(ME)].sort()],
+    ['2026-10-04', [CODE('志工B')]],
   ]);
-  assert.equal(dogOf(disk, '測試狗甲').myWalkedDate, null, '最後一筆不是我，myWalkedDate 不算這天');
   // 舊檔（修好前）最後一筆停在「有我」：下次同步補一筆現在的
   const all = walksOf(disk);
   const lastA = all.map(w => w.name).lastIndexOf('測試狗甲');
   const walks = all.filter((w, i) => i !== lastA);
   const dogs = [dogOf(disk, '測試狗甲')];
-  assert.deepEqual(sync.newWalks(dogs, dogs, walks, KEY).map(w => [w.mine, w.walkers]), [[false, [CODE('志工B')]]]);
+  assert.deepEqual(sync.newWalks(dogs, dogs, walks, KEY).map(w => w.walkers), [[CODE('志工B')]]);
   assert.deepEqual(sync.newWalks(dogs, dogs, walksOf(disk), KEY), [], '已經對上就不再記');
 }));

@@ -4,7 +4,6 @@
 // 試算表 ID 不寫在 repo 裡（repo 是公開的，試算表目前知道連結就能編輯）：
 // workflow 從 GitHub 的 Actions Secret「SHEET_ID」帶進來，設定方式見 docs/SHEET_SYNC_SETUP.md。
 // 「誰遛的」只輸出有沒有人固定照顧（covered），不把志工名字寫進公開的 dogs.json。
-// 「是不是我遛的」（#57）：比對用的名字放 Actions Secret「MY_NAME」，公開檔案只寫 myWalked（true／false）。
 // 「誰遛的」代號（#94）：每個名字用 Actions Secret「WALKER_KEY」算成一串亂碼代號（walkers），公開檔案只有代號。
 // 網站透過 Worker（同一把 WALKER_KEY，見 worker/src/index.js 的 walkerCode）把志工輸入的名字換成代號，才認得出「我溜過」。
 //
@@ -20,9 +19,8 @@
 // - data/history/YYYY-MM-DD.json：當天快照，內容跟 dogs.json 一樣（同一天多次同步覆蓋成最後一次）
 // - data/walks.json：遛狗紀錄 { id, name, date }，某隻狗的遛狗日期比上一次同步新就追加一筆；只追加、不改舊紀錄
 // 兩者都不含志工名字。同一天兩次同步之間被遛兩次只會記一筆。
-// #57 起每筆多一個 mine（是不是我遛的）；同一天從別人換成我（或反過來）也會追加一筆。
-// #57 之前的舊紀錄沒有 mine，原樣保留、不回填。
-// #94 起每筆多一個 walkers（遛的人的代號）；舊紀錄只補兩種：目前最後一次（試算表還看得到是誰）和標了 mine 的（補我的代號）。
+// #94 起每筆多一個 walkers（遛的人的代號），同一天換人也會追加一筆；還沒有 walkers 的舊紀錄，只補目前最後一次（試算表還看得到是誰）。
+// #57–#96 期間的舊紀錄有 mine（是不是 K 遛的），#97 起不再寫也不再讀，舊紀錄原樣保留；K 的那幾筆已經補上代號。
 // #60：另存 data/history/index.json（{ dates: [...] }，有哪幾天的快照），網站才知道能選哪些日期（GitHub Pages 不能列資料夾）。
 
 import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
@@ -162,17 +160,9 @@ function mainColumnMap(table, headerTexts = []) {
   return colMap;
 }
 
-// 「誰遛的」格子裡有沒有我的名字。MY_NAME 可以寫好幾種寫法，用逗號或頓號隔開（例：本名、暱稱）；
-// 格子裡有好幾個人時（例：「甲、乙」「甲。乙」「甲;乙」）逐一比對，要整個名字相同才算，不算部分符合
+// 「誰遛的」格子裡有好幾個人時（例：「甲、乙」「甲。乙」「甲;乙」）用這些符號或空白拆開，每個名字各算一個代號。
 // 志工手打時常用句號、分號、冒號隔開，也都當分隔（2026-10-04 K 回報「維芬。佳岑」抓不到佳岑）
 const NAME_SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
-export function myNames(env = process.env.MY_NAME) {
-  return String(env || '').split(NAME_SEP).map(nameKey).filter(Boolean);
-}
-export function isMine(walkerText, names = myNames()) {
-  if (!names.length) return false;
-  return String(walkerText || '').split(NAME_SEP).map(nameKey).some(n => n && names.includes(n));
-}
 
 // ── 誰遛的代號（#94）──
 // 名字 → 代號：HMAC-SHA256(WALKER_KEY, 整理過的名字) 的前 12 碼十六進位。
@@ -195,7 +185,7 @@ export function walkerCodes(walkerText, key = process.env.WALKER_KEY) {
   return [...new Set(codes)];
 }
 
-export function parseMainList(table, headerTexts = [], today = new Date(), names = myNames(), key = process.env.WALKER_KEY) {
+export function parseMainList(table, headerTexts = [], today = new Date(), key = process.env.WALKER_KEY) {
   const colMap = mainColumnMap(table, headerTexts);
   const get = (c, key) => c[colMap[key]];
   const dogs = [];
@@ -212,8 +202,6 @@ export function parseMainList(table, headerTexts = [], today = new Date(), names
       walkedDate: cellDate(get(c, 'walkedDate'), today),
       // 只記有沒有人固定照顧，志工名字不寫進公開的 dogs.json
       covered: cellText(get(c, 'walker')) !== '',
-      // 最後一次是不是我遛的；名字本身不寫出去
-      myWalked: isMine(cellText(get(c, 'walker')), names),
       // 最後一次是誰遛的（代號）；名字本身不寫出去
       walkers: walkerCodes(cellText(get(c, 'walker')), key),
       note: cellText(get(c, 'note')),
@@ -396,7 +384,7 @@ export const WALKS_VERSION = 1;
 // 比對同一隻狗：有編號用編號，沒編號才用犬名
 const dogKey = d => d.id ? `id:${d.id}` : `name:${nameKey(d.name)}`;
 const walkersKey = list => [...(list || [])].sort().join(',');
-const walkKey = (d, date, mine, walkers) => `${dogKey(d)}|${date}|${mine === true}|${walkersKey(walkers)}`;
+const walkKey = (d, date, walkers) => `${dogKey(d)}|${date}|${walkersKey(walkers)}`;
 
 // 從舊檔讀出遛狗紀錄；沒有或壞掉回傳 null（當作第一次建立）
 export function parseWalks(text) {
@@ -409,25 +397,24 @@ export function parseWalks(text) {
 
 // 算出這次要追加的紀錄。
 // - 已經有紀錄檔：遛狗日期比上一次同步（prevDogs）新的狗才記；日期被改早、被清空都不記，也不刪舊紀錄
-// - 同一天換人：日期沒變但「是不是我遛的」或遛的人（代號，#94）跟上一次不同，也記一筆（上一次沒有 myWalked 欄位時當作不是我）
-//   上一次同步還沒有 walkers 欄位（#94 剛上線）時只看 mine，免得每隻狗都多記一筆；那一次的代號由 upgradeWalks 補進原本那筆
+// - 同一天換人：日期沒變但遛的人（代號，#94）跟上一次不同，也記一筆
+//   上一次同步還沒有 walkers 欄位（#94 剛上線）時不算換人，免得每隻狗都多記一筆；那一次的代號由 upgradeWalks 補進原本那筆
 // - 第一次建立（walks 為 null）：每隻有遛狗日期的狗都記目前的最後一次，當作起點
-// 同一隻狗同一天、同樣是不是我遛的，已經記過就不重複記。
+// 同一隻狗同一天、同樣的人，已經記過就不重複記。
 // 例外：同一天的最後一筆跟現在不一樣（甲 → 甲、乙 → 甲，例如有人按錯又拿掉），再記一筆現在的，
 // 「我溜過」以同一天最後一筆為準（K 2026-10-05 阿湯）。這條也會補回之前漏記的。
 // 沒設定 WALKER_KEY 時新紀錄不加 walkers（不知道是誰，不是「沒人」），之後設定了還能由 upgradeWalks 補上
 export function newWalks(dogs, prevDogs, walks, walkerKey = process.env.WALKER_KEY) {
-  const seen = new Set((walks || []).map(w => walkKey(w, w.date, w.mine, w.walkers)));
+  const seen = new Set((walks || []).map(w => walkKey(w, w.date, w.walkers)));
   const lastOfDay = new Map((walks || []).map(w => [`${dogKey(w)}|${w.date}`, w]));
   const prev = new Map((prevDogs || []).map(d => [dogKey(d), d]));
   const added = [];
   for (const d of dogs) {
     if (!d.walkedDate) continue;
-    const mine = d.myWalked === true;
     const walkers = d.walkers || [];
     const last = lastOfDay.get(`${dogKey(d)}|${d.walkedDate}`);
-    if (last && walkerKey && 'walkers' in last && ((last.mine === true) !== mine || walkersKey(last.walkers) !== walkersKey(walkers))) {
-      added.push({ id: d.id, name: d.name, date: d.walkedDate, mine, walkers });
+    if (last && walkerKey && 'walkers' in last && walkersKey(last.walkers) !== walkersKey(walkers)) {
+      added.push({ id: d.id, name: d.name, date: d.walkedDate, walkers });
       continue;
     }
     if (walks) {
@@ -435,24 +422,22 @@ export function newWalks(dogs, prevDogs, walks, walkerKey = process.env.WALKER_K
       if (before && before.walkedDate) {
         if (before.walkedDate > d.walkedDate) continue;
         const sameWalkers = !('walkers' in before) || walkersKey(before.walkers) === walkersKey(walkers);
-        if (before.walkedDate === d.walkedDate && (before.myWalked === true) === mine && sameWalkers) continue;
+        if (before.walkedDate === d.walkedDate && sameWalkers) continue;
       }
     }
-    const key = walkKey(d, d.walkedDate, mine, walkers);
+    const key = walkKey(d, d.walkedDate, walkers);
     if (seen.has(key)) continue;
     seen.add(key);
-    added.push({ id: d.id, name: d.name, date: d.walkedDate, mine, ...(walkerKey ? { walkers } : {}) });
+    added.push({ id: d.id, name: d.name, date: d.walkedDate, ...(walkerKey ? { walkers } : {}) });
   }
   return added;
 }
 
-// 舊紀錄補上代號（#94），每次同步都跑、跑過的不會再改：
-// 1. 還沒有 walkers 的紀錄，如果就是這隻狗目前的最後一次（同一天、是不是我遛的也一樣），補上試算表現在寫的人
-// 2. 其他還沒有 walkers、但標了 mine 的舊紀錄，補上我的代號（MY_NAME 的第一個寫法），「我溜過」才不會掉
-// 別人的舊紀錄當時沒存名字，補不回來，維持沒有 walkers。沒設定 WALKER_KEY 時什麼都不改。
-export function upgradeWalks(walks, dogs, { key = process.env.WALKER_KEY, names = myNames() } = {}) {
+// 舊紀錄補上代號（#94），每次同步都跑、跑過的不會再改：還沒有 walkers 的紀錄，如果就是這隻狗目前的最後一次（同一天），
+// 補上試算表現在寫的人。其他舊紀錄當時沒存名字，補不回來，維持沒有 walkers。沒設定 WALKER_KEY 時什麼都不改。
+// （K 標了 mine 的舊紀錄在 #94 上線時已經用 MY_NAME 補上 K 的代號，#97 起拿掉那段）
+export function upgradeWalks(walks, dogs, { key = process.env.WALKER_KEY } = {}) {
   if (!key || !walks) return { walks, changed: false };
-  const myCode = names.length ? walkerCode(names[0], key) : '';
   const current = new Map(dogs.filter(d => d.walkedDate).map(d => [dogKey(d), d]));
   // 每隻狗最後一筆還沒有代號的紀錄（後記的在後面）
   const lastIndex = new Map();
@@ -461,38 +446,18 @@ export function upgradeWalks(walks, dogs, { key = process.env.WALKER_KEY, names 
   const out = walks.map((w, i) => {
     if ('walkers' in w) return w;
     const d = current.get(dogKey(w));
-    if (d && lastIndex.get(dogKey(w)) === i && d.walkedDate === w.date && (d.myWalked === true) === (w.mine === true) && d.walkers.length) {
+    if (d && lastIndex.get(dogKey(w)) === i && d.walkedDate === w.date && d.walkers.length) {
       changed = true;
       return { ...w, walkers: d.walkers };
-    }
-    if (w.mine === true && myCode) {
-      changed = true;
-      return { ...w, walkers: [myCode] };
     }
     return w;
   });
   return { walks: out, changed };
 }
 
-// 每隻狗我最後一次遛的日期：遛狗紀錄裡 mine 的最新日期；目前最後一次是我遛的也算
-export function attachMyWalkedDate(dogs, walks) {
-  const lastOfDay = new Map((walks || []).map(w => [`${dogKey(w)}|${w.date}`, w])); // 同一天以最後一筆為準
-  const latest = new Map();
-  for (const w of lastOfDay.values()) {
-    if (w.mine !== true || !w.date) continue;
-    const k = dogKey(w);
-    if (!latest.has(k) || latest.get(k) < w.date) latest.set(k, w.date);
-  }
-  return dogs.map(d => {
-    let date = latest.get(dogKey(d)) || null;
-    if (d.myWalked && d.walkedDate && (!date || date < d.walkedDate)) date = d.walkedDate;
-    return { ...d, myWalkedDate: date };
-  });
-}
-
 // 一筆紀錄一行，檔案變大後 git 的差異也只有新增的那幾行
 export function renderWalks(walks) {
-  // #57 之前的舊紀錄沒有 mine、#94 之前的沒有 walkers，照原樣寫回
+  // #57–#96 的舊紀錄有 mine、#94 之前的沒有 walkers，照原樣寫回
   const lines = walks.map(w => '    ' + JSON.stringify({
     id: w.id, name: w.name, date: w.date,
     ...('mine' in w ? { mine: w.mine === true } : {}),
@@ -513,8 +478,6 @@ export function planWrites(data, { oldDogsText = '', oldWalksText = '', oldSnaps
   const allWalks = [...(walks || []), ...added];
   if (added.length || changed || !walks) writes['walks.json'] = renderWalks(allWalks);
 
-  // dogs.json 的 myWalkedDate 要看整份遛狗紀錄，所以先算紀錄再寫 dogs.json
-  data = { ...data, dogs: attachMyWalkedDate(data.dogs, allWalks) };
   const dogsText = renderFile(data, oldDogsText, now);
   if (dogsText) writes['dogs.json'] = dogsText;
   const current = dogsText || oldDogsText;

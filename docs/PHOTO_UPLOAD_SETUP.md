@@ -157,7 +157,7 @@ https://bq-shelter-photos.你的帳號名稱.workers.dev
 2. **設定 GitHub**：repo 的 **Settings** → **Secrets and variables** → **Actions** → **New repository secret**：**Name** 填 `WALKER_KEY`，**Secret** 貼上密鑰，按 **Add secret**。
 3. **設定 Cloudflare**：Worker 頁面 → **Settings** → **Variables and Secrets** → **Add**：**Type** 選 **Secret**，**Variable name** 填 `WALKER_KEY`，**Value** 貼上**同一串**密鑰，按 **Deploy**（或 Save）。
 4. **重新貼程式**：照上面「步驟 3」的 4–7，把 Worker 程式換成最新的 `worker/src/index.js`，按 **Deploy**。
-5. **確認**：打開服務網址，看到 `"walkerKey":"已設定"`。再到 GitHub 的 **Actions** 手動跑一次「同步試算表」，之後打開網站的「我溜過」輸入你的名字（要包含 `MY_NAME` 裡的第一個寫法，你以前的紀錄才會出現）。
+5. **確認**：打開服務網址，看到 `"walkerKey":"已設定"`。再到 GitHub 的 **Actions** 手動跑一次「同步試算表」，之後打開網站的「我溜過」輸入你的名字。
 
 ### 服務的網址（給寫網站程式的人）
 
