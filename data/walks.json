@@ -610,6 +610,7 @@
     {"id":"2021012101","name":"美金","date":"2026-10-06","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2025011006","name":"百吉","date":"2026-10-06","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2026082607","name":"寶妮","date":"2026-10-06","mine":false,"walkers":["da53fbdda293"]},
-    {"id":"2026082601","name":"朵力（開多）","date":"2026-10-06","mine":false,"walkers":["da53fbdda293"]}
+    {"id":"2026082601","name":"朵力（開多）","date":"2026-10-06","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2025072901","name":"果凍","date":"2026-10-06","mine":false,"walkers":["da53fbdda293"]}
   ]
 }
