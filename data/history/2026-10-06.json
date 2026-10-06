@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-06T14:00:25+08:00",
+  "syncedAt": "2026-10-06T15:30:27+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -473,11 +473,11 @@
       "cage": "新A05",
       "id": "2021012101",
       "name": "美金",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-06",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "67c74c17be08"
+        "da53fbdda293"
       ],
       "note": "",
       "sex": "female",
@@ -488,11 +488,11 @@
       "cage": "新A05",
       "id": "2025011006",
       "name": "百吉",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-06",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "67c74c17be08"
+        "da53fbdda293"
       ],
       "note": "咬傷領養人9/1 移入母幼區;9/16移回C區;2026/2/10試驗與布布同籠（嘉文）",
       "sex": "male",
@@ -1696,7 +1696,7 @@
       "cage": "C區13",
       "id": "2026082607",
       "name": "寶妮",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-06",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1756,11 +1756,11 @@
       "cage": "C區24",
       "id": "2026082601",
       "name": "朵力（開多）",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-06",
       "covered": true,
-      "myWalked": true,
+      "myWalked": false,
       "walkers": [
-        "7fe4735e3c59"
+        "da53fbdda293"
       ],
       "note": "",
       "sex": "",
