@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-05T15:00:15+08:00",
+  "syncedAt": "2026-10-06T11:30:20+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -172,12 +172,11 @@
       "cage": "新獨02",
       "id": "2026032605",
       "name": "小七",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-06",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293",
-        "044328805855"
+        "da53fbdda293"
       ],
       "note": "2026/9/12洗澡（嘉文）",
       "sex": "male",
@@ -218,12 +217,11 @@
       "cage": "新獨05",
       "id": "2026041903",
       "name": "哈囉",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-06",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293",
-        "044328805855"
+        "da53fbdda293"
       ],
       "note": "7/16洗澡、2026/4/19領養退回; 2026/9/9,9/17服用drontal plus(嘉文）",
       "sex": "male",
@@ -264,12 +262,11 @@
       "cage": "新獨08",
       "id": "2019121105",
       "name": "冬粉",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-06",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293",
-        "044328805855"
+        "da53fbdda293"
       ],
       "note": "不要跟阿信放ㄧ起、籠內經常尿在自己飲水盆（嘉文）",
       "sex": "male",
