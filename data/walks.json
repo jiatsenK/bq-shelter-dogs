@@ -598,6 +598,14 @@
     {"id":"2023072604","name":"小梅子","date":"2026-10-06","mine":false,"walkers":["3c0459316acf"]},
     {"id":"2023042803","name":"奈威","date":"2026-10-06","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2023083106","name":"昆布","date":"2026-10-06","mine":false,"walkers":["da53fbdda293"]},
-    {"id":"2023022001","name":"寶弟","date":"2026-10-06","mine":false,"walkers":["3c0459316acf"]}
+    {"id":"2023022001","name":"寶弟","date":"2026-10-06","mine":false,"walkers":["3c0459316acf"]},
+    {"id":"2023081204","name":"福星","date":"2026-10-06","mine":false,"walkers":["a533226b339a"]},
+    {"id":"2026042902","name":"方吉","date":"2026-10-06","mine":false,"walkers":["a533226b339a"]},
+    {"id":"2021043005","name":"小樂","date":"2026-10-06","mine":false,"walkers":["3c0459316acf"]},
+    {"id":"2021050602","name":"保羅","date":"2026-10-06","mine":false,"walkers":["da53fbdda293","3c0459316acf"]},
+    {"id":"2024032902","name":"野口","date":"2026-10-06","mine":false,"walkers":["a533226b339a"]},
+    {"id":"2023083107","name":"丸子","date":"2026-10-06","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2023122901","name":"一路","date":"2026-10-06","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2026032402","name":"雪糕","date":"2026-10-06","mine":false,"walkers":["3c0459316acf"]}
   ]
 }

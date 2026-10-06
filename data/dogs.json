@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-06T12:00:17+08:00",
+  "syncedAt": "2026-10-06T14:00:25+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -81,13 +81,13 @@
       "cage": "母幼A",
       "id": "2023081204",
       "name": "福星",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-06",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "8786042066d4"
+        "a533226b339a"
       ],
-      "note": "",
+      "note": "<羊噴火訓練>",
       "sex": "",
       "intro": "",
       "myWalkedDate": null
@@ -1451,10 +1451,12 @@
       "cage": "舊B04",
       "id": "2026042902",
       "name": "方吉",
-      "walkedDate": null,
-      "covered": false,
+      "walkedDate": "2026-10-06",
+      "covered": true,
       "myWalked": false,
-      "walkers": [],
+      "walkers": [
+        "a533226b339a"
+      ],
       "note": "",
       "sex": "",
       "intro": "",
@@ -1464,11 +1466,11 @@
       "cage": "舊B05",
       "id": "2021043005",
       "name": "小樂",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-06",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "67c74c17be08"
+        "3c0459316acf"
       ],
       "note": "2025/12/07 左眼嚴重眼屎（佳星）",
       "sex": "male",
@@ -1570,11 +1572,12 @@
       "cage": "舊B17",
       "id": "2021050602",
       "name": "保羅",
-      "walkedDate": "2026-10-02",
+      "walkedDate": "2026-10-06",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "7219f133cd3c"
+        "da53fbdda293",
+        "3c0459316acf"
       ],
       "note": "2026/10/2洗澡（旭昇）",
       "sex": "male",
@@ -1617,11 +1620,11 @@
       "cage": "舊B19",
       "id": "2024032902",
       "name": "野口",
-      "walkedDate": null,
+      "walkedDate": "2026-10-06",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "ea864bd3319f"
+        "a533226b339a"
       ],
       "note": "<羊噴火訓練>",
       "sex": "female",
@@ -1678,11 +1681,11 @@
       "cage": "C區12",
       "id": "2023083107",
       "name": "丸子",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-06",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "67c74c17be08"
+        "da53fbdda293"
       ],
       "note": "2025/10/7 俐葶遇到 一路攻擊丸子 ，起始原因沒看到（嘉文)",
       "sex": "male",
@@ -1738,11 +1741,11 @@
       "cage": "C區23",
       "id": "2023122901",
       "name": "一路",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-06",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "67c74c17be08"
+        "da53fbdda293"
       ],
       "note": "2025/10/7 俐葶遇到 一路攻擊丸子 ，起始原因沒看到(嘉文)；11/18 一路要攻擊松果（嘉文）；被阿信咬過（嘉文）；在小區看到外面的芽芽會跳柵欄（俐葶）",
       "sex": "male",
@@ -1783,11 +1786,11 @@
       "cage": "C區32",
       "id": "2026032402",
       "name": "雪糕",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-06",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "67c74c17be08"
+        "3c0459316acf"
       ],
       "note": "20260322;3/28出所代養（嘉文）；4/12回收容所，代養人說有帶去看醫生，疑十字韌帶受傷(嘉文)",
       "sex": "male",
