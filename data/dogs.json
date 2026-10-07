@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-07T11:00:42+08:00",
+  "syncedAt": "2026-10-07T12:00:46+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -170,17 +170,17 @@
     },
     {
       "cage": "新獨02",
-      "id": "2026032605",
-      "name": "小七",
-      "walkedDate": "2026-10-06",
+      "id": "2017090525",
+      "name": "阿寶妹",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
         "da53fbdda293"
       ],
-      "note": "2026/9/12洗澡（嘉文）",
-      "sex": "male",
-      "intro": "2023年3月28日,從樹林進來,有晶片沒人領回,個性很主動的親人,散步超開心,很友善,摸摸頭說說話,更開心,很想要再度有個家,可以被疼愛..",
+      "note": "2026/4/18因為對奶茶及仲基較強勢，調到獨立籠（嘉文)",
+      "sex": "female",
+      "intro": "2016年8月23日迷路進來，個性有點害羞，出籠散步都不成問題，只要多點耐心和鼓勵就開心..",
       "myWalkedDate": null
     },
     {
@@ -217,7 +217,7 @@
       "cage": "新獨05",
       "id": "2026041903",
       "name": "哈囉",
-      "walkedDate": "2026-10-06",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -262,7 +262,7 @@
       "cage": "新獨08",
       "id": "2019121105",
       "name": "冬粉",
-      "walkedDate": "2026-10-06",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -580,24 +580,24 @@
     },
     {
       "cage": "新A08",
-      "id": "2017090525",
-      "name": "阿寶妹",
-      "walkedDate": "2026-10-06",
+      "id": "2026032605",
+      "name": "小七",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
         "da53fbdda293"
       ],
-      "note": "2026/4/18因為對奶茶及仲基較強勢，調到獨立籠（嘉文)",
-      "sex": "female",
-      "intro": "2016年8月23日迷路進來，個性有點害羞，出籠散步都不成問題，只要多點耐心和鼓勵就開心..",
+      "note": "2026/9/12洗澡（嘉文）",
+      "sex": "male",
+      "intro": "2023年3月28日,從樹林進來,有晶片沒人領回,個性很主動的親人,散步超開心,很友善,摸摸頭說說話,更開心,很想要再度有個家,可以被疼愛..",
       "myWalkedDate": null
     },
     {
       "cage": "新A08",
       "id": "2018012909",
       "name": "錢錢",
-      "walkedDate": "2026-10-06",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -612,7 +612,7 @@
       "cage": "新A08",
       "id": "2026042101",
       "name": "納卡西",
-      "walkedDate": "2026-10-06",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -627,12 +627,11 @@
       "cage": "新A09",
       "id": "2021042904",
       "name": "土撥鼠",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "044328805855",
-        "fc2ae30607ef"
+        "21120f797f52"
       ],
       "note": "會想跳小區圍籬（俐葶）",
       "sex": "female",
@@ -643,12 +642,11 @@
       "cage": "新A09",
       "id": "2021082801",
       "name": "海苔",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "044328805855",
-        "fc2ae30607ef"
+        "21120f797f52"
       ],
       "note": "2025/10/30洗澡。會翻牆出小操場圍籬，放繩散步建議在大操場（中興）",
       "sex": "male",
@@ -704,12 +702,11 @@
       "cage": "新B01",
       "id": "2020042106",
       "name": "福嬌",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "044328805855",
-        "fc2ae30607ef"
+        "21120f797f52"
       ],
       "note": "2025/9/17洗澡",
       "sex": "female",
@@ -720,12 +717,11 @@
       "cage": "新B01",
       "id": "2022030501",
       "name": "皮皮",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "044328805855",
-        "fc2ae30607ef"
+        "21120f797f52"
       ],
       "note": "2026/4/10洗澡(msi);跟其他籠的狗在一起可能會兇狗，跟室友福嬌一起，可能護資源（人）會去兇福嬌（嘉文/中興）",
       "sex": "male",
@@ -874,11 +870,11 @@
       "cage": "新B06",
       "id": "2019080604",
       "name": "蛋餅",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "",
       "sex": "male",
@@ -889,11 +885,11 @@
       "cage": "新B06",
       "id": "2021022202",
       "name": "KOBE",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "2026/4/10洗澡(msi);大約2026/4/18，眼睛上方受傷應該被沙沙咬(嘉文）",
       "sex": "male",
@@ -1177,11 +1173,11 @@
       "cage": "舊A09",
       "id": "2019080606",
       "name": "蔥抓餅",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "",
       "sex": "female",
@@ -1192,11 +1188,11 @@
       "cage": "舊A09",
       "id": "2019080607",
       "name": "胡椒餅",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "",
       "sex": "female",
@@ -1253,7 +1249,7 @@
       "cage": "舊A14",
       "id": "2020081808",
       "name": "奇哥",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1268,7 +1264,7 @@
       "cage": "舊A14",
       "id": "2021071301",
       "name": "白尾",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1283,11 +1279,11 @@
       "cage": "舊A15",
       "id": "2019070219",
       "name": "黑豆漿",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "2026/4/12、7/26洗澡",
       "sex": "male",
@@ -1298,11 +1294,11 @@
       "cage": "舊A15",
       "id": "2019080608",
       "name": "可麗餅",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "",
       "sex": "male",
@@ -1313,7 +1309,7 @@
       "cage": "舊A16",
       "id": "2020122507",
       "name": "馬克",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1332,7 +1328,7 @@
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "21120f797f52"
       ],
       "note": "4/12洗澡（佳岑）",
       "sex": "male",
@@ -1512,7 +1508,7 @@
       "cage": "舊B12",
       "id": "2024120202",
       "name": "凱瑞",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1681,11 +1677,12 @@
       "cage": "C區12",
       "id": "2023083107",
       "name": "丸子",
-      "walkedDate": "2026-10-06",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "da53fbdda293",
+        "044328805855"
       ],
       "note": "2025/10/7 俐葶遇到 一路攻擊丸子 ，起始原因沒看到（嘉文)",
       "sex": "male",
@@ -1696,7 +1693,7 @@
       "cage": "C區13",
       "id": "2026082607",
       "name": "寶妮",
-      "walkedDate": "2026-10-06",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1741,11 +1738,12 @@
       "cage": "C區23",
       "id": "2023122901",
       "name": "一路",
-      "walkedDate": "2026-10-06",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "da53fbdda293",
+        "044328805855"
       ],
       "note": "2025/10/7 俐葶遇到 一路攻擊丸子 ，起始原因沒看到(嘉文)；11/18 一路要攻擊松果（嘉文）；被阿信咬過（嘉文）；在小區看到外面的芽芽會跳柵欄（俐葶）",
       "sex": "male",
@@ -1756,7 +1754,7 @@
       "cage": "C區24",
       "id": "2026082601",
       "name": "朵力（開多）",
-      "walkedDate": "2026-10-06",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1771,7 +1769,7 @@
       "cage": "C區31",
       "id": "2023042803",
       "name": "奈威",
-      "walkedDate": "2026-10-06",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1801,7 +1799,7 @@
       "cage": "C區33",
       "id": "2023083106",
       "name": "昆布",
-      "walkedDate": "2026-10-06",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1831,11 +1829,11 @@
       "cage": "C區35",
       "id": "2025021801",
       "name": "阿湯",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "ca36800987f2"
+        "da53fbdda293"
       ],
       "note": "",
       "sex": "",
