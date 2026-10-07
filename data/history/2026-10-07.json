@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-07T16:01:24+08:00",
+  "syncedAt": "2026-10-07T18:31:09+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -1233,11 +1233,11 @@
       "cage": "舊A13",
       "id": "2019120501",
       "name": "皮蛋",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "24bf2ad2af85"
+        "75aeed7c10fe"
       ],
       "note": "2026/4/29洗澡（巧芸）",
       "sex": "male",
@@ -1338,11 +1338,11 @@
       "cage": "舊A19",
       "id": "2018012203",
       "name": "妍妍",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
-      "myWalked": true,
+      "myWalked": false,
       "walkers": [
-        "7fe4735e3c59"
+        "75aeed7c10fe"
       ],
       "note": "5/31洗澡（msi)、",
       "sex": "female",
@@ -1353,11 +1353,11 @@
       "cage": "舊A19",
       "id": "2019062703",
       "name": "婉嬪",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
-      "myWalked": true,
+      "myWalked": false,
       "walkers": [
-        "7fe4735e3c59"
+        "75aeed7c10fe"
       ],
       "note": "5/31洗澡（msi)、7/8洗澡（喬筠）",
       "sex": "female",
@@ -1383,11 +1383,11 @@
       "cage": "舊A21",
       "id": "2021071401",
       "name": "胖胖",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "24bf2ad2af85"
+        "75aeed7c10fe"
       ],
       "note": "",
       "sex": "male",
@@ -1398,11 +1398,11 @@
       "cage": "舊B01",
       "id": "2020021208",
       "name": "靜香",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "24bf2ad2af85"
+        "75aeed7c10fe"
       ],
       "note": "4/12洗澡（Vicki）、7/8洗澡（喬筠）",
       "sex": "female",
@@ -1413,11 +1413,11 @@
       "cage": "舊B01",
       "id": "2020071403",
       "name": "OPEN醬",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "24bf2ad2af85"
+        "75aeed7c10fe"
       ],
       "note": "2026/4/12與7/8洗澡（喬筠）、6/28右後腳左邊數來第二腳趾流血，推估是指甲斷掉(喬筠）",
       "sex": "male",
@@ -1625,11 +1625,11 @@
       "cage": "舊B20",
       "id": "2024040202",
       "name": "鐵雄",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "24bf2ad2af85"
+        "75aeed7c10fe"
       ],
       "note": "3/8右眼有紅色條狀異物（俐葶）、4/12洗澡(巧芸+喬筠)",
       "sex": "male",
@@ -1640,11 +1640,11 @@
       "cage": "舊B21",
       "id": "2021122302",
       "name": "大壯",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "24bf2ad2af85"
+        "75aeed7c10fe"
       ],
       "note": "1/8割腫瘤;1/22拆線、4/12洗澡(巧芸+喬筠)",
       "sex": "male",
