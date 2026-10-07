@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-07T15:01:04+08:00",
+  "syncedAt": "2026-10-07T15:31:05+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -157,11 +157,11 @@
       "cage": "新獨01",
       "id": "2018062507",
       "name": "黑狗兄",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "a2b179095490"
+        "75aeed7c10fe"
       ],
       "note": "20260913，右嘴流血，疑似息肉破裂。2026/4/5 籠內疑似護食，咬了歐疼，暫時搬到獨立籠 7/22洗澡msi",
       "sex": "male",
@@ -338,7 +338,7 @@
       "cage": "新A01",
       "id": "2018050810",
       "name": "黑寶",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -353,7 +353,7 @@
       "cage": "新A01",
       "id": "2018052305",
       "name": "MINI",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -398,7 +398,7 @@
       "cage": "新A03",
       "id": "2021112704",
       "name": "歐疼",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -413,7 +413,7 @@
       "cage": "新A03",
       "id": "2021121404",
       "name": "白心",
-      "walkedDate": "2026-10-01",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -978,11 +978,11 @@
       "cage": "新B09",
       "id": "2017122504",
       "name": "蘇打",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "f16f7d3c8784"
+        "75aeed7c10fe"
       ],
       "note": "2026/5/12洗澡(秀玉)",
       "sex": "female",
@@ -993,11 +993,11 @@
       "cage": "新B09",
       "id": "2018121304",
       "name": "羅密歐",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "f16f7d3c8784"
+        "75aeed7c10fe"
       ],
       "note": "2025/8/15羅密歐左後腳外側有凸起腫塊(嘉文）2026/5/12洗澡(秀玉)",
       "sex": "male",
@@ -1008,11 +1008,11 @@
       "cage": "新B10",
       "id": "2017090508",
       "name": "墨西哥",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "",
       "sex": "male",
@@ -1023,11 +1023,11 @@
       "cage": "新B10",
       "id": "2018050813",
       "name": "歐巴",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "龜縮在椅子底下，伸手進去解套繩沒有咬人（嘉文）",
       "sex": "male",
@@ -1038,11 +1038,11 @@
       "cage": "新B10",
       "id": "2026051406",
       "name": "果果",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "只喜歡在犬舍內繞（嘉文）;1/21 腳流血，醫生麻醉治療，住院區（嘉文)。2/22併入Mini籠；2026/4/28被認養;2026/5/14被送回(嘉文)",
       "sex": "female",
@@ -1656,12 +1656,11 @@
       "cage": "C區11",
       "id": "2021030913",
       "name": "咪寶",
-      "walkedDate": "2026-10-06",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293",
-        "3c0459316acf"
+        "044328805855"
       ],
       "note": "對狗具攻擊性（嘉文），2025/12/24咬了捷運站",
       "sex": "female",
