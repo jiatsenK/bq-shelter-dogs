@@ -644,6 +644,9 @@
     {"id":"2026082601","name":"朵力（開多）","date":"2026-10-07","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2023042803","name":"奈威","date":"2026-10-07","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2023083106","name":"昆布","date":"2026-10-07","mine":false,"walkers":["da53fbdda293"]},
-    {"id":"2025021801","name":"阿湯","date":"2026-10-07","mine":false,"walkers":["da53fbdda293"]}
+    {"id":"2025021801","name":"阿湯","date":"2026-10-07","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2020112402","name":"小新","date":"2026-10-07","mine":false,"walkers":["044328805855"]},
+    {"id":"2018012905","name":"熊熊","date":"2026-10-07","mine":false,"walkers":["044328805855"]},
+    {"id":"2018012907","name":"毛毛","date":"2026-10-07","mine":false,"walkers":["044328805855"]}
   ]
 }

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-07T12:00:46+08:00",
+  "syncedAt": "2026-10-07T12:30:51+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -1538,7 +1538,7 @@
       "cage": "舊B14",
       "id": "2020112402",
       "name": "小新",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1584,12 +1584,11 @@
       "cage": "舊B18",
       "id": "2018012905",
       "name": "熊熊",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "044328805855",
-        "fc2ae30607ef"
+        "044328805855"
       ],
       "note": "陌生人有可能會咬（嘉文）;8/25剃毛",
       "sex": "",
@@ -1600,12 +1599,11 @@
       "cage": "舊B18",
       "id": "2018012907",
       "name": "毛毛",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "044328805855",
-        "fc2ae30607ef"
+        "044328805855"
       ],
       "note": "陌生人有可能會咬（嘉文）",
       "sex": "",
