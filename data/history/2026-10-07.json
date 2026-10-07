@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-07T08:30:46+08:00",
+  "syncedAt": "2026-10-07T10:23:02+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -187,11 +187,11 @@
       "cage": "新獨03",
       "id": "2023072502",
       "name": "老哥",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "24bf2ad2af85"
+        "75aeed7c10fe"
       ],
       "note": "不親狗、護食",
       "sex": "",
@@ -307,11 +307,11 @@
       "cage": "新獨11",
       "id": "2019100711",
       "name": "小貝",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-07",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "a2b179095490"
+        "75aeed7c10fe"
       ],
       "note": "不親狗",
       "sex": "female",

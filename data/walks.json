@@ -612,6 +612,8 @@
     {"id":"2026082607","name":"寶妮","date":"2026-10-06","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2026082601","name":"朵力（開多）","date":"2026-10-06","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2025072901","name":"果凍","date":"2026-10-06","mine":false,"walkers":["da53fbdda293"]},
-    {"id":"2017070102","name":"LUCY","date":"2026-10-07","mine":true,"walkers":["7fe4735e3c59"]}
+    {"id":"2017070102","name":"LUCY","date":"2026-10-07","mine":true,"walkers":["7fe4735e3c59"]},
+    {"id":"2023072502","name":"老哥","date":"2026-10-07","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2019100711","name":"小貝","date":"2026-10-07","mine":false,"walkers":["75aeed7c10fe"]}
   ]
 }
