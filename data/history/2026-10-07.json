@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-07T18:31:09+08:00",
+  "syncedAt": "2026-10-07T19:01:42+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -1559,6 +1559,19 @@
       "sex": "female",
       "intro": "2025年7月29日,從三峽被拾獲,活力超好的黑美眉,小小的耳朵好俏麗,是年輕的孩子,超愛跑跑飛撲,皮毛也黑得發亮~~可以一起散步運動優點多多~",
       "myWalkedDate": "2026-09-24"
+    },
+    {
+      "cage": "舊B16",
+      "id": "",
+      "name": "(阿拉丁)",
+      "walkedDate": null,
+      "covered": false,
+      "myWalked": false,
+      "walkers": [],
+      "note": "",
+      "sex": "",
+      "intro": "",
+      "myWalkedDate": null
     },
     {
       "cage": "舊B17",
