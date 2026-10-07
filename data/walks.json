@@ -674,6 +674,13 @@
     {"id":"2017090508","name":"墨西哥","date":"2026-10-07","mine":false,"walkers":["75aeed7c10fe"]},
     {"id":"2018050813","name":"歐巴","date":"2026-10-07","mine":false,"walkers":["75aeed7c10fe"]},
     {"id":"2026051406","name":"果果","date":"2026-10-07","mine":false,"walkers":["75aeed7c10fe"]},
-    {"id":"2021030913","name":"咪寶","date":"2026-10-07","mine":false,"walkers":["044328805855"]}
+    {"id":"2021030913","name":"咪寶","date":"2026-10-07","mine":false,"walkers":["044328805855"]},
+    {"id":"2026082501","name":"米香","date":"2026-10-07","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2021072201","name":"小白","date":"2026-10-07","mine":false,"walkers":["044328805855"]},
+    {"id":"2021090209","name":"小金","date":"2026-10-07","mine":false,"walkers":["044328805855"]},
+    {"id":"2019121309","name":"荷包蛋","date":"2026-10-07","mine":false,"walkers":["da53fbdda293","044328805855"]},
+    {"id":"2022030205","name":"小偉","date":"2026-10-07","mine":false,"walkers":["da53fbdda293","044328805855"]},
+    {"id":"2018041304","name":"小惠","date":"2026-10-07","mine":false,"walkers":["da53fbdda293","044328805855"]},
+    {"id":"2026051203","name":"圓仔","date":"2026-10-07","mine":false,"walkers":["da53fbdda293","044328805855"]}
   ]
 }
