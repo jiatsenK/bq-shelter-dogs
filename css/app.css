@@ -1475,3 +1475,210 @@ body.toast-on main { padding-bottom: calc(176px + env(safe-area-inset-bottom, 0p
 .a-sex-line b { font-size: 20px; font-variant-numeric: tabular-nums; }
 .dep-line { margin: 6px 0 12px; font-size: 15px; }
 .dep-line b { font-size: 17px; }
+
+/* ── 視覺主題：病歷夾色籤（2026-10-09 impeccable 改版試做，K 比較三版中）──
+   每隻狗是一份病歷夾，天數是夾邊的色籤：深檔案綠的頁首和底部列、淡鋼灰綠底、
+   白色直角紙夾一張接一張、天數是實心色籤、籠位是黑框檔案標籤。只改外觀，功能和文字不動。
+   對比：所有字在自己的底色上 4.5 以上（大字 3 以上），戶外大太陽下也看得清楚 */
+:root {
+  --bg: #E3E9E5;
+  --surface: #FFFFFF;
+  --surface-soft: #EEF2EF;
+  --ink: #16211D;
+  --ink-soft: #4E5E57;
+  --line: #C4CFC9;
+  --primary: #1F5C4D;
+  --primary-soft: #DDE9E3;
+  --red-text: #B3121F;   --red-bg: #FBE3E4;
+  --amber-text: #8A4B00; --amber-bg: #FCEFD6;
+  --green-text: #1E6B3C; --green-bg: #DFF0E4;
+  --muted-text: #5F6964; --muted-bg: #E8ECEA;
+  --radius-card: 3px;
+  --radius-photo: 2px;
+  /* 檔案櫃（頁首、底部列）與天數色籤 */
+  --shell: #1F5C4D; --shell-deep: #174538; --shell-soft: #B5CFC4;
+  --tab-red: #C8202B; --tab-amber: #F2B21B; --tab-green: #23804A; --tab-muted: #6B756F;
+}
+::selection { background: var(--tab-amber); color: var(--ink); }
+input, textarea { caret-color: var(--primary); accent-color: var(--primary); }
+
+/* 頁首：深綠檔案櫃 */
+header.app { background: var(--shell); color: #fff; -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none; }
+header.app.scrolled { box-shadow: 0 6px 16px rgba(16, 40, 33, 0.22); }
+.brand .logo { color: var(--tab-amber); }
+.brand h1 { font-weight: 800; letter-spacing: 0.04em; }
+.brand .date, .brand .updated { color: var(--shell-soft); }
+.brand .updated.offline { color: #FFD3D6; }
+header.app .sync-btn, header.app .analysis-btn { color: #fff !important; border-radius: 3px; }
+header.app .sync-btn:active, header.app .analysis-btn:active, .analysis-open header.app .analysis-btn { background: var(--shell-deep) !important; }
+.search input { border-radius: 3px; background: #fff; }
+.search input:focus { outline: 3px solid var(--tab-amber); outline-offset: 0; }
+
+/* 底部分類列：抽屜標籤，選中的那格是白底綠字的標籤 */
+.bottom-bar { background: var(--shell); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding-top: 6px; }
+.tabs { gap: 6px; }
+.tabs button { color: var(--shell-soft); border-radius: 3px; }
+.tabs button .n { color: var(--shell-soft); }
+.tabs button.active { background: #fff; color: var(--shell); }
+.tabs button.active .n { color: var(--shell); }
+.tabs button:active { opacity: 1; background: var(--shell-deep); }
+.tabs button.active:active { background: #fff; }
+.tabs button:focus-visible { outline: 3px solid var(--tab-amber); outline-offset: 1px; }
+
+/* 溜狗表上面一排：索引分頁，站在一條深綠線上 */
+.walk-tools { align-items: flex-end; border-bottom: 2px solid var(--shell); margin: 0 0 10px; }
+.walk-tools .chips { gap: 4px; }
+.chip { border-radius: 4px 4px 0 0; background: var(--surface-soft); color: var(--ink-soft); font-weight: 600; box-shadow: inset 0 0 0 1px var(--line); }
+.chip small { color: var(--ink-soft); }
+.chip.on { background: var(--shell); color: #fff; box-shadow: none; }
+.chip.on small { color: var(--shell-soft); }
+.seg { background: transparent; border-radius: 0; padding: 0 0 6px; gap: 2px; }
+.seg button { border-radius: 3px; color: var(--ink-soft); }
+.seg button.on { background: var(--shell); color: #fff; box-shadow: none; }
+
+/* 狗卡：白色直角紙夾一張接一張，右緣是天數色籤 */
+.card {
+  border-radius: 0; margin: 0; border: 1px solid var(--line);
+  align-items: stretch; padding: 8px;
+}
+.card + .card { margin-top: -1px; }
+.card:active { background: var(--surface-soft); }
+.card .thumb { border-radius: 2px; align-self: center; }
+.card .body { display: flex; }
+.card .row { flex: 1; min-width: 0; }
+.card .name { font-weight: 700; }
+.card .walk-btn, .card .more { order: 1; }
+.card .last {
+  order: 2; align-self: stretch; width: 76px !important;
+  margin: -8px -8px -8px 2px; padding: 6px 6px;
+  display: flex; flex-direction: column; justify-content: center; text-align: center;
+  background: var(--tab-muted); color: #fff;
+}
+.card.flagged .last { margin-bottom: 0; }
+.card .last .lbl { color: inherit; opacity: 0.9; font-size: 12px; }
+.card .last .val { color: inherit !important; font-size: 17px; font-weight: 800; }
+.card .last .val.small { font-size: 13px; }
+.card .last:has(.val.red) { background: var(--tab-red); }
+.card .last:has(.val.amber) { background: var(--tab-amber); color: var(--ink); }
+.card .last:has(.val.sage) { background: var(--green-bg); color: var(--green-text); box-shadow: inset 1px 0 0 var(--line); }
+.walk-btn { border-radius: 3px; background: #fff; color: var(--primary); box-shadow: inset 0 0 0 2px var(--primary); font-weight: 700; }
+.walk-btn:active { background: var(--primary-soft); }
+.walk-btn.done { background: var(--green-bg); color: var(--green-text); box-shadow: inset 0 0 0 1.5px var(--green-text); }
+.walk-btn.pending { background: var(--primary-soft); color: var(--primary); }
+
+/* 籠位：黑框白底的檔案標籤 */
+.cage-pill {
+  background: #fff !important; color: var(--ink) !important; font-weight: 700 !important;
+  border-radius: 2px; box-shadow: inset 0 0 0 1.5px var(--ink); letter-spacing: 0.02em;
+}
+.cage-pill .icon { color: var(--ink) !important; }
+.cage-pill:active { background: var(--tab-amber) !important; }
+.cage-pill:focus-visible { outline: 3px solid var(--tab-amber); }
+
+/* 警示備註：直角紅籤 */
+.warn-note { border-radius: 2px; background: var(--red-bg); }
+
+/* 列表模式：一列一隻，日期也是小色籤 */
+.rows { border-radius: 0; border: 1px solid var(--line); }
+.row-dog { border-bottom-color: var(--line); }
+.r-date { justify-self: start; padding: 2px 6px; border-radius: 2px; color: #fff !important; font-weight: 700 !important; }
+.r-date.red { background: var(--tab-red); }
+.r-date.amber { background: var(--tab-amber); color: var(--ink) !important; }
+.r-date.sage { background: var(--green-bg); color: var(--green-text) !important; }
+.r-date.muted { background: var(--tab-muted); }
+
+/* 詳細資訊、在哪面板、一起溜的人：從下面拉出的檔案 */
+.detail { border-radius: 6px 6px 0 0; }
+.detail-head, .detail-section, .hide-bar, .photo-upload.preview { border-radius: 3px; box-shadow: inset 0 0 0 1px var(--line); }
+.detail-head .photo-wrap.hero .thumb { border-radius: 2px; }
+.detail-head .name { font-weight: 800; }
+.badge { border-radius: 2px; }
+.badge.red { background: var(--tab-red); color: #fff; }
+.badge.amber { background: var(--tab-amber); color: var(--ink); }
+.badge.sage { background: var(--green-bg); color: var(--green-text); }
+.badge.muted { background: var(--tab-muted); color: #fff; }
+.badge.plain { box-shadow: inset 0 0 0 1px var(--line); }
+.detail-section h3 .icon { color: var(--primary); }
+.detail-bar { background: #fff; }
+.detail-bar .bar-btn { border-radius: 3px; }
+.detail-bar .bar-btn .icon { color: var(--primary); }
+.group-walk, .detail-bar .bar-confirm, .photo-confirm, .my-note-save, .with-ok, .ob-next, .retry-btn { border-radius: 3px; }
+.detail-bar .self-walked { border-radius: 3px; }
+.who-chip, .who-chip.editable, .with-name { border-radius: 3px; }
+.who-plus { border-radius: 3px; border-color: var(--primary); color: var(--primary); }
+.fav-btn { border-radius: 3px; }
+.fav-btn.on { border-color: var(--amber-text); }
+.buddy .thumb, .buddy-tile .thumb, .mine-dog .thumb { border-radius: 2px; }
+.w-grid span, .w-legend i { border-radius: 1px; }
+.w-num, .a-sex, .w-grid .none { border-radius: 2px; }
+.where-sheet { border-radius: 6px 6px 0 0; }
+.where-head h2 .icon { color: var(--tab-red); }
+.where-map { border-radius: 3px; box-shadow: inset 0 0 0 1px var(--line); }
+.where-dog { border-radius: 3px; }
+.where-btn { border-radius: 3px; }
+.where-close, .detail-close { border-radius: 3px; }
+.where-days { padding: 2px 6px; border-radius: 2px; color: #fff !important; }
+.where-days.red { background: var(--tab-red); }
+.where-days.amber { background: var(--tab-amber); color: var(--ink) !important; }
+.where-days.sage { background: var(--green-bg); color: var(--green-text) !important; }
+.where-days.muted { background: var(--tab-muted); }
+.with-sheet { border-radius: 6px 6px 0 0; }
+.with-name.on { background: var(--shell); }
+.toast { border-radius: 3px; background: var(--ink); }
+.toast-undo { color: var(--tab-amber); }
+.toast-extra { border-radius: 3px; }
+
+/* 平面圖：檔案綠的線和字，選到的區淡綠、那一籠黃籤 */
+.find-map {
+  --fm-bg: #EEF2EF; --fm-zone: #FFFFFF; --fm-line: #7C8E86; --fm-ink: #23332C; --fm-soft: rgba(124, 142, 134, 0.6);
+  --fm-sel: #DDE9E3; --fm-sel-line: #1F5C4D;
+}
+.fm-zone rect.fm-cage.has { fill: rgba(124, 142, 134, 0.22); }
+.fm-zone.sel rect.fm-cage { stroke: rgba(31, 92, 77, 0.45); }
+.fm-zone.sel rect.fm-cage.has { fill: rgba(31, 92, 77, 0.16); }
+.find-map .fm-zone rect.fm-cage.on { fill: var(--tab-amber); stroke: var(--ink); }
+.where-ring { stroke: var(--tab-red); }
+.find-zoom { background: #EEF2EF; }
+
+/* 找狗 */
+.find-view { background: var(--surface-soft) !important; border-radius: 3px; box-shadow: inset 0 0 0 1px var(--line); }
+.find-view button { border-radius: 2px; }
+.find-view button.on { background: var(--shell); color: #fff; box-shadow: none; }
+.find-chip { border-radius: 3px; box-shadow: inset 0 0 0 1px var(--line); }
+.find-chip.on { background: var(--shell) !important; box-shadow: none; }
+.find-map-card, .find-rows { border-radius: 3px; box-shadow: inset 0 0 0 1px var(--line); }
+.find-row { border-bottom-color: var(--line); }
+.find-dog { border-radius: 3px; background: var(--surface-soft); }
+.find-dog .thumb { border-radius: 2px; }
+.find-map-all, .find-zoom-btn { border-radius: 3px; }
+.find-dog mark, .find-row-cage mark { background: var(--tab-amber); }
+
+/* 我溜過、統計、其他白卡：直角紙夾 */
+.visit, .who-box, .mine-progress, .stat-tile, .today-hero, .a-card, .a-kpi, .a-back, .detail-back, .hidden-list { border-radius: 3px; box-shadow: inset 0 0 0 1px var(--line); }
+.mine-tiles > div { border-radius: 3px; }
+.who-edit, .who-hint .who-edit { border-radius: 3px; box-shadow: inset 0 0 0 1px var(--line); }
+.who-hint .who-edit.on { background: var(--shell); box-shadow: none; }
+.mine-progress .bar { border-radius: 1px; }
+.a-h-icon, .a-rank { border-radius: 3px; }
+.a-hbar-track, .a-hbar-fill, .a-split { border-radius: 2px; }
+.a-col-bar, .dep-stack { border-radius: 2px 2px 0 0; }
+/* 入所多久分布：JS 給的藍色深淺換成檔案綠深淺 */
+.a-cols:not(.dep-cols) .a-col:nth-child(1) .a-col-bar { background: #D6E5DE !important; }
+.a-cols:not(.dep-cols) .a-col:nth-child(2) .a-col-bar { background: #B5CFC4 !important; }
+.a-cols:not(.dep-cols) .a-col:nth-child(3) .a-col-bar { background: #8FB5A6 !important; }
+.a-cols:not(.dep-cols) .a-col:nth-child(4) .a-col-bar { background: #6A9B89 !important; }
+.a-cols:not(.dep-cols) .a-col:nth-child(5) .a-col-bar { background: #46816D !important; }
+.a-cols:not(.dep-cols) .a-col:nth-child(6) .a-col-bar { background: #2C6A57 !important; }
+.a-cols:not(.dep-cols) .a-col:nth-child(7) .a-col-bar { background: #1F5C4D !important; }
+.a-cols:has(.hi) .a-col:not(.hi) .a-col-bar { background: #B5CFC4 !important; }
+.dep-open, .dep-filters input, .dep-filters select { border-radius: 3px; }
+.g-tile, .g-add, .gallery-grid .gb-item, .gb-item { border-radius: 2px; }
+.hidden-toggle, .hide-btn, .my-note-edit, .photo-crop { border-radius: 3px; }
+.sk, .sk-thumb, .sk-btn { border-radius: 2px; }
+.alert-box, .photo-error, .ob-confirm, .find-unmapped { border-radius: 3px; }
+
+/* 開頭畫面 */
+.ob-hero, .ob-art { border-radius: 4px; background: var(--shell); color: var(--tab-amber); }
+.ob-demo { border-radius: 4px; }
+.ob-demo-walk, .ob-demo-toast { border-radius: 3px; }
+.ob-dots i.on { background: var(--shell); }

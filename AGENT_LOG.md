@@ -785,3 +785,9 @@
 - 根目錄新增 PRODUCT.md（產品摘要，各段指回 PROJECT_GOALS／DESIGN_GUIDE／CONTEXT／AGENTS）、DESIGN.md（frontmatter 抄 css/app.css :root 的現況色碼；內文寫明只是快照、以 CSS 為準、外觀可以改）。沒寫 .impeccable/design.json。
 - `.assetsignore` 加 PRODUCT.md、DESIGN.md、.impeccable（設計用文件不放上網站）；`.gitignore` 加 impeccable 比較頁的暫存。
 - `impeccable context` 已讀到兩份檔（platform: web）。沒改網站程式。
+
+## 2026-10-09 Claude（視覺主題試做 1／3：病歷夾色籤）
+- 依據：K 2026-10-09 用 /impeccable 比較視覺方向，選「病歷夾色籤」，另外加做「犬舍籠位牌」「航廈黃色指標」，三版各開 PR 用預覽網址在手機比較，選定一版再合併。K 說 AI 味來自通用藍、千篇一律的圓角卡片、整體太平均；做錯的標準是「太花、在所裡看不清楚」。
+- 只改 css/app.css 檔尾一段主題樣式，功能、文字、版面結構不動：深檔案綠頁首與底部列、直角紙夾一張接一張、天數是卡片右緣的色籤（黃、紅、灰實心，6 天內淡綠）、籠位是黑框檔案標籤、「溜了」白底綠框。統計頁入所分布直條（JS 給的藍色）用 CSS 換成綠色深淺。
+- 測試：網頁 198 過、2 項失敗（#130 讀 workflow 檔），沒改 CSS 時本機也一樣失敗，是 Windows 換行的關係，跟這次無關。impeccable detect 只剩改版前就有的 2 項。
+- 沒做：方向卡上的「頁首範圍字」要改 JS，這次只改 CSS 先不做。
