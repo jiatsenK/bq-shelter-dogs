@@ -1,0 +1,495 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-08T17:35:53.507Z",
+  "title": "Design System: 板收志工溜狗表",
+  "extensions": {
+    "colorMeta": {
+      "shell": {
+        "role": "primary",
+        "displayName": "檔案櫃綠",
+        "canonical": "#1F5C4D",
+        "tonalRamp": [
+          "#16211D",
+          "#174538",
+          "#1F5C4D",
+          "#2C6A57",
+          "#46816D",
+          "#6A9B89",
+          "#8FB5A6",
+          "#D6E5DE"
+        ]
+      },
+      "shell-deep": {
+        "role": "primary",
+        "displayName": "檔案櫃深綠（按下）",
+        "canonical": "#174538",
+        "tonalRamp": [
+          "oklch(15% 0.055 171)",
+          "oklch(25% 0.055 171)",
+          "oklch(35% 0.055 171)",
+          "oklch(48% 0.055 171)",
+          "oklch(60% 0.055 171)",
+          "oklch(72% 0.055 171)",
+          "oklch(84% 0.055 171)",
+          "oklch(95% 0.030 171)"
+        ]
+      },
+      "shell-soft": {
+        "role": "primary",
+        "displayName": "深綠上的次要字",
+        "canonical": "#B5CFC4",
+        "tonalRamp": [
+          "oklch(15% 0.032 168)",
+          "oklch(25% 0.032 168)",
+          "oklch(35% 0.032 168)",
+          "oklch(48% 0.032 168)",
+          "oklch(60% 0.032 168)",
+          "oklch(72% 0.032 168)",
+          "oklch(84% 0.032 168)",
+          "oklch(95% 0.030 168)"
+        ]
+      },
+      "primary": {
+        "role": "primary",
+        "displayName": "檔案綠（與 shell 同值）",
+        "canonical": "#1F5C4D",
+        "tonalRamp": [
+          "#16211D",
+          "#174538",
+          "#1F5C4D",
+          "#2C6A57",
+          "#46816D",
+          "#6A9B89",
+          "#8FB5A6",
+          "#D6E5DE"
+        ]
+      },
+      "primary-soft": {
+        "role": "primary",
+        "displayName": "淡檔案綠",
+        "canonical": "#DDE9E3",
+        "tonalRamp": [
+          "oklch(15% 0.015 165)",
+          "oklch(25% 0.015 165)",
+          "oklch(35% 0.015 165)",
+          "oklch(48% 0.015 165)",
+          "oklch(60% 0.015 165)",
+          "oklch(72% 0.015 165)",
+          "oklch(84% 0.015 165)",
+          "oklch(95% 0.015 165)"
+        ]
+      },
+      "bg": {
+        "role": "neutral",
+        "displayName": "鋼灰綠底",
+        "canonical": "#E3E9E5",
+        "tonalRamp": [
+          "oklch(15% 0.008 157)",
+          "oklch(25% 0.008 157)",
+          "oklch(35% 0.008 157)",
+          "oklch(48% 0.008 157)",
+          "oklch(60% 0.008 157)",
+          "oklch(72% 0.008 157)",
+          "oklch(84% 0.008 157)",
+          "oklch(95% 0.008 157)"
+        ]
+      },
+      "surface": {
+        "role": "neutral",
+        "displayName": "紙白",
+        "canonical": "#FFFFFF",
+        "tonalRamp": [
+          "oklch(15% 0.000 90)",
+          "oklch(25% 0.000 90)",
+          "oklch(35% 0.000 90)",
+          "oklch(48% 0.000 90)",
+          "oklch(60% 0.000 90)",
+          "oklch(72% 0.000 90)",
+          "oklch(84% 0.000 90)",
+          "oklch(95% 0.000 90)"
+        ]
+      },
+      "surface-soft": {
+        "role": "neutral",
+        "displayName": "淡紙綠",
+        "canonical": "#EEF2EF",
+        "tonalRamp": [
+          "oklch(15% 0.006 154)",
+          "oklch(25% 0.006 154)",
+          "oklch(35% 0.006 154)",
+          "oklch(48% 0.006 154)",
+          "oklch(60% 0.006 154)",
+          "oklch(72% 0.006 154)",
+          "oklch(84% 0.006 154)",
+          "oklch(95% 0.006 154)"
+        ]
+      },
+      "ink": {
+        "role": "neutral",
+        "displayName": "墨綠黑",
+        "canonical": "#16211D",
+        "tonalRamp": [
+          "oklch(15% 0.017 170)",
+          "oklch(25% 0.017 170)",
+          "oklch(35% 0.017 170)",
+          "oklch(48% 0.017 170)",
+          "oklch(60% 0.017 170)",
+          "oklch(72% 0.017 170)",
+          "oklch(84% 0.017 170)",
+          "oklch(95% 0.017 170)"
+        ]
+      },
+      "ink-soft": {
+        "role": "neutral",
+        "displayName": "灰綠字",
+        "canonical": "#4E5E57",
+        "tonalRamp": [
+          "oklch(15% 0.023 167)",
+          "oklch(25% 0.023 167)",
+          "oklch(35% 0.023 167)",
+          "oklch(48% 0.023 167)",
+          "oklch(60% 0.023 167)",
+          "oklch(72% 0.023 167)",
+          "oklch(84% 0.023 167)",
+          "oklch(95% 0.023 167)"
+        ]
+      },
+      "line": {
+        "role": "neutral",
+        "displayName": "細線",
+        "canonical": "#C4CFC9",
+        "tonalRamp": [
+          "oklch(15% 0.015 162)",
+          "oklch(25% 0.015 162)",
+          "oklch(35% 0.015 162)",
+          "oklch(48% 0.015 162)",
+          "oklch(60% 0.015 162)",
+          "oklch(72% 0.015 162)",
+          "oklch(84% 0.015 162)",
+          "oklch(95% 0.015 162)"
+        ]
+      },
+      "tab-red": {
+        "role": "secondary",
+        "displayName": "紅色籤",
+        "canonical": "#C8202B",
+        "tonalRamp": [
+          "oklch(15% 0.200 25)",
+          "oklch(25% 0.200 25)",
+          "oklch(35% 0.200 25)",
+          "oklch(48% 0.200 25)",
+          "oklch(60% 0.200 25)",
+          "oklch(72% 0.200 25)",
+          "oklch(84% 0.200 25)",
+          "oklch(95% 0.030 25)"
+        ]
+      },
+      "tab-amber": {
+        "role": "secondary",
+        "displayName": "黃色籤／籤黃",
+        "canonical": "#F2B21B",
+        "tonalRamp": [
+          "oklch(15% 0.161 82)",
+          "oklch(25% 0.161 82)",
+          "oklch(35% 0.161 82)",
+          "oklch(48% 0.161 82)",
+          "oklch(60% 0.161 82)",
+          "oklch(72% 0.161 82)",
+          "oklch(84% 0.161 82)",
+          "oklch(95% 0.030 82)"
+        ]
+      },
+      "tab-muted": {
+        "role": "secondary",
+        "displayName": "灰色籤（沒有紀錄）",
+        "canonical": "#6B756F",
+        "tonalRamp": [
+          "oklch(15% 0.015 160)",
+          "oklch(25% 0.015 160)",
+          "oklch(35% 0.015 160)",
+          "oklch(48% 0.015 160)",
+          "oklch(60% 0.015 160)",
+          "oklch(72% 0.015 160)",
+          "oklch(84% 0.015 160)",
+          "oklch(95% 0.015 160)"
+        ]
+      },
+      "green-text": {
+        "role": "secondary",
+        "displayName": "最近溜過深綠字",
+        "canonical": "#1E6B3C",
+        "tonalRamp": [
+          "oklch(15% 0.106 152)",
+          "oklch(25% 0.106 152)",
+          "oklch(35% 0.106 152)",
+          "oklch(48% 0.106 152)",
+          "oklch(60% 0.106 152)",
+          "oklch(72% 0.106 152)",
+          "oklch(84% 0.106 152)",
+          "oklch(95% 0.030 152)"
+        ]
+      },
+      "green-bg": {
+        "role": "secondary",
+        "displayName": "最近溜過淡綠底",
+        "canonical": "#DFF0E4",
+        "tonalRamp": [
+          "oklch(15% 0.024 155)",
+          "oklch(25% 0.024 155)",
+          "oklch(35% 0.024 155)",
+          "oklch(48% 0.024 155)",
+          "oklch(60% 0.024 155)",
+          "oklch(72% 0.024 155)",
+          "oklch(84% 0.024 155)",
+          "oklch(95% 0.024 155)"
+        ]
+      },
+      "red-text": {
+        "role": "secondary",
+        "displayName": "紅字（♀）",
+        "canonical": "#B3121F",
+        "tonalRamp": [
+          "oklch(15% 0.190 25)",
+          "oklch(25% 0.190 25)",
+          "oklch(35% 0.190 25)",
+          "oklch(48% 0.190 25)",
+          "oklch(60% 0.190 25)",
+          "oklch(72% 0.190 25)",
+          "oklch(84% 0.190 25)",
+          "oklch(95% 0.030 25)"
+        ]
+      },
+      "red-bg": {
+        "role": "neutral",
+        "displayName": "警示備註底",
+        "canonical": "#FBE3E4",
+        "tonalRamp": [
+          "oklch(15% 0.026 15)",
+          "oklch(25% 0.026 15)",
+          "oklch(35% 0.026 15)",
+          "oklch(48% 0.026 15)",
+          "oklch(60% 0.026 15)",
+          "oklch(72% 0.026 15)",
+          "oklch(84% 0.026 15)",
+          "oklch(95% 0.026 15)"
+        ]
+      },
+      "amber-text": {
+        "role": "secondary",
+        "displayName": "改回沒溜、常溜框色",
+        "canonical": "#8A4B00",
+        "tonalRamp": [
+          "oklch(15% 0.112 60)",
+          "oklch(25% 0.112 60)",
+          "oklch(35% 0.112 60)",
+          "oklch(48% 0.112 60)",
+          "oklch(60% 0.112 60)",
+          "oklch(72% 0.112 60)",
+          "oklch(84% 0.112 60)",
+          "oklch(95% 0.030 60)"
+        ]
+      },
+      "z-new-ink": {
+        "role": "tertiary",
+        "displayName": "青綠灰（新犬舍、♂）",
+        "canonical": "#1F6464",
+        "tonalRamp": [
+          "oklch(15% 0.067 195)",
+          "oklch(25% 0.067 195)",
+          "oklch(35% 0.067 195)",
+          "oklch(48% 0.067 195)",
+          "oklch(60% 0.067 195)",
+          "oklch(72% 0.067 195)",
+          "oklch(84% 0.067 195)",
+          "oklch(95% 0.030 195)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "站名",
+        "purpose": "頁首站名，深綠底白字。"
+      },
+      "title": {
+        "displayName": "狗名",
+        "purpose": "狗卡上的狗名。"
+      },
+      "day-value": {
+        "displayName": "色籤天數",
+        "purpose": "色籤裡的「N 天前」，等寬數字；長字縮到 13px，「沒有紀錄」15px。"
+      },
+      "body": {
+        "displayName": "內文",
+        "purpose": "提示、說明、詳細資訊內文。"
+      },
+      "meta": {
+        "displayName": "籠位列",
+        "purpose": "狗卡的籠位與編號列。"
+      },
+      "label": {
+        "displayName": "小標",
+        "purpose": "色籤上的「上次溜」、底部列分類名。"
+      }
+    },
+    "shadows": [
+      {
+        "name": "header-scrolled",
+        "value": "0 6px 16px rgba(16, 40, 33, 0.22)",
+        "purpose": "內容捲到頁首底下時才出現。"
+      },
+      {
+        "name": "toast",
+        "value": "0 6px 24px rgba(0, 0, 0, 0.25)",
+        "purpose": "浮在內容上的深色提示條。"
+      },
+      {
+        "name": "hairline-frame",
+        "value": "inset 0 0 0 1px var(--line)",
+        "purpose": "白卡、未選中索引分頁的外框（畫線，不是陰影）。"
+      },
+      {
+        "name": "tag-frame",
+        "value": "inset 0 0 0 1.5px var(--ink)",
+        "purpose": "籠位檔案標籤的黑框。"
+      }
+    ],
+    "motion": [
+      {
+        "name": "day-tab-recolor",
+        "value": "background-color 0.4s ease-out, color 0.4s ease-out",
+        "purpose": "色籤換顏色時淡淡轉過去。"
+      },
+      {
+        "name": "reduced-motion",
+        "value": "transition-duration: 0.01ms",
+        "purpose": "系統設定減少動態時全部關掉。"
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "narrow",
+        "value": "300px"
+      },
+      {
+        "name": "sheet-centered",
+        "value": "600px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "卡片「溜了」",
+      "kind": "button",
+      "refersTo": "walk-button",
+      "description": "狗卡上的主要動作：白底綠框。",
+      "html": "<button class=\"ds-walk\">溜了</button>",
+      "css": ".ds-walk{width:66px;height:44px;border:none;border-radius:3px;background:#fff;color:var(--primary,#1F5C4D);box-shadow:inset 0 0 0 2px var(--primary,#1F5C4D);font-family:inherit;font-size:16px;font-weight:700;cursor:pointer}.ds-walk:active{background:var(--primary-soft,#DDE9E3)}.ds-walk:focus-visible{outline:3px solid var(--primary,#1F5C4D);outline-offset:2px}"
+    },
+    {
+      "name": "已溜",
+      "kind": "button",
+      "refersTo": "walk-button-done",
+      "description": "溜完之後的「溜了」。",
+      "html": "<button class=\"ds-walk-done\">已溜</button>",
+      "css": ".ds-walk-done{width:66px;height:44px;border:none;border-radius:3px;background:var(--green-bg,#DFF0E4);color:var(--green-text,#1E6B3C);box-shadow:inset 0 0 0 1.5px var(--green-text,#1E6B3C);font-family:inherit;font-size:16px;font-weight:700}.ds-walk-done:focus-visible{outline:3px solid var(--primary,#1F5C4D);outline-offset:2px}"
+    },
+    {
+      "name": "詳細資訊主要動作",
+      "kind": "button",
+      "refersTo": "sheet-confirm",
+      "description": "從下面拉出的詳細資訊底部的實心主要鈕。",
+      "html": "<button class=\"ds-confirm\">溜了</button>",
+      "css": ".ds-confirm{min-height:50px;padding:0 32px;border:none;border-radius:3px;background:var(--primary,#1F5C4D);color:#fff;font-family:inherit;font-size:16px;font-weight:700;cursor:pointer}.ds-confirm:active{background:var(--shell-deep,#174538)}.ds-confirm:focus-visible{outline:3px solid var(--primary,#1F5C4D);outline-offset:2px}"
+    },
+    {
+      "name": "索引分頁",
+      "kind": "chip",
+      "refersTo": "index-tab",
+      "description": "溜狗表篩選與找狗切換：上緣圓、下緣平，站在深綠線上。",
+      "html": "<div class=\"ds-tabs\"><button class=\"ds-tab on\">全部 <small>122</small></button><button class=\"ds-tab\">我的常溜 <small>0</small></button></div>",
+      "css": ".ds-tabs{display:flex;gap:4px;align-items:flex-end;border-bottom:2px solid var(--shell,#1F5C4D)}.ds-tab{min-height:44px;padding:0 14px;border:none;border-radius:4px 4px 0 0;background:var(--surface-soft,#EEF2EF);color:var(--ink-soft,#4E5E57);box-shadow:inset 0 0 0 1px var(--line,#C4CFC9);font-family:inherit;font-size:15px;font-weight:600;cursor:pointer}.ds-tab small{margin-left:4px;font-size:13px;color:var(--ink-soft,#4E5E57)}.ds-tab.on{background:var(--shell,#1F5C4D);color:#fff;box-shadow:none}.ds-tab.on small{color:var(--shell-soft,#B5CFC4)}.ds-tab:focus-visible{outline:3px solid var(--primary,#1F5C4D);outline-offset:2px}"
+    },
+    {
+      "name": "籠位標籤",
+      "kind": "chip",
+      "refersTo": "cage-tag",
+      "description": "全站一致的黑框白底檔案標籤，點了看在哪。",
+      "html": "<button class=\"ds-cage\"><svg viewBox=\"0 0 24 24\" width=\"13\" height=\"13\" fill=\"currentColor\" aria-hidden=\"true\"><path d=\"M12 2a7 7 0 0 0-7 7c0 5 7 13 7 13s7-8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z\"/></svg>舊B16</button>",
+      "css": ".ds-cage{display:inline-flex;align-items:center;gap:2px;padding:3px 8px 3px 5px;border:none;border-radius:2px;background:#fff;color:var(--ink,#16211D);box-shadow:inset 0 0 0 1.5px var(--ink,#16211D);font-family:inherit;font-size:14px;font-weight:700;letter-spacing:0.02em;cursor:pointer}.ds-cage:active{background:var(--tab-amber,#F2B21B)}.ds-cage:focus-visible{outline:3px solid var(--tab-amber,#F2B21B);outline-offset:2px}"
+    },
+    {
+      "name": "狗卡＋天數色籤",
+      "kind": "card",
+      "refersTo": "dog-card",
+      "description": "白色直角紙夾一張接一張，右緣是天數色籤。",
+      "html": "<div class=\"ds-stack\"><div class=\"ds-card\"><div class=\"ds-thumb\"></div><div class=\"ds-name\">蔥餅</div><div class=\"ds-day amber\"><span>上次溜</span><b>20 天前</b></div></div><div class=\"ds-card\"><div class=\"ds-thumb\"></div><div class=\"ds-name\">阿拉丁</div><div class=\"ds-day sage\"><span>上次溜</span><b>5 天前</b></div></div><div class=\"ds-card\"><div class=\"ds-thumb\"></div><div class=\"ds-name\">小黑</div><div class=\"ds-day red\"><span>上次溜</span><b>30 天前</b></div></div></div>",
+      "css": ".ds-stack{max-width:360px;background:var(--bg,#E3E9E5);padding:8px}.ds-card{display:flex;align-items:stretch;gap:10px;padding:8px;background:#fff;border:1px solid var(--line,#C4CFC9);border-radius:0;cursor:pointer}.ds-card+.ds-card{margin-top:-1px}.ds-card:active{background:var(--surface-soft,#EEF2EF)}.ds-thumb{width:64px;height:64px;border-radius:2px;background:var(--surface-soft,#EEF2EF)}.ds-name{flex:1;align-self:center;font-size:17px;font-weight:700;color:var(--ink,#16211D)}.ds-day{width:76px;margin:-8px -8px -8px 2px;display:flex;flex-direction:column;justify-content:center;text-align:center;background:var(--tab-muted,#6B756F);color:#fff;transition:background-color .4s ease-out,color .4s ease-out}.ds-day span{font-size:12px}.ds-day b{font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}.ds-day.red{background:var(--tab-red,#C8202B)}.ds-day.amber{background:var(--tab-amber,#F2B21B);color:var(--ink,#16211D)}.ds-day.sage{background:var(--green-bg,#DFF0E4);color:var(--green-text,#1E6B3C);box-shadow:inset 1px 0 0 var(--line,#C4CFC9)}"
+    },
+    {
+      "name": "搜尋框",
+      "kind": "input",
+      "refersTo": "search-field",
+      "description": "深綠頁首裡的白色搜尋框。",
+      "html": "<div class=\"ds-head\"><input class=\"ds-search\" type=\"search\" placeholder=\"搜尋狗名\"></div>",
+      "css": ".ds-head{background:var(--shell,#1F5C4D);padding:12px}.ds-search{width:100%;box-sizing:border-box;padding:11px 14px;border:none;border-radius:3px;background:#fff;color:var(--ink,#16211D);font-family:inherit;font-size:16px}.ds-search::placeholder{color:var(--ink-soft,#4E5E57)}.ds-search:focus{outline:3px solid var(--tab-amber,#F2B21B);outline-offset:0}"
+    },
+    {
+      "name": "底部分類列",
+      "kind": "nav",
+      "refersTo": "bottom-tab-active",
+      "description": "深綠檔案櫃，選中的分類是白底綠字的標籤。",
+      "html": "<nav class=\"ds-bar\"><button class=\"ds-bt on\">溜狗表</button><button class=\"ds-bt\">我溜過</button><button class=\"ds-bt\">找狗</button></nav>",
+      "css": ".ds-bar{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:6px 12px 4px;background:var(--shell,#1F5C4D)}.ds-bt{min-height:52px;border:none;border-radius:3px;background:none;color:var(--shell-soft,#B5CFC4);font-family:inherit;font-size:12px;font-weight:500;cursor:pointer}.ds-bt.on{background:#fff;color:var(--shell,#1F5C4D);font-weight:700}.ds-bt:not(.on):active{background:var(--shell-deep,#174538)}.ds-bt:focus-visible{outline:3px solid var(--tab-amber,#F2B21B);outline-offset:1px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "病歷夾色籤",
+    "overview": "每隻狗是一份病歷夾，天數是夾邊凸出來的色籤。頁首和底部列是深檔案綠的檔案櫃（`--shell`），中間是淡鋼灰綠底上的一疊白色直角紙夾，1px 細線相接；志工一打開就看到紅籤、黃籤的那幾份凸出來。籠位是黑框白底的檔案標籤，上方的篩選是站在一條深綠線上的索引分頁。\n\n整體安靜、實用，在犬舍走道的自然光、大太陽下也要看得清楚：每個字在自己的底色上對比 4.5 以上（大字 3 以上）。強烈的顏色只留給天數色籤；其他地方是綠灰中性色加一個檔案綠。這一版取代了 V9 的灰底白圓角卡＋系統藍。",
+    "keyCharacteristics": [
+      "深綠檔案櫃夾住一疊白色直角紙夾",
+      "天數是卡片右緣的實心色籤，顏色就是訊息",
+      "籠位是全站一致的黑框檔案標籤",
+      "索引分頁：上緣圓、下緣平，站在 2px 深綠線上",
+      "平面，靠細線和底色分層，不靠陰影"
+    ],
+    "rules": [
+      {
+        "name": "The 綠色等於最近溜過 Rule",
+        "body": "在內容區，綠色的意思是「最近溜過」。其他需要區別的記號不要用綠，例如 ♂ 改用 `--z-new-ink`。",
+        "section": "colors"
+      },
+      {
+        "name": "The 只有警訊是實心 Rule",
+        "body": "實心色籤只給紅、黃、灰三種；最近溜過用淡綠。新的狀態顏色不要做成實心色塊。",
+        "section": "colors"
+      },
+      {
+        "name": "The 等寬天數 Rule",
+        "body": "天數、計數、統計數字都用 `tabular-nums`，一疊卡片往下看時數字對齊。",
+        "section": "typography"
+      },
+      {
+        "name": "The 紙疊不浮 Rule",
+        "body": "紙夾、白卡不加陰影；要分開就用細線或底色。陰影只給真的浮在上面的東西（捲動後的頁首、提示條）。",
+        "section": "elevation"
+      },
+      {
+        "name": "The 直角檔案 Rule",
+        "body": "不再用大圓角卡片和膠囊按鈕；最大的圓角是拉出面板的 6px。",
+        "section": "shapes"
+      }
+    ],
+    "dos": [
+      "**Do** 改顏色、字級時改 `css/app.css` 的 `:root` 變數（`--shell`、`--tab-red`、`--tab-amber`、`--tab-muted` 等），再用 `/impeccable document` 更新這份。",
+      "**Do** 新的白色區塊用直角或 3px 圓角，加 inset 1px `--line` 外框，相鄰時疊在一起。",
+      "**Do** 新的狀態色在自己的底色上量對比，4.5 以上（大字 3 以上）。",
+      "**Do** 改版前先看 `docs/DESIGN_GUIDE.md` 的理由；要推翻跟 K 確認。"
+    ],
+    "donts": [
+      "**Don't** 在內容區用綠色表示「最近溜過」以外的意思。",
+      "**Don't** 把最近溜過做成實心綠籤；實心只給紅、黃、灰。",
+      "**Don't** 把系統藍、大圓角白卡、膠囊按鈕帶回來（V9 的樣子）。",
+      "**Don't** 把這份快照當成不能改的規格，也不要在這裡重寫 `docs/PROJECT_GOALS.md` 或 `docs/DESIGN_GUIDE.md` 的內容。"
+    ]
+  }
+}

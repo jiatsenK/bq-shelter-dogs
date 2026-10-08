@@ -798,3 +798,9 @@
 - 第二輪審查：6 項確認解決；補回燈箱、提示條深色底上的白／黃焦點框（第一輪的全站焦點框蓋掉了）。統計頁公母條與狗卡 ♂ 原本跟著主色變綠，綠色在這裡是「最近溜過」，改成青綠灰（--z-new-ink），♀ 維持紅。
 - 還沒做：index.html 的 theme-color（Android 網址列顏色）還是藍 #2F7BEA，要改 HTML，等 K 決定。
 - 測試：網頁 198 過、2 項是本機 Windows 換行的老問題（#130）。
+
+## 2026-10-09 Claude（病歷夾色籤：DESIGN.md、DESIGN_GUIDE.md 改成新樣子）
+- 依據：同上，K 選定病歷夾色籤後照 impeccable 流程收尾。
+- DESIGN.md 由 impeccable 文件員（子代理）依實際畫面重寫（frontmatter 色碼、字級、圓角、元件；開頭仍註明是快照、以 CSS 為準、外觀可以改），新增 .impeccable/design.json（impeccable 預覽用，不上網站）。我修正了它寫錯的標題字級（實際 20px）。
+- docs/DESIGN_GUIDE.md：開頭說明這一版的來由，色票表、天數色籤表、字級、元件（頁首、分頁、卡片、溜了、詳細資訊、焦點框）改成病歷夾色籤的現況；單手操作規範不動。
+- css/app.css：離所「死亡」標籤殘留的舊灰字改 --muted-text。

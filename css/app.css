@@ -1733,3 +1733,5 @@ header.app :focus-visible, .bottom-bar :focus-visible { outline-color: var(--tab
 /* 性別：♂ 不用綠色（綠色在這裡是「最近溜過」），改青綠灰；♀ 維持紅 */
 .sex.male, .a-sex-line .male, .a-sex.male .a-sex-mark, .a-sex.male .a-sex-v { color: var(--z-new-ink); }
 .a-split .male { background: var(--z-new-ink); }
+
+.badge.dep-death { color: var(--muted-text); }
