@@ -692,3 +692,7 @@
 - 詳細資訊大照片 4:3（從上對齊）→ 正方形、置中裁切（object-fit: cover，不改原檔）；狗卡本來實際就是 64×64，把被蓋掉的舊 72×64 規則、換照片預覽的狗卡小圖（72×64）、載入中骨架（64×52）都改成 64×64。DESIGN_GUIDE 同步改。
 - 原型截圖：/mnt/project-files/previews/square-photo/。
 - 測試：tests/index.html 檔尾追加 runSquarePhotoTests 三項（iframe 套 app.css 量寬高）；舊「主照片預覽」測試註解改正。網頁 186 項、Node 132 項全過。
+
+## 2026-10-08 Claude（試算表寫入範圍寫進規則）
+- 依據：K 2026-10-08 在離所紀錄規劃串說「請幫我寫規則說，只有遛狗的日期跟名字可以用我的這個網頁去覆蓋，其他都不行」。
+- AGENTS.md 加一條專案規則、docs/PROJECT_GOALS.md 寫回試算表段落後加一段：網站只能改主清單「遛狗日期」「誰遛的」，其他欄位與分頁都不寫入。只改文件，沒改程式；現有 apps-script/sheet-write.gs 本來就只改這兩欄。
