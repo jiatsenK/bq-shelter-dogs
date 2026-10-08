@@ -219,11 +219,23 @@ function walkerSetupHtml() {
   const edit = walkerSetup || { text: '', phase: 'edit', error: '' };
   const busy = edit.phase === 'saving';
   const has = loadMyCodes().length > 0;
+  // 清除前確認一次（2026-10-08 介面評估第二輪：一按就清掉名字和代號，按錯就不能按溜了）
+  if (edit.confirmClear) {
+    return `<div class="who-box">
+      <h3>${icon('alert')}確定清除？</h3>
+      <p>清除後要重新輸入名字，才能按「溜了」寫進試算表。</p>
+      <div class="my-note-actions">
+        <button type="button" class="who-clear-ok" id="whoClearOk">清除</button>
+        <button type="button" class="photo-cancel" id="whoClearNo">不要清除</button>
+      </div>
+    </div>`;
+  }
   return `<form class="who-box" id="whoForm" autocomplete="off">
     <h3>${icon('paw')}你是誰？</h3>
-    <p>輸入你在溜狗表「誰遛的」欄寫的名字。有好幾種寫法的話可以用頓號隔開。</p>
+    <p>輸入你在試算表「誰遛的」欄寫的名字。有好幾種寫法的話可以用頓號隔開。</p>
+    ${obNamesHtml(edit, busy, 'who')}
     <input type="text" id="whoInput" maxlength="60" placeholder="例：小明" aria-label="你在試算表寫的名字" value="${esc(edit.text)}"${busy ? ' disabled' : ''}>
-    <p class="who-note">名字和換出來的代號只記在這支手機；按「溜了」時會用第一個名字寫進試算表「誰遛的」，網站上其他人看不到。換手機或換瀏覽器要重新設定。</p>
+    <p class="who-note">按「溜了」時會用第一個名字寫進試算表「誰遛的」。名字設定存在這支手機，換手機或換瀏覽器要重新設定。</p>
     ${edit.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(edit.error)}</span></div>` : ''}
     <div class="my-note-actions">
       <button type="submit" class="my-note-save" id="whoSave"${busy ? ' disabled' : ''}>${busy ? '設定中…' : '設定'}</button>
@@ -249,7 +261,7 @@ async function saveWalkerSetup() {
 // 名字送 Worker 換代號，成功就記在這支手機；失敗回傳原因（開頭畫面和我溜過的「修改」共用）
 async function setWalkerName(raw) {
   const text = String(raw || '').trim();
-  if (!text) return '請輸入你在溜狗表上寫的名字';
+  if (!text) return '請輸入你在試算表上寫的名字';
   if (!UPLOAD_URL) return '暫時不能設定，網站這邊還沒準備好';
   let out = null;
   try {
@@ -1271,6 +1283,7 @@ function detailHtml(dog, today) {
         <div class="name-row"><div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div>${favButtonHtml(dog)}</div>
         <div class="chips">${statusBadge(dog, today)}${detailChips(dog)}</div>
         ${metaLine(dog)}
+        ${flag ? warnNote(dog.note, flag) : ''}
       </div>
     </div>
     ${lastWalkSection(dog, today)}
@@ -1278,8 +1291,7 @@ function detailHtml(dog, today) {
     <section class="detail-section" data-section="note">
       <h3>${icon('note')}試算表備註</h3>
       ${!dog.note ? `<div class="empty">目前沒有備註</div>`
-        : flag ? warnNote(dog.note, flag)
-        : `<div class="content note-text">${esc(dog.note)}</div>`}
+        : `<div class="content note-text">${flag ? highlightNote(dog.note, flag.terms) : esc(dog.note)}</div>`}
     </section>
     ${cageMatesSection(dog, walked)}
     <section class="detail-section" data-section="group">
@@ -1324,7 +1336,7 @@ function departedDetailHtml(dog, today) {
     <section class="detail-section departed" data-section="departure">
       <h3>${icon('note')}離所紀錄</h3>
       <div class="lw-row"><span class="lw-k">原因</span><span class="lw-v">${esc(DEPARTURE_LABELS[dep.reason])}</span></div>
-      <div class="lw-row"><span class="lw-k">日期</span><span class="lw-v">${esc(ymdText(dep.date))}${dep.dateSource === 'seen' ? '<small>（從主清單消失的那天）</small>' : ''}</span></div>
+      <div class="lw-row"><span class="lw-k">日期</span><span class="lw-v">${esc(ymdText(dep.date))}${dep.dateSource === 'seen' ? '<small>（從試算表消失的那天）</small>' : ''}</span></div>
       <div class="lw-row"><span class="lw-k">依據</span><span class="lw-v">${esc(departureBasis(dep))}</span></div>
       <div class="lw-row"><span class="lw-k">最後籠位</span><span class="lw-v">${esc(dog.cage || '—')}</span></div>
       ${back ? `<button type="button" class="detail-back" data-departed-back="${allDogs.indexOf(back)}">${icon('paw')}已再入所，看現在的 ${esc(back.name)}</button>` : ''}
@@ -1475,7 +1487,7 @@ function galleryDeleteForm(del) {
       <div class="lightbox-del-q">從相簿刪掉這張照片？</div>
       ${del.needPass ? `
         <input type="text" name="username" autocomplete="username" value="板收志工溜狗表" hidden readonly>
-        <input type="password" id="galleryDeletePass" name="password" autocomplete="current-password" placeholder="通關碼（同我的備註）" aria-label="通關碼" value="${esc(del.pass)}"${busy ? ' disabled' : ''}>` : ''}
+        <input type="password" id="galleryDeletePass" name="password" autocomplete="current-password" placeholder="通關碼" aria-label="通關碼" value="${esc(del.pass)}"${busy ? ' disabled' : ''}>` : ''}
       ${del.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(del.error)}</span></div>` : ''}
       <div class="lightbox-del-actions">
         <button type="submit" class="lightbox-del-yes" id="galleryDeleteYes"${busy ? ' disabled' : ''}>${busy ? '刪除中…' : '刪除'}</button>
@@ -1653,12 +1665,14 @@ async function loadGallery() {
 
 // 可以一起溜的每一隻：輕點照片換看那隻；右上角圓圈勾選，之後用下方按鈕一起記（#35，K 選 C）。
 // 今天已溜的不顯示圓圈，改標「今天已溜」
+// 2026-10-08 介面評估第二輪：有警示備註的狗在這裡也要看得到警示（一次牽好幾隻時最需要），名字變紅、下面寫命中的字
 function buddyTile(d, name, walkedNow) {
   const walked = walkedNow.has(d);
+  const flag = specialFlag(d.note);
   const canPick = walkKey(d) && !walked && allDogs.includes(d);
   const picked = canPick && pickedBuddies.has(walkKey(d));
-  return `<div class="buddy-tile">
-    <button class="buddy" data-dog="${allDogs.indexOf(d)}"${allDogs.includes(d) ? '' : ' disabled'}>${photoThumb(d, 64)}<span class="bname">${esc(name)}</span></button>
+  return `<div class="buddy-tile${flag ? ' flagged' : ''}">
+    <button class="buddy" data-dog="${allDogs.indexOf(d)}"${allDogs.includes(d) ? '' : ' disabled'}>${photoThumb(d, 64)}<span class="bname">${flag ? icon('warn') : ''}${esc(name)}</span>${flag ? `<span class="bwarn">${esc(flag.keywords.join('、'))}</span>` : ''}</button>
     ${walked ? `<span class="walked-tag">今天已溜</span>` : ''}
     ${canPick ? `<button type="button" class="pick${picked ? ' on' : ''}" data-pick="${esc(walkKey(d))}" aria-pressed="${picked}" aria-label="勾選 ${esc(name)} 一起記">${icon('tick')}</button>` : ''}
   </div>`;
@@ -2741,8 +2755,13 @@ mainEl.addEventListener('click', e => {
   if (tile) showDetail(allDogs[tile.dataset.mineDog]);
   else if (e.target.closest('#mineRetry')) loadMyWalks();
   else if (e.target.closest('#mineStats')) { mineStatsOpen = !mineStatsOpen; render(); }
-  else if (e.target.closest('#whoEdit')) {
-    walkerSetup = { text: '', phase: 'edit', error: '' };
+  else if (e.target.closest('[data-who-name]')) {
+    const n = e.target.closest('[data-who-name]').dataset.whoName;
+    const list = splitWalkers(walkerSetup ? walkerSetup.text : '');
+    walkerSetup = { ...(walkerSetup || { phase: 'edit', error: '' }), text: (list.includes(n) ? list.filter(x => x !== n) : [...list, n]).join('、') };
+    render();
+  } else if (e.target.closest('#whoEdit')) {
+    walkerSetup = { text: loadWalkerName(), phase: 'edit', error: '' }; // 先填目前的名字，不用重打
     render();
     const input = document.getElementById('whoInput');
     if (input) input.focus();
@@ -2750,6 +2769,12 @@ mainEl.addEventListener('click', e => {
     walkerSetup = null;
     render();
   } else if (e.target.closest('#whoClear')) {
+    walkerSetup = { ...(walkerSetup || { text: '', phase: 'edit', error: '' }), confirmClear: true };
+    render();
+  } else if (e.target.closest('#whoClearNo')) {
+    walkerSetup = { ...walkerSetup, confirmClear: false };
+    render();
+  } else if (e.target.closest('#whoClearOk')) {
     saveMyCodes([]);
     saveWalkerName('');
     walkerSetup = null;
@@ -2802,12 +2827,12 @@ function pad2(n) {
 }
 
 // ── 開頭畫面（#141 第 2 項）──
-// 第一次打開：先輸入你在溜狗表上的名字，才進網站；接著幾頁說明（像新網站上線的導覽），按「開始使用」就不再出現。
+// 第一次打開：先輸入你在試算表上的名字，才進網站；接著幾頁說明（像新網站上線的導覽），按「開始使用」就不再出現。
 // 已經有名字（以前在我溜過設定過）只看說明；說明看過、名字被清掉了，只問名字
 const ONBOARD_KEY = 'bq-onboarded';
 const ONBOARD_SLIDES = [
   { icon: 'list', title: '溜狗表', text: '最久沒溜的狗排在最上面，顏色看得出多久沒溜。上面可以只看「★ 我的常溜」，右上角可以收起照片、像試算表一樣一列一隻。' },
-  { icon: 'tick', title: '溜完按「溜了」', text: '狗卡右邊按一下「溜了」，日期和你的名字會直接寫進溜狗表，其他志工也看得到。按錯再按一次就取消。' },
+  { icon: 'tick', title: '溜完按「溜了」', text: '狗卡右邊按一下「溜了」，日期和你的名字會直接寫進試算表，其他志工也看得到。按錯再按一次就取消。' },
   { icon: 'map', title: '找狗', text: '看照片認狗，或看平面圖找籠位。點狗卡上的籠位，也會告訴你狗在哪。' },
   { icon: 'paw', title: '我溜過', text: '你溜過的狗都在這裡，一次到所一張卡。' },
 ];
@@ -2826,14 +2851,14 @@ function onboardHtml() {
       <div class="ob-hero">${icon('paw')}</div>
       <h1>板收志工溜狗表</h1>
       <p class="ob-lead">歡迎！先告訴我們你是誰。</p>
-      <label class="ob-label" for="obInput">${walkerNameList.length ? '點選你在溜狗表上的名字' : '你在溜狗表「誰遛的」寫的名字'}</label>
+      <label class="ob-label" for="obInput">${walkerNameList.length ? '點選你在試算表上的名字' : '你在試算表「誰遛的」寫的名字'}</label>
       ${obNamesHtml(o, busy)}
       <input type="text" id="obInput" maxlength="60" placeholder="${walkerNameList.length ? '找不到？自己輸入' : '例：小明'}" value="${esc(o.text)}"${busy ? ' disabled' : ''} enterkeyhint="done">
-      <p class="ob-help">如果沒有你的名字，請自行輸入。</p>
+      ${walkerNameList.length ? '<p class="ob-help">上面沒有你的名字，就在這裡輸入。</p>' : ''}
       ${o.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(o.error)}</span></div>` : ''}
       <div class="ob-foot">
         <button type="submit" class="ob-next"${busy ? ' disabled' : ''}>${busy ? '設定中…' : '下一步'}</button>
-        <p class="ob-small">名字只記在這支手機，用來記你溜過的狗。</p>
+        <p class="ob-small">按「溜了」時，會把這個名字寫進試算表「誰遛的」。</p>
       </div>
     </form>`;
   }
@@ -2852,11 +2877,12 @@ function onboardHtml() {
   </div>`;
 }
 // 開頭畫面的名字按鈕（K 2026-10-04：入口的名字要能從表上已有的人選）：點了就加進輸入框，再點一次拿掉
-function obNamesHtml(o, busy) {
+// 我溜過的「修改」也用同一排（kind 'who'）
+function obNamesHtml(o, busy, kind = 'ob') {
   if (!walkerNameList.length) return '';
   const picked = new Set(splitWalkers(o.text));
   return `<div class="ob-names">${walkerNameList.map(n =>
-    `<button type="button" class="with-name${picked.has(n) ? ' on' : ''}" data-ob-name="${esc(n)}" aria-pressed="${picked.has(n)}"${busy ? ' disabled' : ''}>${picked.has(n) ? icon('tick') : ''}${esc(n)}</button>`).join('')}</div>`;
+    `<button type="button" class="with-name${picked.has(n) ? ' on' : ''}" data-${kind}-name="${esc(n)}" aria-pressed="${picked.has(n)}"${busy ? ' disabled' : ''}>${picked.has(n) ? icon('tick') : ''}${esc(n)}</button>`).join('')}</div>`;
 }
 function renderOnboard() {
   let box = document.getElementById('onboard');

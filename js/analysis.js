@@ -284,19 +284,18 @@ function analysisHtml(dogs, today) {
   const avgStay = average(rows.filter(r => r.intake).map(r => r.stayDays));
   const out = [];
 
-  // 最上面四格大數字（V7 #114 改成白底四格）
+  // 最上面三格大數字（V7 #114 白底；2026-10-08 拿掉「在所滿 1 年 %」，下面圓環已經有）
   out.push(`<section class="a-hero">
     <div class="a-hero-title">${icon('paw')}板收在所的狗</div>
     <div class="a-kpis">
       ${kpi(rows.length, '隻', '目前在所')}
       ${kpi(avgStay == null ? '–' : yearsText(avgStay), '年', '平均在所')}
-      ${kpi(share.pct.toFixed(0), '%', '在所滿 1 年')}
       ${kpi(stale, '隻', `超過 ${AMBER_DAYS} 天沒溜`, stale ? 'warn' : '')}
     </div>
     <div class="a-hero-note">入所日期取編號前 8 碼${noIntake.length ? `；${noIntake.length} 隻編號看不出入所日期，不列入時間統計（${dogNames(noIntake.map(r => r.dog))}）` : ''}</div>
   </section>`);
 
-  out.push(section('長期在所犬比例', '',
+  out.push(section('在所滿 1 年的比例', '',
     `<div class="a-ring-row">${ringSvg(share.pct, { label: `${share.pct.toFixed(0)}%`, sub: '滿 1 年' })}
       <div class="a-ring-legend">
         <div><i class="a-key primary"></i>在所滿 1 年<b>${share.long} 隻</b></div>
@@ -340,6 +339,7 @@ function analysisHtml(dogs, today) {
      </div>
      <div class="a-sex-grid">${sexCol('♂', 'male', sex.male)}${sexCol('♀', 'female', sex.female)}</div>`, 'group'));
 
+  out.push(departureSectionHtml(today)); // 2026-10-08：離所放在資料完整度前面（志工比較會看）
   const photosDone = photoCheck && photoCheck.done;
   const comp = dataCompleteness(rows, photosDone ? photoCheck.map : null);
   const ringItems = comp.items.filter(it => it.label !== '編號看不出入所日期');
@@ -354,7 +354,6 @@ function analysisHtml(dogs, today) {
     `<div class="a-comps">${rings}</div>` + compRows +
     (photosDone ? '' : '<div class="a-miss"><span>沒有照片</span><b class="muted">檢查中…</b></div>'), 'note'));
 
-  out.push(departureSectionHtml(today));
   return out.join('');
 }
 
