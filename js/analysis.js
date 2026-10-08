@@ -87,15 +87,6 @@ function longestStay(rows, n = 10) {
     .slice(0, n);
 }
 
-// 3. 入所年度分布：從最早一年到最晚一年，中間沒有狗的年份也列出（0 隻）
-function intakeYears(rows) {
-  const years = dated(rows).map(r => r.intake.getFullYear());
-  if (!years.length) return [];
-  const out = [];
-  for (let y = Math.min(...years); y <= Math.max(...years); y++) out.push({ label: String(y), count: years.filter(v => v === y).length });
-  return out;
-}
-
 // 4. 各區平均在所時間（由久到短）；count 是有入所日期的隻數
 function zoneAverages(rows) {
   const map = new Map();
@@ -239,19 +230,6 @@ function columnChart(items, { color = () => 'var(--primary)', hi = -1 } = {}) {
     </div>`).join('')}</div>`;
 }
 
-// 圓環：pct 0–100，中間放大數字
-function ringSvg(pct, { size = 120, stroke = 14, color = 'var(--primary)', label = '', sub = '' } = {}) {
-  const r = (size - stroke) / 2, c = 2 * Math.PI * r;
-  const len = Math.max(0, Math.min(100, pct)) / 100 * c;
-  return `<svg class="a-ring" viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" role="img" aria-label="${esc(label)} ${esc(sub)}">
-    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--primary-soft)" stroke-width="${stroke}"/>
-    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round"
-      stroke-dasharray="${len.toFixed(1)} ${c.toFixed(1)}" transform="rotate(-90 ${size / 2} ${size / 2})"/>
-    <text x="50%" y="${sub ? '47%' : '53%'}" text-anchor="middle" dominant-baseline="middle" class="a-ring-v">${esc(label)}</text>
-    ${sub ? `<text x="50%" y="66%" text-anchor="middle" class="a-ring-s">${esc(sub)}</text>` : ''}
-  </svg>`;
-}
-
 // 狗的一列：點了開詳細資訊（data-adog 是 allDogs 的索引）
 function dogRow(r, right, { rank } = {}) {
   return `<button type="button" class="a-dog" data-adog="${allDogs.indexOf(r.dog)}">
@@ -295,27 +273,15 @@ function analysisHtml(dogs, today) {
     <div class="a-hero-note">入所日期取編號前 8 碼${noIntake.length ? `；${noIntake.length} 隻編號看不出入所日期，不列入時間統計（${dogNames(noIntake.map(r => r.dog))}）` : ''}</div>
   </section>`);
 
-  out.push(section('在所滿 1 年的比例', '',
-    `<div class="a-ring-row">${ringSvg(share.pct, { label: `${share.pct.toFixed(0)}%`, sub: '滿 1 年' })}
-      <div class="a-ring-legend">
-        <div><i class="a-key primary"></i>在所滿 1 年<b>${share.long} 隻</b></div>
-        <div><i class="a-key soft"></i>未滿 1 年<b>${share.total - share.long} 隻</b></div>
-        <p>每 10 隻狗裡，約有 ${Math.round(share.pct / 10)} 隻已經在收容所住超過一年。</p>
-      </div></div>`, 'alert'));
-
   const dist = stayDistribution(rows).map((b, i) => ({ ...b, short: STAY_SHORT[i] }));
   const topBucket = dist.reduce((m, b, i) => (b.count > dist[m].count ? i : m), 0);
-  out.push(section('入所多久分布', `最多的是「${dist[topBucket].label}」，共 ${dist[topBucket].count} 隻`,
+  // 2026-10-08 distill：「在所滿 1 年的比例」圓環和「入所年度分布」跟這張是同一份資料，併成這一張的說明
+  out.push(section('入所多久分布', `滿 1 年的 ${share.long} 隻（${share.pct.toFixed(0)}%）；最多的是「${dist[topBucket].label}」，共 ${dist[topBucket].count} 隻`,
     columnChart(dist, { color: i => STAY_SHADES[i] }), 'pin'));
 
   const top = longestStay(rows);
   out.push(section('在所最久 Top 10', '點狗名看詳細資訊',
     `<div class="a-list">${top.map((r, i) => dogRow(r, `<b>${yearsText(r.stayDays)}</b><small> 年</small>`, { rank: i + 1 })).join('')}</div>`, 'paw'));
-
-  const years = intakeYears(rows);
-  const peak = years.reduce((m, y, i) => (y.count > years[m].count ? i : m), 0);
-  out.push(section('入所年度分布', years.length ? `${years[peak].label} 年入所最多，共 ${years[peak].count} 隻` : '',
-    columnChart(years.map(y => ({ ...y, short: `'${y.label.slice(2)}` })), { hi: peak }), 'card'));
 
   const zones = zoneAverages(rows);
   const zMax = Math.max(1, ...zones.map(z => z.avgDays));
@@ -330,28 +296,23 @@ function analysisHtml(dogs, today) {
   const sex = sexComparison(rows);
   const known = sex.male.count + sex.female.count;
   const mPct = known ? sex.male.count / known * 100 : 50;
-  const sexCol = (mark, cls, g) => `<div class="a-sex ${cls}"><div class="a-sex-mark">${mark}</div>
-    ${g.count ? `<div class="a-sex-v">${yearsText(g.avgDays)}<small> 年</small></div><div class="a-sex-s">平均在所</div>
-      <div class="a-sex-row"><span>中位數</span><b>${yearsText(g.medianDays)} 年</b></div><div class="a-sex-row"><span>滿 1 年</span><b>${g.long} 隻</b></div>` : '<div class="a-sex-s">沒有資料</div>'}</div>`;
+  // 2026-10-08 distill：兩張數字卡改成一行平均（中位數、滿 1 年隻數拿掉）
+  const sexAvg = (mark, cls, g) => `<span class="${cls}">${mark}</span> ${g.count ? `<b>${yearsText(g.avgDays)}</b> 年` : '沒有資料'}`;
   out.push(section('公母在所時間差異', `只算有性別資料的狗；${sex.missing} 隻沒有性別資料`,
     `<div class="a-split" title="公 ${sex.male.count} 隻、母 ${sex.female.count} 隻">
        <span class="male" style="width:${mPct}%">♂ ${sex.male.count}</span><span class="female" style="width:${100 - mPct}%">♀ ${sex.female.count}</span>
      </div>
-     <div class="a-sex-grid">${sexCol('♂', 'male', sex.male)}${sexCol('♀', 'female', sex.female)}</div>`, 'group'));
+     <p class="a-sex-line">平均在所　${sexAvg('♂', 'male', sex.male)}　${sexAvg('♀', 'female', sex.female)}</p>`, 'group'));
 
   out.push(departureSectionHtml(today)); // 2026-10-08：離所放在資料完整度前面（志工比較會看）
   const photosDone = photoCheck && photoCheck.done;
   const comp = dataCompleteness(rows, photosDone ? photoCheck.map : null);
-  const ringItems = comp.items.filter(it => it.label !== '編號看不出入所日期');
-  const rings = ringItems.map(it => {
-    const pct = (comp.total - it.dogs.length) / comp.total * 100;
-    return `<div class="a-comp">${ringSvg(pct, { size: 78, stroke: 9, color: pct >= 95 ? 'var(--green-text)' : 'var(--primary)', label: `${Math.floor(pct)}%` })}<span>${esc(it.label.replace('沒有', ''))}</span></div>`;
-  }).join('') + (photosDone ? '' : `<div class="a-comp">${ringSvg(0, { size: 78, stroke: 9, label: '…' })}<span>照片</span></div>`);
   const compRows = comp.items.map(it => it.dogs.length
     ? `<details class="a-miss"><summary><span>${esc(it.label)}</span><b>${it.dogs.length} 隻</b></summary><p>${dogNames(it.dogs)}</p></details>`
     : `<div class="a-miss ok"><span>${esc(it.label)}</span><b>0 隻</b></div>`).join('');
-  out.push(section('狗的資料完整度', `共 ${comp.total} 隻；圓環是資料齊全的比例，點下面項目看缺哪幾隻`,
-    `<div class="a-comps">${rings}</div>` + compRows +
+  // 2026-10-08 distill：拿掉跟下面清單重複的圓環
+  out.push(section('狗的資料完整度', `共 ${comp.total} 隻；點項目看缺哪幾隻`,
+    compRows +
     (photosDone ? '' : '<div class="a-miss"><span>沒有照片</span><b class="muted">檢查中…</b></div>'), 'note'));
 
   return out.join('');
@@ -541,18 +502,14 @@ function departureSectionHtml(today) {
   if (departuresData.state === 'loading') return section(title, '', '<p class="a-empty">讀取中…</p>', 'paw');
   if (departuresData.state === 'error') return section(title, '', '<p class="a-empty">離所紀錄讀不到</p>', 'paw');
   const list = departuresData.list;
-  if (!list.length) return section(title, '狗從主清單移走後會記在這裡', '<p class="a-empty">還沒有離所紀錄</p>', 'paw');
+  if (!list.length) return section(title, '狗從試算表移走後會記在這裡', '<p class="a-empty">還沒有離所紀錄</p>', 'paw');
   const { years, noDate } = departureYears(list);
   const thisYear = years.find(y => y.year === today.getFullYear()) || { total: 0, adopt: 0, death: 0 };
   return `<section class="a-card dep-card">
     <h2><span class="a-h-icon">${icon('paw')}</span>離所</h2>
-    <p class="a-hint">從 2026 年 9 月開始記錄；原因由試算表「已出所」分頁判讀${noDate ? `；${noDate} 隻日期不明，沒算進年份` : ''}</p>
-    <div class="a-kpis dep-kpis">
-      ${kpi(thisYear.total, '隻', `${today.getFullYear()} 年離所`)}
-      ${kpi(thisYear.adopt, '隻', '認養')}
-      ${kpi(thisYear.death, '隻', '死亡')}
-    </div>
-    ${stackedYears(years)}
+    <p class="a-hint">從 2026 年 9 月開始記錄；原因看試算表「已出所」分頁${noDate ? `；${noDate} 隻日期不明，沒算進年份` : ''}</p>
+    <p class="dep-line"><b>${today.getFullYear()} 年離所 ${thisYear.total} 隻</b>${thisYear.total ? `（${DEPARTURE_ORDER.filter(r => thisYear[r]).map(r => `${DEPARTURE_LABELS[r]} ${thisYear[r]}`).join('、')}）` : ''}</p>
+    ${years.length > 1 ? stackedYears(years) : ''}
     <button type="button" class="dep-open" id="depToggle" aria-expanded="${depRoster.open}">${depRoster.open ? '收起離所名冊' : `看離所名冊（${list.length} 隻）`}</button>
     ${depRoster.open ? departureRosterHtml(years) : ''}
   </section>`;

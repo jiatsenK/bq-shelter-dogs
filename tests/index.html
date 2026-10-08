@@ -1062,11 +1062,10 @@ async function runAnalysisTests() {
     eq([monthsBetween(new Date(2026, 2, 29), new Date(2026, 3, 28)), monthsBetween(new Date(2026, 2, 29), new Date(2026, 3, 29))], [0, 1], '滿月照日曆：');
     eq([zoneOf('新A07'), zoneOf('C區12'), zoneOf('住院區'), zoneOf('')], ['新A', 'C區', '住院區', '未填籠位']);
   });
-  await check('#59 入所多久分布、入所年度分布（中間沒狗的年份補 0）', () => {
+  await check('#59 入所多久分布（2026-10-08 入所年度分布拿掉，跟這張同一份資料）', () => {
     eq(stayDistribution(rows).map(b => b.count), [1, 0, 1, 1, 0, 0, 4]);
     eq(stayDistribution(rows).map(b => b.label)[6], '5 年以上');
-    eq(intakeYears(rows).map(y => `${y.label}:${y.count}`),
-      ['2017:1', '2018:0', '2019:2', '2020:1', '2021:0', '2022:0', '2023:0', '2024:0', '2025:2', '2026:1']);
+    eq(typeof intakeYears, 'undefined', '入所年度分布已拿掉：');
   });
   await check('#59 在所最久 Top N：依入所日由早到晚，沒入所日期的不列', () => {
     eq(names(longestStay(rows, 3)), ['甲長', '無日', '照顧']);
@@ -1108,10 +1107,12 @@ async function runAnalysisTests() {
       showAnalysis();
       eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [true, true, 'mine'], '打開分析：');
       const titles = [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
-      eq(titles.length, 8, '七張統計（#76 拿掉散布圖）＋離所（#163）：');
+      eq(titles.length, 6, '五張統計＋離所（2026-10-08 distill 拿掉滿 1 年圓環、入所年度分布）：');
       if (titles.includes('長期在所＋近期少遛')) throw new Error('K 說長期在所＋少遛不需要');
-      ['入所多久分布', '在所最久 Top 10', '入所年度分布', '各區平均在所時間', '在所滿 1 年的比例',
+      ['入所多久分布', '在所最久 Top 10', '各區平均在所時間',
         '公母在所時間差異', '狗的資料完整度'].forEach(t => { if (!titles.includes(t)) throw new Error(`少了 ${t}`); });
+      if (!document.querySelector('#main .a-card .a-hint').textContent.includes('滿 1 年的')) throw new Error('入所多久分布要寫滿 1 年幾隻');
+      eq(document.querySelectorAll('#main .a-ring').length, 0, '不再有圓環：');
       if (!document.getElementById('main').textContent.includes('檢查中')) throw new Error('照片還沒查完要顯示檢查中');
       const photoCalls = calls.filter(([u]) => u.startsWith('photos/'));
       eq(photoCalls.every(([, m]) => m === 'HEAD'), true, '照片只用 HEAD：');
@@ -3212,12 +3213,18 @@ async function runDepartureTests() {
       eq(filterDepartures(list, { year: '2026', reason: 'adopt' }).map(d => d.name), ['雪寶']);
       eq(filterDepartures(list, { reason: 'unknown' }).map(d => d.name), ['豆花']);
     });
-    await check('#163 分析頁離所區：今年三個大數字、每年一根直條、名冊按鈕', () => {
+    await check('#163 分析頁離所區：今年一行數字（2026-10-08 distill 拿掉三張數字卡）、兩年以上才有每年直條、名冊按鈕', () => {
       departuresData = { state: 'ready', list }; depRoster = { open: false, query: '', year: 'all', reason: 'all' };
       const box = document.createElement('div');
       box.innerHTML = departureSectionHtml(OCT8);
-      eq([...box.querySelectorAll('.a-kpi-v')].map(k => k.firstChild.textContent), ['3', '1', '1']);
+      eq(box.querySelectorAll('.a-kpi').length, 0, '沒有數字卡：');
+      eq(box.querySelector('.dep-line').textContent, '2026 年離所 3 隻（認養 1、死亡 1、待確認 1）');
       eq([...box.querySelectorAll('[data-dep-year]')].map(c => c.dataset.depYear), ['2025', '2026']);
+      departuresData = { state: 'ready', list: list.filter(d => d.departure.date && d.departure.date.getFullYear() === 2026) };
+      box.innerHTML = departureSectionHtml(OCT8);
+      eq(box.querySelectorAll('[data-dep-year]').length, 0, '只有一年時不畫直條：');
+      departuresData = { state: 'ready', list };
+      box.innerHTML = departureSectionHtml(OCT8);
       eq(box.querySelector('#depToggle').textContent, '看離所名冊（5 隻）');
       depRoster.open = true;
       box.innerHTML = departureSectionHtml(OCT8);
