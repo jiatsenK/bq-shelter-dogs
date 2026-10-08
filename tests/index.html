@@ -123,7 +123,7 @@ function runTests() {
       eq(matchesSearch(dog, '  '), true, '只有空白當作沒搜尋：');
       eq(matchesSearch(dog, '測試戊'), false);
     }),
-    check('搜尋：只篩選目前分類，分類數字跟著變，清空回到原本內容', () => {
+    check('搜尋：只篩選目前分類，溜狗表數字跟著變、找狗不放數字，清空回到原本內容', () => {
       const daysAgo = n => new Date(Date.now() - n * 86400000);
       allDogs = [
         { cage: 'B01', id: '', name: '搜尋甲', walkedDate: daysAgo(1), covered: false, note: '' },
@@ -138,15 +138,15 @@ function runTests() {
         searchQuery = '搜尋';
         activeTab = 'walk'; renderMain();
         eq(names(), ['搜尋乙', '搜尋甲'], '溜狗表（久沒遛的在前）：');
-        eq(counts(), ['2', '', '2'], '分類數字（找狗搜全部）：');
+        eq(counts(), ['2', '', ''], '分類數字（找狗不放數字）：');
         if (!mainText().includes('搜尋「搜尋」：2 隻')) throw new Error('沒有顯示搜尋結果隻數');
         if (!document.querySelector('#main .card .warn-note')) throw new Error('勿溜的搜尋乙沒有警示備註');
         searchQuery = '<b>沒這隻'; activeTab = 'walk'; renderMain();
         eq(document.querySelector('#main .status-msg').innerHTML, '找不到「&lt;b&gt;沒這隻」');
-        eq(counts(), ['0', '', '0'], '查無時分類數字：');
+        eq(counts(), ['0', '', ''], '查無時分類數字：');
         searchQuery = ''; renderMain();
         eq(names().length, 3, '清空後：');
-        eq(counts(), ['3', '', '3'], '清空後分類數字：');
+        eq(counts(), ['3', '', ''], '清空後分類數字：');
       } finally { searchQuery = ''; activeTab = 'walk'; }
     }),
     check('搜尋：輸入即篩選；注音選字途中不篩選，選好字才更新', () => {
@@ -229,7 +229,7 @@ function runTests() {
       eq(tokenHits, [], 'GitHub 憑證相關字眼：');
       // #35 起「今天已溜」存在這支手機的 localStorage，只准用 WALKED_KEY；#62 加上我的備註通關碼 NOTES_PASS_KEY
       eq([...code.matchAll(/\blocalStorage\s*[.[]|window\.localStorage/g)].length, 1, 'localStorage 只在一個地方取用：');
-      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'key', 'key', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'SHEET_WRITES_KEY', 'SHEET_WRITES_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'WALK_SORT_KEY', 'WALK_SORT_KEY', 'WALK_FILTER_KEY', 'WALK_FILTER_KEY', 'WALK_VIEW_KEY', 'WALK_VIEW_KEY', 'ONBOARD_KEY', 'ONBOARD_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、WALKER_NAME_KEY 和 SHEET_WRITES_KEY（#138 寫試算表）、NOTES_PASS_KEY（相簿刪除）、WALK_SORT_KEY、WALK_FILTER_KEY、WALK_VIEW_KEY、ONBOARD_KEY（V9），key 是一起溜的人（readJsonKey／writeJsonKey）：');
+      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'key', 'key', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'SHEET_WRITES_KEY', 'SHEET_WRITES_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'WALK_VIEW_KEY', 'WALK_VIEW_KEY', 'ONBOARD_KEY', 'ONBOARD_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、WALKER_NAME_KEY 和 SHEET_WRITES_KEY（#138 寫試算表）、NOTES_PASS_KEY（相簿刪除）、WALK_VIEW_KEY、ONBOARD_KEY（V9），key 是一起溜的人（readJsonKey／writeJsonKey）：');
       if (!/readJsonKey\(COMPANIONS_KEY\)/.test(APP_JS) || !/writeJsonKey\(WALK_WITH_KEY,/.test(APP_JS)) throw new Error('readJsonKey／writeJsonKey 只給一起溜的人用');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
       eq(urls.length, 4, 'fetch 呼叫數（上傳以外）：');
@@ -394,7 +394,7 @@ function runTests() {
         render();
         const tabs = () => [...document.querySelectorAll('#tabs button')];
         eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '我溜過', '找狗'], '分類（#99 加找狗）：');
-        eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '', '1'], '數字（遛狗紀錄還沒讀）：');
+        eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '', ''], '數字（遛狗紀錄還沒讀；找狗不放數字）：');
         const active = () => tabs().filter(b => b.classList.contains('active')).map(b => b.dataset.tab);
         eq(active(), ['walk'], '預設：');
         eq(document.querySelectorAll('#main .card').length, 1, '溜狗表有狗卡：');
@@ -1110,7 +1110,7 @@ async function runAnalysisTests() {
       const titles = [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
       eq(titles.length, 8, '七張統計（#76 拿掉散布圖）＋離所（#163）：');
       if (titles.includes('長期在所＋近期少遛')) throw new Error('K 說長期在所＋少遛不需要');
-      ['入所多久分布', '在所最久 Top 10', '入所年度分布', '各區平均在所時間', '長期在所犬比例',
+      ['入所多久分布', '在所最久 Top 10', '入所年度分布', '各區平均在所時間', '在所滿 1 年的比例',
         '公母在所時間差異', '狗的資料完整度'].forEach(t => { if (!titles.includes(t)) throw new Error(`少了 ${t}`); });
       if (!document.getElementById('main').textContent.includes('檢查中')) throw new Error('照片還沒查完要顯示檢查中');
       const photoCalls = calls.filter(([u]) => u.startsWith('photos/'));
@@ -1382,7 +1382,7 @@ async function runMyWalksTests() {
       document.getElementById('whoSave').click();
       await tick();
       eq(n, 0, '空白不送：');
-      if (!main.textContent.includes('請輸入你在溜狗表上寫的名字')) throw new Error(main.textContent);
+      if (!main.textContent.includes('請輸入你在試算表上寫的名字')) throw new Error(main.textContent);
       const input = document.getElementById('whoInput');
       input.value = '測試志工';
       input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1401,6 +1401,11 @@ async function runMyWalksTests() {
       eq(cardNames().length, 4, '取消回到紀錄：');
       document.getElementById('whoEdit').click();
       document.getElementById('whoClear').click();
+      eq(loadMyCodes(), ['aaaaaaaaaaaa'], '先問一次，還沒清：');
+      document.getElementById('whoClearNo').click();
+      eq([loadMyCodes().length, !!document.getElementById('whoInput')], [1, true], '不要清除：');
+      document.getElementById('whoClear').click();
+      document.getElementById('whoClearOk').click();
       eq(loadMyCodes(), [], '清除：');
       eq(!!document.getElementById('whoForm'), true, '清除後回到設定框：');
       eq(document.getElementById('whoCancel'), null, '清除後沒有取消：');
@@ -1794,14 +1799,14 @@ async function runV9Tests() {
     walkedStorage = fakeStorage(); walkedMemory = null; walkerNameMemory = ''; sheetWriteState = 'off';
     walkerNames = {};
     render();
-    await check('#141 溜狗表篩選「幾天以上沒溜」：固定 7／3／2 天，沒紀錄的也算久沒溜；選了記在這支手機', () => {
-      const chips = () => [...main.querySelectorAll('[data-walk-filter]')].map(b => b.firstChild.textContent + b.querySelector('small').textContent);
-      eq(chips(), ['全部4', '7 天以上3', '3 天以上3', '2 天以上3', '沒有紀錄1'], '固定選項：');
-      main.querySelector('[data-walk-filter="7"]').click();
-      eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['V9丁', 'V9甲', 'V9乙'], '7 天以上：');
-      eq(walkedStorage.getItem(WALK_FILTER_KEY), '7', '記住：');
-      main.querySelector('[data-walk-filter="0"]').click();
-      eq(main.querySelectorAll('.card').length, 4, '回到全部：');
+    await check('2026-10-08 溜狗表上面只有「全部／★ 我的常溜」兩個選一個，沒有天數篩選和排序', () => {
+      const chips = () => [...main.querySelectorAll('[data-walk-fav]')].map(b => [b.firstChild.textContent + b.querySelector('small').textContent, b.getAttribute('aria-pressed')]);
+      eq(chips(), [['全部4', 'true'], ['★ 我的常溜0', 'false']], '兩個選項：');
+      eq([main.querySelectorAll('[data-walk-filter], [data-walk-sort]').length, main.querySelectorAll('.card').length], [0, 4], '沒有天數、排序：');
+      eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['V9丁', 'V9甲', 'V9乙', 'V9丙'], '最久沒溜在前：');
+      main.querySelector('[data-walk-fav="1"]').click();
+      eq(chips().map(c => c[1]), ['false', 'true'], '只有一個是選的：');
+      main.querySelector('[data-walk-fav="0"]').click();
       if (main.querySelector('.stat-tile')) throw new Error('不再有三格');
     });
     await check('#141 列表模式（收起照片）：一列一隻 籠位｜犬名｜日期｜誰遛的，名字跟 Worker 拿、一格好幾人拆開', async () => {
@@ -2200,7 +2205,7 @@ async function runFindTests() {
       const chip = key => document.querySelector(`#main [data-find-zone="${key}"] small`);
       eq(document.querySelector('#main [data-find-zone="all"]'), null, 'V9（#141）預設就是全部，沒有「全部」鈕：');
       eq(chip('new').textContent, '3', '新犬舍：');
-      eq(document.querySelector('#tabs [data-tab="find"] .n').textContent, '3', '分頁數字：');
+      eq(document.querySelector('#tabs [data-tab="find"] .n').textContent, '', '找狗分頁不放數字：');
       searchQuery = '';
       document.querySelector('#main [data-find-zone="pup"]').click();
       eq([...document.querySelectorAll('#main .find-dog .find-name .n')].map(n => n.textContent), ['咪寶'], 'C區：');
@@ -2356,7 +2361,7 @@ async function runWhereTests() {
       eq(box.querySelector('.where-how').textContent, '進舊犬舍走左邊第二排，從下面數第 3 籠', '找路：');
       eq(box.querySelectorAll('.where-ring').length, 1, '那一籠橘框：');
       eq(box.querySelector('.mates').textContent, '同籠還有 測試乙', '同籠：');
-      eq(box.querySelector('.where-days').textContent, `${computeStatus(allDogs[0], new Date()).days} 天沒溜`, '天數：');
+      eq(box.querySelector('.where-days').textContent, `上次溜 ${computeStatus(allDogs[0], new Date()).days} 天前`, '天數（跟狗卡同一種說法）：');
       box.querySelector('#whereClose').click();
       await wait();
       eq([whereDog, box.hidden], [null, true], '關閉：');
@@ -2428,7 +2433,7 @@ async function runFindV7Tests() {
     await check('#113 找狗：照片／平面圖一排、區域一排（K 2026-09-28）', () => {
       render();
       const bar = document.querySelector('#main .find-bar');
-      eq([...bar.children].map(el => el.className), ['find-view', 'find-chips'], '兩排：');
+      eq([...bar.children].map(el => el.className), ['find-top', 'find-chips'], '兩排（列表模式）：');
     });
     await check('#113 平面圖：選一區就放大到那一區，「看全圖」回到整張', async () => {
       findView = 'map'; findZone = 'all'; render();
@@ -2508,7 +2513,7 @@ async function runV7PagesTests() {
       eq(box.querySelector('.row b').textContent, '2 / 5 隻', '已離所的不算、同一隻只算一次：');
       eq(box.querySelector('.bar i').style.width, '40%');
     });
-    await check('#114 分析頁：白底四格，不再是整塊藍底', async () => {
+    await check('#114 分析頁：白底大數字格，不再是整塊藍底', async () => {
       const css = await fetch('../css/app.css').then(r => r.text());
       if (!/\.a-hero\s*\{/.test(css)) throw new Error('找不到 .a-hero');
       if (/\.a-hero\s*\{[^}]*gradient/.test(css)) throw new Error('分析頁還有藍色漸層');
@@ -2727,38 +2732,35 @@ async function runFastOpenTests() {
   });
 }
 
-// 2026-10-04 K 回報：溜狗表要可以改排序
+// 2026-10-08 介面評估 P0：按了溜了的狗留在原地，下一隻不會滑到手指下；重讀資料、換分頁才重排
 async function runWalkSortTests() {
-  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory];
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, sheetWriteState];
   const TODAY = new Date(2026, 9, 4);
+  const now = new Date();
   const ymdDash = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
-  const d = (name, cage, days) => parseDogsData({ dogs: [{ id: '', name, cage, note: '', covered: false, walkedDate: ymdDash(new Date(2026, 9, 4 - days)) }] }).dogs[0];
+  const d = (name, cage, days, base = TODAY) => parseDogsData({ dogs: [{ id: '', name, cage, note: '', covered: false, walkedDate: ymdDash(new Date(base.getFullYear(), base.getMonth(), base.getDate() - days)) }] }).dogs[0];
   try {
     allDogs = [d('排序丙', '舊A10', 3), d('排序甲', '舊A2', 9), d('排序乙', '', 40), d('排序丁', '新B01', 1), d('排序戊', '舊A2', 20)];
     groupMap = {}; activeTab = 'walk'; searchQuery = '';
     walkedStorage = fakeStorage(); walkedMemory = null;
-    await check('溜狗表排序：預設最久沒溜；最近溜是時間倒過來，有人固定照顧的排最後', () => {
-      const names = sort => sortWalkList(allDogs, TODAY, sort).map(x => x.name);
-      eq(names('due'), ['排序乙', '排序戊', '排序甲', '排序丙', '排序丁'], '最久沒溜：');
-      eq(names('recent'), ['排序丁', '排序丙', '排序甲', '排序戊', '排序乙'], '最近溜（時間倒過來）：');
-      const covered = parseDogsData({ dogs: [{ id: '', name: '排序己', cage: '舊A1', note: '', covered: true, walkedDate: null }] }).dogs[0];
-      eq([computeStatus(covered, TODAY).kind, sortWalkList([covered, d('排序庚', '舊A1', 0)], TODAY, 'recent').map(x => x.name)], ['covered', ['排序庚', '排序己']], '有人固定照顧的不算剛溜過：');
-      eq(loadWalkSort(), 'due', '沒選過就是最久沒溜：');
+    await check('溜狗表一律最久沒溜在前', () => {
+      eq(sortWalkList(allDogs, TODAY).map(x => x.name), ['排序乙', '排序戊', '排序甲', '排序丙', '排序丁'], '最久沒溜：');
     });
-    await check('溜狗表排序：只有一顆按鈕，按一下在最久沒溜／最近溜之間切換、記在這支手機', () => {
+    await check('2026-10-08 按了溜了的狗留在原地、顯示已溜；換分頁回來才排到後面', () => {
+      allDogs = [d('原地甲', '舊A1', 30, now), d('原地乙', '舊A2', 20, now), d('原地丙', '舊A3', 10, now)];
+      sheetWriteState = 'off';
       render();
-      const btns = () => [...document.querySelectorAll('#main [data-walk-sort]')];
-      const cards = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
-      eq(btns().map(b => b.textContent.trim()), ['最久沒溜在前'], '一顆按鈕：');
-      btns()[0].click();
-      eq([walkedStorage.getItem(WALK_SORT_KEY), btns()[0].textContent.trim(), cards()], ['recent', '最近溜在前', ['排序丁', '排序丙', '排序甲', '排序戊', '排序乙']], '按一下改最近溜：');
-      btns()[0].click();
-      eq([walkedStorage.getItem(WALK_SORT_KEY), cards()[0]], ['due', '排序乙'], '再按回到最久沒溜：');
-      walkedStorage.setItem(WALK_SORT_KEY, '亂寫');
-      eq(loadWalkSort(), 'due', '存的值不認得就回到預設：');
+      const cards = () => [...document.querySelectorAll('#main .card .name')].map(n => n.firstChild.textContent);
+      eq(cards(), ['原地甲', '原地乙', '原地丙'], '一開始：');
+      document.querySelector('#main .card[data-dog="0"] [data-walk="add"]').click();
+      eq(cards(), ['原地甲', '原地乙', '原地丙'], '按了溜了不動：');
+      eq(document.querySelector('#main .card[data-dog="0"] .walk-btn').textContent.trim(), '已溜', '變已溜：');
+      hideToast();
+      switchTab('mine'); switchTab('walk');
+      eq(cards(), ['原地乙', '原地丙', '原地甲'], '換分頁回來重排：');
     });
   } finally {
-    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, sheetWriteState] = saved;
     render();
   }
 }
@@ -2825,6 +2827,35 @@ async function runSheetWriteTests() {
       setWalked([allDogs[0]], false); await sheetQueue;
       setWalked([allDogs[0]], true); await sheetQueue;
       eq([n, sheetWriteState, toastText()], [1, 'off', '寫入甲 今天溜了'], '沒設定：');
+      hideToast();
+    });
+    await check('2026-10-08 溜了等試算表回應才變已溜：等的時候「登記中」、卡片不動；寫好才記', async () => {
+      walkedStorage = fakeStorage(); walkedMemory = null; sheetWritesMemory = null; sheetWriteState = 'unknown';
+      saveWalkedIds([]); saveWalkerName('志工我'); activeTab = 'walk'; render();
+      let answer;
+      window.fetch = () => new Promise(r => { answer = r; });
+      document.querySelector('#main .card[data-dog="0"] [data-walk="add"]').click();
+      const btn = () => document.querySelector('#main .card[data-dog="0"] .walk-btn');
+      eq([btn().textContent.trim(), btn().disabled, walkedNow(allDogs[0])], ['登記中', true, false], '等試算表：');
+      await new Promise(r => setTimeout(r, 0));
+      answer(json({ ok: true, results: [{ id: '9801', name: '寫入甲', status: 'written', prev: { date: { date: '2026-10-01' }, walker: '' }, wrote: { walker: '志工我' } }] }));
+      await sheetQueue;
+      eq([btn().textContent.trim(), walkedNow(allDogs[0]), toastText()], ['已溜', true, '寫入甲 今天溜了，已寫進試算表'], '寫好了：');
+      eq(document.querySelector('#toast .toast-extra').textContent, '＋一起溜的人', '可以加人：');
+      window.fetch = async (u, o) => { const body = JSON.parse(o.body); return json({ ok: true, results: body.dogs.map(d => ({ id: d.id, name: d.name, status: 'restored' })) }); };
+      document.querySelector('#toast .toast-undo').click(); await sheetQueue;
+      eq(walkedNow(allDogs[0]), false, '復原：');
+      hideToast();
+    });
+    await check('2026-10-08 網路不通就不記成已溜，提示條有「再試一次」', async () => {
+      window.fetch = async () => { throw new TypeError('Failed to fetch'); };
+      setWalked([allDogs[0]], true); await sheetQueue;
+      eq([walkedNow(allDogs[0]), toastText()], [false, '沒寫進試算表（網路不通），還沒記成已溜'], '沒記：');
+      const retry = document.querySelector('#toast .toast-extra');
+      eq([retry.hidden, retry.textContent], [false, '再試一次'], '再試一次：');
+      window.fetch = async (u, o) => { const body = JSON.parse(o.body); return json({ ok: true, results: body.dogs.map(d => ({ ...d, status: 'written', prev: { walker: '' }, wrote: { walker: '志工我' } })) }); };
+      retry.click(); await sheetQueue;
+      eq(walkedNow(allDogs[0]), true, '再試成功：');
       hideToast();
     });
   } finally {
@@ -2992,11 +3023,22 @@ async function runFindListTests() {
     ];
     groupMap = {}; searchQuery = ''; activeTab = 'find'; findView = 'list'; findZone = 'all'; findCage = null;
     const main = document.getElementById('main');
-    await check('#154 找狗只有列表／平面圖兩種，預設列表，沒有照片格子', () => {
-      render();
-      eq([...main.querySelectorAll('[data-find-view]')].map(b => b.textContent.trim()), ['列表', '平面圖'], '顯示方式：');
-      eq(main.querySelector('[data-find-view="list"]').getAttribute('aria-pressed'), 'true', '預設列表：');
+    await check('2026-10-08 找狗只有平面圖／列表兩種，一打開是平面圖；平面圖不再多一排區域，只留 ★ 我的常溜', async () => {
+      const code = await fetch('../js/find.js').then(r => r.text());
+      if (!/let findView = 'map';/.test(code)) throw new Error('打開找狗應該是平面圖');
+      findView = 'map'; render();
+      eq([...main.querySelectorAll('[data-find-view]')].map(b => b.textContent.trim()), ['平面圖', '列表'], '顯示方式：');
+      eq([!!main.querySelector('.find-map-card'), [...main.querySelectorAll('.find-chip')].map(c => c.dataset.findZone)], [true, ['fav']], '平面圖＋常溜：');
+      findView = 'list'; render();
+      eq(main.querySelector('[data-find-view="list"]').getAttribute('aria-pressed'), 'true', '列表：');
       eq([!!main.querySelector('.find-grid'), !!main.querySelector('.find-map-card')], [false, false], '沒有照片格子、沒有地圖：');
+    });
+    await check('2026-10-08 開始搜尋就搜全部的狗，之前選的區不留著', () => {
+      findView = 'map'; findZone = 'old'; findCage = null; searchQuery = ''; render();
+      searchQuery = '列表'; render();
+      eq(findZone, 'all', '區域回到全部：');
+      eq(main.querySelectorAll('.find-dog').length, 4, '四隻都找到：');
+      searchQuery = ''; findView = 'list'; findZone = 'all'; render();
     });
     await check('#154 列表一區一段、一籠一列：籠位在左，同籠的狗排在同一列', () => {
       render();
@@ -3100,39 +3142,37 @@ async function runFavTests() {
   }
 }
 
-// #155 K 2026-10-04 選「兩頁都放」：溜狗表也有「★ 我的常溜」，可以跟天數篩選一起用
+// #155 K 2026-10-04 選「兩頁都放」：溜狗表也有「★ 我的常溜」（2026-10-08 起跟「全部」兩個選一個）
 async function runWalkFavTests() {
-  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, walkFilterMemory, walkFavMemory];
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, walkFavMemory];
   const TODAY = new Date();
   const ymdDash = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
   const d = (name, id, days) => parseDogsData({ dogs: [{ id, name, cage: '舊A01', note: '', covered: false, walkedDate: ymdDash(new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() - days)) }] }).dogs[0];
   try {
-    walkedStorage = fakeStorage(); walkedMemory = null; walkFilterMemory = 0; walkFavMemory = false;
+    walkedStorage = fakeStorage(); walkedMemory = null; walkFavMemory = false;
     allDogs = [d('常溜一', '2024100601', 9), d('常溜二', '2024100602', 1), d('常溜三', '2024100603', 12)];
     groupMap = {}; activeTab = 'walk'; searchQuery = '';
     const main = document.getElementById('main');
     const names = () => [...main.querySelectorAll('.card .name')].map(n => n.textContent.trim());
-    const favChip = () => main.querySelector('[data-walk-fav]');
-    await check('#155 溜狗表篩選最前面是「★ 我的常溜」；沒收藏時有提示', () => {
+    const favChip = () => main.querySelector('[data-walk-fav="1"]');
+    await check('#155 溜狗表「全部」旁邊是「★ 我的常溜」；沒收藏時有提示', () => {
       render();
-      eq(main.querySelector('.chips .chip'), favChip(), '最前面：');
+      eq([...main.querySelectorAll('.chips .chip')][1], favChip(), '第二個：');
       eq([favChip().textContent, favChip().getAttribute('aria-pressed')], ['★ 我的常溜0', 'false'], '還沒開：');
       favChip().click();
       eq(favChip().getAttribute('aria-pressed'), 'true', '開了：');
       if (!main.querySelector('.status-msg').textContent.includes('「☆ 常溜」加進來')) throw new Error('沒收藏的提示不見了');
     });
-    await check('#155 溜狗表常溜只列收藏的，跟「7 天以上」一起用；記在這支手機', () => {
+    await check('#155 溜狗表常溜只列收藏的；按「全部」回來；記在這支手機', () => {
       toggleFav(allDogs[0]); toggleFav(allDogs[1]);
       render();
       eq([favChip().textContent, names().sort()], ['★ 我的常溜2', ['常溜一', '常溜二']], '常溜：');
-      main.querySelector('[data-walk-filter="7"]').click();
-      eq(names(), ['常溜一'], '常溜＋7 天以上：');
-      favChip().click();
-      eq(names().sort(), ['常溜一', '常溜三'], '關掉常溜只剩 7 天以上：');
+      main.querySelector('[data-walk-fav="0"]').click();
+      eq(names().sort(), ['常溜一', '常溜三', '常溜二'], '全部：');
       eq(walkedStorage.getItem('bq-walk-fav'), 'false', '存在手機：');
     });
   } finally {
-    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, walkFilterMemory, walkFavMemory] = saved;
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, walkFavMemory] = saved;
   }
 }
 
@@ -3206,7 +3246,7 @@ async function runDepartureTests() {
       eq(!!box.querySelector('#detailClose'), true);
       eq(box.querySelector('[data-section="walks"] .w-axis').lastElementChild.textContent, '10/1 離所');
       box.innerHTML = detailHtml(list[2], OCT8);
-      if (!box.textContent.includes('從主清單消失的那天') || !box.textContent.includes('已出所分頁找不到這隻狗')) throw new Error('待確認要寫原因');
+      if (!box.textContent.includes('從試算表消失的那天') || !box.textContent.includes('已出所分頁找不到這隻狗')) throw new Error('待確認要寫原因');
     });
   } finally {
     [allDogs, UPLOAD_URL, departuresData, depRoster, historyData] = saved;
@@ -3242,6 +3282,49 @@ async function runSquarePhotoTests() {
     });
   } finally {
     frame.remove();
+  }
+}
+
+async function runCritique3Tests() {
+  const saved = [allDogs, groupMap, walkedStorage, walkedMemory, dataSyncedAt, walkerNamesOffline];
+  try {
+    walkedStorage = fakeStorage(); walkedMemory = null;
+    const mk = (name, id, note) => ({ name, id, cage: '新A04', walkedDate: null, covered: false, note, intro: '', sex: '', formerIds: [] });
+    allDogs = [mk('測試兇', '2024100801', '不要推他身體移位，會兇想咬人'), mk('測試乖', '2024100802', '')];
+    groupMap = {};
+    await check('介面評估第三輪：在哪面板有警示的狗看得到警示，沒有的不顯示', () => {
+      if (!specialFlag(allDogs[0].note)) throw new Error('測試資料應該要有警示');
+      const box = document.createElement('div');
+      box.innerHTML = whereHtml(allDogs[0]);
+      if (!box.querySelector('.warn-note')) throw new Error('有警示的狗沒有警示');
+      if (!box.querySelector('.warn-note').textContent.includes('會兇想咬人')) throw new Error('警示要有備註原文');
+      box.innerHTML = whereHtml(allDogs[1]);
+      eq(box.querySelector('.warn-note'), null, '沒有警示的狗：');
+    });
+    await check('介面評估第三輪：確認上傳不用沒定義的 --green（會變亮綠）', async () => {
+      const css = await fetch('../css/app.css').then(r => r.text());
+      if (/var\(--green\s*,/.test(css)) throw new Error('還有 var(--green, …)');
+    });
+    await check('介面評估第三輪：提示條出現時內容底部多留空白，收起就拿掉', () => {
+      showToast('測試');
+      if (!document.body.classList.contains('toast-on')) throw new Error('沒有 toast-on');
+      hideToast();
+      if (document.body.classList.contains('toast-on')) throw new Error('收起後還有 toast-on');
+    });
+    await check('介面評估第三輪：沒網路時頁首和溜狗人會說沒網路', () => {
+      const label = document.getElementById('updatedLabel');
+      dataSyncedAt = new Date(2026, 9, 8, 9, 1);
+      walkerNamesOffline = true; renderUpdatedLabel();
+      eq(label.textContent, '沒網路・資料 10/8 09:01', '沒網路：');
+      if (!walkerChipsHtml(allDogs[1], [], new Date()).includes('讀不到（沒網路）')) throw new Error('溜狗人沒說沒網路');
+      walkerNamesOffline = false; renderUpdatedLabel();
+      eq(label.textContent, '資料更新 10/8 09:01', '有網路：');
+      eq(walkerChipsHtml(allDogs[1], [], new Date()), '<span class="lw-none">—</span>', '有網路沒名字：');
+    });
+  } finally {
+    [allDogs, groupMap, walkedStorage, walkedMemory, dataSyncedAt, walkerNamesOffline] = saved;
+    renderUpdatedLabel();
+    hideToast();
   }
 }
 
@@ -3381,6 +3464,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runFix141Tests)
   .then(runSquarePhotoTests)
   .then(runDepartureTests)
+  .then(runCritique3Tests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

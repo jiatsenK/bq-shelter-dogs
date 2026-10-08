@@ -1,6 +1,6 @@
 // 找狗（#99）：照片圖鑑＋全域搜尋＋平面圖分區。K 2026-09-26 看過原型後同意。
 // 溜狗表是決定「接下來遛誰」；找狗是現場「眼前這隻是誰、在哪」，所以不顯示未遛天數、沒有「已遛」按鈕。
-// 會用到 js/app.js 的 allDogs、groupMap、searchQuery、searchKey、esc、icon、sexMark、specialFlag、photoThumb、
+// 會用到 js/app.js 的 allDogs、groupMap、searchQuery、searchKey、esc、icon、sexMark、specialFlag、warnNote、photoThumb、
 // showDetail、closeDetail、switchTab、render、activeTab，所以要在 app.js 之後載入。
 
 // 籠位 → 平面圖分區（K 2026-09-26 確認：新A／新B／新獨＝新犬舍區，舊A／舊B＝舊犬舍區，母幼＝幼母犬舍區，
@@ -46,7 +46,7 @@ function findLabel(cls, name, sub, [x, y, w, h], small) {
     + (sub !== '' ? count(top + chars.length * lh + 14) : '');
 }
 
-let findView = 'list'; // list：列表（一籠一列）；map：平面圖（#154 拿掉照片格子）
+let findView = 'map';  // map：平面圖（2026-10-08 K：找狗的工作就是「在哪」，一打開就是平面圖）；list：列表（一籠一列）
 let findZone = 'all';   // 篩選的區域 key；all＝全部；fav＝我的常溜（#155）
 let findCage = null;    // 平面圖上點選的籠子（findCageOf 的 id）；null＝看整區
 
@@ -116,12 +116,18 @@ function findChipsHtml(query) {
   if (allDogs.some(d => findZoneOf(d) === 'other')) zones.push(findZoneInfo('other'));
   const chip = (key, label, n) =>
     `<button type="button" class="find-chip${findZone === key ? ' on' : ''}" data-find-zone="${key}" aria-pressed="${findZone === key}">${label}<small>${n}</small></button>`;
+  // 平面圖本身就能選區，不再多一排區域（2026-10-08）；只留「★ 我的常溜」，按了換成列表
+  const mapMode = findView === 'map' && findZone !== 'fav';
+  const favChip = chip('fav', '★ 我的常溜', inQuery.filter(isFav).length);
   return `<div class="find-bar">
-    <div class="find-view" role="group" aria-label="顯示方式">
-      <button type="button" data-find-view="list" class="${findView === 'list' ? 'on' : ''}" aria-pressed="${findView === 'list'}">${icon('list')}列表</button>
-      <button type="button" data-find-view="map" class="${findView === 'map' ? 'on' : ''}" aria-pressed="${findView === 'map'}">${icon('map')}平面圖</button>
+    <div class="find-top">
+      <div class="find-view" role="group" aria-label="顯示方式">
+        <button type="button" data-find-view="map" class="${findView === 'map' ? 'on' : ''}" aria-pressed="${findView === 'map'}">${icon('map')}平面圖</button>
+        <button type="button" data-find-view="list" class="${findView === 'list' ? 'on' : ''}" aria-pressed="${findView === 'list'}">${icon('list')}列表</button>
+      </div>
+      ${mapMode ? favChip : ''}
     </div>
-    <div class="find-chips">${chip('fav', '★ 我的常溜', inQuery.filter(isFav).length)}${zones.map(z => chip(z.key, z.short, count(z.key))).join('')}</div>
+    ${mapMode ? '' : `<div class="find-chips">${favChip}${zones.map(z => chip(z.key, z.short, count(z.key))).join('')}</div>`}
   </div>`;
 }
 
@@ -365,7 +371,11 @@ function findMapAnimate() {
   requestAnimationFrame(step);
 }
 
+// 開始搜尋時搜全部的狗（介面評估 P2：之前選的區還留著，搜到的比分頁上的數字少）；我的常溜照舊只搜常溜
+let findLastQuery = '';
 function findPageHtml(query) {
+  if (searchKey(query) && !searchKey(findLastQuery) && findZone !== 'fav') { findZone = 'all'; findCage = null; }
+  findLastQuery = query;
   const bar = findChipsHtml(query);
   const fav = findZone === 'fav'; // 我的常溜一律用列表（#155）
   if (!fav && (findView === 'map' || searchKey(query))) return bar + findMapHtml(query); // 搜尋時列表、平面圖都是地圖在上、結果在下
@@ -599,10 +609,12 @@ function whereMapSvg(dog) {
 function whereHtml(dog) {
   const d = whereDirections(dog);
   const mates = cageMates(dog);
+  // 介面評估第三輪（K 2026-10-08）：在哪面板的主按鈕是溜了，有警示的狗要在這裡就看得到警示
+  const flag = specialFlag(dog.note);
   const walked = walkedToday().has(dog);
   const status = computeStatus(dog, new Date());
   const days = walked ? '今天已溜'
-    : status.kind === 'dated' && status.days >= 0 ? (status.days === 0 ? '今天有人溜' : `${status.days} 天沒溜`)
+    : status.kind === 'dated' && status.days >= 0 ? (status.days === 0 ? '今天有人溜' : `上次溜 ${status.days} 天前`)
     : status.kind === 'covered' ? '有人固定照顧' : '沒有紀錄';
   const tone = walked ? 'sage' : status.kind === 'dated' && status.days >= 0 ? status.level : status.kind === 'covered' ? 'sage' : 'muted';
   const walkBtn = !walkKey(dog) ? ''
@@ -623,6 +635,7 @@ function whereHtml(dog) {
       </div>
       <span class="where-days ${tone}">${days}</span>
     </div>
+    ${flag ? warnNote(dog.note, flag) : ''}
     <div class="where-actions">
       <button type="button" class="where-btn" id="whereDetail">詳細資訊</button>
       ${walkBtn}
