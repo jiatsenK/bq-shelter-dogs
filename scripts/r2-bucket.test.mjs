@@ -12,7 +12,8 @@ test('讀得懂 repo 的 wrangler.jsonc：有 R2 binding、照片和 dogs.json �
   assert.equal(c.name, 'bq-shelter-dogs');
   assert.deepEqual(c.r2_buckets, [{ binding: 'PHOTOS', bucket_name: 'bq-shelter-photos' }]);
   for (const p of ['/api/*', '/photos/*', '/data/dogs.json', '/data/gallery.json']) assert.ok(c.assets.run_worker_first.includes(p), p);
-  assert.equal(c.vars.ALLOWED_ORIGINS, 'https://jiatsenk.github.io', '字串裡的 // 不被當成註解');
+  assert.equal(c.vars.GITHUB_REPO, 'jiatsenK/bq-shelter-dogs');
+  assert.equal(parseJsonc('{\n  // 註解\n  "u": "https://a" // 行尾註解\n}').u, 'https://a', '字串裡的 // 不被當成註解');
 });
 
 async function withRepo(fn) {

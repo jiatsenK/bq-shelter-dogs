@@ -2,7 +2,7 @@
 //
 // 網站（GitHub Pages）→ 這個 Worker → GitHub API → photos/{編號}.jpg、data/my-notes.json
 // #125 起網站也可以放在這個 Worker 裡（設定見 repo 根目錄的 wrangler.jsonc）：網頁是靜態檔案，API 在 /api 底下；
-// 同一份程式也能照舊單獨部署成照片上傳 Worker（worker/wrangler.toml，路徑沒有 /api）
+// 不帶 /api 前綴的路徑也還認得（舊的單獨照片 Worker 留下來的，2026-10 已刪）
 // - GitHub 寫入權限（token）只放在 Worker 的 Secret「GITHUB_TOKEN」，不在網站、也不在 repo
 // - 任何人都能上傳（不用登入），所以這裡做基本防護：只收網站來的要求、編號要在 data/dogs.json 裡、
 //   只收 JPEG、限制大小、同一個人短時間內不能一直傳
@@ -23,7 +23,7 @@
 // - 照片放 R2（#130）：Worker 有 R2（env.PHOTOS）時，照片、相簿、縮圖、Trash 都改存 R2，不再提交 GitHub（worker/src/r2.js）；
 //   沒有 R2 時（例如單獨部署的舊照片 Worker）照舊寫 GitHub
 //
-// 設定步驟見 docs/CLOUDFLARE_SETUP.md（舊的單獨照片 Worker 見 docs/PHOTO_UPLOAD_SETUP.md）。
+// 設定步驟見 docs/CLOUDFLARE_SETUP.md。
 
 import * as r2 from './r2.js';
 
@@ -31,8 +31,8 @@ import * as r2 from './r2.js';
 const DEFAULTS = {
   GITHUB_REPO: 'jiatsenK/bq-shelter-dogs',
   GITHUB_BRANCH: 'main',
-  // 只接受這些網站送來的上傳（用逗號分隔）
-  ALLOWED_ORIGINS: 'https://jiatsenk.github.io',
+  // 除了同網址之外，另外接受哪些網站送來的要求（用逗號分隔）；網站和 Worker 同網址（#125）後不用設，舊網址 2026-10 拿掉
+  ALLOWED_ORIGINS: '',
   // 只有本機測試會換成假的 GitHub
   GITHUB_API: 'https://api.github.com',
 };
