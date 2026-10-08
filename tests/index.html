@@ -1108,7 +1108,7 @@ async function runAnalysisTests() {
       showAnalysis();
       eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [true, true, 'mine'], '打開分析：');
       const titles = [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
-      eq(titles.length, 7, '七張統計（#76 拿掉散布圖）：');
+      eq(titles.length, 8, '七張統計（#76 拿掉散布圖）＋離所（#163）：');
       if (titles.includes('長期在所＋近期少遛')) throw new Error('K 說長期在所＋少遛不需要');
       ['入所多久分布', '在所最久 Top 10', '入所年度分布', '各區平均在所時間', '長期在所犬比例',
         '公母在所時間差異', '狗的資料完整度'].forEach(t => { if (!titles.includes(t)) throw new Error(`少了 ${t}`); });
@@ -1116,7 +1116,7 @@ async function runAnalysisTests() {
       const photoCalls = calls.filter(([u]) => u.startsWith('photos/'));
       eq(photoCalls.every(([, m]) => m === 'HEAD'), true, '照片只用 HEAD：');
       eq(photoCalls.length, 9, '每個編號查一次：');
-      eq(calls.filter(([u]) => !u.startsWith('photos/')).length, 0, '分析頁不讀其他檔：');
+      eq(calls.filter(([u]) => !u.startsWith('photos/') && u !== 'data/departures.json').length, 0, '分析頁只多讀離所紀錄（#163），不讀其他檔：');
       await tick(); await tick(); await tick();
       const photoRow = [...document.querySelectorAll('#main .a-miss')].find(el => el.textContent.includes('沒有照片'));
       if (!photoRow || !photoRow.textContent.includes('9 隻')) throw new Error(`沒有照片列：${photoRow && photoRow.textContent}`);
@@ -1140,7 +1140,7 @@ async function runAnalysisTests() {
   await check('#59 分析程式只讀：網路呼叫只有 HEAD 查照片與讀 data/ 歷史（#60），不寫入、不存資料', () => {
     const code = ANALYSIS_JS.replace("fetch(photoSrc({ id }), { method: 'HEAD', cache: 'no-cache' })", '')
       // #60 讀遛狗歷史與快照：只 GET 同網站的 data/ 檔案
-      .replace("fetch(url, { cache: 'no-cache' })", '').replace("fetch(`${HISTORY_URL}${encodeURIComponent(date)}.json`, { cache: 'no-cache' })", '');
+      .replace("fetch(url, { cache: 'no-cache' })", '').replace("fetch(`${HISTORY_URL}${encodeURIComponent(date)}.json`, { cache: 'no-cache' })", '').replace("fetch(DEPARTURES_URL, { cache: 'no-cache' })", '');
     eq([WALKS_URL, HISTORY_URL], ['data/walks.json', 'data/history/'], '#60 歷史檔位置：');
     const bad = [/fetch\(/, /method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /localStorage|sessionStorage|indexedDB|XMLHttpRequest|sendBeacon/];
     eq(bad.filter(re => re.test(code)).map(String), [], '寫入相關字眼：');
@@ -3138,6 +3138,81 @@ async function runWalkFavTests() {
 
 // K 2026-10-05 正式站回報：只有自己一人時沒有 ×（按錯要能取消）、「岑」被接成「岑、佳岑」、別人溜的跑進我溜過
 // K 2026-10-08：詳細資訊大照片跟狗卡照片統一正方形（置中裁切）
+// #163 #164 離所：data/departures.json 讀進來、年度統計、名冊篩選、詳細資訊的離所模式
+async function runDepartureTests() {
+  const saved = [allDogs, UPLOAD_URL, departuresData, depRoster, historyData];
+  const OCT8 = new Date(2026, 9, 8, 10);
+  const entry = (id, name, date, reason, extra = {}) => ({ id, name, date, dateSource: 'sheet', seen: date, reason, matched: reason === 'adopt' ? '被認養' : reason === 'death' ? '過世' : '', flags: reason === 'unknown' ? ['not-in-sheet'] : [],
+    last: { cage: 'C區35', id, name, walkedDate: '2026-09-30', note: '親人', sex: 'male', intro: '入所介紹文字' }, ...extra });
+  const DATA = { version: 1, departures: [
+    entry('2026021301', '雪寶', '2026-10-01', 'adopt', { returned: '2026100801' }),
+    entry('2024101903', '仲基', '2026-09-26', 'death'),
+    entry('2026092401', '豆花', '2026-10-02', 'unknown', { dateSource: 'seen' }),
+    entry('2017070102', 'LUCY', '2025-11-02', 'adopt', { last: { id: '2017070102', name: 'LUCY', formerIds: ['2015010101'] } }),
+    entry('2017090423', '沒日期', null, 'other'),
+    { id: '', name: '壞資料' },
+  ] };
+  try {
+    const list = parseDeparturesData(DATA);
+    await check('#163 departures.json 讀成離所的狗：跟在所的狗同樣子，多一個 departure；沒編號的略過', () => {
+      eq(list.map(d => d.name), ['雪寶', '仲基', '豆花', 'LUCY', '沒日期']);
+      eq([list[0].sex, list[0].cage, list[0].intro, ymd(list[0].walkedDate)], ['♂', 'C區35', '入所介紹文字', '2026/9/30']);
+      eq([list[0].departure.reason, ymd(list[0].departure.date), list[0].departure.returned], ['adopt', '2026/10/1', '2026100801']);
+      eq(list[3].formerIds, ['2015010101']);
+    });
+    await check('#163 年度統計：每年各類幾隻、總數＝四類相加；沒日期的另外算', () => {
+      const { years, noDate } = departureYears(list);
+      eq(years.map(y => [y.year, y.total, y.adopt, y.death, y.other, y.unknown]), [[2025, 1, 1, 0, 0, 0], [2026, 3, 1, 1, 0, 1]]);
+      eq(noDate, 1);
+    });
+    await check('#164 名冊篩選：狗名、編號、舊編號搜尋，年份、原因可以一起用；新的在前', () => {
+      eq(filterDepartures(list).map(d => d.name), ['豆花', '雪寶', '仲基', 'LUCY', '沒日期']);
+      eq(filterDepartures(list, { query: '雪' }).map(d => d.name), ['雪寶']);
+      eq(filterDepartures(list, { query: '2015010101' }).map(d => d.name), ['LUCY']);
+      eq(filterDepartures(list, { year: '2026', reason: 'adopt' }).map(d => d.name), ['雪寶']);
+      eq(filterDepartures(list, { reason: 'unknown' }).map(d => d.name), ['豆花']);
+    });
+    await check('#163 分析頁離所區：今年三個大數字、每年一根直條、名冊按鈕', () => {
+      departuresData = { state: 'ready', list }; depRoster = { open: false, query: '', year: 'all', reason: 'all' };
+      const box = document.createElement('div');
+      box.innerHTML = departureSectionHtml(OCT8);
+      eq([...box.querySelectorAll('.a-kpi-v')].map(k => k.firstChild.textContent), ['3', '1', '1']);
+      eq([...box.querySelectorAll('[data-dep-year]')].map(c => c.dataset.depYear), ['2025', '2026']);
+      eq(box.querySelector('#depToggle').textContent, '看離所名冊（5 隻）');
+      depRoster.open = true;
+      box.innerHTML = departureSectionHtml(OCT8);
+      eq(box.querySelectorAll('[data-dep-dog]').length, 5);
+      eq(box.querySelector('[data-dep-dog] .badge').textContent, '待確認');
+    });
+    await check('#163 還沒有離所紀錄、讀不到時不壞', () => {
+      departuresData = { state: 'ready', list: [] };
+      if (!departureSectionHtml(OCT8).includes('還沒有離所紀錄')) throw new Error('要說還沒有');
+      departuresData = { state: 'error', list: [] };
+      if (!departureSectionHtml(OCT8).includes('讀不到')) throw new Error('要說讀不到');
+    });
+    await check('#164 離所的詳細資訊：標原因和日期、判讀依據只寫關鍵字；沒有溜了、在哪、☆、換照片、同籠', () => {
+      UPLOAD_URL = 'https://example.test/upload';
+      allDogs = [{ name: '雪寶', id: '2026100801', cage: 'A1', walkedDate: null, covered: false, note: '', intro: '', sex: '', formerIds: ['2026021301'] }];
+      historyData = { state: 'ready', dates: [], walks: [] };
+      const box = document.createElement('div');
+      box.innerHTML = detailHtml(list[0], OCT8);
+      eq(box.querySelector('.chips .badge').textContent, '已認養 · 10/1');
+      const dep = box.querySelector('[data-section="departure"]').textContent;
+      if (!dep.includes('已出所分頁寫了「被認養」') || !dep.includes('C區35')) throw new Error(dep);
+      eq(!!box.querySelector('[data-departed-back]'), true, '再入所要能跳到現在那隻：');
+      for (const sel of ['.walk-btn', '#groupWalk', '#detailWhere', '#favToggle', '#photoPick', '#galleryAdd', '[data-section="cage"]', '[data-section="group"]', '.who-plus']) {
+        if (box.querySelector(sel)) throw new Error(`不該有 ${sel}`);
+      }
+      eq(!!box.querySelector('#detailClose'), true);
+      eq(box.querySelector('[data-section="walks"] .w-axis').lastElementChild.textContent, '10/1 離所');
+      box.innerHTML = detailHtml(list[2], OCT8);
+      if (!box.textContent.includes('從主清單消失的那天') || !box.textContent.includes('已出所分頁找不到這隻狗')) throw new Error('待確認要寫原因');
+    });
+  } finally {
+    [allDogs, UPLOAD_URL, departuresData, depRoster, historyData] = saved;
+  }
+}
+
 async function runSquarePhotoTests() {
   const css = await fetch('../css/app.css').then(r => r.text());
   const frame = document.createElement('iframe');
@@ -3305,6 +3380,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runWalkFavTests)
   .then(runFix141Tests)
   .then(runSquarePhotoTests)
+  .then(runDepartureTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

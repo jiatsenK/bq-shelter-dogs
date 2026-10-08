@@ -591,3 +591,117 @@ test('K 2026-10-05 阿湯：同一天甲 → 甲＋我 → 甲，再記一筆甲
   assert.deepEqual(sync.newWalks(dogs, dogs, walks, KEY).map(w => [w.mine, w.walkers]), [[false, [CODE('志工B')]]]);
   assert.deepEqual(sync.newWalks(dogs, dogs, walksOf(disk), KEY), [], '已經對上就不再記');
 }));
+
+// ── #162 離所 ──
+test('#162 判讀規則：三類關鍵字、否定與還沒定案的字、互相矛盾都標待確認', () => {
+  const r = t => sync.classifyDeparture(t);
+  assert.deepEqual([r('2026/10/1被認養').reason, r('已被領養').reason, r('送養').reason], ['adopt', 'adopt', 'adopt']);
+  assert.deepEqual([r('10/2 安樂死').reason, r('病逝').reason, r('當天使了').reason], ['death', 'death', 'death']);
+  assert.deepEqual([r('原主領回').reason, r('轉所').reason, r('逃脫').reason], ['other', 'other', 'other']);
+  assert.equal(r('2026/10/1被認養').matched, '被認養');
+  for (const t of ['想要認養', '認養未成', '待認養', '有人詢問領養', '認養中', '找領養人', '', '好在沒有攻擊，親人']) {
+    assert.equal(r(t).reason, 'unknown', t);
+  }
+  assert.deepEqual(r('認養後退回').flags, ['unsure']);
+  assert.deepEqual(r('試養一週').flags, ['unsure']);
+  assert.equal(r('原本要認養，後來病逝').reason, 'unknown');
+  assert.deepEqual(r('死亡 認養').flags, ['conflict']);
+});
+
+// 仿已出所分頁：表頭在第 2 列、有出所日期欄，也有照抄的遛狗日期欄
+const DEPARTED = [
+  ['已出所', '', '', '', '', ''],
+  ['籠位', '編號', '犬名', '遛狗日期', '出所日期', '備註'],
+  ['C區35', 2026021301, '雪寶', D(2026, 9, 30), '', '親人（嘉文）2026/10/1被認養'],
+  ['新A08', 2024101903, '仲基', D(2026, 9, 23), D(2026, 9, 26), '過世'],
+  ['新A09', 2024101904, '多多', D(2026, 9, 20), D(2026, 9, 28), '認養'],
+  ['新A09', 2024101904, '多多', D(2026, 9, 20), D(2026, 9, 28), '病逝'],
+  ['C區24', 2026092401, '豆花', '', '', '外宿'],
+];
+const departedTable = (grid = DEPARTED) => fakeGviz(grid, 2).table;
+const OCT8 = new Date(2026, 9, 8, 10);
+
+test('#162 已出所分頁：用編號找那一列；出所日期欄優先，沒有才用關鍵字前面的日期；遛狗日期不算', () => {
+  const rows = sync.departedRows(departedTable(), OCT8);
+  const j = id => sync.judgeDeparture({ id, name: '' }, rows, OCT8);
+  assert.deepEqual([j('2026021301').reason, j('2026021301').date, j('2026021301').dateSource], ['adopt', '2026-10-01', 'note']);
+  assert.deepEqual([j('2024101903').reason, j('2024101903').date, j('2024101903').dateSource], ['death', '2026-09-26', 'sheet']);
+  assert.deepEqual([j('2026092401').reason, j('2026092401').date], ['unknown', null]);
+  assert.deepEqual(j('2024101904').flags, ['duplicate']); // 同一隻兩列寫的不一樣
+  assert.deepEqual(j('2099010101').flags, ['not-in-sheet']);
+  assert.equal(sync.judgeDeparture({ id: '2024101903' }, null), null); // 讀不到分頁
+});
+
+test('#162 讀已出所分頁：先找表頭列再重讀；讀不到回 null、不擋同步', async () => {
+  const f = async url => {
+    const u = new URL(url);
+    if (u.searchParams.get('sheet') !== '已出所') throw new Error('x');
+    return new Response(`google.visualization.Query.setResponse(${JSON.stringify(fakeGviz(DEPARTED, +u.searchParams.get('headers')))});`);
+  };
+  const rows = await sync.loadDepartedRows(f, OCT8);
+  assert.equal(sync.judgeDeparture({ id: '2024101903' }, rows, OCT8).dateSource, 'sheet');
+  const warn = console.warn; console.warn = () => {};
+  try { assert.equal(await sync.loadDepartedRows(async () => { throw new Error('網路'); }, OCT8), null); } finally { console.warn = warn; }
+});
+
+test('#162 關鍵字前面的日期只看同一格：備註只寫「過世」時不會拿隔壁的遛狗日期', () => {
+  const grid = [['籠位', '編號', '犬名', '遛狗日期', '備註'], ['A1', 2020010101, '阿福', '2026/9/30', '過世']];
+  const j = sync.judgeDeparture({ id: '2020010101' }, sync.departedRows(fakeGviz(grid, 1).table, OCT8), OCT8);
+  assert.deepEqual([j.reason, j.date], ['death', null]);
+});
+
+const dog = (id, name, extra = {}) => ({ cage: 'A1', id, name, walkedDate: '2026-09-20', covered: true, myWalked: true, walkers: ['abc123abc123'], note: '親人', sex: 'male', intro: '入所介紹', myWalkedDate: null, ...extra });
+
+test('#162 第一次從快照補：記下第一次不在主清單的那天、最後一次的樣子；不寫志工代號和已出所原文', () => {
+  const snaps = [
+    { date: '2026-09-25', dogs: [dog('2026021301', '雪寶'), dog('2024101903', '仲基'), dog('2026092401', '豆花')], groups: { 仲基: ['松果'] } },
+    { date: '2026-09-27', dogs: [dog('2026021301', '雪寶'), dog('2026092401', '豆花')], groups: {} },
+    { date: '2026-10-01', dogs: [dog('2026092401', '豆花')], groups: {} },
+    { date: '2026-10-08', dogs: [dog('2026092401', '豆花')], groups: {} },
+  ];
+  const text = sync.planDepartures({ snapshots: snaps, rows: sync.departedRows(departedTable(), OCT8), today: OCT8 });
+  const list = sync.parseDepartures(text);
+  assert.deepEqual(list.map(e => [e.name, e.reason, e.date, e.seen]), [
+    ['雪寶', 'adopt', '2026-10-01', '2026-10-01'],
+    ['仲基', 'death', '2026-09-26', '2026-09-27'],
+  ]);
+  assert.deepEqual(list[1].last, { cage: 'A1', id: '2024101903', name: '仲基', walkedDate: '2026-09-20', note: '親人', sex: 'male', intro: '入所介紹', groups: ['松果'] });
+  assert.ok(!text.includes('abc123abc123') && !text.includes('myWalked'));
+  assert.ok(!text.includes('2026/10/1被認養')); // 已出所分頁的原文不進 repo
+  // 再跑一次沒變就不寫
+  assert.equal(sync.planDepartures({ oldText: text, snapshots: snaps.slice(-2), rows: sync.departedRows(departedTable(), OCT8), today: OCT8 }), null);
+});
+
+test('#162 之後的同步：新消失的記今天；又回到主清單的刪掉；再入所標新編號；志工後來補原因會改過來', () => {
+  const old = sync.renderDepartures([
+    { id: '2026092401', name: '豆花', date: '2026-10-02', dateSource: 'seen', seen: '2026-10-02', reason: 'unknown', matched: '', flags: [], last: { id: '2026092401', name: '豆花' } },
+    { id: '2020010101', name: '誤刪', date: '2026-10-07', dateSource: 'seen', seen: '2026-10-07', reason: 'unknown', matched: '', flags: [], last: { id: '2020010101', name: '誤刪' } },
+  ]);
+  const grid = DEPARTED.map(r => [...r]);
+  grid[6][5] = '外宿後原主領回';
+  const prev = [dog('2020010101', '誤刪'), dog('2024101904', '多多'), dog('2020050501', '小白')];
+  const now = [dog('2020010101', '誤刪'), dog('2026100801', '小白', { formerIds: ['2026092401'] })];
+  const list = sync.parseDepartures(sync.planDepartures({
+    oldText: old, rows: sync.departedRows(fakeGviz(grid, 2).table, OCT8), today: OCT8,
+    snapshots: [{ date: '2026-10-08', dogs: prev, groups: {} }, { date: '2026-10-08', dogs: now, groups: {} }],
+  }));
+  const by = Object.fromEntries(list.map(e => [e.id, e]));
+  assert.equal(by['2020010101'], undefined);
+  assert.deepEqual([by['2026092401'].reason, by['2026092401'].matched, by['2026092401'].returned], ['other', '原主領回', '2026100801']);
+  assert.deepEqual([by['2024101904'].seen, by['2024101904'].flags], ['2026-10-08', ['duplicate']]);
+  assert.deepEqual([by['2020050501'].reason, by['2020050501'].flags], ['unknown', ['not-in-sheet']]);
+});
+
+test('#162 讀不到已出所分頁：原因沿用上一次；那一列後來不見也不丟掉已判出的原因', () => {
+  const old = sync.renderDepartures([{ id: '2024101903', name: '仲基', date: '2026-09-26', dateSource: 'sheet', seen: '2026-09-27', reason: 'death', matched: '過世', flags: [], last: { id: '2024101903', name: '仲基' } }]);
+  const snaps = [{ date: '2026-10-08', dogs: [], groups: {} }, { date: '2026-10-08', dogs: [], groups: {} }];
+  assert.equal(sync.planDepartures({ oldText: old, snapshots: snaps, rows: null, today: OCT8 }), null);
+  assert.equal(sync.planDepartures({ oldText: old, snapshots: snaps, rows: [], today: OCT8 }), null);
+});
+
+test('#162 workflow 提交時加入 departures.json；同步程式不寫入試算表', async () => {
+  const wf = await readFile(new URL('../.github/workflows/sync-sheet.yml', import.meta.url), 'utf8');
+  assert.match(wf, /git add [^\n]*data\/departures\.json/);
+  const src = await readFile(new URL('./sync-sheet.mjs', import.meta.url), 'utf8');
+  assert.ok(!/method:\s*['"]POST/.test(src));
+});
