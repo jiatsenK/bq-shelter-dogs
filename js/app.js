@@ -169,7 +169,7 @@ async function loadMyWalks() {
   // 不在「我溜過」就只更新分類上的數字（#91）：整頁重畫會把第一屏正在載入的照片換掉
   const n = document.querySelector('#tabs [data-tab="mine"] .n');
   if (activeTab !== 'mine' && !analysisOpen && n) {
-    const count = myWalksCount(searchQuery.trim());
+    const count = myWalksCount('');
     n.textContent = count == null ? '' : count;
   } else {
     render();
@@ -219,11 +219,23 @@ function walkerSetupHtml() {
   const edit = walkerSetup || { text: '', phase: 'edit', error: '' };
   const busy = edit.phase === 'saving';
   const has = loadMyCodes().length > 0;
+  // 清除前確認一次（2026-10-08 介面評估第二輪：一按就清掉名字和代號，按錯就不能按溜了）
+  if (edit.confirmClear) {
+    return `<div class="who-box">
+      <h3>${icon('alert')}確定清除？</h3>
+      <p>清除後要重新輸入名字，才能按「溜了」寫進試算表。</p>
+      <div class="my-note-actions">
+        <button type="button" class="who-clear-ok" id="whoClearOk">清除</button>
+        <button type="button" class="photo-cancel" id="whoClearNo">不要清除</button>
+      </div>
+    </div>`;
+  }
   return `<form class="who-box" id="whoForm" autocomplete="off">
     <h3>${icon('paw')}你是誰？</h3>
-    <p>輸入你在溜狗表「誰遛的」欄寫的名字。有好幾種寫法的話可以用頓號隔開。</p>
+    <p>輸入你在試算表「誰遛的」欄寫的名字。有好幾種寫法的話可以用頓號隔開。</p>
+    ${obNamesHtml(edit, busy, 'who')}
     <input type="text" id="whoInput" maxlength="60" placeholder="例：小明" aria-label="你在試算表寫的名字" value="${esc(edit.text)}"${busy ? ' disabled' : ''}>
-    <p class="who-note">名字和換出來的代號只記在這支手機；按「溜了」時會用第一個名字寫進試算表「誰遛的」，網站上其他人看不到。換手機或換瀏覽器要重新設定。</p>
+    <p class="who-note">按「溜了」時會用第一個名字寫進試算表「誰遛的」。名字設定存在這支手機，換手機或換瀏覽器要重新設定。</p>
     ${edit.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(edit.error)}</span></div>` : ''}
     <div class="my-note-actions">
       <button type="submit" class="my-note-save" id="whoSave"${busy ? ' disabled' : ''}>${busy ? '設定中…' : '設定'}</button>
@@ -249,7 +261,7 @@ async function saveWalkerSetup() {
 // 名字送 Worker 換代號，成功就記在這支手機；失敗回傳原因（開頭畫面和我溜過的「修改」共用）
 async function setWalkerName(raw) {
   const text = String(raw || '').trim();
-  if (!text) return '請輸入你在溜狗表上寫的名字';
+  if (!text) return '請輸入你在試算表上寫的名字';
   if (!UPLOAD_URL) return '暫時不能設定，網站這邊還沒準備好';
   let out = null;
   try {
@@ -753,7 +765,52 @@ function recordWalked(dogs, on, today = new Date()) {
 
 // 按「溜了」、一起記、移回：記下後重畫，底部跳提示條，可以按「復原」。
 // #138：溜了同時寫進試算表；復原、放回就把試算表改回原本的樣子
+// 2026-10-08 K（介面評估）：會寫試算表時，溜了要等試算表回應才變「已溜」，等的時候按鈕寫「登記中」；
+// 沒寫進去就不記，提示條給「再試一次」。不寫試算表（還沒設定名字、Worker 沒設定）照舊直接記在手機
 function setWalked(dogs, on) {
+  if (on && sheetWillWrite()) walkThenRecord(dogs);
+  else setWalkedLocal(dogs, on);
+}
+function sheetWillWrite() {
+  return !!UPLOAD_URL && sheetWriteState !== 'off' && !!loadWalkerName();
+}
+const walkPending = new Set(); // 按了溜了、還在等試算表回應的狗（walkKey）
+function walkPendingNow(dog) {
+  const key = walkKey(dog);
+  return !!key && walkPending.has(key);
+}
+function walkThenRecord(dogs) {
+  const todo = dogs.filter((d, i) => d && walkKey(d) && !walkedNow(d) && !walkPendingNow(d) && dogs.indexOf(d) === i);
+  if (!todo.length) return;
+  todo.forEach(d => walkPending.add(walkKey(d)));
+  pickedBuddies.clear();
+  hideToast();
+  render();
+  renderDetail();
+  sheetQueue = queueSheetWrite(todo, true).then(ok => {
+    todo.forEach(d => walkPending.delete(walkKey(d)));
+    if (ok === null) { setWalkedLocal(todo, true); return; } // 試算表那邊沒設定，照舊只記在手機
+    const done = todo.filter(d => walkedNow(d));
+    render();
+    renderDetail();
+    if (!done.length) {
+      // 網路不通、試算表回錯誤：sheetWrite 已經跳了原因，這裡補「再試一次」；試算表找不到的狗再試也一樣，不補
+      if (ok === false && sheetWriteFail !== 'missed') showToast(`${sheetWriteFailText}，還沒記成已溜`, null, { label: '再試一次', fn: () => setWalked(todo, true) });
+      return;
+    }
+    if (!ok) return; // 一部分沒寫進去：sheetWrite 的提示說了是哪幾隻，不蓋掉
+    const text = `${done.map(d => d.name).join('、')} 今天溜了`;
+    const undoFn = () => {
+      recordWalked(done, false);
+      clearWalkWith(done);
+      render();
+      renderDetail();
+      queueSheetWrite(done, false);
+    };
+    showToast(`${text}，已寫進試算表`, undoFn, { label: '＋一起溜的人', fn: () => openWithSheet(done) });
+  }).catch(e => console.error(e));
+}
+function setWalkedLocal(dogs, on) {
   const { changed, undo } = recordWalked(dogs, on);
   if (!changed.length) return;
   pickedBuddies.clear();
@@ -802,10 +859,31 @@ let sheetQueue = Promise.resolve();
 // 只在畫面上顯示。{ 狗的 key: '嘉文+俐葶+岑' }；拿不到就不顯示名字，其他照常
 let walkerNames = {};
 let walkerNameList = []; // 表上出現過的名字（開頭畫面讓志工點選自己，#141）
+// 介面評估第三輪（K 2026-10-08）：沒網路時要告訴志工，不然溜狗人只有「—」、頁首照樣寫資料更新時間。
+// 手機說離線，或拿溜狗人名字時連不上（不是 Worker 回錯誤），就當作沒網路
+let walkerNamesOffline = false;
+function isOffline() {
+  return walkerNamesOffline || (typeof navigator !== 'undefined' && navigator.onLine === false);
+}
+function setWalkerNamesOffline(on) {
+  if (walkerNamesOffline === on) return;
+  walkerNamesOffline = on;
+  renderUpdatedLabel();
+  render();
+  renderDetail();
+}
 async function loadWalkerNames() {
   if (!UPLOAD_URL) return;
+  let res;
   try {
-    const res = await fetch(`${UPLOAD_URL}/walkers`, { cache: 'no-cache' });
+    res = await fetch(`${UPLOAD_URL}/walkers`, { cache: 'no-cache' });
+  } catch (e) {
+    console.error(e);
+    setWalkerNamesOffline(true);
+    return;
+  }
+  setWalkerNamesOffline(false);
+  try {
     if (!res.ok) return;
     const out = await res.json();
     if (out && out.walkers && typeof out.walkers === 'object') {
@@ -993,9 +1071,12 @@ function queueSheetWrite(dogs, on, toastText, toastUndo, walker, expected) {
       if (g) g.dogs.push(d); else groups.push({ w, dogs: [d] });
     }
   } else groups.push({ w: walker, dogs });
-  let result = true;
+  // true：都寫進去了；false：有沒寫進去的；null：沒送（還沒設定名字、Worker 沒設定）
+  let result = null;
   for (const g of groups) {
-    sheetQueue = sheetQueue.then(() => sheetWrite(g.dogs, on, toastText, toastUndo, g.w, expected)).then(ok => { if (ok !== true) result = false; }).catch(e => console.error(e));
+    sheetQueue = sheetQueue.then(() => sheetWrite(g.dogs, on, toastText, toastUndo, g.w, expected))
+      .then(ok => { if (ok === false) result = false; else if (ok === true && result === null) result = true; })
+      .catch(e => { console.error(e); result = false; });
   }
   return sheetQueue.then(() => result);
 }
@@ -1014,35 +1095,44 @@ function addToToast(text, undo, extra) {
 }
 
 // walker：加「一起溜的人」時傳那幾個名字（試算表那格已經有今天的名字，小程式會用「、」接在後面）
+// 回傳 true：寫進去了；false：沒寫進去（原因在 sheetWriteFail／sheetWriteFailText，也已跳提示）；null：沒送
+let sheetWriteFail = '';     // network／error／missed
+let sheetWriteFailText = '';
 async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expected = undefined) {
-  if (!UPLOAD_URL || sheetWriteState === 'off') return;
+  if (!UPLOAD_URL || sheetWriteState === 'off') return null;
   const today = new Date();
   const withKey = dogs.map(d => ({ d, key: walkKey(d) })).filter(x => x.key);
   let payload;
   if (on) {
     const who = walker || loadWalkerName();
-    if (!who) return; // 還沒在「我溜過」設定名字（提醒放在我溜過頁）
+    if (!who) return null; // 還沒在「我溜過」設定名字（提醒放在我溜過頁）
     payload = { action: expected === undefined ? 'walk' : 'edit', walker: who, dogs: withKey.map(({ d, key }) => ({ id: d.id || '', name: d.name, ...(expected === undefined ? {} : { expected }) })) };
   } else {
     const items = loadSheetWrites(today);
     const list = withKey.filter(x => items[x.key] && items[x.key].prev && items[x.key].wrote).map(x => items[x.key]);
-    if (!list.length) return;
+    if (!list.length) return null;
     payload = { action: 'undo', dogs: list.map(x => ({ id: x.id, name: x.name, prev: x.prev, wrote: x.wrote })) };
   }
-  if (!payload.dogs.length) return;
+  if (!payload.dogs.length) return null;
   let res = null, out = null;
   try {
     res = await fetch(`${UPLOAD_URL}/walk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     out = await res.json().catch(() => null);
   } catch (e) {
-    showToast(on ? '沒寫進試算表（網路不通），請自己到試算表填' : '試算表沒改回來（網路不通），請自己到試算表改');
-    return;
+    // 一般的溜了要等試算表回應才記（walkThenRecord 會補「還沒記成已溜」），改溜狗人、復原則是請志工自己去改
+    const plain = on && expected === undefined;
+    sheetWriteFail = 'network';
+    sheetWriteFailText = on ? '沒寫進試算表（網路不通）' : '試算表沒改回來（網路不通）';
+    showToast(plain ? `${sheetWriteFailText}，還沒記成已溜` : `${sheetWriteFailText}，請自己到試算表${on ? '填' : '改'}`);
+    return false;
   }
-  if (res.status === 503 && out && out.code === 'off') { sheetWriteState = 'off'; return; }
+  if (res.status === 503 && out && out.code === 'off') { sheetWriteState = 'off'; return null; }
   if (!res.ok || !out || !out.ok) {
     const why = (out && out.error) || `HTTP ${res.status}`;
-    showToast(on ? `沒寫進試算表：${why}` : `試算表沒改回來：${why}`);
-    return;
+    sheetWriteFail = 'error';
+    sheetWriteFailText = on ? `沒寫進試算表：${why}` : `試算表沒改回來：${why}`;
+    showToast(sheetWriteFailText);
+    return false;
   }
   sheetWriteState = 'on';
   const items = loadSheetWrites(today);
@@ -1085,6 +1175,7 @@ async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expecte
   saveWalkedIds(ids, today);
   render(); renderDetail();
   if (missed.length) {
+    sheetWriteFail = 'missed';
     const statuses = (out.results || []).map(r => r.status);
     showToast(statuses.includes('badAction') ? '請先更新 Google Apps Script，再使用修改溜狗人。' : statuses.includes('changed') ? `${missed.join('、')} 在試算表已經被改過，沒有蓋掉別人的，畫面已換成最新名單` : `試算表找不到 ${missed.join('、')}，請自己填`);
   } else if (on && toastText) {
@@ -1129,6 +1220,8 @@ function showToast(text, undo, extra) {
       hideToast();
       if (fn) fn();
     });
+    // 介面評估第三輪：提示條會蓋住下面那張狗卡，點文字就收起
+    el.querySelector('.toast-text').addEventListener('click', hideToast);
     el.querySelector('.toast-undo').addEventListener('click', () => {
       const fn = toastUndo;
       hideToast();
@@ -1144,6 +1237,7 @@ function showToast(text, undo, extra) {
   ex.hidden = !extra;
   ex.textContent = extra ? extra.label : '';
   el.hidden = false;
+  document.body.classList.add('toast-on');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(hideToast, 5000);
 }
@@ -1154,12 +1248,14 @@ function hideToast() {
   toastExtra = null;
   const el = document.getElementById('toast');
   if (el) el.hidden = true;
+  document.body.classList.remove('toast-on');
 }
 
 // 狗卡右側的「已遛」（溜狗表）／「移回」（今天已溜）按鈕；連犬名都沒有的狗記不了，照舊顯示箭頭
 // V9（#141）拿掉今天已溜：按過的狗留在原地，按鈕變成「已溜」，再按一次復原
 function walkButton(dog) {
   if (!walkKey(dog)) return `<span class="more">${icon('chevron')}</span>`;
+  if (walkPendingNow(dog)) return `<button type="button" class="walk-btn pending" disabled aria-label="${esc(dog.name)} 正在寫進試算表">登記中</button>`;
   return walkedNow(dog)
     ? `<button type="button" class="walk-btn done" data-walk="back" aria-label="${esc(dog.name)} 今天已溜，按一下取消">${icon('tick')}已溜</button>`
     : `<button type="button" class="walk-btn" data-walk="add" aria-label="${esc(dog.name)} 溜了">溜了</button>`;
@@ -1212,6 +1308,7 @@ function detailHtml(dog, today) {
         <div class="name-row"><div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div>${favButtonHtml(dog)}</div>
         <div class="chips">${statusBadge(dog, today)}${detailChips(dog)}</div>
         ${metaLine(dog)}
+        ${flag ? warnNote(dog.note, flag) : ''}
       </div>
     </div>
     ${lastWalkSection(dog, today)}
@@ -1219,8 +1316,7 @@ function detailHtml(dog, today) {
     <section class="detail-section" data-section="note">
       <h3>${icon('note')}試算表備註</h3>
       ${!dog.note ? `<div class="empty">目前沒有備註</div>`
-        : flag ? warnNote(dog.note, flag)
-        : `<div class="content note-text">${esc(dog.note)}</div>`}
+        : `<div class="content note-text">${flag ? highlightNote(dog.note, flag.terms) : esc(dog.note)}</div>`}
     </section>
     ${cageMatesSection(dog, walked)}
     <section class="detail-section" data-section="group">
@@ -1265,7 +1361,7 @@ function departedDetailHtml(dog, today) {
     <section class="detail-section departed" data-section="departure">
       <h3>${icon('note')}離所紀錄</h3>
       <div class="lw-row"><span class="lw-k">原因</span><span class="lw-v">${esc(DEPARTURE_LABELS[dep.reason])}</span></div>
-      <div class="lw-row"><span class="lw-k">日期</span><span class="lw-v">${esc(ymdText(dep.date))}${dep.dateSource === 'seen' ? '<small>（從主清單消失的那天）</small>' : ''}</span></div>
+      <div class="lw-row"><span class="lw-k">日期</span><span class="lw-v">${esc(ymdText(dep.date))}${dep.dateSource === 'seen' ? '<small>（從試算表消失的那天）</small>' : ''}</span></div>
       <div class="lw-row"><span class="lw-k">依據</span><span class="lw-v">${esc(departureBasis(dep))}</span></div>
       <div class="lw-row"><span class="lw-k">最後籠位</span><span class="lw-v">${esc(dog.cage || '—')}</span></div>
       ${back ? `<button type="button" class="detail-back" data-departed-back="${allDogs.indexOf(back)}">${icon('paw')}已再入所，看現在的 ${esc(back.name)}</button>` : ''}
@@ -1345,7 +1441,7 @@ function walkerUndoable(dog, who, today = new Date()) {
     && !!(item && item.mine && item.prev && item.wrote && item.current && item.current.walker === item.wrote.walker);
 }
 function walkerChipsHtml(dog, who, today) {
-  if (!who.length) return '<span class="lw-none">—</span>';
+  if (!who.length) return isOffline() ? '<span class="lw-none">讀不到（沒網路）</span>' : '<span class="lw-none">—</span>';
   if (!walkerEditBase(dog, today)) return who.map(n => `<span class="who-chip">${esc(n)}</span>`).join('');
   const busy = walkerEditBusy === walkKey(dog);
   const dis = busy ? ' disabled' : '';
@@ -1416,7 +1512,7 @@ function galleryDeleteForm(del) {
       <div class="lightbox-del-q">從相簿刪掉這張照片？</div>
       ${del.needPass ? `
         <input type="text" name="username" autocomplete="username" value="板收志工溜狗表" hidden readonly>
-        <input type="password" id="galleryDeletePass" name="password" autocomplete="current-password" placeholder="通關碼（同我的備註）" aria-label="通關碼" value="${esc(del.pass)}"${busy ? ' disabled' : ''}>` : ''}
+        <input type="password" id="galleryDeletePass" name="password" autocomplete="current-password" placeholder="通關碼" aria-label="通關碼" value="${esc(del.pass)}"${busy ? ' disabled' : ''}>` : ''}
       ${del.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(del.error)}</span></div>` : ''}
       <div class="lightbox-del-actions">
         <button type="submit" class="lightbox-del-yes" id="galleryDeleteYes"${busy ? ' disabled' : ''}>${busy ? '刪除中…' : '刪除'}</button>
@@ -1626,6 +1722,7 @@ function cageMatesSection(dog, walked) {
 // 「可以一起溜」下方的按鈕：把目前這隻連同勾選的狗一次記進今天已溜。
 // 目前這隻已溜又沒勾選時，就顯示目前這隻今天已溜，不放按鈕
 function groupWalkButton(dog, walked) {
+  if (walkPendingNow(dog)) return `<button type="button" class="group-walk" id="groupWalk" disabled>登記中</button>`;
   const self = !!walkKey(dog) && !walked.has(dog);
   const n = [...pickedBuddies].length;
   if (!self && !n) {
@@ -2033,7 +2130,7 @@ async function uploadPhoto() {
       body: up.blob,
     });
     const out = await res.json().catch(() => null);
-    if (!res.ok || !out || !out.ok) error = (out && out.error) || `上傳失敗（${res.status}），原本的照片不受影響`;
+    if (!res.ok || !out || !out.ok) error = (out && out.error) || `網站暫時收不到照片（${res.status}），請稍後再試；原本的照片不受影響`;
   } catch (e) {
     error = '上傳失敗，請確認網路後再試；原本的照片不受影響';
   }
@@ -2047,6 +2144,7 @@ async function uploadPhoto() {
     up.phase = 'error';
     up.error = error;
     renderDetail();
+    showPhotoError();
     return;
   }
   up.phase = 'done';
@@ -2055,6 +2153,12 @@ async function uploadPhoto() {
   render();
   renderDetail();
   showToast(`${up.dog.name} 的照片已更新（其他志工重新整理就會看到）`);
+}
+
+// 介面評估第三輪（K 2026-10-08）：上傳失敗的說明可能在底部按鈕列後面，捲到看得到的地方
+function showPhotoError() {
+  const el = document.querySelector('#detail .photo-error') || document.querySelector('.photo-error');
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' });
 }
 
 // ── 相簿一次加好幾張：選照片 → 每張壓成 JPEG、排成預覽格（可拿掉幾張）→ 「上傳 N 張」一張一張依序送 ──
@@ -2169,7 +2273,7 @@ async function uploadGalleryBatch() {
       });
       status = res.status;
       out = await res.json().catch(() => null);
-      if (!res.ok || !out || !out.ok) error = (out && out.error) || `上傳失敗（${res.status}）`;
+      if (!res.ok || !out || !out.ok) error = (out && out.error) || `網站暫時收不到照片（${res.status}），請稍後再試`;
       else if (!(out.photo && typeof out.photo.file === 'string')) error = '上傳服務回應不對，請重新整理後再看看';
     } catch (e) {
       error = '上傳失敗，請確認網路後再試';
@@ -2195,7 +2299,7 @@ async function uploadGalleryBatch() {
     return;
   }
   batch.phase = 'error';
-  if (shown()) { renderDetail(); return; }
+  if (shown()) { renderDetail(); showPhotoError(); return; }
   // 上傳途中關掉或換看別隻：用提示條告訴結果，沒傳成的丟掉
   const error = (batch.items.find(it => it.state === 'error') || {}).error;
   clearGalleryBatch();
@@ -2411,13 +2515,10 @@ function cardFromEvent(e) {
 }
 // 點「已遛／移回」只記錄，不開詳細資訊；點照片開燈箱（#46，沒照片就照舊開詳細資訊）；點卡片其他地方開詳細資訊
 document.getElementById('main').addEventListener('click', e => {
-  const filterBtn = e.target.closest('[data-walk-filter]');
-  if (filterBtn) { const v = filterBtn.dataset.walkFilter; saveWalkFilter(v === 'none' ? 'none' : Number(v)); render(); return; }
-  if (e.target.closest('[data-walk-fav]')) { saveWalkFav(!loadWalkFav()); render(); return; }
+  const favBtn = e.target.closest('[data-walk-fav]');
+  if (favBtn) { saveWalkFav(favBtn.dataset.walkFav === '1'); render(); return; }
   const viewBtn = e.target.closest('[data-walk-view]');
   if (viewBtn) { saveWalkView(viewBtn.dataset.walkView); render(); return; }
-  const sortBtn = e.target.closest('[data-walk-sort]');
-  if (sortBtn) { saveWalkSort(sortBtn.dataset.walkSort); render(); return; }
   const dog = cardFromEvent(e);
   if (!dog) return;
   const btn = e.target.closest('[data-walk]');
@@ -2457,7 +2558,8 @@ function buildTabs(counts) {
   const tabsEl = document.getElementById('tabs');
   tabsEl.innerHTML = TABS.map(t => {
     const n = counts[t.id] != null ? counts[t.id] : t.note || '';
-    return `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}"${activeTab === t.id ? ' aria-current="page"' : ''}>${icon(t.icon)}<span class="t">${t.label}</span><span class="n">${n}</span></button>`;
+    const label = n === '' ? '' : ` aria-label="${t.label}，${t.id === 'mine' ? `${n} 筆紀錄` : `${n} 隻`}"`;
+    return `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}"${activeTab === t.id ? ' aria-current="page"' : ''}${label}>${icon(t.icon)}<span class="t">${t.label}</span><span class="n">${n}</span></button>`;
   }).join('');
   tabsEl.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
@@ -2469,6 +2571,7 @@ function switchTab(id) {
   if (!TABS.some(t => t.id === id)) return;
   const changed = id !== activeTab;
   activeTab = id;
+  if (changed) resetWalkOrder(); // 換分頁回來溜狗表時重排，剛溜的狗才會排到後面
   render();
   const btn = document.querySelector(`#tabs button[data-tab="${id}"]`);
   if (btn && btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -2541,73 +2644,26 @@ function dueDogs(dogs, today) {
     .map(x => x.d);
 }
 
-// 溜狗表排序（2026-10-04 K：要可以改排序；之後 K：一個時間順序的按鈕就好，籠位、狗名不用）：
-// 一顆按鈕在「最久沒溜」（預設）和「最近溜」（時間倒過來）之間切換。選了哪個記在這支手機（跟今天已溜同一個 localStorage）
-const WALK_SORT_KEY = 'bq-walk-sort';
-const WALK_SORTS = [
-  { id: 'due', label: '最久沒溜在前' },
-  { id: 'recent', label: '最近溜在前' },
-];
-let walkSortMemory = 'due';
-function loadWalkSort() {
-  let v = walkSortMemory;
-  try {
-    if (walkedStorage) v = walkedStorage.getItem(WALK_SORT_KEY);
-  } catch (e) { /* 讀不到就用記憶體裡的 */ }
-  return WALK_SORTS.some(s => s.id === v) ? v : 'due';
-}
-function saveWalkSort(id) {
-  walkSortMemory = id;
-  try {
-    if (walkedStorage) walkedStorage.setItem(WALK_SORT_KEY, id);
-  } catch (e) { /* 存不了就這次開著網頁的期間記得 */ }
-}
-function sortWalkList(dogs, today, sort = loadWalkSort()) {
+// 溜狗表一律最久沒溜在前（2026-10-08 K 同意介面評估：拿掉排序切換和「幾天以上」篩選，天數的顏色就看得出來）。
+// 按了溜了的狗留在原地（介面評估 P0：重排的話下一隻會滑到手指下，容易按錯寫進試算表）：
+// 第一次排好的順序記著，重新讀資料（allDogs 換了）或換分頁才重排
+let walkOrder = null;   // walkKey → 第幾個
+let walkOrderFor = null; // 記順序時的 allDogs
+function sortWalkList(dogs, today) {
   const due = dueDogs(dogs, today);
-  if (sort !== 'recent') return due;
-  // 最近溜：有日期的照最近溜在前；有人固定照顧、沒有紀錄的放最後（不是剛溜過）
-  const dated = due.filter(d => computeStatus(d, today).kind === 'dated');
-  return [...dated.reverse(), ...due.filter(d => computeStatus(d, today).kind !== 'dated')];
+  if (!walkOrder || walkOrderFor !== allDogs) {
+    walkOrder = new Map(due.map((d, i) => [walkKey(d) || d, i]));
+    walkOrderFor = allDogs;
+    return due;
+  }
+  const pos = d => { const p = walkOrder.get(walkKey(d) || d); return p === undefined ? Infinity : p; };
+  return due.map((d, i) => ({ d, i, p: pos(d) })).sort((a, b) => a.p - b.p || a.i - b.i).map(x => x.d);
 }
-// 按一下換另一種；箭頭表示目前的方向
-function walkSortHtml(sort = loadWalkSort()) {
-  const now = WALK_SORTS.find(s => s.id === sort);
-  const next = WALK_SORTS.find(s => s.id !== sort);
-  return `<div class="walk-sort"><button type="button" class="walk-sort-btn" id="walkSort" data-walk-sort="${next.id}" aria-label="排序：${now.label}，按一下改成${next.label}">${icon('sort')}${now.label}</button></div>`;
+function resetWalkOrder() {
+  walkOrder = null;
 }
 
-// V9（#141 第 4 項）：溜狗表上面不再放三格，改成「幾天以上沒溜」篩選。
-// 選項照目前的資料生出來：只列有狗、而且跟上一個選項隻數不同的天數（不會出現一排一樣的數字）
-const WALK_FILTER_KEY = 'bq-walk-filter';
-const WALK_FILTER_DAYS = [7, 3, 2];
-let walkFilterMemory = 0;
-function loadWalkFilter() {
-  let v = walkFilterMemory;
-  try {
-    if (walkedStorage) { const raw = walkedStorage.getItem(WALK_FILTER_KEY); if (raw != null) v = raw; }
-  } catch (e) { /* 讀不到就用記憶體裡的 */ }
-  return v === 'none' ? 'none' : (WALK_FILTER_DAYS.includes(Number(v)) ? Number(v) : 0);
-}
-function saveWalkFilter(v) {
-  walkFilterMemory = v;
-  try {
-    if (walkedStorage) walkedStorage.setItem(WALK_FILTER_KEY, String(v));
-  } catch (e) { /* 存不了就這次開著網頁的期間記得 */ }
-}
-// 0：全部；N：N 天以上沒溜（含沒有紀錄的）；'none'：沒有紀錄
-function passesWalkFilter(dog, today, f) {
-  if (!f) return true;
-  const s = computeStatus(dog, today);
-  if (f === 'none') return s.kind === 'unknown';
-  return s.kind === 'unknown' || (s.kind === 'dated' && s.days >= f);
-}
-function walkFilterOptions(list, today) {
-  const opts = WALK_FILTER_DAYS.map(days => ({ v: days, label: `${days} 天以上`, n: list.filter(d => passesWalkFilter(d, today, days)).length }));
-  const none = list.filter(d => passesWalkFilter(d, today, 'none')).length;
-  if (none) opts.push({ v: 'none', label: '沒有紀錄', n: none });
-  return opts;
-}
-// 我的常溜（#155，K 2026-10-04 選兩頁都放）：溜狗表的「★ 我的常溜」跟天數篩選可以一起用（例：常溜裡 7 天以上沒溜的）
+// 我的常溜（#155，K 2026-10-04 選兩頁都放）：溜狗表上面只剩「全部／★ 我的常溜」兩個選一個（2026-10-08）
 const WALK_FAV_KEY = 'bq-walk-fav';
 let walkFavMemory = false;
 function loadWalkFav() {
@@ -2619,13 +2675,9 @@ function saveWalkFav(on) {
   writeJsonKey(WALK_FAV_KEY, on);
 }
 
-function walkFilterHtml(list, today, f, fav = false, favN = 0) {
-  const opts = walkFilterOptions(list, today);
-  // 選的天數這次資料裡沒有了（例：大家都溜過了），照樣留著那顆，才按得掉
-  if (f && !opts.some(o => o.v === f)) opts.unshift({ v: f, label: f === 'none' ? '沒有紀錄' : `${f} 天以上`, n: list.filter(d => passesWalkFilter(d, today, f)).length });
-  const chip = o => `<button type="button" class="chip${o.v === f ? ' on' : ''}" data-walk-filter="${o.v}" aria-pressed="${o.v === f}">${o.label}<small>${o.n}</small></button>`;
-  const favChip = `<button type="button" class="chip fav-chip${fav ? ' on' : ''}" data-walk-fav aria-pressed="${fav}">★ 我的常溜<small>${favN}</small></button>`;
-  return `<div class="chips" role="group" aria-label="篩選：我的常溜、幾天以上沒溜">${favChip}${chip({ v: 0, label: '全部', n: list.length })}${opts.map(chip).join('')}</div>`;
+function walkFilterHtml(total, fav, favN) {
+  const chip = (on, v, label, n) => `<button type="button" class="chip${on ? ' on' : ''}" data-walk-fav="${v}" aria-pressed="${on}">${label}<small>${n}</small></button>`;
+  return `<div class="chips" role="group" aria-label="要看哪些狗">${chip(!fav, 0, '全部', total)}${chip(fav, 1, '★ 我的常溜', favN)}</div>`;
 }
 
 // V9（#141 第 6 項）：照片模式／列表模式（收起照片，像試算表一列一隻）。選了哪個記在這支手機
@@ -2644,8 +2696,8 @@ function saveWalkView(v) {
     if (walkedStorage) walkedStorage.setItem(WALK_VIEW_KEY, v);
   } catch (e) { /* 存不了就這次開著網頁的期間記得 */ }
 }
-function walkToolsHtml(view = loadWalkView()) {
-  return `<div class="walk-tools">${walkSortHtml()}
+function walkToolsHtml(chips, view = loadWalkView()) {
+  return `<div class="walk-tools">${chips}
     <div class="seg" role="group" aria-label="顯示方式">
       <button type="button" data-walk-view="photo" class="${view === 'photo' ? 'on' : ''}" aria-pressed="${view === 'photo'}" aria-label="照片">${icon('photos')}</button>
       <button type="button" data-walk-view="list" class="${view === 'list' ? 'on' : ''}" aria-pressed="${view === 'list'}" aria-label="列表（收起照片）">${icon('list')}</button>
@@ -2702,9 +2754,9 @@ function renderMain() {
   const hit = d => matchesSearch(d, q);
   // V9（#141）：沒有今天已溜和收起了，全部的狗都在溜狗表；按過溜了的留在原地、顯示今天
   const walkList = sortWalkList(allDogs, today).filter(hit);
-  const mineCount = myWalksCount(q);
-  // 找狗只要隻數，不用排序（每次重畫都排一百多隻很慢）
-  buildTabs({ walk: walkList.length, mine: mineCount, find: allDogs.filter(d => findMatches(d, q)).length });
+  // 介面評估第三輪（K 2026-10-08）：找狗分頁不放數字（跟溜狗表一樣是全部的狗）；
+  // 我溜過一律是全部紀錄筆數，不跟著搜尋變（搜不到時「我溜過 0」像紀錄不見了）
+  buildTabs({ walk: walkList.length, mine: myWalksCount('') });
   searchInput.placeholder = activeTab === 'find' ? '狗名、編號或籠位' : '搜尋狗名';
   if (activeTab === 'find') {
     // 找狗（#99）搜尋全部的狗：犬名、編號、籠位都算
@@ -2715,16 +2767,14 @@ function renderMain() {
     main.innerHTML = myWalksHtml(today, q);
     return;
   }
-  const filter = loadWalkFilter();
   const fav = loadWalkFav();
-  const base = fav ? walkList.filter(isFav) : walkList;
-  const list = base.filter(d => passesWalkFilter(d, today, filter));
+  const list = fav ? walkList.filter(isFav) : walkList;
   const view = loadWalkView();
   const items = view === 'list'
     ? (list.length ? `<div class="rows"><div class="row-head"><span>籠位</span><span>狗名</span><span>日期</span><span>溜狗人</span><span>登記</span></div>${list.map(d => walkRow(d, today)).join('')}</div>` : '')
     : list.map((d, i) => dogCard(d, today, i < FIRST_SCREEN_CARDS)).join('');
-  const head = walkFilterHtml(base, today, filter, fav, walkList.filter(isFav).length) + walkToolsHtml(view);
-  const empty = fav && !base.length && !q ? '還沒有常溜的狗。<br>點狗打開詳細資訊，<br>按名字旁的「☆ 常溜」加進來。'
+  const head = walkToolsHtml(walkFilterHtml(walkList.length, fav, walkList.filter(isFav).length), view);
+  const empty = fav && !list.length && !q ? '還沒有常溜的狗。<br>點狗打開詳細資訊，<br>按名字旁的「☆ 常溜」加進來。'
     : q ? `找不到「${esc(q)}」` : '沒有符合的狗';
   main.innerHTML = head + (q && list.length ? `<div class="section-hint">${icon('search')}搜尋「${esc(q)}」：${list.length} 隻</div>` : '')
     + (items || `<div class="status-msg">${empty}</div>`);
@@ -2736,8 +2786,13 @@ mainEl.addEventListener('click', e => {
   if (tile) showDetail(allDogs[tile.dataset.mineDog]);
   else if (e.target.closest('#mineRetry')) loadMyWalks();
   else if (e.target.closest('#mineStats')) { mineStatsOpen = !mineStatsOpen; render(); }
-  else if (e.target.closest('#whoEdit')) {
-    walkerSetup = { text: '', phase: 'edit', error: '' };
+  else if (e.target.closest('[data-who-name]')) {
+    const n = e.target.closest('[data-who-name]').dataset.whoName;
+    const list = splitWalkers(walkerSetup ? walkerSetup.text : '');
+    walkerSetup = { ...(walkerSetup || { phase: 'edit', error: '' }), text: (list.includes(n) ? list.filter(x => x !== n) : [...list, n]).join('、') };
+    render();
+  } else if (e.target.closest('#whoEdit')) {
+    walkerSetup = { text: loadWalkerName(), phase: 'edit', error: '' }; // 先填目前的名字，不用重打
     render();
     const input = document.getElementById('whoInput');
     if (input) input.focus();
@@ -2745,6 +2800,12 @@ mainEl.addEventListener('click', e => {
     walkerSetup = null;
     render();
   } else if (e.target.closest('#whoClear')) {
+    walkerSetup = { ...(walkerSetup || { text: '', phase: 'edit', error: '' }), confirmClear: true };
+    render();
+  } else if (e.target.closest('#whoClearNo')) {
+    walkerSetup = { ...walkerSetup, confirmClear: false };
+    render();
+  } else if (e.target.closest('#whoClearOk')) {
     saveMyCodes([]);
     saveWalkerName('');
     walkerSetup = null;
@@ -2797,12 +2858,12 @@ function pad2(n) {
 }
 
 // ── 開頭畫面（#141 第 2 項）──
-// 第一次打開：先輸入你在溜狗表上的名字，才進網站；接著幾頁說明（像新網站上線的導覽），按「開始使用」就不再出現。
+// 第一次打開：先輸入你在試算表上的名字，才進網站；接著幾頁說明（像新網站上線的導覽），按「開始使用」就不再出現。
 // 已經有名字（以前在我溜過設定過）只看說明；說明看過、名字被清掉了，只問名字
 const ONBOARD_KEY = 'bq-onboarded';
 const ONBOARD_SLIDES = [
-  { icon: 'list', title: '溜狗表', text: '最久沒溜的狗排在最上面。上面可以篩「7 天以上沒溜」，右上角可以收起照片、像試算表一樣一列一隻。' },
-  { icon: 'tick', title: '溜完按「溜了」', text: '狗卡右邊按一下「溜了」，日期和你的名字會直接寫進溜狗表，其他志工也看得到。按錯再按一次就取消。' },
+  { icon: 'list', title: '溜狗表', text: '最久沒溜的狗排在最上面，顏色看得出多久沒溜。上面可以只看「★ 我的常溜」，右上角可以收起照片、像試算表一樣一列一隻。' },
+  { icon: 'tick', title: '溜完按「溜了」', text: '狗卡右邊按一下「溜了」，日期和你的名字會直接寫進試算表，其他志工也看得到。按錯再按一次就取消。' },
   { icon: 'map', title: '找狗', text: '看照片認狗，或看平面圖找籠位。點狗卡上的籠位，也會告訴你狗在哪。' },
   { icon: 'paw', title: '我溜過', text: '你溜過的狗都在這裡，一次到所一張卡。' },
 ];
@@ -2821,14 +2882,14 @@ function onboardHtml() {
       <div class="ob-hero">${icon('paw')}</div>
       <h1>板收志工溜狗表</h1>
       <p class="ob-lead">歡迎！先告訴我們你是誰。</p>
-      <label class="ob-label" for="obInput">${walkerNameList.length ? '點選你在溜狗表上的名字' : '你在溜狗表「誰遛的」寫的名字'}</label>
+      <label class="ob-label" for="obInput">${walkerNameList.length ? '點選你在試算表上的名字' : '你在試算表「誰遛的」寫的名字'}</label>
       ${obNamesHtml(o, busy)}
       <input type="text" id="obInput" maxlength="60" placeholder="${walkerNameList.length ? '找不到？自己輸入' : '例：小明'}" value="${esc(o.text)}"${busy ? ' disabled' : ''} enterkeyhint="done">
-      <p class="ob-help">如果沒有你的名字，請自行輸入。</p>
+      ${walkerNameList.length ? '<p class="ob-help">上面沒有你的名字，就在這裡輸入。</p>' : ''}
       ${o.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(o.error)}</span></div>` : ''}
       <div class="ob-foot">
         <button type="submit" class="ob-next"${busy ? ' disabled' : ''}>${busy ? '設定中…' : '下一步'}</button>
-        <p class="ob-small">名字只記在這支手機，用來記你溜過的狗。</p>
+        <p class="ob-small">按「溜了」時，會把這個名字寫進試算表「誰遛的」。</p>
       </div>
     </form>`;
   }
@@ -2847,11 +2908,12 @@ function onboardHtml() {
   </div>`;
 }
 // 開頭畫面的名字按鈕（K 2026-10-04：入口的名字要能從表上已有的人選）：點了就加進輸入框，再點一次拿掉
-function obNamesHtml(o, busy) {
+// 我溜過的「修改」也用同一排（kind 'who'）
+function obNamesHtml(o, busy, kind = 'ob') {
   if (!walkerNameList.length) return '';
   const picked = new Set(splitWalkers(o.text));
   return `<div class="ob-names">${walkerNameList.map(n =>
-    `<button type="button" class="with-name${picked.has(n) ? ' on' : ''}" data-ob-name="${esc(n)}" aria-pressed="${picked.has(n)}"${busy ? ' disabled' : ''}>${picked.has(n) ? icon('tick') : ''}${esc(n)}</button>`).join('')}</div>`;
+    `<button type="button" class="with-name${picked.has(n) ? ' on' : ''}" data-${kind}-name="${esc(n)}" aria-pressed="${picked.has(n)}"${busy ? ' disabled' : ''}>${picked.has(n) ? icon('tick') : ''}${esc(n)}</button>`).join('')}</div>`;
 }
 function renderOnboard() {
   let box = document.getElementById('onboard');
@@ -2933,14 +2995,25 @@ function applyDogsData(data) {
   groupMap = data.groups || {};
   loadWarning = data.groups ? '' : '「可以一起溜」暫時讀不到，其他資訊正常。';
   // 顯示試算表最後同步的時間（不是打開網頁的時間），志工才知道資料有多新
-  const t = data.syncedAt;
-  dataSyncedAt = t;
-  document.getElementById('updatedLabel').textContent = t
-    ? `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${pad2(t.getHours())}:${pad2(t.getMinutes())}` : '';
+  dataSyncedAt = data.syncedAt;
+  renderUpdatedLabel();
   loadState = 'ready';
   render();
   loadMyWalks();
 }
+
+// 頁首的資料時間；沒網路時改寫「沒網路・資料 10/8 09:01」，志工才知道看的是舊資料、溜了寫不進試算表
+function renderUpdatedLabel() {
+  const el = document.getElementById('updatedLabel');
+  if (!el) return;
+  const t = dataSyncedAt;
+  const when = t ? `${t.getMonth() + 1}/${t.getDate()} ${pad2(t.getHours())}:${pad2(t.getMinutes())}` : '';
+  const off = isOffline();
+  el.textContent = off ? (when ? `沒網路・資料 ${when}` : '沒網路') : when ? `資料更新 ${when}` : '';
+  el.classList.toggle('offline', off);
+}
+window.addEventListener('offline', () => { renderUpdatedLabel(); render(); renderDetail(); });
+window.addEventListener('online', () => { renderUpdatedLabel(); render(); renderDetail(); loadWalkerNames(); });
 
 // ── 頁首「更新」按鈕：請 Worker 叫 GitHub 同步試算表，再等網站上的 dogs.json 換新 ──
 // 同步約 1 分鐘、網站重新部署再約 1 分鐘；試算表沒有新東西時 dogs.json 不會變，等滿就告訴志工已經是最新
