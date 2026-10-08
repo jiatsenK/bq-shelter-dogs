@@ -1422,7 +1422,7 @@ html.onboard-open { overflow: hidden; }
 .find-chip small { font-size: 12px; }
 
 /* 我溜過的「統計」「修改」 */
-.who-edit { min-height: 40px; padding: 0 12px; font-size: 14px; }
+.who-edit { min-height: 44px; padding: 0 12px; font-size: 14px; }
 .find-top { display: flex; align-items: center; gap: 8px; }
 .find-top .find-view { flex: 1; min-width: 0; }
 .find-top .find-chip { flex-shrink: 0; min-height: 44px; }
