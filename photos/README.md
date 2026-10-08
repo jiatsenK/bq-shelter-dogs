@@ -1,11 +1,8 @@
-# photos/：狗狗照片
+# photos/：照片不放這裡了
 
-一隻狗一張照片，檔名是 Google 試算表「主清單」的**編號**：`{編號}.jpg`，例如 `202201678.jpg`。
+2026 年 10 月起（#130）狗狗照片（主照片、相簿、縮圖）都存在 Cloudflare R2，網址一樣是 `photos/{編號}.jpg`，
+但檔案不在 repo 裡。換照片、加相簿請在網站的詳細資訊上傳，網站會自動縮小、做縮圖，馬上生效。
 
-- 只接受小寫 `.jpg`（`.JPG`、`.jpeg`、`.png`、`.heic` 網站讀不到）
-- 建議正方形、約 600 × 600 像素，狗在正中間
-- 每張最大 300 KB
-
-完整說明（怎麼縮小照片、在 GitHub 網頁上傳的步驟）見 [`docs/VOLUNTEER_GUIDE.md`](../docs/VOLUNTEER_GUIDE.md)。
-
-> #130 起網站上傳的照片存在 Cloudflare R2，不再寫進這個資料夾；這裡是舊照片，R2 讀不到時網站會用這裡的當備援。搬遷與設定見 [`docs/CLOUDFLARE_SETUP.md`](../docs/CLOUDFLARE_SETUP.md)「照片放 R2」。
+- 舊照片已在 2026-10-04 搬進 R2 並逐張核對（「照片搬到 R2」Action），2026-10-05 K 決定從 repo 刪掉；git 歷史裡還找得到。
+- 設定與管理方式見 [`docs/CLOUDFLARE_SETUP.md`](../docs/CLOUDFLARE_SETUP.md)「照片放 R2」。
+- 這個資料夾如果又放了 `.jpg`，Worker 在 R2 找不到同名照片時還是會讀它（備援），但請不要這樣用。

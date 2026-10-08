@@ -23,7 +23,7 @@ data/history/     ← 每天一份 dogs.json 快照 YYYY-MM-DD.json（同步時�
 data/walks.json   ← 累積的遛狗紀錄 {編號, 犬名, 日期, 是不是我遛的}（同步時自動追加，不含志工名字，請勿手改）
 dogs/{編號}.md     ← 狗狗介紹（YAML frontmatter + 內文），選填；同步時整理進 data/dogs.json
 scripts/          ← 同步程式 sync-sheet.mjs 與它的測試
-photos/{編號}.jpg  ← 狗狗照片，選填
+photos/README.md  ← 照片說明（照片從 #130 起存在 Cloudflare R2，不放 repo；在網站上傳）
 docs/             ← 規格、設計指引、參考圖
 icons/            ← 網站圖示（瀏覽器分頁、手機主畫面）
 manifest.webmanifest ← 加到主畫面時的名稱、顏色、圖示

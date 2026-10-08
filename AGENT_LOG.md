@@ -717,3 +717,9 @@
 - `js/app.js`：拿掉 `OLD_UPLOAD_URL`，`uploadUrlFor` 一律用同網址 `/api`（沒有網址時留空，不顯示上傳）。
 - `worker/src/index.js`：`ALLOWED_ORIGINS` 預設改成空白（只接受同網址）；`wrangler.jsonc` 拿掉給 github.io 的設定。刪掉舊單獨 Worker 的設定檔 `worker/wrangler.toml`；`docs/PHOTO_UPLOAD_SETUP.md` 標成過時。舊網址轉址（#129）保留。
 - 測試：Worker 測試改用 `ALLOWED_ORIGINS` 放行測試網址，新增「沒設時 github.io 一律擋」；`r2-bucket.test.mjs` 改測行內 jsonc；網頁 #125 測試改成一律同網址 `/api`。node 133 項、網頁 183 項全過。
+
+## 2026-10-05 Claude（#130 後續：刪除 repo 裡的舊照片）
+- 依據：K 2026-10-04 手機驗收 R2 沒問題，2026-10-05 在選項卡選「現在就刪」。
+- 刪掉 `photos/` 底下全部 308 張 .jpg（主照片 154、縮圖 154，含相簿）；2026-10-04 已用「照片搬到 R2」複製並逐張核對 308 張全對，搬遷後 repo 沒有新的照片提交。git 歷史仍保留。
+- photos/README.md、README.md、docs/VOLUNTEER_GUIDE.md（照片改成只在網站上傳）、docs/CLOUDFLARE_SETUP.md 跟著改。
+- 程式不動：Worker 的舊檔備援、git 模式、縮圖與搬遷 Action 都留著（沒有檔案時不做事）。之後照片只在 R2，R2 沒接上時網站會沒有照片。
