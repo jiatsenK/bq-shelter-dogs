@@ -692,3 +692,16 @@
 - 詳細資訊大照片 4:3（從上對齊）→ 正方形、置中裁切（object-fit: cover，不改原檔）；狗卡本來實際就是 64×64，把被蓋掉的舊 72×64 規則、換照片預覽的狗卡小圖（72×64）、載入中骨架（64×52）都改成 64×64。DESIGN_GUIDE 同步改。
 - 原型截圖：/mnt/project-files/previews/square-photo/。
 - 測試：tests/index.html 檔尾追加 runSquarePhotoTests 三項（iframe 套 app.css 量寬高）；舊「主照片預覽」測試註解改正。網頁 186 項、Node 132 項全過。
+
+## 2026-10-08 Claude（試算表寫入範圍寫進規則）
+- 依據：K 2026-10-08 在離所紀錄規劃串說「請幫我寫規則說，只有遛狗的日期跟名字可以用我的這個網頁去覆蓋，其他都不行」。
+- AGENTS.md 加一條專案規則、docs/PROJECT_GOALS.md 寫回試算表段落後加一段：網站只能改主清單「遛狗日期」「誰遛的」，其他欄位與分頁都不寫入。只改文件，沒改程式；現有 apps-script/sheet-write.gs 本來就只改這兩欄。
+
+## 2026-10-08 Claude（離所紀錄與年度統計 #162–#164）
+- 依據：K 2026-10-08 規劃串的需求與回答：只做網站資料裡有變動的狗、不匯入已出所歷年資料、原因只讀已出所分頁（只讀不寫）、備註沒寫就待確認、名冊不放原文；K 說「其他同意 開始作業」。規劃文件：/mnt/project-files/plans/departures/離所紀錄規劃.md。
+- #162 同步：scripts/sync-sheet.mjs 加 classifyDeparture、departedRows、judgeDeparture、findDisappeared、updateDepartures、planDepartures；第一次從 data/history 全部快照補（仲基、雪寶、豆花），之後比上一次 dogs.json。讀已出所失敗不擋主清單同步。workflow 加提交 data/departures.json。
+- 雪寶 10/1 的「被認養」沒同步到：當天 10:09 到 16:55 沒有同步（舊 GitHub 排程被跳過），備註補上後那列就被移走，不是備註過長。
+- #163 分析頁最下面「離所」：今年三個大數字＋每年堆疊直條（認養綠、死亡灰、其他藍、待確認橘）。#164 離所名冊（搜尋、年份、原因）＋詳細資訊離所模式（沒有溜了、在哪、☆、換照片、同籠、可以一起溜；溜狗紀錄畫到離所那天）。
+- 原型截圖：/mnt/project-files/previews/departures/（2025 年幾筆是模擬資料）。
+- 測試：sync-sheet.test.mjs 追加 8 項；tests/index.html 檔尾追加 runDepartureTests 6 項，#59 的分析頁張數與讀檔檢查改成包含離所。Node 140、網頁 192 全過。
+- CONTEXT.md 加離所、認養、待確認、離所名冊；PROJECT_GOALS 補一段。
