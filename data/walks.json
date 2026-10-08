@@ -725,6 +725,11 @@
     {"id":"2020071403","name":"OPEN醬","date":"2026-10-08","mine":false,"walkers":["75aeed7c10fe"]},
     {"id":"2023083107","name":"丸子","date":"2026-10-08","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2023072604","name":"小梅子","date":"2026-10-08","mine":false,"walkers":["da53fbdda293"]},
-    {"id":"2023122901","name":"一路","date":"2026-10-08","mine":false,"walkers":["da53fbdda293"]}
+    {"id":"2023122901","name":"一路","date":"2026-10-08","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2023072502","name":"老哥","date":"2026-10-08","mine":true,"walkers":["7fe4735e3c59"]},
+    {"id":"2021082803","name":"大米","date":"2026-10-08","mine":true,"walkers":["7fe4735e3c59"]},
+    {"id":"2021112003","name":"部長","date":"2026-10-08","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2018121202","name":"笑笑","date":"2026-10-08","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2023022001","name":"寶弟","date":"2026-10-08","mine":false,"walkers":["da53fbdda293"]}
   ]
 }
