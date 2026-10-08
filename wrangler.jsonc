@@ -19,12 +19,9 @@
   "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "bq-shelter-photos" }],
   "vars": {
     "GITHUB_REPO": "jiatsenK/bq-shelter-dogs",
-    "GITHUB_BRANCH": "main",
-    // 舊網址（GitHub Pages）在切換前（#129）也可能叫這個 Worker；同網址的要求不用列
-    "ALLOWED_ORIGINS": "https://jiatsenk.github.io"
+    "GITHUB_BRANCH": "main"
   },
   // 定時叫 GitHub 跑同步試算表（UTC；台灣 7:00–22:30 每 30 分鐘）。
-  // 舊的照片上傳 Worker（bq-shelter-photos）的 Cron Trigger 要刪掉，不然會一次叫兩次
   "triggers": {
     "crons": ["0,30 23,0-14 * * *"]
   },
