@@ -354,6 +354,7 @@ function analysisHtml(dogs, today) {
     `<div class="a-comps">${rings}</div>` + compRows +
     (photosDone ? '' : '<div class="a-miss"><span>沒有照片</span><b class="muted">檢查中…</b></div>'), 'note'));
 
+  out.push(departureSectionHtml(today));
   return out.join('');
 }
 
@@ -363,7 +364,10 @@ function mdText(d) {
 }
 
 // 詳細資訊的「遛狗紀錄」：最近 30 天的格子＋三個數字
+// 離所的狗（#164）只畫到離所那天，之後的日子不算「沒溜」
 function walkHistorySection(dog, today) {
+  const end = dog.departure && dog.departure.date && dog.departure.date < today ? dog.departure.date : null;
+  if (end) today = end;
   loadHistory();
   const head = `<h3>${icon('tick')}溜狗紀錄<span class="sub">所有人溜的都算</span></h3>`;
   const wrap = body => `<section class="detail-section" data-section="walks">${head}${body}</section>`;
@@ -376,7 +380,7 @@ function walkHistorySection(dog, today) {
   const num = (v, unit, label) => `<div class="w-num"><b>${v}</b><small>${unit}</small><span>${label}</span></div>`;
   return wrap(`
     <div class="w-grid">${h.cells.map(cell).join('')}</div>
-    <div class="w-axis"><span>${mdText(first)}</span><span>今天</span></div>
+    <div class="w-axis"><span>${mdText(first)}</span><span>${end ? `${mdText(end)} 離所` : '今天'}</span></div>
     <div class="w-nums">
       ${num(h.count, '次', '最近 30 天')}
       ${num(h.avgGap == null ? '–' : h.avgGap.toFixed(1), '天', '平均幾天溜一次')}
@@ -427,3 +431,152 @@ document.getElementById('main').addEventListener('click', e => {
   if (dog) showDetail(dog);
 });
 
+// ── 離所（#163 年度統計、#164 離所名冊）──
+// data/departures.json 由同步產生（scripts/sync-sheet.mjs 的 updateDepartures）：狗從主清單消失就記一筆，
+// 原因只讀試算表「已出所」分頁判讀，判不出來是待確認。打開分析頁才讀，不拖慢溜狗表。
+const DEPARTURES_URL = 'data/departures.json';
+const DEPARTURE_ORDER = ['adopt', 'death', 'other', 'unknown'];
+const DEPARTURE_COLORS = { adopt: 'var(--green-text)', death: '#8E8E93', other: 'var(--primary)', unknown: '#F0A030' };
+let departuresData = null; // { state: 'loading' | 'ready' | 'error', list }
+let depRoster = { open: false, query: '', year: 'all', reason: 'all' };
+
+// departures.json → 離所的狗：跟在所的狗同一個樣子（parseDogsData），多一個 departure
+function parseDeparturesData(data) {
+  if (!data || !Array.isArray(data.departures)) throw new Error('departures.json 格式不對');
+  const text = v => (v == null ? '' : String(v).trim());
+  return data.departures.filter(e => e && text(e.id) && text(e.name)).map(e => {
+    const last = e.last && typeof e.last === 'object' ? e.last : {};
+    const dog = parseDogsData({ dogs: [{ ...last, id: text(e.id), name: text(last.name) || text(e.name) }] }).dogs[0];
+    dog.departure = {
+      reason: DEPARTURE_ORDER.includes(e.reason) ? e.reason : 'unknown',
+      matched: text(e.matched),
+      date: parseYmd(e.date),
+      dateSource: text(e.dateSource),
+      flags: Array.isArray(e.flags) ? e.flags.map(text) : [],
+      returned: text(e.returned),
+    };
+    return dog;
+  });
+}
+
+function loadDepartures() {
+  if (departuresData) return;
+  departuresData = { state: 'loading', list: [] };
+  fetch(DEPARTURES_URL, { cache: 'no-cache' })
+    .then(res => (res.status === 404 ? { departures: [] } : res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+    .then(data => { departuresData = { state: 'ready', list: parseDeparturesData(data) }; })
+    .catch(() => { departuresData = { state: 'error', list: [] }; })
+    .then(() => { if (analysisOpen) render(); });
+}
+
+// 每年各類幾隻（年份由舊到新）；沒有日期的另外算
+function departureYears(list) {
+  const years = new Map();
+  let noDate = 0;
+  for (const d of list) {
+    const dt = d.departure.date;
+    if (!dt) { noDate++; continue; }
+    const y = dt.getFullYear();
+    if (!years.has(y)) years.set(y, { year: y, total: 0, adopt: 0, death: 0, other: 0, unknown: 0 });
+    const row = years.get(y);
+    row[d.departure.reason]++;
+    row.total++;
+  }
+  return { years: [...years.values()].sort((a, b) => a.year - b.year), noDate };
+}
+
+// 名冊篩選：狗名、編號、舊編號（部分符合）＋年份＋原因
+function filterDepartures(list, { query = '', year = 'all', reason = 'all' } = {}) {
+  const q = searchKey(query);
+  return list.filter(d => {
+    if (reason !== 'all' && d.departure.reason !== reason) return false;
+    if (year !== 'all' && (!d.departure.date || String(d.departure.date.getFullYear()) !== String(year))) return false;
+    return !q || [d.name, d.id, ...(d.formerIds || [])].some(v => searchKey(v).includes(q));
+  }).sort((a, b) => (b.departure.date || 0) - (a.departure.date || 0) || a.name.localeCompare(b.name, 'zh-Hant'));
+}
+
+// 堆疊直條：每年一根，四類疊在一起
+function stackedYears(years) {
+  const max = Math.max(1, ...years.map(y => y.total));
+  return `<div class="a-cols dep-cols" style="--n:${Math.max(years.length, 3)}">${years.map(y => `
+    <button type="button" class="a-col dep-col${String(depRoster.year) === String(y.year) && depRoster.open ? ' hi' : ''}" data-dep-year="${y.year}"
+      title="${y.year}：${DEPARTURE_ORDER.map(r => `${DEPARTURE_LABELS[r]} ${y[r]}`).join('、')}">
+      <span class="a-col-v">${y.total}</span>
+      <span class="dep-stack" style="height:${Math.max(3, y.total / max * 100)}%">${DEPARTURE_ORDER.filter(r => y[r]).map(r =>
+        `<i style="flex:${y[r]};background:${DEPARTURE_COLORS[r]}"></i>`).join('')}</span>
+      <span class="a-col-l">${y.year}</span>
+    </button>`).join('')}</div>
+    <div class="dep-legend">${DEPARTURE_ORDER.map(r => `<span><i class="a-key" style="background:${DEPARTURE_COLORS[r]}"></i>${DEPARTURE_LABELS[r]}</span>`).join('')}</div>`;
+}
+
+function departureRow(d) {
+  const dep = d.departure;
+  return `<button type="button" class="a-dog dep-row" data-dep-dog="${departuresData.list.indexOf(d)}">
+    ${photoThumb(d, 40)}
+    <span class="a-dog-name">${esc(d.name)}${dep.returned ? '<small class="dep-back">已再入所</small>' : ''}</span>
+    <span class="a-dog-meta">${esc(ymdText(dep.date))}${dep.dateSource === 'seen' ? '（推估）' : ''}｜${esc(d.id)}</span>
+    <span class="a-dog-right"><span class="badge dep-${dep.reason}">${esc(DEPARTURE_LABELS[dep.reason])}</span></span>
+  </button>`;
+}
+
+function departureListHtml() {
+  const rows = filterDepartures(departuresData.list, depRoster);
+  return rows.length ? rows.map(departureRow).join('') : '<p class="a-empty">沒有符合的狗</p>';
+}
+
+function departureRosterHtml(years) {
+  const opt = (v, label, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${label}</option>`;
+  return `<div class="dep-roster">
+    <div class="dep-filters">
+      <input type="search" id="depSearch" class="dep-search" placeholder="狗名或編號" value="${esc(depRoster.query)}" autocomplete="off" aria-label="搜尋離所的狗">
+      <select id="depYear" aria-label="年份">${opt('all', '全部年份', depRoster.year)}${[...years].reverse().map(y => opt(y.year, `${y.year}`, depRoster.year)).join('')}</select>
+      <select id="depReason" aria-label="原因">${opt('all', '全部原因', depRoster.reason)}${DEPARTURE_ORDER.map(r => opt(r, DEPARTURE_LABELS[r], depRoster.reason)).join('')}</select>
+    </div>
+    <div class="a-list" id="depList">${departureListHtml()}</div>
+  </div>`;
+}
+
+function departureSectionHtml(today) {
+  loadDepartures();
+  const title = '離所';
+  if (departuresData.state === 'loading') return section(title, '', '<p class="a-empty">讀取中…</p>', 'paw');
+  if (departuresData.state === 'error') return section(title, '', '<p class="a-empty">離所紀錄讀不到</p>', 'paw');
+  const list = departuresData.list;
+  if (!list.length) return section(title, '狗從主清單移走後會記在這裡', '<p class="a-empty">還沒有離所紀錄</p>', 'paw');
+  const { years, noDate } = departureYears(list);
+  const thisYear = years.find(y => y.year === today.getFullYear()) || { total: 0, adopt: 0, death: 0 };
+  return `<section class="a-card dep-card">
+    <h2><span class="a-h-icon">${icon('paw')}</span>離所</h2>
+    <p class="a-hint">從 2026 年 9 月開始記錄；原因由試算表「已出所」分頁判讀${noDate ? `；${noDate} 隻日期不明，沒算進年份` : ''}</p>
+    <div class="a-kpis dep-kpis">
+      ${kpi(thisYear.total, '隻', `${today.getFullYear()} 年離所`)}
+      ${kpi(thisYear.adopt, '隻', '認養')}
+      ${kpi(thisYear.death, '隻', '死亡')}
+    </div>
+    ${stackedYears(years)}
+    <button type="button" class="dep-open" id="depToggle" aria-expanded="${depRoster.open}">${depRoster.open ? '收起離所名冊' : `看離所名冊（${list.length} 隻）`}</button>
+    ${depRoster.open ? departureRosterHtml(years) : ''}
+  </section>`;
+}
+
+// 名冊的搜尋、篩選只重畫清單，輸入框不會失去焦點
+function refreshDepartureList() {
+  const box = document.getElementById('depList');
+  if (box && departuresData) box.innerHTML = departureListHtml();
+}
+document.getElementById('main').addEventListener('click', e => {
+  if (!analysisOpen || !e.target.closest) return;
+  if (e.target.closest('#depToggle')) { depRoster.open = !depRoster.open; render(); return; }
+  const col = e.target.closest('[data-dep-year]');
+  if (col) { depRoster = { ...depRoster, open: true, year: col.dataset.depYear }; render(); return; }
+  const row = e.target.closest('[data-dep-dog]');
+  const dog = row && departuresData && departuresData.list[row.dataset.depDog];
+  if (dog) showDetail(dog);
+});
+document.getElementById('main').addEventListener('input', e => {
+  if (e.target.id === 'depSearch') { depRoster.query = e.target.value; refreshDepartureList(); }
+});
+document.getElementById('main').addEventListener('change', e => {
+  if (e.target.id === 'depYear') { depRoster.year = e.target.value; refreshDepartureList(); }
+  if (e.target.id === 'depReason') { depRoster.reason = e.target.value; refreshDepartureList(); }
+});
