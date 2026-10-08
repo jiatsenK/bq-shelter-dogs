@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-08T17:01:18+08:00",
+  "syncedAt": "2026-10-09T00:25:28+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -13,7 +13,7 @@
         "e9c69473e76f"
       ],
       "note": "9／16<羊噴火訓練>移至母幼A5",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": null
     },
@@ -58,7 +58,7 @@
         "55f305be6715"
       ],
       "note": "",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": null
     },
@@ -88,7 +88,7 @@
         "a533226b339a"
       ],
       "note": "<羊噴火訓練>",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": null
     },
@@ -103,7 +103,7 @@
         "dcda49f5b985"
       ],
       "note": "",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": null
     },
@@ -118,7 +118,7 @@
         "21120f797f52"
       ],
       "note": "後肢癱瘓114/9/24起每週一次針灸復健。4/12洗澡。7月底開始會慢慢自主起身行走",
-      "sex": "",
+      "sex": "female",
       "intro": "",
       "myWalkedDate": null
     },
@@ -193,7 +193,7 @@
         "7fe4735e3c59"
       ],
       "note": "不親狗、護食",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": "2026-10-08"
     },
@@ -253,7 +253,7 @@
         "7fe4735e3c59"
       ],
       "note": "6/28後腳無力（旭昇）; 2026/10/2洗澡（旭昇）",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": "2026-10-08"
     },
@@ -328,7 +328,7 @@
         "da53fbdda293"
       ],
       "note": "<羊噴火訓練>",
-      "sex": "",
+      "sex": "female",
       "intro": "",
       "myWalkedDate": null
     },
@@ -1100,7 +1100,7 @@
         "dcda49f5b985"
       ],
       "note": "<羊噴火訓練>",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": null
     },
@@ -1205,7 +1205,7 @@
         "75aeed7c10fe"
       ],
       "note": "2026/8/29洗澡（旭昇）",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": null
     },
@@ -1310,7 +1310,7 @@
         "21120f797f52"
       ],
       "note": "",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": null
     },
@@ -1370,7 +1370,7 @@
         "044328805855"
       ],
       "note": "",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": null
     },
@@ -1445,7 +1445,7 @@
         "a533226b339a"
       ],
       "note": "",
-      "sex": "",
+      "sex": "female",
       "intro": "",
       "myWalkedDate": null
     },
@@ -1491,7 +1491,7 @@
         "ea864bd3319f"
       ],
       "note": "<羊噴火訓練>",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": null
     },
@@ -1536,7 +1536,7 @@
         "044328805855"
       ],
       "note": "<羊噴火訓練>興奮撲人時會咬，遛他時人不要在場內比較安全（俐葶）",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": null
     },
@@ -1595,7 +1595,7 @@
         "044328805855"
       ],
       "note": "陌生人有可能會咬（嘉文）;8/25剃毛",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": null
     },
@@ -1610,7 +1610,7 @@
         "044328805855"
       ],
       "note": "陌生人有可能會咬（嘉文）",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": null
     },
@@ -1760,7 +1760,7 @@
         "da53fbdda293"
       ],
       "note": "",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": "2026-10-04"
     },
@@ -1835,7 +1835,7 @@
         "da53fbdda293"
       ],
       "note": "",
-      "sex": "",
+      "sex": "male",
       "intro": "",
       "myWalkedDate": null
     }
