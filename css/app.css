@@ -1264,29 +1264,45 @@ header.app { background: rgba(255, 255, 255, 0.92); -webkit-backdrop-filter: blu
 
 /* 開頭畫面（#141 第 2 項） */
 html.onboard-open { overflow: hidden; }
-.onboard { position: fixed; inset: 0; z-index: 50; background: var(--surface); overflow-y: auto; }
+.onboard { position: fixed; inset: 0; z-index: 70; background: var(--surface); overflow-y: auto; }
 .ob-page {
   min-height: 100%; max-width: 440px; margin: 0 auto; box-sizing: border-box;
   display: flex; flex-direction: column; padding: calc(56px + env(safe-area-inset-top, 0px)) 28px calc(28px + env(safe-area-inset-bottom, 0px));
 }
-.ob-hero { width: 72px; height: 72px; border-radius: 18px; background: var(--primary); color: #fff; font-size: 40px; display: flex; align-items: center; justify-content: center; }
-.ob-name h1 { font-size: 30px; font-weight: 700; margin: 22px 0 6px; }
-.ob-lead { font-size: 17px; color: var(--ink-soft); margin: 0 0 30px; }
+.ob-hero { width: 56px; height: 56px; border-radius: 14px; background: var(--primary); color: #fff; font-size: 32px; display: flex; align-items: center; justify-content: center; }
+.ob-name h1 { font-size: 28px; font-weight: 700; margin: 18px 0 6px; }
+.ob-name h1.ob-ask { margin-top: 0; font-size: 24px; }
+.ob-name h1:focus { outline: none; }
+.ob-lead { font-size: 17px; line-height: 1.5; color: var(--ink-soft); margin: 0 0 26px; }
 .ob-label { font-size: 15px; font-weight: 600; margin-bottom: 8px; }
+.ob-label-note { font-size: 14px; line-height: 1.5; color: var(--ink-soft); margin: -4px 0 10px; }
 .ob-page input { width: 100%; box-sizing: border-box; border: none; border-radius: 12px; background: var(--surface-soft); font-family: inherit; font-size: 17px; padding: 14px 14px; color: var(--ink); }
 .ob-page input:focus { outline: 2px solid var(--primary); }
+.ob-page input::placeholder, #whoInput::placeholder { color: var(--ink-soft); }
 .ob-help { font-size: 14px; line-height: 1.6; color: var(--ink-soft); margin: 10px 0 0; }
 .ob-foot { align-self: stretch; margin-top: auto; padding-top: 28px; display: flex; flex-direction: column; align-items: center; gap: 14px; }
+/* 名字很多時，下一步（和錯誤、確認訊息）一直在畫面最下面，不用捲找；畫面矮（鍵盤打開）就不黏，免得蓋住輸入框 */
+.ob-name .ob-foot { gap: 6px; }
+.ob-foot > .ob-confirm, .ob-foot > .photo-error { align-self: stretch; margin: 0 0 8px; }
+@media (min-height: 560px) {
+  .ob-name .ob-foot { position: sticky; bottom: 0; background: var(--surface); padding: 16px 0 calc(4px + env(safe-area-inset-bottom, 0px)); margin-bottom: calc(-28px - env(safe-area-inset-bottom, 0px)); }
+}
 .ob-next { width: 100%; border: none; border-radius: 14px; background: var(--primary); color: #fff; font-family: inherit; font-size: 17px; font-weight: 600; padding: 15px; cursor: pointer; }
 .ob-next:disabled { opacity: .5; }
-.ob-small { font-size: 12.5px; color: var(--ink-soft); margin: 0; text-align: center; }
+.ob-small { font-size: 14px; line-height: 1.5; color: var(--ink); margin: 0 0 8px; text-align: center; }
+.ob-later { width: 100%; min-height: 44px; border: none; background: none; color: var(--primary); font-family: inherit; font-size: 16px; font-weight: 500; cursor: pointer; }
+.ob-later:disabled { opacity: .5; }
+.ob-confirm { display: flex; gap: 8px; align-items: flex-start; margin-top: 12px; padding: 10px 12px; border-radius: 12px; background: var(--primary-soft); color: var(--ink); font-size: 14px; line-height: 1.5; }
+.ob-confirm .icon { color: var(--primary); flex-shrink: 0; margin-top: 3px; }
 .ob-slide { align-items: center; text-align: center; }
-.ob-skip { align-self: flex-end; border: none; background: none; color: var(--primary); font-family: inherit; font-size: 16px; margin: -36px -8px 0 0; padding: 8px; cursor: pointer; }
-.ob-art { margin-top: 12vh; width: 120px; height: 120px; border-radius: 32px; background: var(--primary-soft); color: var(--primary); font-size: 60px; display: flex; align-items: center; justify-content: center; }
-.ob-slide h2 { font-size: 26px; font-weight: 700; margin: 30px 0 12px; }
-.ob-slide p { font-size: 17px; line-height: 1.6; color: var(--ink-soft); margin: 0; }
+.ob-top { align-self: stretch; display: flex; justify-content: space-between; margin: -40px -8px 0; }
+.ob-skip, .ob-back { border: none; background: none; color: var(--primary); font-family: inherit; font-size: 16px; padding: 8px; cursor: pointer; min-width: 44px; min-height: 44px; }
+.ob-art { margin-top: auto; flex-shrink: 0; width: 120px; height: 120px; border-radius: 32px; background: var(--primary-soft); color: var(--primary); font-size: 60px; display: flex; align-items: center; justify-content: center; }
+.ob-slide h2 { font-size: 26px; font-weight: 700; margin: 28px 0 12px; }
+.ob-slide h2:focus { outline: none; }
+.ob-slide p { font-size: 17px; line-height: 1.6; color: var(--ink); margin: 0; text-align: left; max-width: 22em; }
 .ob-dots { display: flex; gap: 8px; }
-.ob-dots i { width: 7px; height: 7px; border-radius: 50%; background: #D1D1D6; }
+.ob-dots i { width: 8px; height: 8px; border-radius: 50%; background: #8E8E93; }
 .ob-dots i.on { background: var(--ink); }
 .who-hint .who-edit .icon { color: inherit; }
 .find-chip { background: var(--surface) !important; }
@@ -1313,7 +1329,12 @@ html.onboard-open { overflow: hidden; }
 .with-bar .bar-btn { flex: 1; min-height: 48px; border: none; border-radius: 14px; background: var(--surface-soft); font-family: inherit; font-size: 16px; font-weight: 600; color: var(--ink); cursor: pointer; }
 .with-ok { flex: 1.6; min-height: 48px; border: none; border-radius: 14px; background: var(--primary); color: #fff; font-family: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
 .with-ok:disabled { opacity: 0.4; }
-.ob-names { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; max-height: 40vh; overflow-y: auto; }
+.ob-names { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; max-height: 40vh; overflow-y: auto; padding: 6px 6px 0 0; }
+.onboard .ob-names { max-height: none; overflow: visible; }
+/* 選自己的名字：框線＋右上角小勾（不是實心藍，跟「一起溜的人」分得出來；按鈕不變寬，旁邊的名字不會跳行） */
+.with-name.me-name { position: relative; }
+.with-name.me-name.on { background: var(--primary-soft); color: var(--primary); box-shadow: inset 0 0 0 2px var(--primary); }
+.with-name.me-name .icon { position: absolute; top: -6px; right: -6px; width: 20px; height: 20px; padding: 3px; box-sizing: border-box; border-radius: 50%; background: var(--primary); color: #fff; }
 
 /* #141：列表欄位與持續登記入口 */
 .row-head { display:grid; grid-template-columns:50px minmax(0,1fr) 40px minmax(0,1.1fr) 52px; gap:8px; padding:10px 8px 10px 12px; font-size:12px; color:var(--ink-soft); border-bottom:1px solid var(--line); }
@@ -1409,7 +1430,6 @@ html.onboard-open { overflow: hidden; }
 .who-clear { min-height: 44px; }
 .who-clear-ok { flex: 1; min-height: 48px; border: none; border-radius: 14px; background: var(--red-text); color: #fff; font-family: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
 .with-name { min-height: 44px; }
-.ob-skip { min-width: 44px; min-height: 44px; }
 
 /* 統計頁（介面評估第二輪）：排名不用金銀銅（不是在慶祝待最久的狗）；母狗數字用黑字、紅色只留符號；橫條改實心主色，白字對比夠 */
 .a-rank.r1, .a-rank.r2, .a-rank.r3 { background: var(--primary-soft); color: var(--primary); }

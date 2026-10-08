@@ -1393,7 +1393,7 @@ export default {
       try {
         return await walkerCodes(request, env, allowed);
       } catch (e) {
-        return fail(500, '代號服務發生錯誤', allowed);
+        return fail(500, '名字設定暫時失敗，請稍後再試', allowed);
       }
     }
 
