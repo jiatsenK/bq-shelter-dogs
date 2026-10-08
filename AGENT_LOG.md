@@ -687,6 +687,31 @@
 - 我溜過：同一隻狗同一天以 walks.json 最後一筆為準。原因：阿湯 10/4 先記了「維芬＋我」，之後改回「維芬」，同步因為「同一天同樣的人已經記過」沒再記，最後一筆停在有我。sync-sheet.mjs 改成同一天最後一筆跟現在不一樣就再記一筆（下次同步會補回阿湯），myWalkedDate 也以最後一筆為準。
 - 測試：sync-sheet.test.mjs 追加一項；tests/index.html 檔尾追加 runFix141Tests 五項。Node 132、網頁 183 全過。
 
+## 2026-10-08 Claude（詳細資訊與狗卡照片統一正方形）
+- 依據：K 2026-10-08「詳細資訊跟狗卡的照片，我覺得要統一正方形」。
+- 詳細資訊大照片 4:3（從上對齊）→ 正方形、置中裁切（object-fit: cover，不改原檔）；狗卡本來實際就是 64×64，把被蓋掉的舊 72×64 規則、換照片預覽的狗卡小圖（72×64）、載入中骨架（64×52）都改成 64×64。DESIGN_GUIDE 同步改。
+- 原型截圖：/mnt/project-files/previews/square-photo/。
+- 測試：tests/index.html 檔尾追加 runSquarePhotoTests 三項（iframe 套 app.css 量寬高）；舊「主照片預覽」測試註解改正。網頁 186 項、Node 132 項全過。
+
+## 2026-10-08 Claude（試算表寫入範圍寫進規則）
+- 依據：K 2026-10-08 在離所紀錄規劃串說「請幫我寫規則說，只有遛狗的日期跟名字可以用我的這個網頁去覆蓋，其他都不行」。
+- AGENTS.md 加一條專案規則、docs/PROJECT_GOALS.md 寫回試算表段落後加一段：網站只能改主清單「遛狗日期」「誰遛的」，其他欄位與分頁都不寫入。只改文件，沒改程式；現有 apps-script/sheet-write.gs 本來就只改這兩欄。
+
+## 2026-10-08 Claude（離所紀錄與年度統計 #162–#164）
+- 依據：K 2026-10-08 規劃串的需求與回答：只做網站資料裡有變動的狗、不匯入已出所歷年資料、原因只讀已出所分頁（只讀不寫）、備註沒寫就待確認、名冊不放原文；K 說「其他同意 開始作業」。規劃文件：/mnt/project-files/plans/departures/離所紀錄規劃.md。
+- #162 同步：scripts/sync-sheet.mjs 加 classifyDeparture、departedRows、judgeDeparture、findDisappeared、updateDepartures、planDepartures；第一次從 data/history 全部快照補（仲基、雪寶、豆花），之後比上一次 dogs.json。讀已出所失敗不擋主清單同步。workflow 加提交 data/departures.json。
+- 雪寶 10/1 的「被認養」沒同步到：當天 10:09 到 16:55 沒有同步（舊 GitHub 排程被跳過），備註補上後那列就被移走，不是備註過長。
+- #163 分析頁最下面「離所」：今年三個大數字＋每年堆疊直條（認養綠、死亡灰、其他藍、待確認橘）。#164 離所名冊（搜尋、年份、原因）＋詳細資訊離所模式（沒有溜了、在哪、☆、換照片、同籠、可以一起溜；溜狗紀錄畫到離所那天）。
+- 原型截圖：/mnt/project-files/previews/departures/（2025 年幾筆是模擬資料）。
+- 測試：sync-sheet.test.mjs 追加 8 項；tests/index.html 檔尾追加 runDepartureTests 6 項，#59 的分析頁張數與讀檔檢查改成包含離所。Node 140、網頁 192 全過。
+- CONTEXT.md 加離所、認養、待確認、離所名冊；PROJECT_GOALS 補一段。
+
+## 2026-10-08 Claude（安裝 impeccable 前端檢核技能）
+- 依據：K 2026-10-08「幫我在雲端環境安裝這個技能 https://github.com/pbakaus/impeccable ，我要用這個來檢核我的前端」。
+- 從上游 commit 778c8a7 的 plugin/ 複製 skills/impeccable 到 .claude/skills/impeccable、四個子代理到 .claude/agents/；附 LICENSE-impeccable、NOTICE-impeccable.md。沒裝上游 hooks（每次 Edit/Write 都會跑）。
+- 雲端試跑：`impeccable context` 正常（會自動下載檢查程式）；`impeccable detect index.html css` 找到 3 項（搜尋框 placeholder 對比 2.2:1、灰字對比 3.1:1、深色底彩色光暈）＋1 項建議（條紋背景），這次沒改。
+- AGENTS.md 加用法說明。沒改網站程式。
+
 ## 2026-10-05 拿掉程式裡的舊網址與舊照片上傳 Worker（Claude，分支 claude/project-thread-ovzdfh）
 - 依據：K 說「舊的可以刪掉了」，在選項卡選「以上全部」（程式判斷、舊 Worker、repo 舊照片）。這個 PR 只做程式判斷；舊 Worker 由 K 在 Cloudflare 刪（步驟在 `docs/CLOUDFLARE_SETUP.md`），repo 舊照片轉給 #130 照片搬家那串。
 - `js/app.js`：拿掉 `OLD_UPLOAD_URL`，`uploadUrlFor` 一律用同網址 `/api`（沒有網址時留空，不顯示上傳）。

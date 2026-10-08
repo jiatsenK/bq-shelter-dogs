@@ -4,6 +4,7 @@
 # - 資料有變才提交；讀取失敗時這次執行會顯示失敗，data/dogs.json 保留上一次成功的內容
 # - 有人改了狗卡（dogs/*.md）或這支同步程式、推到 main 時也會馬上跑一次，狗卡資訊不用等排程
 # - 另外存當天快照 data/history/YYYY-MM-DD.json 和累積遛狗紀錄 data/walks.json（#56，都不含志工名字）
+# - 離所（#162）：狗從主清單消失就記進 data/departures.json，原因只讀「已出所」分頁判讀
 # - 只讀試算表，不寫入試算表
 # - 試算表 ID 放在 repo 的 Actions Secret「SHEET_ID」，不寫在程式裡（設定方式見 docs/SHEET_SYNC_SETUP.md）
 name: 同步試算表
@@ -52,7 +53,7 @@ jobs:
 
       - name: 資料有變才提交
         run: |
-          git add data/dogs.json data/history data/walks.json
+          git add data/dogs.json data/history data/walks.json data/departures.json
           if git diff --cached --quiet; then
             echo "資料沒有變動，不提交。"
             exit 0
