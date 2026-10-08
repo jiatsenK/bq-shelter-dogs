@@ -705,3 +705,9 @@
 - 原型截圖：/mnt/project-files/previews/departures/（2025 年幾筆是模擬資料）。
 - 測試：sync-sheet.test.mjs 追加 8 項；tests/index.html 檔尾追加 runDepartureTests 6 項，#59 的分析頁張數與讀檔檢查改成包含離所。Node 140、網頁 192 全過。
 - CONTEXT.md 加離所、認養、待確認、離所名冊；PROJECT_GOALS 補一段。
+
+## 2026-10-08 Claude（安裝 impeccable 前端檢核技能）
+- 依據：K 2026-10-08「幫我在雲端環境安裝這個技能 https://github.com/pbakaus/impeccable ，我要用這個來檢核我的前端」。
+- 從上游 commit 778c8a7 的 plugin/ 複製 skills/impeccable 到 .claude/skills/impeccable、四個子代理到 .claude/agents/；附 LICENSE-impeccable、NOTICE-impeccable.md。沒裝上游 hooks（每次 Edit/Write 都會跑）。
+- 雲端試跑：`impeccable context` 正常（會自動下載檢查程式）；`impeccable detect index.html css` 找到 3 項（搜尋框 placeholder 對比 2.2:1、灰字對比 3.1:1、深色底彩色光暈）＋1 項建議（條紋背景），這次沒改。
+- AGENTS.md 加用法說明。沒改網站程式。
