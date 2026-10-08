@@ -952,7 +952,7 @@ async function runPhotoTests() {
         const hero = document.querySelector('#detail .detail-head .photo-wrap.hero');
         eq([hero.classList.contains('pending'), hero.querySelector('.photo-preview').getAttribute('src'), hero.querySelector('.hero-tag').textContent], [true, photoUpload.url, '預覽'], '大照片位置換成預覽：');
         eq([hero.querySelector('#photoPick'), hero.querySelector('[data-zoom]')], [null, null], '預覽時沒有相機鈕、不開燈箱：');
-        // 測試頁沒載入樣式，改檢查用的是同一組樣式：大照片用 .detail-head .photo-wrap.hero .thumb（4:3、從上對齊），小照片跟狗卡一樣 72×64
+        // 測試頁沒載入樣式，改檢查用的是同一組樣式：大照片用 .detail-head .photo-wrap.hero .thumb（正方形、置中），小照片跟狗卡一樣 64×64
         eq(hero.querySelector('img').matches('.detail-head .photo-wrap.hero .thumb img'), true, '大照片跟上傳後同一個框：');
         const small = document.querySelector('#detail .photo-upload .card-thumb');
         eq([small.classList.contains('thumb'), small.querySelector('img').getAttribute('src')], [true, photoUpload.url], '狗卡小照片：');
@@ -3137,6 +3137,39 @@ async function runWalkFavTests() {
 }
 
 // K 2026-10-05 正式站回報：只有自己一人時沒有 ×（按錯要能取消）、「岑」被接成「岑、佳岑」、別人溜的跑進我溜過
+// K 2026-10-08：詳細資訊大照片跟狗卡照片統一正方形（置中裁切）
+async function runSquarePhotoTests() {
+  const css = await fetch('../css/app.css').then(r => r.text());
+  const frame = document.createElement('iframe');
+  frame.style.cssText = 'position:absolute;left:-9999px;width:390px;height:844px;border:0';
+  document.body.appendChild(frame);
+  const doc = frame.contentDocument;
+  doc.open();
+  doc.write(`<!doctype html><style>${css}</style><body>
+    <div class="card"><div class="thumb" id="cardThumb"><img alt=""></div><div class="body"></div></div>
+    <div class="detail-head"><div class="photo-wrap hero"><div class="thumb" id="heroThumb"><img alt=""></div></div></div>
+    <div class="photo-preview-row"><div class="thumb card-thumb" id="previewThumb"><img alt=""></div></div>
+    <div class="sk sk-thumb" id="skThumb"></div></body>`);
+  doc.close();
+  const size = id => { const r = doc.getElementById(id).getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; };
+  try {
+    await check('2026-10-08 狗卡照片是正方形', () => { const [w, h] = size('cardThumb'); eq(w, h, '寬高：'); });
+    await check('2026-10-08 詳細資訊大照片是正方形、置中裁切', () => {
+      const [w, h] = size('heroThumb');
+      eq(w > 200, true, '大照片要佔滿寬度：');
+      eq(w, h, '寬高：');
+      const cs = frame.contentWindow.getComputedStyle(doc.querySelector('#heroThumb img'));
+      eq([cs.objectFit, cs.objectPosition], ['cover', '50% 50%']);
+    });
+    await check('2026-10-08 新照片預覽的狗卡小圖、載入中骨架也跟狗卡一樣大', () => {
+      eq(size('previewThumb'), size('cardThumb'), '預覽小圖：');
+      eq(size('skThumb'), size('cardThumb'), '骨架：');
+    });
+  } finally {
+    frame.remove();
+  }
+}
+
 async function runFix141Tests() {
   const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList, sheetWritesMemory, sheetWriteState, walkerNameMemory, walkerCodesMemory];
   const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
@@ -3271,6 +3304,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runFavTests)
   .then(runWalkFavTests)
   .then(runFix141Tests)
+  .then(runSquarePhotoTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
