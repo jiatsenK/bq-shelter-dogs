@@ -740,6 +740,10 @@
     {"id":"2025021801","name":"阿湯","date":"2026-10-08","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2022042602","name":"沙沙","date":"2026-10-08","mine":false,"walkers":["75aeed7c10fe"]},
     {"id":"2018041317","name":"IU","date":"2026-10-08","mine":false,"walkers":["da53fbdda293"]},
-    {"id":"2024052201","name":"太郎","date":"2026-10-08","mine":false,"walkers":["da53fbdda293"]}
+    {"id":"2024052201","name":"太郎","date":"2026-10-08","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2018062507","name":"黑狗兄","date":"2026-10-08","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2026062404","name":"史酷比","date":"2026-10-08","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2026060101","name":"甜甜","date":"2026-10-08","mine":true,"walkers":["7fe4735e3c59"]},
+    {"id":"2024120202","name":"凱瑞","date":"2026-10-08","mine":false,"walkers":["75aeed7c10fe"]}
   ]
 }

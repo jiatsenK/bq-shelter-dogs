@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-08T15:31:12+08:00",
+  "syncedAt": "2026-10-08T15:33:25+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -157,7 +157,7 @@
       "cage": "新獨01",
       "id": "2018062507",
       "name": "黑狗兄",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-08",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -892,11 +892,11 @@
       "cage": "新B07",
       "id": "2026062404",
       "name": "史酷比",
-      "walkedDate": "2026-10-04",
+      "walkedDate": "2026-10-08",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "67c74c17be08"
+        "da53fbdda293"
       ],
       "note": "會護食，9/23因吃飼料時護食和阿寶妹打架（俐葶）",
       "sex": "male",
@@ -1424,16 +1424,16 @@
       "cage": "舊B03",
       "id": "2026060101",
       "name": "甜甜",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-08",
       "covered": true,
-      "myWalked": false,
+      "myWalked": true,
       "walkers": [
-        "21120f797f52"
+        "7fe4735e3c59"
       ],
       "note": "不親會走動的狗， 會發出低鳴不悦的聲音。 對捷運站和拉亞倒是沒有問題",
       "sex": "female",
       "intro": "2026年6月1日,從三峽被通報,雖然少了兩隻前腳,個性仍樂觀又親人,會站起來靠近討摸摸,還會用一雙眼睛笑咪咪看著你,表情也太療育..^^",
-      "myWalkedDate": "2026-10-04"
+      "myWalkedDate": "2026-10-08"
     },
     {
       "cage": "舊B04",
@@ -1500,11 +1500,11 @@
       "cage": "舊B12",
       "id": "2024120202",
       "name": "凱瑞",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-08",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "21120f797f52"
+        "75aeed7c10fe"
       ],
       "note": "2025/8/3，咬了旭昇,上手臂後側2-3公分撕裂傷（嘉文)。9／10移至舊犬舍。會護地盤（巧芸）",
       "sex": "male",
