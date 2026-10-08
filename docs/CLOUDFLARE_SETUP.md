@@ -12,7 +12,7 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 - 以後改了 Worker 程式**不用再手動貼**，合併後 Action 會自動部署。
 - 密碼（token、通關碼、代號密鑰）**全部設在 GitHub 的 Secrets**，部署時自動帶到 Cloudflare。
 - 費用 NT$0（Cloudflare Workers 免費方案）。
-- 舊網址 https://jiatsenk.github.io/bq-shelter-dogs/ 從 #129 起一打開就轉到新網址同一頁（舊的書籤、主畫面捷徑都還能用）。舊的照片上傳服務（`bq-shelter-photos`）先留著，什麼時候可以刪見下面「刪掉舊的照片上傳服務」。
+- 舊網址 https://jiatsenk.github.io/bq-shelter-dogs/ 從 #129 起一打開就轉到新網址同一頁（舊的書籤、主畫面捷徑都還能用）。舊的單獨照片上傳 Worker（`bq-shelter-photos`）2026-10 K 決定刪除，程式裡給它和舊網址的判斷也拿掉了。
 
 > Cloudflare 和 GitHub 的網頁偶爾會改版，按鈕名稱可能跟這裡寫的略有不同，找意思相近的就可以。
 
@@ -125,13 +125,12 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
 
 ## 刪掉舊的照片上傳服務（#129 之後）
 
-舊網址轉到新網址以後，舊的 `bq-shelter-photos` Worker 應該就沒人用了。切換後過一週再看：
+舊網址轉到新網址以後，舊的單獨照片上傳 Worker 就沒人用了（2026-10 K 決定刪）：
 
 1. Cloudflare → **Workers & Pages** → 點 `bq-shelter-photos`。
-2. 看 **Metrics**（或 **Observability**）最近 7 天的 **Requests**。
-3. 是 0（或只有零星幾筆）就可以刪：**Settings** 拉到最下面 → **Delete** → 輸入名稱確認。
+2. **Settings** 拉到最下面 → **Delete** → 輸入名稱確認。
 
-還有很多流量的話先不要刪，跟 Claude 說，查是哪裡還在用舊的。
+⚠️ **R2** 裡也有一個叫 `bq-shelter-photos` 的 bucket，那是現在放所有照片的地方，**不能刪**。要刪的是 **Workers & Pages** 底下的那個。
 
 ## 照片放 R2（#130）
 
@@ -191,7 +190,7 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
 ## 給寫程式的人
 
 - 設定：repo 根目錄的 `wrangler.jsonc`（Worker 名稱、靜態檔案、Cron）；不公開的檔案列在 `.assetsignore`。
-- API 在 `/api` 底下（`/api/photos/{編號}`、`/api/notes`、`/api/gallery`、`/api/walker-code`、`/api/sync`），網站在 `*.workers.dev` 上會自動改用同網址的 `/api`（`js/app.js` 的 `uploadUrlFor`）。同一份 `worker/src/index.js` 也還能照舊部署成沒有 `/api` 前綴的單獨 Worker（`worker/wrangler.toml`）。
+- API 在 `/api` 底下（`/api/photos/{編號}`、`/api/notes`、`/api/gallery`、`/api/walker-code`、`/api/sync`），網站一律用同網址的 `/api`（`js/app.js` 的 `uploadUrlFor`）。Worker 只接受同網址的要求；要額外放行別的網站才設 `ALLOWED_ORIGINS`（預設空白）。
 - 本機試跑：在 repo 根目錄 `npx wrangler dev --persist-to /tmp/wrangler-state`（`--persist-to` 放 repo 外面，不然暫存寫進網站資料夾會一直重新載入）。
 - 照片快取（#127）：`_headers` 讓 `photos/` 在手機上快取 30 天；部署前 `scripts/photo-versions.mjs` 把每張照片的內容雜湊寫進要上傳的 `data/dogs.json`（`photoVersions`，不提交），網站組照片網址加 `?v=雜湊`，換照片網址就變。
 - 瀏覽統計（#128）：部署前 `scripts/analytics-beacon.mjs` 把 Cloudflare Web Analytics 的 beacon 插進要上傳的 `index.html`（token 來自 Secret `CF_ANALYTICS_TOKEN`，不提交）；預覽版和舊網址沒有。
