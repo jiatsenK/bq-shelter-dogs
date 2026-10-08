@@ -1301,6 +1301,23 @@ html.onboard-open { overflow: hidden; }
 .ob-slide h2 { font-size: 26px; font-weight: 700; margin: 28px 0 12px; }
 .ob-slide h2:focus { outline: none; }
 .ob-slide p { font-size: 17px; line-height: 1.6; color: var(--ink); margin: 0; text-align: left; max-width: 22em; }
+/* 說明頁的範例（K 2026-10-08）：用網站上真的狗卡、按鈕，只是看、不能按 */
+/* 左右各多出 20px，裡面的狗卡跟溜狗表上的一樣寬 */
+.ob-demo { margin: auto -20px 0; align-self: stretch; pointer-events: none; text-align: left; background: var(--bg); border-radius: 18px; padding: 8px; display: flex; flex-direction: column; gap: 8px; }
+.ob-demo .card { margin: 0; }
+.ob-demo-walk { display: grid; grid-template-columns: 1fr auto 1fr auto 1fr; align-items: center; justify-items: center; gap: 10px 4px; background: var(--surface); border-radius: 14px; padding: 12px; }
+.ob-demo-dog { grid-column: 1 / -1; justify-self: stretch; display: flex; align-items: center; gap: 12px; }
+.ob-demo-name { font-size: 17px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+.ob-demo-walk > .icon { color: var(--ink-soft); font-size: 14px; }
+.ob-demo-walk .walk-btn { width: auto; min-width: 72px; padding: 0 12px; margin: 0; }
+.ob-demo-toast { display: flex; align-items: center; gap: 8px; background: #1C1C1E; color: #fff; border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+.ob-demo-toast span { flex: 1; }
+.ob-demo-toast b { font-weight: 600; background: rgba(255, 255, 255, 0.14); border-radius: 10px; padding: 7px 10px; white-space: nowrap; }
+.ob-demo .who-hint { margin: 0; padding: 0; }
+.ob-demo .visit { margin: 0; }
+.ob-demo .where-map { margin: 0; }
+.ob-demo .where-how { margin: 0; font-size: 15px; }
+.ob-demo + h2 { margin-top: 20px; }
 .ob-dots { display: flex; gap: 8px; }
 .ob-dots i { width: 8px; height: 8px; border-radius: 50%; background: #8E8E93; }
 .ob-dots i.on { background: var(--ink); }
