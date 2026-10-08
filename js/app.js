@@ -236,12 +236,14 @@ function walkerSetupHtml() {
     ${obNamesHtml(edit, busy, 'who')}
     <input type="text" id="whoInput" maxlength="60" placeholder="例：小明" aria-label="你在試算表寫的名字" value="${esc(edit.text)}"${busy ? ' disabled' : ''}>
     <p class="who-note">按「溜了」時會用第一個名字寫進試算表「誰遛的」。名字設定存在這支手機，換手機或換瀏覽器要重新設定。</p>
+    ${nameHintsHtml(edit)}
     ${edit.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(edit.error)}</span></div>` : ''}
     <div class="my-note-actions">
-      <button type="submit" class="my-note-save" id="whoSave"${busy ? ' disabled' : ''}>${busy ? '設定中…' : '設定'}</button>
+      <button type="submit" class="my-note-save" id="whoSave"${busy ? ' disabled' : ''}>${busy ? '設定中…' : edit.phase === 'confirm' ? '確定用這個名字' : '設定'}</button>
       ${has && !busy ? `<button type="button" class="photo-cancel" id="whoCancel">取消</button>` : ''}
     </div>
     ${has && !busy ? `<button type="button" class="who-clear" id="whoClear">清除這支手機的設定</button>` : ''}
+    ${has ? '' : '<button type="button" class="who-clear" data-open-guide>看使用說明</button>'}
   </form>`;
 }
 
@@ -250,10 +252,13 @@ async function saveWalkerSetup() {
   const edit = walkerSetup;
   if (!edit || edit.phase === 'saving') return;
   const failWith = msg => { edit.phase = 'error'; edit.error = msg; render(); };
+  const unknown = unknownWalkerNames(edit.text);
+  if (edit.phase !== 'confirm' && unknown.length) { edit.phase = 'confirm'; edit.unknown = unknown; render(); return; }
   edit.phase = 'saving';
   render();
   const error = await setWalkerName(edit.text);
   if (error) return failWith(error);
+  setNameLater(false);
   if (walkerSetup === edit) walkerSetup = null;
   render();
 }
@@ -368,7 +373,7 @@ function myWalksHtml(today, query) {
   const named = !!loadWalkerName();
   // V9（#141 第 11 項）：小計收進「統計」按鈕，按了才展開
   const statsBtn = visibleWalks.length ? `<button type="button" class="who-edit${mineStatsOpen ? ' on' : ''}" id="mineStats" aria-expanded="${mineStatsOpen}">${icon('chart')}統計</button>` : '';
-  const who = query ? '' : `<div class="section-hint who-hint">${icon('paw')}<span class="who-name">${named ? esc(loadWalkerName()) : '再按「修改」輸入一次名字'}</span>${statsBtn}<button type="button" class="who-edit" id="whoEdit">修改</button></div>`;
+  const who = query ? '' : `<div class="section-hint who-hint">${icon('paw')}<span class="who-name">${named ? esc(loadWalkerName()) : '再按「修改」輸入一次名字'}</span>${statsBtn}<button type="button" class="who-edit" id="whoEdit">修改</button><button type="button" class="who-edit" data-open-guide>說明</button></div>`;
   if (!visibleWalks.length) return who + `<div class="status-msg">還沒有你的溜狗紀錄。<br>試算表「誰遛的」寫上你設定的名字，同步後就會出現在這裡。</div>`;
   // 所有到所紀錄新到舊一路往下排（K 2026-09-25：不要選日期）；搜尋時不顯示小計
   const groups = myWalkGroups(currentMyWalks(), query);
@@ -768,6 +773,7 @@ function recordWalked(dogs, on, today = new Date()) {
 // 2026-10-08 K（介面評估）：會寫試算表時，溜了要等試算表回應才變「已溜」，等的時候按鈕寫「登記中」；
 // 沒寫進去就不記，提示條給「再試一次」。不寫試算表（還沒設定名字、Worker 沒設定）照舊直接記在手機
 function setWalked(dogs, on) {
+  if (on && needNameToWalk()) return askNameThenWalk(dogs); // 還沒設定名字（先看看）：先問名字，設好再登記
   if (on && sheetWillWrite()) walkThenRecord(dogs);
   else setWalkedLocal(dogs, on);
 }
@@ -2786,10 +2792,11 @@ mainEl.addEventListener('click', e => {
   if (tile) showDetail(allDogs[tile.dataset.mineDog]);
   else if (e.target.closest('#mineRetry')) loadMyWalks();
   else if (e.target.closest('#mineStats')) { mineStatsOpen = !mineStatsOpen; render(); }
+  else if (e.target.closest('[data-open-guide]')) openGuide();
   else if (e.target.closest('[data-who-name]')) {
     const n = e.target.closest('[data-who-name]').dataset.whoName;
     const list = splitWalkers(walkerSetup ? walkerSetup.text : '');
-    walkerSetup = { ...(walkerSetup || { phase: 'edit', error: '' }), text: (list.includes(n) ? list.filter(x => x !== n) : [...list, n]).join('、') };
+    walkerSetup = { ...(walkerSetup || { error: '' }), phase: 'edit', text: (list.includes(n) ? list.filter(x => x !== n) : [...list, n]).join('、') };
     render();
   } else if (e.target.closest('#whoEdit')) {
     walkerSetup = { text: loadWalkerName(), phase: 'edit', error: '' }; // 先填目前的名字，不用重打
@@ -2822,7 +2829,10 @@ mainEl.addEventListener('submit', e => {
   if (e.target.id !== 'whoForm') return;
   e.preventDefault();
   const input = document.getElementById('whoInput');
-  walkerSetup = { ...(walkerSetup || {}), text: input ? input.value : '', phase: 'edit', error: '' };
+  const text = input ? input.value : '';
+  // 問過「表上還沒有這個名字」、名字沒改又按一次：就是確定要用
+  const confirmed = walkerSetup && walkerSetup.phase === 'confirm' && walkerSetup.text === text;
+  walkerSetup = { ...(walkerSetup || {}), text, phase: confirmed ? 'confirm' : 'edit', error: '' };
   saveWalkerSetup();
 });
 
@@ -2858,38 +2868,81 @@ function pad2(n) {
 }
 
 // ── 開頭畫面（#141 第 2 項）──
-// 第一次打開：先輸入你在試算表上的名字，才進網站；接著幾頁說明（像新網站上線的導覽），按「開始使用」就不再出現。
+// 第一次打開：先問你在試算表上的名字，接著幾頁說明（像新網站上線的導覽），按「開始使用」就不再出現。
 // 已經有名字（以前在我溜過設定過）只看說明；說明看過、名字被清掉了，只問名字
+// 介面評估第四輪（K 2026-10-08）：名字可以「先看看，等一下再設定」（現場沒訊號也進得去），
+// 沒名字的人按「溜了」時再問，設好直接幫他登記那隻；說明可以從我溜過的「說明」再打開
 const ONBOARD_KEY = 'bq-onboarded';
+const NAME_LATER_KEY = 'bq-name-later';
 const ONBOARD_SLIDES = [
-  { icon: 'list', title: '溜狗表', text: '最久沒溜的狗排在最上面，顏色看得出多久沒溜。上面可以只看「★ 我的常溜」，右上角可以收起照片、像試算表一樣一列一隻。' },
-  { icon: 'tick', title: '溜完按「溜了」', text: '狗卡右邊按一下「溜了」，日期和你的名字會直接寫進試算表，其他志工也看得到。按錯再按一次就取消。' },
-  { icon: 'map', title: '找狗', text: '看照片認狗，或看平面圖找籠位。點狗卡上的籠位，也會告訴你狗在哪。' },
-  { icon: 'paw', title: '我溜過', text: '你溜過的狗都在這裡，一次到所一張卡。' },
+  { icon: 'list', title: '溜狗表', text: '最久沒溜的狗排在最上面，顏色看得出多久沒溜。點狗卡看詳細資訊，紅底字是要先看的警示。在詳細資訊按「☆ 常溜」，狗就會出現在「★ 我的常溜」。' },
+  { icon: 'tick', title: '溜完按「溜了」', text: '按狗卡右邊的「溜了」，日期和你的名字會寫進試算表，寫好才變「已溜」。按錯再按一次就取消。跟別人一起溜，在下面的提示條按「＋一起溜的人」。' },
+  { icon: 'paw', title: '我溜過', text: '你溜過的狗都在這裡，每次到所一張卡。名字要改，在這頁按「修改」；想再看這份說明，按「說明」。' },
+  { icon: 'map', title: '找狗', text: '一打開就是平面圖，點一區看籠位，也可以換成列表。點狗卡上的籠位，會告訴你狗在哪。' },
 ];
-let onboard = null; // { step: 0 名字／1… 說明, text, phase, error }
+// { step: 0 名字／1… 說明, text, phase: edit／saving／error／confirm, error, unknown: 表上沒有的名字,
+//   walk: 名字設好後要登記的狗（按溜了才問名字）, again: 從我溜過再打開說明 }
+let onboard = null;
 function onboardDone() {
   try { return walkedStorage && walkedStorage.getItem(ONBOARD_KEY) === '1'; } catch (e) { return false; }
 }
+function nameLater() {
+  try { return walkedStorage && walkedStorage.getItem(NAME_LATER_KEY) === '1'; } catch (e) { return false; }
+}
+function setNameLater(on) {
+  try { if (walkedStorage) on ? walkedStorage.setItem(NAME_LATER_KEY, '1') : walkedStorage.removeItem(NAME_LATER_KEY); } catch (e) { /* 存不了下次再問一次 */ }
+}
 function needOnboard() {
-  return !onboardDone() || !loadWalkerName() || !loadMyCodes().length;
+  return !onboardDone() || (!nameLater() && (!loadWalkerName() || !loadMyCodes().length));
+}
+// 按溜了要寫進試算表、卻還沒有名字：先問名字
+function needNameToWalk() {
+  return !!UPLOAD_URL && sheetWriteState !== 'off' && !loadWalkerName();
+}
+// 自己打的名字裡，試算表上沒出現過的（打錯字會寫進大家共用的試算表，送出前問一次）
+function unknownWalkerNames(text) {
+  if (!walkerNameList.length) return [];
+  const known = new Set(walkerNameList.map(canonicalWalker));
+  return splitWalkers(text).map(canonicalWalker).filter(n => n && !known.has(n));
+}
+// 名字欄下面的提示：點了好幾個寫法時說按溜了寫哪一個；表上沒有的名字要確認
+function nameFirstHtml(o) {
+  return splitWalkers(o.text).length > 1 ? `<p class="ob-help">按「溜了」時寫「${esc(canonicalWalker(firstWalkerName(o.text)))}」。</p>` : '';
+}
+function nameConfirmHtml(o) {
+  return o.phase === 'confirm' ? `<div class="ob-confirm" role="alert">${icon('alert')}<span>試算表上還沒有「${esc(o.unknown.join('、'))}」，確定用這個名字？打錯字的話請改一下。</span></div>` : '';
+}
+function nameHintsHtml(o) {
+  return nameFirstHtml(o) + nameConfirmHtml(o);
 }
 function onboardHtml() {
   const o = onboard;
   if (o.step === 0) {
     const busy = o.phase === 'saving';
-    return `<form class="ob-page ob-name" id="obForm" autocomplete="off">
-      <div class="ob-hero">${icon('paw')}</div>
+    const names = walkerNameList.length > 0;
+    const head = o.walk
+      ? `<h1 class="ob-ask">先告訴我們你是誰</h1>
+      <p class="ob-lead">「溜了」會把你的名字寫進試算表「誰遛的」。設好就幫你登記 ${esc(o.walk.map(d => d.name).join('、'))}。</p>`
+      : `<div class="ob-hero">${icon('paw')}</div>
       <h1>板收志工溜狗表</h1>
-      <p class="ob-lead">歡迎！先告訴我們你是誰。</p>
-      <label class="ob-label" for="obInput">${walkerNameList.length ? '點選你在試算表上的名字' : '你在試算表「誰遛的」寫的名字'}</label>
+      <p class="ob-lead">歡迎！先告訴我們你是誰。</p>`;
+    const label = names
+      ? `<label class="ob-label" for="obInput">點你在試算表上的名字</label><p class="ob-label-note">同一個人在表上有好幾種寫法，可以都點。</p>`
+      : `<label class="ob-label" for="obInput">你在試算表「誰遛的」寫的名字</label>${isOffline() ? '<p class="ob-label-note">名字清單讀不到（沒網路），請自己輸入。</p>' : ''}`;
+    const submit = busy ? '設定中…' : o.phase === 'confirm' ? '確定用這個名字' : o.walk ? '設定並登記' : '下一步';
+    return `<form class="ob-page ob-name" id="obForm" autocomplete="off">
+      ${head}
+      ${label}
       ${obNamesHtml(o, busy)}
-      <input type="text" id="obInput" maxlength="60" placeholder="${walkerNameList.length ? '找不到？自己輸入' : '例：小明'}" value="${esc(o.text)}"${busy ? ' disabled' : ''} enterkeyhint="done">
-      ${walkerNameList.length ? '<p class="ob-help">上面沒有你的名字，就在這裡輸入。</p>' : ''}
-      ${o.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(o.error)}</span></div>` : ''}
+      <input type="text" id="obInput" maxlength="60" placeholder="例：小明" value="${esc(o.text)}"${busy ? ' disabled' : ''} enterkeyhint="done">
+      ${names ? '<p class="ob-help">上面沒有你的名字，就在這裡輸入。</p>' : ''}
+      ${nameFirstHtml(o)}
       <div class="ob-foot">
-        <button type="submit" class="ob-next"${busy ? ' disabled' : ''}>${busy ? '設定中…' : '下一步'}</button>
-        <p class="ob-small">按「溜了」時，會把這個名字寫進試算表「誰遛的」。</p>
+        ${nameConfirmHtml(o)}
+        ${o.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(o.error)}${o.walk ? '' : '。可以先按「先看看」進網站，有訊號時再設定。'}</span></div>` : ''}
+        ${o.walk ? '' : '<p class="ob-small">按「溜了」時，會把這個名字寫進試算表「誰遛的」。</p>'}
+        <button type="submit" class="ob-next"${busy ? ' disabled' : ''}>${submit}</button>
+        <button type="button" class="ob-later" data-ob="${o.walk ? 'cancel' : 'later'}"${busy ? ' disabled' : ''}>${o.walk ? '取消' : '先看看，等一下再設定'}</button>
       </div>
     </form>`;
   }
@@ -2897,27 +2950,46 @@ function onboardHtml() {
   const sl = ONBOARD_SLIDES[i];
   const last = i === ONBOARD_SLIDES.length - 1;
   return `<div class="ob-page ob-slide">
-    <button type="button" class="ob-skip" data-ob="done">略過</button>
+    <div class="ob-top">
+      ${i > 0 ? '<button type="button" class="ob-back" data-ob="back">上一頁</button>' : '<span></span>'}
+      <button type="button" class="ob-skip" data-ob="done">${o.again ? '關閉' : '略過'}</button>
+    </div>
     <div class="ob-art">${icon(sl.icon)}</div>
-    <h2>${sl.title}</h2>
+    <h2 tabindex="-1">${sl.title}</h2>
     <p>${sl.text}</p>
     <div class="ob-foot">
-      <div class="ob-dots">${ONBOARD_SLIDES.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
-      <button type="button" class="ob-next" data-ob="${last ? 'done' : 'next'}">${last ? '開始使用' : '下一步'}</button>
+      <div class="ob-dots" role="img" aria-label="第 ${i + 1} 頁，共 ${ONBOARD_SLIDES.length} 頁">${ONBOARD_SLIDES.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
+      <button type="button" class="ob-next" data-ob="${last ? 'done' : 'next'}">${last ? (o.again ? '看完了' : '開始使用') : '下一步'}</button>
     </div>
   </div>`;
 }
 // 開頭畫面的名字按鈕（K 2026-10-04：入口的名字要能從表上已有的人選）：點了就加進輸入框，再點一次拿掉
-// 我溜過的「修改」也用同一排（kind 'who'）
+// 我溜過的「修改」也用同一排（kind 'who'）。選了用框線＋右上角勾勾（不是實心藍），跟「一起溜的人」分得出來，按鈕也不會變寬
 function obNamesHtml(o, busy, kind = 'ob') {
   if (!walkerNameList.length) return '';
   const picked = new Set(splitWalkers(o.text));
   return `<div class="ob-names">${walkerNameList.map(n =>
-    `<button type="button" class="with-name${picked.has(n) ? ' on' : ''}" data-${kind}-name="${esc(n)}" aria-pressed="${picked.has(n)}"${busy ? ' disabled' : ''}>${picked.has(n) ? icon('tick') : ''}${esc(n)}</button>`).join('')}</div>`;
+    `<button type="button" class="with-name me-name${picked.has(n) ? ' on' : ''}" data-${kind}-name="${esc(n)}" aria-pressed="${picked.has(n)}"${busy ? ' disabled' : ''}>${esc(n)}${picked.has(n) ? icon('tick') : ''}</button>`).join('')}</div>`;
+}
+// 開頭畫面蓋住整個網站：後面的東西設成不能點、Tab 也跑不過去（inert）
+function setOnboardInert(box) {
+  for (const el of document.body.children) {
+    if (box && el !== box && !el.inert && el.tagName !== 'SCRIPT') { el.inert = true; el.dataset.obInert = '1'; }
+    if (!box && el.dataset.obInert) { el.inert = false; delete el.dataset.obInert; }
+  }
+}
+function closeOnboard() {
+  onboard = null;
+  renderOnboard();
 }
 function renderOnboard() {
   let box = document.getElementById('onboard');
-  if (!onboard) { if (box) box.remove(); document.documentElement.classList.remove('onboard-open'); return; }
+  if (!onboard) {
+    if (box) box.remove();
+    setOnboardInert(null);
+    document.documentElement.classList.remove('onboard-open');
+    return;
+  }
   if (!box) {
     box = document.createElement('div');
     box.id = 'onboard';
@@ -2932,38 +3004,92 @@ function renderOnboard() {
         const n = nameBtn.dataset.obName;
         const list = splitWalkers(onboard.text);
         onboard.text = (list.includes(n) ? list.filter(x => x !== n) : [...list, n]).join('、');
-        if (onboard.phase === 'error') onboard.phase = 'edit';
+        if (onboard.phase === 'error' || onboard.phase === 'confirm') onboard.phase = 'edit';
         renderOnboard();
         return;
       }
       const b = e.target.closest('[data-ob]');
       if (!b) return;
-      if (b.dataset.ob === 'next') onboard.step++;
-      else { try { walkedStorage && walkedStorage.setItem(ONBOARD_KEY, '1'); } catch (err) { /* 存不了下次再看一次 */ } onboard = null; render(); }
+      const act = b.dataset.ob;
+      if (act === 'next') onboard.step++;
+      else if (act === 'back') onboard.step = Math.max(1, onboard.step - 1);
+      else if (act === 'cancel') return closeOnboard();
+      else if (act === 'later') {
+        setNameLater(true);
+        onboard = onboardDone() ? null : { step: 1 };
+        render();
+      } else { try { walkedStorage && walkedStorage.setItem(ONBOARD_KEY, '1'); } catch (err) { /* 存不了下次再看一次 */ } onboard = null; render(); }
       renderOnboard();
     });
-    box.addEventListener('input', e => { if (onboard && onboard.phase !== 'saving' && e.target.id === 'obInput') onboard.text = e.target.value; });
+    box.addEventListener('input', e => {
+      if (!onboard || onboard.phase === 'saving' || e.target.id !== 'obInput') return;
+      onboard.text = e.target.value;
+      // 改了名字，之前的錯誤和「確定用這個名字」就不算了（重畫時游標留在原處）
+      if (onboard.phase === 'error' || onboard.phase === 'confirm') { onboard.phase = 'edit'; renderOnboard(); }
+    });
+    box.addEventListener('keydown', e => {
+      e.stopPropagation(); // 開頭畫面蓋在最上面，後面網頁（在哪面板、裁切）的按鍵處理不要接到
+      if (e.key !== 'Escape' || !onboard) return;
+      if (onboard.walk) closeOnboard();
+      else if (onboard.step > 0) box.querySelector('[data-ob="done"]').click(); // 說明頁 Esc 等於略過
+    });
     box.addEventListener('submit', async e => {
       e.preventDefault();
       if (onboard.phase === 'saving') return;
+      const unknown = unknownWalkerNames(onboard.text);
+      if (onboard.phase !== 'confirm' && unknown.length) {
+        onboard.phase = 'confirm';
+        onboard.unknown = unknown;
+        renderOnboard();
+        return;
+      }
       onboard.phase = 'saving';
       renderOnboard();
       const error = await setWalkerName(onboard.text);
       if (error) { onboard.phase = 'error'; onboard.error = error; renderOnboard(); return; }
-      onboard = onboardDone() ? null : { step: 1 };
+      setNameLater(false);
+      const walk = onboard.walk;
+      onboard = walk || onboardDone() ? null : { step: 1 };
       renderOnboard();
       render();
+      if (walk) setWalked(walk, true);
     });
   }
+  // 重畫時正在打字的人游標不要掉（名字清單比畫面晚到也會重畫）
+  const typing = document.activeElement && document.activeElement.id === 'obInput' && box.contains(document.activeElement)
+    ? [document.activeElement.selectionStart, document.activeElement.selectionEnd] : null;
   document.documentElement.classList.add('onboard-open');
+  setOnboardInert(box);
+  const stepChanged = box.dataset.step !== String(onboard.step);
+  box.dataset.step = String(onboard.step);
   box.innerHTML = onboardHtml();
   const input = box.querySelector('#obInput');
-  // 有名字可以點時不自動叫出鍵盤，免得蓋住名字
-  if (input && onboard.phase !== 'saving' && !walkerNameList.length) input.focus({ preventScroll: true });
+  if (input && typing && !input.disabled) {
+    input.focus({ preventScroll: true });
+    try { input.setSelectionRange(typing[0], typing[1]); } catch (e) { /* 有些輸入法不給設 */ }
+  } else if (onboard.step > 0 && stepChanged) {
+    box.scrollTop = 0;
+    box.querySelector('h2').focus({ preventScroll: true }); // 換頁後讀螢幕的人才知道到了哪一頁
+  } else if (input && onboard.phase === 'edit' && stepChanged && !walkerNameList.length) {
+    input.focus({ preventScroll: true }); // 有名字可以點時不自動叫出鍵盤，免得蓋住名字
+  } else if (!box.contains(document.activeElement)) {
+    (box.querySelector('h1, h2') || box).setAttribute('tabindex', '-1');
+    (box.querySelector('h1, h2') || box).focus({ preventScroll: true });
+  }
 }
 function startOnboard() {
   if (onboard || !needOnboard()) return;
-  onboard = loadWalkerName() && loadMyCodes().length ? { step: 1 } : { step: 0, text: '', phase: 'edit', error: '' };
+  onboard = (loadWalkerName() && loadMyCodes().length) || nameLater() ? { step: 1 } : { step: 0, text: '', phase: 'edit', error: '' };
+  renderOnboard();
+}
+// 按溜了才問名字（先看看的人）：設好直接登記這幾隻
+function askNameThenWalk(dogs) {
+  onboard = { step: 0, text: '', phase: 'edit', error: '', walk: dogs };
+  renderOnboard();
+}
+// 我溜過的「說明」：從第一頁再看一次，不動名字
+function openGuide() {
+  onboard = { step: 1, again: true };
   renderOnboard();
 }
 
