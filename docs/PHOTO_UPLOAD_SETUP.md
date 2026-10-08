@@ -12,7 +12,7 @@ GitHub 的寫入權限（token）只放在 Cloudflare 裡，網站程式和 repo
 
 還沒做完這些步驟前，網站不會出現上傳按鈕，其他功能照常。
 
-> **V8（#125）起網站可以搬到 Cloudflare**，照片上傳服務跟網站合在同一個 Worker、自動部署，設定見 [`CLOUDFLARE_SETUP.md`](CLOUDFLARE_SETUP.md)。這份說明的是舊網址（GitHub Pages）在用的單獨 Worker `bq-shelter-photos`，切換完成前不要刪。
+> ⚠️ **這份已經過時，只留作紀錄。** V8（#125）起照片上傳服務跟網站合在同一個 Worker、自動部署，設定見 [`CLOUDFLARE_SETUP.md`](CLOUDFLARE_SETUP.md)。這份說明的單獨 Worker `bq-shelter-photos` 和 `worker/wrangler.toml` 在 2026-10 拿掉了（K 決定刪除）。下面的「誰遛的代號」密鑰說明仍然適用，只是密鑰現在設在 GitHub Secret `WALKER_KEY`、部署時自動帶上去。
 
 ---
 

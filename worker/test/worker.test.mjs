@@ -6,8 +6,9 @@ import worker from '../src/index.js';
 
 const { resetState, allowUpload, isJpeg, MAX_BYTES } = worker.testing;
 
-const ORIGIN = 'https://jiatsenk.github.io';
-const ENV = { GITHUB_TOKEN: 'test-token' };
+// 測試用另一個網址，用 ALLOWED_ORIGINS 放行（正式網站跟 Worker 同網址，不用設）
+const ORIGIN = 'https://allowed.example';
+const ENV = { GITHUB_TOKEN: 'test-token', ALLOWED_ORIGINS: ORIGIN };
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
 const DOGS = { dogs: [{ id: '2024032902', name: '測試狗' }, { id: '', name: '沒編號' }] };
 
@@ -124,7 +125,7 @@ test('只接受 GitHub Pages 網站：其他網站、沒有 Origin 都擋；預�
 
 test('沒設 GITHUB_TOKEN：回「還沒設定好」；首頁顯示 token 有沒有設、不顯示內容', async () => {
   fakeGithub();
-  const r = await send(post('2024032902'), {});
+  const r = await send(post('2024032902'), { ALLOWED_ORIGINS: ORIGIN });
   assert.equal(r.status, 500);
   assert.match(r.body.error, /GITHUB_TOKEN/);
   const home = await send(new Request('https://w.example/'), ENV);
@@ -153,7 +154,7 @@ test('isJpeg 看檔頭', () => {
 
 // ---- 我的備註（#61）----
 
-const NENV = { GITHUB_TOKEN: 'test-token', NOTES_PASSCODE: '對的通關碼' };
+const NENV = { GITHUB_TOKEN: 'test-token', ALLOWED_ORIGINS: ORIGIN, NOTES_PASSCODE: '對的通關碼' };
 const NOTES_API = '/repos/jiatsenK/bq-shelter-dogs/contents/data/my-notes.json';
 
 // 假 GitHub：data/my-notes.json 放在 store（text 是檔案內容，null 表示還沒有這個檔）
@@ -942,4 +943,11 @@ test('#141 POST /walk 修改：必須帶原始名單快照；通過既有來源�
   const req = new Request(`${SITE}/api/walk`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   assert.equal((await send(req, { ...SHEET_ENV, PREVIEW: '1' })).status, 403);
   assert.equal(calls.length, 1);
+});
+
+test('舊網址拿掉後：沒設 ALLOWED_ORIGINS 時，舊網址 github.io 送來的要求一律擋，同網址照常', async () => {
+  fakeNotesGithub({ text: '{}' });
+  const env = { GITHUB_TOKEN: 'test-token', NOTES_PASSCODE: '對的通關碼' };
+  assert.equal((await send(new Request(`${SITE}/api/notes`, { headers: { Origin: 'https://jiatsenk.github.io' } }), env)).status, 403);
+  assert.equal((await send(new Request(`${SITE}/api/notes`, { headers: { Origin: SITE } }), env)).status, 200);
 });

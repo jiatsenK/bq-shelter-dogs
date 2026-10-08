@@ -711,3 +711,9 @@
 - 從上游 commit 778c8a7 的 plugin/ 複製 skills/impeccable 到 .claude/skills/impeccable、四個子代理到 .claude/agents/；附 LICENSE-impeccable、NOTICE-impeccable.md。沒裝上游 hooks（每次 Edit/Write 都會跑）。
 - 雲端試跑：`impeccable context` 正常（會自動下載檢查程式）；`impeccable detect index.html css` 找到 3 項（搜尋框 placeholder 對比 2.2:1、灰字對比 3.1:1、深色底彩色光暈）＋1 項建議（條紋背景），這次沒改。
 - AGENTS.md 加用法說明。沒改網站程式。
+
+## 2026-10-05 拿掉程式裡的舊網址與舊照片上傳 Worker（Claude，分支 claude/project-thread-ovzdfh）
+- 依據：K 說「舊的可以刪掉了」，在選項卡選「以上全部」（程式判斷、舊 Worker、repo 舊照片）。這個 PR 只做程式判斷；舊 Worker 由 K 在 Cloudflare 刪（步驟在 `docs/CLOUDFLARE_SETUP.md`），repo 舊照片轉給 #130 照片搬家那串。
+- `js/app.js`：拿掉 `OLD_UPLOAD_URL`，`uploadUrlFor` 一律用同網址 `/api`（沒有網址時留空，不顯示上傳）。
+- `worker/src/index.js`：`ALLOWED_ORIGINS` 預設改成空白（只接受同網址）；`wrangler.jsonc` 拿掉給 github.io 的設定。刪掉舊單獨 Worker 的設定檔 `worker/wrangler.toml`；`docs/PHOTO_UPLOAD_SETUP.md` 標成過時。舊網址轉址（#129）保留。
+- 測試：Worker 測試改用 `ALLOWED_ORIGINS` 放行測試網址，新增「沒設時 github.io 一律擋」；`r2-bucket.test.mjs` 改測行內 jsonc；網頁 #125 測試改成一律同網址 `/api`。node 133 項、網頁 183 項全過。
