@@ -1172,7 +1172,7 @@ html.find-zoom-open { overflow: hidden; }
 .detail-bar .self-walked { flex: 1.6; margin: 0; justify-content: center; background: var(--green-bg); border-radius: 14px; }
 .detail-bar button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 /* #146：選了照片時底部換成取消／確認上傳，確認用綠色，跟藍色的溜了分開 */
-.detail-bar .bar-confirm { flex: 1.6; min-height: 50px; border: none; border-radius: 14px; background: var(--green, #34C759); color: #fff; font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
+.detail-bar .bar-confirm { flex: 1.6; min-height: 50px; border: none; border-radius: 14px; background: var(--primary); color: #fff; font-family: inherit; font-size: 16px; font-weight: 700; cursor: pointer; }
 .detail-bar .bar-confirm:disabled { opacity: 0.6; cursor: default; }
 
 /* ── V7（#114）各頁美術：溜狗表三格、今天已溜大數字、我溜過進度條 ── */
@@ -1445,3 +1445,16 @@ html.onboard-open { overflow: hidden; }
 .a-kpis { grid-template-columns: repeat(3, 1fr); }
 .a-back { min-height: 44px; }
 .a-miss summary { min-height: 44px; align-items: center; padding-block: 0; }
+
+/* 介面評估第三輪（2026-10-08）：提示條不擋住最下面的狗卡、按鈕 44px；在哪面板警示 */
+body.toast-on main { padding-bottom: calc(176px + env(safe-area-inset-bottom, 0px)); }
+.toast-text { cursor: pointer; }
+.toast-undo, .toast-extra { min-height: 44px; }
+.where-sheet .warn-note { margin: 10px 0 0; }
+/* 相簿預覽格的 ✕、裁切，裁切比例、相機按鈕：看得到的 34px，可以按的範圍 44px */
+.gb-remove, .gb-crop { width: 34px; height: 34px; font-size: 15px; }
+.gb-remove::after, .gb-crop::after { inset: -5px; }
+.crop-aspects button { min-height: 44px; padding: 0 14px; }
+.crop-zoom input { height: 44px; }
+.detail-head .photo-wrap.hero .photo-pick { width: 44px; height: 44px; }
+.brand .updated.offline { color: var(--red-text); font-weight: 700; }

@@ -169,7 +169,7 @@ async function loadMyWalks() {
   // 不在「我溜過」就只更新分類上的數字（#91）：整頁重畫會把第一屏正在載入的照片換掉
   const n = document.querySelector('#tabs [data-tab="mine"] .n');
   if (activeTab !== 'mine' && !analysisOpen && n) {
-    const count = myWalksCount(searchQuery.trim());
+    const count = myWalksCount('');
     n.textContent = count == null ? '' : count;
   } else {
     render();
@@ -859,10 +859,31 @@ let sheetQueue = Promise.resolve();
 // 只在畫面上顯示。{ 狗的 key: '志工乙+志工丙+岑' }；拿不到就不顯示名字，其他照常
 let walkerNames = {};
 let walkerNameList = []; // 表上出現過的名字（開頭畫面讓志工點選自己，#141）
+// 介面評估第三輪（K 2026-10-08）：沒網路時要告訴志工，不然溜狗人只有「—」、頁首照樣寫資料更新時間。
+// 手機說離線，或拿溜狗人名字時連不上（不是 Worker 回錯誤），就當作沒網路
+let walkerNamesOffline = false;
+function isOffline() {
+  return walkerNamesOffline || (typeof navigator !== 'undefined' && navigator.onLine === false);
+}
+function setWalkerNamesOffline(on) {
+  if (walkerNamesOffline === on) return;
+  walkerNamesOffline = on;
+  renderUpdatedLabel();
+  render();
+  renderDetail();
+}
 async function loadWalkerNames() {
   if (!UPLOAD_URL) return;
+  let res;
   try {
-    const res = await fetch(`${UPLOAD_URL}/walkers`, { cache: 'no-cache' });
+    res = await fetch(`${UPLOAD_URL}/walkers`, { cache: 'no-cache' });
+  } catch (e) {
+    console.error(e);
+    setWalkerNamesOffline(true);
+    return;
+  }
+  setWalkerNamesOffline(false);
+  try {
     if (!res.ok) return;
     const out = await res.json();
     if (out && out.walkers && typeof out.walkers === 'object') {
@@ -1199,6 +1220,8 @@ function showToast(text, undo, extra) {
       hideToast();
       if (fn) fn();
     });
+    // 介面評估第三輪：提示條會蓋住下面那張狗卡，點文字就收起
+    el.querySelector('.toast-text').addEventListener('click', hideToast);
     el.querySelector('.toast-undo').addEventListener('click', () => {
       const fn = toastUndo;
       hideToast();
@@ -1214,6 +1237,7 @@ function showToast(text, undo, extra) {
   ex.hidden = !extra;
   ex.textContent = extra ? extra.label : '';
   el.hidden = false;
+  document.body.classList.add('toast-on');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(hideToast, 5000);
 }
@@ -1224,6 +1248,7 @@ function hideToast() {
   toastExtra = null;
   const el = document.getElementById('toast');
   if (el) el.hidden = true;
+  document.body.classList.remove('toast-on');
 }
 
 // 狗卡右側的「已遛」（溜狗表）／「移回」（今天已溜）按鈕；連犬名都沒有的狗記不了，照舊顯示箭頭
@@ -1416,7 +1441,7 @@ function walkerUndoable(dog, who, today = new Date()) {
     && !!(item && item.mine && item.prev && item.wrote && item.current && item.current.walker === item.wrote.walker);
 }
 function walkerChipsHtml(dog, who, today) {
-  if (!who.length) return '<span class="lw-none">—</span>';
+  if (!who.length) return isOffline() ? '<span class="lw-none">讀不到（沒網路）</span>' : '<span class="lw-none">—</span>';
   if (!walkerEditBase(dog, today)) return who.map(n => `<span class="who-chip">${esc(n)}</span>`).join('');
   const busy = walkerEditBusy === walkKey(dog);
   const dis = busy ? ' disabled' : '';
@@ -2105,7 +2130,7 @@ async function uploadPhoto() {
       body: up.blob,
     });
     const out = await res.json().catch(() => null);
-    if (!res.ok || !out || !out.ok) error = (out && out.error) || `上傳失敗（${res.status}），原本的照片不受影響`;
+    if (!res.ok || !out || !out.ok) error = (out && out.error) || `網站暫時收不到照片（${res.status}），請稍後再試；原本的照片不受影響`;
   } catch (e) {
     error = '上傳失敗，請確認網路後再試；原本的照片不受影響';
   }
@@ -2119,6 +2144,7 @@ async function uploadPhoto() {
     up.phase = 'error';
     up.error = error;
     renderDetail();
+    showPhotoError();
     return;
   }
   up.phase = 'done';
@@ -2127,6 +2153,12 @@ async function uploadPhoto() {
   render();
   renderDetail();
   showToast(`${up.dog.name} 的照片已更新（其他志工重新整理就會看到）`);
+}
+
+// 介面評估第三輪（K 2026-10-08）：上傳失敗的說明可能在底部按鈕列後面，捲到看得到的地方
+function showPhotoError() {
+  const el = document.querySelector('#detail .photo-error') || document.querySelector('.photo-error');
+  if (el && el.scrollIntoView) el.scrollIntoView({ block: 'center' });
 }
 
 // ── 相簿一次加好幾張：選照片 → 每張壓成 JPEG、排成預覽格（可拿掉幾張）→ 「上傳 N 張」一張一張依序送 ──
@@ -2241,7 +2273,7 @@ async function uploadGalleryBatch() {
       });
       status = res.status;
       out = await res.json().catch(() => null);
-      if (!res.ok || !out || !out.ok) error = (out && out.error) || `上傳失敗（${res.status}）`;
+      if (!res.ok || !out || !out.ok) error = (out && out.error) || `網站暫時收不到照片（${res.status}），請稍後再試`;
       else if (!(out.photo && typeof out.photo.file === 'string')) error = '上傳服務回應不對，請重新整理後再看看';
     } catch (e) {
       error = '上傳失敗，請確認網路後再試';
@@ -2267,7 +2299,7 @@ async function uploadGalleryBatch() {
     return;
   }
   batch.phase = 'error';
-  if (shown()) { renderDetail(); return; }
+  if (shown()) { renderDetail(); showPhotoError(); return; }
   // 上傳途中關掉或換看別隻：用提示條告訴結果，沒傳成的丟掉
   const error = (batch.items.find(it => it.state === 'error') || {}).error;
   clearGalleryBatch();
@@ -2526,7 +2558,8 @@ function buildTabs(counts) {
   const tabsEl = document.getElementById('tabs');
   tabsEl.innerHTML = TABS.map(t => {
     const n = counts[t.id] != null ? counts[t.id] : t.note || '';
-    return `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}"${activeTab === t.id ? ' aria-current="page"' : ''}>${icon(t.icon)}<span class="t">${t.label}</span><span class="n">${n}</span></button>`;
+    const label = n === '' ? '' : ` aria-label="${t.label}，${t.id === 'mine' ? `${n} 筆紀錄` : `${n} 隻`}"`;
+    return `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}"${activeTab === t.id ? ' aria-current="page"' : ''}${label}>${icon(t.icon)}<span class="t">${t.label}</span><span class="n">${n}</span></button>`;
   }).join('');
   tabsEl.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
@@ -2721,9 +2754,9 @@ function renderMain() {
   const hit = d => matchesSearch(d, q);
   // V9（#141）：沒有今天已溜和收起了，全部的狗都在溜狗表；按過溜了的留在原地、顯示今天
   const walkList = sortWalkList(allDogs, today).filter(hit);
-  const mineCount = myWalksCount(q);
-  // 找狗只要隻數，不用排序（每次重畫都排一百多隻很慢）
-  buildTabs({ walk: walkList.length, mine: mineCount, find: allDogs.filter(d => findMatches(d, q)).length });
+  // 介面評估第三輪（K 2026-10-08）：找狗分頁不放數字（跟溜狗表一樣是全部的狗）；
+  // 我溜過一律是全部紀錄筆數，不跟著搜尋變（搜不到時「我溜過 0」像紀錄不見了）
+  buildTabs({ walk: walkList.length, mine: myWalksCount('') });
   searchInput.placeholder = activeTab === 'find' ? '狗名、編號或籠位' : '搜尋狗名';
   if (activeTab === 'find') {
     // 找狗（#99）搜尋全部的狗：犬名、編號、籠位都算
@@ -2962,14 +2995,25 @@ function applyDogsData(data) {
   groupMap = data.groups || {};
   loadWarning = data.groups ? '' : '「可以一起溜」暫時讀不到，其他資訊正常。';
   // 顯示試算表最後同步的時間（不是打開網頁的時間），志工才知道資料有多新
-  const t = data.syncedAt;
-  dataSyncedAt = t;
-  document.getElementById('updatedLabel').textContent = t
-    ? `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${pad2(t.getHours())}:${pad2(t.getMinutes())}` : '';
+  dataSyncedAt = data.syncedAt;
+  renderUpdatedLabel();
   loadState = 'ready';
   render();
   loadMyWalks();
 }
+
+// 頁首的資料時間；沒網路時改寫「沒網路・資料 10/8 09:01」，志工才知道看的是舊資料、溜了寫不進試算表
+function renderUpdatedLabel() {
+  const el = document.getElementById('updatedLabel');
+  if (!el) return;
+  const t = dataSyncedAt;
+  const when = t ? `${t.getMonth() + 1}/${t.getDate()} ${pad2(t.getHours())}:${pad2(t.getMinutes())}` : '';
+  const off = isOffline();
+  el.textContent = off ? (when ? `沒網路・資料 ${when}` : '沒網路') : when ? `資料更新 ${when}` : '';
+  el.classList.toggle('offline', off);
+}
+window.addEventListener('offline', () => { renderUpdatedLabel(); render(); renderDetail(); });
+window.addEventListener('online', () => { renderUpdatedLabel(); render(); renderDetail(); loadWalkerNames(); });
 
 // ── 頁首「更新」按鈕：請 Worker 叫 GitHub 同步試算表，再等網站上的 dogs.json 換新 ──
 // 同步約 1 分鐘、網站重新部署再約 1 分鐘；試算表沒有新東西時 dogs.json 不會變，等滿就告訴志工已經是最新
