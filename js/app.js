@@ -232,11 +232,11 @@ function walkerSetupHtml() {
   }
   return `<form class="who-box" id="whoForm" autocomplete="off">
     <h3>${icon('paw')}你是誰？</h3>
-    <p>輸入你在試算表「誰遛的」欄寫的名字。有好幾種寫法的話可以用頓號隔開。</p>
+    <p>點或輸入你在試算表「誰遛的」欄寫的名字。</p>
     ${obNamesHtml(edit, busy, 'who')}
     <input type="text" id="whoInput" maxlength="60" placeholder="例：小明" aria-label="你在試算表寫的名字" value="${esc(edit.text)}"${busy ? ' disabled' : ''}>
-    <p class="who-note">按「溜了」時會用第一個名字寫進試算表「誰遛的」。名字設定存在這支手機，換手機或換瀏覽器要重新設定。</p>
-    ${nameHintsHtml(edit)}
+    <p class="who-note">按「溜了」時會把這個名字寫進試算表「誰遛的」。名字設定存在這支手機，換手機或換瀏覽器要重新設定。</p>
+    ${nameConfirmHtml(edit)}
     ${edit.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(edit.error)}</span></div>` : ''}
     <div class="my-note-actions">
       <button type="submit" class="my-note-save" id="whoSave"${busy ? ' disabled' : ''}>${busy ? '設定中…' : edit.phase === 'confirm' ? '確定用這個名字' : '設定'}</button>
@@ -2795,8 +2795,7 @@ mainEl.addEventListener('click', e => {
   else if (e.target.closest('[data-open-guide]')) openGuide();
   else if (e.target.closest('[data-who-name]')) {
     const n = e.target.closest('[data-who-name]').dataset.whoName;
-    const list = splitWalkers(walkerSetup ? walkerSetup.text : '');
-    walkerSetup = { ...(walkerSetup || { error: '' }), phase: 'edit', text: (list.includes(n) ? list.filter(x => x !== n) : [...list, n]).join('、') };
+    walkerSetup = { ...(walkerSetup || { error: '' }), phase: 'edit', text: canonicalWalker(walkerSetup ? walkerSetup.text : '') === n ? '' : n };
     render();
   } else if (e.target.closest('#whoEdit')) {
     walkerSetup = { text: loadWalkerName(), phase: 'edit', error: '' }; // 先填目前的名字，不用重打
@@ -2874,12 +2873,51 @@ function pad2(n) {
 // 沒名字的人按「溜了」時再問，設好直接幫他登記那隻；說明可以從我溜過的「說明」再打開
 const ONBOARD_KEY = 'bq-onboarded';
 const NAME_LATER_KEY = 'bq-name-later';
+// K 2026-10-08：說明用網站上真的狗卡、按鈕當範例（demo），狗的資料還沒讀到時先用圖示
 const ONBOARD_SLIDES = [
-  { icon: 'list', title: '溜狗表', text: '最久沒溜的狗排在最上面，顏色看得出多久沒溜。點狗卡看詳細資訊，紅底字是要先看的警示。在詳細資訊按「☆ 常溜」，狗就會出現在「★ 我的常溜」。' },
-  { icon: 'tick', title: '溜完按「溜了」', text: '按狗卡右邊的「溜了」，日期和你的名字會寫進試算表，寫好才變「已溜」。按錯再按一次就取消。跟別人一起溜，在下面的提示條按「＋一起溜的人」。' },
-  { icon: 'paw', title: '我溜過', text: '你溜過的狗都在這裡，每次到所一張卡。名字要改，在這頁按「修改」；想再看這份說明，按「說明」。' },
-  { icon: 'map', title: '找狗', text: '一打開就是平面圖，點一區看籠位，也可以換成列表。點狗卡上的籠位，會告訴你狗在哪。' },
+  { icon: 'list', demo: 'card', title: '溜狗表', text: '最久沒溜的狗排在最上面，天數的顏色看得出多久沒溜。紅底字是要先看的警示。點狗卡看詳細資訊。' },
+  { icon: 'tick', demo: 'walk', title: '溜完按「溜了」', text: '日期和你的名字會寫進試算表，寫好才變「已溜」。按錯再按一次就取消。跟別人一起溜，按提示條上的「＋一起溜的人」。' },
+  { icon: 'paw', demo: 'mine', title: '我溜過', text: '你溜過的狗都在這裡，每次到所一張卡。名字要改按「修改」；想再看這份說明按「說明」。' },
+  { icon: 'map', demo: 'where', title: '找狗', text: '一打開就是平面圖，點一區看籠位，也可以換成列表。點狗卡上的籠位，會告訴你狗在哪。' },
 ];
+// 範例用的狗：從目前的溜狗表挑，有照片的優先；第一頁挑有警示的，找狗挑知道籠位的
+function demoDogs(pred = () => true) {
+  const ok = allDogs.filter(d => walkKey(d) && !d.departure && pred(d));
+  return [...ok.filter(d => d.photo), ...ok.filter(d => !d.photo)];
+}
+function onboardDemoHtml(kind) {
+  if (!allDogs.length) return '';
+  const today = new Date();
+  let html = '';
+  if (kind === 'card') {
+    // 有警示、而且好幾天沒溜的狗＋一隻紅色（30 天以上）的狗，看得到警示和天數顏色
+    const days = d => { const st = computeStatus(d, today); return st.kind === 'dated' ? st.days : -1; };
+    const flaggedAll = demoDogs(d => specialFlag(d.note));
+    const flagged = flaggedAll.find(d => days(d) >= AMBER_DAYS) || flaggedAll[0];
+    const others = demoDogs(d => d !== flagged);
+    const plain = others.find(d => days(d) >= RED_DAYS) || others.find(d => days(d) >= AMBER_DAYS) || others[0];
+    html = [flagged, plain].filter(Boolean).map(d => dogCard(d, today)).join('');
+  } else if (kind === 'walk') {
+    const d = demoDogs()[0];
+    if (!d) return '';
+    html = `<div class="ob-demo-walk">
+        <div class="ob-demo-dog">${photoThumb(d, 48)}<span class="ob-demo-name">${esc(d.name)}${sexMark(d)}</span></div>
+        <span class="walk-btn">溜了</span>${icon('chevron')}<span class="walk-btn pending">登記中</span>${icon('chevron')}<span class="walk-btn done">${icon('tick')}已溜</span>
+      </div>
+      <div class="ob-demo-toast"><span>${esc(d.name)} 今天溜了，已寫進試算表</span><b>＋一起溜的人</b></div>`;
+  } else if (kind === 'mine') {
+    const dogs = demoDogs().slice(0, 3);
+    html = `<div class="section-hint who-hint">${icon('paw')}<span class="who-name">${esc(loadWalkerName() || '你的名字')}</span><span class="who-edit">修改</span><span class="who-edit">說明</span></div>
+      ${myVisitCard({ date: today, walks: dogs.map(d => ({ id: d.id, name: d.name })) })}`;
+  } else if (kind === 'where') {
+    if (typeof whereMapSvg !== 'function') return '';
+    const d = demoDogs(x => findCageOf(x) && findZoneOf(x))[0];
+    if (!d) return '';
+    const w = whereDirections(d);
+    html = `<div class="where-map">${whereMapSvg(d)}</div><p class="where-how">${esc(w.title)}：${esc(w.how)}</p>`;
+  }
+  return html ? `<div class="ob-demo" data-demo="${kind}" aria-hidden="true" inert>${html}</div>` : '';
+}
 // { step: 0 名字／1… 說明, text, phase: edit／saving／error／confirm, error, unknown: 表上沒有的名字,
 //   walk: 名字設好後要登記的狗（按溜了才問名字）, again: 從我溜過再打開說明 }
 let onboard = null;
@@ -2905,15 +2943,9 @@ function unknownWalkerNames(text) {
   const known = new Set(walkerNameList.map(canonicalWalker));
   return splitWalkers(text).map(canonicalWalker).filter(n => n && !known.has(n));
 }
-// 名字欄下面的提示：點了好幾個寫法時說按溜了寫哪一個；表上沒有的名字要確認
-function nameFirstHtml(o) {
-  return splitWalkers(o.text).length > 1 ? `<p class="ob-help">按「溜了」時寫「${esc(canonicalWalker(firstWalkerName(o.text)))}」。</p>` : '';
-}
+// 自己打的名字表上沒有：送出前確認一次
 function nameConfirmHtml(o) {
   return o.phase === 'confirm' ? `<div class="ob-confirm" role="alert">${icon('alert')}<span>試算表上還沒有「${esc(o.unknown.join('、'))}」，確定用這個名字？打錯字的話請改一下。</span></div>` : '';
-}
-function nameHintsHtml(o) {
-  return nameFirstHtml(o) + nameConfirmHtml(o);
 }
 function onboardHtml() {
   const o = onboard;
@@ -2927,7 +2959,7 @@ function onboardHtml() {
       <h1>板收志工溜狗表</h1>
       <p class="ob-lead">歡迎！先告訴我們你是誰。</p>`;
     const label = names
-      ? `<label class="ob-label" for="obInput">點你在試算表上的名字</label><p class="ob-label-note">同一個人在表上有好幾種寫法，可以都點。</p>`
+      ? `<label class="ob-label" for="obInput">點你在試算表上的名字</label>`
       : `<label class="ob-label" for="obInput">你在試算表「誰遛的」寫的名字</label>${isOffline() ? '<p class="ob-label-note">名字清單讀不到（沒網路），請自己輸入。</p>' : ''}`;
     const submit = busy ? '設定中…' : o.phase === 'confirm' ? '確定用這個名字' : o.walk ? '設定並登記' : '下一步';
     return `<form class="ob-page ob-name" id="obForm" autocomplete="off">
@@ -2936,7 +2968,6 @@ function onboardHtml() {
       ${obNamesHtml(o, busy)}
       <input type="text" id="obInput" maxlength="60" placeholder="例：小明" value="${esc(o.text)}"${busy ? ' disabled' : ''} enterkeyhint="done">
       ${names ? '<p class="ob-help">上面沒有你的名字，就在這裡輸入。</p>' : ''}
-      ${nameFirstHtml(o)}
       <div class="ob-foot">
         ${nameConfirmHtml(o)}
         ${o.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(o.error)}${o.walk ? '' : '。可以先按「先看看」進網站，有訊號時再設定。'}</span></div>` : ''}
@@ -2954,7 +2985,7 @@ function onboardHtml() {
       ${i > 0 ? '<button type="button" class="ob-back" data-ob="back">上一頁</button>' : '<span></span>'}
       <button type="button" class="ob-skip" data-ob="done">${o.again ? '關閉' : '略過'}</button>
     </div>
-    <div class="ob-art">${icon(sl.icon)}</div>
+    ${onboardDemoHtml(sl.demo) || `<div class="ob-art">${icon(sl.icon)}</div>`}
     <h2 tabindex="-1">${sl.title}</h2>
     <p>${sl.text}</p>
     <div class="ob-foot">
@@ -2963,11 +2994,11 @@ function onboardHtml() {
     </div>
   </div>`;
 }
-// 開頭畫面的名字按鈕（K 2026-10-04：入口的名字要能從表上已有的人選）：點了就加進輸入框，再點一次拿掉
+// 開頭畫面的名字按鈕（K 2026-10-04：入口的名字要能從表上已有的人選）：一人選一個（K 2026-10-08），點了填進輸入框，再點一次拿掉
 // 我溜過的「修改」也用同一排（kind 'who'）。選了用框線＋右上角勾勾（不是實心藍），跟「一起溜的人」分得出來，按鈕也不會變寬
 function obNamesHtml(o, busy, kind = 'ob') {
   if (!walkerNameList.length) return '';
-  const picked = new Set(splitWalkers(o.text));
+  const picked = new Set([canonicalWalker(o.text)]);
   return `<div class="ob-names">${walkerNameList.map(n =>
     `<button type="button" class="with-name me-name${picked.has(n) ? ' on' : ''}" data-${kind}-name="${esc(n)}" aria-pressed="${picked.has(n)}"${busy ? ' disabled' : ''}>${esc(n)}${picked.has(n) ? icon('tick') : ''}</button>`).join('')}</div>`;
 }
@@ -3002,8 +3033,7 @@ function renderOnboard() {
       const nameBtn = e.target.closest('[data-ob-name]');
       if (nameBtn) {
         const n = nameBtn.dataset.obName;
-        const list = splitWalkers(onboard.text);
-        onboard.text = (list.includes(n) ? list.filter(x => x !== n) : [...list, n]).join('、');
+        onboard.text = canonicalWalker(onboard.text) === n ? '' : n;
         if (onboard.phase === 'error' || onboard.phase === 'confirm') onboard.phase = 'edit';
         renderOnboard();
         return;
@@ -3125,6 +3155,7 @@ function applyDogsData(data) {
   renderUpdatedLabel();
   loadState = 'ready';
   render();
+  if (onboard && onboard.step > 0) renderOnboard(); // 說明的範例狗卡要等狗的資料
   loadMyWalks();
 }
 

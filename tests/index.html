@@ -1921,11 +1921,11 @@ async function runV9Tests() {
       if (!box() || !box().querySelector('#obInput')) throw new Error('要先問名字');
       eq([...box().querySelectorAll('[data-ob-name]')].map(b => b.textContent), ['阿明', '阿華'], '表上的名字可以點：');
       box().querySelector('[data-ob-name="阿明"]').click();
+      eq(box().querySelector('#obInput').value, '阿明', '點了填進去：');
       box().querySelector('[data-ob-name="阿華"]').click();
-      eq(box().querySelector('#obInput').value, '阿明、阿華', '點了填進去：');
+      eq([box().querySelector('#obInput').value, box().querySelectorAll('[data-ob-name].on').length], ['阿華', 1], '一人選一個（K 2026-10-08）：');
       box().querySelector('[data-ob-name="阿華"]').click();
-      eq(box().querySelector('#obInput').value, '阿明', '再點一次拿掉：');
-      box().querySelector('[data-ob-name="阿明"]').click();
+      eq(box().querySelector('#obInput').value, '', '再點一次拿掉：');
       walkerNameList = [];
       box().querySelector('.ob-next').click();
       await new Promise(r => setTimeout(r, 0));
@@ -1956,10 +1956,11 @@ async function runV9Tests() {
       startOnboard();
       eq(box().querySelector('[data-ob="later"]').textContent, '先看看，等一下再設定', '名字頁可以先看看：');
       box().querySelector('[data-ob-name="阿明"]').click();
-      box().querySelector('[data-ob-name="阿華"]').click();
-      eq([box().querySelector('[data-ob-name="阿明"]').classList.contains('me-name'), /按「溜了」時寫「阿明」/.test(box().textContent)], [true, true], '點兩個名字說寫哪一個：');
+      eq(box().querySelector('[data-ob-name="阿明"]').classList.contains('me-name'), true, '選自己的名字跟一起溜的人樣子不同：');
       box().querySelector('[data-ob="later"]').click();
       eq([!!box().querySelector('.ob-slide'), nameLater()], [true, true], '先看看進說明：');
+      eq([!!box().querySelector('.ob-demo .card'), !!box().querySelector('.ob-demo [data-walk]')], [true, true], '說明用真的狗卡當範例（不能按）：');
+      if (!box().querySelector('.ob-demo').inert) throw new Error('範例要 inert');
       eq(box().querySelector('[data-ob="back"]'), null, '第一頁沒有上一頁：');
       box().querySelector('[data-ob="next"]').click();
       eq([document.activeElement === box().querySelector('h2'), box().querySelector('.ob-dots').getAttribute('aria-label')], [true, '第 2 頁，共 4 頁'], '換頁焦點到標題：');
