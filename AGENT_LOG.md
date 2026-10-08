@@ -779,3 +779,9 @@
 - 小問題：輸入框提示字改 --ink-soft；「會寫進試算表」那句 14px 黑字放按鈕上方；下一步、錯誤、確認訊息黏在畫面底部（畫面矮時不黏）；說明內容上下置中、段落靠左；Worker 錯誤「代號服務發生錯誤」改「名字設定暫時失敗，請稍後再試」。
 - 測試：測試頁預設 sheetWriteState='off'（溜了只記手機），#138 沒名字那項改成先問名字；新增第四輪 1 項。網頁 200、Node 141 全過。
 - 追加（K 2026-10-08 看過後）：名字改成一人選一個（點別人換掉、再點一次拿掉），拿掉「好幾種寫法可以都點」和「按溜了時寫哪一個」，我溜過修改框的「可以用頓號隔開」也拿掉；表上沒有的名字先確認保留。說明頁改用網站上真的狗卡、按鈕當範例（溜狗表：有警示的狗卡＋天數色；溜了：溜了→登記中→已溜＋提示條；我溜過：名字列＋一次到所卡；找狗：在哪的放大平面圖），範例 inert、不能按；狗的資料讀到後重畫。網頁 200 全過。
+
+## 2026-10-09 Claude（impeccable 用的 PRODUCT.md、DESIGN.md）
+- 依據：K 2026-10-09「請根據既有的 PROJECT_GOALS.md 和 DESIGN_GUIDE.md 建立，不要重複規格，也不要將目前的視覺風格設定成不可更動」。照指示直接從現有文件整理，沒做 impeccable 的訪談。
+- 根目錄新增 PRODUCT.md（產品摘要，各段指回 PROJECT_GOALS／DESIGN_GUIDE／CONTEXT／AGENTS）、DESIGN.md（frontmatter 抄 css/app.css :root 的現況色碼；內文寫明只是快照、以 CSS 為準、外觀可以改）。沒寫 .impeccable/design.json。
+- `.assetsignore` 加 PRODUCT.md、DESIGN.md、.impeccable（設計用文件不放上網站）；`.gitignore` 加 impeccable 比較頁的暫存。
+- `impeccable context` 已讀到兩份檔（platform: web）。沒改網站程式。
