@@ -1428,3 +1428,23 @@ html.onboard-open { overflow: hidden; }
 .find-top .find-chip { flex-shrink: 0; min-height: 44px; }
 .brand .date { white-space: nowrap; }
 .row-head { grid-template-columns: 50px minmax(0, 1fr) 40px minmax(0, 1.1fr) 60px; }
+
+/* 介面評估第二輪（2026-10-08）：一起溜／同籠格子的警示、詳細資訊警示放名字下面、清除前確認 */
+.buddy-tile.flagged .bname { color: var(--red-text); display: inline-flex; align-items: center; gap: 2px; }
+.buddy-tile.flagged .bname .icon { font-size: 13px; }
+.buddy .bwarn { font-size: 12px; font-weight: 700; color: var(--red-text); background: var(--red-bg); border-radius: 6px; padding: 1px 6px; }
+.detail-head .info .warn-note { margin: 10px 0 0; }
+.detail-head .chips { padding: 0; margin-left: 0; margin-right: 0; }
+.who-clear { min-height: 44px; }
+.who-clear-ok { flex: 1; min-height: 48px; border: none; border-radius: 14px; background: var(--red-text); color: #fff; font-family: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
+.with-name { min-height: 44px; }
+.ob-skip { min-width: 44px; min-height: 44px; }
+
+/* 統計頁（介面評估第二輪）：排名不用金銀銅（不是在慶祝待最久的狗）；母狗數字用黑字、紅色只留符號；橫條改實心主色，白字對比夠 */
+.a-rank.r1, .a-rank.r2, .a-rank.r3 { background: var(--primary-soft); color: var(--primary); }
+.a-sex.female .a-sex-v { color: var(--ink); }
+.a-sex.male .a-sex-v { color: var(--ink); }
+.a-hbar-fill { background: var(--primary); }
+.a-kpis { grid-template-columns: repeat(3, 1fr); }
+.a-back { min-height: 44px; }
+.a-miss summary { min-height: 44px; align-items: center; padding-block: 0; }

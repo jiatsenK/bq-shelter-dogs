@@ -1110,7 +1110,7 @@ async function runAnalysisTests() {
       const titles = [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
       eq(titles.length, 8, '七張統計（#76 拿掉散布圖）＋離所（#163）：');
       if (titles.includes('長期在所＋近期少遛')) throw new Error('K 說長期在所＋少遛不需要');
-      ['入所多久分布', '在所最久 Top 10', '入所年度分布', '各區平均在所時間', '長期在所犬比例',
+      ['入所多久分布', '在所最久 Top 10', '入所年度分布', '各區平均在所時間', '在所滿 1 年的比例',
         '公母在所時間差異', '狗的資料完整度'].forEach(t => { if (!titles.includes(t)) throw new Error(`少了 ${t}`); });
       if (!document.getElementById('main').textContent.includes('檢查中')) throw new Error('照片還沒查完要顯示檢查中');
       const photoCalls = calls.filter(([u]) => u.startsWith('photos/'));
@@ -1382,7 +1382,7 @@ async function runMyWalksTests() {
       document.getElementById('whoSave').click();
       await tick();
       eq(n, 0, '空白不送：');
-      if (!main.textContent.includes('請輸入你在溜狗表上寫的名字')) throw new Error(main.textContent);
+      if (!main.textContent.includes('請輸入你在試算表上寫的名字')) throw new Error(main.textContent);
       const input = document.getElementById('whoInput');
       input.value = '測試志工';
       input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1401,6 +1401,11 @@ async function runMyWalksTests() {
       eq(cardNames().length, 4, '取消回到紀錄：');
       document.getElementById('whoEdit').click();
       document.getElementById('whoClear').click();
+      eq(loadMyCodes(), ['aaaaaaaaaaaa'], '先問一次，還沒清：');
+      document.getElementById('whoClearNo').click();
+      eq([loadMyCodes().length, !!document.getElementById('whoInput')], [1, true], '不要清除：');
+      document.getElementById('whoClear').click();
+      document.getElementById('whoClearOk').click();
       eq(loadMyCodes(), [], '清除：');
       eq(!!document.getElementById('whoForm'), true, '清除後回到設定框：');
       eq(document.getElementById('whoCancel'), null, '清除後沒有取消：');
@@ -2508,7 +2513,7 @@ async function runV7PagesTests() {
       eq(box.querySelector('.row b').textContent, '2 / 5 隻', '已離所的不算、同一隻只算一次：');
       eq(box.querySelector('.bar i').style.width, '40%');
     });
-    await check('#114 分析頁：白底四格，不再是整塊藍底', async () => {
+    await check('#114 分析頁：白底大數字格，不再是整塊藍底', async () => {
       const css = await fetch('../css/app.css').then(r => r.text());
       if (!/\.a-hero\s*\{/.test(css)) throw new Error('找不到 .a-hero');
       if (/\.a-hero\s*\{[^}]*gradient/.test(css)) throw new Error('分析頁還有藍色漸層');
@@ -3241,7 +3246,7 @@ async function runDepartureTests() {
       eq(!!box.querySelector('#detailClose'), true);
       eq(box.querySelector('[data-section="walks"] .w-axis').lastElementChild.textContent, '10/1 離所');
       box.innerHTML = detailHtml(list[2], OCT8);
-      if (!box.textContent.includes('從主清單消失的那天') || !box.textContent.includes('已出所分頁找不到這隻狗')) throw new Error('待確認要寫原因');
+      if (!box.textContent.includes('從試算表消失的那天') || !box.textContent.includes('已出所分頁找不到這隻狗')) throw new Error('待確認要寫原因');
     });
   } finally {
     [allDogs, UPLOAD_URL, departuresData, depRoster, historyData] = saved;
