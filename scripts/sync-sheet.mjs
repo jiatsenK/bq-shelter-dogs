@@ -530,6 +530,191 @@ export function renderHistoryIndex(dates) {
   return `{\n  "version": 1,\n  "dates": [${list.map(d => JSON.stringify(d)).join(', ')}]\n}\n`;
 }
 
+// ── 離所（#162）──
+// 狗從主清單消失就記一筆離所，寫進 data/departures.json。原因只讀試算表「已出所」分頁（只讀，不寫入）：
+// 用編號找到那隻狗的那一列，整列文字套下面的關鍵字規則。判不出來、互相矛盾、找不到那一列都標「待確認」（unknown），
+// 不從別的線索推測（K 2026-10-08）。每次同步都重查，志工之後補上原因就會改過來。
+// 公開檔只存分類和命中的關鍵字，不存已出所分頁的原文（認養人、病況等都不會進 repo）。
+
+export const DEPARTURES_VERSION = 1;
+export const DEPARTED_SHEET = '已出所';
+
+// 關鍵字表：同一類寫長的在前，命中時記下是哪個字
+export const DEPARTURE_KEYWORDS = {
+  adopt: ['被認養', '被領養', '認養', '領養', '送養', '出養'],
+  death: ['安樂死', '死亡', '過世', '離世', '往生', '病逝', '去世', '安樂', '當天使', '小天使'],
+  other: ['原主領回', '飼主領回', '主人領回', '領回', '轉送', '轉所', '移送', '逃脫', '走失'],
+};
+// 關鍵字前面接這些字就不算（「未認養」「想認養」「待認養」都不是真的認養了）
+const NOT_BEFORE = /(未|沒|沒有|不|取消|想|想要|有意|詢問|考慮|預計|準備|等待|待|申請|試)$/;
+// 關鍵字後面接這些字也不算（「認養未成」「認養失敗」「領養人」）
+const NOT_AFTER = /^(未|沒|不|失敗|取消|人|者|資格|條件|申請|中)/;
+// 出現這些字整筆都標待確認（認養後被退回、試養還沒定案）
+const UNSURE_WORDS = ['退養', '退回', '試養'];
+
+// 一段文字 → { reason, matched, flags }。reason：adopt／death／other／unknown
+export function classifyDeparture(text) {
+  const s = String(text || '').replace(/\s+/g, '');
+  const hits = {};
+  for (const [reason, words] of Object.entries(DEPARTURE_KEYWORDS)) {
+    for (const w of words) {
+      let i = s.indexOf(w);
+      while (i !== -1) {
+        // 已經被同一類更長的字命中的位置（例：被認養裡的認養）不重算
+        const covered = (hits[reason] || []).some(h => i >= h.at && i < h.at + h.word.length);
+        if (!covered && !NOT_BEFORE.test(s.slice(Math.max(0, i - 3), i)) && !NOT_AFTER.test(s.slice(i + w.length))) {
+          (hits[reason] = hits[reason] || []).push({ word: w, at: i });
+        }
+        i = s.indexOf(w, i + 1);
+      }
+    }
+  }
+  const reasons = Object.keys(hits);
+  const unsure = UNSURE_WORDS.find(w => s.includes(w));
+  if (unsure) return { reason: 'unknown', matched: unsure, flags: ['unsure'] };
+  if (reasons.length > 1) return { reason: 'unknown', matched: reasons.map(r => hits[r][0].word).join('、'), flags: ['conflict'] };
+  if (!reasons.length) return { reason: 'unknown', matched: '', flags: [] };
+  // 同一類命中好幾次：取最後一次（通常是最新補上的那句）
+  const last = hits[reasons[0]].reduce((a, b) => (b.at > a.at ? b : a));
+  return { reason: reasons[0], matched: last.word, flags: [], at: last.at, text: s }; // at、text 給 dateBeforeMatch 找日期用，不寫出去
+}
+
+// 關鍵字前面緊接的日期（例：「2026/10/1被認養」）
+export function dateBeforeMatch(text, at, today = new Date()) {
+  if (at == null) return null;
+  const before = text.slice(Math.max(0, at - 16), at);
+  const m = before.match(/((?:\d{3,4}\s*[\/\-.年]\s*)?\d{1,2}\s*[\/\-.月]\s*\d{1,2}日?)\s*$/);
+  return m ? parseDateText(m[1], today) : null;
+}
+
+// 已出所分頁裡跟出所日期有關的欄（表頭有出所／離所／認養／死亡，又不是遛狗日期）
+const DEPART_DATE_HEADER = /(出所|離所|認養|領養|死亡)/;
+
+// 已出所分頁 → 每列的 { texts（每格文字）, departDate（出所日期欄） }。
+// table 是指定表頭列數重讀的結果（跟主清單一樣，headers=0 讀時數字、日期欄的表頭會被當成 null，見 loadDepartedRows）
+export function departedRows(table, today = new Date()) {
+  const labels = ((table && table.cols) || []).map(c => String((c && c.label) || '').replace(/\s+/g, ''));
+  const dateCols = labels.map((h, i) => (DEPART_DATE_HEADER.test(h) && !/遛|溜/.test(h) ? i : -1)).filter(i => i !== -1);
+  return ((table && table.rows) || []).map(r => {
+    const c = r.c || [];
+    let departDate = null;
+    for (const ci of dateCols) departDate = cellDate(c[ci], today) || departDate;
+    return { texts: c.map(cellText).filter(Boolean), departDate: departDate && departDate <= today ? departDate : null };
+  });
+}
+
+// 一隻狗在已出所分頁的判讀結果：用編號找，沒編號才用犬名（犬名要剛好一列才算）
+export function judgeDeparture(dog, rows, today = new Date()) {
+  if (!rows) return null; // 讀不到分頁：沿用上一次
+  let found = dog.id ? rows.filter(r => r.texts.includes(dog.id)) : [];
+  if (!found.length && !dog.id) {
+    const byName = rows.filter(r => r.texts.some(t => nameKey(t) === nameKey(dog.name)));
+    if (byName.length === 1) found = byName;
+  }
+  if (!found.length) return { reason: 'unknown', matched: '', flags: ['not-in-sheet'], date: null };
+  const results = found.map(r => {
+    const c = classifyDeparture(r.texts.join(' '));
+    // 關鍵字前面緊接的日期只在同一格裡找，免得抓到隔壁的遛狗日期
+    const cell = c.reason !== 'unknown' ? [...r.texts].reverse().map(t => t.replace(/\s+/g, '')).find(t => t.includes(c.matched)) : null;
+    const date = r.departDate || (cell ? dateBeforeMatch(cell, cell.lastIndexOf(c.matched), today) : null);
+    return { ...c, date: date ? formatDate(date) : null, dateSource: r.departDate ? 'sheet' : date ? 'note' : null };
+  });
+  const reasons = [...new Set(results.map(r => r.reason))];
+  if (reasons.length > 1) return { reason: 'unknown', matched: results.map(r => r.matched).filter(Boolean).join('、'), flags: ['duplicate'], date: null };
+  const best = results[results.length - 1];
+  return { reason: best.reason, matched: best.matched, flags: [...new Set(results.flatMap(r => r.flags))], date: best.date, dateSource: best.dateSource };
+}
+
+// 找出從主清單消失的狗：snapshots 依日期由舊到新 [{ date, dogs }]；回傳 Map 編號 → { dog, seen（第一次不在的那天） }
+// 沒有編號的狗不追（犬名不唯一）。中間消失又回來的不算
+export function findDisappeared(snapshots) {
+  const gone = new Map();
+  for (let i = 1; i < snapshots.length; i++) {
+    const now = new Set(snapshots[i].dogs.map(d => d.id).filter(Boolean));
+    for (const id of now) gone.delete(id);
+    for (const d of snapshots[i - 1].dogs) {
+      if (d.id && !now.has(d.id) && !gone.has(d.id)) gone.set(d.id, { dog: d, seen: snapshots[i].date });
+    }
+  }
+  return gone;
+}
+
+// 離開主清單前最後一次的樣子：給離所名冊開詳細資訊用。不含誰遛的代號
+function lastSeenDog(d, groups) {
+  const out = { cage: d.cage || '', id: d.id, name: d.name, walkedDate: d.walkedDate || null, note: d.note || '', sex: d.sex || '', intro: d.intro || '' };
+  if (d.formerIds && d.formerIds.length) out.formerIds = d.formerIds;
+  const g = groups && groups[d.name];
+  if (g && g.length) out.groups = g;
+  return out;
+}
+
+export function parseDepartures(text) {
+  if (!text) return null;
+  try {
+    const old = JSON.parse(text);
+    return Array.isArray(old.departures) ? old.departures : null;
+  } catch { return null; }
+}
+
+// 算出新的離所清單。
+// - old：上一次的 departures（null＝第一次，從 snapshots 補）
+// - snapshots：[{ date, dogs, groups }] 由舊到新，最後一個是這次同步；第一次用全部快照，之後只要上一次和這次
+// - rows：departedRows() 的結果；null＝這次讀不到已出所分頁，原因沿用上一次
+export function updateDepartures(old, snapshots, rows, today = new Date()) {
+  const current = snapshots[snapshots.length - 1].dogs;
+  const currentIds = new Set(current.map(d => d.id).filter(Boolean));
+  const reentered = new Map();
+  for (const d of current) for (const f of d.formerIds || []) reentered.set(f, d.id);
+  const byId = new Map((old || []).map(e => [e.id, e]));
+  for (const [id, { dog, seen }] of findDisappeared(snapshots)) {
+    if (byId.has(id)) continue;
+    const groups = (snapshots.find(s => s.dogs.includes(dog)) || {}).groups;
+    byId.set(id, { id, name: dog.name, seen, last: lastSeenDog(dog, groups) });
+  }
+  const out = [];
+  for (const e of byId.values()) {
+    if (currentIds.has(e.id)) continue; // 又回到主清單（例：誤刪），不算離所
+    let j = judgeDeparture(e.last || e, rows, today);
+    // 已出所分頁那一列後來不見了（例：整理分頁）：已經判出來的原因不丟掉
+    if (j && j.flags.includes('not-in-sheet') && e.reason && e.reason !== 'unknown') j = null;
+    const keep = j || { reason: e.reason || 'unknown', matched: e.matched || '', flags: e.flags || [], date: e.dateSource && e.dateSource !== 'seen' ? e.date : null, dateSource: e.dateSource };
+    const date = keep.date || e.seen;
+    const entry = {
+      id: e.id, name: e.name,
+      date, dateSource: keep.date ? keep.dateSource : 'seen', seen: e.seen,
+      reason: keep.reason, matched: keep.matched, flags: keep.flags,
+    };
+    if (reentered.has(e.id)) entry.returned = reentered.get(e.id);
+    entry.last = e.last;
+    out.push(entry);
+  }
+  return out.sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.id.localeCompare(b.id));
+}
+
+export function renderDepartures(list) {
+  const lines = list.map(e => '    ' + JSON.stringify(e));
+  return `{\n  "version": ${DEPARTURES_VERSION},\n  "departures": [\n${lines.join(',\n')}${lines.length ? '\n' : ''}  ]\n}\n`;
+}
+
+// 讀已出所分頁；失敗回 null（不擋主清單同步）
+export async function loadDepartedRows(fetchImpl = fetch, today = new Date()) {
+  try {
+    const raw = await fetchGviz(DEPARTED_SHEET, 0, fetchImpl);
+    const headerIdx = findHeaderRow(raw);
+    return departedRows(headerIdx === -1 ? raw : await fetchGviz(DEPARTED_SHEET, headerIdx + 1, fetchImpl), today);
+  } catch (e) {
+    console.warn(`讀不到「${DEPARTED_SHEET}」分頁，離所原因這次沿用上一次：${e.message}`);
+    return null;
+  }
+}
+
+// 這次要不要寫 departures.json：回傳新內容，沒變回 null
+export function planDepartures({ oldText = '', snapshots, rows, today = new Date() }) {
+  const list = updateDepartures(parseDepartures(oldText), snapshots, rows, today);
+  const text = renderDepartures(list);
+  return text === oldText ? null : text;
+}
+
 async function main() {
   const data = await buildData();
   const now = new Date();
@@ -541,6 +726,22 @@ async function main() {
     oldIndexText: await read('history/index.json'),
     historyDates: (await readdir(`${DATA_DIR}history`).catch(() => [])).map(f => f.replace(/\.json$/, '')),
   }, now);
+  // 離所（#162）：第一次（還沒有 departures.json）從全部快照補，之後只比上一次和這次
+  const oldDeparturesText = await read('departures.json');
+  const snapshotOf = text => { try { const j = JSON.parse(text); return { dogs: j.dogs || [], groups: j.groups || {} }; } catch { return null; } };
+  const thisSync = snapshotOf(writes['dogs.json'] || await read('dogs.json'));
+  let snapshots;
+  if (parseDepartures(oldDeparturesText)) {
+    const prev = snapshotOf(await read('dogs.json'));
+    snapshots = [...(prev ? [{ date: formatDate(now), ...prev }] : []), { date: formatDate(now), ...thisSync }];
+  } else {
+    const dates = (await readdir(`${DATA_DIR}history`).catch(() => [])).map(f => f.replace(/\.json$/, '')).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && d < formatDate(now)).sort();
+    snapshots = [];
+    for (const d of dates) { const s = snapshotOf(await read(`history/${d}.json`)); if (s) snapshots.push({ date: d, ...s }); }
+    snapshots.push({ date: formatDate(now), ...thisSync });
+  }
+  const departuresText = planDepartures({ oldText: oldDeparturesText, snapshots, rows: await loadDepartedRows(fetch, now), today: now });
+  if (departuresText) writes['departures.json'] = departuresText;
   for (const [path, text] of Object.entries(writes)) {
     await mkdir(dirname(`${DATA_DIR}${path}`), { recursive: true });
     await writeFile(`${DATA_DIR}${path}`, text);
@@ -552,6 +753,7 @@ async function main() {
   }
   const snapshot = Object.keys(writes).find(p => p.startsWith('history/'));
   if (snapshot) console.log(`已存當天快照 data/${snapshot}。`);
+  if (writes['departures.json']) console.log(`已更新 data/departures.json（離所 ${parseDepartures(writes['departures.json']).length} 筆）。`);
   if (writes['walks.json']) console.log(`data/walks.json 追加 ${added.length} 筆遛狗紀錄。`);
 }
 

@@ -562,12 +562,12 @@ function showLightboxPhoto() {
   el.querySelectorAll('.lightbox-nav').forEach(b => { b.hidden = !many; });
   const bar = el.querySelector('.lightbox-bar');
   const del = galleryDelete && galleryDelete.dog === v.dog && galleryDelete.file === item.file ? galleryDelete : null;
-  const canEdit = !!(UPLOAD_URL && item.file);
+  const canEdit = !!(UPLOAD_URL && item.file && !v.dog.departure);
   const swapping = gallerySwap && gallerySwap.dog === v.dog;
   bar.innerHTML = del ? galleryDeleteForm(del) : `
     ${many ? `<span class="lightbox-count">${v.index + 1} / ${v.items.length}</span>` : ''}
     ${!item.file && many ? `<span class="lightbox-tag">主照片</span>` : ''}
-    ${UPLOAD_URL && !item.file && detailDog === v.dog ? `<button type="button" class="lightbox-delete" id="mainCropBtn">${icon('crop')}裁切</button>` : ''}
+    ${UPLOAD_URL && !item.file && detailDog === v.dog && !v.dog.departure ? `<button type="button" class="lightbox-delete" id="mainCropBtn">${icon('crop')}裁切</button>` : ''}
     ${canEdit ? `<button type="button" class="lightbox-delete" id="galleryMainBtn"${swapping ? ' disabled' : ''}>${icon('photos')}${swapping ? '設定中…' : '設為主照片'}</button>` : ''}
     ${canEdit && !swapping ? `<button type="button" class="lightbox-delete" id="galleryDeleteBtn">${icon('trash')}刪除</button>` : ''}`;
   bar.hidden = !bar.textContent.trim() && !bar.querySelector('button');
@@ -1191,12 +1191,13 @@ function dogCard(dog, today, eager = false) {
 // 詳細資訊：備註（志工後續補充，試算表備註欄）／可以一起溜的狗／狗卡資訊（dogs/{編號}.md 的入所原始介紹，同步時已寫進 dogs.json）
 // 詳細資訊名字旁的「☆ 常溜」／「★ 我的常溜」
 function favButtonHtml(dog) {
-  if (!walkKey(dog)) return '';
+  if (!walkKey(dog) || dog.departure) return '';
   const on = isFav(dog);
   return `<button type="button" class="fav-btn${on ? ' on' : ''}" id="favToggle" aria-pressed="${on}">${on ? '★ 我的常溜' : '☆ 常溜'}</button>`;
 }
 
 function detailHtml(dog, today) {
+  if (dog.departure) return departedDetailHtml(dog, today);
   const flag = specialFlag(dog.note);
   const buddies = [...(groupMap[dog.name] || [])];
   const byName = new Map(allDogs.map(d => [d.name, d]));
@@ -1245,6 +1246,71 @@ function detailHtml(dog, today) {
   `;
 }
 
+// 離所的狗（#164）：同一個詳細資訊，頂部標離所原因和日期取代天數，多一區離所紀錄；
+// 沒有溜了、在哪、☆、換照片，也不放同籠和可以一起溜（那是在所時的事）
+function departedDetailHtml(dog, today) {
+  const dep = dog.departure;
+  const flag = specialFlag(dog.note);
+  const back = dep.returned && allDogs.find(d => d.id === dep.returned);
+  return `
+    <div class="detail-head">
+      ${photoHeroHtml(dog)}
+      <div class="info">
+        <div class="name-row"><div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div></div>
+        <div class="chips">${departureBadge(dep)}${since(dog)}</div>
+        ${metaLine(dog)}
+      </div>
+    </div>
+    ${detailTrail.length ? `<button type="button" class="detail-back" id="detailBack">${icon('back')}回到 ${esc(detailTrail[detailTrail.length - 1].name)}</button>` : ''}
+    <section class="detail-section departed" data-section="departure">
+      <h3>${icon('note')}離所紀錄</h3>
+      <div class="lw-row"><span class="lw-k">原因</span><span class="lw-v">${esc(DEPARTURE_LABELS[dep.reason])}</span></div>
+      <div class="lw-row"><span class="lw-k">日期</span><span class="lw-v">${esc(ymdText(dep.date))}${dep.dateSource === 'seen' ? '<small>（從主清單消失的那天）</small>' : ''}</span></div>
+      <div class="lw-row"><span class="lw-k">依據</span><span class="lw-v">${esc(departureBasis(dep))}</span></div>
+      <div class="lw-row"><span class="lw-k">最後籠位</span><span class="lw-v">${esc(dog.cage || '—')}</span></div>
+      ${back ? `<button type="button" class="detail-back" data-departed-back="${allDogs.indexOf(back)}">${icon('paw')}已再入所，看現在的 ${esc(back.name)}</button>` : ''}
+    </section>
+    <section class="detail-section last-walk" data-section="last">
+      <div class="lw-row"><span class="lw-k">上次溜</span><span class="lw-v">${esc(dog.walkedDate ? ymdText(dog.walkedDate) : '沒有紀錄')}</span></div>
+    </section>
+    <section class="detail-section" data-section="note">
+      <h3>${icon('note')}試算表備註<span class="sub">離所前最後一次</span></h3>
+      ${!dog.note ? `<div class="empty">沒有備註</div>`
+        : flag ? warnNote(dog.note, flag)
+        : `<div class="content note-text">${esc(dog.note)}</div>`}
+    </section>
+    ${walkHistorySection(dog, today)}
+    <section class="detail-section" data-section="intro">
+      <h3>${icon('card')}入所介紹<span class="sub">收容所在入所時寫的</span></h3>
+      ${dog.intro ? `<div class="content">${esc(dog.intro)}</div>` : `<div class="empty">沒有入所介紹</div>`}
+    </section>
+    ${gallerySection(dog)}
+    <div class="detail-bar"><button type="button" class="bar-btn" id="detailClose">關閉</button></div>
+  `;
+  function since(d) {
+    const s = idDate(d.id);
+    return s ? `<span class="badge plain">入所 ${s.getFullYear()}/${s.getMonth() + 1}</span>` : '';
+  }
+}
+
+const DEPARTURE_LABELS = { adopt: '認養', death: '死亡', other: '其他', unknown: '待確認' };
+function ymdText(d) {
+  return d ? `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}` : '日期不明';
+}
+function departureBadge(dep) {
+  const label = dep.reason === 'unknown' ? '待確認' : `已${DEPARTURE_LABELS[dep.reason] === '其他' ? '離所' : DEPARTURE_LABELS[dep.reason]}`;
+  return `<span class="badge dep-${dep.reason}">${esc(label)}${dep.date ? ` · ${dep.date.getMonth() + 1}/${dep.date.getDate()}` : ''}</span>`;
+}
+// 判讀依據：只寫命中的關鍵字，不放已出所分頁的原文（K 2026-10-08）
+function departureBasis(dep) {
+  if (dep.reason !== 'unknown') return `已出所分頁寫了「${dep.matched}」`;
+  if (dep.flags.includes('not-in-sheet')) return '已出所分頁找不到這隻狗';
+  if (dep.flags.includes('conflict')) return `已出所分頁同時寫了「${dep.matched}」，看不出是哪一個`;
+  if (dep.flags.includes('duplicate')) return '已出所分頁有好幾列，寫的不一樣';
+  if (dep.flags.includes('unsure')) return `已出所分頁寫了「${dep.matched}」，還沒定案`;
+  return '已出所分頁沒寫原因';
+}
+
 // V9（#141 第 9 項）：上次溜的日期和溜狗人，放在照片和名字下面第一個
 function lastWalkSection(dog, today) {
   const s = computeStatus(dog, today);
@@ -1263,7 +1329,7 @@ function lastWalkSection(dog, today) {
 // 只剩一個人不給 ×（那格至少留一人，整筆取消用提示條的復原）；列表模式不放
 let walkerEditBusy = ''; // 正在寫的狗的 key，寫完前＋／×都不能按
 function walkerEditBase(dog, today = new Date()) {
-  if (!UPLOAD_URL || sheetWriteState === 'off') return null;
+  if (!UPLOAD_URL || sheetWriteState === 'off' || dog.departure) return null;
   const key = walkKey(dog);
   if (!key) return null;
   const date = localDateKey(today);
@@ -1316,7 +1382,7 @@ function detailChips(dog) {
 function gallerySection(dog) {
   if (!dog.id) return '';
   const list = galleryList(dog);
-  const canAdd = !!UPLOAD_URL && list.length < GALLERY_MAX;
+  const canAdd = !!UPLOAD_URL && !dog.departure && list.length < GALLERY_MAX;
   const up = galleryBatch && galleryBatch.dog === dog;
   // 相簿照片讀不到（例：別人剛傳、網站還沒更新）就顯示腳掌、不能點；主照片讀不到整格藏起來
   const tile = (thumb, src, attrs, main = false) => `
@@ -1577,6 +1643,7 @@ function groupWalkButton(dog, walked) {
 // 詳細資訊照片右下角的相機圖示（K 2026-09-25 問業界做法，比照大頭貼）：點照片看大圖、點相機換照片。
 // 沒有編號（照片檔名要用編號）或上傳服務還沒設定就不顯示
 function photoPickButton(dog) {
+  if (dog.departure) return ''; // 離所的狗（#164）不能換照片
   if (!UPLOAD_URL || !dog.id) return '';
   return `<button type="button" class="photo-pick" id="photoPick" aria-label="上傳 ${esc(dog.name)} 的照片" title="上傳照片">${icon('camera')}</button>`;
 }
@@ -2178,6 +2245,7 @@ const DETAIL_CLICKS = [
   }],
   ['#favToggle', () => { toggleFav(detailDog); renderDetail(); render(); }],
   ['#detailBack', () => { const d = detailTrail.pop(); if (d) showDetail(d, false); }],
+  ['[data-departed-back]', el => { const d = allDogs[el.dataset.departedBack]; if (d) showDetail(d); }],
   ['#detailWhere', el => whereOpen(detailDog, el)],
   ['.pick', el => {
     const id = el.dataset.pick;
