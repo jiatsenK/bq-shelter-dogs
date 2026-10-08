@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-08T15:01:14+08:00",
+  "syncedAt": "2026-10-08T15:31:12+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -292,7 +292,7 @@
       "cage": "新獨10",
       "id": "2022042602",
       "name": "沙沙",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-08",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1139,11 +1139,11 @@
       "cage": "舊A07",
       "id": "2018041317",
       "name": "IU",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-08",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "da53fbdda293"
       ],
       "note": "",
       "sex": "female",
@@ -1154,11 +1154,11 @@
       "cage": "舊A08",
       "id": "2024052201",
       "name": "太郎",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-08",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "da53fbdda293"
       ],
       "note": "套繩、解繩要小心，會回頭咬（俐葶）梳毛會生氣(秀玉)",
       "sex": "male",
