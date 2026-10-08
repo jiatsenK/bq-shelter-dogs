@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-08T14:30:37+08:00",
+  "syncedAt": "2026-10-08T15:01:14+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -172,7 +172,7 @@
       "cage": "新獨02",
       "id": "2017090525",
       "name": "阿寶妹",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-08",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -307,7 +307,7 @@
       "cage": "新獨11",
       "id": "2019100711",
       "name": "小貝",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-08",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1064,11 +1064,11 @@
       "cage": "舊A03",
       "id": "2017090505",
       "name": "黑森林",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-08",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "da53fbdda293"
       ],
       "note": "2025/10/26脖子處有脫毛；2025/8/24洗澡;2026/3/10在住院區，據說腳趾（狼爪)有做麻醉醫療（嘉文）；2026/3/24拆線（嘉文）",
       "sex": "male",
@@ -1079,11 +1079,11 @@
       "cage": "舊A03",
       "id": "2024022801",
       "name": "JOJO",
-      "walkedDate": "2026-10-03",
+      "walkedDate": "2026-10-08",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "da53fbdda293"
       ],
       "note": "2025/8/24洗澡",
       "sex": "male",
@@ -1664,7 +1664,7 @@
       "cage": "C區11",
       "id": "2021030913",
       "name": "咪寶",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-08",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1784,7 +1784,7 @@
       "cage": "C區32",
       "id": "2026032402",
       "name": "雪糕",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-08",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1829,7 +1829,7 @@
       "cage": "C區35",
       "id": "2025021801",
       "name": "阿湯",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-08",
       "covered": true,
       "myWalked": false,
       "walkers": [
