@@ -1665,14 +1665,12 @@ async function loadGallery() {
 
 // 可以一起溜的每一隻：輕點照片換看那隻；右上角圓圈勾選，之後用下方按鈕一起記（#35，K 選 C）。
 // 今天已溜的不顯示圓圈，改標「今天已溜」
-// 2026-10-08 介面評估第二輪：有警示備註的狗在這裡也要看得到警示（一次牽好幾隻時最需要），名字變紅、下面寫命中的字
 function buddyTile(d, name, walkedNow) {
   const walked = walkedNow.has(d);
-  const flag = specialFlag(d.note);
   const canPick = walkKey(d) && !walked && allDogs.includes(d);
   const picked = canPick && pickedBuddies.has(walkKey(d));
-  return `<div class="buddy-tile${flag ? ' flagged' : ''}">
-    <button class="buddy" data-dog="${allDogs.indexOf(d)}"${allDogs.includes(d) ? '' : ' disabled'}>${photoThumb(d, 64)}<span class="bname">${flag ? icon('warn') : ''}${esc(name)}</span>${flag ? `<span class="bwarn">${esc(flag.keywords.join('、'))}</span>` : ''}</button>
+  return `<div class="buddy-tile">
+    <button class="buddy" data-dog="${allDogs.indexOf(d)}"${allDogs.includes(d) ? '' : ' disabled'}>${photoThumb(d, 64)}<span class="bname">${esc(name)}</span></button>
     ${walked ? `<span class="walked-tag">今天已溜</span>` : ''}
     ${canPick ? `<button type="button" class="pick${picked ? ' on' : ''}" data-pick="${esc(walkKey(d))}" aria-pressed="${picked}" aria-label="勾選 ${esc(name)} 一起記">${icon('tick')}</button>` : ''}
   </div>`;

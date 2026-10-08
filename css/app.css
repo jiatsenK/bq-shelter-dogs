@@ -1429,10 +1429,7 @@ html.onboard-open { overflow: hidden; }
 .brand .date { white-space: nowrap; }
 .row-head { grid-template-columns: 50px minmax(0, 1fr) 40px minmax(0, 1.1fr) 60px; }
 
-/* 介面評估第二輪（2026-10-08）：一起溜／同籠格子的警示、詳細資訊警示放名字下面、清除前確認 */
-.buddy-tile.flagged .bname { color: var(--red-text); display: inline-flex; align-items: center; gap: 2px; }
-.buddy-tile.flagged .bname .icon { font-size: 13px; }
-.buddy .bwarn { font-size: 12px; font-weight: 700; color: var(--red-text); background: var(--red-bg); border-radius: 6px; padding: 1px 6px; }
+/* 介面評估第二輪（2026-10-08）：詳細資訊警示放名字下面、清除前確認 */
 .detail-head .info .warn-note { margin: 10px 0 0; }
 .detail-head .chips { padding: 0; margin-left: 0; margin-right: 0; }
 .who-clear { min-height: 44px; }
