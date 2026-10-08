@@ -1682,3 +1682,54 @@ header.app .sync-btn:active, header.app .analysis-btn:active, .analysis-open hea
 .ob-demo { border-radius: 4px; }
 .ob-demo-walk, .ob-demo-toast { border-radius: 3px; }
 .ob-dots i.on { background: var(--shell); }
+
+/* 收尾審查修正（2026-10-09）：拿掉殘留的系統藍、籠位標籤全站一致、白卡疊成一份檔案、找狗也用索引分頁 */
+:root {
+  /* 找狗分區色：新犬舍、C區原本是藍、藍紫，換成跟其他區分得開的青綠、土棕 */
+  --z-new: #D3E6E6; --z-new-ink: #1F6464;
+  --z-pup: #E8E1D3; --z-pup-ink: #6B5634;
+}
+.a-hbar-fill { background: var(--primary); }
+.sk { background-image: linear-gradient(90deg, var(--surface-soft) 0%, var(--line) 40%, var(--surface-soft) 80%); }
+.card .more, .card .meta .sep, .detail-head .meta .sep { color: var(--line); }
+
+/* 詳細資訊的籠位也是黑框檔案標籤（跟狗卡一樣） */
+.detail-head .badge.plain {
+  background: #fff !important; color: var(--ink) !important; font-weight: 700;
+  box-shadow: inset 0 0 0 1.5px var(--ink);
+}
+.detail-head .badge.plain .icon { color: var(--ink); }
+
+/* 色籤：小字不打折扣（對比 4.5 以上）、數字等寬、「沒有紀錄」放得下、換顏色時淡淡轉過去 */
+.card .last { transition: background-color 0.4s ease-out, color 0.4s ease-out; }
+.card .last .lbl { opacity: 1; }
+.card .last .val { font-variant-numeric: tabular-nums; }
+.card .last .val.muted { font-size: 15px; }
+
+/* 詳細資訊、統計：白卡一張接一張疊成一份檔案，不再一格一格分開 */
+.detail-head + .detail-section, .detail-section + .detail-section, .detail-section + .hide-bar,
+.hide-bar + .detail-section, .detail-head + .hide-bar, .detail-head + .photo-upload.preview + .detail-section { margin-top: -1px; }
+.detail-head, .detail-section, .hide-bar { border-radius: 0; }
+.a-card { border-radius: 0; margin-bottom: 0; }
+.a-card + .a-card { margin-top: -1px; }
+.a-card:last-child, .a-card:has(+ :not(.a-card)) { margin-bottom: 12px; }
+
+/* 找狗上面一排：跟溜狗表一樣是站在深綠線上的索引分頁 */
+.find-top { align-items: flex-end; gap: 4px; border-bottom: 2px solid var(--shell); }
+.find-top .find-view { background: transparent !important; box-shadow: none; padding: 0; gap: 4px; border-radius: 0; }
+.find-top .find-view button, .find-top .find-chip {
+  border-radius: 4px 4px 0 0; background: var(--surface-soft) !important; color: var(--ink-soft);
+  box-shadow: inset 0 0 0 1px var(--line); font-weight: 600;
+}
+.find-top .find-view button.on, .find-top .find-chip.on { background: var(--shell) !important; color: #fff !important; box-shadow: none; }
+
+/* 鍵盤焦點：白底上一律 3px 檔案綠，深綠頁首、底部列上用黃色 */
+:focus-visible { outline: 3px solid var(--primary) !important; outline-offset: 2px; }
+header.app :focus-visible, .bottom-bar :focus-visible { outline-color: var(--tab-amber) !important; }
+.search input:focus { outline-color: var(--tab-amber) !important; }
+/* 深色底（照片燈箱、提示條）上的焦點框維持看得到的白、黃 */
+.lightbox-close:focus-visible, .lightbox-nav:focus-visible, .lightbox-delete:focus-visible { outline-color: #fff !important; }
+.toast :focus-visible { outline-color: var(--tab-amber) !important; }
+/* 性別：♂ 不用綠色（綠色在這裡是「最近溜過」），改青綠灰；♀ 維持紅 */
+.sex.male, .a-sex-line .male, .a-sex.male .a-sex-mark, .a-sex.male .a-sex-v { color: var(--z-new-ink); }
+.a-split .male { background: var(--z-new-ink); }
