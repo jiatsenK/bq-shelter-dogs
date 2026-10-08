@@ -123,7 +123,7 @@ function runTests() {
       eq(matchesSearch(dog, '  '), true, '只有空白當作沒搜尋：');
       eq(matchesSearch(dog, '測試戊'), false);
     }),
-    check('搜尋：只篩選目前分類，分類數字跟著變，清空回到原本內容', () => {
+    check('搜尋：只篩選目前分類，溜狗表數字跟著變、找狗不放數字，清空回到原本內容', () => {
       const daysAgo = n => new Date(Date.now() - n * 86400000);
       allDogs = [
         { cage: 'B01', id: '', name: '搜尋甲', walkedDate: daysAgo(1), covered: false, note: '' },
@@ -138,15 +138,15 @@ function runTests() {
         searchQuery = '搜尋';
         activeTab = 'walk'; renderMain();
         eq(names(), ['搜尋乙', '搜尋甲'], '溜狗表（久沒遛的在前）：');
-        eq(counts(), ['2', '', '2'], '分類數字（找狗搜全部）：');
+        eq(counts(), ['2', '', ''], '分類數字（找狗不放數字）：');
         if (!mainText().includes('搜尋「搜尋」：2 隻')) throw new Error('沒有顯示搜尋結果隻數');
         if (!document.querySelector('#main .card .warn-note')) throw new Error('勿溜的搜尋乙沒有警示備註');
         searchQuery = '<b>沒這隻'; activeTab = 'walk'; renderMain();
         eq(document.querySelector('#main .status-msg').innerHTML, '找不到「&lt;b&gt;沒這隻」');
-        eq(counts(), ['0', '', '0'], '查無時分類數字：');
+        eq(counts(), ['0', '', ''], '查無時分類數字：');
         searchQuery = ''; renderMain();
         eq(names().length, 3, '清空後：');
-        eq(counts(), ['3', '', '3'], '清空後分類數字：');
+        eq(counts(), ['3', '', ''], '清空後分類數字：');
       } finally { searchQuery = ''; activeTab = 'walk'; }
     }),
     check('搜尋：輸入即篩選；注音選字途中不篩選，選好字才更新', () => {
@@ -394,7 +394,7 @@ function runTests() {
         render();
         const tabs = () => [...document.querySelectorAll('#tabs button')];
         eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '我溜過', '找狗'], '分類（#99 加找狗）：');
-        eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '', '1'], '數字（遛狗紀錄還沒讀）：');
+        eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '', ''], '數字（遛狗紀錄還沒讀；找狗不放數字）：');
         const active = () => tabs().filter(b => b.classList.contains('active')).map(b => b.dataset.tab);
         eq(active(), ['walk'], '預設：');
         eq(document.querySelectorAll('#main .card').length, 1, '溜狗表有狗卡：');
@@ -2205,7 +2205,7 @@ async function runFindTests() {
       const chip = key => document.querySelector(`#main [data-find-zone="${key}"] small`);
       eq(document.querySelector('#main [data-find-zone="all"]'), null, 'V9（#141）預設就是全部，沒有「全部」鈕：');
       eq(chip('new').textContent, '3', '新犬舍：');
-      eq(document.querySelector('#tabs [data-tab="find"] .n').textContent, '3', '分頁數字：');
+      eq(document.querySelector('#tabs [data-tab="find"] .n').textContent, '', '找狗分頁不放數字：');
       searchQuery = '';
       document.querySelector('#main [data-find-zone="pup"]').click();
       eq([...document.querySelectorAll('#main .find-dog .find-name .n')].map(n => n.textContent), ['咪寶'], 'C區：');
@@ -3285,6 +3285,49 @@ async function runSquarePhotoTests() {
   }
 }
 
+async function runCritique3Tests() {
+  const saved = [allDogs, groupMap, walkedStorage, walkedMemory, dataSyncedAt, walkerNamesOffline];
+  try {
+    walkedStorage = fakeStorage(); walkedMemory = null;
+    const mk = (name, id, note) => ({ name, id, cage: '新A04', walkedDate: null, covered: false, note, intro: '', sex: '', formerIds: [] });
+    allDogs = [mk('測試兇', '2024100801', '不要推他身體移位，會兇想咬人'), mk('測試乖', '2024100802', '')];
+    groupMap = {};
+    await check('介面評估第三輪：在哪面板有警示的狗看得到警示，沒有的不顯示', () => {
+      if (!specialFlag(allDogs[0].note)) throw new Error('測試資料應該要有警示');
+      const box = document.createElement('div');
+      box.innerHTML = whereHtml(allDogs[0]);
+      if (!box.querySelector('.warn-note')) throw new Error('有警示的狗沒有警示');
+      if (!box.querySelector('.warn-note').textContent.includes('會兇想咬人')) throw new Error('警示要有備註原文');
+      box.innerHTML = whereHtml(allDogs[1]);
+      eq(box.querySelector('.warn-note'), null, '沒有警示的狗：');
+    });
+    await check('介面評估第三輪：確認上傳不用沒定義的 --green（會變亮綠）', async () => {
+      const css = await fetch('../css/app.css').then(r => r.text());
+      if (/var\(--green\s*,/.test(css)) throw new Error('還有 var(--green, …)');
+    });
+    await check('介面評估第三輪：提示條出現時內容底部多留空白，收起就拿掉', () => {
+      showToast('測試');
+      if (!document.body.classList.contains('toast-on')) throw new Error('沒有 toast-on');
+      hideToast();
+      if (document.body.classList.contains('toast-on')) throw new Error('收起後還有 toast-on');
+    });
+    await check('介面評估第三輪：沒網路時頁首和溜狗人會說沒網路', () => {
+      const label = document.getElementById('updatedLabel');
+      dataSyncedAt = new Date(2026, 9, 8, 9, 1);
+      walkerNamesOffline = true; renderUpdatedLabel();
+      eq(label.textContent, '沒網路・資料 10/8 09:01', '沒網路：');
+      if (!walkerChipsHtml(allDogs[1], [], new Date()).includes('讀不到（沒網路）')) throw new Error('溜狗人沒說沒網路');
+      walkerNamesOffline = false; renderUpdatedLabel();
+      eq(label.textContent, '資料更新 10/8 09:01', '有網路：');
+      eq(walkerChipsHtml(allDogs[1], [], new Date()), '<span class="lw-none">—</span>', '有網路沒名字：');
+    });
+  } finally {
+    [allDogs, groupMap, walkedStorage, walkedMemory, dataSyncedAt, walkerNamesOffline] = saved;
+    renderUpdatedLabel();
+    hideToast();
+  }
+}
+
 async function runFix141Tests() {
   const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList, sheetWritesMemory, sheetWriteState, walkerNameMemory, walkerCodesMemory];
   const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
@@ -3421,6 +3464,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runFix141Tests)
   .then(runSquarePhotoTests)
   .then(runDepartureTests)
+  .then(runCritique3Tests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

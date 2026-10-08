@@ -1,6 +1,6 @@
 // 找狗（#99）：照片圖鑑＋全域搜尋＋平面圖分區。K 2026-09-26 看過原型後同意。
 // 溜狗表是決定「接下來遛誰」；找狗是現場「眼前這隻是誰、在哪」，所以不顯示未遛天數、沒有「已遛」按鈕。
-// 會用到 js/app.js 的 allDogs、groupMap、searchQuery、searchKey、esc、icon、sexMark、specialFlag、photoThumb、
+// 會用到 js/app.js 的 allDogs、groupMap、searchQuery、searchKey、esc、icon、sexMark、specialFlag、warnNote、photoThumb、
 // showDetail、closeDetail、switchTab、render、activeTab，所以要在 app.js 之後載入。
 
 // 籠位 → 平面圖分區（K 2026-09-26 確認：新A／新B／新獨＝新犬舍區，舊A／舊B＝舊犬舍區，母幼＝幼母犬舍區，
@@ -609,6 +609,8 @@ function whereMapSvg(dog) {
 function whereHtml(dog) {
   const d = whereDirections(dog);
   const mates = cageMates(dog);
+  // 介面評估第三輪（K 2026-10-08）：在哪面板的主按鈕是溜了，有警示的狗要在這裡就看得到警示
+  const flag = specialFlag(dog.note);
   const walked = walkedToday().has(dog);
   const status = computeStatus(dog, new Date());
   const days = walked ? '今天已溜'
@@ -633,6 +635,7 @@ function whereHtml(dog) {
       </div>
       <span class="where-days ${tone}">${days}</span>
     </div>
+    ${flag ? warnNote(dog.note, flag) : ''}
     <div class="where-actions">
       <button type="button" class="where-btn" id="whereDetail">詳細資訊</button>
       ${walkBtn}
