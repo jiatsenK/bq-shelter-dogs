@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-08T16:01:17+08:00",
+  "syncedAt": "2026-10-08T16:31:12+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -1668,7 +1668,7 @@
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "044328805855"
+        "da53fbdda293"
       ],
       "note": "對狗具攻擊性（嘉文），2025/12/24咬了捷運站",
       "sex": "female",
