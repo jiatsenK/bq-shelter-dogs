@@ -2928,7 +2928,7 @@ const TOUR_STEPS = [
   { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn'], title: '取消登記', text: '如果按錯，再按一次「已溜」就可以取消。', demo: 'unwalk' },
   { target: ['#main .card[data-dog] .cage-pill'], title: '籠位查詢', text: '點擊籠位，就能在平面圖查看位置。', demo: 'where' },
   { target: ['#tabs [data-tab="mine"]'], title: '我溜過', text: '查看自己溜過的狗。', demo: 'tab' },
-  { target: ['#tabs [data-tab="find"]'], title: '找狗', text: '透過平面圖快速找到狗的位置。', demo: 'tab' },
+  { target: ['#tabs [data-tab="find"]'], title: '找狗', text: '透過平面圖快速找到狗的位置。', demo: 'find' },
 ];
 let tour = null; // { step, again, shown: 示範後改亮的地方, undo: 收回示範, timers }
 function tourTarget(step) {
@@ -2960,7 +2960,19 @@ const TOUR_DEMOS = {
   unwalk: { before: () => tourFakeWalk('done'), run: () => render(), undo: () => render() },
   where: { run: () => { const d = tourDog(); if (d) whereOpen(d); }, show: '#whereSheet', undo: () => { if (whereDog) whereClose(); } },
   tab: { run: el => { if (el) switchTab(el.dataset.tab); }, show: '#main', undo: () => switchTab('walk') },
+  // 找狗（K 2026-10-09）：切過去後再隨便點平面圖上一個有狗的籠子，下面列出那一籠的狗
+  find: {
+    run: el => { if (el) switchTab(el.dataset.tab); },
+    show: '#main',
+    then: { at: tourCageWithDogs, run: g => findPickCage(g.dataset.findCage) },
+    undo: () => { findCage = null; findZone = 'all'; switchTab('walk'); },
+  },
 };
+// 平面圖上隨便一個有狗的籠子（找狗示範用）
+function tourCageWithDogs() {
+  const cages = [...document.querySelectorAll('#main g[data-find-cage]')].filter(g => g.querySelector('rect.fm-cage.has'));
+  return cages.length ? cages[Math.floor(Math.random() * cages.length)] : null;
+}
 function tourLater(fn, ms) {
   if (!tour) return;
   tour.timers.push(setTimeout(() => { if (tour) fn(); }, ms));
@@ -2982,27 +2994,27 @@ function tourPlay() {
   const demo = TOUR_DEMOS[TOUR_STEPS[tour.step].demo];
   if (!demo) return;
   if (demo.before) { tour.undo = demo.undo; demo.before(); placeTour(); }
-  const act = () => {
-    const el = tourTarget(tour.step);
-    tour.undo = demo.undo;
-    demo.run(el);
-    if (demo.show) tour.shown = demo.show;
-    placeTour();
-  };
+  const taps = [{ at: () => tourTarget(tour.step), run: el => { tour.undo = demo.undo; demo.run(el); if (demo.show) tour.shown = demo.show; } }];
+  if (demo.then) taps.push(demo.then);
+  const tap = t => { const el = t.at(); if (el) t.run(el); placeTour(); };
   const still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  if (still) return act();
+  if (still) return taps.forEach(tap);
   const finger = document.querySelector('#tour .tour-finger');
-  const at = () => {
-    const el = tourTarget(tour.step);
-    if (!el || !finger) return false;
-    const r = el.getBoundingClientRect();
-    Object.assign(finger.style, { left: `${r.left + r.width / 2}px`, top: `${r.top + r.height / 2}px` });
-    return true;
-  };
-  tourLater(() => { if (at()) finger.classList.add('on'); }, 500);
-  tourLater(() => finger && finger.classList.add('press'), 1000);
-  tourLater(act, 1150);
-  tourLater(() => { if (finger) finger.className = 'tour-finger'; }, 1500);
+  let when = 500;
+  for (const t of taps) {
+    let el = null;
+    tourLater(() => {
+      el = t.at();
+      if (!el || !finger) return;
+      const r = el.getBoundingClientRect();
+      Object.assign(finger.style, { left: `${r.left + r.width / 2}px`, top: `${r.top + r.height / 2}px` });
+      finger.className = 'tour-finger on';
+    }, when);
+    tourLater(() => finger && finger.classList.add('press'), when + 500);
+    tourLater(() => { if (el) t.run(el); placeTour(); }, when + 650);
+    tourLater(() => { if (finger) finger.className = 'tour-finger'; }, when + 1000);
+    when += 1700;
+  }
 }
 function startTour(again = false) {
   onboard = null;
