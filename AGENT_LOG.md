@@ -951,3 +951,9 @@
 - js/app.js：parseDogsData／applyDogsData 留 sheetNotes；renderMain 寬螢幕溜狗表交給 deskWalkHtml；導覽在電腦版改說勾選登記、最近 30 天。index.html 載入 js/desk.js。css/app.css 檔尾「電腦版」區塊。
 - impeccable：surface brief index-html 加「電腦版溜狗表」段；finish reviewer 兩輪（recapture 手機截圖 → fix 8 項 → 6 項 resolved、2 項缺截圖、1280 簡報被切），1280 我再修好並自己補截圖確認（籠位滑過、30 天往下捲表頭黏住），沒有第三輪。detect 的非 advisory 項目都是手機版原有的。
 - 測試：網頁加 runDeskTests 6 項（最後才載入 desk.js）、#30 script 清單加 desk.js；網頁 214 過（本機另 2 項 #130 老問題），node 130 過。PROJECT_GOALS、DESIGN_GUIDE 補說明。圖鑑（溜過才拿到卡）下一個 PR 改 #189。
+## 2026-10-09 Claude（電腦版：板收明星隊球員卡 cards.html）
+- 依據：K 2026-10-09 要電腦版展示（自己開來炫耀、給人看所內的狗），用 impeccable 做多個版本。第一版「畢業紀念冊」K 覺得「主題太老派」，沒上線；再做翻牌看板、球員卡、花磚牆三個原型，K 選球員卡（「很有互動性」），先做「1. 抽卡 2.獎項 3.收集冊」；K：「手機板是溜狗表」，球員卡只給電腦。
+- 新增 cards.html、css/cards.css、js/cards.js：燙金卡包撕開（上緣撕掉飛走、卡包落下、五張扇形攤開）、滑鼠傾斜＋彩虹反光＋亮點、點了翻背面（入隊日、在所多久、本月出門天數、收容所的話、卡號）；等級看在所多久（7 年雷射、5 年金、3 年銀、其他普卡），背號照入所順序；年度獎項（出門王、資深球星、新人王）資料算；收集冊記在各自瀏覽器（localStorage，可「換人收集」），先抽還沒收到的；沒照片的狗用剪影＋大背號補位。只讀 data/dogs.json、data/walks.json，不寫試算表、不顯示志工名字和警示。Anton＋Noto Sans TC 只有這頁從 Google Fonts 載入。
+- index.html：電腦（≥1100px、hover、pointer fine）打開首頁轉 cards.html；?app 或按「志工版溜狗表」記住、之後留在溜狗表。
+- impeccable：方向輪 seed d9edc232（K 選我的推薦）；surface brief .impeccable/surfaces/cards-html.md；finish reviewer 兩輪（fix → fix），剩下的照片裁切、雷射卡照片霧化兩項我再修掉、自己截圖確認，沒有第三輪；documenter 把球員卡世界寫進 DESIGN.md 和 .impeccable/design.json（溜狗表的病歷夾系統不動）。detect 剩下的是刻意的（撕口鋸齒 clip-path、金箔漸層起點的對比誤判）。
+- 測試：加 runCardsTests 9 項（球員資料、等級、本月出門、獎項、抽卡、收集冊、不寫試算表、電腦版轉址），#30 內嵌程式檢查排除電腦版轉址。網頁 216 過（本機另 2 項 #130 老問題），node 128 過。PROJECT_GOALS、DESIGN_GUIDE 補說明。之後再做：比大小、溜狗排隊、認狗測驗、像素溜狗遊戲。
