@@ -3,7 +3,7 @@
 // 頁首右上角的圖示打開（不佔分類：分類只放每天遛狗會用的）。
 // 會用到 js/app.js 的 makeDate、idDate、computeStatus、esc、icon、photoSrc、showDetail、allDogs、analysisOpen，所以要在 app.js 之後載入。
 
-// 長期在所＝在所滿 1 年；近期少遛＝超過 7 天沒遛（沿用溜狗表的黃色門檻 AMBER_DAYS）
+// 長期在所＝在所滿 1 年；近期少遛＝超過 AMBER_DAYS 天沒遛（沿用溜狗表的黃色門檻，2026-10-09 起 3 天）
 const LONG_STAY_MONTHS = 12;
 // 入所多久分布的區間（以滿幾個月算）
 const STAY_BUCKETS = [
