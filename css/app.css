@@ -1879,10 +1879,45 @@ header.app { top: calc(-1 * var(--brand-h, 0px)); }
 .seg button { color: var(--ink-soft); opacity: 0.8; }
 .seg button.on { color: var(--shell); opacity: 1; }
 /* 底部列：選中的不是白色方塊，是上緣一條白線加白字 */
-.tabs button.active, .tabs button.active:active { background: transparent; color: #fff; box-shadow: inset 0 3px 0 #fff; }
+.tabs button.active, .tabs button.active:active { background: transparent; color: #fff; box-shadow: inset 0 3px 0 #fff; border-radius: 0; }
 .tabs button.active .n { color: #fff; }
 /* 拇指按得到：頁首更新、分析 44px；名字按鈕至少 44px 寬 */
 header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .with-name { min-width: 44px; justify-content: center; }
 /* 紅色只留給天數和警示：「看使用說明」是一般連結，用主色（清除設定才是紅色） */
 .who-clear.guide-link { color: var(--primary); }
+
+/* ── 少一點格子：詳細資訊、分析、找狗、我溜過（critique 2026-10-09 P1，K 選「全部照表做」）──
+   一段一段用細線分開，不再每段一張卡；標籤、統計、名次改成字 */
+/* 詳細資訊：整張是白紙，段落之間一條細線 */
+.detail { background: var(--surface); }
+.detail-head { box-shadow: none; }
+.detail-section, .hide-bar { box-shadow: inset 0 1px 0 var(--line); } /* 線畫在上緣：段落往上疊 1px，畫在下緣會被下一段蓋掉 */
+.detail-head .badge.plain, .badge.plain { background: none !important; box-shadow: none !important; color: var(--ink) !important; font-weight: 700; padding: 4px 6px; }
+.detail-head .badge.plain .icon { color: var(--primary) !important; }
+.fav-btn, .fav-btn.on { border: none; background: none; min-height: 44px; padding: 0 6px; }
+.fav-btn { color: var(--ink-soft); }
+.fav-btn.on { color: var(--primary); }
+.last-walk .who-chip:not(.editable) { background: none; padding: 0; font-weight: 600; }
+.w-sum { margin: 12px 0 0; font-size: 14px; color: var(--ink-soft); line-height: 1.6; }
+.w-sum b { font-size: 18px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; margin: 0 1px; }
+.w-sum .sep { margin: 0 8px; color: var(--line); }
+.g-add { border: none !important; background: none !important; color: var(--primary); }
+/* 分析：大數字一排、用留白分開；圖示、名次不放底色方塊；返回是文字按鈕 */
+.a-kpi { background: none; box-shadow: none !important; padding: 4px 2px; }
+.a-kpis { gap: 4px 12px; }
+.a-h-icon { background: none; width: auto; height: auto; color: var(--primary); }
+.a-rank, .a-rank.r1, .a-rank.r2, .a-rank.r3 { background: none; color: var(--ink-soft); font-size: 15px; }
+.a-back { box-shadow: none !important; background: none; color: var(--primary); padding-left: 0; }
+.a-card { box-shadow: inset 0 1px 0 var(--line); }
+/* 找狗：平面圖不再包一張卡和雙線框；平面圖／列表／★ 我的常溜跟溜狗表一樣是文字分頁 */
+.find-map-card { background: none; box-shadow: none !important; padding: 0; }
+.find-map .fm-frame2 { display: none; }
+.find-top { border-bottom: 1px solid var(--line); }
+.find-top .find-view button, .find-top .find-chip, .find-top .find-view button.on, .find-top .find-chip.on {
+  background: none !important; box-shadow: none !important; border: none; border-radius: 0; color: var(--ink-soft) !important;
+}
+.find-top .find-view button.on, .find-top .find-chip.on { color: var(--ink) !important; font-weight: 800; box-shadow: inset 0 -3px 0 var(--shell) !important; }
+/* 我溜過：名字設定不再包一張卡，輸入框跟搜尋框一樣小圓角 */
+.who-box { background: none; box-shadow: none !important; padding-left: 4px; padding-right: 4px; }
+.who-box input { border-radius: 3px; background: var(--surface); }

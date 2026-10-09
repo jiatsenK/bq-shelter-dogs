@@ -1208,7 +1208,8 @@ async function runHistoryTests() {
       eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-3), ['walks', 'intro', 'gallery'], '位置在入所介紹前（相簿在最後）：');
       eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(0, 2), ['last', 'note'], 'V9（#141）上次溜／溜狗人在最前面，接著試算表備註：');
       eq([sec.querySelectorAll('.w-grid .on').length, sec.querySelectorAll('.w-grid .none').length, sec.querySelectorAll('.w-grid span').length], [14, 2, 30], '格子：');
-      eq([...sec.querySelectorAll('.w-num b')].map(b => b.textContent), ['14', '2.3', '6'], '數字：');
+      eq([...sec.querySelectorAll('.w-sum b')].map(b => b.textContent), ['14', '2.3', '6'], '數字（一行字，不是三格）：');
+      eq(sec.querySelectorAll('.w-num').length, 0, '沒有統計卡：');
       if (!sec.textContent.includes('從 2026/9/25 開始記錄')) throw new Error('要寫從哪天開始記錄');
       hideDetail(); history.replaceState(null, '');
       historyData = { state: 'loading', walks: [], dates: [] };
@@ -2572,11 +2573,10 @@ async function runV7PagesTests() {
       eq(box.querySelector('.row b').textContent, '2 / 5 隻', '已離所的不算、同一隻只算一次：');
       eq(box.querySelector('.bar i').style.width, '40%');
     });
-    await check('#114 分析頁：白底大數字格，不再是整塊藍底', async () => {
+    await check('#114 分析頁：不再是整塊藍底（critique 2026-10-09 大數字也不框成格子）', async () => {
       const css = await fetch('../css/app.css').then(r => r.text());
       if (!/\.a-hero\s*\{/.test(css)) throw new Error('找不到 .a-hero');
       if (/\.a-hero\s*\{[^}]*gradient/.test(css)) throw new Error('分析頁還有藍色漸層');
-      if (!/\.a-kpi\s*\{[^}]*background:\s*var\(--surface\)/.test(css)) throw new Error('四格要白底');
     });
   } finally {
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, myWalks, myWalksState, analysisOpen] = saved;
