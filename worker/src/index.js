@@ -60,6 +60,9 @@ const NOTE_READ_LIMITS = [{ windowMs: 60 * 1000, max: 60 }];
 const PASSCODE_FAIL_LIMITS = [{ windowMs: 60 * 60 * 1000, max: 10 }];
 // 休養中：存放位置、原因最多幾個字、最多設多久（天）
 const REST_PATH = 'data/rest.json';
+// 入所介紹（K 2026-10-10 電腦版補資料）：寫 repo 的 dogs/{編號}.md 內文，不寫試算表
+const INTRO_DIR = 'dogs/';
+const INTRO_MAX_CHARS = 1000;
 const REST_REASON_MAX = 40;
 const REST_MAX_DAYS = 180;
 // 編號只接受英數字（目前都是 10 位數字），也順便擋掉 ../ 之類的路徑
@@ -545,6 +548,87 @@ async function putRest(request, env, origin) {
   return fail(502, '休養設定沒有存進去', origin);
 }
 
+// ---- 入所介紹（K 2026-10-10）：PUT /intro/{編號}，通關碼，改 dogs/{編號}.md 的內文 ----
+// frontmatter（name、id、sex、formerIds…）照原樣留著，只換 --- 下面的文字；沒有這個檔就新建一個（name、id）。
+// 存好後 dogs/ 有變動，GitHub 會馬上同步一次（sync-sheet.yml 的 push 觸發），dogs.json 幾分鐘後就有新的介紹
+function introFile(old, id, name, text) {
+  const m = old ? old.replace(/^\uFEFF/, '').match(/^(---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*)(?:\r?\n|$)/) : null;
+  const head = m ? m[1].replace(/\r\n/g, '\n') : `---\nname: ${String(name || '').replace(/\n/g, ' ')}\nid: ${id}\n---`;
+  return `${head}\n${text}${text ? '\n' : ''}`;
+}
+async function putIntro(request, env, origin) {
+  const cfg = config(env);
+  const now = Date.now();
+  if (!cfg.token) return fail(500, '介紹還沒準備好（缺 GITHUB_TOKEN）', origin);
+  if (!cfg.passcode) return fail(500, '介紹還沒準備好（缺 NOTES_PASSCODE）', origin);
+
+  const m = new URL(request.url).pathname.match(/^\/intro\/([^/]+)$/);
+  const id = m ? decodeURIComponent(m[1]) : '';
+  if (!ID_PATTERN.test(id)) return fail(400, '狗狗編號格式不對', origin);
+
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (passcodeLocked(ip, now)) return fail(429, '通關碼錯太多次，請一小時後再試', origin, { code: 'passcode' });
+  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') return fail(415, '格式不對', origin);
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).length > INTRO_MAX_CHARS * 4 + 512) return fail(413, '介紹太長', origin);
+  let input;
+  try {
+    input = JSON.parse(raw);
+  } catch (e) {
+    return fail(400, '格式不對', origin);
+  }
+  const denied = await checkPasscode(input, cfg, ip, now, origin, '需要通關碼才能改介紹');
+  if (denied) return denied;
+  const text = cleanNote(input && input.text);
+  if (text === null) return fail(400, '格式不對', origin);
+  if ([...text].length > INTRO_MAX_CHARS) return fail(413, `介紹最多 ${INTRO_MAX_CHARS} 字`, origin);
+
+  if (!allow(`intro:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
+  let dogs;
+  try {
+    dogs = await loadDogs(cfg, now);
+  } catch (e) {
+    return fail(502, '暫時無法確認狗狗編號，請稍後再試', origin);
+  }
+  if (!dogs.has(id)) return fail(404, '找不到這個編號的狗狗', origin);
+  const name = dogs.get(id);
+  const path = `${INTRO_DIR}${id}.md`;
+
+  // 先讀最新再改；同時有人改（sha 對不上）就重讀再試
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let old = '', sha = null;
+    const res0 = await github(cfg, `contents/${path}?ref=${encodeURIComponent(cfg.branch)}`);
+    if (res0.ok) {
+      const info = await res0.json();
+      old = new TextDecoder().decode(fromBase64(info.content || ''));
+      sha = info.sha || null;
+    } else if (res0.status !== 404) {
+      return fail(502, '暫時讀不到原本的介紹，請稍後再試', origin);
+    }
+    const next = introFile(old, id, name, text);
+    if (old && next === old.replace(/\r\n/g, '\n')) return reply(200, { ok: true, id, intro: text, commit: null }, origin);
+    const body = {
+      message: `${text ? '改入所介紹' : '清掉入所介紹'}：${id}${name ? `（${name}）` : ''}\n\n網站寫入（電腦版補資料，通關碼驗證）`,
+      content: toBase64(new TextEncoder().encode(next)),
+      branch: cfg.branch,
+    };
+    if (sha) body.sha = sha;
+    const res = await github(cfg, `contents/${path}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const out = await res.json().catch(() => ({}));
+      return reply(200, { ok: true, id, intro: text, commit: out.commit && out.commit.sha }, origin);
+    }
+    if ((res.status === 409 || res.status === 422) && attempt < 2) continue;
+    return fail(502, `介紹沒有存進去（GitHub ${res.status}）`, origin);
+  }
+  return fail(502, '介紹沒有存進去', origin);
+}
+
 // ── 照片放 R2（#130）──
 // 檢查（編號、JPEG、大小、頻率、編號在 dogs.json）跟寫 GitHub 時一樣，只是存的地方換成 R2：
 // 不產生提交、馬上生效。換掉、刪掉之前先備份到 Trash，備份成功才動原檔
@@ -1026,6 +1110,15 @@ export default {
         return await putRest(request, env, allowed);
       } catch (e) {
         return fail(500, '休養設定發生錯誤，原本的設定不受影響', allowed);
+      }
+    }
+
+    if (path.startsWith('/intro/')) {
+      if (request.method !== 'PUT') return fail(405, '介紹只能用 PUT /intro/編號', allowed);
+      try {
+        return await putIntro(request, env, allowed);
+      } catch (e) {
+        return fail(500, '介紹存檔發生錯誤，原本的介紹不受影響', allowed);
       }
     }
 

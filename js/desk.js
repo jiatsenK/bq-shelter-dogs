@@ -37,7 +37,8 @@ function deskNoteParts(text) {
 
 let deskZone = 'all';
 let deskSort = 'days'; // days（跟手機溜狗表同一個順序）、cage、name
-let deskView = 'sheet'; // sheet（全表）、days30（最近 30 天）
+let deskView = 'sheet'; // sheet（全表）、days30（最近 30 天）、fill（補資料：照片、入所介紹）
+let deskFill = 'all'; // 補資料要看哪些：all、photo（沒照片）、intro（沒介紹）
 let deskNotesAll = false;
 const deskChecked = new Set(); // 勾起來要一起登記的狗（walkKey）
 let deskWalkDays = null; // walkKey → Set(yyyy-mm-dd)，最近 30 天用；第一次切過去才讀 walks.json
@@ -80,10 +81,9 @@ function deskToolsHtml(shown, total) {
     .map(([k, t, n]) => `<button type="button" class="dt-chip${deskZone === k ? ' on' : ''}" data-desk-zone="${k}" aria-pressed="${deskZone === k}">${t}<small class="num">${n}</small></button>`).join('');
   return `<div class="desk-tools">
     <div class="dt-chips" role="group" aria-label="區域">${chips}</div>
-    <span class="dt-hint">${shown === total ? '' : `<b class="num">${shown}</b> / ${total} 隻・`}勾左邊的格子可以一次登記好幾隻</span>
+    <span class="dt-hint">${shown === total ? '' : `<b class="num">${shown}</b> / ${total} 隻・`}${deskView === 'fill' ? '照片檔可以直接拖到那一列' : '勾左邊的格子可以一次登記好幾隻'}</span>
     <div class="dt-view" role="group" aria-label="表格">
-      <button type="button" data-desk-view="sheet" class="${deskView === 'sheet' ? 'on' : ''}" aria-pressed="${deskView === 'sheet'}">全表</button>
-      <button type="button" data-desk-view="days30" class="${deskView === 'days30' ? 'on' : ''}" aria-pressed="${deskView === 'days30'}">最近 30 天</button>
+      ${[['sheet', '全表'], ['days30', '最近 30 天'], ['fill', '補資料']].map(([k, t]) => `<button type="button" data-desk-view="${k}" class="${deskView === k ? 'on' : ''}" aria-pressed="${deskView === k}">${t}</button>`).join('')}
     </div>
   </div>`;
 }
@@ -177,6 +177,49 @@ function deskTableHtml(list, today) {
   </div>`;
 }
 
+// ── 補資料（K 2026-10-10：電腦上比較好補資料）：沒照片、沒入所介紹的狗一列一隻；
+// 照片拖到那一列（或按「上傳照片」）、介紹按「補介紹」，都打開詳細資訊走原本的預覽、確認（照片匿名上傳；介紹要通關碼，存 repo，不寫試算表）
+function deskHasPhoto(dog) {
+  if (!dog.id) return false;
+  if (photoOverrides[dog.id]) return true;
+  if (!Object.keys(photoVersions).length) return null; // 沒有版本號（本機）就不知道，照樣去抓
+  return !!photoVersions[`photos/${dog.id}.jpg`];
+}
+function deskFillNeeds(dog) {
+  const intro = typeof introOf === 'function' ? introOf(dog) : dog.intro;
+  return { photo: deskHasPhoto(dog) === false, intro: !intro };
+}
+function deskFillHtml(list) {
+  const rows = list.filter(d => d.id).map(d => ({ d, need: deskFillNeeds(d) }));
+  const nPhoto = rows.filter(r => r.need.photo).length, nIntro = rows.filter(r => r.need.intro).length;
+  const shown = rows.filter(r => deskFill === 'photo' ? r.need.photo : deskFill === 'intro' ? r.need.intro : true)
+    // 兩樣都缺的排最前面，再照籠位
+    .sort((a, b) => (b.need.photo + b.need.intro) - (a.need.photo + a.need.intro) || deskNatural(a.d.cage, b.d.cage));
+  const chip = (k, t, n) => `<button type="button" class="df-chip${deskFill === k ? ' on' : ''}" data-desk-fill="${k}" aria-pressed="${deskFill === k}">${t}<b class="num">${n}</b></button>`;
+  return `<div class="desk-fill">
+    <div class="df-bar">
+      <div class="df-chips" role="group" aria-label="要補什麼">${chip('photo', '沒照片', nPhoto)}${chip('intro', '沒介紹', nIntro)}${chip('all', '全部', rows.length)}</div>
+      <p class="df-note">照片：所有人都能上傳，上傳前會先預覽。介紹：管理用，要通關碼；存在網站，不寫試算表。</p>
+    </div>
+    ${shown.length ? `<table class="desk-table df-table">
+      <thead><tr><th class="df-ph">照片</th><th class="df-name">狗名・籠位</th><th class="df-intro">入所介紹</th><th class="df-act"><span class="sr-only">補資料</span></th></tr></thead>
+      <tbody>${shown.map(({ d, need }) => {
+        const idx = allDogs.indexOf(d);
+        const intro = typeof introOf === 'function' ? introOf(d) : d.intro;
+        return `<tr class="df-row" data-fill-dog="${idx}">
+          <td class="df-ph">${need.photo ? `<span class="df-drop">${icon('camera')}<span>拖照片<br>到這裡</span></span>` : photoThumb(d, 64)}</td>
+          <td class="df-name"><button type="button" data-desk-open="${idx}" aria-haspopup="dialog">${esc(d.name)}</button><span class="df-cage">${icon('pin')}${esc(d.cage)}</span></td>
+          <td class="df-intro">${intro ? `<div>${esc(intro)}</div>` : '<span class="df-missing">還沒有入所介紹</span>'}</td>
+          <td class="df-act">
+            <button type="button" class="df-btn${need.photo ? ' need' : ''}" data-fill-photo="${idx}">${icon('camera')}${need.photo ? '上傳照片' : '換照片'}</button>
+            <button type="button" class="df-btn${need.intro ? ' need' : ''}" data-fill-intro="${idx}">${icon('card')}${need.intro ? '補介紹' : '改介紹'}</button>
+          </td>
+        </tr>`;
+      }).join('')}</tbody>
+    </table>` : `<div class="status-msg">${deskFill === 'photo' ? '這裡的狗都有照片了' : deskFill === 'intro' ? '這裡的狗都有介紹了' : '這一區沒有狗'}</div>`}
+  </div>`;
+}
+
 function deskSideHtml(today) {
   const notes = [...(typeof sheetNotes !== 'undefined' ? sheetNotes : [])].reverse();
   const shown = deskNotesAll ? notes : notes.slice(0, 8);
@@ -213,8 +256,8 @@ function deskWalkHtml(today, query, walkList) {
   }
   const list = deskSorted(deskZone === 'all' ? walkList : walkList.filter(d => deskZoneOf(d) === deskZone));
   const empty = !list.length ? `<div class="status-msg">${query ? `找不到「${esc(query)}」` : '這一區沒有狗'}</div>` : '';
-  return `<h2 class="sr-only">溜狗表（電腦版）</h2><div class="desk">
-    <div class="desk-main">${query ? '' : deskBriefHtml(today)}${deskToolsHtml(list.length, walkList.length)}${empty || deskTableHtml(list, today)}</div>
+  return `<h2 class="sr-only">溜狗表（電腦版）</h2><div class="desk${deskView === 'fill' ? ' filling' : ''}">
+    <div class="desk-main">${query || deskView === 'fill' ? '' : deskBriefHtml(today)}${deskToolsHtml(list.length, walkList.length)}${empty || (deskView === 'fill' ? deskFillHtml(list) : deskTableHtml(list, today))}</div>
     ${deskSideHtml(today)}
   </div>${deskBatchHtml()}`;
 }
@@ -253,6 +296,12 @@ if (typeof document !== 'undefined' && document.getElementById('main')) {
     const where = t.closest('[data-where][data-dog-i]');
     if (where) { whereOpen(allDogs[Number(where.dataset.dogI)], where); return; }
     if (t.closest('[data-desk-notes]')) { deskNotesAll = !deskNotesAll; render(); return; }
+    const fill = t.closest('[data-desk-fill]');
+    if (fill) { deskFill = fill.dataset.deskFill; render(); return; }
+    const addPhoto = t.closest('[data-fill-photo]');
+    if (addPhoto) { showDetail(allDogs[Number(addPhoto.dataset.fillPhoto)]); pickPhotoFile(); return; }
+    const addIntro = t.closest('[data-fill-intro]');
+    if (addIntro) { const d = allDogs[Number(addIntro.dataset.fillIntro)]; showDetail(d); openIntroEdit(d); return; }
     if (t.closest('[data-desk-clear]')) { deskChecked.clear(); render(); return; }
     if (t.closest('[data-desk-go]')) {
       const dogs = [...deskChecked].map(k => allDogs.find(d => walkKey(d) === k)).filter(Boolean);
@@ -260,6 +309,28 @@ if (typeof document !== 'undefined' && document.getElementById('main')) {
       if (dogs.length) setWalked(dogs, true);
       render();
     }
+  });
+  // 補資料：照片檔拖到那一列 → 打開那隻的詳細資訊、直接預覽（按確認才上傳）
+  const fillRow = e => (deskOn() && activeTab === 'walk' && deskView === 'fill' && e.dataTransfer && [...e.dataTransfer.types].includes('Files') ? e.target.closest('[data-fill-dog]') : null);
+  main.addEventListener('dragover', e => {
+    const row = fillRow(e);
+    if (!row) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'copy';
+    main.querySelectorAll('.df-row.drop').forEach(r => { if (r !== row) r.classList.remove('drop'); });
+    row.classList.add('drop');
+  });
+  main.addEventListener('dragleave', e => { const row = e.target.closest && e.target.closest('.df-row'); if (row && !row.contains(e.relatedTarget)) row.classList.remove('drop'); });
+  main.addEventListener('drop', e => {
+    const row = fillRow(e);
+    if (!row) return;
+    e.preventDefault();
+    row.classList.remove('drop');
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    const dog = allDogs[Number(row.dataset.fillDog)];
+    if (!file || !dog) return;
+    showDetail(dog);
+    preparePhoto(dog, file);
   });
   main.addEventListener('change', e => {
     if (!deskOn() || activeTab !== 'walk') return;

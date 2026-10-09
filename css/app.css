@@ -1836,6 +1836,12 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .rest-end, .rest-cancel { border: none; background: var(--surface-soft); color: var(--ink); }
 .self-walked.rest { background: var(--surface-soft) !important; color: var(--ink-soft) !important; }
 .rest-hint { margin: -4px 0 0; font-size: 13px; color: var(--ink-soft); }
+/* 入所介紹（K 2026-10-10 補資料）：跟休養設定同一種表單 */
+.intro-edit-btn { margin-top: 6px; }
+.intro-form textarea { min-height: 150px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 3px; padding: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; line-height: 1.6; resize: vertical; }
+.intro-form textarea:focus { outline: 2px solid var(--primary); outline-offset: 0; }
+.intro-count { align-self: flex-end; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.intro-count.over { color: var(--red-text); font-weight: 700; }
 
 /* ── 警示排版（K 2026-10-09：警示把整張卡片撐歪）──
    狗卡改成格線：天數色籤一路到底（有警示時也是），警示只排在照片到按鈕那一欄下面，不再橫跨天數欄 */
@@ -1891,17 +1897,20 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .find-chip.on { color: var(--ink) !important; font-weight: 800; box-shadow: inset 0 -3px 0 var(--shell) !important; }
 .find-chip.on small { color: var(--ink-soft); }
 
-/* ── 分析頁頁首「← 分析」（K 2026-10-09 標題、返回有點怪）──
+/* ── 分析頁頁首「‹ 回溜狗表　分析」（K 2026-10-09 標題、返回有點怪；10-10 返回寫出回哪裡）──
    平常藏起來；分析頁打開時換掉腳掌和網站名稱，右上角的分析按鈕也收起來（返回只留一個） */
 .head-back, .head-title { display: none; }
 .analysis-open .brand .logo, .analysis-open .brand .titles, .analysis-open .analysis-btn { display: none !important; }
+/* 10-10 K：只有箭頭看不懂，寫出回哪裡；跟電腦版頁首「圖鑑」同一種細框按鈕 */
 .analysis-open .head-back {
-  display: flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin-left: -10px;
-  border: none; background: none; color: #fff; font-size: 24px; cursor: pointer; border-radius: 3px;
+  flex: none; display: flex; align-items: center; gap: 2px; height: 44px; margin-left: -6px; padding: 0 14px 0 6px;
+  border: none; border-radius: 3px; background: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35);
+  color: #fff; font: inherit; font-size: 15px; font-weight: 700; white-space: nowrap; cursor: pointer;
 }
+.analysis-open .head-back .icon { font-size: 22px; }
 .analysis-open .head-back:active { background: var(--shell-deep); }
 .analysis-open .head-back:focus-visible { outline: 3px solid var(--tab-amber); }
-.analysis-open .head-title { display: block; flex: 1; margin: 0; color: #fff; font-size: 20px; font-weight: 800; }
+.analysis-open .head-title { display: block; flex: 1; margin: 0 0 0 14px; color: #fff; font-size: 20px; font-weight: 800; }
 
 /* 本月溜狗：一排大數字＋每天一根細長條（1 號到今天），還沒開始記錄的日子是斜線 */
 .a-month { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin: 4px 0 12px; }
@@ -1918,22 +1927,14 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .a-day em { font-style: normal; font-size: 12px; font-weight: 700; text-align: center; color: var(--ink); font-variant-numeric: tabular-nums; margin-bottom: 2px; }
 .a-days-peak { margin: 4px 0 0; }
 
-/* 列表模式（K 2026-10-09）：溜狗人拿掉，天數｜狗名｜籠位｜溜了；
-   「天數」標題跟下面的數字一樣置中；籠位跟狗卡一樣是黑框標籤，點了開平面圖 */
-.row-head, .row-dog { grid-template-columns: 52px minmax(0, 1fr) 76px 60px; }
+/* 列表模式（K 2026-10-09）：溜狗人拿掉，天數｜狗名＋籠位｜溜了；「天數」標題跟下面的數字一樣置中。
+   10-10 K：籠位單獨一欄的黑框標籤位置怪、跟照片檢視不一樣 → 改成跟狗卡同一個圖釘籠位（.cage-pill），放在狗名下面 */
+.row-head, .row-dog { grid-template-columns: 52px minmax(0, 1fr) 60px; }
 .row-head span:first-child { text-align: center; }
-.row-head span:nth-child(3) { text-align: center; }
-.r-cage {
-  position: relative; justify-self: center; min-height: 30px; padding: 3px 8px;
-  border: none; border-radius: 2px; background: #fff; box-shadow: inset 0 0 0 1.5px var(--ink);
-  font: inherit; font-size: 14px; font-weight: 700; color: var(--ink); letter-spacing: 0.02em;
-  font-variant-numeric: tabular-nums; white-space: nowrap; cursor: pointer;
-}
-.r-cage::after { content: ''; position: absolute; inset: -7px -4px; } /* 手指點的範圍 44px */
-.r-cage:active { background: var(--tab-amber); }
-.r-cage:focus-visible { outline: 3px solid var(--tab-amber); outline-offset: 1px; }
-.r-cage.plain { background: none; box-shadow: none; padding: 3px 0; font-weight: 600; color: var(--ink-soft); cursor: inherit; }
-.r-cage.plain::after { content: none; }
+.r-main { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 0; }
+.r-main .r-name { max-width: 100%; line-height: 1.25; }
+.r-main .cage-pill { margin-left: -1px; }
+.r-cage.plain { font-size: 13px; font-weight: 600; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 
 /* ── 電腦版（K 2026-10-10，≥1100px）：溜狗表是今天的簡報＋像試算表的全表（js/desk.js），右邊異動紀錄、休養中 ──
    分類搬到頁首當分頁（index-tab：選中的那一頁跟內容同底色，站在深綠頁首下緣）；頁首不收起 */
@@ -1956,6 +1957,38 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .desk-on .tabs button.active .n { color: var(--ink-soft); }
   .desk-on .search { margin: 0 0 0 auto; width: 300px; align-self: center; }
   .desk-on main:has(> .desk) { max-width: none; padding: 20px 24px 120px; }
+  /* 補資料（K 2026-10-10）：沒照片、沒介紹的狗一列一隻；照片拖到那一列就能換 */
+  .desk-fill { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); border-top: 2px solid var(--shell); }
+  .df-bar { display: flex; align-items: center; gap: 20px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  .df-chips { display: flex; gap: 6px; }
+  .df-chip { display: inline-flex; align-items: center; gap: 6px; height: 36px; padding: 0 12px; border: none; border-radius: 3px; background: var(--surface-soft); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink-soft); font: inherit; font-weight: 700; cursor: pointer; }
+  .df-chip b { font-weight: 800; color: var(--ink); }
+  .df-chip.on { background: var(--shell); box-shadow: none; color: #fff; }
+  .df-chip.on b { color: #fff; }
+  .df-note { margin: 0 0 0 auto; font-size: 13px; color: var(--ink-soft); }
+  .df-table { width: 100%; }
+  .df-table th.df-ph, .df-table td.df-ph { width: 88px; text-align: center; }
+  .df-table th.df-name { width: 190px; }
+  .df-table th.df-act { width: 1%; }
+  .desk-table.df-table tbody td { vertical-align: middle; padding-top: 8px; padding-bottom: 8px; }
+  .df-ph .thumb { width: 64px; height: 64px; margin: 0 auto; border-radius: 3px; }
+  .df-drop { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; width: 64px; height: 64px; margin: 0 auto; border-radius: 3px; box-shadow: inset 0 0 0 1.5px var(--line); background: repeating-linear-gradient(135deg, var(--surface-soft) 0 6px, var(--surface) 6px 12px); color: var(--ink-soft); font-size: 11px; line-height: 1.25; text-align: center; }
+  .df-drop .icon { font-size: 18px; }
+  .df-name button { display: block; padding: 0; border: none; background: none; color: var(--ink); font: inherit; font-size: 16px; font-weight: 800; text-align: left; cursor: pointer; }
+  .df-name button:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .df-cage { display: inline-flex; align-items: center; gap: 2px; margin-top: 2px; font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+  .df-cage .icon { color: var(--primary); font-size: 13px; }
+  .df-intro div { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; font-size: 13.5px; line-height: 1.55; color: var(--ink-soft); }
+  .df-missing { font-size: 13.5px; color: var(--red-text); font-weight: 600; }
+  .df-act { white-space: nowrap; }
+  .df-btn { display: inline-flex; align-items: center; gap: 6px; height: 40px; padding: 0 14px; border: none; border-radius: 3px; background: var(--surface-soft); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; }
+  .df-btn + .df-btn { margin-left: 6px; }
+  .df-btn .icon { font-size: 16px; color: var(--ink-soft); }
+  .df-btn.need { background: var(--shell); box-shadow: none; color: #fff; }
+  .df-btn.need .icon { color: #fff; }
+  .df-btn:hover { filter: brightness(.96); }
+  .df-row.drop td { background: var(--primary-soft); }
+  .df-row.drop .df-drop { box-shadow: inset 0 0 0 2px var(--shell); color: var(--shell); }
 
   .desk { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; }
 
@@ -2010,7 +2043,8 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .dt-view { display: flex; gap: 14px; align-self: center; }
   .dt-view button { height: 40px; padding: 0 2px; border: none; border-bottom: 2px solid transparent; background: none; color: var(--ink-soft); font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; }
   .dt-view button.on { color: var(--ink); font-weight: 800; border-bottom-color: var(--shell); }
-  .dt-hint { margin-left: auto; align-self: center; font-size: 13px; color: var(--ink-soft); white-space: nowrap; }
+  .dt-hint { margin-left: auto; align-self: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: var(--ink-soft); white-space: nowrap; }
+  .dt-view { flex: none; }
   .dt-hint b { color: var(--ink); }
 
   /* 全表：一列一隻，狗名和天數最先看到；備註字小一級、一行，滑過看全文、點狗名看詳細資訊 */
