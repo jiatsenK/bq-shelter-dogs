@@ -39,10 +39,11 @@ export const DOGS_DIR = fileURLToPath(new URL('../dogs/', import.meta.url));
 export const FORMAT_VERSION = 1;
 
 // headers：前幾列當表頭。0 表示所有列都當資料列回傳
-export async function fetchGviz(sheetName, headers = 0, fetchImpl = fetch) {
+// range（例：A145:Z450）只讀那一段；gviz 照每欄多數的型別判斷，只讀一段時那一段自己算，不會被上面的編號（數字）帶走
+export async function fetchGviz(sheetName, headers = 0, fetchImpl = fetch, range = '') {
   const sheetId = (process.env.SHEET_ID || '').trim();
   if (!sheetId) throw new Error('沒有設定試算表 ID：請到 GitHub repo 的 Settings → Secrets and variables → Actions 新增 Secret「SHEET_ID」。');
-  const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/gviz/tq?tqx=out:json&headers=${headers}&sheet=${encodeURIComponent(sheetName)}`;
+  const url = `https://docs.google.com/spreadsheets/d/${encodeURIComponent(sheetId)}/gviz/tq?tqx=out:json&headers=${headers}&sheet=${encodeURIComponent(sheetName)}${range ? `&range=${encodeURIComponent(range)}` : ''}`;
   let res;
   try {
     res = await fetchImpl(url);
@@ -224,12 +225,49 @@ export function parseMainList(table, headerTexts = [], today = new Date(), names
 
 // 主清單分兩次讀：先找出表頭在第幾列，再指定表頭列數重讀
 export async function loadMainList(fetchImpl = fetch, today = new Date()) {
+  return (await loadMainSheet(fetchImpl, today)).dogs;
+}
+export async function loadMainSheet(fetchImpl = fetch, today = new Date()) {
   const raw = await fetchGviz('主清單', 0, fetchImpl);
   const headerIdx = findHeaderRow(raw);
   if (headerIdx === -1) throw new Error('主清單裡找不到含「犬名」的表頭列，請確認分頁名稱與欄位沒有被改掉。');
   const headerTexts = ((raw.rows[headerIdx] || {}).c || []).map(cellText);
   const table = await fetchGviz('主清單', headerIdx + 1, fetchImpl);
-  return parseMainList(table, headerTexts, today);
+  return { dogs: parseMainList(table, headerTexts, today), notes: await loadSheetNotes(raw, headerTexts, fetchImpl) };
+}
+
+// ── 異動紀錄（K 2026-10-10）：主清單狗的下面那段，籠位欄寫「備註1」「備註2」…（之後的空白），編號欄寫內容 ──
+// 例：「1/7新獨10奈威肛門腺破裂移至新B03休養」。沒有排版、會一直往下加，所以從第一個「備註」那列讀到底。
+// 只讀不寫；讀失敗回 null，同步沿用上一次的（不擋狗的資料）
+export const NOTES_MAX_ROWS = 400;
+export function sheetNotesStart(raw, headerTexts) {
+  const cage = findColumns(headerTexts).cage;
+  if (cage == null) return -1;
+  return (raw.rows || []).findIndex(r => /^備註/.test(cellText((r.c || [])[cage])));
+}
+export function parseSheetNotes(table, headerTexts) {
+  const { cage, id } = findColumns(headerTexts);
+  const out = [];
+  for (const r of table.rows || []) {
+    const c = r.c || [];
+    const text = cellText(c[id]).replace(/\r\n?/g, '\n');
+    if (!text) continue;
+    out.push({ label: cellText(c[cage]), text });
+  }
+  return out;
+}
+async function loadSheetNotes(raw, headerTexts, fetchImpl) {
+  const start = sheetNotesStart(raw, headerTexts);
+  if (start === -1) return [];
+  // headers=0 讀到的第 0 列是試算表第 1 列
+  const row = start + 1;
+  try {
+    const table = await fetchGviz('主清單', 0, fetchImpl, `A${row}:Z${row + NOTES_MAX_ROWS}`);
+    return parseSheetNotes(table, headerTexts);
+  } catch (e) {
+    console.warn(`讀不到主清單下方的異動紀錄，這次沿用上一次：${e.message}`);
+    return null;
+  }
 }
 
 // 犬名比對時忽略空白（含全形空白）
@@ -362,8 +400,8 @@ export async function attachDogCards(dogs, readCard = readDogCardFile) {
 
 // 讀試算表、整理成 dogs.json 的內容（不含同步時間）。任何一個分頁讀取失敗都丟錯。
 export async function buildData(fetchImpl = fetch, today = new Date(), readCard = readDogCardFile) {
-  const [sheetDogs, groupTable] = await Promise.all([
-    loadMainList(fetchImpl, today),
+  const [{ dogs: sheetDogs, notes: sheetNotes }, groupTable] = await Promise.all([
+    loadMainSheet(fetchImpl, today),
     fetchGviz('常遛狗群', 0, fetchImpl),
   ]);
   if (!sheetDogs.length) throw new Error('主清單讀到 0 隻狗，可能是試算表被清空或格式變了，這次不更新。');
@@ -374,6 +412,8 @@ export async function buildData(fetchImpl = fetch, today = new Date(), readCard 
   return {
     dogs: dogs.map(d => ({ ...d, walkedDate: formatDate(d.walkedDate) })),
     groups,
+    // 異動紀錄讀失敗是 null，main() 沿用上一次的
+    sheetNotes,
   };
 }
 
@@ -719,6 +759,9 @@ async function main() {
   const data = await buildData();
   const now = new Date();
   const read = path => readFile(`${DATA_DIR}${path}`, 'utf8').catch(() => '');
+  if (data.sheetNotes == null) {
+    try { data.sheetNotes = JSON.parse(await read('dogs.json')).sheetNotes || []; } catch { data.sheetNotes = []; }
+  }
   const { writes, added } = planWrites(data, {
     oldDogsText: await read('dogs.json'),
     oldWalksText: await read('walks.json'),
