@@ -35,8 +35,9 @@ const SPECIAL_KEYWORDS = [
   ['不親'],
 ];
 // 天數色標（2026-09-24 K 定案）：0～6 天綠、第 7 天起黃、第 30 天起紅
-const AMBER_DAYS = 7;
-const RED_DAYS = 30;
+// K 2026-10-09：大部分的狗三天沒溜就覺得很久了 → 0–2 天綠、3–4 天黃、5 天以上紅（原本 7／30 天）
+const AMBER_DAYS = 3;
+const RED_DAYS = 5;
 
 let allDogs = [];
 let groupMap = {};
@@ -638,7 +639,7 @@ function lastWalk(dog, today) {
   let text = '沒有紀錄', level = 'muted', small = false;
   if (s.kind === 'dated') {
     if (s.days < 0) text = '日期看不懂';
-    else { text = s.days === 0 ? '今天' : `${s.days} 天前`; level = s.level; }
+    else { text = s.days === 0 ? '今天' : `<b>${s.days}</b> 天前`; level = s.level; } // 數字包 <b>：狗卡左緣色籤把天數放大（K 2026-10-09 日期是現場第一眼）
   } else if (s.kind === 'covered') {
     // 窄螢幕放不下一行時只在「有人固定｜照顧」之間換行，不會剩一個「顧」字
     text = '<span class="nowrap">有人固定</span><span class="nowrap">照顧</span>'; level = 'sage'; small = true;
