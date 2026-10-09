@@ -963,3 +963,6 @@
 - cards.html／css/cards.css：標題改「板收圖鑑」，卡包紅標「N 張新卡」、圖例、灰卡樣式；「← 溜狗表」。index.html：拿掉電腦版自動轉 cards.html；頁首加「圖鑑」連結（只有電腦版顯示，css/app.css）。js/app.js：網址 #mine 直接開我溜過。
 - 只讀 dogs.json、walks.json 和溜狗表存的代號、今天已溜，只寫自己的 bq-zukan；不寫試算表、不顯示志工名字。
 - 測試：runCardsTests 換掉抽卡、收集冊、轉址三項，改成「我溜過的狗」「撕開過的、新卡」「首頁不轉、頁首有圖鑑入口」，並檢查 cards.js 只 setItem 自己的 key。PROJECT_GOALS、DESIGN_GUIDE、DESIGN.md 球員卡段、surface brief 改成圖鑑。
+## 2026-10-10 Claude（#189 圖鑑對齊、照片一律正方形）
+- 依據：K 2026-10-10：「整體頁面有很多未對齊的地方，請 impeccable 調整」「照片格式要統一」，選正方形。
+- css/cards.css：頁首右邊「← 溜狗表」和「已拿到」排成一列、跟大標題置中對齊（原本疊兩列、進度掉到標題下面）；卡面、卡套、獎座照片都改 1:1，卡面下方守備位置貼底；卡套不再用 5:7、照片和「待開」卡背都是正方形，名字對齊同一條線。cards.html：年度獎項的說明移到標題下面，跟圖鑑同一個排法。

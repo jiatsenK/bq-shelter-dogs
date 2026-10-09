@@ -21,7 +21,7 @@ html.bq-modal-open { overflow: hidden; }
 .bq-field { position: relative; min-height: 100vh; min-height: 100svh; display: grid; grid-template-rows: auto 1fr auto; overflow: hidden;
   background: repeating-linear-gradient(90deg, var(--navy) 0 7.5vw, var(--navy-2) 7.5vw 15vw); }
 .bq-field::before { content: ''; position: absolute; left: 50%; top: 56%; width: 150vh; height: 150vh; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: inset 0 0 0 3px rgba(244, 244, 240, .07), 0 0 0 3px rgba(244, 244, 240, .04); pointer-events: none; }
-.bq-mast { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: flex-start; gap: 24px; padding: 30px 48px 0; }
+.bq-mast { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 30px 48px 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .bq-lockup { display: flex; align-items: center; gap: 18px; }
 .bq-patch { flex: none; display: flex; align-items: center; gap: 8px; height: clamp(60px, 5.4vw, 82px); padding: 0 16px 0 12px; border-radius: 41px; background: var(--chalk); color: var(--navy); box-shadow: inset 0 0 0 3px var(--gold), inset 0 0 0 5px var(--chalk), inset 0 0 0 6px var(--navy); }
@@ -29,7 +29,7 @@ html.bq-modal-open { overflow: hidden; }
 .bq-patch span { font: 900 clamp(13px, 1.1vw, 16px)/1.15 var(--cjk); letter-spacing: .12em; }
 .bq-mast h1 { margin: 0; font: 400 clamp(44px, 5vw, 76px)/.95 var(--num); letter-spacing: .01em; color: var(--gold); }
 .bq-year { color: var(--chalk); }
-.bq-mast-r { display: flex; flex-direction: column; align-items: flex-end; gap: 18px; }
+.bq-mast-r { display: flex; align-items: center; gap: 36px; }
 .bq-app-link { color: var(--sky); font-size: 14px; font-weight: 700; letter-spacing: .1em; text-decoration: none; display: inline-flex; align-items: center; min-height: 44px; border-bottom: 1px solid rgba(198, 210, 232, .4); }
 .bq-app-link:hover { color: var(--chalk); border-bottom-color: var(--chalk); }
 .bq-progress { display: grid; grid-template-columns: auto auto; align-items: baseline; column-gap: 10px; color: var(--chalk); text-decoration: none; }
@@ -105,7 +105,7 @@ html.bq-modal-open { overflow: hidden; }
 .tier-locked .bq-band { background: #6B7385; }
 .tier-locked .bq-holo { display: none; }
 .tier-locked .bq-back { box-shadow: inset 0 0 0 calc(var(--cw) * .018) #6B7385, 0 24px 50px rgba(0, 0, 0, .5); }
-.bq-ph { position: relative; display: block; flex: 1 1 auto; min-height: 0; background: var(--team); overflow: hidden; }
+.bq-ph { position: relative; display: block; flex: none; aspect-ratio: 1 / 1; background: var(--team); overflow: hidden; }
 .bq-ph img, .bq-pocket-ph img, .bq-trophy-ph img { transform-origin: 50% 0; transform: scale(1.17); }
 .bq-ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
 .bq-nophoto { position: absolute; inset: 0; display: grid; place-items: end center; overflow: hidden; color: var(--chalk);
@@ -118,7 +118,7 @@ html.bq-modal-open { overflow: hidden; }
 .bq-band { display: flex; justify-content: space-between; padding: calc(var(--cw) * .025) calc(var(--cw) * .04); background: var(--team); color: var(--chalk); font-weight: 900; font-size: max(11px, calc(var(--cw) * .05)); letter-spacing: .14em; }
 .bq-band span { letter-spacing: .08em; }
 .bq-nm { display: block; margin-top: calc(var(--cw) * .04); font: 900 calc(var(--cw) * .12)/1.05 var(--cjk); transform: skewX(-8deg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 2px; }
-.bq-pos { display: flex; justify-content: space-between; margin-top: calc(var(--cw) * .02); font-size: max(11px, calc(var(--cw) * .052)); font-weight: 700; color: var(--ink-soft); }
+.bq-pos { display: flex; justify-content: space-between; margin-top: auto; font-size: max(11px, calc(var(--cw) * .052)); font-weight: 700; color: var(--ink-soft); }
 .bq-pos b { color: var(--ink); }
 .tier-silver .bq-pos, .tier-gold .bq-pos, .tier-holo .bq-pos { color: #2E2A1E; }
 .tier-holo .bq-nm, .tier-holo .bq-pos, .tier-holo .bq-pos b { color: var(--ink); }
@@ -179,7 +179,7 @@ html.bq-modal-open { overflow: hidden; }
 .bq-trophy:hover { transform: translateY(-6px) rotate(-.6deg); }
 .bq-trophy-in { position: relative; background: var(--navy); color: var(--chalk); border-radius: 4px; overflow: hidden; box-shadow: inset 0 0 0 2px rgba(255, 229, 138, .6); }
 .bq-trophy-set { margin: 0; padding: 0 26px 18px; font-size: 12px; font-weight: 700; color: var(--sky-dim); letter-spacing: .12em; }
-.bq-trophy-ph { position: relative; display: block; width: 100%; aspect-ratio: 4 / 3; padding: 0; border: none; background: var(--team); cursor: zoom-in; overflow: hidden; }
+.bq-trophy-ph { position: relative; display: block; width: 100%; aspect-ratio: 1 / 1; padding: 0; border: none; background: var(--team); cursor: zoom-in; overflow: hidden; }
 .bq-trophy-ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .6s var(--ease); }
 .bq-trophy-ph:hover img { transform: scale(1.04); }
 .bq-trophy-ph:focus-visible { outline-offset: -6px; }
@@ -211,7 +211,7 @@ html.bq-modal-open { overflow: hidden; }
 .bq-sheet h3 small b { font-weight: 400; color: var(--chalk); }
 .bq-pockets { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 12px 10px; }
 /* 卡套：拿到的是亮卡；溜過還沒撕的是卡背；沒溜過的是透明卡套裡淡淡的照片 */
-.bq-pocket { position: relative; display: flex; flex-direction: column; aspect-ratio: 5 / 7; padding: 5px; border-radius: 5px; border: none; text-align: center;
+.bq-pocket { position: relative; display: flex; flex-direction: column; padding: 5px; border-radius: 5px; border: none; text-align: center;
   background: rgba(198, 210, 232, .06); box-shadow: inset 0 0 0 1px rgba(198, 210, 232, .18); color: var(--sky-dim); }
 .bq-pocket::after { content: ''; position: absolute; inset: 0; border-radius: 5px; pointer-events: none; background: linear-gradient(160deg, rgba(255, 255, 255, .1), transparent 35%); }
 .bq-pocket { cursor: pointer; font: inherit; }
@@ -220,7 +220,7 @@ html.bq-modal-open { overflow: hidden; }
 .bq-pocket.locked .bq-pocket-nm { color: var(--sky-dim); }
 .bq-pocket.pending { background: var(--navy); box-shadow: inset 0 0 0 2px var(--gold), 0 6px 14px rgba(0, 0, 0, .35); color: var(--chalk); transition: transform .25s var(--ease); }
 .bq-pocket.pending:hover { transform: translateY(-4px) rotate(1deg); }
-.bq-pocket-back { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--gold); }
+.bq-pocket-back { flex: none; aspect-ratio: 1 / 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--gold); }
 .bq-pocket-back svg { width: 42%; height: auto; }
 .bq-pocket-back b { font-size: 13px; letter-spacing: .3em; padding-left: .3em; }
 .bq-pocket-q { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
@@ -232,7 +232,7 @@ html.bq-modal-open { overflow: hidden; }
 .bq-pocket.got.tier-gold { background: linear-gradient(135deg, #9A7200, #FFE58A 26%, #C99A10 48%, #FFF2BA 64%, #B88A00 86%, #F2CC45); }
 .bq-pocket.got.tier-holo { background: repeating-linear-gradient(65deg, rgba(255, 255, 255, .28) 0 1px, transparent 1px 4px), linear-gradient(125deg, #FF6FB5, #FFD45A 20%, #7CF2C2 40%, #6FA8FF 60%, #C08CFF 80%, #FF7F8E); }
 .bq-pocket.got:hover { transform: translateY(-4px) rotate(-1deg); }
-.bq-pocket-ph { position: relative; flex: 1; background: var(--team); overflow: hidden; border-radius: 2px; }
+.bq-pocket-ph { position: relative; flex: none; aspect-ratio: 1 / 1; background: var(--team); overflow: hidden; border-radius: 2px; }
 .bq-pocket-ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .bq-pocket-ph { --cw: 110px; }
 .bq-pocket-ph .bq-nophoto span { display: none; }
