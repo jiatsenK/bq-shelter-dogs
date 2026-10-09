@@ -12,6 +12,8 @@
 //   （通關碼放在內容裡、不放標頭，這樣中文通關碼也能用）。
 //   repo 是公開的，備註內容任何人都看得到；通關碼只是擋住路人改掉備註
 // - 相簿 K 2026-10-09 拿掉（怕 Cloudflare 用量爆掉），只留主照片；/gallery 一律回 410
+// - 休養中（K 2026-10-09）：PUT /rest/{編號} 送 { passcode, until: 'YYYY-MM-DD', reason } 設定、{ passcode, end: true } 結束，
+//   寫進 repo 的 data/rest.json（跟我的備註同一組通關碼）。網站只讀這個檔；試算表一律不動
 // - 誰遛的代號（#95）：POST /walker-code 送 { names: [...] }，回 { codes: [...] }。
 //   用 Worker 的 Secret「WALKER_KEY」（跟 GitHub Actions 的同一組）算，網站拿不到密鑰；名字不存、不寫進任何紀錄
 // - 定時叫同步：GitHub 自己的排程常被跳過（2026-09-27 一整天只跑一次），所以在 Cloudflare 設 Cron Trigger，
@@ -56,6 +58,10 @@ const NOTE_WRITE_LIMITS = [
 const NOTE_READ_LIMITS = [{ windowMs: 60 * 1000, max: 60 }];
 // 通關碼打錯：1 小時最多 10 次，超過就先不給試（擋住一直猜）
 const PASSCODE_FAIL_LIMITS = [{ windowMs: 60 * 60 * 1000, max: 10 }];
+// 休養中：存放位置、原因最多幾個字、最多設多久（天）
+const REST_PATH = 'data/rest.json';
+const REST_REASON_MAX = 40;
+const REST_MAX_DAYS = 180;
 // 編號只接受英數字（目前都是 10 位數字），也順便擋掉 ../ 之類的路徑
 const ID_PATTERN = /^[0-9A-Za-z]{1,32}$/;
 // 誰遛的代號：一次最多幾個名字、每個名字最多幾個字、送來的資料上限；1 分鐘最多 20 次
@@ -449,6 +455,94 @@ async function putNote(request, env, origin) {
     return fail(502, `備註沒有存進去（GitHub ${res.status}），原本的備註不受影響`, origin);
   }
   return fail(502, '備註沒有存進去，原本的備註不受影響', origin);
+}
+
+// 台灣今天的日期 YYYY-MM-DD
+function taiwanYmd(now) {
+  return new Date(now + 8 * 3600 * 1000).toISOString().slice(0, 10);
+}
+
+// 休養中（K 2026-10-09）：管理者在網站上設定「到哪天前暫停帶出」。要通關碼；只寫 repo 的 data/rest.json
+async function putRest(request, env, origin) {
+  const cfg = config(env);
+  const now = Date.now();
+  if (!cfg.token) return fail(500, '休養設定還沒準備好（缺 GITHUB_TOKEN）', origin);
+  if (!cfg.passcode) return fail(500, '休養設定還沒準備好（缺 NOTES_PASSCODE）', origin);
+
+  const m = new URL(request.url).pathname.match(/^\/rest\/([^/]+)$/);
+  const id = m ? decodeURIComponent(m[1]) : '';
+  if (!ID_PATTERN.test(id)) return fail(400, '狗狗編號格式不對', origin);
+
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (passcodeLocked(ip, now)) return fail(429, '通關碼錯太多次，請一小時後再試', origin, { code: 'passcode' });
+  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') return fail(415, '格式不對', origin);
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).length > 2048) return fail(413, '資料太長', origin);
+  let input;
+  try {
+    input = JSON.parse(raw);
+  } catch (e) {
+    return fail(400, '格式不對', origin);
+  }
+  const denied = await checkPasscode(input, cfg, ip, now, origin, '需要通關碼才能設定休養');
+  if (denied) return denied;
+
+  let rest = null;
+  if (input.end !== true) {
+    const until = typeof input.until === 'string' ? input.until : '';
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(until) ? new Date(`${until}T00:00:00Z`) : null;
+    if (!day || isNaN(day) || day.toISOString().slice(0, 10) !== until) return fail(400, '日期看不懂', origin);
+    const today = new Date(`${taiwanYmd(now)}T00:00:00Z`);
+    const days = Math.round((day - today) / 86400000);
+    if (days < 0) return fail(400, '日期已經過了', origin);
+    if (days > REST_MAX_DAYS) return fail(400, `最多設 ${REST_MAX_DAYS} 天`, origin);
+    const reason = cleanNote(typeof input.reason === 'string' ? input.reason : '') || '';
+    if ([...reason].length > REST_REASON_MAX) return fail(413, `原因最多 ${REST_REASON_MAX} 字`, origin);
+    rest = { until, reason: reason.replace(/\n/g, ' '), updatedAt: new Date(now).toISOString() };
+  }
+
+  if (!allow(`rest:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '設定太頻繁，請稍等幾分鐘再試', origin);
+  let dogs;
+  try {
+    dogs = await loadDogs(cfg, now);
+  } catch (e) {
+    return fail(502, '暫時無法確認狗狗編號，請稍後再試', origin);
+  }
+
+  // 跟我的備註一樣：先讀最新再改，同時有人改（sha 對不上）就重讀再試
+  for (let attempt = 0; attempt < 3; attempt++) {
+    let current;
+    try {
+      current = await readJsonMap(cfg, REST_PATH);
+    } catch (e) {
+      return fail(502, '暫時讀不到休養設定，請稍後再試', origin);
+    }
+    const map = { ...current.data };
+    if (!dogs.has(id) && !(id in map)) return fail(404, '找不到這個編號的狗狗', origin);
+    if (!rest && !(id in map)) return reply(200, { ok: true, id, rest: null, commit: null }, origin);
+    if (rest) map[id] = rest;
+    else delete map[id];
+    const name = dogs.get(id);
+    const body = {
+      message: `${rest ? `休養中到 ${rest.until}` : '結束休養'}：${id}${name ? `（${name}）` : ''}\n\n網站寫入（休養設定，通關碼驗證）`,
+      content: toBase64(new TextEncoder().encode(serializeNotes(map))),
+      branch: cfg.branch,
+    };
+    if (current.sha) body.sha = current.sha;
+    const res = await github(cfg, `contents/${REST_PATH}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (res.ok) {
+      const out = await res.json().catch(() => ({}));
+      return reply(200, { ok: true, id, rest, commit: out.commit && out.commit.sha }, origin);
+    }
+    if ((res.status === 409 || res.status === 422) && attempt < 2) continue;
+    return fail(502, `休養設定沒有存進去（GitHub ${res.status}）`, origin);
+  }
+  return fail(502, '休養設定沒有存進去', origin);
 }
 
 // ── 照片放 R2（#130）──
@@ -923,6 +1017,15 @@ export default {
         return fail(405, '備註只能讀取（GET /notes）或寫入（PUT /notes/編號）', allowed);
       } catch (e) {
         return fail(500, '備註服務發生錯誤，原本的備註不受影響', allowed);
+      }
+    }
+
+    if (path.startsWith('/rest/')) {
+      if (request.method !== 'PUT') return fail(405, '休養設定只能用 PUT /rest/編號', allowed);
+      try {
+        return await putRest(request, env, allowed);
+      } catch (e) {
+        return fail(500, '休養設定發生錯誤，原本的設定不受影響', allowed);
       }
     }
 

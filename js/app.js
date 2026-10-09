@@ -16,6 +16,8 @@ const FIRST_SCREEN_CARDS = 8;
 // 我最近溜過（#58）：同步時累積的遛狗紀錄（#56）。#96 起每個志工看自己的：
 // 紀錄裡的 walkers 是遛的人的代號，志工在「我溜過」輸入名字、經 Worker 換成代號後記在這支手機
 const WALKS_URL = 'data/walks.json';
+// 休養中（K 2026-10-09）：管理者在網站上設定「到哪天前暫停帶出」，經 Worker（通關碼）寫進 repo 的這個檔，不碰試算表
+const REST_URL = 'data/rest.json';
 const WALKER_CODES_KEY = 'bq-walker-codes';
 const WALKER_CODE_PATTERN = /^[0-9a-f]{12}$/; // 跟 Worker 的 WALKER_CODE_LENGTH 一致
 // 警示關鍵字（2026-09-24 K 定，#28）：備註含任一個，就把備註原文直接顯示在卡片第一層，字眼標紅；
@@ -41,6 +43,8 @@ let detailDog = null; // 詳細資訊正在看的狗
 let detailOpener = null;
 let detailTrail = []; // 在詳細資訊裡點「可以一起溜」換過的狗（#99）：可以按「回到 ○○」一隻一隻回去
 let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, url, phase: 'preview'|'uploading'|'error', error }
+let restMap = {}; // 休養中：編號 → { until: 'YYYY-MM-DD', reason }
+let restEdit = null; // 詳細資訊正在改的休養設定：{ dog, until, reason, pass, needPass, phase: 'edit'|'saving'|'error', error }
 let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（walkKey）
 let searchQuery = '';
 let loadWarning = '';
@@ -99,6 +103,22 @@ function parseDogsData(data) {
     }
   }
   return { dogs, groups, syncedAt: synced && !isNaN(synced) ? synced : null, photoVersions: versions };
+}
+
+// 暫住（K 2026-10-09 阿拉丁）：試算表裡「(阿拉丁)」這種名字加括號、沒有編號的列，是同名那隻狗暫時住的籠子。
+// 合成一隻：籠位換成暫住的那籠（在哪、找狗都指過去），原本的籠位記在 homeCage；括號那列不另外算一隻。
+// 溜了照舊用編號＋名字寫試算表那隻狗本來的列，不受籠位影響。找不到同名的就照原樣留著
+function mergeTempCages(dogs) {
+  const marked = d => !d.id && /^[(（].+[)）]$/.test(d.name);
+  for (const m of dogs.filter(marked)) {
+    const name = m.name.slice(1, -1).trim();
+    const real = dogs.find(d => !marked(d) && d.name === name);
+    if (!real || !m.cage || real.homeCage) continue;
+    real.homeCage = real.cage;
+    real.cage = m.cage;
+    dogs.splice(dogs.indexOf(m), 1);
+  }
+  return dogs;
 }
 
 // 瀏覽器可能拿快取的舊檔；no-cache 讓它每次都先問 GitHub Pages 有沒有新版（沒變只回 304，很省）
@@ -404,6 +424,8 @@ function effectiveWalkDate(dog, today = new Date()) {
 }
 
 function computeStatus(dog, today) {
+  const rest = restOf(dog, today);
+  if (rest) return { kind: 'rest', ...rest };
   // V9（#141）拿掉今天已溜分類：這支手機今天按過溜了的狗（也寫進試算表了）直接當作今天溜的
   if (walkedNow(dog, today)) return { kind: 'dated', days: 0, level: 'sage', mine: true };
   const date = effectiveWalkDate(dog, today);
@@ -417,6 +439,16 @@ function computeStatus(dog, today) {
   if (dog.covered) return { kind: 'covered' };
   return { kind: 'unknown' };
 }
+
+// 休養中：今天還在設定的日期以內（含那一天）才算；過了自動恢復
+function restOf(dog, today = new Date()) {
+  const r = dog && dog.id && restMap[dog.id];
+  const until = r && parseYmd(r.until);
+  if (!until) return null;
+  const day = makeDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
+  return day <= until ? { until, reason: r.reason || '' } : null;
+}
+const monthDay = d => `${d.getMonth() + 1}/${d.getDate()}`;
 
 function esc(s) {
   return String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
@@ -562,6 +594,7 @@ function statusBadge(dog, today) {
     return `<span class="badge ${s.level}">${label}</span>`;
   }
   if (s.kind === 'covered') return `<span class="badge sage">有人固定照顧</span>`;
+  if (s.kind === 'rest') return `<span class="badge rest">休養中・到 ${monthDay(s.until)}</span>`;
   return `<span class="badge muted">沒有紀錄</span>`;
 }
 
@@ -572,6 +605,8 @@ function lastWalk(dog, today) {
   if (s.kind === 'dated') {
     if (s.days < 0) text = '日期看不懂';
     else { text = s.days === 0 ? '今天' : `<b>${s.days}</b> 天前`; level = s.level; } // 數字包 <b>：狗卡左緣色籤把天數放大（K 2026-10-09 日期是現場第一眼）
+  } else if (s.kind === 'rest') {
+    text = `<span class="nowrap">休養中</span><span class="nowrap rest-until">到 ${monthDay(s.until)}</span>`; level = 'rest'; small = true;
   } else if (s.kind === 'covered') {
     // 窄螢幕放不下一行時只在「有人固定｜照顧」之間換行，不會剩一個「顧」字
     text = '<span class="nowrap">有人固定</span><span class="nowrap">照顧</span>'; level = 'sage'; small = true;
@@ -584,9 +619,13 @@ function lastWalk(dog, today) {
 function cardMeta(dog) {
   if (typeof whereKnown === 'function' && whereKnown(dog)) {
     // 籠位膠囊放前面（最常點），編號放後面、放不下就換行
-    return `<div class="meta has-pill"><button type="button" class="cage-pill" data-where aria-label="${esc(dog.name)} 在哪：${esc(dog.cage)}">${icon('pin')}${esc(dog.cage)}</button>${dog.id ? `<span class="id">${esc(dog.id)}</span>` : ''}</div>`;
+    return `<div class="meta has-pill"><button type="button" class="cage-pill" data-where aria-label="${esc(dog.name)} 在哪：${esc(dog.cage)}${dog.homeCage ? '（暫住）' : ''}">${icon('pin')}${esc(dog.cage)}</button>${tempCageText(dog)}${dog.id ? `<span class="id">${esc(dog.id)}</span>` : ''}</div>`;
   }
-  return `<div class="meta">${dog.id ? `${esc(dog.id)}<span class="sep">|</span>` : ''}${esc(dog.cage)}</div>`;
+  return `<div class="meta">${dog.id ? `${esc(dog.id)}<span class="sep">|</span>` : ''}${esc(dog.cage)}${tempCageText(dog)}</div>`;
+}
+// 暫住的狗在籠位旁邊寫「暫住，原本 新B04」
+function tempCageText(dog) {
+  return dog.homeCage ? `<span class="temp-cage">暫住，原本 ${esc(dog.homeCage)}</span>` : '';
 }
 
 // 詳細資訊：籠位已經在標籤上（#112），這裡只寫編號和再入所
@@ -1194,6 +1233,7 @@ function hideToast() {
 // V9（#141）拿掉今天已溜：按過的狗留在原地，按鈕變成「已溜」，再按一次復原
 function walkButton(dog) {
   if (!walkKey(dog)) return `<span class="more">${icon('chevron')}</span>`;
+  if (restOf(dog)) return ''; // 休養中暫停帶出：不放溜了，免得順手按到
   if (walkPendingNow(dog)) return `<button type="button" class="walk-btn pending" disabled aria-label="${esc(dog.name)} 正在寫進試算表">登記中</button>`;
   return walkedNow(dog)
     ? `<button type="button" class="walk-btn done" data-walk="back" aria-label="${esc(dog.name)} 今天已溜，按一下取消">${icon('tick')}已溜</button>`
@@ -1248,6 +1288,7 @@ function detailHtml(dog, today) {
         <div class="chips">${statusBadge(dog, today)}${detailChips(dog)}</div>
         ${metaLine(dog)}
         ${flag ? warnNote(dog.note, flag) : ''}
+        ${restNoteHtml(dog, today)}
       </div>
     </div>
     ${lastWalkSection(dog, today)}
@@ -1272,12 +1313,112 @@ function detailHtml(dog, today) {
       <h3>${icon('card')}入所介紹<span class="sub">收容所在入所時寫的</span></h3>
       ${intro ? `<div class="content">${esc(intro)}</div>` : `<div class="empty">還沒有入所介紹</div>`}
     </section>
+    ${restAdminHtml(dog, today)}
     ${photoBarHtml(dog) || `<div class="detail-bar">
       <button type="button" class="bar-btn" id="detailClose">關閉</button>
       ${typeof whereKnown === 'function' && whereKnown(dog) ? `<button type="button" class="bar-btn" id="detailWhere">${icon('pin')}在哪</button>` : ''}
       ${groupWalkButton(dog, walked)}
     </div>`}
   `;
+}
+
+// ── 休養中（K 2026-10-09：剛動完手術不能溜，「排到下面、休養中、10/20 前暫停帶出」，不動試算表）──
+// 名字下面一行說明；改設定在詳細資訊最下面，要通關碼（跟以前刪相簿照片同一組，記在這支手機）
+function restNoteHtml(dog, today) {
+  const r = restOf(dog, today);
+  return r ? `<div class="rest-note"><b>休養中</b>，${monthDay(r.until)} 前暫停帶出${r.reason ? `（${esc(r.reason)}）` : ''}</div>` : '';
+}
+// 日期 → YYYY-MM-DD（日期輸入框、送給 Worker 用）
+function isoDay(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+function restAdminHtml(dog, today) {
+  if (!dog.id || !UPLOAD_URL) return '';
+  const r = restOf(dog, today);
+  const e = restEdit && restEdit.dog === dog ? restEdit : null;
+  if (!e) {
+    return `<section class="detail-section rest-admin" data-section="rest"><button type="button" class="rest-admin-btn" id="restEdit">${r ? '改休養設定' : '設定休養中'}<small>管理用，要通關碼</small></button></section>`;
+  }
+  const busy = e.phase === 'saving';
+  return `<section class="detail-section rest-admin" data-section="rest">
+    <form class="rest-form" id="restForm" autocomplete="on">
+      <h3>休養中</h3>
+      <p class="rest-hint">排到溜狗表最下面、不能按溜了；過了那天自動恢復。</p>
+      <label>原因<input type="text" id="restReason" maxlength="40" value="${esc(e.reason)}" placeholder="例：術後休養"${busy ? ' disabled' : ''}></label>
+      <label>到哪一天（含那天）<input type="date" id="restUntil" value="${esc(e.until)}" min="${isoDay(today)}" required${busy ? ' disabled' : ''}></label>
+      ${e.needPass ? `<label>通關碼<input type="password" id="restPass" name="password" autocomplete="current-password" value="${esc(e.pass)}"${busy ? ' disabled' : ''}></label>` : ''}
+      ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
+      <div class="rest-actions">
+        <button type="submit" class="rest-save"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存'}</button>
+        ${r && !busy ? `<button type="button" class="rest-end" id="restEnd">結束休養</button>` : ''}
+        ${busy ? '' : `<button type="button" class="rest-cancel" id="restCancel">取消</button>`}
+      </div>
+    </form>
+  </section>`;
+}
+function openRestEdit(dog) {
+  const r = restOf(dog);
+  const until = r ? r.until : new Date(Date.now() + 10 * 86400000);
+  restEdit = { dog, until: isoDay(until), reason: r ? r.reason : '術後休養', pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
+  renderDetail();
+  const first = document.getElementById('restReason');
+  if (first) {
+    first.focus({ preventScroll: true });
+    const form = document.getElementById('restForm');
+    if (form.scrollIntoView) form.scrollIntoView({ block: 'center' });
+  }
+}
+// 送到 Worker：end＝結束休養。成功後這支手機馬上生效，其他志工等網站更新（一兩分鐘）
+async function saveRest(end = false) {
+  const e = restEdit;
+  if (!e || e.phase === 'saving') return;
+  const pass = e.needPass ? e.pass : loadNotesPass();
+  if (!pass) { e.needPass = true; e.phase = 'error'; e.error = '請輸入通關碼'; renderDetail(); return; }
+  if (!end && !parseYmd(e.until)) { e.phase = 'error'; e.error = '請選到哪一天'; renderDetail(); return; }
+  e.phase = 'saving'; e.error = ''; renderDetail();
+  let out = null, error = '';
+  try {
+    const res = await fetch(`${UPLOAD_URL}/rest/${encodeURIComponent(e.dog.id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(end ? { passcode: pass, end: true } : { passcode: pass, until: e.until, reason: e.reason.trim() }),
+    });
+    out = await res.json().catch(() => null);
+    if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
+  } catch (err) {
+    error = '沒有存進去，請確認網路後再試';
+  }
+  if (restEdit !== e) return;
+  if (error) {
+    if (out && out.code === 'passcode') { saveNotesPass(''); e.needPass = true; e.pass = ''; }
+    e.phase = 'error'; e.error = error; renderDetail();
+    return;
+  }
+  saveNotesPass(pass);
+  // 換成新的物件：讀取中的 loadRest 才知道這裡改過（見 loadRest）
+  const next = { ...restMap };
+  if (out.rest) next[e.dog.id] = out.rest; else delete next[e.dog.id];
+  restMap = next;
+  restEdit = null;
+  resetWalkOrder();
+  render(); renderDetail();
+  showToast(out.rest ? `${e.dog.name} 休養到 ${monthDay(parseYmd(out.rest.until))}，排到溜狗表最下面` : `${e.dog.name} 結束休養`);
+}
+// 開網頁時讀休養設定；讀不到就當作沒有，不影響其他功能
+async function loadRest() {
+  const before = restMap;
+  let next = {};
+  try {
+    const res = await fetch(REST_URL, { cache: 'no-cache' });
+    const data = res.ok ? await res.json() : {};
+    if (data && typeof data === 'object' && !Array.isArray(data)) next = data;
+  } catch (e) { /* 讀不到就當作沒有 */ }
+  // 讀的期間這支手機剛改過休養設定（restMap 換了）：網站上的檔還是舊的，不要蓋掉
+  if (restMap !== before) return;
+  restMap = next;
+  resetWalkOrder();
+  render();
+  if (detailDog) renderDetail();
 }
 
 // 離所的狗（#164）：同一個詳細資訊，頂部標離所原因和日期取代天數，多一區離所紀錄；
@@ -1405,7 +1546,7 @@ async function editWalkers(dog, names, text) {
 // 詳細資訊狗名下面的標籤：籠位、入所年月（天數標籤是 statusBadge）
 function detailChips(dog) {
   const since = idDate(dog.id);
-  return (dog.cage ? `<span class="badge plain">${icon('pin')}${esc(dog.cage)}</span>` : '')
+  return (dog.cage ? `<span class="badge plain">${icon('pin')}${esc(dog.cage)}${dog.homeCage ? `<small>暫住，原本 ${esc(dog.homeCage)}</small>` : ''}</span>` : '')
     + (since ? `<span class="badge plain">入所 ${since.getFullYear()}/${since.getMonth() + 1}</span>` : '');
 }
 
@@ -1461,9 +1602,11 @@ function cageMatesSection(dog, walked) {
 // 目前這隻已溜又沒勾選時，就顯示目前這隻今天已溜，不放按鈕
 function groupWalkButton(dog, walked) {
   if (walkPendingNow(dog)) return `<button type="button" class="group-walk" id="groupWalk" disabled>登記中</button>`;
-  const self = !!walkKey(dog) && !walked.has(dog);
+  const rest = restOf(dog);
+  const self = !!walkKey(dog) && !walked.has(dog) && !rest;
   const n = [...pickedBuddies].length;
   if (!self && !n) {
+    if (rest) return `<div class="self-walked rest">休養中，暫停帶出</div>`;
     return walked.has(dog) ? `<div class="self-walked">${icon('tick')}今天已溜</div>` : '';
   }
   // 底部列空間小（#112）：只有自己寫「溜了」，有勾選才寫幾隻
@@ -1878,6 +2021,9 @@ const DETAIL_CLICKS = [
   ['[data-zoom]', el => { if (!el.classList.contains('no-photo')) openLightbox(detailDog, el); }],
   ['#photoCrop', () => cropPhotoUpload()],
   ['#photoPick', () => pickPhotoFile()],
+  ['#restEdit', () => openRestEdit(detailDog)],
+  ['#restEnd', () => saveRest(true)],
+  ['#restCancel', () => { restEdit = null; renderDetail(); const b = document.getElementById('restEdit'); if (b) b.focus({ preventScroll: true }); }],
   ['#photoConfirm', () => uploadPhoto()],
   ['#photoCancel', () => { clearPhotoUpload(); renderDetail(); }],
   ['.buddy', el => { const d = allDogs[el.dataset.dog]; if (d) showDetail(d); }],
@@ -1905,6 +2051,18 @@ const DETAIL_CLICKS = [
 function wireDetail(box) {
   if (box.bqWired) return;
   box.bqWired = true;
+  // 休養設定表單：打的字記在 restEdit，重畫不會不見；送出走 saveRest
+  box.addEventListener('input', e => {
+    if (!restEdit) return;
+    if (e.target.id === 'restReason') restEdit.reason = e.target.value;
+    else if (e.target.id === 'restUntil') restEdit.until = e.target.value;
+    else if (e.target.id === 'restPass') restEdit.pass = e.target.value;
+  });
+  box.addEventListener('submit', e => {
+    if (e.target.id !== 'restForm') return;
+    e.preventDefault();
+    saveRest();
+  });
   box.addEventListener('click', e => {
     if (!detailDog || !e.target.closest) return;
     for (const [sel, run] of DETAIL_CLICKS) {
@@ -1956,6 +2114,7 @@ function showDetail(dog, remember = true) {
   if (wasOpen && remember && dog !== detailDog) detailTrail.push(detailDog);
   if (dog !== detailDog) {
     pickedBuddies.clear();
+    if (!restEdit || restEdit.phase !== 'saving') restEdit = null;
     if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
   }
   detailDog = dog;
@@ -1974,6 +2133,7 @@ function hideDetail() {
   detailDog = null;
   detailTrail = [];
   pickedBuddies.clear();
+  if (!restEdit || restEdit.phase !== 'saving') restEdit = null;
   if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
   document.getElementById('detailBackdrop').hidden = true;
   document.getElementById('detail').innerHTML = '';
@@ -2186,7 +2346,7 @@ window.addEventListener('resize', syncHeaderTuck);
 function dayWord(dog, today) {
   const s = computeStatus(dog, today);
   if (s.kind === 'dated') return s.days < 0 ? '日期看不懂' : s.days === 0 ? '今天' : `${s.days} 天前`;
-  return s.kind === 'covered' ? '有人固定照顧' : '沒有紀錄';
+  return s.kind === 'covered' ? '有人固定照顧' : s.kind === 'rest' ? '休養中' : '沒有紀錄';
 }
 function rangeText(words) {
   if (!words.length) return '';
@@ -2223,7 +2383,8 @@ window.addEventListener('resize', queueRange);
 
 // 溜狗表（沿用原待巡房）：所有狗依幾天沒遛由久到近；沒有遛狗紀錄的排最前，有人固定照顧的排最後
 function dueDogs(dogs, today) {
-  const key = s => s.kind === 'unknown' ? Infinity : s.kind === 'dated' ? s.days : -Infinity;
+  // 休養中排最下面（K 2026-10-09），有人固定照顧在它上面
+  const key = s => s.kind === 'unknown' ? Infinity : s.kind === 'dated' ? s.days : s.kind === 'covered' ? -1 : -2;
   return dogs
     .map(d => ({ d, k: key(computeStatus(d, today)) }))
     .sort((a, b) => (b.k === a.k ? 0 : b.k > a.k ? 1 : -1))
@@ -2299,10 +2460,11 @@ function walkRow(dog, today) {
   const flag = specialFlag(dog.note);
   const days = s.kind === 'dated'
     ? (s.days < 0 ? '?<span class="sr-only">日期看不懂</span>' : s.days === 0 ? '今天' : `<b>${s.days}</b>天<span class="sr-only">前</span>`)
-    : s.kind === 'covered' ? '固定<span class="sr-only">有人照顧</span>' : '—<span class="sr-only">沒有紀錄</span>';
+    : s.kind === 'covered' ? '固定<span class="sr-only">有人照顧</span>'
+    : s.kind === 'rest' ? `休養<span class="sr-only">中，${monthDay(s.until)} 前暫停帶出</span>` : '—<span class="sr-only">沒有紀錄</span>';
   const who = walkerText(dog, today);
   return `<div class="row-dog${flag ? ' flagged' : ''}" data-dog="${allDogs.indexOf(dog)}" role="button" tabindex="0" aria-haspopup="dialog">
-    <span class="r-date ${s.level || 'muted'}">${days}</span>
+    <span class="r-date ${s.kind === 'rest' ? 'rest' : s.level || 'muted'}">${days}</span>
     <span class="r-name">${esc(dog.name)}</span>
     <span class="r-cage">${esc(dog.cage)}</span>
     <span class="r-who">${esc(who)}</span>
@@ -2887,7 +3049,7 @@ async function init() {
 // 換上讀到的 dogs.json（打開網頁時、按「更新」拿到新資料時）
 let dataSyncedAt = null;
 function applyDogsData(data) {
-  allDogs = data.dogs;
+  allDogs = mergeTempCages(data.dogs);
   photoVersions = data.photoVersions || {};
   groupMap = data.groups || {};
   loadWarning = data.groups ? '' : '「可以一起溜」暫時讀不到，其他資訊正常。';
@@ -2897,6 +3059,7 @@ function applyDogsData(data) {
   loadState = 'ready';
   render();
   loadMyWalks();
+  loadRest();
 }
 
 // 頁首的資料時間；沒網路時改寫「沒網路・資料 10/8 09:01」，志工才知道看的是舊資料、溜了寫不進試算表
