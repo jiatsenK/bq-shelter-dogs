@@ -811,3 +811,8 @@
 - 頁首範圍字：index.html 頁首搜尋框下面加 #rangeLabel；js/app.js 加 dayWord、rangeText、syncRange（捲動、render 後用 requestAnimationFrame 更新），只在溜狗表顯示「畫面上：45 天前 ～ 4 天前」，照片、列表模式都從資料算 N 天前。css/app.css 加 .range 樣式。
 - DESIGN_GUIDE.md、DESIGN.md、方向紀錄補上範圍字。
 - 測試：tests/index.html 加 runRangeTests 3 項（說法、頭尾、頁首位置與顏色）。網頁 201 過，本機另 2 項是 Windows 換行老問題；Node 141 全過。
+
+## 2026-10-09 Claude（病歷夾色籤：App 圖示改綠）
+- 依據：K 2026-10-09「我剛剛已經同意你執行改APP圖示了」。
+- icons/icon.svg 改成檔案綠底 #1F5C4D、黃色腳掌 #F2B21B（跟頁首 Logo 一樣），形狀不變；icon-512.png、icon-192.png、apple-touch-icon.png 用 Playwright 從同一個 SVG 重新輸出（滿版正方形，跟原本一樣，手機自己裁圓角）。
+- 網頁測試 201 過（本機另 2 項是 Windows 換行老問題）。已經加到主畫面的人，手機可能要刪掉捷徑重新加才會換圖示。
