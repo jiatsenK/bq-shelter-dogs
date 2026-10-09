@@ -923,3 +923,4 @@
 - 這個 PR：css/app.css 狗卡改格線，天數色籤用 ::before 延伸到卡片底、天數字留第一列，警示只排在照片到按鈕那欄（grid-column 2 / -1）；js/app.js detailChips 籠位標籤改成按鈕（data-where），DETAIL_CLICKS 開在哪；icons/ 四個檔改名加 v2（index.html、manifest），讓手機重新抓；js/find.js 辦公室、醫療室改虛線框＋小字，拿掉圖示（FIND_FAC_ICONS、findFacIcon）；PRODUCT.md 志工名字規則改成 repo 不放、網站可顯示。
 - 桌面圖示：#170 起就是綠底黃腳掌；手機上還是藍色，是當初加到主畫面時存下的舊圖（可能還是舊網址 GitHub Pages），要刪掉重新從正式網址加入。
 - 測試加 runWarnLayoutTests 2 項（測試頁沒載 CSS，排版檢查樣式規則）；網頁 205 過（本機另 2 項老問題）。找狗列表、分析頁另開 PR。
+- 補（K 在 #185 留言「卡片之間沒有線，不知道備註是在寫誰」）：警示行高 1.45 讓卡片高度有小數，卡片底線被下一張的白底蓋掉；改成整數 20px，有警示的卡底下多留 4px、警示和名字那列間距 8→6，警示看得出屬於上面那隻。
