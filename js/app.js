@@ -2626,6 +2626,7 @@ function render() {
     document.getElementById('main').insertAdjacentHTML('afterbegin',
       `<div class="alert-box warn">${icon('warn')}<span>${esc(loadWarning)}</span></div>`);
   }
+  queueRange();
 }
 
 // 讀取中（#78）：先畫幾張灰色卡片骨架，版面不會等資料來才突然跳出來；文字留給螢幕閱讀器
@@ -2640,6 +2641,46 @@ function syncHeaderShadow() {
   if (appHeader) appHeader.classList.toggle('scrolled', window.scrollY > 4);
 }
 window.addEventListener('scroll', syncHeaderShadow, { passive: true });
+
+// 頁首範圍字（K 2026-10-09 病歷夾色籤）：溜狗表捲動時，頁首寫出畫面上第一隻到最後一隻多久沒溜，
+// 像檔案櫃抽屜上的範圍標籤。照片、列表模式都用「N 天前」（從資料算，不抄畫面上的字：列表模式顯示的是日期）
+function dayWord(dog, today) {
+  const s = computeStatus(dog, today);
+  if (s.kind === 'dated') return s.days < 0 ? '日期看不懂' : s.days === 0 ? '今天' : `${s.days} 天前`;
+  return s.kind === 'covered' ? '有人固定照顧' : '沒有紀錄';
+}
+function rangeText(words) {
+  if (!words.length) return '';
+  const a = words[0], b = words[words.length - 1];
+  return a === b ? `畫面上：${a}` : `畫面上：${a} ～ ${b}`;
+}
+const rangeLabel = document.getElementById('rangeLabel');
+let rangeFrame = 0;
+function syncRange() {
+  rangeFrame = 0;
+  if (!rangeLabel) return;
+  let text = '';
+  if (activeTab === 'walk' && !analysisOpen) {
+    const top = appHeader ? appHeader.getBoundingClientRect().bottom : 0;
+    const bar = document.getElementById('bottomBar');
+    const bottom = bar ? bar.getBoundingClientRect().top : window.innerHeight;
+    const today = new Date();
+    const words = [];
+    for (const el of mainEl.querySelectorAll('.card[data-dog], .row-dog[data-dog]')) {
+      const r = el.getBoundingClientRect();
+      if (r.bottom > top + 8 && r.top < bottom - 8) {
+        const dog = allDogs[Number(el.dataset.dog)];
+        if (dog) words.push(dayWord(dog, today));
+      } else if (words.length) break;
+    }
+    text = rangeText(words);
+  }
+  if (rangeLabel.textContent !== text) rangeLabel.textContent = text;
+  rangeLabel.hidden = !text;
+}
+function queueRange() { if (!rangeFrame) rangeFrame = requestAnimationFrame(syncRange); }
+window.addEventListener('scroll', queueRange, { passive: true });
+window.addEventListener('resize', queueRange);
 
 // 溜狗表（沿用原待巡房）：所有狗依幾天沒遛由久到近；沒有遛狗紀錄的排最前，有人固定照顧的排最後
 function dueDogs(dogs, today) {

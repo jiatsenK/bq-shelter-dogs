@@ -779,3 +779,40 @@
 - 小問題：輸入框提示字改 --ink-soft；「會寫進試算表」那句 14px 黑字放按鈕上方；下一步、錯誤、確認訊息黏在畫面底部（畫面矮時不黏）；說明內容上下置中、段落靠左；Worker 錯誤「代號服務發生錯誤」改「名字設定暫時失敗，請稍後再試」。
 - 測試：測試頁預設 sheetWriteState='off'（溜了只記手機），#138 沒名字那項改成先問名字；新增第四輪 1 項。網頁 200、Node 141 全過。
 - 追加（K 2026-10-08 看過後）：名字改成一人選一個（點別人換掉、再點一次拿掉），拿掉「好幾種寫法可以都點」和「按溜了時寫哪一個」，我溜過修改框的「可以用頓號隔開」也拿掉；表上沒有的名字先確認保留。說明頁改用網站上真的狗卡、按鈕當範例（溜狗表：有警示的狗卡＋天數色；溜了：溜了→登記中→已溜＋提示條；我溜過：名字列＋一次到所卡；找狗：在哪的放大平面圖），範例 inert、不能按；狗的資料讀到後重畫。網頁 200 全過。
+
+## 2026-10-09 Claude（impeccable 用的 PRODUCT.md、DESIGN.md）
+- 依據：K 2026-10-09「請根據既有的 PROJECT_GOALS.md 和 DESIGN_GUIDE.md 建立，不要重複規格，也不要將目前的視覺風格設定成不可更動」。照指示直接從現有文件整理，沒做 impeccable 的訪談。
+- 根目錄新增 PRODUCT.md（產品摘要，各段指回 PROJECT_GOALS／DESIGN_GUIDE／CONTEXT／AGENTS）、DESIGN.md（frontmatter 抄 css/app.css :root 的現況色碼；內文寫明只是快照、以 CSS 為準、外觀可以改）。沒寫 .impeccable/design.json。
+- `.assetsignore` 加 PRODUCT.md、DESIGN.md、.impeccable（設計用文件不放上網站）；`.gitignore` 加 impeccable 比較頁的暫存。
+- `impeccable context` 已讀到兩份檔（platform: web）。沒改網站程式。
+
+## 2026-10-09 Claude（視覺主題試做 1／3：病歷夾色籤）
+- 依據：K 2026-10-09 用 /impeccable 比較視覺方向，選「病歷夾色籤」，另外加做「犬舍籠位牌」「航廈黃色指標」，三版各開 PR 用預覽網址在手機比較，選定一版再合併。K 說 AI 味來自通用藍、千篇一律的圓角卡片、整體太平均；做錯的標準是「太花、在所裡看不清楚」。
+- 只改 css/app.css 檔尾一段主題樣式，功能、文字、版面結構不動：深檔案綠頁首與底部列、直角紙夾一張接一張、天數是卡片右緣的色籤（黃、紅、灰實心，6 天內淡綠）、籠位是黑框檔案標籤、「溜了」白底綠框。統計頁入所分布直條（JS 給的藍色）用 CSS 換成綠色深淺。
+- 測試：網頁 198 過、2 項失敗（#130 讀 workflow 檔），沒改 CSS 時本機也一樣失敗，是 Windows 換行的關係，跟這次無關。impeccable detect 只剩改版前就有的 2 項。
+- 沒做：方向卡上的「頁首範圍字」要改 JS，這次只改 CSS 先不做。
+
+## 2026-10-09 Claude（病歷夾色籤：K 選定，收尾審查修正）
+- 依據：K 2026-10-09 在三版中選「病歷夾色籤」。照 impeccable 流程請收尾審查員（子代理）看手機、桌機截圖，兩輪。
+- 第一輪 8 項修正（css/app.css 檔尾「收尾審查修正」一段）：拿掉殘留的藍（統計橫條、找狗新犬舍／C區分區色、讀取骨架、分隔符號）、詳細資訊的籠位也是黑框標籤、色籤小字對比 4.5 以上、「沒有紀錄」不再頂到邊、詳細資訊和統計的白卡疊成一份（-1px 相接）、找狗上面一排改成索引分頁、焦點框統一（白底 3px 綠、深綠底黃色）。另外天數數字等寬、色籤換色淡入 0.4 秒。
+- 第二輪審查：6 項確認解決；補回燈箱、提示條深色底上的白／黃焦點框（第一輪的全站焦點框蓋掉了）。統計頁公母條與狗卡 ♂ 原本跟著主色變綠，綠色在這裡是「最近溜過」，改成青綠灰（--z-new-ink），♀ 維持紅。
+- 還沒做：index.html 的 theme-color（Android 網址列顏色）還是藍 #2F7BEA，要改 HTML，等 K 決定。
+- 測試：網頁 198 過、2 項是本機 Windows 換行的老問題（#130）。
+
+## 2026-10-09 Claude（病歷夾色籤：DESIGN.md、DESIGN_GUIDE.md 改成新樣子）
+- 依據：同上，K 選定病歷夾色籤後照 impeccable 流程收尾。
+- DESIGN.md 由 impeccable 文件員（子代理）依實際畫面重寫（frontmatter 色碼、字級、圓角、元件；開頭仍註明是快照、以 CSS 為準、外觀可以改），新增 .impeccable/design.json（impeccable 預覽用，不上網站）。我修正了它寫錯的標題字級（實際 20px）。
+- docs/DESIGN_GUIDE.md：開頭說明這一版的來由，色票表、天數色籤表、字級、元件（頁首、分頁、卡片、溜了、詳細資訊、焦點框）改成病歷夾色籤的現況；單手操作規範不動。
+- css/app.css：離所「死亡」標籤殘留的舊灰字改 --muted-text。
+
+## 2026-10-09 Claude（病歷夾色籤：網址列顏色、頁首範圍字）
+- 依據：K 2026-10-09「還沒做的兩項都同意更改」（PR #170 列的 theme-color、頁首範圍字）。
+- index.html：theme-color 改 #1F5C4D；manifest.webmanifest 的 theme_color、background_color 一起改成檔案綠、淡鋼灰綠（原本還是 V3 的藍）。App 圖示（icons/）還是藍底白腳掌，沒改。
+- 頁首範圍字：index.html 頁首搜尋框下面加 #rangeLabel；js/app.js 加 dayWord、rangeText、syncRange（捲動、render 後用 requestAnimationFrame 更新），只在溜狗表顯示「畫面上：45 天前 ～ 4 天前」，照片、列表模式都從資料算 N 天前。css/app.css 加 .range 樣式。
+- DESIGN_GUIDE.md、DESIGN.md、方向紀錄補上範圍字。
+- 測試：tests/index.html 加 runRangeTests 3 項（說法、頭尾、頁首位置與顏色）。網頁 201 過，本機另 2 項是 Windows 換行老問題；Node 141 全過。
+
+## 2026-10-09 Claude（病歷夾色籤：App 圖示改綠）
+- 依據：K 2026-10-09「我剛剛已經同意你執行改APP圖示了」。
+- icons/icon.svg 改成檔案綠底 #1F5C4D、黃色腳掌 #F2B21B（跟頁首 Logo 一樣），形狀不變；icon-512.png、icon-192.png、apple-touch-icon.png 用 Playwright 從同一個 SVG 重新輸出（滿版正方形，跟原本一樣，手機自己裁圓角）。
+- 網頁測試 201 過（本機另 2 項是 Windows 換行老問題）。已經加到主畫面的人，手機可能要刪掉捷徑重新加才會換圖示。
