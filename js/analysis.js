@@ -337,15 +337,14 @@ function walkHistorySection(dog, today) {
   const h = dogWalkHistory(dog, historyData.walks, start, today);
   const first = h.cells[0].date, last = h.cells[h.cells.length - 1].date;
   const cell = c => `<span class="${c.walked ? 'on' : c.recorded ? 'off' : 'none'}" title="${mdText(c.date)}${c.walked ? ' 有溜' : c.recorded ? ' 沒溜' : ' 還沒開始記錄'}"></span>`;
-  const num = (v, unit, label) => `<div class="w-num"><b>${v}</b><small>${unit}</small><span>${label}</span></div>`;
+  // critique 2026-10-09 少一點格子：三格統計卡改成一行字；沒有間隔可算（不到兩次）就不寫平均、最久
+  const sum = [`最近 30 天溜 <b>${h.count}</b> 次`];
+  if (h.avgGap != null) sum.push(`平均 <b>${h.avgGap.toFixed(1)}</b> 天溜一次`);
+  if (h.maxGap != null) sum.push(`最久 <b>${h.maxGap}</b> 天沒溜`);
   return wrap(`
     <div class="w-grid">${h.cells.map(cell).join('')}</div>
     <div class="w-axis"><span>${mdText(first)}</span><span>${end ? `${mdText(end)} 離所` : '今天'}</span></div>
-    <div class="w-nums">
-      ${num(h.count, '次', '最近 30 天')}
-      ${num(h.avgGap == null ? '–' : h.avgGap.toFixed(1), '天', '平均幾天溜一次')}
-      ${num(h.maxGap == null ? '–' : h.maxGap, '天', '最久幾天沒溜')}
-    </div>
+    <p class="w-sum">${sum.join('<span class="sep">·</span>')}</p>
     <div class="w-legend"><span><i class="on"></i>有溜</span><span><i class="off"></i>沒溜</span>${h.cells.some(c => !c.recorded) ? '<span><i class="none"></i>還沒開始記錄</span>' : ''}</div>
     <div class="w-note">從 ${start ? `${start.getFullYear()}/${mdText(start)}` : '同步'} 開始記錄，同一天溜幾次都算一格。</div>`);
 }
