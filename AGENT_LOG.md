@@ -951,3 +951,10 @@
 - js/app.js：parseDogsData／applyDogsData 留 sheetNotes；renderMain 寬螢幕溜狗表交給 deskWalkHtml；導覽在電腦版改說勾選登記、最近 30 天。index.html 載入 js/desk.js。css/app.css 檔尾「電腦版」區塊。
 - impeccable：surface brief index-html 加「電腦版溜狗表」段；finish reviewer 兩輪（recapture 手機截圖 → fix 8 項 → 6 項 resolved、2 項缺截圖、1280 簡報被切），1280 我再修好並自己補截圖確認（籠位滑過、30 天往下捲表頭黏住），沒有第三輪。detect 的非 advisory 項目都是手機版原有的。
 - 測試：網頁加 runDeskTests 6 項（最後才載入 desk.js）、#30 script 清單加 desk.js；網頁 214 過（本機另 2 項 #130 老問題），node 130 過。PROJECT_GOALS、DESIGN_GUIDE 補說明。圖鑑（溜過才拿到卡）下一個 PR 改 #189。
+## 2026-10-10 Claude（電腦版補資料：照片、入所介紹；分析頁「‹ 回溜狗表」；手機列表籠位跟照片檢視一樣）
+- 依據：K 2026-10-10：「我希望電腦版可以讓我比較好補資料進去網站」（選補照片、狗的介紹／資料）；「< 分析 改成 ＜回到主頁面 之類的比較好懂」；「列表檢視的籠位排版位置很怪，而且視覺語言跟相片檢視的不一樣」；要我用 impeccable 自己把關。
+- worker/src/index.js：新增 PUT /intro/{編號}（通關碼、1000 字、頻率限制、預覽版不能存），只改 repo 的 dogs/{編號}.md 內文，frontmatter 照留、沒有檔就新建（name、id）；同樣內容不提交。dogs/ 推上去 sync-sheet.yml 會自動同步進 dogs.json。不寫試算表。worker 測試加 2 項。
+- js/app.js：詳細資訊「入所介紹」下面加「補介紹／改介紹」（管理用、要通關碼，跟休養設定同一種表單、同一個記住的通關碼），存好這台馬上看到（introOverrides）。列表 walkRow 籠位改成狗卡同一個 .cage-pill（圖釘＋籠位）放在狗名下面，欄位「天數｜狗名・籠位｜溜了」。
+- js/desk.js：電腦版表格切換多「補資料」：一列一隻（照片｜狗名・籠位｜入所介紹｜上傳照片、補介紹），篩沒照片／沒介紹，兩樣都缺的在前面；照片檔拖到那一列就打開詳細資訊預覽（按確認才上傳）。css/app.css 對應樣式；工具列提示字放不下就截斷，切換鈕不被擠出去。
+- index.html／css：分析頁返回鍵改成有字的「‹ 回溜狗表」細框按鈕，標題「分析」在右邊。
+- 測試：網頁加入所介紹存檔、補資料畫面 2 項，列表、#10 唯讀（PUT /intro 是送到 Worker 寫 repo）跟著改；網頁 216 過（本機另 2 項 #130 老問題），node 132 過。impeccable detect 沒有新的非建議項目。

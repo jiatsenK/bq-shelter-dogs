@@ -213,7 +213,10 @@ function runTests() {
       // 休養中（K 2026-10-09）：管理者 PUT 到 Worker 的 /rest/{編號}（寫進 repo 的 data/rest.json，不是試算表），也先拿掉
       const restCall = /fetch\(`\$\{UPLOAD_URL\}\/rest\/\$\{encodeURIComponent\(e\.dog\.id\)\}`, \{\s*method: 'PUT',/;
       if (!restCall.test(APP_JS)) throw new Error('找不到休養設定的呼叫');
-      const code = APP_JS.replace(walkCall, '').replace(uploadCall, '').replace(walkerCall, '').replace(syncCall, '').replace(restCall, '');
+      // 入所介紹（K 2026-10-10 補資料）：管理者 PUT 到 Worker 的 /intro/{編號}（寫進 repo 的 dogs/{編號}.md，不是試算表），也先拿掉
+      const introCall = /fetch\(`\$\{UPLOAD_URL\}\/intro\/\$\{encodeURIComponent\(e\.dog\.id\)\}`, \{\s*method: 'PUT',/;
+      if (!introCall.test(APP_JS)) throw new Error('找不到入所介紹的呼叫');
+      const code = APP_JS.replace(walkCall, '').replace(uploadCall, '').replace(walkerCall, '').replace(syncCall, '').replace(restCall, '').replace(introCall, '');
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
@@ -1581,8 +1584,9 @@ async function runV9Tests() {
       main.querySelector('[data-walk-view="list"]').click();
       const row = main.querySelector('.row-dog[data-dog="1"]');
       eq([row.querySelector('.r-cage').textContent, row.querySelector('.r-name').textContent, row.querySelector('.r-who')], ['A02', 'V9乙', null], '一列：');
-      eq([...main.querySelectorAll('.row-head span')].map(n => n.textContent), ['天數', '狗名', '籠位', ''], '欄位標題：');
-      eq([...row.children].map(c => c.className.split(' ')[0]), ['r-date', 'r-name', 'r-cage', 'walk-btn'], '天數排最前面：');
+      eq([...main.querySelectorAll('.row-head span')].map(n => n.textContent), ['天數', '狗名・籠位', ''], '欄位標題：');
+      eq([...row.children].map(c => c.className.split(' ')[0]), ['r-date', 'r-main', 'walk-btn'], '天數排最前面：');
+      eq([...row.querySelector('.r-main').children].map(c => c.classList[0]), ['r-name', 'r-cage'], '籠位在狗名下面（10-10 K：跟照片檢視一樣）：');
       eq(row.querySelector('.r-cage').tagName, 'SPAN', '平面圖上沒有的籠位只寫字：');
       const cage1 = allDogs[1].cage;
       try {
@@ -1859,6 +1863,33 @@ async function runRestTests() {
       eq([restEdit, loadNotesPass(), computeStatus(allDogs[1], T).kind], [null, '對的', 'rest'], '成功：');
       hideDetail(); hideToast();
       eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['固定丙', '休養甲', '一般乙'], '設好的那隻也排到最下面：');
+    });
+    await check('入所介紹（10-10 補資料）：管理用、要通關碼，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {
+      const calls = [];
+      window.fetch = async (u, o) => {
+        calls.push([String(u), o && o.method, o && JSON.parse(o.body)]);
+        const b = JSON.parse(o.body);
+        if (b.passcode !== '對的') return json({ ok: false, error: '通關碼不對', code: 'passcode' }, 401);
+        return json({ ok: true, id: '9613', intro: b.text });
+      };
+      saveNotesPass('');
+      showDetail(allDogs[2]);
+      eq(document.getElementById('introEdit').textContent.startsWith('補介紹'), true, '沒介紹寫補介紹：');
+      document.getElementById('introEdit').click();
+      const text = document.getElementById('introText');
+      text.value = '  親人\n喜歡散步  '; text.dispatchEvent(new Event('input', { bubbles: true }));
+      eq(document.querySelector('.intro-count').textContent, '11 / 1000 字', '字數：');
+      const pass = document.getElementById('introPass');
+      pass.value = '對的'; pass.dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('introForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise(r => setTimeout(r, 20));
+      eq([calls.length, calls[0][0], calls[0][1], calls[0][2].text], [1, 'https://worker.test/intro/9613', 'PUT', '親人\n喜歡散步'], '送出：');
+      eq([introEdit, introOf(allDogs[2]), loadNotesPass()], [null, '親人\n喜歡散步', '對的'], '成功：');
+      eq(document.querySelector('[data-section="intro"] .content').textContent, '親人\n喜歡散步', '馬上看到：');
+      eq(document.getElementById('introEdit').textContent.startsWith('改介紹'), true, '有介紹寫改介紹：');
+      if (calls.some(c => /sheet|script\.google/.test(c[0]))) throw new Error('不應該寫試算表');
+      hideDetail(); hideToast();
+      delete introOverrides['9613'];
     });
     await check('找狗的「最久沒溜的狗」、分析頁「超過 3 天沒溜」不算休養中的狗', () => {
       const due = dueDogs(allDogs, T).filter(d => { const st = computeStatus(d, T); return st.kind === 'unknown' || (st.kind === 'dated' && st.days >= AMBER_DAYS); });
@@ -2900,6 +2931,20 @@ async function runDeskTests() {
       main.querySelector('[data-desk-go]').click();
       eq(calls, [[['桌紅', '桌黃'], true]], '一次登記：');
       eq([deskChecked.size, main.querySelector('.desk-batch')], [0, null], '清掉：');
+    });
+    await check('電腦版補資料（10-10）：沒照片、沒介紹的狗一列一隻，兩樣都缺的在最前面；照片、介紹都走詳細資訊', () => {
+      const pv = photoVersions;
+      try {
+        photoVersions = { 'photos/2026010102.jpg': 'a', 'photos/2026010103.jpg': 'b' };
+        allDogs[1].intro = '有介紹'; allDogs[2].intro = '有介紹';
+        eq(allDogs.map(d => deskFillNeeds(d)), [{ photo: true, intro: true }, { photo: false, intro: false }, { photo: false, intro: false }, { photo: true, intro: true }], '缺什麼：');
+        deskView = 'fill'; deskFill = 'all';
+        const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', sortWalkList(allDogs, TODAY)), 'text/html');
+        eq([...doc.querySelectorAll('.df-chip b')].map(b => b.textContent), ['2', '2', '4'], '沒照片、沒介紹、全部：');
+        eq([...doc.querySelectorAll('.df-row .df-name button')].map(b => b.textContent).slice(0, 2).sort(), ['桌無', '桌紅'], '兩樣都缺的在前面：');
+        eq([doc.querySelectorAll('.df-drop').length, doc.querySelector('.desk-brief')], [2, null], '沒照片的格子、補資料不放簡報：');
+        eq(doc.querySelectorAll('[data-fill-photo]').length + doc.querySelectorAll('[data-fill-intro]').length, 8, '每列兩顆：');
+      } finally { photoVersions = pv; deskView = 'sheet'; deskFill = 'all'; }
     });
     await check('電腦版只靠 setWalked 登記，自己不送資料', () => {
       if (/method\s*:|\bPOST\b|sheet-write|UPLOAD_URL/.test(code)) throw new Error('js/desk.js 不應該自己寫試算表');
