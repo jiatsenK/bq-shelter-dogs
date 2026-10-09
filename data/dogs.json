@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-09T00:25:28+08:00",
+  "syncedAt": "2026-10-09T16:00:47+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -66,7 +66,7 @@
       "cage": "母幼A",
       "id": "2021021702",
       "name": "辛巴",
-      "walkedDate": "2026-10-05",
+      "walkedDate": "2026-10-09",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1438,11 +1438,12 @@
       "cage": "舊B04",
       "id": "2026042902",
       "name": "方吉",
-      "walkedDate": "2026-10-06",
+      "walkedDate": "2026-10-09",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "a533226b339a"
+        "a533226b339a",
+        "dcda49f5b985"
       ],
       "note": "",
       "sex": "female",
