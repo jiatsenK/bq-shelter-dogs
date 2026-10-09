@@ -2962,17 +2962,29 @@ const TOUR_DEMOS = {
   unwalk: { before: () => tourFakeWalk('done'), run: () => render(), undo: () => render() },
   where: { run: () => { const d = tourDog(); if (d) whereOpen(d); }, show: '#whereSheet', undo: () => { if (whereDog) whereClose(); } },
   tab: { run: el => { if (el) switchTab(el.dataset.tab); }, show: '#main', undo: () => switchTab('walk') },
-  // 找狗（K 2026-10-09）：切過去後再隨便點平面圖上一個有狗的籠子，下面列出那一籠的狗
+  // 找狗（K 2026-10-09）：切過去後再隨便點平面圖上一個有狗的籠子，下面列出那一籠的狗。
+  // 全圖不畫籠子（critique 2026-10-09），所以先點一區放大，再點那一區的籠子
   find: {
     run: el => { if (el) switchTab(el.dataset.tab); },
     show: '#main',
-    then: { at: tourCageWithDogs, run: g => findPickCage(g.dataset.findCage) },
+    then: [
+      { at: tourZoneWithDogs, run: g => { findZone = g.dataset.findZone; findCage = null; render(); } },
+      { at: tourCageWithDogs, run: g => findPickCage(g.dataset.findCage) },
+    ],
     undo: () => { findCage = null; findZone = 'all'; switchTab('walk'); },
   },
 };
-// 平面圖上隨便一個有狗的籠子（找狗示範用）
+// 全圖上隨便一個有逐籠、又有狗的區（找狗示範用）
+function tourZoneWithDogs() {
+  const zones = [...document.querySelectorAll('#main g[data-find-zone]')].filter(g => {
+    const key = g.dataset.findZone;
+    return allDogs.some(d => findZoneOf(d) === key && FIND_CAGES.cages.some(c => c.zone === key && c.id === findCageOf(d)));
+  });
+  return zones.length ? zones[Math.floor(Math.random() * zones.length)] : null;
+}
+// 放大的那一區裡隨便一個有狗的籠子（找狗示範用）
 function tourCageWithDogs() {
-  const cages = [...document.querySelectorAll('#main g[data-find-cage]')].filter(g => g.querySelector('rect.fm-cage.has'));
+  const cages = [...document.querySelectorAll(`#main g[data-find-zone="${findZone}"] g[data-find-cage]`)].filter(g => g.querySelector('rect.fm-cage.has'));
   return cages.length ? cages[Math.floor(Math.random() * cages.length)] : null;
 }
 function tourLater(fn, ms) {
@@ -2997,7 +3009,7 @@ function tourPlay() {
   if (!demo) return;
   if (demo.before) { tour.undo = demo.undo; demo.before(); placeTour(); }
   const taps = [{ at: () => tourTarget(tour.step), run: el => { tour.undo = demo.undo; demo.run(el); if (demo.show) tour.shown = demo.show; } }];
-  if (demo.then) taps.push(demo.then);
+  if (demo.then) taps.push(...[].concat(demo.then));
   const tap = t => { const el = t.at(); if (el) t.run(el); placeTour(); };
   const still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   if (still) return taps.forEach(tap);
