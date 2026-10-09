@@ -56,10 +56,12 @@ function fakeFetch({ main = MAIN, groups = GROUPS, fail } = {}) {
   const calls = [];
   const fn = async url => {
     const u = new URL(url);
-    const sheet = u.searchParams.get('sheet'), h = +u.searchParams.get('headers');
-    calls.push(`${sheet}:${h}`);
-    if (fail === sheet) return new Response('<html>登入</html>', { status: 200 });
-    const grid = sheet === '主清單' ? main : groups;
+    const sheet = u.searchParams.get('sheet'), h = +u.searchParams.get('headers'), range = u.searchParams.get('range');
+    calls.push(`${sheet}:${h}${range ? `:${range}` : ''}`);
+    if (fail === sheet || (fail === 'range' && range)) return new Response('<html>登入</html>', { status: 200 });
+    let grid = sheet === '主清單' ? main : groups;
+    // range=A{起}:Z{迄}：只回那一段（型別也只看那一段，跟真的 gviz 一樣）
+    if (range) { const m = /^A(\d+):Z(\d+)$/.exec(range); grid = grid.slice(+m[1] - 1, +m[2]); }
     return new Response(`/*O_o*/\ngoogle.visualization.Query.setResponse(${JSON.stringify(fakeGviz(grid, h))});`);
   };
   fn.calls = calls;
@@ -189,6 +191,40 @@ test('不存在或不合理的日期回空值', () => {
   assert.equal(sync.cellDate({ v: '2026/9/100' }, TODAY), null);
   assert.equal(sync.cellDate({ v: '不詳' }, TODAY), null);
   assert.equal(sync.cellDate(null, TODAY), null);
+});
+
+// 異動紀錄（K 2026-10-10 截圖）：狗的下面，籠位欄寫「備註1」…、編號欄寫內容；第 11 筆起籠位欄空白；備註欄的「ppp」不讀
+const MAIN_NOTES = [
+  ...MAIN,
+  ['', '備註1', '1/7新獨10奈威肛門腺破裂移至新B03休養', '', '', ''],
+  ['', '備註2', '2/22 有移動 果果到新A01', '', '', ''],
+  ['', '備註9', '5/17有移動\n1.新B03 小樂 移至舊B05', '', 'ppp', ''],
+  ['', '', '8/19煙捲咬傷泰森', '', '', ''],
+  ['', '', '', '', '', ''],
+  ['', '', '10/1阿湯移至C區35', '', '', ''],
+];
+
+test('異動紀錄：從第一個「備註」那列讀到底，只讀那一段（編號欄才不會因為上面都是數字被丟掉）', async () => {
+  const f = fakeFetch({ main: MAIN_NOTES });
+  const data = await sync.buildData(f, TODAY, fakeCards());
+  assert.deepEqual(data.sheetNotes, [
+    { label: '備註1', text: '1/7新獨10奈威肛門腺破裂移至新B03休養' },
+    { label: '備註2', text: '2/22 有移動 果果到新A01' },
+    { label: '備註9', text: '5/17有移動\n1.新B03 小樂 移至舊B05' },
+    { label: '', text: '8/19煙捲咬傷泰森' },
+    { label: '', text: '10/1阿湯移至C區35' },
+  ]);
+  assert.ok(f.calls.includes(`主清單:0:A15:Z${15 + sync.NOTES_MAX_ROWS}`), f.calls.join());
+  assert.equal(data.dogs.length, 4, '備註列不算狗');
+});
+
+test('異動紀錄：沒有「備註」列就是空的、不多讀；讀失敗回 null（同步沿用上一次），狗照常', async () => {
+  const plain = fakeFetch();
+  assert.deepEqual((await sync.buildData(plain, TODAY, fakeCards())).sheetNotes, []);
+  assert.equal(plain.calls.some(c => c.split(':').length > 2), false);
+  const data = await sync.buildData(fakeFetch({ main: MAIN_NOTES, fail: 'range' }), TODAY, fakeCards());
+  assert.equal(data.sheetNotes, null);
+  assert.equal(data.dogs.length, 4);
 });
 
 test('headers=0 時「編號」「遛狗日期」表頭會被吃掉，所以要先找表頭列再重讀', () => {
