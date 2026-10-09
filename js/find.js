@@ -29,21 +29,26 @@ function findTurn([x, y, w, h]) {
   return [x, y, w, h];
 }
 // 區名：放得下就橫排、放不下就直排（一個字一行）；sub 是隻數，底下畫一條短線（K 2026-09-26 給的看板樣式）
-function findLabel(cls, name, sub, [x, y, w, h], small) {
+// big：找狗全圖（critique 2026-10-09）區名和隻數放大，排版照放大後的字算，不用 CSS 硬改（K 2026-10-09 iPhone 上字疊在一起）
+function findLabel(cls, name, sub, [x, y, w, h], small, big) {
   const cx = x + w / 2, cy = y + h / 2;
   const chars = [...name];
-  const fs = small ? 14 : w > 180 ? 18 : 16;
+  let fs = big ? 26 : small ? 14 : w > 180 ? 18 : 16;
+  // 放大時直排又太矮（C 區）：字縮小到放得下為止
+  while (big && fs > 16 && chars.length * fs * 1.3 >= w - 18 && chars.length * (fs + 4) + 46 > h - 30) fs -= 2;
   const gap = fs * 0.3;
   // K 2026-09-28：隻數下面不畫底線，跟有逐籠的區一致
-  const count = ty => `<text class="fm-n" x="${cx}" y="${ty}" text-anchor="middle">${sub}<tspan class="fm-unit" dx="3">隻</tspan></text>`;
+  const size = big ? ' style="font-size:24px"' : '', unit = big ? ' style="font-size:15px"' : '';
+  const count = ty => `<text class="fm-n" x="${cx}" y="${ty}" text-anchor="middle"${size}>${sub}<tspan class="fm-unit" dx="3"${unit}>隻</tspan></text>`;
   if (chars.length * (fs + gap) < w - 18) {
     return `<text class="${cls}" x="${cx}" y="${sub !== '' ? cy - 4 : cy + fs * 0.35}" text-anchor="middle" font-size="${fs}" letter-spacing="${gap}">${name}</text>`
-      + (sub !== '' ? count(cy + 22) : '');
+      + (sub !== '' ? count(cy + (big ? 30 : 22)) : '');
   }
   const lh = fs + 4;
-  const top = cy - (chars.length * lh + (sub !== '' ? 30 : 0)) / 2 + fs;
+  const tail = big ? 22 : 14;
+  const top = cy - (chars.length * lh + (sub !== '' ? tail + 16 : 0)) / 2 + fs;
   return chars.map((ch, i) => `<text class="${cls}" x="${cx}" y="${top + i * lh}" text-anchor="middle" font-size="${fs}">${ch}</text>`).join('')
-    + (sub !== '' ? count(top + chars.length * lh + 14) : '');
+    + (sub !== '' ? count(top + chars.length * lh + tail) : '');
 }
 
 let findView = 'map';  // map：平面圖（2026-10-08 K：找狗的工作就是「在哪」，一打開就是平面圖）；list：列表（一籠一列）
@@ -222,11 +227,12 @@ function findBandLabel(name, n, r) {
 }
 
 // cage：要標出來的籠子（詳細資訊的小地圖、從小地圖開的全螢幕），用 findCageOf 的 id
-function findMapSvg(selected, query = '', mini = false, turn = FIND_MAP_TURN, cage = null) {
+// overview：找狗全圖（critique 2026-10-09）不畫籠子，只畫各區和放大的區名、隻數；點一區放大才看籠子
+function findMapSvg(selected, query = '', mini = false, turn = FIND_MAP_TURN, cage = null, overview = false) {
   findTurnNow = turn;
-  try { return findMapSvgNow(selected, query, mini, cage); } finally { findTurnNow = FIND_MAP_TURN; }
+  try { return findMapSvgNow(selected, query, mini, cage, overview); } finally { findTurnNow = FIND_MAP_TURN; }
 }
-function findMapSvgNow(selected, query, mini, cage) {
+function findMapSvgNow(selected, query, mini, cage, overview) {
   const count = key => allDogs.filter(d => findZoneOf(d) === key && findMatches(d, query)).length;
   const lit = new Set(allDogs.filter(d => findMatches(d, query)).map(findCageOf)); // 有狗（搜尋時只算找到的）的籠子
   const dogsIn = id => allDogs.filter(d => findCageOf(d) === id && findMatches(d, query)).length;
@@ -244,7 +250,7 @@ function findMapSvgNow(selected, query, mini, cage) {
     });
     return `<polygon class="${cls}" points="${pts.join(' ')}"/>`;
   };
-  let s = `<svg class="find-map${mini ? ' mini' : ''}" viewBox="${-P} ${-P} ${vw + P * 2} ${vh + P * 2}" ${mini ? 'aria-hidden="true"' : 'role="group" aria-label="收容所平面圖"'}>`;
+  let s = `<svg class="find-map${mini ? ' mini' : ''}${overview ? ' overview' : ''}" viewBox="${-P} ${-P} ${vw + P * 2} ${vh + P * 2}" ${mini ? 'aria-hidden="true"' : 'role="group" aria-label="收容所平面圖"'}>`;
   s += `<rect class="fm-bg" x="${-P}" y="${-P}" width="${vw + P * 2}" height="${vh + P * 2}" rx="${mini ? 30 : 16}"/>`;
   s += outline(8, 'fm-frame2') + outline(2, 'fm-frame');
   if (!mini) s += findMapTitle();
@@ -259,7 +265,7 @@ function findMapSvgNow(selected, query, mini, cage) {
     s += mini ? `<g class="${cls}">` : `<g class="${cls}" data-find-zone="${z.key}" role="button" tabindex="0" aria-pressed="${selected === z.key}" aria-label="${z.name} ${n} 隻">`;
     s += box(r);
     const band = FIND_CAGES.bands[z.key];
-    for (const c of FIND_CAGES.cages.filter(c => c.zone === z.key && (!mini || c.id === cage))) {
+    for (const c of overview ? [] : FIND_CAGES.cages.filter(c => c.zone === z.key && (!mini || c.id === cage))) {
       const [x, y, w, h] = findTurn(c.rect);
       // 常見的籠位圖做法：有狗實心、空籠虛線；點選的籠子（或搜尋找到的）用橘色，其他籠子淡掉
       const on = c.id === cage || (searching && lit.has(c.id));
@@ -270,7 +276,8 @@ function findMapSvgNow(selected, query, mini, cage) {
       s += `<g class="fm-cg" data-find-cage="${c.id}" role="button" tabindex="0" aria-pressed="${c.id === cage}" aria-label="${c.id} ${dogsIn(c.id)} 隻">${rect}`
         + `<text class="fm-cn${on ? ' on' : ''}${fade}" x="${x + w / 2}" y="${y + h / 2 + 3}" text-anchor="middle">${c.label}</text></g>`;
     }
-    if (!mini) s += band ? findBandLabel(z.name, n, findTurn(band)) : findLabel('fm-t', z.name, n, r);
+    if (overview) s += findLabel('fm-t', z.name, n, r, false, true);
+    else if (!mini) s += band ? findBandLabel(z.name, n, findTurn(band)) : findLabel('fm-t', z.name, n, r);
     s += `</g>`;
   }
   return s + '</svg>';
@@ -303,13 +310,12 @@ function findMapHtml(query) {
   const hitZones = new Set(hits.map(findZoneOf));
   const box = findMapBox(selected || (hitZones.size === 1 ? [...hitZones][0] : null));
   const from = findMapShown || findMapBox(null); // 從上一次看到的範圍開始，畫好後動畫移到這次的範圍
-  let svg = findMapSvg(selected, query, false, FIND_MAP_TURN, findCage)
+  // 全圖（沒選區、沒搜尋）：手機上籠子的小字看不清（critique 2026-10-09），只放大各區名稱和隻數；點一區放大才看籠子
+  const overview = !selected && !searching;
+  let svg = findMapSvg(selected, query, false, FIND_MAP_TURN, findCage, overview)
     .replace(/viewBox="[^"]*"/, `viewBox="${from.join(' ')}" data-to="${box.join(' ')}"`);
   findMapShown = box;
   requestAnimationFrame(findMapAnimate);
-  // 全圖（沒選區、沒搜尋）：手機上籠子的小字看不清（critique 2026-10-09），只放大各區名稱和隻數；點一區放大才看籠子
-  const overview = !selected && !searching;
-  if (overview) svg = svg.replace('class="find-map"', 'class="find-map overview"');
   let html = `<div class="find-map-card">
     ${svg}
     <div class="find-map-foot">
