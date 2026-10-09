@@ -870,3 +870,9 @@
 - js/find.js：findMapSvg 加 overview，全圖不畫籠子；findLabel 加 big，照放大的字排（橫排放不下就直排，直排也太矮就縮小，C 區縮成橫排）；拿掉 css/app.css 硬改字級那幾行。
 - js/app.js：導覽找狗示範先點一個有狗的區（tourZoneWithDogs），放大後再點那區有狗的籠子。
 - 測試：逐籠平面圖兩項改成先放大到新犬舍區，全圖檢查加「不畫籠子」；網頁 204 過（本機另 2 項老問題），node 141 過。DESIGN_GUIDE 找狗說明更新。
+
+## 2026-10-09 Claude（頁首往下捲時收起標題那一行）
+- 依據：critique 2026-10-09 優先問題 2（P1）：頁首和工具列占掉約 25% 畫面；K 選「5 個優先問題都做」。
+- 修 git：本機分支 claude/find-map-bigger 的指標檔被寫成全 0（上次工作階段中斷），照 reflog 指回 30013ce，遠端追蹤指標刪掉重抓；fsck 乾淨。
+- js/app.js：syncHeaderTuck 算標題那一行的高度放進 --brand-h；css/app.css：header.app sticky 的 top 改成負的 --brand-h，捲動時標題捲走、搜尋框和範圍字黏在上面（固定部分 133px → 83px）；分析頁維持整個頁首。
+- 測試加 2 項；網頁 206 過（本機另 2 項老問題；rebase 到找狗 iPhone 修正後重跑），node 141 過。DESIGN_GUIDE 頁首說明補上。接在 #177 後面。

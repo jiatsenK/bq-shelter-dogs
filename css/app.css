@@ -1835,3 +1835,8 @@ h2.name { margin: 0; }
 
 /* 找狗全圖（critique 2026-10-09 P2）：js/find.js 不畫籠子、區名和隻數照放大的字排（K 2026-10-09 iPhone 上字疊在一起，不再用 CSS 硬改字級） */
 .find-map-card + .find-zone-head h2 { font-size: 17px; }
+
+/* 頁首收起（critique 2026-10-09 P1）：標題那一行捲走，搜尋框和範圍字留在上面；--brand-h 由 js/app.js 的 syncHeaderTuck 算。
+   分析頁沒有搜尋框，頁首整個留著（返回、分析按鈕在標題那一行） */
+header.app { top: calc(-1 * var(--brand-h, 0px)); }
+.analysis-open header.app { top: 0; }

@@ -2645,6 +2645,17 @@ function syncHeaderShadow() {
 }
 window.addEventListener('scroll', syncHeaderShadow, { passive: true });
 
+// 頁首收起（critique 2026-10-09 P1）：往下捲時標題那一行跟著捲走，只留搜尋框和範圍字黏在上面，
+// 狗卡多看得到一兩隻；捲回最上面就回來。用 sticky 負 top 做，不判斷捲動方向，畫面不會跳
+const appBrand = appHeader && appHeader.querySelector('.brand');
+function syncHeaderTuck() {
+  if (!appHeader || !appBrand || typeof getComputedStyle !== 'function') return; // node 測試的假 DOM 沒有
+  const pad = parseFloat(getComputedStyle(appHeader).paddingTop) || 0;
+  appHeader.style.setProperty('--brand-h', `${Math.round(pad + appBrand.offsetHeight)}px`);
+}
+syncHeaderTuck();
+window.addEventListener('resize', syncHeaderTuck);
+
 // 頁首範圍字（K 2026-10-09 病歷夾色籤）：溜狗表捲動時，頁首寫出畫面上第一隻到最後一隻多久沒溜，
 // 像檔案櫃抽屜上的範圍標籤。照片、列表模式都用「N 天前」（從資料算，不抄畫面上的字：列表模式顯示的是日期）
 function dayWord(dog, today) {

@@ -3348,6 +3348,36 @@ async function runSquarePhotoTests() {
   }
 }
 
+// critique 2026-10-09 P1：往下捲時頁首的標題那一行捲走，搜尋框留在畫面上；分析頁頁首整個留著
+async function runHeaderTuckTests() {
+  const css = await fetch('../css/app.css').then(r => r.text());
+  const frame = document.createElement('iframe');
+  frame.style.cssText = 'position:absolute;left:-9999px;width:390px;height:844px;border:0';
+  document.body.appendChild(frame);
+  const doc = frame.contentDocument;
+  doc.open();
+  doc.write(`<!doctype html><style>${css}</style><body>${INDEX_HTML.match(/<header class="app">[\s\S]*?<\/header>/)[0]}<main style="height:3000px"></main></body>`);
+  doc.close();
+  const win = frame.contentWindow;
+  const header = doc.querySelector('header.app');
+  // 跟 js/app.js 的 syncHeaderTuck 一樣算
+  header.style.setProperty('--brand-h', `${Math.round(parseFloat(win.getComputedStyle(header).paddingTop) + doc.querySelector('.brand').offsetHeight)}px`);
+  try {
+    await check('頁首收起：往下捲時標題那一行捲走，搜尋框還貼在畫面最上面', () => {
+      win.scrollTo(0, 900);
+      eq(header.getBoundingClientRect().top < -30, true, '標題那一行要捲走：');
+      eq(Math.round(doc.getElementById('searchInput').getBoundingClientRect().top) >= 0, true, '搜尋框要看得到：');
+    });
+    await check('頁首收起：分析頁的頁首整個留著（返回、分析按鈕在標題那一行）', () => {
+      doc.documentElement.classList.add('analysis-open');
+      win.scrollTo(0, 900);
+      eq(Math.round(header.getBoundingClientRect().top), 0);
+    });
+  } finally {
+    frame.remove();
+  }
+}
+
 // critique 2026-10-09：找狗全圖只放大區名，下面列最久沒溜的狗（黃、紅、沒紀錄）
 async function runFindOverviewTests() {
   const saved = [allDogs, activeTab, searchQuery, findZone, findView, findCage];
@@ -3596,6 +3626,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runCritique3Tests)
   .then(runRangeTests)
   .then(runFindOverviewTests)
+  .then(runHeaderTuckTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
