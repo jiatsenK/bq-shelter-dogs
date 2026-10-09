@@ -890,9 +890,6 @@ function walkerList(dog, today = new Date()) {
   if (walkedNow(dog, today)) return uniq([...splitWalkers(walkerNames[walkKey(dog)]), loadWalkerName() || '你', ...(loadWalkWith(today)[walkKey(dog)] || [])]);
   return uniq(splitWalkers(walkerNames[walkKey(dog)]));
 }
-function walkerText(dog, today) {
-  return walkerList(dog, today).join('、');
-}
 
 // ── 一起溜的人（#141 第 1 項，K：溜了要怎麼寫除了我以外的人）──
 // 按溜了先寫自己；提示條「＋一起溜的人」選名字，再寫進試算表同一格（小程式用「、」接在後面）。
@@ -2458,7 +2455,8 @@ function walkToolsHtml(chips, view = loadWalkView()) {
   </div>`;
 }
 
-// 列表模式的一列：籠位｜犬名｜遛狗日期｜誰遛的｜溜了，跟試算表同一個順序
+// 列表模式的一列：天數｜狗名｜籠位｜溜了。
+// K 2026-10-09：溜狗人拿掉（點進詳細資訊看得到），籠位跟狗卡一樣點了開平面圖
 // critique 2026-10-09：列表模式也是天數優先，天數排最前面、寫「20天」不寫日期（不用心算）；
 // 警示原文跟狗卡一樣放在那一列下面，不只一個小三角
 function walkRow(dog, today) {
@@ -2468,12 +2466,12 @@ function walkRow(dog, today) {
     ? (s.days < 0 ? '?<span class="sr-only">日期看不懂</span>' : s.days === 0 ? '今天' : `<b>${s.days}</b>天<span class="sr-only">前</span>`)
     : s.kind === 'covered' ? '固定<span class="sr-only">有人照顧</span>'
     : s.kind === 'rest' ? `休養<span class="sr-only">中，${monthDay(s.until)} 前暫停帶出</span>` : '—<span class="sr-only">沒有紀錄</span>';
-  const who = walkerText(dog, today);
   return `<div class="row-dog${flag ? ' flagged' : ''}" data-dog="${allDogs.indexOf(dog)}" role="button" tabindex="0" aria-haspopup="dialog">
     <span class="r-date ${s.kind === 'rest' ? 'rest' : s.level || 'muted'}">${days}</span>
     <span class="r-name">${esc(dog.name)}</span>
-    <span class="r-cage">${esc(dog.cage)}</span>
-    <span class="r-who">${esc(who)}</span>
+    ${typeof whereKnown === 'function' && whereKnown(dog)
+      ? `<button type="button" class="r-cage" data-where aria-label="${esc(dog.name)} 在哪：${esc(dog.cage)}${dog.homeCage ? '（暫住）' : ''}">${esc(dog.cage)}</button>`
+      : `<span class="r-cage plain">${esc(dog.cage)}</span>`}
     ${walkButton(dog)}
     ${flag ? warnNote(dog.note, flag) : ''}
   </div>`;
@@ -2527,7 +2525,7 @@ function renderMain() {
   const list = fav ? walkList.filter(isFav) : walkList;
   const view = loadWalkView();
   const items = view === 'list'
-    ? (list.length ? `<div class="rows"><div class="row-head"><span>天數</span><span>狗名</span><span>籠位</span><span>溜狗人</span><span></span></div>${list.map(d => walkRow(d, today)).join('')}</div>` : '')
+    ? (list.length ? `<div class="rows"><div class="row-head"><span>天數</span><span>狗名</span><span>籠位</span><span></span></div>${list.map(d => walkRow(d, today)).join('')}</div>` : '')
     : list.map((d, i) => dogCard(d, today, i < FIRST_SCREEN_CARDS)).join('');
   const head = walkToolsHtml(walkFilterHtml(walkList.length, fav, walkList.filter(isFav).length), view);
   const empty = fav && !list.length && !q ? '還沒有常溜的狗。<br>點狗打開詳細資訊，<br>按名字旁的「☆ 常溜」加進來。'
@@ -2634,7 +2632,8 @@ const TOUR_STEPS = [
   { target: ['#main .card[data-dog] .name', '#main .row-dog[data-dog] .r-name'], title: '狗資料', text: '點擊名稱，可以查看照片和詳細紀錄。', demo: 'detail' },
   { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn'], title: '溜狗登記', text: '溜完按「溜了」，就會自動記錄日期和名字。', demo: 'walk' },
   { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn'], title: '取消登記', text: '如果按錯，再按一次「已溜」就可以取消。', demo: 'unwalk' },
-  { target: ['#main .card[data-dog] .cage-pill'], title: '籠位查詢', text: '點擊籠位，就能在平面圖查看位置。', demo: 'where' },
+  { target: ['#main .card[data-dog] .cage-pill', '#main .row-dog[data-dog] .r-cage'], title: '籠位查詢', text: '點擊籠位，就能在平面圖查看位置。', demo: 'where' },
+  { target: ['#main .walk-tools .seg'], title: '照片／列表', text: '右上角可以切換：有照片的狗卡，或一列一隻、比較好掃過去的列表。', demo: 'view' },
   { target: ['#tabs [data-tab="mine"]'], title: '我溜過', text: '查看自己溜過的狗。', demo: 'tab' },
   { target: ['#tabs [data-tab="find"]'], title: '找狗', text: '透過平面圖快速找到狗的位置。', demo: 'find' },
 ];
@@ -2667,6 +2666,12 @@ const TOUR_DEMOS = {
   walk: { run: () => { tourFakeWalk('pending'); tourLater(() => { tourFakeWalk('done'); placeTour(); }, 700); }, undo: () => render() },
   unwalk: { before: () => tourFakeWalk('done'), run: () => render(), undo: () => render() },
   where: { run: () => { const d = tourDog(); if (d) whereOpen(d); }, show: '#whereSheet', undo: () => { if (whereDog) whereClose(); } },
+  // 照片／列表（K 2026-10-09）：示範切到另一種，收回時切回原本的
+  view: {
+    run: () => { tour.view = loadWalkView(); saveWalkView(tour.view === 'list' ? 'photo' : 'list'); render(); },
+    show: '#main .walk-tools .seg',
+    undo: () => { if (tour && tour.view) { saveWalkView(tour.view); tour.view = null; } render(); },
+  },
   tab: { run: el => { if (el) switchTab(el.dataset.tab); }, show: '#main', undo: () => switchTab('walk') },
   // 找狗（K 2026-10-09）：切過去後再隨便點平面圖上一個有狗的籠子，下面列出那一籠的狗。
   // 全圖不畫籠子（critique 2026-10-09），所以先點一區放大，再點那一區的籠子

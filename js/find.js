@@ -680,7 +680,7 @@ function whereHide() {
   box.hidden = true;
   box.querySelector('.where-sheet').innerHTML = '';
   document.documentElement.classList.remove('where-open');
-  const card = document.querySelector(`#main .card[data-dog="${allDogs.indexOf(dog)}"] [data-where]`);
+  const card = document.querySelector(`#main [data-dog="${allDogs.indexOf(dog)}"] [data-where]`);
   const back = whereOpener && whereOpener.isConnected ? whereOpener : card;
   if (back) back.focus({ preventScroll: true });
   whereOpener = null;
