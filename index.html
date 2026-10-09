@@ -6,7 +6,7 @@
 <script>if (location.hostname === 'jiatsenk.github.io') location.replace('https://bq-shelter-dogs.<子網域>.workers.dev' + location.pathname.replace(/^\/bq-shelter-dogs(?=\/|$)/, '') + location.search + location.hash);</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>板收志工溜狗表</title>
-<meta name="theme-color" content="#2F7BEA">
+<meta name="theme-color" content="#1F5C4D">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="板收志工溜狗表">
 <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
@@ -71,6 +71,8 @@
       <input id="searchInput" type="search" placeholder="搜尋狗名" aria-label="搜尋狗名" enterkeyhint="search" autocomplete="off">
       <button type="button" class="search-clear" id="searchClear" aria-label="清除搜尋" hidden><svg class="icon"><use href="#i-close"/></svg></button>
     </div>
+    <!-- 頁首範圍字（2026-10-09）：溜狗表畫面上第一隻到最後一隻多久沒溜，js/app.js 的 syncRange 填 -->
+    <div class="range" id="rangeLabel" hidden></div>
   </div>
 </header>
 

@@ -804,3 +804,10 @@
 - DESIGN.md 由 impeccable 文件員（子代理）依實際畫面重寫（frontmatter 色碼、字級、圓角、元件；開頭仍註明是快照、以 CSS 為準、外觀可以改），新增 .impeccable/design.json（impeccable 預覽用，不上網站）。我修正了它寫錯的標題字級（實際 20px）。
 - docs/DESIGN_GUIDE.md：開頭說明這一版的來由，色票表、天數色籤表、字級、元件（頁首、分頁、卡片、溜了、詳細資訊、焦點框）改成病歷夾色籤的現況；單手操作規範不動。
 - css/app.css：離所「死亡」標籤殘留的舊灰字改 --muted-text。
+
+## 2026-10-09 Claude（病歷夾色籤：網址列顏色、頁首範圍字）
+- 依據：K 2026-10-09「還沒做的兩項都同意更改」（PR #170 列的 theme-color、頁首範圍字）。
+- index.html：theme-color 改 #1F5C4D；manifest.webmanifest 的 theme_color、background_color 一起改成檔案綠、淡鋼灰綠（原本還是 V3 的藍）。App 圖示（icons/）還是藍底白腳掌，沒改。
+- 頁首範圍字：index.html 頁首搜尋框下面加 #rangeLabel；js/app.js 加 dayWord、rangeText、syncRange（捲動、render 後用 requestAnimationFrame 更新），只在溜狗表顯示「畫面上：45 天前 ～ 4 天前」，照片、列表模式都從資料算 N 天前。css/app.css 加 .range 樣式。
+- DESIGN_GUIDE.md、DESIGN.md、方向紀錄補上範圍字。
+- 測試：tests/index.html 加 runRangeTests 3 項（說法、頭尾、頁首位置與顏色）。網頁 201 過，本機另 2 項是 Windows 換行老問題；Node 141 全過。
