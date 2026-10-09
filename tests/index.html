@@ -24,7 +24,7 @@
 <!-- js/app.js 在載入時會用到這幾個元素 -->
 <div class="hidden">
   <input id="searchInput"><button id="searchClear" hidden></button><div id="tabs"></div><main id="main"></main>
-  <span id="dateLabel"></span><span id="updatedLabel"></span>
+  <span id="dateLabel"></span><span id="updatedLabel"></span><button id="analysisBack" class="head-back"></button>
   <div id="detailBackdrop" hidden><div id="detail"></div></div>
 </div>
 
@@ -1099,17 +1099,18 @@ async function runAnalysisTests() {
       showAnalysis();
       eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [true, true, 'mine'], '打開分析：');
       const titles = [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
-      eq(titles.length, 6, '五張統計＋離所（2026-10-08 distill 拿掉滿 1 年圓環、入所年度分布）：');
+      eq(titles.length, 7, '本月溜狗（K 2026-10-09）＋五張統計＋離所（2026-10-08 distill 拿掉滿 1 年圓環、入所年度分布）：');
       if (titles.includes('長期在所＋近期少遛')) throw new Error('K 說長期在所＋少遛不需要');
       ['入所多久分布', '在所最久 Top 10', '各區平均在所時間',
         '公母在所時間差異', '狗的資料完整度'].forEach(t => { if (!titles.includes(t)) throw new Error(`少了 ${t}`); });
-      if (!document.querySelector('#main .a-card .a-hint').textContent.includes('滿 1 年的')) throw new Error('入所多久分布要寫滿 1 年幾隻');
+      if (![...document.querySelectorAll('#main .a-card')].find(c => c.querySelector('h2').textContent.includes('入所多久分布')).querySelector('.a-hint').textContent.includes('滿 1 年的')) throw new Error('入所多久分布要寫滿 1 年幾隻');
       eq(document.querySelectorAll('#main .a-ring').length, 0, '不再有圓環：');
       if (!document.getElementById('main').textContent.includes('檢查中')) throw new Error('照片還沒查完要顯示檢查中');
       const photoCalls = calls.filter(([u]) => u.startsWith('photos/'));
       eq(photoCalls.every(([, m]) => m === 'HEAD'), true, '照片只用 HEAD：');
       eq(photoCalls.length, 9, '每個編號查一次：');
-      eq(calls.filter(([u]) => !u.startsWith('photos/') && u !== 'data/departures.json').length, 0, '分析頁只多讀離所紀錄（#163），不讀其他檔：');
+      // K 2026-10-09 本月溜狗：另外讀溜狗紀錄（跟詳細資訊同一份 walks.json 和快照目錄）
+      eq(calls.filter(([u]) => !u.startsWith('photos/') && !['data/departures.json', 'data/walks.json', 'data/history/index.json'].includes(u)).length, 0, '分析頁只多讀離所紀錄（#163）和溜狗紀錄，不讀其他檔：');
       await tick(); await tick(); await tick();
       const photoRow = [...document.querySelectorAll('#main .a-miss')].find(el => el.textContent.includes('沒有照片'));
       if (!photoRow || !photoRow.textContent.includes('9 隻')) throw new Error(`沒有照片列：${photoRow && photoRow.textContent}`);
@@ -1907,6 +1908,25 @@ async function runWarnLayoutTests() {
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
     resetWalkOrder(); render();
   }
+}
+
+// ── 分析頁「← 分析」、本月溜狗（K 2026-10-09）──
+async function runMonthWalkTests() {
+  await check('K 2026-10-09 本月溜狗：同一隻狗同一天只算一次；1 號到今天每天幾次；上個月整月；記錄開始前的日子另外標', () => {
+    const d = (m, day) => new Date(2026, m - 1, day);
+    const w = (key, date) => ({ key, date });
+    const walks = [w('a', d(10, 1)), w('a', d(10, 1)), w('b', d(10, 1)), w('a', d(10, 3)), w('c', d(9, 30)), w('c', d(9, 29)), w('x', d(8, 31))];
+    const r = monthWalks(walks, d(10, 4), d(9, 16));
+    eq(r.days.map(x => x.n), [2, 0, 1, 0], '每天：');
+    eq([r.total, r.dogs, r.last], [3, 2, 2], '總計、隻數、上個月：');
+    eq(monthWalks(walks, d(10, 4), d(10, 3)).days.map(x => x.recorded), [false, false, true, true], '記錄開始前：');
+    eq(monthWalks([w('a', d(10, 1))], d(10, 2), d(10, 1)).last, null, '上個月沒紀錄：');
+  });
+  check('K 2026-10-09 分析頁的返回在頁首（← 分析），內容區不再有另一個返回和標題', () => {
+    // 測試頁不是真的 index.html：檢查 index.html 原始碼的頁首
+    if (!/<header class="app">[\s\S]*class="head-back" id="analysisBack"[\s\S]*<h2 class="head-title">分析<\/h2>/.test(INDEX_HTML)) throw new Error('頁首要有返回和標題');
+    if (/class="a-top"|class="a-back"/.test(analysisPageHtml(new Date()))) throw new Error('內容區不該再有返回');
+  });
 }
 
 // #83 照片縮圖：清單讀 photos/thumbs/，燈箱讀原圖；縮圖讀不到先換原圖
@@ -3483,6 +3503,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runCropTests)
   .then(runRestTests)
   .then(runWarnLayoutTests)
+  .then(runMonthWalkTests)
   .then(runV52Tests)
   .then(() => fetch('../.github/workflows/make-thumbs.yml').then(r => r.text()).then(t => { MAKE_THUMBS_YML = t; }))
   .then(runThumbTests)
