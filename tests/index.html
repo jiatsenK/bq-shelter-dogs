@@ -1811,15 +1811,21 @@ async function runV9Tests() {
       main.querySelector('[data-walk-fav="0"]').click();
       if (main.querySelector('.stat-tile')) throw new Error('不再有三格');
     });
-    await check('#141 列表模式（收起照片）：一列一隻 籠位｜犬名｜日期｜誰遛的，名字跟 Worker 拿、一格好幾人拆開', async () => {
+    await check('#141 列表模式（收起照片）：一列一隻 天數｜犬名｜籠位｜誰遛的（critique 2026-10-09 天數優先），名字跟 Worker 拿、一格好幾人拆開', async () => {
       UPLOAD_URL = 'https://worker.test';
       window.fetch = async u => (String(u).endsWith('/walkers') ? json({ ok: true, walkers: { '9902': '志工乙+志工丙。阿明' } }) : json({}, 404));
       await loadWalkerNames();
       main.querySelector('[data-walk-view="list"]').click();
       const row = main.querySelector('.row-dog[data-dog="1"]');
       eq([row.querySelector('.r-cage').textContent, row.querySelector('.r-name').textContent, row.querySelector('.r-who').textContent], ['A02', 'V9乙', '志工乙、志工丙、阿明'], '一列：');
-      eq([...main.querySelectorAll('.row-head span')].map(n => n.textContent), ['籠位', '狗名', '日期', '溜狗人', '登記'], '欄位標題：');
+      eq([...main.querySelectorAll('.row-head span')].map(n => n.textContent), ['天數', '狗名', '籠位', '溜狗人', ''], '欄位標題：');
+      eq([...row.children].map(c => c.className.split(' ')[0]), ['r-date', 'r-name', 'r-cage', 'r-who', 'walk-btn'], '天數排最前面：');
+      const s1 = computeStatus(allDogs[1], new Date());
+      eq(row.querySelector('.r-date').textContent, s1.kind === 'dated' && s1.days > 0 ? `${s1.days}天前` : row.querySelector('.r-date').textContent, '寫天數不寫日期：');
+      if ([...main.querySelectorAll('.r-date')].some(d => d.textContent.includes('/'))) throw new Error('列表還有 月/日 日期');
       eq(main.querySelectorAll('.row-dog .thumb').length, 0, '沒有照片：');
+      const warnRow = new DOMParser().parseFromString(walkRow({ ...allDogs[1], note: '會攻擊其他狗' }, new Date()), 'text/html').body.firstElementChild;
+      eq([warnRow.classList.contains('flagged'), !!warnRow.querySelector(':scope > .warn-note .text'), !warnRow.querySelector('.r-name .icon')], [true, true, true], '警示原文放在那一列下面：');
       eq(walkedStorage.getItem(WALK_VIEW_KEY), 'list', '記住：');
       row.querySelector('.r-name').click();
       eq([...document.querySelectorAll('#detail .last-walk .who-chip')].map(c => c.textContent), ['志工乙', '志工丙', '阿明'], '詳細資訊溜狗人：');
