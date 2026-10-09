@@ -229,7 +229,7 @@ function runTests() {
       eq(tokenHits, [], 'GitHub 憑證相關字眼：');
       // #35 起「今天已溜」存在這支手機的 localStorage，只准用 WALKED_KEY；#62 加上我的備註通關碼 NOTES_PASS_KEY
       eq([...code.matchAll(/\blocalStorage\s*[.[]|window\.localStorage/g)].length, 1, 'localStorage 只在一個地方取用：');
-      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'key', 'key', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'SHEET_WRITES_KEY', 'SHEET_WRITES_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'WALK_VIEW_KEY', 'WALK_VIEW_KEY', 'ONBOARD_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY', 'ONBOARD_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、WALKER_NAME_KEY 和 SHEET_WRITES_KEY（#138 寫試算表）、NOTES_PASS_KEY（相簿刪除）、WALK_VIEW_KEY、ONBOARD_KEY（V9）、NAME_LATER_KEY（先看看，介面評估第四輪），key 是一起溜的人（readJsonKey／writeJsonKey）：');
+      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'key', 'key', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'SHEET_WRITES_KEY', 'SHEET_WRITES_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'WALK_VIEW_KEY', 'WALK_VIEW_KEY', 'ONBOARD_KEY', 'ONBOARD_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、WALKER_NAME_KEY 和 SHEET_WRITES_KEY（#138 寫試算表）、NOTES_PASS_KEY（相簿刪除）、WALK_VIEW_KEY、ONBOARD_KEY（V9）、NAME_LATER_KEY（先看看，介面評估第四輪），key 是一起溜的人（readJsonKey／writeJsonKey）：');
       if (!/readJsonKey\(COMPANIONS_KEY\)/.test(APP_JS) || !/writeJsonKey\(WALK_WITH_KEY,/.test(APP_JS)) throw new Error('readJsonKey／writeJsonKey 只給一起溜的人用');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
       eq(urls.length, 4, 'fetch 呼叫數（上傳以外）：');
@@ -1934,9 +1934,10 @@ async function runV9Tests() {
       input.value = '志工新'; input.dispatchEvent(new Event('input', { bubbles: true }));
       box().querySelector('.ob-next').click();
       for (let i = 0; i < 5; i++) await new Promise(r => setTimeout(r, 0));
-      eq([loadWalkerName(), !!box().querySelector('.ob-slide')], ['志工新', true], '設好名字進說明：');
-      box().querySelector('[data-ob="done"]').click();
-      eq([box(), needOnboard()], [null, false], '看完：');
+      const tour = () => document.getElementById('tour');
+      eq([loadWalkerName(), box(), !!tour()], ['志工新', null, true], '設好名字進導覽（K 2026-10-09 直接用實際的網頁）：');
+      tour().querySelector('[data-tour="done"]').click();
+      eq([box(), tour(), needOnboard()], [null, null, false], '看完：');
       startOnboard();
       eq(box(), null, '不再出現：');
     });
@@ -1958,16 +1959,19 @@ async function runV9Tests() {
       box().querySelector('[data-ob-name="阿明"]').click();
       eq(box().querySelector('[data-ob-name="阿明"]').classList.contains('me-name'), true, '選自己的名字跟一起溜的人樣子不同：');
       box().querySelector('[data-ob="later"]').click();
-      eq([!!box().querySelector('.ob-slide'), nameLater()], [true, true], '先看看進說明：');
-      eq([!!box().querySelector('.ob-demo .card'), !!box().querySelector('.ob-demo [data-walk]')], [true, true], '說明用真的狗卡當範例（不能按）：');
-      if (!box().querySelector('.ob-demo').inert) throw new Error('範例要 inert');
-      eq(box().querySelector('[data-ob="back"]'), null, '第一頁沒有上一頁：');
-      box().querySelector('[data-ob="next"]').click();
-      eq([document.activeElement === box().querySelector('h2'), box().querySelector('.ob-dots').getAttribute('aria-label')], [true, '第 2 頁，共 4 頁'], '換頁焦點到標題：');
-      box().querySelector('[data-ob="back"]').click();
-      eq(box().querySelector('h2').textContent, '溜狗表', '上一頁：');
-      box().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-      eq([box(), needOnboard()], [null, false], 'Esc 等於略過，下次開不再問名字：');
+      const tour = () => document.getElementById('tour');
+      eq([box(), !!tour(), nameLater(), activeTab], [null, true, true, 'walk'], '先看看進導覽，在溜狗表上：');
+      eq([tour().querySelector('h2').textContent, tour().querySelector('.tour-n').textContent], ['溜狗表', '1 / 8'], '第一步：');
+      eq(tour().querySelector('[data-tour="back"]'), null, '第一步沒有上一步：');
+      eq(tourTarget(0), document.querySelector('#main .card[data-dog]'), '亮的是最上面那張狗卡（最久沒溜）：');
+      if (!document.getElementById('main').closest('[inert]')) throw new Error('導覽時後面的網頁不能按');
+      tour().querySelector('[data-tour="next"]').click();
+      eq([document.activeElement === tour().querySelector('h2'), tour().querySelector('.tour-n').textContent], [true, '2 / 8'], '換一步焦點到標題：');
+      eq([tourTarget(1), tourTarget(3)], [document.querySelector('#main .card[data-dog] .last'), document.querySelector('#main .card[data-dog] .walk-btn')], '第二步亮色籤、第四步亮「溜了」（一個說明一個動作）：');
+      tour().querySelector('[data-tour="back"]').click();
+      eq(tour().querySelector('h2').textContent, '溜狗表', '上一步：');
+      tour().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      eq([tour(), needOnboard(), document.getElementById('main').closest('[inert]')], [null, false, null], 'Esc 等於略過，下次開不再問名字：');
       setWalked([allDogs[0]], true);
       eq([!!box(), box().querySelector('.ob-next').textContent], [true, '設定並登記'], '按溜了才問名字：');
       const input = box().querySelector('#obInput');
@@ -1982,12 +1986,12 @@ async function runV9Tests() {
       hideToast();
       activeTab = 'mine'; myWalks = []; myWalksState = 'ready'; render();
       document.querySelector('#main [data-open-guide]').click();
-      eq([box().querySelector('h2').textContent, box().querySelector('[data-ob="done"]').textContent], ['溜狗表', '關閉'], '我溜過可以再打開說明：');
-      box().querySelector('[data-ob="done"]').click();
-      eq(box(), null, '關閉：');
+      eq([tour().querySelector('h2').textContent, tour().querySelector('[data-tour="done"]').textContent, activeTab], ['溜狗表', '關閉', 'walk'], '我溜過可以再打開說明（回到溜狗表）：');
+      tour().querySelector('[data-tour="done"]').click();
+      eq(tour(), null, '關閉：');
     });
   } finally {
-    hideDetail(); hideToast(); onboard = null; renderOnboard(); withSheet = null; renderWithSheet();
+    hideDetail(); hideToast(); onboard = null; renderOnboard(); tour = null; renderTour(); withSheet = null; renderWithSheet();
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList, sheetWritesMemory, sheetWriteState, walkerNameMemory, walkerCodesMemory, myWalks, myWalksState] = saved;
     render();
   }
@@ -3362,6 +3366,24 @@ async function runRangeTests() {
     eq(!!doc.querySelector('header.app #rangeLabel[hidden]'), true, '範圍字在頁首、一開始藏著：');
     eq(doc.querySelector('meta[name="theme-color"]').getAttribute('content'), '#1F5C4D', 'theme-color：');
     eq(MANIFEST.theme_color, '#1F5C4D', '主畫面捷徑：');
+  });
+  await check('2026-10-09 導覽示範「溜了」只換畫面上的樣子：不送出、不記成已溜，收回後畫回原本', async () => {
+    const saved = [allDogs, activeTab, searchQuery, window.fetch];
+    const calls = [];
+    try {
+      allDogs = [dog(ago(12))]; activeTab = 'walk'; searchQuery = ''; render();
+      window.fetch = async (...a) => { calls.push(a); return new Response('{}'); };
+      tour = { step: 3, again: true, shown: null, undo: null, timers: [] };
+      TOUR_DEMOS.walk.run();
+      await new Promise(r => setTimeout(r, 800));
+      const btn = () => document.querySelector('#main .card[data-dog] .walk-btn');
+      eq([btn().textContent.trim(), calls.length, walkedToday().has(allDogs[0])], ['已溜', 0, false], '畫面變已溜、沒送出、沒記：');
+      tour.undo = TOUR_DEMOS.walk.undo; tourReset();
+      eq(btn().textContent.trim(), '溜了', '收回：');
+    } finally {
+      if (tour) tourReset(); tour = null;
+      [allDogs, activeTab, searchQuery, window.fetch] = saved; render();
+    }
   });
 }
 
