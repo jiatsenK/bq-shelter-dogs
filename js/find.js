@@ -307,10 +307,13 @@ function findMapHtml(query) {
     .replace(/viewBox="[^"]*"/, `viewBox="${from.join(' ')}" data-to="${box.join(' ')}"`);
   findMapShown = box;
   requestAnimationFrame(findMapAnimate);
+  // 全圖（沒選區、沒搜尋）：手機上籠子的小字看不清（critique 2026-10-09），只放大各區名稱和隻數；點一區放大才看籠子
+  const overview = !selected && !searching;
+  if (overview) svg = svg.replace('class="find-map"', 'class="find-map overview"');
   let html = `<div class="find-map-card">
     ${svg}
     <div class="find-map-foot">
-      <p class="find-map-hint">${selected ? '點籠子看那籠的狗。' : '點一區放大，點籠子看那籠的狗。'}</p>
+      <p class="find-map-hint">${selected ? '點籠子看那籠的狗。' : '點一區放大看籠子。'}</p>
       ${selected ? `<button type="button" class="find-map-all" data-find-zone="all">${icon('map')}看全圖</button>` : ''}
     </div>
     ${unmapped.length ? `<div class="find-unmapped">這些籠位還不知道在圖上哪裡：${unmapped.map(z =>
@@ -324,6 +327,14 @@ function findMapHtml(query) {
     html += `<div class="find-zone-head"><i class="find-dot z-${z.key}"></i><h2>${esc(title)}</h2><span>${list.length} 隻</span></div>`;
     html += list.length ? findCageRowsHtml(list, query)
       : `<div class="status-msg">${query ? `${where}找不到「${esc(query)}」` : findCage ? '這籠目前沒有狗' : '這區目前沒有對應的籠位'}</div>`;
+  } else if (overview) {
+    // 平面圖下面原本一大塊空白：放最久沒溜的狗（黃、紅、沒紀錄），點籠位看在哪、按溜了直接登記
+    const today = new Date();
+    const due = dueDogs(allDogs, today).filter(d => {
+      const st = computeStatus(d, today);
+      return st.kind === 'unknown' || (st.kind === 'dated' && st.days >= AMBER_DAYS);
+    }).slice(0, 5);
+    if (due.length) html += `<div class="find-zone-head"><h2>最久沒溜的狗</h2><span>點籠位看在哪</span></div>` + due.map(d => dogCard(d, today)).join('');
   } else if (searching) {
     // 搜尋（#113）：上面平面圖標出找到的籠子，下面列出找到的狗
     html += hits.length

@@ -3347,6 +3347,29 @@ async function runSquarePhotoTests() {
   }
 }
 
+// critique 2026-10-09：找狗全圖只放大區名，下面列最久沒溜的狗（黃、紅、沒紀錄）
+async function runFindOverviewTests() {
+  const saved = [allDogs, activeTab, searchQuery, findZone, findView, findCage];
+  const T = new Date();
+  const ymd = n => { const x = new Date(T.getFullYear(), T.getMonth(), T.getDate() - n); return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`; };
+  const dog = (name, id, cage, walkedDate) => parseDogsData({ dogs: [{ id, name, cage, note: '', covered: false, walkedDate }] }).dogs[0];
+  try {
+    allDogs = [dog('剛溜', '2024100901', '新A01', ymd(1)), dog('四天', '2024100902', '新A02', ymd(4)), dog('沒紀錄', '2024100903', '舊A01', ''), dog('十天', '2024100904', '舊A02', ymd(10))];
+    activeTab = 'find'; searchQuery = ''; findZone = 'all'; findView = 'map'; findCage = null;
+    render();
+    const main = document.getElementById('main');
+    await check('找狗全圖：只放大區名（籠子小字收起來），下面列最久沒溜的狗，不列 0–2 天的', () => {
+      eq(!!main.querySelector('.find-map.overview'), true, '全圖：');
+      eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['沒紀錄', '十天', '四天'], '最久沒溜的狗：');
+    });
+    await check('找狗放大到一區時不是全圖，也不列最久沒溜的狗', () => {
+      findZone = 'new'; render();
+      eq([!!main.querySelector('.find-map.overview'), main.querySelectorAll('.card[data-dog]').length], [false, 0]);
+    });
+  } finally {
+    [allDogs, activeTab, searchQuery, findZone, findView, findCage] = saved; render();
+  }
+}
 // K 2026-10-09 病歷夾色籤：頁首範圍字（畫面上第一隻到最後一隻多久沒溜）、網址列顏色
 async function runRangeTests() {
   const TODAY = new Date();
@@ -3570,6 +3593,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runDepartureTests)
   .then(runCritique3Tests)
   .then(runRangeTests)
+  .then(runFindOverviewTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
