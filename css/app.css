@@ -1823,3 +1823,12 @@ header.app { padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-bo
   font-size: 18px; font-weight: 800; padding: 4px 12px;
 }
 .card .warn-note { order: 2; } /* 警示原文排在整張卡最下面一行，溜了留在第一行 */
+
+/* ── 紅色只留給天數和警示（critique 2026-10-09 P2）──
+   ♀ 改梅紫、在哪的圖釘和光圈改主色、統計「超過 N 天沒溜」改黃（它就是黃色門檻）；詳細資訊狗名改成 h2 後的字距歸零 */
+.sex.female, .a-sex-line .female, .a-sex.female .a-sex-mark, .a-sex.female .a-sex-v { color: var(--z-mom-ink); }
+.a-split .female { background: var(--z-mom-ink); }
+.where-head h2 .icon { color: var(--primary); }
+.where-ring { stroke: var(--primary); }
+.a-kpi.warn .a-kpi-v, .a-kpi.warn .a-kpi-l, .a-kpi.warn .a-kpi-v small { color: var(--amber-text); }
+h2.name { margin: 0; }
