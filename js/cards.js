@@ -266,7 +266,9 @@ function bqFan(i, n) {
   const card = document.querySelector('#bqHand .bq-card');
   const cw = (card && card.offsetWidth) || 200;
   const step = wide ? Math.min(cw * .98, (innerWidth - cw - 96) / Math.max(1, n - 1)) : Math.min(56, (innerWidth - cw - 40) / Math.max(1, n - 1));
-  return `translate(${k * step}px, ${Math.abs(k) * (wide ? 26 : 10)}px) rotate(${k * (wide ? 4 : 3)}deg)`;
+  // 往下沉的一半扣回來：扇形整體的中心跟卡包的中心同高（撕開前後主角不跳）
+  const s = wide ? 26 : 10;
+  return `translate(${k * step}px, ${Math.abs(k) * s - Math.floor(n / 2) * s / 2}px) rotate(${k * (wide ? 4 : 3)}deg)`;
 }
 function bqShowHand(cards, freshIds, instant) {
   BQ.hand = cards;
@@ -291,7 +293,7 @@ function bqRenderField() {
   pack.setAttribute('aria-label', n ? `撕開卡包，${Math.min(n, BQ_PACK_SIZE)} 張新卡` : '卡包');
   if (!BQ.codes.length) {
     field.classList.add('locked');
-    note.innerHTML = '先在溜狗表的「我溜過」輸入你的名字，<br>你溜過的狗就會變成你的卡。<a href="index.html#mine">去設定</a>';
+    note.innerHTML = '先在溜狗表的「我溜過」輸入你的名字，你溜過的狗就會變成你的卡。<a href="index.html#mine">去設定</a>';
     pack.disabled = true;
   } else if (!BQ.walksOk && !n) {
     field.classList.add('locked');
