@@ -4,8 +4,6 @@
 <meta charset="UTF-8">
 <!-- 舊網址轉址（#129）：GitHub Pages 不能設伺服器轉址，舊網址 jiatsenk.github.io 一打開就換到新網址同一頁（含 # 分類）；新網址、預覽版、本機不受影響 -->
 <script>if (location.hostname === 'jiatsenk.github.io') location.replace('https://bq-shelter-dogs.jiatsen-k.workers.dev' + location.pathname.replace(/^\/bq-shelter-dogs(?=\/|$)/, '') + location.search + location.hash);</script>
-<!-- 電腦版展示（K 2026-10-09）：寬螢幕＋滑鼠一打開是球員卡（cards.html）；手機、平板不受影響。網址帶 ?app 或按過「志工版」就留在溜狗表 -->
-<script>try { if (/[?&]app\b/.test(location.search)) localStorage.setItem('bq-desktop-app', '1'); else if (matchMedia('(min-width: 1100px) and (hover: hover) and (pointer: fine)').matches && localStorage.getItem('bq-desktop-app') !== '1') location.replace('cards.html'); } catch (e) { /* 讀不到設定就照常開溜狗表 */ }</script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>板收志工溜狗表</title>
 <meta name="theme-color" content="#1F5C4D">
@@ -78,6 +76,8 @@
     </div>
     <!-- 頁首範圍字（2026-10-09）：溜狗表畫面上第一隻到最後一隻多久沒溜，js/app.js 的 syncRange 填 -->
     <div class="range" id="rangeLabel" hidden></div>
+    <!-- 圖鑑入口（K 2026-10-10）：只有電腦版顯示，你溜過的狗才拿得到卡 -->
+    <a class="zukan-link" href="cards.html"><svg class="icon"><use href="#i-paw"/></svg>圖鑑</a>
   </div>
 </header>
 

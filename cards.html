@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>板收明星隊</title>
-<meta name="description" content="板橋收容所的狗，一隻一張球員卡。撕開卡包、看年度獎項、把卡收進收集冊。">
+<title>板收圖鑑</title>
+<meta name="description" content="板橋收容所的狗，一隻一張球員卡。你溜過的狗才拿得到卡，新拿到的包成卡包自己撕。">
 <meta name="theme-color" content="#0B2A5B">
 <link rel="icon" href="icons/icon-v2.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon-v2.png">
@@ -14,36 +14,37 @@
 <link rel="stylesheet" href="css/cards.css">
 </head>
 <body>
-<!-- 電腦版展示（K 2026-10-09 選球員卡）：志工照舊用 index.html 的溜狗表 -->
+<!-- 板收圖鑑（K 2026-10-10）：電腦版溜狗表頁首「圖鑑」進來；你溜過的狗才拿得到卡（js/cards.js） -->
 <main>
   <section class="bq-field" id="bqField" aria-labelledby="bqTitle">
     <header class="bq-mast">
       <div class="bq-lockup">
         <span class="bq-patch" aria-hidden="true"><svg viewBox="0 0 24 24"><g fill="currentColor"><ellipse cx="5.5" cy="10" rx="2.3" ry="2.9" transform="rotate(-18 5.5 10)"/><ellipse cx="9.3" cy="5.6" rx="2.3" ry="3" transform="rotate(-6 9.3 5.6)"/><ellipse cx="14.7" cy="5.6" rx="2.3" ry="3" transform="rotate(6 14.7 5.6)"/><ellipse cx="18.5" cy="10" rx="2.3" ry="2.9" transform="rotate(18 18.5 10)"/><path d="M12 11c-2.7 0-6 3.6-6 6.6 0 1.8 1.3 2.9 3 2.9 1.2 0 2-.6 3-.6s1.8.6 3 .6c1.7 0 3-1.1 3-2.9 0-3-3.3-6.6-6-6.6z"/></g></svg><span>板橋<br>收容所</span></span>
-        <h1 id="bqTitle"><span class="sr-only">板橋收容所 </span>BQ ALL-STARS <span class="bq-year">2026</span></h1>
+        <h1 id="bqTitle"><span class="sr-only">板收圖鑑 </span>BQ ALL-STARS <span class="bq-year">2026</span></h1>
       </div>
       <div class="bq-mast-r">
-        <a class="bq-app-link" href="index.html?app">志工版溜狗表</a>
-        <a class="bq-progress" href="#bqBinderTitle" aria-label="收集冊：已收 0 張">
-          <span class="bq-progress-k">已收</span>
+        <a class="bq-app-link" href="index.html">← 溜狗表</a>
+        <a class="bq-progress" href="#bqBinderTitle" aria-label="圖鑑：已拿到 0 張">
+          <span class="bq-progress-k">已拿到</span>
           <span class="bq-progress-n"><b data-bq="got">0</b>/<span data-bq="total">—</span></span>
           <span class="bq-progress-bar"><i id="bqBar"></i></span>
         </a>
       </div>
     </header>
     <div class="bq-table">
-      <button type="button" class="bq-pack" id="bqPack" aria-label="撕開卡包，抽五張球員卡">
+      <button type="button" class="bq-pack" id="bqPack" aria-label="卡包" disabled>
         <span class="bq-pack-tear" aria-hidden="true"></span>
         <span class="bq-pack-crest" aria-hidden="true"><svg viewBox="0 0 24 24"><g fill="currentColor"><ellipse cx="5.5" cy="10" rx="2.3" ry="2.9" transform="rotate(-18 5.5 10)"/><ellipse cx="9.3" cy="5.6" rx="2.3" ry="3" transform="rotate(-6 9.3 5.6)"/><ellipse cx="14.7" cy="5.6" rx="2.3" ry="3" transform="rotate(6 14.7 5.6)"/><ellipse cx="18.5" cy="10" rx="2.3" ry="2.9" transform="rotate(18 18.5 10)"/><path d="M12 11c-2.7 0-6 3.6-6 6.6 0 1.8 1.3 2.9 3 2.9 1.2 0 2-.6 3-.6s1.8.6 3 .6c1.7 0 3-1.1 3-2.9 0-3-3.3-6.6-6-6.6z"/></g></svg></span>
-        <span class="bq-pack-t"><b>板收明星隊</b><span>球員卡・每包 5 張</span><em>撕開</em></span>
+        <span class="bq-pack-t"><b>板收圖鑑</b><span>你溜過的狗</span><em>撕開</em></span>
       </button>
       <span class="bq-pack-strip" aria-hidden="true"></span>
+      <span class="bq-pack-count" id="bqPackCount"></span>
       <div class="bq-hand" id="bqHand" aria-live="polite"></div>
     </div>
     <div class="bq-under">
-      <p class="bq-pack-note" id="bqPackNote">點卡包撕開</p>
+      <p class="bq-pack-note" id="bqPackNote">讀取中…</p>
       <p class="bq-deal-note" id="bqDealNote"></p>
-      <button type="button" class="bq-again" id="bqAgain">再開一包</button>
+      <button type="button" class="bq-again" id="bqAgain" hidden>再開一包</button>
       <p class="bq-flip-hint">點卡片翻到背面</p>
     </div>
   </section>
@@ -59,23 +60,19 @@
   <section class="bq-binder-sec" aria-labelledby="bqBinderTitle">
     <header class="bq-sec-head bq-binder-head">
       <div>
-        <h2 id="bqBinderTitle">收集冊</h2>
-        <p><span id="bqBookName">我的收集冊</span>・已收 <b data-bq="got">0</b> / <span data-bq="total">—</span> 張・記在這個瀏覽器</p>
+        <h2 id="bqBinderTitle">圖鑑</h2>
+        <p>已拿到 <b data-bq="got">0</b> / <span data-bq="total">—</span> 張・所內每隻狗都在這裡，溜過才拿得到牠的卡</p>
       </div>
-      <div class="bq-books">
-        <div class="bq-book-chips" id="bqBooks"></div>
-        <button type="button" class="bq-switch" id="bqSwitch" aria-expanded="false" aria-controls="bqNewBook">換人收集</button>
-        <form class="bq-new-book" id="bqNewBook" hidden>
-          <label for="bqNewName">誰的收集冊</label>
-          <input id="bqNewName" maxlength="12" placeholder="例：小明" autocomplete="off">
-          <button type="submit">開新的一本</button>
-        </form>
-      </div>
+      <ul class="bq-legend" aria-label="圖例">
+        <li><i class="lg-got"></i>拿到了</li>
+        <li><i class="lg-pending"></i>溜過，還沒撕開</li>
+        <li><i class="lg-locked"></i>還沒溜過</li>
+      </ul>
     </header>
     <div class="bq-binder" id="bqBinder"></div>
     <footer class="bq-foot">
       <p id="bqUpdated"></p>
-      <a href="index.html?app">志工版溜狗表</a>
+      <a href="index.html">← 溜狗表</a>
     </footer>
   </section>
 </main>

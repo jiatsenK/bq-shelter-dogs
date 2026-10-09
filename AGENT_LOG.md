@@ -957,3 +957,9 @@
 - index.html：電腦（≥1100px、hover、pointer fine）打開首頁轉 cards.html；?app 或按「志工版溜狗表」記住、之後留在溜狗表。
 - impeccable：方向輪 seed d9edc232（K 選我的推薦）；surface brief .impeccable/surfaces/cards-html.md；finish reviewer 兩輪（fix → fix），剩下的照片裁切、雷射卡照片霧化兩項我再修掉、自己截圖確認，沒有第三輪；documenter 把球員卡世界寫進 DESIGN.md 和 .impeccable/design.json（溜狗表的病歷夾系統不動）。detect 剩下的是刻意的（撕口鋸齒 clip-path、金箔漸層起點的對比誤判）。
 - 測試：加 runCardsTests 9 項（球員資料、等級、本月出門、獎項、抽卡、收集冊、不寫試算表、電腦版轉址），#30 內嵌程式檢查排除電腦版轉址。網頁 216 過（本機另 2 項 #130 老問題），node 128 過。PROJECT_GOALS、DESIGN_GUIDE 補說明。之後再做：比大小、溜狗排隊、認狗測驗、像素溜狗遊戲。
+## 2026-10-10 Claude（#189 改成板收圖鑑：溜過才拿到卡、卡包自己撕、電腦版頁首入口）
+- 依據：K 2026-10-10：「我把溜狗表變成電腦網頁版，只是電腦可以有這種圖鑑，你有溜過的就可以拿到他的卡玩遊戲之類，所以可以有個入口進去」；沒溜過的狗「看得到，只是還沒卡」；新拿到的「包成卡包自己撕」。#190 電腦版溜狗表已合併，這次把 #189 rebase 到 main 後改寫。
+- js/cards.js：拿掉隨機抽卡和「換人收集」收集冊。你是誰用溜狗表「我溜過」的代號（localStorage bq-walker-codes）；你溜過誰看 data/walks.json（同一隻狗同一天以最後一筆為準，跟我溜過一樣）加今天在這個瀏覽器按的溜了（bq-sheet-writes，只看 mine）。還沒撕開的新卡包成卡包（一包最多 5 張、最近溜的先出），撕開過的記在 localStorage bq-zukan（跟著代號）；都開完就攤開最近溜的五張。卡背多「你溜過 N 天」、第一次溜的日期。圖鑑三種卡套：拿到的亮卡、待開的卡背、沒溜過的淡照片（點了開灰卡，寫溜過就拿得到）。沒設定代號時卡包壓暗、「去設定」連 index.html#mine。
+- cards.html／css/cards.css：標題改「板收圖鑑」，卡包紅標「N 張新卡」、圖例、灰卡樣式；「← 溜狗表」。index.html：拿掉電腦版自動轉 cards.html；頁首加「圖鑑」連結（只有電腦版顯示，css/app.css）。js/app.js：網址 #mine 直接開我溜過。
+- 只讀 dogs.json、walks.json 和溜狗表存的代號、今天已溜，只寫自己的 bq-zukan；不寫試算表、不顯示志工名字。
+- 測試：runCardsTests 換掉抽卡、收集冊、轉址三項，改成「我溜過的狗」「撕開過的、新卡」「首頁不轉、頁首有圖鑑入口」，並檢查 cards.js 只 setItem 自己的 key。PROJECT_GOALS、DESIGN_GUIDE、DESIGN.md 球員卡段、surface brief 改成圖鑑。
