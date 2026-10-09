@@ -1880,3 +1880,23 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 /* 平面圖的辦公室、醫療室：虛線框＋小灰字，看得出不是犬舍、不能點 */
 .fm-fac rect { stroke-dasharray: 4 3; }
 .fm-fac-t { fill: var(--fm-soft); font-weight: 600; }
+
+/* ── 找狗列表更好找（K 2026-10-09「總覺得有更好的擺法，很直覺化的；拿掉狗名外面的灰框」）──
+   一籠一列：左邊籠位大字，右邊這籠的狗排成兩欄（名字對齊、一眼掃得過去），沒有框中框；
+   上面的區域是文字分頁（跟溜狗表的「全部／常溜」一樣），選中的粗體加底線 */
+.find-rows { background: var(--surface); box-shadow: none !important; border-radius: 0; }
+.find-row { align-items: flex-start; gap: 10px; padding: 6px 8px 6px 12px; }
+.find-row-cage { width: 64px; padding-top: 10px; font-size: 17px; font-weight: 800; color: var(--ink); }
+/* 固定兩欄：電腦上寬了也不會變三欄把名字擠斷（K 2026-10-09「名字排版會跑掉」）；名字不從中間斷行，太長用 … */
+.find-row-dogs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 8px; padding: 0; }
+.find-dog { min-width: 0; }
+.find-dog .find-name { flex: 0 1 auto; min-width: 0; flex-wrap: nowrap; }
+.find-dog .find-name .n { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; overflow-wrap: normal; }
+.find-dog .find-name .sex, .find-dog .find-row-warn, .find-dog .fav-mark { flex-shrink: 0; }
+.find-dog { background: none !important; border-radius: 0; min-height: 44px; padding: 4px 0; gap: 8px; }
+.find-dog .thumb { width: 36px; height: 36px; border-radius: 50%; }
+.find-name { font-size: 16px; }
+.find-chips { gap: 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; overflow: visible; }
+.find-chip, .find-chip.on { background: none !important; box-shadow: none !important; border-radius: 0; color: var(--ink-soft) !important; min-height: 44px; padding: 0 10px; flex-shrink: 0; }
+.find-chip.on { color: var(--ink) !important; font-weight: 800; box-shadow: inset 0 -3px 0 var(--shell) !important; }
+.find-chip.on small { color: var(--ink-soft); }
