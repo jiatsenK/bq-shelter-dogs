@@ -121,28 +121,9 @@ https://bq-shelter-photos.你的帳號名稱.workers.dev
 - 讀取：`GET /notes` → `{ "ok": true, "notes": { ...data/my-notes.json 的內容 } }`，直接讀 GitHub 上的最新版，不用等網站重新部署。
 - 寫入：`PUT /notes/{編號}`，內容 `{ "text": "備註", "passcode": "通關碼" }`（`Content-Type: application/json`）。`text` 是空的就刪掉這隻的備註。通關碼錯或沒帶回 401、錯太多次回 429，兩者都帶 `"code": "passcode"`。成功回 `{ "ok": true, "id": "...", "note": { "text", "updatedAt" } 或 null, "commit": "..." }`。
 
-## 相簿
+## 相簿（2026-10-09 拿掉）
 
-每隻狗的詳細資訊最下面（狗卡資訊下方）有「相簿」：主照片之外可以再放幾張，點照片用燈箱看大圖、左右滑換張。
-
-- 照片存在 `photos/gallery/{犬隻編號}/`，檔名是上傳時間（台灣時間）加 4 碼亂數，例：`20260925-153012-ab12.jpg`；清單在 `data/gallery.json`（`{ "犬隻編號": [{ "file": "檔名", "addedAt": "時間" }] }`，舊到新）。
-- **新增不用登入**（跟換主照片一樣）；每隻狗最多 30 張。每張是兩筆提交：先存照片檔，再更新清單。
-- **一次可以選好幾張**（最多 10 張），網站一張一張依序傳。相簿的頻率限制跟主照片分開算：同一個人 1 分鐘最多 12 張、1 小時最多 60 張（這個限制要重貼 Worker 才會生效，沒重貼時 1 分鐘只能傳 5 張，網站會停下來讓你稍後按「重新上傳」）。
-- **刪除要通關碼**，跟「我的備註」同一組 `NOTES_PASSCODE`（手機記過就不用再輸入）。刪除會先從清單拿掉、再刪照片檔；刪錯可以從 `data/gallery.json` 和照片檔的 **History** 還原。
-- 主照片（`photos/{編號}.jpg`）不能從相簿刪，要換主照片照舊按詳細資訊照片角落的相機。
-- **設為主照片**：燈箱裡的相簿照片可以按「設為主照片」，跟主照片互換（原本的主照片放進相簿同一格，不會不見；原本沒有主照片就直接搬過去）。不用通關碼（跟換主照片一樣）。
-- **裁切**：換主照片的預覽、相簿一次加好幾張的預覽格，以及燈箱裡的主照片都能裁切（正方形／直式 3:4／橫式 4:3／原比例）。裁切在手機上做完才上傳，Worker 不用改。
-
-### 啟用步驟（這次 PR 合併後做一次）
-
-只要**重新貼程式**：照上面「步驟 3」的 4–7，打開 Cloudflare 的 `bq-shelter-photos` → **Edit code**，把內容全部換成 https://github.com/jiatsenK/bq-shelter-dogs/blob/main/worker/src/index.js 的最新版（右上角 **Copy raw file**），按 **Deploy**。token 和通關碼都不用動。沒重新貼之前，網站的相簿只會顯示主照片，按「新增」會失敗。
-
-### 服務的網址（給寫網站程式的人）
-
-- 讀取：`GET /gallery` → `{ "ok": true, "gallery": { ...data/gallery.json 的內容 } }`。
-- 新增：`POST /gallery/{編號}`，內容是 JPEG（`Content-Type: image/jpeg`）。成功回 `{ "ok": true, "id": "...", "photo": { "file", "addedAt" } }`；滿 30 張回 409。
-- 設為主照片：`POST /gallery/{編號}/{檔名}/main`（不用內容）。成功回 `{ "ok": true, "swapped": true/false }`；`swapped` 是 true 表示原本的主照片放進了相簿那一格。
-- 刪除：`DELETE /gallery/{編號}/{檔名}`，內容 `{ "passcode": "通關碼" }`（`Content-Type: application/json`）。通關碼錯的回應同我的備註。成功回 `{ "ok": true, "removed": true/false, "fileDeleted": true/false }`。
+K 2026-10-09：怕 Cloudflare 用量爆掉，相簿整個拿掉，只留主照片。網站不再顯示相簿、不能新增；Worker 的 `/gallery` 一律回 410，`photos/gallery/` 的照片不給看、不做縮圖，Trash 裡的相簿照片也不能復原。R2 裡原本的相簿照片要刪掉，步驟見 `docs/CLOUDFLARE_SETUP.md`「刪掉相簿照片」。
 
 ## 誰遛的代號（V6，#95）
 

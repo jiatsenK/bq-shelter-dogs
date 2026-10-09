@@ -1,19 +1,17 @@
-// 照片放在 Cloudflare R2（#130）：主照片、相簿、縮圖、相簿清單、Trash（誤刪可復原）
+// 照片放在 Cloudflare R2（#130）：主照片、縮圖、Trash（誤刪可復原）；相簿 K 2026-10-09 拿掉
 //
 // - R2 是 Cloudflare 的檔案空間（bucket 名稱 bq-shelter-photos，Worker 裡叫 env.PHOTOS，設定在 wrangler.jsonc）。
-//   照片路徑跟以前 repo 裡一樣（photos/{編號}.jpg、photos/gallery/{編號}/{檔名}、photos/thumbs/...），網址不用改
-// - 有 R2 時，換照片、相簿新增／刪除／設為主照片都只寫 R2，不再產生 GitHub 提交，馬上生效
+//   照片路徑跟以前 repo 裡一樣（photos/{編號}.jpg、photos/thumbs/...），網址不用改
+// - 有 R2 時，換照片只寫 R2，不再產生 GitHub 提交，馬上生效
 // - 過渡期：R2 裡沒有的照片改讀 repo 裡的舊檔（部署上去的靜態檔）。刪掉或換掉的照片在 R2 留一個「刪除標記」
 //   （0 位元組、customMetadata.deleted），這樣舊檔不會因為備援又跑出來
 // - 換掉、刪掉之前先把原檔（含縮圖）複製到 trash/{代號}/，備份成功才動原檔；30 天後由 Cron 自動清掉
-// - 相簿清單存在 R2 的 meta/gallery.json（格式跟 data/gallery.json 一樣）；R2 還沒有時第一次寫入會從 repo 那份接過來
 
 export const TRASH_DAYS = 30;
-export const GALLERY_META = 'meta/gallery.json';
 const VERSIONS_CACHE_MS = 30 * 1000;
 const JPEG_META = { contentType: 'image/jpeg' };
-// 只認得這幾種照片路徑，其他一律不碰（也擋掉 ../ 之類的）
-const PHOTO_KEY = /^photos\/(?:thumbs\/)?(?:[0-9A-Za-z]{1,32}|gallery\/[0-9A-Za-z]{1,32}\/\d{8}-\d{6}-[0-9a-f]{4})\.jpg$/;
+// 只認得主照片和它的縮圖，其他一律不碰（也擋掉 ../ 之類的）；相簿照片（photos/gallery/）拿掉後不再給看、不做縮圖
+const PHOTO_KEY = /^photos\/(?:thumbs\/)?[0-9A-Za-z]{1,32}\.jpg$/;
 const TRASH_ID = /^\d{13}-[0-9a-f]{4}$/;
 
 export const r2On = env => !!(env && env.PHOTOS);
@@ -60,7 +58,9 @@ export async function servePhoto(request, env) {
   let key = '';
   try { key = decodeURIComponent(url.pathname.slice(1)); } catch (e) { /* 亂碼網址當作找不到 */ }
   const cache = url.searchParams.has('v') ? 'public, max-age=2592000, immutable' : 'public, max-age=60';
-  const obj = isPhotoKey(key) ? await (request.method === 'HEAD' ? env.PHOTOS.head(key) : env.PHOTOS.get(key)) : null;
+  // 不認得的路徑（含拿掉的相簿照片 photos/gallery/）直接找不到，不退回舊檔
+  if (!isPhotoKey(key)) return new Response('Not found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
+  const obj = await (request.method === 'HEAD' ? env.PHOTOS.head(key) : env.PHOTOS.get(key));
   if (isTomb(obj)) return new Response('Not found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
   if (!obj) {
     const res = await env.ASSETS.fetch(request);
@@ -82,7 +82,7 @@ export async function r2Versions(env, now = Date.now()) {
   const deleted = new Set();
   for (const o of objects) {
     if (isTomb(o)) deleted.add(o.key);
-    else versions[o.key] = String(o.etag || '').replace(/"/g, '').slice(0, 8);
+    else if (isPhotoKey(o.key)) versions[o.key] = String(o.etag || '').replace(/"/g, '').slice(0, 8); // 相簿照片拿掉了，不給版本號
   }
   versionsCache = { at: now, versions, deleted };
   return versionsCache;
@@ -118,31 +118,8 @@ export async function serveDogs(request, env) {
   }
 }
 
-// ── 相簿清單 ──
-export async function readGalleryMeta(env) {
-  const obj = await env.PHOTOS.get(GALLERY_META);
-  if (!obj || isTomb(obj)) return null;
-  return { data: JSON.parse((await obj.text()) || '{}'), etag: obj.etag };
-}
-
-// etag 對不上（同時有人改）回 false；etag 是 null 表示 R2 還沒有這份（第一次建立）
-export async function writeGalleryMeta(env, text, etag) {
-  const opts = { httpMetadata: { contentType: 'application/json; charset=utf-8' } };
-  if (etag) opts.onlyIf = { etagMatches: etag };
-  return !!(await env.PHOTOS.put(GALLERY_META, text, opts));
-}
-
-// data/gallery.json：R2 有清單就回 R2 的（網站讀不到 /api/gallery 時的備援也會是最新的）
-export async function serveGalleryJson(request, env) {
-  const meta = await readGalleryMeta(env).catch(() => null);
-  if (!meta) return env.ASSETS.fetch(request);
-  return new Response(request.method === 'HEAD' ? null : `${JSON.stringify(meta.data, null, 2)}\n`, {
-    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' },
-  });
-}
-
 // ── Trash ──
-// trash/{代號}/photo.jpg（原圖，customMetadata 記原位置、狗、刪除時間、相簿或主照片）＋ thumb.jpg（有縮圖才有）。
+// trash/{代號}/photo.jpg（原圖，customMetadata 記原位置、狗、刪除時間）＋ thumb.jpg（有縮圖才有）。
 // 原檔讀不到回 null（沒東西要備份）；寫 R2 失敗會丟錯，呼叫的地方就不要動原檔
 export async function toTrash(env, base, key, info, now = Date.now()) {
   const photo = await readPhoto(env, base, key);
@@ -195,7 +172,7 @@ export async function purgeTrash(env, now = Date.now()) {
 }
 
 // ── 縮圖 ──
-// 還要做縮圖的原圖：R2 裡的主照片／相簿照片，縮圖不存在、被刪掉，或比原圖舊
+// 還要做縮圖的原圖：R2 裡的主照片，縮圖不存在、被刪掉，或比原圖舊
 export async function pendingThumbs(env) {
   const all = new Map((await listAll(env, 'photos/')).map(o => [o.key, o]));
   const time = o => (o.uploaded instanceof Date ? o.uploaded.getTime() : Date.parse(o.uploaded) || 0);
