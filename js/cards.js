@@ -1,13 +1,17 @@
-// 板收明星隊球員卡（cards.html）：電腦版展示（K 2026-10-09 看過原型選球員卡）。
-// 只讀 data/dogs.json、data/walks.json，不寫試算表；收集冊記在各自的瀏覽器（localStorage）。
+// 板收圖鑑（cards.html）：電腦版溜狗表頁首「圖鑑」進來（K 2026-10-10）。
+// 每隻狗一張球員卡，你溜過的才拿得到；上次來之後新溜的狗包成卡包自己撕。沒溜過的狗也看得到，只是還沒有卡。
+// 「你是誰」用溜狗表「我溜過」設定的代號（同一個瀏覽器的 localStorage），溜狗紀錄讀 data/walks.json，不寫試算表、不顯示志工名字。
 // 純函式在前面（tests/index.html 會測），畫面在後面。
 
 const BQ_DATA_URL = 'data/dogs.json';
 const BQ_WALKS_URL = 'data/walks.json';
-const BQ_BOOK_KEY = 'bq-cards-book';
+const BQ_CODES_KEY = 'bq-walker-codes'; // 溜狗表（js/app.js）存的我的代號
+const BQ_WRITES_KEY = 'bq-sheet-writes'; // 溜狗表今天按過的溜了（還沒同步進 walks.json 的）
+const BQ_OPENED_KEY = 'bq-zukan'; // 撕開過的卡：{ v: 1, codes: { 代號: { 狗編號: 撕開那天 } } }
+const BQ_CODE_PATTERN = /^[0-9a-f]{12}$/;
 const BQ_PACK_SIZE = 5;
 
-// 隊伍照犬舍分；顏色是卡面色帶和收集冊的隊伍標
+// 隊伍照犬舍分；顏色是卡面色帶和圖鑑的隊伍標
 const BQ_TEAMS = [
   { key: 'new', name: '新犬舍隊', test: c => /^新/.test(c), color: '#1F5C9E' },
   { key: 'old', name: '舊犬舍隊', test: c => /^舊/.test(c), color: '#0F6B6B' },
@@ -36,6 +40,9 @@ function bqMakeDate(y, m, d) {
 function bqParseYmd(text) {
   const m = String(text || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
   return m ? bqMakeDate(+m[1], +m[2], +m[3]) : null;
+}
+function bqYmd(d) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 // 編號前 8 碼是入所日期（2024032902 → 2024/3/29）
 function bqIntake(id) {
@@ -123,47 +130,68 @@ function bqAwards(players, today = new Date()) {
   return out;
 }
 
-// 抽一包：先從還沒收到的抽（最多 4 張），剩下的從全部抽，同一包不重複；rand 可換掉方便測試
-function bqDraw(players, got, n = BQ_PACK_SIZE, rand = Math.random) {
-  const take = (pool, k, out) => {
-    const left = pool.filter(p => !out.includes(p));
-    while (k-- > 0 && left.length) out.push(left.splice(Math.floor(rand() * left.length), 1)[0]);
-    return out;
-  };
-  const out = take(players.filter(p => !got[p.id]), n - 1, []);
-  return take(players, n - out.length, out);
+// ── 你是誰、你溜過誰 ──
+function bqLoadCodes(storage) {
+  try {
+    const list = JSON.parse((storage && storage.getItem(BQ_CODES_KEY)) || 'null');
+    return Array.isArray(list) ? list.filter(c => BQ_CODE_PATTERN.test(c)) : [];
+  } catch (e) { return []; }
+}
+// 今天在溜狗表按的「溜了」（還沒同步）：跟 js/app.js 的 loadSheetWrites 同一份，只看今天、記成我的
+function bqTodayWrites(storage, today) {
+  try {
+    const raw = JSON.parse((storage && storage.getItem(BQ_WRITES_KEY)) || 'null');
+    if (!raw || raw.date !== bqYmd(today) || !raw.items || typeof raw.items !== 'object') return [];
+    return Object.values(raw.items).filter(it => it && it.mine && it.id && it.current && it.current.date === raw.date).map(it => ({ id: String(it.id), date: raw.date }));
+  } catch (e) { return []; }
+}
+// 我溜過的狗：{ 編號: { times: 幾天, first, last } }。跟「我溜過」同一個規則：同一隻狗同一天以最後一筆為準（先記了我、後來拿掉就不算）
+function bqMyDogs(walks, codes, todayWrites = []) {
+  const mine = new Map();
+  if (!codes.length) return mine;
+  const text = v => (v == null ? '' : String(v).trim());
+  const last = new Map();
+  (walks || []).forEach(w => { if (w && Array.isArray(w.walkers) && text(w.id)) last.set(`${text(w.id)}|${w.date}`, w); });
+  const days = [...last.values()].filter(w => w.walkers.some(c => codes.includes(c))).map(w => ({ id: text(w.id), date: w.date }));
+  const seen = new Set();
+  for (const { id, date } of [...days, ...todayWrites]) {
+    const d = bqParseYmd(date);
+    if (!d || seen.has(`${id}|${date}`)) continue;
+    seen.add(`${id}|${date}`);
+    const m = mine.get(id) || { times: 0, first: d, last: d };
+    m.times++;
+    if (d < m.first) m.first = d;
+    if (d > m.last) m.last = d;
+    mine.set(id, m);
+  }
+  return mine;
 }
 
-// ── 收集冊：{ current: 名字, books: { 名字: { got: { id: 收到幾次 }, packs: 開了幾包 } } } ──
-// 每個瀏覽器自己一份；同一台電腦（K 拿給朋友玩）可以「換人收集」開新的一本
-function bqEmptyBook() { return { got: {}, packs: 0 }; }
-function bqLoadBooks(storage) {
-  let raw = null;
-  try { raw = storage && JSON.parse(storage.getItem(BQ_BOOK_KEY) || 'null'); } catch (e) { raw = null; }
-  const books = raw && raw.books && typeof raw.books === 'object' ? raw.books : {};
-  for (const k of Object.keys(books)) {
-    const b = books[k];
-    if (!b || typeof b.got !== 'object') books[k] = bqEmptyBook();
+// ── 撕開過的卡：記在這個瀏覽器，跟著代號走（同一台電腦換人設定代號，就是另一個人的圖鑑） ──
+function bqLoadOpened(storage) {
+  try {
+    const raw = JSON.parse((storage && storage.getItem(BQ_OPENED_KEY)) || 'null');
+    if (raw && raw.v === 1 && raw.codes && typeof raw.codes === 'object') return raw;
+  } catch (e) { /* 壞掉就重來 */ }
+  return { v: 1, codes: {} };
+}
+function bqSaveOpened(storage, state) {
+  try { if (storage) storage.setItem(BQ_OPENED_KEY, JSON.stringify(state)); } catch (e) { /* 存不了就這次開著的期間記得 */ }
+}
+function bqOpenedIds(state, codes) {
+  const out = new Set();
+  for (const c of codes) for (const id of Object.keys((state.codes[c]) || {})) out.add(id);
+  return out;
+}
+function bqMarkOpened(state, codes, ids, today) {
+  for (const c of codes) {
+    const book = state.codes[c] || (state.codes[c] = {});
+    for (const id of ids) if (!book[id]) book[id] = bqYmd(today);
   }
-  const current = raw && typeof raw.current === 'string' && books[raw.current] ? raw.current : Object.keys(books)[0] || '我的收集冊';
-  if (!books[current]) books[current] = bqEmptyBook();
-  return { current, books };
 }
-function bqSaveBooks(storage, state) {
-  try { if (storage) storage.setItem(BQ_BOOK_KEY, JSON.stringify(state)); } catch (e) { /* 存不了就這次開著的期間記得 */ }
-}
-// 收進收集冊；回傳這包裡哪些是第一次收到
-function bqCollect(book, cards) {
-  const fresh = new Set();
-  for (const c of cards) {
-    if (!book.got[c.id]) fresh.add(c.id);
-    book.got[c.id] = (book.got[c.id] || 0) + 1;
-  }
-  book.packs = (book.packs || 0) + 1;
-  return fresh;
-}
-function bqBookName(text) {
-  return String(text || '').replace(/\s+/g, ' ').trim().slice(0, 12);
+// 還沒撕開的新卡：最近溜的先出；只算現在還在所裡的狗
+function bqPending(players, mine, opened) {
+  return players.filter(p => mine.has(p.id) && !opened.has(p.id)).sort((a, b) => mine.get(b.id).last - mine.get(a.id).last || a.number - b.number);
 }
 
 // ───────────── 畫面 ─────────────
@@ -171,28 +199,31 @@ function bqBookName(text) {
 function bqEsc(s) {
   return String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
-const BQ_PAW = '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><ellipse cx="5.5" cy="10" rx="2.3" ry="2.9" transform="rotate(-18 5.5 10)"/><ellipse cx="9.3" cy="5.6" rx="2.3" ry="3" transform="rotate(-6 9.3 5.6)"/><ellipse cx="14.7" cy="5.6" rx="2.3" ry="3" transform="rotate(6 14.7 5.6)"/><ellipse cx="18.5" cy="10" rx="2.3" ry="2.9" transform="rotate(18 18.5 10)"/><path d="M12 11c-2.7 0-6 3.6-6 6.6 0 1.8 1.3 2.9 3 2.9 1.2 0 2-.6 3-.6s1.8.6 3 .6c1.7 0 3-1.1 3-2.9 0-3-3.3-6.6-6-6.6z"/></g></svg>';
 
-// 坐著的狗剪影（立耳台灣犬側面）：沒照片的卡、還沒收到的卡套都用它
+// 坐著的狗剪影（立耳台灣犬側面）：沒照片的卡用它
 const BQ_DOG = '<svg class="bq-dog" viewBox="0 0 100 100" aria-hidden="true"><path fill="currentColor" d="M27 97l2-31c0-9 1-15 3-20l-10-2c-5-1-9-4-8-7 1-3 5-4 10-5l3-6 1-15 7 11h5l4-13 3 16c3 6 5 13 7 19 8 5 15 11 20 18 4 6 6 13 6 19 4-4 8-11 9-20 0-4 4-4 4 0 0 12-4 23-11 29l2 7H62l-1-6-5 6H45l1-6-6 6z"/></svg>';
+const BQ_PAW = '<svg viewBox="0 0 24 24" aria-hidden="true"><g fill="currentColor"><ellipse cx="5.5" cy="10" rx="2.3" ry="2.9" transform="rotate(-18 5.5 10)"/><ellipse cx="9.3" cy="5.6" rx="2.3" ry="3" transform="rotate(-6 9.3 5.6)"/><ellipse cx="14.7" cy="5.6" rx="2.3" ry="3" transform="rotate(6 14.7 5.6)"/><ellipse cx="18.5" cy="10" rx="2.3" ry="2.9" transform="rotate(18 18.5 10)"/><path d="M12 11c-2.7 0-6 3.6-6 6.6 0 1.8 1.3 2.9 3 2.9 1.2 0 2-.6 3-.6s1.8.6 3 .6c1.7 0 3-1.1 3-2.9 0-3-3.3-6.6-6-6.6z"/></g></svg>';
 
 // 照片：讀不到（或已知沒有）就換成隊色底＋剪影＋大背號，寫「照片補拍中」
 function bqPhoto(p, src) {
   const miss = `<span class="bq-nophoto">${BQ_DOG}<b>${bqEsc(p.number)}</b><span>照片補拍中</span></span>`;
   if (p.hasPhoto === false) return miss;
-  return `<img src="${bqEsc(src)}" alt="" decoding="async" onerror="this.outerHTML=this.dataset.miss" data-miss="${bqEsc(miss)}">`;
+  return `<img src="${bqEsc(src)}" alt="" decoding="async" loading="lazy" onerror="this.outerHTML=this.dataset.miss" data-miss="${bqEsc(miss)}">`;
 }
 function bqDate(d) { return d ? `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}` : '—'; }
 
-// 一張卡：正面照片、背號、隊伍、名字、守備位置（籠位）；背面資料
+// 一張卡：正面照片、背號、隊伍、名字、守備位置（籠位）；背面資料。
+// locked：還沒溜過的狗，灰卡、不閃，背面寫溜過就拿得到
 function bqCardHtml(p, opts = {}) {
-  const { fresh = false, tag = 'div', big = false } = opts;
+  const { fresh = false, tag = 'div', big = false, mine = null } = opts;
+  const locked = !mine;
   const role = tag === 'button' ? 'type="button"' : 'role="button" tabindex="0"';
-  return `<${tag} ${role} class="bq-card tier-${p.tier.key}${fresh ? ' fresh' : ''}" data-id="${bqEsc(p.id)}" style="--team:${p.team.color}" aria-label="${bqEsc(p.name)}，${bqEsc(p.tier.name)}，點了翻到背面">
+  const tierName = locked ? '還沒拿到' : p.tier.name;
+  return `<${tag} ${role} class="bq-card tier-${locked ? 'locked' : p.tier.key}${fresh ? ' fresh' : ''}" data-id="${bqEsc(p.id)}" style="--team:${p.team.color}" aria-label="${bqEsc(p.name)}，${bqEsc(tierName)}，點了翻到背面">
     <span class="bq-in">
       <span class="bq-face">
         <span class="bq-ph">${bqPhoto(p, big ? p.photo : p.thumb)}<span class="bq-no">${bqEsc(p.number)}</span>${fresh ? '<span class="bq-new">NEW</span>' : ''}</span>
-        <span class="bq-band">${bqEsc(p.team.name)}<span>${bqEsc(p.tier.name)}</span></span>
+        <span class="bq-band">${bqEsc(p.team.name)}<span>${bqEsc(tierName)}</span></span>
         <span class="bq-nm">${bqEsc(p.name)}</span>
         <span class="bq-pos"><span>守備位置 <b>${bqEsc(p.cage)}</b></span><span>${bqEsc(p.sex)}</span></span>
         <span class="bq-holo" aria-hidden="true"></span><span class="bq-glare" aria-hidden="true"></span>
@@ -203,31 +234,32 @@ function bqCardHtml(p, opts = {}) {
         <span class="bq-stats">
           <span><em>入隊</em><b>${bqDate(p.intake)}</b></span>
           <span><em>球齡</em><b>${bqEsc(p.stay)}</b></span>
-          <span><em>本月出賽</em><b><i>${p.monthOut}</i> 天</b></span>
+          <span><em>本月出門</em><b><i>${p.monthOut}</i> 天</b></span>
+          ${mine ? `<span><em>你溜過</em><b><i>${mine.times}</i> 天</b></span>` : ''}
         </span>
         <span class="bq-quote">${bqEsc(p.quote || '收容所還沒幫牠寫介紹。')}</span>
-        <span class="bq-tier-note">${bqEsc(p.tier.name)}：${bqEsc(p.tier.note)}</span>
+        <span class="bq-tier-note">${locked ? `溜過${bqEsc(p.name)}就拿得到這張卡` : `${bqEsc(p.tier.name)}：${bqEsc(p.tier.note)}・第一次溜 ${bqDate(mine.first)}`}</span>
       </span>
     </span>
   </${tag}>`;
 }
 
-const BQ = { players: [], byId: new Map(), state: null, storage: null, today: new Date(), hand: [], still: false };
+const BQ = { players: [], byId: new Map(), storage: null, today: new Date(), codes: [], mine: new Map(), opened: null, pending: [], hand: [], still: false, walksOk: true };
 
-function bqBook() { return BQ.state.books[BQ.state.current]; }
-function bqSave() { bqSaveBooks(BQ.storage, BQ.state); }
+function bqOpenedSet() { return bqOpenedIds(BQ.opened, BQ.codes); }
+function bqGotCount() { const o = bqOpenedSet(); return BQ.players.filter(p => o.has(p.id) && BQ.mine.has(p.id)).length; }
 
 function bqRenderProgress() {
-  const got = Object.keys(bqBook().got).filter(id => BQ.byId.has(id)).length;
+  const got = bqGotCount();
   document.querySelectorAll('[data-bq=got]').forEach(el => { el.textContent = got; });
   document.querySelectorAll('[data-bq=total]').forEach(el => { el.textContent = BQ.players.length; });
   const link = document.querySelector('.bq-progress');
-  if (link) link.setAttribute('aria-label', `收集冊：已收 ${got} 張，共 ${BQ.players.length} 張`);
+  if (link) link.setAttribute('aria-label', `圖鑑：已拿到 ${got} 張，共 ${BQ.players.length} 張`);
   const bar = document.getElementById('bqBar');
   if (bar) bar.style.setProperty('--p', BQ.players.length ? (got / BQ.players.length).toFixed(3) : 0);
 }
 
-// 扇形發牌：五張的水平位置、旋轉、下沉；窄螢幕擠一點
+// 扇形攤開：五張的水平位置、旋轉、下沉；窄螢幕擠一點
 function bqFan(i, n) {
   const mid = (n - 1) / 2, k = i - mid;
   const wide = innerWidth > 900;
@@ -236,34 +268,80 @@ function bqFan(i, n) {
   const step = wide ? Math.min(cw * .98, (innerWidth - cw - 96) / Math.max(1, n - 1)) : Math.min(56, (innerWidth - cw - 40) / Math.max(1, n - 1));
   return `translate(${k * step}px, ${Math.abs(k) * (wide ? 26 : 10)}px) rotate(${k * (wide ? 4 : 3)}deg)`;
 }
-function bqDeal() {
-  const book = bqBook();
-  BQ.hand = bqDraw(BQ.players, book.got);
-  const fresh = bqCollect(book, BQ.hand);
-  bqSave();
+function bqShowHand(cards, freshIds, instant) {
+  BQ.hand = cards;
   const hand = document.getElementById('bqHand');
-  hand.innerHTML = BQ.hand.map(p => bqCardHtml(p, { fresh: fresh.has(p.id) })).join('');
-  const cards = [...hand.querySelectorAll('.bq-card')];
-  cards.forEach((c, i) => {
-    c.dataset.base = bqFan(i, cards.length);
+  hand.innerHTML = cards.map(p => bqCardHtml(p, { fresh: freshIds.has(p.id), mine: BQ.mine.get(p.id) })).join('');
+  [...hand.querySelectorAll('.bq-card')].forEach((c, i, all) => {
+    c.dataset.base = bqFan(i, all.length);
     c.style.zIndex = String(i + 1);
-    if (BQ.still) { c.style.transform = c.dataset.base; c.classList.add('dealt'); return; }
+    if (BQ.still || instant) { c.style.transform = c.dataset.base; c.classList.add('dealt'); return; }
     setTimeout(() => { c.style.transform = c.dataset.base; c.classList.add('dealt'); }, 140 + i * 120);
   });
-  const freshN = fresh.size;
-  document.getElementById('bqDealNote').textContent = freshN ? `新收 ${freshN} 張，已收進收集冊` : '這包都收過了，再開一包';
+}
+
+// 卡包區四種狀態：還沒設定你是誰／還沒溜過／有新卡／都開完了
+function bqRenderField() {
+  const field = document.getElementById('bqField');
+  const note = document.getElementById('bqPackNote');
+  const pack = document.getElementById('bqPack');
+  const n = BQ.pending.length;
+  field.classList.remove('locked', 'empty', 'done');
+  document.getElementById('bqPackCount').textContent = n ? `${n} 張新卡` : '';
+  pack.setAttribute('aria-label', n ? `撕開卡包，${Math.min(n, BQ_PACK_SIZE)} 張新卡` : '卡包');
+  if (!BQ.codes.length) {
+    field.classList.add('locked');
+    note.innerHTML = '先在溜狗表的「我溜過」輸入你的名字，<br>你溜過的狗就會變成你的卡。<a href="index.html#mine">去設定</a>';
+    pack.disabled = true;
+  } else if (!BQ.walksOk && !n) {
+    field.classList.add('locked');
+    note.textContent = '溜狗紀錄讀不到，請重新整理頁面';
+    pack.disabled = true;
+  } else if (n) {
+    note.textContent = '點卡包撕開';
+    pack.disabled = false;
+  } else if (!BQ.mine.size) {
+    field.classList.add('empty');
+    note.textContent = '還沒有你的溜狗紀錄。溜完狗、按了「溜了」，回來就有卡包。';
+    pack.disabled = true;
+  } else {
+    // 都開完了：攤開最近溜的五張，卡包收起來
+    field.classList.add('done', 'opened');
+    const recent = BQ.players.filter(p => BQ.mine.has(p.id)).sort((a, b) => BQ.mine.get(b.id).last - BQ.mine.get(a.id).last).slice(0, BQ_PACK_SIZE);
+    bqShowHand(recent, new Set(), true);
+    document.getElementById('bqDealNote').textContent = '新卡都開完了，這是你最近溜的。下次溜完再來開。';
+    pack.disabled = true;
+  }
+  bqRenderAgain();
+}
+function bqRenderAgain() {
+  const left = Math.ceil(BQ.pending.length / BQ_PACK_SIZE);
+  const again = document.getElementById('bqAgain');
+  again.hidden = !left || document.getElementById('bqField').classList.contains('done');
+  again.textContent = left > 1 ? `再開一包（還有 ${left} 包）` : '再開一包';
+}
+
+function bqDeal() {
+  const cards = BQ.pending.slice(0, BQ_PACK_SIZE);
+  if (!cards.length) return;
+  bqMarkOpened(BQ.opened, BQ.codes, cards.map(p => p.id), BQ.today);
+  bqSaveOpened(BQ.storage, BQ.opened);
+  BQ.pending = BQ.pending.slice(cards.length);
+  bqShowHand(cards, new Set(cards.map(p => p.id)), false);
+  document.getElementById('bqDealNote').textContent = `拿到 ${cards.length} 張，已收進圖鑑`;
+  document.getElementById('bqPackCount').textContent = BQ.pending.length ? `${BQ.pending.length} 張新卡` : '';
+  bqRenderAgain();
   bqRenderProgress();
   bqRenderBinder();
 }
 function bqOpenPack() {
   const field = document.getElementById('bqField');
-  if (field.classList.contains('tearing') || field.classList.contains('opened')) return;
+  if (field.classList.contains('tearing') || field.classList.contains('opened') || !BQ.pending.length) return;
   // 先撕掉上緣那條、卡包往下掉，卡片再從開口升起來攤開（減少動態時直接攤開）
   field.classList.add('tearing');
   setTimeout(() => { field.classList.add('opened'); bqDeal(); }, BQ.still ? 0 : 520);
   setTimeout(() => field.classList.remove('tearing'), BQ.still ? 0 : 1400);
-  const first = document.querySelector('#bqHand .bq-card');
-  if (first) setTimeout(() => first.focus({ preventScroll: true }), BQ.still ? 0 : 700);
+  setTimeout(() => { const first = document.querySelector('#bqHand .bq-card'); if (first) first.focus({ preventScroll: true }); }, BQ.still ? 0 : 900);
 }
 
 // 滑鼠傾斜＋雷射反光（減少動態時不傾斜）
@@ -299,37 +377,35 @@ function bqRenderAwards() {
   </article>`).join('');
 }
 
-function bqRenderBooks() {
-  const names = Object.keys(BQ.state.books);
-  document.getElementById('bqBookName').textContent = BQ.state.current;
-  document.getElementById('bqBooks').innerHTML = names.length > 1
-    ? names.map(n => `<button type="button" class="bq-book-chip${n === BQ.state.current ? ' on' : ''}" data-book="${bqEsc(n)}" aria-pressed="${n === BQ.state.current}">${bqEsc(n)}</button>`).join('')
-    : '';
-}
+// 圖鑑：全部的狗照犬舍分；拿到的是亮卡，溜過還沒撕的是卡背，沒溜過的照片淡淡的
 function bqRenderBinder() {
-  const got = bqBook().got;
+  const opened = bqOpenedSet();
   const natural = (a, b) => a.localeCompare(b, 'en', { numeric: true });
+  const state = p => (!BQ.mine.has(p.id) ? 'locked' : opened.has(p.id) ? 'got' : 'pending');
   const teams = [...BQ_TEAMS, BQ_FREE].map(t => ({ t, list: BQ.players.filter(p => p.team.key === t.key).sort((a, b) => natural(a.cage, b.cage) || natural(a.name, b.name)) })).filter(g => g.list.length);
   document.getElementById('bqBinder').innerHTML = teams.map(({ t, list }) => {
-    const n = list.filter(p => got[p.id]).length;
+    const n = list.filter(p => state(p) === 'got').length;
     return `<section class="bq-sheet" style="--team:${t.color}" aria-label="${bqEsc(t.name)}">
       <h3><span>${bqEsc(t.name)}</span><small><b>${n}</b> / ${list.length}</small></h3>
-      <div class="bq-pockets">${list.map(p => got[p.id]
-        ? `<button type="button" class="bq-pocket got tier-${p.tier.key}" data-open="${bqEsc(p.id)}" aria-label="${bqEsc(p.name)}，${bqEsc(p.tier.name)}${got[p.id] > 1 ? `，收到 ${got[p.id]} 張` : ''}">
-            <span class="bq-pocket-ph">${bqPhoto(p, p.thumb)}</span><span class="bq-pocket-nm">${bqEsc(p.name)}</span>${got[p.id] > 1 ? `<span class="bq-dup">×${got[p.id]}</span>` : ''}</button>`
-        : `<span class="bq-pocket" aria-label="還沒收到：背號 ${bqEsc(p.number)}"><span class="bq-pocket-q">${BQ_DOG}<b>${bqEsc(p.number)}</b></span><span class="bq-pocket-nm">？</span></span>`).join('')}</div>
+      <div class="bq-pockets">${list.map(p => {
+        const s = state(p);
+        if (s === 'pending') return `<button type="button" class="bq-pocket pending" data-to-pack aria-label="${bqEsc(p.name)}，還沒撕開，到上面開卡包"><span class="bq-pocket-back">${BQ_PAW}<b>待開</b></span><span class="bq-pocket-nm">${bqEsc(p.name)}</span></button>`;
+        return `<button type="button" class="bq-pocket ${s === 'got' ? `got tier-${p.tier.key}` : 'locked'}" data-open="${bqEsc(p.id)}" aria-label="${bqEsc(p.name)}，${s === 'got' ? bqEsc(p.tier.name) : '還沒溜過'}">
+            <span class="bq-pocket-ph">${bqPhoto(p, p.thumb)}</span><span class="bq-pocket-nm">${bqEsc(p.name)}</span></button>`;
+      }).join('')}</div>
     </section>`;
   }).join('');
 }
 
-// 大卡：點收集冊或獎項的照片，放大看、可以翻面
+// 大卡：點圖鑑或獎項的照片，放大看、可以翻面
 let bqOpener = null;
 function bqOpen(id, opener) {
   const p = BQ.byId.get(id);
   if (!p) return;
   bqOpener = opener || null;
+  const mine = BQ.mine.has(id) && bqOpenedSet().has(id) ? BQ.mine.get(id) : null;
   const modal = document.getElementById('bqModal');
-  document.getElementById('bqModalCard').innerHTML = bqCardHtml(p, { tag: 'button', big: true });
+  document.getElementById('bqModalCard').innerHTML = bqCardHtml(p, { tag: 'button', big: true, mine });
   modal.hidden = false;
   document.documentElement.classList.add('bq-modal-open');
   document.querySelector('#bqModalCard .bq-card').focus({ preventScroll: true });
@@ -360,32 +436,18 @@ function bqBind() {
   document.addEventListener('click', e => {
     const open = e.target.closest('[data-open]');
     if (open) { bqOpen(open.dataset.open, open); return; }
-    if (e.target.id === 'bqModal' || e.target.closest('#bqClose')) { bqClose(); return; }
-    const chip = e.target.closest('[data-book]');
-    if (chip) { BQ.state.current = chip.dataset.book; bqSave(); bqRenderBooks(); bqRenderBinder(); bqRenderProgress(); }
+    if (e.target.closest('[data-to-pack]')) {
+      document.getElementById('bqField').scrollIntoView({ behavior: BQ.still ? 'auto' : 'smooth' });
+      const target = document.getElementById('bqPack').disabled ? document.getElementById('bqAgain') : document.getElementById('bqPack');
+      target.focus({ preventScroll: true });
+      return;
+    }
+    if (e.target.id === 'bqModal' || e.target.closest('#bqClose')) bqClose();
   });
   document.addEventListener('keydown', e => {
     if (document.getElementById('bqModal').hidden) return;
     if (e.key === 'Escape') bqClose();
     if (e.key === 'Tab') { e.preventDefault(); const c = document.querySelector('#bqModalCard .bq-card'); (document.activeElement === c ? document.getElementById('bqClose') : c).focus(); }
-  });
-  // 換人收集：輸入名字開一本新的（已經有這個名字就切過去）
-  const form = document.getElementById('bqNewBook');
-  document.getElementById('bqSwitch').addEventListener('click', () => {
-    form.hidden = !form.hidden;
-    document.getElementById('bqSwitch').setAttribute('aria-expanded', String(!form.hidden));
-    if (!form.hidden) form.querySelector('input').focus();
-  });
-  form.addEventListener('submit', e => {
-    e.preventDefault();
-    const name = bqBookName(form.querySelector('input').value);
-    if (!name) { form.querySelector('input').focus(); return; }
-    if (!BQ.state.books[name]) BQ.state.books[name] = bqEmptyBook();
-    BQ.state.current = name;
-    bqSave();
-    form.reset(); form.hidden = true;
-    document.getElementById('bqSwitch').setAttribute('aria-expanded', 'false');
-    bqRenderBooks(); bqRenderBinder(); bqRenderProgress();
   });
   addEventListener('resize', () => document.querySelectorAll('#bqHand .bq-card').forEach((c, i, all) => { c.dataset.base = bqFan(i, all.length); c.style.transform = c.dataset.base; }));
 }
@@ -393,32 +455,38 @@ function bqBind() {
 async function bqInit() {
   BQ.still = matchMedia('(prefers-reduced-motion: reduce)').matches;
   try { BQ.storage = window.localStorage; } catch (e) { BQ.storage = null; }
-  BQ.state = bqLoadBooks(BQ.storage);
+  BQ.codes = bqLoadCodes(BQ.storage);
+  BQ.opened = bqLoadOpened(BQ.storage);
   bqBind();
+  let walks = null;
   try {
-    const [res, walks] = await Promise.all([
+    const [res, w] = await Promise.all([
       fetch(BQ_DATA_URL, { cache: 'no-cache' }),
       fetch(BQ_WALKS_URL, { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
     ]);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    BQ.players = bqPlayers(data, walks && walks.walks, BQ.today);
+    walks = w && Array.isArray(w.walks) ? w.walks : null;
+    BQ.walksOk = !!walks;
+    BQ.players = bqPlayers(data, walks, BQ.today);
     BQ.byId = new Map(BQ.players.map(p => [p.id, p]));
     if (data.syncedAt) {
       const d = new Date(data.syncedAt);
-      if (!isNaN(d)) document.getElementById('bqUpdated').textContent = `球員資料 ${d.getMonth() + 1}/${d.getDate()} 更新`;
+      if (!isNaN(d)) document.getElementById('bqUpdated').textContent = `資料 ${d.getMonth() + 1}/${d.getDate()} 更新`;
     }
   } catch (e) {
     console.error(e);
     document.getElementById('bqField').classList.add('failed');
-    document.getElementById('bqPackNote').textContent = '球員資料讀不到，請重新整理頁面';
+    document.getElementById('bqPackNote').textContent = '狗的資料讀不到，請重新整理頁面';
     document.getElementById('bqPack').disabled = true;
     return;
   }
+  BQ.mine = bqMyDogs(walks, BQ.codes, bqTodayWrites(BQ.storage, BQ.today));
+  BQ.pending = bqPending(BQ.players, BQ.mine, bqOpenedSet());
   document.getElementById('bqField').classList.add('ready');
+  bqRenderField();
   bqRenderProgress();
   bqRenderAwards();
-  bqRenderBooks();
   bqRenderBinder();
 }
 

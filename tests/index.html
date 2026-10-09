@@ -2911,11 +2911,11 @@ async function runDeskTests() {
   }
 }
 
-// 電腦版球員卡（cards.html，K 2026-10-09）：js/cards.js 的純函式、首頁電腦版轉址
+// 板收圖鑑（cards.html，K 2026-10-10）：js/cards.js 的純函式；你溜過的狗才拿得到卡，新的包成卡包
 async function runCardsTests() {
   const code = await fetch('../js/cards.js').then(r => r.text());
   // 包在函式裡跑，不把 bq* 放進這頁的全域（測試頁沒有 #bqField，不會開始畫面）
-  const C = new Function(`${code}\nreturn { bqPlayers, bqTier, bqStay, bqQuote, bqMonthOut, bqAwards, bqDraw, bqLoadBooks, bqSaveBooks, bqCollect, bqBookName, bqTeamOf, BQ_BOOK_KEY };`)();
+  const C = new Function(`${code}\nreturn { bqPlayers, bqTier, bqStay, bqQuote, bqMonthOut, bqAwards, bqTeamOf, bqLoadCodes, bqTodayWrites, bqMyDogs, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, BQ_OPENED_KEY };`)();
   const TODAY = new Date(2026, 9, 9);
   const data = {
     photoVersions: { 'photos/2017041502.jpg': 'abc' },
@@ -2954,54 +2954,54 @@ async function runCardsTests() {
   await check('球員卡年度獎項：出門王、資深球星、新人王都是資料算的', () => {
     eq(C.bqAwards(players, TODAY).map(a => [a.title, a.who.name, a.value]), [['出門王', '中堅', 2], ['資深球星', '老將', 9], ['新人王', '新人', 38]]);
   });
-  await check('球員卡抽卡：一包 5 張不重複，先抽還沒收到的（最多 4 張）', () => {
-    const many = Array.from({ length: 12 }, (_, i) => ({ id: String(i) }));
-    let seed = 1;
-    const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
-    for (let t = 0; t < 20; t++) {
-      const got = Object.fromEntries(many.slice(0, 9).map(p => [p.id, 1]));
-      const pack = C.bqDraw(many, got, 5, rand);
-      eq(new Set(pack).size, 5, '不重複：');
-      if (pack.filter(p => !got[p.id]).length !== 3) throw new Error('還沒收到的 3 張要全部抽到');
-    }
-    eq(C.bqDraw(many.slice(0, 3), {}, 5, rand).length, 3, '球員不夠時有幾張給幾張：');
-  });
-  await check('球員卡收集冊：記在這個瀏覽器；壞掉的資料重來；可以換人收集', () => {
+  const ME = 'aaaaaaaaaaaa', ME2 = 'bbbbbbbbbbbb', OTHER = 'cccccccccccc';
+  await check('圖鑑：我溜過的狗照代號算（同一天以最後一筆為準），今天剛按的溜了也算', () => {
+    const log = [
+      { id: '2022061001', date: '2026-10-01', walkers: [ME] }, { id: '2022061001', date: '2026-10-03', walkers: [OTHER, ME2] },
+      { id: '2017041502', date: '2026-10-02', walkers: [ME] }, { id: '2017041502', date: '2026-10-02', walkers: [OTHER] },
+      { id: '2026090101', date: '2026-10-04', walkers: [OTHER] }, { id: '2021010101', date: '2026-10-05' },
+    ];
+    const mine = C.bqMyDogs(log, [ME, ME2], [{ id: '2026090101', date: '2026-10-09' }]);
+    eq([...mine.keys()].sort(), ['2022061001', '2026090101'], '溜過的：');
+    eq([mine.get('2022061001').times, mine.get('2022061001').first.getDate(), mine.get('2022061001').last.getDate()], [2, 1, 3], '次數、第一次、最近：');
+    eq(C.bqMyDogs(log, []).size, 0, '還沒設定代號：');
     const st = fakeStorage();
-    const s1 = C.bqLoadBooks(st);
-    eq([s1.current, Object.keys(s1.books)], ['我的收集冊', ['我的收集冊']], '第一次：');
-    const fresh = C.bqCollect(s1.books[s1.current], [{ id: 'a' }, { id: 'b' }]);
-    C.bqCollect(s1.books[s1.current], [{ id: 'a' }]);
-    eq([[...fresh], s1.books[s1.current].got, s1.books[s1.current].packs], [['a', 'b'], { a: 2, b: 1 }, 2], '收進去：');
-    s1.books['小明'] = { got: {}, packs: 0 }; s1.current = '小明';
-    C.bqSaveBooks(st, s1);
-    const s2 = C.bqLoadBooks(st);
-    eq([s2.current, s2.books['我的收集冊'].got.a], ['小明', 2], '存起來：');
-    st.setItem(C.BQ_BOOK_KEY, '{壞掉');
-    eq(C.bqLoadBooks(st).current, '我的收集冊', '壞掉：');
-    eq(C.bqLoadBooks(null).current, '我的收集冊', '沒有儲存空間：');
-    eq([C.bqBookName('  小  明 '), C.bqBookName('一二三四五六七八九十一二三')], ['小 明', '一二三四五六七八九十一二'], '名字：');
+    st.setItem('bq-walker-codes', JSON.stringify([ME, 'not-a-code']));
+    eq(C.bqLoadCodes(st), [ME], '代號：');
+    st.setItem('bq-sheet-writes', JSON.stringify({ date: '2026-10-09', items: { a: { id: '2026090101', mine: true, current: { date: '2026-10-09' } }, b: { id: '2022061001', mine: false, current: { date: '2026-10-09' } } } }));
+    eq(C.bqTodayWrites(st, TODAY), [{ id: '2026090101', date: '2026-10-09' }], '今天按的：');
+    eq(C.bqTodayWrites(st, new Date(2026, 9, 10)), [], '昨天按的不算：');
   });
-  await check('球員卡只讀 dogs.json、walks.json，不寫試算表、不送資料', () => {
+  await check('圖鑑：撕開過的記在這個瀏覽器、跟著代號走；新卡是溜過還沒撕的，最近溜的先出', () => {
+    const mine = C.bqMyDogs([
+      { id: '2022061001', date: '2026-10-01', walkers: [ME] }, { id: '2017041502', date: '2026-10-05', walkers: [ME] }, { id: '2021010101', date: '2026-10-03', walkers: [ME] },
+      { id: '1999010101', date: '2026-10-03', walkers: [ME] },
+    ], [ME]);
+    const st = fakeStorage();
+    const state = C.bqLoadOpened(st);
+    eq(C.bqPending(players, mine, C.bqOpenedIds(state, [ME])).map(p => p.name), ['老將', '金卡', '中堅'], '新卡（出所的狗不算）：');
+    C.bqMarkOpened(state, [ME, ME2], ['2017041502'], TODAY);
+    C.bqSaveOpened(st, state);
+    const back = C.bqLoadOpened(st);
+    eq([[...C.bqOpenedIds(back, [ME2])], back.codes[ME]['2017041502']], [['2017041502'], '2026-10-09'], '存起來：');
+    eq(C.bqPending(players, mine, C.bqOpenedIds(back, [ME])).map(p => p.name), ['金卡', '中堅'], '撕過的不再出：');
+    eq(C.bqOpenedIds(back, [OTHER]).size, 0, '別人的圖鑑另外算：');
+    st.setItem(C.BQ_OPENED_KEY, '{壞掉');
+    eq(C.bqLoadOpened(st), { v: 1, codes: {} }, '壞掉重來：');
+    eq(C.bqLoadOpened(null), { v: 1, codes: {} }, '沒有儲存空間：');
+  });
+  await check('圖鑑只讀 dogs.json、walks.json，不寫試算表、不送資料', () => {
     const urls = [...code.matchAll(/fetch\(([^,)]+)/g)].map(m => m[1].trim());
     eq(urls, ['BQ_DATA_URL', 'BQ_WALKS_URL'], 'fetch：');
     if (/method\s*:|\bPOST\b|script\.google\.com|sheets\.googleapis\.com|UPLOAD_URL/.test(code)) throw new Error('cards.js 不應該寫任何東西');
+    if (/setItem\((?!BQ_OPENED_KEY)/.test(code)) throw new Error('cards.js 只能存撕開過的卡，不能改溜狗表的代號、今天已溜');
   });
-  await check('電腦版（寬螢幕、有滑鼠）打開首頁轉到球員卡；手機、?app、選過志工版的照常開溜狗表', () => {
-    const src = (INDEX_HTML.match(/<script>(try \{[^<]*bq-desktop-app[^<]*)<\/script>/) || [])[1];
-    if (!src) throw new Error('找不到電腦版轉址程式');
-    const run = (desktop, search, stored) => {
-      const st = fakeStorage();
-      if (stored) st.setItem('bq-desktop-app', '1');
-      let to = null;
-      new Function('location', 'localStorage', 'matchMedia', src)({ search, replace: u => { to = u; } }, st, () => ({ matches: desktop }));
-      return [to, st.getItem('bq-desktop-app')];
-    };
-    eq(run(true, '', false), ['cards.html', null], '電腦：');
-    eq(run(false, '', false), [null, null], '手機：');
-    eq(run(true, '?app', false), [null, '1'], '?app 記住選志工版：');
-    eq(run(true, '', true), [null, '1'], '選過志工版：');
-    if (INDEX_HTML.indexOf('bq-desktop-app') > INDEX_HTML.indexOf('window.__dogsEarly')) throw new Error('轉址要在提早抓 dogs.json 前面');
+  await check('首頁不再轉到球員卡；電腦版頁首有圖鑑入口，手機看不到', () => {
+    if (/bq-desktop-app|location\.replace\('cards\.html'\)/.test(INDEX_HTML)) throw new Error('首頁不應該轉到 cards.html');
+    const link = new DOMParser().parseFromString(INDEX_HTML, 'text/html').querySelector('header.app a.zukan-link[href="cards.html"]');
+    if (!link) throw new Error('頁首要有圖鑑入口');
+    const live = document.querySelector('header.app .zukan-link');
+    if (live && !(typeof deskOn === 'function' && deskOn()) && getComputedStyle(live).display !== 'none') throw new Error('手機不顯示圖鑑入口');
   });
 }
 

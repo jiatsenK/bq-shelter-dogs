@@ -5,7 +5,7 @@
 參考圖第二頁的「狗狗詳細卡片」與第四頁以外的分頁安排僅供風格參考，**功能範圍以 [`PROJECT_GOALS.md`](PROJECT_GOALS.md) 為準**（V3 起三分類為「溜狗表／今天已溜／相關資訊」）。#28 起點狗卡會開詳細資訊（從下方滑出的面板，不是另一頁）。
 
 **電腦版溜狗表（2026-10-10，≥1100px）**：同一個病歷夾世界，排成簡報＋試算表式全表（`css/app.css` 檔尾「電腦版」區塊、`js/desk.js`）。層級：每一列先看到狗名（16px 800）和天數色籤，籠位是同一個黑框標籤，上次溜、誰遛的、備註字小一級（13px、灰綠字），備註只放一行；簡報的數字 34px 900。分類在深綠頁首當索引分頁（選中那頁跟內容同底色）。勾選列和「今天 溜了」浮條是唯一的深色浮層。「最近 30 天」收起上次溜、誰遛的、備註三欄，30 格才放得下，今天那欄用檔案綠框起來。
-**電腦版球員卡（`cards.html`）是另一個視覺世界**：深夜球場藍、燙金卡包、球員卡，樣式只在 `css/cards.css`，不套用這份的病歷夾規則；它自己的色票、字型（Anton＋Noto Sans TC，從 Google Fonts 載入，只有這頁用）記在根目錄 `DESIGN.md` 的球員卡段落，方向見 `.impeccable/surfaces/cards-html.md`。溜狗表照舊不載網路字型。
+**板收圖鑑（`cards.html`，電腦版頁首「圖鑑」進來）是另一個視覺世界**：深夜球場藍、燙金卡包、球員卡，樣式只在 `css/cards.css`，不套用這份的病歷夾規則；它自己的色票、字型（Anton＋Noto Sans TC，從 Google Fonts 載入，只有這頁用）記在根目錄 `DESIGN.md` 的球員卡段落，方向見 `.impeccable/surfaces/cards-html.md`。溜狗表照舊不載網路字型。
 
 實作畫面：[`design/screenshot-due.png`](design/screenshot-due.png)、[`design/screenshot-special.png`](design/screenshot-special.png)
 

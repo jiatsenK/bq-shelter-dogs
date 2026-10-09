@@ -1,4 +1,4 @@
-/* 板收明星隊球員卡（cards.html）：深夜球場藍＋燙金卡包＋球員卡。
+/* 板收圖鑑（cards.html）：深夜球場藍＋燙金卡包＋球員卡。你溜過的狗才拿得到卡。
    只給這一頁用；志工版溜狗表的樣式在 css/app.css，兩邊不共用 */
 :root {
   --navy: #0B2A5B; --navy-2: #0D3068; --navy-deep: #071B3D; --sky: #C6D2E8; --sky-dim: #8FA3C8;
@@ -66,6 +66,17 @@ html.bq-modal-open { overflow: hidden; }
 .bq-pack-t b { font: 900 calc(var(--cw) * .15)/1.1 var(--cjk); color: var(--ink); letter-spacing: .04em; }
 .bq-pack-t span { margin-top: 6px; font-weight: 900; font-size: 13px; letter-spacing: .25em; }
 .bq-pack-t em { margin-top: 14px; padding: 5px 14px; background: var(--red); color: var(--chalk); font-style: normal; font-weight: 900; letter-spacing: .2em; }
+/* 新卡張數：卡包右上角紅標 */
+.bq-pack-count { position: absolute; left: calc(50% + var(--cw) * .4); top: calc(50% - var(--cw) * .66); z-index: 2; transition: opacity .2s; padding: 6px 12px; background: var(--red); color: var(--chalk); font: 900 15px var(--cjk); letter-spacing: .1em; transform: rotate(6deg); box-shadow: 0 6px 14px rgba(0, 0, 0, .35); pointer-events: none; }
+.bq-pack-count:empty, .tearing .bq-pack-count, .opened .bq-pack-count { opacity: 0; }
+.ready .bq-table:has(.bq-pack:hover) .bq-pack-count { transform: translateY(-10px) rotate(6deg); }
+/* 還沒設定你是誰、還沒溜過：卡包壓暗，下面寫怎麼拿到卡 */
+.locked .bq-pack, .empty .bq-pack { filter: grayscale(.85) brightness(.55) drop-shadow(0 34px 40px rgba(0, 0, 0, .5)); }
+.locked .bq-pack-t em, .empty .bq-pack-t em { display: none; }
+.bq-pack-note { text-align: center; line-height: 1.8; }
+.locked .bq-pack-note, .empty .bq-pack-note { color: var(--chalk); letter-spacing: .1em; }
+.bq-pack-note a { display: inline-flex; align-items: center; min-height: 44px; margin-left: 12px; padding: 0 18px; border-radius: 3px; background: var(--gold); color: var(--ink); font-weight: 900; letter-spacing: .15em; text-decoration: none; vertical-align: middle; }
+.bq-pack-note a:hover { background: var(--gold-hi); }
 .opened .bq-pack { transform: translateY(80vh) rotate(8deg); opacity: 0; pointer-events: none; visibility: hidden; transition: transform .8s cubic-bezier(.5, 0, .75, .3), opacity .6s .2s, visibility 0s .8s; }
 
 /* ── 手上的五張 ── */
@@ -89,6 +100,11 @@ html.bq-modal-open { overflow: hidden; }
 .tier-holo .bq-face { background:
     repeating-linear-gradient(65deg, rgba(255, 255, 255, .28) 0 1px, transparent 1px 4px),
     linear-gradient(125deg, #FF6FB5 0%, #FFD45A 18%, #7CF2C2 36%, #6FA8FF 54%, #C08CFF 72%, #FF7F8E 88%, #FFD45A 100%) var(--hx, 30%) var(--hy, 30%) / 220% 220%; }
+.tier-locked .bq-face { background: #B9BFC9; }
+.tier-locked .bq-ph img, .tier-locked .bq-nophoto { filter: grayscale(1) contrast(.9); }
+.tier-locked .bq-band { background: #6B7385; }
+.tier-locked .bq-holo { display: none; }
+.tier-locked .bq-back { box-shadow: inset 0 0 0 calc(var(--cw) * .018) #6B7385, 0 24px 50px rgba(0, 0, 0, .5); }
 .bq-ph { position: relative; display: block; flex: 1 1 auto; min-height: 0; background: var(--team); overflow: hidden; }
 .bq-ph img, .bq-pocket-ph img, .bq-trophy-ph img { transform-origin: 50% 0; transform: scale(1.17); }
 .bq-ph img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -144,6 +160,8 @@ html.bq-modal-open { overflow: hidden; }
 .opened .bq-flip-hint { display: block; color: var(--sky-dim); font-size: 13px; letter-spacing: .2em; }
 .bq-again { padding: 14px 34px; min-height: 48px; border: none; border-radius: 3px; background: var(--gold); color: var(--ink); font-weight: 900; font-size: 18px; letter-spacing: .2em; cursor: pointer; transition: background .2s, transform .2s var(--ease); }
 .opened .bq-again { display: block; }
+.bq-again[hidden] { display: none; }
+.done .bq-flip-hint { display: block; }
 .bq-again:hover { background: var(--gold-hi); transform: translateY(-2px); }
 .bq-again:active { transform: translateY(1px); }
 .failed .bq-pack-note { color: var(--chalk); }
@@ -177,19 +195,13 @@ html.bq-modal-open { overflow: hidden; }
 .bq-binder-sec { background: var(--navy-deep); padding: 96px 48px 64px; }
 .bq-binder-head p { color: var(--sky); }
 .bq-binder-head p b { color: var(--gold); font-weight: 900; }
-.bq-books { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 8px; max-width: 60%; }
-.bq-book-chips { display: contents; }
-.bq-book-chip, .bq-switch { min-height: 44px; padding: 0 16px; border-radius: 3px; border: none; cursor: pointer; font-weight: 700; letter-spacing: .08em; }
-.bq-book-chip { background: rgba(198, 210, 232, .12); color: var(--sky); }
-.bq-book-chip.on { background: var(--chalk); color: var(--ink); }
-.bq-switch { background: none; color: var(--chalk); box-shadow: inset 0 0 0 2px rgba(198, 210, 232, .5); }
-.bq-switch:hover, .bq-book-chip:hover { box-shadow: inset 0 0 0 2px var(--chalk); }
-.bq-new-book[hidden] { display: none; }
-.bq-new-book { flex-basis: 100%; display: flex; justify-content: flex-end; align-items: center; gap: 8px; }
-.bq-new-book label { color: var(--sky); font-weight: 700; font-size: 14px; }
-.bq-new-book input { width: 160px; height: 44px; padding: 0 12px; border: none; border-radius: 3px; background: var(--chalk); color: var(--ink); font: 700 16px var(--cjk); caret-color: var(--ink); }
-.bq-new-book input::placeholder { color: #5A6276; }
-.bq-new-book button { height: 44px; padding: 0 16px; border: none; border-radius: 3px; background: var(--gold); color: var(--ink); font-weight: 900; cursor: pointer; }
+/* 圖例：三種卡套各一個小方塊 */
+.bq-legend { display: flex; gap: 22px; margin: 0; padding: 0; list-style: none; color: var(--sky); font-size: 14px; font-weight: 700; }
+.bq-legend li { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
+.bq-legend i { width: 14px; height: 20px; border-radius: 2px; }
+.lg-got { background: linear-gradient(135deg, #9A7200, #FFE58A 40%, #C99A10); }
+.lg-pending { background: var(--navy); box-shadow: inset 0 0 0 2px var(--gold); }
+.lg-locked { background: rgba(198, 210, 232, .18); box-shadow: inset 0 0 0 1px rgba(198, 210, 232, .3); }
 .bq-binder { display: grid; gap: 28px; }
 .bq-sheet { padding: 22px 24px 26px; background: #0E2147; border-radius: 6px; box-shadow: inset 0 0 0 1px rgba(198, 210, 232, .12); }
 .bq-sheet h3 { display: flex; align-items: center; justify-content: space-between; margin: 0 0 16px; font-size: 20px; font-weight: 900; }
@@ -198,10 +210,19 @@ html.bq-modal-open { overflow: hidden; }
 .bq-sheet h3 small { font: 400 22px var(--num); color: var(--sky-dim); letter-spacing: .04em; }
 .bq-sheet h3 small b { font-weight: 400; color: var(--chalk); }
 .bq-pockets { display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 12px 10px; }
-/* 卡套：沒收到的是透明卡套裡一隻狗的剪影加背號 */
+/* 卡套：拿到的是亮卡；溜過還沒撕的是卡背；沒溜過的是透明卡套裡淡淡的照片 */
 .bq-pocket { position: relative; display: flex; flex-direction: column; aspect-ratio: 5 / 7; padding: 5px; border-radius: 5px; border: none; text-align: center;
   background: rgba(198, 210, 232, .06); box-shadow: inset 0 0 0 1px rgba(198, 210, 232, .18); color: var(--sky-dim); }
 .bq-pocket::after { content: ''; position: absolute; inset: 0; border-radius: 5px; pointer-events: none; background: linear-gradient(160deg, rgba(255, 255, 255, .1), transparent 35%); }
+.bq-pocket { cursor: pointer; font: inherit; }
+.bq-pocket.locked .bq-pocket-ph { filter: grayscale(1) brightness(.6); opacity: .55; transition: filter .25s, opacity .25s; }
+.bq-pocket.locked:hover .bq-pocket-ph, .bq-pocket.locked:focus-visible .bq-pocket-ph { filter: grayscale(.4) brightness(.85); opacity: .9; }
+.bq-pocket.locked .bq-pocket-nm { color: var(--sky-dim); }
+.bq-pocket.pending { background: var(--navy); box-shadow: inset 0 0 0 2px var(--gold), 0 6px 14px rgba(0, 0, 0, .35); color: var(--chalk); transition: transform .25s var(--ease); }
+.bq-pocket.pending:hover { transform: translateY(-4px) rotate(1deg); }
+.bq-pocket-back { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--gold); }
+.bq-pocket-back svg { width: 42%; height: auto; }
+.bq-pocket-back b { font-size: 13px; letter-spacing: .3em; padding-left: .3em; }
 .bq-pocket-q { position: relative; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; }
 .bq-pocket-q .bq-dog { width: 74%; color: rgba(198, 210, 232, .13); }
 .bq-pocket-q b { position: absolute; top: 18%; font: 400 26px/1 var(--num); letter-spacing: .04em; color: var(--sky-dim); }
@@ -243,8 +264,7 @@ html.bq-modal-open { overflow: hidden; }
   .bq-awards, .bq-binder-sec { padding: 64px 18px; }
   .bq-trophies { grid-template-columns: 1fr; gap: 28px; }
   .bq-sec-head { flex-direction: column; align-items: flex-start; margin-bottom: 28px; }
-  .bq-books { max-width: none; justify-content: flex-start; }
-  .bq-new-book { justify-content: flex-start; flex-wrap: wrap; }
+  .bq-legend { flex-wrap: wrap; gap: 10px 18px; }
   .bq-pockets { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 8px; }
   .bq-pocket-q b { font-size: 20px; }
   .bq-pocket-nm { font-size: 12px; }
@@ -255,7 +275,7 @@ html.bq-modal-open { overflow: hidden; }
 
 @media (prefers-reduced-motion: reduce) {
   .bq-pack { animation: none; }
-  .bq-pack, .bq-hand .bq-card, .bq-in, .bq-progress-bar i, .bq-trophy-ph img, .bq-pocket.got { transition: none; }
+  .bq-pack, .bq-hand .bq-card, .bq-in, .bq-progress-bar i, .bq-trophy-ph img, .bq-pocket.got, .bq-pocket.pending, .bq-pocket-ph { transition: none; }
   .bq-card.fresh .bq-face, .bq-modal-in, .tearing .bq-pack-strip { animation: none; }
   .tearing .bq-pack-strip { opacity: 0; }
 }
