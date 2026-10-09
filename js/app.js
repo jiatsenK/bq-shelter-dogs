@@ -3055,18 +3055,28 @@ function placeTour() {
   const pad = 6;
   // 只亮畫面裡看得到的部分（換到我溜過、找狗時亮整個內容區）
   const top = Math.max(r.top - pad, 0), bottom = Math.min(r.bottom + pad, window.innerHeight);
-  Object.assign(hole.style, { left: `${r.left - pad}px`, top: `${top}px`, width: `${r.width + pad * 2}px`, height: `${Math.max(bottom - top, 0)}px` });
+  const rect = [r.left - pad, top, r.width + pad * 2, Math.max(bottom - top, 0)].map(v => `${Math.round(v)}px`);
+  if (hole.dataset.rect !== rect.join()) { // 位置沒變就不動，免得每一格都重排
+    hole.dataset.rect = rect.join();
+    Object.assign(hole.style, { left: rect[0], top: rect[1], width: rect[2], height: rect[3] });
+  }
   const h = tip.offsetHeight;
   let y;
   if (bottom - top > window.innerHeight * 0.55) y = window.innerHeight - h - 96; // 亮的範圍很大（詳細資訊、整頁），小框放下面
   else if (r.top + r.height / 2 < window.innerHeight / 2) y = r.bottom + pad + 12; // 目標在上半部，小框放下面
   else y = r.top - pad - 12 - h; // 在下半部（例如底部分類列），小框放上面
-  tip.style.top = `${Math.max(12, Math.min(window.innerHeight - h - 12, y))}px`;
+  const tipTop = `${Math.round(Math.max(12, Math.min(window.innerHeight - h - 12, y)))}px`;
+  if (tip.style.top !== tipTop) tip.style.top = tipTop;
 }
+// 導覽開著時每一格都重新對位置（K 2026-10-09 黃框歪了）：頁首範圍字晚一格出現、狗卡重畫、在哪面板滑上來，
+// 內容都會移動，只在捲動、重畫時對一次會跟不上
 let tourFrame = 0;
-function queueTour() { if (tour && !tourFrame) tourFrame = requestAnimationFrame(() => { tourFrame = 0; placeTour(); }); }
-window.addEventListener('scroll', queueTour, { passive: true });
-window.addEventListener('resize', queueTour);
+function tourLoop() {
+  if (!tour) { tourFrame = 0; return; }
+  placeTour();
+  tourFrame = requestAnimationFrame(tourLoop);
+}
+function queueTour() { if (tour && !tourFrame) tourFrame = requestAnimationFrame(tourLoop); }
 function renderTour(stepChanged = false) {
   let box = document.getElementById('tour');
   if (!tour) {
@@ -3098,6 +3108,7 @@ function renderTour(stepChanged = false) {
     });
   }
   setOnboardInert(box);
+  queueTour();
   if (!stepChanged && box.querySelector('.tour-tip')) return placeTour(); // 資料重畫時只重新對位置
   const i = tour.step;
   const st = TOUR_STEPS[i];
