@@ -170,7 +170,8 @@ function findCageLayout() {
   {
     const [zx, zy, zw, zh] = zoneLand('old');
     const pad = FIND_MAP_GAP + 8, x0 = zx + pad, y0 = zy + pad, w = zw - pad * 2, h = zh - pad * 2;
-    const col = 34, band = 26, bottom = y0 + h;
+    // K 2026-10-09：走廊不用照比例留那麼寬，知道相對位置就好；走廊縮成一條縫，籠子放大（像新犬舍那樣好讀）
+    const aisle = 8, col = (w - aisle * 2) / 4, band = 26, bottom = y0 + h;
     const side = h / 11, mid = (h - band) / 10, cx = x0 + w / 2;
     for (let n = 1; n <= 10; n++) {
       add('old', `舊A${n}`, `A${n}`, [cx - col, bottom - n * mid, col, mid]);
@@ -180,7 +181,7 @@ function findCageLayout() {
       add('old', `舊A${n}`, `A${n}`, [x0, bottom - (n - 10) * side, col, side]);
       add('old', `舊B${n}`, `B${n}`, [x0 + w - col, bottom - (n - 10) * side, col, side]);
     }
-    bands.old = findFromLand([x0 + col, y0, w - col * 2, band]);
+    bands.old = findFromLand([cx - col, y0, col * 2, band]);
   }
   {
     const [zx, zy, zw, zh] = zoneLand('new');
@@ -196,6 +197,13 @@ function findCageLayout() {
   return { cages, bands };
 }
 const FIND_CAGES = findCageLayout();
+// 籠號字級：照籠子大小算（K 2026-10-09 舊犬舍籠子放大後字也跟著大），同一區用同一個字級（照最擠的那籠），最大 12
+const FIND_CAGE_FS = {};
+for (const c of FIND_CAGES.cages) {
+  const [, , w, h] = c.rect; // 直的座標：轉成橫的以後寬高對調
+  const fit = Math.min(12, w * 0.6, (h - 6) / ([...c.label].length * 0.68));
+  FIND_CAGE_FS[c.zone] = Math.round(Math.max(8, Math.min(FIND_CAGE_FS[c.zone] || 12, fit)) * 10) / 10; // 不比原本的 8 小
+}
 
 // 狗的籠位 → 圖上的籠子 id（新A03 → 新A3）；住院區、C區、母幼這些不分籠的回傳 null
 function findCageOf(dog) {
@@ -271,10 +279,11 @@ function findMapSvgNow(selected, query, mini, cage, overview) {
       const on = c.id === cage || (searching && lit.has(c.id));
       const fade = (searching || cage) && !on ? ' fade' : '';
       const cls = `fm-cage${lit.has(c.id) ? ' has' : ''}${on ? ' on' : ''}${fade}`;
+      const fs = FIND_CAGE_FS[c.zone];
       const rect = `<rect class="${cls}" x="${x + 1}" y="${y + 1}" width="${w - 2}" height="${h - 2}" rx="1.5"/>`;
       if (mini) { s += rect; continue; }
       s += `<g class="fm-cg" data-find-cage="${c.id}" role="button" tabindex="0" aria-pressed="${c.id === cage}" aria-label="${c.id} ${dogsIn(c.id)} 隻">${rect}`
-        + `<text class="fm-cn${on ? ' on' : ''}${fade}" x="${x + w / 2}" y="${y + h / 2 + 3}" text-anchor="middle">${c.label}</text></g>`;
+        + `<text class="fm-cn${on ? ' on' : ''}${fade}" x="${x + w / 2}" y="${y + h / 2 + fs * 0.35}" text-anchor="middle" style="font-size:${fs}px">${c.label}</text></g>`;
     }
     if (overview) s += findLabel('fm-t', z.name, n, r, false, true);
     else if (!mini) s += band ? findBandLabel(z.name, n, findTurn(band)) : findLabel('fm-t', z.name, n, r);
