@@ -2627,6 +2627,7 @@ function render() {
       `<div class="alert-box warn">${icon('warn')}<span>${esc(loadWarning)}</span></div>`);
   }
   queueRange();
+  queueTour();
 }
 
 // 讀取中（#78）：先畫幾張灰色卡片骨架，版面不會等資料來才突然跳出來；文字留給螢幕閱讀器
@@ -2914,50 +2915,220 @@ function pad2(n) {
 // 沒名字的人按「溜了」時再問，設好直接幫他登記那隻；說明可以從我溜過的「說明」再打開
 const ONBOARD_KEY = 'bq-onboarded';
 const NAME_LATER_KEY = 'bq-name-later';
-// K 2026-10-08：說明用網站上真的狗卡、按鈕當範例（demo），狗的資料還沒讀到時先用圖示
-const ONBOARD_SLIDES = [
-  { icon: 'list', demo: 'card', title: '溜狗表', text: '最久沒溜的狗排在最上面，天數的顏色看得出多久沒溜。紅底字是要先看的警示。點狗卡看詳細資訊。' },
-  { icon: 'tick', demo: 'walk', title: '溜完按「溜了」', text: '日期和你的名字會寫進試算表，寫好才變「已溜」。按錯再按一次就取消。跟別人一起溜，按提示條上的「＋一起溜的人」。' },
-  { icon: 'paw', demo: 'mine', title: '我溜過', text: '你溜過的狗都在這裡，每次到所一張卡。名字要改按「修改」；想再看這份說明按「說明」。' },
-  { icon: 'map', demo: 'where', title: '找狗', text: '一打開就是平面圖，點一區看籠位，也可以換成列表。點狗卡上的籠位，會告訴你狗在哪。' },
+// ── 使用說明導覽（K 2026-10-09：直接用實際的網頁；一個說明一個動作，用手指示範）──
+// 畫面變暗、只亮要說明的地方，旁邊小框一句話；有 demo 的步驟，手指會點一下示範那個動作。
+// 「溜了」只換畫面上的樣子，不會送出、不寫試算表；打開詳細資訊、在哪、換分頁本來就不改資料，真的做，換下一步時收回。
+// 說明文字都在 TOUR_STEPS（K 2026-10-09 在 Issue #171 改的字；「狗狗」照名詞表改「狗」，K 同意）；target 依序找，第一個找得到的就亮它，
+// 都找不到（資料還沒讀到、列表模式沒有籠位）時小框放在畫面中間
+const TOUR_STEPS = [
+  { target: ['#main .card[data-dog]', '#main .row-dog[data-dog]'], title: '溜狗表', text: '依照上次溜狗時間排序，越久沒溜的狗會排越前面。' },
+  { target: ['#main .card[data-dog] .last', '#main .row-dog[data-dog] .r-date'], title: '上次溜狗天數', text: '顯示距離上次溜狗的天數過了幾天。' },
+  { target: ['#main .card[data-dog] .name', '#main .row-dog[data-dog] .r-name'], title: '狗資料', text: '點擊名稱，可以查看照片和詳細紀錄。', demo: 'detail' },
+  { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn'], title: '溜狗登記', text: '溜完按「溜了」，就會自動記錄日期和名字。', demo: 'walk' },
+  { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn'], title: '取消登記', text: '如果按錯，再按一次「已溜」就可以取消。', demo: 'unwalk' },
+  { target: ['#main .card[data-dog] .cage-pill'], title: '籠位查詢', text: '點擊籠位，就能在平面圖查看位置。', demo: 'where' },
+  { target: ['#tabs [data-tab="mine"]'], title: '我溜過', text: '查看自己溜過的狗。', demo: 'tab' },
+  { target: ['#tabs [data-tab="find"]'], title: '找狗', text: '透過平面圖快速找到狗的位置。', demo: 'find' },
 ];
-// 範例用的狗：從目前的溜狗表挑，有照片的優先；第一頁挑有警示的，找狗挑知道籠位的
-function demoDogs(pred = () => true) {
-  const ok = allDogs.filter(d => walkKey(d) && !d.departure && pred(d));
-  return [...ok.filter(d => d.photo), ...ok.filter(d => !d.photo)];
-}
-function onboardDemoHtml(kind) {
-  if (!allDogs.length) return '';
-  const today = new Date();
-  let html = '';
-  if (kind === 'card') {
-    // 有警示、而且好幾天沒溜的狗＋一隻紅色（30 天以上）的狗，看得到警示和天數顏色
-    const days = d => { const st = computeStatus(d, today); return st.kind === 'dated' ? st.days : -1; };
-    const flaggedAll = demoDogs(d => specialFlag(d.note));
-    const flagged = flaggedAll.find(d => days(d) >= AMBER_DAYS) || flaggedAll[0];
-    const others = demoDogs(d => d !== flagged);
-    const plain = others.find(d => days(d) >= RED_DAYS) || others.find(d => days(d) >= AMBER_DAYS) || others[0];
-    html = [flagged, plain].filter(Boolean).map(d => dogCard(d, today)).join('');
-  } else if (kind === 'walk') {
-    const d = demoDogs()[0];
-    if (!d) return '';
-    html = `<div class="ob-demo-walk">
-        <div class="ob-demo-dog">${photoThumb(d, 48)}<span class="ob-demo-name">${esc(d.name)}${sexMark(d)}</span></div>
-        <span class="walk-btn">溜了</span>${icon('chevron')}<span class="walk-btn pending">登記中</span>${icon('chevron')}<span class="walk-btn done">${icon('tick')}已溜</span>
-      </div>
-      <div class="ob-demo-toast"><span>${esc(d.name)} 今天溜了，已寫進試算表</span><b>＋一起溜的人</b></div>`;
-  } else if (kind === 'mine') {
-    const dogs = demoDogs().slice(0, 3);
-    html = `<div class="section-hint who-hint">${icon('paw')}<span class="who-name">${esc(loadWalkerName() || '你的名字')}</span><span class="who-edit">修改</span><span class="who-edit">說明</span></div>
-      ${myVisitCard({ date: today, walks: dogs.map(d => ({ id: d.id, name: d.name })) })}`;
-  } else if (kind === 'where') {
-    if (typeof whereMapSvg !== 'function') return '';
-    const d = demoDogs(x => findCageOf(x) && findZoneOf(x))[0];
-    if (!d) return '';
-    const w = whereDirections(d);
-    html = `<div class="where-map">${whereMapSvg(d)}</div><p class="where-how">${esc(w.title)}：${esc(w.how)}</p>`;
+let tour = null; // { step, again, shown: 示範後改亮的地方, undo: 收回示範, timers }
+function tourTarget(step) {
+  for (const sel of TOUR_STEPS[step].target) {
+    const el = document.querySelector(sel);
+    if (el) return el;
   }
-  return html ? `<div class="ob-demo" data-demo="${kind}" aria-hidden="true" inert>${html}</div>` : '';
+  return null;
+}
+// 示範用的狗：溜狗表最上面那隻
+function tourDog() {
+  const el = document.querySelector('#main .card[data-dog], #main .row-dog[data-dog]');
+  return el ? allDogs[Number(el.dataset.dog)] : null;
+}
+// 只換畫面上「溜了」按鈕和色籤的樣子（不送出）；收回時 render() 畫回原本的
+function tourFakeWalk(state) {
+  const row = document.querySelector('#main .card[data-dog], #main .row-dog[data-dog]');
+  const btn = row && row.querySelector('.walk-btn');
+  if (!btn) return;
+  if (state === 'pending') { btn.className = 'walk-btn pending'; btn.textContent = '登記中'; return; }
+  btn.className = 'walk-btn done';
+  btn.innerHTML = `${icon('tick')}已溜`;
+  const val = row.querySelector('.last .val');
+  if (val) { val.className = 'val sage'; val.textContent = '今天'; }
+}
+const TOUR_DEMOS = {
+  detail: { run: () => { const d = tourDog(); if (d) showDetail(d); }, show: '#detail', undo: () => { if (detailDog) closeDetail(); } },
+  walk: { run: () => { tourFakeWalk('pending'); tourLater(() => { tourFakeWalk('done'); placeTour(); }, 700); }, undo: () => render() },
+  unwalk: { before: () => tourFakeWalk('done'), run: () => render(), undo: () => render() },
+  where: { run: () => { const d = tourDog(); if (d) whereOpen(d); }, show: '#whereSheet', undo: () => { if (whereDog) whereClose(); } },
+  tab: { run: el => { if (el) switchTab(el.dataset.tab); }, show: '#main', undo: () => switchTab('walk') },
+  // 找狗（K 2026-10-09）：切過去後再隨便點平面圖上一個有狗的籠子，下面列出那一籠的狗
+  find: {
+    run: el => { if (el) switchTab(el.dataset.tab); },
+    show: '#main',
+    then: { at: tourCageWithDogs, run: g => findPickCage(g.dataset.findCage) },
+    undo: () => { findCage = null; findZone = 'all'; switchTab('walk'); },
+  },
+};
+// 平面圖上隨便一個有狗的籠子（找狗示範用）
+function tourCageWithDogs() {
+  const cages = [...document.querySelectorAll('#main g[data-find-cage]')].filter(g => g.querySelector('rect.fm-cage.has'));
+  return cages.length ? cages[Math.floor(Math.random() * cages.length)] : null;
+}
+function tourLater(fn, ms) {
+  if (!tour) return;
+  tour.timers.push(setTimeout(() => { if (tour) fn(); }, ms));
+}
+// 收回這一步的示範（換步、再看一次、結束時）
+function tourReset() {
+  if (!tour) return;
+  tour.timers.forEach(clearTimeout);
+  tour.timers = [];
+  tour.shown = null;
+  const undo = tour.undo;
+  tour.undo = null;
+  if (undo) undo();
+  const finger = document.querySelector('#tour .tour-finger');
+  if (finger) finger.className = 'tour-finger';
+}
+// 手指出現 → 點一下 → 做那個動作；手機設定減少動態效果時不播，直接顯示做完的樣子
+function tourPlay() {
+  const demo = TOUR_DEMOS[TOUR_STEPS[tour.step].demo];
+  if (!demo) return;
+  if (demo.before) { tour.undo = demo.undo; demo.before(); placeTour(); }
+  const taps = [{ at: () => tourTarget(tour.step), run: el => { tour.undo = demo.undo; demo.run(el); if (demo.show) tour.shown = demo.show; } }];
+  if (demo.then) taps.push(demo.then);
+  const tap = t => { const el = t.at(); if (el) t.run(el); placeTour(); };
+  const still = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if (still) return taps.forEach(tap);
+  const finger = document.querySelector('#tour .tour-finger');
+  let when = 500;
+  for (const t of taps) {
+    let el = null;
+    tourLater(() => {
+      el = t.at();
+      if (!el || !finger) return;
+      const r = el.getBoundingClientRect();
+      Object.assign(finger.style, { left: `${r.left + r.width / 2}px`, top: `${r.top + r.height / 2}px` });
+      finger.className = 'tour-finger on';
+    }, when);
+    tourLater(() => finger && finger.classList.add('press'), when + 500);
+    tourLater(() => { if (el) t.run(el); placeTour(); }, when + 650);
+    tourLater(() => { if (finger) finger.className = 'tour-finger'; }, when + 1000);
+    when += 1700;
+  }
+}
+function startTour(again = false) {
+  onboard = null;
+  renderOnboard();
+  if (activeTab !== 'walk' || analysisOpen) {
+    if (analysisOpen && typeof hideAnalysis === 'function') hideAnalysis();
+    switchTab('walk');
+  }
+  window.scrollTo(0, 0);
+  tour = { step: 0, again, shown: null, undo: null, timers: [] };
+  renderTour(true);
+}
+function endTour() {
+  tourReset();
+  try { walkedStorage && walkedStorage.setItem(ONBOARD_KEY, '1'); } catch (e) { /* 存不了下次再看一次 */ }
+  tour = null;
+  renderTour();
+}
+// 目標不在畫面上（被頁首或底部列擋住）就捲過去
+function scrollTourTarget(el) {
+  const r = el.getBoundingClientRect();
+  const top = appHeader ? appHeader.getBoundingClientRect().bottom : 0;
+  const bar = document.getElementById('bottomBar');
+  if (bar && bar.contains(el)) return; // 底部分類列一直在畫面上，不用捲
+  const bottom = bar ? bar.getBoundingClientRect().top : window.innerHeight;
+  if (r.top < top + 8) window.scrollBy(0, r.top - top - 16);
+  else if (r.bottom > bottom - 8) window.scrollBy(0, r.bottom - bottom + 16);
+}
+function placeTour() {
+  const box = document.getElementById('tour');
+  if (!box || !tour) return;
+  const hole = box.querySelector('.tour-hole');
+  const tip = box.querySelector('.tour-tip');
+  const el = (tour.shown && document.querySelector(tour.shown)) || tourTarget(tour.step);
+  box.classList.toggle('no-target', !el);
+  if (!el) { tip.style.top = ''; return; }
+  const r = el.getBoundingClientRect();
+  const pad = 6;
+  // 只亮畫面裡看得到的部分（換到我溜過、找狗時亮整個內容區）
+  const top = Math.max(r.top - pad, 0), bottom = Math.min(r.bottom + pad, window.innerHeight);
+  const rect = [r.left - pad, top, r.width + pad * 2, Math.max(bottom - top, 0)].map(v => `${Math.round(v)}px`);
+  if (hole.dataset.rect !== rect.join()) { // 位置沒變就不動，免得每一格都重排
+    hole.dataset.rect = rect.join();
+    Object.assign(hole.style, { left: rect[0], top: rect[1], width: rect[2], height: rect[3] });
+  }
+  const h = tip.offsetHeight;
+  let y;
+  if (bottom - top > window.innerHeight * 0.55) y = window.innerHeight - h - 96; // 亮的範圍很大（詳細資訊、整頁），小框放下面
+  else if (r.top + r.height / 2 < window.innerHeight / 2) y = r.bottom + pad + 12; // 目標在上半部，小框放下面
+  else y = r.top - pad - 12 - h; // 在下半部（例如底部分類列），小框放上面
+  const tipTop = `${Math.round(Math.max(12, Math.min(window.innerHeight - h - 12, y)))}px`;
+  if (tip.style.top !== tipTop) tip.style.top = tipTop;
+}
+// 導覽開著時每一格都重新對位置（K 2026-10-09 黃框歪了）：頁首範圍字晚一格出現、狗卡重畫、在哪面板滑上來，
+// 內容都會移動，只在捲動、重畫時對一次會跟不上
+let tourFrame = 0;
+function tourLoop() {
+  if (!tour) { tourFrame = 0; return; }
+  placeTour();
+  tourFrame = requestAnimationFrame(tourLoop);
+}
+function queueTour() { if (tour && !tourFrame) tourFrame = requestAnimationFrame(tourLoop); }
+function renderTour(stepChanged = false) {
+  let box = document.getElementById('tour');
+  if (!tour) {
+    if (box) box.remove();
+    setOnboardInert(null);
+    return;
+  }
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'tour';
+    box.className = 'tour';
+    box.setAttribute('role', 'dialog');
+    box.setAttribute('aria-modal', 'true');
+    box.setAttribute('aria-labelledby', 'tourTitle');
+    document.body.appendChild(box);
+    box.addEventListener('click', e => {
+      const b = e.target.closest('[data-tour]');
+      if (!b || !tour) return;
+      const act = b.dataset.tour;
+      if (act === 'replay') { tourReset(); placeTour(); tourPlay(); return; }
+      if (act === 'done') return endTour();
+      tourReset();
+      tour.step = act === 'next' ? tour.step + 1 : Math.max(0, tour.step - 1);
+      renderTour(true);
+    });
+    box.addEventListener('keydown', e => {
+      e.stopPropagation(); // 導覽蓋在最上面，後面網頁的按鍵處理不要接到
+      if (e.key === 'Escape') endTour();
+    });
+  }
+  setOnboardInert(box);
+  queueTour();
+  if (!stepChanged && box.querySelector('.tour-tip')) return placeTour(); // 資料重畫時只重新對位置
+  const i = tour.step;
+  const st = TOUR_STEPS[i];
+  const last = i === TOUR_STEPS.length - 1;
+  box.innerHTML = `<div class="tour-hole"></div><div class="tour-finger"></div>
+    <div class="tour-tip">
+      <div class="tour-head"><h2 id="tourTitle" tabindex="-1">${esc(st.title)}</h2><button type="button" class="tour-skip" data-tour="done">${tour.again ? '關閉' : '略過'}</button></div>
+      <p>${esc(st.text)}</p>
+      <div class="tour-foot">
+        <span class="tour-n">${i + 1} / ${TOUR_STEPS.length}</span>
+        ${st.demo ? '<button type="button" class="tour-replay" data-tour="replay">再看一次</button>' : ''}
+        ${i > 0 ? '<button type="button" class="tour-back" data-tour="back">上一步</button>' : ''}
+        <button type="button" class="tour-next" data-tour="${last ? 'done' : 'next'}">${last ? (tour.again ? '看完了' : '開始使用') : '下一步'}</button>
+      </div>
+    </div>`;
+  const el = tourTarget(i);
+  if (el) scrollTourTarget(el);
+  placeTour();
+  box.querySelector('h2').focus({ preventScroll: true }); // 換一步後讀螢幕的人才知道到了哪裡
+  tourPlay();
 }
 // { step: 0 名字／1… 說明, text, phase: edit／saving／error／confirm, error, unknown: 表上沒有的名字,
 //   walk: 名字設好後要登記的狗（按溜了才問名字）, again: 從我溜過再打開說明 }
@@ -3018,22 +3189,7 @@ function onboardHtml() {
       </div>
     </form>`;
   }
-  const i = o.step - 1;
-  const sl = ONBOARD_SLIDES[i];
-  const last = i === ONBOARD_SLIDES.length - 1;
-  return `<div class="ob-page ob-slide">
-    <div class="ob-top">
-      ${i > 0 ? '<button type="button" class="ob-back" data-ob="back">上一頁</button>' : '<span></span>'}
-      <button type="button" class="ob-skip" data-ob="done">${o.again ? '關閉' : '略過'}</button>
-    </div>
-    ${onboardDemoHtml(sl.demo) || `<div class="ob-art">${icon(sl.icon)}</div>`}
-    <h2 tabindex="-1">${sl.title}</h2>
-    <p>${sl.text}</p>
-    <div class="ob-foot">
-      <div class="ob-dots" role="img" aria-label="第 ${i + 1} 頁，共 ${ONBOARD_SLIDES.length} 頁">${ONBOARD_SLIDES.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
-      <button type="button" class="ob-next" data-ob="${last ? 'done' : 'next'}">${last ? (o.again ? '看完了' : '開始使用') : '下一步'}</button>
-    </div>
-  </div>`;
+  return '';
 }
 // 開頭畫面的名字按鈕（K 2026-10-04：入口的名字要能從表上已有的人選）：一人選一個（K 2026-10-08），點了填進輸入框，再點一次拿掉
 // 我溜過的「修改」也用同一排（kind 'who'）。選了用框線＋右上角勾勾（不是實心藍），跟「一起溜的人」分得出來，按鈕也不會變寬
@@ -3082,15 +3238,11 @@ function renderOnboard() {
       const b = e.target.closest('[data-ob]');
       if (!b) return;
       const act = b.dataset.ob;
-      if (act === 'next') onboard.step++;
-      else if (act === 'back') onboard.step = Math.max(1, onboard.step - 1);
-      else if (act === 'cancel') return closeOnboard();
-      else if (act === 'later') {
+      if (act === 'cancel') return closeOnboard();
+      if (act === 'later') {
         setNameLater(true);
-        onboard = onboardDone() ? null : { step: 1 };
-        render();
-      } else { try { walkedStorage && walkedStorage.setItem(ONBOARD_KEY, '1'); } catch (err) { /* 存不了下次再看一次 */ } onboard = null; render(); }
-      renderOnboard();
+        if (onboardDone()) { closeOnboard(); render(); } else startTour();
+      }
     });
     box.addEventListener('input', e => {
       if (!onboard || onboard.phase === 'saving' || e.target.id !== 'obInput') return;
@@ -3102,7 +3254,6 @@ function renderOnboard() {
       e.stopPropagation(); // 開頭畫面蓋在最上面，後面網頁（在哪面板、裁切）的按鍵處理不要接到
       if (e.key !== 'Escape' || !onboard) return;
       if (onboard.walk) closeOnboard();
-      else if (onboard.step > 0) box.querySelector('[data-ob="done"]').click(); // 說明頁 Esc 等於略過
     });
     box.addEventListener('submit', async e => {
       e.preventDefault();
@@ -3120,10 +3271,11 @@ function renderOnboard() {
       if (error) { onboard.phase = 'error'; onboard.error = error; renderOnboard(); return; }
       setNameLater(false);
       const walk = onboard.walk;
-      onboard = walk || onboardDone() ? null : { step: 1 };
+      onboard = null;
       renderOnboard();
       render();
       if (walk) setWalked(walk, true);
+      else if (!onboardDone()) startTour();
     });
   }
   // 重畫時正在打字的人游標不要掉（名字清單比畫面晚到也會重畫）
@@ -3138,9 +3290,6 @@ function renderOnboard() {
   if (input && typing && !input.disabled) {
     input.focus({ preventScroll: true });
     try { input.setSelectionRange(typing[0], typing[1]); } catch (e) { /* 有些輸入法不給設 */ }
-  } else if (onboard.step > 0 && stepChanged) {
-    box.scrollTop = 0;
-    box.querySelector('h2').focus({ preventScroll: true }); // 換頁後讀螢幕的人才知道到了哪一頁
   } else if (input && onboard.phase === 'edit' && stepChanged && !walkerNameList.length) {
     input.focus({ preventScroll: true }); // 有名字可以點時不自動叫出鍵盤，免得蓋住名字
   } else if (!box.contains(document.activeElement)) {
@@ -3150,7 +3299,8 @@ function renderOnboard() {
 }
 function startOnboard() {
   if (onboard || !needOnboard()) return;
-  onboard = (loadWalkerName() && loadMyCodes().length) || nameLater() ? { step: 1 } : { step: 0, text: '', phase: 'edit', error: '' };
+  if ((loadWalkerName() && loadMyCodes().length) || nameLater()) return startTour();
+  onboard = { step: 0, text: '', phase: 'edit', error: '' };
   renderOnboard();
 }
 // 按溜了才問名字（先看看的人）：設好直接登記這幾隻
@@ -3158,10 +3308,9 @@ function askNameThenWalk(dogs) {
   onboard = { step: 0, text: '', phase: 'edit', error: '', walk: dogs };
   renderOnboard();
 }
-// 我溜過的「說明」：從第一頁再看一次，不動名字
+// 我溜過的「說明」：回到溜狗表從第一步再看一次，不動名字
 function openGuide() {
-  onboard = { step: 1, again: true };
-  renderOnboard();
+  startTour(true);
 }
 
 // 先畫出分類列與內容區的讀取中（標題、搜尋框本來就在 index.html），再背景讀 dogs.json
@@ -3196,7 +3345,6 @@ function applyDogsData(data) {
   renderUpdatedLabel();
   loadState = 'ready';
   render();
-  if (onboard && onboard.step > 0) renderOnboard(); // 說明的範例狗卡要等狗的資料
   loadMyWalks();
 }
 
