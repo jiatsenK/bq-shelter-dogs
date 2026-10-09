@@ -2767,21 +2767,23 @@ function walkToolsHtml(chips, view = loadWalkView()) {
 }
 
 // 列表模式的一列：籠位｜犬名｜遛狗日期｜誰遛的｜溜了，跟試算表同一個順序
+// critique 2026-10-09：列表模式也是天數優先，天數排最前面、寫「20天」不寫日期（不用心算）；
+// 警示原文跟狗卡一樣放在那一列下面，不只一個小三角
 function walkRow(dog, today) {
   const s = computeStatus(dog, today);
   const flag = specialFlag(dog.note);
-  const date = s.kind === 'dated' ? (s.days === 0 ? '今天' : shortDate(effectiveWalkDate(dog, today))) : s.kind === 'covered' ? '固定' : '—';
+  const days = s.kind === 'dated'
+    ? (s.days < 0 ? '?<span class="sr-only">日期看不懂</span>' : s.days === 0 ? '今天' : `<b>${s.days}</b>天<span class="sr-only">前</span>`)
+    : s.kind === 'covered' ? '固定<span class="sr-only">有人照顧</span>' : '—<span class="sr-only">沒有紀錄</span>';
   const who = walkerText(dog, today);
   return `<div class="row-dog${flag ? ' flagged' : ''}" data-dog="${allDogs.indexOf(dog)}" role="button" tabindex="0" aria-haspopup="dialog">
+    <span class="r-date ${s.level || 'muted'}">${days}</span>
+    <span class="r-name">${esc(dog.name)}</span>
     <span class="r-cage">${esc(dog.cage)}</span>
-    <span class="r-name">${flag ? icon('warn') : ''}${esc(dog.name)}</span>
-    <span class="r-date ${s.level || 'muted'}">${date}</span>
     <span class="r-who">${esc(who)}</span>
     ${walkButton(dog)}
+    ${flag ? warnNote(dog.note, flag) : ''}
   </div>`;
-}
-function shortDate(d) {
-  return `${d.getMonth() + 1}/${d.getDate()}`;
 }
 
 function renderMain() {
@@ -2832,7 +2834,7 @@ function renderMain() {
   const list = fav ? walkList.filter(isFav) : walkList;
   const view = loadWalkView();
   const items = view === 'list'
-    ? (list.length ? `<div class="rows"><div class="row-head"><span>籠位</span><span>狗名</span><span>日期</span><span>溜狗人</span><span>登記</span></div>${list.map(d => walkRow(d, today)).join('')}</div>` : '')
+    ? (list.length ? `<div class="rows"><div class="row-head"><span>天數</span><span>狗名</span><span>籠位</span><span>溜狗人</span><span></span></div>${list.map(d => walkRow(d, today)).join('')}</div>` : '')
     : list.map((d, i) => dogCard(d, today, i < FIRST_SCREEN_CARDS)).join('');
   const head = walkToolsHtml(walkFilterHtml(walkList.length, fav, walkList.filter(isFav).length), view);
   const empty = fav && !list.length && !q ? '還沒有常溜的狗。<br>點狗打開詳細資訊，<br>按名字旁的「☆ 常溜」加進來。'

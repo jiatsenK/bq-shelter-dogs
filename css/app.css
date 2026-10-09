@@ -1840,3 +1840,16 @@ h2.name { margin: 0; }
    分析頁沒有搜尋框，頁首整個留著（返回、分析按鈕在標題那一行） */
 header.app { top: calc(-1 * var(--brand-h, 0px)); }
 .analysis-open header.app { top: 0; }
+
+/* 列表模式也是天數優先（critique 2026-10-09 P1，K 選「比較密的溜狗表」）：天數｜狗名｜籠位｜溜狗人｜溜了。
+   天數是跟狗卡一樣的色籤、數字放大；0–2 天不上底色只用綠字，黃紅灰才跳出來；警示原文排在那一列下面 */
+.row-head, .row-dog { grid-template-columns: 52px minmax(0, 1fr) 46px minmax(0, 0.9fr) 60px; }
+.row-dog { padding-left: 8px; }
+.row-head { padding-left: 8px; }
+.r-date { justify-self: stretch; align-self: stretch; display: flex; align-items: center; justify-content: center; gap: 1px; padding: 0 2px; font-size: 13px; }
+.r-date b { font-size: 20px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
+.r-date.sage { background: none; font-weight: 600 !important; }
+.r-date.sage b { font-size: 16px; font-weight: 700; }
+.r-name { font-size: 16px; font-weight: 700; }
+.r-cage { color: var(--ink-soft); font-size: 13px; }
+.row-dog.flagged > .warn-note { grid-column: 1 / -1; margin: 0; }
