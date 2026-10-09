@@ -1876,6 +1876,7 @@ async function runRestTests() {
       showDetail(allDogs[2]);
       eq(document.getElementById('introEdit').textContent.startsWith('補介紹'), true, '沒介紹寫補介紹：');
       document.getElementById('introEdit').click();
+      eq([!!document.querySelector('#detail .detail-bar [form="introForm"]'), !!document.querySelector('#detail .detail-bar #groupWalk')], [true, false], '底部列換成儲存介紹、溜了收起來：');
       const text = document.getElementById('introText');
       text.value = '  親人\n喜歡散步  '; text.dispatchEvent(new Event('input', { bubbles: true }));
       eq(document.querySelector('.intro-count').textContent, '11 / 1000 字', '字數：');

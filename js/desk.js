@@ -81,7 +81,7 @@ function deskToolsHtml(shown, total) {
     .map(([k, t, n]) => `<button type="button" class="dt-chip${deskZone === k ? ' on' : ''}" data-desk-zone="${k}" aria-pressed="${deskZone === k}">${t}<small class="num">${n}</small></button>`).join('');
   return `<div class="desk-tools">
     <div class="dt-chips" role="group" aria-label="區域">${chips}</div>
-    <span class="dt-hint">${shown === total ? '' : `<b class="num">${shown}</b> / ${total} 隻・`}${deskView === 'fill' ? '照片檔可以直接拖到那一列' : '勾左邊的格子可以一次登記好幾隻'}</span>
+    <span class="dt-hint">${shown === total ? '' : `<b class="num">${shown}</b> / ${total} 隻・`}${deskView === 'fill' ? '' : '勾左邊的格子可以一次登記好幾隻'}</span>
     <div class="dt-view" role="group" aria-label="表格">
       ${[['sheet', '全表'], ['days30', '最近 30 天'], ['fill', '補資料']].map(([k, t]) => `<button type="button" data-desk-view="${k}" class="${deskView === k ? 'on' : ''}" aria-pressed="${deskView === k}">${t}</button>`).join('')}
     </div>
@@ -190,29 +190,32 @@ function deskFillNeeds(dog) {
   return { photo: deskHasPhoto(dog) === false, intro: !intro };
 }
 function deskFillHtml(list) {
-  const rows = list.filter(d => d.id).map(d => ({ d, need: deskFillNeeds(d) }));
-  const nPhoto = rows.filter(r => r.need.photo).length, nIntro = rows.filter(r => r.need.intro).length;
+  const rows = list.map(d => ({ d, need: deskFillNeeds(d) }));
+  const known = Object.keys(photoVersions).length > 0; // 沒有照片清單（本機、讀不到）就不知道誰沒照片
+  const nPhoto = rows.filter(r => r.d.id && r.need.photo).length, nIntro = rows.filter(r => r.d.id && r.need.intro).length;
   const shown = rows.filter(r => deskFill === 'photo' ? r.need.photo : deskFill === 'intro' ? r.need.intro : true)
-    // 兩樣都缺的排最前面，再照籠位
-    .sort((a, b) => (b.need.photo + b.need.intro) - (a.need.photo + a.need.intro) || deskNatural(a.d.cage, b.d.cage));
-  const chip = (k, t, n) => `<button type="button" class="df-chip${deskFill === k ? ' on' : ''}" data-desk-fill="${k}" aria-pressed="${deskFill === k}">${t}<b class="num">${n}</b></button>`;
+    // 兩樣都缺的排最前面，再照籠位；沒編號的放最後
+    .sort((a, b) => !a.d.id - !b.d.id || (b.need.photo + b.need.intro) - (a.need.photo + a.need.intro) || deskNatural(a.d.cage, b.d.cage)); // 沒編號的排最後（補不了）
+  const chip = (k, t, n, off) => `<button type="button" class="df-chip${deskFill === k ? ' on' : ''}" data-desk-fill="${k}" aria-pressed="${deskFill === k}"${off ? ' disabled title="還不知道哪些狗沒照片"' : ''}>${t}<b class="num">${off ? '—' : n}</b></button>`;
   return `<div class="desk-fill">
     <div class="df-bar">
-      <div class="df-chips" role="group" aria-label="要補什麼">${chip('photo', '沒照片', nPhoto)}${chip('intro', '沒介紹', nIntro)}${chip('all', '全部', rows.length)}</div>
-      <p class="df-note">照片：所有人都能上傳，上傳前會先預覽。介紹：管理用，要通關碼；存在網站，不寫試算表。</p>
+      <div class="df-chips" role="group" aria-label="要補什麼">${chip('photo', '沒照片', nPhoto, !known)}${chip('intro', '沒介紹', nIntro)}${chip('all', '全部', rows.length)}</div>
+      <p class="df-note">照片拖到那一列或按上傳（所有人都能傳，會先預覽）・介紹要通關碼，存在網站，不寫試算表。</p>
     </div>
     ${shown.length ? `<table class="desk-table df-table">
       <thead><tr><th class="df-ph">照片</th><th class="df-name">狗名・籠位</th><th class="df-intro">入所介紹</th><th class="df-act"><span class="sr-only">補資料</span></th></tr></thead>
       <tbody>${shown.map(({ d, need }) => {
         const idx = allDogs.indexOf(d);
         const intro = typeof introOf === 'function' ? introOf(d) : d.intro;
-        return `<tr class="df-row" data-fill-dog="${idx}">
+        const off = d.id ? '' : ' disabled';
+        const photoLabel = need.photo || deskHasPhoto(d) === null ? '上傳照片' : '換照片';
+        return `<tr class="df-row" ${d.id ? `data-fill-dog="${idx}"` : ''}>
           <td class="df-ph">${need.photo ? `<span class="df-drop">${icon('camera')}<span>拖照片<br>到這裡</span></span>` : photoThumb(d, 64)}</td>
           <td class="df-name"><button type="button" data-desk-open="${idx}" aria-haspopup="dialog">${esc(d.name)}</button><span class="df-cage">${icon('pin')}${esc(d.cage)}</span></td>
-          <td class="df-intro">${intro ? `<div>${esc(intro)}</div>` : '<span class="df-missing">還沒有入所介紹</span>'}</td>
+          <td class="df-intro">${!d.id ? '<span class="df-missing">沒有編號，試算表補上編號後才能補</span>' : intro ? `<div>${esc(intro)}</div>` : '<span class="df-missing">還沒有入所介紹</span>'}</td>
           <td class="df-act">
-            <button type="button" class="df-btn${need.photo ? ' need' : ''}" data-fill-photo="${idx}">${icon('camera')}${need.photo ? '上傳照片' : '換照片'}</button>
-            <button type="button" class="df-btn${need.intro ? ' need' : ''}" data-fill-intro="${idx}">${icon('card')}${need.intro ? '補介紹' : '改介紹'}</button>
+            <button type="button" class="df-btn${need.photo ? ' need' : ''}" data-fill-photo="${idx}"${off}>${icon('camera')}${photoLabel}</button>
+            <button type="button" class="df-btn${need.intro && d.id ? ' need' : ''}" data-fill-intro="${idx}"${off}>${icon('card')}${need.intro ? '補介紹' : '改介紹'}</button>
           </td>
         </tr>`;
       }).join('')}</tbody>

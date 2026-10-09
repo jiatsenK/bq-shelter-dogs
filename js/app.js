@@ -1313,7 +1313,7 @@ function detailHtml(dog, today) {
     ${walkHistorySection(dog, today)}
     ${introSectionHtml(dog, intro)}
     ${restAdminHtml(dog, today)}
-    ${photoBarHtml(dog) || `<div class="detail-bar">
+    ${photoBarHtml(dog) || introBarHtml(dog) || `<div class="detail-bar">
       <button type="button" class="bar-btn" id="detailClose">關閉</button>
       ${typeof whereKnown === 'function' && whereKnown(dog) ? `<button type="button" class="bar-btn" id="detailWhere">${icon('pin')}在哪</button>` : ''}
       ${groupWalkButton(dog, walked)}
@@ -1365,7 +1365,7 @@ function introSectionHtml(dog, intro) {
   const canEdit = !!(UPLOAD_URL && dog.id);
   if (!e) {
     return `<section class="detail-section" data-section="intro">
-      <h3>${icon('card')}入所介紹<span class="sub">收容所在入所時寫的</span></h3>
+      <h3>${icon('card')}入所介紹</h3>
       ${intro ? `<div class="content">${esc(intro)}</div>` : `<div class="empty">還沒有入所介紹</div>`}
       ${canEdit ? `<button type="button" class="rest-admin-btn intro-edit-btn" id="introEdit">${intro ? '改介紹' : '補介紹'}<small>管理用，要通關碼</small></button>` : ''}
     </section>`;
@@ -1379,15 +1379,18 @@ function introSectionHtml(dog, intro) {
       <label>介紹<textarea id="introText" rows="7" maxlength="${INTRO_MAX}" placeholder="例：親人、喜歡散步，怕機車聲"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea><small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small></label>
       ${e.needPass ? `<label>通關碼<input type="password" id="introPass" name="password" autocomplete="current-password" value="${esc(e.pass)}"${busy ? ' disabled' : ''}></label>` : ''}
       ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
-      <div class="rest-actions">
-        <button type="submit" class="rest-save"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存'}</button>
-        ${busy ? '' : '<button type="button" class="rest-cancel" id="introCancel">取消</button>'}
-      </div>
     </form>
   </section>`;
 }
+// 介紹表單打開時的底部列：取消＋儲存介紹（送出 #introForm）；溜了先收起來，跟換照片同一個做法（#146）
+function introBarHtml(dog) {
+  const e = introEdit && introEdit.dog === dog ? introEdit : null;
+  if (!e) return '';
+  const busy = e.phase === 'saving';
+  return `<div class="detail-bar photo-bar">${busy ? '' : '<button type="button" class="bar-btn" id="introCancel">取消</button>'}<button type="submit" form="introForm" class="bar-confirm"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存介紹'}</button></div>`;
+}
 function openIntroEdit(dog) {
-  if (!dog || !dog.id) return;
+  if (!dog || !dog.id || !UPLOAD_URL) return;
   introEdit = { dog, text: introOf(dog) || '', pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
   renderDetail();
   const box = document.getElementById('introText');
