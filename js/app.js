@@ -50,6 +50,7 @@ let searchQuery = '';
 let loadWarning = '';
 let analysisOpen = false; // 分析頁（#59）開著嗎
 let myWalks = []; // 我遛過的紀錄（#58）：[{ id, name, date: Date, ymd }]，新到舊
+let sheetNotes = []; // 試算表狗清單下面的異動紀錄（K 2026-10-10），dogs.json 的 sheetNotes；電腦版右欄用（js/desk.js）
 let walksData = null; // data/walks.json 讀回來的原始內容；換「我是誰」時不用重讀
 let walkerSetup = null; // 正在設定我是誰（#96）：{ text, phase: 'edit'|'saving'|'error', error }
 let myWalksState = 'loading'; // loading／ready／error
@@ -102,7 +103,9 @@ function parseDogsData(data) {
       if (typeof v === 'string' && /^[0-9a-f]{1,16}$/.test(v)) versions[path] = v;
     }
   }
-  return { dogs, groups, syncedAt: synced && !isNaN(synced) ? synced : null, photoVersions: versions };
+  // 異動紀錄（K 2026-10-10）：試算表狗清單下面那段，電腦版右欄（js/desk.js）；沒有或格式不對就是空的
+  const sheetNotes = Array.isArray(data.sheetNotes) ? data.sheetNotes.filter(n => n && text(n.text)).map(n => ({ label: text(n.label), text: text(n.text) })) : [];
+  return { dogs, groups, syncedAt: synced && !isNaN(synced) ? synced : null, photoVersions: versions, sheetNotes };
 }
 
 // 暫住（K 2026-10-09 阿拉丁）：試算表裡「(阿拉丁)」這種名字加括號、沒有編號的列，是同名那隻狗暫時住的籠子。
@@ -2521,6 +2524,11 @@ function renderMain() {
     main.innerHTML = myWalksHtml(today, q);
     return;
   }
+  // 電腦版（K 2026-10-10）：寬螢幕的溜狗表是簡報＋全表，在 js/desk.js
+  if (typeof deskOn === 'function' && deskOn()) {
+    main.innerHTML = deskWalkHtml(today, q, walkList);
+    return;
+  }
   const fav = loadWalkFav();
   const list = fav ? walkList.filter(isFav) : walkList;
   const view = loadWalkView();
@@ -2627,13 +2635,13 @@ const NAME_LATER_KEY = 'bq-name-later';
 // 說明文字都在 TOUR_STEPS（K 2026-10-09 在 Issue #171 改的字；「狗狗」照名詞表改「狗」，K 同意）；target 依序找，第一個找得到的就亮它，
 // 都找不到（資料還沒讀到、列表模式沒有籠位）時小框放在畫面中間
 const TOUR_STEPS = [
-  { target: ['#main .card[data-dog]', '#main .row-dog[data-dog]'], title: '溜狗表', text: '依照上次溜狗時間排序，越久沒溜的狗會排越前面。' },
-  { target: ['#main .card[data-dog] .last', '#main .row-dog[data-dog] .r-date'], title: '上次溜狗天數', text: '顯示距離上次溜狗的天數過了幾天。' },
-  { target: ['#main .card[data-dog] .name', '#main .row-dog[data-dog] .r-name'], title: '狗資料', text: '點擊名稱，可以查看照片和詳細紀錄。', demo: 'detail' },
-  { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn'], title: '溜狗登記', text: '溜完按「溜了」，就會自動記錄日期和名字。', demo: 'walk' },
-  { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn'], title: '取消登記', text: '如果按錯，再按一次「已溜」就可以取消。', demo: 'unwalk' },
-  { target: ['#main .card[data-dog] .cage-pill', '#main .row-dog[data-dog] .r-cage'], title: '籠位查詢', text: '點擊籠位，就能在平面圖查看位置。', demo: 'where' },
-  { target: ['#main .walk-tools .seg'], title: '照片／列表', text: '右上角可以切換：有照片的狗卡，或一列一隻、比較好掃過去的列表。', demo: 'view' },
+  { target: ['#main .card[data-dog]', '#main .row-dog[data-dog]', '#main .desk-table tbody tr'], title: '溜狗表', text: '依照上次溜狗時間排序，越久沒溜的狗會排越前面。' },
+  { target: ['#main .card[data-dog] .last', '#main .row-dog[data-dog] .r-date', '#main .desk-table tbody .dr-day'], title: '上次溜狗天數', text: '顯示距離上次溜狗的天數過了幾天。' },
+  { target: ['#main .card[data-dog] .name', '#main .row-dog[data-dog] .r-name', '#main .desk-table tbody .dr-name button'], title: '狗資料', text: '點擊名稱，可以查看照片和詳細紀錄。', demo: 'detail' },
+  { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn', '#main .desk-table tbody .dr-ck'], title: '溜狗登記', text: '溜完按「溜了」，就會自動記錄日期和名字。', deskText: '勾選溜過的狗（可以勾好幾隻），再按下面的「今天 溜了」，就會一起記錄日期和名字。', demo: 'walk' },
+  { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn', '#main .desk-table tbody .dr-name button'], title: '取消登記', text: '如果按錯，再按一次「已溜」就可以取消。', deskText: '如果登記錯了，按提示條的「復原」，或點狗名打開詳細資訊按「已溜」取消。', demo: 'unwalk' },
+  { target: ['#main .card[data-dog] .cage-pill', '#main .row-dog[data-dog] .r-cage', '#main .desk-table tbody .dr-cage'], title: '籠位查詢', text: '點擊籠位，就能在平面圖查看位置。', demo: 'where' },
+  { target: ['#main .walk-tools .seg', '#main .dt-view'], title: '照片／列表', text: '右上角可以切換：有照片的狗卡，或一列一隻、比較好掃過去的列表。', deskTitle: '全表／最近 30 天', deskText: '全表下面可以切換「最近 30 天」，看每隻狗這一個月哪幾天有出門。', demo: 'view' },
   { target: ['#tabs [data-tab="mine"]'], title: '我溜過', text: '查看自己溜過的狗。', demo: 'tab' },
   { target: ['#tabs [data-tab="find"]'], title: '找狗', text: '透過平面圖快速找到狗的位置。', demo: 'find' },
 ];
@@ -2668,9 +2676,17 @@ const TOUR_DEMOS = {
   where: { run: () => { const d = tourDog(); if (d) whereOpen(d); }, show: '#whereSheet', undo: () => { if (whereDog) whereClose(); } },
   // 照片／列表（K 2026-10-09）：示範切到另一種，收回時切回原本的
   view: {
-    run: () => { tour.view = loadWalkView(); saveWalkView(tour.view === 'list' ? 'photo' : 'list'); render(); },
-    show: '#main .walk-tools .seg',
-    undo: () => { if (tour && tour.view) { saveWalkView(tour.view); tour.view = null; } render(); },
+    // 電腦版沒有照片／列表：示範切到「最近 30 天」再切回全表
+    run: () => {
+      if (typeof deskOn === 'function' && deskOn()) { tour.view = 'desk'; deskView = 'days30'; render(); return; }
+      tour.view = loadWalkView(); saveWalkView(tour.view === 'list' ? 'photo' : 'list'); render();
+    },
+    show: '#main .walk-tools .seg, #main .dt-view',
+    undo: () => {
+      if (tour && tour.view === 'desk') { deskView = 'sheet'; tour.view = null; }
+      else if (tour && tour.view) { saveWalkView(tour.view); tour.view = null; }
+      render();
+    },
   },
   tab: { run: el => { if (el) switchTab(el.dataset.tab); }, show: '#main', undo: () => switchTab('walk') },
   // 找狗（K 2026-10-09）：切過去後再隨便點平面圖上一個有狗的籠子，下面列出那一籠的狗。
@@ -2836,7 +2852,9 @@ function renderTour(stepChanged = false) {
   queueTour();
   if (!stepChanged && box.querySelector('.tour-tip')) return placeTour(); // 資料重畫時只重新對位置
   const i = tour.step;
-  const st = TOUR_STEPS[i];
+  const desk = typeof deskOn === 'function' && deskOn();
+  // 電腦版（K 2026-10-10）：沒有溜了按鈕、照片／列表，改說勾選登記、最近 30 天
+  const st = desk ? { ...TOUR_STEPS[i], title: TOUR_STEPS[i].deskTitle || TOUR_STEPS[i].title, text: TOUR_STEPS[i].deskText || TOUR_STEPS[i].text } : TOUR_STEPS[i];
   const last = i === TOUR_STEPS.length - 1;
   box.innerHTML = `<div class="tour-hole"></div><div class="tour-finger"></div>
     <div class="tour-tip">
@@ -3063,6 +3081,7 @@ function applyDogsData(data) {
   allDogs = mergeTempCages(data.dogs);
   photoVersions = data.photoVersions || {};
   groupMap = data.groups || {};
+  sheetNotes = Array.isArray(data.sheetNotes) ? data.sheetNotes : [];
   loadWarning = data.groups ? '' : '「可以一起溜」暫時讀不到，其他資訊正常。';
   // 顯示試算表最後同步的時間（不是打開網頁的時間），志工才知道資料有多新
   dataSyncedAt = data.syncedAt;

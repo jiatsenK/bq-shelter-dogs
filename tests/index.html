@@ -577,7 +577,7 @@ function runTests() {
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
       const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
-      eq(scripts.map(s => s.getAttribute('src')), ['js/app.js', 'js/analysis.js', 'js/find.js'], 'script（#59 起多分析頁、#99 多找狗）：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/app.js', 'js/analysis.js', 'js/find.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
@@ -2848,6 +2848,69 @@ async function runSheetWriteTests() {
   }
 }
 
+// 電腦版溜狗表（K 2026-10-10）：簡報＋全表、勾選一次登記、異動紀錄；js/desk.js 最後才載入，前面的測試照手機版跑
+async function runDeskTests() {
+  const code = await fetch('../js/desk.js').then(r => r.text());
+  const el = document.createElement('script');
+  el.textContent = code;
+  document.body.appendChild(el);
+  const saved = [allDogs, activeTab, searchQuery, sheetNotes, walkedStorage, walkedMemory, restMap, window.setWalked];
+  const TODAY = new Date();
+  const ago = n => new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() - n);
+  const mk = (name, id, cage, days, note = '') => ({ name, id, cage, walkedDate: days == null ? null : ago(days), covered: false, note, intro: '', sex: '', formerIds: [] });
+  try {
+    walkedStorage = fakeStorage(); walkedMemory = null; restMap = {};
+    allDogs = [mk('桌紅', '2026010101', '新A10', 9, '會攻擊其他狗'), mk('桌黃', '2026010102', '舊B05', 3), mk('桌綠', '2026010103', 'C區13', 1), mk('桌無', '2026010104', '母幼A', null)];
+    sheetNotes = [{ label: '備註1', text: '1/7新獨10奈威移至新B03休養' }, { label: '', text: '10/1阿湯移至C區35' }];
+    await check('電腦版：區域照籠位分、異動紀錄開頭的日期拆出來', () => {
+      eq(['新A10', '舊B05', '母幼A', 'C區13', '住院區', '外面'].map(c => deskZoneOf({ cage: c })), ['new', 'old', 'mom', 'c', 'ward', 'other']);
+      eq([deskNoteParts('10/1阿湯移至C區35'), deskNoteParts('2026/3/31 妙麗 昆布'), deskNoteParts('沒有日期')],
+        [{ date: '10/1', rest: '阿湯移至C區35' }, { date: '2026/3/31', rest: '妙麗 昆布' }, { date: '', rest: '沒有日期' }]);
+    });
+    await check('電腦版：dogs.json 的 sheetNotes 讀進來（空的、壞的拿掉）', () => {
+      eq(parseDogsData({ dogs: [], sheetNotes: [{ label: '備註1', text: ' x ' }, { text: '' }, null, { text: 'y' }] }).sheetNotes, [{ label: '備註1', text: 'x' }, { label: '', text: 'y' }]);
+      eq(parseDogsData({ dogs: [] }).sheetNotes, []);
+    });
+    await check('電腦版：簡報各幾隻、全表一列一隻（警示字紅色）、異動紀錄新的在上面', () => {
+      const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', sortWalkList(allDogs, TODAY)), 'text/html');
+      eq([...doc.querySelectorAll('.db-count b')].map(b => b.textContent), ['1', '1', '1', '1'], '紅、黃、綠、沒紀錄：');
+      eq([...doc.querySelectorAll('tbody .dr-name button')].map(b => b.textContent), ['桌無', '桌紅', '桌黃', '桌綠'], '跟手機溜狗表同一個順序：');
+      eq(doc.querySelectorAll('[data-desk-check]').length, 4, '每隻都能勾：');
+      eq(doc.querySelector('tr.flagged .dr-note mark').textContent, '攻擊', '警示字：');
+      eq([...doc.querySelectorAll('.ds-notes li')].map(li => li.textContent), ['10/1阿湯移至C區35', '1/7新獨10奈威移至新B03休養'], '新的在上面：');
+      eq(doc.querySelector('.desk-batch'), null, '還沒勾就沒有登記列：');
+    });
+    await check('電腦版：最近 30 天有 30 格，今天框起來', () => {
+      deskView = 'days30';
+      deskWalkDays = new Map(); deskWalkFirst = '';
+      const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', sortWalkList(allDogs, TODAY)), 'text/html');
+      eq([doc.querySelectorAll('thead th.dr-d').length, doc.querySelectorAll('thead th.dr-d.today').length], [30, 1]);
+      const row = [...doc.querySelectorAll('tbody tr')].find(tr => tr.textContent.includes('桌綠'));
+      eq(row.querySelectorAll('i.on').length, 1, '上次溜那天塗色：');
+      deskView = 'sheet';
+    });
+    await check('電腦版：勾兩隻按「今天 溜了」一次交給 setWalked（照舊只寫遛狗日期、誰遛的），勾的清掉', () => {
+      if (!deskOn()) return; // 測試的瀏覽器不夠寬就不測畫面
+      const calls = [];
+      window.setWalked = (dogs, on) => calls.push([dogs.map(d => d.name), on]);
+      activeTab = 'walk'; searchQuery = ''; render();
+      const boxes = [...main.querySelectorAll('[data-desk-check]')];
+      boxes[1].click(); boxes[2].click();
+      eq(main.querySelector('.desk-batch .dbx-n b').textContent, '2', '登記列：');
+      main.querySelector('[data-desk-go]').click();
+      eq(calls, [[['桌紅', '桌黃'], true]], '一次登記：');
+      eq([deskChecked.size, main.querySelector('.desk-batch')], [0, null], '清掉：');
+    });
+    await check('電腦版只靠 setWalked 登記，自己不送資料', () => {
+      if (/method\s*:|\bPOST\b|sheet-write|UPLOAD_URL/.test(code)) throw new Error('js/desk.js 不應該自己寫試算表');
+    });
+  } finally {
+    deskChecked.clear(); deskView = 'sheet';
+    [allDogs, activeTab, searchQuery, sheetNotes, walkedStorage, walkedMemory, restMap, window.setWalked] = saved;
+    render();
+  }
+}
+
 async function runOldUrlTests() {
   const testHtml = await fetch('index.html').then(r => r.text());
   // 把頁面裡的轉址程式拿出來，用假的 location 跑
@@ -3566,6 +3629,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runRangeTests)
   .then(runFindOverviewTests)
   .then(runHeaderTuckTests)
+  .then(runDeskTests) // 最後跑：載入 js/desk.js 後寬螢幕的溜狗表會換成電腦版
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;

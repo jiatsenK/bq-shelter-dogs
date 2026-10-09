@@ -1934,3 +1934,158 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .r-cage:focus-visible { outline: 3px solid var(--tab-amber); outline-offset: 1px; }
 .r-cage.plain { background: none; box-shadow: none; padding: 3px 0; font-weight: 600; color: var(--ink-soft); cursor: inherit; }
 .r-cage.plain::after { content: none; }
+
+/* ── 電腦版（K 2026-10-10，≥1100px）：溜狗表是今天的簡報＋像試算表的全表（js/desk.js），右邊異動紀錄、休養中 ──
+   分類搬到頁首當分頁（index-tab：選中的那一頁跟內容同底色，站在深綠頁首下緣）；頁首不收起 */
+@media (min-width: 1100px) {
+  html.desk-on header.app { top: 0 !important; padding: 0; }
+  .desk-on .header-inner { max-width: none; display: flex; align-items: stretch; gap: 28px; height: 64px; padding: 0 24px; }
+  .desk-on .brand { flex: none; align-items: center; gap: 10px; }
+  .desk-on .brand .titles { flex: none; }
+  .desk-on .brand .sub { justify-content: flex-start; gap: 12px; }
+  .desk-on .range { display: none !important; }
+  .desk-on .bottom-bar { position: static; padding: 0; background: none; box-shadow: none; display: flex; align-items: flex-end; }
+  .desk-on .bottom-inner { max-width: none; margin: 0; }
+  .desk-on .tabs { display: flex; gap: 4px; }
+  .desk-on .tabs button { flex-direction: row; gap: 8px; min-height: 0; height: 48px; padding: 0 18px; border-radius: 4px 4px 0 0; color: var(--shell-soft); }
+  .desk-on .tabs button .icon { font-size: 18px; }
+  .desk-on .tabs button .t { font-size: 15px; font-weight: 700; }
+  .desk-on .tabs button .n { position: static; font-size: 13px; font-weight: 600; padding: 0; min-width: 0; background: none; color: inherit; opacity: .8; }
+  .desk-on .tabs button:hover { color: #fff; }
+  .desk-on .tabs button.active { background: var(--bg); color: var(--ink); }
+  .desk-on .tabs button.active .n { color: var(--ink-soft); }
+  .desk-on .search { margin: 0 0 0 auto; width: 300px; align-self: center; }
+  .desk-on main:has(> .desk) { max-width: none; padding: 20px 24px 120px; }
+
+  .desk { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; }
+
+  /* 今天的簡報：左邊大數字、右邊各區色條（點一區就只看那一區） */
+  .desk-brief { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 36px; padding: 2px 0 18px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+  /* 照嚴重程度由左到右：紅最大，0 隻淡掉；「隻」坐在數字的底線上 */
+  .db-counts { display: flex; gap: 26px; align-items: flex-end; align-self: start; padding-top: 6px; }
+  .db-count { display: grid; gap: 6px; justify-items: start; white-space: nowrap; }
+  .db-n { display: flex; align-items: baseline; gap: 4px; font-size: 13px; color: var(--ink-soft); }
+  .db-n b { font-size: 30px; font-weight: 800; line-height: 1; color: var(--ink); }
+  .db-count.red .db-n b { font-size: 46px; font-weight: 900; color: var(--red-text); }
+  .db-count.zero .db-n b { font-weight: 500; color: var(--ink-soft); }
+  .db-count.zero .db-tag { opacity: .55; }
+  .db-tag { display: inline-flex; align-items: center; justify-content: center; min-width: 72px; height: 26px; padding: 0 8px; border-radius: 2px; font-size: 13px; font-weight: 800; }
+  .db-tag.red, .dr-day.red { background: var(--tab-red); color: #fff; }
+  .db-tag.amber, .dr-day.amber { background: var(--tab-amber); color: var(--ink); }
+  .db-tag.sage, .dr-day.sage { color: var(--green-text); }
+  .db-tag.none, .dr-day.none { background: var(--tab-muted); color: #fff; }
+  .db-tag.rest, .dr-day.rest { color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--line); }
+  .db-zones { display: grid; align-content: start; }
+  .db-zones { min-width: 0; }
+  /* 1280 也放得下：色條和「最久」那欄跟著縮，名字太長就 … */
+  .db-zone { display: grid; grid-template-columns: 96px minmax(60px, 1fr) max-content minmax(96px, 184px); align-items: center; gap: 16px; height: 34px; padding: 0 10px; border: none; border-radius: 3px; background: none; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+  .db-zone:hover { background: var(--surface-soft); }
+  .db-zone.on { background: var(--primary-soft); }
+  .db-zn { font-size: 15px; font-weight: 800; white-space: nowrap; }
+  .db-zn small { margin-left: 6px; font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+  .db-bar { display: flex; height: 12px; border-radius: 2px; overflow: hidden; background: var(--surface-soft); }
+  .db-bar i { display: block; height: 100%; }
+  .db-bar .red { background: var(--tab-red); }
+  .db-bar .amber { background: var(--tab-amber); }
+  .db-bar .none { background: var(--tab-muted); }
+  .db-bar .sage { background: #A9CDB5; }
+  .db-zs { display: flex; gap: 10px; font-size: 13px; font-weight: 700; white-space: nowrap; }
+  .db-zs .r { color: var(--red-text); }
+  .db-zs .a { color: var(--amber-text); }
+  .db-zs .g { color: var(--green-text); font-weight: 600; }
+  .db-long { font-size: 13px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .db-long b { color: var(--ink); }
+  .db-long .lv-red { color: var(--red-text); font-weight: 700; }
+  .db-long .lv-amber { color: var(--amber-text); font-weight: 700; }
+  .db-long .lv-sage { color: var(--green-text); }
+
+  /* 區域、全表／最近 30 天 */
+  /* 區域是索引分頁：上緣圓、下緣平，站在表格上緣那條 2px 檔案綠線上；全表／最近 30 天是另一組，只用底線 */
+  .desk-tools { display: flex; align-items: flex-end; gap: 16px; }
+  .dt-chips { display: flex; gap: 4px; }
+  .dt-chip { height: 40px; padding: 0 14px; border: none; border-radius: 4px 4px 0 0; background: var(--surface-soft); box-shadow: inset 1px 1px 0 var(--line), inset -1px 0 0 var(--line); color: var(--ink-soft); font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .dt-chip small { margin-left: 4px; font-size: 12px; font-weight: 500; }
+  .dt-chip:hover { color: var(--ink); }
+  .dt-chip.on { background: var(--shell); color: #fff; box-shadow: none; }
+  .dt-view { display: flex; gap: 14px; align-self: center; }
+  .dt-view button { height: 40px; padding: 0 2px; border: none; border-bottom: 2px solid transparent; background: none; color: var(--ink-soft); font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; }
+  .dt-view button.on { color: var(--ink); font-weight: 800; border-bottom-color: var(--shell); }
+  .dt-hint { margin-left: auto; align-self: center; font-size: 13px; color: var(--ink-soft); white-space: nowrap; }
+  .dt-hint b { color: var(--ink); }
+
+  /* 全表：一列一隻，狗名和天數最先看到；備註字小一級、一行，滑過看全文、點狗名看詳細資訊 */
+  .desk-sheet { background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); border-top: 2px solid var(--shell); }
+  /* 最近 30 天：自己捲（日期表頭黏在框的上緣，121 列往下也看得到日期） */
+  .desk-sheet.days30 { overflow: auto; max-height: calc(100vh - 160px); }
+  .desk-table { width: 100%; border-collapse: separate; border-spacing: 0; }
+  .desk-table thead th { position: sticky; top: 64px; z-index: 2; height: 38px; padding: 0 10px; background: var(--surface-soft); border-bottom: 1px solid var(--line); text-align: left; font-size: 12px; font-weight: 700; color: var(--ink-soft); white-space: nowrap; }
+  .days30 .desk-table thead th { top: 0; }
+  .desk-table thead th button { height: 38px; padding: 0; border: none; background: none; font: inherit; color: inherit; cursor: pointer; }
+  .desk-table thead th.sorted button { color: var(--ink); }
+  .desk-table thead th.sorted button::after { content: ''; display: inline-block; margin-left: 5px; vertical-align: 2px; border: 4px solid transparent; border-top-color: currentColor; border-bottom: none; }
+  .desk-table tbody td { height: 46px; padding: 0 10px; border-bottom: 1px solid #E6EBE8; vertical-align: middle; }
+  .desk-table tbody tr:hover td { background: #F7F9F8; }
+  .desk-table tbody tr.checked td { background: var(--primary-soft); }
+  .desk-table .dr-ck { width: 44px; padding: 0; text-align: center; }
+  .dr-ck input { width: 18px; height: 18px; margin: 0; accent-color: var(--shell); cursor: pointer; vertical-align: middle; }
+  .dr-state { font-size: 12px; color: var(--ink-soft); }
+  .dr-state.done { color: var(--green-text); font-size: 18px; }
+  .desk-table .dr-dayc { width: 86px; }
+  .dr-day { display: inline-flex; align-items: center; justify-content: center; gap: 1px; min-width: 62px; height: 28px; padding: 0 6px; border-radius: 2px; font-size: 13px; font-weight: 800; white-space: nowrap; }
+  .dr-day b { font-size: 18px; font-weight: 900; line-height: 1; }
+  .dr-day.sage { justify-content: flex-start; padding-left: 4px; }
+  .desk-table .dr-name { width: 150px; white-space: nowrap; }
+  .dr-name button { padding: 6px 0; border: none; background: none; color: var(--ink); font: inherit; font-size: 16px; font-weight: 800; cursor: pointer; }
+  .dr-name button:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .dr-name small { margin-left: 6px; font-size: 12px; color: var(--ink-soft); }
+  .desk-table .dr-cagec { width: 96px; }
+  .dr-cage { padding: 3px 7px; border: none; border-radius: 2px; background: #fff; box-shadow: inset 0 0 0 1.5px var(--ink); color: var(--ink); font: inherit; font-size: 13px; font-weight: 700; white-space: nowrap; cursor: pointer; }
+  .dr-cage:hover { background: var(--primary-soft); }
+  .dr-cage.plain { box-shadow: none; background: none; padding: 0; color: var(--ink-soft); cursor: default; }
+  .desk-table .dr-date { width: 64px; font-size: 13px; color: var(--ink-soft); }
+  .desk-table .dr-who { width: 120px; max-width: 160px; font-size: 13px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .desk-table .dr-note { max-width: 0; padding-top: 6px; padding-bottom: 6px; }
+  .dr-note div { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; font-size: 13px; line-height: 1.45; color: var(--ink-soft); }
+  .dr-warn { display: inline-block; margin-left: 6px; padding: 0 5px; border-radius: 2px; box-shadow: inset 0 0 0 1.5px var(--red-text); color: var(--red-text); font-size: 11px; font-weight: 800; line-height: 18px; vertical-align: 2px; }
+  .dr-note mark { background: none; color: var(--red-text); font-weight: 700; }
+  /* 最近 30 天看的是出門的規律：上次溜、誰遛的、備註收起來（切回全表看），30 格才放得下 */
+  .days30 .desk-table .dr-date, .days30 .desk-table .dr-who, .days30 .desk-table .dr-note { display: none; }
+  .desk-table .dr-d { width: 24px; min-width: 24px; padding: 0; text-align: center; }
+  .desk-table thead th.dr-d { padding: 4px 0; font-size: 10px; font-weight: 600; line-height: 1.15; }
+  .desk-table thead th.dr-d span { display: block; }
+  .desk-table thead th.dr-d.we { color: var(--ink); font-weight: 800; }
+  .desk-table .dr-d.today { box-shadow: inset 2px 0 0 var(--shell), inset -2px 0 0 var(--shell); }
+  .dr-d i { display: block; width: 14px; height: 14px; margin: 0 auto; border-radius: 2px; background: var(--surface-soft); }
+  .dr-d i.on { background: #3E9A62; }
+  .dr-d i.pre { background: repeating-linear-gradient(135deg, #E6EBE8 0 2px, transparent 2px 5px); }
+  .desk-foot { margin: 0; padding: 10px; font-size: 12px; color: var(--ink-soft); }
+
+  /* 右欄：異動紀錄（新的在上面）、休養中 */
+  .desk-side { position: sticky; top: 84px; display: grid; gap: 16px; max-height: calc(100vh - 104px); overflow-y: auto; }
+  .ds-panel { padding: 14px 16px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); }
+  .ds-panel h2 { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 12px; font-size: 17px; font-weight: 800; }
+  .ds-panel h2 small { font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+  .ds-notes { display: grid; margin: 0; padding: 0; list-style: none; }
+  .ds-notes li { padding: 9px 0; border-bottom: 1px solid #E6EBE8; font-size: 13.5px; line-height: 1.55; white-space: pre-line; }
+  .ds-notes li:first-child { padding-top: 0; }
+  .ds-notes li:last-child { border-bottom: none; padding-bottom: 0; }
+  .ds-notes li b { display: block; font-size: 12px; font-weight: 800; color: var(--ink-soft); }
+  .ds-more { min-height: 40px; margin-top: 6px; padding: 0; border: none; background: none; color: var(--primary); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+  .ds-empty { margin: 0; font-size: 13px; color: var(--ink-soft); }
+  .ds-rest { display: grid; gap: 10px; margin: 0; padding: 0; list-style: none; }
+  .ds-rest li { display: grid; gap: 2px; font-size: 13px; color: var(--ink-soft); }
+  .ds-rest button { justify-self: start; padding: 0; border: none; background: none; color: var(--ink); font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; }
+
+  /* 勾了幾隻：下面浮一條，按「今天 溜了」一次登記（跟手機一樣寫進試算表、可以復原） */
+  .desk-batch { position: fixed; left: 50%; bottom: 20px; z-index: 30; display: flex; align-items: center; gap: 16px; padding: 10px 10px 10px 20px; transform: translateX(-50%); border-radius: 6px; background: var(--ink); color: #fff; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.28); animation: desk-up 0.25s ease-out; }
+  @keyframes desk-up { from { transform: translate(-50%, 16px); opacity: 0; } }
+  .dbx-n { white-space: nowrap; }
+  .dbx-n b { font-size: 18px; }
+  .dbx-names { max-width: 420px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; color: var(--shell-soft); }
+  .dbx-clear { height: 44px; padding: 0 12px; border: none; background: none; color: var(--shell-soft); font: inherit; font-weight: 600; cursor: pointer; }
+  .dbx-go { height: 44px; padding: 0 20px; border: none; border-radius: 3px; background: #fff; color: var(--shell); font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; }
+  .dbx-go:hover { background: var(--primary-soft); }
+  /* 數字一律等寬，往下看才對得齊 */
+  .desk .num, .desk-batch .num, .dr-date { font-variant-numeric: tabular-nums; }
+}
+@media (min-width: 1100px) and (prefers-reduced-motion: reduce) { .desk-batch { animation: none; } }
