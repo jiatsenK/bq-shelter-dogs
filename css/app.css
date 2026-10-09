@@ -1779,3 +1779,47 @@ header.app :focus-visible, .bottom-bar :focus-visible { outline-color: var(--tab
 .tour-finger.press::after { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 3px solid var(--tab-amber, #F2B21B); animation: tour-ripple 0.5s ease-out forwards; }
 @keyframes tour-ripple { from { opacity: 1; transform: scale(0.6); } to { opacity: 0; transform: scale(1.7); } }
 .tour-replay { min-height: 44px; border: none; background: none; color: var(--primary); font-family: inherit; font-size: 15px; font-weight: 600; padding: 0 6px; cursor: pointer; }
+
+/* ── 天數優先（2026-10-09 critique＋K：「日期是現場第一個會看的重點」「眼睛跳來跳去」）──
+   色籤從卡片右緣搬到最左緣、數字放大，眼睛只沿著左邊一條線往下掃；狗名加大加粗，籠位標籤變淡，
+   「溜了」是每列唯一有外框的按鈕。頁首縮矮、選中的分頁改白底在前，最重的深色不再是標題 */
+.card .body, .card .row { display: contents; } /* 照片、名字、天數、按鈕都直接排在卡片這一層，天數才能排到最左邊 */
+.card { padding: 8px 8px 8px 0; gap: 10px; align-items: center; }
+.card .last {
+  order: -1; align-self: stretch; width: 70px !important; flex-shrink: 0;
+  margin: -8px 0 -8px 0; padding: 6px 4px; justify-content: center;
+}
+.card.flagged .last { margin-bottom: 0; }
+.card .last .lbl { font-size: 12px; font-weight: 600; }
+.card .last .val { font-size: 14px; font-weight: 700; line-height: 1.15; }
+.card .last .val b { display: block; font-size: 30px; font-weight: 900; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.card .last .val.muted { font-size: 16px; font-weight: 800; }
+.card .last:has(.val.sage) .val b { font-size: 24px; font-weight: 800; }
+.card .last:has(.val.sage) { box-shadow: inset -1px 0 0 var(--line); }
+.card .name { font-size: 18px; font-weight: 800; }
+.card .more { margin-right: 2px; }
+.card .walk-btn { margin-right: 0; }
+/* 籠位：淡底、沒有黑框，資料要讀得到但不搶天數和溜了 */
+.cage-pill { background: var(--surface-soft) !important; box-shadow: none; border-radius: 3px; color: var(--ink) !important; }
+.cage-pill .icon { color: var(--primary) !important; }
+
+/* 頁首縮矮，狗卡往上提 */
+header.app { padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-bottom: 10px; }
+.brand .logo { width: 24px; height: 24px; }
+.brand h1 { font-size: 17px; }
+.search { margin-top: 8px; }
+.search input { padding-top: 9px; padding-bottom: 9px; }
+.range { margin-top: 6px; }
+
+/* 選中的分頁：白底在前、上緣一條深綠，像抽出來的那份檔案；不再是實心深色塊 */
+.chip.on, .find-top .find-view button.on, .find-top .find-chip.on {
+  background: var(--surface) !important; color: var(--ink) !important; box-shadow: inset 0 3px 0 var(--shell), inset 1px 0 0 var(--line), inset -1px 0 0 var(--line);
+}
+.chip.on small { color: var(--ink-soft); }
+.seg button.on { background: var(--surface); color: var(--ink); box-shadow: inset 0 0 0 1.5px var(--shell); }
+
+/* 詳細資訊：天數跟狗卡一樣是大的色籤，不再是名字下的小標籤 */
+.detail-head .chips .badge.red, .detail-head .chips .badge.amber, .detail-head .chips .badge.sage, .detail-head .chips .badge.muted {
+  font-size: 18px; font-weight: 800; padding: 4px 12px;
+}
+.card .warn-note { order: 2; } /* 警示原文排在整張卡最下面一行，溜了留在第一行 */

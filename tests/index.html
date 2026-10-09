@@ -166,14 +166,14 @@ function runTests() {
         eq(searchQuery, '', '清空：');
       } finally { input.value = ''; searchQuery = ''; }
     }),
-    check('#3 色標邊界：0～6 天綠、第 7 天起黃、第 30 天起紅', () => {
+    check('#3 色標邊界（K 2026-10-09 改）：0～2 天綠、第 3 天起黃、第 5 天起紅', () => {
       const daysAgo = n => ({ name: '測試狗', walkedDate: new Date(2026, 8, 24 - n), covered: false });
       const level = n => computeStatus(daysAgo(n), TODAY).level;
-      eq([0, 6, 7, 29, 30, 45].map(level), ['sage', 'sage', 'amber', 'amber', 'red', 'red']);
+      eq([0, 2, 3, 4, 5, 45].map(level), ['sage', 'sage', 'amber', 'amber', 'red', 'red']);
       const box = document.createElement('div');
-      box.innerHTML = statusBadge(daysAgo(30), TODAY);
-      eq(box.querySelector('.badge').className, 'badge red', '30 天徽章：');
-      eq(box.querySelector('.badge').textContent, '30 天前', '30 天徽章文字：');
+      box.innerHTML = statusBadge(daysAgo(5), TODAY);
+      eq(box.querySelector('.badge').className, 'badge red', '5 天徽章：');
+      eq(box.querySelector('.badge').textContent, '5 天前', '5 天徽章文字：');
     }),
     check('#3 待巡房排序：沒紀錄最前，再由久到近，有人固定照顧最後；所有狗都在', () => {
       const d = (name, n, covered = false) => ({ name, walkedDate: n == null ? null : new Date(2026, 8, 24 - n), covered });
@@ -326,7 +326,7 @@ function runTests() {
       const box = document.createElement('div');
       const val = dog => { box.innerHTML = lastWalk(dog, TODAY); const v = box.querySelector('.val'); return [v.textContent, v.className]; };
       eq(val({ walkedDate: new Date(2026, 8, 24), covered: false }), ['今天', 'val sage']);
-      eq(val({ walkedDate: new Date(2026, 8, 14), covered: false }), ['10 天前', 'val amber']);
+      eq(val({ walkedDate: new Date(2026, 8, 21), covered: false }), ['3 天前', 'val amber']); // K 2026-10-09 門檻：第 3 天起黃、第 5 天起紅
       eq(val({ walkedDate: new Date(2026, 7, 20), covered: false }), ['35 天前', 'val red']);
       eq(val({ walkedDate: null, covered: false }), ['沒有紀錄', 'val muted']);
       eq(val({ walkedDate: null, covered: true }), ['有人固定照顧', 'val sage small']);
