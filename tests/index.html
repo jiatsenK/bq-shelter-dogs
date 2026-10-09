@@ -1961,15 +1961,15 @@ async function runV9Tests() {
       box().querySelector('[data-ob="later"]').click();
       const tour = () => document.getElementById('tour');
       eq([box(), !!tour(), nameLater(), activeTab], [null, true, true, 'walk'], '先看看進導覽，在溜狗表上：');
-      eq([tour().querySelector('h2').textContent, tour().querySelector('.tour-n').textContent], ['溜狗表', '1 / 5'], '第一步：');
+      eq([tour().querySelector('h2').textContent, tour().querySelector('.tour-n').textContent], ['最久沒溜的在最上面', '1 / 8'], '第一步：');
       eq(tour().querySelector('[data-tour="back"]'), null, '第一步沒有上一步：');
       eq(tourTarget(0), document.querySelector('#main .card[data-dog]'), '亮的是最上面那張狗卡（最久沒溜）：');
       if (!document.getElementById('main').closest('[inert]')) throw new Error('導覽時後面的網頁不能按');
       tour().querySelector('[data-tour="next"]').click();
-      eq([document.activeElement === tour().querySelector('h2'), tour().querySelector('.tour-n').textContent], [true, '2 / 5'], '換一步焦點到標題：');
-      eq(tourTarget(1), document.querySelector('#main .card[data-dog] .walk-btn'), '第二步亮「溜了」：');
+      eq([document.activeElement === tour().querySelector('h2'), tour().querySelector('.tour-n').textContent], [true, '2 / 8'], '換一步焦點到標題：');
+      eq([tourTarget(1), tourTarget(3)], [document.querySelector('#main .card[data-dog] .last'), document.querySelector('#main .card[data-dog] .walk-btn')], '第二步亮色籤、第四步亮「溜了」（一個說明一個動作）：');
       tour().querySelector('[data-tour="back"]').click();
-      eq(tour().querySelector('h2').textContent, '溜狗表', '上一步：');
+      eq(tour().querySelector('h2').textContent, '最久沒溜的在最上面', '上一步：');
       tour().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       eq([tour(), needOnboard(), document.getElementById('main').closest('[inert]')], [null, false, null], 'Esc 等於略過，下次開不再問名字：');
       setWalked([allDogs[0]], true);
@@ -1986,7 +1986,7 @@ async function runV9Tests() {
       hideToast();
       activeTab = 'mine'; myWalks = []; myWalksState = 'ready'; render();
       document.querySelector('#main [data-open-guide]').click();
-      eq([tour().querySelector('h2').textContent, tour().querySelector('[data-tour="done"]').textContent, activeTab], ['溜狗表', '關閉', 'walk'], '我溜過可以再打開說明（回到溜狗表）：');
+      eq([tour().querySelector('h2').textContent, tour().querySelector('[data-tour="done"]').textContent, activeTab], ['最久沒溜的在最上面', '關閉', 'walk'], '我溜過可以再打開說明（回到溜狗表）：');
       tour().querySelector('[data-tour="done"]').click();
       eq(tour(), null, '關閉：');
     });
@@ -3366,6 +3366,24 @@ async function runRangeTests() {
     eq(!!doc.querySelector('header.app #rangeLabel[hidden]'), true, '範圍字在頁首、一開始藏著：');
     eq(doc.querySelector('meta[name="theme-color"]').getAttribute('content'), '#1F5C4D', 'theme-color：');
     eq(MANIFEST.theme_color, '#1F5C4D', '主畫面捷徑：');
+  });
+  await check('2026-10-09 導覽示範「溜了」只換畫面上的樣子：不送出、不記成已溜，收回後畫回原本', async () => {
+    const saved = [allDogs, activeTab, searchQuery, window.fetch];
+    const calls = [];
+    try {
+      allDogs = [dog(ago(12))]; activeTab = 'walk'; searchQuery = ''; render();
+      window.fetch = async (...a) => { calls.push(a); return new Response('{}'); };
+      tour = { step: 3, again: true, shown: null, undo: null, timers: [] };
+      TOUR_DEMOS.walk.run();
+      await new Promise(r => setTimeout(r, 800));
+      const btn = () => document.querySelector('#main .card[data-dog] .walk-btn');
+      eq([btn().textContent.trim(), calls.length, walkedToday().has(allDogs[0])], ['已溜', 0, false], '畫面變已溜、沒送出、沒記：');
+      tour.undo = TOUR_DEMOS.walk.undo; tourReset();
+      eq(btn().textContent.trim(), '溜了', '收回：');
+    } finally {
+      if (tour) tourReset(); tour = null;
+      [allDogs, activeTab, searchQuery, window.fetch] = saved; render();
+    }
   });
 }
 
