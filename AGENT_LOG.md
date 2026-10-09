@@ -908,3 +908,12 @@
 - R2 裡的相簿照片（photos/gallery/、photos/thumbs/gallery/、meta/gallery.json）是永久刪除，沒有由 Agent 做；步驟寫在 docs/CLOUDFLARE_SETUP.md「刪掉相簿照片」，請 K 自己在 Cloudflare 刪。
 - 通關碼（NOTES_PASS_KEY）留著，下一個 PR「休養中」管理要用。
 - 測試：網頁拿掉相簿測試、留主照片裁切（runCropTests）、加「沒有相簿」；Worker 拿掉 16 項相簿測試、加「/api/gallery 回 410、Trash 相簿照片不能復原」。node 126 過、網頁 198 過（本機另 2 項老問題）。文件：PHOTO_UPLOAD_SETUP、CLOUDFLARE_SETUP、VOLUNTEER_GUIDE、PROJECT_GOALS、README、CONTEXT。
+
+## 2026-10-09 Claude（暫住、休養中管理）
+- 依據：K 2026-10-09 阿拉丁「剛動完手術不能溜，暫時搬到獨立籠」；問答：舊B16「(阿拉丁)」是暫住的籠子、現在不能出來溜但是暫時的；「不能就在我的前端做管理嗎？讓我有管理者的權限可以做這些事情？都不要動到試算表；排到下面、休養中、10/20 前暫停帶出」。
+- 暫住：js/app.js mergeTempCages（在 applyDogsData 做，parseDogsData 仍一列一隻）：名字加括號、沒有編號、有同名狗的列，合到那隻狗，cage 換成暫住的籠、homeCage 記原本的；溜了照舊用編號＋名字寫原本那列。狗卡、詳細資訊籠位旁寫「暫住，原本 新B04」。
+- 休養中：資料在 repo 的 data/rest.json（編號 → until、reason），網站開頁時讀；computeStatus 多 kind 'rest'（今天 ≤ until）。排在最下面（有人固定照顧之上）、色籤不上底色灰字「休養中／到 10/20」、沒有溜了（狗卡、列表、在哪、詳細資訊底部），不算在找狗最久沒溜、分析超過 N 天沒溜。詳細資訊名字下面一行說明，最下面「設定休養中（管理用，要通關碼）」表單（原因、到哪一天、通關碼），送 Worker PUT /rest/{編號}。
+- Worker：putRest（通關碼 NOTES_PASSCODE、日期台灣今天到 180 天、原因 40 字、同備註的 sha 重試），寫 data/rest.json；預覽版 403。
+- data/rest.json 先放阿拉丁（2024082801）到 2026-10-20、術後休養（K 指定）。
+- 撞名修正：原本就有 ymdText（斜線格式），新的改叫 isoDay；mdText2 改 monthDay。loadRest 讀的期間這支手機改過就不蓋掉。
+- 測試：網頁加 runRestTests 5 項、#10 唯讀加 /rest 呼叫和 REST_URL；Worker 加 2 項。node 128 過、網頁 203 過（本機另 2 項老問題）。文件：CONTEXT（休養中、暫住、通關碼）、DESIGN_GUIDE、PHOTO_UPLOAD_SETUP。接在 #183 後面。

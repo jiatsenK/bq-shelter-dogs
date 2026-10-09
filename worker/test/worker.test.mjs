@@ -158,7 +158,7 @@ const NENV = { GITHUB_TOKEN: 'test-token', ALLOWED_ORIGINS: ORIGIN, NOTES_PASSCO
 const NOTES_API = '/repos/jiatsenK/bq-shelter-dogs/contents/data/my-notes.json';
 
 // 假 GitHub：data/my-notes.json 放在 store（text 是檔案內容，null 表示還沒有這個檔）
-function fakeNotesGithub({ text = null, putStatus = [], getStatus = 200 } = {}) {
+function fakeNotesGithub({ text = null, putStatus = [], getStatus = 200, api = NOTES_API } = {}) {
   const store = { text, sha: text === null ? null : 'sha-0', n: 0 };
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
@@ -166,7 +166,7 @@ function fakeNotesGithub({ text = null, putStatus = [], getStatus = 200 } = {}) 
     const method = init.method || 'GET';
     calls.push({ path: u.pathname, method, body: init.body && JSON.parse(init.body) });
     if (u.pathname.endsWith('/contents/data/dogs.json')) return new Response(JSON.stringify(DOGS));
-    if (u.pathname !== NOTES_API) return new Response('no', { status: 404 });
+    if (u.pathname !== api) return new Response('no', { status: 404 });
     if (method === 'GET') {
       if (getStatus !== 200) return new Response('{}', { status: getStatus });
       if (store.text === null) return new Response('{}', { status: 404 });
@@ -191,6 +191,58 @@ function putNote(id, text, { passcode = '對的通關碼', origin = ORIGIN, ip =
 }
 
 const getNotes = (origin = ORIGIN) => new Request('https://w.example/notes', { headers: origin ? { Origin: origin } : {} });
+
+// ---- 休養中（K 2026-10-09）：PUT /rest/{編號}，通關碼，寫 data/rest.json ----
+const REST_API = '/repos/jiatsenK/bq-shelter-dogs/contents/data/rest.json';
+function putRest(id, body, { origin = ORIGIN, ip = '1.1.1.1' } = {}) {
+  const headers = { 'Content-Type': 'application/json', 'CF-Connecting-IP': ip };
+  if (origin) headers.Origin = origin;
+  return new Request(`https://w.example/rest/${id}`, { method: 'PUT', headers, body: JSON.stringify(body) });
+}
+// 台灣今天往後 n 天的 YYYY-MM-DD
+const twDay = n => new Date(Date.now() + 8 * 3600 * 1000 + n * 86400000).toISOString().slice(0, 10);
+
+test('休養中：有通關碼就寫進 data/rest.json（編號 → until、reason），不動別隻；結束休養就拿掉', async () => {
+  const other = { '2024010101': { until: twDay(5), reason: '別隻', updatedAt: '2026-10-01T00:00:00.000Z' } };
+  const { store, calls } = fakeNotesGithub({ text: JSON.stringify(other), api: REST_API });
+  const until = twDay(11);
+  const r = await send(putRest('2024032902', { passcode: '對的通關碼', until, reason: ' 術後休養\n ' }), NENV);
+  assert.equal(r.status, 200);
+  assert.deepEqual([r.body.rest.until, r.body.rest.reason], [until, '術後休養']);
+  const saved = JSON.parse(store.text);
+  assert.deepEqual(saved['2024010101'], other['2024010101']);
+  assert.equal(saved['2024032902'].until, until);
+  const put = calls.find(c => c.method === 'PUT');
+  assert.match(put.body.message, new RegExp(`^休養中到 ${until}：2024032902（測試狗）`));
+
+  const end = await send(putRest('2024032902', { passcode: '對的通關碼', end: true }), NENV);
+  assert.deepEqual([end.status, end.body.rest], [200, null]);
+  assert.equal('2024032902' in JSON.parse(store.text), false);
+  assert.match(calls.filter(c => c.method === 'PUT').pop().body.message, /^結束休養：2024032902/);
+});
+
+test('休養中：通關碼錯、日期看不懂或已經過了、超過 180 天、原因太長、編號不對都擋；只能用 PUT；預覽版不能存', async () => {
+  const { calls } = fakeNotesGithub({ text: '{}', api: REST_API });
+  const bad = async (body, status, id = '2024032902') => {
+    const r = await send(putRest(id, body), NENV);
+    assert.equal(r.status, status, JSON.stringify(body));
+    return r;
+  };
+  const wrong = await bad({ passcode: '錯的', until: twDay(3) }, 401);
+  assert.equal(wrong.body.code, 'passcode');
+  await bad({ passcode: '對的通關碼', until: '2026/10/20' }, 400);
+  await bad({ passcode: '對的通關碼', until: '2026-02-30' }, 400);
+  await bad({ passcode: '對的通關碼', until: twDay(-1) }, 400);
+  await bad({ passcode: '對的通關碼', until: twDay(181) }, 400);
+  await bad({ passcode: '對的通關碼', until: twDay(3), reason: '字'.repeat(41) }, 413);
+  await bad({ passcode: '對的通關碼', until: twDay(3) }, 404, '1999999999');
+  await bad({ passcode: '對的通關碼', until: twDay(3) }, 400, 'a%2Fb');
+  assert.equal(calls.filter(c => c.method === 'PUT').length, 0);
+  const get = await send(new Request('https://w.example/rest/2024032902', { headers: { Origin: ORIGIN } }), NENV);
+  assert.equal(get.status, 405);
+  const pre = await send(putRest('2024032902', { passcode: '對的通關碼', until: twDay(3) }), { ...NENV, PREVIEW: '1' });
+  assert.equal(pre.status, 403);
+});
 
 test('備註：有通關碼寫入，存成 data/my-notes.json（編號 → text、updatedAt），不動其他狗的備註', async () => {
   const other = { '2024010101': { text: '別隻狗的備註', updatedAt: '2026-09-01T00:00:00.000Z' } };
