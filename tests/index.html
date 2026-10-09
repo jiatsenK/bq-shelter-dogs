@@ -2314,13 +2314,14 @@ async function runFindTests() {
       if (!(nb1[1] < na1[1] && na1[1] < d1[1])) throw new Error('新犬舍由上到下應該是新B、新A、新獨');
       if (!(nb1[0] < nb10[0] && d1[0] < d12[0])) throw new Error('新犬舍應該左到右 1 號起');
       if (!(d1[2] < nb1[2])) throw new Error('新獨應該比較窄');
-      findView = 'map'; findZone = 'all'; activeTab = 'find'; searchQuery = '';
+      // 全圖不畫籠子（critique 2026-10-09），放大一區才畫
+      findView = 'map'; findZone = 'new'; activeTab = 'find'; searchQuery = '';
       render();
       eq(document.querySelectorAll('#main rect.fm-cage').length, 74, '頁面平面圖畫出每個籠子：');
       eq(document.querySelectorAll('#main rect.fm-cage.has').length, 4, '有狗的籠子：');
     });
     await check('逐籠平面圖：點籠子只列那籠的狗、再點回整區；搜尋時找到的籠子亮橘色、其他淡掉', () => {
-      findView = 'map'; findZone = 'all'; findCage = null; activeTab = 'find'; searchQuery = '';
+      findView = 'map'; findZone = 'new'; findCage = null; activeTab = 'find'; searchQuery = '';
       render();
       const heads = () => [...document.querySelectorAll('#main .find-dog .find-name .n')].map(n => n.textContent);
       document.querySelector('#main g[data-find-cage="新B10"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -3360,6 +3361,7 @@ async function runFindOverviewTests() {
     const main = document.getElementById('main');
     await check('找狗全圖：只放大區名（籠子小字收起來），下面列最久沒溜的狗，不列 0–2 天的', () => {
       eq(!!main.querySelector('.find-map.overview'), true, '全圖：');
+      eq(main.querySelectorAll('rect.fm-cage').length, 0, '全圖不畫籠子（K 2026-10-09 iPhone 上太擠）：');
       eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['沒紀錄', '十天', '四天'], '最久沒溜的狗：');
     });
     await check('找狗放大到一區時不是全圖，也不列最久沒溜的狗', () => {

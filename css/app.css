@@ -1833,10 +1833,5 @@ header.app { padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-bo
 .a-kpi.warn .a-kpi-v, .a-kpi.warn .a-kpi-l, .a-kpi.warn .a-kpi-v small { color: var(--amber-text); }
 h2.name { margin: 0; }
 
-/* 找狗全圖（critique 2026-10-09 P2）：籠子的小字收起來，區名和隻數放大，在手機上讀得到；點一區放大才看籠子 */
-.find-map.overview .fm-cn { display: none; }
-.find-map.overview .fm-t { font-size: 24px; }
-.find-map.overview .fm-n { font-size: 24px; }
-.find-map.overview .fm-n-s { font-size: 22px; }
-.find-map.overview .fm-unit { font-size: 15px; }
+/* 找狗全圖（critique 2026-10-09 P2）：js/find.js 不畫籠子、區名和隻數照放大的字排（K 2026-10-09 iPhone 上字疊在一起，不再用 CSS 硬改字級） */
 .find-map-card + .find-zone-head h2 { font-size: 17px; }
