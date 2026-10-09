@@ -1,7 +1,7 @@
 // 照片一次性搬到 Cloudflare R2（#130），由 GitHub Action「照片搬到 R2」執行（.github/workflows/migrate-photos-r2.yml）
 // - 清點 repo 裡 photos/ 底下所有 .jpg（主照片、相簿、縮圖），算 sha256 和大小，一次 10 張送給網站的 /api/admin/migrate，
 //   Worker 從部署上去的舊檔複製進 R2，R2 寫入時用 sha256 驗證內容
-// - R2 已經有的（網站換過、刪過）不會被舊檔蓋掉；相簿清單（data/gallery.json）也一起接過去
+// - R2 已經有的（網站換過、刪過）不會被舊檔蓋掉（相簿 K 2026-10-09 拿掉，不再接相簿清單）
 // - 搬完再逐檔核對（/api/admin/verify）：大小、sha256 都對才算數；數量和每一種結果寫進 Action 的摘要
 // - 可以重跑：已經搬過的會顯示「R2 已有」，不會重複複製
 // - repo 裡的舊照片不刪，等 K 驗收 R2 沒問題再另外處理
@@ -61,14 +61,8 @@ export async function migrate({ root = '.', site, passcode, fetchImpl = fetch, l
   log(`repo 裡的照片：${items.length} 張（原圖 ${items.filter(i => !i.path.startsWith('photos/thumbs/')).length}、縮圖 ${items.filter(i => i.path.startsWith('photos/thumbs/')).length}）`);
 
   const copied = [];
-  let gallery = null;
-  const batches = [];
-  for (let i = 0; i < items.length; i += BATCH) batches.push(items.slice(i, i + BATCH));
-  if (!batches.length) batches.push([]); // 沒有照片也要接相簿清單
-  for (const [n, batch] of batches.entries()) {
-    const out = await post(site, passcode, 'migrate', { items: batch, gallery: n === 0 }, fetchImpl);
-    if (n === 0) gallery = out.gallery;
-    copied.push(...out.results);
+  for (let i = 0; i < items.length; i += BATCH) {
+    copied.push(...(await post(site, passcode, 'migrate', { items: items.slice(i, i + BATCH) }, fetchImpl)).results);
   }
   const verified = [];
   for (let i = 0; i < items.length; i += BATCH) {
@@ -81,7 +75,7 @@ export async function migrate({ root = '.', site, passcode, fetchImpl = fetch, l
   const lines = [
     '## 照片搬到 R2',
     '',
-    `repo 裡的照片共 **${items.length}** 張；相簿清單：${gallery === 'copied' ? '這次複製' : gallery === 'exists' ? 'R2 已有' : '沒有複製成功'}`,
+    `repo 裡的照片共 **${items.length}** 張`,
     '',
     '| 搬遷 | 張數 |', '|---|---|',
     ...Object.entries(c).map(([k, n]) => `| ${LABELS[k] || k} | ${n} |`),
@@ -93,7 +87,7 @@ export async function migrate({ root = '.', site, passcode, fetchImpl = fetch, l
   ];
   const summary = lines.join('\n');
   log(summary);
-  return { total: items.length, copied: c, verified: v, gallery, bad, summary, ok: !bad.length && gallery !== 'failed' };
+  return { total: items.length, copied: c, verified: v, bad, summary, ok: !bad.length };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
