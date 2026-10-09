@@ -1961,7 +1961,7 @@ async function runV9Tests() {
       box().querySelector('[data-ob="later"]').click();
       const tour = () => document.getElementById('tour');
       eq([box(), !!tour(), nameLater(), activeTab], [null, true, true, 'walk'], '先看看進導覽，在溜狗表上：');
-      eq([tour().querySelector('h2').textContent, tour().querySelector('.tour-n').textContent], ['最久沒溜的在最上面', '1 / 8'], '第一步：');
+      eq([tour().querySelector('h2').textContent, tour().querySelector('.tour-n').textContent], ['溜狗表', '1 / 8'], '第一步：');
       eq(tour().querySelector('[data-tour="back"]'), null, '第一步沒有上一步：');
       eq(tourTarget(0), document.querySelector('#main .card[data-dog]'), '亮的是最上面那張狗卡（最久沒溜）：');
       if (!document.getElementById('main').closest('[inert]')) throw new Error('導覽時後面的網頁不能按');
@@ -1969,7 +1969,7 @@ async function runV9Tests() {
       eq([document.activeElement === tour().querySelector('h2'), tour().querySelector('.tour-n').textContent], [true, '2 / 8'], '換一步焦點到標題：');
       eq([tourTarget(1), tourTarget(3)], [document.querySelector('#main .card[data-dog] .last'), document.querySelector('#main .card[data-dog] .walk-btn')], '第二步亮色籤、第四步亮「溜了」（一個說明一個動作）：');
       tour().querySelector('[data-tour="back"]').click();
-      eq(tour().querySelector('h2').textContent, '最久沒溜的在最上面', '上一步：');
+      eq(tour().querySelector('h2').textContent, '溜狗表', '上一步：');
       tour().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       eq([tour(), needOnboard(), document.getElementById('main').closest('[inert]')], [null, false, null], 'Esc 等於略過，下次開不再問名字：');
       setWalked([allDogs[0]], true);
@@ -1986,7 +1986,7 @@ async function runV9Tests() {
       hideToast();
       activeTab = 'mine'; myWalks = []; myWalksState = 'ready'; render();
       document.querySelector('#main [data-open-guide]').click();
-      eq([tour().querySelector('h2').textContent, tour().querySelector('[data-tour="done"]').textContent, activeTab], ['最久沒溜的在最上面', '關閉', 'walk'], '我溜過可以再打開說明（回到溜狗表）：');
+      eq([tour().querySelector('h2').textContent, tour().querySelector('[data-tour="done"]').textContent, activeTab], ['溜狗表', '關閉', 'walk'], '我溜過可以再打開說明（回到溜狗表）：');
       tour().querySelector('[data-tour="done"]').click();
       eq(tour(), null, '關閉：');
     });

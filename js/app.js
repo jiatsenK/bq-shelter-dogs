@@ -2918,17 +2918,17 @@ const NAME_LATER_KEY = 'bq-name-later';
 // ── 使用說明導覽（K 2026-10-09：直接用實際的網頁；一個說明一個動作，用手指示範）──
 // 畫面變暗、只亮要說明的地方，旁邊小框一句話；有 demo 的步驟，手指會點一下示範那個動作。
 // 「溜了」只換畫面上的樣子，不會送出、不寫試算表；打開詳細資訊、在哪、換分頁本來就不改資料，真的做，換下一步時收回。
-// 說明文字都在 TOUR_STEPS（K 在 Issue #171 對照修改後照抄進來）；target 依序找，第一個找得到的就亮它，
+// 說明文字都在 TOUR_STEPS（K 2026-10-09 在 Issue #171 改的字；「狗狗」照名詞表改「狗」，K 同意）；target 依序找，第一個找得到的就亮它，
 // 都找不到（資料還沒讀到、列表模式沒有籠位）時小框放在畫面中間
 const TOUR_STEPS = [
-  { target: ['#main .card[data-dog]', '#main .row-dog[data-dog]'], title: '最久沒溜的在最上面', text: '狗照多久沒溜排，最上面的最久沒溜。' },
-  { target: ['#main .card[data-dog] .last', '#main .row-dog[data-dog] .r-date'], title: '看色籤', text: '色籤是多久沒溜：紅、黃要先溜。' },
-  { target: ['#main .card[data-dog] .name', '#main .row-dog[data-dog] .r-name'], title: '點狗卡', text: '點狗卡，看照片和備註。', demo: 'detail' },
-  { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn'], title: '溜完按「溜了」', text: '日期和你的名字會寫進試算表。', demo: 'walk' },
-  { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn'], title: '按錯了', text: '再按一次「已溜」就取消。', demo: 'unwalk' },
-  { target: ['#main .card[data-dog] .cage-pill'], title: '狗在哪', text: '點籠位，平面圖會標出那一籠。', demo: 'where' },
-  { target: ['#tabs [data-tab="mine"]'], title: '我溜過', text: '你溜過的狗都在這裡。', demo: 'tab' },
-  { target: ['#tabs [data-tab="find"]'], title: '找狗', text: '看平面圖找籠子。', demo: 'tab' },
+  { target: ['#main .card[data-dog]', '#main .row-dog[data-dog]'], title: '溜狗表', text: '依照上次溜狗時間排序，越久沒溜的狗會排越前面。' },
+  { target: ['#main .card[data-dog] .last', '#main .row-dog[data-dog] .r-date'], title: '上次溜狗天數', text: '顯示距離上次溜狗的天數過了幾天。' },
+  { target: ['#main .card[data-dog] .name', '#main .row-dog[data-dog] .r-name'], title: '狗資料', text: '點擊名稱，可以查看照片和詳細紀錄。', demo: 'detail' },
+  { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn'], title: '溜狗登記', text: '溜完按「溜了」，就會自動記錄日期和名字。', demo: 'walk' },
+  { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn'], title: '取消登記', text: '如果按錯，再按一次「已溜」就可以取消。', demo: 'unwalk' },
+  { target: ['#main .card[data-dog] .cage-pill'], title: '籠位查詢', text: '點擊籠位，就能在平面圖查看位置。', demo: 'where' },
+  { target: ['#tabs [data-tab="mine"]'], title: '我溜過', text: '查看自己溜過的狗。', demo: 'tab' },
+  { target: ['#tabs [data-tab="find"]'], title: '找狗', text: '透過平面圖快速找到狗的位置。', demo: 'tab' },
 ];
 let tour = null; // { step, again, shown: 示範後改亮的地方, undo: 收回示範, timers }
 function tourTarget(step) {
