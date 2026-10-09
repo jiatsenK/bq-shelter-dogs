@@ -690,51 +690,8 @@ html.lightbox-open { overflow: hidden; }
 .my-note-save:disabled { opacity: 0.6; cursor: default; }
 .my-note-actions .photo-cancel { margin: 0; }
 
-/* 相簿（狗卡資訊下方）：三欄正方形縮圖，最後一格「新增」；點了用燈箱看大圖、左右滑換張 */
-.gallery-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
-@media (min-width: 560px) { .gallery-grid { grid-template-columns: repeat(4, 1fr); } }
-.g-tile, .g-add {
-  position: relative; aspect-ratio: 1; width: 100%;
-  border: none; border-radius: 12px; padding: 0; overflow: hidden;
-  background: var(--primary-soft); font-family: inherit; cursor: zoom-in;
-}
-.g-tile[hidden] { display: none; }
-.g-tile img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.g-tile:focus-visible, .g-add:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.g-tag {
-  position: absolute; left: 6px; bottom: 6px;
-  font-size: 11.5px; font-weight: 700; color: #fff;
-  background: rgba(30, 42, 68, 0.62); border-radius: 99px; padding: 1px 8px;
-}
-.g-fallback { display: none; position: absolute; inset: 0; align-items: center; justify-content: center; color: var(--primary); opacity: 0.55; font-size: 28px; }
-.g-tile.broken { cursor: default; }
-.g-tile.broken img { display: none; }
-.g-tile.broken .g-fallback { display: flex; }
-.g-add {
-  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  background: var(--surface-soft); border: 2px dashed var(--line); color: var(--primary);
-  font-size: 13.5px; font-weight: 700; cursor: pointer;
-}
-.g-add .icon { font-size: 24px; }
-.g-add:active { background: var(--primary-soft); }
-.gallery-note { margin-top: 8px; }
-/* 相簿選好的照片：放在相簿格裡「新增」那格的位置，大小跟其他格一樣 */
-.gallery-grid .gb-item { border-radius: 12px; }
-.gallery-grid .gb-item .g-tag { top: 6px; bottom: auto; }
-.photo-upload.preview.in-gallery { margin-top: 12px; padding: 0; box-shadow: none; }
-
-/* 燈箱換張：兩側箭頭、下方張數與刪除 */
-.lightbox-nav {
-  position: absolute; top: 50%; transform: translateY(-50%);
-  width: 44px; height: 44px; border-radius: 50%;
-  border: none; background: rgba(255, 255, 255, 0.18); color: #fff;
-  font-size: 22px; display: flex; align-items: center; justify-content: center;
-  cursor: pointer;
-}
-.lightbox-nav.prev { left: calc(10px + env(safe-area-inset-left, 0px)); }
-.lightbox-nav.next { right: calc(10px + env(safe-area-inset-right, 0px)); }
-.lightbox-nav[hidden] { display: none; }
-.lightbox-nav:focus-visible, .lightbox-delete:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+/* 燈箱下方列：裁切 */
+.lightbox-delete:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .lightbox-bar {
   position: absolute; left: 50%; transform: translateX(-50%);
   bottom: calc(16px + env(safe-area-inset-bottom, 0px));
@@ -742,33 +699,10 @@ html.lightbox-open { overflow: hidden; }
   display: flex; align-items: center; gap: 10px; color: #fff; font-size: 14px;
 }
 .lightbox-bar[hidden] { display: none; }
-.lightbox-count { font-variant-numeric: tabular-nums; font-weight: 700; background: rgba(255, 255, 255, 0.18); border-radius: 99px; padding: 4px 12px; }
-.lightbox-tag { opacity: 0.85; }
 .lightbox-delete {
   display: flex; align-items: center; gap: 4px;
   border: none; border-radius: 99px; background: rgba(255, 255, 255, 0.18); color: #fff;
   font-family: inherit; font-size: 14px; font-weight: 700; padding: 6px 12px; cursor: pointer;
-}
-.lightbox-del {
-  width: min(360px, calc(100vw - 32px));
-  background: var(--surface); color: var(--ink); border-radius: 16px; padding: 12px 14px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.3);
-}
-.lightbox-del-q { font-size: 15px; font-weight: 700; margin-bottom: 8px; }
-.lightbox-del input[type="password"] {
-  width: 100%; box-sizing: border-box; font-family: inherit; font-size: 16px;
-  border: 1.5px solid var(--line); border-radius: 10px; padding: 8px 10px; background: var(--surface-soft); color: var(--ink);
-}
-.lightbox-del .photo-error { margin-top: 8px; }
-.lightbox-del-actions { display: flex; gap: 8px; margin-top: 10px; }
-.lightbox-del-yes {
-  flex: 1; border: none; border-radius: 12px; background: var(--red-text); color: #fff;
-  font-family: inherit; font-size: 15px; font-weight: 700; padding: 10px; cursor: pointer;
-}
-.lightbox-del-yes:disabled { opacity: 0.6; cursor: default; }
-.lightbox-del-no {
-  border: none; border-radius: 12px; background: var(--muted-bg); color: var(--ink);
-  font-family: inherit; font-size: 15px; padding: 10px 16px; cursor: pointer;
 }
 
 /* 再次入所（#75）：詳細資訊編號下面一行小字 */
@@ -835,31 +769,6 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
   .thumb img { opacity: 1; }
 }
 
-/* 相簿一次加好幾張：預覽格，每張右上角可拿掉，上傳時顯示每張的狀態 */
-.gb-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.gb-item { position: relative; aspect-ratio: 1; border-radius: 10px; overflow: hidden; background: var(--surface-soft); }
-.gb-item img { display: block; width: 100%; height: 100%; object-fit: cover; }
-.gb-item.done img, .gb-item.uploading img { opacity: 0.6; }
-.gb-state {
-  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
-  display: flex; align-items: center; justify-content: center;
-  min-width: 28px; height: 28px; border-radius: 99px; padding: 0 8px;
-  font-size: 12px; font-weight: 700; color: #fff; white-space: nowrap;
-}
-.gb-state .icon { font-size: 16px; }
-.gb-state.busy { background: rgba(30, 42, 68, 0.72); }
-.gb-state.ok { background: var(--green-text); }
-.gb-state.bad { background: var(--red-text); }
-.gb-remove {
-  position: absolute; top: 4px; right: 4px;
-  width: 26px; height: 26px; border-radius: 50%;
-  border: none; background: rgba(30, 42, 68, 0.72); color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 13px; padding: 0; cursor: pointer;
-}
-.gb-remove::after { content: ''; position: absolute; inset: -6px; }
-.gb-remove:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-
 /* 裁切：黑底全螢幕，照片在固定框後面拖曳、縮放；框外變暗 */
 .cropper {
   position: fixed; inset: 0; z-index: 50;
@@ -894,14 +803,6 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
   border: 1.5px solid var(--line); border-radius: 14px; background: var(--surface); color: var(--ink);
   font-family: inherit; font-size: 15px; font-weight: 700; padding: 10px; cursor: pointer;
 }
-.gb-crop {
-  position: absolute; left: 4px; bottom: 4px;
-  width: 26px; height: 26px; border-radius: 50%;
-  border: none; background: rgba(30, 42, 68, 0.72); color: #fff;
-  display: flex; align-items: center; justify-content: center;
-  font-size: 14px; padding: 0; cursor: pointer;
-}
-.gb-crop::after { content: ''; position: absolute; inset: -6px; }
 
 /* ── 找狗（#99）：照片圖鑑＋平面圖 ── */
 /* K 2026-09-28：照片／平面圖一排、區域一排，分開兩排 */
@@ -1460,9 +1361,7 @@ body.toast-on main { padding-bottom: calc(176px + env(safe-area-inset-bottom, 0p
 .toast-text { cursor: pointer; }
 .toast-undo, .toast-extra { min-height: 44px; }
 .where-sheet .warn-note { margin: 10px 0 0; }
-/* 相簿預覽格的 ✕、裁切，裁切比例、相機按鈕：看得到的 34px，可以按的範圍 44px */
-.gb-remove, .gb-crop { width: 34px; height: 34px; font-size: 15px; }
-.gb-remove::after, .gb-crop::after { inset: -5px; }
+/* 裁切比例、相機按鈕：可以按的範圍 44px */
 .crop-aspects button { min-height: 44px; padding: 0 14px; }
 .crop-zoom input { height: 44px; }
 .detail-head .photo-wrap.hero .photo-pick { width: 44px; height: 44px; }
@@ -1672,7 +1571,6 @@ header.app .sync-btn:active, header.app .analysis-btn:active, .analysis-open hea
 .a-cols:not(.dep-cols) .a-col:nth-child(7) .a-col-bar { background: #1F5C4D !important; }
 .a-cols:has(.hi) .a-col:not(.hi) .a-col-bar { background: #B5CFC4 !important; }
 .dep-open, .dep-filters input, .dep-filters select { border-radius: 3px; }
-.g-tile, .g-add, .gallery-grid .gb-item, .gb-item { border-radius: 2px; }
 .hidden-toggle, .hide-btn, .my-note-edit, .photo-crop { border-radius: 3px; }
 .sk, .sk-thumb, .sk-btn { border-radius: 2px; }
 .alert-box, .photo-error, .ob-confirm, .find-unmapped { border-radius: 3px; }
@@ -1728,7 +1626,7 @@ header.app .sync-btn:active, header.app .analysis-btn:active, .analysis-open hea
 header.app :focus-visible, .bottom-bar :focus-visible { outline-color: var(--tab-amber) !important; }
 .search input:focus { outline-color: var(--tab-amber) !important; }
 /* 深色底（照片燈箱、提示條）上的焦點框維持看得到的白、黃 */
-.lightbox-close:focus-visible, .lightbox-nav:focus-visible, .lightbox-delete:focus-visible { outline-color: #fff !important; }
+.lightbox-close:focus-visible, .lightbox-delete:focus-visible { outline-color: #fff !important; }
 .toast :focus-visible { outline-color: var(--tab-amber) !important; }
 /* 性別：♂ 不用綠色（綠色在這裡是「最近溜過」），改青綠灰；♀ 維持紅 */
 .sex.male, .a-sex-line .male, .a-sex.male .a-sex-mark, .a-sex.male .a-sex-v { color: var(--z-new-ink); }
@@ -1902,7 +1800,6 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .w-sum { margin: 12px 0 0; font-size: 14px; color: var(--ink-soft); line-height: 1.6; }
 .w-sum b { font-size: 18px; font-weight: 800; color: var(--ink); font-variant-numeric: tabular-nums; margin: 0 1px; }
 .w-sum .sep { margin: 0 8px; color: var(--line); }
-.g-add { border: none !important; background: none !important; color: var(--primary); }
 /* 分析：大數字一排、用留白分開；圖示、名次不放底色方塊；返回是文字按鈕 */
 .a-kpi { background: none; box-shadow: none !important; padding: 4px 2px; }
 .a-kpis { gap: 4px 12px; }

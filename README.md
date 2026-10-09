@@ -29,7 +29,7 @@ icons/            ← 網站圖示（瀏覽器分頁、手機主畫面）
 manifest.webmanifest ← 加到主畫面時的名稱、顏色、圖示
 .nojekyll         ← 讓舊網址 GitHub Pages 原樣提供檔案（轉址要用，請勿刪除）
 tests/index.html  ← 資料讀取測試（用假資料，不連試算表）
-worker/           ← 後端 API（上傳照片、備註、相簿、代號、更新；跟網站一起部署成同一個 Cloudflare Worker，不含任何 token）
+worker/           ← 後端 API（上傳照片、備註、代號、更新；跟網站一起部署成同一個 Cloudflare Worker，不含任何 token）
 ```
 
 ## 部署

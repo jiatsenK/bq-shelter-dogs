@@ -52,7 +52,6 @@ test('整批搬遷：分批送、全部複製、逐檔核對；重跑只顯示 R
   assert.equal(r.total, BATCH + 4);
   assert.deepEqual(r.copied, { copied: BATCH + 4 });
   assert.deepEqual(r.verified, { ok: BATCH + 4 });
-  assert.equal(r.gallery, 'copied');
   assert.match(r.summary, /每一張都核對過/);
   assert.equal([...PHOTOS.objects.keys()].filter(k => k.startsWith('photos/')).length, BATCH + 4);
 

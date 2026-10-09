@@ -2,7 +2,7 @@
 // - 網站組照片網址時加 ?v=雜湊（js/app.js 的 versioned），Cloudflare 讓照片在手機上快取 30 天（_headers）；
 //   換了照片雜湊就變、網址跟著變，手機就會抓新的
 // - 只改部署用的那份（GitHub Action 裡 checkout 出來的檔案），不提交回 repo，所以不會多出提交
-// - 主照片、相簿、縮圖都算（photos/ 底下所有 .jpg）
+// - 主照片、縮圖都算（photos/ 底下所有 .jpg）
 // 用法：node scripts/photo-versions.mjs [repo 根目錄]
 import { createHash } from 'node:crypto';
 import { readFile, writeFile, readdir } from 'node:fs/promises';
