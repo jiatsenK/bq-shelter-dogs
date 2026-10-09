@@ -3343,6 +3343,28 @@ async function runSquarePhotoTests() {
   }
 }
 
+// K 2026-10-09 病歷夾色籤：頁首範圍字（畫面上第一隻到最後一隻多久沒溜）、網址列顏色
+async function runRangeTests() {
+  const TODAY = new Date();
+  const ymdDash = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
+  const dog = (walkedDate, covered = false) => parseDogsData({ dogs: [{ id: '2024100901', name: '範圍', cage: '舊A01', note: '', covered, walkedDate }] }).dogs[0];
+  const ago = n => ymdDash(new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() - n));
+  await check('2026-10-09 範圍字：跟狗卡同一種說法（N 天前、今天、沒有紀錄）', () => {
+    eq([dayWord(dog(ago(45)), TODAY), dayWord(dog(ago(0)), TODAY), dayWord(dog(''), TODAY)], ['45 天前', '今天', '沒有紀錄']);
+  });
+  await check('2026-10-09 範圍字：頭尾兩隻；一樣只寫一次；沒有狗就不寫', () => {
+    eq(rangeText(['45 天前', '20 天前', '4 天前']), '畫面上：45 天前 ～ 4 天前');
+    eq(rangeText(['2 天前', '2 天前']), '畫面上：2 天前');
+    eq(rangeText([]), '');
+  });
+  await check('2026-10-09 頁首有範圍字的位置；網址列顏色是檔案綠', () => {
+    const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
+    eq(!!doc.querySelector('header.app #rangeLabel[hidden]'), true, '範圍字在頁首、一開始藏著：');
+    eq(doc.querySelector('meta[name="theme-color"]').getAttribute('content'), '#1F5C4D', 'theme-color：');
+    eq(MANIFEST.theme_color, '#1F5C4D', '主畫面捷徑：');
+  });
+}
+
 async function runCritique3Tests() {
   const saved = [allDogs, groupMap, walkedStorage, walkedMemory, dataSyncedAt, walkerNamesOffline];
   try {
@@ -3525,6 +3547,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runSquarePhotoTests)
   .then(runDepartureTests)
   .then(runCritique3Tests)
+  .then(runRangeTests)
   .then(show)
   .catch(e => {
     document.getElementById('summary').textContent = `測試頁載入失敗：${e.message}（請用網址開啟，不要直接雙擊檔案）`;
