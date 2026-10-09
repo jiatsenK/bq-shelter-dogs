@@ -632,6 +632,14 @@ function statusBadge(dog, today) {
   return `<span class="badge muted">沒有紀錄</span>`;
 }
 
+// 牽繩掛鉤牆（探索版 2026-10-09）：天數畫成牽繩長度，30 天以上拉滿；沒有紀錄拉滿、畫成虛線（CSS）。
+// 記住每隻狗上次畫的長度，長度變了（溜了、復原、資料更新）就從舊長度收／放到新長度
+const LEASH_FULL_DAYS = 30;
+const leashShown = new Map();
+function leashLen(s) {
+  if (s.kind === 'dated' && s.days >= 0) return Math.max(0.04, Math.min(s.days, LEASH_FULL_DAYS) / LEASH_FULL_DAYS);
+  return s.kind === 'covered' ? 0.04 : 1;
+}
 // 卡片上的「上次遛狗」：天數用 #3 的綠／黃／紅文字色
 function lastWalk(dog, today) {
   const s = computeStatus(dog, today);
@@ -643,7 +651,12 @@ function lastWalk(dog, today) {
     // 窄螢幕放不下一行時只在「有人固定｜照顧」之間換行，不會剩一個「顧」字
     text = '<span class="nowrap">有人固定</span><span class="nowrap">照顧</span>'; level = 'sage'; small = true;
   }
-  return `<div class="last"><span class="lbl">上次溜</span><span class="val ${level}${small ? ' small' : ''}">${text}</span></div>`;
+  const len = Number(leashLen(s).toFixed(3));
+  const key = walkKey(dog) || dog.name;
+  const was = leashShown.get(key);
+  leashShown.set(key, len);
+  const reel = was != null && was !== len;
+  return `<div class="last${reel ? ' reel' : ''}" style="--len:${len}${reel ? `;--was:${was}` : ''}"><span class="lbl">上次溜</span><span class="val ${level}${small ? ' small' : ''}">${text}</span></div>`;
 }
 
 // 卡片用「編號｜籠位」（照 K 的參考圖）；詳細資訊沿用 metaLine
@@ -2953,6 +2966,12 @@ function tourFakeWalk(state) {
   btn.innerHTML = `${icon('tick')}已溜`;
   const val = row.querySelector('.last .val');
   if (val) { val.className = 'val sage'; val.textContent = '今天'; }
+  const last = row.querySelector('.last');
+  if (last) {
+    last.style.setProperty('--was', last.style.getPropertyValue('--len') || '1');
+    last.style.setProperty('--len', '0.04');
+    last.classList.remove('reel'); void last.offsetWidth; last.classList.add('reel');
+  }
 }
 const TOUR_DEMOS = {
   detail: { run: () => { const d = tourDog(); if (d) showDetail(d); }, show: '#detail', undo: () => { if (detailDog) closeDetail(); } },

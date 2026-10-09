@@ -1779,3 +1779,137 @@ header.app :focus-visible, .bottom-bar :focus-visible { outline-color: var(--tab
 .tour-finger.press::after { content: ""; position: absolute; inset: -8px; border-radius: 50%; border: 3px solid var(--tab-amber, #F2B21B); animation: tour-ripple 0.5s ease-out forwards; }
 @keyframes tour-ripple { from { opacity: 1; transform: scale(0.6); } to { opacity: 0; transform: scale(1.7); } }
 .tour-replay { min-height: 44px; border: none; background: none; color: var(--primary); font-family: inherit; font-size: 15px; font-weight: 600; padding: 0 6px; cursor: pointer; }
+
+/* ── 視覺主題（探索版）：牽繩掛鉤牆（2026-10-09，分支 claude/explore-new-world，K 想看看不同的想像，不合併）──
+   每隻狗掛著一條牽繩，繩子長度就是多久沒溜（js/app.js 的 lastWalk 給 --len，30 天以上拉滿）；
+   繩尾扣環寫天數；按溜了繩子收回來。炭黑頁首與底部列、淡水泥灰底、白色圓角卡，配色安靜、不用大面積紅。
+   這段蓋在病歷夾色籤後面，功能和文字不動 */
+:root {
+  --bg: #E4E7E6;
+  --surface: #FFFFFF;
+  --surface-soft: #EEF0EF;
+  --ink: #1E2326;
+  --ink-soft: #4F585D;
+  --line: #CDD2D2;
+  --primary: #1E2326;
+  --primary-soft: #E1E5E5;
+  --radius-card: 10px;
+  --radius-photo: 50%;
+  --shell: #1E2326; --shell-deep: #0F1214; --shell-soft: #B3BABD;
+  /* 牽繩顏色：帶子用色、扣環字用色（白底對比 4.5 以上） */
+  --leash-ok: #2F7F7A;   --leash-ok-ink: #24625E;
+  --leash-amber: #D08A1E; --leash-amber-ink: #85520A;
+  --leash-red: #B23A2E;  --leash-red-ink: #A1342A;
+  --leash-none: #7D868A; --leash-none-ink: #545C60;
+  --tab-red: #B23A2E; --tab-amber: #E3A23B; --tab-green: #2F7F7A; --tab-muted: #6B7478;
+}
+::selection { background: #F3D9A4; color: var(--ink); }
+
+/* 頁首、底部列：炭黑 */
+header.app { background: var(--shell); }
+.brand .logo { color: #E3A23B; }
+.bottom-bar { background: var(--shell); }
+.tabs button { border-radius: 8px; }
+.tabs button.active { background: transparent; color: #fff; box-shadow: inset 0 -3px 0 var(--leash-ok); border-radius: 0; }
+.tabs button.active .n { color: #fff; }
+.tabs button.active:active { background: var(--shell-deep); }
+.range { color: var(--shell-soft); }
+
+/* 上面一排：圓角膠囊，不再是索引分頁 */
+.walk-tools, .find-top { border-bottom: none; align-items: center; }
+.chip, .find-top .find-view button, .find-top .find-chip {
+  border-radius: 22px; background: var(--surface) !important; color: var(--ink) !important; box-shadow: inset 0 0 0 1px var(--line);
+}
+.chip.on, .find-top .find-view button.on, .find-top .find-chip.on { background: var(--shell) !important; color: #fff !important; box-shadow: none; }
+.chip.on small { color: var(--shell-soft); }
+.seg { background: var(--surface); border-radius: 22px; padding: 2px; box-shadow: inset 0 0 0 1px var(--line); }
+.seg button { border-radius: 20px; }
+.seg button.on { background: var(--shell); }
+.find-chip { border-radius: 20px; }
+
+/* 狗卡：白色圓角卡，一張一張分開；照片圓形；下面一整排是牽繩 */
+.card {
+  border: none; border-radius: var(--radius-card); margin: 0 0 8px; padding: 10px 10px 12px;
+  align-items: center; box-shadow: 0 1px 0 rgba(30, 35, 38, 0.12);
+}
+.card + .card { margin-top: 0; }
+.card .thumb { border-radius: 50%; align-self: flex-start; }
+.card .row { flex-wrap: wrap; row-gap: 8px; }
+.card .who { flex: 1 1 0; min-width: 0; }
+.card .walk-btn, .card .more { order: 1; }
+.walk-btn { border-radius: 22px; background: var(--shell); color: #fff; box-shadow: none; font-weight: 800; }
+.walk-btn:active { background: var(--shell-deep); }
+.walk-btn.done { background: #E3F0EE; color: var(--leash-ok-ink); box-shadow: none; }
+.walk-btn.pending { background: var(--primary-soft); color: var(--ink); }
+.cage-pill { background: var(--surface-soft) !important; box-shadow: none; border-radius: 12px; }
+.cage-pill .icon { color: var(--ink-soft) !important; }
+
+/* 牽繩：帶子長度 = --len（0～1），尾端扣環寫天數 */
+.card .last {
+  --leash: var(--leash-ok); --leash-ink: var(--leash-ok-ink);
+  order: 2; flex: 0 0 100%; width: auto !important; margin: 0; padding: 0;
+  display: flex; flex-direction: row; justify-content: flex-start; align-items: center; text-align: left;
+  background: none !important; color: var(--leash-ink); box-shadow: none; transition: none;
+}
+.card .last:has(.val) { background: none !important; box-shadow: none; color: var(--leash-ink); }
+.card .last:has(.val.amber) { --leash: var(--leash-amber); --leash-ink: var(--leash-amber-ink); }
+.card .last:has(.val.red) { --leash: var(--leash-red); --leash-ink: var(--leash-red-ink); }
+.card .last:has(.val.muted) { --leash: var(--leash-none); --leash-ink: var(--leash-none-ink); }
+.card .last .lbl { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.card .last::before {
+  content: ''; flex: 0 0 auto; height: 10px; min-width: 12px; border-radius: 3px 0 0 3px;
+  width: calc(var(--len, 1) * (100% - 92px));
+  background: var(--leash); box-shadow: inset 0 3px 0 rgba(255, 255, 255, 0.22); /* 織帶中間一條亮線 */
+}
+/* 沒有紀錄：不知道多久，拉滿、畫成虛線 */
+.card .last:has(.val.muted)::before { height: 0; background: none; box-shadow: none; border-top: 4px dashed var(--leash); border-radius: 0; }
+.card .last .val {
+  flex-shrink: 0; margin-left: -2px; padding: 1px 10px; border-radius: 999px;
+  border: 3px solid var(--leash); background: #fff; color: var(--leash-ink) !important;
+  font-size: 15px !important; font-weight: 800; line-height: 1.3; font-variant-numeric: tabular-nums;
+}
+.card .last .val.small { font-size: 13px !important; }
+/* 長度變了（溜了、復原）：從舊長度收／放到新長度 */
+.card .last.reel::before { animation: leash-reel 0.7s cubic-bezier(0.2, 0.8, 0.2, 1); }
+@keyframes leash-reel { from { width: calc(var(--was, 1) * (100% - 92px)); } }
+
+/* 列表模式、在哪面板、詳細資訊：天數一樣是扣環 */
+.r-date, .where-days, .badge.red, .badge.amber, .badge.sage, .badge.muted {
+  background: #fff !important; border-radius: 999px; padding: 0 8px; box-shadow: inset 0 0 0 3px currentColor;
+}
+.r-date.red, .where-days.red, .badge.red { color: var(--leash-red-ink) !important; }
+.r-date.amber, .where-days.amber, .badge.amber { color: var(--leash-amber-ink) !important; }
+.r-date.sage, .where-days.sage, .badge.sage { color: var(--leash-ok-ink) !important; }
+.r-date.muted, .where-days.muted, .badge.muted { color: var(--leash-none-ink) !important; }
+.rows { border-radius: var(--radius-card); border: none; box-shadow: 0 1px 0 rgba(30, 35, 38, 0.12); overflow: hidden; }
+
+/* 其他白卡：圓角、細陰影，一塊一塊分開 */
+.detail-head, .detail-section, .hide-bar, .visit, .who-box, .mine-progress, .a-card, .a-kpi, .find-map-card, .find-rows, .where-map, .where-dog {
+  border-radius: var(--radius-card); box-shadow: 0 1px 0 rgba(30, 35, 38, 0.12);
+}
+.detail-head + .detail-section, .detail-section + .detail-section, .detail-section + .hide-bar, .hide-bar + .detail-section, .detail-head + .hide-bar { margin-top: 8px; }
+.a-card + .a-card { margin-top: 12px; }
+.detail-head .photo-wrap.hero .thumb { border-radius: 12px; }
+.detail-head .badge.plain { background: var(--surface-soft) !important; box-shadow: none; border-radius: 12px; font-weight: 600; }
+.detail-bar .bar-btn, .where-btn, .group-walk, .detail-bar .bar-confirm, .with-ok, .ob-next { border-radius: 22px; }
+.find-dog { border-radius: 22px; }
+.find-dog .thumb, .buddy .thumb, .buddy-tile .thumb, .mine-dog .thumb { border-radius: 50%; }
+.who-edit, .who-hint .who-edit { border-radius: 22px; }
+.toast { border-radius: 12px; }
+.find-map .fm-zone rect.fm-cage.on { fill: #E3A23B; }
+.tour-hole { border-radius: 12px; }
+.card .last:has(.val.sage), .card .last:has(.val.amber), .card .last:has(.val.red), .card .last:has(.val.muted) { box-shadow: none; background: none !important; }
+
+/* 平面圖、統計直條：換成這一版的炭黑、青綠 */
+.find-map { --fm-bg: #EEF0EF; --fm-zone: #FFFFFF; --fm-line: #7D868A; --fm-ink: #1E2326; --fm-soft: rgba(125, 134, 138, 0.6); --fm-sel: #E3F0EE; --fm-sel-line: #2F7F7A; }
+.fm-zone rect.fm-cage.has { fill: rgba(125, 134, 138, 0.22); }
+.fm-zone.sel rect.fm-cage { stroke: rgba(47, 127, 122, 0.45); }
+.fm-zone.sel rect.fm-cage.has { fill: rgba(47, 127, 122, 0.16); }
+.a-cols:not(.dep-cols) .a-col:nth-child(1) .a-col-bar { background: #D3E3E1 !important; }
+.a-cols:not(.dep-cols) .a-col:nth-child(2) .a-col-bar { background: #B1CFCB !important; }
+.a-cols:not(.dep-cols) .a-col:nth-child(3) .a-col-bar { background: #8DB8B3 !important; }
+.a-cols:not(.dep-cols) .a-col:nth-child(4) .a-col-bar { background: #69A09A !important; }
+.a-cols:not(.dep-cols) .a-col:nth-child(5) .a-col-bar { background: #4A8983 !important; }
+.a-cols:not(.dep-cols) .a-col:nth-child(6) .a-col-bar { background: #357670 !important; }
+.a-cols:not(.dep-cols) .a-col:nth-child(7) .a-col-bar { background: #1E2326 !important; }
+.a-cols:has(.hi) .a-col:not(.hi) .a-col-bar { background: #B1CFCB !important; }
