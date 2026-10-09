@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-09T16:00:47+08:00",
+  "syncedAt": "2026-10-09T16:30:46+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -1378,13 +1378,14 @@
       "cage": "舊A21",
       "id": "2021071401",
       "name": "胖胖",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-09",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "75aeed7c10fe",
+        "dcda49f5b985"
       ],
-      "note": "",
+      "note": "梳毛",
       "sex": "male",
       "intro": "2021年7月14日因主人搬家，所以棄養8歲胖胖，剛來害羞不太理人，應該是難過想家，幸好個性溫和，散步是各穩重乖巧的孩子，一起幫推..",
       "myWalkedDate": null
@@ -1619,11 +1620,12 @@
       "cage": "舊B19",
       "id": "2024032902",
       "name": "野口",
-      "walkedDate": "2026-10-06",
+      "walkedDate": "2026-10-09",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "a533226b339a"
+        "a533226b339a",
+        "dcda49f5b985"
       ],
       "note": "<羊噴火訓練>",
       "sex": "female",

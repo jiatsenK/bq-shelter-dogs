@@ -751,6 +751,8 @@
     {"id":"2021030913","name":"咪寶","date":"2026-10-08","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2020081102","name":"滷蛋","date":"2026-10-08","mine":false,"walkers":["dcda49f5b985"]},
     {"id":"2021021702","name":"辛巴","date":"2026-10-09","mine":false,"walkers":["dcda49f5b985"]},
-    {"id":"2026042902","name":"方吉","date":"2026-10-09","mine":false,"walkers":["a533226b339a","dcda49f5b985"]}
+    {"id":"2026042902","name":"方吉","date":"2026-10-09","mine":false,"walkers":["a533226b339a","dcda49f5b985"]},
+    {"id":"2021071401","name":"胖胖","date":"2026-10-09","mine":false,"walkers":["75aeed7c10fe","dcda49f5b985"]},
+    {"id":"2024032902","name":"野口","date":"2026-10-09","mine":false,"walkers":["a533226b339a","dcda49f5b985"]}
   ]
 }
