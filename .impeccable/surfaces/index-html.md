@@ -32,4 +32,4 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
 ## 未決
 
-- 頁首範圍字（目前看到 X 天～Y 天）要改 JS，這次只改 CSS 先不做。
+- 頁首範圍字：K 2026-10-09 同意改 JS，已做（js/app.js syncRange）。

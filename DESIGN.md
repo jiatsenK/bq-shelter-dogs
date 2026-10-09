@@ -241,7 +241,7 @@ components:
 - **Focus:** 3px 籤黃外框。
 
 ### Navigation
-- **頁首：** 實心 `--shell`，白字站名、`--shell-soft` 日期，右上圖示鈕白色，按下 `--shell-deep`。
+- **頁首：** 實心 `--shell`，白字站名、`--shell-soft` 日期，右上圖示鈕白色，按下 `--shell-deep`。溜狗表時搜尋框下面一行 13px / 600 的 `--shell-soft` 範圍字（畫面上第一隻到最後一隻多久沒溜），像抽屜上的範圍標籤。
 - **底部分類列：** 實心 `--shell`，分類是 `--shell-soft` 圖示＋字；選中的那格是白底綠字的標籤（3px）。
 
 ### 天數色籤（Signature Component）
