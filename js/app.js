@@ -380,7 +380,8 @@ function myWalksHtml(today, query) {
   const groups = myWalkGroups(currentMyWalks(), query);
   if (!groups.length) return `<div class="status-msg">找不到「${esc(query)}」</div>`;
   const stats = !query && mineStatsOpen ? `<div class="mine-stats-box">${myProgressHtml(visibleWalks)}${myMonthStats(visibleWalks, today)}</div>` : '';
-  return who + stats + groups.map(g => myVisitCard(g)).join('');
+  // 標題層級（critique 2026-10-09）：頁首 h1 下面先有 h2，每次到所的 h3 才不會跳號
+  return '<h2 class="sr-only">我溜過的紀錄</h2>' + who + stats + groups.map(g => myVisitCard(g)).join('');
 }
 
 // 回傳備註命中的關鍵字（顯示用）與實際出現的寫法（標示用）；沒命中回 null
@@ -1312,7 +1313,7 @@ function detailHtml(dog, today) {
       ${photoHeroHtml(dog)}
       ${photoUploadHtml(dog)}
       <div class="info">
-        <div class="name-row"><div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div>${favButtonHtml(dog)}</div>
+        <div class="name-row"><h2 class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</h2>${favButtonHtml(dog)}</div>
         <div class="chips">${statusBadge(dog, today)}${detailChips(dog)}</div>
         ${metaLine(dog)}
         ${flag ? warnNote(dog.note, flag) : ''}
@@ -1359,7 +1360,7 @@ function departedDetailHtml(dog, today) {
     <div class="detail-head">
       ${photoHeroHtml(dog)}
       <div class="info">
-        <div class="name-row"><div class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</div></div>
+        <div class="name-row"><h2 class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</h2></div>
         <div class="chips">${departureBadge(dep)}${since(dog)}</div>
         ${metaLine(dog)}
       </div>
