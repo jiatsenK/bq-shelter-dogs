@@ -1546,7 +1546,12 @@ async function editWalkers(dog, names, text) {
 // 詳細資訊狗名下面的標籤：籠位、入所年月（天數標籤是 statusBadge）
 function detailChips(dog) {
   const since = idDate(dog.id);
-  return (dog.cage ? `<span class="badge plain">${icon('pin')}${esc(dog.cage)}${dog.homeCage ? `<small>暫住，原本 ${esc(dog.homeCage)}</small>` : ''}</span>` : '')
+  const home = dog.homeCage ? `<small>暫住，原本 ${esc(dog.homeCage)}</small>` : '';
+  // K 2026-10-09：詳細資訊的籠位也要能點開平面圖（找得到位置的籠位才做成按鈕）
+  const where = typeof whereKnown === 'function' && whereKnown(dog);
+  return (dog.cage ? (where
+    ? `<button type="button" class="badge plain cage-badge" data-where aria-label="${esc(dog.name)} 在哪：${esc(dog.cage)}">${icon('pin')}${esc(dog.cage)}${home}</button>`
+    : `<span class="badge plain">${icon('pin')}${esc(dog.cage)}${home}</span>`) : '')
     + (since ? `<span class="badge plain">入所 ${since.getFullYear()}/${since.getMonth() + 1}</span>` : '');
 }
 
@@ -2037,6 +2042,7 @@ const DETAIL_CLICKS = [
   ['#detailBack', () => { const d = detailTrail.pop(); if (d) showDetail(d, false); }],
   ['[data-departed-back]', el => { const d = allDogs[el.dataset.departedBack]; if (d) showDetail(d); }],
   ['#detailWhere', el => whereOpen(detailDog, el)],
+  ['[data-where]', el => whereOpen(detailDog, el)],
   ['.pick', el => {
     const id = el.dataset.pick;
     if (pickedBuddies.has(id)) pickedBuddies.delete(id); else pickedBuddies.add(id);

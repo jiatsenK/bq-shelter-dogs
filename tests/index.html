@@ -1863,6 +1863,52 @@ async function runRestTests() {
   }
 }
 
+// ── 警示排版、詳細資訊籠位可點（K 2026-10-09）──
+async function runWarnLayoutTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory];
+  const main = document.getElementById('main');
+  const box = main.parentElement;
+  try {
+    box.classList.remove('hidden');
+    allDogs = [
+      { id: '9701', name: '警示甲', cage: '新A03', note: '不親狗，會咬', covered: false, walkedDate: new Date(2026, 0, 1) },
+      { id: '9702', name: '一般乙', cage: '新A04', note: '', covered: false, walkedDate: new Date(2026, 0, 2) },
+    ];
+    groupMap = {}; activeTab = 'walk'; searchQuery = '';
+    walkedStorage = fakeStorage(); walkedMemory = null;
+    resetWalkOrder(); render();
+    await check('K 2026-10-09 警示排版：警示只排在照片到按鈕那一欄下面，不蓋過天數欄；天數字跟名字同一列', async () => {
+      const card = main.querySelector('.card.flagged');
+      if (!card.querySelector(':scope > .warn-note')) throw new Error('警示要是卡片的直接子元素，才排得到第二列');
+      // 測試頁沒有載 css/app.css，所以檢查樣式規則本身
+      const css = await fetch('../css/app.css').then(r => r.text());
+      ['.card:not(.skeleton) .last { grid-column: 1; grid-row: 1; }',
+        '.card:not(.skeleton) > .warn-note { grid-column: 2 / -1; grid-row: 2;',
+        '.card.flagged:not(.skeleton)::before {',
+        '.card.flagged:not(.skeleton):has(.last .val.red)::before { background: var(--tab-red); }'].forEach(rule => {
+        if (!css.includes(rule)) throw new Error('少了樣式：' + rule);
+      });
+    });
+    await check('K 2026-10-09 詳細資訊的籠位標籤可以點，點了開平面圖（在哪）', () => {
+      showDetail(allDogs[0]);
+      const badge = document.querySelector('#detail .cage-badge[data-where]');
+      if (!badge || badge.tagName !== 'BUTTON') throw new Error('籠位要是按鈕');
+      badge.click();
+      const where = document.querySelector('.where-sheet');
+      if (!where || where.hidden) throw new Error('沒有開在哪面板');
+      if (typeof whereClose === 'function') whereClose();
+      hideDetail();
+    });
+  } finally {
+    if (typeof whereClose === 'function') whereClose();
+    hideDetail();
+    box.classList.add('hidden');
+    history.replaceState(null, '');
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory] = saved;
+    resetWalkOrder(); render();
+  }
+}
+
 // #83 照片縮圖：清單讀 photos/thumbs/，燈箱讀原圖；縮圖讀不到先換原圖
 async function runThumbTests() {
   const dog = { name: '縮圖狗', id: '9401' };
@@ -3436,6 +3482,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runMyWalksTests)
   .then(runCropTests)
   .then(runRestTests)
+  .then(runWarnLayoutTests)
   .then(runV52Tests)
   .then(() => fetch('../.github/workflows/make-thumbs.yml').then(r => r.text()).then(t => { MAKE_THUMBS_YML = t; }))
   .then(runThumbTests)

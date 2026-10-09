@@ -14,8 +14,9 @@ const FIND_ZONES = [
   { key: 'old', name: '舊犬舍區', short: '舊犬舍', test: c => /^舊/.test(c), rect: [0, 350, 250, 250] },
 ];
 const FIND_FACILITIES = [
-  { name: '醫療室', icon: 'medical', rect: [250, 350, 130, 60] },
-  { name: '辦公室', icon: 'office', rect: [250, 410, 130, 190] },
+  // K 2026-09-28 用圖示；2026-10-09 K 覺得空框裡一個圖示很突兀，改成虛線框＋小字（不是犬舍、不能點）
+  { name: '醫療室', rect: [250, 350, 130, 60] },
+  { name: '辦公室', rect: [250, 410, 130, 190] },
 ];
 
 // K 2026-09-26：平面圖轉 90 度變橫的（手機上比較不佔高度）。rect 照看板直的座標寫，畫的時候再轉；
@@ -213,20 +214,6 @@ function findCageOf(dog) {
   return FIND_CAGES.cages.some(c => c.id === id) ? id : null;
 }
 
-// 辦公室、醫療室用圖示表示（K 2026-09-28），不寫字；螢幕閱讀器讀 title
-const FIND_FAC_ICONS = {
-  // 醫療：圓角方框裡一個十字
-  medical: '<rect x="2" y="2" width="20" height="20" rx="5" fill="none" stroke-width="1.8"/><path d="M12 7v10M7 12h10" stroke-width="2.6" stroke-linecap="round"/>',
-  // 辦公室：一棟樓，門和窗
-  office: '<path d="M4 21V4.5A1.5 1.5 0 0 1 5.5 3h9A1.5 1.5 0 0 1 16 4.5V21M16 9h3.5A1.5 1.5 0 0 1 21 10.5V21M2.5 21h19" fill="none" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>'
-    + '<path d="M7.5 7h1M11.5 7h1M7.5 11h1M11.5 11h1M7.5 15h1M11.5 15h1" stroke-width="2" stroke-linecap="round"/>',
-};
-function findFacIcon(f, [x, y, w, h]) {
-  const size = Math.min(34, Math.min(w, h) * 0.5);
-  const k = size / 24;
-  return `<g class="fm-fac-i" transform="translate(${x + w / 2 - size / 2} ${y + h / 2 - size / 2}) scale(${k})"><title>${f.name}</title>${FIND_FAC_ICONS[f.icon]}</g>`;
-}
-
 // 有逐籠的區：區名和隻數擠成一行，放在籠子上方留白那條
 function findBandLabel(name, n, r) {
   const [x, y, w, h] = r;
@@ -264,7 +251,7 @@ function findMapSvgNow(selected, query, mini, cage, overview) {
   if (!mini) s += findMapTitle();
   for (const f of FIND_FACILITIES) {
     const r = findTurn(f.rect);
-    s += `<g class="fm-fac">${box(r)}${mini ? '' : findFacIcon(f, r)}</g>`;
+    s += `<g class="fm-fac" aria-hidden="true">${box(r)}${mini ? '' : findLabel('fm-fac-t', f.name, '', r, true)}</g>`;
   }
   for (const z of FIND_ZONES.filter(x => x.rect)) {
     const r = findTurn(z.rect);
