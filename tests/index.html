@@ -1574,15 +1574,26 @@ async function runV9Tests() {
       main.querySelector('[data-walk-fav="0"]').click();
       if (main.querySelector('.stat-tile')) throw new Error('不再有三格');
     });
-    await check('#141 列表模式（收起照片）：一列一隻 天數｜犬名｜籠位｜誰遛的（critique 2026-10-09 天數優先），名字跟 Worker 拿、一格好幾人拆開', async () => {
+    await check('#141 列表模式（收起照片）：一列一隻 天數｜狗名｜籠位｜溜了（K 2026-10-09 拿掉溜狗人），溜狗人在詳細資訊、一格好幾人拆開', async () => {
       UPLOAD_URL = 'https://worker.test';
       window.fetch = async u => (String(u).endsWith('/walkers') ? json({ ok: true, walkers: { '9902': '志工乙+志工丙。阿明' } }) : json({}, 404));
       await loadWalkerNames();
       main.querySelector('[data-walk-view="list"]').click();
       const row = main.querySelector('.row-dog[data-dog="1"]');
-      eq([row.querySelector('.r-cage').textContent, row.querySelector('.r-name').textContent, row.querySelector('.r-who').textContent], ['A02', 'V9乙', '志工乙、志工丙、阿明'], '一列：');
-      eq([...main.querySelectorAll('.row-head span')].map(n => n.textContent), ['天數', '狗名', '籠位', '溜狗人', ''], '欄位標題：');
-      eq([...row.children].map(c => c.className.split(' ')[0]), ['r-date', 'r-name', 'r-cage', 'r-who', 'walk-btn'], '天數排最前面：');
+      eq([row.querySelector('.r-cage').textContent, row.querySelector('.r-name').textContent, row.querySelector('.r-who')], ['A02', 'V9乙', null], '一列：');
+      eq([...main.querySelectorAll('.row-head span')].map(n => n.textContent), ['天數', '狗名', '籠位', ''], '欄位標題：');
+      eq([...row.children].map(c => c.className.split(' ')[0]), ['r-date', 'r-name', 'r-cage', 'walk-btn'], '天數排最前面：');
+      eq(row.querySelector('.r-cage').tagName, 'SPAN', '平面圖上沒有的籠位只寫字：');
+      const cage1 = allDogs[1].cage;
+      try {
+        allDogs[1].cage = '新A04'; render();
+        const btn = main.querySelector('.row-dog[data-dog="1"] .r-cage');
+        eq([btn.tagName, btn.hasAttribute('data-where')], ['BUTTON', true], '平面圖上有的籠位是按鈕：');
+        btn.click();
+        eq([whereDog === allDogs[1], !!detailDog], [true, false], '點籠位開平面圖、不開詳細資訊：');
+        whereHide();
+        eq(document.activeElement, btn, '關掉後回到籠位：');
+      } finally { if (whereDog) whereHide(); allDogs[1].cage = cage1; render(); }
       const s1 = computeStatus(allDogs[1], new Date());
       eq(row.querySelector('.r-date').textContent, s1.kind === 'dated' && s1.days > 0 ? `${s1.days}天前` : row.querySelector('.r-date').textContent, '寫天數不寫日期：');
       if ([...main.querySelectorAll('.r-date')].some(d => d.textContent.includes('/'))) throw new Error('列表還有 月/日 日期');
@@ -1590,7 +1601,7 @@ async function runV9Tests() {
       const warnRow = new DOMParser().parseFromString(walkRow({ ...allDogs[1], note: '會攻擊其他狗' }, new Date()), 'text/html').body.firstElementChild;
       eq([warnRow.classList.contains('flagged'), !!warnRow.querySelector(':scope > .warn-note .text'), !warnRow.querySelector('.r-name .icon')], [true, true, true], '警示原文放在那一列下面：');
       eq(walkedStorage.getItem(WALK_VIEW_KEY), 'list', '記住：');
-      row.querySelector('.r-name').click();
+      main.querySelector('.row-dog[data-dog="1"] .r-name').click();
       eq([...document.querySelectorAll('#detail .last-walk .who-chip')].map(c => c.textContent), ['志工乙', '志工丙', '阿明'], '詳細資訊溜狗人：');
       hideDetail();
       main.querySelector('[data-walk-view="photo"]').click();
@@ -1730,12 +1741,12 @@ async function runV9Tests() {
       box().querySelector('[data-ob="later"]').click();
       const tour = () => document.getElementById('tour');
       eq([box(), !!tour(), nameLater(), activeTab], [null, true, true, 'walk'], '先看看進導覽，在溜狗表上：');
-      eq([tour().querySelector('h2').textContent, tour().querySelector('.tour-n').textContent], ['溜狗表', '1 / 8'], '第一步：');
+      eq([tour().querySelector('h2').textContent, tour().querySelector('.tour-n').textContent], ['溜狗表', '1 / 9'], '第一步：');
       eq(tour().querySelector('[data-tour="back"]'), null, '第一步沒有上一步：');
       eq(tourTarget(0), document.querySelector('#main .card[data-dog]'), '亮的是最上面那張狗卡（最久沒溜）：');
       if (!document.getElementById('main').closest('[inert]')) throw new Error('導覽時後面的網頁不能按');
       tour().querySelector('[data-tour="next"]').click();
-      eq([document.activeElement === tour().querySelector('h2'), tour().querySelector('.tour-n').textContent], [true, '2 / 8'], '換一步焦點到標題：');
+      eq([document.activeElement === tour().querySelector('h2'), tour().querySelector('.tour-n').textContent], [true, '2 / 9'], '換一步焦點到標題：');
       eq([tourTarget(1), tourTarget(3)], [document.querySelector('#main .card[data-dog] .last'), document.querySelector('#main .card[data-dog] .walk-btn')], '第二步亮色籤、第四步亮「溜了」（一個說明一個動作）：');
       tour().querySelector('[data-tour="back"]').click();
       eq(tour().querySelector('h2').textContent, '溜狗表', '上一步：');
@@ -3346,6 +3357,23 @@ async function runRangeTests() {
     } finally {
       if (tour) tourReset(); tour = null;
       [allDogs, activeTab, searchQuery, window.fetch] = saved; render();
+    }
+  });
+  await check('K 2026-10-09 導覽教切換照片／列表：亮右上角切換鈕，示範切過去，收回切回原本的', () => {
+    const saved = [allDogs, activeTab, searchQuery, loadWalkView()];
+    try {
+      allDogs = [dog(ago(12))]; activeTab = 'walk'; searchQuery = ''; saveWalkView('photo'); render();
+      const i = TOUR_STEPS.findIndex(st => st.demo === 'view');
+      eq([i > TOUR_STEPS.findIndex(st => st.demo === 'where'), tourTarget(i) === document.querySelector('#main .walk-tools .seg')], [true, true], '在籠位之後、亮切換鈕：');
+      tour = { step: i, again: true, shown: null, undo: null, timers: [] };
+      TOUR_DEMOS.view.run();
+      eq([loadWalkView(), !!document.querySelector('#main .row-dog')], ['list', true], '示範切到列表：');
+      tour.undo = TOUR_DEMOS.view.undo; tourReset();
+      eq([loadWalkView(), !!document.querySelector('#main .card[data-dog]')], ['photo', true], '收回切回照片：');
+    } finally {
+      if (tour) tourReset(); tour = null;
+      saveWalkView(saved[3]);
+      [allDogs, activeTab, searchQuery] = saved; render();
     }
   });
 }
