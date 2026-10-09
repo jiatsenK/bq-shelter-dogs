@@ -210,7 +210,10 @@ function runTests() {
       // #138 按「溜了」：POST 到 /walk，由 Worker 轉給 K 部署的小程式寫試算表兩欄（網站本身不連 Google），也先拿掉
       const walkCall = /fetch\(`\$\{UPLOAD_URL\}\/walk`, \{ method: 'POST',/;
       if (!walkCall.test(APP_JS)) throw new Error('找不到寫入試算表的呼叫');
-      const code = APP_JS.replace(walkCall, '').replace(uploadCall, '').replace(walkerCall, '').replace(syncCall, '');
+      // 休養中（K 2026-10-09）：管理者 PUT 到 Worker 的 /rest/{編號}（寫進 repo 的 data/rest.json，不是試算表），也先拿掉
+      const restCall = /fetch\(`\$\{UPLOAD_URL\}\/rest\/\$\{encodeURIComponent\(e\.dog\.id\)\}`, \{\s*method: 'PUT',/;
+      if (!restCall.test(APP_JS)) throw new Error('找不到休養設定的呼叫');
+      const code = APP_JS.replace(walkCall, '').replace(uploadCall, '').replace(walkerCall, '').replace(syncCall, '').replace(restCall, '');
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
@@ -223,14 +226,15 @@ function runTests() {
       eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'key', 'key', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'SHEET_WRITES_KEY', 'SHEET_WRITES_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'WALK_VIEW_KEY', 'WALK_VIEW_KEY', 'ONBOARD_KEY', 'ONBOARD_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、WALKER_NAME_KEY 和 SHEET_WRITES_KEY（#138 寫試算表）、NOTES_PASS_KEY（管理通關碼）、WALK_VIEW_KEY、ONBOARD_KEY（V9）、NAME_LATER_KEY（先看看，介面評估第四輪），key 是一起溜的人（readJsonKey／writeJsonKey）：');
       if (!/readJsonKey\(COMPANIONS_KEY\)/.test(APP_JS) || !/writeJsonKey\(WALK_WITH_KEY,/.test(APP_JS)) throw new Error('readJsonKey／writeJsonKey 只給一起溜的人用');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
-      eq(urls.length, 3, 'fetch 呼叫數（上傳以外）：');
+      eq(urls.length, 4, 'fetch 呼叫數（上傳以外）：');
       // #32 起前端只讀 data/dogs.json，不直接連試算表；狗卡資訊也已經寫在 dogs.json 裡，不再抓 dogs/*.md
       // #62 另外讀我的備註：只從 Worker 的 /notes 或網站上的 data/my-notes.json 讀
       // #58 我最近溜過另外讀 data/walks.json
-      if (!urls.every(u => u.startsWith('DATA_URL,') || u.startsWith('WALKS_URL,') || u === "`${UPLOAD_URL}/walkers`, { cache: 'no-cache' }")) throw new Error(`只能讀 data/dogs.json、data/walks.json 與我的備註：${urls.join('、')}`);
+      if (!urls.every(u => u.startsWith('DATA_URL,') || u.startsWith('WALKS_URL,') || u.startsWith('REST_URL,') || u === "`${UPLOAD_URL}/walkers`, { cache: 'no-cache' }")) throw new Error(`只能讀 data/dogs.json、data/walks.json 與我的備註：${urls.join('、')}`);
       if (/readJsonObject|GALLERY_URL|\/gallery/.test(APP_JS)) throw new Error('相簿已拿掉（K 2026-10-09），不該再讀相簿清單');
       eq(DATA_URL, 'data/dogs.json', '資料檔：');
       eq(WALKS_URL, 'data/walks.json', '遛狗紀錄檔：');
+      eq(REST_URL, 'data/rest.json', '休養設定檔：');
       if (/docs\.google\.com|gviz/.test(APP_JS)) throw new Error('前端不應再連 Google 試算表');
     }),
     check('#10／#28 卡片沒有連結，也不會跳到別頁（點了只開詳細資訊）', () => {
@@ -758,7 +762,7 @@ async function runSerialTests() {
         `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, '同步時間：');
       eq([...groupMap['讀取甲']], ['讀取乙'], '可以一起溜：');
       // #62 起讀完狗狗資料後另外讀我的備註（Worker 的 /notes、不行再讀 data/my-notes.json），不算在內
-      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$|walks\.json$|\/walkers$/.test(u)), ['data/dogs.json'], '只讀 dogs.json，不再逐隻抓 dogs/*.md：');
+      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$|walks\.json$|rest\.json$|\/walkers$/.test(u)), ['data/dogs.json'], '只讀 dogs.json，不再逐隻抓 dogs/*.md：');
     });
     await check('#32 dogs.json 讀取失敗：標題、搜尋、分類都在，內容區顯示錯誤，可重新讀取', async () => {
       reset();
@@ -1192,7 +1196,7 @@ async function runHistoryTests() {
       showDetail(dogs[0]);
       const sec = document.querySelector('#detail [data-section="walks"]');
       if (!sec) throw new Error('詳細資訊要有遛狗紀錄');
-      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-3), ['group', 'walks', 'intro'], '位置在入所介紹前（入所介紹在最後；相簿 K 2026-10-09 拿掉）：');
+      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-3), ['walks', 'intro', 'rest'], '位置在入所介紹前（入所介紹之後只剩休養設定，管理用；相簿 K 2026-10-09 拿掉）：');
       eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(0, 2), ['last', 'note'], 'V9（#141）上次溜／溜狗人在最前面，接著試算表備註：');
       eq([sec.querySelectorAll('.w-grid .on').length, sec.querySelectorAll('.w-grid .none').length, sec.querySelectorAll('.w-grid span').length], [14, 2, 30], '格子：');
       eq([...sec.querySelectorAll('.w-sum b')].map(b => b.textContent), ['14', '2.3', '6'], '數字（一行字，不是三格）：');
@@ -1768,6 +1772,95 @@ function show() {
   summary.className = failed.length ? 'fail' : 'pass';
   document.getElementById('results').innerHTML = results.map(r =>
     `<li class="${r.ok ? 'pass' : 'fail'}">${r.ok ? '✓' : '✗'} ${esc(r.name)}${r.ok ? '' : `<br>${esc(r.msg)}`}</li>`).join('');
+}
+
+// ── 暫住、休養中（K 2026-10-09 阿拉丁：剛動完手術不能溜，暫時搬到獨立籠）──
+async function runRestTests() {
+  const saved = [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, restMap, restEdit];
+  const realFetch = window.fetch;
+  const main = document.getElementById('main');
+  const box = main.parentElement;
+  const json = (data, status = 200) => new Response(JSON.stringify(data), { status });
+  const T = new Date();
+  const ymd = d => isoDay(d);
+  const ago = n => { const d = new Date(T); d.setDate(d.getDate() - n); return d; };
+  const later = n => { const d = new Date(T); d.setDate(d.getDate() + n); return d; };
+  try {
+    box.classList.remove('hidden');
+    await check('暫住：試算表「(阿拉丁)」這種括號名字、沒有編號的列，合到同名那隻；籠位換成暫住的那籠，原本的記著', () => {
+      const dogs = mergeTempCages([
+        { id: '9601', name: '暫住甲', cage: '新B04' },
+        { id: '', name: '(暫住甲)', cage: '舊B16' },
+        { id: '', name: '（沒這隻）', cage: '舊B17' },
+        { id: '9602', name: '一般乙', cage: 'A01' },
+      ]);
+      eq(dogs.map(d => [d.name, d.cage, d.homeCage || '']), [['暫住甲', '舊B16', '新B04'], ['（沒這隻）', '舊B17', ''], ['一般乙', 'A01', '']], '合併：');
+      const card = document.createElement('div');
+      card.innerHTML = dogCard(dogs[0], T);
+      eq(card.querySelector('.temp-cage') && card.querySelector('.temp-cage').textContent, '暫住，原本 新B04', '狗卡：');
+    });
+    UPLOAD_URL = 'https://worker.test';
+    allDogs = [
+      { id: '9611', name: '休養甲', cage: 'A01', note: '', covered: false, walkedDate: ago(20) },
+      { id: '9612', name: '一般乙', cage: 'A02', note: '', covered: false, walkedDate: ago(1) },
+      { id: '9613', name: '固定丙', cage: 'A03', note: '', covered: true, walkedDate: null },
+    ];
+    groupMap = {}; activeTab = 'walk'; searchQuery = '';
+    walkedStorage = fakeStorage(); walkedMemory = null; notesPassMemory = '';
+    restMap = { '9611': { until: ymd(later(3)), reason: '術後休養' } };
+    resetWalkOrder(); render();
+    await check('休養中：排在溜狗表最下面（有人固定照顧也在它上面），色籤寫「休養中」，沒有溜了；過了日期自動恢復', () => {
+      eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['一般乙', '固定丙', '休養甲'], '順序：');
+      const card = main.querySelector('.card[data-dog="0"]');
+      eq([card.querySelector('.last .val').classList.contains('rest'), card.querySelector('.last').textContent.includes('休養中'), !!card.querySelector('.walk-btn')], [true, true, false], '狗卡：');
+      eq(computeStatus(allDogs[0], later(3)).kind, 'rest', '最後一天還在休養：');
+      eq(computeStatus(allDogs[0], later(4)).kind, 'dated', '隔天恢復：');
+    });
+    await check('休養中：詳細資訊寫「10/20 前暫停帶出」，底部沒有溜了；最下面有管理用的「改休養設定」', () => {
+      showDetail(allDogs[0]);
+      const d = document.getElementById('detail');
+      eq([!!d.querySelector('.rest-note'), !!document.getElementById('groupWalk'), !!document.getElementById('restEdit')], [true, false, true], '詳細資訊：');
+      if (!d.querySelector('.rest-note').textContent.includes('術後休養')) throw new Error('要寫原因');
+      hideDetail();
+    });
+    await check('休養設定：要通關碼，PUT /rest/編號；成功後這支手機馬上排到下面、記住通關碼；通關碼錯就再問', async () => {
+      const calls = [];
+      window.fetch = async (u, o) => {
+        calls.push([String(u), o && o.method, o && JSON.parse(o.body)]);
+        const b = JSON.parse(o.body);
+        if (b.passcode !== '對的') return json({ ok: false, error: '通關碼不對', code: 'passcode' }, 401);
+        return json({ ok: true, id: '9612', rest: { until: b.until, reason: b.reason } });
+      };
+      showDetail(allDogs[1]);
+      document.getElementById('restEdit').click();
+      eq([!!document.getElementById('restPass'), document.getElementById('restReason').value], [true, '術後休養'], '表單：');
+      const pass = document.getElementById('restPass');
+      pass.value = '錯的'; pass.dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('restForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise(r => setTimeout(r, 20));
+      eq([restEdit && restEdit.phase, loadNotesPass()], ['error', ''], '通關碼錯：');
+      const p2 = document.getElementById('restPass');
+      p2.value = '對的'; p2.dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('restForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise(r => setTimeout(r, 20));
+      eq([calls.length, calls[1][0], calls[1][1], calls[1][2].reason], [2, 'https://worker.test/rest/9612', 'PUT', '術後休養'], '送出：');
+      eq([restEdit, loadNotesPass(), computeStatus(allDogs[1], T).kind], [null, '對的', 'rest'], '成功：');
+      hideDetail(); hideToast();
+      eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['固定丙', '休養甲', '一般乙'], '設好的那隻也排到最下面：');
+    });
+    await check('找狗的「最久沒溜的狗」、分析頁「超過 3 天沒溜」不算休養中的狗', () => {
+      const due = dueDogs(allDogs, T).filter(d => { const st = computeStatus(d, T); return st.kind === 'unknown' || (st.kind === 'dated' && st.days >= AMBER_DAYS); });
+      eq(due.map(d => d.name), [], '最久沒溜：');
+    });
+  } finally {
+    window.fetch = realFetch;
+    hideDetail(); hideToast();
+    box.classList.add('hidden');
+    history.replaceState(null, '');
+    saveNotesPass('');
+    [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, restMap, restEdit] = saved;
+    resetWalkOrder(); render();
+  }
 }
 
 // #83 照片縮圖：清單讀 photos/thumbs/，燈箱讀原圖；縮圖讀不到先換原圖
@@ -3342,6 +3435,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runHistoryTests)
   .then(runMyWalksTests)
   .then(runCropTests)
+  .then(runRestTests)
   .then(runV52Tests)
   .then(() => fetch('../.github/workflows/make-thumbs.yml').then(r => r.text()).then(t => { MAKE_THUMBS_YML = t; }))
   .then(runThumbTests)

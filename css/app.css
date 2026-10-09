@@ -1818,3 +1818,33 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 /* 我溜過：名字設定不再包一張卡，輸入框跟搜尋框一樣小圓角 */
 .who-box { background: none; box-shadow: none !important; padding-left: 4px; padding-right: 4px; }
 .who-box input { border-radius: 3px; background: var(--surface); }
+
+/* ── 休養中、暫住（K 2026-10-09 阿拉丁）──
+   休養中不是警訊：色籤不上底色、灰字「休養中／到 10/20」，排在最下面；說明、管理表單都用安靜的灰 */
+.card .last:has(.val.rest) { background: none; box-shadow: none; color: var(--ink-soft); }
+.card .last:has(.val.rest) .lbl { display: none; }
+.card .last .val.rest { font-size: 15px; font-weight: 800; color: var(--ink-soft) !important; }
+.card .last .val.rest .rest-until { display: block; font-size: 12px; font-weight: 600; }
+.r-date.rest { background: none; color: var(--ink-soft) !important; font-weight: 700 !important; }
+.badge.rest { background: var(--surface-soft); color: var(--ink-soft); }
+.detail-head .chips .badge.rest { font-size: 18px; font-weight: 800; padding: 4px 12px; }
+.rest-note { margin-top: 10px; font-size: 14px; color: var(--ink-soft); }
+.rest-note b { color: var(--ink); }
+.self-walked.rest { color: var(--ink-soft); font-weight: 600; }
+.temp-cage { font-size: 12.5px; color: var(--ink-soft); white-space: nowrap; }
+.detail-head .badge.plain small { margin-left: 6px; font-size: 12.5px; font-weight: 500; color: var(--ink-soft); }
+/* 管理：詳細資訊最下面一行小字按鈕，按了才展開表單 */
+.rest-admin-btn { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-height: 44px; padding: 4px 0; border: none; background: none; color: var(--primary); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.rest-admin-btn small { font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+.rest-form { display: flex; flex-direction: column; gap: 10px; }
+.rest-form h3 { margin: 0; }
+.rest-form label { display: flex; flex-direction: column; gap: 4px; font-size: 13.5px; color: var(--ink-soft); }
+.rest-form input { min-height: 44px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 3px; padding: 8px 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; }
+.rest-form input:focus { outline: 2px solid var(--primary); outline-offset: 0; }
+.rest-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.rest-actions button { min-height: 44px; padding: 0 16px; border-radius: 3px; font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+.rest-save { border: none; background: var(--primary); color: #fff; }
+.rest-save:disabled { opacity: 0.6; cursor: default; }
+.rest-end, .rest-cancel { border: none; background: var(--surface-soft); color: var(--ink); }
+.self-walked.rest { background: var(--surface-soft) !important; color: var(--ink-soft) !important; }
+.rest-hint { margin: -4px 0 0; font-size: 13px; color: var(--ink-soft); }

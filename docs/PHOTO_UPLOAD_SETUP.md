@@ -121,6 +121,14 @@ https://bq-shelter-photos.你的帳號名稱.workers.dev
 - 讀取：`GET /notes` → `{ "ok": true, "notes": { ...data/my-notes.json 的內容 } }`，直接讀 GitHub 上的最新版，不用等網站重新部署。
 - 寫入：`PUT /notes/{編號}`，內容 `{ "text": "備註", "passcode": "通關碼" }`（`Content-Type: application/json`）。`text` 是空的就刪掉這隻的備註。通關碼錯或沒帶回 401、錯太多次回 429，兩者都帶 `"code": "passcode"`。成功回 `{ "ok": true, "id": "...", "note": { "text", "updatedAt" } 或 null, "commit": "..." }`。
 
+## 休養中（2026-10-09）
+
+管理者在詳細資訊最下面按「設定休養中」，填原因和到哪一天（含那天），通關碼跟我的備註同一組 `NOTES_PASSCODE`（手機記過就不用再輸入）。Worker 寫進 repo 的 `data/rest.json`（`{ "犬隻編號": { "until": "YYYY-MM-DD", "reason": "術後休養", "updatedAt": "..." } }`），不碰試算表。其他志工的手機等網站更新（一兩分鐘）就會看到。
+
+- 設定：`PUT /rest/{編號}`，內容 `{ "passcode", "until": "YYYY-MM-DD", "reason" }`（`Content-Type: application/json`）。日期要在台灣今天到 180 天內，原因最多 40 字。
+- 結束：`PUT /rest/{編號}`，內容 `{ "passcode", "end": true }`。
+- 通關碼錯的回應同我的備註；成功回 `{ "ok": true, "id", "rest": { until, reason, updatedAt } 或 null, "commit" }`。
+
 ## 相簿（2026-10-09 拿掉）
 
 K 2026-10-09：怕 Cloudflare 用量爆掉，相簿整個拿掉，只留主照片。網站不再顯示相簿、不能新增；Worker 的 `/gallery` 一律回 410，`photos/gallery/` 的照片不給看、不做縮圖，Trash 裡的相簿照片也不能復原。R2 裡原本的相簿照片要刪掉，步驟見 `docs/CLOUDFLARE_SETUP.md`「刪掉相簿照片」。

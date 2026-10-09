@@ -640,10 +640,11 @@ function whereHtml(dog) {
   const walked = walkedToday().has(dog);
   const status = computeStatus(dog, new Date());
   const days = walked ? '今天已溜'
+    : status.kind === 'rest' ? `休養中，${monthDay(status.until)} 前暫停帶出`
     : status.kind === 'dated' && status.days >= 0 ? (status.days === 0 ? '今天有人溜' : `上次溜 ${status.days} 天前`)
     : status.kind === 'covered' ? '有人固定照顧' : '沒有紀錄';
   const tone = walked ? 'sage' : status.kind === 'dated' && status.days >= 0 ? status.level : status.kind === 'covered' ? 'sage' : 'muted';
-  const walkBtn = !walkKey(dog) ? ''
+  const walkBtn = !walkKey(dog) || status.kind === 'rest' ? ''
     : walked ? `<button type="button" class="where-btn" data-where-walk="back">放回</button>`
     : `<button type="button" class="where-btn primary" data-where-walk="add">${icon('tick')}溜了</button>`;
   return `<div class="where-grab" aria-hidden="true"></div>
