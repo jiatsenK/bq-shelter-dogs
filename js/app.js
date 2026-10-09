@@ -244,7 +244,7 @@ function walkerSetupHtml() {
       ${has && !busy ? `<button type="button" class="photo-cancel" id="whoCancel">取消</button>` : ''}
     </div>
     ${has && !busy ? `<button type="button" class="who-clear" id="whoClear">清除這支手機的設定</button>` : ''}
-    ${has ? '' : '<button type="button" class="who-clear" data-open-guide>看使用說明</button>'}
+    ${has ? '' : '<button type="button" class="who-clear guide-link" data-open-guide>看使用說明</button>'}
   </form>`;
 }
 

@@ -1853,3 +1853,36 @@ header.app { top: calc(-1 * var(--brand-h, 0px)); }
 .r-name { font-size: 16px; font-weight: 700; }
 .r-cage { color: var(--ink-soft); font-size: 13px; }
 .row-dog.flagged > .warn-note { grid-column: 1 / -1; margin: 0; }
+
+/* ── 少一點格子（critique 2026-10-09 P1，K：「畫面上太多四方形的格子」）──
+   每一列只留「溜了」一個有框的按鈕；其他用字重、顏色和列與列之間的細線分開 */
+/* 狗卡、列表：不再一張一張框起來，只留列與列之間一條細線 */
+.card { border: none; border-bottom: 1px solid var(--line); }
+.card + .card { margin-top: 0; }
+.rows { border: none; }
+/* 0–2 天：不上底色，只用小綠字；黃紅灰才是實心色籤 */
+.card .last:has(.val.sage) { background: none; box-shadow: none; }
+.card .last:has(.val.sage) .lbl { display: none; }
+.card .last:has(.val.sage) .val { font-size: 13px; font-weight: 600; }
+.card .last:has(.val.sage) .val b { font-size: 18px; font-weight: 700; }
+/* 籠位：不要底色，圖釘＋粗字；::after 已經放大手指點的範圍 */
+.cage-pill { background: none !important; padding: 3px 4px 3px 0; }
+.cage-pill:active { background: var(--primary-soft) !important; }
+/* 全部／★ 我的常溜：純文字分頁，選中的粗體加底線 */
+.walk-tools { border-bottom: 1px solid var(--line); }
+.chip, .chip.on { background: none !important; box-shadow: none !important; border-radius: 0; padding: 0 10px; }
+.chip { color: var(--ink-soft) !important; font-weight: 500; }
+.chip.on { color: var(--ink) !important; font-weight: 800; box-shadow: inset 0 -3px 0 var(--shell) !important; }
+/* 照片／列表：只有圖示，選中的用主色 */
+.seg { padding: 0; }
+.seg button, .seg button.on { width: 44px; height: 44px; background: none !important; box-shadow: none !important; }
+.seg button { color: var(--ink-soft); opacity: 0.8; }
+.seg button.on { color: var(--shell); opacity: 1; }
+/* 底部列：選中的不是白色方塊，是上緣一條白線加白字 */
+.tabs button.active, .tabs button.active:active { background: transparent; color: #fff; box-shadow: inset 0 3px 0 #fff; }
+.tabs button.active .n { color: #fff; }
+/* 拇指按得到：頁首更新、分析 44px；名字按鈕至少 44px 寬 */
+header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
+.with-name { min-width: 44px; justify-content: center; }
+/* 紅色只留給天數和警示：「看使用說明」是一般連結，用主色（清除設定才是紅色） */
+.who-clear.guide-link { color: var(--primary); }

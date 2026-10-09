@@ -90,7 +90,7 @@ components:
     textColor: "{colors.ink}"
     width: "76px"
   day-tab-recent:
-    backgroundColor: "{colors.green-bg}"
+    backgroundColor: "transparent"
     textColor: "{colors.green-text}"
     width: "76px"
   day-tab-none:
@@ -245,7 +245,7 @@ components:
 - **底部分類列：** 實心 `--shell`，分類是 `--shell-soft` 圖示＋字；選中的那格是白底綠字的標籤（3px）。
 
 ### 天數色籤（Signature Component）
-狗卡右緣一條 76px 寬、上下貼齊卡片的色塊，上面小字「上次溜」、下面天數。顏色見 Colors；換顏色時 0.4s ease-out 淡淡轉過去（系統設定減少動態時關掉）。列表模式第一欄的天數（寫「20天」，0–2 天只用綠字不上底色）、在哪面板的天數、詳細資訊的天數徽章用同一組顏色，縮成 2px 圓角的小籤。
+狗卡右緣一條 76px 寬、上下貼齊卡片的色塊，上面小字「上次溜」、下面天數。顏色見 Colors；換顏色時 0.4s ease-out 淡淡轉過去（系統設定減少動態時關掉）。列表模式第一欄的天數（寫「20天」）；0–2 天在狗卡和列表都只用綠字、不上底色、在哪面板的天數、詳細資訊的天數徽章用同一組顏色，縮成 2px 圓角的小籤。
 
 ### 籠位標籤（Signature Component）
 白底、墨字 700、1.5px 墨色內框、2px 圓角，前面一個定位圖示。狗卡、詳細資訊都長一樣；點了開在哪面板，按下變籤黃。
