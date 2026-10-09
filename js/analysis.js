@@ -206,6 +206,7 @@ function loadHistory() {
   }, () => { state.state = 'error'; }).then(() => {
     if (historyData !== state) return;
     if (detailDog) renderDetail();
+    if (analysisOpen) render();
   });
 }
 
@@ -252,6 +253,65 @@ function kpi(value, unit, label, tone = '') {
   return `<div class="a-kpi ${tone}"><div class="a-kpi-v">${value}<small>${unit}</small></div><div class="a-kpi-l">${label}</div></div>`;
 }
 
+// ── 本月溜狗（K 2026-10-09「分析頁可以有個本月報表」：溜狗總計、每天溜狗次數）──
+// 資料是同步累積的溜狗紀錄（data/walks.json，試算表「遛狗日期」換了就記一筆）：同一隻狗同一天只算一次。
+// 回傳 { days: [{ date, n }]（1 號到今天）, total, dogs, start }；last 是上個月整月的次數（沒紀錄回 null）
+function monthWalks(walks, today, start) {
+  const y = today.getFullYear(), m = today.getMonth();
+  const seen = new Set();
+  const perDay = new Map();
+  const dogs = new Set();
+  let last = 0, lastSeen = false;
+  for (const w of walks) {
+    const k = `${w.key}|${+w.date}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    if (w.date.getFullYear() === y && w.date.getMonth() === m) {
+      perDay.set(w.date.getDate(), (perDay.get(w.date.getDate()) || 0) + 1);
+      dogs.add(w.key);
+    } else if (new Date(y, m - 1, 1) <= w.date && w.date < new Date(y, m, 1)) {
+      last++; lastSeen = true;
+    }
+  }
+  const days = [];
+  for (let d = 1; d <= today.getDate(); d++) {
+    const date = new Date(y, m, d);
+    days.push({ date, n: perDay.get(d) || 0, recorded: !!start && date >= start });
+  }
+  return { days, total: days.reduce((a, d) => a + d.n, 0), dogs: dogs.size, last: lastSeen ? last : null };
+}
+
+function monthWalksSection(today) {
+  loadHistory();
+  const title = `${today.getMonth() + 1} 月溜狗`;
+  if (!historyData || historyData.state === 'loading') return section(title, '讀取中…', '', 'tick');
+  if (historyData.state === 'error') return section(title, '溜狗紀錄讀不到', '', 'tick');
+  // 溜狗紀錄從第一筆開始算（快照比較晚才開始，不用快照的日期）
+  const first = historyData.walks.reduce((m, w) => (!m || w.date < m ? w.date : m), null);
+  const start = first && makeDate(first.getFullYear(), first.getMonth() + 1, first.getDate());
+  const r = monthWalks(historyData.walks, today, start);
+  const recordedDays = r.days.filter(d => d.recorded).length;
+  const avg = recordedDays ? (r.total / recordedDays).toFixed(1) : '–';
+  const max = Math.max(1, ...r.days.map(d => d.n));
+  const lastText = r.last == null ? '' : `<span class="a-month-last">上個月 ${r.last} 次${start && start.getMonth() === (today.getMonth() + 11) % 12 && start.getDate() > 1 ? `（${start.getMonth() + 1}/${start.getDate()} 起）` : ''}</span>`;
+  const peak = r.days.reduce((m, d) => (d.n > m.n ? d : m), { n: 0 });
+  const few = r.days.length <= 15; // 天數少時每根長條上面寫次數；多了寫不下，只寫最多那天
+  const bars = r.days.map(d => {
+    const label = `${d.date.getMonth() + 1}/${d.date.getDate()}${d.recorded ? ` ${d.n} 次` : ' 還沒開始記錄'}`;
+    const tick = d.date.getDate() === 1 || d.date.getDate() % 5 === 0 || +d.date === +r.days[r.days.length - 1].date;
+    return `<span class="a-day${d.recorded ? '' : ' none'}" title="${label}" aria-label="${label}">${few && d.recorded ? `<em>${d.n}</em>` : ''}<i style="height:${d.recorded ? Math.max(2, d.n / max * 100) : 100}%"></i>${tick ? `<small>${d.date.getDate()}</small>` : ''}</span>`;
+  }).join('');
+  return section(title, `同一隻狗同一天算一次${start ? `；從 ${start.getMonth() + 1}/${start.getDate()} 開始記錄` : ''}`, `
+    <div class="a-month">
+      <span><b>${r.total}</b><small> 次</small></span>
+      <span><b>${r.dogs}</b><small> 隻狗</small></span>
+      <span><b>${avg}</b><small> 次／天</small></span>
+      ${lastText}
+    </div>
+    <div class="a-days${few ? ' few' : ''}" role="img" aria-label="每天溜狗次數，最多一天 ${max} 次">${bars}</div>
+    ${peak.n ? `<p class="a-hint a-days-peak">最多一天 ${peak.n} 次（${peak.date.getMonth() + 1}/${peak.date.getDate()}）</p>` : ''}`, 'tick');
+}
+
 function analysisHtml(dogs, today) {
   if (!dogs.length) return `<div class="status-msg">目前沒有狗</div>`;
   checkPhotos(dogs);
@@ -272,6 +332,8 @@ function analysisHtml(dogs, today) {
     </div>
     <div class="a-hero-note">入所日期取編號前 8 碼${noIntake.length ? `；${noIntake.length} 隻編號看不出入所日期，不列入時間統計（${dogNames(noIntake.map(r => r.dog))}）` : ''}</div>
   </section>`);
+
+  out.push(monthWalksSection(today));
 
   const dist = stayDistribution(rows).map((b, i) => ({ ...b, short: STAY_SHORT[i] }));
   const topBucket = dist.reduce((m, b, i) => (b.count > dist[m].count ? i : m), 0);
@@ -349,11 +411,10 @@ function walkHistorySection(dog, today) {
     <div class="w-note">從 ${start ? `${start.getFullYear()}/${mdText(start)}` : '同步'} 開始記錄，同一天溜幾次都算一格。</div>`);
 }
 
-// 分析頁整頁：上方「‹ 返回」＋標題；資料還沒好時顯示讀取中或失敗
+// 分析頁整頁：「← 分析」在頁首（index.html 的 .head-back、.head-title，K 2026-10-09）；資料還沒好時顯示讀取中或失敗
 function analysisPageHtml(today) {
-  const top = `<div class="a-top"><button type="button" class="a-back" id="analysisBack">${icon('back')}返回</button><h2>分析</h2></div>`;
-  if (loadState === 'ready') return top + analysisHtml(allDogs, today);
-  return top + `<div class="status-msg">${loadState === 'error' ? '狗的資料讀不到，請確認網路後重新整理。' : '讀取中…'}</div>`;
+  if (loadState === 'ready') return analysisHtml(allDogs, today);
+  return `<div class="status-msg">${loadState === 'error' ? '狗的資料讀不到，請確認網路後重新整理。' : '讀取中…'}</div>`;
 }
 
 // 打開分析頁：手機按「返回」會回到原本的分類（跟詳細資訊一樣用 history）
@@ -383,8 +444,9 @@ const analysisBtn = document.getElementById('analysisBtn');
 if (analysisBtn) analysisBtn.addEventListener('click', () => (analysisOpen ? closeAnalysis() : showAnalysis()));
 
 // 分析頁的狗名列：點了開詳細資訊（事件委派，renderMain 重畫也不用重綁）
+const analysisBack = document.getElementById('analysisBack');
+if (analysisBack) analysisBack.addEventListener('click', () => closeAnalysis());
 document.getElementById('main').addEventListener('click', e => {
-  if (e.target.closest('#analysisBack')) { closeAnalysis(); return; }
   const row = e.target.closest('#main .a-dog[data-adog]');
   const dog = row && allDogs[row.dataset.adog];
   if (dog) showDetail(dog);
