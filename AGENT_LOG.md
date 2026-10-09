@@ -900,3 +900,11 @@
 - js/find.js findCageLayout：舊犬舍四排籠子寬 34→約 52，兩條走廊 43→8，區名那條跟著中間兩排；籠號字級改成照籠子大小算、同一區一樣大、不小於原本 8（FIND_CAGE_FS：舊犬舍 11.8、新犬舍 8）。
 - 舊犬舍區本身是正方形，放大後右邊仍會看到幼母犬舍區；要整塊填滿得改整張平面圖比例，這次沒動。
 - 網頁 206 過（本機另 2 項老問題）。DESIGN_GUIDE 找狗說明補上。
+
+## 2026-10-09 Claude（拿掉相簿，只留主照片）
+- 依據：K 2026-10-09「我覺得不要開放相簿功能比較好，我怕我的 CLOUDFLARE 爆掉」，選「只留主照片、整個相簿拿掉、也把照片刪掉」。
+- 網站：js/app.js 拿掉相簿清單讀取、相簿段落、批次上傳、燈箱換張／設為主照片／刪除（燈箱只剩主照片和裁切）；css/app.css 相簿和燈箱換張樣式；data/gallery.json 刪掉。
+- Worker：拿掉 /gallery 的讀取、新增、設為主照片、刪除（GitHub 版和 R2 版），改回 410；r2.js 只認主照片和縮圖的路徑（photos/gallery/ 一律 404、不給版本號、不做縮圖），拿掉 meta/gallery.json；搬遷不再接相簿清單；Trash 裡的相簿照片不能復原（410）。wrangler.jsonc 拿掉 /data/gallery.json。
+- R2 裡的相簿照片（photos/gallery/、photos/thumbs/gallery/、meta/gallery.json）是永久刪除，沒有由 Agent 做；步驟寫在 docs/CLOUDFLARE_SETUP.md「刪掉相簿照片」，請 K 自己在 Cloudflare 刪。
+- 通關碼（NOTES_PASS_KEY）留著，下一個 PR「休養中」管理要用。
+- 測試：網頁拿掉相簿測試、留主照片裁切（runCropTests）、加「沒有相簿」；Worker 拿掉 16 項相簿測試、加「/api/gallery 回 410、Trash 相簿照片不能復原」。node 126 過、網頁 198 過（本機另 2 項老問題）。文件：PHOTO_UPLOAD_SETUP、CLOUDFLARE_SETUP、VOLUNTEER_GUIDE、PROJECT_GOALS、README、CONTEXT。
