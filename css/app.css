@@ -878,8 +878,6 @@ header.app.scrolled { box-shadow: 0 1px 0 var(--line), 0 6px 16px rgba(30, 42, 6
 .fm-sub { fill: var(--fm-ink); font-size: 9px; letter-spacing: 2.4px; opacity: 0.8; }
 .fm-fac rect { fill: none; stroke: var(--fm-soft); stroke-width: 1; }
 .fm-fac-t { fill: var(--fm-soft); font-weight: 700; }
-.fm-fac-i { stroke: var(--fm-line); color: var(--fm-line); }
-.fm-fac-i rect { fill: none; stroke: var(--fm-line); stroke-width: 1.8; }
 .fm-zone rect { fill: var(--fm-zone); stroke: var(--fm-line); stroke-width: 1.6; transition: fill 0.15s; }
 .find-map:not(.mini) .fm-zone { cursor: pointer; }
 .fm-zone text { fill: var(--fm-ink); }
@@ -1848,3 +1846,37 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .rest-end, .rest-cancel { border: none; background: var(--surface-soft); color: var(--ink); }
 .self-walked.rest { background: var(--surface-soft) !important; color: var(--ink-soft) !important; }
 .rest-hint { margin: -4px 0 0; font-size: 13px; color: var(--ink-soft); }
+
+/* ── 警示排版（K 2026-10-09：警示把整張卡片撐歪）──
+   狗卡改成格線：天數色籤一路到底（有警示時也是），警示只排在照片到按鈕那一欄下面，不再橫跨天數欄 */
+.card:not(.skeleton) {
+  display: grid; grid-template-columns: 70px 64px minmax(0, 1fr) auto; grid-template-rows: auto auto;
+  column-gap: 10px; row-gap: 0; align-items: center;
+}
+.card:not(.skeleton) .last { grid-column: 1; grid-row: 1; }
+/* 有警示的卡：天數字留在第一列跟名字對齊，色籤的顏色用一條底色延伸到卡片底（.last 本身只佔第一列） */
+.card.flagged:not(.skeleton) { position: relative; }
+.card.flagged:not(.skeleton) .last { margin-bottom: 0 !important; position: relative; z-index: 1; }
+.card.flagged:not(.skeleton)::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 70px; background: var(--tab-muted); }
+.card.flagged:not(.skeleton):has(.last .val.red)::before { background: var(--tab-red); }
+.card.flagged:not(.skeleton):has(.last .val.amber)::before { background: var(--tab-amber); }
+.card.flagged:not(.skeleton):has(.last .val.sage, .last .val.rest)::before { background: none; }
+.card:not(.skeleton) .thumb { grid-column: 2; grid-row: 1; }
+.card:not(.skeleton) .who { grid-column: 3; grid-row: 1; }
+.card:not(.skeleton) .walk-btn, .card:not(.skeleton) .more { grid-column: 4; grid-row: 1; }
+.card.flagged:not(.skeleton) { row-gap: 6px; }
+/* 行高用整數 px：卡片高度有小數時，卡片底下那條線會被下一張蓋掉（K 2026-10-09「卡片之間沒有線，不知道備註在寫誰」） */
+.card:not(.skeleton) > .warn-note { grid-column: 2 / -1; grid-row: 2; margin: 0; font-size: 14px; line-height: 20px; padding: 6px 8px; }
+.card.flagged:not(.skeleton) { padding-bottom: 12px; }
+/* 沒有溜了按鈕（休養中）時，名字那欄延伸到右邊 */
+.card:not(.skeleton):not(:has(.walk-btn, .more)) .who { grid-column: 3 / -1; }
+
+/* 詳細資訊的籠位標籤可以點（開平面圖）：跟狗卡籠位一樣是圖釘＋粗字，點的範圍 44px */
+.badge.cage-badge { border: none; font: inherit; font-weight: 700; cursor: pointer; position: relative; min-height: 32px; }
+.badge.cage-badge::after { content: ''; position: absolute; inset: -6px -4px; }
+.badge.cage-badge:active { background: var(--primary-soft) !important; }
+.badge.cage-badge:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+/* 平面圖的辦公室、醫療室：虛線框＋小灰字，看得出不是犬舍、不能點 */
+.fm-fac rect { stroke-dasharray: 4 3; }
+.fm-fac-t { fill: var(--fm-soft); font-weight: 600; }

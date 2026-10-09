@@ -917,3 +917,10 @@
 - data/rest.json 先放阿拉丁（2024082801）到 2026-10-20、術後休養（K 指定）。
 - 撞名修正：原本就有 ymdText（斜線格式），新的改叫 isoDay；mdText2 改 monthDay。loadRest 讀的期間這支手機改過就不蓋掉。
 - 測試：網頁加 runRestTests 5 項、#10 唯讀加 /rest 呼叫和 REST_URL；Worker 加 2 項。node 128 過、網頁 203 過（本機另 2 項老問題）。文件：CONTEXT（休養中、暫住、通關碼）、DESIGN_GUIDE、PHOTO_UPLOAD_SETUP。接在 #183 後面。
+
+## 2026-10-09 Claude（第三次評分；警示排版、籠位可點、圖示改檔名、平面圖設施）
+- 依據：/impeccable critique（兩個子代理）29/40（30 → 29 → 29），存在 .impeccable/critique/。K 回答：警示關鍵字不用加、「警示排版有點問題（整個卡片失衡）」、狗卡裡的位置要能點看平面圖、手機桌面圖示還是舊的藍色、平面圖辦公室和醫療室突兀、分析頁要本月報表（溜狗總計、每天溜狗次數）且標題返回怪、找狗列表要更好找；志工名字「維持顯示，改 PRODUCT.md」。
+- 這個 PR：css/app.css 狗卡改格線，天數色籤用 ::before 延伸到卡片底、天數字留第一列，警示只排在照片到按鈕那欄（grid-column 2 / -1）；js/app.js detailChips 籠位標籤改成按鈕（data-where），DETAIL_CLICKS 開在哪；icons/ 四個檔改名加 v2（index.html、manifest），讓手機重新抓；js/find.js 辦公室、醫療室改虛線框＋小字，拿掉圖示（FIND_FAC_ICONS、findFacIcon）；PRODUCT.md 志工名字規則改成 repo 不放、網站可顯示。
+- 桌面圖示：#170 起就是綠底黃腳掌；手機上還是藍色，是當初加到主畫面時存下的舊圖（可能還是舊網址 GitHub Pages），要刪掉重新從正式網址加入。
+- 測試加 runWarnLayoutTests 2 項（測試頁沒載 CSS，排版檢查樣式規則）；網頁 205 過（本機另 2 項老問題）。找狗列表、分析頁另開 PR。
+- 補（K 在 #185 留言「卡片之間沒有線，不知道備註是在寫誰」）：警示行高 1.45 讓卡片高度有小數，卡片底線被下一張的白底蓋掉；改成整數 20px，有警示的卡底下多留 4px、警示和名字那列間距 8→6，警示看得出屬於上面那隻。
