@@ -338,26 +338,6 @@ export function parseFrontmatterFormerIds(text) {
   return [...new Set(line.replace(/[\[\]"']/g, '').split(/[\s,，、]+/).filter(id => /^[0-9A-Za-z]+$/.test(id)))];
 }
 
-// 入所原因（K 2026-10-10）：frontmatter 的 reason、place（拾獲地點）；沒寫但內文是收容所系統那種
-// 「拾獲地點：○○ 進所原因：○○」就照著讀（只認這個固定寫法，一般敘述不猜）。原因的名字照 js/site-config.js 的 intakeReasons
-export const INTAKE_REASONS = ['政府處理案件', '收容所轉入', '民眾拾獲', '認養後退回', '飼主不續養'];
-const INTAKE_ALIAS = { 政府捕捉: '政府處理案件', 拾獲送交: '民眾拾獲', 不擬續養: '飼主不續養' };
-const INTAKE_NO_PLACE = new Set(['認養後退回', '飼主不續養']);
-export function parseIntake(text) {
-  const raw = text.replace(/^\uFEFF/, '');
-  const m = raw.match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
-  const field = k => (((m ? m[1] : '').match(new RegExp(`^${k}:[ \\t]*(.*)$`, 'mi')) || [])[1] || '').trim().replace(/^(["'])(.*)\1$/, '$2');
-  let reason = field('reason'), place = field('place');
-  if (!reason) {
-    const body = parseFrontmatterBody(raw);
-    const r = ((body.match(/進所原因[：:]\s*(\S+)/) || [])[1] || '').trim();
-    reason = INTAKE_REASONS.includes(r) ? r : INTAKE_ALIAS[r] || '';
-    place = reason ? ((body.match(/(?:拾獲地點|捕獲地址)[：:]\s*(.+?)\s*(?:進所原因[：:]|$)/m) || [])[1] || '').trim() : '';
-  }
-  if (INTAKE_NO_PLACE.has(reason)) place = '';
-  return { reason, place };
-}
-
 // 把 Markdown 轉成純文字，網站上不要露出 **、#、[]() 這些符號
 export function markdownToText(md) {
   return md
@@ -413,9 +393,6 @@ export async function attachDogCards(dogs, readCard = readDogCardFile) {
     const card = { sex: parseFrontmatterSex(raw), intro: markdownToText(parseFrontmatterBody(raw)) };
     const formerIds = parseFrontmatterFormerIds(raw).filter(f => f !== id);
     if (formerIds.length) card.formerIds = formerIds;
-    const intake = parseIntake(raw);
-    if (intake.reason) card.reason = intake.reason;
-    if (intake.place) card.place = intake.place;
     cards.set(id, card);
   }
   return dogs.map(d => ({ ...d, sex: '', intro: '', ...(cards.get(d.id) || {}) }));
@@ -706,8 +683,6 @@ export function findDisappeared(snapshots) {
 function lastSeenDog(d, groups) {
   const out = { cage: d.cage || '', id: d.id, name: d.name, walkedDate: d.walkedDate || null, note: d.note || '', sex: d.sex || '', intro: d.intro || '' };
   if (d.formerIds && d.formerIds.length) out.formerIds = d.formerIds;
-  if (d.reason) out.reason = d.reason;
-  if (d.place) out.place = d.place;
   const g = groups && groups[d.name];
   if (g && g.length) out.groups = g;
   return out;

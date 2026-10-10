@@ -22,16 +22,6 @@ const SITE = {
     ['不親'],
   ],
 
-  // 入所原因（K 2026-10-10）：狗卡上選一個；place 是這個原因要不要另外寫「拾獲地點」。
-  // scripts/sync-sheet.mjs 的 INTAKE_REASONS 是同一份名字（同步時從舊介紹讀出來用），改這裡也要改那裡
-  intakeReasons: [
-    { name: '政府處理案件', place: true },
-    { name: '收容所轉入', place: true },
-    { name: '民眾拾獲', place: true },
-    { name: '認養後退回', place: false },
-    { name: '飼主不續養', place: false },
-  ],
-
   // 犬舍分區：照籠位開頭分（match 是正規表示式，比對去掉空白的籠位）。
   // name：電腦版簡報、分區分頁；team、color：圖鑑的隊名和隊色（中明度，上面放白字）。
   // 找狗的平面圖（js/find.js 的 FIND_ZONES、籠位排法）還沒搬進來。
