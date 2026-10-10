@@ -69,6 +69,12 @@ jobs:
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         run: node scripts/r2-bucket.mjs --create
 
+      # 資料庫（D1，第 2 步）：找資料庫、沒有就建、套資料表、空的才匯入 repo 現有的資料；失敗就不帶資料庫部署，不會失敗
+      - name: 準備資料庫（D1）
+        id: d1
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: node scripts/d1-database.mjs --config "${{ steps.r2.outputs.config }}"
+
       - name: 部署
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         env:
@@ -86,5 +92,5 @@ jobs:
             require("fs").writeFileSync(process.argv[1], JSON.stringify(s), { mode: 0o600 });
             console.log("帶上去的密碼：" + (Object.keys(s).join("、") || "沒有"));
           ' "$RUNNER_TEMP/worker-secrets.json"
-          npx --yes wrangler@4 deploy --config "${{ steps.r2.outputs.config }}" --secrets-file "$RUNNER_TEMP/worker-secrets.json"
+          npx --yes wrangler@4 deploy --config "${{ steps.d1.outputs.config }}" --secrets-file "$RUNNER_TEMP/worker-secrets.json"
           rm -f "$RUNNER_TEMP/worker-secrets.json"
