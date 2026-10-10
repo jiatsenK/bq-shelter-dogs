@@ -405,7 +405,8 @@ function walkHistorySection(dog, today) {
   if (h.avgGap != null) sum.push(`平均 <b>${h.avgGap.toFixed(1)}</b> 天溜一次`);
   if (h.maxGap != null) sum.push(`最久 <b>${h.maxGap}</b> 天沒溜`);
   const open = typeof detailWalksOpen !== 'undefined' && detailWalksOpen;
-  const toggle = `<button type="button" class="w-toggle" id="walksToggle" aria-expanded="${open}"><span class="w-sum">${sum.join('<span class="sep">·</span>')}</span><span class="w-more">${open ? '收起' : '看每一天'}</span></button>`;
+  // 一項一塊、塊裡不斷行：手機放不下就整項換到下一行，不會剩一個點在行尾
+  const toggle = `<button type="button" class="w-toggle" id="walksToggle" aria-expanded="${open}"><span class="w-sum">${sum.map(t => `<span class="w-it">${t}</span>`).join('')}</span><span class="w-more">${open ? '收起' : '看每一天'}</span></button>`;
   if (!open) return wrap(toggle);
   return wrap(`${toggle}
     <div class="w-grid">${h.cells.map(cell).join('')}</div>

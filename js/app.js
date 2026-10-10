@@ -1404,45 +1404,68 @@ function intakeNeedsPlace(reason) {
   const r = SITE.intakeReasons.find(x => x.name === reason);
   return r ? r.place : !!reason;
 }
-// 入所時寫的那段敘述（舊資料）：K 2026-10-10「我就是要把介紹文字改成 tag」，狗卡不再顯示；
-// 文字還留在 dogs/{編號}.md 和 dogs.json（之後整理成「個性與注意」用），這個函式只剩測試和以後要用時讀。
-// 整段只是「拾獲地點：○○ 進所原因：○○」的，同步時已經讀成原因和地點
+// 入所時寫的那段敘述（舊資料）：K 2026-10-10「先不要刪…你刪掉我怎看的到」，照原樣放在入所原因下面，
+// 補標籤時可以對照著看；不能在網站改。整段只是「拾獲地點：○○ 進所原因：○○」的，同步時已經讀成原因和地點，不重複顯示
 function introOf(dog) {
   const t = dog.intro || '';
   return /進所原因[：:]/.test(t) ? '' : t;
 }
+// 標籤沿用溜狗人那種小標籤（.who-chip），地點是後面的一般文字；「拾獲地點」四個字只給報讀軟體
 function intakeTagsHtml(dog) {
   const { reason, place } = intakeOf(dog);
   if (!reason) return '';
-  return `<span class="intake"><span class="intake-tag">${esc(reason)}</span>${place ? `<span class="intake-place"><small>拾獲地點</small>${esc(place)}</span>` : ''}</span>`;
+  return `<span class="intake"><span class="who-chip intake-tag">${esc(reason)}</span>${place ? `<span class="intake-place"><span class="sr-only">拾獲地點</span>${esc(place)}</span>` : ''}</span>`;
 }
-// 五個原因選一個（再點一次取消）；詳細資訊和電腦版補資料共用
+// 五個原因選一個（再點一次取消）；樣子沿用「一起溜的人」的名字鈕（.with-name）。詳細資訊和電腦版補資料共用
 function intakeOptsHtml(reason, busy) {
   return `<div class="intake-opts" role="radiogroup" aria-label="入所原因">${SITE.intakeReasons.map(r =>
-    `<button type="button" role="radio" class="intake-opt${r.name === reason ? ' on' : ''}" aria-checked="${r.name === reason}" data-intake-reason="${esc(r.name)}"${busy ? ' disabled' : ''}>${esc(r.name)}</button>`).join('')}</div>`;
+    `<button type="button" role="radio" class="with-name intake-opt${r.name === reason ? ' on' : ''}" aria-checked="${r.name === reason}" data-intake-reason="${esc(r.name)}"${busy ? ' disabled' : ''}>${esc(r.name)}</button>`).join('')}</div>`;
+}
+// 照舊介紹的用字猜入所原因和地點：只在打開編輯、還沒填的時候先選好當建議，按了儲存才算數。
+// 「迷路進來」「從樹林進來」分不出是民眾拾獲還是政府案件，不猜
+function intakeGuess(text) {
+  const t = String(text || '');
+  const reason = /收容所轉|所轉來|轉入/.test(t) ? '收容所轉入'
+    : /退養|認養後|退回/.test(t) ? '認養後退回'
+    : /棄養|不擬續養|不續養|無法(?:照顧|飼養|養)/.test(t) ? '飼主不續養'
+    : /拾獲|撿到/.test(t) ? '民眾拾獲'
+    : /通報|捕捉|捕獲/.test(t) ? '政府處理案件'
+    : '';
+  if (!reason) return null;
+  const place = intakeNeedsPlace(reason) ? ((t.match(/從([^\s,，、。.被進迷]{2,6}?)(?:收容所|被|進來|迷路|轉)/) || [])[1] || '') : '';
+  return { reason, place };
+}
+function introProseHtml(dog) {
+  const prose = introOf(dog);
+  return prose ? `<p class="intake-prose"><span class="sub">入所時的介紹</span>${esc(prose)}</p>` : '';
 }
 function introSectionHtml(dog) {
   const e = introEdit && introEdit.dog === dog ? introEdit : null;
   if (!e) {
-    // 一排就好（K 2026-10-10）：入所原因｜小標籤｜拾獲地點；整排可以點了改
+    // 一排（K 2026-10-10）：跟上面「上次溜｜溜狗人」同一種排法——左邊標題、右邊小標籤和地點，整排可以點了改
     const tags = intakeTagsHtml(dog);
     const can = !!(dog.id && UPLOAD_URL) && !dog.departure;
-    const body = tags || `<span class="empty">${can ? '還沒填，點這裡選' : '還沒填'}</span>`;
-    return `<section class="detail-section intake-row" data-section="intro">
-      <h3>${icon('card')}入所原因</h3>
-      ${can ? `<button type="button" class="intake-btn${tags ? '' : ' blank'}" id="introEdit" aria-label="${tags ? '改' : '填'}入所原因">${body}${icon('write')}</button>` : `<div class="intake-static">${body}</div>`}
+    const body = tags || `<span class="empty lw-none">${can ? '還沒填，點這裡選' : '還沒填'}</span>`;
+    return `<section class="detail-section intake-sec" data-section="intro">
+      <div class="lw-row">
+        <h3 class="lw-k">入所原因</h3>
+        ${can ? `<button type="button" class="lw-v intake-btn${tags ? '' : ' blank'}" id="introEdit" aria-label="${tags ? '改' : '填'}入所原因">${body}${icon('write')}</button>` : `<div class="lw-v intake-static">${body}</div>`}
+      </div>
+      ${introProseHtml(dog)}
     </section>`;
   }
   const busy = e.phase === 'saving';
   return `<section class="detail-section" data-section="intro">
     <form class="rest-form intro-form" id="introForm" autocomplete="on">
-      <h3>${icon('card')}入所原因</h3>
+      <h3>入所原因</h3>
       ${intakeOptsHtml(e.reason, busy)}
+      ${e.guessed && e.reason === e.guessed ? `<p class="rest-hint">照下面的介紹先選了「${esc(e.guessed)}」，不對就改，按儲存才算數。</p>` : ''}
       ${intakeNeedsPlace(e.reason) ? `<label>拾獲地點<input type="text" id="introPlace" maxlength="${INTAKE_PLACE_MAX}" value="${esc(e.place)}" placeholder="例：樹林區大同山" autocomplete="off"${busy ? ' disabled' : ''}></label>` : ''}
       ${e.needPass ? `<label>通關碼<input type="password" id="introPass" name="password" autocomplete="current-password" value="${esc(e.pass)}"${busy ? ' disabled' : ''}></label>` : ''}
       ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
       <p class="rest-hint">只存在網站，不寫試算表。</p>
     </form>
+    ${introProseHtml(dog)}
   </section>`;
 }
 // 入所原因表單打開時的底部列：取消＋儲存（送出 #introForm）；溜了先收起來，跟換照片同一個做法（#146）
@@ -1454,13 +1477,19 @@ function introBarHtml(dog) {
 }
 function openIntroEdit(dog) {
   if (!dog || !dog.id || !UPLOAD_URL) return;
-  introEdit = { dog, ...intakeOf(dog), pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
+  introEdit = { dog, ...intakeDraft(dog), pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
   renderDetail();
   const first = document.querySelector('#introForm .intake-opt.on') || document.querySelector('#introForm .intake-opt');
   if (first) {
     first.focus({ preventScroll: true });
     if (first.scrollIntoView) first.scrollIntoView({ block: 'center' });
   }
+}
+// 打開編輯時的內容：已經填了就是那個；還沒填就照舊介紹先選好建議（guessed 記下建議的是哪個，畫面上要說）
+function intakeDraft(dog) {
+  const cur = intakeOf(dog);
+  const g = cur.reason ? null : intakeGuess(introOf(dog));
+  return g ? { reason: g.reason, place: g.place, guessed: g.reason } : { ...cur, guessed: '' };
 }
 // 點一個原因：選它；再點一次取消。重畫後焦點留在同一顆
 function pickIntakeReason(e, name, redraw, root) {

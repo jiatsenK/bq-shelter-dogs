@@ -233,21 +233,24 @@ function deskFillIntroCell(d, idx) {
   const key = walkKey(d);
   if (!d.id) return '<span class="df-missing">沒有編號，試算表補上編號後才能補</span>';
   const e = deskFillIntro && deskFillIntro.key === key ? deskFillIntro : null;
+  const prose = introOf(d); // 舊的介紹文字放在旁邊對照（K 2026-10-10：先不要刪）
   if (!e) {
     const tags = intakeTagsHtml(d);
     return `<button type="button" class="df-intro-btn${tags ? '' : ' empty'}" data-fill-intro="${idx}" aria-label="${tags ? '改' : '填'} ${esc(d.name)} 的入所原因" title="點了直接改">
-      <span class="df-intro-text">${tags || '點這裡選入所原因'}</span>${icon('write')}
+      <span class="df-intro-text">${tags || '<span class="df-pick">選入所原因</span>'}${prose ? `<span class="df-prose">${esc(prose)}</span>` : ''}</span>${icon('write')}
     </button>`;
   }
   const busy = e.phase === 'saving';
   return `<form class="df-form" data-fill-form>
     ${intakeOptsHtml(e.reason, busy)}
+    ${e.guessed && e.reason === e.guessed ? `<p class="df-guess">照介紹先選了「${esc(e.guessed)}」，不對就改，按儲存才算數。</p>` : ''}
     <div class="df-form-row">
       ${intakeNeedsPlace(e.reason) ? `<input type="text" id="dfIntroPlace" class="df-place" maxlength="${INTAKE_PLACE_MAX}" placeholder="拾獲地點，例：樹林區大同山" aria-label="${esc(d.name)} 的拾獲地點" autocomplete="off" value="${esc(e.place)}"${busy ? ' disabled' : ''}>` : ''}
       ${e.needPass ? `<input type="password" id="dfIntroPass" name="password" autocomplete="current-password" placeholder="通關碼" aria-label="通關碼" value="${esc(e.pass)}"${busy ? ' disabled' : ''}>` : ''}
       <button type="submit" class="df-go"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存'}</button>
       ${busy ? '' : '<button type="button" class="df-cancel" data-fill-intro-cancel>取消</button>'}
     </div>
+    ${prose ? `<p class="df-prose open">${esc(prose)}</p>` : ''}
   </form>`;
 }
 // 這一列的狀態：正在做什麼、做好了沒、哪裡沒成功
@@ -345,7 +348,7 @@ async function deskFillUploadPhoto() {
 function deskFillOpenIntro(dog) {
   if (!dog || !dog.id) return;
   if (deskFillIntro && deskFillIntro.phase === 'saving') { showToast('上一筆還在儲存，請稍等一下'); return; }
-  deskFillIntro = { key: walkKey(dog), ...intakeOf(dog), pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
+  deskFillIntro = { key: walkKey(dog), ...intakeDraft(dog), pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
   render();
   const first = document.querySelector('#main .df-form .intake-opt.on') || document.querySelector('#main .df-form .intake-opt');
   if (first) first.focus({ preventScroll: true });

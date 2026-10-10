@@ -1866,32 +1866,31 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .mc-cell.on.sel.today { box-shadow: inset 0 0 0 2px var(--shell), inset 0 0 0 4px #fff; }
 .who-hint .who-edit { white-space: nowrap; flex: none; }
 /* 入所原因（K 2026-10-10 減法）：一個原因標籤＋拾獲地點；整塊可以點了直接改，不另外放按鈕 */
-.intake { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
-.intake-tag { display: inline-flex; align-items: center; min-height: 22px; padding: 0 7px; border-radius: 2px; background: var(--surface-soft); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font-size: 13px; font-weight: 700; white-space: nowrap; }
-.intake-place { color: var(--ink); font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
-.intake-place small { margin-right: 5px; color: var(--ink-soft); font-size: 12px; }
-/* 一排：標題在左，標籤接在後面；整排（標題以外）可以點了改，點的範圍留 44px 高 */
-.detail-section.intake-row { display: flex; align-items: center; gap: 10px; padding-top: 4px; padding-bottom: 4px; }
-.detail-section.intake-row h3 { flex: none; margin: 0; }
-.intake-btn, .intake-static { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; padding: 0; border: none; background: none; color: var(--ink); font: inherit; text-align: left; }
-.intake-btn { cursor: pointer; }
+/* 字的角色都沿用狗卡原本的：標題＝.lw-k（14px 灰）、標籤＝.who-chip（14px）、地點＝.lw-v（15px 500）、選項＝.with-name */
+.intake { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 0; }
+.intake-tag { white-space: nowrap; font-weight: 600; }
+.intake-place { overflow-wrap: anywhere; }
+.intake-sec .lw-row { align-items: center; }
+.detail-section.intake-sec h3.lw-k { width: auto; margin: 0; font-size: 14px; font-weight: 400; color: var(--ink-soft); }
+.intake-btn { flex: 1; min-width: 0; flex-wrap: nowrap; align-items: center; min-height: 44px; margin: 0; padding: 0; border: none; background: none; color: var(--ink); font: inherit; font-size: 15px; font-weight: 500; text-align: left; cursor: pointer; }
 .intake-btn > .intake, .intake-btn > .empty { flex: 1; }
 .intake-btn > .icon { flex: none; color: var(--ink-soft); font-size: 16px; }
-.intake-btn .empty, .intake-static .empty { color: var(--ink-soft); font-size: 13.5px; }
-.intake-btn.blank .empty { text-decoration: underline; text-underline-offset: 3px; }
 .intake-btn:active { background: var(--primary-soft); }
 .intake-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.intake-prose { margin: 6px 0 4px; padding-top: 10px; border-top: 0.5px solid var(--line); font-size: 14px; line-height: 1.7; color: var(--ink); }
+.intake-prose .sub { display: block; margin-bottom: 2px; }
+.intro-form + .intake-prose { margin-top: 14px; }
 .intake-opts { display: flex; flex-wrap: wrap; gap: 8px; }
-.intake-opt { min-height: 44px; padding: 0 12px; border: none; border-radius: 3px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
-.intake-opt.on { background: var(--primary-soft); box-shadow: inset 0 0 0 2px var(--shell); font-weight: 800; }
 .intake-opt:disabled { opacity: .6; cursor: default; }
-.intake-opt:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 /* 同籠、可以一起溜合成一段：同籠的那幾隻標出來 */
-.mate-tag { font-size: 11.5px; font-weight: 700; color: var(--ink-soft); background: var(--surface-soft); box-shadow: inset 0 0 0 1px var(--line); border-radius: 2px; padding: 0 6px; }
+.mate-tag { font-size: 12px; line-height: 1.3; color: var(--ink-soft); }
 /* 溜狗紀錄預設一行字，「看每一天」才展開格子 */
 .w-toggle { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px; margin: -6px 0; padding: 0; border: none; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.w-toggle .w-sum { flex: 1; margin: 0; }
-.w-more { flex: none; color: var(--ink-soft); font-size: 13.5px; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.w-toggle { align-items: flex-start; padding: 6px 0; }
+.w-toggle .w-sum { flex: 1; margin: 0; display: flex; flex-wrap: wrap; gap: 0 16px; }
+.w-it { white-space: nowrap; }
+.w-more { line-height: 1.9; }
+.w-more { flex: none; color: var(--ink-soft); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
 .w-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .w-toggle[aria-expanded="true"] { margin-bottom: 6px; }
 
@@ -2055,16 +2054,19 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .df-intro-btn { display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 48px; padding: 6px 8px; margin: 0 -8px; border: none; border-radius: 3px; background: none; color: var(--ink-soft); font: inherit; text-align: left; cursor: text; }
   .df-intro-text { flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.55; }
   .df-intro-btn { align-items: center; cursor: pointer; }
-  .df-intro-btn .intake-tag { background: var(--surface); }
+  .df-intro-text .intake { font-size: 14px; color: var(--ink); }
+  .df-intro-text .intake-tag { font-size: 13px; padding: 1px 8px; }
+  .df-prose { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; margin: 2px 0 0; font-size: 13px; line-height: 1.55; color: var(--ink-soft); }
+  .df-prose.open { display: block; margin: 2px 0 0; max-width: 62ch; }
+  .df-guess { margin: 0; font-size: 13px; color: var(--ink-soft); }
   .df-form .intake-opts { gap: 6px; }
-  .df-form .intake-opt { min-height: 32px; padding: 0 10px; font-size: 13.5px; }
+  .df-form .intake-opt { min-height: 32px; min-width: 0; padding: 0 10px; font-size: 13px; }
   .df-form-row .df-place { flex: 1; width: auto; min-width: 160px; }
   .df-intro-btn .icon { flex: none; margin-top: 3px; font-size: 15px; color: var(--ink-soft); opacity: 0; }
   .df-intro-btn:hover, .df-intro-btn:focus-visible { background: var(--surface-soft); box-shadow: inset 0 0 0 1px var(--line); }
   .df-intro-btn:hover .icon, .df-intro-btn:focus-visible .icon { opacity: 1; }
   .df-intro-btn.empty .df-intro-text { color: var(--ink-soft); }
-  .df-intro-btn.empty { box-shadow: inset 0 0 0 1px var(--line); background: repeating-linear-gradient(135deg, var(--surface-soft) 0 6px, var(--surface) 6px 12px); }
-  .df-intro-btn.empty .icon { opacity: 1; }
+  .df-pick { color: var(--ink-soft); font-size: 14px; text-decoration: underline; text-underline-offset: 3px; }
   .df-form { display: grid; gap: 6px; padding: 4px 0; }
 
   .df-form-row { display: flex; align-items: center; gap: 6px; }
