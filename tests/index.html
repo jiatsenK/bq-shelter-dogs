@@ -2953,13 +2953,14 @@ async function runDeskTests() {
         photoVersions = { 'photos/2026010102.jpg': 'a', 'photos/2026010103.jpg': 'b' };
         allDogs[1].intro = '有介紹'; allDogs[2].intro = '有介紹';
         eq(allDogs.map(d => deskFillNeeds(d)), [{ photo: true, intro: true }, { photo: false, intro: false }, { photo: false, intro: false }, { photo: true, intro: true }], '缺什麼：');
-        deskView = 'fill'; deskFill = 'all';
+        deskView = 'fill'; deskFill = 'all'; deskFillOrder = null;
         const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', sortWalkList(allDogs, TODAY)), 'text/html');
         eq([...doc.querySelectorAll('.df-chip b')].map(b => b.textContent), ['2', '2', '4'], '沒照片、沒介紹、全部：');
         eq([...doc.querySelectorAll('.df-row .dr-name button')].map(b => b.textContent).slice(0, 2).sort(), ['桌無', '桌紅'], '兩樣都缺的在前面：');
         eq([doc.querySelectorAll('.df-drop').length, doc.querySelector('.desk-brief')], [2, null], '沒照片的格子、補資料不放簡報：');
-        eq(doc.querySelectorAll('[data-fill-photo]').length + doc.querySelectorAll('[data-fill-intro]').length, 8, '每列兩顆：');
-      } finally { photoVersions = pv; deskView = 'sheet'; deskFill = 'all'; }
+        eq(doc.querySelectorAll('[data-fill-photo]').length + doc.querySelectorAll('[data-fill-intro]').length, 8, '照片、介紹那兩格本身可以點：');
+        eq(doc.querySelectorAll('.df-btn, .df-act').length, 0, '不另外設按鈕（10-10 K）：');
+      } finally { photoVersions = pv; deskView = 'sheet'; deskFill = 'all'; deskFillOrder = null; allDogs[1].intro = ''; allDogs[2].intro = ''; }
     });
     await check('這間收容所的設定集中在 js/site-config.js（10-10 K：以後其他收容所可以搬去用）：門檻、警示字、分區不寫死在別的檔', () => {
       eq([AMBER_DAYS, RED_DAYS, SPECIAL_KEYWORDS === SITE.warnKeywords, DESK_ZONES === SITE.zones], [SITE.days.amber, SITE.days.red, true, true], '都讀 SITE：');
@@ -2967,8 +2968,85 @@ async function runDeskTests() {
       if (INDEX_HTML.indexOf('js/site-config.js') < 0 || INDEX_HTML.indexOf('js/site-config.js') > INDEX_HTML.indexOf('src="js/app.js"')) throw new Error('index.html 要先載入 js/site-config.js');
       if (/const (AMBER_DAYS|RED_DAYS) = [0-9]/.test(APP_JS) || APP_JS.includes('[\'勿溜\'')) throw new Error('js/app.js 不該再寫死門檻或警示字');
     });
+    await check('補資料直接在表格裡補（10-10 K）：點介紹原地編輯、儲存有狀態；補好的狗留在原位、打勾，順序不跳', async () => {
+      if (!deskOn()) return; // 測試的瀏覽器不夠寬就不測畫面
+      const saved2 = [UPLOAD_URL, window.fetch, photoVersions];
+      const names = () => [...main.querySelectorAll('.df-row .dr-name button')].map(b => b.textContent);
+      try {
+        UPLOAD_URL = 'https://worker.test'; saveNotesPass('');
+        photoVersions = { 'photos/2026010102.jpg': 'a', 'photos/2026010103.jpg': 'b', 'photos/2026010104.jpg': 'c' };
+        allDogs[1].intro = '有介紹'; allDogs[2].intro = '有介紹';
+        deskView = 'fill'; deskFill = 'intro'; deskFillOrder = null; deskFillDone.clear(); deskFillIntro = null;
+        activeTab = 'walk'; searchQuery = ''; render();
+        const before = names();
+        eq(before.slice().sort(), ['桌無', '桌紅'], '沒介紹的兩隻：');
+        const calls = [];
+        let pass = '錯的';
+        window.fetch = async (u, o) => {
+          calls.push([String(u), o.method, JSON.parse(o.body)]);
+          return JSON.parse(o.body).passcode === '對的'
+            ? new Response(JSON.stringify({ ok: true, intro: JSON.parse(o.body).text }))
+            : new Response(JSON.stringify({ ok: false, error: '通關碼不對', code: 'passcode' }), { status: 401 });
+        };
+        const first = before[0];
+        main.querySelector('.df-row [data-fill-intro]').click();
+        const box = document.getElementById('dfIntroText');
+        eq([!!box, !!document.getElementById('dfIntroPass'), !!detailDog], [true, true, false], '原地變成文字框、不開詳細資訊：');
+        box.value = '親人，好牽'; box.dispatchEvent(new Event('input', { bubbles: true }));
+        const type = v => { const p = document.getElementById('dfIntroPass'); p.value = v; p.dispatchEvent(new Event('input', { bubbles: true })); };
+        type(pass);
+        main.querySelector('[data-fill-form]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        eq(main.querySelector('.df-st.busy').textContent, '介紹儲存中…', '按了馬上寫儲存中：');
+        await new Promise(r => setTimeout(r, 20));
+        eq([main.querySelector('.df-st.err').textContent.includes('通關碼不對'), document.getElementById('dfIntroText').value], [true, '親人，好牽'], '沒成功寫原因、打的字還在：');
+        type('對的');
+        main.querySelector('[data-fill-form]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await new Promise(r => setTimeout(r, 20));
+        eq([calls.length, calls[1][0].startsWith('https://worker.test/intro/'), calls[1][1], calls[1][2].text], [2, true, 'PUT', '親人，好牽'], '送出：');
+        const row = main.querySelector('.df-row');
+        eq([names(), row.classList.contains('done'), row.querySelector('.df-st.ok').textContent.includes('介紹已儲存'), row.querySelector('.df-intro-text').textContent], [before, true, true, '親人，好牽'], '補好了留在原位、打勾、看得到新介紹：');
+        eq([deskFillIntro, main.querySelector('.df-done-n').textContent.includes('這次補好 1 隻'), names()[0]], [null, true, first], '上面寫這次補好幾隻：');
+        hideToast();
+        // 換篩選才重排：補好的那隻不再算沒介紹
+        main.querySelector('[data-desk-fill="all"]').click(); main.querySelector('[data-desk-fill="intro"]').click();
+        eq(names().includes(first), false, '換篩選後才離開清單：');
+      } finally {
+        [UPLOAD_URL, window.fetch, photoVersions] = saved2;
+        for (const d of allDogs) delete introOverrides[d.id];
+        allDogs[1].intro = ''; allDogs[2].intro = '';
+        deskFillIntro = null; deskFillDone.clear(); deskFillOrder = null; deskView = 'sheet'; deskFill = 'all'; saveNotesPass(''); hideToast(); render();
+      }
+    });
+    await check('補資料的照片：選了先在那一格預覽，按「上傳」才送；上傳中、已上傳都寫在那一列', async () => {
+      if (!deskOn()) return;
+      const saved2 = [UPLOAD_URL, window.fetch];
+      try {
+        UPLOAD_URL = 'https://worker.test';
+        deskView = 'fill'; deskFill = 'all'; deskFillOrder = null; deskFillDone.clear();
+        activeTab = 'walk'; searchQuery = ''; render();
+        const dog = allDogs[Number(main.querySelector('.df-row[data-fill-dog]').dataset.fillDog)];
+        const calls = [];
+        window.fetch = async (u, o) => { calls.push([String(u), o.method, o.headers['Content-Type']]); return new Response(JSON.stringify({ ok: true })); };
+        deskFillPhoto = { key: walkKey(dog), blob: new Blob(['x'], { type: 'image/jpeg' }), url: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=', phase: 'preview', error: '' };
+        render();
+        const row = main.querySelector('.df-row');
+        eq([!!row.querySelector('.df-photo.pending img'), row.querySelector('.df-st.hint').textContent, calls.length], [true, '這是預覽，按「上傳」才會換', 0], '先預覽、還沒送：');
+        row.querySelector('[data-fill-photo-go]').click();
+        eq(main.querySelector('.df-st.busy').textContent, '照片上傳中…', '按了馬上寫上傳中：');
+        await new Promise(r => setTimeout(r, 20));
+        eq([calls, deskFillPhoto, !!photoOverrides[dog.id]], [[[`https://worker.test/photos/${dog.id}`, 'POST', 'image/jpeg']], null, true], '送到 Worker：');
+        eq(main.querySelector('.df-row .df-st.ok').textContent.includes('照片已上傳'), true, '寫已上傳：');
+        delete photoOverrides[dog.id];
+      } finally {
+        [UPLOAD_URL, window.fetch] = saved2;
+        deskFillPhoto = null; deskFillDone.clear(); deskFillOrder = null; deskView = 'sheet'; hideToast(); render();
+      }
+    });
     await check('電腦版只靠 setWalked 登記，自己不送資料', () => {
-      if (/method\s*:|\bPOST\b|sheet-write|UPLOAD_URL/.test(code)) throw new Error('js/desk.js 不應該自己寫試算表');
+      // 補資料（10-10）：照片 POST /photos、介紹 PUT /intro 都是送到 Worker（寫 R2／repo，不是試算表），其他地方不能再有寫入
+      const fillCalls = code.split('fetch(`${UPLOAD_URL}/photos/').length - 1 + code.split('fetch(`${UPLOAD_URL}/intro/').length - 1;
+      eq(fillCalls, 2, '只有補資料的照片、介紹兩個呼叫：');
+      if ((code.match(/method\s*:/g) || []).length !== 2 || /sheet-write|\/walk\b|script\.google/.test(code)) throw new Error('js/desk.js 不應該自己寫試算表');
     });
   } finally {
     deskChecked.clear(); deskView = 'sheet';
