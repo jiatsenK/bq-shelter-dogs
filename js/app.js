@@ -37,9 +37,8 @@ let detailOpener = null;
 let detailTrail = []; // 在詳細資訊裡點「可以一起溜」換過的狗（#99）：可以按「回到 ○○」一隻一隻回去
 let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, url, phase: 'preview'|'uploading'|'error', error }
 let restMap = {}; // 休養中：編號 → { until: 'YYYY-MM-DD', reason }
-let introEdit = null; // 詳細資訊正在改的入所原因（K 2026-10-10）：{ dog, reason, place, pass, needPass, phase: 'edit'|'saving'|'error', error }
-let detailWalksOpen = false; // 詳細資訊的溜狗紀錄有沒有展開每一天（K 2026-10-10 減法：預設只有一行字）
-const introOverrides = {}; // 編號 → 剛存好的入所原因 { reason, place }：這台電腦馬上看到，dogs.json 等下次同步
+let introEdit = null; // 詳細資訊正在改的入所介紹（K 2026-10-10 補資料）：{ dog, text, pass, needPass, phase: 'edit'|'saving'|'error', error }
+const introOverrides = {}; // 編號 → 剛存好的介紹：這台電腦馬上看到，dogs.json 等下次同步
 let restEdit = null; // 詳細資訊正在改的休養設定：{ dog, until, reason, pass, needPass, phase: 'edit'|'saving'|'error', error }
 let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（walkKey）
 let searchQuery = '';
@@ -81,9 +80,6 @@ function parseDogsData(data) {
     // 狗卡資訊與性別由同步腳本從 dogs/{編號}.md 整理好（scripts/sync-sheet.mjs 的 attachDogCards）
     sex: d.sex === 'male' ? '♂' : d.sex === 'female' ? '♀' : '',
     intro: text(d.intro),
-    // 入所原因、拾獲地點（K 2026-10-10）：狗卡 frontmatter 的 reason、place
-    reason: text(d.reason),
-    place: text(d.place),
     // 再次入所的舊編號（#75，狗卡 frontmatter 的 formerIds）
     formerIds: Array.isArray(d.formerIds) ? d.formerIds.map(text).filter(Boolean) : [],
   }));
@@ -1318,6 +1314,9 @@ function favButtonHtml(dog) {
 function detailHtml(dog, today) {
   if (dog.departure) return departedDetailHtml(dog, today);
   const flag = specialFlag(dog.note);
+  const buddies = [...(groupMap[dog.name] || [])];
+  const byName = new Map(allDogs.map(d => [d.name, d]));
+  const intro = introOf(dog);
   const walked = walkedToday(today);
   // V7（#112）：上面大照片，下面狗名和天數／籠位／入所標籤；關閉、在哪、溜了在底部固定列（在哪裡卡片 V7 小修正拿掉，改用底部「在哪」）
   return `
@@ -1339,9 +1338,18 @@ function detailHtml(dog, today) {
       ${!dog.note ? `<div class="empty">目前沒有備註</div>`
         : `<div class="content note-text">${flag ? highlightNote(dog.note, flag.terms) : esc(dog.note)}</div>`}
     </section>
-    ${togetherSection(dog, walked)}
+    ${cageMatesSection(dog, walked)}
+    <section class="detail-section" data-section="group">
+      <h3>${icon('group')}可以一起溜的狗</h3>
+      ${buddies.length
+        ? `<div class="buddies">${buddies.map(n => {
+            const d = byName.get(n) || { name: n, id: '' };
+            return buddyTile(d, n, walked);
+          }).join('')}</div>`
+        : `<div class="empty">沒有登記可以一起溜的狗</div>`}
+    </section>
     ${walkHistorySection(dog, today)}
-    ${introSectionHtml(dog)}
+    ${introSectionHtml(dog, intro)}
     ${restAdminHtml(dog, today)}
     ${photoBarHtml(dog) || introBarHtml(dog) || `<div class="detail-bar">
       <button type="button" class="bar-btn" id="detailClose">關閉</button>
@@ -1366,11 +1374,12 @@ function restAdminHtml(dog, today) {
   const r = restOf(dog, today);
   const e = restEdit && restEdit.dog === dog ? restEdit : null;
   if (!e) {
-    // 管理用（K 2026-10-10）：只剩設定休養中；入所原因直接點那一段就能改。正在改入所原因時先收起來
+    // 管理用的集中在這一區（K 2026-10-10）：改介紹、設定休養中；正在改介紹時先收起來
     if (introEdit && introEdit.dog === dog) return '';
     return `<section class="detail-section rest-admin" data-section="rest">
       <h3>${icon('write')}管理用<span class="sub">要通關碼</span></h3>
       <div class="admin-btns">
+        <button type="button" class="admin-btn" id="introEdit">${icon('card')}${introOf(dog) ? '改介紹' : '補介紹'}</button>
         <button type="button" class="admin-btn" id="restEdit">${icon('paw')}${r ? '改休養設定' : '設定休養中'}</button>
       </div>
     </section>`;
@@ -1392,126 +1401,62 @@ function restAdminHtml(dog, today) {
     </form>
   </section>`;
 }
-// ── 入所原因（K 2026-10-10 減法）：原本一段「入所介紹」改成選一個原因＋拾獲地點，點那一段直接改；
-// 要通關碼，存在 repo 的 dogs/{編號}.md（frontmatter 的 reason、place），不寫試算表 ──
-const INTAKE_PLACE_MAX = 60;
-function intakeOf(dog) {
-  const o = dog.id && Object.prototype.hasOwnProperty.call(introOverrides, dog.id) ? introOverrides[dog.id] : dog;
-  return { reason: o.reason || '', place: o.place || '' };
-}
-// 這個原因要不要寫拾獲地點（設定檔沒列的舊原因就當作要）
-function intakeNeedsPlace(reason) {
-  const r = SITE.intakeReasons.find(x => x.name === reason);
-  return r ? r.place : !!reason;
-}
-// 入所時寫的那段敘述（舊資料）：K 2026-10-10「先不要刪…你刪掉我怎看的到」，照原樣放在入所原因下面，
-// 補標籤時可以對照著看；不能在網站改。整段只是「拾獲地點：○○ 進所原因：○○」的，同步時已經讀成原因和地點，不重複顯示
+// ── 入所介紹（K 2026-10-10 補資料）：管理用、要通關碼；存在 repo 的 dogs/{編號}.md，不寫試算表 ──
+const INTRO_MAX = 1000;
 function introOf(dog) {
-  const t = dog.intro || '';
-  return /進所原因[：:]/.test(t) ? '' : t;
+  return dog.id && Object.prototype.hasOwnProperty.call(introOverrides, dog.id) ? introOverrides[dog.id] : dog.intro;
 }
-// 標籤沿用溜狗人那種小標籤（.who-chip），地點是後面的一般文字；「拾獲地點」四個字只給報讀軟體
-function intakeTagsHtml(dog) {
-  const { reason, place } = intakeOf(dog);
-  if (!reason) return '';
-  return `<span class="intake"><span class="who-chip intake-tag">${esc(reason)}</span>${place ? `<span class="intake-place"><span class="sr-only">拾獲地點</span>${esc(place)}</span>` : ''}</span>`;
-}
-// 五個原因選一個（再點一次取消）；樣子沿用「一起溜的人」的名字鈕（.with-name）。詳細資訊和電腦版補資料共用
-function intakeOptsHtml(reason, busy) {
-  return `<div class="intake-opts" role="radiogroup" aria-label="入所原因">${SITE.intakeReasons.map(r =>
-    `<button type="button" role="radio" class="with-name intake-opt${r.name === reason ? ' on' : ''}" aria-checked="${r.name === reason}" data-intake-reason="${esc(r.name)}"${busy ? ' disabled' : ''}>${esc(r.name)}</button>`).join('')}</div>`;
-}
-// 照舊介紹的用字猜入所原因和地點：只在打開編輯、還沒填的時候先選好當建議，按了儲存才算數。
-// 「迷路進來」「從樹林進來」分不出是民眾拾獲還是政府案件，不猜
-function intakeGuess(text) {
-  const t = String(text || '');
-  const reason = /收容所轉|所轉來|轉入/.test(t) ? '收容所轉入'
-    : /退養|認養後|退回/.test(t) ? '認養後退回'
-    : /棄養|不擬續養|不續養|無法(?:照顧|飼養|養)/.test(t) ? '飼主不續養'
-    : /拾獲|撿到/.test(t) ? '民眾拾獲'
-    : /通報|捕捉|捕獲/.test(t) ? '政府處理案件'
-    : '';
-  if (!reason) return null;
-  const place = intakeNeedsPlace(reason) ? ((t.match(/從([^\s,，、。.被進迷]{2,6}?)(?:收容所|被|進來|迷路|轉)/) || [])[1] || '') : '';
-  return { reason, place };
-}
-function introProseHtml(dog) {
-  const prose = introOf(dog);
-  return prose ? `<p class="intake-prose"><span class="sub">入所時的介紹</span>${esc(prose)}</p>` : '';
-}
-function introSectionHtml(dog) {
+function introSectionHtml(dog, intro) {
   const e = introEdit && introEdit.dog === dog ? introEdit : null;
   if (!e) {
-    // 一排（K 2026-10-10）：跟上面「上次溜｜溜狗人」同一種排法——左邊標題、右邊小標籤和地點，整排可以點了改
-    const tags = intakeTagsHtml(dog);
-    const can = !!(dog.id && UPLOAD_URL) && !dog.departure;
-    const body = tags || `<span class="empty lw-none">${can ? '還沒填，點這裡選' : '還沒填'}</span>`;
-    return `<section class="detail-section intake-sec" data-section="intro">
-      <div class="lw-row">
-        <h3 class="lw-k">入所原因</h3>
-        ${can ? `<button type="button" class="lw-v intake-btn${tags ? '' : ' blank'}" id="introEdit" aria-label="${tags ? '改' : '填'}入所原因">${body}${icon('write')}</button>` : `<div class="lw-v intake-static">${body}</div>`}
-      </div>
-      ${introProseHtml(dog)}
+    return `<section class="detail-section" data-section="intro">
+      <h3>${icon('card')}入所介紹</h3>
+      ${intro ? `<div class="content">${esc(intro)}</div>` : `<div class="empty">還沒有入所介紹</div>`}
     </section>`;
   }
   const busy = e.phase === 'saving';
+  const n = [...e.text].length;
   return `<section class="detail-section" data-section="intro">
     <form class="rest-form intro-form" id="introForm" autocomplete="on">
-      <h3>入所原因</h3>
-      ${intakeOptsHtml(e.reason, busy)}
-      ${e.guessed && e.reason === e.guessed ? `<p class="rest-hint">照下面的介紹先選了「${esc(e.guessed)}」，不對就改，按儲存才算數。</p>` : ''}
-      ${intakeNeedsPlace(e.reason) ? `<label>拾獲地點<input type="text" id="introPlace" maxlength="${INTAKE_PLACE_MAX}" value="${esc(e.place)}" placeholder="例：樹林區大同山" autocomplete="off"${busy ? ' disabled' : ''}></label>` : ''}
+      <h3>${icon('card')}入所介紹</h3>
+      <p class="rest-hint">存好後這台馬上看到，其他人幾分鐘後（下次更新資料）看到。只存在網站，不寫試算表。</p>
+      <label>介紹<textarea id="introText" rows="7" maxlength="${INTRO_MAX}" placeholder="例：親人、喜歡散步，怕機車聲"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea><small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small></label>
       ${e.needPass ? `<label>通關碼<input type="password" id="introPass" name="password" autocomplete="current-password" value="${esc(e.pass)}"${busy ? ' disabled' : ''}></label>` : ''}
       ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
-      <p class="rest-hint">只存在網站，不寫試算表。</p>
     </form>
-    ${introProseHtml(dog)}
   </section>`;
 }
-// 入所原因表單打開時的底部列：取消＋儲存（送出 #introForm）；溜了先收起來，跟換照片同一個做法（#146）
+// 介紹表單打開時的底部列：取消＋儲存介紹（送出 #introForm）；溜了先收起來，跟換照片同一個做法（#146）
 function introBarHtml(dog) {
   const e = introEdit && introEdit.dog === dog ? introEdit : null;
   if (!e) return '';
   const busy = e.phase === 'saving';
-  return `<div class="detail-bar photo-bar">${busy ? '' : '<button type="button" class="bar-btn" id="introCancel">取消</button>'}<button type="submit" form="introForm" class="bar-confirm"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存'}</button></div>`;
+  return `<div class="detail-bar photo-bar">${busy ? '' : '<button type="button" class="bar-btn" id="introCancel">取消</button>'}<button type="submit" form="introForm" class="bar-confirm"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存介紹'}</button></div>`;
 }
 function openIntroEdit(dog) {
   if (!dog || !dog.id || !UPLOAD_URL) return;
-  introEdit = { dog, ...intakeDraft(dog), pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
+  introEdit = { dog, text: introOf(dog) || '', pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
   renderDetail();
-  const first = document.querySelector('#introForm .intake-opt.on') || document.querySelector('#introForm .intake-opt');
-  if (first) {
-    first.focus({ preventScroll: true });
-    if (first.scrollIntoView) first.scrollIntoView({ block: 'center' });
+  const box = document.getElementById('introText');
+  if (box) {
+    box.focus({ preventScroll: true });
+    if (box.scrollIntoView) box.scrollIntoView({ block: 'center' });
   }
-}
-// 打開編輯時的內容：已經填了就是那個；還沒填就照舊介紹先選好建議（guessed 記下建議的是哪個，畫面上要說）
-function intakeDraft(dog) {
-  const cur = intakeOf(dog);
-  const g = cur.reason ? null : intakeGuess(introOf(dog));
-  return g ? { reason: g.reason, place: g.place, guessed: g.reason } : { ...cur, guessed: '' };
-}
-// 點一個原因：選它；再點一次取消。重畫後焦點留在同一顆
-function pickIntakeReason(e, name, redraw, root) {
-  if (!e || e.phase === 'saving') return;
-  e.reason = e.reason === name ? '' : name;
-  redraw();
-  const b = [...root.querySelectorAll('.intake-opt')].find(x => x.dataset.intakeReason === name);
-  if (b) b.focus({ preventScroll: true });
 }
 async function saveIntro() {
   const e = introEdit;
   if (!e || e.phase === 'saving') return;
   const pass = e.needPass ? e.pass : loadNotesPass();
   if (!pass) { e.needPass = true; e.phase = 'error'; e.error = '請輸入通關碼'; renderDetail(); return; }
-  const reason = e.reason, place = intakeNeedsPlace(reason) ? e.place.replace(/\s+/g, ' ').trim() : '';
+  const text = e.text.replace(/\r\n?/g, '\n').trim();
+  if ([...text].length > INTRO_MAX) { e.phase = 'error'; e.error = `最多 ${INTRO_MAX} 字`; renderDetail(); return; }
   e.phase = 'saving'; e.error = ''; renderDetail();
   let out = null, error = '';
   try {
     const res = await fetch(`${UPLOAD_URL}/intro/${encodeURIComponent(e.dog.id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ passcode: pass, reason, place }),
+      body: JSON.stringify({ passcode: pass, text }),
     });
     out = await res.json().catch(() => null);
     if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
@@ -1525,12 +1470,12 @@ async function saveIntro() {
     return;
   }
   saveNotesPass(pass);
-  introOverrides[e.dog.id] = { reason: typeof out.reason === 'string' ? out.reason : reason, place: typeof out.place === 'string' ? out.place : place };
+  introOverrides[e.dog.id] = typeof out.intro === 'string' ? out.intro : text;
   introEdit = null;
   render(); renderDetail();
   const b = document.getElementById('introEdit');
   if (b) b.focus({ preventScroll: true });
-  showToast(`${e.dog.name} 的入所原因已存好（其他人等資料更新就會看到）`);
+  showToast(`${e.dog.name} 的介紹已存好（其他人等資料更新就會看到）`);
 }
 
 function openRestEdit(dog) {
@@ -1632,7 +1577,10 @@ function departedDetailHtml(dog, today) {
         : `<div class="content note-text">${esc(dog.note)}</div>`}
     </section>
     ${walkHistorySection(dog, today)}
-    ${introSectionHtml(dog)}
+    <section class="detail-section" data-section="intro">
+      <h3>${icon('card')}入所介紹<span class="sub">收容所在入所時寫的</span></h3>
+      ${dog.intro ? `<div class="content">${esc(dog.intro)}</div>` : `<div class="empty">沒有入所介紹</div>`}
+    </section>
     <div class="detail-bar"><button type="button" class="bar-btn" id="detailClose">關閉</button></div>
   `;
   function since(d) {
@@ -1748,13 +1696,12 @@ async function imageToLocal(src) {
 
 // 可以一起溜的每一隻：輕點照片換看那隻；右上角圓圈勾選，之後用下方按鈕一起記（#35，K 選 C）。
 // 今天已溜的不顯示圓圈，改標「今天已溜」
-function buddyTile(d, name, walkedNow, mate) {
+function buddyTile(d, name, walkedNow) {
   const walked = walkedNow.has(d);
   const canPick = walkKey(d) && !walked && allDogs.includes(d);
   const picked = canPick && pickedBuddies.has(walkKey(d));
   return `<div class="buddy-tile">
     <button class="buddy" data-dog="${allDogs.indexOf(d)}"${allDogs.includes(d) ? '' : ' disabled'}>${photoThumb(d, 64)}<span class="bname">${esc(name)}</span></button>
-    ${mate ? `<span class="mate-tag">同籠</span>` : ''}
     ${walked ? `<span class="walked-tag">今天已溜</span>` : ''}
     ${canPick ? `<button type="button" class="pick${picked ? ' on' : ''}" data-pick="${esc(walkKey(d))}" aria-pressed="${picked}" aria-label="勾選 ${esc(name)} 一起記">${icon('tick')}</button>` : ''}
   </div>`;
@@ -1768,19 +1715,13 @@ function cageMates(dog) {
   return allDogs.filter(d => d !== dog && String(d.cage || '').replace(/\s+/g, '') === cage);
 }
 
-// 同籠＋可以一起溜合成一段（K 2026-10-10 減法：兩段常常是同一批狗）：同籠的排前面、標「同籠」，
-// 登記可以一起溜又不同籠的接在後面；同一隻只出現一次
-function togetherSection(dog, walked) {
-  const byName = new Map(allDogs.map(d => [d.name, d]));
+function cageMatesSection(dog, walked) {
   const mates = cageMates(dog);
-  const buddies = [...(groupMap[dog.name] || [])].map(n => byName.get(n) || { name: n, id: '' });
-  const list = [...mates, ...buddies.filter(d => !mates.includes(d))];
+  if (!mates.length) return '';
   return `
-    <section class="detail-section" data-section="group">
-      <h3>${icon('group')}同籠、可以一起溜的狗</h3>
-      ${list.length
-        ? `<div class="buddies">${list.map(d => buddyTile(d, d.name, walked, mates.includes(d))).join('')}</div>`
-        : `<div class="empty">沒有同籠，也沒有登記可以一起溜的狗</div>`}
+    <section class="detail-section" data-section="cage">
+      <h3>${icon('pin')}同籠的狗<span class="sub">${esc(dog.cage)}</span></h3>
+      <div class="buddies">${mates.map(d => buddyTile(d, d.name, walked)).join('')}</div>
     </section>`;
 }
 
@@ -2210,8 +2151,6 @@ const DETAIL_CLICKS = [
   ['#restEdit', () => openRestEdit(detailDog)],
   ['#introEdit', () => openIntroEdit(detailDog)],
   ['#introCancel', () => { introEdit = null; renderDetail(); const b = document.getElementById('introEdit'); if (b) b.focus({ preventScroll: true }); }],
-  ['[data-intake-reason]', el => pickIntakeReason(introEdit, el.dataset.intakeReason, renderDetail, document.getElementById('detail'))],
-  ['#walksToggle', () => { detailWalksOpen = !detailWalksOpen; renderDetail(); const b = document.getElementById('walksToggle'); if (b) b.focus({ preventScroll: true }); }],
   ['#restEnd', () => saveRest(true)],
   ['#restCancel', () => { restEdit = null; renderDetail(); const b = document.getElementById('restEdit'); if (b) b.focus({ preventScroll: true }); }],
   ['#photoConfirm', () => uploadPhoto()],
@@ -2244,7 +2183,12 @@ function wireDetail(box) {
   box.bqWired = true;
   // 休養設定表單：打的字記在 restEdit，重畫不會不見；送出走 saveRest
   box.addEventListener('input', e => {
-    if (introEdit && e.target.id === 'introPlace') { introEdit.place = e.target.value; return; }
+    if (introEdit && e.target.id === 'introText') {
+      introEdit.text = e.target.value;
+      const c = box.querySelector('.intro-count');
+      if (c) { const n = [...introEdit.text].length; c.textContent = `${n} / ${INTRO_MAX} 字`; c.classList.toggle('over', n > INTRO_MAX); }
+      return;
+    }
     if (introEdit && e.target.id === 'introPass') { introEdit.pass = e.target.value; return; }
     if (!restEdit) return;
     if (e.target.id === 'restReason') restEdit.reason = e.target.value;
@@ -2311,7 +2255,6 @@ function showDetail(dog, remember = true) {
   if (wasOpen && remember && dog !== detailDog) detailTrail.push(detailDog);
   if (dog !== detailDog) {
     pickedBuddies.clear();
-    detailWalksOpen = false;
     if (!restEdit || restEdit.phase !== 'saving') restEdit = null;
     if (!introEdit || introEdit.phase !== 'saving') introEdit = null;
     if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
@@ -2330,7 +2273,6 @@ function showDetail(dog, remember = true) {
 function hideDetail() {
   if (!detailDog) return;
   detailDog = null;
-  detailWalksOpen = false;
   detailTrail = [];
   pickedBuddies.clear();
   if (!restEdit || restEdit.phase !== 'saving') restEdit = null;
