@@ -1030,3 +1030,9 @@
 - worker/src/index.js：/api/ 狀態多 database（未設定／D1（各表幾筆）／還沒建表）；網站還是讀 repo 的檔案，行為不變。測試 1 項。
 - .assetsignore、.gitignore 加 wrangler.deploy.json、db/seed.sql；tests.yml、AGENTS.md 測試清單加 d1-database.test.mjs；網頁測試的 #130 部署檢查跟著改。docs/CLOUDFLARE_SETUP.md 加「資料庫（D1）」（確認方式、token 要加 Account｜D1｜Edit）。node 143 過、網頁 226 過（本機另 2 項 #130）。
 - 還沒驗證的：真的對 Cloudflare 跑（wrangler d1 list --json 的欄位、token 權限）要合併後看第一次部署的摘要和 /api/。
+## 2026-10-10 Claude（存檔：個性與注意的設計、資料庫現況和接下來的順序）
+- 依據：K 2026-10-10：「先把目前的狀況 push git，因為額度快沒了。另外資料庫同意。」
+- 現況：#189（圖鑑）、#191（補資料、列表、管理用、我溜過月曆）、#192（js/site-config.js）、#193（資料表設計、轉檔）、#194（部署時自動準備 D1）、#195（補資料直接在表格裡補）都已合併、部署。K 幫 Cloudflare token 加了 Account｜D1｜Edit，重新部署後資料庫已建立並匯入（/api/ 顯示 D1（狗 125、溜狗紀錄 732、異動紀錄 73））；網站還是讀 repo 的檔案，資料庫只匯入過一次。
+- K 問「會不會變成資料庫怪物」：畫了現在／之後的資料流向圖，說明只是把「一堆檔案」換成「一個資料庫」，四張表、不再加層；K 回「資料庫同意」。
+- 新增 docs/TRAITS_PLAN.md：手機狗卡的溜狗紀錄換成「個性與注意」（標籤＋短句、適合誰帶、一句話介紹；所有人能改、記異動、只存 D1）。impeccable shape 的設計，K 選了標籤＋短句、手機拿掉溜狗紀錄電腦留著；還有三件事等 K 回覆（標籤增刪、要不要分級、觀察要不要顯示誰寫的）。還沒動工。
+- 沒提交的暫存檔：_proto-desk.html、_proto-mine.html、.impeccable/mocks/（早期原型，可以刪）。
