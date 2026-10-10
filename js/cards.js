@@ -12,14 +12,9 @@ const BQ_CODE_PATTERN = /^[0-9a-f]{12}$/;
 const BQ_PACK_SIZE = 5;
 
 // 隊伍照犬舍分；顏色是卡面色帶和圖鑑的隊伍標
-const BQ_TEAMS = [
-  { key: 'new', name: '新犬舍隊', test: c => /^新/.test(c), color: '#1F5C9E' },
-  { key: 'old', name: '舊犬舍隊', test: c => /^舊/.test(c), color: '#0F6B6B' },
-  { key: 'mom', name: '幼母隊', test: c => /^母幼/.test(c), color: '#875700' },
-  { key: 'c', name: 'C 區隊', test: c => /^C/i.test(c), color: '#2F7A45' },
-  { key: 'ward', name: '住院區隊', test: c => /^住院/.test(c), color: '#6E4A9E' },
-];
-const BQ_FREE = { key: 'free', name: '自由球員', test: () => true, color: '#55605B' };
+// 分區、隊名、隊色在 js/site-config.js（cards.html 先載入）
+const BQ_TEAMS = SITE.zones.map(z => ({ key: z.key, name: z.team, test: z.test, color: z.color }));
+const BQ_FREE = { key: SITE.freeTeam.key, name: SITE.freeTeam.team, test: () => true, color: SITE.freeTeam.color };
 
 // 卡的等級看在所多久：等越久的狗卡越閃，讓最久的被看見
 const BQ_TIERS = [

@@ -52,6 +52,7 @@ let INDEX_HTML = ''; // index.html 原始碼，#10 唯讀檢查用（其他測�
 let APP_JS = '';     // js/app.js 原始碼（#30 拆檔後程式在這裡）
 let ANALYSIS_JS = ''; // js/analysis.js 原始碼（#59 分析頁）
 let FIND_JS = '';     // js/find.js 原始碼（#99 找狗）
+let SITE_JS = '';     // js/site-config.js 原始碼（這間收容所的設定）
 let MAKE_THUMBS_YML = ''; // .github/workflows/make-thumbs.yml（#83 縮圖 Action）
 let MANIFEST = {};    // manifest.webmanifest，#33 主畫面名稱檢查用
 let DOGS_JSON = null; // data/dogs.json，#32 格式檢查用
@@ -580,7 +581,7 @@ function runTests() {
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
       const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
-      eq(scripts.map(s => s.getAttribute('src')), ['js/app.js', 'js/analysis.js', 'js/find.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版）：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/site-config.js', 'js/app.js', 'js/analysis.js', 'js/find.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
@@ -2960,6 +2961,12 @@ async function runDeskTests() {
         eq(doc.querySelectorAll('[data-fill-photo]').length + doc.querySelectorAll('[data-fill-intro]').length, 8, '每列兩顆：');
       } finally { photoVersions = pv; deskView = 'sheet'; deskFill = 'all'; }
     });
+    await check('這間收容所的設定集中在 js/site-config.js（10-10 K：以後其他收容所可以搬去用）：門檻、警示字、分區不寫死在別的檔', () => {
+      eq([AMBER_DAYS, RED_DAYS, SPECIAL_KEYWORDS === SITE.warnKeywords, DESK_ZONES === SITE.zones], [SITE.days.amber, SITE.days.red, true, true], '都讀 SITE：');
+      eq(SITE.zones.map(z => [z.key, z.test('新 A10'), z.test('c區13')]), [['new', true, false], ['old', false, false], ['mom', false, false], ['c', false, true], ['ward', false, false]], '分區比對（去空白、C 區不分大小寫）：');
+      if (INDEX_HTML.indexOf('js/site-config.js') < 0 || INDEX_HTML.indexOf('js/site-config.js') > INDEX_HTML.indexOf('src="js/app.js"')) throw new Error('index.html 要先載入 js/site-config.js');
+      if (/const (AMBER_DAYS|RED_DAYS) = [0-9]/.test(APP_JS) || APP_JS.includes('[\'勿溜\'')) throw new Error('js/app.js 不該再寫死門檻或警示字');
+    });
     await check('電腦版只靠 setWalked 登記，自己不送資料', () => {
       if (/method\s*:|\bPOST\b|sheet-write|UPLOAD_URL/.test(code)) throw new Error('js/desk.js 不應該自己寫試算表');
     });
@@ -2974,7 +2981,7 @@ async function runDeskTests() {
 async function runCardsTests() {
   const code = await fetch('../js/cards.js').then(r => r.text());
   // 包在函式裡跑，不把 bq* 放進這頁的全域（測試頁沒有 #bqField，不會開始畫面）
-  const C = new Function(`${code}\nreturn { bqPlayers, bqTier, bqStay, bqQuote, bqMonthOut, bqAwards, bqTeamOf, bqLoadCodes, bqTodayWrites, bqMyDogs, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, BQ_OPENED_KEY };`)();
+  const C = new Function(`${SITE_JS}\n${code}\nreturn { bqPlayers, bqTier, bqStay, bqQuote, bqMonthOut, bqAwards, bqTeamOf, bqLoadCodes, bqTodayWrites, bqMyDogs, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, BQ_OPENED_KEY };`)();
   const TODAY = new Date(2026, 9, 9);
   const data = {
     photoVersions: { 'photos/2017041502.jpg': 'abc' },
@@ -3713,11 +3720,15 @@ async function runFix141Tests() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js', '../js/find.js'].map(u => fetch(u).then(res => {
+Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js', '../js/find.js', '../js/site-config.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest, dogsJson, analysisJs, findJs]) => {
+  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs]) => {
+    SITE_JS = siteJs;
+    const c = document.createElement('script'); // 這間收容所的設定要在其他程式前面
+    c.textContent = siteJs;
+    document.body.appendChild(c);
     ANALYSIS_JS = analysisJs;
     FIND_JS = findJs;
     INDEX_HTML = html;

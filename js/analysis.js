@@ -324,7 +324,7 @@ function analysisHtml(dogs, today) {
 
   // 最上面三格大數字（V7 #114 白底；2026-10-08 拿掉「在所滿 1 年 %」，下面圓環已經有）
   out.push(`<section class="a-hero">
-    <div class="a-hero-title">${icon('paw')}板收在所的狗</div>
+    <div class="a-hero-title">${icon('paw')}${esc(SITE.shelterShort)}在所的狗</div>
     <div class="a-kpis">
       ${kpi(rows.length, '隻', '目前在所')}
       ${kpi(avgStay == null ? '–' : yearsText(avgStay), '年', '平均在所')}
