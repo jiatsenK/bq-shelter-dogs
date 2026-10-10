@@ -16,7 +16,7 @@
 <body>
 <!-- 板收圖鑑（K 2026-10-10）：電腦版溜狗表頁首「圖鑑」進來；你溜過的狗才拿得到卡（js/cards.js） -->
 <main>
-  <section class="bq-field" id="bqField" aria-labelledby="bqTitle">
+  <div class="bq-top">
     <header class="bq-mast">
       <div class="bq-lockup">
         <span class="bq-patch" aria-hidden="true"><svg viewBox="0 0 24 24"><g fill="currentColor"><ellipse cx="5.5" cy="10" rx="2.3" ry="2.9" transform="rotate(-18 5.5 10)"/><ellipse cx="9.3" cy="5.6" rx="2.3" ry="3" transform="rotate(-6 9.3 5.6)"/><ellipse cx="14.7" cy="5.6" rx="2.3" ry="3" transform="rotate(6 14.7 5.6)"/><ellipse cx="18.5" cy="10" rx="2.3" ry="2.9" transform="rotate(18 18.5 10)"/><path d="M12 11c-2.7 0-6 3.6-6 6.6 0 1.8 1.3 2.9 3 2.9 1.2 0 2-.6 3-.6s1.8.6 3 .6c1.7 0 3-1.1 3-2.9 0-3-3.3-6.6-6-6.6z"/></g></svg><span>板橋<br>收容所</span></span>
@@ -31,26 +31,10 @@
         </a>
       </div>
     </header>
-    <div class="bq-table">
-      <button type="button" class="bq-pack" id="bqPack" aria-label="卡包" disabled>
-        <span class="bq-pack-tear" aria-hidden="true"></span>
-        <span class="bq-pack-crest" aria-hidden="true"><svg viewBox="0 0 24 24"><g fill="currentColor"><ellipse cx="5.5" cy="10" rx="2.3" ry="2.9" transform="rotate(-18 5.5 10)"/><ellipse cx="9.3" cy="5.6" rx="2.3" ry="3" transform="rotate(-6 9.3 5.6)"/><ellipse cx="14.7" cy="5.6" rx="2.3" ry="3" transform="rotate(6 14.7 5.6)"/><ellipse cx="18.5" cy="10" rx="2.3" ry="2.9" transform="rotate(18 18.5 10)"/><path d="M12 11c-2.7 0-6 3.6-6 6.6 0 1.8 1.3 2.9 3 2.9 1.2 0 2-.6 3-.6s1.8.6 3 .6c1.7 0 3-1.1 3-2.9 0-3-3.3-6.6-6-6.6z"/></g></svg></span>
-        <span class="bq-pack-t"><b>板收圖鑑</b><span>你溜過的狗</span><em>撕開</em></span>
-      </button>
-      <span class="bq-pack-strip" aria-hidden="true"></span>
-      <span class="bq-pack-count" id="bqPackCount"></span>
-      <div class="bq-hand" id="bqHand" aria-live="polite"></div>
-    </div>
-    <div class="bq-under">
-      <p class="bq-pack-note" id="bqPackNote">讀取中…</p>
-      <p class="bq-deal-note" id="bqDealNote"></p>
-      <button type="button" class="bq-again" id="bqAgain" hidden>再開一包</button>
-      <p class="bq-flip-hint">點卡片翻到背面</p>
-    </div>
-    <a class="bq-down" href="#bqAwardsTitle"><span>往下看　年度獎項・圖鑑</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 9l7 7 7-7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
-  </section>
+  </div>
 
-  <section class="bq-awards" aria-labelledby="bqAwardsTitle">
+  <!-- 年度獎項先藏起來（K 2026-10-10：先有圖鑑就好），功能留著，拿掉 hidden 就會出現 -->
+  <section class="bq-awards" aria-labelledby="bqAwardsTitle" hidden>
     <header class="bq-sec-head">
       <div>
         <h2 id="bqAwardsTitle">年度獎項</h2>
@@ -66,12 +50,15 @@
         <h2 id="bqBinderTitle">圖鑑</h2>
         <p>已拿到 <b data-bq="got">0</b> / <span data-bq="total">—</span> 張・所內每隻狗都在這裡，溜過才拿得到牠的卡</p>
       </div>
+      <div class="bq-cta" id="bqCta" aria-live="polite"><p class="bq-cta-note">讀取中…</p></div>
+    </header>
+    <div class="bq-legend-row">
       <ul class="bq-legend" aria-label="圖例">
         <li><i class="lg-got"></i>拿到了</li>
         <li><i class="lg-pending"></i>溜過，還沒撕開</li>
         <li><i class="lg-locked"></i>還沒溜過</li>
       </ul>
-    </header>
+    </div>
     <div class="bq-binder" id="bqBinder"></div>
     <footer class="bq-foot">
       <p id="bqUpdated"></p>
@@ -79,6 +66,27 @@
     </footer>
   </section>
 </main>
+
+<div class="bq-field" id="bqField" role="dialog" aria-modal="true" aria-label="開卡包" hidden>
+  <button type="button" class="bq-close bq-field-close" id="bqFieldClose" aria-label="關閉，回圖鑑"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+  <div class="bq-table">
+    <button type="button" class="bq-pack" id="bqPack" aria-label="撕開卡包">
+      <span class="bq-pack-tear" aria-hidden="true"></span>
+      <span class="bq-pack-crest" aria-hidden="true"><svg viewBox="0 0 24 24"><g fill="currentColor"><ellipse cx="5.5" cy="10" rx="2.3" ry="2.9" transform="rotate(-18 5.5 10)"/><ellipse cx="9.3" cy="5.6" rx="2.3" ry="3" transform="rotate(-6 9.3 5.6)"/><ellipse cx="14.7" cy="5.6" rx="2.3" ry="3" transform="rotate(6 14.7 5.6)"/><ellipse cx="18.5" cy="10" rx="2.3" ry="2.9" transform="rotate(18 18.5 10)"/><path d="M12 11c-2.7 0-6 3.6-6 6.6 0 1.8 1.3 2.9 3 2.9 1.2 0 2-.6 3-.6s1.8.6 3 .6c1.7 0 3-1.1 3-2.9 0-3-3.3-6.6-6-6.6z"/></g></svg></span>
+      <span class="bq-pack-t"><b>板收圖鑑</b><span>你溜過的狗</span><em>撕開</em></span>
+    </button>
+    <span class="bq-pack-strip" aria-hidden="true"></span>
+    <span class="bq-pack-count" id="bqPackCount"></span>
+    <div class="bq-hand" id="bqHand" aria-live="polite"></div>
+  </div>
+  <div class="bq-under">
+    <p class="bq-pack-note" id="bqPackNote">點卡包撕開</p>
+    <p class="bq-deal-note" id="bqDealNote"></p>
+    <button type="button" class="bq-again" id="bqAgain" hidden>再開一包</button>
+    <button type="button" class="bq-done" id="bqDone" hidden>收進圖鑑</button>
+    <p class="bq-flip-hint">點卡片翻到背面</p>
+  </div>
+</div>
 
 <div class="bq-modal" id="bqModal" hidden>
   <div class="bq-modal-in" role="dialog" aria-modal="true" aria-label="球員卡">

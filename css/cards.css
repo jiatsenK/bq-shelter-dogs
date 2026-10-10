@@ -19,8 +19,11 @@ html.bq-modal-open { overflow: hidden; }
 @media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 
 /* ── 球場：深藍底、淺一階的直條草皮紋、投手丘那一圈 ── */
-/* 第一屏留 56px 給下一段露出來，底下一條「往下看」（K 2026-10-10：第一次用的人不知道要往下滑） */
-.bq-field { position: relative; min-height: calc(100vh - 56px); min-height: calc(100svh - 56px); display: grid; grid-template-rows: auto 1fr auto auto; overflow: hidden;
+/* 頁首：球場直條紋的一條，下面直接是圖鑑（K 2026-10-10：預設圖鑑在上面） */
+.bq-top { position: relative; padding-bottom: 28px; overflow: hidden; background: repeating-linear-gradient(90deg, var(--navy) 0 7.5vw, var(--navy-2) 7.5vw 15vw); }
+/* 開卡包：按了圖鑑的「開卡包」才出現，球場蓋住整個畫面 */
+.bq-field[hidden] { display: none; }
+.bq-field { position: fixed; inset: 0; z-index: 40; display: grid; grid-template-rows: 1fr auto; overflow: hidden; animation: bq-field-in .35s var(--ease);
   background: repeating-linear-gradient(90deg, var(--navy) 0 7.5vw, var(--navy-2) 7.5vw 15vw); }
 .bq-field::before { content: ''; position: absolute; left: 50%; top: 56%; width: 150vh; height: 150vh; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: inset 0 0 0 3px rgba(244, 244, 240, .07), 0 0 0 3px rgba(244, 244, 240, .04); pointer-events: none; }
 .bq-mast { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 30px 48px 0; }
@@ -73,13 +76,7 @@ html.bq-modal-open { overflow: hidden; }
 .bq-pack-count { position: absolute; left: calc(50% + var(--cw) * .4); top: calc(50% - var(--cw) * .66); z-index: 2; transition: opacity .2s; padding: 6px 12px; background: var(--red); color: var(--chalk); font: 900 15px var(--cjk); letter-spacing: .1em; transform: rotate(6deg); box-shadow: 0 6px 14px rgba(0, 0, 0, .35); pointer-events: none; }
 .bq-pack-count:empty, .tearing .bq-pack-count, .opened .bq-pack-count { opacity: 0; }
 .ready .bq-table:has(.bq-pack:hover) .bq-pack-count { transform: translateY(-10px) rotate(6deg); }
-/* 還沒設定你是誰、還沒溜過：卡包壓暗，下面寫怎麼拿到卡 */
-.locked .bq-pack, .empty .bq-pack { filter: grayscale(.85) brightness(.55) drop-shadow(0 34px 40px rgba(0, 0, 0, .5)); }
-.locked .bq-pack-t em, .empty .bq-pack-t em { display: none; }
 .bq-pack-note { text-align: center; line-height: 1.8; }
-.locked .bq-pack-note, .empty .bq-pack-note { color: var(--chalk); letter-spacing: .1em; padding-left: .1em; }
-.bq-pack-note a { display: flex; align-items: center; justify-content: center; width: max-content; min-height: 44px; margin: 14px auto 0; padding: 0 calc(22px - .15em) 0 22px; border-radius: 3px; background: var(--gold); color: var(--ink); font-weight: 900; letter-spacing: .15em; text-decoration: none; }
-.bq-pack-note a:hover { background: var(--gold-hi); }
 .opened .bq-pack { transform: translateY(80vh) rotate(8deg); opacity: 0; pointer-events: none; visibility: hidden; transition: transform .8s cubic-bezier(.5, 0, .75, .3), opacity .6s .2s, visibility 0s .8s; }
 
 /* ── 手上的五張 ── */
@@ -157,10 +154,29 @@ html.bq-modal-open { overflow: hidden; }
 /* ── 卡包下面 ── */
 .bq-under { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 24px 16px; min-height: 144px; }
 .bq-under p { margin: 0; }
-.bq-down { position: relative; z-index: 2; justify-self: center; display: inline-flex; align-items: center; gap: 10px; min-height: 48px; margin-bottom: 14px; padding: 0 20px 0 22px; border-radius: 3px; box-shadow: inset 0 0 0 2px rgba(198, 210, 232, .45); color: var(--chalk); font-weight: 900; font-size: 15px; letter-spacing: .12em; text-decoration: none; transition: box-shadow .2s, background .2s; }
-.bq-down:hover { box-shadow: inset 0 0 0 2px var(--chalk); background: rgba(244, 244, 240, .08); }
-.bq-down svg { width: 18px; height: 18px; color: var(--gold); animation: bq-nudge 1.6s var(--ease) infinite; }
-@keyframes bq-nudge { 0%, 100% { transform: none; } 50% { transform: translateY(5px); } }
+@keyframes bq-field-in { from { opacity: 0; } }
+/* 卡包從上面掉進來，落地彈一下 */
+.bq-field:not(.opened):not(.tearing) .bq-pack { animation: bq-pack-in .7s var(--ease) backwards, bq-foil 4.5s ease-in-out .7s infinite alternate; }
+@keyframes bq-pack-in { 0% { transform: translateY(-70vh) rotate(-14deg); } 70% { transform: translateY(12px) rotate(2deg); } 100% { transform: none; } }
+.bq-field:not(.opened):not(.tearing) .bq-pack-count { animation: bq-field-in .3s .6s both; }
+.bq-field .bq-field-close { position: absolute; right: 32px; top: 28px; z-index: 3; }
+.bq-done { min-height: 44px; padding: 0 calc(22px - .15em) 0 22px; border: none; border-radius: 3px; background: none; box-shadow: inset 0 0 0 2px rgba(198, 210, 232, .5); color: var(--chalk); font-weight: 900; font-size: 15px; letter-spacing: .15em; cursor: pointer; }
+.bq-done:hover { box-shadow: inset 0 0 0 2px var(--chalk); }
+.bq-done[hidden] { display: none; }
+/* 圖鑑標題右邊：開卡包按鈕或一句說明 */
+.bq-cta { display: flex; align-items: center; justify-content: flex-end; gap: 16px; max-width: 56%; }
+.bq-cta-note { margin: 0; color: var(--sky); font-weight: 700; font-size: 15px; line-height: 1.6; text-align: right; }
+.bq-cta-btn { flex: none; display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 22px; border: none; border-radius: 3px; background: var(--gold); color: var(--ink); font-weight: 900; font-size: 16px; letter-spacing: .12em; text-decoration: none; cursor: pointer; transition: background .2s, transform .2s var(--ease); }
+.bq-cta-btn:hover { background: var(--gold-hi); transform: translateY(-2px); }
+.bq-cta-btn:active { transform: translateY(1px); }
+.bq-open { gap: 14px; min-height: 72px; padding: 0 26px 0 14px; letter-spacing: 0; box-shadow: 0 14px 28px rgba(0, 0, 0, .4); }
+.bq-open-pack { flex: none; display: grid; place-items: center; width: 40px; height: 54px; border-radius: 2px; background: var(--navy); color: var(--gold); box-shadow: inset 0 0 0 2px var(--gold-deep); transform: rotate(-6deg); transition: transform .3s var(--ease); }
+.bq-open:hover .bq-open-pack { transform: rotate(4deg) translateY(-3px); }
+.bq-open-pack svg { width: 22px; height: 22px; }
+.bq-open-t { display: grid; justify-items: start; gap: 2px; }
+.bq-open-t b { font-size: 20px; font-weight: 900; letter-spacing: .12em; line-height: 1.1; }
+.bq-open-t small { font-size: 13px; font-weight: 700; letter-spacing: .04em; }
+.bq-legend-row { display: flex; justify-content: flex-end; margin: -20px 0 20px; }
 .bq-pack-note { color: var(--sky); font-weight: 700; letter-spacing: .25em; padding-left: .25em; }
 .bq-deal-note, .bq-again, .bq-flip-hint { display: none; }
 .opened .bq-pack-note { display: none; }
@@ -169,10 +185,8 @@ html.bq-modal-open { overflow: hidden; }
 .bq-again { padding: 14px calc(34px - .2em) 14px 34px; font-feature-settings: "halt"; min-height: 48px; border: none; border-radius: 3px; background: var(--gold); color: var(--ink); font-weight: 900; font-size: 18px; letter-spacing: .2em; cursor: pointer; transition: background .2s, transform .2s var(--ease); }
 .opened .bq-again { display: block; }
 .bq-again[hidden] { display: none; }
-.done .bq-flip-hint { display: block; }
 .bq-again:hover { background: var(--gold-hi); transform: translateY(-2px); }
 .bq-again:active { transform: translateY(1px); }
-.failed .bq-pack-note { color: var(--chalk); }
 
 /* ── 段落標題 ── */
 .bq-sec-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 40px; }
@@ -200,8 +214,8 @@ html.bq-modal-open { overflow: hidden; }
 .bq-trophy-n b { font: 400 64px/1 var(--num); margin-right: 4px; }
 
 /* ── 收集冊：深藍活頁，九宮格卡套 ── */
-.bq-binder-sec { background: var(--navy-deep); padding: 96px 48px 64px; }
-.bq-binder-head { align-items: last baseline; }
+.bq-binder-sec { background: var(--navy-deep); padding: 44px 48px 64px; }
+.bq-binder-head { align-items: center; margin-bottom: 32px; }
 .bq-binder-head p { color: var(--sky); }
 .bq-binder-head p b { color: var(--gold); font-weight: 900; }
 /* 圖例：三種卡套各一個小方塊 */
@@ -274,6 +288,10 @@ html.bq-modal-open { overflow: hidden; }
   .bq-trophies { grid-template-columns: 1fr; gap: 28px; }
   .bq-sec-head { flex-direction: column; align-items: flex-start; margin-bottom: 28px; }
   .bq-legend { flex-wrap: wrap; gap: 10px 18px; }
+  .bq-legend-row { justify-content: flex-start; margin: 0 0 16px; }
+  .bq-cta { max-width: none; justify-content: flex-start; flex-wrap: wrap; }
+  .bq-cta-note { text-align: left; }
+  .bq-field .bq-field-close { right: 12px; top: 12px; }
   .bq-pockets { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px 8px; }
   .bq-pocket-q b { font-size: 20px; }
   .bq-pocket-nm { font-size: 12px; }
@@ -283,7 +301,7 @@ html.bq-modal-open { overflow: hidden; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bq-pack, .bq-down svg { animation: none; }
+  .bq-pack, .bq-field, .bq-field:not(.opened):not(.tearing) .bq-pack, .bq-field:not(.opened):not(.tearing) .bq-pack-count { animation: none; }
   .bq-pack, .bq-hand .bq-card, .bq-in, .bq-progress-bar i, .bq-trophy-ph img, .bq-pocket.got, .bq-pocket.pending, .bq-pocket-ph { transition: none; }
   .bq-card.fresh .bq-face, .bq-modal-in, .tearing .bq-pack-strip { animation: none; }
   .tearing .bq-pack-strip { opacity: 0; }
