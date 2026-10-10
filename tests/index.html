@@ -2911,6 +2911,100 @@ async function runDeskTests() {
   }
 }
 
+// 板收圖鑑（cards.html，K 2026-10-10）：js/cards.js 的純函式；你溜過的狗才拿得到卡，新的包成卡包
+async function runCardsTests() {
+  const code = await fetch('../js/cards.js').then(r => r.text());
+  // 包在函式裡跑，不把 bq* 放進這頁的全域（測試頁沒有 #bqField，不會開始畫面）
+  const C = new Function(`${code}\nreturn { bqPlayers, bqTier, bqStay, bqQuote, bqMonthOut, bqAwards, bqTeamOf, bqLoadCodes, bqTodayWrites, bqMyDogs, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, BQ_OPENED_KEY };`)();
+  const TODAY = new Date(2026, 9, 9);
+  const data = {
+    photoVersions: { 'photos/2017041502.jpg': 'abc' },
+    dogs: [
+      { id: '2017041502', name: '老將', cage: '新A07', sex: 'female', intro: '2017年4月15日,從板橋進來,個性溫和,喜歡散步' },
+      { id: '2026090101', name: '新人', cage: 'C區13', sex: 'male', intro: '' },
+      { id: '2022061001', name: '中堅', cage: '舊B05', intro: '' },
+      { id: '', name: '(阿拉丁)', cage: '舊B16' },
+      { id: '2023010101', name: '(暫住)', cage: '舊B16' },
+      { id: '2021010101', name: '金卡', cage: '住院區', intro: '' },
+    ],
+  };
+  const walks = [
+    { id: '2022061001', date: '2026-10-01' }, { id: '2022061001', date: '2026-10-01' }, { id: '2022061001', date: '2026-10-03' },
+    { id: '2017041502', date: '2026-10-02' }, { id: '2017041502', date: '2026-09-30' },
+  ];
+  const players = C.bqPlayers(data, walks, TODAY);
+  const by = Object.fromEntries(players.map(p => [p.name, p]));
+  await check('球員卡：沒編號、括號名字的列不算；背號照入隊順序（1 號最資深）', () => {
+    eq(players.map(p => p.name), ['老將', '新人', '中堅', '金卡'], '球員：');
+    eq(['老將', '金卡', '中堅', '新人'].map(n => by[n].number), ['1', '2', '3', '4'], '背號：');
+  });
+  await check('球員卡：等級看在所多久（7 年雷射、5 年金、3 年銀、其他普卡）；隊伍看犬舍', () => {
+    eq(['老將', '金卡', '中堅', '新人'].map(n => by[n].tier.key), ['holo', 'gold', 'silver', 'base'], '等級：');
+    eq([C.bqTier(7).key, C.bqTier(6.99).key, C.bqTier(3).key, C.bqTier(null).key], ['holo', 'gold', 'silver', 'base'], '邊界：');
+    eq(['新A07', '舊B05', '母幼A3', 'C區13', '住院區', '外面'].map(c => C.bqTeamOf(c).key), ['new', 'old', 'mom', 'c', 'ward', 'free'], '隊伍：');
+  });
+  await check('球員卡：本月出賽一天算一次、只算這個月；在所多久寫年月或天', () => {
+    eq([by['中堅'].monthOut, by['老將'].monthOut, by['新人'].monthOut], [2, 1, 0], '本月出賽：');
+    eq([C.bqStay(new Date(2017, 3, 15), TODAY), C.bqStay(new Date(2026, 8, 1), TODAY), C.bqStay(new Date(2026, 8, 30), TODAY), C.bqStay(null, TODAY)], ['9年5個月', '1個月', '9天', '—'], '在所：');
+  });
+  await check('球員卡：照片版本號；收容所的話跳過日期和從哪裡來', () => {
+    eq([by['老將'].photo, by['老將'].hasPhoto, by['新人'].hasPhoto], ['photos/2017041502.jpg?v=abc', true, false], '照片：');
+    eq(C.bqQuote('2017年4月15日,從板橋進來,個性溫和,喜歡散步'), '個性溫和，喜歡散步', '一句話：');
+  });
+  await check('球員卡年度獎項：出門王、資深球星、新人王都是資料算的', () => {
+    eq(C.bqAwards(players, TODAY).map(a => [a.title, a.who.name, a.value]), [['出門王', '中堅', 2], ['資深球星', '老將', 9], ['新人王', '新人', 38]]);
+  });
+  const ME = 'aaaaaaaaaaaa', ME2 = 'bbbbbbbbbbbb', OTHER = 'cccccccccccc';
+  await check('圖鑑：我溜過的狗照代號算（同一天以最後一筆為準），今天剛按的溜了也算', () => {
+    const log = [
+      { id: '2022061001', date: '2026-10-01', walkers: [ME] }, { id: '2022061001', date: '2026-10-03', walkers: [OTHER, ME2] },
+      { id: '2017041502', date: '2026-10-02', walkers: [ME] }, { id: '2017041502', date: '2026-10-02', walkers: [OTHER] },
+      { id: '2026090101', date: '2026-10-04', walkers: [OTHER] }, { id: '2021010101', date: '2026-10-05' },
+    ];
+    const mine = C.bqMyDogs(log, [ME, ME2], [{ id: '2026090101', date: '2026-10-09' }]);
+    eq([...mine.keys()].sort(), ['2022061001', '2026090101'], '溜過的：');
+    eq([mine.get('2022061001').times, mine.get('2022061001').first.getDate(), mine.get('2022061001').last.getDate()], [2, 1, 3], '次數、第一次、最近：');
+    eq(C.bqMyDogs(log, []).size, 0, '還沒設定代號：');
+    const st = fakeStorage();
+    st.setItem('bq-walker-codes', JSON.stringify([ME, 'not-a-code']));
+    eq(C.bqLoadCodes(st), [ME], '代號：');
+    st.setItem('bq-sheet-writes', JSON.stringify({ date: '2026-10-09', items: { a: { id: '2026090101', mine: true, current: { date: '2026-10-09' } }, b: { id: '2022061001', mine: false, current: { date: '2026-10-09' } } } }));
+    eq(C.bqTodayWrites(st, TODAY), [{ id: '2026090101', date: '2026-10-09' }], '今天按的：');
+    eq(C.bqTodayWrites(st, new Date(2026, 9, 10)), [], '昨天按的不算：');
+  });
+  await check('圖鑑：撕開過的記在這個瀏覽器、跟著代號走；新卡是溜過還沒撕的，最近溜的先出', () => {
+    const mine = C.bqMyDogs([
+      { id: '2022061001', date: '2026-10-01', walkers: [ME] }, { id: '2017041502', date: '2026-10-05', walkers: [ME] }, { id: '2021010101', date: '2026-10-03', walkers: [ME] },
+      { id: '1999010101', date: '2026-10-03', walkers: [ME] },
+    ], [ME]);
+    const st = fakeStorage();
+    const state = C.bqLoadOpened(st);
+    eq(C.bqPending(players, mine, C.bqOpenedIds(state, [ME])).map(p => p.name), ['老將', '金卡', '中堅'], '新卡（出所的狗不算）：');
+    C.bqMarkOpened(state, [ME, ME2], ['2017041502'], TODAY);
+    C.bqSaveOpened(st, state);
+    const back = C.bqLoadOpened(st);
+    eq([[...C.bqOpenedIds(back, [ME2])], back.codes[ME]['2017041502']], [['2017041502'], '2026-10-09'], '存起來：');
+    eq(C.bqPending(players, mine, C.bqOpenedIds(back, [ME])).map(p => p.name), ['金卡', '中堅'], '撕過的不再出：');
+    eq(C.bqOpenedIds(back, [OTHER]).size, 0, '別人的圖鑑另外算：');
+    st.setItem(C.BQ_OPENED_KEY, '{壞掉');
+    eq(C.bqLoadOpened(st), { v: 1, codes: {} }, '壞掉重來：');
+    eq(C.bqLoadOpened(null), { v: 1, codes: {} }, '沒有儲存空間：');
+  });
+  await check('圖鑑只讀 dogs.json、walks.json，不寫試算表、不送資料', () => {
+    const urls = [...code.matchAll(/fetch\(([^,)]+)/g)].map(m => m[1].trim());
+    eq(urls, ['BQ_DATA_URL', 'BQ_WALKS_URL'], 'fetch：');
+    if (/method\s*:|\bPOST\b|script\.google\.com|sheets\.googleapis\.com|UPLOAD_URL/.test(code)) throw new Error('cards.js 不應該寫任何東西');
+    if (/setItem\((?!BQ_OPENED_KEY)/.test(code)) throw new Error('cards.js 只能存撕開過的卡，不能改溜狗表的代號、今天已溜');
+  });
+  await check('首頁不再轉到球員卡；電腦版頁首有圖鑑入口，手機看不到', () => {
+    if (/bq-desktop-app|location\.replace\('cards\.html'\)/.test(INDEX_HTML)) throw new Error('首頁不應該轉到 cards.html');
+    const link = new DOMParser().parseFromString(INDEX_HTML, 'text/html').querySelector('header.app a.zukan-link[href="cards.html"]');
+    if (!link) throw new Error('頁首要有圖鑑入口');
+    const live = document.querySelector('header.app .zukan-link');
+    if (live && !(typeof deskOn === 'function' && deskOn()) && getComputedStyle(live).display !== 'none') throw new Error('手機不顯示圖鑑入口');
+  });
+}
+
 async function runOldUrlTests() {
   const testHtml = await fetch('index.html').then(r => r.text());
   // 把頁面裡的轉址程式拿出來，用假的 location 跑
@@ -3629,6 +3723,7 @@ Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../dat
   .then(runRangeTests)
   .then(runFindOverviewTests)
   .then(runHeaderTuckTests)
+  .then(runCardsTests)
   .then(runDeskTests) // 最後跑：載入 js/desk.js 後寬螢幕的溜狗表會換成電腦版
   .then(show)
   .catch(e => {
