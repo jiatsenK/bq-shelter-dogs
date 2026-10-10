@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-10T23:17:43+08:00",
+  "syncedAt": "2026-10-11T07:00:40+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -66,11 +66,11 @@
       "cage": "母幼A",
       "id": "2021021702",
       "name": "辛巴",
-      "walkedDate": "2026-10-09",
+      "walkedDate": "2026-10-10",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "dcda49f5b985"
+        "55f305be6715"
       ],
       "note": "",
       "sex": "female",
@@ -336,11 +336,11 @@
       "cage": "新A01",
       "id": "2018050810",
       "name": "黑寶",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-10",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "c3b400d1f468"
       ],
       "note": "2026/8/15疑似咬傷室友果果（巧芸）",
       "sex": "female",
