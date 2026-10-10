@@ -799,6 +799,7 @@
     {"id":"2021083002","name":"栗子","date":"2026-10-10","mine":false,"walkers":["c3b400d1f468"]},
     {"id":"2021050602","name":"保羅","date":"2026-10-10","mine":false,"walkers":["c3b400d1f468"]},
     {"id":"2024040202","name":"鐵雄","date":"2026-10-10","mine":false,"walkers":["c3b400d1f468"]},
-    {"id":"2021122302","name":"大壯","date":"2026-10-10","mine":false,"walkers":["c3b400d1f468"]}
+    {"id":"2021122302","name":"大壯","date":"2026-10-10","mine":false,"walkers":["c3b400d1f468"]},
+    {"id":"2020112402","name":"小新","date":"2026-10-10","mine":false,"walkers":["c3b400d1f468"]}
   ]
 }
