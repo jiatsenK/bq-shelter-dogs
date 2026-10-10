@@ -81,7 +81,7 @@ function deskToolsHtml(shown, total) {
     .map(([k, t, n]) => `<button type="button" class="dt-chip${deskZone === k ? ' on' : ''}" data-desk-zone="${k}" aria-pressed="${deskZone === k}">${t}<small class="num">${n}</small></button>`).join('');
   return `<div class="desk-tools">
     <div class="dt-chips" role="group" aria-label="區域">${chips}</div>
-    <span class="dt-hint">${shown === total ? '' : `<b class="num">${shown}</b> / ${total} 隻・`}${deskView === 'fill' ? '' : '勾左邊的格子可以一次登記好幾隻'}</span>
+    <span class="dt-hint">${shown === total ? '' : `<b class="num">${shown}</b> / ${total} 隻・`}${deskView === 'fill' ? '' : '<span class="dt-tip">勾左邊的格子可以一次登記好幾隻</span>'}</span>
     <div class="dt-view" role="group" aria-label="表格">
       ${[['sheet', '全表'], ['days30', '最近 30 天'], ['fill', '補資料']].map(([k, t]) => `<button type="button" data-desk-view="${k}" class="${deskView === k ? 'on' : ''}" aria-pressed="${deskView === k}">${t}</button>`).join('')}
     </div>

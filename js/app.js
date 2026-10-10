@@ -423,10 +423,11 @@ function myCalendarHtml(groups, today) {
   for (let d = 1; d <= total; d++) {
     const key = `${month}-${pad2(d)}`;
     const g = byDay.get(key);
-    const cls = `mc-cell${g ? ' on' : ''}${key === day ? ' sel' : ''}${key === todayKey ? ' today' : ''}`;
+    const isToday = key === todayKey;
+    const cls = `mc-cell${g ? ' on' : ''}${key === day ? ' sel' : ''}${isToday ? ' today' : ''}`;
     cells.push(g
-      ? `<button type="button" class="${cls}" data-mine-day="${key}" aria-pressed="${key === day}" aria-label="${m}月${d}日，溜 ${g.walks.length} 隻"><b>${d}</b><small>${g.walks.length} 隻</small></button>`
-      : `<span class="${cls}"><b>${d}</b></span>`);
+      ? `<button type="button" class="${cls}" data-mine-day="${key}" aria-pressed="${key === day}"${isToday ? ' aria-current="date"' : ''} aria-label="${isToday ? '今天，' : ''}${m}月${d}日，溜 ${g.walks.length} 隻"><b>${d}</b><small>${g.walks.length} 隻</small></button>`
+      : `<span class="${cls}"${isToday ? ' aria-current="date"' : ''}><b>${d}</b>${isToday ? '<span class="sr-only">今天</span>' : ''}</span>`);
   }
   const dogs = inMonth.reduce((n, g) => n + g.walks.length, 0);
   const shift = n => { const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; };
@@ -1383,7 +1384,7 @@ function restAdminHtml(dog, today) {
     // 管理用的集中在這一區（K 2026-10-10）：改介紹、設定休養中；正在改介紹時先收起來
     if (introEdit && introEdit.dog === dog) return '';
     return `<section class="detail-section rest-admin" data-section="rest">
-      <h3>${icon('note')}管理用<span class="sub">要通關碼</span></h3>
+      <h3>${icon('write')}管理用<span class="sub">要通關碼</span></h3>
       <div class="admin-btns">
         <button type="button" class="admin-btn" id="introEdit">${icon('card')}${introOf(dog) ? '改介紹' : '補介紹'}</button>
         <button type="button" class="admin-btn" id="restEdit">${icon('paw')}${r ? '改休養設定' : '設定休養中'}</button>
@@ -2688,7 +2689,13 @@ mainEl.addEventListener('click', e => {
   if (tile) showDetail(allDogs[tile.dataset.mineDog]);
   else if (e.target.closest('#mineRetry')) loadMyWalks();
   else if (e.target.closest('#mineStats')) { mineStatsOpen = !mineStatsOpen; render(); }
-  else if (e.target.closest('[data-mine-month]')) { mineMonth = e.target.closest('[data-mine-month]').dataset.mineMonth; mineDay = ''; render(); const b = document.querySelector('#main .mc-nav:not(:disabled)'); if (b) b.focus({ preventScroll: true }); }
+  else if (e.target.closest('[data-mine-month]')) {
+    const src = e.target.closest('[data-mine-month]');
+    const dir = src.classList.contains('next') ? '.next' : ':not(.next)';
+    mineMonth = src.dataset.mineMonth; mineDay = ''; render();
+    const b = document.querySelector(`#main .mc-nav${dir}:not(:disabled)`) || document.querySelector('#main .mc-nav:not(:disabled)');
+    if (b) b.focus({ preventScroll: true });
+  }
   else if (e.target.closest('[data-mine-day]')) { mineDay = e.target.closest('[data-mine-day]').dataset.mineDay; render(); const b = document.querySelector('#main .mc-cell.sel'); if (b) b.focus({ preventScroll: true }); }
   else if (e.target.closest('[data-open-guide]')) openGuide();
   else if (e.target.closest('[data-who-name]')) {
