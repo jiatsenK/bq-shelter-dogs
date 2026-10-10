@@ -197,6 +197,18 @@ function github(cfg, path, init = {}) {
   });
 }
 
+// 資料庫（D1，第 2 步）：目前只在狀態頁報告有沒有接上、各表幾筆；網站還是讀 repo 的檔案
+async function databaseStatus(env) {
+  if (!env || !env.DB) return '未設定';
+  try {
+    const out = {};
+    for (const t of ['dogs', 'walks', 'changes']) out[t] = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${t}`).first()).n;
+    return `D1（狗 ${out.dogs}、溜狗紀錄 ${out.walks}、異動紀錄 ${out.changes}）`;
+  } catch (e) {
+    return 'D1（還沒建表）';
+  }
+}
+
 // 定時叫 GitHub 跑同步試算表；成功時 GitHub 回 204
 const SYNC_WORKFLOW = 'sync-sheet.yml';
 async function triggerSync(env) {
@@ -1074,6 +1086,7 @@ export default {
         sheetWrite: cfg.sheetWriteUrl ? '已設定' : '未設定',
         walkerNames: cfg.sheetId ? '已設定' : '未設定',
         photos: r2.r2On(env) ? 'R2' : 'GitHub',
+        database: await databaseStatus(env),
         ...(env && env.PREVIEW ? { preview: '預覽版，不能存' } : {}),
       });
     }
