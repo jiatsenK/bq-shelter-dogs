@@ -753,6 +753,8 @@
     {"id":"2021021702","name":"辛巴","date":"2026-10-09","mine":false,"walkers":["dcda49f5b985"]},
     {"id":"2026042902","name":"方吉","date":"2026-10-09","mine":false,"walkers":["a533226b339a","dcda49f5b985"]},
     {"id":"2021071401","name":"胖胖","date":"2026-10-09","mine":false,"walkers":["75aeed7c10fe","dcda49f5b985"]},
-    {"id":"2024032902","name":"野口","date":"2026-10-09","mine":false,"walkers":["a533226b339a","dcda49f5b985"]}
+    {"id":"2024032902","name":"野口","date":"2026-10-09","mine":false,"walkers":["a533226b339a","dcda49f5b985"]},
+    {"id":"2021111807","name":"捷運站","date":"2026-10-10","mine":false,"walkers":["21120f797f52"]},
+    {"id":"2025042401","name":"浩南","date":"2026-10-10","mine":false,"walkers":["21120f797f52"]}
   ]
 }
