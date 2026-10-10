@@ -162,7 +162,7 @@ test('前端讀 dogs.json 的結果跟同步腳本讀試算表一致', async () 
   const groupMap = sync.parseGroups(fakeGviz(GROUPS, 0).table, new Set(dogs.map(d => d.name)));
   const file = sync.renderFile(await sync.buildData(fakeFetch(), TODAY, fakeCards()), '', TODAY);
   const got = fe.parseDogsData(JSON.parse(file));
-  const plain = list => list.map(({ sex, intro, myWalked, walkers, formerIds, ...d }) => ({ ...d, walkedDate: d.walkedDate ? d.walkedDate.toDateString() : null }));
+  const plain = list => list.map(({ sex, intro, reason, place, myWalked, walkers, formerIds, ...d }) => ({ ...d, walkedDate: d.walkedDate ? d.walkedDate.toDateString() : null }));
   assert.deepEqual(JSON.parse(JSON.stringify(plain(got.dogs))), JSON.parse(JSON.stringify(plain([...dogs]))));
   assert.deepEqual(got.dogs.map(d => [d.sex, d.intro]), [['♂', '很親人，怕機車。'], ['', ''], ['', ''], ['', '']], '性別符號與狗卡資訊：');
   assert.equal(JSON.stringify(got.dogs.map(d => d.formerIds)), '[[],[],[],[]]', '沒寫舊編號的狗是空陣列（#75）：');
@@ -269,6 +269,14 @@ test('狗卡：性別只認 frontmatter 的 male／female', () => {
   assert.equal(sync.parseFrontmatterSex('---\nsex: Female\n---\n'), 'female');
   assert.equal(sync.parseFrontmatterSex('---\nsex: 不詳\n---\n'), '');
   assert.equal(sync.parseFrontmatterSex('sex: male'), '', '沒有 frontmatter');
+  // 入所原因（10-10）：frontmatter 優先；沒寫才讀收容所系統的固定寫法，一般敘述不猜
+  assert.deepEqual(sync.parseIntake('---\nname: A\nreason: 民眾拾獲\nplace: "樹林區大同山"\n---\n內文'), { reason: '民眾拾獲', place: '樹林區大同山' });
+  assert.deepEqual(sync.parseIntake('---\nname: A\n---\n捕獲地址：安坑路40號 進所原因：政府捕捉'), { reason: '政府處理案件', place: '安坑路40號' });
+  assert.deepEqual(sync.parseIntake('---\nname: A\n---\n拾獲地點：亞東醫院捷運站2號出口\n進所原因：拾獲送交'), { reason: '民眾拾獲', place: '亞東醫院捷運站2號出口' });
+  assert.deepEqual(sync.parseIntake('---\nname: A\n---\n進所原因：不擬續養'), { reason: '飼主不續養', place: '' });
+  assert.deepEqual(sync.parseIntake('---\nname: A\nreason: 飼主不續養\nplace: 板橋\n---\n'), { reason: '飼主不續養', place: '' }, '不續養不留地點');
+  assert.deepEqual(sync.parseIntake('---\nname: A\n---\n進所原因：其他'), { reason: '', place: '' });
+  assert.deepEqual(sync.parseIntake('---\nname: A\n---\n2023年4月7日,從樹林進來,說在路上追人'), { reason: '', place: '' });
 });
 
 test('狗卡：Markdown 符號不原樣露出', () => {

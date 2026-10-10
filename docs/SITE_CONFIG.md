@@ -11,6 +11,7 @@ K 2026-10-10：「我希望網站當主人（未來），讓這個網站以後�
 | `name`、`shelter`、`shelterShort` | 第一次打開的歡迎畫面、分析頁標題 |
 | `days.amber`、`days.red` | 天數紅黃綠的門檻（溜狗表、列表、電腦版、找狗、分析） |
 | `warnKeywords` | 備註警示關鍵字 |
+| `intakeReasons`（name、place） | 狗卡「入所原因」的選項，place 是要不要寫拾獲地點（同步腳本的 `INTAKE_REASONS` 是同一份名字） |
 | `zones`（key、name、match、team、color） | 電腦版簡報和分區分頁、圖鑑的隊伍和隊色 |
 | `freeTeam` | 圖鑑裡不屬於任何一區的狗 |
 
