@@ -147,7 +147,8 @@ test('資料沒變不寫檔；有變才更新同步時間', async () => {
 // 跟前端比對（#32 起前端只讀 dogs.json）：同步腳本讀到的狗，寫成 dogs.json 再交給前端的 parseDogsData，
 // 犬名、籠位、日期、可以一起溜都要跟同步前一樣，日期也不能因為存成文字而差一天
 async function loadFrontend() {
-  const src = await readFile(new URL('../js/app.js', import.meta.url), 'utf8');
+  // 這間收容所的設定（js/site-config.js）在網頁上先載入，這裡也接在前面
+  const src = (await readFile(new URL('../js/site-config.js', import.meta.url), 'utf8')) + '\n' + (await readFile(new URL('../js/app.js', import.meta.url), 'utf8'));
   // 只需要函式定義；頁面上的 DOM 事件綁定用空殼擋掉
   const stub = () => new Proxy(function () {}, { get: (t, k) => k in t ? t[k] : k === Symbol.toPrimitive ? () => '' : stub(), apply: () => stub() });
   const ctx = vm.createContext({ window: Object.assign(stub(), { __BQ_TEST__: true }), document: stub(), localStorage: stub(), fetch: undefined, Intl, URL, console });

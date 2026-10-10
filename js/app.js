@@ -20,21 +20,13 @@ const WALKS_URL = 'data/walks.json';
 const REST_URL = 'data/rest.json';
 const WALKER_CODES_KEY = 'bq-walker-codes';
 const WALKER_CODE_PATTERN = /^[0-9a-f]{12}$/; // 跟 Worker 的 WALKER_CODE_LENGTH 一致
-// 警示關鍵字（2026-09-24 K 定，#28）：備註含任一個，就把備註原文直接顯示在卡片第一層，字眼標紅；
+// 這間收容所的設定在 js/site-config.js（K 2026-10-10：以後其他收容所要用，只改那個檔）
+// 警示關鍵字（#28）：備註含任一個，就把備註原文直接顯示在卡片第一層，字眼標紅；
 // 只用來判斷要不要顯示，不改寫原文、不另外產生標籤。狗照樣留在待巡房，由志工自己判斷。
-// 每組第一個是關鍵字，後面是常見異體寫法，一起比對。志工發現新的慣用字眼時，只要在這裡加一組。
-// 「住院」不列入：住院區只是籠位，那裡的狗照常會遛。
-const SPECIAL_KEYWORDS = [
-  ['勿溜', '勿遛', '勿蹓'],
-  ['不要'],
-  ['攻擊'],
-  ['不親狗'],
-  ['不親'],
-];
-// 天數色標（2026-09-24 K 定案）：0～6 天綠、第 7 天起黃、第 30 天起紅
-// K 2026-10-09：大部分的狗三天沒溜就覺得很久了 → 0–2 天綠、3–4 天黃、5 天以上紅（原本 7／30 天）
-const AMBER_DAYS = 3;
-const RED_DAYS = 5;
+const SPECIAL_KEYWORDS = SITE.warnKeywords;
+// 天數色標：0～AMBER_DAYS-1 天綠、AMBER_DAYS 天起黃、RED_DAYS 天起紅
+const AMBER_DAYS = SITE.days.amber;
+const RED_DAYS = SITE.days.red;
 
 let allDogs = [];
 let groupMap = {};
@@ -3061,7 +3053,7 @@ function onboardHtml() {
       ? `<h1 class="ob-ask">先告訴我們你是誰</h1>
       <p class="ob-lead">「溜了」會把你的名字寫進試算表「誰遛的」。設好就幫你登記 ${esc(o.walk.map(d => d.name).join('、'))}。</p>`
       : `<div class="ob-hero">${icon('paw')}</div>
-      <h1>板收志工溜狗表</h1>
+      <h1>${esc(SITE.name)}</h1>
       <p class="ob-lead">歡迎！先告訴我們你是誰。</p>`;
     const label = names
       ? `<label class="ob-label" for="obInput">點你在試算表上的名字</label>`
