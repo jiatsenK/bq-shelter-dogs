@@ -2230,7 +2230,10 @@ function renderDetail() {
   const box = document.getElementById('detail');
   wireDetail(box);
   const focused = box.contains(document.activeElement) ? document.activeElement : null;
+  // 重畫後留在原本捲到的位置（K 2026-10-10：補完資料「整個卡片就會跳掉」）；換看別隻時 showDetail 會自己捲回最上面
+  const top = box.scrollTop;
   box.innerHTML = detailHtml(detailDog, new Date());
+  box.scrollTop = top;
   labelPhotoPick(box);
   if (focused) {
     const replacement = [...box.querySelectorAll('button, textarea, input:not([hidden])')].find(btn =>

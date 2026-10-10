@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-10T13:01:17+08:00",
+  "syncedAt": "2026-10-10T13:54:20+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -14,7 +14,7 @@
       ],
       "note": "9／16<羊噴火訓練>移至母幼A5",
       "sex": "male",
-      "intro": "",
+      "intro": "拾獲地點：樹林區大同山 進所原因：民眾拾獲",
       "myWalkedDate": null
     },
     {
@@ -59,7 +59,7 @@
       ],
       "note": "",
       "sex": "male",
-      "intro": "",
+      "intro": "捕獲地址：中正路二段176巷26號 進所原因：政府捕捉",
       "myWalkedDate": null
     },
     {
@@ -89,7 +89,7 @@
       ],
       "note": "<羊噴火訓練>",
       "sex": "male",
-      "intro": "",
+      "intro": "進所原因：不擬續養",
       "myWalkedDate": null
     },
     {
@@ -104,7 +104,7 @@
       ],
       "note": "",
       "sex": "male",
-      "intro": "",
+      "intro": "捕獲地址：安坑路40號 進所原因：政府捕捉",
       "myWalkedDate": null
     },
     {
@@ -119,7 +119,7 @@
       ],
       "note": "後肢癱瘓114/9/24起每週一次針灸復健。4/12洗澡。7月底開始會慢慢自主起身行走",
       "sex": "female",
-      "intro": "",
+      "intro": "捕獲地址：亞東醫院捷運站2號出口 進所原因：拾獲送交",
       "myWalkedDate": null
     },
     {
@@ -194,7 +194,7 @@
       ],
       "note": "不親狗、護食",
       "sex": "male",
-      "intro": "",
+      "intro": "捕獲地址：中州街51巷14號 進所原因：政府處理案件",
       "myWalkedDate": "2026-10-08"
     },
     {
@@ -254,7 +254,7 @@
       ],
       "note": "6/28後腳無力（旭昇）; 2026/10/2洗澡（旭昇）",
       "sex": "male",
-      "intro": "",
+      "intro": "進所原因：其他",
       "myWalkedDate": "2026-10-08"
     },
     {
@@ -329,7 +329,7 @@
       ],
       "note": "<羊噴火訓練>",
       "sex": "female",
-      "intro": "",
+      "intro": "拾獲地點：樹林區大安路84號 進所原因：政府處理案件",
       "myWalkedDate": null
     },
     {
@@ -1101,7 +1101,7 @@
       ],
       "note": "<羊噴火訓練>",
       "sex": "male",
-      "intro": "",
+      "intro": "進所原因：不擬續養",
       "myWalkedDate": null
     },
     {
@@ -1206,7 +1206,7 @@
       ],
       "note": "2026/8/29洗澡（旭昇）",
       "sex": "male",
-      "intro": "",
+      "intro": "進所原因：政府處理案件",
       "myWalkedDate": null
     },
     {
@@ -1221,7 +1221,7 @@
       ],
       "note": "2026/10/2洗澡（旭昇）",
       "sex": "",
-      "intro": "",
+      "intro": "進所原因：不擬續養",
       "myWalkedDate": null
     },
     {
@@ -1311,7 +1311,7 @@
       ],
       "note": "",
       "sex": "male",
-      "intro": "",
+      "intro": "進所原因：不擬續養",
       "myWalkedDate": null
     },
     {
@@ -1371,7 +1371,7 @@
       ],
       "note": "",
       "sex": "male",
-      "intro": "",
+      "intro": "捕獲地址：板橋區漢生東路 進所原因：飼主認養後退回",
       "myWalkedDate": null
     },
     {
@@ -1448,7 +1448,7 @@
       ],
       "note": "",
       "sex": "female",
-      "intro": "",
+      "intro": "捕獲地址：三峽區竹崙路57號 進所原因：拾獲送交",
       "myWalkedDate": null
     },
     {
@@ -1494,7 +1494,7 @@
       ],
       "note": "<羊噴火訓練>",
       "sex": "male",
-      "intro": "",
+      "intro": "進所原因：不擬續養",
       "myWalkedDate": null
     },
     {
@@ -1539,7 +1539,7 @@
       ],
       "note": "<羊噴火訓練>興奮撲人時會咬，遛他時人不要在場內比較安全（俐葶）",
       "sex": "male",
-      "intro": "",
+      "intro": "捕獲地址：溪頭公園 進所原因：政府捕捉",
       "myWalkedDate": null
     },
     {
@@ -1598,7 +1598,7 @@
       ],
       "note": "陌生人有可能會咬（嘉文）;8/25剃毛",
       "sex": "male",
-      "intro": "",
+      "intro": "捕獲地址：八德路 進所原因：通報捕捉",
       "myWalkedDate": null
     },
     {
@@ -1613,7 +1613,7 @@
       ],
       "note": "陌生人有可能會咬（嘉文）",
       "sex": "male",
-      "intro": "",
+      "intro": "入所原因：通報入所",
       "myWalkedDate": null
     },
     {
@@ -1764,7 +1764,7 @@
       ],
       "note": "",
       "sex": "male",
-      "intro": "",
+      "intro": "拾獲地點：三峽區中正路一段19巷8號 進所原因：拾獲送交",
       "myWalkedDate": "2026-10-04"
     },
     {
@@ -1839,7 +1839,7 @@
       ],
       "note": "",
       "sex": "male",
-      "intro": "",
+      "intro": "拾獲地點：板橋區南雅西路2段259巷4號 進所原因：政府處理案件",
       "myWalkedDate": null
     }
   ],
