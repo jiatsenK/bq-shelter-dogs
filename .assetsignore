@@ -8,6 +8,7 @@ worker
 scripts
 wrangler.jsonc
 wrangler.no-r2.json
+wrangler.deploy.json
 .assetsignore
 AGENT_LOG.md
 AGENTS.md

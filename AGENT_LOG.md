@@ -1018,3 +1018,10 @@
 - 新增 db/schema.sql（D1／SQLite：dogs、walks、changes、kv，可重複執行）、scripts/build-db.mjs（repo 的 dogs.json、departures、rest、walks、history 快照 → INSERT；快照只轉成前後兩天有變的欄位、入所、離所）、scripts/build-db.test.mjs（5 項，有 node:sqlite 時真的建表匯入兩次）。
 - 現有資料試轉：狗 125（在所 122）、溜狗紀錄 732、異動紀錄 53（16 天快照）。誰溜的只存代號。
 - 只有程式，不動正式網站、還沒建資料庫。tests.yml 和 AGENTS.md 的 node 測試清單加 build-db.test.mjs；.assetsignore 加 db；新增 docs/DATABASE.md（設計、分幾個 PR、限制）。node 137 過、網頁 226 過（本機另 2 項 #130）。
+## 2026-10-10 Claude（第 2 步之二：部署時自動建 D1 資料庫、建表、匯入現有資料）
+- 依據：K 同意資料庫建在自己的 Cloudflare 帳號、跟 R2 一樣部署時自動建；#193 合併後接著做。
+- 新增 scripts/d1-database.mjs：部署前找名叫 bq-shelter-dogs 的 D1，沒有就建；套 db/schema.sql；dogs 是空的才跑 build-db 匯入一次（db/seed.sql，不提交不公開）；產生 wrangler.deploy.json（上一步 R2 的設定＋d1_databases，binding 叫 DB）。任何一步失敗就不帶資料庫照舊部署，Action 不失敗、摘要寫原因。測試 5 項（假 wrangler）。
+- .github/workflows/deploy-cloudflare.yml：R2 後面多一步「準備資料庫（D1）」，部署改用它輸出的設定。預覽版不接資料庫。
+- worker/src/index.js：/api/ 狀態多 database（未設定／D1（各表幾筆）／還沒建表）；網站還是讀 repo 的檔案，行為不變。測試 1 項。
+- .assetsignore、.gitignore 加 wrangler.deploy.json、db/seed.sql；tests.yml、AGENTS.md 測試清單加 d1-database.test.mjs；網頁測試的 #130 部署檢查跟著改。docs/CLOUDFLARE_SETUP.md 加「資料庫（D1）」（確認方式、token 要加 Account｜D1｜Edit）。node 143 過、網頁 226 過（本機另 2 項 #130）。
+- 還沒驗證的：真的對 Cloudflare 跑（wrangler d1 list --json 的欄位、token 權限）要合併後看第一次部署的摘要和 /api/。
