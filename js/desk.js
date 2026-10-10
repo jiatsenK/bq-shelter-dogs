@@ -171,8 +171,13 @@ function deskTableHtml(list, today) {
   </div>`;
 }
 
-// ── 補資料（K 2026-10-10：電腦上比較好補資料）：沒照片、沒入所介紹的狗一列一隻；
-// 照片拖到那一列（或按「上傳照片」）、介紹按「補介紹」，都打開詳細資訊走原本的預覽、確認（照片匿名上傳；介紹要通關碼，存 repo，不寫試算表）
+// ── 補資料（K 2026-10-10：電腦上比較好補資料）：所內的狗一列一隻，直接在這一列補 ──
+// K 同一天用過後：「入所介紹的地方點擊就可以編輯、照片也是點擊就要可以上傳，而不是另外設按鈕」
+// 「按了之後不知道有沒有成功」「一補其中一個順序馬上就會跳掉」。所以：
+// - 點照片（或把檔案拖到那一列）→ 這一格先看預覽，按「上傳」；點介紹 → 這一格變成文字框，按「儲存」
+// - 每個動作都在那一列寫出狀態：上傳中…／儲存中…／✓ 已上傳／✓ 已儲存／沒成功的原因
+// - 這一輪的順序固定：補好的狗留在原位（打勾），換篩選、換區、搜尋、離開再回來才重排
+// 照片所有人都能傳；介紹要通關碼，存 repo 的 dogs/{編號}.md，不寫試算表
 function deskHasPhoto(dog) {
   if (!dog.id) return false;
   if (photoOverrides[dog.id]) return true;
@@ -183,39 +188,198 @@ function deskFillNeeds(dog) {
   const intro = typeof introOf === 'function' ? introOf(dog) : dog.intro;
   return { photo: deskHasPhoto(dog) === false, intro: !intro };
 }
-function deskFillHtml(list) {
-  const rows = list.map(d => ({ d, need: deskFillNeeds(d) }));
+let deskFillOrder = null; // { sig, keys }：這一輪固定的順序（walkKey）
+let deskFillIntro = null; // 正在改的介紹：{ key, text, pass, needPass, phase: 'edit'|'saving'|'error', error }
+let deskFillPhoto = null; // 選好還沒傳的照片：{ key, blob, url, phase: 'preview'|'uploading'|'error', error }
+const deskFillDone = new Map(); // walkKey → { photo: '10:32', intro: '10:35' }：這次打開網頁補好的
+const deskClock = () => { const d = new Date(); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
+const deskDogOfKey = key => allDogs.find(d => walkKey(d) === key);
+
+// 這一輪要列哪些狗、照什麼順序：兩樣都缺的最前面，再照籠位，沒編號的最後。sig 一樣就沿用，補好了也不動
+function deskFillRows(list, query) {
+  const sig = `${deskFill}|${deskZone}|${query || ''}`;
+  if (!deskFillOrder || deskFillOrder.sig !== sig) {
+    const keys = list.map(d => ({ d, need: deskFillNeeds(d) }))
+      .filter(r => (deskFill === 'photo' ? r.need.photo : deskFill === 'intro' ? r.need.intro : true))
+      .sort((a, b) => !a.d.id - !b.d.id || (b.need.photo + b.need.intro) - (a.need.photo + a.need.intro) || deskNatural(a.d.cage, b.d.cage))
+      .map(r => walkKey(r.d));
+    deskFillOrder = { sig, keys };
+  }
+  return deskFillOrder.keys.map(deskDogOfKey).filter(Boolean);
+}
+function deskFillPhotoCell(d, idx, need) {
+  const key = walkKey(d);
+  const p = deskFillPhoto && deskFillPhoto.key === key ? deskFillPhoto : null;
+  if (!d.id) return `<span class="df-drop off">${icon('camera')}</span>`;
+  if (p) {
+    const busy = p.phase === 'uploading';
+    return `<div class="df-photo pending">
+      <span class="thumb"><img src="${esc(p.url)}" alt="${esc(d.name)} 的新照片預覽"></span>
+      <span class="df-photo-act">
+        <button type="button" class="df-go" data-fill-photo-go${busy ? ' disabled' : ''}>${busy ? '上傳中…' : '上傳'}</button>
+        ${busy ? '' : '<button type="button" class="df-cancel" data-fill-photo-cancel>取消</button>'}
+      </span>
+    </div>`;
+  }
+  const label = need.photo || deskHasPhoto(d) === null ? '上傳' : '換';
+  return `<button type="button" class="df-photo" data-fill-photo="${idx}" aria-label="${label} ${esc(d.name)} 的照片" title="點了選照片，或把照片檔拖到這一列">
+    ${need.photo ? `<span class="df-drop">${icon('camera')}<span>點這裡<br>選照片</span></span>` : `${photoThumb(d, 64)}<span class="df-photo-hint">${icon('camera')}換照片</span>`}
+  </button>`;
+}
+function deskFillIntroCell(d, idx) {
+  const key = walkKey(d);
+  if (!d.id) return '<span class="df-missing">沒有編號，試算表補上編號後才能補</span>';
+  const intro = typeof introOf === 'function' ? introOf(d) : d.intro;
+  const e = deskFillIntro && deskFillIntro.key === key ? deskFillIntro : null;
+  if (!e) {
+    return `<button type="button" class="df-intro-btn${intro ? '' : ' empty'}" data-fill-intro="${idx}" aria-label="${intro ? '改' : '補'} ${esc(d.name)} 的入所介紹" title="點了直接改">
+      <span class="df-intro-text">${intro ? esc(intro) : '點這裡補入所介紹'}</span>${icon('write')}
+    </button>`;
+  }
+  const busy = e.phase === 'saving';
+  const n = [...e.text].length;
+  return `<form class="df-form" data-fill-form>
+    <textarea id="dfIntroText" rows="4" maxlength="${INTRO_MAX}" aria-label="${esc(d.name)} 的入所介紹" placeholder="例：親人、喜歡散步，怕機車聲"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea>
+    <div class="df-form-row">
+      ${e.needPass ? `<input type="password" id="dfIntroPass" name="password" autocomplete="current-password" placeholder="通關碼" aria-label="通關碼" value="${esc(e.pass)}"${busy ? ' disabled' : ''}>` : ''}
+      <button type="submit" class="df-go"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存'}</button>
+      ${busy ? '' : '<button type="button" class="df-cancel" data-fill-intro-cancel>取消</button>'}
+      <small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small>
+    </div>
+  </form>`;
+}
+// 這一列的狀態：正在做什麼、做好了沒、哪裡沒成功
+function deskFillStateCell(d) {
+  const key = walkKey(d);
+  const out = [];
+  const p = deskFillPhoto && deskFillPhoto.key === key ? deskFillPhoto : null;
+  const e = deskFillIntro && deskFillIntro.key === key ? deskFillIntro : null;
+  const done = deskFillDone.get(key) || {};
+  if (p && p.phase === 'uploading') out.push('<span class="df-st busy">照片上傳中…</span>');
+  else if (p && p.phase === 'error') out.push(`<span class="df-st err" role="alert">${icon('alert')}照片沒有上傳：${esc(p.error)}</span>`);
+  else if (p) out.push('<span class="df-st hint">這是預覽，按「上傳」才會換</span>');
+  else if (done.photo) out.push(`<span class="df-st ok">${icon('tick')}照片已上傳 <small>${done.photo}</small></span>`);
+  if (e && e.phase === 'saving') out.push('<span class="df-st busy">介紹儲存中…</span>');
+  else if (e && e.phase === 'error') out.push(`<span class="df-st err" role="alert">${icon('alert')}介紹沒有存：${esc(e.error)}</span>`);
+  else if (!e && done.intro) out.push(`<span class="df-st ok">${icon('tick')}介紹已儲存 <small>${done.intro}</small></span>`);
+  return out.join('');
+}
+function deskFillHtml(list, query) {
+  const all = list.map(d => ({ d, need: deskFillNeeds(d) }));
   const known = Object.keys(photoVersions).length > 0; // 沒有照片清單（本機、讀不到）就不知道誰沒照片
-  const nPhoto = rows.filter(r => r.d.id && r.need.photo).length, nIntro = rows.filter(r => r.d.id && r.need.intro).length;
-  const shown = rows.filter(r => deskFill === 'photo' ? r.need.photo : deskFill === 'intro' ? r.need.intro : true)
-    // 兩樣都缺的排最前面，再照籠位；沒編號的放最後
-    .sort((a, b) => !a.d.id - !b.d.id || (b.need.photo + b.need.intro) - (a.need.photo + a.need.intro) || deskNatural(a.d.cage, b.d.cage)); // 沒編號的排最後（補不了）
+  const nPhoto = all.filter(r => r.d.id && r.need.photo).length, nIntro = all.filter(r => r.d.id && r.need.intro).length;
+  const shown = deskFillRows(list, query);
+  const nDone = shown.filter(d => deskFillDone.has(walkKey(d))).length;
   const chip = (k, t, n, off) => `<button type="button" class="df-chip${deskFill === k ? ' on' : ''}" data-desk-fill="${k}" aria-pressed="${deskFill === k}"${off ? ' disabled title="還不知道哪些狗沒照片"' : ''}>${t}<b class="num">${off ? '—' : n}</b></button>`;
   return `<div class="desk-fill">
     <div class="df-bar">
-      <div class="df-chips" role="group" aria-label="要補什麼">${chip('photo', '沒照片', nPhoto, !known)}${chip('intro', '沒介紹', nIntro)}${chip('all', '全部', rows.length)}</div>
-      <p class="df-note">照片拖到那一列或按上傳（所有人都能傳，會先預覽）・介紹要通關碼，存在網站，不寫試算表。</p>
+      <div class="df-chips" role="group" aria-label="要補什麼">${chip('photo', '沒照片', nPhoto, !known)}${chip('intro', '沒介紹', nIntro)}${chip('all', '全部', all.length)}</div>
+      <p class="df-note">${nDone ? `<b class="df-done-n">${icon('tick')}這次補好 ${nDone} 隻</b>・補好的留在原位。` : '點照片換照片、點介紹直接改；也可以把照片檔拖到那一列。'}介紹要通關碼，存在網站，不寫試算表。</p>
     </div>
     ${shown.length ? `<table class="desk-table df-table">
-      <thead><tr><th class="df-ph">照片</th><th class="dr-name">狗名</th><th class="dr-cagec">籠位</th><th class="df-intro">入所介紹</th><th class="df-act"><span class="sr-only">補資料</span></th></tr></thead>
-      <tbody>${shown.map(({ d, need }) => {
-        const idx = allDogs.indexOf(d);
-        const intro = typeof introOf === 'function' ? introOf(d) : d.intro;
-        const off = d.id ? '' : ' disabled';
-        const photoLabel = need.photo || deskHasPhoto(d) === null ? '上傳照片' : '換照片';
-        return `<tr class="df-row" ${d.id ? `data-fill-dog="${idx}"` : ''}>
-          <td class="df-ph">${need.photo ? `<span class="df-drop">${icon('camera')}<span>拖照片<br>到這裡</span></span>` : photoThumb(d, 64)}</td>
+      <thead><tr><th class="df-ph">照片</th><th class="dr-name">狗名</th><th class="dr-cagec">籠位</th><th class="df-intro">入所介紹</th><th class="df-state">狀態</th></tr></thead>
+      <tbody>${shown.map(d => {
+        const idx = allDogs.indexOf(d), key = walkKey(d), need = deskFillNeeds(d);
+        return `<tr class="df-row${deskFillDone.has(key) ? ' done' : ''}" ${d.id ? `data-fill-dog="${idx}"` : ''}>
+          <td class="df-ph">${deskFillPhotoCell(d, idx, need)}</td>
           <td class="dr-name"><button type="button" data-desk-open="${idx}" aria-haspopup="dialog">${esc(d.name)}</button></td>
           <td class="dr-cagec">${typeof whereKnown === 'function' && whereKnown(d) ? `<button type="button" class="dr-cage" data-where data-dog-i="${idx}" aria-label="${esc(d.name)} 在哪：${esc(d.cage)}">${esc(d.cage)}</button>` : `<span class="dr-cage plain">${esc(d.cage)}</span>`}</td>
-          <td class="df-intro">${!d.id ? '<span class="df-missing">沒有編號，試算表補上編號後才能補</span>' : intro ? `<div>${esc(intro)}</div>` : '<span class="df-missing">還沒有入所介紹</span>'}</td>
-          <td class="df-act">
-            <button type="button" class="df-btn${need.photo ? ' need' : ''}" data-fill-photo="${idx}"${off}>${icon('camera')}${photoLabel}</button>
-            <button type="button" class="df-btn${need.intro && d.id ? ' need' : ''}" data-fill-intro="${idx}"${off}>${icon('card')}${need.intro ? '補介紹' : '改介紹'}</button>
-          </td>
+          <td class="df-intro">${deskFillIntroCell(d, idx)}</td>
+          <td class="df-state" aria-live="polite">${deskFillStateCell(d)}</td>
         </tr>`;
       }).join('')}</tbody>
     </table>` : `<div class="status-msg">${deskFill === 'photo' ? '這裡的狗都有照片了' : deskFill === 'intro' ? '這裡的狗都有介紹了' : '這一區沒有狗'}</div>`}
   </div>`;
+}
+
+// 選好照片（點了選檔，或拖到那一列）：先壓縮、在這一格預覽，按「上傳」才送
+function deskFillPickPhoto(dog) {
+  let input = document.getElementById('deskFillFile');
+  if (!input) {
+    input = document.createElement('input');
+    input.type = 'file'; input.accept = 'image/*'; input.id = 'deskFillFile'; input.hidden = true;
+    input.addEventListener('change', () => {
+      const file = (input.files || [])[0];
+      const d = deskDogOfKey(input.dataset.key);
+      input.value = '';
+      if (file && d) deskFillPreparePhoto(d, file);
+    });
+    document.body.appendChild(input);
+  }
+  input.dataset.key = walkKey(dog);
+  input.click();
+}
+async function deskFillPreparePhoto(dog, file) {
+  if (deskFillPhoto && deskFillPhoto.phase === 'uploading') { showToast('上一張照片還在上傳，請稍等一下'); return; }
+  let blob;
+  try { blob = await compressPhoto(file); } catch (e) { showToast(e.message); return; }
+  if (deskFillPhoto) URL.revokeObjectURL(deskFillPhoto.url);
+  deskFillPhoto = { key: walkKey(dog), blob, url: URL.createObjectURL(blob), phase: 'preview', error: '' };
+  render();
+  const go = document.querySelector('#main [data-fill-photo-go]');
+  if (go) go.focus({ preventScroll: true });
+}
+async function deskFillUploadPhoto() {
+  const p = deskFillPhoto;
+  const dog = p && deskDogOfKey(p.key);
+  if (!p || !dog || p.phase === 'uploading') return;
+  p.phase = 'uploading'; p.error = ''; render();
+  let error = '';
+  try {
+    const res = await fetch(`${UPLOAD_URL}/photos/${encodeURIComponent(dog.id)}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: p.blob });
+    const out = await res.json().catch(() => null);
+    if (!res.ok || !out || !out.ok) error = (out && out.error) || `網站暫時收不到照片（${res.status}），原本的照片不受影響`;
+  } catch (e) {
+    error = '請確認網路後再按一次「上傳」，原本的照片不受影響';
+  }
+  if (deskFillPhoto !== p) return;
+  if (error) { p.phase = 'error'; p.error = error; render(); return; }
+  photoOverrides[dog.id] = p.url; // 這台電腦馬上換成新照片（其他人重新整理就會看到）
+  deskFillPhoto = null;
+  deskFillDone.set(p.key, { ...(deskFillDone.get(p.key) || {}), photo: deskClock() });
+  render();
+  showToast(`${dog.name} 的照片已上傳`);
+}
+function deskFillOpenIntro(dog) {
+  if (!dog || !dog.id) return;
+  if (deskFillIntro && deskFillIntro.phase === 'saving') { showToast('上一筆介紹還在儲存，請稍等一下'); return; }
+  deskFillIntro = { key: walkKey(dog), text: introOf(dog) || '', pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
+  render();
+  const box = document.getElementById('dfIntroText');
+  if (box) { box.focus({ preventScroll: true }); box.setSelectionRange(box.value.length, box.value.length); }
+}
+async function deskFillSaveIntro() {
+  const e = deskFillIntro;
+  const dog = e && deskDogOfKey(e.key);
+  if (!e || !dog || e.phase === 'saving') return;
+  const fail = msg => { e.phase = 'error'; e.error = msg; render(); const b = document.getElementById(e.needPass && !e.pass ? 'dfIntroPass' : 'dfIntroText'); if (b) b.focus({ preventScroll: true }); };
+  const pass = e.needPass ? e.pass : loadNotesPass();
+  if (!pass) { e.needPass = true; fail('請輸入通關碼'); return; }
+  const text = e.text.replace(/\r\n?/g, '\n').trim();
+  if ([...text].length > INTRO_MAX) { fail(`最多 ${INTRO_MAX} 字`); return; }
+  e.phase = 'saving'; e.error = ''; render();
+  let out = null, error = '';
+  try {
+    const res = await fetch(`${UPLOAD_URL}/intro/${encodeURIComponent(dog.id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ passcode: pass, text }) });
+    out = await res.json().catch(() => null);
+    if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
+  } catch (err) {
+    error = '請確認網路後再按一次「儲存」';
+  }
+  if (deskFillIntro !== e) return;
+  if (error) {
+    if (out && out.code === 'passcode') { saveNotesPass(''); e.needPass = true; e.pass = ''; }
+    fail(error);
+    return;
+  }
+  saveNotesPass(pass);
+  introOverrides[dog.id] = typeof out.intro === 'string' ? out.intro : text;
+  deskFillIntro = null;
+  deskFillDone.set(e.key, { ...(deskFillDone.get(e.key) || {}), intro: deskClock() });
+  render();
+  const back = document.querySelector(`#main [data-fill-intro="${allDogs.indexOf(dog)}"]`);
+  if (back) back.focus({ preventScroll: true });
+  showToast(`${dog.name} 的介紹已儲存`);
 }
 
 function deskSideHtml(today) {
@@ -255,7 +419,7 @@ function deskWalkHtml(today, query, walkList) {
   const list = deskSorted(deskZone === 'all' ? walkList : walkList.filter(d => deskZoneOf(d) === deskZone));
   const empty = !list.length ? `<div class="status-msg">${query ? `找不到「${esc(query)}」` : '這一區沒有狗'}</div>` : '';
   return `<h2 class="sr-only">溜狗表（電腦版）</h2><div class="desk${deskView === 'fill' ? ' filling' : ''}">
-    <div class="desk-main">${query || deskView === 'fill' ? '' : deskBriefHtml(today)}${deskToolsHtml(list.length, walkList.length)}${empty || (deskView === 'fill' ? deskFillHtml(list) : deskTableHtml(list, today))}</div>
+    <div class="desk-main">${query || deskView === 'fill' ? '' : deskBriefHtml(today)}${deskToolsHtml(list.length, walkList.length)}${empty || (deskView === 'fill' ? deskFillHtml(list, query) : deskTableHtml(list, today))}</div>
     ${deskSideHtml(today)}
   </div>${deskBatchHtml()}`;
 }
@@ -286,7 +450,7 @@ if (typeof document !== 'undefined' && document.getElementById('main')) {
     const zone = t.closest('[data-desk-zone]');
     if (zone) { deskZone = deskZone === zone.dataset.deskZone && zone.classList.contains('db-zone') ? 'all' : zone.dataset.deskZone; render(); return; }
     const view = t.closest('[data-desk-view]');
-    if (view) { deskView = view.dataset.deskView; render(); return; }
+    if (view) { deskView = view.dataset.deskView; deskFillOrder = null; render(); return; } // 離開再回補資料才重排
     const sort = t.closest('[data-desk-sort]');
     if (sort) { deskSort = sort.dataset.deskSort; render(); return; }
     const open = t.closest('[data-desk-open]');
@@ -297,9 +461,18 @@ if (typeof document !== 'undefined' && document.getElementById('main')) {
     const fill = t.closest('[data-desk-fill]');
     if (fill) { deskFill = fill.dataset.deskFill; render(); return; }
     const addPhoto = t.closest('[data-fill-photo]');
-    if (addPhoto) { showDetail(allDogs[Number(addPhoto.dataset.fillPhoto)]); pickPhotoFile(); return; }
+    if (addPhoto) { deskFillPickPhoto(allDogs[Number(addPhoto.dataset.fillPhoto)]); return; }
+    if (t.closest('[data-fill-photo-go]')) { deskFillUploadPhoto(); return; }
+    if (t.closest('[data-fill-photo-cancel]')) { if (deskFillPhoto) URL.revokeObjectURL(deskFillPhoto.url); deskFillPhoto = null; render(); return; }
     const addIntro = t.closest('[data-fill-intro]');
-    if (addIntro) { const d = allDogs[Number(addIntro.dataset.fillIntro)]; showDetail(d); openIntroEdit(d); return; }
+    if (addIntro) { deskFillOpenIntro(allDogs[Number(addIntro.dataset.fillIntro)]); return; }
+    if (t.closest('[data-fill-intro-cancel]')) {
+      const d = deskFillIntro && deskDogOfKey(deskFillIntro.key);
+      deskFillIntro = null; render();
+      const back = d && document.querySelector(`#main [data-fill-intro="${allDogs.indexOf(d)}"]`);
+      if (back) back.focus({ preventScroll: true });
+      return;
+    }
     if (t.closest('[data-desk-clear]')) { deskChecked.clear(); render(); return; }
     if (t.closest('[data-desk-go]')) {
       const dogs = [...deskChecked].map(k => allDogs.find(d => walkKey(d) === k)).filter(Boolean);
@@ -308,7 +481,22 @@ if (typeof document !== 'undefined' && document.getElementById('main')) {
       render();
     }
   });
-  // 補資料：照片檔拖到那一列 → 打開那隻的詳細資訊、直接預覽（按確認才上傳）
+  // 補資料的介紹：打的字記在 deskFillIntro（重畫不會不見）；Enter 換行、Ctrl+Enter 儲存、Esc 取消
+  main.addEventListener('input', e => {
+    if (!deskFillIntro) return;
+    if (e.target.id === 'dfIntroText') {
+      deskFillIntro.text = e.target.value;
+      const c = main.querySelector('.df-form .intro-count');
+      if (c) { const n = [...deskFillIntro.text].length; c.textContent = `${n} / ${INTRO_MAX} 字`; c.classList.toggle('over', n > INTRO_MAX); }
+    } else if (e.target.id === 'dfIntroPass') deskFillIntro.pass = e.target.value;
+  });
+  main.addEventListener('submit', e => { if (e.target.matches('[data-fill-form]')) { e.preventDefault(); deskFillSaveIntro(); } });
+  main.addEventListener('keydown', e => {
+    if (!deskFillIntro || !e.target.closest || !e.target.closest('[data-fill-form]')) return;
+    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); deskFillSaveIntro(); }
+    else if (e.key === 'Escape' && deskFillIntro.phase !== 'saving') { e.preventDefault(); e.stopPropagation(); const b = main.querySelector('[data-fill-intro-cancel]'); if (b) b.click(); }
+  });
+  // 補資料：照片檔拖到那一列 → 那一格直接預覽（按「上傳」才送）
   const fillRow = e => (deskOn() && activeTab === 'walk' && deskView === 'fill' && e.dataTransfer && [...e.dataTransfer.types].includes('Files') ? e.target.closest('[data-fill-dog]') : null);
   main.addEventListener('dragover', e => {
     const row = fillRow(e);
@@ -327,8 +515,7 @@ if (typeof document !== 'undefined' && document.getElementById('main')) {
     const file = e.dataTransfer.files && e.dataTransfer.files[0];
     const dog = allDogs[Number(row.dataset.fillDog)];
     if (!file || !dog) return;
-    showDetail(dog);
-    preparePhoto(dog, file);
+    deskFillPreparePhoto(dog, file);
   });
   main.addEventListener('change', e => {
     if (!deskOn() || activeTab !== 'walk') return;
