@@ -1867,19 +1867,22 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .who-hint .who-edit { white-space: nowrap; flex: none; }
 /* 入所原因（K 2026-10-10 減法）：一個原因標籤＋拾獲地點；整塊可以點了直接改，不另外放按鈕 */
 .intake { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; min-width: 0; }
-.intake-tag { display: inline-flex; align-items: center; min-height: 28px; padding: 0 10px; border-radius: 2px; background: var(--surface-soft); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font-size: 15px; font-weight: 700; white-space: nowrap; }
-.intake-place { color: var(--ink); font-size: 14.5px; line-height: 1.5; overflow-wrap: anywhere; }
-.intake-place small { margin-right: 6px; color: var(--ink-soft); font-size: 12.5px; }
-.intake-btn { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; margin: -4px 0; padding: 8px 10px; border: none; border-radius: 3px; background: none; box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.intake-tag { display: inline-flex; align-items: center; min-height: 22px; padding: 0 7px; border-radius: 2px; background: var(--surface-soft); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.intake-place { color: var(--ink); font-size: 13.5px; line-height: 1.5; overflow-wrap: anywhere; }
+.intake-place small { margin-right: 5px; color: var(--ink-soft); font-size: 12px; }
+/* 一排：標題在左，標籤接在後面；整排（標題以外）可以點了改，點的範圍留 44px 高 */
+.detail-section.intake-row { display: flex; align-items: center; gap: 10px; padding-top: 4px; padding-bottom: 4px; }
+.detail-section.intake-row h3 { flex: none; margin: 0; }
+.intake-btn, .intake-static { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0; padding: 0; border: none; background: none; color: var(--ink); font: inherit; text-align: left; }
+.intake-btn { cursor: pointer; }
 .intake-btn > .intake, .intake-btn > .empty { flex: 1; }
-.intake-btn > .icon { flex: none; color: var(--ink-soft); font-size: 17px; }
-.intake-btn.blank { background: var(--surface-soft); }
-.intake-btn .empty { color: var(--ink-soft); font-size: 14.5px; }
+.intake-btn > .icon { flex: none; color: var(--ink-soft); font-size: 16px; }
+.intake-btn .empty, .intake-static .empty { color: var(--ink-soft); font-size: 13.5px; }
+.intake-btn.blank .empty { text-decoration: underline; text-underline-offset: 3px; }
 .intake-btn:active { background: var(--primary-soft); }
 .intake-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-.intake-prose { margin-top: 12px; }
 .intake-opts { display: flex; flex-wrap: wrap; gap: 8px; }
-.intake-opt { min-height: 44px; padding: 0 14px; border: none; border-radius: 3px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
+.intake-opt { min-height: 44px; padding: 0 12px; border: none; border-radius: 3px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .intake-opt.on { background: var(--primary-soft); box-shadow: inset 0 0 0 2px var(--shell); font-weight: 800; }
 .intake-opt:disabled { opacity: .6; cursor: default; }
 .intake-opt:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
@@ -2052,8 +2055,7 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .df-intro-btn { display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 48px; padding: 6px 8px; margin: 0 -8px; border: none; border-radius: 3px; background: none; color: var(--ink-soft); font: inherit; text-align: left; cursor: text; }
   .df-intro-text { flex: 1; min-width: 0; font-size: 13.5px; line-height: 1.55; }
   .df-intro-btn { align-items: center; cursor: pointer; }
-  .df-intro-btn .intake-tag { min-height: 26px; font-size: 13.5px; background: var(--surface); }
-  .df-intro-btn .intake-place { font-size: 13.5px; }
+  .df-intro-btn .intake-tag { background: var(--surface); }
   .df-form .intake-opts { gap: 6px; }
   .df-form .intake-opt { min-height: 32px; padding: 0 10px; font-size: 13.5px; }
   .df-form-row .df-place { flex: 1; width: auto; min-width: 160px; }
