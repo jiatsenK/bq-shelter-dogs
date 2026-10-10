@@ -213,7 +213,10 @@ function runTests() {
       // 休養中（K 2026-10-09）：管理者 PUT 到 Worker 的 /rest/{編號}（寫進 repo 的 data/rest.json，不是試算表），也先拿掉
       const restCall = /fetch\(`\$\{UPLOAD_URL\}\/rest\/\$\{encodeURIComponent\(e\.dog\.id\)\}`, \{\s*method: 'PUT',/;
       if (!restCall.test(APP_JS)) throw new Error('找不到休養設定的呼叫');
-      const code = APP_JS.replace(walkCall, '').replace(uploadCall, '').replace(walkerCall, '').replace(syncCall, '').replace(restCall, '');
+      // 入所介紹（K 2026-10-10 補資料）：管理者 PUT 到 Worker 的 /intro/{編號}（寫進 repo 的 dogs/{編號}.md，不是試算表），也先拿掉
+      const introCall = /fetch\(`\$\{UPLOAD_URL\}\/intro\/\$\{encodeURIComponent\(e\.dog\.id\)\}`, \{\s*method: 'PUT',/;
+      if (!introCall.test(APP_JS)) throw new Error('找不到入所介紹的呼叫');
+      const code = APP_JS.replace(walkCall, '').replace(uploadCall, '').replace(walkerCall, '').replace(syncCall, '').replace(restCall, '').replace(introCall, '');
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
@@ -331,7 +334,7 @@ function runTests() {
         groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '可以一起溜的狗', '溜狗紀錄', '入所介紹']); // 相簿 K 2026-10-09 拿掉
+        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '可以一起溜的狗', '溜狗紀錄', '入所介紹', '管理用'].slice(0, box.querySelector('[data-section="rest"]') ? 5 : 4)); // 相簿 K 2026-10-09 拿掉；管理用（改介紹、休養）10-10 集中一區
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/thumbs/2.jpg', '一起溜的照片：');
@@ -1250,8 +1253,14 @@ async function runMyWalksTests() {
     walksData = WALKS;
     saveMyCodes([ME]);
     myWalks = parseMyWalks(WALKS); myWalksState = 'ready';
+    mineMonth = ''; mineDay = '';
     activeTab = 'mine'; render();
   };
+  // 月曆上有來的每一天點一次（新到舊），回傳 [日期標題, 那天的狗, 幾隻]
+  const eachDay = () => [...main.querySelectorAll('.mc-cell.on')].map(c => c.dataset.mineDay).reverse().map(k => {
+    main.querySelector(`[data-mine-day="${k}"]`).click();
+    return [heads()[0], cardNames(), main.querySelector('.visit .walk-date .n').textContent];
+  });
   try {
     await check('#58 只取我遛的紀錄（#96 看代號）：去重、丟掉不合理日期，新到舊', () => {
       eq(parseMyWalks(WALKS, [ME]).map(w => `${w.ymd} ${w.name}`),
@@ -1265,10 +1274,11 @@ async function runMyWalksTests() {
     });
     await check('#58 每次到所一張卡（K 選 A）：同一天的狗排在同一張；之後別人遛過，我那筆仍在；離所的狗只列名字', () => {
       setup();
-      eq(heads(), ['2026/09/24（四）', '2026/09/22（二）', '2026/09/18（五）'], '日期標題：');
-      eq([...main.querySelectorAll('.visit')].map(v => [...v.querySelectorAll('.bname')].map(n => n.textContent)),
-        [['紀錄戊', '紀錄甲'], ['紀錄乙'], ['已離所狗']], '每張卡的狗：');
-      eq([...main.querySelectorAll('.visit .walk-date .n')].map(n => n.textContent), ['2 隻', '1 隻', '1 隻'], '每次幾隻：');
+      // 10-10 K：改成一個月一張月曆，先看最近一次，點哪天看那天
+      eq([main.querySelector('.mc-title').firstChild.textContent, main.querySelector('.mc-title span').textContent], ['2026 年 9 月', '來 3 天・溜 4 隻次'], '月曆標題：');
+      eq([...main.querySelectorAll('.mc-cell.on')].map(c => [c.querySelector('b').textContent, c.querySelector('small').textContent]), [['18', '1 隻'], ['22', '1 隻'], ['24', '2 隻']], '有來的日子：');
+      eq([heads(), main.querySelector('.mc-cell.sel b').textContent], [['2026/09/24（四）'], '24'], '先看最近一次：');
+      eq(eachDay(), [['2026/09/24（四）', ['紀錄戊', '紀錄甲'], '2 隻'], ['2026/09/22（二）', ['紀錄乙'], '1 隻'], ['2026/09/18（五）', ['已離所狗'], '1 隻']], '點哪天看那天：');
       eq(main.querySelectorAll('.mine-dog.gone').length, 1, '離所：');
       eq(main.querySelector('.mine-dog.gone').tagName, 'DIV', '離所的狗不能點：');
       eq(document.querySelector('#tabs button[data-tab="mine"] .n').textContent, '4', '分類數字：');
@@ -1283,8 +1293,8 @@ async function runMyWalksTests() {
       render();
       eq(main.querySelectorAll('.warn-note, .card.flagged, mark').length, 0, '備註：');
       if (main.textContent.includes('測試用備註')) throw new Error('不該出現備註文字');
-      const firsts = [...main.querySelectorAll('.visit')].map(v => [...v.querySelectorAll('.mine-dog')].filter(t => t.querySelector('.first')).map(t => t.querySelector('.bname').textContent));
-      eq(firsts, [[], [], [], []], '不標第一次：');
+      eachDay();
+      eq(main.querySelectorAll('.mine-dog .first').length, 0, '不標第一次：');
       eq([main.querySelector('.mine-stats'), !!main.querySelector('#mineStats')], [null, true], '小計先收起、有統計按鈕：');
       main.querySelector('#mineStats').click();
       if (!main.querySelector('.mine-stats') || !main.querySelector('.mine-progress')) throw new Error('按統計要展開小計');
@@ -1298,12 +1308,19 @@ async function runMyWalksTests() {
       eq([...box.querySelectorAll('.mine-tiles b')].map(b => b.textContent), ['0', '0', '0'], '10 月：');
       if (!box.textContent.includes('上個月到所 4 次')) throw new Error(box.textContent);
     });
-    await check('#58 不選日期：所有到所紀錄一路往下排（跨月也是）', () => {
+    await check('#58 月曆可以往前翻到最早有紀錄的那個月，不能翻到未來；搜尋時照舊一路往下列', () => {
       setup();
-      eq(document.getElementById('mineDate'), null, '沒有日期選擇：');
       myWalks = parseMyWalks({ version: 1, walks: [...WALKS.walks, { id: '8002', name: '紀錄乙', date: '2026-08-05', mine: true, walkers: [ME] }] });
       render();
-      eq(heads(), ['2026/09/24（四）', '2026/09/22（二）', '2026/09/18（五）', '2026/08/05（三）'], '日期標題：');
+      const nav = () => [...main.querySelectorAll('.mc-nav')];
+      eq(main.querySelector('.mc-title').firstChild.textContent, '2026 年 9 月', '先看最近有紀錄的月：');
+      nav()[0].click();
+      eq([main.querySelector('.mc-title').firstChild.textContent, heads(), nav()[0].disabled], ['2026 年 8 月', ['2026/08/05（三）'], true], '上個月、到最早就不能再翻：');
+      nav()[1].click();
+      eq(main.querySelector('.mc-title').firstChild.textContent, '2026 年 9 月', '下個月：');
+      searchQuery = '乙'; render();
+      eq([heads(), main.querySelector('.mine-cal')], [['2026/09/22（二）', '2026/08/05（三）'], null], '搜尋：');
+      searchQuery = '';
     });
     await check('#58 點狗開原本的詳細資訊；搜尋只篩這頁', () => {
       setup();
@@ -1330,7 +1347,7 @@ async function runMyWalksTests() {
       window.fetch = async () => new Response(JSON.stringify(WALKS), { headers: { 'Content-Type': 'application/json' } });
       document.getElementById('mineRetry').click();
       await tick(); await tick();
-      eq(cardNames().length, 4, '重新讀取後：');
+      eq(main.querySelectorAll('.mc-cell.on').length, 3, '重新讀取後：');
     });
     await check('#58 repo 裡的 data/walks.json 讀得懂，畫面不出現其他志工名字', async () => {
       const res = await realFetch('../data/walks.json', { cache: 'no-store' });
@@ -1365,7 +1382,7 @@ async function runMyWalksTests() {
       let stored = '';
       try { stored = localStorage.getItem(WALKER_CODES_KEY) || ''; } catch (e) { /* 無痕模式 */ }
       if (stored.includes('測試志工')) throw new Error('名字不該存在手機');
-      eq(cardNames().length, 4, '設定後列出我的紀錄：');
+      eq(main.querySelectorAll('.mc-cell.on').length, 3, '設定後列出我的紀錄：');
       eq(document.querySelector('#tabs button[data-tab="mine"] .n').textContent, '4', '分類數字：');
     });
     await check('#96 換代號失敗：保留輸入的名字並顯示原因；沒輸入不送出', async () => {
@@ -1393,7 +1410,7 @@ async function runMyWalksTests() {
       document.getElementById('whoEdit').click();
       eq(!!document.getElementById('whoForm'), true, '按修改出現設定框：');
       document.getElementById('whoCancel').click();
-      eq(cardNames().length, 4, '取消回到紀錄：');
+      eq(main.querySelectorAll('.mc-cell.on').length, 3, '取消回到紀錄：');
       document.getElementById('whoEdit').click();
       document.getElementById('whoClear').click();
       eq(loadMyCodes(), ['aaaaaaaaaaaa'], '先問一次，還沒清：');
@@ -1588,7 +1605,7 @@ async function runV9Tests() {
       try {
         allDogs[1].cage = '新A04'; render();
         const btn = main.querySelector('.row-dog[data-dog="1"] .r-cage');
-        eq([btn.tagName, btn.hasAttribute('data-where')], ['BUTTON', true], '平面圖上有的籠位是按鈕：');
+        eq([btn.tagName, btn.hasAttribute('data-where'), btn.classList.contains('cage-pill'), !!btn.querySelector('use[href="#i-pin"]')], ['BUTTON', true, true, true], '平面圖上有的籠位是按鈕，樣子跟狗卡的圖釘籠位一樣（10-10）：');
         btn.click();
         eq([whereDog === allDogs[1], !!detailDog], [true, false], '點籠位開平面圖、不開詳細資訊：');
         whereHide();
@@ -1859,6 +1876,34 @@ async function runRestTests() {
       eq([restEdit, loadNotesPass(), computeStatus(allDogs[1], T).kind], [null, '對的', 'rest'], '成功：');
       hideDetail(); hideToast();
       eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['固定丙', '休養甲', '一般乙'], '設好的那隻也排到最下面：');
+    });
+    await check('入所介紹（10-10 補資料）：管理用、要通關碼，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {
+      const calls = [];
+      window.fetch = async (u, o) => {
+        calls.push([String(u), o && o.method, o && JSON.parse(o.body)]);
+        const b = JSON.parse(o.body);
+        if (b.passcode !== '對的') return json({ ok: false, error: '通關碼不對', code: 'passcode' }, 401);
+        return json({ ok: true, id: '9613', intro: b.text });
+      };
+      saveNotesPass('');
+      showDetail(allDogs[2]);
+      eq(document.getElementById('introEdit').textContent.startsWith('補介紹'), true, '沒介紹寫補介紹：');
+      document.getElementById('introEdit').click();
+      eq([!!document.querySelector('#detail .detail-bar [form="introForm"]'), !!document.querySelector('#detail .detail-bar #groupWalk')], [true, false], '底部列換成儲存介紹、溜了收起來：');
+      const text = document.getElementById('introText');
+      text.value = '  親人\n喜歡散步  '; text.dispatchEvent(new Event('input', { bubbles: true }));
+      eq(document.querySelector('.intro-count').textContent, '11 / 1000 字', '字數：');
+      const pass = document.getElementById('introPass');
+      pass.value = '對的'; pass.dispatchEvent(new Event('input', { bubbles: true }));
+      document.getElementById('introForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise(r => setTimeout(r, 20));
+      eq([calls.length, calls[0][0], calls[0][1], calls[0][2].text], [1, 'https://worker.test/intro/9613', 'PUT', '親人\n喜歡散步'], '送出：');
+      eq([introEdit, introOf(allDogs[2]), loadNotesPass()], [null, '親人\n喜歡散步', '對的'], '成功：');
+      eq(document.querySelector('[data-section="intro"] .content').textContent, '親人\n喜歡散步', '馬上看到：');
+      eq(document.getElementById('introEdit').textContent.startsWith('改介紹'), true, '有介紹寫改介紹：');
+      if (calls.some(c => /sheet|script\.google/.test(c[0]))) throw new Error('不應該寫試算表');
+      hideDetail(); hideToast();
+      delete introOverrides['9613'];
     });
     await check('找狗的「最久沒溜的狗」、分析頁「超過 3 天沒溜」不算休養中的狗', () => {
       const due = dueDogs(allDogs, T).filter(d => { const st = computeStatus(d, T); return st.kind === 'unknown' || (st.kind === 'dated' && st.days >= AMBER_DAYS); });
@@ -2900,6 +2945,20 @@ async function runDeskTests() {
       main.querySelector('[data-desk-go]').click();
       eq(calls, [[['桌紅', '桌黃'], true]], '一次登記：');
       eq([deskChecked.size, main.querySelector('.desk-batch')], [0, null], '清掉：');
+    });
+    await check('電腦版補資料（10-10）：沒照片、沒介紹的狗一列一隻，兩樣都缺的在最前面；照片、介紹都走詳細資訊', () => {
+      const pv = photoVersions;
+      try {
+        photoVersions = { 'photos/2026010102.jpg': 'a', 'photos/2026010103.jpg': 'b' };
+        allDogs[1].intro = '有介紹'; allDogs[2].intro = '有介紹';
+        eq(allDogs.map(d => deskFillNeeds(d)), [{ photo: true, intro: true }, { photo: false, intro: false }, { photo: false, intro: false }, { photo: true, intro: true }], '缺什麼：');
+        deskView = 'fill'; deskFill = 'all';
+        const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', sortWalkList(allDogs, TODAY)), 'text/html');
+        eq([...doc.querySelectorAll('.df-chip b')].map(b => b.textContent), ['2', '2', '4'], '沒照片、沒介紹、全部：');
+        eq([...doc.querySelectorAll('.df-row .dr-name button')].map(b => b.textContent).slice(0, 2).sort(), ['桌無', '桌紅'], '兩樣都缺的在前面：');
+        eq([doc.querySelectorAll('.df-drop').length, doc.querySelector('.desk-brief')], [2, null], '沒照片的格子、補資料不放簡報：');
+        eq(doc.querySelectorAll('[data-fill-photo]').length + doc.querySelectorAll('[data-fill-intro]').length, 8, '每列兩顆：');
+      } finally { photoVersions = pv; deskView = 'sheet'; deskFill = 'all'; }
     });
     await check('電腦版只靠 setWalked 登記，自己不送資料', () => {
       if (/method\s*:|\bPOST\b|sheet-write|UPLOAD_URL/.test(code)) throw new Error('js/desk.js 不應該自己寫試算表');
