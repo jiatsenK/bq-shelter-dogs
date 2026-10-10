@@ -1013,3 +1013,8 @@
 - js/app.js（SPECIAL_KEYWORDS、AMBER_DAYS、RED_DAYS、歡迎畫面站名）、js/desk.js（DESK_ZONES）、js/cards.js（BQ_TEAMS、BQ_FREE）、js/analysis.js（標題）改讀 SITE；行為不變。
 - 新增 docs/SITE_CONFIG.md：哪些已經收進設定檔、哪些還沒（靜態檔站名、找狗平面圖、試算表長相、編號規則、部署、色票），和 K 同意的後續順序。
 - 測試：tests/index.html、scripts/sync-sheet.test.mjs 先載入 site-config.js；#30 script 清單加一個；加 1 項「設定集中」。網頁 226 過（本機另 2 項 #130），node 132 過。
+## 2026-10-10 Claude（第 2 步之一：資料表設計、舊資料轉檔程式）
+- 依據：K 2026-10-10 同意資料表設計（狗、溜狗紀錄、異動紀錄、其他）和三點：試算表當主人期間還原只能查不能寫回、資料庫建在 K 的 Cloudflare 帳號、照片不動。K 問「大家還是習慣試算表會不會有問題」——回覆不會，網站只讀試算表、資料庫只是副本；切換主人要等 K 確定大家願意才做。
+- 新增 db/schema.sql（D1／SQLite：dogs、walks、changes、kv，可重複執行）、scripts/build-db.mjs（repo 的 dogs.json、departures、rest、walks、history 快照 → INSERT；快照只轉成前後兩天有變的欄位、入所、離所）、scripts/build-db.test.mjs（5 項，有 node:sqlite 時真的建表匯入兩次）。
+- 現有資料試轉：狗 125（在所 122）、溜狗紀錄 732、異動紀錄 53（16 天快照）。誰溜的只存代號。
+- 只有程式，不動正式網站、還沒建資料庫。tests.yml 和 AGENTS.md 的 node 測試清單加 build-db.test.mjs；.assetsignore 加 db；新增 docs/DATABASE.md（設計、分幾個 PR、限制）。node 137 過、網頁 226 過（本機另 2 項 #130）。
