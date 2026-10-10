@@ -106,14 +106,14 @@ function runTests() {
       eq(box.querySelector('img'), null, '沒編號時的 img：');
       if (!box.querySelector('.thumb-fallback')) throw new Error('沒編號時沒有腳掌圖示');
     }),
-    check('詳細資訊：入所原因是一排標籤（10-10 K：介紹文字改成 tag），有填顯示原因和拾獲地點，沒填寫還沒填；舊的介紹文字不顯示', () => {
+    check('詳細資訊：入所原因是一排標籤（10-10 K：介紹文字改成 tag），有填顯示原因和拾獲地點，沒填寫還沒填；舊的介紹文字先留著對照', () => {
       const intro = dog => {
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
         return box.querySelector('[data-section="intro"]');
       };
       const a = intro({ name: '宙斯', id: '202101234', cage: 'C03', walkedDate: null, covered: false, note: '', intro: '很親人', reason: '民眾拾獲', place: '樹林區' });
-      eq([a.querySelector('.intake-tag').textContent, a.querySelector('.intake-place').textContent, a.textContent.includes('很親人'), a.querySelector('.content')], ['民眾拾獲', '拾獲地點樹林區', false, null]);
+      eq([a.querySelector('.intake-tag').textContent, a.querySelector('.intake-place').textContent, a.querySelector('.intake-prose').lastChild.textContent], ['民眾拾獲', '拾獲地點樹林區', '很親人'], '標籤一排，舊的介紹文字照留在下面（K：先不要刪）：');
       const b = intro({ name: '比比', id: '202102346', cage: 'A08', walkedDate: null, covered: false, note: '', intro: '' });
       eq([b.querySelector('.intake-tag'), b.querySelector('.empty').textContent.startsWith('還沒填')], [null, true], '沒填：');
     }),
@@ -340,12 +340,12 @@ function runTests() {
         groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '入所原因', '管理用'].slice(0, box.querySelector('[data-section="rest"]') ? 5 : 4)); // 相簿 K 2026-10-09 拿掉；管理用（改介紹、休養）10-10 集中一區
+        eq([...box.querySelectorAll('section h3')].map(h => (h.firstChild.nextSibling || h.firstChild).textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '入所原因', '管理用'].slice(0, box.querySelector('[data-section="rest"]') ? 5 : 4)); // 相簿 K 2026-10-09 拿掉；管理用（改介紹、休養）10-10 集中一區
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/thumbs/2.jpg', '一起溜的照片：');
         eq(buddy.querySelector('.bname').textContent, '好朋友');
-        eq([box.querySelector('[data-section="intro"] .content'), box.querySelector('[data-section="intro"]').classList.contains('intake-row')], [null, true], '入所原因是一排，不放介紹文字：');
+        eq([box.querySelector('[data-section="intro"] .intake-prose').lastChild.textContent, !!box.querySelector('[data-section="intro"] .lw-row h3')], ['入所狗卡', true], '入所原因是一排，舊的介紹文字留在下面：');
         dog.note = ''; dog.intro = ''; groupMap = {};
         box.innerHTML = detailHtml(dog, TODAY);
         eq([...box.querySelectorAll('section .empty')].length, 4, '都沒有資料時顯示提示（#60 遛狗紀錄讀取中也算；V9 拿掉我的備註；相簿 K 2026-10-09 拿掉）：');
@@ -1901,7 +1901,12 @@ async function runRestTests() {
       dog.intro = '2023年迷路進來,個性害羞';
       showDetail(dog);
       const sec = () => document.querySelector('#detail [data-section="intro"]');
-      eq([sec().querySelector('h3').textContent, sec().querySelector('#introEdit').classList.contains('blank'), sec().classList.contains('intake-row'), sec().textContent.includes('迷路進來')], ['入所原因', true, true, false], '沒填：一排、整排可以點；舊的介紹文字不再顯示（K：我就是要把介紹文字改成 tag）：');
+      eq([sec().querySelector('h3').textContent, sec().querySelector('#introEdit').classList.contains('blank'), !!sec().querySelector('.lw-row #introEdit'), sec().querySelector('.intake-prose').lastChild.textContent], ['入所原因', true, true, '2023年迷路進來,個性害羞'], '沒填：一排、整排可以點；舊的介紹文字留在下面對照（K：先不要刪）：');
+      // 照舊介紹的用字先選好建議；分不出來的（迷路進來）不猜
+      eq([intakeGuess('2024年1月5日,從板橋被民眾拾獲進來'), intakeGuess('2017年7月19日從淡水收容所轉來'), intakeGuess('才一歲就被棄養'), intakeGuess('2025年06月11日,從樹林被通報,個性溫和'), intakeGuess('2023年迷路進來,個性害羞')],
+        [{ reason: '民眾拾獲', place: '板橋' }, { reason: '收容所轉入', place: '淡水' }, { reason: '飼主不續養', place: '' }, { reason: '政府處理案件', place: '樹林' }, null], '建議：');
+      eq([intakeDraft({ id: 'x', intro: '才一歲就被棄養' }), intakeDraft({ id: 'x', intro: '才一歲就被棄養', reason: '民眾拾獲', place: '板橋' })],
+        [{ reason: '飼主不續養', place: '', guessed: '飼主不續養' }, { reason: '民眾拾獲', place: '板橋', guessed: '' }], '已經填了就不建議：');
       eq(document.querySelectorAll('#detail [data-section="rest"] .admin-btn').length, 1, '管理用只剩設定休養中：');
       document.getElementById('introEdit').click();
       eq([!!document.querySelector('#detail .detail-bar [form="introForm"]'), !!document.querySelector('#detail .detail-bar #groupWalk')], [true, false], '底部列換成儲存、溜了收起來：');
