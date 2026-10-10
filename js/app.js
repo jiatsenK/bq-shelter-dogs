@@ -37,6 +37,7 @@ let detailOpener = null;
 let detailTrail = []; // 在詳細資訊裡點「可以一起溜」換過的狗（#99）：可以按「回到 ○○」一隻一隻回去
 let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, url, phase: 'preview'|'uploading'|'error', error }
 let restMap = {}; // 休養中：編號 → { until: 'YYYY-MM-DD', reason }
+let detailWalksOpen = false; // 詳細資訊的溜狗紀錄有沒有展開每一天（K 2026-10-10 減法：預設只有一行字）
 let introEdit = null; // 詳細資訊正在改的入所介紹（K 2026-10-10 補資料）：{ dog, text, pass, needPass, phase: 'edit'|'saving'|'error', error }
 const introOverrides = {}; // 編號 → 剛存好的介紹：這台電腦馬上看到，dogs.json 等下次同步
 let restEdit = null; // 詳細資訊正在改的休養設定：{ dog, until, reason, pass, needPass, phase: 'edit'|'saving'|'error', error }
@@ -1314,8 +1315,6 @@ function favButtonHtml(dog) {
 function detailHtml(dog, today) {
   if (dog.departure) return departedDetailHtml(dog, today);
   const flag = specialFlag(dog.note);
-  const buddies = [...(groupMap[dog.name] || [])];
-  const byName = new Map(allDogs.map(d => [d.name, d]));
   const intro = introOf(dog);
   const walked = walkedToday(today);
   // V7（#112）：上面大照片，下面狗名和天數／籠位／入所標籤；關閉、在哪、溜了在底部固定列（在哪裡卡片 V7 小修正拿掉，改用底部「在哪」）
@@ -1338,16 +1337,7 @@ function detailHtml(dog, today) {
       ${!dog.note ? `<div class="empty">目前沒有備註</div>`
         : `<div class="content note-text">${flag ? highlightNote(dog.note, flag.terms) : esc(dog.note)}</div>`}
     </section>
-    ${cageMatesSection(dog, walked)}
-    <section class="detail-section" data-section="group">
-      <h3>${icon('group')}可以一起溜的狗</h3>
-      ${buddies.length
-        ? `<div class="buddies">${buddies.map(n => {
-            const d = byName.get(n) || { name: n, id: '' };
-            return buddyTile(d, n, walked);
-          }).join('')}</div>`
-        : `<div class="empty">沒有登記可以一起溜的狗</div>`}
-    </section>
+    ${togetherSection(dog, walked)}
     ${walkHistorySection(dog, today)}
     ${introSectionHtml(dog, intro)}
     ${restAdminHtml(dog, today)}
@@ -1374,12 +1364,11 @@ function restAdminHtml(dog, today) {
   const r = restOf(dog, today);
   const e = restEdit && restEdit.dog === dog ? restEdit : null;
   if (!e) {
-    // 管理用的集中在這一區（K 2026-10-10）：改介紹、設定休養中；正在改介紹時先收起來
+    // 管理用（K 2026-10-10）：只剩設定休養中；入所介紹直接點那一段就能改。正在改介紹時先收起來
     if (introEdit && introEdit.dog === dog) return '';
     return `<section class="detail-section rest-admin" data-section="rest">
       <h3>${icon('write')}管理用<span class="sub">要通關碼</span></h3>
       <div class="admin-btns">
-        <button type="button" class="admin-btn" id="introEdit">${icon('card')}${introOf(dog) ? '改介紹' : '補介紹'}</button>
         <button type="button" class="admin-btn" id="restEdit">${icon('paw')}${r ? '改休養設定' : '設定休養中'}</button>
       </div>
     </section>`;
@@ -1409,9 +1398,12 @@ function introOf(dog) {
 function introSectionHtml(dog, intro) {
   const e = introEdit && introEdit.dog === dog ? introEdit : null;
   if (!e) {
+    // 直接點這一段就能改（K 2026-10-10：不要多一個按鈕）；不能改的時候（沒編號、離所）就是一般文字
+    const can = !!(dog.id && UPLOAD_URL) && !dog.departure;
+    const body = intro ? `<span class="content">${esc(intro)}</span>` : `<span class="empty">${can ? '還沒有入所介紹，點這裡補' : '還沒有入所介紹'}</span>`;
     return `<section class="detail-section" data-section="intro">
       <h3>${icon('card')}入所介紹</h3>
-      ${intro ? `<div class="content">${esc(intro)}</div>` : `<div class="empty">還沒有入所介紹</div>`}
+      ${can ? `<button type="button" class="intro-btn" id="introEdit" aria-label="${intro ? '改' : '補'}入所介紹">${body}${icon('write')}</button>` : `<div class="intro-static">${body}</div>`}
     </section>`;
   }
   const busy = e.phase === 'saving';
@@ -1696,12 +1688,13 @@ async function imageToLocal(src) {
 
 // 可以一起溜的每一隻：輕點照片換看那隻；右上角圓圈勾選，之後用下方按鈕一起記（#35，K 選 C）。
 // 今天已溜的不顯示圓圈，改標「今天已溜」
-function buddyTile(d, name, walkedNow) {
+function buddyTile(d, name, walkedNow, mate) {
   const walked = walkedNow.has(d);
   const canPick = walkKey(d) && !walked && allDogs.includes(d);
   const picked = canPick && pickedBuddies.has(walkKey(d));
   return `<div class="buddy-tile">
     <button class="buddy" data-dog="${allDogs.indexOf(d)}"${allDogs.includes(d) ? '' : ' disabled'}>${photoThumb(d, 64)}<span class="bname">${esc(name)}</span></button>
+    ${mate ? `<span class="mate-tag">同籠</span>` : ''}
     ${walked ? `<span class="walked-tag">今天已溜</span>` : ''}
     ${canPick ? `<button type="button" class="pick${picked ? ' on' : ''}" data-pick="${esc(walkKey(d))}" aria-pressed="${picked}" aria-label="勾選 ${esc(name)} 一起記">${icon('tick')}</button>` : ''}
   </div>`;
@@ -1715,13 +1708,19 @@ function cageMates(dog) {
   return allDogs.filter(d => d !== dog && String(d.cage || '').replace(/\s+/g, '') === cage);
 }
 
-function cageMatesSection(dog, walked) {
+// 同籠＋可以一起溜合成一段（K 2026-10-10 減法：兩段常常是同一批狗）：同籠的排前面、標「同籠」，
+// 登記可以一起溜又不同籠的接在後面；同一隻只出現一次
+function togetherSection(dog, walked) {
+  const byName = new Map(allDogs.map(d => [d.name, d]));
   const mates = cageMates(dog);
-  if (!mates.length) return '';
+  const buddies = [...(groupMap[dog.name] || [])].map(n => byName.get(n) || { name: n, id: '' });
+  const list = [...mates, ...buddies.filter(d => !mates.includes(d))];
   return `
-    <section class="detail-section" data-section="cage">
-      <h3>${icon('pin')}同籠的狗<span class="sub">${esc(dog.cage)}</span></h3>
-      <div class="buddies">${mates.map(d => buddyTile(d, d.name, walked)).join('')}</div>
+    <section class="detail-section" data-section="group">
+      <h3>${icon('group')}同籠、可以一起溜的狗</h3>
+      ${list.length
+        ? `<div class="buddies">${list.map(d => buddyTile(d, d.name, walked, mates.includes(d))).join('')}</div>`
+        : `<div class="empty">沒有同籠，也沒有登記可以一起溜的狗</div>`}
     </section>`;
 }
 
@@ -2150,6 +2149,7 @@ const DETAIL_CLICKS = [
   ['#photoPick', () => pickPhotoFile()],
   ['#restEdit', () => openRestEdit(detailDog)],
   ['#introEdit', () => openIntroEdit(detailDog)],
+  ['#walksToggle', () => { detailWalksOpen = !detailWalksOpen; renderDetail(); const b = document.getElementById('walksToggle'); if (b) b.focus({ preventScroll: true }); }],
   ['#introCancel', () => { introEdit = null; renderDetail(); const b = document.getElementById('introEdit'); if (b) b.focus({ preventScroll: true }); }],
   ['#restEnd', () => saveRest(true)],
   ['#restCancel', () => { restEdit = null; renderDetail(); const b = document.getElementById('restEdit'); if (b) b.focus({ preventScroll: true }); }],
@@ -2255,6 +2255,7 @@ function showDetail(dog, remember = true) {
   if (wasOpen && remember && dog !== detailDog) detailTrail.push(detailDog);
   if (dog !== detailDog) {
     pickedBuddies.clear();
+    detailWalksOpen = false;
     if (!restEdit || restEdit.phase !== 'saving') restEdit = null;
     if (!introEdit || introEdit.phase !== 'saving') introEdit = null;
     if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
@@ -2273,6 +2274,7 @@ function showDetail(dog, remember = true) {
 function hideDetail() {
   if (!detailDog) return;
   detailDog = null;
+  detailWalksOpen = false;
   detailTrail = [];
   pickedBuddies.clear();
   if (!restEdit || restEdit.phase !== 'saving') restEdit = null;

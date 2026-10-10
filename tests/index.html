@@ -335,7 +335,7 @@ function runTests() {
         groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '可以一起溜的狗', '溜狗紀錄', '入所介紹', '管理用'].slice(0, box.querySelector('[data-section="rest"]') ? 5 : 4)); // 相簿 K 2026-10-09 拿掉；管理用（改介紹、休養）10-10 集中一區
+        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '入所介紹', '管理用'].slice(0, box.querySelector('[data-section="rest"]') ? 5 : 4)); // 相簿 K 2026-10-09 拿掉；管理用（改介紹、休養）10-10 集中一區
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/thumbs/2.jpg', '一起溜的照片：');
@@ -1199,10 +1199,15 @@ async function runHistoryTests() {
       hideAnalysis(); history.replaceState(null, '');
       // 詳細資訊
       showDetail(dogs[0]);
-      const sec = document.querySelector('#detail [data-section="walks"]');
+      let sec = document.querySelector('#detail [data-section="walks"]');
       if (!sec) throw new Error('詳細資訊要有遛狗紀錄');
       eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-3), ['walks', 'intro', 'rest'], '位置在入所介紹前（入所介紹之後只剩休養設定，管理用；相簿 K 2026-10-09 拿掉）：');
       eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(0, 2), ['last', 'note'], 'V9（#141）上次溜／溜狗人在最前面，接著試算表備註：');
+      // 減法（10-10 K：格子很棒但眼花）：預設只有一行字，按「看每一天」才展開格子
+      eq([sec.querySelectorAll('.w-grid').length, document.getElementById('walksToggle').getAttribute('aria-expanded'), sec.querySelector('.w-more').textContent], [0, 'false', '看每一天'], '預設收起來：');
+      document.getElementById('walksToggle').click();
+      sec = document.querySelector('#detail [data-section="walks"]');
+      eq([document.getElementById('walksToggle').getAttribute('aria-expanded'), sec.querySelector('.w-more').textContent], ['true', '收起'], '展開：');
       eq([sec.querySelectorAll('.w-grid .on').length, sec.querySelectorAll('.w-grid .none').length, sec.querySelectorAll('.w-grid span').length], [14, 2, 30], '格子：');
       eq([...sec.querySelectorAll('.w-sum b')].map(b => b.textContent), ['14', '2.3', '6'], '數字（一行字，不是三格）：');
       eq(sec.querySelectorAll('.w-num').length, 0, '沒有統計卡：');
@@ -1878,7 +1883,7 @@ async function runRestTests() {
       hideDetail(); hideToast();
       eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['固定丙', '休養甲', '一般乙'], '設好的那隻也排到最下面：');
     });
-    await check('入所介紹（10-10 補資料）：管理用、要通關碼，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {
+    await check('入所介紹（10-10）：直接點那一段就能改（不另外放按鈕）、要通關碼，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {
       const calls = [];
       window.fetch = async (u, o) => {
         calls.push([String(u), o && o.method, o && JSON.parse(o.body)]);
@@ -1888,7 +1893,7 @@ async function runRestTests() {
       };
       saveNotesPass('');
       showDetail(allDogs[2]);
-      eq(document.getElementById('introEdit').textContent.startsWith('補介紹'), true, '沒介紹寫補介紹：');
+      eq([document.getElementById('introEdit').closest('[data-section]').dataset.section, document.getElementById('introEdit').textContent, document.querySelectorAll('#detail [data-section="rest"] .admin-btn').length], ['intro', '還沒有入所介紹，點這裡補', 1], '沒介紹：那一段本身可以點，管理用只剩設定休養中：');
       document.getElementById('introEdit').click();
       eq([!!document.querySelector('#detail .detail-bar [form="introForm"]'), !!document.querySelector('#detail .detail-bar #groupWalk')], [true, false], '底部列換成儲存介紹、溜了收起來：');
       const text = document.getElementById('introText');
@@ -1901,7 +1906,7 @@ async function runRestTests() {
       eq([calls.length, calls[0][0], calls[0][1], calls[0][2].text], [1, 'https://worker.test/intro/9613', 'PUT', '親人\n喜歡散步'], '送出：');
       eq([introEdit, introOf(allDogs[2]), loadNotesPass()], [null, '親人\n喜歡散步', '對的'], '成功：');
       eq(document.querySelector('[data-section="intro"] .content').textContent, '親人\n喜歡散步', '馬上看到：');
-      eq(document.getElementById('introEdit').textContent.startsWith('改介紹'), true, '有介紹寫改介紹：');
+      eq(document.getElementById('introEdit').getAttribute('aria-label'), '改入所介紹', '有介紹：點了是改：');
       if (calls.some(c => /sheet|script\.google/.test(c[0]))) throw new Error('不應該寫試算表');
       hideDetail(); hideToast();
       delete introOverrides['9613'];
@@ -2567,22 +2572,29 @@ async function runCageMateTests() {
       eq(cageMates(allDogs[0]).map(d => d.name), ['阿黑', '花花'], '新A03：');
       eq(cageMates(allDogs[3]), [], '獨自一籠：');
       eq(cageMates(allDogs[4]), [], '住院區：');
-      eq(cageMatesSection(allDogs[3], new Set()), '', '沒有同籠就不顯示：');
     });
-    await check('同籠：詳細資訊顯示同籠的狗，勾選後用下方按鈕一起記', () => {
-      const html = detailHtml(allDogs[0], TODAY);
-      const box = document.createElement('div');
-      box.innerHTML = html;
-      const sec = box.querySelector('[data-section="cage"]');
-      if (!sec) throw new Error('沒有同籠的狗這一段');
-      eq([...sec.querySelectorAll('.bname')].map(n => n.textContent), ['阿黑', '花花']);
-      eq(sec.querySelectorAll('.pick').length, 2, '勾選圓圈：');
-      if (html.indexOf('data-section="cage"') > html.indexOf('data-section="group"')) throw new Error('同籠要放在可以一起溜上面');
-      recordWalked([allDogs[1]], true, TODAY);
-      const box2 = document.createElement('div');
-      box2.innerHTML = cageMatesSection(allDogs[0], walkedToday(TODAY));
-      eq(box2.querySelectorAll('.pick').length, 1, '今天已溜的不顯示圓圈：');
-      if (!box2.querySelector('.walked-tag')) throw new Error('今天已溜的要標「今天已溜」');
+    await check('同籠、可以一起溜合成一段（10-10 減法）：同一隻只出現一次，同籠的排前面、標「同籠」，一樣可以勾選一起記', () => {
+      const savedGroups = groupMap;
+      try {
+        // 阿黑同籠又登記可以一起溜；獨行不同籠、只有登記
+        groupMap = { ...groupMap, [allDogs[0].name]: new Set([allDogs[1].name, allDogs[3].name]) };
+        const html = detailHtml(allDogs[0], TODAY);
+        const box = document.createElement('div');
+        box.innerHTML = html;
+        if (box.querySelector('[data-section="cage"]')) throw new Error('不該再有另一段同籠的狗');
+        const sec = box.querySelector('[data-section="group"]');
+        eq([...sec.querySelectorAll('.bname')].map(n => n.textContent), ['阿黑', '花花', allDogs[3].name], '不重複、同籠在前：');
+        eq([...sec.querySelectorAll('.buddy-tile')].map(t => !!t.querySelector('.mate-tag')), [true, true, false], '同籠的標出來：');
+        eq(sec.querySelectorAll('.pick').length, 3, '勾選圓圈：');
+        recordWalked([allDogs[1]], true, TODAY);
+        const box2 = document.createElement('div');
+        box2.innerHTML = togetherSection(allDogs[0], walkedToday(TODAY));
+        eq(box2.querySelectorAll('.pick').length, 2, '今天已溜的不顯示圓圈：');
+        if (!box2.querySelector('.walked-tag')) throw new Error('今天已溜的要標「今天已溜」');
+        groupMap = savedGroups;
+        box2.innerHTML = togetherSection(allDogs[3], new Set());
+        eq([box2.querySelectorAll('.buddy-tile').length, box2.querySelector('.empty').textContent], [0, '沒有同籠，也沒有登記可以一起溜的狗'], '都沒有：');
+      } finally { groupMap = savedGroups; }
     });
     await check('V7 小修正：詳細資訊不再有中間的「在哪裡」卡片，底部「在哪」照樣開面板', () => {
       const html = detailHtml(allDogs[0], TODAY);
@@ -3044,6 +3056,30 @@ async function runDeskTests() {
         [UPLOAD_URL, window.fetch] = saved2;
         deskFillPhoto = null; deskFillDone.clear(); deskFillOrder = null; deskView = 'sheet'; hideToast(); render();
       }
+    });
+    await check('電腦版全表（10-10 K）：同一欄再點一次反過來排、三角形跟著換；點整列開詳細資訊，勾選那一格不算', () => {
+      if (!deskOn()) return;
+      try {
+        deskView = 'sheet'; deskSort = 'days'; deskSortRev = false; deskZone = 'all';
+        activeTab = 'walk'; searchQuery = ''; render();
+        const rows = () => [...main.querySelectorAll('.desk-table tbody tr.dr .dr-name button')].map(b => b.textContent);
+        const head = k => main.querySelector(`[data-desk-sort="${k}"]`).closest('th');
+        const days = rows();
+        eq([head('days').getAttribute('aria-sort'), head('days').classList.contains('desc')], ['descending', true], '天數預設最久的在上面：');
+        main.querySelector('[data-desk-sort="days"]').click();
+        eq([rows(), head('days').getAttribute('aria-sort'), head('days').classList.contains('asc')], [days.slice().reverse(), 'ascending', true], '再點一次反過來：');
+        main.querySelector('[data-desk-sort="cage"]').click();
+        const cages = rows();
+        eq([head('cage').getAttribute('aria-sort'), head('days').getAttribute('aria-sort'), deskSortRev], ['ascending', 'none', false], '換一欄從預設方向開始：');
+        main.querySelector('[data-desk-sort="cage"]').click();
+        eq([rows(), head('cage').getAttribute('aria-sort')], [cages.slice().reverse(), 'descending'], '籠位也能反過來：');
+        const row = main.querySelector('.desk-table tbody tr.dr');
+        row.querySelector('.dr-ck').click();
+        eq(detailDog, null, '勾選那一格不開：');
+        row.querySelector('.dr-note').click();
+        eq(detailDog === allDogs[Number(row.dataset.deskDog)], true, '點備註那一格也開這隻狗：');
+        hideDetail(); history.replaceState(null, '');
+      } finally { deskSort = 'days'; deskSortRev = false; render(); }
     });
     await check('電腦版只靠 setWalked 登記，自己不送資料', () => {
       // 補資料（10-10）：照片 POST /photos、介紹 PUT /intro 都是送到 Worker（寫 R2／repo，不是試算表），其他地方不能再有寫入
@@ -3521,7 +3557,9 @@ async function runDepartureTests() {
       allDogs = [{ name: '雪寶', id: '2026100801', cage: 'A1', walkedDate: null, covered: false, note: '', intro: '', sex: '', formerIds: ['2026021301'] }];
       historyData = { state: 'ready', dates: [], walks: [] };
       const box = document.createElement('div');
+      detailWalksOpen = true; // 溜狗紀錄展開才看得到「10/1 離所」
       box.innerHTML = detailHtml(list[0], OCT8);
+      detailWalksOpen = false;
       eq(box.querySelector('.chips .badge').textContent, '已認養 · 10/1');
       const dep = box.querySelector('[data-section="departure"]').textContent;
       if (!dep.includes('已出所分頁寫了「被認養」') || !dep.includes('C區35')) throw new Error(dep);
