@@ -212,3 +212,23 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
   管理 API（標頭 `X-Admin-Passcode: encodeURIComponent(通關碼)`）：`POST /api/admin/migrate`、`POST /api/admin/verify`、`GET /api/admin/thumbs`、`PUT /api/admin/thumbs/{原圖路徑}`、`GET /api/admin/trash`、`POST /api/admin/trash/{代號}/restore`。
   部署前 `scripts/r2-bucket.mjs` 確認 bucket，沒有就用拿掉 R2 的 `wrangler.no-r2.json` 部署（照片照舊寫 GitHub）。縮圖：`.github/workflows/r2-thumbs.yml`（`scripts/make-thumbs.py --site`）；搬遷：`.github/workflows/migrate-photos-r2.yml`（`scripts/migrate-photos-r2.mjs`）。
   本機試跑 `npx wrangler dev --local --persist-to /tmp/wrangler-state --var NOTES_PASSCODE:測試`，再 `SITE_URL=http://localhost:8787 ADMIN_PASSCODE=測試 node scripts/migrate-photos-r2.mjs` 就能模擬搬遷。
+
+## 資料庫（D1）
+
+K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**（設計見 `docs/DATABASE.md`）。免費額度 5 GB，現在的資料不到 1 MB，費用 NT$0。
+目前只是把資料庫建起來、把現有資料放進去；**網站還是讀原本的檔案**，所以資料庫沒接上網站也完全不受影響。
+
+平常不用做任何事：每次部署會自動找名叫 `bq-shelter-dogs` 的資料庫，沒有就建、把資料表建好，資料庫是空的才把現有資料匯進去一次。
+
+### 確認有沒有接上
+
+1. 合併後等「部署到 Cloudflare」綠勾勾（或到 https://github.com/jiatsenK/bq-shelter-dogs/actions/workflows/deploy-cloudflare.yml 按 **Run workflow**）。
+2. 手機打開 https://bq-shelter-dogs.jiatsen-k.workers.dev/api/ ，看到 `"database":"D1（狗 125、溜狗紀錄 732、異動紀錄 53）"` 這樣的字（數字會不一樣）就是接上了。
+3. 如果看到 `"database":"未設定"`：點進剛剛那次部署，**Summary** 會寫原因。通常是 Cloudflare token 沒有 D1 權限：
+   https://dash.cloudflare.com 右上角頭像 → **My Profile** → **API Tokens** → 找到部署用的那把 → **Edit** → **Permissions** 加一行
+   `Account`｜`D1`｜`Edit` → **Continue to summary** → **Update token**，再部署一次（token 字串不會變，GitHub 不用改）。
+
+### 資料弄壞了要救
+
+- Cloudflare 後台 → **Storage & Databases** → **D1** → `bq-shelter-dogs` → **Time Travel** 可以回到 30 天內任一時間點。
+- 試算表還是主人的期間，最壞的情況把資料庫整個刪掉也沒關係：下次部署會重建，並從 repo 的資料再匯入一次。

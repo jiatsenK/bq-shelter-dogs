@@ -762,3 +762,14 @@ test('舊網址拿掉後：沒設 ALLOWED_ORIGINS 時，舊網址 github.io 送�
   assert.equal((await send(new Request(`${SITE}/api/notes`, { headers: { Origin: 'https://jiatsenk.github.io' } }), env)).status, 403);
   assert.equal((await send(new Request(`${SITE}/api/notes`, { headers: { Origin: SITE } }), env)).status, 200);
 });
+
+// ---- 資料庫（D1，第 2 步）：目前只在狀態頁報告，網站還不讀它 ----
+test('狀態頁：沒接資料庫寫「未設定」；接上了寫各表幾筆；還沒建表不會壞', async () => {
+  fakeGithub();
+  assert.equal((await send(new Request('https://x.workers.dev/'), ENV)).body.database, '未設定');
+  const counts = { dogs: 125, walks: 732, changes: 53 };
+  const DB = { prepare: sql => ({ first: async () => ({ n: counts[sql.match(/FROM (\w+)/)[1]] }) }) };
+  assert.equal((await send(new Request('https://x.workers.dev/'), { ...ENV, DB })).body.database, 'D1（狗 125、溜狗紀錄 732、異動紀錄 53）');
+  const broken = { prepare: () => ({ first: async () => { throw new Error('no such table: dogs'); } }) };
+  assert.equal((await send(new Request('https://x.workers.dev/'), { ...ENV, DB: broken })).body.database, 'D1（還沒建表）');
+});
