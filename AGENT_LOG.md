@@ -1030,3 +1030,10 @@
 - worker/src/index.js：/api/ 狀態多 database（未設定／D1（各表幾筆）／還沒建表）；網站還是讀 repo 的檔案，行為不變。測試 1 項。
 - .assetsignore、.gitignore 加 wrangler.deploy.json、db/seed.sql；tests.yml、AGENTS.md 測試清單加 d1-database.test.mjs；網頁測試的 #130 部署檢查跟著改。docs/CLOUDFLARE_SETUP.md 加「資料庫（D1）」（確認方式、token 要加 Account｜D1｜Edit）。node 143 過、網頁 226 過（本機另 2 項 #130）。
 - 還沒驗證的：真的對 Cloudflare 跑（wrangler d1 list --json 的欄位、token 權限）要合併後看第一次部署的摘要和 /api/。
+## 2026-10-10 Claude（減法：溜狗紀錄收成一行、同籠併進可以一起溜、入所介紹改入所原因標籤、電腦版排序可反向、點整列開狗卡）
+- 依據：K 2026-10-10「我要進行減法設計」六點（impeccable distill）。
+- 狗卡（js/app.js、js/analysis.js）：溜狗紀錄預設一行字＋「看每一天」才展開格子；「同籠的狗」併進「同籠、可以一起溜的狗」（togetherSection，同一隻只出現一次、同籠標出來）；「入所介紹」改「入所原因」＝五個原因選一個＋拾獲地點（認養後退回、飼主不續養不用地點），點那一段直接改，「管理用」只剩設定休養中。舊的介紹文字照留在下面，網站上不能再改那段文字。
+- 資料：原因和地點存 dogs/{編號}.md 的 frontmatter（reason、place），不寫試算表。Worker PUT /intro 多收 reason、place（只送這兩個就不動內文）；scripts/sync-sheet.mjs 的 parseIntake 讀進 dogs.json，frontmatter 沒寫但內文是「拾獲地點：○ 進所原因：○」的固定寫法就照著讀（政府捕捉→政府處理案件、拾獲送交→民眾拾獲、不擬續養→飼主不續養；「其他」和一般敘述不猜）。原因清單在 js/site-config.js 的 intakeReasons。
+- 電腦版（js/desk.js）：欄名再點一次反過來排（deskSortRev，aria-sort、▼▲ 跟著換）；點整列開詳細資訊（勾選格、按鈕、選字時不算）；補資料那一欄改成入所原因，原地選標籤。
+- 測試：網頁改 8 項、加 1 項（排序、點整列），node 加 2 項；網頁 229 過（本機 #130 兩項照舊）、node 144 過。本機截圖檢查手機狗卡、編輯表單、電腦版全表、補資料。
+- 還沒做／要注意：資料庫（D1）的 dogs 表還沒有 reason、place 欄，接同步寫資料庫那一步時一起加。目前 dogs.json 要等合併後下一次同步才有 reason、place；現有資料只有 16 隻讀得出原因，其他要人工補。

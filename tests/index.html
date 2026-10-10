@@ -335,7 +335,7 @@ function runTests() {
         groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '可以一起溜的狗', '溜狗紀錄', '入所介紹', '管理用'].slice(0, box.querySelector('[data-section="rest"]') ? 5 : 4)); // 相簿 K 2026-10-09 拿掉；管理用（改介紹、休養）10-10 集中一區
+        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '入所原因', '管理用'].slice(0, box.querySelector('[data-section="rest"]') ? 5 : 4)); // 相簿 K 2026-10-09 拿掉；管理用（改介紹、休養）10-10 集中一區
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/thumbs/2.jpg', '一起溜的照片：');
@@ -1084,7 +1084,7 @@ async function runAnalysisTests() {
     const c = dataCompleteness(rows, null);
     eq(c.items.map(i => `${i.label}:${names(i.dogs).join('/')}`), [
       '沒有編號:沒號', '編號看不出入所日期:怪號/未來', '沒有溜狗日期:無日/照顧',
-      '沒有性別:小二/無日/照顧/沒號/怪號/未來', '沒有入所介紹:乙長/小一/小二/無日/照顧/沒號/怪號/未來']);
+      '沒有性別:小二/無日/照顧/沒號/怪號/未來', '沒有入所原因:甲長/乙長/丙長/小一/小二/無日/照顧/沒號/怪號/未來']);
     const photos = new Map(dogs.filter(d => d.id).map(d => [d.id, d.name !== '乙長']));
     eq(names(dataCompleteness(rows, photos).items[5].dogs), ['乙長', '沒號'], '沒有照片：');
   });
@@ -1199,10 +1199,15 @@ async function runHistoryTests() {
       hideAnalysis(); history.replaceState(null, '');
       // 詳細資訊
       showDetail(dogs[0]);
-      const sec = document.querySelector('#detail [data-section="walks"]');
+      let sec = document.querySelector('#detail [data-section="walks"]');
       if (!sec) throw new Error('詳細資訊要有遛狗紀錄');
       eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-3), ['walks', 'intro', 'rest'], '位置在入所介紹前（入所介紹之後只剩休養設定，管理用；相簿 K 2026-10-09 拿掉）：');
       eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(0, 2), ['last', 'note'], 'V9（#141）上次溜／溜狗人在最前面，接著試算表備註：');
+      // 減法（10-10 K：格子很棒但眼花）：預設只有一行字，按「看每一天」才展開格子
+      eq([sec.querySelectorAll('.w-grid').length, document.getElementById('walksToggle').getAttribute('aria-expanded'), sec.querySelector('.w-more').textContent], [0, 'false', '看每一天'], '預設收起來：');
+      document.getElementById('walksToggle').click();
+      sec = document.querySelector('#detail [data-section="walks"]');
+      eq([document.getElementById('walksToggle').getAttribute('aria-expanded'), sec.querySelector('.w-more').textContent], ['true', '收起'], '展開：');
       eq([sec.querySelectorAll('.w-grid .on').length, sec.querySelectorAll('.w-grid .none').length, sec.querySelectorAll('.w-grid span').length], [14, 2, 30], '格子：');
       eq([...sec.querySelectorAll('.w-sum b')].map(b => b.textContent), ['14', '2.3', '6'], '數字（一行字，不是三格）：');
       eq(sec.querySelectorAll('.w-num').length, 0, '沒有統計卡：');
@@ -1878,33 +1883,45 @@ async function runRestTests() {
       hideDetail(); hideToast();
       eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['固定丙', '休養甲', '一般乙'], '設好的那隻也排到最下面：');
     });
-    await check('入所介紹（10-10 補資料）：管理用、要通關碼，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {
+    await check('入所原因（10-10 減法）：點那一段直接改（不另外放按鈕）、選一個原因＋拾獲地點，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {
       const calls = [];
       window.fetch = async (u, o) => {
         calls.push([String(u), o && o.method, o && JSON.parse(o.body)]);
         const b = JSON.parse(o.body);
         if (b.passcode !== '對的') return json({ ok: false, error: '通關碼不對', code: 'passcode' }, 401);
-        return json({ ok: true, id: '9613', intro: b.text });
+        return json({ ok: true, id: '9613', reason: b.reason, place: b.place });
       };
       saveNotesPass('');
-      showDetail(allDogs[2]);
-      eq(document.getElementById('introEdit').textContent.startsWith('補介紹'), true, '沒介紹寫補介紹：');
+      const dog = allDogs[2];
+      dog.intro = '2023年迷路進來,個性害羞';
+      showDetail(dog);
+      const sec = () => document.querySelector('#detail [data-section="intro"]');
+      eq([sec().querySelector('h3').textContent, sec().querySelector('#introEdit').classList.contains('blank'), sec().querySelector('.intake-prose').textContent], ['入所原因', true, '2023年迷路進來,個性害羞'], '沒填：整塊可以點，舊的敘述照留：');
+      eq(document.querySelectorAll('#detail [data-section="rest"] .admin-btn').length, 1, '管理用只剩設定休養中：');
       document.getElementById('introEdit').click();
-      eq([!!document.querySelector('#detail .detail-bar [form="introForm"]'), !!document.querySelector('#detail .detail-bar #groupWalk')], [true, false], '底部列換成儲存介紹、溜了收起來：');
-      const text = document.getElementById('introText');
-      text.value = '  親人\n喜歡散步  '; text.dispatchEvent(new Event('input', { bubbles: true }));
-      eq(document.querySelector('.intro-count').textContent, '11 / 1000 字', '字數：');
+      eq([!!document.querySelector('#detail .detail-bar [form="introForm"]'), !!document.querySelector('#detail .detail-bar #groupWalk')], [true, false], '底部列換成儲存、溜了收起來：');
+      eq([...document.querySelectorAll('#introForm .intake-opt')].map(b => b.textContent), SITE.intakeReasons.map(r => r.name), '五個原因：');
+      eq(!!document.getElementById('introPlace'), false, '還沒選原因不問地點：');
+      const pick = n => document.querySelector(`#introForm [data-intake-reason="${n}"]`).click();
+      pick('飼主不續養');
+      eq([introEdit.reason, !!document.getElementById('introPlace')], ['飼主不續養', false], '不續養不用地點：');
+      pick('民眾拾獲');
+      eq([introEdit.reason, document.querySelector('#introForm .intake-opt.on').getAttribute('aria-checked'), !!document.getElementById('introPlace')], ['民眾拾獲', 'true', true], '拾獲要地點：');
+      const place = document.getElementById('introPlace');
+      place.value = '  樹林區  大同山 '; place.dispatchEvent(new Event('input', { bubbles: true }));
       const pass = document.getElementById('introPass');
       pass.value = '對的'; pass.dispatchEvent(new Event('input', { bubbles: true }));
       document.getElementById('introForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       await new Promise(r => setTimeout(r, 20));
-      eq([calls.length, calls[0][0], calls[0][1], calls[0][2].text], [1, 'https://worker.test/intro/9613', 'PUT', '親人\n喜歡散步'], '送出：');
-      eq([introEdit, introOf(allDogs[2]), loadNotesPass()], [null, '親人\n喜歡散步', '對的'], '成功：');
-      eq(document.querySelector('[data-section="intro"] .content').textContent, '親人\n喜歡散步', '馬上看到：');
-      eq(document.getElementById('introEdit').textContent.startsWith('改介紹'), true, '有介紹寫改介紹：');
+      eq([calls.length, calls[0][0], calls[0][1], calls[0][2].reason, calls[0][2].place, 'text' in calls[0][2]], [1, 'https://worker.test/intro/9613', 'PUT', '民眾拾獲', '樹林區 大同山', false], '送出（不動舊的敘述）：');
+      eq([introEdit, intakeOf(dog), loadNotesPass()], [null, { reason: '民眾拾獲', place: '樹林區 大同山' }, '對的'], '成功：');
+      eq([sec().querySelector('.intake-tag').textContent, sec().querySelector('.intake-place').textContent, sec().querySelector('#introEdit').classList.contains('blank')], ['民眾拾獲', '拾獲地點樹林區 大同山', false], '馬上看到：');
       if (calls.some(c => /sheet|script\.google/.test(c[0]))) throw new Error('不應該寫試算表');
+      // 收容所系統那種「拾獲地點：○ 進所原因：○」的舊介紹已經讀成標籤，不再重複顯示
+      eq([introOf({ intro: '拾獲地點：樹林區 進所原因：民眾拾獲' }), introOf({ intro: '親人' })], ['', '親人'], '舊介紹：');
       hideDetail(); hideToast();
       delete introOverrides['9613'];
+      dog.intro = '';
     });
     await check('找狗的「最久沒溜的狗」、分析頁「超過 3 天沒溜」不算休養中的狗', () => {
       const due = dueDogs(allDogs, T).filter(d => { const st = computeStatus(d, T); return st.kind === 'unknown' || (st.kind === 'dated' && st.days >= AMBER_DAYS); });
@@ -2567,22 +2584,29 @@ async function runCageMateTests() {
       eq(cageMates(allDogs[0]).map(d => d.name), ['阿黑', '花花'], '新A03：');
       eq(cageMates(allDogs[3]), [], '獨自一籠：');
       eq(cageMates(allDogs[4]), [], '住院區：');
-      eq(cageMatesSection(allDogs[3], new Set()), '', '沒有同籠就不顯示：');
     });
-    await check('同籠：詳細資訊顯示同籠的狗，勾選後用下方按鈕一起記', () => {
-      const html = detailHtml(allDogs[0], TODAY);
-      const box = document.createElement('div');
-      box.innerHTML = html;
-      const sec = box.querySelector('[data-section="cage"]');
-      if (!sec) throw new Error('沒有同籠的狗這一段');
-      eq([...sec.querySelectorAll('.bname')].map(n => n.textContent), ['阿黑', '花花']);
-      eq(sec.querySelectorAll('.pick').length, 2, '勾選圓圈：');
-      if (html.indexOf('data-section="cage"') > html.indexOf('data-section="group"')) throw new Error('同籠要放在可以一起溜上面');
-      recordWalked([allDogs[1]], true, TODAY);
-      const box2 = document.createElement('div');
-      box2.innerHTML = cageMatesSection(allDogs[0], walkedToday(TODAY));
-      eq(box2.querySelectorAll('.pick').length, 1, '今天已溜的不顯示圓圈：');
-      if (!box2.querySelector('.walked-tag')) throw new Error('今天已溜的要標「今天已溜」');
+    await check('同籠、可以一起溜合成一段（10-10 減法）：同一隻只出現一次，同籠的排前面、標「同籠」，一樣可以勾選一起記', () => {
+      const savedGroups = groupMap;
+      try {
+        // 阿黑同籠又登記可以一起溜；獨行不同籠、只有登記
+        groupMap = { ...groupMap, [allDogs[0].name]: new Set([allDogs[1].name, allDogs[3].name]) };
+        const html = detailHtml(allDogs[0], TODAY);
+        const box = document.createElement('div');
+        box.innerHTML = html;
+        if (box.querySelector('[data-section="cage"]')) throw new Error('不該再有另一段同籠的狗');
+        const sec = box.querySelector('[data-section="group"]');
+        eq([...sec.querySelectorAll('.bname')].map(n => n.textContent), ['阿黑', '花花', allDogs[3].name], '不重複、同籠在前：');
+        eq([...sec.querySelectorAll('.buddy-tile')].map(t => !!t.querySelector('.mate-tag')), [true, true, false], '同籠的標出來：');
+        eq(sec.querySelectorAll('.pick').length, 3, '勾選圓圈：');
+        recordWalked([allDogs[1]], true, TODAY);
+        const box2 = document.createElement('div');
+        box2.innerHTML = togetherSection(allDogs[0], walkedToday(TODAY));
+        eq(box2.querySelectorAll('.pick').length, 2, '今天已溜的不顯示圓圈：');
+        if (!box2.querySelector('.walked-tag')) throw new Error('今天已溜的要標「今天已溜」');
+        groupMap = savedGroups;
+        box2.innerHTML = togetherSection(allDogs[3], new Set());
+        eq([box2.querySelectorAll('.buddy-tile').length, box2.querySelector('.empty').textContent], [0, '沒有同籠，也沒有登記可以一起溜的狗'], '都沒有：');
+      } finally { groupMap = savedGroups; }
     });
     await check('V7 小修正：詳細資訊不再有中間的「在哪裡」卡片，底部「在哪」照樣開面板', () => {
       const html = detailHtml(allDogs[0], TODAY);
@@ -2950,11 +2974,11 @@ async function runDeskTests() {
       eq(calls, [[['桌紅', '桌黃'], true]], '一次登記：');
       eq([deskChecked.size, main.querySelector('.desk-batch')], [0, null], '清掉：');
     });
-    await check('電腦版補資料（10-10）：沒照片、沒介紹的狗一列一隻，兩樣都缺的在最前面；照片、介紹都走詳細資訊', () => {
+    await check('電腦版補資料（10-10）：沒照片、沒入所原因的狗一列一隻，兩樣都缺的在最前面', () => {
       const pv = photoVersions;
       try {
         photoVersions = { 'photos/2026010102.jpg': 'a', 'photos/2026010103.jpg': 'b' };
-        allDogs[1].intro = '有介紹'; allDogs[2].intro = '有介紹';
+        allDogs[1].reason = '民眾拾獲'; allDogs[2].reason = '飼主不續養';
         eq(allDogs.map(d => deskFillNeeds(d)), [{ photo: true, intro: true }, { photo: false, intro: false }, { photo: false, intro: false }, { photo: true, intro: true }], '缺什麼：');
         deskView = 'fill'; deskFill = 'all'; deskFillOrder = null;
         const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', sortWalkList(allDogs, TODAY)), 'text/html');
@@ -2963,7 +2987,8 @@ async function runDeskTests() {
         eq([doc.querySelectorAll('.df-drop').length, doc.querySelector('.desk-brief')], [2, null], '沒照片的格子、補資料不放簡報：');
         eq(doc.querySelectorAll('[data-fill-photo]').length + doc.querySelectorAll('[data-fill-intro]').length, 8, '照片、介紹那兩格本身可以點：');
         eq(doc.querySelectorAll('.df-btn, .df-act').length, 0, '不另外設按鈕（10-10 K）：');
-      } finally { photoVersions = pv; deskView = 'sheet'; deskFill = 'all'; deskFillOrder = null; allDogs[1].intro = ''; allDogs[2].intro = ''; }
+        eq([doc.querySelector('.df-table th.df-intro').textContent, doc.querySelectorAll('.df-intro-btn .intake-tag').length], ['入所原因', 2], '那一欄是入所原因的標籤：');
+      } finally { photoVersions = pv; deskView = 'sheet'; deskFill = 'all'; deskFillOrder = null; allDogs[1].reason = ''; allDogs[2].reason = ''; }
     });
     await check('這間收容所的設定集中在 js/site-config.js（10-10 K：以後其他收容所可以搬去用）：門檻、警示字、分區不寫死在別的檔', () => {
       eq([AMBER_DAYS, RED_DAYS, SPECIAL_KEYWORDS === SITE.warnKeywords, DESK_ZONES === SITE.zones], [SITE.days.amber, SITE.days.red, true, true], '都讀 SITE：');
@@ -2971,54 +2996,79 @@ async function runDeskTests() {
       if (INDEX_HTML.indexOf('js/site-config.js') < 0 || INDEX_HTML.indexOf('js/site-config.js') > INDEX_HTML.indexOf('src="js/app.js"')) throw new Error('index.html 要先載入 js/site-config.js');
       if (/const (AMBER_DAYS|RED_DAYS) = [0-9]/.test(APP_JS) || APP_JS.includes('[\'勿溜\'')) throw new Error('js/app.js 不該再寫死門檻或警示字');
     });
-    await check('補資料直接在表格裡補（10-10 K）：點介紹原地編輯、儲存有狀態；補好的狗留在原位、打勾，順序不跳', async () => {
+    await check('補資料直接在表格裡補（10-10 K）：點入所原因原地選、儲存有狀態；補好的狗留在原位、打勾，順序不跳', async () => {
       if (!deskOn()) return; // 測試的瀏覽器不夠寬就不測畫面
       const saved2 = [UPLOAD_URL, window.fetch, photoVersions];
       const names = () => [...main.querySelectorAll('.df-row .dr-name button')].map(b => b.textContent);
       try {
         UPLOAD_URL = 'https://worker.test'; saveNotesPass('');
         photoVersions = { 'photos/2026010102.jpg': 'a', 'photos/2026010103.jpg': 'b', 'photos/2026010104.jpg': 'c' };
-        allDogs[1].intro = '有介紹'; allDogs[2].intro = '有介紹';
+        allDogs[1].reason = '民眾拾獲'; allDogs[2].reason = '飼主不續養';
         deskView = 'fill'; deskFill = 'intro'; deskFillOrder = null; deskFillDone.clear(); deskFillIntro = null;
         activeTab = 'walk'; searchQuery = ''; render();
         const before = names();
-        eq(before.slice().sort(), ['桌無', '桌紅'], '沒介紹的兩隻：');
+        eq(before.slice().sort(), ['桌無', '桌紅'], '沒入所原因的兩隻：');
         const calls = [];
-        let pass = '錯的';
         window.fetch = async (u, o) => {
-          calls.push([String(u), o.method, JSON.parse(o.body)]);
-          return JSON.parse(o.body).passcode === '對的'
-            ? new Response(JSON.stringify({ ok: true, intro: JSON.parse(o.body).text }))
+          const b = JSON.parse(o.body);
+          calls.push([String(u), o.method, b]);
+          return b.passcode === '對的'
+            ? new Response(JSON.stringify({ ok: true, reason: b.reason, place: b.place }))
             : new Response(JSON.stringify({ ok: false, error: '通關碼不對', code: 'passcode' }), { status: 401 });
         };
         const first = before[0];
         main.querySelector('.df-row [data-fill-intro]').click();
-        const box = document.getElementById('dfIntroText');
-        eq([!!box, !!document.getElementById('dfIntroPass'), !!detailDog], [true, true, false], '原地變成文字框、不開詳細資訊：');
-        box.value = '親人，好牽'; box.dispatchEvent(new Event('input', { bubbles: true }));
+        eq([main.querySelectorAll('.df-form .intake-opt').length, !!document.getElementById('dfIntroPass'), !!document.getElementById('dfIntroPlace'), !!detailDog], [5, true, false, false], '原地變成五個原因、不開詳細資訊：');
+        main.querySelector('.df-form [data-intake-reason="政府處理案件"]').click();
+        const place = document.getElementById('dfIntroPlace');
+        place.value = '○○路○號'; place.dispatchEvent(new Event('input', { bubbles: true }));
         const type = v => { const p = document.getElementById('dfIntroPass'); p.value = v; p.dispatchEvent(new Event('input', { bubbles: true })); };
-        type(pass);
+        type('錯的');
         main.querySelector('[data-fill-form]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-        eq(main.querySelector('.df-st.busy').textContent, '介紹儲存中…', '按了馬上寫儲存中：');
+        eq(main.querySelector('.df-st.busy').textContent, '入所原因儲存中…', '按了馬上寫儲存中：');
         await new Promise(r => setTimeout(r, 20));
-        eq([main.querySelector('.df-st.err').textContent.includes('通關碼不對'), document.getElementById('dfIntroText').value], [true, '親人，好牽'], '沒成功寫原因、打的字還在：');
+        eq([main.querySelector('.df-st.err').textContent.includes('通關碼不對'), document.getElementById('dfIntroPlace').value, main.querySelector('.df-form .intake-opt.on').textContent], [true, '○○路○號', '政府處理案件'], '沒成功寫原因、選的和打的字還在：');
         type('對的');
         main.querySelector('[data-fill-form]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         await new Promise(r => setTimeout(r, 20));
-        eq([calls.length, calls[1][0].startsWith('https://worker.test/intro/'), calls[1][1], calls[1][2].text], [2, true, 'PUT', '親人，好牽'], '送出：');
+        eq([calls.length, calls[1][0].startsWith('https://worker.test/intro/'), calls[1][1], calls[1][2].reason, calls[1][2].place], [2, true, 'PUT', '政府處理案件', '○○路○號'], '送出：');
         const row = main.querySelector('.df-row');
-        eq([names(), row.classList.contains('done'), row.querySelector('.df-st.ok').textContent.includes('介紹已儲存'), row.querySelector('.df-intro-text').textContent], [before, true, true, '親人，好牽'], '補好了留在原位、打勾、看得到新介紹：');
+        eq([names(), row.classList.contains('done'), row.querySelector('.df-st.ok').textContent.includes('入所原因已儲存'), row.querySelector('.intake-tag').textContent, row.querySelector('.intake-place').textContent], [before, true, true, '政府處理案件', '拾獲地點○○路○號'], '補好了留在原位、打勾、看得到新的標籤：');
         eq([deskFillIntro, main.querySelector('.df-done-n').textContent.includes('這次補好 1 隻'), names()[0]], [null, true, first], '上面寫這次補好幾隻：');
         hideToast();
-        // 換篩選才重排：補好的那隻不再算沒介紹
+        // 換篩選才重排：補好的那隻不再算沒入所原因
         main.querySelector('[data-desk-fill="all"]').click(); main.querySelector('[data-desk-fill="intro"]').click();
         eq(names().includes(first), false, '換篩選後才離開清單：');
       } finally {
         [UPLOAD_URL, window.fetch, photoVersions] = saved2;
         for (const d of allDogs) delete introOverrides[d.id];
-        allDogs[1].intro = ''; allDogs[2].intro = '';
+        allDogs[1].reason = ''; allDogs[2].reason = '';
         deskFillIntro = null; deskFillDone.clear(); deskFillOrder = null; deskView = 'sheet'; deskFill = 'all'; saveNotesPass(''); hideToast(); render();
       }
+    });
+    await check('電腦版全表（10-10 K）：同一欄再點一次反過來排、三角形跟著換；點整列開詳細資訊，勾選那一格不算', () => {
+      if (!deskOn()) return;
+      try {
+        deskView = 'sheet'; deskSort = 'days'; deskSortRev = false; deskZone = 'all';
+        activeTab = 'walk'; searchQuery = ''; render();
+        const rows = () => [...main.querySelectorAll('.desk-table tbody tr.dr .dr-name button')].map(b => b.textContent);
+        const head = k => main.querySelector(`[data-desk-sort="${k}"]`).closest('th');
+        const days = rows();
+        eq([head('days').getAttribute('aria-sort'), head('days').classList.contains('desc')], ['descending', true], '天數預設最久的在上面：');
+        main.querySelector('[data-desk-sort="days"]').click();
+        eq([rows(), head('days').getAttribute('aria-sort'), head('days').classList.contains('asc')], [days.slice().reverse(), 'ascending', true], '再點一次反過來：');
+        main.querySelector('[data-desk-sort="cage"]').click();
+        const cages = rows();
+        eq([head('cage').getAttribute('aria-sort'), head('days').getAttribute('aria-sort'), deskSortRev], ['ascending', 'none', false], '換一欄從預設方向開始：');
+        main.querySelector('[data-desk-sort="cage"]').click();
+        eq([rows(), head('cage').getAttribute('aria-sort')], [cages.slice().reverse(), 'descending'], '籠位也能反過來：');
+        const row = main.querySelector('.desk-table tbody tr.dr');
+        row.querySelector('.dr-ck').click();
+        eq(detailDog, null, '勾選那一格不開：');
+        row.querySelector('.dr-note').click();
+        eq(detailDog === allDogs[Number(row.dataset.deskDog)], true, '點備註那一格也開這隻狗：');
+        hideDetail(); history.replaceState(null, '');
+      } finally { deskSort = 'days'; deskSortRev = false; render(); }
     });
     await check('補資料的照片：選了先在那一格預覽，按「上傳」才送；上傳中、已上傳都寫在那一列', async () => {
       if (!deskOn()) return;
@@ -3521,7 +3571,10 @@ async function runDepartureTests() {
       allDogs = [{ name: '雪寶', id: '2026100801', cage: 'A1', walkedDate: null, covered: false, note: '', intro: '', sex: '', formerIds: ['2026021301'] }];
       historyData = { state: 'ready', dates: [], walks: [] };
       const box = document.createElement('div');
+      detailWalksOpen = true; // 溜狗紀錄展開才看得到「10/1 離所」
       box.innerHTML = detailHtml(list[0], OCT8);
+      detailWalksOpen = false;
+      eq([!!box.querySelector('#introEdit'), box.querySelector('[data-section="intro"] h3').textContent], [false, '入所原因'], '離所的狗入所原因只能看：');
       eq(box.querySelector('.chips .badge').textContent, '已認養 · 10/1');
       const dep = box.querySelector('[data-section="departure"]').textContent;
       if (!dep.includes('已出所分頁寫了「被認養」') || !dep.includes('C區35')) throw new Error(dep);

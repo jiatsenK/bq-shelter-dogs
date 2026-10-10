@@ -124,7 +124,7 @@ function dataCompleteness(rows, hasPhoto) {
     { label: '編號看不出入所日期', dogs: pick(r => r.dog.id && !r.intake) },
     { label: '沒有溜狗日期', dogs: pick(r => !r.dog.walkedDate) },
     { label: '沒有性別', dogs: pick(r => !r.dog.sex) },
-    { label: '沒有入所介紹', dogs: pick(r => !r.dog.intro) },
+    { label: '沒有入所原因', dogs: pick(r => !intakeOf(r.dog).reason) },
   ];
   if (hasPhoto) items.push({ label: '沒有照片', dogs: pick(r => !r.dog.id || hasPhoto.get(r.dog.id) === false) });
   return { total: rows.length, items };
@@ -385,7 +385,8 @@ function mdText(d) {
   return d ? `${d.getMonth() + 1}/${d.getDate()}` : '沒有紀錄';
 }
 
-// 詳細資訊的「遛狗紀錄」：最近 30 天的格子＋三個數字
+// 詳細資訊的「遛狗紀錄」：一行字（最近 30 天溜幾次、平均、最久）；按「看每一天」才展開 30 天的格子
+// （K 2026-10-10 減法：格子很棒但讓人眼花，預設收起來）
 // 離所的狗（#164）只畫到離所那天，之後的日子不算「沒溜」
 function walkHistorySection(dog, today) {
   const end = dog.departure && dog.departure.date && dog.departure.date < today ? dog.departure.date : null;
@@ -403,10 +404,12 @@ function walkHistorySection(dog, today) {
   const sum = [`最近 30 天溜 <b>${h.count}</b> 次`];
   if (h.avgGap != null) sum.push(`平均 <b>${h.avgGap.toFixed(1)}</b> 天溜一次`);
   if (h.maxGap != null) sum.push(`最久 <b>${h.maxGap}</b> 天沒溜`);
-  return wrap(`
+  const open = typeof detailWalksOpen !== 'undefined' && detailWalksOpen;
+  const toggle = `<button type="button" class="w-toggle" id="walksToggle" aria-expanded="${open}"><span class="w-sum">${sum.join('<span class="sep">·</span>')}</span><span class="w-more">${open ? '收起' : '看每一天'}</span></button>`;
+  if (!open) return wrap(toggle);
+  return wrap(`${toggle}
     <div class="w-grid">${h.cells.map(cell).join('')}</div>
     <div class="w-axis"><span>${mdText(first)}</span><span>${end ? `${mdText(end)} 離所` : '今天'}</span></div>
-    <p class="w-sum">${sum.join('<span class="sep">·</span>')}</p>
     <div class="w-legend"><span><i class="on"></i>有溜</span><span><i class="off"></i>沒溜</span>${h.cells.some(c => !c.recorded) ? '<span><i class="none"></i>還沒開始記錄</span>' : ''}</div>
     <div class="w-note">從 ${start ? `${start.getFullYear()}/${mdText(start)}` : '同步'} 開始記錄，同一天溜幾次都算一格。</div>`);
 }
