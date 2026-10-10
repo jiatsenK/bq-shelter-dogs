@@ -1838,29 +1838,32 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .rest-hint { margin: -4px 0 0; font-size: 13px; color: var(--ink-soft); }
 /* 入所介紹（K 2026-10-10 補資料）：跟休養設定同一種表單 */
 .admin-btns { display: flex; gap: 8px; flex-wrap: wrap; }
-.admin-btn { flex: 1 1 140px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 14px; border: none; border-radius: 3px; background: var(--surface-soft); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink); font: inherit; font-size: 15px; font-weight: 700; cursor: pointer; }
+/* 比底部「關閉／在哪」輕一階：白底細框、灰字，不要看起來像第二排主要動作 */
+.admin-btn { flex: 1 1 140px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 14px; border: none; border-radius: 3px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); color: var(--ink-soft); font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
 .admin-btn .icon { color: var(--ink-soft); font-size: 17px; }
 .admin-btn:active { background: var(--primary-soft); }
 /* 我溜過月曆（K 2026-10-10）：一個月一張，有來的那天塗檔案綠、寫溜幾隻 */
-.mine-cal { margin: 0 0 12px; padding: 12px 12px 14px; background: var(--surface); border-radius: 3px; box-shadow: inset 0 0 0 1px var(--line); }
-.mc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.mine-cal { margin: 0 0 12px; padding: 12px 6px 14px; background: var(--surface); border-radius: 3px; box-shadow: inset 0 0 0 1px var(--line); }
+.mc-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; padding: 0 6px; }
 .mc-title { flex: 1; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 18px; font-weight: 800; }
 .mc-title span { font-size: 13px; font-weight: 500; color: var(--ink-soft); }
 .mc-title span b { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
 .mc-nav { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: none; border-radius: 3px; background: var(--surface-soft); color: var(--ink); font-size: 20px; cursor: pointer; }
 .mc-nav.next .icon { transform: scaleX(-1); }
 .mc-nav:disabled { opacity: .35; cursor: default; }
-.mc-week, .mc-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.mc-week, .mc-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
 .mc-week { margin-bottom: 4px; font-size: 12px; color: var(--ink-soft); text-align: center; }
 .mc-cell { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px; min-height: 48px; padding: 0; border: none; border-radius: 3px; background: none; color: var(--ink-soft); font: inherit; font-variant-numeric: tabular-nums; }
 .mc-cell b { font-size: 15px; font-weight: 500; line-height: 1.1; }
-.mc-cell small { font-size: 11px; font-weight: 700; line-height: 1.1; }
-.mc-cell.today { box-shadow: inset 0 0 0 1.5px var(--line); }
+.mc-cell small { font-size: 12px; font-weight: 700; line-height: 1.1; }
+.mc-cell.today { box-shadow: inset 0 0 0 2px var(--ink-soft); }
+.mc-cell.today b { font-weight: 800; color: var(--ink); }
 .mc-cell.on { background: var(--primary-soft); color: var(--shell); cursor: pointer; }
 .mc-cell.on b { font-weight: 800; color: var(--ink); }
 .mc-cell.on.sel { background: var(--shell); color: #fff; }
 .mc-cell.on.sel b { color: #fff; }
-.mc-cell.on:focus-visible { outline: 3px solid var(--tab-amber); outline-offset: 1px; }
+.mc-cell.on.sel.today { box-shadow: inset 0 0 0 2px var(--shell), inset 0 0 0 4px #fff; }
+.who-hint .who-edit { white-space: nowrap; flex: none; }
 .intro-form textarea { min-height: 150px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 3px; padding: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; line-height: 1.6; resize: vertical; }
 .intro-form textarea:focus { outline: 2px solid var(--primary); outline-offset: 0; }
 .intro-count { align-self: flex-end; font-size: 12.5px; font-variant-numeric: tabular-nums; }
@@ -2036,12 +2039,13 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .db-tag.red, .dr-day.red { background: var(--tab-red); color: #fff; }
   .db-tag.amber, .dr-day.amber { background: var(--tab-amber); color: var(--ink); }
   .db-tag.sage, .dr-day.sage { color: var(--green-text); }
+  .db-tag.sage { justify-content: flex-start; min-width: 0; padding: 0; }
   .db-tag.none, .dr-day.none { background: var(--tab-muted); color: #fff; }
   .db-tag.rest, .dr-day.rest { color: var(--ink-soft); box-shadow: inset 0 0 0 1px var(--line); }
-  .db-zones { display: grid; align-content: start; }
+  .db-zones { display: grid; align-content: start; grid-template-columns: 96px minmax(60px, 1fr) max-content minmax(96px, 184px); column-gap: 16px; }
   .db-zones { min-width: 0; }
   /* 1280 也放得下：色條和「最久」那欄跟著縮，名字太長就 … */
-  .db-zone { display: grid; grid-template-columns: 96px minmax(60px, 1fr) max-content minmax(96px, 184px); align-items: center; gap: 16px; height: 34px; padding: 0 10px; border: none; border-radius: 3px; background: none; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+  .db-zone { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: center; height: 34px; padding: 0 10px; border: none; border-radius: 3px; background: none; color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
   .db-zone:hover { background: var(--surface-soft); }
   .db-zone.on { background: var(--primary-soft); }
   .db-zn { font-size: 15px; font-weight: 800; white-space: nowrap; }
@@ -2052,7 +2056,7 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .db-bar .amber { background: var(--tab-amber); }
   .db-bar .none { background: var(--tab-muted); }
   .db-bar .sage { background: #A9CDB5; }
-  .db-zs { display: flex; gap: 10px; font-size: 13px; font-weight: 700; white-space: nowrap; }
+  .db-zs { display: flex; justify-content: flex-end; gap: 10px; font-size: 13px; font-weight: 700; white-space: nowrap; }
   .db-zs .r { color: var(--red-text); }
   .db-zs .a { color: var(--amber-text); }
   .db-zs .g { color: var(--green-text); font-weight: 600; }
@@ -2075,6 +2079,8 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .dt-view button.on { color: var(--ink); font-weight: 800; border-bottom-color: var(--shell); }
   .dt-hint { margin-left: auto; align-self: center; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; color: var(--ink-soft); white-space: nowrap; }
   .dt-view { flex: none; }
+  @media (max-width: 1359px) { .dt-tip { display: none; } .desk-brief { gap: 24px; } .db-counts { gap: 18px; } }
+  @media (max-width: 1203px) { .desk-table thead th.dr-d { font-size: 9px; } }
   .dt-hint b { color: var(--ink); }
 
   /* 全表：一列一隻，狗名和天數最先看到；備註字小一級、一行，滑過看全文、點狗名看詳細資訊 */
@@ -2087,6 +2093,8 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .days30 .desk-table thead th { top: 0; }
   .desk-table thead th button { height: 38px; padding: 0; border: none; background: none; font: inherit; color: inherit; cursor: pointer; }
   .desk-table thead th.sorted button { color: var(--ink); }
+  .desk-table thead th.dr-dayc button { position: relative; width: 62px; text-align: center; }
+  .desk-table thead th.dr-dayc.sorted button::after { position: absolute; right: 0; top: 50%; margin: -2px 0 0; }
   .desk-table thead th.sorted button::after { content: ''; display: inline-block; margin-left: 5px; vertical-align: 2px; border: 4px solid transparent; border-top-color: currentColor; border-bottom: none; }
   .desk-table tbody td { height: 46px; padding: 0 10px; border-bottom: 1px solid #E6EBE8; vertical-align: middle; }
   .desk-table tbody tr:hover td { background: #F7F9F8; }
@@ -2119,7 +2127,7 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .desk-table thead th.dr-d span { display: block; }
   .desk-table thead th.dr-d.we { color: var(--ink); font-weight: 800; }
   .desk-table .dr-d.today { box-shadow: inset 2px 0 0 var(--shell), inset -2px 0 0 var(--shell); }
-  .dr-d i { display: block; width: 14px; height: 14px; margin: 0 auto; border-radius: 2px; background: var(--surface-soft); }
+  .dr-d i { display: block; width: calc(100% - 3px); max-width: 14px; height: auto; aspect-ratio: 1; margin: 0 auto; border-radius: 2px; background: var(--surface-soft); }
   .dr-d i.on { background: #3E9A62; }
   .dr-d i.pre { background: repeating-linear-gradient(135deg, #E6EBE8 0 2px, transparent 2px 5px); }
   .desk-foot { margin: 0; padding: 10px; font-size: 12px; color: var(--ink-soft); }
