@@ -275,6 +275,25 @@ test('入所介紹：有通關碼就改 dogs/{編號}.md 的內文，frontmatter
   assert.equal(fresh.calls.find(c => c.method === 'PUT').body.sha, undefined);
 });
 
+test('入所原因（10-10 減法）：只送 reason、place 就只改 frontmatter 那兩行，內文和其他行照留；不用地點的原因不留地點', async () => {
+  const old = '---\nname: 測試狗\nid: 2024032902\nsex: female\n---\n舊的介紹\n';
+  const { store, calls } = fakeNotesGithub({ text: old, api: INTRO_API });
+  const r = await send(putIntro('2024032902', { passcode: '對的通關碼', reason: '民眾拾獲', place: '  樹林區\n大同山 ' }), NENV);
+  assert.deepEqual([r.status, r.body.reason, r.body.place, r.body.intro], [200, '民眾拾獲', '樹林區 大同山', undefined]);
+  assert.equal(store.text, '---\nname: 測試狗\nid: 2024032902\nsex: female\nreason: 民眾拾獲\nplace: 樹林區 大同山\n---\n舊的介紹\n');
+  assert.match(calls.find(c => c.method === 'PUT').body.message, /^改入所原因：2024032902（測試狗）/);
+  const r2 = await send(putIntro('2024032902', { passcode: '對的通關碼', reason: '飼主不續養' }), NENV);
+  assert.equal(r2.status, 200);
+  assert.equal(store.text, '---\nname: 測試狗\nid: 2024032902\nsex: female\nreason: 飼主不續養\n---\n舊的介紹\n');
+  const r3 = await send(putIntro('2024032902', { passcode: '對的通關碼', reason: '' }), NENV);
+  assert.deepEqual([r3.status, r3.body.reason], [200, '']);
+  assert.equal(store.text, old);
+  for (const body of [{ reason: 3 }, { reason: '字'.repeat(21) }, { reason: '民眾拾獲', place: '字'.repeat(61) }, {}]) {
+    const bad = await send(putIntro('2024032902', { passcode: '對的通關碼', ...body }), NENV);
+    assert.equal(bad.status, 400, JSON.stringify(body).slice(0, 40));
+  }
+});
+
 test('入所介紹：通關碼錯、太長、編號不對、不是 PUT 都擋；預覽版不能存', async () => {
   const { calls } = fakeNotesGithub({ text: '---\nname: 測試狗\n---\n舊的', api: INTRO_API });
   const bad = async (body, status, id = '2024032902') => {
