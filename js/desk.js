@@ -203,7 +203,7 @@ function deskFillHtml(list) {
       <p class="df-note">照片拖到那一列或按上傳（所有人都能傳，會先預覽）・介紹要通關碼，存在網站，不寫試算表。</p>
     </div>
     ${shown.length ? `<table class="desk-table df-table">
-      <thead><tr><th class="df-ph">照片</th><th class="df-name">狗名・籠位</th><th class="df-intro">入所介紹</th><th class="df-act"><span class="sr-only">補資料</span></th></tr></thead>
+      <thead><tr><th class="df-ph">照片</th><th class="dr-name">狗名</th><th class="dr-cagec">籠位</th><th class="df-intro">入所介紹</th><th class="df-act"><span class="sr-only">補資料</span></th></tr></thead>
       <tbody>${shown.map(({ d, need }) => {
         const idx = allDogs.indexOf(d);
         const intro = typeof introOf === 'function' ? introOf(d) : d.intro;
@@ -211,7 +211,8 @@ function deskFillHtml(list) {
         const photoLabel = need.photo || deskHasPhoto(d) === null ? '上傳照片' : '換照片';
         return `<tr class="df-row" ${d.id ? `data-fill-dog="${idx}"` : ''}>
           <td class="df-ph">${need.photo ? `<span class="df-drop">${icon('camera')}<span>拖照片<br>到這裡</span></span>` : photoThumb(d, 64)}</td>
-          <td class="df-name"><button type="button" data-desk-open="${idx}" aria-haspopup="dialog">${esc(d.name)}</button><span class="df-cage">${icon('pin')}${esc(d.cage)}</span></td>
+          <td class="dr-name"><button type="button" data-desk-open="${idx}" aria-haspopup="dialog">${esc(d.name)}</button></td>
+          <td class="dr-cagec">${typeof whereKnown === 'function' && whereKnown(d) ? `<button type="button" class="dr-cage" data-where data-dog-i="${idx}" aria-label="${esc(d.name)} 在哪：${esc(d.cage)}">${esc(d.cage)}</button>` : `<span class="dr-cage plain">${esc(d.cage)}</span>`}</td>
           <td class="df-intro">${!d.id ? '<span class="df-missing">沒有編號，試算表補上編號後才能補</span>' : intro ? `<div>${esc(intro)}</div>` : '<span class="df-missing">還沒有入所介紹</span>'}</td>
           <td class="df-act">
             <button type="button" class="df-btn${need.photo ? ' need' : ''}" data-fill-photo="${idx}"${off}>${icon('camera')}${photoLabel}</button>
