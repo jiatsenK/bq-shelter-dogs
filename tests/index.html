@@ -106,14 +106,16 @@ function runTests() {
       eq(box.querySelector('img'), null, '沒編號時的 img：');
       if (!box.querySelector('.thumb-fallback')) throw new Error('沒編號時沒有腳掌圖示');
     }),
-    check('詳細資訊：dogs.json 有狗卡資訊才顯示，沒有就顯示提示', () => {
+    check('詳細資訊：入所原因是一排標籤（10-10 K：介紹文字改成 tag），有填顯示原因和拾獲地點，沒填寫還沒填；舊的介紹文字不顯示', () => {
       const intro = dog => {
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        return box.querySelector('[data-section="intro"] .content');
+        return box.querySelector('[data-section="intro"]');
       };
-      eq(intro({ name: '宙斯', id: '202101234', cage: 'C03', walkedDate: null, covered: false, note: '', intro: '很親人' }).textContent, '很親人');
-      eq(intro({ name: '比比', id: '202102346', cage: 'A08', walkedDate: null, covered: false, note: '', intro: '' }), null, '沒狗卡：');
+      const a = intro({ name: '宙斯', id: '202101234', cage: 'C03', walkedDate: null, covered: false, note: '', intro: '很親人', reason: '民眾拾獲', place: '樹林區' });
+      eq([a.querySelector('.intake-tag').textContent, a.querySelector('.intake-place').textContent, a.textContent.includes('很親人'), a.querySelector('.content')], ['民眾拾獲', '拾獲地點樹林區', false, null]);
+      const b = intro({ name: '比比', id: '202102346', cage: 'A08', walkedDate: null, covered: false, note: '', intro: '' });
+      eq([b.querySelector('.intake-tag'), b.querySelector('.empty').textContent.startsWith('還沒填')], [null, true], '沒填：');
     }),
     // ── #7 搜尋 ──
     check('搜尋：犬名部分符合即可，忽略空白、全形與大小寫', () => {
@@ -260,7 +262,10 @@ function runTests() {
         box.innerHTML = detailHtml(dog, TODAY);
         eq(box.querySelectorAll('.info img, section img:not(.thumb img):not(.g-tile img), section b').length, 0, '詳細資訊裡被當成 HTML 的元素：');
         eq(box.querySelector('.buddy .bname').textContent, evil, '可一起遛原文：');
-        eq(box.querySelector('[data-section="intro"] .content').textContent, evil, '狗卡資訊原文：');
+        dog.reason = evil; dog.place = evil;
+        box.innerHTML = detailHtml(dog, TODAY);
+        eq([box.querySelector('[data-section="intro"] .intake-tag').textContent, box.querySelector('[data-section="intro"] .intake-place').lastChild.textContent, box.querySelectorAll('[data-section="intro"] img, [data-section="intro"] b').length], [evil, evil, 0], '入所原因、拾獲地點原文：');
+        delete dog.reason; delete dog.place;
         allDogs = [dog]; activeTab = 'walk'; searchQuery = '';
         render();
         eq(document.querySelectorAll('#main img:not(.thumb img)').length, 0, '清單被當成 HTML 的圖片：');
@@ -340,7 +345,7 @@ function runTests() {
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/thumbs/2.jpg', '一起溜的照片：');
         eq(buddy.querySelector('.bname').textContent, '好朋友');
-        eq(box.querySelector('[data-section="intro"] .content').textContent, '入所狗卡');
+        eq([box.querySelector('[data-section="intro"] .content'), box.querySelector('[data-section="intro"]').classList.contains('intake-row')], [null, true], '入所原因是一排，不放介紹文字：');
         dog.note = ''; dog.intro = ''; groupMap = {};
         box.innerHTML = detailHtml(dog, TODAY);
         eq([...box.querySelectorAll('section .empty')].length, 4, '都沒有資料時顯示提示（#60 遛狗紀錄讀取中也算；V9 拿掉我的備註；相簿 K 2026-10-09 拿掉）：');
@@ -1896,7 +1901,7 @@ async function runRestTests() {
       dog.intro = '2023年迷路進來,個性害羞';
       showDetail(dog);
       const sec = () => document.querySelector('#detail [data-section="intro"]');
-      eq([sec().querySelector('h3').textContent, sec().querySelector('#introEdit').classList.contains('blank'), sec().querySelector('.intake-prose').textContent], ['入所原因', true, '2023年迷路進來,個性害羞'], '沒填：整塊可以點，舊的敘述照留：');
+      eq([sec().querySelector('h3').textContent, sec().querySelector('#introEdit').classList.contains('blank'), sec().classList.contains('intake-row'), sec().textContent.includes('迷路進來')], ['入所原因', true, true, false], '沒填：一排、整排可以點；舊的介紹文字不再顯示（K：我就是要把介紹文字改成 tag）：');
       eq(document.querySelectorAll('#detail [data-section="rest"] .admin-btn').length, 1, '管理用只剩設定休養中：');
       document.getElementById('introEdit').click();
       eq([!!document.querySelector('#detail .detail-bar [form="introForm"]'), !!document.querySelector('#detail .detail-bar #groupWalk')], [true, false], '底部列換成儲存、溜了收起來：');

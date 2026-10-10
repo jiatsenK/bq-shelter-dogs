@@ -1404,8 +1404,9 @@ function intakeNeedsPlace(reason) {
   const r = SITE.intakeReasons.find(x => x.name === reason);
   return r ? r.place : !!reason;
 }
-// 入所時寫的那段敘述（舊資料）：照原樣放在原因下面，不能在網站改。
-// 整段只是「拾獲地點：○○ 進所原因：○○」的，同步時已經讀成原因和地點，不再重複顯示
+// 入所時寫的那段敘述（舊資料）：K 2026-10-10「我就是要把介紹文字改成 tag」，狗卡不再顯示；
+// 文字還留在 dogs/{編號}.md 和 dogs.json（之後整理成「個性與注意」用），這個函式只剩測試和以後要用時讀。
+// 整段只是「拾獲地點：○○ 進所原因：○○」的，同步時已經讀成原因和地點
 function introOf(dog) {
   const t = dog.intro || '';
   return /進所原因[：:]/.test(t) ? '' : t;
@@ -1422,16 +1423,14 @@ function intakeOptsHtml(reason, busy) {
 }
 function introSectionHtml(dog) {
   const e = introEdit && introEdit.dog === dog ? introEdit : null;
-  const prose = introOf(dog);
-  const proseHtml = prose ? `<div class="content intake-prose">${esc(prose)}</div>` : '';
   if (!e) {
+    // 一排就好（K 2026-10-10）：入所原因｜小標籤｜拾獲地點；整排可以點了改
     const tags = intakeTagsHtml(dog);
     const can = !!(dog.id && UPLOAD_URL) && !dog.departure;
     const body = tags || `<span class="empty">${can ? '還沒填，點這裡選' : '還沒填'}</span>`;
-    return `<section class="detail-section" data-section="intro">
+    return `<section class="detail-section intake-row" data-section="intro">
       <h3>${icon('card')}入所原因</h3>
       ${can ? `<button type="button" class="intake-btn${tags ? '' : ' blank'}" id="introEdit" aria-label="${tags ? '改' : '填'}入所原因">${body}${icon('write')}</button>` : `<div class="intake-static">${body}</div>`}
-      ${proseHtml}
     </section>`;
   }
   const busy = e.phase === 'saving';
@@ -1444,7 +1443,6 @@ function introSectionHtml(dog) {
       ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
       <p class="rest-hint">只存在網站，不寫試算表。</p>
     </form>
-    ${proseHtml}
   </section>`;
 }
 // 入所原因表單打開時的底部列：取消＋儲存（送出 #introForm）；溜了先收起來，跟換照片同一個做法（#146）
