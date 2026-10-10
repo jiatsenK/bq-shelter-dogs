@@ -38,7 +38,8 @@ const RED_DAYS = 5;
 
 let allDogs = [];
 let groupMap = {};
-let activeTab = 'walk';
+// 圖鑑（cards.html）的「去設定」連到 index.html#mine，直接打開我溜過
+let activeTab = typeof location !== 'undefined' && location.hash === '#mine' ? 'mine' : 'walk';
 let detailDog = null; // 詳細資訊正在看的狗
 let detailOpener = null;
 let detailTrail = []; // 在詳細資訊裡點「可以一起溜」換過的狗（#99）：可以按「回到 ○○」一隻一隻回去

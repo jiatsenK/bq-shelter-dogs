@@ -951,6 +951,34 @@
 - js/app.js：parseDogsData／applyDogsData 留 sheetNotes；renderMain 寬螢幕溜狗表交給 deskWalkHtml；導覽在電腦版改說勾選登記、最近 30 天。index.html 載入 js/desk.js。css/app.css 檔尾「電腦版」區塊。
 - impeccable：surface brief index-html 加「電腦版溜狗表」段；finish reviewer 兩輪（recapture 手機截圖 → fix 8 項 → 6 項 resolved、2 項缺截圖、1280 簡報被切），1280 我再修好並自己補截圖確認（籠位滑過、30 天往下捲表頭黏住），沒有第三輪。detect 的非 advisory 項目都是手機版原有的。
 - 測試：網頁加 runDeskTests 6 項（最後才載入 desk.js）、#30 script 清單加 desk.js；網頁 214 過（本機另 2 項 #130 老問題），node 130 過。PROJECT_GOALS、DESIGN_GUIDE 補說明。圖鑑（溜過才拿到卡）下一個 PR 改 #189。
+## 2026-10-09 Claude（電腦版：板收明星隊球員卡 cards.html）
+- 依據：K 2026-10-09 要電腦版展示（自己開來炫耀、給人看所內的狗），用 impeccable 做多個版本。第一版「畢業紀念冊」K 覺得「主題太老派」，沒上線；再做翻牌看板、球員卡、花磚牆三個原型，K 選球員卡（「很有互動性」），先做「1. 抽卡 2.獎項 3.收集冊」；K：「手機板是溜狗表」，球員卡只給電腦。
+- 新增 cards.html、css/cards.css、js/cards.js：燙金卡包撕開（上緣撕掉飛走、卡包落下、五張扇形攤開）、滑鼠傾斜＋彩虹反光＋亮點、點了翻背面（入隊日、在所多久、本月出門天數、收容所的話、卡號）；等級看在所多久（7 年雷射、5 年金、3 年銀、其他普卡），背號照入所順序；年度獎項（出門王、資深球星、新人王）資料算；收集冊記在各自瀏覽器（localStorage，可「換人收集」），先抽還沒收到的；沒照片的狗用剪影＋大背號補位。只讀 data/dogs.json、data/walks.json，不寫試算表、不顯示志工名字和警示。Anton＋Noto Sans TC 只有這頁從 Google Fonts 載入。
+- index.html：電腦（≥1100px、hover、pointer fine）打開首頁轉 cards.html；?app 或按「志工版溜狗表」記住、之後留在溜狗表。
+- impeccable：方向輪 seed d9edc232（K 選我的推薦）；surface brief .impeccable/surfaces/cards-html.md；finish reviewer 兩輪（fix → fix），剩下的照片裁切、雷射卡照片霧化兩項我再修掉、自己截圖確認，沒有第三輪；documenter 把球員卡世界寫進 DESIGN.md 和 .impeccable/design.json（溜狗表的病歷夾系統不動）。detect 剩下的是刻意的（撕口鋸齒 clip-path、金箔漸層起點的對比誤判）。
+- 測試：加 runCardsTests 9 項（球員資料、等級、本月出門、獎項、抽卡、收集冊、不寫試算表、電腦版轉址），#30 內嵌程式檢查排除電腦版轉址。網頁 216 過（本機另 2 項 #130 老問題），node 128 過。PROJECT_GOALS、DESIGN_GUIDE 補說明。之後再做：比大小、溜狗排隊、認狗測驗、像素溜狗遊戲。
+## 2026-10-10 Claude（#189 改成板收圖鑑：溜過才拿到卡、卡包自己撕、電腦版頁首入口）
+- 依據：K 2026-10-10：「我把溜狗表變成電腦網頁版，只是電腦可以有這種圖鑑，你有溜過的就可以拿到他的卡玩遊戲之類，所以可以有個入口進去」；沒溜過的狗「看得到，只是還沒卡」；新拿到的「包成卡包自己撕」。#190 電腦版溜狗表已合併，這次把 #189 rebase 到 main 後改寫。
+- js/cards.js：拿掉隨機抽卡和「換人收集」收集冊。你是誰用溜狗表「我溜過」的代號（localStorage bq-walker-codes）；你溜過誰看 data/walks.json（同一隻狗同一天以最後一筆為準，跟我溜過一樣）加今天在這個瀏覽器按的溜了（bq-sheet-writes，只看 mine）。還沒撕開的新卡包成卡包（一包最多 5 張、最近溜的先出），撕開過的記在 localStorage bq-zukan（跟著代號）；都開完就攤開最近溜的五張。卡背多「你溜過 N 天」、第一次溜的日期。圖鑑三種卡套：拿到的亮卡、待開的卡背、沒溜過的淡照片（點了開灰卡，寫溜過就拿得到）。沒設定代號時卡包壓暗、「去設定」連 index.html#mine。
+- cards.html／css/cards.css：標題改「板收圖鑑」，卡包紅標「N 張新卡」、圖例、灰卡樣式；「← 溜狗表」。index.html：拿掉電腦版自動轉 cards.html；頁首加「圖鑑」連結（只有電腦版顯示，css/app.css）。js/app.js：網址 #mine 直接開我溜過。
+- 只讀 dogs.json、walks.json 和溜狗表存的代號、今天已溜，只寫自己的 bq-zukan；不寫試算表、不顯示志工名字。
+- 測試：runCardsTests 換掉抽卡、收集冊、轉址三項，改成「我溜過的狗」「撕開過的、新卡」「首頁不轉、頁首有圖鑑入口」，並檢查 cards.js 只 setItem 自己的 key。PROJECT_GOALS、DESIGN_GUIDE、DESIGN.md 球員卡段、surface brief 改成圖鑑。
+## 2026-10-10 Claude（#189 圖鑑對齊、照片一律正方形）
+- 依據：K 2026-10-10：「整體頁面有很多未對齊的地方，請 impeccable 調整」「照片格式要統一」，選正方形。
+- css/cards.css：頁首右邊「← 溜狗表」和「已拿到」排成一列、跟大標題置中對齊（原本疊兩列、進度掉到標題下面）；卡面、卡套、獎座照片都改 1:1，卡面下方守備位置貼底；卡套不再用 5:7、照片和「待開」卡背都是正方形，名字對齊同一條線。cards.html：年度獎項的說明移到標題下面，跟圖鑑同一個排法。
+## 2026-10-10 Claude（#189 圖鑑 impeccable finish review 修正）
+- finish reviewer 兩輪（第一輪要求補截圖：各狀態 1440／1280、手機 390、滑鼠移開，存 .impeccable/review/zukan-*.png；第二輪 fix 8 項），全部照做，沒有第三輪，自己量過：卡包下面那一行在沒設定、沒溜過、有新卡、撕開四個狀態都在同一個高度。
+- css/cards.css：.bq-under 固定 164px 高；扇形整體往上扣回一半下沉，跟卡包同中心（js/cards.js bqFan）；「溜狗表」返回改 SVG 箭頭（原本是文字 ←）；大卡背景 .94；NEW 跟背號同一條頂線；灰卡照片底不露隊色；有字距的置中字補回最後一個字距（再開一包、去設定、提示字、卡包字）；隊色方塊外框畫在裡面、對齊卡套欄；圖鑑標題列圖例跟說明同基線；手機頁首左邊對齊。去設定按鈕自己一行置中；頁首右邊底部對齊。
+- DESIGN.md 球員卡段：獎座照片、卡套照片改 1:1，段落標題排法改成說明在標題下面。
+## 2026-10-10 Claude（#189 圖鑑第一屏加「往下看」）
+- 依據：K 看預覽版：「圖鑑第一次使用的人會不知道要往下滑」。
+- cards.html／css/cards.css：第一屏底部加「往下看　年度獎項・圖鑑」外框按鈕（金色箭頭輕輕上下動，減少動態時不動），按了捲到年度獎項；第一屏高度少 56px，下一段白底從畫面底部露出來。
+## 2026-10-10 Claude（#189 圖鑑改版面：圖鑑在上面、開卡包變按鈕、年度獎項先藏）
+- 依據：K 看預覽版：「年度獎項先藏起來（功能留著，先不顯示），先有圖鑑就好」「開卡跟圖鑑要想辦法做按鈕開卡…預設是圖鑑在上面，開卡是一個按鈕有動畫可以跑出來」。
+- cards.html：頁首獨立一條（.bq-top），下面直接是圖鑑；圖鑑標題右邊 #bqCta 依狀態放「開卡包（N 張新卡・幾包）」金色按鈕／去設定／一句說明；球場（#bqField）改成蓋住畫面的對話框，預設 hidden；年度獎項 section 加 hidden；拿掉上一版的「往下看」。
+- js/cards.js：bqRenderCta 取代 bqRenderField；bqOpenField／bqCloseField（Esc、右上角 ✕、「收進圖鑑」關閉，Tab 留在畫面裡，關掉後焦點回開卡包按鈕）；點「待開」卡套也開卡包；獎項 hidden 時不畫。拿掉「都開完攤開最近五張」。
+- css/cards.css：.bq-field fixed 全畫面、淡入，卡包從上面掉進來彈一下（減少動態時不動）；開卡包按鈕、收進圖鑑按鈕、圖例移到標題列下面。
+- 自己截圖確認 1440／1280：沒設定、沒溜過、有新卡、卡包、撕開、收進圖鑑、全部開完；finish review 這一版沒有再跑。
 ## 2026-10-10 Claude（電腦版補資料：照片、入所介紹；分析頁「‹ 回溜狗表」；手機列表籠位跟照片檢視一樣）
 - 依據：K 2026-10-10：「我希望電腦版可以讓我比較好補資料進去網站」（選補照片、狗的介紹／資料）；「< 分析 改成 ＜回到主頁面 之類的比較好懂」；「列表檢視的籠位排版位置很怪，而且視覺語言跟相片檢視的不一樣」；要我用 impeccable 自己把關。
 - worker/src/index.js：新增 PUT /intro/{編號}（通關碼、1000 字、頻率限制、預覽版不能存），只改 repo 的 dogs/{編號}.md 內文，frontmatter 照留、沒有檔就新建（name、id）；同樣內容不提交。dogs/ 推上去 sync-sheet.yml 會自動同步進 dogs.json。不寫試算表。worker 測試加 2 項。
