@@ -63,8 +63,6 @@ const REST_PATH = 'data/rest.json';
 // 入所介紹（K 2026-10-10 電腦版補資料）：寫 repo 的 dogs/{編號}.md 內文，不寫試算表
 const INTRO_DIR = 'dogs/';
 const INTRO_MAX_CHARS = 1000;
-const INTRO_REASON_MAX = 20;
-const INTRO_PLACE_MAX = 60;
 const REST_REASON_MAX = 40;
 const REST_MAX_DAYS = 180;
 // 編號只接受英數字（目前都是 10 位數字），也順便擋掉 ../ 之類的路徑
@@ -565,26 +563,10 @@ async function putRest(request, env, origin) {
 // ---- 入所介紹（K 2026-10-10）：PUT /intro/{編號}，通關碼，改 dogs/{編號}.md 的內文 ----
 // frontmatter（name、id、sex、formerIds…）照原樣留著，只換 --- 下面的文字；沒有這個檔就新建一個（name、id）。
 // 存好後 dogs/ 有變動，GitHub 會馬上同步一次（sync-sheet.yml 的 push 觸發），dogs.json 幾分鐘後就有新的介紹
-// 入所原因（K 2026-10-10 減法）：frontmatter 多 reason、place 兩行（拾獲地點）；有送 reason 才動這兩行，有送 text 才動內文
-function introFile(old, id, name, { text, reason, place } = {}) {
-  const src = old ? old.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n') : '';
-  const m = src.match(/^(---[ \t]*\n[\s\S]*?\n---[ \t]*)(?:\n|$)([\s\S]*)$/);
-  let head = m ? m[1] : `---\nname: ${String(name || '').replace(/\n/g, ' ')}\nid: ${id}\n---`;
-  if (reason !== undefined) {
-    const lines = head.split('\n').filter(l => !/^(reason|place):/i.test(l));
-    const end = lines.pop();
-    if (reason) lines.push(`reason: ${reason}`);
-    if (reason && place) lines.push(`place: ${place}`);
-    head = [...lines, end].join('\n');
-  }
-  const body = text !== undefined ? text : (m ? m[2] : src).trim();
-  return `${head}\n${body}${body ? '\n' : ''}`;
-}
-// 入所原因、拾獲地點：一行字，不收換行和 YAML 會誤會的開頭
-function cleanField(v, max) {
-  if (typeof v !== 'string') return null;
-  const s = v.replace(/[\u0000-\u001F\u007F]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^[-#>|&*!%@`'"\[\]{}]+\s*/, '');
-  return [...s].length > max ? null : s;
+function introFile(old, id, name, text) {
+  const m = old ? old.replace(/^\uFEFF/, '').match(/^(---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*)(?:\r?\n|$)/) : null;
+  const head = m ? m[1].replace(/\r\n/g, '\n') : `---\nname: ${String(name || '').replace(/\n/g, ' ')}\nid: ${id}\n---`;
+  return `${head}\n${text}${text ? '\n' : ''}`;
 }
 async function putIntro(request, env, origin) {
   const cfg = config(env);
@@ -610,16 +592,9 @@ async function putIntro(request, env, origin) {
   }
   const denied = await checkPasscode(input, cfg, ip, now, origin, '需要通關碼才能改介紹');
   if (denied) return denied;
-  const hasText = !!input && input.text !== undefined, hasReason = !!input && input.reason !== undefined;
-  if (!hasText && !hasReason) return fail(400, '格式不對', origin);
-  const text = hasText ? cleanNote(input.text) : undefined;
+  const text = cleanNote(input && input.text);
   if (text === null) return fail(400, '格式不對', origin);
-  if (hasText && [...text].length > INTRO_MAX_CHARS) return fail(413, `介紹最多 ${INTRO_MAX_CHARS} 字`, origin);
-  const reason = hasReason ? cleanField(input.reason, INTRO_REASON_MAX) : undefined;
-  const place = hasReason ? cleanField(input.place === undefined ? '' : input.place, INTRO_PLACE_MAX) : undefined;
-  if (reason === null) return fail(400, '格式不對', origin);
-  if (place === null) return fail(400, typeof input.place === 'string' ? `拾獲地點最多 ${INTRO_PLACE_MAX} 字` : '格式不對', origin);
-  const saved = { ...(hasText ? { intro: text } : {}), ...(hasReason ? { reason, place: reason ? place : '' } : {}) };
+  if ([...text].length > INTRO_MAX_CHARS) return fail(413, `介紹最多 ${INTRO_MAX_CHARS} 字`, origin);
 
   if (!allow(`intro:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
   let dogs;
@@ -643,10 +618,10 @@ async function putIntro(request, env, origin) {
     } else if (res0.status !== 404) {
       return fail(502, '暫時讀不到原本的介紹，請稍後再試', origin);
     }
-    const next = introFile(old, id, name, { text, reason, place });
-    if (old && next === old.replace(/\r\n/g, '\n')) return reply(200, { ok: true, id, ...saved, commit: null }, origin);
+    const next = introFile(old, id, name, text);
+    if (old && next === old.replace(/\r\n/g, '\n')) return reply(200, { ok: true, id, intro: text, commit: null }, origin);
     const body = {
-      message: `${hasReason ? (reason ? '改入所原因' : '清掉入所原因') : text ? '改入所介紹' : '清掉入所介紹'}：${id}${name ? `（${name}）` : ''}\n\n網站寫入（通關碼驗證）`,
+      message: `${text ? '改入所介紹' : '清掉入所介紹'}：${id}${name ? `（${name}）` : ''}\n\n網站寫入（電腦版補資料，通關碼驗證）`,
       content: toBase64(new TextEncoder().encode(next)),
       branch: cfg.branch,
     };
@@ -658,7 +633,7 @@ async function putIntro(request, env, origin) {
     });
     if (res.ok) {
       const out = await res.json().catch(() => ({}));
-      return reply(200, { ok: true, id, ...saved, commit: out.commit && out.commit.sha }, origin);
+      return reply(200, { ok: true, id, intro: text, commit: out.commit && out.commit.sha }, origin);
     }
     if ((res.status === 409 || res.status === 422) && attempt < 2) continue;
     return fail(502, `介紹沒有存進去（GitHub ${res.status}）`, origin);
