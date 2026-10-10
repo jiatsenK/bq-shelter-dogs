@@ -45,6 +45,8 @@ let detailOpener = null;
 let detailTrail = []; // 在詳細資訊裡點「可以一起溜」換過的狗（#99）：可以按「回到 ○○」一隻一隻回去
 let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, url, phase: 'preview'|'uploading'|'error', error }
 let restMap = {}; // 休養中：編號 → { until: 'YYYY-MM-DD', reason }
+let introEdit = null; // 詳細資訊正在改的入所介紹（K 2026-10-10 補資料）：{ dog, text, pass, needPass, phase: 'edit'|'saving'|'error', error }
+const introOverrides = {}; // 編號 → 剛存好的介紹：這台電腦馬上看到，dogs.json 等下次同步
 let restEdit = null; // 詳細資訊正在改的休養設定：{ dog, until, reason, pass, needPass, phase: 'edit'|'saving'|'error', error }
 let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（walkKey）
 let searchQuery = '';
@@ -375,6 +377,8 @@ function myProgressHtml(walks) {
 }
 
 let mineStatsOpen = false;
+let mineMonth = ''; // 我溜過月曆正在看的月份（YYYY-MM）；空的＝最近有紀錄的那個月
+let mineDay = ''; // 月曆上選的那一天（YYYY-MM-DD）；空的＝那個月最近一次到所
 function myWalksHtml(today, query) {
   const visibleWalks = currentMyWalks(today);
   const confirmedToday = Object.values(loadSheetWrites(today)).some(item => item.current?.date === localDateKey(today) && splitWalkers(item.current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())));
@@ -394,7 +398,50 @@ function myWalksHtml(today, query) {
   if (!groups.length) return `<div class="status-msg">找不到「${esc(query)}」</div>`;
   const stats = !query && mineStatsOpen ? `<div class="mine-stats-box">${myProgressHtml(visibleWalks)}${myMonthStats(visibleWalks, today)}</div>` : '';
   // 標題層級（critique 2026-10-09）：頁首 h1 下面先有 h2，每次到所的 h3 才不會跳號
-  return '<h2 class="sr-only">我溜過的紀錄</h2>' + who + stats + groups.map(g => myVisitCard(g)).join('');
+  // 搜尋時照舊一路往下列；平常是一個月一張月曆、點哪天看那天溜的狗（K 2026-10-10：常來的志工頁面太長）
+  if (query) return '<h2 class="sr-only">我溜過的紀錄</h2>' + groups.map(g => myVisitCard(g)).join('');
+  return '<h2 class="sr-only">我溜過的紀錄</h2>' + who + stats + myCalendarHtml(groups, today);
+}
+
+// 我溜過的月曆：有來的那幾天塗檔案綠、寫溜幾隻；點了下面換成那天溜的狗。可以往前翻到最早有紀錄的那個月
+function myCalendarState(groups, today) {
+  const months = [...new Set(groups.map(g => g.ymd.slice(0, 7)))].sort();
+  const nowMonth = localDateKey(today).slice(0, 7);
+  const first = months[0] || nowMonth;
+  let month = mineMonth && mineMonth >= first && mineMonth <= nowMonth ? mineMonth : (months[months.length - 1] || nowMonth);
+  const inMonth = groups.filter(g => g.ymd.slice(0, 7) === month); // 新到舊
+  const day = inMonth.some(g => g.ymd === mineDay) ? mineDay : (inMonth[0] ? inMonth[0].ymd : '');
+  return { month, first, nowMonth, inMonth, day };
+}
+function myCalendarHtml(groups, today) {
+  const { month, first, nowMonth, inMonth, day } = myCalendarState(groups, today);
+  const y = +month.slice(0, 4), m = +month.slice(5, 7);
+  const byDay = new Map(inMonth.map(g => [g.ymd, g]));
+  const lead = new Date(y, m - 1, 1).getDay(), total = new Date(y, m, 0).getDate();
+  const todayKey = localDateKey(today);
+  const cells = [];
+  for (let i = 0; i < lead; i++) cells.push('<span class="mc-cell blank"></span>');
+  for (let d = 1; d <= total; d++) {
+    const key = `${month}-${pad2(d)}`;
+    const g = byDay.get(key);
+    const isToday = key === todayKey;
+    const cls = `mc-cell${g ? ' on' : ''}${key === day ? ' sel' : ''}${isToday ? ' today' : ''}`;
+    cells.push(g
+      ? `<button type="button" class="${cls}" data-mine-day="${key}" aria-pressed="${key === day}"${isToday ? ' aria-current="date"' : ''} aria-label="${isToday ? '今天，' : ''}${m}月${d}日，溜 ${g.walks.length} 隻"><b>${d}</b><small>${g.walks.length} 隻</small></button>`
+      : `<span class="${cls}"${isToday ? ' aria-current="date"' : ''}><b>${d}</b>${isToday ? '<span class="sr-only">今天</span>' : ''}</span>`);
+  }
+  const dogs = inMonth.reduce((n, g) => n + g.walks.length, 0);
+  const shift = n => { const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; };
+  const sel = day && byDay.get(day);
+  return `<section class="mine-cal" aria-label="${y} 年 ${m} 月的溜狗月曆">
+    <div class="mc-head">
+      <button type="button" class="mc-nav" data-mine-month="${shift(-1)}" aria-label="上個月"${month <= first ? ' disabled' : ''}>${icon('back')}</button>
+      <h3 class="mc-title">${y} 年 ${m} 月<span>${inMonth.length ? `來 <b>${inMonth.length}</b> 天・溜 <b>${dogs}</b> 隻次` : '這個月還沒有紀錄'}</span></h3>
+      <button type="button" class="mc-nav next" data-mine-month="${shift(1)}" aria-label="下個月"${month >= nowMonth ? ' disabled' : ''}>${icon('back')}</button>
+    </div>
+    <div class="mc-week" aria-hidden="true">${[...'日一二三四五六'].map(w => `<span>${w}</span>`).join('')}</div>
+    <div class="mc-grid">${cells.join('')}</div>
+  </section>${sel ? myVisitCard(sel) : ''}`;
 }
 
 // 回傳備註命中的關鍵字（顯示用）與實際出現的寫法（標示用）；沒命中回 null
@@ -1277,7 +1324,7 @@ function detailHtml(dog, today) {
   const flag = specialFlag(dog.note);
   const buddies = [...(groupMap[dog.name] || [])];
   const byName = new Map(allDogs.map(d => [d.name, d]));
-  const intro = dog.intro;
+  const intro = introOf(dog);
   const walked = walkedToday(today);
   // V7（#112）：上面大照片，下面狗名和天數／籠位／入所標籤；關閉、在哪、溜了在底部固定列（在哪裡卡片 V7 小修正拿掉，改用底部「在哪」）
   return `
@@ -1310,12 +1357,9 @@ function detailHtml(dog, today) {
         : `<div class="empty">沒有登記可以一起溜的狗</div>`}
     </section>
     ${walkHistorySection(dog, today)}
-    <section class="detail-section" data-section="intro">
-      <h3>${icon('card')}入所介紹<span class="sub">收容所在入所時寫的</span></h3>
-      ${intro ? `<div class="content">${esc(intro)}</div>` : `<div class="empty">還沒有入所介紹</div>`}
-    </section>
+    ${introSectionHtml(dog, intro)}
     ${restAdminHtml(dog, today)}
-    ${photoBarHtml(dog) || `<div class="detail-bar">
+    ${photoBarHtml(dog) || introBarHtml(dog) || `<div class="detail-bar">
       <button type="button" class="bar-btn" id="detailClose">關閉</button>
       ${typeof whereKnown === 'function' && whereKnown(dog) ? `<button type="button" class="bar-btn" id="detailWhere">${icon('pin')}在哪</button>` : ''}
       ${groupWalkButton(dog, walked)}
@@ -1338,7 +1382,15 @@ function restAdminHtml(dog, today) {
   const r = restOf(dog, today);
   const e = restEdit && restEdit.dog === dog ? restEdit : null;
   if (!e) {
-    return `<section class="detail-section rest-admin" data-section="rest"><button type="button" class="rest-admin-btn" id="restEdit">${r ? '改休養設定' : '設定休養中'}<small>管理用，要通關碼</small></button></section>`;
+    // 管理用的集中在這一區（K 2026-10-10）：改介紹、設定休養中；正在改介紹時先收起來
+    if (introEdit && introEdit.dog === dog) return '';
+    return `<section class="detail-section rest-admin" data-section="rest">
+      <h3>${icon('write')}管理用<span class="sub">要通關碼</span></h3>
+      <div class="admin-btns">
+        <button type="button" class="admin-btn" id="introEdit">${icon('card')}${introOf(dog) ? '改介紹' : '補介紹'}</button>
+        <button type="button" class="admin-btn" id="restEdit">${icon('paw')}${r ? '改休養設定' : '設定休養中'}</button>
+      </div>
+    </section>`;
   }
   const busy = e.phase === 'saving';
   return `<section class="detail-section rest-admin" data-section="rest">
@@ -1357,6 +1409,83 @@ function restAdminHtml(dog, today) {
     </form>
   </section>`;
 }
+// ── 入所介紹（K 2026-10-10 補資料）：管理用、要通關碼；存在 repo 的 dogs/{編號}.md，不寫試算表 ──
+const INTRO_MAX = 1000;
+function introOf(dog) {
+  return dog.id && Object.prototype.hasOwnProperty.call(introOverrides, dog.id) ? introOverrides[dog.id] : dog.intro;
+}
+function introSectionHtml(dog, intro) {
+  const e = introEdit && introEdit.dog === dog ? introEdit : null;
+  if (!e) {
+    return `<section class="detail-section" data-section="intro">
+      <h3>${icon('card')}入所介紹</h3>
+      ${intro ? `<div class="content">${esc(intro)}</div>` : `<div class="empty">還沒有入所介紹</div>`}
+    </section>`;
+  }
+  const busy = e.phase === 'saving';
+  const n = [...e.text].length;
+  return `<section class="detail-section" data-section="intro">
+    <form class="rest-form intro-form" id="introForm" autocomplete="on">
+      <h3>${icon('card')}入所介紹</h3>
+      <p class="rest-hint">存好後這台馬上看到，其他人幾分鐘後（下次更新資料）看到。只存在網站，不寫試算表。</p>
+      <label>介紹<textarea id="introText" rows="7" maxlength="${INTRO_MAX}" placeholder="例：親人、喜歡散步，怕機車聲"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea><small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small></label>
+      ${e.needPass ? `<label>通關碼<input type="password" id="introPass" name="password" autocomplete="current-password" value="${esc(e.pass)}"${busy ? ' disabled' : ''}></label>` : ''}
+      ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
+    </form>
+  </section>`;
+}
+// 介紹表單打開時的底部列：取消＋儲存介紹（送出 #introForm）；溜了先收起來，跟換照片同一個做法（#146）
+function introBarHtml(dog) {
+  const e = introEdit && introEdit.dog === dog ? introEdit : null;
+  if (!e) return '';
+  const busy = e.phase === 'saving';
+  return `<div class="detail-bar photo-bar">${busy ? '' : '<button type="button" class="bar-btn" id="introCancel">取消</button>'}<button type="submit" form="introForm" class="bar-confirm"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存介紹'}</button></div>`;
+}
+function openIntroEdit(dog) {
+  if (!dog || !dog.id || !UPLOAD_URL) return;
+  introEdit = { dog, text: introOf(dog) || '', pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
+  renderDetail();
+  const box = document.getElementById('introText');
+  if (box) {
+    box.focus({ preventScroll: true });
+    if (box.scrollIntoView) box.scrollIntoView({ block: 'center' });
+  }
+}
+async function saveIntro() {
+  const e = introEdit;
+  if (!e || e.phase === 'saving') return;
+  const pass = e.needPass ? e.pass : loadNotesPass();
+  if (!pass) { e.needPass = true; e.phase = 'error'; e.error = '請輸入通關碼'; renderDetail(); return; }
+  const text = e.text.replace(/\r\n?/g, '\n').trim();
+  if ([...text].length > INTRO_MAX) { e.phase = 'error'; e.error = `最多 ${INTRO_MAX} 字`; renderDetail(); return; }
+  e.phase = 'saving'; e.error = ''; renderDetail();
+  let out = null, error = '';
+  try {
+    const res = await fetch(`${UPLOAD_URL}/intro/${encodeURIComponent(e.dog.id)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ passcode: pass, text }),
+    });
+    out = await res.json().catch(() => null);
+    if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
+  } catch (err) {
+    error = '沒有存進去，請確認網路後再試';
+  }
+  if (introEdit !== e) return;
+  if (error) {
+    if (out && out.code === 'passcode') { saveNotesPass(''); e.needPass = true; e.pass = ''; }
+    e.phase = 'error'; e.error = error; renderDetail();
+    return;
+  }
+  saveNotesPass(pass);
+  introOverrides[e.dog.id] = typeof out.intro === 'string' ? out.intro : text;
+  introEdit = null;
+  render(); renderDetail();
+  const b = document.getElementById('introEdit');
+  if (b) b.focus({ preventScroll: true });
+  showToast(`${e.dog.name} 的介紹已存好（其他人等資料更新就會看到）`);
+}
+
 function openRestEdit(dog) {
   const r = restOf(dog);
   const until = r ? r.until : new Date(Date.now() + 10 * 86400000);
@@ -2028,6 +2157,8 @@ const DETAIL_CLICKS = [
   ['#photoCrop', () => cropPhotoUpload()],
   ['#photoPick', () => pickPhotoFile()],
   ['#restEdit', () => openRestEdit(detailDog)],
+  ['#introEdit', () => openIntroEdit(detailDog)],
+  ['#introCancel', () => { introEdit = null; renderDetail(); const b = document.getElementById('introEdit'); if (b) b.focus({ preventScroll: true }); }],
   ['#restEnd', () => saveRest(true)],
   ['#restCancel', () => { restEdit = null; renderDetail(); const b = document.getElementById('restEdit'); if (b) b.focus({ preventScroll: true }); }],
   ['#photoConfirm', () => uploadPhoto()],
@@ -2060,12 +2191,20 @@ function wireDetail(box) {
   box.bqWired = true;
   // 休養設定表單：打的字記在 restEdit，重畫不會不見；送出走 saveRest
   box.addEventListener('input', e => {
+    if (introEdit && e.target.id === 'introText') {
+      introEdit.text = e.target.value;
+      const c = box.querySelector('.intro-count');
+      if (c) { const n = [...introEdit.text].length; c.textContent = `${n} / ${INTRO_MAX} 字`; c.classList.toggle('over', n > INTRO_MAX); }
+      return;
+    }
+    if (introEdit && e.target.id === 'introPass') { introEdit.pass = e.target.value; return; }
     if (!restEdit) return;
     if (e.target.id === 'restReason') restEdit.reason = e.target.value;
     else if (e.target.id === 'restUntil') restEdit.until = e.target.value;
     else if (e.target.id === 'restPass') restEdit.pass = e.target.value;
   });
   box.addEventListener('submit', e => {
+    if (e.target.id === 'introForm') { e.preventDefault(); saveIntro(); return; }
     if (e.target.id !== 'restForm') return;
     e.preventDefault();
     saveRest();
@@ -2122,6 +2261,7 @@ function showDetail(dog, remember = true) {
   if (dog !== detailDog) {
     pickedBuddies.clear();
     if (!restEdit || restEdit.phase !== 'saving') restEdit = null;
+    if (!introEdit || introEdit.phase !== 'saving') introEdit = null;
     if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
   }
   detailDog = dog;
@@ -2141,6 +2281,7 @@ function hideDetail() {
   detailTrail = [];
   pickedBuddies.clear();
   if (!restEdit || restEdit.phase !== 'saving') restEdit = null;
+  if (!introEdit || introEdit.phase !== 'saving') introEdit = null;
   if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
   document.getElementById('detailBackdrop').hidden = true;
   document.getElementById('detail').innerHTML = '';
@@ -2474,7 +2615,7 @@ function walkRow(dog, today) {
     <span class="r-date ${s.kind === 'rest' ? 'rest' : s.level || 'muted'}">${days}</span>
     <span class="r-name">${esc(dog.name)}</span>
     ${typeof whereKnown === 'function' && whereKnown(dog)
-      ? `<button type="button" class="r-cage" data-where aria-label="${esc(dog.name)} 在哪：${esc(dog.cage)}${dog.homeCage ? '（暫住）' : ''}">${esc(dog.cage)}</button>`
+      ? `<button type="button" class="r-cage cage-pill" data-where aria-label="${esc(dog.name)} 在哪：${esc(dog.cage)}${dog.homeCage ? '（暫住）' : ''}">${icon('pin')}${esc(dog.cage)}</button>`
       : `<span class="r-cage plain">${esc(dog.cage)}</span>`}
     ${walkButton(dog)}
     ${flag ? warnNote(dog.note, flag) : ''}
@@ -2549,6 +2690,14 @@ mainEl.addEventListener('click', e => {
   if (tile) showDetail(allDogs[tile.dataset.mineDog]);
   else if (e.target.closest('#mineRetry')) loadMyWalks();
   else if (e.target.closest('#mineStats')) { mineStatsOpen = !mineStatsOpen; render(); }
+  else if (e.target.closest('[data-mine-month]')) {
+    const src = e.target.closest('[data-mine-month]');
+    const dir = src.classList.contains('next') ? '.next' : ':not(.next)';
+    mineMonth = src.dataset.mineMonth; mineDay = ''; render();
+    const b = document.querySelector(`#main .mc-nav${dir}:not(:disabled)`) || document.querySelector('#main .mc-nav:not(:disabled)');
+    if (b) b.focus({ preventScroll: true });
+  }
+  else if (e.target.closest('[data-mine-day]')) { mineDay = e.target.closest('[data-mine-day]').dataset.mineDay; render(); const b = document.querySelector('#main .mc-cell.sel'); if (b) b.focus({ preventScroll: true }); }
   else if (e.target.closest('[data-open-guide]')) openGuide();
   else if (e.target.closest('[data-who-name]')) {
     const n = e.target.closest('[data-who-name]').dataset.whoName;
