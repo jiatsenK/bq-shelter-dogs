@@ -1865,6 +1865,21 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .mc-cell.on.sel b { color: #fff; }
 .mc-cell.on.sel.today { box-shadow: inset 0 0 0 2px var(--shell), inset 0 0 0 4px #fff; }
 .who-hint .who-edit { white-space: nowrap; flex: none; }
+/* 入所介紹直接點了改（K 2026-10-10）：整段是按鈕，右邊一支筆；字照原本的內文 */
+.intro-btn { display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 44px; margin: 0; padding: 0; border: none; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.intro-btn > .content, .intro-btn > .empty { flex: 1; }
+.intro-btn > .icon { flex: none; margin-top: 4px; color: var(--ink-soft); font-size: 16px; }
+.intro-btn:active { background: var(--primary-soft); }
+.intro-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* 同籠、可以一起溜合成一段：同籠的那幾隻在名字下面標出來 */
+.mate-tag { font-size: 12px; line-height: 1.3; color: var(--ink-soft); }
+/* 溜狗紀錄預設一行字，「看每一天」才展開格子 */
+.w-toggle { display: flex; align-items: flex-start; gap: 12px; width: 100%; min-height: 44px; margin: -6px 0; padding: 6px 0; border: none; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.w-toggle .w-sum { flex: 1; margin: 0; display: flex; flex-wrap: wrap; gap: 0 16px; }
+.w-it { white-space: nowrap; }
+.w-more { flex: none; color: var(--ink-soft); font-size: 14px; line-height: 1.9; text-decoration: underline; text-underline-offset: 3px; }
+.w-toggle:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.w-toggle[aria-expanded="true"] { margin-bottom: 6px; }
 .intro-form textarea { min-height: 150px; box-sizing: border-box; border: 1px solid var(--line); border-radius: 3px; padding: 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; line-height: 1.6; resize: vertical; }
 .intro-form textarea:focus { outline: 2px solid var(--primary); outline-offset: 0; }
 .intro-count { align-self: flex-end; font-size: 12.5px; font-variant-numeric: tabular-nums; }
@@ -2132,6 +2147,12 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .desk-table thead th.dr-dayc button { position: relative; width: 62px; text-align: center; }
   .desk-table thead th.dr-dayc.sorted button::after { position: absolute; right: 0; top: 50%; margin: -2px 0 0; }
   .desk-table thead th.sorted button::after { content: ''; display: inline-block; margin-left: 5px; vertical-align: 2px; border: 4px solid transparent; border-top-color: currentColor; border-bottom: none; }
+  .desk-table thead th.sorted.asc button::after { border-top: none; border-bottom: 4px solid currentColor; }
+  .desk-table thead th button:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 3px; }
+  .desk-table thead th button:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  /* 整列都能點開詳細資訊；勾選那一格除外 */
+  .desk-table tbody tr.dr { cursor: pointer; }
+  .desk-table tbody tr.dr td.dr-ck { cursor: default; }
   .desk-table tbody td { height: 46px; padding: 0 10px; border-bottom: 1px solid #E6EBE8; vertical-align: middle; }
   .desk-table tbody tr:hover td { background: #F7F9F8; }
   .desk-table tbody tr.checked td { background: var(--primary-soft); }

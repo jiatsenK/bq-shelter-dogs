@@ -31,6 +31,7 @@ function deskNoteParts(text) {
 
 let deskZone = 'all';
 let deskSort = 'days'; // days（跟手機溜狗表同一個順序）、cage、name
+let deskSortRev = false; // 同一欄再點一次就反過來排（K 2026-10-10：有三角形但不能切換）
 let deskView = 'sheet'; // sheet（全表）、days30（最近 30 天）、fill（補資料：照片、入所介紹）
 let deskFill = 'all'; // 補資料要看哪些：all、photo（沒照片）、intro（沒介紹）
 let deskNotesAll = false;
@@ -41,10 +42,13 @@ let deskWalksLoading = false;
 
 const deskNatural = (a, b) => String(a).localeCompare(String(b), 'en', { numeric: true });
 function deskSorted(list) {
-  if (deskSort === 'cage') return [...list].sort((a, b) => deskNatural(a.cage, b.cage) || deskNatural(a.name, b.name));
-  if (deskSort === 'name') return [...list].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'));
-  return list;
+  const out = deskSort === 'cage' ? [...list].sort((a, b) => deskNatural(a.cage, b.cage) || deskNatural(a.name, b.name))
+    : deskSort === 'name' ? [...list].sort((a, b) => a.name.localeCompare(b.name, 'zh-Hant'))
+    : list;
+  return deskSortRev ? [...out].reverse() : out;
 }
+// 現在這一欄是由大到小（▼）還是由小到大（▲）：天數預設最久沒溜的在上面，籠位、狗名預設由小到大
+const deskSortDir = () => ((deskSort === 'days') !== deskSortRev ? 'descending' : 'ascending');
 
 function deskBriefHtml(today) {
   const all = allDogs.map(d => ({ d, b: deskBucket(computeStatus(d, today)), s: computeStatus(d, today) }));
@@ -154,7 +158,7 @@ function deskRowHtml(dog, today, days) {
 function deskTableHtml(list, today) {
   const days = deskView === 'days30' ? deskDays(today) : null;
   if (days && !deskWalkDays) deskLoadWalks();
-  const th = (k, t, cls) => `<th class="${cls}${deskSort === k ? ' sorted' : ''}" aria-sort="${deskSort === k ? 'descending' : 'none'}"><button type="button" data-desk-sort="${k}">${t}</button></th>`;
+  const th = (k, t, cls) => `<th class="${cls}${deskSort === k ? ` sorted ${deskSortDir() === 'ascending' ? 'asc' : 'desc'}` : ''}" aria-sort="${deskSort === k ? deskSortDir() : 'none'}"><button type="button" data-desk-sort="${k}" title="${deskSort === k ? '再點一次反過來排' : `照${t}排`}">${t}</button></th>`;
   const eligible = list.filter(d => walkKey(d) && !walkedNow(d, today) && !walkPendingNow(d) && computeStatus(d, today).kind !== 'rest');
   const allOn = eligible.length && eligible.every(d => deskChecked.has(walkKey(d)));
   const dayHead = days ? days.map(d => `<th class="dr-d${localDateKey(d) === localDateKey(today) ? ' today' : ''}${d.getDay() % 6 === 0 ? ' we' : ''}" scope="col"><span class="num">${d.getDate()}</span><span>${'日一二三四五六'[d.getDay()]}</span></th>`).join('') : '';
@@ -452,11 +456,21 @@ if (typeof document !== 'undefined' && document.getElementById('main')) {
     const view = t.closest('[data-desk-view]');
     if (view) { deskView = view.dataset.deskView; deskFillOrder = null; render(); return; } // 離開再回補資料才重排
     const sort = t.closest('[data-desk-sort]');
-    if (sort) { deskSort = sort.dataset.deskSort; render(); return; }
+    if (sort) {
+      // 同一欄再點一次反過來排；換一欄從那一欄的預設方向開始
+      if (deskSort === sort.dataset.deskSort) deskSortRev = !deskSortRev; else { deskSort = sort.dataset.deskSort; deskSortRev = false; }
+      render();
+      const again = main.querySelector(`[data-desk-sort="${deskSort}"]`);
+      if (again) again.focus({ preventScroll: true });
+      return;
+    }
     const open = t.closest('[data-desk-open]');
     if (open) { showDetail(allDogs[Number(open.dataset.deskOpen)]); return; }
     const where = t.closest('[data-where][data-dog-i]');
     if (where) { whereOpen(allDogs[Number(where.dataset.dogI)], where); return; }
+    // 點這一列任何地方都開這隻狗的詳細資訊（K 2026-10-10：不用對準狗名）；勾選那一格、按鈕、正在選字不算
+    const row = t.closest('tr[data-desk-dog]');
+    if (row && !t.closest('button, input, a, label, .dr-ck') && !String(window.getSelection ? window.getSelection() : '').trim()) { showDetail(allDogs[Number(row.dataset.deskDog)]); return; }
     if (t.closest('[data-desk-notes]')) { deskNotesAll = !deskNotesAll; render(); return; }
     const fill = t.closest('[data-desk-fill]');
     if (fill) { deskFill = fill.dataset.deskFill; render(); return; }
