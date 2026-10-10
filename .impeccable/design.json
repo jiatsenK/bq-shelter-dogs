@@ -374,7 +374,646 @@
         "name": "sheet-centered",
         "value": "600px"
       }
-    ]
+    ],
+    "surfaces": {
+      "cards-html": {
+        "scope": {
+          "targets": [
+            "cards.html",
+            "css/cards.css",
+            "js/cards.js"
+          ],
+          "note": "第二個視覺世界，只管 cards.html。上層的 colorMeta、typographyMeta、shadows、motion、breakpoints、components、narrative 都是志工版 index.html（病歷夾色籤），不套用到這一頁；這一段也不套用到 index.html。DESIGN.md 的 frontmatter 只放得下一套，所以這裡的 tokens 放這一頁的數值，以 css/cards.css :root 與 js/cards.js 為準。"
+        },
+        "generatedAt": "2026-10-09T15:30:44.016Z",
+        "title": "Design System: 板收明星隊球員卡（cards.html）",
+        "designMdSection": "DESIGN.md「## 球員卡世界：只限 cards.html」",
+        "tokens": {
+          "colors": {
+            "navy": "#0B2A5B",
+            "navy-2": "#0D3068",
+            "navy-deep": "#071B3D",
+            "binder-sheet": "#0E2147",
+            "sky": "#C6D2E8",
+            "sky-dim": "#8FA3C8",
+            "gold": "#E8B400",
+            "gold-hi": "#FFD95A",
+            "red": "#C41E33",
+            "chalk": "#F4F4F0",
+            "ink": "#0A1428",
+            "ink-soft": "#46506B",
+            "team-new": "#1F5C9E",
+            "team-old": "#0F6B6B",
+            "team-mom": "#875700",
+            "team-c": "#2F7A45",
+            "team-ward": "#6E4A9E",
+            "team-free": "#55605B"
+          },
+          "typography": {
+            "display": {
+              "fontFamily": "'Anton', 'Noto Sans TC', sans-serif",
+              "fontSize": "clamp(44px, 5vw, 76px)",
+              "fontWeight": 400,
+              "lineHeight": 0.95,
+              "letterSpacing": "0.01em"
+            },
+            "numeral": {
+              "fontFamily": "'Anton', 'Noto Sans TC', sans-serif",
+              "fontSize": "calc(var(--cw) * .22)",
+              "fontWeight": 400,
+              "lineHeight": 1
+            },
+            "headline": {
+              "fontFamily": "'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif",
+              "fontSize": "clamp(32px, 3.2vw, 46px)",
+              "fontWeight": 900,
+              "lineHeight": 1.1,
+              "letterSpacing": "0.06em"
+            },
+            "card-name": {
+              "fontFamily": "'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif",
+              "fontSize": "calc(var(--cw) * .12)",
+              "fontWeight": 900,
+              "lineHeight": 1.05
+            },
+            "title": {
+              "fontFamily": "'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif",
+              "fontSize": "28px",
+              "fontWeight": 900
+            },
+            "body": {
+              "fontFamily": "'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif",
+              "fontSize": "calc(var(--cw) * .056)",
+              "fontWeight": 500,
+              "lineHeight": 1.65
+            },
+            "label": {
+              "fontFamily": "'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif",
+              "fontSize": "14px",
+              "fontWeight": 700,
+              "letterSpacing": "0.1em"
+            }
+          },
+          "rounded": {
+            "card": "calc(var(--cw) * .04)",
+            "control": "3px",
+            "pocket": "5px",
+            "sheet": "6px",
+            "trophy-frame": "12px",
+            "trophy-inner": "4px",
+            "patch": "41px"
+          },
+          "spacing": {
+            "section-x": "48px",
+            "section-y": "96px",
+            "head-gap": "40px",
+            "trophy-gap": "40px",
+            "sheet-gap": "28px",
+            "pocket-gap": "12px 10px",
+            "touch": "44px",
+            "card-width": "clamp(150px, 16.5vw, 248px)"
+          }
+        },
+        "colorMeta": {
+          "gold": {
+            "role": "primary",
+            "displayName": "燙金",
+            "canonical": "#E8B400",
+            "tonalRamp": [
+              "oklch(15% 0.163 88)",
+              "oklch(25% 0.163 88)",
+              "oklch(35% 0.163 88)",
+              "oklch(48% 0.163 88)",
+              "oklch(60% 0.163 88)",
+              "oklch(72% 0.163 88)",
+              "oklch(84% 0.163 88)",
+              "oklch(95% 0.030 88)"
+            ]
+          },
+          "gold-hi": {
+            "role": "primary",
+            "displayName": "亮金（NEW、焦點框）",
+            "canonical": "#FFD95A",
+            "tonalRamp": [
+              "oklch(15% 0.149 92)",
+              "oklch(25% 0.149 92)",
+              "oklch(35% 0.149 92)",
+              "oklch(48% 0.149 92)",
+              "oklch(60% 0.149 92)",
+              "oklch(72% 0.149 92)",
+              "oklch(84% 0.149 92)",
+              "oklch(95% 0.030 92)"
+            ]
+          },
+          "team-new": {
+            "role": "secondary",
+            "displayName": "新犬舍隊",
+            "canonical": "#1F5C9E",
+            "tonalRamp": [
+              "oklch(15% 0.123 253)",
+              "oklch(25% 0.123 253)",
+              "oklch(35% 0.123 253)",
+              "oklch(48% 0.123 253)",
+              "oklch(60% 0.123 253)",
+              "oklch(72% 0.123 253)",
+              "oklch(84% 0.123 253)",
+              "oklch(95% 0.030 253)"
+            ]
+          },
+          "team-old": {
+            "role": "secondary",
+            "displayName": "舊犬舍隊",
+            "canonical": "#0F6B6B",
+            "tonalRamp": [
+              "oklch(15% 0.078 195)",
+              "oklch(25% 0.078 195)",
+              "oklch(35% 0.078 195)",
+              "oklch(48% 0.078 195)",
+              "oklch(60% 0.078 195)",
+              "oklch(72% 0.078 195)",
+              "oklch(84% 0.078 195)",
+              "oklch(95% 0.030 195)"
+            ]
+          },
+          "team-mom": {
+            "role": "secondary",
+            "displayName": "幼母隊",
+            "canonical": "#875700",
+            "tonalRamp": [
+              "oklch(15% 0.106 72)",
+              "oklch(25% 0.106 72)",
+              "oklch(35% 0.106 72)",
+              "oklch(48% 0.106 72)",
+              "oklch(60% 0.106 72)",
+              "oklch(72% 0.106 72)",
+              "oklch(84% 0.106 72)",
+              "oklch(95% 0.030 72)"
+            ]
+          },
+          "team-c": {
+            "role": "secondary",
+            "displayName": "C 區隊",
+            "canonical": "#2F7A45",
+            "tonalRamp": [
+              "oklch(15% 0.111 150)",
+              "oklch(25% 0.111 150)",
+              "oklch(35% 0.111 150)",
+              "oklch(48% 0.111 150)",
+              "oklch(60% 0.111 150)",
+              "oklch(72% 0.111 150)",
+              "oklch(84% 0.111 150)",
+              "oklch(95% 0.030 150)"
+            ]
+          },
+          "team-ward": {
+            "role": "secondary",
+            "displayName": "住院區隊",
+            "canonical": "#6E4A9E",
+            "tonalRamp": [
+              "oklch(15% 0.133 301)",
+              "oklch(25% 0.133 301)",
+              "oklch(35% 0.133 301)",
+              "oklch(48% 0.133 301)",
+              "oklch(60% 0.133 301)",
+              "oklch(72% 0.133 301)",
+              "oklch(84% 0.133 301)",
+              "oklch(95% 0.030 301)"
+            ]
+          },
+          "team-free": {
+            "role": "secondary",
+            "displayName": "自由球員",
+            "canonical": "#55605B",
+            "tonalRamp": [
+              "oklch(15% 0.016 167)",
+              "oklch(25% 0.016 167)",
+              "oklch(35% 0.016 167)",
+              "oklch(48% 0.016 167)",
+              "oklch(60% 0.016 167)",
+              "oklch(72% 0.016 167)",
+              "oklch(84% 0.016 167)",
+              "oklch(95% 0.016 167)"
+            ]
+          },
+          "red": {
+            "role": "tertiary",
+            "displayName": "緞帶紅",
+            "canonical": "#C41E33",
+            "tonalRamp": [
+              "oklch(15% 0.197 22)",
+              "oklch(25% 0.197 22)",
+              "oklch(35% 0.197 22)",
+              "oklch(48% 0.197 22)",
+              "oklch(60% 0.197 22)",
+              "oklch(72% 0.197 22)",
+              "oklch(84% 0.197 22)",
+              "oklch(95% 0.030 22)"
+            ]
+          },
+          "navy": {
+            "role": "neutral",
+            "displayName": "球場藍",
+            "canonical": "#0B2A5B",
+            "tonalRamp": [
+              "oklch(15% 0.095 260)",
+              "oklch(25% 0.095 260)",
+              "oklch(35% 0.095 260)",
+              "oklch(48% 0.095 260)",
+              "oklch(60% 0.095 260)",
+              "oklch(72% 0.095 260)",
+              "oklch(84% 0.095 260)",
+              "oklch(95% 0.030 260)"
+            ]
+          },
+          "navy-2": {
+            "role": "neutral",
+            "displayName": "草皮淺藍",
+            "canonical": "#0D3068",
+            "tonalRamp": [
+              "oklch(15% 0.106 260)",
+              "oklch(25% 0.106 260)",
+              "oklch(35% 0.106 260)",
+              "oklch(48% 0.106 260)",
+              "oklch(60% 0.106 260)",
+              "oklch(72% 0.106 260)",
+              "oklch(84% 0.106 260)",
+              "oklch(95% 0.030 260)"
+            ]
+          },
+          "navy-deep": {
+            "role": "neutral",
+            "displayName": "夜空藍",
+            "canonical": "#071B3D",
+            "tonalRamp": [
+              "oklch(15% 0.070 260)",
+              "oklch(25% 0.070 260)",
+              "oklch(35% 0.070 260)",
+              "oklch(48% 0.070 260)",
+              "oklch(60% 0.070 260)",
+              "oklch(72% 0.070 260)",
+              "oklch(84% 0.070 260)",
+              "oklch(95% 0.030 260)"
+            ]
+          },
+          "binder-sheet": {
+            "role": "neutral",
+            "displayName": "收集冊頁",
+            "canonical": "#0E2147",
+            "tonalRamp": [
+              "oklch(15% 0.075 262)",
+              "oklch(25% 0.075 262)",
+              "oklch(35% 0.075 262)",
+              "oklch(48% 0.075 262)",
+              "oklch(60% 0.075 262)",
+              "oklch(72% 0.075 262)",
+              "oklch(84% 0.075 262)",
+              "oklch(95% 0.030 262)"
+            ]
+          },
+          "chalk": {
+            "role": "neutral",
+            "displayName": "粉筆白",
+            "canonical": "#F4F4F0",
+            "tonalRamp": [
+              "oklch(15% 0.005 106)",
+              "oklch(25% 0.005 106)",
+              "oklch(35% 0.005 106)",
+              "oklch(48% 0.005 106)",
+              "oklch(60% 0.005 106)",
+              "oklch(72% 0.005 106)",
+              "oklch(84% 0.005 106)",
+              "oklch(95% 0.005 106)"
+            ]
+          },
+          "sky": {
+            "role": "neutral",
+            "displayName": "燈光藍",
+            "canonical": "#C6D2E8",
+            "tonalRamp": [
+              "oklch(15% 0.033 263)",
+              "oklch(25% 0.033 263)",
+              "oklch(35% 0.033 263)",
+              "oklch(48% 0.033 263)",
+              "oklch(60% 0.033 263)",
+              "oklch(72% 0.033 263)",
+              "oklch(84% 0.033 263)",
+              "oklch(95% 0.030 263)"
+            ]
+          },
+          "sky-dim": {
+            "role": "neutral",
+            "displayName": "看台藍",
+            "canonical": "#8FA3C8",
+            "tonalRamp": [
+              "oklch(15% 0.059 263)",
+              "oklch(25% 0.059 263)",
+              "oklch(35% 0.059 263)",
+              "oklch(48% 0.059 263)",
+              "oklch(60% 0.059 263)",
+              "oklch(72% 0.059 263)",
+              "oklch(84% 0.059 263)",
+              "oklch(95% 0.030 263)"
+            ]
+          },
+          "ink": {
+            "role": "neutral",
+            "displayName": "墨藍",
+            "canonical": "#0A1428",
+            "tonalRamp": [
+              "oklch(15% 0.043 263)",
+              "oklch(25% 0.043 263)",
+              "oklch(35% 0.043 263)",
+              "oklch(48% 0.043 263)",
+              "oklch(60% 0.043 263)",
+              "oklch(72% 0.043 263)",
+              "oklch(84% 0.043 263)",
+              "oklch(95% 0.030 263)"
+            ]
+          },
+          "ink-soft": {
+            "role": "neutral",
+            "displayName": "灰墨藍",
+            "canonical": "#46506B",
+            "tonalRamp": [
+              "oklch(15% 0.047 269)",
+              "oklch(25% 0.047 269)",
+              "oklch(35% 0.047 269)",
+              "oklch(48% 0.047 269)",
+              "oklch(60% 0.047 269)",
+              "oklch(72% 0.047 269)",
+              "oklch(84% 0.047 269)",
+              "oklch(95% 0.030 269)"
+            ]
+          }
+        },
+        "typographyMeta": {
+          "display": {
+            "displayName": "Display",
+            "purpose": "左上 BQ ALL-STARS 2026，英文燙金、年份粉筆白。"
+          },
+          "numeral": {
+            "displayName": "背號與計數",
+            "purpose": "卡面背號、收集進度、獎項數字、卡套背號、NEW、×N；數字一律 Anton。"
+          },
+          "headline": {
+            "displayName": "Headline",
+            "purpose": "年度獎項、收集冊段落標題。"
+          },
+          "card-name": {
+            "displayName": "狗名",
+            "purpose": "卡面斜體粗黑狗名，用 skewX(-8deg) 做斜體。"
+          },
+          "title": {
+            "displayName": "Title",
+            "purpose": "獎座狗名 28px；緞帶 22px、收集冊隊名 20px 同字重。"
+          },
+          "body": {
+            "displayName": "Body",
+            "purpose": "卡背收容所的話。"
+          },
+          "label": {
+            "displayName": "Label",
+            "purpose": "志工版溜狗表、已收、點卡包撕開這類拉開字距的短句。"
+          }
+        },
+        "shadows": [
+          {
+            "name": "card",
+            "value": "0 24px 50px rgba(0, 0, 0, .5)",
+            "purpose": "手上的卡、大卡正反面。"
+          },
+          {
+            "name": "pack",
+            "value": "drop-shadow(0 34px 40px rgba(0, 0, 0, .5))",
+            "purpose": "卡包；用 filter 因為卡包有鋸齒遮罩。"
+          },
+          {
+            "name": "trophy",
+            "value": "0 22px 44px rgba(11, 42, 91, .28)",
+            "purpose": "白底上的獎座。"
+          },
+          {
+            "name": "pocket-got",
+            "value": "0 6px 14px rgba(0, 0, 0, .35)",
+            "purpose": "收集冊裡已收到的卡。"
+          },
+          {
+            "name": "card-back-frame",
+            "value": "inset 0 0 0 calc(var(--cw) * .018) #E8B400",
+            "purpose": "卡背金色內框。"
+          },
+          {
+            "name": "card-focus",
+            "value": "0 0 0 4px #FFD95A, 0 24px 50px rgba(0, 0, 0, .5)",
+            "purpose": "卡片鍵盤焦點。"
+          },
+          {
+            "name": "number-legibility",
+            "value": "0 2px 0 rgba(0, 0, 0, .35), 0 0 12px rgba(0, 0, 0, .25)",
+            "purpose": "text-shadow：白色背號壓在照片上。"
+          }
+        ],
+        "motion": [
+          {
+            "name": "ease",
+            "value": "cubic-bezier(.2, .9, .2, 1)",
+            "purpose": "發牌、翻面、進度條、滑過的主緩動（--ease）。"
+          },
+          {
+            "name": "foil",
+            "value": "4.5s ease-in-out infinite alternate",
+            "purpose": "卡包金箔流光。"
+          },
+          {
+            "name": "tear-strip",
+            "value": ".6s cubic-bezier(.3, .6, .4, 1)",
+            "purpose": "撕下的封條飛走。"
+          },
+          {
+            "name": "pack-drop",
+            "value": ".8s cubic-bezier(.5, 0, .75, .3)",
+            "purpose": "卡包掉出畫面。"
+          },
+          {
+            "name": "deal",
+            "value": ".9s var(--ease)，間隔 120ms（首張 140ms）",
+            "purpose": "五張卡升起攤成扇形：平移約一張卡寬、每張下沉 26px、旋轉 4°。"
+          },
+          {
+            "name": "flip",
+            "value": ".7s var(--ease) rotateY(180deg)",
+            "purpose": "翻到背面。"
+          },
+          {
+            "name": "tilt",
+            "value": "rotateY ±13deg / rotateX ±11deg, translateY(-26px) scale(1.07)",
+            "purpose": "滑鼠傾斜，雷射層與亮點跟著游標。"
+          },
+          {
+            "name": "glint",
+            "value": "1.4s .9s var(--ease)",
+            "purpose": "新收到的卡亮一下。"
+          },
+          {
+            "name": "modal-pop",
+            "value": ".45s var(--ease) from translateY(30px) scale(.94)",
+            "purpose": "大卡彈出。"
+          },
+          {
+            "name": "reduced-motion",
+            "value": "prefers-reduced-motion: reduce",
+            "purpose": "不流光、不撕、不發牌、不傾斜，卡直接在扇形位置。"
+          }
+        ],
+        "breakpoints": [
+          {
+            "name": "narrow",
+            "value": "900px"
+          },
+          {
+            "name": "desktop-route",
+            "value": "1100px"
+          }
+        ],
+        "components": [
+          {
+            "name": "球員卡",
+            "kind": "card",
+            "refersTo": "player-card",
+            "description": "等級框、照片、Anton 背號、隊色色帶、斜體粗黑狗名；點了翻面，滑鼠傾斜反光。",
+            "html": "<div class=\"ds-card\" tabindex=\"0\" style=\"--team:#1F5C9E\"><span class=\"ds-card-ph\"><span class=\"ds-card-no\">57</span><span class=\"ds-card-new\">NEW</span></span><span class=\"ds-card-band\">新犬舍隊<span>普卡</span></span><span class=\"ds-card-nm\">阿拉丁</span><span class=\"ds-card-pos\"><span>守備位置 <b>新B04</b></span><span>公</span></span></div>",
+            "css": ".ds-card{--cw:220px;display:flex;flex-direction:column;width:var(--cw);height:calc(var(--cw)*1.4);padding:calc(var(--cw)*.045);border-radius:calc(var(--cw)*.04);background:#F4F4F0;color:#0A1428;font-family:'Noto Sans TC',sans-serif;box-shadow:0 24px 50px rgba(0,0,0,.5);transition:transform .4s cubic-bezier(.2,.9,.2,1);cursor:pointer}.ds-card:hover{transform:translateY(-12px) rotate(-1deg) scale(1.03)}.ds-card:focus-visible{outline:none;box-shadow:0 0 0 4px #FFD95A,0 24px 50px rgba(0,0,0,.5)}.ds-card-ph{position:relative;flex:1;background:var(--team)}.ds-card-no{position:absolute;left:calc(var(--cw)*.04);top:calc(var(--cw)*.01);font:400 calc(var(--cw)*.22)/1 'Anton',sans-serif;color:#F4F4F0;text-shadow:0 2px 0 rgba(0,0,0,.35),0 0 12px rgba(0,0,0,.25)}.ds-card-new{position:absolute;right:0;top:calc(var(--cw)*.06);padding:3px 8px 3px 10px;background:#FFD95A;color:#0A1428;font:400 calc(var(--cw)*.07)/1.1 'Anton',sans-serif;letter-spacing:.08em}.ds-card-band{display:flex;justify-content:space-between;padding:calc(var(--cw)*.025) calc(var(--cw)*.04);background:var(--team);color:#F4F4F0;font-weight:900;font-size:calc(var(--cw)*.05);letter-spacing:.14em}.ds-card-nm{display:block;margin-top:calc(var(--cw)*.04);font:900 calc(var(--cw)*.12)/1.05 'Noto Sans TC',sans-serif;transform:skewX(-8deg)}.ds-card-pos{display:flex;justify-content:space-between;margin-top:calc(var(--cw)*.02);font-size:calc(var(--cw)*.052);font-weight:700;color:#46506B}.ds-card-pos b{color:#0A1428}"
+          },
+          {
+            "name": "球員卡（金卡框）",
+            "kind": "card",
+            "refersTo": "player-card-gold",
+            "description": "在所 5 到 7 年：金箔漸層框，其餘同普卡。",
+            "html": "<div class=\"ds-gold\"><span class=\"ds-gold-ph\"></span><span class=\"ds-gold-nm\">保羅</span></div>",
+            "css": ".ds-gold{width:200px;height:280px;padding:9px;border-radius:8px;display:flex;flex-direction:column;background:linear-gradient(135deg,#9A7200,#FFE58A 26%,#C99A10 46%,#FFF2BA 62%,#B88A00 84%,#F2CC45);box-shadow:0 24px 50px rgba(0,0,0,.5);font-family:'Noto Sans TC',sans-serif;color:#0A1428}.ds-gold-ph{flex:1;background:#0F6B6B}.ds-gold-nm{margin-top:8px;font-weight:900;font-size:24px;transform:skewX(-8deg)}"
+          },
+          {
+            "name": "球員卡背面",
+            "kind": "card",
+            "refersTo": "player-card-back",
+            "description": "球場藍底、金色內框、卡號、三列資料、收容所的話。",
+            "html": "<div class=\"ds-back\"><span class=\"ds-back-top\"><b>保羅</b><span>#57</span></span><span class=\"ds-back-set\">BQ26・057/120・舊犬舍隊</span><span class=\"ds-back-stats\"><span><em>入隊</em><b>2020.3.29</b></span><span><em>本月出賽</em><b><i>6</i> 天</b></span></span><span class=\"ds-back-q\">收容所還沒幫牠寫介紹。</span></div>",
+            "css": ".ds-back{display:flex;flex-direction:column;gap:11px;width:220px;height:308px;padding:15px;border-radius:9px;background:#0B2A5B;color:#F4F4F0;font-family:'Noto Sans TC',sans-serif;box-shadow:inset 0 0 0 4px #E8B400,0 24px 50px rgba(0,0,0,.5)}.ds-back-top{display:flex;justify-content:space-between;align-items:baseline}.ds-back-top b{font-weight:900;font-size:22px}.ds-back-top span{font:400 22px 'Anton',sans-serif;color:#E8B400}.ds-back-set{font-weight:700;font-size:11px;letter-spacing:.12em;color:#8FA3C8}.ds-back-stats{display:grid;gap:6px;padding:8px 0;border-top:1px solid rgba(198,210,232,.3);border-bottom:1px solid rgba(198,210,232,.3)}.ds-back-stats>span{display:flex;justify-content:space-between;align-items:baseline;font-size:13px}.ds-back-stats em{font-style:normal;color:#E8B400;font-weight:700}.ds-back-stats b{font-weight:700;font-variant-numeric:tabular-nums}.ds-back-stats i{font:400 24px/1 'Anton',sans-serif;font-style:normal;color:#E8B400}.ds-back-q{font-size:12px;line-height:1.65;color:#D9E1F0}"
+          },
+          {
+            "name": "燙金卡包",
+            "kind": "custom",
+            "refersTo": "pack",
+            "description": "金箔漸層、鋸齒封口、腳掌圓徽、紅色「撕開」；平常流光，點了撕開。",
+            "html": "<button class=\"ds-pack\" type=\"button\"><span class=\"ds-pack-crest\"></span><span class=\"ds-pack-t\"><b>板收明星隊</b><span>球員卡・每包 5 張</span><em>撕開</em></span></button>",
+            "css": ".ds-pack{position:relative;width:240px;height:336px;border:none;padding:0;cursor:pointer;color:#0A1428;font-family:'Noto Sans TC',sans-serif;background:linear-gradient(115deg,#8A6400 0%,#F7D560 20%,#C99A10 38%,#FFF2BA 50%,#B88A00 64%,#F2CC45 82%,#8A6400 100%) 0 0/240% 100%;filter:drop-shadow(0 34px 40px rgba(0,0,0,.5));-webkit-mask:radial-gradient(circle at 6px 0,transparent 5.5px,#000 6px) 0 0/12px 51% repeat-x,radial-gradient(circle at 6px 100%,transparent 5.5px,#000 6px) 0 100%/12px 51% repeat-x;mask:radial-gradient(circle at 6px 0,transparent 5.5px,#000 6px) 0 0/12px 51% repeat-x,radial-gradient(circle at 6px 100%,transparent 5.5px,#000 6px) 0 100%/12px 51% repeat-x;animation:ds-foil 4.5s ease-in-out infinite alternate;transition:transform .5s cubic-bezier(.2,.9,.2,1)}.ds-pack:hover{transform:translateY(-10px) rotate(-1.5deg)}.ds-pack:focus-visible{outline:3px solid #FFD95A;outline-offset:3px}@keyframes ds-foil{to{background-position:100% 0}}.ds-pack-crest{position:absolute;left:50%;top:23%;width:40%;aspect-ratio:1;transform:translateX(-50%);border-radius:50%;background:#0B2A5B;box-shadow:inset 0 0 0 5px #E8B400,inset 0 0 0 9px #0B2A5B,inset 0 0 0 11px #E8B400}.ds-pack-t{position:absolute;left:0;right:0;top:60%;display:flex;flex-direction:column;align-items:center}.ds-pack-t b{font-weight:900;font-size:30px;letter-spacing:.04em}.ds-pack-t span{margin-top:6px;font-weight:900;font-size:13px;letter-spacing:.25em}.ds-pack-t em{margin-top:14px;padding:5px 14px;background:#C41E33;color:#F4F4F0;font-style:normal;font-weight:900;letter-spacing:.2em}@media (prefers-reduced-motion:reduce){.ds-pack{animation:none;transition:none}}"
+          },
+          {
+            "name": "獎座",
+            "kind": "card",
+            "refersTo": "trophy",
+            "description": "金箔外框、球場藍內頁、紅緞帶、金色 Anton 大數字。",
+            "html": "<article class=\"ds-trophy\"><div class=\"ds-trophy-in\"><span class=\"ds-trophy-ph\"></span><span class=\"ds-ribbon\">出門王</span><div class=\"ds-trophy-tx\"><div><h3>哈囉</h3><p>10 月出門最多天・新B05</p></div><p class=\"ds-trophy-n\"><b>6</b>天</p></div></div></article>",
+            "css": ".ds-trophy{width:320px;padding:12px;border-radius:12px;background:linear-gradient(135deg,#9A7200,#FFE58A 26%,#C99A10 46%,#FFF2BA 62%,#B88A00 84%,#F2CC45);box-shadow:0 22px 44px rgba(11,42,91,.28);transition:transform .4s cubic-bezier(.2,.9,.2,1);font-family:'Noto Sans TC',sans-serif}.ds-trophy:hover{transform:translateY(-6px) rotate(-.6deg)}.ds-trophy-in{position:relative;background:#0B2A5B;color:#F4F4F0;border-radius:4px;overflow:hidden;box-shadow:inset 0 0 0 2px rgba(255,229,138,.6)}.ds-trophy-ph{display:block;aspect-ratio:4/3;background:#1F5C9E}.ds-ribbon{position:absolute;left:0;top:24px;padding:9px 20px 9px 24px;background:#C41E33;font-weight:900;font-size:22px;letter-spacing:.15em}.ds-trophy-tx{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;padding:20px 26px 18px}.ds-trophy-tx h3{margin:0;font-weight:900;font-size:28px}.ds-trophy-tx p{margin:4px 0 0;color:#C6D2E8;font-weight:700;font-size:14px}.ds-trophy-tx .ds-trophy-n{margin:0;font-weight:900;font-size:18px;color:#E8B400}.ds-trophy-n b{font:400 64px/1 'Anton',sans-serif;margin-right:4px}"
+          },
+          {
+            "name": "收集冊卡套",
+            "kind": "custom",
+            "refersTo": "binder-pocket",
+            "description": "沒收到是半透明空卡套＋狗剪影＋背號；收到換成等級框小卡。",
+            "html": "<div class=\"ds-sheet\"><h3><span>新犬舍隊</span><small><b>12</b> / 58</small></h3><div class=\"ds-pockets\"><span class=\"ds-pocket\"><b>25</b><i>？</i></span><button class=\"ds-pocket got\" type=\"button\"><span class=\"ds-pocket-ph\"></span><i>百吉</i></button></div></div>",
+            "css": ".ds-sheet{padding:22px 24px 26px;background:#0E2147;border-radius:6px;box-shadow:inset 0 0 0 1px rgba(198,210,232,.12);color:#F4F4F0;font-family:'Noto Sans TC',sans-serif}.ds-sheet h3{display:flex;justify-content:space-between;align-items:center;margin:0 0 16px;font-size:20px;font-weight:900}.ds-sheet h3 span{display:flex;align-items:center;gap:10px}.ds-sheet h3 span::before{content:'';width:14px;height:14px;border-radius:3px;background:#1F5C9E;box-shadow:0 0 0 2px rgba(244,244,240,.25)}.ds-sheet small{font:400 22px 'Anton',sans-serif;color:#8FA3C8}.ds-sheet small b{font-weight:400;color:#F4F4F0}.ds-pockets{display:grid;grid-template-columns:repeat(2,96px);gap:12px 10px}.ds-pocket{position:relative;display:flex;flex-direction:column;justify-content:space-between;aspect-ratio:5/7;padding:5px;border:none;border-radius:5px;background:rgba(198,210,232,.06);box-shadow:inset 0 0 0 1px rgba(198,210,232,.18);color:#8FA3C8;text-align:center;font:inherit}.ds-pocket b{margin-top:18%;font:400 26px/1 'Anton',sans-serif}.ds-pocket i{font-style:normal;font-size:13px;font-weight:700}.ds-pocket.got{cursor:zoom-in;background:#F4F4F0;color:#0A1428;box-shadow:0 6px 14px rgba(0,0,0,.35);transition:transform .25s cubic-bezier(.2,.9,.2,1)}.ds-pocket.got:hover{transform:translateY(-4px) rotate(-1deg)}.ds-pocket.got:focus-visible{outline:3px solid #FFD95A;outline-offset:3px}.ds-pocket-ph{flex:1;border-radius:2px;background:#1F5C9E}"
+          },
+          {
+            "name": "再開一包",
+            "kind": "button",
+            "refersTo": "button-primary",
+            "description": "燙金底墨藍字的主要按鈕。",
+            "html": "<button class=\"ds-again\" type=\"button\">再開一包</button>",
+            "css": ".ds-again{padding:14px 34px;min-height:48px;border:none;border-radius:3px;background:#E8B400;color:#0A1428;font:900 18px 'Noto Sans TC',sans-serif;letter-spacing:.2em;cursor:pointer;transition:background .2s,transform .2s cubic-bezier(.2,.9,.2,1)}.ds-again:hover{background:#FFD95A;transform:translateY(-2px)}.ds-again:active{transform:translateY(1px)}.ds-again:focus-visible{outline:3px solid #FFD95A;outline-offset:3px}"
+          },
+          {
+            "name": "換人收集／收集冊切換",
+            "kind": "chip",
+            "refersTo": "book-chip",
+            "description": "外框鈕與收集冊切換；選中是粉筆白底。",
+            "html": "<div class=\"ds-chips\"><button class=\"ds-chip on\" type=\"button\">我的收集冊</button><button class=\"ds-chip\" type=\"button\">小明</button><button class=\"ds-switch\" type=\"button\">換人收集</button></div>",
+            "css": ".ds-chips{display:flex;gap:8px;padding:16px;background:#071B3D}.ds-chip,.ds-switch{min-height:44px;padding:0 16px;border:none;border-radius:3px;cursor:pointer;font:700 15px 'Noto Sans TC',sans-serif;letter-spacing:.08em}.ds-chip{background:rgba(198,210,232,.12);color:#C6D2E8}.ds-chip.on{background:#F4F4F0;color:#0A1428}.ds-switch{background:none;color:#F4F4F0;box-shadow:inset 0 0 0 2px rgba(198,210,232,.5)}.ds-chip:hover,.ds-switch:hover{box-shadow:inset 0 0 0 2px #F4F4F0}.ds-chip:focus-visible,.ds-switch:focus-visible{outline:3px solid #FFD95A;outline-offset:3px}"
+          },
+          {
+            "name": "收集進度",
+            "kind": "nav",
+            "refersTo": "progress",
+            "description": "右上角：已收＋Anton N/總數＋金色進度條，點了跳到收集冊。",
+            "html": "<a class=\"ds-progress\" href=\"#\"><span class=\"ds-progress-k\">已收</span><span class=\"ds-progress-n\"><b>30</b>/120</span><span class=\"ds-progress-bar\"><i style=\"--p:.25\"></i></span></a>",
+            "css": ".ds-progress{display:inline-grid;grid-template-columns:auto auto;align-items:baseline;column-gap:10px;padding:16px;background:#0B2A5B;color:#F4F4F0;text-decoration:none;font-family:'Noto Sans TC',sans-serif}.ds-progress:focus-visible{outline:3px solid #FFD95A;outline-offset:3px}.ds-progress-k{font-weight:700;color:#C6D2E8;letter-spacing:.2em;font-size:14px}.ds-progress-n{font:400 40px/1 'Anton',sans-serif;letter-spacing:.02em;color:#8FA3C8}.ds-progress-n b{font-weight:400;color:#F4F4F0}.ds-progress-bar{grid-column:1/-1;height:4px;margin-top:8px;background:rgba(198,210,232,.2)}.ds-progress-bar i{display:block;height:100%;background:#E8B400;transform:scaleX(var(--p,0));transform-origin:left;transition:transform .6s cubic-bezier(.2,.9,.2,1)}"
+          }
+        ],
+        "narrative": {
+          "northStar": "板收明星隊球員卡",
+          "overview": "收容所的狗是一支職棒球隊，這一頁是一套球員卡：抽、翻、收。地是深夜球場：深藍和淺一階的藍交替成 7.5vw 寬的直條草皮紋，中間淡淡一圈投手丘線。主角是一包燙金卡包，撕開後五張卡扇形攤開；卡面是白邊（或銀、金、雷射框）、滿版照片、隊色色帶、斜體粗黑狗名、Anton 背號。往下換成白底的年度獎項（金框獎座），再往下回到最深的藍，是一頁一頁的收集冊卡套。\n\n這是展示用的，要熱鬧、會反光、會動，跟志工版的安靜實用刻意不同；但動作只用卡片本身的語法（發、翻、傾斜、流光），系統設定減少動態時直接攤開、不傾斜、不流光。",
+          "keyCharacteristics": [
+            "深藍直條球場是地，燙金是唯一的亮面材料",
+            "卡片等級看在所多久：普卡白框、銀卡、金卡、雷射卡，等越久框越亮",
+            "隊色看犬舍：色帶、沒照片時的底、收集冊每頁的色點都用同一個隊色",
+            "數字一律 Anton，中文一律 Noto Sans TC 900／700",
+            "卡片是真的物件：有厚影、會翻面、跟著滑鼠傾斜反光"
+          ],
+          "rules": [
+            {
+              "name": "The 金是收藏 Rule",
+              "body": "金箔漸層只給卡包、金卡和獎座；平面的 `--gold` 是重點字和主要按鈕。不要拿金色當一般裝飾。",
+              "section": "colors"
+            },
+            {
+              "name": "The 隊色是犬舍 Rule",
+              "body": "隊色只表示「哪一隊（哪個犬舍）」，同一隊在色帶、補位底、收集冊色點必須同色；新隊色要中明度，上面的粉筆白字 4.5:1 以上。",
+              "section": "colors"
+            },
+            {
+              "name": "The 紅色是獎 Rule",
+              "body": "紅只給獎項緞帶和「撕開」，不要拿來表示其他狀態。",
+              "section": "colors"
+            },
+            {
+              "name": "The 數字用背號 Rule",
+              "body": "背號、張數、天數、年數這些要被看見的數字用 Anton；中文和夾在中文裡的小數字用 Noto Sans TC（卡背資料列用 `tabular-nums`）。",
+              "section": "typography"
+            },
+            {
+              "name": "The 卡片等比 Rule",
+              "body": "卡片上的字和間距都是卡寬（`--cw`）的比例，所以手上、大卡、獎座、卡套四種尺寸是同一張卡縮放。",
+              "section": "typography"
+            },
+            {
+              "name": "The 物件才浮 Rule",
+              "body": "有影子的只有拿得起來的東西：卡包、卡、獎座、收到的卡。球場、段落、收集冊頁不加外陰影。",
+              "section": "elevation"
+            },
+            {
+              "name": "The 雷射不霧照片 Rule",
+              "body": "雷射彩虹層（`mix-blend-mode: color-dodge`）在照片區只留約 7%，到框和名字那一塊才滿；滑鼠亮點（`screen` 的白色光暈）是另一層，照樣掃過照片。",
+              "section": "elevation"
+            }
+          ],
+          "dos": [
+            "Do 改這一頁的顏色、字級時改 `css/cards.css` 的 `:root`；隊色和等級改 `js/cards.js` 的 `BQ_TEAMS`、`BQ_TIERS`，再用 `/impeccable document` 更新這一段。",
+            "Do 新增的元件放在球場藍、夜空藍或粉筆白其中一種底上；深底上的次要字用燈光藍或看台藍。",
+            "Do 新的隊色取中明度（OKLCH 約 47–52%），量過上面粉筆白字 4.5:1 以上。",
+            "Do 卡片的新尺寸用改 `--cw` 的方式縮放，不要另外寫一套字級。",
+            "Do 新的互動沿用卡片的發、翻、傾斜、流光，並在減少動態時直接到最後的樣子。"
+          ],
+          "donts": [
+            "Don't 把這一段的深藍、燙金、Anton、網路字型、膠囊徽章帶進 `index.html`／`css/app.css`；志工版的規則（綠色等於最近溜過、只有警訊是實心、直角檔案）也不管這一頁的隊色和卡片。",
+            "Don't 讓這一頁變回認養網站的「標題＋一排排圓角照片卡」；照片格只出現在收集冊的卡套裡。",
+            "Don't 做成上一版畢業紀念冊那種懷舊翻書。",
+            "Don't 用金箔漸層做一般背景或按鈕；金箔只給卡包、金卡、獎座。",
+            "Don't 在獎項緞帶和「撕開」以外用紅色。",
+            "Don't 讓雷射彩虹蓋滿照片；照片區保持清楚。"
+          ]
+        }
+      }
+    }
   },
   "components": [
     {
