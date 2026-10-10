@@ -1018,6 +1018,11 @@
 - 新增 db/schema.sql（D1／SQLite：dogs、walks、changes、kv，可重複執行）、scripts/build-db.mjs（repo 的 dogs.json、departures、rest、walks、history 快照 → INSERT；快照只轉成前後兩天有變的欄位、入所、離所）、scripts/build-db.test.mjs（5 項，有 node:sqlite 時真的建表匯入兩次）。
 - 現有資料試轉：狗 125（在所 122）、溜狗紀錄 732、異動紀錄 53（16 天快照）。誰溜的只存代號。
 - 只有程式，不動正式網站、還沒建資料庫。tests.yml 和 AGENTS.md 的 node 測試清單加 build-db.test.mjs；.assetsignore 加 db；新增 docs/DATABASE.md（設計、分幾個 PR、限制）。node 137 過、網頁 226 過（本機另 2 項 #130）。
+## 2026-10-10 Claude（補資料改成直接在表格裡補：點格子就能改、每個動作有狀態、順序不跳）
+- 依據：K 2026-10-10 用過補資料：「入所介紹的地方點擊就可以編輯、照片也是點擊就要可以上傳，而不是另外設按鈕」「使用者最不安的時刻是按了之後不知道有沒有成功，好的系統每一個動作都有回應」「一補其中一個順序馬上就會跳掉…點進詳細卡片補也是，一補完整個卡片就會跳掉」。
+- js/desk.js：補資料表格拿掉右邊兩顆按鈕，改成 照片｜狗名｜籠位｜入所介紹｜狀態。照片格點了選檔（或拖檔到那一列）→ 格子裡預覽＋上傳／取消；介紹格點了原地變文字框（要通關碼時旁邊一格）＋儲存／取消／字數，Ctrl+Enter 儲存、Esc 取消。狀態欄：預覽提示、上傳中…、儲存中…、✓ 已上傳／已儲存加時間、沒成功的原因（打的字留著）。deskFillOrder 把這一輪的順序固定，補好的留在原位（淡綠底），換篩選、換區、搜尋、離開再回來才重排；上面寫「這次補好 N 隻」。不再跳去詳細資訊。
+- js/app.js：renderDetail 重畫後留在原本捲到的位置。css/app.css 對應樣式（1280 篩選不斷行）。
+- 測試：補資料 2 項（介紹：儲存中、通關碼錯留著字、存好留在原位打勾、換篩選才離開；照片：預覽不送、上傳中、已上傳）、「不另外設按鈕」；desk.js 的寫入檢查改成只准照片、介紹兩個送到 Worker 的呼叫。網頁 228 過（本機另 2 項 #130）。自己截圖確認 1440／1280 各狀態；沒有再跑 finish review。
 ## 2026-10-10 Claude（第 2 步之二：部署時自動建 D1 資料庫、建表、匯入現有資料）
 - 依據：K 同意資料庫建在自己的 Cloudflare 帳號、跟 R2 一樣部署時自動建；#193 合併後接著做。
 - 新增 scripts/d1-database.mjs：部署前找名叫 bq-shelter-dogs 的 D1，沒有就建；套 db/schema.sql；dogs 是空的才跑 build-db 匯入一次（db/seed.sql，不提交不公開）；產生 wrangler.deploy.json（上一步 R2 的設定＋d1_databases，binding 叫 DB）。任何一步失敗就不帶資料庫照舊部署，Action 不失敗、摘要寫原因。測試 5 項（假 wrangler）。
