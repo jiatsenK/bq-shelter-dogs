@@ -9,13 +9,7 @@ function deskOn() {
 }
 
 // 區域：照籠位開頭分；跟找狗的分區一樣大的分法，簡報一行一區
-const DESK_ZONES = [
-  { key: 'new', name: '新犬舍', test: c => /^新/.test(c) },
-  { key: 'old', name: '舊犬舍', test: c => /^舊/.test(c) },
-  { key: 'mom', name: '幼母', test: c => /^母幼/.test(c) },
-  { key: 'c', name: 'C 區', test: c => /^C/i.test(c) },
-  { key: 'ward', name: '住院區', test: c => /^住院/.test(c) },
-];
+const DESK_ZONES = SITE.zones; // js/site-config.js
 function deskZoneOf(dog) {
   const c = String(dog.cage || '').replace(/\s/g, '');
   return (DESK_ZONES.find(z => z.test(c)) || { key: 'other' }).key;
