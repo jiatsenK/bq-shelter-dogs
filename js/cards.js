@@ -282,45 +282,29 @@ function bqShowHand(cards, freshIds, instant) {
   });
 }
 
-// 卡包區四種狀態：還沒設定你是誰／還沒溜過／有新卡／都開完了
-function bqRenderField() {
-  const field = document.getElementById('bqField');
-  const note = document.getElementById('bqPackNote');
-  const pack = document.getElementById('bqPack');
+// 圖鑑標題右邊那一塊：還沒設定你是誰／還沒溜過／有新卡（開卡包按鈕）／都開完了
+function bqRenderCta() {
+  const box = document.getElementById('bqCta');
   const n = BQ.pending.length;
-  field.classList.remove('locked', 'empty', 'done');
-  document.getElementById('bqPackCount').textContent = n ? `${n} 張新卡` : '';
-  pack.setAttribute('aria-label', n ? `撕開卡包，${Math.min(n, BQ_PACK_SIZE)} 張新卡` : '卡包');
   if (!BQ.codes.length) {
-    field.classList.add('locked');
-    note.innerHTML = '先在溜狗表的「我溜過」輸入你的名字，你溜過的狗就會變成你的卡。<a href="index.html#mine">去設定</a>';
-    pack.disabled = true;
+    box.innerHTML = '<p class="bq-cta-note">先在溜狗表的「我溜過」輸入你的名字，你溜過的狗就會變成你的卡。</p><a class="bq-cta-btn" href="index.html#mine">去設定</a>';
   } else if (!BQ.walksOk && !n) {
-    field.classList.add('locked');
-    note.textContent = '溜狗紀錄讀不到，請重新整理頁面';
-    pack.disabled = true;
+    box.innerHTML = '<p class="bq-cta-note">溜狗紀錄讀不到，請重新整理頁面。</p>';
   } else if (n) {
-    note.textContent = '點卡包撕開';
-    pack.disabled = false;
+    const packs = Math.ceil(n / BQ_PACK_SIZE);
+    box.innerHTML = `<button type="button" class="bq-cta-btn bq-open" id="bqOpen"><span class="bq-open-pack" aria-hidden="true">${BQ_PAW}</span><span class="bq-open-t"><b>開卡包</b><small>${n} 張新卡${packs > 1 ? `・${packs} 包` : ''}</small></span></button>`;
   } else if (!BQ.mine.size) {
-    field.classList.add('empty');
-    note.textContent = '還沒有你的溜狗紀錄。溜完狗、按了「溜了」，回來就有卡包。';
-    pack.disabled = true;
+    box.innerHTML = '<p class="bq-cta-note">還沒有你的溜狗紀錄。溜完狗、按了「溜了」，回來就有卡包。</p>';
   } else {
-    // 都開完了：攤開最近溜的五張，卡包收起來
-    field.classList.add('done', 'opened');
-    const recent = BQ.players.filter(p => BQ.mine.has(p.id)).sort((a, b) => BQ.mine.get(b.id).last - BQ.mine.get(a.id).last).slice(0, BQ_PACK_SIZE);
-    bqShowHand(recent, new Set(), true);
-    document.getElementById('bqDealNote').textContent = '新卡都開完了，這是你最近溜的。下次溜完再來開。';
-    pack.disabled = true;
+    box.innerHTML = '<p class="bq-cta-note">新卡都開完了。下次溜完再來開。</p>';
   }
-  bqRenderAgain();
 }
 function bqRenderAgain() {
   const left = Math.ceil(BQ.pending.length / BQ_PACK_SIZE);
   const again = document.getElementById('bqAgain');
-  again.hidden = !left || document.getElementById('bqField').classList.contains('done');
+  again.hidden = !left;
   again.textContent = left > 1 ? `再開一包（還有 ${left} 包）` : '再開一包';
+  document.getElementById('bqDone').hidden = false;
 }
 
 function bqDeal() {
@@ -331,10 +315,38 @@ function bqDeal() {
   BQ.pending = BQ.pending.slice(cards.length);
   bqShowHand(cards, new Set(cards.map(p => p.id)), false);
   document.getElementById('bqDealNote').textContent = `拿到 ${cards.length} 張，已收進圖鑑`;
-  document.getElementById('bqPackCount').textContent = BQ.pending.length ? `${BQ.pending.length} 張新卡` : '';
+  document.getElementById('bqPackCount').textContent = '';
   bqRenderAgain();
   bqRenderProgress();
   bqRenderBinder();
+  bqRenderCta();
+}
+// 按「開卡包」：球場蓋住畫面、卡包掉進來；撕開、攤開五張；「收進圖鑑」或 Esc 回圖鑑
+let bqFieldOpener = null;
+function bqOpenField(opener) {
+  if (!BQ.pending.length) return;
+  const field = document.getElementById('bqField');
+  bqFieldOpener = opener || null;
+  field.classList.remove('tearing', 'opened');
+  document.getElementById('bqHand').innerHTML = '';
+  document.getElementById('bqAgain').hidden = true;
+  document.getElementById('bqDone').hidden = true;
+  const n = BQ.pending.length;
+  document.getElementById('bqPackCount').textContent = `${Math.min(n, BQ_PACK_SIZE)} 張新卡`;
+  field.hidden = false;
+  document.documentElement.classList.add('bq-modal-open');
+  document.getElementById('bqPack').focus({ preventScroll: true });
+}
+function bqCloseField() {
+  const field = document.getElementById('bqField');
+  if (field.hidden) return;
+  field.hidden = true;
+  field.classList.remove('tearing', 'opened');
+  document.getElementById('bqHand').innerHTML = '';
+  document.documentElement.classList.remove('bq-modal-open');
+  const back = document.getElementById('bqOpen') || (bqFieldOpener && bqFieldOpener.isConnected ? bqFieldOpener : document.getElementById('bqBinderTitle'));
+  bqFieldOpener = null;
+  if (back && back.focus) back.focus({ preventScroll: true });
 }
 function bqOpenPack() {
   const field = document.getElementById('bqField');
@@ -391,7 +403,7 @@ function bqRenderBinder() {
       <h3><span>${bqEsc(t.name)}</span><small><b>${n}</b> / ${list.length}</small></h3>
       <div class="bq-pockets">${list.map(p => {
         const s = state(p);
-        if (s === 'pending') return `<button type="button" class="bq-pocket pending" data-to-pack aria-label="${bqEsc(p.name)}，還沒撕開，到上面開卡包"><span class="bq-pocket-back">${BQ_PAW}<b>待開</b></span><span class="bq-pocket-nm">${bqEsc(p.name)}</span></button>`;
+        if (s === 'pending') return `<button type="button" class="bq-pocket pending" data-to-pack aria-label="${bqEsc(p.name)}，還沒撕開，按了開卡包"><span class="bq-pocket-back">${BQ_PAW}<b>待開</b></span><span class="bq-pocket-nm">${bqEsc(p.name)}</span></button>`;
         return `<button type="button" class="bq-pocket ${s === 'got' ? `got tier-${p.tier.key}` : 'locked'}" data-open="${bqEsc(p.id)}" aria-label="${bqEsc(p.name)}，${s === 'got' ? bqEsc(p.tier.name) : '還沒溜過'}">
             <span class="bq-pocket-ph">${bqPhoto(p, p.thumb)}</span><span class="bq-pocket-nm">${bqEsc(p.name)}</span></button>`;
       }).join('')}</div>
@@ -438,16 +450,26 @@ function bqBind() {
   document.addEventListener('click', e => {
     const open = e.target.closest('[data-open]');
     if (open) { bqOpen(open.dataset.open, open); return; }
-    if (e.target.closest('[data-to-pack]')) {
-      document.getElementById('bqField').scrollIntoView({ behavior: BQ.still ? 'auto' : 'smooth' });
-      const target = document.getElementById('bqPack').disabled ? document.getElementById('bqAgain') : document.getElementById('bqPack');
-      target.focus({ preventScroll: true });
-      return;
-    }
+    const toPack = e.target.closest('[data-to-pack], #bqOpen');
+    if (toPack) { bqOpenField(toPack); return; }
+    if (e.target.closest('#bqDone, #bqFieldClose')) { bqCloseField(); return; }
     if (e.target.id === 'bqModal' || e.target.closest('#bqClose')) bqClose();
   });
   document.addEventListener('keydown', e => {
-    if (document.getElementById('bqModal').hidden) return;
+    if (document.getElementById('bqModal').hidden) {
+      // 開卡包的畫面：Esc 回圖鑑；Tab 留在這個畫面裡
+      const field = document.getElementById('bqField');
+      if (field.hidden) return;
+      if (e.key === 'Escape') { bqCloseField(); return; }
+      if (e.key === 'Tab') {
+        const items = [...field.querySelectorAll('button:not([hidden]):not(:disabled), [tabindex="0"]')].filter(el => el.offsetParent !== null);
+        if (!items.length) return;
+        const at = items.indexOf(document.activeElement);
+        e.preventDefault();
+        items[(at + (e.shiftKey ? -1 : 1) + items.length) % items.length].focus();
+      }
+      return;
+    }
     if (e.key === 'Escape') bqClose();
     if (e.key === 'Tab') { e.preventDefault(); const c = document.querySelector('#bqModalCard .bq-card'); (document.activeElement === c ? document.getElementById('bqClose') : c).focus(); }
   });
@@ -478,18 +500,17 @@ async function bqInit() {
     }
   } catch (e) {
     console.error(e);
-    document.getElementById('bqField').classList.add('failed');
-    document.getElementById('bqPackNote').textContent = '狗的資料讀不到，請重新整理頁面';
-    document.getElementById('bqPack').disabled = true;
+    document.getElementById('bqCta').innerHTML = '<p class="bq-cta-note">狗的資料讀不到，請重新整理頁面。</p>';
     return;
   }
   BQ.mine = bqMyDogs(walks, BQ.codes, bqTodayWrites(BQ.storage, BQ.today));
   BQ.pending = bqPending(BQ.players, BQ.mine, bqOpenedSet());
   document.getElementById('bqField').classList.add('ready');
-  bqRenderField();
+  bqRenderCta();
   bqRenderProgress();
-  bqRenderAwards();
+  // 年度獎項先藏起來（K 2026-10-10）：cards.html 那一段拿掉 hidden 就會出現
+  if (!document.querySelector('.bq-awards').hidden) bqRenderAwards();
   bqRenderBinder();
 }
 
-if (typeof document !== 'undefined' && document.getElementById('bqField')) bqInit();
+if (typeof document !== 'undefined' && document.getElementById('bqBinder')) bqInit();
