@@ -1007,3 +1007,9 @@
   - 管理用兩顆按鈕改輕一階（白底細框、灰字、44px），標題圖示換成 write（不跟試算表備註共用）。
   - 沒做：審查員建議補資料也保留上面的簡報（切換時工具列才不會跳）——這會少看兩三列，要 K 決定，先維持不放。
 - DESIGN.md、surface brief 跟著改（列表籠位自己一欄、補資料欄位）。
+## 2026-10-10 Claude（第 1 步：這間收容所的設定集中到 js/site-config.js）
+- 依據：K 2026-10-10：「我希望網站當主人（未來），讓這個網站以後若其他收容所要用可以整個搬去用，所以有些東西要分離出來，但目前主人還是試算表」；不做管控，只要資料有紀錄可以恢復（像 Notion、Google 試算表）；同意順序：設定檔 → 資料搬 Cloudflare 資料庫（現況＋異動紀錄）→ 異動紀錄畫面和還原 → 管理頁面。
+- 新增 js/site-config.js（SITE）：站名、收容所名、天數門檻（amber 3、red 5）、警示關鍵字、犬舍分區（key、name、match、圖鑑隊名和隊色）。index.html、cards.html 在其他程式前面載入。
+- js/app.js（SPECIAL_KEYWORDS、AMBER_DAYS、RED_DAYS、歡迎畫面站名）、js/desk.js（DESK_ZONES）、js/cards.js（BQ_TEAMS、BQ_FREE）、js/analysis.js（標題）改讀 SITE；行為不變。
+- 新增 docs/SITE_CONFIG.md：哪些已經收進設定檔、哪些還沒（靜態檔站名、找狗平面圖、試算表長相、編號規則、部署、色票），和 K 同意的後續順序。
+- 測試：tests/index.html、scripts/sync-sheet.test.mjs 先載入 site-config.js；#30 script 清單加一個；加 1 項「設定集中」。網頁 226 過（本機另 2 項 #130），node 132 過。
