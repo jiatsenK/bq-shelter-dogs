@@ -16,9 +16,11 @@ body { margin: 0; color: var(--chalk); font-family: var(--cjk); -webkit-font-smo
 :focus-visible { outline: 3px solid var(--gold-hi); outline-offset: 3px; }
 button { font: inherit; color: inherit; }
 html.bq-modal-open { overflow: hidden; }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
 
 /* ── 球場：深藍底、淺一階的直條草皮紋、投手丘那一圈 ── */
-.bq-field { position: relative; min-height: 100vh; min-height: 100svh; display: grid; grid-template-rows: auto 1fr auto; overflow: hidden;
+/* 第一屏留 56px 給下一段露出來，底下一條「往下看」（K 2026-10-10：第一次用的人不知道要往下滑） */
+.bq-field { position: relative; min-height: calc(100vh - 56px); min-height: calc(100svh - 56px); display: grid; grid-template-rows: auto 1fr auto auto; overflow: hidden;
   background: repeating-linear-gradient(90deg, var(--navy) 0 7.5vw, var(--navy-2) 7.5vw 15vw); }
 .bq-field::before { content: ''; position: absolute; left: 50%; top: 56%; width: 150vh; height: 150vh; transform: translate(-50%, -50%); border-radius: 50%; box-shadow: inset 0 0 0 3px rgba(244, 244, 240, .07), 0 0 0 3px rgba(244, 244, 240, .04); pointer-events: none; }
 .bq-mast { position: relative; z-index: 2; display: flex; justify-content: space-between; align-items: center; gap: 24px; padding: 30px 48px 0; }
@@ -153,8 +155,12 @@ html.bq-modal-open { overflow: hidden; }
 .bq-tier-note { font-size: calc(var(--cw) * .048); color: var(--sky-dim); font-weight: 700; }
 
 /* ── 卡包下面 ── */
-.bq-under { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 24px 36px; min-height: 164px; }
+.bq-under { position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 8px 24px 16px; min-height: 144px; }
 .bq-under p { margin: 0; }
+.bq-down { position: relative; z-index: 2; justify-self: center; display: inline-flex; align-items: center; gap: 10px; min-height: 48px; margin-bottom: 14px; padding: 0 20px 0 22px; border-radius: 3px; box-shadow: inset 0 0 0 2px rgba(198, 210, 232, .45); color: var(--chalk); font-weight: 900; font-size: 15px; letter-spacing: .12em; text-decoration: none; transition: box-shadow .2s, background .2s; }
+.bq-down:hover { box-shadow: inset 0 0 0 2px var(--chalk); background: rgba(244, 244, 240, .08); }
+.bq-down svg { width: 18px; height: 18px; color: var(--gold); animation: bq-nudge 1.6s var(--ease) infinite; }
+@keyframes bq-nudge { 0%, 100% { transform: none; } 50% { transform: translateY(5px); } }
 .bq-pack-note { color: var(--sky); font-weight: 700; letter-spacing: .25em; padding-left: .25em; }
 .bq-deal-note, .bq-again, .bq-flip-hint { display: none; }
 .opened .bq-pack-note { display: none; }
@@ -277,7 +283,7 @@ html.bq-modal-open { overflow: hidden; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bq-pack { animation: none; }
+  .bq-pack, .bq-down svg { animation: none; }
   .bq-pack, .bq-hand .bq-card, .bq-in, .bq-progress-bar i, .bq-trophy-ph img, .bq-pocket.got, .bq-pocket.pending, .bq-pocket-ph { transition: none; }
   .bq-card.fresh .bq-face, .bq-modal-in, .tearing .bq-pack-strip { animation: none; }
   .tearing .bq-pack-strip { opacity: 0; }
