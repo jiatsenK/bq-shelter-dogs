@@ -803,6 +803,12 @@
     {"id":"2020112402","name":"小新","date":"2026-10-10","mine":false,"walkers":["c3b400d1f468"]},
     {"id":"2021021702","name":"辛巴","date":"2026-10-10","mine":false,"walkers":["55f305be6715"]},
     {"id":"2018050810","name":"黑寶","date":"2026-10-10","mine":false,"walkers":["c3b400d1f468"]},
-    {"id":"2025072001","name":"天狼星","date":"2026-10-11","mine":false,"walkers":["044328805855"]}
+    {"id":"2025072001","name":"天狼星","date":"2026-10-11","mine":false,"walkers":["044328805855"]},
+    {"id":"2021111807","name":"捷運站","date":"2026-10-11","mine":false,"walkers":["ca36800987f2"]},
+    {"id":"2018062507","name":"黑狗兄","date":"2026-10-11","mine":false,"walkers":["ca36800987f2"]},
+    {"id":"2023072502","name":"老哥","date":"2026-10-11","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2021082803","name":"大米","date":"2026-10-11","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2022042602","name":"沙沙","date":"2026-10-11","mine":false,"walkers":["c3b400d1f468"]},
+    {"id":"2026032402","name":"雪糕","date":"2026-10-11","mine":false,"walkers":["044328805855"]}
   ]
 }

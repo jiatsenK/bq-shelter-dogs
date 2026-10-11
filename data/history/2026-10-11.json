@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-11T11:00:58+08:00",
+  "syncedAt": "2026-10-11T11:30:50+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -111,11 +111,11 @@
       "cage": "住院區",
       "id": "2021111807",
       "name": "捷運站",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "21120f797f52"
+        "ca36800987f2"
       ],
       "note": "後肢癱瘓114/9/24起每週一次針灸復健。4/12洗澡。7月底開始會慢慢自主起身行走",
       "sex": "female",
@@ -156,11 +156,11 @@
       "cage": "新獨01",
       "id": "2018062507",
       "name": "黑狗兄",
-      "walkedDate": "2026-10-08",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "ca36800987f2"
       ],
       "note": "20260913，右嘴流血，疑似息肉破裂。2026/4/5 籠內疑似護食，咬了歐疼，暫時搬到獨立籠 7/22洗澡msi",
       "sex": "male",
@@ -186,11 +186,11 @@
       "cage": "新獨03",
       "id": "2023072502",
       "name": "老哥",
-      "walkedDate": "2026-10-08",
+      "walkedDate": "2026-10-11",
       "covered": true,
-      "myWalked": true,
+      "myWalked": false,
       "walkers": [
-        "7fe4735e3c59"
+        "24bf2ad2af85"
       ],
       "note": "不親狗、護食",
       "sex": "male",
@@ -246,11 +246,11 @@
       "cage": "新獨07",
       "id": "2021082803",
       "name": "大米",
-      "walkedDate": "2026-10-08",
+      "walkedDate": "2026-10-11",
       "covered": true,
-      "myWalked": true,
+      "myWalked": false,
       "walkers": [
-        "7fe4735e3c59"
+        "24bf2ad2af85"
       ],
       "note": "6/28後腳無力（旭昇）; 2026/10/2洗澡（旭昇）",
       "sex": "male",
@@ -291,7 +291,7 @@
       "cage": "新獨10",
       "id": "2022042602",
       "name": "沙沙",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1785,11 +1785,11 @@
       "cage": "C區32",
       "id": "2026032402",
       "name": "雪糕",
-      "walkedDate": "2026-10-08",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "044328805855"
       ],
       "note": "20260322;3/28出所代養（嘉文）；4/12回收容所，代養人說有帶去看醫生，疑十字韌帶受傷(嘉文)",
       "sex": "male",
