@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-11T07:00:40+08:00",
+  "syncedAt": "2026-10-11T11:00:58+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -1363,7 +1363,7 @@
       "cage": "舊A20",
       "id": "2025072001",
       "name": "天狼星",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
