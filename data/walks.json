@@ -847,6 +847,9 @@
     {"id":"2023083106","name":"昆布","date":"2026-10-11","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2023022001","name":"寶弟","date":"2026-10-11","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2025021801","name":"阿湯","date":"2026-10-11","mine":false,"walkers":["da53fbdda293","044328805855"]},
-    {"id":"2024010203","name":"煙捲","date":"2026-10-11","mine":false,"walkers":["044328805855"]}
+    {"id":"2024010203","name":"煙捲","date":"2026-10-11","mine":false,"walkers":["044328805855"]},
+    {"id":"2017122504","name":"蘇打","date":"2026-10-11","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2018121304","name":"羅密歐","date":"2026-10-11","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2017090508","name":"墨西哥","date":"2026-10-11","mine":false,"walkers":["24bf2ad2af85"]}
   ]
 }

@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-11T12:30:52+08:00",
+  "syncedAt": "2026-10-11T13:01:15+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -979,7 +979,7 @@
       "cage": "新B09",
       "id": "2017122504",
       "name": "蘇打",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -994,7 +994,7 @@
       "cage": "新B09",
       "id": "2018121304",
       "name": "羅密歐",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1009,11 +1009,11 @@
       "cage": "新B10",
       "id": "2017090508",
       "name": "墨西哥",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "24bf2ad2af85"
       ],
       "note": "",
       "sex": "male",
