@@ -857,6 +857,12 @@
     {"id":"2024051602","name":"花田","date":"2026-10-11","mine":false,"walkers":["24bf2ad2af85"]},
     {"id":"2023032803","name":"奧利奧","date":"2026-10-11","mine":false,"walkers":["75aeed7c10fe"]},
     {"id":"2021083002","name":"栗子","date":"2026-10-11","mine":false,"walkers":["24bf2ad2af85"]},
-    {"id":"2024040202","name":"鐵雄","date":"2026-10-11","mine":false,"walkers":["75aeed7c10fe"]}
+    {"id":"2024040202","name":"鐵雄","date":"2026-10-11","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2021012101","name":"美金","date":"2026-10-11","mine":false,"walkers":["67c74c17be08"]},
+    {"id":"2025011006","name":"百吉","date":"2026-10-11","mine":false,"walkers":["67c74c17be08"]},
+    {"id":"2026062404","name":"史酷比","date":"2026-10-11","mine":false,"walkers":["67c74c17be08"]},
+    {"id":"2021043005","name":"小樂","date":"2026-10-11","mine":false,"walkers":["67c74c17be08"]},
+    {"id":"2025072901","name":"果凍","date":"2026-10-11","mine":false,"walkers":["67c74c17be08"]},
+    {"id":"2023083107","name":"丸子","date":"2026-10-11","mine":false,"walkers":["67c74c17be08"]}
   ]
 }

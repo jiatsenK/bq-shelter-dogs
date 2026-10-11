@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-11T13:31:09+08:00",
+  "syncedAt": "2026-10-11T18:00:26+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -474,11 +474,11 @@
       "cage": "新A05",
       "id": "2021012101",
       "name": "美金",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "67c74c17be08"
       ],
       "note": "",
       "sex": "female",
@@ -489,11 +489,11 @@
       "cage": "新A05",
       "id": "2025011006",
       "name": "百吉",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "67c74c17be08"
       ],
       "note": "咬傷領養人9/1 移入母幼區;9/16移回C區;2026/2/10試驗與布布同籠（嘉文）",
       "sex": "male",
@@ -897,11 +897,11 @@
       "cage": "新B07",
       "id": "2026062404",
       "name": "史酷比",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "67c74c17be08"
       ],
       "note": "會護食，9/23因吃飼料時護食和阿寶妹打架（俐葶）",
       "sex": "male",
@@ -1460,11 +1460,11 @@
       "cage": "舊B05",
       "id": "2021043005",
       "name": "小樂",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "67c74c17be08"
       ],
       "note": "2025/12/07 左眼嚴重眼屎（佳星）",
       "sex": "male",
@@ -1551,11 +1551,11 @@
       "cage": "舊B15",
       "id": "2025072901",
       "name": "果凍",
-      "walkedDate": "2026-10-06",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "67c74c17be08"
       ],
       "note": "可能護食，放雞腿後要等她吃完再碰她（嘉文）;2026/5/18調到舊犬舍（嘉文）",
       "sex": "female",
@@ -1685,11 +1685,11 @@
       "cage": "C區12",
       "id": "2023083107",
       "name": "丸子",
-      "walkedDate": "2026-10-08",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "67c74c17be08"
       ],
       "note": "2025/10/7 俐葶遇到 一路攻擊丸子 ，起始原因沒看到（嘉文)",
       "sex": "male",
