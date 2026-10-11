@@ -1,0 +1,2254 @@
+{
+  "version": 1,
+  "syncedAt": "2026-10-11T23:40:15+08:00",
+  "dogs": [
+    {
+      "cage": "母幼A",
+      "id": "2025022703",
+      "name": "滿滿",
+      "walkedDate": null,
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "e9c69473e76f"
+      ],
+      "note": "9／16<羊噴火訓練>移至母幼A5",
+      "sex": "male",
+      "intro": "民眾拾獲入所，拾獲地點是樹林區大同山。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "母幼A",
+      "id": "2024010501",
+      "name": "宙斯",
+      "walkedDate": "2026-10-05",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "dcda49f5b985"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "2024年1月5日從板橋被民眾拾獲入所，剛來時戴著項圈和牽繩，沒有晶片。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "母幼A",
+      "id": "2023040701",
+      "name": "莫莫",
+      "walkedDate": "2026-10-05",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "dcda49f5b985"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "2023年4月7日在樹林被民眾通報入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "母幼A",
+      "id": "2021020304",
+      "name": "冬冬",
+      "walkedDate": "2026-10-05",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "55f305be6715"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "由政府捕捉入所，捕獲地址是中正路二段176巷26號。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "母幼A",
+      "id": "2021021702",
+      "name": "辛巴",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "55f305be6715"
+      ],
+      "note": "",
+      "sex": "female",
+      "intro": "2021年2月17日迷路入所，被通報會追車。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "母幼A",
+      "id": "2023081204",
+      "name": "福星",
+      "walkedDate": "2026-10-06",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "a533226b339a"
+      ],
+      "note": "<羊噴火訓練>",
+      "sex": "male",
+      "intro": "主人不擬續養而入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "母幼A",
+      "id": "2020081102",
+      "name": "滷蛋",
+      "walkedDate": "2026-10-08",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "dcda49f5b985"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "由政府捕捉入所，捕獲地址是安坑路40號。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "住院區",
+      "id": "2021111807",
+      "name": "捷運站",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "ca36800987f2"
+      ],
+      "note": "後肢癱瘓114/9/24起每週一次針灸復健。4/12洗澡。7月底開始會慢慢自主起身行走",
+      "sex": "female",
+      "intro": "民眾拾獲送交入所，捕獲地址是亞東醫院捷運站2號出口。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "住院區",
+      "id": "2024111806",
+      "name": "布布",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "74402fdb5c36"
+      ],
+      "note": "2025/9/9血尿（俐葶）;2025/9/18沒看到血尿; 後來仍可能看到尿帶血，最常在末段尿看到血色(嘉文)、洗澡及左前腳狼爪指甲嵌進肉內已化膿（淑萍2026/07/19）、脖子有傷請穿黃色胸背帶外出（在住院區箱子裡）",
+      "sex": "female",
+      "intro": "2024年11月18日從樹林被拾獲入所，當時戴著小白花項圈，沒有主人領回。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "住院區",
+      "id": "2025061101",
+      "name": "老大",
+      "walkedDate": "2026-10-07",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "21120f797f52"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "2025年6月11日從樹林被通報入所，後腳無力、走路緩慢。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新獨01",
+      "id": "2018062507",
+      "name": "黑狗兄",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "ca36800987f2"
+      ],
+      "note": "20260913，右嘴流血，疑似息肉破裂。2026/4/5 籠內疑似護食，咬了歐疼，暫時搬到獨立籠 7/22洗澡msi",
+      "sex": "male",
+      "intro": "2018年6月24日迷路入所，剛來時嘴巴有被套過的痕跡。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新獨02",
+      "id": "2017090525",
+      "name": "阿寶妹",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
+      "note": "2026/4/18因為對奶茶及仲基較強勢，調到獨立籠（嘉文)",
+      "sex": "female",
+      "intro": "2016年8月23日迷路入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新獨03",
+      "id": "2023072502",
+      "name": "老哥",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "24bf2ad2af85"
+      ],
+      "note": "不親狗、護食",
+      "sex": "male",
+      "intro": "因政府處理案件入所，捕獲地址是中州街51巷14號。",
+      "myWalkedDate": "2026-10-08"
+    },
+    {
+      "cage": "新獨04",
+      "id": "",
+      "name": "金寶",
+      "walkedDate": null,
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "e9c69473e76f"
+      ],
+      "note": "從母幼區移出；2025/9/18左右咬藍衣志工打洞(嘉文）",
+      "sex": "",
+      "intro": "",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新獨05",
+      "id": "2026041903",
+      "name": "哈囉",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
+      "note": "7/16洗澡、2026/4/19領養退回; 2026/9/9,9/17服用drontal plus(嘉文）",
+      "sex": "male",
+      "intro": "2024年10月7日從板橋被通報入所，沒有晶片。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新獨06",
+      "id": "2023090701",
+      "name": "悟空",
+      "walkedDate": null,
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "f1a5fbf59cae"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "2023年9月7日從三峽迷路入所，剛來時偏瘦。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新獨07",
+      "id": "2021082803",
+      "name": "大米",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "8786042066d4"
+      ],
+      "note": "6/28後腳無力（旭昇）; 2026/10/2洗澡（旭昇）",
+      "sex": "male",
+      "intro": "入所原因登記為其他。",
+      "myWalkedDate": "2026-10-08"
+    },
+    {
+      "cage": "新獨08",
+      "id": "2019121105",
+      "name": "冬粉",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
+      "note": "不要跟阿信放ㄧ起、籠內經常尿在自己飲水盆（嘉文）",
+      "sex": "male",
+      "intro": "2019年12月11日迷路入所，腳曾被山豬吊夾傷，已經痊癒。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新獨09",
+      "id": "2021072702",
+      "name": "小草",
+      "walkedDate": null,
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "f1a5fbf59cae"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "2021年7月27日迷路入所，因為追車被通報，右眼萎縮。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新獨10",
+      "id": "2022042602",
+      "name": "沙沙",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "ca36800987f2"
+      ],
+      "note": "2026/4/18，咬Kobe(嘉文）；5/28發現褥瘡（巧芸） 7/22洗澡msi",
+      "sex": "male",
+      "intro": "2022年4月26日被主人帶來棄養，原因是搬新家無法飼養，當時八歲。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新獨11",
+      "id": "2019100711",
+      "name": "小貝",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "ca36800987f2"
+      ],
+      "note": "不親狗",
+      "sex": "female",
+      "intro": "2019年10月7日迷路入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新獨12",
+      "id": "2026082501",
+      "name": "米香",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "<羊噴火訓練>",
+      "sex": "female",
+      "intro": "因政府處理案件入所，拾獲地點是樹林區大安路84號。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A01",
+      "id": "2018050810",
+      "name": "黑寶",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2026/8/15疑似咬傷室友果果（巧芸）",
+      "sex": "female",
+      "intro": "2017年7月19日從淡水收容所轉來。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A01",
+      "id": "2018052305",
+      "name": "MINI",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "4/1胸下腫瘤切除，移至住院區。4/29出所治療住院，5/13回所(巧芸)",
+      "sex": "male",
+      "intro": "2018年5月23日迷路入所，當時腳有傷，已經痊癒。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A02",
+      "id": "2022042601",
+      "name": "黑皮",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "2022年4月26日從三峽迷路入所，後腳沒有腳掌，傷口已經痊癒。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A02",
+      "id": "2019032912",
+      "name": "瓜瓜",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "2019年3月29日因主人年紀大無法照顧被棄養入所，當時一歲多。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A03",
+      "id": "2021112704",
+      "name": "歐疼",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2026/4/10洗澡 7/22洗澡msi",
+      "sex": "male",
+      "intro": "2021年11月27日迷路入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A03",
+      "id": "2021121404",
+      "name": "白心",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2025/8/15洗澡; 2026/4/19左上唇有一點流血（嘉文） 7/22洗澡msi",
+      "sex": "male",
+      "intro": "2021年12月14日迷路入所，當時有項圈、沒有晶片。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A04",
+      "id": "2017122515",
+      "name": "KIWI",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "不要推他身體移位，會兇想咬人(嘉文);2026/5/23洗澡（嘉文）",
+      "sex": "female",
+      "intro": "2017年6月6日被主人棄養入所，主人說狗太吵，當時兩歲。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A04",
+      "id": "2018041328",
+      "name": "鍾碩",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2026/5/23洗澡（嘉文）",
+      "sex": "male",
+      "intro": "2018年4月13日從狗園轉來。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A04",
+      "id": "2026080201",
+      "name": "多多",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2026/6/4洗澡（嘉文）",
+      "sex": "male",
+      "intro": "2022年1月11日因追車、追人被通報入所，剛來時脖子上還有鐵鍊，沒有晶片。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A05",
+      "id": "2021012101",
+      "name": "美金",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "67c74c17be08"
+      ],
+      "note": "",
+      "sex": "female",
+      "intro": "2021年1月21日迷路入所，有晶片但沒有登記資料。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A05",
+      "id": "2025011006",
+      "name": "百吉",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "67c74c17be08"
+      ],
+      "note": "咬傷領養人9/1 移入母幼區;9/16移回C區;2026/2/10試驗與布布同籠（嘉文）",
+      "sex": "male",
+      "intro": "2024年1月10日從鶯歌被通報入所，少了右後腳。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A06",
+      "id": "2021072201",
+      "name": "小白",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2026/7/22洗澡(msi)；2026/9/2 吃一錠除（俐葶）",
+      "sex": "female",
+      "intro": "2021年7月22日因工廠拆遷被棄養入所，當時八歲。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A06",
+      "id": "2021090209",
+      "name": "小金",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "不親狗，曾咬過蘇打（秀玉）；會從小活動區草地區跳欄出來去咬其他狗（俐葶）, 2026/7/22洗澡(msi)",
+      "sex": "female",
+      "intro": "2021年9月2日迷路入所，當時有項圈、沒有晶片。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A07",
+      "id": "2017070102",
+      "name": "LUCY",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2026/9/18洗澡",
+      "sex": "female",
+      "intro": "2017年7月1日被主人棄養入所，原因是吠叫吵到鄰居，當時約一歲。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A07",
+      "id": "2018062601",
+      "name": "斑斑",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2026/5/9 斑斑要晚出籠 先進籠 2026/9/18洗澡",
+      "sex": "male",
+      "intro": "2018年6月26日因家人生病被棄養入所，當時還是幼犬。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A07",
+      "id": "2019052004",
+      "name": "巴迪",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "2019年5月20日迷路入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A08",
+      "id": "2026032605",
+      "name": "小七",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
+      "note": "2026/9/12洗澡（嘉文）",
+      "sex": "male",
+      "intro": "2023年3月28日從樹林入所，有晶片但沒人領回。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A08",
+      "id": "2018012909",
+      "name": "錢錢",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
+      "note": "2026/4/10洗澡(msi)",
+      "sex": "male",
+      "intro": "2016年10月28日迷路入所，剛入所時腳有傷，已經痊癒。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A08",
+      "id": "2026042101",
+      "name": "納卡西",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
+      "note": "約1.5歲(嘉文）; 2026/7/5炸醬麵在場內，本來要讓那卡西入場，但是那卡西呲牙咧嘴很兇（嘉文）",
+      "sex": "male",
+      "intro": "2026年4月21日從板橋被拾獲入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A09",
+      "id": "2021042904",
+      "name": "土撥鼠",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "會想跳小區圍籬（俐葶）",
+      "sex": "female",
+      "intro": "2020年4月29日迷路入所，有晶片但沒人領回。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A09",
+      "id": "2021082801",
+      "name": "海苔",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2025/10/30洗澡。會翻牆出小操場圍籬，放繩散步建議在大操場（中興）",
+      "sex": "male",
+      "intro": "2021年8月28日因追車、追人被通報入所，當時有項圈、沒有晶片，已經有點年紀。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A10",
+      "id": "2017090423",
+      "name": "暴牙斑",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "出籠套繩時會咬牽繩",
+      "sex": "male",
+      "intro": "2017年9月23日迷路入所，剛來時有點暴牙，現在看起來正常。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A10",
+      "id": "2018101206",
+      "name": "寶英",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "",
+      "sex": "female",
+      "intro": "2018年10月12日因主人服刑、家人年紀大無法飼養而被棄養入所，當時一歲多。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新A10",
+      "id": "2020022503",
+      "name": "蔥餅",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "嚴重焦慮、容易受傷，會咬斷牽繩(俐葶）",
+      "sex": "male",
+      "intro": "2020年2月25日迷路入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B01",
+      "id": "2020042106",
+      "name": "福嬌",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2025/9/17洗澡",
+      "sex": "female",
+      "intro": "2020年4月21日從瑞芳動物之家轉來。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B01",
+      "id": "2022030501",
+      "name": "皮皮",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2026/4/10洗澡(msi);跟其他籠的狗在一起可能會兇狗，跟室友福嬌一起，可能護資源（人）會去兇福嬌（嘉文/中興）",
+      "sex": "male",
+      "intro": "2022年3月5日被拾獲入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B02",
+      "id": "2018041609",
+      "name": "小煤炭",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2025/8/24洗澡",
+      "sex": "male",
+      "intro": "2018年4月16日從狗園轉來。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B02",
+      "id": "2019092801",
+      "name": "黃老爺",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2025/8/24洗澡",
+      "sex": "male",
+      "intro": "2019年9月28日迷路入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B03",
+      "id": "2018012903",
+      "name": "比比",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2026/5/31洗澡（秀玉)",
+      "sex": "male",
+      "intro": "2018年1月29日因家人生病被主人棄養入所。",
+      "myWalkedDate": "2026-09-24"
+    },
+    {
+      "cage": "新B03",
+      "id": "2020051906",
+      "name": "圈圈",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2026/5/31洗澡（秀玉）",
+      "sex": "male",
+      "intro": "2020年5月19日迷路入所，剛來時脖子上有四公分寬的傷，治療後幾乎看不到傷痕。",
+      "myWalkedDate": "2026-09-24"
+    },
+    {
+      "cage": "新B04",
+      "id": "2022091301",
+      "name": "沙茶",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "",
+      "sex": "female",
+      "intro": "2022年9月13日被拾獲入所，有晶片但沒有登記資料。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B05",
+      "id": "2024092303",
+      "name": "松果",
+      "walkedDate": "2026-10-08",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293"
+      ],
+      "note": "2025年9月，從母幼區移出，兩後腿外側呈現脫毛白色(嘉文)",
+      "sex": "male",
+      "intro": "2024年9月23日從中和被通報入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B05",
+      "id": "2020120106",
+      "name": "布萊克",
+      "walkedDate": "2026-10-08",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293"
+      ],
+      "note": "出籠害羞完全不敢吃東西，但回籠會吃(巧芸)",
+      "sex": "male",
+      "intro": "2020年12月1日被主人棄養入所，理由是怕生、膽小、亂叫，當時十個月大。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B05",
+      "id": "2020072102",
+      "name": "朵兒",
+      "walkedDate": "2026-10-08",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293"
+      ],
+      "note": "2026/2/10朵兒兇(黑森林或JoJo)其中一隻，那隻沒有回應閃開來。 朵兒是警戒膽小脾氣不好的狗。朵兒曾兩度和粉圓激烈汪汪叫(嘉文）",
+      "sex": "female",
+      "intro": "2020年7月21日迷路入所，有晶片但沒有登記資料。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B06",
+      "id": "2019080604",
+      "name": "蛋餅",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "75aeed7c10fe"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "2019年8月6日入所，主人一次棄養八隻，牠是其中一隻。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B06",
+      "id": "2021022202",
+      "name": "KOBE",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "75aeed7c10fe"
+      ],
+      "note": "2026/4/10洗澡(msi);大約2026/4/18，眼睛上方受傷應該被沙沙咬(嘉文）",
+      "sex": "male",
+      "intro": "2021年2月22日迷路入所，剛來時有項圈、沒有晶片。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B07",
+      "id": "2026062404",
+      "name": "史酷比",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "67c74c17be08"
+      ],
+      "note": "會護食，9/23因吃飼料時護食和阿寶妹打架（俐葶）",
+      "sex": "male",
+      "intro": "2026年6月24日從三峽被通報入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B08",
+      "id": "2019121309",
+      "name": "荷包蛋",
+      "walkedDate": "2026-10-07",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
+      "note": "龜縮在椅子底下，我伸手進去套繩沒有咬人（嘉文）2026/5/20洗澡(msi)",
+      "sex": "male",
+      "intro": "2019年5月3日從淡水收容所轉來，當時還是幼犬。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B08",
+      "id": "2022030205",
+      "name": "小偉",
+      "walkedDate": "2026-10-07",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
+      "note": "右前腳有傷口,有擦藥(嘉文）2026/5/20洗澡(msi)",
+      "sex": "male",
+      "intro": "2018年7月2日迷路入所，有晶片但沒人領回，膝蓋關節的傷口時好時壞。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B08",
+      "id": "2018041304",
+      "name": "小惠",
+      "walkedDate": "2026-10-07",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
+      "note": "2026/5/20洗澡(msi)",
+      "sex": "female",
+      "intro": "2018年4月13日從不良狗場轉來。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B08",
+      "id": "2026051203",
+      "name": "圓仔",
+      "walkedDate": "2026-10-07",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
+      "note": "原編號2018041318",
+      "sex": "female",
+      "intro": "2018年4月13日從不良狗園被沒入收容所；曾被認養，一個月後因不吃飯退回。",
+      "formerIds": [
+        "2018041318"
+      ],
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B09",
+      "id": "2017122504",
+      "name": "蘇打",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "75aeed7c10fe"
+      ],
+      "note": "2026/5/12洗澡(秀玉)",
+      "sex": "female",
+      "intro": "2015年9月10日流浪入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B09",
+      "id": "2018121304",
+      "name": "羅密歐",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "75aeed7c10fe"
+      ],
+      "note": "2025/8/15羅密歐左後腳外側有凸起腫塊(嘉文）2026/5/12洗澡(秀玉)",
+      "sex": "male",
+      "intro": "2018年10月4日迷路入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B10",
+      "id": "2017090508",
+      "name": "墨西哥",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "24bf2ad2af85"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "2015年8月18日迷路入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B10",
+      "id": "2018050813",
+      "name": "歐巴",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "24bf2ad2af85"
+      ],
+      "note": "龜縮在椅子底下，伸手進去解套繩沒有咬人（嘉文）",
+      "sex": "male",
+      "intro": "2017年11月14日從淡水收容所轉來。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "新B10",
+      "id": "2026051406",
+      "name": "果果",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "8786042066d4"
+      ],
+      "note": "只喜歡在犬舍內繞（嘉文）;1/21 腳流血，醫生麻醉治療，住院區（嘉文)。2/22併入Mini籠；2026/4/28被認養;2026/5/14被送回(嘉文)",
+      "sex": "female",
+      "intro": "2025年3月1日被主人帶來棄養；曾被認養一次，因無法適應新環境退回。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A02",
+      "id": "2020013004",
+      "name": "泰森",
+      "walkedDate": "2026-10-07",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "5bcd472f0161"
+      ],
+      "note": "12/4右前腳紅腫有傷口，已擦藥  2026/5/20洗澡(msi);2026/8/19被煙捲咬傷（俐葶）10/10又昏迷後送，檢查正常，暫移至住院區",
+      "sex": "male",
+      "intro": "2020年1月30日迷路入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A03",
+      "id": "2017090505",
+      "name": "黑森林",
+      "walkedDate": "2026-10-08",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293"
+      ],
+      "note": "2025/10/26脖子處有脫毛；2025/8/24洗澡;2026/3/10在住院區，據說腳趾（狼爪)有做麻醉醫療（嘉文）；2026/3/24拆線（嘉文）",
+      "sex": "male",
+      "intro": "2016年6月7日迷路入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A03",
+      "id": "2024022801",
+      "name": "JOJO",
+      "walkedDate": "2026-10-08",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293"
+      ],
+      "note": "2025/8/24洗澡",
+      "sex": "male",
+      "intro": "2019年4月24日被棄養入所，主人說不親人；2023年2月23日被認養，2月28日退回，認養人說不吃飼料。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A04",
+      "id": "2022030902",
+      "name": "哈拉",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "18c3c7b7d3c3"
+      ],
+      "note": "<羊噴火訓練>",
+      "sex": "male",
+      "intro": "主人不擬續養而入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A05",
+      "id": "2024051602",
+      "name": "花田",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "24bf2ad2af85"
+      ],
+      "note": "<羊噴火訓練> 2026/08/30新區門口、9/13舊區門口、9/17小操場（喬筠）",
+      "sex": "female",
+      "intro": "2024年5月16日因在鶯歌追車被通報入所，有晶片但沒有登記資料。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A06",
+      "id": "2024010203",
+      "name": "煙捲",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "044328805855"
+      ],
+      "note": "2/4屁股左後處有腫塊，已回報所方；8/19咬了泰森；8/26散步途中突然要咬經過的路人（俐葶）；8/28右後腳微跛；8/29再觀察沒跛，近期後腳要留意（俐葶）",
+      "sex": "male",
+      "intro": "2024年1月2日從板橋被通報入所，當時戴著項圈，有晶片但沒有資料。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A07",
+      "id": "2018041317",
+      "name": "IU",
+      "walkedDate": "2026-10-08",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293"
+      ],
+      "note": "",
+      "sex": "female",
+      "intro": "2018年4月13日從不良狗場轉來。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A08",
+      "id": "2024052201",
+      "name": "太郎",
+      "walkedDate": "2026-10-08",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293"
+      ],
+      "note": "套繩、解繩要小心，會回頭咬（俐葶）梳毛會生氣(秀玉)",
+      "sex": "male",
+      "intro": "2024年5月22日因主人搬家被棄養入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A09",
+      "id": "2019080606",
+      "name": "蔥抓餅",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "75aeed7c10fe"
+      ],
+      "note": "",
+      "sex": "female",
+      "intro": "2019年8月6日入所，主人一次棄養八隻，牠是其中一隻。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A09",
+      "id": "2019080607",
+      "name": "胡椒餅",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "75aeed7c10fe"
+      ],
+      "note": "",
+      "sex": "female",
+      "intro": "2019年8月6日入所，主人一次棄養八隻，牠是其中一隻。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A10",
+      "id": "2021112003",
+      "name": "部長",
+      "walkedDate": "2026-10-08",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "75aeed7c10fe"
+      ],
+      "note": "2026/8/29洗澡（旭昇）",
+      "sex": "male",
+      "intro": "因政府處理案件入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A12",
+      "id": "2018121202",
+      "name": "笑笑",
+      "walkedDate": "2026-10-08",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "75aeed7c10fe"
+      ],
+      "note": "2026/10/2洗澡（旭昇）",
+      "sex": "",
+      "intro": "主人不擬續養而入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A13",
+      "id": "2019120501",
+      "name": "皮蛋",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "75aeed7c10fe"
+      ],
+      "note": "2026/4/29洗澡（巧芸）",
+      "sex": "male",
+      "intro": "2019年12月5日迷路入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A14",
+      "id": "2020081808",
+      "name": "奇哥",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "24bf2ad2af85"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "2020年8月18日被通報入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A14",
+      "id": "2021071301",
+      "name": "白尾",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "24bf2ad2af85"
+      ],
+      "note": "2026/5/3 大腿內側腫大（嘉文）;約2026/6/3割腫瘤",
+      "sex": "male",
+      "intro": "2021年7月13日被通報入所，剛來時戴著胸背，沒有晶片。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A15",
+      "id": "2019070219",
+      "name": "黑豆漿",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "24bf2ad2af85"
+      ],
+      "note": "2026/4/12、7/26洗澡",
+      "sex": "male",
+      "intro": "2019年7月2日迷路入所，當時已經有點年紀。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A15",
+      "id": "2019080608",
+      "name": "可麗餅",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "24bf2ad2af85"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "2019年8月6日入所，主人一次棄養八隻，牠是其中一隻，剛來時皮膚狀況比較差。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A16",
+      "id": "2020122507",
+      "name": "馬克",
+      "walkedDate": "2026-10-07",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "21120f797f52"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "主人不擬續養而入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A18",
+      "id": "2025042401",
+      "name": "浩南",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "21120f797f52"
+      ],
+      "note": "4/12洗澡（佳岑）",
+      "sex": "male",
+      "intro": "2025年4月24日從三峽被通報入所。",
+      "myWalkedDate": "2026-10-04"
+    },
+    {
+      "cage": "舊A19",
+      "id": "2018012203",
+      "name": "妍妍",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "24bf2ad2af85"
+      ],
+      "note": "5/31洗澡（msi)、",
+      "sex": "female",
+      "intro": "2017年2月5日迷路入所。",
+      "myWalkedDate": "2026-10-04"
+    },
+    {
+      "cage": "舊A19",
+      "id": "2019062703",
+      "name": "婉嬪",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "24bf2ad2af85"
+      ],
+      "note": "5/31洗澡（msi)、7/8洗澡（喬筠）",
+      "sex": "female",
+      "intro": "2019年6月27日因主人生病無法飼養而入所，原本是家犬。",
+      "myWalkedDate": "2026-10-04"
+    },
+    {
+      "cage": "舊A20",
+      "id": "2025072001",
+      "name": "天狼星",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "044328805855"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "認養後被飼主退回，捕獲地址是板橋區漢生東路。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊A21",
+      "id": "2021071401",
+      "name": "胖胖",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "75aeed7c10fe"
+      ],
+      "note": "梳毛",
+      "sex": "male",
+      "intro": "2021年7月14日因主人搬家被棄養入所，當時八歲。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B01",
+      "id": "2020021208",
+      "name": "靜香",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "24bf2ad2af85"
+      ],
+      "note": "4/12洗澡（Vicki）、7/8洗澡（喬筠）",
+      "sex": "female",
+      "intro": "2020年2月12日迷路入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B01",
+      "id": "2020071403",
+      "name": "OPEN醬",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "24bf2ad2af85"
+      ],
+      "note": "2026/4/12與7/8洗澡（喬筠）、6/28右後腳左邊數來第二腳趾流血，推估是指甲斷掉(喬筠）",
+      "sex": "male",
+      "intro": "2020年7月14日迷路入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B03",
+      "id": "2026060101",
+      "name": "甜甜",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "ca36800987f2"
+      ],
+      "note": "不親會走動的狗， 會發出低鳴不悦的聲音。 對捷運站和拉亞倒是沒有問題",
+      "sex": "female",
+      "intro": "2026年6月1日從三峽被通報入所，少了兩隻前腳。",
+      "myWalkedDate": "2026-10-08"
+    },
+    {
+      "cage": "舊B04",
+      "id": "2026042902",
+      "name": "方吉",
+      "walkedDate": "2026-10-09",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "a533226b339a",
+        "dcda49f5b985"
+      ],
+      "note": "",
+      "sex": "female",
+      "intro": "民眾拾獲送交入所，捕獲地址是三峽區竹崙路57號。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B05",
+      "id": "2021043005",
+      "name": "小樂",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "67c74c17be08"
+      ],
+      "note": "2025/12/07 左眼嚴重眼屎（佳星）",
+      "sex": "male",
+      "intro": "2021年4月30日迷路入所，當時已經有點年紀。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B09",
+      "id": "2023032803",
+      "name": "奧利奧",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "75aeed7c10fe"
+      ],
+      "note": "2025/8/15洗澡",
+      "sex": "male",
+      "intro": "2023年3月28日被主人帶來棄養，原因是吠叫遭鄰居抗議，當時三歲半。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B10",
+      "id": "2023112304",
+      "name": "金馬",
+      "walkedDate": null,
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "a533226b339a",
+        "ea864bd3319f"
+      ],
+      "note": "<羊噴火訓練>",
+      "sex": "male",
+      "intro": "主人不擬續養而入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B12",
+      "id": "2024120202",
+      "name": "凱瑞",
+      "walkedDate": "2026-10-08",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "75aeed7c10fe"
+      ],
+      "note": "2025/8/3，咬了旭昇,上手臂後側2-3公分撕裂傷（嘉文)。9／10移至舊犬舍。會護地盤（巧芸）",
+      "sex": "male",
+      "intro": "2024年12月2日從樹林被通報入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B13",
+      "id": "2021083002",
+      "name": "栗子",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "24bf2ad2af85"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "2021年8月30日被通報入所，有晶片但沒人領回。",
+      "myWalkedDate": "2026-10-08"
+    },
+    {
+      "cage": "舊B14",
+      "id": "2020112402",
+      "name": "小新",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "<羊噴火訓練>興奮撲人時會咬，遛他時人不要在場內比較安全（俐葶）",
+      "sex": "male",
+      "intro": "由政府捕捉入所，捕獲地址是溪頭公園。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B15",
+      "id": "2025072901",
+      "name": "果凍",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "67c74c17be08"
+      ],
+      "note": "可能護食，放雞腿後要等她吃完再碰她（嘉文）;2026/5/18調到舊犬舍（嘉文）",
+      "sex": "female",
+      "intro": "2025年7月29日從三峽被拾獲入所。",
+      "myWalkedDate": "2026-09-24"
+    },
+    {
+      "cage": "舊B16",
+      "id": "2024082801",
+      "name": "(阿拉丁)",
+      "walkedDate": "2026-10-04",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "f16f7d3c8784"
+      ],
+      "note": "2026/5/27身體右後方有腫塊(嘉文）10/1出所檢查、10月初切除腫瘤，10/20前休養勿外出散步（俐葶）",
+      "sex": "male",
+      "intro": "2019年3月26日被通報入所，曾被認養後退回，有咬傷紀錄。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B17",
+      "id": "2021050602",
+      "name": "保羅",
+      "walkedDate": "2026-10-10",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "c3b400d1f468"
+      ],
+      "note": "2026/10/2洗澡（旭昇）",
+      "sex": "male",
+      "intro": "2021年5月6日迷路入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B18",
+      "id": "2018012905",
+      "name": "熊熊",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "044328805855"
+      ],
+      "note": "陌生人有可能會咬（嘉文）;8/25剃毛",
+      "sex": "male",
+      "intro": "因通報捕捉入所，捕獲地址是八德路。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B18",
+      "id": "2018012907",
+      "name": "毛毛",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "044328805855"
+      ],
+      "note": "陌生人有可能會咬（嘉文）",
+      "sex": "male",
+      "intro": "因通報入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B19",
+      "id": "2024032902",
+      "name": "野口",
+      "walkedDate": "2026-10-09",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "a533226b339a",
+        "dcda49f5b985"
+      ],
+      "note": "<羊噴火訓練>",
+      "sex": "female",
+      "intro": "2024年3月29日因被通報咬人入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B20",
+      "id": "2024040202",
+      "name": "鐵雄",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "75aeed7c10fe"
+      ],
+      "note": "3/8右眼有紅色條狀異物（俐葶）、4/12洗澡(巧芸+喬筠)",
+      "sex": "male",
+      "intro": "2024年4月2日從樹林被拾獲入所，當時在路上追人。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "舊B21",
+      "id": "2021122302",
+      "name": "大壯",
+      "walkedDate": null,
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "75aeed7c10fe"
+      ],
+      "note": "1/8割腫瘤;1/22拆線、4/12洗澡(巧芸+喬筠)",
+      "sex": "male",
+      "intro": "2021年12月23日迷路入所，因為追咬人被通報，當時有項圈、沒有晶片。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "C區11",
+      "id": "2021030913",
+      "name": "咪寶",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293"
+      ],
+      "note": "對狗具攻擊性（嘉文），2025/12/24咬了捷運站",
+      "sex": "female",
+      "intro": "2021年3月9日迷路入所，當時臉上有些舊傷。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "C區12",
+      "id": "2023083107",
+      "name": "丸子",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "67c74c17be08"
+      ],
+      "note": "2025/10/7 俐葶遇到 一路攻擊丸子 ，起始原因沒看到（嘉文)",
+      "sex": "male",
+      "intro": "2023年8月31日被主人棄養入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "C區13",
+      "id": "2026082607",
+      "name": "寶妮",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293"
+      ],
+      "note": "",
+      "sex": "female",
+      "intro": "2026年8月26日從板橋大遠百被拾獲入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "C區21",
+      "id": "2023052902",
+      "name": "妙麗",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "74402fdb5c36"
+      ],
+      "note": "頸部有腫瘤，不要用p繩，要穿淑萍給的胸背才帶出（嘉文）註：胸背放在住院區箱子裡",
+      "sex": "female",
+      "intro": "2023年5月29日從樹林迷路入所，被通報在路上追人，有口腔腫瘤。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "C區22",
+      "id": "2023072604",
+      "name": "小梅子",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293"
+      ],
+      "note": "",
+      "sex": "female",
+      "intro": "2023年7月26日從三峽迷路入所，右前腳被捕獸夾夾傷，傷口恢復良好。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "C區23",
+      "id": "2023122901",
+      "name": "一路",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
+      "note": "2025/10/7 俐葶遇到 一路攻擊丸子 ，起始原因沒看到(嘉文)；11/18 一路要攻擊松果（嘉文）；被阿信咬過（嘉文）；在小區看到外面的芽芽會跳柵欄（俐葶）",
+      "sex": "male",
+      "intro": "2023年12月29日從三峽被通報入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "C區24",
+      "id": "2026082601",
+      "name": "朵力（開多）",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "民眾拾獲送交入所，拾獲地點是三峽區中正路一段19巷8號。",
+      "myWalkedDate": "2026-10-04"
+    },
+    {
+      "cage": "C區31",
+      "id": "2023042803",
+      "name": "奈威",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
+      "note": "2026/01/04肛門流血，4/12、 5/31洗澡洗澡（Msi）",
+      "sex": "male",
+      "intro": "2023年4月28日從三峽被拾獲入所，因為主人過世，同時入所的共有兩隻。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "C區32",
+      "id": "2026032402",
+      "name": "雪糕",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "044328805855"
+      ],
+      "note": "20260322;3/28出所代養（嘉文）；4/12回收容所，代養人說有帶去看醫生，疑十字韌帶受傷(嘉文)",
+      "sex": "male",
+      "intro": "2025年3月17日從三峽被通報入所。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "C區33",
+      "id": "2023083106",
+      "name": "昆布",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293"
+      ],
+      "note": "小屁孩炸醬麵剛去認識他時太激進，昆布會威嚇驅趕開來，但是沒有真的咬上去（嘉文）",
+      "sex": "male",
+      "intro": "2023年8月31日被主人帶來棄養。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "C區34",
+      "id": "2023022001",
+      "name": "寶弟",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293"
+      ],
+      "note": "對狗曾經攻擊（嘉文）",
+      "sex": "male",
+      "intro": "2023年2月20日迷路入所，當時戴著綠色項圈，沒有晶片。",
+      "myWalkedDate": null
+    },
+    {
+      "cage": "C區35",
+      "id": "2025021801",
+      "name": "阿湯",
+      "walkedDate": "2026-10-11",
+      "covered": true,
+      "myWalked": false,
+      "walkers": [
+        "da53fbdda293",
+        "044328805855"
+      ],
+      "note": "",
+      "sex": "male",
+      "intro": "因政府處理案件入所，拾獲地點是板橋區南雅西路2段259巷4號。",
+      "myWalkedDate": null
+    }
+  ],
+  "groups": {
+    "松果": [
+      "布萊克",
+      "朵兒",
+      "黑森林",
+      "錢錢",
+      "阿寶妹"
+    ],
+    "布萊克": [
+      "松果",
+      "朵兒",
+      "黑森林",
+      "錢錢",
+      "阿寶妹"
+    ],
+    "朵兒": [
+      "松果",
+      "布萊克",
+      "黑森林",
+      "錢錢",
+      "阿寶妹"
+    ],
+    "黑森林": [
+      "松果",
+      "布萊克",
+      "朵兒",
+      "錢錢",
+      "阿寶妹"
+    ],
+    "錢錢": [
+      "松果",
+      "布萊克",
+      "朵兒",
+      "黑森林",
+      "阿寶妹"
+    ],
+    "阿寶妹": [
+      "松果",
+      "布萊克",
+      "朵兒",
+      "黑森林",
+      "錢錢"
+    ],
+    "冬粉": [
+      "昆布",
+      "哈囉",
+      "奈威"
+    ],
+    "昆布": [
+      "冬粉",
+      "哈囉",
+      "奈威"
+    ],
+    "哈囉": [
+      "冬粉",
+      "昆布",
+      "奈威"
+    ],
+    "奈威": [
+      "冬粉",
+      "昆布",
+      "哈囉"
+    ],
+    "一路": [
+      "丸子"
+    ],
+    "丸子": [
+      "一路"
+    ],
+    "KIWI": [
+      "鍾碩",
+      "多多",
+      "圓仔",
+      "小惠",
+      "小偉",
+      "荷包蛋"
+    ],
+    "鍾碩": [
+      "KIWI",
+      "多多",
+      "圓仔",
+      "小惠",
+      "小偉",
+      "荷包蛋"
+    ],
+    "多多": [
+      "KIWI",
+      "鍾碩",
+      "圓仔",
+      "小惠",
+      "小偉",
+      "荷包蛋"
+    ],
+    "圓仔": [
+      "KIWI",
+      "鍾碩",
+      "多多",
+      "小惠",
+      "小偉",
+      "荷包蛋"
+    ],
+    "小惠": [
+      "KIWI",
+      "鍾碩",
+      "多多",
+      "圓仔",
+      "小偉",
+      "荷包蛋"
+    ],
+    "小偉": [
+      "KIWI",
+      "鍾碩",
+      "多多",
+      "圓仔",
+      "小惠",
+      "荷包蛋"
+    ],
+    "荷包蛋": [
+      "KIWI",
+      "鍾碩",
+      "多多",
+      "圓仔",
+      "小惠",
+      "小偉"
+    ],
+    "蘇打": [
+      "羅密歐",
+      "墨西哥",
+      "歐巴",
+      "果果",
+      "黑寶",
+      "白心",
+      "歐疼",
+      "黑狗兄"
+    ],
+    "羅密歐": [
+      "蘇打",
+      "墨西哥",
+      "歐巴",
+      "果果",
+      "黑寶",
+      "白心",
+      "歐疼",
+      "黑狗兄"
+    ],
+    "墨西哥": [
+      "蘇打",
+      "羅密歐",
+      "歐巴",
+      "果果",
+      "黑寶",
+      "白心",
+      "歐疼",
+      "黑狗兄"
+    ],
+    "歐巴": [
+      "蘇打",
+      "羅密歐",
+      "墨西哥",
+      "果果",
+      "黑寶",
+      "白心",
+      "歐疼",
+      "黑狗兄"
+    ],
+    "果果": [
+      "蘇打",
+      "羅密歐",
+      "墨西哥",
+      "歐巴",
+      "黑寶",
+      "白心",
+      "歐疼",
+      "黑狗兄"
+    ],
+    "黑寶": [
+      "蘇打",
+      "羅密歐",
+      "墨西哥",
+      "歐巴",
+      "果果",
+      "白心",
+      "歐疼",
+      "黑狗兄"
+    ],
+    "白心": [
+      "蘇打",
+      "羅密歐",
+      "墨西哥",
+      "歐巴",
+      "果果",
+      "黑寶",
+      "歐疼",
+      "黑狗兄"
+    ],
+    "歐疼": [
+      "蘇打",
+      "羅密歐",
+      "墨西哥",
+      "歐巴",
+      "果果",
+      "黑寶",
+      "白心",
+      "黑狗兄"
+    ],
+    "黑狗兄": [
+      "蘇打",
+      "羅密歐",
+      "墨西哥",
+      "歐巴",
+      "果果",
+      "黑寶",
+      "白心",
+      "歐疼"
+    ],
+    "黑皮": [
+      "瓜瓜",
+      "斑斑",
+      "LUCY",
+      "巴迪"
+    ],
+    "瓜瓜": [
+      "黑皮",
+      "斑斑",
+      "LUCY",
+      "巴迪"
+    ],
+    "斑斑": [
+      "黑皮",
+      "瓜瓜",
+      "LUCY",
+      "巴迪"
+    ],
+    "LUCY": [
+      "黑皮",
+      "瓜瓜",
+      "斑斑",
+      "巴迪"
+    ],
+    "巴迪": [
+      "黑皮",
+      "瓜瓜",
+      "斑斑",
+      "LUCY"
+    ],
+    "胖胖": [
+      "皮蛋",
+      "大壯",
+      "鐵雄",
+      "靜香",
+      "妍妍",
+      "婉嬪"
+    ],
+    "皮蛋": [
+      "胖胖",
+      "大壯",
+      "鐵雄",
+      "靜香",
+      "妍妍",
+      "婉嬪"
+    ],
+    "大壯": [
+      "胖胖",
+      "皮蛋",
+      "鐵雄",
+      "靜香",
+      "妍妍",
+      "婉嬪"
+    ],
+    "鐵雄": [
+      "胖胖",
+      "皮蛋",
+      "大壯",
+      "靜香",
+      "妍妍",
+      "婉嬪"
+    ],
+    "靜香": [
+      "胖胖",
+      "皮蛋",
+      "大壯",
+      "鐵雄",
+      "妍妍",
+      "婉嬪"
+    ],
+    "妍妍": [
+      "胖胖",
+      "皮蛋",
+      "大壯",
+      "鐵雄",
+      "靜香",
+      "婉嬪"
+    ],
+    "婉嬪": [
+      "胖胖",
+      "皮蛋",
+      "大壯",
+      "鐵雄",
+      "靜香",
+      "妍妍"
+    ],
+    "蛋餅": [
+      "蔥抓餅",
+      "胡椒餅",
+      "黑豆漿",
+      "可麗餅",
+      "奇哥",
+      "白尾"
+    ],
+    "蔥抓餅": [
+      "蛋餅",
+      "胡椒餅",
+      "黑豆漿",
+      "可麗餅",
+      "奇哥",
+      "白尾"
+    ],
+    "胡椒餅": [
+      "蛋餅",
+      "蔥抓餅",
+      "黑豆漿",
+      "可麗餅",
+      "奇哥",
+      "白尾"
+    ],
+    "黑豆漿": [
+      "蛋餅",
+      "蔥抓餅",
+      "胡椒餅",
+      "可麗餅",
+      "奇哥",
+      "白尾"
+    ],
+    "可麗餅": [
+      "蛋餅",
+      "蔥抓餅",
+      "胡椒餅",
+      "黑豆漿",
+      "奇哥",
+      "白尾"
+    ],
+    "奇哥": [
+      "蛋餅",
+      "蔥抓餅",
+      "胡椒餅",
+      "黑豆漿",
+      "可麗餅",
+      "白尾"
+    ],
+    "白尾": [
+      "蛋餅",
+      "蔥抓餅",
+      "胡椒餅",
+      "黑豆漿",
+      "可麗餅",
+      "奇哥"
+    ],
+    "黃老爺": [
+      "小煤炭",
+      "寶英",
+      "圈圈",
+      "比比",
+      "沙茶"
+    ],
+    "小煤炭": [
+      "黃老爺",
+      "寶英",
+      "圈圈",
+      "比比",
+      "沙茶"
+    ],
+    "寶英": [
+      "黃老爺",
+      "小煤炭",
+      "圈圈",
+      "比比",
+      "沙茶"
+    ],
+    "圈圈": [
+      "黃老爺",
+      "小煤炭",
+      "寶英",
+      "比比",
+      "沙茶"
+    ],
+    "比比": [
+      "黃老爺",
+      "小煤炭",
+      "寶英",
+      "圈圈",
+      "沙茶"
+    ],
+    "沙茶": [
+      "黃老爺",
+      "小煤炭",
+      "寶英",
+      "圈圈",
+      "比比"
+    ],
+    "捷運站": [
+      "甜甜"
+    ],
+    "甜甜": [
+      "捷運站"
+    ],
+    "部長": [
+      "笑笑"
+    ],
+    "笑笑": [
+      "部長"
+    ]
+  },
+  "sheetNotes": []
+}
