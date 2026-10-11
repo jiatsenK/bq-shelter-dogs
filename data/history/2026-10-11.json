@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-11T13:01:15+08:00",
+  "syncedAt": "2026-10-11T13:31:09+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -252,7 +252,7 @@
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "24bf2ad2af85"
+        "8786042066d4"
       ],
       "note": "6/28後腳無力（旭昇）; 2026/10/2洗澡（旭昇）",
       "sex": "male",
@@ -1024,11 +1024,11 @@
       "cage": "新B10",
       "id": "2018050813",
       "name": "歐巴",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "24bf2ad2af85"
       ],
       "note": "龜縮在椅子底下，伸手進去解套繩沒有咬人（嘉文）",
       "sex": "male",
@@ -1039,11 +1039,11 @@
       "cage": "新B10",
       "id": "2026051406",
       "name": "果果",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "75aeed7c10fe"
+        "8786042066d4"
       ],
       "note": "只喜歡在犬舍內繞（嘉文）;1/21 腳流血，醫生麻醉治療，住院區（嘉文)。2/22併入Mini籠；2026/4/28被認養;2026/5/14被送回(嘉文)",
       "sex": "female",
@@ -1114,11 +1114,11 @@
       "cage": "舊A05",
       "id": "2024051602",
       "name": "花田",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "24bf2ad2af85"
       ],
       "note": "<羊噴火訓練> 2026/08/30新區門口、9/13舊區門口、9/17小操場（喬筠）",
       "sex": "female",
@@ -1475,7 +1475,7 @@
       "cage": "舊B09",
       "id": "2023032803",
       "name": "奧利奧",
-      "walkedDate": "2026-10-08",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1521,11 +1521,11 @@
       "cage": "舊B13",
       "id": "2021083002",
       "name": "栗子",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "24bf2ad2af85"
       ],
       "note": "",
       "sex": "male",
@@ -1640,11 +1640,11 @@
       "cage": "舊B20",
       "id": "2024040202",
       "name": "鐵雄",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-11",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "3/8右眼有紅色條狀異物（俐葶）、4/12洗澡(巧芸+喬筠)",
       "sex": "male",
@@ -1655,11 +1655,11 @@
       "cage": "舊B21",
       "id": "2021122302",
       "name": "大壯",
-      "walkedDate": "2026-10-10",
+      "walkedDate": null,
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "1/8割腫瘤;1/22拆線、4/12洗澡(巧芸+喬筠)",
       "sex": "male",

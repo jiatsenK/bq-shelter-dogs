@@ -850,6 +850,13 @@
     {"id":"2024010203","name":"煙捲","date":"2026-10-11","mine":false,"walkers":["044328805855"]},
     {"id":"2017122504","name":"蘇打","date":"2026-10-11","mine":false,"walkers":["75aeed7c10fe"]},
     {"id":"2018121304","name":"羅密歐","date":"2026-10-11","mine":false,"walkers":["75aeed7c10fe"]},
-    {"id":"2017090508","name":"墨西哥","date":"2026-10-11","mine":false,"walkers":["24bf2ad2af85"]}
+    {"id":"2017090508","name":"墨西哥","date":"2026-10-11","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2021082803","name":"大米","date":"2026-10-11","mine":false,"walkers":["8786042066d4"]},
+    {"id":"2018050813","name":"歐巴","date":"2026-10-11","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2026051406","name":"果果","date":"2026-10-11","mine":false,"walkers":["8786042066d4"]},
+    {"id":"2024051602","name":"花田","date":"2026-10-11","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2023032803","name":"奧利奧","date":"2026-10-11","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2021083002","name":"栗子","date":"2026-10-11","mine":false,"walkers":["24bf2ad2af85"]},
+    {"id":"2024040202","name":"鐵雄","date":"2026-10-11","mine":false,"walkers":["75aeed7c10fe"]}
   ]
 }
