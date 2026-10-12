@@ -982,6 +982,11 @@ html.find-zoom-open { overflow: hidden; }
 }
 @keyframes where-up { from { transform: translateY(40px); opacity: .6; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .where-sheet { animation: none; } }
+/* 籠位查詢導覽：說明卡在上、實際面板在下，避免卡片蓋住地圖和找路文字。 */
+.tour-where-demo .where-sheet { max-height: calc(100dvh - var(--tour-tip-height, 180px) - 36px); }
+.tour-where-demo .where-map .find-map {
+  max-height: min(38vh, max(48px, calc(100dvh - var(--tour-tip-height, 180px) - 200px)));
+}
 .where-open { overflow: hidden; }
 .where-grab { width: 38px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 8px; }
 .where-head { display: flex; align-items: center; gap: 8px; }

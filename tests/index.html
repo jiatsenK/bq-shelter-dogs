@@ -3739,6 +3739,28 @@ async function runRangeTests() {
   const ymdDash = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
   const dog = (walkedDate, covered = false) => parseDogsData({ dogs: [{ id: '2024100901', name: '範圍', cage: '舊A01', note: '', covered, walkedDate }] }).dogs[0];
   const ago = n => ymdDash(new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() - n));
+  await check('籠位查詢導覽：略過沒有籠號的區，只用舊／新犬舍有效籠位，示範與亮的狗一致', () => {
+    const saved = [allDogs, activeTab, searchQuery, loadWalkView()];
+    try {
+      activeTab = 'walk'; searchQuery = ''; saveWalkView('photo');
+      const step = TOUR_STEPS.findIndex(st => st.demo === 'where');
+      for (const cage of ['舊A03', '新B04']) {
+        allDogs = [{ ...dog(ago(20)), id: 'demo0', cage: '母幼' }, { ...dog(ago(10)), id: 'demo1', cage }, { ...dog(ago(5)), id: 'demo2', cage: '舊A99' }];
+        render();
+        const target = tourTarget(step);
+        eq(tourCageDog(target), allDogs[1], `${cage} 的示範目標：`);
+        TOUR_DEMOS.where.run(target);
+        eq(whereDog, allDogs[1], '亮的籠位與打開的狗一致：');
+        if (!document.getElementById('whereTitle').textContent.includes(cage)) throw new Error('面板應顯示實際籠號');
+        TOUR_DEMOS.where.undo();
+      }
+      allDogs = [{ ...dog(ago(20)), cage: '母幼' }]; render();
+      eq(tourTarget(step), null, '沒有有效籠號時不拿其他區示範：');
+    } finally {
+      if (whereDog) whereClose();
+      saveWalkView(saved[3]); [allDogs, activeTab, searchQuery] = saved; render();
+    }
+  });
   await check('2026-10-09 範圍字：跟狗卡同一種說法（N 天前、今天、沒有紀錄）', () => {
     eq([dayWord(dog(ago(45)), TODAY), dayWord(dog(ago(0)), TODAY), dayWord(dog(''), TODAY)], ['45 天前', '今天', '沒有紀錄']);
   });
