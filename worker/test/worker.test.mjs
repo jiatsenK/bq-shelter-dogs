@@ -2,6 +2,7 @@
 // 執行：node --test worker/test/worker.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import worker from '../src/index.js';
 
 const { resetState, allowUpload, isJpeg, MAX_BYTES } = worker.testing;
@@ -732,6 +733,32 @@ test('#141 GET /walkers：分兩次讀主清單，回每隻狗的誰遛的（key
   assert.deepEqual(calls, ['0', '2']);
   await getWalkers({ SHEET_ID: 'abc' });
   assert.equal(calls.length, 2, '第二次用快取');
+});
+
+test('K 2026-10-12 GET /walkers：看過的名字記進資料庫，以前看過、現在表上沒有的放 older；資料庫壞了照舊', async t => {
+  let sqlite;
+  try { sqlite = await import('node:sqlite'); } catch (e) { t.skip('這個 Node 沒有 node:sqlite'); return; }
+  const db = new sqlite.DatabaseSync(':memory:');
+  db.exec(await readFile(new URL('../../db/schema.sql', import.meta.url), 'utf8'));
+  db.prepare('INSERT INTO walker_names (name, last_seen) VALUES (?, ?)').run('老K', '2026-10-01T00:00:00.000Z');
+  db.prepare('INSERT INTO walker_names (name, last_seen) VALUES (?, ?)').run('阿德', '2026-09-01T00:00:00.000Z');
+  // 只做到 Worker 用到的 D1 介面：prepare → bind → run／all，和 batch
+  const stmt = (sql, args = []) => ({
+    bind: (...a) => stmt(sql, a),
+    run: async () => db.prepare(sql).run(...args),
+    all: async () => ({ results: db.prepare(sql).all(...args) }),
+  });
+  const DB = { prepare: sql => stmt(sql), batch: async list => Promise.all(list.map(x => x.run())) };
+  fakeSheet();
+  const { body } = await getWalkers({ SHEET_ID: 'abc', DB });
+  assert.equal(body.names[0], '志工乙');
+  assert.deepEqual(body.older, ['老K', '阿德'], '最近看到的在前，表上現在有的不重複');
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM walker_names').get().n, 7, '表上的 5 個名字記進去');
+  resetState();
+  fakeSheet();
+  const broken = { prepare: () => { throw new Error('no such table: walker_names'); } };
+  const res = await getWalkers({ SHEET_ID: 'abc', DB: broken });
+  assert.deepEqual([res.status, res.body.older, res.body.names.length], [200, [], 5]);
 });
 
 test('#141 GET /walkers：沒設 SHEET_ID 回 off；讀不到回 502；只收 GET', async () => {

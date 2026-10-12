@@ -163,12 +163,15 @@ function parseMyWalks(data, codes = loadMyCodes()) {
   return list.sort((a, b) => b.date - a.date || b.i - a.i).map(({ i, ...w }) => w);
 }
 
+async function fetchWalks() {
+  const res = await fetch(WALKS_URL, { cache: 'no-cache' });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
 async function loadMyWalks() {
   myWalksState = 'loading';
   try {
-    const res = await fetch(WALKS_URL, { cache: 'no-cache' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    walksData = await res.json();
+    walksData = await fetchWalks();
     myWalks = parseMyWalks(walksData);
     myWalksState = 'ready';
   } catch (e) {
@@ -241,7 +244,7 @@ function walkerSetupHtml() {
   }
   return `<form class="who-box" id="whoForm" autocomplete="off">
     <h3>${icon('paw')}你是誰？</h3>
-    <p>點或輸入你在試算表「誰遛的」欄寫的名字。</p>
+    <p>點你的名字（最近溜過狗的人），沒看到就打字找找看。</p>
     ${obNamesHtml(edit, busy, 'who')}
     <input type="text" id="whoInput" maxlength="60" placeholder="例：小明" aria-label="你在試算表寫的名字" value="${esc(edit.text)}"${busy ? ' disabled' : ''}>
     <p class="who-note">按「溜了」時會把這個名字寫進試算表「誰遛的」。名字設定存在這支手機，換手機或換瀏覽器要重新設定。</p>
@@ -261,10 +264,14 @@ async function saveWalkerSetup() {
   const edit = walkerSetup;
   if (!edit || edit.phase === 'saving') return;
   const failWith = msg => { edit.phase = 'error'; edit.error = msg; render(); };
-  const unknown = unknownWalkerNames(edit.text);
-  if (edit.phase !== 'confirm' && unknown.length) { edit.phase = 'confirm'; edit.unknown = unknown; render(); return; }
+  const confirmed = edit.phase === 'confirm';
   edit.phase = 'saving';
   render();
+  if (!confirmed) {
+    const unknown = await namesToConfirm(edit.text);
+    if (walkerSetup !== edit) return;
+    if (unknown.length) { edit.phase = 'confirm'; edit.unknown = unknown; render(); return; }
+  }
   const error = await setWalkerName(edit.text);
   if (error) return failWith(error);
   setNameLater(false);
@@ -277,24 +284,46 @@ async function setWalkerName(raw) {
   const text = String(raw || '').trim();
   if (!text) return '請輸入你在試算表上寫的名字';
   if (!UPLOAD_URL) return '暫時不能設定，網站這邊還沒準備好';
+  const { codes, error } = await walkerCodesFor(splitWalkers(text).map(canonicalWalker).filter(Boolean).flatMap(n => n === 'K' ? [n, '岑'] : [n]));
+  if (error) return error;
+  if (!codes.length) return '設定沒有成功，請稍後再試';
+  saveMyCodes(codes);
+  saveWalkerName(canonicalWalker(firstWalkerName(text)));
+  return '';
+}
+// 名字送 Worker 換代號：回 { codes } 或 { codes: [], error: 原因 }
+async function walkerCodesFor(names) {
   let out = null;
   try {
     const res = await fetch(`${UPLOAD_URL}/walker-code`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ names: [...new Set(splitWalkers(text).map(canonicalWalker).filter(Boolean).flatMap(n => n === 'K' ? [n, '岑'] : [n]))] }),
+      body: JSON.stringify({ names: [...new Set(names)] }),
     });
     out = await res.json().catch(() => null);
     if (!res.ok) throw new Error((out && out.error) || `HTTP ${res.status}`);
   } catch (e) {
     console.error(e);
-    return out && out.error ? out.error : '連不上網路，請稍後再試';
+    return { codes: [], error: out && out.error ? out.error : '連不上網路，請稍後再試' };
   }
-  const codes = out && Array.isArray(out.codes) ? out.codes.filter(c => WALKER_CODE_PATTERN.test(c)) : [];
-  if (!codes.length) return '設定沒有成功，請稍後再試';
-  saveMyCodes(codes);
-  saveWalkerName(canonicalWalker(firstWalkerName(text)));
-  return '';
+  return { codes: out && Array.isArray(out.codes) ? out.codes.filter(c => WALKER_CODE_PATTERN.test(c)) : [] };
+}
+// 自己打的名字要不要再確認一次（K 2026-10-12）：名字清單只有最近溜過的人，清單上沒有的再去查遛狗紀錄
+// （data/walks.json 只有代號，所以先跟 Worker 換代號再對），紀錄裡有就是本人、不用問；查不到或連不上才問
+async function namesToConfirm(text) {
+  const unknown = unknownWalkerNames(text);
+  if (!unknown.length || !UPLOAD_URL) return unknown;
+  if (!walksData) {
+    try { walksData = await fetchWalks(); } catch (e) { console.error(e); }
+  }
+  const walks = walksData && Array.isArray(walksData.walks) ? walksData.walks : null;
+  if (!walks) return unknown;
+  const left = [];
+  for (const n of unknown) {
+    const { codes } = await walkerCodesFor([n]);
+    if (!codes.some(c => walks.some(w => w && Array.isArray(w.walkers) && w.walkers.includes(c)))) left.push(n);
+  }
+  return left;
 }
 
 // 紀錄對到目前清單上的狗：有編號用編號，沒有才用犬名；對不到（例：已離所）回 null
@@ -881,6 +910,8 @@ let sheetQueue = Promise.resolve();
 // 只在畫面上顯示。{ 狗的 key: '志工乙+志工丙+岑' }；拿不到就不顯示名字，其他照常
 let walkerNames = {};
 let walkerNameList = []; // 表上出現過的名字（開頭畫面讓志工點選自己，#141）
+let walkerOlderNames = []; // 以前溜過、現在表上沒有的名字（Worker 記下來的，K 2026-10-12）：打字時才推薦
+const allWalkerNames = () => [...new Set([...walkerNameList, ...walkerOlderNames])];
 // 介面評估第三輪（K 2026-10-08）：沒網路時要告訴志工，不然溜狗人只有「—」、頁首照樣寫資料更新時間。
 // 手機說離線，或拿溜狗人名字時連不上（不是 Worker 回錯誤），就當作沒網路
 let walkerNamesOffline = false;
@@ -911,6 +942,7 @@ async function loadWalkerNames() {
     if (out && out.walkers && typeof out.walkers === 'object') {
       walkerNames = out.walkers;
       walkerNameList = [...new Set((Array.isArray(out.names) ? out.names : []).map(canonicalWalker).filter(Boolean))];
+      walkerOlderNames = [...new Set((Array.isArray(out.older) ? out.older : []).map(canonicalWalker).filter(Boolean))];
       render();
       renderDetail();
       if (onboard && onboard.step === 0 && onboard.phase !== 'saving') renderOnboard();
@@ -2726,6 +2758,12 @@ mainEl.addEventListener('input', e => {
   if (e.target.id !== 'whoInput') return;
   if (!walkerSetup) walkerSetup = { text: '', phase: 'edit', error: '' };
   walkerSetup.text = e.target.value;
+  refreshNames(mainEl, walkerSetup, 'who', e);
+});
+mainEl.addEventListener('compositionend', e => {
+  if (e.target.id !== 'whoInput' || !walkerSetup) return;
+  walkerSetup.text = e.target.value;
+  refreshNames(mainEl, walkerSetup, 'who');
 });
 mainEl.addEventListener('submit', e => {
   if (e.target.id !== 'whoForm') return;
@@ -3039,15 +3077,16 @@ function needOnboard() {
 function needNameToWalk() {
   return !!UPLOAD_URL && sheetWriteState !== 'off' && !loadWalkerName();
 }
-// 自己打的名字裡，試算表上沒出現過的（打錯字會寫進大家共用的試算表，送出前問一次）
+// 自己打的名字裡，名字清單上沒有的（打錯字會寫進大家共用的試算表，送出前問一次）。
+// 清單只看主清單「誰遛的」現在寫的名字（每隻狗最後一個溜的人），最近沒溜的人不在上面，所以還要查遛狗紀錄（namesToConfirm）
 function unknownWalkerNames(text) {
   if (!walkerNameList.length) return [];
-  const known = new Set(walkerNameList.map(canonicalWalker));
+  const known = new Set(allWalkerNames());
   return splitWalkers(text).map(canonicalWalker).filter(n => n && !known.has(n));
 }
-// 自己打的名字表上沒有：送出前確認一次
+// 自己打的名字清單上沒有：送出前確認一次
 function nameConfirmHtml(o) {
-  return o.phase === 'confirm' ? `<div class="ob-confirm" role="alert">${icon('alert')}<span>試算表上還沒有「${esc(o.unknown.join('、'))}」，確定用這個名字？打錯字的話請改一下。</span></div>` : '';
+  return o.phase === 'confirm' ? `<div class="ob-confirm" role="alert">${icon('alert')}<span>溜狗紀錄裡還沒有「${esc(o.unknown.join('、'))}」。第一次來或很久沒來都會這樣，名字沒打錯就按「確定用這個名字」。</span></div>` : '';
 }
 function onboardHtml() {
   const o = onboard;
@@ -3061,7 +3100,7 @@ function onboardHtml() {
       <h1>${esc(SITE.name)}</h1>
       <p class="ob-lead">歡迎！先告訴我們你是誰。</p>`;
     const label = names
-      ? `<label class="ob-label" for="obInput">點你在試算表上的名字</label>`
+      ? `<label class="ob-label" for="obInput">溜過狗的人，點你的名字</label>`
       : `<label class="ob-label" for="obInput">你在試算表「誰遛的」寫的名字</label>${isOffline() ? '<p class="ob-label-note">名字清單讀不到（沒網路），請自己輸入。</p>' : ''}`;
     const submit = busy ? '設定中…' : o.phase === 'confirm' ? '確定用這個名字' : o.walk ? '設定並登記' : '下一步';
     return `<form class="ob-page ob-name" id="obForm" autocomplete="off">
@@ -3069,7 +3108,7 @@ function onboardHtml() {
       ${label}
       ${obNamesHtml(o, busy)}
       <input type="text" id="obInput" maxlength="60" placeholder="例：小明" value="${esc(o.text)}"${busy ? ' disabled' : ''} enterkeyhint="done">
-      ${names ? '<p class="ob-help">上面沒有你的名字，就在這裡輸入。</p>' : ''}
+      ${names ? '<p class="ob-help">沒看到你的名字，就在這裡打字找找看，找不到直接輸入。</p>' : ''}
       <div class="ob-foot">
         ${nameConfirmHtml(o)}
         ${o.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(o.error)}${o.walk ? '' : '。可以先按「先看看」進網站，有訊號時再設定。'}</span></div>` : ''}
@@ -3083,11 +3122,27 @@ function onboardHtml() {
 }
 // 開頭畫面的名字按鈕（K 2026-10-04：入口的名字要能從表上已有的人選）：一人選一個（K 2026-10-08），點了填進輸入框，再點一次拿掉
 // 我溜過的「修改」也用同一排（kind 'who'）。選了用框線＋右上角勾勾（不是實心藍），跟「一起溜的人」分得出來，按鈕也不會變寬
+// 打字時只留符合的名字（K 2026-10-12：打第一個字就出現推薦）：開頭一樣的排前面，再來是中間有這個字的；
+// 沒打字時只列最近溜過的人，打字時連以前溜過的（walkerOlderNames）一起找；
+// 打的剛好是清單上的名字（點選的）就列最近的人＋這個名字，方便換人
+function namesMatching(text) {
+  const q = canonicalWalker(text);
+  const all = allWalkerNames();
+  if (!q) return walkerNameList;
+  if (all.includes(q)) return walkerNameList.includes(q) ? walkerNameList : [...walkerNameList, q];
+  return [...all.filter(n => n.startsWith(q)), ...all.filter(n => !n.startsWith(q) && n.includes(q))];
+}
 function obNamesHtml(o, busy, kind = 'ob') {
   if (!walkerNameList.length) return '';
   const picked = new Set([canonicalWalker(o.text)]);
-  return `<div class="ob-names">${walkerNameList.map(n =>
+  return `<div class="ob-names" data-names="${kind}">${namesMatching(o.text).map(n =>
     `<button type="button" class="with-name me-name${picked.has(n) ? ' on' : ''}" data-${kind}-name="${esc(n)}" aria-pressed="${picked.has(n)}"${busy ? ' disabled' : ''}>${esc(n)}${picked.has(n) ? icon('tick') : ''}</button>`).join('')}</div>`;
+}
+// 打字時只換名字那一排（整個重畫會打斷注音選字）；選字途中不換，選好字（compositionend）再換
+function refreshNames(scope, o, kind, e) {
+  if (e && e.isComposing) return;
+  const row = scope && scope.querySelector(`[data-names="${kind}"]`);
+  if (row) row.outerHTML = obNamesHtml(o, false, kind);
 }
 // 開頭畫面蓋住整個網站：後面的東西設成不能點、Tab 也跑不過去（inert）
 function setOnboardInert(box) {
@@ -3139,6 +3194,10 @@ function renderOnboard() {
       onboard.text = e.target.value;
       // 改了名字，之前的錯誤和「確定用這個名字」就不算了（重畫時游標留在原處）
       if (onboard.phase === 'error' || onboard.phase === 'confirm') { onboard.phase = 'edit'; renderOnboard(); }
+      else refreshNames(box, onboard, 'ob', e);
+    });
+    box.addEventListener('compositionend', e => {
+      if (onboard && e.target.id === 'obInput') { onboard.text = e.target.value; refreshNames(box, onboard, 'ob'); }
     });
     box.addEventListener('keydown', e => {
       e.stopPropagation(); // 開頭畫面蓋在最上面，後面網頁（在哪面板、裁切）的按鍵處理不要接到
@@ -3148,15 +3207,14 @@ function renderOnboard() {
     box.addEventListener('submit', async e => {
       e.preventDefault();
       if (onboard.phase === 'saving') return;
-      const unknown = unknownWalkerNames(onboard.text);
-      if (onboard.phase !== 'confirm' && unknown.length) {
-        onboard.phase = 'confirm';
-        onboard.unknown = unknown;
-        renderOnboard();
-        return;
-      }
+      const confirmed = onboard.phase === 'confirm';
       onboard.phase = 'saving';
       renderOnboard();
+      if (!confirmed) {
+        const o = onboard, unknown = await namesToConfirm(o.text);
+        if (onboard !== o) return;
+        if (unknown.length) { o.phase = 'confirm'; o.unknown = unknown; renderOnboard(); return; }
+      }
       const error = await setWalkerName(onboard.text);
       if (error) { onboard.phase = 'error'; onboard.error = error; renderOnboard(); return; }
       setNameLater(false);
