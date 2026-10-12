@@ -2755,6 +2755,12 @@ mainEl.addEventListener('input', e => {
   if (e.target.id !== 'whoInput') return;
   if (!walkerSetup) walkerSetup = { text: '', phase: 'edit', error: '' };
   walkerSetup.text = e.target.value;
+  refreshNames(mainEl, walkerSetup, 'who', e);
+});
+mainEl.addEventListener('compositionend', e => {
+  if (e.target.id !== 'whoInput' || !walkerSetup) return;
+  walkerSetup.text = e.target.value;
+  refreshNames(mainEl, walkerSetup, 'who');
 });
 mainEl.addEventListener('submit', e => {
   if (e.target.id !== 'whoForm') return;
@@ -3113,11 +3119,24 @@ function onboardHtml() {
 }
 // 開頭畫面的名字按鈕（K 2026-10-04：入口的名字要能從表上已有的人選）：一人選一個（K 2026-10-08），點了填進輸入框，再點一次拿掉
 // 我溜過的「修改」也用同一排（kind 'who'）。選了用框線＋右上角勾勾（不是實心藍），跟「一起溜的人」分得出來，按鈕也不會變寬
+// 打字時只留符合的名字（K 2026-10-12：打第一個字就出現推薦）：開頭一樣的排前面，再來是中間有這個字的；
+// 打的剛好是清單上的名字（點選的）就全部列出，方便換人
+function namesMatching(text) {
+  const q = canonicalWalker(text);
+  if (!q || walkerNameList.includes(q)) return walkerNameList;
+  return [...walkerNameList.filter(n => n.startsWith(q)), ...walkerNameList.filter(n => !n.startsWith(q) && n.includes(q))];
+}
 function obNamesHtml(o, busy, kind = 'ob') {
   if (!walkerNameList.length) return '';
   const picked = new Set([canonicalWalker(o.text)]);
-  return `<div class="ob-names">${walkerNameList.map(n =>
+  return `<div class="ob-names" data-names="${kind}">${namesMatching(o.text).map(n =>
     `<button type="button" class="with-name me-name${picked.has(n) ? ' on' : ''}" data-${kind}-name="${esc(n)}" aria-pressed="${picked.has(n)}"${busy ? ' disabled' : ''}>${esc(n)}${picked.has(n) ? icon('tick') : ''}</button>`).join('')}</div>`;
+}
+// 打字時只換名字那一排（整個重畫會打斷注音選字）；選字途中不換，選好字（compositionend）再換
+function refreshNames(scope, o, kind, e) {
+  if (e && e.isComposing) return;
+  const row = scope && scope.querySelector(`[data-names="${kind}"]`);
+  if (row) row.outerHTML = obNamesHtml(o, false, kind);
 }
 // 開頭畫面蓋住整個網站：後面的東西設成不能點、Tab 也跑不過去（inert）
 function setOnboardInert(box) {
@@ -3169,6 +3188,10 @@ function renderOnboard() {
       onboard.text = e.target.value;
       // 改了名字，之前的錯誤和「確定用這個名字」就不算了（重畫時游標留在原處）
       if (onboard.phase === 'error' || onboard.phase === 'confirm') { onboard.phase = 'edit'; renderOnboard(); }
+      else refreshNames(box, onboard, 'ob', e);
+    });
+    box.addEventListener('compositionend', e => {
+      if (onboard && e.target.id === 'obInput') { onboard.text = e.target.value; refreshNames(box, onboard, 'ob'); }
     });
     box.addEventListener('keydown', e => {
       e.stopPropagation(); // 開頭畫面蓋在最上面，後面網頁（在哪面板、裁切）的按鍵處理不要接到

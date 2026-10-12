@@ -1744,6 +1744,22 @@ async function runV9Tests() {
       startOnboard();
       eq(box(), null, '不再出現：');
     });
+    await check('K 2026-10-12：打第一個字就只留符合的名字（開頭一樣的在前）；點選的名字不篩，方便換人', async () => {
+      const box = () => document.getElementById('onboard');
+      walkedStorage = fakeStorage(); walkedMemory = null; walkedCache = null; walkerNameMemory = ''; walkerCodesMemory = null; onboard = null;
+      walkerNameList = ['阿明', '小華', '明華', '美玲'];
+      startOnboard();
+      const names = () => [...box().querySelectorAll('[data-ob-name]')].map(b => b.textContent);
+      const input = box().querySelector('#obInput');
+      input.value = '明'; input.dispatchEvent(new Event('input', { bubbles: true }));
+      eq([names(), input.isConnected], [['明華', '阿明'], true], '打「明」（輸入框不重畫，注音選字不會斷）：');
+      input.value = '明x'; input.dispatchEvent(new Event('input', { bubbles: true }));
+      eq(names(), [], '沒有符合的就不列：');
+      input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true }));
+      box().querySelector('[data-ob-name="小華"]').click();
+      eq(names(), ['阿明', '小華', '明華', '美玲'], '點選的名字不篩：');
+      onboard = null; renderOnboard();
+    });
     await check('K 2026-10-12：名字清單上沒有、但遛狗紀錄裡有（最近沒溜的人）就不用再確認', async () => {
       const tick = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setTimeout(r, 0)); };
       const box = () => document.getElementById('onboard');
