@@ -2831,7 +2831,20 @@ const TOUR_STEPS = [
   { target: ['#main .walk-tools .seg', '#main .dt-view'], title: '照片／列表', text: '右上角可以切換：有照片的狗卡，或一列一隻、比較好掃過去的列表。', deskTitle: '全表／最近 30 天', deskText: '全表下面可以切換「最近 30 天」，看每隻狗這一個月哪幾天有出門。', demo: 'view' },
   { target: ['#tabs [data-tab="mine"]'], title: '我溜過', text: '查看自己溜過的狗。', demo: 'tab' },
   { target: ['#tabs [data-tab="find"]'], title: '找狗', text: '透過平面圖快速找到狗的位置。', demo: 'find' },
+  { target: [], title: '加入手機主畫面', text: '下次點手機桌面的圖示，就能直接開啟網站。', install: true },
 ];
+function tourStepCount() {
+  const standalone = window.matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+  const count = standalone || window.innerWidth >= 1100 ? TOUR_STEPS.length - 1 : TOUR_STEPS.length;
+  return Math.max(count, tour ? tour.step + 1 : 0); // 安裝說明開著時旋轉手機，不讓最後一步變成超出範圍。
+}
+function tourInstallHtml() {
+  return `<div class="tour-install">
+    <p><strong>iPhone</strong>：用 Safari 開啟網站，點「分享」→「加入主畫面」→「加入」。若有「打開為網頁 App」，請開啟。</p>
+    <p><strong>Android</strong>：用 Chrome 開啟網站，點右上角「⋮」→「安裝並建立捷徑」（或「新增至主畫面」），依提示選「安裝」或「建立捷徑」。</p>
+    <p>在 LINE 裡開啟時，先選「用瀏覽器開啟」；建議使用一般分頁。</p>
+  </div>`;
+}
 let tour = null; // { step, again, shown: 示範後改亮的地方, undo: 收回示範, timers }
 function tourTarget(step) {
   for (const sel of TOUR_STEPS[step].target) {
@@ -2887,12 +2900,12 @@ const TOUR_DEMOS = {
       render();
     },
   },
-  tab: { run: el => { if (el) switchTab(el.dataset.tab); }, show: '#main', undo: () => switchTab('walk') },
+  tab: { run: el => { if (el) switchTab(el.dataset.tab); }, show: '#main .mc-head, #main .status-msg, #main .who-box', undo: () => switchTab('walk') },
   // 找狗（K 2026-10-09）：切過去後再隨便點平面圖上一個有狗的籠子，下面列出那一籠的狗。
   // 全圖不畫籠子（critique 2026-10-09），所以先點一區放大，再點那一區的籠子
   find: {
     run: el => { if (el) switchTab(el.dataset.tab); },
-    show: '#main',
+    show: '#main .find-map-card .find-map',
     then: [
       { at: tourZoneWithDogs, run: g => { findZone = g.dataset.findZone; findCage = null; render(); } },
       { at: tourCageWithDogs, run: g => findPickCage(g.dataset.findCage) },
@@ -2984,22 +2997,44 @@ function scrollTourTarget(el) {
   if (r.top < top + 8) window.scrollBy(0, r.top - top - 16);
   else if (r.bottom > bottom - 8) window.scrollBy(0, r.bottom - bottom + 16);
 }
+function tourViewport() {
+  const v = window.visualViewport;
+  return { top: v ? v.offsetTop : 0, height: v ? v.height : window.innerHeight, width: v ? v.width : window.innerWidth };
+}
+function tourShownTarget() {
+  if (!tour || !tour.shown) return null;
+  for (const selector of tour.shown.split(',')) {
+    const el = document.querySelector(selector.trim());
+    if (el) return el;
+  }
+  return null;
+}
 function placeTour() {
   const box = document.getElementById('tour');
   if (!box || !tour) return;
   const hole = box.querySelector('.tour-hole');
   const tip = box.querySelector('.tour-tip');
+  const root = document.documentElement;
+  const viewport = tourViewport();
+  const viewBottom = viewport.top + viewport.height;
+  const wide = viewport.width >= 600 && viewport.height < 500;
+  root.classList.toggle('tour-wide', wide);
+  root.style.setProperty('--tour-viewport-height', `${viewport.height}px`);
+  root.style.setProperty('--tour-viewport-top', `${viewport.top}px`);
   const whereDemo = tour.shown === '#whereSheet' && !!whereDog;
+  const detailDemo = tour.shown === '#detail' && !!detailDog;
   // 籠位面板固定在底部，先替上方說明卡留空間，再量面板位置（小螢幕也不重疊）。
-  document.documentElement.classList.toggle('tour-where-demo', whereDemo);
-  if (whereDemo) document.documentElement.style.setProperty('--tour-tip-height', `${tip.offsetHeight}px`);
-  const el = (tour.shown && document.querySelector(tour.shown)) || tourTarget(tour.step);
+  root.classList.toggle('tour-where-demo', whereDemo);
+  root.classList.toggle('tour-detail-demo', detailDemo);
+  root.style.setProperty('--tour-tip-height', `${tip.offsetHeight}px`);
+  const el = tourShownTarget() || tourTarget(tour.step);
   box.classList.toggle('no-target', !el);
   if (!el) { tip.style.top = ''; return; }
+  if (!whereDemo && !detailDemo && el.closest('#main') && el.getBoundingClientRect().top < (appHeader ? appHeader.getBoundingClientRect().bottom : viewport.top) + 8) scrollTourTarget(el);
   const r = el.getBoundingClientRect();
   const pad = 6;
   // 只亮畫面裡看得到的部分（換到我溜過、找狗時亮整個內容區）
-  const top = Math.max(r.top - pad, 0), bottom = Math.min(r.bottom + pad, window.innerHeight);
+  const top = Math.max(r.top - pad, viewport.top), bottom = Math.min(r.bottom + pad, viewBottom);
   const rect = [r.left - pad, top, r.width + pad * 2, Math.max(bottom - top, 0)].map(v => `${Math.round(v)}px`);
   if (hole.dataset.rect !== rect.join()) { // 位置沒變就不動，免得每一格都重排
     hole.dataset.rect = rect.join();
@@ -3007,13 +3042,14 @@ function placeTour() {
   }
   const h = tip.offsetHeight;
   let y;
-  if (whereDemo) y = 12;
-  else if (r.bottom + pad + 12 + h <= window.innerHeight - 12) y = r.bottom + pad + 12;
-  else if (r.top - pad - 12 - h >= 12) y = r.top - pad - 12 - h;
-  else if (bottom - top > window.innerHeight * 0.55) y = window.innerHeight - h - 96; // 詳細資訊、整頁等沒有外側空間時放下面
-  else if (r.top + r.height / 2 < window.innerHeight / 2) y = r.bottom + pad + 12; // 目標在上半部，小框放下面
+  if (wide) y = viewport.top + (viewport.height - h) / 2;
+  else if (whereDemo || detailDemo) y = viewport.top + 12;
+  else if (r.bottom + pad + 12 + h <= viewBottom - 12) y = r.bottom + pad + 12;
+  else if (r.top - pad - 12 - h >= viewport.top + 12) y = r.top - pad - 12 - h;
+  else if (bottom - top > viewport.height * 0.55) y = viewBottom - h - 96;
+  else if (r.top + r.height / 2 < viewport.top + viewport.height / 2) y = r.bottom + pad + 12;
   else y = r.top - pad - 12 - h; // 在下半部（例如底部分類列），小框放上面
-  const tipTop = `${Math.round(Math.max(12, Math.min(window.innerHeight - h - 12, y)))}px`;
+  const tipTop = `${Math.round(Math.max(viewport.top + 12, Math.min(viewBottom - h - 12, y)))}px`;
   if (tip.style.top !== tipTop) tip.style.top = tipTop;
 }
 // 導覽開著時每一格都重新對位置（K 2026-10-09 黃框歪了）：頁首範圍字晚一格出現、狗卡重畫、在哪面板滑上來，
@@ -3030,8 +3066,10 @@ function renderTour(stepChanged = false) {
   document.documentElement.classList.toggle('tour-open', !!tour);
   if (!tour) {
     if (box) box.remove();
-    document.documentElement.classList.remove('tour-where-demo');
+    document.documentElement.classList.remove('tour-where-demo', 'tour-detail-demo', 'tour-wide');
     document.documentElement.style.removeProperty('--tour-tip-height');
+    document.documentElement.style.removeProperty('--tour-viewport-height');
+    document.documentElement.style.removeProperty('--tour-viewport-top');
     setOnboardInert(null);
     return;
   }
@@ -3065,13 +3103,15 @@ function renderTour(stepChanged = false) {
   const desk = typeof deskOn === 'function' && deskOn();
   // 電腦版（K 2026-10-10）：沒有溜了按鈕、照片／列表，改說勾選登記、最近 30 天
   const st = desk ? { ...TOUR_STEPS[i], title: TOUR_STEPS[i].deskTitle || TOUR_STEPS[i].title, text: TOUR_STEPS[i].deskText || TOUR_STEPS[i].text } : TOUR_STEPS[i];
-  const last = i === TOUR_STEPS.length - 1;
+  const count = tourStepCount();
+  const last = i === count - 1;
   box.innerHTML = `<div class="tour-hole"></div><div class="tour-finger"></div>
     <div class="tour-tip">
       <div class="tour-head"><h2 id="tourTitle" tabindex="-1">${esc(st.title)}</h2><button type="button" class="tour-skip" data-tour="done">${tour.again ? '關閉' : '略過'}</button></div>
       <p>${esc(st.text)}</p>
+      ${st.install ? tourInstallHtml() : ''}
       <div class="tour-foot">
-        <span class="tour-n">${i + 1} / ${TOUR_STEPS.length}</span>
+        <span class="tour-n">${i + 1} / ${count}</span>
         ${st.demo ? '<button type="button" class="tour-replay" data-tour="replay">再看一次</button>' : ''}
         ${i > 0 ? '<button type="button" class="tour-back" data-tour="back">上一步</button>' : ''}
         <button type="button" class="tour-next" data-tour="${last ? 'done' : 'next'}">${last ? (tour.again ? '看完了' : '開始使用') : '下一步'}</button>
