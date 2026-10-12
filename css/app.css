@@ -983,9 +983,9 @@ html.find-zoom-open { overflow: hidden; }
 @keyframes where-up { from { transform: translateY(40px); opacity: .6; } to { transform: none; opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { .where-sheet { animation: none; } }
 /* 籠位查詢導覽：說明卡在上、實際面板在下，避免卡片蓋住地圖和找路文字。 */
-.tour-where-demo .where-sheet { max-height: calc(100dvh - var(--tour-tip-height, 180px) - 36px); }
+.tour-where-demo .where-sheet { max-height: calc(var(--tour-viewport-height, 100dvh) - var(--tour-tip-height, 180px) - 36px); }
 .tour-where-demo .where-map .find-map {
-  max-height: min(38vh, max(48px, calc(100dvh - var(--tour-tip-height, 180px) - 200px)));
+  max-height: min(38vh, max(48px, calc(var(--tour-viewport-height, 100dvh) - var(--tour-tip-height, 180px) - 200px)));
 }
 .where-open { overflow: hidden; }
 .where-grab { width: 38px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 8px; }
@@ -1646,6 +1646,7 @@ header.app :focus-visible, .bottom-bar :focus-visible { outline-color: var(--tab
 /* 使用說明導覽（K 2026-10-09：直接用實際的網頁）：畫面變暗，只亮要說明的地方（黃框），旁邊白色小框寫說明 */
 /* 導覽只接受說明卡操作，背景不能被手指／滾輪捲走；程式仍可把下一個目標捲進畫面。 */
 html.tour-open { overflow: hidden; overscroll-behavior: none; }
+html.tour-open header.app { top: 0; }
 .tour { position: fixed; inset: 0; z-index: 70; touch-action: none; }
 .tour-hole {
   position: fixed; border-radius: 4px; pointer-events: none;
@@ -1658,9 +1659,23 @@ html.tour-open { overflow: hidden; overscroll-behavior: none; }
   position: fixed; left: 16px; right: 16px; top: 50%; max-width: 420px; margin: 0 auto;
   background: var(--surface); color: var(--ink); border-radius: 4px; padding: 6px 16px 12px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3); transition: top 0.25s ease-out;
-  max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
+  max-height: calc(var(--tour-viewport-height, 100dvh) - 24px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
 }
-.tour.no-target .tour-tip { top: 50% !important; transform: translateY(-50%); }
+/* 導覽示範只用可見高度；照片與資料面板為上方說明卡留空間。 */
+.tour-open .detail-backdrop, .tour-open .where-backdrop {
+  top: var(--tour-viewport-top, 0px); bottom: auto; height: var(--tour-viewport-height, 100dvh);
+}
+.tour-detail-demo .detail { max-height: calc(var(--tour-viewport-height, 100dvh) - var(--tour-tip-height, 180px) - 36px); }
+.tour-detail-demo .detail-head .photo-wrap.hero .thumb { height: min(160px, 24dvh); aspect-ratio: auto; }
+.tour-open .find-map-card .find-map { max-height: max(80px, calc(var(--tour-viewport-height, 100dvh) - var(--tour-tip-height, 180px) - 300px)); }
+.tour-wide .tour-tip { left: calc(50% + 12px); right: 12px; max-width: none; }
+.tour-wide #main { width: 50%; max-width: none; margin-left: 0; margin-right: auto; }
+.tour-wide .detail-backdrop, .tour-wide .where-backdrop { justify-content: flex-start; }
+.tour-wide .detail, .tour-wide .where-sheet { width: 50%; max-width: none; max-height: calc(var(--tour-viewport-height, 100dvh) - 24px); }
+.tour-wide .find-map-card .find-map { max-height: max(80px, calc(var(--tour-viewport-height, 100dvh) - 280px)); }
+.tour.no-target .tour-tip { top: calc(var(--tour-viewport-top, 0px) + var(--tour-viewport-height, 100dvh) / 2) !important; transform: translateY(-50%); }
+.tour-wide .tour.no-target .tour-tip { left: 16px; right: 16px; max-width: 420px; }
+.tour-install p { font-size: 15px; }
 .tour-head { display: flex; align-items: center; gap: 8px; }
 .tour-head h2 { flex: 1; margin: 0; font-size: 18px; font-weight: 800; }
 .tour-head h2:focus, .tour-head h2:focus-visible { outline: none !important; } /* 換一步時焦點移到標題只是給讀螢幕的人，不畫框 */
