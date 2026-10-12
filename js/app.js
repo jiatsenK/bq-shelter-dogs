@@ -911,6 +911,7 @@ let sheetQueue = Promise.resolve();
 let walkerNames = {};
 let walkerNameList = []; // 表上出現過的名字（開頭畫面讓志工點選自己，#141）
 let walkerOlderNames = []; // 以前溜過、現在表上沒有的名字（Worker 記下來的，K 2026-10-12）：打字時才推薦
+let walkerCodeNames = {}; // 代號 → 名字（Worker 用名單換的，K 2026-10-12）：電腦版最近 30 天寫每天誰遛的
 const allWalkerNames = () => [...new Set([...walkerNameList, ...walkerOlderNames])];
 // 介面評估第三輪（K 2026-10-08）：沒網路時要告訴志工，不然溜狗人只有「—」、頁首照樣寫資料更新時間。
 // 手機說離線，或拿溜狗人名字時連不上（不是 Worker 回錯誤），就當作沒網路
@@ -943,6 +944,7 @@ async function loadWalkerNames() {
       walkerNames = out.walkers;
       walkerNameList = [...new Set((Array.isArray(out.names) ? out.names : []).map(canonicalWalker).filter(Boolean))];
       walkerOlderNames = [...new Set((Array.isArray(out.older) ? out.older : []).map(canonicalWalker).filter(Boolean))];
+      walkerCodeNames = out.codes && typeof out.codes === 'object' ? out.codes : {};
       render();
       renderDetail();
       if (onboard && onboard.step === 0 && onboard.phase !== 'saving') renderOnboard();
