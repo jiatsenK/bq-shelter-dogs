@@ -241,7 +241,7 @@ function walkerSetupHtml() {
   }
   return `<form class="who-box" id="whoForm" autocomplete="off">
     <h3>${icon('paw')}你是誰？</h3>
-    <p>點或輸入你在試算表「誰遛的」欄寫的名字。</p>
+    <p>點你的名字（最近溜過狗的人），沒看到就自己輸入。</p>
     ${obNamesHtml(edit, busy, 'who')}
     <input type="text" id="whoInput" maxlength="60" placeholder="例：小明" aria-label="你在試算表寫的名字" value="${esc(edit.text)}"${busy ? ' disabled' : ''}>
     <p class="who-note">按「溜了」時會把這個名字寫進試算表「誰遛的」。名字設定存在這支手機，換手機或換瀏覽器要重新設定。</p>
@@ -3039,15 +3039,16 @@ function needOnboard() {
 function needNameToWalk() {
   return !!UPLOAD_URL && sheetWriteState !== 'off' && !loadWalkerName();
 }
-// 自己打的名字裡，試算表上沒出現過的（打錯字會寫進大家共用的試算表，送出前問一次）
+// 自己打的名字裡，名字清單上沒有的（打錯字會寫進大家共用的試算表，送出前問一次）。
+// 清單只看主清單「誰遛的」現在寫的名字（每隻狗最後一個溜的人），最近沒溜的人本來就不在上面，所以只提醒檢查字，不說「不在表上」（K 2026-10-12）
 function unknownWalkerNames(text) {
   if (!walkerNameList.length) return [];
   const known = new Set(walkerNameList.map(canonicalWalker));
   return splitWalkers(text).map(canonicalWalker).filter(n => n && !known.has(n));
 }
-// 自己打的名字表上沒有：送出前確認一次
+// 自己打的名字清單上沒有：送出前確認一次
 function nameConfirmHtml(o) {
-  return o.phase === 'confirm' ? `<div class="ob-confirm" role="alert">${icon('alert')}<span>試算表上還沒有「${esc(o.unknown.join('、'))}」，確定用這個名字？打錯字的話請改一下。</span></div>` : '';
+  return o.phase === 'confirm' ? `<div class="ob-confirm" role="alert">${icon('alert')}<span>最近溜過狗的人裡沒有「${esc(o.unknown.join('、'))}」。第一次來或最近沒溜都會這樣，名字沒打錯就按「確定用這個名字」。</span></div>` : '';
 }
 function onboardHtml() {
   const o = onboard;
@@ -3061,7 +3062,7 @@ function onboardHtml() {
       <h1>${esc(SITE.name)}</h1>
       <p class="ob-lead">歡迎！先告訴我們你是誰。</p>`;
     const label = names
-      ? `<label class="ob-label" for="obInput">點你在試算表上的名字</label>`
+      ? `<label class="ob-label" for="obInput">最近溜過狗的人，點你的名字</label>`
       : `<label class="ob-label" for="obInput">你在試算表「誰遛的」寫的名字</label>${isOffline() ? '<p class="ob-label-note">名字清單讀不到（沒網路），請自己輸入。</p>' : ''}`;
     const submit = busy ? '設定中…' : o.phase === 'confirm' ? '確定用這個名字' : o.walk ? '設定並登記' : '下一步';
     return `<form class="ob-page ob-name" id="obForm" autocomplete="off">
@@ -3069,7 +3070,7 @@ function onboardHtml() {
       ${label}
       ${obNamesHtml(o, busy)}
       <input type="text" id="obInput" maxlength="60" placeholder="例：小明" value="${esc(o.text)}"${busy ? ' disabled' : ''} enterkeyhint="done">
-      ${names ? '<p class="ob-help">上面沒有你的名字，就在這裡輸入。</p>' : ''}
+      ${names ? '<p class="ob-help">沒看到你的名字（第一次來或最近沒溜），就在這裡輸入。</p>' : ''}
       <div class="ob-foot">
         ${nameConfirmHtml(o)}
         ${o.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(o.error)}${o.walk ? '' : '。可以先按「先看看」進網站，有訊號時再設定。'}</span></div>` : ''}

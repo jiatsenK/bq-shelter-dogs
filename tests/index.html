@@ -1781,7 +1781,7 @@ async function runV9Tests() {
       input.value = '阿名'; input.dispatchEvent(new Event('input', { bubbles: true }));
       box().querySelector('.ob-next').click();
       await tick();
-      eq([/試算表上還沒有「阿名」/.test(box().textContent), calls.length], [true, 0], '表上沒有的名字先確認：');
+      eq([/最近溜過狗的人裡沒有「阿名」/.test(box().textContent), /不在|試算表上還沒有/.test(box().textContent), calls.length], [true, false, 0], '清單上沒有的名字先確認，不說不在表上（K 2026-10-12）：');
       box().querySelector('.ob-next').click();
       await tick(); await sheetQueue; await tick();
       eq([box(), loadWalkerName(), walkedToday().has(allDogs[0]), nameLater()], [null, '阿名', true, false], '設好直接登記：');
