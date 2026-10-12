@@ -2835,10 +2835,22 @@ const TOUR_STEPS = [
 let tour = null; // { step, again, shown: 示範後改亮的地方, undo: 收回示範, timers }
 function tourTarget(step) {
   for (const sel of TOUR_STEPS[step].target) {
-    const el = document.querySelector(sel);
+    // 籠位示範只用舊／新犬舍有逐籠位置的狗；亮的籠位與示範打開的是同一隻。
+    const el = TOUR_STEPS[step].demo === 'where'
+      ? [...document.querySelectorAll(sel)].find(el => {
+        const d = tourCageDog(el);
+        return d && ['old', 'new'].includes(findZoneOf(d)) && findCageOf(d);
+      })
+      : document.querySelector(sel);
     if (el) return el;
   }
   return null;
+}
+function tourCageDog(el) {
+  const row = el && el.closest('[data-dog], [data-desk-dog]');
+  const i = el && el.dataset.dogI !== undefined ? el.dataset.dogI
+    : row && (row.dataset.dog !== undefined ? row.dataset.dog : row.dataset.deskDog);
+  return i != null ? allDogs[Number(i)] : null;
 }
 // 示範用的狗：溜狗表最上面那隻
 function tourDog() {
@@ -2860,7 +2872,7 @@ const TOUR_DEMOS = {
   detail: { run: () => { const d = tourDog(); if (d) showDetail(d); }, show: '#detail', undo: () => { if (detailDog) closeDetail(); } },
   walk: { run: () => { tourFakeWalk('pending'); tourLater(() => { tourFakeWalk('done'); placeTour(); }, 700); }, undo: () => render() },
   unwalk: { before: () => tourFakeWalk('done'), run: () => render(), undo: () => render() },
-  where: { run: () => { const d = tourDog(); if (d) whereOpen(d); }, show: '#whereSheet', undo: () => { if (whereDog) whereClose(); } },
+  where: { run: el => { const d = tourCageDog(el); if (d) whereOpen(d); }, show: '#whereSheet', undo: () => { if (whereDog) whereClose(); } },
   // 照片／列表（K 2026-10-09）：示範切到另一種，收回時切回原本的
   view: {
     // 電腦版沒有照片／列表：示範切到「最近 30 天」再切回全表
@@ -2921,6 +2933,7 @@ function tourReset() {
 function tourPlay() {
   const demo = TOUR_DEMOS[TOUR_STEPS[tour.step].demo];
   if (!demo) return;
+  if (TOUR_STEPS[tour.step].demo === 'where' && !tourTarget(tour.step)) return;
   if (demo.before) { tour.undo = demo.undo; demo.before(); placeTour(); }
   const taps = [{ at: () => tourTarget(tour.step), run: el => { tour.undo = demo.undo; demo.run(el); if (demo.show) tour.shown = demo.show; } }];
   if (demo.then) taps.push(...[].concat(demo.then));
@@ -2976,6 +2989,10 @@ function placeTour() {
   if (!box || !tour) return;
   const hole = box.querySelector('.tour-hole');
   const tip = box.querySelector('.tour-tip');
+  const whereDemo = tour.shown === '#whereSheet' && !!whereDog;
+  // 籠位面板固定在底部，先替上方說明卡留空間，再量面板位置（小螢幕也不重疊）。
+  document.documentElement.classList.toggle('tour-where-demo', whereDemo);
+  if (whereDemo) document.documentElement.style.setProperty('--tour-tip-height', `${tip.offsetHeight}px`);
   const el = (tour.shown && document.querySelector(tour.shown)) || tourTarget(tour.step);
   box.classList.toggle('no-target', !el);
   if (!el) { tip.style.top = ''; return; }
@@ -2990,7 +3007,10 @@ function placeTour() {
   }
   const h = tip.offsetHeight;
   let y;
-  if (bottom - top > window.innerHeight * 0.55) y = window.innerHeight - h - 96; // 亮的範圍很大（詳細資訊、整頁），小框放下面
+  if (whereDemo) y = 12;
+  else if (r.bottom + pad + 12 + h <= window.innerHeight - 12) y = r.bottom + pad + 12;
+  else if (r.top - pad - 12 - h >= 12) y = r.top - pad - 12 - h;
+  else if (bottom - top > window.innerHeight * 0.55) y = window.innerHeight - h - 96; // 詳細資訊、整頁等沒有外側空間時放下面
   else if (r.top + r.height / 2 < window.innerHeight / 2) y = r.bottom + pad + 12; // 目標在上半部，小框放下面
   else y = r.top - pad - 12 - h; // 在下半部（例如底部分類列），小框放上面
   const tipTop = `${Math.round(Math.max(12, Math.min(window.innerHeight - h - 12, y)))}px`;
@@ -3009,6 +3029,8 @@ function renderTour(stepChanged = false) {
   let box = document.getElementById('tour');
   if (!tour) {
     if (box) box.remove();
+    document.documentElement.classList.remove('tour-where-demo');
+    document.documentElement.style.removeProperty('--tour-tip-height');
     setOnboardInert(null);
     return;
   }
