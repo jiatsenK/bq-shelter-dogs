@@ -26,6 +26,15 @@
 }
 * { box-sizing: border-box; }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+/* 手機（含加入主畫面）：一般頁面只讓瀏覽器捲動，避免雙擊／雙指誤縮放。
+   放大照片、地圖時解除祖先限制；裁切區仍用自己的 touch-action: none 處理雙指。
+   main 原本的 pan-y 留著，左右換分類仍交給 app.js。 */
+@media (max-width: 1099px) {
+  html:not(.lightbox-open):not(.find-zoom-open),
+  html:not(.lightbox-open):not(.find-zoom-open) body {
+    touch-action: pan-x pan-y;
+  }
+}
 html, body {
   margin: 0;
   background: var(--bg);
