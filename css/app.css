@@ -1644,7 +1644,9 @@ header.app :focus-visible, .bottom-bar :focus-visible { outline-color: var(--tab
 .range[hidden], .analysis-open .range { display: none; }
 
 /* 使用說明導覽（K 2026-10-09：直接用實際的網頁）：畫面變暗，只亮要說明的地方（黃框），旁邊白色小框寫說明 */
-.tour { position: fixed; inset: 0; z-index: 70; }
+/* 導覽只接受說明卡操作，背景不能被手指／滾輪捲走；程式仍可把下一個目標捲進畫面。 */
+html.tour-open { overflow: hidden; overscroll-behavior: none; }
+.tour { position: fixed; inset: 0; z-index: 70; touch-action: none; }
 .tour-hole {
   position: fixed; border-radius: 4px; pointer-events: none;
   box-shadow: 0 0 0 9999px rgba(12, 30, 25, 0.62); outline: 3px solid var(--tab-amber, #F2B21B); outline-offset: 0;
@@ -1656,6 +1658,7 @@ header.app :focus-visible, .bottom-bar :focus-visible { outline-color: var(--tab
   position: fixed; left: 16px; right: 16px; top: 50%; max-width: 420px; margin: 0 auto;
   background: var(--surface); color: var(--ink); border-radius: 4px; padding: 6px 16px 12px;
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3); transition: top 0.25s ease-out;
+  max-height: calc(100dvh - 24px); overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y;
 }
 .tour.no-target .tour-tip { top: 50% !important; transform: translateY(-50%); }
 .tour-head { display: flex; align-items: center; gap: 8px; }
