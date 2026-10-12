@@ -244,7 +244,7 @@ function walkerSetupHtml() {
   }
   return `<form class="who-box" id="whoForm" autocomplete="off">
     <h3>${icon('paw')}你是誰？</h3>
-    <p>點你的名字（最近溜過狗的人），沒看到就自己輸入。</p>
+    <p>點你的名字（最近溜過狗的人），沒看到就打字找找看。</p>
     ${obNamesHtml(edit, busy, 'who')}
     <input type="text" id="whoInput" maxlength="60" placeholder="例：小明" aria-label="你在試算表寫的名字" value="${esc(edit.text)}"${busy ? ' disabled' : ''}>
     <p class="who-note">按「溜了」時會把這個名字寫進試算表「誰遛的」。名字設定存在這支手機，換手機或換瀏覽器要重新設定。</p>
@@ -910,6 +910,8 @@ let sheetQueue = Promise.resolve();
 // 只在畫面上顯示。{ 狗的 key: '嘉文+俐葶+岑' }；拿不到就不顯示名字，其他照常
 let walkerNames = {};
 let walkerNameList = []; // 表上出現過的名字（開頭畫面讓志工點選自己，#141）
+let walkerOlderNames = []; // 以前溜過、現在表上沒有的名字（Worker 記下來的，K 2026-10-12）：打字時才推薦
+const allWalkerNames = () => [...new Set([...walkerNameList, ...walkerOlderNames])];
 // 介面評估第三輪（K 2026-10-08）：沒網路時要告訴志工，不然溜狗人只有「—」、頁首照樣寫資料更新時間。
 // 手機說離線，或拿溜狗人名字時連不上（不是 Worker 回錯誤），就當作沒網路
 let walkerNamesOffline = false;
@@ -940,6 +942,7 @@ async function loadWalkerNames() {
     if (out && out.walkers && typeof out.walkers === 'object') {
       walkerNames = out.walkers;
       walkerNameList = [...new Set((Array.isArray(out.names) ? out.names : []).map(canonicalWalker).filter(Boolean))];
+      walkerOlderNames = [...new Set((Array.isArray(out.older) ? out.older : []).map(canonicalWalker).filter(Boolean))];
       render();
       renderDetail();
       if (onboard && onboard.step === 0 && onboard.phase !== 'saving') renderOnboard();
@@ -3078,7 +3081,7 @@ function needNameToWalk() {
 // 清單只看主清單「誰遛的」現在寫的名字（每隻狗最後一個溜的人），最近沒溜的人不在上面，所以還要查遛狗紀錄（namesToConfirm）
 function unknownWalkerNames(text) {
   if (!walkerNameList.length) return [];
-  const known = new Set(walkerNameList.map(canonicalWalker));
+  const known = new Set(allWalkerNames());
   return splitWalkers(text).map(canonicalWalker).filter(n => n && !known.has(n));
 }
 // 自己打的名字清單上沒有：送出前確認一次
@@ -3097,7 +3100,7 @@ function onboardHtml() {
       <h1>${esc(SITE.name)}</h1>
       <p class="ob-lead">歡迎！先告訴我們你是誰。</p>`;
     const label = names
-      ? `<label class="ob-label" for="obInput">最近溜過狗的人，點你的名字</label>`
+      ? `<label class="ob-label" for="obInput">溜過狗的人，點你的名字</label>`
       : `<label class="ob-label" for="obInput">你在試算表「誰遛的」寫的名字</label>${isOffline() ? '<p class="ob-label-note">名字清單讀不到（沒網路），請自己輸入。</p>' : ''}`;
     const submit = busy ? '設定中…' : o.phase === 'confirm' ? '確定用這個名字' : o.walk ? '設定並登記' : '下一步';
     return `<form class="ob-page ob-name" id="obForm" autocomplete="off">
@@ -3105,7 +3108,7 @@ function onboardHtml() {
       ${label}
       ${obNamesHtml(o, busy)}
       <input type="text" id="obInput" maxlength="60" placeholder="例：小明" value="${esc(o.text)}"${busy ? ' disabled' : ''} enterkeyhint="done">
-      ${names ? '<p class="ob-help">沒看到你的名字（第一次來或最近沒溜），就在這裡輸入。</p>' : ''}
+      ${names ? '<p class="ob-help">沒看到你的名字，就在這裡打字找找看，找不到直接輸入。</p>' : ''}
       <div class="ob-foot">
         ${nameConfirmHtml(o)}
         ${o.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(o.error)}${o.walk ? '' : '。可以先按「先看看」進網站，有訊號時再設定。'}</span></div>` : ''}
@@ -3120,11 +3123,14 @@ function onboardHtml() {
 // 開頭畫面的名字按鈕（K 2026-10-04：入口的名字要能從表上已有的人選）：一人選一個（K 2026-10-08），點了填進輸入框，再點一次拿掉
 // 我溜過的「修改」也用同一排（kind 'who'）。選了用框線＋右上角勾勾（不是實心藍），跟「一起溜的人」分得出來，按鈕也不會變寬
 // 打字時只留符合的名字（K 2026-10-12：打第一個字就出現推薦）：開頭一樣的排前面，再來是中間有這個字的；
-// 打的剛好是清單上的名字（點選的）就全部列出，方便換人
+// 沒打字時只列最近溜過的人，打字時連以前溜過的（walkerOlderNames）一起找；
+// 打的剛好是清單上的名字（點選的）就列最近的人＋這個名字，方便換人
 function namesMatching(text) {
   const q = canonicalWalker(text);
-  if (!q || walkerNameList.includes(q)) return walkerNameList;
-  return [...walkerNameList.filter(n => n.startsWith(q)), ...walkerNameList.filter(n => !n.startsWith(q) && n.includes(q))];
+  const all = allWalkerNames();
+  if (!q) return walkerNameList;
+  if (all.includes(q)) return walkerNameList.includes(q) ? walkerNameList : [...walkerNameList, q];
+  return [...all.filter(n => n.startsWith(q)), ...all.filter(n => !n.startsWith(q) && n.includes(q))];
 }
 function obNamesHtml(o, busy, kind = 'ob') {
   if (!walkerNameList.length) return '';
