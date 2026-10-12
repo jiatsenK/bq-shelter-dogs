@@ -1815,6 +1815,7 @@ async function runV9Tests() {
       box().querySelector('[data-ob="later"]').click();
       const tour = () => document.getElementById('tour');
       eq([box(), !!tour(), nameLater(), activeTab], [null, true, true, 'walk'], '先看看進導覽，在溜狗表上：');
+      eq(document.documentElement.classList.contains('tour-open'), true, '導覽期間鎖住背景捲動：');
       eq([tour().querySelector('h2').textContent, tour().querySelector('.tour-n').textContent], ['溜狗表', '1 / 9'], '第一步：');
       eq(tour().querySelector('[data-tour="back"]'), null, '第一步沒有上一步：');
       eq(tourTarget(0), document.querySelector('#main .card[data-dog]'), '亮的是最上面那張狗卡（最久沒溜）：');
@@ -1826,6 +1827,7 @@ async function runV9Tests() {
       eq(tour().querySelector('h2').textContent, '溜狗表', '上一步：');
       tour().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       eq([tour(), needOnboard(), document.getElementById('main').closest('[inert]')], [null, false, null], 'Esc 等於略過，下次開不再問名字：');
+      eq(document.documentElement.classList.contains('tour-open'), false, '關閉後解除背景捲動限制：');
       setWalked([allDogs[0]], true);
       eq([!!box(), box().querySelector('.ob-next').textContent], [true, '設定並登記'], '按溜了才問名字：');
       const input = box().querySelector('#obInput');
