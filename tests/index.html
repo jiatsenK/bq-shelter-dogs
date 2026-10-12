@@ -1722,12 +1722,13 @@ async function runV9Tests() {
       startOnboard();
       const box = () => document.getElementById('onboard');
       if (!box() || !box().querySelector('#obInput')) throw new Error('要先問名字');
-      eq([...box().querySelectorAll('[data-ob-name]')].map(b => b.textContent), ['阿明', '阿華'], '表上的名字可以點：');
+      eq(box().querySelectorAll('[data-ob-name]').length, 0, '沒打字不列名字（K 2026-10-12）：');
+      const typed = box().querySelector('#obInput');
+      typed.value = '阿'; typed.dispatchEvent(new Event('input', { bubbles: true }));
+      eq([...box().querySelectorAll('[data-ob-name]')].map(b => b.textContent), ['阿明', '阿華'], '打一個字出現推薦：');
       box().querySelector('[data-ob-name="阿明"]').click();
-      eq(box().querySelector('#obInput').value, '阿明', '點了填進去：');
-      box().querySelector('[data-ob-name="阿華"]').click();
-      eq([box().querySelector('#obInput').value, box().querySelectorAll('[data-ob-name].on').length], ['阿華', 1], '一人選一個（K 2026-10-08）：');
-      box().querySelector('[data-ob-name="阿華"]').click();
+      eq([box().querySelector('#obInput').value, box().querySelectorAll('[data-ob-name].on').length], ['阿明', 1], '點了填進去（一人選一個，K 2026-10-08）：');
+      box().querySelector('[data-ob-name="阿明"]').click();
       eq(box().querySelector('#obInput').value, '', '再點一次拿掉：');
       walkerNameList = [];
       box().querySelector('.ob-next').click();
@@ -1744,7 +1745,7 @@ async function runV9Tests() {
       startOnboard();
       eq(box(), null, '不再出現：');
     });
-    await check('K 2026-10-12：打第一個字就只留符合的名字（開頭一樣的在前）；點選的名字不篩，方便換人', async () => {
+    await check('K 2026-10-12：沒打字不列名字，打一個字出現推薦（開頭一樣的在前），以前溜過的也找得到', async () => {
       const box = () => document.getElementById('onboard');
       walkedStorage = fakeStorage(); walkedMemory = null; walkedCache = null; walkerNameMemory = ''; walkerCodesMemory = null; onboard = null;
       walkerNameList = ['阿明', '小華', '明華', '美玲'];
@@ -1756,18 +1757,17 @@ async function runV9Tests() {
       input.value = '明x'; input.dispatchEvent(new Event('input', { bubbles: true }));
       eq(names(), [], '沒有符合的就不列：');
       input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true }));
-      box().querySelector('[data-ob-name="小華"]').click();
-      eq(names(), ['阿明', '小華', '明華', '美玲'], '點選的名字不篩：');
+      eq(names(), [], '清掉字就不列：');
       onboard = null; renderOnboard();
       // 以前溜過、現在表上沒有的（Worker 記下來的）：沒打字不列，打字才推薦；點了也不算表上沒有
       walkerOlderNames = ['老K', '明哲'];
       startOnboard();
-      eq(names(), ['阿明', '小華', '明華', '美玲'], '沒打字只列最近的：');
+      eq(names(), [], '沒打字不列：');
       const input2 = box().querySelector('#obInput');
       input2.value = '老'; input2.dispatchEvent(new Event('input', { bubbles: true }));
       eq(names(), ['老K'], '打字連以前的一起找：');
       box().querySelector('[data-ob-name="老K"]').click();
-      eq([names(), unknownWalkerNames('老K')], [['阿明', '小華', '明華', '美玲', '老K'], []], '點了以前的名字：');
+      eq([names(), unknownWalkerNames('老K')], [['老K'], []], '點了以前的名字：');
       input2.value = '明'; box().querySelector('#obInput').value = '明'; box().querySelector('#obInput').dispatchEvent(new Event('input', { bubbles: true }));
       eq(names(), ['明華', '明哲', '阿明'], '開頭一樣的在前：');
       walkerOlderNames = []; onboard = null; renderOnboard();
@@ -1808,6 +1808,8 @@ async function runV9Tests() {
       walkerNameList = ['阿明', '阿華'];
       startOnboard();
       eq(box().querySelector('[data-ob="later"]').textContent, '先看看，等一下再設定', '名字頁可以先看看：');
+      const typed = box().querySelector('#obInput');
+      typed.value = '阿'; typed.dispatchEvent(new Event('input', { bubbles: true }));
       box().querySelector('[data-ob-name="阿明"]').click();
       eq(box().querySelector('[data-ob-name="阿明"]').classList.contains('me-name'), true, '選自己的名字跟一起溜的人樣子不同：');
       box().querySelector('[data-ob="later"]').click();
