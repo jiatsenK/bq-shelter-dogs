@@ -881,7 +881,7 @@ async function walkerCodes(request, env, origin) {
 // Google Apps Script 小程式（apps-script/sheet-write.gs，K 用自己的帳號部署）。小程式只改「遛狗日期」「誰遛的」兩欄。
 // ── 溜狗人名字（#141）：GET /walkers ──
 // 名字不進 repo（dogs.json 只有代號），網站打開時跟這裡拿：Worker 直接讀試算表主清單（跟同步一樣用 gviz，試算表要「知道連結的人可檢視」），
-// 回 { walkers: { 狗的 key: 「誰遛的」原文 }, names: [表上出現過的名字，出現多的在前] }；狗的 key 跟網站 walkKey 一樣（有編號用編號，沒有用「名:犬名」）。
+// 回 { walkers: { 狗的 key: 「誰遛的」原文 }, names: [表上出現過的名字，出現多的在前], older: [以前看過、現在表上沒有的名字] }；狗的 key 跟網站 walkKey 一樣（有編號用編號，沒有用「名:犬名」）。
 // 5 分鐘內重複讀用快取，免得每個人打開都去讀 Google。沒設 SHEET_ID 回 503 + code: 'off'
 const WALKERS_CACHE_MS = 5 * 60 * 1000;
 export function gvizTable(text) {
@@ -945,11 +945,29 @@ async function readWalkers(sheetId, fetchImpl = fetch) {
   if (h === -1) throw new Error('主清單找不到「犬名」表頭');
   return parseWalkers(await read(h + 1), ((raw.rows[h] || {}).c || []).map(gvizCell));
 }
+// 看過的名字記進資料庫（K 2026-10-12）：回「以前看過、現在表上沒有」的名字，最近看到的在前（older）。
+// 沒接資料庫或資料庫出錯就回空的，名字清單照舊只有表上現在的
+const WALKER_NAMES_MAX = 300;
+export async function rememberWalkerNames(env, names, now = Date.now()) {
+  if (!env || !env.DB) return [];
+  try {
+    const at = new Date(now).toISOString();
+    const upsert = env.DB.prepare('INSERT INTO walker_names (name, last_seen) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET last_seen = excluded.last_seen');
+    if (names.length) await env.DB.batch(names.map(n => upsert.bind(n, at)));
+    const { results = [] } = await env.DB.prepare('SELECT name FROM walker_names ORDER BY last_seen DESC, name LIMIT ?').bind(WALKER_NAMES_MAX).all();
+    const now_ = new Set(names);
+    return results.map(r => r.name).filter(n => typeof n === 'string' && n && !now_.has(n));
+  } catch (e) {
+    console.error('walker_names', e);
+    return [];
+  }
+}
 async function getWalkers(env, allowed, now = Date.now()) {
   const cfg = config(env);
   if (!cfg.sheetId) return reply(503, { ok: false, code: 'off', error: '還沒設定試算表' }, allowed);
   if (!walkersCache || walkersCache.id !== cfg.sheetId || now - walkersCache.at > WALKERS_CACHE_MS) {
-    walkersCache = { id: cfg.sheetId, at: now, data: await readWalkers(cfg.sheetId) };
+    const data = await readWalkers(cfg.sheetId);
+    walkersCache = { id: cfg.sheetId, at: now, data: { ...data, older: await rememberWalkerNames(env, data.names, now) } };
   }
   return reply(200, { ok: true, ...walkersCache.data }, allowed);
 }

@@ -1239,6 +1239,7 @@ html.onboard-open { overflow: hidden; }
 .with-ok:disabled { opacity: 0.4; }
 .ob-names { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 12px; max-height: 40vh; overflow-y: auto; padding: 6px 6px 0 0; }
 .onboard .ob-names { max-height: none; overflow: visible; }
+.ob-names:empty { display: none; }
 /* 選自己的名字：框線＋右上角小勾（不是實心藍，跟「一起溜的人」分得出來；按鈕不變寬，旁邊的名字不會跳行） */
 .with-name.me-name { position: relative; }
 .with-name.me-name.on { background: var(--primary-soft); color: var(--primary); box-shadow: inset 0 0 0 2px var(--primary); }
