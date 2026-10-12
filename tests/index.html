@@ -1744,6 +1744,26 @@ async function runV9Tests() {
       startOnboard();
       eq(box(), null, '不再出現：');
     });
+    await check('K 2026-10-12：名字清單上沒有、但遛狗紀錄裡有（最近沒溜的人）就不用再確認', async () => {
+      const tick = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setTimeout(r, 0)); };
+      const box = () => document.getElementById('onboard');
+      walkedStorage = fakeStorage(); walkedMemory = null; walkedCache = null; walkerNameMemory = ''; walkerCodesMemory = null; onboard = null; walksData = null;
+      UPLOAD_URL = 'https://worker.test';
+      window.fetch = async (u, o) => {
+        if (String(u).endsWith('/walker-code')) return json({ ok: true, codes: [JSON.parse(o.body).names[0] === '老K' ? 'abcabcabcabc' : 'cccccccccccc'] });
+        if (String(u).endsWith('walks.json')) return json({ version: 1, walks: [{ id: 'x1', name: '舊狗', date: '2026-09-01', walkers: ['abcabcabcabc'] }] });
+        throw new Error('不該送別的');
+      };
+      walkerNameList = ['阿明'];
+      startOnboard();
+      const input = box().querySelector('#obInput');
+      input.value = '老K'; input.dispatchEvent(new Event('input', { bubbles: true }));
+      box().querySelector('.ob-next').click();
+      await tick();
+      eq([box() && box().querySelector('.ob-confirm'), loadWalkerName(), loadMyCodes()], [null, '老K', ['abcabcabcabc']], '紀錄裡有就直接設好：');
+      const t = document.getElementById('tour'); if (t) t.querySelector('[data-tour="done"]').click();
+      onboard = null; renderOnboard(); walksData = null;
+    });
     await check('介面評估第四輪：先看看不設名字也能進；按溜了才問名字，設好直接登記；表上沒有的名字先確認；說明可以再打開', async () => {
       const tick = async () => { for (let i = 0; i < 6; i++) await new Promise(r => setTimeout(r, 0)); };
       const box = () => document.getElementById('onboard');
@@ -1752,7 +1772,8 @@ async function runV9Tests() {
       const calls = [];
       window.fetch = async (u, o) => {
         calls.push(String(u));
-        if (String(u).endsWith('/walker-code')) return json({ ok: true, codes: ['cccccccccccc'] });
+        if (String(u).endsWith('/walker-code')) return json({ ok: true, codes: [JSON.parse(o.body).names[0] === '老K' ? 'abcabcabcabc' : 'cccccccccccc'] });
+        if (String(u).endsWith('walks.json')) return json({ version: 1, walks: [{ id: 'x1', name: '舊狗', date: '2026-09-01', walkers: ['abcabcabcabc'] }] });
         const body = JSON.parse(o.body);
         return json({ ok: true, today: localDateKey(new Date()), results: body.dogs.map(d => ({ ...d, status: 'written', prev: { date: null, walker: '' }, wrote: { walker: body.walker } })) });
       };
@@ -1781,7 +1802,8 @@ async function runV9Tests() {
       input.value = '阿名'; input.dispatchEvent(new Event('input', { bubbles: true }));
       box().querySelector('.ob-next').click();
       await tick();
-      eq([/最近溜過狗的人裡沒有「阿名」/.test(box().textContent), /不在|試算表上還沒有/.test(box().textContent), calls.length], [true, false, 0], '清單上沒有的名字先確認，不說不在表上（K 2026-10-12）：');
+      eq([/溜狗紀錄裡還沒有「阿名」/.test(box().textContent), /不在|試算表上還沒有/.test(box().textContent), calls.some(u => u.endsWith('/walk'))], [true, false, false], '清單上和紀錄裡都沒有的名字先確認，不說不在表上（K 2026-10-12）：');
+      calls.length = 0;
       box().querySelector('.ob-next').click();
       await tick(); await sheetQueue; await tick();
       eq([box(), loadWalkerName(), walkedToday().has(allDogs[0]), nameLater()], [null, '阿名', true, false], '設好直接登記：');
