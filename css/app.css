@@ -2185,8 +2185,19 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .desk-table thead th.dr-d span { display: block; }
   .desk-table thead th.dr-d.we { color: var(--ink); font-weight: 800; }
   .desk-table .dr-d.today { box-shadow: inset 2px 0 0 var(--shell), inset -2px 0 0 var(--shell); }
-  .dr-d i { display: block; width: calc(100% - 3px); max-width: 14px; height: auto; aspect-ratio: 1; margin: 0 auto; border-radius: 2px; background: var(--surface-soft); }
+  /* 格子裡寫誰遛的（名字第一個字，K 2026-10-12）：一格至少 22px 才放得下字，螢幕窄就左右捲（打開時捲到今天） */
+  .days30 .desk-table { min-width: calc(376px + 30 * 23px); }
+  /* 左右捲的時候勾選、天數、狗名留在左邊 */
+  .days30 .desk-table .dr-ck, .days30 .desk-table .dr-dayc, .days30 .desk-table .dr-name { position: sticky; z-index: 1; background: var(--surface); }
+  .days30 .desk-table thead .dr-ck, .days30 .desk-table thead .dr-dayc, .days30 .desk-table thead .dr-name { z-index: 3; background: var(--surface-soft); }
+  .days30 .desk-table .dr-ck { left: 0; }
+  .days30 .desk-table .dr-dayc { left: 44px; }
+  .days30 .desk-table .dr-name { left: 130px; box-shadow: inset -1px 0 0 var(--line); }
+  .days30 .desk-table tbody tr:hover td.dr-ck, .days30 .desk-table tbody tr:hover td.dr-dayc, .days30 .desk-table tbody tr:hover td.dr-name { background: #F7F9F8; }
+  .days30 .desk-table tbody tr.checked td.dr-ck, .days30 .desk-table tbody tr.checked td.dr-dayc, .days30 .desk-table tbody tr.checked td.dr-name { background: var(--primary-soft); }
+  .dr-d i { position: relative; display: block; width: calc(100% - 3px); max-width: 20px; height: auto; aspect-ratio: 1; margin: 0 auto; border-radius: 2px; background: var(--surface-soft); font-style: normal; font-size: 12px; font-weight: 700; line-height: 20px; text-indent: -1px; color: #fff; overflow: hidden; }
   .dr-d i.on { background: #3E9A62; }
+  .dr-d i.multi::after { content: ''; position: absolute; top: 1px; right: 1px; width: 4px; height: 4px; border-radius: 50%; background: #fff; }
   .dr-d i.pre { background: repeating-linear-gradient(135deg, #E6EBE8 0 2px, transparent 2px 5px); }
   .desk-foot { margin: 0; padding: 10px; font-size: 12px; color: var(--ink-soft); }
 
