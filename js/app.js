@@ -244,9 +244,9 @@ function walkerSetupHtml() {
   }
   return `<form class="who-box" id="whoForm" autocomplete="off">
     <h3>${icon('paw')}你是誰？</h3>
-    <p>點你的名字（最近溜過狗的人），沒看到就打字找找看。</p>
+    <p>輸入你在試算表上登記的名字，打一個字就會出現推薦。</p>
+    <input type="text" id="whoInput" maxlength="60" placeholder="例：小明" aria-label="你在試算表登記的名字" value="${esc(edit.text)}"${busy ? ' disabled' : ''}>
     ${obNamesHtml(edit, busy, 'who')}
-    <input type="text" id="whoInput" maxlength="60" placeholder="例：小明" aria-label="你在試算表寫的名字" value="${esc(edit.text)}"${busy ? ' disabled' : ''}>
     <p class="who-note">按「溜了」時會把這個名字寫進試算表「誰遛的」。名字設定存在這支手機，換手機或換瀏覽器要重新設定。</p>
     ${nameConfirmHtml(edit)}
     ${edit.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(edit.error)}</span></div>` : ''}
@@ -3088,7 +3088,7 @@ function unknownWalkerNames(text) {
 }
 // 自己打的名字清單上沒有：送出前確認一次
 function nameConfirmHtml(o) {
-  return o.phase === 'confirm' ? `<div class="ob-confirm" role="alert">${icon('alert')}<span>溜狗紀錄裡還沒有「${esc(o.unknown.join('、'))}」。第一次來或很久沒來都會這樣，名字沒打錯就按「確定用這個名字」。</span></div>` : '';
+  return o.phase === 'confirm' ? `<div class="ob-confirm" role="alert">${icon('alert')}<span>溜狗紀錄裡還沒有「${esc(o.unknown.join('、'))}」，沒打錯就按「確定用這個名字」。</span></div>` : '';
 }
 function onboardHtml() {
   const o = onboard;
@@ -3101,16 +3101,13 @@ function onboardHtml() {
       : `<div class="ob-hero">${icon('paw')}</div>
       <h1>${esc(SITE.name)}</h1>
       <p class="ob-lead">歡迎！先告訴我們你是誰。</p>`;
-    const label = names
-      ? `<label class="ob-label" for="obInput">溜過狗的人，點你的名字</label>`
-      : `<label class="ob-label" for="obInput">你在試算表「誰遛的」寫的名字</label>${isOffline() ? '<p class="ob-label-note">名字清單讀不到（沒網路），請自己輸入。</p>' : ''}`;
+    const label = `<label class="ob-label" for="obInput">輸入你在試算表上登記的名字</label>${!names && isOffline() ? '<p class="ob-label-note">沒網路，不會出現推薦，請打完整的名字。</p>' : ''}`;
     const submit = busy ? '設定中…' : o.phase === 'confirm' ? '確定用這個名字' : o.walk ? '設定並登記' : '下一步';
     return `<form class="ob-page ob-name" id="obForm" autocomplete="off">
       ${head}
       ${label}
-      ${obNamesHtml(o, busy)}
       <input type="text" id="obInput" maxlength="60" placeholder="例：小明" value="${esc(o.text)}"${busy ? ' disabled' : ''} enterkeyhint="done">
-      ${names ? '<p class="ob-help">沒看到你的名字，就在這裡打字找找看，找不到直接輸入。</p>' : ''}
+      ${obNamesHtml(o, busy)}
       <div class="ob-foot">
         ${nameConfirmHtml(o)}
         ${o.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(o.error)}${o.walk ? '' : '。可以先按「先看看」進網站，有訊號時再設定。'}</span></div>` : ''}
@@ -3125,13 +3122,11 @@ function onboardHtml() {
 // 開頭畫面的名字按鈕（K 2026-10-04：入口的名字要能從表上已有的人選）：一人選一個（K 2026-10-08），點了填進輸入框，再點一次拿掉
 // 我溜過的「修改」也用同一排（kind 'who'）。選了用框線＋右上角勾勾（不是實心藍），跟「一起溜的人」分得出來，按鈕也不會變寬
 // 打字時只留符合的名字（K 2026-10-12：打第一個字就出現推薦）：開頭一樣的排前面，再來是中間有這個字的；
-// 沒打字時只列最近溜過的人，打字時連以前溜過的（walkerOlderNames）一起找；
-// 打的剛好是清單上的名字（點選的）就列最近的人＋這個名字，方便換人
+// 沒打字不列（K 2026-10-12：說明只留一句，打一個字才出現推薦），最近溜過的和以前溜過的（walkerOlderNames）一起找
 function namesMatching(text) {
   const q = canonicalWalker(text);
   const all = allWalkerNames();
-  if (!q) return walkerNameList;
-  if (all.includes(q)) return walkerNameList.includes(q) ? walkerNameList : [...walkerNameList, q];
+  if (!q) return [];
   return [...all.filter(n => n.startsWith(q)), ...all.filter(n => !n.startsWith(q) && n.includes(q))];
 }
 function obNamesHtml(o, busy, kind = 'ob') {
@@ -3240,8 +3235,8 @@ function renderOnboard() {
   if (input && typing && !input.disabled) {
     input.focus({ preventScroll: true });
     try { input.setSelectionRange(typing[0], typing[1]); } catch (e) { /* 有些輸入法不給設 */ }
-  } else if (input && onboard.phase === 'edit' && stepChanged && !walkerNameList.length) {
-    input.focus({ preventScroll: true }); // 有名字可以點時不自動叫出鍵盤，免得蓋住名字
+  } else if (input && onboard.phase === 'edit' && stepChanged) {
+    input.focus({ preventScroll: true }); // 名字頁只有輸入框，直接叫出鍵盤
   } else if (!box.contains(document.activeElement)) {
     (box.querySelector('h1, h2') || box).setAttribute('tabindex', '-1');
     (box.querySelector('h1, h2') || box).focus({ preventScroll: true });
