@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-11T23:40:15+08:00",
+  "syncedAt": "2026-10-12T11:00:18+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -1429,11 +1429,11 @@
       "cage": "舊B04",
       "id": "2026042902",
       "name": "方吉",
-      "walkedDate": "2026-10-09",
+      "walkedDate": "2026-10-12",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "a533226b339a",
+        "5bcd472f0161",
         "dcda49f5b985"
       ],
       "note": "",
