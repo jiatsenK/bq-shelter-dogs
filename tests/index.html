@@ -3000,6 +3000,24 @@ async function runDeskTests() {
       eq(row.querySelectorAll('i.on').length, 1, '上次溜那天塗色：');
       deskView = 'sheet';
     });
+    await check('電腦版最近 30 天（K 2026-10-12）：格子寫誰遛的第一個字、好幾個人加一點、滑過去看全名；換不到名字只有綠格', () => {
+      const saved = [walkerCodeNames, walkerNames];
+      try {
+        deskView = 'days30';
+        const k = n => localDateKey(ago(n));
+        walkerCodeNames = { aaa: '嘉文', bbb: '岑' };
+        walkerNames = { 2026010103: '俐葶' };
+        deskWalkDays = new Map([['2026010103', new Map([[k(5), new Set(['aaa', 'bbb'])], [k(8), new Set(['zzz'])], [k(1), new Set()]])]]);
+        deskWalkFirst = k(20);
+        const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', sortWalkList(allDogs, TODAY)), 'text/html');
+        const row = [...doc.querySelectorAll('tbody tr')].find(tr => tr.textContent.includes('桌綠'));
+        const cell = n => row.querySelectorAll('td.dr-d')[29 - n];
+        eq([cell(5).querySelector('i').textContent, cell(5).querySelector('i').classList.contains('multi'), cell(5).title], ['嘉', true, `${ago(5).getMonth() + 1}/${ago(5).getDate()} 嘉文、佳岑`], '兩個人：');
+        eq([cell(1).querySelector('i').textContent, cell(1).title.endsWith(' 俐葶')], ['俐', true], '上次溜那天用試算表的誰遛的：');
+        eq([cell(8).querySelector('i.on').textContent, cell(8).title.endsWith(' 有溜')], ['', true], '換不到名字：');
+        eq(cell(3).title, '', '沒溜：');
+      } finally { [walkerCodeNames, walkerNames] = saved; deskWalkDays = null; deskWalkFirst = ''; deskView = 'sheet'; }
+    });
     await check('電腦版：勾兩隻按「今天 溜了」一次交給 setWalked（照舊只寫遛狗日期、誰遛的），勾的清掉', () => {
       if (!deskOn()) return; // 測試的瀏覽器不夠寬就不測畫面
       const calls = [];
