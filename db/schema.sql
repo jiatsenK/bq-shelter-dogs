@@ -57,3 +57,10 @@ CREATE TABLE IF NOT EXISTS kv (
   value      TEXT NOT NULL,                           -- JSON
   updated_at TEXT NOT NULL
 );
+
+-- 看過的溜狗人名字（K 2026-10-12）：Worker 每次讀試算表「誰遛的」就記下來，最近沒溜的人打字時也推薦得到。
+-- 名字只在這裡和 GET /walkers 的回應，不進 repo
+CREATE TABLE IF NOT EXISTS walker_names (
+  name      TEXT PRIMARY KEY,
+  last_seen TEXT NOT NULL                             -- 最後一次在試算表上看到（ISO 時間）
+);

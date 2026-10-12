@@ -1759,6 +1759,18 @@ async function runV9Tests() {
       box().querySelector('[data-ob-name="小華"]').click();
       eq(names(), ['阿明', '小華', '明華', '美玲'], '點選的名字不篩：');
       onboard = null; renderOnboard();
+      // 以前溜過、現在表上沒有的（Worker 記下來的）：沒打字不列，打字才推薦；點了也不算表上沒有
+      walkerOlderNames = ['老K', '明哲'];
+      startOnboard();
+      eq(names(), ['阿明', '小華', '明華', '美玲'], '沒打字只列最近的：');
+      const input2 = box().querySelector('#obInput');
+      input2.value = '老'; input2.dispatchEvent(new Event('input', { bubbles: true }));
+      eq(names(), ['老K'], '打字連以前的一起找：');
+      box().querySelector('[data-ob-name="老K"]').click();
+      eq([names(), unknownWalkerNames('老K')], [['阿明', '小華', '明華', '美玲', '老K'], []], '點了以前的名字：');
+      input2.value = '明'; box().querySelector('#obInput').value = '明'; box().querySelector('#obInput').dispatchEvent(new Event('input', { bubbles: true }));
+      eq(names(), ['明華', '明哲', '阿明'], '開頭一樣的在前：');
+      walkerOlderNames = []; onboard = null; renderOnboard();
     });
     await check('K 2026-10-12：名字清單上沒有、但遛狗紀錄裡有（最近沒溜的人）就不用再確認', async () => {
       const tick = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setTimeout(r, 0)); };
