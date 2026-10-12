@@ -3027,6 +3027,7 @@ function tourLoop() {
 function queueTour() { if (tour && !tourFrame) tourFrame = requestAnimationFrame(tourLoop); }
 function renderTour(stepChanged = false) {
   let box = document.getElementById('tour');
+  document.documentElement.classList.toggle('tour-open', !!tour);
   if (!tour) {
     if (box) box.remove();
     document.documentElement.classList.remove('tour-where-demo');
