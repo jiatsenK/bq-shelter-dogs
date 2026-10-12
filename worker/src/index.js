@@ -962,12 +962,24 @@ export async function rememberWalkerNames(env, names, now = Date.now()) {
     return [];
   }
 }
+// 電腦版「最近 30 天」要寫每天是誰遛的（K 2026-10-12）：walks.json 只有代號，這裡把名單上每個名字換成代號回給網站
+// （{ 代號: 名字 }）。名單本來就公開在 /walkers、每個名字也能自己拿去 /walker-code 換，所以沒有多給什麼；沒設 WALKER_KEY 回空的
+export async function walkerCodeMap(names, key) {
+  const out = {};
+  if (!key) return out;
+  for (const n of new Set(names)) {
+    const c = await walkerCode(n, key);
+    if (c && !out[c]) out[c] = n;
+  }
+  return out;
+}
 async function getWalkers(env, allowed, now = Date.now()) {
   const cfg = config(env);
   if (!cfg.sheetId) return reply(503, { ok: false, code: 'off', error: '還沒設定試算表' }, allowed);
   if (!walkersCache || walkersCache.id !== cfg.sheetId || now - walkersCache.at > WALKERS_CACHE_MS) {
     const data = await readWalkers(cfg.sheetId);
-    walkersCache = { id: cfg.sheetId, at: now, data: { ...data, older: await rememberWalkerNames(env, data.names, now) } };
+    const older = await rememberWalkerNames(env, data.names, now);
+    walkersCache = { id: cfg.sheetId, at: now, data: { ...data, older, codes: await walkerCodeMap([...data.names, ...older], cfg.walkerKey) } };
   }
   return reply(200, { ok: true, ...walkersCache.data }, allowed);
 }

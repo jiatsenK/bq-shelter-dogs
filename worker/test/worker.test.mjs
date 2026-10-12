@@ -761,6 +761,16 @@ test('K 2026-10-12 GET /walkers：看過的名字記進資料庫，以前看過�
   assert.deepEqual([res.status, res.body.older, res.body.names.length], [200, [], 5]);
 });
 
+test('K 2026-10-12 GET /walkers：有 WALKER_KEY 時多回 codes（代號 → 名字），電腦版最近 30 天寫每天誰遛的；沒密鑰回空的', async () => {
+  fakeSheet();
+  const { body } = await getWalkers({ SHEET_ID: 'abc', WALKER_KEY: 'test-walker-key' });
+  for (const n of body.names) assert.equal(body.codes[await worker.testing.walkerCode(n, 'test-walker-key')], n, n);
+  assert.equal(Object.keys(body.codes).length, body.names.length);
+  resetState();
+  fakeSheet();
+  assert.deepEqual((await getWalkers({ SHEET_ID: 'abc' })).body.codes, {});
+});
+
 test('#141 GET /walkers：沒設 SHEET_ID 回 off；讀不到回 502；只收 GET', async () => {
   assert.deepEqual((await getWalkers({})).body, { ok: false, code: 'off', error: '還沒設定試算表' });
   globalThis.fetch = async () => new Response('', { status: 500 });

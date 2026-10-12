@@ -36,7 +36,7 @@ let deskView = 'sheet'; // sheet（全表）、days30（最近 30 天）、fill�
 let deskFill = 'all'; // 補資料要看哪些：all、photo（沒照片）、intro（沒介紹）
 let deskNotesAll = false;
 const deskChecked = new Set(); // 勾起來要一起登記的狗（walkKey）
-let deskWalkDays = null; // walkKey → Set(yyyy-mm-dd)，最近 30 天用；第一次切過去才讀 walks.json
+let deskWalkDays = null; // walkKey → Map(yyyy-mm-dd → Set(代號))，最近 30 天用；第一次切過去才讀 walks.json
 let deskWalkFirst = '';
 let deskWalksLoading = false;
 
@@ -90,12 +90,19 @@ function deskToolsHtml(shown, total) {
 function deskDays(today) {
   return Array.from({ length: 30 }, (_, i) => new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29 + i));
 }
-function deskWalkedOn(dog, key, today) {
-  if (localDateKey(today) === key && walkedNow(dog, today)) return true;
-  const date = effectiveWalkDate(dog, today);
-  if (date && localDateKey(date) === key) return true;
-  const set = deskWalkDays && deskWalkDays.get(walkKey(dog));
-  return !!(set && set.has(key));
+// 那天有沒有溜、誰遛的（K 2026-10-12：電腦版最近 30 天要看到是誰遛的）。
+// walks.json 只有代號，用 Worker 給的「代號 → 名字」換回來；今天和上次溜那天再加上試算表「誰遛的」。換不到名字就只有綠格
+function deskDayWalk(dog, key, today) {
+  const names = [];
+  let on = false;
+  const sheetDay = (localDateKey(today) === key && walkedNow(dog, today)) || (() => { const d = effectiveWalkDate(dog, today); return !!(d && localDateKey(d) === key); })();
+  if (sheetDay) { on = true; names.push(...walkerList(dog, today)); }
+  const codes = deskWalkDays && deskWalkDays.get(walkKey(dog)) && deskWalkDays.get(walkKey(dog)).get(key);
+  if (codes) {
+    on = true;
+    for (const c of codes) if (walkerCodeNames[c]) names.push(canonicalWalker(walkerCodeNames[c]));
+  }
+  return { on, names: [...new Set(names.filter(n => n && n !== '你'))] };
 }
 async function deskLoadWalks() {
   if (deskWalkDays || deskWalksLoading) return;
@@ -105,8 +112,10 @@ async function deskLoadWalks() {
     const map = new Map();
     for (const w of (data && data.walks) || []) {
       const key = w.id ? w.id : `名:${w.name}`;
-      if (!map.has(key)) map.set(key, new Set());
-      map.get(key).add(w.date);
+      if (!map.has(key)) map.set(key, new Map());
+      const day = map.get(key);
+      if (!day.has(w.date)) day.set(w.date, new Set());
+      for (const c of Array.isArray(w.walkers) ? w.walkers : []) day.get(w.date).add(c);
       if (!deskWalkFirst || w.date < deskWalkFirst) deskWalkFirst = w.date;
     }
     deskWalkDays = map;
@@ -141,7 +150,15 @@ function deskRowHtml(dog, today, days) {
     : `<span class="dr-cage plain">${esc(dog.cage)}</span>`;
   const note = dog.note ? (flag ? highlightNote(dog.note, flag.terms) : esc(dog.note)) : '';
   const cells = days
-    ? days.map(d => { const k = localDateKey(d); const on = deskWalkedOn(dog, k, today); const pre = !on && deskWalkFirst && k < deskWalkFirst; return `<td class="dr-d${localDateKey(d) === localDateKey(today) ? ' today' : ''}"><i class="${on ? 'on' : pre ? 'pre' : ''}"></i></td>`; }).join('')
+    ? days.map(d => {
+      const k = localDateKey(d);
+      const { on, names } = deskDayWalk(dog, k, today);
+      const pre = !on && deskWalkFirst && k < deskWalkFirst;
+      // 格子裡寫第一個人名字的第一個字，好幾個人右上角加一點；滑過去看全名
+      const tip = on ? `${d.getMonth() + 1}/${d.getDate()} ${names.length ? names.join('、') : '有溜'}` : '';
+      const mark = names.length ? esc([...names[0]][0]) : '';
+      return `<td class="dr-d${k === localDateKey(today) ? ' today' : ''}"${tip ? ` title="${esc(tip)}"` : ''}><i class="${on ? 'on' : pre ? 'pre' : ''}${names.length > 1 ? ' multi' : ''}">${mark}</i></td>`;
+    }).join('')
     : '';
   return `<tr class="dr${deskChecked.has(key) ? ' checked' : ''}${flag ? ' flagged' : ''}" data-desk-dog="${idx}">
     <td class="dr-ck">${check}</td>
@@ -171,7 +188,7 @@ function deskTableHtml(list, today) {
       </tr></thead>
       <tbody>${list.map(d => deskRowHtml(d, today, days)).join('')}</tbody>
     </table>
-    ${days ? `<p class="desk-foot">綠格是那天有溜${deskWalkFirst ? `；溜狗紀錄從 ${+deskWalkFirst.slice(5, 7)}/${+deskWalkFirst.slice(8)} 開始，之前是斜線` : ''}。</p>` : ''}
+    ${days ? `<p class="desk-foot">綠格是那天有溜，格子裡是誰遛的（名字第一個字，右上角有點是不只一個人；滑過去看全名）${deskWalkFirst ? `；溜狗紀錄從 ${+deskWalkFirst.slice(5, 7)}/${+deskWalkFirst.slice(8)} 開始，之前是斜線` : ''}。</p>` : ''}
   </div>`;
 }
 
