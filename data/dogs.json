@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-13T13:01:52+08:00",
+  "syncedAt": "2026-10-13T14:38:16+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -1183,7 +1183,7 @@
       "cage": "舊A10",
       "id": "2021112003",
       "name": "部長",
-      "walkedDate": "2026-10-08",
+      "walkedDate": "2026-10-13",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1198,7 +1198,7 @@
       "cage": "舊A12",
       "id": "2018121202",
       "name": "笑笑",
-      "walkedDate": "2026-10-08",
+      "walkedDate": "2026-10-13",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1303,11 +1303,11 @@
       "cage": "舊A18",
       "id": "2025042401",
       "name": "浩南",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-13",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "21120f797f52"
+        "75aeed7c10fe"
       ],
       "note": "4/12洗澡（佳岑）",
       "sex": "male",

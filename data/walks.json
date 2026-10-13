@@ -887,6 +887,9 @@
     {"id":"2026032402","name":"雪糕","date":"2026-10-13","mine":false,"walkers":["3c0459316acf"]},
     {"id":"2023083106","name":"昆布","date":"2026-10-13","mine":false,"walkers":["da53fbdda293"]},
     {"id":"2023022001","name":"寶弟","date":"2026-10-13","mine":false,"walkers":["3c0459316acf"]},
-    {"id":"2025021801","name":"阿湯","date":"2026-10-13","mine":false,"walkers":["da53fbdda293"]}
+    {"id":"2025021801","name":"阿湯","date":"2026-10-13","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2021112003","name":"部長","date":"2026-10-13","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2018121202","name":"笑笑","date":"2026-10-13","mine":false,"walkers":["75aeed7c10fe"]},
+    {"id":"2025042401","name":"浩南","date":"2026-10-13","mine":false,"walkers":["75aeed7c10fe"]}
   ]
 }
