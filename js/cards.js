@@ -354,6 +354,7 @@ async function bqDeal() {
     await bqRemoteOpened(BQ.codes, cards.map(p => p.id));
   } catch (e) {
     document.getElementById('bqDealNote').textContent = '開卡紀錄未儲存，請重新開啟卡包再試。';
+    document.getElementById('bqPackNote').textContent = '開卡紀錄未儲存，點卡包重試。';
     document.getElementById('bqField').classList.remove('opened', 'tearing');
     document.getElementById('bqPackCount').textContent = `${cards.length} 張新卡`;
     return;
@@ -395,6 +396,7 @@ async function bqOpenField(opener) {
   const field = document.getElementById('bqField');
   bqFieldOpener = opener || null;
   field.classList.remove('tearing', 'opened');
+  document.getElementById('bqPackNote').textContent = '點卡包撕開';
   document.getElementById('bqHand').innerHTML = '';
   document.getElementById('bqAgain').hidden = true;
   document.getElementById('bqDone').hidden = true;

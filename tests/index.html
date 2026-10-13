@@ -3330,6 +3330,8 @@ async function runCardsTests() {
       await b.eval('bqDeal()');
       eq(b.eval('BQ.pending.length'), 1, '失敗不把卡標成已開：');
       if (!b.document.getElementById('bqDealNote').textContent.includes('未儲存')) throw new Error('要顯示失敗原因');
+      const failure = b.document.getElementById('bqPackNote');
+      if (!failure.textContent.includes('重試') || b.getComputedStyle(failure).display === 'none') throw new Error('重試提示要在還沒開的卡包旁可見');
       fixture.fail = false;
       await b.eval('bqDeal()');
       eq(b.eval('BQ.pending.length'), 0);
