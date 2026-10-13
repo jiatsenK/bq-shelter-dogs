@@ -327,7 +327,7 @@ function runTests() {
       eq(val({ walkedDate: null, covered: false }), ['沒有紀錄', 'val muted']);
       eq(val({ walkedDate: null, covered: true }), ['有人固定照顧', 'val sage small']);
     }),
-    check('上次遛時間欄：今天、昨天、2～4 天前文字與字體一致，保留配色與欄寬', async () => {
+    check('上次遛時間欄：今天昨天採 A 方案小字，保留天數排版、配色與欄寬', async () => {
       const host = document.createElement('div');
       host.style.setProperty('--green-bg', '#DFF0E4'); host.style.setProperty('--green-text', '#1E6B3C'); // Shadow DOM 不套用文件的 :root，補上正式網站色票
       host.style.width = '320px'; document.body.append(host);
@@ -343,7 +343,8 @@ function runTests() {
         eq(values.map(v => v.className), ['val sage', 'val sage', 'val sage', 'val amber', 'val amber', 'val red']);
         const typography = el => { const s = getComputedStyle(el); return [s.fontSize, s.fontWeight, s.lineHeight, s.textAlign]; };
         for (const v of values) {
-          eq(typography(v), typography(values[3])); eq(typography(v.querySelector('b')), typography(values[3].querySelector('b')));
+          eq(typography(v), typography(values[3]));
+          eq(typography(v.querySelector('b')), values.indexOf(v) < 2 ? ['20px', '700', '32px', 'center'] : typography(values[3].querySelector('b')));
           const last = v.closest('.last');
           eq([last.querySelector('.lbl').textContent, getComputedStyle(last.querySelector('.lbl')).display, getComputedStyle(last).width], ['上次遛', 'block', '70px']);
           if (v.scrollWidth > v.clientWidth) throw new Error('時間欄文字溢出');
@@ -632,7 +633,7 @@ function runTests() {
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
       const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
-      eq(scripts.map(s => s.getAttribute('src')), ['js/site-config.js', 'js/prototype-walk-column.js', 'js/app.js', 'js/analysis.js', 'js/find.js', 'js/desk.js'], 'script（此 prototype 分支多左欄原型啟動檔，正式版不帶入）：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/site-config.js', 'js/app.js', 'js/analysis.js', 'js/find.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
