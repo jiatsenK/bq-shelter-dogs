@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-13T11:01:27+08:00",
+  "syncedAt": "2026-10-13T11:31:18+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -156,11 +156,11 @@
       "cage": "新獨01",
       "id": "2018062507",
       "name": "黑狗兄",
-      "walkedDate": "2026-10-11",
+      "walkedDate": "2026-10-13",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "ca36800987f2"
+        "75aeed7c10fe"
       ],
       "note": "20260913，右嘴流血，疑似息肉破裂。2026/4/5 籠內疑似護食，咬了歐疼，暫時搬到獨立籠 7/22洗澡msi",
       "sex": "male",
@@ -294,11 +294,11 @@
       "cage": "新獨10",
       "id": "2022042602",
       "name": "沙沙",
-      "walkedDate": "2026-10-11",
+      "walkedDate": "2026-10-13",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "ca36800987f2"
+        "75aeed7c10fe"
       ],
       "note": "2026/4/18，咬Kobe(嘉文）；5/28發現褥瘡（巧芸） 7/22洗澡msi",
       "sex": "male",
@@ -309,11 +309,11 @@
       "cage": "新獨11",
       "id": "2019100711",
       "name": "小貝",
-      "walkedDate": "2026-10-11",
+      "walkedDate": "2026-10-13",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "ca36800987f2"
+        "75aeed7c10fe"
       ],
       "note": "不親狗",
       "sex": "female",
