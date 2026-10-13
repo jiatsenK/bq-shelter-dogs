@@ -1714,6 +1714,7 @@ html.tour-open header.app { top: 0; }
 .card .last .lbl { font-size: 12px; font-weight: 600; line-height: 16px; }
 .card .last .val { display: grid; grid-template-rows: 32px 16px; align-items: center; justify-items: center; height: 48px; font-size: 14px; font-weight: 700; line-height: 16px; }
 .card .last .val b { display: block; font-size: 30px; font-weight: 900; line-height: 32px; font-variant-numeric: tabular-nums; }
+.card .last[data-days="0"] .val b, .card .last[data-days="1"] .val b { font-size: 20px; font-weight: 700; }
 .card .last .val.small { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 40px; font-size: 14px; line-height: 20px; }
 .card .last .val.muted { font-size: 16px; font-weight: 800; }
 .card .last .last-unit { display: block; line-height: 16px; }
