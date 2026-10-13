@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-13T14:38:16+08:00",
+  "syncedAt": "2026-10-13T16:02:21+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -336,11 +336,11 @@
       "cage": "新A01",
       "id": "2018050810",
       "name": "黑寶",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-13",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "2026/8/15疑似咬傷室友果果（巧芸）",
       "sex": "female",
@@ -351,11 +351,11 @@
       "cage": "新A01",
       "id": "2018052305",
       "name": "MINI",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-13",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "4/1胸下腫瘤切除，移至住院區。4/29出所治療住院，5/13回所(巧芸)",
       "sex": "male",
@@ -396,11 +396,11 @@
       "cage": "新A03",
       "id": "2021112704",
       "name": "歐疼",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-13",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "2026/4/10洗澡 7/22洗澡msi",
       "sex": "male",
@@ -411,11 +411,11 @@
       "cage": "新A03",
       "id": "2021121404",
       "name": "白心",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-13",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "75aeed7c10fe"
       ],
       "note": "2025/8/15洗澡; 2026/4/19左上唇有一點流血（嘉文） 7/22洗澡msi",
       "sex": "male",
