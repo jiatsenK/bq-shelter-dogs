@@ -1066,6 +1066,32 @@ function scriptError(msg) {
   return [...text.replace(/[A-Za-z0-9_-]{25,}/g, '…')].slice(0, 100).join('');
 }
 
+// 圖鑑開卡：只加不刪，複合主鍵讓重送／多裝置不重複建立紀錄。
+async function openedCards(request, env, origin) {
+  if (!env?.DB) return fail(503, '開卡紀錄暫時無法儲存，請稍後再試', origin);
+  if (!['GET', 'PUT'].includes(request.method)) return fail(405, '開卡紀錄只接受 GET 或 PUT', origin);
+  const input = request.method === 'GET'
+    ? { codes: (new URL(request.url).searchParams.get('codes') || '').split(',') }
+    : await readJsonBody(request, 8 * 1024);
+  if (!input || !Array.isArray(input.codes) || !input.codes.length || input.codes.length > 8 || !input.codes.every(c => typeof c === 'string' && /^[0-9a-f]{12}$/.test(c))) return fail(400, '個人代號格式不對', origin);
+  const codes = [...new Set(input.codes)];
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!allow(`cards:${request.method}:${ip}`, [{ windowMs: 60000, max: 60 }], Date.now())) return fail(429, '操作太頻繁，請稍後再試', origin);
+  if (request.method === 'PUT') {
+    if (!Array.isArray(input.ids) || !input.ids.length || input.ids.length > 50 || !input.ids.every(id => typeof id === 'string' && ID_PATTERN.test(id))) return fail(400, '每次最多記錄 50 張卡', origin);
+    const ids = [...new Set(input.ids)];
+    const dogs = await loadDogs(config(env), Date.now());
+    if (ids.some(id => !dogs.has(id))) return fail(400, '找不到這隻狗', origin);
+    const date = taiwanYmd(Date.now());
+    await env.DB.batch(codes.flatMap(code => ids.map(id => env.DB.prepare('INSERT OR IGNORE INTO card_opened (walker_code, dog_id, opened_on) VALUES (?, ?, ?)').bind(code, id, date))));
+    return reply(200, { ok: true }, origin);
+  }
+  const rows = await env.DB.batch(codes.map(code => env.DB.prepare('SELECT dog_id, opened_on FROM card_opened WHERE walker_code = ?').bind(code)));
+  const books = {};
+  codes.forEach((code, i) => { books[code] = Object.fromEntries((rows[i].results || []).map(r => [r.dog_id, r.opened_on])); });
+  return reply(200, { ok: true, opened: { v: 1, codes: books } }, origin);
+}
+
 export default {
   // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch 和 scheduled
   testing: { r2, MAX_BYTES, NOTE_MAX_CHARS, resetState, allowUpload, isJpeg, cleanNote, walkerCode, triggerSync, maintenance },
@@ -1137,6 +1163,10 @@ export default {
       return fail(403, '這是預覽版，不能存，正式資料不受影響。要改請到正式網址', allowed);
     }
 
+    if (path === '/cards/opened') {
+      try { return await openedCards(request, env, allowed); }
+      catch (e) { return fail(503, '開卡紀錄暫時讀寫失敗，請稍後再試', allowed); }
+    }
     if (path === '/notes' || path.startsWith('/notes/')) {
       try {
         if (request.method === 'GET' && path === '/notes') return await getNotes(request, env, allowed);

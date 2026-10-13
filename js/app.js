@@ -677,14 +677,17 @@ function lastWalk(dog, today) {
   let text = '沒有紀錄', level = 'muted', small = false;
   if (s.kind === 'dated') {
     if (s.days < 0) text = '日期看不懂';
-    else { text = s.days === 0 ? '今天' : `<b>${s.days}</b> 天前`; level = s.level; } // 數字包 <b>：狗卡左緣色籤把天數放大（K 2026-10-09 日期是現場第一眼）
+    else {
+      text = `<b>${s.days === 0 ? '今天' : s.days === 1 ? '昨天' : s.days}</b><span class="last-unit">${s.days >= 2 ? ' 天前' : ''}</span>`;
+      level = s.level;
+    }
   } else if (s.kind === 'rest') {
     text = `<span class="nowrap">休養中</span><span class="nowrap rest-until">到 ${monthDay(s.until)}</span>`; level = 'rest'; small = true;
   } else if (s.kind === 'covered') {
     // 窄螢幕放不下一行時只在「有人固定｜照顧」之間換行，不會剩一個「顧」字
     text = '<span class="nowrap">有人固定</span><span class="nowrap">照顧</span>'; level = 'sage'; small = true;
   }
-  return `<div class="last"><span class="lbl">上次溜</span><span class="val ${level}${small ? ' small' : ''}">${text}</span></div>`;
+  return `<div class="last"><span class="lbl">上次遛</span><span class="val ${level}${small ? ' small' : ''}">${text}</span></div>`;
 }
 
 // 卡片用「編號｜籠位」（照 K 的參考圖）；詳細資訊沿用 metaLine

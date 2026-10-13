@@ -810,3 +810,43 @@ test('狀態頁：沒接資料庫寫「未設定」；接上了寫各表幾筆�
   const broken = { prepare: () => ({ first: async () => { throw new Error('no such table: dogs'); } }) };
   assert.equal((await send(new Request('https://x.workers.dev/'), { ...ENV, DB: broken })).body.database, 'D1（還沒建表）');
 });
+
+test('圖鑑 D1：同人跨裝置合併、重送不重複、不同人隔離、預覽不可寫', async () => {
+  const { DatabaseSync } = await import('node:sqlite');
+  const db = new DatabaseSync(':memory:');
+  db.exec(await readFile(new URL('../../db/schema.sql', import.meta.url), 'utf8'));
+  const original = globalThis.fetch;
+  const calls = fakeGithub();
+  const DB = {
+    prepare(sql) { return { bind(...args) { return { sql, args }; } }; },
+    async batch(statements) {
+      db.exec('BEGIN');
+      try {
+        const result = statements.map(({ sql, args }) => ({ success: true, results: sql.startsWith('SELECT') ? db.prepare(sql).all(...args) : (db.prepare(sql).run(...args), []) }));
+        db.exec('COMMIT'); return result;
+      } catch (e) { db.exec('ROLLBACK'); throw e; }
+    },
+  };
+  const code = 'abcdef123456', other = '123456abcdef';
+  const req = (method, data, env = {}) => worker.fetch(new Request(`https://worker.example/api/cards/opened${method === 'GET' ? '?codes=' + data.join(',') : ''}`, {
+    method, headers: { Origin: ORIGIN, 'Content-Type': 'application/json' }, ...(method === 'GET' ? {} : { body: JSON.stringify(data) }),
+  }), { ...ENV, DB, ...env });
+  try {
+    resetState();
+    assert.equal((await req('PUT', { codes: [code], ids: ['2024032902'] })).status, 200);
+    assert.equal((await req('PUT', { codes: [code], ids: ['2024032902'] })).status, 200);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM card_opened').get().n, 1);
+    const out = await (await req('GET', [code])).json();
+    assert.match(out.opened.codes[code]['2024032902'], /^\d{4}-\d{2}-\d{2}$/);
+    assert.deepEqual((await (await req('GET', [other])).json()).opened.codes[other], {});
+    assert.equal((await req('PUT', { codes: [other], ids: ['2024032902'] })).status, 200);
+    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM card_opened').get().n, 2);
+    assert.equal((await req('PUT', { codes: [code], ids: ['unknown'] })).status, 400);
+    assert.equal((await req('GET', ["bad' OR 1=1"])).status, 400);
+    assert.equal((await req('PUT', { codes: [code], ids: [] })).status, 400);
+    assert.equal((await req('PUT', { codes: [code], ids: ['2024032902'] }, { PREVIEW: '1' })).status, 403);
+    assert.equal((await req('GET', [code], { DB: null })).status, 503);
+    assert.equal((await req('GET', [code], { DB: { batch() { throw new Error('unavailable'); }, prepare: DB.prepare } })).status, 503);
+    assert.equal(calls.filter(c => c.method !== 'GET').length, 0, '不寫 GitHub 或試算表');
+  } finally { globalThis.fetch = original; db.close(); resetState(); }
+});
