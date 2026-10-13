@@ -310,7 +310,7 @@ function runTests() {
         const card = box.querySelector('.card');
         eq(card.querySelector('.name').firstChild.textContent, '測試狗');
         if (!card.querySelector('.name .sex')) throw new Error('要預留性別位置');
-        eq(card.querySelector('.last').textContent, '上次溜今天');
+        eq(card.querySelector('.last').textContent, '上次遛今天');
         eq(card.querySelector('.meta').textContent, '1|A01', '編號｜籠位：');
         if (card.querySelector('.has-note')) throw new Error('犬名旁不再顯示備註小圖示');
         const text = card.textContent;
@@ -326,6 +326,29 @@ function runTests() {
       eq(val({ walkedDate: new Date(2026, 7, 20), covered: false }), ['35 天前', 'val red']);
       eq(val({ walkedDate: null, covered: false }), ['沒有紀錄', 'val muted']);
       eq(val({ walkedDate: null, covered: true }), ['有人固定照顧', 'val sage small']);
+    }),
+    check('上次遛時間欄：今天、昨天、2～4 天前文字與字體一致，保留配色與欄寬', async () => {
+      const host = document.createElement('div');
+      host.style.width = '320px'; document.body.append(host);
+      const root = host.attachShadow({ mode: 'open' });
+      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = '../css/app.css';
+      await new Promise((resolve, reject) => { link.onload = resolve; link.onerror = reject; root.append(link); });
+      const box = document.createElement('div'); root.append(box);
+      try {
+        box.innerHTML = [0, 1, 2, 3, 4, 5].map(days => `<div class="card">${lastWalk({ id: `test-days-${days}`, walkedDate: new Date(2026, 8, 24 - days), covered: false }, TODAY)}</div>`).join('');
+        const values = [...box.querySelectorAll('.val')];
+        eq(values.map(v => v.textContent), ['今天', '昨天', '2 天前', '3 天前', '4 天前', '5 天前']);
+        eq(values.map(v => v.className), ['val sage', 'val sage', 'val sage', 'val amber', 'val amber', 'val red']);
+        const typography = el => { const s = getComputedStyle(el); return [s.fontSize, s.fontWeight, s.lineHeight, s.textAlign]; };
+        for (const v of values) {
+          eq(typography(v), typography(values[3])); eq(typography(v.querySelector('b')), typography(values[3].querySelector('b')));
+          const last = v.closest('.last');
+          eq([last.querySelector('.lbl').textContent, getComputedStyle(last.querySelector('.lbl')).display, getComputedStyle(last).width], ['上次遛', 'block', '70px']);
+          if (v.scrollWidth > v.clientWidth) throw new Error('時間欄文字溢出');
+        }
+        eq(getComputedStyle(values[0].closest('.last')).backgroundColor, 'rgba(0, 0, 0, 0)');
+        eq(getComputedStyle(values[3].closest('.last')).backgroundColor, getComputedStyle(values[4].closest('.last')).backgroundColor);
+      } finally { host.remove(); }
     }),
     check('#28 詳細資訊分成備註、（#62 我的備註、）可以一起溜的狗（照片＋犬名）、（#60 遛狗紀錄、）狗卡資訊', () => {
       const saved = [allDogs, groupMap];
@@ -2391,7 +2414,7 @@ async function runTermTests() {
     const shown = src => src
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/(^|[^:])\/\/.*$/gm, '$1')
-      .replace(/勿遛|勿蹓|「誰遛的」|'誰遛的'/g, '');
+      .replace(/勿遛|勿蹓|「誰遛的」|'誰遛的'|上次遛/g, ''); // K 2026-10-13 指定左側標題「上次遛」
     const old = ['遛', '移回', '一直收起', '今天先收起', '犬名', '犬隻', '狗狗', '狗卡資訊', '平均隔', '最久隔', '日期異常', '尚無', '已存到 Git', '代號服務'];
     const hits = [];
     for (const [file, src] of [['index.html', INDEX_HTML.replace(/<!--[\s\S]*?-->/g, '')], ['app.js', APP_JS], ['analysis.js', ANALYSIS_JS], ['find.js', FIND_JS]]) {
@@ -3245,10 +3268,81 @@ async function runCardsTests() {
     eq(C.bqLoadOpened(st), { v: 1, codes: {} }, '壞掉重來：');
     eq(C.bqLoadOpened(null), { v: 1, codes: {} }, '沒有儲存空間：');
   });
-  await check('圖鑑只讀 dogs.json、walks.json，不寫試算表、不送資料', () => {
+  await check('圖鑑：多頁籤開卡合併保存，不蓋掉自己或別人的卡', () => {
+    const st = fakeStorage(), a = C.bqLoadOpened(st), b = C.bqLoadOpened(st);
+    C.bqMarkOpened(a, [ME], ['2017041502'], TODAY); C.bqSaveOpened(st, a);
+    C.bqMarkOpened(b, [OTHER], ['2022061001'], TODAY); C.bqSaveOpened(st, b);
+    C.bqMarkOpened(a, [ME], ['2021010101'], TODAY); C.bqSaveOpened(st, a);
+    const saved = C.bqLoadOpened(st);
+    eq([...C.bqOpenedIds(saved, [ME])].sort(), ['2017041502', '2021010101']);
+    eq([...C.bqOpenedIds(saved, [OTHER])], ['2022061001']);
+    eq(C.bqSaveOpened({ getItem: () => null, setItem: () => { throw new Error('quota'); } }, a), false);
+  });
+  await check('圖鑑完整流程：舊卡移入後台、重開及跨裝置讀回、另一個人分開、寫入失敗可重試', async () => {
+    const html = await fetch('../cards.html').then(r => r.text());
+    const selected = DOGS_JSON.dogs.filter(d => d.id && !/^[(（]/.test(d.name)).slice(0, 7);
+    const ME = 'abcdef123456', OTHER = '123456abcdef';
+    const fixture = window.__cardFixture = {
+      dogs: { ...DOGS_JSON, dogs: selected },
+      walks: { walks: selected.map(d => ({ id: d.id, date: '2026-10-12', walkers: [ME, OTHER] })) },
+      books: {}, fail: false,
+    };
+    const frames = [];
+    async function device(code, legacy = []) {
+      const iframe = document.createElement('iframe'); frames.push(iframe); document.body.append(iframe);
+      const startup = `<script>
+        const store = new Map([['bq-walker-codes', '${JSON.stringify([code])}'], ['bq-zukan', '${JSON.stringify({ v: 1, codes: { [code]: Object.fromEntries(legacy.map(id => [id, '2026-10-10'])) } })}']]);
+        Object.defineProperty(window, 'localStorage', { value: { getItem: k => store.get(k) || null, setItem: (k, v) => store.set(k, v) } });
+        const nativeFetch = window.fetch;
+        window.fetch = async (url, init = {}) => {
+          const f = parent.__cardFixture;
+          if (url === 'data/dogs.json') return Response.json(f.dogs);
+          if (url === 'data/walks.json') return Response.json(f.walks);
+          if (String(url).startsWith('/api/cards/opened')) {
+            if (f.fail) return Response.json({ ok: false }, { status: 503 });
+            if (init.method === 'PUT') {
+              const input = JSON.parse(init.body);
+              input.codes.forEach(c => { f.books[c] ||= {}; input.ids.forEach(id => { f.books[c][id] ||= '2026-10-13'; }); });
+              return Response.json({ ok: true });
+            }
+            const codes = new URL(url, document.baseURI).searchParams.get('codes').split(',');
+            return Response.json({ ok: true, opened: { v: 1, codes: Object.fromEntries(codes.map(c => [c, f.books[c] || {}])) } });
+          }
+          return nativeFetch(url, init);
+        };
+      <\/script>`;
+      await new Promise(resolve => { iframe.onload = resolve; iframe.srcdoc = html.replace('<head>', `<head><base href="${new URL('../', location.href)}">${startup}`); });
+      const w = iframe.contentWindow;
+      for (let i = 0; i < 100 && w.eval('BQ.remote') === 'loading'; i++) await new Promise(r => setTimeout(r, 20));
+      eq(w.eval('BQ.remote'), 'ready', '後台讀取成功：');
+      return w;
+    }
+    try {
+      const a = await device(ME, [selected[0].id]);
+      eq(Object.keys(fixture.books[ME]), [selected[0].id], '移入舊卡：');
+      const b = await device(ME); // 另一個裝置沒有 localStorage 舊卡
+      eq(b.eval('BQ.pending.length'), 6);
+      await a.eval('bqDeal()');
+      eq(a.eval('BQ.pending.length'), 1);
+      await b.eval('bqOpenField()');
+      eq(b.eval('BQ.pending.length'), 1, '舊頁面開包前先讀後台：');
+      fixture.fail = true;
+      await b.eval('bqDeal()');
+      eq(b.eval('BQ.pending.length'), 1, '失敗不把卡標成已開：');
+      if (!b.document.getElementById('bqDealNote').textContent.includes('未儲存')) throw new Error('要顯示失敗原因');
+      const failure = b.document.getElementById('bqPackNote');
+      if (!failure.textContent.includes('重試') || b.getComputedStyle(failure).display === 'none') throw new Error('重試提示要在還沒開的卡包旁可見');
+      fixture.fail = false;
+      await b.eval('bqDeal()');
+      eq(b.eval('BQ.pending.length'), 0);
+      eq((await device(ME)).eval('BQ.pending.length'), 0, '關閉重開不重複：');
+      eq((await device(OTHER)).eval('BQ.pending.length'), 7, '不同人的圖鑑分開：');
+    } finally { frames.forEach(f => f.remove()); delete window.__cardFixture; }
+  });
+  await check('圖鑑只讀狗與遛狗資料，另透過開卡 API 儲存，不寫試算表', () => {
     const urls = [...code.matchAll(/fetch\(([^,)]+)/g)].map(m => m[1].trim());
-    eq(urls, ['BQ_DATA_URL', 'BQ_WALKS_URL'], 'fetch：');
-    if (/method\s*:|\bPOST\b|script\.google\.com|sheets\.googleapis\.com|UPLOAD_URL/.test(code)) throw new Error('cards.js 不應該寫任何東西');
+    eq(urls.length, 3, '只多開卡 API：');
+    if (!code.includes('/api/cards/opened') || /\bPOST\b|script\.google\.com|sheets\.googleapis\.com|UPLOAD_URL/.test(code)) throw new Error('cards.js 只能寫開卡 API');
     if (/setItem\((?!BQ_OPENED_KEY)/.test(code)) throw new Error('cards.js 只能存撕開過的卡，不能改溜狗表的代號、今天已溜');
   });
   await check('首頁不再轉到球員卡；電腦版頁首有圖鑑入口，手機看不到', () => {

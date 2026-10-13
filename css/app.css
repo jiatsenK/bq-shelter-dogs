@@ -1715,7 +1715,7 @@ html.tour-open header.app { top: 0; }
 .card .last .val { font-size: 14px; font-weight: 700; line-height: 1.15; }
 .card .last .val b { display: block; font-size: 30px; font-weight: 900; line-height: 1.05; font-variant-numeric: tabular-nums; }
 .card .last .val.muted { font-size: 16px; font-weight: 800; }
-.card .last:has(.val.sage) .val b { font-size: 24px; font-weight: 800; }
+.card .last .last-unit { display: block; min-height: 1.15em; }
 .card .last:has(.val.sage) { box-shadow: inset -1px 0 0 var(--line); }
 .card .name { font-size: 18px; font-weight: 800; }
 .card .more { margin-right: 2px; }
@@ -1781,11 +1781,8 @@ header.app { top: calc(-1 * var(--brand-h, 0px)); }
 .card { border: none; border-bottom: 1px solid var(--line); }
 .card + .card { margin-top: 0; }
 .rows { border: none; }
-/* 0–2 天：不上底色，只用小綠字；黃紅灰才是實心色籤 */
+/* 0–2 天：保留綠字、無底色；日期字體沿用 3 天前的大小 */
 .card .last:has(.val.sage) { background: none; box-shadow: none; }
-.card .last:has(.val.sage) .lbl { display: none; }
-.card .last:has(.val.sage) .val { font-size: 13px; font-weight: 600; }
-.card .last:has(.val.sage) .val b { font-size: 18px; font-weight: 700; }
 /* 籠位：不要底色，圖釘＋粗字；::after 已經放大手指點的範圍 */
 .cage-pill { background: none !important; padding: 3px 4px 3px 0; }
 .cage-pill:active { background: var(--primary-soft) !important; }
