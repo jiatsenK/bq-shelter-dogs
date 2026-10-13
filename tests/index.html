@@ -327,7 +327,7 @@ function runTests() {
       eq(val({ walkedDate: null, covered: false }), ['沒有紀錄', 'val muted']);
       eq(val({ walkedDate: null, covered: true }), ['有人固定照顧', 'val sage small']);
     }),
-    check('上次遛時間欄：今天、昨天、2～4 天前文字與字體一致，保留配色與欄寬', async () => {
+    check('上次遛時間欄：今天昨天採 A 方案小字，保留天數排版、配色與欄寬', async () => {
       const host = document.createElement('div');
       host.style.setProperty('--green-bg', '#DFF0E4'); host.style.setProperty('--green-text', '#1E6B3C'); // Shadow DOM 不套用文件的 :root，補上正式網站色票
       host.style.width = '320px'; document.body.append(host);
@@ -343,7 +343,8 @@ function runTests() {
         eq(values.map(v => v.className), ['val sage', 'val sage', 'val sage', 'val amber', 'val amber', 'val red']);
         const typography = el => { const s = getComputedStyle(el); return [s.fontSize, s.fontWeight, s.lineHeight, s.textAlign]; };
         for (const v of values) {
-          eq(typography(v), typography(values[3])); eq(typography(v.querySelector('b')), typography(values[3].querySelector('b')));
+          eq(typography(v), typography(values[3]));
+          eq(typography(v.querySelector('b')), values.indexOf(v) < 2 ? ['20px', '700', '32px', 'center'] : typography(values[3].querySelector('b')));
           const last = v.closest('.last');
           eq([last.querySelector('.lbl').textContent, getComputedStyle(last.querySelector('.lbl')).display, getComputedStyle(last).width], ['上次遛', 'block', '70px']);
           if (v.scrollWidth > v.clientWidth) throw new Error('時間欄文字溢出');
