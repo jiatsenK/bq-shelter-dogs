@@ -64,3 +64,11 @@ CREATE TABLE IF NOT EXISTS walker_names (
   name      TEXT PRIMARY KEY,
   last_seen TEXT NOT NULL                             -- 最後一次在試算表上看到（ISO 時間）
 );
+
+-- K 2026-10-13：開卡紀錄允許存在 D1，依個人代號跨裝置保留，不寫試算表。
+CREATE TABLE IF NOT EXISTS card_opened (
+  walker_code TEXT NOT NULL,
+  dog_id TEXT NOT NULL,
+  opened_on TEXT NOT NULL,
+  PRIMARY KEY (walker_code, dog_id)
+);
