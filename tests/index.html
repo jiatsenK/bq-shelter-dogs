@@ -336,7 +336,8 @@ function runTests() {
       await new Promise((resolve, reject) => { link.onload = resolve; link.onerror = reject; root.append(link); });
       const box = document.createElement('div'); root.append(box);
       try {
-        box.innerHTML = [0, 1, 2, 3, 4, 5].map(days => `<div class="card">${lastWalk({ id: `test-days-${days}`, walkedDate: new Date(2026, 8, 24 - days), covered: false }, TODAY)}</div>`).join('');
+        const dog = { name: '測試狗', cage: '舊A03', note: '', covered: false };
+        box.innerHTML = [0, 1, 2, 3, 4, 5].map(days => dogCard({ ...dog, id: `test-days-${days}`, walkedDate: new Date(2026, 8, 24 - days) }, TODAY)).join('');
         const values = [...box.querySelectorAll('.val')];
         eq(values.map(v => v.textContent), ['今天', '昨天', '2 天前', '3 天前', '4 天前', '5 天前']);
         eq(values.map(v => v.className), ['val sage', 'val sage', 'val sage', 'val amber', 'val amber', 'val red']);
@@ -348,25 +349,31 @@ function runTests() {
           if (v.scrollWidth > v.clientWidth) throw new Error('時間欄文字溢出');
         }
         eq(values.slice(0, 3).map(v => getComputedStyle(v.closest('.last')).backgroundColor), ['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)'], '近期日期不上底色：');
-        eq(values.slice(0, 3).map(v => getComputedStyle(v.closest('.last')).color), ['rgb(102, 118, 107)', 'rgb(75, 118, 89)', 'rgb(30, 107, 60)'], '越近日期越不強調：');
-        const fixed = document.createElement('div'); fixed.className = 'card';
-        fixed.innerHTML = lastWalk({ walkedDate: null, covered: true }, TODAY); box.append(fixed);
-        const relativeTop = (el, parent) => el.getBoundingClientRect().top - parent.getBoundingClientRect().top;
-        const sample = values[3].closest('.last'), covered = fixed.querySelector('.last');
-        eq(relativeTop(covered.querySelector('.lbl'), covered), relativeTop(sample.querySelector('.lbl'), sample), '固定照顧標題跟天數對齊：');
-        eq(getComputedStyle(covered.querySelector('.val')).gridTemplateRows, '32px 16px', '主文字／補充文字共用行高：');
-        eq(getComputedStyle(covered.querySelector('.val')).height, getComputedStyle(values[3]).height);
+        eq(values.slice(0, 3).map(v => getComputedStyle(v.closest('.last')).color), ['rgb(30, 107, 60)', 'rgb(30, 107, 60)', 'rgb(30, 107, 60)'], '近期日期一致原綠字：');
+        const centerY = el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
+        const close = (a, b, msg) => { if (Math.abs(a - b) > 1) throw new Error(`${msg}：${a} / ${b}`); };
+        box.insertAdjacentHTML('beforeend', dogCard({ ...dog, id: 'fixed-align', walkedDate: null, covered: true }, TODAY));
+        const fixed = box.lastElementChild, covered = fixed.querySelector('.last');
+        eq(covered.querySelector('.lbl'), null, '固定照顧沒有標題：');
+        close(centerY(covered.querySelector('.val')), centerY(fixed.querySelector('.thumb')), '固定照顧整組對齊照片');
         const lines = covered.querySelectorAll('.nowrap');
         eq(lines[1].getBoundingClientRect().top - lines[0].getBoundingClientRect().bottom, 0, '固定照顧兩行不撐開：');
-        const resting = document.createElement('div'); resting.className = 'card';
         const previousRest = restMap;
         try {
           restMap = { 'test-rest-align': { until: '2026-12-31' } };
-          resting.innerHTML = lastWalk({ id: 'test-rest-align' }, TODAY); box.append(resting);
+          box.insertAdjacentHTML('beforeend', dogCard({ ...dog, id: 'test-rest-align' }, TODAY));
         } finally { restMap = previousRest; }
+        const resting = box.lastElementChild;
         const restLabel = resting.querySelector('.lbl'), restValue = resting.querySelector('.val');
-        eq([restLabel.textContent, getComputedStyle(restLabel).display], ['狀態', 'block'], '休養中標題與天數共用位置：');
-        eq(relativeTop(restValue, resting.querySelector('.last')), relativeTop(values[3], sample), '休養中主要文字位置對齊：');
+        eq(restLabel, null, '休養中沒有標題：');
+        close(centerY(restValue), centerY(resting.querySelector('.thumb')), '休養中整組對齊照片');
+        for (const days of [0, 1, 2, 3]) {
+          box.insertAdjacentHTML('beforeend', dogCard({ ...dog, id: `flagged-align-${days}`, note: '不親狗', walkedDate: new Date(2026, 8, 24 - days) }, TODAY));
+          const flagged = box.lastElementChild, normal = values[days].closest('.card');
+          const offset = card => centerY(card.querySelector('.last b')) - centerY(card.querySelector('.thumb'));
+          close(offset(flagged), offset(normal), `警示列 ${days} 天主要文字對齊`);
+          close(offset(normal), 0, `一般列 ${days} 天主要文字對齊照片`);
+        }
         if (covered.querySelector('.val').scrollWidth > covered.querySelector('.val').clientWidth) throw new Error('固定照顧文字溢出');
         eq(getComputedStyle(values[3].closest('.last')).backgroundColor, getComputedStyle(values[4].closest('.last')).backgroundColor);
       } finally { host.remove(); }
