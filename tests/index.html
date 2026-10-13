@@ -329,6 +329,7 @@ function runTests() {
     }),
     check('上次遛時間欄：今天、昨天、2～4 天前文字與字體一致，保留配色與欄寬', async () => {
       const host = document.createElement('div');
+      host.style.setProperty('--green-bg', '#DFF0E4'); host.style.setProperty('--green-text', '#1E6B3C'); // Shadow DOM 不套用文件的 :root，補上正式網站色票
       host.style.width = '320px'; document.body.append(host);
       const root = host.attachShadow({ mode: 'open' });
       const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = '../css/app.css';
@@ -346,8 +347,8 @@ function runTests() {
           eq([last.querySelector('.lbl').textContent, getComputedStyle(last.querySelector('.lbl')).display, getComputedStyle(last).width], ['上次遛', 'block', '70px']);
           if (v.scrollWidth > v.clientWidth) throw new Error('時間欄文字溢出');
         }
-        eq(getComputedStyle(values[0].closest('.last')).backgroundColor, 'rgba(0, 0, 0, 0)');
-        eq(getComputedStyle(values[0].closest('.last')).color, 'rgb(67, 127, 89)', '左欄淡綠字：');
+        eq(values.slice(0, 3).map(v => getComputedStyle(v.closest('.last')).backgroundColor), ['rgb(223, 240, 228)', 'rgb(240, 247, 242)', 'rgba(0, 0, 0, 0)'], '今天／昨天／2 天前底色區隔：');
+        eq(getComputedStyle(values[0].closest('.last')).color, 'rgb(30, 107, 60)', '恢復原綠字：');
         const fixed = document.createElement('div'); fixed.className = 'card';
         fixed.innerHTML = lastWalk({ walkedDate: null, covered: true }, TODAY); box.append(fixed);
         const relativeTop = (el, parent) => el.getBoundingClientRect().top - parent.getBoundingClientRect().top;
@@ -355,6 +356,17 @@ function runTests() {
         eq(relativeTop(covered.querySelector('.lbl'), covered), relativeTop(sample.querySelector('.lbl'), sample), '固定照顧標題跟天數對齊：');
         eq(getComputedStyle(covered.querySelector('.val')).gridTemplateRows, '32px 16px', '主文字／補充文字共用行高：');
         eq(getComputedStyle(covered.querySelector('.val')).height, getComputedStyle(values[3]).height);
+        const lines = covered.querySelectorAll('.nowrap');
+        eq(lines[1].getBoundingClientRect().top - lines[0].getBoundingClientRect().bottom, 0, '固定照顧兩行不撐開：');
+        const resting = document.createElement('div'); resting.className = 'card';
+        const previousRest = restMap;
+        try {
+          restMap = { 'test-rest-align': { until: '2026-12-31' } };
+          resting.innerHTML = lastWalk({ id: 'test-rest-align' }, TODAY); box.append(resting);
+        } finally { restMap = previousRest; }
+        const restLabel = resting.querySelector('.lbl'), restValue = resting.querySelector('.val');
+        eq([restLabel.textContent, getComputedStyle(restLabel).display], ['狀態', 'block'], '休養中標題與天數共用位置：');
+        eq(relativeTop(restValue, resting.querySelector('.last')), relativeTop(values[3], sample), '休養中主要文字位置對齊：');
         if (covered.querySelector('.val').scrollWidth > covered.querySelector('.val').clientWidth) throw new Error('固定照顧文字溢出');
         eq(getComputedStyle(values[3].closest('.last')).backgroundColor, getComputedStyle(values[4].closest('.last')).backgroundColor);
       } finally { host.remove(); }
