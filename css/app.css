@@ -1714,8 +1714,7 @@ html.tour-open header.app { top: 0; }
 .card .last .lbl { font-size: 12px; font-weight: 600; line-height: 16px; }
 .card .last .val { display: grid; grid-template-rows: 32px 16px; align-items: center; justify-items: center; height: 48px; font-size: 14px; font-weight: 700; line-height: 16px; }
 .card .last .val b { display: block; font-size: 30px; font-weight: 900; line-height: 32px; font-variant-numeric: tabular-nums; }
-.card .last .val.small { font-size: 14px; line-height: 16px; }
-.card .last .val.small .nowrap:first-child { align-self: end; }
+.card .last .val.small { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 40px; font-size: 14px; line-height: 20px; }
 .card .last .val.muted { font-size: 16px; font-weight: 800; }
 .card .last .last-unit { display: block; line-height: 16px; }
 .card .last:has(.val.sage) { box-shadow: inset -1px 0 0 var(--line); }
@@ -1785,8 +1784,6 @@ header.app { top: calc(-1 * var(--brand-h, 0px)); }
 .rows { border: none; }
 /* 0–2 天：保留綠字、無底色；日期字體沿用 3 天前的大小 */
 .card .last:has(.val.sage) { background: none; box-shadow: none; color: var(--green-text); }
-.card .last[data-days="0"]:has(.val.sage) { color: #66766B; }
-.card .last[data-days="1"]:has(.val.sage) { color: #4B7659; }
 /* 籠位：不要底色，圖釘＋粗字；::after 已經放大手指點的範圍 */
 .cage-pill { background: none !important; padding: 3px 4px 3px 0; }
 .cage-pill:active { background: var(--primary-soft) !important; }
@@ -1926,8 +1923,9 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 }
 .card:not(.skeleton) .last { grid-column: 1; grid-row: 1; }
 /* 有警示的卡：天數字留在第一列跟名字對齊，色籤的顏色用一條底色延伸到卡片底（.last 本身只佔第一列） */
-.card.flagged:not(.skeleton) { position: relative; }
-.card.flagged:not(.skeleton) .last { margin-bottom: 0 !important; position: relative; z-index: 1; }
+/* 保留原警示列 68px 的最小高度，同時讓左欄上下留白對稱、文字中心跟照片一致。 */
+.card.flagged:not(.skeleton) { position: relative; grid-template-rows: minmax(68px, auto) auto; }
+.card.flagged:not(.skeleton) .last { margin-bottom: -8px !important; position: relative; z-index: 1; }
 .card.flagged:not(.skeleton)::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 70px; background: var(--tab-muted); }
 .card.flagged:not(.skeleton):has(.last .val.red)::before { background: var(--tab-red); }
 .card.flagged:not(.skeleton):has(.last .val.amber)::before { background: var(--tab-amber); }
