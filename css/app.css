@@ -1785,8 +1785,8 @@ header.app { top: calc(-1 * var(--brand-h, 0px)); }
 .rows { border: none; }
 /* 0–2 天：保留綠字、無底色；日期字體沿用 3 天前的大小 */
 .card .last:has(.val.sage) { background: none; box-shadow: none; color: var(--green-text); }
-.card .last[data-days="0"]:has(.val.sage) { background: var(--green-bg); }
-.card .last[data-days="1"]:has(.val.sage) { background: #F0F7F2; }
+.card .last[data-days="0"]:has(.val.sage) { color: #66766B; }
+.card .last[data-days="1"]:has(.val.sage) { color: #4B7659; }
 /* 籠位：不要底色，圖釘＋粗字；::after 已經放大手指點的範圍 */
 .cage-pill { background: none !important; padding: 3px 4px 3px 0; }
 .cage-pill:active { background: var(--primary-soft) !important; }
@@ -1932,8 +1932,6 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .card.flagged:not(.skeleton):has(.last .val.red)::before { background: var(--tab-red); }
 .card.flagged:not(.skeleton):has(.last .val.amber)::before { background: var(--tab-amber); }
 .card.flagged:not(.skeleton):has(.last .val.sage, .last .val.rest)::before { background: none; }
-.card.flagged:not(.skeleton):has(.last[data-days="0"] .val.sage)::before { background: var(--green-bg); }
-.card.flagged:not(.skeleton):has(.last[data-days="1"] .val.sage)::before { background: #F0F7F2; }
 .card:not(.skeleton) .thumb { grid-column: 2; grid-row: 1; }
 .card:not(.skeleton) .who { grid-column: 3; grid-row: 1; }
 .card:not(.skeleton) .walk-btn, .card:not(.skeleton) .more { grid-column: 4; grid-row: 1; }

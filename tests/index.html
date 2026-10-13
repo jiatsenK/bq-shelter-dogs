@@ -347,8 +347,8 @@ function runTests() {
           eq([last.querySelector('.lbl').textContent, getComputedStyle(last.querySelector('.lbl')).display, getComputedStyle(last).width], ['上次遛', 'block', '70px']);
           if (v.scrollWidth > v.clientWidth) throw new Error('時間欄文字溢出');
         }
-        eq(values.slice(0, 3).map(v => getComputedStyle(v.closest('.last')).backgroundColor), ['rgb(223, 240, 228)', 'rgb(240, 247, 242)', 'rgba(0, 0, 0, 0)'], '今天／昨天／2 天前底色區隔：');
-        eq(getComputedStyle(values[0].closest('.last')).color, 'rgb(30, 107, 60)', '恢復原綠字：');
+        eq(values.slice(0, 3).map(v => getComputedStyle(v.closest('.last')).backgroundColor), ['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)'], '近期日期不上底色：');
+        eq(values.slice(0, 3).map(v => getComputedStyle(v.closest('.last')).color), ['rgb(102, 118, 107)', 'rgb(75, 118, 89)', 'rgb(30, 107, 60)'], '越近日期越不強調：');
         const fixed = document.createElement('div'); fixed.className = 'card';
         fixed.innerHTML = lastWalk({ walkedDate: null, covered: true }, TODAY); box.append(fixed);
         const relativeTop = (el, parent) => el.getBoundingClientRect().top - parent.getBoundingClientRect().top;
