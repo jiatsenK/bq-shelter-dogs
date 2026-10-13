@@ -1711,11 +1711,12 @@ html.tour-open header.app { top: 0; }
   margin: -8px 0 -8px 0; padding: 6px 4px; justify-content: center;
 }
 .card.flagged .last { margin-bottom: 0; }
-.card .last .lbl { font-size: 12px; font-weight: 600; }
-.card .last .val { font-size: 14px; font-weight: 700; line-height: 1.15; }
-.card .last .val b { display: block; font-size: 30px; font-weight: 900; line-height: 1.05; font-variant-numeric: tabular-nums; }
+.card .last .lbl { font-size: 12px; font-weight: 600; line-height: 16px; }
+.card .last .val { display: grid; grid-template-rows: 32px 16px; align-items: center; justify-items: center; height: 48px; font-size: 14px; font-weight: 700; line-height: 16px; }
+.card .last .val b { display: block; font-size: 30px; font-weight: 900; line-height: 32px; font-variant-numeric: tabular-nums; }
+.card .last .val.small { font-size: 14px; line-height: 16px; }
 .card .last .val.muted { font-size: 16px; font-weight: 800; }
-.card .last .last-unit { display: block; min-height: 1.15em; }
+.card .last .last-unit { display: block; line-height: 16px; }
 .card .last:has(.val.sage) { box-shadow: inset -1px 0 0 var(--line); }
 .card .name { font-size: 18px; font-weight: 800; }
 .card .more { margin-right: 2px; }
@@ -1782,7 +1783,7 @@ header.app { top: calc(-1 * var(--brand-h, 0px)); }
 .card + .card { margin-top: 0; }
 .rows { border: none; }
 /* 0–2 天：保留綠字、無底色；日期字體沿用 3 天前的大小 */
-.card .last:has(.val.sage) { background: none; box-shadow: none; }
+.card .last:has(.val.sage) { background: none; box-shadow: none; color: #437F59; }
 /* 籠位：不要底色，圖釘＋粗字；::after 已經放大手指點的範圍 */
 .cage-pill { background: none !important; padding: 3px 4px 3px 0; }
 .cage-pill:active { background: var(--primary-soft) !important; }

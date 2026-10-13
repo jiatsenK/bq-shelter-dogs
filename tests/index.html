@@ -347,6 +347,15 @@ function runTests() {
           if (v.scrollWidth > v.clientWidth) throw new Error('時間欄文字溢出');
         }
         eq(getComputedStyle(values[0].closest('.last')).backgroundColor, 'rgba(0, 0, 0, 0)');
+        eq(getComputedStyle(values[0].closest('.last')).color, 'rgb(67, 127, 89)', '左欄淡綠字：');
+        const fixed = document.createElement('div'); fixed.className = 'card';
+        fixed.innerHTML = lastWalk({ walkedDate: null, covered: true }, TODAY); box.append(fixed);
+        const relativeTop = (el, parent) => el.getBoundingClientRect().top - parent.getBoundingClientRect().top;
+        const sample = values[3].closest('.last'), covered = fixed.querySelector('.last');
+        eq(relativeTop(covered.querySelector('.lbl'), covered), relativeTop(sample.querySelector('.lbl'), sample), '固定照顧標題跟天數對齊：');
+        eq(getComputedStyle(covered.querySelector('.val')).gridTemplateRows, '32px 16px', '主文字／補充文字共用行高：');
+        eq(getComputedStyle(covered.querySelector('.val')).height, getComputedStyle(values[3]).height);
+        if (covered.querySelector('.val').scrollWidth > covered.querySelector('.val').clientWidth) throw new Error('固定照顧文字溢出');
         eq(getComputedStyle(values[3].closest('.last')).backgroundColor, getComputedStyle(values[4].closest('.last')).backgroundColor);
       } finally { host.remove(); }
     }),
