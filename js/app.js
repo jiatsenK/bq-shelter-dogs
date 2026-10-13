@@ -687,7 +687,7 @@ function lastWalk(dog, today) {
     // 窄螢幕放不下一行時只在「有人固定｜照顧」之間換行，不會剩一個「顧」字
     text = '<span class="nowrap">有人固定</span><span class="nowrap">照顧</span>'; level = 'sage'; small = true;
   }
-  return `<div class="last"><span class="lbl">上次遛</span><span class="val ${level}${small ? ' small' : ''}">${text}</span></div>`;
+  return `<div class="last"${s.kind === 'dated' && s.days >= 0 ? ` data-days="${s.days}"` : ''}><span class="lbl">${s.kind === 'rest' ? '狀態' : '上次遛'}</span><span class="val ${level}${small ? ' small' : ''}">${text}</span></div>`;
 }
 
 // 卡片用「編號｜籠位」（照 K 的參考圖）；詳細資訊沿用 metaLine
