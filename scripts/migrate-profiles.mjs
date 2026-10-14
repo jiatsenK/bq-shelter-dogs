@@ -1,10 +1,12 @@
 // #218：只操作呼叫者提供的 D1，不連線試算表、GitHub 或 R2。
 import { createHash, randomBytes } from 'node:crypto';
-import { thumbKey } from '../worker/src/r2.js';
+import { thumbKey, isTomb } from '../worker/src/r2.js';
 const hash = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 const randomId = () => randomBytes(16).toString('hex');
 const validCode = code => typeof code === 'string' && /^[a-f0-9]{12}$/.test(code);
 const validDate = date => /^\d{4}-\d{2}-\d{2}$/.test(date || '') && Number.isFinite(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date;
+const photoMetadata = object => ({ ...object.custom_metadata, ...object.customMetadata, ...object.metadata });
+const deletedPhoto = object => object.size === 0 || isTomb({ customMetadata: photoMetadata(object) });
 
 async function dogForNumber(db, number) {
   return db.prepare('SELECT a.* FROM v2_admission_numbers n JOIN v2_admissions a USING(admission_id) WHERE n.number=?').bind(number).first();
@@ -84,6 +86,7 @@ export async function migrateProfiles(db, { cardOpened = [], legacyCodes = [], w
     const dog = await dogForNumber(db, number);
     if (!dog || !choice.evidence?.trim()) throw new Error('介紹選擇需有已確認狗身分與證據');
     choices.set(dog.dog_id, choice);
+    await record('confirmed_intro_choice', { number, ...choice }, 'imported', 'explicit_intro_source_decision', { dog_id: dog.dog_id });
   }
   for (const [dog_id, group] of groups) {
     const choice = choices.get(dog_id);
@@ -105,17 +108,24 @@ export async function migrateProfiles(db, { cardOpened = [], legacyCodes = [], w
     await record('rest', { number, ...setting }, valid ? 'imported' : 'pending', valid ? 'original_admission_rest_only' : 'unresolved_admission_or_invalid_rest', admission || {});
   }
   for (const [number, note] of Object.entries(notes)) await record('note_archive', { number, source: 'data/my-notes.json', checksum: hash(note) }, 'archived', 'git_archive_only_no_note_content');
-  const objectKeys = new Set();
+  const objectKeys = new Set(), seenObjectKeys = new Set();
   for (const object of photos) {
-    if (!object.key || objectKeys.has(object.key)) throw new Error('R2 來源路徑缺少或重複');
-    objectKeys.add(object.key);
+    if (!object.key || seenObjectKeys.has(object.key)) throw new Error('R2 來源路徑缺少或重複');
+    seenObjectKeys.add(object.key);
+    if (!deletedPhoto(object)) objectKeys.add(object.key);
   }
+  for (const object of photos) if (deletedPhoto(object)) await db.batch([
+    db.prepare("UPDATE v2_dog_photos SET state='replaced',is_primary=0 WHERE object_key=?").bind(object.key),
+    db.prepare('UPDATE v2_dog_photos SET thumb_key=NULL WHERE thumb_key=?').bind(object.key),
+  ]);
   const photoGroups = new Map(), linkedKeys = new Set();
   for (const object of photos) {
+    if (deletedPhoto(object)) continue;
     const original = object.key.match(/^photos\/([0-9A-Za-z]+)\.jpg$/);
-    const trash = object.key.startsWith('trash/') && object.key.endsWith('/photo.jpg') && object.metadata?.kind === 'main';
+    const metadata = photoMetadata(object);
+    const trash = object.key.startsWith('trash/') && object.key.endsWith('/photo.jpg') && metadata.kind === 'main';
     if (!original && !trash) continue;
-    const number = original?.[1] || object.metadata.dogId;
+    const number = original?.[1] || metadata.dogId;
     const dog = number ? await dogForNumber(db, number) : null;
     if (!dog) continue;
     const candidateThumb = original ? thumbKey(object.key) : object.key.replace(/photo\.jpg$/, 'thumb.jpg');
@@ -128,6 +138,7 @@ export async function migrateProfiles(db, { cardOpened = [], legacyCodes = [], w
     const dog = await dogForNumber(db, number);
     if (!dog || !choice.evidence?.trim() || !photoGroups.get(dog.dog_id)?.some(p => p.object.key === choice.objectKey && !p.replaced)) throw new Error('主照片選擇需有同狗既有 R2 來源與確認證據');
     chosenPhotos.set(dog.dog_id, choice.objectKey);
+    await record('confirmed_photo_choice', { number, ...choice }, 'imported', 'explicit_photo_source_decision', { dog_id: dog.dog_id });
   }
   for (const [dog_id, entries] of photoGroups) {
     const currentNumber = await db.prepare("SELECT n.number FROM v2_admission_numbers n JOIN v2_admissions a USING(admission_id) WHERE a.dog_id=? AND a.status='in' AND n.kind='current'").bind(dog_id).first('number');
@@ -146,7 +157,7 @@ export async function migrateProfiles(db, { cardOpened = [], legacyCodes = [], w
       }
     }
   }
-  for (const object of photos) if (!linkedKeys.has(object.key)) await record('photo', object, 'pending', 'unresolved_photo_identity_or_orphan_object');
+  for (const object of photos) if (!linkedKeys.has(object.key)) await record('photo', object, deletedPhoto(object) ? 'archived' : 'pending', deletedPhoto(object) ? 'r2_deletion_marker_preserved' : 'unresolved_photo_identity_or_orphan_object');
   for (const row of walkerNames) {
     await db.prepare('INSERT INTO walker_names(name,last_seen) VALUES(?,?) ON CONFLICT(name) DO UPDATE SET last_seen=CASE WHEN julianday(excluded.last_seen)>=julianday(walker_names.last_seen) THEN excluded.last_seen ELSE walker_names.last_seen END').bind(row.name, row.last_seen).run();
     await record('walker_name', row, 'imported', 'recommendation_only');

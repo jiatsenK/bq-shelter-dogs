@@ -8,7 +8,7 @@
 - 志工別名：`walkerAliases` 要有 primaryCode、aliasCodes、confirmedAt、K 的 evidence。既有兩個志工 ID 經確認才將參與者、操作、開卡及代號重綁到同人；開卡取最早、同筆參與者去重。舊永久 ID 留著，不刪歷史身分。真實資料此次沒有提供新別名決策，沒有自行合併。
 - 介紹：跟著狗，可靠再入所關係共用；保留來源的每個舊版本與改寫前原文。預設用最新編號的可靠狗卡；明確選擇可提供 `introChoices`（cardId、originalId、evidence）。`docs/migration-213/profile-review.json` 是既有五卡待確認清單的機器可讀入口；未確認且未有有證據選擇時不覆寫介紹。
 - 休養：按來源編號所屬入所保存，不自動套到下一次入所。未有入所對應或日期無效者保留待確認。
-- 照片：沿用 photos／photos/thumbs 路徑；以永久狗 ID 關聯。優先目前入所編號的現有原圖，沒有才沿用同狗的舊圖；每狗只有一張 active 主照片。其他原圖與有可靠 dogId metadata 的 trash 主照片保存 replaced；trash 縮圖使用原同目錄路徑。未知身分／孤立物件保留來源，不猜狗、不搬檔。`photoChoices` 指定同狗既有原圖並附 evidence。
+- 照片：沿用 photos／photos/thumbs 路徑；以永久狗 ID 關聯。優先目前入所編號的現有原圖，沒有才沿用同狗的舊圖；每狗只有一張 active 主照片。其他原圖與有可靠 dogId metadata 的 trash 主照片保存 replaced；trash 縮圖使用原同目錄路徑。零位元組或 deleted metadata 是刪除標記，只保留來源，不作有效照片／縮圖。未知身分／孤立物件保留來源，不猜狗、不搬檔。`photoChoices` 指定同狗既有原圖並附 evidence，明確選擇本身也記入來源表。
 - 名字推薦與 kv：使用既有表、保留內容；時間以實際時間比較，舊來源不蓋掉較新值。名字推薦不連到志工身分。kv 中分組仍保留，分組同步改用新模型留後續票。
 - 舊備註：只在來源表保存 Git 封存檔位置與指紋，文字不搬進 D1 備註功能；原文留現有檔案，正式封存交 #228，不恢復 API。
 
