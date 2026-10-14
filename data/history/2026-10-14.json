@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-13T18:02:17+08:00",
+  "syncedAt": "2026-10-14T11:31:11+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -156,7 +156,7 @@
       "cage": "新獨01",
       "id": "2026082501",
       "name": "米香",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -171,7 +171,7 @@
       "cage": "新獨02",
       "id": "2017090525",
       "name": "阿寶妹",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -216,7 +216,7 @@
       "cage": "新獨05",
       "id": "2026041903",
       "name": "哈囉",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -261,7 +261,7 @@
       "cage": "新獨08",
       "id": "2019121105",
       "name": "冬粉",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -426,7 +426,7 @@
       "cage": "新A04",
       "id": "2017122515",
       "name": "KIWI",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -441,7 +441,7 @@
       "cage": "新A04",
       "id": "2018041328",
       "name": "鍾碩",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -456,7 +456,7 @@
       "cage": "新A04",
       "id": "2026080201",
       "name": "多多",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -471,11 +471,11 @@
       "cage": "新A05",
       "id": "2021012101",
       "name": "美金",
-      "walkedDate": "2026-10-11",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "67c74c17be08"
+        "da53fbdda293"
       ],
       "note": "",
       "sex": "female",
@@ -486,11 +486,11 @@
       "cage": "新A05",
       "id": "2025011006",
       "name": "百吉",
-      "walkedDate": "2026-10-11",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "67c74c17be08"
+        "da53fbdda293"
       ],
       "note": "咬傷領養人9/1 移入母幼區;9/16移回C區;2026/2/10試驗與布布同籠（嘉文）",
       "sex": "male",
@@ -501,11 +501,11 @@
       "cage": "新A06",
       "id": "2021072201",
       "name": "小白",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "da53fbdda293"
       ],
       "note": "2026/7/22洗澡(msi)；2026/9/2 吃一錠除（俐葶）",
       "sex": "female",
@@ -516,11 +516,11 @@
       "cage": "新A06",
       "id": "2021090209",
       "name": "小金",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "da53fbdda293"
       ],
       "note": "不親狗，曾咬過蘇打（秀玉）；會從小活動區草地區跳欄出來去咬其他狗（俐葶）, 2026/7/22洗澡(msi)",
       "sex": "female",
@@ -576,7 +576,7 @@
       "cage": "新A08",
       "id": "2026032605",
       "name": "小七",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -606,7 +606,7 @@
       "cage": "新A08",
       "id": "2026042101",
       "name": "納卡西",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1695,11 +1695,11 @@
       "cage": "C區22",
       "id": "2023072604",
       "name": "小梅子",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "3c0459316acf"
+        "da53fbdda293"
       ],
       "note": "",
       "sex": "female",
@@ -1710,7 +1710,7 @@
       "cage": "C區23",
       "id": "2023122901",
       "name": "一路",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1725,7 +1725,7 @@
       "cage": "C區31",
       "id": "2023042803",
       "name": "奈威",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1755,7 +1755,7 @@
       "cage": "C區33",
       "id": "2023083106",
       "name": "昆布",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1770,11 +1770,11 @@
       "cage": "C區34",
       "id": "2023022001",
       "name": "寶弟",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "3c0459316acf"
+        "da53fbdda293"
       ],
       "note": "對狗曾經攻擊（嘉文）",
       "sex": "male",
@@ -1785,7 +1785,7 @@
       "cage": "C區35",
       "id": "2025021801",
       "name": "阿湯",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
