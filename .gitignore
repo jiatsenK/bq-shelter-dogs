@@ -10,3 +10,4 @@ wrangler.no-r2.json
 wrangler.deploy.json
 wrangler.preview.json
 db/seed.sql
+.migration-private/

@@ -1,0 +1,162 @@
+{
+  "capturedAt": "2026-10-14T12:27:00.327Z",
+  "sourceCommit": "c7403f45cad1f0271d372f80115882a559fa69f3",
+  "wrangler": "4.151.0",
+  "testDatabase": {
+    "name": "bq-shelter-dogs-test",
+    "id": "9e23a65c-c9dd-4f83-ad9c-2e01626910f0"
+  },
+  "restoreDatabase": {
+    "name": "bq-shelter-dogs-restore-219",
+    "id": "ea73d67a-8073-4429-bad0-9e0be03049a5"
+  },
+  "fingerprint": "b1b3607f504a0648f1bb9f4e4fd8b57013a663089e6baf9a1747df4da434d34b",
+  "inputFingerprint": "d834b0c58c27400b2a650afb88fddbfe419365f7e69340d390db6b17d6b7539b",
+  "tables": {
+    "kv": {
+      "count": 3,
+      "sha256": "5215c993a50adb03d2ee5cc549609dfc924629f4130813989077658f652a1125"
+    },
+    "v2_dogs": {
+      "count": 166,
+      "sha256": "6ccf697847cf88b0b99e704d7146f0312786650664ba5b6a9c7e5b709ca65139"
+    },
+    "v2_admissions": {
+      "count": 167,
+      "sha256": "4f7215604d69e0634d5770be02444dda45530996b4dadda301b9e899159c5f8b"
+    },
+    "v2_admission_numbers": {
+      "count": 166,
+      "sha256": "34d336cfed2f8984d1abcefc6a463180d2667a5c180dd86af7afcd78b423c8b0"
+    },
+    "v2_walkers": {
+      "count": 29,
+      "sha256": "21a237f3c693d3e562f9cb7bed012c5ceb5ff6de9ed26bd9c01d20c06f543a0c"
+    },
+    "v2_card_opened": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "v2_operations": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "v2_sync_runs": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "v2_changes": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "v2_daily_walks": {
+      "count": 878,
+      "sha256": "abb0ffbba19a8af6b6d3096af794f3740d1d2adf27db6b1467c6e015fa9b2271"
+    },
+    "v2_dog_photos": {
+      "count": 133,
+      "sha256": "490de0106d243a555a7cac6a3c3bd5497844e59d32969c00e511859fcb6dfeca"
+    },
+    "v2_history_sources": {
+      "count": 3442,
+      "sha256": "5da57fd42e133f7298122a3e89d80bfde5e8e9029b75c44c9de467ff7d2163d8"
+    },
+    "v2_profile_sources": {
+      "count": 594,
+      "sha256": "ab31826ae936311f6ee19746843e13dcd8c06fe54197f7c0ae236ab16ef784a7"
+    },
+    "v2_rest_settings": {
+      "count": 2,
+      "sha256": "81f262ec4baefd05bb3d9f8422612ded0dbcdf26f87c68d930d650d44465ec00"
+    },
+    "v2_source_bindings": {
+      "count": 2660,
+      "sha256": "d6c38996ced1aefb0c57d68a1d4b17e5c0d7a073f85fedd899f765f726c91c8a"
+    },
+    "v2_sheet_observations": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "v2_walk_groups": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "v2_walk_group_members": {
+      "count": 0,
+      "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+    },
+    "v2_walk_participants": {
+      "count": 971,
+      "sha256": "f880ac296c696a249f2f9aafa9ac7ad6e9775f32944c78a7e3f125b711a5f900"
+    },
+    "v2_walker_codes": {
+      "count": 29,
+      "sha256": "04c505c160b6d0bbd16d4b01fe80164cd715f381e041d94b7b30b793aa8ad49f"
+    },
+    "walker_names": {
+      "count": 20,
+      "sha256": "18f15293cf697ffc6d55f392ac5845264142e7434f9160c0a33b657ccae6f437"
+    }
+  },
+  "coverage": {
+    "identity": 2660,
+    "history": 3442,
+    "profiles": 594
+  },
+  "states": {
+    "identity": {
+      "confirmed/source_binding": 2587,
+      "candidate/source_binding": 73
+    },
+    "history": {
+      "imported/departed_sheet_fact": 33,
+      "ignored/empty_walk_date": 130,
+      "imported/same_date_roster_observation": 1430,
+      "imported/last_successful_snapshot": 765,
+      "imported/legacy_before_cutoff": 118,
+      "imported/corroborated_by_snapshot": 785,
+      "ignored/superseded_by_departed_sheet": 5,
+      "pending/departure_date_unconfirmed": 15,
+      "pending/missing_day_evidence": 80,
+      "pending/historical_policy_unconfirmed": 38,
+      "pending/departure_conflicts_with_current_admission": 2,
+      "pending/departure_reason_pending": 2,
+      "pending/identity_unconfirmed": 12,
+      "pending/invalid_or_missing_departure_number": 5,
+      "pending/future_departure_date": 2,
+      "imported/selected_snapshot_header": 20
+    },
+    "profiles": {
+      "imported/original_admission_rest_only": 2,
+      "imported/original_intro_preserved": 119,
+      "imported/shared_dog_intro": 119,
+      "imported/active_primary_same_r2_path": 123,
+      "imported/thumbnail_linked_same_r2_path": 133,
+      "imported/replaced_photo_same_r2_path": 10,
+      "pending/intro_choice_unconfirmed": 9,
+      "pending/unresolved_dog_identity": 8,
+      "imported/preserved_existing_kv": 3,
+      "pending/unresolved_photo_identity_or_orphan_object": 44,
+      "imported/recommendation_only": 20,
+      "archived/git_archive_only_no_note_content": 4
+    }
+  },
+  "checks": {
+    "multipleIn": 0,
+    "missingCurrentNumber": 0,
+    "multiplePrimaryPhotos": 0,
+    "multiplePrimaryCodes": 0,
+    "knownWithoutParticipants": 0,
+    "confirmedWithoutAdmission": 0,
+    "importedHistoryWithoutTarget": 0
+  },
+  "foreignKeyViolations": 0,
+  "integrity": "ok",
+  "localMigrationReplay": true,
+  "cloudInitialIdentical": true,
+  "cloudReplayIdentical": true,
+  "cloudRestoreIdentical": true,
+  "productionUnchanged": true,
+  "productionFingerprint": "1682da0d40644dcdfc6cd2aa6c3115665763317964ff3b830e3fbc93cc3061be",
+  "archiveManifestSha256": "6cf66fd4fcc123329973245cfbf5a0f0c1658bac8f15b29b8afb0b2eca129793"
+}

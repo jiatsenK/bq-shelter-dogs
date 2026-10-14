@@ -22,3 +22,6 @@ db
 # #213 搬遷盤點是 repo 審閱資料，不公開到網站
 docs/MIGRATION_INVENTORY.md
 docs/migration-213
+.migration-private
+docs/migration-219
+docs/D1_REHEARSAL.md
