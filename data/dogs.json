@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-14T11:31:11+08:00",
+  "syncedAt": "2026-10-14T12:01:13+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -591,7 +591,7 @@
       "cage": "新A08",
       "id": "2018012909",
       "name": "錢錢",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -876,11 +876,11 @@
       "cage": "新B07",
       "id": "2026062404",
       "name": "史酷比",
-      "walkedDate": "2026-10-11",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "67c74c17be08"
+        "da53fbdda293"
       ],
       "note": "會護食，9/23因吃飼料時護食和阿寶妹打架（俐葶）",
       "sex": "male",
@@ -891,12 +891,11 @@
       "cage": "新B08",
       "id": "2019121309",
       "name": "荷包蛋",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293",
-        "044328805855"
+        "da53fbdda293"
       ],
       "note": "龜縮在椅子底下，我伸手進去套繩沒有咬人（嘉文）2026/5/20洗澡(msi)",
       "sex": "male",
@@ -907,12 +906,11 @@
       "cage": "新B08",
       "id": "2022030205",
       "name": "小偉",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293",
-        "044328805855"
+        "da53fbdda293"
       ],
       "note": "右前腳有傷口,有擦藥(嘉文）2026/5/20洗澡(msi)",
       "sex": "male",
@@ -923,12 +921,11 @@
       "cage": "新B08",
       "id": "2018041304",
       "name": "小惠",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293",
-        "044328805855"
+        "da53fbdda293"
       ],
       "note": "2026/5/20洗澡(msi)",
       "sex": "female",
@@ -939,12 +936,11 @@
       "cage": "新B08",
       "id": "2026051203",
       "name": "圓仔",
-      "walkedDate": "2026-10-07",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293",
-        "044328805855"
+        "da53fbdda293"
       ],
       "note": "原編號2018041318",
       "sex": "female",
@@ -1650,7 +1646,7 @@
       "cage": "C區12",
       "id": "2023083107",
       "name": "丸子",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
