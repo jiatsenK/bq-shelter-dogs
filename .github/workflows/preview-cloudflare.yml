@@ -44,11 +44,17 @@ jobs:
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         run: node scripts/photo-versions.mjs
 
-      # 照片放 R2（#130）：預覽版讀正式的照片空間（預覽版不能寫）；還沒建 bucket 就不用 R2，預覽不建 bucket
+      # #214：照片仍讀既有 R2，失敗停止，預覽不能寫照片
       - name: 確認照片空間（R2）
         id: r2
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         run: node scripts/r2-bucket.mjs
+
+      # 預覽只綁隔離測試 D1；不套結構或匯入資料
+      - name: 驗證測試資料庫（D1）
+        id: d1
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: node scripts/d1-database.mjs --config "${{ steps.r2.outputs.config }}" --preview
 
       - name: 上傳預覽版本
         id: upload
@@ -58,7 +64,7 @@ jobs:
           SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           npx --yes wrangler@4 versions upload \
-            --config "${{ steps.r2.outputs.config }}" \
+            --config "${{ steps.d1.outputs.config }}" \
             --preview-alias "pr-${PR}" \
             --var PREVIEW:1 \
             --tag "pr-${PR}" \

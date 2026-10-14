@@ -15,8 +15,16 @@
     "run_worker_first": ["/api/*", "/api", "/photos/*", "/data/dogs.json"]
   },
   // 照片空間（#130）：Cloudflare R2 的 bucket，Worker 裡叫 env.PHOTOS。bucket 要先在 Cloudflare 開通 R2 後建立
-  // （docs/CLOUDFLARE_SETUP.md「照片放 R2」）；還沒建好時部署會自動拿掉這段（scripts/r2-bucket.mjs），照片照舊存 GitHub
+  // 部署只驗證既有空間；失敗就停止，不能拿掉綁定（#214）
   "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "bq-shelter-photos" }],
+  // 固定正式庫；部署不建表或匯入。預覽版由準備腳本切換為隔離測試庫。
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "bq-shelter-dogs",
+    "database_id": "6cd6c304-0fed-4ddb-b9ec-799e60a4adb4",
+    "preview_database_id": "9e23a65c-c9dd-4f83-ad9c-2e01626910f0",
+    "migrations_dir": "db/migrations"
+  }],
   "vars": {
     "GITHUB_REPO": "jiatsenK/bq-shelter-dogs",
     "GITHUB_BRANCH": "main"

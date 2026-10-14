@@ -1,0 +1,10 @@
+// #214 隔離測試 D1；同時供預覽準備與明確執行的 migrations 使用。
+// 這份只有資料庫設定，不可直接部署 Worker。
+{
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "bq-shelter-dogs-test",
+    "database_id": "9e23a65c-c9dd-4f83-ad9c-2e01626910f0",
+    "migrations_dir": "db/migrations"
+  }]
+}

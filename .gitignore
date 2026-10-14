@@ -8,4 +8,5 @@ node_modules/
 # 部署時產生的設定和匯入檔（scripts/r2-bucket.mjs、scripts/d1-database.mjs）
 wrangler.no-r2.json
 wrangler.deploy.json
+wrangler.preview.json
 db/seed.sql
