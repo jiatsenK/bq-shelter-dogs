@@ -68,7 +68,7 @@ test('共用 D1 的 batch SELECT 讓 Worker 讀回既有開卡，RETURNING 也�
 test('所有新外鍵都是 RESTRICT，資料庫檢核沒有孤兒', async t => {
   const { db } = await model(t);
   const { results: tables } = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'v2_%'").all();
-  assert.equal(tables.length, 18);
+  assert.equal(tables.length, 19);
   for (const { name } of tables) {
     const { results: keys } = await db.prepare(`PRAGMA foreign_key_list(${name})`).all();
     for (const key of keys) assert.equal(key.on_delete, 'RESTRICT', name);
