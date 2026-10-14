@@ -1,9 +1,14 @@
 // #215：明確呼叫才建新表，部署與 Worker 不會呼叫此入口。
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 
 export async function migrateBusinessDatabase(db) {
-  const sql = await readFile(new URL('../db/migrations/0001_business_model.sql', import.meta.url), 'utf8');
-  const statements = sql.replace(/--[^\n]*/g, '').split(';').map(s => s.trim()).filter(Boolean);
-  // 與 Wrangler migrations 相同的 SQL。IF NOT EXISTS 讓替身與還原演練可重跑。
-  return db.batch(statements.map(statement => db.prepare(statement)));
+  const directory = new URL('../db/migrations/', import.meta.url);
+  const results = [];
+  for (const file of (await readdir(directory)).filter(f => /^\d+.*\.sql$/.test(f)).sort()) {
+    const sql = await readFile(new URL(file, directory), 'utf8');
+    const statements = sql.replace(/--[^\n]*/g, '').split(';').map(s => s.trim()).filter(Boolean);
+    // 每個版本一個交易，與 Wrangler 套同份 SQL；不由部署呼叫。
+    results.push(...await db.batch(statements.map(statement => db.prepare(statement))));
+  }
+  return results;
 }
