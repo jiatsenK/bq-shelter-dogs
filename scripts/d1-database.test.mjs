@@ -1,76 +1,88 @@
-// 部署前準備資料庫（D1）：找得到就用、沒有就建、空的才匯入；失敗就不帶資料庫部署
-// 執行：node --test scripts/d1-database.test.mjs
+// #214 驗證部署準備的外部行為，不呼叫正式 Cloudflare。
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtemp, writeFile, readFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, writeFile, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ensureDatabase, parseJsonOutput, findDatabase, withD1, DB_NAME, DEPLOY_CONFIG } from './d1-database.mjs';
+import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { ensureDatabase, parseJsonOutput, findDatabase, DB_NAME, DEPLOY_CONFIG, PREVIEW_CONFIG } from './d1-database.mjs';
 
-async function repo(config = '{\n  // 註解\n  "name": "x",\n  "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "b" }],\n}\n') {
+const production = { binding: 'DB', database_name: DB_NAME, database_id: 'prod-id', preview_database_id: 'test-id', migrations_dir: 'db/migrations' };
+const testing = { binding: 'DB', database_name: 'bq-shelter-dogs-test', database_id: 'test-id', migrations_dir: 'db/migrations' };
+async function repo(binding = production) {
   const root = await mkdtemp(join(tmpdir(), 'bq-d1-'));
-  await writeFile(join(root, 'wrangler.jsonc'), config);
-  await mkdir(join(root, 'db'));
+  await writeFile(join(root, 'wrangler.jsonc'), JSON.stringify({ name: 'x', r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos' }], vars: { GITHUB_BRANCH: 'main' }, d1_databases: binding ? [binding] : [] }));
+  await writeFile(join(root, 'wrangler.preview-db.jsonc'), JSON.stringify({ d1_databases: [testing] }));
   return root;
 }
-// 假的 wrangler：list 回 dbs；execute 的 COUNT 回 count；記下所有呼叫
-function fake({ dbs = [], count = 0, fail = '' } = {}) {
+function fake({ dbs = [ { uuid: 'prod-id', name: DB_NAME }, { uuid: 'test-id', name: testing.database_name } ], fail = '', probe = [{ success: true, results: [{ ok: 1 }] }] } = {}) {
   const calls = [];
   const run = args => {
-    calls.push(args.join(' '));
-    const cmd = args.slice(0, 2).join(' ');
-    if (fail && args.join(' ').includes(fail)) { const e = new Error('boom'); e.stderr = 'Authentication error [code: 10000]\n'; throw e; }
-    if (cmd === 'd1 list') return `some notice\n${JSON.stringify(dbs)}`;
-    if (cmd === 'd1 create') { dbs.push({ uuid: 'new-id', name: args[2] }); return 'created'; }
-    if (cmd === 'd1 execute' && args.includes('--command')) return JSON.stringify([{ results: [{ n: count }], success: true }]);
-    return '';
+    calls.push(args);
+    if (fail && args.join(' ').includes(fail)) throw new Error('authentication failure');
+    if (args[1] === 'list') return `notice\n${JSON.stringify(dbs)}`;
+    if (args[1] === 'execute') return JSON.stringify(probe);
+    throw new Error('Unexpected Cloudflare mutation');
   };
   return { run, calls };
 }
 
-test('wrangler 的 JSON 輸出前面有提示也讀得懂；照名字找資料庫', () => {
+test('Wrangler 的 JSON 提示與資料庫名稱查找', () => {
   assert.deepEqual(parseJsonOutput('⛅️ wrangler\n[{"a":1}]'), [{ a: 1 }]);
   assert.throws(() => parseJsonOutput('nothing'));
   assert.equal(findDatabase([{ uuid: 'u1', name: 'other' }, { uuid: 'u2', name: DB_NAME }]), 'u2');
-  assert.equal(findDatabase([{ uuid: 'u1', name: 'other' }]), '');
-  assert.deepEqual(withD1({ name: 'x' }, 'u2').d1_databases, [{ binding: 'DB', database_name: DB_NAME, database_id: 'u2' }]);
+  assert.equal(findDatabase([]), '');
 });
 
-test('已經有資料庫、裡面有資料：套資料表、不重複匯入；部署設定加上 d1_databases，原本的設定（R2）照留', async () => {
+test('#214 正式部署不管空庫或有資料，都只查證不建表／匯入', async () => {
   const root = await repo();
-  const { run, calls } = fake({ dbs: [{ uuid: 'abc', name: DB_NAME }], count: 120 });
-  let seeded = false;
-  const r = await ensureDatabase({ run, root, seed: async () => { seeded = true; return ''; } });
-  assert.deepEqual([r.config, r.status, r.id, seeded], [DEPLOY_CONFIG, 'exists', 'abc', false]);
-  const cfg = JSON.parse(await readFile(join(root, DEPLOY_CONFIG), 'utf8'));
-  assert.deepEqual([cfg.name, cfg.r2_buckets[0].bucket_name, cfg.d1_databases[0].database_id], ['x', 'b', 'abc']);
-  assert.ok(calls.some(c => c.includes('--file db/schema.sql') && c.includes('--remote') && c.includes(`--config ${DEPLOY_CONFIG}`)));
-  assert.ok(!calls.some(c => c.startsWith('d1 create') || c.includes('seed.sql')));
+  const { run, calls } = fake();
+  const result = await ensureDatabase({ root, run });
+  assert.equal(result.config, DEPLOY_CONFIG);
+  const cfg = JSON.parse(await readFile(join(root, result.config), 'utf8'));
+  assert.deepEqual(cfg.d1_databases, [{ binding: 'DB', database_name: DB_NAME, database_id: 'prod-id', migrations_dir: 'db/migrations' }]);
+  assert.equal(cfg.r2_buckets[0].bucket_name, 'photos');
+  assert.equal(cfg.vars.PREVIEW, undefined);
+  assert.deepEqual(calls, [['d1', 'list', '--json'], ['d1', 'execute', DB_NAME, '--remote', '--json', '--config', DEPLOY_CONFIG, '--command', 'SELECT 1 AS ok']]);
+  await assert.rejects(readFile(join(root, 'db/seed.sql'), 'utf8'), /ENOENT/);
 });
 
-test('沒有資料庫：建起來、套資料表、空的就匯入一次', async () => {
+test('#214 預覽只查證隔離測試庫，保留 R2 並強制 PREVIEW', async () => {
   const root = await repo();
-  const { run, calls } = fake({ dbs: [], count: 0 });
-  const r = await ensureDatabase({ run, root, seed: async () => 'INSERT INTO kv VALUES (1);\n' });
-  assert.deepEqual([r.status, r.id], ['created-seeded', 'new-id']);
-  assert.equal(await readFile(join(root, 'db/seed.sql'), 'utf8'), 'INSERT INTO kv VALUES (1);\n');
-  assert.deepEqual(calls.map(c => c.split(' ').slice(0, 2).join(' ')), ['d1 list', 'd1 create', 'd1 list', 'd1 execute', 'd1 execute', 'd1 execute']);
-  assert.ok(calls.at(-1).includes('--file db/seed.sql'));
+  const { run, calls } = fake();
+  const result = await ensureDatabase({ root, run, preview: true });
+  const cfg = JSON.parse(await readFile(join(root, result.config), 'utf8'));
+  assert.equal(result.config, PREVIEW_CONFIG);
+  assert.deepEqual(cfg.d1_databases, [testing]);
+  assert.equal(cfg.vars.PREVIEW, '1');
+  assert.equal(cfg.vars.GITHUB_BRANCH, 'main');
+  assert.equal(cfg.r2_buckets[0].bucket_name, 'photos');
+  assert.equal(calls[1][2], testing.database_name);
 });
 
-test('token 沒有 D1 權限：不帶資料庫，照上一步的設定部署，不丟錯', async () => {
-  const root = await repo();
-  await writeFile(join(root, 'wrangler.no-r2.json'), '{"name":"x"}');
-  const { run } = fake({ fail: 'd1 list' });
-  const r = await ensureDatabase({ run, root, config: 'wrangler.no-r2.json' });
-  assert.deepEqual([r.config, r.status], ['wrangler.no-r2.json', 'missing']);
-  assert.match(r.error, /Authentication error/);
-  await assert.rejects(readFile(join(root, DEPLOY_CONFIG), 'utf8'));
+for (const [title, options] of [ ['不存在', { dbs: [] }], ['名稱對但 ID 不符', { dbs: [{ uuid: 'other-id', name: DB_NAME }] }], ['查證失敗', { fail: 'd1 list' }], ['唯讀查詢失敗', { fail: 'd1 execute' }], ['查詢回失敗', { probe: [{ success: false, results: [{ ok: 1 }] }] }], ['查詢不完整', { probe: [] }] ]) {
+  test(`#214 D1 ${title}會停止，不建立或降級`, async () => {
+    const root = await repo();
+    const { run, calls } = fake(options);
+    await assert.rejects(ensureDatabase({ root, run }), /停止部署/);
+    assert.ok(calls.every(c => c[1] === 'list' || (c[1] === 'execute' && c.at(-1) === 'SELECT 1 AS ok')));
+  });
+}
+
+test('#214 預覽若指向正式 ID 或同名即停止，不接觸 Cloudflare', async () => {
+  for (const bad of [{ ...testing, database_id: production.database_id }, { ...testing, database_name: production.database_name }]) {
+    const root = await repo();
+    await writeFile(join(root, 'wrangler.preview-db.jsonc'), JSON.stringify({ d1_databases: [bad] }));
+    await assert.rejects(ensureDatabase({ root, preview: true, run: () => assert.fail('must not query') }), /預覽不能使用正式 D1/);
+  }
 });
 
-test('資料庫在、建表失敗：還是帶著資料庫部署，下次再試', async () => {
-  const root = await repo();
-  const { run } = fake({ dbs: [{ uuid: 'abc', name: DB_NAME }], fail: 'schema.sql' });
-  const r = await ensureDatabase({ run, root });
-  assert.deepEqual([r.config, r.status, r.id], [DEPLOY_CONFIG, 'schema-failed', 'abc']);
+test('#214 缺少正式 DB 的 CLI 以失敗結束，沒有可繼續部署的輸出', async () => {
+  const root = await repo(null);
+  const script = fileURLToPath(new URL('./d1-database.mjs', import.meta.url));
+  const result = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8' });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /停止部署/);
+  assert.equal(result.stdout, '');
 });

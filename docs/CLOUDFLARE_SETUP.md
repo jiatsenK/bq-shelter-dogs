@@ -150,7 +150,7 @@ https://pr-<PR 編號>-bq-shelter-dogs.<子網域>.workers.dev
    - **Location**：`Automatic`
    - 其他不用動，按 **Create bucket**。
 
-> 如果忘了建 bucket，部署時會自動試著建；建不起來網站也不會壞，照片照舊存 GitHub。
+> #214 起，部署只確認既有 bucket；不存在或查證失敗就停止，不建立、不拿掉綁定或改寫 GitHub。已部署的舊版本繼續運作。
 
 ### 步驟 2：部署一次，確認接上了
 
@@ -210,7 +210,7 @@ https://pr-<PR 編號>-bq-shelter-dogs.<子網域>.workers.dev
   `/photos/*`、`/data/dogs.json`（蓋上 R2 照片的版本號）先經過 Worker（相簿 2026-10-09 拿掉，`photos/gallery/` 一律 404）；R2 沒有的照片退回靜態檔，刪掉的照片放 0 位元組的刪除標記（`customMetadata.deleted`）擋住退回。
   換掉、刪掉前複製到 `trash/{時間-亂數}/photo.jpg`（customMetadata 記 path、dogId、kind、file、addedAt、deletedAt）＋`thumb.jpg`，Cron 清掉超過 30 天的。
   管理 API（標頭 `X-Admin-Passcode: encodeURIComponent(通關碼)`）：`POST /api/admin/migrate`、`POST /api/admin/verify`、`GET /api/admin/thumbs`、`PUT /api/admin/thumbs/{原圖路徑}`、`GET /api/admin/trash`、`POST /api/admin/trash/{代號}/restore`。
-  部署前 `scripts/r2-bucket.mjs` 確認 bucket，沒有就用拿掉 R2 的 `wrangler.no-r2.json` 部署（照片照舊寫 GitHub）。縮圖：`.github/workflows/r2-thumbs.yml`（`scripts/make-thumbs.py --site`）；搬遷：`.github/workflows/migrate-photos-r2.yml`（`scripts/migrate-photos-r2.mjs`）。
+  部署前 `scripts/r2-bucket.mjs` 只查證既有 bucket，失敗以非零狀態結束、停止部署。縮圖：`.github/workflows/r2-thumbs.yml`（`scripts/make-thumbs.py --site`）；搬遷：`.github/workflows/migrate-photos-r2.yml`（`scripts/migrate-photos-r2.mjs`）。
   本機試跑 `npx wrangler dev --local --persist-to /tmp/wrangler-state --var NOTES_PASSCODE:測試`，再 `SITE_URL=http://localhost:8787 ADMIN_PASSCODE=測試 node scripts/migrate-photos-r2.mjs` 就能模擬搬遷。
 
 ## 資料庫（D1）
@@ -218,7 +218,34 @@ https://pr-<PR 編號>-bq-shelter-dogs.<子網域>.workers.dev
 K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**（設計見 `docs/DATABASE.md`）。免費額度 5 GB，現在的資料不到 1 MB，費用 NT$0。
 目前只是把資料庫建起來、把現有資料放進去；**網站還是讀原本的檔案**，所以資料庫沒接上網站也完全不受影響。
 
-平常不用做任何事：每次部署會自動找名叫 `bq-shelter-dogs` 的資料庫，沒有就建、把資料表建好，資料庫是空的才把現有資料匯進去一次。
+**#214 起部署不改資料庫。** `scripts/d1-database.mjs` 只驗證既有資料庫名稱／ID 並執行 `SELECT 1`，缺少、ID 不符或讀取失敗就停止部署。即使資料庫是空的也不建表或匯入。新增結構在 #215 之後走有版本的 migration，與網站部署分開執行。
+
+| 用途 | 配置 | 資料庫 |
+|---|---|---|
+| 正式部署 | wrangler.jsonc → wrangler.deploy.json | bq-shelter-dogs |
+| PR 預覽 | wrangler.preview-db.jsonc → wrangler.preview.json | bq-shelter-dogs-test |
+
+測試 D1 已在 2026-10-14 建立，ID `9e23a65c-c9dd-4f83-ad9c-2e01626910f0`，與正式 `6cd6c304-0fed-4ddb-b9ec-799e60a4adb4` 不同。建立後 API 讀回、SELECT 1=1、業務表數=0、rows_written=0。這張票只建測試庫，不匯入正式資料；API 回應裡的 version=production 是 D1 的產品版本，不能用來判斷它是否為本專案正式庫，須看名稱與 ID。
+
+預覽仍透過既有 `versions upload --preview-alias` 上傳版本，不部署正式 Worker；準備腳本將 DB 明確切成測試 ID 並帶 PREVIEW=1，仍保留既有預覽寫入限制。R2 讀既有照片空間。測試庫尚無業務表，因此資料庫相關 API 在 #215 建表前可能回未就緒，不代表已完成資料遷移。
+
+### 結構改動與資料匯入
+
+以下只記錄獨立操作方式，不會由部署 Action 執行。先確認目標與授權，再列出待套用 migration：
+
+```sh
+npx wrangler@4 d1 migrations list bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc
+```
+
+#215 建立 SQL 並通過本機驗證後，明確執行測試庫的 migration：
+
+```sh
+npx wrangler@4 d1 migrations apply bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc
+```
+
+正式目標使用 wrangler.jsonc 與 bq-shelter-dogs，必須另行確認正式操作，不能因 main 合併或空庫而自動執行。migration 目錄配置為 `db/migrations`，新 SQL 留 #215。資料匯入留 #216～#219，不再靠 `db/schema.sql` 與 seed.sql 自動執行。
+
+參考：[D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/)、[D1 綁定設定](https://developers.cloudflare.com/workers/wrangler/configuration/#d1-databases)。目前沿用 repo 的版本網址預覽流程，沒有切換到另一套 Workers Previews 功能。
 
 ### 確認有沒有接上
 
@@ -231,4 +258,4 @@ K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**�
 ### 資料弄壞了要救
 
 - Cloudflare 後台 → **Storage & Databases** → **D1** → `bq-shelter-dogs` → **Time Travel** 可以回到 30 天內任一時間點。
-- 試算表還是主人的期間，最壞的情況把資料庫整個刪掉也沒關係：下次部署會重建，並從 repo 的資料再匯入一次。
+- 不要刪掉資料庫期待部署自動重建。部署已移除建庫與匯入；資料損壞需用正式備份／Time Travel 與經核對的還原流程處理，測試演練先在隔離庫做。

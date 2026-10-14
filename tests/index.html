@@ -2771,13 +2771,14 @@ async function runR2Tests() {
   });
   const deploy = await get('../.github/workflows/deploy-cloudflare.yml');
   const preview = await get('../.github/workflows/preview-cloudflare.yml');
-  await check('#130 部署：先確認 R2 bucket（正式部署會建、預覽不建），用確認後的設定部署', () => {
-    if (!/node scripts\/r2-bucket\.mjs --create/.test(deploy)) throw new Error('正式部署要確認／建立 bucket');
-    // 資料庫（D1，2026-10-10）：接在 R2 後面，拿 R2 那一步的設定再加上資料庫，部署用它的結果
+  await check('#214 部署：R2 只查證，正式 D1 與隔離測試 D1 分開，失敗不繼續部署', () => {
+    if (!/node scripts\/r2-bucket\.mjs\r?\n/.test(deploy) || /r2-bucket\.mjs --create/.test(deploy)) throw new Error('正式 R2 只能查證');
     if (!deploy.includes('node scripts/d1-database.mjs --config "${{ steps.r2.outputs.config }}"')) throw new Error('準備資料庫要接著 R2 那一步的設定');
     if (!deploy.includes('wrangler@4 deploy --config "${{ steps.d1.outputs.config }}"')) throw new Error('正式部署要用確認後的設定');
-    if (!/node scripts\/r2-bucket\.mjs\n/.test(preview) || /r2-bucket\.mjs --create/.test(preview)) throw new Error('預覽只確認、不建 bucket');
-    if (!/--config "\$\{\{ steps\.r2\.outputs\.config \}\}"/.test(preview)) throw new Error('預覽要用確認後的設定');
+    if (!/node scripts\/r2-bucket\.mjs\r?\n/.test(preview) || /r2-bucket\.mjs --create/.test(preview)) throw new Error('預覽只確認、不建 bucket');
+    if (!preview.includes('node scripts/d1-database.mjs --config "${{ steps.r2.outputs.config }}" --preview')) throw new Error('預覽要查證測試 D1');
+    if (!/versions upload\s*\\\s*\r?\n\s*--config "\$\{\{ steps\.d1\.outputs\.config \}\}"/.test(preview)) throw new Error('預覽上傳要用測試 D1 的設定');
+    if (/migrations apply|d1 execute|continue-on-error|if:\s*always\(/.test(deploy + preview)) throw new Error('部署不能改結構或忽略綁定錯誤');
   });
   const thumbs = await get('../.github/workflows/r2-thumbs.yml');
   const migrate = await get('../.github/workflows/migrate-photos-r2.yml');

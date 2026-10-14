@@ -9,6 +9,8 @@ scripts
 wrangler.jsonc
 wrangler.no-r2.json
 wrangler.deploy.json
+wrangler.preview.json
+wrangler.preview-db.jsonc
 .assetsignore
 AGENT_LOG.md
 AGENTS.md
