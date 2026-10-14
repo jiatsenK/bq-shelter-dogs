@@ -1,5 +1,43 @@
 // 測試用的假 R2、假靜態檔（worker/test/r2.test.mjs、scripts/migrate-photos-r2.test.mjs 共用）
 import { createHash } from 'node:crypto';
+import { DatabaseSync } from 'node:sqlite';
+
+// 共用 D1 接縫：真實 SQLite 外鍵／唯一約束，batch 全部成功或全部回復。
+export function fakeD1() {
+  const sqlite = new DatabaseSync(':memory:');
+  sqlite.exec('PRAGMA foreign_keys = ON');
+  const prepare = (sql, values = []) => {
+    return {
+      bind(...args) { return prepare(sql, args); },
+      async run() {
+        const statement = sqlite.prepare(sql);
+        if (statement.columns().length) {
+          return { success: true, results: statement.all(...values).map(row => ({ ...row })), meta: {} };
+        }
+        const result = statement.run(...values);
+        return { success: true, results: [], meta: { changes: Number(result.changes), last_row_id: Number(result.lastInsertRowid) } };
+      },
+      async all() { return { success: true, results: sqlite.prepare(sql).all(...values).map(row => ({ ...row })), meta: {} }; },
+      async first(column) {
+        const row = sqlite.prepare(sql).get(...values);
+        return row ? (column ? row[column] : { ...row }) : null;
+      },
+    };
+  };
+  return {
+    prepare,
+    async batch(statements) {
+      sqlite.exec('BEGIN');
+      try {
+        const results = [];
+        for (const statement of statements) results.push(await statement.run());
+        sqlite.exec('COMMIT');
+        return results;
+      } catch (error) { sqlite.exec('ROLLBACK'); throw error; }
+    },
+    close() { sqlite.close(); },
+  };
+}
 
 export const sha = bytes => createHash('sha256').update(bytes).digest('hex');
 
