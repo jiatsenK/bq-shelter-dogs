@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-14T15:31:13+08:00",
+  "syncedAt": "2026-10-14T15:37:38+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -126,7 +126,7 @@
       "cage": "住院區",
       "id": "2024111806",
       "name": "布布",
-      "walkedDate": "2026-10-11",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1562,11 +1562,11 @@
       "cage": "舊B17",
       "id": "2021050602",
       "name": "保羅",
-      "walkedDate": "2026-10-10",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "c3b400d1f468"
+        "da53fbdda293"
       ],
       "note": "2026/10/2洗澡（旭昇）",
       "sex": "male",
@@ -1683,7 +1683,7 @@
       "cage": "C區21",
       "id": "2023052902",
       "name": "妙麗",
-      "walkedDate": "2026-10-11",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1743,11 +1743,11 @@
       "cage": "C區32",
       "id": "2026032402",
       "name": "雪糕",
-      "walkedDate": "2026-10-13",
+      "walkedDate": "2026-10-14",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "3c0459316acf"
+        "67c74c17be08"
       ],
       "note": "20260322;3/28出所代養（嘉文）；4/12回收容所，代養人說有帶去看醫生，疑十字韌帶受傷(嘉文)",
       "sex": "male",
