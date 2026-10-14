@@ -24,6 +24,32 @@ test('快照前的紀錄標 legacy，名單去重、來源逐筆保存、重跑�
   assert.equal(await db.prepare('SELECT COUNT(*) FROM v2_walk_participants').first('COUNT(*)'), 1);
 });
 
+test('partial 與未知狀態快照不取代完整成功，空快照也保存來源表頭', async t => {
+  const db = await setup(t);
+  const input = { asOf: '2026-10-14', snapshots: [
+    { date: '2026-10-13', syncedAt: '2026-10-13T08:00:00+08:00', status: 'ok', dogs: [{ id: '2026010101', walkedDate: '2026-10-13' }] },
+    { date: '2026-10-13', syncedAt: '2026-10-13T18:00:00+08:00', status: 'partial', dogs: [] },
+    { date: '2026-10-13', syncedAt: '2026-10-13T19:00:00+08:00', status: 'mystery', dogs: [] },
+  ] };
+  const out = await migrateHistory(db, input);
+  assert.equal(out.counts.dogDays, 1);
+  assert.equal(await db.prepare("SELECT COUNT(*) FROM v2_history_sources WHERE source_kind='snapshot'").first('COUNT(*)'), 4);
+});
+
+test('離所 JSON 重排仍逐筆 upsert，重複分頁矛盾不取最後一筆', async t => {
+  const db = await setup(t);
+  const departures = [{ id: '2025010101', date: '2026-09-20', note: '第一筆' }, { id: '2025020101', date: '2026-09-21', note: '第二筆' }];
+  await migrateHistory(db, { asOf: '2026-10-14', departures });
+  await migrateHistory(db, { asOf: '2026-10-14', departures: [...departures].reverse() });
+  assert.equal(await db.prepare('SELECT COUNT(*) FROM v2_history_sources').first('COUNT(*)'), 2);
+  const out = await migrateHistory(db, { asOf: '2026-10-14', departedSheet: [
+    { rowNumber: 2, id: '2025010101', name: '狗', dateText: '2026/9/20', note: '被認養' },
+    { rowNumber: 3, id: '2025010101', name: '狗', dateText: '2026/9/21', note: '死亡' },
+  ] });
+  assert.equal(out.pending.filter(x => x.reason === 'conflicting_departure_rows').length, 2);
+  assert.equal(await db.prepare('SELECT COUNT(*) FROM v2_dogs').first('COUNT(*)'), 1);
+});
+
 test('同狗跨入所同日只算一天，志工別名算同一人，未來日期與未知身分保留', async t => {
   const db = await setup(t, { dogs: [{ id: '2020010101', name: '狗' }], cards: [{ id: '2026010101', formerIds: ['2020010101'] }] });
   const input = { asOf: '2026-10-14', walks: [

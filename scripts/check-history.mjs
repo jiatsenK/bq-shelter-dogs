@@ -25,7 +25,7 @@ export async function checkHistory(input) {
     await migrateBusinessDatabase(db); await migrateIdentities(db, input.identities);
     const first = await migrateHistory(db, input.history), second = await migrateHistory(db, input.history);
     if (JSON.stringify(first) !== JSON.stringify(second)) throw new Error('重跑歷史遷移結果不一致');
-    const expected = input.history.walks.length + input.history.snapshots.reduce((n, s) => n + s.dogs.length, 0) + input.history.departedSheet.length + input.history.departures.length;
+    const expected = input.history.walks.length + input.history.snapshots.reduce((n, s) => n + s.dogs.length + 1, 0) + input.history.departedSheet.length + input.history.departures.length;
     if (second.counts.sources !== expected) throw new Error('來源筆數不平衡');
     if ((await db.prepare('PRAGMA foreign_key_check').all()).results.length) throw new Error('外鍵檢核失敗');
     const reasons = (await db.prepare("SELECT source_kind,reason,COUNT(*) AS n FROM v2_history_sources WHERE state='pending' GROUP BY source_kind,reason").all()).results;

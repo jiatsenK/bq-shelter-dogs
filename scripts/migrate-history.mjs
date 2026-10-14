@@ -52,10 +52,7 @@ function departureDate(value, asOf) {
   return validDate(result) ? result : null;
 }
 
-async function importDepartures(db, rows, jsonRows, asOf) {
-  const sheetNumbers = new Set();
-  for (const [index, row] of rows.entries()) {
-    const source = String(row.rowNumber ?? index + 2);
+function analyzeDeparture(row, asOf) {
     const classification = classifyDeparture(row.note);
     const reason = classification.reason === 'unknown' ? 'pending' : classification.reason;
     const preceding = classification.at == null ? '' : classification.text.slice(0, classification.at);
@@ -65,8 +62,21 @@ async function importDepartures(db, rows, jsonRows, asOf) {
     const ambiguousColumn = /遛|溜/.test(row.dateColumnLabel || '') && !text(row.dateConfirmedEvidence);
     const date = fromNote || (ambiguousColumn ? null : fromColumn);
     const evidence = { ...row, date_source: fromNote ? 'note' : ambiguousColumn ? 'ambiguous_walk_date_column' : 'sheet_date_column', classification: { reason, flags: classification.flags } };
+    return { date, reason, evidence };
+}
+
+async function importDepartures(db, rows, jsonRows, asOf, rowSourceKey) {
+  const sheetNumbers = new Set(), facts = new Map(), rowNumbers = new Set();
+  const analyzed = rows.map((row, index) => ({ row, source: String(row.rowNumber ?? index + 2), ...analyzeDeparture(row, asOf) }));
+  for (const item of analyzed) {
+    if (rowNumbers.has(item.source)) throw new Error('已出所來源列號重複，停止以免覆蓋原文');
+    rowNumbers.add(item.source);
+    if (!facts.has(item.row.id)) facts.set(item.row.id, new Set());
+    facts.get(item.row.id).add(JSON.stringify([item.date, item.reason]));
+  }
+  for (const { row, source, date, reason, evidence } of analyzed) {
     let admission = await resolve(db, row, '已出所');
-    let pendingReason = !/^\d{10}$/.test(text(row.id)) ? 'invalid_or_missing_departure_number' : date > asOf ? 'future_departure_date' : admission?.status === 'in' ? 'departure_conflicts_with_current_admission' : null;
+    let pendingReason = !/^\d{10}$/.test(text(row.id)) ? 'invalid_or_missing_departure_number' : facts.get(row.id).size > 1 ? 'conflicting_departure_rows' : date > asOf ? 'future_departure_date' : admission?.status === 'in' ? 'departure_conflicts_with_current_admission' : null;
     if (!pendingReason) {
       sheetNumbers.add(text(row.id));
       if (!admission) {
@@ -86,22 +96,22 @@ async function importDepartures(db, rows, jsonRows, asOf) {
     }
     await saveSource(db, 'departed_sheet', source, evidence, pendingReason || !date || reason === 'pending' ? 'pending' : 'imported', pendingReason || (!date ? 'departure_date_unconfirmed' : reason === 'pending' ? 'departure_reason_pending' : 'departed_sheet_fact'), admission);
   }
-  for (const [index, row] of jsonRows.entries()) {
+  for (const row of jsonRows) {
     const admission = await resolve(db, row, 'data/departures.json');
-    await saveSource(db, 'departure_json', hash([row.id, row.seen || row.date, index]), row, sheetNumbers.has(text(row.id)) ? 'ignored' : 'pending', sheetNumbers.has(text(row.id)) ? 'superseded_by_departed_sheet' : 'disappearance_observation_pending', admission);
+    await saveSource(db, 'departure_json', rowSourceKey('data/departures.json', row), row, sheetNumbers.has(text(row.id)) ? 'ignored' : 'pending', sheetNumbers.has(text(row.id)) ? 'superseded_by_departed_sheet' : 'disappearance_observation_pending', admission);
   }
 }
 
 export async function migrateHistory(db, { walks = [], snapshots = [], departedSheet = [], departures = [], asOf, historyDecisions = {} } = {}) {
   if (!validDate(asOf)) throw new Error('請提供台灣日期 asOf（YYYY-MM-DD）');
   for (const decision of Object.values(historyDecisions)) if (!['retain', 'exclude'].includes(decision.decision) || !text(decision.evidence)) throw new Error('歷史例外必須有明確保留／排除決策與證據');
-  await importDepartures(db, departedSheet, departures, asOf);
   const sourceOccurrences = new Map();
   const rowSourceKey = (source, row) => {
     const base = `${source}:${key(row)}:${hash(row)}`;
     const n = sourceOccurrences.get(base) || 0; sourceOccurrences.set(base, n + 1);
     return `${base}:${n}`;
   };
+  await importDepartures(db, departedSheet, departures, asOf, rowSourceKey);
   const before = [], after = [];
   for (const [index, row] of walks.entries()) {
     const source = rowSourceKey('data/walks.json', row);
@@ -114,16 +124,19 @@ export async function migrateHistory(db, { walks = [], snapshots = [], departedS
     await saveSource(db, 'walk', source, row, reason ? 'pending' : 'imported', reason || 'legacy_before_cutoff', admission, walk_id);
   }
   const latest = new Map();
-  const usable = snapshot => snapshot.status !== 'failed' && validDate(snapshot.date) && snapshot.date <= asOf && Number.isFinite(Date.parse(snapshot.syncedAt)) && new Date(Date.parse(snapshot.syncedAt) + 8 * 3600000).toISOString().slice(0, 10) === snapshot.date;
+  const successful = snapshot => snapshot.status === undefined || snapshot.status === 'ok';
+  const usable = snapshot => successful(snapshot) && validDate(snapshot.date) && snapshot.date <= asOf && Number.isFinite(Date.parse(snapshot.syncedAt)) && new Date(Date.parse(snapshot.syncedAt) + 8 * 3600000).toISOString().slice(0, 10) === snapshot.date;
   for (const snapshot of snapshots) if (usable(snapshot) && (!latest.has(snapshot.date) || Date.parse(snapshot.syncedAt) > Date.parse(latest.get(snapshot.date).syncedAt))) latest.set(snapshot.date, snapshot);
   for (const snapshot of [...snapshots].sort((a, b) => text(a.date).localeCompare(text(b.date)) || Date.parse(a.syncedAt) - Date.parse(b.syncedAt))) {
     const source = snapshot.source || `data/history/${snapshot.date}.json`;
+    const header = { source, observedDay: snapshot.date, syncedAt: snapshot.syncedAt, status: snapshot.status ?? 'legacy_success', rows: snapshot.dogs.length, payloadHash: hash(snapshot.dogs) };
+    await saveSource(db, 'snapshot', rowSourceKey(`${source}:header`, header), header, !successful(snapshot) ? 'ignored' : !usable(snapshot) ? 'pending' : 'imported', !successful(snapshot) ? 'unsuccessful_snapshot_header' : !usable(snapshot) ? 'invalid_snapshot_header' : latest.get(snapshot.date) === snapshot ? 'selected_snapshot_header' : 'earlier_snapshot_header');
     if (usable(snapshot) && latest.get(snapshot.date) === snapshot) await db.prepare("UPDATE v2_daily_walks SET state='superseded' WHERE walk_date=? AND evidence='snapshot' AND state IN ('provisional','final')").bind(snapshot.date).run();
     for (const row of snapshot.dogs) {
       const sourceKey = rowSourceKey(`${source}:${snapshot.syncedAt}`, row);
       const admission = await resolve(db, row, source);
       let state = 'pending', reason = 'identity_unconfirmed', walk_id = null;
-      if (!usable(snapshot)) { state = snapshot.status === 'failed' ? 'ignored' : 'pending'; reason = 'unsuccessful_or_invalid_snapshot'; }
+      if (!usable(snapshot)) { state = !successful(snapshot) ? 'ignored' : 'pending'; reason = 'unsuccessful_or_invalid_snapshot'; }
       else if (latest.get(snapshot.date) !== snapshot) { state = 'ignored'; reason = 'earlier_successful_snapshot'; }
       else if (!row.walkedDate) { state = 'ignored'; reason = 'empty_walk_date'; }
       else if (!validDate(row.walkedDate) || row.walkedDate > snapshot.date) reason = 'invalid_or_future_date';
