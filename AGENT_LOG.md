@@ -1210,3 +1210,4 @@
 - 最後 Node 全套187/187，真資料594來源重跑一致，2休養／133原圖關聯／20名字推薦／3kv核對；Chrome無頭243過、1項既有 #130 workflow Windows CRLF失敗，Linux CI待PR。Standards／Spec複查通過；#234正式部署與main測試成功，未改正式資料／R2／試算表。
 
 - 2026-10-14 CODEX #219：依 K 授權合併 #235（測試與預覽通過，main 部署成功），接第 7 張。新增私有封存／SQL 還原及逐表逐列指紋驗證；來源 2660／3442／594，Cloudflare 測試 D1 首次、重跑與新還原庫均 21 表／9260 列一致，外鍵、完整性與七項業務檢核通過。正式 D1 前後匯出指紋相同；未寫正式庫、試算表、R2。私有封存於 .migration-private/219，排除 Git 與 assets；證據只含彙總。補測 D1 交錯匯出載入／外鍵錯誤／封存竄改；待完整測試及雙軸審查。
+- #219 驗證完成：Node 190/190；Windows headless 243 通過、1 個既有 #130 workflow CRLF 檢核失敗。Standards 無硬性違反（1 個低度重複 SQL 轉換建議）、Spec 無缺漏；審查再核對三份 Cloudflare 匯出與私有 manifest 均一致。正式庫未變，PR 待 Linux CI 與 K 驗收合併。
