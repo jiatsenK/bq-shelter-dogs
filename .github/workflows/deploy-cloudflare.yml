@@ -63,13 +63,13 @@ jobs:
           CF_ANALYTICS_TOKEN: ${{ secrets.CF_ANALYTICS_TOKEN }}
         run: node scripts/analytics-beacon.mjs
 
-      # 照片放 R2（#130）：確認 bucket，沒有就建；建不起來就這次先不用 R2（照片照舊存 GitHub），不會失敗
+      # #214：只查既有 R2，失敗停止，不建立或拿掉綁定
       - name: 確認照片空間（R2）
         id: r2
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
-        run: node scripts/r2-bucket.mjs --create
+        run: node scripts/r2-bucket.mjs
 
-      # 資料庫（D1，第 2 步）：找資料庫、沒有就建、套資料表、空的才匯入 repo 現有的資料；失敗就不帶資料庫部署，不會失敗
+      # #214：正式 D1 只驗證 ID 與唯讀查詢；不建庫、不建表、不匯入
       - name: 準備資料庫（D1）
         id: d1
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
