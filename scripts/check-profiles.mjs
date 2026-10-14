@@ -36,7 +36,7 @@ export async function checkProfiles(input) {
     const first = await migrateProfiles(db, input.profiles), second = await migrateProfiles(db, input.profiles);
     if (JSON.stringify(first) !== JSON.stringify(second)) throw new Error('重跑附屬資料遷移不一致');
     const p = input.profiles;
-    const expected = p.cardOpened.length + p.walkerNames.length + p.kv.length + p.photos.length + p.cards.length + Object.keys(p.introOriginal).length + Object.keys(p.rest).length + Object.keys(p.notes).length;
+    const expected = p.cardOpened.length + p.walkerNames.length + p.kv.length + p.photos.length + p.cards.length + Object.keys(p.introOriginal).length + Object.keys(p.rest).length + Object.keys(p.notes).length + (p.legacyCodes?.length || 0) + (p.walkerAliases?.length || 0) + Object.keys(p.introChoices || {}).length + Object.keys(p.photoChoices || {}).length;
     if (second.sources !== expected) throw new Error('附屬資料來源筆數不平衡');
     if ((await db.prepare('PRAGMA foreign_key_check').all()).results.length) throw new Error('外鍵檢核失敗');
     for (const row of p.kv) if ((await db.prepare('SELECT value FROM kv WHERE key=?').bind(row.key).first('value')) !== row.value) throw new Error('kv 值與來源不一致');

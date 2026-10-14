@@ -28,6 +28,27 @@ test('開卡認狗跨入所合併取最早日期，名字推薦與 kv 保留，�
   assert.equal(await db.prepare('SELECT value FROM kv').first('value'), '"原值"');
 });
 
+test('重新遷移刪除標記會撤下既有有效照片，不遺留舊縮圖關聯', async t => {
+  const db = await setup(t);
+  await migrateProfiles(db, { photos: [{ key: 'photos/2026010101.jpg', size: 100 }, { key: 'photos/thumbs/2026010101.jpg', size: 30 }] });
+  await migrateProfiles(db, { photos: [{ key: 'photos/2026010101.jpg', size: 0 }, { key: 'photos/thumbs/2026010101.jpg', size: 0 }] });
+  assert.equal(await db.prepare("SELECT COUNT(*) FROM v2_dog_photos WHERE state='active'").first('COUNT(*)'), 0);
+  assert.equal(await db.prepare('SELECT thumb_key FROM v2_dog_photos').first('thumb_key'), null);
+});
+
+test('R2 零位元組或 metadata.deleted 標記不作主照片／縮圖，來源仍保存', async t => {
+  const db = await setup(t);
+  const out = await migrateProfiles(db, { photos: [
+    { key: 'photos/2020010101.jpg', size: 100 }, { key: 'photos/thumbs/2020010101.jpg', size: 0 },
+    { key: 'photos/2026010101.jpg', size: 0, metadata: { deleted: '2026-10-14' } },
+    { key: 'photos/thumbs/2026010101.jpg', size: 50, metadata: { deleted: '2026-10-14' } },
+  ] });
+  const active = await db.prepare("SELECT object_key,thumb_key FROM v2_dog_photos WHERE state='active'").first();
+  assert.deepEqual(active, { object_key: 'photos/2020010101.jpg', thumb_key: null });
+  assert.equal(out.sources, 4);
+  assert.equal(await db.prepare("SELECT COUNT(*) FROM v2_profile_sources WHERE state='archived'").first('COUNT(*)'), 3);
+});
+
 test('照片跨入所跟狗，沿用 R2 路徑，舊照片與 trash 保留 replaced；重跑不增筆', async t => {
   const db = await setup(t);
   const photos = [
