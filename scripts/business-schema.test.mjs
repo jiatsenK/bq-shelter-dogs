@@ -51,6 +51,20 @@ test('預覽 Worker fetch 使用共用 D1，已有新表仍禁止寫入', async 
   assert.equal(await db.prepare('SELECT COUNT(*) FROM v2_operations').first('COUNT(*)'), 0);
 });
 
+test('共用 D1 的 batch SELECT 讓 Worker 讀回既有開卡，RETURNING 也保留結果', async t => {
+  const { db } = await model(t);
+  worker.testing.resetState();
+  await db.prepare('CREATE TABLE card_opened(walker_code TEXT, dog_id TEXT, opened_on TEXT)').run();
+  await db.prepare("INSERT INTO card_opened VALUES('abcdef123456','2026010101','2026-10-14')").run();
+  const res = await worker.fetch(new Request('https://preview.example/api/cards/opened?codes=abcdef123456', {
+    headers: { Origin: 'https://preview.example' },
+  }), { DB: db, PREVIEW: '1' });
+  assert.equal(res.status, 200);
+  assert.deepEqual((await res.json()).opened.codes.abcdef123456, { '2026010101': '2026-10-14' });
+  const [inserted] = await db.batch([db.prepare("INSERT INTO v2_walkers VALUES('returned','now') RETURNING walker_id")]);
+  assert.deepEqual(inserted.results, [{ walker_id: 'returned' }]);
+});
+
 test('所有新外鍵都是 RESTRICT，資料庫檢核沒有孤兒', async t => {
   const { db } = await model(t);
   const { results: tables } = await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'v2_%'").all();

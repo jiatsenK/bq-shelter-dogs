@@ -48,4 +48,5 @@ Wrangler 的 `d1_migrations` 記錄已套用版本；第二次 apply 不再套�
 - Cloudflare 實際拒絕：同狗兩筆在所、兩個現行編號、重複每日溜狗、兩張有效主照片、跨狗入所異動、刪除被引用的狗、不可能日期、含違規寫入的批次。失敗批次前段的更新也已回復。
 - 專用驗證資料清除後，新狗表 0 筆；17 張新表全部外鍵均為 RESTRICT，foreign_key_check 回 0 列。
 - 正式庫唯讀回查：v2_ 表數 0，舊 dogs 仍 125 筆。沒有執行正式庫結構或資料寫入。
-- Node 全套 160/160。Windows Chrome 無頭網頁 243 項通過、1 項既有 #130 縮圖 workflow 的 CRLF 檢查失敗；與本票 SQL 無關，Linux CI 另行驗證。
+- Node 全套 161/161。Windows Chrome 無頭網頁 243 項通過、1 項既有 #130 縮圖 workflow 的 CRLF 檢查失敗；與本票 SQL 無關，Linux CI 另行驗證。
+- Standards 審查發現共用替身的 batch SELECT 未回傳資料，已先以 Worker 開卡讀回測試重現並修正；SELECT／RETURNING 均保留結果。Spec 審查未發現偏離，後續業務同步／遷移入口的驗收仍依各票完成。
