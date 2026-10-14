@@ -1177,3 +1177,11 @@
 - 已按批准票建立 Cloudflare bq-shelter-dogs-test，ID 與正式庫不同，唯讀查詢回 1、業務表數為 0、rows_written=0。預覽準備改綁該測試庫；新 migration／業務資料仍留第 3 張以後。
 - 現有部署準備公開入口採回歸測試，先證明空庫匯入與 R2 降級會違反新規則，再改程式；配置固定正式／測試 ID，結構改動只由獨立明確執行的 D1 migrations。第 1 張 PR #230 未合併，後續 PR 以其分支為前置，不部署正式。
 - 本機驗證：Node 全套 153/153；網頁同一測試頁以本機 Chrome 無頭執行，243 過、1 項既有縮圖／搬遷 workflow CRLF 檢查失敗；受本票影響的正式／預覽部署檢查已通過。正式與預覽配置分別 dry-run，測試庫讀回 SELECT 1 成功，沒有套用 schema 或資料。
+## 2026-10-14 CODEX（#215 新 SQL 結構）
+
+- K 明確授權依序合併 PR #230、#231 並建立第三張 SQL；兩 PR 已合併，正式部署與 main CI 成功，正式 DB 綁定讀回仍為既有正式庫。
+- 新增版本化 migration 0001：17 張 v2_ 新表並存，永久狗 ID、部分唯一索引、複合外鍵、RESTRICT、有效日期及狀態約束。舊 schema／Worker 不改，無正式建表或業務資料搬遷。
+- 新增明確遷移入口與共用真實 SQLite D1 替身；新測試加入 CI、AGENTS.md。隔離 Cloudflare 測試庫已由 Wrangler migrations apply 成功建立結構。
+- 五張狗卡與十筆歷史紀錄的待確認政策仍保留，本次建空表授權不解讀為資料政策定案。
+- Cloudflare 實際拒絕八類違規寫入並確認失敗批次回復；驗證資料全部清除。測試庫 17 張新表、非 RESTRICT 外鍵 0、foreign_key_check 0 列；正式庫新表 0、舊狗 125。Wrangler 再次 apply 無待執行 migration。
+- Node 全套 160/160；Chrome 無頭網頁 243 過、1 項既有 #130 workflow 的 Windows CRLF 檢查失敗。未改其測試或工作流，Linux CI 待 PR 驗證。
