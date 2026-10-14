@@ -10,7 +10,11 @@ export function fakeD1() {
     return {
       bind(...args) { return prepare(sql, args); },
       async run() {
-        const result = sqlite.prepare(sql).run(...values);
+        const statement = sqlite.prepare(sql);
+        if (statement.columns().length) {
+          return { success: true, results: statement.all(...values).map(row => ({ ...row })), meta: {} };
+        }
+        const result = statement.run(...values);
         return { success: true, results: [], meta: { changes: Number(result.changes), last_row_id: Number(result.lastInsertRowid) } };
       },
       async all() { return { success: true, results: sqlite.prepare(sql).all(...values).map(row => ({ ...row })), meta: {} }; },

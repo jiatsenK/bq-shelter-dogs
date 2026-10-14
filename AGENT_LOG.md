@@ -1185,3 +1185,4 @@
 - 五張狗卡與十筆歷史紀錄的待確認政策仍保留，本次建空表授權不解讀為資料政策定案。
 - Cloudflare 實際拒絕八類違規寫入並確認失敗批次回復；驗證資料全部清除。測試庫 17 張新表、非 RESTRICT 外鍵 0、foreign_key_check 0 列；正式庫新表 0、舊狗 125。Wrangler 再次 apply 無待執行 migration。
 - Node 全套 160/160；Chrome 無頭網頁 243 過、1 項既有 #130 workflow 的 Windows CRLF 檢查失敗。未改其測試或工作流，Linux CI 待 PR 驗證。
+- code-review：Standards 沒有規範違反，但指出共用替身 batch SELECT 回傳空值；已由 Worker 開卡讀回先紅後綠修正，SELECT／RETURNING 都保留結果。Spec 無偏離，尚未實作的業務同步／遷移行為留後續票；重跑 Node 全套 161/161。
