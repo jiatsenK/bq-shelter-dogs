@@ -2,14 +2,14 @@
 
 狀態：盤點已完成；K 的資料確認與正式綁定核對尚待完成。不得據此直接遷移或切換正式資料。
 
-盤點日期：2026-10-14，台灣時間約 14:53～15:00。這是時間點證據，不是持續更新的資料來源。
+盤點日期：2026-10-14，台灣時間約 14:53～15:05。這是時間點證據，不是持續更新的資料來源。
 
 ## 固定來源
 
 - 工作票：[#213](https://github.com/jiatsenK/bq-shelter-dogs/issues/213)，父規格 [#212](https://github.com/jiatsenK/bq-shelter-dogs/issues/212)。
 - 程式與舊資料：main `3f7ef91b470e4bf291d67136aa193d3fae823992`；JSON 同步時間為 `2026-10-14T14:31:11+08:00`。
 - 遷移計畫、ADR 0001～0004 與新名詞：`claude/zen-newton-zg4j8m` 的 `58c50b8aecfefe43291ccec2b8357c420c69d94a`。該分支文件尚未合併到 main，本票沒有搬入或改寫規格。
-- GitHub API 確认 repo `jiatsenK/bq-shelter-dogs` 目前為 **PRIVATE**；規格與若干既有註解的「公開」描述已過時。維持目前可見性；封存時須重新確認，不能推定可公開。
+- GitHub API 確認 repo `jiatsenK/bq-shelter-dogs` 目前為 **PRIVATE**；規格與若干既有註解的「公開」描述已過時。維持目前可見性；封存時須重新確認，不能推定可公開。
 - 沒有執行正式寫入、同步、部署、migration、匯入或刪除。D1 證據中每次 SELECT 均為 `rows_written: 0`、`changed_db: false`。
 
 ## 正式 D1
