@@ -25,6 +25,28 @@ test('主清單身分可重跑，名字更改不換狗 ID，入所來源與原�
   assert.equal(await db.prepare('SELECT name FROM v2_dogs').first('name'), '新名');
 });
 
+test('舊號認狗後，快照暫住與主清單暫住都對目前入所', async t => {
+  const db = await setup(t);
+  const out = await migrateIdentities(db, {
+    dogs: [{ id: '2020010101', name: '圓仔' }, { name: '(圓仔)' }],
+    cards: [{ id: '2026010101', formerIds: ['2020010101'] }],
+    sources: [{ source: 'history/current.json', rows: [{ name: '(圓仔)' }] }],
+  });
+  const main = out.mapping.find(x => x.source === 'main' && x.source_key === '名:(圓仔)');
+  const snapshot = out.mapping.find(x => x.source === 'history/current.json');
+  assert.equal(snapshot.admission_id, main.admission_id);
+  assert.equal(await db.prepare('SELECT status FROM v2_admissions WHERE admission_id=?').bind(snapshot.admission_id).first('status'), 'in');
+});
+
+test('來源重複鍵與 NFKC 撞鍵在寫入前停止，不覆蓋原文', async t => {
+  const db = await setup(t);
+  await assert.rejects(migrateIdentities(db, {
+    dogs: [{ id: '2026010101', name: '狗' }],
+    sources: [{ source: 'old.json', rows: [{ name: 'Ａ 狗' }, { name: 'A　狗' }] }],
+  }), /來源鍵重複/);
+  assert.equal(await db.prepare('SELECT COUNT(*) FROM v2_dogs').first('COUNT(*)'), 0);
+});
+
 test('中途失敗後重跑，已存無編號狗的來源對應避免重建', async t => {
   const db = await setup(t);
   const original = db.batch.bind(db);

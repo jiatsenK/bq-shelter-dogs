@@ -19,6 +19,18 @@ function sourceBinding(db, source, row, target, reason, kind) {
     .bind(bindingId(source, key), kind || (row.id ? 'numbered_row' : 'named_row'), key, target?.admission_id || null, state, JSON.stringify({ source, reason, row }));
 }
 
+function resolveRow(row, dogs, resolved, confirmations, knownReason) {
+  const key = sourceKey(row), normalized = nameKey(row.name);
+  let target = resolved.get(key);
+  if (!row.id && /^\(.*\)$/.test(normalized) && !confirmations.has(key)) {
+    const matches = dogs.filter(d => nameKey(d.name) === normalized.slice(1, -1));
+    target = matches.length === 1 ? resolved.get(sourceKey(matches[0])) : null;
+    if (target) target = { ...target, admission_id: target.current_admission_id };
+    return { target, reason: target ? 'temporary_three_conditions' : 'temporary_without_unique_main_dog', kind: 'temp_row' };
+  }
+  return { target, reason: target ? knownReason : 'source_without_reliable_identity' };
+}
+
 // 只用可靠的關係連結，不用同名推測再入所。
 function identityLinks() {
   const parents = new Map();
@@ -32,6 +44,22 @@ function identityLinks() {
 }
 
 export async function migrateIdentities(db, { dogs = [], cards = [], sources = [], confirmedMappings = [] } = {}) {
+  const sourceIds = new Set(['main']);
+  for (const card of cards) {
+    const source = `dogs/${card.id}.md`;
+    if (sourceIds.has(source)) throw new Error(`來源路徑重複：${source}`);
+    sourceIds.add(source);
+  }
+  for (const source of sources) {
+    if (!text(source.source) || sourceIds.has(source.source)) throw new Error(`來源路徑空白或重複：${source.source}`);
+    sourceIds.add(source.source);
+    const keys = new Set();
+    for (const row of source.rows) {
+      const key = sourceKey(row);
+      if (keys.has(key)) throw new Error(`來源鍵重複：${source.source} / ${key}`);
+      keys.add(key);
+    }
+  }
   const dogsLink = identityLinks(), admissionsLink = identityLinks();
   const confirmations = new Map();
   const canonicalKey = key => key.startsWith('名:') ? `名:${nameKey(key.slice(2))}` : text(key);
@@ -123,28 +151,12 @@ export async function migrateIdentities(db, { dogs = [], cards = [], sources = [
     if (!target) pending.push(entry);
   };
   for (const row of dogs) {
-    const key = sourceKey(row), normalized = nameKey(row.name);
-    let target = resolved.get(key), reason = 'main_row', kind;
-    if (!row.id && /^\(.*\)$/.test(normalized)) {
-      const name = normalized.slice(1, -1);
-      const matches = dogs.filter(d => nameKey(d.name) === name);
-      target = matches.length === 1 ? resolved.get(sourceKey(matches[0])) : null;
-      reason = target ? 'temporary_three_conditions' : 'temporary_without_unique_main_dog';
-      kind = 'temp_row';
-    }
+    const { target, reason, kind } = resolveRow(row, dogs, resolved, confirmations, 'main_row');
     await bindSource('main', row, target ? { ...target, admission_id: target.current_admission_id } : null, reason, kind);
   }
   for (const card of cards) await bindSource(`dogs/${card.id}.md`, card, resolved.get(text(card.id)), resolved.has(text(card.id)) ? 'number_or_confirmed_relationship' : 'card_without_reliable_identity');
   for (const source of sources) for (const row of source.rows) {
-    const key = sourceKey(row);
-    let target = resolved.get(key), reason = target ? 'number_or_confirmed_relationship' : 'source_without_reliable_identity', kind;
-    const normalized = nameKey(row.name);
-    if (!row.id && /^\(.*\)$/.test(normalized)) {
-      const matches = dogs.filter(d => nameKey(d.name) === normalized.slice(1, -1));
-      target = matches.length === 1 ? resolved.get(sourceKey(matches[0])) : null;
-      reason = target ? 'temporary_three_conditions' : 'temporary_without_unique_main_dog';
-      kind = 'temp_row';
-    }
+    const { target, reason, kind } = resolveRow(row, dogs, resolved, confirmations, 'number_or_confirmed_relationship');
     await bindSource(source.source, row, target, reason, kind);
   }
   return { mapping, pending };
