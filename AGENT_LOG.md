@@ -1316,3 +1316,7 @@
 - 新增 docs/CLEANUP_252.md：72 小時等待期、性別／舊編號、部署與測試依賴、封存步驟及交給 K 的 D1 刪表候選指令。
 - K 確認我的備註退役；Worker API 待移除，管理共用 NOTES_PASSCODE 保留。只準備文件，未打標籤、未刪資料、未部署；#252 尚未完成。
 - 驗證：CI 清單 Node 測試 233/233；網頁測試因本機缺 Playwright Chromium 無法啟動。文件候選 DROP 已用本機空 schema 核對完整清單與順序；未接正式 D1。文件依規範／規格自行審查，實作前置與實際清除仍待完成。
+
+## 2026-10-15 #252 補另外兩個 D1 資料庫（Claude）
+
+- `docs/CLEANUP_252.md` 補上 `bq-shelter-dogs-test`（刪舊表、保留資料庫）和 `bq-shelter-dogs-restore-219`（整庫刪）的處理方式，都交給 K 執行。只用唯讀指令盤點，沒有刪除任何東西。

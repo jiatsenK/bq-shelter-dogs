@@ -108,3 +108,20 @@ npx --yes wrangler@4 d1 execute bq-shelter-dogs --remote --config wrangler.jsonc
 ```
 
 執行後核對所有 `v3_*` 筆數及關鍵資料與刪除前一致，API 的狗清單、介紹、休養、溜狗、離所、開卡及名字推薦正常。真實寫入驗收只由 K 確認後進行；不拿正式資料做破壞性測試。把實際時間、封存 SHA、PR、部署／同步與驗收結果記在 #252，再決定關閉本票與 #245。
+
+## 另外兩個 D1 資料庫（K 執行，正式庫刪表並驗收後）
+
+2026-10-15 盤點：帳號內除正式 `bq-shelter-dogs`（約 0.2 MB）外，還有兩個本專案資料庫，各約 6.4 MB，都是精簡前的 `v2_*` 舊表：
+
+- `bq-shelter-dogs-test`（`9e23a65c-…`）：預覽環境仍綁定（`wrangler.jsonc` 的 `preview_database_id`、`wrangler.preview*.json`、`wrangler.preview-db.jsonc`），**不能刪整個資料庫**。用上面同一份 `$cleanupSql`，把目標換成 `bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc` 刪舊表；刪前同樣先 `d1 export` 到 `.migration-private/252/`。刪後確認預覽網站仍正常。
+- `bq-shelter-dogs-restore-219`（`ea73d67a-…`）：#219 處理時還原出的備份，沒有任何設定檔使用。正式庫已另做 #252 刪表前備份並驗證可讀後，才可整庫刪除；刪除無法復原：
+
+```powershell
+Set-Location C:\Users\User\repos\bq-shelter-dogs
+if (!(Test-Path -LiteralPath .\wrangler.jsonc)) { throw '工作目錄錯誤' }
+$env:CLOUDFLARE_ACCOUNT_ID = "a0f88d34c34ad0d34f923b9f43799622"
+npx --yes wrangler@4 d1 list
+npx --yes wrangler@4 d1 delete bq-shelter-dogs-restore-219
+```
+
+同帳號的 `shared-trip-planner`、`event-accounting-v2` 屬其他專案，不在本票範圍。
