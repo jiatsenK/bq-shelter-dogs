@@ -2,6 +2,7 @@
 // 只操作呼叫者提供的 D1，不連線試算表、GitHub 或 R2。表結構見 db/compact-schema.sql、docs/COMPACT_D1.md
 import { randomBytes } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
+import { readWalks } from '../worker/src/compact.js';
 
 const PHOTO = /^photos\/([0-9A-Za-z]{1,32})\.jpg$/;
 const THUMB = /^photos\/thumbs\/([0-9A-Za-z]{1,32})\.jpg$/;
@@ -135,20 +136,15 @@ export async function importCompactProfiles(db, input) {
 }
 
 export async function readCompactProfiles(db) {
-  const [walks, intros, rest, photos] = await db.batch([
-    db.prepare('SELECT dog_id,walk_date,walker_code,dog_number,dog_name FROM v3_walks ORDER BY walk_date,dog_number,dog_name,position'),
+  // 溜狗紀錄跟網站讀的是同一份（worker/src/compact.js 的 readWalks）
+  const { walks } = await readWalks(db);
+  const [intros, rest, photos] = await db.batch([
     db.prepare(`SELECT ${NUMBER_OF_DOG} AS number, t.intro FROM v3_intros t`),
     db.prepare(`SELECT ${NUMBER_OF_DOG} AS number, t.until_date, t.reason FROM v3_rest t`),
     db.prepare('SELECT object_key,thumb_key FROM v3_photos'),
   ]);
-  const days = new Map();
-  for (const r of walks.results) {
-    const key = `${r.dog_id}|${r.walk_date}`;
-    if (!days.has(key)) days.set(key, { id: r.dog_number, name: r.dog_name, date: r.walk_date });
-    if (r.walker_code !== null) (days.get(key).walkers ||= []).push(r.walker_code);
-  }
   return {
-    walks: [...days.values()],
+    walks,
     intros: Object.fromEntries(intros.results.map(r => [r.number, r.intro])),
     rest: Object.fromEntries(rest.results.map(r => [r.number, { until: r.until_date, reason: r.reason }])),
     photos: photos.results.flatMap(r => [r.object_key, r.thumb_key]).filter(Boolean).sort(byText),

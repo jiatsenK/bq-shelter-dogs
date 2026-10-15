@@ -1,11 +1,9 @@
-# 定期把 Google 試算表同步成 data/dogs.json（#31）
+# 定期把 Google 試算表同步進 D1（#31、#251）
 # - 主要由 Cloudflare Worker 定時叫（台灣 7:00–22:30 每 30 分鐘，見 worker/src/index.js 的 scheduled）；GitHub 自己的排程常被跳過，
 #   下面每小時 17、47 分的排程留著當備援；也可以在 Actions 頁選「同步試算表」→「Run workflow」手動跑
-# - 資料有變才提交；讀取失敗時這次執行會顯示失敗，data/dogs.json 保留上一次成功的內容
-# - 有人改了狗卡（dogs/*.md）或這支同步程式、推到 main 時也會馬上跑一次，狗卡資訊不用等排程
-# - 另外存當天快照 data/history/YYYY-MM-DD.json 和累積遛狗紀錄 data/walks.json（#56，都不含志工名字）
-# - 離所（#162）：狗從主清單消失就記進 data/departures.json，原因只讀「已出所」分頁判讀
-# - 同步完也把資料整份換進 D1 的 v3_ 表（#251，網站 #247 起讀 D1）；GitHub 的 JSON 提交暫時照舊
+# - 只寫 D1（#251）：主清單、異動紀錄、常遛狗群、已出所每次從試算表整份重建；溜狗紀錄和離所以 D1 上一次的內容為基準往上加
+# - 不提交 GitHub、不寫 data/；讀取失敗或比對不一致時這次執行會顯示失敗，D1 保留上一次的內容
+# - 同步程式改了、推到 main 時也會馬上跑一次
 # - 只讀試算表，不寫入試算表
 # - 試算表 ID 放在 repo 的 Actions Secret「SHEET_ID」，不寫在程式裡（設定方式見 docs/SHEET_SYNC_SETUP.md）
 name: 同步試算表
@@ -19,14 +17,19 @@ on:
   push:
     branches: [main]
     paths:
-      - 'dogs/**'
       - 'scripts/sync-sheet.mjs'
       - 'scripts/sync-compact-d1.mjs'
+      - 'scripts/import-compact-dogs.mjs'
+      - 'scripts/import-compact-profiles.mjs'
+      - 'scripts/import-compact-departures.mjs'
+      - 'scripts/migrate-compact-db.mjs'
+      - 'worker/src/compact.js'
+      - 'db/compact-schema.sql'
 
 permissions:
-  contents: write
+  contents: read
 
-# 同一時間只跑一次，避免兩次同步同時推送
+# 同一時間只跑一次，避免兩次同步同時寫 D1
 concurrency:
   group: sync-sheet
   cancel-in-progress: false
@@ -44,41 +47,16 @@ jobs:
         with:
           node-version: 22
 
-      - name: 讀取試算表與狗卡、產生 data/dogs.json、當天快照與遛狗紀錄
-        id: sync
+      # 用部署同一組 Cloudflare Secrets（CLOUDFLARE_API_TOKEN 要有 D1 編輯權限）
+      - name: 讀試算表、寫入 D1
         env:
           SHEET_ID: ${{ secrets.SHEET_ID }}
           # 判斷「是不是我遛的」用的名字（#57）；沒設定也能同步，只是 myWalked 都是 false
           MY_NAME: ${{ secrets.MY_NAME }}
           # 把「誰遛的」名字換成代號用的密鑰（#94），要跟 Cloudflare Worker 的 WALKER_KEY 一樣；沒設定也能同步，只是沒有代號
           WALKER_KEY: ${{ secrets.WALKER_KEY }}
-        run: node scripts/sync-sheet.mjs
-
-      - name: 資料有變才提交
-        run: |
-          git add data/dogs.json data/history data/walks.json data/departures.json
-          if git diff --cached --quiet; then
-            echo "資料沒有變動，不提交。"
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "同步試算表：更新 data/dogs.json、當天快照與遛狗紀錄"
-          # 期間有人推了別的提交就先接上再推，最多試三次
-          for i in 1 2 3; do
-            git pull --rebase origin "${GITHUB_REF_NAME}" && git push origin "HEAD:${GITHUB_REF_NAME}" && exit 0
-            sleep $((i * 5))
-          done
-          exit 1
-
-      # 網站讀的是 D1（#247）：每次同步都把 data/ 的內容和常遛狗群整份換進 v3_ 表。
-      # 用部署同一組 Cloudflare Secrets；還沒設定時跳過
-      - name: 寫入 D1
-        if: ${{ always() && steps.sync.outcome == 'success' }}
-        env:
-          SHEET_ID: ${{ secrets.SHEET_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
-          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "沒有設定 CLOUDFLARE_API_TOKEN，跳過寫入 D1。"; exit 0; fi
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "沒有設定 CLOUDFLARE_API_TOKEN，無法寫入 D1。"; exit 1; fi
           node scripts/sync-compact-d1.mjs

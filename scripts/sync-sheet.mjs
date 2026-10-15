@@ -1,5 +1,6 @@
-// 從 Google 試算表同步狗狗資料，產生 data/dogs.json（#31）。
-// 由 .github/workflows/sync-sheet.yml 定期執行；也可以在本機跑：SHEET_ID=試算表ID node scripts/sync-sheet.mjs
+// 從 Google 試算表同步狗狗資料（#31）：讀試算表、整理成 dogs.json 的樣子、算溜狗紀錄和離所的函式。
+// #251 起同步的入口是 scripts/sync-compact-d1.mjs（只寫 D1）；這支不再寫 data/，下面提到寫檔的段落是當時的做法，
+// 函式本身（newWalks、updateDepartures 等）照用。
 //
 // 試算表 ID 不寫在 repo 裡（repo 是公開的，試算表目前知道連結就能編輯）：
 // workflow 從 GitHub 的 Actions Secret「SHEET_ID」帶進來，設定方式見 docs/SHEET_SYNC_SETUP.md。
@@ -25,9 +26,8 @@
 // #94 起每筆多一個 walkers（遛的人的代號）；舊紀錄只補兩種：目前最後一次（試算表還看得到是誰）和標了 mine 的（補我的代號）。
 // #60：另存 data/history/index.json（{ dates: [...] }，有哪幾天的快照），網站才知道能選哪些日期（GitHub Pages 不能列資料夾）。
 
-import { readFile, writeFile, mkdir, readdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { createHmac } from 'node:crypto';
-import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 // 日期一律用台灣時間判斷（沒寫年份的日期、同步時間）
@@ -762,56 +762,4 @@ export function planDepartures({ oldText = '', snapshots, rows, today = new Date
   const list = updateDepartures(parseDepartures(oldText), snapshots, rows, today);
   const text = renderDepartures(list);
   return text === oldText ? null : text;
-}
-
-async function main() {
-  const data = await buildData();
-  const now = new Date();
-  const read = path => readFile(`${DATA_DIR}${path}`, 'utf8').catch(() => '');
-  if (data.sheetNotes == null) {
-    try { data.sheetNotes = JSON.parse(await read('dogs.json')).sheetNotes || []; } catch { data.sheetNotes = []; }
-  }
-  const { writes, added } = planWrites(data, {
-    oldDogsText: await read('dogs.json'),
-    oldWalksText: await read('walks.json'),
-    oldSnapshotText: await read(`history/${formatDate(now)}.json`),
-    oldIndexText: await read('history/index.json'),
-    historyDates: (await readdir(`${DATA_DIR}history`).catch(() => [])).map(f => f.replace(/\.json$/, '')),
-  }, now);
-  // 離所（#162）：第一次（還沒有 departures.json）從全部快照補，之後只比上一次和這次
-  const oldDeparturesText = await read('departures.json');
-  const snapshotOf = text => { try { const j = JSON.parse(text); return { dogs: j.dogs || [], groups: j.groups || {} }; } catch { return null; } };
-  const thisSync = snapshotOf(writes['dogs.json'] || await read('dogs.json'));
-  let snapshots;
-  if (parseDepartures(oldDeparturesText)) {
-    const prev = snapshotOf(await read('dogs.json'));
-    snapshots = [...(prev ? [{ date: formatDate(now), ...prev }] : []), { date: formatDate(now), ...thisSync }];
-  } else {
-    const dates = (await readdir(`${DATA_DIR}history`).catch(() => [])).map(f => f.replace(/\.json$/, '')).filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d) && d < formatDate(now)).sort();
-    snapshots = [];
-    for (const d of dates) { const s = snapshotOf(await read(`history/${d}.json`)); if (s) snapshots.push({ date: d, ...s }); }
-    snapshots.push({ date: formatDate(now), ...thisSync });
-  }
-  const departuresText = planDepartures({ oldText: oldDeparturesText, snapshots, rows: await loadDepartedRows(fetch, now), today: now });
-  if (departuresText) writes['departures.json'] = departuresText;
-  for (const [path, text] of Object.entries(writes)) {
-    await mkdir(dirname(`${DATA_DIR}${path}`), { recursive: true });
-    await writeFile(`${DATA_DIR}${path}`, text);
-  }
-  if (writes['dogs.json']) {
-    console.log(`已更新 data/dogs.json：${data.dogs.length} 隻狗、${data.dogs.filter(d => d.intro).length} 隻有狗卡資訊、${Object.values(data.groups).filter(g => g.length).length} 隻有可以一起溜的狗。`);
-  } else {
-    console.log(`資料沒有變動（${data.dogs.length} 隻狗），不更新 data/dogs.json。`);
-  }
-  const snapshot = Object.keys(writes).find(p => p.startsWith('history/'));
-  if (snapshot) console.log(`已存當天快照 data/${snapshot}。`);
-  if (writes['departures.json']) console.log(`已更新 data/departures.json（離所 ${parseDepartures(writes['departures.json']).length} 筆）。`);
-  if (writes['walks.json']) console.log(`data/walks.json 追加 ${added.length} 筆遛狗紀錄。`);
-}
-
-if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
-  main().catch(e => {
-    console.error(`同步失敗，保留原本的 data/dogs.json、歷史與遛狗紀錄：${e.message}`);
-    process.exit(1);
-  });
 }
