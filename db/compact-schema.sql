@@ -25,8 +25,7 @@ CREATE TABLE IF NOT EXISTS v3_sheet_main (
   synced_at TEXT NOT NULL,
   version INTEGER NOT NULL DEFAULT 1,
   sex TEXT NOT NULL DEFAULT '',
-  intro TEXT NOT NULL DEFAULT '',
-  fields INTEGER NOT NULL DEFAULT 0
+  intro TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS v3_sheet_main_walkers (
   row_index INTEGER NOT NULL REFERENCES v3_sheet_main(row_index) ON DELETE RESTRICT,
@@ -65,11 +64,11 @@ CREATE TABLE IF NOT EXISTS v3_walks (
   dog_id TEXT NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
   walk_date TEXT NOT NULL,
   position INTEGER NOT NULL DEFAULT 0,
-  name TEXT NOT NULL DEFAULT '',
   walker_name TEXT,
   walker_code TEXT,
   PRIMARY KEY(dog_id,walk_date,position)
 );
+-- last_seen 給名字推薦排序（沿用舊 walker_names）。
 CREATE TABLE IF NOT EXISTS v3_volunteers (
   volunteer_id TEXT PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(16)))),
   name TEXT NOT NULL UNIQUE,

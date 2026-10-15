@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 
-// 欄位是否存在也要保留，避免把缺欄的舊 JSON 偷改成預設值。
+// 讀回時每隻狗都有全部欄位（formerIds 只在有舊編號時出現）；比對前來源也補成同樣形狀。
 const columns = {
   id: 'number', name: 'name', cage: 'cage', note: 'note', sex: 'sex', intro: 'intro',
   covered: 'covered', walkedDate: 'walked_date', myWalked: 'my_walked', myWalkedDate: 'my_walked_date',
@@ -11,6 +11,16 @@ const fields = Object.keys(columns);
 const booleans = new Set(['covered', 'myWalked']);
 const nullable = new Set(['walkedDate', 'myWalkedDate']);
 const key = dog => dog.id || `名:${dog.name}`;
+const isList = field => columns[field] === null;
+
+function normalize(dog) {
+  const out = {};
+  for (const field of fields) {
+    if (field === 'formerIds') { if (dog.formerIds?.length) out.formerIds = dog.formerIds; continue; }
+    out[field] = isList(field) ? dog[field] || [] : booleans.has(field) ? Boolean(dog[field]) : dog[field] ?? (nullable.has(field) ? null : '');
+  }
+  return out;
+}
 
 function validate(input) {
   if (!Array.isArray(input?.dogs)) throw new Error('來源必須有 dogs 陣列');
@@ -19,7 +29,7 @@ function validate(input) {
     if (!dog || typeof dog.name !== 'string' || !dog.name.trim()) throw new Error('狗名不可空白');
     for (const [field, value] of Object.entries(dog)) {
       if (!Object.hasOwn(columns, field)) throw new Error(`未支援欄位：${field}`);
-      const valid = field === 'walkers' || field === 'formerIds'
+      const valid = isList(field)
         ? Array.isArray(value) && value.every(v => typeof v === 'string' && v.length > 0)
         : booleans.has(field) ? typeof value === 'boolean'
           : nullable.has(field) ? value === null || typeof value === 'string' : typeof value === 'string';
@@ -35,7 +45,8 @@ function validate(input) {
 export async function importCompactDogs(db, input) {
   validate(input);
   const numbers = new Map((await db.prepare('SELECT number,dog_id FROM v3_dog_numbers').all()).results.map(r => [r.number, r.dog_id]));
-  const previous = (await db.prepare("SELECT name,dog_id FROM v3_sheet_main WHERE number='' ORDER BY row_index").all()).results;
+  // 沒有編號的狗只剩名字能認，用名字延續上次的狗 ID；有編號的狗只看編號，同名也不合併。
+  const unnumbered = new Map((await db.prepare("SELECT name,dog_id FROM v3_sheet_main WHERE number=''").all()).results.map(r => [r.name, r.dog_id]));
   const parents = new Map();
   const root = n => {
     if (!parents.has(n)) parents.set(n, n);
@@ -56,7 +67,7 @@ export async function importCompactDogs(db, input) {
   for (const [group, members] of groups) {
     const ids = new Set(members.map(n => numbers.get(n)).filter(Boolean));
     for (const dog of input.dogs.filter(d => !d.id && root(key(d)) === group)) {
-      for (const row of previous.filter(r => r.name === dog.name)) ids.add(row.dog_id);
+      if (unnumbered.has(dog.name)) ids.add(unnumbered.get(dog.name));
     }
     if (ids.size > 1) throw new Error(`編號對照衝突，不合併既有狗：${members.join(', ')}`);
     const dogId = [...ids][0] || randomBytes(16).toString('hex');
@@ -73,9 +84,8 @@ export async function importCompactDogs(db, input) {
     }
     const scalar = fields.filter(f => columns[f]);
     const values = scalar.map(f => booleans.has(f) ? Number(dog[f] || false) : dog[f] ?? (nullable.has(f) ? null : ''));
-    const mask = fields.reduce((mask, f, bit) => mask | (Object.hasOwn(dog, f) ? 1 << bit : 0), 0);
-    const names = ['row_index', 'dog_id', 'synced_at', 'version', 'fields', ...scalar.map(f => columns[f])];
-    statements.push(db.prepare(`INSERT INTO v3_sheet_main(${names.join(',')}) VALUES(${names.map(() => '?').join(',')})`).bind(i, dogId, input.syncedAt || '', input.version ?? 1, mask, ...values));
+    const names = ['row_index', 'dog_id', 'synced_at', 'version', ...scalar.map(f => columns[f])];
+    statements.push(db.prepare(`INSERT INTO v3_sheet_main(${names.join(',')}) VALUES(${names.map(() => '?').join(',')})`).bind(i, dogId, input.syncedAt || '', input.version ?? 1, ...values));
     for (const [position, code] of (dog.walkers || []).entries()) statements.push(db.prepare('INSERT INTO v3_sheet_main_walkers VALUES(?,?,?)').bind(i, position, code));
     for (const [position, number] of (dog.formerIds || []).entries()) statements.push(db.prepare('INSERT INTO v3_sheet_former_numbers VALUES(?,?,?)').bind(i, position, number));
   }
@@ -91,14 +101,10 @@ export async function readCompactDogs(db) {
     db.prepare('SELECT * FROM v3_sheet_former_numbers ORDER BY row_index,position'),
   ]);
   return main.results.map(row => {
-    const dog = {};
-    fields.forEach((field, bit) => {
-      if (!(row.fields & (1 << bit))) return;
-      if (field === 'walkers') dog[field] = walkers.results.filter(r => r.row_index === row.row_index).map(r => r.walker_code);
-      else if (field === 'formerIds') dog[field] = former.results.filter(r => r.row_index === row.row_index).map(r => r.number);
-      else dog[field] = booleans.has(field) ? Boolean(row[columns[field]]) : row[columns[field]];
-    });
-    return dog;
+    const dog = Object.fromEntries(fields.filter(f => !isList(f)).map(f => [f, booleans.has(f) ? Boolean(row[columns[f]]) : row[columns[f]]]));
+    dog.walkers = walkers.results.filter(r => r.row_index === row.row_index).map(r => r.walker_code);
+    dog.formerIds = former.results.filter(r => r.row_index === row.row_index).map(r => r.number);
+    return normalize(dog);
   });
 }
 
@@ -106,13 +112,13 @@ export async function compareCompactDogs(db, input) {
   validate(input);
   const actual = await readCompactDogs(db);
   const differences = [];
-  const expectedByKey = new Map(input.dogs.map(d => [key(d), d]));
+  const expectedByKey = new Map(input.dogs.map(d => [key(d), normalize(d)]));
   const actualByKey = new Map(actual.map(d => [key(d), d]));
   for (const id of new Set([...expectedByKey.keys(), ...actualByKey.keys()])) {
     const expected = expectedByKey.get(id), found = actualByKey.get(id);
     if (!expected || !found) differences.push({ key: id, field: '*', expected: expected ?? null, actual: found ?? null });
     else for (const field of fields) {
-      if (Object.hasOwn(expected, field) !== Object.hasOwn(found, field) || !isDeepStrictEqual(expected[field], found[field])) differences.push({ key: id, field, expected: expected[field], actual: found[field] });
+      if (!isDeepStrictEqual(expected[field], found[field])) differences.push({ key: id, field, expected: expected[field], actual: found[field] });
     }
   }
   if (!isDeepStrictEqual(input.dogs.map(key), actual.map(key))) differences.push({ key: '*', field: 'order', expected: input.dogs.map(key), actual: actual.map(key) });

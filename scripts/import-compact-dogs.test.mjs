@@ -11,7 +11,7 @@ async function setup(t) {
   return db;
 }
 
-test('再入所舊新編號共用永久狗 ID，同名不猜配，無編號也保留', async t => {
+test('再入所舊新編號共用永久狗 ID，有編號的同名狗不合併，無編號的狗以名字延續 ID', async t => {
   const db = await setup(t);
   const input = { dogs: [{ id: 'new', name: '圓仔', formerIds: ['old'] }, { id: 'other', name: '圓仔' }, { id: '', name: '金寶' }] };
   await importCompactDogs(db, input);
@@ -22,7 +22,7 @@ test('再入所舊新編號共用永久狗 ID，同名不猜配，無編號也�
   await importCompactDogs(db, input);
   assert.deepEqual((await db.prepare('SELECT * FROM v3_dog_numbers ORDER BY number').all()).results, first);
   assert.equal(await db.prepare('SELECT COUNT(*) FROM v3_dogs').first('COUNT(*)'), 3);
-  assert.deepEqual(await readCompactDogs(db), input.dogs);
+  assert.deepEqual((await compareCompactDogs(db, input)).equal, true);
 });
 
 test('真實 JSON 讀回完全一致，改一筆時指出狗編號和欄位', async t => {
@@ -45,7 +45,7 @@ test('既有兩狗不可因新對照默默合併，格式錯誤在寫入前停�
   await assert.rejects(importCompactDogs(db, { dogs: [{ id: 'b', name: '乙', formerIds: ['a'] }] }), /衝突/);
   for (const dogs of [[input.dogs[0], input.dogs[0]], [{ name: '' }], [{ name: '狗', walkers: '不合法' }], [{ name: '狗', newField: '不能默默丟掉' }]]) {
     await assert.rejects(importCompactDogs(db, { dogs }));
-    assert.deepEqual(await readCompactDogs(db), input.dogs);
+    assert.equal((await compareCompactDogs(db, input)).equal, true);
   }
 });
 
@@ -58,7 +58,7 @@ test('整批匯入失敗時保留舊複本，重跑不變狗 ID', async t => {
   db.batch = statements => batch([...statements, db.prepare("INSERT INTO v3_dog_numbers VALUES('bad','missing')")]);
   await assert.rejects(importCompactDogs(db, { dogs: [{ id: 'b', name: '乙' }] }), /FOREIGN KEY/);
   db.batch = batch;
-  assert.deepEqual(await readCompactDogs(db), input.dogs);
+  assert.equal((await compareCompactDogs(db, input)).equal, true);
   await importCompactDogs(db, input);
   assert.deepEqual((await db.prepare('SELECT * FROM v3_dogs').all()).results, first);
 });
