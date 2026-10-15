@@ -11,7 +11,7 @@
 
 1. 用電腦打開 <https://script.google.com>，登入 K 的 Google 帳號（要是對試算表有編輯權的那個帳號）。
 2. 左上角 **新專案**，把專案名稱改成「溜狗表寫入」。
-3. 把編輯器裡原本的 `function myFunction() {}` 全部刪掉，貼上 repo 裡 [`apps-script/sheet-write.gs`](../apps-script/sheet-write.gs) 的全部內容，按 **儲存**（磁碟圖示）。
+3. 把編輯器裡原本的 `function myFunction() {}` 全部刪掉，貼上 repo 裡 [`apps-script/sheet-write.gs`](../../apps-script/sheet-write.gs) 的全部內容，按 **儲存**（磁碟圖示）。
 
 ## 2. 設定試算表 ID
 

@@ -131,10 +131,10 @@ components:
 # Design System: 板收志工溜狗表
 
 <!-- 給 impeccable 技能讀的視覺入口，是目前狀態的快照：
-     - 數值以 css/app.css 的 :root 為準（含檔尾「視覺主題：病歷夾色籤」區塊覆寫後的結果）。上面 frontmatter 是 2026-10-09 從實際畫面抄下來的；兩邊不一樣時信 CSS，再用 /impeccable document 重新產生這份。
+     - 數值以 public/css/app.css 的 :root 為準（含檔尾「視覺主題：病歷夾色籤」區塊覆寫後的結果）。上面 frontmatter 是 2026-10-09 從實際畫面抄下來的；兩邊不一樣時信 CSS，再用 /impeccable document 重新產生這份。
      - 單手操作規範、天數色標的規則與設計理由以 docs/DESIGN_GUIDE.md 為準，規格以 docs/PROJECT_GOALS.md 為準，這裡不重寫。
      - 外觀可以改。之後改版照 docs/PROJECT_GOALS.md 的版本流程，K 確認後就換；不要因為這份寫了某個值就拒絕改。
-     - 這份上半（frontmatter 到第一個 Do's and Don'ts）只管志工版 index.html。cards.html（板收圖鑑）是另一個視覺世界，寫在檔尾「球員卡世界：只限 cards.html」。 -->
+     - 這份上半（frontmatter 到第一個 Do's and Don'ts）只管志工版 public/index.html。public/cards.html（板收圖鑑）是另一個視覺世界，寫在檔尾「球員卡世界：只限 public/cards.html」。 -->
 
 ## Overview
 
@@ -249,12 +249,12 @@ components:
 狗卡右緣一條 76px 寬、上下貼齊卡片的色塊，上面小字「上次溜」、下面天數。顏色見 Colors；換顏色時 0.4s ease-out 淡淡轉過去（系統設定減少動態時關掉）。列表模式第一欄的天數（寫「20天」）；0–2 天在狗卡和列表都只用綠字、不上底色、在哪面板的天數、詳細資訊的天數徽章用同一組顏色，縮成 2px 圓角的小籤。
 
 ### 籠位標籤（Signature Component）
-手機（狗卡、列表、詳細資訊）：不加底和框，檔案綠定位圖釘＋墨字 600，按下變淡檔案綠底（`css/app.css`「少一點格子」區塊的 `.cage-pill`）；狗卡放在狗名下面，列表 2026-10-10 起也用同一個、自己一欄（天數｜狗名｜籠位｜溜了；K：黑框標籤位置怪、跟照片檢視不一樣，放狗名下面又太擠）。電腦版全表：白底、墨字 700、1.5px 墨色內框、2px 圓角的檔案標籤（`.dr-cage`），滑過淡檔案綠。點了都開在哪面板。
+手機（狗卡、列表、詳細資訊）：不加底和框，檔案綠定位圖釘＋墨字 600，按下變淡檔案綠底（`public/css/app.css`「少一點格子」區塊的 `.cage-pill`）；狗卡放在狗名下面，列表 2026-10-10 起也用同一個、自己一欄（天數｜狗名｜籠位｜溜了；K：黑框標籤位置怪、跟照片檢視不一樣，放狗名下面又太擠）。電腦版全表：白底、墨字 700、1.5px 墨色內框、2px 圓角的檔案標籤（`.dr-cage`），滑過淡檔案綠。點了都開在哪面板。
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** 改顏色、字級時改 `css/app.css` 的 `:root` 變數（`--shell`、`--tab-red`、`--tab-amber`、`--tab-muted` 等），再用 `/impeccable document` 更新這份。
+- **Do** 改顏色、字級時改 `public/css/app.css` 的 `:root` 變數（`--shell`、`--tab-red`、`--tab-amber`、`--tab-muted` 等），再用 `/impeccable document` 更新這份。
 - **Do** 新的白色區塊用直角或 3px 圓角，加 inset 1px `--line` 外框，相鄰時疊在一起。
 - **Do** 新的狀態色在自己的底色上量對比，4.5 以上（大字 3 以上）。
 - **Do** 改版前先看 `docs/DESIGN_GUIDE.md` 的理由；要推翻跟 K 確認。
@@ -267,11 +267,11 @@ components:
 
 ---
 
-## 球員卡世界：只限 cards.html（板收圖鑑）
+## 球員卡世界：只限 public/cards.html（板收圖鑑）
 
-<!-- 第二個視覺世界，範圍只有 cards.html、css/cards.css、js/cards.js（電腦寬螢幕展示頁「板收明星隊球員卡」）。
-     - 上面 frontmatter 和 Overview 到 Do's and Don'ts 是志工版溜狗表（index.html、css/app.css）的「病歷夾色籤」，照舊有效；這一段不改它，它也不管這一頁。
-     - frontmatter 只能放一套系統，所以這裡的數值以 css/cards.css 的 :root 和 js/cards.js 的 BQ_TEAMS、BQ_TIERS 為準；機器讀的版本在 .impeccable/design.json 的 extensions.surfaces["cards-html"]。2026-10-09 從實際畫面抄下來的；兩邊不一樣時信 CSS/JS。
+<!-- 第二個視覺世界，範圍只有 public/cards.html、public/css/cards.css、public/js/cards.js（電腦寬螢幕展示頁「板收明星隊球員卡」）。
+     - 上面 frontmatter 和 Overview 到 Do's and Don'ts 是志工版溜狗表（public/index.html、public/css/app.css）的「病歷夾色籤」，照舊有效；這一段不改它，它也不管這一頁。
+     - frontmatter 只能放一套系統，所以這裡的數值以 public/css/cards.css 的 :root 和 public/js/cards.js 的 BQ_TEAMS、BQ_TIERS 為準；機器讀的版本在 .impeccable/design.json 的 extensions.surfaces["cards-html"]。2026-10-09 從實際畫面抄下來的；兩邊不一樣時信 CSS/JS。
      - 方向約定見 .impeccable/surfaces/cards-html.md。 -->
 
 ### Overview
@@ -299,7 +299,7 @@ components:
 - **金箔漸層**（卡包、金卡框、獎座外框；#8A6400／#9A7200 到 #FFF2BA 之間 115°或 135° 的多段漸層）：只給「有收藏價值」的實體：卡包、金卡、獎座。卡包的漸層 240% 寬、4.5 秒來回流動。
 
 #### Secondary
-- **隊色**（寫在 `js/cards.js` 的 `BQ_TEAMS`，用 `--team` 傳進元件）：新犬舍隊 #1F5C9E、舊犬舍隊 #0F6B6B、幼母隊 #875700、C 區隊 #2F7A45、住院區隊 #6E4A9E、自由球員 #55605B。全部是中明度（OKLCH 約 47–52%），上面放粉筆白字都在 4.7:1 以上。用在卡面色帶、照片沒載到前的底、沒照片時的補位底、圖鑑每頁標題前的色點。
+- **隊色**（寫在 `public/js/cards.js` 的 `BQ_TEAMS`，用 `--team` 傳進元件）：新犬舍隊 #1F5C9E、舊犬舍隊 #0F6B6B、幼母隊 #875700、C 區隊 #2F7A45、住院區隊 #6E4A9E、自由球員 #55605B。全部是中明度（OKLCH 約 47–52%），上面放粉筆白字都在 4.7:1 以上。用在卡面色帶、照片沒載到前的底、沒照片時的補位底、圖鑑每頁標題前的色點。
 - **等級框**：普卡是粉筆白；銀卡 #8E97A1–#F2F4F6 的 135° 金屬漸層；金卡用金箔漸層；雷射卡是 65° 細白斜紋疊在粉紅、黃、薄荷、藍、紫的 125° 彩虹上，彩虹位置跟著滑鼠走。
 
 #### Tertiary
@@ -416,14 +416,14 @@ components:
 ### Do's and Don'ts
 
 #### Do:
-- **Do** 改這一頁的顏色、字級時改 `css/cards.css` 的 `:root`；隊色和等級改 `js/cards.js` 的 `BQ_TEAMS`、`BQ_TIERS`，再用 `/impeccable document` 更新這一段。
+- **Do** 改這一頁的顏色、字級時改 `public/css/cards.css` 的 `:root`；隊色和等級改 `public/js/cards.js` 的 `BQ_TEAMS`、`BQ_TIERS`，再用 `/impeccable document` 更新這一段。
 - **Do** 新增的元件放在球場藍、夜空藍或粉筆白其中一種底上；深底上的次要字用燈光藍或看台藍。
 - **Do** 新的隊色取中明度（OKLCH 約 47–52%），量過上面粉筆白字 4.5:1 以上。
 - **Do** 卡片的新尺寸用改 `--cw` 的方式縮放，不要另外寫一套字級。
 - **Do** 新的互動沿用卡片的發、翻、傾斜、流光，並在減少動態時直接到最後的樣子。
 
 #### Don't:
-- **Don't** 把這一段的深藍、燙金、Anton、網路字型、膠囊徽章帶進 `index.html`／`css/app.css`；志工版的規則（綠色等於最近溜過、只有警訊是實心、直角檔案）也不管這一頁的隊色和卡片。
+- **Don't** 把這一段的深藍、燙金、Anton、網路字型、膠囊徽章帶進 `public/index.html`／`public/css/app.css`；志工版的規則（綠色等於最近溜過、只有警訊是實心、直角檔案）也不管這一頁的隊色和卡片。
 - **Don't** 讓這一頁變回認養網站的「標題＋一排排圓角照片卡」；照片格只出現在圖鑑的卡套裡。
 - **Don't** 做成上一版畢業紀念冊那種懷舊翻書。
 - **Don't** 用金箔漸層做一般背景或按鈕；金箔只給卡包、金卡、獎座。

@@ -5,7 +5,7 @@
 # - 不提交 GitHub、不寫 data/；讀取失敗或比對不一致時這次執行會顯示失敗，D1 保留上一次的內容
 # - 同步程式改了、推到 main 時也會馬上跑一次
 # - 只讀試算表，不寫入試算表
-# - 試算表 ID 放在 repo 的 Actions Secret「SHEET_ID」，不寫在程式裡（設定方式見 docs/SHEET_SYNC_SETUP.md）
+# - 試算表 ID 放在 repo 的 Actions Secret「SHEET_ID」，不寫在程式裡（設定方式見 docs/setup/SHEET_SYNC_SETUP.md）
 name: 同步試算表
 
 on:

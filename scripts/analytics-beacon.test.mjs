@@ -34,7 +34,7 @@ test('#128 writeBeacon 改寫 index.html', async () => {
 });
 
 test('#128 repo 裡的 index.html 本身沒有 beacon（只在部署時插）', async () => {
-  const html = await readFile(new URL('../index.html', import.meta.url), 'utf8');
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
   assert.ok(!html.includes('data-cf-beacon'));
   assert.ok(html.includes('</body>'));
 });
