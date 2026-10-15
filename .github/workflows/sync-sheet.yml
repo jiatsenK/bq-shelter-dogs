@@ -22,6 +22,7 @@ on:
       - 'dogs/**'
       - 'scripts/sync-sheet.mjs'
       - 'scripts/sync-compact-d1.mjs'
+      - 'scripts/import-compact-departures.mjs'
 
 permissions:
   contents: write
