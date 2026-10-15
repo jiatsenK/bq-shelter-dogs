@@ -238,7 +238,7 @@ function runTests() {
       if (/readJsonObject|GALLERY_URL|\/gallery/.test(APP_JS)) throw new Error('相簿已拿掉（K 2026-10-09），不該再讀相簿清單');
       eq(DATA_URL, 'api/dogs', '資料來源（#247 Worker 讀 D1）：');
       eq(WALKS_URL, 'data/walks.json', '遛狗紀錄檔：');
-      eq(REST_URL, 'data/rest.json', '休養設定檔：');
+      eq(REST_URL, 'api/rest', '休養設定（#250 Worker 讀 D1）：');
       if (/docs\.google\.com|gviz/.test(APP_JS)) throw new Error('前端不應再連 Google 試算表');
     }),
     check('#10／#28 卡片沒有連結，也不會跳到別頁（點了只開詳細資訊）', () => {
@@ -818,7 +818,7 @@ async function runSerialTests() {
         `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, '同步時間：');
       eq([...groupMap['讀取甲']], ['讀取乙'], '可以一起溜：');
       // #62 起讀完狗狗資料後另外讀我的備註（Worker 的 /notes、不行再讀 data/my-notes.json），不算在內
-      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$|walks\.json$|rest\.json$|\/walkers$/.test(u)), ['api/dogs'], '只讀 /api/dogs，不再逐隻抓 dogs/*.md：');
+      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$|walks\.json$|api\/rest$|\/walkers$/.test(u)), ['api/dogs'], '只讀 /api/dogs，不再逐隻抓 dogs/*.md：');
     });
     await check('#32／#247 狗的資料讀取失敗（含 D1 出錯回 503）：標題、搜尋、分類都在，內容區顯示錯誤，可重新讀取', async () => {
       reset();

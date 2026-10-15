@@ -92,7 +92,7 @@ const NUMBER_OF_DOG = `COALESCE(
   (SELECT MAX(n.number) FROM v3_dog_numbers n WHERE n.dog_id = t.dog_id))`;
 
 // 每次整份替換四張表（同一個 batch，失敗保留原本的內容）；永久狗和編號只新增不刪。
-// 沒給 photos（同步程式拿不到 R2 清單，#251）就不動 v3_photos。
+// 沒給的類別不動那張表：同步程式拿不到 R2 清單（#251），介紹和休養 #250 起由網站直接寫 D1。
 export async function importCompactProfiles(db, input) {
   validate(input);
   const { walks, intros = {}, rest = {}, names = {} } = input, photos = input.photos || [];
@@ -121,7 +121,7 @@ export async function importCompactProfiles(db, input) {
     // 依編號排序後新的取代舊的，除非舊的在主清單上、新的不在
     if (!had || current.has(e.number) || !current.has(had.number)) primary.set(id, e);
   }
-  const tables = ['v3_walks', 'v3_intros', 'v3_rest', ...(input.photos ? ['v3_photos'] : [])];
+  const tables = ['v3_walks', ...(input.intros ? ['v3_intros'] : []), ...(input.rest ? ['v3_rest'] : []), ...(input.photos ? ['v3_photos'] : [])];
   const statements = tables.map(t => db.prepare(`DELETE FROM ${t}`));
   for (const d of days) {
     const codes = d.walkers?.length ? d.walkers : [null];
@@ -177,8 +177,8 @@ export async function compareCompactProfiles(db, input) {
   };
   const byKey = list => new Map(list.map(w => [walkKey(w), w]));
   diff('walks', byKey(expected.walks), byKey(actual.walks), ['id', 'name', 'date', 'walkers']);
-  diff('intros', new Map(Object.entries(expected.intros).map(([n, intro]) => [n, { intro }])), new Map(Object.entries(actual.intros).map(([n, intro]) => [n, { intro }])), ['intro']);
-  diff('rest', new Map(Object.entries(expected.rest)), new Map(Object.entries(actual.rest)), ['until', 'reason']);
+  if (input.intros) diff('intros', new Map(Object.entries(expected.intros).map(([n, intro]) => [n, { intro }])), new Map(Object.entries(actual.intros).map(([n, intro]) => [n, { intro }])), ['intro']);
+  if (input.rest) diff('rest', new Map(Object.entries(expected.rest)), new Map(Object.entries(actual.rest)), ['until', 'reason']);
   if (input.photos) diff('photos', new Map(expected.photos.map(k => [k, {}])), new Map(actual.photos.map(k => [k, {}])), []);
   return { equal: differences.length === 0, differences };
 }

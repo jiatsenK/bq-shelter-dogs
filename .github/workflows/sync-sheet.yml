@@ -20,7 +20,6 @@ on:
     branches: [main]
     paths:
       - 'dogs/**'
-      - 'data/rest.json'
       - 'scripts/sync-sheet.mjs'
       - 'scripts/sync-compact-d1.mjs'
 
