@@ -39,7 +39,7 @@ Google 試算表 → GitHub Action 定期同步 → data/dogs.json → Cloudflar
 
 - GitHub Action 定期讀試算表，整理成 `data/dogs.json` 推回 repo；也可以在 Actions 頁手動執行。
 - 狗卡資訊（`dogs/{編號}.md`）與性別也由同一個 Action 整理成純文字寫進 `dogs.json`（2026-09-25 K 選定），前端不再逐隻抓 `.md`；`dogs/` 有變動推到 main 時會馬上同步一次。
-- 歷史（V5，#56）：每次同步另存當天快照 `data/history/YYYY-MM-DD.json`（同一天覆蓋成最後一次），並把「遛狗日期比上次同步新」的狗追加進 `data/walks.json`（`{ id, name, date }`，只追加）。歷史從上線那天開始累積；第一次建立時以每隻狗目前的最後一次遛狗日期當起點。兩次同步之間被遛兩次只記一筆；公開檔案不含志工名字。
+- 歷史（V5，#56）：每次同步另存當天快照 `data/history/YYYY-MM-DD.json`（同一天覆蓋成最後一次），並把「遛狗日期比上次同步新」的狗追加進 `data/walks.json`（`{ id, name, date }`，只追加）。歷史從上線那天開始累積；第一次建立時以每隻狗目前的最後一次遛狗日期當起點。兩次同步之間被遛兩次只記一筆；公開檔案不含志工名字。#251 起溜狗紀錄存在 D1 的 `v3_walks`（網站讀 `/api/walks`），不再存每日快照和 `data/walks.json`。
 - 是不是我遛的（V5，#57）：比對用的名字放 Actions Secret `MY_NAME`（不寫在程式或任何公開檔案）。`dogs.json` 每隻狗加 `myWalked`（最後一次是不是我遛的）與 `myWalkedDate`（我最後一次遛的日期，看遛狗紀錄）；`walks.json` 新紀錄加 `mine`，同一天從別人換成我（或反過來）也會追加一筆。#57 之前的舊紀錄沒有 `mine`，原樣保留。沒設定 `MY_NAME` 時同步照常，`myWalked` 都是 false。
 - 前端只讀 `data/dogs.json`，不直接連 Google 試算表；維持免費靜態部署，不加後端伺服器、不加登入。
 - `dogs.json` 至少保留籠位、編號、犬名、遛狗日期、誰遛的、備註、可以一起溜的關係，以及前端實際用到的其他欄位。改資料來源後，排序、最近遛狗判斷、照片、狗卡資訊、同籠關係與各種 fallback 行為都不能退化。
@@ -140,7 +140,7 @@ K 2026-09-27 說「目前我覺得 ok，可以當作本次版本定版（除了�
 
 ## V5 ✅ 已完成（2026-09-25，Issues 標籤 `v5`：#56–#62）
 
-- **歷史紀錄（#56）**：每次同步另存當天快照 `data/history/`、累積遛狗紀錄 `data/walks.json`，不含志工名字。
+- **歷史紀錄（#56）**：每次同步另存當天快照 `data/history/`、累積遛狗紀錄 `data/walks.json`，不含志工名字。#251 起改存 D1，每日快照停止。
 - **是不是我遛的（#57）**：比對名字放 Actions Secret `MY_NAME`；`dogs.json` 加 `myWalked`／`myWalkedDate`，`walks.json` 加 `mine`。
 - **我溜過（#58）**：第三個分頁取代「相關資訊」，每次到所一張卡，新到舊一路往下排。
 - **誰遛的代號（V6，#94–#96，K 2026-09-26 推翻「只記自己」）**：同步用 Secret `WALKER_KEY` 把「誰遛的」名字換成 12 碼代號（`dogs.json`、`walks.json` 的 `walkers`）；Worker `POST /walker-code` 用同一把密鑰讓志工在網站輸入名字換代號，代號只存在那支手機。公開資料不放名字。
