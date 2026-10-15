@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateBusinessDatabase } from './migrate-business-db.mjs';
+import { migrateCompactDatabase } from './migrate-compact-db.mjs';
 import worker from '../worker/src/index.js';
 
 async function model(t) {
@@ -54,8 +55,11 @@ test('預覽 Worker fetch 使用共用 D1，已有新表仍禁止寫入', async 
 test('共用 D1 的 batch SELECT 讓 Worker 讀回既有開卡，RETURNING 也保留結果', async t => {
   const { db } = await model(t);
   worker.testing.resetState();
-  await db.prepare('CREATE TABLE card_opened(walker_code TEXT, dog_id TEXT, opened_on TEXT)').run();
-  await db.prepare("INSERT INTO card_opened VALUES('abcdef123456','2026010101','2026-10-14')").run();
+  // #247 起 Worker 讀 v3_card_opened，讀回時把永久狗 ID 換成編號
+  await migrateCompactDatabase(db);
+  await db.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('dog-1','測試')").run();
+  await db.prepare("INSERT INTO v3_dog_numbers VALUES('2026010101','dog-1')").run();
+  await db.prepare("INSERT INTO v3_card_opened VALUES('abcdef123456','dog-1','2026-10-14')").run();
   const res = await worker.fetch(new Request('https://preview.example/api/cards/opened?codes=abcdef123456', {
     headers: { Origin: 'https://preview.example' },
   }), { DB: db, PREVIEW: '1' });

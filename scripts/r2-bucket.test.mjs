@@ -12,7 +12,7 @@ test('讀得懂正式 R2 綁定與 JSONC 字串中的網址', async () => {
   const c = parseJsonc(await readFile(new URL('../wrangler.jsonc', import.meta.url), 'utf8'));
   assert.equal(c.name, 'bq-shelter-dogs');
   assert.deepEqual(c.r2_buckets, [{ binding: 'PHOTOS', bucket_name: 'bq-shelter-photos' }]);
-  for (const p of ['/api/*', '/photos/*', '/data/dogs.json']) assert.ok(c.assets.run_worker_first.includes(p));
+  for (const p of ['/api/*', '/photos/*']) assert.ok(c.assets.run_worker_first.includes(p));
   assert.equal(parseJsonc('{\n // comment\n "u": "https://a"\n}').u, 'https://a');
 });
 async function withRepo(fn, buckets = [{ binding: 'PHOTOS', bucket_name: 'photos' }]) {

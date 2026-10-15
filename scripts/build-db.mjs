@@ -1,7 +1,9 @@
+import { pathToFileURL } from 'node:url';
+import { resolve, sep } from 'node:path';
 // 把 repo 裡現有的資料轉成資料庫的內容（第 2 步，K 2026-10-10）：
 // data/dogs.json、departures.json、rest.json、walks.json、history/*.json → db/schema.sql 的四張表。
 // 每天一整份的快照（data/history）轉成異動紀錄：只記前後兩天有變的欄位。
-// 執行：node scripts/build-db.mjs > seed.sql（印出 INSERT，交給 wrangler d1 execute 匯入）；不連網路、不改任何檔。
+// 執行：node scripts/build-db.mjs <封存data目錄> > seed.sql（印出 INSERT，交給 wrangler d1 execute 匯入）；不連網路、不改任何檔。
 // 這個檔只有純函式和一個印出結果的 main；測試在 scripts/build-db.test.mjs。
 import { readFile, readdir } from 'node:fs/promises';
 
@@ -133,7 +135,8 @@ export function seedSql({ dogs, walks, changes, kv }) {
 }
 
 // ── 讀 repo 的檔案 ──
-export async function loadRepoData(dir = new URL('../data/', import.meta.url)) {
+export async function loadRepoData(dir) {
+  if (!dir) throw new Error('請提供封存 data 目錄');
   const json = async (name, fallback) => {
     try { return JSON.parse(await readFile(new URL(name, dir), 'utf8')); } catch (e) { if (e.code === 'ENOENT') return fallback; throw e; }
   };
@@ -154,7 +157,7 @@ export function buildAll({ dogsData, departures, rest, walksData, snapshots }, n
 }
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].replace(/\\/g, '/').split('/').pop())) {
-  const all = buildAll(await loadRepoData());
+  const all = buildAll(await loadRepoData(process.argv[2] ? pathToFileURL(resolve(process.argv[2]) + sep) : undefined));
   process.stdout.write(seedSql(all));
   console.error(`狗 ${all.dogs.length}（在所 ${all.dogs.filter(d => d.status === 'in').length}）、溜狗紀錄 ${all.walks.length}、異動紀錄 ${all.changes.length}、其他 ${all.kv.length}`);
 }

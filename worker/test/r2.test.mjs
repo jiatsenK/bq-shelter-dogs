@@ -32,9 +32,10 @@ const dispatched = calls => calls.filter(c => c.path.endsWith('/actions/workflow
 
 function setup({ assets = {}, failPut, preview = false } = {}) {
   const PHOTOS = fakeR2({ failPut });
-  const ASSETS = fakeAssets({ 'data/dogs.json': JSON.stringify(DOGS), ...assets });
+  const ASSETS = fakeAssets(assets);
+  const DB = { prepare: () => ({ all: async () => ({ results: DOGS.dogs.map(d => ({ number: d.id, name: d.name })) }) }) };
   const calls = fakeGithub();
-  const env = { GITHUB_TOKEN: 't', NOTES_PASSCODE: '通關碼', PHOTOS, ASSETS, ...(preview ? { PREVIEW: '1' } : {}) };
+  const env = { GITHUB_TOKEN: 't', NOTES_PASSCODE: '通關碼', PHOTOS, ASSETS, DB, ...(preview ? { PREVIEW: '1' } : {}) };
   const pending = [];
   const ctx = { waitUntil: p => pending.push(p) };
   const call = async (path, init = {}) => {
@@ -115,22 +116,11 @@ test('讀照片：R2 優先、有版本號長快取＋ETag、304；刪除標記�
   assert.equal((await call('/photos/3000000000.jpg')).status, 404);
 });
 
-test('dogs.json：版本號蓋上 R2 的，被刪掉的拿掉；R2 讀不到照原樣', async () => {
-  const dogs = { dogs: DOGS.dogs, photoVersions: { [`photos/${ID}.jpg`]: 'gitver00', 'photos/thumbs/x.jpg': 'gitthumb', 'photos/keep.jpg': 'keep0000' } };
-  const { env, PHOTOS, call } = setup({ assets: { 'data/dogs.json': JSON.stringify(dogs) } });
-  await PHOTOS.put(`photos/${ID}.jpg`, NEW);
-  await r2.removePhoto(env, 'photos/thumbs/x.jpg');
-  const r = await json(await call('/data/dogs.json'));
-  assert.equal(r.body.dogs.length, 1);
-  assert.notEqual(r.body.photoVersions[`photos/${ID}.jpg`], 'gitver00');
-  assert.equal(r.body.photoVersions[`photos/${ID}.jpg`].length, 8);
-  assert.equal(r.body.photoVersions['photos/thumbs/x.jpg'], undefined);
-  assert.equal(r.body.photoVersions['photos/keep.jpg'], 'keep0000');
-
-  r2.resetR2State();
-  PHOTOS.list = async () => { throw new Error('壞了'); };
-  const fallback = await json(await call('/data/dogs.json'));
-  assert.equal(fallback.body.photoVersions['photos/keep.jpg'], 'keep0000');
+test('#252 舊資料網址退役，不讀靜態資料', async () => {
+  const { ASSETS, call } = setup();
+  assert.equal((await call('/data/dogs.json')).status, 410);
+  assert.equal((await call('/dogs/123.md')).status, 410);
+  assert.equal(ASSETS.seen?.length || 0, 0);
 });
 
 test('相簿拿掉（K 2026-10-09）：/api/gallery 一律回 410；Trash 裡的相簿照片不能復原', async () => {
@@ -235,5 +225,5 @@ test('沒有 R2：照片、dogs.json 照舊給靜態檔', async () => {
   const env = { ASSETS };
   const photo = await worker.fetch(new Request(`${SITE}/photos/${ID}.jpg`), env);
   assert.ok(same(new Uint8Array(await photo.arrayBuffer()), OLD));
-  assert.deepEqual(await (await worker.fetch(new Request(`${SITE}/data/dogs.json`), env)).json(), { dogs: [] });
+  assert.equal((await worker.fetch(new Request(`${SITE}/data/dogs.json`), env)).status, 410);
 });

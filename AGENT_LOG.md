@@ -1215,7 +1215,158 @@
 - 同步上游 v1.3.1 所選技能，加入 pr／retro、移除 resolving-merge-conflicts；保留單票 implement 流程，不加入 implement-spec。
 - 驗證：詞彙表內容雜湊一致、目前引用檢查與技能逐檔比對；本次未變更網站程式或資料。
 
+## 2026-10-15 CODEX（#246 精簡 D1 建表與狗清單）
+- 依 #245/#246 新增獨立 v3_ 表與明確建表、狗清單匯入／讀回／比對入口，不動舊表、不切換網站、不連正式 D1 或試算表。
+- 編號與 formerIds 共用永久狗 ID；同名不猜合併，既有 ID 衝突拒絕，主清單複本以單一 batch 原子替換。私密匯出加入忽略清單。
+- 新增結構、重跑、再入所、真實 JSON 讀回與單筆差異、來源錯誤／交易回復測試，納入 AGENTS.md 與 CI。驗證與雙軸審查進行中。
+- 最後驗證：Node 全套194/194；main基底真實118隻狗與118編號讀回零差異、外鍵0列。無頭Chrome網頁243過、1項既有 #130 workflow Windows CRLF檢查失敗。
+- Standards 0項；Spec發現異動紀錄複本應保存label/text，已補紅→綠測試修正，複查0項。工作期間其他流程切換共用checkout，已移至獨立worktree並精確移除共用目錄的重複變更。
+## 2026-10-15 檢討後的防護（Claude）
+
+- `.gitignore` 加入 `.migration-private/`，避免正式資料庫的匯出被提交。
+- 新增 `docs/agents/agent-split.md`（Claude／Codex 分票原則），AGENTS.md 加上指向它的連結。
+
+## 2026-10-15 CODEX（#246 合入最新 main）
+- 合入 #253 的既有私密匯出忽略規則與分工文件；.gitignore沿用main，AGENT_LOG兩邊紀錄均保留。未變更實作；驗證本票7項通過。
+
+## 2026-10-15 #254 審查修正（Claude）
+
+- 移除 `v3_sheet_main.fields` 位元遮罩：讀回時每隻狗都有全部欄位，比對前來源也補成同樣形狀。
+- `v3_walks` 只留 `walker_name`／`walker_code`，移除意思不明的 `name`。
+- 沒有編號的狗以名字延續狗 ID 改成明確規則並寫進註解、測試標題和 docs；`v3_volunteers.last_seen` 註明給名字推薦排序。
+- 驗證：compact-schema、import-compact-dogs 測試 7 項全過。
+
+## 2026-10-15 #247 溜狗表改讀 D1（Claude）
+
+- Worker 新增 `GET /api/dogs`（`worker/src/compact.js`）：從 v3_ 主清單、上次溜的代號、舊編號、分組、異動紀錄組回跟 `data/dogs.json` 一樣的形狀，另帶 R2 照片版本號。沒接 D1、D1 出錯、主清單沒有狗都回 503（`code: 'db'`），不回空清單。
+- 網站（`js/app.js`、`js/cards.js`、`index.html` 提早抓）改讀 `api/dogs`；讀不到時照舊顯示「狗的資料讀不到」和重新讀取。
+- 開卡改讀寫 `v3_card_opened`：用編號查永久狗 ID 存，讀回時換成主清單上現在的編號（再入所換編號仍是同一張卡）。名字推薦改讀寫 `v3_volunteers`。
+- `/api/` 狀態頁改報新表：`D1 新表（狗 N、主清單 N、溜狗紀錄 N）`，沒建表顯示 `D1（新表還沒建）`。
+- 測試：新增 `worker/test/d1-read.test.mjs`（加進 AGENTS.md 與 CI），舊表的開卡／名字／狀態測試移除；`scripts/business-schema.test.mjs` 的開卡案例改用新表；網頁測試的假資料改走 `api/dogs`。
+- 注意：正式 D1 的 v3_ 表要先由 #248／#249 匯入完成，這個 PR 才能合併部署，否則網站會顯示讀取錯誤。
+
+## 2026-10-15 #248 匯入並比對溜狗紀錄、介紹、休養、照片清單（Claude）
+
+- 這張票原本分給 Codex，K 同意改由 Claude 做。
+- 新增 `scripts/import-compact-profiles.mjs`：`importCompactProfiles` 把 walks.json、dogs/*.md 介紹、rest.json、R2 照片清單匯入 `v3_walks`／`v3_intros`／`v3_rest`／`v3_photos`；`compareCompactProfiles` 逐筆比對，差異列出類別、哪一筆、哪個欄位。
+- K 決定 `v3_walks` 加 `dog_number`、`dog_name` 兩欄存當時的編號和狗名；`migrateCompactDatabase` 幫已建好的表補欄位。
+- 溜狗紀錄照網站規則合併成每狗每天一筆（965 筆→940 天），`mine` 不搬。已出所的狗用編號新建永久狗 ID。
+- 新增 `scripts/check-compact-profiles.mjs` 本機演練：真實資料比對 0 差異、重跑一致、外鍵 0 錯。正式 D1 還沒匯入，要 K 確認。
+- 測試：新增 `scripts/import-compact-profiles.test.mjs`（加進 AGENTS.md 與 CI）。
+
+## 2026-10-15 #251 第一步：同步程式也寫進 D1（Claude）
+
+- 起因：#247 部署時正式 D1 還沒有 v3_ 表，網站讀不到狗。K 執行 #248 產生的匯入 SQL 之後恢復了，但同步還只寫 GitHub，網站資料會停在匯入那一刻，常遛狗群也是空的。
+- 新增 `scripts/sync-compact-d1.mjs`：每次同步後把 data/ 的內容和常遛狗群整份換進 v3_ 表，沿用正式 D1 的永久狗 ID。`sync-sheet.mjs` 拆出 `parseGroupColumns`。
+- `importCompactProfiles` 沒給 photos 時不動 v3_photos。
+- 用正式 D1 的狗 ID 試跑（只讀）：133 隻全部沿用、新增 0 隻。
+- GitHub 提交暫時保留，等 #250 完成後拿掉。
+- 測試：新增 `scripts/sync-compact-d1.test.mjs`（加進 AGENTS.md 與 CI）。
+
+## 2026-10-15 #250 休養、介紹寫入改存 D1（Claude）
+
+- `worker/src/compact.js` 新增 `readRest`／`saveRest`／`saveIntro`；`readDogsPayload` 的介紹改從 `v3_intros` 讀。
+- `PUT /rest/{編號}`、`PUT /intro/{編號}` 改寫 D1，不再呼叫 GitHub；新增 `GET /rest`。網站 `REST_URL` 改成 `api/rest`。
+- 同步（`sync-compact-d1.mjs`）不再匯入休養和介紹，避免蓋掉網站剛存的；`importCompactProfiles` 沒給的類別不動那張表。
+- 取消「已溜」的還原和衝突提示原本就有，也有測試，這次沒改。
+- 測試：新增 `worker/test/d1-write.test.mjs`（加進 AGENTS.md 與 CI），移除 worker.test.mjs 裡寫 GitHub 的休養／介紹測試。node 測試 211 項全過；本機沒有 Playwright Chromium，網頁測試交給 CI。
+
+## 2026-10-15 CODEX（#249 匯入開卡與名字推薦）
+- 只新增 scripts/ 下匯入、讀回、逐筆比對、本機演練及 SQL 產出，不改 Worker、sync-* 或表結構。舊編號查 v3_dog_numbers，同代號同狗取最早開卡、名字推薦取較新 last_seen，不清表、不推測志工代號。
+- 指定私密匯出 0 開卡／20 名字推薦，記憶體 SQLite 重跑與逐筆比對一致、外鍵0列。待確認 SQL 留在原 repo 的 .migration-private/249/，未連正式 D1、未執行正式匯入。
+- 新增匯入合併、差異定位、格式／身分拒絕、交易回復、SQL 實際執行及私密路徑防覆寫測試，加入 AGENTS.md 與 CI。完整驗證與雙軸審查進行中。
+- 最後驗證：Node全套219/219，新測試8/8。指定私密來源0開卡／20名字推薦，函式與產出SQL各自記憶體SQLite重跑逐筆一致、外鍵0列；SQL未連正式D1。無頭Chrome243過、1項既有Windows CRLF workflow檢查失敗，Linux CI待PR。
+- 雙軸審查：Spec 0項；Standards指出JS／SQLite時區解析邊界不一致，已紅→綠補拒絕超過±14:00偏移，複查0項。
+
+## 2026-10-15 CODEX（#249 已授權正式名字推薦匯入）
+- K在本聊天明確同意匯入20筆名字推薦後，確認正式D1 UUID與wrangler.jsonc一致，先保存匯入前私密快照、確認待審SQL與指定來源完全相符，再執行既有SQL。
+- 正式庫原有19筆，這次實際只補1筆至20筆；原有19筆的志工ID與last_seen逐筆完全不變。匯入後依baseline比對零差異，開卡、舊walker_names、狗編號對照均未變，外鍵0列。
+- 匯入前後快照與回應只留.migration-private/249/，未提交個資；未合併PR、未部署、未改Worker或同步程式。
+## 2026-10-15 #259 離所紀錄搬進 D1（Claude）
+
+- 起因：#251 要停止提交 GitHub，但離所紀錄（原因、離開前最後的樣子）存不進 `v3_sheet_departed`。K 同意拆成 #259 → #260 → #251 依序做。
+- `db/compact-schema.sql` 新增 `v3_departures`、`v3_departure_items`；新增 `scripts/import-compact-departures.mjs`（匯入＋比對），讀回 `readDepartures` 放在 `worker/src/compact.js`。
+- `sync-compact-d1.mjs` 每次把 `data/departures.json` 整份換進 D1，SQL 開頭先建表，所以正式 D1 不用另外遷移。
+- 測試：新增 `scripts/import-compact-departures.test.mjs`（加進 AGENTS.md 與 CI）。
+
+## 2026-10-15 #260 網站改從 /api 讀溜狗紀錄與離所（Claude）
+
+- Worker 新增 `GET /walks`、`GET /departures`（`worker/src/compact.js` 的 `readWalks`、`readDepartures`），D1 讀不到回 503。
+- `js/app.js`、`js/cards.js`（`desk.js` 共用 `WALKS_URL`）、`js/analysis.js` 改讀 `api/walks`、`api/departures`；開始記錄日改用 `historyStart`，不再讀快照目錄。
+- 照片、備註確認編號在有 D1 時改讀主清單（`readMainNames`）。`readCompactProfiles` 的溜狗紀錄改共用 `readWalks`。
+- 測試：`worker/test/d1-read.test.mjs` 加新 API 測試；`tests/index.html` 改成新網址。本機沒有 Playwright Chromium，網頁測試交給 CI。
+
+## 2026-10-15 #251 同步只寫 D1（Claude）
+
+- `scripts/sync-compact-d1.mjs` 改成同步入口：讀試算表＋正式 D1 現況，`planSync` 用 D1 上一次的主清單、溜狗紀錄、離所算新的，整份寫回 D1。D1 的溜狗紀錄沒有 `mine`，用代號推回。
+- `scripts/sync-sheet.mjs` 拿掉寫 data/ 的 `main`，只留函式。
+- `sync-sheet.yml` 拿掉 git 提交、權限改 `contents: read`、push 觸發只看程式檔；部署不再跟著同步跑。
+- 測試：`scripts/sync-compact-d1.test.mjs` 加新紀錄、重跑不重複、離所、空 D1 重建、只寫 D1 的檢查。
+
+## 2026-10-15 #261 合併衝突（Claude）
+
+- 合入 main：測試清單保留 #259 的 `import-compact-departures` 和 #249 的兩個新測試；紀錄兩邊都留。
+
+## 2026-10-15 審查依風險分級（Claude）
+
+- `docs/agents/agent-split.md` 加第 4 點：只動 scripts／文件／測試的票自己對照兩面審查，不開代理人；碰正式資料、部署、表結構、API 的票跑完整 `/code-review`；測試全過、影響正式環境先問 K；一張票一個對話。起因：#251 拆三張票在同一對話連做，額度用掉 39%。
+
+## 2026-10-15 #252 清除準備（CODEX）
+
+- 新增 docs/CLEANUP_252.md：72 小時等待期、性別／舊編號、部署與測試依賴、封存步驟及交給 K 的 D1 刪表候選指令。
+- K 確認我的備註退役；Worker API 待移除，管理共用 NOTES_PASSCODE 保留。只準備文件，未打標籤、未刪資料、未部署；#252 尚未完成。
+- 驗證：CI 清單 Node 測試 233/233；網頁測試因本機缺 Playwright Chromium 無法啟動。文件候選 DROP 已用本機空 schema 核對完整清單與順序；未接正式 D1。文件依規範／規格自行審查，實作前置與實際清除仍待完成。
+
+## 2026-10-15 #252 補另外兩個 D1 資料庫（Claude）
+
+- `docs/CLEANUP_252.md` 補上 `bq-shelter-dogs-test`（刪舊表、保留資料庫）和 `bq-shelter-dogs-restore-219`（整庫刪）的處理方式，都交給 K 執行。只用唯讀指令盤點，沒有刪除任何東西。
+
+## 2026-10-15 #252 刪檔依賴驗證與 TDD（CODEX）
+
+- 依 K 更新指示在 codex/issue-252-deletion-audit 分支移除 data/、dogs/ 做刪檔驗證；main 不動，不打標籤、不刪 D1 表、不部署。
+- 原始 Node 218/233 通過、15 失敗；網頁因舊 dogs.json 404 中止，清單見 docs/CLEANUP_252_AUDIT.md。
+- 依 #245 接縫先紅再綠：D1 性別／舊編號保留、備註 API 退役、六類比對與多餘編號關係。部署移除舊版本號步驟，測試改小型合成 fixture，舊搬遷工具需明確封存路徑。
+- 正式 D1 僅 SELECT 匯出，九張表 rows_written 全為 0；比對發現十筆性別舊檔有值、D1 空白，其餘五類一致，未自動補值。私密快照不提交、排除打包。
+- 本機完整驗證：Node 227/227、headless 網頁 244/244；正式與隔離預覽設定 dry-run 打包均通過。尚待雙面 code review 與 GitHub CI。
+- 雙面 code review 各發現比對器漏驗網站複本；Spec 另發現漏列 D1 額外身分。均先補紅燈案例再修正，增加缺主清單列／截斷快照保護；重新比對為十筆性別缺值，加兩個 D1 額外空白身分 2021100407、2022121503，整體不一致，未修正式資料。
+- 審查修正最後驗證：Node 231/231、headless 網頁 244/244。Standards 原 1 項、Spec 原 3 項 P2 皆已補 TDD 反例修正，兩面複查無剩餘問題；正式資料差異仍待 K。新草稿 PR #269 取代已關閉 #266，GitHub 暫無此分支 CI run，不宣稱遠端 CI 通過。
+
+## 2026-10-15 #252 K 核准正式 D1 性別補值（CODEX）
+
+- K 明確同意後，核對舊提交與正式 D1，僅補十筆目前空白的 v3_dogs.sex（7 male、3 female），每筆限定原永久狗 ID 與編號；各更新一列。
+- 另外逐筆 SELECT 讀回 10/10 一致，兩個額外身分維持空白；未改名字、主清單或其他欄位。補值前證據保留，驗證報告追加最新狀態。
+- 未打標籤、刪表、合併、部署；本次未重新進行全庫六類比對。
+## 2026-10-15 我的常溜跟著代號走：決策文件（Claude，#267）
+
+- K 逐題確認（8 題）：常溜比照開卡，用代號＋永久 ID 存 D1；知道名字即可存取、不加密碼；一狗一筆自然合併；舊手機資料和未設名字的人先存手機、設名字後自動上傳；多個代號存第一個、讀取合併。
+- 新增 `docs/adr/0001-volunteer-data-follows-code.md`（哪些資料跟著代號、哪些留在手機）；AGENTS.md 開卡例外擴大為「跟著代號存 D1 的例外」；GLOSSARY 加「代號」「跟著人走的資料」。
+- 開 #267 實作票。只改文件，未動程式。
+
+## 2026-10-15 #252 合入 #268 與最新驗證（CODEX）
+
+- 將 origin/main 的 #268 決策文件合入本分支；AGENTS.md 保留新 ADR 規則及新增測試清單，AGENT_LOG 衝突保留兩邊紀錄。#267 實作未開始。
+- 確認 #268 的 PR test／preview 與合入 main 後測試／部署均成功；#269 的 CI 缺席原因是合併衝突，待解決後確認遠端結果。
+- 唯讀確認兩個額外身分各有 v3_photos 原圖／縮圖關聯，搬遷前 R2 盤點亦有同路徑；其他五類業務關聯皆為零。與匯入器為照片建立空白名字／性別身分的行為相符，保留，不猜名字或性別。
+- 最新完整唯讀快照 2026-10-15T07:36:28Z：九張表筆數全部核對，溜狗唯一鍵 1161；十筆性別缺值已解除。原有溜狗紀錄遺失／變更皆 0，新增 39 筆皆 10/15；其餘差異為已查明的兩個照片身分。CLI 7403 改 connector 讀取，拒絕同步期間筆數不符的中間快照。
+- 合入 #268 後完整 Node 231/231、headless 網頁 244/244。這輪文件／衝突解決依規範與規格自行對照通過；未動 #267，未合併 PR、打標籤、刪表或部署。
+
+## 2026-10-15 活動紀錄與已出所狗卡：決策文件（Claude，#270）
+
+- K 逐題確認：兩種活動（動保小小兵、認養會）只記出席的狗；任何人可新增修改刪除、D1 留操作紀錄；電腦版獨立「活動」頁，入口在找狗旁；舊名單一次性匯入，同名自動接上、其他先存名字。已出所狗卡所有人直接收藏、無動畫。
+- 新增 `docs/adr/0002-activity-records.md`、AGENTS.md 活動紀錄例外、GLOSSARY「活動」一節。
+- 開票：#270 活動紀錄、#271 已出所狗卡、#272 開卡一次全開／跳過動畫、#273 分析頁整理（待討論）。只改文件，未動程式。
+
+## 2026-10-15 #269 合入最新 main 與更新驗收門檻（CODEX）
+
+- 合入 main 1106d74（#274 活動 ADR），AGENT_LOG 衝突保留雙方紀錄，未實作 #267／#270。
+- K 已明確取消固定 72 小時門檻，改為今天完成驗證後驗收；同步更新清除準備文件，仍要求全量唯讀比對、獨立驗證、封存與最終確認。
+- 本輪只解衝突與更新文件，接著重跑完整測試、打包與雙面審查；未合併 PR、部署、打標籤或改正式 D1。
+
 ## 2026-10-15 移除根目錄舊截圖（Claude）
 
 - 刪除根目錄 complete.png、full.png、list.png、scatter.png、top.png、zone.png（#59 分析頁改版時留下，沒有任何頁面或文件引用）。
 - 驗證：git grep 確認沒有引用；未變更網站程式或資料。
+
+## 2026-10-15 技術債盤點收尾（Claude）
+
+- K 同意後：關閉 #252、#245、#238、#124；關閉 PR #243、#236、#196、#174、#159、#150 並刪分支；本 PR 合入最新 main（AGENT_LOG 衝突兩邊都保留）；刪除已合併的遠端分支。
