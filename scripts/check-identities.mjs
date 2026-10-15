@@ -1,12 +1,14 @@
 // #216 本機演練：不連 Cloudflare、不寫試算表、不寫 repo 資料。
 import { readFile, readdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { resolve, sep } from 'node:path';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateBusinessDatabase } from './migrate-business-db.mjs';
 import { migrateIdentities } from './migrate-identities.mjs';
 import { parseFrontmatterFormerIds } from './sync-sheet.mjs';
 
-export async function readIdentitySources(root = new URL('../', import.meta.url)) {
+export async function readIdentitySources(root) {
+  if (!root) throw new Error('請提供封存根目錄');
   const json = async path => JSON.parse(await readFile(new URL(path, root), 'utf8'));
   const current = await json('data/dogs.json');
   const cards = [];
@@ -37,6 +39,6 @@ export async function checkIdentities(input) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  try { console.log(JSON.stringify(await checkIdentities(await readIdentitySources()), null, 2)); }
+  try { console.log(JSON.stringify(await checkIdentities(await readIdentitySources(process.argv[2] ? pathToFileURL(resolve(process.argv[2]) + sep) : undefined)), null, 2)); }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

@@ -1,6 +1,7 @@
 // #218：本機演練。正式 D1／R2 來源由唯讀暫存檔傳入，不加入 repo。
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { resolve, sep } from 'node:path';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateBusinessDatabase } from './migrate-business-db.mjs';
 import { migrateIdentities } from './migrate-identities.mjs';
@@ -9,7 +10,8 @@ import { readHistorySources } from './check-history.mjs';
 import { migrateProfiles } from './migrate-profiles.mjs';
 import { parseFrontmatterBody, parseFrontmatterSex, markdownToText } from './sync-sheet.mjs';
 
-export async function readProfileSources(departedPath, legacyPath, photosPath, root = new URL('../', import.meta.url)) {
+export async function readProfileSources(departedPath, legacyPath, photosPath, root) {
+  if (!root) throw new Error('請提供封存根目錄');
   const json = async path => JSON.parse(await readFile(new URL(path, root), 'utf8'));
   const base = await readHistorySources(departedPath, root);
   if (!legacyPath || !photosPath) throw new Error('請提供唯讀 D1 與 R2 來源檔，不能拿缺少來源當空資料');
@@ -49,6 +51,6 @@ export async function checkProfiles(input) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  try { console.log(JSON.stringify(await checkProfiles(await readProfileSources(...process.argv.slice(2))), null, 2)); }
+  try { console.log(JSON.stringify(await checkProfiles(await readProfileSources(...process.argv.slice(2, 5), process.argv[5] ? pathToFileURL(resolve(process.argv[5]) + sep) : undefined)), null, 2)); }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

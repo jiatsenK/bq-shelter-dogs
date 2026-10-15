@@ -1320,3 +1320,11 @@
 ## 2026-10-15 #252 補另外兩個 D1 資料庫（Claude）
 
 - `docs/CLEANUP_252.md` 補上 `bq-shelter-dogs-test`（刪舊表、保留資料庫）和 `bq-shelter-dogs-restore-219`（整庫刪）的處理方式，都交給 K 執行。只用唯讀指令盤點，沒有刪除任何東西。
+
+## 2026-10-15 #252 刪檔依賴驗證與 TDD（CODEX）
+
+- 依 K 更新指示在 codex/issue-252-deletion-audit 分支移除 data/、dogs/ 做刪檔驗證；main 不動，不打標籤、不刪 D1 表、不部署。
+- 原始 Node 218/233 通過、15 失敗；網頁因舊 dogs.json 404 中止，清單見 docs/CLEANUP_252_AUDIT.md。
+- 依 #245 接縫先紅再綠：D1 性別／舊編號保留、備註 API 退役、六類比對與多餘編號關係。部署移除舊版本號步驟，測試改小型合成 fixture，舊搬遷工具需明確封存路徑。
+- 正式 D1 僅 SELECT 匯出，九張表 rows_written 全為 0；比對發現十筆性別舊檔有值、D1 空白，其餘五類一致，未自動補值。私密快照不提交、排除打包。
+- 本機完整驗證：Node 227/227、headless 網頁 244/244；正式與隔離預覽設定 dry-run 打包均通過。尚待雙面 code review 與 GitHub CI。

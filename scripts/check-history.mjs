@@ -1,13 +1,15 @@
 // #217 本機完整歷史演練；已出所來源由 CLI 提供暫存檔，不進 repo。
 import { readFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
+import { resolve, sep } from 'node:path';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateBusinessDatabase } from './migrate-business-db.mjs';
 import { migrateIdentities } from './migrate-identities.mjs';
 import { readIdentitySources } from './check-identities.mjs';
 import { migrateHistory } from './migrate-history.mjs';
 
-export async function readHistorySources(departedPath, root = new URL('../', import.meta.url)) {
+export async function readHistorySources(departedPath, root) {
+  if (!root) throw new Error('請提供封存根目錄');
   const json = async path => JSON.parse(await readFile(new URL(path, root), 'utf8'));
   const identities = await readIdentitySources(root);
   const snapshots = [];
@@ -41,6 +43,6 @@ export async function checkHistory(input) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  try { console.log(JSON.stringify(await checkHistory(await readHistorySources(process.argv[2])), null, 2)); }
+  try { console.log(JSON.stringify(await checkHistory(await readHistorySources(process.argv[2], process.argv[3] ? pathToFileURL(resolve(process.argv[3]) + sep) : undefined)), null, 2)); }
   catch (error) { console.error(error.message); process.exitCode = 1; }
 }

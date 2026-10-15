@@ -288,9 +288,9 @@ test('狗卡：同編號只讀一次；讀不到就留空；編號不是英數�
   assert.deepEqual(dogs.map(d => [d.name, d.sex, d.intro]), [
     ['宙斯', 'male', '很親人，怕機車。'], ['宙斯二號', 'male', '很親人，怕機車。'], ['金寶', '', ''],
   ]);
-  assert.equal(await sync.readDogCardFile('../README'), '');
-  assert.equal(await sync.readDogCardFile('0000000000'), '', '沒有這個檔');
-  assert.match(await sync.readDogCardFile('2017070102'), /LUCY/, '讀得到 repo 裡的狗卡');
+  await assert.rejects(sync.readDogCardFile('123'), /封存/);
+  assert.equal(await sync.readDogCardFile('0000000000', new URL('../tests/fixtures/', import.meta.url)), '', '沒有這個檔');
+
 });
 
 // ── #75 同一隻狗兩次入所：舊編號 ──

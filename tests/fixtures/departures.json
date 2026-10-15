@@ -1,0 +1,24 @@
+{
+  "departures": [
+    {
+      "id": "2018010101",
+      "name": "離所甲",
+      "date": "2026-10-12",
+      "dateSource": "sheet",
+      "seen": "2026-10-13",
+      "reason": "adopt",
+      "matched": "認養",
+      "flags": []
+    },
+    {
+      "id": "2018010102",
+      "name": "離所乙",
+      "date": "2026-10-11",
+      "dateSource": "sheet",
+      "seen": "2026-10-12",
+      "reason": "unknown",
+      "matched": "",
+      "flags": []
+    }
+  ]
+}

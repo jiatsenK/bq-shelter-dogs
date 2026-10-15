@@ -22,3 +22,9 @@ db
 # #213 搬遷盤點是 repo 審閱資料，不公開到網站
 docs/MIGRATION_INVENTORY.md
 docs/migration-213
+
+# 搬遷私密匯出不得打包部署
+.migration-private
+# 舊資料網址退役，封存只留 Git 歷史
+data
+dogs
