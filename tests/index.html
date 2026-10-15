@@ -1410,7 +1410,7 @@ async function runMyWalksTests() {
       eq(main.querySelectorAll('.mc-cell.on').length, 3, '重新讀取後：');
     });
     await check('#58 repo 裡的 data/walks.json 讀得懂，畫面不出現其他志工名字', async () => {
-      const res = await realFetch('../data/walks.json', { cache: 'no-store' });
+      const res = await realFetch('fixtures/walks.json', { cache: 'no-store' });
       const data = await res.json();
       const list = parseMyWalks(data);
       if (!Array.isArray(data.walks)) throw new Error('walks.json 沒有 walks');
@@ -2760,7 +2760,7 @@ async function runR2Tests() {
   await check('#130 wrangler.jsonc：R2 binding PHOTOS，照片、dogs.json 先經過 Worker（相簿 K 2026-10-09 拿掉）', () => {
     if (!cfg) return;
     if (!/"r2_buckets": \[\{ "binding": "PHOTOS", "bucket_name": "bq-shelter-photos" \}\]/.test(cfg)) throw new Error('少了 R2 binding');
-    ['"/photos/*"', '"/data/dogs.json"', '"/api/*"'].forEach(p => {
+    ['"/photos/*"', '"/api/*"'].forEach(p => {
       if (!cfg.includes(p)) throw new Error(`run_worker_first 少了 ${p}`);
     });
     if (cfg.includes('gallery')) throw new Error('相簿已拿掉，wrangler.jsonc 不該再有 gallery');
@@ -2787,7 +2787,7 @@ async function runR2Tests() {
   await check('#130 縮圖（R2）與搬遷 Action：只能手動或由 Worker 叫、用通關碼、不提交 repo', () => {
     if (!thumbs || !migrate) throw new Error('讀不到 r2-thumbs.yml 或 migrate-photos-r2.yml');
     [thumbs, migrate].forEach(t => {
-      if (!/on:\n  workflow_dispatch:\n\n/.test(t)) throw new Error('只能用 workflow_dispatch 觸發');
+      if (!/on:\r?\n  workflow_dispatch:\r?\n\r?\n/.test(t)) throw new Error('只能用 workflow_dispatch 觸發');
       if (!/ADMIN_PASSCODE: \$\{\{ secrets\.NOTES_PASSCODE \}\}/.test(t)) throw new Error('通關碼要用 Secret NOTES_PASSCODE');
       if (!/contents: read/.test(t) || /git push|git commit/.test(t)) throw new Error('不能提交 repo');
     });
@@ -4066,7 +4066,7 @@ async function runTourLayoutTests() {
   document.body.appendChild(frame);
   await ready;
   const win = frame.contentWindow;
-  win.__tourFixture = await fetch('../data/dogs.json').then(r => r.json());
+  win.__tourFixture = await fetch('fixtures/dogs.json').then(r => r.json());
   try {
     win.eval(`
       const fixtureStorage = new Map();
@@ -4131,7 +4131,7 @@ async function runTourLayoutTests() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', '../data/dogs.json', '../js/analysis.js', '../js/find.js', '../js/site-config.js'].map(u => fetch(u).then(res => {
+Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', 'fixtures/dogs.json', '../js/analysis.js', '../js/find.js', '../js/site-config.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))

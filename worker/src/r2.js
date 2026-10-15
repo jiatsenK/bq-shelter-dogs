@@ -99,25 +99,6 @@ async function listAll(env, prefix) {
   return out;
 }
 
-// data/dogs.json：部署時算好的版本號（repo 裡的照片）再蓋上 R2 的，網站不用改就能拿到新照片的版本號。
-// R2 讀不到就照原樣回，不影響網站打開
-export async function serveDogs(request, env) {
-  const res = await env.ASSETS.fetch(request);
-  if (!res.ok || request.method !== 'GET') return res;
-  try {
-    const data = await res.clone().json();
-    const { versions, deleted } = await r2Versions(env);
-    const merged = { ...(data.photoVersions || {}) };
-    for (const k of deleted) delete merged[k];
-    data.photoVersions = Object.assign(merged, versions);
-    return new Response(JSON.stringify(data), {
-      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache' },
-    });
-  } catch (e) {
-    return res;
-  }
-}
-
 // ── Trash ──
 // trash/{代號}/photo.jpg（原圖，customMetadata 記原位置、狗、刪除時間）＋ thumb.jpg（有縮圖才有）。
 // 原檔讀不到回 null（沒東西要備份）；寫 R2 失敗會丟錯，呼叫的地方就不要動原檔

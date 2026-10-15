@@ -12,9 +12,9 @@ async function freshDb(t) {
   return db;
 }
 
-const repoDepartures = async () => JSON.parse(await readFile(new URL('../data/departures.json', import.meta.url), 'utf8')).departures;
+const repoDepartures = async () => JSON.parse(await readFile(new URL('../tests/fixtures/departures.json', import.meta.url), 'utf8')).departures;
 
-test('repo 的 departures.json 匯入後讀回一模一樣，重跑也一樣', async t => {
+test('合成離所資料 匯入後讀回一模一樣，重跑也一樣', async t => {
   const db = await freshDb(t);
   const list = await repoDepartures();
   await importCompactDepartures(db, list);

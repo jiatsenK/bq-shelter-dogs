@@ -1,30 +1,5 @@
-// 板收志工溜狗表：照片上傳＋我的備註服務（Cloudflare Worker，#47、#61）
-//
-// 網站（GitHub Pages）→ 這個 Worker → GitHub API → photos/{編號}.jpg、data/my-notes.json
-// #125 起網站也可以放在這個 Worker 裡（設定見 repo 根目錄的 wrangler.jsonc）：網頁是靜態檔案，API 在 /api 底下；
-// 不帶 /api 前綴的路徑也還認得（舊的單獨照片 Worker 留下來的，2026-10 已刪）
-// - GitHub 寫入權限（token）只放在 Worker 的 Secret「GITHUB_TOKEN」，不在網站、也不在 repo
-// - 任何人都能上傳（不用登入），所以這裡做基本防護：只收網站來的要求、編號要在 data/dogs.json 裡、
-//   只收 JPEG、限制大小、同一個人短時間內不能一直傳
-// - 每次上傳都是 repo 裡的一筆提交，被亂傳可以從 git 歷史還原
-// - 我的備註（#61）：GET /notes 讀最新內容（不用等網站重新部署）；PUT /notes/{編號} 寫入，
-//   送 JSON { text, passcode }，通關碼放在 Worker 的 Secret「NOTES_PASSCODE」
-//   （通關碼放在內容裡、不放標頭，這樣中文通關碼也能用）。
-//   repo 是公開的，備註內容任何人都看得到；通關碼只是擋住路人改掉備註
-// - 相簿 K 2026-10-09 拿掉（怕 Cloudflare 用量爆掉），只留主照片；/gallery 一律回 410
-// - 休養中（K 2026-10-09）：PUT /rest/{編號} 送 { passcode, until: 'YYYY-MM-DD', reason } 設定、{ passcode, end: true } 結束，
-//   存 D1 的 v3_rest（#250，跟我的備註同一組通關碼），網站讀 GET /rest；試算表一律不動
-// - 誰遛的代號（#95）：POST /walker-code 送 { names: [...] }，回 { codes: [...] }。
-//   用 Worker 的 Secret「WALKER_KEY」（跟 GitHub Actions 的同一組）算，網站拿不到密鑰；名字不存、不寫進任何紀錄
-// - 定時叫同步：GitHub 自己的排程常被跳過（2026-09-27 一整天只跑一次），所以在 Cloudflare 設 Cron Trigger，
-//   時間到就請 GitHub 跑「同步試算表」（.github/workflows/sync-sheet.yml）。token 要多開 Actions 寫入權限。
-//   網站頁首的「更新」按鈕也可以叫：POST /sync（同一個人 2 分鐘 1 次）
-//
-// - 照片放 R2（#130）：Worker 有 R2（env.PHOTOS）時，照片、縮圖、Trash 都改存 R2，不再提交 GitHub（worker/src/r2.js）；
-//   沒有 R2 時（例如單獨部署的舊照片 Worker）照舊寫 GitHub
-//
-// 設定步驟見 docs/CLOUDFLARE_SETUP.md。
-
+// 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
+// 管理功能仍共用 NOTES_PASSCODE；試算表只寫原有兩欄。
 import * as r2 from './r2.js';
 import { readDogsPayload, compactStatus, dogIdsFor, openedBooks, readRest, saveRest, saveIntro, readWalks, readDepartures, readMainNames } from './compact.js';
 
@@ -47,16 +22,11 @@ const RATE_LIMITS = [
 ];
 // 讀過的 dogs.json 暫存 5 分鐘，不用每張照片都去 GitHub 讀一次
 const DOGS_CACHE_MS = 5 * 60 * 1000;
-// 我的備註：存放位置、長度上限（字數）、一次送來的資料上限
-const NOTES_PATH = 'data/my-notes.json';
-const NOTE_MAX_CHARS = 1000;
-const NOTE_MAX_BYTES = 16 * 1024;
-// 備註寫入：1 分鐘最多 10 次、1 小時最多 60 次；讀取：1 分鐘最多 60 次
+// 管理寫入頻率限制（介紹、休養共用）
 const NOTE_WRITE_LIMITS = [
   { windowMs: 60 * 1000, max: 10 },
   { windowMs: 60 * 60 * 1000, max: 60 },
 ];
-const NOTE_READ_LIMITS = [{ windowMs: 60 * 1000, max: 60 }];
 // 通關碼打錯：1 小時最多 10 次，超過就先不給試（擋住一直猜）
 const PASSCODE_FAIL_LIMITS = [{ windowMs: 60 * 60 * 1000, max: 10 }];
 // 休養中：原因最多幾個字、最多設多久（天）
@@ -110,9 +80,7 @@ function config(env) {
     sheetWriteUrl: env && env.SHEET_WRITE_URL ? String(env.SHEET_WRITE_URL) : '',
     sheetWriteKey: env && env.SHEET_WRITE_KEY ? String(env.SHEET_WRITE_KEY) : '',
     sheetId: env && env.SHEET_ID ? String(env.SHEET_ID).trim() : '',
-    // 照片放 R2 時（#130）狗的編號改讀部署上去的 data/dogs.json（每次同步完都會重新部署），照片操作就完全不用 GitHub
-    assets: r2.r2On(env) && env.ASSETS ? env.ASSETS : null,
-    // #260 起狗的編號從 D1 主清單讀，同步不再提交 data/dogs.json；沒接 D1 時照舊
+    // 編號驗證一律讀 D1，不讀 GitHub／靜態舊檔。
     db: env && env.DB ? env.DB : null,
   };
 }
@@ -178,12 +146,6 @@ function toBase64(bytes) {
   return btoa(bin);
 }
 
-function fromBase64(b64) {
-  const bin = atob(String(b64 || '').replace(/\s/g, ''));
-  const bytes = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-  return bytes;
-}
 
 function github(cfg, path, init = {}) {
   return fetch(`${cfg.api}/repos/${cfg.repo}/${path}`, {
@@ -240,27 +202,12 @@ async function triggerSync(env) {
   return res.status;
 }
 
-// 編號 → 犬名：有 D1 讀主清單（#260），沒有才讀 repo 的 data/dogs.json（照片放 R2 時讀部署上去的那份）
+// 編號 → 犬名：只讀 D1 主清單；未接 D1 時停止照片寫入。
 async function loadDogs(cfg, now) {
-  if (dogsCache && now - dogsCache.at < DOGS_CACHE_MS) return dogsCache.dogs;
-  if (cfg.db) {
-    const dogs = await readMainNames(cfg.db);
-    dogsCache = { at: now, dogs };
-    return dogs;
-  }
-  const res = cfg.assets
-    ? await cfg.assets.fetch(new Request('https://assets.invalid/data/dogs.json'))
-    : await github(cfg, `contents/data/dogs.json?ref=${encodeURIComponent(cfg.branch)}`, {
-      headers: { Accept: 'application/vnd.github.raw+json' },
-    });
-  if (!res.ok) throw new Error(`讀 dogs.json 失敗（GitHub ${res.status}）`);
-  const data = await res.json();
-  const dogs = new Map();
-  for (const d of (data && data.dogs) || []) {
-    const id = d && d.id != null ? String(d.id).trim() : '';
-    if (id) dogs.set(id, String(d.name || '').trim());
-  }
-  dogsCache = { at: now, dogs };
+  if (!cfg.db) throw new Error('沒有接 D1，無法確認狗狗編號');
+  if (dogsCache && dogsCache.db === cfg.db && now - dogsCache.at < DOGS_CACHE_MS) return dogsCache.dogs;
+  const dogs = await readMainNames(cfg.db);
+  dogsCache = { at: now, db: cfg.db, dogs };
   return dogs;
 }
 
@@ -343,25 +290,7 @@ async function upload(request, env, origin) {
   return fail(502, '照片沒有存進去，原本的照片不受影響', origin);
 }
 
-// ---- 我的備註（#61）----
-
-// 讀 repo 裡「編號 → 內容」的 JSON 檔（data/my-notes.json）的最新內容與 sha；
-// 檔案還沒建立就回空的
-async function readJsonMap(cfg, path) {
-  const res = await github(cfg, `contents/${path}?ref=${encodeURIComponent(cfg.branch)}`);
-  if (res.status === 404) return { data: {}, sha: null };
-  if (!res.ok) throw new Error(`讀 ${path} 失敗（GitHub ${res.status}）`);
-  const info = await res.json();
-  const text = new TextDecoder().decode(fromBase64(info.content));
-  const data = text.trim() ? JSON.parse(text) : {};
-  return { data: data && typeof data === 'object' && !Array.isArray(data) ? data : {}, sha: info.sha || null };
-}
-
-async function readNotes(cfg) {
-  const { data, sha } = await readJsonMap(cfg, NOTES_PATH);
-  return { notes: data, sha };
-}
-
+// 管理功能共用的純文字整理與通關碼驗證
 // 整理成純文字：統一換行、拿掉看不見的控制字元、去頭尾空白；不是字串回 null
 function cleanNote(text) {
   if (typeof text !== 'string') return null;
@@ -387,110 +316,12 @@ async function samePasscode(given, expected) {
 
 const passcodeLocked = (ip, now) => limited(`pass:${ip}`, PASSCODE_FAIL_LIMITS, now);
 
-// 通關碼對了回 null；不對就記一次錯、回錯誤（我的備註用）
+// 通關碼對了回 null；不對就記一次錯、回錯誤（介紹、休養共用）
 async function checkPasscode(input, cfg, ip, now, origin, missing) {
   const given = input && typeof input.passcode === 'string' ? input.passcode : '';
   if (given && (await samePasscode(given, cfg.passcode))) return null;
   record(`pass:${ip}`, now);
   return fail(401, given ? '通關碼不對' : missing, origin, { code: 'passcode' });
-}
-
-// 編號排序後輸出，每次存檔的差異只有改到的那隻狗
-function serializeNotes(notes) {
-  const sorted = {};
-  for (const k of Object.keys(notes).sort()) sorted[k] = notes[k];
-  return `${JSON.stringify(sorted, null, 2)}\n`;
-}
-
-async function getNotes(request, env, origin) {
-  const cfg = config(env);
-  if (!cfg.token) return fail(500, '備註服務還沒設定好（缺 GITHUB_TOKEN）', origin);
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (!allow(`read:${ip}`, NOTE_READ_LIMITS, Date.now())) return fail(429, '讀取太頻繁，請稍等一下再試', origin);
-  try {
-    const { notes } = await readNotes(cfg);
-    return reply(200, { ok: true, notes }, origin);
-  } catch (e) {
-    return fail(502, '暫時讀不到備註，請稍後再試', origin);
-  }
-}
-
-async function putNote(request, env, origin) {
-  const cfg = config(env);
-  const now = Date.now();
-  if (!cfg.token) return fail(500, '備註服務還沒設定好（缺 GITHUB_TOKEN）', origin);
-  if (!cfg.passcode) return fail(500, '備註服務還沒設定好（缺 NOTES_PASSCODE）', origin);
-
-  const m = new URL(request.url).pathname.match(/^\/notes\/([^/]+)$/);
-  const id = m ? decodeURIComponent(m[1]) : '';
-  if (!ID_PATTERN.test(id)) return fail(400, '狗狗編號格式不對', origin);
-
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (passcodeLocked(ip, now)) return fail(429, '通關碼錯太多次，請一小時後再試', origin, { code: 'passcode' });
-
-  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
-  if (type !== 'application/json') return fail(415, '備註格式不對', origin);
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).length > NOTE_MAX_BYTES) return fail(413, `備註最多 ${NOTE_MAX_CHARS} 字`, origin);
-  let input;
-  try {
-    input = JSON.parse(raw);
-  } catch (e) {
-    return fail(400, '備註格式不對', origin);
-  }
-
-  const denied = await checkPasscode(input, cfg, ip, now, origin, '需要通關碼才能寫備註');
-  if (denied) return denied;
-
-  const text = cleanNote(input.text);
-  if (text === null) return fail(400, '備註要是文字', origin);
-  if ([...text].length > NOTE_MAX_CHARS) return fail(413, `備註最多 ${NOTE_MAX_CHARS} 字`, origin);
-
-  if (!allow(`note:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '寫入太頻繁，請稍等幾分鐘再試', origin);
-
-  let dogs;
-  try {
-    dogs = await loadDogs(cfg, now);
-  } catch (e) {
-    return fail(502, '暫時無法確認狗狗編號，請稍後再試', origin);
-  }
-
-  // 每次都先讀最新版本再改，不會蓋掉別隻狗的備註；同時有人寫入（sha 對不上）就重讀再試
-  for (let attempt = 0; attempt < 3; attempt++) {
-    let current;
-    try {
-      current = await readNotes(cfg);
-    } catch (e) {
-      return fail(502, '暫時讀不到備註，請稍後再試，原本的備註不受影響', origin);
-    }
-    const notes = { ...current.notes };
-    // 已經離開收容所的狗，舊備註還是可以改或刪；新增只限 dogs.json 裡的狗
-    if (!dogs.has(id) && !(id in notes)) return fail(404, '找不到這個編號的狗狗', origin);
-    if (!text && !(id in notes)) return reply(200, { ok: true, id, note: null, commit: null }, origin);
-
-    const note = text ? { text, updatedAt: new Date(now).toISOString() } : null;
-    if (note) notes[id] = note;
-    else delete notes[id];
-    const name = dogs.get(id);
-    const body = {
-      message: `${note ? '更新' : '刪除'}我的備註：${id}${name ? `（${name}）` : ''}\n\n網站寫入（備註服務，通關碼驗證）`,
-      content: toBase64(new TextEncoder().encode(serializeNotes(notes))),
-      branch: cfg.branch,
-    };
-    if (current.sha) body.sha = current.sha;
-    const res = await github(cfg, `contents/${NOTES_PATH}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      const out = await res.json().catch(() => ({}));
-      return reply(200, { ok: true, id, note, commit: out.commit && out.commit.sha }, origin);
-    }
-    if ((res.status === 409 || res.status === 422) && attempt < 2) continue;
-    return fail(502, `備註沒有存進去（GitHub ${res.status}），原本的備註不受影響`, origin);
-  }
-  return fail(502, '備註沒有存進去，原本的備註不受影響', origin);
 }
 
 // 台灣今天的日期 YYYY-MM-DD
@@ -1030,7 +861,7 @@ async function openedCards(request, env, origin) {
 
 export default {
   // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch 和 scheduled
-  testing: { r2, MAX_BYTES, NOTE_MAX_CHARS, resetState, allowUpload, isJpeg, cleanNote, walkerCode, triggerSync, maintenance },
+  testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, triggerSync, maintenance },
 
   // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 wrangler.jsonc 的 triggers）
   async scheduled(event, env, ctx) {
@@ -1050,6 +881,8 @@ export default {
     // 網站和 Worker 合在一起時（#125），API 都在 /api 底下，其他路徑是網站的檔案（Cloudflare 會先找檔案，
     // 找不到才進來這裡）；單獨的照片上傳 Worker 沒有 /api 前綴，兩種都認
     let path = url.pathname;
+    if (/^\/(?:api\/)?notes(?:\/|$)/.test(path)) return fail(410, '我的備註已退役', allowed);
+    if (/^\/(?:data|dogs)(?:\/|$)/.test(path)) return fail(410, '舊資料網址已退役，請使用 /api', allowed);
     if (path === '/api' || path.startsWith('/api/')) {
       path = path.slice(4) || '/';
       // 下面各功能自己會再讀網址裡的編號，所以整個要求換成沒有 /api 的網址
@@ -1061,7 +894,6 @@ export default {
       if (r2.r2On(env)) {
         try {
           if (path.startsWith('/photos/')) return await r2.servePhoto(request, env);
-          if (path === '/data/dogs.json') return await r2.serveDogs(request, env);
         } catch (e) { /* R2 出問題就照舊給靜態檔 */ }
       }
       return env.ASSETS.fetch(request);
@@ -1107,16 +939,6 @@ export default {
       try { return await openedCards(request, env, allowed); }
       catch (e) { return fail(503, '開卡紀錄暫時讀寫失敗，請稍後再試', allowed); }
     }
-    if (path === '/notes' || path.startsWith('/notes/')) {
-      try {
-        if (request.method === 'GET' && path === '/notes') return await getNotes(request, env, allowed);
-        if (request.method === 'PUT' && path !== '/notes') return await putNote(request, env, allowed);
-        return fail(405, '備註只能讀取（GET /notes）或寫入（PUT /notes/編號）', allowed);
-      } catch (e) {
-        return fail(500, '備註服務發生錯誤，原本的備註不受影響', allowed);
-      }
-    }
-
     // 溜狗紀錄、離所紀錄（#260）：形狀跟原本的 data/walks.json、data/departures.json 一樣，從 D1 讀
     if (path === '/walks' || path === '/departures') {
       if (request.method !== 'GET') return fail(405, '只能用 GET 讀', allowed);

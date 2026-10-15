@@ -9,14 +9,14 @@ import { buildSyncSql, SEED_TABLES, planSync, readPrevious } from './sync-compac
 const json = async path => JSON.parse(await readFile(new URL(`../${path}`, import.meta.url), 'utf8'));
 
 async function source() {
-  const dogs = await json('data/dogs.json');
+  const dogs = await json('tests/fixtures/dogs.json');
   // 常遛狗群照欄存：每隻有群組的狗跟它的群組一欄（真實試算表的欄可能更大，這裡只要能還原）
   const groupColumns = [], seen = new Set();
   for (const [name, others] of Object.entries(dogs.groups)) {
     const column = [name, ...others].sort();
     if (!seen.has(column.join()) && column.every(n => dogs.groups[n]?.length === others.length)) { seen.add(column.join()); groupColumns.push(column); }
   }
-  return { dogs, walks: await json('data/walks.json'), departures: (await json('data/departures.json')).departures, groupColumns };
+  return { dogs, walks: await json('tests/fixtures/walks.json'), departures: (await json('tests/fixtures/departures.json')).departures, groupColumns };
 }
 
 async function apply(t, seed, sql) {
@@ -128,7 +128,7 @@ test('#251 複本可以從試算表整份重建：D1 是空的也能同步，主
   const sheet = sheetOf(src);
   const db = await apply(t, {}, await buildSyncSql({}, async mem => ({ ...planSync(await readPrevious(mem), sheet, null, NOW, KEY), groupColumns: src.groupColumns })));
   const payload = await readDogsPayload(db);
-  assert.deepEqual(payload.dogs.map(({ myWalkedDate, intro, ...d }) => d), sheet.dogs.map(({ intro, ...d }) => d));
+  assert.deepEqual(payload.dogs.map(({ myWalkedDate, intro, ...d }) => d), sheet.dogs.map(({ intro, formerIds, ...d }) => ({ ...d, sex: '' })));
   assert.deepEqual(payload.sheetNotes, src.dogs.sheetNotes);
 });
 
@@ -144,4 +144,19 @@ test('#251 只寫 D1：同步不寫 data/、不呼叫 git／GitHub、不寫試�
   assert.doesNotMatch(workflow, /git (add|commit|push)/);
   assert.match(workflow, /contents: read/);
   assert.doesNotMatch(workflow, /contents: write/);
+});
+
+test('#252 沒有 dogs/：同步保留永久狗性別、舊編號與再入所身分，新狗不猜性別', async t => {
+  const db = await apply(t, {}, await buildSyncSql({}, { dogs: { dogs: [
+    { id: 'current', name: '甲', sex: 'female', formerIds: ['old'] },
+    { id: '', name: '無編號', sex: 'male' },
+  ] }, walks: { walks: [] }, departures: [], groupColumns: [] }));
+  const sheet = { dogs: [{ id: 'old', name: '甲改名' }, { id: '', name: '無編號' }, { id: 'new', name: '甲' }], groups: {}, sheetNotes: [] };
+  const seed = await seedOf(db);
+  const sql = await buildSyncSql(seed, async mem => ({ ...planSync(await readPrevious(mem), sheet, [], NOW, KEY), groupColumns: [] }));
+  const after = await apply(t, seed, sql);
+  const dogs = (await readDogsPayload(after)).dogs;
+  assert.deepEqual(dogs.map(d => [d.id, d.sex, d.formerIds || []]), [['old', 'female', ['current']], ['', 'male', []], ['new', '', []]]);
+  const beforeId = await db.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='current'").first('dog_id');
+  assert.equal(await after.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='old'").first('dog_id'), beforeId);
 });

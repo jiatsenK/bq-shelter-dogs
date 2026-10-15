@@ -48,6 +48,7 @@ export async function writePhotoVersions(root) {
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
-  const n = await writePhotoVersions(process.argv[2] || '.');
+  if (!process.argv[2]) throw new Error('已退役的部署步驟：只可明確指定封存根目錄');
+  const n = await writePhotoVersions(process.argv[2]);
   console.log(`照片版本號：${n} 張，寫進 data/dogs.json（只給這次部署用，不提交）`);
 }
