@@ -17,7 +17,7 @@ const FIRST_SCREEN_CARDS = 8;
 // 紀錄裡的 walkers 是遛的人的代號，志工在「我溜過」輸入名字、經 Worker 換成代號後記在這支手機
 const WALKS_URL = 'data/walks.json';
 // 休養中（K 2026-10-09）：管理者在網站上設定「到哪天前暫停帶出」，經 Worker（通關碼）寫進 repo 的這個檔，不碰試算表
-const REST_URL = 'data/rest.json';
+const REST_URL = 'api/rest'; // #250 起休養設定存 D1，從 Worker 讀
 const WALKER_CODES_KEY = 'bq-walker-codes';
 const WALKER_CODE_PATTERN = /^[0-9a-f]{12}$/; // 跟 Worker 的 WALKER_CODE_LENGTH 一致
 // 這間收容所的設定在 js/site-config.js（K 2026-10-10：以後其他收容所要用，只改那個檔）
@@ -39,7 +39,7 @@ let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, u
 let restMap = {}; // 休養中：編號 → { until: 'YYYY-MM-DD', reason }
 let detailWalksOpen = false; // 詳細資訊的溜狗紀錄有沒有展開每一天（K 2026-10-10 減法：預設只有一行字）
 let introEdit = null; // 詳細資訊正在改的入所介紹（K 2026-10-10 補資料）：{ dog, text, pass, needPass, phase: 'edit'|'saving'|'error', error }
-const introOverrides = {}; // 編號 → 剛存好的介紹：這台電腦馬上看到，dogs.json 等下次同步
+const introOverrides = {}; // 編號 → 剛存好的介紹：這台電腦不用重新讀就看到（#250 起存 D1，其他人重新整理就看得到）
 let restEdit = null; // 詳細資訊正在改的休養設定：{ dog, until, reason, pass, needPass, phase: 'edit'|'saving'|'error', error }
 let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（walkKey）
 let searchQuery = '';
@@ -1504,7 +1504,7 @@ async function saveIntro() {
   render(); renderDetail();
   const b = document.getElementById('introEdit');
   if (b) b.focus({ preventScroll: true });
-  showToast(`${e.dog.name} 的介紹已存好（其他人等資料更新就會看到）`);
+  showToast(`${e.dog.name} 的介紹已存好（其他人重新整理就看得到）`);
 }
 
 function openRestEdit(dog) {
@@ -1519,7 +1519,7 @@ function openRestEdit(dog) {
     if (form.scrollIntoView) form.scrollIntoView({ block: 'center' });
   }
 }
-// 送到 Worker：end＝結束休養。成功後這支手機馬上生效，其他志工等網站更新（一兩分鐘）
+// 送到 Worker：end＝結束休養。成功後這支手機馬上生效，其他志工重新整理就看得到（#250 存 D1）
 async function saveRest(end = false) {
   const e = restEdit;
   if (!e || e.phase === 'saving') return;
@@ -1562,9 +1562,9 @@ async function loadRest() {
   try {
     const res = await fetch(REST_URL, { cache: 'no-cache' });
     const data = res.ok ? await res.json() : {};
-    if (data && typeof data === 'object' && !Array.isArray(data)) next = data;
+    if (data && data.rest && typeof data.rest === 'object' && !Array.isArray(data.rest)) next = data.rest;
   } catch (e) { /* 讀不到就當作沒有 */ }
-  // 讀的期間這支手機剛改過休養設定（restMap 換了）：網站上的檔還是舊的，不要蓋掉
+  // 讀的期間這支手機剛改過休養設定（restMap 換了）：讀到的可能是改之前的，不要蓋掉
   if (restMap !== before) return;
   restMap = next;
   resetWalkOrder();

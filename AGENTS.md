@@ -13,7 +13,7 @@
 
 跟 `.github/workflows/tests.yml` 一樣，PR 要全過：
 
-- node 測試：`node --test scripts/sync-sheet.test.mjs worker/test/worker.test.mjs worker/test/sheet-write.test.mjs scripts/photo-versions.test.mjs scripts/analytics-beacon.test.mjs worker/test/r2.test.mjs scripts/migrate-photos-r2.test.mjs scripts/r2-bucket.test.mjs scripts/build-db.test.mjs scripts/d1-database.test.mjs scripts/business-schema.test.mjs scripts/migrate-identities.test.mjs scripts/migrate-history.test.mjs scripts/migrate-profiles.test.mjs scripts/compact-schema.test.mjs scripts/import-compact-dogs.test.mjs scripts/import-compact-profiles.test.mjs scripts/sync-compact-d1.test.mjs worker/test/d1-read.test.mjs`（要寫檔名，寫資料夾在 Node 22 會失敗）
+- node 測試：`node --test scripts/sync-sheet.test.mjs worker/test/worker.test.mjs worker/test/sheet-write.test.mjs scripts/photo-versions.test.mjs scripts/analytics-beacon.test.mjs worker/test/r2.test.mjs scripts/migrate-photos-r2.test.mjs scripts/r2-bucket.test.mjs scripts/build-db.test.mjs scripts/d1-database.test.mjs scripts/business-schema.test.mjs scripts/migrate-identities.test.mjs scripts/migrate-history.test.mjs scripts/migrate-profiles.test.mjs scripts/compact-schema.test.mjs scripts/import-compact-dogs.test.mjs scripts/import-compact-profiles.test.mjs scripts/sync-compact-d1.test.mjs worker/test/d1-read.test.mjs worker/test/d1-write.test.mjs`（要寫檔名，寫資料夾在 Node 22 會失敗）
 - 網頁測試：`node scripts/run-browser-tests.cjs`（需要 Playwright 的 Chromium）
 
 ## Agent skills
