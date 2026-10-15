@@ -276,11 +276,12 @@ function nameKey(name) {
 }
 
 // 常遛狗群：每一欄是一組可同籠的狗。只保留主清單上有的犬名，回傳的名單一律用主清單的寫法。
-export function parseGroups(table, knownNames) {
+// parseGroupColumns 回傳每一欄的名單（D1 的 v3_sheet_groups 照欄存，#251），parseGroups 再合成每隻狗 → 同群的狗
+export function parseGroupColumns(table, knownNames) {
   const rows = table.rows || [];
   const colCount = Math.max((table.cols || []).length, ...rows.map(r => (r.c || []).length), 0);
   const known = knownNames ? new Map([...knownNames].map(n => [nameKey(n), n])) : null;
-  const map = {};
+  const columns = [];
   for (let col = 0; col < colCount; col++) {
     const names = [];
     for (let i = 0; i < rows.length; i++) {
@@ -292,6 +293,14 @@ export function parseGroups(table, knownNames) {
       }
       if (!names.includes(t)) names.push(t);
     }
+    columns.push(names);
+  }
+  return columns;
+}
+
+export function parseGroups(table, knownNames) {
+  const map = {};
+  for (const names of parseGroupColumns(table, knownNames)) {
     names.forEach(n => {
       if (!map[n]) map[n] = new Set();
       names.forEach(m => { if (m !== n) map[n].add(m); });

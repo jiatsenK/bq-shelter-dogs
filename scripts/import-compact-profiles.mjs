@@ -92,9 +92,10 @@ const NUMBER_OF_DOG = `COALESCE(
   (SELECT MAX(n.number) FROM v3_dog_numbers n WHERE n.dog_id = t.dog_id))`;
 
 // 每次整份替換四張表（同一個 batch，失敗保留原本的內容）；永久狗和編號只新增不刪。
+// 沒給 photos（同步程式拿不到 R2 清單，#251）就不動 v3_photos。
 export async function importCompactProfiles(db, input) {
   validate(input);
-  const { walks, intros = {}, rest = {}, photos = [], names = {} } = input;
+  const { walks, intros = {}, rest = {}, names = {} } = input, photos = input.photos || [];
   const days = canonicalWalks(walks);
   const { entries, skipped } = photoEntries(photos);
   const nameFor = n => names[n] || days.findLast(d => d.id === n)?.name || '';
@@ -120,7 +121,8 @@ export async function importCompactProfiles(db, input) {
     // 依編號排序後新的取代舊的，除非舊的在主清單上、新的不在
     if (!had || current.has(e.number) || !current.has(had.number)) primary.set(id, e);
   }
-  const statements = ['v3_walks', 'v3_intros', 'v3_rest', 'v3_photos'].map(t => db.prepare(`DELETE FROM ${t}`));
+  const tables = ['v3_walks', 'v3_intros', 'v3_rest', ...(input.photos ? ['v3_photos'] : [])];
+  const statements = tables.map(t => db.prepare(`DELETE FROM ${t}`));
   for (const d of days) {
     const codes = d.walkers?.length ? d.walkers : [null];
     codes.forEach((code, position) => statements.push(db.prepare('INSERT INTO v3_walks(dog_id,walk_date,position,walker_name,walker_code,dog_number,dog_name) VALUES(?,?,?,NULL,?,?,?)').bind(idOf(d.id, d.name), d.date, position, code, d.id, d.name)));
@@ -177,6 +179,6 @@ export async function compareCompactProfiles(db, input) {
   diff('walks', byKey(expected.walks), byKey(actual.walks), ['id', 'name', 'date', 'walkers']);
   diff('intros', new Map(Object.entries(expected.intros).map(([n, intro]) => [n, { intro }])), new Map(Object.entries(actual.intros).map(([n, intro]) => [n, { intro }])), ['intro']);
   diff('rest', new Map(Object.entries(expected.rest)), new Map(Object.entries(actual.rest)), ['until', 'reason']);
-  diff('photos', new Map(expected.photos.map(k => [k, {}])), new Map(actual.photos.map(k => [k, {}])), []);
+  if (input.photos) diff('photos', new Map(expected.photos.map(k => [k, {}])), new Map(actual.photos.map(k => [k, {}])), []);
   return { equal: differences.length === 0, differences };
 }
