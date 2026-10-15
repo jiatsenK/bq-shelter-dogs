@@ -1271,6 +1271,17 @@
 - 取消「已溜」的還原和衝突提示原本就有，也有測試，這次沒改。
 - 測試：新增 `worker/test/d1-write.test.mjs`（加進 AGENTS.md 與 CI），移除 worker.test.mjs 裡寫 GitHub 的休養／介紹測試。node 測試 211 項全過；本機沒有 Playwright Chromium，網頁測試交給 CI。
 
+## 2026-10-15 CODEX（#249 匯入開卡與名字推薦）
+- 只新增 scripts/ 下匯入、讀回、逐筆比對、本機演練及 SQL 產出，不改 Worker、sync-* 或表結構。舊編號查 v3_dog_numbers，同代號同狗取最早開卡、名字推薦取較新 last_seen，不清表、不推測志工代號。
+- 指定私密匯出 0 開卡／20 名字推薦，記憶體 SQLite 重跑與逐筆比對一致、外鍵0列。待確認 SQL 留在原 repo 的 .migration-private/249/，未連正式 D1、未執行正式匯入。
+- 新增匯入合併、差異定位、格式／身分拒絕、交易回復、SQL 實際執行及私密路徑防覆寫測試，加入 AGENTS.md 與 CI。完整驗證與雙軸審查進行中。
+- 最後驗證：Node全套219/219，新測試8/8。指定私密來源0開卡／20名字推薦，函式與產出SQL各自記憶體SQLite重跑逐筆一致、外鍵0列；SQL未連正式D1。無頭Chrome243過、1項既有Windows CRLF workflow檢查失敗，Linux CI待PR。
+- 雙軸審查：Spec 0項；Standards指出JS／SQLite時區解析邊界不一致，已紅→綠補拒絕超過±14:00偏移，複查0項。
+
+## 2026-10-15 CODEX（#249 已授權正式名字推薦匯入）
+- K在本聊天明確同意匯入20筆名字推薦後，確認正式D1 UUID與wrangler.jsonc一致，先保存匯入前私密快照、確認待審SQL與指定來源完全相符，再執行既有SQL。
+- 正式庫原有19筆，這次實際只補1筆至20筆；原有19筆的志工ID與last_seen逐筆完全不變。匯入後依baseline比對零差異，開卡、舊walker_names、狗編號對照均未變，外鍵0列。
+- 匯入前後快照與回應只留.migration-private/249/，未提交個資；未合併PR、未部署、未改Worker或同步程式。
 ## 2026-10-15 #259 離所紀錄搬進 D1（Claude）
 
 - 起因：#251 要停止提交 GitHub，但離所紀錄（原因、離開前最後的樣子）存不進 `v3_sheet_departed`。K 同意拆成 #259 → #260 → #251 依序做。
@@ -1291,3 +1302,7 @@
 - `scripts/sync-sheet.mjs` 拿掉寫 data/ 的 `main`，只留函式。
 - `sync-sheet.yml` 拿掉 git 提交、權限改 `contents: read`、push 觸發只看程式檔；部署不再跟著同步跑。
 - 測試：`scripts/sync-compact-d1.test.mjs` 加新紀錄、重跑不重複、離所、空 D1 重建、只寫 D1 的檢查。
+
+## 2026-10-15 #261 合併衝突（Claude）
+
+- 合入 main：測試清單保留 #259 的 `import-compact-departures` 和 #249 的兩個新測試；紀錄兩邊都留。
