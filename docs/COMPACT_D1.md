@@ -83,3 +83,9 @@ node scripts/check-compact-profiles.mjs .migration-private/219/bq-218-r2-source.
 ```
 
 `migrateCompactDatabase` 會幫 #246 時已經建好的 `v3_walks` 補上 `dog_number`、`dog_name` 兩欄。
+
+## 同步寫進 D1（#251 第一步）
+
+`.github/workflows/sync-sheet.yml` 同步完會跑 `scripts/sync-compact-d1.mjs`：用 wrangler 讀正式 D1 現有的永久狗 ID，在記憶體 D1 匯入 dogs.json、walks.json、rest.json、狗卡介紹和常遛狗群（照試算表的欄存），比對一致才產生 SQL 寫回正式 D1。開卡、志工、照片表不動。需要 repo Secrets `CLOUDFLARE_API_TOKEN`（要有 D1 編輯權限）和 `CLOUDFLARE_ACCOUNT_ID`。
+
+GitHub 的 JSON 提交暫時照舊：新的溜狗紀錄和離所還是從舊檔算。等 #250 寫入改寫 D1 之後，再把 GitHub 提交拿掉。

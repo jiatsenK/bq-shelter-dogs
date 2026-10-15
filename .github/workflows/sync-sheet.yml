@@ -5,6 +5,7 @@
 # - 有人改了狗卡（dogs/*.md）或這支同步程式、推到 main 時也會馬上跑一次，狗卡資訊不用等排程
 # - 另外存當天快照 data/history/YYYY-MM-DD.json 和累積遛狗紀錄 data/walks.json（#56，都不含志工名字）
 # - 離所（#162）：狗從主清單消失就記進 data/departures.json，原因只讀「已出所」分頁判讀
+# - 同步完也把資料整份換進 D1 的 v3_ 表（#251，網站 #247 起讀 D1）；GitHub 的 JSON 提交暫時照舊
 # - 只讀試算表，不寫入試算表
 # - 試算表 ID 放在 repo 的 Actions Secret「SHEET_ID」，不寫在程式裡（設定方式見 docs/SHEET_SYNC_SETUP.md）
 name: 同步試算表
@@ -19,7 +20,9 @@ on:
     branches: [main]
     paths:
       - 'dogs/**'
+      - 'data/rest.json'
       - 'scripts/sync-sheet.mjs'
+      - 'scripts/sync-compact-d1.mjs'
 
 permissions:
   contents: write
@@ -43,6 +46,7 @@ jobs:
           node-version: 22
 
       - name: 讀取試算表與狗卡、產生 data/dogs.json、當天快照與遛狗紀錄
+        id: sync
         env:
           SHEET_ID: ${{ secrets.SHEET_ID }}
           # 判斷「是不是我遛的」用的名字（#57）；沒設定也能同步，只是 myWalked 都是 false
@@ -67,3 +71,15 @@ jobs:
             sleep $((i * 5))
           done
           exit 1
+
+      # 網站讀的是 D1（#247）：每次同步都把 data/ 的內容和常遛狗群整份換進 v3_ 表。
+      # 用部署同一組 Cloudflare Secrets；還沒設定時跳過
+      - name: 寫入 D1
+        if: ${{ always() && steps.sync.outcome == 'success' }}
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "沒有設定 CLOUDFLARE_API_TOKEN，跳過寫入 D1。"; exit 0; fi
+          node scripts/sync-compact-d1.mjs
