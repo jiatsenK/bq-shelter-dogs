@@ -25,9 +25,9 @@ test('再入所舊新編號共用永久狗 ID，有編號的同名狗不合併�
   assert.deepEqual((await compareCompactDogs(db, input)).equal, true);
 });
 
-test('真實 JSON 讀回完全一致，改一筆時指出狗編號和欄位', async t => {
+test('合成 JSON 讀回完全一致，改一筆時指出狗編號和欄位', async t => {
   const db = await setup(t);
-  const input = JSON.parse(await readFile(new URL('../data/dogs.json', import.meta.url), 'utf8'));
+  const input = JSON.parse(await readFile(new URL('../tests/fixtures/dogs.json', import.meta.url), 'utf8'));
   await importCompactDogs(db, input);
   assert.deepEqual(await readCompactDogs(db), input.dogs);
   assert.deepEqual(await compareCompactDogs(db, input), { equal: true, differences: [] });

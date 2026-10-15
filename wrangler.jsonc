@@ -12,7 +12,7 @@
     "directory": ".",
     "binding": "ASSETS",
     // 照片放 R2（#130）：照片、dogs.json（照片版本號）也先經過 Worker，Worker 讀 R2、讀不到再給 repo 裡的舊檔（相簿 K 2026-10-09 拿掉）
-    "run_worker_first": ["/api/*", "/api", "/photos/*", "/data/dogs.json"]
+    "run_worker_first": ["/api/*", "/api", "/photos/*"]
   },
   // 照片空間（#130）：Cloudflare R2 的 bucket，Worker 裡叫 env.PHOTOS。bucket 要先在 Cloudflare 開通 R2 後建立
   // 部署只驗證既有空間；失敗就停止，不能拿掉綁定（#214）

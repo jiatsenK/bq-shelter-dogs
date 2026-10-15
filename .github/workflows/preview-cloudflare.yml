@@ -39,11 +39,6 @@ jobs:
         with:
           node-version: 22
 
-      # 照片網址的版本號（#127）：只寫進這次要上傳的 data/dogs.json，不提交
-      - name: 照片版本號
-        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
-        run: node scripts/photo-versions.mjs
-
       # #214：照片仍讀既有 R2，失敗停止，預覽不能寫照片
       - name: 確認照片空間（R2）
         id: r2

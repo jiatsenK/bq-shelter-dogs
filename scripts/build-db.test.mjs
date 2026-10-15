@@ -76,8 +76,9 @@ test('印成 SQL：單引號跳脫、NULL、數字；一次最多 50 列；整�
 });
 
 test('repo 裡現在的資料轉得進去，而且真的能放進 db/schema.sql 的表（有 node:sqlite 才跑這段）', async t => {
-  const all = buildAll(await loadRepoData(), NOW);
-  const live = JSON.parse(await readFile(new URL('../data/dogs.json', import.meta.url), 'utf8'));
+  const live = JSON.parse(await readFile(new URL('../tests/fixtures/dogs.json', import.meta.url), 'utf8'));
+  const walksData = JSON.parse(await readFile(new URL('../tests/fixtures/walks.json', import.meta.url), 'utf8'));
+  const all = buildAll({ dogsData: live, departures: [], rest: {}, walksData, snapshots: [{ date: '2026-10-14', syncedAt: live.syncedAt, dogs: live.dogs }, { date: '2026-10-15', syncedAt: live.syncedAt, dogs: live.dogs.map(d => ({ ...d, cage: 'B1' })) }] }, NOW);
   assert.equal(all.dogs.filter(d => d.status === 'in').length, new Set(live.dogs.filter(d => d.name).map(dogKey)).size, '在所的狗一隻不少');
   assert.ok(all.walks.length > 0 && all.changes.length > 0);
   // 公開資料不放志工名字：誰溜的只能是代號
