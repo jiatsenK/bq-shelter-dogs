@@ -1270,3 +1270,10 @@
 - 同步（`sync-compact-d1.mjs`）不再匯入休養和介紹，避免蓋掉網站剛存的；`importCompactProfiles` 沒給的類別不動那張表。
 - 取消「已溜」的還原和衝突提示原本就有，也有測試，這次沒改。
 - 測試：新增 `worker/test/d1-write.test.mjs`（加進 AGENTS.md 與 CI），移除 worker.test.mjs 裡寫 GitHub 的休養／介紹測試。node 測試 211 項全過；本機沒有 Playwright Chromium，網頁測試交給 CI。
+
+## 2026-10-15 #259 離所紀錄搬進 D1（Claude）
+
+- 起因：#251 要停止提交 GitHub，但離所紀錄（原因、離開前最後的樣子）存不進 `v3_sheet_departed`。K 同意拆成 #259 → #260 → #251 依序做。
+- `db/compact-schema.sql` 新增 `v3_departures`、`v3_departure_items`；新增 `scripts/import-compact-departures.mjs`（匯入＋比對），讀回 `readDepartures` 放在 `worker/src/compact.js`。
+- `sync-compact-d1.mjs` 每次把 `data/departures.json` 整份換進 D1，SQL 開頭先建表，所以正式 D1 不用另外遷移。
+- 測試：新增 `scripts/import-compact-departures.test.mjs`（加進 AGENTS.md 與 CI）。
