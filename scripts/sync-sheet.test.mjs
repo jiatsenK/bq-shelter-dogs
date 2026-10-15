@@ -409,9 +409,10 @@ test('#56 公開檔案（dogs.json、快照、walks.json）都找不到志工名
   }
 });
 
-test('#56 workflow 提交時一併加入快照與遛狗紀錄', async () => {
+test('#56 #251 workflow 只跑寫 D1 的同步，不再提交快照與遛狗紀錄', async () => {
   const yml = await readFile(new URL('../.github/workflows/sync-sheet.yml', import.meta.url), 'utf8');
-  assert.match(yml, /git add data\/dogs\.json data\/history data\/walks\.json/);
+  assert.match(yml, /node scripts\/sync-compact-d1\.mjs/);
+  assert.doesNotMatch(yml, /git add|node scripts\/sync-sheet\.mjs/);
 });
 
 // ── #57 是不是我遛的（myWalked） ──
@@ -736,9 +737,7 @@ test('#162 讀不到已出所分頁：原因沿用上一次；那一列後來不
   assert.equal(sync.planDepartures({ oldText: old, snapshots: snaps, rows: [], today: OCT8 }), null);
 });
 
-test('#162 workflow 提交時加入 departures.json；同步程式不寫入試算表', async () => {
-  const wf = await readFile(new URL('../.github/workflows/sync-sheet.yml', import.meta.url), 'utf8');
-  assert.match(wf, /git add [^\n]*data\/departures\.json/);
+test('#162 同步程式不寫入試算表（#251 起離所存 D1，見 sync-compact-d1.test.mjs）', async () => {
   const src = await readFile(new URL('./sync-sheet.mjs', import.meta.url), 'utf8');
   assert.ok(!/method:\s*['"]POST/.test(src));
 });
