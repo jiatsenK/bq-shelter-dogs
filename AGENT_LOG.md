@@ -1284,3 +1284,10 @@
 - `js/app.js`、`js/cards.js`（`desk.js` 共用 `WALKS_URL`）、`js/analysis.js` 改讀 `api/walks`、`api/departures`；開始記錄日改用 `historyStart`，不再讀快照目錄。
 - 照片、備註確認編號在有 D1 時改讀主清單（`readMainNames`）。`readCompactProfiles` 的溜狗紀錄改共用 `readWalks`。
 - 測試：`worker/test/d1-read.test.mjs` 加新 API 測試；`tests/index.html` 改成新網址。本機沒有 Playwright Chromium，網頁測試交給 CI。
+
+## 2026-10-15 #251 同步只寫 D1（Claude）
+
+- `scripts/sync-compact-d1.mjs` 改成同步入口：讀試算表＋正式 D1 現況，`planSync` 用 D1 上一次的主清單、溜狗紀錄、離所算新的，整份寫回 D1。D1 的溜狗紀錄沒有 `mine`，用代號推回。
+- `scripts/sync-sheet.mjs` 拿掉寫 data/ 的 `main`，只留函式。
+- `sync-sheet.yml` 拿掉 git 提交、權限改 `contents: read`、push 觸發只看程式檔；部署不再跟著同步跑。
+- 測試：`scripts/sync-compact-d1.test.mjs` 加新紀錄、重跑不重複、離所、空 D1 重建、只寫 D1 的檢查。
