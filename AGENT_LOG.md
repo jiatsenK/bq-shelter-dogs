@@ -1214,3 +1214,8 @@
 - 依 K 本次確認，CONTEXT.md 改名為 GLOSSARY.md，更新目前文件與 repo-local 技能的引用；歷史紀錄保留原名。
 - 同步上游 v1.3.1 所選技能，加入 pr／retro、移除 resolving-merge-conflicts；保留單票 implement 流程，不加入 implement-spec。
 - 驗證：詞彙表內容雜湊一致、目前引用檢查與技能逐檔比對；本次未變更網站程式或資料。
+
+## 2026-10-15 移除根目錄舊截圖（Claude）
+
+- 刪除根目錄 complete.png、full.png、list.png、scatter.png、top.png、zone.png（#59 分析頁改版時留下，沒有任何頁面或文件引用）。
+- 驗證：git grep 確認沒有引用；未變更網站程式或資料。
