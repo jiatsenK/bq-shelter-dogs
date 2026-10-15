@@ -8,8 +8,8 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { ensureDatabase, parseJsonOutput, findDatabase, DB_NAME, DEPLOY_CONFIG, PREVIEW_CONFIG } from './d1-database.mjs';
 
-const production = { binding: 'DB', database_name: DB_NAME, database_id: 'prod-id', preview_database_id: 'test-id', migrations_dir: 'db/migrations' };
-const testing = { binding: 'DB', database_name: 'bq-shelter-dogs-test', database_id: 'test-id', migrations_dir: 'db/migrations' };
+const production = { binding: 'DB', database_name: DB_NAME, database_id: 'prod-id', preview_database_id: 'test-id' };
+const testing = { binding: 'DB', database_name: 'bq-shelter-dogs-test', database_id: 'test-id' };
 async function repo(binding = production) {
   const root = await mkdtemp(join(tmpdir(), 'bq-d1-'));
   await writeFile(join(root, 'wrangler.jsonc'), JSON.stringify({ name: 'x', r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos' }], vars: { GITHUB_BRANCH: 'main' }, d1_databases: binding ? [binding] : [] }));
@@ -41,7 +41,7 @@ test('#214 正式部署不管空庫或有資料，都只查證不建表／匯入
   const result = await ensureDatabase({ root, run });
   assert.equal(result.config, DEPLOY_CONFIG);
   const cfg = JSON.parse(await readFile(join(root, result.config), 'utf8'));
-  assert.deepEqual(cfg.d1_databases, [{ binding: 'DB', database_name: DB_NAME, database_id: 'prod-id', migrations_dir: 'db/migrations' }]);
+  assert.deepEqual(cfg.d1_databases, [{ binding: 'DB', database_name: DB_NAME, database_id: 'prod-id' }]);
   assert.equal(cfg.r2_buckets[0].bucket_name, 'photos');
   assert.equal(cfg.vars.PREVIEW, undefined);
   assert.deepEqual(calls, [['d1', 'list', '--json'], ['d1', 'execute', DB_NAME, '--remote', '--json', '--config', DEPLOY_CONFIG, '--command', 'SELECT 1 AS ok']]);

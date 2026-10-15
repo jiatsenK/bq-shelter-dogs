@@ -160,12 +160,9 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
    右上角頭像 → **My Profile** → **API Tokens** → 找到部署用的那把 → **Edit** → **Permissions** 加一行
    `Account`｜`Workers R2 Storage`｜`Edit` → **Continue to summary** → **Update token**，再回到第 1 步部署一次（token 字串不會變，GitHub 不用改）。
 
-### 步驟 3：把舊照片搬進 R2
+### 步驟 3：把舊照片搬進 R2（已完成）
 
-1. 打開 https://github.com/jiatsenK/bq-shelter-dogs/actions/workflows/migrate-photos-r2.yml → **Run workflow** → 綠色 **Run workflow**。
-2. 等綠勾勾（幾分鐘），點進去看 **Summary**：會列出 repo 裡共幾張、這次複製幾張、核對正確幾張，最下面是
-   「✅ 每一張都核對過，數量一致。」就完成了。
-3. 紅叉叉的話 Summary 會列出哪幾張不對，截圖給 Claude。可以重跑，搬過的會自動跳過。
+2026-10-04 已用「照片搬到 R2」Action 搬完並逐張核對；這個 Action 和 `scripts/migrate-photos-r2.mjs` 已在 #275 移除，需要時見 Git 歷史。
 
 ### 步驟 4：用手機驗收
 
@@ -174,7 +171,7 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
 3. 過一兩分鐘清單上的小圖也換成新的（縮圖由「產生照片縮圖（R2）」Action 做，做好前先顯示原圖）。
 4. GitHub 的提交紀錄（https://github.com/jiatsenK/bq-shelter-dogs/commits/main ）**沒有**多出照片的提交。
 
-（2026-10-04 K 驗收通過；舊照片 2026-10-05 已從 repo 刪除，「照片搬到 R2」不用再跑。）
+（2026-10-04 K 驗收通過；舊照片 2026-10-05 已從 repo 刪除。）
 
 ### 刪掉相簿照片（2026-10-09 相簿拿掉後，K 自己做一次）
 
@@ -191,7 +188,7 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
 ### 要注意的地方
 
 - 照片改由 Worker 從 R2 讀，會算進 Cloudflare Workers 免費方案的**每天 10 萬次**。照片在手機上快取 30 天，正常用不會超過；Cloudflare 的 Worker 頁面 **Metrics** 看得到每天用量。
-- 管理用的功能（搬遷、縮圖、Trash 清單和復原）都要「我的備註」那組通關碼（GitHub Secret `NOTES_PASSCODE`），之後的管理後台也會用到。
+- 管理用的功能（縮圖、Trash 清單和復原）都要「我的備註」那組通關碼（GitHub Secret `NOTES_PASSCODE`），之後的管理後台也會用到。
 
 ## token 到期時
 
@@ -210,12 +207,12 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
   `/photos/*`、`/data/dogs.json`（蓋上 R2 照片的版本號）先經過 Worker（相簿 2026-10-09 拿掉，`photos/gallery/` 一律 404）；R2 沒有的照片退回靜態檔，刪掉的照片放 0 位元組的刪除標記（`customMetadata.deleted`）擋住退回。
   換掉、刪掉前複製到 `trash/{時間-亂數}/photo.jpg`（customMetadata 記 path、dogId、kind、file、addedAt、deletedAt）＋`thumb.jpg`，Cron 清掉超過 30 天的。
   管理 API（標頭 `X-Admin-Passcode: encodeURIComponent(通關碼)`）：`POST /api/admin/migrate`、`POST /api/admin/verify`、`GET /api/admin/thumbs`、`PUT /api/admin/thumbs/{原圖路徑}`、`GET /api/admin/trash`、`POST /api/admin/trash/{代號}/restore`。
-  部署前 `scripts/r2-bucket.mjs` 只查證既有 bucket，失敗以非零狀態結束、停止部署。縮圖：`.github/workflows/r2-thumbs.yml`（`scripts/make-thumbs.py --site`）；搬遷：`.github/workflows/migrate-photos-r2.yml`（`scripts/migrate-photos-r2.mjs`）。
-  本機試跑 `npx wrangler dev --local --persist-to /tmp/wrangler-state --var NOTES_PASSCODE:測試`，再 `SITE_URL=http://localhost:8787 ADMIN_PASSCODE=測試 node scripts/migrate-photos-r2.mjs` 就能模擬搬遷。
+  部署前 `scripts/r2-bucket.mjs` 只查證既有 bucket，失敗以非零狀態結束、停止部署。縮圖：`.github/workflows/r2-thumbs.yml`（`scripts/make-thumbs.py --site`）。
+  repo 的 `photos/` 已經不放照片（原本的 `photos/README.md` 併到這裡）。R2 找不到照片時 Worker 仍會退回讀部署的靜態檔，這是搬遷過渡期的備援，請不要再把 `.jpg` 放進 repo。
 
 ## 資料庫（D1）
 
-K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**（設計見 `docs/DATABASE.md`）。免費額度 5 GB，現在的資料不到 1 MB，費用 NT$0。
+K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**（結構見 `docs/COMPACT_D1.md`、`db/compact-schema.sql`）。免費額度 5 GB，現在的資料不到 1 MB，費用 NT$0。
 目前只是把資料庫建起來、把現有資料放進去；**網站還是讀原本的檔案**，所以資料庫沒接上網站也完全不受影響。
 
 **#214 起部署不改資料庫。** `scripts/d1-database.mjs` 只驗證既有資料庫名稱／ID 並執行 `SELECT 1`，缺少、ID 不符或讀取失敗就停止部署。即使資料庫是空的也不建表或匯入。新增結構在 #215 之後走有版本的 migration，與網站部署分開執行。
@@ -231,19 +228,7 @@ K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**�
 
 ### 結構改動與資料匯入
 
-以下只記錄獨立操作方式，不會由部署 Action 執行。先確認目標與授權，再列出待套用 migration：
-
-```sh
-npx wrangler@4 d1 migrations list bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc
-```
-
-#215 建立 SQL 並通過本機驗證後，明確執行測試庫的 migration：
-
-```sh
-npx wrangler@4 d1 migrations apply bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc
-```
-
-正式目標使用 wrangler.jsonc 與 bq-shelter-dogs，必須另行確認正式操作，不能因 main 合併或空庫而自動執行。migration 目錄配置為 `db/migrations`，新 SQL 留 #215。資料匯入留 #216～#219，不再靠 `db/schema.sql` 與 seed.sql 自動執行。
+資料表結構只有 `db/compact-schema.sql`（`v3_*`），說明見 `docs/COMPACT_D1.md`。舊的 `db/schema.sql`、`db/migrations/` 在舊表清除（#252，見 `docs/adr/0003-252-old-data-cleanup.md`）後已於 #275 移除，`wrangler*.jsonc` 也不再設定 `migrations_dir`，所以不要再跑 `d1 migrations apply`。
 
 參考：[D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/)、[D1 綁定設定](https://developers.cloudflare.com/workers/wrangler/configuration/#d1-databases)。目前沿用 repo 的版本網址預覽流程，沒有切換到另一套 Workers Previews 功能。
 
