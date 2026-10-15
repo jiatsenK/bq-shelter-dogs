@@ -37,13 +37,13 @@ export function snapshotDb(raw) {
 
 export async function compareCleanup(db, source) {
   const rows = async t => (await db.prepare(`SELECT * FROM ${t}`).all()).results;
-  const [dogs, numbers, main, intros, rest, walks, departures] = await Promise.all([
-    rows('v3_dogs'), rows('v3_dog_numbers'), rows('v3_sheet_main'), rows('v3_intros'), rows('v3_rest'), rows('v3_walks'), readDepartures(db),
+  const [dogs, numbers, main, intros, rest, walks, departures, former] = await Promise.all([
+    rows('v3_dogs'), rows('v3_dog_numbers'), rows('v3_sheet_main'), rows('v3_intros'), rows('v3_rest'), rows('v3_walks'), readDepartures(db), rows('v3_sheet_former_numbers'),
   ]);
   const differences = [], checked = {};
-  const compare = (kind, key, expected, actual) => {
+  const compare = (kind, key, expected, actual, field) => {
     checked[kind] = (checked[kind] || 0) + 1;
-    if (!isDeepStrictEqual(expected, actual)) differences.push({ kind, key, expected, actual });
+    if (!isDeepStrictEqual(expected, actual)) differences.push({ kind, key, ...(field ? { field } : {}), expected, actual });
   };
   const byNumber = new Map(numbers.map(n => [n.number, n.dog_id]));
   const dogId = dog => {
@@ -71,7 +71,25 @@ export async function compareCleanup(db, source) {
     const expected = d.id ? related(d.id) : [];
     compare('formerIds', key, expected, id && d.id ? numbers.filter(n => n.dog_id === id && n.number !== d.id).map(n=>n.number).sort() : []);
     compare('intro', key, d.intro || '', id ? intros.find(r => r.dog_id === id)?.intro || '' : null);
+    const projection = main.find(r => d.id ? r.number === d.id : !r.number && r.name === d.name);
+    if (projection || source.dogs.dogs.some(current => d.id ? current.id === d.id : !current.id && current.name === d.name)) {
+      if (projection) {
+        compare('formerIds',key,id || null,projection.dog_id,'mainIdentity');
+        compare('intro',key,d.intro || '',intros.find(r=>r.dog_id===projection.dog_id)?.intro || '','main');
+      }
+      compare('sex',key,d.sex || '',projection?.sex ?? null,'main');
+      compare('formerIds',key,[...(d.formerIds || [])].sort(),projection ? former.filter(r=>r.row_index === projection.row_index).map(r=>r.number).sort() : null,'main');
+    }
   }
+  const knownIds = new Set([
+    ...[...sourceDogs.values(), ...source.walks.walks, ...source.departures].map(dogId),
+    ...Object.keys(source.rest).map(n=>byNumber.get(n)),
+    ...[...sourceDogs.values()].flatMap(d=>(d.formerIds || []).map(n=>byNumber.get(n))),
+  ].filter(Boolean));
+  const profileIds = new Set([...sourceDogs.values()].map(dogId).filter(Boolean));
+  const keyOf = id => main.find(r=>r.dog_id===id)?.number || numbers.find(n=>n.dog_id===id)?.number || '名:' + (dogs.find(d=>d.dog_id===id)?.name || id);
+  for (const dog of dogs) if (!knownIds.has(dog.dog_id)) compare('sex',keyOf(dog.dog_id),null,dog.sex,'extraDog');
+  for (const intro of intros) if (!profileIds.has(intro.dog_id)) compare('intro',keyOf(intro.dog_id),null,intro.intro,'extraDog');
   const restById = new Map(Object.entries(source.rest).map(([number, r]) => [byNumber.get(number) || `missing:${number}`, { number, until: r.until, reason: r.reason || '' }]));
   for (const [id, value] of restById) compare('rest', value.number, { until: value.until, reason: value.reason }, rest.find(r => r.dog_id === id) ? { until: rest.find(r => r.dog_id === id).until_date, reason: rest.find(r => r.dog_id === id).reason } : null);
   for (const r of rest) if (!restById.has(r.dog_id)) compare('rest', numbers.find(n => n.dog_id === r.dog_id)?.number || r.dog_id, null, { until: r.until_date, reason: r.reason });
