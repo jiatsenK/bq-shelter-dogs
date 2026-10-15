@@ -1215,7 +1215,23 @@
 - 同步上游 v1.3.1 所選技能，加入 pr／retro、移除 resolving-merge-conflicts；保留單票 implement 流程，不加入 implement-spec。
 - 驗證：詞彙表內容雜湊一致、目前引用檢查與技能逐檔比對；本次未變更網站程式或資料。
 
+## 2026-10-15 CODEX（#246 精簡 D1 建表與狗清單）
+- 依 #245/#246 新增獨立 v3_ 表與明確建表、狗清單匯入／讀回／比對入口，不動舊表、不切換網站、不連正式 D1 或試算表。
+- 編號與 formerIds 共用永久狗 ID；同名不猜合併，既有 ID 衝突拒絕，主清單複本以單一 batch 原子替換。私密匯出加入忽略清單。
+- 新增結構、重跑、再入所、真實 JSON 讀回與單筆差異、來源錯誤／交易回復測試，納入 AGENTS.md 與 CI。驗證與雙軸審查進行中。
+- 最後驗證：Node 全套194/194；main基底真實118隻狗與118編號讀回零差異、外鍵0列。無頭Chrome網頁243過、1項既有 #130 workflow Windows CRLF檢查失敗。
+- Standards 0項；Spec發現異動紀錄複本應保存label/text，已補紅→綠測試修正，複查0項。工作期間其他流程切換共用checkout，已移至獨立worktree並精確移除共用目錄的重複變更。
 ## 2026-10-15 檢討後的防護（Claude）
 
 - `.gitignore` 加入 `.migration-private/`，避免正式資料庫的匯出被提交。
 - 新增 `docs/agents/agent-split.md`（Claude／Codex 分票原則），AGENTS.md 加上指向它的連結。
+
+## 2026-10-15 CODEX（#246 合入最新 main）
+- 合入 #253 的既有私密匯出忽略規則與分工文件；.gitignore沿用main，AGENT_LOG兩邊紀錄均保留。未變更實作；驗證本票7項通過。
+
+## 2026-10-15 #254 審查修正（Claude）
+
+- 移除 `v3_sheet_main.fields` 位元遮罩：讀回時每隻狗都有全部欄位，比對前來源也補成同樣形狀。
+- `v3_walks` 只留 `walker_name`／`walker_code`，移除意思不明的 `name`。
+- 沒有編號的狗以名字延續狗 ID 改成明確規則並寫進註解、測試標題和 docs；`v3_volunteers.last_seen` 註明給名字推薦排序。
+- 驗證：compact-schema、import-compact-dogs 測試 7 項全過。
