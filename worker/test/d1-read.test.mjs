@@ -6,6 +6,9 @@ import worker from '../src/index.js';
 import { fakeD1 } from './fakes.mjs';
 import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
 import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
+import { importCompactProfiles } from '../../scripts/import-compact-profiles.mjs';
+import { importCompactDepartures } from '../../scripts/import-compact-departures.mjs';
+import { readMainNames, HISTORY_START } from '../src/compact.js';
 
 const SITE = 'https://bq-shelter-dogs.<子網域>.workers.dev';
 const SOURCE = {
@@ -111,4 +114,47 @@ test('狀態頁：顯示新資料庫有沒有接上、狗和主清單幾筆；�
   assert.equal(await status({}), '未設定');
   assert.equal(await status({ DB: await seededDb() }), 'D1 新表（狗 3、主清單 3、溜狗紀錄 0）');
   assert.equal(await status({ DB: fakeD1() }), 'D1（新表還沒建）');
+});
+
+// #260 網站不再讀 data/walks.json、data/departures.json、data/history/
+test('GET /api/walks：形狀跟 walks.json 一樣，帶開始記錄日；沒記人的舊紀錄沒有 walkers', async () => {
+  const DB = await seededDb();
+  const walks = [
+    { id: '2026051203', name: '圓仔', date: '2026-09-01' },
+    { id: '2025022703', name: '滿滿', date: '2026-10-14', walkers: ['e9c69473e76f', 'aaaaaaaaaaaa'] },
+    { id: '', name: '沒編號', date: '2026-10-15', walkers: ['da53fbdda293'] },
+  ];
+  await importCompactProfiles(DB, { walks: { version: 1, walks } });
+  const body = await (await get('/walks', { DB })).json();
+  assert.equal(body.ok, true);
+  assert.equal(body.historyStart, HISTORY_START);
+  assert.deepEqual(body.walks, walks);
+});
+
+test('GET /api/departures：形狀跟 departures.json 一樣', async () => {
+  const DB = await seededDb();
+  const departures = [{ id: '2021030913', name: '咪寶', date: '2026-10-13', dateSource: 'note', seen: '2026-10-13', reason: 'adopt', matched: '被領養', flags: [],
+    last: { cage: 'C區11', id: '2021030913', name: '咪寶', walkedDate: '2026-10-13', note: '', sex: 'female', intro: '' } }];
+  await importCompactDepartures(DB, departures);
+  const body = await (await get('/departures', { DB })).json();
+  assert.deepEqual(body, { ok: true, version: 1, departures });
+});
+
+test('GET /api/walks、/api/departures：D1 壞了或沒接回 503；只收 GET', async () => {
+  const broken = { prepare: () => ({ bind() { return this; }, all: async () => { throw new Error('D1_ERROR'); } }), batch: async () => { throw new Error('D1_ERROR'); } };
+  for (const path of ['/walks', '/departures']) {
+    for (const env of [{ DB: broken }, {}]) {
+      const res = await get(path, env);
+      assert.equal(res.status, 503);
+      assert.equal((await res.json()).code, 'db');
+    }
+    assert.equal((await send('POST', path, {}, { DB: await seededDb() })).status, 405);
+  }
+});
+
+test('照片、備註確認編號改讀 D1 主清單：只收有編號的狗；主清單空的丟錯', async () => {
+  const DB = await seededDb();
+  assert.deepEqual([...await readMainNames(DB)], [['2025022703', '滿滿'], ['2026051203', '圓仔']]);
+  const empty = fakeD1(); await migrateCompactDatabase(empty);
+  await assert.rejects(readMainNames(empty), /沒有資料/);
 });
