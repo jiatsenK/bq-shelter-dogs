@@ -2,7 +2,6 @@
 // 執行：node --test worker/test/worker.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
 import worker from '../src/index.js';
 
 const { resetState, allowUpload, isJpeg, MAX_BYTES } = worker.testing;
@@ -735,32 +734,6 @@ test('#141 GET /walkers：分兩次讀主清單，回每隻狗的誰遛的（key
   assert.equal(calls.length, 2, '第二次用快取');
 });
 
-test('K 2026-10-12 GET /walkers：看過的名字記進資料庫，以前看過、現在表上沒有的放 older；資料庫壞了照舊', async t => {
-  let sqlite;
-  try { sqlite = await import('node:sqlite'); } catch (e) { t.skip('這個 Node 沒有 node:sqlite'); return; }
-  const db = new sqlite.DatabaseSync(':memory:');
-  db.exec(await readFile(new URL('../../db/schema.sql', import.meta.url), 'utf8'));
-  db.prepare('INSERT INTO walker_names (name, last_seen) VALUES (?, ?)').run('老K', '2026-10-01T00:00:00.000Z');
-  db.prepare('INSERT INTO walker_names (name, last_seen) VALUES (?, ?)').run('阿德', '2026-09-01T00:00:00.000Z');
-  // 只做到 Worker 用到的 D1 介面：prepare → bind → run／all，和 batch
-  const stmt = (sql, args = []) => ({
-    bind: (...a) => stmt(sql, a),
-    run: async () => db.prepare(sql).run(...args),
-    all: async () => ({ results: db.prepare(sql).all(...args) }),
-  });
-  const DB = { prepare: sql => stmt(sql), batch: async list => Promise.all(list.map(x => x.run())) };
-  fakeSheet();
-  const { body } = await getWalkers({ SHEET_ID: 'abc', DB });
-  assert.equal(body.names[0], '志工乙');
-  assert.deepEqual(body.older, ['老K', '阿德'], '最近看到的在前，表上現在有的不重複');
-  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM walker_names').get().n, 7, '表上的 5 個名字記進去');
-  resetState();
-  fakeSheet();
-  const broken = { prepare: () => { throw new Error('no such table: walker_names'); } };
-  const res = await getWalkers({ SHEET_ID: 'abc', DB: broken });
-  assert.deepEqual([res.status, res.body.older, res.body.names.length], [200, [], 5]);
-});
-
 test('K 2026-10-12 GET /walkers：有 WALKER_KEY 時多回 codes（代號 → 名字），電腦版最近 30 天寫每天誰遛的；沒密鑰回空的', async () => {
   fakeSheet();
   const { body } = await getWalkers({ SHEET_ID: 'abc', WALKER_KEY: 'test-walker-key' });
@@ -799,54 +772,4 @@ test('舊網址拿掉後：沒設 ALLOWED_ORIGINS 時，舊網址 github.io 送�
   assert.equal((await send(new Request(`${SITE}/api/notes`, { headers: { Origin: 'https://jiatsenk.github.io' } }), env)).status, 403);
   assert.equal((await send(new Request(`${SITE}/api/notes`, { headers: { Origin: SITE } }), env)).status, 200);
 });
-
-// ---- 資料庫（D1，第 2 步）：目前只在狀態頁報告，網站還不讀它 ----
-test('狀態頁：沒接資料庫寫「未設定」；接上了寫各表幾筆；還沒建表不會壞', async () => {
-  fakeGithub();
-  assert.equal((await send(new Request('https://x.workers.dev/'), ENV)).body.database, '未設定');
-  const counts = { dogs: 125, walks: 732, changes: 53 };
-  const DB = { prepare: sql => ({ first: async () => ({ n: counts[sql.match(/FROM (\w+)/)[1]] }) }) };
-  assert.equal((await send(new Request('https://x.workers.dev/'), { ...ENV, DB })).body.database, 'D1（狗 125、溜狗紀錄 732、異動紀錄 53）');
-  const broken = { prepare: () => ({ first: async () => { throw new Error('no such table: dogs'); } }) };
-  assert.equal((await send(new Request('https://x.workers.dev/'), { ...ENV, DB: broken })).body.database, 'D1（還沒建表）');
-});
-
-test('圖鑑 D1：同人跨裝置合併、重送不重複、不同人隔離、預覽不可寫', async () => {
-  const { DatabaseSync } = await import('node:sqlite');
-  const db = new DatabaseSync(':memory:');
-  db.exec(await readFile(new URL('../../db/schema.sql', import.meta.url), 'utf8'));
-  const original = globalThis.fetch;
-  const calls = fakeGithub();
-  const DB = {
-    prepare(sql) { return { bind(...args) { return { sql, args }; } }; },
-    async batch(statements) {
-      db.exec('BEGIN');
-      try {
-        const result = statements.map(({ sql, args }) => ({ success: true, results: sql.startsWith('SELECT') ? db.prepare(sql).all(...args) : (db.prepare(sql).run(...args), []) }));
-        db.exec('COMMIT'); return result;
-      } catch (e) { db.exec('ROLLBACK'); throw e; }
-    },
-  };
-  const code = 'abcdef123456', other = '123456abcdef';
-  const req = (method, data, env = {}) => worker.fetch(new Request(`https://worker.example/api/cards/opened${method === 'GET' ? '?codes=' + data.join(',') : ''}`, {
-    method, headers: { Origin: ORIGIN, 'Content-Type': 'application/json' }, ...(method === 'GET' ? {} : { body: JSON.stringify(data) }),
-  }), { ...ENV, DB, ...env });
-  try {
-    resetState();
-    assert.equal((await req('PUT', { codes: [code], ids: ['2024032902'] })).status, 200);
-    assert.equal((await req('PUT', { codes: [code], ids: ['2024032902'] })).status, 200);
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM card_opened').get().n, 1);
-    const out = await (await req('GET', [code])).json();
-    assert.match(out.opened.codes[code]['2024032902'], /^\d{4}-\d{2}-\d{2}$/);
-    assert.deepEqual((await (await req('GET', [other])).json()).opened.codes[other], {});
-    assert.equal((await req('PUT', { codes: [other], ids: ['2024032902'] })).status, 200);
-    assert.equal(db.prepare('SELECT COUNT(*) AS n FROM card_opened').get().n, 2);
-    assert.equal((await req('PUT', { codes: [code], ids: ['unknown'] })).status, 400);
-    assert.equal((await req('GET', ["bad' OR 1=1"])).status, 400);
-    assert.equal((await req('PUT', { codes: [code], ids: [] })).status, 400);
-    assert.equal((await req('PUT', { codes: [code], ids: ['2024032902'] }, { PREVIEW: '1' })).status, 403);
-    assert.equal((await req('GET', [code], { DB: null })).status, 503);
-    assert.equal((await req('GET', [code], { DB: { batch() { throw new Error('unavailable'); }, prepare: DB.prepare } })).status, 503);
-    assert.equal(calls.filter(c => c.method !== 'GET').length, 0, '不寫 GitHub 或試算表');
-  } finally { globalThis.fetch = original; db.close(); resetState(); }
-});
+// 資料庫（狀態頁、開卡、名字推薦、GET /api/dogs）的測試在 worker/test/d1-read.test.mjs（#247）

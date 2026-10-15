@@ -236,7 +236,7 @@ function runTests() {
       // #58 我最近溜過另外讀 data/walks.json
       if (!urls.every(u => u.startsWith('DATA_URL,') || u.startsWith('WALKS_URL,') || u.startsWith('REST_URL,') || u === "`${UPLOAD_URL}/walkers`, { cache: 'no-cache' }")) throw new Error(`只能讀 data/dogs.json、data/walks.json 與我的備註：${urls.join('、')}`);
       if (/readJsonObject|GALLERY_URL|\/gallery/.test(APP_JS)) throw new Error('相簿已拿掉（K 2026-10-09），不該再讀相簿清單');
-      eq(DATA_URL, 'data/dogs.json', '資料檔：');
+      eq(DATA_URL, 'api/dogs', '資料來源（#247 Worker 讀 D1）：');
       eq(WALKS_URL, 'data/walks.json', '遛狗紀錄檔：');
       eq(REST_URL, 'data/rest.json', '休養設定檔：');
       if (/docs\.google\.com|gviz/.test(APP_JS)) throw new Error('前端不應再連 Google 試算表');
@@ -808,7 +808,7 @@ async function runSerialTests() {
       document.querySelector('#tabs button[data-tab="walk"]').click();
       eq(main.textContent.trim(), '讀取中…', '切回溜狗表仍在讀取：');
       release(); await done; await tick();
-      eq(calls.filter(c => !/\/walkers$/.test(c[0]))[0], ['data/dogs.json', 'no-cache'], '讀的檔案（#141 溜狗人名字另外跟 Worker 拿）：');
+      eq(calls.filter(c => !/\/walkers$/.test(c[0]))[0], ['api/dogs', 'no-cache'], '讀的檔案（#141 溜狗人名字另外跟 Worker 拿）：');
       onboard = null; renderOnboard(); // init 會開開頭畫面，測試不需要
       if (calls.some(([u]) => /google|gviz/.test(u))) throw new Error('不應連試算表');
       eq(names(), ['讀取甲', '讀取乙'], '狗卡（沒紀錄的在前）：');
@@ -818,12 +818,12 @@ async function runSerialTests() {
         `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, '同步時間：');
       eq([...groupMap['讀取甲']], ['讀取乙'], '可以一起溜：');
       // #62 起讀完狗狗資料後另外讀我的備註（Worker 的 /notes、不行再讀 data/my-notes.json），不算在內
-      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$|walks\.json$|rest\.json$|\/walkers$/.test(u)), ['data/dogs.json'], '只讀 dogs.json，不再逐隻抓 dogs/*.md：');
+      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$|walks\.json$|rest\.json$|\/walkers$/.test(u)), ['api/dogs'], '只讀 /api/dogs，不再逐隻抓 dogs/*.md：');
     });
-    await check('#32 dogs.json 讀取失敗：標題、搜尋、分類都在，內容區顯示錯誤，可重新讀取', async () => {
+    await check('#32／#247 狗的資料讀取失敗（含 D1 出錯回 503）：標題、搜尋、分類都在，內容區顯示錯誤，可重新讀取', async () => {
       reset();
       document.getElementById('updatedLabel').textContent = '';
-      for (const fake of [() => new Response('Not Found', { status: 404 }), () => { throw new TypeError('Failed to fetch'); }, () => new Response('{壞掉')]) {
+      for (const fake of [() => new Response(JSON.stringify({ ok: false, code: 'db', error: '資料庫暫時讀不到狗的資料，請稍後再試' }), { status: 503 }), () => new Response('Not Found', { status: 404 }), () => { throw new TypeError('Failed to fetch'); }, () => new Response('{壞掉')]) {
         install(fake);
         await init();
         eq(tabNames(), ['溜狗表', '我溜過', '找狗'], '分類：');
@@ -2264,7 +2264,7 @@ async function runSyncButtonTests() {
     window.fetch = async (url, init = {}) => {
       calls.push(`${init.method || 'GET'} ${String(url).replace(UPLOAD_URL, 'W')}`);
       if (String(url).endsWith('/sync')) return new Response(JSON.stringify({ ok: status === 200 }), { status });
-      if (String(url).includes('dogs.json')) return new Response(JSON.stringify(files.length > 1 ? files.shift() : files[0]));
+      if (String(url).endsWith('api/dogs')) return new Response(JSON.stringify(files.length > 1 ? files.shift() : files[0]));
       return new Response('{}', { status: 404 });
     };
     return calls;
@@ -2847,7 +2847,7 @@ async function runFastOpenTests() {
   const css = await fetch('../css/app.css').then(r => r.text());
   const rule = sel => (css.match(new RegExp(`\\n${sel.replace('.', '\\.')} \\{([^}]*)\\}`)) || [])[1] || '';
   await check('手機開啟加速：index.html 在 css 前面就開始抓 dogs.json', () => {
-    const at = INDEX_HTML.indexOf("window.__dogsEarly = fetch('data/dogs.json'");
+    const at = INDEX_HTML.indexOf("window.__dogsEarly = fetch('api/dogs'");
     if (at < 0) throw new Error('index.html 沒有提早抓 dogs.json');
     if (at > INDEX_HTML.indexOf('<link rel="stylesheet" href="css/app.css">')) throw new Error('要放在 css 前面，不然會等 css 下載完才執行');
     if (!/document\.addEventListener\('DOMContentLoaded', init\)/.test(APP_JS)) throw new Error('init 要等 find.js、analysis.js 也載入完才開始');
@@ -3326,7 +3326,7 @@ async function runCardsTests() {
         const nativeFetch = window.fetch;
         window.fetch = async (url, init = {}) => {
           const f = parent.__cardFixture;
-          if (url === 'data/dogs.json') return Response.json(f.dogs);
+          if (url === 'api/dogs') return Response.json(f.dogs);
           if (url === 'data/walks.json') return Response.json(f.walks);
           if (String(url).startsWith('/api/cards/opened')) {
             if (f.fail) return Response.json({ ok: false }, { status: 503 });
