@@ -1,5 +1,5 @@
 // 按「溜了」寫進試算表（#138）：這份貼到 Google Apps Script，用 K 的 Google 帳號部署成「網頁應用程式」。
-// 步驟見 docs/SHEET_WRITE_SETUP.md。網站不會直接呼叫這裡，都經過 Worker（POST /api/walk），有設通關碼時 Worker 會帶過來。
+// 步驟見 docs/setup/SHEET_WRITE_SETUP.md。網站不會直接呼叫這裡，都經過 Worker（POST /api/walk），有設通關碼時 Worker 會帶過來。
 // 只會改「主清單」的「遛狗日期」「誰遛的」兩欄，其他欄、其他分頁都不碰。
 //
 // 指令碼屬性（專案設定 → 指令碼屬性）：

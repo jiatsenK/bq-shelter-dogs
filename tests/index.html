@@ -331,7 +331,7 @@ function runTests() {
       host.style.setProperty('--green-bg', '#DFF0E4'); host.style.setProperty('--green-text', '#1E6B3C'); // Shadow DOM 不套用文件的 :root，補上正式網站色票
       host.style.width = '320px'; document.body.append(host);
       const root = host.attachShadow({ mode: 'open' });
-      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = '../css/app.css';
+      const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = '../public/css/app.css';
       await new Promise((resolve, reject) => { link.onload = resolve; link.onerror = reject; root.append(link); });
       const box = document.createElement('div'); root.append(box);
       try {
@@ -1003,7 +1003,7 @@ async function runPhotoTests() {
         eq(hero.querySelector('img').matches('.detail-head .photo-wrap.hero .thumb img'), true, '大照片跟上傳後同一個框：');
         const small = document.querySelector('#detail .photo-upload .card-thumb');
         eq([small.classList.contains('thumb'), small.querySelector('img').getAttribute('src')], [true, photoUpload.url], '狗卡小照片：');
-        const css = await fetch('../css/app.css').then(r => r.text());
+        const css = await fetch('../public/css/app.css').then(r => r.text());
         const size = sel => (css.match(new RegExp(sel.replace(/[.]/g, '\\.') + ' \\{ width: (\\d+px); height: (\\d+px)')) || []).slice(1);
         eq(size('.photo-preview-row .card-thumb'), size('.card .thumb'), '小照片跟狗卡一樣大：');
         if (!size('.card .thumb').length) throw new Error('找不到狗卡照片大小');
@@ -2051,7 +2051,7 @@ async function runWarnLayoutTests() {
       const card = main.querySelector('.card.flagged');
       if (!card.querySelector(':scope > .warn-note')) throw new Error('警示要是卡片的直接子元素，才排得到第二列');
       // 測試頁沒有載 css/app.css，所以檢查樣式規則本身
-      const css = await fetch('../css/app.css').then(r => r.text());
+      const css = await fetch('../public/css/app.css').then(r => r.text());
       ['.card:not(.skeleton) .last { grid-column: 1; grid-row: 1; }',
         '.card:not(.skeleton) > .warn-note { grid-column: 2 / -1; grid-row: 2;',
         '.card.flagged:not(.skeleton)::before {',
@@ -2652,7 +2652,7 @@ async function runV7PagesTests() {
       eq(box.querySelector('.bar i').style.width, '40%');
     });
     await check('#114 分析頁：不再是整塊藍底（critique 2026-10-09 大數字也不框成格子）', async () => {
-      const css = await fetch('../css/app.css').then(r => r.text());
+      const css = await fetch('../public/css/app.css').then(r => r.text());
       if (!/\.a-hero\s*\{/.test(css)) throw new Error('找不到 .a-hero');
       if (/\.a-hero\s*\{[^}]*gradient/.test(css)) throw new Error('分析頁還有藍色漸層');
     });
@@ -2738,7 +2738,7 @@ async function runPhotoVersionTests() {
     delete photoOverrides['9901'];
   });
   photoVersions = saved;
-  const headers = await fetch('../_headers').then(r => r.ok ? r.text() : '');
+  const headers = await fetch('../public/_headers').then(r => r.ok ? r.text() : '');
   await check('#127 _headers：照片快取 30 天，其他檔案不設長快取', () => {
     // 部署到 Cloudflare 後 _headers 不公開，讀不到就跳過（本機和 GitHub Pages 讀得到）
     if (!headers) return;
@@ -2750,7 +2750,7 @@ async function runPhotoVersionTests() {
 // #130 照片放 R2：Worker 讀 R2（照片、dogs.json 先經過 Worker）、部署前確認 bucket、縮圖與搬遷 Action
 async function runR2Tests() {
   const get = p => fetch(p).then(r => r.ok ? r.text() : '');
-  // 部署到 Cloudflare 後 wrangler.jsonc、.assetsignore 不公開，讀不到就跳過（本機和 GitHub Pages 讀得到）
+  // wrangler.jsonc 不在網站資料夾，只有本機和 CI 讀得到，讀不到就跳過
   const cfg = await get('../wrangler.jsonc');
   await check('#130 wrangler.jsonc：R2 binding PHOTOS，照片、dogs.json 先經過 Worker（相簿 K 2026-10-09 拿掉）', () => {
     if (!cfg) return;
@@ -2759,12 +2759,6 @@ async function runR2Tests() {
       if (!cfg.includes(p)) throw new Error(`run_worker_first 少了 ${p}`);
     });
     if (cfg.includes('gallery')) throw new Error('相簿已拿掉，wrangler.jsonc 不該再有 gallery');
-  });
-  const ignore = await get('../.assetsignore');
-  await check('#130 .assetsignore：沒有 R2 時產生的部署設定不公開', () => {
-    if (!ignore) return;
-    if (!ignore.split('\n').map(l => l.trim()).includes('wrangler.no-r2.json')) throw new Error('少了 wrangler.no-r2.json');
-    if (!ignore.split('\n').map(l => l.trim()).includes('wrangler.deploy.json')) throw new Error('少了 wrangler.deploy.json（帶資料庫 id 的部署設定）');
   });
   const deploy = await get('../.github/workflows/deploy-cloudflare.yml');
   const preview = await get('../.github/workflows/preview-cloudflare.yml');
@@ -2804,7 +2798,7 @@ async function runPreviewTests() {
     if (!/head\.repo\.full_name == github\.repository/.test(preview)) throw new Error('fork 的 PR 不能跑');
     if (!/updateComment/.test(preview)) throw new Error('再推送要更新同一則留言');
   });
-  // 部署到 Cloudflare 後 wrangler.jsonc 不公開，讀不到就跳過（本機和 GitHub Pages 讀得到）
+  // wrangler.jsonc 不在網站資料夾，只有本機和 CI 讀得到，讀不到就跳過
   const cfg = await get('../wrangler.jsonc');
   await check('#126 wrangler.jsonc：開預覽網址、正式部署不保留網頁上加的變數', () => {
     if (!cfg) return;
@@ -2824,20 +2818,18 @@ async function runCloudflareTests() {
     eq([uploadUrlFor(undefined), uploadUrlFor({ origin: 'null' })], ['', ''], '沒有網址（同步腳本測試、直接開檔案）不上傳：');
     if (/bq-shelter-photos\.jiatsen-k|OLD_UPLOAD_URL/.test(APP_JS)) throw new Error('js/app.js 不該再有舊的照片上傳服務網址');
   });
-  await check('#125 部署設定：網站檔案不公開 Worker 程式、同步腳本、交接紀錄', async () => {
-    const ignore = await fetch('../.assetsignore').then(r => r.ok ? r.text() : '');
-    // 部署到 Cloudflare 後 .assetsignore 本身不公開，讀不到就跳過（本機和 GitHub Pages 讀得到）
-    if (!ignore) return;
-    const lines = ignore.split('\n').map(l => l.trim());
-    ['worker', 'scripts', 'AGENT_LOG.md', '.git', '.claude', 'wrangler.jsonc'].forEach(n => {
-      if (!lines.includes(n)) throw new Error(`.assetsignore 少了 ${n}`);
-    });
-    if (lines.includes('.github')) throw new Error('.github 要公開，測試頁會讀 workflow 檔');
+  await check('#276 部署設定：只公開 public/，Worker 程式、腳本、部署設定、交接紀錄都不在網站資料夾', async () => {
+    const cfg = await fetch('../wrangler.jsonc').then(r => r.ok ? r.text() : '');
+    if (!cfg) return; // 只有本機和 CI 讀得到
+    if (!/"directory": "\.\/public"/.test(cfg)) throw new Error('assets.directory 要是 ./public');
+    for (const p of ['../public/wrangler.jsonc', '../public/AGENT_LOG.md', '../public/worker/src/index.js', '../public/scripts/sync-sheet.mjs']) {
+      if ((await fetch(p)).ok) throw new Error(`${p} 不該在網站資料夾`);
+    }
   });
 }
 
 async function runFastOpenTests() {
-  const css = await fetch('../css/app.css').then(r => r.text());
+  const css = await fetch('../public/css/app.css').then(r => r.text());
   const rule = sel => (css.match(new RegExp(`\\n${sel.replace('.', '\\.')} \\{([^}]*)\\}`)) || [])[1] || '';
   await check('手機開啟加速：index.html 在 css 前面就開始抓 dogs.json', () => {
     const at = INDEX_HTML.indexOf("window.__dogsEarly = fetch('api/dogs'");
@@ -3011,7 +3003,7 @@ async function runSheetWriteTests() {
 
 // 電腦版溜狗表（K 2026-10-10）：簡報＋全表、勾選一次登記、異動紀錄；js/desk.js 最後才載入，前面的測試照手機版跑
 async function runDeskTests() {
-  const code = await fetch('../js/desk.js').then(r => r.text());
+  const code = await fetch('../public/js/desk.js').then(r => r.text());
   const el = document.createElement('script');
   el.textContent = code;
   document.body.appendChild(el);
@@ -3214,7 +3206,7 @@ async function runDeskTests() {
 
 // 板收圖鑑（cards.html，K 2026-10-10）：js/cards.js 的純函式；你溜過的狗才拿得到卡，新的包成卡包
 async function runCardsTests() {
-  const code = await fetch('../js/cards.js').then(r => r.text());
+  const code = await fetch('../public/js/cards.js').then(r => r.text());
   // 包在函式裡跑，不把 bq* 放進這頁的全域（測試頁沒有 #bqField，不會開始畫面）
   const C = new Function(`${SITE_JS}\n${code}\nreturn { bqPlayers, bqTier, bqStay, bqQuote, bqMonthOut, bqAwards, bqTeamOf, bqLoadCodes, bqTodayWrites, bqMyDogs, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, BQ_OPENED_KEY };`)();
   const TODAY = new Date(2026, 9, 9);
@@ -3302,7 +3294,7 @@ async function runCardsTests() {
     eq(C.bqSaveOpened({ getItem: () => null, setItem: () => { throw new Error('quota'); } }, a), false);
   });
   await check('圖鑑完整流程：舊卡移入後台、重開及跨裝置讀回、另一個人分開、寫入失敗可重試', async () => {
-    const html = await fetch('../cards.html').then(r => r.text());
+    const html = await fetch('../public/cards.html').then(r => r.text());
     const selected = DOGS_JSON.dogs.filter(d => d.id && !/^[(（]/.test(d.name)).slice(0, 7);
     const ME = 'abcdef123456', OTHER = '123456abcdef';
     const fixture = window.__cardFixture = {
@@ -3334,7 +3326,7 @@ async function runCardsTests() {
           return nativeFetch(url, init);
         };
       <\/script>`;
-      await new Promise(resolve => { iframe.onload = resolve; iframe.srcdoc = html.replace('<head>', `<head><base href="${new URL('../', location.href)}">${startup}`); });
+      await new Promise(resolve => { iframe.onload = resolve; iframe.srcdoc = html.replace('<head>', `<head><base href="${new URL('../public/', location.href)}">${startup}`); });
       const w = iframe.contentWindow;
       for (let i = 0; i < 100 && w.eval('BQ.remote') === 'loading'; i++) await new Promise(r => setTimeout(r, 20));
       eq(w.eval('BQ.remote'), 'ready', '後台讀取成功：');
@@ -3529,7 +3521,7 @@ async function runFindListTests() {
     groupMap = {}; searchQuery = ''; activeTab = 'find'; findView = 'list'; findZone = 'all'; findCage = null;
     const main = document.getElementById('main');
     await check('2026-10-08 找狗只有平面圖／列表兩種，一打開是平面圖；平面圖不再多一排區域，只留 ★ 我的常溜', async () => {
-      const code = await fetch('../js/find.js').then(r => r.text());
+      const code = await fetch('../public/js/find.js').then(r => r.text());
       if (!/let findView = 'map';/.test(code)) throw new Error('打開找狗應該是平面圖');
       findView = 'map'; render();
       eq([...main.querySelectorAll('[data-find-view]')].map(b => b.textContent.trim()), ['平面圖', '列表'], '顯示方式：');
@@ -3767,7 +3759,7 @@ async function runDepartureTests() {
 }
 
 async function runSquarePhotoTests() {
-  const css = await fetch('../css/app.css').then(r => r.text());
+  const css = await fetch('../public/css/app.css').then(r => r.text());
   const frame = document.createElement('iframe');
   frame.style.cssText = 'position:absolute;left:-9999px;width:390px;height:844px;border:0';
   document.body.appendChild(frame);
@@ -3800,7 +3792,7 @@ async function runSquarePhotoTests() {
 
 // critique 2026-10-09 P1：往下捲時頁首的標題那一行捲走，搜尋框留在畫面上；分析頁頁首整個留著
 async function runHeaderTuckTests() {
-  const css = await fetch('../css/app.css').then(r => r.text());
+  const css = await fetch('../public/css/app.css').then(r => r.text());
   const frame = document.createElement('iframe');
   frame.style.cssText = 'position:absolute;left:-9999px;width:390px;height:844px;border:0';
   document.body.appendChild(frame);
@@ -3948,7 +3940,7 @@ async function runCritique3Tests() {
       eq(box.querySelector('.warn-note'), null, '沒有警示的狗：');
     });
     await check('介面評估第三輪：確認上傳不用沒定義的 --green（會變亮綠）', async () => {
-      const css = await fetch('../css/app.css').then(r => r.text());
+      const css = await fetch('../public/css/app.css').then(r => r.text());
       if (/var\(--green\s*,/.test(css)) throw new Error('還有 var(--green, …)');
     });
     await check('介面評估第三輪：提示條出現時內容底部多留空白，收起就拿掉', () => {
@@ -4053,7 +4045,7 @@ async function runTourLayoutTests() {
   const frame = document.createElement('iframe');
   frame.style.cssText = 'position:absolute;left:-9999px;width:390px;height:660px;border:0';
   const ready = new Promise(resolve => frame.addEventListener('load', resolve, { once: true }));
-  frame.srcdoc = INDEX_HTML.replace('<head>', `<head><base href="${new URL('../', location.href)}"><script>window.__BQ_TEST__=true;<\/script>`);
+  frame.srcdoc = INDEX_HTML.replace('<head>', `<head><base href="${new URL('../public/', location.href)}"><script>window.__BQ_TEST__=true;<\/script>`);
   document.body.appendChild(frame);
   await ready;
   const win = frame.contentWindow;
@@ -4122,7 +4114,7 @@ async function runTourLayoutTests() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../index.html', '../js/app.js', '../manifest.webmanifest', 'fixtures/dogs.json', '../js/analysis.js', '../js/find.js', '../js/site-config.js'].map(u => fetch(u).then(res => {
+Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))

@@ -29,7 +29,7 @@ jobs:
     steps:
       - name: 還沒設定 Cloudflare 就跳過
         if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
-        run: echo "還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID，這次不產生預覽（步驟見 docs/CLOUDFLARE_SETUP.md）。"
+        run: echo "還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID，這次不產生預覽（步驟見 docs/setup/CLOUDFLARE_SETUP.md）。"
 
       - uses: actions/checkout@v4
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''

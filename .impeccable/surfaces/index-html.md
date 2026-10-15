@@ -1,15 +1,15 @@
 ---
 version: 1
 slug: "index-html"
-primary_target: "index.html"
+primary_target: "public/index.html"
 related_targets: []
 ---
 
-# 溜狗表全站（index.html）視覺改版
+# 溜狗表全站（public/index.html）視覺改版
 
 Mode: Operate。志工單手、在犬舍走道的自然光下用；任務是挑最久沒溜的狗、知道牠在哪、溜完按「溜了」。功能、文字、版面結構、操作方式全部不動，只換 CSS。
 
-K 2026-10-09：現在的 AI 味來自通用的系統藍、千篇一律的圓角卡片、整體太平均；「做錯了」＝太花、在所裡看不清楚。三個方向各做一版（只改 css/app.css 檔尾的主題區塊），放 PR 預覽在手機比較，選定一個再合併。
+K 2026-10-09：現在的 AI 味來自通用的系統藍、千篇一律的圓角卡片、整體太平均；「做錯了」＝太花、在所裡看不清楚。三個方向各做一版（只改 public/css/app.css 檔尾的主題區塊），放 PR 預覽在手機比較，選定一個再合併。
 
 ## Direction contract
 
@@ -32,7 +32,7 @@ FINISH: unreviewed and undocumented is unfinished; this build ends with the fini
 
 ## 未決
 
-- 頁首範圍字：K 2026-10-09 同意改 JS，已做（js/app.js syncRange）。
+- 頁首範圍字：K 2026-10-09 同意改 JS，已做（public/js/app.js syncRange）。
 
 ## 電腦版溜狗表（K 2026-10-10）
 
