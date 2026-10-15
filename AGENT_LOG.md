@@ -1270,3 +1270,10 @@
 - 同步（`sync-compact-d1.mjs`）不再匯入休養和介紹，避免蓋掉網站剛存的；`importCompactProfiles` 沒給的類別不動那張表。
 - 取消「已溜」的還原和衝突提示原本就有，也有測試，這次沒改。
 - 測試：新增 `worker/test/d1-write.test.mjs`（加進 AGENTS.md 與 CI），移除 worker.test.mjs 裡寫 GitHub 的休養／介紹測試。node 測試 211 項全過；本機沒有 Playwright Chromium，網頁測試交給 CI。
+
+## 2026-10-15 CODEX（#249 匯入開卡與名字推薦）
+- 只新增 scripts/ 下匯入、讀回、逐筆比對、本機演練及 SQL 產出，不改 Worker、sync-* 或表結構。舊編號查 v3_dog_numbers，同代號同狗取最早開卡、名字推薦取較新 last_seen，不清表、不推測志工代號。
+- 指定私密匯出 0 開卡／20 名字推薦，記憶體 SQLite 重跑與逐筆比對一致、外鍵0列。待確認 SQL 留在原 repo 的 .migration-private/249/，未連正式 D1、未執行正式匯入。
+- 新增匯入合併、差異定位、格式／身分拒絕、交易回復、SQL 實際執行及私密路徑防覆寫測試，加入 AGENTS.md 與 CI。完整驗證與雙軸審查進行中。
+- 最後驗證：Node全套219/219，新測試8/8。指定私密來源0開卡／20名字推薦，函式與產出SQL各自記憶體SQLite重跑逐筆一致、外鍵0列；SQL未連正式D1。無頭Chrome243過、1項既有Windows CRLF workflow檢查失敗，Linux CI待PR。
+- 雙軸審查：Spec 0項；Standards指出JS／SQLite時區解析邊界不一致，已紅→綠補拒絕超過±14:00偏移，複查0項。
