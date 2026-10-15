@@ -1277,3 +1277,10 @@
 - `db/compact-schema.sql` 新增 `v3_departures`、`v3_departure_items`；新增 `scripts/import-compact-departures.mjs`（匯入＋比對），讀回 `readDepartures` 放在 `worker/src/compact.js`。
 - `sync-compact-d1.mjs` 每次把 `data/departures.json` 整份換進 D1，SQL 開頭先建表，所以正式 D1 不用另外遷移。
 - 測試：新增 `scripts/import-compact-departures.test.mjs`（加進 AGENTS.md 與 CI）。
+
+## 2026-10-15 #260 網站改從 /api 讀溜狗紀錄與離所（Claude）
+
+- Worker 新增 `GET /walks`、`GET /departures`（`worker/src/compact.js` 的 `readWalks`、`readDepartures`），D1 讀不到回 503。
+- `js/app.js`、`js/cards.js`（`desk.js` 共用 `WALKS_URL`）、`js/analysis.js` 改讀 `api/walks`、`api/departures`；開始記錄日改用 `historyStart`，不再讀快照目錄。
+- 照片、備註確認編號在有 D1 時改讀主清單（`readMainNames`）。`readCompactProfiles` 的溜狗紀錄改共用 `readWalks`。
+- 測試：`worker/test/d1-read.test.mjs` 加新 API 測試；`tests/index.html` 改成新網址。本機沒有 Playwright Chromium，網頁測試交給 CI。

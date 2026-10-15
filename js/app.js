@@ -15,7 +15,7 @@ const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
 const FIRST_SCREEN_CARDS = 8;
 // 我最近溜過（#58）：同步時累積的遛狗紀錄（#56）。#96 起每個志工看自己的：
 // 紀錄裡的 walkers 是遛的人的代號，志工在「我溜過」輸入名字、經 Worker 換成代號後記在這支手機
-const WALKS_URL = 'data/walks.json';
+const WALKS_URL = 'api/walks'; // #260 起從 Worker 讀 D1，形狀跟原本的 data/walks.json 一樣
 // 休養中（K 2026-10-09）：管理者在網站上設定「到哪天前暫停帶出」，經 Worker（通關碼）寫進 repo 的這個檔，不碰試算表
 const REST_URL = 'api/rest'; // #250 起休養設定存 D1，從 Worker 讀
 const WALKER_CODES_KEY = 'bq-walker-codes';
