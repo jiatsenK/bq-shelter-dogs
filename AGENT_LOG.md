@@ -1208,3 +1208,9 @@
 - 真實資料演練 594 來源、2 休養、133 原圖關聯、0 開卡、20 名字推薦與3 kv逐筆讀回一致，來源重跑平衡、外鍵0列。以現行 R2 thumbKey 修正縮圖路徑並驗證，沒有搬檔。
 - 兩軸審查指出 R2 tombstone 可能被當有效原圖／縮圖；已紅→綠沿用 isTomb，並排除0 bytes、支援metadata欄位格式。正式 metadata 再查310物件／相同bytes，沒有刪除標記；私密來源仍只在暫存。明確介紹／主照片決策也加入來源保存。
 - 最後 Node 全套187/187，真資料594來源重跑一致，2休養／133原圖關聯／20名字推薦／3kv核對；Chrome無頭243過、1項既有 #130 workflow Windows CRLF失敗，Linux CI待PR。Standards／Spec複查通過；#234正式部署與main測試成功，未改正式資料／R2／試算表。
+
+## 2026-10-15 Matt skills v1.3.1 與詞彙表命名遷移（CODEX）
+
+- 依 K 本次確認，CONTEXT.md 改名為 GLOSSARY.md，更新目前文件與 repo-local 技能的引用；歷史紀錄保留原名。
+- 同步上游 v1.3.1 所選技能，加入 pr／retro、移除 resolving-merge-conflicts；保留單票 implement 流程，不加入 implement-spec。
+- 驗證：詞彙表內容雜湊一致、目前引用檢查與技能逐檔比對；本次未變更網站程式或資料。

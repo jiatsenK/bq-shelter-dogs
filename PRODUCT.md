@@ -2,7 +2,7 @@
 
 <!-- impeccable:product-schema 1 -->
 
-<!-- 給 impeccable 技能讀的產品摘要。規格不在這裡重寫：功能與版本以 docs/PROJECT_GOALS.md 為準，用字以 CONTEXT.md 為準，兩邊衝突時以那兩份為準。本檔依 K 2026-10-09 指示由現有文件整理，沒有另外訪談。 -->
+<!-- 給 impeccable 技能讀的產品摘要。規格不在這裡重寫：功能與版本以 docs/PROJECT_GOALS.md 為準，用字以 GLOSSARY.md 為準，兩邊衝突時以那兩份為準。本檔依 K 2026-10-09 指示由現有文件整理，沒有另外訪談。 -->
 
 ## Platform
 
@@ -25,7 +25,7 @@ web
 
 - 寫回試算表只限主清單的「遛狗日期」和「誰遛的」兩欄，新功能不能加寫入（`AGENTS.md`）。介面上不要出現看起來能改試算表其他內容的元素。
 - repo 裡的公開資料（data/walks.json 等）不放志工名字，用代號；網站畫面可以顯示試算表上的志工名字（溜狗人、名字選單），名字本來就在志工共用的試算表裡（K 2026-10-09）。
-- 固定名詞照 `CONTEXT.md`，畫面上的字也一樣。
+- 固定名詞照 `GLOSSARY.md`，畫面上的字也一樣。
 
 ## Product Principles
 
