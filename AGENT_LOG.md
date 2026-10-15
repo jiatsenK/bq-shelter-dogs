@@ -1228,3 +1228,10 @@
 
 ## 2026-10-15 CODEX（#246 合入最新 main）
 - 合入 #253 的既有私密匯出忽略規則與分工文件；.gitignore沿用main，AGENT_LOG兩邊紀錄均保留。未變更實作；驗證本票7項通過。
+
+## 2026-10-15 #254 審查修正（Claude）
+
+- 移除 `v3_sheet_main.fields` 位元遮罩：讀回時每隻狗都有全部欄位，比對前來源也補成同樣形狀。
+- `v3_walks` 只留 `walker_name`／`walker_code`，移除意思不明的 `name`。
+- 沒有編號的狗以名字延續狗 ID 改成明確規則並寫進註解、測試標題和 docs；`v3_volunteers.last_seen` 註明給名字推薦排序。
+- 驗證：compact-schema、import-compact-dogs 測試 7 項全過。
