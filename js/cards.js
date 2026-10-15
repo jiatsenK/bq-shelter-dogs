@@ -4,7 +4,7 @@
 // 純函式在前面（tests/index.html 會測），畫面在後面。
 
 const BQ_DATA_URL = 'api/dogs'; // #247 起從 Worker 讀 D1
-const BQ_WALKS_URL = 'data/walks.json';
+const BQ_WALKS_URL = 'api/walks'; // #260 起從 Worker 讀 D1
 const BQ_CODES_KEY = 'bq-walker-codes'; // 溜狗表（js/app.js）存的我的代號
 const BQ_WRITES_KEY = 'bq-sheet-writes'; // 溜狗表今天按過的溜了（還沒同步進 walks.json 的）
 const BQ_OPENED_KEY = 'bq-zukan'; // 撕開過的卡：{ v: 1, codes: { 代號: { 狗編號: 撕開那天 } } }

@@ -106,3 +106,10 @@ GitHub 的 JSON 提交暫時照舊：新的溜狗紀錄和離所還是從舊檔�
 - 同步（`sync-compact-d1.mjs`）每次把 `data/departures.json` 整份換進這兩張表，正式 D1 還沒有這兩張表時 SQL 開頭會先建，不用另外遷移。第一次同步就等於匯入既有紀錄，比對不一致就不寫。
 - 讀回用 `worker/src/compact.js` 的 `readDepartures`，形狀跟 `data/departures.json` 的 `departures` 一樣（#260 網站改讀時用）。
 - 離所的計算目前還是用 GitHub 上的舊檔當基準，#251 再改成從 D1 讀。
+
+## 網站改讀 API（#260）
+
+- `GET /api/walks`：形狀跟 `data/walks.json` 一樣（一隻狗一天一筆，沒記人的舊紀錄沒有 `walkers`），另外帶 `historyStart`（溜狗歷史開始累積的日子，原本是 `data/history/index.json` 的第一個日期，固定 2026-09-25）。
+- `GET /api/departures`：形狀跟 `data/departures.json` 一樣。
+- 「我溜過」、圖鑑、電腦版最近 30 天、狗的遛狗歷史、離所名冊都改讀這兩個；不再讀 `data/walks.json`、`data/departures.json`、`data/history/`。
+- 照片上傳、備註確認編號改讀 `v3_sheet_main`（有 D1 時），不讀部署上去的 `data/dogs.json`。

@@ -145,23 +145,22 @@ function checkPhotos(dogs) {
     });
 }
 
-// ── 遛狗歷史（V5-5，#60）：讀 #56 的 data/walks.json 與 data/history/ ──
+// ── 遛狗歷史（V5-5，#60）：讀溜狗紀錄（#260 起是 Worker 的 api/walks，從 D1 讀） ──
 // 試算表每隻狗只記最後一次遛狗，所以歷史從第一份快照那天才開始累積；walks.json 在那之前的紀錄是建立時的「最後一次」，
 // 只拿來當第一段間隔的起點，不算進次數。所有人的遛狗都算（不看 mine），畫面不出現志工名字。
-// WALKS_URL 在 js/app.js（#58 我溜過也讀同一個檔）
-const HISTORY_URL = 'data/history/';
+// WALKS_URL 在 js/app.js（#58 我溜過也讀同一份）
 const dogKey = d => d.id || `名:${d.name}`;
 
-// walks.json → [{ key, id, name, date }]，日期不合理的略過
+// 溜狗紀錄 → [{ key, id, name, date }]，日期不合理的略過
 function parseWalks(data) {
   if (!data || !Array.isArray(data.walks)) return [];
   return data.walks.map(w => ({ id: String(w.id || ''), name: String(w.name || ''), date: parseYmd(w.date) }))
     .filter(w => w.date && (w.id || w.name)).map(w => ({ ...w, key: dogKey(w) }));
 }
 
-// 快照目錄 → 日期字串（由舊到新）
-function parseHistoryIndex(data) {
-  return data && Array.isArray(data.dates) ? [...new Set(data.dates.filter(d => parseYmd(d)))].sort() : [];
+// 開始記錄日（原本是第一份快照的日期，#260 起 api/walks 的 historyStart）→ [日期字串]；沒有或壞掉就是 []
+function historyStartDates(data) {
+  return data && parseYmd(data.historyStart) ? [data.historyStart] : [];
 }
 
 // 開始累積的日期與目前累積幾天（含今天）
@@ -193,15 +192,15 @@ function dogWalkHistory(dog, walks, start, today, n = 30) {
   };
 }
 
-// 讀遛狗紀錄：打開詳細資訊才讀，一次開網頁只讀一遍（快照目錄只用來知道從哪天開始記錄）
+// 讀遛狗紀錄：打開詳細資訊才讀，一次開網頁只讀一遍
 let historyData = null; // { state: 'loading'|'ready'|'error', walks, dates }
 function loadHistory() {
   if (historyData) return;
   const state = historyData = { state: 'loading', walks: [], dates: [] };
   const get = url => fetch(url, { cache: 'no-cache' }).then(res => { if (!res.ok) throw new Error(res.status); return res.json(); });
-  Promise.all([get(WALKS_URL), get(`${HISTORY_URL}index.json`)]).then(([w, idx]) => {
+  get(WALKS_URL).then(w => {
     state.walks = parseWalks(w);
-    state.dates = parseHistoryIndex(idx);
+    state.dates = historyStartDates(w);
     state.state = 'ready';
   }, () => { state.state = 'error'; }).then(() => {
     if (historyData !== state) return;
@@ -254,7 +253,7 @@ function kpi(value, unit, label, tone = '') {
 }
 
 // ── 本月溜狗（K 2026-10-09「分析頁可以有個本月報表」：溜狗總計、每天溜狗次數）──
-// 資料是同步累積的溜狗紀錄（data/walks.json，試算表「遛狗日期」換了就記一筆）：同一隻狗同一天只算一次。
+// 資料是同步累積的溜狗紀錄（api/walks，試算表「遛狗日期」換了就記一筆）：同一隻狗同一天只算一次。
 // 回傳 { days: [{ date, n }]（1 號到今天）, total, dogs, start }；last 是上個月整月的次數（沒紀錄回 null）
 function monthWalks(walks, today, start) {
   const y = today.getFullYear(), m = today.getMonth();
@@ -457,9 +456,9 @@ document.getElementById('main').addEventListener('click', e => {
 });
 
 // ── 離所（#163 年度統計、#164 離所名冊）──
-// data/departures.json 由同步產生（scripts/sync-sheet.mjs 的 updateDepartures）：狗從主清單消失就記一筆，
+// 離所紀錄（api/departures，存在 D1）由同步產生（scripts/sync-sheet.mjs 的 updateDepartures）：狗從主清單消失就記一筆，
 // 原因只讀試算表「已出所」分頁判讀，判不出來是待確認。打開分析頁才讀，不拖慢溜狗表。
-const DEPARTURES_URL = 'data/departures.json';
+const DEPARTURES_URL = 'api/departures'; // #260 起從 Worker 讀 D1，形狀跟原本的 data/departures.json 一樣
 const DEPARTURE_ORDER = ['adopt', 'death', 'other', 'unknown'];
 const DEPARTURE_COLORS = { adopt: 'var(--green-text)', death: '#8E8E93', other: 'var(--primary)', unknown: '#F0A030' };
 let departuresData = null; // { state: 'loading' | 'ready' | 'error', list }
