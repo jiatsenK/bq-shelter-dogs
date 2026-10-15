@@ -28,14 +28,10 @@
 
 import { readFile } from 'node:fs/promises';
 import { createHmac } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
 
 // 日期一律用台灣時間判斷（沒寫年份的日期、同步時間）
 if (!process.env.TZ) process.env.TZ = 'Asia/Taipei';
 
-export const OUTPUT = fileURLToPath(new URL('../data/dogs.json', import.meta.url));
-export const DATA_DIR = fileURLToPath(new URL('../data/', import.meta.url));
-export const DOGS_DIR = fileURLToPath(new URL('../dogs/', import.meta.url));
 export const FORMAT_VERSION = 1;
 
 // headers：前幾列當表頭。0 表示所有列都當資料列回傳
@@ -382,10 +378,11 @@ export function markdownToText(md) {
 
 // 讀 dogs/{編號}.md；沒有這個檔回空字串。編號只接受英數字，擋掉 ../ 之類的路徑
 const CARD_ID = /^[0-9A-Za-z]+$/;
-export async function readDogCardFile(id) {
+export async function readDogCardFile(id, dir) {
+  if (!dir) throw new Error('舊狗卡讀取需明確提供封存目錄');
   if (!CARD_ID.test(id)) return '';
   try {
-    return await readFile(`${DOGS_DIR}${id}.md`, 'utf8');
+    return await readFile(new URL(`${id}.md`, dir), 'utf8');
   } catch (e) {
     if (e.code === 'ENOENT') return '';
     throw e;
@@ -394,7 +391,7 @@ export async function readDogCardFile(id) {
 
 // 每隻狗加上 sex（male／female／空白）和 intro（狗卡資訊純文字）。沒有編號的狗不讀，也不改用犬名配對。
 // 狗卡有寫舊編號才多一個 formerIds（#75），其他狗的 dogs.json 不變
-export async function attachDogCards(dogs, readCard = readDogCardFile) {
+export async function attachDogCards(dogs, readCard = async () => '') {
   const cards = new Map();
   for (const id of new Set(dogs.map(d => d.id).filter(Boolean))) {
     const raw = await readCard(id);
