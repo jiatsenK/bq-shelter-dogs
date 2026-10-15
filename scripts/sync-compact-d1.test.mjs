@@ -4,7 +4,6 @@ import { readFile } from 'node:fs/promises';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateCompactDatabase } from './migrate-compact-db.mjs';
 import { readDogsPayload } from '../worker/src/compact.js';
-import { readCardSources } from './check-compact-profiles.mjs';
 import { buildSyncSql, SEED_TABLES } from './sync-compact-d1.mjs';
 
 const json = async path => JSON.parse(await readFile(new URL(`../${path}`, import.meta.url), 'utf8'));
@@ -17,7 +16,7 @@ async function source() {
     const column = [name, ...others].sort();
     if (!seen.has(column.join()) && column.every(n => dogs.groups[n]?.length === others.length)) { seen.add(column.join()); groupColumns.push(column); }
   }
-  return { dogs, walks: await json('data/walks.json'), rest: await json('data/rest.json'), ...(await readCardSources()), groupColumns };
+  return { dogs, walks: await json('data/walks.json'), groupColumns };
 }
 
 async function apply(t, seed, sql) {
@@ -35,7 +34,8 @@ test('第一次寫入正式 D1：主清單、試算表備註、常遛狗群讀�
   const src = await source();
   const db = await apply(t, {}, await buildSyncSql({}, src));
   const payload = await readDogsPayload(db);
-  assert.deepEqual(payload.dogs, src.dogs.dogs);
+  // 介紹 #250 起由網站寫 D1，同步不帶
+  assert.deepEqual(payload.dogs, src.dogs.dogs.map(d => ({ ...d, intro: '' })));
   assert.deepEqual(payload.sheetNotes, src.dogs.sheetNotes);
   for (const column of src.groupColumns) for (const name of column) assert.deepEqual([...payload.groups[name]].sort(), column.filter(n => n !== name));
   assert.ok(await db.prepare('SELECT COUNT(*) AS n FROM v3_walks').first('n'));
@@ -48,10 +48,10 @@ test('再同步一次沿用正式 D1 的永久狗 ID，不新增狗', async t =>
   for (const [table, sql] of Object.entries(SEED_TABLES)) seed[table] = (await first.prepare(sql).all()).results;
   const db = await apply(t, seed, await buildSyncSql(seed, src));
   assert.deepEqual((await db.prepare('SELECT * FROM v3_dogs ORDER BY dog_id').all()).results, (await first.prepare('SELECT * FROM v3_dogs ORDER BY dog_id').all()).results);
-  assert.deepEqual((await readDogsPayload(db)).dogs, src.dogs.dogs);
+  assert.deepEqual((await readDogsPayload(db)).dogs, src.dogs.dogs.map(d => ({ ...d, intro: '' })));
 });
 
-test('開卡和照片表不被同步清掉', async t => {
+test('開卡、照片、休養、介紹不被同步清掉', async t => {
   const src = await source();
   const first = await apply(t, {}, await buildSyncSql({}, src));
   const dogId = await first.prepare('SELECT dog_id FROM v3_dogs LIMIT 1').first('dog_id');
@@ -60,10 +60,10 @@ test('開卡和照片表不被同步清掉', async t => {
   const seed = {};
   for (const [table, sql] of Object.entries(SEED_TABLES)) seed[table] = (await first.prepare(sql).all()).results;
   const sql = await buildSyncSql(seed, src);
-  assert.doesNotMatch(sql, /v3_card_opened|v3_photos|v3_volunteer/);
+  assert.doesNotMatch(sql, /v3_card_opened|v3_photos|v3_volunteer|v3_rest|v3_intros/);
 });
 
 test('來源有問題時丟錯，不產生 SQL', async t => {
   const src = await source();
-  await assert.rejects(buildSyncSql({}, { ...src, rest: { x: { until: '不是日期' } } }), /休養/);
+  await assert.rejects(buildSyncSql({}, { ...src, walks: { walks: [{ id: 'x', name: '狗', date: '不是日期' }] } }), /日期/);
 });

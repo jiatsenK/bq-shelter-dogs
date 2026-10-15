@@ -86,6 +86,16 @@ node scripts/check-compact-profiles.mjs .migration-private/219/bq-218-r2-source.
 
 ## 同步寫進 D1（#251 第一步）
 
-`.github/workflows/sync-sheet.yml` 同步完會跑 `scripts/sync-compact-d1.mjs`：用 wrangler 讀正式 D1 現有的永久狗 ID，在記憶體 D1 匯入 dogs.json、walks.json、rest.json、狗卡介紹和常遛狗群（照試算表的欄存），比對一致才產生 SQL 寫回正式 D1。開卡、志工、照片表不動。需要 repo Secrets `CLOUDFLARE_API_TOKEN`（要有 D1 編輯權限）和 `CLOUDFLARE_ACCOUNT_ID`。
+`.github/workflows/sync-sheet.yml` 同步完會跑 `scripts/sync-compact-d1.mjs`：用 wrangler 讀正式 D1 現有的永久狗 ID，在記憶體 D1 匯入 dogs.json、walks.json 和常遛狗群（照試算表的欄存），比對一致才產生 SQL 寫回正式 D1。休養、介紹、開卡、志工、照片表不動。需要 repo Secrets `CLOUDFLARE_API_TOKEN`（要有 D1 編輯權限）和 `CLOUDFLARE_ACCOUNT_ID`。
 
 GitHub 的 JSON 提交暫時照舊：新的溜狗紀錄和離所還是從舊檔算。等 #250 寫入改寫 D1 之後，再把 GitHub 提交拿掉。
+
+## 網站寫入改存 D1（#250）
+
+- `PUT /api/rest/{編號}` 存 `v3_rest`，`GET /api/rest` 讀回 `{ ok, rest: { 編號: { until, reason } } }`，網站改讀這裡。
+- `PUT /api/intro/{編號}` 存 `v3_intros`；`/api/dogs` 的 `intro` 改從 `v3_intros` 讀，存完重新整理就看得到。
+- 用舊編號設定也存在同一隻狗，讀回時換成主清單上現在的編號。
+- 這兩個寫入不再呼叫 GitHub。`dogs/*.md` 和 `data/rest.json` 不再更新，同步也不再拿它們蓋 D1。
+- 「已溜」照舊寫試算表兩欄；取消時用 Worker 回傳的原值還原，那格被別人改過時回 `changed`，網站提示不蓋掉（原本就有，見 `apps-script/sheet-write.gs`）。
+- 照片在 R2 上本來就不提交 GitHub。
+- 我的備註（`data/my-notes.json`）依規格不搬，仍寫 GitHub。

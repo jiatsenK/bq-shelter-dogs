@@ -17,7 +17,7 @@ const FIRST_SCREEN_CARDS = 8;
 // 紀錄裡的 walkers 是遛的人的代號，志工在「我溜過」輸入名字、經 Worker 換成代號後記在這支手機
 const WALKS_URL = 'data/walks.json';
 // 休養中（K 2026-10-09）：管理者在網站上設定「到哪天前暫停帶出」，經 Worker（通關碼）寫進 repo 的這個檔，不碰試算表
-const REST_URL = 'data/rest.json';
+const REST_URL = 'api/rest'; // #250 起休養設定存 D1，從 Worker 讀
 const WALKER_CODES_KEY = 'bq-walker-codes';
 const WALKER_CODE_PATTERN = /^[0-9a-f]{12}$/; // 跟 Worker 的 WALKER_CODE_LENGTH 一致
 // 這間收容所的設定在 js/site-config.js（K 2026-10-10：以後其他收容所要用，只改那個檔）
@@ -1562,9 +1562,9 @@ async function loadRest() {
   try {
     const res = await fetch(REST_URL, { cache: 'no-cache' });
     const data = res.ok ? await res.json() : {};
-    if (data && typeof data === 'object' && !Array.isArray(data)) next = data;
+    if (data && data.rest && typeof data.rest === 'object' && !Array.isArray(data.rest)) next = data.rest;
   } catch (e) { /* 讀不到就當作沒有 */ }
-  // 讀的期間這支手機剛改過休養設定（restMap 換了）：網站上的檔還是舊的，不要蓋掉
+  // 讀的期間這支手機剛改過休養設定（restMap 換了）：讀到的可能是改之前的，不要蓋掉
   if (restMap !== before) return;
   restMap = next;
   resetWalkOrder();
