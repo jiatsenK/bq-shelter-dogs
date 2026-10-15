@@ -151,7 +151,7 @@ function checkPhotos(dogs) {
 // WALKS_URL 在 js/app.js（#58 我溜過也讀同一份）
 const dogKey = d => d.id || `名:${d.name}`;
 
-// walks.json → [{ key, id, name, date }]，日期不合理的略過
+// 溜狗紀錄 → [{ key, id, name, date }]，日期不合理的略過
 function parseWalks(data) {
   if (!data || !Array.isArray(data.walks)) return [];
   return data.walks.map(w => ({ id: String(w.id || ''), name: String(w.name || ''), date: parseYmd(w.date) }))
