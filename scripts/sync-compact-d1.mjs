@@ -43,8 +43,9 @@ const insert = (table, row, tail = '') => `INSERT INTO ${table}(${Object.keys(ro
 
 // D1 上一次的狀態：主清單複本（還沒有就是 null）、溜狗紀錄、離所紀錄
 export async function readPrevious(db) {
-  let dogs = null;
-  try { dogs = await readDogsPayload(db); } catch { /* 第一次同步：主清單複本是空的 */ }
+  // 第一次同步主清單複本是空的；其他讀取錯誤照樣丟出，不當成沒有上一次
+  const empty = !(await db.prepare('SELECT COUNT(*) AS n FROM v3_sheet_main').first('n'));
+  const dogs = empty ? null : await readDogsPayload(db);
   return { dogs, walks: (await readWalks(db)).walks, departures: await readDepartures(db) };
 }
 
@@ -108,20 +109,15 @@ export async function buildSyncSql(seed, source) {
 const wrangler = args => execFileSync('npx', ['--yes', 'wrangler@4', 'd1', 'execute', 'bq-shelter-dogs', '--remote', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 64 * 1024 * 1024 });
 
 async function main() {
+  // D1 的溜狗紀錄沒有 mine，要靠代號推回來；沒有 WALKER_KEY 會把「我溜過」的日期算錯，寧可不同步
+  if (!process.env.WALKER_KEY) throw new Error('沒有設定 WALKER_KEY，無法比對溜狗紀錄');
   const now = new Date();
   const sheet = await buildData(fetch, now);
   const groupColumns = parseGroupColumns(await fetchGviz('常遛狗群'), new Set(sheet.dogs.map(d => d.name)));
   const rows = await loadDepartedRows(fetch, now);
   const seed = {};
-  for (const [table, sql] of Object.entries(SEED_TABLES)) {
-    try {
-      seed[table] = JSON.parse(wrangler(['--json', '--command', sql]))[0].results;
-    } catch (e) {
-      // 離所兩張表 #259 才加，正式 D1 還沒建時當作沒有紀錄（寫回的 SQL 會先建表）；其他表讀不到就停
-      if (!table.startsWith('v3_departure')) throw e;
-      seed[table] = [];
-    }
-  }
+  // 任何一張表讀不到就停：當成空的會把累積的溜狗紀錄、離所整份換掉
+  for (const [table, sql] of Object.entries(SEED_TABLES)) seed[table] = JSON.parse(wrangler(['--json', '--command', sql]))[0].results;
   let plan;
   const sql = await buildSyncSql(seed, async db => {
     plan = planSync(await readPrevious(db), sheet, rows, now);
