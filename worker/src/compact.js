@@ -4,7 +4,7 @@
 // 主清單欄位 → dogs.json 欄位；formerIds 只在有舊編號時出現（跟同步寫出來的 JSON 一樣）
 const MAIN_FIELDS = [
   ['cage', 'cage'], ['id', 'number'], ['name', 'name'], ['walkedDate', 'walked_date'], ['covered', 'covered'],
-  ['myWalked', 'my_walked'], ['note', 'note'], ['sex', 'sex'], ['intro', 'intro'], ['myWalkedDate', 'my_walked_date'],
+  ['myWalked', 'my_walked'], ['note', 'note'], ['sex', 'sex'], ['intro', 'd1_intro'], ['myWalkedDate', 'my_walked_date'],
 ];
 const BOOLEANS = new Set(['covered', 'myWalked']);
 
@@ -12,7 +12,7 @@ const BOOLEANS = new Set(['covered', 'myWalked']);
 export async function readDogsPayload(db) {
   // 介紹是 D1 自己存的（#250 網站改了馬上看得到），不用主清單複本上同步帶來的那份
   const [main, walkers, former, groups, notes] = await db.batch([
-    db.prepare("SELECT m.*, COALESCE(i.intro, '') AS intro FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) ORDER BY m.row_index"),
+    db.prepare("SELECT m.*, COALESCE(i.intro, '') AS d1_intro FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) ORDER BY m.row_index"),
     db.prepare('SELECT row_index, walker_code FROM v3_sheet_main_walkers ORDER BY row_index, position'),
     db.prepare('SELECT row_index, number FROM v3_sheet_former_numbers ORDER BY row_index, position'),
     db.prepare('SELECT column_index, name FROM v3_sheet_groups ORDER BY column_index, row_index'),
