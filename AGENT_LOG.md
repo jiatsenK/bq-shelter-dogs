@@ -1214,3 +1214,8 @@
 - 依 K 本次確認，CONTEXT.md 改名為 GLOSSARY.md，更新目前文件與 repo-local 技能的引用；歷史紀錄保留原名。
 - 同步上游 v1.3.1 所選技能，加入 pr／retro、移除 resolving-merge-conflicts；保留單票 implement 流程，不加入 implement-spec。
 - 驗證：詞彙表內容雜湊一致、目前引用檢查與技能逐檔比對；本次未變更網站程式或資料。
+
+## 2026-10-15 檢討後的防護（Claude）
+
+- `.gitignore` 加入 `.migration-private/`，避免正式資料庫的匯出被提交。
+- 新增 `docs/agents/agent-split.md`（Claude／Codex 分票原則），AGENTS.md 加上指向它的連結。
