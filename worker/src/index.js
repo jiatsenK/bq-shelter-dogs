@@ -13,7 +13,7 @@
 //   repo 是公開的，備註內容任何人都看得到；通關碼只是擋住路人改掉備註
 // - 相簿 K 2026-10-09 拿掉（怕 Cloudflare 用量爆掉），只留主照片；/gallery 一律回 410
 // - 休養中（K 2026-10-09）：PUT /rest/{編號} 送 { passcode, until: 'YYYY-MM-DD', reason } 設定、{ passcode, end: true } 結束，
-//   寫進 repo 的 data/rest.json（跟我的備註同一組通關碼）。網站只讀這個檔；試算表一律不動
+//   存 D1 的 v3_rest（#250，跟我的備註同一組通關碼），網站讀 GET /rest；試算表一律不動
 // - 誰遛的代號（#95）：POST /walker-code 送 { names: [...] }，回 { codes: [...] }。
 //   用 Worker 的 Secret「WALKER_KEY」（跟 GitHub Actions 的同一組）算，網站拿不到密鑰；名字不存、不寫進任何紀錄
 // - 定時叫同步：GitHub 自己的排程常被跳過（2026-09-27 一整天只跑一次），所以在 Cloudflare 設 Cron Trigger，
@@ -59,8 +59,8 @@ const NOTE_WRITE_LIMITS = [
 const NOTE_READ_LIMITS = [{ windowMs: 60 * 1000, max: 60 }];
 // 通關碼打錯：1 小時最多 10 次，超過就先不給試（擋住一直猜）
 const PASSCODE_FAIL_LIMITS = [{ windowMs: 60 * 60 * 1000, max: 10 }];
-// 休養中：存放位置、原因最多幾個字、最多設多久（天）
-// 入所介紹（K 2026-10-10 電腦版補資料）：寫 repo 的 dogs/{編號}.md 內文，不寫試算表
+// 休養中：原因最多幾個字、最多設多久（天）
+// 入所介紹（K 2026-10-10 電腦版補資料）：存 D1 的 v3_intros（#250），不寫試算表
 const INTRO_MAX_CHARS = 1000;
 const REST_REASON_MAX = 40;
 const REST_MAX_DAYS = 180;
