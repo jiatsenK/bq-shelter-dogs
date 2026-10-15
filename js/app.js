@@ -47,7 +47,7 @@ let loadWarning = '';
 let analysisOpen = false; // 分析頁（#59）開著嗎
 let myWalks = []; // 我遛過的紀錄（#58）：[{ id, name, date: Date, ymd }]，新到舊
 let sheetNotes = []; // 試算表狗清單下面的異動紀錄（K 2026-10-10），dogs.json 的 sheetNotes；電腦版右欄用（js/desk.js）
-let walksData = null; // data/walks.json 讀回來的原始內容；換「我是誰」時不用重讀
+let walksData = null; // api/walks 讀回來的原始內容；換「我是誰」時不用重讀
 let walkerSetup = null; // 正在設定我是誰（#96）：{ text, phase: 'edit'|'saving'|'error', error }
 let myWalksState = 'loading'; // loading／ready／error
 let loadState = 'loading'; // loading：還在讀 dogs.json；error：讀取失敗；ready：資料好了
@@ -139,10 +139,10 @@ async function loadDogsData() {
 
 // ── 我最近溜過（#58）──
 
-// walks.json 只取 walkers 有我的代號的紀錄（#96；舊紀錄只有 mine 沒有 walkers 的不算），日期不合理的丟掉；
+// 溜狗紀錄只取 walkers 有我的代號的紀錄（#96；舊紀錄只有 mine 沒有 walkers 的不算），日期不合理的丟掉；
 // 同一隻狗同一天只留一筆；新到舊（同一天後記的在前）
 function parseMyWalks(data, codes = loadMyCodes()) {
-  if (!data || !Array.isArray(data.walks)) throw new Error('walks.json 格式不對');
+  if (!data || !Array.isArray(data.walks)) throw new Error('溜狗紀錄格式不對');
   const text = v => (v == null ? '' : String(v).trim());
   // 同一隻狗同一天以最後一筆為準：先記了我、後來把我拿掉（按錯、×），就不算我溜的（K 2026-10-05 阿湯）
   const lastOf = new Map();
@@ -309,7 +309,7 @@ async function walkerCodesFor(names) {
   return { codes: out && Array.isArray(out.codes) ? out.codes.filter(c => WALKER_CODE_PATTERN.test(c)) : [] };
 }
 // 自己打的名字要不要再確認一次（K 2026-10-12）：名字清單只有最近溜過的人，清單上沒有的再去查遛狗紀錄
-// （data/walks.json 只有代號，所以先跟 Worker 換代號再對），紀錄裡有就是本人、不用問；查不到或連不上才問
+// （溜狗紀錄只有代號，所以先跟 Worker 換代號再對），紀錄裡有就是本人、不用問；查不到或連不上才問
 async function namesToConfirm(text) {
   const unknown = unknownWalkerNames(text);
   if (!unknown.length || !UPLOAD_URL) return unknown;

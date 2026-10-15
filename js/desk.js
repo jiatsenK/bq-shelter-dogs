@@ -36,7 +36,7 @@ let deskView = 'sheet'; // sheet（全表）、days30（最近 30 天）、fill�
 let deskFill = 'all'; // 補資料要看哪些：all、photo（沒照片）、intro（沒介紹）
 let deskNotesAll = false;
 const deskChecked = new Set(); // 勾起來要一起登記的狗（walkKey）
-let deskWalkDays = null; // walkKey → Map(yyyy-mm-dd → Set(代號))，最近 30 天用；第一次切過去才讀 walks.json
+let deskWalkDays = null; // walkKey → Map(yyyy-mm-dd → Set(代號))，最近 30 天用；第一次切過去才讀 api/walks
 let deskWalkFirst = '';
 let deskWalksLoading = false;
 
@@ -91,7 +91,7 @@ function deskDays(today) {
   return Array.from({ length: 30 }, (_, i) => new Date(today.getFullYear(), today.getMonth(), today.getDate() - 29 + i));
 }
 // 那天有沒有溜、誰遛的（K 2026-10-12：電腦版最近 30 天要看到是誰遛的）。
-// walks.json 只有代號，用 Worker 給的「代號 → 名字」換回來；今天和上次溜那天再加上試算表「誰遛的」。換不到名字就只有綠格
+// 溜狗紀錄只有代號，用 Worker 給的「代號 → 名字」換回來；今天和上次溜那天再加上試算表「誰遛的」。換不到名字就只有綠格
 function deskDayWalk(dog, key, today) {
   const names = [];
   let on = false;
