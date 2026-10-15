@@ -818,7 +818,7 @@ async function runSerialTests() {
         `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, '同步時間：');
       eq([...groupMap['讀取甲']], ['讀取乙'], '可以一起溜：');
       // #62 起讀完狗狗資料後另外讀我的備註（Worker 的 /notes、不行再讀 data/my-notes.json），不算在內
-      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$|walks\.json$|api\/rest$|\/walkers$/.test(u)), ['api/dogs'], '只讀 /api/dogs，不再逐隻抓 dogs/*.md：');
+      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$|api\/walks$|api\/rest$|\/walkers$/.test(u)), ['api/dogs'], '只讀 /api/dogs，不再逐隻抓 dogs/*.md：');
     });
     await check('#32／#247 狗的資料讀取失敗（含 D1 出錯回 503）：標題、搜尋、分類都在，內容區顯示錯誤，可重新讀取', async () => {
       reset();
