@@ -17,6 +17,7 @@ const source = () => ({
     { id: 'old', name: '圓圓', date: '2026-09-01' },
     { id: 'b', name: '乙', date: '2026-09-02', mine: true, walkers: ['aaaaaaaaaaaa'] },
     { id: 'b', name: '乙', date: '2026-09-02', walkers: ['bbbbbbbbbbbb', 'cccccccccccc'] },
+    { id: 'b', name: '乙後來沒記人', date: '2026-09-02' },
     { id: 'gone', name: '已出所', date: '2026-09-03' },
     { id: '', name: '金寶', date: '2026-09-03', walkers: ['aaaaaaaaaaaa'] },
   ] },

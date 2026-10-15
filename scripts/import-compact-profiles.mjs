@@ -16,12 +16,16 @@ export function canonicalWalks(source) {
   const days = new Map();
   for (const w of source.walks) {
     const key = walkKey(w), day = days.get(key) || { id: w.id || '', name: w.name, date: w.date };
-    day.name = w.name;
-    if (Array.isArray(w.walkers)) day.walkers = [...w.walkers];
+    // 狗名跟著採用的那筆走：有 walkers 的紀錄出現後，沒記人的紀錄不再改狗名
+    if (Array.isArray(w.walkers)) { day.name = w.name; day.walkers = [...w.walkers]; } else if (!day.walkers) day.name = w.name;
     days.set(key, day);
   }
   return [...days.values()].sort((a, b) => byText(a.date, b.date) || byText(a.id, b.id) || byText(a.name, b.name));
 }
+
+// 空白介紹不存；休養只留截止日和原因（updatedAt 網站不看）。匯入和比對共用，規則才不會兩邊不一樣
+const cleanIntros = intros => Object.entries(intros).filter(([, text]) => text.trim());
+const cleanRest = rest => Object.entries(rest).map(([n, r]) => [n, { until: r.until, reason: r.reason || '' }]);
 
 function validate({ walks, intros = {}, rest = {}, photos = [], names = {} }) {
   if (!Array.isArray(walks?.walks)) throw new Error('溜狗紀錄必須有 walks 陣列');
@@ -98,7 +102,7 @@ export async function importCompactProfiles(db, input) {
     ...days.map(d => ({ number: d.id, name: d.name })),
     ...[...Object.keys(intros), ...Object.keys(rest), ...entries.map(e => e.number)].map(n => ({ number: n, name: nameFor(n) })),
   ]);
-  const one = (kind, pairs) => {
+  const onePerDog = (kind, pairs) => {
     const seen = new Map();
     for (const [n, value] of pairs) {
       const id = idOf(n);
@@ -107,13 +111,14 @@ export async function importCompactProfiles(db, input) {
     }
     return seen;
   };
-  const introByDog = one('介紹', Object.entries(intros).filter(([, text]) => text.trim()));
-  const restByDog = one('休養', Object.entries(rest).map(([n, r]) => [n, { until: r.until, reason: r.reason || '' }]));
+  const introByDog = onePerDog('介紹', cleanIntros(intros));
+  const restByDog = onePerDog('休養', cleanRest(rest));
   const current = new Set((await db.prepare("SELECT number FROM v3_sheet_main WHERE number<>''").all()).results.map(r => r.number));
   const primary = new Map();
   for (const e of [...entries].sort((a, b) => byText(a.number, b.number))) {
     const id = idOf(e.number), had = primary.get(id);
-    if (!had || (current.has(e.number) && !current.has(had.number)) || current.has(e.number) === current.has(had.number)) primary.set(id, e);
+    // 依編號排序後新的取代舊的，除非舊的在主清單上、新的不在
+    if (!had || current.has(e.number) || !current.has(had.number)) primary.set(id, e);
   }
   const statements = ['v3_walks', 'v3_intros', 'v3_rest', 'v3_photos'].map(t => db.prepare(`DELETE FROM ${t}`));
   for (const d of days) {
@@ -156,16 +161,16 @@ export async function compareCompactProfiles(db, input) {
   const { intros = {}, rest = {}, photos = [] } = input;
   const expected = {
     walks: canonicalWalks(input.walks),
-    intros: Object.fromEntries(Object.entries(intros).filter(([, text]) => text.trim())),
-    rest: Object.fromEntries(Object.entries(rest).map(([n, r]) => [n, { until: r.until, reason: r.reason || '' }])),
+    intros: Object.fromEntries(cleanIntros(intros)),
+    rest: Object.fromEntries(cleanRest(rest)),
     photos: photoEntries(photos).entries.flatMap(e => [e.key, e.thumb]).filter(Boolean).sort(byText),
   };
   const differences = [];
   const diff = (kind, want, got, fields) => {
     for (const key of new Set([...want.keys(), ...got.keys()])) {
-      const a = want.get(key), b = got.get(key);
-      if (a === undefined || b === undefined) differences.push({ kind, key, field: '*', expected: a ?? null, actual: b ?? null });
-      else for (const field of fields) if (!isDeepStrictEqual(a[field], b[field])) differences.push({ kind, key, field, expected: a[field], actual: b[field] });
+      const expected = want.get(key), found = got.get(key);
+      if (expected === undefined || found === undefined) differences.push({ kind, key, field: '*', expected: expected ?? null, actual: found ?? null });
+      else for (const field of fields) if (!isDeepStrictEqual(expected[field], found[field])) differences.push({ kind, key, field, expected: expected[field], actual: found[field] });
     }
   };
   const byKey = list => new Map(list.map(w => [walkKey(w), w]));

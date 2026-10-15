@@ -1,12 +1,12 @@
 // #248：本機演練。用 repo 裡的 JSON、dogs/*.md 和 R2 清單暫存檔（.migration-private/，不提交）匯入一份
 // 記憶體裡的 D1，跑兩次確認重跑一致，再印出比對報告。不連線正式 D1、R2 或試算表。
-// 執行：node scripts/check-compact-profiles.mjs <R2清單.json>
+// 本機演練工具，所以借用測試的 fakeD1（真的 SQLite）。執行：node scripts/check-compact-profiles.mjs <R2清單.json>
 import { readFile, readdir } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateCompactDatabase } from './migrate-compact-db.mjs';
 import { importCompactDogs, compareCompactDogs } from './import-compact-dogs.mjs';
-import { importCompactProfiles, compareCompactProfiles } from './import-compact-profiles.mjs';
+import { importCompactProfiles, compareCompactProfiles, readCompactProfiles } from './import-compact-profiles.mjs';
 import { parseFrontmatterBody, markdownToText } from './sync-sheet.mjs';
 
 const ROOT = new URL('../', import.meta.url);
@@ -44,11 +44,14 @@ export async function checkCompactProfiles({ dogs, profiles }) {
     const counts = {};
     for (const t of ['v3_dogs', 'v3_dog_numbers', 'v3_walks', 'v3_intros', 'v3_rest', 'v3_photos']) counts[t] = await db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).first('n');
     const dogsReport = await compareCompactDogs(db, dogs), report = await compareCompactProfiles(db, profiles);
+    // 網站現在讀的是 dogs.json 的 intro（同步從狗卡整理的），D1 讀回的介紹要跟它一樣
+    const intros = (await readCompactProfiles(db)).intros;
+    const siteIntros = dogs.dogs.filter(d => d.id && d.intro).map(d => ({ kind: 'site-intro', key: d.id, field: 'intro', expected: d.intro, actual: intros[d.id] ?? null })).filter(d => d.expected !== d.actual);
     return {
       sourceWalkRecords: profiles.walks.walks.length, imported: { ...second, newDogs: first.newDogs.length }, counts,
       replayIdentical: JSON.stringify({ ...first, newDogs: [] }) === JSON.stringify(second),
       foreignKeyErrors: (await db.prepare('PRAGMA foreign_key_check').all()).results.length,
-      equal: dogsReport.equal && report.equal, differences: [...dogsReport.differences, ...report.differences],
+      equal: dogsReport.equal && report.equal && !siteIntros.length, differences: [...dogsReport.differences, ...report.differences, ...siteIntros],
     };
   } finally { db.close(); }
 }

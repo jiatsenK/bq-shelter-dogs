@@ -69,6 +69,7 @@ const report = await compareCompactProfiles(db, { walks, intros, names, rest, ph
 
 - 溜狗紀錄照網站的規則合併：同一隻狗同一天以最後一筆有 `walkers` 的為準；只有 `mine`、沒記人的舊紀錄仍算那天有溜。`mine` 網站已經不看，不搬。一天一個代號一列，沒記人的存一列 `walker_code` 是 NULL。
 - 同一天多隻狗的先後順序不保存，讀回依日期、編號、狗名排序。
+- 介紹來源是 `dogs/*.md`（同步寫進 dogs.json `intro` 的同一份）；`data/intro-original.json` 是改寫前的原文封存，網站不讀，不搬。演練另外確認 D1 讀回的介紹跟 dogs.json 的 `intro` 一樣。
 - 介紹、休養、照片跟著永久狗 ID；讀回時換成主清單上現在的編號，已出所的狗用最大的編號。空白介紹不存。
 - 不在主清單上的狗（已出所）用編號新建永久狗，名字取狗卡或溜狗紀錄；沒編號的用名字認。
 - 照片只收 `photos/{編號}.jpg` 和同編號的縮圖；刪除標記不算。同一隻狗有多張時，主清單上現在編號的那張是主照片。相簿縮圖、trash、沒有主照片的縮圖不搬，列在回傳的 `skipped`。
