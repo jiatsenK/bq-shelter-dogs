@@ -1214,3 +1214,8 @@
 - 依 K 本次確認，CONTEXT.md 改名為 GLOSSARY.md，更新目前文件與 repo-local 技能的引用；歷史紀錄保留原名。
 - 同步上游 v1.3.1 所選技能，加入 pr／retro、移除 resolving-merge-conflicts；保留單票 implement 流程，不加入 implement-spec。
 - 驗證：詞彙表內容雜湊一致、目前引用檢查與技能逐檔比對；本次未變更網站程式或資料。
+
+## 2026-10-15 試算表寫入範圍放寬為只追加備註（Claude）
+
+- 依 #239 決策（地圖 #238），AGENTS.md 試算表寫入規則加入「試算表備註」「異動紀錄」兩種只追加寫入與格式；GLOSSARY.md 補「異動紀錄」定義。
+- 只改文件，未改網站程式、試算表或 D1；實作交給 Codex。
