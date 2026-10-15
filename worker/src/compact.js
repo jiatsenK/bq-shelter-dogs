@@ -123,3 +123,32 @@ export async function saveIntro(db, number, text) {
   else await db.prepare('DELETE FROM v3_intros WHERE dog_id=?').bind(dogId).run();
   return true;
 }
+
+// 離所紀錄（#259）：形狀跟原本的 data/departures.json 的 departures 一樣，依日期新到舊、同一天依編號
+export async function readDepartures(db) {
+  const [deps, items] = await db.batch([
+    db.prepare('SELECT * FROM v3_departures'),
+    db.prepare('SELECT number, kind, value FROM v3_departure_items ORDER BY number, kind, position'),
+  ]);
+  const listOf = new Map();
+  for (const r of items.results || []) {
+    const key = `${r.number}|${r.kind}`;
+    if (!listOf.has(key)) listOf.set(key, []);
+    listOf.get(key).push(r.value);
+  }
+  const list = (deps.results || []).map(r => {
+    const entry = {
+      id: r.number, name: r.name, date: r.departed_date, dateSource: r.date_source, seen: r.seen_date,
+      reason: r.reason, matched: r.matched, flags: listOf.get(`${r.number}|flag`) || [],
+    };
+    if (r.returned_number !== null) entry.returned = r.returned_number;
+    if (r.last_number !== null) {
+      const last = { cage: r.last_cage, id: r.last_number, name: r.last_name, walkedDate: r.last_walked_date, note: r.last_note, sex: r.last_sex, intro: r.last_intro };
+      if (listOf.has(`${r.number}|former`)) last.formerIds = listOf.get(`${r.number}|former`);
+      if (listOf.has(`${r.number}|group`)) last.groups = listOf.get(`${r.number}|group`);
+      entry.last = last;
+    }
+    return entry;
+  });
+  return list.sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.id.localeCompare(b.id));
+}

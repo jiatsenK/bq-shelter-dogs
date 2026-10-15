@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateCompactDatabase } from './migrate-compact-db.mjs';
-import { readDogsPayload } from '../worker/src/compact.js';
+import { readDogsPayload, readDepartures } from '../worker/src/compact.js';
 import { buildSyncSql, SEED_TABLES } from './sync-compact-d1.mjs';
 
 const json = async path => JSON.parse(await readFile(new URL(`../${path}`, import.meta.url), 'utf8'));
@@ -16,7 +16,7 @@ async function source() {
     const column = [name, ...others].sort();
     if (!seen.has(column.join()) && column.every(n => dogs.groups[n]?.length === others.length)) { seen.add(column.join()); groupColumns.push(column); }
   }
-  return { dogs, walks: await json('data/walks.json'), groupColumns };
+  return { dogs, walks: await json('data/walks.json'), departures: (await json('data/departures.json')).departures, groupColumns };
 }
 
 async function apply(t, seed, sql) {
@@ -39,6 +39,13 @@ test('第一次寫入正式 D1：主清單、試算表備註、常遛狗群讀�
   assert.deepEqual(payload.sheetNotes, src.dogs.sheetNotes);
   for (const column of src.groupColumns) for (const name of column) assert.deepEqual([...payload.groups[name]].sort(), column.filter(n => n !== name));
   assert.ok(await db.prepare('SELECT COUNT(*) AS n FROM v3_walks').first('n'));
+  assert.deepEqual(await readDepartures(db), src.departures);
+});
+
+test('正式 D1 還沒有離所表時，SQL 自己先建', async t => {
+  const lines = (await buildSyncSql({}, await source())).split('\n');
+  assert.match(lines[0], /^CREATE TABLE IF NOT EXISTS v3_departures /);
+  assert.match(lines[1], /^CREATE TABLE IF NOT EXISTS v3_departure_items /);
 });
 
 test('再同步一次沿用正式 D1 的永久狗 ID，不新增狗', async t => {
