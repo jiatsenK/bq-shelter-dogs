@@ -10,3 +10,5 @@ wrangler.no-r2.json
 wrangler.deploy.json
 wrangler.preview.json
 db/seed.sql
+# 正式資料庫匯出只留本機（#245）
+.migration-private/
