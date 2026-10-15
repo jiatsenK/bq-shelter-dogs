@@ -1,4 +1,4 @@
-// #251 第一步：同步試算表後，把 data/dogs.json、walks.json 和常遛狗群整份換進 D1 的 v3_ 表，
+// #251 第一步：同步試算表後，把 data/dogs.json、walks.json、departures.json 和常遛狗群整份換進 D1 的 v3_ 表，
 // 網站（#247 起讀 D1）才看得到最新的試算表。GitHub 的 JSON 提交暫時照舊（溜狗紀錄和離所還要靠舊檔算），之後再拿掉。
 // 由 .github/workflows/sync-sheet.yml 在同步後執行：先用 wrangler 讀正式 D1 現有的永久狗 ID，在記憶體 D1 裡匯入並比對，
 // 一致才產生 SQL 交給 wrangler 寫回。只寫 D1，不寫試算表、不呼叫 GitHub。
@@ -12,6 +12,7 @@ import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateCompactDatabase } from './migrate-compact-db.mjs';
 import { importCompactDogs, compareCompactDogs } from './import-compact-dogs.mjs';
 import { importCompactProfiles, compareCompactProfiles } from './import-compact-profiles.mjs';
+import { importCompactDepartures, compareCompactDepartures } from './import-compact-departures.mjs';
 import { fetchGviz, parseGroupColumns } from './sync-sheet.mjs';
 
 // 重跑要沿用的身分：永久狗、編號、主清單上的無編號狗、溜狗紀錄裡的無編號狗
@@ -22,12 +23,13 @@ export const SEED_TABLES = {
   v3_walks: "SELECT * FROM v3_walks WHERE dog_number=''",
 };
 // 整份替換的表，子表在前（刪除照這個順序，新增反過來）
-const REPLACED = ['v3_sheet_main_walkers', 'v3_sheet_former_numbers', 'v3_sheet_main', 'v3_sheet_groups', 'v3_sheet_changes', 'v3_walks'];
+// 離所（#259）也整份替換；正式 D1 還沒有這兩張表時，SQL 開頭先建
+const REPLACED = ['v3_departure_items', 'v3_departures', 'v3_sheet_main_walkers', 'v3_sheet_former_numbers', 'v3_sheet_main', 'v3_sheet_groups', 'v3_sheet_changes', 'v3_walks'];
 
 const sqlValue = v => (v === null || v === undefined ? 'NULL' : typeof v === 'number' ? String(v) : `'${String(v).replace(/'/g, "''")}'`);
 const insert = (table, row, tail = '') => `INSERT INTO ${table}(${Object.keys(row).join(',')}) VALUES(${Object.values(row).map(sqlValue).join(',')})${tail};`;
 
-// seed：{ 表名: 正式 D1 讀到的列 }；source：{ dogs（dogs.json）, walks, groupColumns }。
+// seed：{ 表名: 正式 D1 讀到的列 }；source：{ dogs（dogs.json）, walks, departures（departures.json 的陣列）, groupColumns }。
 // 回傳要寫回正式 D1 的 SQL；讀回跟來源不一致就丟錯，不寫。
 export async function buildSyncSql(seed, source) {
   const db = fakeD1();
@@ -42,10 +44,13 @@ export async function buildSyncSql(seed, source) {
     source.groupColumns.forEach((names, column) => names.forEach((name, row) => sheet.push(db.prepare('INSERT INTO v3_sheet_groups(column_index,row_index,name) VALUES(?,?,?)').bind(column, row, name))));
     (source.dogs.sheetNotes || []).forEach((n, row) => sheet.push(db.prepare('INSERT INTO v3_sheet_changes(row_index,label,text) VALUES(?,?,?)').bind(row, n.label || '', n.text || '')));
     await db.batch([db.prepare('DELETE FROM v3_sheet_groups'), db.prepare('DELETE FROM v3_sheet_changes'), ...sheet]);
-    const differences = [...(await compareCompactDogs(db, source.dogs)).differences, ...(await compareCompactProfiles(db, profiles)).differences];
+    await importCompactDepartures(db, source.departures);
+    const differences = [...(await compareCompactDogs(db, source.dogs)).differences, ...(await compareCompactProfiles(db, profiles)).differences,
+      ...(await compareCompactDepartures(db, source.departures)).differences];
     if (differences.length) throw new Error(`匯入後比對有差異，不寫 D1：${JSON.stringify(differences.slice(0, 5))}`);
     const rows = async t => (await db.prepare(`SELECT * FROM ${t}`).all()).results;
-    const out = [];
+    const schema = await readFile(new URL('../db/compact-schema.sql', import.meta.url), 'utf8');
+    const out = schema.replace(/--[^\n]*/g, '').split(';').map(t => t.trim()).filter(t => /^CREATE TABLE IF NOT EXISTS v3_departure/.test(t)).map(t => `${t.replace(/\s+/g, ' ')};`);
     for (const row of await rows('v3_dogs')) out.push(insert('v3_dogs', row, ' ON CONFLICT(dog_id) DO UPDATE SET name=excluded.name,sex=excluded.sex'));
     for (const row of await rows('v3_dog_numbers')) out.push(insert('v3_dog_numbers', row, ' ON CONFLICT(number) DO NOTHING'));
     for (const t of REPLACED) out.push(`DELETE FROM ${t};`);
@@ -63,11 +68,12 @@ async function main() {
   const groupColumns = parseGroupColumns(await fetchGviz('常遛狗群'), new Set(dogs.dogs.map(d => d.name)));
   const seed = {};
   for (const [table, sql] of Object.entries(SEED_TABLES)) seed[table] = JSON.parse(wrangler(['--json', '--command', sql]))[0].results;
-  const sql = await buildSyncSql(seed, { dogs, walks: await json('data/walks.json'), groupColumns });
+  const { departures } = await json('data/departures.json');
+  const sql = await buildSyncSql(seed, { dogs, walks: await json('data/walks.json'), departures, groupColumns });
   const file = join(tmpdir(), 'bq-sync-compact.sql');
   await writeFile(file, sql);
   wrangler(['--file', file]);
-  console.log(`已寫入 D1：${dogs.dogs.length} 隻狗、${groupColumns.filter(c => c.length).length} 欄常遛狗群。`);
+  console.log(`已寫入 D1：${dogs.dogs.length} 隻狗、${departures.length} 筆離所、${groupColumns.filter(c => c.length).length} 欄常遛狗群。`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

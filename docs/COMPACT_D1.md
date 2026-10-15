@@ -99,3 +99,10 @@ GitHub 的 JSON 提交暫時照舊：新的溜狗紀錄和離所還是從舊檔�
 - 「已溜」照舊寫試算表兩欄；取消時用 Worker 回傳的原值還原，那格被別人改過時回 `changed`，網站提示不蓋掉（原本就有，見 `apps-script/sheet-write.gs`）。
 - 照片在 R2 上本來就不提交 GitHub。
 - 我的備註（`data/my-notes.json`）依規格不搬，仍寫 GitHub。
+
+## 離所紀錄（#259）
+
+- `v3_departures` 一隻離所的狗一列（編號、永久狗 ID、離所日期與來源、第一次不在主清單那天、原因、命中的字、回到主清單用的新編號、離開前最後一次的樣子）；判讀旗標、最後的舊編號、最後的常遛狗群拆在 `v3_departure_items`。
+- 同步（`sync-compact-d1.mjs`）每次把 `data/departures.json` 整份換進這兩張表，正式 D1 還沒有這兩張表時 SQL 開頭會先建，不用另外遷移。第一次同步就等於匯入既有紀錄，比對不一致就不寫。
+- 讀回用 `worker/src/compact.js` 的 `readDepartures`，形狀跟 `data/departures.json` 的 `departures` 一樣（#260 網站改讀時用）。
+- 離所的計算目前還是用 GitHub 上的舊檔當基準，#251 再改成從 D1 讀。
