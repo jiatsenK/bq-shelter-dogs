@@ -30,7 +30,7 @@ const dogs = await readCompactDogs(db);
 | `v3_sheet_changes` | 來源列；實際來源的標籤 `label` 與完整文字 `text`，不猜拆日期或名字 |
 | `v3_sheet_departed` | 來源列；編號、名字、遛狗日期、離所日期、備註 |
 | `v3_sheet_groups` | 來源欄＋列；可以一起溜的狗名 |
-| `v3_walks` | 狗＋日期＋順序；當時狗名、志工名字／代號直接存在紀錄，不另建溜狗的人表 |
+| `v3_walks` | 狗＋日期＋順序；那天的編號 `dog_number`、狗名 `dog_name`、志工名字／代號直接存在紀錄，不另建溜狗的人表 |
 | `v3_volunteers` / `v3_volunteer_codes` | 志工與代號；開卡允許只有舊代號、不必先猜志工 |
 | `v3_card_opened` | 代號＋永久狗 ID；開卡日期 |
 | `v3_rest` | 永久狗 ID；休養截止日、原因 |
@@ -55,3 +55,31 @@ node --test scripts/compact-schema.test.mjs scripts/import-compact-dogs.test.mjs
 ```
 
 測試使用既有 `fakeD1` 的真實 SQLite 約束與交易。包含 repo 現有 `data/dogs.json` 的完整讀回比對，不接觸正式 D1 或試算表。
+
+## 第二階段：溜狗紀錄、介紹、休養、照片清單（#248）
+
+```js
+import { importCompactProfiles, compareCompactProfiles } from './scripts/import-compact-profiles.mjs';
+
+// 先跑完 importCompactDogs；walks 是 data/walks.json，rest 是 data/rest.json，
+// intros／names 是 dogs/*.md 轉好的 { 編號: 介紹純文字 }／{ 編號: 狗名 }，photos 是 R2 清單的 objects。
+await importCompactProfiles(db, { walks, intros, names, rest, photos });
+const report = await compareCompactProfiles(db, { walks, intros, names, rest, photos });
+```
+
+- 溜狗紀錄照網站的規則合併：同一隻狗同一天以最後一筆有 `walkers` 的為準；只有 `mine`、沒記人的舊紀錄仍算那天有溜。`mine` 網站已經不看，不搬。一天一個代號一列，沒記人的存一列 `walker_code` 是 NULL。
+- 同一天多隻狗的先後順序不保存，讀回依日期、編號、狗名排序。
+- 介紹來源是 `dogs/*.md`（同步寫進 dogs.json `intro` 的同一份）；`data/intro-original.json` 是改寫前的原文封存，網站不讀，不搬。演練另外確認 D1 讀回的介紹跟 dogs.json 的 `intro` 一樣。
+- 介紹、休養、照片跟著永久狗 ID；讀回時換成主清單上現在的編號，已出所的狗用最大的編號。空白介紹不存。
+- 不在主清單上的狗（已出所）用編號新建永久狗，名字取狗卡或溜狗紀錄；沒編號的用名字認。
+- 照片只收 `photos/{編號}.jpg` 和同編號的縮圖；刪除標記不算。同一隻狗有多張時，主清單上現在編號的那張是主照片。相簿縮圖、trash、沒有主照片的縮圖不搬，列在回傳的 `skipped`。
+- 四張表在同一個 batch 整份替換；永久狗和編號只新增不刪，重跑不換 ID。
+- 差異列出 `kind`（walks／intros／rest／photos）、`key`（溜狗是「編號或狗名|日期」，其他是編號或 R2 路徑）、`field`、`expected`、`actual`。
+
+本機演練（R2 清單放 `.migration-private/`，不提交）：
+
+```powershell
+node scripts/check-compact-profiles.mjs .migration-private/219/bq-218-r2-source.json
+```
+
+`migrateCompactDatabase` 會幫 #246 時已經建好的 `v3_walks` 補上 `dog_number`、`dog_name` 兩欄。

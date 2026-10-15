@@ -1244,3 +1244,12 @@
 - `/api/` 狀態頁改報新表：`D1 新表（狗 N、主清單 N、溜狗紀錄 N）`，沒建表顯示 `D1（新表還沒建）`。
 - 測試：新增 `worker/test/d1-read.test.mjs`（加進 AGENTS.md 與 CI），舊表的開卡／名字／狀態測試移除；`scripts/business-schema.test.mjs` 的開卡案例改用新表；網頁測試的假資料改走 `api/dogs`。
 - 注意：正式 D1 的 v3_ 表要先由 #248／#249 匯入完成，這個 PR 才能合併部署，否則網站會顯示讀取錯誤。
+
+## 2026-10-15 #248 匯入並比對溜狗紀錄、介紹、休養、照片清單（Claude）
+
+- 這張票原本分給 Codex，K 同意改由 Claude 做。
+- 新增 `scripts/import-compact-profiles.mjs`：`importCompactProfiles` 把 walks.json、dogs/*.md 介紹、rest.json、R2 照片清單匯入 `v3_walks`／`v3_intros`／`v3_rest`／`v3_photos`；`compareCompactProfiles` 逐筆比對，差異列出類別、哪一筆、哪個欄位。
+- K 決定 `v3_walks` 加 `dog_number`、`dog_name` 兩欄存當時的編號和狗名；`migrateCompactDatabase` 幫已建好的表補欄位。
+- 溜狗紀錄照網站規則合併成每狗每天一筆（965 筆→940 天），`mine` 不搬。已出所的狗用編號新建永久狗 ID。
+- 新增 `scripts/check-compact-profiles.mjs` 本機演練：真實資料比對 0 差異、重跑一致、外鍵 0 錯。正式 D1 還沒匯入，要 K 確認。
+- 測試：新增 `scripts/import-compact-profiles.test.mjs`（加進 AGENTS.md 與 CI）。

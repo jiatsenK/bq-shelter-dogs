@@ -60,12 +60,15 @@ CREATE TABLE IF NOT EXISTS v3_sheet_groups (
 );
 
 -- 每個名字直接存在溜狗紀錄；無人名的舊紀錄仍能保留。
+-- dog_number／dog_name 是那天的編號和狗名（#248），狗後來改名或換編號，「我溜過」仍顯示當時的。
 CREATE TABLE IF NOT EXISTS v3_walks (
   dog_id TEXT NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
   walk_date TEXT NOT NULL,
   position INTEGER NOT NULL DEFAULT 0,
   walker_name TEXT,
   walker_code TEXT,
+  dog_number TEXT NOT NULL DEFAULT '',
+  dog_name TEXT NOT NULL DEFAULT '',
   PRIMARY KEY(dog_id,walk_date,position)
 );
 -- last_seen 給名字推薦排序（沿用舊 walker_names）。
