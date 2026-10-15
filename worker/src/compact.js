@@ -123,3 +123,54 @@ export async function saveIntro(db, number, text) {
   else await db.prepare('DELETE FROM v3_intros WHERE dog_id=?').bind(dogId).run();
   return true;
 }
+
+// 離所紀錄（#259）：形狀跟原本的 data/departures.json 的 departures 一樣，依日期新到舊、同一天依編號
+export async function readDepartures(db) {
+  const [deps, items] = await db.batch([
+    db.prepare('SELECT * FROM v3_departures'),
+    db.prepare('SELECT number, kind, value FROM v3_departure_items ORDER BY number, kind, position'),
+  ]);
+  const listOf = new Map();
+  for (const r of items.results || []) {
+    const key = `${r.number}|${r.kind}`;
+    if (!listOf.has(key)) listOf.set(key, []);
+    listOf.get(key).push(r.value);
+  }
+  const list = (deps.results || []).map(r => {
+    const entry = {
+      id: r.number, name: r.name, date: r.departed_date, dateSource: r.date_source, seen: r.seen_date,
+      reason: r.reason, matched: r.matched, flags: listOf.get(`${r.number}|flag`) || [],
+    };
+    if (r.returned_number !== null) entry.returned = r.returned_number;
+    if (r.last_number !== null) {
+      const last = { cage: r.last_cage, id: r.last_number, name: r.last_name, walkedDate: r.last_walked_date, note: r.last_note, sex: r.last_sex, intro: r.last_intro };
+      if (listOf.has(`${r.number}|former`)) last.formerIds = listOf.get(`${r.number}|former`);
+      if (listOf.has(`${r.number}|group`)) last.groups = listOf.get(`${r.number}|group`);
+      entry.last = last;
+    }
+    return entry;
+  });
+  return list.sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.id.localeCompare(b.id));
+}
+
+// 溜狗歷史從這天開始累積（第一份每日快照，原本的 data/history/index.json 第一個日期）；之前的紀錄只是當時的「最後一次」
+export const HISTORY_START = '2026-09-25';
+
+// 溜狗紀錄（#260）：形狀跟原本的 data/walks.json 一樣，一隻狗一天一筆，依日期排；沒記人的舊紀錄沒有 walkers
+export async function readWalks(db) {
+  const { results = [] } = await db.prepare('SELECT dog_id,walk_date,walker_code,dog_number,dog_name FROM v3_walks ORDER BY walk_date,dog_number,dog_name,position').all();
+  const days = new Map();
+  for (const r of results) {
+    const key = `${r.dog_id}|${r.walk_date}`;
+    if (!days.has(key)) days.set(key, { id: r.dog_number, name: r.dog_name, date: r.walk_date });
+    if (r.walker_code !== null) (days.get(key).walkers ||= []).push(r.walker_code);
+  }
+  return { version: 1, historyStart: HISTORY_START, walks: [...days.values()] };
+}
+
+// 主清單上有編號的狗：編號 → 犬名（照片、備註確認編號用）。主清單是空的就丟錯，不當成「沒有狗」
+export async function readMainNames(db) {
+  const { results = [] } = await db.prepare("SELECT number,name FROM v3_sheet_main WHERE number<>'' ORDER BY row_index").all();
+  if (!results.length) throw new Error('v3_sheet_main 沒有資料');
+  return new Map(results.map(r => [r.number, r.name]));
+}

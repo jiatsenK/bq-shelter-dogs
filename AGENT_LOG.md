@@ -1282,3 +1282,27 @@
 - K在本聊天明確同意匯入20筆名字推薦後，確認正式D1 UUID與wrangler.jsonc一致，先保存匯入前私密快照、確認待審SQL與指定來源完全相符，再執行既有SQL。
 - 正式庫原有19筆，這次實際只補1筆至20筆；原有19筆的志工ID與last_seen逐筆完全不變。匯入後依baseline比對零差異，開卡、舊walker_names、狗編號對照均未變，外鍵0列。
 - 匯入前後快照與回應只留.migration-private/249/，未提交個資；未合併PR、未部署、未改Worker或同步程式。
+## 2026-10-15 #259 離所紀錄搬進 D1（Claude）
+
+- 起因：#251 要停止提交 GitHub，但離所紀錄（原因、離開前最後的樣子）存不進 `v3_sheet_departed`。K 同意拆成 #259 → #260 → #251 依序做。
+- `db/compact-schema.sql` 新增 `v3_departures`、`v3_departure_items`；新增 `scripts/import-compact-departures.mjs`（匯入＋比對），讀回 `readDepartures` 放在 `worker/src/compact.js`。
+- `sync-compact-d1.mjs` 每次把 `data/departures.json` 整份換進 D1，SQL 開頭先建表，所以正式 D1 不用另外遷移。
+- 測試：新增 `scripts/import-compact-departures.test.mjs`（加進 AGENTS.md 與 CI）。
+
+## 2026-10-15 #260 網站改從 /api 讀溜狗紀錄與離所（Claude）
+
+- Worker 新增 `GET /walks`、`GET /departures`（`worker/src/compact.js` 的 `readWalks`、`readDepartures`），D1 讀不到回 503。
+- `js/app.js`、`js/cards.js`（`desk.js` 共用 `WALKS_URL`）、`js/analysis.js` 改讀 `api/walks`、`api/departures`；開始記錄日改用 `historyStart`，不再讀快照目錄。
+- 照片、備註確認編號在有 D1 時改讀主清單（`readMainNames`）。`readCompactProfiles` 的溜狗紀錄改共用 `readWalks`。
+- 測試：`worker/test/d1-read.test.mjs` 加新 API 測試；`tests/index.html` 改成新網址。本機沒有 Playwright Chromium，網頁測試交給 CI。
+
+## 2026-10-15 #251 同步只寫 D1（Claude）
+
+- `scripts/sync-compact-d1.mjs` 改成同步入口：讀試算表＋正式 D1 現況，`planSync` 用 D1 上一次的主清單、溜狗紀錄、離所算新的，整份寫回 D1。D1 的溜狗紀錄沒有 `mine`，用代號推回。
+- `scripts/sync-sheet.mjs` 拿掉寫 data/ 的 `main`，只留函式。
+- `sync-sheet.yml` 拿掉 git 提交、權限改 `contents: read`、push 觸發只看程式檔；部署不再跟著同步跑。
+- 測試：`scripts/sync-compact-d1.test.mjs` 加新紀錄、重跑不重複、離所、空 D1 重建、只寫 D1 的檢查。
+
+## 2026-10-15 #261 合併衝突（Claude）
+
+- 合入 main：測試清單保留 #259 的 `import-compact-departures` 和 #249 的兩個新測試；紀錄兩邊都留。

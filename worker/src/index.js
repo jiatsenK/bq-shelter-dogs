@@ -26,7 +26,7 @@
 // 設定步驟見 docs/CLOUDFLARE_SETUP.md。
 
 import * as r2 from './r2.js';
-import { readDogsPayload, compactStatus, dogIdsFor, openedBooks, readRest, saveRest, saveIntro } from './compact.js';
+import { readDogsPayload, compactStatus, dogIdsFor, openedBooks, readRest, saveRest, saveIntro, readWalks, readDepartures, readMainNames } from './compact.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
@@ -112,6 +112,8 @@ function config(env) {
     sheetId: env && env.SHEET_ID ? String(env.SHEET_ID).trim() : '',
     // 照片放 R2 時（#130）狗的編號改讀部署上去的 data/dogs.json（每次同步完都會重新部署），照片操作就完全不用 GitHub
     assets: r2.r2On(env) && env.ASSETS ? env.ASSETS : null,
+    // #260 起狗的編號從 D1 主清單讀，同步不再提交 data/dogs.json；沒接 D1 時照舊
+    db: env && env.DB ? env.DB : null,
   };
 }
 
@@ -238,9 +240,14 @@ async function triggerSync(env) {
   return res.status;
 }
 
-// 從 repo 讀 data/dogs.json（照片放 R2 時讀部署上去的那份），回傳 編號 → 犬名
+// 編號 → 犬名：有 D1 讀主清單（#260），沒有才讀 repo 的 data/dogs.json（照片放 R2 時讀部署上去的那份）
 async function loadDogs(cfg, now) {
   if (dogsCache && now - dogsCache.at < DOGS_CACHE_MS) return dogsCache.dogs;
+  if (cfg.db) {
+    const dogs = await readMainNames(cfg.db);
+    dogsCache = { at: now, dogs };
+    return dogs;
+  }
   const res = cfg.assets
     ? await cfg.assets.fetch(new Request('https://assets.invalid/data/dogs.json'))
     : await github(cfg, `contents/data/dogs.json?ref=${encodeURIComponent(cfg.branch)}`, {
@@ -1110,6 +1117,18 @@ export default {
       }
     }
 
+    // 溜狗紀錄、離所紀錄（#260）：形狀跟原本的 data/walks.json、data/departures.json 一樣，從 D1 讀
+    if (path === '/walks' || path === '/departures') {
+      if (request.method !== 'GET') return fail(405, '只能用 GET 讀', allowed);
+      try {
+        if (!env || !env.DB) throw new Error('沒有 D1');
+        const body = path === '/walks' ? await readWalks(env.DB) : { version: 1, departures: await readDepartures(env.DB) };
+        return reply(200, { ok: true, ...body }, allowed);
+      } catch (e) {
+        console.error(path, e);
+        return fail(503, path === '/walks' ? '暫時讀不到溜狗紀錄' : '暫時讀不到離所紀錄', allowed, { code: 'db' });
+      }
+    }
     if (path === '/rest') {
       if (request.method !== 'GET') return fail(405, '休養設定只能用 GET /rest 讀', allowed);
       try {

@@ -104,3 +104,32 @@ CREATE TABLE IF NOT EXISTS v3_intros (
   dog_id TEXT PRIMARY KEY NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
   intro TEXT NOT NULL
 );
+
+-- 離所紀錄（#259，原本的 data/departures.json）：同步發現狗從主清單消失就記一筆，原因只讀「已出所」分頁判讀。
+-- last_* 是離開主清單前最後一次的樣子（離所名冊的詳細資訊用）；last_number 是 NULL 表示沒有這份資料。
+-- 判讀旗標、最後的舊編號、最後的常遛狗群拆成 v3_departure_items 的列。
+CREATE TABLE IF NOT EXISTS v3_departures (
+  number TEXT PRIMARY KEY NOT NULL CHECK(length(number)>0),
+  dog_id TEXT NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
+  name TEXT NOT NULL,
+  departed_date TEXT,
+  date_source TEXT,
+  seen_date TEXT,
+  reason TEXT NOT NULL DEFAULT 'unknown',
+  matched TEXT NOT NULL DEFAULT '',
+  returned_number TEXT,
+  last_number TEXT,
+  last_name TEXT,
+  last_cage TEXT,
+  last_walked_date TEXT,
+  last_note TEXT,
+  last_sex TEXT,
+  last_intro TEXT
+);
+CREATE TABLE IF NOT EXISTS v3_departure_items (
+  number TEXT NOT NULL REFERENCES v3_departures(number) ON DELETE CASCADE,
+  kind TEXT NOT NULL CHECK(kind IN ('flag','former','group')),
+  position INTEGER NOT NULL,
+  value TEXT NOT NULL,
+  PRIMARY KEY(number,kind,position)
+);
