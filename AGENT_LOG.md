@@ -1235,3 +1235,12 @@
 - `v3_walks` 只留 `walker_name`／`walker_code`，移除意思不明的 `name`。
 - 沒有編號的狗以名字延續狗 ID 改成明確規則並寫進註解、測試標題和 docs；`v3_volunteers.last_seen` 註明給名字推薦排序。
 - 驗證：compact-schema、import-compact-dogs 測試 7 項全過。
+
+## 2026-10-15 #247 溜狗表改讀 D1（Claude）
+
+- Worker 新增 `GET /api/dogs`（`worker/src/compact.js`）：從 v3_ 主清單、上次溜的代號、舊編號、分組、異動紀錄組回跟 `data/dogs.json` 一樣的形狀，另帶 R2 照片版本號。沒接 D1、D1 出錯、主清單沒有狗都回 503（`code: 'db'`），不回空清單。
+- 網站（`js/app.js`、`js/cards.js`、`index.html` 提早抓）改讀 `api/dogs`；讀不到時照舊顯示「狗的資料讀不到」和重新讀取。
+- 開卡改讀寫 `v3_card_opened`：用編號查永久狗 ID 存，讀回時換成主清單上現在的編號（再入所換編號仍是同一張卡）。名字推薦改讀寫 `v3_volunteers`。
+- `/api/` 狀態頁改報新表：`D1 新表（狗 N、主清單 N、溜狗紀錄 N）`，沒建表顯示 `D1（新表還沒建）`。
+- 測試：新增 `worker/test/d1-read.test.mjs`（加進 AGENTS.md 與 CI），舊表的開卡／名字／狀態測試移除；`scripts/business-schema.test.mjs` 的開卡案例改用新表；網頁測試的假資料改走 `api/dogs`。
+- 注意：正式 D1 的 v3_ 表要先由 #248／#249 匯入完成，這個 PR 才能合併部署，否則網站會顯示讀取錯誤。

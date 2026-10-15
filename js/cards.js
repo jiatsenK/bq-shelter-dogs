@@ -3,7 +3,7 @@
 // 「你是誰」用溜狗表「我溜過」設定的代號；開卡紀錄存 D1、localStorage 備援，不寫試算表、不顯示志工名字。
 // 純函式在前面（tests/index.html 會測），畫面在後面。
 
-const BQ_DATA_URL = 'data/dogs.json';
+const BQ_DATA_URL = 'api/dogs'; // #247 起從 Worker 讀 D1
 const BQ_WALKS_URL = 'data/walks.json';
 const BQ_CODES_KEY = 'bq-walker-codes'; // 溜狗表（js/app.js）存的我的代號
 const BQ_WRITES_KEY = 'bq-sheet-writes'; // 溜狗表今天按過的溜了（還沒同步進 walks.json 的）

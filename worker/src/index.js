@@ -26,6 +26,7 @@
 // 設定步驟見 docs/CLOUDFLARE_SETUP.md。
 
 import * as r2 from './r2.js';
+import { readDogsPayload, compactStatus, dogIdsFor, openedBooks } from './compact.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
@@ -197,16 +198,31 @@ function github(cfg, path, init = {}) {
   });
 }
 
-// 資料庫（D1，第 2 步）：目前只在狀態頁報告有沒有接上、各表幾筆；網站還是讀 repo 的檔案
+// 資料庫（D1）：#247 起網站讀精簡新表（v3_，worker/src/compact.js），狀態頁報告新表有沒有接上、各幾筆
 async function databaseStatus(env) {
   if (!env || !env.DB) return '未設定';
+  return compactStatus(env.DB);
+}
+
+// 網站要的狗清單（#247）：形狀跟原本的 data/dogs.json 一樣，另外帶 R2 的照片版本號。
+// 讀不到（沒接 D1、D1 出錯、還沒有狗）一律回 503，網站顯示錯誤，不會當成「沒有狗」
+async function getDogs(env, origin) {
+  const off = () => fail(503, '資料庫暫時讀不到狗的資料，請稍後再試', origin, { code: 'db' });
+  if (!env || !env.DB) return off();
+  let data;
   try {
-    const out = {};
-    for (const t of ['dogs', 'walks', 'changes']) out[t] = (await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${t}`).first()).n;
-    return `D1（狗 ${out.dogs}、溜狗紀錄 ${out.walks}、異動紀錄 ${out.changes}）`;
+    data = await readDogsPayload(env.DB);
   } catch (e) {
-    return 'D1（還沒建表）';
+    console.error('dogs', e);
+    return off();
   }
+  if (r2.r2On(env)) {
+    try {
+      const { versions } = await r2.r2Versions(env);
+      data.photoVersions = versions;
+    } catch (e) { /* 沒有版本號只是照片可能用到快取，狗的資料照給 */ }
+  }
+  return reply(200, { ok: true, ...data }, origin);
 }
 
 // 定時叫 GitHub 跑同步試算表；成功時 GitHub 回 204
@@ -952,13 +968,13 @@ export async function rememberWalkerNames(env, names, now = Date.now()) {
   if (!env || !env.DB) return [];
   try {
     const at = new Date(now).toISOString();
-    const upsert = env.DB.prepare('INSERT INTO walker_names (name, last_seen) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET last_seen = excluded.last_seen');
+    const upsert = env.DB.prepare('INSERT INTO v3_volunteers (name, last_seen) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET last_seen = excluded.last_seen');
     if (names.length) await env.DB.batch(names.map(n => upsert.bind(n, at)));
-    const { results = [] } = await env.DB.prepare('SELECT name FROM walker_names ORDER BY last_seen DESC, name LIMIT ?').bind(WALKER_NAMES_MAX).all();
+    const { results = [] } = await env.DB.prepare('SELECT name FROM v3_volunteers ORDER BY last_seen DESC, name LIMIT ?').bind(WALKER_NAMES_MAX).all();
     const now_ = new Set(names);
     return results.map(r => r.name).filter(n => typeof n === 'string' && n && !now_.has(n));
   } catch (e) {
-    console.error('walker_names', e);
+    console.error('v3_volunteers', e);
     return [];
   }
 }
@@ -1080,15 +1096,14 @@ async function openedCards(request, env, origin) {
   if (request.method === 'PUT') {
     if (!Array.isArray(input.ids) || !input.ids.length || input.ids.length > 50 || !input.ids.every(id => typeof id === 'string' && ID_PATTERN.test(id))) return fail(400, '每次最多記錄 50 張卡', origin);
     const ids = [...new Set(input.ids)];
-    const dogs = await loadDogs(config(env), Date.now());
-    if (ids.some(id => !dogs.has(id))) return fail(400, '找不到這隻狗', origin);
+    // #247：存永久狗 ID（v3_card_opened），再入所換了編號也還是同一張卡
+    const dogIds = await dogIdsFor(env.DB, ids); // 舊編號和新編號會對到同一隻狗，所以下面依狗 ID 去重
+    if (ids.some(id => !dogIds.has(id))) return fail(400, '找不到這隻狗', origin);
     const date = taiwanYmd(Date.now());
-    await env.DB.batch(codes.flatMap(code => ids.map(id => env.DB.prepare('INSERT OR IGNORE INTO card_opened (walker_code, dog_id, opened_on) VALUES (?, ?, ?)').bind(code, id, date))));
+    await env.DB.batch(codes.flatMap(code => [...new Set(dogIds.values())].map(dogId => env.DB.prepare('INSERT OR IGNORE INTO v3_card_opened (walker_code, dog_id, opened_on) VALUES (?, ?, ?)').bind(code, dogId, date))));
     return reply(200, { ok: true }, origin);
   }
-  const rows = await env.DB.batch(codes.map(code => env.DB.prepare('SELECT dog_id, opened_on FROM card_opened WHERE walker_code = ?').bind(code)));
-  const books = {};
-  codes.forEach((code, i) => { books[code] = Object.fromEntries((rows[i].results || []).map(r => [r.dog_id, r.opened_on])); });
+  const books = await openedBooks(env.DB, codes);
   return reply(200, { ok: true, opened: { v: 1, codes: books } }, origin);
 }
 
@@ -1163,6 +1178,10 @@ export default {
       return fail(403, '這是預覽版，不能存，正式資料不受影響。要改請到正式網址', allowed);
     }
 
+    if (path === '/dogs') {
+      if (request.method !== 'GET') return fail(405, '狗的資料只能用 GET /dogs 讀', allowed);
+      return getDogs(env, allowed);
+    }
     if (path === '/cards/opened') {
       try { return await openedCards(request, env, allowed); }
       catch (e) { return fail(503, '開卡紀錄暫時讀寫失敗，請稍後再試', allowed); }
