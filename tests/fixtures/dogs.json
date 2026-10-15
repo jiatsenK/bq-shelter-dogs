@@ -1,0 +1,203 @@
+{
+  "version": 1,
+  "syncedAt": "2026-10-15 12:00",
+  "dogs": [
+    {
+      "id": "2020010100",
+      "name": "測試狗1",
+      "cage": "A1",
+      "walkedDate": "2026-10-14",
+      "covered": false,
+      "myWalked": false,
+      "note": "",
+      "sex": "male",
+      "intro": "合成介紹1",
+      "myWalkedDate": null,
+      "walkers": [
+        "aaaaaaaaaaaa"
+      ],
+      "formerIds": [
+        "2019010100"
+      ]
+    },
+    {
+      "id": "2020010101",
+      "name": "測試狗2",
+      "cage": "A2",
+      "walkedDate": "2026-10-14",
+      "covered": false,
+      "myWalked": false,
+      "note": "",
+      "sex": "female",
+      "intro": "合成介紹2",
+      "myWalkedDate": null,
+      "walkers": [
+        "aaaaaaaaaaaa"
+      ]
+    },
+    {
+      "id": "2020010102",
+      "name": "測試狗3",
+      "cage": "A3",
+      "walkedDate": "2026-10-14",
+      "covered": false,
+      "myWalked": false,
+      "note": "",
+      "sex": "male",
+      "intro": "合成介紹3",
+      "myWalkedDate": null,
+      "walkers": [
+        "aaaaaaaaaaaa"
+      ]
+    },
+    {
+      "id": "2020010103",
+      "name": "測試狗4",
+      "cage": "A4",
+      "walkedDate": "2026-10-14",
+      "covered": false,
+      "myWalked": false,
+      "note": "",
+      "sex": "female",
+      "intro": "合成介紹4",
+      "myWalkedDate": null,
+      "walkers": [
+        "aaaaaaaaaaaa"
+      ]
+    },
+    {
+      "id": "2020010104",
+      "name": "測試狗5",
+      "cage": "A5",
+      "walkedDate": "2026-10-14",
+      "covered": false,
+      "myWalked": false,
+      "note": "",
+      "sex": "male",
+      "intro": "合成介紹5",
+      "myWalkedDate": null,
+      "walkers": [
+        "aaaaaaaaaaaa"
+      ]
+    },
+    {
+      "id": "2020010105",
+      "name": "測試狗6",
+      "cage": "A6",
+      "walkedDate": "2026-10-14",
+      "covered": false,
+      "myWalked": false,
+      "note": "",
+      "sex": "female",
+      "intro": "合成介紹6",
+      "myWalkedDate": null,
+      "walkers": [
+        "aaaaaaaaaaaa"
+      ]
+    },
+    {
+      "id": "2020010106",
+      "name": "測試狗7",
+      "cage": "A7",
+      "walkedDate": "2026-10-14",
+      "covered": false,
+      "myWalked": false,
+      "note": "",
+      "sex": "male",
+      "intro": "合成介紹7",
+      "myWalkedDate": null,
+      "walkers": [
+        "aaaaaaaaaaaa"
+      ]
+    },
+    {
+      "id": "2020010107",
+      "name": "測試狗8",
+      "cage": "A8",
+      "walkedDate": "2026-10-14",
+      "covered": false,
+      "myWalked": false,
+      "note": "",
+      "sex": "female",
+      "intro": "合成介紹8",
+      "myWalkedDate": null,
+      "walkers": [
+        "aaaaaaaaaaaa"
+      ]
+    },
+    {
+      "id": "2020010108",
+      "name": "測試狗9",
+      "cage": "A9",
+      "walkedDate": "2026-10-14",
+      "covered": false,
+      "myWalked": false,
+      "note": "",
+      "sex": "male",
+      "intro": "合成介紹9",
+      "myWalkedDate": null,
+      "walkers": [
+        "aaaaaaaaaaaa"
+      ]
+    },
+    {
+      "id": "2020010109",
+      "name": "測試狗10",
+      "cage": "A10",
+      "walkedDate": "2026-10-14",
+      "covered": false,
+      "myWalked": false,
+      "note": "",
+      "sex": "female",
+      "intro": "合成介紹10",
+      "myWalkedDate": null,
+      "walkers": [
+        "aaaaaaaaaaaa"
+      ]
+    },
+    {
+      "id": "2020010110",
+      "name": "測試狗11",
+      "cage": "A11",
+      "walkedDate": "2026-10-14",
+      "covered": false,
+      "myWalked": false,
+      "note": "",
+      "sex": "male",
+      "intro": "合成介紹11",
+      "myWalkedDate": null,
+      "walkers": [
+        "aaaaaaaaaaaa"
+      ]
+    },
+    {
+      "id": "2020010111",
+      "name": "測試狗12",
+      "cage": "A12",
+      "walkedDate": "2026-10-14",
+      "covered": false,
+      "myWalked": false,
+      "note": "",
+      "sex": "female",
+      "intro": "合成介紹12",
+      "myWalkedDate": null,
+      "walkers": [
+        "aaaaaaaaaaaa"
+      ]
+    }
+  ],
+  "groups": {
+    "測試狗1": [
+      "測試狗2"
+    ],
+    "測試狗2": [
+      "測試狗1"
+    ]
+  },
+  "sheetNotes": [
+    {
+      "label": "異動",
+      "text": "合成測試資料"
+    }
+  ]
+}

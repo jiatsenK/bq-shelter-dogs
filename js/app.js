@@ -1,5 +1,5 @@
-// 狗狗資料：試算表由 GitHub Action 每天同步成這個檔（#31），前端只讀它、不直接連試算表（#32）
-const DATA_URL = 'data/dogs.json';
+// 狗狗資料：試算表同步進 D1（#245），網站從 Worker 的 /api/dogs 讀；前端不直接連試算表（#32）
+const DATA_URL = 'api/dogs'; // #247 起從 Worker 讀 D1，形狀跟原本的 data/dogs.json 一樣
 // 照片上傳服務（Cloudflare Worker，#47／#48）的網址。這裡只放網址，GitHub 寫入權限只在 Worker 裡，網站碰不到
 // - 網站和 Worker 是同一個 Cloudflare Worker（#125）：API 就在同一個網址的 /api 底下（本機用 wrangler dev 也一樣）
 // - 舊的單獨照片上傳 Worker 和舊網址的判斷 2026-10 拿掉了（舊網址只剩轉址，#129）
@@ -15,9 +15,9 @@ const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
 const FIRST_SCREEN_CARDS = 8;
 // 我最近溜過（#58）：同步時累積的遛狗紀錄（#56）。#96 起每個志工看自己的：
 // 紀錄裡的 walkers 是遛的人的代號，志工在「我溜過」輸入名字、經 Worker 換成代號後記在這支手機
-const WALKS_URL = 'data/walks.json';
+const WALKS_URL = 'api/walks'; // #260 起從 Worker 讀 D1，形狀跟原本的 data/walks.json 一樣
 // 休養中（K 2026-10-09）：管理者在網站上設定「到哪天前暫停帶出」，經 Worker（通關碼）寫進 repo 的這個檔，不碰試算表
-const REST_URL = 'data/rest.json';
+const REST_URL = 'api/rest'; // #250 起休養設定存 D1，從 Worker 讀
 const WALKER_CODES_KEY = 'bq-walker-codes';
 const WALKER_CODE_PATTERN = /^[0-9a-f]{12}$/; // 跟 Worker 的 WALKER_CODE_LENGTH 一致
 // 這間收容所的設定在 js/site-config.js（K 2026-10-10：以後其他收容所要用，只改那個檔）
@@ -39,7 +39,7 @@ let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, u
 let restMap = {}; // 休養中：編號 → { until: 'YYYY-MM-DD', reason }
 let detailWalksOpen = false; // 詳細資訊的溜狗紀錄有沒有展開每一天（K 2026-10-10 減法：預設只有一行字）
 let introEdit = null; // 詳細資訊正在改的入所介紹（K 2026-10-10 補資料）：{ dog, text, pass, needPass, phase: 'edit'|'saving'|'error', error }
-const introOverrides = {}; // 編號 → 剛存好的介紹：這台電腦馬上看到，dogs.json 等下次同步
+const introOverrides = {}; // 編號 → 剛存好的介紹：這台電腦不用重新讀就看到（#250 起存 D1，其他人重新整理就看得到）
 let restEdit = null; // 詳細資訊正在改的休養設定：{ dog, until, reason, pass, needPass, phase: 'edit'|'saving'|'error', error }
 let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（walkKey）
 let searchQuery = '';
@@ -47,7 +47,7 @@ let loadWarning = '';
 let analysisOpen = false; // 分析頁（#59）開著嗎
 let myWalks = []; // 我遛過的紀錄（#58）：[{ id, name, date: Date, ymd }]，新到舊
 let sheetNotes = []; // 試算表狗清單下面的異動紀錄（K 2026-10-10），dogs.json 的 sheetNotes；電腦版右欄用（js/desk.js）
-let walksData = null; // data/walks.json 讀回來的原始內容；換「我是誰」時不用重讀
+let walksData = null; // api/walks 讀回來的原始內容；換「我是誰」時不用重讀
 let walkerSetup = null; // 正在設定我是誰（#96）：{ text, phase: 'edit'|'saving'|'error', error }
 let myWalksState = 'loading'; // loading／ready／error
 let loadState = 'loading'; // loading：還在讀 dogs.json；error：讀取失敗；ready：資料好了
@@ -131,18 +131,18 @@ async function loadDogsData() {
   } catch (e) {
     throw new Error('連不到網站，可能是網路中斷。');
   }
-  if (!res.ok) throw new Error(`讀取 dogs.json 失敗（HTTP ${res.status}）。`);
+  if (!res.ok) throw new Error(`讀取狗的資料失敗（HTTP ${res.status}）。`);
   let data;
-  try { data = await res.json(); } catch (e) { throw new Error('dogs.json 內容壞掉了。'); }
+  try { data = await res.json(); } catch (e) { throw new Error('狗的資料格式壞掉了。'); }
   return parseDogsData(data);
 }
 
 // ── 我最近溜過（#58）──
 
-// walks.json 只取 walkers 有我的代號的紀錄（#96；舊紀錄只有 mine 沒有 walkers 的不算），日期不合理的丟掉；
+// 溜狗紀錄只取 walkers 有我的代號的紀錄（#96；舊紀錄只有 mine 沒有 walkers 的不算），日期不合理的丟掉；
 // 同一隻狗同一天只留一筆；新到舊（同一天後記的在前）
 function parseMyWalks(data, codes = loadMyCodes()) {
-  if (!data || !Array.isArray(data.walks)) throw new Error('walks.json 格式不對');
+  if (!data || !Array.isArray(data.walks)) throw new Error('溜狗紀錄格式不對');
   const text = v => (v == null ? '' : String(v).trim());
   // 同一隻狗同一天以最後一筆為準：先記了我、後來把我拿掉（按錯、×），就不算我溜的（K 2026-10-05 阿湯）
   const lastOf = new Map();
@@ -309,7 +309,7 @@ async function walkerCodesFor(names) {
   return { codes: out && Array.isArray(out.codes) ? out.codes.filter(c => WALKER_CODE_PATTERN.test(c)) : [] };
 }
 // 自己打的名字要不要再確認一次（K 2026-10-12）：名字清單只有最近溜過的人，清單上沒有的再去查遛狗紀錄
-// （data/walks.json 只有代號，所以先跟 Worker 換代號再對），紀錄裡有就是本人、不用問；查不到或連不上才問
+// （溜狗紀錄只有代號，所以先跟 Worker 換代號再對），紀錄裡有就是本人、不用問；查不到或連不上才問
 async function namesToConfirm(text) {
   const unknown = unknownWalkerNames(text);
   if (!unknown.length || !UPLOAD_URL) return unknown;
@@ -1504,7 +1504,7 @@ async function saveIntro() {
   render(); renderDetail();
   const b = document.getElementById('introEdit');
   if (b) b.focus({ preventScroll: true });
-  showToast(`${e.dog.name} 的介紹已存好（其他人等資料更新就會看到）`);
+  showToast(`${e.dog.name} 的介紹已存好（其他人重新整理就看得到）`);
 }
 
 function openRestEdit(dog) {
@@ -1519,7 +1519,7 @@ function openRestEdit(dog) {
     if (form.scrollIntoView) form.scrollIntoView({ block: 'center' });
   }
 }
-// 送到 Worker：end＝結束休養。成功後這支手機馬上生效，其他志工等網站更新（一兩分鐘）
+// 送到 Worker：end＝結束休養。成功後這支手機馬上生效，其他志工重新整理就看得到（#250 存 D1）
 async function saveRest(end = false) {
   const e = restEdit;
   if (!e || e.phase === 'saving') return;
@@ -1562,9 +1562,9 @@ async function loadRest() {
   try {
     const res = await fetch(REST_URL, { cache: 'no-cache' });
     const data = res.ok ? await res.json() : {};
-    if (data && typeof data === 'object' && !Array.isArray(data)) next = data;
+    if (data && data.rest && typeof data.rest === 'object' && !Array.isArray(data.rest)) next = data.rest;
   } catch (e) { /* 讀不到就當作沒有 */ }
-  // 讀的期間這支手機剛改過休養設定（restMap 換了）：網站上的檔還是舊的，不要蓋掉
+  // 讀的期間這支手機剛改過休養設定（restMap 換了）：讀到的可能是改之前的，不要蓋掉
   if (restMap !== before) return;
   restMap = next;
   resetWalkOrder();
