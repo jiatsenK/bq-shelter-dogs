@@ -88,7 +88,7 @@ node scripts/check-compact-profiles.mjs .migration-private/219/bq-218-r2-source.
 
 `.github/workflows/sync-sheet.yml` 同步完會跑 `scripts/sync-compact-d1.mjs`：用 wrangler 讀正式 D1 現有的永久狗 ID，在記憶體 D1 匯入 dogs.json、walks.json 和常遛狗群（照試算表的欄存），比對一致才產生 SQL 寫回正式 D1。休養、介紹、開卡、志工、照片表不動。需要 repo Secrets `CLOUDFLARE_API_TOKEN`（要有 D1 編輯權限）和 `CLOUDFLARE_ACCOUNT_ID`。
 
-GitHub 的 JSON 提交暫時照舊：新的溜狗紀錄和離所還是從舊檔算。等 #250 寫入改寫 D1 之後，再把 GitHub 提交拿掉。
+（#251 起已拿掉 GitHub 提交，見下面「同步只寫 D1」。）
 
 ## 網站寫入改存 D1（#250）
 
@@ -105,7 +105,7 @@ GitHub 的 JSON 提交暫時照舊：新的溜狗紀錄和離所還是從舊檔�
 - `v3_departures` 一隻離所的狗一列（編號、永久狗 ID、離所日期與來源、第一次不在主清單那天、原因、命中的字、回到主清單用的新編號、離開前最後一次的樣子）；判讀旗標、最後的舊編號、最後的常遛狗群拆在 `v3_departure_items`。
 - 同步（`sync-compact-d1.mjs`）每次把 `data/departures.json` 整份換進這兩張表，正式 D1 還沒有這兩張表時 SQL 開頭會先建，不用另外遷移。第一次同步就等於匯入既有紀錄，比對不一致就不寫。
 - 讀回用 `worker/src/compact.js` 的 `readDepartures`，形狀跟 `data/departures.json` 的 `departures` 一樣（#260 網站改讀時用）。
-- 離所的計算目前還是用 GitHub 上的舊檔當基準，#251 再改成從 D1 讀。
+- #251 起離所以 D1 上一次的內容為基準計算。
 
 ## 網站改讀 API（#260）
 
@@ -113,3 +113,11 @@ GitHub 的 JSON 提交暫時照舊：新的溜狗紀錄和離所還是從舊檔�
 - `GET /api/departures`：形狀跟 `data/departures.json` 一樣。
 - 「我溜過」、圖鑑、電腦版最近 30 天、狗的遛狗歷史、離所名冊都改讀這兩個；不再讀 `data/walks.json`、`data/departures.json`、`data/history/`。
 - 照片上傳、備註確認編號改讀 `v3_sheet_main`（有 D1 時），不讀部署上去的 `data/dogs.json`。
+
+## 同步只寫 D1（#251）
+
+- 同步的入口改成 `scripts/sync-compact-d1.mjs`：讀試算表（主清單、異動紀錄、常遛狗群、已出所），用 wrangler 讀正式 D1 的現況（主清單複本、溜狗紀錄、離所、永久狗），在記憶體 D1 算出新的溜狗紀錄和離所、匯入並比對，一致才寫回。
+- 上一次的主清單從 `v3_sheet_main` 讀，溜狗紀錄從 `v3_walks` 讀；D1 一隻狗一天只存最後一筆，`mine` 用代號推回來。
+- 不再寫 `data/dogs.json`、`data/walks.json`、`data/departures.json`、`data/history/`，workflow 沒有 git 提交，權限 `contents: read`。repo 裡這些檔停在 #251 那天，網站已不讀（#260）。
+- 每日快照停止；溜狗歷史的開始記錄日固定 2026-09-25（`HISTORY_START`）。
+- `syncedAt` 每次同步都更新（原本資料沒變就不動）。

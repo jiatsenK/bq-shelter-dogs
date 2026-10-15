@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateCompactDatabase } from './migrate-compact-db.mjs';
-import { readDogsPayload, readDepartures } from '../worker/src/compact.js';
-import { buildSyncSql, SEED_TABLES } from './sync-compact-d1.mjs';
+import { readDogsPayload, readDepartures, readWalks } from '../worker/src/compact.js';
+import { buildSyncSql, SEED_TABLES, planSync, readPrevious } from './sync-compact-d1.mjs';
 
 const json = async path => JSON.parse(await readFile(new URL(`../${path}`, import.meta.url), 'utf8'));
 
@@ -73,4 +73,75 @@ test('開卡、照片、休養、介紹不被同步清掉', async t => {
 test('來源有問題時丟錯，不產生 SQL', async t => {
   const src = await source();
   await assert.rejects(buildSyncSql({}, { ...src, walks: { walks: [{ id: 'x', name: '狗', date: '不是日期' }] } }), /日期/);
+});
+
+// ── #251 同步只寫 D1：上一次的狀態從 D1 讀 ──
+const KEY = { key: 'test-key', names: [] };
+const NOW = new Date('2026-10-16T09:00:00+08:00');
+const seedOf = async db => { const seed = {}; for (const [table, sql] of Object.entries(SEED_TABLES)) seed[table] = (await db.prepare(sql).all()).results; return seed; };
+const sheetOf = src => ({ dogs: src.dogs.dogs.map(({ myWalkedDate, ...d }) => d), groups: src.dogs.groups, sheetNotes: src.dogs.sheetNotes });
+// 正式 D1 的樣子：先用 repo 的 JSON 寫一次
+async function production(t) {
+  const src = await source();
+  return { src, db: await apply(t, {}, await buildSyncSql({}, src)) };
+}
+const syncOnce = async (t, db, sheet, rows = null) => {
+  const seed = await seedOf(db);
+  const groupColumns = (await source()).groupColumns;
+  return apply(t, seed, await buildSyncSql(seed, async mem => ({ ...planSync(await readPrevious(mem), sheet, rows, NOW, KEY), groupColumns })));
+};
+
+test('#251 新的溜狗日期記一筆進 v3_walks，舊紀錄一筆不少', async t => {
+  const { src, db } = await production(t);
+  const before = (await readWalks(db)).walks;
+  const sheet = sheetOf(src);
+  const dog = sheet.dogs.find(d => d.id && d.walkedDate);
+  dog.walkedDate = '2026-10-16'; dog.walkers = ['aaaaaaaaaaaa'];
+  const after = (await readWalks(await syncOnce(t, db, sheet))).walks;
+  assert.deepEqual(after.filter(w => w.date === '2026-10-16'), [{ id: dog.id, name: dog.name, date: '2026-10-16', walkers: ['aaaaaaaaaaaa'] }]);
+  for (const w of before) assert.ok(after.some(a => a.id === w.id && a.name === w.name && a.date === w.date), `少了 ${w.name} ${w.date}`);
+});
+
+test('#251 試算表沒變再同步一次：溜狗紀錄、離所都不變（不重複記）', async t => {
+  const { src, db } = await production(t);
+  const once = await syncOnce(t, db, sheetOf(src));
+  const twice = await syncOnce(t, once, sheetOf(src));
+  assert.deepEqual(await readWalks(twice), await readWalks(once));
+  assert.deepEqual(await readDepartures(twice), await readDepartures(once));
+  assert.deepEqual(await readDepartures(once), src.departures);
+});
+
+test('#251 狗從主清單消失記成離所，最後的樣子從 D1 上一次的主清單來；已有的離所保留', async t => {
+  const { src, db } = await production(t);
+  const sheet = sheetOf(src);
+  const gone = sheet.dogs.find(d => d.id && !src.departures.some(e => e.id === d.id));
+  sheet.dogs = sheet.dogs.filter(d => d !== gone);
+  const deps = await readDepartures(await syncOnce(t, db, sheet));
+  const entry = deps.find(e => e.id === gone.id);
+  assert.equal(entry.seen, '2026-10-16');
+  assert.equal(entry.last.name, gone.name);
+  for (const e of src.departures) assert.ok(deps.some(d => d.id === e.id));
+});
+
+test('#251 複本可以從試算表整份重建：D1 是空的也能同步，主清單跟試算表一樣', async t => {
+  const src = await source();
+  const sheet = sheetOf(src);
+  const db = await apply(t, {}, await buildSyncSql({}, async mem => ({ ...planSync(await readPrevious(mem), sheet, null, NOW, KEY), groupColumns: src.groupColumns })));
+  const payload = await readDogsPayload(db);
+  assert.deepEqual(payload.dogs.map(({ myWalkedDate, intro, ...d }) => d), sheet.dogs.map(({ intro, ...d }) => d));
+  assert.deepEqual(payload.sheetNotes, src.dogs.sheetNotes);
+});
+
+test('#251 只寫 D1：同步不寫 data/、不呼叫 git／GitHub、不寫試算表；workflow 沒有提交步驟', async () => {
+  const code = await readFile(new URL('./sync-compact-d1.mjs', import.meta.url), 'utf8');
+  const sheetCode = await readFile(new URL('./sync-sheet.mjs', import.meta.url), 'utf8');
+  for (const [name, text] of [['sync-compact-d1.mjs', code], ['sync-sheet.mjs', sheetCode]]) {
+    assert.doesNotMatch(text, /api\.github\.com|['"]git['"]|method:\s*['"](POST|PUT|PATCH|DELETE)/, name);
+    assert.doesNotMatch(text, /writeFile\([^)]*DATA_DIR/, name);
+  }
+  assert.match(code, /'d1', 'execute'/);
+  const workflow = await readFile(new URL('../.github/workflows/sync-sheet.yml', import.meta.url), 'utf8');
+  assert.doesNotMatch(workflow, /git (add|commit|push)/);
+  assert.match(workflow, /contents: read/);
+  assert.doesNotMatch(workflow, /contents: write/);
 });
