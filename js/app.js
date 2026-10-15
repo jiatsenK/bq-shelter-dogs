@@ -1,5 +1,5 @@
-// 狗狗資料：試算表由 GitHub Action 每天同步成這個檔（#31），前端只讀它、不直接連試算表（#32）
-const DATA_URL = 'data/dogs.json';
+// 狗狗資料：試算表同步進 D1（#245），網站從 Worker 的 /api/dogs 讀；前端不直接連試算表（#32）
+const DATA_URL = 'api/dogs'; // #247 起從 Worker 讀 D1，形狀跟原本的 data/dogs.json 一樣
 // 照片上傳服務（Cloudflare Worker，#47／#48）的網址。這裡只放網址，GitHub 寫入權限只在 Worker 裡，網站碰不到
 // - 網站和 Worker 是同一個 Cloudflare Worker（#125）：API 就在同一個網址的 /api 底下（本機用 wrangler dev 也一樣）
 // - 舊的單獨照片上傳 Worker 和舊網址的判斷 2026-10 拿掉了（舊網址只剩轉址，#129）
@@ -131,7 +131,7 @@ async function loadDogsData() {
   } catch (e) {
     throw new Error('連不到網站，可能是網路中斷。');
   }
-  if (!res.ok) throw new Error(`讀取 dogs.json 失敗（HTTP ${res.status}）。`);
+  if (!res.ok) throw new Error(`讀取狗的資料失敗（HTTP ${res.status}）。`);
   let data;
   try { data = await res.json(); } catch (e) { throw new Error('dogs.json 內容壞掉了。'); }
   return parseDogsData(data);
