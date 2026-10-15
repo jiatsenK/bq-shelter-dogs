@@ -1221,3 +1221,10 @@
 - 新增結構、重跑、再入所、真實 JSON 讀回與單筆差異、來源錯誤／交易回復測試，納入 AGENTS.md 與 CI。驗證與雙軸審查進行中。
 - 最後驗證：Node 全套194/194；main基底真實118隻狗與118編號讀回零差異、外鍵0列。無頭Chrome網頁243過、1項既有 #130 workflow Windows CRLF檢查失敗。
 - Standards 0項；Spec發現異動紀錄複本應保存label/text，已補紅→綠測試修正，複查0項。工作期間其他流程切換共用checkout，已移至獨立worktree並精確移除共用目錄的重複變更。
+## 2026-10-15 檢討後的防護（Claude）
+
+- `.gitignore` 加入 `.migration-private/`，避免正式資料庫的匯出被提交。
+- 新增 `docs/agents/agent-split.md`（Claude／Codex 分票原則），AGENTS.md 加上指向它的連結。
+
+## 2026-10-15 CODEX（#246 合入最新 main）
+- 合入 #253 的既有私密匯出忽略規則與分工文件；.gitignore沿用main，AGENT_LOG兩邊紀錄均保留。未變更實作；驗證本票7項通過。
