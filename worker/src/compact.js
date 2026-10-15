@@ -10,8 +10,9 @@ const BOOLEANS = new Set(['covered', 'myWalked']);
 
 // 同一個 batch 讀，同步正在整份換掉複本時不會讀到一半新一半舊。主清單是空的就丟錯：沒有狗一定是資料出問題
 export async function readDogsPayload(db) {
+  // 介紹是 D1 自己存的（#250 網站改了馬上看得到），不用主清單複本上同步帶來的那份
   const [main, walkers, former, groups, notes] = await db.batch([
-    db.prepare('SELECT * FROM v3_sheet_main ORDER BY row_index'),
+    db.prepare("SELECT m.*, COALESCE(i.intro, '') AS intro FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) ORDER BY m.row_index"),
     db.prepare('SELECT row_index, walker_code FROM v3_sheet_main_walkers ORDER BY row_index, position'),
     db.prepare('SELECT row_index, number FROM v3_sheet_former_numbers ORDER BY row_index, position'),
     db.prepare('SELECT column_index, name FROM v3_sheet_groups ORDER BY column_index, row_index'),
@@ -92,4 +93,33 @@ export async function openedBooks(db, codes) {
   const books = {};
   codes.forEach((code, i) => { books[code] = Object.fromEntries((rows[i].results || []).filter(r => r.id).map(r => [r.id, r.opened_on])); });
   return books;
+}
+
+// 主清單上現在的編號優先，已出所的狗用最大的編號
+const NUMBER_OF = `COALESCE(
+  (SELECT m.number FROM v3_sheet_main m WHERE m.dog_id = t.dog_id AND m.number <> '' ORDER BY m.row_index LIMIT 1),
+  (SELECT MAX(n.number) FROM v3_dog_numbers n WHERE n.dog_id = t.dog_id))`;
+
+// 休養設定（#250）：編號 → { until, reason }，跟原本的 data/rest.json 一樣（不含 updatedAt）
+export async function readRest(db) {
+  const { results = [] } = await db.prepare(`SELECT ${NUMBER_OF} AS id, t.until_date, t.reason FROM v3_rest t`).all();
+  return Object.fromEntries(results.filter(r => r.id).map(r => [r.id, { until: r.until_date, reason: r.reason }]));
+}
+
+// 寫休養：rest 是 null 就結束休養。編號不認得回 false
+export async function saveRest(db, number, rest) {
+  const dogId = (await dogIdsFor(db, [number])).get(number);
+  if (!dogId) return false;
+  if (rest) await db.prepare('INSERT INTO v3_rest(dog_id,until_date,reason) VALUES(?,?,?) ON CONFLICT(dog_id) DO UPDATE SET until_date=excluded.until_date,reason=excluded.reason').bind(dogId, rest.until, rest.reason).run();
+  else await db.prepare('DELETE FROM v3_rest WHERE dog_id=?').bind(dogId).run();
+  return true;
+}
+
+// 寫入所介紹：空字串就清掉。編號不認得回 false
+export async function saveIntro(db, number, text) {
+  const dogId = (await dogIdsFor(db, [number])).get(number);
+  if (!dogId) return false;
+  if (text) await db.prepare('INSERT INTO v3_intros(dog_id,intro) VALUES(?,?) ON CONFLICT(dog_id) DO UPDATE SET intro=excluded.intro').bind(dogId, text).run();
+  else await db.prepare('DELETE FROM v3_intros WHERE dog_id=?').bind(dogId).run();
+  return true;
 }

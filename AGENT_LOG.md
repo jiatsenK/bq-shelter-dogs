@@ -1262,3 +1262,11 @@
 - 用正式 D1 的狗 ID 試跑（只讀）：133 隻全部沿用、新增 0 隻。
 - GitHub 提交暫時保留，等 #250 完成後拿掉。
 - 測試：新增 `scripts/sync-compact-d1.test.mjs`（加進 AGENTS.md 與 CI）。
+
+## 2026-10-15 #250 休養、介紹寫入改存 D1（Claude）
+
+- `worker/src/compact.js` 新增 `readRest`／`saveRest`／`saveIntro`；`readDogsPayload` 的介紹改從 `v3_intros` 讀。
+- `PUT /rest/{編號}`、`PUT /intro/{編號}` 改寫 D1，不再呼叫 GitHub；新增 `GET /rest`。網站 `REST_URL` 改成 `api/rest`。
+- 同步（`sync-compact-d1.mjs`）不再匯入休養和介紹，避免蓋掉網站剛存的；`importCompactProfiles` 沒給的類別不動那張表。
+- 取消「已溜」的還原和衝突提示原本就有，也有測試，這次沒改。
+- 測試：新增 `worker/test/d1-write.test.mjs`（加進 AGENTS.md 與 CI），移除 worker.test.mjs 裡寫 GitHub 的休養／介紹測試。node 測試 211 項全過；本機沒有 Playwright Chromium，網頁測試交給 CI。
