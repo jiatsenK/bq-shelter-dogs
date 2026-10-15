@@ -129,3 +129,12 @@ test('不是主照片或縮圖的 R2 物件、沒有主照片的縮圖列在略�
   const result = await importCompactProfiles(db, source());
   assert.deepEqual(result.skipped, ['photos/thumbs/b.jpg', 'trash/123/photo.jpg']);
 });
+
+test('沒給照片清單時不動 v3_photos', async t => {
+  const db = await setup(t);
+  await importCompactProfiles(db, source());
+  const { photos, ...rest } = source();
+  await importCompactProfiles(db, rest);
+  assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM v3_photos').first('n'), 2);
+  assert.equal((await compareCompactProfiles(db, rest)).equal, true);
+});

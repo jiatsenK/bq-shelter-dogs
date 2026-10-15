@@ -1253,3 +1253,12 @@
 - 溜狗紀錄照網站規則合併成每狗每天一筆（965 筆→940 天），`mine` 不搬。已出所的狗用編號新建永久狗 ID。
 - 新增 `scripts/check-compact-profiles.mjs` 本機演練：真實資料比對 0 差異、重跑一致、外鍵 0 錯。正式 D1 還沒匯入，要 K 確認。
 - 測試：新增 `scripts/import-compact-profiles.test.mjs`（加進 AGENTS.md 與 CI）。
+
+## 2026-10-15 #251 第一步：同步程式也寫進 D1（Claude）
+
+- 起因：#247 部署時正式 D1 還沒有 v3_ 表，網站讀不到狗。K 執行 #248 產生的匯入 SQL 之後恢復了，但同步還只寫 GitHub，網站資料會停在匯入那一刻，常遛狗群也是空的。
+- 新增 `scripts/sync-compact-d1.mjs`：每次同步後把 data/ 的內容和常遛狗群整份換進 v3_ 表，沿用正式 D1 的永久狗 ID。`sync-sheet.mjs` 拆出 `parseGroupColumns`。
+- `importCompactProfiles` 沒給 photos 時不動 v3_photos。
+- 用正式 D1 的狗 ID 試跑（只讀）：133 隻全部沿用、新增 0 隻。
+- GitHub 提交暫時保留，等 #250 完成後拿掉。
+- 測試：新增 `scripts/sync-compact-d1.test.mjs`（加進 AGENTS.md 與 CI）。
