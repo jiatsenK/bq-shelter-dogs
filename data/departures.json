@@ -1,6 +1,7 @@
 {
   "version": 1,
   "departures": [
+    {"id":"2026082607","name":"寶妮","date":"2026-10-15","dateSource":"seen","seen":"2026-10-15","reason":"unknown","matched":"","flags":[],"last":{"cage":"C區13","id":"2026082607","name":"寶妮","walkedDate":"2026-10-11","note":"10/13治療","sex":"female","intro":"2026年8月26日從板橋大遠百被拾獲入所。"}},
     {"id":"2021030913","name":"咪寶","date":"2026-10-13","dateSource":"note","seen":"2026-10-13","reason":"adopt","matched":"被領養","flags":[],"last":{"cage":"C區11","id":"2021030913","name":"咪寶","walkedDate":"2026-10-13","note":"對狗具攻擊性（嘉文），2025/12/24咬了捷運站","sex":"female","intro":"2021年3月9日迷路入所，當時臉上有些舊傷。"}},
     {"id":"2026082601","name":"朵力（開多）","date":"2026-10-13","dateSource":"note","seen":"2026-10-13","reason":"adopt","matched":"被領養","flags":[],"last":{"cage":"C區24","id":"2026082601","name":"朵力（開多）","walkedDate":"2026-10-13","note":"","sex":"male","intro":"民眾拾獲送交入所，拾獲地點是三峽區中正路一段19巷8號。"}},
     {"id":"2026092401","name":"豆花","date":"2026-10-02","dateSource":"seen","seen":"2026-10-02","reason":"unknown","matched":"","flags":[],"last":{"cage":"C區24","id":"2026092401","name":"豆花","walkedDate":"2026-10-01","note":"","sex":"","intro":""}},

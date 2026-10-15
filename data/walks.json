@@ -960,6 +960,11 @@
     {"id":"2020072102","name":"朵兒","date":"2026-10-15","mine":false,"walkers":["da53fbdda293","044328805855"]},
     {"id":"2023042803","name":"奈威","date":"2026-10-15","mine":false,"walkers":["da53fbdda293","044328805855"]},
     {"id":"2023083106","name":"昆布","date":"2026-10-15","mine":false,"walkers":["da53fbdda293","044328805855"]},
-    {"id":"2025021801","name":"阿湯","date":"2026-10-15","mine":false,"walkers":["da53fbdda293","044328805855"]}
+    {"id":"2025021801","name":"阿湯","date":"2026-10-15","mine":false,"walkers":["da53fbdda293","044328805855"]},
+    {"id":"2023083107","name":"丸子","date":"2026-10-15","mine":false,"walkers":["da53fbdda293","044328805855"]},
+    {"id":"2023052902","name":"妙麗","date":"2026-10-15","mine":false,"walkers":["044328805855"]},
+    {"id":"2023072604","name":"小梅子","date":"2026-10-15","mine":false,"walkers":["da53fbdda293"]},
+    {"id":"2023122901","name":"一路","date":"2026-10-15","mine":false,"walkers":["da53fbdda293","044328805855"]},
+    {"id":"2023022001","name":"寶弟","date":"2026-10-15","mine":false,"walkers":["da53fbdda293"]}
   ]
 }

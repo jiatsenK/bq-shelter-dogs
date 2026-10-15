@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "syncedAt": "2026-10-15T11:30:55+08:00",
+  "syncedAt": "2026-10-15T12:00:55+08:00",
   "dogs": [
     {
       "cage": "母幼A",
@@ -1662,11 +1662,12 @@
       "cage": "C區12",
       "id": "2023083107",
       "name": "丸子",
-      "walkedDate": "2026-10-14",
+      "walkedDate": "2026-10-15",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "da53fbdda293",
+        "044328805855"
       ],
       "note": "2025/10/7 俐葶遇到 一路攻擊丸子 ，起始原因沒看到（嘉文)",
       "sex": "male",
@@ -1674,29 +1675,14 @@
       "myWalkedDate": null
     },
     {
-      "cage": "C區13",
-      "id": "2026082607",
-      "name": "寶妮",
-      "walkedDate": "2026-10-11",
-      "covered": true,
-      "myWalked": false,
-      "walkers": [
-        "da53fbdda293"
-      ],
-      "note": "10/13治療",
-      "sex": "female",
-      "intro": "2026年8月26日從板橋大遠百被拾獲入所。",
-      "myWalkedDate": null
-    },
-    {
       "cage": "C區21",
       "id": "2023052902",
       "name": "妙麗",
-      "walkedDate": "2026-10-14",
+      "walkedDate": "2026-10-15",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "74402fdb5c36"
+        "044328805855"
       ],
       "note": "頸部有腫瘤，不要用p繩，要穿淑萍給的胸背才帶出（嘉文）註：胸背放在住院區箱子裡",
       "sex": "female",
@@ -1707,7 +1693,7 @@
       "cage": "C區22",
       "id": "2023072604",
       "name": "小梅子",
-      "walkedDate": "2026-10-14",
+      "walkedDate": "2026-10-15",
       "covered": true,
       "myWalked": false,
       "walkers": [
@@ -1722,11 +1708,12 @@
       "cage": "C區23",
       "id": "2023122901",
       "name": "一路",
-      "walkedDate": "2026-10-14",
+      "walkedDate": "2026-10-15",
       "covered": true,
       "myWalked": false,
       "walkers": [
-        "da53fbdda293"
+        "da53fbdda293",
+        "044328805855"
       ],
       "note": "2025/10/7 俐葶遇到 一路攻擊丸子 ，起始原因沒看到(嘉文)；11/18 一路要攻擊松果（嘉文）；被阿信咬過（嘉文）；在小區看到外面的芽芽會跳柵欄（俐葶）",
       "sex": "male",
@@ -1784,7 +1771,7 @@
       "cage": "C區34",
       "id": "2023022001",
       "name": "寶弟",
-      "walkedDate": "2026-10-14",
+      "walkedDate": "2026-10-15",
       "covered": true,
       "myWalked": false,
       "walkers": [
