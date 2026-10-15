@@ -18,16 +18,11 @@
 index.html        ← 頁面基本結構
 css/app.css       ← 樣式
 js/app.js         ← 程式（資料讀取、分頁、搜尋、畫面）
-data/dogs.json    ← 網站讀的資料（GitHub Action 由試算表＋dogs/*.md 產生，請勿手改）
-data/history/     ← 每天一份 dogs.json 快照 YYYY-MM-DD.json（同步時自動存，請勿手改）
-data/walks.json   ← 累積的遛狗紀錄 {編號, 犬名, 日期, 是不是我遛的}（同步時自動追加，不含志工名字，請勿手改）
-dogs/{編號}.md     ← 狗狗介紹（YAML frontmatter + 內文），選填；同步時整理進 data/dogs.json
-scripts/          ← 同步程式 sync-sheet.mjs 與它的測試
-photos/README.md  ← 照片說明（照片從 #130 起存在 Cloudflare R2，不放 repo；在網站上傳）
+scripts/          ← 同步、部署用的程式與測試
+db/compact-schema.sql ← D1 資料表結構（資料存在 Cloudflare D1，照片存在 R2，都不放 repo）
 docs/             ← 規格、設計指引、參考圖
 icons/            ← 網站圖示（瀏覽器分頁、手機主畫面）
 manifest.webmanifest ← 加到主畫面時的名稱、顏色、圖示
-.nojekyll         ← 讓舊網址 GitHub Pages 原樣提供檔案（轉址要用，請勿刪除）
 tests/index.html  ← 資料讀取測試（用假資料，不連試算表）
 worker/           ← 後端 API（上傳照片、備註、代號、更新；跟網站一起部署成同一個 Cloudflare Worker，不含任何 token）
 ```
@@ -38,7 +33,7 @@ worker/           ← 後端 API（上傳照片、備註、代號、更新；跟
 
 每個 PR 會自動部署一份預覽版，網址貼在 PR 留言（`https://pr-<PR 編號>-bq-shelter-dogs.<子網域>.workers.dev`）。
 
-舊網址 https://jiatsenk.github.io/bq-shelter-dogs/ 還是由 GitHub Pages 從 `main` 根目錄提供，但每一頁打開就轉到新網址同一頁（#129），不要關掉 Pages，不然舊的書籤和主畫面捷徑會打不開。
+舊網址 https://jiatsenk.github.io/bq-shelter-dogs/ 的 GitHub Pages 已經關閉（2026-10-15 查證回 404），`.nojekyll` 因此在 #275 移除。
 
 ## 本機預覽
 
