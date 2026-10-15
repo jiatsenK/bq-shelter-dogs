@@ -26,7 +26,7 @@
 // 設定步驟見 docs/CLOUDFLARE_SETUP.md。
 
 import * as r2 from './r2.js';
-import { readDogsPayload, compactStatus, dogIdsFor } from './compact.js';
+import { readDogsPayload, compactStatus, dogIdsFor, openedBooks } from './compact.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
@@ -1097,20 +1097,13 @@ async function openedCards(request, env, origin) {
     if (!Array.isArray(input.ids) || !input.ids.length || input.ids.length > 50 || !input.ids.every(id => typeof id === 'string' && ID_PATTERN.test(id))) return fail(400, '每次最多記錄 50 張卡', origin);
     const ids = [...new Set(input.ids)];
     // #247：存永久狗 ID（v3_card_opened），再入所換了編號也還是同一張卡
-    const dogIds = await dogIdsFor(env.DB, ids);
+    const dogIds = await dogIdsFor(env.DB, ids); // 舊編號和新編號會對到同一隻狗，所以下面依狗 ID 去重
     if (ids.some(id => !dogIds.has(id))) return fail(400, '找不到這隻狗', origin);
     const date = taiwanYmd(Date.now());
     await env.DB.batch(codes.flatMap(code => [...new Set(dogIds.values())].map(dogId => env.DB.prepare('INSERT OR IGNORE INTO v3_card_opened (walker_code, dog_id, opened_on) VALUES (?, ?, ?)').bind(code, dogId, date))));
     return reply(200, { ok: true }, origin);
   }
-  // 讀回時換成網站認得的編號：主清單上現在的編號優先，已出所的狗用它最大的編號
-  const sql = `SELECT COALESCE(
-      (SELECT m.number FROM v3_sheet_main m WHERE m.dog_id = c.dog_id AND m.number <> '' ORDER BY m.row_index LIMIT 1),
-      (SELECT MAX(n.number) FROM v3_dog_numbers n WHERE n.dog_id = c.dog_id)) AS id, c.opened_on
-    FROM v3_card_opened c WHERE c.walker_code = ?`;
-  const rows = await env.DB.batch(codes.map(code => env.DB.prepare(sql).bind(code)));
-  const books = {};
-  codes.forEach((code, i) => { books[code] = Object.fromEntries((rows[i].results || []).filter(r => r.id).map(r => [r.id, r.opened_on])); });
+  const books = await openedBooks(env.DB, codes);
   return reply(200, { ok: true, opened: { v: 1, codes: books } }, origin);
 }
 

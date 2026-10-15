@@ -133,7 +133,7 @@ async function loadDogsData() {
   }
   if (!res.ok) throw new Error(`讀取狗的資料失敗（HTTP ${res.status}）。`);
   let data;
-  try { data = await res.json(); } catch (e) { throw new Error('dogs.json 內容壞掉了。'); }
+  try { data = await res.json(); } catch (e) { throw new Error('狗的資料格式壞掉了。'); }
   return parseDogsData(data);
 }
 

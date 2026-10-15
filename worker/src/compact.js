@@ -81,3 +81,15 @@ export async function dogIdsFor(db, numbers) {
   for (const r of results) out.set(r.number, r.dog_id);
   return out;
 }
+
+// 開卡讀回：每個代號 → { 編號: 開卡日 }。編號用主清單上現在的那個，已出所的狗用它最大的編號
+export async function openedBooks(db, codes) {
+  const sql = `SELECT COALESCE(
+      (SELECT m.number FROM v3_sheet_main m WHERE m.dog_id = c.dog_id AND m.number <> '' ORDER BY m.row_index LIMIT 1),
+      (SELECT MAX(n.number) FROM v3_dog_numbers n WHERE n.dog_id = c.dog_id)) AS id, c.opened_on
+    FROM v3_card_opened c WHERE c.walker_code = ?`;
+  const rows = await db.batch(codes.map(code => db.prepare(sql).bind(code)));
+  const books = {};
+  codes.forEach((code, i) => { books[code] = Object.fromEntries((rows[i].results || []).filter(r => r.id).map(r => [r.id, r.opened_on])); });
+  return books;
+}
