@@ -28,3 +28,12 @@ test('異動紀錄複本保留試算表實際的標籤與完整文字', async t 
   await db.prepare('INSERT INTO v3_sheet_changes(row_index,label,text) VALUES(?,?,?)').bind(0, '備註1', '移至新B03休養\n保留換行').run();
   assert.deepEqual((await db.prepare('SELECT label,text FROM v3_sheet_changes ORDER BY row_index').all()).results, [{ label: '備註1', text: '移至新B03休養\n保留換行' }]);
 });
+
+test('#246 時建好的 v3_walks 重跑後補上當時編號和狗名兩欄', async t => {
+  const db = fakeD1(); t.after(() => db.close());
+  await db.prepare('CREATE TABLE v3_walks(dog_id TEXT NOT NULL, walk_date TEXT NOT NULL, position INTEGER NOT NULL DEFAULT 0, walker_name TEXT, walker_code TEXT, PRIMARY KEY(dog_id,walk_date,position))').run();
+  await migrateCompactDatabase(db);
+  await migrateCompactDatabase(db);
+  const columns = (await db.prepare('PRAGMA table_info(v3_walks)').all()).results.map(c => c.name);
+  assert.deepEqual(columns.slice(-2), ['dog_number', 'dog_name']);
+});
