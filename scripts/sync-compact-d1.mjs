@@ -85,7 +85,13 @@ export async function readSeed(query) {
   return Object.fromEntries([first, ...rest].map((t, i) => [t, results[i]]));
 }
 
-const wranglerArgs = args => ['--yes', 'wrangler@4', 'd1', 'execute', 'bq-shelter-dogs', '--remote', ...args];
+// 預演時只准送 SELECT 給正式 D1（#309）：預演用的 token 有寫入權限，萬一寫入那段被改壞也送不出去
+let readOnly = false;
+const wranglerArgs = args => {
+  const sql = args[args.indexOf('--command') + 1];
+  if (readOnly && (!args.includes('--command') || !/^\s*SELECT/i.test(sql))) throw new Error('預演只能讀 D1，擋下一個寫入指令');
+  return ['--yes', 'wrangler@4', 'd1', 'execute', 'bq-shelter-dogs', '--remote', ...args];
+};
 const wranglerAsync = args => new Promise((resolve, reject) => {
   execFile('npx', wranglerArgs(args), { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
     if (stderr) process.stderr.write(stderr);
@@ -188,6 +194,7 @@ async function writeDryRunComment(text) {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const dryRun = process.argv.includes('--dry-run');
+  readOnly = dryRun;
   main({ dryRun }).catch(async e => {
     if (dryRun) {
       const text = dryRunFailure(e);

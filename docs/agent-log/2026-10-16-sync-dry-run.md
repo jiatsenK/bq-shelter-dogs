@@ -9,4 +9,4 @@
   - AGENTS.md：改同步的 PR 要附預演結果。
 - 未完成：留言要等第一張改到同步程式的 PR 才看得到（本 PR 本身會觸發）；「故意改回刪光重寫會失敗」靠既有單次門檻 500 列，正式 D1 上千列整份重寫一定超過。
 - code review 後修正：拿掉 main() 裡重複的預演區塊、還原換行雜訊；fork PR 不跑；被取消時不留言。
-- K 決定預演改用另一把只讀 token：Secret `CLOUDFLARE_D1_READ_TOKEN`（D1 Read＋Account Analytics Read），設定方式寫在 `docs/setup/CLOUDFLARE_SETUP.md`；K 建好前預演會失敗。
+- 預演改用另一把 token：Secret `CLOUDFLARE_D1_READ_TOKEN`（D1 Edit＋Account Analytics Read；只給 Read 會被 Cloudflare 擋，查 D1 也要 Edit）。程式在預演時只准送 SELECT，其他指令直接擋下。
