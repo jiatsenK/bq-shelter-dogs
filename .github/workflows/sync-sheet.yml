@@ -60,3 +60,7 @@ jobs:
         run: |
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "沒有設定 CLOUDFLARE_API_TOKEN，無法寫入 D1。"; exit 1; fi
           node scripts/sync-compact-d1.mjs
+
+      # 同步寫完 D1，打一次正式站讀取 API；缺表或讀不到就讓這次同步變紅叉（#293 回顧）
+      - name: 檢查正式站 API
+        run: node scripts/smoke-api.mjs

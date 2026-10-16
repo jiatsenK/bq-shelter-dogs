@@ -90,3 +90,8 @@ jobs:
           ' "$RUNNER_TEMP/worker-secrets.json"
           npx --yes wrangler@4 deploy --config "${{ steps.d1.outputs.config }}" --secrets-file "$RUNNER_TEMP/worker-secrets.json"
           rm -f "$RUNNER_TEMP/worker-secrets.json"
+
+      # 部署完打一次正式站讀取 API：正式 D1 缺表、密碼沒設這類 CI 測不到的問題在這裡變紅叉（#293 回顧）
+      - name: 檢查正式站 API
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: node scripts/smoke-api.mjs
