@@ -44,9 +44,12 @@ test('第一次寫入正式 D1：主清單、試算表備註、常遛狗群讀�
 
 test('正式 D1 還沒有離所表、群名表時，SQL 自己先建', async t => {
   const lines = (await buildSyncSql({}, await source())).split('\n');
-  assert.match(lines[0], /^CREATE TABLE IF NOT EXISTS v3_sheet_group_labels /);
-  assert.match(lines[1], /^CREATE TABLE IF NOT EXISTS v3_departures /);
-  assert.match(lines[2], /^CREATE TABLE IF NOT EXISTS v3_departure_items /);
+  const creates = lines.filter(l => /^CREATE /.test(l));
+  for (const t of ['v3_sheet_group_labels', 'v3_departures', 'v3_departure_items', 'v3_edit_log', 'v3_volunteers']) {
+    assert.ok(creates.some(l => l.startsWith(`CREATE TABLE IF NOT EXISTS ${t} `)), t);
+  }
+  assert.ok(creates.every(l => / IF NOT EXISTS /.test(l)));
+  assert.equal(lines.findIndex(l => !/^CREATE /.test(l)), creates.length);
 });
 
 test('正式 D1 還沒有群名表也能同步：同步前不先讀群名表', () => {
@@ -81,7 +84,9 @@ test('開卡、照片、休養、介紹不被同步清掉', async t => {
   const seed = {};
   for (const [table, sql] of Object.entries(SEED_TABLES)) seed[table] = (await first.prepare(sql).all()).results;
   const sql = await buildSyncSql(seed, src);
-  assert.doesNotMatch(sql, /v3_card_opened|v3_photos|v3_volunteer|v3_rest|v3_intros/);
+  // 只補建表（IF NOT EXISTS），不刪不寫這幾張
+  const writes = sql.split('\n').filter(l => !/^CREATE /.test(l)).join('\n');
+  assert.doesNotMatch(writes, /v3_card_opened|v3_photos|v3_volunteer|v3_rest|v3_intros|v3_edit_log/);
 });
 
 test('來源有問題時丟錯，不產生 SQL', async t => {
