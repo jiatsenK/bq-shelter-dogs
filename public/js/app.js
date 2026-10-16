@@ -605,8 +605,9 @@ function photoSrc(dog) {
 function photoThumbSrc(dog) {
   return photoOverrides[dog.id] || versioned(`photos/thumbs/${encodeURIComponent(dog.id)}.jpg`);
 }
-// 放在 img 的 onerror 最前面：還有原圖可試就換原圖、這次不算讀取失敗
-const thumbFallback = "if (this.dataset.full) { this.src = this.dataset.full; this.removeAttribute('data-full'); return; }";
+// 放在 img 的 onerror 最前面：還有原圖可試就換原圖、這次不算讀取失敗。
+// 縮圖只在上傳時產生一次（#305），沒產生的框標 thumb-full 顯示小圖示，正式畫面看得到要補哪張
+const thumbFallback = "if (this.dataset.full) { this.src = this.dataset.full; this.removeAttribute('data-full'); this.parentNode.classList.add('thumb-full'); return; }";
 function thumbAttrs(thumb, full) {
   return thumb === full ? `src="${esc(full)}"` : `src="${esc(thumb)}" data-full="${esc(full)}"`;
 }
@@ -3829,6 +3830,11 @@ async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES
       let why = '';
       try { why = String((await res.json()).error || ''); } catch (e) { /* 沒有內容就只顯示狀態碼 */ }
       showToast(`更新失敗：${why || `HTTP ${res.status}`}`);
+      return;
+    }
+    // ADR 0008：Worker 比對過試算表沒變，沒有叫同步，不用等
+    if (res.ok && (await res.clone().json().catch(() => ({}))).unchanged) {
+      showToast('試算表沒有新的修改，已經是最新的');
       return;
     }
     showToast('正在更新，約 1 分鐘');
