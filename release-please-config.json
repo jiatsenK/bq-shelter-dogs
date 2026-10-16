@@ -1,0 +1,20 @@
+{
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
+  "bootstrap-sha": "75230be04232b378ad7f5a71eecccc5f66fa2e03",
+  "packages": {
+    ".": {
+      "release-type": "simple",
+      "package-name": "bq-shelter-dogs",
+      "include-component-in-tag": false,
+      "changelog-sections": [
+        { "type": "feat", "section": "新功能" },
+        { "type": "fix", "section": "修正" },
+        { "type": "perf", "section": "改善速度" },
+        { "type": "revert", "section": "還原" },
+        { "type": "docs", "section": "文件", "hidden": true },
+        { "type": "chore", "section": "雜項", "hidden": true },
+        { "type": "test", "section": "測試", "hidden": true }
+      ]
+    }
+  }
+}
