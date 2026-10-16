@@ -1541,6 +1541,10 @@ async function runCropTests() {
     const ctx = c.getContext('2d'); ctx.fillStyle = '#c33'; ctx.fillRect(0, 0, w / 2, h); ctx.fillStyle = '#33c'; ctx.fillRect(w / 2, 0, w / 2, h); return c.toDataURL('image/png'); };
   const blobSize = blob => new Promise((r, j) => { const img = new Image(); img.onload = () => r([img.naturalWidth, img.naturalHeight]); img.onerror = j; img.src = URL.createObjectURL(blob); });
   const cropEl = () => document.getElementById('cropper');
+  // 開裁切要先等照片 decode 完才出現（CI 慢時超過 50ms）；還沒出現就按 Esc 會關掉詳細資訊、清掉 photoUpload
+  const until = async (ok, what) => { for (let i = 0; i < 200; i++) { if (ok()) return; await new Promise(r => setTimeout(r, 10)); } throw new Error(`等不到${what}`); };
+  const openCrop = async () => { document.getElementById('photoCrop').click(); await until(() => cropOpen() && cropView && cropView.frame, '裁切畫面出現'); };
+  const doneCrop = async old => { const p = popped(); document.getElementById('cropDone').click(); await p; await until(() => photoUpload && photoUpload.url !== old, '預覽換成裁好的'); };
   try {
     box.classList.remove('hidden');
     UPLOAD_URL = 'https://worker.test';
@@ -1564,12 +1568,11 @@ async function runCropTests() {
       const file = await (await realFetch(colorPhoto(800, 400))).blob();
       await preparePhoto(allDogs[0], new File([file], 'a.png', { type: 'image/png' }));
       const old = photoUpload.url;
-      document.getElementById('photoCrop').click();
-      await new Promise(r => setTimeout(r, 50));
+      await openCrop();
       eq([cropOpen(), cropEl().querySelector('[aria-pressed="true"]').textContent], [true, '正方形'], '開裁切：');
       cropView.tx += 5000; drawCrop();
       eq(cropView.tx <= cropView.frame.x, true, '拖太右不露空白：');
-      const p = popped(); document.getElementById('cropDone').click(); await p; await new Promise(r => setTimeout(r, 30));
+      await doneCrop(old);
       eq([cropOpen(), photoUpload.url !== old], [false, true], '完成：');
       const [w, h] = await blobSize(photoUpload.blob);
       eq(Math.abs(w - h) <= 1, true, `正方形（${w}×${h}）：`);
@@ -1581,14 +1584,12 @@ async function runCropTests() {
       const file = await (await realFetch(colorPhoto(600, 600))).blob();
       await preparePhoto(allDogs[0], new File([file], 'a.png', { type: 'image/png' }));
       const oldUrl = photoUpload.url;
-      document.getElementById('photoCrop').click();
-      await new Promise(r => setTimeout(r, 50));
-      let p = popped(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await p; await new Promise(r => setTimeout(r, 30));
+      await openCrop();
+      const p = popped(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await p;
       eq([cropOpen(), photoUpload.url], [false, oldUrl], 'Esc 取消：');
-      document.getElementById('photoCrop').click();
-      await new Promise(r => setTimeout(r, 50));
+      await openCrop();
       cropEl().querySelector('[data-aspect="landscape"]').click();
-      p = popped(); document.getElementById('cropDone').click(); await p; await new Promise(r => setTimeout(r, 30));
+      await doneCrop(oldUrl);
       const [w, h] = await blobSize(photoUpload.blob);
       eq([photoUpload.url !== oldUrl, Math.abs(w / h - 4 / 3) < 0.02], [true, true], `換成橫式（${w}×${h}）：`);
       clearPhotoUpload();
