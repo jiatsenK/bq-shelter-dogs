@@ -724,7 +724,8 @@ function firstIntake(dog) {
 }
 const ymdOf = d => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 
-// 再入所（#75、#289）：換新編號就是再入所（K 2026-10-16）。編號下面一行「第 N 次入所・首次 YYYY/M/D・舊編號 …」，每個舊編號旁邊一個 ✕ 可以刪；
+// 舊編號（#75、#289）：編號下面一行「舊編號 …・最早入所 YYYY/M/D」，每個舊編號旁邊一個 ✕ 可以刪；
+// 換新編號就是再入所（GLOSSARY），但畫面不標第幾次入所（K 2026-10-16）。
 // 最後一個「補舊編號」，點了原地變輸入框。誰都能補、都能刪（ADR 0004），離所的狗只看不改
 function reentryLine(dog) {
   const former = dog.formerIds || [];
@@ -745,7 +746,7 @@ function reentryLine(dog) {
       </form></div>`;
   }
   if (!former.length && !can) return '';
-  return `<div class="reentry">${former.length ? `<span>第 ${former.length + 1} 次入所${first ? `・首次 ${ymdOf(first)}` : ''}・舊編號</span>${list}` : ''}${can ? `<button type="button" class="former-add" id="formerAdd">＋補舊編號</button>` : ''}</div>`;
+  return `<div class="reentry">${former.length ? `<span>舊編號</span>${list}${first ? `<span>・最早入所 ${ymdOf(first)}</span>` : ''}` : ''}${can ? `<button type="button" class="former-add" id="formerAdd">＋補舊編號</button>` : ''}</div>`;
 }
 
 function openFormerEdit(dog) {
