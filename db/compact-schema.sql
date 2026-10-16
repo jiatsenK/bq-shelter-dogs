@@ -58,6 +58,11 @@ CREATE TABLE IF NOT EXISTS v3_sheet_groups (
   name TEXT NOT NULL,
   PRIMARY KEY(column_index,row_index)
 );
+-- 常遛狗群每一欄的群名（分頁最下面一列，K 2026-10-16）
+CREATE TABLE IF NOT EXISTS v3_sheet_group_labels (
+  column_index INTEGER PRIMARY KEY,
+  label TEXT NOT NULL
+);
 
 -- 每個名字直接存在溜狗紀錄；無人名的舊紀錄仍能保留。
 -- dog_number／dog_name 是那天的編號和狗名（#248），狗後來改名或換編號，「我溜過」仍顯示當時的。
@@ -105,14 +110,6 @@ CREATE TABLE IF NOT EXISTS v3_intros (
   intro TEXT NOT NULL
 );
 
--- 網站上補／刪舊編號的操作紀錄（#289，ADR 0004）：誰都能改，出事靠這裡查。不記 IP、不記名字。
-CREATE TABLE IF NOT EXISTS v3_number_log (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  at TEXT NOT NULL,
-  action TEXT NOT NULL CHECK(action IN ('add','remove')),
-  number TEXT NOT NULL,
-  dog_id TEXT NOT NULL
-);
 
 -- 離所紀錄（#259，原本的 data/departures.json）：同步發現狗從主清單消失就記一筆，原因只讀「已出所」分頁判讀。
 -- last_* 是離開主清單前最後一次的樣子（離所名冊的詳細資訊用）；last_number 是 NULL 表示沒有這份資料。
@@ -141,4 +138,18 @@ CREATE TABLE IF NOT EXISTS v3_departure_items (
   position INTEGER NOT NULL,
   value TEXT NOT NULL,
   PRIMARY KEY(number,kind,position)
+);
+
+-- 編輯紀錄（docs/adr/0004-open-editing-and-edit-log.md）：網站上的編輯誰改了什麼；只增不刪。
+-- before_json／after_json 是 JSON 文字（null 表示沒有）
+CREATE TABLE IF NOT EXISTS v3_edit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at TEXT NOT NULL,
+  editor_code TEXT NOT NULL DEFAULT '',
+  editor_name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  dog_id TEXT,
+  dog_number TEXT NOT NULL DEFAULT '',
+  before_json TEXT,
+  after_json TEXT
 );

@@ -43,6 +43,7 @@ export async function readDogsPayload(db) {
     syncedAt: rows[0].synced_at,
     dogs,
     groups: groupMap(groups.results || []),
+    groupColumns: groupColumns(groups.results || [], await groupLabels(db)),
     sheetNotes: (notes.results || []).filter(n => n.text).map(n => ({ label: n.label, text: n.text })),
   };
 }
@@ -63,6 +64,26 @@ function groupMap(cells) {
     }
   }
   return out;
+}
+
+// 群名表是 K 2026-10-16 才加的：第一次同步建表之前讀不到，當成都沒有群名，狗清單照常給
+async function groupLabels(db) {
+  try {
+    return new Map(((await db.prepare('SELECT column_index, label FROM v3_sheet_group_labels').all()).results || []).map(r => [r.column_index, r.label]));
+  } catch (e) {
+    return new Map();
+  }
+}
+
+// 狗群頁用：每一欄一群 { column（試算表第幾欄，0 起）, label, names }，照欄排；只有群名沒有狗的欄也列出來
+function groupColumns(cells, labels) {
+  const columns = new Map();
+  for (const c of cells) {
+    if (!columns.has(c.column_index)) columns.set(c.column_index, []);
+    columns.get(c.column_index).push(c.name);
+  }
+  for (const column of labels.keys()) if (!columns.has(column)) columns.set(column, []);
+  return [...columns.keys()].sort((a, b) => a - b).map(column => ({ column, label: labels.get(column) || '', names: columns.get(column) }));
 }
 
 // 狀態頁：新表有沒有接上、各幾筆
@@ -107,27 +128,31 @@ export async function readRest(db) {
   return Object.fromEntries(results.filter(r => r.id).map(r => [r.id, { until: r.until_date, reason: r.reason }]));
 }
 
-// 寫休養：rest 是 null 就結束休養。編號不認得回 false
+// 寫休養：rest 是 null 就結束休養。編號不認得回 null，存好回 { dogId, before }（改前的設定，編輯紀錄用）
 export async function saveRest(db, number, rest) {
   const dogId = (await dogIdsFor(db, [number])).get(number);
-  if (!dogId) return false;
+  if (!dogId) return null;
+  const old = await db.prepare('SELECT until_date, reason FROM v3_rest WHERE dog_id=?').bind(dogId).first();
+  const before = old ? { until: old.until_date, reason: old.reason } : null;
   if (rest) await db.prepare('INSERT INTO v3_rest(dog_id,until_date,reason) VALUES(?,?,?) ON CONFLICT(dog_id) DO UPDATE SET until_date=excluded.until_date,reason=excluded.reason').bind(dogId, rest.until, rest.reason).run();
   else await db.prepare('DELETE FROM v3_rest WHERE dog_id=?').bind(dogId).run();
-  return true;
+  return { dogId, before };
 }
 
-// 寫入所介紹：空字串就清掉。編號不認得回 false
+// 寫入所介紹：空字串就清掉。編號不認得回 null，存好回 { dogId, before }（改前的介紹，沒有是 ''）
 export async function saveIntro(db, number, text) {
   const dogId = (await dogIdsFor(db, [number])).get(number);
-  if (!dogId) return false;
+  if (!dogId) return null;
+  const old = await db.prepare('SELECT intro FROM v3_intros WHERE dog_id=?').bind(dogId).first();
+  const before = old ? old.intro : '';
   if (text) await db.prepare('INSERT INTO v3_intros(dog_id,intro) VALUES(?,?) ON CONFLICT(dog_id) DO UPDATE SET intro=excluded.intro').bind(dogId, text).run();
   else await db.prepare('DELETE FROM v3_intros WHERE dog_id=?').bind(dogId).run();
-  return true;
+  return { dogId, before };
 }
 
-// 舊編號（#289，ADR 0004）：誰都能補、都能刪，D1 記操作紀錄。
-// 回 { ok: true } 或 { status, error }；number 是這隻狗現在（或任何一個）認得的編號
-export async function addFormerNumber(db, number, former, now = new Date()) {
+// 舊編號（#289，ADR 0005）：誰都能補、都能刪；編輯紀錄由 Worker 記（ADR 0004）。
+// 回 { ok: true, dogId } 或 { status, error }；number 是這隻狗現在（或任何一個）認得的編號
+export async function addFormerNumber(db, number, former) {
   const ids = await dogIdsFor(db, [number, former]);
   const dogId = ids.get(number);
   if (!dogId) return { status: 404, error: '找不到這個編號的狗' };
@@ -136,15 +161,12 @@ export async function addFormerNumber(db, number, former, now = new Date()) {
     const other = await db.prepare('SELECT name FROM v3_dogs WHERE dog_id=?').bind(ids.get(former)).first('name');
     return { status: 409, error: `${former} 已經是另一隻狗（${other || '沒有名字'}）的編號，要合併請找 K` };
   }
-  await db.batch([
-    db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(former, dogId),
-    db.prepare("INSERT INTO v3_number_log(at,action,number,dog_id) VALUES(?,'add',?,?)").bind(now.toISOString(), former, dogId),
-  ]);
-  return { ok: true };
+  await db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(former, dogId).run();
+  return { ok: true, dogId };
 }
 
 // 刪舊編號：只能刪這隻狗的，不能刪主清單上現在用的編號
-export async function removeFormerNumber(db, number, former, now = new Date()) {
+export async function removeFormerNumber(db, number, former) {
   const ids = await dogIdsFor(db, [number, former]);
   const dogId = ids.get(number);
   if (!dogId) return { status: 404, error: '找不到這個編號的狗' };
@@ -153,9 +175,8 @@ export async function removeFormerNumber(db, number, former, now = new Date()) {
   await db.batch([
     db.prepare('DELETE FROM v3_sheet_former_numbers WHERE number=?').bind(former),
     db.prepare('DELETE FROM v3_dog_numbers WHERE number=?').bind(former),
-    db.prepare("INSERT INTO v3_number_log(at,action,number,dog_id) VALUES(?,'remove',?,?)").bind(now.toISOString(), former, dogId),
   ]);
-  return { ok: true };
+  return { ok: true, dogId };
 }
 
 // 離所紀錄（#259）：形狀跟原本的 data/departures.json 的 departures 一樣，依日期新到舊、同一天依編號

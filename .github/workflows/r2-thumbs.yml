@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 10
     env:
       SITE_URL: ${{ vars.SITE_URL || 'https://bq-shelter-dogs.jiatsen-k.workers.dev' }}
-      ADMIN_PASSCODE: ${{ secrets.NOTES_PASSCODE }}
+      ADMIN_KEY: ${{ secrets.ADMIN_KEY || secrets.NOTES_PASSCODE }}
     steps:
       - uses: actions/checkout@v4
 

@@ -16,7 +16,7 @@ const STAY_BUCKETS = [
   { label: '5 年以上', max: Infinity },
 ];
 
-// 入所日（ADR 0004）：所有編號裡最舊那個的前 8 碼（app.js 的 firstIntake）；看不出來或在未來的回 null
+// 入所日（ADR 0005）：所有編號裡最舊那個的前 8 碼（app.js 的 firstIntake）；看不出來或在未來的回 null
 function intakeDate(dog, today) {
   const d = firstIntake(dog);
   return d && d <= today ? d : null;

@@ -1,12 +1,14 @@
 // 按「溜了」寫進試算表（#138）：這份貼到 Google Apps Script，用 K 的 Google 帳號部署成「網頁應用程式」。
-// 步驟見 docs/setup/SHEET_WRITE_SETUP.md。網站不會直接呼叫這裡，都經過 Worker（POST /api/walk），有設通關碼時 Worker 會帶過來。
-// 只會改「主清單」的「遛狗日期」「誰遛的」兩欄，以及只追加的「備註」欄和下方異動紀錄（#239、#281），其他欄、其他分頁都不碰。
+// 步驟見 docs/setup/SHEET_WRITE_SETUP.md。網站不會直接呼叫這裡，都經過 Worker（POST /api/walk），有設金鑰時 Worker 會帶過來。
+// 只會改「主清單」的「遛狗日期」「誰遛的」兩欄、只追加的「備註」欄和下方異動紀錄（#239、#281），
+// 以及「常遛狗群」分頁的狗名格和群名列（K 2026-10-16 開放網站編輯狗群）；其他欄、其他分頁都不碰。
 //
 // 指令碼屬性（專案設定 → 指令碼屬性）：
 //   SHEET_ID   試算表 ID（網址 /d/ 和 /edit 中間那串）
-//   WRITE_KEY  （可不設）通關碼；有設的話 GitHub Secret SHEET_WRITE_KEY 要一樣
+//   WRITE_KEY  （可不設）金鑰；有設的話 GitHub Secret SHEET_WRITE_KEY 要一樣
 
 var SHEET_NAME = '主清單';
+var GROUP_SHEET_NAME = '常遛狗群';
 var TIME_ZONE = 'Asia/Taipei';
 var HEADERS = { cage: '籠位', id: '編號', name: '犬名', date: '遛狗日期', walker: '誰遛的', note: '備註' };
 // 跟 scripts/sync-sheet.mjs 的 NAME_SEP 一樣：一格寫好幾個名字時用這些符號或空白隔開
@@ -32,11 +34,12 @@ function handleRequest(req) {
   var props = PropertiesService.getScriptProperties();
   var key = props.getProperty('WRITE_KEY');
   if (!req) return { ok: false, error: '沒有資料' };
-  // K 決定先不設通關碼（2026-10-04）；有設 WRITE_KEY 才檢查
-  if (key && req.key !== key) return { ok: false, error: '通關碼不對', code: 'key' };
+  // K 決定先不設金鑰（2026-10-04）；有設 WRITE_KEY 才檢查
+  if (key && req.key !== key) return { ok: false, error: '金鑰不對', code: 'key' };
   var lock = LockService.getScriptLock();
   lock.waitLock(15000); // 兩個人同時按，一個一個來，免得互相蓋掉
   try {
+    if (req.action === 'group') return writeGroup(SpreadsheetApp.openById(sheetIdOf(props.getProperty('SHEET_ID'))), req);
     var sheet = SpreadsheetApp.openById(sheetIdOf(props.getProperty('SHEET_ID'))).getSheetByName(SHEET_NAME);
     if (!sheet) return { ok: false, error: '找不到「' + SHEET_NAME + '」分頁' };
     var values = sheet.getDataRange().getValues();
@@ -50,6 +53,23 @@ function handleRequest(req) {
   } finally {
     lock.releaseLock();
   }
+}
+
+// 常遛狗群：照 planGroupWrite 算好的結果寫格子；狗名格滿了先在群名列上面插一列（整列插入，各欄的數量公式會自己跟著擴大）
+function writeGroup(book, req) {
+  var sheet = book.getSheetByName(GROUP_SHEET_NAME);
+  if (!sheet) return { ok: false, error: '找不到「' + GROUP_SHEET_NAME + '」分頁' };
+  var plan = planGroupWrite(sheet.getDataRange().getValues(), req);
+  if (plan.error) return { ok: false, error: plan.error };
+  if (plan.insertRowBefore !== undefined) sheet.insertRowBefore(plan.insertRowBefore + 1);
+  plan.cells.forEach(function (c) { sheet.getRange(c.row + 1, c.col + 1).setValue(c.value); });
+  // 新開的一欄：數量那格照左邊一欄的公式（相對位置）補上
+  if (plan.countFormula) {
+    var left = sheet.getRange(plan.countFormula.row + 1, plan.countFormula.col);
+    var formula = left.getFormulaR1C1();
+    if (formula) sheet.getRange(plan.countFormula.row + 1, plan.countFormula.col + 1).setFormulaR1C1(formula);
+  }
+  return { ok: true, result: plan.result };
 }
 
 function ymdOf(v) {
@@ -205,4 +225,75 @@ function planAppend(values, header, req, today) {
     cells: [{ row: last + 1, col: cols.cage, value: label }, { row: last + 1, col: cols.id, value: entry }],
     results: [{ status: 'written', wrote: { label: label, text: entry } }],
   };
+}
+
+// ── 常遛狗群（K 2026-10-16）：每一欄是一群；上面有一列數量（數字），最下面一列是群名，中間是狗名 ──
+// req.op：
+//   add：req.column 那群加上 req.name（已經在就不動）；中間沒空格就在群名列上面插一列
+//   remove：req.column 那群拿掉 req.name，下面的狗往上補，不留空格
+//   create：開一個新群（第一個整欄空的欄，沒有就接在最右邊），群名 req.label、第一隻狗 req.name
+// 回傳 { cells, insertRowBefore?, countFormula?, result: { status, column, label, names } } 或 { error }
+function groupNameKey(n) {
+  return cellText(n).replace(/\s+/g, '').toLowerCase();
+}
+
+function groupLayout(values) {
+  var isNumber = function (v) { return typeof v === 'number' || /^\d+$/.test(cellText(v)); };
+  var countRow = -1;
+  for (var r = 0; r < Math.min(values.length, 10); r++) {
+    var filled = values[r].filter(function (v) { return cellText(v) !== ''; });
+    if (filled.length && filled.every(isNumber)) { countRow = r; break; }
+  }
+  var labelRow = values.length - 1;
+  while (labelRow > countRow && values[labelRow].every(function (v) { return cellText(v) === ''; })) labelRow--;
+  if (countRow === -1 || labelRow <= countRow + 1) return null;
+  return { countRow: countRow, labelRow: labelRow, first: countRow + 1, width: values[0].length };
+}
+
+function planGroupWrite(values, req) {
+  var layout = groupLayout(values);
+  if (!layout) return { error: '常遛狗群分頁找不到數量列或群名列' };
+  var name = cellText(req.name);
+  if (!name) return { error: '要有狗名' };
+  var cell = function (r, c) { return r < values.length && c < (values[r] || []).length ? cellText(values[r][c]) : ''; };
+  var namesOf = function (c) {
+    var out = [];
+    for (var r = layout.first; r < layout.labelRow; r++) if (cell(r, c)) out.push(cell(r, c));
+    return out;
+  };
+  var result = function (status, col, names) {
+    return { status: status, column: col, label: cell(layout.labelRow, col), names: names };
+  };
+  if (req.op === 'create') {
+    var label = cellText(req.label);
+    if (!label) return { error: '要有群名' };
+    var col = 0;
+    while (col < layout.width && (namesOf(col).length || cell(layout.labelRow, col))) col++;
+    var out = { cells: [{ row: layout.first, col: col, value: name }, { row: layout.labelRow, col: col, value: label }], result: { status: 'written', column: col, label: label, names: [name] } };
+    if (col > 0 && !cell(layout.countRow, col)) out.countFormula = { row: layout.countRow, col: col };
+    return out;
+  }
+  var c = Number(req.column);
+  if (!(c >= 0 && c < layout.width) || (!namesOf(c).length && !cell(layout.labelRow, c))) return { error: '找不到這一群' };
+  var names = namesOf(c);
+  var at = names.map(groupNameKey).indexOf(groupNameKey(name));
+  if (req.op === 'add') {
+    if (at !== -1) return { cells: [], result: result('already', c, names) };
+    for (var r = layout.first; r < layout.labelRow; r++) {
+      if (!cell(r, c)) return { cells: [{ row: r, col: c, value: name }], result: result('written', c, names.concat([name])) };
+    }
+    // 中間格子都滿了：插在群名列上面，插完新的那列就在原本群名列的位置
+    return { insertRowBefore: layout.labelRow, cells: [{ row: layout.labelRow, col: c, value: name }], result: result('written', c, names.concat([name])) };
+  }
+  if (req.op === 'remove') {
+    if (at === -1) return { cells: [], result: result('notFound', c, names) };
+    var left = names.slice(0, at).concat(names.slice(at + 1));
+    var cells = [];
+    for (var k = layout.first; k < layout.labelRow; k++) {
+      var want = left[k - layout.first] || '';
+      if (cell(k, c) !== want) cells.push({ row: k, col: c, value: want });
+    }
+    return { cells: cells, result: result('written', c, left) };
+  }
+  return { error: '不認得的狗群操作' };
 }
