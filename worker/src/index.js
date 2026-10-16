@@ -1,6 +1,7 @@
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
-// 管理功能仍共用 NOTES_PASSCODE；試算表只寫原有兩欄。
+// 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
+import { editorOf, editorHeader, logEdit, readEdits, walkerCode } from './editlog.js';
 import { readDogsPayload, compactStatus, dogIdsFor, openedBooks, readRest, saveRest, saveIntro, readWalks, readDepartures, readMainNames } from './compact.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
@@ -27,8 +28,8 @@ const NOTE_WRITE_LIMITS = [
   { windowMs: 60 * 1000, max: 10 },
   { windowMs: 60 * 60 * 1000, max: 60 },
 ];
-// 通關碼打錯：1 小時最多 10 次，超過就先不給試（擋住一直猜）
-const PASSCODE_FAIL_LIMITS = [{ windowMs: 60 * 60 * 1000, max: 10 }];
+// 管理金鑰打錯：1 小時最多 10 次，超過就先不給試（擋住一直猜）
+const ADMIN_FAIL_LIMITS = [{ windowMs: 60 * 60 * 1000, max: 10 }];
 // 休養中：原因最多幾個字、最多設多久（天）
 // 入所介紹（K 2026-10-10 電腦版補資料）：存 D1 的 v3_intros（#250），不寫試算表
 const INTRO_MAX_CHARS = 1000;
@@ -75,7 +76,7 @@ function config(env) {
     api: get('GITHUB_API').replace(/\/+$/, ''),
     origins: get('ALLOWED_ORIGINS').split(',').map(s => s.trim()).filter(Boolean),
     token: env && env.GITHUB_TOKEN,
-    passcode: env && env.NOTES_PASSCODE ? String(env.NOTES_PASSCODE) : '',
+    adminKey: env && env.ADMIN_KEY ? String(env.ADMIN_KEY) : '',
     walkerKey: env && env.WALKER_KEY ? String(env.WALKER_KEY) : '',
     sheetWriteUrl: env && env.SHEET_WRITE_URL ? String(env.SHEET_WRITE_URL) : '',
     sheetWriteKey: env && env.SHEET_WRITE_KEY ? String(env.SHEET_WRITE_KEY) : '',
@@ -290,7 +291,7 @@ async function upload(request, env, origin) {
   return fail(502, '照片沒有存進去，原本的照片不受影響', origin);
 }
 
-// 管理功能共用的純文字整理與通關碼驗證
+// 介紹、休養共用的純文字整理
 // 整理成純文字：統一換行、拿掉看不見的控制字元、去頭尾空白；不是字串回 null
 function cleanNote(text) {
   if (typeof text !== 'string') return null;
@@ -300,8 +301,8 @@ function cleanNote(text) {
     .trim();
 }
 
-// 比對通關碼：先各自雜湊再逐位比，比較時間不會洩漏對了幾個字
-async function samePasscode(given, expected) {
+// 比對金鑰：先各自雜湊再逐位比，比較時間不會洩漏對了幾個字
+async function sameSecret(given, expected) {
   const enc = new TextEncoder();
   const [a, b] = await Promise.all([
     crypto.subtle.digest('SHA-256', enc.encode(given)),
@@ -314,34 +315,25 @@ async function samePasscode(given, expected) {
   return diff === 0;
 }
 
-const passcodeLocked = (ip, now) => limited(`pass:${ip}`, PASSCODE_FAIL_LIMITS, now);
-
-// 通關碼對了回 null；不對就記一次錯、回錯誤（介紹、休養共用）
-async function checkPasscode(input, cfg, ip, now, origin, missing) {
-  const given = input && typeof input.passcode === 'string' ? input.passcode : '';
-  if (given && (await samePasscode(given, cfg.passcode))) return null;
-  record(`pass:${ip}`, now);
-  return fail(401, given ? '通關碼不對' : missing, origin, { code: 'passcode' });
-}
+const adminLocked = (ip, now) => limited(`admin:${ip}`, ADMIN_FAIL_LIMITS, now);
+const needEditor = origin => fail(400, '請先選好你的名字再編輯', origin, { code: 'editor' });
 
 // 台灣今天的日期 YYYY-MM-DD
 function taiwanYmd(now) {
   return new Date(now + 8 * 3600 * 1000).toISOString().slice(0, 10);
 }
 
-// 休養中（K 2026-10-09）：管理者在網站上設定「到哪天前暫停帶出」。要通關碼；#250 起存 D1 的 v3_rest，不再提交 GitHub
+// 休養中（K 2026-10-09）：在網站上設定「到哪天前暫停帶出」。任何人都能改、記編輯紀錄（ADR 0004）；#250 起存 D1 的 v3_rest
 async function putRest(request, env, origin) {
   const cfg = config(env);
   const now = Date.now();
   if (!env || !env.DB) return fail(503, '休養設定還沒準備好（沒有接資料庫）', origin, { code: 'db' });
-  if (!cfg.passcode) return fail(500, '休養設定還沒準備好（缺 NOTES_PASSCODE）', origin);
 
   const m = new URL(request.url).pathname.match(/^\/rest\/([^/]+)$/);
   const id = m ? decodeURIComponent(m[1]) : '';
   if (!ID_PATTERN.test(id)) return fail(400, '狗狗編號格式不對', origin);
 
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (passcodeLocked(ip, now)) return fail(429, '通關碼錯太多次，請一小時後再試', origin, { code: 'passcode' });
   const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
   if (type !== 'application/json') return fail(415, '格式不對', origin);
   const raw = await request.text();
@@ -352,8 +344,8 @@ async function putRest(request, env, origin) {
   } catch (e) {
     return fail(400, '格式不對', origin);
   }
-  const denied = await checkPasscode(input, cfg, ip, now, origin, '需要通關碼才能設定休養');
-  if (denied) return denied;
+  const editor = await editorOf(input && input.editor, cfg.walkerKey);
+  if (!editor) return needEditor(origin);
 
   let rest = null;
   if (input.end !== true) {
@@ -370,24 +362,24 @@ async function putRest(request, env, origin) {
   }
 
   if (!allow(`rest:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '設定太頻繁，請稍等幾分鐘再試', origin);
-  if (!(await saveRest(env.DB, id, rest))) return fail(404, '找不到這個編號的狗狗', origin);
+  const saved = await saveRest(env.DB, id, rest);
+  if (!saved) return fail(404, '找不到這個編號的狗狗', origin);
+  await logEdit(env.DB, { editor, kind: 'rest', dogId: saved.dogId, dogNumber: id, before: saved.before, after: rest && { until: rest.until, reason: rest.reason } }, now);
   return reply(200, { ok: true, id, rest, commit: null }, origin);
 }
 
-// ---- 入所介紹（K 2026-10-10）：PUT /intro/{編號}，通關碼 ----
+// ---- 入所介紹（K 2026-10-10）：PUT /intro/{編號}，任何人都能改、記編輯紀錄 ----
 // #250 起存 D1 的 v3_intros，/api/dogs 馬上讀得到，不再改 dogs/{編號}.md、不再提交 GitHub
 async function putIntro(request, env, origin) {
   const cfg = config(env);
   const now = Date.now();
   if (!env || !env.DB) return fail(503, '介紹還沒準備好（沒有接資料庫）', origin, { code: 'db' });
-  if (!cfg.passcode) return fail(500, '介紹還沒準備好（缺 NOTES_PASSCODE）', origin);
 
   const m = new URL(request.url).pathname.match(/^\/intro\/([^/]+)$/);
   const id = m ? decodeURIComponent(m[1]) : '';
   if (!ID_PATTERN.test(id)) return fail(400, '狗狗編號格式不對', origin);
 
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (passcodeLocked(ip, now)) return fail(429, '通關碼錯太多次，請一小時後再試', origin, { code: 'passcode' });
   const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
   if (type !== 'application/json') return fail(415, '格式不對', origin);
   const raw = await request.text();
@@ -398,14 +390,16 @@ async function putIntro(request, env, origin) {
   } catch (e) {
     return fail(400, '格式不對', origin);
   }
-  const denied = await checkPasscode(input, cfg, ip, now, origin, '需要通關碼才能改介紹');
-  if (denied) return denied;
+  const editor = await editorOf(input && input.editor, cfg.walkerKey);
+  if (!editor) return needEditor(origin);
   const text = cleanNote(input && input.text);
   if (text === null) return fail(400, '格式不對', origin);
   if ([...text].length > INTRO_MAX_CHARS) return fail(413, `介紹最多 ${INTRO_MAX_CHARS} 字`, origin);
 
   if (!allow(`intro:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
-  if (!(await saveIntro(env.DB, id, text))) return fail(404, '找不到這個編號的狗狗', origin);
+  const saved = await saveIntro(env.DB, id, text);
+  if (!saved) return fail(404, '找不到這個編號的狗狗', origin);
+  await logEdit(env.DB, { editor, kind: 'intro', dogId: saved.dogId, dogNumber: id, before: saved.before, after: text }, now);
   return reply(200, { ok: true, id, intro: text, commit: null }, origin);
 }
 
@@ -474,18 +468,18 @@ async function uploadR2(request, env, origin, ctx) {
 }
 
 // ── 管理用 API（/api/admin/...）：搬遷、縮圖、Trash ──
-// 給 GitHub Action 和之後的管理後台用，不看網站來源，改看標頭 X-Admin-Passcode（跟我的備註同一組通關碼，
-// 用 encodeURIComponent 包起來，中文通關碼也能放標頭）
+// 只給 GitHub Action 用（ADR 0004，不做管理後台）：不看網站來源，改看標頭 X-Admin-Key（GitHub Secret ADMIN_KEY）
 async function checkAdmin(request, cfg, origin) {
-  if (!cfg.passcode) return fail(500, '還沒設定 NOTES_PASSCODE', origin);
+  if (!cfg.adminKey) return fail(500, '還沒設定 ADMIN_KEY', origin);
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
   const now = Date.now();
-  if (passcodeLocked(ip, now)) return fail(429, '通關碼錯太多次，請一小時後再試', origin, { code: 'passcode' });
+  if (adminLocked(ip, now)) return fail(429, '金鑰錯太多次，請一小時後再試', origin, { code: 'admin' });
+  // encodeURIComponent 包起來，沿用舊的中文通關碼當金鑰也能放標頭
   let given = '';
-  try { given = decodeURIComponent(request.headers.get('X-Admin-Passcode') || ''); } catch (e) { /* 當作沒給 */ }
-  if (given && (await samePasscode(given, cfg.passcode))) return null;
-  record(`pass:${ip}`, now);
-  return fail(401, given ? '通關碼不對' : '需要通關碼', origin, { code: 'passcode' });
+  try { given = decodeURIComponent(request.headers.get('X-Admin-Key') || ''); } catch (e) { /* 當作沒給 */ }
+  if (given && (await sameSecret(given, cfg.adminKey))) return null;
+  record(`admin:${ip}`, now);
+  return fail(401, given ? '金鑰不對' : '需要金鑰', origin, { code: 'admin' });
 }
 
 async function readJsonBody(request, maxBytes) {
@@ -601,17 +595,7 @@ async function admin(request, env, origin, path) {
 // ── 誰遛的代號（#95）──
 // 算法要跟 scripts/sync-sheet.mjs 的 walkerCode 完全一樣：名字全形半形統一（NFKC）、去空白、轉小寫，
 // HMAC-SHA256(WALKER_KEY, 名字) 取前 12 碼十六進位。兩邊用同一組測試向量（WALKER_VECTORS）確認。
-function walkerNameKey(name) {
-  return String(name || '').normalize('NFKC').replace(/\s+/g, '').toLowerCase();
-}
-async function walkerCode(name, key) {
-  const k = walkerNameKey(name);
-  if (!k || !key) return '';
-  const enc = new TextEncoder();
-  const hmacKey = await crypto.subtle.importKey('raw', enc.encode(key), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-  const sig = new Uint8Array(await crypto.subtle.sign('HMAC', hmacKey, enc.encode(k)));
-  return [...sig].map(b => b.toString(16).padStart(2, '0')).join('').slice(0, WALKER_CODE_LENGTH);
-}
+// walkerNameKey、walkerCode 在 editlog.js（編輯者也用同一套代號）
 
 // 輸入的每個名字再照試算表的規則拆開（例：「小明 明明」算兩個），這樣跟同步時拆出來的代號對得上
 async function walkerCodes(request, env, origin) {
@@ -645,7 +629,7 @@ async function walkerCodes(request, env, origin) {
 }
 
 // ── 按「溜了」寫進試算表（#138）──
-// 網站送 { action: 'walk' | 'undo', walker, dogs: [{ id, name, prev?, wrote? }] }，這裡檢查完帶上通關碼轉給
+// 網站送 { action: 'walk' | 'undo', walker, dogs: [{ id, name, prev?, wrote? }] }，這裡檢查完帶上金鑰（SHEET_WRITE_KEY）轉給
 // Google Apps Script 小程式（apps-script/sheet-write.gs，K 用自己的帳號部署）。小程式只改「遛狗日期」「誰遛的」兩欄。
 // ── 溜狗人名字（#141）：GET /walkers ──
 // 名字不進 repo（dogs.json 只有代號），網站打開時跟這裡拿：Worker 直接讀試算表主清單（跟同步一樣用 gviz，試算表要「知道連結的人可檢視」），
@@ -819,7 +803,7 @@ async function writeWalks(request, env, origin) {
     return fail(502, '連不上試算表，請稍後再試', origin);
   }
   if (!res.ok || !out) return fail(502, `試算表沒有回應（${res.status}）`, origin);
-  if (!out.ok) return fail(502, out.code === 'key' ? '寫入試算表的通關碼不對，請 K 檢查設定' : scriptError(out.error), origin);
+  if (!out.ok) return fail(502, out.code === 'key' ? '寫入試算表的金鑰不對，請 K 檢查設定' : scriptError(out.error), origin);
   walkersCache = null; // 寫入後重新讀取完整名單
   return reply(200, { ok: true, today: out.today, results: Array.isArray(out.results) ? out.results : [] }, origin);
 }
@@ -899,13 +883,13 @@ export default {
       return env.ASSETS.fetch(request);
     }
 
-    // 打開 Worker 網址（合在一起時是 /api/）就能看到服務有沒有在跑、token 和通關碼設了沒（不會顯示內容）
+    // 打開 Worker 網址（合在一起時是 /api/）就能看到服務有沒有在跑、token 和金鑰設了沒（不會顯示內容）
     if (request.method === 'GET' && path === '/') {
       return reply(200, {
         ok: true,
         service: '板收志工溜狗表 照片上傳服務',
         token: cfg.token ? '已設定' : '未設定',
-        notesPasscode: cfg.passcode ? '已設定' : '未設定',
+        adminKey: cfg.adminKey ? '已設定' : '未設定',
         walkerKey: cfg.walkerKey ? '已設定' : '未設定',
         sheetWrite: cfg.sheetWriteUrl ? '已設定' : '未設定',
         walkerNames: cfg.sheetId ? '已設定' : '未設定',
@@ -914,7 +898,7 @@ export default {
         ...(env && env.PREVIEW ? { preview: '預覽版，不能存' } : {}),
       });
     }
-    // 管理用（#130）：GitHub Action 呼叫、沒有網站來源，用通關碼驗證
+    // 管理用（#130）：GitHub Action 呼叫、沒有網站來源，用 ADMIN_KEY 驗證
     if (path.startsWith('/admin/')) {
       try {
         return await admin(request, env, allowed, path);
@@ -977,6 +961,17 @@ export default {
       }
     }
 
+    // 編輯紀錄（ADR 0004）：GET /edits?limit=
+    if (path === '/edits') {
+      if (request.method !== 'GET') return fail(405, '編輯紀錄只能用 GET /edits 讀', allowed);
+      try {
+        const limit = Number(url.searchParams.get('limit') || '') || undefined;
+        return reply(200, { ok: true, edits: await readEdits(env.DB, limit) }, allowed);
+      } catch (e) {
+        return fail(503, '暫時讀不到編輯紀錄', allowed, { code: 'db' });
+      }
+    }
+
     if (path === '/walker-code') {
       if (request.method !== 'POST') return fail(405, '代號只能用 POST /walker-code 換', allowed);
       try {
@@ -1021,7 +1016,15 @@ export default {
 
     if (request.method !== 'POST') return fail(405, '只接受上傳', allowed);
     try {
-      return await (r2.r2On(env) ? uploadR2(request, env, allowed, ctx) : upload(request, env, allowed));
+      const editor = await editorOf(editorHeader(request), cfg.walkerKey);
+      if (!editor) return needEditor(allowed);
+      const res = await (r2.r2On(env) ? uploadR2(request, env, allowed, ctx) : upload(request, env, allowed));
+      if (res.ok) {
+        const out = await res.clone().json().catch(() => ({}));
+        // 換掉的舊照片在垃圾桶（30 天內可還原），記垃圾桶編號
+        await logEdit(env && env.DB, { editor, kind: 'photo', dogId: null, dogNumber: out.id || '', before: out.trash ? { trash: out.trash } : null, after: { path: out.path || `photos/${out.id}.jpg` } });
+      }
+      return res;
     } catch (e) {
       return fail(500, '上傳服務發生錯誤，原本的照片不受影響', allowed);
     }

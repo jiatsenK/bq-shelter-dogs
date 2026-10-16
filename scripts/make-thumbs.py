@@ -8,7 +8,7 @@
 #
 # 照片放 R2 以後（#130）：python3 scripts/make-thumbs.py --site https://網站網址
 # - 問網站哪些照片還沒有縮圖（/api/admin/thumbs），下載原圖、做好縮圖傳回去，存進 R2，不提交 repo
-# - 通關碼放環境變數 ADMIN_PASSCODE（GitHub Secret NOTES_PASSCODE）；由 .github/workflows/r2-thumbs.yml 執行
+# - 金鑰放環境變數 ADMIN_KEY（GitHub Secret ADMIN_KEY）；由 .github/workflows/r2-thumbs.yml 執行
 import io
 import json
 import os
@@ -42,10 +42,10 @@ def make_thumb(src, dst):
         im.save(dst, 'JPEG', quality=QUALITY, optimize=True, progressive=True)
 
 
-def remote(site, passcode, opener=urllib.request.urlopen):
+def remote(site, key, opener=urllib.request.urlopen):
     """R2 模式：還沒有縮圖的照片做好縮圖傳回網站。回傳 (成功張數, 失敗張數)"""
     site = site.rstrip('/')
-    auth = {'X-Admin-Passcode': urllib.parse.quote(passcode, safe=''), 'User-Agent': 'bq-shelter-dogs-thumbs'}
+    auth = {'X-Admin-Key': urllib.parse.quote(key, safe=''), 'User-Agent': 'bq-shelter-dogs-thumbs'}
 
     def call(url, data=None, method='GET', headers=None):
         req = urllib.request.Request(url, data=data, method=method, headers={**auth, **(headers or {})})
@@ -95,6 +95,6 @@ def main(root):
 
 if __name__ == '__main__':
     if len(sys.argv) > 2 and sys.argv[1] == '--site':
-        remote(sys.argv[2], os.environ.get('ADMIN_PASSCODE', ''))
+        remote(sys.argv[2], os.environ.get('ADMIN_KEY', ''))
         sys.exit(0)  # 個別失敗只印出來；下次 Cron 會再試，不讓 Action 一直紅
     main(sys.argv[1] if len(sys.argv) > 1 else '.')
