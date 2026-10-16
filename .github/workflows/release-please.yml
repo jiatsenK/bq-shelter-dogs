@@ -1,12 +1,14 @@
-# 版本號（release-please）：main 有新 commit 就更新一張「Release PR」，裡面改好 version.txt 和 CHANGELOG.md。
+# 版本號（release-please）：每週把 main 的新 commit 整理成一張「Release PR」，裡面改好 version.txt 和 CHANGELOG.md。
 # - 版本號照 commit 開頭決定：fix: → 9.0.1，feat: → 9.1.0，feat!: 或 BREAKING CHANGE → 10.0.0；docs:／chore: 不升版。
 # - Release PR 合併後才打 tag（v9.1.0）並建立 GitHub Release，內容就是這次的改動清單。
 # - 第一次用要到 repo Settings → Actions → General 勾「Allow GitHub Actions to create and approve pull requests」。
 name: 版本號
 
+# #329：不再每次推到 main 都跑（一次 1 分鐘），改成每週一台灣 9:00 更新一次 Release PR；急著發版就在 Actions 頁手動按 Run workflow
 on:
-  push:
-    branches: [main]
+  schedule:
+    - cron: '0 1 * * 1'
+  workflow_dispatch:
 
 permissions:
   contents: write

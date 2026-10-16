@@ -6,13 +6,15 @@
 # - 還沒設 Cloudflare Secret、或是從別人 fork 開的 PR（拿不到 Secret）就跳過
 name: PR 預覽網址
 
-# 只改文件（docs/、根目錄的 .md）不做預覽（#305）
+# 只有改到網站或 Worker 的 PR 才做預覽（#329，省 Actions 分鐘數）；只改文件、測試、同步程式的 PR 不做
 on:
   pull_request:
     types: [opened, synchronize, reopened]
-    paths-ignore:
-      - 'docs/**'
-      - '*.md'
+    paths:
+      - 'public/**'
+      - 'worker/src/**'
+      - 'wrangler.jsonc'
+      - '.github/workflows/preview-cloudflare.yml'
 
 permissions:
   contents: read
