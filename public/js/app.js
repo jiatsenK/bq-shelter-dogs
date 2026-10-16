@@ -1848,18 +1848,39 @@ function restAdminHtml(dog, today) {
 }
 // ── 入所介紹（K 2026-10-10 補資料）：任何人都能改、記編輯紀錄（ADR 0004）；存 D1，不寫試算表 ──
 const INTRO_MAX = 1000;
+function intakeEventsOf(dog) {
+  return dog.intakeEvents || [];
+}
+function intakeDraft(dog) {
+  return intakeEventsOf(dog).map(row => ({ ...row }));
+}
+function intakeListHtml(dog) {
+  const events = intakeEventsOf(dog);
+  if (!events.length) return '';
+  return `<ul class="intake-list">${events.map(e => `<li>${e.date ? `<time datetime="${esc(e.date)}">${esc(e.date.replace(/-/g, '/'))}</time>` : '<span class="intake-date-empty">日期未確認</span>'}<span class="intake-event">${esc(e.event)}</span>${e.number ? `<span class="intake-number">（${esc(e.number)}）</span>` : ''}</li>`).join('')}</ul>`;
+}
+function intakeEditorHtml(dog, e, busy) {
+  const numbers = [...new Set([...(dog.formerIds || []), dog.id, ...e.events.map(row => row.number)].filter(Boolean))].sort();
+  return `<p class="rest-hint">一次入所、退回或轉所一列。日期依確認的資料填寫，不確定就留空，不以編號推定。原因可留空。</p>
+    <div class="intake-rows">${e.events.map((row, i) => `<fieldset class="intake-row"><legend>第 ${i + 1} 筆</legend>
+      <label>日期<input type="date" data-intake-row="${i}" data-intake-field="date" value="${esc(row.date)}"${busy ? ' disabled' : ''}></label>
+      <label>原因<input type="text" maxlength="1000" data-intake-row="${i}" data-intake-field="event" value="${esc(row.event)}" placeholder="例：迷路入所、認養後退回"${busy ? ' disabled' : ''}></label>
+      <label>對應編號<select data-intake-row="${i}" data-intake-field="number"${busy ? ' disabled' : ''}><option value="">尚未確認</option>${numbers.map(n => `<option value="${esc(n)}"${n === row.number ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
+      <button type="button" class="intake-remove" data-intake-remove="${i}"${busy ? ' disabled' : ''}>移除第 ${i + 1} 筆</button>
+    </fieldset>`).join('')}</div>
+    <button type="button" id="intakeAdd"${busy || e.events.length >= 30 ? ' disabled' : ''}>新增一筆</button>`;
+}
 function introOf(dog) {
   return dog.id && Object.prototype.hasOwnProperty.call(introOverrides, dog.id) ? introOverrides[dog.id] : dog.intro;
 }
 function introSectionHtml(dog, intro) {
   const e = introEdit && introEdit.dog === dog ? introEdit : null;
   if (!e) {
-    // 直接點這一段就能改（K 2026-10-10：不要多一個按鈕）；不能改的時候（沒編號、離所）就是一般文字
     const can = !!(dog.id && UPLOAD_URL) && !dog.departure;
-    const body = intro ? `<span class="content">${esc(intro)}</span>` : `<span class="empty">${can ? '還沒有入所介紹，點這裡補' : '還沒有入所介紹'}</span>`;
     return `<section class="detail-section" data-section="intro">
-      <h3>${icon('card')}入所介紹</h3>
-      ${can ? `<button type="button" class="intro-btn" id="introEdit" aria-label="${intro ? '改' : '補'}入所介紹">${body}${icon('write')}</button>` : `<div class="intro-static">${body}</div>`}
+      <h3 class="intro-heading">${icon('card')}入所介紹${can ? `<button type="button" class="intro-heading-edit" id="introEdit" aria-label="${intro || intakeEventsOf(dog).length ? '改' : '補'}入所介紹">${icon('write')}</button>` : ''}</h3>
+      ${intakeListHtml(dog)}
+      ${intro ? `<div class="content">${esc(intro)}</div>` : (!intakeEventsOf(dog).length ? '<div class="empty">還沒有入所介紹</div>' : '')}
     </section>`;
   }
   const busy = e.phase === 'saving';
@@ -1867,8 +1888,9 @@ function introSectionHtml(dog, intro) {
   return `<section class="detail-section" data-section="intro">
     <form class="rest-form intro-form" id="introForm" autocomplete="on">
       <h3>${icon('card')}入所介紹</h3>
+      ${intakeEditorHtml(dog, e, busy)}
       <p class="rest-hint">存好後這台馬上看到，其他人幾分鐘後（下次更新資料）看到。只存在網站，不寫試算表。</p>
-      <label>介紹<textarea id="introText" rows="7" maxlength="${INTRO_MAX}" placeholder="例：親人、喜歡散步，怕機車聲"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea><small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small></label>
+      <label>補充介紹（保留原文）<textarea id="introText" rows="7" maxlength="${INTRO_MAX}" placeholder="例：親人、喜歡散步，怕機車聲"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea><small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small></label>
       ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
     </form>
   </section>`;
@@ -1882,9 +1904,9 @@ function introBarHtml(dog) {
 }
 function openIntroEdit(dog) {
   if (!dog || !dog.id || !UPLOAD_URL) return;
-  introEdit = { dog, text: introOf(dog) || '', phase: 'edit', error: '' };
+  introEdit = { dog, text: introOf(dog) || '', events: intakeDraft(dog), phase: 'edit', error: '' };
   renderDetail();
-  const box = document.getElementById('introText');
+  const box = document.querySelector('#introForm [data-intake-field="date"]') || document.getElementById('introText');
   if (box) {
     box.focus({ preventScroll: true });
     if (box.scrollIntoView) box.scrollIntoView({ block: 'center' });
@@ -1897,16 +1919,18 @@ async function saveIntro() {
   if (!editor) { e.phase = 'error'; e.error = NEED_EDITOR; renderDetail(); return; }
   const text = e.text.replace(/\r\n?/g, '\n').trim();
   if ([...text].length > INTRO_MAX) { e.phase = 'error'; e.error = `最多 ${INTRO_MAX} 字`; renderDetail(); return; }
+  if (e.events.reduce((n, row) => n + [...row.event].length, 0) > INTRO_MAX) { e.phase = 'error'; e.error = '原因合計最多 1000 字'; renderDetail(); return; }
   e.phase = 'saving'; e.error = ''; renderDetail();
   let out = null, error = '';
   try {
     const res = await fetch(`${UPLOAD_URL}/intro/${encodeURIComponent(e.dog.id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ editor, text }),
+      body: JSON.stringify({ editor, text, events: e.events }),
     });
     out = await res.json().catch(() => null);
     if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
+    else if (!Array.isArray(out.intakeEvents) && (e.events.length || intakeEventsOf(e.dog).length)) error = '伺服器尚未確認逐次紀錄已儲存，請稍後再試';
   } catch (err) {
     error = '沒有存進去，請確認網路後再試';
   }
@@ -1916,6 +1940,7 @@ async function saveIntro() {
     return;
   }
   introOverrides[e.dog.id] = typeof out.intro === 'string' ? out.intro : text;
+  e.dog.intakeEvents = Array.isArray(out.intakeEvents) ? out.intakeEvents : e.events;
   introEdit = null;
   render(); renderDetail();
   const b = document.getElementById('introEdit');
@@ -2636,8 +2661,25 @@ const DETAIL_CLICKS = [
 function wireDetail(box) {
   if (box.bqWired) return;
   box.bqWired = true;
+  box.addEventListener('click', e => {
+    if (!introEdit || introEdit.phase === 'saving') return;
+    if (e.target.closest('#intakeAdd') && introEdit.events.length < 30) {
+      introEdit.events.push({ number: introEdit.dog.id, date: '', event: '' });
+      renderDetail(); box.querySelector('.intake-row:last-child input')?.focus({ preventScroll: true });
+    }
+    const remove = e.target.closest('[data-intake-remove]');
+    if (remove) {
+      introEdit.events.splice(Number(remove.dataset.intakeRemove), 1);
+      renderDetail(); box.querySelector('#intakeAdd')?.focus({ preventScroll: true });
+    }
+  });
   // 休養設定表單：打的字記在 restEdit，重畫不會不見；送出走 saveRest
   box.addEventListener('input', e => {
+    if (introEdit && e.target.dataset.intakeField) {
+      const row = introEdit.events[Number(e.target.dataset.intakeRow)];
+      if (row) row[e.target.dataset.intakeField] = e.target.value;
+      return;
+    }
     if (introEdit && e.target.id === 'introText') {
       introEdit.text = e.target.value;
       const c = box.querySelector('.intro-count');
@@ -2680,10 +2722,13 @@ function labelPhotoPick(box) {
   img.addEventListener('load', label);
 }
 
+const detailEditorViewport = createDetailEditorViewport(document.getElementById('detailBackdrop'), document.getElementById('detail'));
+
 function renderDetail() {
   if (!detailDog) return;
   const box = document.getElementById('detail');
   wireDetail(box);
+  const editingFocus = detailEditorViewport.capture();
   const focused = box.contains(document.activeElement) ? document.activeElement : null;
   // 重畫後留在原本捲到的位置（K 2026-10-10：補完資料「整個卡片就會跳掉」）；換看別隻時 showDetail 會自己捲回最上面
   const top = box.scrollTop;
@@ -2701,6 +2746,7 @@ function renderDetail() {
     const fallback = box.querySelector('#detailClose') || box.querySelector('.photo-bar button');
     if (replacement || fallback) (replacement || fallback).focus({ preventScroll: true });
   }
+  detailEditorViewport.restore(editingFocus);
 }
 
 // 在詳細資訊裡點「可以一起溜的狗」會直接換成那隻，不多疊一層；換之前的狗記在 detailTrail，可以按「回到 ○○」
@@ -2709,6 +2755,7 @@ function showDetail(dog, remember = true) {
   if (!wasOpen) detailOpener = { element: document.activeElement, index: allDogs.indexOf(dog) };
   if (wasOpen && remember && dog !== detailDog) detailTrail.push(detailDog);
   if (dog !== detailDog) {
+    detailEditorViewport.reset();
     pickedBuddies.clear();
     detailWalksOpen = false;
     if (!restEdit || restEdit.phase !== 'saving') restEdit = null;
@@ -2719,6 +2766,7 @@ function showDetail(dog, remember = true) {
   detailDog = dog;
   renderDetail();
   document.getElementById('detailBackdrop').hidden = false;
+  detailEditorViewport.sync();
   document.documentElement.classList.add('detail-open');
   document.getElementById('detail').scrollTop = 0;
   // 手機按「返回」時只關掉詳細資訊，不離開網頁
@@ -2729,6 +2777,7 @@ function showDetail(dog, remember = true) {
 
 function hideDetail() {
   if (!detailDog) return;
+  detailEditorViewport.reset();
   detailDog = null;
   detailWalksOpen = false;
   detailTrail = [];
@@ -2794,7 +2843,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && detailDog) closeDetail();
   if (e.key !== 'Tab' || !detailDog) return;
   // 我的備註編輯時（#62）文字框和欄位也要能用 Tab 走到
-  const buttons = [...document.querySelectorAll('#detail button:not(:disabled), #detail textarea:not(:disabled), #detail input:not([hidden]):not(:disabled), #toast:not([hidden]) button:not([hidden])')];
+  const buttons = [...document.querySelectorAll('#detail button:not(:disabled), #detail textarea:not(:disabled), #detail select:not(:disabled), #detail input:not([hidden]):not(:disabled), #toast:not([hidden]) button:not([hidden])')];
   const first = buttons[0], last = buttons[buttons.length - 1];
   if (!first) return;
   if (!buttons.includes(document.activeElement) || (e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
