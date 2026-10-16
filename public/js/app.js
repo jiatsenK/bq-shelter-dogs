@@ -1783,7 +1783,6 @@ function detailHtml(dog, today) {
         <div class="name-row"><h2 class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</h2>${favButtonHtml(dog)}</div>
         <div class="chips">${statusBadge(dog, today)}${detailChips(dog)}</div>
         ${metaLine(dog)}
-        ${flag ? warnNote(dog.note, flag) : ''}
         ${restNoteHtml(dog, today)}
       </div>
     </div>

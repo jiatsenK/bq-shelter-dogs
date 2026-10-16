@@ -2023,6 +2023,14 @@ async function runRestTests() {
       hideDetail(); hideToast();
       eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['固定丙', '休養甲', '一般乙'], '設好的那隻也排到最下面：');
     });
+    await check('#285 移除完整狗卡頂部警語，首頁警語與備註原文保留', () => {
+      const dog = { id: '2021021703', name: '警語測試', cage: 'A1', note: '不親狗，請保持距離。', intro: '' };
+      const detail = document.createElement('div'); detail.innerHTML = detailHtml(dog, new Date());
+      eq(detail.querySelector('.info .warn-note'), null);
+      eq(detail.querySelector('[data-section="note"] .note-text').textContent, dog.note);
+      const card = document.createElement('div'); card.innerHTML = dogCard(dog, new Date());
+      eq(card.querySelector('.warn-note .text').textContent, dog.note);
+    });
     await check('#285 還原早上狗卡：保留分隔區塊與原介紹，文字編輯不送事件以保留伺服器資料', async () => {
       const dog = parseDogsData({ dogs: [{ id: '2021021703', name: '測試狗', cage: 'A1', intro: '早上的完整介紹', formerIds: ['2015081801'], intakeEvents: [{ number: '2021021703', date: '2021-02-17', event: '迷路入所' }] }] }).dogs[0];
       try {
