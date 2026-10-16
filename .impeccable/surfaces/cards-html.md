@@ -1,13 +1,13 @@
 ---
 version: 1
 slug: "cards-html"
-primary_target: "cards.html"
+primary_target: "public/cards.html"
 related_targets: []
 ---
 
-# 板收圖鑑（cards.html）
+# 板收圖鑑（public/cards.html）
 
-Scope：只在電腦寬螢幕（電腦版溜狗表頁首「圖鑑」進來，K 2026-10-10；首頁不再自動轉來）。手機版就是溜狗表（K 2026-10-09），不為手機設計；有人直接用手機開 cards.html 時版面不壞即可。志工版溜狗表照舊在 index.html。Visitor mode：Experience。
+Scope：只在電腦寬螢幕（電腦版溜狗表頁首「圖鑑」進來，K 2026-10-10；首頁不再自動轉來）。手機版就是溜狗表（K 2026-10-09），不為手機設計；有人直接用手機開 public/cards.html 時版面不壞即可。志工版溜狗表照舊在 public/index.html。Visitor mode：Experience。
 Audience：K 開給朋友、同事看（會拍螢幕），之後也把連結傳給別人自己玩。
 Job：你溜過的狗才拿得到牠的卡，新溜的包成卡包自己撕；圖鑑裡看得到所內每隻狗（沒溜過的還沒有卡）；看資料算出來的年度獎項。
 Constraints：不寫試算表、不放志工名字和警示；只讀 data/dogs.json 和 data/walks.json；「你是誰」用溜狗表「我溜過」的代號，撕開過的卡記在各自的瀏覽器（localStorage `bq-zukan`）；沒照片的狗要好看地補位。之後（不在這次）：比大小對戰、溜狗排隊、認狗測驗、像素溜狗遊戲。

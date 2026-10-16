@@ -1377,3 +1377,9 @@
 - GitHub Pages 查證已關閉（has_pages=false、舊網址 404），一併刪除 .nojekyll。
 - 合併：photos/README.md → CLOUDFLARE_SETUP.md；COMPACT_LEGACY_IMPORT.md → COMPACT_D1.md；CLEANUP_252*.md → docs/adr/0003-252-old-data-cleanup.md。
 - wrangler*.jsonc 拿掉 migrations_dir；AGENTS.md 與 tests.yml 的 node 測試指令同步移除 9 個測試。照片快取（?v= 版本號、servePhoto）未動。
+
+## 2026-10-15 網站檔案搬到 public/、設定文件搬到 docs/setup/（Claude，#276）
+
+- index.html、cards.html、css/、js/、icons/、manifest.webmanifest、_headers 搬到 public/；wrangler.jsonc 的 assets.directory 改 ./public，刪除 .assetsignore（只有 public/ 會公開）。測試頁 tests/ 不再放上網站。
+- 測試頁、sync-sheet／analytics-beacon 測試改讀 public/ 路徑；部署的瀏覽統計改寫 public/index.html；.assetsignore 檢查改成「assets 只指向 public/、私密檔不在網站資料夾」。
+- CLOUDFLARE_SETUP、PHOTO_UPLOAD_SETUP、SHEET_SYNC_SETUP、SHEET_WRITE_SETUP、SITE_CONFIG 搬到 docs/setup/，更新所有引用；Markdown 文件裡的網站檔案路徑改成 public/…。網址不變。

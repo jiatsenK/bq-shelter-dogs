@@ -3,7 +3,7 @@
 // 函式本身（newWalks、updateDepartures 等）照用。
 //
 // 試算表 ID 不寫在 repo 裡（repo 是公開的，試算表目前知道連結就能編輯）：
-// workflow 從 GitHub 的 Actions Secret「SHEET_ID」帶進來，設定方式見 docs/SHEET_SYNC_SETUP.md。
+// workflow 從 GitHub 的 Actions Secret「SHEET_ID」帶進來，設定方式見 docs/setup/SHEET_SYNC_SETUP.md。
 // 「誰遛的」只輸出有沒有人固定照顧（covered），不把志工名字寫進公開的 dogs.json。
 // 「是不是我遛的」（#57）：比對用的名字放 Actions Secret「MY_NAME」，公開檔案只寫 myWalked（true／false）。
 // 「誰遛的」代號（#94）：每個名字用 Actions Secret「WALKER_KEY」算成一串亂碼代號（walkers），公開檔案只有代號。

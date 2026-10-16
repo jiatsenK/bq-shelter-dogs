@@ -71,9 +71,9 @@ https://bq-shelter-photos.你的帳號名稱.workers.dev
 
 ## 步驟 6：把網址接到網站
 
-把步驟 5 的網址貼給 Claude，Claude 會把它填進網站程式（`js/app.js` 最上面的 `UPLOAD_URL`）並開 PR。合併後網站的詳細資訊就會出現「上傳照片／更換照片」。
+把步驟 5 的網址貼給 Claude，Claude 會把它填進網站程式（`public/js/app.js` 最上面的 `UPLOAD_URL`）並開 PR。合併後網站的詳細資訊就會出現「上傳照片／更換照片」。
 
-（想自己改也可以：在 GitHub 網頁打開 `js/app.js` → 右上角鉛筆 → 把 `let UPLOAD_URL = '';` 改成 `let UPLOAD_URL = 'https://bq-shelter-photos.你的帳號名稱.workers.dev';` → Commit changes。）
+（想自己改也可以：在 GitHub 網頁打開 `public/js/app.js` → 右上角鉛筆 → 把 `let UPLOAD_URL = '';` 改成 `let UPLOAD_URL = 'https://bq-shelter-photos.你的帳號名稱.workers.dev';` → Commit changes。）
 
 ---
 
@@ -131,7 +131,7 @@ https://bq-shelter-photos.你的帳號名稱.workers.dev
 
 ## 相簿（2026-10-09 拿掉）
 
-K 2026-10-09：怕 Cloudflare 用量爆掉，相簿整個拿掉，只留主照片。網站不再顯示相簿、不能新增；Worker 的 `/gallery` 一律回 410，`photos/gallery/` 的照片不給看、不做縮圖，Trash 裡的相簿照片也不能復原。R2 裡原本的相簿照片要刪掉，步驟見 `docs/CLOUDFLARE_SETUP.md`「刪掉相簿照片」。
+K 2026-10-09：怕 Cloudflare 用量爆掉，相簿整個拿掉，只留主照片。網站不再顯示相簿、不能新增；Worker 的 `/gallery` 一律回 410，`photos/gallery/` 的照片不給看、不做縮圖，Trash 裡的相簿照片也不能復原。R2 裡原本的相簿照片要刪掉，步驟見 `docs/setup/CLOUDFLARE_SETUP.md`「刪掉相簿照片」。
 
 ## 誰遛的代號（V6，#95）
 

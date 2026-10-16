@@ -38,7 +38,7 @@
 
 ## 誰遛的代號：設定 Secret `WALKER_KEY`
 
-同步時把「誰遛的」每個名字用這把密鑰換成一串代號，寫進 `data/dogs.json`（`walkers`）和 `data/walks.json`，名字本身不會出現在網站或 repo。網站上的「我溜過」靠同一把密鑰（放在 Cloudflare Worker）認出每個志工，所以**兩邊要設同一串**，Worker 那邊用的是 GitHub Secret `WALKER_KEY`，部署時自動帶上去（`docs/CLOUDFLARE_SETUP.md` 步驟 4），同步也讀同一個 Secret，所以設一次就好。
+同步時把「誰遛的」每個名字用這把密鑰換成一串代號，寫進 `data/dogs.json`（`walkers`）和 `data/walks.json`，名字本身不會出現在網站或 repo。網站上的「我溜過」靠同一把密鑰（放在 Cloudflare Worker）認出每個志工，所以**兩邊要設同一串**，Worker 那邊用的是 GitHub Secret `WALKER_KEY`，部署時自動帶上去（`docs/setup/CLOUDFLARE_SETUP.md` 步驟 4），同步也讀同一個 Secret，所以設一次就好。
 
 - 第一次設定後的同步，會把舊紀錄補上代號：每隻狗目前的最後一次（試算表還看得到是誰），和標了 `mine` 的舊紀錄（補 `MY_NAME` 第一個寫法的代號）。其他志工以前的紀錄沒存名字，補不回來。
 - 密鑰設定後**不要換**，換了舊紀錄的代號就對不上。

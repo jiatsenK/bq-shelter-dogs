@@ -1,15 +1,15 @@
 // 網站＋API 合在一起的 Cloudflare Worker（#125）
-// - 網頁、data/ 是靜態檔案（assets），API 在 /api 底下（worker/src/index.js）；照片放 R2（#130），repo 裡的舊照片當備援
+// - 網頁是靜態檔案（assets，只放 public/），API 在 /api 底下（worker/src/index.js）；照片放 R2（#130），repo 裡的舊照片當備援
 // - main 有推送就由 GitHub Action 自動部署（.github/workflows/deploy-cloudflare.yml），不用手動貼程式
-// - Secret（GITHUB_TOKEN、NOTES_PASSCODE、WALKER_KEY）不寫在這裡：設在 GitHub Secrets，部署時一起帶上去，步驟見 docs/CLOUDFLARE_SETUP.md
-// - 不公開的檔案列在 .assetsignore
+// - Secret（GITHUB_TOKEN、NOTES_PASSCODE、WALKER_KEY）不寫在這裡：設在 GitHub Secrets，部署時一起帶上去，步驟見 docs/setup/CLOUDFLARE_SETUP.md
+// - 只有 public/ 會放上網站，其他資料夾都不公開（#276 起不再需要 .assetsignore）
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "bq-shelter-dogs",
   "main": "worker/src/index.js",
   "compatibility_date": "2026-09-01",
   "assets": {
-    "directory": ".",
+    "directory": "./public",
     "binding": "ASSETS",
     // 照片放 R2（#130）：照片、dogs.json（照片版本號）也先經過 Worker，Worker 讀 R2、讀不到再給 repo 裡的舊檔（相簿 K 2026-10-09 拿掉）
     "run_worker_first": ["/api/*", "/api", "/photos/*"]
