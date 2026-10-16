@@ -35,7 +35,7 @@ export async function writeBeacon(root, token) {
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const token = (process.env.CF_ANALYTICS_TOKEN || '').trim();
   if (!token) {
-    console.log('還沒設 GitHub Secret CF_ANALYTICS_TOKEN，這次不放瀏覽統計（步驟見 docs/CLOUDFLARE_SETUP.md）。');
+    console.log('還沒設 GitHub Secret CF_ANALYTICS_TOKEN，這次不放瀏覽統計（步驟見 docs/setup/CLOUDFLARE_SETUP.md）。');
   } else if (!isBeaconToken(token)) {
     console.log('CF_ANALYTICS_TOKEN 格式不對（應該是 32 個英數字），這次不放瀏覽統計。');
   } else {

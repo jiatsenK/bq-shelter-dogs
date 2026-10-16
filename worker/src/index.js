@@ -583,7 +583,7 @@ async function restoreTrash(request, env, origin, trashId) {
 
 async function admin(request, env, origin, path) {
   const cfg = config(env);
-  if (!r2.r2On(env)) return fail(503, '還沒接上 R2（照片空間），請照 docs/CLOUDFLARE_SETUP.md 設定', origin, { code: 'off' });
+  if (!r2.r2On(env)) return fail(503, '還沒接上 R2（照片空間），請照 docs/setup/CLOUDFLARE_SETUP.md 設定', origin, { code: 'off' });
   if (env.PREVIEW && request.method !== 'GET') return fail(403, '這是預覽版，不能存，正式資料不受影響。要改請到正式網址', origin);
   const denied = await checkAdmin(request, cfg, origin);
   if (denied) return denied;
