@@ -506,3 +506,18 @@ test('#252 備註已退役：新舊路徑都不讀寫 GitHub，即使有通關�
   }
   assert.equal(calls.length, 0);
 });
+
+test('#281 POST /walk 加備註、新增異動紀錄：轉給小程式；沒名字、沒內容、換行、多隻狗都擋', async () => {
+  const calls = fakeScript();
+  const note = await send(postWalk({ action: 'note', walker: ' 志工我 ', text: ' 很乖 ', dogs: [{ id: '9001', name: '測試甲' }] }), SHEET_ENV);
+  assert.equal(note.status, 200);
+  assert.deepEqual(calls[0].body, { key: 'sheet-key', action: 'note', dogs: [{ id: '9001', name: '測試甲' }], walker: '志工我', text: '很乖' });
+  const log = await send(postWalk({ action: 'log', walker: '志工我', text: '移籠', dogs: [{ id: '1', name: '甲' }] }), SHEET_ENV);
+  assert.equal(log.status, 200);
+  assert.deepEqual(calls[1].body, { key: 'sheet-key', action: 'log', dogs: [], walker: '志工我', text: '移籠' });
+  const ok = { action: 'note', walker: '我', text: '乖', dogs: [{ id: '1', name: '甲' }] };
+  for (const bad of [{ walker: '' }, { text: ' ' }, { text: 'a\nb' }, { text: 'x'.repeat(201) }, { dogs: [{ id: '1', name: '甲' }, { id: '2', name: '乙' }] }]) {
+    assert.equal((await send(postWalk({ ...ok, ...bad }, { ip: '7.7.7.' + calls.length }), SHEET_ENV)).status, 400, JSON.stringify(bad));
+  }
+  assert.equal(calls.length, 2);
+});
