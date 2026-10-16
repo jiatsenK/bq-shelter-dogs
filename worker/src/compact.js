@@ -2,7 +2,8 @@ import { identitiesForCodes } from './identity.js';
 // 精簡 D1（v3_ 表，#245／#247）：網站要的狗清單從這裡讀，形狀跟原本的 data/dogs.json 一樣。
 // 表結構見 db/compact-schema.sql、docs/COMPACT_D1.md
 
-// 主清單欄位 → dogs.json 欄位；formerIds 只在有舊編號時出現（跟同步寫出來的 JSON 一樣）
+// 主清單欄位 → dogs.json 欄位；formerIds 只在有舊編號時出現（跟同步寫出來的 JSON 一樣）。
+// 舊編號直接讀 v3_dog_numbers（同一隻狗的其他編號，#289 網站補了馬上看得到）
 const MAIN_FIELDS = [
   ['cage', 'cage'], ['id', 'number'], ['name', 'name'], ['walkedDate', 'walked_date'], ['covered', 'covered'],
   ['myWalked', 'my_walked'], ['note', 'note'], ['sex', 'sex'], ['intro', 'd1_intro'], ['myWalkedDate', 'my_walked_date'],
@@ -15,7 +16,7 @@ export async function readDogsPayload(db) {
   const [main, walkers, former, groups, notes] = await db.batch([
     db.prepare("SELECT m.*, COALESCE(i.intro, '') AS d1_intro FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) ORDER BY m.row_index"),
     db.prepare('SELECT row_index, walker_code FROM v3_sheet_main_walkers ORDER BY row_index, position'),
-    db.prepare('SELECT row_index, number FROM v3_sheet_former_numbers ORDER BY row_index, position'),
+    db.prepare("SELECT m.row_index, n.number FROM v3_sheet_main m JOIN v3_dog_numbers n USING(dog_id) WHERE n.number <> m.number ORDER BY m.row_index, n.number"),
     db.prepare('SELECT column_index, name FROM v3_sheet_groups ORDER BY column_index, row_index'),
     db.prepare('SELECT label, text FROM v3_sheet_changes ORDER BY row_index'),
   ]);
@@ -176,6 +177,35 @@ export async function saveIntro(db, number, text) {
   if (text) await db.prepare('INSERT INTO v3_intros(dog_id,intro) VALUES(?,?) ON CONFLICT(dog_id) DO UPDATE SET intro=excluded.intro').bind(dogId, text).run();
   else await db.prepare('DELETE FROM v3_intros WHERE dog_id=?').bind(dogId).run();
   return { dogId, before };
+}
+
+// 舊編號（#289，ADR 0005）：誰都能補、都能刪；編輯紀錄由 Worker 記（ADR 0004）。
+// 回 { ok: true, dogId } 或 { status, error }；number 是這隻狗現在（或任何一個）認得的編號
+export async function addFormerNumber(db, number, former) {
+  const ids = await dogIdsFor(db, [number, former]);
+  const dogId = ids.get(number);
+  if (!dogId) return { status: 404, error: '找不到這個編號的狗' };
+  if (ids.has(former)) {
+    if (ids.get(former) === dogId) return { status: 409, error: '這隻狗已經有這個編號了' };
+    const other = await db.prepare('SELECT name FROM v3_dogs WHERE dog_id=?').bind(ids.get(former)).first('name');
+    return { status: 409, error: `${former} 已經是另一隻狗（${other || '沒有名字'}）的編號，要合併請找 K` };
+  }
+  await db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(former, dogId).run();
+  return { ok: true, dogId };
+}
+
+// 刪舊編號：只能刪這隻狗的，不能刪主清單上現在用的編號
+export async function removeFormerNumber(db, number, former) {
+  const ids = await dogIdsFor(db, [number, former]);
+  const dogId = ids.get(number);
+  if (!dogId) return { status: 404, error: '找不到這個編號的狗' };
+  if (ids.get(former) !== dogId) return { status: 404, error: '這隻狗沒有這個舊編號' };
+  if (await db.prepare('SELECT 1 FROM v3_sheet_main WHERE number=?').bind(former).first()) return { status: 409, error: '這是主清單上現在用的編號，不能刪' };
+  await db.batch([
+    db.prepare('DELETE FROM v3_sheet_former_numbers WHERE number=?').bind(former),
+    db.prepare('DELETE FROM v3_dog_numbers WHERE number=?').bind(former),
+  ]);
+  return { ok: true, dogId };
 }
 
 // 離所紀錄（#259）：形狀跟原本的 data/departures.json 的 departures 一樣，依日期新到舊、同一天依編號

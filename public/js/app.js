@@ -38,6 +38,7 @@ let detailTrail = []; // 在詳細資訊裡點「可以一起溜」換過的狗�
 let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, url, phase: 'preview'|'uploading'|'error', error }
 let restMap = {}; // 休養中：編號 → { until: 'YYYY-MM-DD', reason }
 let detailWalksOpen = false; // 詳細資訊的溜狗紀錄有沒有展開每一天（K 2026-10-10 減法：預設只有一行字）
+let formerEdit = null; // 詳細資訊正在補的舊編號（#289）：{ dog, text, phase: 'edit'|'saving'|'error', error }
 let introEdit = null; // 詳細資訊正在改的入所介紹（K 2026-10-10 補資料）：{ dog, text, phase: 'edit'|'saving'|'error', error }
 const introOverrides = {}; // 編號 → 剛存好的介紹：這台電腦不用重新讀就看到（#250 起存 D1，其他人重新整理就看得到）
 let restEdit = null; // 詳細資訊正在改的休養設定：{ dog, until, reason, phase: 'edit'|'saving'|'error', error }
@@ -760,12 +761,91 @@ function idDate(id) {
   return m ? makeDate(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)) : null;
 }
 
-// 再次入所（#75）：詳細資訊編號下面標「第 N 次入所・首次 YYYY/M/D（舊編號 …）」
+// 入所日（ADR 0005）：這隻狗所有編號（現在的和舊編號）裡最舊那個的前 8 碼；看不出來回 null。
+// 詳細資訊、分析頁都用這個，圖鑑（cards.js）照同一個規則
+function firstIntake(dog) {
+  const dates = [dog.id, ...(dog.formerIds || [])].map(idDate).filter(Boolean);
+  return dates.length ? dates.reduce((a, b) => (b < a ? b : a)) : null;
+}
+const ymdOf = d => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+
+// 舊編號（#75、#289）：編號下面一行「舊編號 …・最早入所 YYYY/M/D」，每個舊編號旁邊一個 ✕ 可以刪；
+// 換新編號就是再入所（GLOSSARY），但畫面不標第幾次入所（K 2026-10-16）。
+// 最後一個「補舊編號」，點了原地變輸入框。誰都能補、都能刪（ADR 0005），要先選好名字（ADR 0004），離所的狗只看不改
 function reentryLine(dog) {
-  if (!dog.formerIds || !dog.formerIds.length) return '';
-  const first = dog.formerIds.map(idDate).filter(Boolean).sort((a, b) => a - b)[0];
-  const firstText = first ? `・首次 ${first.getFullYear()}/${first.getMonth() + 1}/${first.getDate()}` : '';
-  return `<div class="reentry"><span>第 ${dog.formerIds.length + 1} 次入所${firstText}</span> <span>（舊編號 ${dog.formerIds.map(esc).join('、')}）</span></div>`;
+  const former = dog.formerIds || [];
+  const can = !!(dog.id && UPLOAD_URL) && !dog.departure;
+  const first = firstIntake(dog);
+  const list = former.map(f => `<span class="former-num">${esc(f)}${can ? `<button type="button" class="former-del" data-former-del="${esc(f)}" aria-label="刪掉舊編號 ${esc(f)}">✕</button>` : ''}</span>`).join('');
+  const e = formerEdit && formerEdit.dog === dog ? formerEdit : null;
+  if (e) {
+    const busy = e.phase === 'saving';
+    return `<div class="reentry">${former.length ? `<span>舊編號</span>${list}` : ''}
+      <form class="former-form" id="formerForm" autocomplete="off">
+        <label for="formerText">補舊編號</label>
+        <input id="formerText" inputmode="numeric" maxlength="12" placeholder="例：2015081801" value="${esc(e.text)}"${busy ? ' disabled' : ''}>
+        <button type="submit" class="former-save"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存'}</button>
+        ${busy ? '' : '<button type="button" class="former-cancel" id="formerCancel">取消</button>'}
+        <small class="former-hint">轉所、退回或換號前的編號，前 8 碼是入所日期。誰都能補，補錯了按 ✕ 刪掉。</small>
+        ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
+      </form></div>`;
+  }
+  if (!former.length && !can) return '';
+  return `<div class="reentry">${former.length ? `<span>舊編號</span>${list}${first ? `<span>・最早入所 ${ymdOf(first)}</span>` : ''}` : ''}${can ? `<button type="button" class="former-add" id="formerAdd">＋補舊編號</button>` : ''}</div>`;
+}
+
+function openFormerEdit(dog) {
+  if (!dog || !dog.id || !UPLOAD_URL) return;
+  formerEdit = { dog, text: '', phase: 'edit', error: '' };
+  renderDetail();
+  const box = document.getElementById('formerText');
+  if (box) box.focus({ preventScroll: true });
+}
+
+// 補或刪舊編號（method 由呼叫的人給）；回空字串是成功，不然是要給人看的原因
+async function sendFormer(dog, former, method) {
+  try {
+    const res = await fetch(`${UPLOAD_URL}/former/${encodeURIComponent(dog.id)}`, {
+      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ editor: editorName(), former }),
+    });
+    const out = await res.json().catch(() => null);
+    if (!res.ok || !out || !out.ok) return (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
+    return '';
+  } catch (err) {
+    return '沒有存進去，請確認網路後再試';
+  }
+}
+
+// 存好就改這台的狗資料，天數、排序馬上重算
+async function saveFormer() {
+  const e = formerEdit;
+  if (!e || e.phase === 'saving') return;
+  const former = e.text.replace(/\s+/g, '');
+  if (!/^\d{10}$/.test(former) || !idDate(former)) { e.phase = 'error'; e.error = '舊編號要是 10 碼數字，前 8 碼是入所日期'; renderDetail(); return; }
+  if (!editorName()) { e.phase = 'error'; e.error = NEED_EDITOR; renderDetail(); return; }
+  e.phase = 'saving'; e.error = ''; renderDetail();
+  const error = await sendFormer(e.dog, former, 'POST');
+  if (formerEdit !== e) return;
+  if (error) {
+    e.phase = 'error'; e.error = error; renderDetail();
+    const b = document.getElementById('formerText');
+    if (b) b.focus({ preventScroll: true });
+    return;
+  }
+  e.dog.formerIds = [...(e.dog.formerIds || []), former].sort();
+  formerEdit = null;
+  render(); renderDetail();
+  showToast(`${e.dog.name} 補上舊編號 ${former}，入所日改從 ${ymdOf(firstIntake(e.dog))} 算`);
+}
+
+async function removeFormer(dog, former) {
+  if (!editorName()) { showToast(NEED_EDITOR); return; }
+  if (!confirm(`刪掉 ${dog.name} 的舊編號 ${former}？`)) return;
+  const error = await sendFormer(dog, former, 'DELETE');
+  if (error) { showToast(error); return; }
+  dog.formerIds = (dog.formerIds || []).filter(f => f !== former);
+  render(); if (detailDog === dog) renderDetail();
+  showToast(`已刪掉 ${dog.name} 的舊編號 ${former}`);
 }
 
 // 性別：狗卡 frontmatter 有寫 sex 才顯示 ♂／♀，沒寫就留空位；♂ 藍色、♀ 紅色
@@ -1849,7 +1929,7 @@ function departedDetailHtml(dog, today) {
     <div class="detail-bar"><button type="button" class="bar-btn" id="detailClose">關閉</button></div>
   `;
   function since(d) {
-    const s = idDate(d.id);
+    const s = firstIntake(d);
     return s ? `<span class="badge plain">入所 ${s.getFullYear()}/${s.getMonth() + 1}</span>` : '';
   }
 }
@@ -1932,7 +2012,7 @@ async function editWalkers(dog, names, text) {
 
 // 詳細資訊狗名下面的標籤：籠位、入所年月（天數標籤是 statusBadge）
 function detailChips(dog) {
-  const since = idDate(dog.id);
+  const since = firstIntake(dog);
   const home = dog.homeCage ? `<small>暫住，原本 ${esc(dog.homeCage)}</small>` : '';
   // K 2026-10-09：詳細資訊的籠位也要能點開平面圖（找得到位置的籠位才做成按鈕）
   const where = typeof whereKnown === 'function' && whereKnown(dog);
@@ -2423,6 +2503,9 @@ const DETAIL_CLICKS = [
   ['#photoPick', () => pickPhotoFile()],
   ['#restEdit', () => openRestEdit(detailDog)],
   ['#introEdit', () => openIntroEdit(detailDog)],
+  ['#formerAdd', () => openFormerEdit(detailDog)],
+  ['#formerCancel', () => { formerEdit = null; renderDetail(); const b = document.getElementById('formerAdd'); if (b) b.focus({ preventScroll: true }); }],
+  ['[data-former-del]', el => removeFormer(detailDog, el.dataset.formerDel)],
   ['#walksToggle', () => { detailWalksOpen = !detailWalksOpen; renderDetail(); const b = document.getElementById('walksToggle'); if (b) b.focus({ preventScroll: true }); }],
   ['#introCancel', () => { introEdit = null; renderDetail(); const b = document.getElementById('introEdit'); if (b) b.focus({ preventScroll: true }); }],
   ['#restEnd', () => saveRest(true)],
@@ -2463,12 +2546,14 @@ function wireDetail(box) {
       if (c) { const n = [...introEdit.text].length; c.textContent = `${n} / ${INTRO_MAX} 字`; c.classList.toggle('over', n > INTRO_MAX); }
       return;
     }
+    if (formerEdit && e.target.id === 'formerText') { formerEdit.text = e.target.value; return; }
     if (!restEdit) return;
     if (e.target.id === 'restReason') restEdit.reason = e.target.value;
     else if (e.target.id === 'restUntil') restEdit.until = e.target.value;
   });
   box.addEventListener('submit', e => {
     if (e.target.id === 'introForm') { e.preventDefault(); saveIntro(); return; }
+    if (e.target.id === 'formerForm') { e.preventDefault(); saveFormer(); return; }
     if (e.target.id !== 'restForm') return;
     e.preventDefault();
     saveRest();
@@ -2530,6 +2615,7 @@ function showDetail(dog, remember = true) {
     detailWalksOpen = false;
     if (!restEdit || restEdit.phase !== 'saving') restEdit = null;
     if (!introEdit || introEdit.phase !== 'saving') introEdit = null;
+    if (!formerEdit || formerEdit.phase !== 'saving') formerEdit = null;
     if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
   }
   detailDog = dog;
@@ -2551,6 +2637,7 @@ function hideDetail() {
   pickedBuddies.clear();
   if (!restEdit || restEdit.phase !== 'saving') restEdit = null;
   if (!introEdit || introEdit.phase !== 'saving') introEdit = null;
+  if (!formerEdit || formerEdit.phase !== 'saving') formerEdit = null;
   if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
   document.getElementById('detailBackdrop').hidden = true;
   document.getElementById('detail').innerHTML = '';
