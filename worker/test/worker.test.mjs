@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
+import { fakeD1 } from './fakes.mjs';
 
 const { resetState, allowUpload, isJpeg, MAX_BYTES } = worker.testing;
 
@@ -210,15 +211,13 @@ test('#95 首頁狀態顯示代號密鑰設了沒', async () => {
   assert.equal((await send(new Request('https://x.workers.dev/'), ENV)).body.walkerKey, '未設定');
 });
 
-test('定時叫同步：POST workflow dispatch（main），GitHub 不是 204 或沒 token 就丟錯', async () => {
+test('叫同步：POST workflow dispatch（main），GitHub 不是 204 或沒 token 就丟錯', async () => {
   const calls = [];
   globalThis.fetch = async (url, init = {}) => {
     calls.push({ path: new URL(url).pathname, method: init.method, headers: init.headers, body: JSON.parse(init.body) });
     return new Response(null, { status: 204 });
   };
-  const waits = [];
-  await worker.scheduled({}, ENV, { waitUntil: p => waits.push(p) });
-  assert.equal(await waits[0], 204);
+  assert.equal(await worker.testing.triggerSync(ENV), 204);
   assert.deepEqual(calls.map(c => [c.method, c.path]), [['POST', '/repos/jiatsenK/bq-shelter-dogs/actions/workflows/sync-sheet.yml/dispatches']]);
   assert.deepEqual(calls[0].body, { ref: 'main' });
   assert.equal(calls[0].headers.Authorization, 'Bearer test-token');
@@ -226,6 +225,54 @@ test('定時叫同步：POST workflow dispatch（main），GitHub 不是 204 或
   globalThis.fetch = async () => new Response('{}', { status: 403 });
   await assert.rejects(worker.testing.triggerSync(ENV), /GitHub 403/);
   await assert.rejects(worker.testing.triggerSync({}), /GITHUB_TOKEN/);
+});
+
+// ADR 0008：Cron 每 10 分鐘看一次，有改才同步；台灣 6:30 保險同步一次
+test('Cron：沒改不叫 GitHub；Apps Script 通知有改後下一格同步一次；6:30 保險同步', async () => {
+  const env = { GITHUB_TOKEN: 'test-token', SHEET_NOTIFY_KEY: 'nk', DB: fakeD1() };
+  const dispatches = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const u = new URL(url);
+    if (u.pathname.endsWith('/dispatches')) { dispatches.push(u.pathname); return new Response(null, { status: 204 }); }
+    return new Response('{}', { status: 404 });
+  };
+  const tick = async iso => { const waits = []; await worker.scheduled({ scheduledTime: new Date(iso).getTime() }, env, { waitUntil: p => waits.push(p) }); await Promise.all(waits); };
+  const notify = (key = 'nk') => send(new Request('https://x.workers.dev/api/sheet-changed', { method: 'POST', headers: { 'X-Notify-Key': key } }), env);
+
+  await tick('2026-10-16T02:00:00Z');
+  assert.equal(dispatches.length, 0);
+  assert.equal((await notify('wrong')).status, 403);
+  assert.equal((await notify()).status, 200);
+  assert.equal((await notify()).status, 200);
+  await tick('2026-10-16T02:10:00Z');
+  await tick('2026-10-16T02:20:00Z');
+  assert.deepEqual(dispatches, ['/repos/jiatsenK/bq-shelter-dogs/actions/workflows/sync-sheet.yml/dispatches']);
+  await tick('2026-10-16T22:30:00Z');
+  assert.equal(dispatches.length, 2);
+  // 沒設專用密碼就不收；預覽版也不收
+  assert.equal((await send(new Request('https://x.workers.dev/api/sheet-changed', { method: 'POST', headers: { 'X-Notify-Key': '' } }), { ...env, SHEET_NOTIFY_KEY: '' })).status, 503);
+  assert.equal((await send(new Request('https://x.workers.dev/api/sheet-changed', { method: 'POST', headers: { 'X-Notify-Key': 'nk' } }), { ...env, PREVIEW: '1' })).status, 403);
+});
+
+test('POST /sync：試算表沒變就不叫 GitHub，回 unchanged；變了才叫；GitHub 失敗下次還會再叫', async () => {
+  const env = { ...ENV, SHEET_ID: 'sheet', DB: fakeD1() };
+  let content = 'v1', ghStatus = 204;
+  const dispatches = [];
+  globalThis.fetch = async (url, init = {}) => {
+    const u = new URL(url);
+    if (u.hostname === 'docs.google.com') return new Response(content);
+    dispatches.push(u.pathname);
+    return new Response(null, { status: ghStatus });
+  };
+  const press = ip => send(new Request('https://x.workers.dev/sync', { method: 'POST', headers: { Origin: ORIGIN, 'CF-Connecting-IP': ip } }), env);
+  assert.deepEqual((await press('1.0.0.1')).body, { ok: true });
+  assert.deepEqual((await press('1.0.0.2')).body, { ok: true, unchanged: true });
+  assert.equal(dispatches.length, 1);
+  content = 'v2'; ghStatus = 403;
+  assert.equal((await press('1.0.0.3')).status, 502);
+  ghStatus = 204;
+  assert.deepEqual((await press('1.0.0.4')).body, { ok: true });
+  assert.equal(dispatches.length, 3);
 });
 
 test('POST /sync：網站按「更新」叫同步；同一個人 2 分鐘 1 次；GitHub 失敗回 502；別的網站、GET 擋掉', async () => {

@@ -71,3 +71,24 @@
 6. 另一人更改同一筆後再送修改／復原，應提示已被修改並保留對方資料。
 
 新增一起溜的人採追加；修改採原始名單快照比對。修改的復原回到該次編輯前，新增人員的復原保留原登記前的快照。持續入口與即時紀錄存於本機，限今天及這支手機；歷史資料仍由排程同步。預覽站禁止試算表寫入，因此上述真實寫入驗收要在正式部署後進行。
+
+## 6. 試算表有改時通知網站（ADR 0008，#305）
+
+網站不再每 30 分鐘同步一次，改成：有人**直接在試算表畫面**改了東西，Apps Script 通知 Worker，Worker 每 10 分鐘看一次、有改才同步（一天最多 30 次）；另外每天台灣 6:30 保險同步一次。網站上按的（溜了、狗群等）本來就馬上進資料庫，不會觸發通知。
+
+通知用一組**專用密碼**，只能說「試算表有改」，不是 `WALKER_KEY`。K 自己設定，不要給別人。
+
+1. **產生密碼**（PowerShell，複製印出來的那串）：
+   ```powershell
+   -join ((48..57) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
+   ```
+2. **交給 Worker**：GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**，名稱 `SHEET_NOTIFY_KEY`，貼上密碼。下次部署（推到 main 或手動跑「部署到 Cloudflare」）會一起帶上去。
+   確認：打開 `https://bq-shelter-dogs.jiatsen-k.workers.dev/api/sheet-changed`，看到「試算表通知只能用 POST」就是設好了；看到「還沒設定試算表通知」就是還沒帶上去。
+3. **更新小程式**：照「之後要改小程式」把最新的 `apps-script/sheet-write.gs` 整份貼上、存檔（這次多了 `notifyWorker`，不用重新部署網頁應用程式）。
+4. **指令碼屬性**：專案設定 → 指令碼屬性，新增兩個：
+   - `NOTIFY_URL`：`https://bq-shelter-dogs.jiatsen-k.workers.dev/api/sheet-changed`
+   - `NOTIFY_KEY`：第 1 步的密碼
+5. **觸發器**：左邊鬧鐘圖示「觸發條件」→ 右下 **新增觸發條件**：函式選 `notifyWorker`、活動來源「試算表」、活動類型「變更時」→ 儲存，照畫面授權（會多要一個「連線到外部服務」的權限）。
+6. **驗收**：在試算表隨便改一格再改回來，等 10 分鐘左右，GitHub repo 的 **Actions** → **同步試算表** 應該多一筆 `workflow_dispatch` 的綠勾。
+
+沒做完這幾步也不會壞：網站照樣每天 6:30 同步，按「更新」時試算表有變也會同步。

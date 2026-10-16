@@ -6,9 +6,13 @@
 # - 還沒設 Cloudflare Secret、或是從別人 fork 開的 PR（拿不到 Secret）就跳過
 name: PR 預覽網址
 
+# 只改文件（docs/、根目錄的 .md）不做預覽（#305）
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
 
 permissions:
   contents: read

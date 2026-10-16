@@ -11,7 +11,7 @@ test('精簡表可重跑，舊表和資料保持原樣', async t => {
   await migrateCompactDatabase(db);
   assert.deepEqual((await db.prepare('SELECT * FROM dogs').all()).results, [{ key: 'old', name: '舊狗' }]);
   const tables = (await db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'v3_%' ORDER BY name").all()).results.map(r => r.name);
-  assert.deepEqual(tables, ['v3_card_opened', 'v3_departure_items', 'v3_departures', 'v3_dog_numbers', 'v3_dogs', 'v3_edit_log', 'v3_favorites', 'v3_identity_guard', 'v3_identity_names', 'v3_identity_operations', 'v3_identity_redirects', 'v3_identity_revision', 'v3_intros', 'v3_photos', 'v3_rest', 'v3_sheet_changes', 'v3_sheet_departed', 'v3_sheet_former_numbers', 'v3_sheet_group_labels', 'v3_sheet_groups', 'v3_sheet_main', 'v3_sheet_main_walkers', 'v3_today_walks', 'v3_volunteer_cards', 'v3_volunteer_codes', 'v3_volunteer_favorites', 'v3_volunteers', 'v3_walks']);
+  assert.deepEqual(tables, ['v3_card_opened', 'v3_departure_items', 'v3_departures', 'v3_dog_numbers', 'v3_dogs', 'v3_edit_log', 'v3_favorites', 'v3_identity_guard', 'v3_identity_names', 'v3_identity_operations', 'v3_identity_redirects', 'v3_identity_revision', 'v3_intros', 'v3_photos', 'v3_rest', 'v3_sheet_changes', 'v3_sheet_departed', 'v3_sheet_former_numbers', 'v3_sheet_group_labels', 'v3_sheet_groups', 'v3_sheet_main', 'v3_sheet_main_walkers', 'v3_sync_state', 'v3_today_walks', 'v3_volunteer_cards', 'v3_volunteer_codes', 'v3_volunteer_favorites', 'v3_volunteers', 'v3_walks']);
   await db.prepare("INSERT INTO v3_dogs(name) VALUES('狗')").run();
   const id = await db.prepare('SELECT dog_id FROM v3_dogs').first('dog_id');
   assert.match(id, /^[a-f0-9]{32}$/);

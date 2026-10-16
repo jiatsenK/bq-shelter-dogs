@@ -2,6 +2,7 @@ import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitie
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
+import { markChanged, planTick, refreshPlan, rememberSignature, sheetSignature } from './sync-plan.js';
 import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache } from './today.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
 import { readDogsPayload, compactStatus, dogIdsFor, readFavorites, saveFavorite, openedBooks, readRest, saveRest, saveIntro, addFormerNumber, removeFormerNumber, readWalks, readDepartures, readMainNames } from './compact.js';
@@ -468,12 +469,31 @@ async function queueThumbs(env) {
   });
 }
 
-// Cron 順便做：清掉超過 30 天的 Trash；有照片還沒縮圖（例如上次叫 Action 失敗）就再叫一次
+// 每天保險同步時順便做：清掉超過 30 天的 Trash。縮圖只在上傳時叫一次（#305），沒縮圖的網站顯示原圖
 async function maintenance(env, now = Date.now()) {
-  const purged = await r2.purgeTrash(env, now);
-  const pending = await r2.pendingThumbs(env);
-  if (pending.length) await queueThumbs(env);
-  return { purged, pending: pending.length };
+  return { purged: await r2.purgeTrash(env, now) };
+}
+
+// Cron 每 10 分鐘一次（ADR 0008）：有改才叫同步，台灣 6:30 保險同步；叫完記下試算表指紋，之後按「更新」沒變就不用再叫
+async function syncTick(env, now) {
+  if (!env || !env.DB) return 'none';
+  const plan = await planTick(env.DB, now);
+  if (plan !== 'daily' && plan !== 'changed') return plan;
+  await triggerSync(env);
+  const cfg = config(env);
+  if (cfg.sheetId) await sheetSignature(cfg.sheetId).then(sig => rememberSignature(env.DB, sig)).catch(() => {});
+  return plan;
+}
+
+// Apps Script 通知「試算表有人手動改了」（ADR 0008）：只記下有改，下一次 Cron 再同步。用專用密碼 SHEET_NOTIFY_KEY，不用 WALKER_KEY
+async function sheetChanged(request, env) {
+  const key = env && env.SHEET_NOTIFY_KEY ? String(env.SHEET_NOTIFY_KEY) : '';
+  if (!key || !env.DB) return fail(503, '還沒設定試算表通知', '');
+  if (env.PREVIEW) return fail(403, '這是預覽版，不收試算表通知', '');
+  if (request.method !== 'POST') return fail(405, '試算表通知只能用 POST', '');
+  if (request.headers.get('X-Notify-Key') !== key) return fail(403, '通知密碼不對', '');
+  await markChanged(env.DB);
+  return reply(200, { ok: true }, '');
 }
 
 const baseOf = request => new URL(request.url).origin;
@@ -990,8 +1010,10 @@ export default {
 
   // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 wrangler.jsonc 的 triggers）
   async scheduled(event, env, ctx) {
-    ctx.waitUntil(triggerSync(env));
-    if (r2.r2On(env)) ctx.waitUntil(maintenance(env));
+    const now = event && event.scheduledTime ? event.scheduledTime : Date.now();
+    ctx.waitUntil(syncTick(env, now).then(plan => {
+      if (plan === 'daily' && r2.r2On(env)) return maintenance(env, now);
+    }));
   },
 
   async fetch(request, env, ctx) {
@@ -1045,6 +1067,14 @@ export default {
         return await admin(request, env, allowed, path);
       } catch (e) {
         return fail(500, '管理功能發生錯誤', allowed);
+      }
+    }
+    // Apps Script 通知試算表有改（ADR 0008）：沒有網站來源，用專用密碼驗證
+    if (path === '/sheet-changed') {
+      try {
+        return await sheetChanged(request, env);
+      } catch (e) {
+        return fail(500, '記錄試算表通知發生錯誤', '');
       }
     }
     // 其他網站送來的一律不收（瀏覽器會擋掉沒有 CORS 回應的要求）
@@ -1200,10 +1230,16 @@ export default {
       if (request.method !== 'POST') return fail(405, '更新只能用 POST /sync', allowed);
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
       if (!allow(`sync:${ip}`, SYNC_LIMITS, Date.now())) return fail(429, '剛剛已經在更新了，請稍等一下', allowed);
+      // ADR 0008：先比對試算表指紋，沒變就不叫 GitHub；沒接 D1 或沒設試算表 ID 就照舊直接叫
+      if (env && env.DB && cfg.sheetId) {
+        if (await refreshPlan(env.DB, () => sheetSignature(cfg.sheetId)).catch(() => 'sync') === 'same') return reply(200, { ok: true, unchanged: true }, allowed);
+      }
       try {
         await triggerSync(env);
         return reply(200, { ok: true }, allowed);
       } catch (e) {
+        // 這次沒叫成，忘掉剛記的指紋，下次按「更新」才會再叫
+        if (env && env.DB && cfg.sheetId) await rememberSignature(env.DB, '').catch(() => {});
         return fail(502, e.message || '叫同步失敗', allowed);
       }
     }
