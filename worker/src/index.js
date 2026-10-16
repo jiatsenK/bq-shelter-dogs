@@ -1,4 +1,5 @@
 import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitiesForCodes, IdentityError } from './identity.js';
+import { cleanIntakeEvents } from './intake.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
@@ -387,7 +388,7 @@ async function putIntro(request, env, origin) {
   const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
   if (type !== 'application/json') return fail(415, '格式不對', origin);
   const raw = await request.text();
-  if (new TextEncoder().encode(raw).length > INTRO_MAX_CHARS * 4 + 512) return fail(413, '介紹太長', origin);
+  if (new TextEncoder().encode(raw).length > 16000) return fail(413, '介紹太長', origin);
   let input;
   try {
     input = JSON.parse(raw);
@@ -399,12 +400,16 @@ async function putIntro(request, env, origin) {
   const text = cleanNote(input && input.text);
   if (text === null) return fail(400, '格式不對', origin);
   if ([...text].length > INTRO_MAX_CHARS) return fail(413, `介紹最多 ${INTRO_MAX_CHARS} 字`, origin);
+  const hasEvents = Object.prototype.hasOwnProperty.call(input, 'events');
+  const events = hasEvents ? cleanIntakeEvents(input.events) : undefined;
+  if (hasEvents && !events) return fail(400, '事件格式不對：最多 30 列、事件合計最多 1000 字，日期請用 YYYY-MM-DD 或留空', origin);
 
   if (!allow(`intro:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
-  const saved = await saveIntro(env.DB, id, text);
+  const saved = await saveIntro(env.DB, id, text, events);
   if (!saved) return fail(404, '找不到這個編號的狗狗', origin);
-  await logEdit(env.DB, { editor, kind: 'intro', dogId: saved.dogId, dogNumber: id, before: saved.before, after: text }, now);
-  return reply(200, { ok: true, id, intro: text, commit: null }, origin);
+  if (saved.invalid) return fail(400, saved.invalid, origin);
+  await logEdit(env.DB, { editor, kind: 'intro', dogId: saved.dogId, dogNumber: id, before: saved.before, after: hasEvents ? { text, events } : text }, now);
+  return reply(200, { ok: true, id, intro: text, ...(hasEvents ? { intakeEvents: events } : {}), commit: null }, origin);
 }
 
 // ---- 舊編號（#289，ADR 0005）：POST／DELETE /former/{編號}，body { editor, former }，誰都能改，不用通關碼；記編輯紀錄（ADR 0004） ----
