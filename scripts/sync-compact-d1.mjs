@@ -5,7 +5,7 @@
 // 溜狗紀錄和離所是累積的，以 D1 上一次的內容為基準往上加。
 // 休養、介紹、開卡、照片由網站直接寫 D1（#249、#250），這裡不碰。
 import { readFile, writeFile } from 'node:fs/promises';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -121,7 +121,23 @@ export async function buildSyncSql(seed, source) {
   } finally { db.close(); }
 }
 
-const wrangler = args => execFileSync('npx', ['--yes', 'wrangler@4', 'd1', 'execute', 'bq-shelter-dogs', '--remote', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 64 * 1024 * 1024 });
+// 11 張表同時讀：每叫一次 npx wrangler 要 3 秒左右，一張一張讀會讓頁首「更新」多等半分鐘
+// 第一張先單獨讀，讓 npx 把 wrangler 下載好，其餘再一起叫，免得同時下載互搶快取
+// 任何一張表讀不到就整個停：當成空的會把累積的溜狗紀錄、離所整份換掉
+export async function readSeed(query) {
+  const [first, ...rest] = Object.keys(SEED_TABLES);
+  const results = [await query(SEED_TABLES[first]), ...await Promise.all(rest.map(t => query(SEED_TABLES[t])))];
+  return Object.fromEntries([first, ...rest].map((t, i) => [t, results[i]]));
+}
+
+const wranglerArgs = args => ['--yes', 'wrangler@4', 'd1', 'execute', 'bq-shelter-dogs', '--remote', ...args];
+const wranglerAsync = args => new Promise((resolve, reject) => {
+  execFile('npx', wranglerArgs(args), { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
+    if (stderr) process.stderr.write(stderr);
+    if (err) reject(err); else resolve(stdout);
+  });
+});
+const wrangler = args => execFileSync('npx', wranglerArgs(args), { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 64 * 1024 * 1024 });
 
 async function main() {
   // D1 的溜狗紀錄沒有 mine，要靠代號推回來；沒有 WALKER_KEY 會把「我溜過」的日期算錯，寧可不同步
@@ -133,9 +149,7 @@ async function main() {
   const groupColumns = parseGroupColumns(groupTable, dogNames);
   const groupLabels = parseGroupLabels(groupTable, dogNames);
   const rows = await loadDepartedRows(fetch, now);
-  const seed = {};
-  // 任何一張表讀不到就停：當成空的會把累積的溜狗紀錄、離所整份換掉
-  for (const [table, sql] of Object.entries(SEED_TABLES)) seed[table] = JSON.parse(wrangler(['--json', '--command', sql]))[0].results;
+  const seed = await readSeed(async sql => JSON.parse(await wranglerAsync(['--json', '--command', sql]))[0].results);
   let plan;
   const sql = await buildSyncSql(seed, async db => {
     plan = planSync(await readPrevious(db), sheet, rows, now);
