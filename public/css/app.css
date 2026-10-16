@@ -2300,3 +2300,25 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .former-form .former-cancel { border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
 .former-form .former-hint { flex-basis: 100%; font-size: 12px; color: var(--ink-soft); white-space: normal; }
 .former-form .photo-error { flex-basis: 100%; }
+/* 編輯限定：跟著鍵盤展開後的可見高度，其他狗卡版面維持原樣。 */
+@media (max-width: 599px) {
+  .detail-backdrop.detail-editing-viewport { top: var(--detail-edit-top); bottom: auto; height: var(--detail-edit-height); }
+  .detail-editing-viewport .detail { max-height: calc(var(--detail-edit-height) - 12px); }
+}
+/* 入所逐次紀錄：沿用白紙與區塊分隔線，只整理入所介紹區。 */
+.intro-heading { display: flex; align-items: center; justify-content: flex-start; gap: 4px; }
+.intro-heading-edit { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 44px; height: 44px; padding: 0; border: 0; background: none; color: var(--primary); cursor: pointer; }
+.intro-heading-edit .icon { width: 16px; height: 16px; }
+.intro-heading-edit:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.intake-list { list-style: none; display: grid; gap: 10px; margin: 0 0 12px; padding: 0; }
+.intake-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; font-size: 16px; line-height: 1.7; overflow-wrap: anywhere; }
+.intake-list time, .intake-date-empty { font-weight: 700; font-variant-numeric: tabular-nums; }
+.intake-number { color: var(--ink-soft); font-size: 13px; font-variant-numeric: tabular-nums; }
+.intake-date-empty { color: var(--ink-soft); }
+.intake-row { display: grid; gap: 8px; min-width: 0; margin: 12px 0; padding: 0; border: 0; }
+.intake-row label { display: grid; gap: 4px; min-width: 0; }
+.intake-row input, .intake-row select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 8px; font: inherit; font-size: 16px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 3px; }
+.intake-remove, #intakeAdd { min-height: 44px; padding: 8px 12px; font: inherit; color: var(--primary); background: var(--surface); border: 1px solid var(--line); border-radius: 3px; }
+@media (max-width: 599px) {
+  .detail-editing-viewport textarea { min-height: min(150px, var(--detail-edit-field-height, 150px)); max-height: var(--detail-edit-field-height, none); overflow-y: auto; }
+}

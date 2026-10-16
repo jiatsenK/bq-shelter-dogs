@@ -33,6 +33,7 @@ const server = http.createServer((req, res) => {
     const failed = await page.$$eval('li.fail', lis => lis.map(li => li.innerText));
     console.log(summary);
     failed.forEach(f => console.log(`✗ ${f.replace(/^✗\s*/, '')}`));
+    if (!failed.length) await require('../tests/detail-editing.cjs')(browser, `http://localhost:${server.address().port}`);
     ok = !failed.length && /^全部 \d+ 項通過$/.test(summary.trim());
   } finally {
     await browser.close();
