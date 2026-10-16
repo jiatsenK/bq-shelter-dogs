@@ -255,6 +255,13 @@ test('可以一起溜：一隻狗在多組時合併去重；犬名多了空白�
   assert.equal(map['已離所'], undefined);
 });
 
+test('可以一起溜：英文名不分大小寫（試算表 Mini 對到主清單 MINI），用主清單寫法', () => {
+  const table = { cols: [{}], rows: [{ c: [{ v: 'Mini' }] }, { c: [{ v: '黑寶' }] }] };
+  const map = sync.parseGroups(table, new Set(['MINI', '黑寶']));
+  assert.deepEqual([...map['MINI']], ['黑寶']);
+  assert.deepEqual([...map['黑寶']], ['MINI']);
+});
+
 // ── 狗卡資訊（dogs/{編號}.md）：原本在 tests/index.html 測前端，改成同步時整理後移到這裡 ──
 
 test('狗卡：去掉 YAML frontmatter，只留內文', () => {

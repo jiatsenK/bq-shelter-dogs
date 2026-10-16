@@ -6,7 +6,7 @@ const ADDED = [['v3_walks', 'dog_number', "TEXT NOT NULL DEFAULT ''"], ['v3_walk
 // 不連線正式服務，也不套用舊模型的 migrations。
 export async function migrateCompactDatabase(db) {
   const sql = await readFile(new URL('../db/compact-schema.sql', import.meta.url), 'utf8');
-  const statements = sql.replace(/--[^\n]*/g, '').split(';').map(s => s.trim()).filter(Boolean);
+  const statements = sql.replace(/--[^\n]*/g, '').match(/CREATE TRIGGER[\s\S]*?END;|(?:(?!CREATE TRIGGER)[^;])+;/g).map(s => s.trim().replace(/;$/, '')).filter(Boolean);
   const result = await db.batch(statements.map(sql => db.prepare(sql)));
   for (const [table, column, type] of ADDED) {
     const { results } = await db.prepare(`PRAGMA table_info(${table})`).all();

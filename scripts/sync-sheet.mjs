@@ -276,7 +276,9 @@ function nameKey(name) {
 export function parseGroupColumns(table, knownNames) {
   const rows = table.rows || [];
   const colCount = Math.max((table.cols || []).length, ...rows.map(r => (r.c || []).length), 0);
-  const known = knownNames ? new Map([...knownNames].map(n => [nameKey(n), n])) : null;
+  // 英文名不分大小寫（試算表寫 Mini、主清單寫 MINI，K 2026-10-16）
+  const groupKey = n => nameKey(n).toLowerCase();
+  const known = knownNames ? new Map([...knownNames].map(n => [groupKey(n), n])) : null;
   const columns = [];
   for (let col = 0; col < colCount; col++) {
     const names = [];
@@ -284,7 +286,7 @@ export function parseGroupColumns(table, knownNames) {
       let t = cellText((rows[i].c || [])[col]);
       if (!t || /^\d+$/.test(t)) continue;
       if (known) {
-        t = known.get(nameKey(t));
+        t = known.get(groupKey(t));
         if (!t) continue;
       }
       if (!names.includes(t)) names.push(t);
