@@ -1457,11 +1457,12 @@
 - 測試：node 180 過；網頁 243 過（本機用 Chrome 跑）；新增舊編號 Worker 3 項、網頁 1 項，#10 唯讀檢查加入 /former。
 - 跟 main 的開放編輯（ADR 0004）合併：原本的 ADR 0004 改編號為 0005，拿掉自己的 v3_number_log。
 
-## 2026-10-16 正式 D1 補建編輯紀錄等新資料表（Claude）
-
-- 編輯紀錄頁顯示「暫時讀不到編輯紀錄」：正式 D1 不另外建表（#214），同步只補建 v3_departure*、v3_sheet_group_labels，v3_edit_log 從沒建到正式環境。
-- scripts/sync-compact-d1.mjs 改成補建 db/compact-schema.sql 裡所有 CREATE TABLE／INDEX IF NOT EXISTS，測試加上檢查 v3_edit_log。
 ## 2026-10-16 #267 再整合已合併的入所日功能（CODEX）
 
 - 主分支再前進至 f766471（#291），解開 AGENT_LOG、網頁唯讀檢查、Worker import 三處衝突，保留雙方變更。舊編號只改編號對照，不改永久狗 ID；身分持有資料不受影響。
 - 最終 Node 201/201、headless 網頁 250/250 通過，真實快照隔離演練再跑通過；Standards／Spec 對三處衝突與永久狗身分複查通過。正式改表、搬移、PR 合併與部署均未執行。
+
+## 2026-10-16 正式 D1 補建編輯紀錄等新資料表（Claude）
+
+- 編輯紀錄頁顯示「暫時讀不到編輯紀錄」：正式 D1 不另外建表（#214），同步只補建 v3_departure*、v3_sheet_group_labels，v3_edit_log 從沒建到正式環境。
+- scripts/sync-compact-d1.mjs 改成補建 db/compact-schema.sql 裡所有 CREATE TABLE／INDEX IF NOT EXISTS，測試加上檢查 v3_edit_log。
