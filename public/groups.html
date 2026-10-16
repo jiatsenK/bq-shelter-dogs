@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>常溜狗群</title>
+<meta name="theme-color" content="#1F5C4D">
+<link rel="icon" href="icons/icon-v2.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon-v2.png">
+<link rel="stylesheet" href="css/groups.css">
+</head>
+<body>
+<!-- 常溜狗群（K 2026-10-16）：看每一群有哪些狗，也能直接加狗、移出、開新群；改的是試算表「常遛狗群」分頁（js/groups.js） -->
+<header class="g-top">
+  <a class="g-back" href="index.html">‹ 溜狗表</a>
+  <h1>常溜狗群</h1>
+</header>
+<main class="g-main">
+  <p class="g-lead">同一群的狗可以一起溜。這裡改了會直接寫進試算表的「常遛狗群」分頁。</p>
+  <div class="g-msg" id="gMsg" role="status" aria-live="polite"></div>
+  <div id="gGroups"><p class="g-empty">讀取中…</p></div>
+
+  <section class="g-card g-new" aria-labelledby="gNewTitle">
+    <h2 id="gNewTitle">開新群</h2>
+    <form id="gNewForm" class="g-form">
+      <label>群名 <input name="label" maxlength="20" required autocomplete="off" placeholder="例如：新十"></label>
+      <label>第一隻狗 <input name="name" list="gDogNames" maxlength="30" required autocomplete="off" placeholder="狗名"></label>
+      <button type="submit">開新群</button>
+    </form>
+  </section>
+
+  <section class="g-card" aria-labelledby="gLoneTitle">
+    <h2 id="gLoneTitle">還沒有群的狗</h2>
+    <div class="g-dogs" id="gLone"></div>
+  </section>
+</main>
+<datalist id="gDogNames"></datalist>
+<script src="js/groups.js"></script>
+</body>
+</html>
