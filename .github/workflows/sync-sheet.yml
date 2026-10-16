@@ -4,7 +4,7 @@
 # - 只寫 D1（#251），而且只寫有變的列（差異同步，#302）：試算表沒變就一列都不寫；溜狗紀錄和離所以 D1 上一次的內容為基準往上加
 # - 寫入預算（ADR 0008）：這次要寫的列數超過單次門檻、或今天整個帳號的 D1 寫入量會超過預算，就整次不寫、讓這次執行失敗，原因寫在執行頁的摘要
 # - 不提交 GitHub、不寫 data/；讀取失敗或比對不一致時這次執行會顯示失敗，D1 保留上一次的內容
-# - 同步程式改了、推到 main 時也會馬上跑一次
+# - 同步程式改了、推到 main 時也會馬上跑一次；PR 階段先由 sync-dry-run.yml 用正式資料預演（#309），兩邊的 paths 要一起改
 # - 只讀試算表，不寫入試算表
 # - 試算表 ID 放在 repo 的 Actions Secret「SHEET_ID」，不寫在程式裡（設定方式見 docs/setup/SHEET_SYNC_SETUP.md）
 name: 同步試算表
@@ -16,6 +16,8 @@ on:
     paths:
       - 'scripts/sync-sheet.mjs'
       - 'scripts/sync-compact-d1.mjs'
+      - 'scripts/sync-plan.mjs'
+      - 'scripts/sync-diff.mjs'
       - 'scripts/import-compact-dogs.mjs'
       - 'scripts/import-compact-profiles.mjs'
       - 'scripts/import-compact-departures.mjs'

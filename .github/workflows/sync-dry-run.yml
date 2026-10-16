@@ -1,0 +1,68 @@
+# 同步預演（#309）：PR 改到同步程式時，用正式試算表和正式 D1 算一次「會寫幾列」，不寫入，結果留言在 PR 上
+# - 只讀：讀試算表、讀正式 D1（一次大約 2,000 列），D1 寫入 0；用正式同步那把 token，程式在預演時只准送 SELECT
+# - 超過單次門檻、每天預算（ADR 0008），或讀取／比對出錯，這次就失敗，PR 上會是紅叉
+# - K 看留言的 N：個位數到幾十可以合併；幾百、幾千或出錯就不要合併
+# - 路徑跟 sync-sheet.yml 的 push paths 一樣，只改網頁的 PR 不會跑
+name: 同步預演
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/sync-sheet.mjs'
+      - 'scripts/sync-compact-d1.mjs'
+      - 'scripts/sync-plan.mjs'
+      - 'scripts/sync-diff.mjs'
+      - 'scripts/import-compact-dogs.mjs'
+      - 'scripts/import-compact-profiles.mjs'
+      - 'scripts/import-compact-departures.mjs'
+      - 'scripts/migrate-compact-db.mjs'
+      - 'worker/src/compact.js'
+      - 'db/compact-schema.sql'
+      - '.github/workflows/sync-dry-run.yml'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: sync-dry-run-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dry-run:
+    # fork 的 PR 拿不到密鑰，跑了也只會失敗
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      TZ: Asia/Taipei
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 用正式資料預演（不寫入）
+        env:
+          SHEET_ID: ${{ secrets.SHEET_ID }}
+          MY_NAME: ${{ secrets.MY_NAME }}
+          WALKER_KEY: ${{ secrets.WALKER_KEY }}
+          # 用正式同步同一把 token（Cloudflare 查 D1 也要寫入權限）；程式在預演時只准送 SELECT，寫入指令會被擋下
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          DRY_RUN_COMMENT: ${{ runner.temp }}/dry-run.md
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "## 預演失敗：沒有設定 CLOUDFLARE_API_TOKEN" | tee "$DRY_RUN_COMMENT"; exit 1; fi
+          node scripts/sync-compact-d1.mjs --dry-run
+
+      # 成功、失敗都留言；PR 每推一次就多一則，K 看最新那則
+      - name: 留言在 PR 上
+        # 被新推的提交取消時不留言，免得誤報失敗
+        if: success() || failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          FILE: ${{ runner.temp }}/dry-run.md
+        run: |
+          [ -s "$FILE" ] || echo "## 預演失敗：沒有產生結果，請看執行頁的紀錄" > "$FILE"
+          gh pr comment "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}" --body-file "$FILE"
