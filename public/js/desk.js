@@ -410,6 +410,7 @@ function deskSideHtml(today) {
       ${notes.length ? `<ol class="ds-notes">${shown.map(n => { const p = deskNoteParts(n.text); return `<li>${p.date ? `<b class="num">${esc(p.date)}</b>` : ''}<span>${esc(p.rest)}</span></li>`; }).join('')}</ol>
         ${notes.length > 8 ? `<button type="button" class="ds-more" data-desk-notes>${deskNotesAll ? '收起' : `看全部 ${notes.length} 則`}</button>` : ''}`
         : '<p class="ds-empty">還沒有紀錄（同步試算表後會出現）。</p>'}
+      ${sheetAppendHtml('log')}
     </section>
     ${resting.length ? `<section class="ds-panel" aria-labelledby="dsRest"><h2 id="dsRest">休養中<small>${resting.length} 隻</small></h2>
       <ul class="ds-rest">${resting.map(d => { const r = restOf(d, today); return `<li><button type="button" data-desk-open="${allDogs.indexOf(d)}">${esc(d.name)}</button><span>${esc(d.cage)}・${esc(r.reason || '休養')}，${monthDay(r.until)} 前暫停帶出</span></li>`; }).join('')}</ul></section>` : ''}

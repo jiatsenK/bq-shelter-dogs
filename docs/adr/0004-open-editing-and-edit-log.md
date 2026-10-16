@@ -14,7 +14,7 @@
 - **`WALKER_KEY` 保留**：它是把名字換成個人代號的金鑰，不是給人輸入的通關碼；拿掉會讓所有人的代號改變。Apps Script 的 `WRITE_KEY` 一樣保留（機器對機器）。
 - **要先選好身分才能編輯**：網頁送出編輯時帶 `editor`（這支手機選好的名字，`bq-walker-name`；照片是 JPEG，改放標頭 `X-Editor: encodeURIComponent(名字)`）；沒有名字 Worker 回 400、`code: 'editor'`，網頁請志工先選名字。
 - **編輯紀錄存 D1 的 `v3_edit_log`**：照 ADR 0001 的「跟著代號存」，存編輯者的代號，另存當時的名字方便顯示（名字本來就公開在 /api/walkers）。每筆存改前、改後內容，出錯時看紀錄就能手動改回來。
-- **記哪些**：休養、入所介紹、照片（換主照片時記垃圾桶編號，30 天內可還原）、活動紀錄（ADR 0002）、試算表備註（#239）。**溜狗打卡不記**（量大，試算表本身就有）。
+- **記哪些**：休養、入所介紹、照片（換主照片時記垃圾桶編號，30 天內可還原）、活動紀錄（ADR 0002）、試算表備註與異動紀錄（#239、#281，走 /api/walk 的 note／log，用 walker 當編輯者）。**溜狗打卡不記**（量大，試算表本身就有）。
 - **防亂寫**：必須選身分、留改前內容、沿用現有的次數限制；不另外做審核。
 - **編輯紀錄頁**：`edits.html`，列出最近的編輯（時間、誰、改了哪隻狗的什麼、改前→改後），任何人都能看。
 
@@ -32,7 +32,7 @@ if (!editor) return fail(400, '請先選好你的名字再編輯', origin, { cod
 // 2. 寫入成功後記一筆；記紀錄失敗不會讓編輯失敗（只 console.error）
 await logEdit(env.DB, {
   editor,              // editorOf 的結果
-  kind: 'note',        // 'rest' | 'intro' | 'photo' | 'activity' | 'note'；新種類在 KIND_LABELS 加一行
+  kind: 'note',        // 'rest' | 'intro' | 'photo' | 'activity' | 'note' | 'sheetlog'；新種類在 KIND_LABELS 加一行
   dogId: 'xxx',        // 永久 ID，沒有就 null
   dogNumber: '123',    // 當時的編號（顯示用），沒有就 ''
   before: '舊內容',     // 任何可 JSON 的值，沒有就 null

@@ -1390,6 +1390,13 @@
 - feat:／fix: 的 commit 會累積到 Release PR，合併後打 tag 並寫 CHANGELOG.md 與 GitHub Release；docs:／chore: 不列入。bootstrap-sha 設在 75230be，之前的歷史不算。
 
 
+## 2026-10-16 網站追加試算表備註與異動紀錄（#281，Claude）
+
+- AGENTS.md 試算表寫入規則改成 #239（K 2026-10-15）的新規則。
+- apps-script/sheet-write.gs 新增 action note（備註欄接「;日期內容（名字）」）、log（異動紀錄新增「備註N」一列），都在鎖內先讀現值再追加。
+- Worker /api/walk 接受 note／log，檢查名字與內容（1–200 字、不換行）。
+- 網頁：狗卡「試算表備註」下方「加備註」、電腦版異動紀錄下方「新增一筆」，輸入→預覽→送出（入口位置 K 2026-10-16 選定）。
+- 編輯紀錄（開放編輯 session 的 logEdit）等該 PR 合併後再接；網頁已帶 editor。Apps Script 要 K 重新部署新版本。
 ## 2026-10-16 開放編輯、編輯紀錄頁（Claude，#284）
 
 - K 決定（docs/adr/0004-open-editing-and-edit-log.md）：網站拿掉通關碼，任何人選好名字就能改休養、介紹、照片；#143 管理者後台廢除並關票。
