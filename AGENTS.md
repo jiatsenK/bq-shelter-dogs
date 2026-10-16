@@ -22,6 +22,7 @@
 
 - node 測試：`node scripts/run-node-tests.mjs`（自動找 `scripts/`、`worker/` 底下全部 `*.test.mjs`）
 - 網頁測試：`node scripts/run-browser-tests.cjs`（需要 Playwright 的 Chromium）
+  - 新 worktree 沒有 `node_modules`，先在 repo 根目錄裝（照 `tests.yml`，repo 沒有 `package.json`，不用 `npm ci`）：`npm install --no-save --no-package-lock playwright@1.56.1`，再 `npx playwright install chromium`（Linux 加 `--with-deps`）
 
 ## Agent skills
 
