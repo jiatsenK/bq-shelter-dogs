@@ -3087,6 +3087,44 @@ async function runSheetWriteTests() {
       await loadWalkerNames();
       eq([walkedNow(allDogs[0]), currentMyWalks().some(w => w.id === '9801')], [true, true], '有我就保留：');
     });
+    // ADR 0007：K 誤按已溜、同步已經把「K 今天溜了」帶進 D1，之後在網站按復原。其他手機（或重新整理）從 /api/today 讀到復原，
+    // 那隻狗不能再出現在「我溜過」，狗卡也改回原本的日期和人
+    await check('ADR 0007 今日溜狗紀錄：誤按已溜後復原，比同步新的紀錄蓋過同步，不再出現在我溜過', async () => {
+      walkedStorage = fakeStorage(); walkedMemory = null; sheetWritesMemory = null;
+      saveWalkerName('K');
+      const today = localDateKey(new Date());
+      const syncedAt = new Date(Date.now() - 10 * 60 * 1000);
+      dataSyncedAt = syncedAt;
+      sheetWritesThisPage.clear(); sheetWrittenAt.clear();
+      allDogs[0].walkedDate = parseYmd(today);
+      walkerNames = { '9801': 'K' };
+      myWalks = [{ id: '9801', name: '寫入甲', date: parseYmd(today), ymd: today }]; // 同步帶來的 D1 紀錄
+      myWalksState = 'ready';
+      saveWalkedIds(['9801']);
+      eq(currentMyWalks().some(w => w.id === '9801'), true, '復原前：');
+      const at = new Date().toISOString();
+      let asked = '';
+      window.fetch = async u => { asked = String(u); return json({ ok: true, date: today, walks: [{ key: '9801', walked: false, walkedDate: '2026-10-01', walker: '志工隊', at }] }); };
+      await loadTodayWalks();
+      eq(asked.endsWith('/today'), true, '讀 /api/today：');
+      eq([currentMyWalks().some(w => w.id === '9801'), walkedNow(allDogs[0]), localDateKey(allDogs[0].walkedDate), walkerList(allDogs[0])], [false, false, '2026-10-01', ['志工隊']], '復原後：');
+      // 別人溜了：狗卡改成今天、顯示誰溜的，不是我的
+      window.fetch = async () => json({ ok: true, date: today, walks: [{ key: '9801', walked: true, walkedDate: today, walker: '志工乙', at: new Date().toISOString() }] });
+      await loadTodayWalks();
+      eq([localDateKey(allDogs[0].walkedDate), walkerList(allDogs[0]), currentMyWalks().some(w => w.id === '9801')], [today, ['志工乙'], false], '別人溜了：');
+      // 比同步舊的紀錄不採用（試算表是正本）
+      dataSyncedAt = new Date(Date.now() + 60 * 1000);
+      allDogs[0].walkedDate = parseYmd('2026-10-02');
+      window.fetch = async () => json({ ok: true, date: today, walks: [{ key: '9801', walked: true, walkedDate: today, walker: '志工丙', at: new Date().toISOString() }] });
+      await loadTodayWalks();
+      eq(localDateKey(allDogs[0].walkedDate), '2026-10-02', '同步後以試算表為準：');
+      // 抓不到：不顯示錯誤、不跳提示
+      hideToast();
+      window.fetch = async () => { throw new TypeError('Failed to fetch'); };
+      await loadTodayWalks();
+      eq(document.getElementById('toast')?.hidden !== false, true, '抓不到不提示：');
+      dataSyncedAt = null; myWalks = []; todayWalks = { date: '', walks: [] };
+    });
   } finally {
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch] = saved;
     sheetWritesMemory = null; walkerNameMemory = ''; sheetWriteState = 'off';
