@@ -1,3 +1,5 @@
+> 2026-10-16 起網站不再用通關碼（`NOTES_PASSCODE`），任何人選好名字就能改，改了記在編輯紀錄；管理 API 改用 `ADMIN_KEY`。下面提到通關碼的段落是舊紀錄，見 `docs/adr/0004-open-editing-and-edit-log.md`。
+
 # 照片上傳服務設定說明（V4，#47／#48）
 
 網站上的「上傳照片／更換照片」要透過一個小服務（Cloudflare Worker）把照片存進這個 repo 的 `photos/{編號}.jpg`：

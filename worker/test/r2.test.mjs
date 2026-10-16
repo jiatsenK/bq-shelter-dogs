@@ -35,7 +35,7 @@ function setup({ assets = {}, failPut, preview = false } = {}) {
   const ASSETS = fakeAssets(assets);
   const DB = { prepare: () => ({ all: async () => ({ results: DOGS.dogs.map(d => ({ number: d.id, name: d.name })) }) }) };
   const calls = fakeGithub();
-  const env = { GITHUB_TOKEN: 't', NOTES_PASSCODE: '通關碼', PHOTOS, ASSETS, DB, ...(preview ? { PREVIEW: '1' } : {}) };
+  const env = { GITHUB_TOKEN: 't', ADMIN_KEY: '通關碼', PHOTOS, ASSETS, DB, ...(preview ? { PREVIEW: '1' } : {}) };
   const pending = [];
   const ctx = { waitUntil: p => pending.push(p) };
   const call = async (path, init = {}) => {
@@ -49,9 +49,9 @@ function setup({ assets = {}, failPut, preview = false } = {}) {
   return { env, PHOTOS, ASSETS, calls, call };
 }
 const json = async res => ({ status: res.status, body: await res.json() });
-const upload = (call, bytes) => call(`/api/photos/${ID}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: bytes.slice() });
+const upload = (call, bytes) => call(`/api/photos/${ID}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', 'X-Editor': encodeURIComponent('小明') }, body: bytes.slice() });
 const admin = (call, path, init = {}, pass = '通關碼') =>
-  call(`/api/admin/${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(pass ? { 'X-Admin-Passcode': encodeURIComponent(pass) } : {}), ...(init.headers || {}) } });
+  call(`/api/admin/${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(pass ? { 'X-Admin-Key': encodeURIComponent(pass) } : {}), ...(init.headers || {}) } });
 const trashEntries = PHOTOS => [...PHOTOS.objects.keys()].filter(k => k.startsWith('trash/') && k.endsWith('/photo.jpg'));
 
 test.beforeEach(() => { resetState(); r2.resetR2State(); });
@@ -144,14 +144,14 @@ test('Trash 復原主照片：現在的主照片先進 Trash', async () => {
   assert.ok(same(PHOTOS.objects.get(key).bytes, NEW));
 });
 
-test('管理 API：沒給或打錯通關碼擋下；預覽版不能搬遷；沒有 R2 回 off', async () => {
+test('管理 API：沒給或打錯金鑰擋下；預覽版不能搬遷；沒有 R2 回 off', async () => {
   const { call } = setup();
   assert.equal((await admin(call, 'trash', {}, '')).status, 401);
   assert.equal((await admin(call, 'trash', {}, '錯')).status, 401);
   assert.equal((await admin(call, 'trash')).status, 200);
   const p = setup({ preview: true });
   assert.equal((await admin(p.call, 'migrate', { method: 'POST', body: '{"items":[]}' })).status, 403);
-  const res = await worker.fetch(new Request(`${SITE}/api/admin/trash`, { headers: { 'X-Admin-Passcode': encodeURIComponent('通關碼') } }), { GITHUB_TOKEN: 't', NOTES_PASSCODE: '通關碼' });
+  const res = await worker.fetch(new Request(`${SITE}/api/admin/trash`, { headers: { 'X-Admin-Key': encodeURIComponent('通關碼') } }), { GITHUB_TOKEN: 't', ADMIN_KEY: '通關碼' });
   assert.equal((await res.json()).code, 'off');
 });
 
@@ -226,4 +226,18 @@ test('沒有 R2：照片、dogs.json 照舊給靜態檔', async () => {
   const photo = await worker.fetch(new Request(`${SITE}/photos/${ID}.jpg`), env);
   assert.ok(same(new Uint8Array(await photo.arrayBuffer()), OLD));
   assert.equal((await worker.fetch(new Request(`${SITE}/data/dogs.json`), env)).status, 410);
+});
+
+test('編輯紀錄（ADR 0004）：換照片記一筆，帶垃圾桶編號；沒選名字不能傳', async () => {
+  const { env, call } = setup({ assets: { [`photos/${ID}.jpg`]: OLD } });
+  const logged = [];
+  const read = env.DB.prepare;
+  env.DB = { prepare: sql => sql.startsWith('INSERT INTO v3_edit_log') ? { bind: (...a) => ({ run: async () => logged.push(a) }) } : read(sql) };
+  const noName = await call(`/api/photos/${ID}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: jpeg(1) });
+  assert.equal(noName.status, 400);
+  assert.equal((await upload(call, jpeg(2))).status, 200);
+  assert.equal(logged.length, 1);
+  const [, , name, kind, , number, before] = logged[0];
+  assert.deepEqual([name, kind, number], ['小明', 'photo', ID]);
+  assert.match(JSON.parse(before).trash, /./);
 });
