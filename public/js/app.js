@@ -3727,10 +3727,11 @@ window.addEventListener('offline', () => { renderUpdatedLabel(); render(); rende
 window.addEventListener('online', () => { renderUpdatedLabel(); render(); renderDetail(); loadWalkerNames(); syncFavs(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) syncFavs(); });
 
-// ── 頁首「更新」按鈕：請 Worker 叫 GitHub 同步試算表，再等網站上的 dogs.json 換新 ──
-// 同步約 1 分鐘、網站重新部署再約 1 分鐘；試算表沒有新東西時 dogs.json 不會變，等滿就告訴志工已經是最新
-const SYNC_POLL_MS = 15 * 1000;
-const SYNC_POLL_TRIES = 16; // 15 秒 × 16 ＝ 最多等 4 分鐘
+// ── 頁首「更新」按鈕：請 Worker 叫 GitHub 同步試算表，再等讀到的資料換新 ──
+// 同步寫進 D1 約 1 分鐘（不用重新部署）；每 5 秒看一次，同步完不必再多等一輪 15 秒
+// 試算表沒有新東西時 syncedAt 不會變，等滿就告訴志工已經是最新
+const SYNC_POLL_MS = 5 * 1000;
+const SYNC_POLL_TRIES = 48; // 5 秒 × 48 ＝ 最多等 4 分鐘
 let syncing = false;
 
 async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES } = {}) {
@@ -3754,7 +3755,7 @@ async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES
       showToast(`更新失敗：${why || `HTTP ${res.status}`}`);
       return;
     }
-    showToast('正在更新，約 1–2 分鐘');
+    showToast('正在更新，約 1 分鐘');
     const before = dataSyncedAt ? dataSyncedAt.getTime() : 0;
     for (let i = 0; i < tries; i++) {
       await new Promise(r => setTimeout(r, pollMs));
