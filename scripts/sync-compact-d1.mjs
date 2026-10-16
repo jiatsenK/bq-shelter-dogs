@@ -89,7 +89,7 @@ export async function readSeed(query) {
 let readOnly = false;
 const wranglerArgs = args => {
   const sql = args[args.indexOf('--command') + 1];
-  if (readOnly && (!args.includes('--command') || !/^\s*SELECT/i.test(sql))) throw new Error('預演只能讀 D1，擋下一個寫入指令');
+  if (readOnly && (!args.includes('--command') || !/^\s*SELECT\s/i.test(sql))) throw new Error('預演只能讀 D1，擋下一個寫入指令');
   return ['--yes', 'wrangler@4', 'd1', 'execute', 'bq-shelter-dogs', '--remote', ...args];
 };
 const wranglerAsync = args => new Promise((resolve, reject) => {
