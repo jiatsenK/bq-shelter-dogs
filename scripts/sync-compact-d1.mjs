@@ -100,10 +100,11 @@ const wranglerAsync = args => new Promise((resolve, reject) => {
   });
 });
 // 預演（#309）：PR 改到同步程式時，用正式試算表和正式 D1 算一次要寫幾列，不寫入；結果貼在 PR 上給 K 看
-// 單次門檻、每天預算跟真的同步一樣（budgetProblem），超過就讓 CI 失敗
+// 只有這次要寫的列數超過單次門檻才讓 CI 失敗；今天帳號已寫多少跟 PR 的程式無關，只列出來提醒
 export function dryRunReport(planned, todayWritten, limits) {
-  const problem = budgetProblem(planned, todayWritten, limits);
-  const used = todayWritten === null ? '查不到' : `${todayWritten} 列`;
+  const problem = budgetProblem(planned, null, limits);
+  const daily = budgetProblem(planned, todayWritten, { ...limits, maxRows: Infinity });
+  const used = `${todayWritten === null ? '查不到' : `${todayWritten} 列`}${daily ? '（已超過每天預算，跟這張 PR 無關，但今天正式同步會停寫）' : ''}`;
   const text = `## 預演：會寫 ${planned} 列${problem ? '（超過門檻）' : ''}
 
 用正式試算表和正式 D1 算的，沒有寫入。

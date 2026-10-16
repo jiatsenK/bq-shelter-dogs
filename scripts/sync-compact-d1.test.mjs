@@ -286,3 +286,10 @@ test('預演失敗時的報告（#309）：讀取或比對出錯也要留言', a
   const { dryRunFailure } = await import('./sync-compact-d1.mjs');
   assert.match(dryRunFailure(new Error('no such table: v3_dogs')), /預演失敗.*no such table: v3_dogs/s);
 });
+
+test('預演（#309）：今天帳號寫太多不算這張 PR 的錯，只提醒、不失敗', async () => {
+  const { dryRunReport } = await import('./sync-compact-d1.mjs');
+  const r = dryRunReport(20, 149142, { maxRows: 500, dailyBudget: 20000 });
+  assert.equal(r.ok, true);
+  assert.match(r.text, /149142 列（已超過每天預算/);
+});
