@@ -1953,7 +1953,7 @@ async function saveIntro() {
 }
 
 // 出入所紀錄（#333，ADR 0011）：照時間列出每一次在所；誰都能補、改、刪（要先選名字），離所的狗也可以改（ADR 0011）。
-// 整隻狗一次存（PUT /stays），連同打開時看到的內容一起送，別人剛改過會被擋下來
+// 整隻狗一次存（Worker 的 /stays），連同打開時看到的內容一起送，別人剛改過會被擋下來
 const STAYS_MAX = 30;
 const stayDate = ymd => String(ymd || '').replace(/-/g, '/');
 function staysSectionHtml(dog) {
