@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateCompactDatabase } from './migrate-compact-db.mjs';
 import { readDogsPayload, readDepartures, readWalks } from '../worker/src/compact.js';
-import { buildSyncSql, buildSyncPlan, SEED_TABLES, planSync, readPrevious, readSeed } from './sync-compact-d1.mjs';
+import { buildSyncSql, buildSyncPlan, SEED_TABLES, SYNC_SCHEMA_SKIP, planSync, readPrevious, readSeed } from './sync-compact-d1.mjs';
 import { budgetProblem, todayRowsWritten } from './sync-diff.mjs';
 
 // SQL 開頭補建表、版本號、觸發器那幾行（不算同步寫的資料）
@@ -302,4 +302,24 @@ test('預演（#309）：今天帳號寫太多不算這張 PR 的錯，只提醒
   const r = dryRunReport(20, 149142, { maxRows: 500, dailyBudget: 20000 });
   assert.equal(r.ok, true);
   assert.match(r.text, /149142 列（已超過每天預算/);
+});
+
+// #321 同步補建的 schema 要和 compact-schema.sql 一致：schema 新增觸發器、表或預設列，同步沒送就失敗。
+// 只允許 SYNC_SCHEMA_SKIP 明列的例外（身分的觸發器和 v3_identity_revision 那一列）
+test('#321 同步 SQL 套到空的 D1，建出來的跟 migrateCompactDatabase 一樣（除了明列的例外）', async t => {
+  const full = fakeD1(); t.after(() => full.close());
+  await migrateCompactDatabase(full);
+  const synced = fakeD1(); t.after(() => synced.close());
+  const sql = await buildSyncSql({}, await source());
+  await synced.batch(sql.split(';\n').map(s => s.trim()).filter(Boolean).map(s => synced.prepare(s)));
+  const objects = async db => (await db.prepare("SELECT type, name FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY type, name").all()).results
+    .map(o => `${o.type} ${o.name}`);
+  const skipped = o => o.startsWith('trigger ') && SYNC_SCHEMA_SKIP.triggers.test(o.slice(8));
+  assert.deepEqual(await objects(synced), (await objects(full)).filter(o => !skipped(o)));
+  // schema 自己放的預設列（版本號）同步也要放
+  for (const name of (await objects(full)).filter(o => o.startsWith('table ')).map(o => o.slice(6))) {
+    if (SYNC_SCHEMA_SKIP.rows.includes(name)) continue;
+    const count = async db => (await db.prepare(`SELECT COUNT(*) AS n FROM ${name}`).first()).n;
+    if (await count(full)) assert.ok(await count(synced), `${name} 少了 schema 的預設列`);
+  }
 });

@@ -36,6 +36,14 @@ export const SEED_TABLES = {
   v3_intros: 'SELECT * FROM v3_intros',
   v3_sheet_group_labels: 'SELECT * FROM v3_sheet_group_labels',
 };
+// 同步不補建的 schema（測試也用這份比對，#321）：身分的觸發器和 v3_identity_revision 那一列照現況不在同步建
+export const SYNC_SCHEMA_SKIP = { triggers: /^identity_/, rows: ['v3_identity_revision'] };
+const skipSchemaStatement = t => {
+  const trigger = t.match(/^CREATE TRIGGER IF NOT EXISTS (\w+)/);
+  const row = t.match(/^INSERT OR IGNORE INTO (\w+)/);
+  return Boolean((trigger && SYNC_SCHEMA_SKIP.triggers.test(trigger[1])) || (row && SYNC_SCHEMA_SKIP.rows.includes(row[1])));
+};
+
 // 差異同步要知道現況才比得出差異，所以群名表也要讀；正式 D1 還沒建這張表時當成空的（SQL 開頭會自己 CREATE TABLE IF NOT EXISTS）
 const OPTIONAL_TABLES = new Set(['v3_sheet_group_labels']);
 
@@ -62,11 +70,9 @@ export async function buildSyncPlan(seed, source) {
       ...(await compareCompactDepartures(db, source.departures)).differences];
     if (differences.length) throw new Error(`匯入後比對有差異，不寫 D1：${JSON.stringify(differences.slice(0, 5))}`);
     const changes = diffTables(before, await snapshot());
-    // 正式 D1 不另外建表（#214），新資料表（例如 v3_edit_log）靠同步時補建；全部是 IF NOT EXISTS，重跑不影響既有資料。
-    // 版本號（ADR 0009）那一列和觸發器也一起補（#315、#320 按月分段，拿掉舊的整份 walks 觸發器），同步自己改的列也會讓資料包失效；身分的觸發器不在這裡建
-    const out = (await compactSchemaStatements())
-      .filter(t => /^CREATE (UNIQUE )?(TABLE|INDEX) IF NOT EXISTS |^INSERT OR IGNORE INTO v3_(data|pack|walk)_versions|^CREATE TRIGGER IF NOT EXISTS (version|pack|walkpack)_|^DROP TRIGGER IF EXISTS pack_v3_walks_|^DELETE FROM v3_packs WHERE part='walks'/.test(t))
-      .map(t => `${t.replace(/\s+/g, ' ')};`);
+    // 正式 D1 不另外建表（#214），compact-schema.sql 整份靠同步時補建，只排除 SYNC_SCHEMA_SKIP（#321）；
+    // 全部是 IF NOT EXISTS／OR IGNORE，重跑不影響既有資料
+    const out = (await compactSchemaStatements()).filter(t => !skipSchemaStatement(t)).map(t => `${t.replace(/\s+/g, ' ')};`);
     for (const { sql, values } of changes) { let i = 0; out.push(`${sql.replace(/\?/g, () => sqlValue(values[i++]))};`); }
     return { sql: out.join('\n') + '\n', rows: changes.length };
   } finally { db.close(); }
