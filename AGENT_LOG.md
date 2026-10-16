@@ -1389,3 +1389,9 @@
 - 新增 .github/workflows/release-please.yml、release-please-config.json、.release-please-manifest.json、version.txt（從 9.0.0 起，對應 V9）。
 - feat:／fix: 的 commit 會累積到 Release PR，合併後打 tag 並寫 CHANGELOG.md 與 GitHub Release；docs:／chore: 不列入。bootstrap-sha 設在 75230be，之前的歷史不算。
 
+
+## 2026-10-16 常遛狗群修正：英文名不分大小寫、母幼區各自一籠（Claude）
+
+- scripts/sync-sheet.mjs 的 parseGroupColumns 比對犬名改成英文不分大小寫：試算表「常遛狗群」E7 寫「Mini」，主清單是「MINI」，以前會被丟掉，所以 MINI 沒有可以一起溜的狗。
+- public/js/app.js 的 cageMates：籠位「母幼…」（例如母幼A）各自一籠，不算同籠（K 2026-10-16）。
+- 暴牙斑：試算表 I5 寫「暴牙班」，主清單是「暴牙斑」，名字錯字要由 K 在試算表手動改，網站不寫常遛狗群分頁。

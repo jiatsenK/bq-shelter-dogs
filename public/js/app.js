@@ -1738,10 +1738,10 @@ function buddyTile(d, name, walkedNow, mate) {
 }
 
 // 同籠的狗（K 2026-09-27）：籠位欄位一樣的其他狗，跟「可以一起溜」同一種格子，也能勾選一起記。
-// 「○○區」（住院區、C區）是整區不是一籠，不算同籠；沒有同籠的狗整段不顯示
+// 「○○區」（住院區、C區）是整區不是一籠，不算同籠；母幼區（母幼A…）也是各自一籠（K 2026-10-16）；沒有同籠的狗整段不顯示
 function cageMates(dog) {
   const cage = String(dog.cage || '').replace(/\s+/g, '');
-  if (!cage || /區$/.test(cage)) return [];
+  if (!cage || /區$/.test(cage) || /^母幼/.test(cage)) return [];
   return allDogs.filter(d => d !== dog && String(d.cage || '').replace(/\s+/g, '') === cage);
 }
 
