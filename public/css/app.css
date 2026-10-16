@@ -661,7 +661,7 @@ html.lightbox-open { overflow: hidden; }
 /* 分析頁開著時收起搜尋框與分類，頁首只留標題 */
 .analysis-open header.app .search, .analysis-open header.app .tabs { display: none; }
 
-/* 我的備註（#62）：溜狗表備註下方，檢視時顯示內容＋「新增／修改」，編輯時是文字框＋通關碼＋儲存 */
+/* 我的備註（#62）：溜狗表備註下方，檢視時顯示內容＋「新增／修改」，編輯時是文字框＋儲存 */
 .my-note-time { margin-top: 6px; font-size: 12.5px; color: var(--muted-text); }
 .my-note-edit {
   display: inline-flex; align-items: center; gap: 6px;

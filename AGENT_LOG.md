@@ -1402,3 +1402,9 @@
 - Worker /api/walk 接受 note／log，檢查名字與內容（1–200 字、不換行）。
 - 網頁：狗卡「試算表備註」下方「加備註」、電腦版異動紀錄下方「新增一筆」，輸入→預覽→送出（入口位置 K 2026-10-16 選定）。
 - 編輯紀錄（開放編輯 session 的 logEdit）等該 PR 合併後再接；網頁已帶 editor。Apps Script 要 K 重新部署新版本。
+## 2026-10-16 開放編輯、編輯紀錄頁（Claude，#284）
+
+- K 決定（docs/adr/0004-open-editing-and-edit-log.md）：網站拿掉通關碼，任何人選好名字就能改休養、介紹、照片；#143 管理者後台廢除並關票。
+- 新增 worker/src/editlog.js（editorOf／logEdit／readEdits，walkerCode 從 index.js 搬來）、D1 表 v3_edit_log、GET /api/edits、public/edits.html＋js/edits.js，電腦版頁首加「編輯紀錄」入口。溜狗打卡不記。
+- /api/admin/* 改用 ADMIN_KEY（標頭 X-Admin-Key），部署與縮圖 Action 在 K 設好 Secret ADMIN_KEY 前沿用 NOTES_PASSCODE 的值；WALKER_KEY、SHEET_WRITE_KEY 保留。
+- 更新測試、AGENTS.md、GLOSSARY、PROJECT_GOALS、DESIGN_GUIDE、設定文件。試算表備註（#239）的 session 要照 ADR 的介面接上編輯紀錄。

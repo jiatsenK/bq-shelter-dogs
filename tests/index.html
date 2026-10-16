@@ -224,9 +224,9 @@ function runTests() {
       // #48 GitHub 寫入權限只在 Worker：網站程式不能有 token 或直接連 GitHub API
       const tokenHits = [/ghp_|gho_|github_pat_/, /api\.github\.com/, /Authorization|Bearer/i, /GITHUB_TOKEN/].filter(re => re.test(APP_JS)).map(String);
       eq(tokenHits, [], 'GitHub 憑證相關字眼：');
-      // #35 起「今天已溜」存在這支手機的 localStorage，只准用 WALKED_KEY；#62 加上我的備註通關碼 NOTES_PASS_KEY
+      // #35 起「今天已溜」存在這支手機的 localStorage，只准用 WALKED_KEY；通關碼 ADR 0004 拿掉了
       eq([...code.matchAll(/\blocalStorage\s*[.[]|window\.localStorage/g)].length, 1, 'localStorage 只在一個地方取用：');
-      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'key', 'key', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'SHEET_WRITES_KEY', 'SHEET_WRITES_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'NOTES_PASS_KEY', 'WALK_VIEW_KEY', 'WALK_VIEW_KEY', 'ONBOARD_KEY', 'ONBOARD_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、WALKER_NAME_KEY 和 SHEET_WRITES_KEY（#138 寫試算表）、NOTES_PASS_KEY（管理通關碼）、WALK_VIEW_KEY、ONBOARD_KEY（V9）、NAME_LATER_KEY（先看看，介面評估第四輪），key 是一起溜的人（readJsonKey／writeJsonKey）：');
+      eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'key', 'key', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'SHEET_WRITES_KEY', 'SHEET_WRITES_KEY', 'WALK_VIEW_KEY', 'WALK_VIEW_KEY', 'ONBOARD_KEY', 'ONBOARD_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、WALKER_NAME_KEY 和 SHEET_WRITES_KEY（#138 寫試算表）、WALK_VIEW_KEY、ONBOARD_KEY（V9）、NAME_LATER_KEY（先看看，介面評估第四輪），key 是一起溜的人（readJsonKey／writeJsonKey）：');
       if (!/readJsonKey\(COMPANIONS_KEY\)/.test(APP_JS) || !/writeJsonKey\(WALK_WITH_KEY,/.test(APP_JS)) throw new Error('readJsonKey／writeJsonKey 只給一起溜的人用');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
       eq(urls.length, 4, 'fetch 呼叫數（上傳以外）：');
@@ -386,7 +386,7 @@ function runTests() {
         groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '入所介紹', '管理用'].slice(0, box.querySelector('[data-section="rest"]') ? 5 : 4)); // 相簿 K 2026-10-09 拿掉；管理用（改介紹、休養）10-10 集中一區
+        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '入所介紹', '休養設定'].slice(0, box.querySelector('[data-section="rest"]') ? 5 : 4)); // 相簿 K 2026-10-09 拿掉；管理用（改介紹、休養）10-10 集中一區
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/thumbs/2.jpg', '一起溜的照片：');
@@ -1948,7 +1948,7 @@ async function runRestTests() {
       { id: '9613', name: '固定丙', cage: 'A03', note: '', covered: true, walkedDate: null },
     ];
     groupMap = {}; activeTab = 'walk'; searchQuery = '';
-    walkedStorage = fakeStorage(); walkedMemory = null; notesPassMemory = '';
+    walkedStorage = fakeStorage(); walkedMemory = null; walkerNameMemory = '';
     restMap = { '9611': { until: ymd(later(3)), reason: '術後休養' } };
     resetWalkOrder(); render();
     await check('休養中：排在溜狗表最下面（有人固定照顧也在它上面），色籤寫「休養中」，沒有溜了；過了日期自動恢復', () => {
@@ -1965,40 +1965,34 @@ async function runRestTests() {
       if (!d.querySelector('.rest-note').textContent.includes('術後休養')) throw new Error('要寫原因');
       hideDetail();
     });
-    await check('休養設定：要通關碼，PUT /rest/編號；成功後這支手機馬上排到下面、記住通關碼；通關碼錯就再問', async () => {
+    await check('休養設定（ADR 0004）：不用通關碼、要先選名字，PUT /rest/編號 帶 editor；成功後這支手機馬上排到下面', async () => {
       const calls = [];
       window.fetch = async (u, o) => {
         calls.push([String(u), o && o.method, o && JSON.parse(o.body)]);
         const b = JSON.parse(o.body);
-        if (b.passcode !== '對的') return json({ ok: false, error: '通關碼不對', code: 'passcode' }, 401);
         return json({ ok: true, id: '9612', rest: { until: b.until, reason: b.reason } });
       };
       showDetail(allDogs[1]);
       document.getElementById('restEdit').click();
-      eq([!!document.getElementById('restPass'), document.getElementById('restReason').value], [true, '術後休養'], '表單：');
-      const pass = document.getElementById('restPass');
-      pass.value = '錯的'; pass.dispatchEvent(new Event('input', { bubbles: true }));
+      eq([!!document.querySelector('#detail input[type="password"]'), document.getElementById('restReason').value], [false, '術後休養'], '表單沒有通關碼：');
       document.getElementById('restForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       await new Promise(r => setTimeout(r, 20));
-      eq([restEdit && restEdit.phase, loadNotesPass()], ['error', ''], '通關碼錯：');
-      const p2 = document.getElementById('restPass');
-      p2.value = '對的'; p2.dispatchEvent(new Event('input', { bubbles: true }));
+      eq([restEdit && restEdit.phase, restEdit && restEdit.error, calls.length], ['error', NEED_EDITOR, 0], '沒選名字：');
+      saveWalkerName('志工我');
       document.getElementById('restForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       await new Promise(r => setTimeout(r, 20));
-      eq([calls.length, calls[1][0], calls[1][1], calls[1][2].reason], [2, 'https://worker.test/rest/9612', 'PUT', '術後休養'], '送出：');
-      eq([restEdit, loadNotesPass(), computeStatus(allDogs[1], T).kind], [null, '對的', 'rest'], '成功：');
+      eq([calls.length, calls[0][0], calls[0][1], calls[0][2].reason, calls[0][2].editor, 'passcode' in calls[0][2]], [1, 'https://worker.test/rest/9612', 'PUT', '術後休養', '志工我', false], '送出：');
+      eq([restEdit, computeStatus(allDogs[1], T).kind], [null, 'rest'], '成功：');
       hideDetail(); hideToast();
       eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['固定丙', '休養甲', '一般乙'], '設好的那隻也排到最下面：');
     });
-    await check('入所介紹（10-10）：直接點那一段就能改（不另外放按鈕）、要通關碼，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {
+    await check('入所介紹（10-10）：直接點那一段就能改（不另外放按鈕）、不用通關碼、帶 editor，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {
       const calls = [];
       window.fetch = async (u, o) => {
         calls.push([String(u), o && o.method, o && JSON.parse(o.body)]);
         const b = JSON.parse(o.body);
-        if (b.passcode !== '對的') return json({ ok: false, error: '通關碼不對', code: 'passcode' }, 401);
         return json({ ok: true, id: '9613', intro: b.text });
       };
-      saveNotesPass('');
       showDetail(allDogs[2]);
       eq([document.getElementById('introEdit').closest('[data-section]').dataset.section, document.getElementById('introEdit').textContent, document.querySelectorAll('#detail [data-section="rest"] .admin-btn').length], ['intro', '還沒有入所介紹，點這裡補', 1], '沒介紹：那一段本身可以點，管理用只剩設定休養中：');
       document.getElementById('introEdit').click();
@@ -2006,12 +2000,12 @@ async function runRestTests() {
       const text = document.getElementById('introText');
       text.value = '  親人\n喜歡散步  '; text.dispatchEvent(new Event('input', { bubbles: true }));
       eq(document.querySelector('.intro-count').textContent, '11 / 1000 字', '字數：');
-      const pass = document.getElementById('introPass');
-      pass.value = '對的'; pass.dispatchEvent(new Event('input', { bubbles: true }));
+      eq(!!document.querySelector('#detail input[type="password"]'), false, '沒有通關碼欄：');
       document.getElementById('introForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
       await new Promise(r => setTimeout(r, 20));
       eq([calls.length, calls[0][0], calls[0][1], calls[0][2].text], [1, 'https://worker.test/intro/9613', 'PUT', '親人\n喜歡散步'], '送出：');
-      eq([introEdit, introOf(allDogs[2]), loadNotesPass()], [null, '親人\n喜歡散步', '對的'], '成功：');
+      eq(calls[0][2].editor, '志工我', '帶名字：');
+      eq([introEdit, introOf(allDogs[2])], [null, '親人\n喜歡散步'], '成功：');
       eq(document.querySelector('[data-section="intro"] .content').textContent, '親人\n喜歡散步', '馬上看到：');
       eq(document.getElementById('introEdit').getAttribute('aria-label'), '改入所介紹', '有介紹：點了是改：');
       if (calls.some(c => /sheet|script\.google/.test(c[0]))) throw new Error('不應該寫試算表');
@@ -2027,7 +2021,7 @@ async function runRestTests() {
     hideDetail(); hideToast();
     box.classList.add('hidden');
     history.replaceState(null, '');
-    saveNotesPass('');
+    saveWalkerName('');
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, restMap, restEdit] = saved;
     resetWalkOrder(); render();
   }
@@ -2774,10 +2768,10 @@ async function runR2Tests() {
     if (/migrations apply|d1 execute|continue-on-error|if:\s*always\(/.test(deploy + preview)) throw new Error('部署不能改結構或忽略綁定錯誤');
   });
   const thumbs = await get('../.github/workflows/r2-thumbs.yml');
-  await check('#130 縮圖（R2）Action：只能手動或由 Worker 叫、用通關碼、不提交 repo', () => {
+  await check('#130 縮圖（R2）Action：只能手動或由 Worker 叫、用管理金鑰、不提交 repo', () => {
     if (!thumbs) throw new Error('讀不到 r2-thumbs.yml');
     if (!/on:\r?\n  workflow_dispatch:\r?\n\r?\n/.test(thumbs)) throw new Error('只能用 workflow_dispatch 觸發');
-    if (!/ADMIN_PASSCODE: \$\{\{ secrets\.NOTES_PASSCODE \}\}/.test(thumbs)) throw new Error('通關碼要用 Secret NOTES_PASSCODE');
+    if (!/ADMIN_KEY: \$\{\{ secrets\.ADMIN_KEY \|\| secrets\.NOTES_PASSCODE \}\}/.test(thumbs)) throw new Error('金鑰要用 Secret ADMIN_KEY');
     if (!/contents: read/.test(thumbs) || /git push|git commit/.test(thumbs)) throw new Error('不能提交 repo');
     if (!/make-thumbs\.py --site/.test(thumbs)) throw new Error('縮圖要用 make-thumbs.py --site');
   });
@@ -3100,7 +3094,7 @@ async function runDeskTests() {
       const saved2 = [UPLOAD_URL, window.fetch, photoVersions];
       const names = () => [...main.querySelectorAll('.df-row .dr-name button')].map(b => b.textContent);
       try {
-        UPLOAD_URL = 'https://worker.test'; saveNotesPass('');
+        UPLOAD_URL = 'https://worker.test'; saveWalkerName('');
         photoVersions = { 'photos/2026010102.jpg': 'a', 'photos/2026010103.jpg': 'b', 'photos/2026010104.jpg': 'c' };
         allDogs[1].intro = '有介紹'; allDogs[2].intro = '有介紹';
         deskView = 'fill'; deskFill = 'intro'; deskFillOrder = null; deskFillDone.clear(); deskFillIntro = null;
@@ -3108,28 +3102,23 @@ async function runDeskTests() {
         const before = names();
         eq(before.slice().sort(), ['桌無', '桌紅'], '沒介紹的兩隻：');
         const calls = [];
-        let pass = '錯的';
         window.fetch = async (u, o) => {
           calls.push([String(u), o.method, JSON.parse(o.body)]);
-          return JSON.parse(o.body).passcode === '對的'
-            ? new Response(JSON.stringify({ ok: true, intro: JSON.parse(o.body).text }))
-            : new Response(JSON.stringify({ ok: false, error: '通關碼不對', code: 'passcode' }), { status: 401 });
+          return new Response(JSON.stringify({ ok: true, intro: JSON.parse(o.body).text }));
         };
         const first = before[0];
         main.querySelector('.df-row [data-fill-intro]').click();
         const box = document.getElementById('dfIntroText');
-        eq([!!box, !!document.getElementById('dfIntroPass'), !!detailDog], [true, true, false], '原地變成文字框、不開詳細資訊：');
+        eq([!!box, !!main.querySelector('.df-form input[type="password"]'), !!detailDog], [true, false, false], '原地變成文字框、沒有通關碼、不開詳細資訊：');
         box.value = '親人，好牽'; box.dispatchEvent(new Event('input', { bubbles: true }));
-        const type = v => { const p = document.getElementById('dfIntroPass'); p.value = v; p.dispatchEvent(new Event('input', { bubbles: true })); };
-        type(pass);
+        main.querySelector('[data-fill-form]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await new Promise(r => setTimeout(r, 20));
+        eq([main.querySelector('.df-st.err').textContent.includes('請先選好你的名字'), document.getElementById('dfIntroText').value, calls.length], [true, '親人，好牽', 0], '沒選名字：寫原因、打的字還在：');
+        saveWalkerName('志工我');
         main.querySelector('[data-fill-form]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         eq(main.querySelector('.df-st.busy').textContent, '介紹儲存中…', '按了馬上寫儲存中：');
         await new Promise(r => setTimeout(r, 20));
-        eq([main.querySelector('.df-st.err').textContent.includes('通關碼不對'), document.getElementById('dfIntroText').value], [true, '親人，好牽'], '沒成功寫原因、打的字還在：');
-        type('對的');
-        main.querySelector('[data-fill-form]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-        await new Promise(r => setTimeout(r, 20));
-        eq([calls.length, calls[1][0].startsWith('https://worker.test/intro/'), calls[1][1], calls[1][2].text], [2, true, 'PUT', '親人，好牽'], '送出：');
+        eq([calls.length, calls[0][0].startsWith('https://worker.test/intro/'), calls[0][1], calls[0][2].text, calls[0][2].editor], [1, true, 'PUT', '親人，好牽', '志工我'], '送出：');
         const row = main.querySelector('.df-row');
         eq([names(), row.classList.contains('done'), row.querySelector('.df-st.ok').textContent.includes('介紹已儲存'), row.querySelector('.df-intro-text').textContent], [before, true, true, '親人，好牽'], '補好了留在原位、打勾、看得到新介紹：');
         eq([deskFillIntro, main.querySelector('.df-done-n').textContent.includes('這次補好 1 隻'), names()[0]], [null, true, first], '上面寫這次補好幾隻：');
@@ -3141,7 +3130,7 @@ async function runDeskTests() {
         [UPLOAD_URL, window.fetch, photoVersions] = saved2;
         for (const d of allDogs) delete introOverrides[d.id];
         allDogs[1].intro = ''; allDogs[2].intro = '';
-        deskFillIntro = null; deskFillDone.clear(); deskFillOrder = null; deskView = 'sheet'; deskFill = 'all'; saveNotesPass(''); hideToast(); render();
+        deskFillIntro = null; deskFillDone.clear(); deskFillOrder = null; deskView = 'sheet'; deskFill = 'all'; saveWalkerName(''); hideToast(); render();
       }
     });
     await check('補資料的照片：選了先在那一格預覽，按「上傳」才送；上傳中、已上傳都寫在那一列', async () => {

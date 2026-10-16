@@ -38,7 +38,7 @@ function fakeGithub({ files = {}, putStatus = [], dogsStatus = 200 } = {}) {
 }
 
 function post(id, { body = JPEG.slice(), origin = ORIGIN, type = 'image/jpeg', ip = '1.1.1.1' } = {}) {
-  const headers = { 'Content-Type': type, 'CF-Connecting-IP': ip };
+  const headers = { 'Content-Type': type, 'CF-Connecting-IP': ip, 'X-Editor': encodeURIComponent('小明') };
   if (origin) headers.Origin = origin;
   return new Request(`https://bq-shelter-photos.example.workers.dev/photos/${id}`, { method: 'POST', headers, body });
 }
@@ -155,7 +155,7 @@ test('isJpeg 看檔頭', () => {
   assert.equal(isJpeg(new Uint8Array([0xff, 0xd8])), false);
 });
 
-const NENV = { ...ENV, NOTES_PASSCODE: '對的通關碼' };
+const NENV = { ...ENV, ADMIN_KEY: '管理金鑰' };
 
 // ── #95 誰遛的代號 ──
 const WALKER_ENV = { ...ENV, WALKER_KEY: 'test-walker-key' };
@@ -255,11 +255,11 @@ const fakeAssets = () => {
   return { seen, fetch: async req => { seen.push(new URL(req.url).pathname); return new Response('檔案', { status: 200 }); } };
 };
 
-test('#125 /api 前綴：/api/ 顯示服務狀態、/api/ 顯示狀態，管理通關碼仍保留', async () => {
+test('#125 /api 前綴：/api/ 顯示服務狀態、/api/ 顯示狀態，管理金鑰仍保留', async () => {
   fakeGithub();
   const home = await send(new Request(`${SITE}/api/`), NENV);
   assert.equal(home.body.ok, true);
-  assert.equal(home.body.notesPasscode, '已設定');
+  assert.equal(home.body.adminKey, '已設定');
   assert.equal((await send(new Request(`${SITE}/api`), NENV)).body.ok, true);
 
 });
@@ -293,7 +293,7 @@ test('#125 合在一起時：不是 /api 的 GET 交給網站檔案（找不到�
 
 test('#125 /api/photos/{編號}：跟舊路徑一樣寫到 photos/{編號}.jpg', async () => {
   const calls = fakeGithub();
-  const req = new Request(`${SITE}/api/photos/2024032902`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'image/jpeg', 'CF-Connecting-IP': '9.9.9.9' }, body: JPEG.slice() });
+  const req = new Request(`${SITE}/api/photos/2024032902`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'image/jpeg', 'CF-Connecting-IP': '9.9.9.9', 'X-Editor': encodeURIComponent('小明') }, body: JPEG.slice() });
   const r = await send(req);
   assert.equal(r.status, 200);
   assert.ok(calls.some(c => c.method === 'PUT' && c.path.endsWith('/contents/photos/2024032902.jpg')));
@@ -307,7 +307,7 @@ test('#126 預覽版：上傳、備註、更新都回 403 且不碰 GitHub；讀
   const h = { Origin: SITE, 'Content-Type': 'application/json' };
   const writes = [
     new Request(`${SITE}/api/photos/2024032902`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'image/jpeg' }, body: JPEG.slice() }),
-    new Request(`${SITE}/api/rest/2024032902`, { method: 'PUT', headers: h, body: JSON.stringify({ text: 'x', passcode: '對的通關碼' }) }),
+    new Request(`${SITE}/api/rest/2024032902`, { method: 'PUT', headers: h, body: JSON.stringify({ text: 'x', editor: '小明' }) }),
     new Request(`${SITE}/api/sync`, { method: 'POST', headers: h }),
   ];
   for (const req of writes) {
@@ -340,7 +340,7 @@ function fakeScript(reply = req => ({ ok: true, today: '2026-10-04', results: re
   return calls;
 }
 
-test('#138 POST /walk：帶通關碼轉給小程式，回傳每隻狗的結果；不碰 GitHub', async () => {
+test('#138 POST /walk：帶金鑰轉給小程式，回傳每隻狗的結果；不碰 GitHub', async () => {
   const calls = fakeScript();
   const r = await send(postWalk({ action: 'walk', walker: ' 志工我 ', dogs: [{ id: '9001', name: '測試甲' }, { id: '', name: '測試丙' }] }), SHEET_ENV);
   assert.equal(r.status, 200);
@@ -358,7 +358,7 @@ test('#138 POST /walk 復原：只帶 prev／wrote 過去，不用名字', async
   assert.deepEqual(calls[0].body, { key: 'sheet-key', action: 'undo', dogs: [{ id: '9001', name: '測試甲', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' } }] });
 });
 
-test('#138 POST /walk 擋掉：沒設定、格式不對、名字太長、太多隻、別的網站、預覽版；小程式說通關碼不對', async () => {
+test('#138 POST /walk 擋掉：沒設定、格式不對、名字太長、太多隻、別的網站、預覽版；小程式說金鑰不對', async () => {
   const calls = fakeScript();
   const ok = { action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] };
   const off = await send(postWalk(ok), ENV);
@@ -374,10 +374,10 @@ test('#138 POST /walk 擋掉：沒設定、格式不對、名字太長、太多�
   assert.equal((await send(postWalk(ok, { origin: 'https://evil.example' }), SHEET_ENV)).status, 403);
   assert.equal((await send(postWalk(ok), { ...SHEET_ENV, PREVIEW: '1' })).status, 403);
   assert.equal(calls.length, 0);
-  fakeScript(() => ({ ok: false, code: 'key', error: '通關碼不對' }));
+  fakeScript(() => ({ ok: false, code: 'key', error: '金鑰不對' }));
   const bad = await send(postWalk(ok), SHEET_ENV);
   assert.equal(bad.status, 502);
-  assert.match(bad.body.error, /通關碼/);
+  assert.match(bad.body.error, /金鑰/);
   globalThis.fetch = async () => { throw new TypeError('down'); };
   assert.equal((await send(postWalk(ok), SHEET_ENV)).status, 502);
 });
@@ -490,17 +490,17 @@ test('#141 POST /walk 修改：必須帶原始名單快照；通過既有來源�
 
 test('舊網址拿掉後：沒設 ALLOWED_ORIGINS 時，舊網址 github.io 送來的要求一律擋，同網址照常', async () => {
   fakeGithub();
-  const env = { GITHUB_TOKEN: 'test-token', NOTES_PASSCODE: '對的通關碼' };
+  const env = { GITHUB_TOKEN: 'test-token' };
   assert.equal((await send(new Request(`${SITE}/api/rest`, { headers: { Origin: 'https://jiatsenk.github.io' } }), env)).status, 403);
   assert.equal((await send(new Request(`${SITE}/api/rest`, { headers: { Origin: SITE } }), env)).status, 503);
 });
 // 資料庫（狀態頁、開卡、名字推薦、GET /api/dogs）的測試在 worker/test/d1-read.test.mjs（#247）
 
-test('#252 備註已退役：新舊路徑都不讀寫 GitHub，即使有通關碼', async () => {
+test('#252 備註已退役：新舊路徑都不讀寫 GitHub，即使有帶名字', async () => {
   const calls = fakeGithub();
   for (const path of ['/notes', '/notes/2024032902', '/api/notes', '/api/notes/2024032902']) {
     for (const method of ['GET','PUT']) {
-      const r = await send(new Request(`https://w.example${path}`, { method, headers: { Origin: ORIGIN }, ...(method === 'PUT' ? { body: JSON.stringify({ text: 'x', passcode: '對的通關碼' }) } : {}) }), { ...ENV, NOTES_PASSCODE: '對的通關碼' });
+      const r = await send(new Request(`https://w.example${path}`, { method, headers: { Origin: ORIGIN }, ...(method === 'PUT' ? { body: JSON.stringify({ text: 'x', editor: '小明' }) } : {}) }), ENV);
       assert.equal(r.status, 410);
     }
   }
