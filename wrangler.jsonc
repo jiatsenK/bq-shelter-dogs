@@ -22,8 +22,7 @@
     "binding": "DB",
     "database_name": "bq-shelter-dogs",
     "database_id": "6cd6c304-0fed-4ddb-b9ec-799e60a4adb4",
-    "preview_database_id": "9e23a65c-c9dd-4f83-ad9c-2e01626910f0",
-    "migrations_dir": "db/migrations"
+    "preview_database_id": "9e23a65c-c9dd-4f83-ad9c-2e01626910f0"
   }],
   "vars": {
     "GITHUB_REPO": "jiatsenK/bq-shelter-dogs",

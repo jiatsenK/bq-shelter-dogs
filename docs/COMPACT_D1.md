@@ -16,7 +16,7 @@ if (!report.equal) throw new Error(JSON.stringify(report.differences));
 const dogs = await readCompactDogs(db);
 ```
 
-建表 SQL 是 `db/compact-schema.sql`，不混入舊 `db/migrations/`；部署不會自動執行。正式套用須由 K 另行確認，後續票沿用這份表契約。私密匯出只放 `.migration-private/`，已加入忽略清單。
+建表 SQL 是 `db/compact-schema.sql`；部署不會自動執行。正式套用須由 K 另行確認，後續票沿用這份表契約。私密匯出只放 `.migration-private/`，已加入忽略清單。
 
 ## 表契約
 
@@ -76,11 +76,7 @@ const report = await compareCompactProfiles(db, { walks, intros, names, rest, ph
 - 四張表在同一個 batch 整份替換；永久狗和編號只新增不刪，重跑不換 ID。
 - 差異列出 `kind`（walks／intros／rest／photos）、`key`（溜狗是「編號或狗名|日期」，其他是編號或 R2 路徑）、`field`、`expected`、`actual`。
 
-本機演練（R2 清單放 `.migration-private/`，不提交）：
-
-```powershell
-node scripts/check-compact-profiles.mjs .migration-private/219/bq-218-r2-source.json
-```
+本機演練用的 `scripts/check-compact-profiles.mjs` 已在 #275 移除（匯入已完成，需要時見 Git 歷史）。
 
 `migrateCompactDatabase` 會幫 #246 時已經建好的 `v3_walks` 補上 `dog_number`、`dog_name` 兩欄。
 
@@ -121,3 +117,7 @@ node scripts/check-compact-profiles.mjs .migration-private/219/bq-218-r2-source.
 - 不再寫 `data/dogs.json`、`data/walks.json`、`data/departures.json`、`data/history/`，workflow 沒有 git 提交，權限 `contents: read`。repo 裡這些檔停在 #251 那天，網站已不讀（#260）。
 - 每日快照停止；溜狗歷史的開始記錄日固定 2026-09-25（`HISTORY_START`）。
 - `syncedAt` 每次同步都更新（原本資料沒變就不動）。
+
+## 開卡與名字推薦的一次性匯入（#249，已完成）
+
+舊 D1 的 `cardOpened`、`walkerNames` 曾用 `scripts/import-compact-legacy.mjs`、`scripts/check-compact-legacy.mjs` 合併進 `v3_card_opened`、`v3_volunteers`：開卡以編號換永久狗 ID，同代號同狗取最早日期；名字完全相同才合併、取較新時間；不清表、不刪既有資料。匯入完成、舊表已在 #252 清除，兩支腳本和原本的 `docs/COMPACT_LEGACY_IMPORT.md` 已在 #275 移除，細節見 Git 歷史。
