@@ -3,7 +3,7 @@ import { importCompactDogs } from './import-compact-dogs.mjs';
 import { importCompactProfiles } from './import-compact-profiles.mjs';
 import { importCompactDepartures } from './import-compact-departures.mjs';
 import { readDogsPayload, readWalks, readDepartures } from '../worker/src/compact.js';
-import { upgradeWalks, newWalks, attachMyWalkedDate, updateDepartures, myNames, walkerCode, formatDate, formatTimestamp, FORMAT_VERSION } from './sync-sheet.mjs';
+import { upgradeWalks, newWalks, attachMyWalkedDate, updateDepartures, myNames, walkerCode, formatDate, formatTimestamp, FORMAT_VERSION, dogKey } from './sync-sheet.mjs';
 
 // D1 上一次的狀態：主清單複本（還沒有就是 null）、溜狗紀錄、離所紀錄
 export async function readPrevious(db) {
@@ -20,7 +20,9 @@ export async function readPrevious(db) {
 // - rows：已出所分頁（loadDepartedRows），null 表示讀不到，離所原因沿用上一次
 // D1 的溜狗紀錄一隻狗一天只存最後一筆、沒有 mine，所以用代號推回 mine：newWalks 的「同一天換人」才比得準。
 // 同一天多算出來的紀錄寫進 D1 時會合併成一筆（importCompactProfiles），不會重複。
-export function planSync(prev, sheet, rows, now = new Date(), { key = process.env.WALKER_KEY, names = myNames() } = {}) {
+// ADR 0010：since 有值時 prev.walks 只有 since 以後的紀錄（加上 daily 時用主鍵核對到的每隻狗最後一次）。
+// since 以前的紀錄定下來：試算表上改了舊日期也不理；daily（6:30 保險同步）時，每隻狗最後一次溜狗在 D1 缺了才補。
+export function planSync(prev, sheet, rows, now = new Date(), { key = process.env.WALKER_KEY, names = myNames(), since = '', daily = false } = {}) {
   // 性別與編號關係由 D1 永久身分提供，不再讀狗卡；有編號的狗絕不按名字合併。
   const identities = prev.identities || [];
   sheet = { ...sheet, dogs: sheet.dogs.map(dog => {
@@ -34,8 +36,21 @@ export function planSync(prev, sheet, rows, now = new Date(), { key = process.en
   const walks = prev.walks.map(w => ({ ...w, mine: Array.isArray(w.walkers) && w.walkers.some(c => myCodes.has(c)) }));
   const prevDogs = prev.dogs ? prev.dogs.dogs : null;
   const upgraded = upgradeWalks(walks, sheet.dogs, { key, names }).walks;
-  const allWalks = [...upgraded, ...newWalks(sheet.dogs, prevDogs, upgraded, key)];
-  const dogs = attachMyWalkedDate(sheet.dogs, allWalks);
+  const added = newWalks(sheet.dogs, prevDogs, upgraded, key).filter(w => !since || w.date >= since);
+  if (since && daily) {
+    const have = new Set([...upgraded, ...added].map(w => `${dogKey(w)}|${w.date}`));
+    for (const d of sheet.dogs) {
+      if (!d.walkedDate || d.walkedDate >= since || have.has(`${dogKey(d)}|${d.walkedDate}`)) continue;
+      added.push({ id: d.id, name: d.name, date: d.walkedDate, mine: d.myWalked === true, ...(key ? { walkers: d.walkers || [] } : {}) });
+    }
+  }
+  const allWalks = [...upgraded, ...added];
+  // 只讀最近一段時，「我最後一次遛」可能在更早以前：沿用上一次算好的，取比較新的那個
+  const prevMine = new Map(since && prevDogs ? prevDogs.filter(d => d.myWalkedDate).map(d => [dogKey(d), d.myWalkedDate]) : []);
+  const dogs = attachMyWalkedDate(sheet.dogs, allWalks).map(d => {
+    const old = prevMine.get(dogKey(d));
+    return old && (!d.myWalkedDate || d.myWalkedDate < old) ? { ...d, myWalkedDate: old } : d;
+  });
   const sheetNotes = sheet.sheetNotes ?? (prev.dogs ? prev.dogs.sheetNotes : []);
   const today = formatDate(now);
   const snapshots = [

@@ -15,7 +15,7 @@ import { migrateCompactDatabase, compactSchemaStatements } from './migrate-compa
 import { compareCompactDogs } from './import-compact-dogs.mjs';
 import { compareCompactProfiles } from './import-compact-profiles.mjs';
 import { compareCompactDepartures } from './import-compact-departures.mjs';
-import { fetchGviz, parseGroupColumns, parseGroupLabels, buildData, loadDepartedRows } from './sync-sheet.mjs';
+import { fetchGviz, parseGroupColumns, parseGroupLabels, buildData, loadDepartedRows, formatDate } from './sync-sheet.mjs';
 import { planSync, readPrevious, applySource } from './sync-plan.mjs';
 import { SYNC_TABLES, diffTables, budgetProblem, todayRowsWritten, MAX_ROWS_PER_SYNC, DAILY_BUDGET } from './sync-diff.mjs';
 export { planSync, readPrevious };
@@ -50,10 +50,37 @@ const OPTIONAL_TABLES = new Set(['v3_sheet_group_labels']);
 const sqlValue = v => (v === null || v === undefined ? 'NULL' : typeof v === 'number' ? String(v) : `'${String(v).replace(/'/g, "''")}'`);
 const insert = (table, row, tail = '') => `INSERT INTO ${table}(${Object.keys(row).join(',')}) VALUES(${Object.values(row).map(sqlValue).join(',')})${tail};`;
 
+// ADR 0010：溜狗紀錄只讀、只寫最近一段。v3_sync_state 記上一次成功同步是哪一天（台灣時間），
+// 起點是那天的前一天（停擺後第一次同步自動補回）；還沒記過或「全量核對」就整張讀。
+export const WALKS_SYNCED_KEY = 'walks_synced';
+export const WALKS_SYNCED_SQL = `SELECT value FROM v3_sync_state WHERE key='${WALKS_SYNCED_KEY}'`;
+export function walkSince(walksSynced, { full = false } = {}) {
+  if (full || !/^\d{4}-\d{2}-\d{2}$/.test(walksSynced || '')) return '';
+  const d = new Date(`${walksSynced}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - 1);
+  return d.toISOString().slice(0, 10);
+}
+
+// 讀 v3_walks 的 SQL：since 以後走 v3_walks_date 索引；checks（6:30 保險同步：試算表每隻狗最後一次溜狗）用主鍵（狗＋日期）核對。
+// 有編號的狗照編號找永久狗，沒編號的照上一次主清單的犬名找
+export function walkSeedSql(since, checks = []) {
+  if (!since) return SEED_TABLES.v3_walks;
+  const values = pairs => `(VALUES ${pairs.map(p => `(${p.map(sqlValue).join(',')})`).join(',')})`;
+  const old = checks.filter(c => c.date && c.date < since);
+  const numbered = old.filter(c => c.number).map(c => [c.number, c.date]);
+  const named = old.filter(c => !c.number).map(c => [c.name, c.date]);
+  return [
+    `SELECT * FROM v3_walks WHERE walk_date>=${sqlValue(since)}`,
+    ...(numbered.length ? [`SELECT w.* FROM v3_walks w JOIN v3_dog_numbers n ON n.dog_id=w.dog_id WHERE (n.number,w.walk_date) IN ${values(numbered)}`] : []),
+    ...(named.length ? [`SELECT w.* FROM v3_walks w JOIN v3_sheet_main m ON m.dog_id=w.dog_id AND m.number='' WHERE (m.name,w.walk_date) IN ${values(named)}`] : []),
+  ].join(' UNION ');
+}
+
 // seed：{ 表名: 正式 D1 讀到的列 }；source：{ dogs（dogs.json 的樣子）, walks, departures, groupColumns }，
 // 或是一個函式：拿到已經放好 seed 的記憶體 D1，回傳 source（同步要先讀上一次的狀態才算得出來）。
 // 回傳 { sql, rows }：要寫回正式 D1 的 SQL、其中要寫幾列；讀回跟來源不一致就丟錯，不寫。
-export async function buildSyncPlan(seed, source) {
+// today：這次同步是哪天，跟 seed.walksSynced 不同就順便記下（ADR 0010）；跟資料寫在同一份 SQL，寫成功才算數
+export async function buildSyncPlan(seed, source, { today = '' } = {}) {
   const db = fakeD1();
   try {
     await migrateCompactDatabase(db);
@@ -74,23 +101,31 @@ export async function buildSyncPlan(seed, source) {
     // 全部是 IF NOT EXISTS／OR IGNORE，重跑不影響既有資料
     const out = (await compactSchemaStatements()).filter(t => !skipSchemaStatement(t)).map(t => `${t.replace(/\s+/g, ' ')};`);
     for (const { sql, values } of changes) { let i = 0; out.push(`${sql.replace(/\?/g, () => sqlValue(values[i++]))};`); }
-    return { sql: out.join('\n') + '\n', rows: changes.length };
+    const mark = Boolean(today) && today !== seed.walksSynced;
+    if (mark) out.push(`INSERT INTO v3_sync_state(key,value) VALUES('${WALKS_SYNCED_KEY}',${sqlValue(today)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value;`);
+    return { sql: out.join('\n') + '\n', rows: changes.length + Number(mark) };
   } finally { db.close(); }
 }
 
-export async function buildSyncSql(seed, source) {
-  return (await buildSyncPlan(seed, source)).sql;
+export async function buildSyncSql(seed, source, options) {
+  return (await buildSyncPlan(seed, source, options)).sql;
 }
 
-// 11 張表同時讀：每叫一次 npx wrangler 要 3 秒左右，一張一張讀會讓頁首「更新」多等半分鐘
-// 第一張先單獨讀，讓 npx 把 wrangler 下載好，其餘再一起叫，免得同時下載互搶快取
+// 12 張表同時讀：每叫一次 npx wrangler 要 3 秒左右，一張一張讀會讓頁首「更新」多等半分鐘
+// 上一次同步的日期先單獨讀（溜狗紀錄要從哪天讀看它，ADR 0010），順便讓 npx 把 wrangler 下載好，其餘再一起叫，免得同時下載互搶快取
 // 任何一張表讀不到就整個停：當成空的會把累積的溜狗紀錄、離所整份換掉
-// 只有還沒建表的群名表可以當成空的
-export async function readSeed(query) {
-  const [first, ...rest] = Object.keys(SEED_TABLES);
-  const read = t => query(SEED_TABLES[t]).catch(e => { if (OPTIONAL_TABLES.has(t) && /no such table/i.test(String(e?.stdout ?? '') + e.message)) return []; throw e; });
-  const results = [await read(first), ...await Promise.all(rest.map(read))];
-  return Object.fromEntries([first, ...rest].map((t, i) => [t, results[i]]));
+// 只有還沒建表的群名表可以當成空的；v3_sync_state 還沒建（沒記過日期）就整張讀溜狗紀錄
+// full：全量核對；checks(since)：6:30 保險同步要用主鍵核對的 [{ number, name, date }]（見 walkSeedSql）
+// 回傳 { 表名: 列, walksSynced（上一次同步的日期）, since（溜狗紀錄從哪天讀，'' 是整張） }
+export async function readSeed(query, { full = false, checks = () => [] } = {}) {
+  const missing = e => /no such table/i.test(String(e?.stdout ?? '') + e.message);
+  const walksSynced = (await query(WALKS_SYNCED_SQL).catch(e => { if (missing(e)) return []; throw e; }))[0]?.value || '';
+  const since = walkSince(walksSynced, { full });
+  const tables = Object.keys(SEED_TABLES);
+  const sqlOf = t => (t === 'v3_walks' ? walkSeedSql(since, checks(since)) : SEED_TABLES[t]);
+  const read = t => query(sqlOf(t)).catch(e => { if (OPTIONAL_TABLES.has(t) && missing(e)) return []; throw e; });
+  const results = await Promise.all(tables.map(read));
+  return { ...Object.fromEntries(tables.map((t, i) => [t, results[i]])), walksSynced, since };
 }
 
 // 預演時只准送 SELECT 給正式 D1（#309）：預演用的 token 有寫入權限，萬一寫入那段被改壞也送不出去
@@ -138,7 +173,8 @@ ${error.message}
 
 const wrangler = args => execFileSync('npx', wranglerArgs(args), { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 64 * 1024 * 1024 });
 
-async function main({ dryRun = false } = {}) {
+// mode（SYNC_MODE）：daily＝6:30 保險同步（Worker 叫的）、full＝手動勾「全量核對」，空的是平常的同步（ADR 0010）
+async function main({ dryRun = false, mode = '' } = {}) {
   // D1 的溜狗紀錄沒有 mine，要靠代號推回來；沒有 WALKER_KEY 會把「我溜過」的日期算錯，寧可不同步
   if (!process.env.WALKER_KEY) throw new Error('沒有設定 WALKER_KEY，無法比對溜狗紀錄');
   const now = new Date();
@@ -148,12 +184,14 @@ async function main({ dryRun = false } = {}) {
   const groupColumns = parseGroupColumns(groupTable, dogNames);
   const groupLabels = parseGroupLabels(groupTable, dogNames);
   const rows = await loadDepartedRows(fetch, now);
-  const seed = await readSeed(async sql => JSON.parse(await wranglerAsync(['--json', '--command', sql]))[0].results);
+  const daily = mode === 'daily';
+  const checks = () => (daily ? sheet.dogs.filter(d => d.walkedDate).map(d => ({ number: d.id || '', name: d.name, date: d.walkedDate })) : []);
+  const seed = await readSeed(async sql => JSON.parse(await wranglerAsync(['--json', '--command', sql]))[0].results, { full: mode === 'full', checks });
   let plan;
   const { sql, rows: planned } = await buildSyncPlan(seed, async db => {
-    plan = planSync(await readPrevious(db), sheet, rows, now);
+    plan = planSync(await readPrevious(db), sheet, rows, now, { since: seed.since, daily });
     return { ...plan, groupColumns, groupLabels };
-  });
+  }, { today: formatDate(now) });
   const limits = { maxRows: Number(process.env.SYNC_MAX_ROWS) || MAX_ROWS_PER_SYNC, dailyBudget: Number(process.env.SYNC_DAILY_BUDGET) || DAILY_BUDGET };
   const todayWritten = await todayRowsWritten({ token: process.env.CLOUDFLARE_API_TOKEN, accountId: process.env.CLOUDFLARE_ACCOUNT_ID });
   // 查不到今天的用量不擋同步（只是少一道檢查），但在摘要寫出來，讓 K 知道 token 要補權限
@@ -185,7 +223,7 @@ ${problem}。這次沒有寫入，D1 保留上一次的內容。
   const file = join(tmpdir(), 'bq-sync-compact.sql');
   await writeFile(file, sql);
   wrangler(['--file', file]);
-  const message = `已同步：寫入 ${planned} 列（今天帳號已寫 ${used}）。共 ${plan.dogs.dogs.length} 隻狗、${plan.walks.walks.length} 筆溜狗紀錄、${plan.departures.length} 筆離所、${groupColumns.filter(c => c.length).length} 欄常遛狗群。`;
+  const message = `已同步：寫入 ${planned} 列（今天帳號已寫 ${used}）。共 ${plan.dogs.dogs.length} 隻狗、比對 ${seed.since ? `${seed.since} 以後` : '全部'}${daily ? '（加上每隻狗最後一次）' : ''}的 ${plan.walks.walks.length} 筆溜狗紀錄、${plan.departures.length} 筆離所、${groupColumns.filter(c => c.length).length} 欄常遛狗群。`;
   console.log(message);
   await summary(`${message}
 `);
@@ -204,7 +242,7 @@ async function writeDryRunComment(text) {
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const dryRun = process.argv.includes('--dry-run');
   readOnly = dryRun;
-  main({ dryRun }).catch(async e => {
+  main({ dryRun, mode: process.env.SYNC_MODE || '' }).catch(async e => {
     if (dryRun) {
       const text = dryRunFailure(e);
       await summary(text).catch(() => {});

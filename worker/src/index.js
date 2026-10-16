@@ -205,13 +205,14 @@ async function getDogs(env, origin) {
 
 // 定時叫 GitHub 跑同步試算表；成功時 GitHub 回 204
 const SYNC_WORKFLOW = 'sync-sheet.yml';
-async function triggerSync(env) {
+// daily：台灣 6:30 的保險同步，同步會再核對每隻狗最後一次溜狗（ADR 0010）
+async function triggerSync(env, { daily = false } = {}) {
   const cfg = config(env);
   if (!cfg.token) throw new Error('沒有設定 GITHUB_TOKEN，無法叫同步');
   const res = await github(cfg, `actions/workflows/${SYNC_WORKFLOW}/dispatches`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ref: cfg.branch }),
+    body: JSON.stringify({ ref: cfg.branch, ...(daily ? { inputs: { daily: 'true' } } : {}) }),
   });
   // 403／404 多半是 token 沒開 Actions 寫入權限；丟錯誤讓 Cloudflare 的 Cron 紀錄顯示失敗
   if (res.status !== 204) throw new Error(`叫同步失敗（GitHub ${res.status}）`);
@@ -526,7 +527,7 @@ async function syncTick(env, now) {
   const plan = await planTick(env.DB, now);
   if (plan !== 'daily' && plan !== 'changed') return plan;
   try {
-    await triggerSync(env);
+    await triggerSync(env, { daily: plan === 'daily' });
   } catch (e) {
     // 沒叫成就把「有改」放回去，下一格再試，不要等到隔天
     await markChanged(env.DB, now).catch(() => {});
