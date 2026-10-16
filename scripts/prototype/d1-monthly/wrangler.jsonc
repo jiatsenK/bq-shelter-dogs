@@ -1,0 +1,6 @@
+// 丟棄式原型（prototype/d1-monthly-packs）：只用本機 D1（miniflare），不部署、不連正式資料庫
+{
+  "name": "proto-d1-monthly",
+  "compatibility_date": "2026-09-01",
+  "d1_databases": [{ "binding": "DB", "database_name": "proto-monthly", "database_id": "00000000-0000-0000-0000-000000000000" }]
+}
