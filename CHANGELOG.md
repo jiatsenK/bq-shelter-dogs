@@ -1,5 +1,14 @@
 # Changelog
 
+## [9.1.1](https://github.com/jiatsenK/bq-shelter-dogs/compare/v9.1.0...v9.1.1) (2026-10-16)
+
+
+### 修正
+
+* 同步時補建正式 D1 缺少的資料表，修好編輯紀錄頁讀不到 ([7e6f760](https://github.com/jiatsenK/bq-shelter-dogs/commit/7e6f760312e86c21e3c715efc58e52155f53a5cf))
+* 復原沒收到回應時，手機「我溜過」殘留已溜的狗 ([b8d7e1d](https://github.com/jiatsenK/bq-shelter-dogs/commit/b8d7e1df12b806c27aa13f40a6902676d19a6dd7))
+* 復原沒收到回應時，打開網頁用試算表現況清掉手機殘留的已溜紀錄 ([0ac5be8](https://github.com/jiatsenK/bq-shelter-dogs/commit/0ac5be8a0895241aff1998685c614c5305a8ccb8))
+
 ## [9.1.0](https://github.com/jiatsenK/bq-shelter-dogs/compare/v9.0.0...v9.1.0) (2026-10-16)
 
 
