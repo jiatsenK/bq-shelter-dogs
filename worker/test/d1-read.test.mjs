@@ -185,6 +185,22 @@ test('GET /api/departures：形狀跟 departures.json 一樣', async () => {
   assert.deepEqual(body, { ok: true, version: 1, departures });
 });
 
+test('#333 出入所紀錄：在所和離所的狗都帶 stays，沒補過的沒有；還沒建表照常讀', async () => {
+  const DB = await seededDb();
+  await importCompactDepartures(DB, [{ id: '2021030913', name: '咪寶', date: '2026-10-13', dateSource: 'note', seen: '2026-10-13', reason: 'adopt', matched: '被領養', flags: [] }]);
+  const list = [{ in: '2015-08-18', out: '', reason: '迷路' }];
+  for (const number of ['2026051203', '2021030913']) {
+    await DB.prepare('INSERT INTO v3_stays SELECT dog_id,? FROM v3_dog_numbers WHERE number=?').bind(JSON.stringify(list), number).run();
+  }
+  const dogs = (await (await get('/dogs', { DB })).json()).dogs;
+  assert.deepEqual(dogs.map(d => d.stays), [undefined, list, undefined]);
+  const deps = (await (await get('/departures', { DB })).json()).departures;
+  assert.deepEqual(deps[0].stays, list);
+  await DB.prepare('DROP TABLE v3_stays').run();
+  worker.testing.resetState();
+  assert.equal((await get('/dogs', { DB })).status, 200);
+});
+
 test('GET /api/walks、/api/departures：D1 壞了或沒接回 503；只收 GET', async () => {
   const broken = { prepare: () => ({ bind() { return this; }, all: async () => { throw new Error('D1_ERROR'); } }), batch: async () => { throw new Error('D1_ERROR'); } };
   for (const path of ['/walks', '/departures']) {

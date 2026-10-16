@@ -131,6 +131,11 @@ CREATE TABLE IF NOT EXISTS v3_intake_events (
 -- 離所紀錄（#259，原本的 data/departures.json）：同步發現狗從主清單消失就記一筆，原因只讀「已出所」分頁判讀。
 -- last_* 是離開主清單前最後一次的樣子（離所名冊的詳細資訊用）；last_number 是 NULL 表示沒有這份資料。
 -- 判讀旗標、最後的舊編號、最後的常遛狗群拆成 v3_departure_items 的列。
+-- 出入所紀錄（#333，ADR 0011）：一隻狗一列，stays_json 是 [{in,out,reason}]（照入所日排）；只有補過紀錄的狗才有這一列
+CREATE TABLE IF NOT EXISTS v3_stays (
+  dog_id TEXT PRIMARY KEY NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
+  stays_json TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS v3_departures (
   number TEXT PRIMARY KEY NOT NULL CHECK(length(number)>0),
   dog_id TEXT NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
@@ -290,6 +295,9 @@ CREATE TRIGGER IF NOT EXISTS pack_v3_rest_DELETE AFTER DELETE ON v3_rest BEGIN U
 CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_INSERT AFTER INSERT ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_UPDATE AFTER UPDATE ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_DELETE AFTER DELETE ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_stays_INSERT AFTER INSERT ON v3_stays BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_stays_UPDATE AFTER UPDATE ON v3_stays BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_stays_DELETE AFTER DELETE ON v3_stays BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 -- UPDATE 改了日期（例如過去改成今天）時新舊兩邊都算
 CREATE TRIGGER IF NOT EXISTS pack_v3_walks_INSERT AFTER INSERT ON v3_walks BEGIN UPDATE v3_pack_versions SET walks=walks+(NEW.walk_date<cutoff), live=live+(NEW.walk_date>=cutoff) WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS pack_v3_walks_UPDATE AFTER UPDATE ON v3_walks BEGIN UPDATE v3_pack_versions SET walks=walks+(OLD.walk_date<cutoff OR NEW.walk_date<cutoff), live=live+(OLD.walk_date>=cutoff OR NEW.walk_date>=cutoff) WHERE id=1; END;
