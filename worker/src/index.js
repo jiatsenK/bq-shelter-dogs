@@ -175,7 +175,7 @@ async function databaseStatus(env) {
     const s = await packStatus(env.DB, taiwanYmd(Date.now()));
     if (s) return `D1 新表（主清單 ${s.dogs} 隻、溜狗紀錄 ${s.walks} 筆）`;
   } catch (e) {
-    return 'D1（新表還沒建）';
+    console.error('status', e);
   }
   return compactStatus(env.DB);
 }
