@@ -44,7 +44,7 @@ function bqIdDate(id) {
   const m = String(id || '').match(/^(\d{4})(\d{2})(\d{2})\d{2}$/);
   return m ? bqMakeDate(+m[1], +m[2], +m[3]) : null;
 }
-// 入所日（ADR 0004，跟 app.js 的 firstIntake 同一個規則）：現在的編號和舊編號裡最舊的那個
+// 入所日（ADR 0005，跟 app.js 的 firstIntake 同一個規則）：現在的編號和舊編號裡最舊的那個
 function bqIntake(d) {
   const dates = [d.id, ...(Array.isArray(d.formerIds) ? d.formerIds : [])].map(bqIdDate).filter(Boolean);
   return dates.length ? dates.reduce((a, b) => (b < a ? b : a)) : null;

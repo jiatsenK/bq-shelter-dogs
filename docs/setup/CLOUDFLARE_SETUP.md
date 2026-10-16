@@ -10,7 +10,7 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 
 - 程式和資料一樣放 GitHub，Cloudflare 只負責「放網站、跑後端」。
 - 以後改了 Worker 程式**不用再手動貼**，合併後 Action 會自動部署。
-- 密碼（token、通關碼、代號密鑰）**全部設在 GitHub 的 Secrets**，部署時自動帶到 Cloudflare。
+- 密碼（token、管理金鑰、代號密鑰）**全部設在 GitHub 的 Secrets**，部署時自動帶到 Cloudflare。
 - 費用 NT$0（Cloudflare Workers 免費方案）。
 - 舊網址 https://jiatsenk.github.io/bq-shelter-dogs/ 從 #129 起一打開就轉到新網址同一頁（舊的書籤、主畫面捷徑都還能用）。舊的單獨照片上傳 Worker（`bq-shelter-photos`）2026-10 K 決定刪除，程式裡給它和舊網址的判斷也拿掉了。
 
@@ -59,7 +59,7 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 | `CLOUDFLARE_ACCOUNT_ID` | 步驟 1 複製的 Account ID |
 | `CLOUDFLARE_API_TOKEN` | 步驟 2 複製的 Cloudflare token |
 | `WORKER_GITHUB_TOKEN` | 步驟 3 複製的 GitHub token |
-| `NOTES_PASSCODE` | 「我的備註」的通關碼（跟現在用的一樣，iPhone 鑰匙圈裡有） |
+| `ADMIN_KEY` | 管理 API（縮圖、搬照片、Trash）用的金鑰，只給 GitHub Action，自己想一組英數字。還沒設時沿用舊的 `NOTES_PASSCODE` Secret（ADR 0004） |
 
 `WALKER_KEY`（誰遛的代號密鑰）本來就在這裡，不用動，部署時會自動一起帶過去，代號不會變。
 
@@ -91,7 +91,6 @@ Cloudflare → **Workers & Pages** → `bq-shelter-photos` → **Settings** → 
 4. 存一則「我的備註」成功。
 5. 按頁首「更新」圓箭頭，沒有出現錯誤。
 6. 「我溜過」重新輸入自己的名字（新網址是新網站，手機上記的東西要重設一次），看得到自己溜過的狗。
-   存備註時通關碼也要自己打一次，之後 iPhone 鑰匙圈會記住新網址。
 
 都沒問題就跟 Claude 說，接著做其他項目；舊網址要等你說「切換」才會導過來（#129）。
 
@@ -188,7 +187,7 @@ https://pr-<PR 編號>-bq-shelter-dogs.<子網域>.workers.dev
 ### 要注意的地方
 
 - 照片改由 Worker 從 R2 讀，會算進 Cloudflare Workers 免費方案的**每天 10 萬次**。照片在手機上快取 30 天，正常用不會超過；Cloudflare 的 Worker 頁面 **Metrics** 看得到每天用量。
-- 管理用的功能（縮圖、Trash 清單和復原）都要「我的備註」那組通關碼（GitHub Secret `NOTES_PASSCODE`），之後的管理後台也會用到。
+- 管理用的功能（縮圖、Trash 清單和復原）要 GitHub Secret `ADMIN_KEY`；不做管理後台（ADR 0004，#143 廢除）。
 
 ## token 到期時
 
@@ -206,7 +205,7 @@ https://pr-<PR 編號>-bq-shelter-dogs.<子網域>.workers.dev
 - 照片放 R2（#130）：`wrangler.jsonc` 的 `r2_buckets`（binding `PHOTOS`，bucket `bq-shelter-photos`），程式在 `worker/src/r2.js`。
   `/photos/*`、`/data/dogs.json`（蓋上 R2 照片的版本號）先經過 Worker（相簿 2026-10-09 拿掉，`photos/gallery/` 一律 404）；R2 沒有的照片退回靜態檔，刪掉的照片放 0 位元組的刪除標記（`customMetadata.deleted`）擋住退回。
   換掉、刪掉前複製到 `trash/{時間-亂數}/photo.jpg`（customMetadata 記 path、dogId、kind、file、addedAt、deletedAt）＋`thumb.jpg`，Cron 清掉超過 30 天的。
-  管理 API（標頭 `X-Admin-Passcode: encodeURIComponent(通關碼)`）：`POST /api/admin/migrate`、`POST /api/admin/verify`、`GET /api/admin/thumbs`、`PUT /api/admin/thumbs/{原圖路徑}`、`GET /api/admin/trash`、`POST /api/admin/trash/{代號}/restore`。
+  管理 API（標頭 `X-Admin-Key: encodeURIComponent(金鑰)`）：`POST /api/admin/migrate`、`POST /api/admin/verify`、`GET /api/admin/thumbs`、`PUT /api/admin/thumbs/{原圖路徑}`、`GET /api/admin/trash`、`POST /api/admin/trash/{代號}/restore`。
   部署前 `scripts/r2-bucket.mjs` 只查證既有 bucket，失敗以非零狀態結束、停止部署。縮圖：`.github/workflows/r2-thumbs.yml`（`scripts/make-thumbs.py --site`）。
   repo 的 `photos/` 已經不放照片（原本的 `photos/README.md` 併到這裡）。R2 找不到照片時 Worker 仍會退回讀部署的靜態檔，這是搬遷過渡期的備援，請不要再把 `.jpg` 放進 repo。
 
