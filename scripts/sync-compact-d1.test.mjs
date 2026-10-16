@@ -268,3 +268,28 @@ test('#302 寫入量異常時不寫 D1：先檢查預算才呼叫 wrangler 寫�
   assert.ok(check > 0 && check < code.indexOf("wrangler(['--file'"));
   assert.match(code, /GITHUB_STEP_SUMMARY/);
 });
+
+test('預演（#309）：只算要寫幾列，寫入量正常時通過，超過單次門檻就失敗', async () => {
+  const { dryRunReport } = await import('./sync-compact-d1.mjs');
+  const ok = dryRunReport(12, 300, { maxRows: 500, dailyBudget: 20000 });
+  assert.equal(ok.ok, true);
+  assert.match(ok.text, /預演：會寫 12 列/);
+  assert.match(ok.text, /沒有寫入/);
+  const bad = dryRunReport(3000, 300, { maxRows: 500, dailyBudget: 20000 });
+  assert.equal(bad.ok, false);
+  assert.match(bad.text, /預演：會寫 3000 列/);
+  assert.match(bad.text, /超過單次門檻 500 列/);
+  assert.match(dryRunReport(5, null, { maxRows: 500, dailyBudget: 20000 }).text, /查不到/);
+});
+
+test('預演失敗時的報告（#309）：讀取或比對出錯也要留言', async () => {
+  const { dryRunFailure } = await import('./sync-compact-d1.mjs');
+  assert.match(dryRunFailure(new Error('no such table: v3_dogs')), /預演失敗.*no such table: v3_dogs/s);
+});
+
+test('預演（#309）：今天帳號寫太多不算這張 PR 的錯，只提醒、不失敗', async () => {
+  const { dryRunReport } = await import('./sync-compact-d1.mjs');
+  const r = dryRunReport(20, 149142, { maxRows: 500, dailyBudget: 20000 });
+  assert.equal(r.ok, true);
+  assert.match(r.text, /149142 列（已超過每天預算/);
+});
