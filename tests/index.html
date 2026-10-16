@@ -216,7 +216,11 @@ function runTests() {
       // 入所介紹（K 2026-10-10 補資料）：管理者 PUT 到 Worker 的 /intro/{編號}（寫進 repo 的 dogs/{編號}.md，不是試算表），也先拿掉
       const introCall = /fetch\(`\$\{UPLOAD_URL\}\/intro\/\$\{encodeURIComponent\(e\.dog\.id\)\}`, \{\s*method: 'PUT',/;
       if (!introCall.test(APP_JS)) throw new Error('找不到入所介紹的呼叫');
-      const code = APP_JS.replace(new RegExp(walkCall.source, 'g'), '').replace(uploadCall, '').replace(walkerCall, '').replace(syncCall, '').replace(restCall, '').replace(introCall, '');
+      // 舊編號（#289）：誰都能 POST／DELETE 到 Worker 的 /former/{編號}（存 D1，不是試算表），也先拿掉
+      const formerCall = /fetch\(`\$\{UPLOAD_URL\}\/former\/\$\{encodeURIComponent\(dog\.id\)\}`, \{\s*method, /;
+      if (!formerCall.test(APP_JS)) throw new Error('找不到舊編號的呼叫');
+      const code = APP_JS.replace(new RegExp(walkCall.source, 'g'), '').replace(uploadCall, '').replace(walkerCall, '').replace(syncCall, '').replace(restCall, '').replace(introCall, '')
+        .replace(formerCall, '').replace("sendFormer(e.dog, former, 'POST')", '').replace("sendFormer(dog, former, 'DELETE')", '');
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
@@ -1590,8 +1594,8 @@ async function runV52Tests() {
       const html = detailHtml(dogs[0], T);
       const box = document.createElement('div');
       box.innerHTML = html;
-      eq(box.querySelector('.reentry').textContent, '第 2 次入所・首次 2018/4/13 （舊編號 2018041318）', '詳細資訊標舊編號：');
-      if (detailHtml(dogs[1], T).includes('次入所')) throw new Error('沒舊編號不顯示');
+      eq([[...box.querySelectorAll('.former-num')].map(n => n.firstChild.textContent), box.querySelector('.reentry').textContent.includes('最早入所 2018/4/13'), box.querySelector('.reentry').textContent.includes('次入所')], [['2018041318'], true, false], '詳細資訊標舊編號和最早入所，不標第幾次入所：');
+      if (detailHtml(dogs[1], T).includes('former-num')) throw new Error('沒舊編號不列舊編號');
     });
 
     await check('#76 詳細資訊標題沒有說明文字；分析頁沒有散布圖、Top 10 沒有長條', () => {
@@ -2011,6 +2015,47 @@ async function runRestTests() {
       if (calls.some(c => /sheet|script\.google/.test(c[0]))) throw new Error('不應該寫試算表');
       hideDetail(); hideToast();
       delete introOverrides['9613'];
+    });
+    await check('舊編號（#289）：誰都能補（不用通關碼、帶 editor），POST /former/編號；入所標籤馬上改從最舊的編號算；✕ 刪掉走 DELETE', async () => {
+      const calls = [];
+      window.fetch = async (u, o) => {
+        calls.push([String(u), o && o.method, o && JSON.parse(o.body)]);
+        const b = JSON.parse(o.body);
+        if (b.former === '2015010101') return json({ ok: false, error: '2015010101 已經是另一隻狗（甲）的編號，要合併請找 K' }, 409);
+        return json({ ok: true, id: '9613', former: b.former });
+      };
+      const realConfirm = window.confirm;
+      window.confirm = () => true;
+      const dog = allDogs[2];
+      const before = dog.formerIds;
+      try {
+        showDetail(dog);
+        document.getElementById('formerAdd').click();
+        const input = document.getElementById('formerText');
+        if (!input || document.getElementById('formerPass') || document.querySelector('#formerForm [type="password"]')) throw new Error('打開是一個編號輸入框，不問通關碼');
+        const type = async v => {
+          const el = document.getElementById('formerText');
+          el.value = v; el.dispatchEvent(new Event('input', { bubbles: true }));
+          document.getElementById('formerForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+          await new Promise(r => setTimeout(r, 20));
+        };
+        await type('123');
+        eq([calls.length, document.querySelector('#formerForm [role="alert"]').textContent], [0, '舊編號要是 10 碼數字，前 8 碼是入所日期'], '格式不對先擋，不送出：');
+        await type('2015010101');
+        eq([calls.length, document.querySelector('#formerForm [role="alert"]').textContent, document.getElementById('formerText').value], [1, '2015010101 已經是另一隻狗（甲）的編號，要合併請找 K', '2015010101'], 'Worker 擋下：原因寫出來、打的字留著：');
+        await type(' 2015081801 ');
+        eq([calls.length, calls[1][0], calls[1][1], calls[1][2].former, calls[1][2].editor], [2, 'https://worker.test/former/9613', 'POST', '2015081801', '志工我'], '送出：帶選好的名字：');
+        eq([formerEdit, dog.formerIds.includes('2015081801'), ymd(firstIntake(dog))], [null, true, '2015-08-18'], '成功：入所日改從最舊的編號算：');
+        if (!document.querySelector('#detail .chips').textContent.includes('入所 2015/8')) throw new Error('入所標籤沒有跟著改');
+        document.querySelector('[data-former-del="2015081801"]').click();
+        await new Promise(r => setTimeout(r, 20));
+        eq([calls.length, calls[2][1], calls[2][2].former, dog.formerIds.includes('2015081801')], [3, 'DELETE', '2015081801', false], '刪掉：');
+        if (calls.some(c => /sheet|script\.google/.test(c[0]))) throw new Error('不應該寫試算表');
+      } finally {
+        window.confirm = realConfirm;
+        dog.formerIds = before;
+        hideDetail(); hideToast();
+      }
     });
     await check('找狗的「最久沒溜的狗」、分析頁「超過 3 天沒溜」不算休養中的狗', () => {
       const due = dueDogs(allDogs, T).filter(d => { const st = computeStatus(d, T); return st.kind === 'unknown' || (st.kind === 'dated' && st.days >= AMBER_DAYS); });

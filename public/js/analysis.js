@@ -1,7 +1,7 @@
 // 分析頁（V5-4 #59、V5-5 #60）：目前 dogs.json 就能算的犬隻統計，加上 #56 累積的遛狗歷史與每日快照。
 // 統計都寫成純函式（輸入狗清單與今天日期，輸出數字），tests/index.html 直接測；畫面只負責把結果畫成 CSS／SVG 資訊圖表（大數字、圓環、直條圖）。
 // 頁首右上角的圖示打開（不佔分類：分類只放每天遛狗會用的）。
-// 會用到 js/app.js 的 makeDate、idDate、computeStatus、esc、icon、photoSrc、showDetail、allDogs、analysisOpen，所以要在 app.js 之後載入。
+// 會用到 js/app.js 的 makeDate、idDate、firstIntake、computeStatus、esc、icon、photoSrc、showDetail、allDogs、analysisOpen，所以要在 app.js 之後載入。
 
 // 長期在所＝在所滿 1 年；近期少遛＝超過 AMBER_DAYS 天沒遛（沿用溜狗表的黃色門檻，2026-10-09 起 3 天）
 const LONG_STAY_MONTHS = 12;
@@ -16,11 +16,10 @@ const STAY_BUCKETS = [
   { label: '5 年以上', max: Infinity },
 ];
 
-// 入所日期＝編號前 8 碼（例：2024032902 → 2024/03/29）。編號不是 10 碼數字、日期不合理或在未來的回 null。
-// 再次入所的狗（#75）從第一次入所算：取現在編號和舊編號裡最早的日期
+// 入所日（ADR 0005）：所有編號裡最舊那個的前 8 碼（app.js 的 firstIntake）；看不出來或在未來的回 null
 function intakeDate(dog, today) {
-  const dates = [dog.id, ...(dog.formerIds || [])].map(idDate).filter(d => d && d <= today);
-  return dates.length ? dates.reduce((a, b) => (b < a ? b : a)) : null;
+  const d = firstIntake(dog);
+  return d && d <= today ? d : null;
 }
 
 // 從入所日到今天滿幾個月（照日曆算：3/29 入所，到 4/28 還是 0 個月，4/29 才滿 1 個月）

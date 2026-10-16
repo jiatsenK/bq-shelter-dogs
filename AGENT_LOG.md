@@ -1421,3 +1421,10 @@
 ## 2026-10-16 修正：正式 D1 還沒有群名表時同步失敗（Claude）
 
 - 部署 #290 後第一次同步失敗：同步前先讀正式 D1 的 v3_sheet_group_labels，表還沒建所以 wrangler 回錯。群名表每次整份重建，從 SEED_TABLES 拿掉；建表由同步 SQL 開頭的 CREATE TABLE IF NOT EXISTS 處理。
+## 2026-10-16 Claude（#289 入所日照最舊編號算，前台補舊編號）
+- 依據：K 2026-10-16：狗有永久 ID、每次入所的新編號都指到它、照最舊的編號算；「前台要有個地方可以補入舊編號」；誰都能補、誰都能刪，跟活動紀錄一樣。
+- 文件：GLOSSARY.md 新增「入所日」、改寫「舊編號」；新增 docs/adr/0005-intake-date-from-oldest-number.md。
+- Worker：`POST／DELETE /api/former/{編號}`（body `{ former }`，不用通關碼）寫 D1 的 v3_dog_numbers；擋格式、日期不合理、比現在編號晚、別隻狗的、重複、主清單現用編號；照 ADR 0004 要先選好名字，補／刪記進 v3_edit_log（種類「舊編號」）。`/api/dogs` 的 formerIds 改直接讀 v3_dog_numbers，補了馬上看得到。
+- 前台：新增 app.js `firstIntake`（所有編號取最舊）；詳細資訊「入所」標籤、已出所卡、分析頁、圖鑑 cards.js 都改用同一個規則（圖鑑原本沒看舊編號）。詳細資訊編號下面一行改成「舊編號 … ✕・最早入所 …」＋「＋補舊編號」，點了原地輸入；拿掉「第 N 次入所」的顯示；K：換新編號就是再入所，但不需要顯示，定義寫進 GLOSSARY／ADR。
+- 測試：node 180 過；網頁 243 過（本機用 Chrome 跑）；新增舊編號 Worker 3 項、網頁 1 項，#10 唯讀檢查加入 /former。
+- 跟 main 的開放編輯（ADR 0004）合併：原本的 ADR 0004 改編號為 0005，拿掉自己的 v3_number_log。
