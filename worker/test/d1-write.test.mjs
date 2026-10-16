@@ -160,3 +160,47 @@ test('狗群：小程式回錯誤就不動 D1', async t => {
   assert.equal(r.status, 502);
   assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_sheet_groups').first()).n, 1);
 });
+
+// #289 舊編號：誰都能補、都能刪，不用通關碼；/api/dogs 馬上讀得到，D1 留操作紀錄
+const dogOf = async (env, id) => (await call(env, 'GET', '/dogs')).body.dogs.find(d => d.id === id);
+
+test('舊編號：補了 /api/dogs 馬上有，刪了就沒有，每次都記編輯紀錄', async () => {
+  const env = await makeEnv();
+  const add = await call(env, 'POST', '/former/2024032902', { editor: ME, former: ' 2015081801 ' });
+  assert.deepEqual([add.status, add.body.former], [200, '2015081801']);
+  assert.deepEqual((await dogOf(env, '2024032902')).formerIds, ['2015081801', '2020010101']);
+  const del = await call(env, 'DELETE', '/former/2024032902', { editor: ME, former: '2015081801' });
+  assert.equal(del.status, 200);
+  assert.deepEqual((await dogOf(env, '2024032902')).formerIds, ['2020010101']);
+  // 同步匯入的舊編號也能刪
+  assert.equal((await call(env, 'DELETE', '/former/2024032902', { editor: ME, former: '2020010101' })).status, 200);
+  assert.equal('formerIds' in (await dogOf(env, '2024032902')), false);
+  const log = (await call(env, 'GET', '/edits')).body.edits.reverse();
+  assert.deepEqual(log.map(r => [r.kind, r.kindLabel, r.editorName, r.dogNumber, r.before, r.after]), [
+    ['former', '舊編號', ME, '2024032902', null, '2015081801'],
+    ['former', '舊編號', ME, '2024032902', '2015081801', null],
+    ['former', '舊編號', ME, '2024032902', '2020010101', null],
+  ]);
+});
+
+test('舊編號：格式、日期、別隻狗的、重複、現在的編號都擋，D1 沒變', async () => {
+  const env = await makeEnv();
+  const bad = async (method, body, status, id = '2024032902') => assert.equal((await call(env, method, `/former/${id}`, body)).status, status, `${method} ${JSON.stringify(body)}`);
+  await bad('POST', { editor: ME, former: '123' }, 400);
+  await bad('POST', { editor: ME, former: '2015139901' }, 400);
+  await bad('POST', { editor: ME, former: '2025010101' }, 400, '2024032902'); // 比現在的編號晚
+  await bad('POST', { editor: ME, former: '2024032902' }, 400);
+  await bad('POST', { editor: ME, former: '2024010101' }, 409); // 別隻狗的
+  await bad('POST', { editor: ME, former: '2020010101' }, 409); // 已經有
+  await bad('POST', { editor: ME, former: '2015081801' }, 404, '2030010101');
+  await bad('DELETE', { editor: ME, former: '2024010101' }, 404); // 不是這隻的
+  await bad('PUT', { editor: ME, former: '2015081801' }, 405);
+  await bad('POST', { former: '2015081801' }, 400); // 沒選名字
+  assert.deepEqual((await dogOf(env, '2024032902')).formerIds, ['2020010101']);
+  assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM v3_edit_log WHERE kind='former'").first('n')), 0);
+});
+
+test('舊編號：預覽版不能存', async () => {
+  const env = await makeEnv({ PREVIEW: '1' });
+  assert.equal((await call(env, 'POST', '/former/2024032902', { editor: ME, former: '2015081801' })).status, 403);
+});

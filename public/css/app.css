@@ -723,7 +723,7 @@ html.lightbox-open { overflow: hidden; }
 
 /* 再次入所（#75）：詳細資訊編號下面一行小字 */
 .detail-head .reentry { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; line-height: 1.5; }
-.detail-head .reentry span { white-space: nowrap; }
+.detail-head .reentry > span { white-space: nowrap; }
 
 /* 收起（#79）：詳細資訊照片下方的按鈕列、溜狗表最下面的「已收起」 */
 .hide-bar {
@@ -2276,3 +2276,21 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .desk .num, .desk-batch .num, .dr-date { font-variant-numeric: tabular-nums; }
 }
 @media (min-width: 1100px) and (prefers-reduced-motion: reduce) { .desk-batch { animation: none; } }
+
+/* 舊編號（#289）：編號下面一行小字；每個舊編號旁 ✕、最後「＋補舊編號」，點了原地變輸入框（跟入所介紹一樣直接改，不另開表單） */
+.detail-head .reentry { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.reentry .former-num { display: inline-flex; align-items: center; gap: 2px; font-variant-numeric: tabular-nums; color: var(--ink); }
+.reentry .former-del { border: 0; background: none; color: var(--ink-soft); font: inherit; font-size: 12px; min-width: 32px; min-height: 32px; padding: 0; cursor: pointer; }
+.reentry .former-del:hover { color: var(--red-text); }
+.reentry .former-add { border: 0; background: none; color: var(--primary); font: inherit; font-size: 12.5px; min-height: 32px; padding: 0 2px; cursor: pointer; }
+.reentry .former-add:hover { text-decoration: underline; }
+.former-form { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; width: 100%; margin-top: 4px; }
+.former-form label { font-size: 13px; color: var(--ink-soft); }
+.former-form input { width: 8em; min-height: 40px; box-sizing: border-box; border: 2px solid var(--primary); border-radius: 3px; padding: 6px 8px; background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; font-variant-numeric: tabular-nums; }
+.former-form input:focus { outline: none; }
+.former-form .former-save, .former-form .former-cancel { min-height: 40px; padding: 0 12px; border-radius: 3px; font: inherit; font-size: 14px; cursor: pointer; }
+.former-form .former-save { border: 0; background: var(--primary); color: #fff; }
+.former-form .former-save:disabled { opacity: .6; cursor: default; }
+.former-form .former-cancel { border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+.former-form .former-hint { flex-basis: 100%; font-size: 12px; color: var(--ink-soft); white-space: normal; }
+.former-form .photo-error { flex-basis: 100%; }

@@ -11,6 +11,7 @@ export const KIND_LABELS = {
   note: '試算表備註',
   sheetlog: '試算表異動紀錄',
   group: '常溜狗群',
+  former: '舊編號',
 };
 export const EDITS_DEFAULT = 100;
 export const EDITS_MAX = 500;
