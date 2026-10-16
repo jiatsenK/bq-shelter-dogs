@@ -1410,3 +1410,9 @@
 - 同步讀群名（最下面一列）存 D1 新表 v3_sheet_group_labels；api/dogs 多回 groupColumns（每群的欄、群名、狗名）。群名表還沒建時照常給狗清單。
 - Worker 新增 POST /api/groups：狗名要在主清單上（不分大小寫），成功後 D1 那一欄馬上換成小程式回的名單。
 - 新頁 public/groups.html、js/groups.js、css/groups.css；電腦版頁首加「狗群」，狗詳細資料的「同籠、可以一起溜」那段加連結。
+## 2026-10-16 開放編輯、編輯紀錄頁（Claude，#284）
+
+- K 決定（docs/adr/0004-open-editing-and-edit-log.md）：網站拿掉通關碼，任何人選好名字就能改休養、介紹、照片；#143 管理者後台廢除並關票。
+- 新增 worker/src/editlog.js（editorOf／logEdit／readEdits，walkerCode 從 index.js 搬來）、D1 表 v3_edit_log、GET /api/edits、public/edits.html＋js/edits.js，電腦版頁首加「編輯紀錄」入口。溜狗打卡不記。
+- /api/admin/* 改用 ADMIN_KEY（標頭 X-Admin-Key），部署與縮圖 Action 在 K 設好 Secret ADMIN_KEY 前沿用 NOTES_PASSCODE 的值；WALKER_KEY、SHEET_WRITE_KEY 保留。
+- 更新測試、AGENTS.md、GLOSSARY、PROJECT_GOALS、DESIGN_GUIDE、設定文件。試算表備註（#239）的 session 要照 ADR 的介面接上編輯紀錄。

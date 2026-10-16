@@ -138,3 +138,17 @@ CREATE TABLE IF NOT EXISTS v3_departure_items (
   value TEXT NOT NULL,
   PRIMARY KEY(number,kind,position)
 );
+
+-- 編輯紀錄（docs/adr/0004-open-editing-and-edit-log.md）：網站上的編輯誰改了什麼；只增不刪。
+-- before_json／after_json 是 JSON 文字（null 表示沒有）
+CREATE TABLE IF NOT EXISTS v3_edit_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at TEXT NOT NULL,
+  editor_code TEXT NOT NULL DEFAULT '',
+  editor_name TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  dog_id TEXT,
+  dog_number TEXT NOT NULL DEFAULT '',
+  before_json TEXT,
+  after_json TEXT
+);

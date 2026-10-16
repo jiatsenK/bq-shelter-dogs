@@ -127,22 +127,26 @@ export async function readRest(db) {
   return Object.fromEntries(results.filter(r => r.id).map(r => [r.id, { until: r.until_date, reason: r.reason }]));
 }
 
-// 寫休養：rest 是 null 就結束休養。編號不認得回 false
+// 寫休養：rest 是 null 就結束休養。編號不認得回 null，存好回 { dogId, before }（改前的設定，編輯紀錄用）
 export async function saveRest(db, number, rest) {
   const dogId = (await dogIdsFor(db, [number])).get(number);
-  if (!dogId) return false;
+  if (!dogId) return null;
+  const old = await db.prepare('SELECT until_date, reason FROM v3_rest WHERE dog_id=?').bind(dogId).first();
+  const before = old ? { until: old.until_date, reason: old.reason } : null;
   if (rest) await db.prepare('INSERT INTO v3_rest(dog_id,until_date,reason) VALUES(?,?,?) ON CONFLICT(dog_id) DO UPDATE SET until_date=excluded.until_date,reason=excluded.reason').bind(dogId, rest.until, rest.reason).run();
   else await db.prepare('DELETE FROM v3_rest WHERE dog_id=?').bind(dogId).run();
-  return true;
+  return { dogId, before };
 }
 
-// 寫入所介紹：空字串就清掉。編號不認得回 false
+// 寫入所介紹：空字串就清掉。編號不認得回 null，存好回 { dogId, before }（改前的介紹，沒有是 ''）
 export async function saveIntro(db, number, text) {
   const dogId = (await dogIdsFor(db, [number])).get(number);
-  if (!dogId) return false;
+  if (!dogId) return null;
+  const old = await db.prepare('SELECT intro FROM v3_intros WHERE dog_id=?').bind(dogId).first();
+  const before = old ? old.intro : '';
   if (text) await db.prepare('INSERT INTO v3_intros(dog_id,intro) VALUES(?,?) ON CONFLICT(dog_id) DO UPDATE SET intro=excluded.intro').bind(dogId, text).run();
   else await db.prepare('DELETE FROM v3_intros WHERE dog_id=?').bind(dogId).run();
-  return true;
+  return { dogId, before };
 }
 
 // 離所紀錄（#259）：形狀跟原本的 data/departures.json 的 departures 一樣，依日期新到舊、同一天依編號
