@@ -43,6 +43,7 @@ export async function readDogsPayload(db) {
     syncedAt: rows[0].synced_at,
     dogs,
     groups: groupMap(groups.results || []),
+    groupColumns: groupColumns(groups.results || [], await groupLabels(db)),
     sheetNotes: (notes.results || []).filter(n => n.text).map(n => ({ label: n.label, text: n.text })),
   };
 }
@@ -63,6 +64,26 @@ function groupMap(cells) {
     }
   }
   return out;
+}
+
+// 群名表是 K 2026-10-16 才加的：第一次同步建表之前讀不到，當成都沒有群名，狗清單照常給
+async function groupLabels(db) {
+  try {
+    return new Map(((await db.prepare('SELECT column_index, label FROM v3_sheet_group_labels').all()).results || []).map(r => [r.column_index, r.label]));
+  } catch (e) {
+    return new Map();
+  }
+}
+
+// 狗群頁用：每一欄一群 { column（試算表第幾欄，0 起）, label, names }，照欄排；只有群名沒有狗的欄也列出來
+function groupColumns(cells, labels) {
+  const columns = new Map();
+  for (const c of cells) {
+    if (!columns.has(c.column_index)) columns.set(c.column_index, []);
+    columns.get(c.column_index).push(c.name);
+  }
+  for (const column of labels.keys()) if (!columns.has(column)) columns.set(column, []);
+  return [...columns.keys()].sort((a, b) => a - b).map(column => ({ column, label: labels.get(column) || '', names: columns.get(column) }));
 }
 
 // 狀態頁：新表有沒有接上、各幾筆

@@ -16,7 +16,7 @@ import { importCompactDogs, compareCompactDogs } from './import-compact-dogs.mjs
 import { importCompactProfiles, compareCompactProfiles } from './import-compact-profiles.mjs';
 import { importCompactDepartures, compareCompactDepartures } from './import-compact-departures.mjs';
 import {
-  fetchGviz, parseGroupColumns, buildData, loadDepartedRows, newWalks, upgradeWalks, attachMyWalkedDate,
+  fetchGviz, parseGroupColumns, parseGroupLabels, buildData, loadDepartedRows, newWalks, upgradeWalks, attachMyWalkedDate,
   updateDepartures, myNames, walkerCode, formatDate, formatTimestamp, FORMAT_VERSION,
 } from './sync-sheet.mjs';
 
@@ -35,8 +35,10 @@ export const SEED_TABLES = {
   v3_departure_items: 'SELECT * FROM v3_departure_items',
   v3_intros: 'SELECT * FROM v3_intros',
 };
+// 群名表 v3_sheet_group_labels 不在上面：每次都整份從試算表重建，不用先讀；正式 D1 還沒建表時讀了會讓同步失敗
+// （SQL 開頭會自己 CREATE TABLE IF NOT EXISTS）
 // 整份替換的表，子表在前（刪除照這個順序，新增反過來）
-const REPLACED = ['v3_departure_items', 'v3_departures', 'v3_sheet_main_walkers', 'v3_sheet_former_numbers', 'v3_sheet_main', 'v3_sheet_groups', 'v3_sheet_changes', 'v3_walks'];
+const REPLACED = ['v3_departure_items', 'v3_departures', 'v3_sheet_main_walkers', 'v3_sheet_former_numbers', 'v3_sheet_main', 'v3_sheet_groups', 'v3_sheet_group_labels', 'v3_sheet_changes', 'v3_walks'];
 
 const sqlValue = v => (v === null || v === undefined ? 'NULL' : typeof v === 'number' ? String(v) : `'${String(v).replace(/'/g, "''")}'`);
 const insert = (table, row, tail = '') => `INSERT INTO ${table}(${Object.keys(row).join(',')}) VALUES(${Object.values(row).map(sqlValue).join(',')})${tail};`;
@@ -100,15 +102,16 @@ export async function buildSyncSql(seed, source) {
     await importCompactProfiles(db, profiles);
     const sheet = [];
     source.groupColumns.forEach((names, column) => names.forEach((name, row) => sheet.push(db.prepare('INSERT INTO v3_sheet_groups(column_index,row_index,name) VALUES(?,?,?)').bind(column, row, name))));
+    (source.groupLabels || []).forEach((label, column) => { if (label) sheet.push(db.prepare('INSERT INTO v3_sheet_group_labels(column_index,label) VALUES(?,?)').bind(column, label)); });
     (source.dogs.sheetNotes || []).forEach((n, row) => sheet.push(db.prepare('INSERT INTO v3_sheet_changes(row_index,label,text) VALUES(?,?,?)').bind(row, n.label || '', n.text || '')));
-    await db.batch([db.prepare('DELETE FROM v3_sheet_groups'), db.prepare('DELETE FROM v3_sheet_changes'), ...sheet]);
+    await db.batch([db.prepare('DELETE FROM v3_sheet_groups'), db.prepare('DELETE FROM v3_sheet_group_labels'), db.prepare('DELETE FROM v3_sheet_changes'), ...sheet]);
     await importCompactDepartures(db, source.departures);
     const differences = [...(await compareCompactDogs(db, source.dogs)).differences, ...(await compareCompactProfiles(db, profiles)).differences,
       ...(await compareCompactDepartures(db, source.departures)).differences];
     if (differences.length) throw new Error(`匯入後比對有差異，不寫 D1：${JSON.stringify(differences.slice(0, 5))}`);
     const rows = async t => (await db.prepare(`SELECT * FROM ${t}`).all()).results;
     const schema = await readFile(new URL('../db/compact-schema.sql', import.meta.url), 'utf8');
-    const out = schema.replace(/--[^\n]*/g, '').split(';').map(t => t.trim()).filter(t => /^CREATE TABLE IF NOT EXISTS v3_departure/.test(t)).map(t => `${t.replace(/\s+/g, ' ')};`);
+    const out = schema.replace(/--[^\n]*/g, '').split(';').map(t => t.trim()).filter(t => /^CREATE TABLE IF NOT EXISTS (v3_departure|v3_sheet_group_labels)/.test(t)).map(t => `${t.replace(/\s+/g, ' ')};`);
     for (const row of await rows('v3_dogs')) out.push(insert('v3_dogs', row, ' ON CONFLICT(dog_id) DO UPDATE SET name=excluded.name,sex=excluded.sex'));
     for (const row of await rows('v3_dog_numbers')) out.push(insert('v3_dog_numbers', row, ' ON CONFLICT(number) DO NOTHING'));
     for (const t of REPLACED) out.push(`DELETE FROM ${t};`);
@@ -124,7 +127,10 @@ async function main() {
   if (!process.env.WALKER_KEY) throw new Error('沒有設定 WALKER_KEY，無法比對溜狗紀錄');
   const now = new Date();
   const sheet = await buildData(fetch, now, async () => '');
-  const groupColumns = parseGroupColumns(await fetchGviz('常遛狗群'), new Set(sheet.dogs.map(d => d.name)));
+  const groupTable = await fetchGviz('常遛狗群');
+  const dogNames = new Set(sheet.dogs.map(d => d.name));
+  const groupColumns = parseGroupColumns(groupTable, dogNames);
+  const groupLabels = parseGroupLabels(groupTable, dogNames);
   const rows = await loadDepartedRows(fetch, now);
   const seed = {};
   // 任何一張表讀不到就停：當成空的會把累積的溜狗紀錄、離所整份換掉
@@ -132,7 +138,7 @@ async function main() {
   let plan;
   const sql = await buildSyncSql(seed, async db => {
     plan = planSync(await readPrevious(db), sheet, rows, now);
-    return { ...plan, groupColumns };
+    return { ...plan, groupColumns, groupLabels };
   });
   const file = join(tmpdir(), 'bq-sync-compact.sql');
   await writeFile(file, sql);

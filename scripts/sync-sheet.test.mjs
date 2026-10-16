@@ -255,6 +255,17 @@ test('可以一起溜：一隻狗在多組時合併去重；犬名多了空白�
   assert.equal(map['已離所'], undefined);
 });
 
+test('群名：分頁最下面有字的那一列；數字、狗名不當群名，沒寫是空字串', () => {
+  const table = { cols: [{}, {}, {}], rows: [
+    { c: [{ v: 2 }, { v: 1 }, { v: 1 }] },
+    { c: [{ v: '宙斯' }, { v: '冬冬' }, { v: '金寶' }] },
+    { c: [null, null, null] },
+    { c: [{ v: '新十' }, null, { v: '金寶' }] },
+    { c: [null, null, null] },
+  ] };
+  assert.deepEqual(sync.parseGroupLabels(table, new Set(['宙斯', '冬冬', '金寶'])), ['新十', '', '']);
+});
+
 test('可以一起溜：英文名不分大小寫（試算表 Mini 對到主清單 MINI），用主清單寫法', () => {
   const table = { cols: [{}], rows: [{ c: [{ v: 'Mini' }] }, { c: [{ v: '黑寶' }] }] };
   const map = sync.parseGroups(table, new Set(['MINI', '黑寶']));

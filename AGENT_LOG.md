@@ -1415,12 +1415,22 @@
 - Worker /api/walk 接受 note／log，檢查名字與內容（1–200 字、不換行）。
 - 網頁：狗卡「試算表備註」下方「加備註」、電腦版異動紀錄下方「新增一筆」，輸入→預覽→送出（入口位置 K 2026-10-16 選定）。
 - 編輯紀錄（開放編輯 session 的 logEdit）等該 PR 合併後再接；網頁已帶 editor。Apps Script 要 K 重新部署新版本。
+
+## 2026-10-16 常溜狗群頁：網站看群組、直接編輯（Claude）
+
+- K 開放網站寫「常遛狗群」分頁（只限狗名格和群名列）；AGENTS.md、PROJECT_GOALS.md 一起更新。
+- apps-script/sheet-write.gs 新增 action `group`（add／remove／create）：自己找數量列和最下面的群名列；移出後下面往上補，格子滿了在群名列上面插一列，新群數量格照左邊補公式。**K 要重新貼上小程式並部署新版本。**
+- 同步讀群名（最下面一列）存 D1 新表 v3_sheet_group_labels；api/dogs 多回 groupColumns（每群的欄、群名、狗名）。群名表還沒建時照常給狗清單。
+- Worker 新增 POST /api/groups：狗名要在主清單上（不分大小寫），成功後 D1 那一欄馬上換成小程式回的名單。
+- 新頁 public/groups.html、js/groups.js、css/groups.css；電腦版頁首加「狗群」，狗詳細資料的「同籠、可以一起溜」那段加連結。
 ## 2026-10-16 開放編輯、編輯紀錄頁（Claude，#284）
 
 - K 決定（docs/adr/0004-open-editing-and-edit-log.md）：網站拿掉通關碼，任何人選好名字就能改休養、介紹、照片；#143 管理者後台廢除並關票。
 - 新增 worker/src/editlog.js（editorOf／logEdit／readEdits，walkerCode 從 index.js 搬來）、D1 表 v3_edit_log、GET /api/edits、public/edits.html＋js/edits.js，電腦版頁首加「編輯紀錄」入口。溜狗打卡不記。
 - /api/admin/* 改用 ADMIN_KEY（標頭 X-Admin-Key），部署與縮圖 Action 在 K 設好 Secret ADMIN_KEY 前沿用 NOTES_PASSCODE 的值；WALKER_KEY、SHEET_WRITE_KEY 保留。
 - 更新測試、AGENTS.md、GLOSSARY、PROJECT_GOALS、DESIGN_GUIDE、設定文件。試算表備註（#239）的 session 要照 ADR 的介面接上編輯紀錄。
+- 合併 main 時接上編輯紀錄（ADR 0004）：/api/groups 要先選好名字，每次改動記一筆「常溜狗群」（改前、改後是那一群的名單）。
+
 ## 2026-10-16 固定志工身分實作（CODEX，#267／PR #282）
 
 - 整合 origin/main 的 #284 編輯紀錄與既有主分支變更，解決 AGENTS、AGENT_LOG、schema 測試、網頁測試及 Worker import 衝突；沿用原分支，不改試算表寫入功能。
@@ -1431,3 +1441,11 @@
 - 後續唯讀證據更新：確認主分支 /walker-code 僅計算 HMAC、不寫 D1 後，重送查詢獲准。21 名字核對完成，正式彙總讀回開卡確定 24/48、溜狗來源列確定 1065/1191；其餘保留待確認，rows_written=0。完整來源列快照查詢另遭自動審核拒絕，實際搬移演練仍未完成。遠端 test 與 preview 均通過（b138358），工作目錄乾淨後只補本筆與上線文件；不重跑程式測試。
 - K 再明確同意完整唯讀快照／本機演練後已完成：最終穩定同步批次 2026-10-16T10:32:31+08:00，133 狗／21 志工／48 開卡／1196 溜狗來源列（同步較初次新增5筆）／0 常溜。整份快照透過單次唯讀要求＋gzip傳輸、SHA-256核對與唯一鍵檢查，避免截斷及跨同步批次；原始資料只放 repo 外私人暫存。
 - 真實資料隔離 SQLite：21既有ID保留、24確定開卡逐筆日期保留、五張來源表逐列不變、11未知代號保留、重跑結果一致、外鍵檢查通過；摘要存 docs/267-identity-dry-run.json（不含個資）。銜接 helper 可注入已核對 codeFor，不需讀出正式 WALKER_KEY，HTTP 仍由伺服器自行計算。雙軸再審無新增問題。正式 DB 維持 rows_written=0，尚未改表／搬移／合併／部署。
+
+## 2026-10-16 修正：正式 D1 還沒有群名表時同步失敗（Claude）
+
+- 部署 #290 後第一次同步失敗：同步前先讀正式 D1 的 v3_sheet_group_labels，表還沒建所以 wrangler 回錯。群名表每次整份重建，從 SEED_TABLES 拿掉；建表由同步 SQL 開頭的 CREATE TABLE IF NOT EXISTS 處理。
+
+## 2026-10-16 #267 最終主分支整合（CODEX）
+
+- 整合工作期間已合併的 #290／#292（origin/main df2ede2），三處衝突保留雙方規則、工作紀錄與 schema 表名聯集，未新增試算表寫入能力。Node 198/198、headless 網頁 249/249 通過；再次以完整真實快照跑隔離演練通過。Standards／Spec 整合後複查通過；正式改表／搬移／合併／部署未執行。
