@@ -125,6 +125,73 @@ async function loadMonth(db, m, mem) {
 }
 const newMem = () => ({ total: null, live: null, months: new Map(), liveList: [] });
 
+
+// ---- 做法 B：按月失效、按年存成少數大列 ----
+// D1 照掃過的列數計費、跟一列多大無關：每月版本號放在版本號那一列的 JSON 裡，資料包一年存成幾個 1 MB 的大列
+const mkey = r => `'$."'||substr(${r}.walk_date,1,7)||'"'`;
+const B_SETUP = [
+  "CREATE TABLE pb_ver (id INTEGER PRIMARY KEY CHECK(id=1), total INTEGER NOT NULL DEFAULT 0, live INTEGER NOT NULL DEFAULT 0, cutoff TEXT NOT NULL DEFAULT '', months TEXT NOT NULL DEFAULT '{}')",
+  'INSERT INTO pb_ver(id) VALUES(1)',
+  // vers：這一年的資料包是用哪些月份版本號算的（每段都存一份）
+  'CREATE TABLE pb_pack (year TEXT NOT NULL, seq INTEGER NOT NULL, vers TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(year,seq))',
+  ...['INSERT', 'DELETE', 'UPDATE'].map(op => {
+    const rows = op === 'INSERT' ? ['NEW'] : op === 'DELETE' ? ['OLD'] : ['OLD', 'NEW'];
+    const body = rows.map(r => `UPDATE pb_ver SET total=total+(${r}.walk_date<cutoff), live=live+(${r}.walk_date>=cutoff), months=CASE WHEN ${r}.walk_date<cutoff THEN json_set(months,${mkey(r)},COALESCE(json_extract(months,${mkey(r)}),0)+1) ELSE months END WHERE id=1;`).join(' ');
+    return `CREATE TRIGGER pb_walks_${op} AFTER ${op} ON v3_walks BEGIN ${body} END`;
+  }),
+];
+const yearOf = m => m.slice(0, 4);
+async function saveYear(db, year, vers, monthsObj) {
+  await db.batch([db.prepare('DELETE FROM pb_pack WHERE year=?').bind(year), ...chunks(JSON.stringify(monthsObj)).map((t, i) => db.prepare('INSERT INTO pb_pack VALUES(?,?,?,?)').bind(year, i, JSON.stringify(vers), t))]);
+}
+async function loadYear(db, year) {
+  const rows = (await db.prepare('SELECT seq,vers,body FROM pb_pack WHERE year=?').bind(year).all()).results.sort((a, b) => a.seq - b.seq);
+  return rows.length ? { vers: JSON.parse(rows[0].vers), months: JSON.parse(rows.map(r => r.body).join('')) } : { vers: {}, months: {} };
+}
+// mem：{ total, live, months: { 月: { ver, list } }, liveList }
+async function freshB(db, today, mem) {
+  let v = await db.prepare('SELECT total,live,cutoff,months FROM pb_ver WHERE id=1').first();
+  if (v.cutoff < today) {
+    const first = !v.cutoff;
+    const add = (await db.prepare(`SELECT ${WALK_COLS} FROM v3_walks WHERE walk_date>=? AND walk_date<?`).bind(v.cutoff, today).all()).results;
+    await db.prepare('UPDATE pb_ver SET cutoff=? WHERE id=1 AND cutoff=?').bind(today, v.cutoff).run();
+    const byMonth = new Map();
+    for (const r of add) { const m = r.walk_date.slice(0, 7); if (!byMonth.has(m)) byMonth.set(m, []); byMonth.get(m).push(r); }
+    const vers = JSON.parse(v.months);
+    for (const m of byMonth.keys()) vers[m] = (vers[m] || 0) + 1;
+    for (const year of new Set([...byMonth.keys()].map(yearOf))) {
+      const pack = first ? { months: {} } : await loadYear(db, year);
+      for (const [m, rows] of byMonth) if (yearOf(m) === year) pack.months[m] = [...(pack.months[m] || []), ...groupWalks(rows)];
+      const yv = Object.fromEntries(Object.keys(pack.months).map(m => [m, vers[m]]));
+      await saveYear(db, year, yv, pack.months);
+      for (const m of Object.keys(pack.months)) mem.months[m] = { ver: vers[m], list: pack.months[m] };
+    }
+    await db.prepare('UPDATE pb_ver SET months=?, total=total+1 WHERE id=1').bind(JSON.stringify(vers)).run();
+    v = await db.prepare('SELECT total,live,cutoff,months FROM pb_ver WHERE id=1').first();
+    mem.live = null;
+  }
+  if (mem.total !== v.total) {
+    const vers = JSON.parse(v.months);
+    const stale = Object.keys(vers).filter(m => !mem.months[m] || mem.months[m].ver !== vers[m]);
+    for (const year of new Set(stale.map(yearOf))) {
+      const pack = await loadYear(db, year);
+      let changed = false;
+      for (const m of stale.filter(m => yearOf(m) === year)) {
+        if (pack.vers[m] !== vers[m]) { pack.months[m] = await buildMonth(db, m, v.cutoff); pack.vers[m] = vers[m]; changed = true; }
+        mem.months[m] = { ver: vers[m], list: pack.months[m] };
+      }
+      if (changed) await saveYear(db, year, pack.vers, pack.months);
+    }
+    mem.total = v.total;
+  }
+  if (mem.live !== v.live) {
+    mem.liveList = groupWalks((await db.prepare(`SELECT ${WALK_COLS} FROM v3_walks WHERE walk_date>=?`).bind(v.cutoff).all()).results);
+    mem.live = v.live;
+  }
+  return [...Object.keys(mem.months).sort().flatMap(m => mem.months[m].list), ...mem.liveList];
+}
+const newMemB = () => ({ total: null, live: null, months: {}, liveList: [] });
+
 (async () => {
   const proxy = await getPlatformProxy({ configPath: path.join(__dirname, 'wrangler.jsonc'), persist: false });
   const raw = proxy.env.DB;
@@ -191,6 +258,33 @@ const newMem = () => ({ total: null, live: null, months: new Map(), liveList: []
     out.monthly_crossDay = { ...db.reset(), same: await same(list) };
     list = await fresh(db, tomorrow, newMem());
     out.monthly_crossDayOtherMachine = { ...db.reset(), same: await same(list) };
+
+
+    // ---- 做法 B（另一份記憶體、另一組表），接著同一份資料量 ----
+    for (const s of B_SETUP) await raw.exec(s.replace(/\s+/g, ' '));
+    const memB = newMemB();
+    db.reset(); list = await freshB(db, tomorrow, memB);
+    out.B_firstBuild = { ...db.reset(), same: await same(list) };
+    list = await freshB(db, tomorrow, memB);
+    out.B_warmNoChange = { ...db.reset(), same: await same(list) };
+    list = await freshB(db, tomorrow, newMemB());
+    out.B_coldNewMachine = { ...db.reset(), same: await same(list) };
+    const dog2 = dogs[101];
+    db.reset(); await db.prepare('INSERT INTO v3_walks VALUES(?,?,0,NULL,?,?,?)').bind(dog2.id, tomorrow, 'dddddddddddd', dog2.number, dog2.name).run();
+    out.trigger_insertToday_A_and_B = db.reset();
+    list = await freshB(db, tomorrow, memB);
+    out.B_afterTodayInsert = { ...db.reset(), same: await same(list) };
+    const old2 = addDays(TODAY, -700);
+    db.reset(); await db.prepare("UPDATE v3_walks SET walker_code='eeeeeeeeeeee' WHERE rowid=(SELECT rowid FROM v3_walks WHERE walk_date=? LIMIT 1)").bind(old2).run();
+    out.trigger_updateOld_A_and_B = db.reset();
+    list = await freshB(db, tomorrow, memB);
+    out.B_afterOldEdit = { ...db.reset(), same: await same(list) };
+    const day3 = addDays(TODAY, 2);
+    list = await freshB(db, day3, memB);
+    out.B_crossDay = { ...db.reset(), same: await same(list) };
+    list = await freshB(db, day3, newMemB());
+    out.B_crossDayOtherMachine = { ...db.reset(), same: await same(list) };
+    out.B_packRows = (await raw.prepare('SELECT COUNT(*) AS n FROM pb_pack').first()).n;
 
     // 大小：每月、每年合併
     const packs = (await raw.prepare('SELECT month, SUM(length(CAST(body AS BLOB))) AS b, COUNT(*) AS c FROM pm_pack GROUP BY month').all()).results;
