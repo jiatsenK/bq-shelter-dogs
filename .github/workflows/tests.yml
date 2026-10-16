@@ -4,14 +4,20 @@
 # - 只讀 repo 裡的檔案和假資料，不碰試算表、Worker 或任何密鑰
 name: 測試
 
+# 只改文件（docs/、根目錄的 .md）不跑（#305）。repo 沒有設必要檢查（私人 repo 免費方案不能設），跳過不會卡住 PR
 on:
   pull_request:
+    paths-ignore:
+      - 'docs/**'
+      - '*.md'
   push:
     branches: [main]
     # 網站自己寫入的資料（同步、照片、備註、縮圖）不用跑測試
     paths-ignore:
       - 'data/**'
       - 'photos/**'
+      - 'docs/**'
+      - '*.md'
 
 permissions:
   contents: read

@@ -75,7 +75,7 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 
 ## 步驟 6：刪掉舊 Worker 的鬧鐘
 
-新 Worker 已經會每 30 分鐘叫一次同步，舊的也叫的話會一次叫兩次（不會壞，只是浪費）。
+新 Worker 已經會自己叫同步（ADR 0008：有改才同步＋每天 6:30 保險一次），舊的也叫的話會多叫（不會壞，只是浪費 GitHub Actions 分鐘數）。
 
 Cloudflare → **Workers & Pages** → `bq-shelter-photos` → **Settings** → **Trigger Events**（舊版畫面叫 **Triggers**）→ 找到 `0,30 23,0-14 * * *` 那一筆 → 刪除。
 

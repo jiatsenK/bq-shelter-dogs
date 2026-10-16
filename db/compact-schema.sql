@@ -223,3 +223,9 @@ CREATE TABLE IF NOT EXISTS v3_today_walks (
   updated_at TEXT NOT NULL,
   PRIMARY KEY(walk_date,dog_key)
 );
+
+-- 什麼時候叫 GitHub 同步試算表（ADR 0008，worker/src/sync-plan.js）：changed（試算表有人改）、count（今天叫了幾次）、sheet_sig（上次同步的試算表指紋）
+CREATE TABLE IF NOT EXISTS v3_sync_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);

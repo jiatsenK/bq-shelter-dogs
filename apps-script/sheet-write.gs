@@ -297,3 +297,16 @@ function planGroupWrite(values, req) {
   }
   return { error: '不認得的狗群操作' };
 }
+
+// ── 試算表有人手動改時通知 Worker（ADR 0008）──
+// 觸發器：編輯 → 觸發條件 → 新增 → 函式 notifyWorker、活動來源「試算表」、類型「變更時」。
+// 網站經過 doPost 寫進來的不會觸發（Google 的規定：程式改的不觸發觸發器），本來就已經在 D1。
+// 指令碼屬性：NOTIFY_URL（例：https://bq-shelter-dogs.<子網域>.workers.dev/api/sheet-changed）、
+//            NOTIFY_KEY（跟 Cloudflare Worker 的 SHEET_NOTIFY_KEY 一樣，只能說「試算表有改」，不是 WALKER_KEY）
+function notifyWorker() {
+  var props = PropertiesService.getScriptProperties();
+  var url = props.getProperty('NOTIFY_URL');
+  var key = props.getProperty('NOTIFY_KEY');
+  if (!url || !key) return;
+  UrlFetchApp.fetch(url, { method: 'post', headers: { 'X-Notify-Key': key }, muteHttpExceptions: true });
+}

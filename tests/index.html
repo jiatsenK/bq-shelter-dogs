@@ -101,6 +101,11 @@ function runTests() {
       eq(img.getAttribute('src'), 'photos/thumbs/202101234.jpg');
       eq(img.dataset.full, 'photos/202101234.jpg', '備用原圖：');
       eq(img.getAttribute('loading'), 'lazy');
+      // #305：縮圖讀不到改用原圖時，框上標 thumb-full（顯示小圖示），讓 K 在正式畫面看得到哪張還沒縮圖
+      img.onerror();
+      eq(img.getAttribute('src'), 'photos/202101234.jpg');
+      eq(img.parentNode.classList.contains('thumb-full'), true, '沒縮圖的標記：');
+      eq(img.parentNode.classList.contains('no-photo'), false, '還有原圖可試：');
       box.innerHTML = photoThumb({ name: '金寶', id: '' });
       eq(box.querySelector('img'), null, '沒編號時的 img：');
       if (!box.querySelector('.thumb-fallback')) throw new Error('沒編號時沒有腳掌圖示');
@@ -2362,6 +2367,13 @@ async function runSyncButtonTests() {
       window.fetch = async () => new Response(JSON.stringify({ ok: false, error: '叫同步失敗（GitHub 403）' }), { status: 502 });
       await requestSync(btn, { pollMs: 0, tries: 1 });
       eq(toast(), '更新失敗：叫同步失敗（GitHub 403）', 'Worker 說的原因：');
+    });
+    await check('更新按鈕：Worker 說試算表沒變（unchanged）就不等，直接說已是最新（#305）', async () => {
+      const calls = [];
+      window.fetch = async (url, init = {}) => { calls.push(`${init.method || 'GET'} ${String(url).replace(UPLOAD_URL, 'W')}`); return new Response(JSON.stringify({ ok: true, unchanged: true })); };
+      await requestSync(btn, { pollMs: 0, tries: 3 });
+      eq(calls, ['POST W/sync'], '不讀 dogs.json：');
+      eq(toast(), '試算表沒有新的修改，已經是最新的');
     });
     await check('更新按鈕：剛按過（429）還是會等新資料', async () => {
       fakeNet(429, [dogsFile('2026-09-27T16:30:00+08:00', '再新')]);
