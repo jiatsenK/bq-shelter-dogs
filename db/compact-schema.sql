@@ -105,6 +105,15 @@ CREATE TABLE IF NOT EXISTS v3_intros (
   intro TEXT NOT NULL
 );
 
+-- 網站上補／刪舊編號的操作紀錄（#289，ADR 0004）：誰都能改，出事靠這裡查。不記 IP、不記名字。
+CREATE TABLE IF NOT EXISTS v3_number_log (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  at TEXT NOT NULL,
+  action TEXT NOT NULL CHECK(action IN ('add','remove')),
+  number TEXT NOT NULL,
+  dog_id TEXT NOT NULL
+);
+
 -- 離所紀錄（#259，原本的 data/departures.json）：同步發現狗從主清單消失就記一筆，原因只讀「已出所」分頁判讀。
 -- last_* 是離開主清單前最後一次的樣子（離所名冊的詳細資訊用）；last_number 是 NULL 表示沒有這份資料。
 -- 判讀旗標、最後的舊編號、最後的常遛狗群拆成 v3_departure_items 的列。

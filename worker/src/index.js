@@ -1,7 +1,7 @@
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 管理功能仍共用 NOTES_PASSCODE；試算表只寫原有兩欄。
 import * as r2 from './r2.js';
-import { readDogsPayload, compactStatus, dogIdsFor, openedBooks, readRest, saveRest, saveIntro, readWalks, readDepartures, readMainNames } from './compact.js';
+import { readDogsPayload, compactStatus, dogIdsFor, openedBooks, readRest, saveRest, saveIntro, addFormerNumber, removeFormerNumber, readWalks, readDepartures, readMainNames } from './compact.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
@@ -407,6 +407,38 @@ async function putIntro(request, env, origin) {
   if (!allow(`intro:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
   if (!(await saveIntro(env.DB, id, text))) return fail(404, '找不到這個編號的狗狗', origin);
   return reply(200, { ok: true, id, intro: text, commit: null }, origin);
+}
+
+// ---- 舊編號（#289，ADR 0004）：POST／DELETE /former/{編號}，body { former }，誰都能改，不用通關碼 ----
+// 舊編號要是 10 碼、前 8 碼是看得懂的日期，而且不晚於現在的編號
+const FORMER_PATTERN = /^(\d{4})(\d{2})(\d{2})\d{2}$/;
+function formerDateOk(former) {
+  const m = former.match(FORMER_PATTERN);
+  if (!m) return false;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] && d <= new Date();
+}
+
+async function formerNumber(request, env, origin) {
+  if (!env || !env.DB) return fail(503, '舊編號還沒準備好（沒有接資料庫）', origin, { code: 'db' });
+  const m = new URL(request.url).pathname.match(/^\/former\/([^/]+)$/);
+  const id = m ? decodeURIComponent(m[1]) : '';
+  if (!ID_PATTERN.test(id)) return fail(400, '狗的編號格式不對', origin);
+  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') return fail(415, '格式不對', origin);
+  let input;
+  try { input = JSON.parse(await request.text()); } catch (e) { return fail(400, '格式不對', origin); }
+  const former = String((input && input.former) || '').replace(/\s+/g, '');
+  if (!formerDateOk(former)) return fail(400, '舊編號要是 10 碼數字，前 8 碼是入所日期', origin);
+  if (former === id) return fail(400, '這是現在的編號，不是舊編號', origin);
+  const current = id.match(FORMER_PATTERN);
+  if (request.method === 'POST' && current && former > id) return fail(400, '舊編號的日期不能比現在的編號晚', origin);
+
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!allow(`former:${ip}`, NOTE_WRITE_LIMITS, Date.now())) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
+  const r = request.method === 'POST' ? await addFormerNumber(env.DB, id, former) : await removeFormerNumber(env.DB, id, former);
+  if (!r.ok) return fail(r.status, r.error, origin);
+  return reply(200, { ok: true, id, former }, origin);
 }
 
 // ── 照片放 R2（#130）──
@@ -984,6 +1016,16 @@ export default {
         return await putIntro(request, env, allowed);
       } catch (e) {
         return fail(500, '介紹存檔發生錯誤，原本的介紹不受影響', allowed);
+      }
+    }
+
+    if (path.startsWith('/former/')) {
+      if (request.method !== 'POST' && request.method !== 'DELETE') return fail(405, '舊編號只能用 POST／DELETE /former/編號', allowed);
+      try {
+        return await formerNumber(request, env, allowed);
+      } catch (e) {
+        console.error('former', e);
+        return fail(500, '舊編號存檔發生錯誤，原本的資料不受影響', allowed);
       }
     }
 
