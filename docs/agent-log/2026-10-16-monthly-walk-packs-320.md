@@ -17,3 +17,9 @@
 - 觸發器內部寫入是否算 D1 讀取：假 D1 只算回傳列數，量不到；上線後用 `wrangler d1 insights` 核對。
 - 上線後第一次跨日（切點從空的開始）會整份讀一次今天以前的紀錄，之後才是每天只讀昨天。
 - 本機沒有 Playwright Chromium，網頁測試交給 CI。
+
+## Code review 後的修正
+
+- 跨日原本比對 cutoff／total／live 才移切點，早上有人登記今天的紀錄就會移不了、重試 3 次後改成整表讀。改成：平常跨日只比對舊切點，同一句 SQL 用 `json_set` 讓舊切點到今天那幾個月加 1，移完再讀昨天的列；存的版本號用「舊的＋1」，中間有人改過就對不上、下次重算。只有上線後第一次（切點是空的）沿用先讀再比對。跨日那次多讀 1 列版本號。
+- `v3_pack_versions` 的 walks／live／cutoff 三欄已不用（不能 ALTER，留著）。
+- 同步會在正式 D1 執行 `DROP TRIGGER IF EXISTS pack_v3_walks_*` 和 `DELETE FROM v3_packs WHERE part='walks'`（只刪舊的快取資料包，可重算），已在 PR 說明。

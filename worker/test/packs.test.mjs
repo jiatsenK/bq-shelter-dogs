@@ -235,7 +235,8 @@ test('跨日：只讀昨天的列和當年的資料包', async t => {
   t.mock.timers.setTime(NOW + 86400e3);
   const segs = await yearSegs(DB, '2026');
   const yesterday = await countRows(DB, 'walk_date=?', TODAY);
-  assert.equal(await readsOf(DB, '/walks'), 1 + yesterday + segs);
+  // 版本號移切點前後各 1 列＋昨天的列＋當年的資料包
+  assert.equal(await readsOf(DB, '/walks'), 2 + yesterday + segs);
   assert.equal(await walkCutoff(DB), '2026-10-17');
   await assertSame(DB, '第二天');
   assert.equal(await readsOf(DB, '/walks'), 1, '跨日後沒變');

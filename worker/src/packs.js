@@ -98,6 +98,7 @@ async function smallPack(db, ver) {
 }
 
 // ---- 溜狗紀錄按月分段（#320）：每月版本號在 v3_walk_versions.months（JSON），資料包一年一份存在 v3_walk_packs ----
+const monthOf = date => date.slice(0, 7);
 const yearOf = month => month.slice(0, 4);
 function monthEnd(month) {
   const [y, m] = month.split('-').map(Number);
@@ -142,27 +143,54 @@ function remember(pack, vers) {
   for (const m of Object.keys(pack.months)) if (pack.vers[m] === vers[m]) mem.walks.months[m] = { ver: vers[m], list: pack.months[m] };
 }
 
+function monthsFrom(from, to) {
+  const out = [];
+  for (let m = from; m <= to; m = monthEnd(m).slice(0, 7)) out.push(m);
+  return out;
+}
+const monthKey = m => `'$."${m}"'`; // 月份只有數字和 -，直接放進 SQL
+const bumpMonths = months => months.reduce((sql, m) => `json_set(${sql},${monthKey(m)},COALESCE(json_extract(months,${monthKey(m)}),0)+1)`, 'months');
+
 // 跨日：把舊切點到今天（正常是昨天）的列補進那幾個月，切點移到今天，只讀這些列和那幾年的資料包。
-// 先讀列、再比對版本號移切點：中間有人寫入（live 或 total 變了）或別台機器先移了，這次不算，回 null 重讀版本號。
-// 移完以後才有人改到那幾個月，版本號會比這裡存的新，下次重算那個月
+// 先移切點（比對舊切點，別台機器先移了就回 null 重讀版本號），同一句 SQL 讓那幾個月加 1，再讀列：
+// 移切點以前的寫入一定讀得到；移完以後才有人改那幾個月，版本號會比這裡存的新，下次重算那個月。
+// 存的版本號是「舊的＋1」：移切點前剛好有人改了那個月以前的列，實際版本號更大，也會重算
 async function advance(db, v, today) {
+  if (!v.cutoff) return advanceFirst(db, v, today);
   const old = JSON.parse(v.months);
-  const added = groupBy(await rowsBetween(db, v.cutoff, today), r => r.walk_date.slice(0, 7));
+  const touched = monthsFrom(monthOf(v.cutoff), monthOf(today));
+  const { meta } = await db.prepare(`UPDATE v3_walk_versions SET cutoff=?, total=total+1, months=${bumpMonths(touched)} WHERE id=1 AND cutoff=?`).bind(today, v.cutoff).run();
+  if (!meta.changes) return null;
   const vers = { ...old };
+  for (const m of touched) vers[m] = (old[m] || 0) + 1;
+  const added = groupBy(await rowsBetween(db, v.cutoff, today), r => monthOf(r.walk_date));
+  for (const [year, months] of groupBy(touched, yearOf)) {
+    const pack = await loadYear(db, year);
+    for (const m of months) {
+      // 資料包裡的那個月不是用舊版本號算的：舊切點以前的部分重算
+      const base = pack.vers[m] === old[m] ? pack.months[m] || [] : await buildMonth(db, m, v.cutoff);
+      pack.months[m] = [...base, ...groupWalks(added.get(m) || [])];
+      pack.vers[m] = vers[m];
+    }
+    await saveYear(db, year, pack);
+    remember(pack, vers);
+  }
+  return walkVersions(db);
+}
+
+// 第一次（切點是空的，上線後只有一次）：讀今天以前全部的列，每個月從頭算。
+// 先讀列、再比對版本號移切點：中間有人寫入（live 或 total 變了）這次不算，回 null 重來
+async function advanceFirst(db, v, today) {
+  const added = groupBy(await rowsBetween(db, '', today), r => monthOf(r.walk_date));
+  const vers = JSON.parse(v.months);
   for (const m of added.keys()) vers[m] = (vers[m] || 0) + 1;
   const months = JSON.stringify(vers);
   const { meta } = await db.prepare('UPDATE v3_walk_versions SET cutoff=?, total=total+1, months=? WHERE id=1 AND cutoff=? AND total=? AND live=?')
     .bind(today, months, v.cutoff, v.total, v.live).run();
   if (!meta.changes) return null;
   for (const [year, list] of groupBy([...added.keys()], yearOf)) {
-    // 第一次（切點是空的）：每個月都是從頭算，不用讀
-    const pack = v.cutoff ? await loadYear(db, year) : { vers: {}, months: {} };
-    for (const m of list) {
-      // 資料包裡的那個月不是用舊版本號算的：舊切點以前的部分重算
-      const base = pack.vers[m] === old[m] ? pack.months[m] || [] : await buildMonth(db, m, v.cutoff);
-      pack.months[m] = [...base, ...groupWalks(added.get(m))];
-      pack.vers[m] = vers[m];
-    }
+    const pack = { vers: {}, months: {} };
+    for (const m of list) { pack.months[m] = groupWalks(added.get(m)); pack.vers[m] = vers[m]; }
     await saveYear(db, year, pack);
     remember(pack, vers);
   }
