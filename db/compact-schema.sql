@@ -116,6 +116,17 @@ CREATE TABLE IF NOT EXISTS v3_intros (
   intro TEXT NOT NULL
 );
 
+-- #285：一次入所／退回／轉所一列，保留未確認的日期與事件空白。
+-- 原介紹仍留在 v3_intros，不自動解析或以編號日期覆寫。
+CREATE TABLE IF NOT EXISTS v3_intake_events (
+  dog_id TEXT NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
+  position INTEGER NOT NULL,
+  number TEXT NOT NULL DEFAULT '',
+  event_date TEXT NOT NULL DEFAULT '',
+  event TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY(dog_id,position)
+);
+
 
 -- 離所紀錄（#259，原本的 data/departures.json）：同步發現狗從主清單消失就記一筆，原因只讀「已出所」分頁判讀。
 -- last_* 是離開主清單前最後一次的樣子（離所名冊的詳細資訊用）；last_number 是 NULL 表示沒有這份資料。
@@ -276,6 +287,9 @@ CREATE TRIGGER IF NOT EXISTS pack_v3_departure_items_DELETE AFTER DELETE ON v3_d
 CREATE TRIGGER IF NOT EXISTS pack_v3_rest_INSERT AFTER INSERT ON v3_rest BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS pack_v3_rest_UPDATE AFTER UPDATE ON v3_rest BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS pack_v3_rest_DELETE AFTER DELETE ON v3_rest BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_INSERT AFTER INSERT ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_UPDATE AFTER UPDATE ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_DELETE AFTER DELETE ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 -- UPDATE 改了日期（例如過去改成今天）時新舊兩邊都算
 CREATE TRIGGER IF NOT EXISTS pack_v3_walks_INSERT AFTER INSERT ON v3_walks BEGIN UPDATE v3_pack_versions SET walks=walks+(NEW.walk_date<cutoff), live=live+(NEW.walk_date>=cutoff) WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS pack_v3_walks_UPDATE AFTER UPDATE ON v3_walks BEGIN UPDATE v3_pack_versions SET walks=walks+(OLD.walk_date<cutoff OR NEW.walk_date<cutoff), live=live+(OLD.walk_date>=cutoff OR NEW.walk_date>=cutoff) WHERE id=1; END;

@@ -1,4 +1,5 @@
 import { identitiesForCodes } from './identity.js';
+import { readIntakeEvents, readAllIntakeEvents } from './intake.js';
 // 精簡 D1（v3_ 表，#245／#247）：網站要的狗清單從這裡讀，形狀跟原本的 data/dogs.json 一樣。
 // 表結構見 db/compact-schema.sql、docs/COMPACT_D1.md
 
@@ -32,11 +33,18 @@ export async function readDogsPayload(db) {
   };
   const walkersOf = listBy(walkers, 'walker_code');
   const formerOf = listBy(former, 'number');
+  const intake = await readAllIntakeEvents(db);
+  const intakeOf = new Map();
+  for (const r of intake.results || []) {
+    if (!intakeOf.has(r.dog_id)) intakeOf.set(r.dog_id, []);
+    intakeOf.get(r.dog_id).push({ number: r.number, date: r.event_date, event: r.event });
+  }
   const dogs = rows.map(row => {
     const dog = {};
     for (const [key, column] of MAIN_FIELDS) dog[key] = BOOLEANS.has(key) ? Boolean(row[column]) : row[column];
     dog.walkers = walkersOf.get(row.row_index) || [];
     if (formerOf.has(row.row_index)) dog.formerIds = formerOf.get(row.row_index);
+    if (intakeOf.has(row.dog_id)) dog.intakeEvents = intakeOf.get(row.dog_id);
     return dog;
   });
   return {
@@ -169,11 +177,24 @@ export async function saveRest(db, number, rest) {
 }
 
 // 寫入所介紹：空字串就清掉。編號不認得回 null，存好回 { dogId, before }（改前的介紹，沒有是 ''）
-export async function saveIntro(db, number, text) {
+export async function saveIntro(db, number, text, events) {
   const dogId = (await dogIdsFor(db, [number])).get(number);
   if (!dogId) return null;
   const old = await db.prepare('SELECT intro FROM v3_intros WHERE dog_id=?').bind(dogId).first();
   const before = old ? old.intro : '';
+  if (events !== undefined) {
+    const numbers = [...new Set(events.map(e => e.number).filter(Boolean))];
+    const owners = await dogIdsFor(db, numbers);
+    if (numbers.some(n => owners.get(n) !== dogId)) return { invalid: '事件編號不屬於這隻狗，請重新整理後確認' };
+    const beforeEvents = await readIntakeEvents(db, dogId);
+    await db.batch([
+      text ? db.prepare('INSERT INTO v3_intros(dog_id,intro) VALUES(?,?) ON CONFLICT(dog_id) DO UPDATE SET intro=excluded.intro').bind(dogId, text)
+        : db.prepare('DELETE FROM v3_intros WHERE dog_id=?').bind(dogId),
+      db.prepare('DELETE FROM v3_intake_events WHERE dog_id=?').bind(dogId),
+      ...events.map((e, position) => db.prepare('INSERT INTO v3_intake_events(dog_id,position,number,event_date,event) VALUES(?,?,?,?,?)').bind(dogId, position, e.number, e.date, e.event)),
+    ]);
+    return { dogId, before: { text: before, events: beforeEvents } };
+  }
   if (text) await db.prepare('INSERT INTO v3_intros(dog_id,intro) VALUES(?,?) ON CONFLICT(dog_id) DO UPDATE SET intro=excluded.intro').bind(dogId, text).run();
   else await db.prepare('DELETE FROM v3_intros WHERE dog_id=?').bind(dogId).run();
   return { dogId, before };

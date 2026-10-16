@@ -73,6 +73,8 @@ test('輸出和直接讀表逐字元相同：改介紹、改休養、同步、�
   await assertSame(DB, '一開始');
   await DB.prepare("INSERT INTO v3_intros SELECT dog_id,'新介紹' FROM v3_dog_numbers WHERE number='2026051203'").run();
   await assertSame(DB, '改介紹');
+  await DB.prepare("INSERT INTO v3_intake_events(dog_id,position,number,event_date,event) SELECT dog_id,0,'2025022703','2025-02-27','入所' FROM v3_dog_numbers WHERE number='2025022703'").run();
+  await assertSame(DB, '改入所事件');
   await DB.prepare("UPDATE v3_rest SET reason='好了一半'").run();
   await assertSame(DB, '改休養');
   await DB.prepare("UPDATE v3_sheet_main SET note='移籠', synced_at='2026-10-16T09:00:00+08:00'").run();
