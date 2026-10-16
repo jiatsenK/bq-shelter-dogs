@@ -1,0 +1,10 @@
+// #301 原型用的預覽 Worker：跟正式網站不同名、接預覽 D1，只部署在 prototype/worker-sync 分支，不合併進 main
+{
+  "name": "bq-shelter-dogs-sync-proto",
+  "account_id": "a0f88d34c34ad0d34f923b9f43799622",
+  "main": "worker/prototype/entry.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [{ "binding": "DB", "database_name": "bq-shelter-dogs-proto", "database_id": "PENDING" }],
+  "observability": { "enabled": true }
+}
