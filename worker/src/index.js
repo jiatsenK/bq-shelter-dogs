@@ -1,7 +1,7 @@
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 管理功能仍共用 NOTES_PASSCODE；試算表只寫原有兩欄。
 import * as r2 from './r2.js';
-import { readDogsPayload, compactStatus, dogIdsFor, openedBooks, readRest, saveRest, saveIntro, readWalks, readDepartures, readMainNames } from './compact.js';
+import { readDogsPayload, compactStatus, dogIdsFor, readFavorites, saveFavorite, openedBooks, readRest, saveRest, saveIntro, readWalks, readDepartures, readMainNames } from './compact.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
@@ -835,6 +835,24 @@ function scriptError(msg) {
 }
 
 // 圖鑑開卡：只加不刪，複合主鍵讓重送／多裝置不重複建立紀錄。
+async function favorites(request, env, origin) {
+  if (!env?.DB) return fail(503, '常溜暫時無法儲存', origin);
+  if (!['GET', 'PUT'].includes(request.method)) return fail(405, '常溜只接受 GET 或 PUT', origin);
+  const input = request.method === 'GET'
+    ? { codes: (new URL(request.url).searchParams.get('codes') || '').split(',') }
+    : await readJsonBody(request, 8 * 1024);
+  if (!input || !Array.isArray(input.codes) || !input.codes.length || input.codes.length > 8 || !input.codes.every(c => typeof c === 'string' && /^[0-9a-f]{12}$/.test(c))) return fail(400, '個人代號格式不對', origin);
+  const codes = [...new Set(input.codes)];
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!allow(`favorites:${request.method}:${ip}`, [{ windowMs: 60000, max: 120 }], Date.now())) return fail(429, '操作太頻繁，請稍後再試', origin);
+  if (request.method === 'PUT') {
+    if (typeof input.on !== 'boolean' || typeof input.dogId !== 'string' || !/^[a-f0-9]{32}$/.test(input.dogId)) return fail(400, '常溜資料不對', origin);
+    if (!await saveFavorite(env.DB, codes, input.dogId, input.on, taiwanYmd(Date.now()))) return fail(400, '找不到這隻狗', origin);
+    return reply(200, { ok: true }, origin);
+  }
+  return reply(200, { ok: true, ...await readFavorites(env.DB, codes) }, origin);
+}
+
 async function openedCards(request, env, origin) {
   if (!env?.DB) return fail(503, '開卡紀錄暫時無法儲存，請稍後再試', origin);
   if (!['GET', 'PUT'].includes(request.method)) return fail(405, '開卡紀錄只接受 GET 或 PUT', origin);
@@ -938,6 +956,10 @@ export default {
     if (path === '/cards/opened') {
       try { return await openedCards(request, env, allowed); }
       catch (e) { return fail(503, '開卡紀錄暫時讀寫失敗，請稍後再試', allowed); }
+    }
+    if (path === '/favorites') {
+      try { return await favorites(request, env, allowed); }
+      catch (e) { return fail(503, '常溜暫時讀寫失敗，請稍後再試', allowed); }
     }
     // 溜狗紀錄、離所紀錄（#260）：形狀跟原本的 data/walks.json、data/departures.json 一樣，從 D1 讀
     if (path === '/walks' || path === '/departures') {
