@@ -1370,3 +1370,10 @@
 ## 2026-10-15 技術債盤點收尾（Claude）
 
 - K 同意後：關閉 #252、#245、#238、#124；關閉 PR #243、#236、#196、#174、#159、#150 並刪分支；本 PR 合入最新 main（AGENT_LOG 衝突兩邊都保留）；刪除已合併的遠端分支。
+
+## 2026-10-15 刪除搬遷完成後用不到的檔案（Claude，#275）
+
+- K 同意盤點表後：刪除 make-thumbs.yml、migrate-photos-r2（腳本／測試／workflow）、db/schema.sql、db/migrations/、build-db、migrate-business-db、business-schema.test、migrate-history/identities/profiles、check-history/identities/profiles、import-compact-legacy、check-compact-legacy、check-compact-profiles、compare-cleanup、.impeccable/critique/、docs 的 BUSINESS_SCHEMA、DATABASE、三份 *_MIGRATION、MIGRATION_INVENTORY、migration-213/。
+- GitHub Pages 查證已關閉（has_pages=false、舊網址 404），一併刪除 .nojekyll。
+- 合併：photos/README.md → CLOUDFLARE_SETUP.md；COMPACT_LEGACY_IMPORT.md → COMPACT_D1.md；CLEANUP_252*.md → docs/adr/0003-252-old-data-cleanup.md。
+- wrangler*.jsonc 拿掉 migrations_dir；AGENTS.md 與 tests.yml 的 node 測試指令同步移除 9 個測試。照片快取（?v= 版本號、servePhoto）未動。

@@ -1,4 +1,4 @@
-// 測試用的假 R2、假靜態檔（worker/test/r2.test.mjs、scripts/migrate-photos-r2.test.mjs 共用）
+// 測試用的假 R2、假靜態檔（worker/test/r2.test.mjs 用）
 import { createHash } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 
