@@ -10,6 +10,8 @@ import { migrateCompactDatabase } from '../migrate-compact-db.mjs';
 const dir = process.argv[2] ? pathToFileURL(`${process.argv[2].replace(/[\\/]?$/, '/')}`) : new URL('../../tests/fixtures/', import.meta.url);
 const json = async p => JSON.parse(await readFile(new URL(p, dir), 'utf8'));
 const dogs = await json('dogs.json');
+// 同步寫進主清單的介紹一律是空的（介紹由網站寫 v3_intros），/api/dogs 帶的介紹要拿掉
+dogs.dogs = dogs.dogs.map(d => ({ ...d, intro: '' }));
 // /api/dogs 的 groupColumns 是 { column, label, names }；fixtures 只有 groups
 const groupColumns = dogs.groupColumns ? dogs.groupColumns.map(c => c.names) : Object.entries(dogs.groups).map(([n, o]) => [n, ...o]);
 const groupLabels = dogs.groupColumns ? dogs.groupColumns.map(c => c.label) : [];
@@ -56,3 +58,17 @@ const N = 50;
 const t0 = performance.now();
 for (let i = 0; i < N; i++) planSync(prev, sheet, null, new Date(), { key: 'prototype-key', names: [] });
 console.log(JSON.stringify({ msPlanSyncOnlyAvg: Math.round((performance.now() - t0) / N * 10) / 10 }));
+
+// 差異同步（worker/src/sheet-sync.js）：一隻狗被溜時要寫幾句、整段計算多久（含假 D1 比對，不含網路與 D1 往返）
+const { planDiff } = await import('../../worker/src/sheet-sync.js');
+const db3 = fakeD1();
+await migrateCompactDatabase(db3);
+await db3.batch(first.split(';\n').map(s => s.trim()).filter(Boolean).map(s => db3.prepare(s)));
+const prev3 = await readPrevious(db3);
+const walked = prev3.dogs.dogs.map(({ myWalked, myWalkedDate, sex, intro, formerIds, ...d }, i) => (i === 0 ? { ...d, walkedDate: '2026-10-16', walkers: ['abcdef123456'] } : d));
+const diffSource = () => ({ ...planSync(prev3, { dogs: walked, groups: prev3.dogs.groups, sheetNotes: prev3.dogs.sheetNotes }, null, new Date(), { key: 'prototype-key', names: [] }), groupColumns, groupLabels });
+let diff = await planDiff(db3, diffSource());
+const t1 = performance.now();
+for (let i = 0; i < 20; i++) diff = await planDiff(db3, diffSource());
+console.log(JSON.stringify({ diffStatements: diff.length, diffSql: diff.map(s => s.sql.slice(0, 60)), msDiffAvgIncludingSnapshotRead: Math.round((performance.now() - t1) / 20 * 10) / 10 }, null, 1));
+db3.close();
