@@ -6,7 +6,8 @@ import * as r2 from './r2.js';
 import { markChanged, planTick, refreshPlan, rememberSignature, sheetSignature } from './sync-plan.js';
 import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache } from './today.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
-import { readDogsPayload, compactStatus, dogIdsFor, readFavorites, saveFavorite, openedBooks, readRest, saveRest, saveIntro, addFormerNumber, removeFormerNumber, readWalks, readDepartures, readMainNames } from './compact.js';
+import { compactStatus, dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, readMainNames } from './compact.js';
+import { readSmall, readDogsPacked, readWalksPacked, packStatus, resetPackCache } from './packs.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
@@ -71,6 +72,7 @@ function resetState() {
   hits.clear();
   dogsCache = null;
   resetTodayCache();
+  resetPackCache();
 }
 
 function config(env) {
@@ -166,9 +168,16 @@ function github(cfg, path, init = {}) {
   });
 }
 
-// 資料庫（D1）：#247 起網站讀精簡新表（v3_，worker/src/compact.js），狀態頁報告新表有沒有接上、各幾筆
+// 資料庫（D1）：#247 起網站讀精簡新表（v3_，worker/src/compact.js），狀態頁報告新表有沒有接上、各幾筆。
+// #315 起從資料包數（worker/src/packs.js），不整表 COUNT(*)；資料包的表還沒建時照舊數
 async function databaseStatus(env) {
   if (!env || !env.DB) return '未設定';
+  try {
+    const s = await packStatus(env.DB, taiwanYmd(Date.now()));
+    if (s) return `D1 新表（主清單 ${s.dogs} 隻、溜狗紀錄 ${s.walks} 筆）`;
+  } catch (e) {
+    console.error('status', e);
+  }
   return compactStatus(env.DB);
 }
 
@@ -179,7 +188,7 @@ async function getDogs(env, origin) {
   if (!env || !env.DB) return off();
   let data;
   try {
-    data = await readDogsPayload(env.DB);
+    data = await readDogsPacked(env.DB);
   } catch (e) {
     console.error('dogs', e);
     return off();
@@ -1135,7 +1144,7 @@ export default {
       if (request.method !== 'GET') return fail(405, '只能用 GET 讀', allowed);
       try {
         if (!env || !env.DB) throw new Error('沒有 D1');
-        const body = path === '/walks' ? await readWalks(env.DB) : { version: 1, departures: await readDepartures(env.DB) };
+        const body = path === '/walks' ? await readWalksPacked(env.DB, taiwanYmd(Date.now())) : { version: 1, departures: await readSmall(env.DB, 'departures') };
         return reply(200, { ok: true, ...body }, allowed);
       } catch (e) {
         console.error(path, e);
@@ -1157,7 +1166,7 @@ export default {
     if (path === '/rest') {
       if (request.method !== 'GET') return fail(405, '休養設定只能用 GET /rest 讀', allowed);
       try {
-        return reply(200, { ok: true, rest: await readRest(env.DB) }, allowed);
+        return reply(200, { ok: true, rest: await readSmall(env.DB, 'rest') }, allowed);
       } catch (e) {
         return fail(503, '暫時讀不到休養設定', allowed, { code: 'db' });
       }

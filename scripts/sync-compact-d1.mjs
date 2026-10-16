@@ -5,13 +5,13 @@
 // 寫之前先檢查寫入預算（ADR 0008），異常就整次不寫。加 --dry-run 只算列數、不寫入（#309）。試算表的部分（主清單、異動紀錄、常遛狗群、已出所）照試算表重建；
 // 溜狗紀錄和離所是累積的，以 D1 上一次的內容為基準往上加。
 // 休養、介紹、開卡、照片由網站直接寫 D1（#249、#250），這裡不碰。
-import { readFile, writeFile, appendFile } from 'node:fs/promises';
+import { writeFile, appendFile } from 'node:fs/promises';
 import { execFile, execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { fakeD1 } from '../worker/test/fakes.mjs';
-import { migrateCompactDatabase } from './migrate-compact-db.mjs';
+import { migrateCompactDatabase, compactSchemaStatements } from './migrate-compact-db.mjs';
 import { compareCompactDogs } from './import-compact-dogs.mjs';
 import { compareCompactProfiles } from './import-compact-profiles.mjs';
 import { compareCompactDepartures } from './import-compact-departures.mjs';
@@ -62,9 +62,11 @@ export async function buildSyncPlan(seed, source) {
       ...(await compareCompactDepartures(db, source.departures)).differences];
     if (differences.length) throw new Error(`匯入後比對有差異，不寫 D1：${JSON.stringify(differences.slice(0, 5))}`);
     const changes = diffTables(before, await snapshot());
-    // 正式 D1 不另外建表（#214），新資料表（例如 v3_edit_log）靠同步時補建；全部是 IF NOT EXISTS，重跑不影響既有資料
-    const schema = await readFile(new URL('../db/compact-schema.sql', import.meta.url), 'utf8');
-    const out = schema.replace(/--[^\n]*/g, '').split(';').map(t => t.trim()).filter(t => /^CREATE (UNIQUE )?(TABLE|INDEX) IF NOT EXISTS /.test(t)).map(t => `${t.replace(/\s+/g, ' ')};`);
+    // 正式 D1 不另外建表（#214），新資料表（例如 v3_edit_log）靠同步時補建；全部是 IF NOT EXISTS，重跑不影響既有資料。
+    // 版本號（ADR 0009）那一列和觸發器也一起補（#315），同步自己改的列也會讓資料包失效；身分的觸發器不在這裡建
+    const out = (await compactSchemaStatements())
+      .filter(t => /^CREATE (UNIQUE )?(TABLE|INDEX) IF NOT EXISTS |^INSERT OR IGNORE INTO v3_(data|pack)_versions|^CREATE TRIGGER IF NOT EXISTS (version|pack)_/.test(t))
+      .map(t => `${t.replace(/\s+/g, ' ')};`);
     for (const { sql, values } of changes) { let i = 0; out.push(`${sql.replace(/\?/g, () => sqlValue(values[i++]))};`); }
     return { sql: out.join('\n') + '\n', rows: changes.length };
   } finally { db.close(); }
