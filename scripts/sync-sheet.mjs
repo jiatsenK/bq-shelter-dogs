@@ -296,6 +296,21 @@ export function parseGroupColumns(table, knownNames) {
   return columns;
 }
 
+// 群名（K 2026-10-16）：分頁最下面有字的那一列是每群的名字（新十、舊八大…）；沒寫的欄是 ''，主清單的犬名不當群名
+export function parseGroupLabels(table, knownNames) {
+  const rows = table.rows || [];
+  const colCount = Math.max((table.cols || []).length, ...rows.map(r => (r.c || []).length), 0);
+  let last = rows.length - 1;
+  while (last > 0 && !(rows[last].c || []).some(c => cellText(c))) last--;
+  const known = new Set([...(knownNames || [])].map(n => nameKey(n).toLowerCase()));
+  const labels = [];
+  for (let col = 0; col < colCount; col++) {
+    const t = last > 0 ? cellText((rows[last].c || [])[col]) : '';
+    labels.push(t && !/^\d+$/.test(t) && !known.has(nameKey(t).toLowerCase()) ? t : '');
+  }
+  return labels;
+}
+
 export function parseGroups(table, knownNames) {
   const map = {};
   for (const names of parseGroupColumns(table, knownNames)) {

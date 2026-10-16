@@ -145,3 +145,52 @@ test('#281 異動紀錄：最後一列的下一列寫「備註N」，N 是現有
     { row: 7, col: 0, value: '備註4' }, { row: 7, col: 1, value: '2026/10/16測試甲移到B03（志工我）' },
   ]);
 });
+
+// ── 常遛狗群（K 2026-10-16 開放網站編輯）：第一列空白、第二列數量、最下面一列群名 ──
+const groupPlan = req => JSON.parse(JSON.stringify(vm.runInContext('planGroupWrite', ctx)(groupSheet(), req)));
+const groupSheet = () => [
+  ['', '', '', ''],
+  [2, 3, 1, 0],
+  ['測試甲', '測試丙', '測試己', ''],
+  ['測試乙', '測試丁', '', ''],
+  ['', '測試戊', '', ''],
+  ['', '', '', ''],
+  ['甲群', '丙群', '', ''],
+];
+
+test('狗群 add：寫進那一群第一個空格；已經在（不分大小寫、空白）就不動', () => {
+  const out = groupPlan({ op: 'add', column: 0, name: '測試庚' });
+  assert.deepEqual(out.cells, [{ row: 4, col: 0, value: '測試庚' }]);
+  assert.deepEqual(out.result, { status: 'written', column: 0, label: '甲群', names: ['測試甲', '測試乙', '測試庚'] });
+  assert.equal(groupPlan({ op: 'add', column: 1, name: '測試 丙' }).result.status, 'already');
+});
+
+test('狗群 add：沒有群名的群也能加；中間滿了就在群名列上面插一列', () => {
+  assert.deepEqual(groupPlan({ op: 'add', column: 2, name: '測試庚' }).cells, [{ row: 3, col: 2, value: '測試庚' }]);
+  const values = groupSheet();
+  values[5][1] = '測試辛';
+  const out = JSON.parse(JSON.stringify(vm.runInContext('planGroupWrite', ctx)(values, { op: 'add', column: 1, name: '測試庚' })));
+  assert.equal(out.insertRowBefore, 6);
+  assert.deepEqual(out.cells, [{ row: 6, col: 1, value: '測試庚' }]);
+});
+
+test('狗群 remove：拿掉那隻，下面的往上補，不碰群名', () => {
+  const out = groupPlan({ op: 'remove', column: 1, name: '測試丙' });
+  assert.deepEqual(out.cells, [{ row: 2, col: 1, value: '測試丁' }, { row: 3, col: 1, value: '測試戊' }, { row: 4, col: 1, value: '' }]);
+  assert.deepEqual(out.result.names, ['測試丁', '測試戊']);
+  assert.equal(groupPlan({ op: 'remove', column: 1, name: '測試甲' }).result.status, 'notFound');
+});
+
+test('狗群 create：用第一個整欄空的欄，寫第一隻狗和群名，數量格照左邊補公式', () => {
+  const out = groupPlan({ op: 'create', name: '測試庚', label: '新群' });
+  assert.deepEqual(out.cells, [{ row: 2, col: 3, value: '測試庚' }, { row: 6, col: 3, value: '新群' }]);
+  assert.equal(out.countFormula, undefined, '數量格已經有東西就不補');
+  assert.ok(groupPlan({ op: 'create', name: '測試庚', label: '' }).error);
+});
+
+test('狗群：欄不存在、沒有狗名、不認得的操作都回錯誤', () => {
+  assert.ok(groupPlan({ op: 'add', column: 3, name: '測試庚' }).error, '空欄不是一群');
+  assert.ok(groupPlan({ op: 'add', column: 9, name: '測試庚' }).error);
+  assert.ok(groupPlan({ op: 'add', column: 0, name: '' }).error);
+  assert.ok(groupPlan({ op: 'move', column: 0, name: '測試甲' }).error);
+});

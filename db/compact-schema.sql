@@ -58,6 +58,11 @@ CREATE TABLE IF NOT EXISTS v3_sheet_groups (
   name TEXT NOT NULL,
   PRIMARY KEY(column_index,row_index)
 );
+-- 常遛狗群每一欄的群名（分頁最下面一列，K 2026-10-16）
+CREATE TABLE IF NOT EXISTS v3_sheet_group_labels (
+  column_index INTEGER PRIMARY KEY,
+  label TEXT NOT NULL
+);
 
 -- 每個名字直接存在溜狗紀錄；無人名的舊紀錄仍能保留。
 -- dog_number／dog_name 是那天的編號和狗名（#248），狗後來改名或換編號，「我溜過」仍顯示當時的。
