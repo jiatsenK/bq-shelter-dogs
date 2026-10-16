@@ -18,7 +18,6 @@ import { compareCompactDepartures } from './import-compact-departures.mjs';
 import { fetchGviz, parseGroupColumns, parseGroupLabels, buildData, loadDepartedRows } from './sync-sheet.mjs';
 import { planSync, readPrevious, applySource } from './sync-plan.mjs';
 import { SYNC_TABLES, diffTables, budgetProblem, todayRowsWritten, MAX_ROWS_PER_SYNC, DAILY_BUDGET } from './sync-diff.mjs';
-
 export { planSync, readPrevious };
 
 // 從正式 D1 讀回的現況：永久狗與編號（重跑沿用 ID）、上一次的主清單複本（比對溜狗日期、離所）、
@@ -147,15 +146,7 @@ async function main({ dryRun = false } = {}) {
     const report = dryRunReport(planned, todayWritten, limits);
     console.log(report.text);
     await summary(report.text);
-    await dryRunComment(report.text);
-    if (!report.ok) throw new Error(`預演寫入量超過門檻：會寫 ${planned} 列`);
-    return;
-  }
-  if (dryRun) {
-    const report = dryRunReport(planned, todayWritten, limits);
-    console.log(report.text);
-    await summary(report.text);
-    await dryRunComment(report.text);
+    await writeDryRunComment(report.text);
     if (!report.ok) throw new Error(`預演寫入量超過門檻：會寫 ${planned} 列`);
     return;
   }
@@ -188,8 +179,8 @@ async function summary(text) {
   if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, text);
 }
 
-// 預演結果另外寫一份給 CI 貼成 PR 留言（DRY_RUN_COMMENT 是檔案路徑）
-async function dryRunComment(text) {
+// 預演結果另外寫一份，給 CI 貼成 PR 留言（DRY_RUN_COMMENT 是檔案路徑）
+async function writeDryRunComment(text) {
   if (process.env.DRY_RUN_COMMENT) await writeFile(process.env.DRY_RUN_COMMENT, text);
 }
 
@@ -199,9 +190,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     if (dryRun) {
       const text = dryRunFailure(e);
       await summary(text).catch(() => {});
-      await dryRunComment(text).catch(() => {});
-    }
-    console.error(`${dryRun ? '預演' : '同步'}失敗，D1 保留上一次的內容：${e.message}`);
+      await writeDryRunComment(text).catch(() => {});
+      console.error(`預演失敗，沒有寫入：${e.message}`);
+    } else console.error(`同步失敗，D1 保留上一次的內容：${e.message}`);
     process.exit(1);
   });
 }

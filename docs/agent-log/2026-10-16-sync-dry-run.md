@@ -8,3 +8,5 @@
   - `sync-sheet.yml` 的 push paths 補上 `sync-plan.mjs`、`sync-diff.mjs`（#302 拆出來後漏掉），兩邊路徑保持一致。
   - AGENTS.md：改同步的 PR 要附預演結果。
 - 未完成：留言要等第一張改到同步程式的 PR 才看得到（本 PR 本身會觸發）；「故意改回刪光重寫會失敗」靠既有單次門檻 500 列，正式 D1 上千列整份重寫一定超過。
+- code review 後修正：拿掉 main() 裡重複的預演區塊、還原換行雜訊；fork PR 不跑；被取消時不留言。
+- 待 K 確認：預演用的 `CLOUDFLARE_API_TOKEN` 跟正式同步同一把（有 D1 寫入權限），「不寫入」靠 PR 裡的程式保證。

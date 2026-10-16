@@ -30,6 +30,8 @@ concurrency:
 
 jobs:
   dry-run:
+    # fork 的 PR 拿不到密鑰，跑了也只會失敗
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -55,7 +57,8 @@ jobs:
 
       # 成功、失敗都留言；PR 每推一次就多一則，K 看最新那則
       - name: 留言在 PR 上
-        if: always()
+        # 被新推的提交取消時不留言，免得誤報失敗
+        if: success() || failure()
         env:
           GH_TOKEN: ${{ github.token }}
           FILE: ${{ runner.temp }}/dry-run.md
