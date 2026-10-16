@@ -236,7 +236,7 @@ CREATE TABLE IF NOT EXISTS v3_today_walks (
 );
 
 -- 資料版本號（ADR 0009）：觸發器在表有新增、修改、刪除時自動加 1，Worker 每次只讀這 1 列，沒變就回記憶體裡的資料。
--- today 對應 v3_today_walks；之後 small／walks／live 用 ALTER TABLE 加欄。
+-- today 對應 v3_today_walks；small／walks／live 在下面的 v3_pack_versions（#315）。
 CREATE TABLE IF NOT EXISTS v3_data_versions (id INTEGER PRIMARY KEY CHECK(id=1), today INTEGER NOT NULL DEFAULT 0);
 INSERT OR IGNORE INTO v3_data_versions(id) VALUES(1);
 CREATE TRIGGER IF NOT EXISTS version_v3_today_walks_INSERT AFTER INSERT ON v3_today_walks BEGIN UPDATE v3_data_versions SET today=today+1 WHERE id=1; END;
@@ -248,3 +248,49 @@ CREATE TABLE IF NOT EXISTS v3_sync_state (
   key TEXT PRIMARY KEY,
   value TEXT NOT NULL
 );
+
+-- 資料包（ADR 0009，#315，worker/src/packs.js）：small（狗清單、離所、休養）、walks（切點以前的溜狗紀錄）算好存在 v3_packs，
+-- 一律分段存（每段最多 1 MB，D1 一列上限 2 MB）。v3_pack_versions 一列：small／walks／live 版本號由觸發器自動加 1，
+-- cutoff 是 walks 資料包算到哪天（不含），由 Worker 跨日時往前移。v3_walks 切點以前的列動 walks、以後的動 live（今天的紀錄）。
+-- 獨立一張表（不加在 v3_data_versions）：同步補建只跑 IF NOT EXISTS，不用 ALTER TABLE
+CREATE TABLE IF NOT EXISTS v3_pack_versions (id INTEGER PRIMARY KEY CHECK(id=1), small INTEGER NOT NULL DEFAULT 0, walks INTEGER NOT NULL DEFAULT 0, live INTEGER NOT NULL DEFAULT 0, cutoff TEXT NOT NULL DEFAULT '');
+INSERT OR IGNORE INTO v3_pack_versions(id) VALUES(1);
+CREATE TABLE IF NOT EXISTS v3_packs (part TEXT NOT NULL, seq INTEGER NOT NULL, ver INTEGER NOT NULL, cutoff TEXT NOT NULL DEFAULT '', body TEXT NOT NULL, PRIMARY KEY(part,seq));
+CREATE INDEX IF NOT EXISTS v3_walks_date ON v3_walks(walk_date);
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_main_INSERT AFTER INSERT ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_main_UPDATE AFTER UPDATE ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_main_DELETE AFTER DELETE ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_intros_INSERT AFTER INSERT ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_intros_UPDATE AFTER UPDATE ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_intros_DELETE AFTER DELETE ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_main_walkers_INSERT AFTER INSERT ON v3_sheet_main_walkers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_main_walkers_UPDATE AFTER UPDATE ON v3_sheet_main_walkers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_main_walkers_DELETE AFTER DELETE ON v3_sheet_main_walkers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_dog_numbers_INSERT AFTER INSERT ON v3_dog_numbers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_dog_numbers_UPDATE AFTER UPDATE ON v3_dog_numbers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_dog_numbers_DELETE AFTER DELETE ON v3_dog_numbers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_groups_INSERT AFTER INSERT ON v3_sheet_groups BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_groups_UPDATE AFTER UPDATE ON v3_sheet_groups BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_groups_DELETE AFTER DELETE ON v3_sheet_groups BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_changes_INSERT AFTER INSERT ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_changes_UPDATE AFTER UPDATE ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_changes_DELETE AFTER DELETE ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_group_labels_INSERT AFTER INSERT ON v3_sheet_group_labels BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_group_labels_UPDATE AFTER UPDATE ON v3_sheet_group_labels BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_group_labels_DELETE AFTER DELETE ON v3_sheet_group_labels BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_departures_INSERT AFTER INSERT ON v3_departures BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_departures_UPDATE AFTER UPDATE ON v3_departures BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_departures_DELETE AFTER DELETE ON v3_departures BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_departure_items_INSERT AFTER INSERT ON v3_departure_items BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_departure_items_UPDATE AFTER UPDATE ON v3_departure_items BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_departure_items_DELETE AFTER DELETE ON v3_departure_items BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_rest_INSERT AFTER INSERT ON v3_rest BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_rest_UPDATE AFTER UPDATE ON v3_rest BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_rest_DELETE AFTER DELETE ON v3_rest BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_INSERT AFTER INSERT ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_UPDATE AFTER UPDATE ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_DELETE AFTER DELETE ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+-- UPDATE 改了日期（例如過去改成今天）時新舊兩邊都算
+CREATE TRIGGER IF NOT EXISTS pack_v3_walks_INSERT AFTER INSERT ON v3_walks BEGIN UPDATE v3_pack_versions SET walks=walks+(NEW.walk_date<cutoff), live=live+(NEW.walk_date>=cutoff) WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_walks_UPDATE AFTER UPDATE ON v3_walks BEGIN UPDATE v3_pack_versions SET walks=walks+(OLD.walk_date<cutoff OR NEW.walk_date<cutoff), live=live+(OLD.walk_date>=cutoff OR NEW.walk_date>=cutoff) WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS pack_v3_walks_DELETE AFTER DELETE ON v3_walks BEGIN UPDATE v3_pack_versions SET walks=walks+(OLD.walk_date<cutoff), live=live+(OLD.walk_date>=cutoff) WHERE id=1; END;

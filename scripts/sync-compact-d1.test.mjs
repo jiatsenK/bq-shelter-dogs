@@ -50,7 +50,11 @@ test('正式 D1 還沒有離所表、群名表時，SQL 自己先建', async t =
     assert.ok(creates.some(l => l.startsWith(`CREATE TABLE IF NOT EXISTS ${t} `)), t);
   }
   assert.ok(creates.every(l => / IF NOT EXISTS /.test(l)));
-  assert.equal(lines.findIndex(l => !/^CREATE /.test(l)), creates.length);
+  // 版本號那一列和觸發器（#315）：同步自己改的列也會讓資料包失效
+  const head = lines.filter(l => /^CREATE |^INSERT OR IGNORE INTO v3_(data|pack)_versions/.test(l));
+  assert.equal(lines.findIndex(l => !head.includes(l)), head.length);
+  for (const name of ['version_v3_today_walks_INSERT', 'pack_v3_walks_UPDATE', 'pack_v3_rest_DELETE']) assert.ok(creates.some(l => l.startsWith(`CREATE TRIGGER IF NOT EXISTS ${name} `)), name);
+  assert.ok(!creates.some(l => /TRIGGER IF NOT EXISTS identity_/.test(l)), '身分的觸發器不在這裡建');
 });
 
 test('正式 D1 還沒有群名表也能同步：讀不到群名表當成空的，其他表讀不到照樣停', async () => {
@@ -88,7 +92,7 @@ test('開卡、照片、休養、介紹不被同步清掉', async t => {
   for (const [table, sql] of Object.entries(SEED_TABLES)) seed[table] = (await first.prepare(sql).all()).results;
   const sql = await buildSyncSql(seed, src);
   // 只補建表（IF NOT EXISTS），不刪不寫這幾張
-  const writes = sql.split('\n').filter(l => !/^CREATE /.test(l)).join('\n');
+  const writes = sql.split('\n').filter(l => !/^CREATE |^INSERT OR IGNORE INTO v3_(data|pack)_versions/.test(l)).join('\n');
   assert.doesNotMatch(writes, /v3_card_opened|v3_photos|v3_volunteer|v3_rest|v3_intros|v3_edit_log/);
 });
 
@@ -204,7 +208,7 @@ const planOnce = async (db, sheet) => {
   const groupColumns = (await source()).groupColumns;
   return buildSyncPlan(seed, async mem => ({ ...planSync(await readPrevious(mem), sheet, null, NOW, KEY), groupColumns }));
 };
-const writes = sql => sql.split('\n').filter(l => l && !/^CREATE /.test(l));
+const writes = sql => sql.split('\n').filter(l => l && !/^CREATE |^INSERT OR IGNORE INTO v3_(data|pack)_versions/.test(l));
 
 test('#302 試算表沒變再同步一次：一列都不寫', async t => {
   const { src, db } = await production(t);
