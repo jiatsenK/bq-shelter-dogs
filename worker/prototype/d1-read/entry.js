@@ -1,5 +1,6 @@
 // 丟棄式原型（prototype/d1-read-reduction）：量 D1 每個查詢回傳的 meta.rows_read，
 // 比較「現在每次都讀整張表」和「歷史資料包＋今天紀錄＋記憶體快取」。只接原型 D1，不合併進 main
+import { INVAL_SETUP, INVAL_TEARDOWN, fresh2, body2, oldBody2, resetMem, readTodayWalks } from './inval.js';
 import { readDogsPayload, readWalks, readDepartures, readRest, HISTORY_START } from '../../src/compact.js';
 
 // 包住 D1：每個 statement 的 meta.rows_read 記到 log。first() 改走 all()，才拿得到 meta
@@ -136,6 +137,51 @@ export default {
           db.prepare('UPDATE proto_versions SET today=today+1 WHERE id=1'),
         ]);
         return json({ rows_read: sum(log), rows_written: sum(log, 'rows_written'), log });
+      }
+
+      // ---- 第二輪：快取失效與同步 ----
+      if (p[0] === 'inval') {
+        const today = q.get('today') || ymd(now);
+        if (p[1] === 'setup') { for (const s of INVAL_SETUP) await db.prepare(s).run(); resetMem(); return json({ n: INVAL_SETUP.length }); }
+        if (p[1] === 'teardown') { for (const s of INVAL_TEARDOWN) await db.prepare(s).run(); return json({ ok: 1 }); }
+        if (p[1] === 'get') { const c = await fresh2(db, now, { today, cold: q.get('cold') === '1', checkMs: Number(q.get('checkMs') || 60e3) }); body2(c, p[2]); return json({ rows_read: sum(log), rows_written: sum(log, 'rows_written'), log: log.map(x => [x.rows_read, x.rows_written, x.sql.slice(0, 60)]) }); }
+        if (p[1] === 'compare') {
+          const c = await fresh2(db, now, { today, checkMs: 0 });
+          const reads = sum(log), writes = sum(log, 'rows_written');
+          const out = { reads, writes };
+          for (const w of ['dogs', 'walks', 'departures', 'rest']) out[w] = JSON.stringify(await oldBody2(env.DB, w)) === JSON.stringify(body2(c, w));
+          return json(out);
+        }
+        if (p[1] === 'mutate') {
+          const k = q.get('kind'), tag = String(now);
+          const dog = await env.DB.prepare('SELECT dog_id FROM v3_sheet_main WHERE row_index=3').first();
+          const stmts = {
+            intro: [db.prepare('INSERT INTO v3_intros(dog_id,intro) VALUES(?,?) ON CONFLICT(dog_id) DO UPDATE SET intro=excluded.intro').bind(dog.dog_id, '原型介紹 ' + tag)],
+            rest: [db.prepare('INSERT INTO v3_rest(dog_id,until_date,reason) VALUES(?,?,?) ON CONFLICT(dog_id) DO UPDATE SET reason=excluded.reason').bind(dog.dog_id, '2026-12-31', '原型 ' + tag)],
+            syncedat: [db.prepare('UPDATE v3_sheet_main SET synced_at=? WHERE row_index=0').bind(new Date(now).toISOString())],
+            walkpast: [db.prepare("UPDATE v3_walks SET walker_code=? WHERE rowid=(SELECT rowid FROM v3_walks WHERE walk_date='2026-09-30' LIMIT 1)").bind(tag.slice(-12).padStart(12, '0'))],
+            walktoday: [db.prepare('INSERT OR IGNORE INTO v3_walks(dog_id,walk_date,position,walker_code,dog_number,dog_name) VALUES(?,?,?,?,?,?)').bind(dog.dog_id, today, 10 + Number(tag.slice(-4)), 'proto0000000', 'X', 'X')],
+            // 一次差異同步改 30 列（溜狗紀錄 20 列＋主清單 10 列）
+            sync30: [
+              ...Array.from({ length: 20 }, (_, i) => db.prepare("UPDATE v3_walks SET walker_code=? WHERE rowid=(SELECT rowid FROM v3_walks WHERE walk_date='2026-10-01' LIMIT 1 OFFSET ?)").bind(('s' + tag).slice(-12), i)),
+              ...Array.from({ length: 10 }, (_, i) => db.prepare('UPDATE v3_sheet_main SET note=? WHERE row_index=?').bind('原型 ' + tag, 10 + i)),
+            ],
+          }[k];
+          await db.batch(stmts);
+          return json({ kind: k, rows_read: sum(log), rows_written: sum(log, 'rows_written') });
+        }
+      }
+      if (p[0] === 'today-read') { await readTodayWalks(db, q.get('today') || ymd(now), now); return json({ rows_read: sum(log) }); }
+      if (p[0] === 'today-seed') {
+        const n = Number(q.get('n') || 30), d = q.get('today') || ymd(now);
+        await db.batch(Array.from({ length: n }, (_, i) => db.prepare('INSERT OR REPLACE INTO v3_today_walks(walk_date,dog_key,walked,walked_date,walker,updated_at) VALUES(?,?,1,?,?,?)').bind(d, 'k' + i, d, '原型', new Date(now).toISOString())));
+        return json({ rows_written: sum(log, 'rows_written') });
+      }
+      // 同步程式（scripts/sync-compact-d1.mjs）每次先讀的 12 張整表
+      if (p[0] === 'sync-read') {
+        const T = ['v3_dogs','v3_dog_numbers','v3_sheet_main','v3_sheet_main_walkers','v3_sheet_former_numbers','v3_sheet_groups','v3_sheet_changes','v3_walks','v3_departures','v3_departure_items','v3_intros','v3_sheet_group_labels'];
+        const per = {}; for (const t of T) per[t] = (await env.DB.prepare('SELECT * FROM ' + t).all()).meta.rows_read;
+        return json({ total: Object.values(per).reduce((a, b) => a + b, 0), per });
       }
       // 單一查詢：直接量 rows_read
       if (p[0] === 'sql') { const r = await env.DB.prepare(q.get('q')).all(); return json({ rows_read: r.meta.rows_read, n: r.results.length, first: r.results[0] }); }
