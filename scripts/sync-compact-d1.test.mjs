@@ -44,9 +44,13 @@ test('第一次寫入正式 D1：主清單、試算表備註、常遛狗群讀�
 
 test('正式 D1 還沒有離所表、群名表時，SQL 自己先建', async t => {
   const lines = (await buildSyncSql({}, await source())).split('\n');
-  assert.match(lines[0], /^CREATE TABLE IF NOT EXISTS v3_sheet_group_labels /);
-  assert.match(lines[1], /^CREATE TABLE IF NOT EXISTS v3_departures /);
-  assert.match(lines[2], /^CREATE TABLE IF NOT EXISTS v3_departure_items /);
+  const creates = lines.filter(l => /^CREATE /.test(l));
+  for (const t of ['v3_sheet_group_labels', 'v3_departures', 'v3_departure_items', 'v3_edit_log', 'v3_volunteers']) {
+    assert.ok(creates.some(l => l.startsWith(`CREATE TABLE IF NOT EXISTS ${t} `)), t);
+  }
+  assert.ok(creates.every(l => / IF NOT EXISTS /.test(l)));
+  assert.equal(lines.findIndex(l => !/^CREATE /.test(l)), creates.length);
+
 });
 
 test('正式 D1 還沒有群名表也能同步：同步前不先讀群名表', () => {

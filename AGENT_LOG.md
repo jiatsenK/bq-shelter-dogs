@@ -1428,3 +1428,8 @@
 - 前台：新增 app.js `firstIntake`（所有編號取最舊）；詳細資訊「入所」標籤、已出所卡、分析頁、圖鑑 cards.js 都改用同一個規則（圖鑑原本沒看舊編號）。詳細資訊編號下面一行改成「舊編號 … ✕・最早入所 …」＋「＋補舊編號」，點了原地輸入；拿掉「第 N 次入所」的顯示；K：換新編號就是再入所，但不需要顯示，定義寫進 GLOSSARY／ADR。
 - 測試：node 180 過；網頁 243 過（本機用 Chrome 跑）；新增舊編號 Worker 3 項、網頁 1 項，#10 唯讀檢查加入 /former。
 - 跟 main 的開放編輯（ADR 0004）合併：原本的 ADR 0004 改編號為 0005，拿掉自己的 v3_number_log。
+
+## 2026-10-16 正式 D1 補建編輯紀錄等新資料表（Claude）
+
+- 編輯紀錄頁顯示「暫時讀不到編輯紀錄」：正式 D1 不另外建表（#214），同步只補建 v3_departure*、v3_sheet_group_labels，v3_edit_log 從沒建到正式環境。
+- scripts/sync-compact-d1.mjs 改成補建 db/compact-schema.sql 裡所有 CREATE TABLE／INDEX IF NOT EXISTS，測試加上檢查 v3_edit_log。
