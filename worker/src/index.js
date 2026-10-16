@@ -3,6 +3,7 @@ import { cleanIntakeEvents } from './intake.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
+import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache } from './today.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
 import { readDogsPayload, compactStatus, dogIdsFor, readFavorites, saveFavorite, openedBooks, readRest, saveRest, saveIntro, addFormerNumber, removeFormerNumber, readWalks, readDepartures, readMainNames } from './compact.js';
 
@@ -68,6 +69,7 @@ function resetState() {
   walkersCache = null;
   hits.clear();
   dogsCache = null;
+  resetTodayCache();
 }
 
 function config(env) {
@@ -857,6 +859,15 @@ async function writeWalks(request, env, origin) {
   if (!res.ok || !out) return fail(502, `試算表沒有回應（${res.status}）`, origin);
   if (!out.ok) return fail(502, out.code === 'key' ? '寫入試算表的金鑰不對，請 K 檢查設定' : scriptError(out.error), origin);
   walkersCache = null; // 寫入後重新讀取完整名單
+  // 今日溜狗紀錄（ADR 0007）：其他手機不用等同步；寫失敗只記日誌，按的人照常成功
+  if (['walk', 'edit', 'undo'].includes(action) && env && env.DB) {
+    const today = YMD_PATTERN.test(out.today || '') ? out.today : taiwanYmd(Date.now());
+    try {
+      await saveTodayWalks(env.DB, today, todayRows(action, dogs, out.results, today));
+    } catch (e) {
+      console.error('today-walks', e);
+    }
+  }
   // 備註、異動紀錄是只追加的編輯，記進編輯紀錄（ADR 0004）；名字用送來的 walker
   if (action === 'note' || action === 'log') {
     const editor = await editorOf(body.walker, cfg.walkerKey);
@@ -1093,6 +1104,18 @@ export default {
       } catch (e) {
         console.error(path, e);
         return fail(503, path === '/walks' ? '暫時讀不到溜狗紀錄' : '暫時讀不到離所紀錄', allowed, { code: 'db' });
+      }
+    }
+    // 今日溜狗紀錄（ADR 0007）：網站每分鐘來讀今天的清單；讀不到網站就照舊不顯示錯誤
+    if (path === '/today') {
+      if (request.method !== 'GET') return fail(405, '只能用 GET /today 讀', allowed);
+      const today = taiwanYmd(Date.now());
+      try {
+        if (!env || !env.DB) throw new Error('沒有 D1');
+        return reply(200, { ok: true, date: today, walks: await readTodayWalks(env.DB, today) }, allowed);
+      } catch (e) {
+        console.error('today', e);
+        return fail(503, '暫時讀不到今日溜狗紀錄', allowed, { code: 'db' });
       }
     }
     if (path === '/rest') {

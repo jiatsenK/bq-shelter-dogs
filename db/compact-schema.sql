@@ -221,3 +221,16 @@ CREATE TRIGGER IF NOT EXISTS identity_v3_volunteer_cards_DELETE AFTER DELETE ON 
 CREATE TRIGGER IF NOT EXISTS identity_v3_walks_INSERT AFTER INSERT ON v3_walks BEGIN UPDATE v3_identity_revision SET revision=revision+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS identity_v3_walks_UPDATE AFTER UPDATE ON v3_walks BEGIN UPDATE v3_identity_revision SET revision=revision+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS identity_v3_walks_DELETE AFTER DELETE ON v3_walks BEGIN UPDATE v3_identity_revision SET revision=revision+1 WHERE id=1; END;
+
+-- 今日溜狗紀錄（ADR 0007）：網站按溜了／復原寫試算表成功後，Worker 記下那隻狗在試算表的「遛狗日期」「誰遛的」現在是什麼，
+-- 其他手機不用等同步就看得到。walked=0 是按了復原（狗不能再算今天溜過）。只認台灣時間今天；以前的下次寫入時清掉。
+-- dog_key 跟網站 walkKey 一樣（有編號用編號，沒有用「名:犬名」）。試算表是正本，網站只採用比上次同步新的紀錄。
+CREATE TABLE IF NOT EXISTS v3_today_walks (
+  walk_date TEXT NOT NULL,
+  dog_key TEXT NOT NULL,
+  walked INTEGER NOT NULL CHECK(walked IN (0,1)),
+  walked_date TEXT NOT NULL DEFAULT '',
+  walker TEXT NOT NULL DEFAULT '',
+  updated_at TEXT NOT NULL,
+  PRIMARY KEY(walk_date,dog_key)
+);
