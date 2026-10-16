@@ -1383,3 +1383,9 @@
 - index.html、cards.html、css/、js/、icons/、manifest.webmanifest、_headers 搬到 public/；wrangler.jsonc 的 assets.directory 改 ./public，刪除 .assetsignore（只有 public/ 會公開）。測試頁 tests/ 不再放上網站。
 - 測試頁、sync-sheet／analytics-beacon 測試改讀 public/ 路徑；部署的瀏覽統計改寫 public/index.html；.assetsignore 檢查改成「assets 只指向 public/、私密檔不在網站資料夾」。
 - CLOUDFLARE_SETUP、PHOTO_UPLOAD_SETUP、SHEET_SYNC_SETUP、SHEET_WRITE_SETUP、SITE_CONFIG 搬到 docs/setup/，更新所有引用；Markdown 文件裡的網站檔案路徑改成 public/…。網址不變。
+
+## 2026-10-16 加上自動版本號 release-please（Claude）
+
+- 新增 .github/workflows/release-please.yml、release-please-config.json、.release-please-manifest.json、version.txt（從 9.0.0 起，對應 V9）。
+- feat:／fix: 的 commit 會累積到 Release PR，合併後打 tag 並寫 CHANGELOG.md 與 GitHub Release；docs:／chore: 不列入。bootstrap-sha 設在 75230be，之前的歷史不算。
+
