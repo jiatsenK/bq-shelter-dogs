@@ -12,6 +12,7 @@
   - 志工身分、更名、合併 → `docs/adr/0005-volunteer-identity.md`、`GLOSSARY.md`
   - 活動紀錄、已出所狗卡 → `docs/adr/0002-activity-records.md`
   - 新增會改資料的功能（編輯紀錄、沒有通關碼）→ `docs/adr/0004-open-editing-and-edit-log.md`
+  - 今天溜過要讓其他手機很快看到（今日溜狗紀錄、免費方案額度）→ `docs/adr/0007-today-walks-live.md`
   - 新增 D1 資料表 → 寫進 `db/compact-schema.sql`，同步時會自動補建到正式 D1（#293）
 
 ## 指令
