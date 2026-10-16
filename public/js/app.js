@@ -1263,6 +1263,108 @@ let toastTimer = null;
 let toastUndo = null;
 let toastExtra = null;
 // extra：{ label, fn } 提示條上多一顆按鈕（例：溜了之後「＋一起溜的人」）
+// ── 加備註、新增異動紀錄（#239、#281）：只追加，寫進試算表前先預覽；日期用台灣時間、名字用「我是誰」 ──
+// 狗卡在「試算表備註」下面，異動紀錄只在電腦版右欄（K 2026-10-16）
+const APPEND_MAX = 200;
+let sheetAppend = null; // { kind: 'note'|'log', dog, text, phase: 'edit'|'preview'|'busy', error }
+function taipeiStamp(now = new Date()) {
+  const [y, m, d] = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }).split('-').map(Number);
+  return `${y}/${m}/${d}`;
+}
+function appendEntry(text, who) { return `${taipeiStamp()}${text.trim()}（${who}）`; }
+function nextLogLabel() {
+  const nums = (typeof sheetNotes !== 'undefined' ? sheetNotes : []).map(n => Number((String(n.label).match(/^備註\s*(\d+)/) || [])[1]) || 0);
+  return `備註${Math.max(0, ...nums) + 1}`;
+}
+function appendPreview(a, who) {
+  const entry = appendEntry(a.text, who);
+  if (a.kind === 'log') return `<div class="append-preview"><span class="append-label">${esc(nextLogLabel())}</span>${esc(entry)}</div>`;
+  const now = a.dog.note || '';
+  return `<div class="append-preview note-text">${now.trim() ? `${esc(now)};` : ''}<mark>${esc(entry)}</mark></div>`;
+}
+function sheetAppendHtml(kind, dog = null) {
+  if (!UPLOAD_URL || sheetWriteState === 'off' || (dog && dog.departure)) return '';
+  const a = sheetAppend && sheetAppend.kind === kind && sheetAppend.dog === dog ? sheetAppend : null;
+  const label = kind === 'note' ? '加備註' : '新增一筆';
+  if (!a) return `<button type="button" class="my-note-edit append-open" data-append-open="${kind}">${icon('note')}${label}</button>`;
+  const who = loadWalkerName();
+  const busy = a.phase === 'busy';
+  const err = a.error ? `<p class="append-error" role="alert">${esc(a.error)}</p>` : '';
+  if (!who) return `<div class="my-note-form append-form"><p class="append-hint">要先在「我溜過」設定名字，才能寫進試算表。</p>
+    <div class="my-note-actions"><button type="button" class="photo-cancel" data-append-cancel>取消</button></div></div>`;
+  if (a.phase === 'edit') return `<form class="my-note-form append-form" data-append-form>
+    <label class="my-note-pass-label" for="appendText">${kind === 'note' ? '要接在備註後面的內容' : '要加在異動紀錄最下面的內容'}</label>
+    <input type="text" id="appendText" maxlength="${APPEND_MAX}" value="${esc(a.text)}" autocomplete="off">
+    <p class="append-hint">日期和名字（${esc(who)}）會自動加上；已經寫在試算表的字不會被改。</p>${err}
+    <div class="my-note-actions"><button type="submit" class="my-note-save"${a.text.trim() ? '' : ' disabled'}>預覽</button>
+      <button type="button" class="photo-cancel" data-append-cancel>取消</button></div></form>`;
+  return `<div class="my-note-form append-form">
+    <p class="my-note-pass-label">${kind === 'note' ? '送出後這格會變成：' : '送出後會在最下面新增：'}</p>
+    ${appendPreview(a, who)}${err}
+    <div class="my-note-actions"><button type="button" class="my-note-save" data-append-send${busy ? ' disabled' : ''}>${busy ? '寫入中…' : '送出'}</button>
+      ${busy ? '' : '<button type="button" class="photo-cancel" data-append-back>改一下</button>'}</div></div>`;
+}
+function rerenderAppend(kind, focusSel) {
+  if (kind === 'note') renderDetail(); else render();
+  const el = focusSel && document.querySelector(focusSel);
+  if (el) el.focus({ preventScroll: true });
+}
+async function sendAppend() {
+  const a = sheetAppend;
+  const who = loadWalkerName();
+  if (!a || a.phase !== 'preview' || !who) return;
+  a.phase = 'busy'; a.error = '';
+  rerenderAppend(a.kind);
+  const payload = { action: a.kind, walker: who, editor: who, text: a.text.trim(), dogs: a.kind === 'note' ? [{ id: a.dog.id || '', name: a.dog.name }] : [] };
+  let res = null, out = null;
+  try {
+    res = await fetch(`${UPLOAD_URL}/walk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    out = await res.json().catch(() => null);
+  } catch (e) { res = null; }
+  if (sheetAppend !== a) return;
+  const r = out && out.ok && Array.isArray(out.results) ? out.results[0] : null;
+  if (!r || r.status !== 'written') {
+    a.phase = 'preview';
+    a.error = !res ? '網路不通，沒寫進試算表，請稍後再試' : r && r.status === 'notFound' ? '試算表找不到這隻狗，沒寫進去' : `沒寫進試算表：${(out && out.error) || `HTTP ${res.status}`}`;
+    rerenderAppend(a.kind);
+    return;
+  }
+  sheetAppend = null;
+  if (a.kind === 'note') a.dog.note = r.wrote.note;
+  else if (typeof sheetNotes !== 'undefined') sheetNotes.push({ label: r.wrote.label, text: r.wrote.text });
+  rerenderAppend(a.kind);
+  showToast(a.kind === 'note' ? `已加進 ${a.dog.name} 的試算表備註` : '已加進異動紀錄');
+}
+document.addEventListener('click', e => {
+  const t = e.target && e.target.closest ? e.target : null;
+  if (!t) return;
+  const open = t.closest('[data-append-open]');
+  if (open) {
+    const kind = open.dataset.appendOpen;
+    sheetAppend = { kind, dog: kind === 'note' ? detailDog : null, text: '', phase: 'edit', error: '' };
+    rerenderAppend(kind, '#appendText');
+    return;
+  }
+  if (!sheetAppend) return;
+  const kind = sheetAppend.kind;
+  if (t.closest('[data-append-cancel]')) { sheetAppend = null; rerenderAppend(kind, `[data-append-open="${kind}"]`); return; }
+  if (t.closest('[data-append-back]')) { sheetAppend.phase = 'edit'; sheetAppend.error = ''; rerenderAppend(kind, '#appendText'); return; }
+  if (t.closest('[data-append-send]')) sendAppend();
+});
+document.addEventListener('input', e => {
+  if (!sheetAppend || !e.target || e.target.id !== 'appendText') return;
+  sheetAppend.text = e.target.value;
+  const btn = e.target.form && e.target.form.querySelector('.my-note-save');
+  if (btn) btn.disabled = !e.target.value.trim();
+});
+document.addEventListener('submit', e => {
+  if (!sheetAppend || !e.target.matches || !e.target.matches('[data-append-form]')) return;
+  e.preventDefault();
+  if (!sheetAppend.text.trim()) return;
+  sheetAppend.phase = 'preview'; sheetAppend.error = '';
+  rerenderAppend(sheetAppend.kind, '[data-append-send]');
+});
+
 function showToast(text, undo, extra) {
   let el = document.getElementById('toast');
   if (!el) {
@@ -1373,6 +1475,7 @@ function detailHtml(dog, today) {
       <h3>${icon('note')}試算表備註</h3>
       ${!dog.note ? `<div class="empty">目前沒有備註</div>`
         : `<div class="content note-text">${flag ? highlightNote(dog.note, flag.terms) : esc(dog.note)}</div>`}
+      ${sheetAppendHtml('note', dog)}
     </section>
     ${togetherSection(dog, walked)}
     ${walkHistorySection(dog, today)}

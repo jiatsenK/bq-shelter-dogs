@@ -1,6 +1,6 @@
 // 按「溜了」寫進試算表（#138）：這份貼到 Google Apps Script，用 K 的 Google 帳號部署成「網頁應用程式」。
 // 步驟見 docs/setup/SHEET_WRITE_SETUP.md。網站不會直接呼叫這裡，都經過 Worker（POST /api/walk），有設通關碼時 Worker 會帶過來。
-// 只會改「主清單」的「遛狗日期」「誰遛的」兩欄，其他欄、其他分頁都不碰。
+// 只會改「主清單」的「遛狗日期」「誰遛的」兩欄，以及只追加的「備註」欄和下方異動紀錄（#239、#281），其他欄、其他分頁都不碰。
 //
 // 指令碼屬性（專案設定 → 指令碼屬性）：
 //   SHEET_ID   試算表 ID（網址 /d/ 和 /edit 中間那串）
@@ -8,7 +8,7 @@
 
 var SHEET_NAME = '主清單';
 var TIME_ZONE = 'Asia/Taipei';
-var HEADERS = { id: '編號', name: '犬名', date: '遛狗日期', walker: '誰遛的' };
+var HEADERS = { cage: '籠位', id: '編號', name: '犬名', date: '遛狗日期', walker: '誰遛的', note: '備註' };
 // 跟 scripts/sync-sheet.mjs 的 NAME_SEP 一樣：一格寫好幾個名字時用這些符號或空白隔開
 var NAME_SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
 
@@ -123,6 +123,7 @@ function namesIn(text) {
 function planSheetWrites(values, req, today, ymd) {
   var header = findHeader(values);
   if (!header) return { error: '主清單找不到「犬名」表頭' };
+  if (req.action === 'note' || req.action === 'log') return planAppend(values, header, req, today);
   var missing = ['id', 'date', 'walker'].filter(function (k) { return header.cols[k] === undefined; });
   if (missing.length) return { error: '主清單找不到「' + missing.map(function (k) { return HEADERS[k]; }).join('」「') + '」欄' };
   var cols = header.cols;
@@ -166,4 +167,42 @@ function planSheetWrites(values, req, today, ymd) {
     return Object.assign(base, { status: 'badAction' });
   });
   return { cells: cells, results: results };
+}
+
+// ── 只追加（#239、#281）：日期用今天（台灣時間），月日不補 0；名字用全形括號；不刪、不改原本的字 ──
+function appendEntry(req, today) {
+  var p = today.split('-').map(Number);
+  return p[0] + '/' + p[1] + '/' + p[2] + cellText(req.text) + '（' + cellText(req.walker) + '）';
+}
+
+// note：該狗「備註」欄接上「;日期內容（名字）」，原本空的就不加分號
+// log：狗清單下方異動紀錄最後一列的下一列，籠位欄寫「備註N」（現有最大 N + 1），編號欄寫「日期內容（名字）」
+function planAppend(values, header, req, today) {
+  var cols = header.cols;
+  if (!cellText(req.text) || !cellText(req.walker)) return { error: '內容和名字都要有' };
+  var entry = appendEntry(req, today);
+  if (req.action === 'note') {
+    if (cols.note === undefined || cols.id === undefined) return { error: '主清單找不到「備註」或「編號」欄' };
+    var dog = (req.dogs || [])[0] || {};
+    var base = { id: dog.id, name: dog.name };
+    var r = findDogRow(values, header, dog);
+    if (r === -1) return { cells: [], results: [Object.assign(base, { status: 'notFound' })] };
+    var raw = values[r][cols.note];
+    var now = raw === null || raw === undefined ? '' : String(raw);
+    var value = now.trim() ? now + ';' + entry : entry;
+    return { cells: [{ row: r, col: cols.note, value: value }], results: [Object.assign(base, { status: 'written', prev: { note: now }, wrote: { note: value } })] };
+  }
+  if (cols.cage === undefined || cols.id === undefined) return { error: '主清單找不到「籠位」或「編號」欄' };
+  var max = 0;
+  for (var i = header.row + 1; i < values.length; i++) {
+    var m = cellText(values[i][cols.cage]).match(/^備註\s*(\d*)/);
+    if (m) max = Math.max(max, Number(m[1]) || 0);
+  }
+  var last = values.length - 1;
+  while (last > header.row && values[last].every(function (v) { return cellText(v) === ''; })) last--;
+  var label = '備註' + (max + 1);
+  return {
+    cells: [{ row: last + 1, col: cols.cage, value: label }, { row: last + 1, col: cols.id, value: entry }],
+    results: [{ status: 'written', wrote: { label: label, text: entry } }],
+  };
 }
