@@ -7,4 +7,4 @@
   - `worker/src/today.js`：讀取先讀 1 列版本號，版本號和日期沒變就回記憶體快取；拿掉 15 秒快取與寫入時清快取。
   - `worker/test/fakes.mjs` 的 `fakeD1` 加 `stats.rowsRead`；`worker/test/today.test.mjs` 加讀取量、別台寫入、跨日、讀不到版本號的測試。
 - 未完成：網頁測試本機沒有 Playwright Chromium，沒跑（前端沒改，交給 CI）。
-- 相關 PR：待開
+- 相關 PR：https://github.com/jiatsenK/bq-shelter-dogs/pull/316
