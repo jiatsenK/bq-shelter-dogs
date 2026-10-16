@@ -1140,6 +1140,8 @@ let walkerNameMemory = '';
 let sheetWritesMemory = null;
 let sheetWriteState = 'unknown'; // unknown／on／off
 let sheetQueue = Promise.resolve();
+// 這次打開網頁後寫過（收到試算表回應）的狗：拿試算表現況核對時不動它們，免得被較早送出的 /walkers 回應蓋掉
+const sheetWritesThisPage = new Set();
 
 // ── 誰遛的名字（#141 第 9 項）──
 // 名字不放進公開的 repo（dogs.json 只有代號）：打開網頁時跟 Worker 拿（GET /api/walkers，Worker 直接讀試算表），
@@ -1181,11 +1183,33 @@ async function loadWalkerNames() {
       walkerNameList = [...new Set((Array.isArray(out.names) ? out.names : []).map(canonicalWalker).filter(Boolean))];
       walkerOlderNames = [...new Set((Array.isArray(out.older) ? out.older : []).map(canonicalWalker).filter(Boolean))];
       walkerCodeNames = out.codes && typeof out.codes === 'object' ? out.codes : {};
+      reconcileSheetWrites();
       render();
       renderDetail();
       if (onboard && onboard.step === 0 && onboard.phase !== 'saving') renderOnboard();
     }
   } catch (e) { console.error(e); }
+}
+// K 2026-10-16：按了復原，試算表改回去了，但手機沒收到回應（例如馬上重新整理），手機上「今天我溜了」會一直留著。
+// 拿到試算表現況時核對：這頁還沒寫過的狗，手機記的誰遛的跟試算表不一樣，就以試算表為準，清掉手機上的今天紀錄
+function reconcileSheetWrites(today = new Date()) {
+  if (!Object.keys(walkerNames).length) return;
+  const items = loadSheetWrites(today);
+  const ids = loadWalkedIds(today);
+  const me = canonicalWalker(loadWalkerName());
+  let changed = false;
+  for (const [key, item] of Object.entries(items)) {
+    if (sheetWritesThisPage.has(key) || !item || !item.current) continue;
+    const live = String(walkerNames[key] || '');
+    if (live === String(item.current.walker || '')) continue;
+    delete items[key];
+    changed = true;
+    const at = ids.indexOf(key);
+    if (at !== -1 && !splitWalkers(live).map(canonicalWalker).includes(me)) ids.splice(at, 1);
+  }
+  if (!changed) return;
+  saveSheetWrites(items, today);
+  saveWalkedIds(ids, today);
 }
 // 一格好幾個名字（「志工乙+志工丙+岑」「志工甲。K」）拆開，用頓號接起來，不重複
 function canonicalWalker(name) {
@@ -1431,6 +1455,7 @@ async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expecte
     const key = keyOf(r);
     if (!key) continue;
     const old = items[key];
+    sheetWritesThisPage.add(key);
     if (on && (r.status === 'written' || r.status === 'already')) {
       const current = { date: out.today || localDateKey(today), walker: r.wrote ? r.wrote.walker : (r.current ? r.current.walker : walkerNames[key] || '') };
       items[key] = { id: r.id || '', name: r.name, prev: expected !== undefined ? r.prev : (old && old.prev ? old.prev : r.prev), wrote: r.wrote || (old && old.wrote), current, mine: splitWalkers(current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())) };
