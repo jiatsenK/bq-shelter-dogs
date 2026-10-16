@@ -1658,7 +1658,6 @@ document.addEventListener('click', e => {
   if (!t) return;
   const open = t.closest('[data-append-open]');
   if (open) {
-    e.preventDefault(); // 標題旁的鉛筆只展開編輯，不同時切換 details。
     const kind = open.dataset.appendOpen;
     sheetAppend = { kind, dog: kind === 'note' ? detailDog : null, text: '', phase: 'edit', error: '' };
     rerenderAppend(kind, '#appendText');
@@ -1783,14 +1782,21 @@ function detailHtml(dog, today) {
       <div class="info">
         <div class="name-row"><h2 class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</h2>${favButtonHtml(dog)}</div>
         <div class="chips">${statusBadge(dog, today)}${detailChips(dog)}</div>
+        ${metaLine(dog)}
         ${flag ? warnNote(dog.note, flag) : ''}
         ${restNoteHtml(dog, today)}
       </div>
     </div>
     ${lastWalkSection(dog, today)}
     ${detailTrail.length ? `<button type="button" class="detail-back" id="detailBack">${icon('back')}回到 ${esc(detailTrail[detailTrail.length - 1].name)}</button>` : ''}
-    ${noteSectionHtml(dog, flag)}
+    <section class="detail-section" data-section="note">
+      <h3>${icon('note')}試算表備註</h3>
+      ${!dog.note ? `<div class="empty">目前沒有備註</div>`
+        : `<div class="content note-text">${flag ? highlightNote(dog.note, flag.terms) : esc(dog.note)}</div>`}
+      ${sheetAppendHtml('note', dog)}
+    </section>
     ${togetherSection(dog, walked)}
+    ${walkHistorySection(dog, today)}
     ${introSectionHtml(dog, intro)}
     ${restAdminHtml(dog, today)}
     ${photoBarHtml(dog) || introBarHtml(dog) || `<div class="detail-bar">
@@ -1799,22 +1805,6 @@ function detailHtml(dog, today) {
       ${groupWalkButton(dog, walked)}
     </div>`}
   `;
-}
-
-// 三區編輯入口都在標題旁；備註的原文可以收起，安全警示另保留在頂部。
-function sectionEditButton(id, label, attrs = '') {
-  return `<button type="button" class="section-edit"${id ? ` id="${id}"` : ''} aria-label="${label}" ${attrs}>${icon('write')}</button>`;
-}
-function noteSectionHtml(dog, flag) {
-  const editing = sheetAppend && sheetAppend.kind === 'note' && sheetAppend.dog === dog;
-  const can = UPLOAD_URL && sheetWriteState !== 'off';
-  return `<section class="detail-section" data-section="note">
-    <details class="note-disclosure"${editing ? ' open' : ''}>
-      <summary><h3 class="section-heading">${icon('note')}試算表備註${can ? sectionEditButton('', '追加試算表備註', 'data-append-open="note"') : ''}</h3></summary>
-      <div class="note-disclosure-body">${dog.note ? `<div class="content note-text">${flag ? highlightNote(dog.note, flag.terms) : esc(dog.note)}</div>` : '<div class="empty">目前沒有備註</div>'}
-      ${editing ? sheetAppendHtml('note', dog) : ''}</div>
-    </details>
-  </section>`;
 }
 
 // ── 休養中（K 2026-10-09：剛動完手術不能溜，「排到下面、休養中、10/20 前暫停帶出」，不動試算表）──
@@ -1835,14 +1825,16 @@ function restAdminHtml(dog, today) {
     // 管理用（K 2026-10-10）：只剩設定休養中；入所介紹直接點那一段就能改。正在改介紹時先收起來
     if (introEdit && introEdit.dog === dog) return '';
     return `<section class="detail-section rest-admin" data-section="rest">
-      <h3 class="section-heading">${icon('bed')}休養設定${sectionEditButton('restEdit', '編輯休養設定', 'aria-expanded="false"')}</h3>
-      <p class="rest-setting-note">${r ? `${esc(r.reason || '休養中')}，到 ${monthDay(r.until)}` : '設定期間暫停帶出，期滿自動恢復'}</p>
+      <h3>${icon('write')}休養設定<span class="sub">會記在編輯紀錄</span></h3>
+      <div class="admin-btns">
+        <button type="button" class="admin-btn" id="restEdit">${icon('paw')}${r ? '改休養設定' : '設定休養中'}</button>
+      </div>
     </section>`;
   }
   const busy = e.phase === 'saving';
   return `<section class="detail-section rest-admin" data-section="rest">
     <form class="rest-form" id="restForm" autocomplete="on">
-      <h3 class="section-heading">${icon('bed')}休養設定</h3>
+      <h3>休養中</h3>
       <p class="rest-hint">排到溜狗表最下面、不能按溜了；過了那天自動恢復。</p>
       <label>原因<input type="text" id="restReason" maxlength="40" value="${esc(e.reason)}" placeholder="例：術後休養"${busy ? ' disabled' : ''}></label>
       <label>到哪一天（含那天）<input type="date" id="restUntil" value="${esc(e.until)}" min="${isoDay(today)}" required${busy ? ' disabled' : ''}></label>
@@ -1871,7 +1863,7 @@ function intakeDraft(dog) {
 function intakeListHtml(dog) {
   const events = intakeEventsOf(dog);
   if (!events.length) return '';
-  return `<ul class="intake-list">${events.map(e => `<li>${e.date ? `<time datetime="${esc(e.date)}">${esc(e.date.replace(/-/g, '/'))}</time>` : '<span class="intake-date-empty">日期未確認</span>'}<span class="intake-event">${esc(e.event)}</span>${e.number ? `<span class="intake-number">（${esc(e.number)}）</span>` : ''}</li>`).join('')}</ul>`;
+  return `<ul class="intake-list">${events.map(e => `<li>${e.date ? `<time datetime="${esc(e.date)}">${esc(e.date.replace(/-/g, '/'))}</time>` : '<span class="intake-date-empty">日期未確認</span>'}<span class="intake-event">${esc(e.event)}</span></li>`).join('')}</ul>`;
 }
 function intakeEditorHtml(dog, e, busy) {
   const numbers = [...new Set([...(dog.formerIds || []), dog.id, ...e.events.map(row => row.number)].filter(Boolean))].sort();
@@ -1890,21 +1882,24 @@ function introOf(dog) {
 function introSectionHtml(dog, intro) {
   const e = introEdit && introEdit.dog === dog ? introEdit : null;
   if (!e) {
+    // 直接點這一段就能改（K 2026-10-10：不要多一個按鈕）；不能改的時候（沒編號、離所）就是一般文字
     const can = !!(dog.id && UPLOAD_URL) && !dog.departure;
+    const body = intro ? `<span class="content">${esc(intro)}</span>` : `<span class="empty">${intakeEventsOf(dog).length ? (can ? '編輯入所紀錄' : '') : (can ? '還沒有入所介紹，點這裡補' : '還沒有入所介紹')}</span>`;
     return `<section class="detail-section" data-section="intro">
-      <h3 class="section-heading">${icon('card')}入所介紹${can ? sectionEditButton('introEdit', `${intro ? '改' : '補'}入所介紹`, 'aria-expanded="false"') : ''}</h3>
+      <h3>${icon('card')}入所介紹</h3>
       ${intakeListHtml(dog)}
-      ${intro ? `<div class="content">${esc(intro)}</div>` : (!intakeEventsOf(dog).length ? '<div class="empty">還沒有入所介紹</div>' : '')}
+      ${intakeEventsOf(dog).length && intro ? '<p class="rest-hint">原介紹</p>' : ''}
+      ${can ? `<button type="button" class="intro-btn" id="introEdit" aria-label="${intro ? '改' : '補'}入所介紹">${body}${icon('write')}</button>` : `<div class="intro-static">${body}</div>`}
     </section>`;
   }
   const busy = e.phase === 'saving';
   const n = [...e.text].length;
   return `<section class="detail-section" data-section="intro">
     <form class="rest-form intro-form" id="introForm" autocomplete="on">
-      <h3 class="section-heading">${icon('card')}入所介紹</h3>
+      <h3>${icon('card')}入所介紹</h3>
       ${intakeEditorHtml(dog, e, busy)}
       <p class="rest-hint">存好後這台馬上看到，其他人幾分鐘後（下次更新資料）看到。只存在網站，不寫試算表。</p>
-      <label>介紹文字<textarea id="introText" rows="7" maxlength="${INTRO_MAX}"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea><small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small></label>
+      <label>原介紹（保留未對應的資料）<textarea id="introText" rows="7" maxlength="${INTRO_MAX}"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea><small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small></label>
       ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
     </form>
   </section>`;
@@ -2093,10 +2088,11 @@ function departureBasis(dep) {
 function lastWalkSection(dog, today) {
   const s = computeStatus(dog, today);
   const d = s.mine ? today : effectiveWalkDate(dog, today);
-  const date = d ? `${d.getFullYear()}/${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}（${'日一二三四五六'[d.getDay()]}）` : (s.kind === 'covered' ? '有人固定照顧' : '沒有紀錄');
+  const date = d ? `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}（${'日一二三四五六'[d.getDay()]}）` : (s.kind === 'covered' ? '有人固定照顧' : '沒有紀錄');
   const who = walkerList(dog, today);
   return `<section class="detail-section last-walk" data-section="last">
-    <div class="last-inline"><span class="lw-k">上次溜</span><span class="last-date">${esc(date)}</span><span class="last-people lw-v">${walkerChipsHtml(dog, who, today)}</span></div>
+    <div class="lw-row"><span class="lw-k">上次溜</span><span class="lw-v">${esc(date)}</span></div>
+    <div class="lw-row"><span class="lw-k">溜狗人</span><span class="lw-v">${walkerChipsHtml(dog, who, today)}</span></div>
   </section>`;
 }
 
@@ -2146,14 +2142,16 @@ async function editWalkers(dog, names, text) {
   showToast(`${text}，已寫進試算表`, undo);
 }
 
-// 詳細資訊天數旁只保留籠位；入所日期與編號整合到入所介紹（#285）。
+// 詳細資訊狗名下面的標籤：籠位、入所年月（天數標籤是 statusBadge）
 function detailChips(dog) {
+  const since = firstIntake(dog);
   const home = dog.homeCage ? `<small>暫住，原本 ${esc(dog.homeCage)}</small>` : '';
   // K 2026-10-09：詳細資訊的籠位也要能點開平面圖（找得到位置的籠位才做成按鈕）
   const where = typeof whereKnown === 'function' && whereKnown(dog);
   return (dog.cage ? (where
     ? `<button type="button" class="badge plain cage-badge" data-where aria-label="${esc(dog.name)} 在哪：${esc(dog.cage)}">${icon('pin')}${esc(dog.cage)}${home}</button>`
-    : `<span class="badge plain">${icon('pin')}${esc(dog.cage)}${home}</span>`) : '');
+    : `<span class="badge plain">${icon('pin')}${esc(dog.cage)}${home}</span>`) : '')
+    + (since ? `<span class="badge plain">入所 ${since.getFullYear()}/${since.getMonth() + 1}</span>` : '');
 }
 
 // 已經顯示過的照片畫成這支手機上的本機圖片（網站要幾分鐘才更新，換好後先用這個顯示）；讀不到回 null
@@ -2739,14 +2737,10 @@ function renderDetail() {
   if (!detailDog) return;
   const box = document.getElementById('detail');
   wireDetail(box);
-  box.classList.toggle('current-dog', !detailDog.departure);
   const focused = box.contains(document.activeElement) ? document.activeElement : null;
   // 重畫後留在原本捲到的位置（K 2026-10-10：補完資料「整個卡片就會跳掉」）；換看別隻時 showDetail 會自己捲回最上面
   const top = box.scrollTop;
-  const noteOpen = box.dataset.detailKey === walkKey(detailDog) && box.querySelector('.note-disclosure')?.open;
-  box.dataset.detailKey = walkKey(detailDog);
   box.innerHTML = detailHtml(detailDog, new Date());
-  if (noteOpen && box.querySelector('.note-disclosure')) box.querySelector('.note-disclosure').open = true;
   box.scrollTop = top;
   labelPhotoPick(box);
   if (focused) {
