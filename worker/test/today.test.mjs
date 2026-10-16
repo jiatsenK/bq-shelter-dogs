@@ -80,7 +80,7 @@ test('今天以前的紀錄下次寫入時清掉；GET /api/today 只回今天�
 });
 
 // ADR 0009：Worker 每次只讀 1 列 today 版本號，沒變回記憶體裡的清單
-const readsOf = async (env, at) => {
+const readsOf = async env => {
   const before = env.DB.stats.rowsRead;
   const out = await (await worker.fetch(new Request(`${SITE}/api/today`, { headers: { Origin: SITE } }), env)).json();
   return { out, rows: env.DB.stats.rowsRead - before };
@@ -91,7 +91,7 @@ test('沒人登記時，再抓一次 /api/today 只讀 1 列版本號，內容�
   fakeScript(sheet);
   await worker.fetch(post({ action: 'walk', walker: 'K', dogs: [{ id: '9001', name: '甲' }, { id: '9002', name: '乙' }] }), env);
   const first = await readsOf(env);
-  assert.equal(first.rows, 3);
+  assert.equal(first.rows, 3); // 版本號 1 列＋今天 2 隻狗
   const second = await readsOf(env);
   assert.equal(second.rows, 1);
   assert.deepEqual(second.out, first.out);
