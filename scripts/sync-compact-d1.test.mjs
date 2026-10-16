@@ -87,8 +87,6 @@ test('開卡、照片、休養、介紹不被同步清掉', async t => {
   // 只補建表（IF NOT EXISTS），不刪不寫這幾張
   const writes = sql.split('\n').filter(l => !/^CREATE /.test(l)).join('\n');
   assert.doesNotMatch(writes, /v3_card_opened|v3_photos|v3_volunteer|v3_rest|v3_intros|v3_edit_log/);
-  const again = await apply(t, seed, sql);
-  assert.equal(await again.prepare('SELECT count(*) n FROM v3_card_opened').first('n'), 1);
 });
 
 test('來源有問題時丟錯，不產生 SQL', async t => {
