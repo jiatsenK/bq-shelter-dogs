@@ -1,5 +1,7 @@
 # 精簡 D1 第一階段（#246）
 
+> 志工身分調整：K 已確認 [ADR 0005](adr/0005-volunteer-identity.md)。下列志工、開卡與 #267 常溜的代號表契約描述既有實作；新規格改用固定 `volunteer_id` 持有資料，名字／代號只作對照，尚待實作，不能沿用舊契約判定已完成。
+
 依規格 #245，使用現有資料庫的新名稱 `v3_`；舊 `dogs`、`walks`、`v2_*` 等表完全不動。這張票只提供建表與狗清單匯入／比對函式，不部署、不連正式服務、不切換網站，也不匯入其他資料。
 
 ## 入口
@@ -122,3 +124,9 @@ const report = await compareCompactProfiles(db, { walks, intros, names, rest, ph
 ## 開卡與名字推薦的一次性匯入（#249，已完成）
 
 舊 D1 的 `cardOpened`、`walkerNames` 曾用 `scripts/import-compact-legacy.mjs`、`scripts/check-compact-legacy.mjs` 合併進 `v3_card_opened`、`v3_volunteers`：開卡以編號換永久狗 ID，同代號同狗取最早日期；名字完全相同才合併、取較新時間；不清表、不刪既有資料。匯入完成、舊表已在 #252 清除，兩支腳本和原本的 `docs/COMPACT_LEGACY_IMPORT.md` 已在 #275 移除，細節見 Git 歷史。
+
+## #267 固定志工身分（PR 尚待驗證／上線）
+
+常溜與開卡由 volunteer_id＋永久 dog_id 持有，名字與代號是對照。更名、明確確認後合併、舊手機相容及正式升級順序見 [267-identity-rollout.md](267-identity-rollout.md) 與 ADR 0005。
+
+原本的 v3_favorites／v3_card_opened 保留來源資料，新的 v3_volunteer_favorites／v3_volunteer_cards 才是新寫入位置；不以重建空庫代替升級。正式資料尚未搬移，PR 不可視為已上線。
