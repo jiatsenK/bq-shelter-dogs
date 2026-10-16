@@ -1,0 +1,37 @@
+{
+  "snapshotSha256": "34d5ce15907c9c419886964f8e6a25023e95292df3e4ad01e6de1ecbaa1f745a",
+  "counts": {
+    "v3_dogs": 133,
+    "v3_volunteers": 21,
+    "v3_card_opened": 48,
+    "v3_walks": 1196,
+    "v3_favorites": 0,
+    "v3_volunteer_codes": 0
+  },
+  "confirmedIdentities": 21,
+  "conflicts": 0,
+  "categories": {
+    "favorites": {
+      "total": 0,
+      "confirmed": 0,
+      "pending": 0
+    },
+    "cards": {
+      "total": 48,
+      "confirmed": 24,
+      "pending": 24
+    },
+    "walkRows": {
+      "total": 1196,
+      "confirmed": 1070,
+      "pending": 126
+    }
+  },
+  "unknownCodes": 11,
+  "ownedCards": 24,
+  "ownedFavorites": 0,
+  "sourceRowsUnchanged": true,
+  "earliestDatesPreserved": true,
+  "rerunIdentical": true,
+  "foreignKeysValid": true
+}

@@ -1,8 +1,9 @@
+import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitiesForCodes, IdentityError } from './identity.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
-import { editorOf, editorHeader, logEdit, readEdits, walkerCode } from './editlog.js';
-import { readDogsPayload, compactStatus, dogIdsFor, openedBooks, readRest, saveRest, saveIntro, addFormerNumber, removeFormerNumber, readWalks, readDepartures, readMainNames } from './compact.js';
+import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
+import { readDogsPayload, compactStatus, dogIdsFor, readFavorites, saveFavorite, openedBooks, readRest, saveRest, saveIntro, addFormerNumber, removeFormerNumber, readWalks, readDepartures, readMainNames } from './compact.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
@@ -740,9 +741,9 @@ export async function rememberWalkerNames(env, names, now = Date.now()) {
   if (!env || !env.DB) return [];
   try {
     const at = new Date(now).toISOString();
-    const upsert = env.DB.prepare('INSERT INTO v3_volunteers (name, last_seen) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET last_seen = excluded.last_seen');
-    if (names.length) await env.DB.batch(names.map(n => upsert.bind(n, at)));
-    const { results = [] } = await env.DB.prepare('SELECT name FROM v3_volunteers ORDER BY last_seen DESC, name LIMIT ?').bind(WALKER_NAMES_MAX).all();
+    const upsert = env.DB.prepare('INSERT INTO v3_volunteers (name, last_seen) SELECT ?, ? WHERE NOT EXISTS(SELECT 1 FROM v3_identity_names WHERE name_key=?) ON CONFLICT(name) DO UPDATE SET last_seen = excluded.last_seen');
+    if (names.length) await env.DB.batch(names.map(n => upsert.bind(n, at, walkerNameKey(n))));
+    const { results = [] } = await env.DB.prepare('SELECT name FROM v3_volunteers WHERE volunteer_id NOT IN (SELECT volunteer_id FROM v3_identity_redirects) ORDER BY last_seen DESC, name LIMIT ?').bind(WALKER_NAMES_MAX).all();
     const now_ = new Set(names);
     return results.map(r => r.name).filter(n => typeof n === 'string' && n && !now_.has(n));
   } catch (e) {
@@ -929,6 +930,24 @@ function scriptError(msg) {
 }
 
 // 圖鑑開卡：只加不刪，複合主鍵讓重送／多裝置不重複建立紀錄。
+async function favorites(request, env, origin) {
+  if (!env?.DB) return fail(503, '常溜暫時無法儲存', origin);
+  if (!['GET', 'PUT'].includes(request.method)) return fail(405, '常溜只接受 GET 或 PUT', origin);
+  const input = request.method === 'GET'
+    ? { codes: (new URL(request.url).searchParams.get('codes') || '').split(',') }
+    : await readJsonBody(request, 8 * 1024);
+  if (!input || !Array.isArray(input.codes) || !input.codes.length || input.codes.length > 8 || !input.codes.every(c => typeof c === 'string' && /^[0-9a-f]{12}$/.test(c))) return fail(400, '個人代號格式不對', origin);
+  const codes = [...new Set(input.codes)];
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!allow(`favorites:${request.method}:${ip}`, [{ windowMs: 60000, max: 120 }], Date.now())) return fail(429, '操作太頻繁，請稍後再試', origin);
+  if (request.method === 'PUT') {
+    if (typeof input.on !== 'boolean' || typeof input.dogId !== 'string' || !/^[a-f0-9]{32}$/.test(input.dogId)) return fail(400, '常溜資料不對', origin);
+    if (!await saveFavorite(env.DB, codes, input.dogId, input.on, taiwanYmd(Date.now()))) return fail(400, '找不到這隻狗', origin);
+    return reply(200, { ok: true }, origin);
+  }
+  return reply(200, { ok: true, ...await readFavorites(env.DB, codes) }, origin);
+}
+
 async function openedCards(request, env, origin) {
   if (!env?.DB) return fail(503, '開卡紀錄暫時無法儲存，請稍後再試', origin);
   if (!['GET', 'PUT'].includes(request.method)) return fail(405, '開卡紀錄只接受 GET 或 PUT', origin);
@@ -946,7 +965,8 @@ async function openedCards(request, env, origin) {
     const dogIds = await dogIdsFor(env.DB, ids); // 舊編號和新編號會對到同一隻狗，所以下面依狗 ID 去重
     if (ids.some(id => !dogIds.has(id))) return fail(400, '找不到這隻狗', origin);
     const date = taiwanYmd(Date.now());
-    await env.DB.batch(codes.flatMap(code => [...new Set(dogIds.values())].map(dogId => env.DB.prepare('INSERT OR IGNORE INTO v3_card_opened (walker_code, dog_id, opened_on) VALUES (?, ?, ?)').bind(code, dogId, date))));
+    const people = await identitiesForCodes(env.DB, codes);
+    await env.DB.batch(people.flatMap(p => [...new Set(dogIds.values())].map(dogId => env.DB.prepare('INSERT OR IGNORE INTO v3_volunteer_cards (volunteer_id, dog_id, opened_on) VALUES ((SELECT volunteer_id FROM v3_identity_names WHERE code=?), ?, ?)').bind(p.codes[0], dogId, date))));
     return reply(200, { ok: true }, origin);
   }
   const books = await openedBooks(env.DB, codes);
@@ -1029,9 +1049,34 @@ export default {
       if (request.method !== 'GET') return fail(405, '狗的資料只能用 GET /dogs 讀', allowed);
       return getDogs(env, allowed);
     }
+    if (['/identity', '/identity/rename', '/identity/merge-preview', '/identity/merge'].includes(path)) {
+      if (request.method !== 'POST') return fail(405, '請用 POST 設定身分', allowed);
+      if (!env?.DB || !cfg.walkerKey) return fail(503, '身分服務尚未準備好', allowed);
+      if (!allow('identity:' + (request.headers.get('CF-Connecting-IP') || 'unknown'), [{ windowMs: 60000, max: 120 }], Date.now())) return fail(429, '操作太頻繁，請稍後再試', allowed);
+      const input = await readJsonBody(request, 2048);
+      if (!input || (!path.includes('merge') && (typeof input.name !== 'string' || !input.name.trim() || [...input.name.trim()].length > 20))) return fail(400, '名字要 1–20 個字', allowed);
+      if (path.endsWith('/rename') && (!/^[a-f0-9]{12}$/.test(input.code || '') || !/^[a-zA-Z0-9-]{1,80}$/.test(input.operationId || ''))) return fail(400, '操作格式不對', allowed);
+      try {
+        if (path.includes('merge')) {
+          if (!/^[a-f0-9]{12}$/.test(input.code || '') || !/^[a-f0-9]{12}$/.test(input.targetCode || '')) return fail(400, '身分格式不對', allowed);
+          if (path.endsWith('merge-preview')) return reply(200, { ok: true, ...await previewMerge(env.DB, input, cfg.walkerKey) }, allowed);
+          if (!/^[a-zA-Z0-9-]{1,80}$/.test(input.operationId || '')) return fail(400, '操作格式不對', allowed);
+          return reply(200, { ok: true, identity: await mergeIdentity(env.DB, input, cfg.walkerKey) }, allowed);
+        }
+        const identity = path.endsWith('/rename') ? await renameIdentity(env.DB, { ...input, name: input.name.trim() }, cfg.walkerKey) : await resolveIdentity(env.DB, input.name.trim(), cfg.walkerKey);
+        return reply(200, { ok: true, identity }, allowed);
+      } catch (e) {
+        if (e instanceof IdentityError) return reply(e.status, { ok: false, error: e.message, ...e.details }, allowed);
+        console.error('identity', e); return fail(409, '身分資料已變動，請重新檢視', allowed);
+      }
+    }
     if (path === '/cards/opened') {
       try { return await openedCards(request, env, allowed); }
       catch (e) { return fail(503, '開卡紀錄暫時讀寫失敗，請稍後再試', allowed); }
+    }
+    if (path === '/favorites') {
+      try { return await favorites(request, env, allowed); }
+      catch (e) { return fail(503, '常溜暫時讀寫失敗，請稍後再試', allowed); }
     }
     // 溜狗紀錄、離所紀錄（#260）：形狀跟原本的 data/walks.json、data/departures.json 一樣，從 D1 讀
     if (path === '/walks' || path === '/departures') {

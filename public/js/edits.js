@@ -19,6 +19,11 @@ function editsWhen(iso) {
 // 改前／改後內容寫成一行字
 function editsValue(kind, v) {
   if (v === null || v === undefined || v === '') return '（沒有）';
+  if (kind === 'volunteer_rename') return v.name;
+  if (kind === 'volunteer_merge') {
+    const person = p => p.name + '（常溜 ' + p.favorites + '、開卡 ' + p.cards + '、溜狗來源紀錄 ' + p.walkRows + '）';
+    return v.source ? person(v.source) + ' ＋ ' + person(v.target) : v.name;
+  }
   if (kind === 'rest') return `休養到 ${v.until}${v.reason ? `（${v.reason}）` : ''}`;
   if (kind === 'group') return `${v.label || '（沒有群名）'}：${(v.names || []).join('、') || '（沒有狗）'}`;
   if (kind === 'photo') return v.trash ? `舊照片在垃圾桶：${v.trash}` : (v.path ? '新照片' : '（沒有）');

@@ -1,3 +1,4 @@
+import { identitiesForCodes } from './identity.js';
 // 精簡 D1（v3_ 表，#245／#247）：網站要的狗清單從這裡讀，形狀跟原本的 data/dogs.json 一樣。
 // 表結構見 db/compact-schema.sql、docs/COMPACT_D1.md
 
@@ -105,13 +106,41 @@ export async function dogIdsFor(db, numbers) {
   return out;
 }
 
+// 舊收藏的編號／名字只在能唯一對應時轉成永久 ID，不猜同名狗。
+export async function favoriteAliases(db) {
+  const [numbers, names] = await db.batch([
+    db.prepare('SELECT number, dog_id FROM v3_dog_numbers'),
+    db.prepare('SELECT name, MIN(dog_id) AS dog_id FROM v3_dogs GROUP BY name HAVING COUNT(*) = 1'),
+  ]);
+  return Object.fromEntries([
+    ...(numbers.results || []).map(r => [r.number, r.dog_id]),
+    ...(names.results || []).map(r => [`名:${r.name}`, r.dog_id]),
+  ]);
+}
+
+export async function readFavorites(db, codes) {
+  const people = await identitiesForCodes(db, codes);
+  const rows = await db.prepare(`SELECT DISTINCT dog_id FROM v3_volunteer_favorites WHERE volunteer_id IN (${people.map(() => '?').join(',')})`).bind(...people.map(p => p.volunteerId)).all();
+  return { ids: (rows.results || []).map(r => r.dog_id), aliases: await favoriteAliases(db) };
+}
+
+export async function saveFavorite(db, codes, dogId, on, date) {
+  if (!await db.prepare('SELECT dog_id FROM v3_dogs WHERE dog_id = ?').bind(dogId).first()) return false;
+  const people = await identitiesForCodes(db, codes);
+  await db.batch((on ? people.slice(0, 1) : people).map(person => on
+    ? db.prepare('INSERT OR IGNORE INTO v3_volunteer_favorites(volunteer_id,dog_id,added_on) VALUES((SELECT volunteer_id FROM v3_identity_names WHERE code=?),?,?)').bind(person.codes[0], dogId, date)
+    : db.prepare('DELETE FROM v3_volunteer_favorites WHERE volunteer_id=(SELECT volunteer_id FROM v3_identity_names WHERE code=?) AND dog_id=?').bind(person.codes[0], dogId)));
+  return true;
+}
+
 // 開卡讀回：每個代號 → { 編號: 開卡日 }。編號用主清單上現在的那個，已出所的狗用它最大的編號
 export async function openedBooks(db, codes) {
   const sql = `SELECT COALESCE(
       (SELECT m.number FROM v3_sheet_main m WHERE m.dog_id = c.dog_id AND m.number <> '' ORDER BY m.row_index LIMIT 1),
       (SELECT MAX(n.number) FROM v3_dog_numbers n WHERE n.dog_id = c.dog_id)) AS id, c.opened_on
-    FROM v3_card_opened c WHERE c.walker_code = ?`;
-  const rows = await db.batch(codes.map(code => db.prepare(sql).bind(code)));
+    FROM v3_volunteer_cards c WHERE c.volunteer_id = ?`;
+  const people = await Promise.all(codes.map(async code => (await identitiesForCodes(db, [code]))[0]));
+  const rows = await db.batch(people.map(p => db.prepare(sql).bind(p.volunteerId)));
   const books = {};
   codes.forEach((code, i) => { books[code] = Object.fromEntries((rows[i].results || []).filter(r => r.id).map(r => [r.id, r.opened_on])); });
   return books;
