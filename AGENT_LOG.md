@@ -1466,3 +1466,10 @@
 
 - 編輯紀錄頁顯示「暫時讀不到編輯紀錄」：正式 D1 不另外建表（#214），同步只補建 v3_departure*、v3_sheet_group_labels，v3_edit_log 從沒建到正式環境。
 - scripts/sync-compact-d1.mjs 改成補建 db/compact-schema.sql 裡所有 CREATE TABLE／INDEX IF NOT EXISTS，測試加上檢查 v3_edit_log。
+
+## 2026-10-16 復原沒收到回應時，手機的「我溜過」殘留（Claude）
+
+- K 回報：手機按蔥餅溜了後馬上按復原，試算表改回志工隊，但手機重新整理後「我溜過」還有蔥餅，電腦版正常。
+- 原因：復原送到試算表後手機沒收到回應（例如馬上重新整理），本機 bq-sheet-writes／bq-walked-today 留著「今天我溜了」。
+- public/js/app.js 新增 reconcileSheetWrites：拿到 /api/walkers 試算表現況時，這頁還沒寫過的狗若本機記的誰遛的跟試算表不同，就清掉本機紀錄。tests/index.html 補重現測試（先紅後綠）。
+- Node 201/201、網頁 251/251 通過（本機用 Edge 跑，Playwright 的 Chromium 下載被鎖住）。
