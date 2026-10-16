@@ -738,6 +738,7 @@ async function getWalkers(env, allowed, now = Date.now()) {
 
 // 沒設定 SHEET_WRITE_URL 時回 503（SHEET_WRITE_KEY 可不設） + code: 'off'，網站就照舊只記在手機上
 const shortText = (v, max) => typeof v === 'string' && [...v.trim()].length <= max && !/[\u0000-\u001f]/.test(v);
+const NOTE_MAX_CHARS = 200;
 const YMD_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 function cleanWalkDog(d, action) {
   if (!d || typeof d !== 'object') return null;
@@ -778,12 +779,21 @@ async function writeWalks(request, env, origin) {
     return fail(400, '格式不對', origin);
   }
   const action = input && input.action;
-  if (!['walk', 'undo', 'edit'].includes(action)) return fail(400, '要說是溜了、修改還是復原', origin);
-  if (!Array.isArray(input.dogs) || !input.dogs.length || input.dogs.length > WALK_MAX_DOGS) return fail(400, `一次 1–${WALK_MAX_DOGS} 隻`, origin);
-  const dogs = input.dogs.map(d => cleanWalkDog(d, action));
+  if (!['walk', 'undo', 'edit', 'note', 'log'].includes(action)) return fail(400, '要說是溜了、修改、復原還是加備註', origin);
+  // #239、#281：note 追加一隻狗的備註、log 新增一筆異動紀錄；都要有名字和內容
+  const maxDogs = action === 'note' ? 1 : action === 'log' ? 0 : WALK_MAX_DOGS;
+  const rawDogs = action === 'log' ? [] : input.dogs;
+  if (maxDogs && (!Array.isArray(rawDogs) || !rawDogs.length || rawDogs.length > maxDogs)) return fail(400, `一次 1–${maxDogs} 隻`, origin);
+  const dogs = rawDogs.map(d => cleanWalkDog(d, action));
   if (dogs.some(d => !d)) return fail(400, '狗的資料不對', origin);
   const body = { action, dogs };
   if (cfg.sheetWriteKey) body.key = cfg.sheetWriteKey;
+  if (action === 'note' || action === 'log') {
+    if (!shortText(input.walker, WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, '要先選好身分', origin);
+    if (!shortText(input.text, NOTE_MAX_CHARS) || !input.text.trim()) return fail(400, `內容要 1–${NOTE_MAX_CHARS} 個字，不能換行`, origin);
+    body.walker = input.walker.trim();
+    body.text = input.text.trim();
+  }
   if (action === 'walk' || action === 'edit') {
     if (!shortText(input.walker, action === 'edit' ? 200 : WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, `名字要 1–${action === 'edit' ? 200 : WALKER_NAME_MAX_CHARS} 個字`, origin);
     body.walker = input.walker.trim();
@@ -805,6 +815,11 @@ async function writeWalks(request, env, origin) {
   if (!res.ok || !out) return fail(502, `試算表沒有回應（${res.status}）`, origin);
   if (!out.ok) return fail(502, out.code === 'key' ? '寫入試算表的金鑰不對，請 K 檢查設定' : scriptError(out.error), origin);
   walkersCache = null; // 寫入後重新讀取完整名單
+  // 備註、異動紀錄是只追加的編輯，記進編輯紀錄（ADR 0004）；名字用送來的 walker
+  if (action === 'note' || action === 'log') {
+    const editor = await editorOf(body.walker, cfg.walkerKey);
+    await logEdit(env && env.DB, { editor, kind: action === 'note' ? 'note' : 'sheetlog', dogNumber: action === 'note' ? dogs[0].id || '' : '', before: null, after: body.text });
+  }
   return reply(200, { ok: true, today: out.today, results: Array.isArray(out.results) ? out.results : [] }, origin);
 }
 

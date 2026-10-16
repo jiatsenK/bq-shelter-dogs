@@ -9,6 +9,7 @@ export const KIND_LABELS = {
   photo: '照片',
   activity: '活動紀錄',
   note: '試算表備註',
+  sheetlog: '試算表異動紀錄',
 };
 export const EDITS_DEFAULT = 100;
 export const EDITS_MAX = 500;

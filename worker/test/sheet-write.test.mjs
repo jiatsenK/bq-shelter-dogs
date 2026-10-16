@@ -117,3 +117,31 @@ test('#141 手打日期與多人新增：今天既有姓名保留，不重複、
   assert.equal(already.cells.length, 0);
   assert.deepEqual(JSON.parse(JSON.stringify(already.results[0].current)), { date: '2026-10-04', walker: '志工丙' });
 });
+
+// #239、#281：只追加的備註和異動紀錄
+const noteSheet = () => [
+  ['板收志工溜狗表', '', '', '', '', ''],
+  ['籠位', '編號', '犬名', '遛狗日期', '誰遛的', '備註'],
+  ['舊A01', 9001, '測試甲', '', '', '怕貓'],
+  ['舊A02', '9002', '測試乙', '', '', ''],
+  ['', '', '', '', '', ''],
+  ['備註1', '1/7測試移籠', '', '', '', ''],
+  ['備註 3', '1/9測試', '', '', '', ''],
+  ['', '', '', '', '', ''],
+];
+
+test('#281 備註：原本有字就接「;日期內容（名字）」，空的不加分號；月日不補 0', () => {
+  const a = plan(noteSheet(), { action: 'note', walker: '志工我', text: '今天很乖', dogs: [{ id: '9001', name: '測試甲' }] }, '2026-10-06');
+  assert.deepEqual(JSON.parse(JSON.stringify(a.cells)), [{ row: 2, col: 5, value: '怕貓;2026/10/6今天很乖（志工我）' }]);
+  const b = plan(noteSheet(), { action: 'note', walker: '志工我', text: '會拉', dogs: [{ id: '9002', name: '測試乙' }] }, '2026-10-16');
+  assert.deepEqual(JSON.parse(JSON.stringify(b.cells)), [{ row: 3, col: 5, value: '2026/10/16會拉（志工我）' }]);
+  assert.equal(plan(noteSheet(), { action: 'note', walker: '我', text: 'x', dogs: [{ id: '9999', name: '無' }] }).results[0].status, 'notFound');
+  assert.match(plan(noteSheet(), { action: 'note', walker: '', text: 'x', dogs: [{ id: '9001', name: '測試甲' }] }).error, /名字/);
+});
+
+test('#281 異動紀錄：最後一列的下一列寫「備註N」，N 是現有最大 + 1', () => {
+  const out = plan(noteSheet(), { action: 'log', walker: '志工我', text: '測試甲移到B03' }, '2026-10-16');
+  assert.deepEqual(JSON.parse(JSON.stringify(out.cells)), [
+    { row: 7, col: 0, value: '備註4' }, { row: 7, col: 1, value: '2026/10/16測試甲移到B03（志工我）' },
+  ]);
+});
