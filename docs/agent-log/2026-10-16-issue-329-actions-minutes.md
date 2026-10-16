@@ -13,3 +13,10 @@
   - 照這週的開發速度，本 repo 改完約每月 1,700 分鐘，再加其他 repo（每月約 600）帳號仍會超過 2,000；開發速度回到一天 4 張 PR 左右約 850 分鐘。
   - 長期把同步搬到 Worker 是 #301，不在這張票。
   - 只改 workflow 和常數，網頁測試沒有在本機跑。
+
+## 後續：改開發流程（K 同意研究報告的建議，見 docs/research/2026-10-16-actions-dev-flow-minutes.md）
+
+- `tests.yml`：草稿 PR 不跑，轉正式（`ready_for_review`）才跑；同步預演併進來當步驟，改到同步程式才跑，刪掉 `sync-dry-run.yml`。
+- `preview-cloudflare.yml`：要有 `preview` 標籤才做預覽（已用 `gh label create` 建好標籤）。
+- `AGENTS.md`：新增「開 PR」段落：先開草稿、推完 `gh pr ready`、要預覽才加標籤、不加 `[skip ci]`。
+- 推估本 repo 約 950 分鐘／月、帳號合計約 1,550（研究報告推估，一個月後要到帳單頁核對）。

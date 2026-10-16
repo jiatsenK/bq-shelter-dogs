@@ -6,10 +6,11 @@
 # - 還沒設 Cloudflare Secret、或是從別人 fork 開的 PR（拿不到 Secret）就跳過
 name: PR 預覽網址
 
-# 只有改到網站或 Worker 的 PR 才做預覽（#329，省 Actions 分鐘數）；只改文件、測試、同步程式的 PR 不做
+# 只有加上 preview 標籤、而且改到網站或 Worker 的 PR 才做預覽（#329，省 Actions 分鐘數）
+# - 想用手機看畫面就在 PR 加 preview 標籤；加了之後每次推送都會更新預覽，拿掉標籤就停
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    types: [opened, synchronize, reopened, labeled]
     paths:
       - 'public/**'
       - 'worker/src/**'
@@ -28,7 +29,10 @@ jobs:
   preview:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      contains(github.event.pull_request.labels.*.name, 'preview') &&
+      (github.event.action != 'labeled' || github.event.label.name == 'preview')
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
