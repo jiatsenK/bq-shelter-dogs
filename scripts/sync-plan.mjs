@@ -40,7 +40,8 @@ export function planSync(prev, sheet, rows, now = new Date(), { key = process.en
   if (since && daily) {
     const have = new Set([...upgraded, ...added].map(w => `${dogKey(w)}|${w.date}`));
     for (const d of sheet.dogs) {
-      if (!d.walkedDate || d.walkedDate >= since || have.has(`${dogKey(d)}|${d.walkedDate}`)) continue;
+      // 沒編號的狗不核對（見 lastWalkChecks）
+      if (!d.id || !d.walkedDate || d.walkedDate >= since || have.has(`${dogKey(d)}|${d.walkedDate}`)) continue;
       added.push({ id: d.id, name: d.name, date: d.walkedDate, mine: d.myWalked === true, ...(key ? { walkers: d.walkers || [] } : {}) });
     }
   }

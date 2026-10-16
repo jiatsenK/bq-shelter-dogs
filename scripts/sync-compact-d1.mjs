@@ -61,20 +61,19 @@ export function walkSince(walksSynced, { full = false } = {}) {
   return d.toISOString().slice(0, 10);
 }
 
-// 讀 v3_walks 的 SQL：since 以後走 v3_walks_date 索引；checks（6:30 保險同步：試算表每隻狗最後一次溜狗）用主鍵（狗＋日期）核對。
-// 有編號的狗照編號找永久狗，沒編號的照上一次主清單的犬名找
+// 讀 v3_walks 的 SQL：since 以後走 v3_walks_date 索引；checks（lastWalkChecks）照編號找永久狗，用主鍵（狗＋日期）核對
 export function walkSeedSql(since, checks = []) {
   if (!since) return SEED_TABLES.v3_walks;
-  const values = pairs => `(VALUES ${pairs.map(p => `(${p.map(sqlValue).join(',')})`).join(',')})`;
-  const old = checks.filter(c => c.date && c.date < since);
-  const numbered = old.filter(c => c.number).map(c => [c.number, c.date]);
-  const named = old.filter(c => !c.number).map(c => [c.name, c.date]);
+  const pairs = checks.filter(c => c.number && c.date && c.date < since).map(c => `(${sqlValue(c.number)},${sqlValue(c.date)})`);
   return [
     `SELECT * FROM v3_walks WHERE walk_date>=${sqlValue(since)}`,
-    ...(numbered.length ? [`SELECT w.* FROM v3_walks w JOIN v3_dog_numbers n ON n.dog_id=w.dog_id WHERE (n.number,w.walk_date) IN ${values(numbered)}`] : []),
-    ...(named.length ? [`SELECT w.* FROM v3_walks w JOIN v3_sheet_main m ON m.dog_id=w.dog_id AND m.number='' WHERE (m.name,w.walk_date) IN ${values(named)}`] : []),
+    ...(pairs.length ? [`SELECT w.* FROM v3_walks w JOIN v3_dog_numbers n ON n.dog_id=w.dog_id WHERE (n.number,w.walk_date) IN (VALUES ${pairs.join(',')})`] : []),
   ].join(' UNION ');
 }
+
+// 6:30 保險同步要核對的：試算表上每隻有編號的狗最後一次溜狗。
+// 沒編號的狗只能照上一次主清單的犬名找，這次剛改名會找不到而重複補一筆（撞主鍵），所以不核對
+export const lastWalkChecks = sheet => sheet.dogs.filter(d => d.id && d.walkedDate).map(d => ({ number: d.id, date: d.walkedDate }));
 
 // seed：{ 表名: 正式 D1 讀到的列 }；source：{ dogs（dogs.json 的樣子）, walks, departures, groupColumns }，
 // 或是一個函式：拿到已經放好 seed 的記憶體 D1，回傳 source（同步要先讀上一次的狀態才算得出來）。
@@ -101,9 +100,9 @@ export async function buildSyncPlan(seed, source, { today = '' } = {}) {
     // 全部是 IF NOT EXISTS／OR IGNORE，重跑不影響既有資料
     const out = (await compactSchemaStatements()).filter(t => !skipSchemaStatement(t)).map(t => `${t.replace(/\s+/g, ' ')};`);
     for (const { sql, values } of changes) { let i = 0; out.push(`${sql.replace(/\?/g, () => sqlValue(values[i++]))};`); }
-    const mark = Boolean(today) && today !== seed.walksSynced;
-    if (mark) out.push(`INSERT INTO v3_sync_state(key,value) VALUES('${WALKS_SYNCED_KEY}',${sqlValue(today)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value;`);
-    return { sql: out.join('\n') + '\n', rows: changes.length + Number(mark) };
+    const recordDay = Boolean(today) && today !== seed.walksSynced;
+    if (recordDay) out.push(`INSERT INTO v3_sync_state(key,value) VALUES('${WALKS_SYNCED_KEY}',${sqlValue(today)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value;`);
+    return { sql: out.join('\n') + '\n', rows: changes.length + Number(recordDay) };
   } finally { db.close(); }
 }
 
@@ -185,7 +184,7 @@ async function main({ dryRun = false, mode = '' } = {}) {
   const groupLabels = parseGroupLabels(groupTable, dogNames);
   const rows = await loadDepartedRows(fetch, now);
   const daily = mode === 'daily';
-  const checks = () => (daily ? sheet.dogs.filter(d => d.walkedDate).map(d => ({ number: d.id || '', name: d.name, date: d.walkedDate })) : []);
+  const checks = () => (daily ? lastWalkChecks(sheet) : []);
   const seed = await readSeed(async sql => JSON.parse(await wranglerAsync(['--json', '--command', sql]))[0].results, { full: mode === 'full', checks });
   let plan;
   const { sql, rows: planned } = await buildSyncPlan(seed, async db => {

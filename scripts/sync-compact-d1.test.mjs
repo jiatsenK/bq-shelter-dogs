@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateCompactDatabase } from './migrate-compact-db.mjs';
 import { readDogsPayload, readDepartures, readWalks } from '../worker/src/compact.js';
-import { buildSyncSql, buildSyncPlan, SEED_TABLES, SYNC_SCHEMA_SKIP, planSync, readPrevious, readSeed } from './sync-compact-d1.mjs';
+import { buildSyncSql, buildSyncPlan, SEED_TABLES, SYNC_SCHEMA_SKIP, planSync, readPrevious, readSeed, lastWalkChecks } from './sync-compact-d1.mjs';
 import { budgetProblem, todayRowsWritten } from './sync-diff.mjs';
 
 // SQL 開頭補建表、版本號、觸發器那幾行（不算同步寫的資料）
@@ -330,7 +330,7 @@ const syncedOn = (db, day) => db.prepare("INSERT INTO v3_sync_state(key,value) V
 // 照正式同步的流程：讀最近一段 → 算 → 把 SQL 寫回同一個 D1（不是從 seed 重建，seed 只有一部分溜狗紀錄）
 async function syncRecent(db, sheet, { mode = '', now = NOW } = {}) {
   const daily = mode === 'daily';
-  const checks = () => (daily ? sheet.dogs.filter(d => d.walkedDate).map(d => ({ number: d.id || '', name: d.name, date: d.walkedDate })) : []);
+  const checks = () => (daily ? lastWalkChecks(sheet) : []);
   const seed = await readSeed(queryOf(db), { full: mode === 'full', checks });
   const groupColumns = (await source()).groupColumns;
   const plan = await buildSyncPlan(seed, async mem => ({ ...planSync(await readPrevious(mem), sheet, null, now, { ...KEY, since: seed.since, daily }), groupColumns }), { today: '2026-10-16' });
@@ -435,6 +435,8 @@ test('#331 還沒記過同步日期或勾了全量核對就整張讀', async () 
   assert.equal(walkSince('2026-10-16', { full: true }), '');
   assert.equal(walkSince('2026-10-01'), '2026-09-30');
   assert.equal(walkSeedSql(''), SEED_TABLES.v3_walks);
-  assert.match(walkSeedSql('2026-10-15', [{ number: 'A', name: '甲', date: '2026-10-01' }, { number: '', name: "乙'", date: '2026-10-02' }]),
-    /walk_date>='2026-10-15' UNION .*\('A','2026-10-01'\).* UNION .*\('乙''','2026-10-02'\)/);
+  assert.match(walkSeedSql('2026-10-15', [{ number: "A'", date: '2026-10-01' }, { number: 'B', date: '2026-10-16' }]),
+    /walk_date>='2026-10-15' UNION .*IN \(VALUES \('A''','2026-10-01'\)\)$/);
+  // 沒編號的狗不核對：剛改名會找不到而重複補一筆
+  assert.deepEqual(lastWalkChecks({ dogs: [{ id: '', name: '甲', walkedDate: '2026-10-01' }, { id: 'B', name: '乙', walkedDate: '2026-10-02' }] }), [{ number: 'B', date: '2026-10-02' }]);
 });
