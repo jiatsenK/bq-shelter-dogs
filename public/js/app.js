@@ -193,6 +193,15 @@ async function loadMyWalks() {
 function currentMyWalks(today = new Date()) {
   const list = [...myWalks];
   const date = localDateKey(today);
+  // 今日溜狗紀錄比同步新：按了復原的狗不能再出現在我溜過（ADR 0007）
+  const me = canonicalWalker(loadWalkerName());
+  for (const w of liveTodayWalks(today)) {
+    const dog = allDogs.find(d => walkKey(d) === w.key);
+    if (!dog) continue;
+    const at = list.findIndex(x => (dog.id ? x.id === dog.id : !x.id && x.name === dog.name) && x.ymd === date);
+    if (at !== -1) list.splice(at, 1);
+    if (w.walked && me && splitWalkers(w.walker).map(canonicalWalker).includes(me)) list.unshift({ id: dog.id || '', name: dog.name, date: parseYmd(date), ymd: date });
+  }
   for (const item of Object.values(loadSheetWrites(today))) {
     if (!item.current) continue;
     const at = list.findIndex(w => (item.id ? w.id === item.id : !w.id && w.name === item.name) && w.ymd === date);
@@ -1211,6 +1220,68 @@ function reconcileSheetWrites(today = new Date()) {
   saveSheetWrites(items, today);
   saveWalkedIds(ids, today);
 }
+// ── 今日溜狗紀錄（ADR 0007）：別支手機按溜了／復原，這裡不用等同步 ──
+// Worker 在 D1 記下按溜了／復原後試算表那隻狗的「遛狗日期」「誰遛的」，這裡從 /api/today 讀今天的清單。
+// 試算表是正本：只採用比上次同步新的紀錄。狗卡安靜換掉，不跳提示；抓不到就照舊，下次再試
+const TODAY_POLL_MS = 60 * 1000;   // 網頁顯示在螢幕上時每 1 分鐘抓一次
+const TODAY_REFETCH_MS = 30 * 1000; // 切回網頁、距上次超過 30 秒就馬上抓
+let todayWalks = { date: '', walks: [] };
+let todayFetchedAt = 0;
+const sheetWrittenAt = new Map(); // 這頁自己寫試算表的時間（狗的 key → ms）：比它舊的今日紀錄不蓋掉自己剛寫的
+async function loadTodayWalks() {
+  if (!UPLOAD_URL) return;
+  todayFetchedAt = Date.now();
+  try {
+    const res = await fetch(`${UPLOAD_URL}/today`, { cache: 'no-cache' });
+    if (!res.ok) return;
+    const out = await res.json();
+    if (!out || !Array.isArray(out.walks) || typeof out.date !== 'string') return;
+    todayWalks = { date: out.date, walks: out.walks };
+  } catch (e) { return; }
+  if (applyTodayWalks()) { render(); renderDetail(); }
+}
+// 比上次同步新、今天的紀錄
+function liveTodayWalks(today = new Date()) {
+  if (todayWalks.date !== localDateKey(today)) return [];
+  const since = dataSyncedAt ? dataSyncedAt.getTime() : 0;
+  return todayWalks.walks.filter(w => w && w.key && Date.parse(w.at) > since && Date.parse(w.at) >= (sheetWrittenAt.get(w.key) || 0));
+}
+// 把今日紀錄套到狗卡、誰遛的、這支手機的今天已溜；回傳畫面要不要重畫
+function applyTodayWalks(today = new Date()) {
+  const walks = liveTodayWalks(today);
+  if (!walks.length) return false;
+  const me = canonicalWalker(loadWalkerName());
+  const items = loadSheetWrites(today);
+  const ids = loadWalkedIds(today);
+  let changed = false, itemsChanged = false, idsChanged = false;
+  for (const w of walks) {
+    const date = w.walkedDate || '';
+    const walker = String(w.walker || '');
+    const dog = allDogs.find(d => walkKey(d) === w.key);
+    if (dog) {
+      const before = dog.walkedDate ? localDateKey(dog.walkedDate) : '';
+      if (before !== date) { dog.walkedDate = parseYmd(date); changed = true; }
+    }
+    if (walkerNames[w.key] !== walker) { walkerNames[w.key] = walker; changed = true; }
+    const mine = !!w.walked && !!me && splitWalkers(walker).map(canonicalWalker).includes(me);
+    const item = items[w.key];
+    if (item && item.current && (item.current.date !== date || item.current.walker !== walker)) {
+      items[w.key] = { ...item, current: { date, walker }, mine };
+      itemsChanged = true;
+    }
+    const at = ids.indexOf(w.key);
+    if (mine && at === -1) { ids.unshift(w.key); idsChanged = true; }
+    if (!mine && at !== -1) { ids.splice(at, 1); idsChanged = true; }
+  }
+  if (itemsChanged) saveSheetWrites(items, today);
+  if (idsChanged) saveWalkedIds(ids, today);
+  return changed || itemsChanged || idsChanged;
+}
+function refreshTodayWalks() {
+  if (typeof document !== 'undefined' && document.hidden) return;
+  if (Date.now() - todayFetchedAt < TODAY_REFETCH_MS) return;
+  loadTodayWalks();
+}
 // 一格好幾個名字（「志工乙+志工丙+岑」「志工甲。K」）拆開，用頓號接起來，不重複
 function canonicalWalker(name) {
   const n = String(name || '').trim().replace(/經常帶.*$/, '').trim();
@@ -1456,6 +1527,7 @@ async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expecte
     if (!key) continue;
     const old = items[key];
     sheetWritesThisPage.add(key);
+    sheetWrittenAt.set(key, Date.now());
     if (on && (r.status === 'written' || r.status === 'already')) {
       const current = { date: out.today || localDateKey(today), walker: r.wrote ? r.wrote.walker : (r.current ? r.current.walker : walkerNames[key] || '') };
       items[key] = { id: r.id || '', name: r.name, prev: expected !== undefined ? r.prev : (old && old.prev ? old.prev : r.prev), wrote: r.wrote || (old && old.wrote), current, mine: splitWalkers(current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())) };
@@ -3711,6 +3783,7 @@ function applyDogsData(data) {
   loadMyWalks();
   loadRest();
   syncFavs();
+  loadTodayWalks();
 }
 
 // 頁首的資料時間；沒網路時改寫「沒網路・資料 10/8 09:01」，志工才知道看的是舊資料、溜了寫不進試算表
@@ -3726,6 +3799,9 @@ function renderUpdatedLabel() {
 window.addEventListener('offline', () => { renderUpdatedLabel(); render(); renderDetail(); });
 window.addEventListener('online', () => { renderUpdatedLabel(); render(); renderDetail(); loadWalkerNames(); syncFavs(); });
 document.addEventListener('visibilitychange', () => { if (!document.hidden) syncFavs(); });
+// 今日溜狗紀錄：顯示在螢幕上時每分鐘抓；鎖螢幕、切到別的 App 時不抓，切回來超過 30 秒就馬上抓
+document.addEventListener('visibilitychange', refreshTodayWalks);
+if (!window.__BQ_TEST__) setInterval(refreshTodayWalks, TODAY_POLL_MS);
 
 // ── 頁首「更新」按鈕：請 Worker 叫 GitHub 同步試算表，再等讀到的資料換新 ──
 // 同步寫進 D1 約 1 分鐘（不用重新部署）；每 5 秒看一次，同步完不必再多等一輪 15 秒
