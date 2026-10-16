@@ -14,7 +14,7 @@
   - 新增會改資料的功能（編輯紀錄、沒有通關碼）→ `docs/adr/0004-open-editing-and-edit-log.md`
   - 今天溜過要讓其他手機很快看到（今日溜狗紀錄、免費方案額度）→ `docs/adr/0007-today-walks-live.md`
   - 新增 D1 資料表 → 寫進 `db/compact-schema.sql`，同步時會自動補建到正式 D1（#293）
-  - 改同步、或新增會寫 D1 的功能（每天寫入預算、只寫差異）→ `docs/adr/0008-diff-sync-and-write-budget.md`
+  - 改同步、或新增會寫 D1 的功能（每天寫入預算、只寫差異）→ `docs/adr/0008-diff-sync-and-write-budget.md`；PR 要附預演結果（`同步預演` CI 會自動留言「預演：會寫 N 列」，#309）
 
 ## 指令
 
