@@ -1,0 +1,9 @@
+// prototype/d1-read-reduction：只用 wrangler dev --remote 跑，不部署；只接原型 D1
+{
+  "name": "bq-shelter-dogs-d1read-proto",
+  "account_id": "a0f88d34c34ad0d34f923b9f43799622",
+  "main": "worker/prototype/d1-read/entry.js",
+  "compatibility_date": "2026-09-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "d1_databases": [{ "binding": "DB", "database_name": "bq-shelter-dogs-proto", "database_id": "a9658a9a-6345-445d-9e9a-a28411f40a44" }]
+}

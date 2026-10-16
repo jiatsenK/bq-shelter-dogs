@@ -1,0 +1,33 @@
+build 5585
+{
+ "tot": {
+  "old": {
+   "rest": 450,
+   "dogs": 309150,
+   "walks": 2212566,
+   "departures": 550
+  },
+  "warm": {
+   "rest": 387,
+   "dogs": 315,
+   "walks": 259,
+   "departures": 53
+  },
+  "cold": {
+   "rest": 8577,
+   "dogs": 8300,
+   "walks": 8287,
+   "departures": 973
+  },
+  "walk": {
+   "rows_read": 60,
+   "rows_written": 120
+  }
+ },
+ "sums": {
+  "old": 2522716,
+  "warm": 1014,
+  "cold": 26137
+ }
+}
+compare at end of day {"dogs":{"same":true,"bytes":28332},"walks":{"same":true,"bytes":167317},"departures":{"same":true,"bytes":2028},"rest":{"same":true,"bytes":21}}
