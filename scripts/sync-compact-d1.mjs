@@ -110,8 +110,9 @@ export async function buildSyncSql(seed, source) {
       ...(await compareCompactDepartures(db, source.departures)).differences];
     if (differences.length) throw new Error(`匯入後比對有差異，不寫 D1：${JSON.stringify(differences.slice(0, 5))}`);
     const rows = async t => (await db.prepare(`SELECT * FROM ${t}`).all()).results;
+    // 正式 D1 不另外建表（#214），新資料表（例如 v3_edit_log）靠同步時補建；全部是 IF NOT EXISTS，重跑不影響既有資料
     const schema = await readFile(new URL('../db/compact-schema.sql', import.meta.url), 'utf8');
-    const out = schema.replace(/--[^\n]*/g, '').split(';').map(t => t.trim()).filter(t => /^CREATE TABLE IF NOT EXISTS (v3_departure|v3_sheet_group_labels)/.test(t)).map(t => `${t.replace(/\s+/g, ' ')};`);
+    const out = schema.replace(/--[^\n]*/g, '').split(';').map(t => t.trim()).filter(t => /^CREATE (UNIQUE )?(TABLE|INDEX) IF NOT EXISTS /.test(t)).map(t => `${t.replace(/\s+/g, ' ')};`);
     for (const row of await rows('v3_dogs')) out.push(insert('v3_dogs', row, ' ON CONFLICT(dog_id) DO UPDATE SET name=excluded.name,sex=excluded.sex'));
     for (const row of await rows('v3_dog_numbers')) out.push(insert('v3_dog_numbers', row, ' ON CONFLICT(number) DO NOTHING'));
     for (const t of REPLACED) out.push(`DELETE FROM ${t};`);
