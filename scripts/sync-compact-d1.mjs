@@ -147,7 +147,8 @@ async function main({ dryRun = false } = {}) {
     console.log(report.text);
     await summary(report.text);
     await writeDryRunComment(report.text);
-    if (!report.ok) throw new Error(`預演寫入量超過門檻：會寫 ${planned} 列`);
+    // 報告已經寫好，直接結束；用 throw 會被下面的「預演失敗」蓋掉，看不到列數
+    if (!report.ok) process.exitCode = 1;
     return;
   }
   const problem = budgetProblem(planned, todayWritten, limits);
