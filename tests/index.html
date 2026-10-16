@@ -2669,12 +2669,14 @@ async function runCageMateTests() {
     allDogs = [
       dog('小白', '2024032901', '新A03'), dog('阿黑', '2024032902', '新A03'), dog('花花', '2024032903', '新 A03'),
       dog('老大', '2024032904', '新A04'), dog('布布', '2024032905', '住院區'), dog('咪寶', '2024032906', '住院區'),
+      dog('滿滿', '2024032907', '母幼A'), dog('宙斯', '2024032908', '母幼A'),
     ];
     groupMap = {};
     await check('同籠：籠位一樣（忽略空白）才算，不含自己；「○○區」不算同籠', () => {
       eq(cageMates(allDogs[0]).map(d => d.name), ['阿黑', '花花'], '新A03：');
       eq(cageMates(allDogs[3]), [], '獨自一籠：');
       eq(cageMates(allDogs[4]), [], '住院區：');
+      eq(cageMates(allDogs[6]), [], '母幼區各自一籠：');
     });
     await check('同籠、可以一起溜合成一段（10-10 減法）：同一隻只出現一次，同籠的排前面、標「同籠」，一樣可以勾選一起記', () => {
       const savedGroups = groupMap;
