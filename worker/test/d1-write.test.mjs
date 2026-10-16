@@ -263,3 +263,11 @@ test('出入所紀錄：今天可以、預覽版不能存', async () => {
   const preview = await makeEnv({ PREVIEW: '1' });
   assert.equal((await stays(preview, '2024032902', { before: [], stays: [] })).status, 403);
 });
+
+test('出入所紀錄：Worker 不看在不在所，用編號找得到狗就能補（ADR 0011，離所的狗也能改）', async () => {
+  const env = await makeEnv();
+  const id = await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='2024010101'").first('dog_id');
+  const r = await stays(env, '2024010101', { before: [], stays: [{ in: '2015-08-18', out: '', reason: '迷路' }] });
+  assert.equal(r.status, 200);
+  assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_stays WHERE dog_id=?').bind(id).first('n'), 1);
+});
