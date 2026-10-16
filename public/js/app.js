@@ -3779,16 +3779,16 @@ const syncBtn = document.getElementById('syncBtn');
 if (syncBtn) syncBtn.addEventListener('click', () => requestSync(syncBtn));
 
 // 暫時公告（2026-10-16 D1 額度）：關掉記在這支手機，key 帶日期，下次換新公告會重新出現；讀寫不了 localStorage 就只關這次
+const NOTICE_KEY = 'bq-notice-closed-2026-10-16';
 function initNotice() {
   const box = document.getElementById('notice');
   const close = document.getElementById('noticeClose');
   if (!box || !close) return;
-  const key = 'bq-notice-closed-2026-10-16';
-  try { if (window.localStorage.getItem(key)) return; } catch (e) { /* 無痕模式 */ }
+  try { if (walkedStorage && walkedStorage.getItem(NOTICE_KEY)) return; } catch (e) { /* 無痕模式 */ }
   box.hidden = false;
   close.addEventListener('click', () => {
     box.hidden = true;
-    try { window.localStorage.setItem(key, '1'); } catch (e) { /* 無痕模式 */ }
+    try { if (walkedStorage) walkedStorage.setItem(NOTICE_KEY, '1'); } catch (e) { /* 無痕模式 */ }
   });
 }
 initNotice();
