@@ -2336,6 +2336,10 @@ async function runSyncButtonTests() {
   try {
     activeTab = 'walk'; searchQuery = '';
     dataSyncedAt = new Date('2026-09-27T13:24:18+08:00');
+    await check('更新按鈕：每 5 秒內就看一次新資料，同步完不再多等一輪 15 秒；總共仍等滿 4 分鐘', async () => {
+      if (!(SYNC_POLL_MS <= 5000)) throw new Error(`輪詢間隔 ${SYNC_POLL_MS}ms 太長`);
+      eq(SYNC_POLL_MS * SYNC_POLL_TRIES >= 4 * 60 * 1000, true);
+    });
     await check('更新按鈕：叫同步後等到 syncedAt 變新才換上資料、顯示更新時間', async () => {
       const calls = fakeNet(200, [dogsFile('2026-09-27T13:24:18+08:00', '舊'), dogsFile('2026-09-27T15:02:00+08:00', '新狗')]);
       await requestSync(btn, { pollMs: 0, tries: 5 });

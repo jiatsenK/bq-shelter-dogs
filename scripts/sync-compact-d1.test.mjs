@@ -179,3 +179,18 @@ test('#252 沒有 dogs/：同步保留永久狗性別、舊編號與再入所身
   const beforeId = await db.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='current'").first('dog_id');
   assert.equal(await after.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='old'").first('dog_id'), beforeId);
 });
+
+test('讀 D1 現況：第一張讀完後其餘表同時讀，不再一張等一張（頁首「更新」變慢）', async () => {
+  const { readSeed } = await import('./sync-compact-d1.mjs');
+  const tables = Object.keys(SEED_TABLES);
+  let running = 0, peak = 0;
+  const seed = await readSeed(async sql => {
+    running++; peak = Math.max(peak, running);
+    await new Promise(r => setTimeout(r, 5));
+    running--;
+    return [{ sql }];
+  });
+  assert.equal(peak, tables.length - 1);
+  for (const t of tables) assert.deepEqual(seed[t], [{ sql: SEED_TABLES[t] }]);
+  await assert.rejects(readSeed(async sql => { if (sql === SEED_TABLES.v3_walks) throw new Error('讀不到'); return []; }), /讀不到/);
+});
