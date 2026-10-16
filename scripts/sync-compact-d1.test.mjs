@@ -4,7 +4,8 @@ import { readFile } from 'node:fs/promises';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateCompactDatabase } from './migrate-compact-db.mjs';
 import { readDogsPayload, readDepartures, readWalks } from '../worker/src/compact.js';
-import { buildSyncSql, SEED_TABLES, planSync, readPrevious } from './sync-compact-d1.mjs';
+import { buildSyncSql, buildSyncPlan, SEED_TABLES, planSync, readPrevious, readSeed } from './sync-compact-d1.mjs';
+import { budgetProblem, todayRowsWritten } from './sync-diff.mjs';
 
 const json = async path => JSON.parse(await readFile(new URL(`../${path}`, import.meta.url), 'utf8'));
 
@@ -52,8 +53,10 @@ test('正式 D1 還沒有離所表、群名表時，SQL 自己先建', async t =
   assert.equal(lines.findIndex(l => !/^CREATE /.test(l)), creates.length);
 });
 
-test('正式 D1 還沒有群名表也能同步：同步前不先讀群名表', () => {
-  assert.equal(SEED_TABLES.v3_sheet_group_labels, undefined);
+test('正式 D1 還沒有群名表也能同步：讀不到群名表當成空的，其他表讀不到照樣停', async () => {
+  const missing = table => async sql => { if (sql === SEED_TABLES[table]) throw new Error('no such table: ' + table); return []; };
+  assert.deepEqual((await readSeed(missing('v3_sheet_group_labels'))).v3_sheet_group_labels, []);
+  await assert.rejects(readSeed(missing('v3_walks')), /no such table/);
 });
 
 test('群名（K 2026-10-16）：照欄存，api/dogs 的 groupColumns 帶群名和狗名', async t => {
@@ -193,4 +196,75 @@ test('讀 D1 現況：第一張讀完後其餘表同時讀，不再一張等一�
   assert.equal(peak, tables.length - 1);
   for (const t of tables) assert.deepEqual(seed[t], [{ sql: SEED_TABLES[t] }]);
   await assert.rejects(readSeed(async sql => { if (sql === SEED_TABLES.v3_walks) throw new Error('讀不到'); return []; }), /讀不到/);
+});
+
+// ── #302 差異同步：只寫有變的列，寫入量異常時停寫 ──
+const planOnce = async (db, sheet) => {
+  const seed = await seedOf(db);
+  const groupColumns = (await source()).groupColumns;
+  return buildSyncPlan(seed, async mem => ({ ...planSync(await readPrevious(mem), sheet, null, NOW, KEY), groupColumns }));
+};
+const writes = sql => sql.split('\n').filter(l => l && !/^CREATE /.test(l));
+
+test('#302 試算表沒變再同步一次：一列都不寫', async t => {
+  const { src, db } = await production(t);
+  const once = await syncOnce(t, db, sheetOf(src));
+  const plan = await planOnce(once, sheetOf(src));
+  assert.equal(plan.rows, 0);
+  assert.deepEqual(writes(plan.sql), []);
+});
+
+test('#302 一隻狗被溜：只寫幾列，不再刪光重寫溜狗紀錄', async t => {
+  const { src, db } = await production(t);
+  const once = await syncOnce(t, db, sheetOf(src));
+  const sheet = sheetOf(src);
+  const dog = sheet.dogs.find(d => d.id && d.walkedDate);
+  dog.walkedDate = '2026-10-16'; dog.walkers = ['aaaaaaaaaaaa'];
+  const plan = await planOnce(once, sheet);
+  assert.ok(plan.rows > 0 && plan.rows <= 10, `寫了 ${plan.rows} 列`);
+  assert.equal(writes(plan.sql).length, plan.rows);
+  assert.ok(writes(plan.sql).every(l => !/^DELETE FROM \w+;$/.test(l)), '不能有整張表刪光');
+});
+
+test('#302 寫完的結果跟整份重建一樣', async t => {
+  const { src, db } = await production(t);
+  const sheet = sheetOf(src);
+  sheet.dogs = sheet.dogs.slice(1);
+  sheet.dogs[0] = { ...sheet.dogs[0], walkedDate: '2026-10-16', walkers: ['aaaaaaaaaaaa'] };
+  const diffed = await syncOnce(t, db, sheet);
+  const seed = await seedOf(db);
+  const fresh = await apply(t, {}, await buildSyncSql({}, async mem => {
+    for (const [table, rows] of Object.entries(seed)) for (const row of rows) await mem.prepare(`INSERT INTO ${table}(${Object.keys(row).join(',')}) VALUES(${Object.keys(row).map(() => '?').join(',')})`).bind(...Object.values(row)).run();
+    return { ...planSync(await readPrevious(mem), sheet, null, NOW, KEY), groupColumns: src.groupColumns };
+  }));
+  for (const table of Object.keys(SEED_TABLES)) {
+    // 主清單只有第 0 列的同步時間有用（網站只讀這列），其他列不跟著改
+    const all = async d => (await d.prepare(`SELECT * FROM ${table}`).all()).results.map(r => JSON.stringify(r.row_index ? { ...r, synced_at: '' } : r)).sort();
+    assert.deepEqual(await all(diffed), await all(fresh), table);
+  }
+});
+
+test('#302 寫入預算：單次超過門檻、或今天累計會超過預算就停寫', () => {
+  assert.equal(budgetProblem(3, 1000), null);
+  assert.match(budgetProblem(501, 0), /單次門檻 500/);
+  assert.match(budgetProblem(10, 19995), /每天的寫入預算 20000/);
+  assert.equal(budgetProblem(10, null), null, '查不到今天用量時只看單次門檻');
+  assert.match(budgetProblem(30, 0, { maxRows: 20 }), /單次門檻 20/);
+});
+
+test('#302 查今天的 D1 寫入量：加總帳號所有資料庫，查不到回 null', async () => {
+  let body;
+  const ok = async (url, init) => { body = JSON.parse(init.body); return { ok: true, json: async () => ({ data: { viewer: { accounts: [{ d1AnalyticsAdaptiveGroups: [{ sum: { rowsWritten: 40 } }, { sum: { rowsWritten: 2 } }] }] } } }) }; };
+  assert.equal(await todayRowsWritten({ token: 't', accountId: 'a', now: new Date('2026-10-17T01:00:00+08:00'), fetchImpl: ok }), 42);
+  assert.equal(body.variables.d, '2026-10-16', '額度照 UTC 日期算（台灣早上 8:00 重置）');
+  const denied = async () => ({ ok: true, json: async () => ({ data: null, errors: [{ message: 'not authorized' }] }) });
+  assert.equal(await todayRowsWritten({ token: 't', accountId: 'a', fetchImpl: denied }), null);
+  assert.equal(await todayRowsWritten({ token: 't', accountId: 'a', fetchImpl: async () => { throw new Error('網路斷了'); } }), null);
+});
+
+test('#302 寫入量異常時不寫 D1：先檢查預算才呼叫 wrangler 寫入', async () => {
+  const code = await readFile(new URL('./sync-compact-d1.mjs', import.meta.url), 'utf8');
+  const check = code.indexOf('budgetProblem(planned');
+  assert.ok(check > 0 && check < code.indexOf("wrangler(['--file'"));
+  assert.match(code, /GITHUB_STEP_SUMMARY/);
 });
