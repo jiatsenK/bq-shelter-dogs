@@ -1403,3 +1403,28 @@
 - 更新 GLOSSARY 的志工詞彙，新增 ADR 0005，標記 ADR 0001 的代號持有規則被取代；AGENTS 與 COMPACT_D1 補入口及尚待實作的狀態。文件已確認的規格不冒充已完成的程式。
 - 正式 v3_favorites 先前經 K 確認已建空表，當時讀回 0 筆、既有 v3_dogs 前後均 133 筆；本次只改文件，不再改正式 D1、不合併或部署，也未修改 Claude 的 #284 工作檔案。
 - 本次文件檢查：規範／規格自審通過；git diff --check 通過，Node 175/175、headless 網頁 247/247 通過。這些測試仍是既有程式的回歸結果，新身分規格尚未實作。
+## 2026-10-16 常遛狗群修正：英文名不分大小寫、母幼區各自一籠（Claude）
+
+- scripts/sync-sheet.mjs 的 parseGroupColumns 比對犬名改成英文不分大小寫：試算表「常遛狗群」E7 寫「Mini」，主清單是「MINI」，以前會被丟掉，所以 MINI 沒有可以一起溜的狗。
+- public/js/app.js 的 cageMates：籠位「母幼…」（例如母幼A）各自一籠，不算同籠（K 2026-10-16）。
+- 暴牙斑：試算表 I5 寫「暴牙班」，主清單是「暴牙斑」，名字錯字要由 K 在試算表手動改，網站不寫常遛狗群分頁。
+## 2026-10-16 網站追加試算表備註與異動紀錄（#281，Claude）
+
+- AGENTS.md 試算表寫入規則改成 #239（K 2026-10-15）的新規則。
+- apps-script/sheet-write.gs 新增 action note（備註欄接「;日期內容（名字）」）、log（異動紀錄新增「備註N」一列），都在鎖內先讀現值再追加。
+- Worker /api/walk 接受 note／log，檢查名字與內容（1–200 字、不換行）。
+- 網頁：狗卡「試算表備註」下方「加備註」、電腦版異動紀錄下方「新增一筆」，輸入→預覽→送出（入口位置 K 2026-10-16 選定）。
+- 編輯紀錄（開放編輯 session 的 logEdit）等該 PR 合併後再接；網頁已帶 editor。Apps Script 要 K 重新部署新版本。
+## 2026-10-16 開放編輯、編輯紀錄頁（Claude，#284）
+
+- K 決定（docs/adr/0004-open-editing-and-edit-log.md）：網站拿掉通關碼，任何人選好名字就能改休養、介紹、照片；#143 管理者後台廢除並關票。
+- 新增 worker/src/editlog.js（editorOf／logEdit／readEdits，walkerCode 從 index.js 搬來）、D1 表 v3_edit_log、GET /api/edits、public/edits.html＋js/edits.js，電腦版頁首加「編輯紀錄」入口。溜狗打卡不記。
+- /api/admin/* 改用 ADMIN_KEY（標頭 X-Admin-Key），部署與縮圖 Action 在 K 設好 Secret ADMIN_KEY 前沿用 NOTES_PASSCODE 的值；WALKER_KEY、SHEET_WRITE_KEY 保留。
+- 更新測試、AGENTS.md、GLOSSARY、PROJECT_GOALS、DESIGN_GUIDE、設定文件。試算表備註（#239）的 session 要照 ADR 的介面接上編輯紀錄。
+## 2026-10-16 固定志工身分實作（CODEX，#267／PR #282）
+
+- 整合 origin/main 的 #284 編輯紀錄與既有主分支變更，解決 AGENTS、AGENT_LOG、schema 測試、網頁測試及 Worker import 衝突；沿用原分支，不改試算表寫入功能。
+- 新增共用身分模組與固定志工持有的常溜／開卡表、名字對照及合併轉向。更名、合併與編輯紀錄同一 batch，revision guard 拒絕過期確認，重送可追溯；歷史與未知代號來源保留。
+- 前端可更名、檢視雙方摘要後確認合併；開啟與恢復連線重新解析身分。所有個人請求只送單碼，避免別名累積上限；慢回應不覆寫後來清除／切換的身分。
+- 提供純 DB 注入的盤點／銜接 helper 及 docs/267-identity-rollout.md。K 同意後正式唯讀查詢為 21 志工、0 對照、0 常溜、48 開卡、1191 溜狗來源列、29 種來源代號；rows_written 全為 0，正式編輯紀錄表尚缺。精確碼對照 POST 查詢遭自動審核拒絕，未執行正式改表、搬移、合併或部署。
+- Node 187/187、headless 網頁 249/249 通過（本機既有 Chrome 跑原 Playwright runner）；Standards／Spec 平行審查修正後無必修問題。impeccable detect 僅報兩處原有動態圖片容器，未擴大修整。PR 保持草稿，正式碼對照／實際資料演練與兩裝置正式驗收待續。

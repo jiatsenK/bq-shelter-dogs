@@ -16,7 +16,7 @@ const FIRST_SCREEN_CARDS = 8;
 // 我最近溜過（#58）：同步時累積的遛狗紀錄（#56）。#96 起每個志工看自己的：
 // 紀錄裡的 walkers 是遛的人的代號，志工在「我溜過」輸入名字、經 Worker 換成代號後記在這支手機
 const WALKS_URL = 'api/walks'; // #260 起從 Worker 讀 D1，形狀跟原本的 data/walks.json 一樣
-// 休養中（K 2026-10-09）：管理者在網站上設定「到哪天前暫停帶出」，經 Worker（通關碼）寫進 repo 的這個檔，不碰試算表
+// 休養中（K 2026-10-09）：在網站上設定「到哪天前暫停帶出」，經 Worker 存 D1、記編輯紀錄，不碰試算表
 const REST_URL = 'api/rest'; // #250 起休養設定存 D1，從 Worker 讀
 const WALKER_CODES_KEY = 'bq-walker-codes';
 const WALKER_CODE_PATTERN = /^[0-9a-f]{12}$/; // 跟 Worker 的 WALKER_CODE_LENGTH 一致
@@ -38,9 +38,9 @@ let detailTrail = []; // 在詳細資訊裡點「可以一起溜」換過的狗�
 let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, url, phase: 'preview'|'uploading'|'error', error }
 let restMap = {}; // 休養中：編號 → { until: 'YYYY-MM-DD', reason }
 let detailWalksOpen = false; // 詳細資訊的溜狗紀錄有沒有展開每一天（K 2026-10-10 減法：預設只有一行字）
-let introEdit = null; // 詳細資訊正在改的入所介紹（K 2026-10-10 補資料）：{ dog, text, pass, needPass, phase: 'edit'|'saving'|'error', error }
+let introEdit = null; // 詳細資訊正在改的入所介紹（K 2026-10-10 補資料）：{ dog, text, phase: 'edit'|'saving'|'error', error }
 const introOverrides = {}; // 編號 → 剛存好的介紹：這台電腦不用重新讀就看到（#250 起存 D1，其他人重新整理就看得到）
-let restEdit = null; // 詳細資訊正在改的休養設定：{ dog, until, reason, pass, needPass, phase: 'edit'|'saving'|'error', error }
+let restEdit = null; // 詳細資訊正在改的休養設定：{ dog, until, reason, phase: 'edit'|'saving'|'error', error }
 let pickedBuddies = new Set(); // 詳細資訊「可以一起溜」勾選的狗（walkKey）
 let searchQuery = '';
 let loadWarning = '';
@@ -228,10 +228,51 @@ function saveMyCodes(codes) {
   syncFavs();
 }
 
+async function identityRequest(action, body) {
+  const res = await fetch(UPLOAD_URL + '/identity' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const out = await res.json();
+  if (!res.ok || !out.ok) { const e = new Error(out.error || '身分設定失敗，請稍後再試'); e.targetCode = out.targetCode; throw e; }
+  return out;
+}
+async function renameWalker() {
+  const edit = walkerSetup;
+  if (!edit || edit.phase === 'saving') return;
+  const originalCodes = loadMyCodes().join(',');
+  edit.phase = 'saving'; render();
+  try {
+    const out = await identityRequest('/rename', { code: loadMyCodes()[0], name: edit.text.trim(), operationId: edit.operationId || (edit.operationId = crypto.randomUUID()) });
+    if (walkerSetup !== edit || loadMyCodes().join(',') !== originalCodes) return;
+    saveWalkerName(out.identity.name); saveMyCodes(out.identity.codes); walkerSetup = null;
+  } catch (e) {
+    edit.phase = 'error'; edit.error = e.message;
+    if (e.targetCode) {
+      try { edit.merge = await identityRequest('/merge-preview', { code: loadMyCodes()[0], targetCode: e.targetCode }); edit.targetCode = e.targetCode; }
+      catch (previewError) { edit.error = previewError.message; }
+    }
+  }
+  render();
+}
+async function confirmWalkerMerge() {
+  const edit = walkerSetup;
+  if (!edit?.merge || edit.phase === 'saving') return;
+  const originalCodes = loadMyCodes().join(',');
+  edit.phase = 'saving'; render();
+  try {
+    const out = await identityRequest('/merge', { code: loadMyCodes()[0], targetCode: edit.targetCode, token: edit.merge.token, confirm: true, operationId: edit.mergeOperationId || (edit.mergeOperationId = crypto.randomUUID()) });
+    if (walkerSetup !== edit || loadMyCodes().join(',') !== originalCodes) return;
+    saveWalkerName(out.identity.name); saveMyCodes(out.identity.codes); walkerSetup = null;
+  } catch (e) { edit.phase = 'error'; edit.error = e.message; edit.merge = null; }
+  render();
+}
+
 function walkerSetupHtml() {
   const edit = walkerSetup || { text: '', phase: 'edit', error: '' };
   const busy = edit.phase === 'saving';
   const has = loadMyCodes().length > 0;
+  if (edit.merge) {
+    const summary = p => esc(p.name) + '：常溜 ' + p.favorites + '、開卡 ' + p.cards + '、溜狗來源紀錄 ' + p.walkRows;
+    return '<div class="who-box"><h3>確認身分合併</h3><p role="alert">' + esc(edit.error || '') + '</p><p>' + summary(edit.merge.source) + '</p><p>' + summary(edit.merge.target) + '</p><p>合併後顯示「' + esc(edit.merge.target.name) + '」，兩邊資料都保留。</p><div class="my-note-actions"><button type="button" class="my-note-save" id="whoMerge"' + (busy ? ' disabled' : '') + '>這兩個身分都是我</button><button type="button" class="photo-cancel" id="whoCancel">取消</button></div></div>';
+  }
   // 清除前確認一次（2026-10-08 介面評估第二輪：一按就清掉名字和代號，按錯就不能按溜了）
   if (edit.confirmClear) {
     return `<div class="who-box">
@@ -253,7 +294,7 @@ function walkerSetupHtml() {
     ${edit.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(edit.error)}</span></div>` : ''}
     <div class="my-note-actions">
       <button type="submit" class="my-note-save" id="whoSave"${busy ? ' disabled' : ''}>${busy ? '設定中…' : edit.phase === 'confirm' ? '確定用這個名字' : '設定'}</button>
-      ${has && !busy ? `<button type="button" class="photo-cancel" id="whoCancel">取消</button>` : ''}
+      ${has && !busy ? `<button type="button" class="photo-cancel" id="whoRename">更改登記名字</button><button type="button" class="photo-cancel" id="whoCancel">取消</button>` : ''}
     </div>
     ${has && !busy ? `<button type="button" class="who-clear" id="whoClear">清除這支手機的設定</button>` : ''}
     ${has ? '' : '<button type="button" class="who-clear guide-link" data-open-guide>看使用說明</button>'}
@@ -274,6 +315,7 @@ async function saveWalkerSetup() {
     if (unknown.length) { edit.phase = 'confirm'; edit.unknown = unknown; render(); return; }
   }
   const error = await setWalkerName(edit.text);
+  if (walkerSetup !== edit) return;
   if (error) return failWith(error);
   setNameLater(false);
   if (walkerSetup === edit) walkerSetup = null;
@@ -285,11 +327,13 @@ async function setWalkerName(raw) {
   const text = String(raw || '').trim();
   if (!text) return '請輸入你在試算表上寫的名字';
   if (!UPLOAD_URL) return '暫時不能設定，網站這邊還沒準備好';
-  const { codes, error } = await walkerCodesFor(splitWalkers(text).map(canonicalWalker).filter(Boolean).flatMap(n => n === 'K' ? [n, '岑'] : [n]));
-  if (error) return error;
-  if (!codes.length) return '設定沒有成功，請稍後再試';
-  saveMyCodes(codes);
-  saveWalkerName(canonicalWalker(firstWalkerName(text)));
+  const oldName = loadWalkerName(), oldCodes = loadMyCodes().join(',');
+  try {
+    const out = await identityRequest('', { name: text });
+    if (loadWalkerName() !== oldName || loadMyCodes().join(',') !== oldCodes) return '身分設定已變動，請重新設定';
+    saveWalkerName(out.identity.name);
+    saveMyCodes(out.identity.codes);
+  } catch (e) { return e.message; }
   return '';
 }
 // 名字送 Worker 換代號：回 { codes } 或 { codes: [], error: 原因 }
@@ -923,7 +967,7 @@ function toggleFav(dog) {
   const dogId = state.aliases[k];
   if (codes.length && dogId) {
     // 讀取合併所有名字；取消時也要取消各個名字底下的這隻狗。
-    state.pending.push({ codes: on ? [codes[0]] : codes, dogId, on });
+    state.pending.push({ codes: [codes[0]], dogId, on });
     writeJsonKey(FAVS_KEY, localFavs().filter(x => state.aliases[x] !== dogId && x !== k));
     saveFavState();
   } else {
@@ -969,8 +1013,8 @@ async function reconcileFavorites(state, codes, io) {
 
 async function favoriteRequest(codes, op) {
   const base = UPLOAD_URL + '/favorites';
-  const res = await fetch(op ? base : base + '?codes=' + encodeURIComponent(codes.join(',')), op ? {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(op),
+  const res = await fetch(op ? base : base + '?codes=' + encodeURIComponent(codes[0]), op ? {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...op, codes: op.codes.slice(0, 1) }),
   } : { cache: 'no-store' });
   const out = await res.json();
   if (!res.ok || !out.ok || (!op && (!Array.isArray(out.ids) || !out.aliases))) throw new Error('常溜同步失敗');
@@ -980,8 +1024,18 @@ async function favoriteRequest(codes, op) {
 function syncFavs() {
   // 串行保留點擊順序；失敗的操作下次打開或恢復連線再試。
   favSyncQueue = favSyncQueue.then(async () => {
-    const codes = loadMyCodes();
+    let codes = loadMyCodes();
     if (!codes.length || !UPLOAD_URL) return;
+    const original = codes.join(','), name = loadWalkerName();
+    if (name) {
+      const out = await identityRequest('', { name });
+      if (loadMyCodes().join(',') !== original || loadWalkerName() !== name) return;
+      saveWalkerName(out.identity.name);
+      walkerCodesMemory = out.identity.codes;
+      try { walkedStorage?.setItem(WALKER_CODES_KEY, JSON.stringify(out.identity.codes)); } catch (e) { /* 本次仍可使用 */ }
+      codes = out.identity.codes;
+      myWalks = walksData ? parseMyWalks(walksData, codes) : [];
+    }
     await reconcileFavorites(favState(), codes, {
       codes: loadMyCodes, local: localFavs, save: saveFavState,
       read: codes => favoriteRequest(codes), write: op => favoriteRequest(null, op),
@@ -1187,9 +1241,9 @@ function firstWalkerName(text) {
 }
 function loadWalkerName() {
   try {
-    if (walkedStorage) return canonicalWalker(walkedStorage.getItem(WALKER_NAME_KEY) || '');
+    if (walkedStorage) return (walkedStorage.getItem(WALKER_NAME_KEY) || '').trim();
   } catch (e) { /* 讀不到就用記憶體裡的 */ }
-  return canonicalWalker(walkerNameMemory);
+  return String(walkerNameMemory || '').trim();
 }
 function saveWalkerName(name) {
   walkerNameMemory = name || '';
@@ -1339,29 +1393,117 @@ async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expecte
   return !missed.length;
 }
 
-// 管理用的通關碼（原本 #62 我的備註、後來相簿刪除用）：成功後記在這支手機，被拒絕就清掉重問
-const NOTES_PASS_KEY = 'bq-notes-passcode';
-let notesPassMemory = '';
-function loadNotesPass() {
-  try {
-    return (walkedStorage && walkedStorage.getItem(NOTES_PASS_KEY)) || notesPassMemory;
-  } catch (e) {
-    return notesPassMemory;
-  }
-}
-function saveNotesPass(pass) {
-  notesPassMemory = pass;
-  try {
-    if (!walkedStorage) return;
-    if (pass) walkedStorage.setItem(NOTES_PASS_KEY, pass);
-    else walkedStorage.removeItem(NOTES_PASS_KEY);
-  } catch (e) { /* 存不了就只記在記憶體 */ }
-}
+// 開放編輯（ADR 0004）：不用通關碼，送出時帶這支手機選好的名字，Worker 記進編輯紀錄（edits.html）
+const NEED_EDITOR = '請先選好你的名字再編輯（開頭畫面點自己的名字）';
+const editorName = () => loadWalkerName();
+const editorHeaders = () => ({ 'X-Editor': encodeURIComponent(editorName()) });
 
 let toastTimer = null;
 let toastUndo = null;
 let toastExtra = null;
 // extra：{ label, fn } 提示條上多一顆按鈕（例：溜了之後「＋一起溜的人」）
+// ── 加備註、新增異動紀錄（#239、#281）：只追加，寫進試算表前先預覽；日期用台灣時間、名字用「我是誰」 ──
+// 狗卡在「試算表備註」下面，異動紀錄只在電腦版右欄（K 2026-10-16）
+const APPEND_MAX = 200;
+let sheetAppend = null; // { kind: 'note'|'log', dog, text, phase: 'edit'|'preview'|'busy', error }
+function taipeiStamp(now = new Date()) {
+  const [y, m, d] = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }).split('-').map(Number);
+  return `${y}/${m}/${d}`;
+}
+function appendEntry(text, who) { return `${taipeiStamp()}${text.trim()}（${who}）`; }
+function nextLogLabel() {
+  const nums = (typeof sheetNotes !== 'undefined' ? sheetNotes : []).map(n => Number((String(n.label).match(/^備註\s*(\d+)/) || [])[1]) || 0);
+  return `備註${Math.max(0, ...nums) + 1}`;
+}
+function appendPreview(a, who) {
+  const entry = appendEntry(a.text, who);
+  if (a.kind === 'log') return `<div class="append-preview"><span class="append-label">${esc(nextLogLabel())}</span>${esc(entry)}</div>`;
+  const now = a.dog.note || '';
+  return `<div class="append-preview note-text">${now.trim() ? `${esc(now)};` : ''}<mark>${esc(entry)}</mark></div>`;
+}
+function sheetAppendHtml(kind, dog = null) {
+  if (!UPLOAD_URL || sheetWriteState === 'off' || (dog && dog.departure)) return '';
+  const a = sheetAppend && sheetAppend.kind === kind && sheetAppend.dog === dog ? sheetAppend : null;
+  const label = kind === 'note' ? '加備註' : '新增一筆';
+  if (!a) return `<button type="button" class="my-note-edit append-open" data-append-open="${kind}">${icon('note')}${label}</button>`;
+  const who = loadWalkerName();
+  const busy = a.phase === 'busy';
+  const err = a.error ? `<p class="append-error" role="alert">${esc(a.error)}</p>` : '';
+  if (!who) return `<div class="my-note-form append-form"><p class="append-hint">要先在「我溜過」設定名字，才能寫進試算表。</p>
+    <div class="my-note-actions"><button type="button" class="photo-cancel" data-append-cancel>取消</button></div></div>`;
+  if (a.phase === 'edit') return `<form class="my-note-form append-form" data-append-form>
+    <label class="my-note-pass-label" for="appendText">${kind === 'note' ? '要接在備註後面的內容' : '要加在異動紀錄最下面的內容'}</label>
+    <input type="text" id="appendText" maxlength="${APPEND_MAX}" value="${esc(a.text)}" autocomplete="off">
+    <p class="append-hint">日期和名字（${esc(who)}）會自動加上；已經寫在試算表的字不會被改。</p>${err}
+    <div class="my-note-actions"><button type="submit" class="my-note-save"${a.text.trim() ? '' : ' disabled'}>預覽</button>
+      <button type="button" class="photo-cancel" data-append-cancel>取消</button></div></form>`;
+  return `<div class="my-note-form append-form">
+    <p class="my-note-pass-label">${kind === 'note' ? '送出後這格會變成：' : '送出後會在最下面新增：'}</p>
+    ${appendPreview(a, who)}${err}
+    <div class="my-note-actions"><button type="button" class="my-note-save" data-append-send${busy ? ' disabled' : ''}>${busy ? '寫入中…' : '送出'}</button>
+      ${busy ? '' : '<button type="button" class="photo-cancel" data-append-back>改一下</button>'}</div></div>`;
+}
+function rerenderAppend(kind, focusSel) {
+  if (kind === 'note') renderDetail(); else render();
+  const el = focusSel && document.querySelector(focusSel);
+  if (el) el.focus({ preventScroll: true });
+}
+async function sendAppend() {
+  const a = sheetAppend;
+  const who = loadWalkerName();
+  if (!a || a.phase !== 'preview' || !who) return;
+  a.phase = 'busy'; a.error = '';
+  rerenderAppend(a.kind);
+  const payload = { action: a.kind, walker: who, editor: who, text: a.text.trim(), dogs: a.kind === 'note' ? [{ id: a.dog.id || '', name: a.dog.name }] : [] };
+  let res = null, out = null;
+  try {
+    res = await fetch(`${UPLOAD_URL}/walk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    out = await res.json().catch(() => null);
+  } catch (e) { res = null; }
+  if (sheetAppend !== a) return;
+  const r = out && out.ok && Array.isArray(out.results) ? out.results[0] : null;
+  if (!r || r.status !== 'written') {
+    a.phase = 'preview';
+    a.error = !res ? '網路不通，沒寫進試算表，請稍後再試' : r && r.status === 'notFound' ? '試算表找不到這隻狗，沒寫進去' : `沒寫進試算表：${(out && out.error) || `HTTP ${res.status}`}`;
+    rerenderAppend(a.kind);
+    return;
+  }
+  sheetAppend = null;
+  if (a.kind === 'note') a.dog.note = r.wrote.note;
+  else if (typeof sheetNotes !== 'undefined') sheetNotes.push({ label: r.wrote.label, text: r.wrote.text });
+  rerenderAppend(a.kind);
+  showToast(a.kind === 'note' ? `已加進 ${a.dog.name} 的試算表備註` : '已加進異動紀錄');
+}
+document.addEventListener('click', e => {
+  const t = e.target && e.target.closest ? e.target : null;
+  if (!t) return;
+  const open = t.closest('[data-append-open]');
+  if (open) {
+    const kind = open.dataset.appendOpen;
+    sheetAppend = { kind, dog: kind === 'note' ? detailDog : null, text: '', phase: 'edit', error: '' };
+    rerenderAppend(kind, '#appendText');
+    return;
+  }
+  if (!sheetAppend) return;
+  const kind = sheetAppend.kind;
+  if (t.closest('[data-append-cancel]')) { sheetAppend = null; rerenderAppend(kind, `[data-append-open="${kind}"]`); return; }
+  if (t.closest('[data-append-back]')) { sheetAppend.phase = 'edit'; sheetAppend.error = ''; rerenderAppend(kind, '#appendText'); return; }
+  if (t.closest('[data-append-send]')) sendAppend();
+});
+document.addEventListener('input', e => {
+  if (!sheetAppend || !e.target || e.target.id !== 'appendText') return;
+  sheetAppend.text = e.target.value;
+  const btn = e.target.form && e.target.form.querySelector('.my-note-save');
+  if (btn) btn.disabled = !e.target.value.trim();
+});
+document.addEventListener('submit', e => {
+  if (!sheetAppend || !e.target.matches || !e.target.matches('[data-append-form]')) return;
+  e.preventDefault();
+  if (!sheetAppend.text.trim()) return;
+  sheetAppend.phase = 'preview'; sheetAppend.error = '';
+  rerenderAppend(sheetAppend.kind, '[data-append-send]');
+});
+
 function showToast(text, undo, extra) {
   let el = document.getElementById('toast');
   if (!el) {
@@ -1472,6 +1614,7 @@ function detailHtml(dog, today) {
       <h3>${icon('note')}試算表備註</h3>
       ${!dog.note ? `<div class="empty">目前沒有備註</div>`
         : `<div class="content note-text">${flag ? highlightNote(dog.note, flag.terms) : esc(dog.note)}</div>`}
+      ${sheetAppendHtml('note', dog)}
     </section>
     ${togetherSection(dog, walked)}
     ${walkHistorySection(dog, today)}
@@ -1486,7 +1629,7 @@ function detailHtml(dog, today) {
 }
 
 // ── 休養中（K 2026-10-09：剛動完手術不能溜，「排到下面、休養中、10/20 前暫停帶出」，不動試算表）──
-// 名字下面一行說明；改設定在詳細資訊最下面，要通關碼（跟以前刪相簿照片同一組，記在這支手機）
+// 名字下面一行說明；改設定在詳細資訊最下面，任何人都能改、記編輯紀錄
 function restNoteHtml(dog, today) {
   const r = restOf(dog, today);
   return r ? `<div class="rest-note"><b>休養中</b>，${monthDay(r.until)} 前暫停帶出${r.reason ? `（${esc(r.reason)}）` : ''}</div>` : '';
@@ -1503,7 +1646,7 @@ function restAdminHtml(dog, today) {
     // 管理用（K 2026-10-10）：只剩設定休養中；入所介紹直接點那一段就能改。正在改介紹時先收起來
     if (introEdit && introEdit.dog === dog) return '';
     return `<section class="detail-section rest-admin" data-section="rest">
-      <h3>${icon('write')}管理用<span class="sub">要通關碼</span></h3>
+      <h3>${icon('write')}休養設定<span class="sub">會記在編輯紀錄</span></h3>
       <div class="admin-btns">
         <button type="button" class="admin-btn" id="restEdit">${icon('paw')}${r ? '改休養設定' : '設定休養中'}</button>
       </div>
@@ -1516,7 +1659,6 @@ function restAdminHtml(dog, today) {
       <p class="rest-hint">排到溜狗表最下面、不能按溜了；過了那天自動恢復。</p>
       <label>原因<input type="text" id="restReason" maxlength="40" value="${esc(e.reason)}" placeholder="例：術後休養"${busy ? ' disabled' : ''}></label>
       <label>到哪一天（含那天）<input type="date" id="restUntil" value="${esc(e.until)}" min="${isoDay(today)}" required${busy ? ' disabled' : ''}></label>
-      ${e.needPass ? `<label>通關碼<input type="password" id="restPass" name="password" autocomplete="current-password" value="${esc(e.pass)}"${busy ? ' disabled' : ''}></label>` : ''}
       ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
       <div class="rest-actions">
         <button type="submit" class="rest-save"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存'}</button>
@@ -1526,7 +1668,7 @@ function restAdminHtml(dog, today) {
     </form>
   </section>`;
 }
-// ── 入所介紹（K 2026-10-10 補資料）：管理用、要通關碼；存在 repo 的 dogs/{編號}.md，不寫試算表 ──
+// ── 入所介紹（K 2026-10-10 補資料）：任何人都能改、記編輯紀錄（ADR 0004）；存 D1，不寫試算表 ──
 const INTRO_MAX = 1000;
 function introOf(dog) {
   return dog.id && Object.prototype.hasOwnProperty.call(introOverrides, dog.id) ? introOverrides[dog.id] : dog.intro;
@@ -1549,7 +1691,6 @@ function introSectionHtml(dog, intro) {
       <h3>${icon('card')}入所介紹</h3>
       <p class="rest-hint">存好後這台馬上看到，其他人幾分鐘後（下次更新資料）看到。只存在網站，不寫試算表。</p>
       <label>介紹<textarea id="introText" rows="7" maxlength="${INTRO_MAX}" placeholder="例：親人、喜歡散步，怕機車聲"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea><small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small></label>
-      ${e.needPass ? `<label>通關碼<input type="password" id="introPass" name="password" autocomplete="current-password" value="${esc(e.pass)}"${busy ? ' disabled' : ''}></label>` : ''}
       ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
     </form>
   </section>`;
@@ -1563,7 +1704,7 @@ function introBarHtml(dog) {
 }
 function openIntroEdit(dog) {
   if (!dog || !dog.id || !UPLOAD_URL) return;
-  introEdit = { dog, text: introOf(dog) || '', pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
+  introEdit = { dog, text: introOf(dog) || '', phase: 'edit', error: '' };
   renderDetail();
   const box = document.getElementById('introText');
   if (box) {
@@ -1574,8 +1715,8 @@ function openIntroEdit(dog) {
 async function saveIntro() {
   const e = introEdit;
   if (!e || e.phase === 'saving') return;
-  const pass = e.needPass ? e.pass : loadNotesPass();
-  if (!pass) { e.needPass = true; e.phase = 'error'; e.error = '請輸入通關碼'; renderDetail(); return; }
+  const editor = editorName();
+  if (!editor) { e.phase = 'error'; e.error = NEED_EDITOR; renderDetail(); return; }
   const text = e.text.replace(/\r\n?/g, '\n').trim();
   if ([...text].length > INTRO_MAX) { e.phase = 'error'; e.error = `最多 ${INTRO_MAX} 字`; renderDetail(); return; }
   e.phase = 'saving'; e.error = ''; renderDetail();
@@ -1584,7 +1725,7 @@ async function saveIntro() {
     const res = await fetch(`${UPLOAD_URL}/intro/${encodeURIComponent(e.dog.id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ passcode: pass, text }),
+      body: JSON.stringify({ editor, text }),
     });
     out = await res.json().catch(() => null);
     if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
@@ -1593,11 +1734,9 @@ async function saveIntro() {
   }
   if (introEdit !== e) return;
   if (error) {
-    if (out && out.code === 'passcode') { saveNotesPass(''); e.needPass = true; e.pass = ''; }
     e.phase = 'error'; e.error = error; renderDetail();
     return;
   }
-  saveNotesPass(pass);
   introOverrides[e.dog.id] = typeof out.intro === 'string' ? out.intro : text;
   introEdit = null;
   render(); renderDetail();
@@ -1609,7 +1748,7 @@ async function saveIntro() {
 function openRestEdit(dog) {
   const r = restOf(dog);
   const until = r ? r.until : new Date(Date.now() + 10 * 86400000);
-  restEdit = { dog, until: isoDay(until), reason: r ? r.reason : '術後休養', pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
+  restEdit = { dog, until: isoDay(until), reason: r ? r.reason : '術後休養', phase: 'edit', error: '' };
   renderDetail();
   const first = document.getElementById('restReason');
   if (first) {
@@ -1622,8 +1761,8 @@ function openRestEdit(dog) {
 async function saveRest(end = false) {
   const e = restEdit;
   if (!e || e.phase === 'saving') return;
-  const pass = e.needPass ? e.pass : loadNotesPass();
-  if (!pass) { e.needPass = true; e.phase = 'error'; e.error = '請輸入通關碼'; renderDetail(); return; }
+  const editor = editorName();
+  if (!editor) { e.phase = 'error'; e.error = NEED_EDITOR; renderDetail(); return; }
   if (!end && !parseYmd(e.until)) { e.phase = 'error'; e.error = '請選到哪一天'; renderDetail(); return; }
   e.phase = 'saving'; e.error = ''; renderDetail();
   let out = null, error = '';
@@ -1631,7 +1770,7 @@ async function saveRest(end = false) {
     const res = await fetch(`${UPLOAD_URL}/rest/${encodeURIComponent(e.dog.id)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(end ? { passcode: pass, end: true } : { passcode: pass, until: e.until, reason: e.reason.trim() }),
+      body: JSON.stringify(end ? { editor, end: true } : { editor, until: e.until, reason: e.reason.trim() }),
     });
     out = await res.json().catch(() => null);
     if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
@@ -1640,11 +1779,9 @@ async function saveRest(end = false) {
   }
   if (restEdit !== e) return;
   if (error) {
-    if (out && out.code === 'passcode') { saveNotesPass(''); e.needPass = true; e.pass = ''; }
     e.phase = 'error'; e.error = error; renderDetail();
     return;
   }
-  saveNotesPass(pass);
   // 換成新的物件：讀取中的 loadRest 才知道這裡改過（見 loadRest）
   const next = { ...restMap };
   if (out.rest) next[e.dog.id] = out.rest; else delete next[e.dog.id];
@@ -1837,10 +1974,10 @@ function buddyTile(d, name, walkedNow, mate) {
 }
 
 // 同籠的狗（K 2026-09-27）：籠位欄位一樣的其他狗，跟「可以一起溜」同一種格子，也能勾選一起記。
-// 「○○區」（住院區、C區）是整區不是一籠，不算同籠；沒有同籠的狗整段不顯示
+// 「○○區」（住院區、C區）是整區不是一籠，不算同籠；母幼區（母幼A…）也是各自一籠（K 2026-10-16）；沒有同籠的狗整段不顯示
 function cageMates(dog) {
   const cage = String(dog.cage || '').replace(/\s+/g, '');
-  if (!cage || /區$/.test(cage)) return [];
+  if (!cage || /區$/.test(cage) || /^母幼/.test(cage)) return [];
   return allDogs.filter(d => d !== dog && String(d.cage || '').replace(/\s+/g, '') === cage);
 }
 
@@ -2241,7 +2378,7 @@ async function uploadPhoto() {
   try {
     const res = await fetch(`${UPLOAD_URL}/photos/${encodeURIComponent(up.dog.id)}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'image/jpeg' },
+      headers: { 'Content-Type': 'image/jpeg', ...editorHeaders() },
       body: up.blob,
     });
     const out = await res.json().catch(() => null);
@@ -2325,11 +2462,9 @@ function wireDetail(box) {
       if (c) { const n = [...introEdit.text].length; c.textContent = `${n} / ${INTRO_MAX} 字`; c.classList.toggle('over', n > INTRO_MAX); }
       return;
     }
-    if (introEdit && e.target.id === 'introPass') { introEdit.pass = e.target.value; return; }
     if (!restEdit) return;
     if (e.target.id === 'restReason') restEdit.reason = e.target.value;
     else if (e.target.id === 'restUntil') restEdit.until = e.target.value;
-    else if (e.target.id === 'restPass') restEdit.pass = e.target.value;
   });
   box.addEventListener('submit', e => {
     if (e.target.id === 'introForm') { e.preventDefault(); saveIntro(); return; }
@@ -2472,7 +2607,7 @@ document.addEventListener('keydown', e => {
   }
   if (e.key === 'Escape' && detailDog) closeDetail();
   if (e.key !== 'Tab' || !detailDog) return;
-  // 我的備註編輯時（#62）文字框和通關碼欄位也要能用 Tab 走到
+  // 我的備註編輯時（#62）文字框和欄位也要能用 Tab 走到
   const buttons = [...document.querySelectorAll('#detail button:not(:disabled), #detail textarea:not(:disabled), #detail input:not([hidden]):not(:disabled), #toast:not([hidden]) button:not([hidden])')];
   const first = buttons[0], last = buttons[buttons.length - 1];
   if (!first) return;
@@ -2841,6 +2976,10 @@ mainEl.addEventListener('click', e => {
     render();
     const input = document.getElementById('whoInput');
     if (input) input.focus();
+  } else if (e.target.closest('#whoRename')) {
+    renameWalker();
+  } else if (e.target.closest('#whoMerge')) {
+    confirmWalkerMerge();
   } else if (e.target.closest('#whoCancel')) {
     walkerSetup = null;
     render();
@@ -2861,6 +3000,7 @@ mainEl.addEventListener('click', e => {
 mainEl.addEventListener('input', e => {
   if (e.target.id !== 'whoInput') return;
   if (!walkerSetup) walkerSetup = { text: '', phase: 'edit', error: '' };
+  if (walkerSetup.text !== e.target.value) { delete walkerSetup.operationId; delete walkerSetup.mergeOperationId; delete walkerSetup.merge; }
   walkerSetup.text = e.target.value;
   refreshNames(mainEl, walkerSetup, 'who', e);
 });

@@ -1,3 +1,4 @@
+import { identitiesForCodes } from './identity.js';
 // 精簡 D1（v3_ 表，#245／#247）：網站要的狗清單從這裡讀，形狀跟原本的 data/dogs.json 一樣。
 // 表結構見 db/compact-schema.sql、docs/COMPACT_D1.md
 
@@ -96,16 +97,17 @@ export async function favoriteAliases(db) {
 }
 
 export async function readFavorites(db, codes) {
-  const rows = await db.prepare(`SELECT DISTINCT dog_id FROM v3_favorites WHERE walker_code IN (${codes.map(() => '?').join(',')})`).bind(...codes).all();
+  const people = await identitiesForCodes(db, codes);
+  const rows = await db.prepare(`SELECT DISTINCT dog_id FROM v3_volunteer_favorites WHERE volunteer_id IN (${people.map(() => '?').join(',')})`).bind(...people.map(p => p.volunteerId)).all();
   return { ids: (rows.results || []).map(r => r.dog_id), aliases: await favoriteAliases(db) };
 }
 
 export async function saveFavorite(db, codes, dogId, on, date) {
   if (!await db.prepare('SELECT dog_id FROM v3_dogs WHERE dog_id = ?').bind(dogId).first()) return false;
-  // 收藏屬於自己設定名字的第一個代號；取消則涵蓋所有讀取的別名。
-  await db.batch((on ? codes.slice(0, 1) : codes).map(code => on
-    ? db.prepare('INSERT OR IGNORE INTO v3_favorites(walker_code,dog_id,added_on) VALUES(?,?,?)').bind(code, dogId, date)
-    : db.prepare('DELETE FROM v3_favorites WHERE walker_code = ? AND dog_id = ?').bind(code, dogId)));
+  const people = await identitiesForCodes(db, codes);
+  await db.batch((on ? people.slice(0, 1) : people).map(person => on
+    ? db.prepare('INSERT OR IGNORE INTO v3_volunteer_favorites(volunteer_id,dog_id,added_on) VALUES((SELECT volunteer_id FROM v3_identity_names WHERE code=?),?,?)').bind(person.codes[0], dogId, date)
+    : db.prepare('DELETE FROM v3_volunteer_favorites WHERE volunteer_id=(SELECT volunteer_id FROM v3_identity_names WHERE code=?) AND dog_id=?').bind(person.codes[0], dogId)));
   return true;
 }
 
@@ -114,8 +116,9 @@ export async function openedBooks(db, codes) {
   const sql = `SELECT COALESCE(
       (SELECT m.number FROM v3_sheet_main m WHERE m.dog_id = c.dog_id AND m.number <> '' ORDER BY m.row_index LIMIT 1),
       (SELECT MAX(n.number) FROM v3_dog_numbers n WHERE n.dog_id = c.dog_id)) AS id, c.opened_on
-    FROM v3_card_opened c WHERE c.walker_code = ?`;
-  const rows = await db.batch(codes.map(code => db.prepare(sql).bind(code)));
+    FROM v3_volunteer_cards c WHERE c.volunteer_id = ?`;
+  const people = await Promise.all(codes.map(async code => (await identitiesForCodes(db, [code]))[0]));
+  const rows = await db.batch(people.map(p => db.prepare(sql).bind(p.volunteerId)));
   const books = {};
   codes.forEach((code, i) => { books[code] = Object.fromEntries((rows[i].results || []).filter(r => r.id).map(r => [r.id, r.opened_on])); });
   return books;
@@ -132,22 +135,26 @@ export async function readRest(db) {
   return Object.fromEntries(results.filter(r => r.id).map(r => [r.id, { until: r.until_date, reason: r.reason }]));
 }
 
-// 寫休養：rest 是 null 就結束休養。編號不認得回 false
+// 寫休養：rest 是 null 就結束休養。編號不認得回 null，存好回 { dogId, before }（改前的設定，編輯紀錄用）
 export async function saveRest(db, number, rest) {
   const dogId = (await dogIdsFor(db, [number])).get(number);
-  if (!dogId) return false;
+  if (!dogId) return null;
+  const old = await db.prepare('SELECT until_date, reason FROM v3_rest WHERE dog_id=?').bind(dogId).first();
+  const before = old ? { until: old.until_date, reason: old.reason } : null;
   if (rest) await db.prepare('INSERT INTO v3_rest(dog_id,until_date,reason) VALUES(?,?,?) ON CONFLICT(dog_id) DO UPDATE SET until_date=excluded.until_date,reason=excluded.reason').bind(dogId, rest.until, rest.reason).run();
   else await db.prepare('DELETE FROM v3_rest WHERE dog_id=?').bind(dogId).run();
-  return true;
+  return { dogId, before };
 }
 
-// 寫入所介紹：空字串就清掉。編號不認得回 false
+// 寫入所介紹：空字串就清掉。編號不認得回 null，存好回 { dogId, before }（改前的介紹，沒有是 ''）
 export async function saveIntro(db, number, text) {
   const dogId = (await dogIdsFor(db, [number])).get(number);
-  if (!dogId) return false;
+  if (!dogId) return null;
+  const old = await db.prepare('SELECT intro FROM v3_intros WHERE dog_id=?').bind(dogId).first();
+  const before = old ? old.intro : '';
   if (text) await db.prepare('INSERT INTO v3_intros(dog_id,intro) VALUES(?,?) ON CONFLICT(dog_id) DO UPDATE SET intro=excluded.intro').bind(dogId, text).run();
   else await db.prepare('DELETE FROM v3_intros WHERE dog_id=?').bind(dogId).run();
-  return true;
+  return { dogId, before };
 }
 
 // 離所紀錄（#259）：形狀跟原本的 data/departures.json 的 departures 一樣，依日期新到舊、同一天依編號

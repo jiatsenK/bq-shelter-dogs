@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
+import { resolveIdentity } from '../src/identity.js';
 import { fakeD1 } from './fakes.mjs';
 import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
 import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
@@ -80,11 +81,11 @@ test('GET /api/dogs：只收 GET；別的網站擋掉；預覽版照常可讀', 
 
 test('開卡改用 v3_card_opened：用編號找永久狗 ID 存；讀回時用現在的編號；舊編號開的卡也對到同一隻', async () => {
   const DB = await seededDb();
-  const code = 'abcdef123456', other = '123456abcdef';
+  const code = (await resolveIdentity(DB, '甲', 'test-key')).codes[0], other = (await resolveIdentity(DB, '乙', 'test-key')).codes[0];
   assert.equal((await send('PUT', '/cards/opened', { codes: [code], ids: ['2025022703'] }, { DB })).status, 200);
   assert.equal((await send('PUT', '/cards/opened', { codes: [code], ids: ['2025022703'] }, { DB })).status, 200);
   assert.equal((await send('PUT', '/cards/opened', { codes: [code], ids: ['2018041318'] }, { DB })).status, 200, '舊編號');
-  const { results } = await DB.prepare('SELECT walker_code, dog_id FROM v3_card_opened').all();
+  const { results } = await DB.prepare('SELECT volunteer_id, dog_id FROM v3_volunteer_cards').all();
   assert.equal(results.length, 2, '重送不重複');
   const dogIds = (await DB.prepare("SELECT number, dog_id FROM v3_dog_numbers WHERE number IN ('2025022703','2026051203')").all()).results;
   assert.deepEqual(new Set(results.map(r => r.dog_id)), new Set(dogIds.map(r => r.dog_id)), '存永久狗 ID');
@@ -99,7 +100,7 @@ test('開卡改用 v3_card_opened：用編號找永久狗 ID 存；讀回時用�
 
 test('#267 常溜永久 ID：跨裝置增刪不覆蓋、合併別名、再入所與無編號狗', async t => {
   const DB = await seededDb(); t.after(() => DB.close());
-  const code = 'abcdef123456', alias = '123456abcdef';
+  const code = (await resolveIdentity(DB, '甲', 'test-key')).codes[0], alias = (await resolveIdentity(DB, '乙', 'test-key')).codes[0];
   const read = async (codes = [code]) => (await get(`/favorites?codes=${codes.join(',')}`, { DB })).json();
   const initial = await read();
   const a = initial.aliases['2025022703'], b = initial.aliases['2018041318'];

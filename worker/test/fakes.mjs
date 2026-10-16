@@ -24,9 +24,11 @@ export function fakeD1() {
       },
     };
   };
+  let batchQueue = Promise.resolve();
   return {
     prepare,
-    async batch(statements) {
+    batch(statements) {
+      const result = batchQueue.then(async () => {
       sqlite.exec('BEGIN');
       try {
         const results = [];
@@ -34,6 +36,9 @@ export function fakeD1() {
         sqlite.exec('COMMIT');
         return results;
       } catch (error) { sqlite.exec('ROLLBACK'); throw error; }
+      });
+      batchQueue = result.catch(() => {});
+      return result;
     },
     close() { sqlite.close(); },
   };

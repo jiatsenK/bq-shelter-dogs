@@ -252,8 +252,8 @@ function bqCardHtml(p, opts = {}) {
 const BQ = { players: [], byId: new Map(), storage: null, today: new Date(), codes: [], mine: new Map(), opened: null, pending: [], hand: [], still: false, walksOk: true, remote: 'loading', saving: false };
 
 async function bqRemoteOpened(codes, ids) {
-  const res = await fetch(ids ? '/api/cards/opened' : `/api/cards/opened?codes=${encodeURIComponent(codes.join(','))}`, ids
-    ? { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codes, ids }), signal: AbortSignal.timeout(15000) }
+  const res = await fetch(ids ? '/api/cards/opened' : `/api/cards/opened?codes=${encodeURIComponent(codes[0])}`, ids
+    ? { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codes: codes.slice(0, 1), ids }), signal: AbortSignal.timeout(15000) }
     : { cache: 'no-store', signal: AbortSignal.timeout(15000) });
   const out = await res.json();
   if (!res.ok || !out.ok) throw new Error('開卡紀錄暫時無法同步');
@@ -265,6 +265,7 @@ async function bqSyncOpened() {
   bqRenderCta();
   try {
     const { opened } = await bqRemoteOpened(BQ.codes);
+    for (const code of BQ.codes) opened.codes[code] = opened.codes[BQ.codes[0]] || {};
     // 只移入當前設定的人已開過的卡，不搬別人的資料。
     for (const code of BQ.codes) {
       const local = BQ.opened.codes[code] || {};
@@ -554,6 +555,21 @@ async function bqInit() {
   try { BQ.storage = window.localStorage; } catch (e) { BQ.storage = null; }
   BQ.codes = bqLoadCodes(BQ.storage);
   BQ.opened = bqLoadOpened(BQ.storage);
+  try {
+    const name = BQ.storage?.getItem('bq-walker-name');
+    const originalCodes = BQ.codes.join(',');
+    if (name && BQ.codes.length) {
+      const res = await fetch('/api/identity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
+      const out = await res.json();
+      if (BQ.storage?.getItem('bq-walker-name') !== name || bqLoadCodes(BQ.storage).join(',') !== originalCodes) {
+        BQ.codes = bqLoadCodes(BQ.storage);
+      } else if (res.ok && out.identity) {
+        BQ.codes = out.identity.codes;
+        BQ.storage?.setItem(BQ_CODES_KEY, JSON.stringify(BQ.codes));
+        BQ.storage?.setItem('bq-walker-name', out.identity.name);
+      }
+    }
+  } catch (e) { /* 離線保留原來的名字對照 */ }
   bqBind();
   let walks = null;
   try {
