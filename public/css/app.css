@@ -2302,3 +2302,36 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .former-form .former-cancel { border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
 .former-form .former-hint { flex-basis: 100%; font-size: 12px; color: var(--ink-soft); white-space: normal; }
 .former-form .photo-error { flex-basis: 100%; }
+/* #285 完整狗卡：白紙、留白分組，只有上次溜下方一條線。 */
+#detail.current-dog .detail-head, #detail.current-dog .detail-section { box-shadow: none; border: 0; border-radius: 0; }
+#detail.current-dog .detail-head { padding: 20px 24px 0; }
+#detail.current-dog .detail-head .info { padding: 20px 4px 0; }
+#detail.current-dog .detail-head .name { font-size: 24px; font-weight: 700; }
+#detail.current-dog .detail-section { margin: 0 24px; padding: 20px 4px; }
+#detail.current-dog .detail-section h3, #detail.current-dog .section-title { font-size: 16px; font-weight: 700; line-height: 1.5; }
+#detail.current-dog .detail-section .content, #detail.current-dog .intake-list li { font-size: 16px; line-height: 1.8; overflow-wrap: anywhere; }
+#detail.current-dog .section-heading { display: flex; align-items: center; justify-content: flex-start; gap: 4px; margin: 0 0 10px; }
+#detail.current-dog .section-heading > .icon, #detail.current-dog .section-title > .icon { width: 16px; height: 16px; margin-right: 4px; }
+#detail.current-dog .section-title { display: inline-flex; align-items: center; gap: 4px; }
+#detail.current-dog .section-edit { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 44px; height: 44px; padding: 0; border: 0; background: none; color: var(--primary); cursor: pointer; }
+#detail.current-dog .section-edit .icon { width: 16px; height: 16px; }
+#detail.current-dog :is(button, summary, input, textarea, select):focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+#detail.current-dog .note-disclosure > summary { cursor: pointer; list-style: none; min-height: 44px; }
+#detail.current-dog .note-disclosure > summary::-webkit-details-marker { display: none; }
+#detail.current-dog .note-disclosure-body { padding-top: 8px; }
+#detail.current-dog .last-walk { border-bottom: 1px solid var(--line); padding-top: 12px; padding-bottom: 20px; }
+#detail.current-dog .last-inline { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+#detail.current-dog .last-inline .lw-k { width: auto; font-size: 13px; }
+#detail.current-dog .last-date { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+#detail.current-dog .last-people { min-width: 0; font-size: 13px; color: var(--ink-soft); overflow-wrap: anywhere; }
+#detail.current-dog .last-people .who-chip { font-size: inherit; border: 0; background: none; padding: 0; }
+#detail.current-dog .intake-list { list-style: none; padding: 0; margin: 0 0 16px; display: grid; gap: 12px; }
+#detail.current-dog .intake-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; padding: 0; }
+#detail.current-dog .intake-list time { margin: 0; font-size: 16px; font-weight: 700; font-variant-numeric: tabular-nums; }
+#detail.current-dog .intake-number, #detail.current-dog .rest-setting-note, #detail.current-dog .rest-hint { font-size: 13px; color: var(--ink-soft); line-height: 1.65; overflow-wrap: anywhere; }
+#detail.current-dog .intake-row { border: 0; padding: 0; margin: 16px 0; }
+#detail.current-dog .detail-bar { border-top: 0; box-shadow: none; }
+
+#detail.current-dog .last-people .who-chip { font-weight: 400; }
+#detail.current-dog .last-people .who-chip + .who-chip::before { content: "、"; }
+#detail.current-dog .intake-number { font-variant-numeric: tabular-nums; }

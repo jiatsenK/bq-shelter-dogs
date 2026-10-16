@@ -392,7 +392,7 @@ function runTests() {
         groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '入所介紹', '休養設定'].slice(0, box.querySelector('[data-section="rest"]') ? 5 : 4)); // 相簿 K 2026-10-09 拿掉；管理用（改介紹、休養）10-10 集中一區
+        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '入所介紹', '休養設定'].slice(0, box.querySelector('[data-section="rest"]') ? 4 : 3)); // 相簿 K 2026-10-09 拿掉；管理用（改介紹、休養）10-10 集中一區
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/thumbs/2.jpg', '一起溜的照片：');
@@ -400,7 +400,7 @@ function runTests() {
         eq(box.querySelector('[data-section="intro"] .content').textContent, '入所狗卡');
         dog.note = ''; dog.intro = ''; groupMap = {};
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section .empty')].length, 4, '都沒有資料時顯示提示（#60 遛狗紀錄讀取中也算；V9 拿掉我的備註；相簿 K 2026-10-09 拿掉）：');
+        eq([...box.querySelectorAll('section .empty')].length, 3, '都沒有資料時顯示提示（#60 遛狗紀錄讀取中也算；V9 拿掉我的備註；相簿 K 2026-10-09 拿掉）：');
       } finally { [allDogs, groupMap] = saved; }
     }),
     check('#28 點狗卡開詳細資訊，點一起溜的狗換成那隻，關閉後回到清單', () => {
@@ -1240,7 +1240,7 @@ async function runHistoryTests() {
     const d = dogWalkHistory(dogs[3], walks, span.start, T);
     eq([d.count, d.avgGap, d.maxGap], [3, 7, 7], '沒編號：');
   });
-  await check('#60 分析頁不放歷史與快照；詳細資訊有這隻狗最近 30 天的遛狗紀錄；不出現志工名字', async () => {
+  await check('#60 分析頁不放歷史與快照；#285 完整狗卡移除紀錄但保留資料', async () => {
     const saved = [allDogs, groupMap, activeTab, searchQuery, photoCheck, historyData];
     const realFetch = window.fetch;
     const realDate = Date;
@@ -1256,25 +1256,10 @@ async function runHistoryTests() {
       if (document.querySelector('#main select, #main .a-divider')) throw new Error('分析頁不要快照選單');
       if (/志工|walker/.test(document.getElementById('main').innerHTML)) throw new Error('不能出現志工');
       hideAnalysis(); history.replaceState(null, '');
-      // 詳細資訊
       showDetail(dogs[0]);
-      let sec = document.querySelector('#detail [data-section="walks"]');
-      if (!sec) throw new Error('詳細資訊要有遛狗紀錄');
-      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-3), ['walks', 'intro', 'rest'], '位置在入所介紹前（入所介紹之後只剩休養設定，管理用；相簿 K 2026-10-09 拿掉）：');
-      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(0, 2), ['last', 'note'], 'V9（#141）上次溜／溜狗人在最前面，接著試算表備註：');
-      // 減法（10-10 K：格子很棒但眼花）：預設只有一行字，按「看每一天」才展開格子
-      eq([sec.querySelectorAll('.w-grid').length, document.getElementById('walksToggle').getAttribute('aria-expanded'), sec.querySelector('.w-more').textContent], [0, 'false', '看每一天'], '預設收起來：');
-      document.getElementById('walksToggle').click();
-      sec = document.querySelector('#detail [data-section="walks"]');
-      eq([document.getElementById('walksToggle').getAttribute('aria-expanded'), sec.querySelector('.w-more').textContent], ['true', '收起'], '展開：');
-      eq([sec.querySelectorAll('.w-grid .on').length, sec.querySelectorAll('.w-grid .none').length, sec.querySelectorAll('.w-grid span').length], [14, 2, 30], '格子：');
-      eq([...sec.querySelectorAll('.w-sum b')].map(b => b.textContent), ['14', '2.3', '6'], '數字（一行字，不是三格）：');
-      eq(sec.querySelectorAll('.w-num').length, 0, '沒有統計卡：');
-      if (!sec.textContent.includes('從 2026/9/25 開始記錄')) throw new Error('要寫從哪天開始記錄');
-      hideDetail(); history.replaceState(null, '');
-      historyData = { state: 'loading', walks: [], dates: [] };
-      showDetail(dogs[0]);
-      eq(document.querySelector('#detail [data-section="walks"] .empty').textContent, '讀取中…', '還沒讀到：');
+      eq(document.querySelector('#detail [data-section="walks"]'), null, '#285 完整狗卡移除紀錄區塊：');
+      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(0, 2), ['last', 'note']);
+      eq(walks.length > 0, true, '保留歷史資料：');
       hideDetail(); history.replaceState(null, '');
     } finally {
       window.fetch = realFetch; window.Date = realDate;
@@ -1619,8 +1604,8 @@ async function runV52Tests() {
       const html = detailHtml(dogs[0], T);
       const box = document.createElement('div');
       box.innerHTML = html;
-      eq([[...box.querySelectorAll('.former-num')].map(n => n.firstChild.textContent), box.querySelector('.reentry').textContent.includes('最早入所 2018/4/13'), box.querySelector('.reentry').textContent.includes('次入所')], [['2018041318'], true, false], '詳細資訊標舊編號和最早入所，不標第幾次入所：');
-      if (detailHtml(dogs[1], T).includes('former-num')) throw new Error('沒舊編號不列舊編號');
+      eq([box.querySelector('.reentry'), box.querySelector('.info .meta')], [null, null], '#285 不再獨立列出舊編號：');
+      eq(dogs[0].formerIds, ['2018041318'], '保留編號關係：');
     });
 
     await check('#76 詳細資訊標題沒有說明文字；分析頁沒有散布圖、Top 10 沒有長條', () => {
@@ -2018,6 +2003,30 @@ async function runRestTests() {
       hideDetail(); hideToast();
       eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['固定丙', '休養甲', '一般乙'], '設好的那隻也排到最下面：');
     });
+    await check('#285 完整狗卡：事件整合編號、標題旁鉛筆、上次溜接志工，移除獨立編號與紀錄', () => {
+      const beforeSheetState = sheetWriteState; sheetWriteState = 'unknown';
+      try {
+      const dog = { id: '2021021703', name: '規格狗', cage: 'A1', note: '不親狗', intro: '保留介紹', formerIds: ['2015081801'], walkedDate: new Date(2026, 9, 14), intakeEvents: [
+        { number: '2021021703', date: '2021-02-17', event: '迷路入所' },
+        { number: '2021021703', date: '2026-01-02', event: '領養退回' },
+      ] };
+      showDetail(dog);
+      const d = document.getElementById('detail');
+      eq([...d.querySelectorAll('.intake-number')].map(n => n.textContent), ['（2021021703）', '（2021021703）']);
+      eq([d.querySelector('.info .meta'), d.querySelector('.reentry'), d.querySelector('[data-section="walks"]')], [null, null, null]);
+      if (d.querySelector('.chips').textContent.includes('入所')) throw new Error('頂部不顯示入所年月');
+      eq([...d.querySelectorAll('[data-section="last"] .lw-k')].map(n => n.textContent), ['上次溜']);
+      for (const selector of ['#introEdit', '#restEdit', '[data-append-open="note"]']) {
+        const button = d.querySelector(selector);
+        if (!button.closest('.section-heading') || !button.querySelector('use[href="#i-write"]') || !button.getAttribute('aria-label')) throw new Error('鉛筆要緊接標題並有名稱：' + selector);
+      }
+      eq(d.querySelector('.note-disclosure').open, false);
+      if (!d.querySelector('.info .warn-note')) throw new Error('備註收起仍保留警示');
+      d.querySelector('[data-append-open="note"]').click();
+      eq([document.querySelector('.note-disclosure').open, !!document.getElementById('appendText')], [true, true]);
+      document.querySelector('[data-append-cancel]').click();
+      } finally { sheetWriteState = beforeSheetState; sheetAppend = null; hideDetail(); }
+    });
     await check('#285 入所紀錄：日期獨立於編號、缺事件留空，前端可逐列編輯並儲存，保留原介紹', async () => {
       const dog = { id: '2017090505', name: '測試狗', cage: '新A01', formerIds: ['2016060701'], intro: '2016年6月7日迷路入所。', intakeEvents: [
         { number: '2017090505', date: '2016-06-07', event: '迷路入所' },
@@ -2046,7 +2055,7 @@ async function runRestTests() {
       if (/sheet|script\.google/.test(calls[0].url)) throw new Error('不能寫試算表');
       hideDetail(); hideToast(); delete introOverrides[dog.id]; delete intakeOverrides[dog.id];
     });
-    await check('入所介紹（10-10）：直接點那一段就能改（不另外放按鈕）、不用通關碼、帶 editor，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {
+    await check('入所介紹（#285）：標題旁鉛筆原地展開、不用通關碼、帶 editor，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {
       const calls = [];
       window.fetch = async (u, o) => {
         calls.push([String(u), o && o.method, o && JSON.parse(o.body)]);
@@ -2054,7 +2063,7 @@ async function runRestTests() {
         return json({ ok: true, id: '9613', intro: b.text });
       };
       showDetail(allDogs[2]);
-      eq([document.getElementById('introEdit').closest('[data-section]').dataset.section, document.getElementById('introEdit').textContent, document.querySelectorAll('#detail [data-section="rest"] .admin-btn').length], ['intro', '還沒有入所介紹，點這裡補', 1], '沒介紹：那一段本身可以點，管理用只剩設定休養中：');
+      eq([document.getElementById('introEdit').closest('[data-section]').dataset.section, document.getElementById('introEdit').getAttribute('aria-label'), document.querySelectorAll('#detail [data-section="rest"] #restEdit').length], ['intro', '補入所介紹', 1], '沒介紹：那一段本身可以點，管理用只剩設定休養中：');
       document.getElementById('introEdit').click();
       eq([!!document.querySelector('#detail .detail-bar [form="introForm"]'), !!document.querySelector('#detail .detail-bar #groupWalk')], [true, false], '底部列換成儲存介紹、溜了收起來：');
       const text = document.getElementById('introText');
@@ -2071,47 +2080,6 @@ async function runRestTests() {
       if (calls.some(c => /sheet|script\.google/.test(c[0]))) throw new Error('不應該寫試算表');
       hideDetail(); hideToast();
       delete introOverrides['9613'];
-    });
-    await check('舊編號（#289）：誰都能補（不用通關碼、帶 editor），POST /former/編號；入所標籤馬上改從最舊的編號算；✕ 刪掉走 DELETE', async () => {
-      const calls = [];
-      window.fetch = async (u, o) => {
-        calls.push([String(u), o && o.method, o && JSON.parse(o.body)]);
-        const b = JSON.parse(o.body);
-        if (b.former === '2015010101') return json({ ok: false, error: '2015010101 已經是另一隻狗（甲）的編號，要合併請找 K' }, 409);
-        return json({ ok: true, id: '9613', former: b.former });
-      };
-      const realConfirm = window.confirm;
-      window.confirm = () => true;
-      const dog = allDogs[2];
-      const before = dog.formerIds;
-      try {
-        showDetail(dog);
-        document.getElementById('formerAdd').click();
-        const input = document.getElementById('formerText');
-        if (!input || document.getElementById('formerPass') || document.querySelector('#formerForm [type="password"]')) throw new Error('打開是一個編號輸入框，不問通關碼');
-        const type = async v => {
-          const el = document.getElementById('formerText');
-          el.value = v; el.dispatchEvent(new Event('input', { bubbles: true }));
-          document.getElementById('formerForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-          await new Promise(r => setTimeout(r, 20));
-        };
-        await type('123');
-        eq([calls.length, document.querySelector('#formerForm [role="alert"]').textContent], [0, '舊編號要是 10 碼數字，前 8 碼是入所日期'], '格式不對先擋，不送出：');
-        await type('2015010101');
-        eq([calls.length, document.querySelector('#formerForm [role="alert"]').textContent, document.getElementById('formerText').value], [1, '2015010101 已經是另一隻狗（甲）的編號，要合併請找 K', '2015010101'], 'Worker 擋下：原因寫出來、打的字留著：');
-        await type(' 2015081801 ');
-        eq([calls.length, calls[1][0], calls[1][1], calls[1][2].former, calls[1][2].editor], [2, 'https://worker.test/former/9613', 'POST', '2015081801', '志工我'], '送出：帶選好的名字：');
-        eq([formerEdit, dog.formerIds.includes('2015081801'), ymd(firstIntake(dog))], [null, true, '2015-08-18'], '成功：入所日改從最舊的編號算：');
-        if (!document.querySelector('#detail .chips').textContent.includes('入所 2015/8')) throw new Error('入所標籤沒有跟著改');
-        document.querySelector('[data-former-del="2015081801"]').click();
-        await new Promise(r => setTimeout(r, 20));
-        eq([calls.length, calls[2][1], calls[2][2].former, dog.formerIds.includes('2015081801')], [3, 'DELETE', '2015081801', false], '刪掉：');
-        if (calls.some(c => /sheet|script\.google/.test(c[0]))) throw new Error('不應該寫試算表');
-      } finally {
-        window.confirm = realConfirm;
-        dog.formerIds = before;
-        hideDetail(); hideToast();
-      }
     });
     await check('找狗的「最久沒溜的狗」、分析頁「超過 3 天沒溜」不算休養中的狗', () => {
       const due = dueDogs(allDogs, T).filter(d => { const st = computeStatus(d, T); return st.kind === 'unknown' || (st.kind === 'dated' && st.days >= AMBER_DAYS); });
@@ -2623,7 +2591,7 @@ async function runWhereTests() {
       const box = document.getElementById('detail');
       const head = box.querySelector('.detail-head');
       eq(head.firstElementChild.classList.contains('hero'), true, '照片在最上面：');
-      eq([...head.querySelectorAll('.chips .badge')].map(b => b.textContent.trim()).slice(1), ['舊A03', '入所 2024/3'], '籠位、入所標籤：');
+      eq([...head.querySelectorAll('.chips .badge')].map(b => b.textContent.trim()).slice(1), ['舊A03'], '籠位、入所標籤：');
       hideDetail();
     });
     await check('#112 詳細資訊底部固定列：關閉、在哪、溜了；在哪開面板、Esc 只關面板', async () => {
