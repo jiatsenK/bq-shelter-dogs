@@ -235,11 +235,11 @@ function runTests() {
       eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'WALKER_CODES_KEY', 'key', 'key', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'SHEET_WRITES_KEY', 'SHEET_WRITES_KEY', 'WALK_VIEW_KEY', 'WALK_VIEW_KEY', 'ONBOARD_KEY', 'ONBOARD_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、WALKER_NAME_KEY 和 SHEET_WRITES_KEY（#138 寫試算表）、WALK_VIEW_KEY、ONBOARD_KEY（V9）、NAME_LATER_KEY（先看看，介面評估第四輪），key 是一起溜的人（readJsonKey／writeJsonKey）：');
       if (!/readJsonKey\(COMPANIONS_KEY\)/.test(APP_JS) || !/writeJsonKey\(WALK_WITH_KEY,/.test(APP_JS)) throw new Error('readJsonKey／writeJsonKey 只給一起溜的人用');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
-      eq(urls.length, 4, 'fetch 呼叫數（上傳以外）：');
+      eq(urls.length, 5, 'fetch 呼叫數（上傳以外）：');
       // #32 起前端只讀 data/dogs.json，不直接連試算表；狗卡資訊也已經寫在 dogs.json 裡，不再抓 dogs/*.md
       // #62 另外讀我的備註：只從 Worker 的 /notes 或網站上的 data/my-notes.json 讀
-      // #58 我最近溜過另外讀溜狗紀錄（#260 起是 api/walks）
-      if (!urls.every(u => u.startsWith('DATA_URL,') || u.startsWith('WALKS_URL,') || u.startsWith('REST_URL,') || u === "`${UPLOAD_URL}/walkers`, { cache: 'no-cache' }")) throw new Error(`只能讀 api/dogs、api/walks 與我的備註：${urls.join('、')}`);
+      // #58 我最近溜過另外讀溜狗紀錄（#260 起是 api/walks）；ADR 0007 今日溜狗紀錄讀 api/today
+      if (!urls.every(u => u.startsWith('DATA_URL,') || u.startsWith('WALKS_URL,') || u.startsWith('REST_URL,') || u === "`${UPLOAD_URL}/walkers`, { cache: 'no-cache' }" || u === "`${UPLOAD_URL}/today`, { cache: 'no-cache' }")) throw new Error(`只能讀 api/dogs、api/walks 與我的備註：${urls.join('、')}`);
       if (/readJsonObject|GALLERY_URL|\/gallery/.test(APP_JS)) throw new Error('相簿已拿掉（K 2026-10-09），不該再讀相簿清單');
       eq(DATA_URL, 'api/dogs', '資料來源（#247 Worker 讀 D1）：');
       eq(WALKS_URL, 'api/walks', '遛狗紀錄（#260 Worker 讀 D1）：');
@@ -823,7 +823,7 @@ async function runSerialTests() {
         `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${String(t.getHours()).padStart(2, '0')}:${String(t.getMinutes()).padStart(2, '0')}`, '同步時間：');
       eq([...groupMap['讀取甲']], ['讀取乙'], '可以一起溜：');
       // #62 起讀完狗狗資料後另外讀我的備註（Worker 的 /notes、不行再讀 data/my-notes.json），不算在內
-      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$|api\/walks$|api\/rest$|\/walkers$/.test(u)), ['api/dogs'], '只讀 /api/dogs，不再逐隻抓 dogs/*.md：');
+      eq(calls.map(([u]) => u).filter(u => !/\/notes$|my-notes\.json$|api\/walks$|api\/rest$|\/walkers$|\/today$/.test(u)), ['api/dogs'], '只讀 /api/dogs，不再逐隻抓 dogs/*.md：');
     });
     await check('#32／#247 狗的資料讀取失敗（含 D1 出錯回 503）：標題、搜尋、分類都在，內容區顯示錯誤，可重新讀取', async () => {
       reset();
