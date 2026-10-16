@@ -225,6 +225,7 @@ function saveMyCodes(codes) {
     else if (walkedStorage) walkedStorage.removeItem(WALKER_CODES_KEY);
   } catch (e) { /* 存不了就只記在記憶體 */ }
   try { myWalks = walksData ? parseMyWalks(walksData, codes) : []; } catch (e) { myWalks = []; }
+  syncFavs();
 }
 
 function walkerSetupHtml() {
@@ -884,15 +885,113 @@ function setWalkedLocal(dogs, on) {
   queueSheetWrite(changed, on, text, undoFn);
 }
 
-// ── 我的常溜（#155）：志工自己收藏的狗，只存這支手機，不寫試算表、不送伺服器；跟「我溜過」（歷史）分開 ──
+// ── 我的常溜（#267）：逐隻增刪，絕不把手機上的舊整份清單蓋到 D1 ──
 const FAVS_KEY = 'bq-favs';
-function loadFavs() { const v = readJsonKey(FAVS_KEY); return Array.isArray(v) ? v.map(String) : []; }
+const FAV_SYNC_KEY = 'bq-favs-sync';
+let favSyncMemory = null;
+let favSyncQueue = Promise.resolve();
+function favState() {
+  if (!favSyncMemory) {
+    const saved = readJsonKey(FAV_SYNC_KEY);
+    favSyncMemory = saved && saved.v === 1 ? saved : { v: 1, aliases: {}, books: {}, pending: [] };
+  }
+  return favSyncMemory;
+}
+function saveFavState() { writeJsonKey(FAV_SYNC_KEY, favState()); }
+function localFavs() { const v = readJsonKey(FAVS_KEY); return Array.isArray(v) ? v.map(String) : []; }
+function favoriteIds() {
+  const state = favState(), codes = loadMyCodes();
+  const ids = new Set(state.books[codes.join(',')] || []);
+  for (const op of state.pending) {
+    if (!op.codes.some(c => codes.includes(c))) continue;
+    if (op.on) ids.add(op.dogId); else ids.delete(op.dogId);
+  }
+  return ids;
+}
+function loadFavs() {
+  const ids = favoriteIds(), aliases = favState().aliases;
+  return [...new Set([...localFavs(), ...allDogs.filter(d => ids.has(aliases[walkKey(d)])).map(walkKey)])];
+}
 function isFav(dog) { const k = walkKey(dog); return !!k && loadFavs().includes(k); }
 function toggleFav(dog) {
   const k = walkKey(dog);
   if (!k) return;
-  const favs = loadFavs();
-  writeJsonKey(FAVS_KEY, favs.includes(k) ? favs.filter(x => x !== k) : [k, ...favs]);
+  const on = !isFav(dog), codes = loadMyCodes(), state = favState();
+  state.localVersions ||= {};
+  state.localVersions[k] = (state.localVersions[k] || 0) + 1;
+  saveFavState();
+  const dogId = state.aliases[k];
+  if (codes.length && dogId) {
+    // 讀取合併所有名字；取消時也要取消各個名字底下的這隻狗。
+    state.pending.push({ codes: on ? [codes[0]] : codes, dogId, on });
+    writeJsonKey(FAVS_KEY, localFavs().filter(x => state.aliases[x] !== dogId && x !== k));
+    saveFavState();
+  } else {
+    writeJsonKey(FAVS_KEY, on ? [k, ...localFavs()] : localFavs().filter(x => x !== k));
+  }
+  syncFavs();
+}
+
+// 核心只操作收藏狀態；儲存、傳輸由呼叫者提供，不依賴畫面或瀏覽器。
+async function reconcileFavorites(state, codes, io) {
+  const out = await io.read(codes);
+  if (io.codes().join(',') !== codes.join(',')) return;
+  state.aliases = out.aliases;
+  const bookKey = codes.join(',');
+  state.books[bookKey] = out.ids;
+  for (const key of io.local()) {
+    const dogId = state.aliases[key];
+    if (!dogId) continue;
+    let op = state.pending.slice().reverse().find(op => op.dogId === dogId && op.codes.includes(codes[0]));
+    if (!op || !op.on) {
+      op = { codes: [codes[0]], dogId, on: true };
+      state.pending.push(op);
+    }
+    op.legacy ||= {};
+    op.legacy[key] = state.localVersions?.[key] || 0;
+  }
+  io.save();
+  while (state.pending.length) {
+    const op = state.pending[0];
+    await io.write({ codes: op.codes, dogId: op.dogId, on: op.on });
+    // 只清除此筆搬移的原始收藏；等待期間新按的訪客收藏保留。
+    io.removeLegacy(key => Object.hasOwn(op.legacy || {}, key)
+      && (state.localVersions?.[key] || 0) === op.legacy[key]);
+    state.pending.shift();
+    if (op.codes.some(c => codes.includes(c))) {
+      const ids = new Set(state.books[bookKey]);
+      if (op.on) ids.add(op.dogId); else ids.delete(op.dogId);
+      state.books[bookKey] = [...ids];
+    }
+    io.save();
+  }
+}
+
+async function favoriteRequest(codes, op) {
+  const base = UPLOAD_URL + '/favorites';
+  const res = await fetch(op ? base : base + '?codes=' + encodeURIComponent(codes.join(',')), op ? {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(op),
+  } : { cache: 'no-store' });
+  const out = await res.json();
+  if (!res.ok || !out.ok || (!op && (!Array.isArray(out.ids) || !out.aliases))) throw new Error('常溜同步失敗');
+  return out;
+}
+
+function syncFavs() {
+  // 串行保留點擊順序；失敗的操作下次打開或恢復連線再試。
+  favSyncQueue = favSyncQueue.then(async () => {
+    const codes = loadMyCodes();
+    if (!codes.length || !UPLOAD_URL) return;
+    await reconcileFavorites(favState(), codes, {
+      codes: loadMyCodes, local: localFavs, save: saveFavState,
+      read: codes => favoriteRequest(codes), write: op => favoriteRequest(null, op),
+      removeLegacy: matches => writeJsonKey(FAVS_KEY, localFavs().filter(key => !matches(key))),
+    });
+    if (loadMyCodes().join(',') === codes.join(',')) { render(); renderDetail(); }
+  }).catch(() => {
+    if (loadMyCodes().length) showToast('常溜暫存在這支手機，連線恢復後會再同步');
+  });
+  return favSyncQueue;
 }
 
 // ── 按「溜了」寫進試算表（#138）──
@@ -3358,6 +3457,7 @@ function applyDogsData(data) {
   render();
   loadMyWalks();
   loadRest();
+  syncFavs();
 }
 
 // 頁首的資料時間；沒網路時改寫「沒網路・資料 10/8 09:01」，志工才知道看的是舊資料、溜了寫不進試算表
@@ -3371,7 +3471,8 @@ function renderUpdatedLabel() {
   el.classList.toggle('offline', off);
 }
 window.addEventListener('offline', () => { renderUpdatedLabel(); render(); renderDetail(); });
-window.addEventListener('online', () => { renderUpdatedLabel(); render(); renderDetail(); loadWalkerNames(); });
+window.addEventListener('online', () => { renderUpdatedLabel(); render(); renderDetail(); loadWalkerNames(); syncFavs(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) syncFavs(); });
 
 // ── 頁首「更新」按鈕：請 Worker 叫 GitHub 同步試算表，再等網站上的 dogs.json 換新 ──
 // 同步約 1 分鐘、網站重新部署再約 1 分鐘；試算表沒有新東西時 dogs.json 不會變，等滿就告訴志工已經是最新

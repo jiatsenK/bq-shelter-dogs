@@ -83,6 +83,32 @@ export async function dogIdsFor(db, numbers) {
   return out;
 }
 
+// 舊收藏的編號／名字只在能唯一對應時轉成永久 ID，不猜同名狗。
+export async function favoriteAliases(db) {
+  const [numbers, names] = await db.batch([
+    db.prepare('SELECT number, dog_id FROM v3_dog_numbers'),
+    db.prepare('SELECT name, MIN(dog_id) AS dog_id FROM v3_dogs GROUP BY name HAVING COUNT(*) = 1'),
+  ]);
+  return Object.fromEntries([
+    ...(numbers.results || []).map(r => [r.number, r.dog_id]),
+    ...(names.results || []).map(r => [`名:${r.name}`, r.dog_id]),
+  ]);
+}
+
+export async function readFavorites(db, codes) {
+  const rows = await db.prepare(`SELECT DISTINCT dog_id FROM v3_favorites WHERE walker_code IN (${codes.map(() => '?').join(',')})`).bind(...codes).all();
+  return { ids: (rows.results || []).map(r => r.dog_id), aliases: await favoriteAliases(db) };
+}
+
+export async function saveFavorite(db, codes, dogId, on, date) {
+  if (!await db.prepare('SELECT dog_id FROM v3_dogs WHERE dog_id = ?').bind(dogId).first()) return false;
+  // 收藏屬於自己設定名字的第一個代號；取消則涵蓋所有讀取的別名。
+  await db.batch((on ? codes.slice(0, 1) : codes).map(code => on
+    ? db.prepare('INSERT OR IGNORE INTO v3_favorites(walker_code,dog_id,added_on) VALUES(?,?,?)').bind(code, dogId, date)
+    : db.prepare('DELETE FROM v3_favorites WHERE walker_code = ? AND dog_id = ?').bind(code, dogId)));
+  return true;
+}
+
 // 開卡讀回：每個代號 → { 編號: 開卡日 }。編號用主清單上現在的那個，已出所的狗用它最大的編號
 export async function openedBooks(db, codes) {
   const sql = `SELECT COALESCE(

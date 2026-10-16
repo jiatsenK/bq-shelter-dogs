@@ -87,6 +87,12 @@ CREATE TABLE IF NOT EXISTS v3_card_opened (
   opened_on TEXT NOT NULL,
   PRIMARY KEY(walker_code,dog_id)
 );
+CREATE TABLE IF NOT EXISTS v3_favorites (
+  walker_code TEXT NOT NULL,
+  dog_id TEXT NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
+  added_on TEXT NOT NULL,
+  PRIMARY KEY(walker_code,dog_id)
+);
 CREATE TABLE IF NOT EXISTS v3_rest (
   dog_id TEXT PRIMARY KEY NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
   until_date TEXT NOT NULL,

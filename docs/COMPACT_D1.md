@@ -121,3 +121,11 @@ const report = await compareCompactProfiles(db, { walks, intros, names, rest, ph
 ## 開卡與名字推薦的一次性匯入（#249，已完成）
 
 舊 D1 的 `cardOpened`、`walkerNames` 曾用 `scripts/import-compact-legacy.mjs`、`scripts/check-compact-legacy.mjs` 合併進 `v3_card_opened`、`v3_volunteers`：開卡以編號換永久狗 ID，同代號同狗取最早日期；名字完全相同才合併、取較新時間；不清表、不刪既有資料。匯入完成、舊表已在 #252 清除，兩支腳本和原本的 `docs/COMPACT_LEGACY_IMPORT.md` 已在 #275 移除，細節見 Git 歷史。
+
+## #267 常溜跟著代號
+
+`v3_favorites` 逐隻記錄代號、永久狗 ID、加入日；`GET /api/favorites?codes=...` 合併代號，`PUT /api/favorites` 接 `{ codes, dogId, on }`，加入只用第一個代號，取消用目前所有代號。寫入可重試，不取代整份清單。查詢會附編號／唯一狗名到永久 ID 的對照，舊編號也能搬入；同名不猜。
+
+前端將尚未送出的操作保存在 `bq-favs-sync`，開啟、回到網站、恢復連線或設定名字後重試。舊 `bq-favs` 只在該狗寫入成功後移除，對不上的保留；遠端快取不當成待上傳清單，避免復活另一台取消的狗。名字與別名變更不沿用別組代號的快取。
+
+上線前須由 K 確認建立新表，再部署；部署流程仍不自動建表。專用 SQL：`db/267-favorites.sql`（可重跑，不含刪除）。正式與預覽 D1 各自套用，不共用資料庫。正式環境尚未執行，需在部署後以兩個裝置驗收；常溜寫入不寫試算表、不產生 Git 提交。

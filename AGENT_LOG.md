@@ -1389,3 +1389,10 @@
 - 新增 .github/workflows/release-please.yml、release-please-config.json、.release-please-manifest.json、version.txt（從 9.0.0 起，對應 V9）。
 - feat:／fix: 的 commit 會累積到 Release PR，合併後打 tag 並寫 CHANGELOG.md 與 GitHub Release；docs:／chore: 不列入。bootstrap-sha 設在 75230be，之前的歷史不算。
 
+
+## 2026-10-16 常溜跟著代號存 D1（CODEX，#267）
+
+- 新增 v3_favorites 與 GET／PUT /api/favorites，逐狗增刪、永久 ID、所有代號合併讀取，保留來源與預覽寫入保護。
+- 前端合併舊手機編號／名字收藏、保留無法辨識資料；未設定名字維持本機收藏，設定後上傳到第一個代號；失敗操作保存在手機，恢復連線及回到網站重試。
+- 提供獨立建表 SQL 與上線說明；未更動正式 D1、未部署、未寫試算表。補 API 與跨裝置網頁測試，審查與最終驗證結果待補。
+- 最終驗證：AGENTS.md Node 全套 175/175、網頁 247/247 通過；Playwright 下載解壓停滯，改用本機現有 Chrome 以 headless 跑相同測試頁與 runner。規範與規格兩軸審查完成，已修正 API 僅寫首碼、延遲搬移不刪訪客新收藏、離線取消後再收藏的順序；複查無剩餘問題。
