@@ -49,6 +49,10 @@ test('正式 D1 還沒有離所表、群名表時，SQL 自己先建', async t =
   assert.match(lines[2], /^CREATE TABLE IF NOT EXISTS v3_departure_items /);
 });
 
+test('正式 D1 還沒有群名表也能同步：同步前不先讀群名表', () => {
+  assert.equal(SEED_TABLES.v3_sheet_group_labels, undefined);
+});
+
 test('群名（K 2026-10-16）：照欄存，api/dogs 的 groupColumns 帶群名和狗名', async t => {
   const src = await source();
   const labels = src.groupColumns.map((c, i) => (i === 0 ? '第一群' : ''));
