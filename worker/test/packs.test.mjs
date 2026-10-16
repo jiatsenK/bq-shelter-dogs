@@ -181,3 +181,33 @@ test('正式 D1 還沒有資料包的表（同步還沒補建）：照舊直接�
   await DB.prepare('DROP TABLE v3_pack_versions').run();
   await assertSame(DB, '沒有版本號表');
 });
+
+// #322 狗清單、離所、休養讀到的 v3_ 表，每張都要有 pack_ 觸發器，不然改了資料網站不會更新（ADR 0009）
+async function readTables(DB) {
+  const tables = new Set();
+  const spy = { ...DB, prepare(sql) { for (const name of sql.match(/\bv3_\w+/g) || []) tables.add(name); return DB.prepare(sql); } };
+  await readDogsPayload(spy); await readDepartures(spy); await readRest(spy);
+  return [...tables].sort();
+}
+async function missingTriggers(DB) {
+  const have = new Set((await DB.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'pack_%'").all()).results.map(r => r.name));
+  return (await readTables(DB)).flatMap(table => ['INSERT', 'UPDATE', 'DELETE'].map(op => `pack_${table}_${op}`)).filter(name => !have.has(name));
+}
+
+test('狗清單、離所、休養讀到的表都有 pack_ 觸發器', async t => {
+  const DB = await seededDb(t);
+  const tables = await readTables(DB);
+  assert.ok(tables.includes('v3_intake_events') && tables.includes('v3_rest') && tables.includes('v3_departures'), tables.join(','));
+  assert.deepEqual(await missingTriggers(DB), []);
+});
+
+test('拿掉任何一個 pack_ 觸發器都抓得到', async t => {
+  const DB = await seededDb(t);
+  const triggers = (await readTables(DB)).flatMap(table => ['INSERT', 'UPDATE', 'DELETE'].map(op => `pack_${table}_${op}`));
+  for (const name of triggers) {
+    const { sql } = await DB.prepare("SELECT sql FROM sqlite_master WHERE name=?").bind(name).first();
+    await DB.prepare(`DROP TRIGGER ${name}`).run();
+    assert.deepEqual(await missingTriggers(DB), [name]);
+    await DB.prepare(sql).run();
+  }
+});
