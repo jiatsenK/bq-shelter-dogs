@@ -3778,6 +3778,21 @@ async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES
 const syncBtn = document.getElementById('syncBtn');
 if (syncBtn) syncBtn.addEventListener('click', () => requestSync(syncBtn));
 
+// 暫時公告（2026-10-16 D1 額度）：關掉記在這支手機，key 帶日期，下次換新公告會重新出現；讀寫不了 localStorage 就只關這次
+function initNotice() {
+  const box = document.getElementById('notice');
+  const close = document.getElementById('noticeClose');
+  if (!box || !close) return;
+  const key = 'bq-notice-closed-2026-10-16';
+  try { if (window.localStorage.getItem(key)) return; } catch (e) { /* 無痕模式 */ }
+  box.hidden = false;
+  close.addEventListener('click', () => {
+    box.hidden = true;
+    try { window.localStorage.setItem(key, '1'); } catch (e) { /* 無痕模式 */ }
+  });
+}
+initNotice();
+
 // tests/index.html 會設定 __BQ_TEST__，只載入函式、不去讀 dogs.json
 // 等 find.js、analysis.js 也載入完才開始：dogs.json 提早抓（手機開啟加速）可能比它們先到，畫面要用到它們的函式
 if (!window.__BQ_TEST__) {
