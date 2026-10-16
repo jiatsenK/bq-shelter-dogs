@@ -50,7 +50,6 @@ test('正式 D1 還沒有離所表、群名表時，SQL 自己先建', async t =
   }
   assert.ok(creates.every(l => / IF NOT EXISTS /.test(l)));
   assert.equal(lines.findIndex(l => !/^CREATE /.test(l)), creates.length);
-
 });
 
 test('正式 D1 還沒有群名表也能同步：同步前不先讀群名表', () => {
@@ -85,7 +84,11 @@ test('開卡、照片、休養、介紹不被同步清掉', async t => {
   const seed = {};
   for (const [table, sql] of Object.entries(SEED_TABLES)) seed[table] = (await first.prepare(sql).all()).results;
   const sql = await buildSyncSql(seed, src);
-  assert.doesNotMatch(sql, /v3_card_opened|v3_photos|v3_volunteer|v3_rest|v3_intros/);
+  // 只補建表（IF NOT EXISTS），不刪不寫這幾張
+  const writes = sql.split('\n').filter(l => !/^CREATE /.test(l)).join('\n');
+  assert.doesNotMatch(writes, /v3_card_opened|v3_photos|v3_volunteer|v3_rest|v3_intros|v3_edit_log/);
+  const again = await apply(t, seed, sql);
+  assert.equal(await again.prepare('SELECT count(*) n FROM v3_card_opened').first('n'), 1);
 });
 
 test('來源有問題時丟錯，不產生 SQL', async t => {
