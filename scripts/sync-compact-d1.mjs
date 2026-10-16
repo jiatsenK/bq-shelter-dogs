@@ -89,7 +89,8 @@ const wranglerArgs = args => ['--yes', 'wrangler@4', 'd1', 'execute', 'bq-shelte
 const wranglerAsync = args => new Promise((resolve, reject) => {
   execFile('npx', wranglerArgs(args), { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
     if (stderr) process.stderr.write(stderr);
-    if (err) reject(err); else resolve(stdout);
+    if (err) { if (stdout) err.message += `
+${stdout.slice(0, 2000)}`; reject(err); } else resolve(stdout);
   });
 });
 // 預演（#309）：PR 改到同步程式時，用正式試算表和正式 D1 算一次要寫幾列，不寫入；結果貼在 PR 上給 K 看
