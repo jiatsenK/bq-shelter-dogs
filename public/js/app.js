@@ -1994,6 +1994,7 @@ function togetherSection(dog, walked) {
       ${list.length
         ? `<div class="buddies">${list.map(d => buddyTile(d, d.name, walked, mates.includes(d))).join('')}</div>`
         : `<div class="empty">沒有同籠，也沒有登記可以一起溜的狗</div>`}
+      <a class="group-page-link" href="groups.html">看全部狗群、編輯</a>
     </section>`;
 }
 
