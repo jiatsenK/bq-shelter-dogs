@@ -1,12 +1,13 @@
 import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitiesForCodes, IdentityError } from './identity.js';
 import { cleanIntakeEvents } from './intake.js';
+import { cleanStays } from './stays.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
 import { markChanged, planTick, refreshPlan, rememberSignature, sheetSignature } from './sync-plan.js';
 import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache } from './today.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
-import { compactStatus, dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, readMainNames } from './compact.js';
+import { compactStatus, dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
 import { readSmall, readDogsPacked, readWalksPacked, packStatus, resetPackCache } from './packs.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
@@ -455,6 +456,37 @@ async function formerNumber(request, env, origin) {
   const add = request.method === 'POST';
   await logEdit(env.DB, { editor, kind: 'former', dogId: r.dogId, dogNumber: id, before: add ? null : former, after: add ? former : null });
   return reply(200, { ok: true, id, former }, origin);
+}
+
+// ---- 出入所紀錄（#333，ADR 0011）：PUT /stays/{編號}，body { editor, before, stays }，整隻狗的陣列一次覆蓋（空陣列＝刪掉）；
+// before 是改之前看到的內容，別人剛改過就回 409。誰都能改，不用通關碼；記編輯紀錄（ADR 0004） ----
+async function putStays(request, env, origin) {
+  if (!env || !env.DB) return fail(503, '出入所紀錄還沒準備好（沒有接資料庫）', origin, { code: 'db' });
+  const m = new URL(request.url).pathname.match(/^\/stays\/([^/]+)$/);
+  const id = m ? decodeURIComponent(m[1]) : '';
+  if (!ID_PATTERN.test(id)) return fail(400, '狗的編號格式不對', origin);
+  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') return fail(415, '格式不對', origin);
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).length > 16000) return fail(413, '出入所紀錄太長', origin);
+  let input;
+  try { input = JSON.parse(raw); } catch (e) { return fail(400, '格式不對', origin); }
+  const now = Date.now();
+  const today = taiwanYmd(now);
+  const next = cleanStays(input && input.stays, today);
+  if (next.error) return fail(400, next.error, origin);
+  const editor = await editorOf(input && input.editor, config(env).walkerKey);
+  if (!editor) return needEditor(origin);
+  // 沒帶或帶錯改之前的內容，一律當成別人剛改過
+  const before = cleanStays(input.before, today);
+  if (before.error) return fail(409, '別人剛改過，請重新整理再改', origin);
+
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!allow(`stays:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
+  const r = await saveStays(env.DB, id, before.stays, next.stays);
+  if (!r.ok) return fail(r.status, r.error, origin);
+  await logEdit(env.DB, { editor, kind: 'stays', dogId: r.dogId, dogNumber: id, before: r.before, after: next.stays.length ? next.stays : null }, now);
+  return reply(200, { ok: true, id, stays: next.stays }, origin);
 }
 
 // ── 照片放 R2（#130）──
@@ -1196,6 +1228,16 @@ export default {
       } catch (e) {
         console.error('former', e);
         return fail(500, '舊編號存檔發生錯誤，原本的資料不受影響', allowed);
+      }
+    }
+
+    if (path.startsWith('/stays/')) {
+      if (request.method !== 'PUT') return fail(405, '出入所紀錄只能用 PUT /stays/編號', allowed);
+      try {
+        return await putStays(request, env, allowed);
+      } catch (e) {
+        console.error('stays', e);
+        return fail(500, '出入所紀錄存檔發生錯誤，原本的資料不受影響', allowed);
       }
     }
 

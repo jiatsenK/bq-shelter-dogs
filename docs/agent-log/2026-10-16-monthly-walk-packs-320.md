@@ -24,3 +24,4 @@
 - `v3_pack_versions` 的 walks／live／cutoff 三欄已不用（不能 ALTER，留著）。
 - 同步會在正式 D1 執行 `DROP TRIGGER IF EXISTS pack_v3_walks_*` 和 `DELETE FROM v3_packs WHERE part='walks'`（只刪舊的快取資料包，可重算），已在 PR 說明。
 - 合併 main（#321 改成同步整份 schema）時，scripts/sync-compact-d1.mjs 採 main 的寫法；新表、新觸發器、DROP／DELETE 句子都不在排除清單，照樣會送出。
+- 10/17 再合併 main（#333 新增 v3_stays）：schema 保留 pack_v3_stays_* 觸發器和按月分段，main 那邊的舊 pack_v3_walks_* 觸發器照 #320 拿掉；表清單測試兩邊合併。

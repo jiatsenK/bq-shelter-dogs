@@ -1,5 +1,5 @@
 # 把網站＋API 部署到 Cloudflare（#125，設定在 repo 根目錄的 wrangler.jsonc）
-# - main 有推送就部署：程式、狗卡、網站上傳的照片和備註（Worker 用 GitHub token 提交）都算
+# - main 有推送、而且改到網站或 Worker 的檔案才部署（#329 起，見下方 paths）；網站上傳的照片存 R2，不用重新部署
 # - 縮圖（#130 起存 R2）、同步試算表（#251 起只寫 D1）都不提交，跑完不用重新部署（#305 拿掉縮圖後部署）
 # - 還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID 時直接跳過，不會失敗；設定步驟見 docs/setup/CLOUDFLARE_SETUP.md
 # - Worker 要用的密碼也從 GitHub Secret 一起帶上去（有設才帶，沒設的保留 Cloudflare 上原本的）：
@@ -13,6 +13,16 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
+    # 只有會放上網站的檔案改了才部署（#329，省 Actions 分鐘數）：文件、測試、同步程式、版本號都不用重新部署
+    paths:
+      - 'public/**'
+      - 'worker/src/**'
+      - 'wrangler.jsonc'
+      - 'scripts/analytics-beacon.mjs'
+      - 'scripts/r2-bucket.mjs'
+      - 'scripts/d1-database.mjs'
+      - 'scripts/smoke-api.mjs'
+      - '.github/workflows/deploy-cloudflare.yml'
 
 permissions:
   contents: read

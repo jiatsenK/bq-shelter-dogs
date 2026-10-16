@@ -44,9 +44,10 @@ function bqIdDate(id) {
   const m = String(id || '').match(/^(\d{4})(\d{2})(\d{2})\d{2}$/);
   return m ? bqMakeDate(+m[1], +m[2], +m[3]) : null;
 }
-// 入所日（ADR 0005，跟 app.js 的 firstIntake 同一個規則）：現在的編號和舊編號裡最舊的那個
+// 入所日（ADR 0011，跟 app.js 的 firstIntake 同一個規則）：現在的編號、舊編號、出入所紀錄的入所日，三者裡最早的那天
 function bqIntake(d) {
-  const dates = [d.id, ...(Array.isArray(d.formerIds) ? d.formerIds : [])].map(bqIdDate).filter(Boolean);
+  const stays = Array.isArray(d.stays) ? d.stays.map(r => bqParseYmd(r && r.in)) : [];
+  const dates = [...[d.id, ...(Array.isArray(d.formerIds) ? d.formerIds : [])].map(bqIdDate), ...stays].filter(Boolean);
   return dates.length ? dates.reduce((a, b) => (b < a ? b : a)) : null;
 }
 function bqTier(years) {
@@ -96,7 +97,7 @@ function bqPlayers(data, walks, today = new Date()) {
   const month = bqMonthOut(walks, today);
   const players = data.dogs.filter(d => d && text(d.id) && text(d.name) && !/^[(（].*[)）]$/.test(text(d.name))).map(d => {
     const id = text(d.id);
-    const intake = bqIntake({ id, formerIds: d.formerIds });
+    const intake = bqIntake({ id, formerIds: d.formerIds, stays: d.stays });
     const years = intake ? (today - intake) / (365.25 * 86400000) : null;
     const thumb = `photos/thumbs/${id}.jpg`, full = `photos/${id}.jpg`;
     const ver = p => (pv[p] ? `${p}?v=${pv[p]}` : p);
