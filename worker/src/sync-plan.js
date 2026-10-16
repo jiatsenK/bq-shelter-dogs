@@ -5,7 +5,8 @@
 // - 頁首「更新」先比對試算表指紋（refreshPlan），沒變就不叫 GitHub
 // 狀態存在 D1 的 v3_sync_state（db/compact-schema.sql），一列一個 key
 
-export const SYNC_DAILY_MAX = 30;
+// #329：30 → 12，GitHub Actions 免費額度一個月 2,000 分鐘，同步每次算 1 分鐘
+export const SYNC_DAILY_MAX = 12;
 // 同步讀的分頁（scripts/sync-sheet.mjs、scripts/sync-compact-d1.mjs）
 export const SHEET_TABS = ['主清單', '常遛狗群', '已出所'];
 
