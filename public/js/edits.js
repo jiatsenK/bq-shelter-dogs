@@ -19,6 +19,9 @@ function editsWhen(iso) {
 // 改前／改後內容寫成一行字
 function editsValue(kind, v) {
   if (v === null || v === undefined || v === '') return '（沒有）';
+  if (kind === 'intro' && typeof v === 'object' && Array.isArray(v.events)) {
+    return [...v.events.map(e => `${e.date || '日期未確認'} ${e.event}${e.number ? `（${e.number}）` : ''}`), v.text].filter(Boolean).join('\n');
+  }
   if (kind === 'volunteer_rename') return v.name;
   if (kind === 'volunteer_merge') {
     const person = p => p.name + '（常溜 ' + p.favorites + '、開卡 ' + p.cards + '、溜狗來源紀錄 ' + p.walkRows + '）';
