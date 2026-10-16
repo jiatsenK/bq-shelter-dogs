@@ -1402,3 +1402,11 @@
 - Worker /api/walk 接受 note／log，檢查名字與內容（1–200 字、不換行）。
 - 網頁：狗卡「試算表備註」下方「加備註」、電腦版異動紀錄下方「新增一筆」，輸入→預覽→送出（入口位置 K 2026-10-16 選定）。
 - 編輯紀錄（開放編輯 session 的 logEdit）等該 PR 合併後再接；網頁已帶 editor。Apps Script 要 K 重新部署新版本。
+
+## 2026-10-16 常溜狗群頁：網站看群組、直接編輯（Claude）
+
+- K 開放網站寫「常遛狗群」分頁（只限狗名格和群名列）；AGENTS.md、PROJECT_GOALS.md 一起更新。
+- apps-script/sheet-write.gs 新增 action `group`（add／remove／create）：自己找數量列和最下面的群名列；移出後下面往上補，格子滿了在群名列上面插一列，新群數量格照左邊補公式。**K 要重新貼上小程式並部署新版本。**
+- 同步讀群名（最下面一列）存 D1 新表 v3_sheet_group_labels；api/dogs 多回 groupColumns（每群的欄、群名、狗名）。群名表還沒建時照常給狗清單。
+- Worker 新增 POST /api/groups：狗名要在主清單上（不分大小寫），成功後 D1 那一欄馬上換成小程式回的名單。
+- 新頁 public/groups.html、js/groups.js、css/groups.css；電腦版頁首加「狗群」，狗詳細資料的「同籠、可以一起溜」那段加連結。

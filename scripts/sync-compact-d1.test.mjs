@@ -42,10 +42,20 @@ test('第一次寫入正式 D1：主清單、試算表備註、常遛狗群讀�
   assert.deepEqual(await readDepartures(db), src.departures);
 });
 
-test('正式 D1 還沒有離所表時，SQL 自己先建', async t => {
+test('正式 D1 還沒有離所表、群名表時，SQL 自己先建', async t => {
   const lines = (await buildSyncSql({}, await source())).split('\n');
-  assert.match(lines[0], /^CREATE TABLE IF NOT EXISTS v3_departures /);
-  assert.match(lines[1], /^CREATE TABLE IF NOT EXISTS v3_departure_items /);
+  assert.match(lines[0], /^CREATE TABLE IF NOT EXISTS v3_sheet_group_labels /);
+  assert.match(lines[1], /^CREATE TABLE IF NOT EXISTS v3_departures /);
+  assert.match(lines[2], /^CREATE TABLE IF NOT EXISTS v3_departure_items /);
+});
+
+test('群名（K 2026-10-16）：照欄存，api/dogs 的 groupColumns 帶群名和狗名', async t => {
+  const src = await source();
+  const labels = src.groupColumns.map((c, i) => (i === 0 ? '第一群' : ''));
+  const db = await apply(t, {}, await buildSyncSql({}, { ...src, groupLabels: labels }));
+  const payload = await readDogsPayload(db);
+  assert.deepEqual(payload.groupColumns[0], { column: 0, label: '第一群', names: src.groupColumns[0] });
+  assert.equal(payload.groupColumns.length, src.groupColumns.filter(c => c.length).length);
 });
 
 test('再同步一次沿用正式 D1 的永久狗 ID，不新增狗', async t => {
