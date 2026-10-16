@@ -2018,6 +2018,34 @@ async function runRestTests() {
       hideDetail(); hideToast();
       eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['固定丙', '休養甲', '一般乙'], '設好的那隻也排到最下面：');
     });
+    await check('#285 入所紀錄：日期獨立於編號、缺事件留空，前端可逐列編輯並儲存，保留原介紹', async () => {
+      const dog = { id: '2017090505', name: '測試狗', cage: '新A01', formerIds: ['2016060701'], intro: '2016年6月7日迷路入所。', intakeEvents: [
+        { number: '2017090505', date: '2016-06-07', event: '迷路入所' },
+        { number: '2016060701', date: '', event: '' },
+      ] };
+      const parsed = parseDogsData({ dogs: [dog] }).dogs[0];
+      showDetail(parsed);
+      eq([...document.querySelectorAll('.intake-list time')].map(e => e.textContent), ['2016/06/07'], '不拿 20170905 取代已確認日期：');
+      eq(document.querySelector('.intake-list .intake-event').textContent, '迷路入所');
+      document.getElementById('introEdit').click();
+      const date = document.querySelector('[data-intake-field="date"]');
+      date.value = '2016-06-08'; date.dispatchEvent(new Event('input', { bubbles: true }));
+      const event = document.querySelector('[data-intake-field="event"]');
+      event.value = '迷路入所（補正）'; event.dispatchEvent(new Event('input', { bubbles: true }));
+      const calls = [];
+      window.fetch = async (url, options) => {
+        const body = JSON.parse(options.body); calls.push({ url: String(url), body });
+        return json({ ok: true, intro: body.text, intakeEvents: body.events });
+      };
+      document.getElementById('introForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+      await new Promise(r => setTimeout(r, 20));
+      eq(calls.length, 1);
+      eq(calls[0].body.text, dog.intro, '原介紹保留：');
+      eq(calls[0].body.events, [{ number: '2017090505', date: '2016-06-08', event: '迷路入所（補正）' }, { number: '2016060701', date: '', event: '' }]);
+      eq(document.querySelector('.intake-list time').textContent, '2016/06/08');
+      if (/sheet|script\.google/.test(calls[0].url)) throw new Error('不能寫試算表');
+      hideDetail(); hideToast(); delete introOverrides[dog.id]; delete intakeOverrides[dog.id];
+    });
     await check('入所介紹（10-10）：直接點那一段就能改（不另外放按鈕）、不用通關碼、帶 editor，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {
       const calls = [];
       window.fetch = async (u, o) => {
