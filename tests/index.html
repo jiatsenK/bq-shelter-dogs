@@ -1594,7 +1594,7 @@ async function runV52Tests() {
       const html = detailHtml(dogs[0], T);
       const box = document.createElement('div');
       box.innerHTML = html;
-      eq([[...box.querySelectorAll('.former-num')].map(n => n.firstChild.textContent), box.querySelector('.reentry > span').textContent], [['2018041318'], '第 2 次入所・首次 2018/4/13・舊編號'], '詳細資訊標第 2 次入所、首次和舊編號：');
+      eq([[...box.querySelectorAll('.former-num')].map(n => n.firstChild.textContent), box.querySelector('.reentry').textContent.includes('最早入所 2018/4/13'), box.querySelector('.reentry').textContent.includes('次入所')], [['2018041318'], true, false], '詳細資訊標舊編號和最早入所，不標第幾次入所：');
       if (detailHtml(dogs[1], T).includes('former-num')) throw new Error('沒舊編號不列舊編號');
     });
 
