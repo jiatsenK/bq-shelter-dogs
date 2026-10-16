@@ -10,6 +10,7 @@ export const KIND_LABELS = {
   activity: '活動紀錄',
   note: '試算表備註',
   sheetlog: '試算表異動紀錄',
+  group: '常溜狗群',
 };
 export const EDITS_DEFAULT = 100;
 export const EDITS_MAX = 500;
