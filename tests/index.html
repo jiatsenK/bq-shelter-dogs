@@ -207,7 +207,7 @@ function runTests() {
       // 頁首「更新」：POST 到 /sync 請 Worker 叫 GitHub 同步（只讀試算表），也先拿掉
       const syncCall = /fetch\(`\$\{UPLOAD_URL\}\/sync`, \{ method: 'POST' \}\)/;
       if (!syncCall.test(APP_JS)) throw new Error('找不到更新的呼叫');
-      // #138 按「溜了」：POST 到 /walk，由 Worker 轉給 K 部署的小程式寫試算表兩欄（網站本身不連 Google），也先拿掉
+      // #138 按「溜了」：POST 到 /walk，由 Worker 轉給 K 部署的小程式寫試算表兩欄（網站本身不連 Google），也先拿掉；#281 加備註、異動紀錄也走 /walk
       const walkCall = /fetch\(`\$\{UPLOAD_URL\}\/walk`, \{ method: 'POST',/;
       if (!walkCall.test(APP_JS)) throw new Error('找不到寫入試算表的呼叫');
       // 休養中（K 2026-10-09）：管理者 PUT 到 Worker 的 /rest/{編號}（寫進 repo 的 data/rest.json，不是試算表），也先拿掉
@@ -216,7 +216,7 @@ function runTests() {
       // 入所介紹（K 2026-10-10 補資料）：管理者 PUT 到 Worker 的 /intro/{編號}（寫進 repo 的 dogs/{編號}.md，不是試算表），也先拿掉
       const introCall = /fetch\(`\$\{UPLOAD_URL\}\/intro\/\$\{encodeURIComponent\(e\.dog\.id\)\}`, \{\s*method: 'PUT',/;
       if (!introCall.test(APP_JS)) throw new Error('找不到入所介紹的呼叫');
-      const code = APP_JS.replace(walkCall, '').replace(uploadCall, '').replace(walkerCall, '').replace(syncCall, '').replace(restCall, '').replace(introCall, '');
+      const code = APP_JS.replace(new RegExp(walkCall.source, 'g'), '').replace(uploadCall, '').replace(walkerCall, '').replace(syncCall, '').replace(restCall, '').replace(introCall, '');
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
