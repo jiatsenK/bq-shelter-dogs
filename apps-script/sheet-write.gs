@@ -1,10 +1,10 @@
 // 按「溜了」寫進試算表（#138）：這份貼到 Google Apps Script，用 K 的 Google 帳號部署成「網頁應用程式」。
-// 步驟見 docs/setup/SHEET_WRITE_SETUP.md。網站不會直接呼叫這裡，都經過 Worker（POST /api/walk），有設通關碼時 Worker 會帶過來。
+// 步驟見 docs/setup/SHEET_WRITE_SETUP.md。網站不會直接呼叫這裡，都經過 Worker（POST /api/walk），有設金鑰時 Worker 會帶過來。
 // 只會改「主清單」的「遛狗日期」「誰遛的」兩欄，其他欄、其他分頁都不碰。
 //
 // 指令碼屬性（專案設定 → 指令碼屬性）：
 //   SHEET_ID   試算表 ID（網址 /d/ 和 /edit 中間那串）
-//   WRITE_KEY  （可不設）通關碼；有設的話 GitHub Secret SHEET_WRITE_KEY 要一樣
+//   WRITE_KEY  （可不設）金鑰；有設的話 GitHub Secret SHEET_WRITE_KEY 要一樣
 
 var SHEET_NAME = '主清單';
 var TIME_ZONE = 'Asia/Taipei';
@@ -32,8 +32,8 @@ function handleRequest(req) {
   var props = PropertiesService.getScriptProperties();
   var key = props.getProperty('WRITE_KEY');
   if (!req) return { ok: false, error: '沒有資料' };
-  // K 決定先不設通關碼（2026-10-04）；有設 WRITE_KEY 才檢查
-  if (key && req.key !== key) return { ok: false, error: '通關碼不對', code: 'key' };
+  // K 決定先不設金鑰（2026-10-04）；有設 WRITE_KEY 才檢查
+  if (key && req.key !== key) return { ok: false, error: '金鑰不對', code: 'key' };
   var lock = LockService.getScriptLock();
   lock.waitLock(15000); // 兩個人同時按，一個一個來，免得互相蓋掉
   try {

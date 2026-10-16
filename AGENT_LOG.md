@@ -1389,3 +1389,10 @@
 - 新增 .github/workflows/release-please.yml、release-please-config.json、.release-please-manifest.json、version.txt（從 9.0.0 起，對應 V9）。
 - feat:／fix: 的 commit 會累積到 Release PR，合併後打 tag 並寫 CHANGELOG.md 與 GitHub Release；docs:／chore: 不列入。bootstrap-sha 設在 75230be，之前的歷史不算。
 
+
+## 2026-10-16 開放編輯、編輯紀錄頁（Claude，#284）
+
+- K 決定（docs/adr/0004-open-editing-and-edit-log.md）：網站拿掉通關碼，任何人選好名字就能改休養、介紹、照片；#143 管理者後台廢除並關票。
+- 新增 worker/src/editlog.js（editorOf／logEdit／readEdits，walkerCode 從 index.js 搬來）、D1 表 v3_edit_log、GET /api/edits、public/edits.html＋js/edits.js，電腦版頁首加「編輯紀錄」入口。溜狗打卡不記。
+- /api/admin/* 改用 ADMIN_KEY（標頭 X-Admin-Key），部署與縮圖 Action 在 K 設好 Secret ADMIN_KEY 前沿用 NOTES_PASSCODE 的值；WALKER_KEY、SHEET_WRITE_KEY 保留。
+- 更新測試、AGENTS.md、GLOSSARY、PROJECT_GOALS、DESIGN_GUIDE、設定文件。試算表備註（#239）的 session 要照 ADR 的介面接上編輯紀錄。

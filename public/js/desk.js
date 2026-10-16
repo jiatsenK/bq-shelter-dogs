@@ -198,7 +198,7 @@ function deskTableHtml(list, today) {
 // - 點照片（或把檔案拖到那一列）→ 這一格先看預覽，按「上傳」；點介紹 → 這一格變成文字框，按「儲存」
 // - 每個動作都在那一列寫出狀態：上傳中…／儲存中…／✓ 已上傳／✓ 已儲存／沒成功的原因
 // - 這一輪的順序固定：補好的狗留在原位（打勾），換篩選、換區、搜尋、離開再回來才重排
-// 照片所有人都能傳；介紹要通關碼，存 repo 的 dogs/{編號}.md，不寫試算表
+// 照片所有人都能傳；介紹也是所有人都能改（記編輯紀錄），存 D1，不寫試算表
 function deskHasPhoto(dog) {
   if (!dog.id) return false;
   if (photoOverrides[dog.id]) return true;
@@ -210,7 +210,7 @@ function deskFillNeeds(dog) {
   return { photo: deskHasPhoto(dog) === false, intro: !intro };
 }
 let deskFillOrder = null; // { sig, keys }：這一輪固定的順序（walkKey）
-let deskFillIntro = null; // 正在改的介紹：{ key, text, pass, needPass, phase: 'edit'|'saving'|'error', error }
+let deskFillIntro = null; // 正在改的介紹：{ key, text, phase: 'edit'|'saving'|'error', error }
 let deskFillPhoto = null; // 選好還沒傳的照片：{ key, blob, url, phase: 'preview'|'uploading'|'error', error }
 const deskFillDone = new Map(); // walkKey → { photo: '10:32', intro: '10:35' }：這次打開網頁補好的
 const deskClock = () => { const d = new Date(); return `${pad2(d.getHours())}:${pad2(d.getMinutes())}`; };
@@ -262,7 +262,6 @@ function deskFillIntroCell(d, idx) {
   return `<form class="df-form" data-fill-form>
     <textarea id="dfIntroText" rows="4" maxlength="${INTRO_MAX}" aria-label="${esc(d.name)} 的入所介紹" placeholder="例：親人、喜歡散步，怕機車聲"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea>
     <div class="df-form-row">
-      ${e.needPass ? `<input type="password" id="dfIntroPass" name="password" autocomplete="current-password" placeholder="通關碼" aria-label="通關碼" value="${esc(e.pass)}"${busy ? ' disabled' : ''}>` : ''}
       <button type="submit" class="df-go"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存'}</button>
       ${busy ? '' : '<button type="button" class="df-cancel" data-fill-intro-cancel>取消</button>'}
       <small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small>
@@ -295,7 +294,7 @@ function deskFillHtml(list, query) {
   return `<div class="desk-fill">
     <div class="df-bar">
       <div class="df-chips" role="group" aria-label="要補什麼">${chip('photo', '沒照片', nPhoto, !known)}${chip('intro', '沒介紹', nIntro)}${chip('all', '全部', all.length)}</div>
-      <p class="df-note">${nDone ? `<b class="df-done-n">${icon('tick')}這次補好 ${nDone} 隻</b>・補好的留在原位。` : '點照片換照片、點介紹直接改；也可以把照片檔拖到那一列。'}介紹要通關碼，存在網站，不寫試算表。</p>
+      <p class="df-note">${nDone ? `<b class="df-done-n">${icon('tick')}這次補好 ${nDone} 隻</b>・補好的留在原位。` : '點照片換照片、點介紹直接改；也可以把照片檔拖到那一列。'}改了會記在編輯紀錄，不寫試算表。</p>
     </div>
     ${shown.length ? `<table class="desk-table df-table">
       <thead><tr><th class="df-ph">照片</th><th class="dr-name">狗名</th><th class="dr-cagec">籠位</th><th class="df-intro">入所介紹</th><th class="df-state">狀態</th></tr></thead>
@@ -347,7 +346,7 @@ async function deskFillUploadPhoto() {
   p.phase = 'uploading'; p.error = ''; render();
   let error = '';
   try {
-    const res = await fetch(`${UPLOAD_URL}/photos/${encodeURIComponent(dog.id)}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg' }, body: p.blob });
+    const res = await fetch(`${UPLOAD_URL}/photos/${encodeURIComponent(dog.id)}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', ...editorHeaders() }, body: p.blob });
     const out = await res.json().catch(() => null);
     if (!res.ok || !out || !out.ok) error = (out && out.error) || `網站暫時收不到照片（${res.status}），原本的照片不受影響`;
   } catch (e) {
@@ -364,7 +363,7 @@ async function deskFillUploadPhoto() {
 function deskFillOpenIntro(dog) {
   if (!dog || !dog.id) return;
   if (deskFillIntro && deskFillIntro.phase === 'saving') { showToast('上一筆介紹還在儲存，請稍等一下'); return; }
-  deskFillIntro = { key: walkKey(dog), text: introOf(dog) || '', pass: '', needPass: !loadNotesPass(), phase: 'edit', error: '' };
+  deskFillIntro = { key: walkKey(dog), text: introOf(dog) || '', phase: 'edit', error: '' };
   render();
   const box = document.getElementById('dfIntroText');
   if (box) { box.focus({ preventScroll: true }); box.setSelectionRange(box.value.length, box.value.length); }
@@ -373,15 +372,15 @@ async function deskFillSaveIntro() {
   const e = deskFillIntro;
   const dog = e && deskDogOfKey(e.key);
   if (!e || !dog || e.phase === 'saving') return;
-  const fail = msg => { e.phase = 'error'; e.error = msg; render(); const b = document.getElementById(e.needPass && !e.pass ? 'dfIntroPass' : 'dfIntroText'); if (b) b.focus({ preventScroll: true }); };
-  const pass = e.needPass ? e.pass : loadNotesPass();
-  if (!pass) { e.needPass = true; fail('請輸入通關碼'); return; }
+  const fail = msg => { e.phase = 'error'; e.error = msg; render(); const b = document.getElementById('dfIntroText'); if (b) b.focus({ preventScroll: true }); };
+  const editor = editorName();
+  if (!editor) { fail(NEED_EDITOR); return; }
   const text = e.text.replace(/\r\n?/g, '\n').trim();
   if ([...text].length > INTRO_MAX) { fail(`最多 ${INTRO_MAX} 字`); return; }
   e.phase = 'saving'; e.error = ''; render();
   let out = null, error = '';
   try {
-    const res = await fetch(`${UPLOAD_URL}/intro/${encodeURIComponent(dog.id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ passcode: pass, text }) });
+    const res = await fetch(`${UPLOAD_URL}/intro/${encodeURIComponent(dog.id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ editor, text }) });
     out = await res.json().catch(() => null);
     if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
   } catch (err) {
@@ -389,11 +388,9 @@ async function deskFillSaveIntro() {
   }
   if (deskFillIntro !== e) return;
   if (error) {
-    if (out && out.code === 'passcode') { saveNotesPass(''); e.needPass = true; e.pass = ''; }
     fail(error);
     return;
   }
-  saveNotesPass(pass);
   introOverrides[dog.id] = typeof out.intro === 'string' ? out.intro : text;
   deskFillIntro = null;
   deskFillDone.set(e.key, { ...(deskFillDone.get(e.key) || {}), intro: deskClock() });
@@ -519,7 +516,7 @@ if (typeof document !== 'undefined' && document.getElementById('main')) {
       deskFillIntro.text = e.target.value;
       const c = main.querySelector('.df-form .intro-count');
       if (c) { const n = [...deskFillIntro.text].length; c.textContent = `${n} / ${INTRO_MAX} 字`; c.classList.toggle('over', n > INTRO_MAX); }
-    } else if (e.target.id === 'dfIntroPass') deskFillIntro.pass = e.target.value;
+    }
   });
   main.addEventListener('submit', e => { if (e.target.matches('[data-fill-form]')) { e.preventDefault(); deskFillSaveIntro(); } });
   main.addEventListener('keydown', e => {
