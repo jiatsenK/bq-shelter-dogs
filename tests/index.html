@@ -2124,6 +2124,60 @@ async function runRestTests() {
         hideDetail(); hideToast();
       }
     });
+    await check('出入所紀錄（#333）：照時間列出；整份 PUT /stays/編號、帶改之前的內容；入所日取最早；別人剛改過就提示重新整理', async () => {
+      const calls = [];
+      let conflict = false;
+      window.fetch = async (u, o) => {
+        calls.push([String(u), o && o.method, o && JSON.parse(o.body)]);
+        if (conflict) return json({ ok: false, error: '別人剛改過，請重新整理再改' }, 409);
+        const b = JSON.parse(o.body);
+        return json({ ok: true, id: '9613', stays: [...b.stays].sort((x, y) => x.in.localeCompare(y.in)) });
+      };
+      const dog = allDogs[2];
+      const before = dog.stays;
+      const set = (i, field, v) => {
+        const el = document.querySelector(`[data-stay-row="${i}"][data-stay-field="${field}"]`);
+        el.value = v; el.dispatchEvent(new Event('input', { bubbles: true }));
+      };
+      const submit = async () => {
+        document.getElementById('staysForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        await new Promise(r => setTimeout(r, 20));
+      };
+      try {
+        dog.stays = [];
+        showDetail(dog);
+        eq(document.getElementById('staysEdit').getAttribute('aria-label'), '補出入所紀錄', '還沒有：點了是補：');
+        document.getElementById('staysEdit').click();
+        set(0, 'in', '2019-03-01'); set(0, 'out', '2019-02-01');
+        await submit();
+        eq([calls.length, document.querySelector('#staysForm [role="alert"]').textContent], [0, '出所日不能早於入所日'], '出所早於入所先擋：');
+        set(0, 'out', '2019-06-01'); set(0, 'reason', '整修移所');
+        document.getElementById('staysAdd').click();
+        set(1, 'in', '2015-08-18'); set(1, 'reason', '迷路');
+        await submit();
+        eq([calls.length, calls[0][0], calls[0][1], calls[0][2].editor, calls[0][2].before], [1, 'https://worker.test/stays/9613', 'PUT', '志工我', []], '送出：帶名字和改之前的內容：');
+        eq(calls[0][2].stays, [{ in: '2019-03-01', out: '2019-06-01', reason: '整修移所' }, { in: '2015-08-18', out: '', reason: '迷路' }], '整份送出：');
+        eq([staysEdit, ymd(firstIntake(dog))], [null, '2015-08-18'], '成功：入所日改從最早那次算：');
+        eq([...document.querySelectorAll('.stays-list li')].map(li => li.textContent), ['2015/08/18入所（迷路）', '2019/03/01入所，2019/06/01 出所（整修移所）'], '照時間列出：');
+        if (!document.querySelector('#detail .chips').textContent.includes('入所 2015/8')) throw new Error('入所標籤沒有跟著改');
+        // 刪掉一筆：送出的 before 是剛剛存好的內容
+        document.getElementById('staysEdit').click();
+        document.querySelector('[data-stay-remove="0"]').click();
+        await submit();
+        eq([calls[1][2].before.length, calls[1][2].stays], [2, [{ in: '2019-03-01', out: '2019-06-01', reason: '整修移所' }]], '刪一筆：');
+        eq(ymd(firstIntake(dog)), '2019-03-01', '刪了就回到剩下最早的：');
+        conflict = true;
+        document.getElementById('staysEdit').click();
+        set(0, 'reason', '移所');
+        await submit();
+        eq([document.querySelector('#staysForm [role="alert"]').textContent, dog.stays[0].reason], ['別人剛改過，請重新整理再改', '整修移所'], '別人剛改過：提示、不改這台的資料：');
+        if (calls.some(c => /sheet|script\.google/.test(c[0]))) throw new Error('不應該寫試算表');
+      } finally {
+        dog.stays = before;
+        staysEdit = null;
+        hideDetail(); hideToast();
+      }
+    });
     await check('找狗的「最久沒溜的狗」、分析頁「超過 3 天沒溜」不算休養中的狗', () => {
       const due = dueDogs(allDogs, T).filter(d => { const st = computeStatus(d, T); return st.kind === 'unknown' || (st.kind === 'dated' && st.days >= AMBER_DAYS); });
       eq(due.map(d => d.name), [], '最久沒溜：');
@@ -3399,6 +3453,18 @@ async function runCardsTests() {
   ];
   const players = C.bqPlayers(data, walks, TODAY);
   const by = Object.fromEntries(players.map(p => [p.name, p]));
+  await check('入所日（ADR 0011）：編號、舊編號、出入所紀錄三者取最早，圖鑑和溜狗表算出來一樣', () => {
+    const cases = [
+      { id: '2017090508', name: '墨西哥', formerIds: [], stays: [{ in: '2015-08-18', out: '', reason: '迷路' }, { in: '2016-03-01', out: '2016-05-01', reason: '' }] },
+      { id: '2017090508', name: '舊編號最早', formerIds: ['2014010101'], stays: [{ in: '2015-08-18', out: '', reason: '' }] },
+      { id: '2017090508', name: '編號最早', formerIds: [], stays: [{ in: '2018-01-01', out: '', reason: '' }] },
+      { id: 'ABC', name: '只有紀錄', stays: [{ in: '2020-02-02', out: '', reason: '' }] },
+    ];
+    const fromCards = C.bqPlayers({ dogs: cases }, [], TODAY).map(p => p.intake && ymd(p.intake));
+    const fromApp = parseDogsData({ dogs: cases }).dogs.map(d => ymd(firstIntake(d)));
+    eq(fromCards, ['2015/8/18', '2014/1/1', '2017/9/5', '2020/2/2'], '圖鑑：');
+    eq(fromApp, fromCards, '溜狗表跟圖鑑一樣：');
+  });
   await check('球員卡：沒編號、括號名字的列不算；背號照入隊順序（1 號最資深）', () => {
     eq(players.map(p => p.name), ['老將', '新人', '中堅', '金卡'], '球員：');
     eq(['老將', '金卡', '中堅', '新人'].map(n => by[n].number), ['1', '2', '3', '4'], '背號：');

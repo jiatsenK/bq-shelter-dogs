@@ -39,6 +39,7 @@ let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, u
 let restMap = {}; // 休養中：編號 → { until: 'YYYY-MM-DD', reason }
 let detailWalksOpen = false; // 詳細資訊的溜狗紀錄有沒有展開每一天（K 2026-10-10 減法：預設只有一行字）
 let formerEdit = null; // 詳細資訊正在補的舊編號（#289）：{ dog, text, phase: 'edit'|'saving'|'error', error }
+let staysEdit = null; // 詳細資訊正在改的出入所紀錄（#333）：{ dog, before, rows, phase: 'edit'|'saving'|'error', error }
 let introEdit = null; // 詳細資訊正在改的入所介紹（K 2026-10-10 補資料）：{ dog, text, phase: 'edit'|'saving'|'error', error }
 const introOverrides = {}; // 編號 → 剛存好的介紹：這台電腦不用重新讀就看到（#250 起存 D1，其他人重新整理就看得到）
 let restEdit = null; // 詳細資訊正在改的休養設定：{ dog, until, reason, phase: 'edit'|'saving'|'error', error }
@@ -84,6 +85,8 @@ function parseDogsData(data) {
     intro: text(d.intro),
     // 再次入所的舊編號（#75，狗卡 frontmatter 的 formerIds）
     formerIds: Array.isArray(d.formerIds) ? d.formerIds.map(text).filter(Boolean) : [],
+    // 出入所紀錄（#333，ADR 0011）：每次在所一筆，out 還在所就是空字串
+    ...(Array.isArray(d.stays) ? { stays: d.stays.filter(r => r && typeof r === 'object').map(r => ({ in: text(r.in), out: text(r.out), reason: text(r.reason) })) } : {}),
     ...(Array.isArray(d.intakeEvents) ? { intakeEvents: d.intakeEvents.map(e => ({ number: text(e.number), date: text(e.date), event: text(e.event) })) } : {}),
   }));
   let groups = null;
@@ -772,10 +775,10 @@ function idDate(id) {
   return m ? makeDate(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)) : null;
 }
 
-// 入所日（ADR 0005）：這隻狗所有編號（現在的和舊編號）裡最舊那個的前 8 碼；看不出來回 null。
-// 詳細資訊、分析頁都用這個，圖鑑（cards.js）照同一個規則
+// 入所日（ADR 0011）：現在的編號、舊編號的前 8 碼、出入所紀錄的入所日，三者裡最早的那天；看不出來回 null。
+// 詳細資訊、分析頁都用這個，圖鑑（cards.js 的 bqIntake）照同一個規則
 function firstIntake(dog) {
-  const dates = [dog.id, ...(dog.formerIds || [])].map(idDate).filter(Boolean);
+  const dates = [...[dog.id, ...(dog.formerIds || [])].map(idDate), ...(dog.stays || []).map(r => parseYmd(r.in))].filter(Boolean);
   return dates.length ? dates.reduce((a, b) => (b < a ? b : a)) : null;
 }
 const ymdOf = d => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
@@ -1797,6 +1800,7 @@ function detailHtml(dog, today) {
     ${togetherSection(dog, walked)}
     ${walkHistorySection(dog, today)}
     ${introSectionHtml(dog, intro)}
+    ${staysSectionHtml(dog)}
     ${restAdminHtml(dog, today)}
     ${photoBarHtml(dog) || introBarHtml(dog) || `<div class="detail-bar">
       <button type="button" class="bar-btn" id="detailClose">關閉</button>
@@ -1948,6 +1952,93 @@ async function saveIntro() {
   showToast(`${e.dog.name} 的介紹已存好（其他人重新整理就看得到）`);
 }
 
+// 出入所紀錄（#333，ADR 0011）：照時間列出每一次在所；誰都能補、改、刪（要先選名字），離所的狗只看不改。
+// 整隻狗一次存（PUT /stays），連同打開時看到的內容一起送，別人剛改過會被擋下來
+const STAYS_MAX = 30;
+const stayDate = ymd => String(ymd || '').replace(/-/g, '/');
+function staysSectionHtml(dog) {
+  const list = dog.stays || [];
+  const can = !!(dog.id && UPLOAD_URL) && !dog.departure;
+  const e = staysEdit && staysEdit.dog === dog ? staysEdit : null;
+  if (!e) {
+    if (!list.length && !can) return '';
+    return `<section class="detail-section" data-section="stays">
+      <h3 class="intro-heading">${icon('note')}出入所紀錄${can ? `<button type="button" class="intro-heading-edit" id="staysEdit" aria-label="${list.length ? '改' : '補'}出入所紀錄">${icon('write')}</button>` : ''}</h3>
+      ${list.length ? `<ul class="intake-list stays-list">${list.map(r => `<li><time datetime="${esc(r.in)}">${esc(stayDate(r.in))}</time><span class="intake-event">入所${r.out ? `，${esc(stayDate(r.out))} 出所` : ''}</span>${r.reason ? `<span class="intake-number">（${esc(r.reason)}）</span>` : ''}</li>`).join('')}</ul>`
+        : '<div class="empty">還沒有補登。轉所、退養前的入所日查得到的話，可以補在這裡</div>'}
+    </section>`;
+  }
+  const busy = e.phase === 'saving';
+  const today = isoDay(new Date());
+  return `<section class="detail-section" data-section="stays">
+    <form class="rest-form stays-form" id="staysForm" autocomplete="off">
+      <h3>${icon('note')}出入所紀錄</h3>
+      <p class="rest-hint">每次在所一筆，還在所就不填出所日。入所日從現在的編號、舊編號和這裡最早的那天算。</p>
+      <div class="intake-rows">${e.rows.map((row, i) => `<fieldset class="intake-row"><legend>第 ${i + 1} 筆</legend>
+        <label>入所日<input type="date" max="${today}" data-stay-row="${i}" data-stay-field="in" value="${esc(row.in)}"${busy ? ' disabled' : ''}></label>
+        <label>出所日<input type="date" max="${today}" data-stay-row="${i}" data-stay-field="out" value="${esc(row.out)}"${busy ? ' disabled' : ''}></label>
+        <label>原因<input type="text" maxlength="40" data-stay-row="${i}" data-stay-field="reason" value="${esc(row.reason)}" placeholder="例：迷路、退養、整修移所"${busy ? ' disabled' : ''}></label>
+        <button type="button" class="intake-remove" data-stay-remove="${i}"${busy ? ' disabled' : ''}>刪掉第 ${i + 1} 筆</button>
+      </fieldset>`).join('')}</div>
+      <button type="button" id="staysAdd"${busy || e.rows.length >= STAYS_MAX ? ' disabled' : ''}>新增一筆</button>
+      ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
+      <div class="stays-actions">${busy ? '' : '<button type="button" class="former-cancel" id="staysCancel">取消</button>'}<button type="submit" class="former-save"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存'}</button></div>
+    </form>
+  </section>`;
+}
+function openStaysEdit(dog) {
+  if (!dog || !dog.id || !UPLOAD_URL) return;
+  const before = (dog.stays || []).map(r => ({ ...r }));
+  staysEdit = { dog, before, rows: before.length ? before.map(r => ({ ...r })) : [{ in: '', out: '', reason: '' }], phase: 'edit', error: '' };
+  renderDetail();
+  const box = document.querySelector('#staysForm [data-stay-field="in"]');
+  if (box) {
+    box.focus({ preventScroll: true });
+    if (box.scrollIntoView) box.scrollIntoView({ block: 'center' });
+  }
+}
+// 先在這台檢查一次（伺服器也會檢查）；回空字串是沒問題
+function staysProblem(rows) {
+  const today = isoDay(new Date());
+  for (const r of rows) {
+    if (!parseYmd(r.in)) return '每一筆都要填入所日';
+    if (r.in > today || (r.out && r.out > today)) return '日期不能是未來的日子';
+    if (r.out && r.out < r.in) return '出所日不能早於入所日';
+  }
+  return '';
+}
+async function saveStays() {
+  const e = staysEdit;
+  if (!e || e.phase === 'saving') return;
+  const editor = editorName();
+  if (!editor) { e.phase = 'error'; e.error = NEED_EDITOR; renderDetail(); return; }
+  // 整列都空白的當成沒填
+  const rows = e.rows.map(r => ({ in: r.in.trim(), out: r.out.trim(), reason: r.reason.trim() })).filter(r => r.in || r.out || r.reason);
+  const problem = staysProblem(rows);
+  if (problem) { e.phase = 'error'; e.error = problem; renderDetail(); return; }
+  e.phase = 'saving'; e.error = ''; renderDetail();
+  let out = null, error = '';
+  try {
+    const res = await fetch(`${UPLOAD_URL}/stays/${encodeURIComponent(e.dog.id)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ editor, before: e.before, stays: rows }),
+    });
+    out = await res.json().catch(() => null);
+    if (res.status === 409) error = '別人剛改過，請重新整理再改';
+    else if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
+  } catch (err) {
+    error = '沒有存進去，請確認網路後再試';
+  }
+  if (staysEdit !== e) return;
+  if (error) { e.phase = 'error'; e.error = error; renderDetail(); return; }
+  e.dog.stays = Array.isArray(out.stays) ? out.stays : rows;
+  staysEdit = null;
+  render(); renderDetail();
+  const b = document.getElementById('staysEdit');
+  if (b) b.focus({ preventScroll: true });
+  const first = firstIntake(e.dog);
+  showToast(`${e.dog.name} 的出入所紀錄已存好${first ? `，入所日從 ${ymdOf(first)} 算` : ''}`);
+}
+
 function openRestEdit(dog) {
   const r = restOf(dog);
   const until = r ? r.until : new Date(Date.now() + 10 * 86400000);
@@ -2049,6 +2140,7 @@ function departedDetailHtml(dog, today) {
       <h3>${icon('card')}入所介紹<span class="sub">收容所在入所時寫的</span></h3>
       ${dog.intro ? `<div class="content">${esc(dog.intro)}</div>` : `<div class="empty">沒有入所介紹</div>`}
     </section>
+    ${staysSectionHtml(dog)}
     <div class="detail-bar"><button type="button" class="bar-btn" id="detailClose">關閉</button></div>
   `;
   function since(d) {
@@ -2627,6 +2719,8 @@ const DETAIL_CLICKS = [
   ['#restEdit', () => openRestEdit(detailDog)],
   ['#introEdit', () => openIntroEdit(detailDog)],
   ['#formerAdd', () => openFormerEdit(detailDog)],
+  ['#staysEdit', () => openStaysEdit(detailDog)],
+  ['#staysCancel', () => { staysEdit = null; renderDetail(); const b = document.getElementById('staysEdit'); if (b) b.focus({ preventScroll: true }); }],
   ['#formerCancel', () => { formerEdit = null; renderDetail(); const b = document.getElementById('formerAdd'); if (b) b.focus({ preventScroll: true }); }],
   ['[data-former-del]', el => removeFormer(detailDog, el.dataset.formerDel)],
   ['#walksToggle', () => { detailWalksOpen = !detailWalksOpen; renderDetail(); const b = document.getElementById('walksToggle'); if (b) b.focus({ preventScroll: true }); }],
@@ -2662,6 +2756,18 @@ function wireDetail(box) {
   if (box.bqWired) return;
   box.bqWired = true;
   box.addEventListener('click', e => {
+    if (!staysEdit || staysEdit.phase === 'saving') return;
+    if (e.target.closest('#staysAdd') && staysEdit.rows.length < STAYS_MAX) {
+      staysEdit.rows.push({ in: '', out: '', reason: '' });
+      renderDetail(); box.querySelector('.stays-form .intake-row:last-child input')?.focus({ preventScroll: true });
+    }
+    const remove = e.target.closest('[data-stay-remove]');
+    if (remove) {
+      staysEdit.rows.splice(Number(remove.dataset.stayRemove), 1);
+      renderDetail(); box.querySelector('#staysAdd')?.focus({ preventScroll: true });
+    }
+  });
+  box.addEventListener('click', e => {
     if (!introEdit || introEdit.phase === 'saving') return;
     if (e.target.closest('#intakeAdd') && introEdit.events.length < 30) {
       introEdit.events.push({ number: introEdit.dog.id, date: '', event: '' });
@@ -2675,6 +2781,11 @@ function wireDetail(box) {
   });
   // 休養設定表單：打的字記在 restEdit，重畫不會不見；送出走 saveRest
   box.addEventListener('input', e => {
+    if (staysEdit && e.target.dataset.stayField) {
+      const row = staysEdit.rows[Number(e.target.dataset.stayRow)];
+      if (row) row[e.target.dataset.stayField] = e.target.value;
+      return;
+    }
     if (introEdit && e.target.dataset.intakeField) {
       const row = introEdit.events[Number(e.target.dataset.intakeRow)];
       if (row) row[e.target.dataset.intakeField] = e.target.value;
@@ -2694,6 +2805,7 @@ function wireDetail(box) {
   box.addEventListener('submit', e => {
     if (e.target.id === 'introForm') { e.preventDefault(); saveIntro(); return; }
     if (e.target.id === 'formerForm') { e.preventDefault(); saveFormer(); return; }
+    if (e.target.id === 'staysForm') { e.preventDefault(); saveStays(); return; }
     if (e.target.id !== 'restForm') return;
     e.preventDefault();
     saveRest();
@@ -2761,6 +2873,7 @@ function showDetail(dog, remember = true) {
     if (!restEdit || restEdit.phase !== 'saving') restEdit = null;
     if (!introEdit || introEdit.phase !== 'saving') introEdit = null;
     if (!formerEdit || formerEdit.phase !== 'saving') formerEdit = null;
+    if (!staysEdit || staysEdit.phase !== 'saving') staysEdit = null;
     if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
   }
   detailDog = dog;
@@ -2785,6 +2898,7 @@ function hideDetail() {
   if (!restEdit || restEdit.phase !== 'saving') restEdit = null;
   if (!introEdit || introEdit.phase !== 'saving') introEdit = null;
   if (!formerEdit || formerEdit.phase !== 'saving') formerEdit = null;
+  if (!staysEdit || staysEdit.phase !== 'saving') staysEdit = null;
   if (!photoUpload || photoUpload.phase !== 'uploading') clearPhotoUpload();
   document.getElementById('detailBackdrop').hidden = true;
   document.getElementById('detail').innerHTML = '';

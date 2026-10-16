@@ -1,5 +1,6 @@
 import { identitiesForCodes } from './identity.js';
 import { readIntakeEvents, readAllIntakeEvents } from './intake.js';
+import { readAllStays } from './stays.js';
 // 精簡 D1（v3_ 表，#245／#247）：網站要的狗清單從這裡讀，形狀跟原本的 data/dogs.json 一樣。
 // 表結構見 db/compact-schema.sql、docs/COMPACT_D1.md
 
@@ -39,12 +40,14 @@ export async function readDogsPayload(db) {
     if (!intakeOf.has(r.dog_id)) intakeOf.set(r.dog_id, []);
     intakeOf.get(r.dog_id).push({ number: r.number, date: r.event_date, event: r.event });
   }
+  const staysOf = await readAllStays(db);
   const dogs = rows.map(row => {
     const dog = {};
     for (const [key, column] of MAIN_FIELDS) dog[key] = BOOLEANS.has(key) ? Boolean(row[column]) : row[column];
     dog.walkers = walkersOf.get(row.row_index) || [];
     if (formerOf.has(row.row_index)) dog.formerIds = formerOf.get(row.row_index);
     if (intakeOf.has(row.dog_id)) dog.intakeEvents = intakeOf.get(row.dog_id);
+    if (staysOf.has(row.dog_id)) dog.stays = staysOf.get(row.dog_id);
     return dog;
   });
   return {
@@ -229,12 +232,34 @@ export async function removeFormerNumber(db, number, former) {
   return { ok: true, dogId };
 }
 
+// 出入所紀錄（#333，ADR 0011）：整份覆蓋，空陣列就刪掉這一列。before 是送出的人改之前看到的內容，
+// 跟 D1 現在的不一樣（別人剛改過）就回 409，用條件式 SQL 確保兩支手機同時送也不會蓋掉。
+// 回 { ok, dogId, before } 或 { status, error }；before 是 null 表示原本沒有紀錄
+export async function saveStays(db, number, before, stays) {
+  const dogId = (await dogIdsFor(db, [number])).get(number);
+  if (!dogId) return { status: 404, error: '找不到這個編號的狗' };
+  const conflict = { status: 409, error: '別人剛改過，請重新整理再改' };
+  const old = before.length ? JSON.stringify(before) : null;
+  const next = stays.length ? JSON.stringify(stays) : null;
+  if (old === next) {
+    const now = await db.prepare('SELECT stays_json FROM v3_stays WHERE dog_id=?').bind(dogId).first('stays_json');
+    return (now ?? null) === old ? { ok: true, dogId, before: old && before } : conflict;
+  }
+  let r;
+  if (!old) r = await db.prepare('INSERT INTO v3_stays(dog_id,stays_json) VALUES(?,?) ON CONFLICT(dog_id) DO NOTHING').bind(dogId, next).run();
+  else if (!next) r = await db.prepare('DELETE FROM v3_stays WHERE dog_id=? AND stays_json=?').bind(dogId, old).run();
+  else r = await db.prepare('UPDATE v3_stays SET stays_json=? WHERE dog_id=? AND stays_json=?').bind(next, dogId, old).run();
+  if (!r.meta || !r.meta.changes) return conflict;
+  return { ok: true, dogId, before: old && before };
+}
+
 // 離所紀錄（#259）：形狀跟原本的 data/departures.json 的 departures 一樣，依日期新到舊、同一天依編號
 export async function readDepartures(db) {
   const [deps, items] = await db.batch([
     db.prepare('SELECT * FROM v3_departures'),
     db.prepare('SELECT number, kind, value FROM v3_departure_items ORDER BY number, kind, position'),
   ]);
+  const staysOf = await readAllStays(db);
   const listOf = new Map();
   for (const r of items.results || []) {
     const key = `${r.number}|${r.kind}`;
@@ -247,6 +272,7 @@ export async function readDepartures(db) {
       reason: r.reason, matched: r.matched, flags: listOf.get(`${r.number}|flag`) || [],
     };
     if (r.returned_number !== null) entry.returned = r.returned_number;
+    if (staysOf.has(r.dog_id)) entry.stays = staysOf.get(r.dog_id);
     if (r.last_number !== null) {
       const last = { cage: r.last_cage, id: r.last_number, name: r.last_name, walkedDate: r.last_walked_date, note: r.last_note, sex: r.last_sex, intro: r.last_intro };
       if (listOf.has(`${r.number}|former`)) last.formerIds = listOf.get(`${r.number}|former`);
