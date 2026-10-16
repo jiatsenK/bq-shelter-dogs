@@ -577,3 +577,28 @@ test('#281 POST /walk 加備註、新增異動紀錄：轉給小程式；沒名�
   }
   assert.equal(calls.length, 2);
 });
+
+// #333 出入所紀錄 PUT /stays/{編號}：路由層的擋法（方法、格式、大小、沒接 D1、限流、D1 出錯）
+test('出入所紀錄路由：405、415、413、壞 JSON、沒接 D1、限流 429、D1 出錯回 500', async () => {
+  const { migrateCompactDatabase } = await import('../../scripts/migrate-compact-db.mjs');
+  const { importCompactDogs } = await import('../../scripts/import-compact-dogs.mjs');
+  resetState();
+  const db = fakeD1();
+  await migrateCompactDatabase(db);
+  await importCompactDogs(db, { syncedAt: '2026-10-15T12:00:00+08:00', dogs: [{ id: '2024032902', name: '測試狗' }] });
+  const env = { ALLOWED_ORIGINS: ORIGIN, DB: db, WALKER_KEY: 'k' };
+  const put = ({ method = 'PUT', type = 'application/json', body = JSON.stringify({ editor: '小明', before: [], stays: [] }), ip = '9.9.9.1' } = {}) =>
+    new Request('https://w.example/stays/2024032902', { method, headers: { Origin: ORIGIN, 'Content-Type': type, 'CF-Connecting-IP': ip }, body: method === 'GET' ? undefined : body });
+  const status = async (r, e = env) => (await worker.fetch(r, e)).status;
+  assert.equal(await status(put({ method: 'POST' })), 405);
+  assert.equal(await status(put({ method: 'GET' })), 405);
+  assert.equal(await status(put({ type: 'text/plain' })), 415);
+  assert.equal(await status(put({ body: 'x'.repeat(16001) })), 413);
+  assert.equal(await status(put({ body: '{' })), 400);
+  assert.equal(await status(put(), { ALLOWED_ORIGINS: ORIGIN, WALKER_KEY: 'k' }), 503);
+  let last;
+  for (let i = 0; i < 11; i++) last = await status(put({ ip: '9.9.9.2' }));
+  assert.equal(last, 429);
+  const broken = { ...env, DB: { prepare() { throw new Error('D1 壞了'); } } };
+  assert.equal(await status(put({ ip: '9.9.9.3' }), broken), 500);
+});

@@ -204,3 +204,70 @@ test('舊編號：預覽版不能存', async () => {
   const env = await makeEnv({ PREVIEW: '1' });
   assert.equal((await call(env, 'POST', '/former/2024032902', { editor: ME, former: '2015081801' })).status, 403);
 });
+
+// #333 出入所紀錄（ADR 0011）：一隻狗一列、整份覆蓋；送出改之前的內容，別人剛改過就擋（409）
+const stays = (env, id, body) => call(env, 'PUT', `/stays/${id}`, { editor: ME, ...body });
+
+test('出入所紀錄：存了 /api/dogs 馬上有、照入所日排，空陣列就刪掉這一列，每次都記編輯紀錄', async () => {
+  const env = await makeEnv();
+  const list = [{ in: '2019-03-01', out: '2019-06-01', reason: ' 整修移所 ' }, { in: '2015-08-18', out: '', reason: '迷路' }];
+  const r = await stays(env, '2024032902', { before: [], stays: list });
+  assert.equal(r.status, 200);
+  const saved = [{ in: '2015-08-18', out: '', reason: '迷路' }, { in: '2019-03-01', out: '2019-06-01', reason: '整修移所' }];
+  assert.deepEqual(r.body.stays, saved);
+  assert.deepEqual((await dogOf(env, '2024032902')).stays, saved);
+  assert.equal('stays' in (await dogOf(env, '2024010101')), false);
+  // 用舊編號改也是同一隻
+  assert.equal((await stays(env, '2020010101', { before: saved, stays: [] })).status, 200);
+  assert.equal('stays' in (await dogOf(env, '2024032902')), false);
+  assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_stays').first('n'), 0);
+  const log = (await call(env, 'GET', '/edits')).body.edits.reverse();
+  assert.deepEqual(log.map(e => [e.kind, e.kindLabel, e.editorName, e.before, e.after]), [
+    ['stays', '出入所紀錄', ME, null, saved],
+    ['stays', '出入所紀錄', ME, saved, null],
+  ]);
+});
+
+test('出入所紀錄：兩支手機同時改，後送的人帶的舊內容對不上就回 409，不蓋掉', async () => {
+  const env = await makeEnv();
+  const a = [{ in: '2015-08-18', out: '', reason: '迷路' }];
+  assert.equal((await stays(env, '2024032902', { before: [], stays: a })).status, 200);
+  const late = await stays(env, '2024032902', { before: [], stays: [{ in: '2016-01-01', out: '', reason: '流浪' }] });
+  assert.equal(late.status, 409);
+  assert.match(late.body.error, /別人剛改過/);
+  assert.equal((await stays(env, '2024032902', { stays: [] })).status, 409); // 沒帶舊內容也不行
+  assert.deepEqual((await dogOf(env, '2024032902')).stays, a);
+});
+
+test('出入所紀錄：日期格式、未來的日子、出所早於入所、原因太長、沒選名字、找不到狗都擋', async () => {
+  const env = await makeEnv();
+  const bad = async (body, status, id = '2024032902') => assert.equal((await call(env, 'PUT', `/stays/${id}`, { before: [], ...body })).status, status, JSON.stringify(body));
+  const one = s => ({ editor: ME, stays: [s] });
+  await bad(one({ in: '2015/08/18', out: '', reason: '' }), 400);
+  await bad(one({ in: '2015-02-30', out: '', reason: '' }), 400);
+  await bad(one({ in: twDay(1), out: '', reason: '' }), 400);
+  await bad(one({ in: '2015-08-18', out: twDay(1), reason: '' }), 400);
+  await bad(one({ in: '2015-08-18', out: '2015-08-17', reason: '' }), 400);
+  await bad(one({ in: '2015-08-18', out: '', reason: '字'.repeat(41) }), 400);
+  await bad({ editor: ME, stays: 'x' }, 400);
+  await bad({ stays: [] }, 400); // 沒選名字
+  await bad(one({ in: '2015-08-18', out: '', reason: '' }), 404, '2030010101');
+  assert.equal((await call(env, 'POST', '/stays/2024032902', { editor: ME, before: [], stays: [] })).status, 405);
+  assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_stays').first('n'), 0);
+  assert.equal(await env.DB.prepare("SELECT COUNT(*) AS n FROM v3_edit_log WHERE kind='stays'").first('n'), 0);
+});
+
+test('出入所紀錄：今天可以、預覽版不能存', async () => {
+  const env = await makeEnv();
+  assert.equal((await stays(env, '2024032902', { before: [], stays: [{ in: twDay(0), out: '', reason: '' }] })).status, 200);
+  const preview = await makeEnv({ PREVIEW: '1' });
+  assert.equal((await stays(preview, '2024032902', { before: [], stays: [] })).status, 403);
+});
+
+test('出入所紀錄：Worker 不看在不在所，用編號找得到狗就能補（ADR 0011，離所的狗也能改）', async () => {
+  const env = await makeEnv();
+  const id = await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='2024010101'").first('dog_id');
+  const r = await stays(env, '2024010101', { before: [], stays: [{ in: '2015-08-18', out: '', reason: '迷路' }] });
+  assert.equal(r.status, 200);
+  assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_stays WHERE dog_id=?').bind(id).first('n'), 1);
+});

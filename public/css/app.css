@@ -2318,7 +2318,13 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .intake-row { display: grid; gap: 8px; min-width: 0; margin: 12px 0; padding: 0; border: 0; }
 .intake-row label { display: grid; gap: 4px; min-width: 0; }
 .intake-row input, .intake-row select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 8px; font: inherit; font-size: 16px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 3px; }
-.intake-remove, #intakeAdd { min-height: 44px; padding: 8px 12px; font: inherit; color: var(--primary); background: var(--surface); border: 1px solid var(--line); border-radius: 3px; }
+.intake-remove, #intakeAdd, #staysAdd { min-height: 44px; padding: 8px 12px; font: inherit; color: var(--primary); background: var(--surface); border: 1px solid var(--line); border-radius: 3px; }
 @media (max-width: 599px) {
   .detail-editing-viewport textarea { min-height: min(150px, var(--detail-edit-field-height, 150px)); max-height: var(--detail-edit-field-height, none); overflow-y: auto; }
 }
+/* 出入所紀錄（#333）：表單沿用入所逐次紀錄的列，儲存、取消照補舊編號的按鈕 */
+.stays-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.stays-actions .former-save, .stays-actions .former-cancel { min-height: 44px; padding: 0 16px; border-radius: 3px; font: inherit; font-size: 15px; cursor: pointer; }
+.stays-actions .former-save { border: 0; background: var(--primary); color: #fff; }
+.stays-actions .former-save:disabled { opacity: .6; cursor: default; }
+.stays-actions .former-cancel { border: 1px solid var(--line); background: var(--surface); color: var(--ink); }

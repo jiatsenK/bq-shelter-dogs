@@ -16,7 +16,7 @@ const STAY_BUCKETS = [
   { label: '5 年以上', max: Infinity },
 ];
 
-// 入所日（ADR 0005）：所有編號裡最舊那個的前 8 碼（app.js 的 firstIntake）；看不出來或在未來的回 null
+// 入所日（ADR 0011）：編號、舊編號、出入所紀錄裡最早的那天（app.js 的 firstIntake）；看不出來或在未來的回 null
 function intakeDate(dog, today) {
   const d = firstIntake(dog);
   return d && d <= today ? d : null;
@@ -328,7 +328,7 @@ function analysisHtml(dogs, today) {
       ${kpi(avgStay == null ? '–' : yearsText(avgStay), '年', '平均在所')}
       ${kpi(stale, '隻', `超過 ${AMBER_DAYS} 天沒溜`, stale ? 'warn' : '')}
     </div>
-    <div class="a-hero-note">入所日期取編號前 8 碼${noIntake.length ? `；${noIntake.length} 隻編號看不出入所日期，不列入時間統計（${dogNames(noIntake.map(r => r.dog))}）` : ''}</div>
+    <div class="a-hero-note">入所日期取編號（含舊編號）前 8 碼和出入所紀錄裡最早的那天${noIntake.length ? `；${noIntake.length} 隻編號看不出入所日期，不列入時間統計（${dogNames(noIntake.map(r => r.dog))}）` : ''}</div>
   </section>`);
 
   out.push(monthWalksSection(today));
@@ -469,7 +469,7 @@ function parseDeparturesData(data) {
   const text = v => (v == null ? '' : String(v).trim());
   return data.departures.filter(e => e && text(e.id) && text(e.name)).map(e => {
     const last = e.last && typeof e.last === 'object' ? e.last : {};
-    const dog = parseDogsData({ dogs: [{ ...last, id: text(e.id), name: text(last.name) || text(e.name) }] }).dogs[0];
+    const dog = parseDogsData({ dogs: [{ ...last, id: text(e.id), name: text(last.name) || text(e.name), stays: e.stays }] }).dogs[0];
     dog.departure = {
       reason: DEPARTURE_ORDER.includes(e.reason) ? e.reason : 'unknown',
       matched: text(e.matched),
