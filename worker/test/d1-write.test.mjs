@@ -92,3 +92,42 @@ test('介紹：通關碼錯、太長、格式錯、編號不對都擋；預覽�
   assert.equal((await call(env, 'GET', '/intro/2024032902')).status, 405);
   assert.equal((await call({ ...env, PREVIEW: '1' }, 'PUT', '/intro/2024032902', { passcode: PASS, text: 'x' })).status, 403);
 });
+
+// #289 舊編號：誰都能補、都能刪，不用通關碼；/api/dogs 馬上讀得到，D1 留操作紀錄
+const dogOf = async (env, id) => (await call(env, 'GET', '/dogs')).body.dogs.find(d => d.id === id);
+
+test('舊編號：補了 /api/dogs 馬上有，刪了就沒有，兩次都記操作紀錄', async () => {
+  const env = await makeEnv();
+  const add = await call(env, 'POST', '/former/2024032902', { former: ' 2015081801 ' });
+  assert.deepEqual([add.status, add.body.former], [200, '2015081801']);
+  assert.deepEqual((await dogOf(env, '2024032902')).formerIds, ['2015081801', '2020010101']);
+  const del = await call(env, 'DELETE', '/former/2024032902', { former: '2015081801' });
+  assert.equal(del.status, 200);
+  assert.deepEqual((await dogOf(env, '2024032902')).formerIds, ['2020010101']);
+  // 同步匯入的舊編號也能刪
+  assert.equal((await call(env, 'DELETE', '/former/2024032902', { former: '2020010101' })).status, 200);
+  assert.equal('formerIds' in (await dogOf(env, '2024032902')), false);
+  const log = (await env.DB.prepare('SELECT action, number FROM v3_number_log ORDER BY id').all()).results;
+  assert.deepEqual(log.map(r => `${r.action}:${r.number}`), ['add:2015081801', 'remove:2015081801', 'remove:2020010101']);
+});
+
+test('舊編號：格式、日期、別隻狗的、重複、現在的編號都擋，D1 沒變', async () => {
+  const env = await makeEnv();
+  const bad = async (method, body, status, id = '2024032902') => assert.equal((await call(env, method, `/former/${id}`, body)).status, status, `${method} ${JSON.stringify(body)}`);
+  await bad('POST', { former: '123' }, 400);
+  await bad('POST', { former: '2015139901' }, 400);
+  await bad('POST', { former: '2025010101' }, 400, '2024032902'); // 比現在的編號晚
+  await bad('POST', { former: '2024032902' }, 400);
+  await bad('POST', { former: '2024010101' }, 409); // 別隻狗的
+  await bad('POST', { former: '2020010101' }, 409); // 已經有
+  await bad('POST', { former: '2015081801' }, 404, '2030010101');
+  await bad('DELETE', { former: '2024010101' }, 404); // 不是這隻的
+  await bad('PUT', { former: '2015081801' }, 405);
+  assert.deepEqual((await dogOf(env, '2024032902')).formerIds, ['2020010101']);
+  assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_number_log').first('n')), 0);
+});
+
+test('舊編號：預覽版不能存', async () => {
+  const env = await makeEnv({ PREVIEW: '1' });
+  assert.equal((await call(env, 'POST', '/former/2024032902', { former: '2015081801' })).status, 403);
+});
