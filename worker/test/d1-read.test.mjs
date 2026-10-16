@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
+import { resolveIdentity } from '../src/identity.js';
 import { fakeD1 } from './fakes.mjs';
 import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
 import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
@@ -80,11 +81,11 @@ test('GET /api/dogs：只收 GET；別的網站擋掉；預覽版照常可讀', 
 
 test('開卡改用 v3_card_opened：用編號找永久狗 ID 存；讀回時用現在的編號；舊編號開的卡也對到同一隻', async () => {
   const DB = await seededDb();
-  const code = 'abcdef123456', other = '123456abcdef';
+  const code = (await resolveIdentity(DB, '甲', 'test-key')).codes[0], other = (await resolveIdentity(DB, '乙', 'test-key')).codes[0];
   assert.equal((await send('PUT', '/cards/opened', { codes: [code], ids: ['2025022703'] }, { DB })).status, 200);
   assert.equal((await send('PUT', '/cards/opened', { codes: [code], ids: ['2025022703'] }, { DB })).status, 200);
   assert.equal((await send('PUT', '/cards/opened', { codes: [code], ids: ['2018041318'] }, { DB })).status, 200, '舊編號');
-  const { results } = await DB.prepare('SELECT walker_code, dog_id FROM v3_card_opened').all();
+  const { results } = await DB.prepare('SELECT volunteer_id, dog_id FROM v3_volunteer_cards').all();
   assert.equal(results.length, 2, '重送不重複');
   const dogIds = (await DB.prepare("SELECT number, dog_id FROM v3_dog_numbers WHERE number IN ('2025022703','2026051203')").all()).results;
   assert.deepEqual(new Set(results.map(r => r.dog_id)), new Set(dogIds.map(r => r.dog_id)), '存永久狗 ID');
@@ -95,6 +96,50 @@ test('開卡改用 v3_card_opened：用編號找永久狗 ID 存；讀回時用�
   assert.equal((await send('PUT', '/cards/opened', { codes: [code], ids: ['9999999999'] }, { DB })).status, 400, '不認得的編號');
   assert.equal((await send('PUT', '/cards/opened', { codes: [code], ids: ['2025022703'] }, { DB, PREVIEW: '1' })).status, 403);
   assert.equal((await get(`/cards/opened?codes=${code}`, {})).status, 503);
+});
+
+test('#267 常溜永久 ID：跨裝置增刪不覆蓋、合併別名、再入所與無編號狗', async t => {
+  const DB = await seededDb(); t.after(() => DB.close());
+  const code = (await resolveIdentity(DB, '甲', 'test-key')).codes[0], alias = (await resolveIdentity(DB, '乙', 'test-key')).codes[0];
+  const read = async (codes = [code]) => (await get(`/favorites?codes=${codes.join(',')}`, { DB })).json();
+  const initial = await read();
+  const a = initial.aliases['2025022703'], b = initial.aliases['2018041318'];
+  assert.match(a, /^[a-f0-9]{32}$/);
+  assert.equal(b, initial.aliases['2026051203'], '新舊編號對同一永久 ID');
+  assert.match(initial.aliases['名:沒編號'], /^[a-f0-9]{32}$/);
+  const put = async (dogId, on, codes = [code]) => send('PUT', '/favorites', { dogId, on, codes }, { DB });
+  assert.equal((await put(a, true)).status, 200);
+  assert.equal((await put(a, true)).status, 200, '重試冪等');
+  await put(a, true, [code, alias]);
+  assert.deepEqual((await read([alias])).ids, [], 'API 新增只寫首碼');
+  assert.equal((await put(b, true)).status, 200, '另一台新增另一隻');
+  assert.deepEqual(new Set((await read()).ids), new Set([a, b]));
+  await put(a, false);
+  assert.deepEqual((await read()).ids, [b], '只刪指定狗，另一台新增仍保留');
+  await put(a, true, [alias]);
+  assert.deepEqual(new Set((await read([code, alias])).ids), new Set([a, b]));
+  await put(a, false, [code, alias]);
+  assert.deepEqual((await read([code, alias])).ids, [b]);
+  await DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind('2026101601', b).run();
+  await DB.prepare("UPDATE v3_sheet_main SET number='2026101601',name='新名字' WHERE dog_id=?").bind(b).run();
+  const returned = await read();
+  assert.equal(returned.aliases['2026101601'], b);
+  assert.deepEqual(returned.ids, [b], '換編號仍收藏');
+  await DB.prepare("INSERT INTO v3_dogs(name) VALUES('沒編號')").run();
+  assert.equal((await read()).aliases['名:沒編號'], undefined, '同名不猜');
+});
+
+test('#267 常溜 API 驗證、跨站與預覽寫入保護', async t => {
+  const DB = await seededDb(); t.after(() => DB.close());
+  const path = '/favorites', codes = ['abcdef123456'];
+  assert.equal((await get(path + '?codes=bad', { DB })).status, 400);
+  assert.equal((await get(path + '?codes=' + codes[0], {})).status, 503);
+  assert.equal((await get(path + '?codes=' + codes[0], { DB }, { Origin: 'https://evil.example' })).status, 403);
+  assert.equal((await send('POST', path, {}, { DB })).status, 405);
+  for (const body of [{ codes, dogId: 'bad', on: true }, { codes, dogId: '0'.repeat(32), on: true }, { codes, dogId: '0'.repeat(32), on: 'yes' }, { codes: [], on: true }]) {
+    assert.equal((await send('PUT', path, body, { DB })).status, 400);
+  }
+  assert.equal((await send('PUT', path, { codes }, { DB, PREVIEW: '1' })).status, 403);
 });
 
 test('名字推薦改用 v3_volunteers：表上的名字記進去、以前看過的放 older；資料庫壞了照舊', async () => {

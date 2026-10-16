@@ -7,7 +7,8 @@
 - 與 K 溝通用繁體中文（台灣用語）。
 - 任何 Agent 寫入 repo 後，都要在 `AGENT_LOG.md` 檔尾追加一筆紀錄。
 - **試算表寫入規則（K 2026-10-15，#239，取代 10-08 的規則）**：網站只能寫「主清單」的這幾處（`apps-script/sheet-write.gs`）：「遛狗日期」「誰遛的」兩欄；「備註」欄只追加 `;2026/10/15內容（名字）`（原本空的就不加分號）；狗清單下方異動紀錄只新增一列「備註N」。日期由系統帶台灣時間，名字用網站選好的身分，送出前要預覽，寫入前先讀出格子現有內容再接上去，不刪、不改既有文字。另外「常遛狗群」分頁開放網站編輯（K 2026-10-16，`groups.html` → `/api/groups`）：只改狗名格（加狗、移出後往上補、狗名格滿了在群名列上面插一列）和最下面的群名列，數量列不動。其他欄位、其他分頁（含已出所）一律不寫入；需要另外記的資料放 repo 或 D1，不放試算表。
-- **跟著代號存 D1 的例外（K 2026-10-13、10-15）**：圖鑑開卡、我的常溜這類志工自己的選擇，用個人代號和永久 ID 存現有 D1，以便跨裝置保存；不寫試算表，不新增 Git 提交。新功能要存使用者資料時，先看 `docs/adr/0001-volunteer-data-follows-code.md` 歸類。
+- **志工自己的資料存 D1 的例外（K 2026-10-13、10-15、10-16）**：圖鑑開卡、我的常溜這類志工自己的選擇存現有 D1，以便跨裝置保存；不寫試算表，不新增使用者資料的 Git 提交。新功能要存使用者資料時，先看 `docs/adr/0001-volunteer-data-follows-code.md` 歸類，志工身分依下條。
+- **志工身分（K 2026-10-16）**：更名、身分合併、志工資料關聯先讀 `docs/adr/0005-volunteer-identity.md` 和 `GLOSSARY.md`。已確認以固定 `volunteer_id` 持有資料，名字／代號只作對照；不得再把代號當成另一套志工身分。PR #282 已補本機實作與真實資料隔離演練，正式結構與上線尚未切換，不能把舊正式表或 API 當成已完成的新規格。
 - **活動紀錄例外（K 2026-10-15）**：動保小小兵、認養會的出席紀錄和已出所狗卡存現有 D1，任何人都能新增修改；不寫試算表，不新增 Git 提交。見 `docs/adr/0002-activity-records.md`。
 - **開放編輯（K 2026-10-16）**：網站上沒有通關碼，任何人選好名字就能改；不做管理後台（#143 廢除）。新增會改資料的功能，要照 `docs/adr/0004-open-editing-and-edit-log.md` 用 `worker/src/editlog.js` 的 `editorOf`／`logEdit` 記進編輯紀錄（溜狗打卡除外）。`/api/admin/*` 只給 GitHub Action，用 `ADMIN_KEY`。
 
@@ -15,7 +16,7 @@
 
 跟 `.github/workflows/tests.yml` 一樣，PR 要全過：
 
-- node 測試：`node --test scripts/sync-sheet.test.mjs worker/test/worker.test.mjs worker/test/sheet-write.test.mjs scripts/photo-versions.test.mjs scripts/analytics-beacon.test.mjs worker/test/r2.test.mjs scripts/r2-bucket.test.mjs scripts/d1-database.test.mjs scripts/compact-schema.test.mjs scripts/import-compact-dogs.test.mjs scripts/import-compact-profiles.test.mjs scripts/import-compact-departures.test.mjs scripts/sync-compact-d1.test.mjs worker/test/d1-read.test.mjs worker/test/d1-write.test.mjs`（要寫檔名，寫資料夾在 Node 22 會失敗）
+- node 測試：`node --test scripts/sync-sheet.test.mjs worker/test/worker.test.mjs worker/test/sheet-write.test.mjs scripts/photo-versions.test.mjs scripts/analytics-beacon.test.mjs worker/test/r2.test.mjs scripts/r2-bucket.test.mjs scripts/d1-database.test.mjs scripts/compact-schema.test.mjs scripts/import-compact-dogs.test.mjs scripts/import-compact-profiles.test.mjs scripts/import-compact-departures.test.mjs scripts/sync-compact-d1.test.mjs worker/test/d1-read.test.mjs worker/test/d1-write.test.mjs worker/test/identity.test.mjs`（要寫檔名，寫資料夾在 Node 22 會失敗）
 - 網頁測試：`node scripts/run-browser-tests.cjs`（需要 Playwright 的 Chromium）
 
 ## Agent skills

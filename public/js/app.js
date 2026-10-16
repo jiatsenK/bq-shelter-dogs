@@ -226,12 +226,54 @@ function saveMyCodes(codes) {
     else if (walkedStorage) walkedStorage.removeItem(WALKER_CODES_KEY);
   } catch (e) { /* 存不了就只記在記憶體 */ }
   try { myWalks = walksData ? parseMyWalks(walksData, codes) : []; } catch (e) { myWalks = []; }
+  syncFavs();
+}
+
+async function identityRequest(action, body) {
+  const res = await fetch(UPLOAD_URL + '/identity' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const out = await res.json();
+  if (!res.ok || !out.ok) { const e = new Error(out.error || '身分設定失敗，請稍後再試'); e.targetCode = out.targetCode; throw e; }
+  return out;
+}
+async function renameWalker() {
+  const edit = walkerSetup;
+  if (!edit || edit.phase === 'saving') return;
+  const originalCodes = loadMyCodes().join(',');
+  edit.phase = 'saving'; render();
+  try {
+    const out = await identityRequest('/rename', { code: loadMyCodes()[0], name: edit.text.trim(), operationId: edit.operationId || (edit.operationId = crypto.randomUUID()) });
+    if (walkerSetup !== edit || loadMyCodes().join(',') !== originalCodes) return;
+    saveWalkerName(out.identity.name); saveMyCodes(out.identity.codes); walkerSetup = null;
+  } catch (e) {
+    edit.phase = 'error'; edit.error = e.message;
+    if (e.targetCode) {
+      try { edit.merge = await identityRequest('/merge-preview', { code: loadMyCodes()[0], targetCode: e.targetCode }); edit.targetCode = e.targetCode; }
+      catch (previewError) { edit.error = previewError.message; }
+    }
+  }
+  render();
+}
+async function confirmWalkerMerge() {
+  const edit = walkerSetup;
+  if (!edit?.merge || edit.phase === 'saving') return;
+  const originalCodes = loadMyCodes().join(',');
+  edit.phase = 'saving'; render();
+  try {
+    const out = await identityRequest('/merge', { code: loadMyCodes()[0], targetCode: edit.targetCode, token: edit.merge.token, confirm: true, operationId: edit.mergeOperationId || (edit.mergeOperationId = crypto.randomUUID()) });
+    if (walkerSetup !== edit || loadMyCodes().join(',') !== originalCodes) return;
+    saveWalkerName(out.identity.name); saveMyCodes(out.identity.codes); walkerSetup = null;
+  } catch (e) { edit.phase = 'error'; edit.error = e.message; edit.merge = null; }
+  render();
 }
 
 function walkerSetupHtml() {
   const edit = walkerSetup || { text: '', phase: 'edit', error: '' };
   const busy = edit.phase === 'saving';
   const has = loadMyCodes().length > 0;
+  if (edit.merge) {
+    const summary = p => esc(p.name) + '：常溜 ' + p.favorites + '、開卡 ' + p.cards + '、溜狗來源紀錄 ' + p.walkRows;
+    return '<div class="who-box"><h3>確認身分合併</h3><p role="alert">' + esc(edit.error || '') + '</p><p>' + summary(edit.merge.source) + '</p><p>' + summary(edit.merge.target) + '</p><p>合併後顯示「' + esc(edit.merge.target.name) + '」，兩邊資料都保留。</p><div class="my-note-actions"><button type="button" class="my-note-save" id="whoMerge"' + (busy ? ' disabled' : '') + '>這兩個身分都是我</button><button type="button" class="photo-cancel" id="whoCancel">取消</button></div></div>';
+  }
   // 清除前確認一次（2026-10-08 介面評估第二輪：一按就清掉名字和代號，按錯就不能按溜了）
   if (edit.confirmClear) {
     return `<div class="who-box">
@@ -253,7 +295,7 @@ function walkerSetupHtml() {
     ${edit.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(edit.error)}</span></div>` : ''}
     <div class="my-note-actions">
       <button type="submit" class="my-note-save" id="whoSave"${busy ? ' disabled' : ''}>${busy ? '設定中…' : edit.phase === 'confirm' ? '確定用這個名字' : '設定'}</button>
-      ${has && !busy ? `<button type="button" class="photo-cancel" id="whoCancel">取消</button>` : ''}
+      ${has && !busy ? `<button type="button" class="photo-cancel" id="whoRename">更改登記名字</button><button type="button" class="photo-cancel" id="whoCancel">取消</button>` : ''}
     </div>
     ${has && !busy ? `<button type="button" class="who-clear" id="whoClear">清除這支手機的設定</button>` : ''}
     ${has ? '' : '<button type="button" class="who-clear guide-link" data-open-guide>看使用說明</button>'}
@@ -274,6 +316,7 @@ async function saveWalkerSetup() {
     if (unknown.length) { edit.phase = 'confirm'; edit.unknown = unknown; render(); return; }
   }
   const error = await setWalkerName(edit.text);
+  if (walkerSetup !== edit) return;
   if (error) return failWith(error);
   setNameLater(false);
   if (walkerSetup === edit) walkerSetup = null;
@@ -285,11 +328,13 @@ async function setWalkerName(raw) {
   const text = String(raw || '').trim();
   if (!text) return '請輸入你在試算表上寫的名字';
   if (!UPLOAD_URL) return '暫時不能設定，網站這邊還沒準備好';
-  const { codes, error } = await walkerCodesFor(splitWalkers(text).map(canonicalWalker).filter(Boolean).flatMap(n => n === 'K' ? [n, '岑'] : [n]));
-  if (error) return error;
-  if (!codes.length) return '設定沒有成功，請稍後再試';
-  saveMyCodes(codes);
-  saveWalkerName(canonicalWalker(firstWalkerName(text)));
+  const oldName = loadWalkerName(), oldCodes = loadMyCodes().join(',');
+  try {
+    const out = await identityRequest('', { name: text });
+    if (loadWalkerName() !== oldName || loadMyCodes().join(',') !== oldCodes) return '身分設定已變動，請重新設定';
+    saveWalkerName(out.identity.name);
+    saveMyCodes(out.identity.codes);
+  } catch (e) { return e.message; }
   return '';
 }
 // 名字送 Worker 換代號：回 { codes } 或 { codes: [], error: 原因 }
@@ -964,15 +1009,123 @@ function setWalkedLocal(dogs, on) {
   queueSheetWrite(changed, on, text, undoFn);
 }
 
-// ── 我的常溜（#155）：志工自己收藏的狗，只存這支手機，不寫試算表、不送伺服器；跟「我溜過」（歷史）分開 ──
+// ── 我的常溜（#267）：逐隻增刪，絕不把手機上的舊整份清單蓋到 D1 ──
 const FAVS_KEY = 'bq-favs';
-function loadFavs() { const v = readJsonKey(FAVS_KEY); return Array.isArray(v) ? v.map(String) : []; }
+const FAV_SYNC_KEY = 'bq-favs-sync';
+let favSyncMemory = null;
+let favSyncQueue = Promise.resolve();
+function favState() {
+  if (!favSyncMemory) {
+    const saved = readJsonKey(FAV_SYNC_KEY);
+    favSyncMemory = saved && saved.v === 1 ? saved : { v: 1, aliases: {}, books: {}, pending: [] };
+  }
+  return favSyncMemory;
+}
+function saveFavState() { writeJsonKey(FAV_SYNC_KEY, favState()); }
+function localFavs() { const v = readJsonKey(FAVS_KEY); return Array.isArray(v) ? v.map(String) : []; }
+function favoriteIds() {
+  const state = favState(), codes = loadMyCodes();
+  const ids = new Set(state.books[codes.join(',')] || []);
+  for (const op of state.pending) {
+    if (!op.codes.some(c => codes.includes(c))) continue;
+    if (op.on) ids.add(op.dogId); else ids.delete(op.dogId);
+  }
+  return ids;
+}
+function loadFavs() {
+  const ids = favoriteIds(), aliases = favState().aliases;
+  return [...new Set([...localFavs(), ...allDogs.filter(d => ids.has(aliases[walkKey(d)])).map(walkKey)])];
+}
 function isFav(dog) { const k = walkKey(dog); return !!k && loadFavs().includes(k); }
 function toggleFav(dog) {
   const k = walkKey(dog);
   if (!k) return;
-  const favs = loadFavs();
-  writeJsonKey(FAVS_KEY, favs.includes(k) ? favs.filter(x => x !== k) : [k, ...favs]);
+  const on = !isFav(dog), codes = loadMyCodes(), state = favState();
+  state.localVersions ||= {};
+  state.localVersions[k] = (state.localVersions[k] || 0) + 1;
+  saveFavState();
+  const dogId = state.aliases[k];
+  if (codes.length && dogId) {
+    // 讀取合併所有名字；取消時也要取消各個名字底下的這隻狗。
+    state.pending.push({ codes: [codes[0]], dogId, on });
+    writeJsonKey(FAVS_KEY, localFavs().filter(x => state.aliases[x] !== dogId && x !== k));
+    saveFavState();
+  } else {
+    writeJsonKey(FAVS_KEY, on ? [k, ...localFavs()] : localFavs().filter(x => x !== k));
+  }
+  syncFavs();
+}
+
+// 核心只操作收藏狀態；儲存、傳輸由呼叫者提供，不依賴畫面或瀏覽器。
+async function reconcileFavorites(state, codes, io) {
+  const out = await io.read(codes);
+  if (io.codes().join(',') !== codes.join(',')) return;
+  state.aliases = out.aliases;
+  const bookKey = codes.join(',');
+  state.books[bookKey] = out.ids;
+  for (const key of io.local()) {
+    const dogId = state.aliases[key];
+    if (!dogId) continue;
+    let op = state.pending.slice().reverse().find(op => op.dogId === dogId && op.codes.includes(codes[0]));
+    if (!op || !op.on) {
+      op = { codes: [codes[0]], dogId, on: true };
+      state.pending.push(op);
+    }
+    op.legacy ||= {};
+    op.legacy[key] = state.localVersions?.[key] || 0;
+  }
+  io.save();
+  while (state.pending.length) {
+    const op = state.pending[0];
+    await io.write({ codes: op.codes, dogId: op.dogId, on: op.on });
+    // 只清除此筆搬移的原始收藏；等待期間新按的訪客收藏保留。
+    io.removeLegacy(key => Object.hasOwn(op.legacy || {}, key)
+      && (state.localVersions?.[key] || 0) === op.legacy[key]);
+    state.pending.shift();
+    if (op.codes.some(c => codes.includes(c))) {
+      const ids = new Set(state.books[bookKey]);
+      if (op.on) ids.add(op.dogId); else ids.delete(op.dogId);
+      state.books[bookKey] = [...ids];
+    }
+    io.save();
+  }
+}
+
+async function favoriteRequest(codes, op) {
+  const base = UPLOAD_URL + '/favorites';
+  const res = await fetch(op ? base : base + '?codes=' + encodeURIComponent(codes[0]), op ? {
+    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...op, codes: op.codes.slice(0, 1) }),
+  } : { cache: 'no-store' });
+  const out = await res.json();
+  if (!res.ok || !out.ok || (!op && (!Array.isArray(out.ids) || !out.aliases))) throw new Error('常溜同步失敗');
+  return out;
+}
+
+function syncFavs() {
+  // 串行保留點擊順序；失敗的操作下次打開或恢復連線再試。
+  favSyncQueue = favSyncQueue.then(async () => {
+    let codes = loadMyCodes();
+    if (!codes.length || !UPLOAD_URL) return;
+    const original = codes.join(','), name = loadWalkerName();
+    if (name) {
+      const out = await identityRequest('', { name });
+      if (loadMyCodes().join(',') !== original || loadWalkerName() !== name) return;
+      saveWalkerName(out.identity.name);
+      walkerCodesMemory = out.identity.codes;
+      try { walkedStorage?.setItem(WALKER_CODES_KEY, JSON.stringify(out.identity.codes)); } catch (e) { /* 本次仍可使用 */ }
+      codes = out.identity.codes;
+      myWalks = walksData ? parseMyWalks(walksData, codes) : [];
+    }
+    await reconcileFavorites(favState(), codes, {
+      codes: loadMyCodes, local: localFavs, save: saveFavState,
+      read: codes => favoriteRequest(codes), write: op => favoriteRequest(null, op),
+      removeLegacy: matches => writeJsonKey(FAVS_KEY, localFavs().filter(key => !matches(key))),
+    });
+    if (loadMyCodes().join(',') === codes.join(',')) { render(); renderDetail(); }
+  }).catch(() => {
+    if (loadMyCodes().length) showToast('常溜暫存在這支手機，連線恢復後會再同步');
+  });
+  return favSyncQueue;
 }
 
 // ── 按「溜了」寫進試算表（#138）──
@@ -1168,9 +1321,9 @@ function firstWalkerName(text) {
 }
 function loadWalkerName() {
   try {
-    if (walkedStorage) return canonicalWalker(walkedStorage.getItem(WALKER_NAME_KEY) || '');
+    if (walkedStorage) return (walkedStorage.getItem(WALKER_NAME_KEY) || '').trim();
   } catch (e) { /* 讀不到就用記憶體裡的 */ }
-  return canonicalWalker(walkerNameMemory);
+  return String(walkerNameMemory || '').trim();
 }
 function saveWalkerName(name) {
   walkerNameMemory = name || '';
@@ -2911,6 +3064,10 @@ mainEl.addEventListener('click', e => {
     render();
     const input = document.getElementById('whoInput');
     if (input) input.focus();
+  } else if (e.target.closest('#whoRename')) {
+    renameWalker();
+  } else if (e.target.closest('#whoMerge')) {
+    confirmWalkerMerge();
   } else if (e.target.closest('#whoCancel')) {
     walkerSetup = null;
     render();
@@ -2931,6 +3088,7 @@ mainEl.addEventListener('click', e => {
 mainEl.addEventListener('input', e => {
   if (e.target.id !== 'whoInput') return;
   if (!walkerSetup) walkerSetup = { text: '', phase: 'edit', error: '' };
+  if (walkerSetup.text !== e.target.value) { delete walkerSetup.operationId; delete walkerSetup.mergeOperationId; delete walkerSetup.merge; }
   walkerSetup.text = e.target.value;
   refreshNames(mainEl, walkerSetup, 'who', e);
 });
@@ -3527,6 +3685,7 @@ function applyDogsData(data) {
   render();
   loadMyWalks();
   loadRest();
+  syncFavs();
 }
 
 // 頁首的資料時間；沒網路時改寫「沒網路・資料 10/8 09:01」，志工才知道看的是舊資料、溜了寫不進試算表
@@ -3540,7 +3699,8 @@ function renderUpdatedLabel() {
   el.classList.toggle('offline', off);
 }
 window.addEventListener('offline', () => { renderUpdatedLabel(); render(); renderDetail(); });
-window.addEventListener('online', () => { renderUpdatedLabel(); render(); renderDetail(); loadWalkerNames(); });
+window.addEventListener('online', () => { renderUpdatedLabel(); render(); renderDetail(); loadWalkerNames(); syncFavs(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) syncFavs(); });
 
 // ── 頁首「更新」按鈕：請 Worker 叫 GitHub 同步試算表，再等網站上的 dogs.json 換新 ──
 // 同步約 1 分鐘、網站重新部署再約 1 分鐘；試算表沒有新東西時 dogs.json 不會變，等滿就告訴志工已經是最新

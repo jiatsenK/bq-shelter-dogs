@@ -4,6 +4,8 @@
 
 // 種類 → 編輯紀錄頁顯示的字；新種類加在這裡
 export const KIND_LABELS = {
+  volunteer_rename: '志工更名',
+  volunteer_merge: '身分合併',
   rest: '休養',
   intro: '入所介紹',
   photo: '照片',
@@ -68,5 +70,6 @@ export async function readEdits(db, limit = EDITS_DEFAULT) {
     id: r.id, at: r.at, editorName: r.editor_name, editorCode: r.editor_code, kind: r.kind,
     kindLabel: KIND_LABELS[r.kind] || r.kind, dogId: r.dog_id, dogNumber: r.dog_number,
     before: parse(r.before_json), after: parse(r.after_json),
+    ...(['volunteer_rename', 'volunteer_merge'].includes(r.kind) ? { editorVolunteerId: parse(r.before_json)?.volunteerId || parse(r.before_json)?.source?.volunteerId } : {}),
   }));
 }
