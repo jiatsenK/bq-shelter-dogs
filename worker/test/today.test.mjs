@@ -78,3 +78,56 @@ test('今天以前的紀錄下次寫入時清掉；GET /api/today 只回今天�
   const res = await worker.fetch(new Request(`${SITE}/api/today`, { headers: { Origin: SITE } }), {});
   assert.equal(res.status, 503);
 });
+
+// ADR 0009：Worker 每次只讀 1 列 today 版本號，沒變回記憶體裡的清單
+const readsOf = async env => {
+  const before = env.DB.stats.rowsRead;
+  const out = await (await worker.fetch(new Request(`${SITE}/api/today`, { headers: { Origin: SITE } }), env)).json();
+  return { out, rows: env.DB.stats.rowsRead - before };
+};
+
+test('沒人登記時，再抓一次 /api/today 只讀 1 列版本號，內容相同', async () => {
+  const env = await makeEnv();
+  fakeScript(sheet);
+  await worker.fetch(post({ action: 'walk', walker: 'K', dogs: [{ id: '9001', name: '甲' }, { id: '9002', name: '乙' }] }), env);
+  const first = await readsOf(env);
+  assert.equal(first.rows, 3); // 版本號 1 列＋今天 2 隻狗
+  const second = await readsOf(env);
+  assert.equal(second.rows, 1);
+  assert.deepEqual(second.out, first.out);
+});
+
+test('別台 Worker 機器按溜了、復原，或直接改表：下一次抓就重讀並回新內容', async () => {
+  const env = await makeEnv();
+  fakeScript(sheet);
+  assert.deepEqual((await readsOf(env)).out.walks, []);
+  await worker.fetch(post({ action: 'walk', walker: 'K', dogs: [{ id: '9001', name: '甲' }] }), env);
+  assert.equal((await readsOf(env)).out.walks[0].walked, true);
+  const undo = { action: 'undo', dogs: [{ id: '9001', name: '甲', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: 'K' } }] };
+  await worker.fetch(post(undo), env);
+  assert.equal((await readsOf(env)).out.walks[0].walked, false);
+  await env.DB.prepare('DELETE FROM v3_today_walks').run(); // 例如同步清掉舊資料
+  const after = await readsOf(env);
+  assert.deepEqual(after.out.walks, []);
+  assert.equal(after.rows, 1);
+});
+
+test('跨過午夜：版本號沒變也回新一天的清單', async () => {
+  const env = await makeEnv();
+  await env.DB.prepare(`INSERT INTO v3_today_walks VALUES('${TODAY}','9001',1,'${TODAY}','K','x')`).run();
+  const realNow = Date.now;
+  try {
+    assert.equal((await readsOf(env)).out.walks.length, 1);
+    Date.now = () => realNow() + 86400 * 1000;
+    const next = await readsOf(env);
+    assert.notEqual(next.out.date, TODAY);
+    assert.deepEqual(next.out.walks, []);
+  } finally { Date.now = realNow; }
+});
+
+test('讀不到版本號：回 503，跟讀不到表一樣', async () => {
+  const env = await makeEnv();
+  await env.DB.prepare('DROP TABLE v3_data_versions').run();
+  const res = await worker.fetch(new Request(`${SITE}/api/today`, { headers: { Origin: SITE } }), env);
+  assert.equal(res.status, 503);
+});

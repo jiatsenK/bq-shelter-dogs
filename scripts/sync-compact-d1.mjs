@@ -2,7 +2,7 @@
 // 網站從 D1 讀（#247、#260）。只寫 D1：不寫試算表、不寫 data/、不呼叫 git／GitHub。
 // 由 .github/workflows/sync-sheet.yml 執行：先用 wrangler 讀正式 D1 的現況，在記憶體 D1 裡算好、匯入並比對，
 // 一致才跟現況照主鍵比對，只產生有變的列的 SQL 交給 wrangler 寫回（差異同步，#302；以前每次刪光重寫，一天就用完 D1 寫入額度）。
-// 寫之前先檢查寫入預算（ADR 0008），異常就整次不寫。試算表的部分（主清單、異動紀錄、常遛狗群、已出所）照試算表重建；
+// 寫之前先檢查寫入預算（ADR 0008），異常就整次不寫。加 --dry-run 只算列數、不寫入（#309）。試算表的部分（主清單、異動紀錄、常遛狗群、已出所）照試算表重建；
 // 溜狗紀錄和離所是累積的，以 D1 上一次的內容為基準往上加。
 // 休養、介紹、開卡、照片由網站直接寫 D1（#249、#250），這裡不碰。
 import { readFile, writeFile, appendFile } from 'node:fs/promises';
@@ -17,7 +17,7 @@ import { compareCompactProfiles } from './import-compact-profiles.mjs';
 import { compareCompactDepartures } from './import-compact-departures.mjs';
 import { fetchGviz, parseGroupColumns, parseGroupLabels, buildData, loadDepartedRows } from './sync-sheet.mjs';
 import { planSync, readPrevious, applySource } from './sync-plan.mjs';
-import { SYNC_TABLES, diffTables, budgetProblem, todayRowsWritten, MAX_ROWS_PER_SYNC, DAILY_BUDGET } from './sync-diff.mjs';
+import { SYNC_TABLES, diffTables, budgetProblem, todayRowsWritten, MAX_ROWS_PER_SYNC, DAILY_BUDGET } from './sync-diff.mjs';
 export { planSync, readPrevious };
 
 // 從正式 D1 讀回的現況：永久狗與編號（重跑沿用 ID）、上一次的主清單複本（比對溜狗日期、離所）、
@@ -85,16 +85,52 @@ export async function readSeed(query) {
   return Object.fromEntries([first, ...rest].map((t, i) => [t, results[i]]));
 }
 
-const wranglerArgs = args => ['--yes', 'wrangler@4', 'd1', 'execute', 'bq-shelter-dogs', '--remote', ...args];
+// 預演時只准送 SELECT 給正式 D1（#309）：預演用的 token 有寫入權限，萬一寫入那段被改壞也送不出去
+let readOnly = false;
+const wranglerArgs = args => {
+  const sql = args[args.indexOf('--command') + 1];
+  if (readOnly && (!args.includes('--command') || !/^\s*SELECT\s/i.test(sql))) throw new Error('預演只能讀 D1，擋下一個寫入指令');
+  return ['--yes', 'wrangler@4', 'd1', 'execute', 'bq-shelter-dogs', '--remote', ...args];
+};
 const wranglerAsync = args => new Promise((resolve, reject) => {
   execFile('npx', wranglerArgs(args), { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
     if (stderr) process.stderr.write(stderr);
-    if (err) reject(err); else resolve(stdout);
+    // wrangler --json 把錯誤原因印在 stdout，接到訊息後面，失敗時才看得出原因
+    if (err) { if (stdout) err.message += `\n${stdout.slice(0, 2000)}`; reject(err); } else resolve(stdout);
   });
 });
+// 預演（#309）：PR 改到同步程式時，用正式試算表和正式 D1 算一次要寫幾列，不寫入；結果貼在 PR 上給 K 看
+// 只有這次要寫的列數超過單次門檻才讓 CI 失敗；今天帳號已寫多少跟 PR 的程式無關，只列出來提醒
+export function dryRunReport(planned, todayWritten, limits) {
+  const problem = budgetProblem(planned, null, limits);
+  const daily = budgetProblem(planned, todayWritten, { ...limits, maxRows: Infinity });
+  const used = `${todayWritten === null ? '查不到' : `${todayWritten} 列`}${daily ? '（已超過每天預算，跟這張 PR 無關，但今天正式同步會停寫）' : ''}`;
+  const text = `## 預演：會寫 ${planned} 列${problem ? '（超過門檻）' : ''}
+
+用正式試算表和正式 D1 算的，沒有寫入。
+
+- 今天帳號已寫：${used}
+- 單次門檻 ${limits.maxRows} 列、每天預算 ${limits.dailyBudget} 列（ADR 0008）
+
+${problem ? `**${problem}，不要合併。** 通常是程式又變回整份重寫。` : '列數很小（個位數到幾十）就可以合併。'}
+`;
+  return { ok: !problem, text };
+}
+
+export function dryRunFailure(error) {
+  return `## 預演失敗
+
+用正式資料預演同步時出錯，沒有寫入。**不要合併**，先查原因：
+
+\`\`\`
+${error.message}
+\`\`\`
+`;
+}
+
 const wrangler = args => execFileSync('npx', wranglerArgs(args), { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 64 * 1024 * 1024 });
 
-async function main() {
+async function main({ dryRun = false } = {}) {
   // D1 的溜狗紀錄沒有 mine，要靠代號推回來；沒有 WALKER_KEY 會把「我溜過」的日期算錯，寧可不同步
   if (!process.env.WALKER_KEY) throw new Error('沒有設定 WALKER_KEY，無法比對溜狗紀錄');
   const now = new Date();
@@ -114,6 +150,15 @@ async function main() {
   const todayWritten = await todayRowsWritten({ token: process.env.CLOUDFLARE_API_TOKEN, accountId: process.env.CLOUDFLARE_ACCOUNT_ID });
   // 查不到今天的用量不擋同步（只是少一道檢查），但在摘要寫出來，讓 K 知道 token 要補權限
   if (todayWritten === null) console.log('::warning::查不到今天的 D1 寫入量（CLOUDFLARE_API_TOKEN 要有 Account Analytics 讀取權限），這次只檢查單次門檻');
+  if (dryRun) {
+    const report = dryRunReport(planned, todayWritten, limits);
+    console.log(report.text);
+    await summary(report.text);
+    await writeDryRunComment(report.text);
+    // 報告已經寫好，直接結束；用 throw 會被下面的「預演失敗」蓋掉，看不到列數
+    if (!report.ok) process.exitCode = 1;
+    return;
+  }
   const problem = budgetProblem(planned, todayWritten, limits);
   const used = todayWritten === null ? '查不到' : `${todayWritten} 列`;
   if (problem) {
@@ -143,6 +188,21 @@ async function summary(text) {
   if (process.env.GITHUB_STEP_SUMMARY) await appendFile(process.env.GITHUB_STEP_SUMMARY, text);
 }
 
+// 預演結果另外寫一份，給 CI 貼成 PR 留言（DRY_RUN_COMMENT 是檔案路徑）
+async function writeDryRunComment(text) {
+  if (process.env.DRY_RUN_COMMENT) await writeFile(process.env.DRY_RUN_COMMENT, text);
+}
+
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch(e => { console.error(`同步失敗，D1 保留上一次的內容：${e.message}`); process.exit(1); });
+  const dryRun = process.argv.includes('--dry-run');
+  readOnly = dryRun;
+  main({ dryRun }).catch(async e => {
+    if (dryRun) {
+      const text = dryRunFailure(e);
+      await summary(text).catch(() => {});
+      await writeDryRunComment(text).catch(() => {});
+      console.error(`預演失敗，沒有寫入：${e.message}`);
+    } else console.error(`同步失敗，D1 保留上一次的內容：${e.message}`);
+    process.exit(1);
+  });
 }

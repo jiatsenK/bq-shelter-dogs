@@ -234,3 +234,17 @@ CREATE TABLE IF NOT EXISTS v3_today_walks (
   updated_at TEXT NOT NULL,
   PRIMARY KEY(walk_date,dog_key)
 );
+
+-- 資料版本號（ADR 0009）：觸發器在表有新增、修改、刪除時自動加 1，Worker 每次只讀這 1 列，沒變就回記憶體裡的資料。
+-- today 對應 v3_today_walks；之後 small／walks／live 用 ALTER TABLE 加欄。
+CREATE TABLE IF NOT EXISTS v3_data_versions (id INTEGER PRIMARY KEY CHECK(id=1), today INTEGER NOT NULL DEFAULT 0);
+INSERT OR IGNORE INTO v3_data_versions(id) VALUES(1);
+CREATE TRIGGER IF NOT EXISTS version_v3_today_walks_INSERT AFTER INSERT ON v3_today_walks BEGIN UPDATE v3_data_versions SET today=today+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_today_walks_UPDATE AFTER UPDATE ON v3_today_walks BEGIN UPDATE v3_data_versions SET today=today+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_today_walks_DELETE AFTER DELETE ON v3_today_walks BEGIN UPDATE v3_data_versions SET today=today+1 WHERE id=1; END;
+
+-- 什麼時候叫 GitHub 同步試算表（ADR 0008，worker/src/sync-plan.js）：changed（試算表有人改）、count（今天叫了幾次）、sheet_sig（上次同步的試算表指紋）
+CREATE TABLE IF NOT EXISTS v3_sync_state (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
