@@ -22,7 +22,13 @@ async function identityOf(db, id) {
 
 // 只有相同正規化名字及同一算法的代號才建立對照，不推測不同名字。
 export async function resolveIdentity(db, name, key) {
-  const code = await walkerCode(name, key), nameKey = walkerNameKey(name);
+  return linkIdentityName(db, name, await walkerCode(name, key));
+}
+
+// 供離線演練使用已從原服務核對的代號；HTTP 仍由伺服器自行計算，不能接受客戶端指定代號。
+export async function linkIdentityName(db, name, code) {
+  if (!/^[a-f0-9]{12}$/.test(code)) throw new IdentityError(400, '名字代號格式不對');
+  const nameKey = walkerNameKey(name);
   const existing = await one(db, 'SELECT volunteer_id FROM v3_identity_names WHERE code=?', code);
   if (existing) return identityOf(db, existing.volunteer_id);
   const people = await rows(db, 'SELECT volunteer_id,name FROM v3_volunteers ORDER BY volunteer_id');

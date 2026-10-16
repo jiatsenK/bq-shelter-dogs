@@ -1,6 +1,6 @@
 // #267：唯讀分析與可重跑銜接。呼叫者提供 DB 與同一 WALKER_KEY 的代號算法；不自行連正式服務。
 import { walkerCode, walkerNameKey } from '../worker/src/editlog.js';
-import { resolveIdentity } from '../worker/src/identity.js';
+import { linkIdentityName } from '../worker/src/identity.js';
 
 export async function inspectVolunteerIdentity(db, codeFor) {
   const people = (await db.prepare('SELECT volunteer_id,name FROM v3_volunteers ORDER BY volunteer_id').all()).results;
@@ -31,12 +31,13 @@ export async function inspectVolunteerIdentity(db, codeFor) {
 }
 
 // 先套用 267-identity.sql。只接確定名字，未知代號與原表完全保留。
-export async function migrateVolunteerIdentity(db, key) {
-  if (!key) throw new Error('缺少原本的 WALKER_KEY');
-  const report = await inspectVolunteerIdentity(db, name => walkerCode(name, key));
+export async function migrateVolunteerIdentity(db, keyOrCodeFor) {
+  if (!keyOrCodeFor) throw new Error('缺少原本的 WALKER_KEY 或已核對的代號提供者');
+  const codeFor = typeof keyOrCodeFor === 'function' ? keyOrCodeFor : name => walkerCode(name, keyOrCodeFor);
+  const report = await inspectVolunteerIdentity(db, codeFor);
   if (report.conflicts.length) throw new Error('正規化後有多個志工身分，請先確認，不自動合併');
   for (const person of report.confirmed) {
-    const identity = await resolveIdentity(db, person.name, key);
+    const identity = await linkIdentityName(db, person.name, person.code);
     if (identity.volunteerId !== person.volunteerId) throw new Error('既有有效志工身分發生變動');
   }
   return report;

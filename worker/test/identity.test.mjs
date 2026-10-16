@@ -45,7 +45,7 @@ test('舊資料銜接可重跑，未知代號保留，取消後不因再登入�
  assert.equal((await call(env,'/identity',{name:'舊名字'})).identity.volunteerId,'original-person');
  assert.deepEqual((await call(env,'/favorites?codes='+code)).ids,['b'.repeat(32)]);
  await worker.fetch(new Request(site+'/api/favorites',{method:'PUT',headers:{Origin:site,'Content-Type':'application/json'},body:JSON.stringify({codes:[code],dogId:'b'.repeat(32),on:false})}),env);
- await migrateVolunteerIdentity(DB,env.WALKER_KEY);assert.deepEqual((await call(env,'/favorites?codes='+code)).ids,[]);
+ await migrateVolunteerIdentity(DB, async name => { assert.equal(name, '舊名字'); return code; });assert.deepEqual((await call(env,'/favorites?codes='+code)).ids,[]);
  await DB.prepare("CREATE TRIGGER reject_identity_log BEFORE INSERT ON v3_edit_log WHEN NEW.kind='volunteer_rename' BEGIN SELECT RAISE(ABORT,'test log failure'); END").run();
  assert.equal((await call(env,'/identity/rename',{code,name:'新名字',operationId:'failed-rename'})).status,409);
  assert.equal((await call(env,'/identity',{name:'舊名字'})).identity.name,'舊名字');
