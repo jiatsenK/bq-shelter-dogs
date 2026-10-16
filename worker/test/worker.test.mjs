@@ -249,6 +249,15 @@ test('Cron：沒改不叫 GitHub；Apps Script 通知有改後下一格同步一
   assert.deepEqual(dispatches, ['/repos/jiatsenK/bq-shelter-dogs/actions/workflows/sync-sheet.yml/dispatches']);
   await tick('2026-10-16T22:30:00Z');
   assert.equal(dispatches.length, 2);
+  // GitHub 失敗：「有改」留著，下一格再叫
+  await notify();
+  let down = true;
+  const ok = globalThis.fetch;
+  globalThis.fetch = async (url, init) => down ? new Response('{}', { status: 500 }) : ok(url, init);
+  await assert.rejects(tick('2026-10-16T22:40:00Z'));
+  down = false;
+  await tick('2026-10-16T22:50:00Z');
+  assert.equal(dispatches.length, 3);
   // 沒設專用密碼就不收；預覽版也不收
   assert.equal((await send(new Request('https://x.workers.dev/api/sheet-changed', { method: 'POST', headers: { 'X-Notify-Key': '' } }), { ...env, SHEET_NOTIFY_KEY: '' })).status, 503);
   assert.equal((await send(new Request('https://x.workers.dev/api/sheet-changed', { method: 'POST', headers: { 'X-Notify-Key': 'nk' } }), { ...env, PREVIEW: '1' })).status, 403);

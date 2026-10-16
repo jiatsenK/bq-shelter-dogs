@@ -479,7 +479,13 @@ async function syncTick(env, now) {
   if (!env || !env.DB) return 'none';
   const plan = await planTick(env.DB, now);
   if (plan !== 'daily' && plan !== 'changed') return plan;
-  await triggerSync(env);
+  try {
+    await triggerSync(env);
+  } catch (e) {
+    // 沒叫成就把「有改」放回去，下一格再試，不要等到隔天
+    await markChanged(env.DB, now).catch(() => {});
+    throw e;
+  }
   const cfg = config(env);
   if (cfg.sheetId) await sheetSignature(cfg.sheetId).then(sig => rememberSignature(env.DB, sig)).catch(() => {});
   return plan;

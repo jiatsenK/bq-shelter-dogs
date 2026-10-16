@@ -17,3 +17,8 @@
 
 - 設 GitHub Secret `SHEET_NOTIFY_KEY`、更新 Apps Script、設指令碼屬性和「變更時」觸發器（SHEET_WRITE_SETUP.md 第 6 節）。沒做之前只靠每天 6:30 和「更新」。
 - 「更新」叫同步後若 GitHub 那次同步失敗，指紋已記下，要等試算表再改或隔天 6:30 才會再同步。
+
+## 審查後修正
+
+- Cron 叫 GitHub 失敗時把「有改」放回去，下一格再試（原本會等到隔天 6:30）。
+- 審查提到但沒改：`docs/adr/` 有兩份 0008（`0008-diff-sync-and-write-budget.md` 是 #303 留下的），編號衝突不是這張票造成的，留給 K 決定要不要把其中一份改成 0009。每次讀狀態前的 `CREATE TABLE IF NOT EXISTS` 留著，部署後第一次同步前表可能還不存在，只多一次讀取。
