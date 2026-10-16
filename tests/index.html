@@ -643,7 +643,7 @@ function runTests() {
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
       const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
-      eq(scripts.map(s => s.getAttribute('src')), ['js/site-config.js', 'js/app.js', 'js/analysis.js', 'js/find.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定）：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/site-config.js', 'js/detail-viewport.js', 'js/app.js', 'js/analysis.js', 'js/find.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
@@ -2031,23 +2031,30 @@ async function runRestTests() {
       const card = document.createElement('div'); card.innerHTML = dogCard(dog, new Date());
       eq(card.querySelector('.warn-note .text').textContent, dog.note);
     });
-    await check('#285 還原早上狗卡：保留分隔區塊與原介紹，文字編輯不送事件以保留伺服器資料', async () => {
-      const dog = parseDogsData({ dogs: [{ id: '2021021703', name: '測試狗', cage: 'A1', intro: '早上的完整介紹', formerIds: ['2015081801'], intakeEvents: [{ number: '2021021703', date: '2021-02-17', event: '迷路入所' }] }] }).dogs[0];
+    await check('#285 保留早上版面，入所逐次列日期與原因並可編輯，同號可有不同事件', async () => {
+      const dog = parseDogsData({ dogs: [{ id: '2021021703', name: '測試狗', cage: 'A1', intro: '保留完整原介紹', formerIds: ['2015081801'], intakeEvents: [
+        { number: '2021021703', date: '2021-02-17', event: '迷路入所' },
+        { number: '2021021703', date: '2026-01-02', event: '領養退回' },
+      ] }] }).dogs[0];
       try {
         showDetail(dog);
-        eq(document.querySelector('#detail .intake-list'), null, '恢復整段介紹：');
+        eq([...document.querySelectorAll('.intake-list time')].map(el => el.textContent), ['2021/02/17', '2026/01/02']);
+        eq([...document.querySelectorAll('.intake-number')].map(el => el.textContent), ['（2021021703）', '（2021021703）']);
         eq(document.querySelector('[data-section="intro"] .content').textContent, dog.intro);
-        if (!document.querySelector('[data-section="walks"]') || !document.querySelector('.reentry')) throw new Error('保留早上的區塊');
+        if (!document.querySelector('[data-section="walks"]') || !document.querySelector('.reentry')) throw new Error('保留早上其他區塊');
         document.getElementById('introEdit').click();
-        eq(document.querySelector('#introForm .intake-row'), null, '恢復文字表單：');
+        const reason = document.querySelector('[data-intake-row="1"][data-intake-field="event"]');
+        reason.value = '領養退回（補正）'; reason.dispatchEvent(new Event('input', { bubbles: true }));
+        document.getElementById('intakeAdd').click();
+        eq(document.querySelectorAll('.intake-row').length, 3);
+        document.querySelector('[data-intake-remove="2"]').click();
         const calls = [];
-        window.fetch = async (url, options) => { const body = JSON.parse(options.body); calls.push(body); return json({ ok: true, intro: body.text, intakeEvents: dog.intakeEvents }); };
-        document.getElementById('introText').value = '更正原介紹';
-        document.getElementById('introText').dispatchEvent(new Event('input', { bubbles: true }));
+        window.fetch = async (url, options) => { const body = JSON.parse(options.body); calls.push(body); return json({ ok: true, intro: body.text, intakeEvents: body.events }); };
         document.getElementById('introForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         await new Promise(r => setTimeout(r, 20));
-        eq(calls, [{ editor: '志工我', text: '更正原介紹' }], '不送空事件覆寫既有資料：');
-        eq(document.querySelector('[data-section="intro"] .content').textContent, '更正原介紹');
+        eq(calls, [{ editor: '志工我', text: dog.intro, events: [dog.intakeEvents[0], { ...dog.intakeEvents[1], event: '領養退回（補正）' }] }]);
+        eq(document.querySelectorAll('.intake-list li').length, 2);
+        eq(document.querySelectorAll('.intake-event')[1].textContent, '領養退回（補正）');
       } finally { hideDetail(); hideToast(); delete introOverrides[dog.id]; }
     });
     await check('入所介紹（10-10）：直接點那一段就能改（不另外放按鈕）、不用通關碼、帶 editor，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {
@@ -2058,7 +2065,7 @@ async function runRestTests() {
         return json({ ok: true, id: '9613', intro: b.text });
       };
       showDetail(allDogs[2]);
-      eq([document.getElementById('introEdit').closest('[data-section]').dataset.section, document.getElementById('introEdit').textContent, document.querySelectorAll('#detail [data-section="rest"] .admin-btn').length], ['intro', '還沒有入所介紹，點這裡補', 1], '沒介紹：那一段本身可以點，管理用只剩設定休養中：');
+      eq([document.getElementById('introEdit').closest('[data-section]').dataset.section, document.getElementById('introEdit').getAttribute('aria-label'), document.querySelectorAll('#detail [data-section="rest"] .admin-btn').length], ['intro', '補入所介紹', 1], '沒介紹：那一段本身可以點，管理用只剩設定休養中：');
       document.getElementById('introEdit').click();
       eq([!!document.querySelector('#detail .detail-bar [form="introForm"]'), !!document.querySelector('#detail .detail-bar #groupWalk')], [true, false], '底部列換成儲存介紹、溜了收起來：');
       const text = document.getElementById('introText');
@@ -4395,11 +4402,11 @@ async function runTourLayoutTests() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js'].map(u => fetch(u).then(res => {
+Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs]) => {
+  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs]) => {
     SITE_JS = siteJs;
     const c = document.createElement('script'); // 這間收容所的設定要在其他程式前面
     c.textContent = siteJs;
@@ -4410,6 +4417,7 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     MANIFEST = JSON.parse(manifest);
     APP_JS = js;
     DOGS_JSON = JSON.parse(dogsJson);
+    const dv = document.createElement('script'); dv.textContent = detailViewportJs; document.body.appendChild(dv);
     const s = document.createElement('script');
     s.textContent = js;
     document.body.appendChild(s);
