@@ -1,5 +1,5 @@
 // 資料包（ADR 0009，#315）：很少變的資料預先算好存在 D1，Worker 每次只讀 1 列版本號，有變才讀資料包或重算。
-// small：狗清單、離所、休養；walks：切點（cutoff，正常是今天）以前的溜狗紀錄；今天的紀錄另外只讀今天的列。
+// small：狗清單、離所、休養；溜狗紀錄：切點（cutoff，正常是今天）以前的按月分段（#320），一年存一份；今天的紀錄另外只讀今天的列。
 // 版本號由 db/compact-schema.sql 的觸發器自動加 1，所以網站、同步、別台 Worker 機器寫入都看得到。
 // 輸出和直接讀表（compact.js 的 readDogsPayload 等）逐字元相同
 import { readDogsPayload, readDepartures, readRest, HISTORY_START } from './compact.js';
@@ -8,8 +8,15 @@ import { readDogsPayload, readDepartures, readRest, HISTORY_START } from './comp
 let chunkBytes = 1_000_000;
 export function setPackChunkBytes(n) { chunkBytes = n; }
 
-let mem = null; // { db, small, walks: { ver, cutoff, list }, live: { ver, cutoff, list } }
+let mem = null; // { db, small, walks: { total, months: { 月: { ver, list } } }, live: { ver, cutoff, list } }
 export function resetPackCache() { mem = null; }
+// 測試換一台機器用：換上 next（null 是空的記憶體），回傳原本的
+export function swapPackCache(next) { const prev = mem; mem = next; return prev; }
+function memFor(db) {
+  if (!mem || mem.db !== db) mem = { db };
+  mem.walks ||= { total: null, months: {} };
+  return mem;
+}
 
 const WALK_COLS = 'dog_id,walk_date,walker_code,dog_number,dog_name,position';
 
@@ -90,35 +97,130 @@ async function smallPack(db, ver) {
   return body;
 }
 
-// 歷史資料包切在今天：跨日後第一次讀重算一次，把昨天併進去。切點只往前移，時鐘慢一點的機器不會把它拉回去
-async function walksPack(db, v, today) {
-  if (mem.walks && mem.walks.ver === v.walks && mem.walks.cutoff === today) return mem.walks;
-  let list = await loadPack(db, 'walks', v.walks, today);
-  if (!list) {
-    if (v.cutoff !== today) await db.prepare('UPDATE v3_pack_versions SET cutoff=? WHERE id=1 AND cutoff<?').bind(today, today).run();
-    list = groupWalks((await db.prepare(`SELECT ${WALK_COLS} FROM v3_walks WHERE walk_date<?`).bind(today).all()).results || []);
-    await savePack(db, 'walks', v.walks, today, list);
+// ---- 溜狗紀錄按月分段（#320）：每月版本號在 v3_walk_versions.months（JSON），資料包一年一份存在 v3_walk_packs ----
+const yearOf = month => month.slice(0, 4);
+function monthEnd(month) {
+  const [y, m] = month.split('-').map(Number);
+  return m === 12 ? `${y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, '0')}-01`;
+}
+// 走 walk_date 索引
+const rowsBetween = async (db, from, to) => (await db.prepare(`SELECT ${WALK_COLS} FROM v3_walks WHERE walk_date>=? AND walk_date<?`).bind(from, to).all()).results || [];
+// 某個月切點以前的紀錄
+async function buildMonth(db, month, cutoff) {
+  const end = monthEnd(month);
+  return groupWalks(await rowsBetween(db, month + '-01', end < cutoff ? end : cutoff));
+}
+function groupBy(items, key) {
+  const out = new Map();
+  for (const x of items) { const k = key(x); if (!out.has(k)) out.set(k, []); out.get(k).push(x); }
+  return out;
+}
+
+// 一年的資料包：{ vers: { 月: 版本號 }, months: { 月: list } }；沒有或缺段回空的（每個月都對不上版本號，會重算）
+async function loadYear(db, year) {
+  const { results = [] } = await db.prepare('SELECT seq,vers,body FROM v3_walk_packs WHERE year=?').bind(year).all();
+  results.sort((a, b) => a.seq - b.seq);
+  if (results.length && results.every((r, i) => r.seq === i && r.vers === results[0].vers)) {
+    try { return { vers: JSON.parse(results[0].vers), months: JSON.parse(results.map(r => r.body).join('')) }; } catch (e) { /* 缺段 */ }
   }
-  mem.walks = { ver: v.walks, cutoff: today, list };
-  mem.live = null;
-  return mem.walks;
+  return { vers: {}, months: {} };
+}
+// 每個月的資料和它的版本號一起存：兩台機器先後存同一年，各月份仍然對得上自己的版本號
+async function saveYear(db, year, pack) {
+  const vers = JSON.stringify(pack.vers);
+  try {
+    await db.batch([
+      db.prepare('DELETE FROM v3_walk_packs WHERE year=?').bind(year),
+      ...chunks(JSON.stringify(pack.months)).map((text, seq) => db.prepare('INSERT INTO v3_walk_packs(year,seq,vers,body) VALUES(?,?,?,?)').bind(year, seq, vers, text)),
+    ]);
+  } catch (e) {
+    console.error('walk pack', year, e);
+  }
+}
+// 資料包裡版本號對得上的月份都放進記憶體
+function remember(pack, vers) {
+  for (const m of Object.keys(pack.months)) if (pack.vers[m] === vers[m]) mem.walks.months[m] = { ver: vers[m], list: pack.months[m] };
+}
+
+// 跨日：把舊切點到今天（正常是昨天）的列補進那幾個月，切點移到今天，只讀這些列和那幾年的資料包。
+// 先讀列、再比對版本號移切點：中間有人寫入（live 或 total 變了）或別台機器先移了，這次不算，回 null 重讀版本號。
+// 移完以後才有人改到那幾個月，版本號會比這裡存的新，下次重算那個月
+async function advance(db, v, today) {
+  const old = JSON.parse(v.months);
+  const added = groupBy(await rowsBetween(db, v.cutoff, today), r => r.walk_date.slice(0, 7));
+  const vers = { ...old };
+  for (const m of added.keys()) vers[m] = (vers[m] || 0) + 1;
+  const months = JSON.stringify(vers);
+  const { meta } = await db.prepare('UPDATE v3_walk_versions SET cutoff=?, total=total+1, months=? WHERE id=1 AND cutoff=? AND total=? AND live=?')
+    .bind(today, months, v.cutoff, v.total, v.live).run();
+  if (!meta.changes) return null;
+  for (const [year, list] of groupBy([...added.keys()], yearOf)) {
+    // 第一次（切點是空的）：每個月都是從頭算，不用讀
+    const pack = v.cutoff ? await loadYear(db, year) : { vers: {}, months: {} };
+    for (const m of list) {
+      // 資料包裡的那個月不是用舊版本號算的：舊切點以前的部分重算
+      const base = pack.vers[m] === old[m] ? pack.months[m] || [] : await buildMonth(db, m, v.cutoff);
+      pack.months[m] = [...base, ...groupWalks(added.get(m))];
+      pack.vers[m] = vers[m];
+    }
+    await saveYear(db, year, pack);
+    remember(pack, vers);
+  }
+  return { ...v, cutoff: today, total: v.total + 1, months };
+}
+
+// 切點以前的紀錄：版本號變了的月份才讀那一年的資料包，資料包也對不上才重算那個月
+async function history(db, v) {
+  if (mem.walks.total === v.total) return;
+  const vers = JSON.parse(v.months);
+  const stale = Object.keys(vers).filter(m => mem.walks.months[m]?.ver !== vers[m]);
+  for (const [year, list] of groupBy(stale, yearOf)) {
+    const pack = await loadYear(db, year);
+    let changed = false;
+    for (const m of list) {
+      if (pack.vers[m] === vers[m]) continue;
+      pack.months[m] = await buildMonth(db, m, v.cutoff);
+      pack.vers[m] = vers[m];
+      changed = true;
+    }
+    if (changed) await saveYear(db, year, pack);
+    remember(pack, vers);
+  }
+  mem.walks.total = v.total;
 }
 
 // 今天（切點以後）的紀錄：live 版本號變了才重讀，走 walk_date 索引
-async function liveWalks(db, v, cutoff) {
-  if (mem.live && mem.live.ver === v.live && mem.live.cutoff === cutoff) return mem.live.list;
-  const list = groupWalks((await db.prepare(`SELECT ${WALK_COLS} FROM v3_walks WHERE walk_date>=?`).bind(cutoff).all()).results || []);
-  mem.live = { ver: v.live, cutoff, list };
+async function liveWalks(db, v) {
+  if (mem.live && mem.live.ver === v.live && mem.live.cutoff === v.cutoff) return mem.live.list;
+  const list = groupWalks((await db.prepare(`SELECT ${WALK_COLS} FROM v3_walks WHERE walk_date>=?`).bind(v.cutoff).all()).results || []);
+  mem.live = { ver: v.live, cutoff: v.cutoff, list };
   return list;
 }
 
 // 讀不到版本號（正式 D1 要等同步補建表）回 null，呼叫的人照舊直接讀表；D1 真的壞了，直接讀表也會失敗
-async function versions(db) {
+async function firstOrNull(db, sql) {
   try {
-    return await db.prepare('SELECT small,walks,live,cutoff FROM v3_pack_versions WHERE id=1').first();
+    return await db.prepare(sql).first();
   } catch (e) {
     return null;
   }
+}
+const versions = db => firstOrNull(db, 'SELECT small FROM v3_pack_versions WHERE id=1');
+const walkVersions = db => firstOrNull(db, 'SELECT total,live,cutoff,months FROM v3_walk_versions WHERE id=1');
+
+// 溜狗紀錄（依日期排好）；回 null 表示要直接讀表：沒有版本號表、切點比今天新（時鐘慢一點的機器不把它拉回去）、一直移不了切點
+async function packedWalks(db, today) {
+  let v = await walkVersions(db);
+  if (!v || v.cutoff > today) return null;
+  memFor(db);
+  for (let i = 0; v.cutoff < today; i++) {
+    if (i === 3) return null;
+    v = await advance(db, v, today) || await walkVersions(db);
+    if (!v || v.cutoff > today) return null;
+  }
+  await history(db, v);
+  const { months } = mem.walks;
+  return [...Object.keys(months).sort().flatMap(m => months[m].list), ...await liveWalks(db, v)];
 }
 
 // part 是 dogs／departures／rest；dogs 是 null 表示主清單沒有狗。沒有版本號時只直接讀要的那份
@@ -126,21 +228,13 @@ const DIRECT = { dogs: readDogsPayload, departures: readDepartures, rest: readRe
 export async function readSmall(db, part) {
   const v = await versions(db);
   if (!v) return DIRECT[part](db);
-  if (!mem || mem.db !== db) mem = { db };
+  memFor(db);
   return (await smallPack(db, v.small))[part];
 }
 
 // 跟 readWalks 一樣的形狀；today 是台灣日期
 export async function readWalksPacked(db, today) {
-  const v = await versions(db);
-  let list;
-  if (!v || v.cutoff > today) {
-    list = groupWalks((await db.prepare(`SELECT ${WALK_COLS} FROM v3_walks`).all()).results || []);
-  } else {
-    if (!mem || mem.db !== db) mem = { db };
-    const hist = await walksPack(db, v, today);
-    list = [...hist.list, ...await liveWalks(db, v, today)];
-  }
+  const list = await packedWalks(db, today) || groupWalks((await db.prepare(`SELECT ${WALK_COLS} FROM v3_walks`).all()).results || []);
   return { version: 1, historyStart: HISTORY_START, walks: list };
 }
 
@@ -151,13 +245,12 @@ export async function readDogsPacked(db) {
   return { ...dogs };
 }
 
-// 狀態頁：從資料包數主清單和溜狗紀錄，不整表 COUNT(*)；沒變時只讀 1 列版本號
+// 狀態頁：從資料包數主清單和溜狗紀錄，不整表 COUNT(*)；沒變時只讀 2 列版本號（small、溜狗紀錄）
 export async function packStatus(db, today) {
   const v = await versions(db);
   if (!v) return null;
-  if (!mem || mem.db !== db) mem = { db };
+  memFor(db);
   const { dogs } = await smallPack(db, v.small);
-  let walks = 0;
-  if (v.cutoff <= today) walks = (await walksPack(db, v, today)).list.length + (await liveWalks(db, v, today)).length;
-  return { dogs: dogs ? dogs.dogs.length : 0, walks };
+  const walks = await packedWalks(db, today);
+  return { dogs: dogs ? dogs.dogs.length : 0, walks: walks ? walks.length : 0 };
 }

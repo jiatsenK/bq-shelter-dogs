@@ -63,9 +63,9 @@ export async function buildSyncPlan(seed, source) {
     if (differences.length) throw new Error(`匯入後比對有差異，不寫 D1：${JSON.stringify(differences.slice(0, 5))}`);
     const changes = diffTables(before, await snapshot());
     // 正式 D1 不另外建表（#214），新資料表（例如 v3_edit_log）靠同步時補建；全部是 IF NOT EXISTS，重跑不影響既有資料。
-    // 版本號（ADR 0009）那一列和觸發器也一起補（#315），同步自己改的列也會讓資料包失效；身分的觸發器不在這裡建
+    // 版本號（ADR 0009）那一列和觸發器也一起補（#315、#320 按月分段，拿掉舊的整份 walks 觸發器），同步自己改的列也會讓資料包失效；身分的觸發器不在這裡建
     const out = (await compactSchemaStatements())
-      .filter(t => /^CREATE (UNIQUE )?(TABLE|INDEX) IF NOT EXISTS |^INSERT OR IGNORE INTO v3_(data|pack)_versions|^CREATE TRIGGER IF NOT EXISTS (version|pack)_/.test(t))
+      .filter(t => /^CREATE (UNIQUE )?(TABLE|INDEX) IF NOT EXISTS |^INSERT OR IGNORE INTO v3_(data|pack|walk)_versions|^CREATE TRIGGER IF NOT EXISTS (version|pack|walkpack)_|^DROP TRIGGER IF EXISTS pack_v3_walks_|^DELETE FROM v3_packs WHERE part='walks'/.test(t))
       .map(t => `${t.replace(/\s+/g, ' ')};`);
     for (const { sql, values } of changes) { let i = 0; out.push(`${sql.replace(/\?/g, () => sqlValue(values[i++]))};`); }
     return { sql: out.join('\n') + '\n', rows: changes.length };

@@ -1,9 +1,9 @@
-// #315 歷史資料包＋只讀今天（ADR 0009）：輸出和直接讀表逐字元相同，沒變時每次只讀 1 列版本號
+// #315 歷史資料包＋只讀今天、#320 溜狗歷史按月分段（ADR 0009）：輸出和直接讀表逐字元相同，沒變時每次只讀 1 列版本號
 // 執行：node --test worker/test/packs.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
-import { setPackChunkBytes } from '../src/packs.js';
+import { setPackChunkBytes, swapPackCache } from '../src/packs.js';
 import { readDogsPayload, readWalks, readDepartures, readRest } from '../src/compact.js';
 import { fakeD1 } from './fakes.mjs';
 import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
@@ -60,7 +60,11 @@ async function readsOf(DB, path) {
   assert.equal((await get(path, { DB })).status, 200);
   return DB.stats.rowsRead - before;
 }
-const packRows = async (DB, part) => (await DB.prepare('SELECT seq,ver,cutoff FROM v3_packs WHERE part=? ORDER BY seq').bind(part).all()).results;
+const packRows = async (DB, part) => part === 'walks'
+  ? (await DB.prepare('SELECT year,seq,vers FROM v3_walk_packs ORDER BY year,seq').all()).results
+  : (await DB.prepare('SELECT seq,ver,cutoff FROM v3_packs WHERE part=? ORDER BY seq').bind(part).all()).results;
+const walkCutoff = async DB => (await DB.prepare('SELECT cutoff FROM v3_walk_versions WHERE id=1').first()).cutoff;
+const addWalk = (DB, date, position, code) => DB.prepare("INSERT INTO v3_walks(dog_id,walk_date,position,walker_code,dog_number,dog_name) SELECT dog_id,?,?,?,'2025022703','滿滿' FROM v3_dog_numbers WHERE number='2025022703'").bind(date, position, code).run();
 
 test.beforeEach(t => {
   worker.testing.resetState();
@@ -105,7 +109,7 @@ test('跨過午夜：昨天的紀錄併進歷史，今天從空的開始', async
   await assertSame(DB, '第一天');
   t.mock.timers.setTime(NOW + 86400e3);
   await assertSame(DB, '第二天');
-  assert.deepEqual((await packRows(DB, 'walks')).map(r => r.cutoff), ['2026-10-17']);
+  assert.equal(await walkCutoff(DB), '2026-10-17');
   // 新的今天加一筆，不重算歷史
   const walksPack = await packRows(DB, 'walks');
   await DB.prepare("INSERT INTO v3_walks(dog_id,walk_date,position,walker_code,dog_number,dog_name) SELECT dog_id,'2026-10-17',0,'eeeeeeeeeeee','2025022703','滿滿' FROM v3_dog_numbers WHERE number='2025022703'").run();
@@ -163,8 +167,10 @@ test('資料包分段：每段上限調小時自動多幾段，讀回一樣', as
 
 test('溜狗紀錄不在 SQL 排序，走 walk_date 索引', async t => {
   const DB = await seededDb(t);
-  const plan = (await DB.prepare('EXPLAIN QUERY PLAN SELECT dog_id FROM v3_walks WHERE walk_date>=?').bind(TODAY).all()).results.map(r => r.detail).join();
-  assert.match(plan, /v3_walks_date/);
+  for (const [where, args] of [['walk_date>=?', [TODAY]], ['walk_date>=? AND walk_date<?', [TODAY, TODAY]]]) {
+    const plan = (await DB.prepare(`EXPLAIN QUERY PLAN SELECT dog_id FROM v3_walks WHERE ${where}`).bind(...args).all()).results.map(r => r.detail).join();
+    assert.match(plan, /v3_walks_date/, where);
+  }
 });
 
 test('狀態頁不再整表數列數：沒變時只讀版本號', async t => {
@@ -173,13 +179,127 @@ test('狀態頁不再整表數列數：沒變時只讀版本號', async t => {
   assert.equal(await status(), 'D1 新表（主清單 3 隻、溜狗紀錄 4 筆）');
   const before = DB.stats.rowsRead;
   await status();
-  assert.equal(DB.stats.rowsRead - before, 1);
+  // small 和溜狗紀錄各 1 列版本號
+  assert.equal(DB.stats.rowsRead - before, 2);
 });
 
 test('正式 D1 還沒有資料包的表（同步還沒補建）：照舊直接讀表', async t => {
   const DB = await seededDb(t);
   await DB.prepare('DROP TABLE v3_pack_versions').run();
+  await DB.prepare('DROP TABLE v3_walk_versions').run();
   await assertSame(DB, '沒有版本號表');
+});
+
+// #320 溜狗歷史按月分段：跨月、跨年的資料
+const MONTHS = [['2025-11-20', 'a1'], ['2025-12-31', 'a2'], ['2026-01-01', 'a3'], ['2026-08-31', 'a4'], ['2026-09-01', 'a5'], ['2026-09-15', 'a6']];
+async function monthlyDb(t) {
+  const DB = await seededDb(t);
+  for (const [date, c] of MONTHS) await addWalk(DB, date, 0, c.repeat(6));
+  return DB;
+}
+const countRows = async (DB, where, ...args) => (await DB.prepare(`SELECT COUNT(*) AS n FROM v3_walks WHERE ${where}`).bind(...args).first()).n;
+const yearSegs = async (DB, year) => (await packRows(DB, 'walks')).filter(r => r.year === year).length;
+
+test('跨月、跨年：輸出逐字元相同，資料包一年一份，每段記著月份版本號', async t => {
+  const DB = await monthlyDb(t);
+  await assertSame(DB, '一開始');
+  assert.deepEqual([...new Set((await packRows(DB, 'walks')).map(r => r.year))], ['2025', '2026']);
+  assert.deepEqual(Object.keys(JSON.parse((await packRows(DB, 'walks'))[0].vers)).sort(), ['2025-11', '2025-12']);
+  await DB.prepare("UPDATE v3_walks SET walk_date='2026-01-02' WHERE walk_date='2025-12-31'").run();
+  await assertSame(DB, '跨年搬日期');
+  await DB.prepare("DELETE FROM v3_walks WHERE walk_date='2025-11-20'").run();
+  await assertSame(DB, '刪掉一整個月');
+  await DB.prepare("UPDATE v3_walks SET walk_date=? WHERE walk_date='2026-09-15'").bind(TODAY).run();
+  await assertSame(DB, '過去改成今天');
+  t.mock.timers.setTime(NOW + 86400e3);
+  await assertSame(DB, '第二天');
+  t.mock.timers.setTime(NOW + 3 * 86400e3);
+  await assertSame(DB, '隔了兩天沒人看');
+});
+
+test('改某個月的紀錄：只讀版本號、那一年的資料包和那個月的列', async t => {
+  const DB = await monthlyDb(t);
+  await get('/walks', { DB });
+  await DB.prepare("UPDATE v3_walks SET walker_code='cccccccccccc' WHERE walk_date='2026-09-15'").run();
+  const month = await countRows(DB, "walk_date>='2026-09-01' AND walk_date<'2026-10-01'");
+  assert.equal(await readsOf(DB, '/walks'), 1 + await yearSegs(DB, '2026') + month);
+  await assertSame(DB, '改完');
+  // 新開的機器：版本號＋所有段＋今天的列，不重算
+  worker.testing.resetState();
+  assert.equal(await readsOf(DB, '/walks'), 1 + (await packRows(DB, 'walks')).length + await countRows(DB, 'walk_date>=?', TODAY));
+});
+
+test('跨日：只讀昨天的列和當年的資料包', async t => {
+  const DB = await monthlyDb(t);
+  await get('/walks', { DB });
+  t.mock.timers.setTime(NOW + 86400e3);
+  const segs = await yearSegs(DB, '2026');
+  const yesterday = await countRows(DB, 'walk_date=?', TODAY);
+  assert.equal(await readsOf(DB, '/walks'), 1 + yesterday + segs);
+  assert.equal(await walkCutoff(DB), '2026-10-17');
+  await assertSame(DB, '第二天');
+  assert.equal(await readsOf(DB, '/walks'), 1, '跨日後沒變');
+  worker.testing.resetState();
+  assert.equal(await readsOf(DB, '/walks'), 1 + (await packRows(DB, 'walks')).length, '新機器：版本號＋所有段，今天還沒有紀錄');
+});
+
+test('跨日跨到新的一年', async t => {
+  const DB = await monthlyDb(t);
+  t.mock.timers.setTime(Date.parse('2026-12-31T02:00:00Z'));
+  await addWalk(DB, '2026-12-31', 0, 'b'.repeat(12));
+  await assertSame(DB, '12/31');
+  t.mock.timers.setTime(Date.parse('2027-01-01T02:00:00Z'));
+  await addWalk(DB, '2027-01-01', 0, 'c'.repeat(12));
+  await assertSame(DB, '1/1');
+  t.mock.timers.setTime(Date.parse('2027-01-02T02:00:00Z'));
+  await assertSame(DB, '1/2');
+  assert.ok((await packRows(DB, 'walks')).some(r => r.year === '2027'));
+});
+
+test('另一台機器先跨日：記憶體裡是舊資料的那台照版本號更新，結果一樣', async t => {
+  const DB = await monthlyDb(t);
+  await get('/walks', { DB }); // 這台記著昨天以前的資料
+  t.mock.timers.setTime(NOW + 86400e3);
+
+  const saved = swapPackCache(null);
+  // 換別台跨日
+  await get('/walks', { DB });
+  swapPackCache(saved);
+  await assertSame(DB, '舊機器');
+  assert.equal(await readsOf(DB, '/walks'), 1);
+});
+
+test('跨日讀昨天的列時有人寫入：切點這次不移，下一次再來，結果一樣', async t => {
+  const DB = await monthlyDb(t);
+  await get('/walks', { DB });
+  t.mock.timers.setTime(NOW + 86400e3);
+  const prepare = DB.prepare;
+  let once = true;
+  DB.prepare = sql => {
+    const stmt = prepare(sql);
+    if (!once || !/walk_date>=\? AND walk_date<\?$/.test(sql)) return stmt;
+    once = false;
+    return { bind: (...a) => ({ all: async () => { const r = await stmt.bind(...a).all(); await addWalk(DB, TODAY, 5, 'f'.repeat(12)); return r; } }) };
+  };
+  t.after(() => { DB.prepare = prepare; });
+  await assertSame(DB, '跨日時有人寫入');
+  assert.equal(once, false);
+  assert.equal(await walkCutoff(DB), '2026-10-17');
+});
+
+test('觸發器：只讓改到的月份變，今天的紀錄只動 live', async t => {
+  const DB = await monthlyDb(t);
+  await get('/walks', { DB });
+  const ver = async () => { const r = await DB.prepare('SELECT total,live,months FROM v3_walk_versions WHERE id=1').first(); return { ...r, months: JSON.parse(r.months) }; };
+  const before = await ver();
+  await DB.prepare("UPDATE v3_walks SET walker_code='cccccccccccc' WHERE walk_date='2026-08-31'").run();
+  const after = await ver();
+  assert.ok(after.months['2026-08'] > before.months['2026-08']);
+  assert.deepEqual({ ...after.months, '2026-08': 0 }, { ...before.months, '2026-08': 0 });
+  assert.ok(after.total > before.total);
+  await addWalk(DB, TODAY, 3, 'd'.repeat(12));
+  const live = await ver();
+  assert.deepEqual([live.months, live.total, live.live], [after.months, after.total, after.live + 1]);
 });
 
 // #322 狗清單、離所、休養讀到的 v3_ 表，每張都要有 pack_ 觸發器，不然改了資料網站不會更新（ADR 0009）

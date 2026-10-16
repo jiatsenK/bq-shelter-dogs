@@ -290,7 +290,18 @@ CREATE TRIGGER IF NOT EXISTS pack_v3_rest_DELETE AFTER DELETE ON v3_rest BEGIN U
 CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_INSERT AFTER INSERT ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_UPDATE AFTER UPDATE ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_DELETE AFTER DELETE ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
--- UPDATE 改了日期（例如過去改成今天）時新舊兩邊都算
-CREATE TRIGGER IF NOT EXISTS pack_v3_walks_INSERT AFTER INSERT ON v3_walks BEGIN UPDATE v3_pack_versions SET walks=walks+(NEW.walk_date<cutoff), live=live+(NEW.walk_date>=cutoff) WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_walks_UPDATE AFTER UPDATE ON v3_walks BEGIN UPDATE v3_pack_versions SET walks=walks+(OLD.walk_date<cutoff OR NEW.walk_date<cutoff), live=live+(OLD.walk_date>=cutoff OR NEW.walk_date>=cutoff) WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_walks_DELETE AFTER DELETE ON v3_walks BEGIN UPDATE v3_pack_versions SET walks=walks+(OLD.walk_date<cutoff), live=live+(OLD.walk_date>=cutoff) WHERE id=1; END;
+-- 溜狗歷史按月分段（ADR 0009，#320）：取代上面 v3_pack_versions 的 walks／live／cutoff 和 v3_packs 的 walks。
+-- v3_walk_versions 一列：months 是每個月的版本號（JSON，{"2026-10":3}），觸發器依 walk_date 只讓那個月加 1；
+-- total 是切點以前任何一列有變就加 1（沒變時 Worker 只讀這 1 列），live 是切點以後（今天）的列；cutoff 由 Worker 跨日時往前移。
+-- v3_walk_packs：一年一份，切成每段最多 1 MB 的大列，vers 是這份用哪些月份版本號算的（每段都存同一份）
+CREATE TABLE IF NOT EXISTS v3_walk_versions (id INTEGER PRIMARY KEY CHECK(id=1), total INTEGER NOT NULL DEFAULT 0, live INTEGER NOT NULL DEFAULT 0, cutoff TEXT NOT NULL DEFAULT '', months TEXT NOT NULL DEFAULT '{}');
+INSERT OR IGNORE INTO v3_walk_versions(id) VALUES(1);
+CREATE TABLE IF NOT EXISTS v3_walk_packs (year TEXT NOT NULL, seq INTEGER NOT NULL, vers TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(year,seq));
+CREATE TRIGGER IF NOT EXISTS walkpack_v3_walks_INSERT AFTER INSERT ON v3_walks BEGIN UPDATE v3_walk_versions SET total=total+(NEW.walk_date<cutoff), live=live+(NEW.walk_date>=cutoff), months=CASE WHEN NEW.walk_date<cutoff THEN json_set(months,'$."'||substr(NEW.walk_date,1,7)||'"',COALESCE(json_extract(months,'$."'||substr(NEW.walk_date,1,7)||'"'),0)+1) ELSE months END WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS walkpack_v3_walks_UPDATE AFTER UPDATE ON v3_walks BEGIN UPDATE v3_walk_versions SET total=total+(OLD.walk_date<cutoff), live=live+(OLD.walk_date>=cutoff), months=CASE WHEN OLD.walk_date<cutoff THEN json_set(months,'$."'||substr(OLD.walk_date,1,7)||'"',COALESCE(json_extract(months,'$."'||substr(OLD.walk_date,1,7)||'"'),0)+1) ELSE months END WHERE id=1; UPDATE v3_walk_versions SET total=total+(NEW.walk_date<cutoff), live=live+(NEW.walk_date>=cutoff), months=CASE WHEN NEW.walk_date<cutoff THEN json_set(months,'$."'||substr(NEW.walk_date,1,7)||'"',COALESCE(json_extract(months,'$."'||substr(NEW.walk_date,1,7)||'"'),0)+1) ELSE months END WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS walkpack_v3_walks_DELETE AFTER DELETE ON v3_walks BEGIN UPDATE v3_walk_versions SET total=total+(OLD.walk_date<cutoff), live=live+(OLD.walk_date>=cutoff), months=CASE WHEN OLD.walk_date<cutoff THEN json_set(months,'$."'||substr(OLD.walk_date,1,7)||'"',COALESCE(json_extract(months,'$."'||substr(OLD.walk_date,1,7)||'"'),0)+1) ELSE months END WHERE id=1; END;
+-- #315 的整份 walks 資料包不再用：拿掉它的觸發器（每寫一筆少寫 1 列）和存著的資料包
+DROP TRIGGER IF EXISTS pack_v3_walks_INSERT;
+DROP TRIGGER IF EXISTS pack_v3_walks_UPDATE;
+DROP TRIGGER IF EXISTS pack_v3_walks_DELETE;
+DELETE FROM v3_packs WHERE part='walks';
