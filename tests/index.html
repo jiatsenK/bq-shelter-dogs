@@ -3063,6 +3063,26 @@ async function runSheetWriteTests() {
       eq(walkedNow(allDogs[0]), true, '再試成功：');
       hideToast();
     });
+    // K 2026-10-16 正式站回報：按溜了馬上復原，試算表改回「志工隊」，但手機沒收到復原的回應（重新整理中斷），
+    // 手機上「今天佳岑溜了」那筆一直留著，重新整理也還在「我溜過」。打開網頁拿到試算表現況時要核對
+    await check('2026-10-16 復原的回應沒收到：重新整理後拿試算表現況核對，對不上就清掉手機上的今天紀錄', async () => {
+      walkedStorage = fakeStorage(); walkedMemory = null; sheetWritesMemory = null; sheetWriteState = 'unknown';
+      saveWalkerName('志工我');
+      const today = localDateKey(new Date());
+      walkedStorage.setItem(SHEET_WRITES_KEY, JSON.stringify({ date: today, items: { '9801': { id: '9801', name: '寫入甲', prev: { date: { date: '2026-10-01' }, walker: '志工隊' }, wrote: { walker: '志工我' }, current: { date: today, walker: '志工我' }, mine: true } } }));
+      walkedStorage.setItem(WALKED_KEY, JSON.stringify({ date: today, ids: ['9801'] }));
+      sheetWritesThisPage.clear(); // 模擬重新整理：這頁還沒寫過
+      eq([walkedNow(allDogs[0]), currentMyWalks().some(w => w.id === '9801')], [true, true], '重新整理前：');
+      window.fetch = async () => json({ walkers: { '9801': '志工隊' }, names: ['志工隊'] });
+      await loadWalkerNames();
+      eq([walkedNow(allDogs[0]), currentMyWalks().some(w => w.id === '9801'), walkerList(allDogs[0])], [false, false, ['志工隊']], '核對後：');
+      // 試算表上確實有我：保留
+      saveSheetWrites({ '9801': { id: '9801', name: '寫入甲', current: { date: today, walker: '志工隊、志工我' }, mine: true } });
+      saveWalkedIds(['9801']);
+      window.fetch = async () => json({ walkers: { '9801': '志工隊、志工我' }, names: [] });
+      await loadWalkerNames();
+      eq([walkedNow(allDogs[0]), currentMyWalks().some(w => w.id === '9801')], [true, true], '有我就保留：');
+    });
   } finally {
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch] = saved;
     sheetWritesMemory = null; walkerNameMemory = ''; sheetWriteState = 'off';
