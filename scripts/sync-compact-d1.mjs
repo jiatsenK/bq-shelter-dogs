@@ -29,13 +29,14 @@ export const SEED_TABLES = {
   v3_sheet_main_walkers: 'SELECT * FROM v3_sheet_main_walkers',
   v3_sheet_former_numbers: 'SELECT * FROM v3_sheet_former_numbers',
   v3_sheet_groups: 'SELECT * FROM v3_sheet_groups',
-  v3_sheet_group_labels: 'SELECT * FROM v3_sheet_group_labels',
   v3_sheet_changes: 'SELECT * FROM v3_sheet_changes',
   v3_walks: 'SELECT * FROM v3_walks',
   v3_departures: 'SELECT * FROM v3_departures',
   v3_departure_items: 'SELECT * FROM v3_departure_items',
   v3_intros: 'SELECT * FROM v3_intros',
 };
+// 群名表 v3_sheet_group_labels 不在上面：每次都整份從試算表重建，不用先讀；正式 D1 還沒建表時讀了會讓同步失敗
+// （SQL 開頭會自己 CREATE TABLE IF NOT EXISTS）
 // 整份替換的表，子表在前（刪除照這個順序，新增反過來）
 const REPLACED = ['v3_departure_items', 'v3_departures', 'v3_sheet_main_walkers', 'v3_sheet_former_numbers', 'v3_sheet_main', 'v3_sheet_groups', 'v3_sheet_group_labels', 'v3_sheet_changes', 'v3_walks'];
 

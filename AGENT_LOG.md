@@ -1417,3 +1417,7 @@
 - /api/admin/* 改用 ADMIN_KEY（標頭 X-Admin-Key），部署與縮圖 Action 在 K 設好 Secret ADMIN_KEY 前沿用 NOTES_PASSCODE 的值；WALKER_KEY、SHEET_WRITE_KEY 保留。
 - 更新測試、AGENTS.md、GLOSSARY、PROJECT_GOALS、DESIGN_GUIDE、設定文件。試算表備註（#239）的 session 要照 ADR 的介面接上編輯紀錄。
 - 合併 main 時接上編輯紀錄（ADR 0004）：/api/groups 要先選好名字，每次改動記一筆「常溜狗群」（改前、改後是那一群的名單）。
+
+## 2026-10-16 修正：正式 D1 還沒有群名表時同步失敗（Claude）
+
+- 部署 #290 後第一次同步失敗：同步前先讀正式 D1 的 v3_sheet_group_labels，表還沒建所以 wrangler 回錯。群名表每次整份重建，從 SEED_TABLES 拿掉；建表由同步 SQL 開頭的 CREATE TABLE IF NOT EXISTS 處理。
