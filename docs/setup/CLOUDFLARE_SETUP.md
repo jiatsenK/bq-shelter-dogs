@@ -58,7 +58,6 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 |---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | 步驟 1 複製的 Account ID |
 | `CLOUDFLARE_API_TOKEN` | 步驟 2 複製的 Cloudflare token |
-| `CLOUDFLARE_D1_READ_TOKEN` | 同步預演（#309）專用 token：Cloudflare → My Profile → API Tokens → Create Custom Token，權限給 Account｜D1｜Edit（Cloudflare 查 D1 也要 Edit）、Account｜Account Analytics｜Read |
 | `WORKER_GITHUB_TOKEN` | 步驟 3 複製的 GitHub token |
 | `ADMIN_KEY` | 管理 API（縮圖、搬照片、Trash）用的金鑰，只給 GitHub Action，自己想一組英數字。還沒設時沿用舊的 `NOTES_PASSCODE` Secret（ADR 0004） |
 
