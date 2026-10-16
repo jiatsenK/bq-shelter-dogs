@@ -59,7 +59,7 @@ test('#138 表頭找不到就不寫；分隔符號跟同步腳本一樣', async 
   assert.equal(code.match(/NAME_SEP = (\/.*\/);/)[1], sync.match(/NAME_SEP = (\/.*\/);/)[1]);
 });
 
-test('#138 通關碼：沒設 WRITE_KEY 就照常寫；有設就要一樣', () => {
+test('#138 金鑰：沒設 WRITE_KEY 就照常寫；有設就要一樣', () => {
   const run = (props, req) => {
     const writes = [];
     const g = {

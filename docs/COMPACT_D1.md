@@ -36,6 +36,7 @@ const dogs = await readCompactDogs(db);
 | `v3_rest` | 永久狗 ID；休養截止日、原因 |
 | `v3_photos` | R2 物件路徑；永久狗 ID、縮圖路徑、主照片、上傳時間 |
 | `v3_intros` | 永久狗 ID；入所介紹 |
+| `v3_edit_log` | 編輯紀錄：時間、編輯者代號與名字、種類、狗、改前／改後（JSON），見 `docs/adr/0004-open-editing-and-edit-log.md` |
 
 所有集合拆成列，沒有 JSON 欄位。讀回時每隻狗都有全部欄位，比對前來源 JSON 也補成同樣形狀，所以不另存欄位是否存在。沒有編號的狗以名字延續狗 ID（改名會變成新狗）。JSON 內的 `intro` 是主清單讀取結果的複本；D1 自存介紹放 `v3_intros`，實際匯入留給後續票。其餘試算表複本、分組和 D1 自存資料本票只建表，不填資料。
 
