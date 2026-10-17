@@ -232,7 +232,7 @@ test('叫同步：POST workflow dispatch（main），GitHub 不是 204 或沒 to
 
 // ADR 0012：Cron 每 10 分鐘看一次，有改才同步；台灣 6:30 保險同步一次
 test('Cron：沒改不叫 GitHub；Apps Script 通知有改後下一格同步一次；6:30 保險同步', async () => {
-  const env = { GITHUB_TOKEN: 'test-token', SHEET_NOTIFY_KEY: 'nk', DB: fakeD1() };
+  const env = await withTables({ GITHUB_TOKEN: 'test-token', SHEET_NOTIFY_KEY: 'nk' });
   const dispatches = [], inputs = [];
   globalThis.fetch = async (url, init = {}) => {
     const u = new URL(url);
@@ -269,7 +269,7 @@ test('Cron：沒改不叫 GitHub；Apps Script 通知有改後下一格同步一
 });
 
 test('POST /sync：試算表沒變就不叫 GitHub，回 unchanged；變了才叫；GitHub 失敗下次還會再叫', async () => {
-  const env = { ...ENV, SHEET_ID: 'sheet', DB: fakeD1() };
+  const env = await withTables({ ...ENV, SHEET_ID: 'sheet' });
   let content = 'v1', ghStatus = 204;
   const dispatches = [];
   globalThis.fetch = async (url, init = {}) => {

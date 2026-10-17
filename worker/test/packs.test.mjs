@@ -321,6 +321,7 @@ test('觸發器：只讓改到的月份變，今天的紀錄只動 live', async 
 });
 
 // #322 狗清單、離所、休養讀到的 v3_ 表，每張都要有 pack_ 觸發器，不然改了資料網站不會更新（ADR 0009）
+// 表清單是實際攔到的 SQL，不是手寫的：v3_dogs、v3_sheet_former_numbers 只有寫入（收藏、舊編號）會碰，狗清單不讀，所以不需要觸發器（#354）
 async function readTables(DB) {
   const tables = new Set();
   const spy = { ...DB, prepare(sql) { for (const name of sql.match(/\bv3_\w+/g) || []) tables.add(name); return DB.prepare(sql); } };
@@ -336,6 +337,7 @@ test('狗清單、離所、休養讀到的表都有 pack_ 觸發器', async t =>
   const DB = await seededDb(t);
   const tables = await readTables(DB);
   assert.ok(tables.includes('v3_intake_events') && tables.includes('v3_rest') && tables.includes('v3_departures'), tables.join(','));
+  assert.ok(!tables.includes('v3_dogs') && !tables.includes('v3_sheet_former_numbers'), tables.join(','));
   assert.deepEqual(await missingTriggers(DB), []);
 });
 

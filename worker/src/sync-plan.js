@@ -10,11 +10,11 @@ export const SYNC_DAILY_MAX = 12;
 // 同步讀的分頁（scripts/sync-sheet.mjs、scripts/sync-compact-d1.mjs）
 export const SHEET_TABS = ['主清單', '常遛狗群', '已出所'];
 
-const TABLE = 'CREATE TABLE IF NOT EXISTS v3_sync_state (key TEXT PRIMARY KEY, value TEXT NOT NULL)';
-const taiwanDay = now => new Date(now + 8 * 3600000).toISOString().slice(0, 10);
+
+// 台灣今天的日期 YYYY-MM-DD（index.js 也用這個）
+export const taiwanYmd = now => new Date(now + 8 * 3600000).toISOString().slice(0, 10);
 
 async function get(db, key) {
-  await db.prepare(TABLE).run();
   return db.prepare('SELECT value FROM v3_sync_state WHERE key = ?').bind(key).first('value');
 }
 const put = (db, key, value) => db.prepare('INSERT INTO v3_sync_state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').bind(key, String(value));
@@ -27,7 +27,6 @@ export function isDailySlot(now) {
 }
 
 export async function markChanged(db, now = Date.now()) {
-  await db.prepare(TABLE).run();
   await put(db, 'changed', new Date(now).toISOString()).run();
 }
 
@@ -39,7 +38,7 @@ export async function planTick(db, now = Date.now()) {
     return 'daily';
   }
   if (!changed) return 'none';
-  const day = taiwanDay(now);
+  const day = taiwanYmd(now);
   const [countDay, count] = String((await get(db, 'count')) || '').split(' ');
   const used = countDay === day ? Number(count) || 0 : 0;
   if (used >= SYNC_DAILY_MAX) return 'cap';
@@ -60,7 +59,6 @@ export async function sheetSignature(sheetId, fetchImpl = fetch) {
 }
 
 export async function rememberSignature(db, sig) {
-  await db.prepare(TABLE).run();
   await put(db, 'sheet_sig', sig).run();
 }
 
