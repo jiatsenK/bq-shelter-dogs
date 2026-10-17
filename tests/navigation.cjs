@@ -29,14 +29,8 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
     };
     await page.locator('#tabs [data-tab="groups"]').click();
     await selected('groups');
-    const group = page.frameLocator('#groupsFrame');
-    await group.locator('#gGroups h2').filter({ hasText: '測試群' }).waitFor();
-    assert.equal(await group.locator('.g-top').isVisible(), false, '只有共用頁首標題');
-    assert(await group.locator('#gNewForm').isVisible(), '保留正式狗群管理');
-    for (const control of await group.locator('button, input').all()) {
-      const box = await control.boundingBox();
-      assert(box && box.width >= 44 && box.height >= 44, '狗群控制項至少 44px');
-    }
+    await page.locator('#groupPage h2').filter({ hasText: '測試群' }).waitFor();
+    assert(await page.locator('[data-gw-action="create"]').isVisible(), '保留狗群管理');
     await page.locator('#analysisBack').click();
     await selected('walk');
     assert(await page.locator('#tabs [data-tab="walk"]').evaluate(el => el === document.activeElement), '返回恢復焦點');

@@ -31,7 +31,7 @@ const RED_DAYS = SITE.days.red;
 let allDogs = [];
 let groupMap = {};
 // 圖鑑（cards.html）的「去設定」連到 index.html#mine，直接打開我溜過
-let activeTab = typeof location !== 'undefined' && ['#mine', '#find'].includes(location.hash) ? location.hash.slice(1) : 'walk';
+let activeTab = typeof location !== 'undefined' && ['#mine', '#find', '#groups'].includes(location.hash) ? location.hash.slice(1) : 'walk';
 let groupsReturnTab = 'walk';
 let detailDog = null; // 詳細資訊正在看的狗
 let detailOpener = null;
@@ -3321,7 +3321,7 @@ function renderMain() {
   if (activeTab === 'groups') {
     buildTabs({});
     // 沿用正式狗群頁及既有 API；獨立文件的觸控事件不會冒泡到主分類。
-    if (!main.querySelector('#groupsFrame')) main.innerHTML = '<iframe id="groupsFrame" class="groups-frame" title="常遛狗群" src="groups.html?embedded=1" data-navigation-scope></iframe>';
+    main.innerHTML = groupStageHtml();
     return;
   }
 

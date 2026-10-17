@@ -578,7 +578,7 @@ document.getElementById('main').addEventListener('change', e => {
   if (e.target.id === 'depReason') { depRoster.reason = e.target.value; refreshDepartureList(); }
 });
 // #273 分類狀態只跟著當前 history entry，不跨裝置儲存。
-const INFO_PAGES = { stay: '在所統計', departures: '離所紀錄', activities: '活動紀錄', quality: '資料檢查', updates: '更新紀錄' };
+const INFO_PAGES = { stay: '在所統計', departures: '離所紀錄', quality: '資料檢查', updates: '更新紀錄' };
 let infoPage = '';
 let infoUpdateTab = 'website';
 let websiteUpdates = null;
@@ -601,7 +601,7 @@ function infoHomeHtml() {
   loadDepartures();
   const dogs = loadState === 'ready' ? `目前在所 ${allDogs.length} 隻` : loadState === 'error' ? '在所資料讀取失敗' : '在所資料讀取中…';
   const dep = !departuresData || departuresData.state === 'loading' ? '離所紀錄讀取中…' : departuresData.state === 'error' ? '離所紀錄讀取失敗' : departuresData.list.length ? `共 ${departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
-  const summary = { stay: dogs, departures: dep, activities: '活動紀錄尚未開放', quality: '查看缺照片、介紹及其他資料', updates: '網站更新與資料編輯' };
+  const summary = { stay: dogs, departures: dep, quality: '查看缺照片、介紹及其他資料', updates: '網站更新與資料編輯' };
   return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}</section>`;
 }
 
