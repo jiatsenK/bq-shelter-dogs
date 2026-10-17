@@ -77,8 +77,17 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
       assert(await page.locator('#tabs').isVisible(), '桌機內頁導覽仍可用');
     }
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.locator('#tabs [data-tab="mine"]').focus();
-    await page.keyboard.press('Enter');
+    // CI 偶發：focus 和按鍵之間分頁列重畫（innerHTML 換掉按鈕），Enter 落到別處就沒切換。
+    // 等焦點真的在「我溜過」上才按，沒切到就重來，直到逾時（#380 失敗紀錄）。
+    const mineTab = page.locator('#tabs [data-tab="mine"]');
+    const isSelected = () => page.locator('#tabs [data-tab="mine"][aria-current="page"]').count();
+    const deadline = Date.now() + 10000;
+    while (!(await isSelected())) {
+      assert(Date.now() < deadline, '鍵盤 Enter 沒切到我溜過，焦點在 ' + await page.evaluate(() => document.activeElement?.outerHTML.slice(0, 80)));
+      await mineTab.focus();
+      if (await mineTab.evaluate(el => el === document.activeElement)) await page.keyboard.press('Enter');
+      await page.waitForFunction(() => document.querySelector('#tabs [data-tab="mine"][aria-current="page"]'), null, { timeout: 1000 }).catch(() => {});
+    }
     await selected('mine');
     for (const id of ['info', 'groups']) {
       await page.locator('#tabs [data-tab="' + id + '"]').click();
