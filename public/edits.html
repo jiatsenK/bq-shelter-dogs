@@ -24,7 +24,11 @@
   .diff dt { color: var(--muted); }
   .diff dd { margin: 0; white-space: pre-wrap; word-break: break-word; }
   .status { color: var(--muted); }
+  html.embedded header { display: none; }
+  html.embedded { --bg: #E3E9E5; --ink: #16211D; --muted: #4E5E57; --line: #C4CFC9; --accent: #1F5C4D; }
+  html.embedded main { padding: 0 16px 16px; }
 </style>
+<script>if (self !== top && new URLSearchParams(location.search).get('embedded') === '1') document.documentElement.classList.add('embedded');</script>
 </head>
 <body>
 <!-- 編輯紀錄（ADR 0004）：誰做了什麼編輯；資料來自 GET api/edits（js/edits.js） -->
