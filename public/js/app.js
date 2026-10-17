@@ -496,11 +496,7 @@ function myProgressHtml(walks) {
 let mineStatsOpen = false;
 let mineMonth = ''; // 我溜過月曆正在看的月份（YYYY-MM）；空的＝最近有紀錄的那個月
 let mineDay = ''; // 月曆上選的那一天（YYYY-MM-DD）；空的＝那個月最近一次到所
-// 誤觸復原的入口放最上面，名字還沒設定、紀錄讀取中也看得到
 function myWalksHtml(today, query) {
-  return (query ? '' : todayUndoHtml()) + myWalksBodyHtml(today, query);
-}
-function myWalksBodyHtml(today, query) {
   const visibleWalks = currentMyWalks(today);
   const confirmedToday = Object.values(loadSheetWrites(today)).some(item => item.current?.date === localDateKey(today) && splitWalkers(item.current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())));
   if (myWalksState === 'loading' && !confirmedToday) return `<div class="status-msg">讀取溜狗紀錄中…</div>`;
@@ -1061,7 +1057,7 @@ function setWalkedLocal(dogs, on) {
   queueSheetWrite(changed, on, text, undoFn);
 }
 
-// ── 誤觸復原：這支手機今天寫進試算表的溜了，事後也能從狗群頁、我溜過撤銷 ──
+// ── 誤觸復原：這支手機今天寫進試算表的溜了，事後也能從狗群頁的「已溜」撤銷 ──
 // 只認這支手機記下的 prev／wrote（sheetWrite 存的）；試算表那格已被別人改過（current 不是我們寫的）就不提供，
 // 撤銷時 Apps Script 也會再核對一次，不蓋掉別人後來改的
 function sheetUndoable(dog, today = new Date()) {
@@ -1094,21 +1090,6 @@ async function undoSheetWalks(dogs) {
   showToast(text, null, left.length ? { label: '再試一次', fn: () => undoSheetWalks(left) } : null);
   return text;
 }
-// 我溜過最上面：今天這支手機登記、還能撤銷的狗
-function todayUndoHtml() {
-  const dogs = allDogs.filter(d => sheetUndoable(d));
-  if (!dogs.length) return '';
-  return `<section class="mine-undo" aria-label="今天登記的">
-    <p>今天在這支手機登記 ${dogs.length} 隻，按錯可以取消（會把試算表改回原本的）。</p>
-    <ul>${dogs.map(d => `<li><span>${esc(d.name)}</span><button type="button" class="who-edit" data-undo-walk="${esc(walkKey(d))}" aria-label="取消 ${esc(d.name)} 今天溜了"${sheetUndoBusy ? ' disabled' : ''}>取消</button></li>`).join('')}</ul>
-  </section>`;
-}
-document.getElementById('main').addEventListener('click', e => {
-  const btn = e.target.closest('[data-undo-walk]');
-  if (!btn) return;
-  const dog = allDogs.find(d => walkKey(d) === btn.dataset.undoWalk);
-  if (dog) undoSheetWalks([dog]);
-});
 
 // ── 我的常溜（#267）：逐隻增刪，絕不把手機上的舊整份清單蓋到 D1 ──
 const FAVS_KEY = 'bq-favs';

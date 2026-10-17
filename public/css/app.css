@@ -2011,6 +2011,13 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .analysis-open:not(.head-sub) .head-title { margin-left: 0; }
 .analysis-open.head-shared .head-title { display: none; }
 .analysis-open.head-shared .brand .logo, .analysis-open.head-shared .brand .titles { display: block !important; }
+/* 四個主分頁頂列同高（2026-10-17 polish）：狗群跟溜狗表一樣有更新資料鈕；資訊只有標題時也撐到同一個高度，切分頁時頁首不跳 */
+.analysis-open.head-shared .sync-btn { display: inline-flex; }
+.analysis-open .brand { min-height: 44px; }
+/* 桌機的導覽分頁排在網站名稱右邊：資訊首頁也保留網站名稱，分頁位置才不會跳；子頁照舊「回資訊」＋子頁標題 */
+.desk-on.analysis-open:not(.head-sub) .head-title { display: none; }
+.desk-on.analysis-open:not(.head-sub) .brand .logo, .desk-on.analysis-open:not(.head-sub) .brand .titles { display: block !important; }
+.desk-on.analysis-open:not(.head-sub) .sync-btn { display: inline-flex; }
 
 /* 列表模式（K 2026-10-09）：溜狗人拿掉，天數｜狗名＋籠位｜溜了；「天數」標題跟下面的數字一樣置中。
    10-10 K：籠位單獨一欄的黑框標籤位置怪、跟照片檢視不一樣 → 改成跟狗卡同一個圖釘籠位（.cage-pill），放在狗名下面 */
@@ -2374,8 +2381,11 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 #groupPage .gw-add .gw-tile { min-height: var(--card-h); display: grid; place-items: center; border-color: var(--line); font-size: 28px; }
 .gw-pages { display: flex; justify-content: center; align-items: center; gap: 16px; color: var(--ink-soft); }
 .gw-pages svg { width: 20px; height: 20px; }
-.gw-actions { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; padding: 12px 0; }
-#groupPage #gwWalk { background: var(--primary); color: white; padding: 12px; font-weight: 800; }
+/* 按鈕置中（K 2026-10-17）；「有狗沒溜」跟在主按鈕旁邊 */
+.gw-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 16px; padding: 12px 0; }
+#groupPage #gwWalk { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 200px; background: var(--primary); color: white; padding: 12px 24px; font-weight: 800; }
+/* 已溜：跟溜狗表的「已溜」同色，再按一次復原 */
+#groupPage #gwWalk.done { background: var(--green-bg); color: var(--green-text); }
 #groupPage [data-gw-action="except"] { text-decoration: underline; text-underline-offset: 4px; }
 #gwFeedback, .gw-restrictions { font-size: 14px; overflow-wrap: anywhere; }
 #gwFeedback:empty, .gw-restrictions:empty { display: none; }
@@ -2408,10 +2418,3 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .analysis-open header.app { position: fixed; inset: 0 0 auto; }
   .analysis-open body::before { content: ""; display: block; height: var(--app-header-height, 64px); }
 }
-
-/* 我溜過最上面：今天這支手機登記、按錯可取消（2026-10-17） */
-.mine-undo { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
-.mine-undo p { margin: 0 0 6px; font-size: 14px; color: var(--ink-soft); }
-.mine-undo ul { list-style: none; margin: 0; padding: 0; }
-.mine-undo li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
-.mine-undo .who-edit { min-height: 44px; min-width: 44px; }
