@@ -27,10 +27,14 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
       await page.locator('#tabs [data-tab="' + id + '"][aria-current="page"]').waitFor();
       assert.equal(await page.locator('#tabs [aria-current="page"]').count(), 1);
     };
+    const counts = await page.locator('#tabs .n').allTextContents();
     await page.locator('#tabs [data-tab="groups"]').click();
     await selected('groups');
+    assert.deepEqual(await page.locator('#tabs .n').allTextContents(), counts, '內頁保留底部數字');
+    assert.equal(await page.locator('.gw-layer').count(), 1, '只顯示當前群');
+    assert.equal(await page.locator('.gw-summary').count(), 0, '移除可變長度敘述');
     await page.locator('#groupPage h2').filter({ hasText: '測試群' }).waitFor();
-    assert(await page.locator('[data-gw-action="create"]').isVisible(), '保留狗群管理');
+    assert(await page.locator('[data-gw-action="manage"]').isVisible(), '保留狗群管理');
     await page.locator('#analysisBack').click();
     await selected('walk');
     assert(await page.locator('#tabs [data-tab="walk"]').evaluate(el => el === document.activeElement), '返回恢復焦點');
@@ -42,6 +46,7 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
     assert(await page.locator('#bottomBar').isVisible());
     assert.equal(await page.locator('.head-title').textContent(), '資訊');
     assert.equal(await page.locator('#analysisBtn').count(), 0);
+    assert.deepEqual(await page.locator('#tabs .n').allTextContents(), counts, '資訊頁數字保留');
     await page.goBack();
     await selected('mine');
     assert(await page.locator('#tabs [data-tab="mine"]').evaluate(el => el === document.activeElement));
@@ -75,6 +80,12 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
     await page.locator('#tabs [data-tab="mine"]').focus();
     await page.keyboard.press('Enter');
     await selected('mine');
+    for (const id of ['info', 'groups']) {
+      await page.locator('#tabs [data-tab="' + id + '"]').click();
+      assert.equal(await page.locator('header.app').evaluate(el => getComputedStyle(el).position), 'fixed', '手機內頁固定定位');
+      await page.evaluate(() => window.scrollTo(0, 400));
+      assert.equal(await page.locator('header.app').evaluate(el => Math.round(el.getBoundingClientRect().top)), 0, '內頁表頭固定');
+    }
     console.log('#373 導覽、既有狗群／資訊、返回／前進／焦點、搜尋、320／390px／桌機及鍵盤通過');
   } finally { await context.close(); }
 };

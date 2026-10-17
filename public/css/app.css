@@ -2391,3 +2391,15 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 #groupPage { padding-inline: 4px; }
 .gw-stage { --card-w: 60px; }
 @media(min-width:390px) { .gw-stage { --card-w: 74px; } }
+
+/* 內頁管理與切群保持在固定高度；只有照片區內捲動。 */
+.gw-stage { height: clamp(126px, calc(100dvh - 360px), 504px); min-height: 126px; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; }
+.gw-layer.front { padding-block: 12px; }
+.gw-heading { position: relative; }
+.gw-manage { position: absolute; right: 0; top: 60px; z-index: 5; max-width: 100%; max-height: 50dvh; overflow: auto; padding: 12px; background: var(--surface); box-shadow: 0 3px 12px #0002; }
+#groupPage { position: relative; }
+
+@media (max-width: 1099px) {
+  .analysis-open header.app { position: fixed; inset: 0 0 auto; }
+  .analysis-open body::before { content: ""; display: block; height: var(--app-header-height, 64px); }
+}
