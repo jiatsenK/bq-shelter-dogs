@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateCompactDatabase } from './migrate-compact-db.mjs';
 import { readDogsPayload, readDepartures, readWalks } from '../worker/src/compact.js';
-import { buildSyncSql, buildSyncPlan, SEED_TABLES, SYNC_SCHEMA_SKIP, planSync, readPrevious, readSeed } from './sync-compact-d1.mjs';
+import { buildSyncSql, buildSyncPlan, SEED_TABLES, SYNC_SCHEMA_SKIP, planSync, readPrevious, readSeed, lastWalkChecks } from './sync-compact-d1.mjs';
 import { budgetProblem, todayRowsWritten } from './sync-diff.mjs';
 
 // SQL 開頭補建表、版本號、觸發器那幾行（不算同步寫的資料）
@@ -193,7 +193,7 @@ test('#252 沒有 dogs/：同步保留永久狗性別、舊編號與再入所身
   assert.equal(await after.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='old'").first('dog_id'), beforeId);
 });
 
-test('讀 D1 現況：第一張讀完後其餘表同時讀，不再一張等一張（頁首「更新」變慢）', async () => {
+test('讀 D1 現況：先讀上一次同步的日期，其餘表同時讀，不再一張等一張（頁首「更新」變慢）', async () => {
   const { readSeed } = await import('./sync-compact-d1.mjs');
   const tables = Object.keys(SEED_TABLES);
   let running = 0, peak = 0;
@@ -203,7 +203,7 @@ test('讀 D1 現況：第一張讀完後其餘表同時讀，不再一張等一�
     running--;
     return [{ sql }];
   });
-  assert.equal(peak, tables.length - 1);
+  assert.equal(peak, tables.length);
   for (const t of tables) assert.deepEqual(seed[t], [{ sql: SEED_TABLES[t] }]);
   await assert.rejects(readSeed(async sql => { if (sql === SEED_TABLES.v3_walks) throw new Error('讀不到'); return []; }), /讀不到/);
 });
@@ -322,4 +322,121 @@ test('#321 同步 SQL 套到空的 D1，建出來的跟 migrateCompactDatabase �
     const count = async db => (await db.prepare(`SELECT COUNT(*) AS n FROM ${name}`).first()).n;
     if (await count(full)) assert.ok(await count(synced), `${name} 少了 schema 的預設列`);
   }
+});
+
+// ── ADR 0010（#331）：溜狗紀錄只讀、只寫最近一段 ──
+const queryOf = db => async sql => (await db.prepare(sql).all()).results;
+const syncedOn = (db, day) => db.prepare("INSERT INTO v3_sync_state(key,value) VALUES('walks_synced',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(day).run();
+// 照正式同步的流程：讀最近一段 → 算 → 把 SQL 寫回同一個 D1（不是從 seed 重建，seed 只有一部分溜狗紀錄）
+async function syncRecent(db, sheet, { mode = '', now = NOW } = {}) {
+  const daily = mode === 'daily';
+  const checks = () => (daily ? lastWalkChecks(sheet) : []);
+  const seed = await readSeed(queryOf(db), { full: mode === 'full', checks });
+  const groupColumns = (await source()).groupColumns;
+  const plan = await buildSyncPlan(seed, async mem => ({ ...planSync(await readPrevious(mem), sheet, null, now, { ...KEY, since: seed.since, daily }), groupColumns }), { today: '2026-10-16' });
+  await db.batch(plan.sql.split(';\n').map(s => s.trim()).filter(Boolean).map(s => db.prepare(s)));
+  return { seed, written: writes(plan.sql) };
+}
+async function addHistory(db, days) {
+  const dogs = (await db.prepare('SELECT dog_id,MIN(dog_number) AS number,MIN(dog_name) AS name FROM v3_walks GROUP BY dog_id').all()).results;
+  const rows = [];
+  for (let i = 1; i <= days; i++) {
+    const date = new Date(Date.UTC(2025, 0, 1) + i * 86400000).toISOString().slice(0, 10);
+    for (const d of dogs) rows.push(db.prepare("INSERT INTO v3_walks(dog_id,walk_date,position,walker_code,dog_number,dog_name) VALUES(?,?,0,'bbbbbbbbbbbb',?,?)").bind(d.dog_id, date, d.number, d.name));
+  }
+  await db.batch(rows);
+}
+
+test('#331 平常同步讀的溜狗紀錄列數不隨歷史變多', async t => {
+  const counts = [];
+  for (const days of [0, 30, 200]) {
+    const { src, db } = await production(t);
+    await addHistory(db, days);
+    await syncedOn(db, '2026-10-15');
+    const { seed } = await syncRecent(db, sheetOf(src));
+    assert.equal(seed.since, '2026-10-14');
+    assert.ok(seed.v3_walks.every(w => w.walk_date >= '2026-10-14'));
+    counts.push(seed.v3_walks.length);
+  }
+  assert.deepEqual(counts, [counts[0], counts[0], counts[0]]);
+});
+
+test('#331 舊紀錄不被平常的同步刪掉，也不被整張重寫', async t => {
+  const { src, db } = await production(t);
+  await addHistory(db, 30);
+  await syncedOn(db, '2026-10-15');
+  const before = await readWalks(db);
+  const { written } = await syncRecent(db, sheetOf(src));
+  assert.deepEqual(written.filter(l => /v3_walks/.test(l)), []);
+  assert.ok(written.some(l => /^INSERT INTO v3_sync_state/.test(l)), '記下同步日期');
+  assert.deepEqual((await syncRecent(db, sheetOf(src))).written.filter(l => /v3_sync_state/.test(l)), [], '同一天不再寫一次');
+  assert.deepEqual(await readWalks(db), before);
+});
+
+test('#331 停擺 3 天後第一次同步補回這幾天的紀錄', async t => {
+  const { src, db } = await production(t);
+  await syncedOn(db, '2026-10-12');
+  const sheet = sheetOf(src);
+  const walked = sheet.dogs.filter(d => d.id).slice(0, 3);
+  // 試算表只留每隻狗最後一次，停擺期間溜的就是這幾隻最新的日期
+  ['2026-10-15', '2026-10-15', '2026-10-16'].forEach((date, i) => { walked[i].walkedDate = date; walked[i].walkers = ['cccccccccccc']; });
+  const { seed } = await syncRecent(db, sheet);
+  assert.equal(seed.since, '2026-10-11');
+  const walks = (await readWalks(db)).walks;
+  for (const d of walked) assert.ok(walks.some(w => w.id === d.id && w.date === d.walkedDate), `少了 ${d.name} ${d.walkedDate}`);
+  assert.equal(await db.prepare("SELECT value FROM v3_sync_state WHERE key='walks_synced'").first('value'), '2026-10-16');
+});
+
+test('#331 試算表上舊日期被改掉，平常的同步不影響 D1 的溜狗紀錄', async t => {
+  const { src, db } = await production(t);
+  await syncedOn(db, '2026-10-16');
+  const before = await readWalks(db);
+  const sheet = sheetOf(src);
+  const dog = sheet.dogs.find(d => d.id && d.walkedDate);
+  dog.walkedDate = '2026-09-01';
+  await syncRecent(db, sheet);
+  assert.deepEqual(await readWalks(db), before);
+});
+
+test('#331 6:30 保險同步：用主鍵核對每隻狗最後一次溜狗，D1 缺了就補；平常的同步不補', async t => {
+  const { src, db } = await production(t);
+  const dog = sheetOf(src).dogs.find(d => d.id && d.walkedDate && d.walkedDate < '2026-10-15');
+  const dogId = await db.prepare('SELECT dog_id FROM v3_dog_numbers WHERE number=?').bind(dog.id).first('dog_id');
+  await db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(dogId, dog.walkedDate).run();
+  await syncedOn(db, '2026-10-16');
+  const has = async () => Boolean(await db.prepare('SELECT 1 AS x FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(dogId, dog.walkedDate).first('x'));
+  await syncRecent(db, sheetOf(src));
+  assert.equal(await has(), false);
+  const { seed } = await syncRecent(db, sheetOf(src), { mode: 'daily' });
+  assert.equal(await has(), true);
+  // 核對讀的列數跟狗的數量有關：最近一段＋每隻狗最後一次
+  assert.ok(seed.v3_walks.length <= sheetOf(src).dogs.length * 2);
+});
+
+test('#331 輸出和整張比對一致（最近一段以內）', async t => {
+  const results = [];
+  for (const mode of ['full', '']) {
+    const { src, db } = await production(t);
+    await addHistory(db, 10);
+    await syncedOn(db, '2026-10-15');
+    const sheet = sheetOf(src);
+    const dog = sheet.dogs.find(d => d.id && d.walkedDate);
+    dog.walkedDate = '2026-10-16'; dog.walkers = ['aaaaaaaaaaaa'];
+    const { seed } = await syncRecent(db, sheet, { mode });
+    assert.equal(seed.since, mode === 'full' ? '' : '2026-10-14');
+    results.push({ walks: await readWalks(db), dogs: (await readDogsPayload(db)).dogs.map(({ syncedAt, ...d }) => d) });
+  }
+  assert.deepEqual(results[1], results[0]);
+});
+
+test('#331 還沒記過同步日期或勾了全量核對就整張讀', async () => {
+  const { walkSince, walkSeedSql } = await import('./sync-compact-d1.mjs');
+  assert.equal(walkSince(''), '');
+  assert.equal(walkSince('2026-10-16', { full: true }), '');
+  assert.equal(walkSince('2026-10-01'), '2026-09-30');
+  assert.equal(walkSeedSql(''), SEED_TABLES.v3_walks);
+  assert.match(walkSeedSql('2026-10-15', [{ number: "A'", date: '2026-10-01' }, { number: 'B', date: '2026-10-16' }]),
+    /walk_date>='2026-10-15' UNION .*IN \(VALUES \('A''','2026-10-01'\)\)$/);
+  // 沒編號的狗不核對：剛改名會找不到而重複補一筆
+  assert.deepEqual(lastWalkChecks({ dogs: [{ id: '', name: '甲', walkedDate: '2026-10-01' }, { id: 'B', name: '乙', walkedDate: '2026-10-02' }] }), [{ number: 'B', date: '2026-10-02' }]);
 });
