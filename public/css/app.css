@@ -2418,6 +2418,8 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .gw-stage-wrap .gw-stage { --card-h: 0px; }
 .gw-stage-wrap .gw-cards { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 #groupPage .gw-stage-wrap .gw-dog { width: auto; }
+/* 「＋」卡沒有照片，高度跟有照片的卡差不多，也守住 44px 點擊區 */
+#groupPage .gw-stage-wrap .gw-add .gw-tile { min-height: 100px; }
 .gw-stage-wrap .gw-photo { height: auto; aspect-ratio: 1; }
 .gw-walkbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
 .gw-walkbar .gw-actions { flex: 1; min-width: 0; }

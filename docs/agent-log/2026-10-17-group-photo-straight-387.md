@@ -11,3 +11,4 @@ n- Agent：Claude Code（Opus 5.5）
 - `public/js/group-stage.js`：箭頭搬進新的 `.gw-walkbar`（上一群｜溜了｜下一群）。
 - `public/css/app.css`：照片區改撐滿寬度、照片改正方形；保留第一排三張、之後每排四張的交錯排法。390px 寬時照片從 56px 放大到約 83px。
 - 已用 Playwright 在 320／390px 截圖確認；node、網頁測試全過。
+- CI（Linux）量到「＋加入狗」卡在空群時高度不到 44px（字型比 Windows 矮），補 `min-height: 100px`。
