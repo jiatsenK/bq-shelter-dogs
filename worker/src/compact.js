@@ -12,7 +12,7 @@ const MAIN_FIELDS = [
 ];
 const BOOLEANS = new Set(['covered', 'myWalked']);
 
-// 同一個 batch 讀，同步正在整份換掉複本時不會讀到一半新一半舊。主清單是空的就丟錯：沒有狗一定是資料出問題
+// 不含同步時間（ADR 0014，見 readSyncedAt）。同一個 batch 讀，同步正在整份換掉複本時不會讀到一半新一半舊。主清單是空的就丟錯：沒有狗一定是資料出問題
 export async function readDogsPayload(db) {
   // 介紹是 D1 自己存的（#250 網站改了馬上看得到），不用主清單複本上同步帶來的那份
   const [main, walkers, former, groups, notes] = await db.batch([
@@ -52,12 +52,24 @@ export async function readDogsPayload(db) {
   });
   return {
     version: rows[0].version,
-    syncedAt: rows[0].synced_at,
     dogs,
     groups: groupMap(groups.results || []),
     groupColumns: groupColumns(groups.results || [], await groupLabels(db)),
     sheetNotes: (notes.results || []).filter(n => n.text).map(n => ({ label: n.label, text: n.text })),
   };
+}
+
+// 上一次同步的時間（ADR 0014，#361）：存在 v3_sync_state，改它不會讓 small 資料包失效。
+// 還沒有這列（新版同步還沒跑過）就用主清單第 0 列舊的那份；表還沒建也一樣
+export const SYNCED_AT_KEY = 'synced_at';
+export async function readSyncedAt(db) {
+  const sql = `SELECT COALESCE((SELECT value FROM v3_sync_state WHERE key='${SYNCED_AT_KEY}'), (SELECT synced_at FROM v3_sheet_main WHERE row_index=0)) AS v`;
+  try {
+    return (await db.prepare(sql).first('v')) ?? '';
+  } catch (e) {
+    if (!/no such table/i.test(e.message)) throw e;
+    return (await db.prepare('SELECT synced_at FROM v3_sheet_main WHERE row_index=0').first('synced_at')) ?? '';
+  }
 }
 
 // 「常遛狗群」每一欄是一群：每隻狗對到同群的其他狗，好幾群就合起來（跟 scripts/sync-sheet.mjs 的 parseGroups 一樣）

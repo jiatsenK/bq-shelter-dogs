@@ -216,12 +216,29 @@ const planOnce = async (db, sheet) => {
 };
 const writes = sql => sql.split('\n').filter(l => l && !SCHEMA_LINE.test(l));
 
-test('#302 試算表沒變再同步一次：一列都不寫', async t => {
+test('#302 試算表沒變再同步一次：只寫同步時間 1 列', async t => {
   const { src, db } = await production(t);
   const once = await syncOnce(t, db, sheetOf(src));
   const plan = await planOnce(once, sheetOf(src));
-  assert.equal(plan.rows, 0);
-  assert.deepEqual(writes(plan.sql), []);
+  assert.equal(plan.rows, 1);
+  assert.equal(writes(plan.sql).length, 1);
+  assert.match(writes(plan.sql)[0], /^INSERT INTO v3_sync_state\(key,value\) VALUES\('synced_at',/);
+});
+
+// #361 同步時間存 v3_sync_state（ADR 0014）：只跑同步、試算表沒改時 small 資料包不失效
+test('#361 試算表沒改只跑同步：small 版本號不變，同步時間照樣更新', async t => {
+  const { src, db } = await production(t);
+  const once = await syncOnce(t, db, sheetOf(src));
+  const small = async () => (await once.prepare('SELECT small FROM v3_pack_versions WHERE id=1').first()).small;
+  const before = await small();
+  const later = new Date(NOW.getTime() + 60 * 60 * 1000);
+  const seed = await seedOf(once);
+  const plan = await buildSyncPlan(seed, async mem => ({ ...planSync(await readPrevious(mem), sheetOf(src), null, later, KEY), groupColumns: src.groupColumns }));
+  await once.batch(plan.sql.split(';\n').map(l => l.trim()).filter(Boolean).map(l => once.prepare(l)));
+  assert.equal(await small(), before);
+  const synced = await once.prepare("SELECT value FROM v3_sync_state WHERE key='synced_at'").first('value');
+  assert.match(synced, /^2026-10-16T10:00/);
+  assert.equal((await readDogsPayload(once)).syncedAt, undefined, '主清單不帶同步時間');
 });
 
 test('#302 一隻狗被溜：只寫幾列，不再刪光重寫溜狗紀錄', async t => {
@@ -248,8 +265,7 @@ test('#302 寫完的結果跟整份重建一樣', async t => {
     return { ...planSync(await readPrevious(mem), sheet, null, NOW, KEY), groupColumns: src.groupColumns };
   }));
   for (const table of Object.keys(SEED_TABLES)) {
-    // 主清單只有第 0 列的同步時間有用（網站只讀這列），其他列不跟著改
-    const all = async d => (await d.prepare(`SELECT * FROM ${table}`).all()).results.map(r => JSON.stringify(r.row_index ? { ...r, synced_at: '' } : r)).sort();
+    const all = async d => (await d.prepare(`SELECT * FROM ${table}`).all()).results.map(r => JSON.stringify(r)).sort();
     assert.deepEqual(await all(diffed), await all(fresh), table);
   }
 });
@@ -369,7 +385,7 @@ test('#331 舊紀錄不被平常的同步刪掉，也不被整張重寫', async 
   const { written } = await syncRecent(db, sheetOf(src));
   assert.deepEqual(written.filter(l => /v3_walks/.test(l)), []);
   assert.ok(written.some(l => /^INSERT INTO v3_sync_state/.test(l)), '記下同步日期');
-  assert.deepEqual((await syncRecent(db, sheetOf(src))).written.filter(l => /v3_sync_state/.test(l)), [], '同一天不再寫一次');
+  assert.deepEqual((await syncRecent(db, sheetOf(src))).written.filter(l => /v3_sync_state/.test(l) && /walks_synced/.test(l)), [], '同一天不再寫一次');
   assert.deepEqual(await readWalks(db), before);
 });
 

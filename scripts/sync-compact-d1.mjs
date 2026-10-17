@@ -18,6 +18,7 @@ import { compareCompactDepartures } from './import-compact-departures.mjs';
 import { fetchGviz, parseGroupColumns, parseGroupLabels, buildData, loadDepartedRows, formatDate } from './sync-sheet.mjs';
 import { planSync, readPrevious, applySource } from './sync-compact-plan.mjs';
 import { SYNC_TABLES, diffTables, budgetProblem, todayRowsWritten, MAX_ROWS_PER_SYNC, DAILY_BUDGET } from './sync-diff.mjs';
+import { SYNCED_AT_KEY } from '../worker/src/compact.js';
 export { planSync, readPrevious };
 
 // 從正式 D1 讀回的現況：永久狗與編號（重跑沿用 ID）、上一次的主清單複本（比對溜狗日期、離所）、
@@ -102,7 +103,10 @@ export async function buildSyncPlan(seed, source, { today = '' } = {}) {
     for (const { sql, values } of changes) { let i = 0; out.push(`${sql.replace(/\?/g, () => sqlValue(values[i++]))};`); }
     const recordDay = Boolean(today) && today !== seed.walksSynced;
     if (recordDay) out.push(`INSERT INTO v3_sync_state(key,value) VALUES('${WALKS_SYNCED_KEY}',${sqlValue(today)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value;`);
-    return { sql: out.join('\n') + '\n', rows: changes.length + Number(recordDay) };
+    // 同步時間另存 v3_sync_state（ADR 0014，#361）：每次同步寫 1 列，沒有 small 觸發器，試算表沒改時 small 不會失效
+    const syncedAt = source.dogs?.syncedAt || '';
+    if (syncedAt) out.push(`INSERT INTO v3_sync_state(key,value) VALUES('${SYNCED_AT_KEY}',${sqlValue(syncedAt)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value;`);
+    return { sql: out.join('\n') + '\n', rows: changes.length + Number(recordDay) + Number(Boolean(syncedAt)) };
   } finally { db.close(); }
 }
 
