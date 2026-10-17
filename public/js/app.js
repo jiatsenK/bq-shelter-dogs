@@ -1980,8 +1980,7 @@ function openIntroEdit(dog) {
   renderDetail();
   const box = document.querySelector('#introForm [data-intake-field="date"]') || document.getElementById('introText');
   if (box) {
-    box.focus({ preventScroll: true });
-    if (box.scrollIntoView) box.scrollIntoView({ block: 'center' });
+    box.focus({ preventScroll: true }); // 捲到看得見交給 detail-viewport.js，只捲狗卡不捲整頁（#389）
   }
 }
 async function saveIntro() {
@@ -2061,8 +2060,7 @@ function openStaysEdit(dog) {
   renderDetail();
   const box = document.querySelector('#staysForm [data-stay-field="in"]');
   if (box) {
-    box.focus({ preventScroll: true });
-    if (box.scrollIntoView) box.scrollIntoView({ block: 'center' });
+    box.focus({ preventScroll: true }); // 捲到看得見交給 detail-viewport.js，只捲狗卡不捲整頁（#389）
   }
 }
 // 先在這台檢查一次（伺服器也會檢查）；回空字串是沒問題
@@ -2114,9 +2112,7 @@ function openRestEdit(dog) {
   renderDetail();
   const first = document.getElementById('restReason');
   if (first) {
-    first.focus({ preventScroll: true });
-    const form = document.getElementById('restForm');
-    if (form.scrollIntoView) form.scrollIntoView({ block: 'center' });
+    first.focus({ preventScroll: true }); // 同上（#389）
   }
 }
 // 送到 Worker：end＝結束休養。成功後這支手機馬上生效，其他志工重新整理就看得到（#250 存 D1）
