@@ -2413,14 +2413,19 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .gw-heading { position: relative; }
 .gw-manage { position: absolute; right: 0; top: 60px; z-index: 5; max-width: 100%; max-height: 50dvh; overflow: auto; padding: 12px; background: var(--surface); box-shadow: 0 3px 12px #0002; }
 #groupPage { position: relative; }
-/* 切群箭頭放在照片區左右兩側正中間；照片縮小讓出位置，避免誤觸（K 2026-10-17） */
+/* 換群箭頭放在「溜了」兩側、貼齊畫面左右邊，讓出寬度給照片（#387）；跟主按鈕留空隙免得誤按換群 */
 .gw-stage-wrap { position: relative; }
-.gw-stage-wrap .gw-stage { margin-inline: 44px; --card-w: 46px; --card-h: 88px; }
-#groupPage .gw-side { position: absolute; top: 50%; transform: translateY(-50%); z-index: 6; width: 44px; height: 64px; display: grid; place-items: center; padding: 0; color: var(--ink-soft); }
-#groupPage .gw-side.prev { left: 0; }
-#groupPage .gw-side.next { right: 0; }
+.gw-stage-wrap .gw-stage { --card-h: 0px; }
+.gw-stage-wrap .gw-cards { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+#groupPage .gw-stage-wrap .gw-dog { width: auto; }
+/* 「＋」卡沒有照片，高度跟有照片的卡差不多，也守住 44px 點擊區 */
+#groupPage .gw-stage-wrap .gw-add .gw-tile { min-height: 100px; }
+.gw-stage-wrap .gw-photo { height: auto; aspect-ratio: 1; }
+.gw-walkbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.gw-walkbar .gw-actions { flex: 1; min-width: 0; }
+#groupPage .gw-walkbar #gwWalk { min-width: 0; width: 100%; max-width: 240px; padding-inline: 12px; }
+#groupPage .gw-side { flex: none; width: 48px; height: 48px; margin-top: 12px; display: grid; place-items: center; padding: 0; color: var(--ink-soft); }
 .gw-side svg { width: 24px; height: 24px; }
-@media(min-width:390px) { .gw-stage-wrap .gw-stage { --card-w: 56px; --card-h: 100px; } }
 /* 手機一頁內看得到所有按鈕（K 2026-10-17）：照片區扣掉表頭、搜尋、群名、頁碼、兩顆按鈕和底部分頁列，其餘在照片區內捲動 */
 @media (max-width: 1099px) { .gw-stage-wrap .gw-stage { height: max(126px, calc(100dvh - 404px)); } }
 
