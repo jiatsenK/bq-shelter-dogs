@@ -496,7 +496,11 @@ function myProgressHtml(walks) {
 let mineStatsOpen = false;
 let mineMonth = ''; // 我溜過月曆正在看的月份（YYYY-MM）；空的＝最近有紀錄的那個月
 let mineDay = ''; // 月曆上選的那一天（YYYY-MM-DD）；空的＝那個月最近一次到所
+// 誤觸復原的入口放最上面，名字還沒設定、紀錄讀取中也看得到
 function myWalksHtml(today, query) {
+  return (query ? '' : todayUndoHtml()) + myWalksBodyHtml(today, query);
+}
+function myWalksBodyHtml(today, query) {
   const visibleWalks = currentMyWalks(today);
   const confirmedToday = Object.values(loadSheetWrites(today)).some(item => item.current?.date === localDateKey(today) && splitWalkers(item.current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())));
   if (myWalksState === 'loading' && !confirmedToday) return `<div class="status-msg">讀取溜狗紀錄中…</div>`;
@@ -1032,13 +1036,8 @@ function walkThenRecord(dogs) {
     }
     if (!ok) return; // 一部分沒寫進去：sheetWrite 的提示說了是哪幾隻，不蓋掉
     const text = `${done.map(d => d.name).join('、')} 今天溜了`;
-    const undoFn = () => {
-      recordWalked(done, false);
-      clearWalkWith(done);
-      render();
-      renderDetail();
-      queueSheetWrite(done, false);
-    };
+    // 復原要等試算表改回來才算，不先改手機畫面
+    const undoFn = () => undoSheetWalks(done);
     showToast(`${text}，已寫進試算表`, undoFn, { label: '＋一起溜的人', fn: () => openWithSheet(done) });
   }).catch(e => console.error(e));
 }
@@ -1061,6 +1060,55 @@ function setWalkedLocal(dogs, on) {
   showToast(text, undoFn, extra);
   queueSheetWrite(changed, on, text, undoFn);
 }
+
+// ── 誤觸復原：這支手機今天寫進試算表的溜了，事後也能從狗群頁、我溜過撤銷 ──
+// 只認這支手機記下的 prev／wrote（sheetWrite 存的）；試算表那格已被別人改過（current 不是我們寫的）就不提供，
+// 撤銷時 Apps Script 也會再核對一次，不蓋掉別人後來改的
+function sheetUndoable(dog, today = new Date()) {
+  const it = loadSheetWrites(today)[walkKey(dog)];
+  return !!(it && it.prev && it.wrote && (!it.current || it.current.walker === it.wrote.walker));
+}
+let sheetUndoBusy = false;
+// 回傳要顯示的結果文字；只有試算表回「restored」的才算復原
+async function undoSheetWalks(dogs) {
+  const todo = dogs.filter((d, i) => d && sheetUndoable(d) && dogs.indexOf(d) === i);
+  if (sheetUndoBusy || !todo.length) return '';
+  sheetUndoBusy = true;
+  hideToast();
+  render();
+  let ok = false;
+  try { ok = await queueSheetWrite(todo, false); } catch (e) { console.error(e); }
+  sheetUndoBusy = false;
+  const items = loadSheetWrites();
+  const restored = todo.filter(d => { const it = items[walkKey(d)]; return it && !it.wrote; });
+  const changed = todo.filter(d => !restored.includes(d) && !sheetUndoable(d));
+  const left = todo.filter(d => !restored.includes(d) && !changed.includes(d));
+  const names = list => list.map(d => d.name).join('、');
+  const parts = [];
+  if (restored.length) parts.push(`已從試算表復原 ${restored.length} 隻`);
+  if (changed.length) parts.push(`${names(changed)} 在試算表已被改過，沒有蓋掉別人的紀錄`);
+  if (left.length) parts.push(ok === null ? `${names(left)} 目前連不到試算表，尚未復原` : `${names(left)} ${sheetWriteFailText || '試算表沒改回來'}，尚未復原`);
+  const text = parts.join('；');
+  render();
+  renderDetail();
+  showToast(text, null, left.length ? { label: '再試一次', fn: () => undoSheetWalks(left) } : null);
+  return text;
+}
+// 我溜過最上面：今天這支手機登記、還能撤銷的狗
+function todayUndoHtml() {
+  const dogs = allDogs.filter(d => sheetUndoable(d));
+  if (!dogs.length) return '';
+  return `<section class="mine-undo" aria-label="今天登記的">
+    <p>今天在這支手機登記 ${dogs.length} 隻，按錯可以取消（會把試算表改回原本的）。</p>
+    <ul>${dogs.map(d => `<li><span>${esc(d.name)}</span><button type="button" class="who-edit" data-undo-walk="${esc(walkKey(d))}" aria-label="取消 ${esc(d.name)} 今天溜了"${sheetUndoBusy ? ' disabled' : ''}>取消</button></li>`).join('')}</ul>
+  </section>`;
+}
+document.getElementById('main').addEventListener('click', e => {
+  const btn = e.target.closest('[data-undo-walk]');
+  if (!btn) return;
+  const dog = allDogs.find(d => walkKey(d) === btn.dataset.undoWalk);
+  if (dog) undoSheetWalks([dog]);
+});
 
 // ── 我的常溜（#267）：逐隻增刪，絕不把手機上的舊整份清單蓋到 D1 ──
 const FAVS_KEY = 'bq-favs';
@@ -3282,6 +3330,9 @@ function renderMain() {
   const main = document.getElementById('main');
   // 資訊與狗群共用內頁頁首；底部導覽保持可用。
   document.documentElement.classList.toggle('analysis-open', analysisOpen || activeTab === 'groups');
+  // 常遛狗群、資訊都是底部導覽的主分頁：狗群用網站共用表頭，資訊首頁只寫「資訊」；只有資訊子頁有「回資訊」
+  document.documentElement.classList.toggle('head-shared', !analysisOpen && activeTab === 'groups');
+  document.documentElement.classList.toggle('head-sub', analysisOpen && !!infoPage);
   const title = document.querySelector('.head-title');
   if (title) title.textContent = analysisOpen ? (INFO_PAGES[infoPage] || '資訊') : '常遛狗群';
   const back = document.getElementById('analysisBack');

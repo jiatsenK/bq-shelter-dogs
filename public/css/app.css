@@ -2006,6 +2006,11 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .analysis-open .head-back:active { background: var(--shell-deep); }
 .analysis-open .head-back:focus-visible { outline: 3px solid var(--tab-amber); }
 .analysis-open .head-title { display: block; flex: 1; margin: 0 0 0 14px; color: #fff; font-size: 20px; font-weight: 800; }
+/* 主分頁沒有返回（2026-10-17）：資訊首頁只放「資訊」，子頁才有「回資訊」；常遛狗群換回網站名稱的共用表頭 */
+.analysis-open:not(.head-sub) .head-back { display: none; }
+.analysis-open:not(.head-sub) .head-title { margin-left: 0; }
+.analysis-open.head-shared .head-title { display: none; }
+.analysis-open.head-shared .brand .logo, .analysis-open.head-shared .brand .titles { display: block !important; }
 
 /* 列表模式（K 2026-10-09）：溜狗人拿掉，天數｜狗名＋籠位｜溜了；「天數」標題跟下面的數字一樣置中。
    10-10 K：籠位單獨一欄的黑框標籤位置怪、跟照片檢視不一樣 → 改成跟狗卡同一個圖釘籠位（.cage-pill），放在狗名下面 */
@@ -2403,3 +2408,10 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .analysis-open header.app { position: fixed; inset: 0 0 auto; }
   .analysis-open body::before { content: ""; display: block; height: var(--app-header-height, 64px); }
 }
+
+/* 我溜過最上面：今天這支手機登記、按錯可取消（2026-10-17） */
+.mine-undo { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
+.mine-undo p { margin: 0 0 6px; font-size: 14px; color: var(--ink-soft); }
+.mine-undo ul { list-style: none; margin: 0; padding: 0; }
+.mine-undo li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+.mine-undo .who-edit { min-height: 44px; min-width: 44px; }
