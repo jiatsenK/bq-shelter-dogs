@@ -2382,7 +2382,7 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .gw-pages { display: flex; justify-content: center; align-items: center; gap: 16px; color: var(--ink-soft); }
 .gw-pages svg { width: 20px; height: 20px; }
 /* 按鈕置中（K 2026-10-17）；「有狗沒溜」跟在主按鈕旁邊 */
-.gw-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 16px; padding: 12px 0; }
+.gw-actions { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px 16px; padding: 12px 0; }
 #groupPage #gwWalk { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 200px; background: var(--primary); color: white; padding: 12px 24px; font-weight: 800; }
 /* 已溜：跟溜狗表的「已溜」同色，再按一次復原 */
 #groupPage #gwWalk.done { background: var(--green-bg); color: var(--green-text); }
@@ -2413,6 +2413,14 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .gw-heading { position: relative; }
 .gw-manage { position: absolute; right: 0; top: 60px; z-index: 5; max-width: 100%; max-height: 50dvh; overflow: auto; padding: 12px; background: var(--surface); box-shadow: 0 3px 12px #0002; }
 #groupPage { position: relative; }
+/* 切群箭頭放在照片區左右兩側正中間；照片縮小讓出位置，避免誤觸（K 2026-10-17） */
+.gw-stage-wrap { position: relative; }
+.gw-stage-wrap .gw-stage { margin-inline: 44px; --card-w: 46px; --card-h: 88px; }
+#groupPage .gw-side { position: absolute; top: 50%; transform: translateY(-50%); z-index: 6; width: 44px; height: 64px; display: grid; place-items: center; padding: 0; color: var(--ink-soft); }
+#groupPage .gw-side.prev { left: 0; }
+#groupPage .gw-side.next { right: 0; }
+.gw-side svg { width: 24px; height: 24px; }
+@media(min-width:390px) { .gw-stage-wrap .gw-stage { --card-w: 56px; --card-h: 100px; } }
 
 @media (max-width: 1099px) {
   .analysis-open header.app { position: fixed; inset: 0 0 auto; }
