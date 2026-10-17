@@ -67,7 +67,7 @@ export function walkSeedSql(since, checks = []) {
   if (!since) return SEED_TABLES.v3_walks;
   const pairs = checks.filter(c => c.number && c.date && c.date < since).map(c => `(${sqlValue(c.number)},${sqlValue(c.date)})`);
   return [
-    `SELECT * FROM v3_walks WHERE walk_date>=${sqlValue(since)}`,
+    `SELECT * FROM v3_walks INDEXED BY v3_walks_date WHERE walk_date>=${sqlValue(since)}`,
     ...(pairs.length ? [`SELECT w.* FROM v3_walks w JOIN v3_dog_numbers n ON n.dog_id=w.dog_id WHERE (n.number,w.walk_date) IN (VALUES ${pairs.join(',')})`] : []),
   ].join(' UNION ');
 }
@@ -124,7 +124,7 @@ export function departureCutoff(today) {
   return d.toISOString().slice(0, 10);
 }
 export function narrowSeedSql({ cutoff, numbers = [], walksSql }) {
-  const recent = `SELECT * FROM v3_departures WHERE departed_date IS NULL OR departed_date='' OR departed_date>=${sqlValue(cutoff)}`;
+  const recent = `SELECT * FROM v3_departures INDEXED BY v3_departures_date WHERE departed_date IS NULL OR departed_date='' OR departed_date>=${sqlValue(cutoff)}`;
   const nums = [...new Set(numbers.filter(Boolean))];
   const dogIds = [
     'SELECT dog_id FROM v3_sheet_main',

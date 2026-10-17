@@ -519,3 +519,17 @@ test('#364 出所很久的狗回到主清單（同一個編號）：照主鍵讀
   assert.equal(await db.prepare("SELECT COUNT(*) AS n FROM v3_dogs WHERE name='舊狗1'").first('n'), 1);
   assert.equal((await readDogsPayload(db)).dogs.filter(d => d.id === 'old1').length, 1);
 });
+
+test('#371 同步讀的 SQL 不整張掃溜狗紀錄、離所（D1 照掃過的列數算讀取額度）', async () => {
+  const { narrowSeedSql, walkSeedSql } = await import('./sync-compact-d1.mjs');
+  const db = fakeD1();
+  try {
+    await migrateCompactDatabase(db);
+    const walksSql = walkSeedSql('2026-10-15', [{ number: 'A', date: '2026-10-01' }]);
+    const sqls = { v3_walks: walksSql, ...narrowSeedSql({ cutoff: '2026-08-17', numbers: ['A'], walksSql }) };
+    for (const [table, sql] of Object.entries(sqls)) {
+      const plan = (await db.prepare(`EXPLAIN QUERY PLAN ${sql}`).all()).results.map(r => r.detail);
+      assert.deepEqual(plan.filter(d => /^SCAN v3_(walks|departures)\b/.test(d)), [], `${table}：${plan.join(' / ')}`);
+    }
+  } finally { db.close(); }
+});
