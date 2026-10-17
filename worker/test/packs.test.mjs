@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
-import { setPackChunkBytes, swapPackCache, readSmall, readWalksPacked } from '../src/packs.js';
+import { setPackChunkBytes, swapPackCache, readSmall, readWalksPacked, yearVersions } from '../src/packs.js';
 import { readDogsPayload, readWalks, readDepartures, readRest } from '../src/compact.js';
 import { fakeD1 } from './fakes.mjs';
 import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
@@ -43,7 +43,11 @@ const PATHS = ['/dogs', '/walks', '/departures', '/rest'];
 // 現在的讀法（直接讀表）算出來的回應
 async function direct(DB, path) {
   if (path === '/dogs') return { ok: true, ...await readDogsPayload(DB) };
-  if (path === '/walks') return { ok: true, ...await readWalks(DB) };
+  if (path === '/walks') {
+    const { version, historyStart, walks } = await readWalks(DB);
+    const v = await DB.prepare('SELECT cutoff,live,months FROM v3_walk_versions WHERE id=1').first();
+    return { ok: true, version, historyStart, years: yearVersions(v), walks };
+  }
   if (path === '/departures') return { ok: true, version: 1, departures: await readDepartures(DB) };
   return { ok: true, rest: await readRest(DB) };
 }
@@ -335,4 +339,53 @@ test('拿掉任何一個 pack_ 觸發器都抓得到', async t => {
     assert.deepEqual(await missingTriggers(DB), [name]);
     await DB.prepare(sql).run();
   }
+});
+
+// #346 /api/walks?year=：那一年的紀錄，形狀跟 /api/walks 一樣，網址帶版本號才永久快取
+const yearOf = async (DB, year, v) => get(`/walks?year=${year}${v === undefined ? '' : `&v=${encodeURIComponent(v)}`}`, { DB });
+
+test('?year=：內容是那一年的全部紀錄（含今天），跟整份逐筆相同', async t => {
+  const DB = await monthlyDb(t);
+  const all = await (await get('/walks', { DB })).json();
+  assert.deepEqual(Object.keys(all.years).sort(), ['2025', '2026']);
+  for (const year of ['2025', '2026', '2019']) {
+    const res = await yearOf(DB, year, all.years[year]);
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.deepEqual(Object.keys(body), ['ok', 'version', 'historyStart', 'year', 'ver', 'walks']);
+    assert.equal(body.ver, all.years[year] || '');
+    assert.deepEqual(body.walks, all.walks.filter(w => w.date.startsWith(year)), year);
+  }
+  assert.ok((await (await yearOf(DB, '2026')).json()).walks.some(w => w.date === TODAY), '今年含今天');
+  assert.equal((await yearOf(DB, '26')).status, 400);
+});
+
+test('?year=：版本號對得上才 immutable；改那一年的紀錄版本號就變，別年不變', async t => {
+  const DB = await monthlyDb(t);
+  const before = (await (await get('/walks', { DB })).json()).years;
+  assert.match((await yearOf(DB, '2025', before['2025'])).headers.get('Cache-Control'), /immutable/);
+  assert.equal((await yearOf(DB, '2025', 'old')).headers.get('Cache-Control'), 'no-store');
+  assert.equal((await yearOf(DB, '2025')).headers.get('Cache-Control'), 'no-store');
+  await DB.prepare("UPDATE v3_walks SET walker_code='cccccccccccc' WHERE walk_date='2025-11-20'").run();
+  const after = (await (await get('/walks', { DB })).json()).years;
+  assert.notEqual(after['2025'], before['2025']);
+  assert.equal(after['2026'], before['2026']);
+  assert.equal((await yearOf(DB, '2025', before['2025'])).headers.get('Cache-Control'), 'no-store', '舊版本號不快取新內容');
+  // 今年帶切點和 live：今天多一筆，今年的版本號就變
+  await addWalk(DB, TODAY, 1, 'd'.repeat(12));
+  assert.notEqual((await (await get('/walks', { DB })).json()).years['2026'], after['2026']);
+});
+
+test('?year=：新機器只讀版本號和那一年的資料包', async t => {
+  const DB = await monthlyDb(t);
+  await get('/walks', { DB });
+  worker.testing.resetState();
+  const before = DB.stats.rowsRead;
+  assert.equal((await yearOf(DB, '2025')).status, 200);
+  assert.equal(DB.stats.rowsRead - before, 1 + await yearSegs(DB, '2025'));
+  // 同一台再拿：只讀版本號
+  const again = DB.stats.rowsRead;
+  await yearOf(DB, '2025');
+  assert.equal(DB.stats.rowsRead - again, 1);
+  await assertSame(DB, '拿過一年後整份照常');
 });

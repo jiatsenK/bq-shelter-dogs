@@ -242,11 +242,11 @@ function runTests() {
       eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'WALKER_CODES_KEY', 'key', 'key', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'SHEET_WRITES_KEY', 'SHEET_WRITES_KEY', 'WALK_VIEW_KEY', 'WALK_VIEW_KEY', 'ONBOARD_KEY', 'ONBOARD_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、WALKER_NAME_KEY 和 SHEET_WRITES_KEY（#138 寫試算表）、WALK_VIEW_KEY、ONBOARD_KEY（V9）、NAME_LATER_KEY（先看看，介面評估第四輪），key 是一起溜的人（readJsonKey／writeJsonKey）：');
       if (!/readJsonKey\(COMPANIONS_KEY\)/.test(APP_JS) || !/writeJsonKey\(WALK_WITH_KEY,/.test(APP_JS)) throw new Error('readJsonKey／writeJsonKey 只給一起溜的人用');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
-      eq(urls.length, 5, 'fetch 呼叫數（上傳以外）：');
+      eq(urls.length, 6, 'fetch 呼叫數（上傳以外）：');
       // #32 起前端只讀 data/dogs.json，不直接連試算表；狗卡資訊也已經寫在 dogs.json 裡，不再抓 dogs/*.md
       // #62 另外讀我的備註：只從 Worker 的 /notes 或網站上的 data/my-notes.json 讀
       // #58 我最近溜過另外讀溜狗紀錄（#260 起是 api/walks）；ADR 0007 今日溜狗紀錄讀 api/today
-      if (!urls.every(u => u.startsWith('DATA_URL,') || u.startsWith('WALKS_URL,') || u.startsWith('REST_URL,') || u === "`${UPLOAD_URL}/walkers`, { cache: 'no-cache' }" || u === "`${UPLOAD_URL}/today`, { cache: 'no-cache' }")) throw new Error(`只能讀 api/dogs、api/walks 與我的備註：${urls.join('、')}`);
+      if (!urls.every(u => u.startsWith('DATA_URL,') || u.startsWith('WALKS_URL,') || u.startsWith('`${WALKS_URL}?year=') || u.startsWith('REST_URL,') || u === "`${UPLOAD_URL}/walkers`, { cache: 'no-cache' }" || u === "`${UPLOAD_URL}/today`, { cache: 'no-cache' }")) throw new Error(`只能讀 api/dogs、api/walks 與我的備註：${urls.join('、')}`);
       if (/readJsonObject|GALLERY_URL|\/gallery/.test(APP_JS)) throw new Error('相簿已拿掉（K 2026-10-09），不該再讀相簿清單');
       eq(DATA_URL, 'api/dogs', '資料來源（#247 Worker 讀 D1）：');
       eq(WALKS_URL, 'api/walks', '遛狗紀錄（#260 Worker 讀 D1）：');
@@ -1393,6 +1393,37 @@ async function runMyWalksTests() {
       searchQuery = '乙'; render();
       eq([heads(), main.querySelector('.mine-cal')], [['2026/09/22（二）', '2026/08/05（三）'], null], '搜尋：');
       searchQuery = '';
+    });
+    await check('#346 月曆翻到上個月 1 號以前才按年拿，網址帶那年版本號；拿回來併進月曆', async () => {
+      setup();
+      walksData = { ...WALKS, years: { 2025: '4', 2026: '9.2026-09-26.1' } };
+      render();
+      const calls = [];
+      let done;
+      const wait = new Promise(r => { done = r; });
+      window.fetch = async url => {
+        if (!String(url).includes('year=')) return realFetch(url);
+        calls.push(String(url));
+        await wait;
+        const year = String(url).match(/year=(\d+)/)[1];
+        return new Response(JSON.stringify({ ok: true, version: 1, year, walks: year === '2026' ? [{ id: '8002', name: '紀錄乙', date: '2026-08-05', walkers: [ME] }] : [{ id: '8001', name: '紀錄甲', date: '2025-12-30', walkers: [ME] }] }));
+      };
+      const nav = () => [...main.querySelectorAll('.mc-nav')];
+      try {
+      eq(nav()[0].disabled, false, '還有沒拿的年份可以往前翻：');
+      nav()[0].click();
+      eq([calls, main.querySelector('.mc-title span').textContent], [['api/walks?year=2026&v=9.2026-09-26.1'], '讀取中…'], '拿那一年：');
+      done(); await tick(); await tick();
+      eq([main.querySelector('.mc-title').firstChild.textContent, heads()], ['2026 年 8 月', ['2026/08/05（三）']], '拿回來還在 8 月，併進月曆：');
+      eq(myWalks.filter(w => w.ymd.startsWith('2026-09')).length, 4, '近期範圍不重複：');
+      nav()[0].click();
+      eq(calls.length, 1, '同一年不再拿：');
+      for (let i = 0; i < 7; i++) nav()[0].click();
+      eq(main.querySelector('.mc-title').firstChild.textContent, '2025 年 12 月', '跨年：');
+      await tick(); await tick();
+      eq([calls[1], heads()], ['api/walks?year=2025&v=4', ['2025/12/30（二）']], '跨年拿前一年：');
+      eq(nav()[0].disabled, true, '都拿過了，最早有紀錄就不能再翻：');
+      } finally { window.fetch = realFetch; walksData = WALKS; }
     });
     await check('#58 點狗開原本的詳細資訊；搜尋只篩這頁', () => {
       setup();
