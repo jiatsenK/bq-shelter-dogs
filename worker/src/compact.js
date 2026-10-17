@@ -98,16 +98,6 @@ function groupColumns(cells, labels) {
   return [...columns.keys()].sort((a, b) => a - b).map(column => ({ column, label: labels.get(column) || '', names: columns.get(column) }));
 }
 
-// 狀態頁：新表有沒有接上、各幾筆
-export async function compactStatus(db) {
-  try {
-    const n = async t => (await db.prepare(`SELECT COUNT(*) AS n FROM ${t}`).first()).n;
-    return `D1 新表（狗 ${await n('v3_dogs')}、主清單 ${await n('v3_sheet_main')}、溜狗紀錄 ${await n('v3_walks')}）`;
-  } catch (e) {
-    return 'D1（新表還沒建）';
-  }
-}
-
 // 編號 → 永久狗 ID；不認得的編號不在回傳的 Map 裡
 export async function dogIdsFor(db, numbers) {
   const out = new Map();

@@ -3995,7 +3995,7 @@ async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES
       showToast(`更新失敗：${why || `HTTP ${res.status}`}`);
       return;
     }
-    // ADR 0008：Worker 比對過試算表沒變，沒有叫同步，不用等
+    // ADR 0012：Worker 比對過試算表沒變，沒有叫同步，不用等
     if (res.ok && (await res.clone().json().catch(() => ({}))).unchanged) {
       showToast('試算表沒有新的修改，已經是最新的');
       return;

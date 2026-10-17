@@ -154,11 +154,11 @@ test('名字推薦改用 v3_volunteers：表上的名字記進去、以前看過
   assert.deepEqual(await rememberWalkerNames({ DB: { prepare() { throw new Error('x'); } } }, ['志工乙']), []);
 });
 
-test('狀態頁：顯示新資料庫有沒有接上、狗和主清單幾筆；還沒建表或沒接都不會壞', async () => {
+test('狀態頁：顯示新資料庫有沒有接上、狗和主清單幾筆；還沒建表或沒接都不會壞，也不退回整表數', async () => {
   const status = async env => (await (await worker.fetch(new Request(`${SITE}/api/`), env)).json()).database;
   assert.equal(await status({}), '未設定');
   assert.equal(await status({ DB: await seededDb() }), 'D1 新表（主清單 3 隻、溜狗紀錄 0 筆）');
-  assert.equal(await status({ DB: fakeD1() }), 'D1（新表還沒建）');
+  assert.equal(await status({ DB: fakeD1() }), 'D1（讀不到資料包版本號）');
 });
 
 // #260 網站不再讀 data/walks.json、data/departures.json、data/history/

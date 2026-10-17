@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
-import { setPackChunkBytes, swapPackCache } from '../src/packs.js';
+import { setPackChunkBytes, swapPackCache, readSmall, readWalksPacked } from '../src/packs.js';
 import { readDogsPayload, readWalks, readDepartures, readRest } from '../src/compact.js';
 import { fakeD1 } from './fakes.mjs';
 import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
@@ -183,11 +183,15 @@ test('狀態頁不再整表數列數：沒變時只讀版本號', async t => {
   assert.equal(DB.stats.rowsRead - before, 2);
 });
 
-test('正式 D1 還沒有資料包的表（同步還沒補建）：照舊直接讀表', async t => {
+test('讀不到版本號：報錯，不退回整表讀取（整表讀取量隨歷史變多）', async t => {
   const DB = await seededDb(t);
   await DB.prepare('DROP TABLE v3_pack_versions').run();
   await DB.prepare('DROP TABLE v3_walk_versions').run();
-  await assertSame(DB, '沒有版本號表');
+  await assert.rejects(readSmall(DB, 'dogs'));
+  await assert.rejects(readWalksPacked(DB, TODAY));
+  const empty = await seededDb(t);
+  await empty.prepare('DELETE FROM v3_walk_versions').run();
+  await assert.rejects(readWalksPacked(empty, TODAY), /版本號/);
 });
 
 // #320 溜狗歷史按月分段：跨月、跨年的資料

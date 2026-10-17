@@ -1,4 +1,4 @@
-// ADR 0008：有改才同步＋每天保險一次（worker/src/sync-plan.js）
+// ADR 0012：有改才同步＋每天保險一次（worker/src/sync-plan.js）
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fakeD1 } from './fakes.mjs';
