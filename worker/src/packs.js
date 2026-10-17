@@ -276,10 +276,23 @@ export function yearVersions(v) {
   return Object.fromEntries(Object.entries(out).map(([y, n]) => [y, live && y >= live ? `${n}.${v.cutoff}.${v.live}` : String(n)]));
 }
 
-// 跟 readWalks 一樣的形狀；today 是台灣日期。years 是每年的版本號，網站拿來組 ?year= 的網址
+// 近期溜狗紀錄的起點：上個月 1 號（ADR 0013）；today 是台灣日期 YYYY-MM-DD
+export function recentStart(today) {
+  const [y, m] = today.split('-').map(Number);
+  return m === 1 ? `${y - 1}-12-01` : `${y}-${String(m - 1).padStart(2, '0')}-01`;
+}
+
+// 跟 readWalks 一樣的形狀，但只有近期溜狗紀錄（#347）；更早的用 ?year= 拿。years 是每年的版本號，網站拿來組 ?year= 的網址
 export async function readWalksPacked(db, today) {
-  const walks = await packedWalks(db, today);
-  return { version: 1, historyStart: HISTORY_START, years: yearVersions(mem.walks.v), walks };
+  const v = await currentVersions(db, today);
+  const from = recentStart(today);
+  const vers = JSON.parse(v.months);
+  const stale = Object.keys(vers).filter(m => m >= monthOf(from) && mem.walks.months[m]?.ver !== vers[m]);
+  for (const [y, list] of groupBy(stale, yearOf)) remember(await freshYear(db, y, list, vers, v.cutoff), vers);
+  const { months } = mem.walks;
+  const old = Object.keys(months).filter(m => m >= monthOf(from)).sort().flatMap(m => months[m].list);
+  const walks = [...old, ...await liveWalks(db, v)].filter(w => w.date >= from);
+  return { version: 1, historyStart: HISTORY_START, recentStart: from, years: yearVersions(v), walks };
 }
 
 // 一年的溜狗紀錄（#346）：只讀版本號和那一年的資料包；ver 是 years 裡那一年的版本號（沒有那年是 ''）
