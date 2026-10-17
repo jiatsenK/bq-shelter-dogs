@@ -102,6 +102,12 @@ async function measure(years) {
   let t = performance.now(); const body = await (await get(DB, '/walks')).text(); out.coldWalksCpuMs = Math.round(performance.now() - t);
   out.walksResponseKB = Math.round(body.length / 1024);
   t = performance.now(); await (await get(DB, '/walks')).text(); out.warmWalksCpuMs = Math.round(performance.now() - t);
+  // #347 之後：圖鑑我溜過的狗（新機器）、按年拿一年（月曆往前翻）
+  const post = (path, body) => worker.fetch(new Request(`https://bq-shelter-dogs.jiatsen-k.workers.dev/api${path}`, { method: 'POST', headers: { Origin: 'https://bq-shelter-dogs.jiatsen-k.workers.dev', 'Content-Type': 'application/json' }, body: JSON.stringify(body) }), { DB });
+  resetPackCache(); out.mineCold = (await cost(DB, async () => { const r = await post('/walks/mine', { codes: ['aaaaaaaaaaaa'] }); if (r.status !== 200) throw new Error(`mine ${r.status}`); await r.text(); })).read;
+  out.mineWarm = (await cost(DB, async () => (await post('/walks/mine', { codes: ['aaaaaaaaaaaa'] })).text())).read;
+  const lastYear = String(+TODAY.slice(0, 4) - 1);
+  resetPackCache(); t = performance.now(); const yb = await (await get(DB, `/walks?year=${lastYear}`)).text(); out.yearCpuMs = Math.round(performance.now() - t); out.yearKB = Math.round(yb.length / 1024);
   out.departures = (await cost(DB, async () => (await get(DB, '/departures')).text())).read;
   // 改一筆介紹 → small 失效，下一次讀（每台機器各一次）
   DB.sqlite.exec("UPDATE v3_sheet_main SET note=note||'!' WHERE row_index=(SELECT MIN(row_index) FROM v3_sheet_main)");
