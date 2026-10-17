@@ -173,10 +173,45 @@ async function fetchWalks() {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
+// 按年拿舊紀錄（ADR 0013，#346）：api/walks 的 years 是每年的版本號，網址帶版本號，瀏覽器快取過就不再下載。
+// 只有我溜過月曆翻到上個月 1 號以前、那一年還沒拿過才拿
+const walkYears = {}; // 年 → 'loading'／'ready'／'error'
+function recentStartMonth(today = new Date()) {
+  const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+}
+// 還沒拿、有紀錄、在近期範圍以前的年份
+function missingWalkYears(today = new Date()) {
+  const recent = recentStartMonth(today);
+  return Object.keys((walksData && walksData.years) || {}).filter(y => `${y}-01` < recent && walkYears[y] !== 'ready').sort();
+}
+async function loadWalkYear(month, today = new Date()) {
+  const year = month.slice(0, 4);
+  const ver = walksData && walksData.years && walksData.years[year];
+  if (!ver || month >= recentStartMonth(today) || walkYears[year] === 'ready' || walkYears[year] === 'loading') return;
+  walkYears[year] = 'loading';
+  try {
+    const res = await fetch(`${WALKS_URL}?year=${year}&v=${encodeURIComponent(ver)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = await res.json();
+    // 近期範圍以內以 api/walks 為準；那一年更早的換成拿回來的
+    const cut = `${recentStartMonth(today)}-01`;
+    const old = y => w => !(String(w.date || '').startsWith(y) && String(w.date || '') < cut);
+    walksData = { ...walksData, walks: [...walksData.walks.filter(old(year)), ...(body.walks || []).filter(w => String(w.date || '') < cut)] };
+    myWalks = parseMyWalks(walksData);
+    walkYears[year] = 'ready';
+  } catch (e) {
+    console.error(e);
+    walkYears[year] = 'error';
+  }
+  render();
+}
+
 async function loadMyWalks() {
   myWalksState = 'loading';
   try {
     walksData = await fetchWalks();
+    for (const y of Object.keys(walkYears)) delete walkYears[y];
     myWalks = parseMyWalks(walksData);
     myWalksState = 'ready';
   } catch (e) {
@@ -488,8 +523,11 @@ function myWalksHtml(today, query) {
 function myCalendarState(groups, today) {
   const months = [...new Set(groups.map(g => g.ymd.slice(0, 7)))].sort();
   const nowMonth = localDateKey(today).slice(0, 7);
-  const first = months[0] || nowMonth;
-  let month = mineMonth && mineMonth >= first && mineMonth <= nowMonth ? mineMonth : (months[months.length - 1] || nowMonth);
+  // 還有沒拿的年份：可以翻到那年 1 月，翻到了再拿（#346）
+  const missing = missingWalkYears(today)[0];
+  const first = [months[0] || nowMonth, ...(missing ? [`${missing}-01`] : [])].sort()[0];
+  // 拿回來那年比翻到的月份晚開始：停在最早有紀錄的那個月，不跳回最近
+  let month = mineMonth && mineMonth <= nowMonth ? (mineMonth >= first ? mineMonth : first) : (months[months.length - 1] || nowMonth);
   const inMonth = groups.filter(g => g.ymd.slice(0, 7) === month); // 新到舊
   const day = inMonth.some(g => g.ymd === mineDay) ? mineDay : (inMonth[0] ? inMonth[0].ymd : '');
   return { month, first, nowMonth, inMonth, day };
@@ -517,7 +555,7 @@ function myCalendarHtml(groups, today) {
   return `<section class="mine-cal" aria-label="${y} 年 ${m} 月的溜狗月曆">
     <div class="mc-head">
       <button type="button" class="mc-nav" data-mine-month="${shift(-1)}" aria-label="上個月"${month <= first ? ' disabled' : ''}>${icon('back')}</button>
-      <h3 class="mc-title">${y} 年 ${m} 月<span>${inMonth.length ? `來 <b>${inMonth.length}</b> 天・溜 <b>${dogs}</b> 隻次` : '這個月還沒有紀錄'}</span></h3>
+      <h3 class="mc-title">${y} 年 ${m} 月<span>${walkYears[y] === 'loading' ? '讀取中…' : walkYears[y] === 'error' ? '這一年的紀錄讀不到' : inMonth.length ? `來 <b>${inMonth.length}</b> 天・溜 <b>${dogs}</b> 隻次` : '這個月還沒有紀錄'}</span></h3>
       <button type="button" class="mc-nav next" data-mine-month="${shift(1)}" aria-label="下個月"${month >= nowMonth ? ' disabled' : ''}>${icon('back')}</button>
     </div>
     <div class="mc-week" aria-hidden="true">${[...'日一二三四五六'].map(w => `<span>${w}</span>`).join('')}</div>
@@ -3310,7 +3348,7 @@ mainEl.addEventListener('click', e => {
   else if (e.target.closest('[data-mine-month]')) {
     const src = e.target.closest('[data-mine-month]');
     const dir = src.classList.contains('next') ? '.next' : ':not(.next)';
-    mineMonth = src.dataset.mineMonth; mineDay = ''; render();
+    mineMonth = src.dataset.mineMonth; mineDay = ''; loadWalkYear(mineMonth); render();
     const b = document.querySelector(`#main .mc-nav${dir}:not(:disabled)`) || document.querySelector('#main .mc-nav:not(:disabled)');
     if (b) b.focus({ preventScroll: true });
   }

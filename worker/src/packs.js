@@ -204,12 +204,13 @@ async function advanceFirst(db, v, today) {
 }
 
 // 切點以前的紀錄：版本號變了的月份才讀那一年的資料包，資料包也對不上才重算那個月
-async function history(db, v) {
+// year 有給就只補那一年（/api/walks?year=，#346）
+async function history(db, v, year) {
   if (mem.walks.total === v.total) return;
   const vers = JSON.parse(v.months);
-  const stale = Object.keys(vers).filter(m => mem.walks.months[m]?.ver !== vers[m]);
-  for (const [year, list] of groupBy(stale, yearOf)) remember(await freshYear(db, year, list, vers, v.cutoff), vers);
-  mem.walks.total = v.total;
+  const stale = Object.keys(vers).filter(m => mem.walks.months[m]?.ver !== vers[m] && (!year || yearOf(m) === year));
+  for (const [y, list] of groupBy(stale, yearOf)) remember(await freshYear(db, y, list, vers, v.cutoff), vers);
+  if (!year) mem.walks.total = v.total;
 }
 
 // 讀那一年的資料包，版本號對不上的月份重算再存
@@ -244,19 +245,18 @@ async function versionRow(db, sql) {
 const versions = db => versionRow(db, 'SELECT small FROM v3_pack_versions WHERE id=1');
 const walkVersions = db => versionRow(db, 'SELECT total,live,cutoff,months FROM v3_walk_versions WHERE id=1');
 
-// 切點以前跨日、移切點（advance），回最新的版本號
-async function currentWalkVersions(db, today) {
+// 溜狗紀錄（依日期排好）。切點以前讀資料包、以後讀 live，不管切點在哪天都是完整的一份：
+// 切點比今天新（時鐘慢一點的機器不把它拉回去）或一直移不了切點，就照現在的切點給，下一次再移
+async function currentVersions(db, today) {
   let v = await walkVersions(db);
   memFor(db);
   for (let i = 0; i < 3 && v.cutoff < today; i++) v = await advance(db, v, today) || await walkVersions(db);
   return v;
 }
-
-// 溜狗紀錄（依日期排好）。切點以前讀資料包、以後讀 live，不管切點在哪天都是完整的一份：
-// 切點比今天新（時鐘慢一點的機器不把它拉回去）或一直移不了切點，就照現在的切點給，下一次再移
 async function packedWalks(db, today) {
-  const v = await currentWalkVersions(db, today);
+  const v = await currentVersions(db, today);
   await history(db, v);
+  mem.walks.v = v;
   const { months } = mem.walks;
   return [...Object.keys(months).sort().flatMap(m => months[m].list), ...await liveWalks(db, v)];
 }
@@ -268,9 +268,28 @@ export async function readSmall(db, part) {
   return (await smallPack(db, v.small))[part];
 }
 
-// 跟 readWalks 一樣的形狀；today 是台灣日期
+// 每年的版本號（#346）：各月版本號只會加 1，加總不會回到舊值；切點那年起還有今天的紀錄，再帶切點和 live
+export function yearVersions(v) {
+  const out = {};
+  for (const [m, n] of Object.entries(JSON.parse(v.months))) out[yearOf(m)] = (out[yearOf(m)] || 0) + n;
+  const live = v.cutoff ? yearOf(v.cutoff) : '';
+  return Object.fromEntries(Object.entries(out).map(([y, n]) => [y, live && y >= live ? `${n}.${v.cutoff}.${v.live}` : String(n)]));
+}
+
+// 跟 readWalks 一樣的形狀；today 是台灣日期。years 是每年的版本號，網站拿來組 ?year= 的網址
 export async function readWalksPacked(db, today) {
-  return { version: 1, historyStart: HISTORY_START, walks: await packedWalks(db, today) };
+  const walks = await packedWalks(db, today);
+  return { version: 1, historyStart: HISTORY_START, years: yearVersions(mem.walks.v), walks };
+}
+
+// 一年的溜狗紀錄（#346）：只讀版本號和那一年的資料包；ver 是 years 裡那一年的版本號（沒有那年是 ''）
+export async function readWalksYear(db, today, year) {
+  const v = await currentVersions(db, today);
+  await history(db, v, year);
+  const { months } = mem.walks;
+  const live = v.cutoff && yearOf(v.cutoff) <= year ? (await liveWalks(db, v)).filter(w => w.date.startsWith(year)) : [];
+  const walks = [...Object.keys(months).filter(m => yearOf(m) === year).sort().flatMap(m => months[m].list), ...live];
+  return { version: 1, historyStart: HISTORY_START, year, ver: yearVersions(v)[year] || '', walks };
 }
 
 // 狗清單：回新物件，呼叫的人加 photoVersions 不會改到快取
@@ -354,7 +373,7 @@ async function yearSummaries(db, v) {
 
 // { 編號: { times, first, last } }；codes 是這個人的全部代號（含舊代號）
 export async function readMineWalks(db, today, codes) {
-  const v = await currentWalkVersions(db, today);
+  const v = await currentVersions(db, today);
   const out = {};
   for (const s of await yearSummaries(db, v)) addMine(out, s, codes);
   addMine(out, summarize(await liveWalks(db, v)), codes);

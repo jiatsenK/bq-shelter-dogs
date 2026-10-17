@@ -8,7 +8,7 @@ import { markChanged, planTick, refreshPlan, rememberSignature, sheetSignature }
 import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache } from './today.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
-import { readSmall, readDogsPacked, readWalksPacked, readMineWalks, packStatus, resetPackCache } from './packs.js';
+import { readSmall, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
@@ -1191,6 +1191,16 @@ export default {
       if (request.method !== 'GET') return fail(405, '只能用 GET 讀', allowed);
       try {
         if (!env || !env.DB) throw new Error('沒有 D1');
+        // ?year=YYYY&v=版本號（#346）：那一年的紀錄。版本號對得上才讓瀏覽器永久快取，版本號一變網址就變
+        const params = new URL(request.url).searchParams;
+        if (path === '/walks' && params.has('year')) {
+          const year = params.get('year');
+          if (!/^\d{4}$/.test(year)) return fail(400, 'year 要是四位數年份', allowed);
+          const body = await readWalksYear(env.DB, taiwanYmd(Date.now()), year);
+          const res = reply(200, { ok: true, ...body }, allowed);
+          if (body.ver && params.get('v') === body.ver) res.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+          return res;
+        }
         const body = path === '/walks' ? await readWalksPacked(env.DB, taiwanYmd(Date.now())) : { version: 1, departures: await readSmall(env.DB, 'departures') };
         return reply(200, { ok: true, ...body }, allowed);
       } catch (e) {

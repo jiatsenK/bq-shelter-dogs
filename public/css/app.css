@@ -2007,21 +2007,6 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .analysis-open .head-back:focus-visible { outline: 3px solid var(--tab-amber); }
 .analysis-open .head-title { display: block; flex: 1; margin: 0 0 0 14px; color: #fff; font-size: 20px; font-weight: 800; }
 
-/* 本月溜狗：一排大數字＋每天一根細長條（1 號到今天），還沒開始記錄的日子是斜線 */
-.a-month { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin: 4px 0 12px; }
-.a-month b { font-size: 28px; font-weight: 900; font-variant-numeric: tabular-nums; }
-.a-month small { font-size: 14px; color: var(--ink-soft); }
-.a-month-last { font-size: 13px; color: var(--ink-soft); }
-.a-days { display: flex; align-items: flex-end; gap: 2px; height: 96px; padding-bottom: 18px; position: relative; }
-.a-day { flex: 1; height: 100%; display: flex; align-items: flex-end; position: relative; }
-.a-day i { display: block; width: 100%; background: var(--primary); border-radius: 1px 1px 0 0; }
-.a-day.none i { background: repeating-linear-gradient(135deg, var(--line) 0 2px, transparent 2px 5px); }
-.a-day small { position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%); font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-.a-days.few { height: 116px; }
-.a-day { flex-direction: column; justify-content: flex-end; align-items: stretch; }
-.a-day em { font-style: normal; font-size: 12px; font-weight: 700; text-align: center; color: var(--ink); font-variant-numeric: tabular-nums; margin-bottom: 2px; }
-.a-days-peak { margin: 4px 0 0; }
-
 /* 列表模式（K 2026-10-09）：溜狗人拿掉，天數｜狗名＋籠位｜溜了；「天數」標題跟下面的數字一樣置中。
    10-10 K：籠位單獨一欄的黑框標籤位置怪、跟照片檢視不一樣 → 改成跟狗卡同一個圖釘籠位（.cage-pill），放在狗名下面 */
 /* 同一天再改（K 看預覽版）：放在狗名下面太擠、不好看也不好點 → 籠位自己一欄、靠左對齊「籠位」標題，樣子還是狗卡那個圖釘籠位 */
