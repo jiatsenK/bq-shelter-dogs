@@ -4,7 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { setPackChunkBytes, swapPackCache, readSmall, readWalksPacked, yearVersions, recentStart } from '../src/packs.js';
-import { readDogsPayload, readWalks, readDepartures, readRest } from '../src/compact.js';
+import { readDogsPayload, readWalks, readDepartures, readRest, readSyncedAt } from '../src/compact.js';
 import { fakeD1 } from './fakes.mjs';
 import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
 import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
@@ -42,7 +42,7 @@ const PATHS = ['/dogs', '/walks', '/departures', '/rest'];
 
 // 現在的讀法（直接讀表）算出來的回應
 async function direct(DB, path) {
-  if (path === '/dogs') return { ok: true, ...await readDogsPayload(DB) };
+  if (path === '/dogs') { const { version, ...rest } = await readDogsPayload(DB); return { ok: true, version, syncedAt: await readSyncedAt(DB), ...rest }; }
   if (path === '/walks') {
     const { version, historyStart, walks } = await readWalks(DB);
     const v = await DB.prepare('SELECT cutoff,live,months FROM v3_walk_versions WHERE id=1').first();
@@ -94,7 +94,8 @@ test('輸出和直接讀表逐字元相同：改介紹、改休養、同步、�
   await assertSame(DB, '改入所事件');
   await DB.prepare("UPDATE v3_rest SET reason='好了一半'").run();
   await assertSame(DB, '改休養');
-  await DB.prepare("UPDATE v3_sheet_main SET note='移籠', synced_at='2026-10-16T09:00:00+08:00'").run();
+  await DB.prepare("UPDATE v3_sheet_main SET note='移籠'").run();
+  await DB.prepare("UPDATE v3_sync_state SET value='2026-10-16T09:00:00+08:00' WHERE key='synced_at'").run();
   await assertSame(DB, '同步');
   await DB.prepare("UPDATE v3_walks SET walker_code='cccccccccccc' WHERE walk_date='2026-10-14' AND position=0").run();
   await assertSame(DB, '改過去的紀錄');
@@ -133,10 +134,10 @@ test('跨過午夜：昨天的紀錄併進歷史，今天從空的開始', async
   await assertSame(DB, '補登昨天');
 });
 
-test('沒有資料變動時，每次請求只讀 1 列版本號', async t => {
+test('沒有資料變動時，每次請求只讀 1 列版本號（狗清單再加 1 列同步時間）', async t => {
   const DB = await seededDb(t);
   for (const path of PATHS) await get(path, { DB });
-  for (const path of PATHS) assert.equal(await readsOf(DB, path), 1, path);
+  for (const path of PATHS) assert.equal(await readsOf(DB, path), path === '/dogs' ? 2 : 1, path);
 });
 
 test('今天新增一筆：只重讀今天的列，不重算歷史資料包', async t => {
@@ -147,7 +148,7 @@ test('今天新增一筆：只重讀今天的列，不重算歷史資料包', as
   // 版本號 1 列＋今天 2 列
   assert.equal(await readsOf(DB, '/walks'), 3);
   assert.deepEqual(await packRows(DB, 'walks'), pack);
-  assert.equal(await readsOf(DB, '/dogs'), 1, '狗清單沒變');
+  assert.equal(await readsOf(DB, '/dogs'), 2, '狗清單沒變：版本號＋同步時間');
 });
 
 test('別台機器算好的資料包直接拿來用：只讀版本號、資料包和今天的列', async t => {
@@ -328,6 +329,18 @@ async function readTables(DB) {
   await readDogsPayload(spy); await readDepartures(spy); await readRest(spy);
   return [...tables].sort();
 }
+// #361 同步時間存 v3_sync_state，改了不讓 small 失效、狗清單照樣拿到新的同步時間（ADR 0014）
+test('只改同步時間：small 版本號不變，/api/dogs 的 syncedAt 跟著變', async t => {
+  const DB = await seededDb(t);
+  await get('/dogs', { DB });
+  const ver = async () => (await DB.prepare('SELECT small FROM v3_pack_versions WHERE id=1').first()).small;
+  const before = await ver();
+  await DB.prepare("UPDATE v3_sync_state SET value='2026-10-16T09:30:00+08:00' WHERE key='synced_at'").run();
+  assert.equal(await ver(), before);
+  assert.equal((await (await get('/dogs', { DB })).json()).syncedAt, '2026-10-16T09:30:00+08:00');
+  assert.ok(!(await readTables(DB)).includes('v3_sync_state'), 'small 不讀 v3_sync_state');
+});
+
 async function missingTriggers(DB) {
   const have = new Set((await DB.prepare("SELECT name FROM sqlite_master WHERE type='trigger' AND name LIKE 'pack_%'").all()).results.map(r => r.name));
   return (await readTables(DB)).flatMap(table => ['INSERT', 'UPDATE', 'DELETE'].map(op => `pack_${table}_${op}`)).filter(name => !have.has(name));

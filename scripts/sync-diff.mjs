@@ -19,7 +19,7 @@ export const SYNC_TABLES = {
 const keyOf = (table, row) => JSON.stringify(SYNC_TABLES[table].map(c => row[c]));
 
 // before、after：{ 表名: 列 }。回傳要寫的 [{ sql, values }]：先照父→子新增／更新，再照子→父刪除。
-// 主清單每列都存同步時間，網站只讀第 0 列（worker/src/compact.js），其他列的同步時間不同不算變動。
+// 同步時間改存 v3_sync_state（ADR 0014，#361），主清單的 synced_at 欄不再用，不同也不算變動（改了會讓 small 失效）。
 export function diffTables(before, after) {
   const writes = [], deletes = [];
   for (const [table, pk] of Object.entries(SYNC_TABLES)) {
@@ -34,7 +34,7 @@ export function diffTables(before, after) {
         writes.push({ sql: `INSERT INTO ${table}(${cols.join(',')}) VALUES(${cols.map(() => '?').join(',')})`, values: cols.map(c => row[c]) });
         continue;
       }
-      const changed = cols.filter(c => !pk.includes(c) && row[c] !== prev[c] && !(table === 'v3_sheet_main' && c === 'synced_at' && row.row_index !== 0));
+      const changed = cols.filter(c => !pk.includes(c) && row[c] !== prev[c] && !(table === 'v3_sheet_main' && c === 'synced_at'));
       if (changed.length) writes.push({ sql: `UPDATE ${table} SET ${changed.map(c => `${c}=?`).join(',')} WHERE ${pk.map(c => `${c}=?`).join(' AND ')}`, values: [...changed.map(c => row[c]), ...pk.map(c => row[c])] });
     }
     for (const [key, row] of old) if (!seen.has(key)) deletes.unshift({ sql: `DELETE FROM ${table} WHERE ${pk.map(c => `${c}=?`).join(' AND ')}`, values: pk.map(c => row[c]) });
