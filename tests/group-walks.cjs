@@ -39,6 +39,14 @@ module.exports = async (browser, base) => {
     await page.locator('#groupStage').waitFor();
     assert.equal(await page.locator('.gw-layer').count(), 1, '多群資料仍只渲染當前群');
     assert.equal(await page.locator('.gw-layer:not([inert]) [data-gw-dog]').count(), 2);
+    // 搜尋狗名：跳到有這隻的群，其他狗變淡；沒有群有就提示（K 2026-10-17）
+    await page.locator('#searchInput').fill(data.dogs[5].name);
+    await page.locator('.front [data-gw-dog]:not(.miss)').filter({ hasText: data.dogs[5].name }).waitFor();
+    assert.equal(await page.locator('.front [data-gw-dog]:not(.miss)').count(), 1);
+    await page.locator('#searchInput').fill('不存在的狗');
+    await page.getByText('沒有狗群有「不存在的狗」').waitFor();
+    await page.locator('#searchClear').click();
+    await page.getByRole('button', { name: '上一群', exact: true }).click();
     await page.getByRole('button', { name: '有狗沒溜', exact: true }).click();
     await page.locator('.gw-layer:not([inert]) [data-gw-dog]').first().click();
     await page.getByRole('button', { name: '登記其餘 1 隻', exact: true }).click();
@@ -149,9 +157,11 @@ module.exports = async (browser, base) => {
     await page.getByRole('button', { name: '整群溜了 · 1 隻', exact: true }).click();
     await page.getByText('已登記 1 隻', { exact: true }).waitFor();
     assert.deepEqual(writes.at(-1).body.dogs.map(d => d.name), [data.dogs[1].name], '休養狗不送出');
-    // 誤觸「整群溜了」：要能從狗群頁和我溜過撤銷試算表上的紀錄，失敗不能假裝已復原
-    const undoBtn = page.getByRole('button', { name: '復原今天登記 · 1 隻', exact: true });
+    // 誤觸「整群溜了」：比照溜狗表，整群溜了變「已溜」，再按一次復原；失敗不能假裝已復原
+    const undoBtn = page.getByRole('button', { name: '這群今天已溜，按一下取消', exact: true });
     await undoBtn.waitFor();
+    assert.equal((await undoBtn.textContent()).trim(), '已溜 · 1 隻');
+    assert.equal(await page.getByRole('button', { name: /復原今天登記/ }).count(), 0, '不另放復原按鈕');
     undoMode = 'fail';
     await undoBtn.click();
     await page.getByText(/試算表沒改回來：測試復原失敗/).first().waitFor();
@@ -161,17 +171,15 @@ module.exports = async (browser, base) => {
     undoMode = 'ok';
     await undoBtn.click();
     await page.getByText('已從試算表復原 1 隻').first().waitFor();
-    assert.equal(await undoBtn.count(), 0, '復原後不再顯示');
-    // 我溜過：今天這支手機登記的可以一隻一隻取消；部分被別人改過的不蓋掉
+    await page.getByRole('button', { name: '整群溜了 · 1 隻', exact: true }).waitFor();
+    // 別人改過的不蓋掉；我溜過不另放取消那排
     await page.getByRole('button', { name: '整群溜了 · 1 隻', exact: true }).click();
     await page.getByText('已登記 1 隻', { exact: true }).waitFor();
-    await page.locator('[data-tab="mine"]').click();
-    const cancel = page.getByRole('button', { name: '取消 ' + data.dogs[1].name + ' 今天溜了', exact: true });
-    await cancel.waitFor();
     undoMode = 'partial';
-    await cancel.click();
+    await undoBtn.click();
     await page.getByText(/已被改過/).first().waitFor();
-    assert.equal(await cancel.count(), 0, '別人改過的不再提供撤銷');
+    await page.locator('[data-tab="mine"]').click();
+    assert.equal(await page.locator('.mine-undo, [data-undo-walk]').count(), 0, '我溜過沒有取消那排');
     undoMode = 'ok';
     console.log('#374 全量欄號、同名群、例外登記與空群通過');
   } finally { await context.close(); }
