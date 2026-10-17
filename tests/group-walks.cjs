@@ -39,6 +39,14 @@ module.exports = async (browser, base) => {
     await page.locator('#groupStage').waitFor();
     assert.equal(await page.locator('.gw-layer').count(), 1, '多群資料仍只渲染當前群');
     assert.equal(await page.locator('.gw-layer:not([inert]) [data-gw-dog]').count(), 2);
+    // 搜尋狗名：跳到有這隻的群，其他狗變淡；沒有群有就提示（K 2026-10-17）
+    await page.locator('#searchInput').fill(data.dogs[5].name);
+    await page.locator('.front [data-gw-dog]:not(.miss)').filter({ hasText: data.dogs[5].name }).waitFor();
+    assert.equal(await page.locator('.front [data-gw-dog]:not(.miss)').count(), 1);
+    await page.locator('#searchInput').fill('不存在的狗');
+    await page.getByText('沒有狗群有「不存在的狗」').waitFor();
+    await page.locator('#searchClear').click();
+    await page.getByRole('button', { name: '上一群', exact: true }).click();
     await page.getByRole('button', { name: '有狗沒溜', exact: true }).click();
     await page.locator('.gw-layer:not([inert]) [data-gw-dog]').first().click();
     await page.getByRole('button', { name: '登記其餘 1 隻', exact: true }).click();

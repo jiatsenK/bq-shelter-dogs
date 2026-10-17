@@ -3311,8 +3311,10 @@ function renderMain() {
   const main = document.getElementById('main');
   // 資訊與狗群共用內頁頁首；底部導覽保持可用。
   document.documentElement.classList.toggle('analysis-open', analysisOpen || activeTab === 'groups');
-  // 常遛狗群、資訊都是底部導覽的主分頁：狗群用網站共用表頭，資訊首頁只寫「資訊」；只有資訊子頁有「回資訊」
-  document.documentElement.classList.toggle('head-shared', !analysisOpen && activeTab === 'groups');
+  // 四個主分頁都用網站共用表頭（K 2026-10-17）；只有資訊子頁換成「回資訊」＋子頁標題
+  document.documentElement.classList.toggle('head-shared', analysisOpen ? !infoPage : activeTab === 'groups');
+  // 常遛狗群也有搜尋狗名（K 2026-10-17）：前三個主分頁都能搜尋，資訊沒有
+  document.documentElement.classList.toggle('head-search', !analysisOpen && activeTab === 'groups');
   document.documentElement.classList.toggle('head-sub', analysisOpen && !!infoPage);
   const title = document.querySelector('.head-title');
   if (title) title.textContent = analysisOpen ? (INFO_PAGES[infoPage] || '資訊') : '常遛狗群';

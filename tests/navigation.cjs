@@ -47,10 +47,9 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
     await selected('info');
     await page.locator('#main .a-card').first().waitFor();
     assert(await page.locator('#bottomBar').isVisible());
-    assert.equal(await page.locator('.head-title').textContent(), '資訊');
-    assert(await page.locator('.head-title').isVisible(), '資訊首頁只顯示「資訊」');
+    assert(!(await page.locator('.head-title').isVisible()), '資訊首頁用網站表頭，不另放標題');
     assert(!(await page.locator('#analysisBack').isVisible()), '資訊首頁沒有返回');
-    assert(!(await page.locator('header.app h1').isVisible()), '資訊首頁不放網站名稱');
+    assert(await page.locator('header.app h1').isVisible(), '資訊首頁放網站名稱');
     assert(!(await page.locator('#searchInput').isVisible()), '資訊首頁沒有搜尋框');
     assert.equal(Math.round(await page.locator('header.app .brand').evaluate(e => e.getBoundingClientRect().height)), 44, '資訊頂列跟其他主分頁同高');
     await page.locator('[data-info-page="stay"]').click();

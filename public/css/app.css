@@ -2006,18 +2006,15 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .analysis-open .head-back:active { background: var(--shell-deep); }
 .analysis-open .head-back:focus-visible { outline: 3px solid var(--tab-amber); }
 .analysis-open .head-title { display: block; flex: 1; margin: 0 0 0 14px; color: #fff; font-size: 20px; font-weight: 800; }
-/* 主分頁沒有返回（2026-10-17）：資訊首頁只放「資訊」，子頁才有「回資訊」；常遛狗群換回網站名稱的共用表頭 */
+/* 主分頁沒有返回（2026-10-17）：常遛狗群、資訊首頁都用網站名稱的共用表頭，只有資訊子頁有「回資訊」 */
 .analysis-open:not(.head-sub) .head-back { display: none; }
 .analysis-open:not(.head-sub) .head-title { margin-left: 0; }
 .analysis-open.head-shared .head-title { display: none; }
 .analysis-open.head-shared .brand .logo, .analysis-open.head-shared .brand .titles { display: block !important; }
-/* 四個主分頁頂列同高（2026-10-17 polish）：狗群跟溜狗表一樣有更新資料鈕；資訊只有標題時也撐到同一個高度，切分頁時頁首不跳 */
+/* 四個主分頁頂列同高（2026-10-17 polish）：共用表頭都有更新資料鈕；資訊子頁只有標題時也撐到同一個高度 */
 .analysis-open.head-shared .sync-btn { display: inline-flex; }
 .analysis-open .brand { min-height: 44px; }
-/* 桌機的導覽分頁排在網站名稱右邊：資訊首頁也保留網站名稱，分頁位置才不會跳；子頁照舊「回資訊」＋子頁標題 */
-.desk-on.analysis-open:not(.head-sub) .head-title { display: none; }
-.desk-on.analysis-open:not(.head-sub) .brand .logo, .desk-on.analysis-open:not(.head-sub) .brand .titles { display: block !important; }
-.desk-on.analysis-open:not(.head-sub) .sync-btn { display: inline-flex; }
+.analysis-open.head-search header.app .search { display: block; }
 
 /* 列表模式（K 2026-10-09）：溜狗人拿掉，天數｜狗名＋籠位｜溜了；「天數」標題跟下面的數字一樣置中。
    10-10 K：籠位單獨一欄的黑框標籤位置怪、跟照片檢視不一樣 → 改成跟狗卡同一個圖釘籠位（.cage-pill），放在狗名下面 */
@@ -2378,6 +2375,9 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .gw-tile strong { display: block; padding: 2px 1px; font-size: 14px; line-height: 20px; transform: skew(8deg); overflow-wrap: anywhere; color: var(--ink); }
 .gw-dog.excluded .gw-photo { opacity: .35; }
 .gw-dog.excluded strong { text-decoration: line-through; }
+/* 搜尋時沒對到的狗變淡，對到的照常 */
+.gw-dog.miss { opacity: .3; }
+.gw-search-note { margin: 0 0 4px; font-size: 14px; color: var(--ink-soft); }
 #groupPage .gw-add .gw-tile { min-height: var(--card-h); display: grid; place-items: center; border-color: var(--line); font-size: 28px; }
 .gw-pages { display: flex; justify-content: center; align-items: center; gap: 16px; color: var(--ink-soft); }
 .gw-pages svg { width: 20px; height: 20px; }

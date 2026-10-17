@@ -7,6 +7,7 @@ let groupBusy = false;
 let groupFeedback = '';
 let groupForm = null;
 let groupManage = false;
+let groupSearchSeen = '';
 
 function namedGroups() { return (groupStageData?.groups || []).filter(g => g.label); }
 function currentGroup() { return namedGroups().find(g => g.column === groupColumn) || namedGroups()[0]; }
@@ -53,13 +54,19 @@ async function loadGroupStage(retry = false) {
 function groupTile(dog, index, rear) {
   const blocked = groupBlocked(dog);
   const excluded = groupExcluded.has(dog.name);
-  return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}" data-gw-dog="${index}" ${rear ? 'tabindex="-1"' : ''} ${!rear && groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}"><span class="gw-tile"><span class="gw-cage">${esc(dog.cage || '待確認')}</span><span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><strong>${esc(dog.name)}</strong></span></button>`;
+  return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}${searchQuery.trim() && !matchesSearch(dog, searchQuery.trim()) ? ' miss' : ''}" data-gw-dog="${index}" ${rear ? 'tabindex="-1"' : ''} ${!rear && groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}"><span class="gw-tile"><span class="gw-cage">${esc(dog.cage || '待確認')}</span><span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><strong>${esc(dog.name)}</strong></span></button>`;
 }
 function groupStageHtml() {
   if (!groupStageData) loadGroupStage();
   const data = groupStageData;
   if (data.state !== 'ready' || loadState !== 'ready') return `<div class="status-msg">${data.state === 'error' || loadState === 'error' ? '讀不到狗群，請重新讀取。<button type="button" data-gw-action="retry">重新讀取</button>' : '狗群讀取中…'}</div>`;
   const groups = namedGroups();
+  // 搜尋狗名（K 2026-10-17）：跳到有這隻狗的群，其他狗變淡；目前這群就有的話不換群
+  const query = searchQuery.trim();
+  const hits = query ? groups.filter(g => g.names.some(n => matchesSearch({ name: n }, query))) : [];
+  // 只在搜尋字改變時跳群，之後用箭頭切到別群不會被拉回來
+  if (query !== groupSearchSeen) { groupSearchSeen = query; if (hits.length && !hits.includes(currentGroup())) { groupColumn = hits[0].column; resetGroupSelection(); } }
+  const searchNote = !query ? '' : hits.length ? (hits.length > 1 ? `有 ${hits.length} 群有「${query}」，用下方箭頭切換` : '') : `沒有狗群有「${query}」`;
   const group = currentGroup();
   const dogs = groupDogs(group);
   const index = groups.indexOf(group);
@@ -74,6 +81,7 @@ function groupStageHtml() {
   const layers = group ? `<div class="gw-layer front" data-column="${group.column}"><div class="gw-cards">${dogs.map((d, i) => groupTile(d, i, false)).join('')}<button type="button" class="gw-dog gw-add" data-gw-action="add" aria-label="加入狗"><span class="gw-tile">＋</span></button></div></div>` : '';
   return `<section id="groupPage" data-navigation-scope aria-busy="${groupBusy}">
     <div class="gw-heading"><h2>${esc(group?.label || '還沒有狗群')}<small>${dogs.length} 隻</small></h2><button type="button" data-gw-action="manage" aria-expanded="${groupManage}" aria-controls="gwManage">管理</button></div>
+    ${searchNote ? `<p class="gw-search-note" role="status">${esc(searchNote)}</p>` : ''}
     <div id="gwManage" class="gw-manage" ${groupManage ? '' : 'hidden'}><button type="button" data-gw-action="create">＋狗群</button>${dogs.map(d => `<button type="button" data-gw-remove="${esc(d.name)}">移出 ${esc(d.name)}</button>`).join('')}</div>
 
     <div id="groupStage" class="gw-stage" style="--rows:${Math.max(1, Math.ceil((dogs.length + 2) / 4))}" aria-label="目前狗群">${layers}</div>
