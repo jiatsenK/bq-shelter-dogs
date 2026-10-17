@@ -2364,15 +2364,15 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .gw-layer.rear { pointer-events: none; }
 .gw-layer.rear .gw-cage, .gw-layer.rear strong { visibility: hidden; }
 .gw-cards { display: grid; grid-template-columns: repeat(4, var(--card-w)); grid-auto-rows: minmax(var(--card-h), auto); justify-content: center; gap: 10px 5px; align-items: start; }
-#groupPage .gw-dog { width: var(--card-w); min-height: var(--card-h); padding: 0; text-align: center; transform: translateX(3px); }
-.gw-dog:nth-child(8n+1), .gw-dog:nth-child(8n+2), .gw-dog:nth-child(8n+3), .gw-dog:nth-child(8n+4) { transform: translateX(9px); }
-.gw-tile { display: block; background: var(--surface); border: 2px solid var(--surface); transform: skew(-8deg); transition: transform 160ms cubic-bezier(.16,1,.3,1); box-shadow: 0 3px 8px #1f5c4d16; }
-.gw-dog:hover .gw-tile, .gw-dog:active .gw-tile, .gw-dog:focus-visible .gw-tile { transform: skew(-8deg) scale(1.12); position: relative; z-index: 3; border-color: var(--primary); }
+/* 照片正放、每張一樣大，不斜不錯位（#387，K 說斜的看了眼睛痛） */
+#groupPage .gw-dog { width: var(--card-w); min-height: var(--card-h); padding: 0; text-align: center; }
+.gw-tile { display: block; background: var(--surface); border: 2px solid var(--surface); transition: transform 160ms cubic-bezier(.16,1,.3,1); box-shadow: 0 3px 8px #1f5c4d16; }
+.gw-dog:hover .gw-tile, .gw-dog:active .gw-tile, .gw-dog:focus-visible .gw-tile { transform: scale(1.12); position: relative; z-index: 3; border-color: var(--primary); }
 .gw-dog:focus-visible, .gw-dog:hover { z-index: 4; }
 .gw-cage { display: block; min-height: 18px; padding: 0 3px; background: var(--bg); color: var(--ink-soft); text-align: right; font-size: 12px; overflow-wrap: anywhere; }
 .gw-photo { display: block; height: 68px; background: var(--primary-soft); overflow: hidden; }
-.gw-photo img { width: 120%; margin-left: -10%; height: 100%; object-fit: cover; transform: skew(8deg); pointer-events: none; }
-.gw-tile strong { display: block; padding: 2px 1px; font-size: 14px; line-height: 20px; transform: skew(8deg); overflow-wrap: anywhere; color: var(--ink); }
+.gw-photo img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.gw-tile strong { display: block; padding: 2px 1px; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; color: var(--ink); }
 .gw-dog.excluded .gw-photo { opacity: .35; }
 .gw-dog.excluded strong { text-decoration: line-through; }
 /* 搜尋時沒對到的狗變淡，對到的照常 */
