@@ -25,6 +25,7 @@ const server = http.createServer((req, res) => {
   const browser = await chromium.launch();
   let ok = false;
   try {
+    await require('../tests/info-page.cjs')(browser, `http://localhost:${server.address().port}`);
     await require('../tests/group-walks.cjs')(browser, `http://localhost:${server.address().port}`);
     await require('../tests/navigation.cjs')(browser, `http://localhost:${server.address().port}`);
     const page = await browser.newPage();

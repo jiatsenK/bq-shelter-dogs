@@ -2966,6 +2966,7 @@ window.addEventListener('popstate', e => {
     activeTab = e.state.base || 'walk';
     groupsReturnTab = e.state.returnTab || 'walk';
     switchTab(e.state.tab, false);
+    if (e.state.tab === 'info') restoreInfoPage(e.state.infoPage || '');
   }
   else if (analysisOpen) hideAnalysis();
   else if (activeTab === 'groups') switchTab(groupsReturnTab, false);
@@ -3079,12 +3080,13 @@ function switchTab(id, pushHistory = true) {
   if (id !== 'find' && !TABS.some(t => t.id === id)) return;
   const changed = id !== (analysisOpen ? 'info' : activeTab);
   if (pushHistory && changed) {
-    history.replaceState({ bqNavigation: true, tab: analysisOpen ? 'info' : activeTab, base: activeTab, returnTab: groupsReturnTab }, '');
+    history.replaceState({ bqNavigation: true, tab: analysisOpen ? 'info' : activeTab, base: activeTab, returnTab: groupsReturnTab, infoPage: typeof infoPage === 'undefined' ? '' : infoPage }, '');
   }
   if (id === 'groups' && activeTab !== 'groups') groupsReturnTab = analysisOpen ? 'info' : activeTab;
+  if (pushHistory && changed && id === 'info') infoPage = '';
   analysisOpen = id === 'info';
   if (!analysisOpen) activeTab = id;
-  if (pushHistory && changed) history.pushState({ bqNavigation: true, tab: id, base: activeTab, returnTab: groupsReturnTab }, '');
+  if (pushHistory && changed) history.pushState({ bqNavigation: true, tab: id, base: activeTab, returnTab: groupsReturnTab, infoPage: typeof infoPage === 'undefined' ? '' : infoPage }, '');
   if (changed) resetWalkOrder(); // 換分頁回來溜狗表時重排，剛溜的狗才會排到後面
   render();
   const btn = document.querySelector(`#tabs button[data-tab="${id}"]`);
@@ -3305,14 +3307,15 @@ function renderMain() {
   // 資訊與狗群共用內頁頁首；底部導覽保持可用。
   document.documentElement.classList.toggle('analysis-open', analysisOpen || activeTab === 'groups');
   const title = document.querySelector('.head-title');
-  if (title) title.textContent = analysisOpen ? '資訊' : '常遛狗群';
+  if (title) title.textContent = analysisOpen ? (INFO_PAGES[infoPage] || '資訊') : '常遛狗群';
   const back = document.getElementById('analysisBack');
   if (back) back.innerHTML = `${icon('back')}回${(TABS.find(t => t.id === (analysisOpen ? activeTab : groupsReturnTab)) || TABS[0]).label}`;
 
-  // 資訊先承接既有分析內容（#59），#273 再整理分類。
+  if (back && analysisOpen && infoPage) back.innerHTML = `${icon('back')}回資訊`;
+  // #273 資訊分類與子頁。
   if (analysisOpen) {
     buildTabs({});
-    main.innerHTML = analysisPageHtml(today);
+    if (!(infoPage === 'updates' && infoUpdateTab === 'edits' && main.querySelector('#infoEdits'))) main.innerHTML = analysisPageHtml(today);
     return;
   }
   if (activeTab === 'groups') {
