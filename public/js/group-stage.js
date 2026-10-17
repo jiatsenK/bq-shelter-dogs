@@ -6,6 +6,7 @@ const groupExcluded = new Set();
 let groupBusy = false;
 let groupFeedback = '';
 let groupForm = null;
+let groupManage = false;
 
 function namedGroups() { return (groupStageData?.groups || []).filter(g => g.label); }
 function currentGroup() { return namedGroups().find(g => g.column === groupColumn) || namedGroups()[0]; }
@@ -63,18 +64,15 @@ function groupStageHtml() {
   const dogs = groupDogs(group);
   const index = groups.indexOf(group);
   const selected = dogs.filter(d => !groupExcluded.has(d.name) && !groupBlocked(d));
-  const layers = groups.filter((g, i) => Math.abs(i - index) <= 1).map(g => {
-    const offset = groups.indexOf(g) - index;
-    const rear = offset !== 0;
-    return `<div class="gw-layer ${rear ? 'rear' : 'front'}" data-column="${g.column}" data-offset="${offset}" style="--offset:${offset};--rows:${Math.ceil((g.names.length + 2) / 4)}" ${rear ? 'inert aria-hidden="true"' : ''}><div class="gw-cards">${groupDogs(g).map((d, i) => groupTile(d, i, rear)).join('')}${rear ? '' : '<button type="button" class="gw-dog gw-add" data-gw-action="add" aria-label="加入狗"><span class="gw-tile">＋</span></button>'}</div></div>`;
-  }).join('');
+  const layers = group ? `<div class="gw-layer front" data-column="${group.column}"><div class="gw-cards">${dogs.map((d, i) => groupTile(d, i, false)).join('')}<button type="button" class="gw-dog gw-add" data-gw-action="add" aria-label="加入狗"><span class="gw-tile">＋</span></button></div></div>` : '';
   return `<section id="groupPage" data-navigation-scope aria-busy="${groupBusy}">
-    <div class="gw-heading"><h2>${esc(group?.label || '還沒有狗群')}<small>${dogs.length} 隻</small></h2><button type="button" data-gw-action="create">＋狗群</button></div>
-    <p class="gw-summary">${esc(groupSummary(dogs))}</p>
-    <div id="groupStage" class="gw-stage" style="--rows:${Math.max(1, Math.ceil((dogs.length + 2) / 4))}" aria-label="左右滑動切換狗群">${layers}</div>
+    <div class="gw-heading"><h2>${esc(group?.label || '還沒有狗群')}<small>${dogs.length} 隻</small></h2><button type="button" data-gw-action="manage" aria-expanded="${groupManage}" aria-controls="gwManage">管理</button></div>
+    <div id="gwManage" class="gw-manage" ${groupManage ? '' : 'hidden'}><button type="button" data-gw-action="create">＋狗群</button>${dogs.map(d => `<button type="button" data-gw-remove="${esc(d.name)}">移出 ${esc(d.name)}</button>`).join('')}</div>
+
+    <div id="groupStage" class="gw-stage" style="--rows:${Math.max(1, Math.ceil((dogs.length + 2) / 4))}" aria-label="目前狗群">${layers}</div>
     <div class="gw-pages"><button type="button" data-gw-step="-1" aria-label="上一群" ${index <= 0 ? 'disabled' : ''}>${icon('back')}</button><span>${groups.length ? index + 1 : 0} / ${groups.length}</span><button type="button" data-gw-step="1" aria-label="下一群" ${index >= groups.length - 1 ? 'disabled' : ''}>${icon('chevron')}</button></div>
     <p id="gwFeedback" role="status">${esc(groupBusy ? '登記中…' : groupFeedback)}</p>
-    ${group ? `<div class="gw-actions"><button type="button" id="gwWalk" ${!selected.length || groupBusy ? 'disabled' : ''}>${groupBusy ? '登記中…' : groupExcept ? `登記其餘 ${selected.length} 隻` : `整群溜了 · ${selected.length} 隻`}</button><button type="button" data-gw-action="except" aria-pressed="${groupExcept}">${groupExcept ? '取消' : '有狗沒溜'}</button></div><p class="gw-restrictions">${dogs.some(groupBlocked) ? `不登記：${dogs.filter(groupBlocked).map(d => `${esc(d.name)}（${esc(groupBlocked(d))}）`).join('、')}` : ''}</p><details class="gw-manage"><summary>管理這一群</summary>${dogs.map(d => `<button type="button" data-gw-remove="${esc(d.name)}">移出 ${esc(d.name)}</button>`).join('')}</details>` : ''}
+    ${group ? `<div class="gw-actions"><button type="button" id="gwWalk" ${!selected.length || groupBusy ? 'disabled' : ''}>${groupBusy ? '登記中…' : groupExcept ? `登記其餘 ${selected.length} 隻` : `整群溜了 · ${selected.length} 隻`}</button><button type="button" data-gw-action="except" aria-pressed="${groupExcept}">${groupExcept ? '取消' : '有狗沒溜'}</button></div><p class="gw-restrictions">${dogs.some(groupBlocked) ? `不登記：${dogs.filter(groupBlocked).map(d => `${esc(d.name)}（${esc(groupBlocked(d))}）`).join('、')}` : ''}</p>` : ''}
     ${groupFormHtml()}
   </section>`;
 }
@@ -82,7 +80,7 @@ function groupFormHtml() {
   if (!groupForm) return '';
   return `<form id="gwForm" class="gw-form"><h3>${groupForm.op === 'create' ? '建立狗群' : '加入狗'}</h3>${groupForm.op === 'create' ? `<label>群名<input name="label" required maxlength="20" value="${esc(groupForm.label || '')}"></label>` : ''}<label>狗名<input name="name" required maxlength="30" list="gwNames" value="${esc(groupForm.name || '')}"></label><datalist id="gwNames">${allDogs.map(d => `<option value="${esc(d.name)}">`).join('')}</datalist><button type="submit">${groupBusy ? '寫入中…' : '儲存'}</button><button type="button" data-gw-action="cancel-form">取消</button></form>`;
 }
-function resetGroupSelection() { groupExcept = false; groupExcluded.clear(); groupForm = null; groupFeedback = ''; }
+function resetGroupSelection() { groupManage = false; groupExcept = false; groupExcluded.clear(); groupForm = null; groupFeedback = ''; }
 function changeGroup(step) {
   if (groupBusy) return;
   const groups = namedGroups();
@@ -158,9 +156,10 @@ groupMain.addEventListener('click', e => {
   if (remove && confirm(`把「${remove.dataset.gwRemove}」移出「${currentGroup().label}」？`)) return writeGroup({ op: 'remove', column: groupColumn, name: remove.dataset.gwRemove });
   if (e.target.closest('#gwWalk')) return registerGroupWalk();
   const action = e.target.closest('[data-gw-action]')?.dataset.gwAction;
+  if (action === 'manage') { groupManage = !groupManage; render(); document.querySelector('[data-gw-action="manage"]')?.focus({ preventScroll: true }); }
   if (action === 'except') { groupExcept = !groupExcept; groupExcluded.clear(); groupFeedback = ''; render(); document.querySelector('[data-gw-action="except"]')?.focus(); }
-  if (action === 'add' || action === 'create') { groupForm = { op: action, column: groupColumn }; render(); document.querySelector('#gwForm input')?.focus(); }
-  if (action === 'cancel-form') { groupForm = null; render(); document.querySelector('[data-gw-action="create"]')?.focus(); }
+  if (action === 'add' || action === 'create') { groupManage = false; groupForm = { op: action, column: groupColumn }; render(); document.querySelector('#gwForm input')?.focus(); }
+  if (action === 'cancel-form') { groupForm = null; render(); document.querySelector('[data-gw-action="manage"]')?.focus({ preventScroll: true }); }
 });
 groupMain.addEventListener('input', e => {
   if (e.target.closest('#gwForm') && groupForm) groupForm[e.target.name] = e.target.value;
@@ -174,54 +173,6 @@ groupMain.addEventListener('submit', e => {
   if (allDogs.filter(d => d.name === groupForm.name).length !== 1) { groupFeedback = '請選擇主清單中可唯一對應的狗名'; render(); return; }
   writeGroup({ ...groupForm });
 });
-let groupPointer = null;
-function settleGroupDrag(start) {
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  start.layers.forEach(({ el }) => {
-    const before = { transform: getComputedStyle(el).transform, opacity: getComputedStyle(el).opacity };
-    el.style.removeProperty('transform'); el.style.removeProperty('opacity'); el.style.removeProperty('transition');
-    if (!reduced && el.isConnected) el.animate([before, { transform: getComputedStyle(el).transform, opacity: getComputedStyle(el).opacity }], { duration: 220, easing: 'cubic-bezier(.16,1,.3,1)' });
-  });
-}
-groupMain.addEventListener('pointerdown', e => {
-  const stage = e.target.closest('#groupStage');
-  if (!stage || groupBusy || e.target.closest('.gw-add') || e.button !== 0) return;
-  const layers = [...stage.querySelectorAll('.gw-layer')].map(el => {
-    const transform = getComputedStyle(el).transform, opacity = getComputedStyle(el).opacity;
-    const seed = new DOMMatrixReadOnly(transform).m41 / (stage.clientWidth * .36);
-    el.getAnimations().forEach(a => a.cancel());
-    el.style.transform = transform; el.style.opacity = opacity;
-    return { el, seed };
-  });
-  groupPointer = { x: e.clientX, y: e.clientY, id: e.pointerId, stage, layers, dragged: false };
-});
-groupMain.addEventListener('pointermove', e => {
-  if (!groupPointer || groupPointer.id !== e.pointerId) return;
-  const start = groupPointer;
-  const dx = e.clientX - start.x, dy = e.clientY - start.y;
-  if (!start.dragged && Math.abs(dy) > Math.abs(dx) && Math.abs(dy) > 12) { settleGroupDrag(start); groupPointer = null; return; }
-  if (Math.abs(dx) > 12 || start.dragged) {
-    start.dragged = true; start.stage.setPointerCapture(e.pointerId);
-    start.layers.forEach(({ el, seed }) => {
-      const d = seed + dx / start.stage.clientWidth;
-      const distance = Math.min(1, Math.abs(d));
-      el.style.transition = 'none';
-      el.style.transform = 'translateX(' + (d * start.stage.clientWidth * .36) + 'px) scale(' + (1 - distance * .64) + ')';
-      el.style.opacity = 1 - distance * .55;
-    });
-  }
-});
-groupMain.addEventListener('pointerup', e => {
-  if (!groupPointer) return;
-  const start = groupPointer; groupPointer = null;
-  const dx = e.clientX - start.x;
-  if (start.dragged && Math.abs(dx) >= 50) {
-    const groups = namedGroups(), next = groups[groups.indexOf(currentGroup()) + (dx < 0 ? 1 : -1)];
-    if (next) { changeGroup(dx < 0 ? 1 : -1); return; }
-  }
-  settleGroupDrag(start);
-});
-groupMain.addEventListener('pointercancel', () => { if (groupPointer) settleGroupDrag(groupPointer); groupPointer = null; });
 groupMain.addEventListener('keydown', e => {
   if (!e.target.closest('#groupPage') || e.target.matches('input')) return;
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); changeGroup(e.key === 'ArrowRight' ? 1 : -1); }
