@@ -64,6 +64,7 @@ function groupStageHtml() {
   const dogs = groupDogs(group);
   const index = groups.indexOf(group);
   const selected = dogs.filter(d => !groupExcluded.has(d.name) && !groupBlocked(d));
+  const undoable = dogs.filter(d => sheetUndoable(d));
   const layers = group ? `<div class="gw-layer front" data-column="${group.column}"><div class="gw-cards">${dogs.map((d, i) => groupTile(d, i, false)).join('')}<button type="button" class="gw-dog gw-add" data-gw-action="add" aria-label="加入狗"><span class="gw-tile">＋</span></button></div></div>` : '';
   return `<section id="groupPage" data-navigation-scope aria-busy="${groupBusy}">
     <div class="gw-heading"><h2>${esc(group?.label || '還沒有狗群')}<small>${dogs.length} 隻</small></h2><button type="button" data-gw-action="manage" aria-expanded="${groupManage}" aria-controls="gwManage">管理</button></div>
@@ -71,8 +72,8 @@ function groupStageHtml() {
 
     <div id="groupStage" class="gw-stage" style="--rows:${Math.max(1, Math.ceil((dogs.length + 2) / 4))}" aria-label="目前狗群">${layers}</div>
     <div class="gw-pages"><button type="button" data-gw-step="-1" aria-label="上一群" ${index <= 0 ? 'disabled' : ''}>${icon('back')}</button><span>${groups.length ? index + 1 : 0} / ${groups.length}</span><button type="button" data-gw-step="1" aria-label="下一群" ${index >= groups.length - 1 ? 'disabled' : ''}>${icon('chevron')}</button></div>
-    <p id="gwFeedback" role="status">${esc(groupBusy ? '登記中…' : groupFeedback)}</p>
-    ${group ? `<div class="gw-actions"><button type="button" id="gwWalk" ${!selected.length || groupBusy ? 'disabled' : ''}>${groupBusy ? '登記中…' : groupExcept ? `登記其餘 ${selected.length} 隻` : `整群溜了 · ${selected.length} 隻`}</button><button type="button" data-gw-action="except" aria-pressed="${groupExcept}">${groupExcept ? '取消' : '有狗沒溜'}</button></div><p class="gw-restrictions">${dogs.some(groupBlocked) ? `不登記：${dogs.filter(groupBlocked).map(d => `${esc(d.name)}（${esc(groupBlocked(d))}）`).join('、')}` : ''}</p>` : ''}
+    <p id="gwFeedback" role="status">${esc(groupBusy ? '處理中…' : groupFeedback)}</p>
+    ${group ? `<div class="gw-actions"><button type="button" id="gwWalk" ${!selected.length || groupBusy ? 'disabled' : ''}>${groupBusy ? '登記中…' : groupExcept ? `登記其餘 ${selected.length} 隻` : `整群溜了 · ${selected.length} 隻`}</button><button type="button" data-gw-action="except" aria-pressed="${groupExcept}">${groupExcept ? '取消' : '有狗沒溜'}</button>${undoable.length ? `<button type="button" data-gw-action="undo" ${groupBusy ? 'disabled' : ''}>復原今天登記 · ${undoable.length} 隻</button>` : ''}</div><p class="gw-restrictions">${dogs.some(groupBlocked) ? `不登記：${dogs.filter(groupBlocked).map(d => `${esc(d.name)}（${esc(groupBlocked(d))}）`).join('、')}` : ''}</p>` : ''}
     ${groupFormHtml()}
   </section>`;
 }
@@ -112,6 +113,16 @@ async function registerGroupWalk() {
     if (ok === true && confirmed) { groupExcept = false; groupExcluded.clear(); }
   } catch (e) { groupFeedback = '登記失敗，請重試；尚未確認成功'; }
   finally { dogs.forEach(d => walkPending.delete(walkKey(d))); groupBusy = false; render(); document.getElementById('gwWalk')?.focus({ preventScroll: true }); }
+}
+// 誤觸「整群溜了」：撤銷這一群今天由這支手機寫進試算表的紀錄（結果以試算表回應為準）
+async function undoGroupWalk() {
+  if (groupBusy) return;
+  const dogs = groupDogs(currentGroup()).filter(d => sheetUndoable(d));
+  if (!dogs.length) return;
+  groupBusy = true; groupFeedback = ''; render();
+  try { groupFeedback = await undoSheetWalks(dogs); }
+  catch (e) { groupFeedback = '復原失敗，請重試；尚未確認復原'; }
+  finally { groupBusy = false; render(); document.getElementById('gwWalk')?.focus({ preventScroll: true }); }
 }
 async function writeGroup(body) {
   if (groupBusy) return false;
@@ -156,6 +167,7 @@ groupMain.addEventListener('click', e => {
   if (remove && confirm(`把「${remove.dataset.gwRemove}」移出「${currentGroup().label}」？`)) return writeGroup({ op: 'remove', column: groupColumn, name: remove.dataset.gwRemove });
   if (e.target.closest('#gwWalk')) return registerGroupWalk();
   const action = e.target.closest('[data-gw-action]')?.dataset.gwAction;
+  if (action === 'undo') return undoGroupWalk();
   if (action === 'manage') { groupManage = !groupManage; render(); document.querySelector('[data-gw-action="manage"]')?.focus({ preventScroll: true }); }
   if (action === 'except') { groupExcept = !groupExcept; groupExcluded.clear(); groupFeedback = ''; render(); document.querySelector('[data-gw-action="except"]')?.focus(); }
   if (action === 'add' || action === 'create') { groupManage = false; groupForm = { op: action, column: groupColumn }; render(); document.querySelector('#gwForm input')?.focus(); }
