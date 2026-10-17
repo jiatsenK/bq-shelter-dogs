@@ -467,14 +467,7 @@ function runTests() {
         render();
       }
     }),
-    check('#33 滑動判斷：夠長的水平滑動才換分類，上下捲動不算', () => {
-      eq(swipeStep(-80, 10), 1, '向左滑＝下一個：');
-      eq(swipeStep(80, -10), -1, '向右滑＝上一個：');
-      eq(swipeStep(-40, 0), 0, '太短：');
-      eq(swipeStep(-80, 70), 0, '斜著捲動：');
-      eq(swipeStep(5, 300), 0, '上下捲動：');
-    }),
-    check('#33 內容區左右滑動換分類，頭尾不循環，標籤同步；狗卡上滑也算', () => {
+    check('內容區與狗卡左右滑動都不換分類', () => {
       const saved = [allDogs, groupMap, activeTab, searchQuery];
       const main = document.getElementById('main');
       const touch = (target, x, y) => new Touch({ identifier: 1, target, clientX: x, clientY: y });
@@ -491,13 +484,13 @@ function runTests() {
         swipe(main, 100);
         eq(activeTab, 'walk', '第一頁向右滑不循環：');
         swipe(main.querySelector('.card'), -100);
-        eq([activeTab, active()], ['groups', ['groups']], '向左滑進常遛狗群：');
+        eq([activeTab, active()], ['walk', ['walk']], '狗卡滑動不換頁：');
         swipe(main, -100);
-        eq([activeTab, active()], ['groups', ['groups']], '狗群內滑動不切主分類：');
+        eq([activeTab, active()], ['walk', ['walk']], '內容滑動不換頁：');
         switchTab('walk');
         searchQuery = '測試'; render();
         swipe(main, -100);
-        eq([activeTab, searchQuery], ['groups', '測試'], '搜尋字保留：');
+        eq([activeTab, searchQuery], ['walk', '測試'], '搜尋時也不換頁：');
       } finally {
         [allDogs, groupMap, activeTab, searchQuery] = saved;
         render();

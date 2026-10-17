@@ -3104,33 +3104,8 @@ function stepTab(step) {
   return true;
 }
 
-// 判斷一次手指移動算不算換分類的滑動：水平距離夠長、而且明顯比垂直移動多（上下捲動不算）。
-// 回傳 +1（向左滑，下一個分類）、-1（向右滑，上一個分類）或 0
-const SWIPE_MIN_PX = 60;
-function swipeStep(dx, dy) {
-  if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return 0;
-  return dx < 0 ? 1 : -1;
-}
 
-// 內容區左右滑動換分類，狗卡上也可以滑（K 2026-09-24 定：加入／移回今天已溜改用狗卡上的按鈕，#35）；
-// 按鈕、輸入框上不算，避免誤觸
-const SWIPE_IGNORE = 'button, input, a, textarea, select, iframe, [data-navigation-scope]';
-let swipeStart = null;
 const mainEl = document.getElementById('main');
-mainEl.addEventListener('touchstart', e => {
-  swipeStart = null;
-  if (e.touches.length !== 1 || e.target.closest(SWIPE_IGNORE)) return;
-  swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-}, { passive: true });
-mainEl.addEventListener('touchend', e => {
-  if (!swipeStart || analysisOpen || activeTab === 'groups') return;
-  const t = e.changedTouches[0];
-  const step = swipeStep(t.clientX - swipeStart.x, t.clientY - swipeStart.y);
-  swipeStart = null;
-  if (step) stepTab(step);
-});
-mainEl.addEventListener('touchcancel', () => { swipeStart = null; });
-
 function render() {
   renderMain();
   if (loadWarning) {
@@ -3159,6 +3134,7 @@ window.addEventListener('scroll', syncHeaderShadow, { passive: true });
 const appBrand = appHeader && appHeader.querySelector('.brand');
 function syncHeaderTuck() {
   if (!appHeader || !appBrand || typeof getComputedStyle !== 'function') return; // node 測試的假 DOM 沒有
+  document.documentElement.style.setProperty('--app-header-height', `${appHeader.getBoundingClientRect().height}px`);
   const pad = parseFloat(getComputedStyle(appHeader).paddingTop) || 0;
   appHeader.style.setProperty('--brand-h', `${Math.round(pad + appBrand.offsetHeight)}px`);
 }
@@ -3312,14 +3288,15 @@ function renderMain() {
   if (back) back.innerHTML = `${icon('back')}回${(TABS.find(t => t.id === (analysisOpen ? activeTab : groupsReturnTab)) || TABS[0]).label}`;
 
   if (back && analysisOpen && infoPage) back.innerHTML = `${icon('back')}回資訊`;
+  syncHeaderTuck();
   // #273 資訊分類與子頁。
   if (analysisOpen) {
-    buildTabs({});
+    buildTabs(loadState === 'ready' ? { walk: allDogs.filter(d => matchesSearch(d, searchQuery.trim())).length, mine: myWalksCount('') } : {});
     if (!(infoPage === 'updates' && infoUpdateTab === 'edits' && main.querySelector('#infoEdits'))) main.innerHTML = analysisPageHtml(today);
     return;
   }
   if (activeTab === 'groups') {
-    buildTabs({});
+    buildTabs(loadState === 'ready' ? { walk: allDogs.filter(d => matchesSearch(d, searchQuery.trim())).length, mine: myWalksCount('') } : {});
     // 沿用正式狗群頁及既有 API；獨立文件的觸控事件不會冒泡到主分類。
     main.innerHTML = groupStageHtml();
     return;
