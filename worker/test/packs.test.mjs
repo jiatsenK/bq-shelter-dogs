@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
-import { setPackChunkBytes, swapPackCache, readSmall, readWalksPacked, yearVersions } from '../src/packs.js';
+import { setPackChunkBytes, swapPackCache, readSmall, readWalksPacked, yearVersions, recentStart } from '../src/packs.js';
 import { readDogsPayload, readWalks, readDepartures, readRest } from '../src/compact.js';
 import { fakeD1 } from './fakes.mjs';
 import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
@@ -46,16 +46,25 @@ async function direct(DB, path) {
   if (path === '/walks') {
     const { version, historyStart, walks } = await readWalks(DB);
     const v = await DB.prepare('SELECT cutoff,live,months FROM v3_walk_versions WHERE id=1').first();
-    return { ok: true, version, historyStart, years: yearVersions(v), walks };
+    const from = recentStart(taiwanToday());
+    return { ok: true, version, historyStart, recentStart: from, years: yearVersions(v), walks: walks.filter(w => w.date >= from) };
   }
   if (path === '/departures') return { ok: true, version: 1, departures: await readDepartures(DB) };
   return { ok: true, rest: await readRest(DB) };
 }
+const taiwanToday = () => new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
 async function assertSame(DB, label) {
   for (const path of PATHS) {
     const res = await get(path, { DB });
     assert.equal(res.status, 200, `${label} ${path}`);
-    assert.equal(await res.text(), JSON.stringify(await direct(DB, path)), `${label} ${path}`);
+    const body = await res.text();
+    assert.equal(body, JSON.stringify(await direct(DB, path)), `${label} ${path}`);
+    if (path !== '/walks') continue;
+    // #347 近期以外按年拿：各年接起來就是全部紀錄
+    const years = Object.keys(JSON.parse(body).years).sort();
+    const all = [];
+    for (const y of years) all.push(...(await (await get(`/walks?year=${y}`, { DB })).json()).walks);
+    assert.deepEqual(all, (await readWalks(DB)).walks, `${label} 各年接起來`);
   }
 }
 // 一次請求讀了幾列
@@ -232,9 +241,9 @@ test('改某個月的紀錄：只讀版本號、那一年的資料包和那個�
   const month = await countRows(DB, "walk_date>='2026-09-01' AND walk_date<'2026-10-01'");
   assert.equal(await readsOf(DB, '/walks'), 1 + await yearSegs(DB, '2026') + month);
   await assertSame(DB, '改完');
-  // 新開的機器：版本號＋所有段＋今天的列，不重算
+  // 新開的機器：版本號＋近期那一年的段＋今天的列，不重算；更早的年份不讀（#347）
   worker.testing.resetState();
-  assert.equal(await readsOf(DB, '/walks'), 1 + (await packRows(DB, 'walks')).length + await countRows(DB, 'walk_date>=?', TODAY));
+  assert.equal(await readsOf(DB, '/walks'), 1 + await yearSegs(DB, '2026') + await countRows(DB, 'walk_date>=?', TODAY));
 });
 
 test('跨日：只讀昨天的列和當年的資料包', async t => {
@@ -249,7 +258,7 @@ test('跨日：只讀昨天的列和當年的資料包', async t => {
   await assertSame(DB, '第二天');
   assert.equal(await readsOf(DB, '/walks'), 1, '跨日後沒變');
   worker.testing.resetState();
-  assert.equal(await readsOf(DB, '/walks'), 1 + (await packRows(DB, 'walks')).length, '新機器：版本號＋所有段，今天還沒有紀錄');
+  assert.equal(await readsOf(DB, '/walks'), 1 + await yearSegs(DB, '2026'), '新機器：版本號＋近期那一年的段，今天還沒有紀錄（#347）');
 });
 
 test('跨日跨到新的一年', async t => {
@@ -354,7 +363,7 @@ test('?year=：內容是那一年的全部紀錄（含今天），跟整份逐�
     const body = await res.json();
     assert.deepEqual(Object.keys(body), ['ok', 'version', 'historyStart', 'year', 'ver', 'walks']);
     assert.equal(body.ver, all.years[year] || '');
-    assert.deepEqual(body.walks, all.walks.filter(w => w.date.startsWith(year)), year);
+    assert.deepEqual(body.walks, (await readWalks(DB)).walks.filter(w => w.date.startsWith(year)), year);
   }
   assert.ok((await (await yearOf(DB, '2026')).json()).walks.some(w => w.date === TODAY), '今年含今天');
   assert.equal((await yearOf(DB, '26')).status, 400);
