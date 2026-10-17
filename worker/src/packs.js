@@ -47,6 +47,8 @@ function groupWalks(rows) {
 
 // 切成每段不超過 chunkBytes 位元組（UTF-8），不切開一個字
 function chunks(text) {
+  // 一個 UTF-16 單位最多 3 位元組，總長度不可能超過上限就不用逐字算（#356）
+  if (text.length * 3 <= chunkBytes) return [text];
   const out = [];
   let start = 0, bytes = 0;
   for (let i = 0; i < text.length; i++) {
