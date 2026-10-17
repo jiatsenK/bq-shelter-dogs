@@ -1,5 +1,33 @@
 # Changelog
 
+## [9.2.0](https://github.com/jiatsenK/bq-shelter-dogs/compare/v9.1.1...v9.2.0) (2026-10-16)
+
+
+### 新功能
+
+* 今日溜狗紀錄，其他手機很快看到今天溜過（ADR 0007） ([#308](https://github.com/jiatsenK/bq-shelter-dogs/issues/308)) ([0283641](https://github.com/jiatsenK/bq-shelter-dogs/commit/0283641493910e3767700e1a144b6f7fbdc1b886))
+* 入所事件條列與完整狗卡排版（[#285](https://github.com/jiatsenK/bq-shelter-dogs/issues/285)） ([#311](https://github.com/jiatsenK/bq-shelter-dogs/issues/311)) ([03f2918](https://github.com/jiatsenK/bq-shelter-dogs/commit/03f29183721994bfbb7f833e9415de08899e3954))
+* 首頁暫時公告，D1 額度用完網站今日看不到別人最新的已溜 ([#304](https://github.com/jiatsenK/bq-shelter-dogs/issues/304)) ([28618d7](https://github.com/jiatsenK/bq-shelter-dogs/commit/28618d7108649396bb315afadec031e890a76b96))
+
+
+### 修正
+
+* GitHub Actions 分鐘數：有改才同步、縮圖不重叫、只改文件不跑測試（[#305](https://github.com/jiatsenK/bq-shelter-dogs/issues/305)） ([#312](https://github.com/jiatsenK/bq-shelter-dogs/issues/312)) ([e31ab05](https://github.com/jiatsenK/bq-shelter-dogs/commit/e31ab0559ed00f89e798dab48a48bee88b3fbb15))
+* 同步改成差異同步，寫入量異常時停寫（[#302](https://github.com/jiatsenK/bq-shelter-dogs/issues/302)） ([#303](https://github.com/jiatsenK/bq-shelter-dogs/issues/303)) ([2da5ce7](https://github.com/jiatsenK/bq-shelter-dogs/commit/2da5ce723c4eec22f8addeb47ef0e5d83d95aa63))
+* 手機編輯鍵盤避讓與入所逐次條列（[#285](https://github.com/jiatsenK/bq-shelter-dogs/issues/285)） ([#326](https://github.com/jiatsenK/bq-shelter-dogs/issues/326)) ([2f26894](https://github.com/jiatsenK/bq-shelter-dogs/commit/2f2689482efdb71d161b18dcfd1e14bfd5bac99e))
+
+
+### 改善速度
+
+* /api/today 改看版本號，沒變只讀 1 列 ([#314](https://github.com/jiatsenK/bq-shelter-dogs/issues/314)) ([#316](https://github.com/jiatsenK/bq-shelter-dogs/issues/316)) ([87f5deb](https://github.com/jiatsenK/bq-shelter-dogs/commit/87f5deb7b19bc2dbb160086d0b2c6dfc808b4686))
+* 歷史資料包＋只讀今天，沒變時每次只讀 1 列版本號 ([#315](https://github.com/jiatsenK/bq-shelter-dogs/issues/315)) ([#317](https://github.com/jiatsenK/bq-shelter-dogs/issues/317)) ([0a5b98c](https://github.com/jiatsenK/bq-shelter-dogs/commit/0a5b98cf5d972a842edf4644e25494a517c1befb))
+* 頁首「更新」縮短等待：同步讀 D1 現況改並行、手機每 5 秒看一次 ([#299](https://github.com/jiatsenK/bq-shelter-dogs/issues/299)) ([f97e455](https://github.com/jiatsenK/bq-shelter-dogs/commit/f97e4556fdf0bf98002a41f393d96ea850138695))
+
+
+### 還原
+
+* 恢復早上狗卡版面與編輯方式（[#285](https://github.com/jiatsenK/bq-shelter-dogs/issues/285)） ([#318](https://github.com/jiatsenK/bq-shelter-dogs/issues/318)) ([c60e031](https://github.com/jiatsenK/bq-shelter-dogs/commit/c60e031be3533c9a11f7f183c82452f4f9a25a2a))
+
 ## [9.1.1](https://github.com/jiatsenK/bq-shelter-dogs/compare/v9.1.0...v9.1.1) (2026-10-16)
 
 
