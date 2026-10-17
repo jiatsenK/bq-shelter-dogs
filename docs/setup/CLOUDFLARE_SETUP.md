@@ -199,7 +199,7 @@ https://pr-<PR 編號>-bq-shelter-dogs.<子網域>.workers.dev
 - 設定：repo 根目錄的 `wrangler.jsonc`（Worker 名稱、靜態檔案、Cron）；不公開的檔案列在 `.assetsignore`。
 - API 在 `/api` 底下（`/api/photos/{編號}`、`/api/notes`、`/api/gallery`、`/api/walker-code`、`/api/sync`），網站一律用同網址的 `/api`（`public/js/app.js` 的 `uploadUrlFor`）。Worker 只接受同網址的要求；要額外放行別的網站才設 `ALLOWED_ORIGINS`（預設空白）。
 - 本機試跑：在 repo 根目錄 `npx wrangler dev --persist-to /tmp/wrangler-state`（`--persist-to` 放 repo 外面，不然暫存寫進網站資料夾會一直重新載入）。
-- 照片快取（#127）：`public/_headers` 讓 `photos/` 在手機上快取 30 天；部署前 `scripts/photo-versions.mjs` 把每張照片的內容雜湊寫進要上傳的 `data/dogs.json`（`photoVersions`，不提交），網站組照片網址加 `?v=雜湊`，換照片網址就變。
+- 照片快取（#127）：`public/_headers` 讓 `photos/` 在手機上快取 30 天；Worker 的 `/api/dogs` 回傳每張照片的內容雜湊（`photoVersions`），網站組照片網址加 `?v=雜湊`，換照片網址就變。
 - 瀏覽統計（#128）：部署前 `scripts/analytics-beacon.mjs` 把 Cloudflare Web Analytics 的 beacon 插進要上傳的 `public/index.html`（token 來自 Secret `CF_ANALYTICS_TOKEN`，不提交）；預覽版和舊網址沒有。
 - 部署：`.github/workflows/deploy-cloudflare.yml`。同步試算表、產生縮圖這兩個 Action 用 GitHub 內建 token 提交，不會觸發推送事件，所以用 `workflow_run` 接著部署。
 - 照片放 R2（#130）：`wrangler.jsonc` 的 `r2_buckets`（binding `PHOTOS`，bucket `bq-shelter-photos`），程式在 `worker/src/r2.js`。
