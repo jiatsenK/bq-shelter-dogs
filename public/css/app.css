@@ -2421,6 +2421,8 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 #groupPage .gw-side.next { right: 0; }
 .gw-side svg { width: 24px; height: 24px; }
 @media(min-width:390px) { .gw-stage-wrap .gw-stage { --card-w: 56px; --card-h: 100px; } }
+/* 手機一頁內看得到所有按鈕（K 2026-10-17）：照片區扣掉表頭、搜尋、群名、頁碼、兩顆按鈕和底部分頁列，其餘在照片區內捲動 */
+@media (max-width: 1099px) { .gw-stage-wrap .gw-stage { height: max(126px, calc(100dvh - 404px)); } }
 
 @media (max-width: 1099px) {
   .analysis-open header.app { position: fixed; inset: 0 0 auto; }
