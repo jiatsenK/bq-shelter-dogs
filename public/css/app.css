@@ -2324,3 +2324,56 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .desk-on .brand { min-height: 64px; }
   .desk-on .tabs button { padding-inline: 10px; }
 }
+/* #374 定版斜照片卡。少群不放大；長名換行，不縮字。 */
+#groupPage { max-width: 480px; margin: auto; padding: 0 16px 24px; overflow: hidden; color: var(--ink); }
+#groupPage button, #groupPage input, #groupPage summary { min-height: 44px; min-width: 44px; font: inherit; }
+#groupPage button { cursor: pointer; color: var(--primary); border: 0; background: transparent; }
+#groupPage button:disabled { opacity: .45; cursor: default; }
+#groupPage button:focus-visible, #groupPage summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gw-heading { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.gw-heading h2 { margin: 16px 0 8px; font-size: 24px; overflow-wrap: anywhere; }
+.gw-heading small { margin-left: 8px; font-size: 13px; font-weight: 400; color: var(--ink-soft); white-space: nowrap; }
+.gw-heading button { white-space: nowrap; }
+.gw-summary { font-size: 14px; line-height: 1.65; margin: 0 0 12px; color: var(--ink-soft); overflow-wrap: anywhere; }
+.gw-stage { --card-w: 62px; --card-h: 116px; position: relative; height: calc(var(--rows) * 126px + 50px); isolation: isolate; touch-action: pan-y; user-select: none; }
+.gw-layer { position: absolute; inset: 40px 0 0; transform: translateX(calc(var(--offset) * 36%)) translateY(calc(var(--offset) * -12px)) scale(.36); opacity: .45; transform-origin: 50% 15%; transition: transform 320ms cubic-bezier(.16,1,.3,1), opacity 220ms ease-out; }
+.gw-layer.front { z-index: 2; opacity: 1; transform: translateX(var(--drag, 0px)) scale(1); }
+.gw-layer.rear { pointer-events: none; }
+.gw-layer.rear .gw-cage, .gw-layer.rear strong { visibility: hidden; }
+.gw-cards { display: grid; grid-template-columns: repeat(4, var(--card-w)); grid-auto-rows: minmax(var(--card-h), auto); justify-content: center; gap: 10px 5px; align-items: start; }
+#groupPage .gw-dog { width: var(--card-w); min-height: var(--card-h); padding: 0; text-align: center; transform: translateX(3px); }
+.gw-dog:nth-child(8n+1), .gw-dog:nth-child(8n+2), .gw-dog:nth-child(8n+3), .gw-dog:nth-child(8n+4) { transform: translateX(9px); }
+.gw-tile { display: block; background: var(--surface); border: 2px solid var(--surface); transform: skew(-8deg); transition: transform 160ms cubic-bezier(.16,1,.3,1); box-shadow: 0 3px 8px #1f5c4d16; }
+.gw-dog:hover .gw-tile, .gw-dog:active .gw-tile, .gw-dog:focus-visible .gw-tile { transform: skew(-8deg) scale(1.12); position: relative; z-index: 3; border-color: var(--primary); }
+.gw-dog:focus-visible, .gw-dog:hover { z-index: 4; }
+.gw-cage { display: block; min-height: 18px; padding: 0 3px; background: var(--bg); color: var(--ink-soft); text-align: right; font-size: 12px; overflow-wrap: anywhere; }
+.gw-photo { display: block; height: 68px; background: var(--primary-soft); overflow: hidden; }
+.gw-photo img { width: 120%; margin-left: -10%; height: 100%; object-fit: cover; transform: skew(8deg); pointer-events: none; }
+.gw-tile strong { display: block; padding: 2px 1px; font-size: 14px; line-height: 20px; transform: skew(8deg); overflow-wrap: anywhere; color: var(--ink); }
+.gw-dog.excluded .gw-photo { opacity: .35; }
+.gw-dog.excluded strong { text-decoration: line-through; }
+#groupPage .gw-add .gw-tile { min-height: var(--card-h); display: grid; place-items: center; border-color: var(--line); font-size: 28px; }
+.gw-pages { display: flex; justify-content: center; align-items: center; gap: 16px; color: var(--ink-soft); }
+.gw-pages svg { width: 20px; height: 20px; }
+.gw-actions { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; padding: 12px 0; }
+#groupPage #gwWalk { background: var(--primary); color: white; padding: 12px; font-weight: 800; }
+#groupPage [data-gw-action="except"] { text-decoration: underline; text-underline-offset: 4px; }
+#gwFeedback, .gw-restrictions { font-size: 14px; overflow-wrap: anywhere; }
+#gwFeedback:empty, .gw-restrictions:empty { display: none; }
+.gw-manage { border-top: 1px solid var(--line); padding: 12px 0; }
+.gw-manage summary { cursor: pointer; }
+.gw-form { display: grid; gap: 12px; padding: 16px; background: var(--surface); }
+.gw-form label { display: grid; gap: 4px; }
+.gw-form input { width: 100%; padding: 8px; border: 1px solid var(--line); font-size: 16px; }
+@media(min-width:390px) { .gw-stage { --card-w: 74px; } }
+@media(prefers-reduced-motion:reduce) { .gw-layer, .gw-tile { transition: none; } }
+/* 第一排三格、後續每排四格，沿用定版交錯密度。 */
+.gw-stage { height: auto; min-height: calc(var(--rows) * 126px + 50px); }
+.gw-layer.front { position: relative; inset: auto; padding-top: 40px; }
+.gw-cards { grid-template-columns: repeat(8, calc((var(--card-w) - 5px) / 2)); }
+.gw-dog { grid-column: span 2; }
+.gw-dog:first-child { grid-column: 2 / span 2; }
+.gw-dog:nth-child(4n+4) { grid-column: 1 / span 2; }
+#groupPage { padding-inline: 4px; }
+.gw-stage { --card-w: 60px; }
+@media(min-width:390px) { .gw-stage { --card-w: 74px; } }
