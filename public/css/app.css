@@ -69,7 +69,7 @@ header.app {
   padding: 8px 12px calc(4px + env(safe-area-inset-bottom, 0px));
 }
 .bottom-inner { max-width: 480px; margin: 0 auto; }
-.analysis-open .bottom-bar { display: none; }
+.analysis-open .bottom-bar { display: block; }
 .search { position: relative; margin: 10px 0 0; }
 .search .icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--ink-soft); font-size: 16px; }
 .search input {
@@ -666,7 +666,7 @@ html.lightbox-open { overflow: hidden; }
 @keyframes sync-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .sync-btn.syncing .icon { animation-duration: 3s; } }
 /* 分析頁開著時收起搜尋框與分類，頁首只留標題 */
-.analysis-open header.app .search, .analysis-open header.app .tabs { display: none; }
+.analysis-open header.app .search { display: none; }
 
 /* 我的備註（#62）：溜狗表備註下方，檢視時顯示內容＋「新增／修改」，編輯時是文字框＋儲存 */
 .my-note-time { margin-top: 6px; font-size: 12.5px; color: var(--muted-text); }
@@ -2006,21 +2006,15 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .analysis-open .head-back:active { background: var(--shell-deep); }
 .analysis-open .head-back:focus-visible { outline: 3px solid var(--tab-amber); }
 .analysis-open .head-title { display: block; flex: 1; margin: 0 0 0 14px; color: #fff; font-size: 20px; font-weight: 800; }
-
-/* 本月溜狗：一排大數字＋每天一根細長條（1 號到今天），還沒開始記錄的日子是斜線 */
-.a-month { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 18px; margin: 4px 0 12px; }
-.a-month b { font-size: 28px; font-weight: 900; font-variant-numeric: tabular-nums; }
-.a-month small { font-size: 14px; color: var(--ink-soft); }
-.a-month-last { font-size: 13px; color: var(--ink-soft); }
-.a-days { display: flex; align-items: flex-end; gap: 2px; height: 96px; padding-bottom: 18px; position: relative; }
-.a-day { flex: 1; height: 100%; display: flex; align-items: flex-end; position: relative; }
-.a-day i { display: block; width: 100%; background: var(--primary); border-radius: 1px 1px 0 0; }
-.a-day.none i { background: repeating-linear-gradient(135deg, var(--line) 0 2px, transparent 2px 5px); }
-.a-day small { position: absolute; left: 50%; bottom: -18px; transform: translateX(-50%); font-size: 11px; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
-.a-days.few { height: 116px; }
-.a-day { flex-direction: column; justify-content: flex-end; align-items: stretch; }
-.a-day em { font-style: normal; font-size: 12px; font-weight: 700; text-align: center; color: var(--ink); font-variant-numeric: tabular-nums; margin-bottom: 2px; }
-.a-days-peak { margin: 4px 0 0; }
+/* 主分頁沒有返回（2026-10-17）：常遛狗群、資訊首頁都用網站名稱的共用表頭，只有資訊子頁有「回資訊」 */
+.analysis-open:not(.head-sub) .head-back { display: none; }
+.analysis-open:not(.head-sub) .head-title { margin-left: 0; }
+.analysis-open.head-shared .head-title { display: none; }
+.analysis-open.head-shared .brand .logo, .analysis-open.head-shared .brand .titles { display: block !important; }
+/* 四個主分頁頂列同高（2026-10-17 polish）：共用表頭都有更新資料鈕；資訊子頁只有標題時也撐到同一個高度 */
+.analysis-open.head-shared .sync-btn { display: inline-flex; }
+.analysis-open .brand { min-height: 44px; }
+.analysis-open.head-search header.app .search { display: block; }
 
 /* 列表模式（K 2026-10-09）：溜狗人拿掉，天數｜狗名＋籠位｜溜了；「天數」標題跟下面的數字一樣置中。
    10-10 K：籠位單獨一欄的黑框標籤位置怪、跟照片檢視不一樣 → 改成跟狗卡同一個圖釘籠位（.cage-pill），放在狗名下面 */
@@ -2328,3 +2322,128 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .stays-actions .former-save { border: 0; background: var(--primary); color: #fff; }
 .stays-actions .former-save:disabled { opacity: .6; cursor: default; }
 .stays-actions .former-cancel { border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+
+/* #373：四格共用導覽與既有狗群內容。 */
+.tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tabs button { min-width: 44px; min-height: 44px; padding-inline: 2px; }
+.groups-frame { display: block; width: 100%; height: calc(100dvh - 160px - env(safe-area-inset-bottom, 0px)); min-height: 300px; border: 0; }
+.analysis-open header.app .zukan-link { display: none; }
+@media (min-width: 1100px) {
+  .desk-on .header-inner { flex-wrap: wrap; height: auto; min-height: 64px; gap: 12px; }
+  .desk-on .brand { min-height: 64px; }
+  .desk-on .tabs button { padding-inline: 10px; }
+}
+/* #273 資訊分類沿用既有白紙、細線及安全區。 */
+.info-home button { display: grid; gap: 6px; width: 100%; padding: 20px 0; min-height: 80px; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
+.info-home button strong { font-size: 18px; }
+.info-home button span { color: var(--ink-soft); font-size: 14px; }
+.info-home button:hover { background: var(--surface-soft); }
+.info-home button:focus-visible, .info-update-tabs button:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+.info-update-tabs { display: flex; gap: 8px; padding: 12px 16px; background: var(--surface); }
+.info-update-tabs button, #retryUpdates { min-width: 44px; min-height: 44px; padding: 8px 16px; background: var(--surface); color: var(--ink); font: inherit; border: 1px solid var(--line); cursor: pointer; }
+.info-update-tabs button[aria-pressed="true"] { font-weight: 800; border-bottom: 3px solid var(--primary); }
+.info-edits { display: block; border: 0; width: 100%; height: calc(100dvh - 240px - env(safe-area-inset-bottom)); min-height: 300px; }
+.info-releases { list-style: none; margin: 0; padding: 0; }
+.info-releases li { border-bottom: 1px solid var(--line); padding: 16px 0; overflow-wrap: anywhere; }
+.info-releases time { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.analysis-open .a-miss summary, .analysis-open .dep-filters input, .analysis-open .dep-filters select { min-height: 44px; min-width: 44px; }
+/* #374 定版斜照片卡。少群不放大；長名換行，不縮字。 */
+#groupPage { max-width: 480px; margin: auto; padding: 0 16px 24px; overflow: hidden; color: var(--ink); }
+#groupPage button, #groupPage input, #groupPage summary { min-height: 44px; min-width: 44px; font: inherit; }
+#groupPage button { cursor: pointer; color: var(--primary); border: 0; background: transparent; }
+#groupPage button:disabled { opacity: .45; cursor: default; }
+#groupPage button:focus-visible, #groupPage summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.gw-heading { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.gw-heading h2 { margin: 16px 0 8px; font-size: 24px; overflow-wrap: anywhere; }
+.gw-heading small { margin-left: 8px; font-size: 13px; font-weight: 400; color: var(--ink-soft); white-space: nowrap; }
+.gw-heading button { white-space: nowrap; }
+.gw-summary { font-size: 14px; line-height: 1.65; margin: 0 0 12px; color: var(--ink-soft); overflow-wrap: anywhere; }
+.gw-stage { --card-w: 62px; --card-h: 116px; position: relative; height: calc(var(--rows) * 126px + 50px); isolation: isolate; touch-action: pan-y; user-select: none; }
+.gw-layer { position: absolute; inset: 40px 0 0; transform: translateX(calc(var(--offset) * 36%)) translateY(calc(var(--offset) * -12px)) scale(.36); opacity: .45; transform-origin: 50% 15%; transition: transform 320ms cubic-bezier(.16,1,.3,1), opacity 220ms ease-out; }
+.gw-layer.front { z-index: 2; opacity: 1; transform: translateX(var(--drag, 0px)) scale(1); }
+.gw-layer.rear { pointer-events: none; }
+.gw-layer.rear .gw-cage, .gw-layer.rear strong { visibility: hidden; }
+.gw-cards { display: grid; grid-template-columns: repeat(4, var(--card-w)); grid-auto-rows: minmax(var(--card-h), auto); justify-content: center; gap: 10px 5px; align-items: start; }
+/* 照片正放、每張一樣大，不斜不錯位（#387，K 說斜的看了眼睛痛） */
+#groupPage .gw-dog { width: var(--card-w); min-height: var(--card-h); padding: 0; text-align: center; }
+.gw-tile { display: block; background: var(--surface); border: 2px solid var(--surface); transition: transform 160ms cubic-bezier(.16,1,.3,1); box-shadow: 0 3px 8px #1f5c4d16; }
+.gw-dog:hover .gw-tile, .gw-dog:active .gw-tile, .gw-dog:focus-visible .gw-tile { transform: scale(1.12); position: relative; z-index: 3; border-color: var(--primary); }
+.gw-dog:focus-visible, .gw-dog:hover { z-index: 4; }
+.gw-cage { display: block; min-height: 18px; padding: 0 3px; background: var(--bg); color: var(--ink-soft); text-align: right; font-size: 12px; overflow-wrap: anywhere; }
+.gw-photo { display: block; height: 68px; background: var(--primary-soft); overflow: hidden; }
+.gw-photo img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.gw-tile strong { display: block; padding: 2px 1px; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; color: var(--ink); }
+.gw-dog.excluded .gw-photo { opacity: .35; }
+.gw-dog.excluded strong { text-decoration: line-through; }
+/* 搜尋時沒對到的狗變淡，對到的照常 */
+.gw-dog.miss { opacity: .3; }
+.gw-search-note { margin: 0 0 4px; font-size: 14px; color: var(--ink-soft); }
+#groupPage .gw-add .gw-tile { min-height: var(--card-h); display: grid; place-items: center; border-color: var(--line); font-size: 28px; }
+.gw-pages { display: flex; justify-content: center; align-items: center; gap: 16px; color: var(--ink-soft); }
+.gw-pages svg { width: 20px; height: 20px; }
+/* 按鈕置中（K 2026-10-17）；「有狗沒溜」跟在主按鈕旁邊 */
+.gw-actions { display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 8px 16px; padding: 12px 0; }
+#groupPage #gwWalk { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 200px; background: var(--primary); color: white; padding: 12px 24px; font-weight: 800; }
+/* 已溜：跟溜狗表的「已溜」同色，再按一次復原 */
+#groupPage #gwWalk.done { background: var(--green-bg); color: var(--green-text); }
+#groupPage [data-gw-action="except"] { text-decoration: underline; text-underline-offset: 4px; }
+#gwFeedback, .gw-restrictions { font-size: 14px; overflow-wrap: anywhere; }
+#gwFeedback:empty, .gw-restrictions:empty { display: none; }
+.gw-manage { border-top: 1px solid var(--line); padding: 12px 0; }
+.gw-manage summary { cursor: pointer; }
+.gw-form { display: grid; gap: 12px; padding: 16px; background: var(--surface); }
+.gw-form label { display: grid; gap: 4px; }
+.gw-form input { width: 100%; padding: 8px; border: 1px solid var(--line); font-size: 16px; }
+@media(min-width:390px) { .gw-stage { --card-w: 74px; } }
+@media(prefers-reduced-motion:reduce) { .gw-layer, .gw-tile { transition: none; } }
+/* 第一排三格、後續每排四格，沿用定版交錯密度。 */
+.gw-stage { height: auto; min-height: calc(var(--rows) * 126px + 50px); }
+.gw-layer.front { position: relative; inset: auto; padding-top: 40px; }
+.gw-cards { grid-template-columns: repeat(8, calc((var(--card-w) - 5px) / 2)); }
+.gw-dog { grid-column: span 2; }
+.gw-dog:first-child { grid-column: 2 / span 2; }
+.gw-dog:nth-child(4n+4) { grid-column: 1 / span 2; }
+#groupPage { padding-inline: 4px; }
+.gw-stage { --card-w: 60px; }
+@media(min-width:390px) { .gw-stage { --card-w: 74px; } }
+
+/* 內頁管理與切群保持在固定高度；只有照片區內捲動。 */
+.gw-stage { height: clamp(126px, calc(100dvh - 360px), 504px); min-height: 126px; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; }
+.gw-layer.front { padding-block: 12px; }
+.gw-heading { position: relative; }
+.gw-manage { position: absolute; right: 0; top: 60px; z-index: 5; max-width: 100%; max-height: 50dvh; overflow: auto; padding: 12px; background: var(--surface); box-shadow: 0 3px 12px #0002; }
+#groupPage { position: relative; }
+/* 換群箭頭放在「溜了」兩側、貼齊畫面左右邊，讓出寬度給照片（#387）；跟主按鈕留空隙免得誤按換群 */
+.gw-stage-wrap { position: relative; }
+.gw-stage-wrap .gw-stage { --card-h: 0px; }
+.gw-stage-wrap .gw-cards { grid-template-columns: repeat(8, minmax(0, 1fr)); }
+#groupPage .gw-stage-wrap .gw-dog { width: auto; }
+/* 「＋」卡沒有照片，高度跟有照片的卡差不多，也守住 44px 點擊區 */
+#groupPage .gw-stage-wrap .gw-add .gw-tile { min-height: 100px; }
+.gw-stage-wrap .gw-photo { height: auto; aspect-ratio: 1; }
+.gw-walkbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.gw-walkbar .gw-actions { flex: 1; min-width: 0; }
+#groupPage .gw-walkbar #gwWalk { min-width: 0; width: 100%; max-width: 240px; padding-inline: 12px; }
+#groupPage .gw-side { flex: none; width: 48px; height: 48px; margin-top: 12px; display: grid; place-items: center; padding: 0; color: var(--ink-soft); }
+.gw-side svg { width: 24px; height: 24px; }
+/* 手機一頁內看得到所有按鈕（K 2026-10-17）：照片區扣掉表頭、搜尋、群名、頁碼、兩顆按鈕和底部分頁列，其餘在照片區內捲動 */
+@media (max-width: 1099px) { .gw-stage-wrap .gw-stage { height: max(126px, calc(100dvh - 404px)); } }
+
+@media (max-width: 1099px) {
+  .analysis-open header.app { position: fixed; inset: 0 0 auto; }
+  .analysis-open body::before { content: ""; display: block; height: var(--app-header-height, 64px); }
+}
+
+/* 手機搜尋框在表頭下面（K 2026-10-17 選 A）：溜狗表、常遛狗群、我溜過同一個位置，資訊沒有 */
+.page-search { max-width: 480px; margin: 0 auto; padding: 12px 14px 0; }
+.page-search:empty, .analysis-open:not(.head-search) .page-search { display: none; }
+.page-search .search { margin: 0; }
+.page-search .search input { box-shadow: inset 0 0 0 1px var(--line); }
+.page-search .range { margin: 8px 2px 0; color: var(--ink-soft); }
+
+/* 手機鍵盤（#389）：鍵盤彈出時（html.kb-open，js/keyboard-viewport.js）底部分類列先收起來，
+   底部面板貼齊看得到的範圍，輸入框只在面板裡捲，整頁不跟著跳 */
+html.kb-open .bottom-bar { display: none; }
+html.kb-open .with-backdrop { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-height, 100%); }
+html.kb-open .with-sheet { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
+html.kb-open .onboard { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-height, 100%); }

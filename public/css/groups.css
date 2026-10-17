@@ -18,6 +18,7 @@ button, input { font: inherit; }
 
 .g-top { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 12px; padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); background: var(--primary); color: #fff; }
 .g-top h1 { margin: 0; font-size: 18px; }
+.embedded .g-top { display: none; }
 .g-back { color: #fff; text-decoration: none; font-weight: 700; padding: 6px 0; }
 
 .g-main { max-width: 760px; margin: 0 auto; padding: 12px 16px 48px; }
@@ -45,3 +46,5 @@ button, input { font: inherit; }
 .g-form button { min-height: 40px; padding: 0 16px; border: 0; border-radius: 10px; background: var(--primary); color: #fff; font-weight: 700; cursor: pointer; }
 .g-form button:disabled, .g-dog button:disabled { opacity: .5; cursor: default; }
 .g-card .g-form.add { margin-top: 10px; }
+/* 共用導覽內的手機點擊區（#373），既有資料與編輯流程不變。 */
+.embedded button, .embedded input { min-width: 44px; min-height: 44px; }

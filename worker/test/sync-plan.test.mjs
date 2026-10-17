@@ -1,8 +1,12 @@
-// ADR 0008：有改才同步＋每天保險一次（worker/src/sync-plan.js）
+// ADR 0012：有改才同步＋每天保險一次（worker/src/sync-plan.js）
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fakeD1 } from './fakes.mjs';
 import { markChanged, planTick, isDailySlot, sheetSignature, refreshPlan, rememberSignature, SYNC_DAILY_MAX } from '../src/sync-plan.js';
+import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
+
+// v3_sync_state 跟正式 D1 一樣由 db/compact-schema.sql 建（#354）
+const syncDb = async () => { const db = fakeD1(); await migrateCompactDatabase(db); return db; };
 
 const at = iso => new Date(iso).getTime();
 
@@ -13,12 +17,12 @@ test('每天台灣 6:30（UTC 22:30）那一格是保險同步，其他格不是
 });
 
 test('沒人改試算表：每 10 分鐘看一次都不同步', async () => {
-  const db = fakeD1();
+  const db = await syncDb();
   assert.equal(await planTick(db, at('2026-10-16T02:00:00Z')), 'none');
 });
 
 test('有人改：下一格同步一次，改很多次也只同步一次', async () => {
-  const db = fakeD1();
+  const db = await syncDb();
   await markChanged(db, at('2026-10-16T02:01:00Z'));
   await markChanged(db, at('2026-10-16T02:03:00Z'));
   assert.equal(await planTick(db, at('2026-10-16T02:10:00Z')), 'changed');
@@ -26,14 +30,14 @@ test('有人改：下一格同步一次，改很多次也只同步一次', async
 });
 
 test('保險同步：沒人改也同步，順便清掉「有改」', async () => {
-  const db = fakeD1();
+  const db = await syncDb();
   await markChanged(db, at('2026-10-16T22:25:00Z'));
   assert.equal(await planTick(db, at('2026-10-16T22:30:00Z')), 'daily');
   assert.equal(await planTick(db, at('2026-10-16T22:40:00Z')), 'none');
 });
 
 test(`一天最多 ${SYNC_DAILY_MAX} 次，台灣隔天重新算；超過的「有改」留到隔天`, async () => {
-  const db = fakeD1();
+  const db = await syncDb();
   // 台灣 10/17 一整天 ＝ UTC 10/16 16:00 起
   let t = at('2026-10-16T16:00:00Z');
   for (let i = 0; i < SYNC_DAILY_MAX; i++, t += 600000) {
@@ -60,7 +64,7 @@ test('試算表指紋：三個分頁內容的雜湊，內容一樣指紋就一�
 });
 
 test('「更新」：試算表沒變不同步；變了才同步並記住指紋；讀不到試算表就照樣同步', async () => {
-  const db = fakeD1();
+  const db = await syncDb();
   assert.equal(await refreshPlan(db, async () => 'x'), 'sync');
   assert.equal(await refreshPlan(db, async () => 'x'), 'same');
   assert.equal(await refreshPlan(db, async () => 'y'), 'sync');

@@ -5,6 +5,7 @@
 
 const BQ_DATA_URL = 'api/dogs'; // #247 起從 Worker 讀 D1
 const BQ_WALKS_URL = 'api/walks'; // #260 起從 Worker 讀 D1
+const BQ_MINE_URL = 'api/walks/mine'; // #344 我溜過的狗由 Worker 彙總
 const BQ_CODES_KEY = 'bq-walker-codes'; // 溜狗表（js/app.js）存的我的代號
 const BQ_WRITES_KEY = 'bq-sheet-writes'; // 溜狗表今天按過的溜了（還沒同步進 walks.json 的）
 const BQ_OPENED_KEY = 'bq-zukan'; // 撕開過的卡：{ v: 1, codes: { 代號: { 狗編號: 撕開那天 } } }
@@ -146,26 +147,30 @@ function bqTodayWrites(storage, today) {
     return Object.values(raw.items).filter(it => it && it.mine && it.id && it.current && it.current.date === raw.date).map(it => ({ id: String(it.id), date: raw.date }));
   } catch (e) { return []; }
 }
-// 我溜過的狗：{ 編號: { times: 幾天, first, last } }。跟「我溜過」同一個規則：同一隻狗同一天以最後一筆為準（先記了我、後來拿掉就不算）
-function bqMyDogs(walks, codes, todayWrites = []) {
+// 我溜過的狗：{ 編號: { times: 幾天, first, last } }。Worker 照各年摘要加總（ADR 0013，#344，規則跟「我溜過」一樣：同一隻狗同一天以最後一筆為準）；
+// 今天剛按、還沒同步的溜了另外加，Worker 已經算到今天的就不重複
+function bqMineFrom(dogs, todayWrites = []) {
   const mine = new Map();
-  if (!codes.length) return mine;
-  const text = v => (v == null ? '' : String(v).trim());
-  const last = new Map();
-  (walks || []).forEach(w => { if (w && Array.isArray(w.walkers) && text(w.id)) last.set(`${text(w.id)}|${w.date}`, w); });
-  const days = [...last.values()].filter(w => w.walkers.some(c => codes.includes(c))).map(w => ({ id: text(w.id), date: w.date }));
-  const seen = new Set();
-  for (const { id, date } of [...days, ...todayWrites]) {
-    const d = bqParseYmd(date);
-    if (!d || seen.has(`${id}|${date}`)) continue;
-    seen.add(`${id}|${date}`);
-    const m = mine.get(id) || { times: 0, first: d, last: d };
-    m.times++;
-    if (d < m.first) m.first = d;
-    if (d > m.last) m.last = d;
-    mine.set(id, m);
+  for (const [id, m] of Object.entries(dogs || {})) {
+    const first = bqParseYmd(m && m.first), last = bqParseYmd(m && m.last);
+    if (first && last && m.times > 0) mine.set(id, { times: m.times, first, last });
+  }
+  for (const { id, date } of todayWrites) {
+    const d = bqParseYmd(date), m = mine.get(id);
+    if (!d || (m && bqYmd(m.last) === date)) continue;
+    if (!m) mine.set(id, { times: 1, first: d, last: d });
+    else { m.times++; if (d > m.last) m.last = d; if (d < m.first) m.first = d; }
   }
   return mine;
+}
+// POST /api/walks/mine：代號放在請求內容（不放網址）；讀不到回 null
+async function bqFetchMine(codes) {
+  if (!codes.length) return {};
+  try {
+    const res = await fetch(BQ_MINE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codes }) });
+    const out = await res.json();
+    return res.ok && out.dogs && typeof out.dogs === 'object' ? out.dogs : null;
+  } catch (e) { return null; }
 }
 
 // ── 撕開過的卡：記在這個瀏覽器，跟著代號走（同一台電腦換人設定代號，就是另一個人的圖鑑） ──
@@ -577,16 +582,18 @@ async function bqInit() {
     }
   } catch (e) { /* 離線保留原來的名字對照 */ }
   bqBind();
-  let walks = null;
+  let mine = null;
   try {
-    const [res, w] = await Promise.all([
+    const [res, w, m] = await Promise.all([
       fetch(BQ_DATA_URL, { cache: 'no-cache' }),
       fetch(BQ_WALKS_URL, { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
+      bqFetchMine(BQ.codes),
     ]);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    walks = w && Array.isArray(w.walks) ? w.walks : null;
-    BQ.walksOk = !!walks;
+    const walks = w && Array.isArray(w.walks) ? w.walks : null;
+    mine = m;
+    BQ.walksOk = !!walks && !!mine;
     BQ.players = bqPlayers(data, walks, BQ.today);
     BQ.byId = new Map(BQ.players.map(p => [p.id, p]));
     if (data.syncedAt) {
@@ -598,7 +605,7 @@ async function bqInit() {
     document.getElementById('bqCta').innerHTML = '<p class="bq-cta-note">狗的資料讀不到，請重新整理頁面。</p>';
     return;
   }
-  BQ.mine = bqMyDogs(walks, BQ.codes, bqTodayWrites(BQ.storage, BQ.today));
+  BQ.mine = BQ.codes.length ? bqMineFrom(mine, bqTodayWrites(BQ.storage, BQ.today)) : new Map();
   BQ.pending = bqPending(BQ.players, BQ.mine, bqOpenedSet());
   document.getElementById('bqField').classList.add('ready');
   bqRenderCta();

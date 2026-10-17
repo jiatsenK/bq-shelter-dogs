@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { fakeD1 } from './fakes.mjs';
+import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
 
 const { resetState, allowUpload, isJpeg, MAX_BYTES } = worker.testing;
 
@@ -157,6 +158,8 @@ test('isJpeg 看檔頭', () => {
 });
 
 const NENV = { ...ENV, ADMIN_KEY: '管理金鑰' };
+// 讀資料包要有版本號表（ADR 0009，讀不到不退回整表讀取）
+const withTables = async env => { const DB = fakeD1(); await migrateCompactDatabase(DB); return { ...env, DB }; };
 
 // ── #95 誰遛的代號 ──
 const WALKER_ENV = { ...ENV, WALKER_KEY: 'test-walker-key' };
@@ -227,9 +230,9 @@ test('叫同步：POST workflow dispatch（main），GitHub 不是 204 或沒 to
   await assert.rejects(worker.testing.triggerSync({}), /GITHUB_TOKEN/);
 });
 
-// ADR 0008：Cron 每 10 分鐘看一次，有改才同步；台灣 6:30 保險同步一次
+// ADR 0012：Cron 每 10 分鐘看一次，有改才同步；台灣 6:30 保險同步一次
 test('Cron：沒改不叫 GitHub；Apps Script 通知有改後下一格同步一次；6:30 保險同步', async () => {
-  const env = { GITHUB_TOKEN: 'test-token', SHEET_NOTIFY_KEY: 'nk', DB: fakeD1() };
+  const env = await withTables({ GITHUB_TOKEN: 'test-token', SHEET_NOTIFY_KEY: 'nk' });
   const dispatches = [], inputs = [];
   globalThis.fetch = async (url, init = {}) => {
     const u = new URL(url);
@@ -266,7 +269,7 @@ test('Cron：沒改不叫 GitHub；Apps Script 通知有改後下一格同步一
 });
 
 test('POST /sync：試算表沒變就不叫 GitHub，回 unchanged；變了才叫；GitHub 失敗下次還會再叫', async () => {
-  const env = { ...ENV, SHEET_ID: 'sheet', DB: fakeD1() };
+  const env = await withTables({ ...ENV, SHEET_ID: 'sheet' });
   let content = 'v1', ghStatus = 204;
   const dispatches = [];
   globalThis.fetch = async (url, init = {}) => {
@@ -324,7 +327,7 @@ test('#125 /api 前綴：/api/ 顯示服務狀態、/api/ 顯示狀態，管理�
 
 test('#125 同網址：送資料帶自己的 Origin、讀取只帶 Sec-Fetch-Site 都接受；別的網站、什麼都沒帶照樣擋', async () => {
   fakeGithub();
-  const read = await send(new Request(`${SITE}/api/rest`, { headers: { 'Sec-Fetch-Site': 'same-origin' } }), NENV);
+  const read = await send(new Request(`${SITE}/api/rest`, { headers: { 'Sec-Fetch-Site': 'same-origin' } }), await withTables(NENV));
   assert.equal(read.status, 200);
   const write = await send(new Request(`${SITE}/api/walker-code`, {
     method: 'POST', headers: { Origin: SITE, 'Content-Type': 'application/json' }, body: JSON.stringify({ names: ['測試'] }),
@@ -374,7 +377,7 @@ test('#126 預覽版：上傳、備註、更新都回 403 且不碰 GitHub；讀
     assert.match(r.body.error, /預覽版/);
   }
   assert.equal(calls.length, 0);
-  assert.equal((await send(new Request(`${SITE}/api/rest`, { headers: { Origin: SITE } }), PENV)).status, 200);
+  assert.equal((await send(new Request(`${SITE}/api/rest`, { headers: { Origin: SITE } }), await withTables(PENV))).status, 200);
   const codes = await send(new Request(`${SITE}/api/walker-code`, { method: 'POST', headers: h, body: JSON.stringify({ names: ['測試'] }) }), PENV);
   assert.equal(codes.status, 200);
   assert.equal((await send(new Request(`${SITE}/api/`), PENV)).body.preview, '預覽版，不能存');

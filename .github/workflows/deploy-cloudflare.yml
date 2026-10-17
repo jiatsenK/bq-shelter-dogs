@@ -5,7 +5,7 @@
 # - Worker 要用的密碼也從 GitHub Secret 一起帶上去（有設才帶，沒設的保留 Cloudflare 上原本的）：
 #   WORKER_GITHUB_TOKEN → Worker 的 GITHUB_TOKEN（GitHub 不准 Secret 用 GITHUB_ 開頭，所以換個名字）、
 #   ADMIN_KEY（給 /api/admin 的 GitHub Action）、WALKER_KEY（同步試算表本來就在用這一個）、
-#   SHEET_NOTIFY_KEY（Apps Script 通知試算表有改用的專用密碼，ADR 0008）
+#   SHEET_NOTIFY_KEY（Apps Script 通知試算表有改用的專用密碼，ADR 0012）
 # - 也可以在 Actions 頁選「部署到 Cloudflare」→「Run workflow」手動跑
 name: 部署到 Cloudflare
 

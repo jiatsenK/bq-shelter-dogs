@@ -25,9 +25,9 @@ export async function readIntakeEvents(db, dogId) {
 }
 
 // 同步才補建新表；初次上線前仍可讀原介紹。其他資料庫錯誤不能吞掉。
-export async function readAllIntakeEvents(db) {
+export async function readAllIntakeEvents(db, where = '') {
   try {
-    return await db.prepare('SELECT dog_id,number,event_date,event FROM v3_intake_events ORDER BY dog_id,position').all();
+    return await db.prepare(`SELECT dog_id,number,event_date,event FROM v3_intake_events${where ? ` WHERE ${where}` : ''} ORDER BY dog_id,position`).all();
   } catch (e) {
     if (/no such table:\s*(?:main\.)?v3_intake_events\b/i.test(e.message)) return { results: [] };
     throw e;

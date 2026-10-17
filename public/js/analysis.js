@@ -137,7 +137,7 @@ function checkPhotos(dogs) {
   const state = photoCheck;
   const ids = [...new Set(dogs.map(d => d.id).filter(Boolean))];
   Promise.all(ids.map(id => fetch(photoSrc({ id }), { method: 'HEAD', cache: 'no-cache' })
-    .then(res => state.map.set(id, res.ok), () => state.map.set(id, false))))
+    .then(res => state.map.set(id, res.ok ? true : res.status === 404 ? false : null), () => state.map.set(id, null))))
     .then(() => {
       state.done = true;
       if (analysisOpen && photoCheck === state) render();
@@ -169,8 +169,14 @@ function historySpan(dates, today) {
   return { start, days: start ? daysBetween(start, t) + 1 : 0 };
 }
 
+// 近期溜狗紀錄的範圍起點：上個月 1 號（ADR 0013；today 已是台灣時間的日期）
+function recentStart(today) {
+  return new Date(today.getFullYear(), today.getMonth() - 1, 1); // 1 月時自動退到去年 12 月
+}
+
 // 一隻狗的遛狗紀錄（K 2026-09-25：遛狗歷史要看每隻狗才有意義，放在詳細資訊）：
-// 最近 N 天每天有沒有遛（開始記錄前的日子標「未記錄」）、這段期間遛幾次、平均與最久隔幾天
+// 最近 N 天每天有沒有遛（開始記錄前的日子標「未記錄」）、這段期間遛幾次、平均與最久隔幾天。
+// 間隔只用近期溜狗紀錄（上個月 1 號到今天，#345）算；範圍內一次都沒溜（範圍開始前就有紀錄）→ maxGap 是 'over'（超過 62 天）
 function dogWalkHistory(dog, walks, start, today, n = 30) {
   const key = dogKey(dog);
   const dates = [...new Set(walks.filter(w => w.key === key).map(w => +w.date))].sort((a, b) => a - b);
@@ -181,13 +187,16 @@ function dogWalkHistory(dog, walks, start, today, n = 30) {
     const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() - i);
     cells.push({ date: d, walked: set.has(+d), recorded: !!start && d >= start });
   }
+  const from = Math.max(+recentStart(today), start ? +start : Infinity);
+  const recent = dates.filter(d => d >= +recentStart(today) && d <= +t);
   const gaps = [];
-  for (let i = 1; i < dates.length; i++) if (start && dates[i] >= +start) gaps.push(Math.round((dates[i] - dates[i - 1]) / 86400000));
+  for (let i = 1; i < recent.length; i++) if (recent[i] >= from) gaps.push(Math.round((recent[i] - recent[i - 1]) / 86400000));
+  const over = !!start && +start < +recentStart(today) && !recent.length;
   return {
     cells,
     count: cells.filter(c => c.walked).length, // 開始記錄前的那筆「最後遛狗日」也是真的，一起算
     avgGap: average(gaps),
-    maxGap: gaps.length ? Math.max(...gaps) : null,
+    maxGap: over ? 'over' : gaps.length ? Math.max(...gaps) : null,
   };
 }
 
@@ -252,71 +261,13 @@ function kpi(value, unit, label, tone = '') {
 }
 
 // ── 本月溜狗（K 2026-10-09「分析頁可以有個本月報表」：溜狗總計、每天溜狗次數）──
-// 資料是同步累積的溜狗紀錄（api/walks，試算表「遛狗日期」換了就記一筆）：同一隻狗同一天只算一次。
-// 回傳 { days: [{ date, n }]（1 號到今天）, total, dogs, start }；last 是上個月整月的次數（沒紀錄回 null）
-function monthWalks(walks, today, start) {
-  const y = today.getFullYear(), m = today.getMonth();
-  const seen = new Set();
-  const perDay = new Map();
-  const dogs = new Set();
-  let last = 0, lastSeen = false;
-  for (const w of walks) {
-    const k = `${w.key}|${+w.date}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    if (w.date.getFullYear() === y && w.date.getMonth() === m) {
-      perDay.set(w.date.getDate(), (perDay.get(w.date.getDate()) || 0) + 1);
-      dogs.add(w.key);
-    } else if (new Date(y, m - 1, 1) <= w.date && w.date < new Date(y, m, 1)) {
-      last++; lastSeen = true;
-    }
-  }
-  const days = [];
-  for (let d = 1; d <= today.getDate(); d++) {
-    const date = new Date(y, m, d);
-    days.push({ date, n: perDay.get(d) || 0, recorded: !!start && date >= start });
-  }
-  return { days, total: days.reduce((a, d) => a + d.n, 0), dogs: dogs.size, last: lastSeen ? last : null };
-}
-
-function monthWalksSection(today) {
-  loadHistory();
-  const title = `${today.getMonth() + 1} 月溜狗`;
-  if (!historyData || historyData.state === 'loading') return section(title, '讀取中…', '', 'tick');
-  if (historyData.state === 'error') return section(title, '溜狗紀錄讀不到', '', 'tick');
-  // 溜狗紀錄從第一筆開始算（快照比較晚才開始，不用快照的日期）
-  const first = historyData.walks.reduce((m, w) => (!m || w.date < m ? w.date : m), null);
-  const start = first && makeDate(first.getFullYear(), first.getMonth() + 1, first.getDate());
-  const r = monthWalks(historyData.walks, today, start);
-  const recordedDays = r.days.filter(d => d.recorded).length;
-  const avg = recordedDays ? (r.total / recordedDays).toFixed(1) : '–';
-  const max = Math.max(1, ...r.days.map(d => d.n));
-  const lastText = r.last == null ? '' : `<span class="a-month-last">上個月 ${r.last} 次${start && start.getMonth() === (today.getMonth() + 11) % 12 && start.getDate() > 1 ? `（${start.getMonth() + 1}/${start.getDate()} 起）` : ''}</span>`;
-  const peak = r.days.reduce((m, d) => (d.n > m.n ? d : m), { n: 0 });
-  const few = r.days.length <= 15; // 天數少時每根長條上面寫次數；多了寫不下，只寫最多那天
-  const bars = r.days.map(d => {
-    const label = `${d.date.getMonth() + 1}/${d.date.getDate()}${d.recorded ? ` ${d.n} 次` : ' 還沒開始記錄'}`;
-    const tick = d.date.getDate() === 1 || d.date.getDate() % 5 === 0 || +d.date === +r.days[r.days.length - 1].date;
-    return `<span class="a-day${d.recorded ? '' : ' none'}" title="${label}" aria-label="${label}">${few && d.recorded ? `<em>${d.n}</em>` : ''}<i style="height:${d.recorded ? Math.max(2, d.n / max * 100) : 100}%"></i>${tick ? `<small>${d.date.getDate()}</small>` : ''}</span>`;
-  }).join('');
-  return section(title, `同一隻狗同一天算一次${start ? `；從 ${start.getMonth() + 1}/${start.getDate()} 開始記錄` : ''}`, `
-    <div class="a-month">
-      <span><b>${r.total}</b><small> 次</small></span>
-      <span><b>${r.dogs}</b><small> 隻狗</small></span>
-      <span><b>${avg}</b><small> 次／天</small></span>
-      ${lastText}
-    </div>
-    <div class="a-days${few ? ' few' : ''}" role="img" aria-label="每天溜狗次數，最多一天 ${max} 次">${bars}</div>
-    ${peak.n ? `<p class="a-hint a-days-peak">最多一天 ${peak.n} 次（${peak.date.getMonth() + 1}/${peak.date.getDate()}）</p>` : ''}`, 'tick');
-}
-
-function analysisHtml(dogs, today) {
+function analysisHtml(dogs, today, page = 'stay') {
   if (!dogs.length) return `<div class="status-msg">目前沒有狗</div>`;
   checkPhotos(dogs);
   const rows = analysisRows(dogs, today);
+  if (page === 'quality') return dataChecksHtml(rows);
   const noIntake = rows.filter(r => !r.intake);
   const share = longStayShare(rows);
-  const stale = rows.filter(r => r.walkDays != null && r.walkDays >= AMBER_DAYS).length;
   const avgStay = average(rows.filter(r => r.intake).map(r => r.stayDays));
   const out = [];
 
@@ -326,12 +277,9 @@ function analysisHtml(dogs, today) {
     <div class="a-kpis">
       ${kpi(rows.length, '隻', '目前在所')}
       ${kpi(avgStay == null ? '–' : yearsText(avgStay), '年', '平均在所')}
-      ${kpi(stale, '隻', `超過 ${AMBER_DAYS} 天沒溜`, stale ? 'warn' : '')}
     </div>
     <div class="a-hero-note">入所日期取編號（含舊編號）前 8 碼和出入所紀錄裡最早的那天${noIntake.length ? `；${noIntake.length} 隻編號看不出入所日期，不列入時間統計（${dogNames(noIntake.map(r => r.dog))}）` : ''}</div>
   </section>`);
-
-  out.push(monthWalksSection(today));
 
   const dist = stayDistribution(rows).map((b, i) => ({ ...b, short: STAY_SHORT[i] }));
   const topBucket = dist.reduce((m, b, i) => (b.count > dist[m].count ? i : m), 0);
@@ -364,18 +312,19 @@ function analysisHtml(dogs, today) {
      </div>
      <p class="a-sex-line">平均在所　${sexAvg('♂', 'male', sex.male)}　${sexAvg('♀', 'female', sex.female)}</p>`, 'group'));
 
-  out.push(departureSectionHtml(today)); // 2026-10-08：離所放在資料完整度前面（志工比較會看）
+  return out.join('');
+}
+
+function dataChecksHtml(rows) {
   const photosDone = photoCheck && photoCheck.done;
   const comp = dataCompleteness(rows, photosDone ? photoCheck.map : null);
   const compRows = comp.items.map(it => it.dogs.length
     ? `<details class="a-miss"><summary><span>${esc(it.label)}</span><b>${it.dogs.length} 隻</b></summary><p>${dogNames(it.dogs)}</p></details>`
     : `<div class="a-miss ok"><span>${esc(it.label)}</span><b>0 隻</b></div>`).join('');
   // 2026-10-08 distill：拿掉跟下面清單重複的圓環
-  out.push(section('狗的資料完整度', `共 ${comp.total} 隻；點項目看缺哪幾隻`,
+  return section('狗的資料完整度', `共 ${comp.total} 隻；點項目看缺哪幾隻`,
     compRows +
-    (photosDone ? '' : '<div class="a-miss"><span>沒有照片</span><b class="muted">檢查中…</b></div>'), 'note'));
-
-  return out.join('');
+    (photosDone ? ([...photoCheck.map.values()].some(v => v === null) ? '<p role="alert">部分照片讀取失敗，未列入缺照片名單；請確認網路後重新整理。</p>' : '') : '<div class="a-miss"><span>沒有照片</span><b class="muted">檢查中…</b></div>'), 'note');
 }
 
 // ── 詳細資訊的遛狗紀錄 ──
@@ -401,7 +350,8 @@ function walkHistorySection(dog, today) {
   // critique 2026-10-09 少一點格子：三格統計卡改成一行字；沒有間隔可算（不到兩次）就不寫平均、最久
   const sum = [`最近 30 天溜 <b>${h.count}</b> 次`];
   if (h.avgGap != null) sum.push(`平均 <b>${h.avgGap.toFixed(1)}</b> 天溜一次`);
-  if (h.maxGap != null) sum.push(`最久 <b>${h.maxGap}</b> 天沒溜`);
+  if (h.maxGap === 'over') sum.push('最久 <b>超過 62</b> 天沒溜');
+  else if (h.maxGap != null) sum.push(`最久 <b>${h.maxGap}</b> 天沒溜`);
   const open = typeof detailWalksOpen !== 'undefined' && detailWalksOpen;
   // 一項一塊、塊裡不斷行：手機放不下就整項換到下一行，不會剩一個點在行尾
   const toggle = `<button type="button" class="w-toggle" id="walksToggle" aria-expanded="${open}"><span class="w-sum">${sum.map(t => `<span class="w-it">${t}</span>`).join('')}</span><span class="w-more">${open ? '收起' : '看每一天'}</span></button>`;
@@ -415,30 +365,28 @@ function walkHistorySection(dog, today) {
 
 // 分析頁整頁：「← 分析」在頁首（index.html 的 .head-back、.head-title，K 2026-10-09）；資料還沒好時顯示讀取中或失敗
 function analysisPageHtml(today) {
-  if (loadState === 'ready') return analysisHtml(allDogs, today);
+  if (!infoPage) return infoHomeHtml();
+  if (infoPage === 'departures') return departureSectionHtml(today);
+  // #270 尚未提供活動核心，不以空名單冒充零場，不另建資料契約。
+  if (infoPage === 'activities') return section('活動紀錄', '', '<p>活動紀錄尚未開放</p><p class="a-hint">活動查看與編輯準備好後，會在這裡提供。</p>');
+  if (infoPage === 'updates') return infoUpdatesHtml();
+  if (loadState === 'ready') return analysisHtml(allDogs, today, infoPage);
   return `<div class="status-msg">${loadState === 'error' ? '狗的資料讀不到，請確認網路後重新整理。' : '讀取中…'}</div>`;
 }
 
 // 打開分析頁：手機按「返回」會回到原本的分類（跟詳細資訊一樣用 history）
 function showAnalysis() {
   if (analysisOpen) return;
-  analysisOpen = true;
-  document.documentElement.classList.add('analysis-open');
-  history.pushState({ bqAnalysis: true }, '');
-  render();
-  window.scrollTo(0, 0);
+  switchTab('info');
 }
 
 function hideAnalysis() {
   if (!analysisOpen) return;
-  analysisOpen = false;
-  document.documentElement.classList.remove('analysis-open');
-  render();
-  window.scrollTo(0, 0);
+  switchTab(activeTab, false);
 }
 
 function closeAnalysis() {
-  if (history.state && history.state.bqAnalysis) history.back(); // popstate 會接著 hideAnalysis
+  if (history.state && (history.state.bqAnalysis || history.state.bqNavigation)) history.back();
   else hideAnalysis();
 }
 
@@ -447,7 +395,16 @@ if (analysisBtn) analysisBtn.addEventListener('click', () => (analysisOpen ? clo
 
 // 分析頁的狗名列：點了開詳細資訊（事件委派，renderMain 重畫也不用重綁）
 const analysisBack = document.getElementById('analysisBack');
-if (analysisBack) analysisBack.addEventListener('click', () => closeAnalysis());
+if (analysisBack) analysisBack.addEventListener('click', () => {
+  if (analysisOpen && infoPage) {
+    if (history.state?.infoPage) history.back();
+    else restoreInfoPage('');
+  } else if (analysisOpen) closeAnalysis();
+  else if (activeTab === 'groups') {
+    if (history.state && history.state.bqNavigation) history.back();
+    else switchTab(groupsReturnTab, false);
+  }
+});
 document.getElementById('main').addEventListener('click', e => {
   const row = e.target.closest('#main .a-dog[data-adog]');
   const dog = row && allDogs[row.dataset.adog];
@@ -457,19 +414,26 @@ document.getElementById('main').addEventListener('click', e => {
 // ── 離所（#163 年度統計、#164 離所名冊）──
 // 離所紀錄（api/departures，存在 D1）由同步產生（scripts/sync-sheet.mjs 的 updateDepartures）：狗從主清單消失就記一筆，
 // 原因只讀試算表「已出所」分頁判讀，判不出來是待確認。打開分析頁才讀，不拖慢溜狗表。
-const DEPARTURES_URL = 'api/departures'; // #260 起從 Worker 讀 D1，形狀跟原本的 data/departures.json 一樣
+// #363 ADR 0014：長條圖、名冊搜尋（全部年份）用名冊索引（每隻只有編號、狗名、舊編號、出所日、原因）；
+// 點一隻狗才拿那一年的詳細資料（最後籠位、介紹、旗標、出入所），網址帶版本號，瀏覽器快取
+const DEPARTURES_URL = 'api/departures/index';
+const DEPARTURE_YEAR_URL = 'api/departures'; // ?year=YYYY|none&v=版本號，形狀跟原本的 data/departures.json 一樣
 const DEPARTURE_ORDER = ['adopt', 'death', 'other', 'unknown'];
 const DEPARTURE_COLORS = { adopt: 'var(--green-text)', death: '#8E8E93', other: 'var(--primary)', unknown: '#F0A030' };
-let departuresData = null; // { state: 'loading' | 'ready' | 'error', list }
+let departuresData = null; // { state: 'loading' | 'ready' | 'error', list, years: { 年: 版本號 } }
+const departureDetails = new Map(); // 年 → Promise<Map<編號, 離所的狗（詳細）>>
 let depRoster = { open: false, query: '', year: 'all', reason: 'all' };
 
-// departures.json → 離所的狗：跟在所的狗同一個樣子（parseDogsData），多一個 departure
+// departures.json（或名冊索引的 dogs）→ 離所的狗：跟在所的狗同一個樣子（parseDogsData），多一個 departure；
+// 索引沒有 last，舊編號放在 formerIds
 function parseDeparturesData(data) {
-  if (!data || !Array.isArray(data.departures)) throw new Error('departures.json 格式不對');
+  const entries = data && (Array.isArray(data.departures) ? data.departures : data.dogs);
+  if (!Array.isArray(entries)) throw new Error('departures.json 格式不對');
   const text = v => (v == null ? '' : String(v).trim());
-  return data.departures.filter(e => e && text(e.id) && text(e.name)).map(e => {
-    const last = e.last && typeof e.last === 'object' ? e.last : {};
+  return entries.filter(e => e && text(e.id) && text(e.name)).map(e => {
+    const last = e.last && typeof e.last === 'object' ? e.last : { formerIds: e.formerIds };
     const dog = parseDogsData({ dogs: [{ ...last, id: text(e.id), name: text(last.name) || text(e.name), stays: e.stays }] }).dogs[0];
+    dog.depYear = text(e.date).slice(0, 4) || 'none';
     dog.departure = {
       reason: DEPARTURE_ORDER.includes(e.reason) ? e.reason : 'unknown',
       matched: text(e.matched),
@@ -486,10 +450,24 @@ function loadDepartures() {
   if (departuresData) return;
   departuresData = { state: 'loading', list: [] };
   fetch(DEPARTURES_URL, { cache: 'no-cache' })
-    .then(res => (res.status === 404 ? { departures: [] } : res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
-    .then(data => { departuresData = { state: 'ready', list: parseDeparturesData(data) }; })
+    .then(res => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+    .then(data => { departuresData = { state: 'ready', list: parseDeparturesData(data), years: (data && data.years) || {} }; })
     .catch(() => { departuresData = { state: 'error', list: [] }; })
     .then(() => { if (analysisOpen) render(); });
+}
+
+// 名冊點一隻狗：拿那一年的詳細資料再開；拿不到就用索引那一筆開（只少了籠位、介紹等）
+function departureDetail(dog) {
+  const year = dog.depYear;
+  if (!departureDetails.has(year)) {
+    const ver = (departuresData && departuresData.years[year]) || '';
+    const url = `${DEPARTURE_YEAR_URL}?year=${encodeURIComponent(year)}&v=${encodeURIComponent(ver)}`;
+    departureDetails.set(year, fetch(url)
+      .then(res => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then(data => new Map(parseDeparturesData(data).map(d => [d.id, d])))
+      .catch(e => { departureDetails.delete(year); throw e; }));
+  }
+  return departureDetails.get(year).then(map => map.get(dog.id) || dog, () => dog);
 }
 
 // 每年各類幾隻（年份由舊到新）；沒有日期的另外算
@@ -590,7 +568,7 @@ document.getElementById('main').addEventListener('click', e => {
   if (col) { depRoster = { ...depRoster, open: true, year: col.dataset.depYear }; render(); return; }
   const row = e.target.closest('[data-dep-dog]');
   const dog = row && departuresData && departuresData.list[row.dataset.depDog];
-  if (dog) showDetail(dog);
+  if (dog) departureDetail(dog).then(full => { if (analysisOpen) showDetail(full); });
 });
 document.getElementById('main').addEventListener('input', e => {
   if (e.target.id === 'depSearch') { depRoster.query = e.target.value; refreshDepartureList(); }
@@ -598,4 +576,69 @@ document.getElementById('main').addEventListener('input', e => {
 document.getElementById('main').addEventListener('change', e => {
   if (e.target.id === 'depYear') { depRoster.year = e.target.value; refreshDepartureList(); }
   if (e.target.id === 'depReason') { depRoster.reason = e.target.value; refreshDepartureList(); }
+});
+// #273 分類狀態只跟著當前 history entry，不跨裝置儲存。
+const INFO_PAGES = { stay: '在所統計', departures: '離所紀錄', quality: '資料檢查', updates: '更新紀錄' };
+let infoPage = '';
+let infoUpdateTab = 'website';
+let websiteUpdates = null;
+
+function loadWebsiteUpdates() {
+  if (websiteUpdates) return;
+  websiteUpdates = { state: 'loading', entries: [] };
+  fetch('website-updates.json', { cache: 'no-cache' })
+    .then(async res => {
+      if (!res.ok) throw new Error('讀取失敗');
+      const entries = await res.json();
+      if (!Array.isArray(entries) || entries.some(e => !e || !/^\d{4}-\d{2}-\d{2}$/.test(e.date) || typeof e.text !== 'string')) throw new Error('格式不對');
+      websiteUpdates = { state: 'ready', entries };
+    })
+    .catch(() => { websiteUpdates = { state: 'error', entries: [] }; })
+    .then(() => { if (analysisOpen && infoPage === 'updates') render(); });
+}
+
+function infoHomeHtml() {
+  loadDepartures();
+  const dogs = loadState === 'ready' ? `目前在所 ${allDogs.length} 隻` : loadState === 'error' ? '在所資料讀取失敗' : '在所資料讀取中…';
+  const dep = !departuresData || departuresData.state === 'loading' ? '離所紀錄讀取中…' : departuresData.state === 'error' ? '離所紀錄讀取失敗' : departuresData.list.length ? `共 ${departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
+  const summary = { stay: dogs, departures: dep, quality: '查看缺照片、介紹及其他資料', updates: '網站更新與資料編輯' };
+  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}</section>`;
+}
+
+function infoUpdatesHtml() {
+  const tabs = `<div class="info-update-tabs" aria-label="更新紀錄種類"><button type="button" data-update-tab="website" aria-pressed="${infoUpdateTab === 'website'}">網站更新</button><button type="button" data-update-tab="edits" aria-pressed="${infoUpdateTab === 'edits'}">資料編輯</button></div>`;
+  if (infoUpdateTab === 'edits') return tabs + '<iframe id="infoEdits" class="info-edits" title="資料編輯紀錄" src="edits.html?embedded=1" data-navigation-scope></iframe>';
+  loadWebsiteUpdates();
+  const data = websiteUpdates;
+  const body = data.state === 'loading' ? '<p role="status">讀取中…</p>' : data.state === 'error' ? '<p role="alert">網站更新讀取失敗，請重試。</p><button type="button" id="retryUpdates">重新讀取</button>' : data.entries.length ? `<ol class="info-releases">${data.entries.map(e => `<li><time>${esc(e.date)}</time><p>${esc(e.text)}</p></li>`).join('')}</ol>` : '<p>還沒有網站更新紀錄</p>';
+  return tabs + section('網站更新', '只列已正式上線的變更', body);
+}
+
+function openInfoPage(page) {
+  if (!Object.hasOwn(INFO_PAGES, page)) return;
+  history.replaceState({ ...history.state, infoPage: '' }, '');
+  infoPage = page;
+  history.pushState({ ...history.state, infoPage: page }, '');
+  render();
+  window.scrollTo(0, 0);
+  document.getElementById('analysisBack').focus();
+}
+
+function restoreInfoPage(page) {
+  const previous = infoPage;
+  infoPage = Object.hasOwn(INFO_PAGES, page) ? page : '';
+  render();
+  if (!infoPage && previous) document.querySelector(`[data-info-page="${previous}"]`)?.focus();
+}
+
+document.getElementById('main').addEventListener('click', e => {
+  const entry = e.target.closest('[data-info-page]');
+  if (entry) openInfoPage(entry.dataset.infoPage);
+  const tab = e.target.closest('[data-update-tab]');
+  if (tab) {
+    infoUpdateTab = tab.dataset.updateTab;
+    render();
+    document.querySelector(`[data-update-tab="${infoUpdateTab}"]`).focus();
+  }
+  if (e.target.closest('#retryUpdates')) { websiteUpdates = null; render(); }
 });
