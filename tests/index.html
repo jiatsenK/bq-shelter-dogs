@@ -1163,13 +1163,16 @@ async function runAnalysisTests() {
       eq([...document.querySelectorAll('#tabs button')].map(b => b.dataset.tab), ['walk', 'groups', 'mine', 'info'], '分析不佔分類：');
       showAnalysis();
       eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [true, true, 'mine'], '打開分析：');
+      eq(document.querySelectorAll('[data-info-page]').length, 5, '資訊五類：');
+      infoPage = 'stay'; render();
       const titles = [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
-      eq(titles.length, 6, '五張統計＋離所（#345 拿掉本月溜狗；（2026-10-08 distill 拿掉滿 1 年圓環、入所年度分布）：');
+      eq(titles.length, 4, '五張統計＋離所（#345 拿掉本月溜狗；（2026-10-08 distill 拿掉滿 1 年圓環、入所年度分布）：');
       if (titles.includes('長期在所＋近期少遛')) throw new Error('K 說長期在所＋少遛不需要');
       ['入所多久分布', '在所最久 Top 10', '各區平均在所時間',
-        '公母在所時間差異', '狗的資料完整度'].forEach(t => { if (!titles.includes(t)) throw new Error(`少了 ${t}`); });
+        '公母在所時間差異'].forEach(t => { if (!titles.includes(t)) throw new Error(`少了 ${t}`); });
       if (![...document.querySelectorAll('#main .a-card')].find(c => c.querySelector('h2').textContent.includes('入所多久分布')).querySelector('.a-hint').textContent.includes('滿 1 年的')) throw new Error('入所多久分布要寫滿 1 年幾隻');
       eq(document.querySelectorAll('#main .a-ring').length, 0, '不再有圓環：');
+      infoPage = 'quality'; render();
       if (!document.getElementById('main').textContent.includes('檢查中')) throw new Error('照片還沒查完要顯示檢查中');
       const photoCalls = calls.filter(([u]) => u.startsWith('photos/'));
       eq(photoCalls.every(([, m]) => m === 'HEAD'), true, '照片只用 HEAD：');
@@ -1179,10 +1182,12 @@ async function runAnalysisTests() {
       await tick(); await tick(); await tick();
       const photoRow = [...document.querySelectorAll('#main .a-miss')].find(el => el.textContent.includes('沒有照片'));
       if (!photoRow || !photoRow.textContent.includes('9 隻')) throw new Error(`沒有照片列：${photoRow && photoRow.textContent}`);
+      infoPage = 'stay'; render();
       document.querySelector('#main .a-dog').click();
       eq(detailDog && detailDog.name, '甲長', '點 Top 1 開詳細資訊：');
       hideDetail();
       eq(analysisOpen, true, '關詳細資訊後還在分析頁：');
+      infoPage = '';
       history.replaceState(null, ''); // 測試頁不真的按返回，直接關
       document.getElementById('analysisBack').click();
       eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [false, false, 'mine'], '返回回到原本的分類：');
@@ -1201,7 +1206,7 @@ async function runAnalysisTests() {
       // #60 讀溜狗紀錄、離所紀錄：只 GET 同網站的 api/
       .replace("fetch(url, { cache: 'no-cache' })", '').replace("fetch(DEPARTURES_URL, { cache: 'no-cache' })", '')
       // #363 點離所的狗才拿那一年（網址帶版本號，瀏覽器快取）
-      .replace('fetch(url)', '');
+      .replace('fetch(url)', '').replace("fetch('website-updates.json', { cache: 'no-cache' })", '');
     eq([WALKS_URL, DEPARTURES_URL, DEPARTURE_YEAR_URL], ['api/walks', 'api/departures/index', 'api/departures'], '#60 #260 溜狗紀錄、離所紀錄從 Worker 讀：');
     if (/['`]data\/(history|walks|departures)/.test(code)) throw new Error('#260 起不再讀 data/ 的溜狗紀錄、快照、離所');
     const bad = [/fetch\(/, /method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /localStorage|sessionStorage|indexedDB|XMLHttpRequest|sendBeacon/];

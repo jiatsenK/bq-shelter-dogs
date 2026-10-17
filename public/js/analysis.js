@@ -137,7 +137,7 @@ function checkPhotos(dogs) {
   const state = photoCheck;
   const ids = [...new Set(dogs.map(d => d.id).filter(Boolean))];
   Promise.all(ids.map(id => fetch(photoSrc({ id }), { method: 'HEAD', cache: 'no-cache' })
-    .then(res => state.map.set(id, res.ok), () => state.map.set(id, false))))
+    .then(res => state.map.set(id, res.ok ? true : res.status === 404 ? false : null), () => state.map.set(id, null))))
     .then(() => {
       state.done = true;
       if (analysisOpen && photoCheck === state) render();
@@ -261,13 +261,13 @@ function kpi(value, unit, label, tone = '') {
 }
 
 // ── 本月溜狗（K 2026-10-09「分析頁可以有個本月報表」：溜狗總計、每天溜狗次數）──
-function analysisHtml(dogs, today) {
+function analysisHtml(dogs, today, page = 'stay') {
   if (!dogs.length) return `<div class="status-msg">目前沒有狗</div>`;
   checkPhotos(dogs);
   const rows = analysisRows(dogs, today);
+  if (page === 'quality') return dataChecksHtml(rows);
   const noIntake = rows.filter(r => !r.intake);
   const share = longStayShare(rows);
-  const stale = rows.filter(r => r.walkDays != null && r.walkDays >= AMBER_DAYS).length;
   const avgStay = average(rows.filter(r => r.intake).map(r => r.stayDays));
   const out = [];
 
@@ -277,7 +277,6 @@ function analysisHtml(dogs, today) {
     <div class="a-kpis">
       ${kpi(rows.length, '隻', '目前在所')}
       ${kpi(avgStay == null ? '–' : yearsText(avgStay), '年', '平均在所')}
-      ${kpi(stale, '隻', `超過 ${AMBER_DAYS} 天沒溜`, stale ? 'warn' : '')}
     </div>
     <div class="a-hero-note">入所日期取編號（含舊編號）前 8 碼和出入所紀錄裡最早的那天${noIntake.length ? `；${noIntake.length} 隻編號看不出入所日期，不列入時間統計（${dogNames(noIntake.map(r => r.dog))}）` : ''}</div>
   </section>`);
@@ -313,18 +312,19 @@ function analysisHtml(dogs, today) {
      </div>
      <p class="a-sex-line">平均在所　${sexAvg('♂', 'male', sex.male)}　${sexAvg('♀', 'female', sex.female)}</p>`, 'group'));
 
-  out.push(departureSectionHtml(today)); // 2026-10-08：離所放在資料完整度前面（志工比較會看）
+  return out.join('');
+}
+
+function dataChecksHtml(rows) {
   const photosDone = photoCheck && photoCheck.done;
   const comp = dataCompleteness(rows, photosDone ? photoCheck.map : null);
   const compRows = comp.items.map(it => it.dogs.length
     ? `<details class="a-miss"><summary><span>${esc(it.label)}</span><b>${it.dogs.length} 隻</b></summary><p>${dogNames(it.dogs)}</p></details>`
     : `<div class="a-miss ok"><span>${esc(it.label)}</span><b>0 隻</b></div>`).join('');
   // 2026-10-08 distill：拿掉跟下面清單重複的圓環
-  out.push(section('狗的資料完整度', `共 ${comp.total} 隻；點項目看缺哪幾隻`,
+  return section('狗的資料完整度', `共 ${comp.total} 隻；點項目看缺哪幾隻`,
     compRows +
-    (photosDone ? '' : '<div class="a-miss"><span>沒有照片</span><b class="muted">檢查中…</b></div>'), 'note'));
-
-  return out.join('');
+    (photosDone ? ([...photoCheck.map.values()].some(v => v === null) ? '<p role="alert">部分照片讀取失敗，未列入缺照片名單；請確認網路後重新整理。</p>' : '') : '<div class="a-miss"><span>沒有照片</span><b class="muted">檢查中…</b></div>'), 'note');
 }
 
 // ── 詳細資訊的遛狗紀錄 ──
@@ -365,7 +365,12 @@ function walkHistorySection(dog, today) {
 
 // 分析頁整頁：「← 分析」在頁首（index.html 的 .head-back、.head-title，K 2026-10-09）；資料還沒好時顯示讀取中或失敗
 function analysisPageHtml(today) {
-  if (loadState === 'ready') return analysisHtml(allDogs, today);
+  if (!infoPage) return infoHomeHtml();
+  if (infoPage === 'departures') return departureSectionHtml(today);
+  // #270 尚未提供活動核心，不以空名單冒充零場，不另建資料契約。
+  if (infoPage === 'activities') return section('活動紀錄', '', '<p>活動紀錄尚未開放</p><p class="a-hint">活動查看與編輯準備好後，會在這裡提供。</p>');
+  if (infoPage === 'updates') return infoUpdatesHtml();
+  if (loadState === 'ready') return analysisHtml(allDogs, today, infoPage);
   return `<div class="status-msg">${loadState === 'error' ? '狗的資料讀不到，請確認網路後重新整理。' : '讀取中…'}</div>`;
 }
 
@@ -391,7 +396,10 @@ if (analysisBtn) analysisBtn.addEventListener('click', () => (analysisOpen ? clo
 // 分析頁的狗名列：點了開詳細資訊（事件委派，renderMain 重畫也不用重綁）
 const analysisBack = document.getElementById('analysisBack');
 if (analysisBack) analysisBack.addEventListener('click', () => {
-  if (analysisOpen) closeAnalysis();
+  if (analysisOpen && infoPage) {
+    if (history.state?.infoPage) history.back();
+    else restoreInfoPage('');
+  } else if (analysisOpen) closeAnalysis();
   else if (activeTab === 'groups') {
     if (history.state && history.state.bqNavigation) history.back();
     else switchTab(groupsReturnTab, false);
@@ -442,7 +450,7 @@ function loadDepartures() {
   if (departuresData) return;
   departuresData = { state: 'loading', list: [] };
   fetch(DEPARTURES_URL, { cache: 'no-cache' })
-    .then(res => (res.status === 404 ? { departures: [] } : res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+    .then(res => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
     .then(data => { departuresData = { state: 'ready', list: parseDeparturesData(data), years: (data && data.years) || {} }; })
     .catch(() => { departuresData = { state: 'error', list: [] }; })
     .then(() => { if (analysisOpen) render(); });
@@ -568,4 +576,69 @@ document.getElementById('main').addEventListener('input', e => {
 document.getElementById('main').addEventListener('change', e => {
   if (e.target.id === 'depYear') { depRoster.year = e.target.value; refreshDepartureList(); }
   if (e.target.id === 'depReason') { depRoster.reason = e.target.value; refreshDepartureList(); }
+});
+// #273 分類狀態只跟著當前 history entry，不跨裝置儲存。
+const INFO_PAGES = { stay: '在所統計', departures: '離所紀錄', activities: '活動紀錄', quality: '資料檢查', updates: '更新紀錄' };
+let infoPage = '';
+let infoUpdateTab = 'website';
+let websiteUpdates = null;
+
+function loadWebsiteUpdates() {
+  if (websiteUpdates) return;
+  websiteUpdates = { state: 'loading', entries: [] };
+  fetch('website-updates.json', { cache: 'no-cache' })
+    .then(async res => {
+      if (!res.ok) throw new Error('讀取失敗');
+      const entries = await res.json();
+      if (!Array.isArray(entries) || entries.some(e => !e || !/^\d{4}-\d{2}-\d{2}$/.test(e.date) || typeof e.text !== 'string')) throw new Error('格式不對');
+      websiteUpdates = { state: 'ready', entries };
+    })
+    .catch(() => { websiteUpdates = { state: 'error', entries: [] }; })
+    .then(() => { if (analysisOpen && infoPage === 'updates') render(); });
+}
+
+function infoHomeHtml() {
+  loadDepartures();
+  const dogs = loadState === 'ready' ? `目前在所 ${allDogs.length} 隻` : loadState === 'error' ? '在所資料讀取失敗' : '在所資料讀取中…';
+  const dep = !departuresData || departuresData.state === 'loading' ? '離所紀錄讀取中…' : departuresData.state === 'error' ? '離所紀錄讀取失敗' : departuresData.list.length ? `共 ${departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
+  const summary = { stay: dogs, departures: dep, activities: '活動紀錄尚未開放', quality: '查看缺照片、介紹及其他資料', updates: '網站更新與資料編輯' };
+  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}</section>`;
+}
+
+function infoUpdatesHtml() {
+  const tabs = `<div class="info-update-tabs" aria-label="更新紀錄種類"><button type="button" data-update-tab="website" aria-pressed="${infoUpdateTab === 'website'}">網站更新</button><button type="button" data-update-tab="edits" aria-pressed="${infoUpdateTab === 'edits'}">資料編輯</button></div>`;
+  if (infoUpdateTab === 'edits') return tabs + '<iframe id="infoEdits" class="info-edits" title="資料編輯紀錄" src="edits.html?embedded=1" data-navigation-scope></iframe>';
+  loadWebsiteUpdates();
+  const data = websiteUpdates;
+  const body = data.state === 'loading' ? '<p role="status">讀取中…</p>' : data.state === 'error' ? '<p role="alert">網站更新讀取失敗，請重試。</p><button type="button" id="retryUpdates">重新讀取</button>' : data.entries.length ? `<ol class="info-releases">${data.entries.map(e => `<li><time>${esc(e.date)}</time><p>${esc(e.text)}</p></li>`).join('')}</ol>` : '<p>還沒有網站更新紀錄</p>';
+  return tabs + section('網站更新', '只列已正式上線的變更', body);
+}
+
+function openInfoPage(page) {
+  if (!Object.hasOwn(INFO_PAGES, page)) return;
+  history.replaceState({ ...history.state, infoPage: '' }, '');
+  infoPage = page;
+  history.pushState({ ...history.state, infoPage: page }, '');
+  render();
+  window.scrollTo(0, 0);
+  document.getElementById('analysisBack').focus();
+}
+
+function restoreInfoPage(page) {
+  const previous = infoPage;
+  infoPage = Object.hasOwn(INFO_PAGES, page) ? page : '';
+  render();
+  if (!infoPage && previous) document.querySelector(`[data-info-page="${previous}"]`)?.focus();
+}
+
+document.getElementById('main').addEventListener('click', e => {
+  const entry = e.target.closest('[data-info-page]');
+  if (entry) openInfoPage(entry.dataset.infoPage);
+  const tab = e.target.closest('[data-update-tab]');
+  if (tab) {
+    infoUpdateTab = tab.dataset.updateTab;
+    render();
+    document.querySelector(`[data-update-tab="${infoUpdateTab}"]`).focus();
+  }
+  if (e.target.closest('#retryUpdates')) { websiteUpdates = null; render(); }
 });
