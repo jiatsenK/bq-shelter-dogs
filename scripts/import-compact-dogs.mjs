@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
+import { SYNCED_AT_KEY } from '../worker/src/compact.js';
 
 // 讀回時每隻狗都有全部欄位（formerIds 只在有舊編號時出現）；比對前來源也補成同樣形狀。
 const columns = {
@@ -84,11 +85,13 @@ export async function importCompactDogs(db, input) {
     }
     const scalar = fields.filter(f => columns[f]);
     const values = scalar.map(f => booleans.has(f) ? Number(dog[f] || false) : dog[f] ?? (nullable.has(f) ? null : ''));
+    // 同步時間不寫主清單（ADR 0014），欄位留空，另存 v3_sync_state
     const names = ['row_index', 'dog_id', 'synced_at', 'version', ...scalar.map(f => columns[f])];
-    statements.push(db.prepare(`INSERT INTO v3_sheet_main(${names.join(',')}) VALUES(${names.map(() => '?').join(',')})`).bind(i, dogId, input.syncedAt || '', input.version ?? 1, ...values));
+    statements.push(db.prepare(`INSERT INTO v3_sheet_main(${names.join(',')}) VALUES(${names.map(() => '?').join(',')})`).bind(i, dogId, '', input.version ?? 1, ...values));
     for (const [position, code] of (dog.walkers || []).entries()) statements.push(db.prepare('INSERT INTO v3_sheet_main_walkers VALUES(?,?,?)').bind(i, position, code));
     for (const [position, number] of (dog.formerIds || []).entries()) statements.push(db.prepare('INSERT INTO v3_sheet_former_numbers VALUES(?,?,?)').bind(i, position, number));
   }
+  if (input.syncedAt) statements.push(db.prepare(`INSERT INTO v3_sync_state(key,value) VALUES('${SYNCED_AT_KEY}',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).bind(input.syncedAt));
   if (statements.length) await db.batch(statements);
   return { dogs: input.dogs.length, identities: groups.size };
 }
