@@ -2,7 +2,7 @@
 // small：在所（狗清單、主清單上的狗的休養）；離所按出所年份一年一份（ADR 0014，#362）；溜狗紀錄：切點（cutoff，正常是今天）以前的按月分段（#320），一年存一份；今天的紀錄另外只讀今天的列。
 // 版本號由 db/compact-schema.sql 的觸發器自動加 1，所以網站、同步、別台 Worker 機器寫入都看得到。
 // 輸出和直接讀表（compact.js 的 readDogsPayload 等）逐字元相同
-import { readDogsPayload, readDepartures, readRest, sortDepartures, sortedRest, HISTORY_START } from './compact.js';
+import { readDogsPayload, readDepartures, readRest, readSyncedAt, sortDepartures, sortedRest, HISTORY_START } from './compact.js';
 
 // D1 一列上限 2 MB；資料包一律分段存，每段最多這麼多位元組（測試會調小）
 let chunkBytes = 1_000_000;
@@ -338,11 +338,12 @@ export async function readWalksYear(db, today, year) {
   return { version: 1, historyStart: HISTORY_START, year, ver: yearVersions(v)[year] || '', walks };
 }
 
-// 狗清單：回新物件，呼叫的人加 photoVersions 不會改到快取
+// 狗清單：回新物件，呼叫的人加 photoVersions 不會改到快取；同步時間另外讀 1 列合進來，欄位順序跟直接讀表一樣
 export async function readDogsPacked(db) {
   const dogs = await readSmall(db, 'dogs');
   if (!dogs) throw new Error('v3_sheet_main 沒有資料');
-  return { ...dogs };
+  const { version, ...rest } = dogs;
+  return { version, syncedAt: await readSyncedAt(db), ...rest };
 }
 
 // 狀態頁：從資料包數主清單和溜狗紀錄，不整表 COUNT(*)；沒變時只讀 2 列版本號（small、溜狗紀錄）
