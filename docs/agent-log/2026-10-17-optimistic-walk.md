@@ -1,0 +1,2 @@
+- 2026-10-17 補：分支 `feat/optimistic-walk` 從 main 開。main 的復原已改成等試算表改回才算（#383），這裡的復原沿用 `undoSheetWalks`，背景寫入還沒回來時先等寫完再改回。
+- 本機測試：`tests/navigation.cjs` 在 main 上本來就失敗（「只顯示當前群」），跟這次無關；跳過它後主測試頁 258 項、node 287 項全過。
