@@ -1,14 +1,14 @@
 // 資料包（ADR 0009，#315）：很少變的資料預先算好存在 D1，Worker 每次只讀 1 列版本號，有變才讀資料包或重算。
-// small：狗清單、離所、休養；溜狗紀錄：切點（cutoff，正常是今天）以前的按月分段（#320），一年存一份；今天的紀錄另外只讀今天的列。
+// small：在所（狗清單、主清單上的狗的休養）；離所按出所年份一年一份（ADR 0014，#362）；溜狗紀錄：切點（cutoff，正常是今天）以前的按月分段（#320），一年存一份；今天的紀錄另外只讀今天的列。
 // 版本號由 db/compact-schema.sql 的觸發器自動加 1，所以網站、同步、別台 Worker 機器寫入都看得到。
 // 輸出和直接讀表（compact.js 的 readDogsPayload 等）逐字元相同
-import { readDogsPayload, readDepartures, readRest, readSyncedAt, HISTORY_START } from './compact.js';
+import { readDogsPayload, readDepartures, readRest, readSyncedAt, sortDepartures, sortedRest, HISTORY_START } from './compact.js';
 
 // D1 一列上限 2 MB；資料包一律分段存，每段最多這麼多位元組（測試會調小）
 let chunkBytes = 1_000_000;
 export function setPackChunkBytes(n) { chunkBytes = n; }
 
-let mem = null; // { db, small, walks: { total, months: { 月: { ver, list } } }, live: { ver, cutoff, list } }
+let mem = null; // { db, small, deps: { 年: { ver, body } }, walks: { total, months: { 月: { ver, list } } }, live: { ver, cutoff, list } }
 export function resetPackCache() { mem = null; }
 // 測試換一台機器用：換上 next（null 是空的記憶體），回傳原本的
 export function swapPackCache(next) { const prev = mem; mem = next; return prev; }
@@ -84,17 +84,43 @@ async function savePack(db, part, ver, cutoff, body) {
 // ver 一律用「開始重算前」讀到的版本號：重算途中有人改，版本號已經往前，下次會再算
 async function smallPack(db, ver) {
   if (mem.small && mem.small.ver === ver) return mem.small.body;
-  let body = await loadPack(db, 'small', ver, '');
+  let body = await loadPack(db, 'main', ver, ''); // 在所資料包（ADR 0014 以前叫 small、含離所）
   if (!body) {
-    // 主清單是空的（資料出問題）：狗清單回錯誤，離所、休養照給，也不存資料包
+    // 主清單是空的（資料出問題）：狗清單回錯誤，休養照給，也不存資料包
     let dogs = null;
     try { dogs = await readDogsPayload(db); } catch (e) { if (!/沒有資料/.test(e.message)) throw e; }
-    body = { dogs, departures: await readDepartures(db), rest: await readRest(db) };
+    body = { dogs, rest: await readRest(db, 'main') };
     if (!dogs) return body;
-    await savePack(db, 'small', ver, '', body);
+    await savePack(db, 'main', ver, '', body);
   }
   mem.small = { ver, body };
   return body;
+}
+
+// ---- 離所按出所年份（ADR 0014，#362）：每年版本號在 v3_departure_versions.years（JSON，{"2026":3,"none":1}），
+// 觸發器依出所日的年份只讓那一年加 1；資料包存在 v3_packs，part 是 departures:年，一年一份 ----
+const depPart = year => `departures:${year}`;
+// 每年 { departures, rest }（rest 是那年離所、現在不在主清單上的狗）；只讀版本號變了的那幾年
+async function departurePacks(db) {
+  const years = JSON.parse((await versionRow(db, 'SELECT years FROM v3_departure_versions WHERE id=1')).years);
+  const deps = mem.deps ||= {};
+  for (const y of Object.keys(deps)) if (!(y in years)) delete deps[y];
+  const stale = Object.keys(years).filter(y => deps[y]?.ver !== years[y]);
+  if (stale.length) {
+    // 一次讀這幾年的資料包，版本號對不上的那年才重算
+    const { results = [] } = await db.prepare(`SELECT part,seq,ver,body FROM v3_packs WHERE part IN (${stale.map(() => '?').join(',')})`).bind(...stale.map(depPart)).all();
+    const rows = groupBy(results, r => r.part);
+    for (const y of stale) {
+      const segs = (rows.get(depPart(y)) || []).sort((a, b) => a.seq - b.seq);
+      let body = segs.length && segs.every((r, i) => r.seq === i && r.ver === years[y]) ? JSON.parse(segs.map(r => r.body).join('')) : null;
+      if (!body) {
+        body = { departures: await readDepartures(db, y), rest: await readRest(db, y) };
+        await savePack(db, depPart(y), years[y], '', body);
+      }
+      deps[y] = { ver: years[y], body };
+    }
+  }
+  return Object.keys(years).map(y => deps[y].body);
 }
 
 // ---- 溜狗紀錄按月分段（#320）：每月版本號在 v3_walk_versions.months（JSON），資料包一年一份存在 v3_walk_packs ----
@@ -261,11 +287,18 @@ async function packedWalks(db, today) {
   return [...Object.keys(months).sort().flatMap(m => months[m].list), ...await liveWalks(db, v)];
 }
 
-// part 是 dogs／departures／rest；dogs 是 null 表示主清單沒有狗
+// part 是 dogs／departures／rest；dogs 是 null 表示主清單沒有狗。
+// 離所由各年資料包接起來；休養是在所的加上各年離所的（同一隻狗回到主清單時以在所為準）
 export async function readSmall(db, part) {
-  const v = await versions(db);
   memFor(db);
-  return (await smallPack(db, v.small))[part];
+  if (part === 'departures') return sortDepartures((await departurePacks(db)).flatMap(p => p.departures));
+  const v = await versions(db);
+  const small = await smallPack(db, v.small);
+  if (part === 'dogs') return small.dogs;
+  const rest = new Map();
+  for (const p of await departurePacks(db)) for (const [id, r] of Object.entries(p.rest)) rest.set(id, r);
+  for (const [id, r] of Object.entries(small.rest)) rest.set(id, r);
+  return sortedRest([...rest]);
 }
 
 // 每年的版本號（#346）：各月版本號只會加 1，加總不會回到舊值；切點那年起還有今天的紀錄，再帶切點和 live

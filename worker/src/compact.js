@@ -4,6 +4,9 @@ import { readAllStays } from './stays.js';
 // 精簡 D1（v3_ 表，#245／#247）：網站要的狗清單從這裡讀，形狀跟原本的 data/dogs.json 一樣。
 // 表結構見 db/compact-schema.sql、docs/COMPACT_D1.md
 
+// 只讀主清單上的狗（ADR 0014）：入所、休養照主鍵讀，不整張讀，讀取量不隨離所的狗變多
+const ON_MAIN = 'dog_id IN (SELECT dog_id FROM v3_sheet_main)';
+
 // 主清單欄位 → dogs.json 欄位；formerIds 只在有舊編號時出現（跟同步寫出來的 JSON 一樣）。
 // 舊編號直接讀 v3_dog_numbers（同一隻狗的其他編號，#289 網站補了馬上看得到）
 const MAIN_FIELDS = [
@@ -34,13 +37,13 @@ export async function readDogsPayload(db) {
   };
   const walkersOf = listBy(walkers, 'walker_code');
   const formerOf = listBy(former, 'number');
-  const intake = await readAllIntakeEvents(db);
+  const intake = await readAllIntakeEvents(db, ON_MAIN);
   const intakeOf = new Map();
   for (const r of intake.results || []) {
     if (!intakeOf.has(r.dog_id)) intakeOf.set(r.dog_id, []);
     intakeOf.get(r.dog_id).push({ number: r.number, date: r.event_date, event: r.event });
   }
-  const staysOf = await readAllStays(db);
+  const staysOf = await readAllStays(db, ON_MAIN);
   const dogs = rows.map(row => {
     const dog = {};
     for (const [key, column] of MAIN_FIELDS) dog[key] = BOOLEANS.has(key) ? Boolean(row[column]) : row[column];
@@ -164,11 +167,15 @@ const NUMBER_OF = `COALESCE(
   (SELECT m.number FROM v3_sheet_main m WHERE m.dog_id = t.dog_id AND m.number <> '' ORDER BY m.row_index LIMIT 1),
   (SELECT MAX(n.number) FROM v3_dog_numbers n WHERE n.dog_id = t.dog_id))`;
 
-// 休養設定（#250）：編號 → { until, reason }，跟原本的 data/rest.json 一樣（不含 updatedAt）
-export async function readRest(db) {
-  const { results = [] } = await db.prepare(`SELECT ${NUMBER_OF} AS id, t.until_date, t.reason FROM v3_rest t`).all();
-  return Object.fromEntries(results.filter(r => r.id).map(r => [r.id, { until: r.until_date, reason: r.reason }]));
+// 休養設定（#250）：編號 → { until, reason }，跟原本的 data/rest.json 一樣（不含 updatedAt），依編號排。
+// scope（ADR 0014）：沒給是全部；'main' 是主清單上的狗；出所年份（departureYear）是那年離所、現在不在主清單上的狗
+export async function readRest(db, scope) {
+  const where = !scope ? '' : scope === 'main' ? ` WHERE t.${ON_MAIN}`
+    : ` WHERE t.dog_id IN (SELECT dog_id FROM v3_departures WHERE ${departedIn(scope)}) AND NOT t.${ON_MAIN}`;
+  const { results = [] } = await db.prepare(`SELECT ${NUMBER_OF} AS id, t.until_date, t.reason FROM v3_rest t${where}`).all();
+  return sortedRest(results.filter(r => r.id).map(r => [r.id, { until: r.until_date, reason: r.reason }]));
 }
+export const sortedRest = entries => Object.fromEntries(entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
 
 // 寫休養：rest 是 null 就結束休養。編號不認得回 null，存好回 { dogId, before }（改前的設定，編輯紀錄用）
 export async function saveRest(db, number, rest) {
@@ -255,13 +262,28 @@ export async function saveStays(db, number, before, stays) {
   return { ok: true, dogId, before: old && before };
 }
 
-// 離所紀錄（#259）：形狀跟原本的 data/departures.json 的 departures 一樣，依日期新到舊、同一天依編號
-export async function readDepartures(db) {
+// 出所年份（ADR 0014）：出所日的前 4 個字，日期不明是 'none'；跟 db/compact-schema.sql 觸發器的 CASE 一樣
+export const departureYear = date => (date ? date.slice(0, 4) : 'none');
+// 那一年的離所紀錄（WHERE 條件）：走 departed_date 索引。year 只會是版本號 JSON 的鍵，用 JSON 字串放進 SQL
+function departedIn(year) {
+  if (year === 'none') return "(departed_date IS NULL OR departed_date='')";
+  const next = year.slice(0, -1) + String.fromCharCode(year.charCodeAt(year.length - 1) + 1);
+  return `departed_date>=${sqlText(year)} AND departed_date<${sqlText(next)}`;
+}
+const sqlText = text => `'${String(text).replace(/'/g, "''")}'`;
+// 依日期新到舊、同一天依編號
+export const sortDepartures = list => list.sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.id.localeCompare(b.id));
+
+// 離所紀錄（#259）：形狀跟原本的 data/departures.json 的 departures 一樣，依日期新到舊、同一天依編號。
+// year 有給（ADR 0014）只讀那一年出所的
+export async function readDepartures(db, year) {
+  const where = year ? ` WHERE ${departedIn(year)}` : '';
+  const inYear = column => year ? `${column} IN (SELECT ${column} FROM v3_departures${where})` : '';
   const [deps, items] = await db.batch([
-    db.prepare('SELECT * FROM v3_departures'),
-    db.prepare('SELECT number, kind, value FROM v3_departure_items ORDER BY number, kind, position'),
+    db.prepare(`SELECT * FROM v3_departures${where}`),
+    db.prepare(`SELECT number, kind, value FROM v3_departure_items${year ? ` WHERE ${inYear('number')}` : ''} ORDER BY number, kind, position`),
   ]);
-  const staysOf = await readAllStays(db);
+  const staysOf = await readAllStays(db, inYear('dog_id'));
   const listOf = new Map();
   for (const r of items.results || []) {
     const key = `${r.number}|${r.kind}`;
@@ -283,7 +305,7 @@ export async function readDepartures(db) {
     }
     return entry;
   });
-  return list.sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.id.localeCompare(b.id));
+  return sortDepartures(list);
 }
 
 // 溜狗歷史從這天開始累積（第一份每日快照，原本的 data/history/index.json 第一個日期）；之前的紀錄只是當時的「最後一次」
