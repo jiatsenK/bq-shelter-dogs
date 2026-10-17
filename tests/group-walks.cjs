@@ -6,7 +6,7 @@ module.exports = async (browser, base) => {
   data.dogs[8].name = '名字很長也要完整顯示的測試狗';
   data.groupColumns = [{ column: 4, label: '同名群', names: data.dogs.slice(0, 2).map(d => d.name) }, { column: 7, label: '同名群', names: data.dogs.slice(0, 10).map(d => d.name) }, { column: 12, label: '空群', names: [] }];
   const writes = [];
-  let failWrite = false, partial = false, failRead = false, restMode = false;
+  let failWrite = false, partial = false, failRead = false, restMode = false, undoMode = 'ok';
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Asia/Taipei', serviceWorkers: 'block' });
   await context.addInitScript(() => { localStorage.setItem('bq-onboarded', '1'); localStorage.setItem('bq-name-later', '1'); localStorage.setItem('bq-walker-name', '測試志工'); });
   await context.route('**/*', async route => {
@@ -18,6 +18,10 @@ module.exports = async (browser, base) => {
     if (route.request().method() === 'POST') {
       const body = route.request().postDataJSON(); writes.push({ endpoint, body });
       if (failWrite) return route.fulfill({ status: 500, json: { ok: false, error: '測試寫入失敗' } });
+      if (endpoint === 'walk' && body.action === 'undo') {
+        if (undoMode === 'fail') return route.fulfill({ status: 500, json: { ok: false, error: '測試復原失敗' } });
+        return route.fulfill({ json: { ok: true, today, results: body.dogs.map((d, i) => undoMode === 'partial' && i === 0 ? { id: d.id, name: d.name, status: 'changed', current: { date: today, walker: '別人' } } : { id: d.id, name: d.name, status: 'restored' }) } });
+      }
       if (endpoint === 'walk') return route.fulfill({ json: { ok: true, today, results: body.dogs.map(d => ({ ...d, status: partial && d.name === body.dogs[0].name ? 'missing' : 'written', prev: {}, wrote: { date: today, walker: body.walker } })) } });
       const group = data.groupColumns.find(g => g.column === body.column);
       if (body.op === 'add' && !group.names.includes(body.name)) group.names.push(body.name);
@@ -145,6 +149,30 @@ module.exports = async (browser, base) => {
     await page.getByRole('button', { name: '整群溜了 · 1 隻', exact: true }).click();
     await page.getByText('已登記 1 隻', { exact: true }).waitFor();
     assert.deepEqual(writes.at(-1).body.dogs.map(d => d.name), [data.dogs[1].name], '休養狗不送出');
+    // 誤觸「整群溜了」：要能從狗群頁和我溜過撤銷試算表上的紀錄，失敗不能假裝已復原
+    const undoBtn = page.getByRole('button', { name: '復原今天登記 · 1 隻', exact: true });
+    await undoBtn.waitFor();
+    undoMode = 'fail';
+    await undoBtn.click();
+    await page.getByText(/試算表沒改回來：測試復原失敗/).first().waitFor();
+    assert.equal(writes.at(-1).body.action, 'undo');
+    assert.deepEqual(writes.at(-1).body.dogs.map(d => d.name), [data.dogs[1].name]);
+    assert(await undoBtn.isVisible(), '失敗後仍可重試');
+    undoMode = 'ok';
+    await undoBtn.click();
+    await page.getByText('已從試算表復原 1 隻').first().waitFor();
+    assert.equal(await undoBtn.count(), 0, '復原後不再顯示');
+    // 我溜過：今天這支手機登記的可以一隻一隻取消；部分被別人改過的不蓋掉
+    await page.getByRole('button', { name: '整群溜了 · 1 隻', exact: true }).click();
+    await page.getByText('已登記 1 隻', { exact: true }).waitFor();
+    await page.locator('[data-tab="mine"]').click();
+    const cancel = page.getByRole('button', { name: '取消 ' + data.dogs[1].name + ' 今天溜了', exact: true });
+    await cancel.waitFor();
+    undoMode = 'partial';
+    await cancel.click();
+    await page.getByText(/已被改過/).first().waitFor();
+    assert.equal(await cancel.count(), 0, '別人改過的不再提供撤銷');
+    undoMode = 'ok';
     console.log('#374 全量欄號、同名群、例外登記與空群通過');
   } finally { await context.close(); }
 };

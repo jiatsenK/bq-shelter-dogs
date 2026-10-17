@@ -35,9 +35,11 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
     assert.equal(await page.locator('.gw-summary').count(), 0, '移除可變長度敘述');
     await page.locator('#groupPage h2').filter({ hasText: '測試群' }).waitFor();
     assert(await page.locator('[data-gw-action="manage"]').isVisible(), '保留狗群管理');
-    await page.locator('#analysisBack').click();
+    assert(!(await page.locator('#analysisBack').isVisible()), '常遛狗群是主分頁，沒有返回');
+    assert(await page.locator('header.app h1').filter({ hasText: '板收志工溜狗表' }).isVisible(), '常遛狗群顯示共用表頭');
+    assert(!(await page.locator('.head-title').isVisible()), '常遛狗群不另放內頁標題');
+    await page.locator('#tabs [data-tab="walk"]').click();
     await selected('walk');
-    assert(await page.locator('#tabs [data-tab="walk"]').evaluate(el => el === document.activeElement), '返回恢復焦點');
     await page.locator('#tabs [data-tab="mine"]').click();
     await selected('mine');
     await page.locator('#tabs [data-tab="info"]').click();
@@ -45,6 +47,15 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
     await page.locator('#main .a-card').first().waitFor();
     assert(await page.locator('#bottomBar').isVisible());
     assert.equal(await page.locator('.head-title').textContent(), '資訊');
+    assert(await page.locator('.head-title').isVisible(), '資訊首頁只顯示「資訊」');
+    assert(!(await page.locator('#analysisBack').isVisible()), '資訊首頁沒有返回');
+    assert(!(await page.locator('header.app h1').isVisible()), '資訊首頁不放網站名稱');
+    assert(!(await page.locator('#searchInput').isVisible()), '資訊首頁沒有搜尋框');
+    await page.locator('[data-info-page="stay"]').click();
+    assert.equal((await page.locator('#analysisBack').textContent()).trim(), '回資訊', '資訊子頁保留回資訊');
+    assert(await page.locator('#analysisBack').isVisible());
+    await page.locator('#analysisBack').click();
+    await page.locator('[data-info-page="stay"]').waitFor();
     assert.equal(await page.locator('#analysisBtn').count(), 0);
     assert.deepEqual(await page.locator('#tabs .n').allTextContents(), counts, '資訊頁數字保留');
     await page.goBack();
@@ -54,7 +65,7 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
     await selected('info');
     await page.locator('#tabs [data-tab="groups"]').click();
     await selected('groups');
-    await page.locator('#analysisBack').click();
+    await page.goBack();
     await selected('info');
     await page.locator('#tabs [data-tab="walk"]').click();
     await selected('walk');
