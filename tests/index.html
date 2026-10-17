@@ -1167,7 +1167,7 @@ async function runAnalysisTests() {
       showAnalysis();
       eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [true, true, 'mine'], '打開分析：');
       const titles = [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
-      eq(titles.length, 7, '本月溜狗（K 2026-10-09）＋五張統計＋離所（2026-10-08 distill 拿掉滿 1 年圓環、入所年度分布）：');
+      eq(titles.length, 6, '五張統計＋離所（#345 拿掉本月溜狗；（2026-10-08 distill 拿掉滿 1 年圓環、入所年度分布）：');
       if (titles.includes('長期在所＋近期少遛')) throw new Error('K 說長期在所＋少遛不需要');
       ['入所多久分布', '在所最久 Top 10', '各區平均在所時間',
         '公母在所時間差異', '狗的資料完整度'].forEach(t => { if (!titles.includes(t)) throw new Error(`少了 ${t}`); });
@@ -1177,8 +1177,8 @@ async function runAnalysisTests() {
       const photoCalls = calls.filter(([u]) => u.startsWith('photos/'));
       eq(photoCalls.every(([, m]) => m === 'HEAD'), true, '照片只用 HEAD：');
       eq(photoCalls.length, 9, '每個編號查一次：');
-      // K 2026-10-09 本月溜狗：另外讀溜狗紀錄（跟詳細資訊同一份 api/walks）
-      eq(calls.filter(([u]) => !u.startsWith('photos/') && !['api/departures', 'api/walks'].includes(u)).length, 0, '分析頁只多讀離所紀錄（#163）和溜狗紀錄，不讀其他檔：');
+      // #345 拿掉本月溜狗：分析頁不再讀溜狗紀錄
+      eq(calls.filter(([u]) => !u.startsWith('photos/') && u !== 'api/departures').length, 0, '分析頁只多讀離所紀錄（#163），不讀溜狗紀錄和其他檔：');
       await tick(); await tick(); await tick();
       const photoRow = [...document.querySelectorAll('#main .a-miss')].find(el => el.textContent.includes('沒有照片'));
       if (!photoRow || !photoRow.textContent.includes('9 隻')) throw new Error(`沒有照片列：${photoRow && photoRow.textContent}`);
@@ -1246,6 +1246,14 @@ async function runHistoryTests() {
     eq(Object.values(dogWalkHistory(dogs[2], walks, span.start, T)).slice(1), [0, null, null], '沒遛過：');
     const d = dogWalkHistory(dogs[3], walks, span.start, T);
     eq([d.count, d.avgGap, d.maxGap], [3, 7, 7], '沒編號：');
+    // #345 間隔只用近期溜狗紀錄（上個月 1 號到今天）；範圍內沒溜顯示超過 62 天
+    const old = parseWalks({ walks: [W('2020010109', '歷舊', '2026-08-20'), W('2020010109', '歷舊', '2026-09-05'), W('2020010109', '歷舊', '2026-09-12'),
+      W('2020010108', '歷久', '2026-08-01')] });
+    const s0 = historySpan(['2026-07-01'], T).start;
+    const o = dogWalkHistory(dog('歷舊', '2020010109', 'A', null), old, s0, T);
+    eq([o.avgGap, o.maxGap], [7, 7], '上個月 1 號前的紀錄不算間隔：');
+    eq(dogWalkHistory(dog('歷久', '2020010108', 'A', null), old, s0, T).maxGap, 'over', '範圍內沒溜：');
+    eq(+recentStart(new Date(2027, 0, 5)), +new Date(2026, 11, 1), '1 月的範圍從去年 12/1：');
   });
   await check('#60 分析頁不放歷史與快照；詳細資訊有這隻狗最近 30 天的遛狗紀錄；不出現志工名字', async () => {
     const saved = [allDogs, groupMap, activeTab, searchQuery, photoCheck, historyData];
@@ -2242,18 +2250,8 @@ async function runWarnLayoutTests() {
   }
 }
 
-// ── 分析頁「← 分析」、本月溜狗（K 2026-10-09）──
+// ── 分析頁「← 分析」（K 2026-10-09；本月溜狗 #345 拿掉）──
 async function runMonthWalkTests() {
-  await check('K 2026-10-09 本月溜狗：同一隻狗同一天只算一次；1 號到今天每天幾次；上個月整月；記錄開始前的日子另外標', () => {
-    const d = (m, day) => new Date(2026, m - 1, day);
-    const w = (key, date) => ({ key, date });
-    const walks = [w('a', d(10, 1)), w('a', d(10, 1)), w('b', d(10, 1)), w('a', d(10, 3)), w('c', d(9, 30)), w('c', d(9, 29)), w('x', d(8, 31))];
-    const r = monthWalks(walks, d(10, 4), d(9, 16));
-    eq(r.days.map(x => x.n), [2, 0, 1, 0], '每天：');
-    eq([r.total, r.dogs, r.last], [3, 2, 2], '總計、隻數、上個月：');
-    eq(monthWalks(walks, d(10, 4), d(10, 3)).days.map(x => x.recorded), [false, false, true, true], '記錄開始前：');
-    eq(monthWalks([w('a', d(10, 1))], d(10, 2), d(10, 1)).last, null, '上個月沒紀錄：');
-  });
   check('K 2026-10-09 分析頁的返回在頁首（← 分析），內容區不再有另一個返回和標題', () => {
     // 測試頁不是真的 index.html：檢查 index.html 原始碼的頁首
     if (!/<header class="app">[\s\S]*class="head-back" id="analysisBack"[\s\S]*<h2 class="head-title">分析<\/h2>/.test(INDEX_HTML)) throw new Error('頁首要有返回和標題');

@@ -169,8 +169,14 @@ function historySpan(dates, today) {
   return { start, days: start ? daysBetween(start, t) + 1 : 0 };
 }
 
+// 近期溜狗紀錄的範圍起點：上個月 1 號（ADR 0013；today 已是台灣時間的日期）
+function recentStart(today) {
+  return new Date(today.getFullYear(), today.getMonth() - 1, 1); // 1 月時自動退到去年 12 月
+}
+
 // 一隻狗的遛狗紀錄（K 2026-09-25：遛狗歷史要看每隻狗才有意義，放在詳細資訊）：
-// 最近 N 天每天有沒有遛（開始記錄前的日子標「未記錄」）、這段期間遛幾次、平均與最久隔幾天
+// 最近 N 天每天有沒有遛（開始記錄前的日子標「未記錄」）、這段期間遛幾次、平均與最久隔幾天。
+// 間隔只用近期溜狗紀錄（上個月 1 號到今天，#345）算；範圍內一次都沒溜（範圍開始前就有紀錄）→ maxGap 是 'over'（超過 62 天）
 function dogWalkHistory(dog, walks, start, today, n = 30) {
   const key = dogKey(dog);
   const dates = [...new Set(walks.filter(w => w.key === key).map(w => +w.date))].sort((a, b) => a - b);
@@ -181,13 +187,16 @@ function dogWalkHistory(dog, walks, start, today, n = 30) {
     const d = new Date(t.getFullYear(), t.getMonth(), t.getDate() - i);
     cells.push({ date: d, walked: set.has(+d), recorded: !!start && d >= start });
   }
+  const from = Math.max(+recentStart(today), start ? +start : Infinity);
+  const recent = dates.filter(d => d >= +recentStart(today) && d <= +t);
   const gaps = [];
-  for (let i = 1; i < dates.length; i++) if (start && dates[i] >= +start) gaps.push(Math.round((dates[i] - dates[i - 1]) / 86400000));
+  for (let i = 1; i < recent.length; i++) if (recent[i] >= from) gaps.push(Math.round((recent[i] - recent[i - 1]) / 86400000));
+  const over = !!start && +start < +recentStart(today) && !recent.length;
   return {
     cells,
     count: cells.filter(c => c.walked).length, // 開始記錄前的那筆「最後遛狗日」也是真的，一起算
     avgGap: average(gaps),
-    maxGap: gaps.length ? Math.max(...gaps) : null,
+    maxGap: over ? 'over' : gaps.length ? Math.max(...gaps) : null,
   };
 }
 
@@ -252,64 +261,6 @@ function kpi(value, unit, label, tone = '') {
 }
 
 // ── 本月溜狗（K 2026-10-09「分析頁可以有個本月報表」：溜狗總計、每天溜狗次數）──
-// 資料是同步累積的溜狗紀錄（api/walks，試算表「遛狗日期」換了就記一筆）：同一隻狗同一天只算一次。
-// 回傳 { days: [{ date, n }]（1 號到今天）, total, dogs, start }；last 是上個月整月的次數（沒紀錄回 null）
-function monthWalks(walks, today, start) {
-  const y = today.getFullYear(), m = today.getMonth();
-  const seen = new Set();
-  const perDay = new Map();
-  const dogs = new Set();
-  let last = 0, lastSeen = false;
-  for (const w of walks) {
-    const k = `${w.key}|${+w.date}`;
-    if (seen.has(k)) continue;
-    seen.add(k);
-    if (w.date.getFullYear() === y && w.date.getMonth() === m) {
-      perDay.set(w.date.getDate(), (perDay.get(w.date.getDate()) || 0) + 1);
-      dogs.add(w.key);
-    } else if (new Date(y, m - 1, 1) <= w.date && w.date < new Date(y, m, 1)) {
-      last++; lastSeen = true;
-    }
-  }
-  const days = [];
-  for (let d = 1; d <= today.getDate(); d++) {
-    const date = new Date(y, m, d);
-    days.push({ date, n: perDay.get(d) || 0, recorded: !!start && date >= start });
-  }
-  return { days, total: days.reduce((a, d) => a + d.n, 0), dogs: dogs.size, last: lastSeen ? last : null };
-}
-
-function monthWalksSection(today) {
-  loadHistory();
-  const title = `${today.getMonth() + 1} 月溜狗`;
-  if (!historyData || historyData.state === 'loading') return section(title, '讀取中…', '', 'tick');
-  if (historyData.state === 'error') return section(title, '溜狗紀錄讀不到', '', 'tick');
-  // 溜狗紀錄從第一筆開始算（快照比較晚才開始，不用快照的日期）
-  const first = historyData.walks.reduce((m, w) => (!m || w.date < m ? w.date : m), null);
-  const start = first && makeDate(first.getFullYear(), first.getMonth() + 1, first.getDate());
-  const r = monthWalks(historyData.walks, today, start);
-  const recordedDays = r.days.filter(d => d.recorded).length;
-  const avg = recordedDays ? (r.total / recordedDays).toFixed(1) : '–';
-  const max = Math.max(1, ...r.days.map(d => d.n));
-  const lastText = r.last == null ? '' : `<span class="a-month-last">上個月 ${r.last} 次${start && start.getMonth() === (today.getMonth() + 11) % 12 && start.getDate() > 1 ? `（${start.getMonth() + 1}/${start.getDate()} 起）` : ''}</span>`;
-  const peak = r.days.reduce((m, d) => (d.n > m.n ? d : m), { n: 0 });
-  const few = r.days.length <= 15; // 天數少時每根長條上面寫次數；多了寫不下，只寫最多那天
-  const bars = r.days.map(d => {
-    const label = `${d.date.getMonth() + 1}/${d.date.getDate()}${d.recorded ? ` ${d.n} 次` : ' 還沒開始記錄'}`;
-    const tick = d.date.getDate() === 1 || d.date.getDate() % 5 === 0 || +d.date === +r.days[r.days.length - 1].date;
-    return `<span class="a-day${d.recorded ? '' : ' none'}" title="${label}" aria-label="${label}">${few && d.recorded ? `<em>${d.n}</em>` : ''}<i style="height:${d.recorded ? Math.max(2, d.n / max * 100) : 100}%"></i>${tick ? `<small>${d.date.getDate()}</small>` : ''}</span>`;
-  }).join('');
-  return section(title, `同一隻狗同一天算一次${start ? `；從 ${start.getMonth() + 1}/${start.getDate()} 開始記錄` : ''}`, `
-    <div class="a-month">
-      <span><b>${r.total}</b><small> 次</small></span>
-      <span><b>${r.dogs}</b><small> 隻狗</small></span>
-      <span><b>${avg}</b><small> 次／天</small></span>
-      ${lastText}
-    </div>
-    <div class="a-days${few ? ' few' : ''}" role="img" aria-label="每天溜狗次數，最多一天 ${max} 次">${bars}</div>
-    ${peak.n ? `<p class="a-hint a-days-peak">最多一天 ${peak.n} 次（${peak.date.getMonth() + 1}/${peak.date.getDate()}）</p>` : ''}`, 'tick');
-}
-
 function analysisHtml(dogs, today) {
   if (!dogs.length) return `<div class="status-msg">目前沒有狗</div>`;
   checkPhotos(dogs);
@@ -330,8 +281,6 @@ function analysisHtml(dogs, today) {
     </div>
     <div class="a-hero-note">入所日期取編號（含舊編號）前 8 碼和出入所紀錄裡最早的那天${noIntake.length ? `；${noIntake.length} 隻編號看不出入所日期，不列入時間統計（${dogNames(noIntake.map(r => r.dog))}）` : ''}</div>
   </section>`);
-
-  out.push(monthWalksSection(today));
 
   const dist = stayDistribution(rows).map((b, i) => ({ ...b, short: STAY_SHORT[i] }));
   const topBucket = dist.reduce((m, b, i) => (b.count > dist[m].count ? i : m), 0);
@@ -401,7 +350,8 @@ function walkHistorySection(dog, today) {
   // critique 2026-10-09 少一點格子：三格統計卡改成一行字；沒有間隔可算（不到兩次）就不寫平均、最久
   const sum = [`最近 30 天溜 <b>${h.count}</b> 次`];
   if (h.avgGap != null) sum.push(`平均 <b>${h.avgGap.toFixed(1)}</b> 天溜一次`);
-  if (h.maxGap != null) sum.push(`最久 <b>${h.maxGap}</b> 天沒溜`);
+  if (h.maxGap === 'over') sum.push('最久 <b>超過 62</b> 天沒溜');
+  else if (h.maxGap != null) sum.push(`最久 <b>${h.maxGap}</b> 天沒溜`);
   const open = typeof detailWalksOpen !== 'undefined' && detailWalksOpen;
   // 一項一塊、塊裡不斷行：手機放不下就整項換到下一行，不會剩一個點在行尾
   const toggle = `<button type="button" class="w-toggle" id="walksToggle" aria-expanded="${open}"><span class="w-sum">${sum.map(t => `<span class="w-it">${t}</span>`).join('')}</span><span class="w-more">${open ? '收起' : '看每一天'}</span></button>`;
