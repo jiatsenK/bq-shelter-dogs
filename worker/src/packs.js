@@ -225,45 +225,37 @@ async function liveWalks(db, v) {
   return list;
 }
 
-// 讀不到版本號（正式 D1 要等同步補建表）回 null，呼叫的人照舊直接讀表；D1 真的壞了，直接讀表也會失敗
-async function firstOrNull(db, sql) {
-  try {
-    return await db.prepare(sql).first();
-  } catch (e) {
-    return null;
-  }
+// 讀不到版本號就報錯，不退回整表讀取：整表讀取量隨歷史一直變多，退回去會悄悄吃光 D1 免費額度（ADR 0009）。
+// 版本號表由同步補建（db/compact-schema.sql），有表沒那一列也算壞掉
+async function versionRow(db, sql) {
+  const v = await db.prepare(sql).first();
+  if (!v) throw new Error('D1 沒有資料包版本號，等同步補建');
+  return v;
 }
-const versions = db => firstOrNull(db, 'SELECT small FROM v3_pack_versions WHERE id=1');
-const walkVersions = db => firstOrNull(db, 'SELECT total,live,cutoff,months FROM v3_walk_versions WHERE id=1');
+const versions = db => versionRow(db, 'SELECT small FROM v3_pack_versions WHERE id=1');
+const walkVersions = db => versionRow(db, 'SELECT total,live,cutoff,months FROM v3_walk_versions WHERE id=1');
 
-// 溜狗紀錄（依日期排好）；回 null 表示要直接讀表：沒有版本號表、切點比今天新（時鐘慢一點的機器不把它拉回去）、一直移不了切點
+// 溜狗紀錄（依日期排好）。切點以前讀資料包、以後讀 live，不管切點在哪天都是完整的一份：
+// 切點比今天新（時鐘慢一點的機器不把它拉回去）或一直移不了切點，就照現在的切點給，下一次再移
 async function packedWalks(db, today) {
   let v = await walkVersions(db);
-  if (!v || v.cutoff > today) return null;
   memFor(db);
-  for (let i = 0; v.cutoff < today; i++) {
-    if (i === 3) return null;
-    v = await advance(db, v, today) || await walkVersions(db);
-    if (!v || v.cutoff > today) return null;
-  }
+  for (let i = 0; i < 3 && v.cutoff < today; i++) v = await advance(db, v, today) || await walkVersions(db);
   await history(db, v);
   const { months } = mem.walks;
   return [...Object.keys(months).sort().flatMap(m => months[m].list), ...await liveWalks(db, v)];
 }
 
-// part 是 dogs／departures／rest；dogs 是 null 表示主清單沒有狗。沒有版本號時只直接讀要的那份
-const DIRECT = { dogs: readDogsPayload, departures: readDepartures, rest: readRest };
+// part 是 dogs／departures／rest；dogs 是 null 表示主清單沒有狗
 export async function readSmall(db, part) {
   const v = await versions(db);
-  if (!v) return DIRECT[part](db);
   memFor(db);
   return (await smallPack(db, v.small))[part];
 }
 
 // 跟 readWalks 一樣的形狀；today 是台灣日期
 export async function readWalksPacked(db, today) {
-  const list = await packedWalks(db, today) || groupWalks((await db.prepare(`SELECT ${WALK_COLS} FROM v3_walks`).all()).results || []);
-  return { version: 1, historyStart: HISTORY_START, walks: list };
+  return { version: 1, historyStart: HISTORY_START, walks: await packedWalks(db, today) };
 }
 
 // 狗清單：回新物件，呼叫的人加 photoVersions 不會改到快取
@@ -276,9 +268,8 @@ export async function readDogsPacked(db) {
 // 狀態頁：從資料包數主清單和溜狗紀錄，不整表 COUNT(*)；沒變時只讀 2 列版本號（small、溜狗紀錄）
 export async function packStatus(db, today) {
   const v = await versions(db);
-  if (!v) return null;
   memFor(db);
   const { dogs } = await smallPack(db, v.small);
   const walks = await packedWalks(db, today);
-  return { dogs: dogs ? dogs.dogs.length : 0, walks: walks ? walks.length : 0 };
+  return { dogs: dogs ? dogs.dogs.length : 0, walks: walks.length };
 }
