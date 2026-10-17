@@ -83,12 +83,12 @@ function groupStageHtml() {
     <div class="gw-heading"><h2>${esc(group?.label || '還沒有狗群')}<small>${dogs.length} 隻</small></h2><button type="button" data-gw-action="manage" aria-expanded="${groupManage}" aria-controls="gwManage">管理</button></div>
     ${searchNote ? `<p class="gw-search-note" role="status">${esc(searchNote)}</p>` : ''}
     <div id="gwManage" class="gw-manage" ${groupManage ? '' : 'hidden'}><button type="button" data-gw-action="create">＋狗群</button>${dogs.map(d => `<button type="button" data-gw-remove="${esc(d.name)}">移出 ${esc(d.name)}</button>`).join('')}</div>
+    ${groupFormHtml() /* 輸入框開在按鈕所在的群組上方，不把人帶到頁面下方（#388） */}
 
     <div class="gw-stage-wrap"><button type="button" class="gw-side prev" data-gw-step="-1" aria-label="上一群" ${groups.length < 2 ? 'disabled' : ''}>${icon('back')}</button><div id="groupStage" class="gw-stage" style="--rows:${Math.max(1, Math.ceil((dogs.length + 2) / 4))}" aria-label="目前狗群">${layers}</div><button type="button" class="gw-side next" data-gw-step="1" aria-label="下一群" ${groups.length < 2 ? 'disabled' : ''}>${icon('chevron')}</button></div>
     <div class="gw-pages"><span>${groups.length ? index + 1 : 0} / ${groups.length}</span></div>
     <p id="gwFeedback" role="status">${esc(groupBusy ? '處理中…' : groupFeedback)}</p>
     ${group ? `<div class="gw-actions">${walkBtn}</div><p class="gw-restrictions">${dogs.some(groupBlocked) ? `不登記：${dogs.filter(groupBlocked).map(d => `${esc(d.name)}（${esc(groupBlocked(d))}）`).join('、')}` : ''}</p>` : ''}
-    ${groupFormHtml()}
   </section>`;
 }
 function groupFormHtml() {
@@ -186,7 +186,7 @@ groupMain.addEventListener('click', e => {
   if (action === 'manage') { groupManage = !groupManage; render(); document.querySelector('[data-gw-action="manage"]')?.focus({ preventScroll: true }); }
   if (action === 'except') { groupExcept = !groupExcept; groupExcluded.clear(); groupFeedback = ''; render(); document.querySelector('[data-gw-action="except"]')?.focus(); }
   if (action === 'add' || action === 'create') { groupManage = false; groupForm = { op: action, column: groupColumn }; render(); document.querySelector('#gwForm input')?.focus(); }
-  if (action === 'cancel-form') { groupForm = null; render(); document.querySelector('[data-gw-action="manage"]')?.focus({ preventScroll: true }); }
+  if (action === 'cancel-form') { groupForm = null; render(); document.querySelector('.front [data-gw-action="add"]')?.focus({ preventScroll: true }); }
 });
 groupMain.addEventListener('input', e => {
   if (e.target.closest('#gwForm') && groupForm) groupForm[e.target.name] = e.target.value;
@@ -198,7 +198,7 @@ groupMain.addEventListener('submit', e => {
   groupForm.name = form.elements.name.value.trim();
   if (form.elements.label) groupForm.label = form.elements.label.value.trim();
   if (allDogs.filter(d => d.name === groupForm.name).length !== 1) { groupFeedback = '請選擇主清單中可唯一對應的狗名'; render(); return; }
-  writeGroup({ ...groupForm });
+  writeGroup({ ...groupForm }).then(() => document.querySelector('#gwForm input, .front [data-gw-action="add"]')?.focus({ preventScroll: true }));
 });
 groupMain.addEventListener('keydown', e => {
   if (!e.target.closest('#groupPage') || e.target.matches('input')) return;
