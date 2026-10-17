@@ -8,7 +8,7 @@ import { buildSyncSql, buildSyncPlan, SEED_TABLES, SYNC_SCHEMA_SKIP, planSync, r
 import { budgetProblem, todayRowsWritten } from './sync-diff.mjs';
 
 // SQL 開頭補建表、版本號、觸發器那幾行（不算同步寫的資料）
-const SCHEMA_LINE = /^CREATE |^INSERT OR IGNORE INTO v3_(data|pack|walk)_versions|^DROP TRIGGER IF EXISTS pack_v3_walks_|^DELETE FROM v3_packs WHERE part='walks'/;
+const SCHEMA_LINE = /^CREATE |^INSERT OR IGNORE INTO v3_(data|pack|walk)_versions|^INSERT INTO v3_departure_versions\(id,years\) |^DROP TRIGGER IF EXISTS pack_v3_|^DELETE FROM v3_packs WHERE part='(walks|small)'/;
 
 const json = async path => JSON.parse(await readFile(new URL(`../${path}`, import.meta.url), 'utf8'));
 
@@ -56,7 +56,7 @@ test('正式 D1 還沒有離所表、群名表時，SQL 自己先建', async t =
   // 版本號那一列和觸發器（#315）：同步自己改的列也會讓資料包失效
   const head = lines.filter(l => SCHEMA_LINE.test(l));
   assert.equal(lines.findIndex(l => !head.includes(l)), head.length);
-  for (const name of ['version_v3_today_walks_INSERT', 'walkpack_v3_walks_UPDATE', 'pack_v3_rest_DELETE']) assert.ok(creates.some(l => l.startsWith(`CREATE TRIGGER IF NOT EXISTS ${name} `)), name);
+  for (const name of ['version_v3_today_walks_INSERT', 'walkpack_v3_walks_UPDATE', 'packs_v3_rest_DELETE', 'packs_v3_departures_UPDATE']) assert.ok(creates.some(l => l.startsWith(`CREATE TRIGGER IF NOT EXISTS ${name} `)), name);
   assert.ok(!creates.some(l => /TRIGGER IF NOT EXISTS identity_/.test(l)), '身分的觸發器不在這裡建');
   // #320 舊的整份 walks 觸發器要拿掉
   for (const op of ['INSERT', 'UPDATE', 'DELETE']) assert.ok(lines.includes(`DROP TRIGGER IF EXISTS pack_v3_walks_${op};`), op);
