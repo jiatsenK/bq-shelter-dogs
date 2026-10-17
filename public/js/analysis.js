@@ -372,23 +372,16 @@ function analysisPageHtml(today) {
 // 打開分析頁：手機按「返回」會回到原本的分類（跟詳細資訊一樣用 history）
 function showAnalysis() {
   if (analysisOpen) return;
-  analysisOpen = true;
-  document.documentElement.classList.add('analysis-open');
-  history.pushState({ bqAnalysis: true }, '');
-  render();
-  window.scrollTo(0, 0);
+  switchTab('info');
 }
 
 function hideAnalysis() {
   if (!analysisOpen) return;
-  analysisOpen = false;
-  document.documentElement.classList.remove('analysis-open');
-  render();
-  window.scrollTo(0, 0);
+  switchTab(activeTab, false);
 }
 
 function closeAnalysis() {
-  if (history.state && history.state.bqAnalysis) history.back(); // popstate 會接著 hideAnalysis
+  if (history.state && (history.state.bqAnalysis || history.state.bqNavigation)) history.back();
   else hideAnalysis();
 }
 
@@ -397,7 +390,13 @@ if (analysisBtn) analysisBtn.addEventListener('click', () => (analysisOpen ? clo
 
 // 分析頁的狗名列：點了開詳細資訊（事件委派，renderMain 重畫也不用重綁）
 const analysisBack = document.getElementById('analysisBack');
-if (analysisBack) analysisBack.addEventListener('click', () => closeAnalysis());
+if (analysisBack) analysisBack.addEventListener('click', () => {
+  if (analysisOpen) closeAnalysis();
+  else if (activeTab === 'groups') {
+    if (history.state && history.state.bqNavigation) history.back();
+    else switchTab(groupsReturnTab, false);
+  }
+});
 document.getElementById('main').addEventListener('click', e => {
   const row = e.target.closest('#main .a-dog[data-adog]');
   const dog = row && allDogs[row.dataset.adog];

@@ -69,7 +69,7 @@ header.app {
   padding: 8px 12px calc(4px + env(safe-area-inset-bottom, 0px));
 }
 .bottom-inner { max-width: 480px; margin: 0 auto; }
-.analysis-open .bottom-bar { display: none; }
+.analysis-open .bottom-bar { display: block; }
 .search { position: relative; margin: 10px 0 0; }
 .search .icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: var(--ink-soft); font-size: 16px; }
 .search input {
@@ -666,7 +666,7 @@ html.lightbox-open { overflow: hidden; }
 @keyframes sync-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .sync-btn.syncing .icon { animation-duration: 3s; } }
 /* 分析頁開著時收起搜尋框與分類，頁首只留標題 */
-.analysis-open header.app .search, .analysis-open header.app .tabs { display: none; }
+.analysis-open header.app .search { display: none; }
 
 /* 我的備註（#62）：溜狗表備註下方，檢視時顯示內容＋「新增／修改」，編輯時是文字框＋儲存 */
 .my-note-time { margin-top: 6px; font-size: 12.5px; color: var(--muted-text); }
@@ -2313,3 +2313,14 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .stays-actions .former-save { border: 0; background: var(--primary); color: #fff; }
 .stays-actions .former-save:disabled { opacity: .6; cursor: default; }
 .stays-actions .former-cancel { border: 1px solid var(--line); background: var(--surface); color: var(--ink); }
+
+/* #373：四格共用導覽與既有狗群內容。 */
+.tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.tabs button { min-width: 44px; min-height: 44px; padding-inline: 2px; }
+.groups-frame { display: block; width: 100%; height: calc(100dvh - 160px - env(safe-area-inset-bottom, 0px)); min-height: 300px; border: 0; }
+.analysis-open header.app .zukan-link { display: none; }
+@media (min-width: 1100px) {
+  .desk-on .header-inner { flex-wrap: wrap; height: auto; min-height: 64px; gap: 12px; }
+  .desk-on .brand { min-height: 64px; }
+  .desk-on .tabs button { padding-inline: 10px; }
+}
