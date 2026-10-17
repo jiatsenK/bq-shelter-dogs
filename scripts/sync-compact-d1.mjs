@@ -16,7 +16,7 @@ import { compareCompactDogs } from './import-compact-dogs.mjs';
 import { compareCompactProfiles } from './import-compact-profiles.mjs';
 import { compareCompactDepartures } from './import-compact-departures.mjs';
 import { fetchGviz, parseGroupColumns, parseGroupLabels, buildData, loadDepartedRows, formatDate } from './sync-sheet.mjs';
-import { planSync, readPrevious, applySource } from './sync-plan.mjs';
+import { planSync, readPrevious, applySource } from './sync-compact-plan.mjs';
 import { SYNC_TABLES, diffTables, budgetProblem, todayRowsWritten, MAX_ROWS_PER_SYNC, DAILY_BUDGET } from './sync-diff.mjs';
 export { planSync, readPrevious };
 

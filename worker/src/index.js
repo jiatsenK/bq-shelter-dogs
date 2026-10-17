@@ -4,7 +4,7 @@ import { cleanStays } from './stays.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
-import { markChanged, planTick, refreshPlan, rememberSignature, sheetSignature } from './sync-plan.js';
+import { markChanged, planTick, refreshPlan, rememberSignature, sheetSignature, taiwanYmd } from './sync-plan.js';
 import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache } from './today.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
@@ -334,11 +334,6 @@ async function sameSecret(given, expected) {
 const adminLocked = (ip, now) => limited(`admin:${ip}`, ADMIN_FAIL_LIMITS, now);
 const needEditor = origin => fail(400, '請先選好你的名字再編輯', origin, { code: 'editor' });
 
-// 台灣今天的日期 YYYY-MM-DD
-function taiwanYmd(now) {
-  return new Date(now + 8 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
 // 休養中（K 2026-10-09）：在網站上設定「到哪天前暫停帶出」。任何人都能改、記編輯紀錄（ADR 0004）；#250 起存 D1 的 v3_rest
 async function putRest(request, env, origin) {
   const cfg = config(env);
@@ -384,6 +379,18 @@ async function putRest(request, env, origin) {
   return reply(200, { ok: true, id, rest, commit: null }, origin);
 }
 
+// 介紹、出入所紀錄的 JSON 請求本文上限（位元組）
+const EDIT_BODY_MAX_BYTES = 16000;
+
+// 讀 JSON 本文：不是 JSON、太大都回 { error }，否則回 { input }
+async function jsonBody(request, origin, tooLong) {
+  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') return { error: fail(415, '格式不對', origin) };
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).length > EDIT_BODY_MAX_BYTES) return { error: fail(413, tooLong, origin) };
+  try { return { input: JSON.parse(raw) }; } catch (e) { return { error: fail(400, '格式不對', origin) }; }
+}
+
 // ---- 入所介紹（K 2026-10-10）：PUT /intro/{編號}，任何人都能改、記編輯紀錄 ----
 // #250 起存 D1 的 v3_intros，/api/dogs 馬上讀得到，不再改 dogs/{編號}.md、不再提交 GitHub
 async function putIntro(request, env, origin) {
@@ -396,16 +403,9 @@ async function putIntro(request, env, origin) {
   if (!ID_PATTERN.test(id)) return fail(400, '狗狗編號格式不對', origin);
 
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
-  if (type !== 'application/json') return fail(415, '格式不對', origin);
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).length > 16000) return fail(413, '介紹太長', origin);
-  let input;
-  try {
-    input = JSON.parse(raw);
-  } catch (e) {
-    return fail(400, '格式不對', origin);
-  }
+  const body = await jsonBody(request, origin, '介紹太長');
+  if (body.error) return body.error;
+  const input = body.input;
   const editor = await editorOf(input && input.editor, cfg.walkerKey);
   if (!editor) return needEditor(origin);
   const text = cleanNote(input && input.text);
@@ -466,12 +466,9 @@ async function putStays(request, env, origin) {
   const m = new URL(request.url).pathname.match(/^\/stays\/([^/]+)$/);
   const id = m ? decodeURIComponent(m[1]) : '';
   if (!ID_PATTERN.test(id)) return fail(400, '狗的編號格式不對', origin);
-  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
-  if (type !== 'application/json') return fail(415, '格式不對', origin);
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).length > 16000) return fail(413, '出入所紀錄太長', origin);
-  let input;
-  try { input = JSON.parse(raw); } catch (e) { return fail(400, '格式不對', origin); }
+  const body = await jsonBody(request, origin, '出入所紀錄太長');
+  if (body.error) return body.error;
+  const input = body.input;
   const now = Date.now();
   const today = taiwanYmd(now);
   const next = cleanStays(input && input.stays, today);
@@ -992,7 +989,6 @@ async function writeGroup(request, env, origin) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM v3_sheet_groups WHERE column_index = ?').bind(r.column),
     ...names.map((n, i) => env.DB.prepare('INSERT INTO v3_sheet_groups(column_index,row_index,name) VALUES(?,?,?)').bind(r.column, i, n)),
-    env.DB.prepare('CREATE TABLE IF NOT EXISTS v3_sheet_group_labels (column_index INTEGER PRIMARY KEY, label TEXT NOT NULL)'),
     env.DB.prepare('DELETE FROM v3_sheet_group_labels WHERE column_index = ?').bind(r.column),
     ...(label ? [env.DB.prepare('INSERT INTO v3_sheet_group_labels(column_index,label) VALUES(?,?)').bind(r.column, label)] : []),
   ]);

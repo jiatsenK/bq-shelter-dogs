@@ -255,10 +255,11 @@ CREATE TABLE IF NOT EXISTS v3_sync_state (
 );
 
 -- 資料包（ADR 0009，#315，worker/src/packs.js）：small（狗清單、離所、休養）、walks（切點以前的溜狗紀錄）算好存在 v3_packs，
--- 一律分段存（每段最多 1 MB，D1 一列上限 2 MB）。v3_pack_versions 一列：small／walks／live 版本號由觸發器自動加 1，
--- cutoff 是 walks 資料包算到哪天（不含），由 Worker 跨日時往前移。v3_walks 切點以前的列動 walks、以後的動 live（今天的紀錄）。
+-- 一律分段存（每段最多 1 MB，D1 一列上限 2 MB）。v3_pack_versions 一列：small 版本號由觸發器自動加 1。
+-- 溜狗紀錄按月分段（#320）後改用 v3_walk_versions，這張表只剩 small（#354）；正式 D1 舊表還有 walks／live／cutoff 三欄，
+-- 沒人讀寫，留著不 ALTER TABLE（同步補建只跑 IF NOT EXISTS）。
 -- 獨立一張表（不加在 v3_data_versions）：同步補建只跑 IF NOT EXISTS，不用 ALTER TABLE
-CREATE TABLE IF NOT EXISTS v3_pack_versions (id INTEGER PRIMARY KEY CHECK(id=1), small INTEGER NOT NULL DEFAULT 0, walks INTEGER NOT NULL DEFAULT 0, live INTEGER NOT NULL DEFAULT 0, cutoff TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS v3_pack_versions (id INTEGER PRIMARY KEY CHECK(id=1), small INTEGER NOT NULL DEFAULT 0);
 INSERT OR IGNORE INTO v3_pack_versions(id) VALUES(1);
 CREATE TABLE IF NOT EXISTS v3_packs (part TEXT NOT NULL, seq INTEGER NOT NULL, ver INTEGER NOT NULL, cutoff TEXT NOT NULL DEFAULT '', body TEXT NOT NULL, PRIMARY KEY(part,seq));
 CREATE INDEX IF NOT EXISTS v3_walks_date ON v3_walks(walk_date);

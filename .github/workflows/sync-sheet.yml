@@ -28,7 +28,7 @@ on:
     paths:
       - 'scripts/sync-sheet.mjs'
       - 'scripts/sync-compact-d1.mjs'
-      - 'scripts/sync-plan.mjs'
+      - 'scripts/sync-compact-plan.mjs'
       - 'scripts/sync-diff.mjs'
       - 'scripts/import-compact-dogs.mjs'
       - 'scripts/import-compact-profiles.mjs'
