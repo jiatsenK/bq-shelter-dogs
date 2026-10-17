@@ -457,7 +457,7 @@ export function renderFile(data, oldText, now = new Date()) {
 export const WALKS_VERSION = 1;
 
 // 比對同一隻狗：有編號用編號，沒編號才用犬名
-const dogKey = d => d.id ? `id:${d.id}` : `name:${nameKey(d.name)}`;
+export const dogKey = d => d.id ? `id:${d.id}` : `name:${nameKey(d.name)}`;
 const walkersKey = list => [...(list || [])].sort().join(',');
 const walkKey = (d, date, mine, walkers) => `${dogKey(d)}|${date}|${mine === true}|${walkersKey(walkers)}`;
 

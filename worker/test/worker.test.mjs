@@ -230,10 +230,10 @@ test('叫同步：POST workflow dispatch（main），GitHub 不是 204 或沒 to
 // ADR 0008：Cron 每 10 分鐘看一次，有改才同步；台灣 6:30 保險同步一次
 test('Cron：沒改不叫 GitHub；Apps Script 通知有改後下一格同步一次；6:30 保險同步', async () => {
   const env = { GITHUB_TOKEN: 'test-token', SHEET_NOTIFY_KEY: 'nk', DB: fakeD1() };
-  const dispatches = [];
+  const dispatches = [], inputs = [];
   globalThis.fetch = async (url, init = {}) => {
     const u = new URL(url);
-    if (u.pathname.endsWith('/dispatches')) { dispatches.push(u.pathname); return new Response(null, { status: 204 }); }
+    if (u.pathname.endsWith('/dispatches')) { dispatches.push(u.pathname); inputs.push(JSON.parse(init.body).inputs); return new Response(null, { status: 204 }); }
     return new Response('{}', { status: 404 });
   };
   const tick = async iso => { const waits = []; await worker.scheduled({ scheduledTime: new Date(iso).getTime() }, env, { waitUntil: p => waits.push(p) }); await Promise.all(waits); };
@@ -258,6 +258,8 @@ test('Cron：沒改不叫 GitHub；Apps Script 通知有改後下一格同步一
   down = false;
   await tick('2026-10-16T22:50:00Z');
   assert.equal(dispatches.length, 3);
+  // 只有 6:30 那次帶 daily，同步會再核對每隻狗最後一次溜狗（ADR 0010）
+  assert.deepEqual(inputs, [undefined, { daily: 'true' }, undefined]);
   // 沒設專用密碼就不收；預覽版也不收
   assert.equal((await send(new Request('https://x.workers.dev/api/sheet-changed', { method: 'POST', headers: { 'X-Notify-Key': '' } }), { ...env, SHEET_NOTIFY_KEY: '' })).status, 503);
   assert.equal((await send(new Request('https://x.workers.dev/api/sheet-changed', { method: 'POST', headers: { 'X-Notify-Key': 'nk' } }), { ...env, PREVIEW: '1' })).status, 403);
