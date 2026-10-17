@@ -143,15 +143,15 @@ function runTests() {
         searchQuery = '搜尋';
         activeTab = 'walk'; renderMain();
         eq(names(), ['搜尋乙', '搜尋甲'], '溜狗表（久沒遛的在前）：');
-        eq(counts(), ['2', '', ''], '分類數字（找狗不放數字）：');
+        eq(counts(), ['2', '', '', ''], '分類數字（找狗不放數字）：');
         if (!mainText().includes('搜尋「搜尋」：2 隻')) throw new Error('沒有顯示搜尋結果隻數');
         if (!document.querySelector('#main .card .warn-note')) throw new Error('勿溜的搜尋乙沒有警示備註');
         searchQuery = '<b>沒這隻'; activeTab = 'walk'; renderMain();
         eq(document.querySelector('#main .status-msg').innerHTML, '找不到「&lt;b&gt;沒這隻」');
-        eq(counts(), ['0', '', ''], '查無時分類數字：');
+        eq(counts(), ['0', '', '', ''], '查無時分類數字：');
         searchQuery = ''; renderMain();
         eq(names().length, 3, '清空後：');
-        eq(counts(), ['3', '', ''], '清空後分類數字：');
+        eq(counts(), ['3', '', '', ''], '清空後分類數字：');
       } finally { searchQuery = ''; activeTab = 'walk'; }
     }),
     check('搜尋：輸入即篩選；注音選字途中不篩選，選好字才更新', () => {
@@ -453,12 +453,12 @@ function runTests() {
         groupMap = {}; activeTab = 'walk'; searchQuery = '';
         render();
         const tabs = () => [...document.querySelectorAll('#tabs button')];
-        eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '我溜過', '找狗'], '分類（#99 加找狗）：');
-        eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '', ''], '數字（遛狗紀錄還沒讀；找狗不放數字）：');
+        eq(tabs().map(b => b.querySelector('.t').textContent), ['遛狗表', '常遛狗群', '我溜過', '資訊'], '分類（#99 加找狗）：');
+        eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '', '', ''], '數字（遛狗紀錄還沒讀；找狗不放數字）：');
         const active = () => tabs().filter(b => b.classList.contains('active')).map(b => b.dataset.tab);
         eq(active(), ['walk'], '預設：');
         eq(document.querySelectorAll('#main .card').length, 1, '溜狗表有狗卡：');
-        tabs()[1].click();
+        tabs()[2].click();
         eq([activeTab, active()], ['mine', ['mine']], '點我溜過：');
         tabs()[0].click();
         eq(active(), ['walk'], '點回溜狗表：');
@@ -491,16 +491,13 @@ function runTests() {
         swipe(main, 100);
         eq(activeTab, 'walk', '第一頁向右滑不循環：');
         swipe(main.querySelector('.card'), -100);
-        eq([activeTab, active()], ['mine', ['mine']], '在狗卡上向左滑也會到我溜過：');
+        eq([activeTab, active()], ['groups', ['groups']], '向左滑進常遛狗群：');
         swipe(main, -100);
-        eq([activeTab, active()], ['find', ['find']], '再向左滑到找狗（#99）：');
-        swipe(main, -100);
-        eq(activeTab, 'find', '最後一頁向左滑不循環：');
-        swipe(main, 100); swipe(main, 100);
-        eq([activeTab, active()], ['walk', ['walk']], '向右滑回溜狗表：');
+        eq([activeTab, active()], ['groups', ['groups']], '狗群內滑動不切主分類：');
+        switchTab('walk');
         searchQuery = '測試'; render();
         swipe(main, -100);
-        eq([activeTab, searchQuery], ['mine', '測試'], '搜尋中也能滑，搜尋字保留：');
+        eq([activeTab, searchQuery], ['groups', '測試'], '搜尋字保留：');
       } finally {
         [allDogs, groupMap, activeTab, searchQuery] = saved;
         render();
@@ -813,7 +810,7 @@ async function runSerialTests() {
       let release;
       const calls = install(() => new Promise(r => { release = () => r(json(DATA)); }));
       const done = init();
-      eq(tabNames(), ['溜狗表', '我溜過', '找狗'], '讀取中就有分類：');
+      eq(tabNames(), ['遛狗表', '常遛狗群', '我溜過', '資訊'], '讀取中就有分類：');
       eq(main.textContent.trim(), '讀取中…', '讀取中：');
       document.querySelector('#tabs button[data-tab="mine"]').click();
       eq(activeTab, 'mine', '讀取中也能切到我溜過：');
@@ -838,7 +835,7 @@ async function runSerialTests() {
       for (const fake of [() => new Response(JSON.stringify({ ok: false, code: 'db', error: '資料庫暫時讀不到狗的資料，請稍後再試' }), { status: 503 }), () => new Response('Not Found', { status: 404 }), () => { throw new TypeError('Failed to fetch'); }, () => new Response('{壞掉')]) {
         install(fake);
         await init();
-        eq(tabNames(), ['溜狗表', '我溜過', '找狗'], '分類：');
+        eq(tabNames(), ['遛狗表', '常遛狗群', '我溜過', '資訊'], '分類：');
         eq(main.querySelector('.status-msg').firstChild.textContent, '狗的資料讀不到，請確認網路後按「重新讀取」。', '錯誤訊息：');
         eq(document.querySelectorAll('#main .card').length, 0, '沒有狗卡：');
       }
@@ -1162,8 +1159,8 @@ async function runAnalysisTests() {
       render();
       const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
       const btn = doc.querySelector('header .brand #analysisBtn');
-      if (!btn || btn.getAttribute('aria-label') !== '分析' || !btn.querySelector('use[href="#i-chart"]')) throw new Error('頁首右上角要有分析圖示');
-      eq([...document.querySelectorAll('#tabs button')].map(b => b.dataset.tab), ['walk', 'mine', 'find'], '分析不佔分類：');
+      if (btn) throw new Error('分析入口已移到底部資訊');
+      eq([...document.querySelectorAll('#tabs button')].map(b => b.dataset.tab), ['walk', 'groups', 'mine', 'info'], '分析不佔分類：');
       showAnalysis();
       eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [true, true, 'mine'], '打開分析：');
       const titles = [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
@@ -1761,7 +1758,7 @@ async function runV9Tests() {
       main.querySelector('[data-walk-view="photo"]').click();
     });
     await check('#141 沒有今天已溜：按溜了留在溜狗表、變「已溜」、天數變今天；再按一次取消', () => {
-      eq(TABS.map(t => t.id), ['walk', 'mine', 'find'], '分類：');
+      eq(TABS.map(t => t.id), ['walk', 'groups', 'mine', 'info'], '分類：');
       main.querySelector('.card[data-dog="0"] [data-walk="add"]').click();
       const btn = main.querySelector('.card[data-dog="0"] .walk-btn');
       eq([btn.dataset.walk, btn.textContent.trim(), computeStatus(allDogs[0], new Date()).days], ['back', '已溜', 0], '已溜：');
@@ -2287,7 +2284,7 @@ async function runWarnLayoutTests() {
 async function runMonthWalkTests() {
   check('K 2026-10-09 分析頁的返回在頁首（← 分析），內容區不再有另一個返回和標題', () => {
     // 測試頁不是真的 index.html：檢查 index.html 原始碼的頁首
-    if (!/<header class="app">[\s\S]*class="head-back" id="analysisBack"[\s\S]*<h2 class="head-title">分析<\/h2>/.test(INDEX_HTML)) throw new Error('頁首要有返回和標題');
+    if (!/<header class="app">[\s\S]*class="head-back" id="analysisBack"[\s\S]*<h2 class="head-title">資訊<\/h2>/.test(INDEX_HTML)) throw new Error('頁首要有返回和標題');
     if (/class="a-top"|class="a-back"/.test(analysisPageHtml(new Date()))) throw new Error('內容區不該再有返回');
   });
 }
@@ -2547,7 +2544,7 @@ async function runFindTests() {
       const chip = key => document.querySelector(`#main [data-find-zone="${key}"] small`);
       eq(document.querySelector('#main [data-find-zone="all"]'), null, 'V9（#141）預設就是全部，沒有「全部」鈕：');
       eq(chip('new').textContent, '3', '新犬舍：');
-      eq(document.querySelector('#tabs [data-tab="find"] .n').textContent, '', '找狗分頁不放數字：');
+      eq(document.querySelector('#tabs [data-tab="find"]'), null, '找狗不在底部分類：');
       searchQuery = '';
       document.querySelector('#main [data-find-zone="pup"]').click();
       eq([...document.querySelectorAll('#main .find-dog .find-name .n')].map(n => n.textContent), ['咪寶'], 'C區：');
@@ -2645,7 +2642,7 @@ async function runTermTests() {
     const shown = src => src
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/(^|[^:])\/\/.*$/gm, '$1')
-      .replace(/勿遛|勿蹓|「誰遛的」|'誰遛的'|上次遛/g, ''); // K 2026-10-13 指定左側標題「上次遛」
+      .replace(/遛狗表|常遛狗群|勿遛|勿蹓|「誰遛的」|'誰遛的'|上次遛/g, ''); // K 2026-10-13 指定左側標題「上次遛」
     const old = ['遛', '移回', '一直收起', '今天先收起', '犬名', '犬隻', '狗狗', '狗卡資訊', '平均隔', '最久隔', '日期異常', '尚無', '已存到 Git', '代號服務'];
     const hits = [];
     for (const [file, src] of [['index.html', INDEX_HTML.replace(/<!--[\s\S]*?-->/g, '')], ['app.js', APP_JS], ['analysis.js', ANALYSIS_JS], ['find.js', FIND_JS]]) {
@@ -2674,7 +2671,7 @@ async function runWhereTests() {
       if (!bar || bar.compareDocumentPosition(doc.getElementById('main')) & Node.DOCUMENT_POSITION_FOLLOWING) throw new Error('底部列要在內容區後面');
       if (doc.querySelector('header #tabs, #bottomBar #searchInput')) throw new Error('分類不放頁首；搜尋框 2026-10-04 起在頁首、不在底部列');
       buildTabs({});
-      eq([...document.querySelectorAll('#tabs button')].map(b => !!b.querySelector('svg.icon')), [true, true, true], '每個分類都有圖示：');
+      eq([...document.querySelectorAll('#tabs button')].map(b => !!b.querySelector('svg.icon')), [true, true, true, true], '每個分類都有圖示：');
     });
     await check('#111 找路的話：舊犬舍由下往上數、新犬舍由左往右數，不分籠的區說進去找', () => {
       const how = cage => whereDirections({ cage }).how;

@@ -31,7 +31,8 @@ const RED_DAYS = SITE.days.red;
 let allDogs = [];
 let groupMap = {};
 // 圖鑑（cards.html）的「去設定」連到 index.html#mine，直接打開我溜過
-let activeTab = typeof location !== 'undefined' && location.hash === '#mine' ? 'mine' : 'walk';
+let activeTab = typeof location !== 'undefined' && ['#mine', '#find'].includes(location.hash) ? location.hash.slice(1) : 'walk';
+let groupsReturnTab = 'walk';
 let detailDog = null; // 詳細資訊正在看的狗
 let detailOpener = null;
 let detailTrail = []; // 在詳細資訊裡點「可以一起溜」換過的狗（#99）：可以按「回到 ○○」一隻一隻回去
@@ -2955,13 +2956,19 @@ function closeDetail() {
 }
 
 // 燈箱開著時「返回」只關燈箱，詳細資訊留著
-window.addEventListener('popstate', () => {
+window.addEventListener('popstate', e => {
   if (findZoomOpen()) findZoomHide(); // 找狗平面圖全螢幕（#102，js/find.js）
   else if (cropOpen()) hideCropper();
   else if (lightboxOpen()) hideLightbox();
   else if (whereDog) whereHide(); // 在哪面板（#111，js/find.js）
   else if (detailDog) hideDetail();
+  else if (e.state && e.state.bqNavigation) {
+    activeTab = e.state.base || 'walk';
+    groupsReturnTab = e.state.returnTab || 'walk';
+    switchTab(e.state.tab, false);
+  }
   else if (analysisOpen) hideAnalysis();
+  else if (activeTab === 'groups') switchTab(groupsReturnTab, false);
 });
 document.getElementById('detailBackdrop').addEventListener('click', e => {
   if (e.target.id === 'detailBackdrop') closeDetail();
@@ -3044,32 +3051,44 @@ function matchesSearch(dog, query) {
 
 // 主分類（V3，#33）：順序就是左右滑動切換的順序
 const TABS = [
-  { id: 'walk', label: '溜狗表', icon: 'list' },
+  { id: 'walk', label: '遛狗表', icon: 'list' },
+  { id: 'groups', label: '常遛狗群', icon: 'group' },
   { id: 'mine', label: '我溜過', icon: 'paw' }, // #58 取代原本的「相關資訊（編輯中）」
-  { id: 'find', label: '找狗', icon: 'map' }, // #99 照片圖鑑＋平面圖，程式在 js/find.js
+  { id: 'info', label: '資訊', icon: 'chart' },
 ];
 
 // counts：各分類要顯示的數字；沒有數字的分類留白
 function buildTabs(counts) {
   const tabsEl = document.getElementById('tabs');
+  const focusedTab = tabsEl.contains(document.activeElement) && document.activeElement.dataset.tab;
+  const selected = analysisOpen ? 'info' : activeTab;
   tabsEl.innerHTML = TABS.map(t => {
     const n = counts[t.id] != null ? counts[t.id] : t.note || '';
     const label = n === '' ? '' : ` aria-label="${t.label}，${t.id === 'mine' ? `${n} 筆紀錄` : `${n} 隻`}"`;
-    return `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}"${activeTab === t.id ? ' aria-current="page"' : ''}${label}>${icon(t.icon)}<span class="t">${t.label}</span><span class="n">${n}</span></button>`;
+    return `<button type="button" data-tab="${t.id}" class="${selected === t.id ? 'active' : ''}"${selected === t.id ? ' aria-current="page"' : ''}${label}>${icon(t.icon)}<span class="t">${t.label}</span><span class="n">${n}</span></button>`;
   }).join('');
   tabsEl.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
+  if (focusedTab) tabsEl.querySelector(`[data-tab="${focusedTab}"]`)?.focus({ preventScroll: true });
 }
 
 // 切換分類：標籤跟著亮起，畫面回到內容最上面
-function switchTab(id) {
-  if (!TABS.some(t => t.id === id)) return;
-  const changed = id !== activeTab;
-  activeTab = id;
+function switchTab(id, pushHistory = true) {
+  // find 保留給舊入口與操作教學，底部不再佔一格。
+  if (id !== 'find' && !TABS.some(t => t.id === id)) return;
+  const changed = id !== (analysisOpen ? 'info' : activeTab);
+  if (pushHistory && changed) {
+    history.replaceState({ bqNavigation: true, tab: analysisOpen ? 'info' : activeTab, base: activeTab, returnTab: groupsReturnTab }, '');
+  }
+  if (id === 'groups' && activeTab !== 'groups') groupsReturnTab = analysisOpen ? 'info' : activeTab;
+  analysisOpen = id === 'info';
+  if (!analysisOpen) activeTab = id;
+  if (pushHistory && changed) history.pushState({ bqNavigation: true, tab: id, base: activeTab, returnTab: groupsReturnTab }, '');
   if (changed) resetWalkOrder(); // 換分頁回來溜狗表時重排，剛溜的狗才會排到後面
   render();
   const btn = document.querySelector(`#tabs button[data-tab="${id}"]`);
+  if (btn) btn.focus({ preventScroll: true });
   if (btn && btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   if (changed) window.scrollTo(0, 0);
 }
@@ -3093,7 +3112,7 @@ function swipeStep(dx, dy) {
 
 // 內容區左右滑動換分類，狗卡上也可以滑（K 2026-09-24 定：加入／移回今天已溜改用狗卡上的按鈕，#35）；
 // 按鈕、輸入框上不算，避免誤觸
-const SWIPE_IGNORE = 'button, input, a, textarea';
+const SWIPE_IGNORE = 'button, input, a, textarea, select, iframe, [data-navigation-scope]';
 let swipeStart = null;
 const mainEl = document.getElementById('main');
 mainEl.addEventListener('touchstart', e => {
@@ -3102,7 +3121,7 @@ mainEl.addEventListener('touchstart', e => {
   swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
 }, { passive: true });
 mainEl.addEventListener('touchend', e => {
-  if (!swipeStart || analysisOpen) return; // 分析頁不是分類，滑動不換頁
+  if (!swipeStart || analysisOpen || activeTab === 'groups') return;
   const t = e.changedTouches[0];
   const step = swipeStep(t.clientX - swipeStart.x, t.clientY - swipeStart.y);
   swipeStart = null;
@@ -3283,12 +3302,23 @@ function renderMain() {
     `${today.getMonth() + 1}月${today.getDate()}日 (${'日一二三四五六'[today.getDay()]})`;
 
   const main = document.getElementById('main');
-  // 分析頁開著時底部列收起來（分析頁有自己的「返回」）
-  document.documentElement.classList.toggle('analysis-open', analysisOpen);
+  // 資訊與狗群共用內頁頁首；底部導覽保持可用。
+  document.documentElement.classList.toggle('analysis-open', analysisOpen || activeTab === 'groups');
+  const title = document.querySelector('.head-title');
+  if (title) title.textContent = analysisOpen ? '資訊' : '常遛狗群';
+  const back = document.getElementById('analysisBack');
+  if (back) back.innerHTML = `${icon('back')}回${(TABS.find(t => t.id === (analysisOpen ? activeTab : groupsReturnTab)) || TABS[0]).label}`;
 
-  // 分析頁（#59）：頁首右上角的圖示打開，蓋住分類清單；統計與畫面在 js/analysis.js
+  // 資訊先承接既有分析內容（#59），#273 再整理分類。
   if (analysisOpen) {
+    buildTabs({});
     main.innerHTML = analysisPageHtml(today);
+    return;
+  }
+  if (activeTab === 'groups') {
+    buildTabs({});
+    // 沿用正式狗群頁及既有 API；獨立文件的觸控事件不會冒泡到主分類。
+    if (!main.querySelector('#groupsFrame')) main.innerHTML = '<iframe id="groupsFrame" class="groups-frame" title="常遛狗群" src="groups.html?embedded=1" data-navigation-scope></iframe>';
     return;
   }
 
@@ -3459,7 +3489,7 @@ const TOUR_STEPS = [
   { target: ['#main .card[data-dog] .cage-pill', '#main .row-dog[data-dog] .r-cage', '#main .desk-table tbody .dr-cage'], title: '籠位查詢', text: '點擊籠位，就能在平面圖查看位置。', demo: 'where' },
   { target: ['#main .walk-tools .seg', '#main .dt-view'], title: '照片／列表', text: '右上角可以切換：有照片的狗卡，或一列一隻、比較好掃過去的列表。', deskTitle: '全表／最近 30 天', deskText: '全表下面可以切換「最近 30 天」，看每隻狗這一個月哪幾天有出門。', demo: 'view' },
   { target: ['#tabs [data-tab="mine"]'], title: '我溜過', text: '查看自己溜過的狗。', demo: 'tab' },
-  { target: ['#tabs [data-tab="find"]'], title: '找狗', text: '透過平面圖快速找到狗的位置。', demo: 'find' },
+  { target: ['#main [data-where]', '#main .card .meta', '#main .row-dog .r-cage'], title: '找狗', text: '點籠位查看狗的位置，也可以看平面圖。', demo: 'find' },
   { target: [], title: '加入手機主畫面', text: '下次點手機桌面的圖示，就能直接開啟網站。', install: true },
 ];
 function tourStepCount() {
@@ -3533,7 +3563,7 @@ const TOUR_DEMOS = {
   // 找狗（K 2026-10-09）：切過去後再隨便點平面圖上一個有狗的籠子，下面列出那一籠的狗。
   // 全圖不畫籠子（critique 2026-10-09），所以先點一區放大，再點那一區的籠子
   find: {
-    run: el => { if (el) switchTab(el.dataset.tab); },
+    run: () => switchTab('find'),
     show: '#main .find-map-card .find-map',
     then: [
       { at: tourZoneWithDogs, run: g => { findZone = g.dataset.findZone; findCage = null; render(); } },
