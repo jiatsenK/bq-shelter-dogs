@@ -84,8 +84,8 @@ function groupStageHtml() {
     ${searchNote ? `<p class="gw-search-note" role="status">${esc(searchNote)}</p>` : ''}
     <div id="gwManage" class="gw-manage" ${groupManage ? '' : 'hidden'}><button type="button" data-gw-action="create">＋狗群</button>${dogs.map(d => `<button type="button" data-gw-remove="${esc(d.name)}">移出 ${esc(d.name)}</button>`).join('')}</div>
 
-    <div id="groupStage" class="gw-stage" style="--rows:${Math.max(1, Math.ceil((dogs.length + 2) / 4))}" aria-label="目前狗群">${layers}</div>
-    <div class="gw-pages"><button type="button" data-gw-step="-1" aria-label="上一群" ${index <= 0 ? 'disabled' : ''}>${icon('back')}</button><span>${groups.length ? index + 1 : 0} / ${groups.length}</span><button type="button" data-gw-step="1" aria-label="下一群" ${index >= groups.length - 1 ? 'disabled' : ''}>${icon('chevron')}</button></div>
+    <div class="gw-stage-wrap"><button type="button" class="gw-side prev" data-gw-step="-1" aria-label="上一群" ${groups.length < 2 ? 'disabled' : ''}>${icon('back')}</button><div id="groupStage" class="gw-stage" style="--rows:${Math.max(1, Math.ceil((dogs.length + 2) / 4))}" aria-label="目前狗群">${layers}</div><button type="button" class="gw-side next" data-gw-step="1" aria-label="下一群" ${groups.length < 2 ? 'disabled' : ''}>${icon('chevron')}</button></div>
+    <div class="gw-pages"><span>${groups.length ? index + 1 : 0} / ${groups.length}</span></div>
     <p id="gwFeedback" role="status">${esc(groupBusy ? '處理中…' : groupFeedback)}</p>
     ${group ? `<div class="gw-actions">${walkBtn}</div><p class="gw-restrictions">${dogs.some(groupBlocked) ? `不登記：${dogs.filter(groupBlocked).map(d => `${esc(d.name)}（${esc(groupBlocked(d))}）`).join('、')}` : ''}</p>` : ''}
     ${groupFormHtml()}
@@ -99,8 +99,9 @@ function resetGroupSelection() { groupManage = false; groupExcept = false; group
 function changeGroup(step) {
   if (groupBusy) return;
   const groups = namedGroups();
-  const next = groups[groups.indexOf(currentGroup()) + step];
-  if (!next) return;
+  // 頭尾相接（K 2026-10-17）：最後一群再按下一群回到第一群，反之亦然
+  if (groups.length < 2) return;
+  const next = groups[(groups.indexOf(currentGroup()) + step + groups.length) % groups.length];
   const previous = new Map([...document.querySelectorAll('.gw-layer')].map(el => [el.dataset.column, { transform: getComputedStyle(el).transform, opacity: getComputedStyle(el).opacity }]));
   groupColumn = next.column; resetGroupSelection(); render();
   if (!matchMedia('(prefers-reduced-motion: reduce)').matches) document.querySelectorAll('.gw-layer').forEach(el => {

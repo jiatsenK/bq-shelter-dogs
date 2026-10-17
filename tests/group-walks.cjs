@@ -57,6 +57,12 @@ module.exports = async (browser, base) => {
     await page.getByRole('button', { name: '下一群', exact: true }).click();
     await page.getByRole('heading', { name: /空群/ }).waitFor();
     assert(await page.locator('#gwWalk').isDisabled());
+    // 頭尾相接：最後一群按下一群回第一群，再按上一群回最後一群
+    const lastCol = await page.locator('.front').getAttribute('data-column');
+    await page.getByRole('button', { name: '下一群', exact: true }).click();
+    assert.equal(await page.locator('.gw-pages span').textContent(), `1 / ${await page.locator('.gw-pages span').textContent().then(t => t.split(' / ')[1])}`);
+    await page.getByRole('button', { name: '上一群', exact: true }).click();
+    assert.equal(await page.locator('.front').getAttribute('data-column'), lastCol);
     await page.getByRole('button', { name: '上一群', exact: true }).click();
     await page.getByRole('button', { name: '有狗沒溜', exact: true }).click();
     for (const dog of await page.locator('.front [data-gw-dog]').all()) await dog.click();
@@ -105,14 +111,14 @@ module.exports = async (browser, base) => {
         const b = await el.boundingBox(); assert(b.width >= 44 && b.height >= 44, '點擊區44px');
       }
     }
-    await page.locator('.gw-pages button').last().focus();
+    await page.locator('.gw-side.next').focus();
     await page.keyboard.press('ArrowLeft');
     assert.equal(await page.locator('[data-tab="groups"][aria-current="page"]').count(), 1);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const before = await page.locator('.front').getAttribute('data-column');
-    const pageY = await page.locator('.gw-pages').evaluate(el => el.getBoundingClientRect().top);
+    const pageY = await page.locator('.gw-side.next').evaluate(el => el.getBoundingClientRect().top);
     await page.getByRole('button', { name: '下一群', exact: true }).click();
-    assert.equal(await page.locator('.gw-pages').evaluate(el => el.getBoundingClientRect().top), pageY, '狗數變化不移動切群按鈕');
+    assert.equal(await page.locator('.gw-side.next').evaluate(el => el.getBoundingClientRect().top), pageY, '狗數變化不移動切群按鈕');
     await page.getByRole('button', { name: '上一群', exact: true }).click();
     await page.locator('#groupStage').scrollIntoViewIfNeeded();
     const stage = await page.locator('#groupStage').boundingBox();
