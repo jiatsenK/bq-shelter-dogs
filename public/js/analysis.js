@@ -407,19 +407,26 @@ document.getElementById('main').addEventListener('click', e => {
 // ── 離所（#163 年度統計、#164 離所名冊）──
 // 離所紀錄（api/departures，存在 D1）由同步產生（scripts/sync-sheet.mjs 的 updateDepartures）：狗從主清單消失就記一筆，
 // 原因只讀試算表「已出所」分頁判讀，判不出來是待確認。打開分析頁才讀，不拖慢溜狗表。
-const DEPARTURES_URL = 'api/departures'; // #260 起從 Worker 讀 D1，形狀跟原本的 data/departures.json 一樣
+// #363 ADR 0014：長條圖、名冊搜尋（全部年份）用名冊索引（每隻只有編號、狗名、舊編號、出所日、原因）；
+// 點一隻狗才拿那一年的詳細資料（最後籠位、介紹、旗標、出入所），網址帶版本號，瀏覽器快取
+const DEPARTURES_URL = 'api/departures/index';
+const DEPARTURE_YEAR_URL = 'api/departures'; // ?year=YYYY|none&v=版本號，形狀跟原本的 data/departures.json 一樣
 const DEPARTURE_ORDER = ['adopt', 'death', 'other', 'unknown'];
 const DEPARTURE_COLORS = { adopt: 'var(--green-text)', death: '#8E8E93', other: 'var(--primary)', unknown: '#F0A030' };
-let departuresData = null; // { state: 'loading' | 'ready' | 'error', list }
+let departuresData = null; // { state: 'loading' | 'ready' | 'error', list, years: { 年: 版本號 } }
+const departureDetails = new Map(); // 年 → Promise<Map<編號, 離所的狗（詳細）>>
 let depRoster = { open: false, query: '', year: 'all', reason: 'all' };
 
-// departures.json → 離所的狗：跟在所的狗同一個樣子（parseDogsData），多一個 departure
+// departures.json（或名冊索引的 dogs）→ 離所的狗：跟在所的狗同一個樣子（parseDogsData），多一個 departure；
+// 索引沒有 last，舊編號放在 formerIds
 function parseDeparturesData(data) {
-  if (!data || !Array.isArray(data.departures)) throw new Error('departures.json 格式不對');
+  const entries = data && (Array.isArray(data.departures) ? data.departures : data.dogs);
+  if (!Array.isArray(entries)) throw new Error('departures.json 格式不對');
   const text = v => (v == null ? '' : String(v).trim());
-  return data.departures.filter(e => e && text(e.id) && text(e.name)).map(e => {
-    const last = e.last && typeof e.last === 'object' ? e.last : {};
+  return entries.filter(e => e && text(e.id) && text(e.name)).map(e => {
+    const last = e.last && typeof e.last === 'object' ? e.last : { formerIds: e.formerIds };
     const dog = parseDogsData({ dogs: [{ ...last, id: text(e.id), name: text(last.name) || text(e.name), stays: e.stays }] }).dogs[0];
+    dog.depYear = text(e.date).slice(0, 4) || 'none';
     dog.departure = {
       reason: DEPARTURE_ORDER.includes(e.reason) ? e.reason : 'unknown',
       matched: text(e.matched),
@@ -437,9 +444,23 @@ function loadDepartures() {
   departuresData = { state: 'loading', list: [] };
   fetch(DEPARTURES_URL, { cache: 'no-cache' })
     .then(res => (res.status === 404 ? { departures: [] } : res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
-    .then(data => { departuresData = { state: 'ready', list: parseDeparturesData(data) }; })
+    .then(data => { departuresData = { state: 'ready', list: parseDeparturesData(data), years: (data && data.years) || {} }; })
     .catch(() => { departuresData = { state: 'error', list: [] }; })
     .then(() => { if (analysisOpen) render(); });
+}
+
+// 名冊點一隻狗：拿那一年的詳細資料再開；拿不到就用索引那一筆開（只少了籠位、介紹等）
+function departureDetail(dog) {
+  const year = dog.depYear;
+  if (!departureDetails.has(year)) {
+    const ver = (departuresData && departuresData.years[year]) || '';
+    const url = `${DEPARTURE_YEAR_URL}?year=${encodeURIComponent(year)}&v=${encodeURIComponent(ver)}`;
+    departureDetails.set(year, fetch(url)
+      .then(res => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then(data => new Map(parseDeparturesData(data).map(d => [d.id, d])))
+      .catch(e => { departureDetails.delete(year); throw e; }));
+  }
+  return departureDetails.get(year).then(map => map.get(dog.id) || dog, () => dog);
 }
 
 // 每年各類幾隻（年份由舊到新）；沒有日期的另外算
@@ -540,7 +561,7 @@ document.getElementById('main').addEventListener('click', e => {
   if (col) { depRoster = { ...depRoster, open: true, year: col.dataset.depYear }; render(); return; }
   const row = e.target.closest('[data-dep-dog]');
   const dog = row && departuresData && departuresData.list[row.dataset.depDog];
-  if (dog) showDetail(dog);
+  if (dog) departureDetail(dog).then(full => { if (analysisOpen) showDetail(full); });
 });
 document.getElementById('main').addEventListener('input', e => {
   if (e.target.id === 'depSearch') { depRoster.query = e.target.value; refreshDepartureList(); }
