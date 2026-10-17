@@ -31,7 +31,8 @@ const RED_DAYS = SITE.days.red;
 let allDogs = [];
 let groupMap = {};
 // 圖鑑（cards.html）的「去設定」連到 index.html#mine，直接打開我溜過
-let activeTab = typeof location !== 'undefined' && location.hash === '#mine' ? 'mine' : 'walk';
+let activeTab = typeof location !== 'undefined' && ['#mine', '#find', '#groups'].includes(location.hash) ? location.hash.slice(1) : 'walk';
+let groupsReturnTab = 'walk';
 let detailDog = null; // 詳細資訊正在看的狗
 let detailOpener = null;
 let detailTrail = []; // 在詳細資訊裡點「可以一起溜」換過的狗（#99）：可以按「回到 ○○」一隻一隻回去
@@ -97,7 +98,7 @@ function parseDogsData(data) {
     }
   }
   const synced = data.syncedAt ? new Date(data.syncedAt) : null;
-  // 照片版本（#127）：部署到 Cloudflare 時才加（scripts/photo-versions.mjs），照片路徑 → 內容雜湊；repo 裡的 dogs.json 沒有
+  // 照片版本（#127）：Worker 的 /api/dogs 回傳時帶上，照片路徑 → 內容雜湊；repo 裡的 dogs.json 沒有
   const versions = {};
   if (data.photoVersions && typeof data.photoVersions === 'object' && !Array.isArray(data.photoVersions)) {
     for (const [path, v] of Object.entries(data.photoVersions)) {
@@ -173,10 +174,45 @@ async function fetchWalks() {
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }
+// 按年拿舊紀錄（ADR 0013，#346）：api/walks 的 years 是每年的版本號，網址帶版本號，瀏覽器快取過就不再下載。
+// 只有我溜過月曆翻到上個月 1 號以前、那一年還沒拿過才拿
+const walkYears = {}; // 年 → 'loading'／'ready'／'error'
+function recentStartMonth(today = new Date()) {
+  const d = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+}
+// 還沒拿、有紀錄、在近期範圍以前的年份
+function missingWalkYears(today = new Date()) {
+  const recent = recentStartMonth(today);
+  return Object.keys((walksData && walksData.years) || {}).filter(y => `${y}-01` < recent && walkYears[y] !== 'ready').sort();
+}
+async function loadWalkYear(month, today = new Date()) {
+  const year = month.slice(0, 4);
+  const ver = walksData && walksData.years && walksData.years[year];
+  if (!ver || month >= recentStartMonth(today) || walkYears[year] === 'ready' || walkYears[year] === 'loading') return;
+  walkYears[year] = 'loading';
+  try {
+    const res = await fetch(`${WALKS_URL}?year=${year}&v=${encodeURIComponent(ver)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const body = await res.json();
+    // 近期範圍以內以 api/walks 為準；那一年更早的換成拿回來的
+    const cut = `${recentStartMonth(today)}-01`;
+    const old = y => w => !(String(w.date || '').startsWith(y) && String(w.date || '') < cut);
+    walksData = { ...walksData, walks: [...walksData.walks.filter(old(year)), ...(body.walks || []).filter(w => String(w.date || '') < cut)] };
+    myWalks = parseMyWalks(walksData);
+    walkYears[year] = 'ready';
+  } catch (e) {
+    console.error(e);
+    walkYears[year] = 'error';
+  }
+  render();
+}
+
 async function loadMyWalks() {
   myWalksState = 'loading';
   try {
     walksData = await fetchWalks();
+    for (const y of Object.keys(walkYears)) delete walkYears[y];
     myWalks = parseMyWalks(walksData);
     myWalksState = 'ready';
   } catch (e) {
@@ -488,8 +524,11 @@ function myWalksHtml(today, query) {
 function myCalendarState(groups, today) {
   const months = [...new Set(groups.map(g => g.ymd.slice(0, 7)))].sort();
   const nowMonth = localDateKey(today).slice(0, 7);
-  const first = months[0] || nowMonth;
-  let month = mineMonth && mineMonth >= first && mineMonth <= nowMonth ? mineMonth : (months[months.length - 1] || nowMonth);
+  // 還有沒拿的年份：可以翻到那年 1 月，翻到了再拿（#346）
+  const missing = missingWalkYears(today)[0];
+  const first = [months[0] || nowMonth, ...(missing ? [`${missing}-01`] : [])].sort()[0];
+  // 拿回來那年比翻到的月份晚開始：停在最早有紀錄的那個月，不跳回最近
+  let month = mineMonth && mineMonth <= nowMonth ? (mineMonth >= first ? mineMonth : first) : (months[months.length - 1] || nowMonth);
   const inMonth = groups.filter(g => g.ymd.slice(0, 7) === month); // 新到舊
   const day = inMonth.some(g => g.ymd === mineDay) ? mineDay : (inMonth[0] ? inMonth[0].ymd : '');
   return { month, first, nowMonth, inMonth, day };
@@ -517,7 +556,7 @@ function myCalendarHtml(groups, today) {
   return `<section class="mine-cal" aria-label="${y} 年 ${m} 月的溜狗月曆">
     <div class="mc-head">
       <button type="button" class="mc-nav" data-mine-month="${shift(-1)}" aria-label="上個月"${month <= first ? ' disabled' : ''}>${icon('back')}</button>
-      <h3 class="mc-title">${y} 年 ${m} 月<span>${inMonth.length ? `來 <b>${inMonth.length}</b> 天・溜 <b>${dogs}</b> 隻次` : '這個月還沒有紀錄'}</span></h3>
+      <h3 class="mc-title">${y} 年 ${m} 月<span>${walkYears[y] === 'loading' ? '讀取中…' : walkYears[y] === 'error' ? '這一年的紀錄讀不到' : inMonth.length ? `來 <b>${inMonth.length}</b> 天・溜 <b>${dogs}</b> 隻次` : '這個月還沒有紀錄'}</span></h3>
       <button type="button" class="mc-nav next" data-mine-month="${shift(1)}" aria-label="下個月"${month >= nowMonth ? ' disabled' : ''}>${icon('back')}</button>
     </div>
     <div class="mc-week" aria-hidden="true">${[...'日一二三四五六'].map(w => `<span>${w}</span>`).join('')}</div>
@@ -592,7 +631,7 @@ function icon(id) {
 
 // 照片網址加版本號（#127）：Cloudflare 讓照片在手機上快取 30 天（_headers），換了照片內容雜湊就變、網址跟著變，
 // 手機就會抓新的。沒有版本（舊網址 GitHub Pages、剛上傳還沒部署）就不加，照舊用原本的短快取
-let photoVersions = {}; // 照片路徑（photos/...）→ 內容雜湊，來自 dogs.json 的 photoVersions
+let photoVersions = {}; // 照片路徑（photos/...）→ 內容雜湊，來自 /api/dogs 的 photoVersions
 function versioned(path) {
   const v = photoVersions[path];
   return v ? `${path}?v=${v}` : path;
@@ -980,15 +1019,12 @@ function walkThenRecord(dogs) {
   render();
   renderDetail();
   const text = `${todo.map(d => d.name).join('、')} 今天溜了`;
-  const undoFn = () => {
-    recordWalked(todo, false);
-    clearWalkWith(todo);
-    render();
-    renderDetail();
-    queueSheetWrite(todo, false);
-  };
+  // 復原要等試算表改回來才算（#383）；還在寫就先等寫完再改回
+  let written = false, write = null;
+  const undoFn = () => written ? undoSheetWalks(todo) : write.then(() => undoSheetWalks(todo));
   showToast(text, undoFn, { label: '＋一起溜的人', fn: () => openWithSheet(todo) });
-  sheetQueue = queueSheetWrite(todo, true, text, undoFn).then(ok => {
+  write = sheetQueue = queueSheetWrite(todo, true, text, undoFn).then(ok => {
+    written = true;
     if (ok === null) return; // 試算表那邊沒設定，照舊只記在手機
     // 沒寫進試算表的退回：試算表沒有這支手機寫的今天紀錄
     const items = loadSheetWrites();
@@ -1019,6 +1055,40 @@ function setWalkedLocal(dogs, on) {
   const extra = on && loadWalkerName() ? { label: '＋一起溜的人', fn: () => openWithSheet(changed) } : null;
   showToast(text, undoFn, extra);
   queueSheetWrite(changed, on, text, undoFn);
+}
+
+// ── 誤觸復原：這支手機今天寫進試算表的溜了，事後也能從狗群頁的「已溜」撤銷 ──
+// 只認這支手機記下的 prev／wrote（sheetWrite 存的）；試算表那格已被別人改過（current 不是我們寫的）就不提供，
+// 撤銷時 Apps Script 也會再核對一次，不蓋掉別人後來改的
+function sheetUndoable(dog, today = new Date()) {
+  const it = loadSheetWrites(today)[walkKey(dog)];
+  return !!(it && it.prev && it.wrote && (!it.current || it.current.walker === it.wrote.walker));
+}
+let sheetUndoBusy = false;
+// 回傳要顯示的結果文字；只有試算表回「restored」的才算復原
+async function undoSheetWalks(dogs) {
+  const todo = dogs.filter((d, i) => d && sheetUndoable(d) && dogs.indexOf(d) === i);
+  if (sheetUndoBusy || !todo.length) return '';
+  sheetUndoBusy = true;
+  hideToast();
+  render();
+  let ok = false;
+  try { ok = await queueSheetWrite(todo, false); } catch (e) { console.error(e); }
+  sheetUndoBusy = false;
+  const items = loadSheetWrites();
+  const restored = todo.filter(d => { const it = items[walkKey(d)]; return it && !it.wrote; });
+  const changed = todo.filter(d => !restored.includes(d) && !sheetUndoable(d));
+  const left = todo.filter(d => !restored.includes(d) && !changed.includes(d));
+  const names = list => list.map(d => d.name).join('、');
+  const parts = [];
+  if (restored.length) parts.push(`已從試算表復原 ${restored.length} 隻`);
+  if (changed.length) parts.push(`${names(changed)} 在試算表已被改過，沒有蓋掉別人的紀錄`);
+  if (left.length) parts.push(ok === null ? `${names(left)} 目前連不到試算表，尚未復原` : `${names(left)} ${sheetWriteFailText || '試算表沒改回來'}，尚未復原`);
+  const text = parts.join('；');
+  render();
+  renderDetail();
+  showToast(text, null, left.length ? { label: '再試一次', fn: () => undoSheetWalks(left) } : null);
+  return text;
 }
 
 // ── 我的常溜（#267）：逐隻增刪，絕不把手機上的舊整份清單蓋到 D1 ──
@@ -1910,8 +1980,7 @@ function openIntroEdit(dog) {
   renderDetail();
   const box = document.querySelector('#introForm [data-intake-field="date"]') || document.getElementById('introText');
   if (box) {
-    box.focus({ preventScroll: true });
-    if (box.scrollIntoView) box.scrollIntoView({ block: 'center' });
+    box.focus({ preventScroll: true }); // 捲到看得見交給 detail-viewport.js，只捲狗卡不捲整頁（#389）
   }
 }
 async function saveIntro() {
@@ -1991,8 +2060,7 @@ function openStaysEdit(dog) {
   renderDetail();
   const box = document.querySelector('#staysForm [data-stay-field="in"]');
   if (box) {
-    box.focus({ preventScroll: true });
-    if (box.scrollIntoView) box.scrollIntoView({ block: 'center' });
+    box.focus({ preventScroll: true }); // 捲到看得見交給 detail-viewport.js，只捲狗卡不捲整頁（#389）
   }
 }
 // 先在這台檢查一次（伺服器也會檢查）；回空字串是沒問題
@@ -2044,9 +2112,7 @@ function openRestEdit(dog) {
   renderDetail();
   const first = document.getElementById('restReason');
   if (first) {
-    first.focus({ preventScroll: true });
-    const form = document.getElementById('restForm');
-    if (form.scrollIntoView) form.scrollIntoView({ block: 'center' });
+    first.focus({ preventScroll: true }); // 同上（#389）
   }
 }
 // 送到 Worker：end＝結束休養。成功後這支手機馬上生效，其他志工重新整理就看得到（#250 存 D1）
@@ -2915,13 +2981,20 @@ function closeDetail() {
 }
 
 // 燈箱開著時「返回」只關燈箱，詳細資訊留著
-window.addEventListener('popstate', () => {
+window.addEventListener('popstate', e => {
   if (findZoomOpen()) findZoomHide(); // 找狗平面圖全螢幕（#102，js/find.js）
   else if (cropOpen()) hideCropper();
   else if (lightboxOpen()) hideLightbox();
   else if (whereDog) whereHide(); // 在哪面板（#111，js/find.js）
   else if (detailDog) hideDetail();
+  else if (e.state && e.state.bqNavigation) {
+    activeTab = e.state.base || 'walk';
+    groupsReturnTab = e.state.returnTab || 'walk';
+    switchTab(e.state.tab, false);
+    if (e.state.tab === 'info') restoreInfoPage(e.state.infoPage || '');
+  }
   else if (analysisOpen) hideAnalysis();
+  else if (activeTab === 'groups') switchTab(groupsReturnTab, false);
 });
 document.getElementById('detailBackdrop').addEventListener('click', e => {
   if (e.target.id === 'detailBackdrop') closeDetail();
@@ -3004,32 +3077,45 @@ function matchesSearch(dog, query) {
 
 // 主分類（V3，#33）：順序就是左右滑動切換的順序
 const TABS = [
-  { id: 'walk', label: '溜狗表', icon: 'list' },
+  { id: 'walk', label: '遛狗表', icon: 'list' },
+  { id: 'groups', label: '常遛狗群', icon: 'group' },
   { id: 'mine', label: '我溜過', icon: 'paw' }, // #58 取代原本的「相關資訊（編輯中）」
-  { id: 'find', label: '找狗', icon: 'map' }, // #99 照片圖鑑＋平面圖，程式在 js/find.js
+  { id: 'info', label: '資訊', icon: 'chart' },
 ];
 
 // counts：各分類要顯示的數字；沒有數字的分類留白
 function buildTabs(counts) {
   const tabsEl = document.getElementById('tabs');
+  const focusedTab = tabsEl.contains(document.activeElement) && document.activeElement.dataset.tab;
+  const selected = analysisOpen ? 'info' : activeTab;
   tabsEl.innerHTML = TABS.map(t => {
     const n = counts[t.id] != null ? counts[t.id] : t.note || '';
     const label = n === '' ? '' : ` aria-label="${t.label}，${t.id === 'mine' ? `${n} 筆紀錄` : `${n} 隻`}"`;
-    return `<button data-tab="${t.id}" class="${activeTab === t.id ? 'active' : ''}"${activeTab === t.id ? ' aria-current="page"' : ''}${label}>${icon(t.icon)}<span class="t">${t.label}</span><span class="n">${n}</span></button>`;
+    return `<button type="button" data-tab="${t.id}" class="${selected === t.id ? 'active' : ''}"${selected === t.id ? ' aria-current="page"' : ''}${label}>${icon(t.icon)}<span class="t">${t.label}</span><span class="n">${n}</span></button>`;
   }).join('');
   tabsEl.querySelectorAll('button').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
+  if (focusedTab) tabsEl.querySelector(`[data-tab="${focusedTab}"]`)?.focus({ preventScroll: true });
 }
 
 // 切換分類：標籤跟著亮起，畫面回到內容最上面
-function switchTab(id) {
-  if (!TABS.some(t => t.id === id)) return;
-  const changed = id !== activeTab;
-  activeTab = id;
+function switchTab(id, pushHistory = true) {
+  // find 保留給舊入口與操作教學，底部不再佔一格。
+  if (id !== 'find' && !TABS.some(t => t.id === id)) return;
+  const changed = id !== (analysisOpen ? 'info' : activeTab);
+  if (pushHistory && changed) {
+    history.replaceState({ bqNavigation: true, tab: analysisOpen ? 'info' : activeTab, base: activeTab, returnTab: groupsReturnTab, infoPage: typeof infoPage === 'undefined' ? '' : infoPage }, '');
+  }
+  if (id === 'groups' && activeTab !== 'groups') groupsReturnTab = analysisOpen ? 'info' : activeTab;
+  if (pushHistory && changed && id === 'info') infoPage = '';
+  analysisOpen = id === 'info';
+  if (!analysisOpen) activeTab = id;
+  if (pushHistory && changed) history.pushState({ bqNavigation: true, tab: id, base: activeTab, returnTab: groupsReturnTab, infoPage: typeof infoPage === 'undefined' ? '' : infoPage }, '');
   if (changed) resetWalkOrder(); // 換分頁回來溜狗表時重排，剛溜的狗才會排到後面
   render();
   const btn = document.querySelector(`#tabs button[data-tab="${id}"]`);
+  if (btn) btn.focus({ preventScroll: true });
   if (btn && btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   if (changed) window.scrollTo(0, 0);
 }
@@ -3043,33 +3129,8 @@ function stepTab(step) {
   return true;
 }
 
-// 判斷一次手指移動算不算換分類的滑動：水平距離夠長、而且明顯比垂直移動多（上下捲動不算）。
-// 回傳 +1（向左滑，下一個分類）、-1（向右滑，上一個分類）或 0
-const SWIPE_MIN_PX = 60;
-function swipeStep(dx, dy) {
-  if (Math.abs(dx) < SWIPE_MIN_PX || Math.abs(dx) < Math.abs(dy) * 1.5) return 0;
-  return dx < 0 ? 1 : -1;
-}
 
-// 內容區左右滑動換分類，狗卡上也可以滑（K 2026-09-24 定：加入／移回今天已溜改用狗卡上的按鈕，#35）；
-// 按鈕、輸入框上不算，避免誤觸
-const SWIPE_IGNORE = 'button, input, a, textarea';
-let swipeStart = null;
 const mainEl = document.getElementById('main');
-mainEl.addEventListener('touchstart', e => {
-  swipeStart = null;
-  if (e.touches.length !== 1 || e.target.closest(SWIPE_IGNORE)) return;
-  swipeStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-}, { passive: true });
-mainEl.addEventListener('touchend', e => {
-  if (!swipeStart || analysisOpen) return; // 分析頁不是分類，滑動不換頁
-  const t = e.changedTouches[0];
-  const step = swipeStep(t.clientX - swipeStart.x, t.clientY - swipeStart.y);
-  swipeStart = null;
-  if (step) stepTab(step);
-});
-mainEl.addEventListener('touchcancel', () => { swipeStart = null; });
-
 function render() {
   renderMain();
   if (loadWarning) {
@@ -3098,6 +3159,7 @@ window.addEventListener('scroll', syncHeaderShadow, { passive: true });
 const appBrand = appHeader && appHeader.querySelector('.brand');
 function syncHeaderTuck() {
   if (!appHeader || !appBrand || typeof getComputedStyle !== 'function') return; // node 測試的假 DOM 沒有
+  document.documentElement.style.setProperty('--app-header-height', `${appHeader.getBoundingClientRect().height}px`);
   const pad = parseFloat(getComputedStyle(appHeader).paddingTop) || 0;
   appHeader.style.setProperty('--brand-h', `${Math.round(pad + appBrand.offsetHeight)}px`);
 }
@@ -3243,12 +3305,30 @@ function renderMain() {
     `${today.getMonth() + 1}月${today.getDate()}日 (${'日一二三四五六'[today.getDay()]})`;
 
   const main = document.getElementById('main');
-  // 分析頁開著時底部列收起來（分析頁有自己的「返回」）
-  document.documentElement.classList.toggle('analysis-open', analysisOpen);
+  // 資訊與狗群共用內頁頁首；底部導覽保持可用。
+  document.documentElement.classList.toggle('analysis-open', analysisOpen || activeTab === 'groups');
+  // 四個主分頁都用網站共用表頭（K 2026-10-17）；只有資訊子頁換成「回資訊」＋子頁標題
+  document.documentElement.classList.toggle('head-shared', analysisOpen ? !infoPage : activeTab === 'groups');
+  // 常遛狗群也有搜尋狗名（K 2026-10-17）：前三個主分頁都能搜尋，資訊沒有
+  document.documentElement.classList.toggle('head-search', !analysisOpen && activeTab === 'groups');
+  document.documentElement.classList.toggle('head-sub', analysisOpen && !!infoPage);
+  const title = document.querySelector('.head-title');
+  if (title) title.textContent = analysisOpen ? (INFO_PAGES[infoPage] || '資訊') : '常遛狗群';
+  const back = document.getElementById('analysisBack');
+  if (back) back.innerHTML = `${icon('back')}回${(TABS.find(t => t.id === (analysisOpen ? activeTab : groupsReturnTab)) || TABS[0]).label}`;
 
-  // 分析頁（#59）：頁首右上角的圖示打開，蓋住分類清單；統計與畫面在 js/analysis.js
+  if (back && analysisOpen && infoPage) back.innerHTML = `${icon('back')}回資訊`;
+  syncHeaderTuck();
+  // #273 資訊分類與子頁。
   if (analysisOpen) {
-    main.innerHTML = analysisPageHtml(today);
+    buildTabs(loadState === 'ready' ? { walk: allDogs.filter(d => matchesSearch(d, searchQuery.trim())).length, mine: myWalksCount('') } : {});
+    if (!(infoPage === 'updates' && infoUpdateTab === 'edits' && main.querySelector('#infoEdits'))) main.innerHTML = analysisPageHtml(today);
+    return;
+  }
+  if (activeTab === 'groups') {
+    buildTabs(loadState === 'ready' ? { walk: allDogs.filter(d => matchesSearch(d, searchQuery.trim())).length, mine: myWalksCount('') } : {});
+    // 沿用正式狗群頁及既有 API；獨立文件的觸控事件不會冒泡到主分類。
+    main.innerHTML = groupStageHtml();
     return;
   }
 
@@ -3308,7 +3388,7 @@ mainEl.addEventListener('click', e => {
   else if (e.target.closest('[data-mine-month]')) {
     const src = e.target.closest('[data-mine-month]');
     const dir = src.classList.contains('next') ? '.next' : ':not(.next)';
-    mineMonth = src.dataset.mineMonth; mineDay = ''; render();
+    mineMonth = src.dataset.mineMonth; mineDay = ''; loadWalkYear(mineMonth); render();
     const b = document.querySelector(`#main .mc-nav${dir}:not(:disabled)`) || document.querySelector('#main .mc-nav:not(:disabled)');
     if (b) b.focus({ preventScroll: true });
   }
@@ -3419,7 +3499,7 @@ const TOUR_STEPS = [
   { target: ['#main .card[data-dog] .cage-pill', '#main .row-dog[data-dog] .r-cage', '#main .desk-table tbody .dr-cage'], title: '籠位查詢', text: '點擊籠位，就能在平面圖查看位置。', demo: 'where' },
   { target: ['#main .walk-tools .seg', '#main .dt-view'], title: '照片／列表', text: '右上角可以切換：有照片的狗卡，或一列一隻、比較好掃過去的列表。', deskTitle: '全表／最近 30 天', deskText: '全表下面可以切換「最近 30 天」，看每隻狗這一個月哪幾天有出門。', demo: 'view' },
   { target: ['#tabs [data-tab="mine"]'], title: '我溜過', text: '查看自己溜過的狗。', demo: 'tab' },
-  { target: ['#tabs [data-tab="find"]'], title: '找狗', text: '透過平面圖快速找到狗的位置。', demo: 'find' },
+  { target: ['#main [data-where]', '#main .card .meta', '#main .row-dog .r-cage'], title: '找狗', text: '點籠位查看狗的位置，也可以看平面圖。', demo: 'find' },
   { target: [], title: '加入手機主畫面', text: '下次點手機桌面的圖示，就能直接開啟網站。', install: true },
 ];
 function tourStepCount() {
@@ -3493,7 +3573,7 @@ const TOUR_DEMOS = {
   // 找狗（K 2026-10-09）：切過去後再隨便點平面圖上一個有狗的籠子，下面列出那一籠的狗。
   // 全圖不畫籠子（critique 2026-10-09），所以先點一區放大，再點那一區的籠子
   find: {
-    run: el => { if (el) switchTab(el.dataset.tab); },
+    run: () => switchTab('find'),
     show: '#main .find-map-card .find-map',
     then: [
       { at: tourZoneWithDogs, run: g => { findZone = g.dataset.findZone; findCage = null; render(); } },
@@ -3993,7 +4073,7 @@ async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES
       showToast(`更新失敗：${why || `HTTP ${res.status}`}`);
       return;
     }
-    // ADR 0008：Worker 比對過試算表沒變，沒有叫同步，不用等
+    // ADR 0012：Worker 比對過試算表沒變，沒有叫同步，不用等
     if (res.ok && (await res.clone().json().catch(() => ({}))).unchanged) {
       showToast('試算表沒有新的修改，已經是最新的');
       return;

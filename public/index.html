@@ -56,7 +56,7 @@
     <div class="brand">
       <!-- 分析頁打開時頁首換成「‹ 回溜狗表｜分析」（K 2026-10-09；10-10 K：只有箭頭看不懂，改寫回哪裡），內容區不再另外放返回和標題 -->
       <button type="button" class="head-back" id="analysisBack"><svg class="icon"><use href="#i-back"/></svg>回溜狗表</button>
-      <h2 class="head-title">分析</h2>
+      <h2 class="head-title">資訊</h2>
       <svg class="icon logo"><use href="#i-paw"/></svg>
       <div class="titles">
         <h1>板收志工溜狗表</h1>
@@ -66,7 +66,6 @@
         </div>
       </div>
       <button type="button" class="sync-btn" id="syncBtn" aria-label="更新資料" title="更新資料"><svg class="icon"><use href="#i-refresh"/></svg></button>
-      <button type="button" class="analysis-btn" id="analysisBtn" aria-label="分析" title="分析"><svg class="icon"><use href="#i-chart"/></svg></button>
     </div>
     <!-- 搜尋框在畫面上方（2026-10-04 K：放上面比較好），頁首捲動時固定在上面 -->
     <div class="search">
@@ -84,6 +83,9 @@
     <a class="zukan-link" href="groups.html"><svg class="icon"><use href="#i-group"/></svg>狗群</a>
   </div>
 </header>
+
+<!-- 手機的搜尋框（K 2026-10-17 選 A）：表頭四頁同高只放網站名稱，搜尋框放這裡，溜狗表／常遛狗群／我溜過同位置；桌機由 js/desk.js 搬回表頭 -->
+<div class="page-search" id="pageSearch"></div>
 
 <main id="main">
   <div class="status-msg">讀取中…</div>
@@ -108,8 +110,10 @@
 
 <script src="js/site-config.js"></script>
 <script src="js/detail-viewport.js"></script>
+<script src="js/keyboard-viewport.js"></script>
 <script src="js/app.js"></script>
 <script src="js/analysis.js"></script>
+<script src="js/group-stage.js"></script>
 <script src="js/find.js"></script>
 <script src="js/desk.js"></script>
 </body>

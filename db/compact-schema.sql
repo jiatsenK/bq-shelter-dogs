@@ -254,50 +254,27 @@ CREATE TABLE IF NOT EXISTS v3_sync_state (
   value TEXT NOT NULL
 );
 
--- 資料包（ADR 0009，#315，worker/src/packs.js）：small（狗清單、離所、休養）、walks（切點以前的溜狗紀錄）算好存在 v3_packs，
--- 一律分段存（每段最多 1 MB，D1 一列上限 2 MB）。v3_pack_versions 一列：small／walks／live 版本號由觸發器自動加 1，
--- cutoff 是 walks 資料包算到哪天（不含），由 Worker 跨日時往前移。v3_walks 切點以前的列動 walks、以後的動 live（今天的紀錄）。
+-- 資料包（ADR 0009，#315，worker/src/packs.js）：small（在所：狗清單、主清單上的狗的休養，存在 part=main；離所按年見最後，ADR 0014）、walks（切點以前的溜狗紀錄）算好存在 v3_packs，
+-- 一律分段存（每段最多 1 MB，D1 一列上限 2 MB）。v3_pack_versions 一列：small 版本號由觸發器自動加 1。
+-- 溜狗紀錄按月分段（#320）後改用 v3_walk_versions，這張表只剩 small（#354）；正式 D1 舊表還有 walks／live／cutoff 三欄，
+-- 沒人讀寫，留著不 ALTER TABLE（同步補建只跑 IF NOT EXISTS）。
 -- 獨立一張表（不加在 v3_data_versions）：同步補建只跑 IF NOT EXISTS，不用 ALTER TABLE
-CREATE TABLE IF NOT EXISTS v3_pack_versions (id INTEGER PRIMARY KEY CHECK(id=1), small INTEGER NOT NULL DEFAULT 0, walks INTEGER NOT NULL DEFAULT 0, live INTEGER NOT NULL DEFAULT 0, cutoff TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS v3_pack_versions (id INTEGER PRIMARY KEY CHECK(id=1), small INTEGER NOT NULL DEFAULT 0);
 INSERT OR IGNORE INTO v3_pack_versions(id) VALUES(1);
 CREATE TABLE IF NOT EXISTS v3_packs (part TEXT NOT NULL, seq INTEGER NOT NULL, ver INTEGER NOT NULL, cutoff TEXT NOT NULL DEFAULT '', body TEXT NOT NULL, PRIMARY KEY(part,seq));
 CREATE INDEX IF NOT EXISTS v3_walks_date ON v3_walks(walk_date);
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_main_INSERT AFTER INSERT ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_main_UPDATE AFTER UPDATE ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_main_DELETE AFTER DELETE ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_intros_INSERT AFTER INSERT ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_intros_UPDATE AFTER UPDATE ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_intros_DELETE AFTER DELETE ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_main_walkers_INSERT AFTER INSERT ON v3_sheet_main_walkers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_main_walkers_UPDATE AFTER UPDATE ON v3_sheet_main_walkers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_main_walkers_DELETE AFTER DELETE ON v3_sheet_main_walkers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_dog_numbers_INSERT AFTER INSERT ON v3_dog_numbers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_dog_numbers_UPDATE AFTER UPDATE ON v3_dog_numbers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_dog_numbers_DELETE AFTER DELETE ON v3_dog_numbers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_groups_INSERT AFTER INSERT ON v3_sheet_groups BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_groups_UPDATE AFTER UPDATE ON v3_sheet_groups BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_groups_DELETE AFTER DELETE ON v3_sheet_groups BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_changes_INSERT AFTER INSERT ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_changes_UPDATE AFTER UPDATE ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_changes_DELETE AFTER DELETE ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_group_labels_INSERT AFTER INSERT ON v3_sheet_group_labels BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_group_labels_UPDATE AFTER UPDATE ON v3_sheet_group_labels BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_sheet_group_labels_DELETE AFTER DELETE ON v3_sheet_group_labels BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_departures_INSERT AFTER INSERT ON v3_departures BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_departures_UPDATE AFTER UPDATE ON v3_departures BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_departures_DELETE AFTER DELETE ON v3_departures BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_departure_items_INSERT AFTER INSERT ON v3_departure_items BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_departure_items_UPDATE AFTER UPDATE ON v3_departure_items BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_departure_items_DELETE AFTER DELETE ON v3_departure_items BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_rest_INSERT AFTER INSERT ON v3_rest BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_rest_UPDATE AFTER UPDATE ON v3_rest BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_rest_DELETE AFTER DELETE ON v3_rest BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_INSERT AFTER INSERT ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_UPDATE AFTER UPDATE ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_intake_events_DELETE AFTER DELETE ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_stays_INSERT AFTER INSERT ON v3_stays BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_stays_UPDATE AFTER UPDATE ON v3_stays BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS pack_v3_stays_DELETE AFTER DELETE ON v3_stays BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_main_walkers_INSERT AFTER INSERT ON v3_sheet_main_walkers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_main_walkers_UPDATE AFTER UPDATE ON v3_sheet_main_walkers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_main_walkers_DELETE AFTER DELETE ON v3_sheet_main_walkers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_groups_INSERT AFTER INSERT ON v3_sheet_groups BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_groups_UPDATE AFTER UPDATE ON v3_sheet_groups BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_groups_DELETE AFTER DELETE ON v3_sheet_groups BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_changes_INSERT AFTER INSERT ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_changes_UPDATE AFTER UPDATE ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_changes_DELETE AFTER DELETE ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_group_labels_INSERT AFTER INSERT ON v3_sheet_group_labels BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_group_labels_UPDATE AFTER UPDATE ON v3_sheet_group_labels BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_group_labels_DELETE AFTER DELETE ON v3_sheet_group_labels BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 -- 溜狗歷史按月分段（ADR 0009，#320）：取代上面 v3_pack_versions 的 walks／live／cutoff 和 v3_packs 的 walks。
 -- v3_walk_versions 一列：months 是每個月的版本號（JSON，{"2026-10":3}），觸發器依 walk_date 只讓那個月加 1；
 -- total 是切點以前任何一列有變就加 1（沒變時 Worker 只讀這 1 列），live 是切點以後（今天）的列；cutoff 由 Worker 跨日時往前移。
@@ -305,6 +282,8 @@ CREATE TRIGGER IF NOT EXISTS pack_v3_stays_DELETE AFTER DELETE ON v3_stays BEGIN
 CREATE TABLE IF NOT EXISTS v3_walk_versions (id INTEGER PRIMARY KEY CHECK(id=1), total INTEGER NOT NULL DEFAULT 0, live INTEGER NOT NULL DEFAULT 0, cutoff TEXT NOT NULL DEFAULT '', months TEXT NOT NULL DEFAULT '{}');
 INSERT OR IGNORE INTO v3_walk_versions(id) VALUES(1);
 CREATE TABLE IF NOT EXISTS v3_walk_packs (year TEXT NOT NULL, seq INTEGER NOT NULL, vers TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(year,seq));
+-- v3_walk_summaries（#344，ADR 0013）：跟 v3_walk_packs 同一年、同一份 vers，存「每個代號對每隻狗：幾天、第一次、最近一次」，給 /api/walks/mine
+CREATE TABLE IF NOT EXISTS v3_walk_summaries (year TEXT NOT NULL, seq INTEGER NOT NULL, vers TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(year,seq));
 CREATE TRIGGER IF NOT EXISTS walkpack_v3_walks_INSERT AFTER INSERT ON v3_walks BEGIN UPDATE v3_walk_versions SET total=total+(NEW.walk_date<cutoff), live=live+(NEW.walk_date>=cutoff), months=CASE WHEN NEW.walk_date<cutoff THEN json_set(months,'$."'||substr(NEW.walk_date,1,7)||'"',COALESCE(json_extract(months,'$."'||substr(NEW.walk_date,1,7)||'"'),0)+1) ELSE months END WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS walkpack_v3_walks_UPDATE AFTER UPDATE ON v3_walks BEGIN UPDATE v3_walk_versions SET total=total+(OLD.walk_date<cutoff), live=live+(OLD.walk_date>=cutoff), months=CASE WHEN OLD.walk_date<cutoff THEN json_set(months,'$."'||substr(OLD.walk_date,1,7)||'"',COALESCE(json_extract(months,'$."'||substr(OLD.walk_date,1,7)||'"'),0)+1) ELSE months END WHERE id=1; UPDATE v3_walk_versions SET total=total+(NEW.walk_date<cutoff), live=live+(NEW.walk_date>=cutoff), months=CASE WHEN NEW.walk_date<cutoff THEN json_set(months,'$."'||substr(NEW.walk_date,1,7)||'"',COALESCE(json_extract(months,'$."'||substr(NEW.walk_date,1,7)||'"'),0)+1) ELSE months END WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS walkpack_v3_walks_DELETE AFTER DELETE ON v3_walks BEGIN UPDATE v3_walk_versions SET total=total+(OLD.walk_date<cutoff), live=live+(OLD.walk_date>=cutoff), months=CASE WHEN OLD.walk_date<cutoff THEN json_set(months,'$."'||substr(OLD.walk_date,1,7)||'"',COALESCE(json_extract(months,'$."'||substr(OLD.walk_date,1,7)||'"'),0)+1) ELSE months END WHERE id=1; END;
@@ -313,3 +292,75 @@ DROP TRIGGER IF EXISTS pack_v3_walks_INSERT;
 DROP TRIGGER IF EXISTS pack_v3_walks_UPDATE;
 DROP TRIGGER IF EXISTS pack_v3_walks_DELETE;
 DELETE FROM v3_packs WHERE part='walks';
+-- 離所按出所年份（ADR 0014，#362，worker/src/packs.js 的 departurePacks）：v3_departure_versions 一列，years 是每年的版本號
+-- （JSON，{"2026":3,"none":1}，日期不明是 none），資料包存在 v3_packs 的 departures:年。
+-- 觸發器只讓改到的那幾年加 1；狗的休養、出入所紀錄、編號改了，讓這隻狗出所那幾年加 1，在主清單上才讓 small 加 1。
+-- 第一次建表時從現有離所紀錄補上每年的鍵（只有這一次讀整張；之後每次同步 WHERE NOT EXISTS 先擋掉）。
+-- 改觸發器內容要先 DROP：同步只跑 IF NOT EXISTS
+CREATE TABLE IF NOT EXISTS v3_departure_versions (id INTEGER PRIMARY KEY CHECK(id=1), years TEXT NOT NULL DEFAULT '{}');
+CREATE INDEX IF NOT EXISTS v3_departures_date ON v3_departures(departed_date);
+CREATE INDEX IF NOT EXISTS v3_departures_dog ON v3_departures(dog_id);
+INSERT INTO v3_departure_versions(id,years) SELECT 1,(SELECT COALESCE(json_group_object(k,1),'{}') FROM (SELECT DISTINCT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END AS k FROM v3_departures d)) WHERE NOT EXISTS(SELECT 1 FROM v3_departure_versions WHERE id=1);
+-- 觸發器內容換了，名字改成 packs_（同步只跑 IF NOT EXISTS，同名的舊觸發器不會被換掉）；舊的 pack_ 拿掉，
+-- 舊的 small 資料包（含離所）也拿掉，在所資料包改存 main。之後每次同步這幾行都沒東西可刪
+DROP TRIGGER IF EXISTS pack_v3_sheet_main_INSERT;
+DROP TRIGGER IF EXISTS pack_v3_sheet_main_UPDATE;
+DROP TRIGGER IF EXISTS pack_v3_sheet_main_DELETE;
+DROP TRIGGER IF EXISTS pack_v3_intros_INSERT;
+DROP TRIGGER IF EXISTS pack_v3_intros_UPDATE;
+DROP TRIGGER IF EXISTS pack_v3_intros_DELETE;
+DROP TRIGGER IF EXISTS pack_v3_sheet_main_walkers_INSERT;
+DROP TRIGGER IF EXISTS pack_v3_sheet_main_walkers_UPDATE;
+DROP TRIGGER IF EXISTS pack_v3_sheet_main_walkers_DELETE;
+DROP TRIGGER IF EXISTS pack_v3_dog_numbers_INSERT;
+DROP TRIGGER IF EXISTS pack_v3_dog_numbers_UPDATE;
+DROP TRIGGER IF EXISTS pack_v3_dog_numbers_DELETE;
+DROP TRIGGER IF EXISTS pack_v3_sheet_groups_INSERT;
+DROP TRIGGER IF EXISTS pack_v3_sheet_groups_UPDATE;
+DROP TRIGGER IF EXISTS pack_v3_sheet_groups_DELETE;
+DROP TRIGGER IF EXISTS pack_v3_sheet_changes_INSERT;
+DROP TRIGGER IF EXISTS pack_v3_sheet_changes_UPDATE;
+DROP TRIGGER IF EXISTS pack_v3_sheet_changes_DELETE;
+DROP TRIGGER IF EXISTS pack_v3_sheet_group_labels_INSERT;
+DROP TRIGGER IF EXISTS pack_v3_sheet_group_labels_UPDATE;
+DROP TRIGGER IF EXISTS pack_v3_sheet_group_labels_DELETE;
+DROP TRIGGER IF EXISTS pack_v3_departures_INSERT;
+DROP TRIGGER IF EXISTS pack_v3_departures_UPDATE;
+DROP TRIGGER IF EXISTS pack_v3_departures_DELETE;
+DROP TRIGGER IF EXISTS pack_v3_departure_items_INSERT;
+DROP TRIGGER IF EXISTS pack_v3_departure_items_UPDATE;
+DROP TRIGGER IF EXISTS pack_v3_departure_items_DELETE;
+DROP TRIGGER IF EXISTS pack_v3_rest_INSERT;
+DROP TRIGGER IF EXISTS pack_v3_rest_UPDATE;
+DROP TRIGGER IF EXISTS pack_v3_rest_DELETE;
+DROP TRIGGER IF EXISTS pack_v3_intake_events_INSERT;
+DROP TRIGGER IF EXISTS pack_v3_intake_events_UPDATE;
+DROP TRIGGER IF EXISTS pack_v3_intake_events_DELETE;
+DROP TRIGGER IF EXISTS pack_v3_stays_INSERT;
+DROP TRIGGER IF EXISTS pack_v3_stays_UPDATE;
+DROP TRIGGER IF EXISTS pack_v3_stays_DELETE;
+DELETE FROM v3_packs WHERE part='small';
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_main_INSERT AFTER INSERT ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=NEW.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=NEW.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_main_UPDATE AFTER UPDATE ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=OLD.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=OLD.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=NEW.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=NEW.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_main_DELETE AFTER DELETE ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=OLD.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=OLD.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_intros_INSERT AFTER INSERT ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_intros_UPDATE AFTER UPDATE ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_intros_DELETE AFTER DELETE ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_dog_numbers_INSERT AFTER INSERT ON v3_dog_numbers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=NEW.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=NEW.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_dog_numbers_UPDATE AFTER UPDATE ON v3_dog_numbers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=OLD.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=OLD.dog_id); UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=NEW.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=NEW.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_dog_numbers_DELETE AFTER DELETE ON v3_dog_numbers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=OLD.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=OLD.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_departures_INSERT AFTER INSERT ON v3_departures BEGIN UPDATE v3_departure_versions SET years=json_set(years,'$."'||CASE WHEN COALESCE(NEW.departed_date,'')='' THEN 'none' ELSE substr(NEW.departed_date,1,4) END||'"',COALESCE(json_extract(years,'$."'||CASE WHEN COALESCE(NEW.departed_date,'')='' THEN 'none' ELSE substr(NEW.departed_date,1,4) END||'"'),0)+1) WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_departures_UPDATE AFTER UPDATE ON v3_departures BEGIN UPDATE v3_departure_versions SET years=json_set(years,'$."'||CASE WHEN COALESCE(OLD.departed_date,'')='' THEN 'none' ELSE substr(OLD.departed_date,1,4) END||'"',COALESCE(json_extract(years,'$."'||CASE WHEN COALESCE(OLD.departed_date,'')='' THEN 'none' ELSE substr(OLD.departed_date,1,4) END||'"'),0)+1) WHERE id=1; UPDATE v3_departure_versions SET years=json_set(years,'$."'||CASE WHEN COALESCE(NEW.departed_date,'')='' THEN 'none' ELSE substr(NEW.departed_date,1,4) END||'"',COALESCE(json_extract(years,'$."'||CASE WHEN COALESCE(NEW.departed_date,'')='' THEN 'none' ELSE substr(NEW.departed_date,1,4) END||'"'),0)+1) WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_departures_DELETE AFTER DELETE ON v3_departures BEGIN UPDATE v3_departure_versions SET years=json_set(years,'$."'||CASE WHEN COALESCE(OLD.departed_date,'')='' THEN 'none' ELSE substr(OLD.departed_date,1,4) END||'"',COALESCE(json_extract(years,'$."'||CASE WHEN COALESCE(OLD.departed_date,'')='' THEN 'none' ELSE substr(OLD.departed_date,1,4) END||'"'),0)+1) WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_departure_items_INSERT AFTER INSERT ON v3_departure_items BEGIN UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.number=NEW.number))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.number=NEW.number); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_departure_items_UPDATE AFTER UPDATE ON v3_departure_items BEGIN UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.number=OLD.number))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.number=OLD.number); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.number=NEW.number))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.number=NEW.number); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_departure_items_DELETE AFTER DELETE ON v3_departure_items BEGIN UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.number=OLD.number))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.number=OLD.number); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_rest_INSERT AFTER INSERT ON v3_rest BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=NEW.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=NEW.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_rest_UPDATE AFTER UPDATE ON v3_rest BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=OLD.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=OLD.dog_id); UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=NEW.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=NEW.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_rest_DELETE AFTER DELETE ON v3_rest BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=OLD.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=OLD.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_intake_events_INSERT AFTER INSERT ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_intake_events_UPDATE AFTER UPDATE ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_intake_events_DELETE AFTER DELETE ON v3_intake_events BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_stays_INSERT AFTER INSERT ON v3_stays BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=NEW.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=NEW.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_stays_UPDATE AFTER UPDATE ON v3_stays BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=OLD.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=OLD.dog_id); UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=NEW.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=NEW.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_stays_DELETE AFTER DELETE ON v3_stays BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=OLD.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=OLD.dog_id); END;

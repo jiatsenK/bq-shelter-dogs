@@ -16,11 +16,12 @@ import { compareCompactDogs } from './import-compact-dogs.mjs';
 import { compareCompactProfiles } from './import-compact-profiles.mjs';
 import { compareCompactDepartures } from './import-compact-departures.mjs';
 import { fetchGviz, parseGroupColumns, parseGroupLabels, buildData, loadDepartedRows, formatDate } from './sync-sheet.mjs';
-import { planSync, readPrevious, applySource } from './sync-plan.mjs';
+import { planSync, readPrevious, applySource } from './sync-compact-plan.mjs';
 import { SYNC_TABLES, diffTables, budgetProblem, todayRowsWritten, MAX_ROWS_PER_SYNC, DAILY_BUDGET } from './sync-diff.mjs';
+import { SYNCED_AT_KEY } from '../worker/src/compact.js';
 export { planSync, readPrevious };
 
-// 從正式 D1 讀回的現況：永久狗與編號（重跑沿用 ID）、上一次的主清單複本（比對溜狗日期、離所）、
+// 從正式 D1 讀回的現況（全量核對用的整張讀；平常的同步改用 narrowSeedSql 只讀需要的，ADR 0014）：永久狗與編號（重跑沿用 ID）、上一次的主清單複本（比對溜狗日期、離所）、
 // 溜狗紀錄、離所紀錄（累積的基準），介紹（離所時記下最後的樣子）
 export const SEED_TABLES = {
   v3_dogs: 'SELECT * FROM v3_dogs',
@@ -66,7 +67,7 @@ export function walkSeedSql(since, checks = []) {
   if (!since) return SEED_TABLES.v3_walks;
   const pairs = checks.filter(c => c.number && c.date && c.date < since).map(c => `(${sqlValue(c.number)},${sqlValue(c.date)})`);
   return [
-    `SELECT * FROM v3_walks WHERE walk_date>=${sqlValue(since)}`,
+    `SELECT * FROM v3_walks INDEXED BY v3_walks_date WHERE walk_date>=${sqlValue(since)}`,
     ...(pairs.length ? [`SELECT w.* FROM v3_walks w JOIN v3_dog_numbers n ON n.dog_id=w.dog_id WHERE (n.number,w.walk_date) IN (VALUES ${pairs.join(',')})`] : []),
   ].join(' UNION ');
 }
@@ -102,7 +103,10 @@ export async function buildSyncPlan(seed, source, { today = '' } = {}) {
     for (const { sql, values } of changes) { let i = 0; out.push(`${sql.replace(/\?/g, () => sqlValue(values[i++]))};`); }
     const recordDay = Boolean(today) && today !== seed.walksSynced;
     if (recordDay) out.push(`INSERT INTO v3_sync_state(key,value) VALUES('${WALKS_SYNCED_KEY}',${sqlValue(today)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value;`);
-    return { sql: out.join('\n') + '\n', rows: changes.length + Number(recordDay) };
+    // 同步時間另存 v3_sync_state（ADR 0014，#361）：每次同步寫 1 列，沒有 small 觸發器，試算表沒改時 small 不會失效
+    const syncedAt = source.dogs?.syncedAt || '';
+    if (syncedAt) out.push(`INSERT INTO v3_sync_state(key,value) VALUES('${SYNCED_AT_KEY}',${sqlValue(syncedAt)}) ON CONFLICT(key) DO UPDATE SET value=excluded.value;`);
+    return { sql: out.join('\n') + '\n', rows: changes.length + Number(recordDay) + Number(Boolean(syncedAt)) };
   } finally { db.close(); }
 }
 
@@ -110,18 +114,48 @@ export async function buildSyncSql(seed, source, options) {
   return (await buildSyncPlan(seed, source, options)).sql;
 }
 
+// ADR 0014（#364）：出所滿 60 天的離所定下來，平常的同步不讀也不改。
+// 只讀 60 天內（或日期不明）的離所與明細，狗和編號照主鍵（dog_id）讀：上一次主清單上的、這些離所的、
+// 試算表這次的編號（找回來的狗）、這次要讀的溜狗紀錄的。記憶體 D1 裡沒有舊離所，寫回時比不出差異，不會被刪。
+export const SETTLED_DAYS = 60;
+export function departureCutoff(today) {
+  const d = new Date(`${today}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - SETTLED_DAYS);
+  return d.toISOString().slice(0, 10);
+}
+export function narrowSeedSql({ cutoff, numbers = [], walksSql }) {
+  const recent = `SELECT * FROM v3_departures INDEXED BY v3_departures_date WHERE departed_date IS NULL OR departed_date='' OR departed_date>=${sqlValue(cutoff)}`;
+  const nums = [...new Set(numbers.filter(Boolean))];
+  const dogIds = [
+    'SELECT dog_id FROM v3_sheet_main',
+    `SELECT dog_id FROM (${recent})`,
+    ...(nums.length ? [`SELECT dog_id FROM v3_dog_numbers WHERE number IN (${nums.map(sqlValue).join(',')})`] : []),
+    `SELECT dog_id FROM (${walksSql})`,
+  ].join(' UNION ');
+  return {
+    v3_dogs: `SELECT * FROM v3_dogs WHERE dog_id IN (${dogIds})`,
+    v3_dog_numbers: `SELECT * FROM v3_dog_numbers WHERE dog_id IN (${dogIds})`,
+    v3_intros: `SELECT * FROM v3_intros WHERE dog_id IN (${dogIds})`,
+    v3_departures: recent,
+    v3_departure_items: `SELECT * FROM v3_departure_items WHERE number IN (SELECT number FROM (${recent}))`,
+  };
+}
+
 // 12 張表同時讀：每叫一次 npx wrangler 要 3 秒左右，一張一張讀會讓頁首「更新」多等半分鐘
 // 上一次同步的日期先單獨讀（溜狗紀錄要從哪天讀看它，ADR 0010），順便讓 npx 把 wrangler 下載好，其餘再一起叫，免得同時下載互搶快取
 // 任何一張表讀不到就整個停：當成空的會把累積的溜狗紀錄、離所整份換掉
 // 只有還沒建表的群名表可以當成空的；v3_sync_state 還沒建（沒記過日期）就整張讀溜狗紀錄
-// full：全量核對；checks(since)：6:30 保險同步要用主鍵核對的 [{ number, name, date }]（見 walkSeedSql）
+// full：全量核對（溜狗紀錄、離所、狗都整張讀）；checks(since)：6:30 保險同步要用主鍵核對的 [{ number, name, date }]（見 walkSeedSql）
+// numbers：試算表這次的編號；today：台灣時間的今天，離所從 60 天前讀起（ADR 0014）
 // 回傳 { 表名: 列, walksSynced（上一次同步的日期）, since（溜狗紀錄從哪天讀，'' 是整張） }
-export async function readSeed(query, { full = false, checks = () => [] } = {}) {
+export async function readSeed(query, { full = false, checks = () => [], numbers = [], today = formatDate(new Date()) } = {}) {
   const missing = e => /no such table/i.test(String(e?.stdout ?? '') + e.message);
   const walksSynced = (await query(WALKS_SYNCED_SQL).catch(e => { if (missing(e)) return []; throw e; }))[0]?.value || '';
   const since = walkSince(walksSynced, { full });
   const tables = Object.keys(SEED_TABLES);
-  const sqlOf = t => (t === 'v3_walks' ? walkSeedSql(since, checks(since)) : SEED_TABLES[t]);
+  const walksSql = walkSeedSql(since, checks(since));
+  const narrow = full ? {} : narrowSeedSql({ cutoff: departureCutoff(today), numbers, walksSql });
+  const sqlOf = t => (t === 'v3_walks' ? walksSql : narrow[t] || SEED_TABLES[t]);
   const read = t => query(sqlOf(t)).catch(e => { if (OPTIONAL_TABLES.has(t) && missing(e)) return []; throw e; });
   const results = await Promise.all(tables.map(read));
   return { ...Object.fromEntries(tables.map((t, i) => [t, results[i]])), walksSynced, since };
@@ -185,7 +219,7 @@ async function main({ dryRun = false, mode = '' } = {}) {
   const rows = await loadDepartedRows(fetch, now);
   const daily = mode === 'daily';
   const checks = () => (daily ? lastWalkChecks(sheet) : []);
-  const seed = await readSeed(async sql => JSON.parse(await wranglerAsync(['--json', '--command', sql]))[0].results, { full: mode === 'full', checks });
+  const seed = await readSeed(async sql => JSON.parse(await wranglerAsync(['--json', '--command', sql]))[0].results, { full: mode === 'full', checks, numbers: sheet.dogs.map(d => d.id), today: formatDate(now) });
   let plan;
   const { sql, rows: planned } = await buildSyncPlan(seed, async db => {
     plan = planSync(await readPrevious(db), sheet, rows, now, { since: seed.since, daily });

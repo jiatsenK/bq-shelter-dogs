@@ -4,11 +4,11 @@ import { cleanStays } from './stays.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
-import { markChanged, planTick, refreshPlan, rememberSignature, sheetSignature } from './sync-plan.js';
+import { markChanged, planTick, refreshPlan, rememberSignature, sheetSignature, taiwanYmd } from './sync-plan.js';
 import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache } from './today.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
-import { compactStatus, dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
-import { readSmall, readDogsPacked, readWalksPacked, packStatus, resetPackCache } from './packs.js';
+import { dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
+import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
@@ -170,16 +170,16 @@ function github(cfg, path, init = {}) {
 }
 
 // 資料庫（D1）：#247 起網站讀精簡新表（v3_，worker/src/compact.js），狀態頁報告新表有沒有接上、各幾筆。
-// #315 起從資料包數（worker/src/packs.js），不整表 COUNT(*)；資料包的表還沒建時照舊數
+// #315 起從資料包數（worker/src/packs.js），不整表 COUNT(*)，讀不到也不退回整表數
 async function databaseStatus(env) {
   if (!env || !env.DB) return '未設定';
   try {
     const s = await packStatus(env.DB, taiwanYmd(Date.now()));
-    if (s) return `D1 新表（主清單 ${s.dogs} 隻、溜狗紀錄 ${s.walks} 筆）`;
+    return `D1 新表（主清單 ${s.dogs} 隻、溜狗紀錄 ${s.walks} 筆）`;
   } catch (e) {
     console.error('status', e);
+    return 'D1（讀不到資料包版本號）';
   }
-  return compactStatus(env.DB);
 }
 
 // 網站要的狗清單（#247）：形狀跟原本的 data/dogs.json 一樣，另外帶 R2 的照片版本號。
@@ -334,11 +334,6 @@ async function sameSecret(given, expected) {
 const adminLocked = (ip, now) => limited(`admin:${ip}`, ADMIN_FAIL_LIMITS, now);
 const needEditor = origin => fail(400, '請先選好你的名字再編輯', origin, { code: 'editor' });
 
-// 台灣今天的日期 YYYY-MM-DD
-function taiwanYmd(now) {
-  return new Date(now + 8 * 3600 * 1000).toISOString().slice(0, 10);
-}
-
 // 休養中（K 2026-10-09）：在網站上設定「到哪天前暫停帶出」。任何人都能改、記編輯紀錄（ADR 0004）；#250 起存 D1 的 v3_rest
 async function putRest(request, env, origin) {
   const cfg = config(env);
@@ -384,6 +379,18 @@ async function putRest(request, env, origin) {
   return reply(200, { ok: true, id, rest, commit: null }, origin);
 }
 
+// 介紹、出入所紀錄的 JSON 請求本文上限（位元組）
+const EDIT_BODY_MAX_BYTES = 16000;
+
+// 讀 JSON 本文：不是 JSON、太大都回 { error }，否則回 { input }
+async function jsonBody(request, origin, tooLong) {
+  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
+  if (type !== 'application/json') return { error: fail(415, '格式不對', origin) };
+  const raw = await request.text();
+  if (new TextEncoder().encode(raw).length > EDIT_BODY_MAX_BYTES) return { error: fail(413, tooLong, origin) };
+  try { return { input: JSON.parse(raw) }; } catch (e) { return { error: fail(400, '格式不對', origin) }; }
+}
+
 // ---- 入所介紹（K 2026-10-10）：PUT /intro/{編號}，任何人都能改、記編輯紀錄 ----
 // #250 起存 D1 的 v3_intros，/api/dogs 馬上讀得到，不再改 dogs/{編號}.md、不再提交 GitHub
 async function putIntro(request, env, origin) {
@@ -396,16 +403,9 @@ async function putIntro(request, env, origin) {
   if (!ID_PATTERN.test(id)) return fail(400, '狗狗編號格式不對', origin);
 
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
-  if (type !== 'application/json') return fail(415, '格式不對', origin);
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).length > 16000) return fail(413, '介紹太長', origin);
-  let input;
-  try {
-    input = JSON.parse(raw);
-  } catch (e) {
-    return fail(400, '格式不對', origin);
-  }
+  const body = await jsonBody(request, origin, '介紹太長');
+  if (body.error) return body.error;
+  const input = body.input;
   const editor = await editorOf(input && input.editor, cfg.walkerKey);
   if (!editor) return needEditor(origin);
   const text = cleanNote(input && input.text);
@@ -466,12 +466,9 @@ async function putStays(request, env, origin) {
   const m = new URL(request.url).pathname.match(/^\/stays\/([^/]+)$/);
   const id = m ? decodeURIComponent(m[1]) : '';
   if (!ID_PATTERN.test(id)) return fail(400, '狗的編號格式不對', origin);
-  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
-  if (type !== 'application/json') return fail(415, '格式不對', origin);
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).length > 16000) return fail(413, '出入所紀錄太長', origin);
-  let input;
-  try { input = JSON.parse(raw); } catch (e) { return fail(400, '格式不對', origin); }
+  const body = await jsonBody(request, origin, '出入所紀錄太長');
+  if (body.error) return body.error;
+  const input = body.input;
   const now = Date.now();
   const today = taiwanYmd(now);
   const next = cleanStays(input && input.stays, today);
@@ -521,7 +518,7 @@ async function maintenance(env, now = Date.now()) {
   return { purged: await r2.purgeTrash(env, now) };
 }
 
-// Cron 每 10 分鐘一次（ADR 0008）：有改才叫同步，台灣 6:30 保險同步；叫完記下試算表指紋，之後按「更新」沒變就不用再叫
+// Cron 每 10 分鐘一次（ADR 0012）：有改才叫同步，台灣 6:30 保險同步；叫完記下試算表指紋，之後按「更新」沒變就不用再叫
 async function syncTick(env, now) {
   if (!env || !env.DB) return 'none';
   const plan = await planTick(env.DB, now);
@@ -538,7 +535,7 @@ async function syncTick(env, now) {
   return plan;
 }
 
-// Apps Script 通知「試算表有人手動改了」（ADR 0008）：只記下有改，下一次 Cron 再同步。用專用密碼 SHEET_NOTIFY_KEY，不用 WALKER_KEY
+// Apps Script 通知「試算表有人手動改了」（ADR 0012）：只記下有改，下一次 Cron 再同步。用專用密碼 SHEET_NOTIFY_KEY，不用 WALKER_KEY
 async function sheetChanged(request, env) {
   const key = env && env.SHEET_NOTIFY_KEY ? String(env.SHEET_NOTIFY_KEY) : '';
   if (!key || !env.DB) return fail(503, '還沒設定試算表通知', '');
@@ -992,7 +989,6 @@ async function writeGroup(request, env, origin) {
   await env.DB.batch([
     env.DB.prepare('DELETE FROM v3_sheet_groups WHERE column_index = ?').bind(r.column),
     ...names.map((n, i) => env.DB.prepare('INSERT INTO v3_sheet_groups(column_index,row_index,name) VALUES(?,?,?)').bind(r.column, i, n)),
-    env.DB.prepare('CREATE TABLE IF NOT EXISTS v3_sheet_group_labels (column_index INTEGER PRIMARY KEY, label TEXT NOT NULL)'),
     env.DB.prepare('DELETE FROM v3_sheet_group_labels WHERE column_index = ?').bind(r.column),
     ...(label ? [env.DB.prepare('INSERT INTO v3_sheet_group_labels(column_index,label) VALUES(?,?)').bind(r.column, label)] : []),
   ]);
@@ -1122,7 +1118,7 @@ export default {
         return fail(500, '管理功能發生錯誤', allowed);
       }
     }
-    // Apps Script 通知試算表有改（ADR 0008）：沒有網站來源，用專用密碼驗證
+    // Apps Script 通知試算表有改（ADR 0012）：沒有網站來源，用專用密碼驗證
     if (path === '/sheet-changed') {
       try {
         return await sheetChanged(request, env);
@@ -1172,11 +1168,45 @@ export default {
       try { return await favorites(request, env, allowed); }
       catch (e) { return fail(503, '常溜暫時讀寫失敗，請稍後再試', allowed); }
     }
+    // 我溜過的狗（ADR 0013，#344）：代號放在請求內容，不放網址
+    if (path === '/walks/mine') {
+      if (request.method !== 'POST') return fail(405, '只能用 POST /walks/mine', allowed);
+      const input = await readJsonBody(request, 4096);
+      const codes = input && input.codes;
+      if (!Array.isArray(codes) || codes.length > 100 || !codes.every(c => typeof c === 'string' && /^[a-f0-9]{12}$/.test(c))) return fail(400, '代號格式不對', allowed);
+      try {
+        if (!env || !env.DB) throw new Error('沒有 D1');
+        return reply(200, { ok: true, dogs: await readMineWalks(env.DB, taiwanYmd(Date.now()), codes) }, allowed);
+      } catch (e) {
+        console.error('walks/mine', e);
+        return fail(503, '暫時讀不到溜狗紀錄', allowed, { code: 'db' });
+      }
+    }
     // 溜狗紀錄、離所紀錄（#260）：形狀跟原本的 data/walks.json、data/departures.json 一樣，從 D1 讀
-    if (path === '/walks' || path === '/departures') {
+    if (path === '/walks' || path === '/departures' || path === '/departures/index') {
       if (request.method !== 'GET') return fail(405, '只能用 GET 讀', allowed);
       try {
         if (!env || !env.DB) throw new Error('沒有 D1');
+        // ?year=YYYY&v=版本號（#346）：那一年的紀錄。版本號對得上才讓瀏覽器永久快取，版本號一變網址就變
+        const params = new URL(request.url).searchParams;
+        if (path === '/walks' && params.has('year')) {
+          const year = params.get('year');
+          if (!/^\d{4}$/.test(year)) return fail(400, 'year 要是四位數年份', allowed);
+          const body = await readWalksYear(env.DB, taiwanYmd(Date.now()), year);
+          const res = reply(200, { ok: true, ...body }, allowed);
+          if (body.ver && params.get('v') === body.ver) res.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+          return res;
+        }
+        // 離所名冊索引（#363）：分析頁的每年長條圖、名冊搜尋用；點一隻狗才拿那一年 ?year=YYYY|none&v=版本號
+        if (path === '/departures/index') return reply(200, { ok: true, ...await readDepartureIndex(env.DB) }, allowed);
+        if (path === '/departures' && params.has('year')) {
+          const year = params.get('year');
+          if (!/^(\d{4}|none)$/.test(year)) return fail(400, 'year 要是四位數年份或 none', allowed);
+          const body = await readDepartureYear(env.DB, year);
+          const res = reply(200, { ok: true, ...body }, allowed);
+          if (body.ver && params.get('v') === body.ver) res.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+          return res;
+        }
         const body = path === '/walks' ? await readWalksPacked(env.DB, taiwanYmd(Date.now())) : { version: 1, departures: await readSmall(env.DB, 'departures') };
         return reply(200, { ok: true, ...body }, allowed);
       } catch (e) {
@@ -1293,7 +1323,7 @@ export default {
       if (request.method !== 'POST') return fail(405, '更新只能用 POST /sync', allowed);
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
       if (!allow(`sync:${ip}`, SYNC_LIMITS, Date.now())) return fail(429, '剛剛已經在更新了，請稍等一下', allowed);
-      // ADR 0008：先比對試算表指紋，沒變就不叫 GitHub；沒接 D1 或沒設試算表 ID 就照舊直接叫
+      // ADR 0012：先比對試算表指紋，沒變就不叫 GitHub；沒接 D1 或沒設試算表 ID 就照舊直接叫
       if (env && env.DB && cfg.sheetId) {
         if (await refreshPlan(env.DB, () => sheetSignature(cfg.sheetId)).catch(() => 'sync') === 'same') return reply(200, { ok: true, unchanged: true }, allowed);
       }

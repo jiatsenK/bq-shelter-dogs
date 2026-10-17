@@ -25,6 +25,10 @@ const server = http.createServer((req, res) => {
   const browser = await chromium.launch();
   let ok = false;
   try {
+    await require('../tests/info-page.cjs')(browser, `http://localhost:${server.address().port}`);
+    await require('../tests/group-walks.cjs')(browser, `http://localhost:${server.address().port}`);
+    await require('../tests/navigation.cjs')(browser, `http://localhost:${server.address().port}`);
+    await require('../tests/keyboard-viewport.cjs')(browser, `http://localhost:${server.address().port}`);
     const page = await browser.newPage();
     page.on('pageerror', e => console.error('頁面錯誤（不影響結果，只供參考）：', e.message));
     await page.goto(`http://localhost:${server.address().port}/tests/index.html`);

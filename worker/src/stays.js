@@ -27,9 +27,10 @@ export function cleanStays(value, today) {
 }
 
 // 同步才補建新表；正式 D1 還沒建表前當成都沒有紀錄。其他資料庫錯誤不能吞掉
-export async function readAllStays(db) {
+// where 有給只讀符合的狗（照主鍵，ADR 0014）
+export async function readAllStays(db, where = '') {
   try {
-    const { results = [] } = await db.prepare('SELECT dog_id, stays_json FROM v3_stays').all();
+    const { results = [] } = await db.prepare(`SELECT dog_id, stays_json FROM v3_stays${where ? ` WHERE ${where}` : ''}`).all();
     return new Map(results.map(r => [r.dog_id, JSON.parse(r.stays_json)]));
   } catch (e) {
     if (/no such table:\s*(?:main\.)?v3_stays\b/i.test(e.message)) return new Map();

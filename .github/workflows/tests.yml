@@ -61,7 +61,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           files=$(gh api --paginate "repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files" --jq '.[].filename')
-          if echo "$files" | grep -qxE 'scripts/(sync-sheet|sync-compact-d1|sync-plan|sync-diff|import-compact-dogs|import-compact-profiles|import-compact-departures|migrate-compact-db)\.mjs|worker/src/compact\.js|db/compact-schema\.sql|\.github/workflows/tests\.yml'; then
+          if echo "$files" | grep -qxE 'scripts/(sync-sheet|sync-compact-d1|sync-compact-plan|sync-diff|import-compact-dogs|import-compact-profiles|import-compact-departures|migrate-compact-db)\.mjs|worker/src/compact\.js|db/compact-schema\.sql|\.github/workflows/tests\.yml'; then
             echo "run=1" >> "$GITHUB_OUTPUT"
           fi
 
