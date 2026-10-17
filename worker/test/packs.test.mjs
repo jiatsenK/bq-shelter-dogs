@@ -517,3 +517,60 @@ test('正式 D1 第一次補建 v3_departure_versions：從現有離所紀錄補
   assert.deepEqual(await depYears(DB), years);
   await assertSame(DB, '補建後');
 });
+
+// #363 ADR 0014：離所名冊索引＋按年詳細資料
+async function assertDepartureIndex(DB, label) {
+  const all = await readDepartures(DB);
+  const index = await (await get('/departures/index', { DB })).json();
+  const expect = all.map(e => {
+    const dog = { id: e.id, name: e.last && e.last.name ? e.last.name : e.name, date: e.date, dateSource: e.dateSource, reason: e.reason };
+    if (e.returned !== undefined) dog.returned = e.returned;
+    if (e.last && e.last.formerIds) dog.formerIds = e.last.formerIds;
+    return dog;
+  });
+  assert.deepEqual(index.dogs, expect, `${label} 索引`);
+  // 各年詳細資料接起來就是全部，網址帶對版本號才永久快取
+  const joined = [];
+  for (const [year, ver] of Object.entries(index.years)) {
+    const res = await get(`/departures?year=${year}&v=${ver}`, { DB });
+    assert.equal(res.headers.get('Cache-Control'), 'public, max-age=31536000, immutable', `${label} ${year}`);
+    const body = await res.json();
+    assert.equal(body.ver, ver);
+    assert.deepEqual(body.departures, await readDepartures(DB, year), `${label} ${year}`);
+    joined.push(...body.departures);
+  }
+  assert.deepEqual(joined.sort((a, b) => a.id.localeCompare(b.id)), [...all].sort((a, b) => a.id.localeCompare(b.id)), `${label} 各年接起來`);
+}
+
+test('離所名冊索引、按年詳細資料：跟直接讀表相同；改了只換那一年的版本號', async t => {
+  const DB = await departedDb(t, 20);
+  await DB.prepare("UPDATE v3_departures SET returned_number='2026100801' WHERE number='2010000008'").run();
+  await assertDepartureIndex(DB, '一開始');
+  const before = (await (await get('/departures/index', { DB })).json()).years;
+  await DB.prepare("UPDATE v3_departures SET reason='died' WHERE number='2010000004'").run();
+  const after = (await (await get('/departures/index', { DB })).json()).years;
+  assert.deepEqual(Object.keys(after).filter(y => after[y] !== before[y]), ['2014']);
+  await assertDepartureIndex(DB, '改了 2014');
+  worker.testing.resetState();
+  await assertDepartureIndex(DB, '換一台機器');
+  // 版本號不對、沒有那一年、壞掉的年份
+  assert.equal((await get('/departures?year=2014&v=0', { DB })).headers.get('Cache-Control'), 'no-store');
+  assert.deepEqual(await (await get('/departures?year=1990&v=', { DB })).json(), { ok: true, version: 1, year: '1990', ver: '', departures: [] });
+  assert.equal((await get('/departures?year=abc', { DB })).status, 400);
+});
+
+test('讀取量不隨離所的狗變多：名冊索引、點一年的詳細資料，10 隻和 100 隻一樣', async t => {
+  const reads = async n => {
+    const DB = await departedDb(t, n);
+    await get('/departures/index', { DB });
+    const same = await readsOf(DB, '/departures/index');
+    // 今年有狗出所：只重算 2026 那一份
+    await DB.prepare("UPDATE v3_departures SET reason='died' WHERE number='2021030913'").run();
+    const changed = await readsOf(DB, '/departures/index');
+    const year = await readsOf(DB, '/departures?year=2026');
+    return { same, changed, year };
+  };
+  const small = await reads(10), big = await reads(100);
+  assert.equal(small.same, 1, '沒變只讀 1 列版本號');
+  assert.deepEqual(big, small);
+});

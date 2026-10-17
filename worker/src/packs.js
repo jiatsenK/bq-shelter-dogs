@@ -120,7 +120,7 @@ async function departurePacks(db) {
       deps[y] = { ver: years[y], body };
     }
   }
-  return Object.keys(years).map(y => deps[y].body);
+  return { years, packs: Object.keys(years).map(y => deps[y].body) };
 }
 
 // ---- 溜狗紀錄按月分段（#320）：每月版本號在 v3_walk_versions.months（JSON），資料包一年一份存在 v3_walk_packs ----
@@ -291,14 +291,37 @@ async function packedWalks(db, today) {
 // 離所由各年資料包接起來；休養是在所的加上各年離所的（同一隻狗回到主清單時以在所為準）
 export async function readSmall(db, part) {
   memFor(db);
-  if (part === 'departures') return sortDepartures((await departurePacks(db)).flatMap(p => p.departures));
+  if (part === 'departures') return sortDepartures((await departurePacks(db)).packs.flatMap(p => p.departures));
   const v = await versions(db);
   const small = await smallPack(db, v.small);
   if (part === 'dogs') return small.dogs;
   const rest = new Map();
-  for (const p of await departurePacks(db)) for (const [id, r] of Object.entries(p.rest)) rest.set(id, r);
+  for (const p of (await departurePacks(db)).packs) for (const [id, r] of Object.entries(p.rest)) rest.set(id, r);
   for (const [id, r] of Object.entries(small.rest)) rest.set(id, r);
   return sortedRest([...rest]);
+}
+
+// 離所名冊索引（ADR 0014，#363）：每隻只留編號、狗名、舊編號、出所日、原因（和名冊那一行要顯示的推估、再入所），
+// 從各年資料包組，不讀離所表；years 是每年的版本號，網站拿來組 ?year= 的網址
+export async function readDepartureIndex(db) {
+  memFor(db);
+  const { years, packs } = await departurePacks(db);
+  const dogs = sortDepartures(packs.flatMap(p => p.departures)).map(e => {
+    const last = e.last || {};
+    const dog = { id: e.id, name: String(last.name || '').trim() ? last.name : e.name, date: e.date, dateSource: e.dateSource, reason: e.reason };
+    if (e.returned !== undefined) dog.returned = e.returned;
+    if (last.formerIds) dog.formerIds = last.formerIds;
+    return dog;
+  });
+  return { version: 1, years: Object.fromEntries(Object.entries(years).map(([y, v]) => [y, String(v)])), dogs };
+}
+
+// 一年的離所紀錄（#363）：year 是四位數年份或 none；ver 是那一年的版本號（沒有那年是 ''，departures 是空的）
+export async function readDepartureYear(db, year) {
+  memFor(db);
+  const { years } = await departurePacks(db);
+  if (!(year in years)) return { version: 1, year, ver: '', departures: [] };
+  return { version: 1, year, ver: String(years[year]), departures: sortDepartures([...mem.deps[year].body.departures]) };
 }
 
 // 每年的版本號（#346）：各月版本號只會加 1，加總不會回到舊值；切點那年起還有今天的紀錄，再帶切點和 live

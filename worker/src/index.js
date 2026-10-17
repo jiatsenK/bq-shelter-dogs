@@ -8,7 +8,7 @@ import { markChanged, planTick, refreshPlan, rememberSignature, sheetSignature, 
 import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache } from './today.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
-import { readSmall, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
+import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
@@ -1183,7 +1183,7 @@ export default {
       }
     }
     // 溜狗紀錄、離所紀錄（#260）：形狀跟原本的 data/walks.json、data/departures.json 一樣，從 D1 讀
-    if (path === '/walks' || path === '/departures') {
+    if (path === '/walks' || path === '/departures' || path === '/departures/index') {
       if (request.method !== 'GET') return fail(405, '只能用 GET 讀', allowed);
       try {
         if (!env || !env.DB) throw new Error('沒有 D1');
@@ -1193,6 +1193,16 @@ export default {
           const year = params.get('year');
           if (!/^\d{4}$/.test(year)) return fail(400, 'year 要是四位數年份', allowed);
           const body = await readWalksYear(env.DB, taiwanYmd(Date.now()), year);
+          const res = reply(200, { ok: true, ...body }, allowed);
+          if (body.ver && params.get('v') === body.ver) res.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+          return res;
+        }
+        // 離所名冊索引（#363）：分析頁的每年長條圖、名冊搜尋用；點一隻狗才拿那一年 ?year=YYYY|none&v=版本號
+        if (path === '/departures/index') return reply(200, { ok: true, ...await readDepartureIndex(env.DB) }, allowed);
+        if (path === '/departures' && params.has('year')) {
+          const year = params.get('year');
+          if (!/^(\d{4}|none)$/.test(year)) return fail(400, 'year 要是四位數年份或 none', allowed);
+          const body = await readDepartureYear(env.DB, year);
           const res = reply(200, { ok: true, ...body }, allowed);
           if (body.ver && params.get('v') === body.ver) res.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
           return res;
