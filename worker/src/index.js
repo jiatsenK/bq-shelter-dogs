@@ -7,7 +7,7 @@ import * as r2 from './r2.js';
 import { markChanged, planTick, refreshPlan, rememberSignature, sheetSignature } from './sync-plan.js';
 import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache } from './today.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
-import { compactStatus, dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
+import { dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
 import { readSmall, readDogsPacked, readWalksPacked, packStatus, resetPackCache } from './packs.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
@@ -170,16 +170,16 @@ function github(cfg, path, init = {}) {
 }
 
 // 資料庫（D1）：#247 起網站讀精簡新表（v3_，worker/src/compact.js），狀態頁報告新表有沒有接上、各幾筆。
-// #315 起從資料包數（worker/src/packs.js），不整表 COUNT(*)；資料包的表還沒建時照舊數
+// #315 起從資料包數（worker/src/packs.js），不整表 COUNT(*)，讀不到也不退回整表數
 async function databaseStatus(env) {
   if (!env || !env.DB) return '未設定';
   try {
     const s = await packStatus(env.DB, taiwanYmd(Date.now()));
-    if (s) return `D1 新表（主清單 ${s.dogs} 隻、溜狗紀錄 ${s.walks} 筆）`;
+    return `D1 新表（主清單 ${s.dogs} 隻、溜狗紀錄 ${s.walks} 筆）`;
   } catch (e) {
     console.error('status', e);
+    return 'D1（讀不到資料包版本號）';
   }
-  return compactStatus(env.DB);
 }
 
 // 網站要的狗清單（#247）：形狀跟原本的 data/dogs.json 一樣，另外帶 R2 的照片版本號。
@@ -521,7 +521,7 @@ async function maintenance(env, now = Date.now()) {
   return { purged: await r2.purgeTrash(env, now) };
 }
 
-// Cron 每 10 分鐘一次（ADR 0008）：有改才叫同步，台灣 6:30 保險同步；叫完記下試算表指紋，之後按「更新」沒變就不用再叫
+// Cron 每 10 分鐘一次（ADR 0012）：有改才叫同步，台灣 6:30 保險同步；叫完記下試算表指紋，之後按「更新」沒變就不用再叫
 async function syncTick(env, now) {
   if (!env || !env.DB) return 'none';
   const plan = await planTick(env.DB, now);
@@ -538,7 +538,7 @@ async function syncTick(env, now) {
   return plan;
 }
 
-// Apps Script 通知「試算表有人手動改了」（ADR 0008）：只記下有改，下一次 Cron 再同步。用專用密碼 SHEET_NOTIFY_KEY，不用 WALKER_KEY
+// Apps Script 通知「試算表有人手動改了」（ADR 0012）：只記下有改，下一次 Cron 再同步。用專用密碼 SHEET_NOTIFY_KEY，不用 WALKER_KEY
 async function sheetChanged(request, env) {
   const key = env && env.SHEET_NOTIFY_KEY ? String(env.SHEET_NOTIFY_KEY) : '';
   if (!key || !env.DB) return fail(503, '還沒設定試算表通知', '');
@@ -1122,7 +1122,7 @@ export default {
         return fail(500, '管理功能發生錯誤', allowed);
       }
     }
-    // Apps Script 通知試算表有改（ADR 0008）：沒有網站來源，用專用密碼驗證
+    // Apps Script 通知試算表有改（ADR 0012）：沒有網站來源，用專用密碼驗證
     if (path === '/sheet-changed') {
       try {
         return await sheetChanged(request, env);
@@ -1293,7 +1293,7 @@ export default {
       if (request.method !== 'POST') return fail(405, '更新只能用 POST /sync', allowed);
       const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
       if (!allow(`sync:${ip}`, SYNC_LIMITS, Date.now())) return fail(429, '剛剛已經在更新了，請稍等一下', allowed);
-      // ADR 0008：先比對試算表指紋，沒變就不叫 GitHub；沒接 D1 或沒設試算表 ID 就照舊直接叫
+      // ADR 0012：先比對試算表指紋，沒變就不叫 GitHub；沒接 D1 或沒設試算表 ID 就照舊直接叫
       if (env && env.DB && cfg.sheetId) {
         if (await refreshPlan(env.DB, () => sheetSignature(cfg.sheetId)).catch(() => 'sync') === 'same') return reply(200, { ok: true, unchanged: true }, allowed);
       }
