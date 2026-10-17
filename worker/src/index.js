@@ -8,7 +8,7 @@ import { markChanged, planTick, refreshPlan, rememberSignature, sheetSignature }
 import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache } from './today.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
-import { readSmall, readDogsPacked, readWalksPacked, readWalksYear, packStatus, resetPackCache } from './packs.js';
+import { readSmall, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
@@ -1171,6 +1171,20 @@ export default {
     if (path === '/favorites') {
       try { return await favorites(request, env, allowed); }
       catch (e) { return fail(503, '常溜暫時讀寫失敗，請稍後再試', allowed); }
+    }
+    // 我溜過的狗（ADR 0013，#344）：代號放在請求內容，不放網址
+    if (path === '/walks/mine') {
+      if (request.method !== 'POST') return fail(405, '只能用 POST /walks/mine', allowed);
+      const input = await readJsonBody(request, 4096);
+      const codes = input && input.codes;
+      if (!Array.isArray(codes) || codes.length > 100 || !codes.every(c => typeof c === 'string' && /^[a-f0-9]{12}$/.test(c))) return fail(400, '代號格式不對', allowed);
+      try {
+        if (!env || !env.DB) throw new Error('沒有 D1');
+        return reply(200, { ok: true, dogs: await readMineWalks(env.DB, taiwanYmd(Date.now()), codes) }, allowed);
+      } catch (e) {
+        console.error('walks/mine', e);
+        return fail(503, '暫時讀不到溜狗紀錄', allowed, { code: 'db' });
+      }
     }
     // 溜狗紀錄、離所紀錄（#260）：形狀跟原本的 data/walks.json、data/departures.json 一樣，從 D1 讀
     if (path === '/walks' || path === '/departures') {
