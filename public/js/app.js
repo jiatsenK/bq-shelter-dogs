@@ -97,7 +97,7 @@ function parseDogsData(data) {
     }
   }
   const synced = data.syncedAt ? new Date(data.syncedAt) : null;
-  // 照片版本（#127）：部署到 Cloudflare 時才加（scripts/photo-versions.mjs），照片路徑 → 內容雜湊；repo 裡的 dogs.json 沒有
+  // 照片版本（#127）：Worker 的 /api/dogs 回傳時帶上，照片路徑 → 內容雜湊；repo 裡的 dogs.json 沒有
   const versions = {};
   if (data.photoVersions && typeof data.photoVersions === 'object' && !Array.isArray(data.photoVersions)) {
     for (const [path, v] of Object.entries(data.photoVersions)) {
@@ -630,7 +630,7 @@ function icon(id) {
 
 // 照片網址加版本號（#127）：Cloudflare 讓照片在手機上快取 30 天（_headers），換了照片內容雜湊就變、網址跟著變，
 // 手機就會抓新的。沒有版本（舊網址 GitHub Pages、剛上傳還沒部署）就不加，照舊用原本的短快取
-let photoVersions = {}; // 照片路徑（photos/...）→ 內容雜湊，來自 dogs.json 的 photoVersions
+let photoVersions = {}; // 照片路徑（photos/...）→ 內容雜湊，來自 /api/dogs 的 photoVersions
 function versioned(path) {
   const v = photoVersions[path];
   return v ? `${path}?v=${v}` : path;
