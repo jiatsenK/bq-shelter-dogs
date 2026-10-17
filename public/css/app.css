@@ -2006,11 +2006,15 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .analysis-open .head-back:active { background: var(--shell-deep); }
 .analysis-open .head-back:focus-visible { outline: 3px solid var(--tab-amber); }
 .analysis-open .head-title { display: block; flex: 1; margin: 0 0 0 14px; color: #fff; font-size: 20px; font-weight: 800; }
-/* 主分頁沒有返回（2026-10-17）：資訊首頁只放「資訊」，子頁才有「回資訊」；常遛狗群換回網站名稱的共用表頭 */
+/* 主分頁沒有返回（2026-10-17）：常遛狗群、資訊首頁都用網站名稱的共用表頭，只有資訊子頁有「回資訊」 */
 .analysis-open:not(.head-sub) .head-back { display: none; }
 .analysis-open:not(.head-sub) .head-title { margin-left: 0; }
 .analysis-open.head-shared .head-title { display: none; }
 .analysis-open.head-shared .brand .logo, .analysis-open.head-shared .brand .titles { display: block !important; }
+/* 四個主分頁頂列同高（2026-10-17 polish）：共用表頭都有更新資料鈕；資訊子頁只有標題時也撐到同一個高度 */
+.analysis-open.head-shared .sync-btn { display: inline-flex; }
+.analysis-open .brand { min-height: 44px; }
+.analysis-open.head-search header.app .search { display: block; }
 
 /* 列表模式（K 2026-10-09）：溜狗人拿掉，天數｜狗名＋籠位｜溜了；「天數」標題跟下面的數字一樣置中。
    10-10 K：籠位單獨一欄的黑框標籤位置怪、跟照片檢視不一樣 → 改成跟狗卡同一個圖釘籠位（.cage-pill），放在狗名下面 */
@@ -2371,11 +2375,17 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .gw-tile strong { display: block; padding: 2px 1px; font-size: 14px; line-height: 20px; transform: skew(8deg); overflow-wrap: anywhere; color: var(--ink); }
 .gw-dog.excluded .gw-photo { opacity: .35; }
 .gw-dog.excluded strong { text-decoration: line-through; }
+/* 搜尋時沒對到的狗變淡，對到的照常 */
+.gw-dog.miss { opacity: .3; }
+.gw-search-note { margin: 0 0 4px; font-size: 14px; color: var(--ink-soft); }
 #groupPage .gw-add .gw-tile { min-height: var(--card-h); display: grid; place-items: center; border-color: var(--line); font-size: 28px; }
 .gw-pages { display: flex; justify-content: center; align-items: center; gap: 16px; color: var(--ink-soft); }
 .gw-pages svg { width: 20px; height: 20px; }
-.gw-actions { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px; padding: 12px 0; }
-#groupPage #gwWalk { background: var(--primary); color: white; padding: 12px; font-weight: 800; }
+/* 按鈕置中（K 2026-10-17）；「有狗沒溜」跟在主按鈕旁邊 */
+.gw-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 16px; padding: 12px 0; }
+#groupPage #gwWalk { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 200px; background: var(--primary); color: white; padding: 12px 24px; font-weight: 800; }
+/* 已溜：跟溜狗表的「已溜」同色，再按一次復原 */
+#groupPage #gwWalk.done { background: var(--green-bg); color: var(--green-text); }
 #groupPage [data-gw-action="except"] { text-decoration: underline; text-underline-offset: 4px; }
 #gwFeedback, .gw-restrictions { font-size: 14px; overflow-wrap: anywhere; }
 #gwFeedback:empty, .gw-restrictions:empty { display: none; }
@@ -2409,9 +2419,9 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .analysis-open body::before { content: ""; display: block; height: var(--app-header-height, 64px); }
 }
 
-/* 我溜過最上面：今天這支手機登記、按錯可取消（2026-10-17） */
-.mine-undo { margin: 0 0 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); }
-.mine-undo p { margin: 0 0 6px; font-size: 14px; color: var(--ink-soft); }
-.mine-undo ul { list-style: none; margin: 0; padding: 0; }
-.mine-undo li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
-.mine-undo .who-edit { min-height: 44px; min-width: 44px; }
+/* 手機搜尋框在表頭下面（K 2026-10-17 選 A）：溜狗表、常遛狗群、我溜過同一個位置，資訊沒有 */
+.page-search { max-width: 480px; margin: 0 auto; padding: 12px 14px 0; }
+.page-search:empty, .analysis-open:not(.head-search) .page-search { display: none; }
+.page-search .search { margin: 0; }
+.page-search .search input { box-shadow: inset 0 0 0 1px var(--line); }
+.page-search .range { margin: 8px 2px 0; color: var(--ink-soft); }

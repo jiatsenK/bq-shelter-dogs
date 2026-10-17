@@ -31,6 +31,7 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
     await page.locator('#tabs [data-tab="groups"]').click();
     await selected('groups');
     assert.deepEqual(await page.locator('#tabs .n').allTextContents(), counts, '內頁保留底部數字');
+    await page.locator('#groupStage').waitFor(); // 狗群資料非同步讀進來，先等畫好
     assert.equal(await page.locator('.gw-layer').count(), 1, '只顯示當前群');
     assert.equal(await page.locator('.gw-summary').count(), 0, '移除可變長度敘述');
     await page.locator('#groupPage h2').filter({ hasText: '測試群' }).waitFor();
@@ -46,11 +47,11 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
     await selected('info');
     await page.locator('#main .a-card').first().waitFor();
     assert(await page.locator('#bottomBar').isVisible());
-    assert.equal(await page.locator('.head-title').textContent(), '資訊');
-    assert(await page.locator('.head-title').isVisible(), '資訊首頁只顯示「資訊」');
+    assert(!(await page.locator('.head-title').isVisible()), '資訊首頁用網站表頭，不另放標題');
     assert(!(await page.locator('#analysisBack').isVisible()), '資訊首頁沒有返回');
-    assert(!(await page.locator('header.app h1').isVisible()), '資訊首頁不放網站名稱');
+    assert(await page.locator('header.app h1').isVisible(), '資訊首頁放網站名稱');
     assert(!(await page.locator('#searchInput').isVisible()), '資訊首頁沒有搜尋框');
+    assert.equal(Math.round(await page.locator('header.app .brand').evaluate(e => e.getBoundingClientRect().height)), 44, '資訊頂列跟其他主分頁同高');
     await page.locator('[data-info-page="stay"]').click();
     assert.equal((await page.locator('#analysisBack').textContent()).trim(), '回資訊', '資訊子頁保留回資訊');
     assert(await page.locator('#analysisBack').isVisible());
