@@ -3167,14 +3167,14 @@ async function runSheetWriteTests() {
       eq([n, sheetWriteState, toastText()], [1, 'off', '寫入甲 今天溜了'], '沒設定：');
       hideToast();
     });
-    await check('2026-10-08 溜了等試算表回應才變已溜：等的時候「登記中」、卡片不動；寫好才記', async () => {
+    await check('2026-10-17 溜了立刻變已溜，背景寫試算表，寫好提示條補「已寫進試算表」', async () => {
       walkedStorage = fakeStorage(); walkedMemory = null; sheetWritesMemory = null; sheetWriteState = 'unknown';
       saveWalkedIds([]); saveWalkerName('志工我'); activeTab = 'walk'; render();
       let answer;
       window.fetch = () => new Promise(r => { answer = r; });
       document.querySelector('#main .card[data-dog="0"] [data-walk="add"]').click();
       const btn = () => document.querySelector('#main .card[data-dog="0"] .walk-btn');
-      eq([btn().textContent.trim(), btn().disabled, walkedNow(allDogs[0])], ['登記中', true, false], '等試算表：');
+      eq([btn().textContent.trim(), walkedNow(allDogs[0]), toastText()], ['已溜', true, '寫入甲 今天溜了'], '還在寫就已溜：');
       await new Promise(r => setTimeout(r, 0));
       answer(json({ ok: true, results: [{ id: '9801', name: '寫入甲', status: 'written', prev: { date: { date: '2026-10-01' }, walker: '' }, wrote: { walker: '志工我' } }] }));
       await sheetQueue;
@@ -3185,10 +3185,10 @@ async function runSheetWriteTests() {
       eq(walkedNow(allDogs[0]), false, '復原：');
       hideToast();
     });
-    await check('2026-10-08 網路不通就不記成已溜，提示條有「再試一次」', async () => {
+    await check('2026-10-17 網路不通就退回未溜，提示條有「再試一次」', async () => {
       window.fetch = async () => { throw new TypeError('Failed to fetch'); };
       setWalked([allDogs[0]], true); await sheetQueue;
-      eq([walkedNow(allDogs[0]), toastText()], [false, '沒寫進試算表（網路不通），還沒記成已溜'], '沒記：');
+      eq([walkedNow(allDogs[0]), toastText()], [false, '沒寫進試算表（網路不通），已退回未溜'], '退回：');
       const retry = document.querySelector('#toast .toast-extra');
       eq([retry.hidden, retry.textContent], [false, '再試一次'], '再試一次：');
       window.fetch = async (u, o) => { const body = JSON.parse(o.body); return json({ ok: true, results: body.dogs.map(d => ({ ...d, status: 'written', prev: { walker: '' }, wrote: { walker: '志工我' } })) }); };

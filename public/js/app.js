@@ -1000,8 +1000,8 @@ function recordWalked(dogs, on, today = new Date()) {
 
 // 按「溜了」、一起記、移回：記下後重畫，底部跳提示條，可以按「復原」。
 // #138：溜了同時寫進試算表；復原、放回就把試算表改回原本的樣子
-// 2026-10-08 K（介面評估）：會寫試算表時，溜了要等試算表回應才變「已溜」，等的時候按鈕寫「登記中」；
-// 沒寫進去就不記，提示條給「再試一次」。不寫試算表（還沒設定名字、Worker 沒設定）照舊直接記在手機
+// K 2026-10-17：會寫試算表時，按了溜了立刻變「已溜」，背景寫試算表（取代 2026-10-08 先等回應的做法，Apps Script 要好幾秒）；
+// 沒寫進去就退回未溜，提示條給「再試一次」。不寫試算表（還沒設定名字、Worker 沒設定）照舊直接記在手機
 function setWalked(dogs, on) {
   if (on && needNameToWalk()) return askNameThenWalk(dogs); // 還沒設定名字（先看看）：先問名字，設好再登記
   if (on && sheetWillWrite()) walkThenRecord(dogs);
@@ -1016,29 +1016,29 @@ function walkPendingNow(dog) {
   return !!key && walkPending.has(key);
 }
 function walkThenRecord(dogs) {
-  const todo = dogs.filter((d, i) => d && walkKey(d) && !walkedNow(d) && !walkPendingNow(d) && dogs.indexOf(d) === i);
+  const todo = dogs.filter((d, i) => d && walkKey(d) && !walkedNow(d) && dogs.indexOf(d) === i);
   if (!todo.length) return;
-  todo.forEach(d => walkPending.add(walkKey(d)));
+  recordWalked(todo, true);
   pickedBuddies.clear();
-  hideToast();
   render();
   renderDetail();
-  sheetQueue = queueSheetWrite(todo, true).then(ok => {
-    todo.forEach(d => walkPending.delete(walkKey(d)));
-    if (ok === null) { setWalkedLocal(todo, true); return; } // 試算表那邊沒設定，照舊只記在手機
-    const done = todo.filter(d => walkedNow(d));
+  const text = `${todo.map(d => d.name).join('、')} 今天溜了`;
+  // 復原要等試算表改回來才算（#383）；還在寫就先等寫完再改回
+  let written = false, write = null;
+  const undoFn = () => written ? undoSheetWalks(todo) : write.then(() => undoSheetWalks(todo));
+  showToast(text, undoFn, { label: '＋一起溜的人', fn: () => openWithSheet(todo) });
+  write = sheetQueue = queueSheetWrite(todo, true, text, undoFn).then(ok => {
+    written = true;
+    if (ok === null) return; // 試算表那邊沒設定，照舊只記在手機
+    // 沒寫進試算表的退回：試算表沒有這支手機寫的今天紀錄
+    const items = loadSheetWrites();
+    const failed = todo.filter(d => walkedNow(d) && !(items[walkKey(d)] && items[walkKey(d)].mine));
+    if (!failed.length) return;
+    recordWalked(failed, false);
     render();
     renderDetail();
-    if (!done.length) {
-      // 網路不通、試算表回錯誤：sheetWrite 已經跳了原因，這裡補「再試一次」；試算表找不到的狗再試也一樣，不補
-      if (ok === false && sheetWriteFail !== 'missed') showToast(`${sheetWriteFailText}，還沒記成已溜`, null, { label: '再試一次', fn: () => setWalked(todo, true) });
-      return;
-    }
-    if (!ok) return; // 一部分沒寫進去：sheetWrite 的提示說了是哪幾隻，不蓋掉
-    const text = `${done.map(d => d.name).join('、')} 今天溜了`;
-    // 復原要等試算表改回來才算，不先改手機畫面
-    const undoFn = () => undoSheetWalks(done);
-    showToast(`${text}，已寫進試算表`, undoFn, { label: '＋一起溜的人', fn: () => openWithSheet(done) });
+    // 網路不通、試算表回錯誤：給「再試一次」；試算表找不到的狗再試也一樣，sheetWrite 的提示已說是哪幾隻
+    if (ok === false && sheetWriteFail !== 'missed') showToast(`${sheetWriteFailText}，已退回未溜`, null, { label: '再試一次', fn: () => setWalked(failed, true) });
   }).catch(e => console.error(e));
 }
 function setWalkedLocal(dogs, on) {
@@ -1595,11 +1595,11 @@ async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expecte
     res = await fetch(`${UPLOAD_URL}/walk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     out = await res.json().catch(() => null);
   } catch (e) {
-    // 一般的溜了要等試算表回應才記（walkThenRecord 會補「還沒記成已溜」），改溜狗人、復原則是請志工自己去改
+    // 一般的溜了沒寫進去會退回未溜（walkThenRecord 補「再試一次」），改溜狗人、復原則是請志工自己去改
     const plain = on && expected === undefined;
     sheetWriteFail = 'network';
     sheetWriteFailText = on ? '沒寫進試算表（網路不通）' : '試算表沒改回來（網路不通）';
-    showToast(plain ? `${sheetWriteFailText}，還沒記成已溜` : `${sheetWriteFailText}，請自己到試算表${on ? '填' : '改'}`);
+    showToast(plain ? `${sheetWriteFailText}，已退回未溜` : `${sheetWriteFailText}，請自己到試算表${on ? '填' : '改'}`);
     return false;
   }
   if (res.status === 503 && out && out.code === 'off') { sheetWriteState = 'off'; return null; }
