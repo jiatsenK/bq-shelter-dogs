@@ -154,6 +154,27 @@ test('名字推薦改用 v3_volunteers：表上的名字記進去、以前看過
   assert.deepEqual(await rememberWalkerNames({ DB: { prepare() { throw new Error('x'); } } }, ['志工乙']), []);
 });
 
+test('存登記名字只寫有變的（#407）：同一天名字沒變寫 0 列、多一個新名字寫 1 列、隔天才更新 last_seen', async () => {
+  const DB = await seededDb();
+  const { rememberWalkerNames } = await import('../src/index.js');
+  // total_changes 也算觸發器：每寫 1 列名字，identity_v3_volunteers_* 會多寫 1 列 v3_identity_revision
+  const changes = async () => (await DB.prepare('SELECT total_changes() AS n').all()).results[0].n / 2;
+  const t0 = Date.parse('2026-10-15T01:00:00Z');
+  await rememberWalkerNames({ DB }, ['志工乙', '老K'], t0);
+  let before = await changes();
+  await rememberWalkerNames({ DB }, ['志工乙', '老K'], t0 + 3600e3);
+  assert.equal(await changes() - before, 0);
+  before = await changes();
+  await rememberWalkerNames({ DB }, ['志工乙', '老K', '阿德'], t0 + 7200e3);
+  assert.equal(await changes() - before, 1);
+  before = await changes();
+  await rememberWalkerNames({ DB }, ['老K'], t0 + 86400e3);
+  assert.equal(await changes() - before, 1);
+  const rows = (await DB.prepare('SELECT name, last_seen FROM v3_volunteers').all()).results;
+  assert.equal(rows.find(r => r.name === '老K').last_seen, '2026-10-16T01:00:00.000Z');
+  assert.equal(rows.find(r => r.name === '志工乙').last_seen, '2026-10-15T01:00:00.000Z');
+});
+
 test('狀態頁：顯示新資料庫有沒有接上、狗和主清單幾筆；還沒建表或沒接都不會壞，也不退回整表數', async () => {
   const status = async env => (await (await worker.fetch(new Request(`${SITE}/api/`), env)).json()).database;
   assert.equal(await status({}), '未設定');
