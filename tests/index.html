@@ -3931,7 +3931,7 @@ async function runFavSyncTests() {
   const a = 'a'.repeat(32), b = 'b'.repeat(32);
   const books = { [code]: new Set(), [alias]: new Set() };
   let aliases = { '2024100501': a, '2018100501': a, '名:無編號': b };
-  const calls = [];
+  const calls = [], keyCalls = [];
   let offline = false;
   let pauseWrite = null;
   const device = () => { walkedStorage = fakeStorage(); walkerCodesMemory = null; favSyncMemory = null; };
@@ -3946,8 +3946,13 @@ async function runFavSyncTests() {
         for (const c of input.codes) { if (input.on) books[c].add(input.dogId); else books[c].delete(input.dogId); }
         return { ok: true, json: async () => ({ ok: true }) };
       }
-      const codes = new URL(url).searchParams.get('codes').split(',');
-      return { ok: true, json: async () => ({ ok: true, aliases, ids: [...new Set(codes.flatMap(c => [...books[c]]))] }) };
+      const params = new URL(url).searchParams, codes = params.get('codes').split(','), keys = params.getAll('key');
+      keyCalls.push(keys);
+      // 跟 Worker 一樣只回常溜的狗和問到的鍵（#406）
+      const ids = [...new Set(codes.flatMap(c => [...books[c]]))];
+      const dogs = new Set([...ids, ...keys.map(k => aliases[k]).filter(Boolean)]);
+      const picked = Object.fromEntries(Object.entries(aliases).filter(([, id]) => dogs.has(id)));
+      return { ok: true, json: async () => ({ ok: true, aliases: picked, ids }) };
     };
     device();
     allDogs = [{ name: '甲', id: '2024100501', formerIds: ['2018100501'] }, { name: '無編號', id: '', formerIds: [] }];
@@ -3961,6 +3966,14 @@ async function runFavSyncTests() {
       eq([...books[alias]], [], '只寫第一個代號：');
       eq(localFavs(), ['無法辨識']);
       eq(allDogs.map(isFav), [true, true]);
+    });
+    await check('#406 沒有舊格式常溜時，讀常溜不帶 key', async () => {
+      keyCalls.length = 0;
+      writeJsonKey(FAVS_KEY, []);
+      await syncFavs();
+      eq(keyCalls, [[]]);
+      eq(allDogs.map(isFav), [true, true], '常溜的狗仍認得：');
+      writeJsonKey(FAVS_KEY, ['無法辨識']);
     });
     const firstPhone = walkedStorage;
     await check('#267 第二台讀回同一份；各自取消不同狗後兩邊改動都保留', async () => {
