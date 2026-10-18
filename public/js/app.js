@@ -1151,7 +1151,9 @@ function toggleFav(dog) {
 async function reconcileFavorites(state, codes, io) {
   const out = await io.read(codes);
   if (io.codes().join(',') !== codes.join(',')) return;
-  state.aliases = out.aliases;
+  // 只收到常溜的狗和問到的舊鍵（#406）；還沒送出的操作用到的對照留著
+  const waiting = new Set(state.pending.map(op => op.dogId));
+  state.aliases = { ...Object.fromEntries(Object.entries(state.aliases).filter(([, id]) => waiting.has(id))), ...out.aliases };
   const bookKey = codes.join(',');
   state.books[bookKey] = out.ids;
   for (const key of io.local()) {
@@ -1184,7 +1186,9 @@ async function reconcileFavorites(state, codes, io) {
 
 async function favoriteRequest(codes, op) {
   const base = UPLOAD_URL + '/favorites';
-  const res = await fetch(op ? base : base + '?codes=' + encodeURIComponent(codes[0]), op ? {
+  // 手機還有舊格式（編號／狗名）常溜時才帶 key，讓 Worker 換成狗 ID
+  const url = op ? base : base + '?codes=' + encodeURIComponent(codes[0]) + localFavs().map(k => '&key=' + encodeURIComponent(k)).join('');
+  const res = await fetch(url, op ? {
     method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...op, codes: op.codes.slice(0, 1) }),
   } : { cache: 'no-store' });
   const out = await res.json();
