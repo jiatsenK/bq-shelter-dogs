@@ -813,8 +813,10 @@ export async function rememberWalkerNames(env, names, now = Date.now()) {
   if (!env || !env.DB) return [];
   try {
     const at = new Date(now).toISOString();
-    const upsert = env.DB.prepare('INSERT INTO v3_volunteers (name, last_seen) SELECT ?, ? WHERE NOT EXISTS(SELECT 1 FROM v3_identity_names WHERE name_key=?) ON CONFLICT(name) DO UPDATE SET last_seen = excluded.last_seen');
-    if (names.length) await env.DB.batch(names.map(n => upsert.bind(n, at, walkerNameKey(n))));
+    // 只寫有變的（#407、ADR 0008）：新名字才新增；舊名字一天最多更新一次 last_seen，同一天再讀寫 0 列
+    const upsert = env.DB.prepare('INSERT INTO v3_volunteers (name, last_seen) SELECT ?, ? WHERE NOT EXISTS(SELECT 1 FROM v3_identity_names WHERE name_key=?) ON CONFLICT(name) DO UPDATE SET last_seen = excluded.last_seen WHERE last_seen < ?');
+    const day = at.slice(0, 10);
+    if (names.length) await env.DB.batch(names.map(n => upsert.bind(n, at, walkerNameKey(n), day)));
     const { results = [] } = await env.DB.prepare('SELECT name FROM v3_volunteers WHERE volunteer_id NOT IN (SELECT volunteer_id FROM v3_identity_redirects) ORDER BY last_seen DESC, name LIMIT ?').bind(WALKER_NAMES_MAX).all();
     const now_ = new Set(names);
     return results.map(r => r.name).filter(n => typeof n === 'string' && n && !now_.has(n));
