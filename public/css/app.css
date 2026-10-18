@@ -2448,5 +2448,17 @@ html.kb-open .with-backdrop { top: var(--vv-top, 0px); bottom: auto; height: var
 html.kb-open .with-sheet { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
 html.kb-open .onboard { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-height, 100%); }
 
+/* #399 固定照顧：沿用詳細資訊白紙、細線、內建字型與主色。 */
+.fixed-care-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.fixed-care-row > span { font-weight: 700; }
+.care-switch { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: 88px; min-height: 44px; padding: 4px; border: 0; background: transparent; color: var(--ink); font: inherit; cursor: pointer; flex-shrink: 0; }
+.care-switch-track { display: inline-flex; align-items: center; width: 48px; height: 28px; padding: 3px; box-sizing: border-box; border: 1px solid var(--ink-soft); border-radius: 16px; background: var(--surface-soft); }
+.care-switch-track::after { content: ''; width: 20px; height: 20px; border-radius: 50%; background: var(--ink-soft); }
+.care-switch[aria-checked="true"] .care-switch-track { justify-content: flex-end; background: var(--primary); border-color: var(--primary); }
+.care-switch[aria-checked="true"] .care-switch-track::after { background: var(--surface); }
+.care-switch:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.care-switch:disabled { cursor: wait; opacity: .65; }
+.care-switch:not(:disabled):hover { background: var(--surface-soft); }
+.fixed-care .rest-hint { margin-bottom: 0; }
 /* #396：同行人／重試共用一列，手機照片區保留同行人及狀態文字的操作空間。 */
 .gw-secondary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; }
