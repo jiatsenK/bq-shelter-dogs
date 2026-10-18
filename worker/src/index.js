@@ -1025,7 +1025,9 @@ async function favorites(request, env, origin) {
     if (!await saveFavorite(env.DB, codes, input.dogId, input.on, taiwanYmd(Date.now()))) return fail(400, '找不到這隻狗', origin);
     return reply(200, { ok: true }, origin);
   }
-  return reply(200, { ok: true, ...await readFavorites(env.DB, codes) }, origin);
+  // 手機只在還有舊格式常溜時才帶 key（#406）
+  const keys = [...new Set(new URL(request.url).searchParams.getAll('key'))].filter(k => k.length <= 64).slice(0, 200);
+  return reply(200, { ok: true, ...await readFavorites(env.DB, codes, keys) }, origin);
 }
 
 async function openedCards(request, env, origin) {
