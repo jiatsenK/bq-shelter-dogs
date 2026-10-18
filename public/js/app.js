@@ -1009,33 +1009,50 @@ function sheetWillWrite() {
 const walkPending = new Set(); // 按了溜了、還在等試算表回應的狗（walkKey）
 function walkPendingNow(dog) {
   const key = walkKey(dog);
-  return !!key && walkPending.has(key);
+  return !!key && (walkPending.has(key) || walkRegistration.pending(dog));
 }
-function walkThenRecord(dogs) {
-  const todo = dogs.filter((d, i) => d && walkKey(d) && !walkedNow(d) && dogs.indexOf(d) === i);
+function walkThenRecord(dogs, retry = null) {
+  const todo = dogs.filter((d, i) => d && walkKey(d) && !walkedNow(d) && !walkPendingNow(d) && dogs.indexOf(d) === i);
   if (!todo.length) return;
   recordWalked(todo, true);
   pickedBuddies.clear();
-  render();
-  renderDetail();
   const text = `${todo.map(d => d.name).join('、')} 今天溜了`;
-  // 復原要等試算表改回來才算（#383）；還在寫就先等寫完再改回
-  let written = false, write = null;
-  const undoFn = () => written ? undoSheetWalks(todo) : write.then(() => undoSheetWalks(todo));
-  showToast(text, undoFn, { label: '＋一起溜的人', fn: () => openWithSheet(todo) });
-  write = sheetQueue = queueSheetWrite(todo, true, text, undoFn).then(ok => {
-    written = true;
-    if (ok === null) return; // 試算表那邊沒設定，照舊只記在手機
-    // 沒寫進試算表的退回：試算表沒有這支手機寫的今天紀錄
-    const items = loadSheetWrites();
-    const failed = todo.filter(d => walkedNow(d) && !(items[walkKey(d)] && items[walkKey(d)].mine));
-    if (!failed.length) return;
+  let confirmed = null;
+  const write = retry ? walkRegistration.retry(retry) : walkRegistration.register(todo);
+  const undoFn = () => sheetQueue = write.then(result => undoSheetWalks(result.successful));
+  showToast(text, undoFn, { label: '＋一起溜的人', fn: () => {
+    const open = result => { if (result.successful.length) openWithSheet(result.successful); };
+    if (confirmed) open(confirmed); else write.then(open);
+  } });
+  render(); renderDetail();
+  sheetQueue = write.then(result => {
+    confirmed = result;
+    if (result.off) return result; // 舊有僅記手機的備援
+    const failed = result.rows.filter(r => !['written', 'already'].includes(r.status)).map(r => r.dog);
     recordWalked(failed, false);
-    render();
-    renderDetail();
-    // 網路不通、試算表回錯誤：給「再試一次」；試算表找不到的狗再試也一樣，sheetWrite 的提示已說是哪幾隻
-    if (ok === false && sheetWriteFail !== 'missed') showToast(`${sheetWriteFailText}，已退回未溜`, null, { label: '再試一次', fn: () => setWalked(failed, true) });
+    render(); renderDetail();
+    if (failed.length) {
+      const again = result.retryDogs;
+      showToast(registrationText(result), null, again.length ? { label: '再試一次', fn: () => walkThenRecord(again, result) } : null);
+    } else addToToast(text, undoFn, '，已寫進試算表');
+    return result;
   }).catch(e => console.error(e));
+}
+function registrationText(result) {
+  const parts = [];
+  if (result.successful.length) parts.push(`已登記 ${result.successful.length} 隻`);
+  const failed = result.rows.filter(r => !['written', 'already'].includes(r.status));
+  if (failed.length) {
+    parts.push('未全部登記成功');
+    const unknown = failed.filter(r => r.status === 'unknown');
+    const missing = failed.filter(r => ['notFound', 'missing'].includes(r.status));
+    const changed = failed.filter(r => r.status === 'changed');
+    if (unknown.length) parts.push(`${unknown.map(r => r.dog.name).join('、')} 尚未確認登記結果${result.error ? '（' + result.error + '）' : ''}`);
+    if (missing.length) parts.push(`試算表找不到 ${missing.map(r => r.dog.name).join('、')}，請自己填`);
+    if (changed.length) parts.push(`${changed.map(r => r.dog.name).join('、')} 在試算表已經被改過，沒有蓋掉別人的紀錄`);
+    if (result.off) parts.push('目前無法寫入試算表，尚未登記');
+  }
+  return parts.join('；');
 }
 function setWalkedLocal(dogs, on) {
   const { changed, undo } = recordWalked(dogs, on);
@@ -1061,34 +1078,26 @@ function setWalkedLocal(dogs, on) {
 // 只認這支手機記下的 prev／wrote（sheetWrite 存的）；試算表那格已被別人改過（current 不是我們寫的）就不提供，
 // 撤銷時 Apps Script 也會再核對一次，不蓋掉別人後來改的
 function sheetUndoable(dog, today = new Date()) {
-  const it = loadSheetWrites(today)[walkKey(dog)];
-  return !!(it && it.prev && it.wrote && (!it.current || it.current.walker === it.wrote.walker));
+  return walkRegistration.canUndo(dog, localDateKey(today));
 }
 let sheetUndoBusy = false;
-// 回傳要顯示的結果文字；只有試算表回「restored」的才算復原
-async function undoSheetWalks(dogs) {
-  const todo = dogs.filter((d, i) => d && sheetUndoable(d) && dogs.indexOf(d) === i);
-  if (sheetUndoBusy || !todo.length) return '';
-  sheetUndoBusy = true;
-  hideToast();
-  render();
-  let ok = false;
-  try { ok = await queueSheetWrite(todo, false); } catch (e) { console.error(e); }
-  sheetUndoBusy = false;
-  const items = loadSheetWrites();
-  const restored = todo.filter(d => { const it = items[walkKey(d)]; return it && !it.wrote; });
-  const changed = todo.filter(d => !restored.includes(d) && !sheetUndoable(d));
-  const left = todo.filter(d => !restored.includes(d) && !changed.includes(d));
-  const names = list => list.map(d => d.name).join('、');
-  const parts = [];
-  if (restored.length) parts.push(`已從試算表復原 ${restored.length} 隻`);
-  if (changed.length) parts.push(`${names(changed)} 在試算表已被改過，沒有蓋掉別人的紀錄`);
-  if (left.length) parts.push(ok === null ? `${names(left)} 目前連不到試算表，尚未復原` : `${names(left)} ${sheetWriteFailText || '試算表沒改回來'}，尚未復原`);
-  const text = parts.join('；');
-  render();
-  renderDetail();
-  showToast(text, null, left.length ? { label: '再試一次', fn: () => undoSheetWalks(left) } : null);
-  return text;
+async function undoSheetWalks(dogs, retry = null) {
+  if (sheetUndoBusy || !dogs.length) return '';
+  sheetUndoBusy = true; hideToast(); render();
+  try {
+    const pending = retry ? walkRegistration.retry(retry) : walkRegistration.undo(dogs);
+    sheetQueue = pending;
+    const result = await pending;
+    const changed = result.rows.filter(r => r.status === 'changed').map(r => r.dog);
+    const left = result.rows.filter(r => !['restored', 'changed'].includes(r.status)).map(r => r.dog);
+    const parts = [];
+    if (result.successful.length) parts.push(`已從試算表復原 ${result.successful.length} 隻`);
+    if (changed.length) parts.push(`${changed.map(d => d.name).join('、')} 在試算表已經被改過，沒有蓋掉別人的紀錄`);
+    if (left.length) parts.push(`${left.map(d => d.name).join('、')} 試算表沒改回來${result.error ? '：' + result.error : ''}，尚未復原`);
+    const text = parts.join('；');
+    showToast(text, null, result.retryDogs.length ? { label: '再試一次', fn: () => undoSheetWalks(result.retryDogs, result) } : null);
+    return text;
+  } finally { sheetUndoBusy = false; render(); renderDetail(); }
 }
 
 // ── 我的常溜（#267）：逐隻增刪，絕不把手機上的舊整份清單蓋到 D1 ──
@@ -1407,7 +1416,10 @@ function clearWalkWith(dogs, today = new Date()) {
 let withSheet = null; // { dogs, picked: Set, text, add }
 // add：詳細資訊溜狗人旁的「＋」，選好的人接在目前名單後面（#141）；不是 add 就是溜了之後提示條的「＋一起溜的人」
 function openWithSheet(dogs, add = false) {
-  const already = add ? new Set(walkerList(dogs[0]).map(canonicalWalker)) : new Set(dogs.flatMap(d => loadWalkWith()[walkKey(d)] || []));
+  if (!dogs.length) return;
+  const withMap = loadWalkWith();
+  const already = add ? new Set(walkerList(dogs[0]).map(canonicalWalker)) : new Set(
+    (withMap[walkKey(dogs[0])] || []).filter(n => dogs.every(d => (withMap[walkKey(d)] || []).includes(n))));
   withSheet = { dogs, picked: new Set(), text: '', already, add, phase: 'edit', error: '' };
   renderWithSheet();
 }
@@ -1476,12 +1488,16 @@ async function finishWithSheet() {
   withSheet = null;
   renderWithSheet();
   if (!names.length) return;
-  addWalkWith(w.dogs, names);
-  render();
-  renderDetail();
-  const text = `已加上 ${names.join('、')}`;
-  showToast(text);
-  queueSheetWrite(w.dogs, true, text, null, names.join('、'));
+  await submitCompanions(w.dogs, names);
+}
+async function submitCompanions(dogs, names, retry = null) {
+  const pending = retry ? walkRegistration.retry(retry) : walkRegistration.register(dogs, { walker: names.join('、') });
+  sheetQueue = pending;
+  const result = await pending;
+  addWalkWith(result.successful, names);
+  render(); renderDetail();
+  const text = result.successful.length === result.rows.length && !result.off ? `已加上 ${names.join('、')}` : registrationText(result);
+  showToast(text, null, result.retryDogs.length ? { label: '再試一次', fn: () => submitCompanions(result.retryDogs, names, result) } : null);
 }
 
 function firstWalkerName(text) {
@@ -1518,24 +1534,7 @@ function saveSheetWrites(items, today = new Date()) {
 
 // 一個一個送，按了溜了馬上復原時，復原會等溜了寫完才送（才知道要改回什麼）
 function queueSheetWrite(dogs, on, toastText, toastUndo, walker, expected) {
-  // 按溜了時，那格今天已經用別的寫法寫了我（例：「岑」），就送那格原本的寫法：小程式看到已經有我就不動，
-  // 不會接成「岑、佳岑」（K 2026-10-05）。寫法不同的狗分開送
-  const groups = [];
-  if (on && !walker && expected === undefined) {
-    for (const d of dogs) {
-      const w = myAliasIn(d);
-      const g = groups.find(x => x.w === w);
-      if (g) g.dogs.push(d); else groups.push({ w, dogs: [d] });
-    }
-  } else groups.push({ w: walker, dogs });
-  // true：都寫進去了；false：有沒寫進去的；null：沒送（還沒設定名字、Worker 沒設定）
-  let result = null;
-  for (const g of groups) {
-    sheetQueue = sheetQueue.then(() => sheetWrite(g.dogs, on, toastText, toastUndo, g.w, expected))
-      .then(ok => { if (ok === false) result = false; else if (ok === true && result === null) result = true; })
-      .catch(e => { console.error(e); result = false; });
-  }
-  return sheetQueue.then(() => result);
+  return sheetQueue = sheetWrite(dogs, on, toastText, toastUndo, walker, expected);
 }
 function myAliasIn(dog, today = new Date()) {
   const me = loadWalkerName();
@@ -1555,92 +1554,52 @@ function addToToast(text, undo, extra) {
 // 回傳 true：寫進去了；false：沒寫進去（原因在 sheetWriteFail／sheetWriteFailText，也已跳提示）；null：沒送
 let sheetWriteFail = '';     // network／error／missed
 let sheetWriteFailText = '';
-async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expected = undefined) {
-  if (!UPLOAD_URL || sheetWriteState === 'off') return null;
-  const today = new Date();
-  const withKey = dogs.map(d => ({ d, key: walkKey(d) })).filter(x => x.key);
-  let payload;
-  if (on) {
-    const who = walker || loadWalkerName();
-    if (!who) return null; // 還沒在「我溜過」設定名字（提醒放在我溜過頁）
-    payload = { action: expected === undefined ? 'walk' : 'edit', walker: who, dogs: withKey.map(({ d, key }) => ({ id: d.id || '', name: d.name, ...(expected === undefined ? {} : { expected }) })) };
-  } else {
-    const items = loadSheetWrites(today);
-    const list = withKey.filter(x => items[x.key] && items[x.key].prev && items[x.key].wrote).map(x => items[x.key]);
-    if (!list.length) return null;
-    payload = { action: 'undo', dogs: list.map(x => ({ id: x.id, name: x.name, prev: x.prev, wrote: x.wrote })) };
-  }
-  if (!payload.dogs.length) return null;
-  let res = null, out = null;
-  try {
-    res = await fetch(`${UPLOAD_URL}/walk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    out = await res.json().catch(() => null);
-  } catch (e) {
-    // 一般的溜了沒寫進去會退回未溜（walkThenRecord 補「再試一次」），改溜狗人、復原則是請志工自己去改
-    const plain = on && expected === undefined;
-    sheetWriteFail = 'network';
-    sheetWriteFailText = on ? '沒寫進試算表（網路不通）' : '試算表沒改回來（網路不通）';
-    showToast(plain ? `${sheetWriteFailText}，已退回未溜` : `${sheetWriteFailText}，請自己到試算表${on ? '填' : '改'}`);
-    return false;
-  }
-  if (res.status === 503 && out && out.code === 'off') { sheetWriteState = 'off'; return null; }
-  if (!res.ok || !out || !out.ok) {
-    const why = (out && out.error) || `HTTP ${res.status}`;
-    sheetWriteFail = 'error';
-    sheetWriteFailText = on ? `沒寫進試算表：${why}` : `試算表沒改回來：${why}`;
-    showToast(sheetWriteFailText);
-    return false;
-  }
-  sheetWriteState = 'on';
-  const items = loadSheetWrites(today);
-  const keyOf = r => (withKey.find(({ d }) => (d.id || '') === (r.id || '') && d.name === r.name) || {}).key;
-  const missed = [];
-  for (const r of out.results || []) {
-    const key = keyOf(r);
-    if (!key) continue;
-    const old = items[key];
-    sheetWritesThisPage.add(key);
-    sheetWrittenAt.set(key, Date.now());
-    if (on && (r.status === 'written' || r.status === 'already')) {
-      const current = { date: out.today || localDateKey(today), walker: r.wrote ? r.wrote.walker : (r.current ? r.current.walker : walkerNames[key] || '') };
-      items[key] = { id: r.id || '', name: r.name, prev: expected !== undefined ? r.prev : (old && old.prev ? old.prev : r.prev), wrote: r.wrote || (old && old.wrote), current, mine: splitWalkers(current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())) };
-      walkerNames[key] = current.walker;
-    }
-    if (!on && r.status === 'restored' && old) {
-      const rawDate = old.prev.date || {};
-      const parsed = parseYmd(String(rawDate.text || '').replace(/\//g, '-').replace(/-(\d)(?=-|$)/g, '-0$1'));
-      const date = rawDate.date || (parsed ? localDateKey(parsed) : '');
-      items[key] = { id: old.id, name: old.name, current: { date, walker: old.prev.walker }, mine: date === localDateKey(today) && splitWalkers(old.prev.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())) };
-      walkerNames[key] = old.prev.walker;
-      clearWalkWith([withKey.find(x => x.key === key).d], today);
-    }
-    if (r.status === 'changed' && r.current) {
-      items[key] = { ...old, id: r.id || '', name: r.name, current: r.current, mine: r.current.date === localDateKey(today) && splitWalkers(r.current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())) };
-      walkerNames[key] = r.current.walker;
-    }
-    if (!['written', 'already', 'restored'].includes(r.status)) missed.push(r.name);
-  }
-  saveSheetWrites(items, today);
-  const ids = loadWalkedIds(today);
-  for (const { d, key } of withKey) {
-    const item = items[key];
-    if (item && item.current) {
+// 資料存取 adapter：HTTP 與本機儲存由 app 提供，模組不依賴 DOM。
+const walkRegistration = createWalkRegistration({
+  key: walkKey, date: () => localDateKey(new Date()), walker: loadWalkerName, alias: myAliasIn,
+  canonical: canonicalWalker, split: splitWalkers,
+  read: day => loadSheetWrites(parseYmd(day)),
+  save: (items, day) => saveSheetWrites(items, parseYmd(day)),
+  send: async payload => {
+    if (!UPLOAD_URL || sheetWriteState === 'off' || (payload.action !== 'undo' && !payload.walker)) return { off: true };
+    const res = await fetch(`${UPLOAD_URL}/walk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+    const out = await res.json().catch(() => null);
+    if (res.status === 503 && out?.code === 'off') { sheetWriteState = 'off'; return { off: true }; }
+    if (!res.ok || !out?.ok) return { ok: false, error: out?.error || `HTTP ${res.status}` };
+    sheetWriteState = 'on';
+    return out;
+  },
+  apply: (dogs, items, day, restored) => {
+    const today = parseYmd(day), ids = loadWalkedIds(today);
+    for (const dog of dogs) {
+      const key = walkKey(dog), item = items[key];
+      if (!item?.current) continue;
+      const parsed = parseYmd(String(item.current.date).replace(/\//g, '-').replace(/-(\d)(?=-|$)/g, '-0$1'));
+      sheetWritesThisPage.add(key); sheetWrittenAt.set(key, Date.now());
+      walkerNames[key] = item.current.walker;
       const at = ids.indexOf(key);
       if (item.mine && at === -1) ids.unshift(key);
       if (!item.mine && at !== -1) ids.splice(at, 1);
-      d.walkedDate = parseYmd(item.current.date);
+      dog.walkedDate = parsed;
     }
-  }
-  saveWalkedIds(ids, today);
+    saveWalkedIds(ids, today);
+    if (restored.length) clearWalkWith(restored, today);
+    render(); renderDetail();
+  },
+});
+// 舊的編輯入口仍回傳布林值；新登記入口直接使用模組逐狗結果。
+async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expected = undefined) {
+  if (!UPLOAD_URL || sheetWriteState === 'off' || (on && !walker && !loadWalkerName())) return null;
+  const result = await (on ? walkRegistration.register(dogs, { walker, expected }) : walkRegistration.undo(dogs));
+  if (result.off || !result.rows.length) return null;
+  const failed = result.rows.filter(r => !['written', 'already', 'restored'].includes(r.status));
+  if (failed.length) {
+    sheetWriteFail = failed.some(r => r.status === 'unknown') ? 'network' : 'missed';
+    sheetWriteFailText = on || failed.some(r => r.status === 'changed') ? registrationText(result) : '試算表沒改回來';
+    showToast(sheetWriteFailText);
+  } else if (on && toastText) addToToast(toastText, toastUndo, '，已寫進試算表');
   render(); renderDetail();
-  if (missed.length) {
-    sheetWriteFail = 'missed';
-    const statuses = (out.results || []).map(r => r.status);
-    showToast(statuses.includes('badAction') ? '請先更新 Google Apps Script，再使用修改溜狗人。' : statuses.includes('changed') ? `${missed.join('、')} 在試算表已經被改過，沒有蓋掉別人的，畫面已換成最新名單` : `試算表找不到 ${missed.join('、')}，請自己填`);
-  } else if (on && toastText) {
-    addToToast(toastText, toastUndo, '，已寫進試算表');
-  }
-  return !missed.length;
+  return !failed.length;
 }
 
 // 開放編輯（ADR 0004）：不用通關碼，送出時帶這支手機選好的名字，Worker 記進編輯紀錄（edits.html）
@@ -1803,7 +1762,7 @@ function hideToast() {
 function walkButton(dog) {
   if (!walkKey(dog)) return `<span class="more">${icon('chevron')}</span>`;
   if (restOf(dog)) return ''; // 休養中暫停帶出：不放溜了，免得順手按到
-  if (walkPendingNow(dog)) return `<button type="button" class="walk-btn pending" disabled aria-label="${esc(dog.name)} 正在寫進試算表">登記中</button>`;
+  if (walkPendingNow(dog) && !walkedNow(dog)) return `<button type="button" class="walk-btn pending" disabled aria-label="${esc(dog.name)} 正在寫進試算表">登記中</button>`;
   return walkedNow(dog)
     ? `<button type="button" class="walk-btn done" data-walk="back" aria-label="${esc(dog.name)} 今天已溜，按一下取消">${icon('tick')}已溜</button>`
     : `<button type="button" class="walk-btn" data-walk="add" aria-label="${esc(dog.name)} 溜了">溜了</button>`;
@@ -2360,7 +2319,7 @@ function togetherSection(dog, walked) {
 // 「可以一起溜」下方的按鈕：把目前這隻連同勾選的狗一次記進今天已溜。
 // 目前這隻已溜又沒勾選時，就顯示目前這隻今天已溜，不放按鈕
 function groupWalkButton(dog, walked) {
-  if (walkPendingNow(dog)) return `<button type="button" class="group-walk" id="groupWalk" disabled>登記中</button>`;
+  if (walkPendingNow(dog) && !walkedNow(dog)) return `<button type="button" class="group-walk" id="groupWalk" disabled>登記中</button>`;
   const rest = restOf(dog);
   const self = !!walkKey(dog) && !walked.has(dog) && !rest;
   const n = [...pickedBuddies].length;
