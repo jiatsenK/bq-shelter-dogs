@@ -52,6 +52,12 @@ module.exports = async (browser, base) => {
     await page.getByRole('button', { name: '登記其餘 1 隻', exact: true }).click();
     await page.getByText('已登記 1 隻', { exact: true }).waitFor();
     assert.deepEqual(writes.find(w => w.endpoint === 'walk').body.dogs.map(d => d.name), [data.dogs[1].name]);
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const action = await page.locator('[data-gw-action="companions"]').boundingBox();
+      const bar = await page.locator('#bottomBar').boundingBox();
+      assert(action.y + action.height <= bar.y, '同行人按鈕不能被底部分類列遮住：' + JSON.stringify({ width, action, bar }));
+    }
     await page.getByRole('button', { name: '＋一起溜的人', exact: true }).click();
     await page.locator('#withInput').fill('同行志工');
     await page.locator('[data-with-ok]').click();

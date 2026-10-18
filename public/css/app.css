@@ -2427,7 +2427,7 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 #groupPage .gw-side { flex: none; width: 48px; height: 48px; margin-top: 12px; display: grid; place-items: center; padding: 0; color: var(--ink-soft); }
 .gw-side svg { width: 24px; height: 24px; }
 /* 手機一頁內看得到所有按鈕（K 2026-10-17）：照片區扣掉表頭、搜尋、群名、頁碼、兩顆按鈕和底部分頁列，其餘在照片區內捲動 */
-@media (max-width: 1099px) { .gw-stage-wrap .gw-stage { height: max(126px, calc(100dvh - 404px)); } }
+@media (max-width: 1099px) { .gw-stage-wrap .gw-stage { height: max(126px, calc(100dvh - 504px)); } }
 
 @media (max-width: 1099px) {
   .analysis-open header.app { position: fixed; inset: 0 0 auto; }
@@ -2447,3 +2447,6 @@ html.kb-open .bottom-bar { display: none; }
 html.kb-open .with-backdrop { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-height, 100%); }
 html.kb-open .with-sheet { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
 html.kb-open .onboard { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-height, 100%); }
+
+/* #396：同行人／重試共用一列，手機照片區保留同行人及狀態文字的操作空間。 */
+.gw-secondary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; }
