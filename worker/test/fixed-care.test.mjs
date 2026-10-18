@@ -62,6 +62,7 @@ test('固定照顧：全部預設關閉，網站開關經狗清單讀回，舊�
   const on = await call(env, '/fixed-care/2020010101', { editor: '志工甲', enabled: true });
   assert.equal(on.status, 200);
   assert.equal(on.body.enabled, true);
+  assert.equal(await env.DB.prepare("SELECT fixed_care FROM v3_dogs WHERE name='甲'").first('fixed_care'), 1, '設定跟狗的永久資料存同一列');
   assert.deepEqual((await dogs(env)).map(d => d.covered), [true, false]);
   const changes = await env.DB.prepare('SELECT total_changes() AS n').first('n');
   await call(env, '/fixed-care/2024032902', { editor: '志工甲', enabled: true });
@@ -105,8 +106,7 @@ test('固定照顧 API：無關設定多 10 倍，單次讀寫量固定且只用
   const seed = async (start, end) => {
     for (let n = start; n < end; n++) {
       const id = n.toString(16).padStart(32, '0');
-      await env.DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(id, `無關${n}`).run();
-      await env.DB.prepare('INSERT INTO v3_fixed_care VALUES(?,1)').bind(id).run();
+      await env.DB.prepare('INSERT INTO v3_dogs(dog_id,name,fixed_care) VALUES(?,?,1)').bind(id, `無關${n}`).run();
     }
   };
   await seed(1, 11);

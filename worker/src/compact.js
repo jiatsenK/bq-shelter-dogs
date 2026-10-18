@@ -19,7 +19,7 @@ const BOOLEANS = new Set(['covered', 'myWalked']);
 export async function readDogsPayload(db) {
   // 介紹是 D1 自己存的（#250 網站改了馬上看得到），不用主清單複本上同步帶來的那份
   const [main, walkers, former, groups, notes] = await db.batch([
-    db.prepare("SELECT m.*, COALESCE(i.intro, '') AS d1_intro, COALESCE(c.enabled, 0) AS fixed_care FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) LEFT JOIN v3_fixed_care c USING(dog_id) ORDER BY m.row_index"),
+    db.prepare("SELECT m.*, COALESCE(i.intro, '') AS d1_intro, c.fixed_care FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) JOIN v3_dogs c USING(dog_id) ORDER BY m.row_index"),
     db.prepare('SELECT row_index, walker_code FROM v3_sheet_main_walkers ORDER BY row_index, position'),
     db.prepare("SELECT m.row_index, n.number FROM v3_sheet_main m JOIN v3_dog_numbers n USING(dog_id) WHERE n.number <> m.number ORDER BY m.row_index, n.number"),
     db.prepare('SELECT column_index, name FROM v3_sheet_groups ORDER BY column_index, row_index'),
@@ -187,18 +187,19 @@ export async function readRest(db, scope) {
 }
 export const sortedRest = entries => Object.fromEntries(entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
 
-// 寫休養：rest 是 null 就結束休養。編號不認得回 null，存好回 { dogId, before }（改前的設定，編輯紀錄用）
+// 固定照顧是狗的網站設定，不由試算表同步提供（ADR 0015）。
 export async function saveFixedCare(db, number, enabled) {
   const dogId = (await dogIdsFor(db, [number])).get(number)
     || (/^[a-f0-9]{32}$/.test(number) ? await db.prepare('SELECT dog_id FROM v3_dogs WHERE dog_id=?').bind(number).first('dog_id') : null);
   if (!dogId) return null;
-  const before = Boolean(await db.prepare('SELECT enabled FROM v3_fixed_care WHERE dog_id=?').bind(dogId).first('enabled'));
+  const before = Boolean(await db.prepare('SELECT fixed_care FROM v3_dogs WHERE dog_id=?').bind(dogId).first('fixed_care'));
   if (before !== enabled) {
-    await db.prepare('INSERT INTO v3_fixed_care(dog_id,enabled) VALUES(?,?) ON CONFLICT(dog_id) DO UPDATE SET enabled=excluded.enabled').bind(dogId, Number(enabled)).run();
+    await db.prepare('UPDATE v3_dogs SET fixed_care=? WHERE dog_id=?').bind(Number(enabled), dogId).run();
   }
   return { dogId, before };
 }
 
+// 寫休養：rest 是 null 就結束休養。編號不認得回 null，存好回 { dogId, before }（改前的設定，編輯紀錄用）
 export async function saveRest(db, number, rest) {
   const dogId = (await dogIdsFor(db, [number])).get(number);
   if (!dogId) return null;
