@@ -29,7 +29,8 @@ export function diffTables(before, after) {
       const key = keyOf(table, row);
       seen.add(key);
       const prev = old.get(key);
-      const cols = Object.keys(row);
+      // #399：fixed_care 屬於網站。即使同步預演後有人切換，寫回名字／性別也不能覆蓋它。
+      const cols = Object.keys(row).filter(c => !(table === 'v3_dogs' && c === 'fixed_care'));
       if (!prev) {
         writes.push({ sql: `INSERT INTO ${table}(${cols.join(',')}) VALUES(${cols.map(() => '?').join(',')})`, values: cols.map(c => row[c]) });
         continue;

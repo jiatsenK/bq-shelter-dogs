@@ -24,9 +24,9 @@ const dogs = await readCompactDogs(db);
 
 | 表 | 主鍵／用途 |
 | --- | --- |
-| `v3_dogs` | 隨機永久 `dog_id`；狗名、性別 |
+| `v3_dogs` | 隨機永久 `dog_id`；狗名、性別；網站共用設定 `fixed_care` 預設 0，試算表同步不得寫入（ADR 0015） |
 | `v3_dog_numbers` | `number` → `dog_id`，多個編號可以對同狗 |
-| `v3_sheet_main` | `row_index`；主清單複本，保存順序、編號、狗名、籠位、備註、固定照顧、上次溜、同步時間和 JSON 現有純量欄位 |
+| `v3_sheet_main` | `row_index`；主清單複本，保存順序、編號、狗名、籠位、備註、試算表原始 covered（不作網站固定照顧設定）、上次溜、同步時間和 JSON 現有純量欄位 |
 | `v3_sheet_main_walkers` | 主清單列＋順序；上次溜的代號 |
 | `v3_sheet_former_numbers` | 主清單列＋順序；JSON 明載舊編號 |
 | `v3_sheet_changes` | 來源列；實際來源的標籤 `label` 與完整文字 `text`，不猜拆日期或名字 |

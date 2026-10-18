@@ -26,6 +26,7 @@ const server = http.createServer((req, res) => {
   let ok = false;
   try {
     await require('../tests/info-page.cjs')(browser, `http://localhost:${server.address().port}`);
+    await require('../tests/fixed-care.cjs')(browser, `http://localhost:${server.address().port}`);
     await require('../tests/group-walks.cjs')(browser, `http://localhost:${server.address().port}`);
     await require('../tests/navigation.cjs')(browser, `http://localhost:${server.address().port}`);
     await require('../tests/keyboard-viewport.cjs')(browser, `http://localhost:${server.address().port}`);

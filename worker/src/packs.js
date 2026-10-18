@@ -87,11 +87,13 @@ async function savePack(db, part, ver, cutoff, body) {
 async function smallPack(db, ver) {
   if (mem.small && mem.small.ver === ver) return mem.small.body;
   let body = await loadPack(db, 'main', ver, ''); // 在所資料包（ADR 0014 以前叫 small、含離所）
+  // #399：部署前的包使用試算表 covered，版本未變也必須重算一次。
+  if (body && body.fixedCareVersion !== 1) body = null;
   if (!body) {
     // 主清單是空的（資料出問題）：狗清單回錯誤，休養照給，也不存資料包
     let dogs = null;
     try { dogs = await readDogsPayload(db); } catch (e) { if (!/沒有資料/.test(e.message)) throw e; }
-    body = { dogs, rest: await readRest(db, 'main') };
+    body = { dogs, rest: await readRest(db, 'main'), fixedCareVersion: 1 };
     if (!dogs) return body;
     await savePack(db, 'main', ver, '', body);
   }

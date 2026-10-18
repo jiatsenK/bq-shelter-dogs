@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 
 // #248 加的欄位：已經建好的 v3_walks 用 ALTER 補上（CREATE TABLE IF NOT EXISTS 不會改舊表）
-const ADDED = [['v3_walks', 'dog_number', "TEXT NOT NULL DEFAULT ''"], ['v3_walks', 'dog_name', "TEXT NOT NULL DEFAULT ''"]];
+const ADDED = [['v3_walks', 'dog_number', "TEXT NOT NULL DEFAULT ''"], ['v3_walks', 'dog_name', "TEXT NOT NULL DEFAULT ''"],
+  ['v3_dogs', 'fixed_care', 'INTEGER NOT NULL DEFAULT 0 CHECK(fixed_care IN (0,1))']];
 
 // db/compact-schema.sql 拆成一句一句（不含結尾分號）；觸發器裡面也有分號，整段算一句
 export async function compactSchemaStatements() {
