@@ -52,6 +52,12 @@ module.exports = async (browser, base) => {
     await page.getByRole('button', { name: '登記其餘 1 隻', exact: true }).click();
     await page.getByText('已登記 1 隻', { exact: true }).waitFor();
     assert.deepEqual(writes.find(w => w.endpoint === 'walk').body.dogs.map(d => d.name), [data.dogs[1].name]);
+    await page.getByRole('button', { name: '＋一起溜的人', exact: true }).click();
+    await page.locator('#withInput').fill('同行志工');
+    await page.locator('[data-with-ok]').click();
+    await page.getByText('已加上 同行志工', { exact: true }).waitFor();
+    assert.deepEqual(writes.at(-1).body.dogs.map(d => d.name), [data.dogs[1].name], '同行人只套用本次成功狗');
+    assert.equal(writes.at(-1).body.walker, '同行志工');
     await page.getByRole('button', { name: '下一群', exact: true }).click();
     assert.equal(await page.locator('.gw-layer:not([inert]) [data-gw-dog]').count(), 10);
     await page.getByRole('button', { name: '下一群', exact: true }).click();
@@ -183,7 +189,7 @@ module.exports = async (browser, base) => {
     await page.getByText('已登記 1 隻', { exact: true }).waitFor();
     undoMode = 'partial';
     await undoBtn.click();
-    await page.getByText(/已被改過/).first().waitFor();
+    await page.getByText(/已(?:經)?被改過/).first().waitFor();
     await page.locator('[data-tab="mine"]').click();
     assert.equal(await page.locator('.mine-undo, [data-undo-walk]').count(), 0, '我溜過沒有取消那排');
     undoMode = 'ok';
