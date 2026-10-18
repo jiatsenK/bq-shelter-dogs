@@ -636,7 +636,7 @@ function runTests() {
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
       const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
-      eq(scripts.map(s => s.getAttribute('src')), ['js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定）：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
@@ -1788,6 +1788,14 @@ async function runV9Tests() {
       eq(loadCompanions(), ['阿華'], '記住最近一起溜的人：');
       eq(loadSheetWrites()[walkKey(allDogs[1])].prev.walker, '舊的', '復原回到按溜了之前：');
       hideToast();
+    });
+    await check('#396 整群只有部分狗已有同行人，仍可替其他狗補加', () => {
+      const targets = allDogs.slice(0, 2);
+      clearWalkWith(targets);
+      addWalkWith([targets[0]], ['阿華']);
+      openWithSheet(targets);
+      eq(!!document.querySelector('#withBackdrop [data-with="阿華"]'), true, '只有全部狗都有的人才隱藏：');
+      withSheet = null; renderWithSheet(); clearWalkWith(targets);
     });
     await check('#141 多人登記立即更新今天紀錄與統計；重新載入仍可編輯及復原，衝突不覆寫', async () => {
       walkedStorage = fakeStorage(); sheetWritesMemory = null; walkedMemory = null;
@@ -3159,7 +3167,7 @@ async function runSheetWriteTests() {
       if (!toastText().includes('已經被改過')) throw new Error(`改過：${toastText()}`);
       window.fetch = async () => { throw new TypeError('Failed to fetch'); };
       setWalked([allDogs[0]], true); await sheetQueue;
-      if (!toastText().includes('沒寫進試算表')) throw new Error(`網路：${toastText()}`);
+      if (!toastText().includes('尚未確認登記結果')) throw new Error(`網路：${toastText()}`);
       setWalked([allDogs[0]], false); await sheetQueue;
       let n = 0;
       window.fetch = async () => { n++; return json({ ok: false, code: 'off', error: '還沒設定' }, 503); };
@@ -3190,7 +3198,7 @@ async function runSheetWriteTests() {
     await check('2026-10-17 網路不通就退回未溜，提示條有「再試一次」', async () => {
       window.fetch = async () => { throw new TypeError('Failed to fetch'); };
       setWalked([allDogs[0]], true); await sheetQueue;
-      eq([walkedNow(allDogs[0]), toastText()], [false, '沒寫進試算表（網路不通），已退回未溜'], '退回：');
+      eq([walkedNow(allDogs[0]), toastText()], [false, '未全部登記成功；寫入甲 尚未確認登記結果（網路不通）'], '退回：');
       const retry = document.querySelector('#toast .toast-extra');
       eq([retry.hidden, retry.textContent], [false, '再試一次'], '再試一次：');
       window.fetch = async (u, o) => { const body = JSON.parse(o.body); return json({ ok: true, results: body.dogs.map(d => ({ ...d, status: 'written', prev: { walker: '' }, wrote: { walker: '志工我' } })) }); };
@@ -3925,7 +3933,7 @@ async function runFavSyncTests() {
   const a = 'a'.repeat(32), b = 'b'.repeat(32);
   const books = { [code]: new Set(), [alias]: new Set() };
   let aliases = { '2024100501': a, '2018100501': a, '名:無編號': b };
-  const calls = [];
+  const calls = [], keyCalls = [];
   let offline = false;
   let pauseWrite = null;
   const device = () => { walkedStorage = fakeStorage(); walkerCodesMemory = null; favSyncMemory = null; };
@@ -3940,8 +3948,13 @@ async function runFavSyncTests() {
         for (const c of input.codes) { if (input.on) books[c].add(input.dogId); else books[c].delete(input.dogId); }
         return { ok: true, json: async () => ({ ok: true }) };
       }
-      const codes = new URL(url).searchParams.get('codes').split(',');
-      return { ok: true, json: async () => ({ ok: true, aliases, ids: [...new Set(codes.flatMap(c => [...books[c]]))] }) };
+      const params = new URL(url).searchParams, codes = params.get('codes').split(','), keys = params.getAll('key');
+      keyCalls.push(keys);
+      // 跟 Worker 一樣只回常溜的狗和問到的鍵（#406）
+      const ids = [...new Set(codes.flatMap(c => [...books[c]]))];
+      const dogs = new Set([...ids, ...keys.map(k => aliases[k]).filter(Boolean)]);
+      const picked = Object.fromEntries(Object.entries(aliases).filter(([, id]) => dogs.has(id)));
+      return { ok: true, json: async () => ({ ok: true, aliases: picked, ids }) };
     };
     device();
     allDogs = [{ name: '甲', id: '2024100501', formerIds: ['2018100501'] }, { name: '無編號', id: '', formerIds: [] }];
@@ -3955,6 +3968,14 @@ async function runFavSyncTests() {
       eq([...books[alias]], [], '只寫第一個代號：');
       eq(localFavs(), ['無法辨識']);
       eq(allDogs.map(isFav), [true, true]);
+    });
+    await check('#406 沒有舊格式常溜時，讀常溜不帶 key', async () => {
+      keyCalls.length = 0;
+      writeJsonKey(FAVS_KEY, []);
+      await syncFavs();
+      eq(keyCalls, [[]]);
+      eq(allDogs.map(isFav), [true, true], '常溜的狗仍認得：');
+      writeJsonKey(FAVS_KEY, ['無法辨識']);
     });
     const firstPhone = walkedStorage;
     await check('#267 第二台讀回同一份；各自取消不同狗後兩邊改動都保留', async () => {
@@ -4554,11 +4575,11 @@ async function runTourLayoutTests() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js'].map(u => fetch(u).then(res => {
+Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs]) => {
+  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs]) => {
     SITE_JS = siteJs;
     const c = document.createElement('script'); // 這間收容所的設定要在其他程式前面
     c.textContent = siteJs;
@@ -4570,6 +4591,7 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     APP_JS = js;
     DOGS_JSON = JSON.parse(dogsJson);
     const dv = document.createElement('script'); dv.textContent = detailViewportJs; document.body.appendChild(dv);
+    const wr = document.createElement('script'); wr.textContent = walkRegistrationJs; document.body.appendChild(wr);
     const s = document.createElement('script');
     s.textContent = js;
     document.body.appendChild(s);

@@ -85,3 +85,35 @@ test('固定照顧：沒有編號的狗也能獨立設定，不按同名合併',
   assert.equal((await call(env, `/fixed-care/${dog.dogId}`, { editor: '甲', enabled: true })).status, 200);
   assert.deepEqual((await dogs(env)).map(d => d.covered), [true, false]);
 });
+
+test('固定照顧 API：無關設定多 10 倍，單次讀寫量固定且只用索引查詢', async () => {
+  const env = await setup();
+  const measure = async enabled => {
+    const before = await env.DB.prepare('SELECT total_changes() AS n').first('n');
+    const readsBefore = env.DB.stats.rowsRead;
+    const sql = [];
+    const spy = { ...env.DB, prepare(query) { sql.push(query); return env.DB.prepare(query); } };
+    assert.equal((await call({ ...env, DB: spy }, '/fixed-care/2024032902', { editor: '甲', enabled })).status, 200);
+    const reads = env.DB.stats.rowsRead - readsBefore;
+    const writes = (await env.DB.prepare('SELECT total_changes() AS n').first('n')) - before;
+    for (const query of sql.filter(q => /^SELECT/.test(q))) {
+      const plan = (await env.DB.prepare(`EXPLAIN QUERY PLAN ${query.replace(/\?/g, "'2024032902'")}`).all()).results;
+      assert.ok(plan.every(p => !/SCAN /.test(p.detail)), query);
+    }
+    return { reads, writes };
+  };
+  const seed = async (start, end) => {
+    for (let n = start; n < end; n++) {
+      const id = n.toString(16).padStart(32, '0');
+      await env.DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(id, `無關${n}`).run();
+      await env.DB.prepare('INSERT INTO v3_fixed_care VALUES(?,1)').bind(id).run();
+    }
+  };
+  await seed(1, 11);
+  await call(env, '/fixed-care/2024032902', { editor: '甲', enabled: true });
+  await call(env, '/fixed-care/2024032902', { editor: '甲', enabled: false });
+  const small = await measure(true);
+  await seed(11, 101);
+  assert.deepEqual(await measure(false), small);
+  assert.deepEqual(small, { reads: 2, writes: 3 });
+});

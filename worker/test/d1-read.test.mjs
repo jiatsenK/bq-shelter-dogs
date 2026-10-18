@@ -102,11 +102,12 @@ test('開卡改用 v3_card_opened：用編號找永久狗 ID 存；讀回時用�
 test('#267 常溜永久 ID：跨裝置增刪不覆蓋、合併別名、再入所與無編號狗', async t => {
   const DB = await seededDb(); t.after(() => DB.close());
   const code = (await resolveIdentity(DB, '甲', 'test-key')).codes[0], alias = (await resolveIdentity(DB, '乙', 'test-key')).codes[0];
-  const read = async (codes = [code]) => (await get(`/favorites?codes=${codes.join(',')}`, { DB })).json();
-  const initial = await read();
+  const read = async (codes = [code], keys = []) => (await get(`/favorites?codes=${codes.join(',')}${keys.map(k => '&key=' + encodeURIComponent(k)).join('')}`, { DB })).json();
+  const initial = await read([code], ['2025022703', '2018041318', '2026051203', '名:沒編號']);
   const a = initial.aliases['2025022703'], b = initial.aliases['2018041318'];
   assert.match(a, /^[a-f0-9]{32}$/);
   assert.equal(b, initial.aliases['2026051203'], '新舊編號對同一永久 ID');
+  assert.equal((await read([code], ['2018041318'])).aliases['2026051203'], b, '問舊編號也拿到現在的編號');
   assert.match(initial.aliases['名:沒編號'], /^[a-f0-9]{32}$/);
   const put = async (dogId, on, codes = [code]) => send('PUT', '/favorites', { dogId, on, codes }, { DB });
   assert.equal((await put(a, true)).status, 200);
@@ -124,10 +125,32 @@ test('#267 常溜永久 ID：跨裝置增刪不覆蓋、合併別名、再入所
   await DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind('2026101601', b).run();
   await DB.prepare("UPDATE v3_sheet_main SET number='2026101601',name='新名字' WHERE dog_id=?").bind(b).run();
   const returned = await read();
-  assert.equal(returned.aliases['2026101601'], b);
+  assert.equal(returned.aliases['2026101601'], b, '常溜的狗自帶全部編號');
+  assert.equal(returned.aliases['2025022703'], undefined, '沒問、也不是常溜的狗不附');
   assert.deepEqual(returned.ids, [b], '換編號仍收藏');
   await DB.prepare("INSERT INTO v3_dogs(name) VALUES('沒編號')").run();
-  assert.equal((await read()).aliases['名:沒編號'], undefined, '同名不猜');
+  assert.equal((await read([code], ['名:沒編號'])).aliases['名:沒編號'], undefined, '同名不猜');
+});
+
+test('#406 讀常溜的讀取量不隨狗數變大', async t => {
+  const DB = await seededDb(); t.after(() => DB.close());
+  const code = (await resolveIdentity(DB, '甲', 'test-key')).codes[0];
+  const b = (await DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='2026051203'").first()).dog_id;
+  await send('PUT', '/favorites', { dogId: b, on: true, codes: [code] }, { DB });
+  const cost = async () => {
+    const before = DB.stats.rowsRead;
+    const out = await (await get(`/favorites?codes=${code}`, { DB })).json();
+    return { rows: DB.stats.rowsRead - before, out };
+  };
+  const small = await cost();
+  assert.deepEqual(small.out.aliases, { '2026051203': b, '2018041318': b, '名:圓仔': b });
+  for (let i = 0; i < 300; i++) {
+    const { dog_id } = await DB.prepare('INSERT INTO v3_dogs(name) VALUES(?) RETURNING dog_id').bind('狗' + i).first();
+    await DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind(String(3000000000 + i), dog_id).run();
+  }
+  const big = await cost();
+  assert.equal(big.rows, small.rows, '多 300 隻狗，讀取列數不變');
+  assert.deepEqual(big.out.aliases, small.out.aliases);
 });
 
 test('#267 常溜 API 驗證、跨站與預覽寫入保護', async t => {
@@ -153,6 +176,27 @@ test('名字推薦改用 v3_volunteers：表上的名字記進去、以前看過
   assert.deepEqual(rows.map(r => r.name).sort(), ['嘉文', '老K', '阿德'].sort());
   assert.equal(rows.find(r => r.name === '老K').last_seen, '2026-10-15T00:00:00.000Z');
   assert.deepEqual(await rememberWalkerNames({ DB: { prepare() { throw new Error('x'); } } }, ['嘉文']), []);
+});
+
+test('存登記名字只寫有變的（#407）：同一天名字沒變寫 0 列、多一個新名字寫 1 列、隔天才更新 last_seen', async () => {
+  const DB = await seededDb();
+  const { rememberWalkerNames } = await import('../src/index.js');
+  // total_changes 也算觸發器：每寫 1 列名字，identity_v3_volunteers_* 會多寫 1 列 v3_identity_revision
+  const changes = async () => (await DB.prepare('SELECT total_changes() AS n').all()).results[0].n / 2;
+  const t0 = Date.parse('2026-10-15T01:00:00Z');
+  await rememberWalkerNames({ DB }, ['嘉文', '老K'], t0);
+  let before = await changes();
+  await rememberWalkerNames({ DB }, ['嘉文', '老K'], t0 + 3600e3);
+  assert.equal(await changes() - before, 0);
+  before = await changes();
+  await rememberWalkerNames({ DB }, ['嘉文', '老K', '阿德'], t0 + 7200e3);
+  assert.equal(await changes() - before, 1);
+  before = await changes();
+  await rememberWalkerNames({ DB }, ['老K'], t0 + 86400e3);
+  assert.equal(await changes() - before, 1);
+  const rows = (await DB.prepare('SELECT name, last_seen FROM v3_volunteers').all()).results;
+  assert.equal(rows.find(r => r.name === '老K').last_seen, '2026-10-16T01:00:00.000Z');
+  assert.equal(rows.find(r => r.name === '嘉文').last_seen, '2026-10-15T01:00:00.000Z');
 });
 
 test('狀態頁：顯示新資料庫有沒有接上、狗和主清單幾筆；還沒建表或沒接都不會壞，也不退回整表數', async () => {

@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS v3_dog_numbers (
   dog_id TEXT NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT
 );
 CREATE INDEX IF NOT EXISTS v3_numbers_dog ON v3_dog_numbers(dog_id);
+-- 常溜用名字找狗時不整張掃（#406）
+CREATE INDEX IF NOT EXISTS v3_dogs_name ON v3_dogs(name);
 
 CREATE TABLE IF NOT EXISTS v3_sheet_main (
   row_index INTEGER PRIMARY KEY,

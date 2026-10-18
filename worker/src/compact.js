@@ -123,22 +123,31 @@ export async function dogIdsFor(db, numbers) {
   return out;
 }
 
-// 舊收藏的編號／名字只在能唯一對應時轉成永久 ID，不猜同名狗。
-export async function favoriteAliases(db) {
-  const [numbers, names] = await db.batch([
-    db.prepare('SELECT number, dog_id FROM v3_dog_numbers'),
-    db.prepare('SELECT name, MIN(dog_id) AS dog_id FROM v3_dogs GROUP BY name HAVING COUNT(*) = 1'),
+// 編號／名字 → 永久 ID，只查常溜的狗和手機問的舊格式鍵對到的狗（#406）；名字只在能唯一對應時轉，不猜同名狗。
+export async function favoriteAliases(db, dogIds, keys = []) {
+  const marks = list => list.map(() => '?').join(',');
+  const uniqueNames = where => `SELECT name, MIN(dog_id) AS dog_id FROM v3_dogs WHERE name IN (${where}) GROUP BY name HAVING COUNT(*) = 1`;
+  const numbers = keys.filter(k => !k.startsWith('名:')), names = keys.filter(k => k.startsWith('名:')).map(k => k.slice(2));
+  const found = [];
+  if (numbers.length) found.push(db.prepare(`SELECT dog_id FROM v3_dog_numbers WHERE number IN (${marks(numbers)})`).bind(...numbers));
+  if (names.length) found.push(db.prepare(uniqueNames(marks(names))).bind(...names));
+  const ids = [...new Set([...dogIds, ...(found.length ? await db.batch(found) : []).flatMap(r => (r.results || []).map(x => x.dog_id))])];
+  if (!ids.length) return {};
+  const [nums, named] = await db.batch([
+    db.prepare(`SELECT number, dog_id FROM v3_dog_numbers WHERE dog_id IN (${marks(ids)})`).bind(...ids),
+    db.prepare(uniqueNames(`SELECT name FROM v3_dogs WHERE dog_id IN (${marks(ids)})`)).bind(...ids),
   ]);
   return Object.fromEntries([
-    ...(numbers.results || []).map(r => [r.number, r.dog_id]),
-    ...(names.results || []).map(r => [`名:${r.name}`, r.dog_id]),
+    ...(nums.results || []).map(r => [r.number, r.dog_id]),
+    ...(named.results || []).map(r => [`名:${r.name}`, r.dog_id]),
   ]);
 }
 
-export async function readFavorites(db, codes) {
+export async function readFavorites(db, codes, keys = []) {
   const people = await identitiesForCodes(db, codes);
   const rows = await db.prepare(`SELECT DISTINCT dog_id FROM v3_volunteer_favorites WHERE volunteer_id IN (${people.map(() => '?').join(',')})`).bind(...people.map(p => p.volunteerId)).all();
-  return { ids: (rows.results || []).map(r => r.dog_id), aliases: await favoriteAliases(db) };
+  const ids = (rows.results || []).map(r => r.dog_id);
+  return { ids, aliases: await favoriteAliases(db, ids, keys) };
 }
 
 export async function saveFavorite(db, codes, dogId, on, date) {
