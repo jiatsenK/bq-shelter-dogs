@@ -10,7 +10,7 @@ const ON_MAIN = 'dog_id IN (SELECT dog_id FROM v3_sheet_main)';
 // 主清單欄位 → dogs.json 欄位；formerIds 只在有舊編號時出現（跟同步寫出來的 JSON 一樣）。
 // 舊編號直接讀 v3_dog_numbers（同一隻狗的其他編號，#289 網站補了馬上看得到）
 const MAIN_FIELDS = [
-  ['cage', 'cage'], ['id', 'number'], ['name', 'name'], ['walkedDate', 'walked_date'], ['covered', 'covered'],
+  ['cage', 'cage'], ['id', 'number'], ['name', 'name'], ['walkedDate', 'walked_date'], ['covered', 'fixed_care'],
   ['myWalked', 'my_walked'], ['note', 'note'], ['sex', 'sex'], ['intro', 'd1_intro'], ['myWalkedDate', 'my_walked_date'],
 ];
 const BOOLEANS = new Set(['covered', 'myWalked']);
@@ -19,7 +19,7 @@ const BOOLEANS = new Set(['covered', 'myWalked']);
 export async function readDogsPayload(db) {
   // 介紹是 D1 自己存的（#250 網站改了馬上看得到），不用主清單複本上同步帶來的那份
   const [main, walkers, former, groups, notes] = await db.batch([
-    db.prepare("SELECT m.*, COALESCE(i.intro, '') AS d1_intro FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) ORDER BY m.row_index"),
+    db.prepare("SELECT m.*, COALESCE(i.intro, '') AS d1_intro, COALESCE(c.enabled, 0) AS fixed_care FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) LEFT JOIN v3_fixed_care c USING(dog_id) ORDER BY m.row_index"),
     db.prepare('SELECT row_index, walker_code FROM v3_sheet_main_walkers ORDER BY row_index, position'),
     db.prepare("SELECT m.row_index, n.number FROM v3_sheet_main m JOIN v3_dog_numbers n USING(dog_id) WHERE n.number <> m.number ORDER BY m.row_index, n.number"),
     db.prepare('SELECT column_index, name FROM v3_sheet_groups ORDER BY column_index, row_index'),
@@ -47,6 +47,7 @@ export async function readDogsPayload(db) {
   const dogs = rows.map(row => {
     const dog = {};
     for (const [key, column] of MAIN_FIELDS) dog[key] = BOOLEANS.has(key) ? Boolean(row[column]) : row[column];
+    if (!row.number) dog.dogId = row.dog_id; // 無編號的狗也用永久身分設定固定照顧，不猜名字。
     dog.walkers = walkersOf.get(row.row_index) || [];
     if (formerOf.has(row.row_index)) dog.formerIds = formerOf.get(row.row_index);
     if (intakeOf.has(row.dog_id)) dog.intakeEvents = intakeOf.get(row.dog_id);
@@ -178,6 +179,17 @@ export async function readRest(db, scope) {
 export const sortedRest = entries => Object.fromEntries(entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
 
 // 寫休養：rest 是 null 就結束休養。編號不認得回 null，存好回 { dogId, before }（改前的設定，編輯紀錄用）
+export async function saveFixedCare(db, number, enabled) {
+  const dogId = (await dogIdsFor(db, [number])).get(number)
+    || (/^[a-f0-9]{32}$/.test(number) ? await db.prepare('SELECT dog_id FROM v3_dogs WHERE dog_id=?').bind(number).first('dog_id') : null);
+  if (!dogId) return null;
+  const before = Boolean(await db.prepare('SELECT enabled FROM v3_fixed_care WHERE dog_id=?').bind(dogId).first('enabled'));
+  if (before !== enabled) {
+    await db.prepare('INSERT INTO v3_fixed_care(dog_id,enabled) VALUES(?,?) ON CONFLICT(dog_id) DO UPDATE SET enabled=excluded.enabled').bind(dogId, Number(enabled)).run();
+  }
+  return { dogId, before };
+}
+
 export async function saveRest(db, number, rest) {
   const dogId = (await dogIdsFor(db, [number])).get(number);
   if (!dogId) return null;

@@ -229,7 +229,8 @@ function runTests() {
       const favoriteCall = /async function favoriteRequest\(codes, op\) \{[\s\S]*?\n\}\r?\n\r?\nfunction syncFavs/;
       if (!favoriteCall.test(APP_JS) || !APP_JS.includes("const base = UPLOAD_URL + '/favorites'")) throw new Error('找不到常溜的 Worker 呼叫');
       const identityCall = /async function identityRequest\(action, body\) \{[\s\S]*?\n\}/;
-      const code = APP_JS.replace(identityCall, '').replace(favoriteCall, '').replace(new RegExp(walkCall.source, 'g'), '').replace(uploadCall, '').replace(walkerCall, '').replace(syncCall, '').replace(restCall, '').replace(introCall, '').replace(formerCall, '').replace(staysCall, '').replace("sendFormer(e.dog, former, 'POST')", '').replace("sendFormer(dog, former, 'DELETE')", '');
+      const fixedCareCall = /async function toggleFixedCare\(dog\) \{[\s\S]*?\n\}\r?\n/;
+        const code = APP_JS.replace(fixedCareCall, '').replace(identityCall, '').replace(favoriteCall, '').replace(new RegExp(walkCall.source, 'g'), '').replace(uploadCall, '').replace(walkerCall, '').replace(syncCall, '').replace(restCall, '').replace(introCall, '').replace(formerCall, '').replace(staysCall, '').replace("sendFormer(e.dog, former, 'POST')", '').replace("sendFormer(dog, former, 'DELETE')", '');
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
@@ -1272,7 +1273,7 @@ async function runHistoryTests() {
       showDetail(dogs[0]);
       let sec = document.querySelector('#detail [data-section="walks"]');
       if (!sec) throw new Error('詳細資訊要有遛狗紀錄');
-      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-4), ['walks', 'intro', 'stays', 'rest'], '位置在入所介紹前（入所介紹之後是出入所紀錄 #333、休養設定；相簿 K 2026-10-09 拿掉）：');
+      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-5), ['walks', 'intro', 'stays', 'fixed-care', 'rest'], '位置在入所介紹前（入所介紹之後是出入所紀錄 #333、休養設定；相簿 K 2026-10-09 拿掉）：');
       eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(0, 2), ['last', 'note'], 'V9（#141）上次溜／溜狗人在最前面，接著試算表備註：');
       // 減法（10-10 K：格子很棒但眼花）：預設只有一行字，按「看每一天」才展開格子
       eq([sec.querySelectorAll('.w-grid').length, document.getElementById('walksToggle').getAttribute('aria-expanded'), sec.querySelector('.w-more').textContent], [0, 'false', '看每一天'], '預設收起來：');
@@ -2485,11 +2486,12 @@ async function runSyncButtonTests() {
       await requestSync(btn, { pollMs: 0, tries: 1 });
       eq(toast(), '更新失敗：叫同步失敗（GitHub 403）', 'Worker 說的原因：');
     });
-    await check('更新按鈕：Worker 說試算表沒變（unchanged）就不等，直接說已是最新（#305）', async () => {
+    await check('更新按鈕：試算表沒變仍讀回網站設定，不等試算表同步（#305、#399）', async () => {
       const calls = [];
-      window.fetch = async (url, init = {}) => { calls.push(`${init.method || 'GET'} ${String(url).replace(UPLOAD_URL, 'W')}`); return new Response(JSON.stringify({ ok: true, unchanged: true })); };
+      window.fetch = async (url, init = {}) => { calls.push(`${init.method || 'GET'} ${String(url).replace(UPLOAD_URL, 'W')}`); return new Response(JSON.stringify(String(url).endsWith('/sync') ? { ok: true, unchanged: true } : dogsFile('2026-09-27T16:25:00+08:00', '網站設定'))); };
       await requestSync(btn, { pollMs: 0, tries: 3 });
-      eq(calls, ['POST W/sync'], '不讀 dogs.json：');
+      eq(calls.slice(0, 2), ['POST W/sync', 'GET api/dogs'], '重新讀回網站設定：');
+      eq(allDogs.map(d => d.name), ['網站設定']);
       eq(toast(), '試算表沒有新的修改，已經是最新的');
     });
     await check('更新按鈕：剛按過（429）還是會等新資料', async () => {

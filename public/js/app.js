@@ -8,6 +8,7 @@ function uploadUrlFor(loc) {
   return loc && loc.origin && loc.origin !== 'null' ? `${loc.origin}/api` : '';
 }
 let UPLOAD_URL = uploadUrlFor(globalThis.location); // 同步腳本的測試在 Node 裡讀這個檔，沒有 location
+const fixedCareEdits = new Map(); // 每隻狗各自的儲存狀態，關閉詳細資訊不會取消已送出的設定。
 // 上傳前先在手機上壓成 JPEG：長邊最多 1280px，避免 repo 堆滿手機原圖；上限要跟 Worker 的 MAX_BYTES 一致
 const PHOTO_MAX_EDGE = 1280;
 const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
@@ -76,10 +77,11 @@ function parseDogsData(data) {
   const dogs = data.dogs.filter(d => d && text(d.name)).map(d => ({
     cage: text(d.cage),
     id: text(d.id),
+    ...(d.dogId ? { dogId: text(d.dogId) } : {}),
     name: text(d.name),
     walkedDate: parseYmd(d.walkedDate),
-    // 同步只寫有沒有人固定照顧（covered）；舊版 dogs.json 是志工名字（walker），也當作有
-    covered: d.covered === true || text(d.walker) !== '',
+    // #399：API 的 covered 只來自網站設定，不再由志工名字推定。
+    covered: d.covered === true,
     note: text(d.note),
     // 狗卡資訊與性別由同步腳本從 dogs/{編號}.md 整理好（scripts/sync-sheet.mjs 的 attachDogCards）
     sex: d.sex === 'male' ? '♂' : d.sex === 'female' ? '♀' : '',
@@ -597,6 +599,7 @@ function effectiveWalkDate(dog, today = new Date()) {
 function computeStatus(dog, today) {
   const rest = restOf(dog, today);
   if (rest) return { kind: 'rest', ...rest };
+  if (dog.covered) return { kind: 'covered' };
   // V9（#141）拿掉今天已溜分類：這支手機今天按過溜了的狗（也寫進試算表了）直接當作今天溜的
   if (walkedNow(dog, today)) return { kind: 'dated', days: 0, level: 'sage', mine: true };
   const date = effectiveWalkDate(dog, today);
@@ -607,7 +610,6 @@ function computeStatus(dog, today) {
     else if (days >= AMBER_DAYS) level = 'amber';
     return { kind: 'dated', days, level };
   }
-  if (dog.covered) return { kind: 'covered' };
   return { kind: 'unknown' };
 }
 
@@ -1869,6 +1871,7 @@ function detailHtml(dog, today) {
     ${walkHistorySection(dog, today)}
     ${introSectionHtml(dog, intro)}
     ${staysSectionHtml(dog)}
+    ${fixedCareHtml(dog)}
     ${restAdminHtml(dog, today)}
     ${photoBarHtml(dog) || introBarHtml(dog) || `<div class="detail-bar">
       <button type="button" class="bar-btn" id="detailClose">關閉</button>
@@ -1888,6 +1891,58 @@ function restNoteHtml(dog, today) {
 function isoDay(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
+function fixedCareHtml(dog) {
+  if (!(dog.id || dog.dogId) || dog.departure || !UPLOAD_URL) return '';
+  const state = fixedCareEdits.get(dog.id || dog.dogId);
+  const busy = state?.busy;
+  return `<section class="detail-section fixed-care" data-section="fixed-care">
+    <div class="fixed-care-row">
+      <span id="fixedCareLabel">有人固定照顧</span>
+      <button type="button" id="fixedCareToggle" class="care-switch" role="switch" aria-labelledby="fixedCareLabel" aria-describedby="fixedCareHint" aria-checked="${dog.covered ? 'true' : 'false'}"${busy ? ' disabled aria-busy="true"' : ''}>
+        <span class="care-switch-state" aria-hidden="true">${dog.covered ? '開啟' : '關閉'}</span><span class="care-switch-track" aria-hidden="true"></span>
+      </button>
+    </div>
+    <p class="rest-hint" id="fixedCareHint">所有人共用。開啟後排在一般待溜狗之後、不計入天數統計，仍可溜。</p>
+    ${busy ? '<p class="rest-hint" role="status">儲存中…</p>' : ''}
+    ${state?.error ? `<p class="photo-error" role="alert">${esc(state.error)}</p>` : ''}
+  </section>`;
+}
+
+async function toggleFixedCare(dog) {
+  const key = dog?.id || dog?.dogId;
+  if (!key || fixedCareEdits.get(key)?.busy) return;
+  const editor = editorName();
+  if (!editor) {
+    fixedCareEdits.set(key, { error: NEED_EDITOR });
+    renderDetail();
+    return;
+  }
+  const enabled = !dog.covered;
+  const state = { busy: true, error: '' };
+  fixedCareEdits.set(key, state);
+  renderDetail();
+  try {
+    const res = await fetch(`${UPLOAD_URL}/fixed-care/${encodeURIComponent(key)}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ editor, enabled }),
+    });
+    const out = await res.json().catch(() => null);
+    if (!res.ok || !out?.ok || out.enabled !== enabled) throw new Error(out?.error || '沒有存進去，請稍後再試');
+    dog.covered = enabled;
+    for (const current of allDogs) if ((current.id || current.dogId) === key) current.covered = enabled;
+    if (detailDog && (detailDog.id || detailDog.dogId) === key) detailDog.covered = enabled;
+    showToast(`${dog.name} 的固定照顧已${enabled ? '開啟' : '關閉'}`);
+    render();
+  } catch (e) {
+    state.error = e.message === 'Failed to fetch' ? '沒有存進去，請確認網路後再試' : e.message;
+  } finally {
+    state.busy = false;
+    if (detailDog && (detailDog.id || detailDog.dogId) === key) {
+      renderDetail();
+      document.getElementById('fixedCareToggle')?.focus({ preventScroll: true });
+    }
+  }
+}
+
 function restAdminHtml(dog, today) {
   if (!dog.id || !UPLOAD_URL) return '';
   const r = restOf(dog, today);
@@ -2776,6 +2831,7 @@ function showPhotoError() {
 // 詳細資訊的按鈕（#86）：在外框綁一次，依按下的是哪個按鈕分派，每次重畫內容不用重新綁。
 // 由上往下找第一個符合的，所以同一個按鈕只會做一件事
 const DETAIL_CLICKS = [
+  ['#fixedCareToggle', () => toggleFixedCare(detailDog)],
   ['#detailClose', () => closeDetail()],
   ['[data-zoom]', el => { if (!el.classList.contains('no-photo')) openLightbox(detailDog, el); }],
   ['#photoCrop', () => cropPhotoUpload()],
@@ -3209,7 +3265,7 @@ window.addEventListener('resize', queueRange);
 // 溜狗表（沿用原待巡房）：所有狗依幾天沒遛由久到近；沒有遛狗紀錄的排最前，有人固定照顧的排最後
 function dueDogs(dogs, today) {
   // 休養中排最下面（K 2026-10-09），有人固定照顧在它上面
-  const key = s => s.kind === 'unknown' ? Infinity : s.kind === 'dated' ? s.days : s.kind === 'covered' ? -1 : -2;
+  const key = s => s.kind === 'unknown' ? Infinity : s.kind === 'dated' ? Math.max(0, s.days) : s.kind === 'covered' ? -1 : -2;
   return dogs
     .map(d => ({ d, k: key(computeStatus(d, today)) }))
     .sort((a, b) => (b.k === a.k ? 0 : b.k > a.k ? 1 : -1))
@@ -4013,6 +4069,10 @@ async function init() {
 let dataSyncedAt = null;
 function applyDogsData(data) {
   allDogs = mergeTempCages(data.dogs);
+  if (detailDog) {
+    const current = allDogs.find(d => (d.id || d.dogId) === (detailDog.id || detailDog.dogId));
+    if (current) detailDog.covered = current.covered;
+  }
   photoVersions = data.photoVersions || {};
   groupMap = data.groups || {};
   sheetNotes = Array.isArray(data.sheetNotes) ? data.sheetNotes : [];
@@ -4026,6 +4086,7 @@ function applyDogsData(data) {
   loadRest();
   syncFavs();
   loadTodayWalks();
+  if (detailDog) renderDetail();
 }
 
 // 頁首的資料時間；沒網路時改寫「沒網路・資料 10/8 09:01」，志工才知道看的是舊資料、溜了寫不進試算表
@@ -4075,6 +4136,11 @@ async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES
     }
     // ADR 0012：Worker 比對過試算表沒變，沒有叫同步，不用等
     if (res.ok && (await res.clone().json().catch(() => ({}))).unchanged) {
+      // #399 網站設定與試算表同步時間無關；即使試算表沒改，也要讀回其他人的設定。
+      try { applyDogsData(await loadDogsData()); } catch (e) {
+        showToast('暫時讀不到網站設定，請稍後再更新');
+        return;
+      }
       showToast('試算表沒有新的修改，已經是最新的');
       return;
     }
@@ -4084,7 +4150,11 @@ async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES
       await new Promise(r => setTimeout(r, pollMs));
       let data;
       try { data = await loadDogsData(); } catch (e) { continue; }
-      if (data.syncedAt && data.syncedAt.getTime() > before) {
+      const careChanged = data.dogs.some(d => {
+        const old = allDogs.find(o => (o.id || o.dogId) === (d.id || d.dogId));
+        return old && old.covered !== d.covered;
+      });
+      if ((data.syncedAt && data.syncedAt.getTime() > before) || careChanged) {
         applyDogsData(data);
         showToast('資料已更新');
         return;
