@@ -400,7 +400,7 @@ function runTests() {
         groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '入所介紹', '出入所紀錄', '休養設定'].slice(0, box.querySelector('[data-section="rest"]') ? 6 : 5)); // 相簿 K 2026-10-09 拿掉；管理用（改介紹、休養）10-10 集中一區；出入所紀錄 #333
+        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '入所介紹', '休養設定'].slice(0, box.querySelector('[data-section="rest"]') ? 5 : 4)); // #390：出入所紀錄併入入所介紹
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/thumbs/2.jpg', '一起溜的照片：');
@@ -408,7 +408,7 @@ function runTests() {
         eq(box.querySelector('[data-section="intro"] .content').textContent, '入所狗卡');
         dog.note = ''; dog.intro = ''; groupMap = {};
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section .empty')].length, 5, '都沒有資料時顯示提示（#60 遛狗紀錄讀取中也算；V9 拿掉我的備註；相簿 K 2026-10-09 拿掉；#333 出入所紀錄）：');
+        eq([...box.querySelectorAll('section .empty')].length, 3, '入所資料不再顯示兩段空提示：');
       } finally { [allDogs, groupMap] = saved; }
     }),
     check('#28 點狗卡開詳細資訊，點一起溜的狗換成那隻，關閉後回到清單', () => {
@@ -1273,7 +1273,7 @@ async function runHistoryTests() {
       showDetail(dogs[0]);
       let sec = document.querySelector('#detail [data-section="walks"]');
       if (!sec) throw new Error('詳細資訊要有遛狗紀錄');
-      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-5), ['walks', 'intro', 'stays', 'fixed-care', 'rest'], '位置在入所介紹前（入所介紹之後是出入所紀錄 #333、休養設定；相簿 K 2026-10-09 拿掉）：');
+      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-4), ['walks', 'intro', 'fixed-care', 'rest'], '位置在合併後的入所介紹前：');
       eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(0, 2), ['last', 'note'], 'V9（#141）上次溜／溜狗人在最前面，接著試算表備註：');
       // 減法（10-10 K：格子很棒但眼花）：預設只有一行字，按「看每一天」才展開格子
       eq([sec.querySelectorAll('.w-grid').length, document.getElementById('walksToggle').getAttribute('aria-expanded'), sec.querySelector('.w-more').textContent], [0, 'false', '看每一天'], '預設收起來：');
@@ -2087,10 +2087,11 @@ async function runRestTests() {
       try {
         showDetail(dog);
         eq([...document.querySelectorAll('.intake-list time')].map(el => el.textContent), ['2021/02/17', '2026/01/02']);
-        eq([...document.querySelectorAll('.intake-number')].map(el => el.textContent), ['（2021021703）', '（2021021703）']);
+        eq(document.querySelectorAll('.intake-number').length, 0, '閱讀不逐筆重複編號，編輯仍保留對應編號：');
         eq(document.querySelector('[data-section="intro"] .content').textContent, dog.intro);
         if (!document.querySelector('[data-section="walks"]') || !document.querySelector('.reentry')) throw new Error('保留早上其他區塊');
         document.getElementById('introEdit').click();
+        eq([...document.querySelectorAll('[data-intake-field="number"]')].map(el => el.value), ['2021021703', '2021021703']);
         const reason = document.querySelector('[data-intake-row="1"][data-intake-field="event"]');
         reason.value = '領養退回（補正）'; reason.dispatchEvent(new Event('input', { bubbles: true }));
         document.getElementById('intakeAdd').click();
@@ -2191,11 +2192,14 @@ async function runRestTests() {
         document.getElementById('staysForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         await new Promise(r => setTimeout(r, 20));
       };
+      const edit = () => {
+        if (!document.getElementById('staysEdit')) document.getElementById('introEdit').click();
+        document.getElementById('staysEdit').click();
+      };
       try {
         dog.stays = [];
         showDetail(dog);
-        eq(document.getElementById('staysEdit').getAttribute('aria-label'), '補出入所紀錄', '還沒有：點了是補：');
-        document.getElementById('staysEdit').click();
+        edit();
         set(0, 'in', '2019-03-01'); set(0, 'out', '2019-02-01');
         await submit();
         eq([calls.length, document.querySelector('#staysForm [role="alert"]').textContent], [0, '出所日不能早於入所日'], '出所早於入所先擋：');
@@ -2206,16 +2210,17 @@ async function runRestTests() {
         eq([calls.length, calls[0][0], calls[0][1], calls[0][2].editor, calls[0][2].before], [1, 'https://worker.test/stays/9613', 'PUT', '志工我', []], '送出：帶名字和改之前的內容：');
         eq(calls[0][2].stays, [{ in: '2019-03-01', out: '2019-06-01', reason: '整修移所' }, { in: '2015-08-18', out: '', reason: '迷路' }], '整份送出：');
         eq([staysEdit, ymd(firstIntake(dog))], [null, '2015-08-18'], '成功：入所日改從最早那次算：');
-        eq([...document.querySelectorAll('.stays-list li')].map(li => li.textContent), ['2015/08/18入所（迷路）', '2019/03/01入所，2019/06/01 出所（整修移所）'], '照時間列出：');
+        document.getElementById('introCancel').click();
+        eq([...document.querySelectorAll('[data-section="intro"] .intake-list li')].map(li => li.textContent), ['2015/08/18迷路入所', '2019/03/01入所', '2019/06/01整修移所'], '同一段直接列日期與經過：');
         if (!document.querySelector('#detail .chips').textContent.includes('入所 2015/8')) throw new Error('入所標籤沒有跟著改');
         // 刪掉一筆：送出的 before 是剛剛存好的內容
-        document.getElementById('staysEdit').click();
+        edit();
         document.querySelector('[data-stay-remove="0"]').click();
         await submit();
         eq([calls[1][2].before.length, calls[1][2].stays], [2, [{ in: '2019-03-01', out: '2019-06-01', reason: '整修移所' }]], '刪一筆：');
         eq(ymd(firstIntake(dog)), '2019-03-01', '刪了就回到剩下最早的：');
         conflict = true;
-        document.getElementById('staysEdit').click();
+        edit();
         set(0, 'reason', '移所');
         await submit();
         eq([document.querySelector('#staysForm [role="alert"]').textContent, dog.stays[0].reason], ['別人剛改過，請重新整理再改', '整修移所'], '別人剛改過：提示、不改這台的資料：');
