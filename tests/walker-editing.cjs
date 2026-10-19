@@ -11,6 +11,7 @@ module.exports = async (browser, base) => {
   const names = Object.fromEntries(data.dogs.map(d => [d.id, '測試志工、同行甲']));
   const writes = [];
   let releaseWrite = null, holdWrite = false, failWrite = false;
+  let delayedRead = '', releaseRead = null;
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Asia/Taipei', serviceWorkers: 'block' });
   await context.addInitScript(() => {
     localStorage.setItem('bq-onboarded', '1');
@@ -25,6 +26,7 @@ module.exports = async (browser, base) => {
     if (url.origin !== base) return route.abort();
     if (!url.pathname.includes('/api/')) return route.continue();
     const endpoint = url.pathname.split('/api/')[1];
+    if (endpoint === delayedRead && req.method() === 'GET') await new Promise(resolve => { releaseRead = resolve; });
     if (endpoint === 'walk' && req.method() === 'POST') {
       const body = req.postDataJSON(); writes.push(body);
       if (holdWrite) await new Promise(resolve => { releaseWrite = resolve; });
@@ -94,6 +96,18 @@ module.exports = async (browser, base) => {
     data.dogs[1].walkedDate = '2026-10-17';
     names[data.dogs[1].id] = '同行甲';
     await page.reload({ waitUntil: 'networkidle' });
+    await page.locator('#main [data-dog="1"]').first().click();
+    holdWrite = true;
+    const ordinarySent = page.waitForRequest(r => r.url().endsWith('/api/walk') && r.method() === 'POST');
+    await page.locator('#groupWalk').click();
+    await ordinarySent;
+    assert.equal(await page.locator('#whoAdd').count(), 0, '一般登記尚未確認時不可編輯');
+    assert.match(await page.locator('.last-walk').textContent(), /正在寫進試算表/);
+    holdWrite = false; releaseWrite();
+    await page.locator('#whoAdd').waitFor();
+    // 模擬重開後尚未登記的另一隻狗，再驗證整群入口。
+    await page.evaluate(() => { localStorage.removeItem('bq-sheet-writes'); localStorage.removeItem('bq-walked-today'); });
+    await page.reload({ waitUntil: 'networkidle' });
     await page.locator('[data-tab="groups"]').click();
     await page.locator('#gwWalk').waitFor();
     holdWrite = true;
@@ -111,6 +125,21 @@ module.exports = async (browser, base) => {
     await openDog();
     assert.equal(await page.locator('#whoAdd').count(), 0, '隔天不開放昨天名單編輯');
     assert.match(await page.locator('.last-walk').textContent(), /僅能編輯.*今天/);
+    await page.clock.setSystemTime(new Date('2026-10-18T02:00:00Z'));
+    for (const endpoint of ['walkers', 'today']) {
+      await page.evaluate(() => { localStorage.removeItem('bq-sheet-writes'); localStorage.removeItem('bq-walked-today'); });
+      delayedRead = endpoint; releaseRead = null;
+      const first = page.waitForResponse(r => r.url().endsWith('/api/' + (endpoint === 'walkers' ? 'today' : 'walkers')));
+      await page.reload({ waitUntil: 'domcontentloaded' });
+      await first;
+      await openDog();
+      await page.locator('#whoAdd').waitFor();
+      const last = page.waitForResponse(r => r.url().endsWith('/api/' + endpoint));
+      delayedRead = ''; releaseRead();
+      await last;
+      await page.waitForLoadState('networkidle');
+      assert.equal(await page.locator('#whoAdd').count(), 1, `${endpoint} 較晚抵達仍可編輯`);
+    }
     console.log('#417 今日資料讀回、加減溜狗人、重開及衝突保護通過');
   } finally { await context.close(); }
 };
