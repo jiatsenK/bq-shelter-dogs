@@ -2300,12 +2300,13 @@ function lastWalkSection(dog, today) {
 let walkerEditBusy = ''; // 正在寫的狗的 key，寫完前＋／×都不能按
 function walkerEditBase(dog, today = new Date()) {
   if (!UPLOAD_URL || sheetWriteState === 'off' || dog.departure) return null;
+  if (!loadWalkerName() || isOffline() || walkPendingNow(dog)) return null;
   const key = walkKey(dog);
   if (!key) return null;
   const date = localDateKey(today);
   const item = loadSheetWrites(today)[key];
   if (item && item.current) return item.current.date === date && item.current.walker ? item.current.walker : null;
-  if (walkedNow(dog, today)) return null; // 這支手機按了溜了，試算表還沒回來
+  // 今日消息也會標記自己已溜；已確認日期和名單時，不因已溜而隱藏編輯入口。
   return dog.walkedDate && localDateKey(dog.walkedDate) === date && walkerNames[key] ? walkerNames[key] : null;
 }
 // 只剩自己一個人、而且是這支手機今天登記的（按錯了），那個 × 是取消這次登記：日期和名字改回登記前（K 2026-10-05）
@@ -2316,7 +2317,12 @@ function walkerUndoable(dog, who, today = new Date()) {
 }
 function walkerChipsHtml(dog, who, today) {
   if (!who.length) return isOffline() ? '<span class="lw-none">讀不到（沒網路）</span>' : '<span class="lw-none">—</span>';
-  if (!walkerEditBase(dog, today)) return who.map(n => `<span class="who-chip">${esc(n)}</span>`).join('');
+  if (!walkerEditBase(dog, today)) {
+    const reason = isOffline() ? '沒網路，連線後才能編輯' : !loadWalkerName() ? '請先在「我溜過」選好你的名字再編輯'
+      : walkPendingNow(dog) ? '正在寫進試算表，請稍候' : !UPLOAD_URL || sheetWriteState === 'off' ? '目前無法寫入試算表'
+        : '僅能編輯已確認的今天溜狗人';
+    return who.map(n => `<span class="who-chip">${esc(n)}</span>`).join('') + `<small class="lw-none">${reason}</small>`;
+  }
   const busy = walkerEditBusy === walkKey(dog);
   const dis = busy ? ' disabled' : '';
   const undoable = walkerUndoable(dog, who, today);
