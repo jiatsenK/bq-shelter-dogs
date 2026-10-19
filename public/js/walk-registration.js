@@ -3,16 +3,99 @@
   function createWalkRegistration(deps) {
     let queue = Promise.resolve();
     const pending = new Map(), requests = new WeakMap();
+    let revision = 0, readSequence = 0, acceptedToday = 0;
+    const changedAt = new Map();
+    const now = () => deps.now?.() ?? Date.now();
     const isSuccess = status => ['written', 'already', 'restored'].includes(status);
     const isRetryable = status => ['unknown', 'notSent'].includes(status);
     function dateKey(value) {
       const match = String(value || '').match(/^(\d{4})[/-](\d{1,2})[/-](\d{1,2})$/);
       return match ? `${match[1]}-${match[2].padStart(2, '0')}-${match[3].padStart(2, '0')}` : '';
     }
-    const isMine = (current, day, me) => current.date === day && deps.split(current.walker).map(deps.canonical).includes(deps.canonical(me));
+    const isMine = (current, day, me = deps.walker()) => current.date === day && !!me
+      && deps.split(current.walker).map(deps.canonical).some(n => [me, ...(deps.names?.() || [])].map(deps.canonical).includes(n));
+    function activeItem(dog, day) {
+      const item = deps.read(day)[deps.key(dog)];
+      const since = deps.syncedAt?.() || 0;
+      // 舊版沒有時間證據，不能推定它比已同步正本新。
+      return since && (!item?.observedAt || item.observedAt <= since) ? null : item;
+    }
+    function state(dog, day = deps.date()) {
+      const item = activeItem(dog, day);
+      const base = deps.base?.(dog) || {};
+      const expired = !item && !!deps.read(day)[deps.key(dog)];
+      const local = !expired && (deps.local?.(day) || []).includes(deps.key(dog));
+      const current = item?.current || (local ? { date: day, walker: [base.walker, deps.walker() || '你', ...(deps.companions?.(dog, day) || [])].filter(Boolean).join('、') } : base);
+      const date = dateKey(current.date), walker = String(current.walker || '');
+      return { date, walker, walkers: [...new Set(deps.split(walker).map(deps.canonical).filter(Boolean))],
+        today: date === day, mine: item?.current ? isMine({ date, walker }, day) : local || isMine({ date, walker }, day), canUndo: canUndo(dog, day) };
+    }
+    function today(dogs, day = deps.date()) {
+      return dogs.filter(d => activeItem(d, day)?.current || (dateKey(deps.base?.(d)?.date) === day && deps.base(d).walker))
+        .map(dog => ({ dog, ...state(dog, day) }));
+    }
     function canUndo(dog, day = deps.date()) {
       const item = deps.read(day)[deps.key(dog)];
-      return !!(item && item.prev && item.wrote && (!item.current || item.current.walker === item.wrote.walker));
+      const current = activeItem(dog, day) ? item.current : deps.base?.(dog);
+      return !!(item && item.prev && item.wrote && (!current || (current.walker === item.wrote.walker
+        && (!(item.wrote.date || item.current?.date) || dateKey(current.date) === dateKey(item.wrote.date || item.current.date)))));
+    }
+    function beginRead() { return { day: deps.date(), revision, sequence: ++readSequence, at: now() }; }
+    // 日期、名字、本機名單與復原證據一併套用；傳輸與 DOM 不參與規則。
+    function setCurrent(records, dog, current, day, evidence = {}, observedAt = now()) {
+      const key = deps.key(dog), old = records[key];
+      records[key] = { ...old, ...evidence, id: dog.id || '', name: dog.name,
+        current: { date: dateKey(current.date), walker: String(current.walker || '') }, observedAt };
+      records[key].mine = isMine(records[key].current, day);
+      if (old?.current && (old.current.date !== records[key].current.date || old.current.walker !== records[key].current.walker)
+        && !Object.hasOwn(evidence, 'wrote')) {
+        delete records[key].prev; delete records[key].wrote;
+      }
+      changedAt.set(`${day}:${key}`, ++revision);
+    }
+    function saveCurrent(records, dogs, day, restored = []) {
+      if (day !== deps.date()) return;
+      deps.save(records, day);
+      if (deps.saveLocal) {
+        const ids = new Set(deps.local(day));
+        for (const dog of dogs) {
+          const key = deps.key(dog);
+          if (records[key]?.mine) ids.add(key); else ids.delete(key);
+        }
+        deps.saveLocal([...ids], day);
+      }
+      if (dogs.length) deps.apply(dogs, records, day, restored);
+    }
+    function receiveToday(payload, dogs, read = beginRead()) {
+      const day = deps.date();
+      if (read.day !== day || payload?.date !== day || !Array.isArray(payload.walks) || read.sequence < acceptedToday) return false;
+      acceptedToday = read.sequence;
+      const records = { ...deps.read(day) }, changed = [];
+      for (const row of payload.walks) {
+        const dog = dogs.find(d => deps.key(d) === row?.key), at = Date.parse(row?.at);
+        if (!dog || !Number.isFinite(at) || at <= (deps.syncedAt?.() || 0)
+          || (changedAt.get(`${day}:${row.key}`) || 0) > read.revision
+          || at < (records[row.key]?.observedAt || 0)) continue;
+        setCurrent(records, dog, { date: row.walkedDate, walker: row.walker }, day, {}, at);
+        changed.push(dog);
+      }
+      if (changed.length) saveCurrent(records, changed, day);
+      return !!changed.length;
+    }
+    function receiveNames(names, dogs, read = beginRead()) {
+      if (read.day !== deps.date()) return false;
+      const records = { ...deps.read(read.day) }, changed = [];
+      for (const dog of dogs) {
+        const key = deps.key(dog), item = records[key];
+        if (!Object.hasOwn(names, key) || !item?.current || item.current.walker === String(names[key] || '')
+          || (changedAt.get(`${read.day}:${key}`) || 0) > read.revision) continue;
+        // 名單讀取不帶日期，保留已知日期；完整日期由同步或今日紀錄確認。
+        const current = activeItem(dog, read.day)?.current || deps.base?.(dog) || {};
+        setCurrent(records, dog, { date: current.date, walker: names[key] }, read.day, {}, read.at);
+        changed.push(dog);
+      }
+      if (changed.length) saveCurrent(records, changed, read.day);
+      return !!changed.length;
     }
     function register(dogs, options = {}) {
       const day = deps.date(), me = deps.walker();
@@ -61,6 +144,7 @@
           }
           return { id: e.id, name: e.name, ...(expected === undefined ? {} : { expected }) };
         }) };
+        const writeStarted = beginRead();
         let out;
         try { out = await deps.send(payload); }
         catch { out = { ok: false, error: '網路不通' }; }
@@ -77,26 +161,27 @@
           const status = out.off ? 'notSent' : raw && allowed.includes(raw.status) ? raw.status : 'unknown';
           statuses.set(e.key, status);
           const old = updated[e.key];
+          const newer = old?.current && (changedAt.get(`${day}:${e.key}`) || 0) > writeStarted.revision
+            && old.observedAt >= writeStarted.at;
+          const applyCurrent = (current, evidence = {}) => setCurrent(updated, e.dog, newer ? old.current : current,
+            day, evidence, newer ? old.observedAt : now());
           if (status === 'written' || status === 'already') {
             const current = { date: dateKey(out.today || day), walker: raw.wrote?.walker ?? raw.current?.walker ?? '' };
-            updated[e.key] = { id: e.id, name: e.name, prev: expected !== undefined ? raw.prev : old?.prev || raw.prev,
-              wrote: raw.wrote || old?.wrote, current,
-              mine: isMine(current, day, me) };
+            applyCurrent(current, { prev: expected !== undefined ? raw.prev : old?.prev || raw.prev,
+              wrote: raw.wrote || old?.wrote });
           } else if (status === 'restored' && old) {
-            const date = old.prev.date || {};
-            const current = { date: dateKey(date.date || date.text), walker: old.prev.walker };
-            updated[e.key] = { id: e.id, name: e.name, current, mine: isMine(current, day, me) };
+            const previous = (e.undo || old).prev || {}, date = previous.date || {};
+            const current = { date: dateKey(date.date || date.text), walker: previous.walker };
+            applyCurrent(current, { prev: undefined, wrote: undefined });
           } else if (status === 'changed') {
-            updated[e.key] = { ...old, id: e.id, name: e.name,
-              ...(raw.current ? { current: { ...raw.current, date: dateKey(raw.current.date) },
-                mine: isMine({ ...raw.current, date: dateKey(raw.current.date) }, day, me) } : {}) };
+            if (raw.current) applyCurrent(raw.current);
+            else updated[e.key] = { ...old, id: e.id, name: e.name };
             // 衝突後不再使用舊快照復原。
             delete updated[e.key].prev; delete updated[e.key].wrote;
           }
           if (isSuccess(status) || (status === 'changed' && raw.current)) confirmed.push(e);
         }
-        deps.save(updated, day);
-        if (confirmed.length) deps.apply(confirmed.map(e => e.dog), updated, day, confirmed.filter(e => statuses.get(e.key) === 'restored').map(e => e.dog));
+        if (day === deps.date()) saveCurrent(updated, confirmed.map(e => e.dog), day, confirmed.filter(e => statuses.get(e.key) === 'restored').map(e => e.dog));
       }
       const rows = entries.map(e => ({ dog: e.dog, status: statuses.get(e.key) || 'notSent', canUndo: canUndo(e.dog, day) }));
       const result = { rows, error, off, successful: rows.filter(r => isSuccess(r.status)).map(r => r.dog),
@@ -110,7 +195,7 @@
       const entries = request.entries.filter((e, i) => isRetryable(result.rows[i].status));
       return enqueue({ ...request, entries });
     }
-    return { register, retry, undo, canUndo, pending: dog => pending.has(deps.key(dog)) };
+    return { register, retry, undo, canUndo, state, today, beginRead, receiveToday, receiveNames, pending: dog => pending.has(deps.key(dog)) };
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = { createWalkRegistration };
   else root.createWalkRegistration = createWalkRegistration;
