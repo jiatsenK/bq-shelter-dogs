@@ -1833,7 +1833,6 @@ function detailHtml(dog, today) {
     ${togetherSection(dog, walked)}
     ${walkHistorySection(dog, today)}
     ${introSectionHtml(dog, intro)}
-    ${staysSectionHtml(dog)}
     ${fixedCareHtml(dog)}
     ${restAdminHtml(dog, today)}
     ${photoBarHtml(dog) || introBarHtml(dog) || `<div class="detail-bar">
@@ -1944,10 +1943,51 @@ function intakeEventsOf(dog) {
 function intakeDraft(dog) {
   return intakeEventsOf(dog).map(row => ({ ...row }));
 }
-function intakeListHtml(dog) {
-  const events = intakeEventsOf(dog);
+// #390：僅整理閱讀畫面，不修改原介紹、stays 或入所日算法。
+function intakePresentation(dog, intro) {
+  const events = intakeEventsOf(dog).map(e => ({ date: e.date, event: e.event }));
+  let supplement = intro || '';
+  // 只排版開頭明寫完整日期的句子；沒有年份、不合理日期與其餘文字照原樣保留。
+  const datedSentence = /^(\d{4})年(\d{1,2})月(\d{1,2})日([^。\n]+)(?:[。\n]+|$)/;
+  for (;;) {
+    const match = supplement.match(datedSentence);
+    if (!match) break;
+    const date = makeDate(+match[1], +match[2], +match[3]);
+    if (!date) break;
+    events.push({ date: isoDay(date), event: match[4] });
+    supplement = supplement.slice(match[0].length);
+  }
+  const sameText = value => String(value || '').replace(/[\s。]+/g, '');
+  const add = row => {
+    if (!events.some(e => e.date === row.date && sameText(e.event) === sameText(row.event))) events.push(row);
+  };
+  for (const stay of dog.stays || []) {
+    // #392 盤點的舊資料：這兩種原因記的是該段怎麼結束，不能改標成入所原因。
+    const ending = stay.out && ['整修移所', '領養後退養'].includes(stay.reason);
+    const reason = ending ? '' : stay.reason;
+    const arrival = reason ? (/入所$/.test(reason) ? reason : `${reason}入所`) : '入所';
+    const hasArrival = events.some(e => e.date === stay.in && (sameText(e.event) === sameText(arrival) || (!reason && /入所|轉來|退回/.test(e.event))));
+    if (!hasArrival) add({ date: stay.in, event: arrival });
+    if (stay.out) add({ date: stay.out, event: ending ? stay.reason : '出所' });
+  }
+  const unique = [];
+  const covers = (longer, shorter) => {
+    const a = sameText(longer), b = sameText(shorter);
+    return a === b || (b && ['，', ',', '；', ';'].some(mark => a.startsWith(b + mark)));
+  };
+  for (const row of events) {
+    if (unique.some(e => e.date === row.date && covers(e.event, row.event))) continue;
+    for (let i = unique.length - 1; i >= 0; i--) {
+      if (unique[i].date === row.date && covers(row.event, unique[i].event)) unique.splice(i, 1);
+    }
+    unique.push(row);
+  }
+  unique.sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
+  return { events: unique, supplement };
+}
+function intakeListHtml(events) {
   if (!events.length) return '';
-  return `<ul class="intake-list">${events.map(e => `<li>${e.date ? `<time datetime="${esc(e.date)}">${esc(e.date.replace(/-/g, '/'))}</time>` : '<span class="intake-date-empty">日期未確認</span>'}<span class="intake-event">${esc(e.event)}</span>${e.number ? `<span class="intake-number">（${esc(e.number)}）</span>` : ''}</li>`).join('')}</ul>`;
+  return `<ul class="intake-list">${events.map(e => `<li>${e.date ? `<time datetime="${esc(e.date)}">${esc(e.date.replace(/-/g, '/'))}</time>` : '<span class="intake-date-empty">日期未確認</span>'}<span class="intake-event">${esc(e.event || '原因未填')}</span></li>`).join('')}</ul>`;
 }
 function intakeEditorHtml(dog, e, busy) {
   const numbers = [...new Set([...(dog.formerIds || []), dog.id, ...e.events.map(row => row.number)].filter(Boolean))].sort();
@@ -1964,13 +2004,17 @@ function introOf(dog) {
   return dog.id && Object.prototype.hasOwnProperty.call(introOverrides, dog.id) ? introOverrides[dog.id] : dog.intro;
 }
 function introSectionHtml(dog, intro) {
+  if (staysEdit && staysEdit.dog === dog) return staysSectionHtml(dog);
   const e = introEdit && introEdit.dog === dog ? introEdit : null;
   if (!e) {
     const can = !!(dog.id && UPLOAD_URL) && !dog.departure;
+    const canStays = !!(dog.id && UPLOAD_URL);
+    const { events, supplement } = intakePresentation(dog, intro);
+    if (!events.length && !supplement && !canStays) return '';
     return `<section class="detail-section" data-section="intro">
-      <h3 class="intro-heading">${icon('card')}入所介紹${can ? `<button type="button" class="intro-heading-edit" id="introEdit" aria-label="${intro || intakeEventsOf(dog).length ? '改' : '補'}入所介紹">${icon('write')}</button>` : ''}</h3>
-      ${intakeListHtml(dog)}
-      ${intro ? `<div class="content">${esc(intro)}</div>` : (!intakeEventsOf(dog).length ? '<div class="empty">還沒有入所介紹</div>' : '')}
+      <h3 class="intro-heading">${icon('card')}入所介紹${can ? `<button type="button" class="intro-heading-edit" id="introEdit" aria-label="${events.length || supplement ? '改' : '補'}入所介紹">${icon('write')}</button>` : canStays ? `<button type="button" class="intro-heading-edit" id="staysEdit" aria-label="${(dog.stays || []).length ? '改' : '補'}出入所紀錄">${icon('write')}</button>` : ''}</h3>
+      ${intakeListHtml(events)}
+      ${supplement ? `<div class="content">${esc(supplement)}</div>` : ''}
     </section>`;
   }
   const busy = e.phase === 'saving';
@@ -1978,6 +2022,7 @@ function introSectionHtml(dog, intro) {
   return `<section class="detail-section" data-section="intro">
     <form class="rest-form intro-form" id="introForm" autocomplete="on">
       <h3>${icon('card')}入所介紹</h3>
+      <button type="button" class="admin-btn" id="staysEdit"${busy ? ' disabled' : ''}>${(dog.stays || []).length ? '改' : '補'}出入所紀錄</button>
       ${intakeEditorHtml(dog, e, busy)}
       <p class="rest-hint">存好後這台馬上看到，其他人幾分鐘後（下次更新資料）看到。只存在網站，不寫試算表。</p>
       <label>補充介紹（保留原文）<textarea id="introText" rows="7" maxlength="${INTRO_MAX}" placeholder="例：親人、喜歡散步，怕機車聲"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea><small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small></label>
@@ -1987,6 +2032,7 @@ function introSectionHtml(dog, intro) {
 }
 // 介紹表單打開時的底部列：取消＋儲存介紹（送出 #introForm）；溜了先收起來，跟換照片同一個做法（#146）
 function introBarHtml(dog) {
+  if (staysEdit && staysEdit.dog === dog) return '';
   const e = introEdit && introEdit.dog === dog ? introEdit : null;
   if (!e) return '';
   const busy = e.phase === 'saving';
@@ -2040,24 +2086,14 @@ async function saveIntro() {
 // 出入所紀錄（#333，ADR 0011）：照時間列出每一次在所；誰都能補、改、刪（要先選名字），離所的狗也可以改（ADR 0011）。
 // 整隻狗一次存（Worker 的 /stays），連同打開時看到的內容一起送，別人剛改過會被擋下來
 const STAYS_MAX = 30;
-const stayDate = ymd => String(ymd || '').replace(/-/g, '/');
 function staysSectionHtml(dog) {
-  const list = dog.stays || [];
-  const can = !!(dog.id && UPLOAD_URL);
   const e = staysEdit && staysEdit.dog === dog ? staysEdit : null;
-  if (!e) {
-    if (!list.length && !can) return '';
-    return `<section class="detail-section" data-section="stays">
-      <h3 class="intro-heading">${icon('note')}出入所紀錄${can ? `<button type="button" class="intro-heading-edit" id="staysEdit" aria-label="${list.length ? '改' : '補'}出入所紀錄">${icon('write')}</button>` : ''}</h3>
-      ${list.length ? `<ul class="intake-list stays-list">${list.map(r => `<li><time datetime="${esc(r.in)}">${esc(stayDate(r.in))}</time><span class="intake-event">入所${r.out ? `，${esc(stayDate(r.out))} 出所` : ''}</span>${r.reason ? `<span class="intake-number">（${esc(r.reason)}）</span>` : ''}</li>`).join('')}</ul>`
-        : '<div class="empty">還沒有補登。轉所、退養前的入所日查得到的話，可以補在這裡</div>'}
-    </section>`;
-  }
+  if (!e) return '';
   const busy = e.phase === 'saving';
   const today = isoDay(new Date());
-  return `<section class="detail-section" data-section="stays">
+  return `<section class="detail-section" data-section="intro">
     <form class="rest-form stays-form" id="staysForm" autocomplete="off">
-      <h3>${icon('note')}出入所紀錄</h3>
+      <h3>${icon('card')}入所介紹</h3>
       <p class="rest-hint">每次在所一筆，還在所就不填出所日。入所日從現在的編號、舊編號和這裡最早的那天算。</p>
       <div class="intake-rows">${e.rows.map((row, i) => `<fieldset class="intake-row"><legend>第 ${i + 1} 筆</legend>
         <label>入所日<input type="date" max="${today}" data-stay-row="${i}" data-stay-field="in" value="${esc(row.in)}"${busy ? ' disabled' : ''}></label>
@@ -2117,7 +2153,7 @@ async function saveStays() {
   e.dog.stays = Array.isArray(out.stays) ? out.stays : rows;
   staysEdit = null;
   render(); renderDetail();
-  const b = document.getElementById('staysEdit');
+  const b = document.getElementById('staysEdit') || document.getElementById('introEdit');
   if (b) b.focus({ preventScroll: true });
   const first = firstIntake(e.dog);
   showToast(`${e.dog.name} 的出入所紀錄已存好${first ? `，入所日從 ${ymdOf(first)} 算` : ''}`);
@@ -2218,11 +2254,7 @@ function departedDetailHtml(dog, today) {
         : `<div class="content note-text">${esc(dog.note)}</div>`}
     </section>
     ${walkHistorySection(dog, today)}
-    <section class="detail-section" data-section="intro">
-      <h3>${icon('card')}入所介紹<span class="sub">收容所在入所時寫的</span></h3>
-      ${dog.intro ? `<div class="content">${esc(dog.intro)}</div>` : `<div class="empty">沒有入所介紹</div>`}
-    </section>
-    ${staysSectionHtml(dog)}
+    ${introSectionHtml(dog, introOf(dog))}
     <div class="detail-bar"><button type="button" class="bar-btn" id="detailClose">關閉</button></div>
   `;
   function since(d) {
@@ -2803,7 +2835,7 @@ const DETAIL_CLICKS = [
   ['#introEdit', () => openIntroEdit(detailDog)],
   ['#formerAdd', () => openFormerEdit(detailDog)],
   ['#staysEdit', () => openStaysEdit(detailDog)],
-  ['#staysCancel', () => { staysEdit = null; renderDetail(); const b = document.getElementById('staysEdit'); if (b) b.focus({ preventScroll: true }); }],
+  ['#staysCancel', () => { staysEdit = null; renderDetail(); const b = document.getElementById('staysEdit') || document.getElementById('introEdit'); if (b) b.focus({ preventScroll: true }); }],
   ['#formerCancel', () => { formerEdit = null; renderDetail(); const b = document.getElementById('formerAdd'); if (b) b.focus({ preventScroll: true }); }],
   ['[data-former-del]', el => removeFormer(detailDog, el.dataset.formerDel)],
   ['#walksToggle', () => { detailWalksOpen = !detailWalksOpen; renderDetail(); const b = document.getElementById('walksToggle'); if (b) b.focus({ preventScroll: true }); }],
