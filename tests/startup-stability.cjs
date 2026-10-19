@@ -100,6 +100,7 @@ module.exports = async (browser, base) => {
     failed.delete('rest');
     await page.locator('#restRetry').click();
     await page.getByText('休養設定暫時讀不到', { exact: false }).waitFor({ state: 'hidden' });
+    assert.equal(await page.locator('#main .card[data-dog]').last().getAttribute('data-dog'), '0', '首次補齊休養設定後，重新建立可靠排序');
     failed.clear();
     // 每次重開換一個最慢來源；今日消息與個人紀錄不互相冒充已讀完。
     for (const endpoint of ['dogs', 'today', 'walks', 'rest']) {
@@ -107,6 +108,11 @@ module.exports = async (browser, base) => {
       const requested = page.waitForRequest(r => r.url().endsWith('/api/' + endpoint));
       await page.reload({ waitUntil: 'domcontentloaded' });
       await requested;
+      if (endpoint === 'today') {
+        await page.locator('[data-tab="mine"]').click();
+        await page.getByText('讀取溜狗紀錄中…', { exact: true }).waitFor();
+        assert.equal(await page.locator('#main .mc-cell.on').count(), 0, '今日消息未回應前不呈現不完整個人紀錄');
+      }
       await page.locator('[data-tab="info"]').click();
       await page.locator('[data-info-page="stay"]').waitFor();
       release(endpoint);

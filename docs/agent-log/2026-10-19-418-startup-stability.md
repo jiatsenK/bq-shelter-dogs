@@ -9,3 +9,4 @@
 - 視覺：手機大字與桌機截圖位於 docs/design/issue-418，皆為合成資料；impeccable detect 兩筆圖片提示均在未改的既有程式。
 - 範圍：只處理 #418，不改同步、正式資料或 API 契約。
 - PR：待建立；未合併、未部署。
+- PR：https://github.com/jiatsenK/bq-shelter-dogs/pull/424（草稿）。第一輪完整網頁 260/260 與所有互動套件通過；兩軸審查找到首次休養失敗後補齊排序、個人內容等待今日消息兩項 P2，補測試先紅再修正皆綠。Standards 程式違規 0，提醒同步舊排序文件，已依 #418 的背景更新要求同步 DESIGN_GUIDE 與註解。

@@ -40,6 +40,7 @@ let detailTrail = []; // 在詳細資訊裡點「可以一起溜」換過的狗�
 let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, url, phase: 'preview'|'uploading'|'error', error }
 let restMap = {}; // 休養中：編號 → { until: 'YYYY-MM-DD', reason }
 let restState = 'loading'; // 初次休養設定未到齊前，不先排出不完整的溜狗表
+let restLoaded = false; // 首次失敗後重試，必須補建可靠排序
 let detailWalksOpen = false; // 詳細資訊的溜狗紀錄有沒有展開每一天（K 2026-10-10 減法：預設只有一行字）
 let formerEdit = null; // 詳細資訊正在補的舊編號（#289）：{ dog, text, phase: 'edit'|'saving'|'error', error }
 let staysEdit = null; // 詳細資訊正在改的出入所紀錄（#333）：{ dog, before, rows, phase: 'edit'|'saving'|'error', error }
@@ -511,7 +512,7 @@ let mineDay = ''; // 月曆上選的那一天（YYYY-MM-DD）；空的＝那個�
 function myWalksHtml(today, query) {
   const visibleWalks = currentMyWalks(today);
   const confirmedToday = Object.values(loadSheetWrites(today)).some(item => item.current?.date === localDateKey(today) && splitWalkers(item.current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())));
-  if (myWalksState === 'loading' && !confirmedToday) return `<div class="status-msg">讀取溜狗紀錄中…</div>`;
+  if (todayState === 'loading' || (myWalksState === 'loading' && !confirmedToday)) return `<div class="status-msg">讀取溜狗紀錄中…</div>`;
   if (myWalksState === 'error' && !confirmedToday) {
     return `<div class="status-msg">溜狗紀錄讀不到，請確認網路後按「重新讀取」。<br><button class="retry-btn" id="mineRetry">重新讀取</button></div>`;
   }
@@ -2233,6 +2234,8 @@ async function loadRest() {
     if (!data || !data.rest || typeof data.rest !== 'object' || Array.isArray(data.rest)) throw new Error('休養設定格式不對');
     // 讀的期間這支手機剛改過設定，不蓋掉自己的修改。
     if (restMap === before) restMap = data.rest;
+    if (!restLoaded) resetWalkOrder();
+    restLoaded = true;
     restState = 'ready';
   } catch (e) { restState = 'error'; }
   // 已顯示的狗保留原位，避免背景讀取或按了溜了之後跳位。
@@ -3298,7 +3301,7 @@ function dueDogs(dogs, today) {
 
 // 溜狗表一律最久沒溜在前（2026-10-08 K 同意介面評估：拿掉排序切換和「幾天以上」篩選，天數的顏色就看得出來）。
 // 按了溜了的狗留在原地（介面評估 P0：重排的話下一隻會滑到手指下，容易按錯寫進試算表）：
-// 第一次排好的順序記著，重新讀資料（allDogs 換了）或換分頁才重排
+// 第一次可靠的順序記著；背景重讀保留位置，換分頁才重排（#418）
 let walkOrder = null;   // walkKey → 第幾個
 let walkOrderFor = null; // 記順序時的 allDogs
 function sortWalkList(dogs, today) {
