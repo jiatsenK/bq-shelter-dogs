@@ -9,4 +9,5 @@
 - 部署前基準：10/19 10:35 唯讀正式 HTTP 量測，`/api/dogs` 1,583 ms；25 張縮圖共 445,207 bytes，兩輪並行完整下載 1,255／728 ms，單張中位數 860／411 ms，全部 200、無 `CF-Cache-Status`。不使用瀏覽器快取，不是整頁載入時間。原始網址與結果只留本機 `.scratch/issue-279-baseline.json`，不提交。
 - 參考：[Cloudflare Cache API](https://developers.cloudflare.com/workers/runtime-apis/cache/)；快取限同一資料中心，未命中仍會讀 R2。
 - 例外／未完成：未合併、未部署、未修改正式資料。正式部署需 K 確認；部署後用相同 25 個版本網址重測，確認實際 HIT 與耗時，再判斷 B 段驗收，不以模擬測試當成正式成效。
-- 相關 PR：待建立；審查結果另補。
+- 審查：依 code-review 技能固定比較 `d8d3baf...4b8f6cd`，兩個獨立代理分別審查。Standards：0 項；Spec：0 項程式缺失，部署後驗收仍待辦。Spec 代理另跑照片測試 20 項通過。
+- 相關 PR：[#414](https://github.com/jiatsenK/bq-shelter-dogs/pull/414)。先開草稿，最後一次推送後才轉正式跑 CI；保留 K 合併／正式部署與量測驗收。
