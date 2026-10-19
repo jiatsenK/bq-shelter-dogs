@@ -54,7 +54,158 @@ const admin = (call, path, init = {}, pass = '通關碼') =>
   call(`/api/admin/${path}`, { ...init, headers: { 'Content-Type': 'application/json', ...(pass ? { 'X-Admin-Key': encodeURIComponent(pass) } : {}), ...(init.headers || {}) } });
 const trashEntries = PHOTOS => [...PHOTOS.objects.keys()].filter(k => k.startsWith('trash/') && k.endsWith('/photo.jpg'));
 
+// Cache API 是外部邊界：只存 GET 完整回應，每次讀取都有自己的 body。
+function photoCache(t) {
+  const entries = new Map();
+  const cache = {
+    async match(request) { return entries.get(request.url)?.clone(); },
+    async put(request, response) {
+      assert.equal(request.method, 'GET');
+      assert.equal(response.status, 200);
+      entries.set(request.url, new Response(await response.arrayBuffer(), response));
+    },
+  };
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'caches');
+  Object.defineProperty(globalThis, 'caches', { configurable: true, value: { default: cache } });
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, 'caches', previous);
+    else delete globalThis.caches;
+  });
+  return cache;
+}
+
 test.beforeEach(() => { resetState(); r2.resetR2State(); });
+
+test('#279 不同訪客讀同一版本照片：第二次命中邊緣快取，不再讀 R2', async t => {
+  photoCache(t);
+  const { PHOTOS, call } = setup();
+  await PHOTOS.put(`photos/thumbs/${ID}.jpg`, NEW);
+  const version = PHOTOS.objects.get(`photos/thumbs/${ID}.jpg`).etag.slice(0, 8);
+  const path = `/photos/thumbs/${ID}.jpg?v=${version}`;
+  const first = await call(path);
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get('CF-Cache-Status'), 'MISS');
+  assert.ok(same(await first.arrayBuffer(), NEW));
+  PHOTOS.get = async () => { throw new Error('命中快取不應再讀 R2'); };
+  const second = await call(path);
+  assert.equal(second.status, 200);
+  assert.equal(second.headers.get('CF-Cache-Status'), 'HIT');
+  assert.ok(same(await second.arrayBuffer(), NEW));
+  assert.match(second.headers.get('Cache-Control'), /max-age=2592000/);
+});
+
+test('#279 快取命中仍保留 HEAD 無 body 與 ETag 304；HEAD 未命中不存空圖片', async t => {
+  photoCache(t);
+  const { PHOTOS, call } = setup();
+  await PHOTOS.put(`photos/${ID}.jpg`, NEW);
+  const path = `/photos/${ID}.jpg?v=${PHOTOS.objects.get(`photos/${ID}.jpg`).etag.slice(0, 8)}`;
+  assert.equal(await (await call(path, { method: 'HEAD' })).text(), '');
+  const first = await call(path);
+  assert.equal(first.headers.get('CF-Cache-Status'), 'MISS');
+  const etag = first.headers.get('ETag');
+  assert.ok(same(await first.arrayBuffer(), NEW));
+  PHOTOS.get = PHOTOS.head = async () => { throw new Error('命中快取不應再讀 R2'); };
+  const head = await call(path, { method: 'HEAD' });
+  assert.equal(head.status, 200);
+  assert.equal(head.headers.get('ETag'), etag);
+  assert.equal(head.headers.get('CF-Cache-Status'), 'HIT');
+  assert.equal(await head.text(), '');
+  const conditional = await call(path, { headers: { 'If-None-Match': etag } });
+  assert.equal(conditional.status, 304);
+  assert.equal(conditional.headers.get('CF-Cache-Status'), 'HIT');
+  assert.equal(await conditional.text(), '');
+  assert.ok(same(await (await call(path, { headers: { 'If-None-Match': '"other"' } })).arrayBuffer(), NEW));
+});
+
+test('#279 Cache API 讀取或寫入失敗仍給 R2 照片，不退回舊靜態照片', async t => {
+  const cache = photoCache(t);
+  const { PHOTOS, call } = setup({ assets: { [`photos/${ID}.jpg`]: OLD } });
+  await PHOTOS.put(`photos/${ID}.jpg`, NEW);
+  const path = `/photos/${ID}.jpg?v=${PHOTOS.objects.get(`photos/${ID}.jpg`).etag.slice(0, 8)}`;
+  cache.match = async () => { throw new Error('快取讀取失敗'); };
+  assert.ok(same(await (await call(path)).arrayBuffer(), NEW));
+  cache.match = async () => undefined;
+  cache.put = async () => { throw new Error('快取寫入失敗'); };
+  assert.ok(same(await (await call(path)).arrayBuffer(), NEW));
+});
+
+test('#279 換照片改版本網址；版本不符不把新照片長期存進舊版本的快取', async t => {
+  photoCache(t);
+  const { PHOTOS, call } = setup();
+  const key = `photos/${ID}.jpg`;
+  await PHOTOS.put(key, OLD);
+  const oldVersion = PHOTOS.objects.get(key).etag.slice(0, 8);
+  await PHOTOS.put(key, NEW);
+  const newVersion = PHOTOS.objects.get(key).etag.slice(0, 8);
+  // 其他機器的版本清單可能還停在舊版；第一次看到舊網址也不能快取新版內容。
+  await (await call(`/${key}?v=${oldVersion}`)).arrayBuffer();
+  assert.ok(same(await (await call(`/${key}?v=${newVersion}`)).arrayBuffer(), NEW));
+  await PHOTOS.put(key, OLD);
+  assert.ok(same(await (await call(`/${key}?v=${oldVersion}`)).arrayBuffer(), OLD));
+  PHOTOS.get = async () => { throw new Error('新版應有獨立快取'); };
+  const hit = await call(`/${key}?v=${newVersion}`);
+  assert.equal(hit.headers.get('CF-Cache-Status'), 'HIT');
+  assert.ok(same(await hit.arrayBuffer(), NEW));
+});
+
+test('#279 無版本不走邊緣快取；找不到、已刪除及舊靜態備援都不存快取', async t => {
+  const cache = photoCache(t);
+  const { PHOTOS, call } = setup({ assets: { 'photos/2.jpg': OLD, 'photos/3.jpg': OLD } });
+  await PHOTOS.put(`photos/${ID}.jpg`, OLD);
+  let operations = 0;
+  cache.match = cache.put = async () => { operations++; };
+  for (const suffix of ['', '?v=']) {
+    const response = await call(`/photos/${ID}.jpg${suffix}`);
+    assert.equal(response.headers.get('CF-Cache-Status'), null);
+    assert.ok(same(await response.arrayBuffer(), OLD));
+  }
+  assert.equal(operations, 0, '無版本不呼叫 Cache API');
+  await PHOTOS.put(`photos/${ID}.jpg`, NEW);
+  assert.ok(same(await (await call(`/photos/${ID}.jpg`)).arrayBuffer(), NEW));
+  cache.match = async () => undefined;
+  let writes = 0;
+  cache.put = async () => { writes++; };
+  await r2.removePhoto({ PHOTOS }, 'photos/2.jpg');
+  for (const path of ['/photos/1.jpg?v=abcd1234', '/photos/2.jpg?v=abcd1234', '/photos/gallery/1/a.jpg?v=abcd1234']) {
+    assert.equal((await call(path)).status, 404);
+  }
+  assert.ok(same(await (await call('/photos/3.jpg?v=abcd1234')).arrayBuffer(), OLD));
+  assert.equal(writes, 0, '404 或靜態備援不可寫入邊緣快取');
+});
+
+test('#279 有條件讀取未命中回 304，不把空回應存入快取', async t => {
+  photoCache(t);
+  const { PHOTOS, call } = setup();
+  await PHOTOS.put(`photos/${ID}.jpg`, NEW);
+  const obj = PHOTOS.objects.get(`photos/${ID}.jpg`);
+  const path = `/photos/${ID}.jpg?v=${obj.etag.slice(0, 8)}`;
+  const conditional = await call(path, { headers: { 'If-None-Match': `"${obj.etag}"` } });
+  assert.equal(conditional.status, 304);
+  assert.equal(await conditional.text(), '');
+  const first = await call(path);
+  assert.equal(first.status, 200);
+  assert.equal(first.headers.get('CF-Cache-Status'), 'MISS');
+  assert.ok(same(await first.arrayBuffer(), NEW));
+});
+
+test('#279 寫入邊緣快取由 waitUntil 保持生命週期，不擋住圖片回應', async t => {
+  const cache = photoCache(t);
+  const { env, PHOTOS } = setup();
+  await PHOTOS.put(`photos/${ID}.jpg`, NEW);
+  let finish;
+  const writing = new Promise(resolve => { finish = resolve; });
+  cache.put = async (_key, response) => { await response.arrayBuffer(); await writing; };
+  const waits = [];
+  const ctx = { waitUntil(promise) { assert.equal(this, ctx); waits.push(promise); } };
+  try {
+    const res = await worker.fetch(new Request(`${SITE}/photos/${ID}.jpg?v=${PHOTOS.objects.get(`photos/${ID}.jpg`).etag.slice(0, 8)}`), env, ctx);
+    assert.ok(same(await res.arrayBuffer(), NEW));
+    assert.equal(waits.length, 1);
+  } finally {
+    finish();
+    await Promise.all(waits);
+  }
+});
 
 test('換主照片：只寫 R2、沒有 GitHub 提交；舊照片（還在 repo）先進 Trash，舊縮圖放刪除標記、叫縮圖 Action', async () => {
   const { PHOTOS, calls, call } = setup({ assets: { [`photos/${ID}.jpg`]: OLD, [`photos/thumbs/${ID}.jpg`]: jpeg(9) } });

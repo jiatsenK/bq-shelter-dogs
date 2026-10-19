@@ -1113,7 +1113,7 @@ export default {
       // 照片放 R2（#130）：照片、dogs.json（照片版本號）先經過這裡（wrangler.jsonc 的 run_worker_first）
       if (r2.r2On(env)) {
         try {
-          if (path.startsWith('/photos/')) return await r2.servePhoto(request, env);
+          if (path.startsWith('/photos/')) return await r2.servePhoto(request, env, ctx);
         } catch (e) { /* R2 出問題就照舊給靜態檔 */ }
       }
       return env.ASSETS.fetch(request);
