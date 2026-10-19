@@ -39,6 +39,7 @@ let detailOpener = null;
 let detailTrail = []; // 在詳細資訊裡點「可以一起溜」換過的狗（#99）：可以按「回到 ○○」一隻一隻回去
 let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, url, phase: 'preview'|'uploading'|'error', error }
 let restMap = {}; // 休養中：編號 → { until: 'YYYY-MM-DD', reason }
+let restState = 'loading'; // 初次休養設定未到齊前，不先排出不完整的溜狗表
 let detailWalksOpen = false; // 詳細資訊的溜狗紀錄有沒有展開每一天（K 2026-10-10 減法：預設只有一行字）
 let formerEdit = null; // 詳細資訊正在補的舊編號（#289）：{ dog, text, phase: 'edit'|'saving'|'error', error }
 let staysEdit = null; // 詳細資訊正在改的出入所紀錄（#333）：{ dog, before, rows, phase: 'edit'|'saving'|'error', error }
@@ -211,21 +212,24 @@ async function loadWalkYear(month, today = new Date()) {
 }
 
 async function loadMyWalks() {
-  myWalksState = 'loading';
+  myWalksState = walksData ? 'ready' : 'loading';
   try {
-    walksData = await fetchWalks();
+    const data = await fetchWalks();
+    const mine = parseMyWalks(data);
+    walksData = data;
     for (const y of Object.keys(walkYears)) delete walkYears[y];
-    myWalks = parseMyWalks(walksData);
+    myWalks = mine;
     myWalksState = 'ready';
   } catch (e) {
     console.error(e);
-    myWalksState = 'error';
+    myWalksState = walksData ? 'ready' : 'error';
   }
   // 不在「我溜過」就只更新分類上的數字（#91）：整頁重畫會把第一屏正在載入的照片換掉
   const n = document.querySelector('#tabs [data-tab="mine"] .n');
   if (activeTab !== 'mine' && !analysisOpen && n) {
     const count = myWalksCount('');
-    n.textContent = count == null ? '' : count;
+    n.textContent = mineTabNumber(count);
+    n.closest('button').setAttribute('aria-label', mineTabLabel(count));
   } else {
     render();
   }
@@ -254,8 +258,14 @@ function currentMyWalks(today = new Date()) {
 }
 
 function myWalksCount(query) {
-  if (!loadMyCodes().length || (myWalksState !== 'ready' && !Object.values(loadSheetWrites()).some(item => item.mine))) return null;
+  if (!loadMyCodes().length || myWalksState !== 'ready' || todayState === 'loading') return null;
   return myWalkGroups(currentMyWalks(), query).reduce((k, g) => k + g.walks.length, 0);
+}
+function mineTabNumber(count) {
+  return count != null ? count : !loadMyCodes().length ? '' : myWalksState === 'loading' || todayState === 'loading' ? '…' : '—';
+}
+function mineTabLabel(count) {
+  return count != null ? `我溜過，${count} 筆紀錄` : !loadMyCodes().length ? '我溜過' : mineTabNumber(count) === '…' ? '我溜過，紀錄讀取中' : '我溜過，紀錄暫時讀不到';
 }
 
 // ── 我是誰（#96）──
@@ -1314,19 +1324,31 @@ function reconcileSheetWrites(today = new Date()) {
 const TODAY_POLL_MS = 60 * 1000;   // 網頁顯示在螢幕上時每 1 分鐘抓一次
 const TODAY_REFETCH_MS = 30 * 1000; // 切回網頁、距上次超過 30 秒就馬上抓
 let todayWalks = { date: '', walks: [] };
+let todayState = 'loading'; // 初次今日消息讀完（失敗沿用同步資料）才呈現溜狗表
 let todayFetchedAt = 0;
 const sheetWrittenAt = new Map(); // 這頁自己寫試算表的時間（狗的 key → ms）：比它舊的今日紀錄不蓋掉自己剛寫的
+// 排序需要的兩份狀態不能無限等待；包含讀取回應內容的時間。
+async function fetchWalkStatus(url) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const res = await fetch(url, { cache: 'no-cache', signal: controller.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    return await res.json();
+  } finally { clearTimeout(timeout); }
+}
 async function loadTodayWalks() {
-  if (!UPLOAD_URL) return;
   todayFetchedAt = Date.now();
   try {
-    const res = await fetch(`${UPLOAD_URL}/today`, { cache: 'no-cache' });
-    if (!res.ok) return;
-    const out = await res.json();
+    if (!UPLOAD_URL) return;
+    const out = await fetchWalkStatus(`${UPLOAD_URL}/today`);
     if (!out || !Array.isArray(out.walks) || typeof out.date !== 'string') return;
     todayWalks = { date: out.date, walks: out.walks };
-  } catch (e) { return; }
-  if (applyTodayWalks()) { render(); renderDetail(); }
+    if (applyTodayWalks()) { render(); renderDetail(); }
+  } catch (e) { /* ADR 0007：抓不到時維持同步資料，下次再試 */ }
+  finally {
+    if (todayState === 'loading') { todayState = 'ready'; render(); }
+  }
 }
 // 比上次同步新、今天的紀錄
 function liveTodayWalks(today = new Date()) {
@@ -2203,19 +2225,17 @@ async function saveRest(end = false) {
   render(); renderDetail();
   showToast(out.rest ? `${e.dog.name} 休養到 ${monthDay(parseYmd(out.rest.until))}，排到溜狗表最下面` : `${e.dog.name} 結束休養`);
 }
-// 開網頁時讀休養設定；讀不到就當作沒有，不影響其他功能
+// 初次讀取前不顯示未確認的排序；背景讀取失敗保留已知設定。
 async function loadRest() {
   const before = restMap;
-  let next = {};
   try {
-    const res = await fetch(REST_URL, { cache: 'no-cache' });
-    const data = res.ok ? await res.json() : {};
-    if (data && data.rest && typeof data.rest === 'object' && !Array.isArray(data.rest)) next = data.rest;
-  } catch (e) { /* 讀不到就當作沒有 */ }
-  // 讀的期間這支手機剛改過休養設定（restMap 換了）：讀到的可能是改之前的，不要蓋掉
-  if (restMap !== before) return;
-  restMap = next;
-  resetWalkOrder();
+    const data = await fetchWalkStatus(REST_URL);
+    if (!data || !data.rest || typeof data.rest !== 'object' || Array.isArray(data.rest)) throw new Error('休養設定格式不對');
+    // 讀的期間這支手機剛改過設定，不蓋掉自己的修改。
+    if (restMap === before) restMap = data.rest;
+    restState = 'ready';
+  } catch (e) { restState = 'error'; }
+  // 已顯示的狗保留原位，避免背景讀取或按了溜了之後跳位。
   render();
   if (detailDog) renderDetail();
 }
@@ -3146,8 +3166,8 @@ function buildTabs(counts) {
   const focusedTab = tabsEl.contains(document.activeElement) && document.activeElement.dataset.tab;
   const selected = analysisOpen ? 'info' : activeTab;
   tabsEl.innerHTML = TABS.map(t => {
-    const n = counts[t.id] != null ? counts[t.id] : t.note || '';
-    const label = n === '' ? '' : ` aria-label="${t.label}，${t.id === 'mine' ? `${n} 筆紀錄` : `${n} 隻`}"`;
+    const n = t.id === 'mine' ? mineTabNumber(counts.mine) : counts[t.id] != null ? counts[t.id] : t.note || '';
+    const label = t.id === 'mine' ? ` aria-label="${mineTabLabel(counts.mine)}"` : n === '' ? '' : ` aria-label="${t.label}，${n} 隻"`;
     return `<button type="button" data-tab="${t.id}" class="${selected === t.id ? 'active' : ''}"${selected === t.id ? ' aria-current="page"' : ''}${label}>${icon(t.icon)}<span class="t">${t.label}</span><span class="n">${n}</span></button>`;
   }).join('');
   tabsEl.querySelectorAll('button').forEach(btn => {
@@ -3193,6 +3213,9 @@ function render() {
   if (loadWarning) {
     document.getElementById('main').insertAdjacentHTML('afterbegin',
       `<div class="alert-box warn">${icon('warn')}<span>${esc(loadWarning)}</span></div>`);
+  }
+  if (loadState === 'ready' && activeTab === 'walk' && !analysisOpen && restState === 'error') {
+    mainEl.insertAdjacentHTML('afterbegin', `<div class="alert-box warn" role="status"><span>休養設定暫時讀不到，帶出前請確認。已讀到的設定會保留。<br><button type="button" class="retry-btn" id="restRetry">重讀休養設定</button></span></div>`);
   }
   queueRange();
   queueTour();
@@ -3403,8 +3426,13 @@ function renderMain() {
   // 搜尋時只篩選目前分類的內容，分類上的數字也改成各分類符合的隻數；清空就回到原本的內容
   const q = searchQuery.trim();
   const hit = d => matchesSearch(d, q);
+  if (activeTab === 'walk' && (restState === 'loading' || todayState === 'loading')) {
+    buildTabs({ walk: allDogs.filter(hit).length, mine: myWalksCount('') });
+    main.innerHTML = skeletonHtml();
+    return;
+  }
   // V9（#141）：沒有今天已溜和收起了，全部的狗都在溜狗表；按過溜了的留在原地、顯示今天
-  const walkList = sortWalkList(allDogs, today).filter(hit);
+  const walkList = (activeTab === 'walk' ? sortWalkList(allDogs, today) : allDogs).filter(hit);
   // 介面評估第三輪（K 2026-10-08）：找狗分頁不放數字（跟溜狗表一樣是全部的狗）；
   // 我溜過一律是全部紀錄筆數，不跟著搜尋變（搜不到時「我溜過 0」像紀錄不見了）
   buildTabs({ walk: walkList.length, mine: myWalksCount('') });
@@ -3438,6 +3466,7 @@ function renderMain() {
 
 // 我溜過：點照片開詳細資訊、讀取失敗時重新讀取（內容區每次重畫，所以用事件委派）
 mainEl.addEventListener('click', e => {
+  if (e.target.closest('#restRetry')) { loadRest(); return; }
   const tile = e.target.closest('[data-mine-dog]');
   if (tile) showDetail(allDogs[tile.dataset.mineDog]);
   else if (e.target.closest('#mineRetry')) loadMyWalks();
@@ -4070,6 +4099,8 @@ async function init() {
 let dataSyncedAt = null;
 function applyDogsData(data) {
   allDogs = mergeTempCages(data.dogs);
+  // 背景讀回不重排正在操作的清單；換分頁仍照原約定重排。
+  if (walkOrder) walkOrderFor = allDogs;
   if (detailDog) {
     const current = allDogs.find(d => (d.id || d.dogId) === (detailDog.id || detailDog.dogId));
     if (current) detailDog.covered = current.covered;
@@ -4080,6 +4111,7 @@ function applyDogsData(data) {
   loadWarning = data.groups ? '' : '「可以一起溜」暫時讀不到，其他資訊正常。';
   // 顯示試算表最後同步的時間（不是打開網頁的時間），志工才知道資料有多新
   dataSyncedAt = data.syncedAt;
+  applyTodayWalks(); // 不短暫蓋回較新的今日消息
   renderUpdatedLabel();
   loadState = 'ready';
   render();

@@ -243,11 +243,11 @@ function runTests() {
       eq([...code.matchAll(/\.(setItem|getItem|removeItem)\(([^,)]*)/g)].map(m => m[2]), ['WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKER_CODES_KEY', 'WALKED_KEY', 'WALKED_KEY', 'WALKER_CODES_KEY', 'key', 'key', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'WALKER_NAME_KEY', 'SHEET_WRITES_KEY', 'SHEET_WRITES_KEY', 'WALK_VIEW_KEY', 'WALK_VIEW_KEY', 'ONBOARD_KEY', 'ONBOARD_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY', 'NAME_LATER_KEY'], '只讀寫 WALKER_CODES_KEY（#96 我是誰）、WALKED_KEY、WALKER_NAME_KEY 和 SHEET_WRITES_KEY（#138 寫試算表）、WALK_VIEW_KEY、ONBOARD_KEY（V9）、NAME_LATER_KEY（先看看，介面評估第四輪），key 是一起溜的人（readJsonKey／writeJsonKey）：');
       if (!/readJsonKey\(COMPANIONS_KEY\)/.test(APP_JS) || !/writeJsonKey\(WALK_WITH_KEY,/.test(APP_JS)) throw new Error('readJsonKey／writeJsonKey 只給一起溜的人用');
       const urls = [...code.matchAll(/fetch\(([^)]*)\)/g)].map(m => m[1].trim());
-      eq(urls.length, 6, 'fetch 呼叫數（上傳以外）：');
+      eq(urls.length, 5, 'fetch 呼叫數（休養與今日消息共用逾時讀取）：');
       // #32 起前端只讀 data/dogs.json，不直接連試算表；狗卡資訊也已經寫在 dogs.json 裡，不再抓 dogs/*.md
       // #62 另外讀我的備註：只從 Worker 的 /notes 或網站上的 data/my-notes.json 讀
       // #58 我最近溜過另外讀溜狗紀錄（#260 起是 api/walks）；ADR 0007 今日溜狗紀錄讀 api/today
-      if (!urls.every(u => u.startsWith('DATA_URL,') || u.startsWith('WALKS_URL,') || u.startsWith('`${WALKS_URL}?year=') || u.startsWith('REST_URL,') || u === "`${UPLOAD_URL}/walkers`, { cache: 'no-cache' }" || u === "`${UPLOAD_URL}/today`, { cache: 'no-cache' }")) throw new Error(`只能讀 api/dogs、api/walks 與我的備註：${urls.join('、')}`);
+      if (!urls.every(u => u.startsWith('DATA_URL,') || u.startsWith('WALKS_URL,') || u.startsWith('`${WALKS_URL}?year=') || u === "url, { cache: 'no-cache', signal: controller.signal }" || u === "`${UPLOAD_URL}/walkers`, { cache: 'no-cache' }")) throw new Error(`只能讀 api/dogs、api/walks 與狀態資料：${urls.join('、')}`);
       if (/readJsonObject|GALLERY_URL|\/gallery/.test(APP_JS)) throw new Error('相簿已拿掉（K 2026-10-09），不該再讀相簿清單');
       eq(DATA_URL, 'api/dogs', '資料來源（#247 Worker 讀 D1）：');
       eq(WALKS_URL, 'api/walks', '遛狗紀錄（#260 Worker 讀 D1）：');
@@ -1448,6 +1448,7 @@ async function runMyWalksTests() {
     });
     await check('#58 讀 api/walks；讀不到顯示錯誤，可重新讀取', async () => {
       setup();
+      walksData = null; myWalks = []; // 初次讀取失敗；已有資料的背景失敗由 #418 保留原內容
       const calls = [];
       window.fetch = async url => { calls.push(String(url)); return new Response('Not Found', { status: 404 }); };
       await loadMyWalks();
@@ -4609,6 +4610,7 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     document.body.appendChild(f);
     walkedStorage = fakeStorage(); // 其他測試也不碰真正的 localStorage
     loadState = 'ready'; // 測試頁不跑 init，直接當資料已讀好，各測試自己放假資料
+    restState = 'ready'; todayState = 'ready'; // 初次狀態讀取另由 startup-stability.cjs 走真實頁面驗證
     // 介面評估第四輪：沒設名字按溜了會先問名字。測試頁預設當作試算表寫入沒開（溜了只記手機），測寫試算表的各自設 'unknown'
     sheetWriteState = 'off';
     return runTests();
