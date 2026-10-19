@@ -1,6 +1,7 @@
 import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitiesForCodes, IdentityError } from './identity.js';
 import { cleanIntakeEvents } from './intake.js';
 import { cleanStays } from './stays.js';
+import { saveFixedCare } from './compact.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
@@ -389,6 +390,25 @@ async function jsonBody(request, origin, tooLong) {
   const raw = await request.text();
   if (new TextEncoder().encode(raw).length > EDIT_BODY_MAX_BYTES) return { error: fail(413, tooLong, origin) };
   try { return { input: JSON.parse(raw) }; } catch (e) { return { error: fail(400, '格式不對', origin) }; }
+}
+
+async function putFixedCare(request, env, origin) {
+  if (!env?.DB) return fail(503, '固定照顧設定還沒準備好', origin, { code: 'db' });
+  const id = decodeURIComponent(new URL(request.url).pathname.split('/').at(-1));
+  if (!ID_PATTERN.test(id)) return fail(400, '狗編號格式不對', origin);
+  const body = await jsonBody(request, origin, '資料太長');
+  if (body.error) return body.error;
+  const editor = await editorOf(body.input?.editor, config(env).walkerKey);
+  if (!editor) return needEditor(origin);
+  const enabled = body.input?.enabled;
+  if (typeof enabled !== 'boolean') return fail(400, '請指定開啟或關閉', origin);
+  const now = Date.now();
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  if (!allow(`fixed-care:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '設定太頻繁，請稍等幾分鐘再試', origin);
+  const saved = await saveFixedCare(env.DB, id, enabled);
+  if (!saved) return fail(404, '找不到這個編號的狗', origin);
+  if (saved.before !== enabled) await logEdit(env.DB, { editor, kind: 'fixed-care', dogId: saved.dogId, dogNumber: id === saved.dogId ? '' : id, before: saved.before, after: enabled }, now);
+  return reply(200, { ok: true, id, enabled }, origin);
 }
 
 // ---- 入所介紹（K 2026-10-10）：PUT /intro/{編號}，任何人都能改、記編輯紀錄 ----
@@ -813,8 +833,10 @@ export async function rememberWalkerNames(env, names, now = Date.now()) {
   if (!env || !env.DB) return [];
   try {
     const at = new Date(now).toISOString();
-    const upsert = env.DB.prepare('INSERT INTO v3_volunteers (name, last_seen) SELECT ?, ? WHERE NOT EXISTS(SELECT 1 FROM v3_identity_names WHERE name_key=?) ON CONFLICT(name) DO UPDATE SET last_seen = excluded.last_seen');
-    if (names.length) await env.DB.batch(names.map(n => upsert.bind(n, at, walkerNameKey(n))));
+    // 只寫有變的（#407、ADR 0008）：新名字才新增；舊名字一天最多更新一次 last_seen，同一天再讀寫 0 列
+    const upsert = env.DB.prepare('INSERT INTO v3_volunteers (name, last_seen) SELECT ?, ? WHERE NOT EXISTS(SELECT 1 FROM v3_identity_names WHERE name_key=?) ON CONFLICT(name) DO UPDATE SET last_seen = excluded.last_seen WHERE last_seen < ?');
+    const day = at.slice(0, 10);
+    if (names.length) await env.DB.batch(names.map(n => upsert.bind(n, at, walkerNameKey(n), day)));
     const { results = [] } = await env.DB.prepare('SELECT name FROM v3_volunteers WHERE volunteer_id NOT IN (SELECT volunteer_id FROM v3_identity_redirects) ORDER BY last_seen DESC, name LIMIT ?').bind(WALKER_NAMES_MAX).all();
     const now_ = new Set(names);
     return results.map(r => r.name).filter(n => typeof n === 'string' && n && !now_.has(n));
@@ -1025,7 +1047,9 @@ async function favorites(request, env, origin) {
     if (!await saveFavorite(env.DB, codes, input.dogId, input.on, taiwanYmd(Date.now()))) return fail(400, '找不到這隻狗', origin);
     return reply(200, { ok: true }, origin);
   }
-  return reply(200, { ok: true, ...await readFavorites(env.DB, codes) }, origin);
+  // 手機只在還有舊格式常溜時才帶 key（#406）
+  const keys = [...new Set(new URL(request.url).searchParams.getAll('key'))].filter(k => k.length <= 64).slice(0, 200);
+  return reply(200, { ok: true, ...await readFavorites(env.DB, codes, keys) }, origin);
 }
 
 async function openedCards(request, env, origin) {
@@ -1224,6 +1248,14 @@ export default {
       } catch (e) {
         console.error('today', e);
         return fail(503, '暫時讀不到今日溜狗紀錄', allowed, { code: 'db' });
+      }
+    }
+    if (path.startsWith('/fixed-care/')) {
+      if (request.method !== 'PUT') return fail(405, '固定照顧設定只能用 PUT /fixed-care/編號', allowed);
+      try {
+        return await putFixedCare(request, env, allowed);
+      } catch (e) {
+        return fail(500, '固定照顧設定未完成，請重新讀取後再試', allowed);
       }
     }
     if (path === '/rest') {

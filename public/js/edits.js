@@ -18,6 +18,7 @@ function editsWhen(iso) {
 
 // 改前／改後內容寫成一行字
 function editsValue(kind, v) {
+  if (kind === 'fixed-care') return v ? '開啟' : '關閉';
   if (v === null || v === undefined || v === '') return '（沒有）';
   if (kind === 'intro' && typeof v === 'object' && Array.isArray(v.events)) {
     return [...v.events.map(e => `${e.date || '日期未確認'} ${e.event}${e.number ? `（${e.number}）` : ''}`), v.text].filter(Boolean).join('\n');
@@ -34,7 +35,7 @@ function editsValue(kind, v) {
 }
 
 function editsItemHtml(e, names) {
-  const dog = e.dogNumber ? `${names[e.dogNumber] || ''} ${e.dogNumber}`.trim() : '';
+  const dog = e.dogNumber ? `${names[e.dogNumber] || ''} ${e.dogNumber}`.trim() : names[e.dogId] || '';
   return `<li>
     <div class="head"><span class="who">${editsEsc(e.editorName)}</span><span class="what">${editsEsc(e.kindLabel || e.kind)}</span>${dog ? `<span>${editsEsc(dog)}</span>` : ''}<span class="when">${editsEsc(editsWhen(e.at))}</span></div>
     <dl class="diff"><dt>改前</dt><dd>${editsEsc(editsValue(e.kind, e.before))}</dd><dt>改後</dt><dd>${editsEsc(editsValue(e.kind, e.after))}</dd></dl>
@@ -52,7 +53,10 @@ async function editsLoad() {
     const names = {};
     try {
       const d = dogsRes && dogsRes.ok ? await dogsRes.json() : null;
-      for (const dog of (d && d.dogs) || []) if (dog.id) names[dog.id] = dog.name;
+      for (const dog of (d && d.dogs) || []) {
+        if (dog.id) names[dog.id] = dog.name;
+        if (dog.dogId) names[dog.dogId] = dog.name;
+      }
     } catch (e) { /* 沒有狗名就只顯示編號 */ }
     list.innerHTML = out.edits.map(e => editsItemHtml(e, names)).join('');
     status.textContent = out.edits.length ? '' : '還沒有編輯紀錄';

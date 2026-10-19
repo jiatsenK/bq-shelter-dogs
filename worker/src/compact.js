@@ -10,7 +10,7 @@ const ON_MAIN = 'dog_id IN (SELECT dog_id FROM v3_sheet_main)';
 // 主清單欄位 → dogs.json 欄位；formerIds 只在有舊編號時出現（跟同步寫出來的 JSON 一樣）。
 // 舊編號直接讀 v3_dog_numbers（同一隻狗的其他編號，#289 網站補了馬上看得到）
 const MAIN_FIELDS = [
-  ['cage', 'cage'], ['id', 'number'], ['name', 'name'], ['walkedDate', 'walked_date'], ['covered', 'covered'],
+  ['cage', 'cage'], ['id', 'number'], ['name', 'name'], ['walkedDate', 'walked_date'], ['covered', 'fixed_care'],
   ['myWalked', 'my_walked'], ['note', 'note'], ['sex', 'sex'], ['intro', 'd1_intro'], ['myWalkedDate', 'my_walked_date'],
 ];
 const BOOLEANS = new Set(['covered', 'myWalked']);
@@ -19,7 +19,7 @@ const BOOLEANS = new Set(['covered', 'myWalked']);
 export async function readDogsPayload(db) {
   // 介紹是 D1 自己存的（#250 網站改了馬上看得到），不用主清單複本上同步帶來的那份
   const [main, walkers, former, groups, notes] = await db.batch([
-    db.prepare("SELECT m.*, COALESCE(i.intro, '') AS d1_intro FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) ORDER BY m.row_index"),
+    db.prepare("SELECT m.*, COALESCE(i.intro, '') AS d1_intro, c.fixed_care FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) JOIN v3_dogs c USING(dog_id) ORDER BY m.row_index"),
     db.prepare('SELECT row_index, walker_code FROM v3_sheet_main_walkers ORDER BY row_index, position'),
     db.prepare("SELECT m.row_index, n.number FROM v3_sheet_main m JOIN v3_dog_numbers n USING(dog_id) WHERE n.number <> m.number ORDER BY m.row_index, n.number"),
     db.prepare('SELECT column_index, name FROM v3_sheet_groups ORDER BY column_index, row_index'),
@@ -47,6 +47,7 @@ export async function readDogsPayload(db) {
   const dogs = rows.map(row => {
     const dog = {};
     for (const [key, column] of MAIN_FIELDS) dog[key] = BOOLEANS.has(key) ? Boolean(row[column]) : row[column];
+    if (!row.number) dog.dogId = row.dog_id; // 無編號的狗也用永久身分設定固定照顧，不猜名字。
     dog.walkers = walkersOf.get(row.row_index) || [];
     if (formerOf.has(row.row_index)) dog.formerIds = formerOf.get(row.row_index);
     if (intakeOf.has(row.dog_id)) dog.intakeEvents = intakeOf.get(row.dog_id);
@@ -122,22 +123,31 @@ export async function dogIdsFor(db, numbers) {
   return out;
 }
 
-// 舊收藏的編號／名字只在能唯一對應時轉成永久 ID，不猜同名狗。
-export async function favoriteAliases(db) {
-  const [numbers, names] = await db.batch([
-    db.prepare('SELECT number, dog_id FROM v3_dog_numbers'),
-    db.prepare('SELECT name, MIN(dog_id) AS dog_id FROM v3_dogs GROUP BY name HAVING COUNT(*) = 1'),
+// 編號／名字 → 永久 ID，只查常溜的狗和手機問的舊格式鍵對到的狗（#406）；名字只在能唯一對應時轉，不猜同名狗。
+export async function favoriteAliases(db, dogIds, keys = []) {
+  const marks = list => list.map(() => '?').join(',');
+  const uniqueNames = where => `SELECT name, MIN(dog_id) AS dog_id FROM v3_dogs WHERE name IN (${where}) GROUP BY name HAVING COUNT(*) = 1`;
+  const numbers = keys.filter(k => !k.startsWith('名:')), names = keys.filter(k => k.startsWith('名:')).map(k => k.slice(2));
+  const found = [];
+  if (numbers.length) found.push(db.prepare(`SELECT dog_id FROM v3_dog_numbers WHERE number IN (${marks(numbers)})`).bind(...numbers));
+  if (names.length) found.push(db.prepare(uniqueNames(marks(names))).bind(...names));
+  const ids = [...new Set([...dogIds, ...(found.length ? await db.batch(found) : []).flatMap(r => (r.results || []).map(x => x.dog_id))])];
+  if (!ids.length) return {};
+  const [nums, named] = await db.batch([
+    db.prepare(`SELECT number, dog_id FROM v3_dog_numbers WHERE dog_id IN (${marks(ids)})`).bind(...ids),
+    db.prepare(uniqueNames(`SELECT name FROM v3_dogs WHERE dog_id IN (${marks(ids)})`)).bind(...ids),
   ]);
   return Object.fromEntries([
-    ...(numbers.results || []).map(r => [r.number, r.dog_id]),
-    ...(names.results || []).map(r => [`名:${r.name}`, r.dog_id]),
+    ...(nums.results || []).map(r => [r.number, r.dog_id]),
+    ...(named.results || []).map(r => [`名:${r.name}`, r.dog_id]),
   ]);
 }
 
-export async function readFavorites(db, codes) {
+export async function readFavorites(db, codes, keys = []) {
   const people = await identitiesForCodes(db, codes);
   const rows = await db.prepare(`SELECT DISTINCT dog_id FROM v3_volunteer_favorites WHERE volunteer_id IN (${people.map(() => '?').join(',')})`).bind(...people.map(p => p.volunteerId)).all();
-  return { ids: (rows.results || []).map(r => r.dog_id), aliases: await favoriteAliases(db) };
+  const ids = (rows.results || []).map(r => r.dog_id);
+  return { ids, aliases: await favoriteAliases(db, ids, keys) };
 }
 
 export async function saveFavorite(db, codes, dogId, on, date) {
@@ -176,6 +186,18 @@ export async function readRest(db, scope) {
   return sortedRest(results.filter(r => r.id).map(r => [r.id, { until: r.until_date, reason: r.reason }]));
 }
 export const sortedRest = entries => Object.fromEntries(entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
+
+// 固定照顧是狗的網站設定，不由試算表同步提供（ADR 0015）。
+export async function saveFixedCare(db, number, enabled) {
+  const dogId = (await dogIdsFor(db, [number])).get(number)
+    || (/^[a-f0-9]{32}$/.test(number) ? await db.prepare('SELECT dog_id FROM v3_dogs WHERE dog_id=?').bind(number).first('dog_id') : null);
+  if (!dogId) return null;
+  const before = Boolean(await db.prepare('SELECT fixed_care FROM v3_dogs WHERE dog_id=?').bind(dogId).first('fixed_care'));
+  if (before !== enabled) {
+    await db.prepare('UPDATE v3_dogs SET fixed_care=? WHERE dog_id=?').bind(Number(enabled), dogId).run();
+  }
+  return { dogId, before };
+}
 
 // 寫休養：rest 是 null 就結束休養。編號不認得回 null，存好回 { dogId, before }（改前的設定，編輯紀錄用）
 export async function saveRest(db, number, rest) {

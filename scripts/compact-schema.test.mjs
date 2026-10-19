@@ -3,6 +3,18 @@ import assert from 'node:assert/strict';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateCompactDatabase } from './migrate-compact-db.mjs';
 
+test('固定照顧補在既有狗表，預設關閉，重跑不重設網站設定、不建立獨立表', async t => {
+  const db = fakeD1(); t.after(() => db.close());
+  await db.prepare("CREATE TABLE v3_dogs(dog_id TEXT PRIMARY KEY NOT NULL,name TEXT NOT NULL,sex TEXT NOT NULL DEFAULT '')").run();
+  await db.prepare("INSERT INTO v3_dogs VALUES('a','甲','')").run();
+  await migrateCompactDatabase(db);
+  assert.equal(await db.prepare("SELECT fixed_care FROM v3_dogs WHERE dog_id='a'").first('fixed_care'), 0);
+  await db.prepare("UPDATE v3_dogs SET fixed_care=1 WHERE dog_id='a'").run();
+  await migrateCompactDatabase(db);
+  assert.equal(await db.prepare("SELECT fixed_care FROM v3_dogs WHERE dog_id='a'").first('fixed_care'), 1);
+  assert.equal(await db.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='table' AND name='v3_fixed_care'").first('n'), 0);
+});
+
 test('精簡表可重跑，舊表和資料保持原樣', async t => {
   const db = fakeD1(); t.after(() => db.close());
   await db.prepare('CREATE TABLE dogs(key TEXT PRIMARY KEY, name TEXT)').run();

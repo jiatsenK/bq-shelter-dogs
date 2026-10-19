@@ -7,6 +7,7 @@ export const KIND_LABELS = {
   volunteer_rename: '志工更名',
   volunteer_merge: '身分合併',
   rest: '休養',
+  'fixed-care': '有人固定照顧',
   intro: '入所介紹',
   photo: '照片',
   activity: '活動紀錄',

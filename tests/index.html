@@ -229,7 +229,8 @@ function runTests() {
       const favoriteCall = /async function favoriteRequest\(codes, op\) \{[\s\S]*?\n\}\r?\n\r?\nfunction syncFavs/;
       if (!favoriteCall.test(APP_JS) || !APP_JS.includes("const base = UPLOAD_URL + '/favorites'")) throw new Error('找不到常溜的 Worker 呼叫');
       const identityCall = /async function identityRequest\(action, body\) \{[\s\S]*?\n\}/;
-      const code = APP_JS.replace(identityCall, '').replace(favoriteCall, '').replace(new RegExp(walkCall.source, 'g'), '').replace(uploadCall, '').replace(walkerCall, '').replace(syncCall, '').replace(restCall, '').replace(introCall, '').replace(formerCall, '').replace(staysCall, '').replace("sendFormer(e.dog, former, 'POST')", '').replace("sendFormer(dog, former, 'DELETE')", '');
+      const fixedCareCall = /async function toggleFixedCare\(dog\) \{[\s\S]*?\n\}\r?\n/;
+        const code = APP_JS.replace(fixedCareCall, '').replace(identityCall, '').replace(favoriteCall, '').replace(new RegExp(walkCall.source, 'g'), '').replace(uploadCall, '').replace(walkerCall, '').replace(syncCall, '').replace(restCall, '').replace(introCall, '').replace(formerCall, '').replace(staysCall, '').replace("sendFormer(e.dog, former, 'POST')", '').replace("sendFormer(dog, former, 'DELETE')", '');
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
@@ -399,7 +400,7 @@ function runTests() {
         groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '入所介紹', '出入所紀錄', '休養設定'].slice(0, box.querySelector('[data-section="rest"]') ? 6 : 5)); // 相簿 K 2026-10-09 拿掉；管理用（改介紹、休養）10-10 集中一區；出入所紀錄 #333
+        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '入所介紹', '休養設定'].slice(0, box.querySelector('[data-section="rest"]') ? 5 : 4)); // #390：出入所紀錄併入入所介紹
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/thumbs/2.jpg', '一起溜的照片：');
@@ -407,7 +408,7 @@ function runTests() {
         eq(box.querySelector('[data-section="intro"] .content').textContent, '入所狗卡');
         dog.note = ''; dog.intro = ''; groupMap = {};
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section .empty')].length, 5, '都沒有資料時顯示提示（#60 遛狗紀錄讀取中也算；V9 拿掉我的備註；相簿 K 2026-10-09 拿掉；#333 出入所紀錄）：');
+        eq([...box.querySelectorAll('section .empty')].length, 3, '入所資料不再顯示兩段空提示：');
       } finally { [allDogs, groupMap] = saved; }
     }),
     check('#28 點狗卡開詳細資訊，點一起溜的狗換成那隻，關閉後回到清單', () => {
@@ -635,7 +636,7 @@ function runTests() {
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
       const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
-      eq(scripts.map(s => s.getAttribute('src')), ['js/site-config.js', 'js/detail-viewport.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定）：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
@@ -1272,7 +1273,7 @@ async function runHistoryTests() {
       showDetail(dogs[0]);
       let sec = document.querySelector('#detail [data-section="walks"]');
       if (!sec) throw new Error('詳細資訊要有遛狗紀錄');
-      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-4), ['walks', 'intro', 'stays', 'rest'], '位置在入所介紹前（入所介紹之後是出入所紀錄 #333、休養設定；相簿 K 2026-10-09 拿掉）：');
+      eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(-4), ['walks', 'intro', 'fixed-care', 'rest'], '位置在合併後的入所介紹前：');
       eq([...document.querySelectorAll('#detail .detail-section')].map(s => s.dataset.section).slice(0, 2), ['last', 'note'], 'V9（#141）上次溜／溜狗人在最前面，接著試算表備註：');
       // 減法（10-10 K：格子很棒但眼花）：預設只有一行字，按「看每一天」才展開格子
       eq([sec.querySelectorAll('.w-grid').length, document.getElementById('walksToggle').getAttribute('aria-expanded'), sec.querySelector('.w-more').textContent], [0, 'false', '看每一天'], '預設收起來：');
@@ -1788,6 +1789,14 @@ async function runV9Tests() {
       eq(loadSheetWrites()[walkKey(allDogs[1])].prev.walker, '舊的', '復原回到按溜了之前：');
       hideToast();
     });
+    await check('#396 整群只有部分狗已有同行人，仍可替其他狗補加', () => {
+      const targets = allDogs.slice(0, 2);
+      clearWalkWith(targets);
+      addWalkWith([targets[0]], ['阿華']);
+      openWithSheet(targets);
+      eq(!!document.querySelector('#withBackdrop [data-with="阿華"]'), true, '只有全部狗都有的人才隱藏：');
+      withSheet = null; renderWithSheet(); clearWalkWith(targets);
+    });
     await check('#141 多人登記立即更新今天紀錄與統計；重新載入仍可編輯及復原，衝突不覆寫', async () => {
       walkedStorage = fakeStorage(); sheetWritesMemory = null; walkedMemory = null;
       saveWalkerName('志工我'); saveMyCodes(['aaaaaaaaaaaa']);
@@ -2078,10 +2087,11 @@ async function runRestTests() {
       try {
         showDetail(dog);
         eq([...document.querySelectorAll('.intake-list time')].map(el => el.textContent), ['2021/02/17', '2026/01/02']);
-        eq([...document.querySelectorAll('.intake-number')].map(el => el.textContent), ['（2021021703）', '（2021021703）']);
+        eq(document.querySelectorAll('.intake-number').length, 0, '閱讀不逐筆重複編號，編輯仍保留對應編號：');
         eq(document.querySelector('[data-section="intro"] .content').textContent, dog.intro);
         if (!document.querySelector('[data-section="walks"]') || !document.querySelector('.reentry')) throw new Error('保留早上其他區塊');
         document.getElementById('introEdit').click();
+        eq([...document.querySelectorAll('[data-intake-field="number"]')].map(el => el.value), ['2021021703', '2021021703']);
         const reason = document.querySelector('[data-intake-row="1"][data-intake-field="event"]');
         reason.value = '領養退回（補正）'; reason.dispatchEvent(new Event('input', { bubbles: true }));
         document.getElementById('intakeAdd').click();
@@ -2182,11 +2192,14 @@ async function runRestTests() {
         document.getElementById('staysForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         await new Promise(r => setTimeout(r, 20));
       };
+      const edit = () => {
+        if (!document.getElementById('staysEdit')) document.getElementById('introEdit').click();
+        document.getElementById('staysEdit').click();
+      };
       try {
         dog.stays = [];
         showDetail(dog);
-        eq(document.getElementById('staysEdit').getAttribute('aria-label'), '補出入所紀錄', '還沒有：點了是補：');
-        document.getElementById('staysEdit').click();
+        edit();
         set(0, 'in', '2019-03-01'); set(0, 'out', '2019-02-01');
         await submit();
         eq([calls.length, document.querySelector('#staysForm [role="alert"]').textContent], [0, '出所日不能早於入所日'], '出所早於入所先擋：');
@@ -2197,16 +2210,17 @@ async function runRestTests() {
         eq([calls.length, calls[0][0], calls[0][1], calls[0][2].editor, calls[0][2].before], [1, 'https://worker.test/stays/9613', 'PUT', '志工我', []], '送出：帶名字和改之前的內容：');
         eq(calls[0][2].stays, [{ in: '2019-03-01', out: '2019-06-01', reason: '整修移所' }, { in: '2015-08-18', out: '', reason: '迷路' }], '整份送出：');
         eq([staysEdit, ymd(firstIntake(dog))], [null, '2015-08-18'], '成功：入所日改從最早那次算：');
-        eq([...document.querySelectorAll('.stays-list li')].map(li => li.textContent), ['2015/08/18入所（迷路）', '2019/03/01入所，2019/06/01 出所（整修移所）'], '照時間列出：');
+        document.getElementById('introCancel').click();
+        eq([...document.querySelectorAll('[data-section="intro"] .intake-list li')].map(li => li.textContent), ['2015/08/18迷路入所', '2019/03/01入所', '2019/06/01整修移所'], '同一段直接列日期與經過：');
         if (!document.querySelector('#detail .chips').textContent.includes('入所 2015/8')) throw new Error('入所標籤沒有跟著改');
         // 刪掉一筆：送出的 before 是剛剛存好的內容
-        document.getElementById('staysEdit').click();
+        edit();
         document.querySelector('[data-stay-remove="0"]').click();
         await submit();
         eq([calls[1][2].before.length, calls[1][2].stays], [2, [{ in: '2019-03-01', out: '2019-06-01', reason: '整修移所' }]], '刪一筆：');
         eq(ymd(firstIntake(dog)), '2019-03-01', '刪了就回到剩下最早的：');
         conflict = true;
-        document.getElementById('staysEdit').click();
+        edit();
         set(0, 'reason', '移所');
         await submit();
         eq([document.querySelector('#staysForm [role="alert"]').textContent, dog.stays[0].reason], ['別人剛改過，請重新整理再改', '整修移所'], '別人剛改過：提示、不改這台的資料：');
@@ -2485,11 +2499,12 @@ async function runSyncButtonTests() {
       await requestSync(btn, { pollMs: 0, tries: 1 });
       eq(toast(), '更新失敗：叫同步失敗（GitHub 403）', 'Worker 說的原因：');
     });
-    await check('更新按鈕：Worker 說試算表沒變（unchanged）就不等，直接說已是最新（#305）', async () => {
+    await check('更新按鈕：試算表沒變仍讀回網站設定，不等試算表同步（#305、#399）', async () => {
       const calls = [];
-      window.fetch = async (url, init = {}) => { calls.push(`${init.method || 'GET'} ${String(url).replace(UPLOAD_URL, 'W')}`); return new Response(JSON.stringify({ ok: true, unchanged: true })); };
+      window.fetch = async (url, init = {}) => { calls.push(`${init.method || 'GET'} ${String(url).replace(UPLOAD_URL, 'W')}`); return new Response(JSON.stringify(String(url).endsWith('/sync') ? { ok: true, unchanged: true } : dogsFile('2026-09-27T16:25:00+08:00', '網站設定'))); };
       await requestSync(btn, { pollMs: 0, tries: 3 });
-      eq(calls, ['POST W/sync'], '不讀 dogs.json：');
+      eq(calls.slice(0, 2), ['POST W/sync', 'GET api/dogs'], '重新讀回網站設定：');
+      eq(allDogs.map(d => d.name), ['網站設定']);
       eq(toast(), '試算表沒有新的修改，已經是最新的');
     });
     await check('更新按鈕：剛按過（429）還是會等新資料', async () => {
@@ -3157,7 +3172,7 @@ async function runSheetWriteTests() {
       if (!toastText().includes('已經被改過')) throw new Error(`改過：${toastText()}`);
       window.fetch = async () => { throw new TypeError('Failed to fetch'); };
       setWalked([allDogs[0]], true); await sheetQueue;
-      if (!toastText().includes('沒寫進試算表')) throw new Error(`網路：${toastText()}`);
+      if (!toastText().includes('尚未確認登記結果')) throw new Error(`網路：${toastText()}`);
       setWalked([allDogs[0]], false); await sheetQueue;
       let n = 0;
       window.fetch = async () => { n++; return json({ ok: false, code: 'off', error: '還沒設定' }, 503); };
@@ -3188,7 +3203,7 @@ async function runSheetWriteTests() {
     await check('2026-10-17 網路不通就退回未溜，提示條有「再試一次」', async () => {
       window.fetch = async () => { throw new TypeError('Failed to fetch'); };
       setWalked([allDogs[0]], true); await sheetQueue;
-      eq([walkedNow(allDogs[0]), toastText()], [false, '沒寫進試算表（網路不通），已退回未溜'], '退回：');
+      eq([walkedNow(allDogs[0]), toastText()], [false, '未全部登記成功；寫入甲 尚未確認登記結果（網路不通）'], '退回：');
       const retry = document.querySelector('#toast .toast-extra');
       eq([retry.hidden, retry.textContent], [false, '再試一次'], '再試一次：');
       window.fetch = async (u, o) => { const body = JSON.parse(o.body); return json({ ok: true, results: body.dogs.map(d => ({ ...d, status: 'written', prev: { walker: '' }, wrote: { walker: '志工我' } })) }); };
@@ -3923,7 +3938,7 @@ async function runFavSyncTests() {
   const a = 'a'.repeat(32), b = 'b'.repeat(32);
   const books = { [code]: new Set(), [alias]: new Set() };
   let aliases = { '2024100501': a, '2018100501': a, '名:無編號': b };
-  const calls = [];
+  const calls = [], keyCalls = [];
   let offline = false;
   let pauseWrite = null;
   const device = () => { walkedStorage = fakeStorage(); walkerCodesMemory = null; favSyncMemory = null; };
@@ -3938,8 +3953,13 @@ async function runFavSyncTests() {
         for (const c of input.codes) { if (input.on) books[c].add(input.dogId); else books[c].delete(input.dogId); }
         return { ok: true, json: async () => ({ ok: true }) };
       }
-      const codes = new URL(url).searchParams.get('codes').split(',');
-      return { ok: true, json: async () => ({ ok: true, aliases, ids: [...new Set(codes.flatMap(c => [...books[c]]))] }) };
+      const params = new URL(url).searchParams, codes = params.get('codes').split(','), keys = params.getAll('key');
+      keyCalls.push(keys);
+      // 跟 Worker 一樣只回常溜的狗和問到的鍵（#406）
+      const ids = [...new Set(codes.flatMap(c => [...books[c]]))];
+      const dogs = new Set([...ids, ...keys.map(k => aliases[k]).filter(Boolean)]);
+      const picked = Object.fromEntries(Object.entries(aliases).filter(([, id]) => dogs.has(id)));
+      return { ok: true, json: async () => ({ ok: true, aliases: picked, ids }) };
     };
     device();
     allDogs = [{ name: '甲', id: '2024100501', formerIds: ['2018100501'] }, { name: '無編號', id: '', formerIds: [] }];
@@ -3953,6 +3973,14 @@ async function runFavSyncTests() {
       eq([...books[alias]], [], '只寫第一個代號：');
       eq(localFavs(), ['無法辨識']);
       eq(allDogs.map(isFav), [true, true]);
+    });
+    await check('#406 沒有舊格式常溜時，讀常溜不帶 key', async () => {
+      keyCalls.length = 0;
+      writeJsonKey(FAVS_KEY, []);
+      await syncFavs();
+      eq(keyCalls, [[]]);
+      eq(allDogs.map(isFav), [true, true], '常溜的狗仍認得：');
+      writeJsonKey(FAVS_KEY, ['無法辨識']);
     });
     const firstPhone = walkedStorage;
     await check('#267 第二台讀回同一份；各自取消不同狗後兩邊改動都保留', async () => {
@@ -4552,11 +4580,11 @@ async function runTourLayoutTests() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js'].map(u => fetch(u).then(res => {
+Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs]) => {
+  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs]) => {
     SITE_JS = siteJs;
     const c = document.createElement('script'); // 這間收容所的設定要在其他程式前面
     c.textContent = siteJs;
@@ -4568,6 +4596,7 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     APP_JS = js;
     DOGS_JSON = JSON.parse(dogsJson);
     const dv = document.createElement('script'); dv.textContent = detailViewportJs; document.body.appendChild(dv);
+    const wr = document.createElement('script'); wr.textContent = walkRegistrationJs; document.body.appendChild(wr);
     const s = document.createElement('script');
     s.textContent = js;
     document.body.appendChild(s);
