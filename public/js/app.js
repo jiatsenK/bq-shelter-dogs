@@ -240,20 +240,11 @@ async function loadMyWalks() {
 function currentMyWalks(today = new Date()) {
   const list = [...myWalks];
   const date = localDateKey(today);
-  // 今日溜狗紀錄比同步新：按了復原的狗不能再出現在我溜過（ADR 0007）
-  const me = canonicalWalker(loadWalkerName());
-  for (const w of liveTodayWalks(today)) {
-    const dog = allDogs.find(d => walkKey(d) === w.key);
-    if (!dog) continue;
-    const at = list.findIndex(x => (dog.id ? x.id === dog.id : !x.id && x.name === dog.name) && x.ymd === date);
+  for (const row of walkRegistration.today(allDogs, date)) {
+    const dog = row.dog;
+    const at = list.findIndex(w => (dog.id ? w.id === dog.id : !w.id && w.name === dog.name) && w.ymd === date);
     if (at !== -1) list.splice(at, 1);
-    if (w.walked && me && splitWalkers(w.walker).map(canonicalWalker).includes(me)) list.unshift({ id: dog.id || '', name: dog.name, date: parseYmd(date), ymd: date });
-  }
-  for (const item of Object.values(loadSheetWrites(today))) {
-    if (!item.current) continue;
-    const at = list.findIndex(w => (item.id ? w.id === item.id : !w.id && w.name === item.name) && w.ymd === date);
-    if (at !== -1) list.splice(at, 1);
-    if (item.current.date === date && splitWalkers(item.current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName()))) list.unshift({ id: item.id, name: item.name, date: parseYmd(date), ymd: date });
+    if (row.mine) list.unshift({ id: dog.id || '', name: dog.name, date: parseYmd(date), ymd: date });
   }
   return list.sort((a, b) => b.date - a.date);
 }
@@ -603,8 +594,7 @@ function highlightNote(note, terms) {
 }
 
 function effectiveWalkDate(dog, today = new Date()) {
-  const item = loadSheetWrites(today)[walkKey(dog)];
-  return item && item.current ? parseYmd(item.current.date) : dog.walkedDate;
+  return parseYmd(walkRegistration.state(dog, localDateKey(today)).date);
 }
 
 function computeStatus(dog, today) {
@@ -953,7 +943,6 @@ function loadWalkedIds(today = new Date()) {
 }
 
 function saveWalkedIds(ids, today = new Date()) {
-  walkedCache = null;
   walkedMemory = { date: localDateKey(today), ids: [...ids] };
   try {
     if (walkedStorage) walkedStorage.setItem(WALKED_KEY, JSON.stringify(walkedMemory));
@@ -969,20 +958,16 @@ function walkKey(dog) {
   return dog.name ? `名:${dog.name}` : '';
 }
 
-// 這支手機今天溜了沒；computeStatus 每隻狗都會問，所以讀一次 localStorage 記著，記錄有變（saveWalkedIds）或換日才重讀
-let walkedCache = null;
+// 今天名單包含自己就算已登記；本機暫存只用於尚未收到寫入結果時。
 function walkedNow(dog, today = new Date()) {
-  const date = localDateKey(today);
-  if (!walkedCache || walkedCache.date !== date) walkedCache = { date, ids: new Set(loadWalkedIds(today)) };
-  const key = walkKey(dog);
-  return !!key && walkedCache.ids.has(key);
+  return walkRegistration.state(dog, localDateKey(today)).mine;
 }
 
 // 今天已溜的查詢入口（#85）：讀一次這支手機今天的紀錄，之後問「這隻溜了沒」、排今天已溜清單都用它，
 // 不用再把編號陣列傳來傳去
 function walkedToday(today = new Date()) {
   const ids = loadWalkedIds(today);
-  const has = dog => { const key = walkKey(dog); return !!key && ids.includes(key); };
+  const has = dog => walkedNow(dog, today);
   return {
     has,
     // 今天已溜清單：最近記的排最上面
@@ -1248,8 +1233,6 @@ let walkerNameMemory = '';
 let sheetWritesMemory = null;
 let sheetWriteState = 'unknown'; // unknown／on／off
 let sheetQueue = Promise.resolve();
-// 這次打開網頁後寫過（收到試算表回應）的狗：拿試算表現況核對時不動它們，免得被較早送出的 /walkers 回應蓋掉
-const sheetWritesThisPage = new Set();
 
 // ── 誰遛的名字（#141 第 9 項）──
 // 名字不放進公開的 repo（dogs.json 只有代號）：打開網頁時跟 Worker 拿（GET /api/walkers，Worker 直接讀試算表），
@@ -1274,6 +1257,7 @@ function setWalkerNamesOffline(on) {
 }
 async function loadWalkerNames() {
   if (!UPLOAD_URL) return;
+  const read = walkRegistration.beginRead();
   let res;
   try {
     res = await fetch(`${UPLOAD_URL}/walkers`, { cache: 'no-cache' });
@@ -1291,43 +1275,18 @@ async function loadWalkerNames() {
       walkerNameList = [...new Set((Array.isArray(out.names) ? out.names : []).map(canonicalWalker).filter(Boolean))];
       walkerOlderNames = [...new Set((Array.isArray(out.older) ? out.older : []).map(canonicalWalker).filter(Boolean))];
       walkerCodeNames = out.codes && typeof out.codes === 'object' ? out.codes : {};
-      reconcileSheetWrites();
+      walkRegistration.receiveNames(out.walkers, allDogs, read);
       render();
       renderDetail();
       if (onboard && onboard.step === 0 && onboard.phase !== 'saving') renderOnboard();
     }
   } catch (e) { console.error(e); }
 }
-// K 2026-10-16：按了復原，試算表改回去了，但手機沒收到回應（例如馬上重新整理），手機上「今天我溜了」會一直留著。
-// 拿到試算表現況時核對：這頁還沒寫過的狗，手機記的誰遛的跟試算表不一樣，就以試算表為準，清掉手機上的今天紀錄
-function reconcileSheetWrites(today = new Date()) {
-  if (!Object.keys(walkerNames).length) return;
-  const items = loadSheetWrites(today);
-  const ids = loadWalkedIds(today);
-  const me = canonicalWalker(loadWalkerName());
-  let changed = false;
-  for (const [key, item] of Object.entries(items)) {
-    if (sheetWritesThisPage.has(key) || !item || !item.current) continue;
-    const live = String(walkerNames[key] || '');
-    if (live === String(item.current.walker || '')) continue;
-    delete items[key];
-    changed = true;
-    const at = ids.indexOf(key);
-    if (at !== -1 && !splitWalkers(live).map(canonicalWalker).includes(me)) ids.splice(at, 1);
-  }
-  if (!changed) return;
-  saveSheetWrites(items, today);
-  saveWalkedIds(ids, today);
-}
-// ── 今日溜狗紀錄（ADR 0007）：別支手機按溜了／復原，這裡不用等同步 ──
-// Worker 在 D1 記下按溜了／復原後試算表那隻狗的「遛狗日期」「誰遛的」，這裡從 /api/today 讀今天的清單。
-// 試算表是正本：只採用比上次同步新的紀錄。狗卡安靜換掉，不跳提示；抓不到就照舊，下次再試
-const TODAY_POLL_MS = 60 * 1000;   // 網頁顯示在螢幕上時每 1 分鐘抓一次
-const TODAY_REFETCH_MS = 30 * 1000; // 切回網頁、距上次超過 30 秒就馬上抓
-let todayWalks = { date: '', walks: [] };
-let todayState = 'loading'; // 初次今日消息讀完（失敗沿用同步資料）才呈現溜狗表
+// 今日紀錄只負責傳輸；新舊順序與狀態套用交給共用登記模組（ADR 0007）。
+const TODAY_POLL_MS = 60 * 1000;
+const TODAY_REFETCH_MS = 30 * 1000;
 let todayFetchedAt = 0;
-const sheetWrittenAt = new Map(); // 這頁自己寫試算表的時間（狗的 key → ms）：比它舊的今日紀錄不蓋掉自己剛寫的
+let todayState = 'loading'; // 初次請求完成後才呈現完整狀態；失敗沿用同步資料
 // 排序需要的兩份狀態不能無限等待；包含讀取回應內容的時間。
 async function fetchWalkStatus(url) {
   const controller = new AbortController();
@@ -1339,54 +1298,15 @@ async function fetchWalkStatus(url) {
   } finally { clearTimeout(timeout); }
 }
 async function loadTodayWalks() {
+  const read = walkRegistration.beginRead();
   todayFetchedAt = Date.now();
   try {
     if (!UPLOAD_URL) return;
-    const out = await fetchWalkStatus(`${UPLOAD_URL}/today`);
-    if (!out || !Array.isArray(out.walks) || typeof out.date !== 'string') return;
-    todayWalks = { date: out.date, walks: out.walks };
-    if (applyTodayWalks()) { render(); renderDetail(); }
-  } catch (e) { /* ADR 0007：抓不到時維持同步資料，下次再試 */ }
+    walkRegistration.receiveToday(await fetchWalkStatus(`${UPLOAD_URL}/today`), allDogs, read);
+  } catch (e) { /* 抓不到就維持現況，下次再試。 */ }
   finally {
     if (todayState === 'loading') { todayState = 'ready'; render(); }
   }
-}
-// 比上次同步新、今天的紀錄
-function liveTodayWalks(today = new Date()) {
-  if (todayWalks.date !== localDateKey(today)) return [];
-  const since = dataSyncedAt ? dataSyncedAt.getTime() : 0;
-  return todayWalks.walks.filter(w => w && w.key && Date.parse(w.at) > since && Date.parse(w.at) >= (sheetWrittenAt.get(w.key) || 0));
-}
-// 把今日紀錄套到狗卡、誰遛的、這支手機的今天已溜；回傳畫面要不要重畫
-function applyTodayWalks(today = new Date()) {
-  const walks = liveTodayWalks(today);
-  if (!walks.length) return false;
-  const me = canonicalWalker(loadWalkerName());
-  const items = loadSheetWrites(today);
-  const ids = loadWalkedIds(today);
-  let changed = false, itemsChanged = false, idsChanged = false;
-  for (const w of walks) {
-    const date = w.walkedDate || '';
-    const walker = String(w.walker || '');
-    const dog = allDogs.find(d => walkKey(d) === w.key);
-    if (dog) {
-      const before = dog.walkedDate ? localDateKey(dog.walkedDate) : '';
-      if (before !== date) { dog.walkedDate = parseYmd(date); changed = true; }
-    }
-    if (walkerNames[w.key] !== walker) { walkerNames[w.key] = walker; changed = true; }
-    const mine = !!w.walked && !!me && splitWalkers(walker).map(canonicalWalker).includes(me);
-    const item = items[w.key];
-    if (item && item.current && (item.current.date !== date || item.current.walker !== walker)) {
-      items[w.key] = { ...item, current: { date, walker }, mine };
-      itemsChanged = true;
-    }
-    const at = ids.indexOf(w.key);
-    if (mine && at === -1) { ids.unshift(w.key); idsChanged = true; }
-    if (!mine && at !== -1) { ids.splice(at, 1); idsChanged = true; }
-  }
-  if (itemsChanged) saveSheetWrites(items, today);
-  if (idsChanged) saveWalkedIds(ids, today);
-  return changed || itemsChanged || idsChanged;
 }
 function refreshTodayWalks() {
   if (typeof document !== 'undefined' && document.hidden) return;
@@ -1404,11 +1324,7 @@ function splitWalkers(text) {
 // 上次是誰溜的：這支手機今天按過溜了就是自己；否則用試算表的「誰遛的」
 // 同一個人的不同寫法只顯示一次（「岑」＝「佳岑」，K 2026-10-05）
 function walkerList(dog, today = new Date()) {
-  const uniq = list => [...new Set(list.map(canonicalWalker).filter(Boolean))];
-  const item = loadSheetWrites(today)[walkKey(dog)];
-  if (item && item.current) return uniq(splitWalkers(item.current.walker));
-  if (walkedNow(dog, today)) return uniq([...splitWalkers(walkerNames[walkKey(dog)]), loadWalkerName() || '你', ...(loadWalkWith(today)[walkKey(dog)] || [])]);
-  return uniq(splitWalkers(walkerNames[walkKey(dog)]));
+  return walkRegistration.state(dog, localDateKey(today)).walkers;
 }
 
 // ── 一起溜的人（#141 第 1 項，K：溜了要怎麼寫除了我以外的人）──
@@ -1587,6 +1503,12 @@ let sheetWriteFailText = '';
 const walkRegistration = createWalkRegistration({
   key: walkKey, date: () => localDateKey(new Date()), walker: loadWalkerName, alias: myAliasIn,
   canonical: canonicalWalker, split: splitWalkers,
+  names: () => loadMyCodes().map(code => walkerCodeNames[code]).filter(Boolean),
+  base: dog => ({ date: dog.walkedDate ? localDateKey(dog.walkedDate) : '', walker: walkerNames[walkKey(dog)] || '' }),
+  local: day => loadWalkedIds(parseYmd(day)),
+  saveLocal: (ids, day) => saveWalkedIds(ids, parseYmd(day)),
+  companions: (dog, day) => loadWalkWith(parseYmd(day))[walkKey(dog)] || [],
+  syncedAt: () => dataSyncedAt?.getTime() || 0,
   read: day => loadSheetWrites(parseYmd(day)),
   save: (items, day) => saveSheetWrites(items, parseYmd(day)),
   send: async payload => {
@@ -1599,20 +1521,7 @@ const walkRegistration = createWalkRegistration({
     return out;
   },
   apply: (dogs, items, day, restored) => {
-    const today = parseYmd(day), ids = loadWalkedIds(today);
-    for (const dog of dogs) {
-      const key = walkKey(dog), item = items[key];
-      if (!item?.current) continue;
-      const parsed = parseYmd(String(item.current.date).replace(/\//g, '-').replace(/-(\d)(?=-|$)/g, '-0$1'));
-      sheetWritesThisPage.add(key); sheetWrittenAt.set(key, Date.now());
-      walkerNames[key] = item.current.walker;
-      const at = ids.indexOf(key);
-      if (item.mine && at === -1) ids.unshift(key);
-      if (!item.mine && at !== -1) ids.splice(at, 1);
-      dog.walkedDate = parsed;
-    }
-    saveWalkedIds(ids, today);
-    if (restored.length) clearWalkWith(restored, today);
+    if (restored.length) clearWalkWith(restored, parseYmd(day));
     render(); renderDetail();
   },
 });
@@ -1792,8 +1701,10 @@ function walkButton(dog) {
   if (!walkKey(dog)) return `<span class="more">${icon('chevron')}</span>`;
   if (restOf(dog)) return ''; // 休養中暫停帶出：不放溜了，免得順手按到
   if (walkPendingNow(dog) && !walkedNow(dog)) return `<button type="button" class="walk-btn pending" disabled aria-label="${esc(dog.name)} 正在寫進試算表">登記中</button>`;
-  return walkedNow(dog)
-    ? `<button type="button" class="walk-btn done" data-walk="back" aria-label="${esc(dog.name)} 今天已溜，按一下取消">${icon('tick')}已溜</button>`
+  const state = walkRegistration.state(dog);
+  const disabled = sheetWillWrite() && !state.canUndo && !walkPendingNow(dog) ? ' disabled' : '';
+  return state.mine
+    ? `<button type="button" class="walk-btn done" data-walk="back" aria-label="${esc(dog.name)} 今天已溜，按一下取消"${disabled}>${icon('tick')}已溜</button>`
     : `<button type="button" class="walk-btn" data-walk="add" aria-label="${esc(dog.name)} 溜了">溜了</button>`;
 }
 
@@ -2326,18 +2237,15 @@ function walkerEditBase(dog, today = new Date()) {
   if (!loadWalkerName() || isOffline() || walkPendingNow(dog)) return null;
   const key = walkKey(dog);
   if (!key) return null;
-  const date = localDateKey(today);
-  const item = loadSheetWrites(today)[key];
-  if (item && item.current) return item.current.date === date && item.current.walker ? item.current.walker : null;
-  // 今日消息也會標記自己已溜；已確認日期和名單時，不因已溜而隱藏編輯入口。
-  return dog.walkedDate && localDateKey(dog.walkedDate) === date && walkerNames[key] ? walkerNames[key] : null;
+  const state = walkRegistration.state(dog, localDateKey(today));
+  return state.today && state.walker ? state.walker : null;
 }
 // 只剩自己一個人、而且是這支手機今天登記的（按錯了），那個 × 是取消這次登記：日期和名字改回登記前（K 2026-10-05）
 function walkerUndoable(dog, who, today = new Date()) {
-  const item = loadSheetWrites(today)[walkKey(dog)];
-  return who.length === 1 && who[0] === canonicalWalker(loadWalkerName()) && walkedNow(dog, today)
-    && !!(item && item.mine && item.prev && item.wrote && item.current && item.current.walker === item.wrote.walker);
+  const state = walkRegistration.state(dog, localDateKey(today));
+  return who.length === 1 && state.mine && state.canUndo;
 }
+
 function walkerChipsHtml(dog, who, today) {
   if (!who.length) return isOffline() ? '<span class="lw-none">讀不到（沒網路）</span>' : '<span class="lw-none">—</span>';
   if (!walkerEditBase(dog, today)) {
@@ -4114,7 +4022,6 @@ function applyDogsData(data) {
   loadWarning = data.groups ? '' : '「可以一起溜」暫時讀不到，其他資訊正常。';
   // 顯示試算表最後同步的時間（不是打開網頁的時間），志工才知道資料有多新
   dataSyncedAt = data.syncedAt;
-  applyTodayWalks(); // 不短暫蓋回較新的今日消息
   renderUpdatedLabel();
   loadState = 'ready';
   render();

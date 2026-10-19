@@ -1884,7 +1884,7 @@ async function runV9Tests() {
     });
     await check('K 2026-10-12：沒打字不列名字，打一個字出現推薦（開頭一樣的在前），以前溜過的也找得到', async () => {
       const box = () => document.getElementById('onboard');
-      walkedStorage = fakeStorage(); walkedMemory = null; walkedCache = null; walkerNameMemory = ''; walkerCodesMemory = null; onboard = null;
+      walkedStorage = fakeStorage(); walkedMemory = null; walkerNameMemory = ''; walkerCodesMemory = null; onboard = null;
       walkerNameList = ['阿明', '小華', '明華', '美玲'];
       startOnboard();
       const names = () => [...box().querySelectorAll('[data-ob-name]')].map(b => b.textContent);
@@ -1912,7 +1912,7 @@ async function runV9Tests() {
     await check('K 2026-10-12：名字清單上沒有、但遛狗紀錄裡有（最近沒溜的人）就不用再確認', async () => {
       const tick = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setTimeout(r, 0)); };
       const box = () => document.getElementById('onboard');
-      walkedStorage = fakeStorage(); walkedMemory = null; walkedCache = null; walkerNameMemory = ''; walkerCodesMemory = null; onboard = null; walksData = null;
+      walkedStorage = fakeStorage(); walkedMemory = null; walkerNameMemory = ''; walkerCodesMemory = null; onboard = null; walksData = null;
       UPLOAD_URL = 'https://worker.test';
       window.fetch = async (u, o) => {
         if (String(u).endsWith('/identity')) { const name = JSON.parse(o.body).name; return json({ ok: true, identity: { volunteerId: 'test-person', name, codes: [name === '老K' ? 'abcabcabcabc' : 'cccccccccccc'] } }); }
@@ -1933,7 +1933,7 @@ async function runV9Tests() {
     await check('介面評估第四輪：先看看不設名字也能進；按溜了才問名字，設好直接登記；表上沒有的名字先確認；說明可以再打開', async () => {
       const tick = async () => { for (let i = 0; i < 6; i++) await new Promise(r => setTimeout(r, 0)); };
       const box = () => document.getElementById('onboard');
-      walkedStorage = fakeStorage(); walkedMemory = null; walkedCache = null; walkerNameMemory = ''; walkerCodesMemory = null; sheetWritesMemory = null; onboard = null;
+      walkedStorage = fakeStorage(); walkedMemory = null; walkerNameMemory = ''; walkerCodesMemory = null; sheetWritesMemory = null; onboard = null;
       UPLOAD_URL = 'https://worker.test'; sheetWriteState = 'unknown';
       const calls = [];
       window.fetch = async (u, o) => {
@@ -3218,15 +3218,14 @@ async function runSheetWriteTests() {
       walkedStorage = fakeStorage(); walkedMemory = null; sheetWritesMemory = null; sheetWriteState = 'unknown';
       saveWalkerName('志工我');
       const today = localDateKey(new Date());
-      walkedStorage.setItem(SHEET_WRITES_KEY, JSON.stringify({ date: today, items: { '9801': { id: '9801', name: '寫入甲', prev: { date: { date: '2026-10-01' }, walker: '志工隊' }, wrote: { walker: '志工我' }, current: { date: today, walker: '志工我' }, mine: true } } }));
+      walkedStorage.setItem(SHEET_WRITES_KEY, JSON.stringify({ date: today, items: { '9801': { id: '9801', name: '寫入甲', observedAt: Date.now(), prev: { date: { date: '2026-10-01' }, walker: '志工隊' }, wrote: { walker: '志工我' }, current: { date: today, walker: '志工我' }, mine: true } } }));
       walkedStorage.setItem(WALKED_KEY, JSON.stringify({ date: today, ids: ['9801'] }));
-      sheetWritesThisPage.clear(); // 模擬重新整理：這頁還沒寫過
       eq([walkedNow(allDogs[0]), currentMyWalks().some(w => w.id === '9801')], [true, true], '重新整理前：');
       window.fetch = async () => json({ walkers: { '9801': '志工隊' }, names: ['志工隊'] });
       await loadWalkerNames();
       eq([walkedNow(allDogs[0]), currentMyWalks().some(w => w.id === '9801'), walkerList(allDogs[0])], [false, false, ['志工隊']], '核對後：');
       // 試算表上確實有我：保留
-      saveSheetWrites({ '9801': { id: '9801', name: '寫入甲', current: { date: today, walker: '志工隊、志工我' }, mine: true } });
+      saveSheetWrites({ '9801': { id: '9801', name: '寫入甲', observedAt: Date.now(), current: { date: today, walker: '志工隊、志工我' }, mine: true } });
       saveWalkedIds(['9801']);
       window.fetch = async () => json({ walkers: { '9801': '志工隊、志工我' }, names: [] });
       await loadWalkerNames();
@@ -3240,7 +3239,6 @@ async function runSheetWriteTests() {
       const today = localDateKey(new Date());
       const syncedAt = new Date(Date.now() - 10 * 60 * 1000);
       dataSyncedAt = syncedAt;
-      sheetWritesThisPage.clear(); sheetWrittenAt.clear();
       allDogs[0].walkedDate = parseYmd(today);
       walkerNames = { '9801': 'K' };
       myWalks = [{ id: '9801', name: '寫入甲', date: parseYmd(today), ymd: today }]; // 同步帶來的 D1 紀錄
@@ -3252,23 +3250,35 @@ async function runSheetWriteTests() {
       window.fetch = async u => { asked = String(u); return json({ ok: true, date: today, walks: [{ key: '9801', walked: false, walkedDate: '2026-10-01', walker: '志工隊', at }] }); };
       await loadTodayWalks();
       eq(asked.endsWith('/today'), true, '讀 /api/today：');
-      eq([currentMyWalks().some(w => w.id === '9801'), walkedNow(allDogs[0]), localDateKey(allDogs[0].walkedDate), walkerList(allDogs[0])], [false, false, '2026-10-01', ['志工隊']], '復原後：');
+      eq([currentMyWalks().some(w => w.id === '9801'), walkedNow(allDogs[0]), localDateKey(effectiveWalkDate(allDogs[0])), walkerList(allDogs[0])], [false, false, '2026-10-01', ['志工隊']], '復原後：');
       // 別人溜了：狗卡改成今天、顯示誰溜的，不是我的
       window.fetch = async () => json({ ok: true, date: today, walks: [{ key: '9801', walked: true, walkedDate: today, walker: '志工乙', at: new Date().toISOString() }] });
       await loadTodayWalks();
-      eq([localDateKey(allDogs[0].walkedDate), walkerList(allDogs[0]), currentMyWalks().some(w => w.id === '9801')], [today, ['志工乙'], false], '別人溜了：');
+      eq([localDateKey(effectiveWalkDate(allDogs[0])), walkerList(allDogs[0]), currentMyWalks().some(w => w.id === '9801')], [today, ['志工乙'], false], '別人溜了：');
       // 比同步舊的紀錄不採用（試算表是正本）
       dataSyncedAt = new Date(Date.now() + 60 * 1000);
       allDogs[0].walkedDate = parseYmd('2026-10-02');
       window.fetch = async () => json({ ok: true, date: today, walks: [{ key: '9801', walked: true, walkedDate: today, walker: '志工丙', at: new Date().toISOString() }] });
       await loadTodayWalks();
-      eq(localDateKey(allDogs[0].walkedDate), '2026-10-02', '同步後以試算表為準：');
+      eq(localDateKey(effectiveWalkDate(allDogs[0])), '2026-10-02', '同步後以試算表為準：');
       // 抓不到：不顯示錯誤、不跳提示
       hideToast();
       window.fetch = async () => { throw new TypeError('Failed to fetch'); };
       await loadTodayWalks();
       eq(document.getElementById('toast')?.hidden !== false, true, '抓不到不提示：');
-      dataSyncedAt = null; myWalks = []; todayWalks = { date: '', walks: [] };
+      dataSyncedAt = null; myWalks = [];
+    });
+    await check('#397 換手機讀到自己的今日登記：狗卡、詳細資訊、狗群一致，沒有本機證據不能復原', () => {
+      const dog = allDogs[0], today = new Date();
+      saveSheetWrites({}); saveWalkedIds([]); saveWalkerName('志工我');
+      dog.walkedDate = parseYmd(localDateKey(today));
+      walkerNames = { [walkKey(dog)]: '志工我、同行人' };
+      sheetWriteState = 'on';
+      eq([walkedNow(dog), sheetUndoable(dog), groupDateLabel(dog)], [true, false, '今天溜過']);
+      const card = document.createElement('div'); card.innerHTML = walkButton(dog);
+      eq([card.querySelector('button').textContent, card.querySelector('button').disabled], ['已溜', true]);
+      eq(walkerList(dog), ['志工我', '同行人']);
+      if (!lastWalkSection(dog, today).includes('志工我')) throw new Error('詳細資訊缺自己名字');
     });
   } finally {
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch] = saved;
@@ -3707,7 +3717,7 @@ async function runWalkerChipTests() {
       { id: '9902', name: '加減乙', cage: 'A02', note: '', covered: false, walkedDate: new Date(Date.now() - 3 * 864e5), formerIds: [] },
     ];
     groupMap = {}; activeTab = 'walk'; searchQuery = '';
-    walkedStorage = fakeStorage(); walkedMemory = null; walkedCache = null; sheetWritesMemory = null; sheetWriteState = 'unknown';
+    walkedStorage = fakeStorage(); walkedMemory = null; sheetWritesMemory = null; sheetWriteState = 'unknown';
     saveWalkerName('志工我'); UPLOAD_URL = 'https://worker.test';
     walkerNames = { '9901': '志工乙+志工丙', '9902': '志工乙+志工丙' }; walkerNameList = ['志工乙', '志工丙', '志工丁'];
     let current = '志工乙+志工丙', bodies = [];
@@ -4455,7 +4465,7 @@ async function runFix141Tests() {
       { id: '9813', name: '修正戊', cage: 'A03', note: '', covered: false, walkedDate: new Date(), formerIds: [] },
     ];
     groupMap = {}; activeTab = 'walk'; searchQuery = '';
-    walkedStorage = fakeStorage(); walkedMemory = null; walkedCache = null; sheetWritesMemory = null; sheetWriteState = 'unknown';
+    walkedStorage = fakeStorage(); walkedMemory = null; sheetWritesMemory = null; sheetWriteState = 'unknown';
     saveWalkerName('佳岑'); UPLOAD_URL = 'https://worker.test';
     walkerNames = { '9811': '岑', '9813': '志工乙' }; walkerNameList = [];
     const bodies = [];
@@ -4476,8 +4486,8 @@ async function runFix141Tests() {
       eq(walkerList({ id: '9890', name: '假' }), ['佳岑', '志工乙']);
       delete walkerNames['9890'];
     });
-    await check('K 2026-10-05：那格已經有「岑」，按溜了送「岑」（小程式不動），其他狗照常送「佳岑」', async () => {
-      setWalked([allDogs[0], allDogs[1]], true);
+    await check('K 2026-10-05：整群明確送出已有「岑」的狗，仍沿用「岑」，其他狗送「佳岑」', async () => {
+      await queueSheetWrite([allDogs[0], allDogs[1]], true);
       await sheetQueue; await tick();
       eq(bodies.map(b => [b.action, b.walker, b.dogs.map(d => d.id)]), [['walk', '岑', ['9811']], ['walk', '佳岑', ['9812']]], '送出：');
       showDetail(allDogs[0]);
@@ -4503,7 +4513,6 @@ async function runFix141Tests() {
   } finally {
     hideDetail(); hideToast();
     [allDogs, groupMap, activeTab, searchQuery, walkedStorage, walkedMemory, UPLOAD_URL, window.fetch, walkerNames, walkerNameList, sheetWritesMemory, sheetWriteState, walkerNameMemory, walkerCodesMemory] = saved;
-    walkedCache = null;
     render();
   }
 }
