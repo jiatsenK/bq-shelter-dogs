@@ -25,6 +25,7 @@ const server = http.createServer((req, res) => {
   const browser = await chromium.launch();
   let ok = false;
   try {
+    await require('../tests/startup-stability.cjs')(browser, `http://localhost:${server.address().port}`);
     await require('../tests/walker-editing.cjs')(browser, `http://localhost:${server.address().port}`);
     await require('../tests/intake-presentation.cjs')(browser, `http://localhost:${server.address().port}`);
     await require('../tests/info-page.cjs')(browser, `http://localhost:${server.address().port}`);

@@ -132,12 +132,18 @@ module.exports = async (browser, base) => {
       const first = page.waitForResponse(r => r.url().endsWith('/api/' + (endpoint === 'walkers' ? 'today' : 'walkers')));
       await page.reload({ waitUntil: 'domcontentloaded' });
       await first;
-      await openDog();
-      await page.locator('#whoAdd').waitFor();
+      if (endpoint === 'walkers') {
+        await openDog();
+        await page.locator('#whoAdd').waitFor();
+      } else {
+        // #418：初次今日消息尚未確認時，溜狗表先維持載入狀態。
+        assert.equal(await page.locator('#main [data-dog]').count(), 0);
+      }
       const last = page.waitForResponse(r => r.url().endsWith('/api/' + endpoint));
       delayedRead = ''; releaseRead();
       await last;
       await page.waitForLoadState('networkidle');
+      if (endpoint === 'today') await openDog();
       assert.equal(await page.locator('#whoAdd').count(), 1, `${endpoint} 較晚抵達仍可編輯`);
     }
     console.log('#417 今日資料讀回、加減溜狗人、重開及衝突保護通過');
