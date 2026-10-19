@@ -25,7 +25,8 @@ module.exports = async (browser, base) => {
     if (req.method() === 'POST' && endpoint === 'walk') {
       const body = req.postDataJSON();
       if (body.action === 'undo') return route.fulfill({ json: { ok: true, results: body.dogs.map(d => ({ id: d.id, name: d.name, status: 'restored' })) } });
-      return route.fulfill({ json: { ok: true, today: new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date()), results: body.dogs.map(d => ({ ...d, status: 'written', prev: { date: { date: '2026-01-01' }, walker: '' }, wrote: { date: '2026/10/18', walker: body.walker } })) } });
+      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
+      return route.fulfill({ json: { ok: true, today, results: body.dogs.map(d => ({ ...d, status: 'written', prev: { date: { date: '2026-01-01' }, walker: '' }, wrote: { date: today, walker: body.walker } })) } });
     }
     return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'rest' ? { rest: {} } : { ok: true, walks: [], walkers: [] } });
   });

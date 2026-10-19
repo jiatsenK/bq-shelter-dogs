@@ -155,7 +155,7 @@ module.exports = async (browser, base) => {
     assert.equal(await page.locator('.front').getAttribute('data-column'), current, '上下移動不換群');
     await page.goto(base + '/public/groups.html');
     await page.locator('#groupStage').waitFor();
-    await page.evaluate(() => localStorage.removeItem('bq-walker-name'));
+    await page.evaluate(() => { localStorage.removeItem('bq-walker-name'); render(); });
     const writeCount = writes.length;
     await page.locator('#gwWalk').click();
     await page.getByText('請先在「我溜過」選好你的名字再登記', { exact: true }).waitFor();
@@ -168,7 +168,11 @@ module.exports = async (browser, base) => {
     await page.getByRole('button', { name: '重新讀取', exact: true }).click();
     await page.locator('#groupStage').waitFor();
     restMode = true;
-    await page.evaluate(() => localStorage.setItem('bq-walker-name', '測試志工'));
+    // 休養與復原情境從未登記開始，不沿用前面整群登記的快照。
+    await page.evaluate(() => {
+      localStorage.setItem('bq-walker-name', '測試志工');
+      localStorage.removeItem('bq-sheet-writes'); localStorage.removeItem('bq-walked-today');
+    });
     await page.reload();
     await page.locator('[data-tab="groups"]').click();
     await page.locator('.gw-restrictions').filter({ hasText: '休養中' }).waitFor();
