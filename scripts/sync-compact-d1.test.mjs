@@ -63,9 +63,9 @@ test('正式 D1 還沒有離所表、群名表時，SQL 自己先建', async t =
   assert.ok(lines.includes('INSERT OR IGNORE INTO v3_walk_versions(id) VALUES(1);'));
 });
 
-test('正式 D1 還沒有群名表也能同步：讀不到群名表當成空的，其他表讀不到照樣停', async () => {
+test('讀 D1 現況：群名表和其他必要表讀不到都停止同步', async () => {
   const missing = table => async sql => { if (sql === SEED_TABLES[table]) throw new Error('no such table: ' + table); return []; };
-  assert.deepEqual((await readSeed(missing('v3_sheet_group_labels'))).v3_sheet_group_labels, []);
+  await assert.rejects(readSeed(missing('v3_sheet_group_labels')), /no such table/);
   await assert.rejects(readSeed(missing('v3_walks')), /no such table/);
 });
 
