@@ -45,9 +45,6 @@ const skipSchemaStatement = t => {
   return Boolean((trigger && SYNC_SCHEMA_SKIP.triggers.test(trigger[1])) || (row && SYNC_SCHEMA_SKIP.rows.includes(row[1])));
 };
 
-// 差異同步要知道現況才比得出差異，所以群名表也要讀；正式 D1 還沒建這張表時當成空的（SQL 開頭會自己 CREATE TABLE IF NOT EXISTS）
-const OPTIONAL_TABLES = new Set(['v3_sheet_group_labels']);
-
 const sqlValue = v => (v === null || v === undefined ? 'NULL' : typeof v === 'number' ? String(v) : `'${String(v).replace(/'/g, "''")}'`);
 const insert = (table, row, tail = '') => `INSERT INTO ${table}(${Object.keys(row).join(',')}) VALUES(${Object.values(row).map(sqlValue).join(',')})${tail};`;
 
@@ -144,7 +141,7 @@ export function narrowSeedSql({ cutoff, numbers = [], walksSql }) {
 // 12 張表同時讀：每叫一次 npx wrangler 要 3 秒左右，一張一張讀會讓頁首「更新」多等半分鐘
 // 上一次同步的日期先單獨讀（溜狗紀錄要從哪天讀看它，ADR 0010），順便讓 npx 把 wrangler 下載好，其餘再一起叫，免得同時下載互搶快取
 // 任何一張表讀不到就整個停：當成空的會把累積的溜狗紀錄、離所整份換掉
-// 只有還沒建表的群名表可以當成空的；v3_sync_state 還沒建（沒記過日期）就整張讀溜狗紀錄
+// v3_sync_state 還沒建（沒記過日期）就整張讀溜狗紀錄
 // full：全量核對（溜狗紀錄、離所、狗都整張讀）；checks(since)：6:30 保險同步要用主鍵核對的 [{ number, name, date }]（見 walkSeedSql）
 // numbers：試算表這次的編號；today：台灣時間的今天，離所從 60 天前讀起（ADR 0014）
 // 回傳 { 表名: 列, walksSynced（上一次同步的日期）, since（溜狗紀錄從哪天讀，'' 是整張） }
@@ -156,8 +153,7 @@ export async function readSeed(query, { full = false, checks = () => [], numbers
   const walksSql = walkSeedSql(since, checks(since));
   const narrow = full ? {} : narrowSeedSql({ cutoff: departureCutoff(today), numbers, walksSql });
   const sqlOf = t => (t === 'v3_walks' ? walksSql : narrow[t] || SEED_TABLES[t]);
-  const read = t => query(sqlOf(t)).catch(e => { if (OPTIONAL_TABLES.has(t) && missing(e)) return []; throw e; });
-  const results = await Promise.all(tables.map(read));
+  const results = await Promise.all(tables.map(t => query(sqlOf(t))));
   return { ...Object.fromEntries(tables.map((t, i) => [t, results[i]])), walksSynced, since };
 }
 
