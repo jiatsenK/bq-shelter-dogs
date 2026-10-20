@@ -1728,17 +1728,17 @@ html.tour-open header.app { top: 0; }
 .card .body, .card .row { display: contents; } /* 照片、名字、天數、按鈕都直接排在卡片這一層，天數才能排到最左邊 */
 .card { padding: 8px 8px 8px 0; gap: 10px; align-items: center; }
 .card .last {
-  order: -1; align-self: stretch; width: 70px !important; flex-shrink: 0;
+  order: -1; align-self: stretch; width: auto !important; min-width: 70px; flex-shrink: 0;
   margin: -8px 0 -8px 0; padding: 6px 4px; justify-content: center;
 }
 .card.flagged .last { margin-bottom: 0; }
 .card .last .lbl { font-size: 12px; font-weight: 600; line-height: 16px; }
-.card .last .val { display: grid; grid-template-rows: 32px 16px; align-items: center; justify-items: center; height: 48px; font-size: 14px; font-weight: 700; line-height: 16px; }
-.card .last .val b { display: block; font-size: 30px; font-weight: 900; line-height: 32px; font-variant-numeric: tabular-nums; }
-.card .last[data-days="0"] .val b, .card .last[data-days="1"] .val b { font-size: 20px; font-weight: 700; }
+.card .last .val { display: flex; align-items: baseline; justify-content: center; flex-wrap: wrap; font-size: 14px; font-weight: 700; line-height: 1.3; }
+.card .last .val b { display: block; font-size: 30px; font-weight: 900; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.card .last[data-days="0"] .val b { font-size: 20px; font-weight: 700; }
 .card .last .val.small { display: flex; flex-direction: column; justify-content: center; align-items: center; height: 40px; font-size: 14px; line-height: 20px; }
 .card .last .val.muted { font-size: 16px; font-weight: 800; }
-.card .last .last-unit { display: block; line-height: 16px; }
+.card .last .last-unit { line-height: 1.3; }
 .card .last:has(.val.sage) { box-shadow: inset -1px 0 0 var(--line); }
 .card .name { font-size: 18px; font-weight: 800; }
 .card .more { margin-right: 2px; }
@@ -1940,7 +1940,7 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 /* ── 警示排版（K 2026-10-09：警示把整張卡片撐歪）──
    狗卡改成格線：天數色籤一路到底（有警示時也是），警示只排在照片到按鈕那一欄下面，不再橫跨天數欄 */
 .card:not(.skeleton) {
-  display: grid; grid-template-columns: 70px 64px minmax(0, 1fr) auto; grid-template-rows: auto auto;
+  display: grid; grid-template-columns: minmax(70px, max-content) 64px minmax(0, 1fr) auto; grid-template-rows: auto auto;
   column-gap: 10px; row-gap: 0; align-items: center;
 }
 .card:not(.skeleton) .last { grid-column: 1; grid-row: 1; }
@@ -1948,7 +1948,7 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 /* 保留原警示列 68px 的最小高度，同時讓左欄上下留白對稱、文字中心跟照片一致。 */
 .card.flagged:not(.skeleton) { position: relative; grid-template-rows: minmax(68px, auto) auto; }
 .card.flagged:not(.skeleton) .last { margin-bottom: -8px !important; position: relative; z-index: 1; }
-.card.flagged:not(.skeleton)::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 70px; background: var(--tab-muted); }
+.card.flagged:not(.skeleton)::before { content: ""; position: absolute; grid-column: 1; grid-row: 1 / -1; inset: 0; background: var(--tab-muted); }
 .card.flagged:not(.skeleton):has(.last .val.red)::before { background: var(--tab-red); }
 .card.flagged:not(.skeleton):has(.last .val.amber)::before { background: var(--tab-amber); }
 .card.flagged:not(.skeleton):has(.last .val.sage, .last .val.rest)::before { background: none; }
@@ -1961,6 +1961,14 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .card.flagged:not(.skeleton) { padding-bottom: 12px; }
 /* 沒有溜了按鈕（休養中）時，名字那欄延伸到右邊 */
 .card:not(.skeleton):not(:has(.walk-btn, .more)) .who { grid-column: 3 / -1; }
+/* 窄手機把狗名放在照片下方，天數放大時仍留出閱讀寬度。 */
+@media (max-width: 360px) {
+  .card:not(.skeleton) { grid-template-columns: minmax(70px, max-content) minmax(0, 1fr) auto; }
+  .card:not(.skeleton) .last { grid-row: 1 / 3; }
+  .card:not(.skeleton) .who, .card:not(.skeleton):not(:has(.walk-btn, .more)) .who { grid-column: 2 / -1; grid-row: 2; padding-top: 6px; }
+  .card:not(.skeleton) .walk-btn, .card:not(.skeleton) .more { grid-column: 3; }
+  .card:not(.skeleton) > .warn-note { grid-row: 3; }
+}
 
 /* 詳細資訊的籠位標籤可以點（開平面圖）：跟狗卡籠位一樣是圖釘＋粗字，點的範圍 44px */
 .badge.cage-badge { border: none; font: inherit; font-weight: 700; cursor: pointer; position: relative; min-height: 32px; }
@@ -2372,7 +2380,7 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .gw-cage { display: block; min-height: 18px; padding: 0 3px; background: var(--bg); color: var(--ink-soft); text-align: right; font-size: 12px; overflow-wrap: anywhere; }
 .gw-photo { display: block; height: 68px; background: var(--primary-soft); overflow: hidden; }
 .gw-photo img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
-.gw-tile strong { display: block; padding: 2px 1px; font-size: 14px; line-height: 20px; overflow-wrap: anywhere; color: var(--ink); }
+.gw-tile strong { display: block; padding: 2px 1px; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; color: var(--ink); }
 .gw-dog.excluded .gw-photo { opacity: .35; }
 .gw-dog.excluded strong { text-decoration: line-through; }
 /* 搜尋時沒對到的狗變淡，對到的照常 */
@@ -2407,14 +2415,14 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .gw-stage { --card-w: 60px; }
 @media(min-width:390px) { .gw-stage { --card-w: 74px; } }
 
-/* 內頁管理與切群保持在固定高度；只有照片區內捲動。 */
-.gw-stage { height: clamp(126px, calc(100dvh - 360px), 504px); min-height: 126px; overflow-y: auto; overflow-x: hidden; overscroll-behavior-y: contain; }
+/* #400：狗卡隨文字自然增高，由整頁捲閱，避免大字與短螢幕壓縮照片區。 */
+.gw-stage { height: auto; min-height: 126px; }
 .gw-layer.front { padding-block: 12px; }
 .gw-heading { position: relative; }
 .gw-manage { position: absolute; right: 0; top: 60px; z-index: 5; max-width: 100%; max-height: 50dvh; overflow: auto; padding: 12px; background: var(--surface); box-shadow: 0 3px 12px #0002; }
 #groupPage { position: relative; }
 /* 換群箭頭放在「溜了」兩側、貼齊畫面左右邊，讓出寬度給照片（#387）；跟主按鈕留空隙免得誤按換群 */
-.gw-stage-wrap { position: relative; }
+.gw-stage-wrap { position: relative; container-type: inline-size; }
 .gw-stage-wrap .gw-stage { --card-h: 0px; }
 .gw-stage-wrap .gw-cards { grid-template-columns: repeat(8, minmax(0, 1fr)); }
 #groupPage .gw-stage-wrap .gw-dog { width: auto; }
@@ -2426,8 +2434,13 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 #groupPage .gw-walkbar #gwWalk { min-width: 0; width: 100%; max-width: 240px; padding-inline: 12px; }
 #groupPage .gw-side { flex: none; width: 48px; height: 48px; margin-top: 12px; display: grid; place-items: center; padding: 0; color: var(--ink-soft); }
 .gw-side svg { width: 24px; height: 24px; }
-/* 手機一頁內看得到所有按鈕（K 2026-10-17）：照片區扣掉表頭、搜尋、群名、頁碼、兩顆按鈕和底部分頁列，其餘在照片區內捲動 */
-@media (max-width: 1099px) { .gw-stage-wrap .gw-stage { height: max(126px, calc(100dvh - 504px)); } }
+/* 以字級為基準：放大文字時減少欄數，保留照片與名字的閱讀寬度。 */
+@container (max-width: 18em) {
+  .gw-stage-wrap .gw-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .gw-stage-wrap .gw-dog, .gw-stage-wrap .gw-dog:first-child, .gw-stage-wrap .gw-dog:nth-child(4n+4) { grid-column: auto; }
+}
+.gw-walkbar { flex-wrap: wrap; }
+.gw-walkbar .gw-actions { flex-basis: 120px; }
 
 @media (max-width: 1099px) {
   .analysis-open header.app { position: fixed; inset: 0 0 auto; }

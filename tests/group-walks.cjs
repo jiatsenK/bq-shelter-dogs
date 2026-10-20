@@ -128,9 +128,9 @@ module.exports = async (browser, base) => {
     assert.equal(await page.locator('[data-tab="groups"][aria-current="page"]').count(), 1);
     await page.emulateMedia({ reducedMotion: 'reduce' });
     const before = await page.locator('.front').getAttribute('data-column');
-    const pageY = await page.locator('.gw-side.next').evaluate(el => el.getBoundingClientRect().top);
+
     await page.getByRole('button', { name: '下一群', exact: true }).click();
-    assert.equal(await page.locator('.gw-side.next').evaluate(el => el.getBoundingClientRect().top), pageY, '狗數變化不移動切群按鈕');
+    assert(await page.locator('.gw-side.next').evaluate(el => el.getBoundingClientRect().top >= document.querySelector('#groupStage').getBoundingClientRect().bottom), '#400 切群按鈕隨狗卡自然增高，保持在內容之後');
     await page.getByRole('button', { name: '上一群', exact: true }).click();
     await page.locator('#groupStage').scrollIntoViewIfNeeded();
     const stage = await page.locator('#groupStage').boundingBox();
