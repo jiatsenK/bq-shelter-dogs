@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateCompactDatabase } from './migrate-compact-db.mjs';
 import { readDogsPayload, readDepartures, readWalks } from '../worker/src/compact.js';
-import { buildSyncSql, buildSyncPlan, SEED_TABLES, SYNC_SCHEMA_SKIP, planSync, readPrevious, readSeed, lastWalkChecks } from './sync-compact-d1.mjs';
+import { buildSyncSql, buildSyncPlan, SEED_TABLES, SYNC_SCHEMA_SKIP, planSync, readPrevious, readSeed, lastWalkChecks, d1Target } from './sync-compact-d1.mjs';
 import { budgetProblem, todayRowsWritten } from './sync-diff.mjs';
 
 // SQL 開頭補建表、版本號、觸發器那幾行（不算同步寫的資料）
@@ -532,4 +532,11 @@ test('#371 同步讀的 SQL 不整張掃溜狗紀錄、離所（D1 照掃過的�
       assert.deepEqual(plan.filter(d => /^SCAN v3_(walks|departures)\b/.test(d)), [], `${table}：${plan.join(' / ')}`);
     }
   } finally { db.close(); }
+});
+
+// 預覽測試庫補資料（預覽讀不到狗）：SYNC_D1 只能選正式庫或測試庫，測試庫要帶自己的設定檔
+test('d1Target：預設正式庫，只接受測試庫這個例外', () => {
+  assert.deepEqual(d1Target({}), { name: 'bq-shelter-dogs', config: [] });
+  assert.deepEqual(d1Target({ SYNC_D1: 'bq-shelter-dogs-test' }), { name: 'bq-shelter-dogs-test', config: ['--config', 'wrangler.preview-db.jsonc'] });
+  assert.throws(() => d1Target({ SYNC_D1: 'other' }), /SYNC_D1/);
 });
