@@ -10,7 +10,7 @@ web
 
 ## Users
 
-板橋收容所的遛狗志工。在所裡站著、走路，常常一手牽狗、一手拿手機用。不是試算表管理者。背景與使用情境見 `docs/PROJECT_GOALS.md`「背景」和 `docs/DESIGN_GUIDE.md`「單手操作 › 為什麼」。
+板橋收容所的遛狗志工。在所裡站著、走路，常常一手牽狗、一手拿手機用。不是試算表管理者。背景與使用情境見 `docs/PROJECT_GOALS.md`「背景」和 `docs/DESIGN_GUIDE.md`「單手操作」。
 
 ## Product Purpose
 
@@ -36,4 +36,4 @@ web
 
 ## Accessibility & Inclusion
 
-點擊目標至少 44×44 px、避開系統手勢區（`docs/DESIGN_GUIDE.md`「單手操作 › 規範」）；手機設定減少動態效果時要跟著減少動畫（V5.2 #78）。
+點擊目標至少 44×44 px、避開系統手勢區（`docs/DESIGN_GUIDE.md`「單手操作」）；手機設定減少動態效果時要跟著減少動畫（V5.2 #78）。
