@@ -3104,6 +3104,11 @@ function buildTabs(counts) {
   if (focusedTab) tabsEl.querySelector(`[data-tab="${focusedTab}"]`)?.focus({ preventScroll: true });
 }
 
+// 最後一次輸入是不是觸控，決定切頁後要不要補焦點（#420）
+let lastInputTouch = false;
+document.addEventListener('keydown', () => { lastInputTouch = false; }, true);
+document.addEventListener('pointerdown', e => { lastInputTouch = e.pointerType === 'touch'; }, true);
+
 // 切換分類：標籤跟著亮起，畫面回到內容最上面
 function switchTab(id, pushHistory = true) {
   // find 保留給舊入口與操作教學，底部不再佔一格。
@@ -3119,13 +3124,13 @@ function switchTab(id, pushHistory = true) {
   if (pushHistory && changed) history.pushState({ bqNavigation: true, tab: id, base: activeTab, returnTab: groupsReturnTab, infoPage: typeof infoPage === 'undefined' ? '' : infoPage }, '');
   if (changed) resetWalkOrder(); // 換分頁回來溜狗表時重排，剛溜的狗才會排到後面
   if (changed && id === 'groups') refreshGroupStage();
-  const before = document.activeElement;
+  const prevFocus = document.activeElement;
   render();
   const btn = document.querySelector(`#tabs button[data-tab="${id}"]`);
-  // 焦點原本在頁籤上，或原本的按鈕（如返回）被重繪拿掉時才移到頁籤；
-  // 手機點按鈕不給焦點，這時主動 focus 會被當成鍵盤焦點而留下橘框（#420）
-  const lost = before && before !== document.body && !before.isConnected;
-  if (btn && (lost || (before && before.closest && before.closest('#tabs')))) btn.focus({ preventScroll: true });
+  // 焦點原本在頁籤上就跟著移；原焦點被重繪拿掉（如返回鈕）時，觸控以外才補到頁籤。
+  // 觸控時主動 focus 會被 iOS 當成鍵盤焦點而留下橘框（#420）
+  const focusRemoved = prevFocus && prevFocus !== document.body && !prevFocus.isConnected;
+  if (btn && (prevFocus?.closest?.('#tabs') || (!lastInputTouch && focusRemoved))) btn.focus({ preventScroll: true });
   if (btn && btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   if (changed) window.scrollTo(0, 0);
 }

@@ -33,8 +33,16 @@ module.exports = async function verifyTabFocus(browser, baseUrl) {
       await page.locator(`#tabs [data-tab="${id}"][aria-current="page"]`).waitFor();
       assert.equal(await ring(), false, `觸控切到 ${id} 不殘留焦點框`);
     }
-    await page.evaluate(() => typeof buildTabs === 'function' && render());
+    await page.evaluate(() => render());
     assert.equal(await ring(), false, '背景重繪後仍沒有焦點框');
+
+    // 觸控按資訊子頁的返回鈕：返回鈕被重繪拿掉，也不能把焦點框搬到頁籤
+    await page.locator('#tabs [data-tab="info"]').tap();
+    await page.locator('[data-info-page="stay"]').tap();
+    await page.locator('#analysisBack').tap();
+    await page.locator('[data-info-page="stay"]').waitFor();
+    assert.equal(await ring(), false, '觸控返回不殘留焦點框');
+    await page.locator('#tabs [data-tab="walk"]').tap();
 
     // 鍵盤：焦點在頁籤上按 Enter 切頁，焦點留在新頁籤且看得見
     await page.locator('#tabs [data-tab="walk"]').focus();
