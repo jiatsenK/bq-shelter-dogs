@@ -111,7 +111,8 @@ function parseDogsData(data) {
   }
   // 異動紀錄（K 2026-10-10）：試算表狗清單下面那段，電腦版右欄（js/desk.js）；沒有或格式不對就是空的
   const sheetNotes = Array.isArray(data.sheetNotes) ? data.sheetNotes.filter(n => n && text(n.text)).map(n => ({ label: text(n.label), text: text(n.text) })) : [];
-  return { dogs, groups, syncedAt: synced && !isNaN(synced) ? synced : null, photoVersions: versions, sheetNotes };
+  return { dogs, groups, syncedAt: synced && !isNaN(synced) ? synced : null, photoVersions: versions, sheetNotes,
+    ...(Object.hasOwn(data, 'groupColumns') ? { groupColumns: data.groupColumns } : {}) };
 }
 
 // 暫住（K 2026-10-09 阿拉丁）：試算表裡「(阿拉丁)」這種名字加括號、沒有編號的列，是同名那隻狗暫時住的籠子。
@@ -132,19 +133,34 @@ function mergeTempCages(dogs) {
 
 // 瀏覽器可能拿快取的舊檔；no-cache 讓它每次都先問 GitHub Pages 有沒有新版（沒變只回 304，很省）
 // 開網頁的第一次改用 index.html 頁首提早開始抓的那一份（手機開啟加速），之後（重新讀取、更新）照常抓
-async function loadDogsData() {
+let dogsRead = null;
+function loadDogsData() {
+  if (!dogsRead) {
+    const controller = new AbortController();
+    let timeout;
+    const expired = new Promise((_, reject) => { timeout = setTimeout(() => {
+      controller.abort(); reject(new Error('讀取狗的資料逾時。'));
+    }, 8000); });
+    dogsRead = Promise.race([fetchDogsData(controller.signal), expired]).finally(() => {
+      clearTimeout(timeout); dogsRead = null;
+    });
+  }
+  return dogsRead;
+}
+async function fetchDogsData(signal) {
+  const groupReadRevision = typeof groupRevision === 'undefined' ? 0 : groupRevision;
   const early = window.__dogsEarly;
   window.__dogsEarly = null;
   let res;
   try {
-    res = await (early || fetch(DATA_URL, { cache: 'no-cache' }));
+    res = await (early || fetch(DATA_URL, { cache: 'no-cache', signal }));
   } catch (e) {
     throw new Error('連不到網站，可能是網路中斷。');
   }
   if (!res.ok) throw new Error(`讀取狗的資料失敗（HTTP ${res.status}）。`);
   let data;
   try { data = await res.json(); } catch (e) { throw new Error('狗的資料格式壞掉了。'); }
-  return parseDogsData(data);
+  return { ...parseDogsData(data), groupReadRevision };
 }
 
 // ── 我最近溜過（#58）──
@@ -3101,6 +3117,7 @@ function switchTab(id, pushHistory = true) {
   if (!analysisOpen) activeTab = id;
   if (pushHistory && changed) history.pushState({ bqNavigation: true, tab: id, base: activeTab, returnTab: groupsReturnTab, infoPage: typeof infoPage === 'undefined' ? '' : infoPage }, '');
   if (changed) resetWalkOrder(); // 換分頁回來溜狗表時重排，剛溜的狗才會排到後面
+  if (changed && id === 'groups') refreshGroupStage();
   render();
   const btn = document.querySelector(`#tabs button[data-tab="${id}"]`);
   if (btn) btn.focus({ preventScroll: true });
@@ -4018,6 +4035,7 @@ function applyDogsData(data) {
   }
   photoVersions = data.photoVersions || {};
   groupMap = data.groups || {};
+  if (typeof receiveGroupData === 'function') receiveGroupData(data);
   sheetNotes = Array.isArray(data.sheetNotes) ? data.sheetNotes : [];
   loadWarning = data.groups ? '' : '「可以一起溜」暫時讀不到，其他資訊正常。';
   // 顯示試算表最後同步的時間（不是打開網頁的時間），志工才知道資料有多新

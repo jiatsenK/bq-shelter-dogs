@@ -1,5 +1,9 @@
 // #374：命名群用試算表欄號識別；登記與今日紀錄共用 app.js 的能力。
 let groupStageData = null;
+let groupRead = null;
+let groupReadError = false;
+let groupRevision = 0; // 寫群組前開始的讀取，不得覆蓋試算表寫入後讀回的內容。
+let groupRegistrationIdentity = '';
 let groupColumn = null;
 let groupExcept = false;
 const groupExcluded = new Set();
@@ -37,20 +41,43 @@ function groupSummary(dogs) {
   const dates = dogs.map(d => groupDateLabel(d));
   return dates.every(d => d === dates[0]) && /溜過$/.test(dates[0]) ? `${dogs.length} 隻${dates[0].replace('溜過', '都溜過')}` : dogs.map((d, i) => `${d.name}${dates[i]}`).join('；');
 }
+function receiveGroupData(data) {
+  if (data.groupReadRevision !== undefined && data.groupReadRevision !== groupRevision) return false;
+  const groups = data.groupColumns;
+  if (!Array.isArray(groups) || groups.some(g => !g || !Number.isInteger(g.column) || typeof g.label !== 'string' || !Array.isArray(g.names) || g.names.some(n => typeof n !== 'string')) || new Set(groups.map(g => g.column)).size !== groups.length) {
+    groupReadError = true;
+    if (groupStageData?.state !== 'ready') groupStageData = { state: 'error', groups: [] };
+    return false;
+  }
+  groupStageData = { state: 'ready', groups, checkedAt: Date.now(), syncedAt: data.syncedAt };
+  groupReadError = false;
+  groupColumn = currentGroup()?.column ?? null;
+  return true;
+}
 async function loadGroupStage(retry = false) {
-  if (groupStageData && !retry) return;
-  groupStageData = { state: 'loading', groups: [] };
-  try {
-    const res = await fetch('api/dogs', { cache: 'no-cache' });
-    const out = await res.json();
-    if (!res.ok || !Array.isArray(out.groupColumns)) throw new Error('讀不到狗群');
-    const groups = out.groupColumns;
-    if (groups.some(g => !Number.isInteger(g.column) || !Array.isArray(g.names)) || new Set(groups.map(g => g.column)).size !== groups.length) throw new Error('狗群欄號無法確認');
-    groupStageData = { state: 'ready', groups };
-    if (!currentGroup()) groupColumn = null;
-    else groupColumn = currentGroup().column;
-  } catch (e) { groupStageData = { state: 'error', groups: [] }; }
+  // 首次由 init 讀回同一份資料；切頁不再另向 api/dogs 抓一次。
+  if (!retry) { groupStageData ||= { state: 'loading', groups: [] }; return; }
+  if (groupRead) return groupRead;
+  groupRead = (async () => {
+    try {
+      const data = await loadDogsData();
+      if (!receiveGroupData(data)) throw new Error('狗群格式無法確認');
+      applyDogsData(data);
+      return true;
+    } catch (e) {
+      groupReadError = true;
+      if (groupStageData?.state !== 'ready') groupStageData = { state: 'error', groups: [] };
+      return false;
+    } finally {
+      groupRead = null;
+      if (activeTab === 'groups') render();
+    }
+  })();
   if (activeTab === 'groups') render();
+  return groupRead;
+}
+function refreshGroupStage() {
+  if (groupStageData?.state === 'ready' && Date.now() - groupStageData.checkedAt >= 30000 && !groupBusy) loadGroupStage(true);
 }
 function groupTile(dog, index, rear) {
   const blocked = groupBlocked(dog);
@@ -58,6 +85,8 @@ function groupTile(dog, index, rear) {
   return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}${searchQuery.trim() && !matchesSearch(dog, searchQuery.trim()) ? ' miss' : ''}" data-gw-dog="${index}" ${rear ? 'tabindex="-1"' : ''} ${!rear && groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}"><span class="gw-tile"><span class="gw-cage">${esc(dog.cage || '待確認')}</span><span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><strong>${esc(dog.name)}</strong></span></button>`;
 }
 function groupStageHtml() {
+  const identity = loadWalkerName();
+  if (identity !== groupRegistrationIdentity) { groupRegistrations.clear(); groupRegistrationIdentity = identity; }
   if (!groupStageData) loadGroupStage();
   const data = groupStageData;
   if (data.state !== 'ready' || loadState !== 'ready') return `<div class="status-msg">${data.state === 'error' || loadState === 'error' ? '讀不到狗群，請重新讀取。<button type="button" data-gw-action="retry">重新讀取</button>' : '狗群讀取中…'}</div>`;
@@ -94,6 +123,7 @@ function groupStageHtml() {
     ${groupRegistrations.get(groupColumn)?.successful.length ? `<button type="button" class="bar-btn" data-gw-action="companions" ${groupBusy ? 'disabled' : ''}>＋一起溜的人</button>` : ''}
     ${groupRegistrations.get(groupColumn)?.result.retryDogs.length ? `<button type="button" class="bar-btn" data-gw-action="retry-walk" ${groupBusy ? 'disabled' : ''}>再試一次</button>` : ''}
     </div>
+    <p id="gwSource" class="section-hint" role="status">${esc(`網站狗群・讀取 ${new Date(data.checkedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false })}`)}${groupRead ? '・檢查中…' : groupReadError ? '・檢查失敗，保留先前內容' : ''}${groupReadError ? '<button type="button" data-gw-action="retry">重新讀取</button>' : ''}</p>
   </section>`;
 }
 function groupFormHtml() {
@@ -120,6 +150,21 @@ async function registerGroupWalk(retry = false) {
   if (groupBusy) return;
   if (!loadWalkerName()) { groupFeedback = '請先在「我溜過」選好你的名字再登記'; render(); return; }
   if (!sheetWillWrite()) { groupFeedback = '目前無法寫入試算表，請稍後再試；尚未登記'; render(); return; }
+  const identity = loadWalkerName();
+  const before = JSON.stringify(currentGroup());
+  const columnBefore = groupColumn;
+  groupBusy = true; render();
+  const verified = await loadGroupStage(true);
+  groupBusy = false;
+  if (identity !== loadWalkerName()) {
+    groupRegistrations.clear(); groupFeedback = '登記名字已變更，請確認後再登記'; render(); return;
+  }
+  if (!verified) { groupFeedback = '無法確認最新狗群，尚未登記，請重試'; render(); return; }
+  if (columnBefore !== groupColumn || before !== JSON.stringify(currentGroup())) {
+    groupRegistrations.delete(columnBefore);
+    groupExcluded.clear(); groupExcept = false;
+    groupFeedback = '狗群名單已變更，請確認後再登記'; render(); return;
+  }
   const previous = groupRegistrations.get(groupColumn);
   const last = retry || previous?.result.retryDogs.length ? previous : null;
   const dogs = last ? last.result.retryDogs : groupDogs(currentGroup()).filter(d => !groupExcluded.has(d.name) && !groupBlocked(d));
@@ -152,6 +197,7 @@ async function writeGroup(body) {
   if (groupBusy) return false;
   const editor = loadWalkerName();
   if (!editor) { groupFeedback = '請先在「我溜過」選好你的名字再編輯'; render(); return false; }
+  groupRevision++;
   groupBusy = true; render();
   try {
     const res = await fetch('api/groups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, editor }) });
@@ -162,6 +208,9 @@ async function writeGroup(body) {
     const i = groups.findIndex(g => g.column === out.group.column);
     if (i < 0) groups.push(out.group); else groups[i] = out.group;
     groups.sort((a, b) => a.column - b.column);
+    groupRevision++;
+    groupStageData.checkedAt = Date.now();
+    groupReadError = false;
     groupColumn = out.group.column;
     resetGroupSelection(); groupFeedback = out.status === 'already' ? '這隻狗本來就在這一群' : '狗群已更新';
     return true;
@@ -215,3 +264,8 @@ groupMain.addEventListener('keydown', e => {
   if (!e.target.closest('#groupPage') || e.target.matches('input')) return;
   if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') { e.preventDefault(); changeGroup(e.key === 'ArrowRight' ? 1 : -1); }
 });
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && activeTab === 'groups') refreshGroupStage();
+});
+window.addEventListener('online', () => { if (activeTab === 'groups') refreshGroupStage(); });
+window.addEventListener('popstate', () => { if (activeTab === 'groups') refreshGroupStage(); });
