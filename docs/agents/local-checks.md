@@ -4,7 +4,7 @@
 
 ## 檢查入口
 
-在 repo 根目錄執行；需要的 Playwright 安裝方式見 AGENTS.md。
+在 repo 根目錄執行；Playwright 安裝方式見本檔末段。
 
 ```powershell
 node scripts/run-browser-tests.cjs --list
@@ -27,3 +27,15 @@ node scripts/run-browser-tests.cjs --only startup-stability,walker-editing
 - 純行為修正沿用既有產品／設計文件，不自動擴成完整視覺設計流程；介面改動仍照 AGENTS.md 做必要 detect。
 - 使用技能的長 context 命令時先輸出到 `.scratch/`，只讀與當前目標相關的段落；不把無關設計資產與診斷整份帶入對話。
 - 審查維持規定的獨立性；複審只交付新增差異、基準與未解項目。
+
+## 完整測試與安裝
+
+跟 `.github/workflows/tests.yml` 一樣，PR 要全過：
+
+- node 測試：`node scripts/run-node-tests.mjs`（自動找 `scripts/`、`worker/` 底下全部 `*.test.mjs`）
+- 網頁測試：`node scripts/run-browser-tests.cjs`（需要 Playwright 的 Chromium）
+  - 新 worktree 沒有 `node_modules`，先在 repo 根目錄裝（照 `tests.yml`，repo 沒有 `package.json`，不用 `npm ci`）：`npm install --no-save --no-package-lock playwright@1.56.1`，再 `npx playwright install chromium`（Linux 加 `--with-deps`）
+  - `playwright install` 卡住沒進度時：刪 `%LOCALAPPDATA%\ms-playwright\__dirlock`，改用 curl 直接下載 `https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1194/chromium-headless-shell-win64.zip` 解壓縮到 `ms-playwright\chromium_headless_shell-1194\`，`builds/winldd/1007/winldd-win64.zip` 解壓縮到 `ms-playwright\winldd-1007\`（版本號以錯誤訊息寫的路徑為準）
+
+
+設計 context 摘要、指定段落與原版工具輸出方式見 [design-tools.md](design-tools.md)。
