@@ -51,3 +51,9 @@ jobs:
           MY_NAME: ${{ secrets.MY_NAME }}
           WALKER_KEY: ${{ secrets.WALKER_KEY }}
         run: node scripts/sync-compact-d1.mjs
+
+      # 匯入後核對：主清單幾隻、幾隻沒有遛狗日期（預覽溜狗表「沒有紀錄」的狗排最前）、溜狗紀錄幾筆
+      - name: 核對測試庫
+        run: |
+          npx --yes wrangler@4 d1 execute bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc --json --command \
+            "SELECT (SELECT COUNT(*) FROM v3_sheet_main) AS main, (SELECT COUNT(*) FROM v3_sheet_main WHERE walked_date IS NULL OR walked_date='') AS no_date, (SELECT MIN(walked_date) FROM v3_sheet_main) AS min_date, (SELECT MAX(walked_date) FROM v3_sheet_main) AS max_date, (SELECT COUNT(*) FROM v3_walks) AS walks, (SELECT COUNT(*) FROM v3_packs) AS packs, (SELECT small FROM v3_pack_versions) AS small"
