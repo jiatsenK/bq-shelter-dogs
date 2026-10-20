@@ -6,7 +6,7 @@ import { saveFixedCare } from './compact.js';
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
 import { markChanged, planTick, refreshPlan, rememberSignature, sheetSignature, taiwanYmd } from './sync-plan.js';
-import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache } from './today.js';
+import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache, previousWalk } from './today.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
 import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
@@ -758,7 +758,7 @@ async function walkerCodes(request, env, origin) {
 }
 
 // ── 按「溜了」寫進試算表（#138）──
-// 網站送 { action: 'walk' | 'undo', walker, dogs: [{ id, name, prev?, wrote? }] }，這裡檢查完帶上金鑰（SHEET_WRITE_KEY）轉給
+// 網站送 { action: 'walk' | 'undo', walker, dogs: [{ id, name, prev?, wrote? }] }；undo 沒帶 prev 時 Worker 從溜狗紀錄找（ADR 0016），這裡檢查完帶上金鑰（SHEET_WRITE_KEY）轉給
 // Google Apps Script 小程式（apps-script/sheet-write.gs，K 用自己的帳號部署）。小程式只改「遛狗日期」「誰遛的」兩欄。
 // ── 溜狗人名字（#141）：GET /walkers ──
 // 名字不進 repo（dogs.json 只有代號），網站打開時跟這裡拿：Worker 直接讀試算表主清單（跟同步一樣用 gviz，試算表要「知道連結的人可檢視」），
@@ -883,7 +883,15 @@ function cleanWalkDog(d, action) {
   }
   if (action === 'undo') {
     const p = d.prev, w = d.wrote;
-    if (!p || !w || typeof p !== 'object' || typeof w !== 'object') return null;
+    if (!w || typeof w !== 'object' || !shortText(w.walker || '', 200)) return null;
+    // 沒有 prev：手機沒有復原證據，Worker 從溜狗紀錄找上一次（ADR 0016）；只撤銷只剩一個名字的登記
+    if (p === undefined) {
+      if (w.walker.split(WALKER_NAME_SEP).filter(Boolean).length !== 1) return null;
+      out.wrote = { walker: w.walker.trim() };
+      out.lookup = true;
+      return out;
+    }
+    if (!p || typeof p !== 'object') return null;
     const date = p.date || {};
     if (date.date !== undefined && !YMD_PATTERN.test(date.date)) return null;
     if (date.date === undefined && !shortText(date.text || '', 40)) return null;
@@ -925,6 +933,24 @@ async function writeWalks(request, env, origin) {
     body.walker = input.walker.trim();
     body.text = input.text.trim();
   }
+  const lookups = action === 'undo' ? dogs.filter(d => d.lookup) : [];
+  let editor = null;
+  if (action === 'undo') {
+    // 撤銷記進編輯紀錄（ADR 0016）；用伺服器找上一次時一定要先選好身分
+    editor = await editorOf(input.walker, cfg.walkerKey);
+    if (lookups.length && (!editor || !env?.DB)) return !editor ? fail(400, '要先選好身分', origin) : fail(503, '暫時無法撤銷，請稍後再試', origin);
+  }
+  const skipped = [];
+  if (lookups.length) {
+    const today = taiwanYmd(Date.now());
+    for (const d of lookups) {
+      delete d.lookup;
+      const prev = await previousWalk(env.DB, d, today);
+      if (prev) d.prev = prev; else skipped.push(d);
+    }
+    body.dogs = dogs.filter(d => !skipped.includes(d));
+  }
+  if (action === 'undo' && !body.dogs.length) return reply(200, { ok: true, today: taiwanYmd(Date.now()), results: skipped.map(d => ({ id: d.id, name: d.name, status: 'notFound' })) }, origin);
   if (action === 'walk' || action === 'edit') {
     if (!shortText(input.walker, action === 'edit' ? 200 : WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, `名字要 1–${action === 'edit' ? 200 : WALKER_NAME_MAX_CHARS} 個字`, origin);
     body.walker = input.walker.trim();
@@ -955,12 +981,24 @@ async function writeWalks(request, env, origin) {
       console.error('today-walks', e);
     }
   }
+  const results = Array.isArray(out.results) ? out.results : [];
+  if (action === 'undo') {
+    const today = YMD_PATTERN.test(out.today || '') ? out.today : taiwanYmd(Date.now());
+    for (const r of results) {
+      const d = r && r.status === 'restored' && body.dogs.find(x => x.id === (r.id || '') && x.name === r.name);
+      if (!d) continue;
+      r.prev = d.prev; // 網站照這個顯示撤銷後的上次溜
+      const p = d.prev.date || {};
+      await logEdit(env && env.DB, { editor, kind: 'walkundo', dogNumber: d.id, before: { date: today, walker: d.wrote.walker }, after: { date: p.date || p.text || '', walker: d.prev.walker } });
+    }
+    results.push(...skipped.map(d => ({ id: d.id, name: d.name, status: 'notFound' })));
+  }
   // 備註、異動紀錄是只追加的編輯，記進編輯紀錄（ADR 0004）；名字用送來的 walker
   if (action === 'note' || action === 'log') {
     const editor = await editorOf(body.walker, cfg.walkerKey);
     await logEdit(env && env.DB, { editor, kind: action === 'note' ? 'note' : 'sheetlog', dogNumber: action === 'note' ? dogs[0].id || '' : '', before: null, after: body.text });
   }
-  return reply(200, { ok: true, today: out.today, results: Array.isArray(out.results) ? out.results : [] }, origin);
+  return reply(200, { ok: true, today: out.today, results }, origin);
 }
 
 // 編輯常遛狗群（K 2026-10-16 開放）：轉給小程式改「常遛狗群」分頁，成功後 D1 那一欄馬上換成小程式回的名單，

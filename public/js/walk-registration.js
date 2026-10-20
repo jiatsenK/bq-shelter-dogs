@@ -28,7 +28,8 @@
       const current = item?.current || (local ? { date: day, walker: [base.walker, deps.walker() || '你', ...(deps.companions?.(dog, day) || [])].filter(Boolean).join('、') } : base);
       const date = dateKey(current.date), walker = String(current.walker || '');
       return { date, walker, walkers: [...new Set(deps.split(walker).map(deps.canonical).filter(Boolean))],
-        today: date === day, mine: item?.current ? isMine({ date, walker }, day) : local || isMine({ date, walker }, day), canUndo: canUndo(dog, day) };
+        today: date === day, mine: item?.current ? isMine({ date, walker }, day) : local || isMine({ date, walker }, day), canUndo: canUndo(dog, day),
+        canRevert: canRevert(dog, day, { date, walker }) };
     }
     function today(dogs, day = deps.date()) {
       return dogs.filter(d => activeItem(d, day)?.current || (dateKey(deps.base?.(d)?.date) === day && deps.base(d).walker))
@@ -39,6 +40,12 @@
       const current = activeItem(dog, day) ? item.current : deps.base?.(dog);
       return !!(item && item.prev && item.wrote && (!current || (current.walker === item.wrote.walker
         && (!(item.wrote.date || item.current?.date) || dateKey(current.date) === dateKey(item.wrote.date || item.current.date)))));
+    }
+    // ADR 0016：沒有本機復原證據，但今天只剩一個名字，可請 Worker 從溜狗紀錄找上一次再撤銷（任何人）
+    function canRevert(dog, day = deps.date(), current = null) {
+      if (canUndo(dog, day)) return false;
+      const now_ = current || state(dog, day);
+      return now_.date === day && deps.split(now_.walker).length === 1;
     }
     function beginRead() { return { day: deps.date(), revision, sequence: ++readSequence, at: now() }; }
     // 日期、名字、本機名單與復原證據一併套用；傳輸與 DOM 不參與規則。
@@ -105,11 +112,12 @@
           walker: options.walker || deps.alias(dog) || me }));
       return enqueue({ entries, day, me, action: options.expected === undefined ? 'walk' : 'edit', expected: options.expected });
     }
-    function undo(dogs) {
+    // options.revert：沒有本機證據的狗改請 Worker 找上一次（ADR 0016）
+    function undo(dogs, options = {}) {
       const seen = new Set();
       return enqueue({ entries: dogs.filter(d => d && !seen.has(deps.key(d)) && seen.add(deps.key(d)))
         .map(dog => ({ dog, key: deps.key(dog), id: dog.id || '', name: dog.name })),
-        day: deps.date(), me: deps.walker(), action: 'undo' });
+        day: deps.date(), me: deps.walker(), action: 'undo', revert: !!options.revert });
     }
     function enqueue(request) {
       request.entries.forEach(e => pending.set(e.key, (pending.get(e.key) || 0) + 1));
@@ -122,7 +130,7 @@
       return finished;
     }
     async function execute(request) {
-      const { entries, day, me, action, expected } = request;
+      const { entries, day, me, action, expected, revert } = request;
       const groups = [];
       for (const entry of entries) {
         let group = groups.find(g => g.walker === entry.walker);
@@ -133,14 +141,14 @@
       let error = '', off = false;
       for (const group of groups) {
         const records = deps.read(day);
-        const sendable = action === 'undo' ? group.entries.filter(e => canUndo(e.dog, day)) : group.entries;
+        const sendable = action === 'undo' ? group.entries.filter(e => canUndo(e.dog, day) || (revert && (e.undo || canRevert(e.dog, day)))) : group.entries;
         group.entries.filter(e => !sendable.includes(e)).forEach(e => statuses.set(e.key, 'changed'));
         if (!sendable.length) continue;
-        const payload = { action, ...(action === 'undo' ? {} : { walker: group.walker }), dogs: sendable.map(e => {
+        const payload = { action, ...(action === 'undo' ? (me ? { walker: me } : {}) : { walker: group.walker }), dogs: sendable.map(e => {
           if (action === 'undo') {
-            // 首次真正送出時才取得快照（可能須等前筆登記），重試不讀後來的內容。
-            const item = e.undo || (e.undo = structuredClone(records[e.key]));
-            return { id: e.id, name: e.name, prev: structuredClone(item.prev), wrote: structuredClone(item.wrote) };
+            // 首次真正送出時才取得快照（可能須等前筆登記），重試不讀後來的內容；沒有本機證據時只帶現在的名單給 Worker 比對
+            const item = e.undo || (e.undo = canUndo(e.dog, day) ? structuredClone(records[e.key]) : { wrote: { walker: state(e.dog, day).walker } });
+            return { id: e.id, name: e.name, ...(item.prev ? { prev: structuredClone(item.prev) } : {}), wrote: structuredClone(item.wrote) };
           }
           return { id: e.id, name: e.name, ...(expected === undefined ? {} : { expected }) };
         }) };
@@ -169,8 +177,8 @@
             const current = { date: dateKey(out.today || day), walker: raw.wrote?.walker ?? raw.current?.walker ?? '' };
             applyCurrent(current, { prev: expected !== undefined ? raw.prev : old?.prev || raw.prev,
               wrote: raw.wrote || old?.wrote });
-          } else if (status === 'restored' && old) {
-            const previous = (e.undo || old).prev || {}, date = previous.date || {};
+          } else if (status === 'restored' && (old || raw.prev)) {
+            const previous = raw.prev || (e.undo || old).prev || {}, date = previous.date || {};
             const current = { date: dateKey(date.date || date.text), walker: previous.walker };
             applyCurrent(current, { prev: undefined, wrote: undefined });
           } else if (status === 'changed') {
@@ -195,7 +203,7 @@
       const entries = request.entries.filter((e, i) => isRetryable(result.rows[i].status));
       return enqueue({ ...request, entries });
     }
-    return { register, retry, undo, canUndo, state, today, beginRead, receiveToday, receiveNames, pending: dog => pending.has(deps.key(dog)) };
+    return { register, retry, undo, canUndo, canRevert, state, today, beginRead, receiveToday, receiveNames, pending: dog => pending.has(deps.key(dog)) };
   }
   if (typeof module !== 'undefined' && module.exports) module.exports = { createWalkRegistration };
   else root.createWalkRegistration = createWalkRegistration;

@@ -3155,7 +3155,7 @@ async function runSheetWriteTests() {
       window.fetch = async (u, o) => { const body = JSON.parse(o.body); calls.push(body); return json({ ok: true, results: body.dogs.map(d => ({ id: d.id, name: d.name, status: 'restored' })) }); };
       document.querySelector('#toast .toast-undo').click();
       await sheetQueue;
-      eq(calls, [{ action: 'undo', dogs: [
+      eq(calls, [{ action: 'undo', walker: '志工我', dogs: [
         { id: '9801', name: '寫入甲', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' } },
         { id: '', name: '寫入乙', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' } }] }], '復原送出：');
       eq(Object.values(loadSheetWrites()).map(item => [item.current.date, item.current.walker, !!item.prev]), [['2026-10-01', '志工乙', false], ['2026-10-01', '志工乙', false]], '保留還原結果但不留復原快照：');
@@ -4469,7 +4469,7 @@ async function runFix141Tests() {
     window.fetch = async (u, o) => {
       const body = JSON.parse(o.body); bodies.push(body);
       const results = body.dogs.map(d => {
-        if (body.action === 'undo') return { id: d.id, name: d.name, status: 'restored' };
+        if (body.action === 'undo') return { id: d.id, name: d.name, status: 'restored', ...(d.prev ? {} : { prev: { date: { date: '2026-03-04' }, walker: '志工甲' } }) };
         const now = walkerNames[d.id] || '';
         if (splitWalkers(now).includes(body.walker)) return { id: d.id, name: d.name, status: 'already', current: { date: today, walker: now } };
         const wrote = now ? `${now}、${body.walker}` : body.walker;
@@ -4502,10 +4502,16 @@ async function runFix141Tests() {
       eq(walkedNow(allDogs[1]), false, '今天已溜拿掉：');
       hideDetail(); hideToast();
     });
-    await check('K 2026-10-05：只有別人一人時不給 ×（不能拿掉別人唯一的登記）', () => {
+    await check('ADR 0016：別人唯一的登記、這支手機沒有復原證據，也有 ×；按了請 Worker 找上一次再撤銷', async () => {
       showDetail(allDogs[2]);
-      eq([[...document.querySelectorAll('.last-walk .who-chip')].map(c => c.firstChild.textContent), document.querySelectorAll('.last-walk .who-x').length, !!document.getElementById('whoAdd')], [['志工乙'], 0, true]);
-      hideDetail();
+      const x = document.querySelector('.last-walk [data-who-undo]');
+      if (!x) throw new Error('沒有 ×');
+      bodies.length = 0;
+      x.click();
+      await sheetQueue; await tick(); await tick();
+      eq(bodies, [{ action: 'undo', walker: 'K', dogs: [{ id: '9813', name: '修正戊', wrote: { walker: '志工乙' } }] }], '送出：');
+      eq(document.querySelector('.last-walk [data-who-undo]'), null, '撤銷後不是今天：');
+      hideDetail(); hideToast();
     });
   } finally {
     hideDetail(); hideToast();
