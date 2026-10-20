@@ -4,7 +4,7 @@ module.exports = async (browser, base) => {
   const data = structuredClone(fixture);
   data.groupColumns = [{ column: 4, label: '測試群', names: data.dogs.slice(0, 2).map(d => d.name) }];
   let reads = 0;
-  let hold = false, fail = false, release;
+  let hold = false, fail = false, partial = false, release;
   const writes = [];
   const context = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
   await context.addInitScript(() => {
@@ -18,7 +18,7 @@ module.exports = async (browser, base) => {
     const endpoint = url.pathname.split('/api/')[1];
     if (endpoint === 'walk' && route.request().method() === 'POST') {
       const body = route.request().postDataJSON(); writes.push(body);
-      return route.fulfill({ json: { ok: true, today: '2026-10-20', results: body.dogs.map(d => ({ ...d, status: 'written', prev: {}, wrote: { date: '2026-10-20', walker: body.walker } })) } });
+      return route.fulfill({ json: { ok: true, today: '2026-10-20', results: body.dogs.map((d, i) => ({ ...d, status: partial && i === 0 ? 'unknown' : 'written', prev: {}, wrote: { date: '2026-10-20', walker: body.walker } })) } });
     }
     if (endpoint === 'groups' && route.request().method() === 'POST') {
       const body = route.request().postDataJSON();
@@ -132,6 +132,28 @@ module.exports = async (browser, base) => {
         await page.screenshot({ path: `${process.env.BQ_SCREENSHOTS}/groups-${width}.png`, fullPage: true });
       }
     }
-    console.log('#419 共用首頁狗群資料通過');
+    await page.evaluate(() => { localStorage.removeItem('bq-sheet-writes'); localStorage.removeItem('bq-walked-today'); });
+    await page.goto(base + '/public/index.html?retry#groups');
+    await page.locator('#groupStage').waitFor();
+    partial = true;
+    await page.locator('#gwWalk').click();
+    await page.getByText(/未全部登記成功/).waitFor();
+    partial = false;
+    const beforeRetry = writes.length;
+    data.dogs[1].note = '禁止溜狗';
+    await page.locator('[data-gw-action="retry-walk"]').click();
+    await page.getByText('待重試的狗目前無法登記，請確認狗群狀態', { exact: true }).waitFor();
+    assert.equal(writes.length, beforeRetry, '部分失敗重試也必須重新檢查狗的限制');
+    data.dogs[1].note = '';
+    const originalId = data.dogs[1].id;
+    data.dogs[1].id = '20991231001';
+    await page.locator('[data-gw-action="retry-walk"]').click();
+    await page.getByText('待重試的狗目前無法登記，請確認狗群狀態', { exact: true }).waitFor();
+    assert.equal(writes.length, beforeRetry, '同名換編號也不能重送舊狗');
+    data.dogs[1].id = originalId;
+    await page.locator('[data-gw-action="retry-walk"]').click();
+    await page.getByText('已登記 2 隻', { exact: true }).waitFor();
+    assert.deepEqual(writes.at(-1).dogs.map(d => d.name), [data.dogs[1].name], '安全重試只送先前失敗項目');
+    console.log('#419 共用、背景檢查、舊名單／身分保護、逾時、修改競態與部分重試通過');
   } finally { await context.close(); }
 };

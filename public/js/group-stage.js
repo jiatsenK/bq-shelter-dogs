@@ -167,11 +167,16 @@ async function registerGroupWalk(retry = false) {
   }
   const previous = groupRegistrations.get(groupColumn);
   const last = retry || previous?.result.retryDogs.length ? previous : null;
-  const dogs = last ? last.result.retryDogs : groupDogs(currentGroup()).filter(d => !groupExcluded.has(d.name) && !groupBlocked(d));
-  if (!dogs.length || dogs.some(walkPendingNow)) return;
+  const currentDogs = groupDogs(currentGroup());
+  const retryDogs = last?.result.retryDogs.map(old => currentDogs.find(d => !d.unavailable && walkKey(d) === walkKey(old) && d.name === old.name));
+  if (retryDogs?.some(d => !d || groupBlocked(d))) {
+    groupFeedback = '待重試的狗目前無法登記，請確認狗群狀態'; render(); return;
+  }
+  const dogs = retryDogs || currentDogs.filter(d => !groupExcluded.has(d.name) && !groupBlocked(d));
+  if (!dogs.length || dogs.some(walkPendingNow)) { render(); return; }
   const column = groupColumn;
   groupBusy = true;
-  const pending = last ? walkRegistration.retry(last.result) : walkRegistration.register(dogs);
+  const pending = walkRegistration.register(dogs);
   sheetQueue = pending;
   render();
   try {
