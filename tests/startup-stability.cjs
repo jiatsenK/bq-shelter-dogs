@@ -75,12 +75,12 @@ module.exports = async (browser, base) => {
     assert.deepEqual(await order(), before, '登記後留在原位');
     await page.locator('#syncBtn').click();
     await page.getByText('試算表沒有新的修改，已經是最新的', { exact: true }).waitFor();
-    assert.deepEqual(await order(), before, '背景讀回相同狗清單，不因重建物件或休養重讀而跳位');
+    assert.deepEqual(await order(), ['2', '1', '0'], 'K 2026-10-20：按「更新」全部重排，剛溜的排到後面');
     assert.ok((await page.locator('#main [data-dog="1"]').textContent()).includes('今天'), '同步舊日期不能蓋掉較新的今日消息');
     today.walks.push({ key: data.dogs[2].id, walked: true, walkedDate: today.date, walker: '其他志工', at: '2026-10-19T02:02:00Z' });
     await page.clock.runFor(61000);
     await page.waitForFunction(() => document.querySelector('#main [data-dog="2"]')?.textContent.includes('今天'));
-    assert.deepEqual(await order(), before, '其他手機今日消息一分鐘內更新，清單留原位');
+    assert.deepEqual(await order(), ['1', '2', '0'], 'K 2026-10-20：其他手機溜的不是我按的，一分鐘內更新並照天數排到後面');
     held.add('today');
     failed.add('walks'); failed.add('rest');
     const failedRead = page.waitForResponse(r => r.url().endsWith('/api/walks'));
