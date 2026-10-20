@@ -1948,7 +1948,7 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 /* 保留原警示列 68px 的最小高度，同時讓左欄上下留白對稱、文字中心跟照片一致。 */
 .card.flagged:not(.skeleton) { position: relative; grid-template-rows: minmax(68px, auto) auto; }
 .card.flagged:not(.skeleton) .last { margin-bottom: -8px !important; position: relative; z-index: 1; }
-.card.flagged:not(.skeleton)::before { content: ""; position: absolute; grid-column: 1; grid-row: 1 / -1; inset: 0; background: var(--tab-muted); }
+.card.flagged:not(.skeleton)::before { content: ""; position: absolute; grid-column: 1 / 2; grid-row: 1 / -1; inset: 0; background: var(--tab-muted); }
 .card.flagged:not(.skeleton):has(.last .val.red)::before { background: var(--tab-red); }
 .card.flagged:not(.skeleton):has(.last .val.amber)::before { background: var(--tab-amber); }
 .card.flagged:not(.skeleton):has(.last .val.sage, .last .val.rest)::before { background: none; }
