@@ -157,12 +157,21 @@ export async function readSeed(query, { full = false, checks = () => [], numbers
   return { ...Object.fromEntries(tables.map((t, i) => [t, results[i]])), walksSynced, since };
 }
 
+// 寫哪個 D1：預設正式庫；SYNC_D1=bq-shelter-dogs-test 給預覽測試庫補資料（.github/workflows/seed-preview-db.yml），其他名字一律擋下
+export function d1Target(env = process.env) {
+  const name = env.SYNC_D1 || 'bq-shelter-dogs';
+  if (name === 'bq-shelter-dogs') return { name, config: [] };
+  if (name === 'bq-shelter-dogs-test') return { name, config: ['--config', 'wrangler.preview-db.jsonc'] };
+  throw new Error(`SYNC_D1 只能是 bq-shelter-dogs 或 bq-shelter-dogs-test，收到 ${name}`);
+}
+
 // 預演時只准送 SELECT 給正式 D1（#309）：預演用的 token 有寫入權限，萬一寫入那段被改壞也送不出去
 let readOnly = false;
 const wranglerArgs = args => {
   const sql = args[args.indexOf('--command') + 1];
   if (readOnly && (!args.includes('--command') || !/^\s*SELECT\s/i.test(sql))) throw new Error('預演只能讀 D1，擋下一個寫入指令');
-  return ['--yes', 'wrangler@4', 'd1', 'execute', 'bq-shelter-dogs', '--remote', ...args];
+  const { name, config } = d1Target();
+  return ['--yes', 'wrangler@4', 'd1', 'execute', name, '--remote', ...config, ...args];
 };
 const wranglerAsync = args => new Promise((resolve, reject) => {
   execFile('npx', wranglerArgs(args), { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 }, (err, stdout, stderr) => {
