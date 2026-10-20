@@ -28,6 +28,8 @@
 
 ## 指令
 
+單套測試、摘要輸出與工具檢核見 [docs/agents/local-checks.md](docs/agents/local-checks.md)。
+
 跟 `.github/workflows/tests.yml` 一樣，PR 要全過：
 
 - node 測試：`node scripts/run-node-tests.mjs`（自動找 `scripts/`、`worker/` 底下全部 `*.test.mjs`）
