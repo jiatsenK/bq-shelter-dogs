@@ -124,7 +124,7 @@ module.exports = async (browser, base) => {
     await page.reload({ waitUntil: 'networkidle' });
     await openDog();
     assert.equal(await page.locator('#whoAdd').count(), 0, '隔天不開放昨天名單編輯');
-    assert.match(await page.locator('.last-walk').textContent(), /僅能編輯.*今天/);
+    assert.doesNotMatch(await page.locator('.last-walk').textContent(), /僅能編輯已確認的今天溜狗人/, '刪除提示後不顯示該文案，昨天名單仍不可編輯');
     await page.clock.setSystemTime(new Date('2026-10-18T02:00:00Z'));
     for (const endpoint of ['walkers', 'today']) {
       await page.evaluate(() => { localStorage.removeItem('bq-sheet-writes'); localStorage.removeItem('bq-walked-today'); });
