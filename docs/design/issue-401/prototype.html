@@ -3,173 +3,188 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#1F5C4D">
 <title>溜狗表狀態比較</title>
-<!-- #401 Prototype：天數色彩強度 × 今天有人溜／自己已登記。只用記憶體假資料，不寫試算表／D1。 -->
+<!-- #401 Prototype：天數色彩強度 × 今天有人溜／自己已登記。
+     視覺沿用 docs/DESIGN_GUIDE.md「病歷夾色籤」：直角紙夾一張接一張、1px 細線相接，只有「溜了」有框。
+     只用記憶體假資料，不寫試算表／D1。 -->
 <style>
 :root {
-  --surface: #FFFFFF; --surface-soft: #EEF2EF; --page: #E4EAE6;
-  --ink: #16211D; --ink-soft: #4E5E57; --line: #C4CFC9;
+  --shell: #1F5C4D; --shell-soft: #B5CFC4;
+  --bg: #E3E9E5; --surface: #FFFFFF; --surface-soft: #EEF2EF; --line: #C4CFC9;
+  --ink: #16211D; --ink-soft: #4E5E57;
   --primary: #1F5C4D; --primary-soft: #DDE9E3;
   --red-text: #B3121F; --red-bg: #FBE3E4; --tab-red: #C8202B;
   --amber-text: #8A4B00; --amber-bg: #FCEFD6; --tab-amber: #F2B21B;
   --green-text: #1E6B3C; --green-bg: #DFF0E4;
 }
-@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --page: #E4EAE6; } }
-:root[data-theme="dark"] { --page: #E4EAE6; }
+/* 病歷夾世界只有亮色；深色模式仍維持同一組值 */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { color-scheme: light; } }
+:root[data-theme="dark"] { color-scheme: light; }
 * { box-sizing: border-box; }
-body { margin: 0; background: var(--page); color: var(--ink); font: 16px/1.4 system-ui, "Noto Sans TC", sans-serif; }
+::selection { background: var(--primary-soft); color: var(--ink); }
+html { -webkit-text-size-adjust: 100%; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.4 "PingFang TC", "Noto Sans CJK TC", "Noto Sans TC", "Microsoft JhengHei", sans-serif; }
 body.big { font-size: 20px; }
-.wrap { max-width: 430px; margin: 0 auto; padding: 0 16px 40px; }
-.panel { position: sticky; top: 0; z-index: 5; background: var(--page); padding: 12px 0 8px; }
-.panel h1 { font-size: 17px; margin: 0 0 8px; }
-.row { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; align-items: center; }
-.row > span { font-size: 13px; color: var(--ink-soft); width: 40px; }
-.seg button { font: inherit; font-size: 14px; padding: 6px 10px; border: 1.5px solid var(--line); background: var(--surface); border-radius: 6px; color: var(--ink); }
-.seg button[aria-pressed="true"] { border-color: var(--primary); background: var(--primary-soft); font-weight: 700; }
-.hint { font-size: 13px; color: var(--ink-soft); margin: 4px 0 0; }
-.list { display: flex; flex-direction: column; gap: 8px; }
-.card { display: flex; align-items: center; gap: 10px; background: var(--surface); border-radius: 4px; padding: 8px 8px 8px 0; min-height: 72px; position: relative; overflow: hidden; }
-.photo { width: 52px; height: 52px; border-radius: 4px; background: var(--surface-soft); flex-shrink: 0; display: grid; place-items: center; font-size: 22px; }
-.info { flex: 1; min-width: 0; }
-.name { font-size: 1.1em; font-weight: 800; }
-.sub { font-size: .8em; color: var(--ink-soft); }
-.who { font-size: .8em; margin-top: 2px; }
-.days { flex-shrink: 0; min-width: 64px; text-align: center; font-variant-numeric: tabular-nums; }
-.days b { font-size: 1.7em; line-height: 1; font-weight: 900; }
-.days small { font-size: .8em; font-weight: 700; }
-.days .today { font-size: 1.1em; font-weight: 700; }
+button { font: inherit; color: inherit; -webkit-tap-highlight-color: transparent; }
+:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.icon { width: 1em; height: 1em; flex-shrink: 0; }
+.wrap { max-width: 480px; margin: 0 auto; }
 
-/* A 現行：整塊實心色底 */
-.sA .days { align-self: stretch; margin: -8px 0; display: flex; align-items: center; justify-content: center; color: #fff; }
-.sA .days.red { background: var(--tab-red); }
+/* 頁首：深綠檔案櫃，比較用的切換放在這裡 */
+header { position: sticky; top: 0; z-index: 5; background: var(--shell); color: #fff; padding: 12px 16px 0; }
+header h1 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 17px; font-weight: 800; letter-spacing: .04em; }
+header h1 .icon { color: var(--tab-amber); width: 22px; height: 22px; }
+header p { margin: 2px 0 10px; font-size: 13px; color: var(--shell-soft); }
+.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.tabs button { flex-shrink: 0; min-height: 44px; padding: 0 12px; border: 0; background: transparent; color: var(--shell-soft); font-size: 14px; font-weight: 700; }
+.tabs button[aria-pressed="true"] { background: var(--bg); color: var(--ink); box-shadow: inset 0 3px 0 var(--tab-amber); }
+.tabs .sep { width: 1px; margin: 12px 6px; background: rgba(255,255,255,.25); flex-shrink: 0; }
+
+.legend { padding: 10px 16px; font-size: 13px; color: var(--ink-soft); }
+
+/* 紙夾一張接一張 */
+.list { background: var(--surface); border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.card { display: flex; align-items: stretch; min-height: 80px; border-bottom: 1px solid var(--line); }
+.card:last-child { border-bottom: 0; }
+.days { flex: 0 0 auto; min-width: 72px; padding: 0 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; line-height: 1; }
+.days b { font-size: 1.85em; font-weight: 900; }
+.days small { font-size: .82em; font-weight: 700; margin-top: 2px; }
+.days .today { font-size: 1.1em; font-weight: 700; }
+.body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 4px; }
+.photo { width: 60px; height: 60px; flex-shrink: 0; background: var(--primary-soft); color: var(--shell); display: grid; place-items: center; overflow: hidden; }
+.photo svg { width: 28px; height: 28px; opacity: .55; }
+.info { flex: 1; min-width: 0; }
+.name { font-size: 1.12em; font-weight: 800; line-height: 1.25; }
+.cage { display: inline-flex; align-items: center; gap: 2px; font-size: .84em; font-weight: 700; }
+.cage .icon { color: var(--primary); }
+.who { margin-top: 3px; font-size: .84em; line-height: 1.35; color: var(--ink-soft); }
+.who .icon { vertical-align: -2px; }
+.who.mine { color: var(--green-text); font-weight: 700; }
+.who.err { color: var(--red-text); font-weight: 700; }
+
+/* A 現行：黃紅實心色籤 */
+.sA .days.red { background: var(--tab-red); color: #fff; }
 .sA .days.amber { background: var(--tab-amber); color: var(--ink); }
-.sA .days.green { background: var(--green-bg); color: var(--green-text); }
-/* B 只有數字上色，白底 */
-.sB .days { padding-left: 8px; }
+.sA .days.green { color: var(--green-text); }
+/* B 只有數字上色，紙不上色 */
 .sB .days.red { color: var(--red-text); }
 .sB .days.amber { color: var(--amber-text); }
-.sB .days.green { color: var(--ink-soft); }
-/* C 左緣細色條＋黑字 */
-.sC .card { padding-left: 6px; }
-.sC .card::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; }
-.sC .card.red::before { background: var(--tab-red); }
-.sC .card.amber::before { background: var(--tab-amber); }
-.sC .days.green { color: var(--ink-soft); }
-/* D 一律黑字，只有超過門檻多一個小標籤 */
-.sD .days { padding-left: 8px; }
-.sD .days.green { color: var(--ink-soft); }
-.flag { display: none; }
-.sD .flag { display: inline-block; margin-top: 3px; font-size: .65em; font-weight: 800; padding: 0 5px; border-radius: 3px; }
-.sD .days.red .flag { background: var(--red-bg); color: var(--red-text); }
-.sD .days.amber .flag { background: var(--amber-bg); color: var(--amber-text); }
+.sB .days.green { color: var(--green-text); }
+/* C 夾邊窄色籤：顏色縮成卡片最左 6px，數字黑 */
+.sC .days { position: relative; padding-left: 12px; }
+.sC .days::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 6px; }
+.sC .days.red::before { background: var(--tab-red); }
+.sC .days.amber::before { background: var(--tab-amber); }
+.sC .days.green { color: var(--green-text); }
+/* D 淡底色籤：保留色塊位置，但用淡底＋深字 */
+.sD .days.red { background: var(--red-bg); color: var(--red-text); }
+.sD .days.amber { background: var(--amber-bg); color: var(--amber-text); }
+.sD .days.green { color: var(--green-text); }
 
-/* 登記按鈕 */
-.btn { font: inherit; font-size: .95em; font-weight: 800; min-width: 76px; min-height: 48px; padding: 0 10px; border-radius: 6px; border: 2px solid var(--primary); background: var(--surface); color: var(--primary); flex-shrink: 0; }
-.btn.mine { background: var(--primary); color: #fff; }
-.btn.join { border-style: dashed; }
-.btn.pending { border-color: var(--line); color: var(--ink-soft); }
-.btn.fail { border-color: var(--red-text); color: var(--red-text); }
-.btn.locked { background: var(--surface-soft); border-color: var(--line); color: var(--ink-soft); }
-.others { display: inline-block; font-size: .78em; font-weight: 700; padding: 1px 6px; border-radius: 3px; background: var(--surface-soft); color: var(--ink); }
-.mine-tag { display: inline-block; font-size: .78em; font-weight: 800; padding: 1px 6px; border-radius: 3px; background: var(--primary-soft); color: var(--primary); }
-.err { color: var(--red-text); font-weight: 700; }
-.note { margin-top: 20px; font-size: 13px; color: var(--ink-soft); }
+/* 溜了：每列唯一有框的元素，直角 */
+.walk { flex-shrink: 0; min-width: 66px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 3px; background: #fff; color: var(--primary); box-shadow: inset 0 0 0 2px var(--primary); font-weight: 800; font-size: .95em; display: inline-flex; align-items: center; justify-content: center; gap: 3px; }
+.walk:active { background: var(--primary-soft); }
+.walk.pending { background: var(--primary-soft); box-shadow: none; font-size: .85em; }
+.walk.done { background: var(--green-bg); color: var(--green-text); box-shadow: inset 0 0 0 1.5px var(--green-text); }
+.walk.retry { color: var(--red-text); box-shadow: inset 0 0 0 2px var(--red-text); }
+.walk.locked { background: transparent; box-shadow: none; color: var(--green-text); font-weight: 700; padding: 0 4px; }
+
+.note { padding: 16px; font-size: 13px; color: var(--ink-soft); }
 </style>
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-paw" viewBox="0 0 24 24"><g fill="currentColor"><ellipse cx="5.5" cy="10" rx="2.3" ry="2.9" transform="rotate(-18 5.5 10)"/><ellipse cx="9.3" cy="5.6" rx="2.3" ry="3" transform="rotate(-6 9.3 5.6)"/><ellipse cx="14.7" cy="5.6" rx="2.3" ry="3" transform="rotate(6 14.7 5.6)"/><ellipse cx="18.5" cy="10" rx="2.3" ry="2.9" transform="rotate(18 18.5 10)"/><path d="M12 11c-2.7 0-6 3.6-6 6.6 0 1.8 1.3 2.9 3 2.9 1.2 0 2-.6 3-.6s1.8.6 3 .6c1.7 0 3-1.1 3-2.9 0-3-3.3-6.6-6-6.6z"/></g></symbol>
+  <symbol id="i-pin" viewBox="0 0 24 24"><path fill="currentColor" d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></symbol>
+  <symbol id="i-tick" viewBox="0 0 24 24"><path fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+</svg>
 <div class="wrap">
-  <div class="panel">
-    <h1>#401 狀態比較（假資料）</h1>
-    <div class="row seg" id="style"><span>天數</span>
-      <button data-v="A" aria-pressed="false">A 現行色塊</button>
-      <button data-v="B" aria-pressed="true">B 只有數字上色</button>
-      <button data-v="C" aria-pressed="false">C 左緣細條</button>
-      <button data-v="D" aria-pressed="false">D 黑字＋小標</button>
+  <header>
+    <h1><svg class="icon"><use href="#i-paw"/></svg>#401 狀態比較</h1>
+    <p>假資料・不寫試算表・重新整理就重來</p>
+    <div class="tabs" id="style" role="group" aria-label="天數樣式">
+      <button data-v="A" aria-pressed="false">A 現行</button>
+      <button data-v="B" aria-pressed="true">B 只有字</button>
+      <button data-v="C" aria-pressed="false">C 窄籤</button>
+      <button data-v="D" aria-pressed="false">D 淡底</button>
+      <span class="sep"></span>
+      <button data-v="big" id="bigBtn" aria-pressed="false">大字</button>
     </div>
-    <div class="row seg" id="size"><span>字級</span>
-      <button data-v="n" aria-pressed="true">一般</button>
-      <button data-v="big" aria-pressed="false">大字</button>
-    </div>
-    <p class="hint">點按鈕可以實際切換狀態：溜了 → 登記中 → 已溜（約 1 秒）；「失敗」那隻會寫入失敗。</p>
-  </div>
-  <div class="list" id="list"></div>
-  <p class="note">門檻沿用正式設定：3 天起黃、5 天起紅。這頁不連線、不寫資料，重新整理就回到初始狀態。</p>
+  </header>
+  <div class="legend">按「溜了」約 1 秒後登記好；梅子第一次會寫不進去。</div>
+  <div class="list sB" id="list"></div>
+  <p class="note">3 天起黃、5 天起紅，跟正式網站相同。最下面三隻示範今天已經有人溜過。</p>
 </div>
 <script>
 const AMBER = 3, RED = 5;
-// state：none 今天沒人溜｜others 別人溜過、自己沒登記｜mine 自己已登記｜locked 自己已登記但不能復原（名單被別人改過）
+// state：none 今天沒人溜｜others 別人溜過、自己沒登記｜mine 自己已登記｜locked 自己已登記但名單被別人改過，不能從這裡取消
 const dogs = [
-  { name: '小黑', cage: 'A5', days: 100, state: 'none', emoji: '🐕' },
-  { name: '阿花', cage: 'B2', days: 14, state: 'none', emoji: '🐶' },
-  { name: '豆豆', cage: 'A7', days: 6, state: 'none', emoji: '🐕' },
-  { name: '失敗', cage: 'C1', days: 4, state: 'none', emoji: '🐶', willFail: true },
-  { name: '旺財', cage: 'B4', days: 3, state: 'none', emoji: '🐕' },
-  { name: '咪咪', cage: 'C3', days: 1, state: 'none', emoji: '🐶' },
-  { name: '來福', cage: 'A2', days: 0, state: 'others', walkers: ['小美'], emoji: '🐕' },
-  { name: '球球', cage: 'B1', days: 0, state: 'mine', walkers: ['我', '小美'], emoji: '🐶' },
-  { name: '胖胖', cage: 'C2', days: 0, state: 'locked', walkers: ['我', '阿明'], emoji: '🐕' },
+  { name: '小黑', sex: '♂', cage: '新A05', days: 100, state: 'none' },
+  { name: '阿花', sex: '♀', cage: '新B02', days: 14, state: 'none' },
+  { name: '豆豆', sex: '♂', cage: '舊A07', days: 6, state: 'none' },
+  { name: '梅子', sex: '♀', cage: '舊C01', days: 4, state: 'none', willFail: true },
+  { name: '旺財', sex: '♂', cage: '新B04', days: 3, state: 'none' },
+  { name: '咪咪', sex: '♀', cage: '舊C03', days: 1, state: 'none' },
+  { name: '來福', sex: '♂', cage: '新A02', days: 0, state: 'others', walkers: ['小美'] },
+  { name: '球球', sex: '♀', cage: '新B01', days: 0, state: 'mine', walkers: ['我', '小美'] },
+  { name: '胖胖', sex: '♂', cage: '舊C02', days: 0, state: 'locked', walkers: ['我', '阿明'] },
 ];
 const level = d => d >= RED ? 'red' : d >= AMBER ? 'amber' : 'green';
-const flagText = d => d >= RED ? '很久沒溜' : d >= AMBER ? '該溜了' : '';
+const tick = '<svg class="icon"><use href="#i-tick"/></svg>';
 
 function daysHtml(dog) {
-  const lv = level(dog.days);
   const val = dog.days === 0 ? '<span class="today">今天</span>' : `<b>${dog.days}</b><small>天</small>`;
-  const flag = flagText(dog.days) ? `<br><span class="flag">${flagText(dog.days)}</span>` : '';
-  return `<div class="days ${lv}">${val}${flag}</div>`;
+  return `<div class="days ${level(dog.days)}">${val}</div>`;
 }
 function whoHtml(dog) {
-  if (dog.error) return `<div class="who err">沒寫進去，再按一次</div>`;
-  const w = dog.walkers || [];
-  if (dog.state === 'others') return `<div class="who"><span class="others">${w.join('、')} 今天溜過</span></div>`;
-  if (dog.state === 'mine' || dog.state === 'locked') {
-    const rest = w.filter(n => n !== '我');
-    return `<div class="who"><span class="mine-tag">✓ 你已登記</span>${rest.length ? ` 同行：${rest.join('、')}` : ''}</div>`;
-  }
+  if (dog.error) return `<div class="who err">沒寫進試算表，再按一次</div>`;
+  const others = (dog.walkers || []).filter(n => n !== '我');
+  if (dog.state === 'others') return `<div class="who">${others.join('、')} 溜過了</div>`;
+  if (dog.state === 'mine' || dog.state === 'locked')
+    return `<div class="who mine">${tick} 你${others.length ? `和${others.join('、')}` : ''}溜過了</div>`;
   return '';
 }
 function btnHtml(dog, i) {
-  if (dog.pending) return `<button class="btn pending" disabled>登記中</button>`;
-  if (dog.error) return `<button class="btn fail" data-i="${i}">重試</button>`;
-  if (dog.state === 'mine') return `<button class="btn mine" data-i="${i}">✓ 已溜</button>`;
-  if (dog.state === 'locked') return `<button class="btn locked" disabled title="名單被別人改過，不能從這裡取消">✓ 已溜</button>`;
-  if (dog.state === 'others') return `<button class="btn join" data-i="${i}">我也溜了</button>`;
-  return `<button class="btn" data-i="${i}">溜了</button>`;
+  if (dog.pending) return `<button class="walk pending" disabled>登記中</button>`;
+  if (dog.error) return `<button class="walk retry" data-i="${i}">再試</button>`;
+  if (dog.state === 'mine') return `<button class="walk done" data-i="${i}" aria-label="${dog.name} 已溜，按一下取消">${tick}已溜</button>`;
+  if (dog.state === 'locked') return `<span class="walk locked" title="名單被別人改過，不能從這裡取消">${tick}已溜</span>`;
+  return `<button class="walk" data-i="${i}">溜了</button>`;
 }
 function render() {
   document.getElementById('list').innerHTML = dogs.map((d, i) =>
-    `<div class="card ${level(d.days)}">${daysHtml(d)}<div class="photo">${d.emoji}</div>
-      <div class="info"><div class="name">${d.name}</div><div class="sub">${d.cage}</div>${whoHtml(d)}</div>${btnHtml(d, i)}</div>`).join('');
+    `<div class="card">${daysHtml(d)}<div class="body"><div class="photo"><svg><use href="#i-paw"/></svg></div>
+      <div class="info"><div class="name">${d.name} <span style="font-weight:600;color:var(--ink-soft)">${d.sex}</span></div>
+      <div class="cage"><svg class="icon"><use href="#i-pin"/></svg>${d.cage}</div>${whoHtml(d)}</div>${btnHtml(d, i)}</div></div>`).join('');
 }
 document.getElementById('list').addEventListener('click', e => {
   const b = e.target.closest('button[data-i]'); if (!b) return;
   const dog = dogs[+b.dataset.i];
-  if (dog.state === 'mine') { // 復原：拿掉自己，名單還有別人就回到「別人溜過」
+  if (dog.state === 'mine') { // 取消只拿掉自己；名單還有別人就回到「別人溜過」
     dog.walkers = (dog.walkers || []).filter(n => n !== '我');
     dog.state = dog.walkers.length ? 'others' : 'none';
-    if (!dog.walkers.length) dog.days = dog.prevDays ?? dog.days;
+    if (!dog.walkers.length && dog.prevDays != null) dog.days = dog.prevDays;
     return render();
   }
   dog.pending = true; dog.error = false; render();
   setTimeout(() => {
     dog.pending = false;
     if (dog.willFail && !dog.retried) { dog.error = true; dog.retried = true; return render(); }
-    dog.prevDays = dog.days; dog.days = 0;
-    dog.walkers = ['我', ...(dog.walkers || [])];
-    dog.state = 'mine'; render();
+    if (dog.days) dog.prevDays = dog.days;
+    dog.days = 0; dog.walkers = ['我', ...(dog.walkers || [])]; dog.state = 'mine';
+    render();
   }, 1000);
 });
-function seg(id, fn) {
-  const el = document.getElementById(id);
-  el.addEventListener('click', e => {
-    const b = e.target.closest('button'); if (!b) return;
-    el.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', x === b));
-    fn(b.dataset.v);
-  });
-}
-seg('style', v => { document.getElementById('list').className = 'list s' + v; });
-seg('size', v => document.body.classList.toggle('big', v === 'big'));
-document.getElementById('list').className = 'list sB';
+document.getElementById('style').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.v === 'big') {
+    const on = b.getAttribute('aria-pressed') !== 'true';
+    b.setAttribute('aria-pressed', on); document.body.classList.toggle('big', on); return;
+  }
+  document.querySelectorAll('#style button:not(#bigBtn)').forEach(x => x.setAttribute('aria-pressed', x === b));
+  document.getElementById('list').className = 'list s' + b.dataset.v;
+});
 render();
 </script>
 </body>
