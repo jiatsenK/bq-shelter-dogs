@@ -98,13 +98,14 @@
       for (const dog of dogs) {
         const key = deps.key(dog), item = records[key];
         if ((changedAt.get(`${read.day}:${key}`) || 0) > read.revision || pending.has(key)) continue;
-        const sheetDate = Object.hasOwn(dates, key) ? dateKey(dates[key]) : '';
+        const hasDate = Object.hasOwn(dates, key); // 有這個 key、值是空的＝試算表清掉了
+        const sheetDate = hasDate ? dateKey(dates[key]) : '';
         const active = activeItem(dog, read.day);
         if (item?.current && active) {
-          if (!Object.hasOwn(names, key) && !sheetDate) continue;
+          if (!Object.hasOwn(names, key) && !hasDate) continue;
           if ((item.observedAt || 0) > sheetAt) continue; // 名單讀得比這筆早，還沒包含它
           const walker = Object.hasOwn(names, key) ? String(names[key] || '') : item.current.walker;
-          const date = sheetDate || item.current.date;
+          const date = hasDate ? sheetDate : item.current.date;
           if (item.current.walker === walker && dateKey(item.current.date) === date) continue;
           setCurrent(records, dog, { date, walker }, read.day, {}, sheetAt);
           changed.push(dog);
