@@ -179,7 +179,8 @@ async function databaseStatus(env) {
     return `D1 新表（主清單 ${s.dogs} 隻、溜狗紀錄 ${s.walks} 筆）`;
   } catch (e) {
     console.error('status', e);
-    return 'D1（讀不到資料包版本號）';
+    // 預覽版附上原因：預覽看不到 Cloudflare 紀錄，測試庫缺什麼要從這裡看（正式版不外露）
+    return env.PREVIEW ? `D1（讀不到資料包版本號：${e.message}）` : 'D1（讀不到資料包版本號）';
   }
 }
 

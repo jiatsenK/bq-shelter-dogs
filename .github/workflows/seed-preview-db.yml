@@ -37,6 +37,10 @@ jobs:
           if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "沒有設定 CLOUDFLARE_API_TOKEN，無法寫入 D1。"; exit 1; fi
           npx --yes wrangler@4 d1 execute bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc --file db/compact-schema.sql
 
+      # 測試庫的表比後來加的欄位（例：v3_dogs.fixed_care）早建，CREATE TABLE IF NOT EXISTS 補不到，缺了預覽讀狗會 no such column
+      - name: 測試庫補欄位
+        run: node scripts/migrate-compact-db.mjs
+
       - name: 從試算表匯入測試庫
         env:
           SYNC_D1: bq-shelter-dogs-test
