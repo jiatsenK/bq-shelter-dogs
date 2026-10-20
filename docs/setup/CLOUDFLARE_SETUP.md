@@ -223,7 +223,7 @@ K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**�
 
 測試 D1 已在 2026-10-14 建立，ID `9e23a65c-c9dd-4f83-ad9c-2e01626910f0`，與正式 `6cd6c304-0fed-4ddb-b9ec-799e60a4adb4` 不同。建立後 API 讀回、SELECT 1=1、業務表數=0、rows_written=0。這張票只建測試庫，不匯入正式資料；API 回應裡的 version=production 是 D1 的產品版本，不能用來判斷它是否為本專案正式庫，須看名稱與 ID。
 
-預覽仍透過既有 `versions upload --preview-alias` 上傳版本，不部署正式 Worker；準備腳本將 DB 明確切成測試 ID 並帶 PREVIEW=1，仍保留既有預覽寫入限制。R2 讀既有照片空間。測試庫一開始沒有資料表，預覽會顯示「狗的資料讀不到」。到 Actions 選「準備預覽資料庫」→「Run workflow」（`.github/workflows/seed-preview-db.yml`）：在測試庫建表，再從試算表匯入狗、異動紀錄、溜狗紀錄。只寫測試庫，正式 D1 不受影響；想讓預覽資料跟上試算表就再跑一次。溜狗紀錄只有試算表上那一段，網站直接寫的休養、介紹、開卡、照片設定不會有。
+預覽仍透過既有 `versions upload --preview-alias` 上傳版本，不部署正式 Worker；準備腳本將 DB 明確切成測試 ID 並帶 PREVIEW=1，仍保留既有預覽寫入限制。R2 讀既有照片空間。測試庫一開始沒有資料表，預覽會顯示「狗的資料讀不到」。到 Actions 選「準備預覽資料庫」→「Run workflow」（`.github/workflows/seed-preview-db.yml`）：在測試庫建表，再從試算表匯入狗、異動紀錄、溜狗紀錄。只寫測試庫，正式 D1 不受影響；想讓預覽資料跟上試算表就再跑一次。溜狗紀錄只有試算表上那一段，網站直接寫的資料只補「有人固定照顧」（從正式庫只讀名單），休養、介紹、開卡、照片設定不會有。
 
 ### 結構改動與資料匯入
 

@@ -493,9 +493,9 @@ function fakeSheet() {
         { c: [cell('舊A20'), cell(2025072001), cell('天狼星'), cell('嘉文+俐葶+岑')] },
       ] }));
     }
-    return new Response(gviz({ cols: [{ label: '籠位' }, { label: '編號' }, { label: '犬名' }, { label: '誰遛的' }], rows: [
-      { c: [cell('舊A20'), cell(2025072001), cell('天狼星'), cell('嘉文+俐葶+岑')] },
-      { c: [cell('舊B03'), cell(2026060101), cell('甜甜'), cell('維芬。嘉文')] },
+    return new Response(gviz({ cols: [{ label: '籠位' }, { label: '編號' }, { label: '犬名' }, { label: '誰遛的' }, { label: '遛狗日期' }], rows: [
+      { c: [cell('舊A20'), cell(2025072001), cell('天狼星'), cell('嘉文+俐葶+岑'), { v: 'Date(2026,9,20)', f: '2026/10/20' }] },
+      { c: [cell('舊B03'), cell(2026060101), cell('甜甜'), cell('維芬。嘉文'), cell('2026/10/3')] },
       { c: [cell('C區1'), null, cell('新來的'), cell('喬筠')] },
       { c: [cell('舊B04'), cell(2026042902), cell('方吉'), null] },
       { c: [null, null, cell('今天週六'), cell('備註')] },
@@ -513,8 +513,19 @@ test('#141 GET /walkers：分兩次讀主清單，回每隻狗的誰遛的（key
   assert.deepEqual(body.walkers, { 2025072001: '嘉文+俐葶+岑', 2026060101: '維芬。嘉文', '名:新來的': '喬筠' });
   assert.deepEqual(body.names, ['嘉文', '俐葶', '岑', '喬筠', '維芬'].sort((a, b) => (a === '嘉文' ? -1 : b === '嘉文' ? 1 : a.localeCompare(b, 'zh-Hant'))));
   assert.deepEqual(calls, ['0', '2']);
+  assert.deepEqual(body.dates, { 2025072001: '2026-10-20', 2026060101: '2026-10-03' }, 'K 2026-10-20：連遛狗日期一起回');
+  assert.ok(Date.parse(body.readAt), '回讀試算表的時間');
   await getWalkers({ SHEET_ID: 'abc' });
   assert.equal(calls.length, 2, '第二次用快取');
+});
+
+test('K 2026-10-20 walkersDate：日期格式、完整文字、只有月日都讀得懂，讀不懂回空的', () => {
+  const now = new Date(2026, 9, 20);
+  assert.equal(worker.testing.walkersDate({ v: 'Date(2026,9,20)' }, now), '2026-10-20');
+  assert.equal(worker.testing.walkersDate({ v: '2026/1/5' }, now), '2026-01-05');
+  assert.equal(worker.testing.walkersDate({ v: 46315, f: '10/20' }, now), '2026-10-20');
+  assert.equal(worker.testing.walkersDate({ v: '不知道' }, now), '');
+  assert.equal(worker.testing.walkersDate(null, now), '');
 });
 
 test('K 2026-10-12 GET /walkers：有 WALKER_KEY 時多回 codes（代號 → 名字），電腦版最近 30 天寫每天誰遛的；沒密鑰回空的', async () => {
