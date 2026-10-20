@@ -1013,6 +1013,7 @@ function recordWalked(dogs, on, today = new Date()) {
 // K 2026-10-17：會寫試算表時，按了溜了立刻變「已溜」，背景寫試算表（取代 2026-10-08 先等回應的做法，Apps Script 要好幾秒）；
 // 沒寫進去就退回未溜，提示條給「再試一次」。不寫試算表（還沒設定名字、Worker 沒設定）照舊直接記在手機
 function setWalked(dogs, on) {
+  pinWalkOrder(dogs); // 按的狗留在原地，下一隻不會滑到手指下
   if (on && needNameToWalk()) return askNameThenWalk(dogs); // 還沒設定名字（先看看）：先問名字，設好再登記
   if (on && sheetWillWrite()) walkThenRecord(dogs);
   else setWalkedLocal(dogs, on);
@@ -1096,6 +1097,7 @@ function sheetUndoable(dog, today = new Date()) {
 }
 let sheetUndoBusy = false;
 async function undoSheetWalks(dogs, retry = null, options = {}) {
+  pinWalkOrder(dogs); // 復原的狗也留在原地
   if (sheetUndoBusy || !dogs.length) return '';
   sheetUndoBusy = true; hideToast(); render();
   try {
@@ -1254,6 +1256,7 @@ let sheetQueue = Promise.resolve();
 // 名字不放進公開的 repo（dogs.json 只有代號）：打開網頁時跟 Worker 拿（GET /api/walkers，Worker 直接讀試算表），
 // 只在畫面上顯示。{ 狗的 key: '嘉文+俐葶+岑' }；拿不到就不顯示名字，其他照常
 let walkerNames = {};
+let walkerDates = {}; // 試算表現在的「遛狗日期」（狗的 key → 'YYYY-MM-DD'）：直接改試算表也 1 分鐘內看到（K 2026-10-20）
 let walkerNameList = []; // 表上出現過的名字（開頭畫面讓志工點選自己，#141）
 let walkerOlderNames = []; // 以前溜過、現在表上沒有的名字（Worker 記下來的，K 2026-10-12）：打字時才推薦
 let walkerCodeNames = {}; // 代號 → 名字（Worker 用名單換的，K 2026-10-12）：電腦版最近 30 天寫每天誰遛的
@@ -1288,10 +1291,11 @@ async function loadWalkerNames() {
     const out = await res.json();
     if (out && out.walkers && typeof out.walkers === 'object') {
       walkerNames = out.walkers;
+      walkerDates = out.dates && typeof out.dates === 'object' ? out.dates : {};
       walkerNameList = [...new Set((Array.isArray(out.names) ? out.names : []).map(canonicalWalker).filter(Boolean))];
       walkerOlderNames = [...new Set((Array.isArray(out.older) ? out.older : []).map(canonicalWalker).filter(Boolean))];
       walkerCodeNames = out.codes && typeof out.codes === 'object' ? out.codes : {};
-      walkRegistration.receiveNames(out.walkers, allDogs, read);
+      walkRegistration.receiveNames(out.walkers, allDogs, read, walkerDates, Date.parse(out.readAt) || read.at);
       render();
       renderDetail();
       if (onboard && onboard.step === 0 && onboard.phase !== 'saving') renderOnboard();
@@ -1328,6 +1332,7 @@ function refreshTodayWalks() {
   if (typeof document !== 'undefined' && document.hidden) return;
   if (Date.now() - todayFetchedAt < TODAY_REFETCH_MS) return;
   loadTodayWalks();
+  loadWalkerNames(); // 試算表名單也每分鐘重讀：直接改試算表的也要同步（K 2026-10-20）
 }
 // 一格好幾個名字（「嘉文+俐葶+岑」「維芬。佳岑」）拆開，用頓號接起來，不重複
 function canonicalWalker(name) {
@@ -1520,7 +1525,7 @@ const walkRegistration = createWalkRegistration({
   key: walkKey, date: () => localDateKey(new Date()), walker: loadWalkerName, alias: myAliasIn,
   canonical: canonicalWalker, split: splitWalkers,
   names: () => loadMyCodes().map(code => walkerCodeNames[code]).filter(Boolean),
-  base: dog => ({ date: dog.walkedDate ? localDateKey(dog.walkedDate) : '', walker: walkerNames[walkKey(dog)] || '' }),
+  base: dog => ({ date: walkerDates[walkKey(dog)] || (dog.walkedDate ? localDateKey(dog.walkedDate) : ''), walker: walkerNames[walkKey(dog)] || '' }),
   local: day => loadWalkedIds(parseYmd(day)),
   saveLocal: (ids, day) => saveWalkedIds(ids, parseYmd(day)),
   companions: (dog, day) => loadWalkWith(parseYmd(day))[walkKey(dog)] || [],
@@ -3236,21 +3241,29 @@ function dueDogs(dogs, today) {
 
 // 溜狗表一律最久沒溜在前（2026-10-08 K 同意介面評估：拿掉排序切換和「幾天以上」篩選，天數的顏色就看得出來）。
 // 按了溜了的狗留在原地（介面評估 P0：重排的話下一隻會滑到手指下，容易按錯寫進試算表）：
-// 第一次可靠的順序記著；背景重讀保留位置，換分頁才重排（#418）
-let walkOrder = null;   // walkKey → 第幾個
+// 只有這支手機按過的狗留在原位（K 2026-10-20：別人溜的不是我按的，照天數排到後面）；換分頁或按「更新」才全部重排（#418）
+let walkOrder = null;   // 上次畫出來的順序：walkKey → 第幾個
 let walkOrderFor = null; // 記順序時的 allDogs
+const walkPinned = new Set(); // 這次排好之後，這支手機按過溜了／復原的狗（walkKey）
 function sortWalkList(dogs, today) {
   const due = dueDogs(dogs, today);
-  if (!walkOrder || walkOrderFor !== allDogs) {
-    walkOrder = new Map(due.map((d, i) => [walkKey(d) || d, i]));
-    walkOrderFor = allDogs;
-    return due;
+  const k = d => walkKey(d) || d;
+  let out = due;
+  if (walkOrder && walkOrderFor === allDogs && walkPinned.size) {
+    const pinned = due.filter(d => walkPinned.has(k(d)) && walkOrder.has(k(d))).sort((a, b) => walkOrder.get(k(a)) - walkOrder.get(k(b)));
+    out = due.filter(d => !pinned.includes(d));
+    for (const d of pinned) out.splice(Math.min(walkOrder.get(k(d)), out.length), 0, d);
   }
-  const pos = d => { const p = walkOrder.get(walkKey(d) || d); return p === undefined ? Infinity : p; };
-  return due.map((d, i) => ({ d, i, p: pos(d) })).sort((a, b) => a.p - b.p || a.i - b.i).map(x => x.d);
+  walkOrder = new Map(out.map((d, i) => [k(d), i]));
+  walkOrderFor = allDogs;
+  return out;
+}
+function pinWalkOrder(dogs) {
+  for (const d of dogs) if (d) walkPinned.add(walkKey(d) || d);
 }
 function resetWalkOrder() {
   walkOrder = null;
+  walkPinned.clear();
 }
 
 // 我的常溜（#155，K 2026-10-04 選兩頁都放）：溜狗表上面只剩「全部／★ 我的常溜」兩個選一個（2026-10-08）
@@ -4084,6 +4097,14 @@ const SYNC_POLL_MS = 5 * 1000;
 const SYNC_POLL_TRIES = 48; // 5 秒 × 48 ＝ 最多等 4 分鐘
 let syncing = false;
 
+// 按「更新」一定重抓今日紀錄和試算表名單，再全部重排（K 2026-10-20：網站上按的不會讓試算表「有改」）
+// 不等回應：先照現有資料重排，讀到新的再排一次（抓不到就維持現況）
+function freshWalkList() {
+  todayFetchedAt = 0;
+  const resort = () => { resetWalkOrder(); render(); };
+  resort();
+  Promise.all([loadTodayWalks(), loadWalkerNames()]).then(resort, () => {});
+}
 async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES } = {}) {
   if (syncing) return;
   syncing = true;
@@ -4112,6 +4133,7 @@ async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES
         showToast('暫時讀不到網站設定，請稍後再更新');
         return;
       }
+      freshWalkList();
       showToast('試算表沒有新的修改，已經是最新的');
       return;
     }
@@ -4127,10 +4149,12 @@ async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES
       });
       if ((data.syncedAt && data.syncedAt.getTime() > before) || careChanged) {
         applyDogsData(data);
+        freshWalkList();
         showToast('資料已更新');
         return;
       }
     }
+    freshWalkList();
     showToast('已經是最新的');
   } finally {
     syncing = false;
