@@ -136,8 +136,8 @@ header p { margin: 2px 0 10px; font-size: 13px; color: var(--shell-soft); }
     <p>假資料・不寫試算表・重新整理就重來</p>
     <div class="tabs" id="style" role="group" aria-label="天數樣式">
       <button data-v="A" aria-pressed="false">A 現行</button>
-      <button data-v="B" aria-pressed="false">B 只有字</button>
-      <button data-v="C" aria-pressed="true">C 窄籤</button>
+      <button data-v="B" aria-pressed="true">B 只有字</button>
+      <button data-v="C" aria-pressed="false">C 窄籤</button>
       <button data-v="D" aria-pressed="false">D 淡底</button>
       <span class="sep"></span>
       <button data-v="big" id="bigBtn" aria-pressed="false">大字</button>
@@ -150,7 +150,7 @@ header p { margin: 2px 0 10px; font-size: 13px; color: var(--shell-soft); }
     </div>
   </header>
   <div class="legend">按「溜了」約 1 秒後登記好；梅子第一次會寫不進去。</div>
-  <div class="list sC b1" id="list"></div>
+  <div class="list sB b1" id="list"></div>
   <p class="note">3 天起黃、5 天起紅，跟正式網站相同；綠色只代表「已溜」，0～2 天是灰字。最下面三隻示範今天已經有人溜過。</p>
 </div>
 <script>
