@@ -71,6 +71,7 @@ let dogsCache = null; // { at, dogs: Map(編號 → 犬名) }
 let walkersCache = null; // GET /walkers 的快取（#141）
 function resetState() {
   walkersCache = null;
+  walkerNamesRemembered = null;
   hits.clear();
   dogsCache = null;
   resetTodayCache();
@@ -763,8 +764,12 @@ async function walkerCodes(request, env, origin) {
 // ── 溜狗人名字（#141）：GET /walkers ──
 // 名字不進 repo（dogs.json 只有代號），網站打開時跟這裡拿：Worker 直接讀試算表主清單（跟同步一樣用 gviz，試算表要「知道連結的人可檢視」），
 // 回 { walkers: { 狗的 key: 「誰遛的」原文 }, names: [表上出現過的名字，出現多的在前], older: [以前看過、現在表上沒有的名字] }；狗的 key 跟網站 walkKey 一樣（有編號用編號，沒有用「名:犬名」）。
-// 5 分鐘內重複讀用快取，免得每個人打開都去讀 Google。沒設 SHEET_ID 回 503 + code: 'off'
-const WALKERS_CACHE_MS = 5 * 60 * 1000;
+// 1 分鐘內重複讀用快取，免得每個人都去讀 Google。沒設 SHEET_ID 回 503 + code: 'off'
+// K 2026-10-20：不管在網站按還是直接改試算表，其他手機 1 分鐘內要看到（原本 5 分鐘）。手機每分鐘跟著今日紀錄一起抓
+const WALKERS_CACHE_MS = 60 * 1000;
+// 看過的名字寫資料庫很花寫入額度（每個名字一列），快取改 1 分鐘後另外限制：名單沒變就 30 分鐘才記一次
+const WALKER_NAMES_REMEMBER_MS = 30 * 60 * 1000;
+let walkerNamesRemembered = null; // { at, names: 'a,b', older }
 export function gvizTable(text) {
   const m = String(text).match(/setResponse\(([\s\S]*)\);?\s*$/);
   if (!m) throw new Error('試算表回應格式不對');
@@ -779,7 +784,7 @@ function gvizCell(c) {
 }
 // 主清單跟同步（scripts/sync-sheet.mjs）一樣分兩次讀：gviz 會照多數決猜欄位型別，表頭文字在數字欄會變空的，
 // 所以先 headers=0 找表頭在第幾列，再指定表頭列數重讀、用欄位標題對欄（標題缺的用第一次讀到的表頭文字補）
-const WALKERS_COLUMNS = { cage: '籠位', id: '編號', name: '犬名', walker: '誰遛的' };
+const WALKERS_COLUMNS = { cage: '籠位', id: '編號', name: '犬名', walker: '誰遛的', date: '遛狗日期' };
 function walkersColumns(texts) {
   const norm = texts.map(t => String(t || '').replace(/\s+/g, ''));
   const map = {};
@@ -794,25 +799,44 @@ function walkersColumns(texts) {
 export function walkersHeaderRow(table) {
   return (table.rows || []).findIndex(r => walkersColumns((r.c || []).map(gvizCell)).name != null);
 }
-// table：指定表頭列數重讀的結果；headerTexts：第一次讀到的表頭列。回 { walkers: { 狗的 key: 原文 }, names }
+// 「遛狗日期」：日期格式（gviz 的 Date(年,月-1,日)）或文字（2026/10/20、10/20）→ 'YYYY-MM-DD'；讀不懂回 ''
+export function walkersDate(c, now = new Date()) {
+  if (!c || c.v == null) return '';
+  const ymd = (y, m, d) => (m >= 1 && m <= 12 && d >= 1 && d <= 31 ? `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` : '');
+  const g = typeof c.v === 'string' && c.v.match(/^Date\((\d+),(\d+),(\d+)/);
+  if (g) return ymd(+g[1], +g[2] + 1, +g[3]);
+  const t = String(c.f || c.v).trim();
+  const full = t.match(/^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})/);
+  if (full) return ymd(+full[1], +full[2], +full[3]);
+  const short = t.match(/^(\d{1,2})[/.-](\d{1,2})$/);
+  if (short) return ymd(now.getFullYear(), +short[1], +short[2]);
+  return '';
+}
+// table：指定表頭列數重讀的結果；headerTexts：第一次讀到的表頭列。回 { walkers: { 狗的 key: 原文 }, dates: { 狗的 key: 'YYYY-MM-DD' }, names }
 export function parseWalkers(table, headerTexts = []) {
   const map = walkersColumns((table.cols || []).map(c => (c && c.label) || ''));
   const fallback = walkersColumns(headerTexts);
   for (const k of Object.keys(WALKERS_COLUMNS)) if (map[k] == null && fallback[k] != null) map[k] = fallback[k];
   if (map.name == null || map.walker == null) throw new Error('主清單找不到「犬名」或「誰遛的」欄');
   const walkers = {};
+  const dates = {};
   const count = new Map();
   for (const r of table.rows || []) {
-    const c = (r.c || []).map(gvizCell);
+    const raw = r.c || [];
+    const c = raw.map(gvizCell);
     const name = c[map.name] || '', id = map.id == null ? '' : (c[map.id] || ''), text = c[map.walker] || '';
     // 跟同步一樣：要有犬名和籠位才算狗（表尾的提示文字不算）
-    if (!name || (map.cage != null && !c[map.cage]) || name === WALKERS_COLUMNS.name || !text) continue;
+    if (!name || (map.cage != null && !c[map.cage]) || name === WALKERS_COLUMNS.name) continue;
+    // 試算表是正本（K 2026-10-20）：手機用這裡的日期蓋掉 dogs.json，直接改試算表也 1 分鐘內看到
+    const date = map.date == null ? '' : walkersDate(raw[map.date]);
+    if (date) dates[id || `名:${name}`] = date;
+    if (!text) continue;
     walkers[id || `名:${name}`] = text;
     for (const n of new Set(text.split(WALKER_NAME_SEP).map(x => x.trim()).filter(Boolean))) count.set(n, (count.get(n) || 0) + 1);
   }
   // 名字（開頭畫面讓志工點選自己）：出現次數多的在前
   const names = [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-Hant')).map(([n]) => n);
-  return { walkers, names };
+  return { walkers, dates, names };
 }
 async function readWalkers(sheetId, fetchImpl = fetch) {
   const id = (sheetId.match(/\/d\/([A-Za-z0-9_-]+)/) || [])[1] || sheetId;
@@ -861,8 +885,12 @@ async function getWalkers(env, allowed, now = Date.now()) {
   if (!cfg.sheetId) return reply(503, { ok: false, code: 'off', error: '還沒設定試算表' }, allowed);
   if (!walkersCache || walkersCache.id !== cfg.sheetId || now - walkersCache.at > WALKERS_CACHE_MS) {
     const data = await readWalkers(cfg.sheetId);
-    const older = await rememberWalkerNames(env, data.names, now);
-    walkersCache = { id: cfg.sheetId, at: now, data: { ...data, older, codes: await walkerCodeMap([...data.names, ...older], cfg.walkerKey) } };
+    const key = data.names.join(',');
+    const r = walkerNamesRemembered;
+    const older = r && r.names === key && now - r.at < WALKER_NAMES_REMEMBER_MS ? r.older : await rememberWalkerNames(env, data.names, now);
+    if (!r || r.names !== key || now - r.at >= WALKER_NAMES_REMEMBER_MS) walkerNamesRemembered = { at: now, names: key, older };
+    // readAt：這份名單是什麼時候讀的。手機用它判斷今日溜狗紀錄是不是比試算表新（比它舊的以試算表為準）
+    walkersCache = { id: cfg.sheetId, at: now, data: { ...data, older, readAt: new Date(now).toISOString(), codes: await walkerCodeMap([...data.names, ...older], cfg.walkerKey) } };
   }
   return reply(200, { ok: true, ...walkersCache.data }, allowed);
 }
@@ -1117,7 +1145,7 @@ async function openedCards(request, env, origin) {
 
 export default {
   // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch 和 scheduled
-  testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, triggerSync, maintenance },
+  testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, walkersDate, triggerSync, maintenance },
 
   // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 wrangler.jsonc 的 triggers）
   async scheduled(event, env, ctx) {

@@ -89,20 +89,36 @@
       if (changed.length) saveCurrent(records, changed, day);
       return !!changed.length;
     }
-    function receiveNames(names, dogs, read = beginRead()) {
+    // 試算表名單是正本（K 2026-10-20：不管在網站按還是直接改試算表，都要同步）。
+    // dates 有那隻狗的「遛狗日期」就連日期一起換；sheetAt 是 Worker 讀試算表的時間，比它新的今日紀錄才蓋得過名單。
+    function receiveNames(names, dogs, read = beginRead(), dates = {}, sheetAt = read.at) {
       if (read.day !== deps.date()) return false;
-      const records = { ...deps.read(read.day) }, changed = [];
+      const records = { ...deps.read(read.day) }, changed = [], dropped = [];
+      const local = new Set(deps.local?.(read.day) || []);
       for (const dog of dogs) {
         const key = deps.key(dog), item = records[key];
-        if (!Object.hasOwn(names, key) || !item?.current || item.current.walker === String(names[key] || '')
-          || (changedAt.get(`${read.day}:${key}`) || 0) > read.revision) continue;
-        // 名單讀取不帶日期，保留已知日期；完整日期由同步或今日紀錄確認。
-        const current = activeItem(dog, read.day)?.current || deps.base?.(dog) || {};
-        setCurrent(records, dog, { date: current.date, walker: names[key] }, read.day, {}, read.at);
-        changed.push(dog);
+        if ((changedAt.get(`${read.day}:${key}`) || 0) > read.revision || pending.has(key)) continue;
+        const sheetDate = Object.hasOwn(dates, key) ? dateKey(dates[key]) : '';
+        const active = activeItem(dog, read.day);
+        if (item?.current && active) {
+          if (!Object.hasOwn(names, key) && !sheetDate) continue;
+          if ((item.observedAt || 0) > sheetAt) continue; // 名單讀得比這筆早，還沒包含它
+          const walker = Object.hasOwn(names, key) ? String(names[key] || '') : item.current.walker;
+          const date = sheetDate || item.current.date;
+          if (item.current.walker === walker && dateKey(item.current.date) === date) continue;
+          setCurrent(records, dog, { date, walker }, read.day, {}, sheetAt);
+          changed.push(dog);
+        } else if (local.has(key) && sheetDate === read.day
+          && !isMine({ date: sheetDate, walker: String(names[key] || '') }, read.day)) {
+          // 這支手機記著「今天我溜了」，但試算表今天寫的是別人：以試算表為準
+          local.delete(key);
+          dropped.push(dog);
+        }
       }
+      if (dropped.length && deps.saveLocal) deps.saveLocal([...local], read.day);
       if (changed.length) saveCurrent(records, changed, read.day);
-      return !!changed.length;
+      else if (dropped.length) deps.apply(dropped, records, read.day, []);
+      return !!(changed.length || dropped.length);
     }
     function register(dogs, options = {}) {
       const day = deps.date(), me = deps.walker();
