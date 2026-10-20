@@ -789,14 +789,14 @@ function statusBadge(dog, today) {
   return `<span class="badge muted">沒有紀錄</span>`;
 }
 
-// 卡片上的「上次遛狗」：天數用 #3 的綠／黃／紅文字色
+// 卡片天數比照列表：今天／X天；完整意思保留給輔助閱讀。
 function lastWalk(dog, today) {
   const s = computeStatus(dog, today);
   let text = '沒有紀錄', level = 'muted', small = false;
   if (s.kind === 'dated') {
     if (s.days < 0) text = '日期看不懂';
     else {
-      text = `<b>${s.days === 0 ? '今天' : s.days === 1 ? '昨天' : s.days}</b>${s.days >= 2 ? '<span class="last-unit"> 天前</span>' : ''}`;
+      text = `<b>${s.days === 0 ? '今天' : s.days}</b>${s.days > 0 ? '<span class="last-unit">天</span>' : ''}`;
       level = s.level;
     }
   } else if (s.kind === 'rest') {
@@ -805,7 +805,7 @@ function lastWalk(dog, today) {
     // 窄螢幕放不下一行時只在「有人固定｜照顧」之間換行，不會剩一個「顧」字
     text = '<span class="nowrap">有人固定</span><span class="nowrap">照顧</span>'; level = 'sage'; small = true;
   }
-  return `<div class="last"${s.kind === 'dated' && s.days >= 0 ? ` data-days="${s.days}"` : ''}>${s.kind === 'covered' || s.kind === 'rest' ? '' : '<span class="lbl">上次遛</span>'}<span class="val ${level}${small ? ' small' : ''}">${text}</span></div>`;
+  return `<div class="last"${s.kind === 'dated' && s.days >= 0 ? ` data-days="${s.days}"` : ''}>${s.kind === 'dated' && s.days >= 0 ? '<span class="sr-only">上次溜</span>' : ''}<span class="val ${level}${small ? ' small' : ''}">${text}</span>${s.kind === 'dated' && s.days > 0 ? '<span class="sr-only">前</span>' : ''}</div>`;
 }
 
 // 卡片用「編號｜籠位」（照 K 的參考圖）；詳細資訊沿用 metaLine
