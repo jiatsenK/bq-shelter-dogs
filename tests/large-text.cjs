@@ -6,6 +6,8 @@ module.exports = async (browser, base) => {
   data.dogs[8].name = '名字很長也要完整閱讀的測試狗';
   data.dogs[4].walkedDate = '2026-07-12'; data.dogs[4].covered = false;
   data.dogs[3].note = '不親狗，測試警示原文';
+  data.dogs[6].walkedDate = '2026-10-17'; data.dogs[6].covered = false;
+  data.dogs[6].note = '不要一起溜，測試黃色警示';
   data.groupColumns = [{ column: 4, label: '大字完整捲閱測試群', names: data.dogs.slice(0, 10).map(d => d.name) }];
   const ctx = await browser.newContext({ viewport: { width: 320, height: 568 }, timezoneId: 'Asia/Taipei', serviceWorkers: 'block' });
   await ctx.addInitScript(() => { localStorage.setItem('bq-onboarded', '1'); localStorage.setItem('bq-name-later', '1'); });
@@ -30,6 +32,27 @@ module.exports = async (browser, base) => {
     }
     assert.deepEqual(labels.map(l => l.visible), ['今天', '1天', '2天', '14天'], '照片狗卡與列表採相同簡短天數');
     assert.match(labels[1].full, /上次溜1天前/, '輔助閱讀保留完整意思');
+    for (const width of [320, 390, 768, 1024]) {
+      await page.setViewportSize({ width, height: 700 });
+      for (const dog of [data.dogs[3], data.dogs[6]]) {
+        const warning = page.locator('#main .card.flagged').filter({ hasText: dog.name }).first();
+        assert.equal(await warning.locator(dog === data.dogs[3] ? '.val.red' : '.val.amber').count(), 1, '警示案例保留紅、黃色覆蓋');
+        await warning.scrollIntoViewIfNeeded();
+        const geometry = await warning.evaluate(el => {
+          const before = getComputedStyle(el, '::before');
+          const track = parseFloat(getComputedStyle(el).gridTemplateColumns);
+          const name = el.querySelector('.who .name');
+          const box = name.getBoundingClientRect();
+          return { backgroundWidth: parseFloat(before.width), track, nameVisible: name.contains(document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2)) };
+        });
+        assert(geometry.backgroundWidth <= geometry.track + 1, `${width}px 警示狗卡色籤只佔第一欄，不蓋住狗名與按鈕：${JSON.stringify(geometry)}`);
+        assert(geometry.nameVisible, `${width}px 警示狗卡狗名未被色籤遮蓋`);
+        const button = warning.locator('.walk-btn');
+        await button.scrollIntoViewIfNeeded();
+        await button.click({ trial: true });
+      }
+    }
+    await page.setViewportSize({ width: 320, height: 568 });
     const cardFonts = await page.addStyleTag({ content: '.card .last .val b { font-size:60px !important; } .card .last .last-unit { font-size:28px !important; }' });
     for (const dog of [data.dogs[3], data.dogs[4]]) {
       const card = page.locator('#main .card').filter({ has: page.locator('.name').filter({ hasText: new RegExp('^' + dog.name + '[♂♀]?$') }) }).first();
