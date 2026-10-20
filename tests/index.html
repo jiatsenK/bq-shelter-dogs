@@ -337,9 +337,10 @@ function runTests() {
       eq(val({ walkedDate: null, covered: false }), ['沒有紀錄', 'val muted']);
       eq(val({ walkedDate: null, covered: true }), ['有人固定照顧', 'val sage small']);
     }),
-    check('#400 天數欄：今天／X天，保留配色、欄寬與完整輔助文字', async () => {
+    check('#400 天數欄：今天／X天、欄寬與完整輔助文字；#401 配色只有字', async () => {
       const host = document.createElement('div');
-      host.style.setProperty('--green-bg', '#DFF0E4'); host.style.setProperty('--green-text', '#1E6B3C'); // Shadow DOM 不套用文件的 :root，補上正式網站色票
+      // Shadow DOM 不套用文件的 :root，補上正式網站色票
+      [['--green-bg', '#DFF0E4'], ['--green-text', '#1E6B3C'], ['--ink-soft', '#4E5E57'], ['--red-text', '#B3121F'], ['--amber-text', '#8A4B00']].forEach(([k, v]) => host.style.setProperty(k, v));
       host.style.width = '320px'; document.body.append(host);
       const root = host.attachShadow({ mode: 'open' });
       const link = document.createElement('link'); link.rel = 'stylesheet'; link.href = '../public/css/app.css';
@@ -359,8 +360,9 @@ function runTests() {
           eq(last.querySelector('.lbl'), null, '不顯示重複標題：'); eq(getComputedStyle(last).width, '70px'); eq(last.textContent, values.indexOf(v) === 0 ? '上次溜今天' : '上次溜' + values.indexOf(v) + '天前');
           if (v.scrollWidth > v.clientWidth) throw new Error('時間欄文字溢出');
         }
-        eq(values.slice(0, 3).map(v => getComputedStyle(v.closest('.last')).backgroundColor), ['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)'], '近期日期不上底色：');
-        eq(values.slice(0, 3).map(v => getComputedStyle(v.closest('.last')).color), ['rgb(30, 107, 60)', 'rgb(30, 107, 60)', 'rgb(30, 107, 60)'], '近期日期一致原綠字：');
+        // #401（K 2026-10-20 選 B1）：天數格一律不上底色，數字本身上色；綠色只留給已溜，近期日期是灰字
+        eq(values.map(v => getComputedStyle(v.closest('.last')).backgroundColor), Array(6).fill('rgba(0, 0, 0, 0)'), '天數不上底色：');
+        eq(values.map(v => getComputedStyle(v.closest('.last')).color), [...Array(3).fill('rgb(78, 94, 87)'), 'rgb(138, 75, 0)', 'rgb(138, 75, 0)', 'rgb(179, 18, 31)'], '近期灰字、3 天起黃字、5 天起紅字：');
         const centerY = el => { const r = el.getBoundingClientRect(); return r.top + r.height / 2; };
         const close = (a, b, msg) => { if (Math.abs(a - b) > 1) throw new Error(`${msg}：${a} / ${b}`); };
         box.insertAdjacentHTML('beforeend', dogCard({ ...dog, id: 'fixed-align', walkedDate: null, covered: true }, TODAY));
