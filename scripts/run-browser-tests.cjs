@@ -3,7 +3,8 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const { chromium } = require('playwright');
+const SUITES = ['read-policy', 'startup-stability', 'walker-editing', 'intake-presentation', 'info-page', 'fixed-care',
+  'group-walks', 'navigation', 'keyboard-viewport', 'index', 'detail-editing'];
 
 const ROOT = path.resolve(__dirname, '..');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css',
@@ -21,30 +22,41 @@ const server = http.createServer((req, res) => {
 });
 
 (async () => {
-  await new Promise(r => server.listen(0, r));
-  const browser = await chromium.launch();
-  let ok = false;
+  const args = process.argv.slice(2);
+  if (args.length === 1 && args[0] === '--list') { console.log(SUITES.join('\n')); return; }
+  if (args.length === 1 && args[0] === '--help') {
+    console.log('node scripts/run-browser-tests.cjs [--list | --only suite[,suite]]\n未指定參數時跑全部套件。'); return;
+  }
+  let selected = SUITES;
+  if (args.length) {
+    if (args.length !== 2 || args[0] !== '--only') throw new Error('請用 --list、--help 或 --only suite[,suite]');
+    const names = args[1].split(',');
+    if (names.some(n => !SUITES.includes(n))) throw new Error(`未知套件：${names.filter(n => !SUITES.includes(n)).join(',')}；用 --list 查看`);
+    selected = SUITES.filter(n => names.includes(n));
+  }
+  const { chromium } = require('playwright'); // --list／參數檢查不需要安裝瀏覽器
+  let browser;
+  let ok = true;
   try {
-    await require('../tests/startup-stability.cjs')(browser, `http://localhost:${server.address().port}`);
-    await require('../tests/walker-editing.cjs')(browser, `http://localhost:${server.address().port}`);
-    await require('../tests/intake-presentation.cjs')(browser, `http://localhost:${server.address().port}`);
-    await require('../tests/info-page.cjs')(browser, `http://localhost:${server.address().port}`);
-    await require('../tests/fixed-care.cjs')(browser, `http://localhost:${server.address().port}`);
-    await require('../tests/group-walks.cjs')(browser, `http://localhost:${server.address().port}`);
-    await require('../tests/navigation.cjs')(browser, `http://localhost:${server.address().port}`);
-    await require('../tests/keyboard-viewport.cjs')(browser, `http://localhost:${server.address().port}`);
-    const page = await browser.newPage();
-    page.on('pageerror', e => console.error('頁面錯誤（不影響結果，只供參考）：', e.message));
-    await page.goto(`http://localhost:${server.address().port}/tests/index.html`);
-    await page.waitForFunction(() => /通過|失敗/.test(document.getElementById('summary').textContent), null, { timeout: 120000 });
-    const summary = await page.textContent('#summary');
-    const failed = await page.$$eval('li.fail', lis => lis.map(li => li.innerText));
-    console.log(summary);
-    failed.forEach(f => console.log(`✗ ${f.replace(/^✗\s*/, '')}`));
-    if (!failed.length) await require('../tests/detail-editing.cjs')(browser, `http://localhost:${server.address().port}`);
-    ok = !failed.length && /^全部 \d+ 項通過$/.test(summary.trim());
+    await new Promise(r => server.listen(0, r));
+    browser = await chromium.launch();
+    const base = `http://localhost:${server.address().port}`;
+    for (const suite of selected) {
+      if (suite !== 'index') { await require(`../tests/${suite}.cjs`)(browser, base); continue; }
+      const page = await browser.newPage();
+      page.on('pageerror', e => console.error('頁面錯誤（不影響結果，只供參考）：', e.message));
+      await page.goto(`${base}/tests/index.html`);
+      await page.waitForFunction(() => /通過|失敗/.test(document.getElementById('summary').textContent), null, { timeout: 120000 });
+      const summary = await page.textContent('#summary');
+      const failed = await page.$$eval('li.fail', lis => lis.map(li => li.innerText));
+      console.log(summary);
+      failed.forEach(f => console.log(`✗ ${f.replace(/^✗\s*/, '')}`));
+      ok = !failed.length && /^全部 \d+ 項通過$/.test(summary.trim());
+      await page.close();
+      if (!ok) break;
+    }
   } finally {
-    await browser.close();
+    await browser?.close();
     server.close();
   }
   process.exit(ok ? 0 : 1);
