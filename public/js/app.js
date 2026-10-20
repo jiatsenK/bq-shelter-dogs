@@ -3119,9 +3119,13 @@ function switchTab(id, pushHistory = true) {
   if (pushHistory && changed) history.pushState({ bqNavigation: true, tab: id, base: activeTab, returnTab: groupsReturnTab, infoPage: typeof infoPage === 'undefined' ? '' : infoPage }, '');
   if (changed) resetWalkOrder(); // 換分頁回來溜狗表時重排，剛溜的狗才會排到後面
   if (changed && id === 'groups') refreshGroupStage();
+  const before = document.activeElement;
   render();
   const btn = document.querySelector(`#tabs button[data-tab="${id}"]`);
-  if (btn) btn.focus({ preventScroll: true });
+  // 焦點原本在頁籤上，或原本的按鈕（如返回）被重繪拿掉時才移到頁籤；
+  // 手機點按鈕不給焦點，這時主動 focus 會被當成鍵盤焦點而留下橘框（#420）
+  const lost = before && before !== document.body && !before.isConnected;
+  if (btn && (lost || (before && before.closest && before.closest('#tabs')))) btn.focus({ preventScroll: true });
   if (btn && btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   if (changed) window.scrollTo(0, 0);
 }
