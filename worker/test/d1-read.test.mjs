@@ -204,6 +204,8 @@ test('狀態頁：顯示新資料庫有沒有接上、狗和主清單幾筆；�
   assert.equal(await status({}), '未設定');
   assert.equal(await status({ DB: await seededDb() }), 'D1 新表（主清單 3 隻、溜狗紀錄 0 筆）');
   assert.equal(await status({ DB: fakeD1() }), 'D1（讀不到資料包版本號）');
+  // 預覽版直接附原因，看不到 Cloudflare 紀錄也查得出來；正式版不外露
+  assert.match(await status({ DB: fakeD1(), PREVIEW: '1' }), /^D1（讀不到資料包版本號：.*no such table/);
 });
 
 // #260 網站不再讀 data/walks.json、data/departures.json、data/history/
