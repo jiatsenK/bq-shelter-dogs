@@ -16,6 +16,7 @@ export const KIND_LABELS = {
   group: '常溜狗群',
   former: '舊編號',
   stays: '出入所紀錄',
+  walkundo: '撤銷溜了',
 };
 export const EDITS_DEFAULT = 100;
 export const EDITS_MAX = 500;

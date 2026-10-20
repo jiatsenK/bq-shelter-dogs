@@ -1095,11 +1095,11 @@ function sheetUndoable(dog, today = new Date()) {
   return walkRegistration.canUndo(dog, localDateKey(today));
 }
 let sheetUndoBusy = false;
-async function undoSheetWalks(dogs, retry = null) {
+async function undoSheetWalks(dogs, retry = null, options = {}) {
   if (sheetUndoBusy || !dogs.length) return '';
   sheetUndoBusy = true; hideToast(); render();
   try {
-    const pending = retry ? walkRegistration.retry(retry) : walkRegistration.undo(dogs);
+    const pending = retry ? walkRegistration.retry(retry) : walkRegistration.undo(dogs, options);
     sheetQueue = pending;
     const result = await pending;
     const changed = result.rows.filter(r => r.status === 'changed').map(r => r.dog);
@@ -1109,7 +1109,7 @@ async function undoSheetWalks(dogs, retry = null) {
     if (changed.length) parts.push(`${changed.map(d => d.name).join('、')} 在試算表已經被改過，沒有蓋掉別人的紀錄`);
     if (left.length) parts.push(`${left.map(d => d.name).join('、')} 試算表沒改回來${result.error ? '：' + result.error : ''}，尚未復原`);
     const text = parts.join('；');
-    showToast(text, null, result.retryDogs.length ? { label: '再試一次', fn: () => undoSheetWalks(result.retryDogs, result) } : null);
+    showToast(text, null, result.retryDogs.length ? { label: '再試一次', fn: () => undoSheetWalks(result.retryDogs, result, options) } : null);
     return text;
   } finally { sheetUndoBusy = false; render(); renderDetail(); }
 }
@@ -2256,10 +2256,11 @@ function walkerEditBase(dog, today = new Date()) {
   const state = walkRegistration.state(dog, localDateKey(today));
   return state.today && state.walker ? state.walker : null;
 }
-// 只剩自己一個人、而且是這支手機今天登記的（按錯了），那個 × 是取消這次登記：日期和名字改回登記前（K 2026-10-05）
+// 只剩一個人時，那個 × 是取消這次登記：日期和名字改回登記前（K 2026-10-05）。
+// 這支手機登記的用本機記下的登記前；其他人、其他裝置由 Worker 從溜狗紀錄找上一次（ADR 0016，任何人都能撤銷）
 function walkerUndoable(dog, who, today = new Date()) {
   const state = walkRegistration.state(dog, localDateKey(today));
-  return who.length === 1 && state.mine && state.canUndo;
+  return who.length === 1 && (state.mine && state.canUndo || state.canRevert);
 }
 
 function walkerChipsHtml(dog, who, today) {
@@ -2799,7 +2800,7 @@ const DETAIL_CLICKS = [
   ['#photoCancel', () => { clearPhotoUpload(); renderDetail(); }],
   ['.buddy', el => { const d = allDogs[el.dataset.dog]; if (d) showDetail(d); }],
   ['#whoAdd', () => openWithSheet([detailDog], true)],
-  ['[data-who-undo]', () => setWalked([detailDog], false)],
+  ['[data-who-undo]', () => sheetUndoable(detailDog) ? setWalked([detailDog], false) : undoSheetWalks([detailDog], null, { revert: true })],
   ['[data-who-remove]', el => {
     const n = el.dataset.whoRemove;
     editWalkers(detailDog, walkerList(detailDog).filter(x => x !== n), `已拿掉 ${n}`);

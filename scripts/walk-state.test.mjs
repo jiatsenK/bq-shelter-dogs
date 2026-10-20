@@ -27,7 +27,7 @@ test('另一支手機讀到自己今天已登記，不需要本機名單，也�
   const { walks, dog } = setup();
   dog.date = '2026-10-19'; dog.walker = '我、同行人';
   assert.deepEqual(walks.state(dog), {
-    date: '2026-10-19', walker: '我、同行人', walkers: ['我', '同行人'], today: true, mine: true, canUndo: false,
+    date: '2026-10-19', walker: '我、同行人', walkers: ['我', '同行人'], today: true, mine: true, canUndo: false, canRevert: false,
   });
 });
 
@@ -45,7 +45,7 @@ test('新同步正本取代已套入的今日紀錄與本機名單，不繼續�
   s.walks.receiveToday({ date: '2026-10-19', walks: [{ key: '1', walkedDate: '2026-10-19', walker: '我', at: '2026-10-19T02:00:00Z' }] }, [s.dog]);
   assert.equal(s.walks.state(s.dog).mine, true);
   s.sync(Date.parse('2026-10-19T02:01:00Z'));
-  assert.deepEqual(s.walks.state(s.dog), { date: '2026-10-01', walker: '隊', walkers: ['隊'], today: false, mine: false, canUndo: false });
+  assert.deepEqual(s.walks.state(s.dog), { date: '2026-10-01', walker: '隊', walkers: ['隊'], today: false, mine: false, canUndo: false, canRevert: false });
 });
 
 test('同步後日期與名單仍符合本機寫入，保留復原資格；改過日期或名單就停止', async () => {

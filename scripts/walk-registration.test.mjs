@@ -148,3 +148,42 @@ test('回應缺少登記內容或同狗重複回應時，不能宣稱成功', as
   assert.deepEqual(result.rows.map(r => r.status), ['unknown', 'unknown']);
   assert.equal(result.successful.length, 0);
 });
+
+// ADR 0016：手機沒有復原證據時，今天只剩一個名字的登記可請 Worker 找上一次再撤銷（任何人）
+function setupBase(send, base) {
+  let records = {};
+  const walks = createWalkRegistration({
+    key: d => d.id, date: () => '2026-10-18', walker: () => '我', alias: () => null,
+    canonical: n => n, split: n => (n || '').split('、').filter(Boolean), base: d => base[d.id] || {},
+    read: () => records, save: v => { records = v; }, apply: () => {}, send,
+  });
+  return { walks, records: () => records };
+}
+
+test('沒有本機證據：只有今天、只剩一個名字才能請伺服器撤銷', () => {
+  const { walks } = setupBase(async () => ({}), {
+    1: { date: '2026-10-18', walker: '小明' }, 2: { date: '2026-10-18', walker: '小明、我' }, 3: { date: '2026-10-17', walker: '小明' },
+  });
+  assert.deepEqual([1, 2, 3].map(id => walks.state({ id: String(id), name: 'x' }).canRevert), [true, false, false]);
+  assert.equal(walks.state({ id: '1', name: 'x' }).canUndo, false);
+});
+
+test('伺服器撤銷：送名單比對與編輯者、不帶 prev；照回傳的 prev 顯示上次溜', async () => {
+  const calls = [];
+  const { walks } = setupBase(async payload => {
+    calls.push(structuredClone(payload));
+    return { ok: true, results: [{ id: '1', name: '甲', status: 'restored', prev: { date: { date: '2026-03-04' }, walker: '維芬' } }] };
+  }, { 1: { date: '2026-10-18', walker: '小明' } });
+  const result = await walks.undo([{ id: '1', name: '甲' }], { revert: true });
+  assert.deepEqual(calls, [{ action: 'undo', walker: '我', dogs: [{ id: '1', name: '甲', wrote: { walker: '小明' } }] }]);
+  assert.equal(result.rows[0].status, 'restored');
+  const st = walks.state({ id: '1', name: '甲' });
+  assert.deepEqual([st.date, st.walker, st.today, st.canRevert], ['2026-03-04', '維芬', false, false]);
+});
+
+test('沒說要伺服器撤銷時，沒有本機證據照舊不送', async () => {
+  const calls = [];
+  const { walks } = setupBase(async payload => { calls.push(payload); return { ok: true, results: [] }; }, { 1: { date: '2026-10-18', walker: '小明' } });
+  const result = await walks.undo([{ id: '1', name: '甲' }]);
+  assert.deepEqual([calls.length, result.rows[0].status], [0, 'changed']);
+});
