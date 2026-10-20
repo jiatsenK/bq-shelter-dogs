@@ -86,7 +86,8 @@ header p { margin: 2px 0 10px; font-size: 13px; color: var(--shell-soft); }
 .walk { flex-shrink: 0; min-width: 66px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 3px; background: var(--surface-soft); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); font-weight: 800; font-size: .95em; display: inline-flex; align-items: center; justify-content: center; gap: 3px; }
 .walk:active { background: var(--line); }
 .walk.pending { background: var(--surface-soft); color: var(--ink-soft); box-shadow: none; font-size: .85em; }
-.walk.done { background: var(--green-bg); color: var(--green-text); box-shadow: inset 0 0 0 1.5px var(--green-text); }
+.walk.done { background: var(--green-bg); color: var(--green-text); box-shadow: none; gap: 2px; }
+.walk.done .icon, .walk.locked .icon { width: 1.15em; height: 1.15em; }
 .walk.retry { background: var(--red-bg); color: var(--red-text); box-shadow: none; }
 .walk.locked { background: transparent; box-shadow: none; color: var(--green-text); font-weight: 700; padding: 0 4px; }
 
@@ -142,14 +143,14 @@ header p { margin: 2px 0 10px; font-size: 13px; color: var(--shell-soft); }
       <button data-v="big" id="bigBtn" aria-pressed="false">大字</button>
     </div>
     <div class="tabs" id="btnStyle" role="group" aria-label="溜了按鈕樣式">
-      <button data-v="1" aria-pressed="false">1 現行框</button>
-      <button data-v="2" aria-pressed="true">2 勾選格</button>
+      <button data-v="1" aria-pressed="true">1 現行框</button>
+      <button data-v="2" aria-pressed="false">2 勾選格</button>
       <button data-v="3" aria-pressed="false">3 印章</button>
       <button data-v="4" aria-pressed="false">4 整欄</button>
     </div>
   </header>
   <div class="legend">按「溜了」約 1 秒後登記好；梅子第一次會寫不進去。</div>
-  <div class="list sB b2" id="list"></div>
+  <div class="list sB b1" id="list"></div>
   <p class="note">3 天起黃、5 天起紅，跟正式網站相同；綠色只代表「已溜」，0～2 天是灰字。最下面三隻示範今天已經有人溜過。</p>
 </div>
 <script>
