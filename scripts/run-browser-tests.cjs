@@ -4,7 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const SUITES = ['read-policy', 'startup-stability', 'walker-editing', 'intake-presentation', 'info-page', 'fixed-care',
-  'group-walks', 'navigation', 'keyboard-viewport', 'index', 'detail-editing'];
+  'group-cache', 'group-walks', 'navigation', 'keyboard-viewport', 'index', 'detail-editing'];
 
 const ROOT = path.resolve(__dirname, '..');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css',
