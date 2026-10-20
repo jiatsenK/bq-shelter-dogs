@@ -90,6 +90,36 @@ header p { margin: 2px 0 10px; font-size: 13px; color: var(--shell-soft); }
 .walk.retry { color: var(--red-text); box-shadow: inset 0 0 0 2px var(--red-text); }
 .walk.locked { background: transparent; box-shadow: none; color: var(--green-text); font-weight: 700; padding: 0 4px; }
 
+/* ── 按鈕比較（K：「溜了」也不要 AI 感）── 標記一樣，只換外觀 */
+.walk .box { display: none; }
+/* 2 勾選格：病歷表上的勾選欄，方格在上、小字在下 */
+.b2 .walk { flex-direction: column; gap: 2px; min-width: 56px; min-height: 56px; padding: 4px 6px; background: transparent; box-shadow: none; font-size: .78em; font-weight: 700; color: var(--ink-soft); }
+.b2 .walk:active { background: transparent; }
+.b2 .walk .box { display: grid; place-items: center; width: 30px; height: 30px; border: 2.5px solid var(--primary); background: #fff; }
+.b2 .walk.done { color: var(--green-text); }
+.b2 .walk.done .box { background: var(--primary); color: #fff; }
+.b2 .walk .box .icon { width: 22px; height: 22px; }
+.b2 .walk.done > .icon, .b2 .walk.locked > .icon { display: none; }
+.b2 .walk.pending .box { border-style: dashed; }
+.b2 .walk.retry { color: var(--red-text); }
+.b2 .walk.retry .box { border-color: var(--red-text); }
+.b2 .walk.locked { flex-direction: column; }
+.b2 .walk.locked .box { display: grid; border-color: var(--line); background: var(--surface-soft); color: var(--green-text); }
+/* 3 印章：方正粗字像蓋在紙上；登記好變成斜蓋的圓章 */
+.b3 .walk { border-radius: 2px; min-width: 60px; font-weight: 900; letter-spacing: .12em; padding: 0 6px 0 10px; box-shadow: inset 0 0 0 2.5px var(--primary); }
+.b3 .walk.done, .b3 .walk.locked { width: 58px; height: 58px; min-width: 0; padding: 0; border-radius: 50%; background: transparent; color: var(--green-text); box-shadow: inset 0 0 0 2.5px var(--green-text), inset 0 0 0 5px #fff, inset 0 0 0 6px var(--green-text); transform: rotate(-12deg); font-size: .9em; letter-spacing: .04em; }
+.b3 .walk.done > .icon, .b3 .walk.locked > .icon { display: none; }
+.b3 .walk.locked { opacity: .55; }
+/* 4 整欄：右邊一整條欄位就是按鈕，跟左邊天數籤對稱，沒有框 */
+.b4 .body { padding-right: 0; }
+.b4 .walk { align-self: stretch; margin: -8px 0; min-width: 72px; border-radius: 0; box-shadow: inset 1px 0 0 var(--line); background: var(--surface); }
+.b4 .walk:active { background: var(--primary-soft); }
+.b4 .walk.done, .b4 .walk.locked { flex-direction: column; gap: 0; background: var(--green-bg); box-shadow: inset 1px 0 0 var(--line); }
+.b4 .walk.done .icon, .b4 .walk.locked .icon { width: 1.3em; height: 1.3em; }
+.b4 .walk.locked { background: var(--surface-soft); }
+.b4 .walk.pending { box-shadow: inset 1px 0 0 var(--line); }
+.b4 .walk.retry { box-shadow: inset 1px 0 0 var(--line), inset 0 -4px 0 var(--red-text); }
+
 .note { padding: 16px; font-size: 13px; color: var(--ink-soft); }
 </style>
 </head>
@@ -111,9 +141,15 @@ header p { margin: 2px 0 10px; font-size: 13px; color: var(--shell-soft); }
       <span class="sep"></span>
       <button data-v="big" id="bigBtn" aria-pressed="false">大字</button>
     </div>
+    <div class="tabs" id="btnStyle" role="group" aria-label="溜了按鈕樣式">
+      <button data-v="1" aria-pressed="false">1 現行框</button>
+      <button data-v="2" aria-pressed="true">2 勾選格</button>
+      <button data-v="3" aria-pressed="false">3 印章</button>
+      <button data-v="4" aria-pressed="false">4 整欄</button>
+    </div>
   </header>
   <div class="legend">按「溜了」約 1 秒後登記好；梅子第一次會寫不進去。</div>
-  <div class="list sB" id="list"></div>
+  <div class="list sB b2" id="list"></div>
   <p class="note">3 天起黃、5 天起紅，跟正式網站相同。最下面三隻示範今天已經有人溜過。</p>
 </div>
 <script>
@@ -146,11 +182,12 @@ function whoHtml(dog) {
   return '';
 }
 function btnHtml(dog, i) {
-  if (dog.pending) return `<button class="walk pending" disabled>登記中</button>`;
-  if (dog.error) return `<button class="walk retry" data-i="${i}">再試</button>`;
-  if (dog.state === 'mine') return `<button class="walk done" data-i="${i}" aria-label="${dog.name} 已溜，按一下取消">${tick}已溜</button>`;
-  if (dog.state === 'locked') return `<span class="walk locked" title="名單被別人改過，不能從這裡取消">${tick}已溜</span>`;
-  return `<button class="walk" data-i="${i}">溜了</button>`;
+  const box = `<span class="box">${dog.state === 'mine' || dog.state === 'locked' ? tick : ''}</span>`;
+  if (dog.pending) return `<button class="walk pending" disabled>${box}登記中</button>`;
+  if (dog.error) return `<button class="walk retry" data-i="${i}">${box}再試</button>`;
+  if (dog.state === 'mine') return `<button class="walk done" data-i="${i}" aria-label="${dog.name} 已溜，按一下取消">${box}${tick}已溜</button>`;
+  if (dog.state === 'locked') return `<span class="walk locked" title="名單被別人改過，不能從這裡取消">${box}${tick}已溜</span>`;
+  return `<button class="walk" data-i="${i}">${box}溜了</button>`;
 }
 function render() {
   document.getElementById('list').innerHTML = dogs.map((d, i) =>
@@ -176,6 +213,7 @@ document.getElementById('list').addEventListener('click', e => {
     render();
   }, 1000);
 });
+const list = document.getElementById('list');
 document.getElementById('style').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   if (b.dataset.v === 'big') {
@@ -183,7 +221,12 @@ document.getElementById('style').addEventListener('click', e => {
     b.setAttribute('aria-pressed', on); document.body.classList.toggle('big', on); return;
   }
   document.querySelectorAll('#style button:not(#bigBtn)').forEach(x => x.setAttribute('aria-pressed', x === b));
-  document.getElementById('list').className = 'list s' + b.dataset.v;
+  list.classList.remove('sA', 'sB', 'sC', 'sD'); list.classList.add('s' + b.dataset.v);
+});
+document.getElementById('btnStyle').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#btnStyle button').forEach(x => x.setAttribute('aria-pressed', x === b));
+  list.classList.remove('b1', 'b2', 'b3', 'b4'); list.classList.add('b' + b.dataset.v);
 });
 render();
 </script>
