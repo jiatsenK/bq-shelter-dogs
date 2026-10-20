@@ -2475,3 +2475,20 @@ html.kb-open .onboard { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-
 .fixed-care .rest-hint { margin-bottom: 0; }
 /* #396：同行人／重試共用一列，手機照片區保留同行人及狀態文字的操作空間。 */
 .gw-secondary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; }
+
+/* ── #401 天數只有字、綠色只代表已溜（K 2026-10-20 操作 prototype 後選 B1，docs/design/issue-401/decision.md）──
+   天數格不再上實心色塊，數字本身上色：黃字 3～4 天、紅字 5 天起；0～2 天、今天、固定照顧、沒有紀錄是灰字。
+   「溜了」改淡灰底細框黑字，已溜淡綠底不加框，一排看下來只有溜過的是綠的。位置、尺寸、按法維持原樣。 */
+.card .last, .card .last:has(.val.red), .card .last:has(.val.amber), .card .last:has(.val.sage), .card .last:has(.val.rest) { background: none; box-shadow: none; color: var(--ink-soft); }
+.card .last:has(.val.red) { color: var(--red-text); }
+.card .last:has(.val.amber) { color: var(--amber-text); }
+.card .last:has(.val.muted) { color: var(--muted-text); }
+.card.flagged:not(.skeleton)::before { background: none !important; }
+.r-date.red, .badge.red, .where-days.red, .dr-day.red, .db-tag.red { background: none !important; color: var(--red-text) !important; }
+.r-date.amber, .badge.amber, .where-days.amber, .dr-day.amber, .db-tag.amber { background: none !important; color: var(--amber-text) !important; }
+.r-date.sage, .badge.sage, .where-days.sage, .dr-day.sage, .db-tag.sage { background: none !important; color: var(--ink-soft) !important; }
+.r-date.muted, .badge.muted, .where-days.muted, .dr-day.none, .db-tag.none { background: none !important; color: var(--muted-text) !important; }
+.walk-btn { background: var(--surface-soft); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); font-weight: 800; }
+.walk-btn:active { background: var(--line); }
+.walk-btn.done { background: var(--green-bg); color: var(--green-text); box-shadow: none; }
+.walk-btn.pending { background: var(--surface-soft); color: var(--ink-soft); box-shadow: none; }
