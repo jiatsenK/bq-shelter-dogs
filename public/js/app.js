@@ -1525,7 +1525,7 @@ const walkRegistration = createWalkRegistration({
   key: walkKey, date: () => localDateKey(new Date()), walker: loadWalkerName, alias: myAliasIn,
   canonical: canonicalWalker, split: splitWalkers,
   names: () => loadMyCodes().map(code => walkerCodeNames[code]).filter(Boolean),
-  base: dog => ({ date: walkerDates[walkKey(dog)] || (dog.walkedDate ? localDateKey(dog.walkedDate) : ''), walker: walkerNames[walkKey(dog)] || '' }),
+  base: dog => ({ date: Object.hasOwn(walkerDates, walkKey(dog)) ? walkerDates[walkKey(dog)] : (dog.walkedDate ? localDateKey(dog.walkedDate) : ''), walker: walkerNames[walkKey(dog)] || '' }),
   local: day => loadWalkedIds(parseYmd(day)),
   saveLocal: (ids, day) => saveWalkedIds(ids, parseYmd(day)),
   companions: (dog, day) => loadWalkWith(parseYmd(day))[walkKey(dog)] || [],

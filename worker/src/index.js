@@ -829,10 +829,13 @@ export function parseWalkers(table, headerTexts = []) {
     // 跟同步一樣：要有犬名和籠位才算狗（表尾的提示文字不算）
     if (!name || (map.cage != null && !c[map.cage]) || name === WALKERS_COLUMNS.name) continue;
     // 試算表是正本（K 2026-10-20）：手機用這裡的日期蓋掉 dogs.json，直接改試算表也 1 分鐘內看到
-    const date = map.date == null ? '' : walkersDate(raw[map.date]);
-    if (date) dates[id || `名:${name}`] = date;
+    // 清空的格子也要回（空字串），手機才知道被清掉；日期讀不懂就不回，手機沿用上次同步的
+    const key = id || `名:${name}`;
+    const cell = map.date == null ? null : raw[map.date];
+    const date = cell && cell.v != null && String(cell.f ?? cell.v).trim() ? walkersDate(cell) : '';
+    if (date || (map.date != null && !(cell && cell.v != null && String(cell.f ?? cell.v).trim()))) dates[key] = date;
+    walkers[key] = text;
     if (!text) continue;
-    walkers[id || `名:${name}`] = text;
     for (const n of new Set(text.split(WALKER_NAME_SEP).map(x => x.trim()).filter(Boolean))) count.set(n, (count.get(n) || 0) + 1);
   }
   // 名字（開頭畫面讓志工點選自己）：出現次數多的在前
