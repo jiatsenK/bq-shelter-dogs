@@ -48,14 +48,14 @@ header p { margin: 2px 0 10px; font-size: 13px; color: var(--shell-soft); }
 .card { display: flex; align-items: stretch; min-height: 80px; border-bottom: 1px solid var(--line); }
 .card:last-child { border-bottom: 0; }
 .days { flex: 0 0 auto; min-width: 72px; padding: 0 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-variant-numeric: tabular-nums; line-height: 1; }
-.days b { font-size: 1.85em; font-weight: 900; }
+.days b { font-size: 1.85em; font-weight: 800; }
 .days small { font-size: .82em; font-weight: 700; margin-top: 2px; }
 .days .today { font-size: 1.1em; font-weight: 700; }
 .body { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; padding: 8px 10px 8px 4px; }
 .photo { width: 60px; height: 60px; flex-shrink: 0; background: var(--surface-soft); color: var(--ink-soft); display: grid; place-items: center; overflow: hidden; }
 .photo svg { width: 28px; height: 28px; opacity: .55; }
 .info { flex: 1; min-width: 0; }
-.name { font-size: 1.12em; font-weight: 800; line-height: 1.25; }
+.name { font-size: 1.1em; font-weight: 700; line-height: 1.25; }
 .cage { display: inline-flex; align-items: center; gap: 2px; margin-top: 1px; font-size: .84em; font-weight: 600; }
 .cage .icon { color: var(--ink-soft); }
 .who { margin-top: 3px; font-size: .8em; line-height: 1.35; color: var(--ink-soft); }
@@ -83,11 +83,11 @@ header p { margin: 2px 0 10px; font-size: 13px; color: var(--shell-soft); }
 .sD .days.green { color: var(--ink-soft); }
 
 /* 溜了：每列唯一有框的元素，直角 */
-.walk { flex-shrink: 0; min-width: 66px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 3px; background: #fff; color: var(--ink); box-shadow: inset 0 0 0 2px var(--ink); font-weight: 800; font-size: .95em; display: inline-flex; align-items: center; justify-content: center; gap: 3px; }
-.walk:active { background: var(--surface-soft); }
+.walk { flex-shrink: 0; min-width: 66px; min-height: 44px; padding: 0 10px; border: 0; border-radius: 3px; background: var(--surface-soft); color: var(--ink); box-shadow: inset 0 0 0 1px var(--line); font-weight: 800; font-size: .95em; display: inline-flex; align-items: center; justify-content: center; gap: 3px; }
+.walk:active { background: var(--line); }
 .walk.pending { background: var(--surface-soft); color: var(--ink-soft); box-shadow: none; font-size: .85em; }
 .walk.done { background: var(--green-bg); color: var(--green-text); box-shadow: inset 0 0 0 1.5px var(--green-text); }
-.walk.retry { color: var(--red-text); box-shadow: inset 0 0 0 2px var(--red-text); }
+.walk.retry { background: var(--red-bg); color: var(--red-text); box-shadow: none; }
 .walk.locked { background: transparent; box-shadow: none; color: var(--green-text); font-weight: 700; padding: 0 4px; }
 
 /* ── 按鈕比較（K：「溜了」也不要 AI 感）── 標記一樣，只換外觀 */
@@ -95,7 +95,7 @@ header p { margin: 2px 0 10px; font-size: 13px; color: var(--shell-soft); }
 /* 2 勾選格：病歷表上的勾選欄，方格在上、小字在下 */
 .b2 .walk { flex-direction: column; gap: 2px; min-width: 56px; min-height: 56px; padding: 4px 6px; background: transparent; box-shadow: none; font-size: .78em; font-weight: 700; color: var(--ink-soft); }
 .b2 .walk:active { background: transparent; }
-.b2 .walk .box { display: grid; place-items: center; width: 30px; height: 30px; border: 2.5px solid var(--ink); background: #fff; }
+.b2 .walk .box { display: grid; place-items: center; width: 30px; height: 30px; border: 2px solid #7E918A; background: #fff; }
 .b2 .walk.done { color: var(--green-text); }
 .b2 .walk.done .box { background: var(--green-text); border-color: var(--green-text); color: #fff; }
 .b2 .walk .box .icon { width: 22px; height: 22px; }
@@ -106,19 +106,19 @@ header p { margin: 2px 0 10px; font-size: 13px; color: var(--shell-soft); }
 .b2 .walk.locked { flex-direction: column; }
 .b2 .walk.locked .box { display: grid; border-color: var(--line); background: var(--surface-soft); color: var(--green-text); }
 /* 3 印章：方正粗字像蓋在紙上；登記好變成斜蓋的圓章 */
-.b3 .walk { border-radius: 2px; min-width: 60px; font-weight: 900; letter-spacing: .12em; padding: 0 6px 0 10px; box-shadow: inset 0 0 0 2.5px var(--ink); }
+.b3 .walk { border-radius: 2px; min-width: 60px; font-weight: 900; letter-spacing: .12em; padding: 0 6px 0 10px; box-shadow: inset 0 0 0 2px #7E918A; color: var(--ink-soft); }
 .b3 .walk.done, .b3 .walk.locked { width: 58px; height: 58px; min-width: 0; padding: 0; border-radius: 50%; background: transparent; color: var(--green-text); box-shadow: inset 0 0 0 2.5px var(--green-text), inset 0 0 0 5px #fff, inset 0 0 0 6px var(--green-text); transform: rotate(-12deg); font-size: .9em; letter-spacing: .04em; }
 .b3 .walk.done > .icon, .b3 .walk.locked > .icon { display: none; }
 .b3 .walk.locked { opacity: .55; }
 /* 4 整欄：右邊一整條欄位就是按鈕，跟左邊天數籤對稱，沒有框 */
 .b4 .body { padding-right: 0; }
-.b4 .walk { align-self: stretch; margin: -8px 0; min-width: 72px; border-radius: 0; box-shadow: inset 1px 0 0 var(--line); background: var(--surface); }
-.b4 .walk:active { background: var(--surface-soft); }
+.b4 .walk { align-self: stretch; margin: -8px 0; min-width: 72px; border-radius: 0; box-shadow: inset 1px 0 0 var(--line); background: var(--surface); color: var(--ink-soft); }
+.b4 .walk:active { background: var(--line); }
 .b4 .walk.done, .b4 .walk.locked { flex-direction: column; gap: 0; background: var(--green-bg); box-shadow: inset 1px 0 0 var(--line); }
 .b4 .walk.done .icon, .b4 .walk.locked .icon { width: 1.3em; height: 1.3em; }
 .b4 .walk.locked { background: var(--surface-soft); }
 .b4 .walk.pending { box-shadow: inset 1px 0 0 var(--line); }
-.b4 .walk.retry { box-shadow: inset 1px 0 0 var(--line), inset 0 -4px 0 var(--red-text); }
+.b4 .walk.retry { background: var(--red-bg); color: var(--red-text); box-shadow: inset 1px 0 0 var(--line); }
 
 .note { padding: 16px; font-size: 13px; color: var(--ink-soft); }
 </style>
@@ -184,7 +184,7 @@ function whoHtml(dog) {
 function btnHtml(dog, i) {
   const box = `<span class="box">${dog.state === 'mine' || dog.state === 'locked' ? tick : ''}</span>`;
   if (dog.pending) return `<button class="walk pending" disabled>${box}登記中</button>`;
-  if (dog.error) return `<button class="walk retry" data-i="${i}">${box}再試</button>`;
+  if (dog.error) return `<button class="walk retry" data-i="${i}">${box}重送</button>`;
   if (dog.state === 'mine') return `<button class="walk done" data-i="${i}" aria-label="${dog.name} 已溜，按一下取消">${box}${tick}已溜</button>`;
   if (dog.state === 'locked') return `<span class="walk locked" title="名單被別人改過，不能從這裡取消">${box}${tick}已溜</span>`;
   return `<button class="walk" data-i="${i}">${box}溜了</button>`;
