@@ -2267,8 +2267,8 @@ function walkerChipsHtml(dog, who, today) {
   if (!walkerEditBase(dog, today)) {
     const reason = isOffline() ? '沒網路，連線後才能編輯' : !loadWalkerName() ? '請先在「我溜過」選好你的名字再編輯'
       : walkPendingNow(dog) ? '正在寫進試算表，請稍候' : !UPLOAD_URL || sheetWriteState === 'off' ? '目前無法寫入試算表'
-        : '僅能編輯已確認的今天溜狗人';
-    return who.map(n => `<span class="who-chip">${esc(n)}</span>`).join('') + `<small class="lw-none">${reason}</small>`;
+        : '';
+    return who.map(n => `<span class="who-chip">${esc(n)}</span>`).join('') + (reason ? `<small class="lw-none">${reason}</small>` : '');
   }
   const busy = walkerEditBusy === walkKey(dog);
   const dis = busy ? ' disabled' : '';
