@@ -3188,6 +3188,15 @@ function syncHeaderTuck() {
 syncHeaderTuck();
 window.addEventListener('resize', syncHeaderTuck);
 
+// 常溜狗群「溜了」那排黏在底部分類列上方（#443）：分類列高度隨字級、安全區變，量實際高度
+const bottomBarEl = document.getElementById('bottomBar');
+function syncBottomBar() {
+  if (typeof bottomBarEl?.getBoundingClientRect !== 'function') return; // node 測試的假 DOM 沒有
+  document.documentElement.style.setProperty('--bottom-bar-height', `${bottomBarEl.getBoundingClientRect().height}px`);
+}
+syncBottomBar();
+if (bottomBarEl && typeof ResizeObserver === 'function') new ResizeObserver(syncBottomBar).observe(bottomBarEl);
+
 // 頁首範圍字（K 2026-10-09 病歷夾色籤）：溜狗表捲動時，頁首寫出畫面上第一隻到最後一隻多久沒溜，
 // 像檔案櫃抽屜上的範圍標籤。照片、列表模式都用「N 天前」（從資料算，不抄畫面上的字：列表模式顯示的是日期）
 function dayWord(dog, today) {
