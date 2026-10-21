@@ -6,3 +6,4 @@
 - 文件：`docs/273-info-page.md` 離所紀錄一行補上預設展開。
 - TDD：`tests/info-page.cjs` 新增一隻離所狗的情境：進頁即見名冊、aria-expanded=true、可收起、返回再進又展開；先紅後綠。
 - 未改樣式，未跑 impeccable detect。
+- PR：https://github.com/jiatsenK/bq-shelter-dogs/pull/450（草稿，推完、本機檢查全過後轉正式）。
