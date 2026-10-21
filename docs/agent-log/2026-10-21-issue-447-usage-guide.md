@@ -8,3 +8,4 @@
   - `public/css/app.css`：拿掉只給「看使用說明」用的 `.who-clear.guide-link`。
 - 測試：`tests/index.html` 原「我溜過可以再打開說明」改成我溜過沒有使用說明、資訊的使用說明開導覽並離開資訊頁。Node 346/346、網頁 261/261（headless Chromium）。
 - 沒改資料、Worker、schema。
+- 相關 PR：#449。
