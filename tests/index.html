@@ -3613,6 +3613,7 @@ async function runCardsTests() {
           if (String(url).startsWith('/api/cards/opened')) {
             if (f.fail) return Response.json({ ok: false }, { status: 503 });
             if (init.method === 'PUT') {
+              if (f.delay) await new Promise(r => setTimeout(r, f.delay));
               const input = JSON.parse(init.body);
               f.puts = (f.puts || []).concat(input.ids.length);
               if (input.ids.length > 50) return Response.json({ ok: false }, { status: 400 });
@@ -3679,17 +3680,28 @@ async function runCardsTests() {
       eq([dealt.length, dealt.every(c => c.classList.contains('dealt') && c.style.transform === c.dataset.base), field.classList.contains('tearing'), field.classList.contains('animating')], [5, true, false, false], '跳過動畫：');
       if (third.getComputedStyle(dealt[0]).transitionDuration.split(',').some(t => parseFloat(t) > 0)) throw new Error('跳過後卡片不再有過場');
       eq([third.eval('BQ.pending.length'), Object.keys(fixture.books[THIRD]).length], [2, 5], '跳過動畫照樣存：');
-      const again = td.getElementById('bqAll');
-      eq([again.hidden, td.getElementById('bqAgain').hidden], [true, false], '剩一包以內只留再開一包：');
+      eq([td.getElementById('bqAll').hidden, td.getElementById('bqAgain').hidden], [true, false], '剩一包以內只留再開一包：');
+      // 存檔中按跳過：等存好才攤開，焦點移到第一張卡
+      fixture.delay = 150;
+      td.getElementById('bqAgain').click();
+      if (third.getComputedStyle(skip).display === 'none') throw new Error('存檔中也要能跳過');
+      await third.eval('bqSkip()');
+      fixture.delay = 0;
+      eq([td.querySelectorAll('#bqHand .bq-card.dealt').length, td.activeElement === td.querySelector('#bqHand .bq-card'), third.eval('BQ.pending.length')], [2, true, 0], '存檔中跳過：');
       // 張數超過後台一次上限（50 張）就分批存
       const many = Array.from({ length: 55 }, (_, i) => ({ ...selected[0], id: `20250101${String(i).padStart(2, '0')}`, name: `多${i}` }));
       fixture.dogs = { ...DOGS_JSON, dogs: many };
       fixture.walks = { walks: many.map(d => ({ id: d.id, date: '2026-10-12', walkers: [MANY] })) };
       fixture.puts = [];
-      const m = await device(MANY);
+      const m = await device(MANY), md = m.document;
       await m.eval('bqOpenField()');
+      // 一般撕開（減少動態）：撕完 tearing 拿掉、焦點移到第一張卡
+      m.eval('BQ.still = true');
+      md.getElementById('bqPack').click();
+      await wait(() => md.querySelectorAll('#bqHand .bq-card').length === 5 && md.activeElement === md.querySelector('#bqHand .bq-card') && !md.getElementById('bqField').classList.contains('tearing'));
+      eq([md.activeElement === md.querySelector('#bqHand .bq-card'), md.getElementById('bqField').classList.contains('tearing')], [true, false], '撕開後焦點與狀態：');
       await m.eval('bqDeal({ all: true, instant: true })');
-      eq([fixture.puts, m.eval('BQ.pending.length'), Object.keys(fixture.books[MANY]).length], [[50, 5], 0, 55], '分批存：');
+      eq([fixture.puts, m.eval('BQ.pending.length'), Object.keys(fixture.books[MANY]).length], [[5, 50], 0, 55], '分批存：');
     } finally { frames.forEach(f => f.remove()); delete window.__cardFixture; }
   });
   await check('圖鑑只讀狗與遛狗資料，另透過開卡 API 儲存，不寫試算表', () => {

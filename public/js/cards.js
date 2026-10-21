@@ -261,7 +261,7 @@ function bqCardHtml(p, opts = {}) {
   </${tag}>`;
 }
 
-const BQ = { players: [], byId: new Map(), storage: null, today: new Date(), codes: [], mine: new Map(), opened: null, pending: [], hand: [], still: false, timers: [], packAll: false, walksOk: true, remote: 'loading', saving: false };
+const BQ = { players: [], byId: new Map(), storage: null, today: new Date(), codes: [], mine: new Map(), opened: null, pending: [], hand: [], still: false, timers: [], packAll: false, dealing: null, walksOk: true, remote: 'loading', saving: false };
 
 async function bqRemoteOpened(codes, ids) {
   const res = await fetch(ids ? '/api/cards/opened' : `/api/cards/opened?codes=${encodeURIComponent(codes[0])}`, ids
@@ -371,12 +371,18 @@ function bqRenderAll() {
 }
 
 // all：這次把待開的全部打開；instant：跳過動畫，卡片直接在扇形位置
-async function bqDeal({ all = false, instant = false } = {}) {
-  if (BQ.saving || BQ.remote !== 'ready') return;
+function bqDeal(opts) {
+  if (BQ.saving || BQ.remote !== 'ready') return BQ.dealing || Promise.resolve();
+  BQ.dealing = bqDealNow(opts).finally(() => { BQ.dealing = null; });
+  return BQ.dealing;
+}
+async function bqDealNow({ all = false, instant = false } = {}) {
   bqRefreshOpened();
   const cards = all ? BQ.pending.slice() : BQ.pending.slice(0, BQ_PACK_SIZE);
   if (!cards.length) return;
   const field = document.getElementById('bqField');
+  // 撕開卡包來的：攤開後才拿掉撕包狀態、焦點移到第一張卡（「再開一包」焦點留在按鈕上）
+  const fromPack = field.classList.contains('tearing');
   bqClearTimers();
   field.classList.toggle('instant', instant);
   if (!BQ.still && !instant) field.classList.add('animating');
@@ -419,6 +425,11 @@ async function bqDeal({ all = false, instant = false } = {}) {
     return;
   }
   bqShowHand(cards, new Set(cards.map(p => p.id)), instant);
+  if (fromPack) {
+    const quick = BQ.still || field.classList.contains('instant');
+    bqLater(() => field.classList.remove('tearing'), quick ? 0 : 880);
+    bqLater(bqFocusHand, quick ? 0 : 380);
+  }
   document.getElementById('bqDealNote').textContent = `拿到 ${cards.length} 張，已收進圖鑑`;
   document.getElementById('bqPackCount').textContent = '';
   bqRenderAgain();
@@ -484,8 +495,6 @@ function bqOpenPack(all = false) {
   if (!BQ.still) field.classList.add('animating');
   field.classList.add('tearing');
   bqLater(() => { field.classList.add('opened'); bqDeal({ all }); }, BQ.still ? 0 : 520);
-  bqLater(() => field.classList.remove('tearing'), BQ.still ? 0 : 1400);
-  bqLater(bqFocusHand, BQ.still ? 0 : 900);
 }
 // 跳過動畫：撕包、掉包、發牌都直接到最後；還沒開始存的這時才存（存好才收進圖鑑不變）
 async function bqSkip() {
@@ -495,7 +504,7 @@ async function bqSkip() {
   bqClearTimers();
   field.classList.remove('tearing', 'animating');
   field.classList.add('opened', 'instant');
-  if (!started) await bqDeal({ all: BQ.packAll, instant: true });
+  await (started ? BQ.dealing : bqDeal({ all: BQ.packAll, instant: true }));
   document.querySelectorAll('#bqHand .bq-card').forEach(c => { c.style.transform = c.dataset.base; c.classList.add('dealt'); });
   bqFocusHand();
 }
