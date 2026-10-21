@@ -57,6 +57,12 @@ module.exports = async (browser, base) => {
     await page.goForward();
     await page.getByRole('heading', { name: '入所多久分布', exact: true }).waitFor();
     await page.locator('[data-tab="mine"]').click();
+    assert.equal(await page.locator('#main [data-open-guide]').count(), 0, '#447 我溜過的頁不再有使用說明');
+    await page.locator('[data-tab="info"]').click();
+    await page.locator('[data-open-guide]').filter({ hasText: '使用說明' }).click();
+    await page.locator('.tour-tip').waitFor();
+    assert.equal(await page.locator('#tabs [data-tab="walk"]').getAttribute('aria-current'), 'page', '使用說明回到溜狗表看導覽');
+    await page.locator('.tour-skip').click();
     await page.locator('[data-tab="info"]').click();
     await page.locator('[data-info-page="stay"]').waitFor();
     await page.locator('[data-info-page="stay"]').click();

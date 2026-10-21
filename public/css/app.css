@@ -1826,7 +1826,6 @@ header.app { top: calc(-1 * var(--brand-h, 0px)); }
 header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .with-name { min-width: 44px; justify-content: center; }
 /* 紅色只留給天數和警示：「看使用說明」是一般連結，用主色（清除設定才是紅色） */
-.who-clear.guide-link { color: var(--primary); }
 
 /* ── 少一點格子：詳細資訊、分析、找狗、我溜過（critique 2026-10-09 P1，K 選「全部照表做」）──
    一段一段用細線分開，不再每段一張卡；標籤、統計、名次改成字 */
