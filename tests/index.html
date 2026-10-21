@@ -1927,7 +1927,7 @@ async function runV9Tests() {
       const t = document.getElementById('tour'); if (t) t.querySelector('[data-tour="done"]').click();
       onboard = null; renderOnboard(); walksData = null;
     });
-    await check('介面評估第四輪：先看看不設名字也能進；按溜了才問名字，設好直接登記；表上沒有的名字先確認；說明可以再打開', async () => {
+    await check('介面評估第四輪：先看看不設名字也能進；按溜了才問名字，設好直接登記；表上沒有的名字先確認；說明可以從資訊頁再打開', async () => {
       const tick = async () => { for (let i = 0; i < 6; i++) await new Promise(r => setTimeout(r, 0)); };
       const box = () => document.getElementById('onboard');
       walkedStorage = fakeStorage(); walkedMemory = null; walkerNameMemory = ''; walkerCodesMemory = null; sheetWritesMemory = null; onboard = null;
@@ -1978,8 +1978,10 @@ async function runV9Tests() {
       eq(calls.filter(u => !u.includes('/favorites?codes=')).map(u => u.replace('https://worker.test', '')), ['/identity', '/identity', '/walk'], '送出：');
       hideToast();
       activeTab = 'mine'; myWalks = []; myWalksState = 'ready'; render();
+      eq(document.querySelector('#main [data-open-guide]'), null, '我溜過不再有使用說明（#447）：');
+      showAnalysis();
       document.querySelector('#main [data-open-guide]').click();
-      eq([tour().querySelector('h2').textContent, tour().querySelector('[data-tour="done"]').textContent, activeTab], ['溜狗表', '關閉', 'walk'], '我溜過可以再打開說明（回到溜狗表）：');
+      eq([tour().querySelector('h2').textContent, tour().querySelector('[data-tour="done"]').textContent, activeTab, analysisOpen], ['溜狗表', '關閉', 'walk', false], '資訊頁的使用說明可以再打開（回到溜狗表）：');
       tour().querySelector('[data-tour="done"]').click();
       eq(tour(), null, '關閉：');
     });

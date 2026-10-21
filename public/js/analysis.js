@@ -602,7 +602,9 @@ function infoHomeHtml() {
   const dogs = loadState === 'ready' ? `目前在所 ${allDogs.length} 隻` : loadState === 'error' ? '在所資料讀取失敗' : '在所資料讀取中…';
   const dep = !departuresData || departuresData.state === 'loading' ? '離所紀錄讀取中…' : departuresData.state === 'error' ? '離所紀錄讀取失敗' : departuresData.list.length ? `共 ${departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
   const summary = { stay: dogs, departures: dep, quality: '查看缺照片、介紹及其他資料', updates: '網站更新與資料編輯' };
-  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}</section>`;
+  // #447 使用說明從我溜過移過來：按了回溜狗表重看導覽（app.js openGuide）
+  const guide = '<button type="button" data-open-guide><strong>使用說明</strong><span>從頭再看一次網站怎麼用</span></button>';
+  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}${guide}</section>`;
 }
 
 function infoUpdatesHtml() {
