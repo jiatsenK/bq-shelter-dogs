@@ -285,7 +285,7 @@ function bqCardHtml(p, opts = {}) {
 // 已出所的卡：白框、沒有背號；背面是在所期間、離所原因、溜過幾天、出席活動幾次
 function bqAlumniCardHtml(a) {
   const span = `${bqDate(a.intake)} – ${bqDate(a.left)}`;
-  const photo = bqPhoto({ ...a, number: '' }, a.photo);
+  const photo = bqPhoto({ ...a, number: '' }, a.photo); // 已出所沒有背號：補位圖不印編號
   return `<button type="button" class="bq-card tier-base bq-alumni-card" data-alumni-card="${bqEsc(a.id)}" style="--team:${a.team.color}" aria-label="${bqEsc(a.name)}，已出所，點了翻到背面">
     <span class="bq-in">
       <span class="bq-face">
@@ -311,7 +311,7 @@ function bqAlumniCardHtml(a) {
   </button>`;
 }
 
-const BQ = { alumni: null, players: [], byId: new Map(), storage: null, today: new Date(), codes: [], mine: new Map(), opened: null, pending: [], hand: [], still: false, walksOk: true, remote: 'loading', saving: false };
+const BQ = { alumni: { state: 'loading', list: [] }, players: [], byId: new Map(), storage: null, today: new Date(), codes: [], mine: new Map(), opened: null, pending: [], hand: [], still: false, walksOk: true, remote: 'loading', saving: false };
 
 async function bqRemoteOpened(codes, ids) {
   const res = await fetch(ids ? '/api/cards/opened' : `/api/cards/opened?codes=${encodeURIComponent(codes[0])}`, ids
@@ -547,11 +547,11 @@ function bqRenderBinder() {
 function bqRenderAlumni() {
   const box = document.getElementById('bqAlumni');
   if (!box) return;
-  const list = BQ.alumni;
+  const { state, list } = BQ.alumni;
   const count = document.querySelector('[data-bq="alumni"]');
-  if (count) count.textContent = Array.isArray(list) ? String(list.length) : '—';
-  if (list === null) { box.innerHTML = '<p class="bq-cta-note">讀取中…</p>'; return; }
-  if (list === 'error') { box.innerHTML = '<p class="bq-cta-note">已出所的狗讀不到，請重新整理頁面。</p>'; return; }
+  if (count) count.textContent = state === 'ready' ? String(list.length) : '—';
+  if (state === 'loading') { box.innerHTML = '<p class="bq-cta-note">讀取中…</p>'; return; }
+  if (state === 'error') { box.innerHTML = '<p class="bq-cta-note">已出所的狗讀不到，請重新整理頁面。</p>'; return; }
   if (!list.length) { box.innerHTML = '<p class="bq-cta-note">還沒有已出所的狗</p>'; return; }
   box.innerHTML = `<section class="bq-sheet" style="--team:${BQ_FREE.color}" aria-label="已出所">
     <div class="bq-pockets">${list.map(a => `<button type="button" class="bq-pocket got tier-base" data-alumni="${bqEsc(a.id)}" aria-label="${bqEsc(a.name)}，已出所，${bqEsc(a.reason)}">
@@ -562,10 +562,10 @@ async function bqLoadAlumni() {
   try {
     const res = await fetch(BQ_ALUMNI_URL, { cache: 'no-cache' });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    BQ.alumni = bqAlumni(await res.json());
+    BQ.alumni = { state: 'ready', list: bqAlumni(await res.json()) };
   } catch (e) {
     console.error(e);
-    BQ.alumni = 'error';
+    BQ.alumni = { state: 'error', list: [] };
   }
   bqRenderAlumni();
 }
@@ -575,22 +575,19 @@ let bqOpener = null;
 function bqOpen(id, opener) {
   const p = BQ.byId.get(id);
   if (!p) return;
-  bqOpener = opener || null;
   const mine = BQ.mine.has(id) && bqOpenedSet().has(id) ? BQ.mine.get(id) : null;
-  const modal = document.getElementById('bqModal');
-  document.getElementById('bqModalCard').innerHTML = bqCardHtml(p, { tag: 'button', big: true, mine });
-  modal.hidden = false;
+  bqShowModal(bqCardHtml(p, { tag: 'button', big: true, mine }), opener);
+}
+function bqShowModal(html, opener) {
+  bqOpener = opener || null;
+  document.getElementById('bqModalCard').innerHTML = html;
+  document.getElementById('bqModal').hidden = false;
   document.documentElement.classList.add('bq-modal-open');
   document.querySelector('#bqModalCard .bq-card').focus({ preventScroll: true });
 }
 function bqOpenAlumni(id, opener) {
-  const a = Array.isArray(BQ.alumni) && BQ.alumni.find(x => x.id === id);
-  if (!a) return;
-  bqOpener = opener || null;
-  document.getElementById('bqModalCard').innerHTML = bqAlumniCardHtml(a);
-  document.getElementById('bqModal').hidden = false;
-  document.documentElement.classList.add('bq-modal-open');
-  document.querySelector('#bqModalCard .bq-card').focus({ preventScroll: true });
+  const a = BQ.alumni.list.find(x => x.id === id);
+  if (a) bqShowModal(bqAlumniCardHtml(a), opener);
 }
 function bqClose() {
   const modal = document.getElementById('bqModal');

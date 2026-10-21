@@ -70,10 +70,27 @@ test('#271 以前存的摘要沒有每隻狗的天數：重算一次，答案一
   }
   resetPackCache();
   assert.deepEqual(brief(await get(DB)), first);
-  resetPackCache();
+});
+
+// CODING_STANDARDS「附讀寫量測試」：先用小資料跑，再塞大量無關資料跑，沒變時讀取量一樣
+async function readsOf(DB) {
   const before = DB.stats.rowsRead;
   await get(DB);
-  assert(DB.stats.rowsRead - before < 30, `冷啟動只讀版本號、資料包和摘要：讀了 ${DB.stats.rowsRead - before} 列`);
+  return DB.stats.rowsRead - before;
+}
+test('讀取量：沒變時只讀版本號，不隨狗、活動、溜狗紀錄變多', async t => {
+  const DB = await seeded(t);
+  await get(DB);
+  const small = await readsOf(DB);
+  for (let i = 0; i < 300; i++) await DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(`x${i}`, `無關${i}`).run();
+  for (let i = 0; i < 40; i++) {
+    await DB.prepare("INSERT INTO v3_activities(activity_id,activity_date,kind) VALUES(?,'2025-01-01','kids')").bind(`b${i}`).run();
+    await DB.prepare('INSERT INTO v3_activity_dogs VALUES(?,0,?,?)').bind(`b${i}`, `x${i}`, `無關${i}`).run();
+    await DB.prepare("INSERT INTO v3_walks(dog_id,walk_date,position,dog_number,dog_name) VALUES(?,'2025-02-01',0,'',?)").bind(`x${i}`, `無關${i}`).run();
+  }
+  await get(DB); // 有變：重讀一次
+  assert.equal(await readsOf(DB), small, '資料多了，沒變時讀取量一樣');
+  assert(small <= 5, `沒變時只讀幾列版本號：${small}`);
 });
 
 test('沒有 D1 回 503，不是空名單', async () => {

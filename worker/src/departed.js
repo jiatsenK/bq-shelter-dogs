@@ -5,16 +5,32 @@ import { readSmall, readDogWalkDays } from './packs.js';
 
 const REASONS = new Set(['adopt', 'death', 'other', 'unknown']);
 
+// 出席次數和只有名字的卡：跟活動同一個版本號（v3_activity_versions），沒變只讀那 1 列；變了才讀出席名單
+// （一年約幾百列）和這些狗的編號（照 v3_numbers_dog 索引），不讀離所表
+let attendCache = null; // { db, ver, byNumber: Map(編號 → 次數), manual: [列] }
+async function attendance(db) {
+  const ver = await db.prepare('SELECT ver FROM v3_activity_versions WHERE id=1').first('ver');
+  if (ver !== null && attendCache && attendCache.db === db && attendCache.ver === ver) return attendCache;
+  const [counts, numbers, manual] = await db.batch([
+    db.prepare('SELECT dog_id, COUNT(DISTINCT activity_id) AS n FROM v3_activity_dogs WHERE dog_id IS NOT NULL GROUP BY dog_id'),
+    db.prepare('SELECT number, dog_id FROM v3_dog_numbers WHERE dog_id IN (SELECT dog_id FROM v3_activity_dogs WHERE dog_id IS NOT NULL)'),
+    db.prepare('SELECT c.dog_id, g.name, c.departed_date, c.reason FROM v3_departed_cards c JOIN v3_dogs g USING(dog_id)'),
+  ]);
+  const byDog = new Map((counts.results || []).map(r => [r.dog_id, r.n]));
+  const out = {
+    db, ver,
+    byNumber: new Map((numbers.results || []).map(r => [r.number, byDog.get(r.dog_id) || 0])),
+    manual: (manual.results || []).map(r => ({ ...r, n: byDog.get(r.dog_id) || 0 })),
+  };
+  attendCache = ver === null ? null : out;
+  return out;
+}
+
 // 回 [{ id, number, dogId, name, formerIds, stays, departed, reason, walkDays, activities, nameOnly }]，離所日新到舊
 export async function readDepartedCards(db, today) {
   const departures = await readSmall(db, 'departures');
   const walkDays = await readDogWalkDays(db, today);
-  const [byNumber, manual] = await db.batch([
-    db.prepare('SELECT d.number, COUNT(DISTINCT a.activity_id) AS n FROM v3_activity_dogs a JOIN v3_departures d USING(dog_id) GROUP BY d.number'),
-    db.prepare(`SELECT c.dog_id, g.name, c.departed_date, c.reason, (SELECT COUNT(DISTINCT a.activity_id) FROM v3_activity_dogs a WHERE a.dog_id=c.dog_id) AS n
-      FROM v3_departed_cards c JOIN v3_dogs g USING(dog_id)`),
-  ]);
-  const acts = new Map((byNumber.results || []).map(r => [r.number, r.n]));
+  const { byNumber, manual } = await attendance(db);
   const out = [];
   // 再入所（現在又在主清單上）的不算；同一隻離所兩次（舊編號在較新那筆的 formerIds 裡）只留最新那筆
   const covered = new Set();
@@ -28,10 +44,10 @@ export async function readDepartedCards(db, today) {
       id: e.id, number: e.id, dogId: null, name, formerIds, stays: e.stays || [],
       departed: e.date || '', reason: REASONS.has(e.reason) ? e.reason : 'unknown',
       walkDays: [e.id, ...formerIds].reduce((n, id) => n + (walkDays[id] || 0), 0),
-      activities: acts.get(e.id) || 0, nameOnly: false,
+      activities: byNumber.get(e.id) || 0, nameOnly: false,
     });
   }
-  for (const r of manual.results || []) {
+  for (const r of manual) {
     out.push({
       id: r.dog_id, number: '', dogId: r.dog_id, name: r.name, formerIds: [], stays: [],
       departed: r.departed_date || '', reason: REASONS.has(r.reason) ? r.reason : 'unknown',
