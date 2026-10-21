@@ -323,7 +323,7 @@ function bqShowHand(cards, freshIds, instant) {
     c.dataset.base = bqFan(i, all.length);
     c.style.zIndex = String(i + 1);
     if (BQ.still || instant) { c.style.transform = c.dataset.base; c.classList.add('dealt'); return; }
-    setTimeout(() => { c.style.transform = c.dataset.base; c.classList.add('dealt'); }, 140 + i * 120);
+    bqLater(() => { c.style.transform = c.dataset.base; c.classList.add('dealt'); }, 140 + i * 120);
   });
 }
 
@@ -352,15 +352,38 @@ function bqRenderAgain() {
   again.hidden = !left;
   again.textContent = left > 1 ? `再開一包（還有 ${left} 包）` : '再開一包';
   document.getElementById('bqDone').hidden = false;
+  bqRenderAll();
+}
+// 「一次全開」：剩超過一包才出現，把全部新卡一次攤開、不跑動畫
+function bqRenderAll() {
+  const all = document.getElementById('bqAll');
+  all.hidden = BQ.pending.length <= BQ_PACK_SIZE;
+  all.textContent = `一次全開（${BQ.pending.length} 張）`;
+}
+// 撕包、發牌的計時器；「跳過動畫」清掉它們，直接排好
+let bqTimers = [];
+function bqLater(fn, ms) { bqTimers.push(setTimeout(fn, ms)); }
+function bqSkip() {
+  bqTimers.forEach(clearTimeout);
+  bqTimers = [];
+  const field = document.getElementById('bqField');
+  const tearing = field.classList.contains('tearing');
+  field.classList.remove('tearing');
+  document.getElementById('bqSkip').hidden = true;
+  document.querySelectorAll('#bqHand .bq-card').forEach(c => { c.style.transform = c.dataset.base; c.classList.add('dealt'); });
+  const focusFirst = () => { const first = document.querySelector('#bqHand .bq-card'); if (first) first.focus({ preventScroll: true }); };
+  if (tearing && !field.classList.contains('opened')) { field.classList.add('opened'); return bqDeal(false, true).then(focusFirst); }
+  focusFirst();
 }
 
-async function bqDeal() {
+async function bqDeal(all = false, instant = false) {
   if (BQ.saving || BQ.remote !== 'ready') return;
   bqRefreshOpened();
-  const cards = BQ.pending.slice(0, BQ_PACK_SIZE);
+  const cards = all ? BQ.pending.slice() : BQ.pending.slice(0, BQ_PACK_SIZE);
   if (!cards.length) return;
   BQ.saving = true;
   document.getElementById('bqAgain').disabled = true;
+  document.getElementById('bqAll').disabled = true;
   document.getElementById('bqDealNote').textContent = '正在儲存開卡紀錄…';
   try {
     await bqRemoteOpened(BQ.codes, cards.map(p => p.id));
@@ -373,11 +396,14 @@ async function bqDeal() {
   } finally {
     BQ.saving = false;
     document.getElementById('bqAgain').disabled = false;
+    document.getElementById('bqAll').disabled = false;
   }
   bqMarkOpened(BQ.opened, BQ.codes, cards.map(p => p.id), BQ.today);
   bqSaveOpened(BQ.storage, BQ.opened);
   BQ.pending = bqPending(BQ.players, BQ.mine, bqOpenedSet());
-  bqShowHand(cards, new Set(cards.map(p => p.id)), false);
+  bqShowHand(cards, new Set(cards.map(p => p.id)), instant);
+  document.getElementById('bqSkip').hidden = BQ.still || instant;
+  if (!BQ.still && !instant) bqLater(() => { document.getElementById('bqSkip').hidden = true; }, 140 + cards.length * 120);
   document.getElementById('bqDealNote').textContent = `拿到 ${cards.length} 張，已收進圖鑑`;
   document.getElementById('bqPackCount').textContent = '';
   bqRenderAgain();
@@ -412,6 +438,8 @@ async function bqOpenField(opener) {
   document.getElementById('bqHand').innerHTML = '';
   document.getElementById('bqAgain').hidden = true;
   document.getElementById('bqDone').hidden = true;
+  document.getElementById('bqSkip').hidden = true;
+  bqRenderAll();
   const n = BQ.pending.length;
   document.getElementById('bqPackCount').textContent = `${Math.min(n, BQ_PACK_SIZE)} 張新卡`;
   field.hidden = false;
@@ -421,6 +449,8 @@ async function bqOpenField(opener) {
 function bqCloseField() {
   const field = document.getElementById('bqField');
   if (field.hidden) return;
+  bqTimers.forEach(clearTimeout);
+  bqTimers = [];
   field.hidden = true;
   field.classList.remove('tearing', 'opened');
   document.getElementById('bqHand').innerHTML = '';
@@ -434,9 +464,20 @@ function bqOpenPack() {
   if (field.classList.contains('tearing') || field.classList.contains('opened') || !BQ.pending.length) return;
   // 先撕掉上緣那條、卡包往下掉，卡片再從開口升起來攤開（減少動態時直接攤開）
   field.classList.add('tearing');
-  setTimeout(() => { field.classList.add('opened'); bqDeal(); }, BQ.still ? 0 : 520);
-  setTimeout(() => field.classList.remove('tearing'), BQ.still ? 0 : 1400);
-  setTimeout(() => { const first = document.querySelector('#bqHand .bq-card'); if (first) first.focus({ preventScroll: true }); }, BQ.still ? 0 : 900);
+  document.getElementById('bqSkip').hidden = BQ.still;
+  bqLater(() => { field.classList.add('opened'); bqDeal(); }, BQ.still ? 0 : 520);
+  bqLater(() => field.classList.remove('tearing'), BQ.still ? 0 : 1400);
+  bqLater(() => { const first = document.querySelector('#bqHand .bq-card'); if (first) first.focus({ preventScroll: true }); }, BQ.still ? 0 : 900);
+}
+function bqOpenAll() {
+  const field = document.getElementById('bqField');
+  if (BQ.saving || !BQ.pending.length) return;
+  bqTimers.forEach(clearTimeout);
+  bqTimers = [];
+  field.classList.remove('tearing');
+  field.classList.add('opened');
+  document.getElementById('bqSkip').hidden = true;
+  return bqDeal(true, true).then(() => { const first = document.querySelector('#bqHand .bq-card'); if (first) first.focus({ preventScroll: true }); });
 }
 
 // 滑鼠傾斜＋雷射反光（減少動態時不傾斜）
@@ -520,7 +561,9 @@ function bqBind() {
   addEventListener('pageshow', () => bqRefreshOpened());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) bqRefreshOpened(); });
   document.getElementById('bqPack').addEventListener('click', bqOpenPack);
-  document.getElementById('bqAgain').addEventListener('click', bqDeal);
+  document.getElementById('bqAgain').addEventListener('click', () => bqDeal());
+  document.getElementById('bqAll').addEventListener('click', bqOpenAll);
+  document.getElementById('bqSkip').addEventListener('click', bqSkip);
   const hand = document.getElementById('bqHand');
   hand.addEventListener('pointermove', bqTilt);
   hand.addEventListener('pointerout', bqUntilt);
