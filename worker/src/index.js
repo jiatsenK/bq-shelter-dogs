@@ -2,6 +2,7 @@ import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitie
 import { cleanIntakeEvents } from './intake.js';
 import { cleanStays } from './stays.js';
 import { saveFixedCare } from './compact.js';
+import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, readActivities, resolveDogs, updateActivity } from './activities.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
@@ -443,6 +444,43 @@ async function putIntro(request, env, origin) {
   if (saved.invalid) return fail(400, saved.invalid, origin);
   await logEdit(env.DB, { editor, kind: 'intro', dogId: saved.dogId, dogNumber: id, before: saved.before, after: hasEvents ? { text, events } : text }, now);
   return reply(200, { ok: true, id, intro: text, ...(hasEvents ? { intakeEvents: events } : {}), commit: null }, origin);
+}
+
+// ---- 活動紀錄（#270，ADR 0002）：GET /activities；POST 新增、PUT／DELETE /activities/{id}，誰都能改（先選名字），記編輯紀錄 ----
+// 改、刪要帶打開時看到的 revision，別人剛改過會被擋下來
+const ACTIVITY_ID = /^[a-f0-9]{32}$/;
+async function activities(request, env, origin) {
+  if (!env || !env.DB) return fail(503, '活動紀錄還沒準備好（沒有接資料庫）', origin, { code: 'db' });
+  const m = new URL(request.url).pathname.match(/^\/activities(?:\/([^/]+))?$/);
+  const id = m && m[1] ? decodeURIComponent(m[1]) : '';
+  if (!m || (m[1] && !ACTIVITY_ID.test(id))) return fail(404, '找不到這場活動', origin);
+  const method = request.method;
+  if (method === 'GET' && !id) return reply(200, { ok: true, activities: await readActivities(env.DB) }, origin);
+  if (!(id ? ['PUT', 'DELETE'] : ['POST']).includes(method)) return fail(405, '活動紀錄只能用 GET／POST /activities、PUT／DELETE /activities/{id}', origin);
+
+  const body = await jsonBody(request, origin, '資料太長');
+  if (body.error) return body.error;
+  const input = body.input || {};
+  const editor = await editorOf(input.editor, config(env).walkerKey);
+  if (!editor) return needEditor(origin);
+  const now = Date.now();
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  try {
+    const revision = Number.isInteger(input.revision) ? input.revision : null;
+    if (id && revision === null) throw new ActivityError(400, '請重新整理後再改');
+    const act = method === 'DELETE' ? null : cleanActivity(input, taiwanYmd(now));
+    if (!allow(`activity:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
+    if (act) act.dogs = await resolveDogs(env.DB, act.dogs);
+    let before = null, after = null;
+    if (method === 'POST') after = await createActivity(env.DB, act);
+    else if (method === 'PUT') ({ before, after } = await updateActivity(env.DB, id, revision, act));
+    else ({ before } = await deleteActivity(env.DB, id, revision));
+    await logEdit(env.DB, { editor, kind: 'activity', before: activityLog(before), after: activityLog(after) }, now);
+    return reply(200, { ok: true, activity: after, ...(method === 'DELETE' ? { deleted: id } : {}) }, origin);
+  } catch (e) {
+    if (e instanceof ActivityError) return fail(e.status, e.message, origin);
+    throw e;
+  }
 }
 
 // ---- 舊編號（#289，ADR 0005）：POST／DELETE /former/{編號}，body { editor, former }，誰都能改，不用通關碼；記編輯紀錄（ADR 0004） ----
@@ -1368,6 +1406,16 @@ export default {
       } catch (e) {
         console.error('stays', e);
         return fail(500, '出入所紀錄存檔發生錯誤，原本的資料不受影響', allowed);
+      }
+    }
+
+    // 活動紀錄（#270）
+    if (path === '/activities' || path.startsWith('/activities/')) {
+      try {
+        return await activities(request, env, allowed);
+      } catch (e) {
+        console.error('activities', e);
+        return request.method === 'GET' ? fail(503, '暫時讀不到活動紀錄', allowed, { code: 'db' }) : fail(500, '活動紀錄存檔發生錯誤，原本的資料不受影響', allowed);
       }
     }
 

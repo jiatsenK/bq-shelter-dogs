@@ -2354,6 +2354,35 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .info-releases { list-style: none; margin: 0; padding: 0; }
 .info-releases li { border-bottom: 1px solid var(--line); padding: 16px 0; overflow-wrap: anywhere; }
 .info-releases time { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+/* #270 活動紀錄：每場標題下直接列出席的狗；新增、修改就地展開 */
+.act-list { margin-top: 8px; }
+.act-item { border-top: 1px solid var(--line); padding: 12px 0; }
+.act-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.act-item h3 { margin: 0; font-size: 16px; font-weight: 700; overflow-wrap: anywhere; }
+.act-item.editing h3 { margin-bottom: 8px; }
+.act-dogs { display: flex; flex-wrap: wrap; gap: 6px 14px; list-style: none; margin: 6px 0 0; padding: 0; font-size: 15px; }
+.act-dogs li { overflow-wrap: anywhere; }
+.act-dogs small, .act-chip small, .act-pick small { margin-left: 4px; color: var(--ink-soft); font-size: 12.5px; font-weight: 400; }
+.act-none { margin: 6px 0 0; color: var(--ink-soft); font-size: 14px; }
+.act-form { margin-top: 10px; }
+.act-edit, .act-kinds button, .act-buttons button, .act-chip button, .act-pick { min-height: 44px; min-width: 44px; font: inherit; cursor: pointer; }
+.act-edit { flex: none; padding: 0 12px; border: 0; background: none; color: var(--primary); font-weight: 700; }
+.act-kinds { display: flex; flex-wrap: wrap; gap: 8px; }
+.act-kinds button { flex: 1 1 8em; padding: 8px 12px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); color: var(--ink); }
+.act-kinds button[aria-pressed="true"] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); color: var(--primary); font-weight: 800; }
+.act-count { margin: 0; font-size: 13.5px; color: var(--ink-soft); }
+.act-picked { display: flex; flex-wrap: wrap; gap: 6px; }
+.act-chip { display: inline-flex; align-items: center; gap: 2px; padding-left: 10px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface-soft); font-size: 15px; overflow-wrap: anywhere; }
+.act-chip button { border: 0; background: none; color: var(--ink-soft); font-size: 20px; line-height: 1; }
+.act-picks { display: flex; flex-direction: column; }
+.act-picks:empty { display: none; }
+.act-pick { display: block; width: 100%; padding: 8px 4px; border: 0; border-bottom: 1px solid var(--line); background: none; color: var(--ink); text-align: left; overflow-wrap: anywhere; }
+.act-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.act-buttons button { flex: 1 1 6em; padding: 8px 12px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); color: var(--ink); }
+.act-buttons .act-save { border-color: var(--primary); background: var(--primary); color: #fff; font-weight: 700; }
+.act-buttons .act-delete { color: var(--red-text); }
+.act-buttons button:disabled, .act-kinds button:disabled { opacity: .55; cursor: default; }
+.act-edit:focus-visible, .act-kinds button:focus-visible, .act-buttons button:focus-visible, .act-chip button:focus-visible, .act-pick:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
 .analysis-open .a-miss summary, .analysis-open .dep-filters input, .analysis-open .dep-filters select { min-height: 44px; min-width: 44px; }
 /* #374 定版斜照片卡。少群不放大；長名換行，不縮字。 */
 #groupPage { max-width: 480px; margin: auto; padding: 0 16px 24px; overflow: hidden; color: var(--ink); }

@@ -178,6 +178,27 @@ CREATE TABLE IF NOT EXISTS v3_edit_log (
   before_json TEXT,
   after_json TEXT
 );
+-- 活動紀錄（#270，ADR 0002）：一場一列，類型固定兩種（kids＝動保小小兵、adoption＝認養會）。網站寫，同步不碰。
+-- revision 每改一次加 1，兩支手機同時改時後送的會被擋下（不互相蓋掉）
+CREATE TABLE IF NOT EXISTS v3_activities (
+  activity_id TEXT PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(16)))),
+  activity_date TEXT NOT NULL CHECK(length(activity_date)=10),
+  kind TEXT NOT NULL CHECK(kind IN ('kids','adoption')),
+  revision INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS v3_activities_date ON v3_activities(activity_date);
+-- 出席的狗：只記出席，不記狀況。dog_id 是 NULL 表示只有名字、還沒對上狗（舊名單），之後補建狗卡再接上；name 是記的時候的名字
+CREATE TABLE IF NOT EXISTS v3_activity_dogs (
+  activity_id TEXT NOT NULL REFERENCES v3_activities(activity_id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  dog_id TEXT REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
+  name TEXT NOT NULL,
+  PRIMARY KEY(activity_id,position)
+);
+CREATE INDEX IF NOT EXISTS v3_activity_dogs_dog ON v3_activity_dogs(dog_id);
+-- 在 batch 內檢查活動沒被別人改過；失敗時整批回復（同 v3_identity_guard）
+CREATE TABLE IF NOT EXISTS v3_activity_guard (valid INTEGER NOT NULL CHECK(valid=1));
+
 -- #267：舊代號資料保留作為待對照來源，新個人資料只由固定志工持有。
 CREATE TABLE IF NOT EXISTS v3_identity_names (
  code TEXT PRIMARY KEY NOT NULL,
