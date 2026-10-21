@@ -72,3 +72,15 @@ repo 的測試 D1 設定 `wrangler.preview-db.jsonc`，ID 為 `9e23a65c-c9dd-4f8
 - 本次已關閉 Cron 並以到期設定停用 HTTP 作業，正確金鑰也只會得到 410。重跑前須再次核對授權目標、schema、金鑰與期限；先 `wrangler deploy --dry-run`，再用 `--secrets-file` 的忽略暫存檔部署。部署後刪明文暫存，測完移除排程並到期停用，API 讀回確認。
 
 第 1 步所有實測完成前，#441 仍維持未完成。接著才由 K 確認 ADR，依票內第 2、3 步決定規格與子票。
+
+## 版本快取／預算追加驗證
+
+[快取／預算報告](../../../docs/research/2026-10-21-d1-walk-cache-budget.md)及[原始選取證據](../../../docs/research/2026-10-21-d1-walk-cache-evidence.json)。
+
+- `cache-schema.sql`／`cache-seed.sql` 只在測試 D1 建兩張專屬表與版本觸發器，200 筆假資料分兩批，每批 100 個 INSERT。每批實測寫 300 列，不能把整份 600 列寫入當作低於 500 的單批。
+- `cache-meter.mjs` 匯入原 `readTodayWalks`，只以 SQL allowlist 導向測試表，使用 ALS 分別記每請求 metadata；正式檔案不改。此測試原型的今天日期固定 2026-10-21，不能跨日期直接重跑冒充今天。
+- `cache-load.mjs load` 在第 0、1、2 分鐘各 30 個邏輯客戶端讀取，中間另加 30 次登記後立即驗證。登記啟用 `cacheExercise`，會把 pending 與測試 today 更新放進同一 batch。
+- `cache-load.mjs clear`／`restore` 需要先由連接器精確讀回測試格、確認編號與備份，再完成明確的測試複本改值。工具只發通知及驗證，不能拿它代替 Apps Script 觸發器的端到端驗收。
+- `cache-load.mjs cold` 在正常測試後獨立強制 30 次資料快取 miss，不等同新 isolate。`read-tail.mjs cache` 寫另一份白名單紀錄，避免覆蓋前輪原始日誌。
+- `cache-summarize.mjs` 根據本次固定檔名、版本及帳號聚合日誌產生證據；只適用本次 run，重跑須保留歷史證據並更換來源／輸出。
+- 三組資料正確性驗證已通過，成本是命中 1 列、miss 201 列。200 列全 miss 的全天情境會超出免費額度，CPU 最大分組 P99 10.591 ms 也高於 10 ms；報告沒有將短時段命中率或 HTTP 成功當免費方案過關。測完再次到期停用，API 已核對回 410。
