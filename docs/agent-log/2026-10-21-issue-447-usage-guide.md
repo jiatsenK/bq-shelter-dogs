@@ -9,3 +9,8 @@
 - 測試：`tests/index.html` 原「我溜過可以再打開說明」改成我溜過沒有使用說明、資訊的使用說明開導覽並離開資訊頁。Node 346/346、網頁 261/261（headless Chromium）。
 - 沒改資料、Worker、schema。
 - 相關 PR：#449。
+
+## 併入本機進度（同 PR）
+- K 本機中斷前的 WIP 在 `origin/local/unruffled-chaplygin`（426cae5），比對後只併入 `tests/info-page.cjs` 的實機檢查：我溜過沒有使用說明、資訊頁按使用說明回溜狗表開導覽。其餘是措辭差異；本機版 app.css 留了一行沒有規則的孤兒註解，不採用。沒對 local/ 分支推送。
+- 補驗：舊程式跑新測試會失敗（紅），新程式通過。/code-review 兩軸沒有要修的項目。
+- info-page、index 套件重跑通過。
