@@ -123,7 +123,7 @@ function groupStageHtml() {
     ${groupRegistrations.get(groupColumn)?.successful.length ? `<button type="button" class="bar-btn" data-gw-action="companions" ${groupBusy ? 'disabled' : ''}>＋一起溜的人</button>` : ''}
     ${groupRegistrations.get(groupColumn)?.result.retryDogs.length ? `<button type="button" class="bar-btn" data-gw-action="retry-walk" ${groupBusy ? 'disabled' : ''}>再試一次</button>` : ''}
     </div>
-    <p id="gwSource" class="section-hint" role="status">${esc(`網站狗群・讀取 ${new Date(data.checkedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false })}`)}${groupRead ? '・檢查中…' : groupReadError ? '・檢查失敗，保留先前內容' : ''}${groupReadError ? '<button type="button" data-gw-action="retry">重新讀取</button>' : ''}</p>
+    <p id="gwSource" class="section-hint" role="status">${groupRead ? '檢查中…' : groupReadError ? '檢查失敗，保留先前內容' : ''}${groupReadError ? '<button type="button" data-gw-action="retry">重新讀取</button>' : ''}</p>
   </section>`;
 }
 function groupFormHtml() {
