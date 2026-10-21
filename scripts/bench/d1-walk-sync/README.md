@@ -1,6 +1,6 @@
 # #441 丟棄式量測工具
 
-分支 `prototype/d1-walk-sync`。只準備第 1 步的一部分；**實測尚未執行**，不能用來決定 ADR 0017、寬限期或 Cron 頻率。不變更正式 Worker、D1 schema、試算表寫入程式。
+分支 `prototype/d1-walk-sync`。第 1 步已完成 Google 20 筆與 Cloudflare 部分原型量測，見[實測報告](../../../docs/research/2026-10-21-d1-walk-sync-measurements.md)。仍不能視為完整驗收或直接決定 ADR 0017、寬限期與 Cron 頻率。不變更正式 Worker、D1 schema、試算表寫入程式。
 
 ## K 先準備的 Google 複本
 
@@ -17,7 +17,7 @@ node scripts/bench/d1-walk-sync/build-gas.mjs
 4. 測試專案「專案設定 → 指令碼屬性」設定：`SHEET_ID` 與 `PROTOTYPE_SHEET_ID` 都填**複本 ID**，`WRITE_KEY` 填一組測試專用金鑰。金鑰留在本機，不貼到 Issue 或聊天。時區設台北。不要設定正式的 `NOTIFY_URL`／`NOTIFY_KEY`。
 5. 另建「網頁應用程式」部署，執行身分選自己，存取選所有人。提供複本網址與這個測試部署的 `/exec` 網址。程式會要求試算表名稱以 `BENCH441` 開頭；這是防誤用，不能取代人工核對複本 ID。
 6. gviz 必須可在未登入狀態讀取，和現有 Worker 一樣。若需要開放讀取，先將複本資料匿名化，再設定測試複本的讀取權限。不要為了量測改正式表權限。
-7. 在**測試專案**新增安裝型「試算表／變更時」觸發器，函式選 `notifyWorker`。它目前只在執行紀錄記時間與 `changeType`，不通知任何 Worker。Cloudflare 通知 CPU 量測需另接隔離 Worker，尚未準備。
+7. 在**測試專案**新增安裝型「試算表／變更時」觸發器，函式選 `notifyWorker`。它目前只在執行紀錄記時間與 `changeType`，不通知任何 Worker。Cloudflare 通知 CPU 已由獨立 HTTP 呼叫探測，尚未連接 Apps Script 的端到端通知。
 
 Google 授權與部署由 K 操作；不需把正式金鑰交給工具。官方說明：[Web Apps](https://developers.google.com/apps-script/guides/web)、[Installable Triggers](https://developers.google.com/apps-script/guides/triggers/installable)。程式呼叫不會觸發安裝型觸發器，排序、貼上、復原是否產生事件仍須實際操作，不能由這份工具的 doPost 模擬。
 
@@ -53,12 +53,22 @@ try {
 
 | 項目 | 所需證據 | 狀態 |
 |---|---|---|
-| doPost 與 gviz 延遲 | 至少 20 組原始樣本、日期、複本結構、觀測最大值及失敗數；上限為樣本觀測範圍，不是服務保證 | 工具已備，未執行 |
-| 排序、多格貼上、Ctrl+Z | 人工動作時間與執行紀錄 `receivedAt`／`changeType` 配對，每項多次；沒事件也記錄 | 測試觸發器記錄器已備，未執行 |
-| Cloudflare Cron／通知 CPU | 隔離 Worker 版本、Cron 事件及通知請求的 Cloudflare CPU 原始資料；冷啟動須有 isolate 證據，不能拿新 URL 當冷啟動 | 隔離 Worker／量測入口尚未建立 |
-| 10 支手機每分鐘讀、同狗並行寫 | 10 個獨立客戶端＋隔離 D1＋候選同步邏輯，讀回名字聯集、pending、三方合併與重試狀態 | 尚未建立；現有 Sheet writer 測試不能冒充 D1 先寫驗證 |
-| 免費額度 | 實際 D1 rows_read／rows_written（含索引、觸發器、重試）與 Workers 請求／CPU；估算要另標假設與帳號其他用量 | 未測 |
+| doPost 與 gviz 延遲 | 至少 20 組原始樣本、日期、複本結構、觀測最大值及失敗數；上限為樣本觀測範圍，不是服務保證 | 20 筆序列樣本完成；人工修改後的可見延遲未測 |
+| 排序、多格貼上、Ctrl+Z | 人工動作時間與執行紀錄 `receivedAt`／`changeType` 配對，每項多次；沒事件也記錄 | K 回報三項都有，原始紀錄待補 |
+| Cloudflare Cron／通知 CPU | 隔離 Worker 版本、Cron 事件及通知請求的 Cloudflare CPU 原始資料；冷啟動須有 isolate 證據，不能拿新 URL 當冷啟動 | 已取得通知與 Cron CPU；首次 handler 有識別，未保證所有平台啟動成本 |
+| 10 支手機每分鐘讀、同狗並行寫 | 10 個獨立客戶端＋隔離 D1＋候選同步邏輯，讀回名字聯集、pending、三方合併與重試狀態 | 十個邏輯客戶端的 D1 先寫、背景加名寫回及真實 Cron 恢復通過；三方合併／整格替換未做 |
+| 免費額度 | 實際 D1 rows_read／rows_written（含索引、觸發器、重試）與 Workers 請求／CPU；估算要另標假設與帳號其他用量 | 單次成本已測；全帳號與正式全今日清單仍未驗證 |
 
-已找到 repo 的測試 D1 設定 `wrangler.preview-db.jsonc`，ID 為 `9e23a65c-c9dd-4f83-ad9c-2e01626910f0`；本工作未對它連線或寫入。它供其他預覽共用，不能清庫；後續原型必須用專屬表名／測試 run ID 隔離。不要直接部署現有 `wrangler.preview.json`，它含非本票服務設定。
+repo 的測試 D1 設定 `wrangler.preview-db.jsonc`，ID 為 `9e23a65c-c9dd-4f83-ad9c-2e01626910f0`；只在此庫使用 `schema.sql` 的兩張 `bench441_` 表及 run ID，不清庫。不要直接部署現有 `wrangler.preview.json`，它含非本票服務設定。
+
+## Cloudflare 原型工具與重跑界線
+
+- `worker.mjs`：加密驗證 header、到期防護、四欄雜湊快照比對、D1 原子加名／pending、既有測試 GAS 背景加名與 Cron 重試。這不是正式整格替換／三方合併。
+- `schema.sql`：只建立兩張原型表，不帶刪除或正式表操作。原型分支不合併 main，不把這些表加進正式 compact-schema。
+- `wrangler.jsonc`：固定測試帳號、測試 D1、獨立 Worker 名稱。預設 `EXPIRES_AT=0` 且無 Cron，直接部署會處於停用狀態。實測時使用忽略的 `deploy.generated.json` 設定有限期限與暫時 Cron；不能把正式資源綁進來。
+- `probe.mjs`：20 次序列通知探測；`load.mjs`：十人同狗並行＋三輪每分鐘十讀＋Sheet 聯集；`deferred.mjs`：未派送的 pending＋同名重送＋等待真實 Cron 恢復。它們使用 `BENCH_WORKER_URL` 與本機環境變數 `BENCH_WRITE_KEY`，不在命令列帶金鑰。
+- `read-tail.mjs`：從本機即時事件移除 request 資訊，只保留白名單診斷；`summarize.mjs`：核對本次探測／聯集／Cron 恢復證據，再產生研究證據 JSON。它是本次 run 的整理器，版本 ID 與檔名固定；重跑須更新來源，不能直接覆蓋歷史證據。
+- 使用 `wrangler tail --format json` 收原始事件時先遮蔽 `X-Bench-Key`，只放忽略檔；不提交 request headers、IP 或 request.cf。正式證據使用白名單轉出的 JSON。
+- 本次已關閉 Cron 並以到期設定停用 HTTP 作業，正確金鑰也只會得到 410。重跑前須再次核對授權目標、schema、金鑰與期限；先 `wrangler deploy --dry-run`，再用 `--secrets-file` 的忽略暫存檔部署。部署後刪明文暫存，測完移除排程並到期停用，API 讀回確認。
 
 第 1 步所有實測完成前，#441 仍維持未完成。接著才由 K 確認 ADR，依票內第 2、3 步決定規格與子票。

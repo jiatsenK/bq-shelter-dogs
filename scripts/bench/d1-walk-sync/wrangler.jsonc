@@ -1,0 +1,18 @@
+{
+  "name": "bq-d1-walk-sync-441",
+  "account_id": "a0f88d34c34ad0d34f923b9f43799622",
+  "main": "worker.mjs",
+  "compatibility_date": "2026-10-21",
+  "workers_dev": true,
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "bq-shelter-dogs-test",
+    "database_id": "9e23a65c-c9dd-4f83-ad9c-2e01626910f0"
+  }],
+  "observability": { "enabled": true, "logs": { "enabled": true, "head_sampling_rate": 1, "invocation_logs": true } },
+  "triggers": { "crons": [] },
+  "vars": {
+    "EXPIRES_AT": "0",
+    "WRITE_URL": "https://script.google.com/macros/s/AKfycbxz87ymqFClpggSXrvY8wY-BWx2ocaRKPYXSDqymbZnt2lggxyd6RuP1dfQ4IxrSjfW-Q/exec"
+  }
+}

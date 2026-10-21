@@ -1,3 +1,5 @@
 generated-test-only.gs
 *.jsonl
 *.log
+.build/
+*.generated.json

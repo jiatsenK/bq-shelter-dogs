@@ -1,0 +1,4670 @@
+{
+  "summary": {
+    "version": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d",
+    "disabledVersion": "56157f35-c4f7-4f3f-9dba-f7f1a29a681f",
+    "worker": "bq-d1-walk-sync-441",
+    "testDatabaseId": "9e23a65c-c9dd-4f83-ad9c-2e01626910f0",
+    "codeSha256LF": {
+      "worker.mjs": "98a5361e4bca9e3132a521fed93df743df3e18e13c16c64bc436799295cf774b",
+      "schema.sql": "2cd4f437f9afc3c8d2eeb15d999a9cc6e82ea58486019fe5938212f2d558d419",
+      "load.mjs": "cf58565f3eb15beb811c3883fc7f2080a4888184996c1385b857cc10f751c2a8",
+      "probe.mjs": "71dd213ffc9aa20846da326ce7ade55b85d6ced67a08551f59440bbf221f86cf",
+      "deferred.mjs": "a082f4f672001f4ce20098d214b7d89392dc8376ce5e4e61b1eb5fc220b1a553"
+    },
+    "notify": {
+      "capturedEvents": 15,
+      "minMs": 2,
+      "maxMs": 8,
+      "firstHandlerEvents": 1
+    },
+    "walks": {
+      "capturedEvents": 12,
+      "minMs": 1,
+      "maxMs": 7,
+      "firstHandlerEvents": 5
+    },
+    "reads": {
+      "capturedEvents": 43,
+      "minMs": 0,
+      "maxMs": 5,
+      "firstHandlerEvents": 8
+    },
+    "cron": {
+      "capturedEvents": 4,
+      "minMs": 5,
+      "maxMs": 8,
+      "firstHandlerEvents": 4
+    },
+    "probeResponses": 20,
+    "loadComplete": true,
+    "realCronRecovery": true,
+    "limitations": [
+      "Tail capture is incomplete; event counts are captured samples only.",
+      "invocation=1 identifies first handler on an instrumented isolate, not guaranteed platform startup.",
+      "Append-based test GAS and hashed snapshot comparison are not full replacement/reconciliation implementation."
+    ]
+  },
+  "probe": [
+    {
+      "at": "2026-10-21T02:07:33.763Z",
+      "index": 0,
+      "status": 200,
+      "wallMs": 1689.1634000000001,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 1,
+        "at": "2026-10-21T02:07:34.641Z",
+        "dogs": 116,
+        "changed": 116,
+        "read": 1,
+        "written": 232
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:35.453Z",
+      "index": 1,
+      "status": 200,
+      "wallMs": 616.9748999999997,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 2,
+        "at": "2026-10-21T02:07:35.969Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:36.071Z",
+      "index": 2,
+      "status": 200,
+      "wallMs": 571.2163,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 3,
+        "at": "2026-10-21T02:07:36.590Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:36.644Z",
+      "index": 3,
+      "status": 200,
+      "wallMs": 571.7310000000002,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 4,
+        "at": "2026-10-21T02:07:37.167Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:37.217Z",
+      "index": 4,
+      "status": 200,
+      "wallMs": 627.2283999999995,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 5,
+        "at": "2026-10-21T02:07:37.718Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:37.844Z",
+      "index": 5,
+      "status": 200,
+      "wallMs": 545.3194000000003,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 6,
+        "at": "2026-10-21T02:07:38.345Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:38.390Z",
+      "index": 6,
+      "status": 200,
+      "wallMs": 605.8735000000006,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 7,
+        "at": "2026-10-21T02:07:38.949Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:38.997Z",
+      "index": 7,
+      "status": 200,
+      "wallMs": 679.2530000000006,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 8,
+        "at": "2026-10-21T02:07:39.498Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:39.677Z",
+      "index": 8,
+      "status": 200,
+      "wallMs": 568.8833000000004,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 9,
+        "at": "2026-10-21T02:07:40.196Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:40.246Z",
+      "index": 9,
+      "status": 200,
+      "wallMs": 758.9979000000003,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 10,
+        "at": "2026-10-21T02:07:40.750Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:41.007Z",
+      "index": 10,
+      "status": 200,
+      "wallMs": 551.1942999999992,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 11,
+        "at": "2026-10-21T02:07:41.508Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:41.558Z",
+      "index": 11,
+      "status": 200,
+      "wallMs": 721.349299999999,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 12,
+        "at": "2026-10-21T02:07:42.058Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:42.281Z",
+      "index": 12,
+      "status": 200,
+      "wallMs": 655.1115000000009,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 13,
+        "at": "2026-10-21T02:07:42.801Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:42.938Z",
+      "index": 13,
+      "status": 200,
+      "wallMs": 534.7042999999994,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 14,
+        "at": "2026-10-21T02:07:43.440Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:43.473Z",
+      "index": 14,
+      "status": 200,
+      "wallMs": 557.8107,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 15,
+        "at": "2026-10-21T02:07:44.001Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:44.031Z",
+      "index": 15,
+      "status": 200,
+      "wallMs": 679.8361999999997,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 16,
+        "at": "2026-10-21T02:07:44.562Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:44.713Z",
+      "index": 16,
+      "status": 200,
+      "wallMs": 528.387200000001,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 17,
+        "at": "2026-10-21T02:07:45.212Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:45.242Z",
+      "index": 17,
+      "status": 200,
+      "wallMs": 570.4963000000007,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 18,
+        "at": "2026-10-21T02:07:45.763Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:45.813Z",
+      "index": 18,
+      "status": 200,
+      "wallMs": 652.0692999999992,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 19,
+        "at": "2026-10-21T02:07:46.334Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:46.465Z",
+      "index": 19,
+      "status": 200,
+      "wallMs": 541.6502,
+      "result": {
+        "kind": "/notify",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 20,
+        "at": "2026-10-21T02:07:46.964Z",
+        "dogs": 116,
+        "changed": 0,
+        "read": 116,
+        "written": 0
+      }
+    }
+  ],
+  "load": [
+    {
+      "at": "2026-10-21T02:07:57.008Z",
+      "run": "r91f328c0fb0e96e6",
+      "scenario": "ten-logical-clients-three-minute-read-rounds"
+    },
+    {
+      "at": "2026-10-21T02:07:57.679Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walk",
+      "status": 200,
+      "wallMs": 646.0053,
+      "result": {
+        "kind": "/walk",
+        "isolateId": "67e33754-d2a1-47f8-a322-5be2fdddcd05",
+        "invocation": 1,
+        "at": "2026-10-21T02:07:57.850Z",
+        "accepted": true,
+        "read": 0,
+        "written": 2
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:57.680Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walk",
+      "status": 200,
+      "wallMs": 646.1369,
+      "result": {
+        "kind": "/walk",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 21,
+        "at": "2026-10-21T02:07:57.858Z",
+        "accepted": true,
+        "read": 0,
+        "written": 2
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:57.685Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walk",
+      "status": 200,
+      "wallMs": 674.4007,
+      "result": {
+        "kind": "/walk",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 22,
+        "at": "2026-10-21T02:07:57.860Z",
+        "accepted": true,
+        "read": 0,
+        "written": 2
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:57.691Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walk",
+      "status": 200,
+      "wallMs": 657.5673,
+      "result": {
+        "kind": "/walk",
+        "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+        "invocation": 1,
+        "at": "2026-10-21T02:07:57.860Z",
+        "accepted": true,
+        "read": 0,
+        "written": 2
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:57.691Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walk",
+      "status": 200,
+      "wallMs": 657.8433,
+      "result": {
+        "kind": "/walk",
+        "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+        "invocation": 2,
+        "at": "2026-10-21T02:07:57.862Z",
+        "accepted": true,
+        "read": 0,
+        "written": 2
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:57.707Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walk",
+      "status": 200,
+      "wallMs": 675.4923,
+      "result": {
+        "kind": "/walk",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 23,
+        "at": "2026-10-21T02:07:57.888Z",
+        "accepted": true,
+        "read": 0,
+        "written": 2
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:57.708Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walk",
+      "status": 200,
+      "wallMs": 675.5356999999999,
+      "result": {
+        "kind": "/walk",
+        "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+        "invocation": 1,
+        "at": "2026-10-21T02:07:57.883Z",
+        "accepted": true,
+        "read": 0,
+        "written": 2
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:57.709Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walk",
+      "status": 200,
+      "wallMs": 674.9526999999999,
+      "result": {
+        "kind": "/walk",
+        "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+        "invocation": 3,
+        "at": "2026-10-21T02:07:57.873Z",
+        "accepted": true,
+        "read": 0,
+        "written": 2
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:57.723Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walk",
+      "status": 200,
+      "wallMs": 688.917,
+      "result": {
+        "kind": "/walk",
+        "isolateId": "69e721cd-0dd7-447f-a34c-6cc0728342cf",
+        "invocation": 1,
+        "at": "2026-10-21T02:07:57.891Z",
+        "accepted": true,
+        "read": 0,
+        "written": 2
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:57.889Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walk",
+      "status": 200,
+      "wallMs": 853.9587,
+      "result": {
+        "kind": "/walk",
+        "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+        "invocation": 4,
+        "at": "2026-10-21T02:07:57.879Z",
+        "accepted": true,
+        "read": 0,
+        "written": 2
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:58.208Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 318.19259999999997,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 24,
+        "at": "2026-10-21T02:07:58.393Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 1
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:58.214Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 322.9634000000001,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+        "invocation": 5,
+        "at": "2026-10-21T02:07:58.392Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 1
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:58.217Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 327.2347000000001,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "67e33754-d2a1-47f8-a322-5be2fdddcd05",
+        "invocation": 2,
+        "at": "2026-10-21T02:07:58.405Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 1
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:58.228Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 339.0787,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 25,
+        "at": "2026-10-21T02:07:58.410Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 1
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:58.230Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 339.9734000000001,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+        "invocation": 7,
+        "at": "2026-10-21T02:07:58.409Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 1
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:58.237Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 346.06090000000006,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 26,
+        "at": "2026-10-21T02:07:58.420Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 1
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:58.239Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 348.7917,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+        "invocation": 6,
+        "at": "2026-10-21T02:07:58.408Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 1
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:58.265Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 374.48570000000007,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "69e721cd-0dd7-447f-a34c-6cc0728342cf",
+        "invocation": 2,
+        "at": "2026-10-21T02:07:58.414Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 1
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:58.267Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 377.1501999999999,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+        "invocation": 2,
+        "at": "2026-10-21T02:07:58.426Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 1
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:07:58.286Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 395.0847,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+        "invocation": 8,
+        "at": "2026-10-21T02:07:58.461Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 1
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 1
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:08:57.646Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 624.8443000000043,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+        "invocation": 9,
+        "at": "2026-10-21T02:08:57.810Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:08:57.649Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 627.4353000000046,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 28,
+        "at": "2026-10-21T02:08:57.832Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:08:57.649Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 627.5015000000058,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "199d5d70-8c8e-43cf-821b-97db930a623c",
+        "invocation": 1,
+        "at": "2026-10-21T02:08:57.802Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:08:57.651Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 628.5865999999951,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "199d5d70-8c8e-43cf-821b-97db930a623c",
+        "invocation": 2,
+        "at": "2026-10-21T02:08:57.827Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:08:57.651Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 631.7428,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+        "invocation": 27,
+        "at": "2026-10-21T02:08:57.830Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:08:57.654Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 630.5223999999944,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "a5f82971-d86e-4aa0-962a-f10a8522130f",
+        "invocation": 1,
+        "at": "2026-10-21T02:08:57.842Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:08:57.667Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 643.4559000000008,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+        "invocation": 3,
+        "at": "2026-10-21T02:08:57.843Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:08:57.676Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 652.9281000000046,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "199d5d70-8c8e-43cf-821b-97db930a623c",
+        "invocation": 3,
+        "at": "2026-10-21T02:08:57.835Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:08:57.684Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 663.5497000000032,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "3f06dc9a-3258-4f41-bd1f-72a4c9075191",
+        "invocation": 1,
+        "at": "2026-10-21T02:08:57.862Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:08:57.742Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 725.0110999999961,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "199d5d70-8c8e-43cf-821b-97db930a623c",
+        "invocation": 4,
+        "at": "2026-10-21T02:08:57.904Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:09:57.637Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 612.6962000000058,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "59aa3721-c970-491b-8c08-b7af20f3c4e7",
+        "invocation": 1,
+        "at": "2026-10-21T02:09:57.816Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:09:57.639Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 610.6404000000039,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "681d30f8-4d5b-4445-89ef-739cdbb401d3",
+        "invocation": 1,
+        "at": "2026-10-21T02:09:57.814Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:09:57.644Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 618.6552000000083,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "59aa3721-c970-491b-8c08-b7af20f3c4e7",
+        "invocation": 2,
+        "at": "2026-10-21T02:09:57.827Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:09:57.652Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 624.8852999999945,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "681d30f8-4d5b-4445-89ef-739cdbb401d3",
+        "invocation": 2,
+        "at": "2026-10-21T02:09:57.837Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:09:57.657Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 631.1657999999879,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "199d5d70-8c8e-43cf-821b-97db930a623c",
+        "invocation": 5,
+        "at": "2026-10-21T02:09:57.816Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:09:57.659Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 633.9507000000012,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "59aa3721-c970-491b-8c08-b7af20f3c4e7",
+        "invocation": 3,
+        "at": "2026-10-21T02:09:57.844Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:09:57.669Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 644.3640999999916,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "59aa3721-c970-491b-8c08-b7af20f3c4e7",
+        "invocation": 4,
+        "at": "2026-10-21T02:09:57.853Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:09:57.694Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 671.2345999999961,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "681d30f8-4d5b-4445-89ef-739cdbb401d3",
+        "invocation": 3,
+        "at": "2026-10-21T02:09:57.860Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:09:57.695Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 667.9771000000037,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+        "invocation": 4,
+        "at": "2026-10-21T02:09:57.849Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:09:57.715Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 689.7309999999998,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+        "invocation": 5,
+        "at": "2026-10-21T02:09:57.876Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:09:58.034Z",
+      "run": "r91f328c0fb0e96e6",
+      "path": "/walks?run=r91f328c0fb0e96e6",
+      "status": 200,
+      "wallMs": 317.61350000000675,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "681d30f8-4d5b-4445-89ef-739cdbb401d3",
+        "invocation": 4,
+        "at": "2026-10-21T02:09:58.218Z",
+        "rows": [
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+            "pending": 0
+          },
+          {
+            "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+            "pending": 0
+          }
+        ],
+        "read": 10,
+        "written": 0
+      }
+    },
+    {
+      "run": "r91f328c0fb0e96e6",
+      "stage": "sheet-readback",
+      "poll": 0,
+      "matched": 10,
+      "expected": 10
+    },
+    {
+      "run": "r91f328c0fb0e96e6",
+      "complete": true,
+      "expected": [
+        "BENCH441_r91f328c0fb0e96e6_client0",
+        "BENCH441_r91f328c0fb0e96e6_client1",
+        "BENCH441_r91f328c0fb0e96e6_client2",
+        "BENCH441_r91f328c0fb0e96e6_client3",
+        "BENCH441_r91f328c0fb0e96e6_client4",
+        "BENCH441_r91f328c0fb0e96e6_client5",
+        "BENCH441_r91f328c0fb0e96e6_client6",
+        "BENCH441_r91f328c0fb0e96e6_client7",
+        "BENCH441_r91f328c0fb0e96e6_client8",
+        "BENCH441_r91f328c0fb0e96e6_client9"
+      ],
+      "pending": 0
+    }
+  ],
+  "deferred": [
+    {
+      "at": "2026-10-21T02:10:19.644Z",
+      "run": "re09e042e69b65d34",
+      "path": "/walk",
+      "status": 200,
+      "result": {
+        "kind": "/walk",
+        "isolateId": "87c4b8b3-f352-4ee2-aa6c-68c56e01f449",
+        "invocation": 1,
+        "at": "2026-10-21T02:10:19.818Z",
+        "accepted": true,
+        "read": 0,
+        "written": 2
+      }
+    },
+    {
+      "at": "2026-10-21T02:10:19.989Z",
+      "run": "re09e042e69b65d34",
+      "path": "/walk",
+      "status": 200,
+      "result": {
+        "kind": "/walk",
+        "isolateId": "87c4b8b3-f352-4ee2-aa6c-68c56e01f449",
+        "invocation": 2,
+        "at": "2026-10-21T02:10:20.172Z",
+        "accepted": true,
+        "read": 0,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:10:20.330Z",
+      "run": "re09e042e69b65d34",
+      "path": "/walks?run=re09e042e69b65d34",
+      "status": 200,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "87c4b8b3-f352-4ee2-aa6c-68c56e01f449",
+        "invocation": 3,
+        "at": "2026-10-21T02:10:20.511Z",
+        "rows": [
+          {
+            "walker": "BENCH441_re09e042e69b65d34_deferred",
+            "pending": 1
+          }
+        ],
+        "read": 1,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:10:26.024Z",
+      "run": "re09e042e69b65d34",
+      "path": "/walks?run=re09e042e69b65d34",
+      "status": 200,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "87c4b8b3-f352-4ee2-aa6c-68c56e01f449",
+        "invocation": 4,
+        "at": "2026-10-21T02:10:26.202Z",
+        "rows": [
+          {
+            "walker": "BENCH441_re09e042e69b65d34_deferred",
+            "pending": 1
+          }
+        ],
+        "read": 1,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:10:31.639Z",
+      "run": "re09e042e69b65d34",
+      "path": "/walks?run=re09e042e69b65d34",
+      "status": 200,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+        "invocation": 6,
+        "at": "2026-10-21T02:10:31.816Z",
+        "rows": [
+          {
+            "walker": "BENCH441_re09e042e69b65d34_deferred",
+            "pending": 1
+          }
+        ],
+        "read": 1,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:10:37.288Z",
+      "run": "re09e042e69b65d34",
+      "path": "/walks?run=re09e042e69b65d34",
+      "status": 200,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "681d30f8-4d5b-4445-89ef-739cdbb401d3",
+        "invocation": 5,
+        "at": "2026-10-21T02:10:37.474Z",
+        "rows": [
+          {
+            "walker": "BENCH441_re09e042e69b65d34_deferred",
+            "pending": 1
+          }
+        ],
+        "read": 1,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:10:42.935Z",
+      "run": "re09e042e69b65d34",
+      "path": "/walks?run=re09e042e69b65d34",
+      "status": 200,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "681d30f8-4d5b-4445-89ef-739cdbb401d3",
+        "invocation": 6,
+        "at": "2026-10-21T02:10:43.111Z",
+        "rows": [
+          {
+            "walker": "BENCH441_re09e042e69b65d34_deferred",
+            "pending": 1
+          }
+        ],
+        "read": 1,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:10:48.584Z",
+      "run": "re09e042e69b65d34",
+      "path": "/walks?run=re09e042e69b65d34",
+      "status": 200,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "78841e3f-65cb-434d-ba98-6a52d8a1054f",
+        "invocation": 1,
+        "at": "2026-10-21T02:10:48.740Z",
+        "rows": [
+          {
+            "walker": "BENCH441_re09e042e69b65d34_deferred",
+            "pending": 1
+          }
+        ],
+        "read": 1,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:10:54.207Z",
+      "run": "re09e042e69b65d34",
+      "path": "/walks?run=re09e042e69b65d34",
+      "status": 200,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "681d30f8-4d5b-4445-89ef-739cdbb401d3",
+        "invocation": 7,
+        "at": "2026-10-21T02:10:54.386Z",
+        "rows": [
+          {
+            "walker": "BENCH441_re09e042e69b65d34_deferred",
+            "pending": 1
+          }
+        ],
+        "read": 1,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:10:59.873Z",
+      "run": "re09e042e69b65d34",
+      "path": "/walks?run=re09e042e69b65d34",
+      "status": 200,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+        "invocation": 7,
+        "at": "2026-10-21T02:11:00.031Z",
+        "rows": [
+          {
+            "walker": "BENCH441_re09e042e69b65d34_deferred",
+            "pending": 1
+          }
+        ],
+        "read": 1,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:11:05.484Z",
+      "run": "re09e042e69b65d34",
+      "path": "/walks?run=re09e042e69b65d34",
+      "status": 200,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "393bd15a-e8f9-47c9-a0cc-dfb2fbe448e2",
+        "invocation": 1,
+        "at": "2026-10-21T02:11:05.663Z",
+        "rows": [
+          {
+            "walker": "BENCH441_re09e042e69b65d34_deferred",
+            "pending": 1
+          }
+        ],
+        "read": 1,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:11:11.126Z",
+      "run": "re09e042e69b65d34",
+      "path": "/walks?run=re09e042e69b65d34",
+      "status": 200,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "73bc4022-94e0-4b3c-9f6f-51c6fa2dcae9",
+        "invocation": 1,
+        "at": "2026-10-21T02:11:11.278Z",
+        "rows": [
+          {
+            "walker": "BENCH441_re09e042e69b65d34_deferred",
+            "pending": 1
+          }
+        ],
+        "read": 1,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:11:16.750Z",
+      "run": "re09e042e69b65d34",
+      "path": "/walks?run=re09e042e69b65d34",
+      "status": 200,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "393bd15a-e8f9-47c9-a0cc-dfb2fbe448e2",
+        "invocation": 2,
+        "at": "2026-10-21T02:11:16.931Z",
+        "rows": [
+          {
+            "walker": "BENCH441_re09e042e69b65d34_deferred",
+            "pending": 1
+          }
+        ],
+        "read": 1,
+        "written": 0
+      }
+    },
+    {
+      "at": "2026-10-21T02:11:22.410Z",
+      "run": "re09e042e69b65d34",
+      "path": "/walks?run=re09e042e69b65d34",
+      "status": 200,
+      "result": {
+        "kind": "/walks",
+        "isolateId": "199d5d70-8c8e-43cf-821b-97db930a623c",
+        "invocation": 6,
+        "at": "2026-10-21T02:11:22.571Z",
+        "rows": [
+          {
+            "walker": "BENCH441_re09e042e69b65d34_deferred",
+            "pending": 0
+          }
+        ],
+        "read": 1,
+        "written": 0
+      }
+    }
+  ],
+  "tail": [
+    {
+      "eventTimestamp": 1792548454641,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 8,
+      "wallTime": 1166,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 1,
+          "at": "2026-10-21T02:07:34.641Z",
+          "dogs": 116,
+          "changed": 116,
+          "read": 1,
+          "written": 232
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548455969,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 7,
+      "wallTime": 459,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 2,
+          "at": "2026-10-21T02:07:35.969Z",
+          "dogs": 116,
+          "changed": 0,
+          "read": 116,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548456590,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 4,
+      "wallTime": 414,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 3,
+          "at": "2026-10-21T02:07:36.590Z",
+          "dogs": 116,
+          "changed": 0,
+          "read": 116,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548457167,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 4,
+      "wallTime": 411,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 4,
+          "at": "2026-10-21T02:07:37.167Z",
+          "dogs": 116,
+          "changed": 0,
+          "read": 116,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548457718,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 8,
+      "wallTime": 487,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 5,
+          "at": "2026-10-21T02:07:37.718Z",
+          "dogs": 116,
+          "changed": 0,
+          "read": 116,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548458345,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 5,
+      "wallTime": 405,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 6,
+          "at": "2026-10-21T02:07:38.345Z",
+          "dogs": 116,
+          "changed": 0,
+          "read": 116,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548458948,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 3,
+      "wallTime": 408,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 7,
+          "at": "2026-10-21T02:07:38.949Z",
+          "dogs": 116,
+          "changed": 0,
+          "read": 116,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548459498,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 7,
+      "wallTime": 538,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 8,
+          "at": "2026-10-21T02:07:39.498Z",
+          "dogs": 116,
+          "changed": 0,
+          "read": 116,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548460196,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 4,
+      "wallTime": 411,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 9,
+          "at": "2026-10-21T02:07:40.196Z",
+          "dogs": 116,
+          "changed": 0,
+          "read": 116,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548460750,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 3,
+      "wallTime": 611,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 10,
+          "at": "2026-10-21T02:07:40.750Z",
+          "dogs": 116,
+          "changed": 0,
+          "read": 116,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548461508,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 3,
+      "wallTime": 412,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 11,
+          "at": "2026-10-21T02:07:41.508Z",
+          "dogs": 116,
+          "changed": 0,
+          "read": 116,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548462058,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 7,
+      "wallTime": 581,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 12,
+          "at": "2026-10-21T02:07:42.058Z",
+          "dogs": 116,
+          "changed": 0,
+          "read": 116,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548462801,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 2,
+      "wallTime": 493,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 13,
+          "at": "2026-10-21T02:07:42.801Z",
+          "dogs": 116,
+          "changed": 0,
+          "read": 116,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548464562,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 4,
+      "wallTime": 509,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 16,
+          "at": "2026-10-21T02:07:44.562Z",
+          "dogs": 116,
+          "changed": 0,
+          "read": 116,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548465763,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 3,
+      "wallTime": 411,
+      "diagnostics": [
+        {
+          "kind": "/notify",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 18,
+          "at": "2026-10-21T02:07:45.763Z",
+          "dogs": 116,
+          "changed": 0,
+          "read": 116,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548478393,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 0,
+      "wallTime": 176,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 24,
+          "at": "2026-10-21T02:07:58.393Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548478405,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 175,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "67e33754-d2a1-47f8-a322-5be2fdddcd05",
+          "invocation": 2,
+          "at": "2026-10-21T02:07:58.405Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548478392,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 185,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+          "invocation": 5,
+          "at": "2026-10-21T02:07:58.392Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548478410,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 0,
+      "wallTime": 178,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 25,
+          "at": "2026-10-21T02:07:58.410Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548478409,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 0,
+      "wallTime": 183,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+          "invocation": 7,
+          "at": "2026-10-21T02:07:58.409Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548478420,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 178,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 26,
+          "at": "2026-10-21T02:07:58.420Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548478408,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 0,
+      "wallTime": 194,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+          "invocation": 6,
+          "at": "2026-10-21T02:07:58.408Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548478414,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 214,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "69e721cd-0dd7-447f-a34c-6cc0728342cf",
+          "invocation": 2,
+          "at": "2026-10-21T02:07:58.414Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548478426,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 2,
+      "wallTime": 203,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+          "invocation": 2,
+          "at": "2026-10-21T02:07:58.426Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548478461,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 0,
+      "wallTime": 184,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+          "invocation": 8,
+          "at": "2026-10-21T02:07:58.461Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548477861,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 3,
+      "wallTime": 3522,
+      "diagnostics": [
+        {
+          "kind": "/walk",
+          "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+          "invocation": 2,
+          "at": "2026-10-21T02:07:57.862Z",
+          "accepted": true,
+          "read": 0,
+          "written": 2
+        },
+        {
+          "kind": "writeback-done",
+          "run": "r91f328c0fb0e96e6",
+          "walker": "BENCH441_r91f328c0fb0e96e6_client5",
+          "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+          "invocation": 2,
+          "read": 1,
+          "written": 1
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548477858,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 2,
+      "wallTime": 3936,
+      "diagnostics": [
+        {
+          "kind": "/walk",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 21,
+          "at": "2026-10-21T02:07:57.858Z",
+          "accepted": true,
+          "read": 0,
+          "written": 2
+        },
+        {
+          "kind": "writeback-done",
+          "run": "r91f328c0fb0e96e6",
+          "walker": "BENCH441_r91f328c0fb0e96e6_client6",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 21,
+          "read": 1,
+          "written": 1
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548477860,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 4,
+      "wallTime": 4081,
+      "diagnostics": [
+        {
+          "kind": "/walk",
+          "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+          "invocation": 1,
+          "at": "2026-10-21T02:07:57.860Z",
+          "accepted": true,
+          "read": 0,
+          "written": 2
+        },
+        {
+          "kind": "writeback-done",
+          "run": "r91f328c0fb0e96e6",
+          "walker": "BENCH441_r91f328c0fb0e96e6_client4",
+          "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+          "invocation": 1,
+          "read": 1,
+          "written": 1
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548477879,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 2,
+      "wallTime": 4614,
+      "diagnostics": [
+        {
+          "kind": "/walk",
+          "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+          "invocation": 4,
+          "at": "2026-10-21T02:07:57.879Z",
+          "accepted": true,
+          "read": 0,
+          "written": 2
+        },
+        {
+          "kind": "writeback-done",
+          "run": "r91f328c0fb0e96e6",
+          "walker": "BENCH441_r91f328c0fb0e96e6_client9",
+          "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+          "invocation": 4,
+          "read": 1,
+          "written": 1
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548477873,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 2,
+      "wallTime": 6575,
+      "diagnostics": [
+        {
+          "kind": "/walk",
+          "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+          "invocation": 3,
+          "at": "2026-10-21T02:07:57.873Z",
+          "accepted": true,
+          "read": 0,
+          "written": 2
+        },
+        {
+          "kind": "writeback-done",
+          "run": "r91f328c0fb0e96e6",
+          "walker": "BENCH441_r91f328c0fb0e96e6_client8",
+          "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+          "invocation": 3,
+          "read": 1,
+          "written": 1
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548477891,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 7,
+      "wallTime": 7774,
+      "diagnostics": [
+        {
+          "kind": "/walk",
+          "isolateId": "69e721cd-0dd7-447f-a34c-6cc0728342cf",
+          "invocation": 1,
+          "at": "2026-10-21T02:07:57.891Z",
+          "accepted": true,
+          "read": 0,
+          "written": 2
+        },
+        {
+          "kind": "writeback-done",
+          "run": "r91f328c0fb0e96e6",
+          "walker": "BENCH441_r91f328c0fb0e96e6_client7",
+          "isolateId": "69e721cd-0dd7-447f-a34c-6cc0728342cf",
+          "invocation": 1,
+          "read": 1,
+          "written": 1
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548477883,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 6,
+      "wallTime": 7957,
+      "diagnostics": [
+        {
+          "kind": "/walk",
+          "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+          "invocation": 1,
+          "at": "2026-10-21T02:07:57.883Z",
+          "accepted": true,
+          "read": 0,
+          "written": 2
+        },
+        {
+          "kind": "writeback-done",
+          "run": "r91f328c0fb0e96e6",
+          "walker": "BENCH441_r91f328c0fb0e96e6_client2",
+          "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+          "invocation": 1,
+          "read": 1,
+          "written": 1
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548477850,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 4,
+      "wallTime": 8781,
+      "diagnostics": [
+        {
+          "kind": "/walk",
+          "isolateId": "67e33754-d2a1-47f8-a322-5be2fdddcd05",
+          "invocation": 1,
+          "at": "2026-10-21T02:07:57.850Z",
+          "accepted": true,
+          "read": 0,
+          "written": 2
+        },
+        {
+          "kind": "writeback-done",
+          "run": "r91f328c0fb0e96e6",
+          "walker": "BENCH441_r91f328c0fb0e96e6_client3",
+          "isolateId": "67e33754-d2a1-47f8-a322-5be2fdddcd05",
+          "invocation": 1,
+          "read": 1,
+          "written": 1
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548477888,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 2,
+      "wallTime": 11033,
+      "diagnostics": [
+        {
+          "kind": "/walk",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 23,
+          "at": "2026-10-21T02:07:57.888Z",
+          "accepted": true,
+          "read": 0,
+          "written": 2
+        },
+        {
+          "kind": "writeback-done",
+          "run": "r91f328c0fb0e96e6",
+          "walker": "BENCH441_r91f328c0fb0e96e6_client1",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 23,
+          "read": 1,
+          "written": 1
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548477860,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 16519,
+      "diagnostics": [
+        {
+          "kind": "/walk",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 22,
+          "at": "2026-10-21T02:07:57.860Z",
+          "accepted": true,
+          "read": 0,
+          "written": 2
+        },
+        {
+          "kind": "writeback-done",
+          "run": "r91f328c0fb0e96e6",
+          "walker": "BENCH441_r91f328c0fb0e96e6_client0",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 22,
+          "read": 1,
+          "written": 1
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548537810,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 0,
+      "wallTime": 195,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "b31ed451-3448-4998-ac2b-064ff4f1e7e2",
+          "invocation": 9,
+          "at": "2026-10-21T02:08:57.810Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548537831,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 176,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 28,
+          "at": "2026-10-21T02:08:57.832Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548537830,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 2,
+      "wallTime": 180,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "f4519ce9-b4f0-42c3-b536-fce11a86af32",
+          "invocation": 27,
+          "at": "2026-10-21T02:08:57.830Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548537843,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 183,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+          "invocation": 3,
+          "at": "2026-10-21T02:08:57.843Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548537862,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 3,
+      "wallTime": 182,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "3f06dc9a-3258-4f41-bd1f-72a4c9075191",
+          "invocation": 1,
+          "at": "2026-10-21T02:08:57.862Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548537842,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 2,
+      "wallTime": 175,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "a5f82971-d86e-4aa0-962a-f10a8522130f",
+          "invocation": 1,
+          "at": "2026-10-21T02:08:57.842Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548537802,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 3,
+      "wallTime": 207,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "199d5d70-8c8e-43cf-821b-97db930a623c",
+          "invocation": 1,
+          "at": "2026-10-21T02:08:57.802Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548537835,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 198,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "199d5d70-8c8e-43cf-821b-97db930a623c",
+          "invocation": 3,
+          "at": "2026-10-21T02:08:57.835Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548537904,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 194,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "199d5d70-8c8e-43cf-821b-97db930a623c",
+          "invocation": 4,
+          "at": "2026-10-21T02:08:57.904Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548537827,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 184,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "199d5d70-8c8e-43cf-821b-97db930a623c",
+          "invocation": 2,
+          "at": "2026-10-21T02:08:57.827Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548579287,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 6,
+      "wallTime": 698,
+      "scheduledTime": 1792548554289,
+      "diagnostics": [
+        {
+          "kind": "cron",
+          "isolateId": "6231fb7a-e540-4cfb-87d5-3b5d2021f797",
+          "invocation": 1,
+          "at": "2026-10-21T02:09:39.299Z",
+          "scheduledTime": 1792548554289,
+          "comparison": {
+            "dogs": 116,
+            "changed": 1,
+            "read": 117,
+            "written": 1
+          },
+          "retried": {
+            "jobs": 0,
+            "failed": 0,
+            "read": 10,
+            "written": 0
+          }
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548597816,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 3,
+      "wallTime": 182,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "59aa3721-c970-491b-8c08-b7af20f3c4e7",
+          "invocation": 1,
+          "at": "2026-10-21T02:09:57.816Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548597814,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 3,
+      "wallTime": 184,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "681d30f8-4d5b-4445-89ef-739cdbb401d3",
+          "invocation": 1,
+          "at": "2026-10-21T02:09:57.814Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548597827,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 0,
+      "wallTime": 176,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "59aa3721-c970-491b-8c08-b7af20f3c4e7",
+          "invocation": 2,
+          "at": "2026-10-21T02:09:57.827Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548597837,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 0,
+      "wallTime": 174,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "681d30f8-4d5b-4445-89ef-739cdbb401d3",
+          "invocation": 2,
+          "at": "2026-10-21T02:09:57.837Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548597843,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 0,
+      "wallTime": 174,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "59aa3721-c970-491b-8c08-b7af20f3c4e7",
+          "invocation": 3,
+          "at": "2026-10-21T02:09:57.844Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548597816,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 199,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "199d5d70-8c8e-43cf-821b-97db930a623c",
+          "invocation": 5,
+          "at": "2026-10-21T02:09:57.816Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548597860,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 175,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "681d30f8-4d5b-4445-89ef-739cdbb401d3",
+          "invocation": 3,
+          "at": "2026-10-21T02:09:57.860Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548597849,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 189,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+          "invocation": 4,
+          "at": "2026-10-21T02:09:57.849Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548597853,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 176,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "59aa3721-c970-491b-8c08-b7af20f3c4e7",
+          "invocation": 4,
+          "at": "2026-10-21T02:09:57.853Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548597876,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 197,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+          "invocation": 5,
+          "at": "2026-10-21T02:09:57.876Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548598218,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 175,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "681d30f8-4d5b-4445-89ef-739cdbb401d3",
+          "invocation": 4,
+          "at": "2026-10-21T02:09:58.218Z",
+          "read": 10,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548614723,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 8,
+      "wallTime": 505,
+      "scheduledTime": 1792548614289,
+      "diagnostics": [
+        {
+          "kind": "cron",
+          "isolateId": "52f3fff1-9134-4a14-bd1e-9ab01b19b28f",
+          "invocation": 1,
+          "at": "2026-10-21T02:10:14.738Z",
+          "scheduledTime": 1792548614289,
+          "comparison": {
+            "dogs": 116,
+            "changed": 0,
+            "read": 116,
+            "written": 0
+          },
+          "retried": {
+            "jobs": 0,
+            "failed": 0,
+            "read": 10,
+            "written": 0
+          }
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548619818,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 2,
+      "wallTime": 180,
+      "diagnostics": [
+        {
+          "kind": "/walk",
+          "isolateId": "87c4b8b3-f352-4ee2-aa6c-68c56e01f449",
+          "invocation": 1,
+          "at": "2026-10-21T02:10:19.818Z",
+          "accepted": true,
+          "read": 0,
+          "written": 2
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548620172,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 177,
+      "diagnostics": [
+        {
+          "kind": "/walk",
+          "isolateId": "87c4b8b3-f352-4ee2-aa6c-68c56e01f449",
+          "invocation": 2,
+          "at": "2026-10-21T02:10:20.172Z",
+          "accepted": true,
+          "read": 0,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548620511,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 177,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "87c4b8b3-f352-4ee2-aa6c-68c56e01f449",
+          "invocation": 3,
+          "at": "2026-10-21T02:10:20.511Z",
+          "read": 1,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548626202,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 0,
+      "wallTime": 180,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "87c4b8b3-f352-4ee2-aa6c-68c56e01f449",
+          "invocation": 4,
+          "at": "2026-10-21T02:10:26.202Z",
+          "read": 1,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548631816,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 181,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+          "invocation": 6,
+          "at": "2026-10-21T02:10:31.816Z",
+          "read": 1,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548637474,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 0,
+      "wallTime": 173,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "681d30f8-4d5b-4445-89ef-739cdbb401d3",
+          "invocation": 5,
+          "at": "2026-10-21T02:10:37.474Z",
+          "read": 1,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548643111,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 178,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "681d30f8-4d5b-4445-89ef-739cdbb401d3",
+          "invocation": 6,
+          "at": "2026-10-21T02:10:43.111Z",
+          "read": 1,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548648740,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 4,
+      "wallTime": 202,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "78841e3f-65cb-434d-ba98-6a52d8a1054f",
+          "invocation": 1,
+          "at": "2026-10-21T02:10:48.740Z",
+          "read": 1,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548654386,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 174,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "681d30f8-4d5b-4445-89ef-739cdbb401d3",
+          "invocation": 7,
+          "at": "2026-10-21T02:10:54.386Z",
+          "read": 1,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548660031,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 196,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "91f75405-8c41-466d-98a1-43ded75b7f8c",
+          "invocation": 7,
+          "at": "2026-10-21T02:11:00.031Z",
+          "read": 1,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548665663,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 2,
+      "wallTime": 181,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "393bd15a-e8f9-47c9-a0cc-dfb2fbe448e2",
+          "invocation": 1,
+          "at": "2026-10-21T02:11:05.663Z",
+          "read": 1,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548671278,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 5,
+      "wallTime": 199,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "73bc4022-94e0-4b3c-9f6f-51c6fa2dcae9",
+          "invocation": 1,
+          "at": "2026-10-21T02:11:11.278Z",
+          "read": 1,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548676931,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 0,
+      "wallTime": 174,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "393bd15a-e8f9-47c9-a0cc-dfb2fbe448e2",
+          "invocation": 2,
+          "at": "2026-10-21T02:11:16.931Z",
+          "read": 1,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548674813,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 6,
+      "wallTime": 2649,
+      "scheduledTime": 1792548674289,
+      "diagnostics": [
+        {
+          "kind": "cron",
+          "isolateId": "30305e01-64d9-49ee-b7b6-7d675f03af79",
+          "invocation": 1,
+          "at": "2026-10-21T02:11:14.823Z",
+          "scheduledTime": 1792548674289,
+          "comparison": {
+            "dogs": 116,
+            "changed": 0,
+            "read": 116,
+            "written": 0
+          },
+          "retried": {
+            "jobs": 1,
+            "failed": 0,
+            "read": 12,
+            "written": 1
+          }
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548682571,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 1,
+      "wallTime": 193,
+      "diagnostics": [
+        {
+          "kind": "/walks",
+          "isolateId": "199d5d70-8c8e-43cf-821b-97db930a623c",
+          "invocation": 6,
+          "at": "2026-10-21T02:11:22.571Z",
+          "read": 1,
+          "written": 0
+        }
+      ]
+    },
+    {
+      "eventTimestamp": 1792548734820,
+      "outcome": "ok",
+      "scriptVersion": {
+        "id": "131bddfe-57d0-43aa-ac59-9c62e8c8d05d"
+      },
+      "cpuTime": 5,
+      "wallTime": 651,
+      "scheduledTime": 1792548734289,
+      "diagnostics": [
+        {
+          "kind": "cron",
+          "isolateId": "89ebc7f9-4614-41dc-93f3-d319d7687ef7",
+          "invocation": 1,
+          "at": "2026-10-21T02:12:14.831Z",
+          "scheduledTime": 1792548734289,
+          "comparison": {
+            "dogs": 116,
+            "changed": 1,
+            "read": 117,
+            "written": 1
+          },
+          "retried": {
+            "jobs": 0,
+            "failed": 0,
+            "read": 11,
+            "written": 0
+          }
+        }
+      ]
+    }
+  ],
+  "graphql": {
+    "response": {
+      "data": {
+        "viewer": {
+          "accounts": [
+            {
+              "workersInvocationsAdaptive": [
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:09:57Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 1227,
+                    "cpuTimeP99": 3501
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 10
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:11:16Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 669,
+                    "cpuTimeP99": 669
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:10:19Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 2195,
+                    "cpuTimeP99": 2195
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:58Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 896,
+                    "cpuTimeP99": 2121
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 10
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:57Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 2845,
+                    "cpuTimeP99": 7754
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 10
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:35Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 7530,
+                    "cpuTimeP99": 7530
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:37Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 4098,
+                    "cpuTimeP99": 8141
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 2
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:11:11Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 5171,
+                    "cpuTimeP99": 5171
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:10:31Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 1739,
+                    "cpuTimeP99": 1739
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:10:48Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 4050,
+                    "cpuTimeP99": 4050
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:38Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 3758,
+                    "cpuTimeP99": 5270
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 2
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:43Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 4019,
+                    "cpuTimeP99": 4019
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:44Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 3022,
+                    "cpuTimeP99": 4219
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 2
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:34Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 8155,
+                    "cpuTimeP99": 8155
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:10:14Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 8258,
+                    "cpuTimeP99": 8258
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:10:20Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 1006,
+                    "cpuTimeP99": 1547
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 2
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:11:14Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 6060,
+                    "cpuTimeP99": 6060
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:08:57Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 1744,
+                    "cpuTimeP99": 3801
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 10
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:36Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 4095,
+                    "cpuTimeP99": 4095
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:10:54Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 1336,
+                    "cpuTimeP99": 1336
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:41Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 3224,
+                    "cpuTimeP99": 3224
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:11:00Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 1446,
+                    "cpuTimeP99": 1446
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:11:05Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 2660,
+                    "cpuTimeP99": 2660
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:10:43Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 1899,
+                    "cpuTimeP99": 1899
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:45Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 3805,
+                    "cpuTimeP99": 3805
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:09:37Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 6446,
+                    "cpuTimeP99": 6446
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:11:22Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 1264,
+                    "cpuTimeP99": 1264
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:10:26Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 790,
+                    "cpuTimeP99": 790
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:46Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 3805,
+                    "cpuTimeP99": 4966
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 2
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:39Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 7156,
+                    "cpuTimeP99": 7156
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:09:58Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 1175,
+                    "cpuTimeP99": 1175
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 1
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:40Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 3848,
+                    "cpuTimeP99": 4828
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 2
+                  }
+                },
+                {
+                  "dimensions": {
+                    "datetime": "2026-10-21T02:07:42Z",
+                    "status": "success"
+                  },
+                  "quantiles": {
+                    "cpuTimeP50": 2594,
+                    "cpuTimeP99": 7419
+                  },
+                  "sum": {
+                    "errors": 0,
+                    "requests": 2
+                  }
+                }
+              ]
+            }
+          ]
+        }
+      },
+      "errors": null
+    },
+    "variables": {
+      "accountTag": "a0f88d34c34ad0d34f923b9f43799622",
+      "start": "2026-10-21T02:07:00Z",
+      "end": "2026-10-21T02:13:12Z",
+      "scriptName": "bq-d1-walk-sync-441"
+    }
+  }
+}
