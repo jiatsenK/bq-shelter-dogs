@@ -422,7 +422,7 @@ const DEPARTURE_ORDER = ['adopt', 'death', 'other', 'unknown'];
 const DEPARTURE_COLORS = { adopt: 'var(--green-text)', death: '#8E8E93', other: 'var(--primary)', unknown: '#F0A030' };
 let departuresData = null; // { state: 'loading' | 'ready' | 'error', list, years: { 年: 版本號 } }
 const departureDetails = new Map(); // 年 → Promise<Map<編號, 離所的狗（詳細）>>
-let depRoster = { open: false, query: '', year: 'all', reason: 'all' };
+let depRoster = { open: true, query: '', year: 'all', reason: 'all' }; // #446 離所紀錄是專屬頁，名冊預設展開
 
 // departures.json（或名冊索引的 dogs）→ 離所的狗：跟在所的狗同一個樣子（parseDogsData），多一個 departure；
 // 索引沒有 last，舊編號放在 formerIds
@@ -618,6 +618,7 @@ function openInfoPage(page) {
   if (!Object.hasOwn(INFO_PAGES, page)) return;
   history.replaceState({ ...history.state, infoPage: '' }, '');
   infoPage = page;
+  if (page === 'departures') depRoster.open = true; // #446 每次從分類進來都展開，收起只到離開為止
   history.pushState({ ...history.state, infoPage: page }, '');
   render();
   window.scrollTo(0, 0);
