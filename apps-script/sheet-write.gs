@@ -36,12 +36,19 @@ function handleRequest(req) {
   if (!req) return { ok: false, error: '沒有資料' };
   // K 決定先不設金鑰（2026-10-04）；有設 WRITE_KEY 才檢查
   if (key && req.key !== key) return { ok: false, error: '金鑰不對', code: 'key' };
+  if (req.action === 'walkWake' && (!key || req.key !== key)) return { ok: false, error: '寫回必須設定金鑰', code: 'key' };
   var lock = LockService.getScriptLock();
   lock.waitLock(15000); // 兩個人同時按，一個一個來，免得互相蓋掉
   try {
     if (req.action === 'group') return writeGroup(SpreadsheetApp.openById(sheetIdOf(props.getProperty('SHEET_ID'))), req);
     var sheet = SpreadsheetApp.openById(sheetIdOf(props.getProperty('SHEET_ID'))).getSheetByName(SHEET_NAME);
     if (!sheet) return { ok: false, error: '找不到「' + SHEET_NAME + '」分頁' };
+    if (req.action === 'walkWake') return writeLatestWalk(sheet, req, props);
+    // 所有程式寫入共用此鎖；舊版喚醒延後抵達也不能繞過 D1 正本。
+    if (props.getProperty('WALK_WORKER_URL') && ['walk', 'edit', 'undo'].indexOf(req.action) !== -1) {
+      var gate = walkWorker(props, 'legacy-check', { dogs: req.dogs });
+      if (!gate.ok || !gate.allowed) return { ok: false, error: '已使用新登記流程，請重新整理' };
+    }
     var values = sheet.getDataRange().getValues();
     var today = Utilities.formatDate(new Date(), TIME_ZONE, 'yyyy-MM-dd');
     var plan = planSheetWrites(values, req, today, ymdOf);
@@ -53,6 +60,54 @@ function handleRequest(req) {
   } finally {
     lock.releaseLock();
   }
+}
+
+function walkWorker(props, action, body) {
+  var url = props.getProperty('WALK_WORKER_URL');
+  var key = props.getProperty('WRITE_KEY');
+  if (!url || !/^https:\/\//.test(url) || !key) throw new Error('尚未設定寫回 Worker');
+  var res = UrlFetchApp.fetch(url.replace(/\/$/, '') + '/api/walk-writeback/' + action, {
+    method: 'post', contentType: 'application/json', headers: { 'X-Sheet-Write-Key': key },
+    payload: JSON.stringify(body), muteHttpExceptions: true
+  });
+  var out = JSON.parse(res.getContentText());
+  if (res.getResponseCode() !== 200 || !out.ok) throw new Error('Worker 停止寫回：' + (out.error || res.getResponseCode()));
+  return out;
+}
+
+// 每次直接重定位，不保存舊列號；無編號只認唯一且無編號的狗名。
+function directWalkCell(sheet, dog) {
+  var values = sheet.getDataRange().getValues(), header = findHeader(values);
+  if (!header || ['id', 'name', 'date', 'walker'].some(function (k) { return header.cols[k] === undefined; })) throw new Error('主清單缺必要欄位');
+  var matches = [];
+  for (var r = header.row + 1; r < values.length; r++) {
+    if (dog.id ? cellText(values[r][header.cols.id]) === dog.id
+      : !cellText(values[r][header.cols.id]) && cellText(values[r][header.cols.name]) === dog.name) matches.push(r);
+  }
+  if (matches.length !== 1) throw new Error('找不到唯一的狗，停止寫回');
+  var row = matches[0], value = values[row][header.cols.date];
+  var text = isDate(value) ? ymdOf(value) : cellText(value).replace(/\//g, '-').replace(/-(\d)(?=-|$)/g, '-0$1');
+  if (text && !/^\d{4}-\d{2}-\d{2}$/.test(text)) throw new Error('日期無法確認，停止寫回');
+  return { row: row, cols: header.cols, current: { date: text, walker: cellText(values[row][header.cols.walker]) } };
+}
+function sameWalk(a, b) { return a.date === b.date && a.walker === b.walker; }
+function writeLatestWalk(sheet, req, props) {
+  if (!req.dog || !req.dispatchId) throw new Error('缺少寫回識別');
+  var observed = directWalkCell(sheet, req.dog);
+  var target = walkWorker(props, 'target', { dog: req.dog, dispatchId: req.dispatchId, current: observed.current });
+  // 人工不受 script lock 限制：寫前再讀，排序則重新定位，值不同立即停寫。
+  var before = directWalkCell(sheet, req.dog);
+  if (!sameWalk(observed.current, before.current)) throw new Error('寫前觀測到人工修改，停止寫回');
+  if (!sameWalk(before.current, target.current)) {
+    sheet.getRange(before.row + 1, before.cols.date + 1).setValue(target.current.date ? toSheetDate(target.current.date) : '');
+    sheet.getRange(before.row + 1, before.cols.walker + 1).setValue(target.current.walker);
+    SpreadsheetApp.flush();
+  }
+  var after = directWalkCell(sheet, req.dog);
+  if (!sameWalk(after.current, target.current)) throw new Error('試算表讀回不符');
+  var receipt = { dogKey: req.dog.id || '名:' + req.dog.name, version: target.version, dispatchId: target.dispatchId, current: after.current };
+  var confirmed = walkWorker(props, 'receipt', receipt);
+  return { ok: true, version: receipt.version, dispatchId: receipt.dispatchId, current: receipt.current, confirmed: confirmed.confirmed };
 }
 
 // 常遛狗群：照 planGroupWrite 算好的結果寫格子；狗名格滿了先在群名列上面插一列（整列插入，各欄的數量公式會自己跟著擴大）

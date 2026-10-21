@@ -2,6 +2,7 @@ import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitie
 import { cleanIntakeEvents } from './intake.js';
 import { cleanStays } from './stays.js';
 import { saveFixedCare } from './compact.js';
+import { acceptWalk, dispatchWalk, readAcceptedWalks, writebackTarget, confirmWalk } from './walk-accept.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
@@ -931,9 +932,8 @@ function cleanWalkDog(d, action) {
   return out;
 }
 
-async function writeWalks(request, env, origin) {
+async function writeWalks(request, env, origin, ctx) {
   const cfg = config(env);
-  if (!cfg.sheetWriteUrl) return fail(503, '還沒設定寫入試算表', origin, { code: 'off' });
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
   if (!allow(`walk:${ip}`, WALK_LIMITS, Date.now())) return fail(429, '太頻繁了，請稍等一下再試', origin);
   const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
@@ -954,6 +954,22 @@ async function writeWalks(request, env, origin) {
   if (maxDogs && (!Array.isArray(rawDogs) || !rawDogs.length || rawDogs.length > maxDogs)) return fail(400, `一次 1–${maxDogs} 隻`, origin);
   const dogs = rawDogs.map(d => cleanWalkDog(d, action));
   if (dogs.some(d => !d)) return fail(400, '狗的資料不對', origin);
+  if (input.requestId !== undefined) {
+    if (!shortText(input.walker, WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, '要先選好身分', origin);
+    try {
+      const result = await acceptWalk(env?.DB, { ...input, dogs }, env);
+      // 沒有執行背景工作的 context 時仍保留 pending，不能等待 Google 才回接受。
+      if (ctx?.waitUntil) ctx.waitUntil(dispatchWalk(env.DB, dogs[0], env).catch(e => console.error('walk-dispatch', e.message)));
+      return reply(200, { ok: true, source: 'd1', today: input.operationDate, results: [result], snapshot: await readAcceptedWalks(env.DB, taiwanYmd(Date.now())) }, origin);
+    } catch (e) { return fail(e.status || 503, e.status ? e.message : '登記尚未接受，請用原請求再試', origin); }
+  }
+  // 已接管的狗不再允許舊手機從另一入口覆蓋試算表。
+  if (env?.DB && ['walk','edit','undo'].includes(action)) {
+    for (const d of dogs) {
+      if (await env.DB.prepare('SELECT dog_key FROM v3_walk_state WHERE dog_key=?').bind(d.id || `名:${d.name}`).first()) return fail(409, '此狗已使用新登記流程，請重新整理', origin);
+    }
+  }
+  if (!cfg.sheetWriteUrl) return fail(503, '還沒設定寫入試算表', origin, { code: 'off' });
   const body = { action, dogs };
   if (cfg.sheetWriteKey) body.key = cfg.sheetWriteKey;
   if (action === 'note' || action === 'log') {
@@ -1217,6 +1233,29 @@ export default {
         return fail(500, '記錄試算表通知發生錯誤', '');
       }
     }
+    if (['/walk-writeback/target', '/walk-writeback/receipt', '/walk-writeback/legacy-check'].includes(path)) {
+      if (request.method !== 'POST' || env?.PREVIEW || !env?.DB || !cfg.sheetWriteKey) return fail(403, '不接受寫回要求', '');
+      const supplied = request.headers.get('X-Sheet-Write-Key') || '';
+      const digest = text => crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+      const a = new Uint8Array(await digest(supplied)), b = new Uint8Array(await digest(cfg.sheetWriteKey));
+      let different = 0;
+      for (let i = 0; i < a.length; i++) different |= a[i] ^ b[i];
+      if (different) return fail(403, '寫回驗證失敗', '');
+      try {
+        const raw = await request.text();
+        if (raw.length > WALK_MAX_BYTES) return fail(413, '資料太大', '');
+        const input = JSON.parse(raw);
+        if (path.endsWith('/legacy-check')) {
+          if (!Array.isArray(input.dogs) || input.dogs.length > WALK_MAX_DOGS) return fail(400, '狗的資料不對', '');
+          for (const dog of input.dogs) {
+            if (await env.DB.prepare('SELECT dog_key FROM v3_walk_state WHERE dog_key=?').bind(dog.id || `名:${dog.name}`).first()) return reply(200, { ok: true, allowed: false }, '');
+          }
+          return reply(200, { ok: true, allowed: true }, '');
+        }
+        const result = path.endsWith('/target') ? await writebackTarget(env.DB, input, env) : await confirmWalk(env.DB, input, env);
+        return reply(200, { ok: true, ...result }, '');
+      } catch (e) { return fail(e.status || 503, e.status ? e.message : '寫回尚未確認', ''); }
+    }
     // 其他網站送來的一律不收（瀏覽器會擋掉沒有 CORS 回應的要求）
     if (!allowed) return fail(403, '不接受這個網站的要求', '');
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(allowed) });
@@ -1310,6 +1349,7 @@ export default {
       if (request.method !== 'GET') return fail(405, '只能用 GET /today 讀', allowed);
       const today = taiwanYmd(Date.now());
       try {
+        if (url.searchParams.get('source') === 'd1') return reply(200, { ok: true, ...await readAcceptedWalks(env.DB, today) }, allowed);
         if (!env || !env.DB) throw new Error('沒有 D1');
         return reply(200, { ok: true, date: today, walks: await readTodayWalks(env.DB, today) }, allowed);
       } catch (e) {
@@ -1403,10 +1443,21 @@ export default {
     if (path === '/walk') {
       if (request.method !== 'POST') return fail(405, '寫入試算表只能用 POST /walk', allowed);
       try {
-        return await writeWalks(request, env, allowed);
+        return await writeWalks(request, env, allowed, ctx);
       } catch (e) {
         return fail(500, '寫入試算表發生錯誤', allowed);
       }
+    }
+    if (path === '/walk/result') {
+      if (request.method !== 'GET' || !env?.DB) return fail(405, '只能讀取登記結果', allowed);
+      const id = url.searchParams.get('requestId') || '';
+      if (!/^[A-Za-z0-9_-]{8,100}$/.test(id)) return fail(400, '請求識別不對', allowed);
+      try {
+        const found = await env.DB.prepare('SELECT result_json FROM v3_walk_requests WHERE request_id=?').bind(id).first();
+        if (!found) return fail(404, '尚未找到接受結果', allowed);
+        const result = JSON.parse(found.result_json);
+        return reply(200, { ok: true, source: 'd1', today: result.operationDate, results: [result], snapshot: await readAcceptedWalks(env.DB, taiwanYmd(Date.now())) }, allowed);
+      } catch { return fail(503, '暫時讀不到登記結果', allowed); }
     }
 
     if (path === '/groups') {
