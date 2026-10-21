@@ -597,12 +597,13 @@ function loadWebsiteUpdates() {
     .then(() => { if (analysisOpen && infoPage === 'updates') render(); });
 }
 
+// #447 使用說明從我溜過搬來：不是子頁，按了直接開溜狗表上的導覽（文字沿用 #171 的 TOUR_STEPS）
 function infoHomeHtml() {
   loadDepartures();
   const dogs = loadState === 'ready' ? `目前在所 ${allDogs.length} 隻` : loadState === 'error' ? '在所資料讀取失敗' : '在所資料讀取中…';
   const dep = !departuresData || departuresData.state === 'loading' ? '離所紀錄讀取中…' : departuresData.state === 'error' ? '離所紀錄讀取失敗' : departuresData.list.length ? `共 ${departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
   const summary = { stay: dogs, departures: dep, quality: '查看缺照片、介紹及其他資料', updates: '網站更新與資料編輯' };
-  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}</section>`;
+  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
 }
 
 function infoUpdatesHtml() {

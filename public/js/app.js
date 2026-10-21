@@ -367,7 +367,6 @@ function walkerSetupHtml() {
       ${has && !busy ? `<button type="button" class="photo-cancel" id="whoRename">更改登記名字</button><button type="button" class="photo-cancel" id="whoCancel">取消</button>` : ''}
     </div>
     ${has && !busy ? `<button type="button" class="who-clear" id="whoClear">清除這支手機的設定</button>` : ''}
-    ${has ? '' : '<button type="button" class="who-clear guide-link" data-open-guide>看使用說明</button>'}
   </form>`;
 }
 
@@ -528,7 +527,7 @@ function myWalksHtml(today, query) {
   const named = !!loadWalkerName();
   // V9（#141 第 11 項）：小計收進「統計」按鈕，按了才展開
   const statsBtn = visibleWalks.length ? `<button type="button" class="who-edit${mineStatsOpen ? ' on' : ''}" id="mineStats" aria-expanded="${mineStatsOpen}">${icon('chart')}統計</button>` : '';
-  const who = query ? '' : `<div class="section-hint who-hint">${icon('paw')}<span class="who-name">${named ? esc(loadWalkerName()) : '再按「修改」輸入一次名字'}</span>${statsBtn}<button type="button" class="who-edit" id="whoEdit">修改</button><button type="button" class="who-edit" data-open-guide>說明</button></div>`;
+  const who = query ? '' : `<div class="section-hint who-hint">${icon('paw')}<span class="who-name">${named ? esc(loadWalkerName()) : '再按「修改」輸入一次名字'}</span>${statsBtn}<button type="button" class="who-edit" id="whoEdit">修改</button></div>`;
   if (!visibleWalks.length) return who + `<div class="status-msg">還沒有你的溜狗紀錄。<br>試算表「誰遛的」寫上你設定的名字，同步後就會出現在這裡。</div>`;
   // 所有到所紀錄新到舊一路往下排（K 2026-09-25：不要選日期）；搜尋時不顯示小計
   const groups = myWalkGroups(currentMyWalks(), query);
@@ -3519,7 +3518,7 @@ function pad2(n) {
 // 第一次打開：先問你在試算表上的名字，接著幾頁說明（像新網站上線的導覽），按「開始使用」就不再出現。
 // 已經有名字（以前在我溜過設定過）只看說明；說明看過、名字被清掉了，只問名字
 // 介面評估第四輪（K 2026-10-08）：名字可以「先看看，等一下再設定」（現場沒訊號也進得去），
-// 沒名字的人按「溜了」時再問，設好直接幫他登記那隻；說明可以從我溜過的「說明」再打開
+// 沒名字的人按「溜了」時再問，設好直接幫他登記那隻；說明可以從資訊的「使用說明」再打開（#447 從我溜過搬過去）
 const ONBOARD_KEY = 'bq-onboarded';
 const NAME_LATER_KEY = 'bq-name-later';
 // ── 使用說明導覽（K 2026-10-09：直接用實際的網頁；一個說明一個動作，用手指示範）──
@@ -3830,7 +3829,7 @@ function renderTour(stepChanged = false) {
   tourPlay();
 }
 // { step: 0 名字／1… 說明, text, phase: edit／saving／error／confirm, error, unknown: 表上沒有的名字,
-//   walk: 名字設好後要登記的狗（按溜了才問名字）, again: 從我溜過再打開說明 }
+//   walk: 名字設好後要登記的狗（按溜了才問名字）, again: 從資訊再打開說明 }
 let onboard = null;
 function onboardDone() {
   try { return walkedStorage && walkedStorage.getItem(ONBOARD_KEY) === '1'; } catch (e) { return false; }
@@ -4022,7 +4021,7 @@ function askNameThenWalk(dogs) {
   onboard = { step: 0, text: '', phase: 'edit', error: '', walk: dogs };
   renderOnboard();
 }
-// 我溜過的「說明」：回到溜狗表從第一步再看一次，不動名字
+// 資訊的「使用說明」（#447）：回到溜狗表從第一步再看一次，不動名字
 function openGuide() {
   startTour(true);
 }

@@ -1978,8 +1978,10 @@ async function runV9Tests() {
       eq(calls.filter(u => !u.includes('/favorites?codes=')).map(u => u.replace('https://worker.test', '')), ['/identity', '/identity', '/walk'], '送出：');
       hideToast();
       activeTab = 'mine'; myWalks = []; myWalksState = 'ready'; render();
-      document.querySelector('#main [data-open-guide]').click();
-      eq([tour().querySelector('h2').textContent, tour().querySelector('[data-tour="done"]').textContent, activeTab], ['溜狗表', '關閉', 'walk'], '我溜過可以再打開說明（回到溜狗表）：');
+      eq(document.querySelector('#main [data-open-guide]'), null, '#447 我溜過不再放使用說明：');
+      showAnalysis();
+      document.querySelector('#main .info-home [data-open-guide]').click();
+      eq([tour().querySelector('h2').textContent, tour().querySelector('[data-tour="done"]').textContent, activeTab, analysisOpen], ['溜狗表', '關閉', 'walk', false], '#447 資訊的使用說明再打開導覽（回到溜狗表）：');
       tour().querySelector('[data-tour="done"]').click();
       eq(tour(), null, '關閉：');
     });
