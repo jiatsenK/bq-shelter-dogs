@@ -4131,7 +4131,9 @@ async function runDepartureTests() {
       eq(filterDepartures(list, { reason: 'unknown' }).map(d => d.name), ['豆花']);
     });
     await check('#163 分析頁離所區：今年一行數字（2026-10-08 distill 拿掉三張數字卡）、兩年以上才有每年直條、名冊按鈕', () => {
-      departuresData = { state: 'ready', list }; depRoster = { open: false, query: '', year: 'all', reason: 'all' };
+      departuresData = { state: 'ready', list }; depRoster = depRosterDefault();
+      eq(depRoster.open, true, '#446 名冊預設展開：');
+      depRoster.open = false;
       const box = document.createElement('div');
       box.innerHTML = departureSectionHtml(OCT8);
       eq(box.querySelectorAll('.a-kpi').length, 0, '沒有數字卡：');
@@ -4146,6 +4148,7 @@ async function runDepartureTests() {
       depRoster.open = true;
       box.innerHTML = departureSectionHtml(OCT8);
       eq(box.querySelectorAll('[data-dep-dog]').length, 5);
+      eq(box.querySelector('#depToggle').textContent, '收起離所名冊', '#446 展開時仍可收起：');
       eq(box.querySelector('[data-dep-dog] .badge').textContent, '待確認');
     });
     await check('#363 名冊索引：搜尋全部年份；點舊年份的狗才拿那一年的詳細資料，拿過不再拿，拿不到用索引那筆', async () => {
