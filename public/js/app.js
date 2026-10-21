@@ -3192,7 +3192,7 @@ window.addEventListener('resize', syncHeaderTuck);
 // 常溜狗群「溜了」那排黏在底部分類列上方（#443）：分類列高度隨字級、安全區變，量實際高度
 const bottomBarEl = document.getElementById('bottomBar');
 function syncBottomBar() {
-  if (!bottomBarEl || typeof getComputedStyle !== 'function') return;
+  if (typeof bottomBarEl?.getBoundingClientRect !== 'function') return; // node 測試的假 DOM 沒有
   document.documentElement.style.setProperty('--bottom-bar-height', `${bottomBarEl.getBoundingClientRect().height}px`);
 }
 syncBottomBar();

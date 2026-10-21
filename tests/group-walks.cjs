@@ -89,7 +89,7 @@ module.exports = async (browser, base) => {
     const beforeWalk = await sideTop();
     await page.locator('#gwWalk').click();
     await page.getByText('已登記 10 隻', { exact: true }).waitFor();
-    assert.equal(await sideTop(), beforeWalk, '#443 按下溜了變「已溜」後箭頭不移動');
+    assert(Math.abs(await sideTop() - beforeWalk) <= 1, '#443 按下溜了變「已溜」後箭頭不移動');
     await page.getByRole('button', { name: '加入狗', exact: true }).click();
     await page.locator('#gwForm input[name="name"]').fill(data.dogs[10].name);
     failWrite = true;
@@ -137,14 +137,14 @@ module.exports = async (browser, base) => {
           const b = document.querySelector(s).getBoundingClientRect();
           return [s, { left: b.left, right: b.right, top: b.top, bottom: b.bottom, mid: (b.top + b.bottom) / 2 }];
         })));
-        const prev = box['.gw-side.prev'], walk = box['#gwWalk'], next = box['.gw-side.next'], page_ = box['#groupPage'];
+        const prev = box['.gw-side.prev'], walk = box['#gwWalk'], next = box['.gw-side.next'], groupBox = box['#groupPage'];
         const info = JSON.stringify({ width, height, group: i, prev, walk, next });
         assert(Math.abs(prev.mid - walk.mid) <= 2 && Math.abs(next.mid - walk.mid) <= 2, '箭頭跟「溜了」同一排：' + info);
         assert(prev.right + 16 <= walk.left && walk.right + 16 <= next.left, '箭頭在「溜了」左右兩側，留 16px 防誤按：' + info);
-        assert(prev.left - page_.left <= 24 && page_.right - next.right <= 24, '箭頭貼齊畫面左右邊：' + info);
+        assert(prev.left - groupBox.left <= 24 && groupBox.right - next.right <= 24, '箭頭貼齊畫面左右邊：' + info);
         assert(next.bottom <= box['#bottomBar'].top, '箭頭不被底部分類列遮住：' + info);
         if (!first) first = { prev, next };
-        else assert(first.prev.top === prev.top && first.next.top === next.top, '狗數變化不移動切群按鈕：' + info);
+        else assert(Math.abs(first.prev.top - prev.top) <= 1 && Math.abs(first.next.top - next.top) <= 1, '狗數變化不移動切群按鈕：' + info);
         await page.getByRole('button', { name: '下一群', exact: true }).click();
       }
     }

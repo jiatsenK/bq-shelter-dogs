@@ -2445,7 +2445,7 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
    狗卡多或大字時整頁照常捲閱（#400），捲到底「溜了」那排回到所有內容之後 */
 @media (max-width: 1099px) {
   /* overflow: clip 不像 hidden 會變成捲動容器，sticky 才會對畫面黏住 */
-  #groupPage { overflow: clip; display: flex; flex-direction: column; min-height: calc(100dvh - var(--app-header-height, 120px) - var(--bottom-bar-height, 64px)); }
+  #groupPage { overflow: clip; display: flex; flex-direction: column; min-height: calc(100dvh - var(--app-header-height, 64px) - var(--bottom-bar-height, 64px)); }
   .gw-walkbar { margin-top: auto; position: sticky; bottom: var(--bottom-bar-height, 64px); z-index: 4; background: var(--bg); }
   /* 已溜時沒有「有狗沒溜」，留同高的空位，箭頭才不會在按下溜了後往下掉 */
   .gw-walkbar .gw-actions:has(#gwWalk.done)::after { content: ""; height: 44px; }
