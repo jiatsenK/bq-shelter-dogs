@@ -43,6 +43,10 @@ module.exports = async (browser, base) => {
     await page.locator('[data-tab="groups"]').click();
     await page.locator('#groupStage').waitFor();
     assert.equal(reads, 1, '第一次切進狗群共用首頁的資料，不重複讀取');
+    // #444：讀取時間只留頁首右上角，狗群頁不再顯示第二個時間。
+    assert.equal(await page.locator('#gwSource').textContent(), '', '狗群頁平常不顯示讀取時間');
+    assert.equal(await page.locator('#groupPage').getByText(/讀取 \d/).count(), 0, '狗群頁沒有讀取時間');
+    assert.match(await page.locator('#updatedLabel').textContent(), /資料更新 \d/, '頁首右上角仍有資料時間');
     await page.locator('[data-tab="walk"]').click();
     await page.clock.runFor(61000);
     hold = true;
