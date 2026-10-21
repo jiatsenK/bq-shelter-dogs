@@ -31,15 +31,16 @@ function activityDateText(ymd) {
   return d ? `${ymdText(d)}（${'日一二三四五六'[d.getDay()]}）` : ymd;
 }
 const activityTitle = a => `${activityDateText(a.date)} ${ACTIVITY_KINDS[a.kind] || a.kind}`;
-// 出席的狗：有永久 ID 的照 ID 認，只有名字的照名字認
-const activityDogKey = d => d.dogId || (d.number ? `#${d.number}` : `名:${d.name}`);
+// 出席的狗送給 Worker 的樣子：有編號送編號，沒編號的狗送永久 ID，都沒有是只有名字。同一隻狗也用它比對
+const activityDogRef = d => (d.number ? { number: d.number } : d.dogId ? { dogId: d.dogId } : { name: d.name });
+const activityDogKey = d => JSON.stringify(activityDogRef(d));
 
 // 可以選的狗：在所的加上離所名冊的；有編號用編號送，沒編號的用永久 ID
 function activityCandidates() {
   const out = new Map();
   const add = (dog, departed) => {
     const pick = dog.id ? { number: dog.id, name: dog.name } : dog.dogId ? { dogId: dog.dogId, name: dog.name } : null;
-    if (pick && !out.has(pick.number || pick.dogId)) out.set(pick.number || pick.dogId, { ...pick, departed, formerIds: dog.formerIds || [] });
+    if (pick && !out.has(activityDogKey(pick))) out.set(activityDogKey(pick), { ...pick, departed, formerIds: dog.formerIds || [] });
   };
   for (const dog of allDogs) add(dog, false);
   if (departuresData && departuresData.state === 'ready') for (const dog of departuresData.list) add(dog, true);
@@ -50,9 +51,9 @@ function activityCandidates() {
 function activityMatches(query, picked) {
   const q = searchKey(query);
   if (!q) return [];
-  const have = new Set(picked.map(d => d.number ? `#${d.number}` : d.dogId || ''));
+  const have = new Set(picked.map(activityDogKey));
   return activityCandidates()
-    .filter(c => !have.has(c.number ? `#${c.number}` : c.dogId) && [c.name, c.number, ...c.formerIds].some(v => searchKey(v).includes(q)))
+    .filter(c => !have.has(activityDogKey(c)) && [c.name, c.number, ...c.formerIds].some(v => searchKey(v).includes(q)))
     .sort((a, b) => (searchKey(a.name) === q ? 0 : 1) - (searchKey(b.name) === q ? 0 : 1) || a.departed - b.departed || a.name.localeCompare(b.name, 'zh-Hant'))
     .slice(0, ACTIVITY_PICKS);
 }
@@ -68,7 +69,7 @@ function activityPicksHtml(e) {
   const picks = activityMatches(query, e.dogs);
   // 有同名的狗就不給「只記名字」，免得記成沒對上的
   const named = e.dogs.some(d => !d.dogId && !d.number && d.name === query) || activityCandidates().some(c => searchKey(c.name) === searchKey(query));
-  return picks.map(c => `<button type="button" class="act-pick" data-act-pick="${esc(c.number || c.dogId)}">${esc(c.name)}<small>${esc(c.number || '沒有編號')}${c.departed ? '・已離所' : ''}</small></button>`).join('')
+  return picks.map(c => `<button type="button" class="act-pick" data-act-pick="${esc(activityDogKey(c))}">${esc(c.name)}<small>${esc(c.number || '沒有編號')}${c.departed ? '・已離所' : ''}</small></button>`).join('')
     + (named || [...query].length > 20 ? '' : `<button type="button" class="act-pick" data-act-name>只記名字「${esc(query)}」<small>找不到這隻狗時用，之後再對上</small></button>`);
 }
 
@@ -140,7 +141,7 @@ async function saveActivity(remove = false) {
   if (!remove && e.dogs.length > ACTIVITY_MAX_DOGS) return activityFail(e, `一場最多 ${ACTIVITY_MAX_DOGS} 隻`);
   e.phase = 'saving'; e.error = '';
   render();
-  const dogs = e.dogs.map(d => (d.dogId ? { dogId: d.dogId } : d.number ? { number: d.number } : { name: d.name }));
+  const dogs = e.dogs.map(activityDogRef);
   const body = remove ? { editor, revision: e.revision } : { editor, ...(e.id ? { revision: e.revision } : {}), date: e.date, kind: e.kind, dogs };
   let out = null, error = '';
   try {
@@ -193,7 +194,7 @@ document.getElementById('main').addEventListener('click', e => {
   if (remove) { ae.dogs.splice(Number(remove.dataset.actRemove), 1); ae.confirmDelete = false; render(); document.getElementById('actSearch')?.focus({ preventScroll: true }); return; }
   const pick = e.target.closest('[data-act-pick]');
   if (pick) {
-    const c = activityCandidates().find(x => (x.number || x.dogId) === pick.dataset.actPick);
+    const c = activityCandidates().find(x => activityDogKey(x) === pick.dataset.actPick);
     if (c) addActivityDog(c.number ? { dogId: null, number: c.number, name: c.name } : { dogId: c.dogId, number: '', name: c.name });
     return;
   }

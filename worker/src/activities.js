@@ -39,7 +39,7 @@ export function cleanActivity(input, today) {
   return { date: input.date, kind: input.kind, dogs };
 }
 
-const marks = list => list.map(() => '?').join(',');
+const placeholders = list => list.map(() => '?').join(',');
 
 // 編號／永久 ID → 狗；名字照原樣存（不猜同名的狗）。同一隻狗、同一個名字只留第一次。
 // 回傳 [{ dogId, name }]，dogId 是 null 表示只有名字
@@ -48,11 +48,11 @@ export async function resolveDogs(db, dogs) {
   const ids = dogs.filter(d => d.dogId).map(d => d.dogId);
   const byNumber = new Map(), byId = new Map();
   if (numbers.length) {
-    const { results = [] } = await db.prepare(`SELECT n.number, d.dog_id, d.name FROM v3_dog_numbers n JOIN v3_dogs d USING(dog_id) WHERE n.number IN (${marks(numbers)})`).bind(...numbers).all();
+    const { results = [] } = await db.prepare(`SELECT n.number, d.dog_id, d.name FROM v3_dog_numbers n JOIN v3_dogs d USING(dog_id) WHERE n.number IN (${placeholders(numbers)})`).bind(...numbers).all();
     for (const r of results) byNumber.set(r.number, r);
   }
   if (ids.length) {
-    const { results = [] } = await db.prepare(`SELECT dog_id, name FROM v3_dogs WHERE dog_id IN (${marks(ids)})`).bind(...ids).all();
+    const { results = [] } = await db.prepare(`SELECT dog_id, name FROM v3_dogs WHERE dog_id IN (${placeholders(ids)})`).bind(...ids).all();
     for (const r of results) byId.set(r.dog_id, r);
   }
   const out = [], seen = new Set();
@@ -68,9 +68,9 @@ export async function resolveDogs(db, dogs) {
   return out;
 }
 
-// 狗現在的編號：在主清單上用主清單的，不然用最新的那個（離所的狗）；沒有編號是 ''
+// 狗現在的編號：最新的那個（編號前 8 碼是入所日，主清單上的就是最新的）；照 v3_numbers_dog 索引找，沒有編號是 ''
 const DOG_ROWS = `SELECT a.activity_id, a.position, a.dog_id, COALESCE(d.name, a.name) AS name,
-  COALESCE((SELECT m.number FROM v3_sheet_main m WHERE m.dog_id=a.dog_id AND m.number<>'' LIMIT 1), (SELECT MAX(n.number) FROM v3_dog_numbers n WHERE n.dog_id=a.dog_id), '') AS number
+  COALESCE((SELECT MAX(n.number) FROM v3_dog_numbers n WHERE n.dog_id=a.dog_id), '') AS number
   FROM v3_activity_dogs a LEFT JOIN v3_dogs d USING(dog_id)`;
 
 function shape(rows, dogRows) {
@@ -82,13 +82,23 @@ function shape(rows, dogRows) {
   return rows.map(r => ({ id: r.activity_id, date: r.activity_date, kind: r.kind, revision: r.revision, dogs: dogsOf.get(r.activity_id) || [] }));
 }
 
-// 全部場次，新到舊（一年約 24 場，整張讀）
+// 全部場次，新到舊。ADR 0009 的做法：每次只讀版本號那 1 列（活動、狗名／編號各一個），沒變就回記憶體裡的名單；
+// 有人改了活動或同步改了狗，才整份重讀（一年約 24 場）
+let cache = null; // { db, ver, list }
+async function versionOf(db) {
+  const v = await db.prepare('SELECT (SELECT ver FROM v3_activity_versions WHERE id=1) AS act, (SELECT small FROM v3_pack_versions WHERE id=1) AS dogs').first();
+  return v && v.act !== null ? `${v.act}|${v.dogs}` : null;
+}
 export async function readActivities(db) {
+  const ver = await versionOf(db);
+  if (ver && cache && cache.db === db && cache.ver === ver) return cache.list;
   const [acts, dogs] = await db.batch([
     db.prepare('SELECT activity_id, activity_date, kind, revision FROM v3_activities ORDER BY activity_date DESC, activity_id'),
     db.prepare(`${DOG_ROWS} ORDER BY a.activity_id, a.position`),
   ]);
-  return shape(acts.results || [], dogs.results || []);
+  const list = shape(acts.results || [], dogs.results || []);
+  cache = ver ? { db, ver, list } : null;
+  return list;
 }
 
 export async function readActivity(db, id) {
@@ -99,9 +109,9 @@ export async function readActivity(db, id) {
   return shape(acts.results || [], dogs.results || [])[0] || null;
 }
 
-// 編輯紀錄存的樣子：日期、類型、出席的狗名
+// 編輯紀錄存的樣子：日期、類型、出席的狗名；dogIds 是同順序的永久 ID（只有名字的是 null），誤刪時照它接回原本的狗
 export function activityLog(a) {
-  return a && { date: a.date, kind: a.kind, dogs: a.dogs.map(d => d.name) };
+  return a && { date: a.date, kind: a.kind, dogs: a.dogs.map(d => d.name), dogIds: a.dogs.map(d => d.dogId || null) };
 }
 
 const insertDogs = (db, id, dogs) => dogs.map((d, i) => db.prepare('INSERT INTO v3_activity_dogs(activity_id,position,dog_id,name) VALUES(?,?,?,?)').bind(id, i, d.dogId, d.name));
@@ -115,27 +125,28 @@ export async function createActivity(db, { date, kind, dogs }) {
   return readActivity(db, id);
 }
 
+const CHANGED = '這場活動剛被別人改過，請重新整理後再改';
 // 先確認還是打開時看到的那一版（revision），整批寫；中途被別人改了整批回復
-async function current(db, id, revision) {
+async function readUnchanged(db, id, revision) {
   const before = await readActivity(db, id);
   if (!before) throw new ActivityError(404, '找不到這場活動（可能已經被刪掉），請重新整理');
-  if (before.revision !== revision) throw new ActivityError(409, '這場活動剛被別人改過，請重新整理後再改');
+  if (before.revision !== revision) throw new ActivityError(409, CHANGED);
   return before;
 }
 const guard = (db, id, revision) => db.prepare('INSERT INTO v3_activity_guard SELECT CASE WHEN revision=? THEN 1 ELSE 0 END FROM v3_activities WHERE activity_id=?').bind(revision, id);
 
-async function guarded(db, statements) {
+async function batchUnlessChanged(db, statements) {
   try {
     await db.batch(statements);
   } catch (e) {
-    if (/CHECK constraint|FOREIGN KEY/i.test(e.message)) throw new ActivityError(409, '這場活動剛被別人改過，請重新整理後再改');
+    if (/CHECK constraint|FOREIGN KEY/i.test(e.message)) throw new ActivityError(409, CHANGED);
     throw e;
   }
 }
 
 export async function updateActivity(db, id, revision, { date, kind, dogs }) {
-  const before = await current(db, id, revision);
-  await guarded(db, [
+  const before = await readUnchanged(db, id, revision);
+  await batchUnlessChanged(db, [
     guard(db, id, revision),
     db.prepare('UPDATE v3_activities SET activity_date=?, kind=?, revision=revision+1 WHERE activity_id=?').bind(date, kind, id),
     db.prepare('DELETE FROM v3_activity_dogs WHERE activity_id=?').bind(id),
@@ -146,8 +157,8 @@ export async function updateActivity(db, id, revision, { date, kind, dogs }) {
 }
 
 export async function deleteActivity(db, id, revision) {
-  const before = await current(db, id, revision);
-  await guarded(db, [
+  const before = await readUnchanged(db, id, revision);
+  await batchUnlessChanged(db, [
     guard(db, id, revision),
     db.prepare('DELETE FROM v3_activities WHERE activity_id=?').bind(id),
     db.prepare('DELETE FROM v3_activity_guard'),

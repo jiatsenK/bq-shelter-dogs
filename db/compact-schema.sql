@@ -198,6 +198,15 @@ CREATE TABLE IF NOT EXISTS v3_activity_dogs (
 CREATE INDEX IF NOT EXISTS v3_activity_dogs_dog ON v3_activity_dogs(dog_id);
 -- 在 batch 內檢查活動沒被別人改過；失敗時整批回復（同 v3_identity_guard）
 CREATE TABLE IF NOT EXISTS v3_activity_guard (valid INTEGER NOT NULL CHECK(valid=1));
+-- 活動紀錄版本號（ADR 0009 的做法）：兩張表有新增、修改、刪除就加 1，Worker 每次只讀這 1 列，沒變就回記憶體裡的名單
+CREATE TABLE IF NOT EXISTS v3_activity_versions (id INTEGER PRIMARY KEY CHECK(id=1), ver INTEGER NOT NULL DEFAULT 0);
+INSERT OR IGNORE INTO v3_activity_versions(id) VALUES(1);
+CREATE TRIGGER IF NOT EXISTS version_v3_activities_INSERT AFTER INSERT ON v3_activities BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activities_UPDATE AFTER UPDATE ON v3_activities BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activities_DELETE AFTER DELETE ON v3_activities BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activity_dogs_INSERT AFTER INSERT ON v3_activity_dogs BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activity_dogs_UPDATE AFTER UPDATE ON v3_activity_dogs BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activity_dogs_DELETE AFTER DELETE ON v3_activity_dogs BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
 
 -- 只有名字的已出所狗卡（#271，ADR 0002）：網站開始記錄前就離所、D1 沒有的狗，K 確認後用 scripts/departed-card.mjs 建。
 -- 狗本身是 v3_dogs 一列（沒有編號）；離所日、原因不知道就留空／unknown。同步不碰
