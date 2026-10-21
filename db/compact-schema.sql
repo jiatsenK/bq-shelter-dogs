@@ -199,6 +199,15 @@ CREATE INDEX IF NOT EXISTS v3_activity_dogs_dog ON v3_activity_dogs(dog_id);
 -- 在 batch 內檢查活動沒被別人改過；失敗時整批回復（同 v3_identity_guard）
 CREATE TABLE IF NOT EXISTS v3_activity_guard (valid INTEGER NOT NULL CHECK(valid=1));
 
+-- 只有名字的已出所狗卡（#271，ADR 0002）：網站開始記錄前就離所、D1 沒有的狗，K 確認後用 scripts/departed-card.mjs 建。
+-- 狗本身是 v3_dogs 一列（沒有編號）；離所日、原因不知道就留空／unknown。同步不碰
+CREATE TABLE IF NOT EXISTS v3_departed_cards (
+  dog_id TEXT PRIMARY KEY NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
+  departed_date TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL DEFAULT 'unknown' CHECK(reason IN ('adopt','death','other','unknown')),
+  created_at TEXT NOT NULL
+);
+
 -- #267：舊代號資料保留作為待對照來源，新個人資料只由固定志工持有。
 CREATE TABLE IF NOT EXISTS v3_identity_names (
  code TEXT PRIMARY KEY NOT NULL,

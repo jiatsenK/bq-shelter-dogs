@@ -3486,7 +3486,7 @@ async function runDeskTests() {
 async function runCardsTests() {
   const code = await fetch('../public/js/cards.js').then(r => r.text());
   // 包在函式裡跑，不把 bq* 放進這頁的全域（測試頁沒有 #bqField，不會開始畫面）
-  const C = new Function(`${SITE_JS}\n${code}\nreturn { bqPlayers, bqTier, bqStay, bqQuote, bqMonthOut, bqAwards, bqTeamOf, bqLoadCodes, bqTodayWrites, bqMineFrom, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, BQ_OPENED_KEY };`)();
+  const C = new Function(`${SITE_JS}\n${code}\nreturn { bqPlayers, bqTier, bqStay, bqQuote, bqMonthOut, bqAwards, bqTeamOf, bqLoadCodes, bqTodayWrites, bqMineFrom, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, BQ_OPENED_KEY, bqAlumni };`)();
   const TODAY = new Date(2026, 9, 9);
   const data = {
     photoVersions: { 'photos/2017041502.jpg': 'abc' },
@@ -3516,6 +3516,17 @@ async function runCardsTests() {
     const fromApp = parseDogsData({ dogs: cases }).dogs.map(d => ymd(firstIntake(d)));
     eq(fromCards, ['2015/8/18', '2014/1/1', '2017/9/5', '2020/2/2'], '圖鑑：');
     eq(fromApp, fromCards, '溜狗表跟圖鑑一樣：');
+  });
+  await check('#271 已出所狗卡：在所期間是入所日到離所日，原因寫給人看；只有名字的卡沒有照片', () => {
+    const list = C.bqAlumni({ dogs: [
+      { id: '2020010101', number: '2020010101', name: '阿福', formerIds: ['2019010101'], stays: [], departed: '2026-10-10', reason: 'adopt', walkDays: 4, activities: 2 },
+      { id: 'm1', number: '', name: '老黃', formerIds: [], stays: [], departed: '', reason: 'lost', walkDays: 0, activities: 1, nameOnly: true },
+      { id: '', name: '壞資料' },
+    ] });
+    eq(list.map(a => [a.name, a.intake && ymd(a.intake), a.left && ymd(a.left), a.stay, a.reason, a.walkDays, a.activities, a.hasPhoto]), [
+      ['阿福', '2019/1/1', '2026/10/10', '7年9個月', '被認養', 4, 2, null],
+      ['老黃', null, null, '—', '原因待確認', 0, 1, false],
+    ]);
   });
   await check('球員卡：沒編號、括號名字的列不算；背號照入隊順序（1 號最資深）', () => {
     eq(players.map(p => p.name), ['老將', '新人', '中堅', '金卡'], '球員：');
@@ -3656,7 +3667,8 @@ async function runCardsTests() {
   });
   await check('圖鑑只讀狗與遛狗資料，另透過開卡 API 儲存，不寫試算表', () => {
     const urls = [...code.matchAll(/fetch\(([^,)]+)/g)].map(m => m[1].trim());
-    eq(urls.length, 5, '狗、歷史、我溜過的狗、身分解析與開卡：');
+    eq(urls.length, 6, '狗、歷史、我溜過的狗、身分解析、開卡與已出所（#271）：');
+    if (!urls.includes('BQ_ALUMNI_URL') || !code.includes("fetch(BQ_ALUMNI_URL, { cache: 'no-cache' })")) throw new Error('已出所只用 GET 讀');
     if (!code.includes('/api/cards/opened') || /script\.google\.com|sheets\.googleapis\.com|UPLOAD_URL/.test(code)) throw new Error('cards.js 只能寫開卡 API');
     if (/setItem\((?!BQ_OPENED_KEY|BQ_CODES_KEY|'bq-walker-name')/.test(code)) throw new Error('cards.js 只能存撕開過的卡，不能改溜狗表的代號、今天已溜');
   });

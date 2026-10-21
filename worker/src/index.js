@@ -2,6 +2,7 @@ import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitie
 import { cleanIntakeEvents } from './intake.js';
 import { cleanStays } from './stays.js';
 import { saveFixedCare } from './compact.js';
+import { readDepartedCards } from './departed.js';
 import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, readActivities, resolveDogs, updateActivity } from './activities.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
@@ -1341,6 +1342,17 @@ export default {
       } catch (e) {
         console.error(path, e);
         return fail(503, path === '/walks' ? '暫時讀不到溜狗紀錄' : '暫時讀不到離所紀錄', allowed, { code: 'db' });
+      }
+    }
+    // 已出所狗卡（#271）：圖鑑的「已出所」名單，誰都看得到
+    if (path === '/departed-cards') {
+      if (request.method !== 'GET') return fail(405, '只能用 GET /departed-cards 讀', allowed);
+      try {
+        if (!env || !env.DB) throw new Error('沒有 D1');
+        return reply(200, { ok: true, dogs: await readDepartedCards(env.DB, taiwanYmd(Date.now())) }, allowed);
+      } catch (e) {
+        console.error('departed-cards', e);
+        return fail(503, '暫時讀不到已出所的狗', allowed, { code: 'db' });
       }
     }
     // 今日溜狗紀錄（ADR 0007）：網站每分鐘來讀今天的清單；讀不到網站就照舊不顯示錯誤

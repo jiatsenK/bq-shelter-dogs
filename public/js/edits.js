@@ -31,6 +31,7 @@ function editsValue(kind, v) {
   if (kind === 'rest') return `休養到 ${v.until}${v.reason ? `（${v.reason}）` : ''}`;
   if (kind === 'group') return `${v.label || '（沒有群名）'}：${(v.names || []).join('、') || '（沒有狗）'}`;
   if (kind === 'activity') return `${v.date} ${{ kids: '動保小小兵', adoption: '認養會' }[v.kind] || v.kind}：${(v.dogs || []).join('、') || '（沒有狗）'}`;
+  if (kind === 'departed-card') return v.linkedTo ? `「${v.name}」接到編號 ${v.linkedTo}（${v.attendances} 筆出席）` : `${v.name}（離所 ${v.departed || '日期不明'}，接上 ${v.attendances} 筆出席）`;
   if (kind === 'walkundo') return `上次溜 ${v.date || '沒溜過'}${v.walker ? `（${v.walker}）` : ''}`;
   if (kind === 'photo') return v.trash ? `舊照片在垃圾桶：${v.trash}` : (v.path ? '新照片' : '（沒有）');
   return typeof v === 'string' ? v : JSON.stringify(v);

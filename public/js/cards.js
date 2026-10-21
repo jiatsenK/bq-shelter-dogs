@@ -6,6 +6,7 @@
 const BQ_DATA_URL = 'api/dogs'; // #247 起從 Worker 讀 D1
 const BQ_WALKS_URL = 'api/walks'; // #260 起從 Worker 讀 D1
 const BQ_MINE_URL = 'api/walks/mine'; // #344 我溜過的狗由 Worker 彙總
+const BQ_ALUMNI_URL = 'api/departed-cards'; // #271 已出所狗卡
 const BQ_CODES_KEY = 'bq-walker-codes'; // 溜狗表（js/app.js）存的我的代號
 const BQ_WRITES_KEY = 'bq-sheet-writes'; // 溜狗表今天按過的溜了（還沒同步進 walks.json 的）
 const BQ_OPENED_KEY = 'bq-zukan'; // 撕開過的卡：{ v: 1, codes: { 代號: { 狗編號: 撕開那天 } } }
@@ -133,6 +134,27 @@ function bqAwards(players, today = new Date()) {
 }
 
 // ── 你是誰、你溜過誰 ──
+// 已出所狗卡（#271，ADR 0002）：每個人都直接收藏，不用開卡、沒有動畫，不算進開卡進度。
+// api/departed-cards → 卡；在所期間是入所日（跟在所的狗同一個規則）到離所日
+const BQ_DEPART_REASONS = { adopt: '被認養', death: '當小天使了', other: '離開收容所', unknown: '原因待確認' };
+function bqAlumni(data) {
+  if (!data || !Array.isArray(data.dogs)) throw new Error('已出所格式不對');
+  const text = v => (v == null ? '' : String(v).trim());
+  return data.dogs.filter(d => d && text(d.id) && text(d.name)).map(d => {
+    const number = text(d.number);
+    const intake = number || (Array.isArray(d.stays) && d.stays.length) ? bqIntake({ id: number, formerIds: d.formerIds, stays: d.stays }) : null;
+    const left = bqParseYmd(d.departed);
+    return {
+      id: text(d.id), number, name: text(d.name), nameOnly: !!d.nameOnly, intake, left,
+      stay: intake && left ? bqStay(intake, left) : '—',
+      reason: BQ_DEPART_REASONS[d.reason] || BQ_DEPART_REASONS.unknown,
+      walkDays: Math.max(0, Number(d.walkDays) || 0), activities: Math.max(0, Number(d.activities) || 0),
+      team: BQ_FREE,
+      hasPhoto: number ? null : false, thumb: `photos/thumbs/${number}.jpg`, photo: `photos/${number}.jpg`,
+    };
+  });
+}
+
 function bqLoadCodes(storage) {
   try {
     const list = JSON.parse((storage && storage.getItem(BQ_CODES_KEY)) || 'null');
@@ -260,7 +282,36 @@ function bqCardHtml(p, opts = {}) {
   </${tag}>`;
 }
 
-const BQ = { players: [], byId: new Map(), storage: null, today: new Date(), codes: [], mine: new Map(), opened: null, pending: [], hand: [], still: false, walksOk: true, remote: 'loading', saving: false };
+// 已出所的卡：白框、沒有背號；背面是在所期間、離所原因、溜過幾天、出席活動幾次
+function bqAlumniCardHtml(a) {
+  const span = `${bqDate(a.intake)} – ${bqDate(a.left)}`;
+  const photo = bqPhoto({ ...a, number: '' }, a.photo);
+  return `<button type="button" class="bq-card tier-base bq-alumni-card" data-alumni-card="${bqEsc(a.id)}" style="--team:${a.team.color}" aria-label="${bqEsc(a.name)}，已出所，點了翻到背面">
+    <span class="bq-in">
+      <span class="bq-face">
+        <span class="bq-ph">${photo}</span>
+        <span class="bq-band">已出所<span>${bqEsc(a.reason)}</span></span>
+        <span class="bq-nm">${bqEsc(a.name)}</span>
+        <span class="bq-pos"><span>在所 <b>${bqEsc(span)}</b></span><span></span></span>
+        <span class="bq-holo" aria-hidden="true"></span><span class="bq-glare" aria-hidden="true"></span>
+      </span>
+      <span class="bq-back" aria-hidden="true">
+        <span class="bq-back-top"><b>${bqEsc(a.name)}</b><span>${bqEsc(a.number || '')}</span></span>
+        <span class="bq-set">BQ 已出所・${bqEsc(a.reason)}</span>
+        <span class="bq-stats">
+          <span><em>在所期間</em><b>${bqEsc(span)}</b></span>
+          <span><em>在所多久</em><b>${bqEsc(a.stay)}</b></span>
+          <span><em>溜過</em><b><i>${a.walkDays}</i> 天</b></span>
+          <span><em>出席活動</em><b><i>${a.activities}</i> 次</b></span>
+        </span>
+        <span class="bq-quote">${a.nameOnly ? '網站開始記錄以前就離開了，名字留在這裡。' : '謝謝每一位陪牠走過、溜過牠的人。'}</span>
+        <span class="bq-tier-note">離所原因：${bqEsc(a.reason)}</span>
+      </span>
+    </span>
+  </button>`;
+}
+
+const BQ = { alumni: null, players: [], byId: new Map(), storage: null, today: new Date(), codes: [], mine: new Map(), opened: null, pending: [], hand: [], still: false, walksOk: true, remote: 'loading', saving: false };
 
 async function bqRemoteOpened(codes, ids) {
   const res = await fetch(ids ? '/api/cards/opened' : `/api/cards/opened?codes=${encodeURIComponent(codes[0])}`, ids
@@ -492,6 +543,33 @@ function bqRenderBinder() {
   }).join('');
 }
 
+// 已出所：所有人直接收藏（卡套都是拿到的樣子），讀不到就說讀不到，不當成沒有
+function bqRenderAlumni() {
+  const box = document.getElementById('bqAlumni');
+  if (!box) return;
+  const list = BQ.alumni;
+  const count = document.querySelector('[data-bq="alumni"]');
+  if (count) count.textContent = Array.isArray(list) ? String(list.length) : '—';
+  if (list === null) { box.innerHTML = '<p class="bq-cta-note">讀取中…</p>'; return; }
+  if (list === 'error') { box.innerHTML = '<p class="bq-cta-note">已出所的狗讀不到，請重新整理頁面。</p>'; return; }
+  if (!list.length) { box.innerHTML = '<p class="bq-cta-note">還沒有已出所的狗</p>'; return; }
+  box.innerHTML = `<section class="bq-sheet" style="--team:${BQ_FREE.color}" aria-label="已出所">
+    <div class="bq-pockets">${list.map(a => `<button type="button" class="bq-pocket got tier-base" data-alumni="${bqEsc(a.id)}" aria-label="${bqEsc(a.name)}，已出所，${bqEsc(a.reason)}">
+      <span class="bq-pocket-ph">${bqPhoto({ ...a, number: '' }, a.thumb)}</span><span class="bq-pocket-nm">${bqEsc(a.name)}</span></button>`).join('')}</div>
+  </section>`;
+}
+async function bqLoadAlumni() {
+  try {
+    const res = await fetch(BQ_ALUMNI_URL, { cache: 'no-cache' });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    BQ.alumni = bqAlumni(await res.json());
+  } catch (e) {
+    console.error(e);
+    BQ.alumni = 'error';
+  }
+  bqRenderAlumni();
+}
+
 // 大卡：點圖鑑或獎項的照片，放大看、可以翻面
 let bqOpener = null;
 function bqOpen(id, opener) {
@@ -502,6 +580,15 @@ function bqOpen(id, opener) {
   const modal = document.getElementById('bqModal');
   document.getElementById('bqModalCard').innerHTML = bqCardHtml(p, { tag: 'button', big: true, mine });
   modal.hidden = false;
+  document.documentElement.classList.add('bq-modal-open');
+  document.querySelector('#bqModalCard .bq-card').focus({ preventScroll: true });
+}
+function bqOpenAlumni(id, opener) {
+  const a = Array.isArray(BQ.alumni) && BQ.alumni.find(x => x.id === id);
+  if (!a) return;
+  bqOpener = opener || null;
+  document.getElementById('bqModalCard').innerHTML = bqAlumniCardHtml(a);
+  document.getElementById('bqModal').hidden = false;
   document.documentElement.classList.add('bq-modal-open');
   document.querySelector('#bqModalCard .bq-card').focus({ preventScroll: true });
 }
@@ -533,6 +620,8 @@ function bqBind() {
   big.addEventListener('pointerout', bqUntilt);
   document.addEventListener('click', e => {
     if (e.target.closest('#bqRetry')) { bqSyncOpened(); return; }
+    const alumni = e.target.closest('[data-alumni]');
+    if (alumni) { bqOpenAlumni(alumni.dataset.alumni, alumni); return; }
     const open = e.target.closest('[data-open]');
     if (open) { bqOpen(open.dataset.open, open); return; }
     const toPack = e.target.closest('[data-to-pack], #bqOpen');
@@ -582,6 +671,8 @@ async function bqInit() {
     }
   } catch (e) { /* 離線保留原來的名字對照 */ }
   bqBind();
+  bqRenderAlumni();
+  bqLoadAlumni(); // 已出所跟開卡無關，自己讀，在所資料讀不到也照樣顯示
   let mine = null;
   try {
     const [res, w, m] = await Promise.all([
