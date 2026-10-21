@@ -3648,7 +3648,17 @@ async function runCardsTests() {
       await b.eval('bqDeal()');
       eq(b.eval('BQ.pending.length'), 0);
       eq((await device(ME)).eval('BQ.pending.length'), 0, '關閉重開不重複：');
-      eq((await device(OTHER)).eval('BQ.pending.length'), 7, '不同人的圖鑑分開：');
+      const o = await device(OTHER);
+      eq(o.eval('BQ.pending.length'), 7, '不同人的圖鑑分開：');
+      await o.eval('bqOpenField()');
+      eq(o.document.getElementById('bqAll').hidden, false, '超過一包才有一次全開：');
+      o.eval('BQ.still = false; bqOpenPack()');
+      eq(o.document.getElementById('bqSkip').hidden, false, '撕包時可以跳過：');
+      await o.eval('bqSkip()');
+      eq([o.eval('BQ.pending.length'), o.document.querySelectorAll('#bqHand .bq-card.dealt').length], [2, 5], '跳過動畫直接攤開、照樣存：');
+      eq(Object.keys(fixture.books[OTHER]).length, 5);
+      await o.eval('bqOpenAll()');
+      eq([o.eval('BQ.pending.length'), Object.keys(fixture.books[OTHER]).length, o.document.getElementById('bqAll').hidden], [0, 7, true], '一次全開存進後台：');
       const cleared = await device(ME, [], true);
       eq(cleared.eval('BQ.codes.length'), 0, '慢回應不復活已清除的身分：');
       eq(cleared.localStorage.getItem('bq-walker-name'), null);
