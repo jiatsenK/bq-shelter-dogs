@@ -23,3 +23,12 @@
 - 舊名單還沒匯入：等 K 提供表格（日期、活動類型、狗名），先預演給 K 看對不上的清單。
 - 未在真機驗收。
 - 截圖：docs/design/issue-270（合成資料，非正式資料）。
+
+## 審查（/implement 流程的 /code-review，同 PR）
+
+- 使用者補充改用 repo 的 /implement 技能接續：已完成的實作與測試沿用，補跑兩軸審查。
+- Standards：`GET /activities` 每次整張讀、`DOG_ROWS` 對主清單無索引子查詢、沒有讀寫量測試、沒附 ADR 0008 估算、沒有 1440px。修正：新增 `v3_activity_versions`＋觸發器，Worker 只讀版本號那 1 列（活動版本＋small 版本），沒變回記憶體；編號改走 `v3_numbers_dog` 索引；補 `readsOf` 小資料／塞 300 隻狗＋40 場後讀取量相同（1 列）、修改寫入句數不隨其他場次變多；瀏覽器測試改 320／1440px，補 1440px 截圖。改名 `placeholders`／`readUnchanged`／`batchUnlessChanged`、409 訊息一處；前端出席狗的鍵統一為 `activityDogRef`／`activityDogKey`。
+- Spec：編輯紀錄只存狗名，誤刪無法接回永久 ID → 改前／改後加 `dogIds`（匯入也一樣）。「之後補建狗卡再接上」由 #271 的 `scripts/departed-card.mjs` 提供；上限（一場 60 隻、日期最多一年後）與 revision 衝突保護是防呆，列在 PR 請 K 確認。
+- 類型對照（動保小小兵／認養會）在 Worker、activities.js、edits.js 各一份：三個檔分別在 Worker、志工頁、編輯紀錄頁載入，沒有共用模組，維持現狀。
+- 寫入量估算（ADR 0008）：一次存檔約「1 活動＋2 guard＋舊名單 N 刪＋新名單 N 新增＋版本觸發 2N+1＋1 編輯紀錄」，15 隻約 65 列；一個月幾場、每場改幾次，每天遠低於 20000 列預算。舊名單匯入一次性約「場次 ×（2×狗數＋3）」列。
+- 複驗：Node 357／357、網頁 261／261 與全部互動套件通過。

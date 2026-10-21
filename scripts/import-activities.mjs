@@ -97,7 +97,7 @@ export function importSql(plan, { editor = DEFAULT_EDITOR, at = new Date().toISO
     const id = newId();
     out.push(`INSERT INTO v3_activities(activity_id,activity_date,kind) VALUES(${sqlValue(id)},${sqlValue(a.date)},${sqlValue(a.kind)})`);
     a.dogs.forEach((d, i) => out.push(`INSERT INTO v3_activity_dogs(activity_id,position,dog_id,name) VALUES(${sqlValue(id)},${i},${sqlValue(d.dogId)},${sqlValue(d.name)})`));
-    const after = JSON.stringify({ date: a.date, kind: a.kind, dogs: a.dogs.map(d => d.name) });
+    const after = JSON.stringify({ date: a.date, kind: a.kind, dogs: a.dogs.map(d => d.name), dogIds: a.dogs.map(d => d.dogId) });
     out.push(`INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) VALUES(${sqlValue(at)},'',${sqlValue(editor)},'activity',NULL,'','null',${sqlValue(after)})`);
   }
   return out;

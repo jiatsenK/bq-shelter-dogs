@@ -74,7 +74,7 @@ module.exports = async (browser, base) => {
     await page.getByRole('button', { name: /只記名字「名單上沒有的狗」/ }).click();
     assert.deepEqual(await page.locator('.act-chip').evaluateAll(els => els.map(e => e.firstChild.textContent)), ['測試狗2', '離所甲', '名單上沒有的狗']);
     await page.getByRole('button', { name: '拿掉 名單上沒有的狗' }).click();
-    for (const width of [320, 1280]) {
+    for (const width of [320, 1440]) {
       await page.setViewportSize({ width, height: 844 });
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}px 表單不橫向溢出`);
       for (const b of await page.locator('.act-form button:visible').all()) {
@@ -137,6 +137,6 @@ module.exports = async (browser, base) => {
     await page.getByRole('button', { name: '存好' }).click();
     await page.getByRole('alert').filter({ hasText: '請先選好你的名字' }).waitFor();
     assert.equal(writes.length, before, '沒選名字不送出');
-    console.log('#270 活動紀錄：資訊入口、標題下直接列狗、新增／修改／刪除、衝突、重新整理、狗卡無活動、需先選名字、320／390／桌機通過');
+    console.log('#270 活動紀錄：資訊入口、標題下直接列狗、新增／修改／刪除、衝突、重新整理、狗卡無活動、需先選名字、320／390／1440px 通過');
   } finally { await ctx.close(); }
 };

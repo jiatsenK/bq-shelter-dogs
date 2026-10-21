@@ -31,8 +31,10 @@ const req = (method, path, body, ip = '1.1.1.1') => new Request(`${SITE}/api${pa
 });
 const call = async (env, ...args) => { const res = await worker.fetch(req(...args), env); return { status: res.status, body: await res.json() }; };
 const list = async env => (await call(env, 'GET', '/activities')).body.activities;
+// 編輯紀錄：dogIds 只看有沒有接上狗（永久 ID 是亂數）
+const noIds = v => v && { ...v, dogIds: v.dogIds.map(Boolean) };
 const logs = async env => (await env.DB.prepare("SELECT editor_name, before_json, after_json FROM v3_edit_log WHERE kind='activity' ORDER BY id").all()).results
-  .map(r => [r.editor_name, JSON.parse(r.before_json), JSON.parse(r.after_json)]);
+  .map(r => [r.editor_name, noIds(JSON.parse(r.before_json)), noIds(JSON.parse(r.after_json))]);
 
 test('新增：用編號、舊編號選狗，只有名字的也存；讀回新到舊、帶現在的編號', async () => {
   const env = await makeEnv();
@@ -46,8 +48,8 @@ test('新增：用編號、舊編號選狗，只有名字的也存；讀回新�
   // 舊編號和現在的編號是同一隻，只留一次；同名只有名字的也只留一次
   assert.deepEqual(all[0].dogs.map(d => [d.number, d.name, Boolean(d.dogId)]), [['2024032902', '小白', true], ['', '阿福', false]]);
   assert.deepEqual(await logs(env), [
-    [ME, null, { date: '2026-09-12', kind: 'kids', dogs: ['小黑'] }],
-    [ME, null, { date: '2026-10-11', kind: 'adoption', dogs: ['小白', '阿福'] }],
+    [ME, null, { date: '2026-09-12', kind: 'kids', dogs: ['小黑'], dogIds: [true] }],
+    [ME, null, { date: '2026-10-11', kind: 'adoption', dogs: ['小白', '阿福'], dogIds: [true, false] }],
   ]);
 });
 
@@ -63,7 +65,7 @@ test('修改：帶打開時的 revision 才能改，改完 revision 加 1；別�
   const stale = await call(env, 'PUT', `/activities/${activity.id}`, { editor: ME, revision: 1, date: '2026-10-13', kind: 'kids', dogs: [] });
   assert.equal(stale.status, 409);
   assert.equal((await list(env))[0].date, '2026-10-12');
-  assert.deepEqual((await logs(env))[1], ['小華', { date: '2026-10-11', kind: 'adoption', dogs: ['阿福'] }, { date: '2026-10-12', kind: 'kids', dogs: ['阿福', '小黑'] }]);
+  assert.deepEqual((await logs(env))[1], ['小華', { date: '2026-10-11', kind: 'adoption', dogs: ['阿福'], dogIds: [false] }, { date: '2026-10-12', kind: 'kids', dogs: ['阿福', '小黑'], dogIds: [false, true] }]);
   // 用永久 ID 選的狗（例：沒有編號的狗）照樣接上
   const id = (await list(env))[0].dogs[1].dogId;
   const byId = await call(env, 'PUT', `/activities/${activity.id}`, { editor: ME, revision: 2, date: '2026-10-12', kind: 'kids', dogs: [{ dogId: id }] });
@@ -78,7 +80,7 @@ test('刪除：整場連出席名單一起刪，記改前內容；舊 revision�
   assert.deepEqual([r.status, r.body.deleted], [200, activity.id]);
   assert.deepEqual(await list(env), []);
   assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_activity_dogs').first('n'), 0);
-  assert.deepEqual((await logs(env)).at(-1), [ME, { date: '2026-10-11', kind: 'kids', dogs: ['小黑'] }, null]);
+  assert.deepEqual((await logs(env)).at(-1), [ME, { date: '2026-10-11', kind: 'kids', dogs: ['小黑'], dogIds: [true] }, null]);
   assert.equal((await call(env, 'DELETE', `/activities/${activity.id}`, { editor: ME, revision: 1 })).status, 404);
 });
 
@@ -112,4 +114,46 @@ test('寫入出錯時整批回復：出席名單寫不進去，活動本身也�
   const [after] = await list(env);
   assert.deepEqual([after.date, after.kind, after.revision, after.dogs.map(d => d.name)], ['2026-10-11', 'kids', 1, ['阿福']]);
   assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_activity_guard').first('n'), 0);
+});
+
+// CODING_STANDARDS「附讀寫量測試」：先用小資料跑，再塞大量無關資料跑，讀寫量一樣
+async function readsOf(env) {
+  const before = env.DB.stats.rowsRead;
+  assert.equal((await call(env, 'GET', '/activities')).status, 200);
+  return env.DB.stats.rowsRead - before;
+}
+// 數送出的寫入句數（一句寫一列）；回傳停止計數的函式
+function countWrites(DB) {
+  const batch = DB.batch, counter = { n: 0 };
+  DB.batch = list => { counter.n += list.length; return batch.call(DB, list); };
+  counter.stop = () => { DB.batch = batch; return counter.n; };
+  return counter;
+}
+
+test('讀取量：沒改時只讀版本號，不隨場次、狗、溜狗紀錄變多；有人改了才重讀', async () => {
+  const env = await makeEnv();
+  await call(env, 'POST', '/activities', { editor: ME, date: '2026-10-11', kind: 'kids', dogs: [{ number: '2024010101' }, { name: '阿福' }] });
+  await readsOf(env);
+  const small = await readsOf(env);
+  assert.equal(small, 1, '沒改時只讀版本號那 1 列');
+  for (let i = 0; i < 300; i++) await env.DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)").bind(`x${i}`, `無關${i}`).run();
+  for (let i = 0; i < 40; i++) {
+    await env.DB.prepare('INSERT INTO v3_activities(activity_id,activity_date,kind) VALUES(?,?,?)').bind(`a${i}`, '2025-01-01', 'adoption').run();
+    await env.DB.prepare('INSERT INTO v3_activity_dogs VALUES(?,0,?,?)').bind(`a${i}`, `x${i}`, `無關${i}`).run();
+  }
+  assert.equal((await call(env, 'GET', '/activities')).body.activities.length, 41, '有人改了就重讀');
+  assert.equal(await readsOf(env), small, '資料多了，沒改時讀取量一樣');
+});
+
+test('寫入量：修改只跟這場的狗數有關，不隨其他場次變多', async () => {
+  const env = await makeEnv();
+  const writesOfUpdate = async () => {
+    const { activity } = (await call(env, 'POST', '/activities', { editor: ME, date: '2026-10-11', kind: 'kids', dogs: [{ name: '甲' }] })).body;
+    const counter = countWrites(env.DB);
+    await call(env, 'PUT', `/activities/${activity.id}`, { editor: ME, revision: 1, date: '2026-10-11', kind: 'kids', dogs: [{ name: '甲' }, { name: '乙' }] });
+    return counter.stop();
+  };
+  const small = await writesOfUpdate();
+  for (let i = 0; i < 40; i++) await call(env, 'POST', '/activities', { editor: ME, date: '2025-01-01', kind: 'adoption', dogs: [{ name: `狗${i}` }] }, `9.9.9.${i}`);
+  assert.equal(await writesOfUpdate(), small);
 });
