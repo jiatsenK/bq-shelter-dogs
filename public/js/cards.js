@@ -11,6 +11,7 @@ const BQ_WRITES_KEY = 'bq-sheet-writes'; // 溜狗表今天按過的溜了（還
 const BQ_OPENED_KEY = 'bq-zukan'; // 撕開過的卡：{ v: 1, codes: { 代號: { 狗編號: 撕開那天 } } }
 const BQ_CODE_PATTERN = /^[0-9a-f]{12}$/;
 const BQ_PACK_SIZE = 5;
+const BQ_SAVE_MAX = 50; // Worker PUT /api/cards/opened 一次最多 50 張
 
 // 隊伍照犬舍分；顏色是卡面色帶和圖鑑的隊伍標
 // 分區、隊名、隊色在 js/site-config.js（cards.html 先載入）
@@ -260,7 +261,7 @@ function bqCardHtml(p, opts = {}) {
   </${tag}>`;
 }
 
-const BQ = { players: [], byId: new Map(), storage: null, today: new Date(), codes: [], mine: new Map(), opened: null, pending: [], hand: [], still: false, walksOk: true, remote: 'loading', saving: false };
+const BQ = { players: [], byId: new Map(), storage: null, today: new Date(), codes: [], mine: new Map(), opened: null, pending: [], hand: [], still: false, timers: [], packAll: false, walksOk: true, remote: 'loading', saving: false };
 
 async function bqRemoteOpened(codes, ids) {
   const res = await fetch(ids ? '/api/cards/opened' : `/api/cards/opened?codes=${encodeURIComponent(codes[0])}`, ids
@@ -312,19 +313,26 @@ function bqFan(i, n) {
   const cw = (card && card.offsetWidth) || 200;
   const step = wide ? Math.min(cw * .98, (innerWidth - cw - 96) / Math.max(1, n - 1)) : Math.min(56, (innerWidth - cw - 40) / Math.max(1, n - 1));
   // 往下沉的一半扣回來：扇形整體的中心跟卡包的中心同高（撕開前後主角不跳）
-  const s = wide ? 26 : 10;
-  return `translate(${k * step}px, ${Math.abs(k) * s - Math.floor(n / 2) * s / 2}px) rotate(${k * (wide ? 4 : 3)}deg)`;
+  // 一次全開張數多：整把扇形最多轉 ±20°、下沉 80px，五張以內不變
+  const s = Math.min(wide ? 26 : 10, 80 / Math.max(1, mid)), r = Math.min(wide ? 4 : 3, 20 / Math.max(1, mid));
+  return `translate(${k * step}px, ${Math.abs(k) * s - Math.floor(n / 2) * s / 2}px) rotate(${k * r}deg)`;
 }
+function bqLater(fn, ms) { BQ.timers.push(setTimeout(fn, ms)); }
+function bqClearTimers() { BQ.timers.forEach(clearTimeout); BQ.timers = []; }
 function bqShowHand(cards, freshIds, instant) {
   BQ.hand = cards;
   const hand = document.getElementById('bqHand');
+  instant = instant || document.getElementById('bqField').classList.contains('instant');
   hand.innerHTML = cards.map(p => bqCardHtml(p, { fresh: freshIds.has(p.id), mine: BQ.mine.get(p.id) })).join('');
   [...hand.querySelectorAll('.bq-card')].forEach((c, i, all) => {
     c.dataset.base = bqFan(i, all.length);
     c.style.zIndex = String(i + 1);
     if (BQ.still || instant) { c.style.transform = c.dataset.base; c.classList.add('dealt'); return; }
-    setTimeout(() => { c.style.transform = c.dataset.base; c.classList.add('dealt'); }, 140 + i * 120);
+    bqLater(() => { c.style.transform = c.dataset.base; c.classList.add('dealt'); }, 140 + i * 120);
   });
+  // 最後一張發完，「跳過動畫」才收起來
+  if (BQ.still || instant) document.getElementById('bqField').classList.remove('animating');
+  else bqLater(() => document.getElementById('bqField').classList.remove('animating'), 140 + (cards.length - 1) * 120 + 900);
 }
 
 // 圖鑑標題右邊那一塊：還沒設定你是誰／還沒溜過／有新卡（開卡包按鈕）／都開完了
@@ -352,32 +360,65 @@ function bqRenderAgain() {
   again.hidden = !left;
   again.textContent = left > 1 ? `再開一包（還有 ${left} 包）` : '再開一包';
   document.getElementById('bqDone').hidden = false;
+  bqRenderAll();
+}
+// 一次全開：還有超過一包才出現（一包以內撕開就是全部）
+function bqRenderAll() {
+  const n = BQ.pending.length;
+  const all = document.getElementById('bqAll');
+  all.hidden = n <= BQ_PACK_SIZE;
+  all.textContent = document.getElementById('bqField').classList.contains('opened') ? `一次全開（還有 ${n} 張）` : `一次全開（${n} 張）`;
 }
 
-async function bqDeal() {
+// all：這次把待開的全部打開；instant：跳過動畫，卡片直接在扇形位置
+async function bqDeal({ all = false, instant = false } = {}) {
   if (BQ.saving || BQ.remote !== 'ready') return;
   bqRefreshOpened();
-  const cards = BQ.pending.slice(0, BQ_PACK_SIZE);
+  const cards = all ? BQ.pending.slice() : BQ.pending.slice(0, BQ_PACK_SIZE);
   if (!cards.length) return;
+  const field = document.getElementById('bqField');
+  bqClearTimers();
+  field.classList.toggle('instant', instant);
+  if (!BQ.still && !instant) field.classList.add('animating');
   BQ.saving = true;
   document.getElementById('bqAgain').disabled = true;
+  document.getElementById('bqAll').disabled = true;
   document.getElementById('bqDealNote').textContent = '正在儲存開卡紀錄…';
+  // 後台一次最多收 50 張，張數多就分批；中途失敗時，前面存好的照樣收進圖鑑
+  const saved = [];
+  let failed = false;
   try {
-    await bqRemoteOpened(BQ.codes, cards.map(p => p.id));
+    for (let i = 0; i < cards.length; i += BQ_SAVE_MAX) {
+      const ids = cards.slice(i, i + BQ_SAVE_MAX).map(p => p.id);
+      await bqRemoteOpened(BQ.codes, ids);
+      saved.push(...ids);
+    }
   } catch (e) {
-    document.getElementById('bqDealNote').textContent = '開卡紀錄未儲存，請重新開啟卡包再試。';
-    document.getElementById('bqPackNote').textContent = '開卡紀錄未儲存，點卡包重試。';
-    document.getElementById('bqField').classList.remove('opened', 'tearing');
-    document.getElementById('bqPackCount').textContent = `${cards.length} 張新卡`;
-    return;
+    failed = true;
   } finally {
     BQ.saving = false;
     document.getElementById('bqAgain').disabled = false;
+    document.getElementById('bqAll').disabled = false;
   }
-  bqMarkOpened(BQ.opened, BQ.codes, cards.map(p => p.id), BQ.today);
-  bqSaveOpened(BQ.storage, BQ.opened);
-  BQ.pending = bqPending(BQ.players, BQ.mine, bqOpenedSet());
-  bqShowHand(cards, new Set(cards.map(p => p.id)), false);
+  if (saved.length) {
+    bqMarkOpened(BQ.opened, BQ.codes, saved, BQ.today);
+    bqSaveOpened(BQ.storage, BQ.opened);
+    BQ.pending = bqPending(BQ.players, BQ.mine, bqOpenedSet());
+  }
+  if (failed) {
+    bqClearTimers();
+    document.getElementById('bqDealNote').textContent = '開卡紀錄未儲存，請重新開啟卡包再試。';
+    document.getElementById('bqPackNote').textContent = saved.length ? `已收進 ${saved.length} 張，其餘未儲存，點卡包重試。` : '開卡紀錄未儲存，點卡包重試。';
+    field.classList.remove('opened', 'tearing', 'animating', 'instant');
+    document.getElementById('bqHand').innerHTML = '';
+    document.getElementById('bqAgain').hidden = true;
+    document.getElementById('bqDone').hidden = true;
+    document.getElementById('bqPackCount').textContent = `${Math.min(BQ.pending.length, BQ_PACK_SIZE)} 張新卡`;
+    bqRenderAll();
+    if (saved.length) { bqRenderProgress(); bqRenderBinder(); bqRenderCta(); }
+    return;
+  }
+  bqShowHand(cards, new Set(cards.map(p => p.id)), instant);
   document.getElementById('bqDealNote').textContent = `拿到 ${cards.length} 張，已收進圖鑑`;
   document.getElementById('bqPackCount').textContent = '';
   bqRenderAgain();
@@ -407,13 +448,15 @@ async function bqOpenField(opener) {
   if (!BQ.pending.length) return;
   const field = document.getElementById('bqField');
   bqFieldOpener = opener || null;
-  field.classList.remove('tearing', 'opened');
+  bqClearTimers();
+  field.classList.remove('tearing', 'opened', 'animating', 'instant');
   document.getElementById('bqPackNote').textContent = '點卡包撕開';
   document.getElementById('bqHand').innerHTML = '';
   document.getElementById('bqAgain').hidden = true;
   document.getElementById('bqDone').hidden = true;
   const n = BQ.pending.length;
   document.getElementById('bqPackCount').textContent = `${Math.min(n, BQ_PACK_SIZE)} 張新卡`;
+  bqRenderAll();
   field.hidden = false;
   document.documentElement.classList.add('bq-modal-open');
   document.getElementById('bqPack').focus({ preventScroll: true });
@@ -422,21 +465,39 @@ function bqCloseField() {
   const field = document.getElementById('bqField');
   if (field.hidden) return;
   field.hidden = true;
-  field.classList.remove('tearing', 'opened');
+  bqClearTimers();
+  field.classList.remove('tearing', 'opened', 'animating', 'instant');
   document.getElementById('bqHand').innerHTML = '';
   document.documentElement.classList.remove('bq-modal-open');
   const back = document.getElementById('bqOpen') || (bqFieldOpener && bqFieldOpener.isConnected ? bqFieldOpener : document.getElementById('bqBinderTitle'));
   bqFieldOpener = null;
   if (back && back.focus) back.focus({ preventScroll: true });
 }
-function bqOpenPack() {
+function bqFocusHand() { const first = document.querySelector('#bqHand .bq-card'); if (first) first.focus({ preventScroll: true }); }
+function bqOpenPack(all = false) {
   const field = document.getElementById('bqField');
-  if (field.classList.contains('tearing') || field.classList.contains('opened') || !BQ.pending.length) return;
+  if (field.classList.contains('tearing') || field.classList.contains('opened') || !BQ.pending.length || BQ.saving) return;
   // 先撕掉上緣那條、卡包往下掉，卡片再從開口升起來攤開（減少動態時直接攤開）
+  BQ.packAll = all;
+  bqClearTimers();
+  field.classList.remove('instant');
+  if (!BQ.still) field.classList.add('animating');
   field.classList.add('tearing');
-  setTimeout(() => { field.classList.add('opened'); bqDeal(); }, BQ.still ? 0 : 520);
-  setTimeout(() => field.classList.remove('tearing'), BQ.still ? 0 : 1400);
-  setTimeout(() => { const first = document.querySelector('#bqHand .bq-card'); if (first) first.focus({ preventScroll: true }); }, BQ.still ? 0 : 900);
+  bqLater(() => { field.classList.add('opened'); bqDeal({ all }); }, BQ.still ? 0 : 520);
+  bqLater(() => field.classList.remove('tearing'), BQ.still ? 0 : 1400);
+  bqLater(bqFocusHand, BQ.still ? 0 : 900);
+}
+// 跳過動畫：撕包、掉包、發牌都直接到最後；還沒開始存的這時才存（存好才收進圖鑑不變）
+async function bqSkip() {
+  const field = document.getElementById('bqField');
+  if (!field.classList.contains('animating')) return;
+  const started = field.classList.contains('opened');
+  bqClearTimers();
+  field.classList.remove('tearing', 'animating');
+  field.classList.add('opened', 'instant');
+  if (!started) await bqDeal({ all: BQ.packAll, instant: true });
+  document.querySelectorAll('#bqHand .bq-card').forEach(c => { c.style.transform = c.dataset.base; c.classList.add('dealt'); });
+  bqFocusHand();
 }
 
 // 滑鼠傾斜＋雷射反光（減少動態時不傾斜）
@@ -519,8 +580,13 @@ function bqBind() {
   addEventListener('storage', e => { if (e.key === BQ_OPENED_KEY) bqRefreshOpened(); });
   addEventListener('pageshow', () => bqRefreshOpened());
   document.addEventListener('visibilitychange', () => { if (!document.hidden) bqRefreshOpened(); });
-  document.getElementById('bqPack').addEventListener('click', bqOpenPack);
-  document.getElementById('bqAgain').addEventListener('click', bqDeal);
+  document.getElementById('bqPack').addEventListener('click', () => bqOpenPack());
+  document.getElementById('bqAgain').addEventListener('click', () => bqDeal());
+  document.getElementById('bqAll').addEventListener('click', () => {
+    if (document.getElementById('bqField').classList.contains('opened')) bqDeal({ all: true });
+    else bqOpenPack(true);
+  });
+  document.getElementById('bqSkip').addEventListener('click', bqSkip);
   const hand = document.getElementById('bqHand');
   hand.addEventListener('pointermove', bqTilt);
   hand.addEventListener('pointerout', bqUntilt);

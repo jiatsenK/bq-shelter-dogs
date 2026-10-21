@@ -3583,10 +3583,10 @@ async function runCardsTests() {
   await check('圖鑑完整流程：舊卡移入後台、重開及跨裝置讀回、另一個人分開、寫入失敗可重試', async () => {
     const html = await fetch('../public/cards.html').then(r => r.text());
     const selected = DOGS_JSON.dogs.filter(d => d.id && !/^[(（]/.test(d.name)).slice(0, 7);
-    const ME = 'abcdef123456', OTHER = '123456abcdef';
+    const ME = 'abcdef123456', OTHER = '123456abcdef', THIRD = 'a1b2c3d4e5f6', MANY = 'f6e5d4c3b2a1';
     const fixture = window.__cardFixture = {
       dogs: { ...DOGS_JSON, dogs: selected },
-      walks: { walks: selected.map(d => ({ id: d.id, date: '2026-10-12', walkers: [ME, OTHER] })) },
+      walks: { walks: selected.map(d => ({ id: d.id, date: '2026-10-12', walkers: [ME, OTHER, THIRD] })) },
       books: {}, fail: false,
     };
     const frames = [];
@@ -3614,6 +3614,8 @@ async function runCardsTests() {
             if (f.fail) return Response.json({ ok: false }, { status: 503 });
             if (init.method === 'PUT') {
               const input = JSON.parse(init.body);
+              f.puts = (f.puts || []).concat(input.ids.length);
+              if (input.ids.length > 50) return Response.json({ ok: false }, { status: 400 });
               input.codes.forEach(c => { f.books[c] ||= {}; input.ids.forEach(id => { f.books[c][id] ||= '2026-10-13'; }); });
               return Response.json({ ok: true });
             }
@@ -3652,6 +3654,42 @@ async function runCardsTests() {
       const cleared = await device(ME, [], true);
       eq(cleared.eval('BQ.codes.length'), 0, '慢回應不復活已清除的身分：');
       eq(cleared.localStorage.getItem('bq-walker-name'), null);
+      // #272 一次全開：7 張待開（超過一包）一次撕開，全部存進後台才收進圖鑑
+      const other = (await device(OTHER));
+      const od = other.document, wait = async ok => { for (let i = 0; i < 100 && !ok(); i++) await new Promise(r => setTimeout(r, 20)); };
+      await other.eval('bqOpenField()');
+      const allBtn = od.getElementById('bqAll');
+      if (allBtn.hidden || !allBtn.textContent.includes('7 張')) throw new Error('超過一包時要有「一次全開（7 張）」');
+      allBtn.click();
+      await wait(() => od.querySelectorAll('#bqHand .bq-card').length === 7);
+      eq([od.querySelectorAll('#bqHand .bq-card').length, other.eval('BQ.pending.length'), Object.keys(fixture.books[OTHER]).length], [7, 0, 7], '一次全開：');
+      // #272 跳過動畫：撕到一半跳過，卡片直接在扇形位置、跳過鈕收起來；開卡紀錄照樣存進後台
+      const third = await device(THIRD);
+      const td = third.document, field = td.getElementById('bqField');
+      await third.eval('bqOpenField()');
+      if (!td.getElementById('bqAll').textContent.includes('7 張')) throw new Error('開卡前也要能一次全開');
+      third.eval('BQ.still = false');
+      td.getElementById('bqPack').click();
+      const skip = td.getElementById('bqSkip');
+      if (third.getComputedStyle(skip).display === 'none') throw new Error('動畫進行中要看得到「跳過動畫」');
+      if (third.getComputedStyle(td.getElementById('bqAll')).display !== 'none') throw new Error('動畫進行中不顯示一次全開');
+      skip.click();
+      await wait(() => td.querySelectorAll('#bqHand .bq-card.dealt').length === 5);
+      const dealt = [...td.querySelectorAll('#bqHand .bq-card')];
+      eq([dealt.length, dealt.every(c => c.classList.contains('dealt') && c.style.transform === c.dataset.base), field.classList.contains('tearing'), field.classList.contains('animating')], [5, true, false, false], '跳過動畫：');
+      if (third.getComputedStyle(dealt[0]).transitionDuration.split(',').some(t => parseFloat(t) > 0)) throw new Error('跳過後卡片不再有過場');
+      eq([third.eval('BQ.pending.length'), Object.keys(fixture.books[THIRD]).length], [2, 5], '跳過動畫照樣存：');
+      const again = td.getElementById('bqAll');
+      eq([again.hidden, td.getElementById('bqAgain').hidden], [true, false], '剩一包以內只留再開一包：');
+      // 張數超過後台一次上限（50 張）就分批存
+      const many = Array.from({ length: 55 }, (_, i) => ({ ...selected[0], id: `20250101${String(i).padStart(2, '0')}`, name: `多${i}` }));
+      fixture.dogs = { ...DOGS_JSON, dogs: many };
+      fixture.walks = { walks: many.map(d => ({ id: d.id, date: '2026-10-12', walkers: [MANY] })) };
+      fixture.puts = [];
+      const m = await device(MANY);
+      await m.eval('bqOpenField()');
+      await m.eval('bqDeal({ all: true, instant: true })');
+      eq([fixture.puts, m.eval('BQ.pending.length'), Object.keys(fixture.books[MANY]).length], [[50, 5], 0, 55], '分批存：');
     } finally { frames.forEach(f => f.remove()); delete window.__cardFixture; }
   });
   await check('圖鑑只讀狗與遛狗資料，另透過開卡 API 儲存，不寫試算表', () => {
