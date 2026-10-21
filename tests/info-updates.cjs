@@ -121,6 +121,14 @@ module.exports = async (browser, base) => {
     await page.locator('[data-tab="info"]').click();
     await page.locator('[data-info-page="updates"]').click();
     await page.getByText('網站更新讀取失敗，請重試。', { exact: true }).waitFor();
+    // 初次失敗後，超過 30 秒重開會自動再試
+    mode.updates = 'ok';
+    await page.locator('#analysisBack').click();
+    await page.locator('[data-info-page="updates"]').click();
+    assert(await page.getByText('網站更新讀取失敗，請重試。', { exact: true }).isVisible(), '30 秒內不自動重試');
+    await later(31000);
+    await reopen();
+    await page.getByText('重試後的更新', { exact: true }).waitFor();
     console.log('#421 更新紀錄重開先顯示、背景檢查新版、失敗保留、版本標示通過');
   } finally { await context.close(); }
 };

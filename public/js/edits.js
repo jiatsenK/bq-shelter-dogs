@@ -61,10 +61,10 @@ async function editsLoad() {
   const host = editsCacheHost();
   let cache = null;
   try {
-    const c = host && host.bqEditsCache;
-    if (c && Array.isArray(c.edits) && c.names && typeof c.at === 'number') { editsShow(list, c); cache = c; }
+    const saved = host && host.bqEditsCache;
+    if (saved && Array.isArray(saved.edits) && saved.names && typeof saved.names === 'object' && typeof saved.at === 'number') { editsShow(list, saved); cache = saved; }
   } catch (e) { list.innerHTML = ''; /* 先前內容壞掉就當沒有 */ }
-  const when = cache && editsWhen(new Date(cache.at).toISOString());
+  const when = cache && editsWhen(cache.at);
   status.textContent = cache ? `讀取 ${when}・檢查中…` : '讀取中…';
   if (retry) retry.hidden = true;
   const controller = new AbortController();

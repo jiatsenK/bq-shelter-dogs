@@ -582,14 +582,14 @@ const INFO_PAGES = { stay: '在所統計', departures: '離所紀錄', quality: 
 let infoPage = '';
 let infoUpdateTab = 'website';
 // #421 讀過的網站更新留在本次頁面的記憶體：重開先顯示，距上次檢查超過 30 秒才背景檢查；檢查失敗保留先前內容。
-// checkedAt 是內容讀到的時間（顯示用），triedAt 是上次檢查的時間（節流用，失敗也算，避免重繪又重抓）。
+// checkedAt 是內容讀到的時間（顯示用），triedAt 是上次檢查的時間（節流用，失敗也算，避免重繪又重抓；初次失敗 30 秒後重開也會再試）。
 let websiteUpdates = null;
 
 function loadWebsiteUpdates(force) {
   const data = websiteUpdates;
   if (data && (data.checking || data.state === 'loading')) return;
-  if (data && !force && (data.state === 'error' || Date.now() - data.triedAt < 30000)) return;
-  websiteUpdates = data?.state === 'ready' ? { ...data, checking: true, checkError: false, triedAt: Date.now() } : { state: 'loading', entries: [] };
+  if (data && !force && Date.now() - data.triedAt < 30000) return;
+  websiteUpdates = data?.state === 'ready' ? { ...data, checking: true, checkError: false, triedAt: Date.now() } : { state: 'loading', entries: [], triedAt: Date.now() };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   fetch('website-updates.json', { cache: 'no-cache', signal: controller.signal })
@@ -600,7 +600,7 @@ function loadWebsiteUpdates(force) {
       websiteUpdates = { state: 'ready', entries, checkedAt: Date.now(), triedAt: Date.now() };
     })
     .catch(() => {
-      websiteUpdates = websiteUpdates.state === 'ready' ? { ...websiteUpdates, checking: false, checkError: true } : { state: 'error', entries: [] };
+      websiteUpdates = websiteUpdates.state === 'ready' ? { ...websiteUpdates, checking: false, checkError: true }  : { state: 'error', entries: [], triedAt: websiteUpdates.triedAt };
     })
     .then(() => { clearTimeout(timeout); if (analysisOpen && infoPage === 'updates' && infoUpdateTab === 'website') render(); });
 }
