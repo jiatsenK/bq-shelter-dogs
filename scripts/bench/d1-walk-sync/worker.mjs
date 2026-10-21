@@ -1,4 +1,5 @@
-// THROWAWAY #441. Diagnostic counters only; no application state in the isolate.
+// THROWAWAY #441. Diagnostic counters and imported production read cache only.
+import { cacheRead, cacheAppend, cacheSheetProjection } from './cache-meter.mjs';
 let isolateId;
 let invocation = 0;
 const SHEET_ID = '1E2my7vuseiOwCK7EODr9AdJf8StW2fpit4CFkaY1d-4';
@@ -98,7 +99,12 @@ export default {
       let result;
       if (path === '/notify' && request.method === 'POST') result = await compareSheet(env);
       else if (path === '/retry' && request.method === 'POST') result = await retry(env);
-      else if (path === '/walk' && request.method === 'POST') {
+      else if (path === '/cache/today' && request.method === 'GET') {
+        result = await cacheRead(env.DB, new URL(request.url).searchParams.get('cold') === '1');
+      } else if (path === '/cache/notify' && request.method === 'POST') {
+        const changed = await cacheSheetProjection(env.DB, await sheetRows());
+        result = meta([changed]);
+      } else if (path === '/walk' && request.method === 'POST') {
         const body = await request.text();
         if (body.length > 1024) return Response.json({ error: 'too large' }, { status: 413 });
         const input = JSON.parse(body);
@@ -106,21 +112,22 @@ export default {
           return Response.json({ error: 'invalid test input' }, { status: 400 });
         }
         const row = { run: input.run, walker: input.walker };
-        const inserted = await env.DB.prepare('INSERT OR IGNORE INTO bench441_walkers(run,dog,walker,pending) VALUES(?,?,?,1)')
-          .bind(input.run, DOG_ID, input.walker).run();
+        const insert = env.DB.prepare('INSERT OR IGNORE INTO bench441_walkers(run,dog,walker,pending) VALUES(?,?,?,1)')
+          .bind(input.run, DOG_ID, input.walker);
+        const inserts = input.cacheExercise ? await env.DB.batch([insert, cacheAppend(env.DB, input.walker)]) : [await insert.run()];
         // Deferred mode exercises persisted pending jobs without making a Google call.
         if (!input.defer) ctx.waitUntil(writeBack(env, row)
           .then(result => console.log(JSON.stringify({ kind: 'writeback-done', run: row.run,
             walker: row.walker, isolateId: info.isolateId, invocation: info.invocation, ...meta([result]) })))
           .catch(() => console.log(JSON.stringify({ kind: 'writeback-pending', run: row.run, walker: row.walker }))));
-        result = { accepted: true, ...meta([inserted]) };
+        result = { accepted: true, ...meta(inserts) };
       } else if (path === '/walks' && request.method === 'GET') {
         const run = new URL(request.url).searchParams.get('run');
         if (!/^r[0-9a-f]{16}$/.test(run || '')) return Response.json({ error: 'invalid run' }, { status: 400 });
         const rows = await env.DB.prepare('SELECT walker,pending FROM bench441_walkers WHERE run=? AND dog=? ORDER BY walker').bind(run, DOG_ID).all();
         result = { rows: rows.results, ...meta([rows]) };
       } else return Response.json({ error: 'not found' }, { status: 404 });
-      console.log(JSON.stringify({ ...info, ...result, rows: undefined }));
+      console.log(JSON.stringify({ ...info, ...result, rows: undefined, walks: undefined }));
       return Response.json({ ...info, ...result }, { headers: { 'Cache-Control': 'no-store' } });
     } catch (error) {
       console.error(JSON.stringify({ ...info, error: error.message }));
