@@ -54,6 +54,10 @@ module.exports = async (browser, base) => {
     assert.deepEqual(writes.find(w => w.endpoint === 'walk').body.dogs.map(d => d.name), [data.dogs[1].name]);
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 844 });
+      // #395 定案、#443 回歸：換群箭頭在「溜了」左右兩側、同一列
+      const [prev, walk, next] = await Promise.all(['.gw-side.prev', '#gwWalk', '.gw-side.next'].map(s => page.locator(s).boundingBox()));
+      const sameRow = b => b.y < walk.y + walk.height && b.y + b.height > walk.y;
+      assert(prev.x + prev.width <= walk.x && next.x >= walk.x + walk.width && sameRow(prev) && sameRow(next), '換群箭頭在溜了兩側：' + JSON.stringify({ width, prev, walk, next }));
       const action = await page.locator('[data-gw-action="companions"]').boundingBox();
       const bar = await page.locator('#bottomBar').boundingBox();
       assert(action.y + action.height <= bar.y, '同行人按鈕不能被底部分類列遮住：' + JSON.stringify({ width, action, bar }));
