@@ -581,20 +581,28 @@ document.getElementById('main').addEventListener('change', e => {
 const INFO_PAGES = { stay: '在所統計', departures: '離所紀錄', quality: '資料檢查', updates: '更新紀錄' };
 let infoPage = '';
 let infoUpdateTab = 'website';
+// #421 讀過的網站更新留在本次頁面的記憶體：重開先顯示，距上次檢查超過 30 秒才背景檢查；檢查失敗保留先前內容。
+// checkedAt 是內容讀到的時間（顯示用），triedAt 是上次檢查的時間（節流用，失敗也算，避免重繪又重抓）。
 let websiteUpdates = null;
 
-function loadWebsiteUpdates() {
-  if (websiteUpdates) return;
-  websiteUpdates = { state: 'loading', entries: [] };
-  fetch('website-updates.json', { cache: 'no-cache' })
+function loadWebsiteUpdates(force) {
+  const data = websiteUpdates;
+  if (data && (data.checking || data.state === 'loading')) return;
+  if (data && !force && (data.state === 'error' || Date.now() - data.triedAt < 30000)) return;
+  websiteUpdates = data?.state === 'ready' ? { ...data, checking: true, checkError: false, triedAt: Date.now() } : { state: 'loading', entries: [] };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  fetch('website-updates.json', { cache: 'no-cache', signal: controller.signal })
     .then(async res => {
       if (!res.ok) throw new Error('讀取失敗');
       const entries = await res.json();
       if (!Array.isArray(entries) || entries.some(e => !e || !/^\d{4}-\d{2}-\d{2}$/.test(e.date) || typeof e.text !== 'string')) throw new Error('格式不對');
-      websiteUpdates = { state: 'ready', entries };
+      websiteUpdates = { state: 'ready', entries, checkedAt: Date.now(), triedAt: Date.now() };
     })
-    .catch(() => { websiteUpdates = { state: 'error', entries: [] }; })
-    .then(() => { if (analysisOpen && infoPage === 'updates') render(); });
+    .catch(() => {
+      websiteUpdates = websiteUpdates.state === 'ready' ? { ...websiteUpdates, checking: false, checkError: true } : { state: 'error', entries: [] };
+    })
+    .then(() => { clearTimeout(timeout); if (analysisOpen && infoPage === 'updates' && infoUpdateTab === 'website') render(); });
 }
 
 function infoHomeHtml() {
@@ -610,8 +618,11 @@ function infoUpdatesHtml() {
   if (infoUpdateTab === 'edits') return tabs + '<iframe id="infoEdits" class="info-edits" title="資料編輯紀錄" src="edits.html?embedded=1" data-navigation-scope></iframe>';
   loadWebsiteUpdates();
   const data = websiteUpdates;
-  const body = data.state === 'loading' ? '<p role="status">讀取中…</p>' : data.state === 'error' ? '<p role="alert">網站更新讀取失敗，請重試。</p><button type="button" id="retryUpdates">重新讀取</button>' : data.entries.length ? `<ol class="info-releases">${data.entries.map(e => `<li><time>${esc(e.date)}</time><p>${esc(e.text)}</p></li>`).join('')}</ol>` : '<p>還沒有網站更新紀錄</p>';
-  return tabs + section('網站更新', '只列已正式上線的變更', body);
+  const when = data.checkedAt && new Date(data.checkedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+  const source = data.state === 'ready' ? `<p id="updatesSource" class="a-hint" role="status">${esc(`讀取 ${when}`)}${data.checking ? '・檢查中…' : data.checkError ? '・檢查失敗，保留先前內容<button type="button" id="retryUpdates">重新讀取</button>' : ''}</p>` : '';
+  const list = data.entries.length ? `<ol class="info-releases">${data.entries.map(e => `<li>${e.version ? `<strong class="info-release-ver">V${esc(e.version)}</strong> ` : ''}<time>${esc(e.date)}</time><p>${esc(e.text)}</p></li>`).join('')}</ol>` : '<p>還沒有網站更新紀錄</p>';
+  const body = data.state === 'loading' ? '<p role="status">讀取中…</p>' : data.state === 'error' ? '<p role="alert">網站更新讀取失敗，請重試。</p><button type="button" id="retryUpdates">重新讀取</button>' : source + list;
+  return tabs + section('網站更新', '', body);
 }
 
 function openInfoPage(page) {
@@ -640,5 +651,5 @@ document.getElementById('main').addEventListener('click', e => {
     render();
     document.querySelector(`[data-update-tab="${infoUpdateTab}"]`).focus();
   }
-  if (e.target.closest('#retryUpdates')) { websiteUpdates = null; render(); }
+  if (e.target.closest('#retryUpdates')) { loadWebsiteUpdates(true); render(); }
 });

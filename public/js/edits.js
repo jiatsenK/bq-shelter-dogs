@@ -43,12 +43,34 @@ function editsItemHtml(e, names) {
   </li>`;
 }
 
+// #421 嵌在資訊頁時，上次讀到的紀錄留在上層頁面的記憶體：切回資料編輯先顯示，每次打開仍向 API 確認；
+// 讀不到保留先前內容。單獨打開或上層讀不到（不同網站等）就沒有先前內容，照常讀取。
+function editsCacheHost() {
+  try { return window.parent !== window && window.parent.document ? window.parent : null; } catch (e) { return null; }
+}
+
+function editsShow(list, cache) {
+  list.innerHTML = cache.edits.map(e => editsItemHtml(e, cache.names)).join('');
+}
+
 async function editsLoad() {
   const status = document.getElementById('status');
   const list = document.getElementById('list');
+  const retry = document.getElementById('retry');
   if (!status || !list) return;
+  const host = editsCacheHost();
+  let cache = null;
   try {
-    const [res, dogsRes] = await Promise.all([fetch(EDITS_URL, { cache: 'no-cache' }), fetch(EDITS_DOGS_URL).catch(() => null)]);
+    const c = host && host.bqEditsCache;
+    if (c && Array.isArray(c.edits) && c.names && typeof c.at === 'number') { editsShow(list, c); cache = c; }
+  } catch (e) { list.innerHTML = ''; /* 先前內容壞掉就當沒有 */ }
+  const when = cache && editsWhen(new Date(cache.at).toISOString());
+  status.textContent = cache ? `讀取 ${when}・檢查中…` : '讀取中…';
+  if (retry) retry.hidden = true;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const [res, dogsRes] = await Promise.all([fetch(EDITS_URL, { cache: 'no-cache', signal: controller.signal }), fetch(EDITS_DOGS_URL).catch(() => null)]);
     const out = await res.json();
     if (!res.ok || !out.ok) throw new Error(out.error || '讀不到');
     const names = {};
@@ -59,11 +81,17 @@ async function editsLoad() {
         if (dog.dogId) names[dog.dogId] = dog.name;
       }
     } catch (e) { /* 沒有狗名就只顯示編號 */ }
-    list.innerHTML = out.edits.map(e => editsItemHtml(e, names)).join('');
+    const fresh = { edits: out.edits, names: Object.keys(names).length ? names : (cache ? cache.names : names), at: Date.now() };
+    editsShow(list, fresh);
+    try { if (host) host.bqEditsCache = fresh; } catch (e) { /* 存不了就下次重讀 */ }
     status.textContent = out.edits.length ? '' : '還沒有編輯紀錄';
   } catch (e) {
-    status.textContent = '暫時讀不到編輯紀錄，請稍後重新整理';
-  }
+    status.textContent = cache ? `讀不到新的編輯紀錄，顯示 ${when} 讀取的內容` : '暫時讀不到編輯紀錄';
+    if (retry) retry.hidden = false;
+  } finally { clearTimeout(timeout); }
 }
 
-if (typeof document !== 'undefined' && document.getElementById('list')) editsLoad();
+if (typeof document !== 'undefined' && document.getElementById('list')) {
+  document.getElementById('retry')?.addEventListener('click', editsLoad);
+  editsLoad();
+}

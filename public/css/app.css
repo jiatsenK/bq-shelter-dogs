@@ -2354,6 +2354,8 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .info-releases { list-style: none; margin: 0; padding: 0; }
 .info-releases li { border-bottom: 1px solid var(--line); padding: 16px 0; overflow-wrap: anywhere; }
 .info-releases time { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.info-release-ver { color: var(--primary); font-weight: 800; }
+#updatesSource #retryUpdates { margin-left: 8px; }
 .analysis-open .a-miss summary, .analysis-open .dep-filters input, .analysis-open .dep-filters select { min-height: 44px; min-width: 44px; }
 /* #374 定版斜照片卡。少群不放大；長名換行，不縮字。 */
 #groupPage { max-width: 480px; margin: auto; padding: 0 16px 24px; overflow: hidden; color: var(--ink); }

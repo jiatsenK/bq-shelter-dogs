@@ -13,7 +13,6 @@
   header a { color: #fff; text-decoration: none; font-weight: 700; }
   header h1 { margin: 0; font-size: 18px; }
   main { max-width: 860px; margin: 0 auto; padding: 16px; }
-  .hint { color: var(--muted); font-size: 14px; margin: 0 0 12px; }
   ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
   li { background: var(--card); border: 1px solid var(--line); border-radius: 6px; padding: 10px 12px; }
   .head { display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: baseline; }
@@ -24,6 +23,7 @@
   .diff dt { color: var(--muted); }
   .diff dd { margin: 0; white-space: pre-wrap; word-break: break-word; }
   .status { color: var(--muted); }
+  #retry { min-height: 44px; margin: 4px 0 8px; padding: 8px 16px; font: inherit; color: var(--ink); background: var(--card); border: 1px solid var(--line); cursor: pointer; }
   html.embedded header { display: none; }
   html.embedded { --bg: #E3E9E5; --ink: #16211D; --muted: #4E5E57; --line: #C4CFC9; --accent: #1F5C4D; }
   html.embedded main { padding: 0 16px 16px; }
@@ -37,8 +37,8 @@
   <h1>編輯紀錄</h1>
 </header>
 <main>
-  <p class="hint">大家都能直接改休養、介紹、照片等，每次修改都記在這裡。改錯了可以照「改前」改回來；換掉的照片 30 天內還能找回來。</p>
-  <div class="status" id="status">讀取中…</div>
+  <div class="status" id="status" role="status">讀取中…</div>
+  <button type="button" id="retry" hidden>重新讀取</button>
   <ol id="list"></ol>
 </main>
 <script src="js/edits.js"></script>

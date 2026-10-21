@@ -1197,7 +1197,7 @@ async function runAnalysisTests() {
       // #60 讀溜狗紀錄、離所紀錄：只 GET 同網站的 api/
       .replace("fetch(url, { cache: 'no-cache' })", '').replace("fetch(DEPARTURES_URL, { cache: 'no-cache' })", '')
       // #363 點離所的狗才拿那一年（網址帶版本號，瀏覽器快取）
-      .replace('fetch(url)', '').replace("fetch('website-updates.json', { cache: 'no-cache' })", '');
+      .replace('fetch(url)', '').replace("fetch('website-updates.json', { cache: 'no-cache', signal: controller.signal })", '');
     eq([WALKS_URL, DEPARTURES_URL, DEPARTURE_YEAR_URL], ['api/walks', 'api/departures/index', 'api/departures'], '#60 #260 溜狗紀錄、離所紀錄從 Worker 讀：');
     if (/['`]data\/(history|walks|departures)/.test(code)) throw new Error('#260 起不再讀 data/ 的溜狗紀錄、快照、離所');
     const bad = [/fetch\(/, /method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /localStorage|sessionStorage|indexedDB|XMLHttpRequest|sendBeacon/];
