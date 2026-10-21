@@ -85,8 +85,11 @@ module.exports = async (browser, base) => {
     await page.locator('#gwWalk').click();
     await page.getByText(/未全部登記成功/).waitFor();
     partial = false;
+    const sideTop = () => page.evaluate(() => { scrollTo(0, 0); return document.querySelector('.gw-side.next').getBoundingClientRect().top; });
+    const beforeWalk = await sideTop();
     await page.locator('#gwWalk').click();
     await page.getByText('已登記 10 隻', { exact: true }).waitFor();
+    assert.equal(await sideTop(), beforeWalk, '#443 按下溜了變「已溜」後箭頭不移動');
     await page.getByRole('button', { name: '加入狗', exact: true }).click();
     await page.locator('#gwForm input[name="name"]').fill(data.dogs[10].name);
     failWrite = true;
@@ -123,6 +126,29 @@ module.exports = async (browser, base) => {
         const b = await el.boundingBox(); assert(b.width >= 44 && b.height >= 44, '點擊區44px');
       }
     }
+    // #443：換群箭頭在「溜了」兩側（#395），換群時不跟著狗數移動；長群也停在底部分類列上方
+    for (const [width, height] of [[320, 844], [390, 844], [390, 568]]) {
+      await page.setViewportSize({ width, height });
+      const total = Number((await page.locator('.gw-pages span').textContent()).split(' / ')[1]);
+      let first;
+      for (let i = 0; i < total; i++) {
+        await page.evaluate(() => scrollTo(0, 0));
+        const box = await page.evaluate(() => Object.fromEntries(['.gw-side.prev', '#gwWalk', '.gw-side.next', '#bottomBar', '#groupPage'].map(s => {
+          const b = document.querySelector(s).getBoundingClientRect();
+          return [s, { left: b.left, right: b.right, top: b.top, bottom: b.bottom, mid: (b.top + b.bottom) / 2 }];
+        })));
+        const prev = box['.gw-side.prev'], walk = box['#gwWalk'], next = box['.gw-side.next'], page_ = box['#groupPage'];
+        const info = JSON.stringify({ width, height, group: i, prev, walk, next });
+        assert(Math.abs(prev.mid - walk.mid) <= 2 && Math.abs(next.mid - walk.mid) <= 2, '箭頭跟「溜了」同一排：' + info);
+        assert(prev.right + 16 <= walk.left && walk.right + 16 <= next.left, '箭頭在「溜了」左右兩側，留 16px 防誤按：' + info);
+        assert(prev.left - page_.left <= 24 && page_.right - next.right <= 24, '箭頭貼齊畫面左右邊：' + info);
+        assert(next.bottom <= box['#bottomBar'].top, '箭頭不被底部分類列遮住：' + info);
+        if (!first) first = { prev, next };
+        else assert(first.prev.top === prev.top && first.next.top === next.top, '狗數變化不移動切群按鈕：' + info);
+        await page.getByRole('button', { name: '下一群', exact: true }).click();
+      }
+    }
+    await page.setViewportSize({ width: 1280, height: 844 });
     await page.locator('.gw-side.next').focus();
     await page.keyboard.press('ArrowLeft');
     assert.equal(await page.locator('[data-tab="groups"][aria-current="page"]').count(), 1);
