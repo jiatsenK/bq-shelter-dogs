@@ -7,7 +7,7 @@ import { saveFixedCare } from './compact.js';
 import * as r2 from './r2.js';
 import { markChanged, planTick, refreshPlan, rememberSignature, sheetSignature, taiwanYmd } from './sync-plan.js';
 import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache, previousWalk } from './today.js';
-import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
+import { editorOf, editorHeader, editsVersion, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
 import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
 
@@ -115,6 +115,12 @@ function reply(status, body, origin) {
       ...(origin ? corsHeaders(origin) : {}),
     },
   });
+}
+
+// If-None-Match 可能是清單、弱 ETag（Cloudflare 壓縮時會加 W/）或 *
+function etagMatches(header, etag) {
+  if (!header) return false;
+  return header.split(',').some(t => { const v = t.trim().replace(/^W\//, ''); return v === '*' || v === etag; });
 }
 
 const fail = (status, error, origin, extra) => reply(status, { ok: false, error, ...(extra || {}) }, origin);
@@ -1372,11 +1378,19 @@ export default {
     }
 
     // 編輯紀錄（ADR 0004）：GET /edits?limit=
+    // #421 可驗證快取：手機留著上次的回應，每次帶 If-None-Match 問；沒有新編輯回 304，不讀整份紀錄。
     if (path === '/edits') {
       if (request.method !== 'GET') return fail(405, '編輯紀錄只能用 GET /edits 讀', allowed);
       try {
         const limit = Number(url.searchParams.get('limit') || '') || undefined;
-        return reply(200, { ok: true, edits: await readEdits(env.DB, limit) }, allowed);
+        const etag = await editsVersion(env.DB, limit);
+        const cache = { 'Cache-Control': 'private, no-cache', ETag: etag };
+        if (etagMatches(request.headers.get('If-None-Match'), etag)) {
+          return new Response(null, { status: 304, headers: { ...cache, ...(allowed ? corsHeaders(allowed) : {}) } });
+        }
+        const res = reply(200, { ok: true, edits: await readEdits(env.DB, limit) }, allowed);
+        for (const [k, v] of Object.entries(cache)) res.headers.set(k, v);
+        return res;
       } catch (e) {
         return fail(503, '暫時讀不到編輯紀錄', allowed, { code: 'db' });
       }

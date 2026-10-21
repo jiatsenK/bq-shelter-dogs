@@ -45,6 +45,7 @@ function editsItemHtml(e, names) {
 
 // #421 嵌在資訊頁時，上次讀到的紀錄留在上層頁面的記憶體：切回資料編輯先顯示，每次打開仍向 API 確認；
 // 讀不到保留先前內容。單獨打開或上層讀不到（不同網站等）就沒有先前內容，照常讀取。
+// api/edits 回 ETag（private, no-cache）：cache: 'no-cache' 讓瀏覽器帶 If-None-Match，沒有新編輯時 Worker 回 304、不讀整份紀錄。
 function editsCacheHost() {
   try { return window.parent !== window && window.parent.document ? window.parent : null; } catch (e) { return null; }
 }

@@ -64,9 +64,18 @@ export async function logEdit(db, { editor, kind, dogId = null, dogNumber = '', 
   }
 }
 
+const editsCount = limit => Math.min(Math.max(1, Number.isInteger(limit) ? limit : EDITS_DEFAULT), EDITS_MAX);
+
+// #421 編輯紀錄只增不刪（ADR 0004），最新一筆 id＋筆數就是這份清單的版本，當 ETag 用；只讀 1 列。
+// 回傳的欄位或 KIND_LABELS 改了要把 f1 加 1，不然手機會一直拿到舊格式。
+export async function editsVersion(db, limit = EDITS_DEFAULT) {
+  const latest = await db.prepare('SELECT MAX(id) AS id FROM v3_edit_log').first('id');
+  return `"edits-f1-${latest || 0}-${editsCount(limit)}"`;
+}
+
 // 新到舊
 export async function readEdits(db, limit = EDITS_DEFAULT) {
-  const n = Math.min(Math.max(1, Number.isInteger(limit) ? limit : EDITS_DEFAULT), EDITS_MAX);
+  const n = editsCount(limit);
   const { results = [] } = await db.prepare('SELECT * FROM v3_edit_log ORDER BY id DESC LIMIT ?').bind(n).all();
   const parse = s => { try { return JSON.parse(s); } catch (e) { return null; } };
   return results.map(r => ({

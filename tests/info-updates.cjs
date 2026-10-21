@@ -2,6 +2,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const http = require('node:http');
 const fixture = require('./fixtures/dogs.json');
 
 module.exports = async (browser, base) => {
@@ -129,6 +130,53 @@ module.exports = async (browser, base) => {
     await later(31000);
     await reopen();
     await page.getByText('重試後的更新', { exact: true }).waitFor();
-    console.log('#421 更新紀錄重開先顯示、背景檢查新版、失敗保留、版本標示通過');
   } finally { await context.close(); }
+  await httpCacheCheck(browser);
+  console.log('#421 更新紀錄重開先顯示、背景檢查新版、失敗保留、版本標示、編輯紀錄 304 通過');
 };
+
+// 資料編輯走瀏覽器 HTTP 快取：重新整理（App 重開）帶 If-None-Match，沒變回 304 仍顯示內容。
+// Playwright 攔截請求會關掉 HTTP 快取，所以另開一個會回 ETag 的伺服器。
+async function httpCacheCheck(browser) {
+  const root = path.join(__dirname, '../public');
+  const seen = [];
+  let version = 1;
+  const server = http.createServer((req, res) => {
+    const u = new URL(req.url, 'http://x');
+    if (u.pathname === '/api/edits') {
+      const etag = `"edits-f1-${version}-200"`;
+      seen.push({ inm: req.headers['if-none-match'] || '', status: req.headers['if-none-match'] === etag ? 304 : 200 });
+      res.setHeader('Cache-Control', 'private, no-cache');
+      res.setHeader('ETag', etag);
+      if (req.headers['if-none-match'] === etag) { res.statusCode = 304; return res.end(); }
+      res.setHeader('Content-Type', 'application/json');
+      return res.end(JSON.stringify({ ok: true, edits: [{ editorName: `志工${version}`, kind: 'group', at: '2026-10-21T00:00:00Z', before: null, after: null }] }));
+    }
+    if (u.pathname === '/api/dogs') { res.setHeader('Content-Type', 'application/json'); return res.end('{"dogs":[]}'); }
+    fs.readFile(path.join(root, u.pathname), (err, data) => {
+      if (err) { res.statusCode = 404; return res.end(); }
+      res.setHeader('Content-Type', u.pathname.endsWith('.js') ? 'text/javascript' : 'text/html');
+      res.end(data);
+    });
+  });
+  await new Promise(r => server.listen(0, r));
+  const context = await browser.newContext({ serviceWorkers: 'block' });
+  try {
+    const page = await context.newPage();
+    page.setDefaultTimeout(8000);
+    const url = `http://localhost:${server.address().port}/edits.html`;
+    await page.goto(url);
+    await page.getByText('志工1', { exact: true }).waitFor();
+    await page.reload();
+    await page.getByText('志工1', { exact: true }).waitFor();
+    assert.equal(await page.locator('#status').innerText(), '');
+    assert.deepEqual(seen.map(s => s.status), [200, 304], '重開帶 If-None-Match，沒變回 304');
+    version = 2;
+    await page.reload();
+    await page.getByText('志工2', { exact: true }).waitFor();
+    assert.deepEqual(seen.map(s => s.status), [200, 304, 200], '有新編輯回新內容');
+  } finally {
+    await context.close();
+    server.close();
+  }
+}
