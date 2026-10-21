@@ -118,12 +118,13 @@ function groupStageHtml() {
     <div class="gw-stage-wrap"><div id="groupStage" class="gw-stage" style="--rows:${Math.max(1, Math.ceil((dogs.length + 2) / 4))}" aria-label="目前狗群">${layers}</div></div>
     <div class="gw-pages"><span>${groups.length ? index + 1 : 0} / ${groups.length}</span></div>
     <p id="gwFeedback" role="status">${esc(groupBusy ? '處理中…' : groupFeedback)}</p>
-    ${group ? `<div class="gw-walkbar"><button type="button" class="gw-side prev" data-gw-step="-1" aria-label="上一群" ${groups.length < 2 ? 'disabled' : ''}>${icon('back')}</button><div class="gw-actions">${walkBtn}</div><button type="button" class="gw-side next" data-gw-step="1" aria-label="下一群" ${groups.length < 2 ? 'disabled' : ''}>${icon('chevron')}</button></div><p class="gw-restrictions">${dogs.some(groupBlocked) ? `不登記：${dogs.filter(groupBlocked).map(d => `${esc(d.name)}（${esc(groupBlocked(d))}）`).join('、')}` : ''}</p>` : ''}
+    ${group ? `<p class="gw-restrictions">${dogs.some(groupBlocked) ? `不登記：${dogs.filter(groupBlocked).map(d => `${esc(d.name)}（${esc(groupBlocked(d))}）`).join('、')}` : ''}</p>` : ''}
     <div class="gw-secondary-actions">
     ${groupRegistrations.get(groupColumn)?.successful.length ? `<button type="button" class="bar-btn" data-gw-action="companions" ${groupBusy ? 'disabled' : ''}>＋一起溜的人</button>` : ''}
     ${groupRegistrations.get(groupColumn)?.result.retryDogs.length ? `<button type="button" class="bar-btn" data-gw-action="retry-walk" ${groupBusy ? 'disabled' : ''}>再試一次</button>` : ''}
     </div>
     <p id="gwSource" class="section-hint" role="status">${/* 讀取時間只留頁首右上角（#444）；這裡只說背景檢查的狀態 */ groupRead ? '檢查中…' : groupReadError ? '檢查失敗，保留先前內容' : ''}${groupReadError ? '<button type="button" data-gw-action="retry">重新讀取</button>' : ''}</p>
+    ${group ? `<div class="gw-walkbar"><button type="button" class="gw-side prev" data-gw-step="-1" aria-label="上一群" ${groups.length < 2 ? 'disabled' : ''}>${icon('back')}</button><div class="gw-actions">${walkBtn}</div><button type="button" class="gw-side next" data-gw-step="1" aria-label="下一群" ${groups.length < 2 ? 'disabled' : ''}>${icon('chevron')}</button></div>` : '' /* 「溜了」那排放最後、手機黏在底部分類列上方，換群箭頭不隨狗數移動（#443） */}
   </section>`;
 }
 function groupFormHtml() {
