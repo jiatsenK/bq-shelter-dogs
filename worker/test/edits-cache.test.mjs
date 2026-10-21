@@ -76,3 +76,23 @@ test('#421 沒有任何編輯也有 ETag；其他 API 仍 no-store', async () =>
   assert.equal((await get(env, '/edits', { 'If-None-Match': empty.headers.get('ETag') })).status, 304);
   assert.equal((await get(env, '/rest')).headers.get('Cache-Control'), 'no-store');
 });
+
+// CODING_STANDARDS「附讀寫量測試」：紀錄多很多倍，304 仍只讀 1 列，200 只跟 limit 成正比
+async function readsOf(env, path, headers) {
+  const before = env.DB.stats.rowsRead;
+  const res = await get(env, path, headers);
+  return { status: res.status, etag: res.headers.get('ETag'), reads: env.DB.stats.rowsRead - before };
+}
+
+test('#421 /api/edits 讀取量不隨紀錄變多', async () => {
+  const env = await makeEnv();
+  for (let i = 0; i < 5; i++) await putIntro(env, `介紹 ${i}`);
+  const small = await readsOf(env, '/edits?limit=3');
+  const small304 = await readsOf(env, '/edits?limit=3', { 'If-None-Match': small.etag });
+  assert.deepEqual([small.status, small.reads, small304.status, small304.reads], [200, 4, 304, 1], '版本 1 列＋3 筆；304 只讀版本');
+  const insert = env.DB.prepare("INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,before_json,after_json) VALUES('2026-10-21T00:00:00Z','x','塞資料','intro','null','null')");
+  for (let i = 0; i < 2000; i++) await insert.run();
+  const big = await readsOf(env, '/edits?limit=3', { 'If-None-Match': small.etag });
+  const big304 = await readsOf(env, '/edits?limit=3', { 'If-None-Match': big.etag });
+  assert.deepEqual([big.status, big.reads, big304.status, big304.reads], [200, small.reads, 304, small304.reads], '資料變多，讀取量不能變');
+});

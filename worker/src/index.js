@@ -106,12 +106,13 @@ function corsHeaders(origin) {
   };
 }
 
-function reply(status, body, origin) {
-  return new Response(JSON.stringify(body), {
+function reply(status, body, origin, headers = {}) {
+  return new Response(status === 304 ? null : JSON.stringify(body), {
     status,
     headers: {
-      'Content-Type': 'application/json; charset=utf-8',
+      ...(status === 304 ? {} : { 'Content-Type': 'application/json; charset=utf-8' }),
       'Cache-Control': 'no-store',
+      ...headers,
       ...(origin ? corsHeaders(origin) : {}),
     },
   });
@@ -1385,12 +1386,8 @@ export default {
         const limit = Number(url.searchParams.get('limit') || '') || undefined;
         const etag = await editsVersion(env.DB, limit);
         const cache = { 'Cache-Control': 'private, no-cache', ETag: etag };
-        if (etagMatches(request.headers.get('If-None-Match'), etag)) {
-          return new Response(null, { status: 304, headers: { ...cache, ...(allowed ? corsHeaders(allowed) : {}) } });
-        }
-        const res = reply(200, { ok: true, edits: await readEdits(env.DB, limit) }, allowed);
-        for (const [k, v] of Object.entries(cache)) res.headers.set(k, v);
-        return res;
+        if (etagMatches(request.headers.get('If-None-Match'), etag)) return reply(304, null, allowed, cache);
+        return reply(200, { ok: true, edits: await readEdits(env.DB, limit) }, allowed, cache);
       } catch (e) {
         return fail(503, '暫時讀不到編輯紀錄', allowed, { code: 'db' });
       }
