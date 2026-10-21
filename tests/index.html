@@ -3661,8 +3661,12 @@ async function runCardsTests() {
       await other.eval('bqOpenField()');
       const allBtn = od.getElementById('bqAll');
       if (allBtn.hidden || !allBtn.textContent.includes('7 張')) throw new Error('超過一包時要有「一次全開（7 張）」');
+      other.eval('BQ.still = false');
       allBtn.click();
-      await wait(() => od.querySelectorAll('#bqHand .bq-card').length === 7);
+      // K 2026-10-21：卡包還沒撕時按一次全開，不播撕包動畫，直接攤開
+      if (od.getElementById('bqField').classList.contains('tearing')) throw new Error('一次全開不播撕包動畫');
+      await wait(() => od.querySelectorAll('#bqHand .bq-card.dealt').length === 7);
+      eq([od.getElementById('bqField').classList.contains('instant'), od.activeElement === od.querySelector('#bqHand .bq-card')], [true, true], '一次全開直接攤開、焦點在第一張：');
       eq([od.querySelectorAll('#bqHand .bq-card').length, other.eval('BQ.pending.length'), Object.keys(fixture.books[OTHER]).length], [7, 0, 7], '一次全開：');
       // #272 跳過動畫：撕到一半跳過，卡片直接在扇形位置、跳過鈕收起來；開卡紀錄照樣存進後台
       const third = await device(THIRD);

@@ -261,7 +261,7 @@ function bqCardHtml(p, opts = {}) {
   </${tag}>`;
 }
 
-const BQ = { players: [], byId: new Map(), storage: null, today: new Date(), codes: [], mine: new Map(), opened: null, pending: [], hand: [], still: false, timers: [], packAll: false, dealing: null, walksOk: true, remote: 'loading', saving: false };
+const BQ = { players: [], byId: new Map(), storage: null, today: new Date(), codes: [], mine: new Map(), opened: null, pending: [], hand: [], still: false, timers: [], dealing: null, walksOk: true, remote: 'loading', saving: false };
 
 async function bqRemoteOpened(codes, ids) {
   const res = await fetch(ids ? '/api/cards/opened' : `/api/cards/opened?codes=${encodeURIComponent(codes[0])}`, ids
@@ -485,16 +485,26 @@ function bqCloseField() {
   if (back && back.focus) back.focus({ preventScroll: true });
 }
 function bqFocusHand() { const first = document.querySelector('#bqHand .bq-card'); if (first) first.focus({ preventScroll: true }); }
-function bqOpenPack(all = false) {
+function bqOpenPack() {
   const field = document.getElementById('bqField');
   if (field.classList.contains('tearing') || field.classList.contains('opened') || !BQ.pending.length || BQ.saving) return;
   // 先撕掉上緣那條、卡包往下掉，卡片再從開口升起來攤開（減少動態時直接攤開）
-  BQ.packAll = all;
   bqClearTimers();
   field.classList.remove('instant');
   if (!BQ.still) field.classList.add('animating');
   field.classList.add('tearing');
-  bqLater(() => { field.classList.add('opened'); bqDeal({ all }); }, BQ.still ? 0 : 520);
+  bqLater(() => { field.classList.add('opened'); bqDeal(); }, BQ.still ? 0 : 520);
+}
+// 一次全開（K 2026-10-21）：卡包還沒撕就不播撕包動畫，直接攤開全部；開完一包後按照常發牌
+async function bqOpenAll() {
+  const field = document.getElementById('bqField');
+  if (BQ.saving || !BQ.pending.length) return;
+  if (field.classList.contains('opened')) return bqDeal({ all: true });
+  bqClearTimers();
+  field.classList.remove('tearing', 'animating');
+  field.classList.add('opened', 'instant');
+  await bqDeal({ all: true, instant: true });
+  bqFocusHand();
 }
 // 跳過動畫：撕包、掉包、發牌都直接到最後；還沒開始存的這時才存（存好才收進圖鑑不變）
 async function bqSkip() {
@@ -504,7 +514,7 @@ async function bqSkip() {
   bqClearTimers();
   field.classList.remove('tearing', 'animating');
   field.classList.add('opened', 'instant');
-  await (started ? BQ.dealing : bqDeal({ all: BQ.packAll, instant: true }));
+  await (started ? BQ.dealing : bqDeal({ instant: true }));
   document.querySelectorAll('#bqHand .bq-card').forEach(c => { c.style.transform = c.dataset.base; c.classList.add('dealt'); });
   bqFocusHand();
 }
@@ -591,10 +601,7 @@ function bqBind() {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) bqRefreshOpened(); });
   document.getElementById('bqPack').addEventListener('click', () => bqOpenPack());
   document.getElementById('bqAgain').addEventListener('click', () => bqDeal());
-  document.getElementById('bqAll').addEventListener('click', () => {
-    if (document.getElementById('bqField').classList.contains('opened')) bqDeal({ all: true });
-    else bqOpenPack(true);
-  });
+  document.getElementById('bqAll').addEventListener('click', bqOpenAll);
   document.getElementById('bqSkip').addEventListener('click', bqSkip);
   const hand = document.getElementById('bqHand');
   hand.addEventListener('pointermove', bqTilt);
