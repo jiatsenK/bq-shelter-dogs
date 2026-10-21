@@ -1,5 +1,24 @@
 # Changelog
 
+## [9.2.1](https://github.com/jiatsenK/bq-shelter-dogs/compare/v9.2.0...v9.2.1) (2026-10-19)
+
+
+### 修正
+
+* 存登記名字只寫新的或今天還沒更新的（[#407](https://github.com/jiatsenK/bq-shelter-dogs/issues/407)） ([#410](https://github.com/jiatsenK/bq-shelter-dogs/issues/410)) ([89a9507](https://github.com/jiatsenK/bq-shelter-dogs/commit/89a95074aad8e3d31424fe9aa4dce1cf10d130c7))
+* 常溜狗群照片改正放、大小一致 ([#387](https://github.com/jiatsenK/bq-shelter-dogs/issues/387)) ([#394](https://github.com/jiatsenK/bq-shelter-dogs/issues/394)) ([cc617d6](https://github.com/jiatsenK/bq-shelter-dogs/commit/cc617d65d9fca55c0d16f4229b839881d53f2c95))
+* 常溜狗群照片放大，換群箭頭移到溜了兩側 ([#387](https://github.com/jiatsenK/bq-shelter-dogs/issues/387)) ([#395](https://github.com/jiatsenK/bq-shelter-dogs/issues/395)) ([60c3702](https://github.com/jiatsenK/bq-shelter-dogs/commit/60c3702733934a914e6da7696ec05465771aebb6))
+* 手機鍵盤彈出時畫面不再亂跳 ([#389](https://github.com/jiatsenK/bq-shelter-dogs/issues/389)) ([#393](https://github.com/jiatsenK/bq-shelter-dogs/issues/393)) ([086fcec](https://github.com/jiatsenK/bq-shelter-dogs/commit/086fcecfc95d3535cdca554299c98c89236ed844))
+* 狗群已溜再按復原、搜尋狗名，四個主分頁共用表頭 ([#385](https://github.com/jiatsenK/bq-shelter-dogs/issues/385)) ([08da566](https://github.com/jiatsenK/bq-shelter-dogs/commit/08da566a9fc8f54c00dcfd98c4c63f8e528bc759))
+* 狗群按＋在群組上方就地輸入，完成後留在原處 ([#388](https://github.com/jiatsenK/bq-shelter-dogs/issues/388)) ([#391](https://github.com/jiatsenK/bq-shelter-dogs/issues/391)) ([a3816cf](https://github.com/jiatsenK/bq-shelter-dogs/commit/a3816cf1ed14c9bd602b234e9384378a9ab3097d))
+* 狗群換群箭頭放兩側、頭尾相接，整群溜了單排置中 ([#386](https://github.com/jiatsenK/bq-shelter-dogs/issues/386)) ([54cfd80](https://github.com/jiatsenK/bq-shelter-dogs/commit/54cfd8001daf340939c8232a9bba5d585b38c32b))
+* 讀常溜只附常溜狗與舊格式鍵的對照，不再整張讀狗編號 ([#406](https://github.com/jiatsenK/bq-shelter-dogs/issues/406)) ([#411](https://github.com/jiatsenK/bq-shelter-dogs/issues/411)) ([3efcd63](https://github.com/jiatsenK/bq-shelter-dogs/commit/3efcd630483e4ef879dc3f360c5cc7da04ffe1a9))
+
+
+### 改善速度
+
+* 有版本照片使用邊緣快取（[#279](https://github.com/jiatsenK/bq-shelter-dogs/issues/279) B 段） ([#414](https://github.com/jiatsenK/bq-shelter-dogs/issues/414)) ([fb00d9f](https://github.com/jiatsenK/bq-shelter-dogs/commit/fb00d9f3ddb1792ecab856e8f5d8a00e0c2a79f8))
+
 ## [9.2.0](https://github.com/jiatsenK/bq-shelter-dogs/compare/v9.1.1...v9.2.0) (2026-10-16)
 
 
