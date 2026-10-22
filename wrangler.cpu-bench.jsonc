@@ -1,0 +1,20 @@
+// #460 CPU 驗收用的獨立 Worker：只接隔離測試 D1，不接正式 D1、R2、試算表，沒有 Cron。
+// 只由 .github/workflows/cpu-bench.yml 部署，量完同一個工作流程刪除。
+{
+  "name": "bq-shelter-dogs-cpu",
+  "main": "worker/cpu-bench/index.js",
+  "compatibility_date": "2026-09-01",
+  "workers_dev": true,
+  "d1_databases": [{
+    "binding": "DB",
+    "database_name": "bq-shelter-dogs-test",
+    "database_id": "9e23a65c-c9dd-4f83-ad9c-2e01626910f0"
+  }],
+  "vars": {
+    "WALK_RETRY_ENABLED": "true",
+    "D1_WALK_NOTIFY": "1",
+    "SHEET_WRITE_URL": "https://fake-gas.invalid/exec",
+    // 預留量只記在測試 D1；不設帳號分析權杖，不會拿帳號用量當門檻
+    "SYNC_DAILY_BUDGET": "1000000"
+  }
+}
