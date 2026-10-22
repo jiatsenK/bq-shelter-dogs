@@ -7,7 +7,7 @@ import { dispatchWalk } from '../src/walk-accept.js';
 import { setup, request, post, current } from './walk-fixture.mjs';
 
 const source = readFileSync(new URL('../../apps-script/sheet-write.gs', import.meta.url), 'utf8');
-function scriptAdapter(callback, { mutate = () => {} } = {}) {
+function scriptAdapter(callback, { mutate = () => {}, forbidFullRead = false } = {}) {
   let values = [['編號','犬名','遛狗日期','誰遛的'],['9001','測試狗','2026/10/1','']];
   const writes = [];
   let locked = false, reads = 0;
@@ -15,7 +15,7 @@ function scriptAdapter(callback, { mutate = () => {} } = {}) {
   const sheet = {
     getLastRow: () => values.length,
     getLastColumn: () => values[0].length,
-    getDataRange: () => ({ getValues: () => { assert.equal(locked, true); mutate(values, ++reads); return values.map(r => [...r]); } }),
+    getDataRange: () => ({ getValues: () => { assert.equal(forbidFullRead,false,'通知不得下載完整主清單內容'); assert.equal(locked, true); mutate(values, ++reads); return values.map(r => [...r]); } }),
     getRange: (r,c,height=1,width=1) => ({
       getValues: () => { assert.equal(locked,true); return values.slice(r-1,r-1+height).map(row=>row.slice(c-1,c-1+width)); },
       setValue: value => { assert.equal(locked, true); values[r-1][c-1] = value; writes.push([r,c,value]); }
@@ -53,15 +53,35 @@ test('接收端同鎖重定位、忽略舊 payload 目標、整格替換並讀�
 });
 
 test('寫前可見人工修改、同名無編號歧義、狗已移走都停止寫入', () => {
-  const reply = (url, body) => ({ getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, version: 1, dispatchId: body.dispatchId, current: { date: '2026-10-21', walker: '甲' } }) });
+  const observations = [];
+  const reply = (url, body) => {
+    if (url.endsWith('/observe')) observations.push(...body.observations);
+    return { getResponseCode: () => 200, getContentText: () => JSON.stringify({ ok: true, results:[{ ok:true }], version: 1, dispatchId: body.dispatchId, current: { date: '2026-10-21', walker: '甲' } }) };
+  };
   const script = scriptAdapter(reply, { mutate: (values,n) => { if (n === 2) values[1][3] = '人工修改'; } });
   const wake = { action: 'walkWake', key: 'test-secret', dog: { id: '9001', name: '測試狗' }, dispatchId: 'dispatch-1' };
   assert.throws(() => script.run(wake), /人工修改/);
   assert.deepEqual(script.writes, []);
+  assert.equal(observations[0].current.walker,'人工修改');
   script.replace([['編號','犬名','遛狗日期','誰遛的'],['','同名','',''],['','同名','','']]);
   assert.throws(() => script.run({ ...wake, dog: { id: '', name: '同名' } }), /唯一/);
   assert.throws(() => script.run(wake), /唯一/);
   assert.deepEqual(script.writes, []);
+});
+
+test('通知讀表在同鎖內只送變更的四欄，排序與重送不造成格子寫入', () => {
+  const batches = [];
+  const script = scriptAdapter((url,body) => {
+    assert.ok(url.endsWith('/observe')); batches.push(body.observations);
+    return { getResponseCode:()=>200,getContentText:()=>JSON.stringify({ ok:true,results:body.observations.map(()=>({ ok:true })) }) };
+  },{ forbidFullRead:true });
+  const compare = { action:'walkCompare',key:'test-secret',known:[{ id:'9001',name:'測試狗',date:'2026-10-01',walker:'' }] };
+  assert.equal(script.run(compare).ok,true);
+  assert.equal(batches.length,0);
+  script.replace([['編號','犬名','遛狗日期','誰遛的'],['9999','新狗','',''],['9001','測試狗','2026/9/1','甲']]);
+  assert.equal(script.run(compare).ok,true);
+  assert.equal(batches[0].find(o=>o.dog.id==='9001').current.date,'2026-09-01');
+  assert.deepEqual(script.writes,[]);
 });
 
 async function machine(env, action, body, key = 'test-secret') {

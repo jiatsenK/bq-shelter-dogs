@@ -39,6 +39,16 @@ CREATE TABLE IF NOT EXISTS v3_walk_outbox (
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_due ON v3_walk_outbox(next_attempt_at,dog_key) WHERE status IN ('pending','retry','unconfirmed');
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_active ON v3_walk_outbox(dog_key) WHERE status NOT IN ('synced','superseded');
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_readback ON v3_walk_outbox(dog_key,target_date,target_walker) WHERE readback_seen=1;
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_agreed ON v3_walk_outbox(dog_key,version) WHERE status='synced';
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_causal ON v3_walk_outbox(dog_key,target_date,target_walker,version) WHERE readback_seen=1 AND status='superseded';
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_unknown ON v3_walk_outbox(dog_key,target_date,target_walker,version) WHERE readback_seen=0 AND dispatch_id<>'';
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_unknown_date ON v3_walk_outbox(dog_key,target_date,version) WHERE readback_seen=0 AND dispatch_id<>'';
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_unknown_walker ON v3_walk_outbox(dog_key,target_walker,version) WHERE readback_seen=0 AND dispatch_id<>'';
+-- 一致基準／已接受人工觀測的因果界線；更早歷史值不能作派送中間值授權。
+CREATE TABLE IF NOT EXISTS v3_walk_baselines (
+  dog_key TEXT PRIMARY KEY REFERENCES v3_walk_state(dog_key),
+  version INTEGER NOT NULL
+);
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_dispatch ON v3_walk_outbox(dog_key,dispatch_id) WHERE status='dispatching';
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_interrupted ON v3_walk_outbox(next_attempt_at,dog_key) WHERE status='dispatching';
 CREATE TABLE IF NOT EXISTS v3_walk_delivery (
@@ -65,6 +75,21 @@ INSERT OR IGNORE INTO v3_walk_pack VALUES(1,0,'{}');
 CREATE TABLE IF NOT EXISTS v3_walk_guard (ok INTEGER NOT NULL CHECK(ok=1));
 -- 保守計量包含索引與觸發器；不是帳號分析用量的替代品。
 CREATE TABLE IF NOT EXISTS v3_walk_write_budget (day TEXT PRIMARY KEY, reserved INTEGER NOT NULL);
+-- #458：通知工作的持久狀態，與非溜狗欄位的 v3_sync_state.changed 分開。
+CREATE TABLE IF NOT EXISTS v3_walk_compare (
+  id INTEGER PRIMARY KEY CHECK(id=1),
+  status TEXT NOT NULL CHECK(status IN ('idle','running','pending')),
+  owner TEXT NOT NULL DEFAULT '',
+  again INTEGER NOT NULL DEFAULT 0,
+  started_at TEXT NOT NULL DEFAULT '',
+  error TEXT NOT NULL DEFAULT ''
+);
+INSERT OR IGNORE INTO v3_walk_compare(id,status) VALUES(1,'idle');
+CREATE TABLE IF NOT EXISTS v3_walk_conflicts (
+  dog_key TEXT PRIMARY KEY,
+  observation TEXT NOT NULL CHECK(json_valid(observation)),
+  error TEXT NOT NULL
+);
 CREATE TRIGGER IF NOT EXISTS walk_pack_INSERT AFTER INSERT ON v3_walk_state BEGIN
   UPDATE v3_walk_pack SET version=version+1,payload=json_set(payload,'$.'||json_quote(NEW.dog_key),json_object('key',NEW.dog_key,'version',NEW.version,'walkedDate',NEW.effective_date,'walker',NEW.walker,'at',NEW.updated_at,'syncStatus','pending')) WHERE id=1;
 END;
