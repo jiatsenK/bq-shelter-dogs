@@ -1,4 +1,69 @@
 -- #245/#246：獨立精簡模型。只由明確的遷移入口執行，不由部署自動套用。
+-- #456：網站已接管的最新溜狗狀態獨立於試算表複本；舊同步不得寫入這些表。
+CREATE TABLE IF NOT EXISTS v3_walk_state (
+  dog_key TEXT PRIMARY KEY,
+  dog_id TEXT NOT NULL REFERENCES v3_dogs(dog_id),
+  number TEXT NOT NULL,
+  name TEXT NOT NULL,
+  version INTEGER NOT NULL CHECK(version>0),
+  effective_date TEXT NOT NULL,
+  walker TEXT NOT NULL,
+  members_json TEXT NOT NULL CHECK(json_valid(members_json)),
+  base_date TEXT NOT NULL,
+  base_walker TEXT NOT NULL,
+  previous_date TEXT NOT NULL,
+  previous_walker TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS v3_walk_requests (
+  request_id TEXT NOT NULL,
+  dog_key TEXT NOT NULL REFERENCES v3_walk_state(dog_key),
+  operation_date TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  result_json TEXT NOT NULL CHECK(json_valid(result_json)),
+  PRIMARY KEY(request_id)
+);
+CREATE TABLE IF NOT EXISTS v3_walk_outbox (
+  dog_key TEXT NOT NULL REFERENCES v3_walk_state(dog_key),
+  version INTEGER NOT NULL,
+  operation_date TEXT NOT NULL,
+  target_date TEXT NOT NULL,
+  target_walker TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('pending','dispatching','unconfirmed','retry','synced','superseded')),
+  next_attempt_at TEXT NOT NULL,
+  dispatch_id TEXT NOT NULL DEFAULT '',
+  readback_seen INTEGER NOT NULL DEFAULT 0 CHECK(readback_seen IN (0,1)),
+  error TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY(dog_key,version)
+);
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_due ON v3_walk_outbox(next_attempt_at,dog_key) WHERE status IN ('pending','retry','unconfirmed');
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_active ON v3_walk_outbox(dog_key) WHERE status NOT IN ('synced','superseded');
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_readback ON v3_walk_outbox(dog_key,target_date,target_walker) WHERE readback_seen=1;
+CREATE TABLE IF NOT EXISTS v3_walk_delivery (
+  dog_key TEXT PRIMARY KEY REFERENCES v3_walk_state(dog_key),
+  dispatch_id TEXT NOT NULL,
+  started_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS v3_walk_pack (
+  id INTEGER PRIMARY KEY CHECK(id=1),
+  version INTEGER NOT NULL,
+  payload TEXT NOT NULL CHECK(json_valid(payload))
+);
+INSERT OR IGNORE INTO v3_walk_pack VALUES(1,0,'{}');
+-- 交易 guard：比較版本失敗必須整筆回復，不能留下去重結果或工作。
+CREATE TABLE IF NOT EXISTS v3_walk_guard (ok INTEGER NOT NULL CHECK(ok=1));
+-- 保守計量包含索引與觸發器；不是帳號分析用量的替代品。
+CREATE TABLE IF NOT EXISTS v3_walk_write_budget (day TEXT PRIMARY KEY, reserved INTEGER NOT NULL);
+CREATE TRIGGER IF NOT EXISTS walk_pack_INSERT AFTER INSERT ON v3_walk_state BEGIN
+  UPDATE v3_walk_pack SET version=version+1,payload=json_set(payload,'$.'||json_quote(NEW.dog_key),json_object('key',NEW.dog_key,'version',NEW.version,'walkedDate',NEW.effective_date,'walker',NEW.walker,'at',NEW.updated_at,'syncStatus','pending')) WHERE id=1;
+END;
+CREATE TRIGGER IF NOT EXISTS walk_pack_UPDATE AFTER UPDATE ON v3_walk_state BEGIN
+  UPDATE v3_walk_pack SET version=version+1,payload=json_set(payload,'$.'||json_quote(NEW.dog_key),json_object('key',NEW.dog_key,'version',NEW.version,'walkedDate',NEW.effective_date,'walker',NEW.walker,'at',NEW.updated_at,'syncStatus',COALESCE((SELECT status FROM v3_walk_outbox WHERE dog_key=NEW.dog_key AND version=NEW.version),'pending'))) WHERE id=1;
+END;
+CREATE TRIGGER IF NOT EXISTS walk_pack_outbox_UPDATE AFTER UPDATE OF status ON v3_walk_outbox
+WHEN NEW.status<>OLD.status AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=NEW.dog_key AND version=NEW.version) BEGIN
+  UPDATE v3_walk_pack SET version=version+1,payload=json_set(payload,'$.'||json_quote(NEW.dog_key)||'.syncStatus',NEW.status) WHERE id=1;
+END;
 -- 試算表複本以來源列／欄排序保存；集合拆成列，不存 JSON。
 CREATE TABLE IF NOT EXISTS v3_dogs (
   dog_id TEXT PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(16)))),
@@ -30,6 +95,8 @@ CREATE TABLE IF NOT EXISTS v3_sheet_main (
   sex TEXT NOT NULL DEFAULT '',
   intro TEXT NOT NULL DEFAULT ''
 );
+CREATE INDEX IF NOT EXISTS v3_sheet_main_number ON v3_sheet_main(number);
+CREATE INDEX IF NOT EXISTS v3_sheet_main_name ON v3_sheet_main(name) WHERE number='';
 CREATE TABLE IF NOT EXISTS v3_sheet_main_walkers (
   row_index INTEGER NOT NULL REFERENCES v3_sheet_main(row_index) ON DELETE RESTRICT,
   position INTEGER NOT NULL,

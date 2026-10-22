@@ -25,6 +25,7 @@
   --z-fac: #F2F2EC; --z-fac-ink: #8A8A7A;
 }
 * { box-sizing: border-box; }
+.walk-sync { display: block; margin-top: 4px; color: var(--ink-soft); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 /* 手機（含加入主畫面）：一般頁面只讓瀏覽器捲動，避免雙擊／雙指誤縮放。
    放大照片、地圖時解除祖先限制；裁切區仍用自己的 touch-action: none 處理雙指。
