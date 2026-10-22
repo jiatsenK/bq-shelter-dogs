@@ -20,14 +20,21 @@ export function fakeSheet(env, worker) {
     if (String(url) !== env.SHEET_WRITE_URL) throw new Error('測速 Worker 不連外');
     const body = JSON.parse(init.body);
     if (body.key !== env.SHEET_WRITE_KEY) return Response.json({ ok: false }, { status: 403 });
+    // 量最壞情況（#460）：指紋每輪都不同，Worker 每輪都拿整份 200 列比對，不走「沒改」捷徑
     if (body.action === 'walkScan') {
-      return Response.json({ ok: true, rows: Array.from({ length: BENCH_DOGS }, (_, i) => ({ dog: benchDog(i + 1), current: BENCH_VALUE })) });
+      return Response.json({ ok: true, sig: `bench-${Date.now()}-${Math.random()}`, rows: Array.from({ length: BENCH_DOGS }, (_, i) => ({ dog: benchDog(i + 1), current: BENCH_VALUE })) });
     }
-    if (body.action === 'walkWake') {
-      const target = await machine('target', { dog: body.dog, dispatchId: body.dispatchId, current: BENCH_VALUE });
-      const receipt = { dogKey: body.dog.id, version: target.version, dispatchId: target.dispatchId, current: target.current };
-      const result = await machine('receipt', receipt);
-      return Response.json({ ok: true, ...receipt, ...result });
+    const wake = async item => {
+      const target = await machine('target', { dog: item.dog, dispatchId: item.dispatchId, current: BENCH_VALUE });
+      const receipt = { dogKey: item.dog.id, version: target.version, dispatchId: target.dispatchId, current: target.current };
+      return { ok: true, ...receipt, ...await machine('receipt', receipt) };
+    };
+    if (body.action === 'walkWake') return Response.json(await wake(body));
+    // 合併派送：跟 Apps Script 一樣逐隻走（同一個鎖），回呼各自是分開的呼叫
+    if (body.action === 'walkWakeBatch') {
+      const results = [];
+      for (const item of body.items) results.push(await wake(item));
+      return Response.json({ ok: true, results });
     }
     return Response.json({ ok: false }, { status: 400 });
   };
