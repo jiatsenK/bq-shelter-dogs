@@ -1,0 +1,120 @@
+# #460 CPU 驗收（K 2026-10-22 授權一次：100 輪，P99 超過 10 ms 就停）
+# PR 加上 cpu-bench 標籤才跑。部署獨立的 bq-shelter-dogs-cpu，只接隔離測試 D1；
+# 每批 20 輪，讀 Cloudflare 分析的 CPU P99，超過 10 ms 立刻停；不管結果如何，最後一定刪掉這個 Worker 和測速資料。
+name: CPU 驗收
+
+on:
+  pull_request:
+    types: [labeled]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: cpu-bench
+  cancel-in-progress: false
+
+jobs:
+  bench:
+    if: github.event.label.name == 'cpu-bench' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CONFIG: wrangler.cpu-bench.jsonc
+      DB_NAME: bq-shelter-dogs-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 確認只接測試庫
+        run: |
+          node -e '
+            const read = f => JSON.parse(require("fs").readFileSync(f, "utf8").replace(/^\s*\/\/.*$/gm, ""));
+            const bench = read("wrangler.cpu-bench.jsonc"), prod = read("wrangler.jsonc");
+            const b = bench.d1_databases[0], p = prod.d1_databases[0];
+            if (b.database_id === p.database_id || b.database_name === p.database_name) throw new Error("測速 Worker 不能接正式 D1");
+            if (bench.name === prod.name) throw new Error("名稱不能跟正式 Worker 一樣");
+          '
+
+      - name: 準備測試庫（結構、清掉舊測速資料、放 200 隻測速狗）
+        run: |
+          w="npx --yes wrangler@4 d1 execute $DB_NAME --remote --config $CONFIG --yes"
+          $w --file db/compact-schema.sql > /dev/null
+          node scripts/cpu-bench.mjs sql cleanup > "$RUNNER_TEMP/cleanup.sql"
+          node scripts/cpu-bench.mjs sql seed > "$RUNNER_TEMP/seed.sql"
+          node scripts/cpu-bench.mjs sql reset > "$RUNNER_TEMP/reset.sql"
+          $w --file "$RUNNER_TEMP/cleanup.sql" > /dev/null
+          $w --file "$RUNNER_TEMP/seed.sql" > /dev/null
+
+      - name: 部署測速 Worker
+        id: deploy
+        run: |
+          node -e '
+            const k = () => require("crypto").randomBytes(24).toString("hex");
+            require("fs").writeFileSync(process.argv[1], JSON.stringify({ BENCH_KEY: k(), SHEET_WRITE_KEY: k(), WALKER_KEY: k() }), { mode: 0o600 });
+          ' "$RUNNER_TEMP/secrets.json"
+          key=$(node -p 'require(process.argv[1]).BENCH_KEY' "$RUNNER_TEMP/secrets.json")
+          echo "::add-mask::$key"
+          echo "key=$key" >> "$GITHUB_OUTPUT"
+          npx --yes wrangler@4 deploy --config $CONFIG --secrets-file "$RUNNER_TEMP/secrets.json" | tee "$RUNNER_TEMP/deploy.log"
+          rm -f "$RUNNER_TEMP/secrets.json"
+          url=$(grep -oE "https://bq-shelter-dogs-cpu\.[a-z0-9.-]+\.workers\.dev" "$RUNNER_TEMP/deploy.log" | head -1)
+          if [ -z "$url" ]; then echo "找不到測速網址"; exit 1; fi
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      - name: 分 5 批跑 100 輪（P99 > 10 ms 就停）
+        id: run
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+          KEY: ${{ steps.deploy.outputs.key }}
+        run: |
+          sleep 20 # 新 Worker 網址生效
+          echo "| 批 | 輪數 | 錯誤 | P50 (ms) | P99 (ms) |" > "$RUNNER_TEMP/result.md"
+          echo "|---|---|---|---|---|" >> "$RUNNER_TEMP/result.md"
+          verdict=pass
+          for b in 1 2 3 4 5; do
+            npx --yes wrangler@4 d1 execute $DB_NAME --remote --config $CONFIG --yes --file "$RUNNER_TEMP/reset.sql" > /dev/null
+            since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+            sleep 2
+            for i in $(seq 1 20); do
+              out=$(curl -sS -X POST -H "X-Bench-Key: $KEY" "$URL/cpu-round" || echo '{}')
+              echo "第 $b 批第 $i 輪：$out"
+            done
+            stats=$(node scripts/cpu-bench.mjs p99 "$since" 20)
+            echo "第 $b 批：$stats"
+            node -e 'const s=JSON.parse(process.argv[1]);console.log(`| ${process.argv[2]} | ${s.requests} | ${s.errors} | ${(s.p50/1000).toFixed(2)} | ${(s.p99/1000).toFixed(2)} |`)' "$stats" "$b" >> "$RUNNER_TEMP/result.md"
+            # 超過門檻、有錯誤、或分析資料沒到齊都停
+            if ! node -e 'const s=JSON.parse(process.argv[1]);process.exit(s.requests>=20 && s.errors===0 && s.p99<=10000 ? 0 : 1)' "$stats"; then
+              verdict=fail; echo "P99 超過 10 ms、有錯誤或資料不齊，停止"; break
+            fi
+            if ! echo "$out" | grep -q '"waiting":0'; then verdict=incomplete; echo "第 $b 批沒有派完，停止"; break; fi
+          done
+          echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
+          cat "$RUNNER_TEMP/result.md" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 刪除測速 Worker 與測速資料
+        if: always()
+        run: |
+          npx --yes wrangler@4 delete --name bq-shelter-dogs-cpu --force || true
+          node scripts/cpu-bench.mjs sql cleanup > "$RUNNER_TEMP/cleanup.sql"
+          npx --yes wrangler@4 d1 execute $DB_NAME --remote --config $CONFIG --yes --file "$RUNNER_TEMP/cleanup.sql" > /dev/null
+          if npx --yes wrangler@4 deployments list --name bq-shelter-dogs-cpu > /dev/null 2>&1; then echo "測速 Worker 還在"; exit 1; fi
+          echo "測速 Worker 與測速資料已刪除"
+
+      - name: 在 PR 留下結果
+        if: always() && steps.run.outputs.verdict != ''
+        uses: actions/github-script@v7
+        env:
+          VERDICT: ${{ steps.run.outputs.verdict }}
+        with:
+          script: |
+            const fs = require('fs');
+            const table = fs.readFileSync(`${process.env.RUNNER_TEMP}/result.md`, 'utf8');
+            const label = { pass: '通過（每批 P99 ≤ 10 ms）', fail: '未通過（P99 > 10 ms、有錯誤或資料不齊，已停止）', incomplete: '未完成（有一批沒派完，已停止）' }[process.env.VERDICT];
+            await github.rest.issues.createComment({ ...context.repo, issue_number: context.issue.number,
+              body: `**CPU 驗收：${label}**\n\n${table}\n測速 Worker 已刪除。CPU 單位 ms；假 Apps Script 回呼與一輪在同一次呼叫，數字比正式偏高。` });
