@@ -1,14 +1,12 @@
-import { dispatchWalk } from './walk-accept.js';
-import { scanWalks } from './walk-reconcile.js';
-import { retryNotifiedComparison } from './walk-notify.js';
+import { dispatchWalks } from './walk-accept.js';
+import { scanWalks, retryNotifiedScan } from './walk-reconcile.js';
 
-// 分開使用到期、未完成及中斷派送索引；不讀已完成的歷史工作。
+// 溜狗對帳排程（#460，每 10 分鐘）：保險掃描一次，再把到期、未完成及中斷的派送合併送出；不讀已完成的歷史工作。
 export async function retryWalks(env, now) {
   if (env.WALK_RETRY_ENABLED !== 'true' || env.PREVIEW || !env.DB) return;
   const db = env.DB, at = new Date(now).toISOString();
-  try { await retryNotifiedComparison(env,now); }
-  catch (error) { console.warn('walk-notify-retry:',error.message); }
-  try { await scanWalks(env,now); }
+  // 有沒跑完的改表通知就補跑它（它本身就是一次掃描），否則照常掃描。
+  try { if (!await retryNotifiedScan(env,now)) await scanWalks(env,now); }
   catch (error) { console.warn('walk-scan:',error.message); }
   const interrupted = (await db.prepare(`SELECT d.dog_key,d.dispatch_id,s.number,s.name
     FROM v3_walk_delivery d JOIN v3_walk_state s ON s.dog_key=d.dog_key
@@ -26,10 +24,7 @@ export async function retryWalks(env, now) {
     AND NOT EXISTS(SELECT 1 FROM v3_walk_delivery d WHERE d.dog_key=o.dog_key)
     ORDER BY o.next_attempt_at,o.dog_key LIMIT ?`).bind(at,10-interrupted.length-orphaned.length).all()).results || [];
   const recoveries=[...interrupted,...orphaned].map(dog=>({ ...dog,recovery:{ dispatchId:dog.dispatch_id || '' } }));
-  for (const dog of [...recoveries,...due]) {
-    try {
-      // 逾時只允許同鎖重新讀回，不表示舊 Google 執行已停止。
-      await dispatchWalk(db,{ id:dog.number,name:dog.name },env,now,dog.recovery);
-    } catch (error) { console.warn('walk-retry:',dog.dog_key,error.message); }
-  }
+  // 逾時只允許同鎖重新讀回，不表示舊 Google 執行已停止。
+  try { await dispatchWalks(db,[...recoveries,...due].map(dog=>({ dog:{ id:dog.number,name:dog.name },recovery:dog.recovery })),env,now); }
+  catch (error) { console.warn('walk-retry:',error.message); }
 }

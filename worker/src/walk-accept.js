@@ -229,6 +229,80 @@ export async function dispatchWalk(db, dog, env, clock = Date.now(), recovery = 
   }
 }
 
+// 合併派送（#460）：Cron 補送一輪最多 10 隻，認領、交給 Apps Script、收尾各一次往返，不再逐隻。
+// items：[{ dog, recovery }]。認領批次被任一隻的 guard 擋下時，退回逐隻 dispatchWalk。
+export async function dispatchWalks(db, items, env, clock = Date.now()) {
+  if (!items.length) return;
+  if (items.length === 1) return dispatchWalk(db, items[0].dog, env, clock, items[0].recovery);
+  const now = new Date(clock).toISOString(), day = now.slice(0, 10);
+  const found = await reads(db, ...items.flatMap(({ dog, recovery }) => [
+    ['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', keyOf(dog)],
+    [`${CURRENT_JOB} AND (o.status IN ('pending','retry','unconfirmed') OR (?=1 AND o.status='dispatching'))`, keyOf(dog), Number(!!recovery)]]));
+  const jobs = items.map((item, i) => ({ ...item, key: keyOf(item.dog), delivery: found[2 * i][0], job: found[2 * i + 1][0],
+    recoverId: item.recovery?.dispatchId || '', dispatchId: crypto.randomUUID() }))
+    .filter(j => !(j.delivery && j.delivery.dispatch_id !== j.recoverId) && j.job && (j.recovery || j.job.next_attempt_at <= now));
+  if (!jobs.length) return;
+  let claimed;
+  try { claimed = await db.batch([
+    ...await writeBudget(db, env, 96 * jobs.length, clock),
+    ...jobs.flatMap(j => [
+      db.prepare("INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?),'')=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?) THEN 1 ELSE 0 END").bind(j.key, j.recoverId, j.key, j.job.version),
+      db.prepare('INSERT INTO v3_walk_retry(dog_key,version,failures,dispatch_id,reserved_day) VALUES(?,?,0,?,?) ON CONFLICT(dog_key) DO UPDATE SET failures=CASE WHEN version=excluded.version THEN failures ELSE 0 END,version=excluded.version,dispatch_id=excluded.dispatch_id,reserved_day=excluded.reserved_day').bind(j.key, j.job.version, j.dispatchId, day),
+      db.prepare('INSERT INTO v3_walk_delivery VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET dispatch_id=excluded.dispatch_id,started_at=excluded.started_at').bind(j.key, j.dispatchId, now),
+      db.prepare("UPDATE v3_walk_outbox SET status='dispatching',dispatch_id=?,error='' WHERE dog_key=? AND version=? AND (status IN ('pending','retry','unconfirmed') OR (?=1 AND status='dispatching')) RETURNING version").bind(j.dispatchId, j.key, j.job.version, Number(!!j.recovery)),
+      db.prepare('DELETE FROM v3_walk_guard'),
+    ]),
+  ]); } catch (error) {
+    // 有一隻的狀態在讀和認領之間變了：整批沒寫進去，改逐隻處理，各自判斷。
+    for (const { dog, recovery } of items) {
+      try { await dispatchWalk(db, dog, env, clock, recovery); } catch (e) { console.warn('walk-dispatch:', keyOf(dog), e.message); }
+    }
+    return;
+  }
+  const offset = claimed.length - jobs.length * 5;
+  const mine = jobs.filter((j, i) => claimed[offset + i * 5 + 3].results?.length);
+  const lost = jobs.filter(j => !mine.includes(j));
+  if (lost.length) await db.batch(lost.map(j => db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(j.key, j.dispatchId)));
+  if (!mine.length) return;
+  const receipts = new Map();
+  let batchError = '';
+  try {
+    if (!env.SHEET_WRITE_URL || !env.SHEET_WRITE_KEY) throw new Error('writeback-not-configured');
+    const out = await callSheet(env, { action: 'walkWakeBatch', items: mine.map(j => ({ dog: j.dog, dispatchId: j.dispatchId })) });
+    for (const r of Array.isArray(out.results) ? out.results : []) if (r?.dispatchId) receipts.set(r.dispatchId, r);
+  } catch (error) { batchError = `writeback-unconfirmed: ${error.message}`; }
+  // 每隻剛認領時已在 v3_walk_retry 保留今天的預算，收尾的狀態轉換不用再扣。
+  const prepaid = j => ({ dispatch_id: j.dispatchId, reserved_day: day });
+  const after = await reads(db, ...mine.flatMap(j => {
+    const r = receipts.get(j.dispatchId);
+    return [["SELECT o.version FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version WHERE o.dog_key=? AND o.version=? AND o.dispatch_id=? AND o.status='synced'", j.key, r?.ok ? r.version : -1, j.dispatchId],
+      ["SELECT o.version,COALESCE(r.failures,0) AS failures,r.version AS retry_version FROM v3_walk_outbox o LEFT JOIN v3_walk_retry r ON r.dog_key=o.dog_key WHERE o.dog_key=? AND o.dispatch_id=? AND o.status='dispatching'", j.key, j.dispatchId]];
+  }));
+  const failed = [];
+  for (const [i, j] of mine.entries()) {
+    const r = receipts.get(j.dispatchId), [done] = after[2 * i], [stuck] = after[2 * i + 1];
+    if (done || !stuck) continue;
+    let error = batchError || (r ? (r.ok ? '' : `writeback-unconfirmed: ${r.error || ''}`) : 'writeback-unconfirmed: 沒有這隻的回應');
+    if (!error) {
+      try { if ((await confirmWalk(db, { ...r, dogKey: j.key }, env)).confirmed) continue; error = 'writeback-unconfirmed'; }
+      catch (e) { error = e.message; }
+    }
+    const failures = stuck.retry_version === stuck.version ? stuck.failures + 1 : 1;
+    failed.push({ j, version: stuck.version, failures, error });
+  }
+  const statements = [];
+  for (const { j, version, failures, error } of failed) {
+    const delay = [1,2,4,8,15][Math.min(failures - 1,4)] * 60000;
+    statements.push(...await transitionBudget(db, env, j.key, j.dispatchId, 24, prepaid(j)),
+      db.prepare('UPDATE v3_walk_retry SET version=?,failures=? WHERE dog_key=? AND dispatch_id=?').bind(version, failures, j.key, j.dispatchId),
+      db.prepare("UPDATE v3_walk_outbox SET status='retry',error=?,next_attempt_at=? WHERE dog_key=? AND dispatch_id=? AND status='dispatching'")
+        .bind(String(error).slice(0, 100), new Date(Math.max(clock, Date.now()) + delay).toISOString(), j.key, j.dispatchId));
+  }
+  // 成功、失敗都放掉這次的派送識別；回執已確認的那幾隻早就刪了，DELETE 刪不到也無妨。
+  statements.push(...mine.map(j => db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(j.key, j.dispatchId)));
+  await db.batch(statements);
+}
+
 export async function confirmWalk(db, receipt, env) {
   const { dogKey, dispatchId, version, current } = receipt;
   if (!current || !dispatchId || !Number.isInteger(version)) throw new WalkError(400, '回執不完整');

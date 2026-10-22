@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import worker from '../src/index.js';
 import { dispatchWalk } from '../src/walk-accept.js';
 import { setup, request, post, current } from './walk-fixture.mjs';
@@ -160,7 +161,8 @@ test('每輪最多十隻，失敗退避不擋其他到期工作；完成歷史�
   globalThis.fetch=async (_url,init) => {
     const body=JSON.parse(init.body);
     if (body.action==='walkScan') return Response.json({ ok:true,rows:[] });
-    sent.push(body.dog.id); throw new Error('lost');
+    // 合併派送一次送多隻（#460）
+    sent.push(...(body.items || [body]).map(item=>item.dog.id)); throw new Error('lost');
   };
   try {
     for (let i=0;i<12;i++) {
@@ -317,4 +319,65 @@ test('UTC 午夜前的預留不能繞過隔日預算，晚到回執保留待確�
     await assert.rejects(machine(env,'receipt',{ dogKey:'9001',...target }),{ status:503 });
     assert.equal((await current(env)).walks[0].syncStatus,'dispatching');
   } finally { env.SYNC_DAILY_BUDGET='20000';stop?.();if(a)await a;globalThis.fetch=real;env.DB.close(); }
+});
+
+test('#460 合併派送：一輪只呼叫 Apps Script 一次，成功的標成已同步，失敗的那隻各自退避', async t => {
+  const now=Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now });
+  const env={ ...await setup(),WALK_RETRY_ENABLED:'true' },real=globalThis.fetch;
+  worker.testing.resetState();
+  const batches=[], cells={};
+  globalThis.fetch=async (_url,init)=>{
+    const body=JSON.parse(init.body);
+    if (body.action==='walkScan') return Response.json({ ok:true,rows:[] });
+    assert.equal(body.action,'walkWakeBatch');
+    batches.push(body.items.map(item=>item.dog.id));
+    const results=[];
+    for (const item of body.items) {
+      if (item.dog.id==='9102') { results.push({ ok:false,dispatchId:item.dispatchId,error:'找不到唯一的狗，停止寫回' }); continue; }
+      const target=await machine(env,'target',{ dog:item.dog,dispatchId:item.dispatchId,current:cells[item.dog.id] || { date:'2026-10-01',walker:'' } });
+      cells[item.dog.id]=target.current;
+      const receipt={ dogKey:item.dog.id,version:target.version,dispatchId:target.dispatchId,current:target.current };
+      results.push({ ok:true,...receipt,...await machine(env,'receipt',receipt) });
+    }
+    return Response.json({ ok:true,results });
+  };
+  try {
+    for (let i=0;i<3;i++) {
+      const id=String(9100+i),dogId=`batch-${i}`,name=`合併狗${i}`;
+      await env.DB.batch([
+        env.DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId,name),
+        env.DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind(id,dogId),
+        env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(?,?,?,?, '2026-10-01','x')").bind(i+2,dogId,id,name),
+      ]);
+      assert.equal((await post(env,request(`batch-000${i}`,'甲',{ dogs:[{ id,name }] }))).status,200);
+    }
+    await tick(env,now);
+    assert.equal(batches.length,1);
+    assert.deepEqual([...batches[0]].sort(),['9100','9101','9102']);
+    const rows=(await env.DB.prepare("SELECT o.dog_key,o.status FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version ORDER BY o.dog_key").all()).results;
+    assert.deepEqual(rows.map(r=>[r.dog_key,r.status]),[['9100','synced'],['9101','synced'],['9102','retry']]);
+    assert.equal((await env.DB.prepare('SELECT COUNT(*) n FROM v3_walk_delivery').first()).n,0);
+    const failed=await env.DB.prepare("SELECT error,next_attempt_at FROM v3_walk_outbox WHERE dog_key='9102' AND status='retry'").first();
+    assert.match(failed.error,/唯一/);
+    assert.ok(failed.next_attempt_at>new Date(now).toISOString());
+  } finally { globalThis.fetch=real; env.DB.close(); }
+});
+
+test('#460 兩個排程各跑一件：同步排程不跑溜狗對帳，對帳排程不跑同步', async () => {
+  const env={ ...await setup(),WALK_RETRY_ENABLED:'true' },real=globalThis.fetch;
+  const actions=[];
+  globalThis.fetch=async (url,init)=>{ actions.push(init?.body ? JSON.parse(init.body).action : String(url)); return Response.json({ ok:true,rows:[] }); };
+  const run=async cron=>{ const tasks=[]; await worker.scheduled({ scheduledTime:Date.now(),cron },env,{ waitUntil:p=>tasks.push(p) }); await Promise.allSettled(tasks); };
+  try {
+    await post(env,request('cron-split-0001','甲'));
+    await run('5-59/10 * * * *');
+    assert.ok(actions.includes('walkScan'));
+    assert.ok(!actions.some(a=>String(a).includes('gviz')));
+    actions.length=0;
+    await run('*/10 * * * *');
+    assert.ok(!actions.includes('walkScan'));
+    const wrangler=readFileSync(new URL('../../wrangler.jsonc',import.meta.url),'utf8');
+    assert.match(wrangler,/"5-59\/10 \* \* \* \*"/);
+  } finally { globalThis.fetch=real; env.DB.close(); }
 });

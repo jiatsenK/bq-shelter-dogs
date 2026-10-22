@@ -7,7 +7,7 @@ import { gvizTable, cellText, findHeaderRow, columnMap, MAIN_COLUMNS, splitNames
 import { readDepartedCards } from './departed.js';
 import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, readActivities, resolveDogs, updateActivity } from './activities.js';
 import { acceptWalk, dispatchWalk, readAcceptedWalks, writebackTarget, confirmWalk, reconcileWalk } from './walk-accept.js';
-import { compareNotifiedWalks } from './walk-notify.js';
+import { scanNotifiedWalks } from './walk-reconcile.js';
 import { retryWalks } from './walk-retry.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
@@ -17,6 +17,9 @@ import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache, previousWal
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
 import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
+
+// 溜狗對帳的排程，要跟 wrangler.jsonc 的 triggers.crons 一致（#460）
+const WALK_CRON = '5-59/10 * * * *';
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
@@ -572,7 +575,7 @@ async function sheetChanged(request, env) {
   if (!await sameSecret(request.headers.get('X-Notify-Key') || '',key)) return fail(403, '通知密碼不對', '');
   // 非溜狗欄位仍須交既有同步；不因今日狀態已處理就消掉這個標記。
   if (!await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='changed'").first()) await markChanged(env.DB);
-  const comparison = env.D1_WALK_NOTIFY === '1' ? await compareNotifiedWalks(env.DB,env) : { deferred:true };
+  const comparison = env.D1_WALK_NOTIFY === '1' ? await scanNotifiedWalks(env.DB,env) : { deferred:true };
   return reply(200, { ok: true, comparison }, '');
 }
 
@@ -1268,9 +1271,12 @@ export default {
   testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, walkersDate, triggerSync, maintenance },
 
   // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 wrangler.jsonc 的 triggers）
+  // 兩個排程各跑一件（#460）：WALK_CRON 跑溜狗對帳，其他跑試算表同步；沒帶 cron（測試）兩件都跑
   async scheduled(event, env, ctx) {
     const now = event && event.scheduledTime ? event.scheduledTime : Date.now();
-    ctx.waitUntil(retryWalks(env, now));
+    const cron = event && event.cron;
+    if (!cron || cron === WALK_CRON) ctx.waitUntil(retryWalks(env, now));
+    if (cron === WALK_CRON) return;
     ctx.waitUntil(syncTick(env, now).then(plan => {
       if (plan === 'daily' && r2.r2On(env)) return maintenance(env, now);
     }));

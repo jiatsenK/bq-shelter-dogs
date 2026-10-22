@@ -116,6 +116,16 @@ Cron 一輪派 10 隻（含回呼）從 166 次降到 66 次。`worker/test/walk
 - 更正（2026-10-22）：之前推估「每輪固定約 22 ms，是保險掃描」，只用兩次測速硬算，站不住。本機剖析顯示 CPU 大多花在 D1 綁定的每次往返（打包、解讀、轉成物件），商業邏輯不到 15%；往返幾乎都來自派送。見 `docs/research/2026-10-22-460-cron-cpu-cause.md`、`docs/research/2026-10-22-460-sync-patterns.md`。
 - 方向（K 討論中）：一輪的派送合併成少數幾次 D1 `batch()` 與一次 Apps Script 呼叫；保險掃描是否降頻，看人工改表通知（#458）怎麼送。
 
+## Cron 收成兩件（K 2026-10-22 決定，討論見 `460-cron-cpu-handoff.md`）
+
+- **兩個排程**：`wrangler.jsonc` 設 `*/10`（試算表同步）和 `5-59/10`（溜狗對帳），`scheduled()` 依 `event.cron` 只跑其中一件，各自有 10 ms。改排程要一起改 `worker/src/index.js` 的 `WALK_CRON`。
+- **溜狗對帳**（詞見 GLOSSARY）：改表通知、Cron 補漏、按下後背景派送都走同一路徑。通知改成直接跑一次保險掃描（`scanNotifiedWalks`），刪掉 `walk-notify.js` 和 Apps Script 的 `walkCompare`；重送合併、失敗留 pending 的控制列 `v3_walk_compare` 沿用。
+- **四欄指紋**：Worker 把上次記的指紋（`v3_sync_state.walk_scan_sig`）送給 `walkScan`；Apps Script 照常在鎖內讀四欄、算 SHA-256，一樣就只回 `same`，Worker 不比對、不寫入。還有差異沒收完（未決派送、一輪 10 隻上限、失敗）就不記指紋，下次照常整份比對。現有的 `sheet_sig` 不能沿用：它用 gviz 讀三個分頁，比四欄還多，而且可能是舊快照。
+- **合併派送**：Cron 補送用 `dispatchWalks`，一輪最多 10 隻，D1 認領、交給 Apps Script（`walkWakeBatch`）、收尾各一次。認領批次被任一隻的 guard 擋下就整批退回逐隻 `dispatchWalk`。按下時的背景派送仍是單隻 `dispatchWalk`。
+- **已知限制**：`walkWakeBatch` 在同一個鎖內逐隻寫，10 隻可能占鎖幾十秒，這段時間其他寫入等鎖超過 15 秒會失敗（舊流程寫入、群組編輯）。Worker 端合併派送逾時設 90 秒。
+- **Apps Script 要 K 重新部署一次**（`walkWakeBatch`、`walkScan` 指紋、刪 `walkCompare`），之後再開 `SITE.d1WalkAccept`。
+- **驗收**：開開關前用 `cpu-bench` 量一輪對帳（掃描＋派送 10 隻）P99 < 10 ms；超過再回來討論。
+
 ## 正式啟用（K 決定，這次不做）
 
 1. 通過上面的 CPU 驗收，並決定寫入保留量。
