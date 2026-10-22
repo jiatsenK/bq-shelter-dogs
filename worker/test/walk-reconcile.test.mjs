@@ -136,6 +136,33 @@ test('人工刪名剛好回到更早的已同步名單，也必須保留刪除�
   } finally { env.DB.close(); }
 });
 
+test('人工同日刪名保留原復原前值，不因同步複本已到今天而遺失上次溜', async () => {
+  const env=await setup(); worker.testing.resetState();
+  try {
+    await baseline(env,'甲、乙');
+    await env.DB.prepare('UPDATE v3_sheet_main SET walked_date=? WHERE number=?').bind(day(),dog.id).run();
+    const corrected=await machine(env,'observe',{ observations:[{ dog,current:{ date:day(),walker:'乙' } }] });
+    assert.equal(corrected.results[0].ok,true);
+    const state=(await current(env)).walks[0];
+    const undo=await post(env,request('after-human-undo','丙',{ action:'undo',dogs:[{ ...dog,expectedVersion:state.version }] }));
+    assert.equal(undo.status,200);
+    assert.equal(undo.body.results[0].current.date,'2026-10-01');
+  } finally { env.DB.close(); }
+});
+
+test('復原可信人工前次名單中的未註冊名字，仍只驗證操作人而不建立被還原者身分', async () => {
+  const env=await setup(); worker.testing.resetState();
+  try {
+    await machine(env,'observe',{ observations:[{ dog,current:{ date:'2026-09-01',walker:'丁' } }] });
+    await post(env,request('after-manual-walk','甲'));
+    const state=(await current(env)).walks[0];
+    const undo=await post(env,request('restore-manual-name','乙',{ action:'undo',dogs:[{ ...dog,expectedVersion:state.version }] }));
+    assert.equal(undo.status,200);
+    assert.deepEqual(undo.body.results[0].current,{ date:'2026-09-01',walker:'丁' });
+    assert.equal((await env.DB.prepare('SELECT COUNT(*) n FROM v3_volunteers').first()).n,3);
+  } finally { env.DB.close(); }
+});
+
 test('通知失敗與中斷的 running 能經既有 scheduled 同鎖補漏，不冒充完成', async () => {
   const env={ ...await setup(),SHEET_NOTIFY_KEY:'nk',D1_WALK_NOTIFY:'1',WALK_RETRY_ENABLED:'true',GITHUB_TOKEN:'test' },real=globalThis.fetch;
   const tick=async ()=>{ const tasks=[]; await worker.scheduled({ scheduledTime:Date.now() },env,{ waitUntil:p=>tasks.push(p) }); await Promise.all(tasks); };

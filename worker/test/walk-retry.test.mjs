@@ -32,6 +32,29 @@ async function tick(env, at) {
   await Promise.all(tasks);
 }
 
+test('#457 今天人工改名單後復原，仍回到今天以前，不復活人工拿掉的名字', async t => {
+  const now = Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now });
+  const env = { ...await setup(),WALK_RETRY_ENABLED:'true' }, real = globalThis.fetch;
+  worker.testing.resetState();
+  const sheet = { value:{ date:'2026-10-01',walker:'' } }, calls = [];
+  globalThis.fetch = sheetAdapter(env,sheet,calls);
+  try {
+    await post(env,request('manual-before-undo'));
+    await tick(env,now);
+    sheet.value = { date:'2026-10-22',walker:'乙' };
+    await tick(env,now+60000);
+    assert.equal((await current(env)).walks[0].walker,'乙');
+    const undo = await post(env,request('manual-after-undo','丙',{ action:'undo',dogs:[{ id:'9001',name:'測試狗',expectedVersion:2 }] }));
+    assert.equal(undo.status,200);
+    assert.deepEqual(undo.body.results[0].current,{ date:'2026-10-01',walker:'' });
+    await tick(env,now+120000);
+    assert.deepEqual(sheet.value,{ date:'2026-10-01',walker:'' });
+    assert.equal((await current(env)).walks[0].walked,false);
+    assert.equal((await current(env)).walks[0].syncStatus,'synced');
+  } finally { globalThis.fetch=real;env.DB.close(); }
+});
+
 test('排程按 1、2、4、8、15 分鐘持久退避，重啟不重設', async t => {
   const start = Date.parse('2026-10-22T02:00:00Z');
   t.mock.timers.enable({ apis: ['Date'], now: start });

@@ -8,7 +8,7 @@ import { buildSyncSql, buildSyncPlan, SEED_TABLES, SYNC_SCHEMA_SKIP, planSync, r
 import { budgetProblem, todayRowsWritten } from './sync-diff.mjs';
 
 // SQL 開頭補建表、版本號、觸發器那幾行（不算同步寫的資料）
-const SCHEMA_LINE = /^CREATE |^INSERT OR IGNORE INTO v3_(data|pack|walk)_versions|^INSERT OR IGNORE INTO v3_walk_pack |^INSERT OR IGNORE INTO v3_walk_compare\(|^INSERT INTO v3_departure_versions\(id,years\) |^DROP TRIGGER IF EXISTS pack_v3_|^DELETE FROM v3_packs WHERE part='(walks|small)'/;
+const SCHEMA_LINE = /^CREATE |^INSERT OR IGNORE INTO v3_(data|pack|walk|activity)_versions|^INSERT OR IGNORE INTO v3_walk_pack |^INSERT OR IGNORE INTO v3_walk_compare\(|^INSERT INTO v3_departure_versions\(id,years\) |^DROP TRIGGER IF EXISTS pack_v3_|^DELETE FROM v3_packs WHERE part='(walks|small)'/;
 
 const json = async path => JSON.parse(await readFile(new URL(`../${path}`, import.meta.url), 'utf8'));
 
@@ -99,7 +99,7 @@ test('開卡、照片、休養、介紹不被同步清掉', async t => {
   const sql = await buildSyncSql(seed, src);
   // 只補建表（IF NOT EXISTS），不刪不寫這幾張
   const writes = sql.split('\n').filter(l => !SCHEMA_LINE.test(l)).join('\n');
-  assert.doesNotMatch(writes, /v3_card_opened|v3_photos|v3_volunteer|v3_rest|v3_intros|v3_edit_log/);
+  assert.doesNotMatch(writes, /v3_card_opened|v3_photos|v3_volunteer|v3_rest|v3_intros|v3_edit_log|v3_activit|v3_departed_cards/);
 });
 
 test('來源有問題時丟錯，不產生 SQL', async t => {

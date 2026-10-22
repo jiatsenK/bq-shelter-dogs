@@ -2,6 +2,8 @@ import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitie
 import { cleanIntakeEvents } from './intake.js';
 import { cleanStays } from './stays.js';
 import { saveFixedCare } from './compact.js';
+import { readDepartedCards } from './departed.js';
+import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, readActivities, resolveDogs, updateActivity } from './activities.js';
 import { acceptWalk, dispatchWalk, readAcceptedWalks, writebackTarget, confirmWalk, reconcileWalk } from './walk-accept.js';
 import { compareNotifiedWalks } from './walk-notify.js';
 import { retryWalks } from './walk-retry.js';
@@ -446,6 +448,43 @@ async function putIntro(request, env, origin) {
   if (saved.invalid) return fail(400, saved.invalid, origin);
   await logEdit(env.DB, { editor, kind: 'intro', dogId: saved.dogId, dogNumber: id, before: saved.before, after: hasEvents ? { text, events } : text }, now);
   return reply(200, { ok: true, id, intro: text, ...(hasEvents ? { intakeEvents: events } : {}), commit: null }, origin);
+}
+
+// ---- 活動紀錄（#270，ADR 0002）：GET /activities；POST 新增、PUT／DELETE /activities/{id}，誰都能改（先選名字），記編輯紀錄 ----
+// 改、刪要帶打開時看到的 revision，別人剛改過會被擋下來
+const ACTIVITY_ID = /^[a-f0-9]{32}$/;
+async function activities(request, env, origin) {
+  if (!env || !env.DB) return fail(503, '活動紀錄還沒準備好（沒有接資料庫）', origin, { code: 'db' });
+  const m = new URL(request.url).pathname.match(/^\/activities(?:\/([^/]+))?$/);
+  const id = m && m[1] ? decodeURIComponent(m[1]) : '';
+  if (!m || (m[1] && !ACTIVITY_ID.test(id))) return fail(404, '找不到這場活動', origin);
+  const method = request.method;
+  if (method === 'GET' && !id) return reply(200, { ok: true, activities: await readActivities(env.DB) }, origin);
+  if (!(id ? ['PUT', 'DELETE'] : ['POST']).includes(method)) return fail(405, '活動紀錄只能用 GET／POST /activities、PUT／DELETE /activities/{id}', origin);
+
+  const body = await jsonBody(request, origin, '資料太長');
+  if (body.error) return body.error;
+  const input = body.input || {};
+  const editor = await editorOf(input.editor, config(env).walkerKey);
+  if (!editor) return needEditor(origin);
+  const now = Date.now();
+  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+  try {
+    const revision = Number.isInteger(input.revision) ? input.revision : null;
+    if (id && revision === null) throw new ActivityError(400, '請重新整理後再改');
+    const act = method === 'DELETE' ? null : cleanActivity(input, taiwanYmd(now));
+    if (!allow(`activity:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
+    if (act) act.dogs = await resolveDogs(env.DB, act.dogs);
+    let before = null, after = null;
+    if (method === 'POST') after = await createActivity(env.DB, act);
+    else if (method === 'PUT') ({ before, after } = await updateActivity(env.DB, id, revision, act));
+    else ({ before } = await deleteActivity(env.DB, id, revision));
+    await logEdit(env.DB, { editor, kind: 'activity', before: activityLog(before), after: activityLog(after) }, now);
+    return reply(200, { ok: true, activity: after, ...(method === 'DELETE' ? { deleted: id } : {}) }, origin);
+  } catch (e) {
+    if (e instanceof ActivityError) return fail(e.status, e.message, origin);
+    throw e;
+  }
 }
 
 // ---- 舊編號（#289，ADR 0005）：POST／DELETE /former/{編號}，body { editor, former }，誰都能改，不用通關碼；記編輯紀錄（ADR 0004） ----
@@ -908,12 +947,17 @@ async function getWalkers(env, allowed, now = Date.now()) {
 const shortText = (v, max) => typeof v === 'string' && [...v.trim()].length <= max && !/[\u0000-\u001f]/.test(v);
 const NOTE_MAX_CHARS = 200;
 const YMD_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-function cleanWalkDog(d, action) {
+function cleanWalkDog(d, action, accepted = false) {
   if (!d || typeof d !== 'object') return null;
   const id = typeof d.id === 'string' ? d.id.trim() : '';
   if (id && !ID_PATTERN.test(id)) return null;
   if (!shortText(d.name, 30) || !d.name.trim()) return null;
   const out = { id, name: d.name.trim() };
+  if (accepted && ['edit', 'undo'].includes(action)) {
+    if (!Number.isSafeInteger(d.expectedVersion) || d.expectedVersion < 0) return null;
+    out.expectedVersion = d.expectedVersion;
+    return out;
+  }
   if (action === 'edit') {
     if (!shortText(d.expected, 200) || !d.expected.trim()) return null;
     out.expected = d.expected.trim();
@@ -959,16 +1003,21 @@ async function writeWalks(request, env, origin, ctx) {
   const maxDogs = action === 'note' ? 1 : action === 'log' ? 0 : WALK_MAX_DOGS;
   const rawDogs = action === 'log' ? [] : input.dogs;
   if (maxDogs && (!Array.isArray(rawDogs) || !rawDogs.length || rawDogs.length > maxDogs)) return fail(400, `一次 1–${maxDogs} 隻`, origin);
-  const dogs = rawDogs.map(d => cleanWalkDog(d, action));
+  const dogs = rawDogs.map(d => cleanWalkDog(d, action, input.requestId !== undefined));
   if (dogs.some(d => !d)) return fail(400, '狗的資料不對', origin);
   if (input.requestId !== undefined) {
-    if (!shortText(input.walker, WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, '要先選好身分', origin);
+    if (!shortText(input.walker, action === 'edit' ? 200 : WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, '要先選好身分', origin);
     try {
       const result = await acceptWalk(env?.DB, { ...input, dogs }, env);
       // 沒有執行背景工作的 context 時仍保留 pending，不能等待 Google 才回接受。
       if (ctx?.waitUntil) ctx.waitUntil(dispatchWalk(env.DB, dogs[0], env).catch(e => console.error('walk-dispatch', e.message)));
       return reply(200, { ok: true, source: 'd1', today: input.operationDate, results: [result], snapshot: await readAcceptedWalks(env.DB, taiwanYmd(Date.now())) }, origin);
-    } catch (e) { return fail(e.status || 503, e.status ? e.message : '登記尚未接受，請用原請求再試', origin); }
+    } catch (e) {
+      if (e.current) return reply(409, { ok: false, source: 'd1', error: e.message,
+        results: [{ ...dogs[0], status: 'changed', version: e.version, current: e.current }],
+        snapshot: await readAcceptedWalks(env.DB, taiwanYmd(Date.now())) }, origin);
+      return fail(e.status || 503, e.status ? e.message : '登記尚未接受，請用原請求再試', origin);
+    }
   }
   // 已接管的狗不再允許舊手機從另一入口覆蓋試算表。
   if (env?.DB && ['walk','edit','undo'].includes(action)) {
@@ -1361,6 +1410,17 @@ export default {
         return fail(503, path === '/walks' ? '暫時讀不到溜狗紀錄' : '暫時讀不到離所紀錄', allowed, { code: 'db' });
       }
     }
+    // 已出所狗卡（#271）：圖鑑的「已出所」名單，誰都看得到
+    if (path === '/departed-cards') {
+      if (request.method !== 'GET') return fail(405, '只能用 GET /departed-cards 讀', allowed);
+      try {
+        if (!env || !env.DB) throw new Error('沒有 D1');
+        return reply(200, { ok: true, dogs: await readDepartedCards(env.DB, taiwanYmd(Date.now())) }, allowed);
+      } catch (e) {
+        console.error('departed-cards', e);
+        return fail(503, '暫時讀不到已出所的狗', allowed, { code: 'db' });
+      }
+    }
     // 今日溜狗紀錄（ADR 0007）：網站每分鐘來讀今天的清單；讀不到網站就照舊不顯示錯誤
     if (path === '/today') {
       if (request.method !== 'GET') return fail(405, '只能用 GET /today 讀', allowed);
@@ -1425,6 +1485,16 @@ export default {
       } catch (e) {
         console.error('stays', e);
         return fail(500, '出入所紀錄存檔發生錯誤，原本的資料不受影響', allowed);
+      }
+    }
+
+    // 活動紀錄（#270）
+    if (path === '/activities' || path.startsWith('/activities/')) {
+      try {
+        return await activities(request, env, allowed);
+      } catch (e) {
+        console.error('activities', e);
+        return request.method === 'GET' ? fail(503, '暫時讀不到活動紀錄', allowed, { code: 'db' }) : fail(500, '活動紀錄存檔發生錯誤，原本的資料不受影響', allowed);
       }
     }
 

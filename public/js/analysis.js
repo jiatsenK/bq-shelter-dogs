@@ -367,8 +367,7 @@ function walkHistorySection(dog, today) {
 function analysisPageHtml(today) {
   if (!infoPage) return infoHomeHtml();
   if (infoPage === 'departures') return departureSectionHtml(today);
-  // #270 尚未提供活動核心，不以空名單冒充零場，不另建資料契約。
-  if (infoPage === 'activities') return section('活動紀錄', '', '<p>活動紀錄尚未開放</p><p class="a-hint">活動查看與編輯準備好後，會在這裡提供。</p>');
+  if (infoPage === 'activities') return activitySectionHtml();
   if (infoPage === 'updates') return infoUpdatesHtml();
   if (loadState === 'ready') return analysisHtml(allDogs, today, infoPage);
   return `<div class="status-msg">${loadState === 'error' ? '狗的資料讀不到，請確認網路後重新整理。' : '讀取中…'}</div>`;
@@ -580,7 +579,7 @@ document.getElementById('main').addEventListener('change', e => {
   if (e.target.id === 'depReason') { depRoster.reason = e.target.value; refreshDepartureList(); }
 });
 // #273 分類狀態只跟著當前 history entry，不跨裝置儲存。
-const INFO_PAGES = { stay: '在所統計', departures: '離所紀錄', quality: '資料檢查', updates: '更新紀錄' };
+const INFO_PAGES = { stay: '在所統計', departures: '離所紀錄', activities: '活動紀錄', quality: '資料檢查', updates: '更新紀錄' };
 let infoPage = '';
 let infoUpdateTab = 'website';
 let websiteUpdates = null;
@@ -612,9 +611,11 @@ function loadWebsiteUpdates() {
 // #447 使用說明從我溜過搬來：不是子頁，按了直接開溜狗表上的導覽（文字沿用 #171 的 TOUR_STEPS）
 function infoHomeHtml() {
   loadDepartures();
+  loadActivities();
   const dogs = loadState === 'ready' ? `目前在所 ${allDogs.length} 隻` : loadState === 'error' ? '在所資料讀取失敗' : '在所資料讀取中…';
   const dep = !departuresData || departuresData.state === 'loading' ? '離所紀錄讀取中…' : departuresData.state === 'error' ? '離所紀錄讀取失敗' : departuresData.list.length ? `共 ${departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
-  const summary = { stay: dogs, departures: dep, quality: '查看缺照片、介紹及其他資料', updates: '網站更新與資料編輯' };
+  const act = activitiesData.state === 'loading' ? '活動紀錄讀取中…' : activitiesData.state === 'error' ? '活動紀錄讀取失敗' : activitiesData.list.length ? `共 ${activitiesData.list.length} 場活動` : '還沒有活動紀錄';
+  const summary = { stay: dogs, departures: dep, activities: act, quality: '查看缺照片、介紹及其他資料', updates: '網站更新與資料編輯' };
   return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
 }
 
