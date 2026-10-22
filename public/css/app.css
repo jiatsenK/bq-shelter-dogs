@@ -2475,3 +2475,18 @@ html.kb-open .onboard { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-
 .fixed-care .rest-hint { margin-bottom: 0; }
 /* #396：同行人／重試共用一列，手機照片區保留同行人及狀態文字的操作空間。 */
 .gw-secondary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; }
+/* #270 活動紀錄：每場標題下直接列出席的狗；沿用離所按鈕與休養表單樣式 */
+.act-item { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.act-item h3 { margin: 0 0 8px; font-size: 17px; overflow-wrap: anywhere; }
+.act-item h3 small { margin-left: 8px; font-size: 13px; font-weight: 400; color: var(--ink-soft); }
+.act-dogs { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0; padding: 0; list-style: none; }
+.act-dogs li { overflow-wrap: anywhere; }
+.act-dogs small, .act-suggest small { margin-left: 4px; color: var(--ink-soft); font-size: 12px; }
+.act-actions { display: flex; gap: 16px; margin-top: 4px; }
+.act-actions .dep-open { width: auto; flex: 1; }
+.act-form { padding: 14px 0; border-bottom: 1px solid var(--line); }
+.act-form select { min-height: 44px; border: 1px solid var(--line); border-radius: 3px; padding: 8px 10px; background: var(--surface); color: var(--ink); font: inherit; font-size: 16px; }
+.act-picked, .act-suggest { display: flex; flex-wrap: wrap; gap: 8px; }
+.act-picked button, .act-suggest button { min-height: 44px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 3px; background: var(--surface); color: var(--ink); font: inherit; cursor: pointer; overflow-wrap: anywhere; }
+.act-suggest button { color: var(--primary); }
+.act-error { margin: 0; color: var(--red-text); }

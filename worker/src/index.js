@@ -2,6 +2,7 @@ import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitie
 import { cleanIntakeEvents } from './intake.js';
 import { cleanStays } from './stays.js';
 import { saveFixedCare } from './compact.js';
+import { readActivities, cleanActivity, createActivity, updateActivity, deleteActivity, ActivityError } from './activities.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
@@ -386,6 +387,36 @@ async function putRest(request, env, origin) {
 const EDIT_BODY_MAX_BYTES = 16000;
 
 // 讀 JSON 本文：不是 JSON、太大都回 { error }，否則回 { input }
+async function activities(request, env, origin, path) {
+  if (!env?.DB) return fail(503, '活動紀錄還沒準備好', origin, { code: 'db' });
+  const id = path === '/activities' ? '' : decodeURIComponent(path.slice('/activities/'.length));
+  if (!id && request.method === 'GET') return reply(200, { ok: true, activities: await readActivities(env.DB) }, origin);
+  if (id ? !['PUT', 'DELETE'].includes(request.method) : request.method !== 'POST') return fail(405, '活動紀錄：GET／POST /activities，PUT／DELETE /activities/{id}', origin);
+  if (id && !/^[0-9a-f]{1,32}$/.test(id)) return fail(400, '活動編號格式不對', origin);
+  const input = await readJsonBody(request, 16384);
+  if (!input) return fail(400, '資料格式不對或太長', origin);
+  const editor = await editorOf(input.editor, config(env).walkerKey);
+  if (!editor) return needEditor(origin);
+  const now = Date.now();
+  if (!allow(`activity:${request.headers.get('CF-Connecting-IP') || 'unknown'}`, NOTE_WRITE_LIMITS, now)) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
+  if (request.method === 'DELETE') {
+    const before = await deleteActivity(env.DB, id);
+    if (!before) return fail(404, '找不到這場活動，可能已經被刪除', origin);
+    await logEdit(env.DB, { editor, kind: 'activity', before, after: null }, now);
+    return reply(200, { ok: true, id }, origin);
+  }
+  const act = await cleanActivity(env.DB, input);
+  if (!id) {
+    const after = await createActivity(env.DB, act);
+    await logEdit(env.DB, { editor, kind: 'activity', before: null, after }, now);
+    return reply(200, { ok: true, activity: after }, origin);
+  }
+  const saved = await updateActivity(env.DB, id, act);
+  if (!saved) return fail(404, '找不到這場活動，可能已經被刪除', origin);
+  await logEdit(env.DB, { editor, kind: 'activity', before: saved.before, after: saved.after }, now);
+  return reply(200, { ok: true, activity: saved.after }, origin);
+}
+
 async function jsonBody(request, origin, tooLong) {
   const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
   if (type !== 'application/json') return { error: fail(415, '格式不對', origin) };
@@ -1368,6 +1399,17 @@ export default {
       } catch (e) {
         console.error('stays', e);
         return fail(500, '出入所紀錄存檔發生錯誤，原本的資料不受影響', allowed);
+      }
+    }
+
+    // 活動紀錄（ADR 0002，#270）：GET 全部場次；POST 新增；PUT／DELETE /activities/{id}。改動要先選名字、記編輯紀錄
+    if (path === '/activities' || path.startsWith('/activities/')) {
+      try {
+        return await activities(request, env, allowed, path);
+      } catch (e) {
+        if (e instanceof ActivityError) return fail(e.status, e.message, allowed);
+        console.error('activities', e);
+        return fail(503, '活動紀錄暫時讀寫失敗，請稍後再試', allowed, { code: 'db' });
       }
     }
 

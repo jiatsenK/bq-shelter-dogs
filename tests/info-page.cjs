@@ -17,7 +17,7 @@ module.exports = async (browser, base) => {
     if (!u.pathname.includes('/api/')) return route.continue();
     const endpoint = u.pathname.split('/api/')[1];
     if (failure && ['dogs', 'departures/index', 'edits'].includes(endpoint)) return route.fulfill({ status: 503, json: { ok: false } });
-    const json = endpoint === 'dogs' ? fixture : endpoint === 'edits' ? { ok: true, edits: [{ editorName: '志工甲', kind: 'group', at: '2026-10-17T00:00:00Z', before: { label: '舊群', names: ['小白'] }, after: { label: '新群', names: ['小黑'] } }] } : endpoint === 'departures/index' ? { departures: [], years: {} } : { rest: {}, walkers: [], walks: [] };
+    const json = endpoint === 'dogs' ? fixture : endpoint === 'edits' ? { ok: true, edits: [{ editorName: '志工甲', kind: 'group', at: '2026-10-17T00:00:00Z', before: { label: '舊群', names: ['小白'] }, after: { label: '新群', names: ['小黑'] } }] } : endpoint === 'departures/index' ? { departures: [], years: {} } : endpoint === 'activities' ? { ok: true, activities: [] } : { rest: {}, walkers: [], walks: [] };
     return route.fulfill({ json });
   });
   const page = await context.newPage();
@@ -27,14 +27,15 @@ module.exports = async (browser, base) => {
     await page.goto(base + '/public/index.html');
     await page.locator('#main .card').first().waitFor();
     await page.locator('[data-tab="info"]').click();
-    assert.deepEqual(await page.locator('[data-info-page] strong').allTextContents(), ['在所統計', '離所紀錄', '資料檢查', '更新紀錄']);
+    assert.deepEqual(await page.locator('[data-info-page] strong').allTextContents(), ['在所統計', '離所紀錄', '活動紀錄', '資料檢查', '更新紀錄']);
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 844 });
-      for (const key of ['stay', 'departures', 'quality', 'updates']) {
+      for (const key of ['stay', 'departures', 'activities', 'quality', 'updates']) {
         await page.locator('[data-info-page="' + key + '"]').click();
         assert(!/超過 \d+ 天沒溜|本月溜狗/.test(await page.locator('#main').innerText()));
         if (key === 'stay') await page.getByRole('heading', { name: '入所多久分布', exact: true }).waitFor();
         if (key === 'departures') await page.getByText('還沒有離所紀錄', { exact: true }).waitFor();
+        if (key === 'activities') await page.getByText('還沒有活動紀錄', { exact: true }).waitFor();
         if (key === 'quality') await page.getByRole('heading', { name: '狗的資料完整度', exact: true }).waitFor();
         if (key === 'updates') {
           await page.getByRole('button', { name: '網站更新', exact: true }).click();
@@ -72,6 +73,6 @@ module.exports = async (browser, base) => {
     failure = false; emptyUpdates = true;
     await page.getByRole('button', { name: '重新讀取', exact: true }).click();
     await page.getByText('還沒有網站更新紀錄', { exact: true }).waitFor();
-    console.log('#273 資訊分類、內容、更新與編輯紀錄、返回焦點及320／390／桌機通過；活動核心待 #270');
+    console.log('#273 資訊分類、內容、更新與編輯紀錄、返回焦點及320／390／桌機通過、活動紀錄');
   } finally { await context.close(); }
 };

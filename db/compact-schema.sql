@@ -178,6 +178,21 @@ CREATE TABLE IF NOT EXISTS v3_edit_log (
   before_json TEXT,
   after_json TEXT
 );
+-- 活動紀錄（ADR 0002，#270）：動保小小兵（kids）、認養會（adoption）每場出席的狗。只記出席。
+-- 出席可以只有名字（舊名單對不上狗時），dog_id 之後補；name 是當時的名字，對上狗時顯示用 v3_dogs 的名字
+CREATE TABLE IF NOT EXISTS v3_activities (
+  id TEXT PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(8)))),
+  activity_date TEXT NOT NULL CHECK(activity_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  kind TEXT NOT NULL CHECK(kind IN ('kids','adoption'))
+);
+CREATE TABLE IF NOT EXISTS v3_activity_dogs (
+  activity_id TEXT NOT NULL REFERENCES v3_activities(id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  dog_id TEXT REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
+  name TEXT NOT NULL,
+  PRIMARY KEY(activity_id,position)
+);
+CREATE INDEX IF NOT EXISTS v3_activity_dogs_dog ON v3_activity_dogs(dog_id);
 -- #267：舊代號資料保留作為待對照來源，新個人資料只由固定志工持有。
 CREATE TABLE IF NOT EXISTS v3_identity_names (
  code TEXT PRIMARY KEY NOT NULL,
