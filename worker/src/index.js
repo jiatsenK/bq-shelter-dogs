@@ -341,113 +341,142 @@ async function sameSecret(given, expected) {
 const adminLocked = (ip, now) => limited(`admin:${ip}`, ADMIN_FAIL_LIMITS, now);
 const needEditor = origin => fail(400, '請先選好你的名字再編輯', origin, { code: 'editor' });
 
-// 休養中（K 2026-10-09）：在網站上設定「到哪天前暫停帶出」。任何人都能改、記編輯紀錄（ADR 0004）；#250 起存 D1 的 v3_rest
-async function putRest(request, env, origin) {
-  const cfg = config(env);
-  const now = Date.now();
-  if (!env || !env.DB) return fail(503, '休養設定還沒準備好（沒有接資料庫）', origin, { code: 'db' });
-
-  const m = new URL(request.url).pathname.match(/^\/rest\/([^/]+)$/);
-  const id = m ? decodeURIComponent(m[1]) : '';
-  if (!ID_PATTERN.test(id)) return fail(400, '狗狗編號格式不對', origin);
-
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
-  if (type !== 'application/json') return fail(415, '格式不對', origin);
-  const raw = await request.text();
-  if (new TextEncoder().encode(raw).length > 2048) return fail(413, '資料太長', origin);
-  let input;
-  try {
-    input = JSON.parse(raw);
-  } catch (e) {
-    return fail(400, '格式不對', origin);
-  }
-  const editor = await editorOf(input && input.editor, cfg.walkerKey);
-  if (!editor) return needEditor(origin);
-
-  let rest = null;
-  if (input.end !== true) {
-    const until = typeof input.until === 'string' ? input.until : '';
-    const day = /^\d{4}-\d{2}-\d{2}$/.test(until) ? new Date(`${until}T00:00:00Z`) : null;
-    if (!day || isNaN(day) || day.toISOString().slice(0, 10) !== until) return fail(400, '日期看不懂', origin);
-    const today = new Date(`${taiwanYmd(now)}T00:00:00Z`);
-    const days = Math.round((day - today) / 86400000);
-    if (days < 0) return fail(400, '日期已經過了', origin);
-    if (days > REST_MAX_DAYS) return fail(400, `最多設 ${REST_MAX_DAYS} 天`, origin);
-    const reason = cleanNote(typeof input.reason === 'string' ? input.reason : '') || '';
-    if ([...reason].length > REST_REASON_MAX) return fail(413, `原因最多 ${REST_REASON_MAX} 字`, origin);
-    rest = { until, reason: reason.replace(/\n/g, ' '), updatedAt: new Date(now).toISOString() };
-  }
-
-  if (!allow(`rest:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '設定太頻繁，請稍等幾分鐘再試', origin);
-  const saved = await saveRest(env.DB, id, rest);
-  if (!saved) return fail(404, '找不到這個編號的狗狗', origin);
-  await logEdit(env.DB, { editor, kind: 'rest', dogId: saved.dogId, dogNumber: id, before: saved.before, after: rest && { until: rest.until, reason: rest.reason } }, now);
-  return reply(200, { ok: true, id, rest, commit: null }, origin);
-}
-
-// 介紹、出入所紀錄的 JSON 請求本文上限（位元組）
+// ── 網站上改一隻狗的資料（ADR 0004）：誰都能改、不用通關碼，先選好名字，記編輯紀錄 ──
+// 共同步驟都在 editDog，照順序：有接 D1 → 網址編號 → JSON 本文（型別、大小） → 編輯者 → 欄位檢查 → 頻率 → 存 → 編輯紀錄 → 回應。
+// 每種編輯（DOG_EDITS）只寫自己的部分：
+// - check(input, ctx) → { value } 或 { error: [狀態, 訊息] }；ctx = { id, now, method }
+// - save(db, id, value, ctx) → 找不到狗回 null；擋下回 { status, error }；否則 { dogId, before, ... }
+// - log(value, saved, ctx) → 編輯紀錄的 { before, after }（可蓋掉 dogNumber）；回 null 不記
+// - respond(value, saved, ctx) → 回給網站的內容（ok、id 自動加上）
+// 介紹、出入所紀錄的 JSON 請求本文上限（位元組）；其他編輯的本文都很小
 const EDIT_BODY_MAX_BYTES = 16000;
+const SMALL_BODY_MAX_BYTES = 2048;
 
 // 讀 JSON 本文：不是 JSON、太大都回 { error }，否則回 { input }
-async function jsonBody(request, origin, tooLong) {
+async function jsonBody(request, origin, tooLong, maxBytes = EDIT_BODY_MAX_BYTES) {
   const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
   if (type !== 'application/json') return { error: fail(415, '格式不對', origin) };
   const raw = await request.text();
-  if (new TextEncoder().encode(raw).length > EDIT_BODY_MAX_BYTES) return { error: fail(413, tooLong, origin) };
+  if (new TextEncoder().encode(raw).length > maxBytes) return { error: fail(413, tooLong, origin) };
   try { return { input: JSON.parse(raw) }; } catch (e) { return { error: fail(400, '格式不對', origin) }; }
 }
 
-async function putFixedCare(request, env, origin) {
-  if (!env?.DB) return fail(503, '固定照顧設定還沒準備好', origin, { code: 'db' });
-  const id = decodeURIComponent(new URL(request.url).pathname.split('/').at(-1));
-  if (!ID_PATTERN.test(id)) return fail(400, '狗編號格式不對', origin);
-  const body = await jsonBody(request, origin, '資料太長');
-  if (body.error) return body.error;
-  const editor = await editorOf(body.input?.editor, config(env).walkerKey);
-  if (!editor) return needEditor(origin);
-  const enabled = body.input?.enabled;
-  if (typeof enabled !== 'boolean') return fail(400, '請指定開啟或關閉', origin);
-  const now = Date.now();
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (!allow(`fixed-care:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '設定太頻繁，請稍等幾分鐘再試', origin);
-  const saved = await saveFixedCare(env.DB, id, enabled);
-  if (!saved) return fail(404, '找不到這個編號的狗', origin);
-  if (saved.before !== enabled) await logEdit(env.DB, { editor, kind: 'fixed-care', dogId: saved.dogId, dogNumber: id === saved.dogId ? '' : id, before: saved.before, after: enabled }, now);
-  return reply(200, { ok: true, id, enabled }, origin);
-}
-
-// ---- 入所介紹（K 2026-10-10）：PUT /intro/{編號}，任何人都能改、記編輯紀錄 ----
-// #250 起存 D1 的 v3_intros，/api/dogs 馬上讀得到，不再改 dogs/{編號}.md、不再提交 GitHub
-async function putIntro(request, env, origin) {
-  const cfg = config(env);
-  const now = Date.now();
-  if (!env || !env.DB) return fail(503, '介紹還沒準備好（沒有接資料庫）', origin, { code: 'db' });
-
-  const m = new URL(request.url).pathname.match(/^\/intro\/([^/]+)$/);
+async function editDog(request, env, origin, edit) {
+  if (!env || !env.DB) return fail(503, `${edit.label}還沒準備好（沒有接資料庫）`, origin, { code: 'db' });
+  const m = new URL(request.url).pathname.match(/^\/[^/]+\/([^/]+)$/);
   const id = m ? decodeURIComponent(m[1]) : '';
   if (!ID_PATTERN.test(id)) return fail(400, '狗狗編號格式不對', origin);
+  const body = await jsonBody(request, origin, edit.tooLong || '資料太長', edit.maxBytes || SMALL_BODY_MAX_BYTES);
+  if (body.error) return body.error;
+  const input = body.input && typeof body.input === 'object' ? body.input : {};
+  const editor = await editorOf(input.editor, config(env).walkerKey);
+  if (!editor) return needEditor(origin);
+  const now = Date.now();
+  const ctx = { id, now, method: request.method };
+  const checked = edit.check(input, ctx);
+  if (checked.error) return fail(checked.error[0], checked.error[1], origin);
 
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  const body = await jsonBody(request, origin, '介紹太長');
-  if (body.error) return body.error;
-  const input = body.input;
-  const editor = await editorOf(input && input.editor, cfg.walkerKey);
-  if (!editor) return needEditor(origin);
-  const text = cleanNote(input && input.text);
-  if (text === null) return fail(400, '格式不對', origin);
-  if ([...text].length > INTRO_MAX_CHARS) return fail(413, `介紹最多 ${INTRO_MAX_CHARS} 字`, origin);
-  const hasEvents = Object.prototype.hasOwnProperty.call(input, 'events');
-  const events = hasEvents ? cleanIntakeEvents(input.events) : undefined;
-  if (hasEvents && !events) return fail(400, '事件格式不對：最多 30 列、事件合計最多 1000 字，日期請用 YYYY-MM-DD 或留空', origin);
-
-  if (!allow(`intro:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
-  const saved = await saveIntro(env.DB, id, text, events);
+  if (!allow(`${edit.kind}:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
+  const saved = await edit.save(env.DB, id, checked.value, ctx);
   if (!saved) return fail(404, '找不到這個編號的狗狗', origin);
-  if (saved.invalid) return fail(400, saved.invalid, origin);
-  await logEdit(env.DB, { editor, kind: 'intro', dogId: saved.dogId, dogNumber: id, before: saved.before, after: hasEvents ? { text, events } : text }, now);
-  return reply(200, { ok: true, id, intro: text, ...(hasEvents ? { intakeEvents: events } : {}), commit: null }, origin);
+  if (saved.error) return fail(saved.status, saved.error, origin);
+  const entry = edit.log(checked.value, saved, ctx);
+  if (entry) await logEdit(env.DB, { editor, kind: edit.kind, dogId: saved.dogId, dogNumber: id, ...entry }, now);
+  return reply(200, { ok: true, id, ...edit.respond(checked.value, saved, ctx) }, origin);
 }
+
+// 舊編號要是 10 碼、前 8 碼是看得懂的日期，而且不晚於現在的編號
+const FORMER_PATTERN = /^(\d{4})(\d{2})(\d{2})\d{2}$/;
+function formerDateOk(former) {
+  const m = former.match(FORMER_PATTERN);
+  if (!m) return false;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] && d <= new Date();
+}
+
+// 網址第一段 → 編輯；methods：接受哪些方法；crash：存檔時出錯給網站看的話
+const DOG_EDITS = {
+  // 休養中（K 2026-10-09）：PUT /rest/{編號}，設定「到哪天前暫停帶出」，body { editor, until, reason } 或 { editor, end: true }；存 D1 的 v3_rest（#250）
+  rest: {
+    kind: 'rest', label: '休養設定', methods: ['PUT'], crash: '休養設定發生錯誤，原本的設定不受影響',
+    check(input, { now }) {
+      if (input.end === true) return { value: null };
+      const until = typeof input.until === 'string' ? input.until : '';
+      const day = /^\d{4}-\d{2}-\d{2}$/.test(until) ? new Date(`${until}T00:00:00Z`) : null;
+      if (!day || isNaN(day) || day.toISOString().slice(0, 10) !== until) return { error: [400, '日期看不懂'] };
+      const days = Math.round((day - new Date(`${taiwanYmd(now)}T00:00:00Z`)) / 86400000);
+      if (days < 0) return { error: [400, '日期已經過了'] };
+      if (days > REST_MAX_DAYS) return { error: [400, `最多設 ${REST_MAX_DAYS} 天`] };
+      const reason = cleanNote(typeof input.reason === 'string' ? input.reason : '') || '';
+      if ([...reason].length > REST_REASON_MAX) return { error: [413, `原因最多 ${REST_REASON_MAX} 字`] };
+      return { value: { until, reason: reason.replace(/\n/g, ' '), updatedAt: new Date(now).toISOString() } };
+    },
+    save: (db, id, rest) => saveRest(db, id, rest),
+    log: (rest, saved) => ({ before: saved.before, after: rest && { until: rest.until, reason: rest.reason } }),
+    respond: rest => ({ rest, commit: null }),
+  },
+  // 有人固定照顧（#399）：PUT /fixed-care/{編號}，body { editor, enabled }；沒變不記編輯紀錄
+  'fixed-care': {
+    kind: 'fixed-care', label: '固定照顧設定', methods: ['PUT'], crash: '固定照顧設定未完成，請重新讀取後再試',
+    check: input => (typeof input.enabled === 'boolean' ? { value: input.enabled } : { error: [400, '請指定開啟或關閉'] }),
+    save: (db, id, enabled) => saveFixedCare(db, id, enabled),
+    log: (enabled, saved, { id }) => (saved.before === enabled ? null : { dogNumber: id === saved.dogId ? '' : id, before: saved.before, after: enabled }),
+    respond: enabled => ({ enabled }),
+  },
+  // 入所介紹（K 2026-10-10）：PUT /intro/{編號}，body { editor, text, events? }；#250 起存 D1 的 v3_intros，/api/dogs 馬上讀得到
+  intro: {
+    kind: 'intro', label: '介紹', methods: ['PUT'], crash: '介紹存檔發生錯誤，原本的介紹不受影響',
+    maxBytes: EDIT_BODY_MAX_BYTES, tooLong: '介紹太長',
+    check(input) {
+      const text = cleanNote(input.text);
+      if (text === null) return { error: [400, '格式不對'] };
+      if ([...text].length > INTRO_MAX_CHARS) return { error: [413, `介紹最多 ${INTRO_MAX_CHARS} 字`] };
+      const hasEvents = Object.prototype.hasOwnProperty.call(input, 'events');
+      const events = hasEvents ? cleanIntakeEvents(input.events) : undefined;
+      if (hasEvents && !events) return { error: [400, '事件格式不對：最多 30 列、事件合計最多 1000 字，日期請用 YYYY-MM-DD 或留空'] };
+      return { value: { text, hasEvents, events } };
+    },
+    async save(db, id, { text, events }) {
+      const saved = await saveIntro(db, id, text, events);
+      return saved && saved.invalid ? { status: 400, error: saved.invalid } : saved;
+    },
+    log: ({ text, hasEvents, events }, saved) => ({ before: saved.before, after: hasEvents ? { text, events } : text }),
+    respond: ({ text, hasEvents, events }) => ({ intro: text, ...(hasEvents ? { intakeEvents: events } : {}), commit: null }),
+  },
+  // 舊編號（#289，ADR 0005）：POST／DELETE /former/{編號}，body { editor, former }
+  former: {
+    kind: 'former', label: '舊編號', methods: ['POST', 'DELETE'], crash: '舊編號存檔發生錯誤，原本的資料不受影響',
+    check(input, { id, method }) {
+      const former = String(input.former || '').replace(/\s+/g, '');
+      if (!formerDateOk(former)) return { error: [400, '舊編號要是 10 碼數字，前 8 碼是入所日期'] };
+      if (former === id) return { error: [400, '這是現在的編號，不是舊編號'] };
+      if (method === 'POST' && FORMER_PATTERN.test(id) && former > id) return { error: [400, '舊編號的日期不能比現在的編號晚'] };
+      return { value: former };
+    },
+    save: (db, id, former, { method }) => (method === 'POST' ? addFormerNumber(db, id, former) : removeFormerNumber(db, id, former)),
+    log: (former, saved, { method }) => (method === 'POST' ? { before: null, after: former } : { before: former, after: null }),
+    respond: former => ({ former }),
+  },
+  // 出入所紀錄（#333，ADR 0011）：PUT /stays/{編號}，body { editor, before, stays }，整隻狗的陣列一次覆蓋（空陣列＝刪掉）；
+  // before 是改之前看到的內容，別人剛改過就回 409
+  stays: {
+    kind: 'stays', label: '出入所紀錄', methods: ['PUT'], crash: '出入所紀錄存檔發生錯誤，原本的資料不受影響',
+    maxBytes: EDIT_BODY_MAX_BYTES, tooLong: '出入所紀錄太長',
+    check(input, { now }) {
+      const today = taiwanYmd(now);
+      const next = cleanStays(input.stays, today);
+      if (next.error) return { error: [400, next.error] };
+      // 沒帶或帶錯改之前的內容，一律當成別人剛改過
+      const before = cleanStays(input.before, today);
+      if (before.error) return { error: [409, '別人剛改過，請重新整理再改'] };
+      return { value: { before: before.stays, stays: next.stays } };
+    },
+    save: (db, id, { before, stays }) => saveStays(db, id, before, stays),
+    log: ({ stays }, saved) => ({ before: saved.before, after: stays.length ? stays : null }),
+    respond: ({ stays }) => ({ stays }),
+  },
+};
 
 // ---- 活動紀錄（#270，ADR 0002）：GET /activities；POST 新增、PUT／DELETE /activities/{id}，誰都能改（先選名字），記編輯紀錄 ----
 // 改、刪要帶打開時看到的 revision，別人剛改過會被擋下來
@@ -484,70 +513,6 @@ async function activities(request, env, origin) {
     if (e instanceof ActivityError) return fail(e.status, e.message, origin);
     throw e;
   }
-}
-
-// ---- 舊編號（#289，ADR 0005）：POST／DELETE /former/{編號}，body { editor, former }，誰都能改，不用通關碼；記編輯紀錄（ADR 0004） ----
-// 舊編號要是 10 碼、前 8 碼是看得懂的日期，而且不晚於現在的編號
-const FORMER_PATTERN = /^(\d{4})(\d{2})(\d{2})\d{2}$/;
-function formerDateOk(former) {
-  const m = former.match(FORMER_PATTERN);
-  if (!m) return false;
-  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
-  return d.getUTCFullYear() === +m[1] && d.getUTCMonth() === +m[2] - 1 && d.getUTCDate() === +m[3] && d <= new Date();
-}
-
-async function formerNumber(request, env, origin) {
-  if (!env || !env.DB) return fail(503, '舊編號還沒準備好（沒有接資料庫）', origin, { code: 'db' });
-  const m = new URL(request.url).pathname.match(/^\/former\/([^/]+)$/);
-  const id = m ? decodeURIComponent(m[1]) : '';
-  if (!ID_PATTERN.test(id)) return fail(400, '狗的編號格式不對', origin);
-  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
-  if (type !== 'application/json') return fail(415, '格式不對', origin);
-  let input;
-  try { input = JSON.parse(await request.text()); } catch (e) { return fail(400, '格式不對', origin); }
-  const former = String((input && input.former) || '').replace(/\s+/g, '');
-  if (!formerDateOk(former)) return fail(400, '舊編號要是 10 碼數字，前 8 碼是入所日期', origin);
-  if (former === id) return fail(400, '這是現在的編號，不是舊編號', origin);
-  const current = id.match(FORMER_PATTERN);
-  if (request.method === 'POST' && current && former > id) return fail(400, '舊編號的日期不能比現在的編號晚', origin);
-  const editor = await editorOf(input && input.editor, config(env).walkerKey);
-  if (!editor) return needEditor(origin);
-
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (!allow(`former:${ip}`, NOTE_WRITE_LIMITS, Date.now())) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
-  const r = request.method === 'POST' ? await addFormerNumber(env.DB, id, former) : await removeFormerNumber(env.DB, id, former);
-  if (!r.ok) return fail(r.status, r.error, origin);
-  const add = request.method === 'POST';
-  await logEdit(env.DB, { editor, kind: 'former', dogId: r.dogId, dogNumber: id, before: add ? null : former, after: add ? former : null });
-  return reply(200, { ok: true, id, former }, origin);
-}
-
-// ---- 出入所紀錄（#333，ADR 0011）：PUT /stays/{編號}，body { editor, before, stays }，整隻狗的陣列一次覆蓋（空陣列＝刪掉）；
-// before 是改之前看到的內容，別人剛改過就回 409。誰都能改，不用通關碼；記編輯紀錄（ADR 0004） ----
-async function putStays(request, env, origin) {
-  if (!env || !env.DB) return fail(503, '出入所紀錄還沒準備好（沒有接資料庫）', origin, { code: 'db' });
-  const m = new URL(request.url).pathname.match(/^\/stays\/([^/]+)$/);
-  const id = m ? decodeURIComponent(m[1]) : '';
-  if (!ID_PATTERN.test(id)) return fail(400, '狗的編號格式不對', origin);
-  const body = await jsonBody(request, origin, '出入所紀錄太長');
-  if (body.error) return body.error;
-  const input = body.input;
-  const now = Date.now();
-  const today = taiwanYmd(now);
-  const next = cleanStays(input && input.stays, today);
-  if (next.error) return fail(400, next.error, origin);
-  const editor = await editorOf(input && input.editor, config(env).walkerKey);
-  if (!editor) return needEditor(origin);
-  // 沒帶或帶錯改之前的內容，一律當成別人剛改過
-  const before = cleanStays(input.before, today);
-  if (before.error) return fail(409, '別人剛改過，請重新整理再改', origin);
-
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (!allow(`stays:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
-  const r = await saveStays(env.DB, id, before.stays, next.stays);
-  if (!r.ok) return fail(r.status, r.error, origin);
-  await logEdit(env.DB, { editor, kind: 'stays', dogId: r.dogId, dogNumber: id, before: r.before, after: next.stays.length ? next.stays : null }, now);
-  return reply(200, { ok: true, id, stays: next.stays }, origin);
 }
 
 // ── 照片放 R2（#130）──
@@ -1396,12 +1361,16 @@ export default {
         return fail(503, '暫時讀不到今日溜狗紀錄', allowed, { code: 'db' });
       }
     }
-    if (path.startsWith('/fixed-care/')) {
-      if (request.method !== 'PUT') return fail(405, '固定照顧設定只能用 PUT /fixed-care/編號', allowed);
+    // 改一隻狗的資料（DOG_EDITS）：/rest/編號、/fixed-care/編號、/intro/編號、/former/編號、/stays/編號
+    const editName = (path.match(/^\/([^/]+)\/[^/]+$/) || [])[1];
+    const dogEdit = editName && Object.hasOwn(DOG_EDITS, editName) ? DOG_EDITS[editName] : null;
+    if (dogEdit) {
+      if (!dogEdit.methods.includes(request.method)) return fail(405, `${dogEdit.label}只能用 ${dogEdit.methods.join('／')} ${path.split('/').slice(0, 2).join('/')}/編號`, allowed);
       try {
-        return await putFixedCare(request, env, allowed);
+        return await editDog(request, env, allowed, dogEdit);
       } catch (e) {
-        return fail(500, '固定照顧設定未完成，請重新讀取後再試', allowed);
+        console.error(dogEdit.kind, e);
+        return fail(500, dogEdit.crash, allowed);
       }
     }
     if (path === '/rest') {
@@ -1412,44 +1381,6 @@ export default {
         return fail(503, '暫時讀不到休養設定', allowed, { code: 'db' });
       }
     }
-    if (path.startsWith('/rest/')) {
-      if (request.method !== 'PUT') return fail(405, '休養設定只能用 PUT /rest/編號', allowed);
-      try {
-        return await putRest(request, env, allowed);
-      } catch (e) {
-        return fail(500, '休養設定發生錯誤，原本的設定不受影響', allowed);
-      }
-    }
-
-    if (path.startsWith('/intro/')) {
-      if (request.method !== 'PUT') return fail(405, '介紹只能用 PUT /intro/編號', allowed);
-      try {
-        return await putIntro(request, env, allowed);
-      } catch (e) {
-        return fail(500, '介紹存檔發生錯誤，原本的介紹不受影響', allowed);
-      }
-    }
-
-    if (path.startsWith('/former/')) {
-      if (request.method !== 'POST' && request.method !== 'DELETE') return fail(405, '舊編號只能用 POST／DELETE /former/編號', allowed);
-      try {
-        return await formerNumber(request, env, allowed);
-      } catch (e) {
-        console.error('former', e);
-        return fail(500, '舊編號存檔發生錯誤，原本的資料不受影響', allowed);
-      }
-    }
-
-    if (path.startsWith('/stays/')) {
-      if (request.method !== 'PUT') return fail(405, '出入所紀錄只能用 PUT /stays/編號', allowed);
-      try {
-        return await putStays(request, env, allowed);
-      } catch (e) {
-        console.error('stays', e);
-        return fail(500, '出入所紀錄存檔發生錯誤，原本的資料不受影響', allowed);
-      }
-    }
-
     // 活動紀錄（#270）
     if (path === '/activities' || path.startsWith('/activities/')) {
       try {

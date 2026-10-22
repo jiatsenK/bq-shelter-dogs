@@ -196,6 +196,7 @@ test('舊編號：格式、日期、別隻狗的、重複、現在的編號都�
   await bad('DELETE', { editor: ME, former: '2024010101' }, 404); // 不是這隻的
   await bad('PUT', { editor: ME, former: '2015081801' }, 405);
   await bad('POST', { former: '2015081801' }, 400); // 沒選名字
+  await bad('POST', { editor: ME, former: '2015081801', pad: 'x'.repeat(3000) }, 413); // 本文太大（跟其他狗資料編輯一樣有上限）
   assert.deepEqual((await dogOf(env, '2024032902')).formerIds, ['2020010101']);
   assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM v3_edit_log WHERE kind='former'").first('n')), 0);
 });
