@@ -43,3 +43,14 @@ assert.equal(await writesOf(DB, () => remember('小明')), small, '資料變多�
 ```
 
 審查時：diff 裡出現每次請求都跑的 `SELECT` 沒有帶索引條件、`DELETE` 沒有 `WHERE`、或迴圈把整份清單重寫，又沒有附上述讀寫量測試，算違反本條。
+
+能機械判斷的部分（沒帶 `WHERE`／`LIMIT` 的 `SELECT`、`DELETE`）由 `worker/test/standards.test.mjs` 擋；既有例外列在那裡的 `FULL_SCAN_OK`，每筆附原因或票號。
+
+## 搬動的程式碼視同新寫
+
+diff 碰到的程式（包括從別的檔案搬過來、改名、包進新函式）裡違反本檔或 agent-hub 規範的地方，跟新寫的一樣算數。二選一：
+
+- 這次修掉；
+- 開票，並把票號寫在例外清單或程式註解（例如 `FULL_SCAN_OK`），PR 內文列出。
+
+「原本就這樣、只是搬位置」不能當作通過的理由。審查時，沒修也沒票號的既有違規照樣列為違反。

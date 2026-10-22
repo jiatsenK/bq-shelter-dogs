@@ -55,8 +55,8 @@ test('#138 復原：還是我們寫的樣子才寫回原本的日期和名字；
 test('#138 表頭找不到就不寫；分隔符號跟同步腳本一樣', async () => {
   assert.match(plan([['a', 'b']], { action: 'walk', walker: '我', dogs: [] }).error, /犬名/);
   assert.match(plan([['犬名', '遛狗日期']], { action: 'walk', walker: '我', dogs: [] }).error, /編號/);
-  const sync = await readFile(new URL('../../scripts/sync-sheet.mjs', import.meta.url), 'utf8');
-  assert.equal(code.match(/NAME_SEP = (\/.*\/);/)[1], sync.match(/NAME_SEP = (\/.*\/);/)[1]);
+  const { NAME_SEP } = await import('../src/sheet-read.js');
+  assert.equal(code.match(/NAME_SEP = (\/.*\/);/)[1], String(NAME_SEP), '小程式和 Worker、同步共用的分隔符號要一樣');
 });
 
 test('#138 金鑰：沒設 WRITE_KEY 就照常寫；有設就要一樣', () => {
