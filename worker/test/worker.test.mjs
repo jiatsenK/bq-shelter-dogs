@@ -510,10 +510,10 @@ test('#141 GET /walkers：分兩次讀主清單，回每隻狗的誰遛的（key
   const calls = fakeSheet();
   const { status, body } = await getWalkers({ SHEET_ID: 'abc' });
   assert.equal(status, 200);
-  assert.deepEqual(body.walkers, { 2025072001: '嘉文+俐葶+岑', 2026060101: '維芬。嘉文', '名:新來的': '喬筠' });
+  assert.deepEqual(body.walkers, { 2025072001: '嘉文+俐葶+岑', 2026060101: '維芬。嘉文', '名:新來的': '喬筠', 2026042902: '' }, '清空的也回空字串，手機才會清掉');
   assert.deepEqual(body.names, ['嘉文', '俐葶', '岑', '喬筠', '維芬'].sort((a, b) => (a === '嘉文' ? -1 : b === '嘉文' ? 1 : a.localeCompare(b, 'zh-Hant'))));
   assert.deepEqual(calls, ['0', '2']);
-  assert.deepEqual(body.dates, { 2025072001: '2026-10-20', 2026060101: '2026-10-03' }, 'K 2026-10-20：連遛狗日期一起回');
+  assert.deepEqual(body.dates, { 2025072001: '2026-10-20', 2026060101: '2026-10-03', '名:新來的': '', 2026042902: '' }, 'K 2026-10-20：連遛狗日期一起回，空格回空字串');
   assert.ok(Date.parse(body.readAt), '回讀試算表的時間');
   await getWalkers({ SHEET_ID: 'abc' });
   assert.equal(calls.length, 2, '第二次用快取');
