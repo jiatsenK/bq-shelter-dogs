@@ -125,6 +125,7 @@ Cron 一輪派 10 隻（含回呼）從 166 次降到 66 次。`worker/test/walk
 - **已知限制**：`walkWakeBatch` 在同一個鎖內逐隻寫，10 隻可能占鎖幾十秒，這段時間其他寫入等鎖超過 15 秒會失敗（舊流程寫入、群組編輯）。Worker 端合併派送逾時設 90 秒。
 - **Apps Script 要 K 重新部署一次**（`walkWakeBatch`、`walkScan` 指紋、刪 `walkCompare`），之後再開 `SITE.d1WalkAccept`。
 - **驗收**：開開關前用 `cpu-bench` 量一輪對帳（掃描＋派送 10 隻）P99 < 10 ms；超過再回來討論。
+- **驗收結果（2026-10-22，K 授權一次，[run 39784436803](https://github.com/jiatsenK/bq-shelter-dogs/actions/runs/39784436803)）：未通過。** 第 1 批 Cron 一輪 P50 31.95 ms、P99 57.89 ms（26 次、0 錯誤），回呼 P99 3.68 ms（520 次）；超過門檻，第 1 批後停止，測速 Worker 已刪。量的是最壞情況：假 Apps Script 每輪指紋都不同，Worker 每輪整份比對 200 列再派送 10 隻。合併前（第二次驗收）同樣情況 P99 約 50 ms，合併沒有讓 Cron 一輪降下來；原因還沒拆開量（掃描和派送各占多少）。
 
 ## 正式啟用（K 決定，這次不做）
 
