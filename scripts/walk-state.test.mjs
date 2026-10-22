@@ -172,3 +172,21 @@ test('K 2026-10-20：名單帶日期時連日期一起換；比名單新的今�
   s.walks.receiveNames({ '1': '別人' }, [s.dog], s.walks.beginRead(), { '1': '2026-10-18' }, before + 60000);
   assert.deepEqual([s.walks.state(s.dog).date, s.walks.state(s.dog).walker], ['2026-10-18', '別人']);
 });
+
+test('K 2026-10-20：試算表清空「誰遛的」「遛狗日期」，已有今日紀錄的手機也跟著清掉', async () => {
+  const s = setup();
+  await s.walks.register([s.dog]);
+  const at = s.records()['1'].observedAt + 60000;
+  s.time(at);
+  s.walks.receiveNames({ '1': '' }, [s.dog], s.walks.beginRead(), { '1': '' }, at);
+  assert.deepEqual([s.walks.state(s.dog).date, s.walks.state(s.dog).walker, s.walks.state(s.dog).mine], ['', '', false]);
+});
+
+test('K 2026-10-20：日期讀不懂（名單沒帶這隻的日期）時保留已知日期，只換名字', async () => {
+  const s = setup();
+  await s.walks.register([s.dog]);
+  const at = s.records()['1'].observedAt + 60000;
+  s.time(at);
+  s.walks.receiveNames({ '1': '別人' }, [s.dog], s.walks.beginRead(), {}, at);
+  assert.deepEqual([s.walks.state(s.dog).date, s.walks.state(s.dog).walker], ['2026-10-19', '別人']);
+});
