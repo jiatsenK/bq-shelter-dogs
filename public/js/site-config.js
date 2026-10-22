@@ -2,6 +2,8 @@
 // 換一間收容所時先改這個檔；還沒搬進來、要另外改的地方列在 docs/setup/SITE_CONFIG.md。
 // index.html、cards.html 都在其他程式前面載入；這裡只放設定，不放邏輯。
 const SITE = {
+  // #456 最小單狗路徑。正式切換留待 #441 最後子票，部署前須完成其餘入口與資料銜接。
+  d1WalkAccept: false,
   // 名字：頁首、導覽、分析頁用。index.html 的 <title>、manifest.webmanifest 是靜態檔，要另外改（見 docs/setup/SITE_CONFIG.md）
   name: '板收志工溜狗表',
   shelter: '板橋收容所',

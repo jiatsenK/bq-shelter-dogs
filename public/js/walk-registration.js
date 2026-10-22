@@ -3,6 +3,8 @@
   function createWalkRegistration(deps) {
     let queue = Promise.resolve();
     const pending = new Map(), requests = new WeakMap();
+    const accepted = new Map();
+    let acceptedVersion = -1;
     let revision = 0, readSequence = 0, acceptedToday = 0;
     const changedAt = new Map();
     const now = () => deps.now?.() ?? Date.now();
@@ -21,6 +23,11 @@
       return since && (!item?.observedAt || item.observedAt <= since) ? null : item;
     }
     function state(dog, day = deps.date()) {
+      const authoritative = accepted.get(deps.key(dog));
+      if (authoritative) return { date: authoritative.walkedDate, walker: authoritative.walker,
+        walkers: [...new Set(deps.split(authoritative.walker).map(deps.canonical).filter(Boolean))],
+        today: authoritative.walkedDate === day, mine: isMine({ date: authoritative.walkedDate, walker: authoritative.walker }, day),
+        canUndo: false, canRevert: false, syncStatus: authoritative.syncStatus, version: authoritative.version };
       const item = activeItem(dog, day);
       const base = deps.base?.(dog) || {};
       const expired = !item && !!deps.read(day)[deps.key(dog)];
@@ -32,7 +39,7 @@
         canRevert: canRevert(dog, day, { date, walker }) };
     }
     function today(dogs, day = deps.date()) {
-      return dogs.filter(d => activeItem(d, day)?.current || (dateKey(deps.base?.(d)?.date) === day && deps.base(d).walker))
+      return dogs.filter(d => accepted.has(deps.key(d)) ? state(d, day).today : activeItem(d, day)?.current || (dateKey(deps.base?.(d)?.date) === day && deps.base(d).walker))
         .map(dog => ({ dog, ...state(dog, day) }));
     }
     function canUndo(dog, day = deps.date()) {
@@ -75,10 +82,23 @@
     }
     function receiveToday(payload, dogs, read = beginRead()) {
       const day = deps.date();
+      if (payload?.source === 'd1') {
+        if (read.day !== day || payload.date !== day || !Number.isInteger(payload.version) || payload.version < acceptedVersion || !Array.isArray(payload.walks)) return false;
+        acceptedVersion = payload.version;
+        const changed = [];
+        for (const row of payload.walks) {
+          const dog = dogs.find(d => deps.key(d) === row.key), old = accepted.get(row.key);
+          if (!dog || !Number.isInteger(row.version) || row.version < (old?.version || 0)) continue;
+          accepted.set(row.key, row); changed.push(dog);
+        }
+        if (changed.length) deps.apply(changed, deps.read(day), day, []);
+        return !!changed.length;
+      }
       if (read.day !== day || payload?.date !== day || !Array.isArray(payload.walks) || read.sequence < acceptedToday) return false;
       acceptedToday = read.sequence;
       const records = { ...deps.read(day) }, changed = [];
       for (const row of payload.walks) {
+        if (accepted.has(row?.key)) continue;
         const dog = dogs.find(d => deps.key(d) === row?.key), at = Date.parse(row?.at);
         if (!dog || !Number.isFinite(at) || at <= (deps.syncedAt?.() || 0)
           || (changedAt.get(`${day}:${row.key}`) || 0) > read.revision
@@ -97,6 +117,7 @@
       const local = new Set(deps.local?.(read.day) || []);
       for (const dog of dogs) {
         const key = deps.key(dog), item = records[key];
+        if (accepted.has(key)) continue;
         if ((changedAt.get(`${read.day}:${key}`) || 0) > read.revision || pending.has(key)) continue;
         const sheetDate = Object.hasOwn(dates, key) ? dateKey(dates[key]) : '';
         const active = activeItem(dog, read.day);
@@ -126,7 +147,8 @@
       const entries = dogs.filter(d => d && deps.key(d) && !seen.has(deps.key(d)) && seen.add(deps.key(d)))
         .map(dog => ({ dog, key: deps.key(dog), id: dog.id || '', name: dog.name,
           walker: options.walker || deps.alias(dog) || me }));
-      return enqueue({ entries, day, me, action: options.expected === undefined ? 'walk' : 'edit', expected: options.expected });
+      return enqueue({ entries, day, me, action: options.expected === undefined ? 'walk' : 'edit', expected: options.expected,
+        d1: !!deps.d1 && entries.length === 1 && options.expected === undefined });
     }
     // options.revert：沒有本機證據的狗改請 Worker 找上一次（ADR 0016）
     function undo(dogs, options = {}) {
@@ -146,6 +168,7 @@
       return finished;
     }
     async function execute(request) {
+      if (request.d1) return executeAccepted(request);
       const { entries, day, me, action, expected, revert } = request;
       const groups = [];
       for (const entry of entries) {
@@ -212,6 +235,41 @@
         retryDogs: rows.filter(r => isRetryable(r.status)).map(r => r.dog) };
       requests.set(result, request);
       return result;
+    }
+    async function executeAccepted(request) {
+      const entry = request.entries[0], key = entry.key;
+      const saved = { ...(deps.readRequests?.() || {}) };
+      // 尚未查明的原要求優先；換名字或午夜都不能將它變成另一筆登記。
+      const payload = saved[key] || request.payload || { action: 'walk', requestId: crypto.randomUUID(), operationDate: request.day,
+        walker: entry.walker, dogs: [{ id: entry.id, name: entry.name }] };
+      request.payload = payload;
+      saved[key] = payload;
+      try { deps.saveRequests?.(saved); } catch {
+        const response = { rows:[{ dog:entry.dog, status:'notSent', canUndo:false }], error:'無法保留登記識別，尚未送出', off:false,
+          successful:[], retryDogs:[entry.dog], source:'d1' };
+        requests.set(response, request);
+        return response;
+      }
+      let out;
+      try { out = payload.operationDate !== deps.date() && deps.lookupRequest ? await deps.lookupRequest(payload.requestId) : await deps.send(payload); } catch { out = null; }
+      const matches = out?.ok && out.source === 'd1' && Array.isArray(out.results) ? out.results.filter(r => r.id === entry.id && r.name === entry.name) : [];
+      const result = matches.length === 1 ? matches[0] : null;
+      const valid = result?.accepted === true && result.requestId === payload.requestId && result.operationDate === payload.operationDate
+        && Number.isInteger(result.version) && typeof result.current?.date === 'string' && typeof result.current.walker === 'string';
+      if (valid) {
+        if (out.snapshot) receiveToday(out.snapshot, [entry.dog]);
+        const old = accepted.get(key);
+        if (!old || result.version > old.version) accepted.set(key, { key, version: result.version, walkedDate: result.current.date,
+          walker: result.current.walker, syncStatus: result.syncStatus, at: result.at });
+        delete saved[key];
+        // 清除失敗仍保留原識別，下次可安全查詢／重送，不影響已接受結果。
+        try { deps.saveRequests?.(saved); } catch { /* 保留原要求供下次查明。 */ }
+        deps.apply([entry.dog], deps.read(deps.date()), deps.date(), []);
+      }
+      const rows = [{ dog: entry.dog, status: valid ? 'written' : 'unknown', canUndo: false }];
+      const response = { rows, error: out?.error || '', off: false, successful: valid ? [entry.dog] : [], retryDogs: valid ? [] : [entry.dog], source: 'd1' };
+      requests.set(response, request);
+      return response;
     }
     function retry(result) {
       const request = requests.get(result);

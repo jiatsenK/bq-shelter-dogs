@@ -367,7 +367,6 @@ function walkerSetupHtml() {
       ${has && !busy ? `<button type="button" class="photo-cancel" id="whoRename">更改登記名字</button><button type="button" class="photo-cancel" id="whoCancel">取消</button>` : ''}
     </div>
     ${has && !busy ? `<button type="button" class="who-clear" id="whoClear">清除這支手機的設定</button>` : ''}
-    ${has ? '' : '<button type="button" class="who-clear guide-link" data-open-guide>看使用說明</button>'}
   </form>`;
 }
 
@@ -528,7 +527,7 @@ function myWalksHtml(today, query) {
   const named = !!loadWalkerName();
   // V9（#141 第 11 項）：小計收進「統計」按鈕，按了才展開
   const statsBtn = visibleWalks.length ? `<button type="button" class="who-edit${mineStatsOpen ? ' on' : ''}" id="mineStats" aria-expanded="${mineStatsOpen}">${icon('chart')}統計</button>` : '';
-  const who = query ? '' : `<div class="section-hint who-hint">${icon('paw')}<span class="who-name">${named ? esc(loadWalkerName()) : '再按「修改」輸入一次名字'}</span>${statsBtn}<button type="button" class="who-edit" id="whoEdit">修改</button><button type="button" class="who-edit" data-open-guide>說明</button></div>`;
+  const who = query ? '' : `<div class="section-hint who-hint">${icon('paw')}<span class="who-name">${named ? esc(loadWalkerName()) : '再按「修改」輸入一次名字'}</span>${statsBtn}<button type="button" class="who-edit" id="whoEdit">修改</button></div>`;
   if (!visibleWalks.length) return who + `<div class="status-msg">還沒有你的溜狗紀錄。<br>試算表「誰遛的」寫上你設定的名字，同步後就會出現在這裡。</div>`;
   // 所有到所紀錄新到舊一路往下排（K 2026-09-25：不要選日期）；搜尋時不顯示小計
   const groups = myWalkGroups(currentMyWalks(), query);
@@ -1029,13 +1028,14 @@ function walkPendingNow(dog) {
 function walkThenRecord(dogs, retry = null) {
   const todo = dogs.filter((d, i) => d && walkKey(d) && !walkedNow(d) && !walkPendingNow(d) && dogs.indexOf(d) === i);
   if (!todo.length) return;
-  recordWalked(todo, true);
+  const acceptsD1 = SITE.d1WalkAccept && todo.length === 1;
+  if (!acceptsD1) recordWalked(todo, true);
   pickedBuddies.clear();
   const text = `${todo.map(d => d.name).join('、')} 今天溜了`;
   let confirmed = null;
   const write = retry ? walkRegistration.retry(retry) : walkRegistration.register(todo);
   const undoFn = () => sheetQueue = write.then(result => undoSheetWalks(result.successful));
-  showToast(text, undoFn, { label: '＋一起溜的人', fn: () => {
+  if (!acceptsD1) showToast(text, undoFn, { label: '＋一起溜的人', fn: () => {
     const open = result => { if (result.successful.length) openWithSheet(result.successful); };
     if (confirmed) open(confirmed); else write.then(open);
   } });
@@ -1049,7 +1049,7 @@ function walkThenRecord(dogs, retry = null) {
     if (failed.length) {
       const again = result.retryDogs;
       showToast(registrationText(result), null, again.length ? { label: '再試一次', fn: () => walkThenRecord(again, result) } : null);
-    } else addToToast(text, undoFn, '，已寫進試算表');
+    } else if (!acceptsD1) addToToast(text, undoFn, '，已寫進試算表');
     return result;
   }).catch(e => console.error(e));
 }
@@ -1320,12 +1320,16 @@ async function fetchWalkStatus(url) {
 async function loadTodayWalks() {
   const read = walkRegistration.beginRead();
   todayFetchedAt = Date.now();
+  let received = false;
   try {
     if (!UPLOAD_URL) return;
-    walkRegistration.receiveToday(await fetchWalkStatus(`${UPLOAD_URL}/today`), allDogs, read);
+    const payload = await fetchWalkStatus(`${UPLOAD_URL}/today${SITE.d1WalkAccept ? '?source=d1' : ''}`);
+    if (SITE.d1WalkAccept && (payload?.source !== 'd1' || !Array.isArray(payload.walks))) return;
+    walkRegistration.receiveToday(payload, allDogs, read);
+    received = true;
   } catch (e) { /* 抓不到就維持現況，下次再試。 */ }
   finally {
-    if (todayState === 'loading') { todayState = 'ready'; render(); }
+    if (todayState === 'loading' && (!SITE.d1WalkAccept || received)) { todayState = 'ready'; render(); }
   }
 }
 function refreshTodayWalks() {
@@ -1522,6 +1526,13 @@ let sheetWriteFail = '';     // network／error／missed
 let sheetWriteFailText = '';
 // 資料存取 adapter：HTTP 與本機儲存由 app 提供，模組不依賴 DOM。
 const walkRegistration = createWalkRegistration({
+  get d1() { return SITE.d1WalkAccept; },
+  readRequests: () => readJsonKey('bq-walk-requests') || {},
+  saveRequests: items => {
+    writeJsonKey('bq-walk-requests', items);
+    if (JSON.stringify(readJsonKey('bq-walk-requests')) !== JSON.stringify(items)) throw new Error('無法保留登記識別，尚未送出');
+  },
+  lookupRequest: id => fetchWalkStatus(`${UPLOAD_URL}/walk/result?requestId=${encodeURIComponent(id)}`),
   key: walkKey, date: () => localDateKey(new Date()), walker: loadWalkerName, alias: myAliasIn,
   canonical: canonicalWalker, split: splitWalkers,
   names: () => loadMyCodes().map(code => walkerCodeNames[code]).filter(Boolean),
@@ -1721,12 +1732,17 @@ function hideToast() {
 function walkButton(dog) {
   if (!walkKey(dog)) return `<span class="more">${icon('chevron')}</span>`;
   if (restOf(dog)) return ''; // 休養中暫停帶出：不放溜了，免得順手按到
-  if (walkPendingNow(dog) && !walkedNow(dog)) return `<button type="button" class="walk-btn pending" disabled aria-label="${esc(dog.name)} 正在寫進試算表">登記中</button>`;
+  if (walkPendingNow(dog) && !walkedNow(dog)) return `<button type="button" class="walk-btn pending" disabled aria-label="${esc(dog.name)} 正在登記">登記中</button>`;
   const state = walkRegistration.state(dog);
   const disabled = sheetWillWrite() && !state.canUndo && !walkPendingNow(dog) ? ' disabled' : '';
   return state.mine
     ? `<button type="button" class="walk-btn done" data-walk="back" aria-label="${esc(dog.name)} 今天已溜，按一下取消"${disabled}>${icon('tick')}已溜</button>`
     : `<button type="button" class="walk-btn" data-walk="add" aria-label="${esc(dog.name)} 溜了">溜了</button>`;
+}
+function walkSyncHtml(dog) {
+  const status = walkRegistration.state(dog).syncStatus;
+  if (!status || status === 'synced') return '';
+  return `<small class="walk-sync">${status === 'retry' || status === 'unconfirmed' ? '試算表尚未同步，會自動重試' : '試算表同步中'}</small>`;
 }
 
 // 所有分頁、搜尋、籠位共用這張卡片。第一層只放照片、犬名、天數、籠位｜編號，
@@ -1746,6 +1762,7 @@ function dogCard(dog, today, eager = false) {
           ${lastWalk(dog, today)}
           ${walkButton(dog)}
         </div>
+        ${walkSyncHtml(dog)}
       </div>
       ${flag ? warnNote(dog.note, flag) : ''}
     </div>
@@ -2245,6 +2262,7 @@ function lastWalkSection(dog, today) {
   return `<section class="detail-section last-walk" data-section="last">
     <div class="lw-row"><span class="lw-k">上次溜</span><span class="lw-v">${esc(date)}</span></div>
     <div class="lw-row"><span class="lw-k">溜狗人</span><span class="lw-v">${walkerChipsHtml(dog, who, today)}</span></div>
+    ${walkSyncHtml(dog)}
   </section>`;
 }
 
@@ -3189,6 +3207,15 @@ function syncHeaderTuck() {
 syncHeaderTuck();
 window.addEventListener('resize', syncHeaderTuck);
 
+// 常溜狗群「溜了」那排黏在底部分類列上方（#443）：分類列高度隨字級、安全區變，量實際高度
+const bottomBarEl = document.getElementById('bottomBar');
+function syncBottomBar() {
+  if (typeof bottomBarEl?.getBoundingClientRect !== 'function') return; // node 測試的假 DOM 沒有
+  document.documentElement.style.setProperty('--bottom-bar-height', `${bottomBarEl.getBoundingClientRect().height}px`);
+}
+syncBottomBar();
+if (bottomBarEl && typeof ResizeObserver === 'function') new ResizeObserver(syncBottomBar).observe(bottomBarEl);
+
 // 頁首範圍字（K 2026-10-09 病歷夾色籤）：溜狗表捲動時，頁首寫出畫面上第一隻到最後一隻多久沒溜，
 // 像檔案櫃抽屜上的範圍標籤。照片、列表模式都用「N 天前」（從資料算，不抄畫面上的字：列表模式顯示的是日期）
 function dayWord(dog, today) {
@@ -3519,7 +3546,7 @@ function pad2(n) {
 // 第一次打開：先問你在試算表上的名字，接著幾頁說明（像新網站上線的導覽），按「開始使用」就不再出現。
 // 已經有名字（以前在我溜過設定過）只看說明；說明看過、名字被清掉了，只問名字
 // 介面評估第四輪（K 2026-10-08）：名字可以「先看看，等一下再設定」（現場沒訊號也進得去），
-// 沒名字的人按「溜了」時再問，設好直接幫他登記那隻；說明可以從我溜過的「說明」再打開
+// 沒名字的人按「溜了」時再問，設好直接幫他登記那隻；說明可以從資訊的「使用說明」再打開（#447 從我溜過搬過去）
 const ONBOARD_KEY = 'bq-onboarded';
 const NAME_LATER_KEY = 'bq-name-later';
 // ── 使用說明導覽（K 2026-10-09：直接用實際的網頁；一個說明一個動作，用手指示範）──
@@ -3830,7 +3857,7 @@ function renderTour(stepChanged = false) {
   tourPlay();
 }
 // { step: 0 名字／1… 說明, text, phase: edit／saving／error／confirm, error, unknown: 表上沒有的名字,
-//   walk: 名字設好後要登記的狗（按溜了才問名字）, again: 從我溜過再打開說明 }
+//   walk: 名字設好後要登記的狗（按溜了才問名字）, again: 從資訊再打開說明 }
 let onboard = null;
 function onboardDone() {
   try { return walkedStorage && walkedStorage.getItem(ONBOARD_KEY) === '1'; } catch (e) { return false; }
@@ -4022,7 +4049,7 @@ function askNameThenWalk(dogs) {
   onboard = { step: 0, text: '', phase: 'edit', error: '', walk: dogs };
   renderOnboard();
 }
-// 我溜過的「說明」：回到溜狗表從第一步再看一次，不動名字
+// 資訊的「使用說明」（#447）：回到溜狗表從第一步再看一次，不動名字
 function openGuide() {
   startTour(true);
 }
