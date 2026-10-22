@@ -1,5 +1,20 @@
 # Changelog
 
+## [9.3.0](https://github.com/jiatsenK/bq-shelter-dogs/compare/v9.2.1...v9.3.0) (2026-10-22)
+
+
+### 新功能
+
+* 名單修改與復原先存 D1 再寫回試算表 ([#457](https://github.com/jiatsenK/bq-shelter-dogs/issues/457)) ([#469](https://github.com/jiatsenK/bq-shelter-dogs/issues/469)) ([a8edd13](https://github.com/jiatsenK/bq-shelter-dogs/commit/a8edd13bf4f6218941a661c704369da3d5abba2a))
+* 我溜過的「說明」改成資訊頁的「使用說明」 ([#449](https://github.com/jiatsenK/bq-shelter-dogs/issues/449)) ([a1b9ef9](https://github.com/jiatsenK/bq-shelter-dogs/commit/a1b9ef94db408e6a0d17479c82f9e9a9856dd680))
+* 持久重試試算表寫回並保持跨日最新結果 ([#459](https://github.com/jiatsenK/bq-shelter-dogs/issues/459)) ([#468](https://github.com/jiatsenK/bq-shelter-dogs/issues/468)) ([07dbffd](https://github.com/jiatsenK/bq-shelter-dogs/commit/07dbffd9976f27ffa4ed39e7b2395750c4451a6d))
+
+
+### 修正
+
+* 常溜狗群換群箭頭回到「溜了」兩側並固定位置 ([#443](https://github.com/jiatsenK/bq-shelter-dogs/issues/443)) ([#453](https://github.com/jiatsenK/bq-shelter-dogs/issues/453)) ([cfdf65a](https://github.com/jiatsenK/bq-shelter-dogs/commit/cfdf65af65058b1c5331977805ce53670adda918))
+* 試算表清空誰遛的、遛狗日期，手機也跟著清；附同步坑研究 ([#438](https://github.com/jiatsenK/bq-shelter-dogs/issues/438)) ([6f8635b](https://github.com/jiatsenK/bq-shelter-dogs/commit/6f8635ba86f2290df3ae3417bc0b5da48db615b9))
+
 ## [9.2.1](https://github.com/jiatsenK/bq-shelter-dogs/compare/v9.2.0...v9.2.1) (2026-10-19)
 
 
