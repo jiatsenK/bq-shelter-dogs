@@ -8,3 +8,4 @@
 - 測速：回呼改經服務綁定打到第二個測速 Worker `bq-shelter-dogs-cpu-cb`，跟正式一樣分開呼叫；工作流程分開讀兩邊 CPU、最後兩個都刪。新增 `cpu-bench.test.mjs` 一項。
 - 驗證：Node 430／430。合併 main（#472、#491、9.3.0）時解 `walk-accept.js` 衝突（保留 `callSheet` 與單次確認）；合併後 Node 430 通過，`local-check.test.mjs` 4 項在乾淨 main 也失敗，與本次無關；CI 測試通過。
 - 第二次線上驗收（K 授權，run 39765949063）：回呼 P99 4.61 ms 通過；Cron 一輪 P99 50.30 ms 未通過，停在第 1 批，兩個 Worker 已刪除。前端沒改，網頁測試沒重跑。未部署、未線上量測。
+- 唯讀查詢：新增 `scripts/cpu-history.mjs` 與 `.github/workflows/cpu-history.yml`（PR 加 `cpu-history` 標籤才跑），讀正式 Worker 過去 7 天 Cron 與每日 CPU 分位數，不部署、不改設定（K 同意 B）。
