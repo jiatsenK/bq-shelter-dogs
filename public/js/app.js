@@ -1014,6 +1014,7 @@ function recordWalked(dogs, on, today = new Date()) {
 function setWalked(dogs, on) {
   pinWalkOrder(dogs); // 按的狗留在原地，下一隻不會滑到手指下
   if (on && needNameToWalk()) return askNameThenWalk(dogs); // 還沒設定名字（先看看）：先問名字，設好再登記
+  if (!on && SITE.d1WalkAccept && dogs.length === 1) return undoSheetWalks(dogs, null, { revert: true });
   if (on && sheetWillWrite()) walkThenRecord(dogs);
   else setWalkedLocal(dogs, on);
 }
@@ -1064,7 +1065,7 @@ function registrationText(result) {
     const changed = failed.filter(r => r.status === 'changed');
     if (unknown.length) parts.push(`${unknown.map(r => r.dog.name).join('、')} 尚未確認登記結果${result.error ? '（' + result.error + '）' : ''}`);
     if (missing.length) parts.push(`試算表找不到 ${missing.map(r => r.dog.name).join('、')}，請自己填`);
-    if (changed.length) parts.push(`${changed.map(r => r.dog.name).join('、')} 在試算表已經被改過，沒有蓋掉別人的紀錄`);
+    if (changed.length) parts.push(`${changed.map(r => r.dog.name).join('、')} ${result.source === 'd1' ? '紀錄' : '在試算表'}已經被改過，沒有蓋掉別人的紀錄`);
     if (result.off) parts.push('目前無法寫入試算表，尚未登記');
   }
   return parts.join('；');
@@ -1107,11 +1108,12 @@ async function undoSheetWalks(dogs, retry = null, options = {}) {
     const changed = result.rows.filter(r => r.status === 'changed').map(r => r.dog);
     const left = result.rows.filter(r => !['restored', 'changed'].includes(r.status)).map(r => r.dog);
     const parts = [];
-    if (result.successful.length) parts.push(`已從試算表復原 ${result.successful.length} 隻`);
-    if (changed.length) parts.push(`${changed.map(d => d.name).join('、')} 在試算表已經被改過，沒有蓋掉別人的紀錄`);
-    if (left.length) parts.push(`${left.map(d => d.name).join('、')} 試算表沒改回來${result.error ? '：' + result.error : ''}，尚未復原`);
+    const d1 = result.source === 'd1';
+    if (result.successful.length) parts.push(d1 ? `已復原 ${result.successful.length} 隻` : `已從試算表復原 ${result.successful.length} 隻`);
+    if (changed.length) parts.push(`${changed.map(d => d.name).join('、')} ${d1 ? '紀錄' : '在試算表'}已經被改過，沒有蓋掉別人的紀錄`);
+    if (left.length) parts.push(`${left.map(d => d.name).join('、')} ${d1 ? '尚未確認' : '試算表沒改回來'}${result.error ? '：' + result.error : ''}，尚未復原`);
     const text = parts.join('；');
-    showToast(text, null, result.retryDogs.length ? { label: '再試一次', fn: () => undoSheetWalks(result.retryDogs, result, options) } : null);
+    if (!d1 || changed.length || left.length) showToast(text, null, result.retryDogs.length ? { label: '再試一次', fn: () => undoSheetWalks(result.retryDogs, result, options) } : null);
     return text;
   } finally { sheetUndoBusy = false; render(); renderDetail(); }
 }
@@ -1548,7 +1550,7 @@ const walkRegistration = createWalkRegistration({
     const res = await fetch(`${UPLOAD_URL}/walk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
     const out = await res.json().catch(() => null);
     if (res.status === 503 && out?.code === 'off') { sheetWriteState = 'off'; return { off: true }; }
-    if (!res.ok || !out?.ok) return { ok: false, error: out?.error || `HTTP ${res.status}` };
+    if (!res.ok || !out?.ok) return { ...out, ok: false, httpStatus: res.status, error: out?.error || `HTTP ${res.status}` };
     sheetWriteState = 'on';
     return out;
   },
@@ -1734,7 +1736,7 @@ function walkButton(dog) {
   if (restOf(dog)) return ''; // 休養中暫停帶出：不放溜了，免得順手按到
   if (walkPendingNow(dog) && !walkedNow(dog)) return `<button type="button" class="walk-btn pending" disabled aria-label="${esc(dog.name)} 正在登記">登記中</button>`;
   const state = walkRegistration.state(dog);
-  const disabled = sheetWillWrite() && !state.canUndo && !walkPendingNow(dog) ? ' disabled' : '';
+  const disabled = sheetWillWrite() && !state.canUndo && !state.canRevert && !walkPendingNow(dog) ? ' disabled' : '';
   return state.mine
     ? `<button type="button" class="walk-btn done" data-walk="back" aria-label="${esc(dog.name)} 今天已溜，按一下取消"${disabled}>${icon('tick')}已溜</button>`
     : `<button type="button" class="walk-btn" data-walk="add" aria-label="${esc(dog.name)} 溜了">溜了</button>`;
@@ -2308,12 +2310,27 @@ async function editWalkers(dog, names, text) {
   if (!expected || walkerEditBusy) return;
   walkerEditBusy = key;
   renderDetail();
+  if (SITE.d1WalkAccept) {
+    try {
+      const result = await walkRegistration.register([dog], { walker: [...new Set(names)].join('、'), expected });
+      if (!result.successful.length) showToast(registrationText(result), null,
+        result.retryDogs.length ? { label: '再試一次', fn: () => retryWalkerEdit(result) } : null);
+    } finally { walkerEditBusy = ''; render(); renderDetail(); }
+    return;
+  }
   const ok = await queueSheetWrite([dog], true, null, null, [...new Set(names)].join('、'), expected);
   walkerEditBusy = '';
   renderDetail();
   if (!ok) return; // 失敗、別人改過的提示 sheetWrite 已經跳了
   const undo = () => queueSheetWrite([dog], false);
   showToast(`${text}，已寫進試算表`, undo);
+}
+async function retryWalkerEdit(previous) {
+  const result = await walkRegistration.retry(previous);
+  if (!result.successful.length) showToast(registrationText(result), null,
+    result.retryDogs.length ? { label: '再試一次', fn: () => retryWalkerEdit(result) } : null);
+  else hideToast();
+  render(); renderDetail();
 }
 
 // 詳細資訊狗名下面的標籤：籠位、入所年月（天數標籤是 statusBadge）

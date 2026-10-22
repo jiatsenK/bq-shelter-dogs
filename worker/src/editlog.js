@@ -18,6 +18,7 @@ export const KIND_LABELS = {
   former: '舊編號',
   stays: '出入所紀錄',
   walkundo: '撤銷溜了',
+  walkedit: '溜狗名單',
 };
 export const EDITS_DEFAULT = 100;
 export const EDITS_MAX = 500;
