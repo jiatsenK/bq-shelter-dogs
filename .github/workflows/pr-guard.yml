@@ -1,0 +1,26 @@
+# 重複 PR 提醒（scripts/pr-guard.mjs）：開 PR、改目標分支或內文時檢查，有問題就在 PR 留言，不擋合併
+# - 票已關閉（可能已有別的 PR 做完）、同一張票還有其他開著的 PR、目標分支不是 main
+# - 草稿也跑（重複要越早發現越好）；不跑 synchronize，推新提交不重跑，省 Actions 分鐘數（#329）
+name: 重複 PR 提醒
+
+on:
+  pull_request:
+    types: [opened, reopened, edited]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: write
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    if: github.event.action != 'edited' || github.event.changes.base || github.event.changes.body
+    steps:
+      - uses: actions/checkout@v4
+      - name: 檢查
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: node scripts/pr-guard.mjs ${{ github.event.pull_request.number }}
