@@ -13,7 +13,7 @@
 | 查功能、版本與驗收範圍 | `docs/PROJECT_GOALS.md`，先定位最新相關段落 |
 | 改畫面 | `DESIGN.md` 路由到該頁現行規格；工具與 detect 見 `docs/agents/design-tools.md` |
 | 資料寫入、同步、D1 schema／讀取來源變更 | `docs/agents/data-changes.md`，依條件讀 ADR |
-| 執行測試、安裝 Playwright、等待 CI | `docs/agents/local-checks.md` |
+| 執行測試（本機統一走 check-local.ps1）、安裝 Playwright、等待 CI | `docs/agents/local-checks.md` |
 | 分派 Claude／Codex | `docs/agents/agent-split.md` |
 | 接票、更新 Issue／狀態標籤 | `docs/agents/issue-tracker.md`、`docs/agents/triage-labels.md` |
 | 領域名詞、ADR | `GLOSSARY.md`、`docs/agents/domain.md` |

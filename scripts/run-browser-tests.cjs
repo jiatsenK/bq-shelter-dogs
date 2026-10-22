@@ -34,6 +34,7 @@ const server = http.createServer((req, res) => {
     if (names.some(n => !SUITES.includes(n))) throw new Error(`未知套件：${names.filter(n => !SUITES.includes(n)).join(',')}；用 --list 查看`);
     selected = SUITES.filter(n => names.includes(n));
   }
+  require('./local-check-record.cjs').requireLocalCheck(args);
   const { chromium } = require('playwright'); // --list／參數檢查不需要安裝瀏覽器
   let browser;
   let ok = true;

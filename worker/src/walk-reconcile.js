@@ -1,4 +1,5 @@
 import { writeBudget, membersOf } from './walk-accept.js';
+import { callSheet } from './sheet-write.js';
 
 const same = (a,b) => a.date===b.date && a.walker===b.walker;
 
@@ -43,9 +44,6 @@ export async function scanWalks(env,now) {
   const observed=(await env.DB.prepare(`SELECT s.*,o.status FROM v3_walk_state s
     JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version`).all()).results || [];
   if (!observed.length) return;
-  const response=await fetch(env.SHEET_WRITE_URL,{ method:'POST',headers:{ 'Content-Type':'application/json' },
-    body:JSON.stringify({ action:'walkScan',key:env.SHEET_WRITE_KEY }),signal:AbortSignal.timeout(20000) });
-  const body=await response.json();
-  if (!response.ok || !body.ok) throw new Error('主清單直接讀回失敗');
+  const body=await callSheet(env,{ action:'walkScan' }).catch(e=>{ throw new Error(`主清單直接讀回失敗：${e.message}`); });
   await reconcileWalkSnapshot(env.DB,body.rows,observed,env,now);
 }
