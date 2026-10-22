@@ -1,10 +1,13 @@
 import { dispatchWalk } from './walk-accept.js';
 import { scanWalks } from './walk-reconcile.js';
+import { retryNotifiedComparison } from './walk-notify.js';
 
 // 分開使用到期、未完成及中斷派送索引；不讀已完成的歷史工作。
 export async function retryWalks(env, now) {
   if (env.WALK_RETRY_ENABLED !== 'true' || env.PREVIEW || !env.DB) return;
   const db = env.DB, at = new Date(now).toISOString();
+  try { await retryNotifiedComparison(env,now); }
+  catch (error) { console.warn('walk-notify-retry:',error.message); }
   try { await scanWalks(env,now); }
   catch (error) { console.warn('walk-scan:',error.message); }
   const interrupted = (await db.prepare(`SELECT d.dog_key,d.dispatch_id,s.number,s.name
