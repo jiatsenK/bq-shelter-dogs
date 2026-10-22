@@ -13,7 +13,7 @@
 // #57 起每筆多一個 mine、#94 起多一個 walkers（代號）；舊紀錄由 upgradeWalks 補。
 
 import { createHmac } from 'node:crypto';
-import { gvizTable, cellText, findColumns, findHeaderRow, columnMap, MAIN_COLUMNS, NAME_SEP } from '../worker/src/sheet-read.js';
+import { gvizTable, cellText, findColumns, findHeaderRow, columnMap, MAIN_COLUMNS, splitNames } from '../worker/src/sheet-read.js';
 
 // 試算表解析的共用部分在 worker/src/sheet-read.js（Worker 也用），這裡轉出去給測試和其他腳本
 export { cellText, findHeaderRow };
@@ -108,11 +108,11 @@ function mainColumnMap(table, headerTexts = []) {
 // 格子裡有好幾個人時（例：「甲、乙」「甲。乙」「甲;乙」）逐一比對，要整個名字相同才算，不算部分符合
 // 分隔符號（NAME_SEP）見 worker/src/sheet-read.js
 export function myNames(env = process.env.MY_NAME) {
-  return String(env || '').split(NAME_SEP).map(nameKey).filter(Boolean);
+  return splitNames(env).map(nameKey).filter(Boolean);
 }
 export function isMine(walkerText, names = myNames()) {
   if (!names.length) return false;
-  return String(walkerText || '').split(NAME_SEP).map(nameKey).some(n => n && names.includes(n));
+  return splitNames(walkerText).map(nameKey).some(n => n && names.includes(n));
 }
 
 // ── 誰遛的代號（#94）──
@@ -132,7 +132,7 @@ export function walkerCode(name, key = process.env.WALKER_KEY) {
 // 「誰遛的」格子（可能好幾個人）→ 代號清單，不重複、照格子裡的順序；沒設定 WALKER_KEY 時是空的
 export function walkerCodes(walkerText, key = process.env.WALKER_KEY) {
   if (!key) return [];
-  const codes = String(walkerText || '').split(NAME_SEP).map(n => walkerCode(n, key)).filter(Boolean);
+  const codes = splitNames(walkerText).map(n => walkerCode(n, key)).filter(Boolean);
   return [...new Set(codes)];
 }
 

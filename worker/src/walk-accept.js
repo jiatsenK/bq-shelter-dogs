@@ -3,10 +3,10 @@ import { walkerCode, editorOf } from './editlog.js';
 import { identityByCode } from './identity.js';
 import { previousWalk } from './today.js';
 import { callSheet } from './sheet-write.js';
-import { NAME_SEP } from './sheet-read.js';
+import { splitNames } from './sheet-read.js';
 import { todayRowsWritten } from '../../scripts/sync-diff.mjs';
 
-const names = text => [...new Set(String(text || '').split(NAME_SEP).filter(Boolean))];
+const names = text => [...new Set(splitNames(text))];
 const keyOf = dog => dog.id || `名:${dog.name}`;
 const one = (db, sql, ...args) => db.prepare(sql).bind(...args).first();
 const rows = async (db, sql, ...args) => (await db.prepare(sql).bind(...args).all()).results || [];

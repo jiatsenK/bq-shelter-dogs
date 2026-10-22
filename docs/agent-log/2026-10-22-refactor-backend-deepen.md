@@ -21,6 +21,11 @@
 - 狗群金鑰錯誤的訊息從「通關碼」改成「金鑰」（ADR 0004 已沒有通關碼）。
 - `/rest/a/b` 這種多一段的網址不再被休養接住（原本回 400，現在落到後面的處理）。
 
+## retro 後補的檢查（K：「壞的東西只是搬家」）
+
+- `worker/test/standards.test.mjs`：沒帶條件的 SELECT／DELETE 要列在 `FULL_SCAN_OK`（既有的待 #474 確認）；拆名字只能用 `splitNames`（三處改掉，trim 差異已補進 #473）。
+- CODING_STANDARDS.md 加「搬動的程式碼視同新寫」；`docs/agents/issue-tracker.md` 加重構規格要列既有違規與票號。
+
 ## 驗證
 
 node 測試 403 項、網頁測試 262 項全過；Standards／Spec 兩軸審查已做，上面的差異就是審查列出、決定保留的。

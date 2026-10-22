@@ -33,6 +33,8 @@ GitHub shares one number space across issues and PRs, so a bare `#42` may be eit
 
 Create a GitHub issue.
 
+重構的規格（行為不變的整理）：Out of Scope 要逐項列出這次碰到但不修的既有違規（CODING_STANDARDS 或 ADR），每項附票號，沒有票就先開。「行為不變」只保護網站看得到的行為，不保護既有的違規。
+
 ## When a skill says "fetch the relevant ticket"
 
 Run `gh issue view <number> --comments`.

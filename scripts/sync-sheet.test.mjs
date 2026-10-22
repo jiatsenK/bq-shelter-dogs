@@ -512,10 +512,10 @@ test('2026-10-04 誰遛的格子用句號、分號、冒號等隔開也拆成好
   }
   assert.equal(sync.isMine('測試志工乙經常', names), false, '分隔符號以外的字還是要整個名字相同');
   assert.deepEqual(sync.walkerCodes('測試志工甲。測試志工乙', KEY), [CODE('測試志工甲'), CODE('測試志工乙')]);
-  // 同步和 Worker 的分隔符號要一樣，不然換出來的代號對不上：兩邊都 import worker/src/sheet-read.js 的 NAME_SEP
+  // 同步和 Worker 的分隔符號要一樣，不然換出來的代號對不上：兩邊都 import worker/src/sheet-read.js 的 splitNames
   for (const file of ['../worker/src/index.js', './sync-sheet.mjs']) {
     const src = await readFile(new URL(file, import.meta.url), 'utf8');
-    assert.match(src, /import \{[^}]*\bNAME_SEP\b[^}]*\} from '[./]*(worker\/src\/)?sheet-read\.js'/, file);
+    assert.match(src, /import \{[^}]*\bsplitNames\b[^}]*\} from '[./]*(worker\/src\/)?sheet-read\.js'/, file);
     assert.doesNotMatch(src, /NAME_SEP = \//, `${file} 不要自己再定義一份`);
   }
 });

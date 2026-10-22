@@ -3,7 +3,7 @@ import { cleanIntakeEvents } from './intake.js';
 import { cleanStays } from './stays.js';
 import { saveFixedCare, mainNameMatcher, replaceGroup } from './compact.js';
 import { callSheet, SheetWriteError } from './sheet-write.js';
-import { gvizTable, cellText, findHeaderRow, columnMap, MAIN_COLUMNS, NAME_SEP, splitNames } from './sheet-read.js';
+import { gvizTable, cellText, findHeaderRow, columnMap, MAIN_COLUMNS, splitNames } from './sheet-read.js';
 import { readDepartedCards } from './departed.js';
 import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, readActivities, resolveDogs, updateActivity } from './activities.js';
 import { acceptWalk, dispatchWalk, readAcceptedWalks, writebackTarget, confirmWalk } from './walk-accept.js';
@@ -751,7 +751,7 @@ async function walkerCodes(request, env, origin) {
     return fail(400, '格式不對', origin);
   }
   if (!input || !Array.isArray(input.names) || input.names.some(n => typeof n !== 'string')) return fail(400, '請送名字清單', origin);
-  const names = [...new Set(input.names.flatMap(n => n.split(NAME_SEP)).map(n => n.trim()).filter(Boolean))];
+  const names = [...new Set(input.names.flatMap(splitNames))];
   if (!names.length) return fail(400, '請輸入名字', origin);
   if (names.length > WALKER_MAX_NAMES) return fail(400, `最多 ${WALKER_MAX_NAMES} 個名字`, origin);
   if (names.some(n => [...n].length > WALKER_NAME_MAX_CHARS)) return fail(400, `每個名字最多 ${WALKER_NAME_MAX_CHARS} 個字`, origin);
@@ -898,7 +898,7 @@ function cleanWalkDog(d, action, accepted = false) {
     if (!w || typeof w !== 'object' || !shortText(w.walker || '', 200)) return null;
     // 沒有 prev：手機沒有復原證據，Worker 從溜狗紀錄找上一次（ADR 0016）；只撤銷只剩一個名字的登記
     if (p === undefined) {
-      if (w.walker.split(NAME_SEP).filter(Boolean).length !== 1) return null;
+      if (splitNames(w.walker).length !== 1) return null;
       out.wrote = { walker: w.walker.trim() };
       out.lookup = true;
       return out;
