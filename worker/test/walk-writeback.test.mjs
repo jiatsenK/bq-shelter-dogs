@@ -69,6 +69,32 @@ async function machine(env, action, body, key = 'test-secret') {
   return { status: res.status, ...await res.json() };
 }
 
+test('登記後立即復原：延遲喚醒只取復原目標；舊回執不能使名字復活或清除新工作', async () => {
+  for (const oldDispatched of [false, true]) {
+    const env = await setup(); worker.testing.resetState();
+    const dog = { id:'9001',name:'測試狗' }, baseline = { date:'2026-10-01',walker:'' };
+    try {
+      await post(env,request('undo-delivery-walk'));
+      const old = oldDispatched ? await machine(env,'target',{ dog,dispatchId:'before-undo',current:baseline }) : null;
+      const undo = await post(env,request('undo-delivery-restore','乙',{ action:'undo',dogs:[{ ...dog,expectedVersion:1 }] }));
+      assert.equal(undo.status,200);
+      if (old) assert.equal((await machine(env,'receipt',{ dogKey:dog.id,dispatchId:old.dispatchId,version:old.version,current:old.current })).confirmed,false);
+      const target = await machine(env,'target',{ dog,dispatchId:'late-wake',current:old?.current || baseline });
+      assert.equal(target.status,200);
+      assert.equal(target.version,2);
+      assert.deepEqual(target.current,baseline);
+      assert.equal((await current(env)).walks[0].syncStatus,'dispatching');
+      assert.equal((await machine(env,'receipt',{ dogKey:dog.id,dispatchId:target.dispatchId,version:2,current:target.current })).confirmed,true);
+      if (old) await machine(env,'receipt',{ dogKey:dog.id,dispatchId:old.dispatchId,version:old.version,current:old.current });
+      const data = await current(env);
+      assert.equal(data.walks[0].walker,'');
+      assert.equal(data.walks[0].walkedDate,baseline.date);
+      assert.equal(data.walks[0].version,2);
+      assert.equal(data.walks[0].syncStatus,'synced');
+    } finally { env.DB.close(); }
+  }
+});
+
 test('一次派送失敗可靠留存；可信讀回才完成，舊回執不清新版本', async () => {
   const env = await setup(), real = globalThis.fetch;
   worker.testing.resetState();

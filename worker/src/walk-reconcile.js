@@ -25,8 +25,9 @@ export async function reconcileWalkSnapshot(db, snapshot, observedStates, env, n
       await db.batch([
         db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN EXISTS(SELECT 1 FROM v3_walk_state s JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version WHERE s.dog_key=? AND s.version=? AND o.status=\'synced\') THEN 1 ELSE 0 END').bind(state.dog_key,state.version),
         ...await writeBudget(db,env,40,now),
-        db.prepare('UPDATE v3_walk_state SET version=?,effective_date=?,walker=?,members_json=?,base_date=?,base_walker=?,previous_date=effective_date,previous_walker=walker,updated_at=? WHERE dog_key=? AND version=?')
-          .bind(version,sheet.date,sheet.walker,JSON.stringify(members),sheet.date,sheet.walker,at,state.dog_key,state.version),
+        // 同日人工改名單保留原復原基準，不將今天被移除的人當成上一次。
+        db.prepare('UPDATE v3_walk_state SET version=?,effective_date=?,walker=?,members_json=?,base_date=?,base_walker=?,previous_date=CASE WHEN effective_date=? THEN previous_date ELSE effective_date END,previous_walker=CASE WHEN effective_date=? THEN previous_walker ELSE walker END,updated_at=? WHERE dog_key=? AND version=?')
+          .bind(version,sheet.date,sheet.walker,JSON.stringify(members),sheet.date,sheet.walker,sheet.date,sheet.date,at,state.dog_key,state.version),
         db.prepare("INSERT INTO v3_walk_outbox(dog_key,version,operation_date,target_date,target_walker,status,next_attempt_at) VALUES(?,?,?,?,?,'pending',?)")
           .bind(state.dog_key,version,at.slice(0,10),sheet.date,sheet.walker,at),
         db.prepare("UPDATE v3_walk_outbox SET status='synced',readback_seen=1 WHERE dog_key=? AND version=?").bind(state.dog_key,version),

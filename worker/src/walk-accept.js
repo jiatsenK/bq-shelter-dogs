@@ -1,6 +1,7 @@
 // #456：API 成功承諾止於 D1 原子接受；Google 寫回由持久工作追蹤。
-import { walkerCode } from './editlog.js';
+import { walkerCode, editorOf } from './editlog.js';
 import { identityByCode } from './identity.js';
+import { previousWalk } from './today.js';
 import { todayRowsWritten } from '../../scripts/sync-diff.mjs';
 
 const SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
@@ -11,6 +12,12 @@ const rows = async (db, sql, ...args) => (await db.prepare(sql).bind(...args).al
 const dayOf = now => new Date(now + 8 * 3600000).toISOString().slice(0, 10);
 export class WalkError extends Error {
   constructor(status, message) { super(message); this.status = status; }
+}
+function changedWalk(old) {
+  const error = new WalkError(409, '名單已改變，請先確認目前紀錄');
+  error.current = { date: old.effective_date, walker: old.walker };
+  error.version = old.version;
+  return error;
 }
 
 export async function readAcceptedWalks(db, today) {
@@ -45,12 +52,14 @@ async function transitionBudget(db,env,dogKey,dispatchId,cost) {
   return prepaid ? [] : writeBudget(db,env,cost);
 }
 
-async function seedState(db, dog) {
+async function seedState(db, dog, today) {
   const matches = await rows(db, `SELECT dog_id,walked_date,row_index FROM v3_sheet_main WHERE ${dog.id ? 'number=?' : "number='' AND name=?"}`, dog.id || dog.name);
   if (matches.length !== 1) throw new WalkError(409, '找不到唯一的主清單狗');
   const seed = matches[0];
   const people = await rows(db, 'SELECT COALESCE(n.name,v.name) AS name FROM v3_sheet_main_walkers w LEFT JOIN v3_identity_names n ON n.code=w.walker_code LEFT JOIN v3_volunteer_codes c ON c.code=w.walker_code LEFT JOIN v3_volunteers v ON v.volunteer_id=c.volunteer_id WHERE w.row_index=? ORDER BY w.position', seed.row_index);
-  return { dog_id: seed.dog_id, effective_date: seed.walked_date || '', walker: people.map(p => p.name).filter(Boolean).join('、'), version: 0 };
+  const previous = seed.walked_date === today ? await previousWalk(db, dog, today) : null;
+  return { dog_id: seed.dog_id, effective_date: seed.walked_date || '', walker: people.map(p => p.name).filter(Boolean).join('、'), version: 0,
+    ...(previous ? { previous_date: previous.date.date || '', previous_walker: previous.walker } : {}) };
 }
 
 export async function membersOf(db, text, secret) {
@@ -66,9 +75,9 @@ export async function membersOf(db, text, secret) {
 export async function acceptWalk(db, input, env, now = Date.now()) {
   if (!db || !env.WALKER_KEY) throw new WalkError(503, '身分服務尚未準備好');
   if (!/^[A-Za-z0-9_-]{8,100}$/.test(input.requestId || '') || input.operationDate !== dayOf(now)) throw new WalkError(400, '請求識別或操作日期不對');
-  if (input.action !== 'walk' || !Array.isArray(input.dogs) || input.dogs.length !== 1) throw new WalkError(400, '此入口只接受單狗登記');
+  if (!['walk', 'edit', 'undo'].includes(input.action) || !Array.isArray(input.dogs) || input.dogs.length !== 1) throw new WalkError(400, '此入口只接受單狗操作');
   const dog = input.dogs[0], key = keyOf(dog);
-  const fingerprint = JSON.stringify({ action: input.action, operationDate: input.operationDate, walker: input.walker, dog });
+  const fingerprint = JSON.stringify({ action: input.action, operationDate: input.operationDate, walker: input.walker, editor: input.editor, dog });
   const previous = () => one(db, 'SELECT fingerprint,result_json FROM v3_walk_requests WHERE request_id=?', input.requestId);
   const replay = old => {
     if (old.fingerprint !== fingerprint) throw new WalkError(409, '相同請求識別不能更改內容');
@@ -78,28 +87,47 @@ export async function acceptWalk(db, input, env, now = Date.now()) {
   if (existing) return replay(existing);
   const added = await membersOf(db, input.walker, env.WALKER_KEY);
   if (!added.length) throw new WalkError(400, '要先選好身分');
+  const modifying = input.action !== 'walk';
+  const editor = modifying ? await editorOf(input.action === 'edit' ? input.editor : input.walker, env.WALKER_KEY) : null;
+  if (modifying && !editor) throw new WalkError(400, '要先選好身分');
+  if (editor) await membersOf(db, editor.name, env.WALKER_KEY);
   for (let attempt = 0; attempt < 8; attempt++) {
-    const old = await one(db, 'SELECT * FROM v3_walk_state WHERE dog_key=?', key) || await seedState(db, dog);
-    const members = old.effective_date === input.operationDate
+    const old = await one(db, 'SELECT * FROM v3_walk_state WHERE dog_key=?', key) || await seedState(db, dog, input.operationDate);
+    if (modifying && (dog.expectedVersion !== old.version || old.effective_date !== input.operationDate)) throw changedWalk(old);
+    let members = old.effective_date === input.operationDate
       ? old.members_json ? JSON.parse(old.members_json) : await membersOf(db, old.walker, env.WALKER_KEY) : [];
-    for (const person of added) if (!members.some(m => m.volunteerId === person.volunteerId)) members.push(person);
+    let effectiveDate = input.operationDate;
+    if (input.action === 'undo') {
+      if (members.length !== 1) throw changedWalk(old);
+      const previous = old.previous_date !== undefined && old.previous_date < input.operationDate ? { date: { date: old.previous_date }, walker: old.previous_walker }
+        : await previousWalk(db, dog, input.operationDate);
+      if (!previous) throw new WalkError(409, '找不到唯一的主清單狗');
+      effectiveDate = previous.date.date || '';
+      members = await membersOf(db, previous.walker, env.WALKER_KEY);
+    } else if (input.action === 'edit') {
+      members = added;
+    } else {
+      for (const person of added) if (!members.some(m => m.volunteerId === person.volunteerId)) members.push(person);
+    }
     const walker = members.map(m => m.name).join('、'), version = old.version + 1;
     const baseDate = old.base_date ?? old.effective_date, baseWalker = old.base_walker ?? old.walker;
     const previousDate = old.effective_date === input.operationDate ? old.previous_date ?? '' : old.effective_date;
     const previousWalker = old.effective_date === input.operationDate ? old.previous_walker ?? '' : old.walker;
     const at = new Date(now).toISOString();
-    const result = { ...dog, status: 'written', accepted: true, requestId: input.requestId, operationDate: input.operationDate,
-      version, current: { date: input.operationDate, walker }, wrote: { walker },
+    const result = { ...dog, status: input.action === 'undo' ? 'restored' : 'written', accepted: true, requestId: input.requestId, operationDate: input.operationDate,
+      version, current: { date: effectiveDate, walker }, wrote: { walker },
       prev: { date: { date: previousDate }, walker: previousWalker }, syncStatus: 'pending', at };
     try {
       await db.batch([
         db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT version FROM v3_walk_state WHERE dog_key=?),0)=? THEN 1 ELSE 0 END').bind(key, old.version),
-        ...await writeBudget(db, env, 32, now),
+        ...await writeBudget(db, env, editor ? 40 : 32, now),
         db.prepare('INSERT INTO v3_walk_state(dog_key,dog_id,number,name,version,effective_date,walker,members_json,base_date,base_walker,previous_date,previous_walker,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dog_key) DO UPDATE SET version=excluded.version,effective_date=excluded.effective_date,walker=excluded.walker,members_json=excluded.members_json,previous_date=excluded.previous_date,previous_walker=excluded.previous_walker,updated_at=excluded.updated_at')
-          .bind(key, old.dog_id, dog.id, dog.name, version, input.operationDate, walker, JSON.stringify(members), baseDate, baseWalker, previousDate, previousWalker, at),
+          .bind(key, old.dog_id, dog.id, dog.name, version, effectiveDate, walker, JSON.stringify(members), baseDate, baseWalker, previousDate, previousWalker, at),
         db.prepare('INSERT INTO v3_walk_requests VALUES(?,?,?,?,?)').bind(input.requestId, key, input.operationDate, fingerprint, JSON.stringify(result)),
         db.prepare("UPDATE v3_walk_outbox SET status='superseded' WHERE dog_key=? AND status NOT IN ('synced','superseded')").bind(key),
-        db.prepare("INSERT INTO v3_walk_outbox(dog_key,version,operation_date,target_date,target_walker,status,next_attempt_at) VALUES(?,?,?,?,?,'pending',?)").bind(key, version, input.operationDate, input.operationDate, walker, at),
+        db.prepare("INSERT INTO v3_walk_outbox(dog_key,version,operation_date,target_date,target_walker,status,next_attempt_at) VALUES(?,?,?,?,?,'pending',?)").bind(key, version, input.operationDate, effectiveDate, walker, at),
+        ...(editor ? [db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) VALUES(?,?,?,?,?,?,?,?)')
+          .bind(at, editor.code, editor.name, input.action === 'undo' ? 'walkundo' : 'walkedit', old.dog_id, dog.id, JSON.stringify({ date: old.effective_date, walker: old.walker }), JSON.stringify(result.current))] : []),
         db.prepare('DELETE FROM v3_walk_guard'),
       ]);
       return result;
