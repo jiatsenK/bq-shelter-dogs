@@ -38,3 +38,11 @@
 - 掃描加 Apps Script 四欄指紋，沒改就不回傳整份（`sheet_sig` 是 gviz，不能沿用）。
 
 實作內容見 `460-d1-walk-unified.md` 的「Cron 收成兩件」。
+
+## 目前進度（2026-10-22 換電腦前）
+
+- 已實作並推上 PR #487：Cron 拆兩個排程、通知改跑保險掃描、四欄指紋、合併派送（`dispatchWalks`／`walkWakeBatch`）。ADR 0017 第 5 點改在 `prototype/d1-walk-sync`（commit e34ffea）。
+- 測試：網頁測試全過；node 只剩 `scripts/local-check.test.mjs` 4 項，HEAD 改動前就失敗，跟本次無關。
+- `cpu-bench`（run 39784436803）未通過：Cron 一輪 P99 57.89 ms（最壞情況：每輪整份比對 200 列＋派送 10 隻），回呼 P99 3.68 ms。
+- 開關 `SITE.d1WalkAccept` 關著；Apps Script 還沒部署，等 CPU 過了再部署。
+- **下一步**（等 K 決定）：先在本機拆開量掃描和派送各占多少 CPU，不跑線上；知道哪段最吃再決定怎麼改。
