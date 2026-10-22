@@ -1121,6 +1121,145 @@ async function openedCards(request, env, origin) {
   return reply(200, { ok: true, opened: { v: 1, codes: books } }, origin);
 }
 
+// ── 網站的 API（/api/路徑）：路徑 → { method, wrongMethod, crash, run } ──
+// fetch 先做完共同的事（同網址或允許的來源、OPTIONS、預覽版不能寫），再查這張表：
+// 方法不對回 405 wrongMethod；run 丟錯回 crash（[狀態, 訊息, 額外欄位]），寫進日誌。
+// method 是 null 的，方法由 run 自己分（GET 讀、POST 寫）。改一隻狗的資料另外查 DOG_EDITS。
+// run(c)：c = { request, env, origin, path, url, cfg, ctx }（path 已拿掉 /api）
+const DB_DOWN = { code: 'db' };
+const needDb = env => { if (!env || !env.DB) throw new Error('沒有 D1'); return env.DB; };
+const yearParam = (url, pattern, message) => {
+  const year = url.searchParams.get('year');
+  return pattern.test(year) ? { year } : { error: message };
+};
+// ?year=YYYY&v=版本號（#346）：那一年的紀錄。版本號對得上才讓瀏覽器永久快取，版本號一變網址就變
+function versioned(body, url, origin) {
+  const res = reply(200, { ok: true, ...body }, origin);
+  if (body.ver && url.searchParams.get('v') === body.ver) res.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+  return res;
+}
+
+async function identityRoute({ request, env, origin, path, cfg }) {
+  if (!env?.DB || !cfg.walkerKey) return fail(503, '身分服務尚未準備好', origin);
+  if (!allow('identity:' + (request.headers.get('CF-Connecting-IP') || 'unknown'), [{ windowMs: 60000, max: 120 }], Date.now())) return fail(429, '操作太頻繁，請稍後再試', origin);
+  const input = await readJsonBody(request, 2048);
+  if (!input || (!path.includes('merge') && (typeof input.name !== 'string' || !input.name.trim() || [...input.name.trim()].length > 20))) return fail(400, '名字要 1–20 個字', origin);
+  if (path.endsWith('/rename') && (!/^[a-f0-9]{12}$/.test(input.code || '') || !/^[a-zA-Z0-9-]{1,80}$/.test(input.operationId || ''))) return fail(400, '操作格式不對', origin);
+  try {
+    if (path.includes('merge')) {
+      if (!/^[a-f0-9]{12}$/.test(input.code || '') || !/^[a-f0-9]{12}$/.test(input.targetCode || '')) return fail(400, '身分格式不對', origin);
+      if (path.endsWith('merge-preview')) return reply(200, { ok: true, ...await previewMerge(env.DB, input, cfg.walkerKey) }, origin);
+      if (!/^[a-zA-Z0-9-]{1,80}$/.test(input.operationId || '')) return fail(400, '操作格式不對', origin);
+      return reply(200, { ok: true, identity: await mergeIdentity(env.DB, input, cfg.walkerKey) }, origin);
+    }
+    const identity = path.endsWith('/rename') ? await renameIdentity(env.DB, { ...input, name: input.name.trim() }, cfg.walkerKey) : await resolveIdentity(env.DB, input.name.trim(), cfg.walkerKey);
+    return reply(200, { ok: true, identity }, origin);
+  } catch (e) {
+    if (e instanceof IdentityError) return reply(e.status, { ok: false, error: e.message, ...e.details }, origin);
+    console.error('identity', e); return fail(409, '身分資料已變動，請重新檢視', origin);
+  }
+}
+const IDENTITY = { method: 'POST', wrongMethod: '請用 POST 設定身分', crash: [409, '身分資料已變動，請重新檢視'], run: identityRoute };
+
+const SITE_ROUTES = {
+  // 網站要的狗清單（#247）
+  '/dogs': { method: 'GET', wrongMethod: '狗的資料只能用 GET /dogs 讀', crash: [503, '資料庫暫時讀不到狗的資料，請稍後再試', DB_DOWN],
+    run: ({ env, origin }) => getDogs(env, origin) },
+  // 志工身分、更名、合併（ADR 0005）
+  '/identity': IDENTITY, '/identity/rename': IDENTITY, '/identity/merge-preview': IDENTITY, '/identity/merge': IDENTITY,
+  '/cards/opened': { method: null, crash: [503, '開卡紀錄暫時讀寫失敗，請稍後再試'], run: ({ request, env, origin }) => openedCards(request, env, origin) },
+  '/favorites': { method: null, crash: [503, '常溜暫時讀寫失敗，請稍後再試'], run: ({ request, env, origin }) => favorites(request, env, origin) },
+  // 我溜過的狗（ADR 0013，#344）：代號放在請求內容，不放網址
+  '/walks/mine': { method: 'POST', wrongMethod: '只能用 POST /walks/mine', crash: [503, '暫時讀不到溜狗紀錄', DB_DOWN],
+    async run({ request, env, origin }) {
+      const input = await readJsonBody(request, 4096);
+      const codes = input && input.codes;
+      if (!Array.isArray(codes) || codes.length > 100 || !codes.every(c => typeof c === 'string' && /^[a-f0-9]{12}$/.test(c))) return fail(400, '代號格式不對', origin);
+      return reply(200, { ok: true, dogs: await readMineWalks(needDb(env), taiwanYmd(Date.now()), codes) }, origin);
+    } },
+  // 溜狗紀錄（#260）：形狀跟原本的 data/walks.json 一樣；?year= 拿那一年
+  '/walks': { method: 'GET', wrongMethod: '只能用 GET 讀', crash: [503, '暫時讀不到溜狗紀錄', DB_DOWN],
+    async run({ env, origin, url }) {
+      const db = needDb(env);
+      if (!url.searchParams.has('year')) return reply(200, { ok: true, ...await readWalksPacked(db, taiwanYmd(Date.now())) }, origin);
+      const { year, error } = yearParam(url, /^\d{4}$/, 'year 要是四位數年份');
+      return error ? fail(400, error, origin) : versioned(await readWalksYear(db, taiwanYmd(Date.now()), year), url, origin);
+    } },
+  // 離所紀錄（#260）；?year=YYYY|none&v=版本號 拿那一年
+  '/departures': { method: 'GET', wrongMethod: '只能用 GET 讀', crash: [503, '暫時讀不到離所紀錄', DB_DOWN],
+    async run({ env, origin, url }) {
+      const db = needDb(env);
+      if (!url.searchParams.has('year')) return reply(200, { ok: true, version: 1, departures: await readSmall(db, 'departures') }, origin);
+      const { year, error } = yearParam(url, /^(\d{4}|none)$/, 'year 要是四位數年份或 none');
+      return error ? fail(400, error, origin) : versioned(await readDepartureYear(db, year), url, origin);
+    } },
+  // 離所名冊索引（#363）：分析頁的每年長條圖、名冊搜尋用
+  '/departures/index': { method: 'GET', wrongMethod: '只能用 GET 讀', crash: [503, '暫時讀不到離所紀錄', DB_DOWN],
+    run: async ({ env, origin }) => reply(200, { ok: true, ...await readDepartureIndex(needDb(env)) }, origin) },
+  // 已出所狗卡（#271）：圖鑑的「已出所」名單，誰都看得到
+  '/departed-cards': { method: 'GET', wrongMethod: '只能用 GET /departed-cards 讀', crash: [503, '暫時讀不到已出所的狗', DB_DOWN],
+    run: async ({ env, origin }) => reply(200, { ok: true, dogs: await readDepartedCards(needDb(env), taiwanYmd(Date.now())) }, origin) },
+  // 今日溜狗紀錄（ADR 0007）：網站每分鐘來讀今天的清單；讀不到網站就照舊不顯示錯誤
+  '/today': { method: 'GET', wrongMethod: '只能用 GET /today 讀', crash: [503, '暫時讀不到今日溜狗紀錄', DB_DOWN],
+    async run({ env, origin, url }) {
+      const today = taiwanYmd(Date.now());
+      if (url.searchParams.get('source') === 'd1') return reply(200, { ok: true, ...await readAcceptedWalks(env.DB, today) }, origin);
+      return reply(200, { ok: true, date: today, walks: await readTodayWalks(needDb(env), today) }, origin);
+    } },
+  '/rest': { method: 'GET', wrongMethod: '休養設定只能用 GET /rest 讀', crash: [503, '暫時讀不到休養設定', DB_DOWN],
+    run: async ({ env, origin }) => reply(200, { ok: true, rest: await readSmall(env.DB, 'rest') }, origin) },
+  // 編輯紀錄（ADR 0004）：GET /edits?limit=
+  '/edits': { method: 'GET', wrongMethod: '編輯紀錄只能用 GET /edits 讀', crash: [503, '暫時讀不到編輯紀錄', DB_DOWN],
+    run: async ({ env, origin, url }) => reply(200, { ok: true, edits: await readEdits(env.DB, Number(url.searchParams.get('limit') || '') || undefined) }, origin) },
+  '/walker-code': { method: 'POST', wrongMethod: '代號只能用 POST /walker-code 換', crash: [500, '名字設定暫時失敗，請稍後再試'],
+    run: ({ request, env, origin }) => walkerCodes(request, env, origin) },
+  '/walkers': { method: 'GET', wrongMethod: '溜狗人名字只能用 GET /walkers 讀', crash: [502, '暫時讀不到試算表的溜狗人'],
+    run: ({ env, origin }) => getWalkers(env, origin) },
+  '/walk': { method: 'POST', wrongMethod: '寫入試算表只能用 POST /walk', crash: [500, '寫入試算表發生錯誤'],
+    run: ({ request, env, origin, ctx }) => writeWalks(request, env, origin, ctx) },
+  '/walk/result': { method: 'GET', wrongMethod: '只能讀取登記結果', crash: [503, '暫時讀不到登記結果'],
+    async run({ env, origin, url }) {
+      if (!env?.DB) return fail(405, '只能讀取登記結果', origin);
+      const id = url.searchParams.get('requestId') || '';
+      if (!/^[A-Za-z0-9_-]{8,100}$/.test(id)) return fail(400, '請求識別不對', origin);
+      const found = await env.DB.prepare('SELECT result_json FROM v3_walk_requests WHERE request_id=?').bind(id).first();
+      if (!found) return fail(404, '尚未找到接受結果', origin);
+      const result = JSON.parse(found.result_json);
+      return reply(200, { ok: true, source: 'd1', today: result.operationDate, results: [result], snapshot: await readAcceptedWalks(env.DB, taiwanYmd(Date.now())) }, origin);
+    } },
+  '/groups': { method: 'POST', wrongMethod: '編輯狗群只能用 POST /groups', crash: [500, '編輯狗群發生錯誤'],
+    run: ({ request, env, origin }) => writeGroup(request, env, origin) },
+  // 網站「更新」按鈕
+  '/sync': { method: 'POST', wrongMethod: '更新只能用 POST /sync', crash: [502, '叫同步失敗'],
+    async run({ request, env, origin, cfg }) {
+      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
+      if (!allow(`sync:${ip}`, SYNC_LIMITS, Date.now())) return fail(429, '剛剛已經在更新了，請稍等一下', origin);
+      // ADR 0012：先比對試算表指紋，沒變就不叫 GitHub；沒接 D1 或沒設試算表 ID 就照舊直接叫
+      if (env && env.DB && cfg.sheetId) {
+        if (await refreshPlan(env.DB, () => sheetSignature(cfg.sheetId)).catch(() => 'sync') === 'same') return reply(200, { ok: true, unchanged: true }, origin);
+      }
+      try {
+        await triggerSync(env);
+        return reply(200, { ok: true }, origin);
+      } catch (e) {
+        // 這次沒叫成，忘掉剛記的指紋，下次按「更新」才會再叫
+        if (env && env.DB && cfg.sheetId) await rememberSignature(env.DB, '').catch(() => {});
+        return fail(502, e.message || '叫同步失敗', origin);
+      }
+    } },
+};
+
+async function siteRoute(route, c) {
+  if (route.method && c.request.method !== route.method) return fail(405, route.wrongMethod, c.origin);
+  try {
+    return await route.run(c);
+  } catch (e) {
+    console.error(c.path, e);
+    const [status, message, extra] = route.crash;
+    return fail(status, message, c.origin, extra);
+  }
+}
+
 export default {
   // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch 和 scheduled
   testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, walkersDate, triggerSync, maintenance },
@@ -1227,109 +1366,8 @@ export default {
       return fail(403, '這是預覽版，不能存，正式資料不受影響。要改請到正式網址', allowed);
     }
 
-    if (path === '/dogs') {
-      if (request.method !== 'GET') return fail(405, '狗的資料只能用 GET /dogs 讀', allowed);
-      return getDogs(env, allowed);
-    }
-    if (['/identity', '/identity/rename', '/identity/merge-preview', '/identity/merge'].includes(path)) {
-      if (request.method !== 'POST') return fail(405, '請用 POST 設定身分', allowed);
-      if (!env?.DB || !cfg.walkerKey) return fail(503, '身分服務尚未準備好', allowed);
-      if (!allow('identity:' + (request.headers.get('CF-Connecting-IP') || 'unknown'), [{ windowMs: 60000, max: 120 }], Date.now())) return fail(429, '操作太頻繁，請稍後再試', allowed);
-      const input = await readJsonBody(request, 2048);
-      if (!input || (!path.includes('merge') && (typeof input.name !== 'string' || !input.name.trim() || [...input.name.trim()].length > 20))) return fail(400, '名字要 1–20 個字', allowed);
-      if (path.endsWith('/rename') && (!/^[a-f0-9]{12}$/.test(input.code || '') || !/^[a-zA-Z0-9-]{1,80}$/.test(input.operationId || ''))) return fail(400, '操作格式不對', allowed);
-      try {
-        if (path.includes('merge')) {
-          if (!/^[a-f0-9]{12}$/.test(input.code || '') || !/^[a-f0-9]{12}$/.test(input.targetCode || '')) return fail(400, '身分格式不對', allowed);
-          if (path.endsWith('merge-preview')) return reply(200, { ok: true, ...await previewMerge(env.DB, input, cfg.walkerKey) }, allowed);
-          if (!/^[a-zA-Z0-9-]{1,80}$/.test(input.operationId || '')) return fail(400, '操作格式不對', allowed);
-          return reply(200, { ok: true, identity: await mergeIdentity(env.DB, input, cfg.walkerKey) }, allowed);
-        }
-        const identity = path.endsWith('/rename') ? await renameIdentity(env.DB, { ...input, name: input.name.trim() }, cfg.walkerKey) : await resolveIdentity(env.DB, input.name.trim(), cfg.walkerKey);
-        return reply(200, { ok: true, identity }, allowed);
-      } catch (e) {
-        if (e instanceof IdentityError) return reply(e.status, { ok: false, error: e.message, ...e.details }, allowed);
-        console.error('identity', e); return fail(409, '身分資料已變動，請重新檢視', allowed);
-      }
-    }
-    if (path === '/cards/opened') {
-      try { return await openedCards(request, env, allowed); }
-      catch (e) { return fail(503, '開卡紀錄暫時讀寫失敗，請稍後再試', allowed); }
-    }
-    if (path === '/favorites') {
-      try { return await favorites(request, env, allowed); }
-      catch (e) { return fail(503, '常溜暫時讀寫失敗，請稍後再試', allowed); }
-    }
-    // 我溜過的狗（ADR 0013，#344）：代號放在請求內容，不放網址
-    if (path === '/walks/mine') {
-      if (request.method !== 'POST') return fail(405, '只能用 POST /walks/mine', allowed);
-      const input = await readJsonBody(request, 4096);
-      const codes = input && input.codes;
-      if (!Array.isArray(codes) || codes.length > 100 || !codes.every(c => typeof c === 'string' && /^[a-f0-9]{12}$/.test(c))) return fail(400, '代號格式不對', allowed);
-      try {
-        if (!env || !env.DB) throw new Error('沒有 D1');
-        return reply(200, { ok: true, dogs: await readMineWalks(env.DB, taiwanYmd(Date.now()), codes) }, allowed);
-      } catch (e) {
-        console.error('walks/mine', e);
-        return fail(503, '暫時讀不到溜狗紀錄', allowed, { code: 'db' });
-      }
-    }
-    // 溜狗紀錄、離所紀錄（#260）：形狀跟原本的 data/walks.json、data/departures.json 一樣，從 D1 讀
-    if (path === '/walks' || path === '/departures' || path === '/departures/index') {
-      if (request.method !== 'GET') return fail(405, '只能用 GET 讀', allowed);
-      try {
-        if (!env || !env.DB) throw new Error('沒有 D1');
-        // ?year=YYYY&v=版本號（#346）：那一年的紀錄。版本號對得上才讓瀏覽器永久快取，版本號一變網址就變
-        const params = new URL(request.url).searchParams;
-        if (path === '/walks' && params.has('year')) {
-          const year = params.get('year');
-          if (!/^\d{4}$/.test(year)) return fail(400, 'year 要是四位數年份', allowed);
-          const body = await readWalksYear(env.DB, taiwanYmd(Date.now()), year);
-          const res = reply(200, { ok: true, ...body }, allowed);
-          if (body.ver && params.get('v') === body.ver) res.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-          return res;
-        }
-        // 離所名冊索引（#363）：分析頁的每年長條圖、名冊搜尋用；點一隻狗才拿那一年 ?year=YYYY|none&v=版本號
-        if (path === '/departures/index') return reply(200, { ok: true, ...await readDepartureIndex(env.DB) }, allowed);
-        if (path === '/departures' && params.has('year')) {
-          const year = params.get('year');
-          if (!/^(\d{4}|none)$/.test(year)) return fail(400, 'year 要是四位數年份或 none', allowed);
-          const body = await readDepartureYear(env.DB, year);
-          const res = reply(200, { ok: true, ...body }, allowed);
-          if (body.ver && params.get('v') === body.ver) res.headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-          return res;
-        }
-        const body = path === '/walks' ? await readWalksPacked(env.DB, taiwanYmd(Date.now())) : { version: 1, departures: await readSmall(env.DB, 'departures') };
-        return reply(200, { ok: true, ...body }, allowed);
-      } catch (e) {
-        console.error(path, e);
-        return fail(503, path === '/walks' ? '暫時讀不到溜狗紀錄' : '暫時讀不到離所紀錄', allowed, { code: 'db' });
-      }
-    }
-    // 已出所狗卡（#271）：圖鑑的「已出所」名單，誰都看得到
-    if (path === '/departed-cards') {
-      if (request.method !== 'GET') return fail(405, '只能用 GET /departed-cards 讀', allowed);
-      try {
-        if (!env || !env.DB) throw new Error('沒有 D1');
-        return reply(200, { ok: true, dogs: await readDepartedCards(env.DB, taiwanYmd(Date.now())) }, allowed);
-      } catch (e) {
-        console.error('departed-cards', e);
-        return fail(503, '暫時讀不到已出所的狗', allowed, { code: 'db' });
-      }
-    }
-    // 今日溜狗紀錄（ADR 0007）：網站每分鐘來讀今天的清單；讀不到網站就照舊不顯示錯誤
-    if (path === '/today') {
-      if (request.method !== 'GET') return fail(405, '只能用 GET /today 讀', allowed);
-      const today = taiwanYmd(Date.now());
-      try {
-        if (url.searchParams.get('source') === 'd1') return reply(200, { ok: true, ...await readAcceptedWalks(env.DB, today) }, allowed);
-        if (!env || !env.DB) throw new Error('沒有 D1');
-        return reply(200, { ok: true, date: today, walks: await readTodayWalks(env.DB, today) }, allowed);
-      } catch (e) {
-        console.error('today', e);
-        return fail(503, '暫時讀不到今日溜狗紀錄', allowed, { code: 'db' });
-      }
-    }
+    const route = Object.hasOwn(SITE_ROUTES, path) ? SITE_ROUTES[path] : null;
+    if (route) return siteRoute(route, { request, env, origin: allowed, path, url, cfg, ctx });
     // 改一隻狗的資料（DOG_EDITS）：/rest/編號、/fixed-care/編號、/intro/編號、/former/編號、/stays/編號
     const editName = (path.match(/^\/([^/]+)\/[^/]+$/) || [])[1];
     const dogEdit = editName && Object.hasOwn(DOG_EDITS, editName) ? DOG_EDITS[editName] : null;
@@ -1342,14 +1380,6 @@ export default {
         return fail(500, dogEdit.crash, allowed);
       }
     }
-    if (path === '/rest') {
-      if (request.method !== 'GET') return fail(405, '休養設定只能用 GET /rest 讀', allowed);
-      try {
-        return reply(200, { ok: true, rest: await readSmall(env.DB, 'rest') }, allowed);
-      } catch (e) {
-        return fail(503, '暫時讀不到休養設定', allowed, { code: 'db' });
-      }
-    }
     // 活動紀錄（#270）
     if (path === '/activities' || path.startsWith('/activities/')) {
       try {
@@ -1357,82 +1387,6 @@ export default {
       } catch (e) {
         console.error('activities', e);
         return request.method === 'GET' ? fail(503, '暫時讀不到活動紀錄', allowed, { code: 'db' }) : fail(500, '活動紀錄存檔發生錯誤，原本的資料不受影響', allowed);
-      }
-    }
-
-    // 編輯紀錄（ADR 0004）：GET /edits?limit=
-    if (path === '/edits') {
-      if (request.method !== 'GET') return fail(405, '編輯紀錄只能用 GET /edits 讀', allowed);
-      try {
-        const limit = Number(url.searchParams.get('limit') || '') || undefined;
-        return reply(200, { ok: true, edits: await readEdits(env.DB, limit) }, allowed);
-      } catch (e) {
-        return fail(503, '暫時讀不到編輯紀錄', allowed, { code: 'db' });
-      }
-    }
-
-    if (path === '/walker-code') {
-      if (request.method !== 'POST') return fail(405, '代號只能用 POST /walker-code 換', allowed);
-      try {
-        return await walkerCodes(request, env, allowed);
-      } catch (e) {
-        return fail(500, '名字設定暫時失敗，請稍後再試', allowed);
-      }
-    }
-
-    if (path === '/walkers') {
-      if (request.method !== 'GET') return fail(405, '溜狗人名字只能用 GET /walkers 讀', allowed);
-      try {
-        return await getWalkers(env, allowed);
-      } catch (e) {
-        return fail(502, '暫時讀不到試算表的溜狗人', allowed);
-      }
-    }
-
-    if (path === '/walk') {
-      if (request.method !== 'POST') return fail(405, '寫入試算表只能用 POST /walk', allowed);
-      try {
-        return await writeWalks(request, env, allowed, ctx);
-      } catch (e) {
-        return fail(500, '寫入試算表發生錯誤', allowed);
-      }
-    }
-    if (path === '/walk/result') {
-      if (request.method !== 'GET' || !env?.DB) return fail(405, '只能讀取登記結果', allowed);
-      const id = url.searchParams.get('requestId') || '';
-      if (!/^[A-Za-z0-9_-]{8,100}$/.test(id)) return fail(400, '請求識別不對', allowed);
-      try {
-        const found = await env.DB.prepare('SELECT result_json FROM v3_walk_requests WHERE request_id=?').bind(id).first();
-        if (!found) return fail(404, '尚未找到接受結果', allowed);
-        const result = JSON.parse(found.result_json);
-        return reply(200, { ok: true, source: 'd1', today: result.operationDate, results: [result], snapshot: await readAcceptedWalks(env.DB, taiwanYmd(Date.now())) }, allowed);
-      } catch { return fail(503, '暫時讀不到登記結果', allowed); }
-    }
-
-    if (path === '/groups') {
-      if (request.method !== 'POST') return fail(405, '編輯狗群只能用 POST /groups', allowed);
-      try {
-        return await writeGroup(request, env, allowed);
-      } catch (e) {
-        return fail(500, '編輯狗群發生錯誤', allowed);
-      }
-    }
-
-    if (path === '/sync') {
-      if (request.method !== 'POST') return fail(405, '更新只能用 POST /sync', allowed);
-      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-      if (!allow(`sync:${ip}`, SYNC_LIMITS, Date.now())) return fail(429, '剛剛已經在更新了，請稍等一下', allowed);
-      // ADR 0012：先比對試算表指紋，沒變就不叫 GitHub；沒接 D1 或沒設試算表 ID 就照舊直接叫
-      if (env && env.DB && cfg.sheetId) {
-        if (await refreshPlan(env.DB, () => sheetSignature(cfg.sheetId)).catch(() => 'sync') === 'same') return reply(200, { ok: true, unchanged: true }, allowed);
-      }
-      try {
-        await triggerSync(env);
-        return reply(200, { ok: true }, allowed);
-      } catch (e) {
-        // 這次沒叫成，忘掉剛記的指紋，下次按「更新」才會再叫
-        if (env && env.DB && cfg.sheetId) await rememberSignature(env.DB, '').catch(() => {});
-        return fail(502, e.message || '叫同步失敗', allowed);
       }
     }
 
