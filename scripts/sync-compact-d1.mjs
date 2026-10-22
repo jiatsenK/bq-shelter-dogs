@@ -216,7 +216,7 @@ async function main({ dryRun = false, mode = '' } = {}) {
   // D1 的溜狗紀錄沒有 mine，要靠代號推回來；沒有 WALKER_KEY 會把「我溜過」的日期算錯，寧可不同步
   if (!process.env.WALKER_KEY) throw new Error('沒有設定 WALKER_KEY，無法比對溜狗紀錄');
   const now = new Date();
-  const sheet = await buildData(fetch, now, async () => '');
+  const sheet = await buildData(fetch, now);
   const groupTable = await fetchGviz('常遛狗群');
   const dogNames = new Set(sheet.dogs.map(d => d.name));
   const groupColumns = parseGroupColumns(groupTable, dogNames);
