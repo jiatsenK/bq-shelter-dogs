@@ -96,7 +96,9 @@
 
 Cron 一輪派 10 隻（含回呼）從 166 次降到 66 次。`worker/test/walk-round-trips.test.mjs` 鎖住這三個上限（改前紅、改後綠）。
 
-還要做：測速 Worker 的回呼改成分開的請求（正式環境就是分開的），再取得 K 授權量一次線上 CPU。
+測速也改了：假 Apps Script 的回呼經服務綁定打到第二個測速 Worker `bq-shelter-dogs-cpu-cb`（`wrangler.cpu-bench-callback.jsonc`，不開公開網址），跟正式環境一樣是分開的呼叫。工作流程分別讀「Cron 一輪」和「回呼」的 CPU，兩個 P99 都要 ≤ 10 ms，最後兩個 Worker 都刪除。
+
+還要做：取得 K 授權後再量一次線上 CPU（加 `cpu-bench` 標籤）。
 
 ## 正式啟用（K 決定，這次不做）
 

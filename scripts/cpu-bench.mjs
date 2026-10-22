@@ -1,6 +1,7 @@
 // #460 CPU 驗收：產生測試 D1 的準備／清除 SQL，並讀 Cloudflare 分析的 CPU P99。
 // node scripts/cpu-bench.mjs sql seed|reset|cleanup   → 印出 SQL（給 wrangler d1 execute --file）
-// node scripts/cpu-bench.mjs p99 <since ISO> <次數>    → 等分析資料到齊，印出 JSON { requests, errors, p50, p99 }（微秒）
+// node scripts/cpu-bench.mjs p99 <since ISO> <次數> [Worker 名稱] → 等分析資料到齊，印出 JSON { requests, errors, p50, p99 }（微秒）
+//   預設量 Cron 那一輪（bq-shelter-dogs-cpu）；回呼另外量 bq-shelter-dogs-cpu-cb
 import { BENCH_DOGS, BENCH_VALUE, benchDog } from '../worker/cpu-bench/fake-gas.js';
 
 const q = s => `'${String(s).replace(/'/g, "''")}'`;
@@ -36,12 +37,12 @@ export function benchSql(kind) {
   throw new Error(`不認得 ${kind}`);
 }
 
-async function p99(since, expected, { token = process.env.CLOUDFLARE_API_TOKEN, account = process.env.CLOUDFLARE_ACCOUNT_ID, wait = 15 * 60000 } = {}) {
-  const query = `query($a:String!,$s:Time!,$u:Time!){viewer{accounts(filter:{accountTag:$a}){workersInvocationsAdaptive(limit:10,filter:{scriptName:"bq-shelter-dogs-cpu",datetime_geq:$s,datetime_leq:$u}){sum{requests errors} quantiles{cpuTimeP50 cpuTimeP99}}}}}`;
+async function p99(since, expected, script = 'bq-shelter-dogs-cpu', { token = process.env.CLOUDFLARE_API_TOKEN, account = process.env.CLOUDFLARE_ACCOUNT_ID, wait = 15 * 60000 } = {}) {
+  const query = `query($a:String!,$n:String!,$s:Time!,$u:Time!){viewer{accounts(filter:{accountTag:$a}){workersInvocationsAdaptive(limit:10,filter:{scriptName:$n,datetime_geq:$s,datetime_leq:$u}){sum{requests errors} quantiles{cpuTimeP50 cpuTimeP99}}}}}`;
   const end = Date.now() + wait;
   for (;;) {
     const res = await fetch('https://api.cloudflare.com/client/v4/graphql', { method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, variables: { a: account, s: since, u: new Date().toISOString() } }) });
+      body: JSON.stringify({ query, variables: { a: account, n: script, s: since, u: new Date().toISOString() } }) });
     const out = await res.json();
     if (!res.ok || out.errors?.length) throw new Error(`讀不到分析資料（權杖可能沒有 Account Analytics 讀取權限）：${JSON.stringify(out.errors || res.status)}`);
     const rows = out.data.viewer.accounts[0]?.workersInvocationsAdaptive || [];
@@ -54,7 +55,7 @@ async function p99(since, expected, { token = process.env.CLOUDFLARE_API_TOKEN, 
 }
 
 if (process.argv[1]?.endsWith('cpu-bench.mjs')) {
-  const [cmd, a, b] = process.argv.slice(2);
+  const [cmd, a, b, c] = process.argv.slice(2);
   if (cmd === 'sql') process.stdout.write(benchSql(a) + '\n');
-  else if (cmd === 'p99') console.log(JSON.stringify(await p99(a, Number(b))));
+  else if (cmd === 'p99') console.log(JSON.stringify(await p99(a, Number(b), c)));
 }

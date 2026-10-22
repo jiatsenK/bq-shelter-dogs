@@ -5,6 +5,8 @@
   "main": "worker/cpu-bench/index.js",
   "compatibility_date": "2026-09-01",
   "workers_dev": true,
+  // 回呼 Worker 要先部署（wrangler.cpu-bench-callback.jsonc）
+  "services": [{ "binding": "CALLBACK", "service": "bq-shelter-dogs-cpu-cb" }],
   "d1_databases": [{
     "binding": "DB",
     "database_name": "bq-shelter-dogs-test",

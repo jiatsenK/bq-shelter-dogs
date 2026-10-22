@@ -32,3 +32,19 @@ test('測速 Worker：兩批各 20 輪派完 200 隻，沒有失敗；清除後�
   for (const t of ['v3_walk_state', 'v3_walk_outbox', 'v3_sheet_main', 'v3_dogs']) assert.equal(await DB.prepare(`SELECT COUNT(*) n FROM ${t}`).first('n'), 0, t);
   assert.equal(await DB.prepare('SELECT payload FROM v3_walk_pack WHERE id=1').first('payload'), '{}');
 });
+
+test('測速 Worker 有 CALLBACK 綁定時，回呼走回呼 Worker（分開的呼叫），一隻狗兩次；回呼 Worker 不接 /cpu-round', async () => {
+  const DB = fakeD1();
+  await migrateCompactDatabase(DB);
+  const vars = { DB, SHEET_WRITE_KEY: 'sheet', WALKER_KEY: 'walker', WALK_RETRY_ENABLED: 'true', D1_WALK_NOTIFY: '1',
+    SHEET_WRITE_URL: 'https://fake-gas.invalid/exec', SYNC_DAILY_BUDGET: '1000000' };
+  const cb = { ...vars, BENCH_ROLE: 'callback' }, paths = [];
+  const env = { ...vars, BENCH_KEY: 'bench', CALLBACK: { fetch: req => (paths.push(new URL(req.url).pathname), bench.fetch(req, cb, { waitUntil() {} })) } };
+  assert.equal((await bench.fetch(new Request('https://cb.example/cpu-round', { method: 'POST', headers: { 'X-Bench-Key': 'bench' } }), cb)).status, 404);
+  await exec(DB, benchSql('seed'));
+  await exec(DB, benchSql('reset'));
+  const out = await (await round(env)).json();
+  assert.equal(paths.length, 20);
+  assert.deepEqual([...new Set(paths)].sort(), ['/api/walk-writeback/receipt', '/api/walk-writeback/target']);
+  assert.equal(out.waiting, 190, '一輪派十隻');
+});

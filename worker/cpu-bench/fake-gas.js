@@ -5,11 +5,13 @@ export const BENCH_VALUE = { date: '2026-10-21', walker: '甲' };
 export const benchDog = i => ({ id: `CPU${String(i).padStart(4, '0')}`, name: `測速狗${i}` });
 
 export function fakeSheet(env, worker) {
-  // 回呼跟正式 Apps Script 一樣走寫回端點；在同一次呼叫裡執行，CPU 會一起算（比正式偏高）。
+  // 回呼跟正式 Apps Script 一樣走寫回端點。線上經服務綁定 CALLBACK 打到另一個測速 Worker，
+  // 是分開的呼叫、各自計 CPU（跟正式相同）；本機測試沒有綁定時在同一個行程執行。
   const machine = async (action, body) => {
-    const res = await worker.fetch(new Request(`https://bench.invalid/api/walk-writeback/${action}`, {
+    const req = new Request(`https://bench.invalid/api/walk-writeback/${action}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Sheet-Write-Key': env.SHEET_WRITE_KEY }, body: JSON.stringify(body),
-    }), env, { waitUntil() {} });
+    });
+    const res = env.CALLBACK ? await env.CALLBACK.fetch(req) : await worker.fetch(req, env, { waitUntil() {} });
     const out = await res.json();
     if (!res.ok) throw new Error(out.error || `HTTP ${res.status}`);
     return out;
