@@ -384,11 +384,18 @@ export async function packStatus(db, today) {
 
 // ---- 我溜過的狗（ADR 0013，#344）：跟 public/js/cards.js 的 bqMyDogs 同一個規則 ----
 // 同一隻狗（編號）同一天以最後一筆有登記人的為準。
-// 摘要：{ codes: { 代號: { 編號: [幾天, 第一次, 最近一次] } }, multi: { '編號|日期': [代號…] } }；
-// multi 只記同一天有兩個以上代號的，加總時一個人的幾個代號同一天都在只算一天
+// 摘要：{ codes: { 代號: { 編號: [幾天, 第一次, 最近一次] } }, multi: { '編號|日期': [代號…] }, dogs: { 編號: 幾天 } }；
+// multi 只記同一天有兩個以上代號的，加總時一個人的幾個代號同一天都在只算一天。
+// dogs 是每隻狗（編號）溜過幾天，沒記人的舊紀錄也算（#271 已出所狗卡）
 function summarize(list) {
-  const last = new Map();
-  for (const w of list) if (Array.isArray(w.walkers) && String(w.id ?? '').trim()) last.set(`${String(w.id).trim()}|${w.date}`, w);
+  const last = new Map(), dogDays = new Set();
+  for (const w of list) {
+    const id = String(w.id ?? '').trim();
+    if (id) dogDays.add(`${id}|${w.date}`);
+    if (Array.isArray(w.walkers) && id) last.set(`${id}|${w.date}`, w);
+  }
+  const dogs = {};
+  for (const key of dogDays) { const id = key.slice(0, key.lastIndexOf('|')); dogs[id] = (dogs[id] || 0) + 1; }
   const codes = {}, multi = {};
   for (const [key, w] of last) {
     const id = key.slice(0, key.lastIndexOf('|'));
@@ -401,7 +408,7 @@ function summarize(list) {
     }
     if (who.length > 1) multi[key] = who;
   }
-  return { codes, multi };
+  return { codes, multi, dogs };
 }
 
 function addMine(out, summary, codes) {
@@ -423,7 +430,8 @@ function addMine(out, summary, codes) {
 async function yearSummaries(db, v) {
   const vers = JSON.parse(v.months);
   const years = groupBy(Object.keys(vers), yearOf);
-  const fits = (s, months) => s && months.every(m => s.vers[m] === vers[m]);
+  // #271 以前存的摘要沒有 dogs：當成舊的，重算一次（讀那一年的資料包，不讀 v3_walks 整表）
+  const fits = (s, months) => s && s.body.dogs && months.every(m => s.vers[m] === vers[m]);
   mem.mine ||= {};
   if ([...years].some(([y, ms]) => !fits(mem.mine[y], ms))) {
     const { results = [] } = await db.prepare('SELECT year,seq,vers,body FROM v3_walk_summaries').all();
@@ -451,5 +459,15 @@ export async function readMineWalks(db, today, codes) {
   const out = {};
   for (const s of await yearSummaries(db, v)) addMine(out, s, codes);
   addMine(out, summarize(await liveWalks(db, v)), codes);
+  return out;
+}
+
+// 每隻狗（編號）溜過幾天（#271 已出所狗卡）：跟 readMineWalks 一樣用各年摘要加上今天的紀錄，不整表讀 v3_walks
+export async function readDogWalkDays(db, today) {
+  const v = await currentVersions(db, today);
+  const out = {};
+  for (const s of [...await yearSummaries(db, v), summarize(await liveWalks(db, v))]) {
+    for (const [id, days] of Object.entries(s.dogs)) out[id] = (out[id] || 0) + days;
+  }
   return out;
 }

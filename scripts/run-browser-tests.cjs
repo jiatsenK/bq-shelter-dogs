@@ -3,7 +3,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const SUITES = ['walk-accept', 'read-policy', 'startup-stability', 'walker-editing', 'intake-presentation', 'info-page', 'fixed-care',
+const SUITES = ['walk-accept', 'read-policy', 'startup-stability', 'walker-editing', 'intake-presentation', 'info-page', 'activities', 'departed-cards', 'fixed-care',
   'group-cache', 'group-walks', 'large-text', 'navigation', 'tab-focus', 'keyboard-viewport', 'index', 'detail-editing'];
 
 const ROOT = path.resolve(__dirname, '..');

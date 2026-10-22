@@ -256,6 +256,49 @@ CREATE TABLE IF NOT EXISTS v3_edit_log (
   before_json TEXT,
   after_json TEXT
 );
+-- 活動紀錄（#270，ADR 0002）：一場一列，類型固定兩種（kids＝動保小小兵、adoption＝認養會）。網站寫，同步不碰。
+-- revision 每改一次加 1，兩支手機同時改時後送的會被擋下（不互相蓋掉）
+CREATE TABLE IF NOT EXISTS v3_activities (
+  activity_id TEXT PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(16)))),
+  activity_date TEXT NOT NULL CHECK(length(activity_date)=10),
+  kind TEXT NOT NULL CHECK(kind IN ('kids','adoption')),
+  revision INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS v3_activities_date ON v3_activities(activity_date);
+-- 出席的狗：只記出席，不記狀況。dog_id 是 NULL 表示只有名字、還沒對上狗（舊名單），之後補建狗卡再接上；name 是記的時候的名字
+CREATE TABLE IF NOT EXISTS v3_activity_dogs (
+  activity_id TEXT NOT NULL REFERENCES v3_activities(activity_id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  dog_id TEXT REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
+  name TEXT NOT NULL,
+  PRIMARY KEY(activity_id,position)
+);
+CREATE INDEX IF NOT EXISTS v3_activity_dogs_dog ON v3_activity_dogs(dog_id);
+-- 在 batch 內檢查活動沒被別人改過；失敗時整批回復（同 v3_identity_guard）
+CREATE TABLE IF NOT EXISTS v3_activity_guard (valid INTEGER NOT NULL CHECK(valid=1));
+-- 活動紀錄版本號（ADR 0009 的做法）：兩張表有新增、修改、刪除就加 1，Worker 每次只讀這 1 列，沒變就回記憶體裡的名單
+CREATE TABLE IF NOT EXISTS v3_activity_versions (id INTEGER PRIMARY KEY CHECK(id=1), ver INTEGER NOT NULL DEFAULT 0);
+INSERT OR IGNORE INTO v3_activity_versions(id) VALUES(1);
+CREATE TRIGGER IF NOT EXISTS version_v3_activities_INSERT AFTER INSERT ON v3_activities BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activities_UPDATE AFTER UPDATE ON v3_activities BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activities_DELETE AFTER DELETE ON v3_activities BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activity_dogs_INSERT AFTER INSERT ON v3_activity_dogs BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activity_dogs_UPDATE AFTER UPDATE ON v3_activity_dogs BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activity_dogs_DELETE AFTER DELETE ON v3_activity_dogs BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+
+-- 只有名字的已出所狗卡（#271，ADR 0002）：網站開始記錄前就離所、D1 沒有的狗，K 確認後用 scripts/departed-card.mjs 建。
+-- 狗本身是 v3_dogs 一列（沒有編號）；離所日、原因不知道就留空／unknown。同步不碰
+CREATE TABLE IF NOT EXISTS v3_departed_cards (
+  dog_id TEXT PRIMARY KEY NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
+  departed_date TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL DEFAULT 'unknown' CHECK(reason IN ('adopt','death','other','unknown')),
+  created_at TEXT NOT NULL
+);
+-- 已出所狗卡的出席次數跟活動用同一個版本號（v3_activity_versions），建卡也要讓它加 1
+CREATE TRIGGER IF NOT EXISTS version_v3_departed_cards_INSERT AFTER INSERT ON v3_departed_cards BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_departed_cards_UPDATE AFTER UPDATE ON v3_departed_cards BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_departed_cards_DELETE AFTER DELETE ON v3_departed_cards BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+
 -- #267：舊代號資料保留作為待對照來源，新個人資料只由固定志工持有。
 CREATE TABLE IF NOT EXISTS v3_identity_names (
  code TEXT PRIMARY KEY NOT NULL,

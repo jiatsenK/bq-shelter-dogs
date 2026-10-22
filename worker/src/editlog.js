@@ -11,6 +11,7 @@ export const KIND_LABELS = {
   intro: '入所介紹',
   photo: '照片',
   activity: '活動紀錄',
+  'departed-card': '已出所狗卡',
   note: '試算表備註',
   sheetlog: '試算表異動紀錄',
   group: '常溜狗群',
