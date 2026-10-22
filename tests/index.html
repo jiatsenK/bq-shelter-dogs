@@ -633,7 +633,7 @@ function runTests() {
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
       const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
-      eq(scripts.map(s => s.getAttribute('src')), ['js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定）：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/activities.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定、#270 活動紀錄）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
@@ -1154,7 +1154,7 @@ async function runAnalysisTests() {
       eq([...document.querySelectorAll('#tabs button')].map(b => b.dataset.tab), ['walk', 'groups', 'mine', 'info'], '分析不佔分類：');
       showAnalysis();
       eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [true, true, 'mine'], '打開分析：');
-      eq(document.querySelectorAll('[data-info-page]').length, 4, '資訊四類（活動待 #270）：');
+      eq(document.querySelectorAll('[data-info-page]').length, 5, '資訊五類（含活動 #270）：');
       infoPage = 'stay'; render();
       const titles = [...document.querySelectorAll('#main .a-card h2')].map(h => h.textContent);
       eq(titles.length, 4, '五張統計＋離所（#345 拿掉本月溜狗；（2026-10-08 distill 拿掉滿 1 年圓環、入所年度分布）：');
@@ -1169,7 +1169,7 @@ async function runAnalysisTests() {
       eq(photoCalls.every(([, m]) => m === 'HEAD'), true, '照片只用 HEAD：');
       eq(photoCalls.length, 9, '每個編號查一次：');
       // #345 拿掉本月溜狗：分析頁不再讀溜狗紀錄
-      eq(calls.filter(([u]) => !u.startsWith('photos/') && u !== 'api/departures/index').length, 0, '分析頁只多讀離所名冊索引（#163、#363），不讀溜狗紀錄和其他檔：');
+      eq(calls.filter(([u]) => !u.startsWith('photos/') && u !== 'api/departures/index' && u !== 'api/activities').length, 0, '分析頁只多讀離所名冊索引（#163、#363）和活動紀錄（#270），不讀溜狗紀錄和其他檔：');
       await tick(); await tick(); await tick();
       const photoRow = [...document.querySelectorAll('#main .a-miss')].find(el => el.textContent.includes('沒有照片'));
       if (!photoRow || !photoRow.textContent.includes('9 隻')) throw new Error(`沒有照片列：${photoRow && photoRow.textContent}`);
@@ -3490,7 +3490,7 @@ async function runDeskTests() {
 async function runCardsTests() {
   const code = await fetch('../public/js/cards.js').then(r => r.text());
   // 包在函式裡跑，不把 bq* 放進這頁的全域（測試頁沒有 #bqField，不會開始畫面）
-  const C = new Function(`${SITE_JS}\n${code}\nreturn { bqPlayers, bqTier, bqStay, bqQuote, bqMonthOut, bqAwards, bqTeamOf, bqLoadCodes, bqTodayWrites, bqMineFrom, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, BQ_OPENED_KEY };`)();
+  const C = new Function(`${SITE_JS}\n${code}\nreturn { bqPlayers, bqTier, bqStay, bqQuote, bqMonthOut, bqAwards, bqTeamOf, bqLoadCodes, bqTodayWrites, bqMineFrom, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, BQ_OPENED_KEY, bqAlumni };`)();
   const TODAY = new Date(2026, 9, 9);
   const data = {
     photoVersions: { 'photos/2017041502.jpg': 'abc' },
@@ -3520,6 +3520,17 @@ async function runCardsTests() {
     const fromApp = parseDogsData({ dogs: cases }).dogs.map(d => ymd(firstIntake(d)));
     eq(fromCards, ['2015/8/18', '2014/1/1', '2017/9/5', '2020/2/2'], '圖鑑：');
     eq(fromApp, fromCards, '溜狗表跟圖鑑一樣：');
+  });
+  await check('#271 已出所狗卡：在所期間是入所日到離所日，原因寫給人看；只有名字的卡沒有照片', () => {
+    const list = C.bqAlumni({ dogs: [
+      { id: '2020010101', number: '2020010101', name: '阿福', formerIds: ['2019010101'], stays: [], departed: '2026-10-10', reason: 'adopt', walkDays: 4, activities: 2 },
+      { id: 'm1', number: '', name: '老黃', formerIds: [], stays: [], departed: '', reason: 'lost', walkDays: 0, activities: 1, nameOnly: true },
+      { id: '', name: '壞資料' },
+    ] });
+    eq(list.map(a => [a.name, a.intake && ymd(a.intake), a.left && ymd(a.left), a.stay, a.reason, a.walkDays, a.activities, a.hasPhoto]), [
+      ['阿福', '2019/1/1', '2026/10/10', '7年9個月', '被認養', 4, 2, null],
+      ['老黃', null, null, '—', '原因待確認', 0, 1, false],
+    ]);
   });
   await check('球員卡：沒編號、括號名字的列不算；背號照入隊順序（1 號最資深）', () => {
     eq(players.map(p => p.name), ['老將', '新人', '中堅', '金卡'], '球員：');
@@ -3670,7 +3681,8 @@ async function runCardsTests() {
   });
   await check('圖鑑只讀狗與遛狗資料，另透過開卡 API 儲存，不寫試算表', () => {
     const urls = [...code.matchAll(/fetch\(([^,)]+)/g)].map(m => m[1].trim());
-    eq(urls.length, 5, '狗、歷史、我溜過的狗、身分解析與開卡：');
+    eq(urls.length, 6, '狗、歷史、我溜過的狗、身分解析、開卡與已出所（#271）：');
+    if (!urls.includes('BQ_ALUMNI_URL') || !code.includes("fetch(BQ_ALUMNI_URL, { cache: 'no-cache' })")) throw new Error('已出所只用 GET 讀');
     if (!code.includes('/api/cards/opened') || /script\.google\.com|sheets\.googleapis\.com|UPLOAD_URL/.test(code)) throw new Error('cards.js 只能寫開卡 API');
     if (/setItem\((?!BQ_OPENED_KEY|BQ_CODES_KEY|'bq-walker-name')/.test(code)) throw new Error('cards.js 只能存撕開過的卡，不能改溜狗表的代號、今天已溜');
   });
@@ -4610,11 +4622,11 @@ async function runTourLayoutTests() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js'].map(u => fetch(u).then(res => {
+Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs]) => {
+  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs]) => {
     SITE_JS = siteJs;
     const c = document.createElement('script'); // 這間收容所的設定要在其他程式前面
     c.textContent = siteJs;
@@ -4637,6 +4649,7 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     const f = document.createElement('script');
     f.textContent = findJs;
     document.body.appendChild(f);
+    const act = document.createElement('script'); act.textContent = activitiesJs; document.body.appendChild(act);
     walkedStorage = fakeStorage(); // 其他測試也不碰真正的 localStorage
     loadState = 'ready'; // 測試頁不跑 init，直接當資料已讀好，各測試自己放假資料
     restState = 'ready'; todayState = 'ready'; // 初次狀態讀取另由 startup-stability.cjs 走真實頁面驗證
