@@ -168,7 +168,7 @@ export async function dispatchWalk(db, dog, env, clock = Date.now(), recovery = 
   let release = false;
   try {
     if (!env.SHEET_WRITE_URL || !env.SHEET_WRITE_KEY) throw new Error('writeback-not-configured');
-    const receipt = await callSheet(env, { action: 'walkWake', dog, dispatchId }).catch(() => { throw new Error('writeback-unconfirmed'); });
+    const receipt = await callSheet(env, { action: 'walkWake', dog, dispatchId }).catch(e => { throw new Error(`writeback-unconfirmed: ${e.message}`); }); // callSheet 的訊息不含試算表 ID、金鑰
     const confirmed = await confirmWalk(db, { ...receipt, dogKey: key }, env);
     if (!confirmed.confirmed) throw new Error('writeback-unconfirmed');
     release = true;

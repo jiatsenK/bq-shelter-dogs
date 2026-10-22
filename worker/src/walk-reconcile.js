@@ -44,6 +44,6 @@ export async function scanWalks(env,now) {
   const observed=(await env.DB.prepare(`SELECT s.*,o.status FROM v3_walk_state s
     JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version`).all()).results || [];
   if (!observed.length) return;
-  const body=await callSheet(env,{ action:'walkScan' }).catch(()=>{ throw new Error('主清單直接讀回失敗'); });
+  const body=await callSheet(env,{ action:'walkScan' }).catch(e=>{ throw new Error(`主清單直接讀回失敗：${e.message}`); });
   await reconcileWalkSnapshot(env.DB,body.rows,observed,env,now);
 }

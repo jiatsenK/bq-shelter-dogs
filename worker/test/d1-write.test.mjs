@@ -272,3 +272,12 @@ test('出入所紀錄：Worker 不看在不在所，用編號找得到狗就能�
   assert.equal(r.status, 200);
   assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_stays WHERE dog_id=?').bind(id).first('n'), 1);
 });
+
+test('網址沒帶狗狗編號：每種編輯都回 400「狗狗編號格式不對」，不是要人先選名字', async () => {
+  const env = await makeEnv();
+  for (const [method, kind] of [['PUT', 'rest'], ['PUT', 'fixed-care'], ['PUT', 'intro'], ['POST', 'former'], ['PUT', 'stays']]) {
+    const { status, body } = await call(env, method, `/${kind}/`, { editor: ME });
+    assert.equal(status, 400, kind);
+    assert.equal(body.error, '狗狗編號格式不對', kind);
+  }
+});

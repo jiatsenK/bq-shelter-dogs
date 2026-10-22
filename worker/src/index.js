@@ -1369,7 +1369,7 @@ export default {
     const route = Object.hasOwn(SITE_ROUTES, path) ? SITE_ROUTES[path] : null;
     if (route) return siteRoute(route, { request, env, origin: allowed, path, url, cfg, ctx });
     // 改一隻狗的資料（DOG_EDITS）：/rest/編號、/fixed-care/編號、/intro/編號、/former/編號、/stays/編號
-    const editName = (path.match(/^\/([^/]+)\/[^/]+$/) || [])[1];
+    const editName = (path.match(/^\/([^/]+)\/[^/]*$/) || [])[1]; // 編號空白也接住，回「狗狗編號格式不對」
     const dogEdit = editName && Object.hasOwn(DOG_EDITS, editName) ? DOG_EDITS[editName] : null;
     if (dogEdit) {
       if (!dogEdit.methods.includes(request.method)) return fail(405, `${dogEdit.label}只能用 ${dogEdit.methods.join('／')} ${path.split('/').slice(0, 2).join('/')}/編號`, allowed);

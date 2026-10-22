@@ -26,6 +26,12 @@
 - `worker/test/standards.test.mjs`：沒帶條件的 SELECT／DELETE 要列在 `FULL_SCAN_OK`（既有的待 #474 確認）；拆名字只能用 `splitNames`（三處改掉，trim 差異已補進 #473）。
 - CODING_STANDARDS.md 加「搬動的程式碼視同新寫」；`docs/agents/issue-tracker.md` 加重構規格要列既有違規與票號。
 
+## 第二次 Spec 審查後補修（K 同意）
+
+- 沒帶編號的編輯網址（/rest/ 等）恢復回「狗狗編號格式不對」，補測試。
+- 統一寫日誌保留：只記錯誤物件，不記請求本文；已補進 #473。
+- walkWake、walkScan 失敗時在固定分類後補上 callSheet 的原因（不含試算表 ID、金鑰），重試機制不變。
+
 ## 驗證
 
 node 測試 403 項、網頁測試 262 項全過；Standards／Spec 兩軸審查已做，上面的差異就是審查列出、決定保留的。
