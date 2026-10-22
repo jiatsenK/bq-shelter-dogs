@@ -16,7 +16,9 @@ export function parseCsv(text) {
   const rows = [];
   for (const [i, line] of String(text).replace(/^﻿/, '').split(/\r?\n/).entries()) {
     if (!line.trim()) continue;
-    const [date = '', kind = '', name = ''] = line.split(',').map(s => s.trim().replace(/^"|"$/g, ''));
+    // 欄位可以用雙引號包（裡面可以有逗號，"" 是一個引號）
+    const cells = [...line.matchAll(/\s*(?:"((?:[^"]|"")*)"|([^,]*))\s*(?:,|$)/g)].map(m => (m[1] !== undefined ? m[1].replace(/""/g, '"') : m[2]).trim());
+    const [date = '', kind = '', name = ''] = cells;
     if (i === 0 && !/\d/.test(date)) continue; // 標題列
     rows.push({ line: i + 1, date, kind, name });
   }

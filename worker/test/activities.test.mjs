@@ -4,6 +4,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { fakeD1 } from './fakes.mjs';
+import { createActivity, cleanActivity } from '../src/activities.js';
 import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
 import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
 import { parseCsv, planActivityImport, importSql } from '../../scripts/import-activities.mjs';
@@ -79,4 +80,17 @@ test('舊名單匯入：完全同名且只有一隻才接上，其他列出並�
   for (const s of importSql(plan.activities).trim().split('\n')) await env.DB.prepare(s).run();
   const imported = (await list(env)).find(a => a.date === '2026-03-08');
   assert.deepEqual(imported.dogs.map(d => [d.name, Boolean(d.dogId)]), [['甲', true], ['乙', false], ['小黑', false]]);
+});
+
+test('活動紀錄：修改、刪除只讀那一場，讀取量不隨其他場次變多', async t => {
+  const readsOf = async n => {
+    const env = await setup(t);
+    for (let i = 0; i < n; i++) await createActivity(env.DB, await cleanActivity(env.DB, { date: `2026-01-${String(i % 28 + 1).padStart(2, '0')}`, kind: 'kids', dogs: [{ name: '舊' + i }, { number: '2024032902' }] }));
+    const id = (await call(env, 'POST', '/activities', { editor: '小明', date: '2026-10-01', kind: 'kids', dogs: [{ name: '目標' }] })).body.activity.id;
+    const before = env.DB.stats.rowsRead;
+    await call(env, 'PUT', `/activities/${id}`, { editor: '小明', date: '2026-10-02', kind: 'kids', dogs: [{ name: '改' }] });
+    await call(env, 'DELETE', `/activities/${id}`, { editor: '小明' });
+    return env.DB.stats.rowsRead - before;
+  };
+  assert.equal(await readsOf(30), await readsOf(1));
 });

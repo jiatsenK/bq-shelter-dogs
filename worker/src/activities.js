@@ -11,13 +11,16 @@ export class ActivityError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 
-// 全部場次，新到舊：[{ id, date, kind, dogs: [{ dogId, name, number }] }]
-// 對上狗的顯示現在的名字和最新編號（在所的才有編號）；只有名字的照存的名字
-export async function readActivities(db) {
+// 全部場次，新到舊：[{ id, date, kind, dogs: [{ dogId, name, number }] }]；給 id 只讀那一場（寫入前後用，不整張讀）
+// 對上狗的顯示現在的名字和在所編號（離所的沒有編號）；只有名字的照存的名字
+// 列表頁整張讀：一個月幾場、一場幾十隻，一年約幾百列，只在打開活動紀錄頁時讀（ADR 0002）
+export async function readActivities(db, id = null) {
+  const where = id ? ' WHERE id=?' : '', dogWhere = id ? ' WHERE a.activity_id=?' : '';
+  const bind = (sql) => (id ? db.prepare(sql).bind(id) : db.prepare(sql));
   const [acts, dogs] = await db.batch([
-    db.prepare('SELECT id,activity_date,kind FROM v3_activities'),
-    db.prepare(`SELECT a.activity_id,a.position,a.dog_id,a.name,d.name AS dog_name,m.number
-      FROM v3_activity_dogs a LEFT JOIN v3_dogs d ON d.dog_id=a.dog_id LEFT JOIN v3_sheet_main m ON m.dog_id=a.dog_id`),
+    bind('SELECT id,activity_date,kind FROM v3_activities' + where),
+    bind(`SELECT a.activity_id,a.position,a.dog_id,a.name,d.name AS dog_name,(SELECT number FROM v3_sheet_main m WHERE m.dog_id=a.dog_id LIMIT 1) AS number
+      FROM v3_activity_dogs a LEFT JOIN v3_dogs d ON d.dog_id=a.dog_id` + dogWhere),
   ]);
   const byId = new Map((acts.results || []).map(r => [r.id, { id: r.id, date: r.activity_date, kind: r.kind, dogs: [] }]));
   const rows = (dogs.results || []).sort((a, b) => a.position - b.position);
@@ -29,7 +32,7 @@ export async function readActivities(db) {
 }
 
 async function readOne(db, id) {
-  return (await readActivities(db)).find(a => a.id === id) || null;
+  return (await readActivities(db, id))[0] || null;
 }
 
 // 網站送來的 { date, kind, dogs: [{ dogId } | { number } | { name }] } → 檢查並把編號換成永久 ID
@@ -68,12 +71,13 @@ function writeStatements(db, id, act) {
 
 // 新增一場，回傳讀回的內容
 export async function createActivity(db, act) {
-  const row = await db.prepare('INSERT INTO v3_activities(activity_date,kind) VALUES(?,?) RETURNING id').bind(act.date, act.kind).first();
-  if (act.dogs.length) await db.batch(writeStatements(db, row.id, act));
-  return readOne(db, row.id);
+  // 場次和出席同一批寫入：失敗就整場都沒寫，不會留下沒有狗的空場次
+  const id = [...crypto.getRandomValues(new Uint8Array(8))].map(b => b.toString(16).padStart(2, '0')).join('');
+  await db.batch([db.prepare('INSERT INTO v3_activities(id,activity_date,kind) VALUES(?,?,?)').bind(id, act.date, act.kind), ...writeStatements(db, id, act)]);
+  return readOne(db, id);
 }
 
-// 整場換掉（日期、類型、出席名單）；回傳 { before, after }，找不到回 null
+// 整場換掉（日期、類型、出席名單）：只刪寫這一場的出席，寫入量跟名單長度成正比；回傳 { before, after }，找不到回 null
 export async function updateActivity(db, id, act) {
   const before = await readOne(db, id);
   if (!before) return null;

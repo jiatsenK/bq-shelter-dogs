@@ -22,7 +22,7 @@ const actToday = () => { const d = new Date(); return `${d.getFullYear()}-${Stri
 function actSuggestionsHtml() {
   const q = (actEdit?.query || '').trim();
   if (!q) return '';
-  const picked = new Set(actEdit.dogs.map(d => d.number).filter(Boolean));
+  const picked = new Set(actEdit.dogs.map(d => d.number).filter(Boolean)); // 已對上的在所狗也帶編號（GET 讀回）
   const hits = (allDogs || []).filter(d => d.id && !picked.has(d.id) && (d.name.includes(q) || d.id.includes(q))).slice(0, 8);
   return hits.map(d => `<button type="button" data-act-add="${esc(d.id)}">${esc(d.name)}<small>${esc(d.id)}</small></button>`).join('') +
     (actEdit.dogs.some(d => !d.dogId && !d.number && d.name === q) ? '' : `<button type="button" data-act-add-name>只記名字「${esc(q)}」</button>`);
@@ -128,7 +128,6 @@ document.getElementById('main').addEventListener('input', e => {
   if (e.target.id === 'actDate') actEdit.date = e.target.value;
   if (e.target.id === 'actKind') actEdit.kind = e.target.value;
 });
-document.getElementById('main').addEventListener('change', e => { if (actEdit && e.target.id === 'actKind') actEdit.kind = e.target.value; });
 document.getElementById('main').addEventListener('submit', e => {
   if (e.target.id !== 'actForm') return;
   e.preventDefault();
