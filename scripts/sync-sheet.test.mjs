@@ -512,10 +512,12 @@ test('2026-10-04 誰遛的格子用句號、分號、冒號等隔開也拆成好
   }
   assert.equal(sync.isMine('測試志工乙經常', names), false, '分隔符號以外的字還是要整個名字相同');
   assert.deepEqual(sync.walkerCodes('測試志工甲。測試志工乙', KEY), [CODE('測試志工甲'), CODE('測試志工乙')]);
-  const src = re => re.match(/NAME_SEP = (\/.*\/);/)[1];
-  const worker = await readFile(new URL('../worker/src/index.js', import.meta.url), 'utf8');
-  const script = await readFile(new URL('./sync-sheet.mjs', import.meta.url), 'utf8');
-  assert.equal(src(worker), src(script), '同步和 Worker 的分隔符號要一樣，不然換出來的代號對不上');
+  // 同步和 Worker 的分隔符號要一樣，不然換出來的代號對不上：兩邊都 import worker/src/sheet-read.js 的 NAME_SEP
+  for (const file of ['../worker/src/index.js', './sync-sheet.mjs']) {
+    const src = await readFile(new URL(file, import.meta.url), 'utf8');
+    assert.match(src, /import \{[^}]*\bNAME_SEP\b[^}]*\} from '[./]*(worker\/src\/)?sheet-read\.js'/, file);
+    assert.doesNotMatch(src, /NAME_SEP = \//, `${file} 不要自己再定義一份`);
+  }
 });
 
 test('K 2026-10-05 阿湯：同一天甲 → 甲＋我 → 甲，再記一筆甲，「我溜過」以最後一筆為準；舊檔漏記的也補回', () => withEnv({ WALKER_KEY: KEY, MY_NAME: ME }, async () => {

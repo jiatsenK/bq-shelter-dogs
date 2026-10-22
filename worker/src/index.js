@@ -3,6 +3,7 @@ import { cleanIntakeEvents } from './intake.js';
 import { cleanStays } from './stays.js';
 import { saveFixedCare, mainNameMatcher, replaceGroup } from './compact.js';
 import { callSheet, SheetWriteError } from './sheet-write.js';
+import { gvizTable, cellText, findHeaderRow, columnMap, MAIN_COLUMNS, NAME_SEP, splitNames } from './sheet-read.js';
 import { readDepartedCards } from './departed.js';
 import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, readActivities, resolveDogs, updateActivity } from './activities.js';
 import { acceptWalk, dispatchWalk, readAcceptedWalks, writebackTarget, confirmWalk } from './walk-accept.js';
@@ -64,8 +65,6 @@ const WALK_LIMITS = [
 ];
 // 網站「更新」按鈕：同一個人 2 分鐘 1 次；同步本身要跑約 1 分鐘，按再多次也沒用
 const SYNC_LIMITS = [{ windowMs: 2 * 60 * 1000, max: 1 }];
-// 跟 scripts/sync-sheet.mjs 的 NAME_SEP 一樣：一格寫好幾個名字時用這些符號或空白隔開
-const WALKER_NAME_SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
 
 // 注意：Cloudflare 會同時開好幾份 Worker，下面這兩個暫存各自獨立，
 // 所以頻率限制是「盡量擋」，不是精確計數；目的是擋住一直狂傳，不是算帳
@@ -752,7 +751,7 @@ async function walkerCodes(request, env, origin) {
     return fail(400, '格式不對', origin);
   }
   if (!input || !Array.isArray(input.names) || input.names.some(n => typeof n !== 'string')) return fail(400, '請送名字清單', origin);
-  const names = [...new Set(input.names.flatMap(n => n.split(WALKER_NAME_SEP)).map(n => n.trim()).filter(Boolean))];
+  const names = [...new Set(input.names.flatMap(n => n.split(NAME_SEP)).map(n => n.trim()).filter(Boolean))];
   if (!names.length) return fail(400, '請輸入名字', origin);
   if (names.length > WALKER_MAX_NAMES) return fail(400, `最多 ${WALKER_MAX_NAMES} 個名字`, origin);
   if (names.some(n => [...n].length > WALKER_NAME_MAX_CHARS)) return fail(400, `每個名字最多 ${WALKER_NAME_MAX_CHARS} 個字`, origin);
@@ -777,35 +776,7 @@ const WALKERS_CACHE_MS = 60 * 1000;
 // 看過的名字寫資料庫很花寫入額度（每個名字一列），快取改 1 分鐘後另外限制：名單沒變就 30 分鐘才記一次
 const WALKER_NAMES_REMEMBER_MS = 30 * 60 * 1000;
 let walkerNamesRemembered = null; // { at, names: 'a,b', older }
-export function gvizTable(text) {
-  const m = String(text).match(/setResponse\(([\s\S]*)\);?\s*$/);
-  if (!m) throw new Error('試算表回應格式不對');
-  const data = JSON.parse(m[1]);
-  if (data.status === 'error') throw new Error('試算表回應錯誤');
-  return data.table || {};
-}
-function gvizCell(c) {
-  if (!c || c.v == null) return '';
-  if (typeof c.v === 'string' && c.v.startsWith('Date(')) return c.f || '';
-  return String(c.v).trim();
-}
-// 主清單跟同步（scripts/sync-sheet.mjs）一樣分兩次讀：gviz 會照多數決猜欄位型別，表頭文字在數字欄會變空的，
-// 所以先 headers=0 找表頭在第幾列，再指定表頭列數重讀、用欄位標題對欄（標題缺的用第一次讀到的表頭文字補）
-const WALKERS_COLUMNS = { cage: '籠位', id: '編號', name: '犬名', walker: '誰遛的', date: '遛狗日期' };
-function walkersColumns(texts) {
-  const norm = texts.map(t => String(t || '').replace(/\s+/g, ''));
-  const map = {};
-  for (const [key, label] of Object.entries(WALKERS_COLUMNS)) {
-    let i = norm.indexOf(label);
-    if (i === -1) i = norm.findIndex(t => t.endsWith(label));
-    if (i === -1) i = norm.findIndex(t => t.includes(label));
-    if (i !== -1) map[key] = i;
-  }
-  return map;
-}
-export function walkersHeaderRow(table) {
-  return (table.rows || []).findIndex(r => walkersColumns((r.c || []).map(gvizCell)).name != null);
-}
+// 主清單跟同步一樣分兩次讀、用欄位標題對欄（worker/src/sheet-read.js）
 // 「遛狗日期」：日期格式（gviz 的 Date(年,月-1,日)）或文字（2026/10/20、10/20）→ 'YYYY-MM-DD'；讀不懂回 ''
 export function walkersDate(c, now = new Date()) {
   if (!c || c.v == null) return '';
@@ -821,28 +792,26 @@ export function walkersDate(c, now = new Date()) {
 }
 // table：指定表頭列數重讀的結果；headerTexts：第一次讀到的表頭列。回 { walkers: { 狗的 key: 原文 }, dates: { 狗的 key: 'YYYY-MM-DD' }, names }
 export function parseWalkers(table, headerTexts = []) {
-  const map = walkersColumns((table.cols || []).map(c => (c && c.label) || ''));
-  const fallback = walkersColumns(headerTexts);
-  for (const k of Object.keys(WALKERS_COLUMNS)) if (map[k] == null && fallback[k] != null) map[k] = fallback[k];
+  const map = columnMap(table, headerTexts);
   if (map.name == null || map.walker == null) throw new Error('主清單找不到「犬名」或「誰遛的」欄');
   const walkers = {};
   const dates = {};
   const count = new Map();
   for (const r of table.rows || []) {
     const raw = r.c || [];
-    const c = raw.map(gvizCell);
+    const c = raw.map(cellText);
     const name = c[map.name] || '', id = map.id == null ? '' : (c[map.id] || ''), text = c[map.walker] || '';
     // 跟同步一樣：要有犬名和籠位才算狗（表尾的提示文字不算）
-    if (!name || (map.cage != null && !c[map.cage]) || name === WALKERS_COLUMNS.name) continue;
+    if (!name || (map.cage != null && !c[map.cage]) || name === MAIN_COLUMNS.name) continue;
     // 試算表是正本（K 2026-10-20）：手機用這裡的日期蓋掉 dogs.json，直接改試算表也 1 分鐘內看到
     // 清空的格子也要回（空字串），手機才知道被清掉；日期讀不懂就不回，手機沿用上次同步的
     const key = id || `名:${name}`;
-    const cell = map.date == null ? null : raw[map.date];
+    const cell = map.walkedDate == null ? null : raw[map.walkedDate];
     const date = cell && cell.v != null && String(cell.f ?? cell.v).trim() ? walkersDate(cell) : '';
-    if (date || (map.date != null && !(cell && cell.v != null && String(cell.f ?? cell.v).trim()))) dates[key] = date;
+    if (date || (map.walkedDate != null && !(cell && cell.v != null && String(cell.f ?? cell.v).trim()))) dates[key] = date;
     walkers[key] = text;
     if (!text) continue;
-    for (const n of new Set(text.split(WALKER_NAME_SEP).map(x => x.trim()).filter(Boolean))) count.set(n, (count.get(n) || 0) + 1);
+    for (const n of new Set(splitNames(text))) count.set(n, (count.get(n) || 0) + 1);
   }
   // 名字（開頭畫面讓志工點選自己）：出現次數多的在前
   const names = [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-Hant')).map(([n]) => n);
@@ -856,9 +825,9 @@ async function readWalkers(sheetId, fetchImpl = fetch) {
     return gvizTable(await res.text());
   };
   const raw = await read(0);
-  const h = walkersHeaderRow(raw);
+  const h = findHeaderRow(raw);
   if (h === -1) throw new Error('主清單找不到「犬名」表頭');
-  return parseWalkers(await read(h + 1), ((raw.rows[h] || {}).c || []).map(gvizCell));
+  return parseWalkers(await read(h + 1), ((raw.rows[h] || {}).c || []).map(cellText));
 }
 // 看過的名字記進資料庫（K 2026-10-12）：回「以前看過、現在表上沒有」的名字，最近看到的在前（older）。
 // 沒接資料庫或資料庫出錯就回空的，名字清單照舊只有表上現在的
@@ -929,7 +898,7 @@ function cleanWalkDog(d, action, accepted = false) {
     if (!w || typeof w !== 'object' || !shortText(w.walker || '', 200)) return null;
     // 沒有 prev：手機沒有復原證據，Worker 從溜狗紀錄找上一次（ADR 0016）；只撤銷只剩一個名字的登記
     if (p === undefined) {
-      if (w.walker.split(WALKER_NAME_SEP).filter(Boolean).length !== 1) return null;
+      if (w.walker.split(NAME_SEP).filter(Boolean).length !== 1) return null;
       out.wrote = { walker: w.walker.trim() };
       out.lookup = true;
       return out;

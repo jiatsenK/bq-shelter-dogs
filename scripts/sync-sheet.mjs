@@ -13,6 +13,10 @@
 // #57 起每筆多一個 mine、#94 起多一個 walkers（代號）；舊紀錄由 upgradeWalks 補。
 
 import { createHmac } from 'node:crypto';
+import { gvizTable, cellText, findColumns, findHeaderRow, columnMap, MAIN_COLUMNS, NAME_SEP } from '../worker/src/sheet-read.js';
+
+// 試算表解析的共用部分在 worker/src/sheet-read.js（Worker 也用），這裡轉出去給測試和其他腳本
+export { cellText, findHeaderRow };
 
 // 日期一律用台灣時間判斷（沒寫年份的日期、同步時間）
 if (!process.env.TZ) process.env.TZ = 'Asia/Taipei';
@@ -33,20 +37,12 @@ export async function fetchGviz(sheetName, headers = 0, fetchImpl = fetch, range
   }
   if (!res.ok) throw new Error(`讀取「${sheetName}」分頁失敗（HTTP ${res.status}），請確認試算表已設定「知道連結的人可檢視」。`);
   const text = await res.text();
-  const match = text.match(/setResponse\(([\s\S]*)\);?\s*$/);
-  if (!match) throw new Error(`「${sheetName}」分頁回應格式異常，請確認試算表已設定「知道連結的人可檢視」。`);
-  const data = JSON.parse(match[1]);
-  if (data.status === 'error') {
-    const detail = (data.errors || []).map(e => e.detailed_message || e.message).filter(Boolean).join('；');
-    throw new Error(`讀取「${sheetName}」分頁失敗${detail ? `：${detail}` : ''}`);
+  try {
+    return gvizTable(text);
+  } catch (e) {
+    if (e.detail !== undefined) throw new Error(`讀取「${sheetName}」分頁失敗${e.detail ? `：${e.detail}` : ''}`);
+    throw new Error(`「${sheetName}」分頁回應格式異常，請確認試算表已設定「知道連結的人可檢視」。`);
   }
-  return data.table || { cols: [], rows: [] };
-}
-
-export function cellText(cell) {
-  if (!cell || cell.v == null) return '';
-  if (typeof cell.v === 'string' && cell.v.startsWith('Date(')) return cell.f || '';
-  return String(cell.v).trim();
 }
 
 // 把年月日組成日期；不合理的日期（例：2/30）回傳 null
@@ -100,45 +96,9 @@ export function cellDate(cell, today = new Date()) {
   return null;
 }
 
-const MAIN_COLUMNS = {
-  cage: '籠位',
-  id: '編號',
-  name: '犬名',
-  walkedDate: '遛狗日期',
-  walker: '誰遛的',
-  note: '備註',
-};
-
-// 表頭文字去空白後比對：先找完全相同，再找包含（例：「備註 」、「犬名(暱稱)」）
-function findColumns(headerTexts) {
-  const norm = headerTexts.map(t => t.replace(/\s+/g, ''));
-  const colMap = {};
-  for (const [key, label] of Object.entries(MAIN_COLUMNS)) {
-    let idx = norm.indexOf(label);
-    if (idx === -1) idx = norm.findIndex(t => t.endsWith(label));
-    if (idx === -1) idx = norm.findIndex(t => t.includes(label));
-    if (idx !== -1) colMap[key] = idx;
-  }
-  return colMap;
-}
-
-// 在「所有列都當資料」的回應裡找含「犬名」的表頭列，回傳第幾列（從 0 起算）
-export function findHeaderRow(table) {
-  const rows = table.rows || [];
-  for (let i = 0; i < rows.length; i++) {
-    if (findColumns((rows[i].c || []).map(cellText)).name != null) return i;
-  }
-  return -1;
-}
-
 // table 是用 headers=表頭列數 重讀的結果；headerTexts 是第一次讀到的表頭列文字，欄位標題缺漏時拿來補
 function mainColumnMap(table, headerTexts = []) {
-  const labels = (table.cols || []).map(c => String((c && c.label) || '').trim());
-  const colMap = findColumns(labels);
-  const fallback = findColumns(headerTexts);
-  for (const key of Object.keys(MAIN_COLUMNS)) {
-    if (colMap[key] == null && fallback[key] != null) colMap[key] = fallback[key];
-  }
+  const colMap = columnMap(table, headerTexts);
   const missing = Object.keys(MAIN_COLUMNS).filter(k => colMap[k] == null).map(k => `「${MAIN_COLUMNS[k]}」`);
   if (missing.length) throw new Error(`主清單找不到${missing.join('')}欄，請確認表頭沒有被改掉。`);
   return colMap;
@@ -146,8 +106,7 @@ function mainColumnMap(table, headerTexts = []) {
 
 // 「誰遛的」格子裡有沒有我的名字。MY_NAME 可以寫好幾種寫法，用逗號或頓號隔開（例：本名、暱稱）；
 // 格子裡有好幾個人時（例：「甲、乙」「甲。乙」「甲;乙」）逐一比對，要整個名字相同才算，不算部分符合
-// 志工手打時常用句號、分號、冒號隔開，也都當分隔（2026-10-04 K 回報「維芬。佳岑」抓不到佳岑）
-const NAME_SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
+// 分隔符號（NAME_SEP）見 worker/src/sheet-read.js
 export function myNames(env = process.env.MY_NAME) {
   return String(env || '').split(NAME_SEP).map(nameKey).filter(Boolean);
 }

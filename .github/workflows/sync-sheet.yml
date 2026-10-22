@@ -36,6 +36,7 @@ on:
       - 'scripts/import-compact-departures.mjs'
       - 'scripts/migrate-compact-db.mjs'
       - 'worker/src/compact.js'
+      - 'worker/src/sheet-read.js'
       - 'db/compact-schema.sql'
 
 permissions:
