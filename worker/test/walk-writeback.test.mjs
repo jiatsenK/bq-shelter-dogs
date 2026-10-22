@@ -175,9 +175,10 @@ test('授予目標前版本已變，交易停止而不回傳過期目標', async
   const env = await setup(); worker.testing.resetState();
   await post(env,request('race-target-0001'));
   const batch = env.DB.batch;
-  let interfere = true;
+  // 拿目標先一次讀齊快照（第 1 次 batch），在授予目標的寫入（第 2 次）之前插入別人的登記。
+  let calls = 0;
   env.DB.batch = async statements => {
-    if (interfere) { interfere=false; assert.equal((await post(env,request('race-target-0002','乙'))).status,200); }
+    if (++calls === 2) { assert.equal((await post(env,request('race-target-0002','乙'))).status,200); }
     return batch(statements);
   };
   const out = await machine(env,'target',{ dog:{ id:'9001',name:'測試狗' },dispatchId:'race-dispatch',current:{ date:'2026-10-01',walker:'' } });

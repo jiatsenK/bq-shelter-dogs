@@ -1,6 +1,6 @@
 // #460 CPU 驗收用的假 Apps Script：不連 Google，主清單只在記憶體裡。
 // 每隻測速狗的試算表值固定等於 D1 的目標（S），所以保險掃描沒有差異、派送照正式流程取目標、寫入、讀回、確認。
-export const BENCH_DOGS = 200;
+export const BENCH_DOGS = Number(globalThis.process?.env?.BENCH_DOGS) || 200;
 export const BENCH_VALUE = { date: '2026-10-21', walker: '甲' };
 export const benchDog = i => ({ id: `CPU${String(i).padStart(4, '0')}`, name: `測速狗${i}` });
 

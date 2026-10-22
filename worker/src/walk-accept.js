@@ -9,6 +9,10 @@ const names = text => [...new Set(String(text || '').split(SEP).filter(Boolean))
 const keyOf = dog => dog.id || `名:${dog.name}`;
 const one = (db, sql, ...args) => db.prepare(sql).bind(...args).first();
 const rows = async (db, sql, ...args) => (await db.prepare(sql).bind(...args).all()).results || [];
+// 多個讀取併成一次 D1 往返（#460：Worker CPU 跟往返次數成正比）；回傳每個查詢的結果列。
+const reads = async (db, ...queries) => (await db.batch(queries.map(([sql, ...args]) => db.prepare(sql).bind(...args)))).map(r => r.results || []);
+const CURRENT_JOB = 'SELECT o.* FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version WHERE o.dog_key=?';
+const RETRY = 'SELECT dispatch_id,reserved_day FROM v3_walk_retry WHERE dog_key=?';
 const dayOf = now => new Date(now + 8 * 3600000).toISOString().slice(0, 10);
 export class WalkError extends Error {
   constructor(status, message) { super(message); this.status = status; }
@@ -47,13 +51,17 @@ export async function writeBudget(db, env, cost, now = Date.now()) {
 
 // 派送前一次保留整條協定（含失敗／釋放）的索引及觸發器上界。
 // 同派送重送的 target／receipt 是冪等的，不可重複消耗這份保留量。
-async function transitionBudget(db,env,dogKey,dispatchId,cost) {
-  const prepaid=await one(db,'SELECT dispatch_id FROM v3_walk_retry WHERE dog_key=? AND dispatch_id=? AND reserved_day=?',dogKey,dispatchId,new Date().toISOString().slice(0,10));
+// retry：同一次請求已讀到的 v3_walk_retry 列（沒有這列為 null）；沒傳就自己讀。
+async function transitionBudget(db,env,dogKey,dispatchId,cost,retry) {
+  const day=new Date().toISOString().slice(0,10);
+  const prepaid=retry!==undefined ? retry?.dispatch_id===dispatchId && retry.reserved_day===day
+    : await one(db,'SELECT dispatch_id FROM v3_walk_retry WHERE dog_key=? AND dispatch_id=? AND reserved_day=?',dogKey,dispatchId,day);
   return prepaid ? [] : writeBudget(db,env,cost);
 }
 
+const MAIN_DOG = dog => `SELECT dog_id,walked_date,row_index FROM v3_sheet_main WHERE ${dog.id ? 'number=?' : "number='' AND name=?"}`;
 async function uniqueMainDog(db,dog) {
-  const matches = await rows(db, `SELECT dog_id,walked_date,row_index FROM v3_sheet_main WHERE ${dog.id ? 'number=?' : "number='' AND name=?"}`, dog.id || dog.name);
+  const matches = await rows(db, MAIN_DOG(dog), dog.id || dog.name);
   if (matches.length !== 1) throw new WalkError(409, '找不到唯一的主清單狗');
   return matches[0];
 }
@@ -163,9 +171,9 @@ export async function acceptWalk(db, input, env, now = Date.now()) {
 export async function dispatchWalk(db, dog, env, clock = Date.now(), recovery = null) {
   const key = keyOf(dog), dispatchId = crypto.randomUUID(), now = new Date(clock).toISOString();
   const recoverDispatchId = recovery?.dispatchId || '';
-  const delivery = await one(db, 'SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', key);
+  const [[delivery], [job]] = await reads(db, ['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', key],
+    [`${CURRENT_JOB} AND (o.status IN ('pending','retry','unconfirmed') OR (?=1 AND o.status='dispatching'))`, key, Number(!!recovery)]);
   if (delivery && delivery.dispatch_id !== recoverDispatchId) return;
-  const job = await one(db, "SELECT o.* FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version WHERE o.dog_key=? AND (o.status IN ('pending','retry','unconfirmed') OR (?=1 AND o.status='dispatching'))", key, Number(!!recovery));
   if (!job || (!recovery && job.next_attempt_at > now)) return;
   let claimed;
   try { claimed = await db.batch([
@@ -183,15 +191,19 @@ export async function dispatchWalk(db, dog, env, clock = Date.now(), recovery = 
     await db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(key, dispatchId).run();
     return;
   }
-  let release = false;
+  let release = false, held;
   try {
     if (!env.SHEET_WRITE_URL || !env.SHEET_WRITE_KEY) throw new Error('writeback-not-configured');
     const res = await fetch(env.SHEET_WRITE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'walkWake', dog, dispatchId, key: env.SHEET_WRITE_KEY }), signal: AbortSignal.timeout(20000) });
     const receipt = await res.json();
     if (!res.ok || !receipt.ok) throw new Error('writeback-unconfirmed');
-    const confirmed = await confirmWalk(db, { ...receipt, dogKey: key }, env);
-    if (!confirmed.confirmed) throw new Error('writeback-unconfirmed');
+    // 正常情況 Apps Script 的回執請求已確認完成：讀一次確認就好；沒完成才補走完整確認。
+    const [[done], [still]] = await reads(db,
+      ["SELECT o.version FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version WHERE o.dog_key=? AND o.version=? AND o.dispatch_id=? AND o.status='synced'", key, receipt.version, receipt.dispatchId],
+      ['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?', key, dispatchId]);
+    if (done) held = !!still;
+    else if (!(await confirmWalk(db, { ...receipt, dogKey: key }, env)).confirmed) throw new Error('writeback-unconfirmed');
     release = true;
   } catch (error) {
     const failed = await one(db, "SELECT version FROM v3_walk_outbox WHERE dog_key=? AND dispatch_id=? AND status='dispatching'",key,dispatchId);
@@ -209,7 +221,7 @@ export async function dispatchWalk(db, dog, env, clock = Date.now(), recovery = 
     ]);
     release = true;
   } finally {
-    if (release && await one(db,'SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?',key,dispatchId)) {
+    if (release && (held ?? await one(db,'SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?',key,dispatchId))) {
       await db.batch([
         ...await transitionBudget(db,env,key,dispatchId,8),
         db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(key,dispatchId),
@@ -222,14 +234,15 @@ export async function dispatchWalk(db, dog, env, clock = Date.now(), recovery = 
 export async function confirmWalk(db, receipt, env) {
   const { dogKey, dispatchId, version, current } = receipt;
   if (!current || !dispatchId || !Number.isInteger(version)) throw new WalkError(400, '回執不完整');
-  const job = await one(db, 'SELECT * FROM v3_walk_outbox WHERE dog_key=? AND version=? AND dispatch_id=?', dogKey, version, dispatchId);
-  const state = await one(db, 'SELECT * FROM v3_walk_state WHERE dog_key=?', dogKey);
+  const [[job], [state], [retryRow]] = await reads(db, ['SELECT * FROM v3_walk_outbox WHERE dog_key=? AND version=? AND dispatch_id=?', dogKey, version, dispatchId],
+    ['SELECT * FROM v3_walk_state WHERE dog_key=?', dogKey], [RETRY, dogKey]);
+  const retry = retryRow ?? null;
   if (!job) return { confirmed:false };
   if (current.date !== job.target_date || current.walker !== job.target_walker) throw new WalkError(409, '試算表讀回不符');
   if (state?.version !== version) {
     // 可信舊回執只記中間讀值，不把目前工作標成完成。未知結果不能走此捷徑。
     if (!job.readback_seen) await db.batch([
-      ...await transitionBudget(db,env,dogKey,dispatchId,16),
+      ...await transitionBudget(db,env,dogKey,dispatchId,16,retry),
       db.prepare('UPDATE v3_walk_outbox SET readback_seen=1 WHERE dog_key=? AND version=? AND dispatch_id=? AND readback_seen=0').bind(dogKey,version,dispatchId),
       db.prepare('DELETE FROM v3_walk_guard'),
     ]);
@@ -238,7 +251,7 @@ export async function confirmWalk(db, receipt, env) {
   if (job.status === 'synced') return { confirmed:true };
   await db.batch([
     db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN EXISTS(SELECT 1 FROM v3_walk_state s JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version WHERE s.dog_key=? AND s.version=? AND o.dispatch_id=?) THEN 1 ELSE 0 END').bind(dogKey,version,dispatchId),
-    ...await transitionBudget(db,env,dogKey,dispatchId,16),
+    ...await transitionBudget(db,env,dogKey,dispatchId,16,retry),
     db.prepare('UPDATE v3_walk_state SET base_date=?,base_walker=? WHERE dog_key=? AND version=?').bind(current.date, current.walker, dogKey, version),
     db.prepare('INSERT INTO v3_walk_baselines VALUES(?,?) ON CONFLICT(dog_key) DO UPDATE SET version=excluded.version').bind(dogKey,version),
     db.prepare("UPDATE v3_walk_outbox SET status='synced',readback_seen=1,error='' WHERE dog_key=? AND version=? AND dispatch_id=?").bind(dogKey, version, dispatchId),
@@ -259,13 +272,13 @@ async function knownIntermediate(db,key,observed,version) {
 }
 
 // 僅接受同鎖 GAS 直接讀值；通知內容與 gviz 都不能呼叫這個比較入口。
-export async function reconcileWalk(db, dog, observed, env) {
+export async function reconcileWalk(db, dog, observed, env, seen = {}) {
   if (!dog || typeof dog.id !== 'string' || typeof dog.name !== 'string' || !dog.name ||
     (dog.id && !/^[A-Za-z0-9]{1,32}$/.test(dog.id))) throw new WalkError(400,'狗的識別不完整');
   const key = keyOf(dog);
   try {
-    const result = await compareTrustedWalk(db,dog,observed,env);
-    if (await one(db,'SELECT dog_key FROM v3_walk_conflicts WHERE dog_key=?',key)) {
+    const result = await compareTrustedWalk(db,dog,observed,env,seen);
+    if (seen.conflict) {
       await db.batch([...await writeBudget(db,env,8),db.prepare('DELETE FROM v3_walk_conflicts WHERE dog_key=?').bind(key),db.prepare('DELETE FROM v3_walk_guard')]);
     }
     return result;
@@ -279,20 +292,29 @@ export async function reconcileWalk(db, dog, observed, env) {
   }
 }
 
-async function compareTrustedWalk(db, dog, observed, env) {
+// seen：回填同一次讀到的衝突紀錄；狀態沒變時也回填快照，給拿目標沿用，不再重讀。
+async function compareTrustedWalk(db, dog, observed, env, seen = {}) {
   if (!observed || typeof observed.walker !== 'string' || observed.walker.length > 2000 ||
     typeof observed.date !== 'string' || (observed.date && (!/^\d{4}-\d{2}-\d{2}$/.test(observed.date) ||
       !Number.isFinite(Date.parse(observed.date)) || new Date(observed.date).toISOString().slice(0,10) !== observed.date))) {
     throw new WalkError(409, '試算表日期或名單無法確認');
   }
   const key = keyOf(dog);
-  const old = await one(db, 'SELECT * FROM v3_walk_state WHERE dog_key=?', key) || await seedState(db, dog,dayOf(Date.now()));
-  if ((await uniqueMainDog(db,dog)).dog_id!==old.dog_id) throw new WalkError(409,'找不到唯一的主清單狗');
+  const [[stateRow], mains, [conflict], [currentJob], [delivery], [retry]] = await reads(db,
+    ['SELECT * FROM v3_walk_state WHERE dog_key=?', key], [MAIN_DOG(dog), dog.id || dog.name],
+    ['SELECT dog_key FROM v3_walk_conflicts WHERE dog_key=?', key], [CURRENT_JOB, key],
+    ['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', key], [RETRY, key]);
+  seen.conflict = !!conflict;
+  const old = stateRow || await seedState(db, dog,dayOf(Date.now()));
+  if (mains.length !== 1 || mains[0].dog_id!==old.dog_id) throw new WalkError(409,'找不到唯一的主清單狗');
   const base = { date: old.base_date ?? old.effective_date, walker: old.base_walker ?? old.walker };
   const same = (a,b) => a.date === b.date && a.walker === b.walker;
   const current = { date: old.effective_date, walker: old.walker };
-  if (same(observed,base)) return { changed:false, version:old.version, current };
-  const job = old.version && await one(db, 'SELECT * FROM v3_walk_outbox WHERE dog_key=? AND version=?',key,old.version);
+  if (same(observed,base)) {
+    if (stateRow) seen.snapshot = { state: stateRow, job: currentJob, delivery, retry: retry ?? null };
+    return { changed:false, version:old.version, current };
+  }
+  const job = old.version && currentJob;
   if (same(observed,current) && job?.dispatch_id) {
     await confirmWalk(db, { dogKey:key, dispatchId:job.dispatch_id, version:old.version, current:observed },env);
     return { changed:false, version:old.version, current };
@@ -333,10 +355,13 @@ async function compareTrustedWalk(db, dog, observed, env) {
 // 同鎖直接讀表後才呼叫。觀測到不同值時停寫，不將 gviz 舊快照當成人工修改。
 export async function writebackTarget(db, input, env) {
   const key = keyOf(input.dog);
-  await reconcileWalk(db,input.dog,input.current,env);
-  const state = await one(db, 'SELECT * FROM v3_walk_state WHERE dog_key=?', key);
+  const seen = {};
+  await reconcileWalk(db,input.dog,input.current,env,seen);
+  // 比對沒改狀態時沿用同一次讀到的快照；改了才重讀。
+  const snap = seen.snapshot;
+  const state = snap ? snap.state : await one(db, 'SELECT * FROM v3_walk_state WHERE dog_key=?', key);
   if (!state) throw new WalkError(404, '尚未接管這隻狗');
-  const job = await one(db, 'SELECT * FROM v3_walk_outbox WHERE dog_key=? AND version=?', key, state.version);
+  const job = snap ? snap.job : await one(db, 'SELECT * FROM v3_walk_outbox WHERE dog_key=? AND version=?', key, state.version);
   if (job?.status === 'synced' && input.current?.date === state.effective_date && input.current?.walker === state.walker) {
     return { skip:true,version:state.version,dispatchId:input.dispatchId,current:input.current };
   }
@@ -348,13 +373,13 @@ export async function writebackTarget(db, input, env) {
   }
   if (!job || !['dispatching','retry','unconfirmed','pending'].includes(job.status)) throw new WalkError(409, '沒有待寫回目標');
   if (job.dispatch_id===input.dispatchId && job.status==='dispatching') {
-    const granted=await one(db,'SELECT version FROM v3_walk_state WHERE dog_key=? AND version=? AND EXISTS(SELECT 1 FROM v3_walk_outbox WHERE dog_key=? AND version=? AND dispatch_id=? AND status=\'dispatching\') AND EXISTS(SELECT 1 FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?)',key,state.version,key,state.version,input.dispatchId,key,input.dispatchId);
+    const granted=snap ? snap.delivery?.dispatch_id===input.dispatchId : await one(db,'SELECT version FROM v3_walk_state WHERE dog_key=? AND version=? AND EXISTS(SELECT 1 FROM v3_walk_outbox WHERE dog_key=? AND version=? AND dispatch_id=? AND status=\'dispatching\') AND EXISTS(SELECT 1 FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?)',key,state.version,key,state.version,input.dispatchId,key,input.dispatchId);
     if (granted) return { version:state.version,dispatchId:input.dispatchId,current:{ date:state.effective_date,walker:state.walker } };
   }
   // 舊喚醒也只取目前版本；在 script lock 中授予目前版本派送識別。
   await db.batch([
     db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?) THEN 1 ELSE 0 END').bind(key,state.version),
-    ...await transitionBudget(db,env,key,input.dispatchId,16),
+    ...await transitionBudget(db,env,key,input.dispatchId,16,snap ? snap.retry : undefined),
     db.prepare('INSERT INTO v3_walk_delivery VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET dispatch_id=excluded.dispatch_id,started_at=excluded.started_at').bind(key,input.dispatchId,new Date().toISOString()),
     db.prepare("UPDATE v3_walk_outbox SET dispatch_id=?,status='dispatching' WHERE dog_key=? AND version=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?)").bind(input.dispatchId, key, state.version, key, state.version),
     db.prepare('DELETE FROM v3_walk_guard'),

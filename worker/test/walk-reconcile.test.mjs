@@ -213,8 +213,9 @@ test('#408 單狗比對及 target 在主清單與同狗歷史十倍後，讀寫�
       const writes=(await prepare('SELECT total_changes() n').first()).n-before;
       for (const { sql,args } of queries.filter(q=>/^SELECT/.test(q.sql) && q.sql.includes('FROM v3_walk_outbox'))) {
         const plan=(await prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...args).all()).results.map(p=>p.detail).join(';');
-        assert.doesNotMatch(plan,/SCAN v3_walk_outbox/);
-        assert.match(plan,/SEARCH v3_walk_outbox/);
+        // 查詢可能用別名 o；不管名字，待寫回工作都要走索引。
+        assert.doesNotMatch(plan,/SCAN (v3_walk_outbox|o)/);
+        assert.match(plan,/SEARCH (v3_walk_outbox|o) /);
       }
       return { reads,writes };
     } finally { env.DB.close(); }
