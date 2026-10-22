@@ -1,7 +1,7 @@
 // 分析頁（V5-4 #59、V5-5 #60）：目前 dogs.json 就能算的犬隻統計，加上 #56 累積的遛狗歷史與每日快照。
 // 統計都寫成純函式（輸入狗清單與今天日期，輸出數字），tests/index.html 直接測；畫面只負責把結果畫成 CSS／SVG 資訊圖表（大數字、圓環、直條圖）。
 // 頁首右上角的圖示打開（不佔分類：分類只放每天遛狗會用的）。
-// 會用到 js/app.js 的 makeDate、idDate、firstIntake、computeStatus、esc、icon、photoSrc、showDetail、allDogs、analysisOpen，所以要在 app.js 之後載入。
+// 會用到 js/dates.js 的日期工具及 js/app.js 的 computeStatus、esc、icon、photoSrc、showDetail、allDogs、analysisOpen，所以要在 app.js 之後載入。
 
 // 長期在所＝在所滿 1 年；近期少遛＝超過 AMBER_DAYS 天沒遛（沿用溜狗表的黃色門檻，2026-10-09 起 3 天）
 const LONG_STAY_MONTHS = 12;
@@ -16,9 +16,9 @@ const STAY_BUCKETS = [
   { label: '5 年以上', max: Infinity },
 ];
 
-// 入所日（ADR 0011）：編號、舊編號、出入所紀錄裡最早的那天（app.js 的 firstIntake）；看不出來或在未來的回 null
+// 入所日（ADR 0011）：編號、舊編號、出入所紀錄裡最早的那天（BQDates.firstIntake）；看不出來或在未來的回 null
 function intakeDate(dog, today) {
-  const d = firstIntake(dog);
+  const d = BQDates.firstIntake(dog);
   return d && d <= today ? d : null;
 }
 
@@ -153,19 +153,19 @@ const dogKey = d => d.id || `名:${d.name}`;
 // 溜狗紀錄 → [{ key, id, name, date }]，日期不合理的略過
 function parseWalks(data) {
   if (!data || !Array.isArray(data.walks)) return [];
-  return data.walks.map(w => ({ id: String(w.id || ''), name: String(w.name || ''), date: parseYmd(w.date) }))
+  return data.walks.map(w => ({ id: String(w.id || ''), name: String(w.name || ''), date: BQDates.parseYmd(w.date) }))
     .filter(w => w.date && (w.id || w.name)).map(w => ({ ...w, key: dogKey(w) }));
 }
 
 // 開始記錄日（原本是第一份快照的日期，#260 起 api/walks 的 historyStart）→ [日期字串]；沒有或壞掉就是 []
 function historyStartDates(data) {
-  return data && parseYmd(data.historyStart) ? [data.historyStart] : [];
+  return data && BQDates.parseYmd(data.historyStart) ? [data.historyStart] : [];
 }
 
 // 開始累積的日期與目前累積幾天（含今天）
 function historySpan(dates, today) {
-  const start = dates.length ? parseYmd(dates[0]) : null;
-  const t = makeDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
+  const start = dates.length ? BQDates.parseYmd(dates[0]) : null;
+  const t = BQDates.makeDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
   return { start, days: start ? daysBetween(start, t) + 1 : 0 };
 }
 
@@ -180,7 +180,7 @@ function recentStart(today) {
 function dogWalkHistory(dog, walks, start, today, n = 30) {
   const key = dogKey(dog);
   const dates = [...new Set(walks.filter(w => w.key === key).map(w => +w.date))].sort((a, b) => a - b);
-  const t = makeDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
+  const t = BQDates.makeDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
   const set = new Set(dates);
   const cells = [];
   for (let i = n - 1; i >= 0; i--) {
@@ -438,7 +438,7 @@ function parseDeparturesData(data) {
     dog.departure = {
       reason: DEPARTURE_ORDER.includes(e.reason) ? e.reason : 'unknown',
       matched: text(e.matched),
-      date: parseYmd(e.date),
+      date: BQDates.parseYmd(e.date),
       dateSource: text(e.dateSource),
       flags: Array.isArray(e.flags) ? e.flags.map(text) : [],
       returned: text(e.returned),

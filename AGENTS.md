@@ -3,6 +3,7 @@
 板收志工溜狗表：Cloudflare Worker 提供前端與 `/api`。`CLAUDE.md` 指向本檔。
 
 - 全域規則：先讀 `C:/Users/User/repos/agent-hub/CORE_RULES.md`，已讀且未變更時沿用。
+- 前端檔案責任、依賴與載入頁面：`public/js/README.md`。
 - 修改前讀 `docs/agent-log/README.md` 與最近紀錄；同一 PR 維護一筆紀錄。
 - PR 先開草稿，全部推送與本機檢查完成後才轉正式，節省 Actions 分鐘；需要手機預覽才加 `preview` 標籤。commit 不加 `[skip ci]`。
 
