@@ -10,7 +10,7 @@ import { execFile, execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { fakeD1 } from '../worker/test/fakes.mjs';
+import { memoryD1 } from './memory-d1.mjs';
 import { migrateCompactDatabase, compactSchemaStatements } from './migrate-compact-db.mjs';
 import { compareCompactDogs } from './import-compact-dogs.mjs';
 import { compareCompactProfiles } from './import-compact-profiles.mjs';
@@ -78,7 +78,7 @@ export const lastWalkChecks = sheet => sheet.dogs.filter(d => d.id && d.walkedDa
 // 回傳 { sql, rows }：要寫回正式 D1 的 SQL、其中要寫幾列；讀回跟來源不一致就丟錯，不寫。
 // today：這次同步是哪天，跟 seed.walksSynced 不同就順便記下（ADR 0010）；跟資料寫在同一份 SQL，寫成功才算數
 export async function buildSyncPlan(seed, source, { today = '' } = {}) {
-  const db = fakeD1();
+  const db = memoryD1();
   try {
     await migrateCompactDatabase(db);
     const seeds = Object.keys(SEED_TABLES).flatMap(t => (seed[t] || []).map(row => db.prepare(insert(t, row))));
@@ -216,7 +216,7 @@ async function main({ dryRun = false, mode = '' } = {}) {
   // D1 的溜狗紀錄沒有 mine，要靠代號推回來；沒有 WALKER_KEY 會把「我溜過」的日期算錯，寧可不同步
   if (!process.env.WALKER_KEY) throw new Error('沒有設定 WALKER_KEY，無法比對溜狗紀錄');
   const now = new Date();
-  const sheet = await buildData(fetch, now, async () => '');
+  const sheet = await buildData(fetch, now);
   const groupTable = await fetchGviz('常遛狗群');
   const dogNames = new Set(sheet.dogs.map(d => d.name));
   const groupColumns = parseGroupColumns(groupTable, dogNames);

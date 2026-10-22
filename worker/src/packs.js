@@ -3,6 +3,7 @@
 // 版本號由 db/compact-schema.sql 的觸發器自動加 1，所以網站、同步、別台 Worker 機器寫入都看得到。
 // 輸出和直接讀表（compact.js 的 readDogsPayload 等）逐字元相同
 import { readDogsPayload, readDepartures, readRest, readSyncedAt, sortDepartures, sortedRest, HISTORY_START } from './compact.js';
+import { summarize, addMine } from './walk-summary.js';
 
 // D1 一列上限 2 MB；資料包一律分段存，每段最多這麼多位元組（測試會調小）
 let chunkBytes = 1_000_000;
@@ -382,50 +383,7 @@ export async function packStatus(db, today) {
   return { dogs: dogs ? dogs.dogs.length : 0, walks: walks.length };
 }
 
-// ---- 我溜過的狗（ADR 0013，#344）：跟 public/js/cards.js 的 bqMyDogs 同一個規則 ----
-// 同一隻狗（編號）同一天以最後一筆有登記人的為準。
-// 摘要：{ codes: { 代號: { 編號: [幾天, 第一次, 最近一次] } }, multi: { '編號|日期': [代號…] }, dogs: { 編號: 幾天 } }；
-// multi 只記同一天有兩個以上代號的，加總時一個人的幾個代號同一天都在只算一天。
-// dogs 是每隻狗（編號）溜過幾天，沒記人的舊紀錄也算（#271 已出所狗卡）
-function summarize(list) {
-  const last = new Map(), dogDays = new Set();
-  for (const w of list) {
-    const id = String(w.id ?? '').trim();
-    if (id) dogDays.add(`${id}|${w.date}`);
-    if (Array.isArray(w.walkers) && id) last.set(`${id}|${w.date}`, w);
-  }
-  const dogs = {};
-  for (const key of dogDays) { const id = key.slice(0, key.lastIndexOf('|')); dogs[id] = (dogs[id] || 0) + 1; }
-  const codes = {}, multi = {};
-  for (const [key, w] of last) {
-    const id = key.slice(0, key.lastIndexOf('|'));
-    const who = [...new Set(w.walkers)];
-    for (const c of who) {
-      const dogs = codes[c] ||= {};
-      const m = dogs[id];
-      if (!m) dogs[id] = [1, w.date, w.date];
-      else { m[0]++; if (w.date < m[1]) m[1] = w.date; if (w.date > m[2]) m[2] = w.date; }
-    }
-    if (who.length > 1) multi[key] = who;
-  }
-  return { codes, multi, dogs };
-}
-
-function addMine(out, summary, codes) {
-  const want = new Set(codes);
-  for (const c of want) {
-    for (const [id, [times, first, last]] of Object.entries(summary.codes[c] || {})) {
-      const m = out[id];
-      if (!m) out[id] = { times, first, last };
-      else { m.times += times; if (first < m.first) m.first = first; if (last > m.last) m.last = last; }
-    }
-  }
-  for (const [key, who] of Object.entries(summary.multi)) {
-    const k = who.filter(c => want.has(c)).length;
-    if (k > 1) out[key.slice(0, key.lastIndexOf('|'))].times -= k - 1;
-  }
-}
-
+// ---- 我溜過的狗（ADR 0013，#344）：計算規則在 walk-summary.js，這裡管各年摘要的快取與版本號 ----
 // 各年的摘要：版本號和那一年每個月都對得上才用；一次讀整張摘要表（約每年 1 列）
 async function yearSummaries(db, v) {
   const vers = JSON.parse(v.months);

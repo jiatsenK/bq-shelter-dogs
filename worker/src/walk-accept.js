@@ -2,10 +2,11 @@
 import { walkerCode, editorOf } from './editlog.js';
 import { identityByCode } from './identity.js';
 import { previousWalk } from './today.js';
+import { callSheet } from './sheet-write.js';
+import { splitNames } from './sheet-read.js';
 import { todayRowsWritten } from '../../scripts/sync-diff.mjs';
 
-const SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
-const names = text => [...new Set(String(text || '').split(SEP).filter(Boolean))];
+const names = text => [...new Set(splitNames(text))];
 const keyOf = dog => dog.id || `名:${dog.name}`;
 const one = (db, sql, ...args) => db.prepare(sql).bind(...args).first();
 const rows = async (db, sql, ...args) => (await db.prepare(sql).bind(...args).all()).results || [];
@@ -186,10 +187,7 @@ export async function dispatchWalk(db, dog, env, clock = Date.now(), recovery = 
   let release = false;
   try {
     if (!env.SHEET_WRITE_URL || !env.SHEET_WRITE_KEY) throw new Error('writeback-not-configured');
-    const res = await fetch(env.SHEET_WRITE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'walkWake', dog, dispatchId, key: env.SHEET_WRITE_KEY }), signal: AbortSignal.timeout(20000) });
-    const receipt = await res.json();
-    if (!res.ok || !receipt.ok) throw new Error('writeback-unconfirmed');
+    const receipt = await callSheet(env, { action: 'walkWake', dog, dispatchId }).catch(e => { throw new Error(`writeback-unconfirmed: ${e.message}`); }); // callSheet 的訊息不含試算表 ID、金鑰
     const confirmed = await confirmWalk(db, { ...receipt, dogKey: key }, env);
     if (!confirmed.confirmed) throw new Error('writeback-unconfirmed');
     release = true;
