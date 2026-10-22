@@ -106,6 +106,9 @@ module.exports = async (browser, base) => {
       await page.locator('#gwWalk').evaluate(el => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
       const action = await page.locator('#gwWalk').boundingBox(), bar = await page.locator('#bottomBar').boundingBox();
       assert(action.y + action.height <= bar.y, '整群登記按鈕可捲到導覽列上方：' + JSON.stringify({ width, action, bar }));
+      const [prev, next] = await Promise.all(['.gw-side.prev', '.gw-side.next'].map(s => page.locator(s).boundingBox()));
+      const sameRow = b => b.y < action.y + action.height && b.y + b.height > action.y;
+      assert(prev.x + prev.width <= action.x && next.x >= action.x + action.width && sameRow(prev) && sameRow(next), '#443 大字時換群箭頭仍在「溜了」兩側：' + JSON.stringify({ width, prev, action, next }));
       if (process.env.CAPTURE_400) {
         await page.evaluate(() => scrollTo(0, 0));
         await page.screenshot({ path: `docs/design/issue-400/groups-large-${width}.png`, fullPage: true });

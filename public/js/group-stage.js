@@ -82,7 +82,7 @@ function refreshGroupStage() {
 function groupTile(dog, index, rear) {
   const blocked = groupBlocked(dog);
   const excluded = groupExcluded.has(dog.name);
-  return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}${searchQuery.trim() && !matchesSearch(dog, searchQuery.trim()) ? ' miss' : ''}" data-gw-dog="${index}" ${rear ? 'tabindex="-1"' : ''} ${!rear && groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}"><span class="gw-tile"><span class="gw-cage">${esc(dog.cage || '待確認')}</span><span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><strong>${esc(dog.name)}</strong></span></button>`;
+  return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}${searchQuery.trim() && !matchesSearch(dog, searchQuery.trim()) ? ' miss' : ''}" data-gw-dog="${index}" ${rear ? 'tabindex="-1"' : ''} ${!rear && groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}"><span class="gw-tile"><span class="gw-cage">${esc(dog.cage || '待確認')}</span><span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><strong>${esc(dog.name)}</strong></span>${dog.unavailable ? '' : walkSyncHtml(dog)}</button>`;
 }
 function groupStageHtml() {
   const identity = loadWalkerName();
@@ -118,12 +118,13 @@ function groupStageHtml() {
     <div class="gw-stage-wrap"><div id="groupStage" class="gw-stage" style="--rows:${Math.max(1, Math.ceil((dogs.length + 2) / 4))}" aria-label="目前狗群">${layers}</div></div>
     <div class="gw-pages"><span>${groups.length ? index + 1 : 0} / ${groups.length}</span></div>
     <p id="gwFeedback" role="status">${esc(groupBusy ? '處理中…' : groupFeedback)}</p>
-    ${group ? `<div class="gw-walkbar"><button type="button" class="gw-side prev" data-gw-step="-1" aria-label="上一群" ${groups.length < 2 ? 'disabled' : ''}>${icon('back')}</button><div class="gw-actions">${walkBtn}</div><button type="button" class="gw-side next" data-gw-step="1" aria-label="下一群" ${groups.length < 2 ? 'disabled' : ''}>${icon('chevron')}</button></div><p class="gw-restrictions">${dogs.some(groupBlocked) ? `不登記：${dogs.filter(groupBlocked).map(d => `${esc(d.name)}（${esc(groupBlocked(d))}）`).join('、')}` : ''}</p>` : ''}
+    ${group ? `<p class="gw-restrictions">${dogs.some(groupBlocked) ? `不登記：${dogs.filter(groupBlocked).map(d => `${esc(d.name)}（${esc(groupBlocked(d))}）`).join('、')}` : ''}</p>` : ''}
     <div class="gw-secondary-actions">
     ${groupRegistrations.get(groupColumn)?.successful.length ? `<button type="button" class="bar-btn" data-gw-action="companions" ${groupBusy ? 'disabled' : ''}>＋一起溜的人</button>` : ''}
     ${groupRegistrations.get(groupColumn)?.result.retryDogs.length ? `<button type="button" class="bar-btn" data-gw-action="retry-walk" ${groupBusy ? 'disabled' : ''}>再試一次</button>` : ''}
     </div>
-    <p id="gwSource" class="section-hint" role="status">${esc(`網站狗群・讀取 ${new Date(data.checkedAt).toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false })}`)}${groupRead ? '・檢查中…' : groupReadError ? '・檢查失敗，保留先前內容' : ''}${groupReadError ? '<button type="button" data-gw-action="retry">重新讀取</button>' : ''}</p>
+    <p id="gwSource" class="section-hint" role="status">${/* 讀取時間只留頁首右上角（#444）；這裡只說背景檢查的狀態 */ groupRead ? '檢查中…' : groupReadError ? '檢查失敗，保留先前內容' : ''}${groupReadError ? '<button type="button" data-gw-action="retry">重新讀取</button>' : ''}</p>
+    ${group ? `<div class="gw-walkbar"><button type="button" class="gw-side prev" data-gw-step="-1" aria-label="上一群" ${groups.length < 2 ? 'disabled' : ''}>${icon('back')}</button><div class="gw-actions">${walkBtn}</div><button type="button" class="gw-side next" data-gw-step="1" aria-label="下一群" ${groups.length < 2 ? 'disabled' : ''}>${icon('chevron')}</button></div>` : '' /* 「溜了」那排放最後、手機黏在底部分類列上方，換群箭頭不隨狗數移動（#443） */}
   </section>`;
 }
 function groupFormHtml() {

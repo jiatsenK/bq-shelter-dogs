@@ -1197,7 +1197,9 @@ async function runAnalysisTests() {
       // #60 讀溜狗紀錄、離所紀錄：只 GET 同網站的 api/
       .replace("fetch(url, { cache: 'no-cache' })", '').replace("fetch(DEPARTURES_URL, { cache: 'no-cache' })", '')
       // #363 點離所的狗才拿那一年（網址帶版本號，瀏覽器快取）
-      .replace('fetch(url)', '').replace("fetch('website-updates.json', { cache: 'no-cache' })", '');
+      .replace('fetch(url)', '').replace("fetch('website-updates.json', { cache: 'no-cache' })", '')
+      // #421 網站更新只在本機留一份上次讀到的內容，先顯示再背景檢查
+      .replace('localStorage.getItem(WEBSITE_UPDATES_CACHE)', '').replace('localStorage.setItem(WEBSITE_UPDATES_CACHE, JSON.stringify(entries))', '');
     eq([WALKS_URL, DEPARTURES_URL, DEPARTURE_YEAR_URL], ['api/walks', 'api/departures/index', 'api/departures'], '#60 #260 溜狗紀錄、離所紀錄從 Worker 讀：');
     if (/['`]data\/(history|walks|departures)/.test(code)) throw new Error('#260 起不再讀 data/ 的溜狗紀錄、快照、離所');
     const bad = [/fetch\(/, /method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /localStorage|sessionStorage|indexedDB|XMLHttpRequest|sendBeacon/];
@@ -1978,8 +1980,10 @@ async function runV9Tests() {
       eq(calls.filter(u => !u.includes('/favorites?codes=')).map(u => u.replace('https://worker.test', '')), ['/identity', '/identity', '/walk'], '送出：');
       hideToast();
       activeTab = 'mine'; myWalks = []; myWalksState = 'ready'; render();
-      document.querySelector('#main [data-open-guide]').click();
-      eq([tour().querySelector('h2').textContent, tour().querySelector('[data-tour="done"]').textContent, activeTab], ['溜狗表', '關閉', 'walk'], '我溜過可以再打開說明（回到溜狗表）：');
+      eq(document.querySelector('#main [data-open-guide]'), null, '#447 我溜過不再放使用說明：');
+      showAnalysis();
+      document.querySelector('#main .info-home [data-open-guide]').click();
+      eq([tour().querySelector('h2').textContent, tour().querySelector('[data-tour="done"]').textContent, activeTab, analysisOpen], ['溜狗表', '關閉', 'walk', false], '#447 資訊的使用說明再打開導覽（回到溜狗表）：');
       tour().querySelector('[data-tour="done"]').click();
       eq(tour(), null, '關閉：');
     });
@@ -3659,7 +3663,17 @@ async function runCardsTests() {
       await b.eval('bqDeal()');
       eq(b.eval('BQ.pending.length'), 0);
       eq((await device(ME)).eval('BQ.pending.length'), 0, '關閉重開不重複：');
-      eq((await device(OTHER)).eval('BQ.pending.length'), 7, '不同人的圖鑑分開：');
+      const o = await device(OTHER);
+      eq(o.eval('BQ.pending.length'), 7, '不同人的圖鑑分開：');
+      await o.eval('bqOpenField()');
+      eq(o.document.getElementById('bqAll').hidden, false, '超過一包才有一次全開：');
+      o.eval('BQ.still = false; bqOpenPack()');
+      eq(o.document.getElementById('bqSkip').hidden, false, '撕包時可以跳過：');
+      await o.eval('bqSkip()');
+      eq([o.eval('BQ.pending.length'), o.document.querySelectorAll('#bqHand .bq-card.dealt').length], [2, 5], '跳過動畫直接攤開、照樣存：');
+      eq(Object.keys(fixture.books[OTHER]).length, 5);
+      await o.eval('bqOpenAll()');
+      eq([o.eval('BQ.pending.length'), Object.keys(fixture.books[OTHER]).length, o.document.getElementById('bqAll').hidden], [0, 7, true], '一次全開存進後台：');
       const cleared = await device(ME, [], true);
       eq(cleared.eval('BQ.codes.length'), 0, '慢回應不復活已清除的身分：');
       eq(cleared.localStorage.getItem('bq-walker-name'), null);
@@ -4143,7 +4157,9 @@ async function runDepartureTests() {
       eq(filterDepartures(list, { reason: 'unknown' }).map(d => d.name), ['豆花']);
     });
     await check('#163 分析頁離所區：今年一行數字（2026-10-08 distill 拿掉三張數字卡）、兩年以上才有每年直條、名冊按鈕', () => {
-      departuresData = { state: 'ready', list }; depRoster = { open: false, query: '', year: 'all', reason: 'all' };
+      departuresData = { state: 'ready', list }; depRoster = depRosterDefault();
+      eq(depRoster.open, true, '#446 名冊預設展開：');
+      depRoster.open = false;
       const box = document.createElement('div');
       box.innerHTML = departureSectionHtml(OCT8);
       eq(box.querySelectorAll('.a-kpi').length, 0, '沒有數字卡：');
@@ -4158,6 +4174,7 @@ async function runDepartureTests() {
       depRoster.open = true;
       box.innerHTML = departureSectionHtml(OCT8);
       eq(box.querySelectorAll('[data-dep-dog]').length, 5);
+      eq(box.querySelector('#depToggle').textContent, '收起離所名冊', '#446 展開時仍可收起：');
       eq(box.querySelector('[data-dep-dog] .badge').textContent, '待確認');
     });
     await check('#363 名冊索引：搜尋全部年份；點舊年份的狗才拿那一年的詳細資料，拿過不再拿，拿不到用索引那筆', async () => {

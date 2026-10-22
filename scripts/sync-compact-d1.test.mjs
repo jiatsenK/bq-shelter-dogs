@@ -8,7 +8,7 @@ import { buildSyncSql, buildSyncPlan, SEED_TABLES, SYNC_SCHEMA_SKIP, planSync, r
 import { budgetProblem, todayRowsWritten } from './sync-diff.mjs';
 
 // SQL 開頭補建表、版本號、觸發器那幾行（不算同步寫的資料）
-const SCHEMA_LINE = /^CREATE |^INSERT OR IGNORE INTO v3_(data|pack|walk|activity)_versions|^INSERT INTO v3_departure_versions\(id,years\) |^DROP TRIGGER IF EXISTS pack_v3_|^DELETE FROM v3_packs WHERE part='(walks|small)'/;
+const SCHEMA_LINE = /^CREATE |^INSERT OR IGNORE INTO v3_(data|pack|walk|activity)_versions|^INSERT OR IGNORE INTO v3_walk_pack |^INSERT INTO v3_departure_versions\(id,years\) |^DROP TRIGGER IF EXISTS pack_v3_|^DELETE FROM v3_packs WHERE part='(walks|small)'/;
 
 const json = async path => JSON.parse(await readFile(new URL(`../${path}`, import.meta.url), 'utf8'));
 

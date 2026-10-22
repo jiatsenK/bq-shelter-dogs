@@ -421,7 +421,9 @@ const DEPARTURE_ORDER = ['adopt', 'death', 'other', 'unknown'];
 const DEPARTURE_COLORS = { adopt: 'var(--green-text)', death: '#8E8E93', other: 'var(--primary)', unknown: '#F0A030' };
 let departuresData = null; // { state: 'loading' | 'ready' | 'error', list, years: { 年: 版本號 } }
 const departureDetails = new Map(); // 年 → Promise<Map<編號, 離所的狗（詳細）>>
-let depRoster = { open: false, query: '', year: 'all', reason: 'all' };
+// #446 離所統計是專屬頁面，名冊預設展開（仍可收起）
+const depRosterDefault = () => ({ open: true, query: '', year: 'all', reason: 'all' });
+let depRoster = depRosterDefault();
 
 // departures.json（或名冊索引的 dogs）→ 離所的狗：跟在所的狗同一個樣子（parseDogsData），多一個 departure；
 // 索引沒有 last，舊編號放在 formerIds
@@ -582,20 +584,31 @@ let infoPage = '';
 let infoUpdateTab = 'website';
 let websiteUpdates = null;
 
+const WEBSITE_UPDATES_CACHE = 'bq-website-updates';
+const validWebsiteUpdates = entries => Array.isArray(entries) && entries.every(e => e && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && typeof e.text === 'string' && (e.version === undefined || typeof e.version === 'string'));
+
+// #421 先顯示上次讀到的內容，每次進頁面背景檢查新版；檢查失敗不清空，改標示「上次讀到的」。
 function loadWebsiteUpdates() {
-  if (websiteUpdates) return;
-  websiteUpdates = { state: 'loading', entries: [] };
+  if (websiteUpdates?.checking) return;
+  if (!websiteUpdates) {
+    let cached = null;
+    try { cached = JSON.parse(localStorage.getItem(WEBSITE_UPDATES_CACHE)); } catch {}
+    websiteUpdates = validWebsiteUpdates(cached) ? { state: 'ready', entries: cached } : { state: 'loading', entries: [] };
+  }
+  websiteUpdates.checking = true;
   fetch('website-updates.json', { cache: 'no-cache' })
     .then(async res => {
       if (!res.ok) throw new Error('讀取失敗');
       const entries = await res.json();
-      if (!Array.isArray(entries) || entries.some(e => !e || !/^\d{4}-\d{2}-\d{2}$/.test(e.date) || typeof e.text !== 'string')) throw new Error('格式不對');
+      if (!validWebsiteUpdates(entries)) throw new Error('格式不對');
       websiteUpdates = { state: 'ready', entries };
+      try { localStorage.setItem(WEBSITE_UPDATES_CACHE, JSON.stringify(entries)); } catch {}
     })
-    .catch(() => { websiteUpdates = { state: 'error', entries: [] }; })
-    .then(() => { if (analysisOpen && infoPage === 'updates') render(); });
+    .catch(() => { websiteUpdates = websiteUpdates.state === 'ready' ? { state: 'ready', stale: true, entries: websiteUpdates.entries } : { state: 'error', entries: [] }; })
+    .then(() => { if (analysisOpen && infoPage === 'updates' && infoUpdateTab === 'website') render(); });
 }
 
+// #447 使用說明從我溜過搬來：不是子頁，按了直接開溜狗表上的導覽（文字沿用 #171 的 TOUR_STEPS）
 function infoHomeHtml() {
   loadDepartures();
   loadActivities();
@@ -603,16 +616,16 @@ function infoHomeHtml() {
   const dep = !departuresData || departuresData.state === 'loading' ? '離所紀錄讀取中…' : departuresData.state === 'error' ? '離所紀錄讀取失敗' : departuresData.list.length ? `共 ${departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
   const act = activitiesData.state === 'loading' ? '活動紀錄讀取中…' : activitiesData.state === 'error' ? '活動紀錄讀取失敗' : activitiesData.list.length ? `共 ${activitiesData.list.length} 場活動` : '還沒有活動紀錄';
   const summary = { stay: dogs, departures: dep, activities: act, quality: '查看缺照片、介紹及其他資料', updates: '網站更新與資料編輯' };
-  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}</section>`;
+  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
 }
 
 function infoUpdatesHtml() {
   const tabs = `<div class="info-update-tabs" aria-label="更新紀錄種類"><button type="button" data-update-tab="website" aria-pressed="${infoUpdateTab === 'website'}">網站更新</button><button type="button" data-update-tab="edits" aria-pressed="${infoUpdateTab === 'edits'}">資料編輯</button></div>`;
   if (infoUpdateTab === 'edits') return tabs + '<iframe id="infoEdits" class="info-edits" title="資料編輯紀錄" src="edits.html?embedded=1" data-navigation-scope></iframe>';
-  loadWebsiteUpdates();
+  if (!websiteUpdates) loadWebsiteUpdates();
   const data = websiteUpdates;
-  const body = data.state === 'loading' ? '<p role="status">讀取中…</p>' : data.state === 'error' ? '<p role="alert">網站更新讀取失敗，請重試。</p><button type="button" id="retryUpdates">重新讀取</button>' : data.entries.length ? `<ol class="info-releases">${data.entries.map(e => `<li><time>${esc(e.date)}</time><p>${esc(e.text)}</p></li>`).join('')}</ol>` : '<p>還沒有網站更新紀錄</p>';
-  return tabs + section('網站更新', '只列已正式上線的變更', body);
+  const body = data.state === 'loading' ? '<p role="status">讀取中…</p>' : data.state === 'error' ? '<p role="alert">網站更新讀取失敗，請重試。</p><button type="button" id="retryUpdates">重新讀取</button>' : data.entries.length ? `${data.stale ? '<p role="status">暫時讀不到最新內容，以下是上次讀到的</p>' : ''}<ol class="info-releases">${data.entries.map(e => `<li><time>${esc(e.version ? `${e.version} · ${e.date}` : e.date)}</time><p>${esc(e.text)}</p></li>`).join('')}</ol>` : '<p>還沒有網站更新紀錄</p>';
+  return tabs + section('網站更新', '', body);
 }
 
 function openInfoPage(page) {
@@ -620,6 +633,7 @@ function openInfoPage(page) {
   history.replaceState({ ...history.state, infoPage: '' }, '');
   infoPage = page;
   history.pushState({ ...history.state, infoPage: page }, '');
+  if (page === 'updates' && infoUpdateTab === 'website') loadWebsiteUpdates();
   render();
   window.scrollTo(0, 0);
   document.getElementById('analysisBack').focus();
@@ -638,6 +652,7 @@ document.getElementById('main').addEventListener('click', e => {
   const tab = e.target.closest('[data-update-tab]');
   if (tab) {
     infoUpdateTab = tab.dataset.updateTab;
+    if (infoUpdateTab === 'website') loadWebsiteUpdates();
     render();
     document.querySelector(`[data-update-tab="${infoUpdateTab}"]`).focus();
   }
