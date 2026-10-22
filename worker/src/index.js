@@ -376,7 +376,7 @@ async function editDog(request, env, origin, edit) {
   if (checked.error) return fail(checked.error[0], checked.error[1], origin);
 
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (!allow(`${edit.kind}:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, '改得太頻繁，請稍等幾分鐘再試', origin);
+  if (!allow(`${edit.kind}:${ip}`, NOTE_WRITE_LIMITS, now)) return fail(429, edit.tooOften || '改得太頻繁，請稍等幾分鐘再試', origin);
   const saved = await edit.save(env.DB, id, checked.value, ctx);
   if (!saved) return fail(404, '找不到這個編號的狗狗', origin);
   if (saved.error) return fail(saved.status, saved.error, origin);
@@ -398,7 +398,7 @@ function formerDateOk(former) {
 const DOG_EDITS = {
   // 休養中（K 2026-10-09）：PUT /rest/{編號}，設定「到哪天前暫停帶出」，body { editor, until, reason } 或 { editor, end: true }；存 D1 的 v3_rest（#250）
   rest: {
-    kind: 'rest', label: '休養設定', methods: ['PUT'], crash: '休養設定發生錯誤，原本的設定不受影響',
+    kind: 'rest', label: '休養設定', methods: ['PUT'], tooOften: '設定太頻繁，請稍等幾分鐘再試', crash: '休養設定發生錯誤，原本的設定不受影響',
     check(input, { now }) {
       if (input.end === true) return { value: null };
       const until = typeof input.until === 'string' ? input.until : '';
@@ -417,7 +417,7 @@ const DOG_EDITS = {
   },
   // 有人固定照顧（#399）：PUT /fixed-care/{編號}，body { editor, enabled }；沒變不記編輯紀錄
   'fixed-care': {
-    kind: 'fixed-care', label: '固定照顧設定', methods: ['PUT'], crash: '固定照顧設定未完成，請重新讀取後再試',
+    kind: 'fixed-care', label: '固定照顧設定', methods: ['PUT'], tooOften: '設定太頻繁，請稍等幾分鐘再試', crash: '固定照顧設定未完成，請重新讀取後再試', maxBytes: EDIT_BODY_MAX_BYTES,
     check: input => (typeof input.enabled === 'boolean' ? { value: input.enabled } : { error: [400, '請指定開啟或關閉'] }),
     save: (db, id, enabled) => saveFixedCare(db, id, enabled),
     log: (enabled, saved, { id }) => (saved.before === enabled ? null : { dogNumber: id === saved.dogId ? '' : id, before: saved.before, after: enabled }),
