@@ -27,7 +27,8 @@
       if (authoritative) return { date: authoritative.walkedDate, walker: authoritative.walker,
         walkers: [...new Set(deps.split(authoritative.walker).map(deps.canonical).filter(Boolean))],
         today: authoritative.walkedDate === day, mine: isMine({ date: authoritative.walkedDate, walker: authoritative.walker }, day),
-        canUndo: false, canRevert: false, syncStatus: authoritative.syncStatus, version: authoritative.version };
+        canUndo: false, canRevert: authoritative.walkedDate === day && !!deps.walker() && deps.split(authoritative.walker).length === 1,
+        syncStatus: authoritative.syncStatus, version: authoritative.version };
       const item = activeItem(dog, day);
       const base = deps.base?.(dog) || {};
       const expired = !item && !!deps.read(day)[deps.key(dog)];
@@ -43,6 +44,7 @@
         .map(dog => ({ dog, ...state(dog, day) }));
     }
     function canUndo(dog, day = deps.date()) {
+      if (accepted.has(deps.key(dog))) return false;
       const item = deps.read(day)[deps.key(dog)];
       const current = activeItem(dog, day) ? item.current : deps.base?.(dog);
       return !!(item && item.prev && item.wrote && (!current || (current.walker === item.wrote.walker
@@ -50,6 +52,7 @@
     }
     // ADR 0016：沒有本機復原證據，但今天只剩一個名字，可請 Worker 從溜狗紀錄找上一次再撤銷（任何人）
     function canRevert(dog, day = deps.date(), current = null) {
+      if (accepted.has(deps.key(dog))) return state(dog, day).canRevert;
       if (canUndo(dog, day)) return false;
       const now_ = current || state(dog, day);
       return now_.date === day && deps.split(now_.walker).length === 1;
@@ -147,16 +150,16 @@
       const seen = new Set();
       const entries = dogs.filter(d => d && deps.key(d) && !seen.has(deps.key(d)) && seen.add(deps.key(d)))
         .map(dog => ({ dog, key: deps.key(dog), id: dog.id || '', name: dog.name,
-          walker: options.walker || deps.alias(dog) || me }));
+          walker: options.walker || deps.alias(dog) || me, expectedVersion: state(dog, day).version ?? 0 }));
       return enqueue({ entries, day, me, action: options.expected === undefined ? 'walk' : 'edit', expected: options.expected,
-        d1: !!deps.d1 && entries.length === 1 && options.expected === undefined });
+        d1: !!deps.d1 && entries.length === 1 });
     }
     // options.revert：沒有本機證據的狗改請 Worker 找上一次（ADR 0016）
     function undo(dogs, options = {}) {
       const seen = new Set();
       return enqueue({ entries: dogs.filter(d => d && !seen.has(deps.key(d)) && seen.add(deps.key(d)))
-        .map(dog => ({ dog, key: deps.key(dog), id: dog.id || '', name: dog.name })),
-        day: deps.date(), me: deps.walker(), action: 'undo', revert: !!options.revert });
+        .map(dog => ({ dog, key: deps.key(dog), id: dog.id || '', name: dog.name, expectedVersion: state(dog).version ?? 0 })),
+        day: deps.date(), me: deps.walker(), action: 'undo', revert: !!options.revert, d1: !!deps.d1 && dogs.length === 1 });
     }
     function enqueue(request) {
       request.entries.forEach(e => pending.set(e.key, (pending.get(e.key) || 0) + 1));
@@ -241,8 +244,10 @@
       const entry = request.entries[0], key = entry.key;
       const saved = { ...(deps.readRequests?.() || {}) };
       // 尚未查明的原要求優先；換名字或午夜都不能將它變成另一筆登記。
-      const payload = saved[key] || request.payload || { action: 'walk', requestId: crypto.randomUUID(), operationDate: request.day,
-        walker: entry.walker, dogs: [{ id: entry.id, name: entry.name }] };
+      const payload = saved[key] || request.payload || { action: request.action, requestId: crypto.randomUUID(), operationDate: request.day,
+        walker: request.action === 'undo' ? request.me : entry.walker,
+        ...(request.action === 'edit' ? { editor: request.me } : {}),
+        dogs: [{ id: entry.id, name: entry.name, ...(request.action !== 'walk' ? { expectedVersion: entry.expectedVersion } : {}) }] };
       request.payload = payload;
       saved[key] = payload;
       try { deps.saveRequests?.(saved); } catch {
@@ -253,22 +258,30 @@
       }
       let out;
       try { out = payload.operationDate !== deps.date() && deps.lookupRequest ? await deps.lookupRequest(payload.requestId) : await deps.send(payload); } catch { out = null; }
-      const matches = out?.ok && out.source === 'd1' && Array.isArray(out.results) ? out.results.filter(r => r.id === entry.id && r.name === entry.name) : [];
+      const matches = out?.source === 'd1' && Array.isArray(out.results) ? out.results.filter(r => r.id === entry.id && r.name === entry.name) : [];
       const result = matches.length === 1 ? matches[0] : null;
-      const valid = result?.accepted === true && result.requestId === payload.requestId && result.operationDate === payload.operationDate
+      const valid = out?.ok && result?.accepted === true && result.status === (payload.action === 'undo' ? 'restored' : 'written') && result.requestId === payload.requestId && result.operationDate === payload.operationDate
         && Number.isInteger(result.version) && typeof result.current?.date === 'string' && typeof result.current.walker === 'string';
-      if (valid) {
-        if (out.snapshot) receiveToday(out.snapshot, [entry.dog]);
+      const conflict = !out?.ok && result?.status === 'changed' && Number.isInteger(result.version)
+        && typeof result.current?.date === 'string' && typeof result.current.walker === 'string';
+      const rejected = !out?.ok && [400, 403, 404, 409].includes(out?.httpStatus);
+      if ((valid || conflict) && out.snapshot) receiveToday(out.snapshot, [entry.dog]);
+      if (valid || conflict) {
         const old = accepted.get(key);
         if (!old || result.version > old.version) accepted.set(key, { key, version: result.version, walkedDate: result.current.date,
           walker: result.current.walker, syncStatus: result.syncStatus, at: result.at });
+      }
+      if (valid || conflict || rejected) {
         delete saved[key];
         // 清除失敗仍保留原識別，下次可安全查詢／重送，不影響已接受結果。
         try { deps.saveRequests?.(saved); } catch { /* 保留原要求供下次查明。 */ }
-        deps.apply([entry.dog], deps.read(deps.date()), deps.date(), []);
+        deps.apply([entry.dog], deps.read(deps.date()), deps.date(), valid && payload.action === 'undo' ? [entry.dog] : []);
       }
-      const rows = [{ dog: entry.dog, status: valid ? 'written' : 'unknown', canUndo: false }];
-      const response = { rows, error: out?.error || '', off: false, successful: valid ? [entry.dog] : [], retryDogs: valid ? [] : [entry.dog], source: 'd1' };
+      const completed = valid && payload.action === request.action && (request.action !== 'edit'
+        || payload.walker === entry.walker && payload.editor === request.me);
+      const rows = [{ dog: entry.dog, status: completed ? result.status : valid || conflict || rejected ? 'changed' : 'unknown', canUndo: false }];
+      const response = { rows, error: valid && !completed ? '前次操作已確認，請先確認目前紀錄' : out?.error || '', off: false,
+        successful: completed ? [entry.dog] : [], retryDogs: valid || conflict || rejected ? [] : [entry.dog], source: 'd1' };
       requests.set(response, request);
       return response;
     }
