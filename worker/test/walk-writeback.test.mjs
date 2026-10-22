@@ -13,8 +13,13 @@ function scriptAdapter(callback, { mutate = () => {} } = {}) {
   let locked = false, reads = 0;
   const props = { getProperty: key => ({ SHEET_ID: 'test', WRITE_KEY: 'test-secret', WALK_WORKER_URL: 'https://worker.example' })[key] };
   const sheet = {
+    getLastRow: () => values.length,
+    getLastColumn: () => values[0].length,
     getDataRange: () => ({ getValues: () => { assert.equal(locked, true); mutate(values, ++reads); return values.map(r => [...r]); } }),
-    getRange: (r,c) => ({ setValue: value => { assert.equal(locked, true); values[r-1][c-1] = value; writes.push([r,c,value]); } }),
+    getRange: (r,c,height=1,width=1) => ({
+      getValues: () => { assert.equal(locked,true); return values.slice(r-1,r-1+height).map(row=>row.slice(c-1,c-1+width)); },
+      setValue: value => { assert.equal(locked, true); values[r-1][c-1] = value; writes.push([r,c,value]); }
+    }),
   };
   const context = vm.createContext({
     PropertiesService: { getScriptProperties: () => props },
@@ -25,6 +30,14 @@ function scriptAdapter(callback, { mutate = () => {} } = {}) {
   vm.runInContext(source, context);
   return { run: body => context.handleRequest(body), writes, values: () => values, replace: rows => { values = rows; } };
 }
+
+test('保險掃描在相同鎖內只回四個必要欄位，不寫格子且必須驗證',() => {
+  const script=scriptAdapter(()=>{ throw new Error('掃描不回呼 Worker'); });
+  const scan=script.run({ action:'walkScan',key:'test-secret' });
+  assert.deepEqual(JSON.parse(JSON.stringify(scan.rows)),[{ dog:{ id:'9001',name:'測試狗' },current:{ date:'2026-10-01',walker:'' } }]);
+  assert.deepEqual(script.writes,[]);
+  assert.equal(script.run({ action:'walkScan',key:'wrong' }).ok,false);
+});
 test('接收端同鎖重定位、忽略舊 payload 目標、整格替換並讀回派送版本', () => {
   const calls = [];
   const script = scriptAdapter((url, body) => {

@@ -36,7 +36,7 @@ function handleRequest(req) {
   if (!req) return { ok: false, error: '沒有資料' };
   // K 決定先不設金鑰（2026-10-04）；有設 WRITE_KEY 才檢查
   if (key && req.key !== key) return { ok: false, error: '金鑰不對', code: 'key' };
-  if (req.action === 'walkWake' && (!key || req.key !== key)) return { ok: false, error: '寫回必須設定金鑰', code: 'key' };
+  if (['walkWake', 'walkScan'].indexOf(req.action) !== -1 && (!key || req.key !== key)) return { ok: false, error: '寫回必須設定金鑰', code: 'key' };
   var lock = LockService.getScriptLock();
   lock.waitLock(15000); // 兩個人同時按，一個一個來，免得互相蓋掉
   try {
@@ -44,6 +44,7 @@ function handleRequest(req) {
     var sheet = SpreadsheetApp.openById(sheetIdOf(props.getProperty('SHEET_ID'))).getSheetByName(SHEET_NAME);
     if (!sheet) return { ok: false, error: '找不到「' + SHEET_NAME + '」分頁' };
     if (req.action === 'walkWake') return writeLatestWalk(sheet, req, props);
+    if (req.action === 'walkScan') return readWalkSnapshot(sheet);
     // 所有程式寫入共用此鎖；舊版喚醒延後抵達也不能繞過 D1 正本。
     if (props.getProperty('WALK_WORKER_URL') && ['walk', 'edit', 'undo'].indexOf(req.action) !== -1) {
       var gate = walkWorker(props, 'legacy-check', { dogs: req.dogs });
@@ -91,6 +92,25 @@ function directWalkCell(sheet, dog) {
   return { row: row, cols: header.cols, current: { date: text, walker: cellText(values[row][header.cols.walker]) } };
 }
 function sameWalk(a, b) { return a.date === b.date && a.walker === b.walker; }
+// 保險比對只取編號、狗名、日期、名單四欄；不下載備註等整份歷史內容。
+function readWalkSnapshot(sheet) {
+  var header = findHeader(sheet.getRange(1, 1, Math.min(20, sheet.getLastRow()), sheet.getLastColumn()).getValues());
+  if (!header || ['id', 'name', 'date', 'walker'].some(function (k) { return header.cols[k] === undefined; })) throw new Error('主清單缺必要欄位');
+  var count = sheet.getLastRow() - header.row - 1;
+  var columns = {};
+  ['id', 'name', 'date', 'walker'].forEach(function (k) {
+    columns[k] = count ? sheet.getRange(header.row + 2, header.cols[k] + 1, count, 1).getValues() : [];
+  });
+  var rows = [];
+  for (var r = 0; r < count; r++) {
+    var id = cellText(columns.id[r][0]), name = cellText(columns.name[r][0]);
+    if (!name) continue;
+    var value = columns.date[r][0];
+    var date = isDate(value) ? ymdOf(value) : cellText(value).replace(/\//g, '-').replace(/-(\d)(?=-|$)/g, '-0$1');
+    rows.push({ dog: { id: id, name: name }, current: { date: date, walker: cellText(columns.walker[r][0]) } });
+  }
+  return { ok: true, rows: rows };
+}
 function writeLatestWalk(sheet, req, props) {
   if (!req.dog || !req.dispatchId) throw new Error('缺少寫回識別');
   var observed = directWalkCell(sheet, req.dog);
