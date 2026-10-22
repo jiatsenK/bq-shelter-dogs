@@ -99,7 +99,7 @@ test('開卡、照片、休養、介紹不被同步清掉', async t => {
   const sql = await buildSyncSql(seed, src);
   // 只補建表（IF NOT EXISTS），不刪不寫這幾張
   const writes = sql.split('\n').filter(l => !SCHEMA_LINE.test(l)).join('\n');
-  assert.doesNotMatch(writes, /v3_card_opened|v3_photos|v3_volunteer|v3_rest|v3_intros|v3_edit_log|v3_activit/);
+  assert.doesNotMatch(writes, /v3_card_opened|v3_photos|v3_volunteer|v3_rest|v3_intros|v3_edit_log|v3_activit|v3_departed_cards/);
 });
 
 test('來源有問題時丟錯，不產生 SQL', async t => {
