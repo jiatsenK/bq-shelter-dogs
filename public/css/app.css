@@ -25,6 +25,7 @@
   --z-fac: #F2F2EC; --z-fac-ink: #8A8A7A;
 }
 * { box-sizing: border-box; }
+.walk-sync { display: block; margin-top: 4px; color: var(--ink-soft); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 html { scroll-padding-top: env(safe-area-inset-top, 0px); }
 /* 手機（含加入主畫面）：一般頁面只讓瀏覽器捲動，避免雙擊／雙指誤縮放。
    放大照片、地圖時解除祖先限制；裁切區仍用自己的 touch-action: none 處理雙指。
@@ -1825,8 +1826,6 @@ header.app { top: calc(-1 * var(--brand-h, 0px)); }
 /* 拇指按得到：頁首更新、分析 44px；名字按鈕至少 44px 寬 */
 header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .with-name { min-width: 44px; justify-content: center; }
-/* 紅色只留給天數和警示：「看使用說明」是一般連結，用主色（清除設定才是紅色） */
-.who-clear.guide-link { color: var(--primary); }
 
 /* ── 少一點格子：詳細資訊、分析、找狗、我溜過（critique 2026-10-09 P1，K 選「全部照表做」）──
    一段一段用細線分開，不再每段一張卡；標籤、統計、名次改成字 */
@@ -2441,6 +2440,15 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 }
 .gw-walkbar { flex-wrap: wrap; }
 .gw-walkbar .gw-actions { flex-basis: 120px; }
+/* #443：手機換群箭頭停在同一個位置（#395）。狗群頁至少撐滿表頭到底部分類列之間，「溜了」那排推到最下面並黏在分類列上方；
+   狗卡多或大字時整頁照常捲閱（#400），捲到底「溜了」那排回到所有內容之後 */
+@media (max-width: 1099px) {
+  /* overflow: clip 不像 hidden 會變成捲動容器，sticky 才會對畫面黏住 */
+  #groupPage { overflow: clip; display: flex; flex-direction: column; min-height: calc(100dvh - var(--app-header-height, 64px) - var(--bottom-bar-height, 64px)); }
+  .gw-walkbar { margin-top: auto; position: sticky; bottom: var(--bottom-bar-height, 64px); z-index: 4; background: var(--bg); }
+  /* 已溜時沒有「有狗沒溜」，留同高的空位，箭頭才不會在按下溜了後往下掉 */
+  .gw-walkbar .gw-actions:has(#gwWalk.done)::after { content: ""; height: 44px; }
+}
 
 @media (max-width: 1099px) {
   .analysis-open header.app { position: fixed; inset: 0 0 auto; }

@@ -11,7 +11,7 @@ const { resetState, allowUpload, isJpeg, MAX_BYTES } = worker.testing;
 // 測試用另一個網址，用 ALLOWED_ORIGINS 放行（正式網站跟 Worker 同網址，不用設）
 const ORIGIN = 'https://allowed.example';
 let mainStatus = 200;
-const DB = { prepare: () => ({ all: async () => { if (mainStatus !== 200) throw new Error('D1 read failed'); return { results: DOGS.dogs.filter(d => d.id).map(d => ({ number: d.id, name: d.name })) }; } }) };
+const DB = { prepare: sql => sql.includes('v3_walk_state') ? { bind() { return this; }, first: async () => null } : ({ all: async () => { if (mainStatus !== 200) throw new Error('D1 read failed'); return { results: DOGS.dogs.filter(d => d.id).map(d => ({ number: d.id, name: d.name })) }; } }) };
 const ENV = { GITHUB_TOKEN: 'test-token', ALLOWED_ORIGINS: ORIGIN, DB };
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
 const DOGS = { dogs: [{ id: '2024032902', name: '測試狗' }, { id: '', name: '沒編號' }] };
@@ -510,10 +510,10 @@ test('#141 GET /walkers：分兩次讀主清單，回每隻狗的誰遛的（key
   const calls = fakeSheet();
   const { status, body } = await getWalkers({ SHEET_ID: 'abc' });
   assert.equal(status, 200);
-  assert.deepEqual(body.walkers, { 2025072001: '嘉文+俐葶+岑', 2026060101: '維芬。嘉文', '名:新來的': '喬筠' });
+  assert.deepEqual(body.walkers, { 2025072001: '嘉文+俐葶+岑', 2026060101: '維芬。嘉文', '名:新來的': '喬筠', 2026042902: '' }, '清空的也回空字串，手機才會清掉');
   assert.deepEqual(body.names, ['嘉文', '俐葶', '岑', '喬筠', '維芬'].sort((a, b) => (a === '嘉文' ? -1 : b === '嘉文' ? 1 : a.localeCompare(b, 'zh-Hant'))));
   assert.deepEqual(calls, ['0', '2']);
-  assert.deepEqual(body.dates, { 2025072001: '2026-10-20', 2026060101: '2026-10-03' }, 'K 2026-10-20：連遛狗日期一起回');
+  assert.deepEqual(body.dates, { 2025072001: '2026-10-20', 2026060101: '2026-10-03', '名:新來的': '', 2026042902: '' }, 'K 2026-10-20：連遛狗日期一起回，空格回空字串');
   assert.ok(Date.parse(body.readAt), '回讀試算表的時間');
   await getWalkers({ SHEET_ID: 'abc' });
   assert.equal(calls.length, 2, '第二次用快取');

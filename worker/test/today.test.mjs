@@ -64,7 +64,7 @@ test('試算表沒寫進去、找不到狗：不記；D1 寫失敗：按的人�
   await worker.fetch(post({ action: 'walk', walker: 'K', dogs: [{ id: '9001', name: '甲' }] }), env);
   assert.deepEqual((await today(env)).walks, []);
   fakeScript(sheet);
-  const broken = { ...env, DB: { prepare: () => ({ bind() { return this; } }), batch: async () => { throw new Error('D1 壞了'); } } };
+  const broken = { ...env, DB: { prepare: sql => sql.includes('v3_walk_state') ? env.DB.prepare(sql) : ({ bind() { return this; } }), batch: async () => { throw new Error('D1 壞了'); } } };
   const res = await worker.fetch(post({ action: 'walk', walker: 'K', dogs: [{ id: '9001', name: '甲' }] }), broken);
   assert.equal(res.status, 200);
 });
