@@ -82,6 +82,8 @@ function parseDogsData(data) {
     ...(d.dogId ? { dogId: text(d.dogId) } : {}),
     name: text(d.name),
     walkedDate: parseYmd(d.walkedDate),
+    // #460：主清單「誰遛的」代號，D1 模式未接管的狗用它換名字
+    walkers: Array.isArray(d.walkers) ? d.walkers.map(text).filter(Boolean) : [],
     // #399：API 的 covered 只來自網站設定，不再由志工名字推定。
     covered: d.covered === true,
     note: text(d.note),
@@ -517,7 +519,7 @@ let mineMonth = ''; // 我溜過月曆正在看的月份（YYYY-MM）；空的�
 let mineDay = ''; // 月曆上選的那一天（YYYY-MM-DD）；空的＝那個月最近一次到所
 function myWalksHtml(today, query) {
   const visibleWalks = currentMyWalks(today);
-  const confirmedToday = Object.values(loadSheetWrites(today)).some(item => item.current?.date === localDateKey(today) && splitWalkers(item.current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())));
+  const confirmedToday = SITE.d1WalkAccept ? walkRegistration.today(allDogs, localDateKey(today)).some(row => row.mine) : Object.values(loadSheetWrites(today)).some(item => item.current?.date === localDateKey(today) && splitWalkers(item.current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())));
   if (todayState === 'loading' || (myWalksState === 'loading' && !confirmedToday)) return `<div class="status-msg">讀取溜狗紀錄中…</div>`;
   if (myWalksState === 'error' && !confirmedToday) {
     return `<div class="status-msg">溜狗紀錄讀不到，請確認網路後按「重新讀取」。<br><button class="retry-btn" id="mineRetry">重新讀取</button></div>`;
@@ -1014,8 +1016,9 @@ function recordWalked(dogs, on, today = new Date()) {
 function setWalked(dogs, on) {
   pinWalkOrder(dogs); // 按的狗留在原地，下一隻不會滑到手指下
   if (on && needNameToWalk()) return askNameThenWalk(dogs); // 還沒設定名字（先看看）：先問名字，設好再登記
-  if (!on && SITE.d1WalkAccept && dogs.length === 1) return undoSheetWalks(dogs, null, { revert: true });
-  if (on && sheetWillWrite()) walkThenRecord(dogs);
+  // #460：D1 模式所有入口（單狗、整群、一起溜）都等 D1 接受，不先記在手機
+  if (!on && SITE.d1WalkAccept) return undoSheetWalks(dogs, null, { revert: true });
+  if (on && (SITE.d1WalkAccept || sheetWillWrite())) walkThenRecord(dogs);
   else setWalkedLocal(dogs, on);
 }
 function sheetWillWrite() {
@@ -1029,7 +1032,7 @@ function walkPendingNow(dog) {
 function walkThenRecord(dogs, retry = null) {
   const todo = dogs.filter((d, i) => d && walkKey(d) && !walkedNow(d) && !walkPendingNow(d) && dogs.indexOf(d) === i);
   if (!todo.length) return;
-  const acceptsD1 = SITE.d1WalkAccept && todo.length === 1;
+  const acceptsD1 = SITE.d1WalkAccept;
   if (!acceptsD1) recordWalked(todo, true);
   pickedBuddies.clear();
   const text = `${todo.map(d => d.name).join('、')} 今天溜了`;
@@ -1094,7 +1097,8 @@ function setWalkedLocal(dogs, on) {
 // 只認這支手機記下的 prev／wrote（sheetWrite 存的）；試算表那格已被別人改過（current 不是我們寫的）就不提供，
 // 撤銷時 Apps Script 也會再核對一次，不蓋掉別人後來改的
 function sheetUndoable(dog, today = new Date()) {
-  return walkRegistration.canUndo(dog, localDateKey(today));
+  const day = localDateKey(today);
+  return walkRegistration.canUndo(dog, day) || (SITE.d1WalkAccept && walkRegistration.canRevert(dog, day));
 }
 let sheetUndoBusy = false;
 async function undoSheetWalks(dogs, retry = null, options = {}) {
@@ -1338,7 +1342,9 @@ function refreshTodayWalks() {
   if (typeof document !== 'undefined' && document.hidden) return;
   if (Date.now() - todayFetchedAt < TODAY_REFETCH_MS) return;
   loadTodayWalks();
-  loadWalkerNames(); // 試算表名單也每分鐘重讀：直接改試算表的也要同步（K 2026-10-20）
+  // 試算表名單也每分鐘重讀：直接改試算表的也要同步（K 2026-10-20）。
+  // #460：D1 模式人工改表由伺服器比對後進 D1 資料包，手機不再每分鐘讀試算表名單
+  if (!SITE.d1WalkAccept) loadWalkerNames();
 }
 // 一格好幾個名字（「嘉文+俐葶+岑」「維芬。佳岑」）拆開，用頓號接起來，不重複
 function canonicalWalker(name) {
@@ -1538,7 +1544,7 @@ const walkRegistration = createWalkRegistration({
   key: walkKey, date: () => localDateKey(new Date()), walker: loadWalkerName, alias: myAliasIn,
   canonical: canonicalWalker, split: splitWalkers,
   names: () => loadMyCodes().map(code => walkerCodeNames[code]).filter(Boolean),
-  base: dog => ({ date: Object.hasOwn(walkerDates, walkKey(dog)) ? walkerDates[walkKey(dog)] : (dog.walkedDate ? localDateKey(dog.walkedDate) : ''), walker: walkerNames[walkKey(dog)] || '' }),
+  base: dog => SITE.d1WalkAccept ? d1Base(dog) : ({ date: Object.hasOwn(walkerDates, walkKey(dog)) ? walkerDates[walkKey(dog)] : (dog.walkedDate ? localDateKey(dog.walkedDate) : ''), walker: walkerNames[walkKey(dog)] || '' }),
   local: day => loadWalkedIds(parseYmd(day)),
   saveLocal: (ids, day) => saveWalkedIds(ids, parseYmd(day)),
   companions: (dog, day) => loadWalkWith(parseYmd(day))[walkKey(dog)] || [],
@@ -1559,6 +1565,11 @@ const walkRegistration = createWalkRegistration({
     render(); renderDetail();
   },
 });
+// #460：還沒經過新流程的狗，用 D1 狗清單（同步進 D1 的主清單）的日期與代號，不用試算表即時名單
+function d1Base(dog) {
+  const walker = [...new Set((Array.isArray(dog.walkers) ? dog.walkers : []).map(code => walkerCodeNames[code]).filter(Boolean))].join('、');
+  return { date: dog.walkedDate ? localDateKey(dog.walkedDate) : '', walker };
+}
 // 舊的編輯入口仍回傳布林值；新登記入口直接使用模組逐狗結果。
 async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expected = undefined) {
   if (!UPLOAD_URL || sheetWriteState === 'off' || (on && !walker && !loadWalkerName())) return null;

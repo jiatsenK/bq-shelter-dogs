@@ -109,3 +109,61 @@ test('跨裝置的單人 D1 紀錄可復原；送出版本並立即套用較早�
   assert.equal(r.state(dog).syncStatus,'pending');
   assert.equal(r.state(dog).canRevert,false);
 });
+
+const dog2 = { id: '9002', name: '第二隻' };
+test('#460 整群在 D1 模式逐狗送出單狗請求，部分成功逐狗回報，重試沿用原識別', async () => {
+  const sent = [];
+  let fail = true;
+  const { registration:r, requests } = client(async body => {
+    sent.push(body);
+    if (body.dogs[0].id === dog2.id && fail) throw new Error('lost');
+    const out = accepted(body);
+    out.results[0] = { ...out.results[0], id: body.dogs[0].id, name: body.dogs[0].name };
+    return out;
+  });
+  const out = await r.register([dog, dog2]);
+  assert.equal(sent.length, 2);
+  assert.ok(sent.every(p => p.dogs.length === 1));
+  assert.notEqual(sent[0].requestId, sent[1].requestId);
+  assert.deepEqual(out.rows.map(x => x.status), ['written', 'unknown']);
+  assert.deepEqual(out.successful, [dog]);
+  assert.deepEqual(out.retryDogs, [dog2]);
+  assert.equal(r.state(dog).today, true);
+  assert.equal(r.state(dog2).today, false);
+  assert.deepEqual(Object.keys(requests()), [dog2.id]);
+  fail = false;
+  const again = await r.retry(out);
+  assert.equal(sent.length, 3);
+  assert.equal(sent[2].requestId, sent[1].requestId);
+  assert.deepEqual(again.successful, [dog2]);
+});
+
+test('#460 整群復原在 D1 模式逐狗帶版本', async () => {
+  const sent = [];
+  const { registration:r } = client(async body => {
+    sent.push(body);
+    const out = accepted(body);
+    out.results[0] = { ...out.results[0], id: body.dogs[0].id, name: body.dogs[0].name, status: 'restored', version: 2, current: { date: '2026-10-01', walker: '' } };
+    return out;
+  });
+  r.receiveToday({ source:'d1', version:3, date:day, walks:[dog, dog2].map(d => ({ key:d.id, version:1, walkedDate:day, walker:'甲', syncStatus:'synced' })) },[dog, dog2]);
+  const out = await r.undo([dog, dog2],{ revert:true });
+  assert.deepEqual(sent.map(p => [p.action, p.dogs.length, p.dogs[0].expectedVersion]), [['undo',1,1],['undo',1,1]]);
+  assert.equal(out.successful.length, 2);
+  assert.equal(r.state(dog2).today, false);
+});
+
+test('#460 D1 模式未接管的狗只看伺服器基準，不採本機已溜、本機寫入紀錄或試算表即時名單', () => {
+  let records = { [dog.id]: { id: dog.id, name: dog.name, current: { date: day, walker: '本機' }, observedAt: Date.now() + 99999, prev: { walker: '' }, wrote: { walker: '本機' } } };
+  const r = createWalkRegistration({ d1: true, key: d => d.id, date: () => day, walker: () => '甲', alias: () => '', split: s => s.split('、').filter(Boolean), canonical: s => s,
+    base: () => ({ date: '2026-10-01', walker: '舊' }), syncedAt: () => 0,
+    read: () => records, save: x => { records = x; }, local: () => [dog.id], saveLocal: () => {}, apply: () => {}, send: async () => ({}) });
+  assert.equal(r.state(dog).today, false);
+  assert.equal(r.state(dog).mine, false);
+  assert.equal(r.state(dog).walker, '舊');
+  assert.equal(r.canUndo(dog), false);
+  r.receiveNames({ [dog.id]: '試算表乙' }, [dog], r.beginRead(), { [dog.id]: day }, Date.now() + 999999);
+  r.receiveToday({ date: day, walks: [{ key: dog.id, walkedDate: day, walker: '舊消息', at: new Date(Date.now() + 99999).toISOString() }] }, [dog]);
+  assert.equal(r.state(dog).walker, '舊');
+  assert.equal(r.today([dog]).length, 0);
+});
