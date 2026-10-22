@@ -39,10 +39,21 @@ CREATE TABLE IF NOT EXISTS v3_walk_outbox (
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_due ON v3_walk_outbox(next_attempt_at,dog_key) WHERE status IN ('pending','retry','unconfirmed');
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_active ON v3_walk_outbox(dog_key) WHERE status NOT IN ('synced','superseded');
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_readback ON v3_walk_outbox(dog_key,target_date,target_walker) WHERE readback_seen=1;
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_dispatch ON v3_walk_outbox(dog_key,dispatch_id) WHERE status='dispatching';
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_interrupted ON v3_walk_outbox(next_attempt_at,dog_key) WHERE status='dispatching';
 CREATE TABLE IF NOT EXISTS v3_walk_delivery (
   dog_key TEXT PRIMARY KEY REFERENCES v3_walk_state(dog_key),
   dispatch_id TEXT NOT NULL,
   started_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS v3_walk_delivery_started ON v3_walk_delivery(started_at,dog_key);
+-- #459：只保留每狗目前版本的退避計數，程序重啟後仍沿用。
+CREATE TABLE IF NOT EXISTS v3_walk_retry (
+  dog_key TEXT PRIMARY KEY REFERENCES v3_walk_state(dog_key),
+  version INTEGER NOT NULL,
+  failures INTEGER NOT NULL,
+  dispatch_id TEXT NOT NULL,
+  reserved_day TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS v3_walk_pack (
   id INTEGER PRIMARY KEY CHECK(id=1),

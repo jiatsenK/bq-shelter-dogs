@@ -12,5 +12,12 @@ try {
   globalThis.fetch = async () => { throw new Error('synthetic Google failure'); };
   report.push(await measure('dispatch and retained failure',() => dispatchWalk(env.DB,{ id:'9001',name:'測試狗' },env)));
   if ((await current(env)).walks[0].syncStatus !== 'retry') throw new Error('failure not retained');
-  console.log(JSON.stringify({ report, conservativeReservations:{ accept:32, claimIncludingRelease:16, target:16, receipt:16, failure:16 }, note:'changedRows includes guards, budget, projection and version triggers; index costs covered by conservative reservations; not production CPU or account-budget acceptance' },null,2));
+  const before=await total();
+  const tasks=[];
+  const worker=(await import('../src/index.js')).default;
+  globalThis.fetch=async () => Response.json({ ok:true,rows:[] });
+  await worker.scheduled({ scheduledTime:Date.now() },{ ...env,WALK_RETRY_ENABLED:'true' },{ waitUntil:p=>tasks.push(p) });
+  await Promise.all(tasks);
+  report.push({ name:'unchanged scan and retry not yet due',changedRows:await total()-before });
+  console.log(JSON.stringify({ report, conservativeReservations:{ accept:32, completeAttempt:96, standaloneTargetOrReceipt:16, manualSnapshotChange:40 }, note:'changedRows includes guards, budget, projection and version triggers; index costs covered by conservative reservations; not production CPU or account-budget acceptance' },null,2));
 } finally { globalThis.fetch=real; env.DB.close(); }

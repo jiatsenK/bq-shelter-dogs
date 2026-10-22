@@ -38,6 +38,13 @@ export async function writeBudget(db, env, cost, now = Date.now()) {
   ];
 }
 
+// 派送前一次保留整條協定（含失敗／釋放）的索引及觸發器上界。
+// 同派送重送的 target／receipt 是冪等的，不可重複消耗這份保留量。
+async function transitionBudget(db,env,dogKey,dispatchId,cost) {
+  const prepaid=await one(db,'SELECT dispatch_id FROM v3_walk_retry WHERE dog_key=? AND dispatch_id=? AND reserved_day=?',dogKey,dispatchId,new Date().toISOString().slice(0,10));
+  return prepaid ? [] : writeBudget(db,env,cost);
+}
+
 async function seedState(db, dog) {
   const matches = await rows(db, `SELECT dog_id,walked_date,row_index FROM v3_sheet_main WHERE ${dog.id ? 'number=?' : "number='' AND name=?"}`, dog.id || dog.name);
   if (matches.length !== 1) throw new WalkError(409, '找不到唯一的主清單狗');
@@ -46,7 +53,7 @@ async function seedState(db, dog) {
   return { dog_id: seed.dog_id, effective_date: seed.walked_date || '', walker: people.map(p => p.name).filter(Boolean).join('、'), version: 0 };
 }
 
-async function membersOf(db, text, secret) {
+export async function membersOf(db, text, secret) {
   const members = [];
   for (const name of names(text)) {
     // 沿用既有固定身分。登記不建立、猜測或合併任何人。
@@ -106,17 +113,20 @@ export async function acceptWalk(db, input, env, now = Date.now()) {
   throw new WalkError(409, '登記競爭中，請用原請求再試');
 }
 
-export async function dispatchWalk(db, dog, env) {
-  const key = keyOf(dog), dispatchId = crypto.randomUUID(), now = new Date().toISOString();
-  if (await one(db, 'SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', key)) return;
-  const job = await one(db, "SELECT o.* FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version WHERE o.dog_key=? AND o.status IN ('pending','retry','unconfirmed')", key);
-  if (!job) return;
+export async function dispatchWalk(db, dog, env, clock = Date.now(), recovery = null) {
+  const key = keyOf(dog), dispatchId = crypto.randomUUID(), now = new Date(clock).toISOString();
+  const recoverDispatchId = recovery?.dispatchId || '';
+  const delivery = await one(db, 'SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', key);
+  if (delivery && delivery.dispatch_id !== recoverDispatchId) return;
+  const job = await one(db, "SELECT o.* FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version WHERE o.dog_key=? AND (o.status IN ('pending','retry','unconfirmed') OR (?=1 AND o.status='dispatching'))", key, Number(!!recovery));
+  if (!job || (!recovery && job.next_attempt_at > now)) return;
   let claimed;
   try { claimed = await db.batch([
-    db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN NOT EXISTS(SELECT 1 FROM v3_walk_delivery WHERE dog_key=?) THEN 1 ELSE 0 END').bind(key),
-    ...await writeBudget(db, env, 16),
-    db.prepare('INSERT INTO v3_walk_delivery VALUES(?,?,?)').bind(key, dispatchId, now),
-    db.prepare("UPDATE v3_walk_outbox SET status='dispatching',dispatch_id=?,error='' WHERE dog_key=? AND version=? AND status IN ('pending','retry','unconfirmed') RETURNING version").bind(dispatchId, key, job.version),
+    db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?),\'\')=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?) THEN 1 ELSE 0 END').bind(key, recoverDispatchId, key, job.version),
+    ...await writeBudget(db, env, 96, clock),
+    db.prepare('INSERT INTO v3_walk_retry(dog_key,version,failures,dispatch_id,reserved_day) VALUES(?,?,0,?,?) ON CONFLICT(dog_key) DO UPDATE SET failures=CASE WHEN version=excluded.version THEN failures ELSE 0 END,version=excluded.version,dispatch_id=excluded.dispatch_id,reserved_day=excluded.reserved_day').bind(key,job.version,dispatchId,now.slice(0,10)),
+    db.prepare('INSERT INTO v3_walk_delivery VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET dispatch_id=excluded.dispatch_id,started_at=excluded.started_at').bind(key, dispatchId, now),
+    db.prepare("UPDATE v3_walk_outbox SET status='dispatching',dispatch_id=?,error='' WHERE dog_key=? AND version=? AND (status IN ('pending','retry','unconfirmed') OR (?=1 AND status='dispatching')) RETURNING version").bind(dispatchId, key, job.version, Number(!!recovery)),
     db.prepare('DELETE FROM v3_walk_guard'),
   ]); } catch (error) {
     if (await one(db, 'SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', key)) return;
@@ -126,6 +136,7 @@ export async function dispatchWalk(db, dog, env) {
     await db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(key, dispatchId).run();
     return;
   }
+  let release = false;
   try {
     if (!env.SHEET_WRITE_URL || !env.SHEET_WRITE_KEY) throw new Error('writeback-not-configured');
     const res = await fetch(env.SHEET_WRITE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -134,15 +145,30 @@ export async function dispatchWalk(db, dog, env) {
     if (!res.ok || !receipt.ok) throw new Error('writeback-unconfirmed');
     const confirmed = await confirmWalk(db, { ...receipt, dogKey: key }, env);
     if (!confirmed.confirmed) throw new Error('writeback-unconfirmed');
+    release = true;
   } catch (error) {
+    const failed = await one(db, "SELECT version FROM v3_walk_outbox WHERE dog_key=? AND dispatch_id=? AND status='dispatching'",key,dispatchId);
+    if (!failed) { release = true; return; }
+    const retry = await one(db, 'SELECT version,failures FROM v3_walk_retry WHERE dog_key=?', key);
+    const failures = retry?.version === failed.version ? retry.failures + 1 : 1;
+    const delay = [1,2,4,8,15][Math.min(failures - 1,4)] * 60000;
     await db.batch([
-      ...await writeBudget(db, env, 16),
+      ...await transitionBudget(db,env,key,dispatchId,24),
+      db.prepare('UPDATE v3_walk_retry SET version=?,failures=? WHERE dog_key=? AND dispatch_id=?').bind(failed.version,failures,key,dispatchId),
       db.prepare("UPDATE v3_walk_outbox SET status='retry',error=?,next_attempt_at=? WHERE dog_key=? AND dispatch_id=? AND status='dispatching'")
-        .bind(String(error.message).slice(0, 100), now, key, dispatchId),
+        .bind(String(error.message).slice(0, 100), new Date(Math.max(clock,Date.now()) + delay).toISOString(), key, dispatchId),
       db.prepare('DELETE FROM v3_walk_guard'),
+      db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(key,dispatchId),
     ]);
+    release = true;
   } finally {
-    await db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(key, dispatchId).run();
+    if (release && await one(db,'SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?',key,dispatchId)) {
+      await db.batch([
+        ...await transitionBudget(db,env,key,dispatchId,8),
+        db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(key,dispatchId),
+        db.prepare('DELETE FROM v3_walk_guard'),
+      ]);
+    }
   }
 }
 
@@ -156,7 +182,7 @@ export async function confirmWalk(db, receipt, env) {
   if (state?.version !== version) {
     // 可信舊回執只記中間讀值，不把目前工作標成完成。未知結果不能走此捷徑。
     if (!job.readback_seen) await db.batch([
-      ...await writeBudget(db,env,16),
+      ...await transitionBudget(db,env,dogKey,dispatchId,16),
       db.prepare('UPDATE v3_walk_outbox SET readback_seen=1 WHERE dog_key=? AND version=? AND dispatch_id=? AND readback_seen=0').bind(dogKey,version,dispatchId),
       db.prepare('DELETE FROM v3_walk_guard'),
     ]);
@@ -165,9 +191,10 @@ export async function confirmWalk(db, receipt, env) {
   if (job.status === 'synced') return { confirmed:true };
   await db.batch([
     db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN EXISTS(SELECT 1 FROM v3_walk_state s JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version WHERE s.dog_key=? AND s.version=? AND o.dispatch_id=?) THEN 1 ELSE 0 END').bind(dogKey,version,dispatchId),
-    ...await writeBudget(db, env, 16),
+    ...await transitionBudget(db,env,dogKey,dispatchId,16),
     db.prepare('UPDATE v3_walk_state SET base_date=?,base_walker=? WHERE dog_key=? AND version=?').bind(current.date, current.walker, dogKey, version),
     db.prepare("UPDATE v3_walk_outbox SET status='synced',readback_seen=1,error='' WHERE dog_key=? AND version=? AND dispatch_id=?").bind(dogKey, version, dispatchId),
+    db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(dogKey,dispatchId),
     db.prepare('DELETE FROM v3_walk_guard'),
   ]);
   return { confirmed: true };
@@ -186,10 +213,15 @@ export async function writebackTarget(db, input, env) {
     if (!matchesCurrent && !intermediate) throw new WalkError(409, '觀測到試算表衝突，停止覆寫');
   }
   if (!job || !['dispatching','retry','unconfirmed','pending'].includes(job.status)) throw new WalkError(409, '沒有待寫回目標');
+  if (job.dispatch_id===input.dispatchId && job.status==='dispatching') {
+    const granted=await one(db,'SELECT version FROM v3_walk_state WHERE dog_key=? AND version=? AND EXISTS(SELECT 1 FROM v3_walk_outbox WHERE dog_key=? AND version=? AND dispatch_id=? AND status=\'dispatching\') AND EXISTS(SELECT 1 FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?)',key,state.version,key,state.version,input.dispatchId,key,input.dispatchId);
+    if (granted) return { version:state.version,dispatchId:input.dispatchId,current:{ date:state.effective_date,walker:state.walker } };
+  }
   // 舊喚醒也只取目前版本；在 script lock 中授予目前版本派送識別。
   await db.batch([
     db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?) THEN 1 ELSE 0 END').bind(key,state.version),
-    ...await writeBudget(db, env, 16),
+    ...await transitionBudget(db,env,key,input.dispatchId,16),
+    db.prepare('INSERT INTO v3_walk_delivery VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET dispatch_id=excluded.dispatch_id,started_at=excluded.started_at').bind(key,input.dispatchId,new Date().toISOString()),
     db.prepare("UPDATE v3_walk_outbox SET dispatch_id=?,status='dispatching' WHERE dog_key=? AND version=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?)").bind(input.dispatchId, key, state.version, key, state.version),
     db.prepare('DELETE FROM v3_walk_guard'),
   ]);
