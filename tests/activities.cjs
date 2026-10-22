@@ -77,10 +77,12 @@ module.exports = async (browser, base) => {
     for (const width of [320, 1440]) {
       await page.setViewportSize({ width, height: 844 });
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}px 表單不橫向溢出`);
-      for (const b of await page.locator('.act-form button:visible').all()) {
-        const box = await b.boundingBox();
-        assert(box.width >= 44 && box.height >= 44, `${width}px 按鈕至少 44×44：${await b.textContent()}`);
-      }
+      // 一次量完：換寬度後畫面會重畫，先抓的按鈕可能已被換掉而量不到
+      const small = await page.locator('.act-form').evaluate(form => [...form.querySelectorAll('button')]
+        .filter(b => b.getClientRects().length)
+        .filter(b => { const r = b.getBoundingClientRect(); return r.width < 44 || r.height < 44; })
+        .map(b => b.textContent));
+      assert.deepEqual(small, [], `${width}px 按鈕至少 44×44`);
     }
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole('button', { name: '存好' }).click();
