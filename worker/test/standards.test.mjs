@@ -25,6 +25,7 @@ const FULL_SCAN_OK = {
   'identity.js: DELETE FROM v3_identity_guard': '既有，待 #474 確認',
   'packs.js: SELECT year,seq,vers,body FROM v3_walk_summaries': '既有，待 #474 確認',
   'walk-accept.js: DELETE FROM v3_walk_guard': '既有，待 #474 確認',
+  'walk-notify.js: DELETE FROM v3_walk_guard': '#475 既有交易 guard 清理，與 walk-accept 同類，待 #474 確認',
   'walk-reconcile.js: DELETE FROM v3_walk_guard': '既有，待 #474 確認',
   'walk-reconcile.js: SELECT s.*,o.status FROM v3_walk_state s': '既有，待 #474 確認',
 };
