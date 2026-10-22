@@ -1,7 +1,8 @@
 import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitiesForCodes, IdentityError } from './identity.js';
 import { cleanIntakeEvents } from './intake.js';
 import { cleanStays } from './stays.js';
-import { saveFixedCare } from './compact.js';
+import { saveFixedCare, mainNameMatcher, replaceGroup } from './compact.js';
+import { callSheet, SheetWriteError } from './sheet-write.js';
 import { readDepartedCards } from './departed.js';
 import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, readActivities, resolveDogs, updateActivity } from './activities.js';
 import { acceptWalk, dispatchWalk, readAcceptedWalks, writebackTarget, confirmWalk } from './walk-accept.js';
@@ -61,7 +62,6 @@ const WALK_LIMITS = [
   { windowMs: 60 * 1000, max: 30 },
   { windowMs: 60 * 60 * 1000, max: 200 },
 ];
-const WALK_TIMEOUT_MS = 20 * 1000;
 // 網站「更新」按鈕：同一個人 2 分鐘 1 次；同步本身要跑約 1 分鐘，按再多次也沒用
 const SYNC_LIMITS = [{ windowMs: 2 * 60 * 1000, max: 1 }];
 // 跟 scripts/sync-sheet.mjs 的 NAME_SEP 一樣：一格寫好幾個名字時用這些符號或空白隔開
@@ -1024,7 +1024,6 @@ async function writeWalks(request, env, origin, ctx) {
   }
   if (!cfg.sheetWriteUrl) return fail(503, '還沒設定寫入試算表', origin, { code: 'off' });
   const body = { action, dogs };
-  if (cfg.sheetWriteKey) body.key = cfg.sheetWriteKey;
   if (action === 'note' || action === 'log') {
     if (!shortText(input.walker, WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, '要先選好身分', origin);
     if (!shortText(input.text, NOTE_MAX_CHARS) || !input.text.trim()) return fail(400, `內容要 1–${NOTE_MAX_CHARS} 個字，不能換行`, origin);
@@ -1054,21 +1053,12 @@ async function writeWalks(request, env, origin, ctx) {
     body.walker = input.walker.trim();
   }
 
-  let res, out = null;
+  let out;
   try {
-    // Apps Script 回應會先轉址到 googleusercontent.com，fetch 會自己跟過去
-    res = await fetch(cfg.sheetWriteUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(WALK_TIMEOUT_MS),
-    });
-    out = await res.json().catch(() => null);
+    out = await callSheet(env, body);
   } catch (e) {
-    return fail(502, '連不上試算表，請稍後再試', origin);
+    return sheetFail(e, origin);
   }
-  if (!res.ok || !out) return fail(502, `試算表沒有回應（${res.status}）`, origin);
-  if (!out.ok) return fail(502, out.code === 'key' ? '寫入試算表的金鑰不對，請 K 檢查設定' : scriptError(out.error), origin);
   walkersCache = null; // 寫入後重新讀取完整名單
   // 今日溜狗紀錄（ADR 0007）：其他手機不用等同步；寫失敗只記日誌，按的人照常成功
   if (['walk', 'edit', 'undo'].includes(action) && env && env.DB) {
@@ -1123,33 +1113,21 @@ async function writeGroup(request, env, origin) {
     if (!Number.isInteger(input.column) || input.column < 0 || input.column > 200) return fail(400, '找不到這一群', origin);
     body.column = input.column;
   }
-  const known = ((await env.DB.prepare('SELECT name FROM v3_sheet_main').all()).results || []).map(r => r.name);
-  const keyOf = n => String(n).replace(/\s+/g, '').toLowerCase();
-  const byKey = new Map(known.map(n => [keyOf(n), n]));
-  if (!byKey.has(keyOf(body.name))) return fail(400, '主清單上沒有這隻狗', origin);
-  body.name = byKey.get(keyOf(body.name));
-  if (cfg.sheetWriteKey) body.key = cfg.sheetWriteKey;
+  const mainName = await mainNameMatcher(env.DB);
+  if (!mainName(body.name)) return fail(400, '主清單上沒有這隻狗', origin);
+  body.name = mainName(body.name);
 
-  let res, out = null;
+  let out;
   try {
-    res = await fetch(cfg.sheetWriteUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(WALK_TIMEOUT_MS) });
-    out = await res.json().catch(() => null);
+    out = await callSheet(env, body);
   } catch (e) {
-    return fail(502, '連不上試算表，請稍後再試', origin);
+    return sheetFail(e, origin);
   }
-  if (!res.ok || !out) return fail(502, `試算表沒有回應（${res.status}）`, origin);
-  if (!out.ok) return fail(502, out.code === 'key' ? '寫入試算表的通關碼不對，請 K 檢查設定' : scriptError(out.error), origin);
   const r = out.result || {};
   if (!Number.isInteger(r.column) || !Array.isArray(r.names)) return fail(502, '試算表回的資料不對', origin);
-  const names = [...new Set(r.names.map(n => byKey.get(keyOf(n))).filter(Boolean))];
+  const names = [...new Set(r.names.map(mainName).filter(Boolean))];
   const label = typeof r.label === 'string' ? r.label.trim() : '';
-  const prevNames = ((await env.DB.prepare('SELECT name FROM v3_sheet_groups WHERE column_index = ? ORDER BY row_index').bind(r.column).all()).results || []).map(x => x.name);
-  await env.DB.batch([
-    env.DB.prepare('DELETE FROM v3_sheet_groups WHERE column_index = ?').bind(r.column),
-    ...names.map((n, i) => env.DB.prepare('INSERT INTO v3_sheet_groups(column_index,row_index,name) VALUES(?,?,?)').bind(r.column, i, n)),
-    env.DB.prepare('DELETE FROM v3_sheet_group_labels WHERE column_index = ?').bind(r.column),
-    ...(label ? [env.DB.prepare('INSERT INTO v3_sheet_group_labels(column_index,label) VALUES(?,?)').bind(r.column, label)] : []),
-  ]);
+  const prevNames = await replaceGroup(env.DB, r.column, names, label);
   // 編輯紀錄（ADR 0004）：改前、改後都記這一群的名單；沒變（已經在、已經不在）不記
   if (r.status === 'written') {
     await logEdit(env.DB, { editor, kind: 'group', before: input.op === 'create' ? null : { label, names: prevNames }, after: { label, names } });
@@ -1157,14 +1135,10 @@ async function writeGroup(request, env, origin) {
   return reply(200, { ok: true, status: r.status || 'written', group: { column: r.column, label, names } }, origin);
 }
 
-// 小程式的錯誤訊息會顯示給志工看：Google 的原始錯誤可能帶試算表 ID，換成白話、不帶 ID
-function scriptError(msg) {
-  const text = typeof msg === 'string' ? msg : '';
-  if (!text) return '試算表沒有寫進去';
-  if (/spreadsheet id|Illegal spreadsheet|找不到.*檔案|not found/i.test(text)) return '試算表 ID 不對，請 K 檢查小程式設定';
-  if (/permission|權限|access/i.test(text)) return '小程式沒有試算表的編輯權限，請 K 檢查設定';
-  if (text.startsWith('小程式發生錯誤')) return '小程式發生錯誤，請 K 查看 Apps Script 的執行紀錄';
-  return [...text.replace(/[A-Za-z0-9_-]{25,}/g, '…')].slice(0, 100).join('');
+// 小程式失敗（worker/src/sheet-write.js）換成給網站的回應；其他錯誤照常往外丟
+function sheetFail(e, origin) {
+  if (!(e instanceof SheetWriteError)) throw e;
+  return fail(e.status, e.message, origin, e.code === 'off' ? { code: 'off' } : undefined);
 }
 
 // 圖鑑開卡：只加不刪，複合主鍵讓重送／多裝置不重複建立紀錄。
