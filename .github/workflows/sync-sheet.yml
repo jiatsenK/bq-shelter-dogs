@@ -30,11 +30,13 @@ on:
       - 'scripts/sync-compact-d1.mjs'
       - 'scripts/sync-compact-plan.mjs'
       - 'scripts/sync-diff.mjs'
+      - 'scripts/memory-d1.mjs'
       - 'scripts/import-compact-dogs.mjs'
       - 'scripts/import-compact-profiles.mjs'
       - 'scripts/import-compact-departures.mjs'
       - 'scripts/migrate-compact-db.mjs'
       - 'worker/src/compact.js'
+      - 'worker/src/sheet-read.js'
       - 'db/compact-schema.sql'
 
 permissions:

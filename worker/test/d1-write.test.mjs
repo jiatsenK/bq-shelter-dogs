@@ -196,6 +196,7 @@ test('舊編號：格式、日期、別隻狗的、重複、現在的編號都�
   await bad('DELETE', { editor: ME, former: '2024010101' }, 404); // 不是這隻的
   await bad('PUT', { editor: ME, former: '2015081801' }, 405);
   await bad('POST', { former: '2015081801' }, 400); // 沒選名字
+  await bad('POST', { editor: ME, former: '2015081801', pad: 'x'.repeat(3000) }, 413); // 本文太大（跟其他狗資料編輯一樣有上限）
   assert.deepEqual((await dogOf(env, '2024032902')).formerIds, ['2020010101']);
   assert.equal((await env.DB.prepare("SELECT COUNT(*) AS n FROM v3_edit_log WHERE kind='former'").first('n')), 0);
 });
@@ -270,4 +271,13 @@ test('出入所紀錄：Worker 不看在不在所，用編號找得到狗就能�
   const r = await stays(env, '2024010101', { before: [], stays: [{ in: '2015-08-18', out: '', reason: '迷路' }] });
   assert.equal(r.status, 200);
   assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_stays WHERE dog_id=?').bind(id).first('n'), 1);
+});
+
+test('網址沒帶狗狗編號：每種編輯都回 400「狗狗編號格式不對」，不是要人先選名字', async () => {
+  const env = await makeEnv();
+  for (const [method, kind] of [['PUT', 'rest'], ['PUT', 'fixed-care'], ['PUT', 'intro'], ['POST', 'former'], ['PUT', 'stays']]) {
+    const { status, body } = await call(env, method, `/${kind}/`, { editor: ME });
+    assert.equal(status, 400, kind);
+    assert.equal(body.error, '狗狗編號格式不對', kind);
+  }
 });

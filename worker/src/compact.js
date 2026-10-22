@@ -114,6 +114,27 @@ function groupColumns(cells, labels) {
   return [...columns.keys()].sort((a, b) => a - b).map(column => ({ column, label: labels.get(column) || '', names: columns.get(column) }));
 }
 
+// 網站編輯狗群（K 2026-10-16）：狗名要是主清單上的狗。回傳 名字 → 主清單寫法（不分空白、大小寫），對不到回 undefined
+export async function mainNameMatcher(db) {
+  const keyOf = n => String(n).replace(/\s+/g, '').toLowerCase();
+  const known = ((await db.prepare('SELECT name FROM v3_sheet_main').all()).results || []).map(r => r.name);
+  const byKey = new Map(known.map(n => [keyOf(n), n]));
+  return name => byKey.get(keyOf(name));
+}
+
+// 小程式改好常遛狗群分頁後，D1 那一欄馬上換成小程式回的名單，狗群頁不用等下一次同步。
+// 一群只有幾隻，整欄換掉；回改之前的名單給編輯紀錄
+export async function replaceGroup(db, column, names, label) {
+  const before = ((await db.prepare('SELECT name FROM v3_sheet_groups WHERE column_index = ? ORDER BY row_index').bind(column).all()).results || []).map(x => x.name);
+  await db.batch([
+    db.prepare('DELETE FROM v3_sheet_groups WHERE column_index = ?').bind(column),
+    ...names.map((n, i) => db.prepare('INSERT INTO v3_sheet_groups(column_index,row_index,name) VALUES(?,?,?)').bind(column, i, n)),
+    db.prepare('DELETE FROM v3_sheet_group_labels WHERE column_index = ?').bind(column),
+    ...(label ? [db.prepare('INSERT INTO v3_sheet_group_labels(column_index,label) VALUES(?,?)').bind(column, label)] : []),
+  ]);
+  return before;
+}
+
 // 編號 → 永久狗 ID；不認得的編號不在回傳的 Map 裡
 export async function dogIdsFor(db, numbers) {
   const out = new Map();

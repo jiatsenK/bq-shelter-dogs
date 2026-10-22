@@ -3,8 +3,8 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const SUITES = ['read-policy', 'startup-stability', 'walker-editing', 'intake-presentation', 'info-page', 'fixed-care',
-  'group-walks', 'navigation', 'keyboard-viewport', 'index', 'detail-editing'];
+const SUITES = ['walk-accept', 'read-policy', 'startup-stability', 'walker-editing', 'intake-presentation', 'info-page', 'activities', 'departed-cards', 'fixed-care',
+  'group-cache', 'group-walks', 'large-text', 'navigation', 'tab-focus', 'keyboard-viewport', 'index', 'detail-editing'];
 
 const ROOT = path.resolve(__dirname, '..');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css',
@@ -34,6 +34,7 @@ const server = http.createServer((req, res) => {
     if (names.some(n => !SUITES.includes(n))) throw new Error(`未知套件：${names.filter(n => !SUITES.includes(n)).join(',')}；用 --list 查看`);
     selected = SUITES.filter(n => names.includes(n));
   }
+  require('./local-check-record.cjs').requireLocalCheck(args);
   const { chromium } = require('playwright'); // --list／參數檢查不需要安裝瀏覽器
   let browser;
   let ok = true;

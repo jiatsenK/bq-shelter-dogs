@@ -27,7 +27,7 @@ test('另一支手機讀到自己今天已登記，不需要本機名單，也�
   const { walks, dog } = setup();
   dog.date = '2026-10-19'; dog.walker = '我、同行人';
   assert.deepEqual(walks.state(dog), {
-    date: '2026-10-19', walker: '我、同行人', walkers: ['我', '同行人'], today: true, mine: true, canUndo: false,
+    date: '2026-10-19', walker: '我、同行人', walkers: ['我', '同行人'], today: true, mine: true, canUndo: false, canRevert: false,
   });
 });
 
@@ -45,7 +45,7 @@ test('新同步正本取代已套入的今日紀錄與本機名單，不繼續�
   s.walks.receiveToday({ date: '2026-10-19', walks: [{ key: '1', walkedDate: '2026-10-19', walker: '我', at: '2026-10-19T02:00:00Z' }] }, [s.dog]);
   assert.equal(s.walks.state(s.dog).mine, true);
   s.sync(Date.parse('2026-10-19T02:01:00Z'));
-  assert.deepEqual(s.walks.state(s.dog), { date: '2026-10-01', walker: '隊', walkers: ['隊'], today: false, mine: false, canUndo: false });
+  assert.deepEqual(s.walks.state(s.dog), { date: '2026-10-01', walker: '隊', walkers: ['隊'], today: false, mine: false, canUndo: false, canRevert: false });
 });
 
 test('同步後日期與名單仍符合本機寫入，保留復原資格；改過日期或名單就停止', async () => {
@@ -140,4 +140,53 @@ test('舊版未存時間的快照不能蓋過新同步，即使名字相同也�
   s.sync(Date.parse('2026-10-19T02:01:00Z'));
   s.walks.receiveNames({ '1': '我' }, [s.dog]);
   assert.deepEqual([s.walks.state(s.dog).date, s.walks.state(s.dog).mine, s.walks.canUndo(s.dog)], ['2026-10-01', false, false]);
+});
+
+test('K 2026-10-20：本機記著今天我溜了，試算表今天寫的是別人，以試算表為準', () => {
+  const s = setup();
+  const { walks, dog } = s;
+  const ids = [];
+  // 只有本機名單、沒有寫入紀錄（例如別支手機登記、或舊版留下的）
+  const w = createWalkRegistration({
+    key: d => d.id, date: () => '2026-10-19', walker: () => '我', alias: () => null,
+    canonical: n => n, split: n => String(n || '').split('、').filter(Boolean),
+    read: () => ({}), save: () => {}, apply: () => {}, local: () => ids, saveLocal: v => { ids.splice(0, ids.length, ...v); },
+    base: d => ({ date: d.date, walker: d.walker }), now: () => Date.parse('2026-10-19T02:00:00Z'), syncedAt: () => 0, send: async () => ({}),
+  });
+  ids.push('1');
+  assert.equal(w.state(dog).mine, true);
+  w.receiveNames({ '1': '中興' }, [dog], w.beginRead(), { '1': '2026-10-19' });
+  assert.deepEqual(ids, []);
+  w.receiveNames({ '1': '我' }, [dog], w.beginRead(), { '1': '2026-10-19' });
+  assert.deepEqual(ids, [], '試算表寫的是自己就不用動');
+  assert.ok(walks);
+});
+
+test('K 2026-10-20：名單帶日期時連日期一起換；比名單新的今日紀錄不被舊名單蓋掉', async () => {
+  const s = setup();
+  await s.walks.register([s.dog]);
+  const before = s.records()['1'].observedAt;
+  s.walks.receiveNames({ '1': '別人' }, [s.dog], s.walks.beginRead(), { '1': '2026-10-18' }, before - 1000);
+  assert.equal(s.walks.state(s.dog).walker, '我', '名單比自己的登記早讀，不蓋掉');
+  s.time(before + 60000);
+  s.walks.receiveNames({ '1': '別人' }, [s.dog], s.walks.beginRead(), { '1': '2026-10-18' }, before + 60000);
+  assert.deepEqual([s.walks.state(s.dog).date, s.walks.state(s.dog).walker], ['2026-10-18', '別人']);
+});
+
+test('K 2026-10-20：試算表清空「誰遛的」「遛狗日期」，已有今日紀錄的手機也跟著清掉', async () => {
+  const s = setup();
+  await s.walks.register([s.dog]);
+  const at = s.records()['1'].observedAt + 60000;
+  s.time(at);
+  s.walks.receiveNames({ '1': '' }, [s.dog], s.walks.beginRead(), { '1': '' }, at);
+  assert.deepEqual([s.walks.state(s.dog).date, s.walks.state(s.dog).walker, s.walks.state(s.dog).mine], ['', '', false]);
+});
+
+test('K 2026-10-20：日期讀不懂（名單沒帶這隻的日期）時保留已知日期，只換名字', async () => {
+  const s = setup();
+  await s.walks.register([s.dog]);
+  const at = s.records()['1'].observedAt + 60000;
+  s.time(at);
+  s.walks.receiveNames({ '1': '別人' }, [s.dog], s.walks.beginRead(), {}, at);
+  assert.deepEqual([s.walks.state(s.dog).date, s.walks.state(s.dog).walker], ['2026-10-19', '別人']);
 });

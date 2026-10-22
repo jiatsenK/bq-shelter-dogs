@@ -1,33 +1,22 @@
-// 從 Google 試算表同步狗狗資料（#31）：讀試算表、整理成 dogs.json 的樣子、算溜狗紀錄和離所的函式。
-// #251 起同步的入口是 scripts/sync-compact-d1.mjs（只寫 D1）；這支不再寫 data/，下面提到寫檔的段落是當時的做法，
-// 函式本身（newWalks、updateDepartures 等）照用。
+// 從 Google 試算表讀狗狗資料（#31）：讀試算表、整理成網站狗清單的樣子、算溜狗紀錄和離所的函式。
+// 同步的入口是 scripts/sync-compact-d1.mjs（只寫 D1，#251）；這支只提供函式，不寫檔。
 //
-// 試算表 ID 不寫在 repo 裡（repo 是公開的，試算表目前知道連結就能編輯）：
-// workflow 從 GitHub 的 Actions Secret「SHEET_ID」帶進來，設定方式見 docs/setup/SHEET_SYNC_SETUP.md。
-// 「誰遛的」只輸出有沒有人固定照顧（covered），不把志工名字寫進公開的 dogs.json。
-// 「是不是我遛的」（#57）：比對用的名字放 Actions Secret「MY_NAME」，公開檔案只寫 myWalked（true／false）。
-// 「誰遛的」代號（#94）：每個名字用 Actions Secret「WALKER_KEY」算成一串亂碼代號（walkers），公開檔案只有代號。
-// 網站透過 Worker（同一把 WALKER_KEY，見 worker/src/index.js 的 walkerCode）把志工輸入的名字換成代號，才認得出「我溜過」。
+// 試算表 ID 不寫在 repo 裡：workflow 從 GitHub 的 Actions Secret「SHEET_ID」帶進來，設定方式見 docs/setup/SHEET_SYNC_SETUP.md。
+// 「誰遛的」只輸出有沒有人固定照顧（covered）和代號，不輸出志工名字。
+// 「是不是我遛的」（#57）：比對用的名字放 Actions Secret「MY_NAME」，只輸出 myWalked（true／false）。
+// 「誰遛的」代號（#94）：每個名字用 Actions Secret「WALKER_KEY」算成一串亂碼代號（walkers）。
+// 網站透過 Worker（同一把 WALKER_KEY，見 worker/src/editlog.js 的 walkerCode）把志工輸入的名字換成代號，才認得出「我溜過」。
 //
-// 試算表的解析只在這裡做（#32 起前端只讀 dogs.json）。前端讀 dogs.json 的 parseDogsData 要讀得懂這裡寫出的格式，
-// scripts/sync-sheet.test.mjs 會拿前端的函式來比對。
-// 狗卡資訊（dogs/{編號}.md）也在這裡整理成純文字和性別一起寫進 dogs.json，網站不用逐隻抓 .md。
+// 讀取失敗（網路、試算表沒公開、欄位被改掉、讀到 0 隻狗）時直接丟錯，同步就不寫 D1。
 //
-// 讀取失敗（網路、試算表沒公開、欄位被改掉、讀到 0 隻狗）時直接失敗結束，不寫檔，
-// 保留上一次成功的 data/dogs.json。資料跟舊檔一樣時也不寫檔（連同步時間都不動），
-// workflow 看到沒有變動就不提交。
-//
-// 歷史（#56）：試算表每隻狗只有一列、只記最後一次遛狗，所以每次同步另外存：
-// - data/history/YYYY-MM-DD.json：當天快照，內容跟 dogs.json 一樣（同一天多次同步覆蓋成最後一次）
-// - data/walks.json：遛狗紀錄 { id, name, date }，某隻狗的遛狗日期比上一次同步新就追加一筆；只追加、不改舊紀錄
-// 兩者都不含志工名字。同一天兩次同步之間被遛兩次只會記一筆。
-// #57 起每筆多一個 mine（是不是我遛的）；同一天從別人換成我（或反過來）也會追加一筆。
-// #57 之前的舊紀錄沒有 mine，原樣保留、不回填。
-// #94 起每筆多一個 walkers（遛的人的代號）；舊紀錄只補兩種：目前最後一次（試算表還看得到是誰）和標了 mine 的（補我的代號）。
-// #60：另存 data/history/index.json（{ dates: [...] }，有哪幾天的快照），網站才知道能選哪些日期（GitHub Pages 不能列資料夾）。
+// 溜狗紀錄（#56）：試算表每隻狗只有一列、只記最後一次遛狗，所以每次同步比對上一次，日期變新就追加一筆（newWalks）。
+// #57 起每筆多一個 mine、#94 起多一個 walkers（代號）；舊紀錄由 upgradeWalks 補。
 
-import { readFile } from 'node:fs/promises';
 import { createHmac } from 'node:crypto';
+import { gvizTable, cellText, findColumns, findHeaderRow, columnMap, MAIN_COLUMNS, splitNames } from '../worker/src/sheet-read.js';
+
+// 試算表解析的共用部分在 worker/src/sheet-read.js（Worker 也用），這裡轉出去給測試和其他腳本
+export { cellText, findHeaderRow };
 
 // 日期一律用台灣時間判斷（沒寫年份的日期、同步時間）
 if (!process.env.TZ) process.env.TZ = 'Asia/Taipei';
@@ -48,20 +37,12 @@ export async function fetchGviz(sheetName, headers = 0, fetchImpl = fetch, range
   }
   if (!res.ok) throw new Error(`讀取「${sheetName}」分頁失敗（HTTP ${res.status}），請確認試算表已設定「知道連結的人可檢視」。`);
   const text = await res.text();
-  const match = text.match(/setResponse\(([\s\S]*)\);?\s*$/);
-  if (!match) throw new Error(`「${sheetName}」分頁回應格式異常，請確認試算表已設定「知道連結的人可檢視」。`);
-  const data = JSON.parse(match[1]);
-  if (data.status === 'error') {
-    const detail = (data.errors || []).map(e => e.detailed_message || e.message).filter(Boolean).join('；');
-    throw new Error(`讀取「${sheetName}」分頁失敗${detail ? `：${detail}` : ''}`);
+  try {
+    return gvizTable(text);
+  } catch (e) {
+    if (e.detail !== undefined) throw new Error(`讀取「${sheetName}」分頁失敗${e.detail ? `：${e.detail}` : ''}`);
+    throw new Error(`「${sheetName}」分頁回應格式異常，請確認試算表已設定「知道連結的人可檢視」。`);
   }
-  return data.table || { cols: [], rows: [] };
-}
-
-export function cellText(cell) {
-  if (!cell || cell.v == null) return '';
-  if (typeof cell.v === 'string' && cell.v.startsWith('Date(')) return cell.f || '';
-  return String(cell.v).trim();
 }
 
 // 把年月日組成日期；不合理的日期（例：2/30）回傳 null
@@ -115,45 +96,9 @@ export function cellDate(cell, today = new Date()) {
   return null;
 }
 
-const MAIN_COLUMNS = {
-  cage: '籠位',
-  id: '編號',
-  name: '犬名',
-  walkedDate: '遛狗日期',
-  walker: '誰遛的',
-  note: '備註',
-};
-
-// 表頭文字去空白後比對：先找完全相同，再找包含（例：「備註 」、「犬名(暱稱)」）
-function findColumns(headerTexts) {
-  const norm = headerTexts.map(t => t.replace(/\s+/g, ''));
-  const colMap = {};
-  for (const [key, label] of Object.entries(MAIN_COLUMNS)) {
-    let idx = norm.indexOf(label);
-    if (idx === -1) idx = norm.findIndex(t => t.endsWith(label));
-    if (idx === -1) idx = norm.findIndex(t => t.includes(label));
-    if (idx !== -1) colMap[key] = idx;
-  }
-  return colMap;
-}
-
-// 在「所有列都當資料」的回應裡找含「犬名」的表頭列，回傳第幾列（從 0 起算）
-export function findHeaderRow(table) {
-  const rows = table.rows || [];
-  for (let i = 0; i < rows.length; i++) {
-    if (findColumns((rows[i].c || []).map(cellText)).name != null) return i;
-  }
-  return -1;
-}
-
 // table 是用 headers=表頭列數 重讀的結果；headerTexts 是第一次讀到的表頭列文字，欄位標題缺漏時拿來補
 function mainColumnMap(table, headerTexts = []) {
-  const labels = (table.cols || []).map(c => String((c && c.label) || '').trim());
-  const colMap = findColumns(labels);
-  const fallback = findColumns(headerTexts);
-  for (const key of Object.keys(MAIN_COLUMNS)) {
-    if (colMap[key] == null && fallback[key] != null) colMap[key] = fallback[key];
-  }
+  const colMap = columnMap(table, headerTexts);
   const missing = Object.keys(MAIN_COLUMNS).filter(k => colMap[k] == null).map(k => `「${MAIN_COLUMNS[k]}」`);
   if (missing.length) throw new Error(`主清單找不到${missing.join('')}欄，請確認表頭沒有被改掉。`);
   return colMap;
@@ -161,14 +106,13 @@ function mainColumnMap(table, headerTexts = []) {
 
 // 「誰遛的」格子裡有沒有我的名字。MY_NAME 可以寫好幾種寫法，用逗號或頓號隔開（例：本名、暱稱）；
 // 格子裡有好幾個人時（例：「甲、乙」「甲。乙」「甲;乙」）逐一比對，要整個名字相同才算，不算部分符合
-// 志工手打時常用句號、分號、冒號隔開，也都當分隔（2026-10-04 K 回報「維芬。佳岑」抓不到佳岑）
-const NAME_SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
+// 分隔符號（NAME_SEP）見 worker/src/sheet-read.js
 export function myNames(env = process.env.MY_NAME) {
-  return String(env || '').split(NAME_SEP).map(nameKey).filter(Boolean);
+  return splitNames(env).map(nameKey).filter(Boolean);
 }
 export function isMine(walkerText, names = myNames()) {
   if (!names.length) return false;
-  return String(walkerText || '').split(NAME_SEP).map(nameKey).some(n => n && names.includes(n));
+  return splitNames(walkerText).map(nameKey).some(n => n && names.includes(n));
 }
 
 // ── 誰遛的代號（#94）──
@@ -188,7 +132,7 @@ export function walkerCode(name, key = process.env.WALKER_KEY) {
 // 「誰遛的」格子（可能好幾個人）→ 代號清單，不重複、照格子裡的順序；沒設定 WALKER_KEY 時是空的
 export function walkerCodes(walkerText, key = process.env.WALKER_KEY) {
   if (!key) return [];
-  const codes = String(walkerText || '').split(NAME_SEP).map(n => walkerCode(n, key)).filter(Boolean);
+  const codes = splitNames(walkerText).map(n => walkerCode(n, key)).filter(Boolean);
   return [...new Set(codes)];
 }
 
@@ -207,7 +151,7 @@ export function parseMainList(table, headerTexts = [], today = new Date(), names
       id: cellText(get(c, 'id')),
       name,
       walkedDate: cellDate(get(c, 'walkedDate'), today),
-      // 只記有沒有人固定照顧，志工名字不寫進公開的 dogs.json
+      // 只記有沒有人固定照顧，志工名字不輸出
       covered: cellText(get(c, 'walker')) !== '',
       // 最後一次是不是我遛的；名字本身不寫出去
       myWalked: isMine(cellText(get(c, 'walker')), names),
@@ -220,9 +164,6 @@ export function parseMainList(table, headerTexts = [], today = new Date(), names
 }
 
 // 主清單分兩次讀：先找出表頭在第幾列，再指定表頭列數重讀
-export async function loadMainList(fetchImpl = fetch, today = new Date()) {
-  return (await loadMainSheet(fetchImpl, today)).dogs;
-}
 export async function loadMainSheet(fetchImpl = fetch, today = new Date()) {
   const raw = await fetchGviz('主清單', 0, fetchImpl);
   const headerIdx = findHeaderRow(raw);
@@ -335,94 +276,8 @@ export function formatTimestamp(d) {
     `${sign}${pad(Math.floor(Math.abs(off) / 60))}:${pad(Math.abs(off) % 60)}`;
 }
 
-// ── 狗卡資訊（dogs/{編號}.md，#9）：原本在前端做，改成同步時整理好寫進 dogs.json ──
-
-// 去掉開頭的 YAML frontmatter（--- 到 ---），沒有就原樣回傳
-export function parseFrontmatterBody(text) {
-  const m = text.replace(/^\uFEFF/, '').match(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)([\s\S]*)$/);
-  return (m ? m[1] : text).trim();
-}
-
-// 狗卡 frontmatter 的性別：male／female，其他都當作沒寫
-export function parseFrontmatterSex(text) {
-  const m = text.replace(/^\uFEFF/, '').match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
-  if (!m) return '';
-  const sex = ((m[1].match(/^sex:\s*(male|female)\s*$/mi) || [])[1] || '').toLowerCase();
-  return sex;
-}
-
-// 狗卡 frontmatter 的舊編號（#75）：同一隻狗再次入所會拿到新編號，舊的寫在 formerIds，多個用逗號／頓號／空白分開。
-// 只收英數字，跟檔名的編號規則一樣
-export function parseFrontmatterFormerIds(text) {
-  const m = text.replace(/^\uFEFF/, '').match(/^---[ \t]*\r?\n([\s\S]*?)\r?\n---[ \t]*(?:\r?\n|$)/);
-  if (!m) return [];
-  const line = (m[1].match(/^formerIds:[ \t]*(.*)$/mi) || [])[1] || '';
-  return [...new Set(line.replace(/[\[\]"']/g, '').split(/[\s,，、]+/).filter(id => /^[0-9A-Za-z]+$/.test(id)))];
-}
-
-// 把 Markdown 轉成純文字，網站上不要露出 **、#、[]() 這些符號
-export function markdownToText(md) {
-  return md
-    .replace(/<!--[\s\S]*?-->/g, '')
-    .replace(/%%[\s\S]*?%%/g, '')                            // Obsidian 註解
-    .split(/\r?\n/)
-    .map(line => line
-      .replace(/^\s*(```|~~~).*$/, '')                        // 程式碼區塊的框線
-      .replace(/^\s*([-*_])(\s*\1){2,}\s*$/, '')              // 分隔線
-      .replace(/^\s{0,3}#{1,6}\s+/, '')                       // 標題
-      .replace(/^\s*(>\s*)+/, '')                             // 引用
-      .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/, '')                // 待辦清單
-      .replace(/^\s*([-*+]|\d+[.)])\s+/, '')                  // 清單符號
-      .replace(/^\s*\|?(\s*:?-+:?\s*\|)+\s*:?-*:?\s*$/, '')    // 表格分隔列
-      .replace(/!\[\[[^\]]*\]\]/g, '')                        // Obsidian 嵌入圖片
-      .replace(/!\[([^\]]*)\]\([^)]*\)/g, '')                  // 圖片
-      .replace(/\[\[([^\]|]*)\|([^\]]*)\]\]/g, '$2')           // [[頁面|顯示文字]]
-      .replace(/\[\[([^\]]*)\]\]/g, '$1')                      // [[頁面]]
-      .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')                 // [文字](網址)
-      .replace(/<[^>]+>/g, '')                                // HTML 標籤
-      .replace(/(\*\*|__)(.+?)\1/g, '$2')                      // 粗體
-      .replace(/(^|[^*\w])\*(?!\s)(.+?)\*(?!\w)/g, '$1$2')     // 斜體 *
-      .replace(/(^|[^_\w])_(?!\s)(.+?)_(?![\w])/g, '$1$2')      // 斜體 _
-      .replace(/~~(.+?)~~/g, '$1')
-      .replace(/==(.+?)==/g, '$1')
-      .replace(/`+([^`]*)`+/g, '$1')
-      .replace(/^\s*\||\|\s*$/g, '')                          // 表格左右框線
-      .replace(/\s*\|\s*/g, ' ')
-      .trim())
-    .filter(Boolean)
-    .join(' ');
-}
-
-// 讀 dogs/{編號}.md；沒有這個檔回空字串。編號只接受英數字，擋掉 ../ 之類的路徑
-const CARD_ID = /^[0-9A-Za-z]+$/;
-export async function readDogCardFile(id, dir) {
-  if (!dir) throw new Error('舊狗卡讀取需明確提供封存目錄');
-  if (!CARD_ID.test(id)) return '';
-  try {
-    return await readFile(new URL(`${id}.md`, dir), 'utf8');
-  } catch (e) {
-    if (e.code === 'ENOENT') return '';
-    throw e;
-  }
-}
-
-// 每隻狗加上 sex（male／female／空白）和 intro（狗卡資訊純文字）。沒有編號的狗不讀，也不改用犬名配對。
-// 狗卡有寫舊編號才多一個 formerIds（#75），其他狗的 dogs.json 不變
-export async function attachDogCards(dogs, readCard = async () => '') {
-  const cards = new Map();
-  for (const id of new Set(dogs.map(d => d.id).filter(Boolean))) {
-    const raw = await readCard(id);
-    if (!raw) { cards.set(id, null); continue; }
-    const card = { sex: parseFrontmatterSex(raw), intro: markdownToText(parseFrontmatterBody(raw)) };
-    const formerIds = parseFrontmatterFormerIds(raw).filter(f => f !== id);
-    if (formerIds.length) card.formerIds = formerIds;
-    cards.set(id, card);
-  }
-  return dogs.map(d => ({ ...d, sex: '', intro: '', ...(cards.get(d.id) || {}) }));
-}
-
-// 讀試算表、整理成 dogs.json 的內容（不含同步時間）。任何一個分頁讀取失敗都丟錯。
-export async function buildData(fetchImpl = fetch, today = new Date(), readCard = readDogCardFile) {
+// 讀試算表、整理成網站狗清單的內容（不含同步時間、性別、介紹；那些由同步從 D1 補）。任何一個分頁讀取失敗都丟錯。
+export async function buildData(fetchImpl = fetch, today = new Date()) {
   const [{ dogs: sheetDogs, notes: sheetNotes }, groupTable] = await Promise.all([
     loadMainSheet(fetchImpl, today),
     fetchGviz('常遛狗群', 0, fetchImpl),
@@ -431,44 +286,20 @@ export async function buildData(fetchImpl = fetch, today = new Date(), readCard 
   const groupMap = parseGroups(groupTable, new Set(sheetDogs.map(d => d.name)));
   const groups = {};
   for (const [name, set] of Object.entries(groupMap)) groups[name] = [...set];
-  const dogs = await attachDogCards(sheetDogs, readCard);
   return {
-    dogs: dogs.map(d => ({ ...d, walkedDate: formatDate(d.walkedDate) })),
+    dogs: sheetDogs.map(d => ({ ...d, walkedDate: formatDate(d.walkedDate) })),
     groups,
     // 異動紀錄讀失敗是 null，main() 沿用上一次的
     sheetNotes,
   };
 }
 
-// 組成完整檔案內容；資料跟舊檔相同時回傳 null（不需要寫檔）
-export function renderFile(data, oldText, now = new Date()) {
-  if (oldText) {
-    try {
-      const old = JSON.parse(oldText);
-      const { version, syncedAt, ...oldData } = old;
-      if (version === FORMAT_VERSION && JSON.stringify(oldData) === JSON.stringify(data)) return null;
-    } catch { /* 舊檔壞掉就直接覆蓋 */ }
-  }
-  return JSON.stringify({ version: FORMAT_VERSION, syncedAt: formatTimestamp(now), ...data }, null, 2) + '\n';
-}
-
-// ── 歷史（#56）──
-
-export const WALKS_VERSION = 1;
+// ── 溜狗紀錄（#56）──
 
 // 比對同一隻狗：有編號用編號，沒編號才用犬名
 export const dogKey = d => d.id ? `id:${d.id}` : `name:${nameKey(d.name)}`;
 const walkersKey = list => [...(list || [])].sort().join(',');
 const walkKey = (d, date, mine, walkers) => `${dogKey(d)}|${date}|${mine === true}|${walkersKey(walkers)}`;
-
-// 從舊檔讀出遛狗紀錄；沒有或壞掉回傳 null（當作第一次建立）
-export function parseWalks(text) {
-  if (!text) return null;
-  try {
-    const old = JSON.parse(text);
-    return Array.isArray(old.walks) ? old.walks : null;
-  } catch { return null; }
-}
 
 // 算出這次要追加的紀錄。
 // - 已經有紀錄檔：遛狗日期比上一次同步（prevDogs）新的狗才記；日期被改早、被清空都不記，也不刪舊紀錄
@@ -553,53 +384,12 @@ export function attachMyWalkedDate(dogs, walks) {
   });
 }
 
-// 一筆紀錄一行，檔案變大後 git 的差異也只有新增的那幾行
-export function renderWalks(walks) {
-  // #57 之前的舊紀錄沒有 mine、#94 之前的沒有 walkers，照原樣寫回
-  const lines = walks.map(w => '    ' + JSON.stringify({
-    id: w.id, name: w.name, date: w.date,
-    ...('mine' in w ? { mine: w.mine === true } : {}),
-    ...('walkers' in w ? { walkers: w.walkers } : {}),
-  }));
-  return `{\n  "version": ${WALKS_VERSION},\n  "walks": [\n${lines.join(',\n')}${lines.length ? '\n' : ''}  ]\n}\n`;
-}
-
-// 同步一次要寫哪些檔：回傳 { 相對 data/ 的路徑: 內容 }，沒變的檔不列。
-// oldDogsText／oldWalksText／oldSnapshotText／oldIndexText 是 dogs.json、walks.json、今天快照、快照目錄的舊內容（沒有就空字串）；
-// historyDates 是 data/history/ 裡已經有的快照日期
-export function planWrites(data, { oldDogsText = '', oldWalksText = '', oldSnapshotText = '', oldIndexText = '', historyDates = [] } = {}, now = new Date()) {
-  const writes = {};
-  let prevDogs = null;
-  try { prevDogs = JSON.parse(oldDogsText).dogs; } catch { /* 沒有舊檔：只能靠 walks.json 去重 */ }
-  const { walks, changed } = upgradeWalks(parseWalks(oldWalksText), data.dogs);
-  const added = newWalks(data.dogs, prevDogs, walks);
-  const allWalks = [...(walks || []), ...added];
-  if (added.length || changed || !walks) writes['walks.json'] = renderWalks(allWalks);
-
-  // dogs.json 的 myWalkedDate 要看整份遛狗紀錄，所以先算紀錄再寫 dogs.json
-  data = { ...data, dogs: attachMyWalkedDate(data.dogs, allWalks) };
-  const dogsText = renderFile(data, oldDogsText, now);
-  if (dogsText) writes['dogs.json'] = dogsText;
-  const current = dogsText || oldDogsText;
-  if (current !== oldSnapshotText) writes[`history/${formatDate(now)}.json`] = current;
-  const indexText = renderHistoryIndex([...historyDates, formatDate(now)]);
-  if (indexText !== oldIndexText) writes['history/index.json'] = indexText;
-  return { writes, added };
-}
-
-// 快照目錄：日期由舊到新、不重複
-export function renderHistoryIndex(dates) {
-  const list = [...new Set(dates.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d)))].sort();
-  return `{\n  "version": 1,\n  "dates": [${list.map(d => JSON.stringify(d)).join(', ')}]\n}\n`;
-}
-
 // ── 離所（#162）──
-// 狗從主清單消失就記一筆離所，寫進 data/departures.json。原因只讀試算表「已出所」分頁（只讀，不寫入）：
+// 狗從主清單消失就記一筆離所（#251 起存 D1）。原因只讀試算表「已出所」分頁（只讀，不寫入）：
 // 用編號找到那隻狗的那一列，整列文字套下面的關鍵字規則。判不出來、互相矛盾、找不到那一列都標「待確認」（unknown），
 // 不從別的線索推測（K 2026-10-08）。每次同步都重查，志工之後補上原因就會改過來。
 // 公開檔只存分類和命中的關鍵字，不存已出所分頁的原文（認養人、病況等都不會進 repo）。
 
-export const DEPARTURES_VERSION = 1;
 export const DEPARTED_SHEET = '已出所';
 
 // 關鍵字表：同一類寫長的在前，命中時記下是哪個字
@@ -711,14 +501,6 @@ function lastSeenDog(d, groups) {
   return out;
 }
 
-export function parseDepartures(text) {
-  if (!text) return null;
-  try {
-    const old = JSON.parse(text);
-    return Array.isArray(old.departures) ? old.departures : null;
-  } catch { return null; }
-}
-
 // 算出新的離所清單。
 // - old：上一次的 departures（null＝第一次，從 snapshots 補）
 // - snapshots：[{ date, dogs, groups }] 由舊到新，最後一個是這次同步；第一次用全部快照，之後只要上一次和這次
@@ -754,11 +536,6 @@ export function updateDepartures(old, snapshots, rows, today = new Date()) {
   return out.sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.id.localeCompare(b.id));
 }
 
-export function renderDepartures(list) {
-  const lines = list.map(e => '    ' + JSON.stringify(e));
-  return `{\n  "version": ${DEPARTURES_VERSION},\n  "departures": [\n${lines.join(',\n')}${lines.length ? '\n' : ''}  ]\n}\n`;
-}
-
 // 讀已出所分頁；失敗回 null（不擋主清單同步）
 export async function loadDepartedRows(fetchImpl = fetch, today = new Date()) {
   try {
@@ -769,11 +546,4 @@ export async function loadDepartedRows(fetchImpl = fetch, today = new Date()) {
     console.warn(`讀不到「${DEPARTED_SHEET}」分頁，離所原因這次沿用上一次：${e.message}`);
     return null;
   }
-}
-
-// 這次要不要寫 departures.json：回傳新內容，沒變回 null
-export function planDepartures({ oldText = '', snapshots, rows, today = new Date() }) {
-  const list = updateDepartures(parseDepartures(oldText), snapshots, rows, today);
-  const text = renderDepartures(list);
-  return text === oldText ? null : text;
 }

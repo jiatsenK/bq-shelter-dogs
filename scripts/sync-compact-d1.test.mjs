@@ -4,11 +4,11 @@ import { readFile } from 'node:fs/promises';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { migrateCompactDatabase } from './migrate-compact-db.mjs';
 import { readDogsPayload, readDepartures, readWalks } from '../worker/src/compact.js';
-import { buildSyncSql, buildSyncPlan, SEED_TABLES, SYNC_SCHEMA_SKIP, planSync, readPrevious, readSeed, lastWalkChecks } from './sync-compact-d1.mjs';
+import { buildSyncSql, buildSyncPlan, SEED_TABLES, SYNC_SCHEMA_SKIP, planSync, readPrevious, readSeed, lastWalkChecks, d1Target } from './sync-compact-d1.mjs';
 import { budgetProblem, todayRowsWritten } from './sync-diff.mjs';
 
 // SQL 開頭補建表、版本號、觸發器那幾行（不算同步寫的資料）
-const SCHEMA_LINE = /^CREATE |^INSERT OR IGNORE INTO v3_(data|pack|walk)_versions|^INSERT INTO v3_departure_versions\(id,years\) |^DROP TRIGGER IF EXISTS pack_v3_|^DELETE FROM v3_packs WHERE part='(walks|small)'/;
+const SCHEMA_LINE = /^CREATE |^INSERT OR IGNORE INTO v3_(data|pack|walk|activity)_versions|^INSERT OR IGNORE INTO v3_walk_pack |^INSERT OR IGNORE INTO v3_walk_compare\(|^INSERT INTO v3_departure_versions\(id,years\) |^DROP TRIGGER IF EXISTS pack_v3_|^DELETE FROM v3_packs WHERE part='(walks|small)'/;
 
 const json = async path => JSON.parse(await readFile(new URL(`../${path}`, import.meta.url), 'utf8'));
 
@@ -99,7 +99,7 @@ test('開卡、照片、休養、介紹不被同步清掉', async t => {
   const sql = await buildSyncSql(seed, src);
   // 只補建表（IF NOT EXISTS），不刪不寫這幾張
   const writes = sql.split('\n').filter(l => !SCHEMA_LINE.test(l)).join('\n');
-  assert.doesNotMatch(writes, /v3_card_opened|v3_photos|v3_volunteer|v3_rest|v3_intros|v3_edit_log/);
+  assert.doesNotMatch(writes, /v3_card_opened|v3_photos|v3_volunteer|v3_rest|v3_intros|v3_edit_log|v3_activit|v3_departed_cards/);
 });
 
 test('來源有問題時丟錯，不產生 SQL', async t => {
@@ -532,4 +532,11 @@ test('#371 同步讀的 SQL 不整張掃溜狗紀錄、離所（D1 照掃過的�
       assert.deepEqual(plan.filter(d => /^SCAN v3_(walks|departures)\b/.test(d)), [], `${table}：${plan.join(' / ')}`);
     }
   } finally { db.close(); }
+});
+
+// 預覽測試庫補資料（預覽讀不到狗）：SYNC_D1 只能選正式庫或測試庫，測試庫要帶自己的設定檔
+test('d1Target：預設正式庫，只接受測試庫這個例外', () => {
+  assert.deepEqual(d1Target({}), { name: 'bq-shelter-dogs', config: [] });
+  assert.deepEqual(d1Target({ SYNC_D1: 'bq-shelter-dogs-test' }), { name: 'bq-shelter-dogs-test', config: ['--config', 'wrangler.preview-db.jsonc'] });
+  assert.throws(() => d1Target({ SYNC_D1: 'other' }), /SYNC_D1/);
 });

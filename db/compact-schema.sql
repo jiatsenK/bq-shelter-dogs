@@ -1,4 +1,105 @@
 -- #245/#246：獨立精簡模型。只由明確的遷移入口執行，不由部署自動套用。
+-- #456：網站已接管的最新溜狗狀態獨立於試算表複本；舊同步不得寫入這些表。
+CREATE TABLE IF NOT EXISTS v3_walk_state (
+  dog_key TEXT PRIMARY KEY,
+  dog_id TEXT NOT NULL REFERENCES v3_dogs(dog_id),
+  number TEXT NOT NULL,
+  name TEXT NOT NULL,
+  version INTEGER NOT NULL CHECK(version>0),
+  effective_date TEXT NOT NULL,
+  walker TEXT NOT NULL,
+  members_json TEXT NOT NULL CHECK(json_valid(members_json)),
+  base_date TEXT NOT NULL,
+  base_walker TEXT NOT NULL,
+  previous_date TEXT NOT NULL,
+  previous_walker TEXT NOT NULL,
+  updated_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS v3_walk_requests (
+  request_id TEXT NOT NULL,
+  dog_key TEXT NOT NULL REFERENCES v3_walk_state(dog_key),
+  operation_date TEXT NOT NULL,
+  fingerprint TEXT NOT NULL,
+  result_json TEXT NOT NULL CHECK(json_valid(result_json)),
+  PRIMARY KEY(request_id)
+);
+CREATE TABLE IF NOT EXISTS v3_walk_outbox (
+  dog_key TEXT NOT NULL REFERENCES v3_walk_state(dog_key),
+  version INTEGER NOT NULL,
+  operation_date TEXT NOT NULL,
+  target_date TEXT NOT NULL,
+  target_walker TEXT NOT NULL,
+  status TEXT NOT NULL CHECK(status IN ('pending','dispatching','unconfirmed','retry','synced','superseded')),
+  next_attempt_at TEXT NOT NULL,
+  dispatch_id TEXT NOT NULL DEFAULT '',
+  readback_seen INTEGER NOT NULL DEFAULT 0 CHECK(readback_seen IN (0,1)),
+  error TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY(dog_key,version)
+);
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_due ON v3_walk_outbox(next_attempt_at,dog_key) WHERE status IN ('pending','retry','unconfirmed');
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_active ON v3_walk_outbox(dog_key) WHERE status NOT IN ('synced','superseded');
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_readback ON v3_walk_outbox(dog_key,target_date,target_walker) WHERE readback_seen=1;
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_agreed ON v3_walk_outbox(dog_key,version) WHERE status='synced';
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_causal ON v3_walk_outbox(dog_key,target_date,target_walker,version) WHERE readback_seen=1 AND status='superseded';
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_unknown ON v3_walk_outbox(dog_key,target_date,target_walker,version) WHERE readback_seen=0 AND dispatch_id<>'';
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_unknown_date ON v3_walk_outbox(dog_key,target_date,version) WHERE readback_seen=0 AND dispatch_id<>'';
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_unknown_walker ON v3_walk_outbox(dog_key,target_walker,version) WHERE readback_seen=0 AND dispatch_id<>'';
+-- 一致基準／已接受人工觀測的因果界線；更早歷史值不能作派送中間值授權。
+CREATE TABLE IF NOT EXISTS v3_walk_baselines (
+  dog_key TEXT PRIMARY KEY REFERENCES v3_walk_state(dog_key),
+  version INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_dispatch ON v3_walk_outbox(dog_key,dispatch_id) WHERE status='dispatching';
+CREATE INDEX IF NOT EXISTS v3_walk_outbox_interrupted ON v3_walk_outbox(next_attempt_at,dog_key) WHERE status='dispatching';
+CREATE TABLE IF NOT EXISTS v3_walk_delivery (
+  dog_key TEXT PRIMARY KEY REFERENCES v3_walk_state(dog_key),
+  dispatch_id TEXT NOT NULL,
+  started_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS v3_walk_delivery_started ON v3_walk_delivery(started_at,dog_key);
+-- #459：只保留每狗目前版本的退避計數，程序重啟後仍沿用。
+CREATE TABLE IF NOT EXISTS v3_walk_retry (
+  dog_key TEXT PRIMARY KEY REFERENCES v3_walk_state(dog_key),
+  version INTEGER NOT NULL,
+  failures INTEGER NOT NULL,
+  dispatch_id TEXT NOT NULL,
+  reserved_day TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS v3_walk_pack (
+  id INTEGER PRIMARY KEY CHECK(id=1),
+  version INTEGER NOT NULL,
+  payload TEXT NOT NULL CHECK(json_valid(payload))
+);
+INSERT OR IGNORE INTO v3_walk_pack VALUES(1,0,'{}');
+-- 交易 guard：比較版本失敗必須整筆回復，不能留下去重結果或工作。
+CREATE TABLE IF NOT EXISTS v3_walk_guard (ok INTEGER NOT NULL CHECK(ok=1));
+-- 保守計量包含索引與觸發器；不是帳號分析用量的替代品。
+CREATE TABLE IF NOT EXISTS v3_walk_write_budget (day TEXT PRIMARY KEY, reserved INTEGER NOT NULL);
+-- #458：通知工作的持久狀態，與非溜狗欄位的 v3_sync_state.changed 分開。
+CREATE TABLE IF NOT EXISTS v3_walk_compare (
+  id INTEGER PRIMARY KEY CHECK(id=1),
+  status TEXT NOT NULL CHECK(status IN ('idle','running','pending')),
+  owner TEXT NOT NULL DEFAULT '',
+  again INTEGER NOT NULL DEFAULT 0,
+  started_at TEXT NOT NULL DEFAULT '',
+  error TEXT NOT NULL DEFAULT ''
+);
+INSERT OR IGNORE INTO v3_walk_compare(id,status) VALUES(1,'idle');
+CREATE TABLE IF NOT EXISTS v3_walk_conflicts (
+  dog_key TEXT PRIMARY KEY,
+  observation TEXT NOT NULL CHECK(json_valid(observation)),
+  error TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS walk_pack_INSERT AFTER INSERT ON v3_walk_state BEGIN
+  UPDATE v3_walk_pack SET version=version+1,payload=json_set(payload,'$.'||json_quote(NEW.dog_key),json_object('key',NEW.dog_key,'version',NEW.version,'walkedDate',NEW.effective_date,'walker',NEW.walker,'at',NEW.updated_at,'syncStatus','pending')) WHERE id=1;
+END;
+CREATE TRIGGER IF NOT EXISTS walk_pack_UPDATE AFTER UPDATE ON v3_walk_state BEGIN
+  UPDATE v3_walk_pack SET version=version+1,payload=json_set(payload,'$.'||json_quote(NEW.dog_key),json_object('key',NEW.dog_key,'version',NEW.version,'walkedDate',NEW.effective_date,'walker',NEW.walker,'at',NEW.updated_at,'syncStatus',COALESCE((SELECT status FROM v3_walk_outbox WHERE dog_key=NEW.dog_key AND version=NEW.version),'pending'))) WHERE id=1;
+END;
+CREATE TRIGGER IF NOT EXISTS walk_pack_outbox_UPDATE AFTER UPDATE OF status ON v3_walk_outbox
+WHEN NEW.status<>OLD.status AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=NEW.dog_key AND version=NEW.version) BEGIN
+  UPDATE v3_walk_pack SET version=version+1,payload=json_set(payload,'$.'||json_quote(NEW.dog_key)||'.syncStatus',NEW.status) WHERE id=1;
+END;
 -- 試算表複本以來源列／欄排序保存；集合拆成列，不存 JSON。
 CREATE TABLE IF NOT EXISTS v3_dogs (
   dog_id TEXT PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(16)))),
@@ -30,6 +131,8 @@ CREATE TABLE IF NOT EXISTS v3_sheet_main (
   sex TEXT NOT NULL DEFAULT '',
   intro TEXT NOT NULL DEFAULT ''
 );
+CREATE INDEX IF NOT EXISTS v3_sheet_main_number ON v3_sheet_main(number);
+CREATE INDEX IF NOT EXISTS v3_sheet_main_name ON v3_sheet_main(name) WHERE number='';
 CREATE TABLE IF NOT EXISTS v3_sheet_main_walkers (
   row_index INTEGER NOT NULL REFERENCES v3_sheet_main(row_index) ON DELETE RESTRICT,
   position INTEGER NOT NULL,
@@ -178,6 +281,49 @@ CREATE TABLE IF NOT EXISTS v3_edit_log (
   before_json TEXT,
   after_json TEXT
 );
+-- 活動紀錄（#270，ADR 0002）：一場一列，類型固定兩種（kids＝動保小小兵、adoption＝認養會）。網站寫，同步不碰。
+-- revision 每改一次加 1，兩支手機同時改時後送的會被擋下（不互相蓋掉）
+CREATE TABLE IF NOT EXISTS v3_activities (
+  activity_id TEXT PRIMARY KEY NOT NULL DEFAULT (lower(hex(randomblob(16)))),
+  activity_date TEXT NOT NULL CHECK(length(activity_date)=10),
+  kind TEXT NOT NULL CHECK(kind IN ('kids','adoption')),
+  revision INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS v3_activities_date ON v3_activities(activity_date);
+-- 出席的狗：只記出席，不記狀況。dog_id 是 NULL 表示只有名字、還沒對上狗（舊名單），之後補建狗卡再接上；name 是記的時候的名字
+CREATE TABLE IF NOT EXISTS v3_activity_dogs (
+  activity_id TEXT NOT NULL REFERENCES v3_activities(activity_id) ON DELETE CASCADE,
+  position INTEGER NOT NULL,
+  dog_id TEXT REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
+  name TEXT NOT NULL,
+  PRIMARY KEY(activity_id,position)
+);
+CREATE INDEX IF NOT EXISTS v3_activity_dogs_dog ON v3_activity_dogs(dog_id);
+-- 在 batch 內檢查活動沒被別人改過；失敗時整批回復（同 v3_identity_guard）
+CREATE TABLE IF NOT EXISTS v3_activity_guard (valid INTEGER NOT NULL CHECK(valid=1));
+-- 活動紀錄版本號（ADR 0009 的做法）：兩張表有新增、修改、刪除就加 1，Worker 每次只讀這 1 列，沒變就回記憶體裡的名單
+CREATE TABLE IF NOT EXISTS v3_activity_versions (id INTEGER PRIMARY KEY CHECK(id=1), ver INTEGER NOT NULL DEFAULT 0);
+INSERT OR IGNORE INTO v3_activity_versions(id) VALUES(1);
+CREATE TRIGGER IF NOT EXISTS version_v3_activities_INSERT AFTER INSERT ON v3_activities BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activities_UPDATE AFTER UPDATE ON v3_activities BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activities_DELETE AFTER DELETE ON v3_activities BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activity_dogs_INSERT AFTER INSERT ON v3_activity_dogs BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activity_dogs_UPDATE AFTER UPDATE ON v3_activity_dogs BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_activity_dogs_DELETE AFTER DELETE ON v3_activity_dogs BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+
+-- 只有名字的已出所狗卡（#271，ADR 0002）：網站開始記錄前就離所、D1 沒有的狗，K 確認後用 scripts/departed-card.mjs 建。
+-- 狗本身是 v3_dogs 一列（沒有編號）；離所日、原因不知道就留空／unknown。同步不碰
+CREATE TABLE IF NOT EXISTS v3_departed_cards (
+  dog_id TEXT PRIMARY KEY NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
+  departed_date TEXT NOT NULL DEFAULT '',
+  reason TEXT NOT NULL DEFAULT 'unknown' CHECK(reason IN ('adopt','death','other','unknown')),
+  created_at TEXT NOT NULL
+);
+-- 已出所狗卡的出席次數跟活動用同一個版本號（v3_activity_versions），建卡也要讓它加 1
+CREATE TRIGGER IF NOT EXISTS version_v3_departed_cards_INSERT AFTER INSERT ON v3_departed_cards BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_departed_cards_UPDATE AFTER UPDATE ON v3_departed_cards BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS version_v3_departed_cards_DELETE AFTER DELETE ON v3_departed_cards BEGIN UPDATE v3_activity_versions SET ver=ver+1 WHERE id=1; END;
+
 -- #267：舊代號資料保留作為待對照來源，新個人資料只由固定志工持有。
 CREATE TABLE IF NOT EXISTS v3_identity_names (
  code TEXT PRIMARY KEY NOT NULL,
