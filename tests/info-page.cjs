@@ -65,6 +65,15 @@ module.exports = async (browser, base) => {
     await page.locator('[data-info-page="stay"]').click();
     await page.locator('#analysisBack').click();
     await page.locator('[data-info-page="stay"]').waitFor();
+    // #421 手機上留著舊版內容時，背景檢查拿到新版就換掉並更新快取
+    await page.evaluate(() => localStorage.setItem('bq-website-updates', JSON.stringify([{ date: '2026-10-01', text: '舊的快取內容' }])));
+    await page.reload();
+    await page.locator('[data-tab="info"]').click();
+    await page.locator('[data-info-page="updates"]').click();
+    await page.getByText('已上線的測試更新', { exact: true }).waitFor();
+    assert(!(await page.locator('#main').innerText()).includes('舊的快取內容'));
+    assert((await page.evaluate(() => localStorage.getItem('bq-website-updates'))).includes('已上線的測試更新'));
+    await page.locator('#analysisBack').click();
     failure = true;
     await page.reload();
     await page.locator('[data-tab="info"]').click();
@@ -79,7 +88,7 @@ module.exports = async (browser, base) => {
     await staleFrame.getByText('志工甲', { exact: true }).waitFor();
     await staleFrame.getByText('暫時讀不到最新編輯紀錄，以下是上次讀到的', { exact: true }).waitFor();
     await page.getByRole('button', { name: '網站更新', exact: true }).click();
-    await page.evaluate(() => { localStorage.removeItem('bq-website-updates'); localStorage.removeItem('bq-edits-cache'); });
+    await page.evaluate(() => { localStorage.setItem('bq-website-updates', '{壞掉'); localStorage.setItem('bq-edits-cache', '[]'); });
     await page.reload();
     await page.locator('[data-tab="info"]').click();
     await page.locator('[data-info-page="updates"]').click();
