@@ -52,10 +52,13 @@ async function transitionBudget(db,env,dogKey,dispatchId,cost) {
   return prepaid ? [] : writeBudget(db,env,cost);
 }
 
-async function seedState(db, dog, today) {
+async function uniqueMainDog(db,dog) {
   const matches = await rows(db, `SELECT dog_id,walked_date,row_index FROM v3_sheet_main WHERE ${dog.id ? 'number=?' : "number='' AND name=?"}`, dog.id || dog.name);
   if (matches.length !== 1) throw new WalkError(409, '找不到唯一的主清單狗');
-  const seed = matches[0];
+  return matches[0];
+}
+async function seedState(db, dog, today) {
+  const seed = await uniqueMainDog(db,dog);
   const people = await rows(db, 'SELECT COALESCE(n.name,v.name) AS name FROM v3_sheet_main_walkers w LEFT JOIN v3_identity_names n ON n.code=w.walker_code LEFT JOIN v3_volunteer_codes c ON c.code=w.walker_code LEFT JOIN v3_volunteers v ON v.volunteer_id=c.volunteer_id WHERE w.row_index=? ORDER BY w.position', seed.row_index);
   const previous = seed.walked_date === today ? await previousWalk(db, dog, today) : null;
   return { dog_id: seed.dog_id, effective_date: seed.walked_date || '', walker: people.map(p => p.name).filter(Boolean).join('、'), version: 0,
@@ -68,6 +71,18 @@ export async function membersOf(db, text, secret) {
     // 沿用既有固定身分。登記不建立、猜測或合併任何人。
     const person = await identityByCode(db, await walkerCode(name, secret));
     if (!members.some(m => m.volunteerId === person.volunteerId)) members.push({ volunteerId: person.volunteerId, name });
+  }
+  return members;
+}
+
+// 已可信讀回的來源名單可含未使用網站的人；只保留精確文字，不建立或推測身分。
+async function sourceMembers(db,text,secret) {
+  const members=[];
+  for (const name of names(text)) {
+    let volunteerId=null;
+    try { volunteerId=(await identityByCode(db,await walkerCode(name,secret))).volunteerId; }
+    catch (error) { if (error.status!==409) throw error; }
+    members.push({ volunteerId,name });
   }
   return members;
 }
@@ -95,7 +110,7 @@ export async function acceptWalk(db, input, env, now = Date.now()) {
     const old = await one(db, 'SELECT * FROM v3_walk_state WHERE dog_key=?', key) || await seedState(db, dog, input.operationDate);
     if (modifying && (dog.expectedVersion !== old.version || old.effective_date !== input.operationDate)) throw changedWalk(old);
     let members = old.effective_date === input.operationDate
-      ? old.members_json ? JSON.parse(old.members_json) : await membersOf(db, old.walker, env.WALKER_KEY) : [];
+      ? old.members_json ? JSON.parse(old.members_json) : await sourceMembers(db, old.walker, env.WALKER_KEY) : [];
     let effectiveDate = input.operationDate;
     if (input.action === 'undo') {
       if (members.length !== 1) throw changedWalk(old);
@@ -103,11 +118,15 @@ export async function acceptWalk(db, input, env, now = Date.now()) {
         : await previousWalk(db, dog, input.operationDate);
       if (!previous) throw new WalkError(409, '找不到唯一的主清單狗');
       effectiveDate = previous.date.date || '';
-      members = await membersOf(db, previous.walker, env.WALKER_KEY);
+      members = await sourceMembers(db, previous.walker, env.WALKER_KEY);
     } else if (input.action === 'edit') {
       members = added;
     } else {
-      for (const person of added) if (!members.some(m => m.volunteerId === person.volunteerId)) members.push(person);
+      for (const person of added) {
+        const existingMember = members.find(m => m.volunteerId === person.volunteerId || (!m.volunteerId && m.name === person.name));
+        if (existingMember && !existingMember.volunteerId) existingMember.volunteerId=person.volunteerId;
+        else if (!existingMember) members.push(person);
+      }
     }
     const walker = members.map(m => m.name).join('、'), version = old.version + 1;
     const baseDate = old.base_date ?? old.effective_date, baseWalker = old.base_walker ?? old.walker;
@@ -221,6 +240,7 @@ export async function confirmWalk(db, receipt, env) {
     db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN EXISTS(SELECT 1 FROM v3_walk_state s JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version WHERE s.dog_key=? AND s.version=? AND o.dispatch_id=?) THEN 1 ELSE 0 END').bind(dogKey,version,dispatchId),
     ...await transitionBudget(db,env,dogKey,dispatchId,16),
     db.prepare('UPDATE v3_walk_state SET base_date=?,base_walker=? WHERE dog_key=? AND version=?').bind(current.date, current.walker, dogKey, version),
+    db.prepare('INSERT INTO v3_walk_baselines VALUES(?,?) ON CONFLICT(dog_key) DO UPDATE SET version=excluded.version').bind(dogKey,version),
     db.prepare("UPDATE v3_walk_outbox SET status='synced',readback_seen=1,error='' WHERE dog_key=? AND version=? AND dispatch_id=?").bind(dogKey, version, dispatchId),
     db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(dogKey,dispatchId),
     db.prepare('DELETE FROM v3_walk_guard'),
@@ -228,16 +248,102 @@ export async function confirmWalk(db, receipt, env) {
   return { confirmed: true };
 }
 
+async function baselineVersion(db,key) {
+  const accepted=(await one(db,'SELECT version FROM v3_walk_baselines WHERE dog_key=?',key))?.version || 0;
+  const synced=(await one(db,"SELECT version FROM v3_walk_outbox WHERE dog_key=? AND status='synced' ORDER BY version DESC LIMIT 1",key))?.version || 0;
+  return Math.max(accepted,synced);
+}
+async function knownIntermediate(db,key,observed,version) {
+  return one(db,"SELECT version FROM v3_walk_outbox WHERE dog_key=? AND target_date=? AND target_walker=? AND readback_seen=1 AND status='superseded' AND version>? AND version<? LIMIT 1",
+    key,observed.date,observed.walker,await baselineVersion(db,key),version);
+}
+
+// 僅接受同鎖 GAS 直接讀值；通知內容與 gviz 都不能呼叫這個比較入口。
+export async function reconcileWalk(db, dog, observed, env) {
+  if (!dog || typeof dog.id !== 'string' || typeof dog.name !== 'string' || !dog.name ||
+    (dog.id && !/^[A-Za-z0-9]{1,32}$/.test(dog.id))) throw new WalkError(400,'狗的識別不完整');
+  const key = keyOf(dog);
+  try {
+    const result = await compareTrustedWalk(db,dog,observed,env);
+    if (await one(db,'SELECT dog_key FROM v3_walk_conflicts WHERE dog_key=?',key)) {
+      await db.batch([...await writeBudget(db,env,8),db.prepare('DELETE FROM v3_walk_conflicts WHERE dog_key=?').bind(key),db.prepare('DELETE FROM v3_walk_guard')]);
+    }
+    return result;
+  } catch (error) {
+    const observation = JSON.stringify(observed ?? null), reason = error.status ? error.message : '比較失敗，保留待處理';
+    const previous = await one(db,'SELECT observation,error FROM v3_walk_conflicts WHERE dog_key=?',key);
+    if (previous?.observation !== observation || previous?.error !== reason) {
+      await db.batch([...await writeBudget(db,env,8),db.prepare('INSERT INTO v3_walk_conflicts VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET observation=excluded.observation,error=excluded.error').bind(key,observation,reason),db.prepare('DELETE FROM v3_walk_guard')]);
+    }
+    throw error;
+  }
+}
+
+async function compareTrustedWalk(db, dog, observed, env) {
+  if (!observed || typeof observed.walker !== 'string' || observed.walker.length > 2000 ||
+    typeof observed.date !== 'string' || (observed.date && (!/^\d{4}-\d{2}-\d{2}$/.test(observed.date) ||
+      !Number.isFinite(Date.parse(observed.date)) || new Date(observed.date).toISOString().slice(0,10) !== observed.date))) {
+    throw new WalkError(409, '試算表日期或名單無法確認');
+  }
+  const key = keyOf(dog);
+  const old = await one(db, 'SELECT * FROM v3_walk_state WHERE dog_key=?', key) || await seedState(db, dog,dayOf(Date.now()));
+  if ((await uniqueMainDog(db,dog)).dog_id!==old.dog_id) throw new WalkError(409,'找不到唯一的主清單狗');
+  const base = { date: old.base_date ?? old.effective_date, walker: old.base_walker ?? old.walker };
+  const same = (a,b) => a.date === b.date && a.walker === b.walker;
+  const current = { date: old.effective_date, walker: old.walker };
+  if (same(observed,base)) return { changed:false, version:old.version, current };
+  const job = old.version && await one(db, 'SELECT * FROM v3_walk_outbox WHERE dog_key=? AND version=?',key,old.version);
+  if (same(observed,current) && job?.dispatch_id) {
+    await confirmWalk(db, { dogKey:key, dispatchId:job.dispatch_id, version:old.version, current:observed },env);
+    return { changed:false, version:old.version, current };
+  }
+  // 未取得可信回執的已派送值，可能是舊程式寫入，不能猜成人工修正。
+  const frontier = await baselineVersion(db,key);
+  let unknown = await one(db,"SELECT version FROM v3_walk_outbox WHERE dog_key=? AND target_date=? AND target_walker=? AND readback_seen=0 AND dispatch_id<>'' AND version>? LIMIT 1",key,observed.date,observed.walker,frontier);
+  if (!unknown && observed.walker===base.walker) unknown=await one(db,"SELECT version FROM v3_walk_outbox WHERE dog_key=? AND target_date=? AND readback_seen=0 AND dispatch_id<>'' AND version>? LIMIT 1",key,observed.date,frontier);
+  if (!unknown && observed.date===base.date) unknown=await one(db,"SELECT version FROM v3_walk_outbox WHERE dog_key=? AND target_walker=? AND readback_seen=0 AND dispatch_id<>'' AND version>? LIMIT 1",key,observed.walker,frontier);
+  if (unknown) throw new WalkError(409, '試算表可能是未確認派送結果，保留待處理');
+  const intermediate = await knownIntermediate(db,key,observed,old.version);
+  if (intermediate) return { changed:false, version:old.version, current };
+  let target = observed;
+  if (observed.date === base.date && current.date === base.date && observed.walker && !same(current,base)) {
+    const removed = names(base.walker).filter(name => !names(observed.walker).includes(name));
+    target = { date:observed.date, walker:[...new Set([...names(current.walker).filter(name => !removed.includes(name)), ...names(observed.walker)])].join('、') };
+  }
+  // 自由改表可能有尚未使用網站的名字；保留來源文字，不猜測或建立志工身分。
+  const members = await sourceMembers(db,target.walker,env.WALKER_KEY);
+  const version = old.version + 1, at = new Date().toISOString();
+  const status = same(target,observed) ? 'synced' : 'pending';
+  const previousDate=target.date===old.effective_date ? old.previous_date ?? '' : old.effective_date;
+  const previousWalker=target.date===old.effective_date ? old.previous_walker ?? '' : old.walker;
+  await db.batch([
+    db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT version FROM v3_walk_state WHERE dog_key=?),0)=? THEN 1 ELSE 0 END').bind(key,old.version),
+    ...await writeBudget(db,env,32),
+    db.prepare('INSERT INTO v3_walk_state(dog_key,dog_id,number,name,version,effective_date,walker,members_json,base_date,base_walker,previous_date,previous_walker,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dog_key) DO UPDATE SET version=excluded.version,effective_date=excluded.effective_date,walker=excluded.walker,members_json=excluded.members_json,base_date=excluded.base_date,base_walker=excluded.base_walker,previous_date=excluded.previous_date,previous_walker=excluded.previous_walker,updated_at=excluded.updated_at')
+      .bind(key,old.dog_id,dog.id,dog.name,version,target.date,target.walker,JSON.stringify(members),observed.date,observed.walker,previousDate,previousWalker,at),
+    db.prepare('INSERT INTO v3_walk_baselines VALUES(?,?) ON CONFLICT(dog_key) DO UPDATE SET version=excluded.version').bind(key,version),
+    db.prepare("UPDATE v3_walk_outbox SET status='superseded' WHERE dog_key=? AND status NOT IN ('synced','superseded')").bind(key),
+    db.prepare("INSERT INTO v3_walk_outbox(dog_key,version,operation_date,target_date,target_walker,status,next_attempt_at) VALUES(?,?,?,?,?,'pending',?)").bind(key,version,dayOf(Date.now()),target.date,target.walker,at),
+    db.prepare('UPDATE v3_walk_outbox SET status=? WHERE dog_key=? AND version=?').bind(status,key,version),
+    db.prepare('DELETE FROM v3_walk_guard'),
+  ]);
+  return { changed:true, version, current:target };
+}
+
 // 同鎖直接讀表後才呼叫。觀測到不同值時停寫，不將 gviz 舊快照當成人工修改。
 export async function writebackTarget(db, input, env) {
   const key = keyOf(input.dog);
+  await reconcileWalk(db,input.dog,input.current,env);
   const state = await one(db, 'SELECT * FROM v3_walk_state WHERE dog_key=?', key);
   if (!state) throw new WalkError(404, '尚未接管這隻狗');
   const job = await one(db, 'SELECT * FROM v3_walk_outbox WHERE dog_key=? AND version=?', key, state.version);
+  if (job?.status === 'synced' && input.current?.date === state.effective_date && input.current?.walker === state.walker) {
+    return { skip:true,version:state.version,dispatchId:input.dispatchId,current:input.current };
+  }
   if (!input.current || (input.current.date !== state.base_date || input.current.walker !== state.base_walker)) {
     // 目前目標相符可處理回應遺失；其他已觀測修改留待重新比對，絕不盲寫。
     const matchesCurrent = input.current?.date === state.effective_date && input.current?.walker === state.walker && !!job?.dispatch_id;
-    const intermediate = input.current && await one(db, 'SELECT version FROM v3_walk_outbox WHERE dog_key=? AND target_date=? AND target_walker=? AND readback_seen=1 AND version<? LIMIT 1',key,input.current.date,input.current.walker,state.version);
+    const intermediate = input.current && await knownIntermediate(db,key,input.current,state.version);
     if (!matchesCurrent && !intermediate) throw new WalkError(409, '觀測到試算表衝突，停止覆寫');
   }
   if (!job || !['dispatching','retry','unconfirmed','pending'].includes(job.status)) throw new WalkError(409, '沒有待寫回目標');

@@ -4,7 +4,8 @@ import { cleanStays } from './stays.js';
 import { saveFixedCare } from './compact.js';
 import { readDepartedCards } from './departed.js';
 import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, readActivities, resolveDogs, updateActivity } from './activities.js';
-import { acceptWalk, dispatchWalk, readAcceptedWalks, writebackTarget, confirmWalk } from './walk-accept.js';
+import { acceptWalk, dispatchWalk, readAcceptedWalks, writebackTarget, confirmWalk, reconcileWalk } from './walk-accept.js';
+import { compareNotifiedWalks } from './walk-notify.js';
 import { retryWalks } from './walk-retry.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
@@ -598,15 +599,17 @@ async function syncTick(env, now) {
   return plan;
 }
 
-// Apps Script 通知「試算表有人手動改了」（ADR 0012）：只記下有改，下一次 Cron 再同步。用專用密碼 SHEET_NOTIFY_KEY，不用 WALKER_KEY
+// 通知只負責喚醒可信讀表，請求內容不提供格子值。
 async function sheetChanged(request, env) {
   const key = env && env.SHEET_NOTIFY_KEY ? String(env.SHEET_NOTIFY_KEY) : '';
   if (!key || !env.DB) return fail(503, '還沒設定試算表通知', '');
   if (env.PREVIEW) return fail(403, '這是預覽版，不收試算表通知', '');
   if (request.method !== 'POST') return fail(405, '試算表通知只能用 POST', '');
-  if (request.headers.get('X-Notify-Key') !== key) return fail(403, '通知密碼不對', '');
-  await markChanged(env.DB);
-  return reply(200, { ok: true }, '');
+  if (!await sameSecret(request.headers.get('X-Notify-Key') || '',key)) return fail(403, '通知密碼不對', '');
+  // 非溜狗欄位仍須交既有同步；不因今日狀態已處理就消掉這個標記。
+  if (!await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='changed'").first()) await markChanged(env.DB);
+  const comparison = env.D1_WALK_NOTIFY === '1' ? await compareNotifiedWalks(env.DB,env) : { deferred:true };
+  return reply(200, { ok: true, comparison }, '');
 }
 
 const baseOf = request => new URL(request.url).origin;
@@ -1287,7 +1290,7 @@ export default {
         return fail(500, '記錄試算表通知發生錯誤', '');
       }
     }
-    if (['/walk-writeback/target', '/walk-writeback/receipt', '/walk-writeback/legacy-check'].includes(path)) {
+    if (['/walk-writeback/target', '/walk-writeback/receipt', '/walk-writeback/legacy-check', '/walk-writeback/observe'].includes(path)) {
       if (request.method !== 'POST' || env?.PREVIEW || !env?.DB || !cfg.sheetWriteKey) return fail(403, '不接受寫回要求', '');
       const supplied = request.headers.get('X-Sheet-Write-Key') || '';
       const digest = text => crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -1299,6 +1302,15 @@ export default {
         const raw = await request.text();
         if (raw.length > WALK_MAX_BYTES) return fail(413, '資料太大', '');
         const input = JSON.parse(raw);
+        if (path.endsWith('/observe')) {
+          if (!Array.isArray(input.observations) || input.observations.length > 10) return fail(400,'每批最多比對十隻狗','');
+          const results = [];
+          for (const observation of input.observations) {
+            try { results.push({ ok:true, ...await reconcileWalk(env.DB,observation.dog,observation.current,env) }); }
+            catch (error) { results.push({ ok:false, error:error.status ? error.message : '比較失敗，保留待處理' }); }
+          }
+          return reply(200,{ ok:true, results },'');
+        }
         if (path.endsWith('/legacy-check')) {
           if (!Array.isArray(input.dogs) || input.dogs.length > WALK_MAX_DOGS) return fail(400, '狗的資料不對', '');
           for (const dog of input.dogs) {

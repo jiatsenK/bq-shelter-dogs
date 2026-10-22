@@ -36,7 +36,7 @@ function handleRequest(req) {
   if (!req) return { ok: false, error: '沒有資料' };
   // K 決定先不設金鑰（2026-10-04）；有設 WRITE_KEY 才檢查
   if (key && req.key !== key) return { ok: false, error: '金鑰不對', code: 'key' };
-  if (['walkWake', 'walkScan'].indexOf(req.action) !== -1 && (!key || req.key !== key)) return { ok: false, error: '寫回必須設定金鑰', code: 'key' };
+  if (['walkWake','walkScan','walkCompare'].indexOf(req.action) !== -1 && (!key || req.key !== key)) return { ok: false, error: '寫回必須設定金鑰', code: 'key' };
   var lock = LockService.getScriptLock();
   lock.waitLock(15000); // 兩個人同時按，一個一個來，免得互相蓋掉
   try {
@@ -45,6 +45,7 @@ function handleRequest(req) {
     if (!sheet) return { ok: false, error: '找不到「' + SHEET_NAME + '」分頁' };
     if (req.action === 'walkWake') return writeLatestWalk(sheet, req, props);
     if (req.action === 'walkScan') return readWalkSnapshot(sheet);
+    if (req.action === 'walkCompare') return compareWalkCells(sheet, req, props);
     // 所有程式寫入共用此鎖；舊版喚醒延後抵達也不能繞過 D1 正本。
     if (props.getProperty('WALK_WORKER_URL') && ['walk', 'edit', 'undo'].indexOf(req.action) !== -1) {
       var gate = walkWorker(props, 'legacy-check', { dogs: req.dogs });
@@ -86,10 +87,14 @@ function directWalkCell(sheet, dog) {
       : !cellText(values[r][header.cols.id]) && cellText(values[r][header.cols.name]) === dog.name) matches.push(r);
   }
   if (matches.length !== 1) throw new Error('找不到唯一的狗，停止寫回');
-  var row = matches[0], value = values[row][header.cols.date];
+  var row = matches[0];
+  return { row: row, cols: header.cols, current: walkCellValue(values[row], header.cols) };
+}
+function walkCellValue(row, cols) {
+  var value = row[cols.date];
   var text = isDate(value) ? ymdOf(value) : cellText(value).replace(/\//g, '-').replace(/-(\d)(?=-|$)/g, '-0$1');
   if (text && !/^\d{4}-\d{2}-\d{2}$/.test(text)) throw new Error('日期無法確認，停止寫回');
-  return { row: row, cols: header.cols, current: { date: text, walker: cellText(values[row][header.cols.walker]) } };
+  return { date: text, walker: cellText(row[cols.walker]) };
 }
 function sameWalk(a, b) { return a.date === b.date && a.walker === b.walker; }
 // 保險比對只取編號、狗名、日期、名單四欄；不下載備註等整份歷史內容。
@@ -111,13 +116,42 @@ function readWalkSnapshot(sheet) {
   }
   return { ok: true, rows: rows };
 }
+// 一份同鎖直接讀值；不讀 gviz、不回傳其他欄位。通知每輪五隻，機器入口最多十隻。
+function compareWalkCells(sheet, req, props) {
+  if (!Array.isArray(req.known) || req.known.length > 500) throw new Error('比對基準不完整');
+  var byKey = {};
+  readWalkSnapshot(sheet).rows.forEach(function(row) {
+    var key=row.dog.id ? 'id:'+row.dog.id : 'name:'+row.dog.name;
+    if (!byKey[key]) byKey[key]=[];
+    byKey[key].push(row.current);
+  });
+  var observations=[], problems=[];
+  req.known.forEach(function(known) {
+    var matches=byKey[known.id ? 'id:'+known.id : 'name:'+known.name] || [];
+    if (matches.length !== 1) { problems.push('找不到唯一的狗：'+(known.id || known.name)); return; }
+    var current=matches[0];
+    if (!sameWalk(current,known)) observations.push({ dog:{ id:known.id,name:known.name },current:current });
+  });
+  var limit=Math.min(10,Math.max(1,Number(req.limit)||10));
+  var batch=observations.slice(0,limit);
+  if (batch.length) {
+    var result=walkWorker(props,'observe',{ observations:batch });
+    if (!Array.isArray(result.results) || result.results.length !== batch.length || result.results.some(function(r) { return !r.ok; })) problems.push('比較未完成');
+  }
+  return { ok:problems.length===0 && observations.length<=limit, protocol:'walkCompare-v1', compared:batch.length,
+    remaining:Math.max(0,observations.length-limit), error:problems.join(';') };
+}
 function writeLatestWalk(sheet, req, props) {
   if (!req.dog || !req.dispatchId) throw new Error('缺少寫回識別');
   var observed = directWalkCell(sheet, req.dog);
   var target = walkWorker(props, 'target', { dog: req.dog, dispatchId: req.dispatchId, current: observed.current });
+  if (target.skip) return { ok:true, version:target.version, dispatchId:target.dispatchId, current:target.current, confirmed:true };
   // 人工不受 script lock 限制：寫前再讀，排序則重新定位，值不同立即停寫。
   var before = directWalkCell(sheet, req.dog);
-  if (!sameWalk(observed.current, before.current)) throw new Error('寫前觀測到人工修改，停止寫回');
+  if (!sameWalk(observed.current, before.current)) {
+    walkWorker(props,'observe',{ observations:[{ dog:req.dog,current:before.current }] });
+    throw new Error('寫前觀測到人工修改，停止寫回');
+  }
   if (!sameWalk(before.current, target.current)) {
     sheet.getRange(before.row + 1, before.cols.date + 1).setValue(target.current.date ? toSheetDate(target.current.date) : '');
     sheet.getRange(before.row + 1, before.cols.walker + 1).setValue(target.current.walker);
