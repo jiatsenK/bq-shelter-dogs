@@ -632,7 +632,7 @@ function runTests() {
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
       const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
-      eq(scripts.map(s => s.getAttribute('src')), ['js/dates.js', 'js/api.js', 'js/store.js', 'js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/walk-flow.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/activities.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定、#270 活動紀錄）：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/dates.js', 'js/api.js', 'js/store.js', 'js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/walk-flow.js', 'js/detail-editor.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/activities.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定、#270 活動紀錄）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
@@ -1021,6 +1021,8 @@ async function runPhotoTests() {
         document.getElementById('photoConfirm').click();
         await tick();
         const btn = document.getElementById('photoConfirm');
+        btn.click(); await uploadPhoto();
+        eq(calls.length, 1, '上傳中重按仍只送一張：');
         eq([btn.disabled, btn.textContent.trim(), document.getElementById('photoCancel')], [true, '上傳中…', null], '上傳中：');
         release(); await tick(); await tick();
         eq(calls.length, 1, '呼叫次數：');
@@ -2203,6 +2205,45 @@ async function runRestTests() {
         hideDetail(); hideToast();
       }
     });
+    // #481：只觀察表單與 API，保護共用狀態轉換前後的既有行為。
+    for (const spec of [
+      { name: '舊編號', open: 'formerAdd', form: 'formerForm', field: '#formerText', value: '2015081801', api: 'saveFormer', cancel: 'formerCancel' },
+      { name: '入所介紹', open: 'introEdit', form: 'introForm', field: '#introText', value: '保留這份介紹草稿', api: 'saveIntro', cancel: 'introCancel' },
+      { name: '出入所紀錄', open: 'staysEdit', form: 'staysForm', field: '[data-stay-field="reason"]', value: '迷路', api: 'saveStays', cancel: 'staysCancel' },
+      { name: '休養設定', open: 'restEdit', form: 'restForm', field: '#restReason', value: '保留休養原因', api: 'saveRest', cancel: 'restCancel' },
+    ]) {
+      await check('#481 ' + spec.name + '：儲存中只送一次；失敗保留草稿、重試清掉錯誤；取消回閱讀畫面', async () => {
+        let release;
+        const tick = () => new Promise(r => setTimeout(r, 0));
+        const calls = fakeApi(() => new Promise(r => { release = () => r(json({ ok: false, error: '暫時無法儲存' }, 503)); }));
+        const submit = () => document.getElementById(spec.form).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+        const type = (selector, value) => {
+          const input = document.querySelector(selector);
+          input.value = value; input.dispatchEvent(new Event('input', { bubbles: true }));
+        };
+        try {
+          showDetail(allDogs[2]);
+          if (!document.getElementById(spec.open)) document.getElementById('introEdit').click();
+          document.getElementById(spec.open).click();
+          if (spec.api === 'saveStays') type('[data-stay-field="in"]', '2015-08-18');
+          type(spec.field, spec.value);
+          submit(); submit();
+          await tick();
+          eq(calls.map(c => c[0]), [spec.api], '重複送出只呼叫一次：');
+          eq([document.querySelector(spec.field).disabled, document.querySelector('#' + spec.form + ' [type="submit"], [form="' + spec.form + '"]').textContent], [true, '儲存中…'], '儲存中：');
+          release(); await tick(); await tick();
+          eq([document.querySelector(spec.field).value, document.querySelector('#' + spec.form + ' [role="alert"]').textContent], [spec.value, '暫時無法儲存'], '失敗後草稿與錯誤：');
+          submit(); await tick();
+          eq([calls.length, document.querySelector('#' + spec.form + ' [role="alert"]'), document.querySelector(spec.field).value], [2, null, spec.value], '重試保留草稿並清掉錯誤：');
+          release(); await tick(); await tick();
+          document.getElementById(spec.cancel).click();
+          eq(document.getElementById(spec.form), null, '取消關掉表單：');
+        } finally {
+          if (release) { release(); await tick(); }
+          hideDetail(); hideToast(); restoreApi();
+        }
+      });
+    }
     await check('找狗的「最久沒溜的狗」、分析頁「超過 3 天沒溜」不算休養中的狗', () => {
       const due = dueDogs(allDogs, T).filter(d => { const st = computeStatus(d, T); return st.kind === 'unknown' || (st.kind === 'dated' && st.days >= AMBER_DAYS); });
       eq(due.map(d => d.name), [], '最久沒溜：');
@@ -4579,11 +4620,11 @@ async function runTourLayoutTests() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js', '../public/js/dates.js', '../public/js/api.js', '../public/js/store.js', '../public/js/walk-flow.js'].map(u => fetch(u).then(res => {
+Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js', '../public/js/dates.js', '../public/js/api.js', '../public/js/store.js', '../public/js/walk-flow.js', '../public/js/detail-editor.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs]) => {
+  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs]) => {
     const dates = document.createElement('script'); dates.textContent = datesJs; document.body.appendChild(dates);
     API_JS = apiJs;
     const api = document.createElement('script'); api.textContent = apiJs; document.body.appendChild(api);
@@ -4601,6 +4642,7 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     const dv = document.createElement('script'); dv.textContent = detailViewportJs; document.body.appendChild(dv);
     const wr = document.createElement('script'); wr.textContent = walkRegistrationJs; document.body.appendChild(wr);
     const wf = document.createElement('script'); wf.textContent = walkFlowJs; document.body.appendChild(wf);
+    const de = document.createElement('script'); de.textContent = detailEditorJs; document.body.appendChild(de);
     const s = document.createElement('script');
     s.textContent = js;
     document.body.appendChild(s);

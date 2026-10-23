@@ -6,7 +6,8 @@
 - `api.js`：`BQApi` 後端用戶端，每個 /api 端點一個函式，非 2xx、非 JSON、斷線都回同一形狀 { ok, status, data, error, message }，並接手主頁提前讀的狗清單；網頁測試替換它假裝後端；無檔案依賴；index、cards、edits 在 dates 後載入。
 - `store.js`：`BQStore` 集中所有 `bq-*` 手機資料鍵與字串／JSON 讀寫，可注入假儲存空間；無法存取時逐鍵退回記憶體，寫入／移除回傳是否存入持久儲存；無檔案依賴；index、cards、edits 在 api 後載入。
 - `site-config.js`：`SITE` 收容所設定；無檔案依賴；index、cards 載入。
-- `app.js`：主頁資料、狗卡詳細資訊、身分與溜狗操作；依賴 dates、api、store、site-config、detail-viewport、walk-flow，搭配後載入的頁面檔案；index 載入。
+- `detail-editor.js`：詳細資訊五種編輯器共用的草稿、儲存中、錯誤與重畫狀態；由主頁注入重畫函式，驗證、API 與焦點由主頁負責；無檔案依賴；index 在 app 前載入。
+- `app.js`：主頁資料、狗卡詳細資訊、身分與溜狗操作；依賴 dates、api、store、site-config、detail-editor、detail-viewport、walk-flow，搭配後載入的頁面檔案；index 載入。
 - `analysis.js`：分析、離所名冊與資訊頁；依賴 dates、api、store、app，搭配 activities；index 在 app 後載入。
 - `cards.js`：圖鑑、開卡與已出所狗卡，保留卡片專用顯示格式；依賴 dates、api、store、site-config；cards 載入。
 - `activities.js`：活動紀錄及已出所狗卡的編輯；依賴 dates、api、app、analysis；index 載入。
