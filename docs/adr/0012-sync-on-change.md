@@ -1,6 +1,7 @@
 # 0012 同步改成「有改才同步＋每天保險一次」
 
 > 2026-10-23 已由 [ADR 0018](0018-today-walks-d1-event-sync.md) 修訂：今日溜狗以 D1 為準、有人編輯才同步。
+> #501 起整份取代：狗清單也改成 GAS 編輯觸發送 Worker（`worker/src/dog-list.js`），`sync-sheet.yml`、Worker 的 `syncTick`／`planTick`／`triggerSync`、試算表指紋輪詢都已移除。
 
 日期：2026-10-16（K 決定，#305）
 

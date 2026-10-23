@@ -59,11 +59,10 @@ export async function scanWalks(env,now) {
 }
 
 // 有人編輯（#500，ADR 0018）：GAS 在同一 script lock 內直接讀出受影響的列送來，Worker 只比這幾隻，不回頭讀整張表。
-// 換籠、出現在「已出所」等非溜狗欄位交給狗清單同步（markChanged）；同狗兩處都有，GAS 已合併成最後出現的那筆。
+// 換籠、出現在「已出所」等非溜狗欄位由狗清單編輯觸發另外送（#501，worker/src/dog-list.js），這裡只回 ack。
 // ack：Worker 已持久接手（更新、無差異，或已記進 v3_walk_conflicts）；D1 失敗或功能開關關閉回 false，讓 GAS 保留待通知版本，開啟後補送。
-export async function reconcileEditedRows(db, rows, env, markChanged) {
+export async function reconcileEditedRows(db, rows, env) {
   const walks = env.D1_WALK_NOTIFY === '1';
-  if (!walks || rows.some(row => row.sheet !== 'main' || row.other)) await markChanged(db);
   const results = [];
   for (const row of rows) {
     if (row.sheet !== 'main' || !row.current) { results.push({ ok:true, ack:true }); continue; }

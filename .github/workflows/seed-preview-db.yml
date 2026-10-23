@@ -1,8 +1,7 @@
 # 預覽測試庫補資料：PR 預覽網址綁的是隔離測試 D1（bq-shelter-dogs-test，#214），原本是空的，預覽畫面會顯示「狗的資料讀不到」
 # - 只能手動跑：Actions 頁選「準備預覽資料庫」→「Run workflow」。第一次跑建表＋匯入，之後想讓預覽資料跟上試算表再跑一次
-# - 只寫測試庫，不碰正式 D1：建表指令和同步都明確帶 wrangler.preview-db.jsonc，同步程式只接受正式庫或測試庫兩個名字（scripts/sync-compact-d1.mjs 的 d1Target）
-# - 資料來源是試算表（跟正式同步同一份），所以溜狗紀錄只有試算表上那一段；網站直接寫的資料只補「有人固定照顧」（從正式庫只讀名單），休養、介紹、開卡、照片設定不會有
-# - 第一次是全量匯入，列數遠超過平常同步的單次門檻，這裡把單次門檻放寬；每天整個帳號的寫入預算照舊檢查（ADR 0008）
+# - 只寫測試庫，不碰正式 D1：建表指令明確帶 wrangler.preview-db.jsonc
+# - #501 起不再從試算表匯入（試算表同步退出 Actions）：只建表、補欄位、補固定照顧，測試庫保留既有資料（預覽版 Worker 不收寫回，無法用 GAS 灌；要更新預覽資料另開票）
 name: 準備預覽資料庫
 
 on:
@@ -10,11 +9,6 @@ on:
 
 permissions:
   contents: read
-
-# 跟正式同步共用同一個鎖，兩邊不同時寫 D1、也不同時算帳號寫入量
-concurrency:
-  group: sync-sheet
-  cancel-in-progress: false
 
 jobs:
   seed:
@@ -40,17 +34,6 @@ jobs:
       # 測試庫的表比後來加的欄位（例：v3_dogs.fixed_care）早建，CREATE TABLE IF NOT EXISTS 補不到，缺了預覽讀狗會 no such column
       - name: 測試庫補欄位
         run: node scripts/migrate-compact-db.mjs
-
-      - name: 從試算表匯入測試庫
-        env:
-          SYNC_D1: bq-shelter-dogs-test
-          SYNC_MODE: full
-          SYNC_MAX_ROWS: '50000'
-          SYNC_DAILY_BUDGET: ${{ vars.SYNC_DAILY_BUDGET }}
-          SHEET_ID: ${{ secrets.SHEET_ID }}
-          MY_NAME: ${{ secrets.MY_NAME }}
-          WALKER_KEY: ${{ secrets.WALKER_KEY }}
-        run: node scripts/sync-compact-d1.mjs
 
       # 「有人固定照顧」是網站寫進正式庫的，試算表沒有；照正式庫的名單補到測試庫（正式庫只讀）
       - name: 測試庫補固定照顧
