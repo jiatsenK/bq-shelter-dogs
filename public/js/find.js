@@ -83,7 +83,7 @@ function findSorted(dogs) {
 }
 
 function findList(query, zone = findZone) {
-  return findSorted(allDogs.filter(d => findMatches(d, query) && (zone === 'all' || (zone === 'fav' ? isFav(d) : findZoneOf(d) === zone))));
+  return findSorted(allDogs.filter(d => findMatches(d, query) && (zone === 'all' || (zone === 'fav' ? favorites.isFav(d) : findZoneOf(d) === zone))));
 }
 
 // 搜尋命中的字標黃；比對時忽略空白、全形半形，對不回原文位置時就不標
@@ -102,7 +102,7 @@ function findDogHtml(dog, query) {
   const q = searchKey(query);
   const idHit = q && dog.id && !searchKey(dog.name).includes(q) && [dog.id, ...(dog.formerIds || [])].some(v => searchKey(v).includes(q));
   const flag = specialFlag(dog.note);
-  return `<button type="button" class="find-dog find-row-dog" data-dog="${allDogs.indexOf(dog)}" aria-haspopup="dialog">${photoThumb(dog, 32)}<span class="find-name"><span class="n">${findMark(dog.name, query)}</span>${sexMark(dog)}${isFav(dog) ? '<i class="fav-mark" role="img" aria-label="我的常溜">★</i>' : ''}</span>${idHit ? `<small class="find-row-id">${findMark(dog.id, query)}</small>` : ''}${flag ? `<span class="find-row-warn" role="img" aria-label="注意" title="注意">${icon('warn')}</span>` : ''}</button>`;
+  return `<button type="button" class="find-dog find-row-dog" data-dog="${allDogs.indexOf(dog)}" aria-haspopup="dialog">${photoThumb(dog, 32)}<span class="find-name"><span class="n">${findMark(dog.name, query)}</span>${sexMark(dog)}${favorites.isFav(dog) ? '<i class="fav-mark" role="img" aria-label="我的常溜">★</i>' : ''}</span>${idHit ? `<small class="find-row-id">${findMark(dog.id, query)}</small>` : ''}${flag ? `<span class="find-row-warn" role="img" aria-label="注意" title="注意">${icon('warn')}</span>` : ''}</button>`;
 }
 
 // 一個籠位一列：籠位在左、這籠的狗排在右邊，名字多就換行
@@ -124,7 +124,7 @@ function findChipsHtml(query) {
     `<button type="button" class="find-chip${findZone === key ? ' on' : ''}" data-find-zone="${key}" aria-pressed="${findZone === key}">${label}<small>${n}</small></button>`;
   // 平面圖本身就能選區，不再多一排區域（2026-10-08）；只留「★ 我的常溜」，按了換成列表
   const mapMode = findView === 'map' && findZone !== 'fav';
-  const favChip = chip('fav', '★ 我的常溜', inQuery.filter(isFav).length);
+  const favChip = chip('fav', '★ 我的常溜', inQuery.filter(favorites.isFav).length);
   return `<div class="find-bar">
     <div class="find-top">
       <div class="find-view" role="group" aria-label="顯示方式">

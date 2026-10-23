@@ -268,7 +268,7 @@ function saveMyCodes(codes) {
     else if (phoneStore) phoneStore.remove(WALKER_CODES_KEY);
   } catch (e) { /* 存不了就只記在記憶體 */ }
   try { myWalks = walksData ? parseMyWalks(walksData, codes) : []; } catch (e) { myWalks = []; }
-  syncFavs();
+  favorites.syncFavs();
 }
 
 // 名字送 Worker 換代號：回 { codes } 或 { codes: [], error: 原因 }
@@ -802,126 +802,8 @@ function walkedToday(today = new Date()) {
 // 回傳真的有變的狗和 undo（回到記之前的樣子）；都沒變就不寫入
 function recordWalked(dogs, on, today = new Date()) { return walkRecords.recordWalked(dogs, on, today); }
 
-// ── 我的常溜（#267）：逐隻增刪，絕不把手機上的舊整份清單蓋到 D1 ──
-const FAVS_KEY = BQStore.keys.favs;
-const FAV_SYNC_KEY = BQStore.keys.favsSync;
-let favSyncMemory = null;
-let favSyncQueue = Promise.resolve();
-function favState() {
-  if (!favSyncMemory) {
-    const saved = phoneStore.readJson(FAV_SYNC_KEY);
-    favSyncMemory = saved && saved.v === 1 ? saved : { v: 1, aliases: {}, books: {}, pending: [] };
-  }
-  return favSyncMemory;
-}
-function saveFavState() { phoneStore.writeJson(FAV_SYNC_KEY, favState()); }
-function localFavs() { const v = phoneStore.readJson(FAVS_KEY); return Array.isArray(v) ? v.map(String) : []; }
-function favoriteIds() {
-  const state = favState(), codes = loadMyCodes();
-  const ids = new Set(state.books[codes.join(',')] || []);
-  for (const op of state.pending) {
-    if (!op.codes.some(c => codes.includes(c))) continue;
-    if (op.on) ids.add(op.dogId); else ids.delete(op.dogId);
-  }
-  return ids;
-}
-function loadFavs() {
-  const ids = favoriteIds(), aliases = favState().aliases;
-  return [...new Set([...localFavs(), ...allDogs.filter(d => ids.has(aliases[walkKey(d)])).map(walkKey)])];
-}
-function isFav(dog) { const k = walkKey(dog); return !!k && loadFavs().includes(k); }
-function toggleFav(dog) {
-  const k = walkKey(dog);
-  if (!k) return;
-  const on = !isFav(dog), codes = loadMyCodes(), state = favState();
-  state.localVersions ||= {};
-  state.localVersions[k] = (state.localVersions[k] || 0) + 1;
-  saveFavState();
-  const dogId = state.aliases[k];
-  if (codes.length && dogId) {
-    // 讀取合併所有名字；取消時也要取消各個名字底下的這隻狗。
-    state.pending.push({ codes: [codes[0]], dogId, on });
-    phoneStore.writeJson(FAVS_KEY, localFavs().filter(x => state.aliases[x] !== dogId && x !== k));
-    saveFavState();
-  } else {
-    phoneStore.writeJson(FAVS_KEY, on ? [k, ...localFavs()] : localFavs().filter(x => x !== k));
-  }
-  syncFavs();
-}
-
-// 核心只操作收藏狀態；儲存、傳輸由呼叫者提供，不依賴畫面或瀏覽器。
-async function reconcileFavorites(state, codes, io) {
-  const out = await io.read(codes);
-  if (io.codes().join(',') !== codes.join(',')) return;
-  // 只收到常溜的狗和問到的舊鍵（#406）；還沒送出的操作用到的對照留著
-  const waiting = new Set(state.pending.map(op => op.dogId));
-  state.aliases = { ...Object.fromEntries(Object.entries(state.aliases).filter(([, id]) => waiting.has(id))), ...out.aliases };
-  const bookKey = codes.join(',');
-  state.books[bookKey] = out.ids;
-  for (const key of io.local()) {
-    const dogId = state.aliases[key];
-    if (!dogId) continue;
-    let op = state.pending.slice().reverse().find(op => op.dogId === dogId && op.codes.includes(codes[0]));
-    if (!op || !op.on) {
-      op = { codes: [codes[0]], dogId, on: true };
-      state.pending.push(op);
-    }
-    op.legacy ||= {};
-    op.legacy[key] = state.localVersions?.[key] || 0;
-  }
-  io.save();
-  while (state.pending.length) {
-    const op = state.pending[0];
-    await io.write({ codes: op.codes, dogId: op.dogId, on: op.on });
-    // 只清除此筆搬移的原始收藏；等待期間新按的訪客收藏保留。
-    io.removeLegacy(key => Object.hasOwn(op.legacy || {}, key)
-      && (state.localVersions?.[key] || 0) === op.legacy[key]);
-    state.pending.shift();
-    if (op.codes.some(c => codes.includes(c))) {
-      const ids = new Set(state.books[bookKey]);
-      if (op.on) ids.add(op.dogId); else ids.delete(op.dogId);
-      state.books[bookKey] = [...ids];
-    }
-    io.save();
-  }
-}
-
-async function favoriteRequest(codes, op) {
-  // 手機還有舊格式（編號／狗名）常溜時才帶 key，讓 Worker 換成狗 ID
-  const r = op ? await BQApi.saveFavorite({ ...op, codes: op.codes.slice(0, 1) })
-    : await BQApi.favorites('codes=' + encodeURIComponent(codes[0]) + localFavs().map(k => '&key=' + encodeURIComponent(k)).join(''));
-  if (r.error === 'network' || !r.data) throw new Error(r.message);
-  const out = r.data;
-  if (!r.ok || !out.ok || (!op && (!Array.isArray(out.ids) || !out.aliases))) throw new Error('常溜同步失敗');
-  return out;
-}
-
-function syncFavs() {
-  // 串行保留點擊順序；失敗的操作下次打開或恢復連線再試。
-  favSyncQueue = favSyncQueue.then(async () => {
-    let codes = loadMyCodes();
-    if (!codes.length || !UPLOAD_URL) return;
-    const original = codes.join(','), name = loadWalkerName();
-    if (name) {
-      const out = await BQWelcome.request('', { name });
-      if (loadMyCodes().join(',') !== original || loadWalkerName() !== name) return;
-      saveWalkerName(out.identity.name);
-      walkerCodesMemory = out.identity.codes;
-      try { phoneStore?.writeJson(WALKER_CODES_KEY, out.identity.codes); } catch (e) { /* 本次仍可使用 */ }
-      codes = out.identity.codes;
-      myWalks = walksData ? parseMyWalks(walksData, codes) : [];
-    }
-    await reconcileFavorites(favState(), codes, {
-      codes: loadMyCodes, local: localFavs, save: saveFavState,
-      read: codes => favoriteRequest(codes), write: op => favoriteRequest(null, op),
-      removeLegacy: matches => phoneStore.writeJson(FAVS_KEY, localFavs().filter(key => !matches(key))),
-    });
-    if (loadMyCodes().join(',') === codes.join(',')) { render(); renderDetail(); }
-  }).catch(() => {
-    if (loadMyCodes().length) BQWalkUI.showToast('常溜暫存在這支手機，連線恢復後會再同步');
-  });
-  return favSyncQueue;
-}
+// 我的常溜的快取、排隊及同步由 favorites.js 管理。
+let favorites = BQFavorites.create();
 
 // ── 按「溜了」寫進試算表（#138）──
 // 經過 Worker 的 /walk 轉給 K 部署的 Google Apps Script，只改主清單的「遛狗日期」「誰遛的」。
@@ -1197,7 +1079,7 @@ function dogCard(dog, today, eager = false) {
 // 詳細資訊名字旁的「☆ 常溜」／「★ 我的常溜」
 function favButtonHtml(dog) {
   if (!walkKey(dog) || dog.departure) return '';
-  const on = isFav(dog);
+  const on = favorites.isFav(dog);
   return `<button type="button" class="fav-btn${on ? ' on' : ''}" id="favToggle" aria-pressed="${on}">${on ? '★ 我的常溜' : '☆ 常溜'}</button>`;
 }
 
@@ -1784,7 +1666,7 @@ const DETAIL_CLICKS = [
     const n = el.dataset.whoRemove;
     BQWalkUI.editWalkers(detailDog, walkerList(detailDog).filter(x => x !== n), `已拿掉 ${n}`);
   }],
-  ['#favToggle', () => { toggleFav(detailDog); renderDetail(); render(); }],
+  ['#favToggle', () => { favorites.toggleFav(detailDog); renderDetail(); render(); }],
   ['#detailBack', () => { const d = detailTrail.pop(); if (d) showDetail(d, false); }],
   ['[data-departed-back]', el => { const d = allDogs[el.dataset.departedBack]; if (d) showDetail(d); }],
   ['#detailWhere', el => whereOpen(detailDog, el)],
@@ -2386,12 +2268,12 @@ function renderMain() {
     return;
   }
   const fav = loadWalkFav();
-  const list = fav ? walkList.filter(isFav) : walkList;
+  const list = fav ? walkList.filter(favorites.isFav) : walkList;
   const view = loadWalkView();
   const items = view === 'list'
     ? (list.length ? `<div class="rows"><div class="row-head"><span>天數</span><span>狗名</span><span>籠位</span><span></span></div>${list.map(d => walkRow(d, today)).join('')}</div>` : '')
     : list.map((d, i) => dogCard(d, today, i < FIRST_SCREEN_CARDS)).join('');
-  const head = walkToolsHtml(walkFilterHtml(walkList.length, fav, walkList.filter(isFav).length), view);
+  const head = walkToolsHtml(walkFilterHtml(walkList.length, fav, walkList.filter(favorites.isFav).length), view);
   const empty = fav && !list.length && !q ? '還沒有常溜的狗。<br>點狗打開詳細資訊，<br>按名字旁的「☆ 常溜」加進來。'
     : q ? `找不到「${esc(q)}」` : '沒有符合的狗';
   main.innerHTML = head + (q && list.length ? `<div class="section-hint">${icon('search')}搜尋「${esc(q)}」：${list.length} 隻</div>` : '')
@@ -2495,7 +2377,7 @@ function applyDogsData(data) {
   render();
   loadMyWalks();
   loadRest();
-  syncFavs();
+  favorites.syncFavs();
   loadTodayWalks();
   if (detailDog) renderDetail();
 }
@@ -2511,8 +2393,8 @@ function renderUpdatedLabel() {
   el.classList.toggle('offline', off);
 }
 window.addEventListener('offline', () => { renderUpdatedLabel(); render(); renderDetail(); });
-window.addEventListener('online', () => { renderUpdatedLabel(); render(); renderDetail(); loadWalkerNames(); syncFavs(); });
-document.addEventListener('visibilitychange', () => { if (!document.hidden) syncFavs(); });
+window.addEventListener('online', () => { renderUpdatedLabel(); render(); renderDetail(); loadWalkerNames(); favorites.syncFavs(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) favorites.syncFavs(); });
 // 今日溜狗紀錄：顯示在螢幕上時每分鐘抓；鎖螢幕、切到別的 App 時不抓，切回來超過 30 秒就馬上抓
 document.addEventListener('visibilitychange', refreshTodayWalks);
 if (!window.__BQ_TEST__) setInterval(refreshTodayWalks, TODAY_POLL_MS);

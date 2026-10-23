@@ -103,6 +103,7 @@ function guideSpotlights(el) {
 let TOUR_JS = '';
 let WELCOME_JS = '';
 let PHOTO_JS = '';
+let FAVORITES_JS = '';
 let WALK_UI_JS = '';
 let APP_JS = '';    // js/app.js 原始碼（#30 拆檔後程式在這裡）
 let API_JS = '';    // js/api.js 原始碼（#478 呼叫 /api 都在這裡）
@@ -665,7 +666,7 @@ function runTests() {
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
       const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
-      eq(scripts.map(s => s.getAttribute('src')), ['js/dates.js', 'js/api.js', 'js/store.js', 'js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/walk-flow.js', 'js/detail-editor.js', 'js/tour.js', 'js/photo.js', 'js/walk-ui.js', 'js/welcome.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/activities.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定、#270 活動紀錄）：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/dates.js', 'js/api.js', 'js/store.js', 'js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/walk-flow.js', 'js/detail-editor.js', 'js/tour.js', 'js/photo.js', 'js/walk-ui.js', 'js/welcome.js', 'js/favorites.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/activities.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定、#270 活動紀錄）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
@@ -2740,7 +2741,7 @@ async function runTermTests() {
       .replace(/遛狗表|常遛狗群|勿遛|勿蹓|「誰遛的」|'誰遛的'|上次遛/g, ''); // K 2026-10-13 指定左側標題「上次遛」
     const old = ['遛', '移回', '一直收起', '今天先收起', '犬名', '犬隻', '狗狗', '狗卡資訊', '平均隔', '最久隔', '日期異常', '尚無', '已存到 Git', '代號服務'];
     const hits = [];
-    for (const [file, src] of [['index.html', INDEX_HTML.replace(/<!--[\s\S]*?-->/g, '')], ['app.js', APP_JS], ['tour.js', TOUR_JS], ['photo.js', PHOTO_JS], ['walk-ui.js', WALK_UI_JS], ['welcome.js', WELCOME_JS], ['analysis.js', ANALYSIS_JS], ['find.js', FIND_JS]]) {
+    for (const [file, src] of [['index.html', INDEX_HTML.replace(/<!--[\s\S]*?-->/g, '')], ['app.js', APP_JS], ['tour.js', TOUR_JS], ['photo.js', PHOTO_JS], ['walk-ui.js', WALK_UI_JS], ['welcome.js', WELCOME_JS], ['favorites.js', FAVORITES_JS], ['analysis.js', ANALYSIS_JS], ['find.js', FIND_JS]]) {
       const text = shown(src);
       for (const w of old) if (text.includes(w)) hits.push(`${file}：${w}`);
     }
@@ -4015,8 +4016,8 @@ async function runFavTests() {
       hideDetail();
     });
     await check('#155 沒有編號的狗用名字記；重新整理（重讀手機存的）仍保留', () => {
-      toggleFav(allDogs[2]); toggleFav(allDogs[0]);
-      eq(loadFavs(), ['2024100501', '名:常溜丙'], '存的鍵：');
+      favorites.toggleFav(allDogs[2]); favorites.toggleFav(allDogs[0]);
+      eq(favorites.loadFavs(), ['2024100501', '名:常溜丙'], '存的鍵：');
       findZone = 'all'; render();
       eq(chip().textContent, '★ 我的常溜2', '重畫後：');
       eq([...main.querySelectorAll('.find-dog')].filter(b => b.querySelector('.fav-mark')).map(b => b.querySelector('.n').textContent), ['常溜甲', '常溜丙'], '全部列表也標 ★：');
@@ -4040,8 +4041,8 @@ async function runFavTests() {
 }
 
 async function runFavSyncTests() {
-  await favSyncQueue;
-  const saved = [allDogs, phoneStore, walkerCodesMemory, favSyncMemory, UPLOAD_URL];
+  await favorites.whenIdle();
+  const saved = [allDogs, phoneStore, walkerCodesMemory, favorites, UPLOAD_URL];
   const code = 'abcdef123456', alias = '123456abcdef';
   const a = 'a'.repeat(32), b = 'b'.repeat(32);
   const books = { [code]: new Set(), [alias]: new Set() };
@@ -4049,7 +4050,7 @@ async function runFavSyncTests() {
   const calls = [], keyCalls = [];
   let offline = false;
   let pauseWrite = null;
-  const device = () => { phoneStore = fakeStorage(); walkerCodesMemory = null; favSyncMemory = null; };
+  const device = () => { phoneStore = fakeStorage(); walkerCodesMemory = null; favorites = BQFavorites.create(); };
   try {
     UPLOAD_URL = 'https://favorites.test/api';
     fakeApi(async (name, arg) => {
@@ -4073,89 +4074,93 @@ async function runFavSyncTests() {
     device();
     allDogs = [{ name: '甲', id: '2024100501', formerIds: ['2018100501'] }, { name: '無編號', id: '', formerIds: [] }];
     await check('#267 未設定名字可收藏；設定後自動合併舊編號、名字，未知資料保留', async () => {
-      toggleFav(allDogs[0]); await favSyncQueue;
-      eq(isFav(allDogs[0]), true);
+      favorites.toggleFav(allDogs[0]); await favorites.whenIdle();
+      eq(favorites.isFav(allDogs[0]), true);
       eq(calls.length, 0);
-      phoneStore.writeJson(FAVS_KEY, ['2018100501', '名:無編號', '無法辨識']);
-      saveMyCodes([code, alias]); await favSyncQueue;
+      phoneStore.writeJson(BQStore.keys.favs, ['2018100501', '名:無編號', '無法辨識']);
+      saveMyCodes([code, alias]); await favorites.whenIdle();
       eq([...books[code]].sort(), [a, b].sort());
       eq([...books[alias]], [], '只寫第一個代號：');
-      eq(localFavs(), ['無法辨識']);
-      eq(allDogs.map(isFav), [true, true]);
+      eq(phoneStore.readJson(BQStore.keys.favs, []), ['無法辨識']);
+      eq(allDogs.map(favorites.isFav), [true, true]);
     });
     await check('#406 沒有舊格式常溜時，讀常溜不帶 key', async () => {
       keyCalls.length = 0;
-      phoneStore.writeJson(FAVS_KEY, []);
-      await syncFavs();
+      phoneStore.writeJson(BQStore.keys.favs, []);
+      await favorites.syncFavs();
       eq(keyCalls, [[]]);
-      eq(allDogs.map(isFav), [true, true], '常溜的狗仍認得：');
-      phoneStore.writeJson(FAVS_KEY, ['無法辨識']);
+      eq(allDogs.map(favorites.isFav), [true, true], '常溜的狗仍認得：');
+      phoneStore.writeJson(BQStore.keys.favs, ['無法辨識']);
     });
     const firstPhone = phoneStore;
     await check('#267 第二台讀回同一份；各自取消不同狗後兩邊改動都保留', async () => {
-      device(); saveMyCodes([code, alias]); await favSyncQueue;
-      eq(allDogs.map(isFav), [true, true]);
-      toggleFav(allDogs[1]); await favSyncQueue;
-      phoneStore = firstPhone; favSyncMemory = null;
-      toggleFav(allDogs[0]); await favSyncQueue;
+      device(); saveMyCodes([code, alias]); await favorites.whenIdle();
+      eq(allDogs.map(favorites.isFav), [true, true]);
+      favorites.toggleFav(allDogs[1]); await favorites.whenIdle();
+      phoneStore = firstPhone; favorites = BQFavorites.create();
+      favorites.toggleFav(allDogs[0]); await favorites.whenIdle();
       eq([...books[code]], []);
-      eq(allDogs.map(isFav), [false, false]);
+      eq(allDogs.map(favorites.isFav), [false, false]);
     });
     await check('#267 離線操作重開仍可重試；換編號仍顯示收藏，清除名字不串資料', async () => {
       offline = true;
-      toggleFav(allDogs[0]); await favSyncQueue;
-      eq(isFav(allDogs[0]), true);
-      favSyncMemory = null;
-      eq(isFav(allDogs[0]), true, '離線操作保存在手機：');
-      offline = false; await syncFavs();
+      favorites.toggleFav(allDogs[0]); await favorites.whenIdle();
+      eq(favorites.isFav(allDogs[0]), true);
+      favorites = BQFavorites.create();
+      eq(favorites.isFav(allDogs[0]), true, '離線操作保存在手機：');
+      offline = false; await favorites.syncFavs();
       eq([...books[code]], [a]);
       aliases = { ...aliases, '2026101601': a };
       allDogs[0] = { ...allDogs[0], id: '2026101601', name: '改名' };
-      await syncFavs();
-      eq(isFav(allDogs[0]), true);
-      saveMyCodes([]); await favSyncQueue;
-      eq(isFav(allDogs[0]), false);
+      await favorites.syncFavs();
+      eq(favorites.isFav(allDogs[0]), true);
+      saveMyCodes([]); await favorites.whenIdle();
+      eq(favorites.isFav(allDogs[0]), false);
     });
     await check('#267 舊搬移回應較慢，不能刪掉清除名字後新加的訪客收藏', async () => {
-      phoneStore.writeJson(FAVS_KEY, ['2026101601']);
+      phoneStore.writeJson(BQStore.keys.favs, ['2026101601']);
       let release, started;
       const waiting = new Promise(resolve => { started = resolve; });
       pauseWrite = () => { started(); return new Promise(resolve => { release = resolve; }); };
       saveMyCodes([code]);
       await waiting;
       saveMyCodes([]);
-      toggleFav(allDogs[0]); // 取消原本的本機收藏
-      toggleFav(allDogs[0]); // 訪客新收藏
+      favorites.toggleFav(allDogs[0]); // 取消原本的本機收藏
+      favorites.toggleFav(allDogs[0]); // 訪客新收藏
       pauseWrite = null; release();
-      await favSyncQueue;
-      eq(localFavs(), ['2026101601']);
-      eq(isFav(allDogs[0]), true);
+      await favorites.whenIdle();
+      eq(phoneStore.readJson(BQStore.keys.favs, []), ['2026101601']);
+      eq(favorites.isFav(allDogs[0]), true);
     });
     await check('#267 離線取消後訪客重新收藏，設回原名字時以較晚的收藏為準', async () => {
-      saveMyCodes([code]); await favSyncQueue;
+      saveMyCodes([code]); await favorites.whenIdle();
       offline = true;
-      toggleFav(allDogs[0]); await favSyncQueue;
-      saveMyCodes([]); await favSyncQueue;
-      toggleFav(allDogs[0]); await favSyncQueue;
-      eq(isFav(allDogs[0]), true);
-      saveMyCodes([code]); await favSyncQueue;
-      offline = false; await syncFavs();
+      favorites.toggleFav(allDogs[0]); await favorites.whenIdle();
+      saveMyCodes([]); await favorites.whenIdle();
+      favorites.toggleFav(allDogs[0]); await favorites.whenIdle();
+      eq(favorites.isFav(allDogs[0]), true);
+      saveMyCodes([code]); await favorites.whenIdle();
+      offline = false; await favorites.syncFavs();
       eq([...books[code]], [a]);
-      eq(isFav(allDogs[0]), true);
-      eq(localFavs(), []);
+      eq(favorites.isFav(allDogs[0]), true);
+      eq(phoneStore.readJson(BQStore.keys.favs, []), []);
     });
     await check('#267 多次更名有九個代號仍可取消常溜，舊待送操作也只以單碼送出', async () => {
       device(); books[code] = new Set([a]);
       const codes = [code, ...Array.from({length:8}, (_, i) => (i+1).toString(16).padStart(12,'0'))];
-      saveMyCodes(codes); await favSyncQueue;
-      toggleFav(allDogs[0]); await favSyncQueue;
+      saveMyCodes(codes); await favorites.whenIdle();
+      favorites.toggleFav(allDogs[0]); await favorites.whenIdle();
       eq([...books[code]], []); eq(calls.at(-1).codes, [code]);
-      await favoriteRequest(null, {codes, dogId:a, on:true});
+      const stored = phoneStore.readJson(BQStore.keys.favsSync);
+      stored.pending.push({ codes, dogId: a, on: true });
+      phoneStore.writeJson(BQStore.keys.favsSync, stored);
+      favorites = BQFavorites.create(); // 重開網頁後重試舊版留下的多代號操作
+      await favorites.syncFavs();
       eq(calls.at(-1).codes, [code], '舊操作也正規化為單碼：');
     });
   } finally {
-    await favSyncQueue;
-    [allDogs, phoneStore, walkerCodesMemory, favSyncMemory, UPLOAD_URL] = saved; restoreApi();
+    await favorites.whenIdle();
+    [allDogs, phoneStore, walkerCodesMemory, favorites, UPLOAD_URL] = saved; restoreApi();
     BQWalkUI.hideToast();
   }
 }
@@ -4182,7 +4187,7 @@ async function runWalkFavTests() {
       if (!main.querySelector('.status-msg').textContent.includes('「☆ 常溜」加進來')) throw new Error('沒收藏的提示不見了');
     });
     await check('#155 溜狗表常溜只列收藏的；按「全部」回來；記在這支手機', () => {
-      toggleFav(allDogs[0]); toggleFav(allDogs[1]);
+      favorites.toggleFav(allDogs[0]); favorites.toggleFav(allDogs[1]);
       render();
       eq([favChip().textContent, names().sort()], ['★ 我的常溜2', ['常溜一', '常溜二']], '常溜：');
       main.querySelector('[data-walk-fav="0"]').click();
@@ -4690,11 +4695,11 @@ async function runTourLayoutTests() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js', '../public/js/dates.js', '../public/js/api.js', '../public/js/store.js', '../public/js/walk-flow.js', '../public/js/detail-editor.js', '../public/js/tour.js', '../public/js/photo.js', '../public/js/walk-ui.js', '../public/js/welcome.js'].map(u => fetch(u).then(res => {
+Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js', '../public/js/dates.js', '../public/js/api.js', '../public/js/store.js', '../public/js/walk-flow.js', '../public/js/detail-editor.js', '../public/js/tour.js', '../public/js/photo.js', '../public/js/walk-ui.js', '../public/js/welcome.js', '../public/js/favorites.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs, tourJs, photoJs, walkUiJs, welcomeJs]) => {
+  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs, tourJs, photoJs, walkUiJs, welcomeJs, favoritesJs]) => {
     const dates = document.createElement('script'); dates.textContent = datesJs; document.body.appendChild(dates);
     API_JS = apiJs;
     const api = document.createElement('script'); api.textContent = apiJs; document.body.appendChild(api);
@@ -4712,6 +4717,7 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     PHOTO_JS = photoJs;
     WALK_UI_JS = walkUiJs;
     WELCOME_JS = welcomeJs;
+    FAVORITES_JS = favoritesJs;
     DOGS_JSON = JSON.parse(dogsJson);
     const dv = document.createElement('script'); dv.textContent = detailViewportJs; document.body.appendChild(dv);
     const wr = document.createElement('script'); wr.textContent = walkRegistrationJs; document.body.appendChild(wr);
@@ -4721,6 +4727,7 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     const photo = document.createElement('script'); photo.textContent = photoJs; document.body.appendChild(photo);
     const walkUi = document.createElement('script'); walkUi.textContent = walkUiJs; document.body.appendChild(walkUi);
     const welcome = document.createElement('script'); welcome.textContent = welcomeJs; document.body.appendChild(welcome);
+    const fav = document.createElement('script'); fav.textContent = favoritesJs; document.body.appendChild(fav);
     const s = document.createElement('script');
     s.textContent = js;
     document.body.appendChild(s);
