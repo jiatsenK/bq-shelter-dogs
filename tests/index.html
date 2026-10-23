@@ -101,6 +101,7 @@ function guideSpotlights(el) {
 }
 
 let TOUR_JS = '';
+let PHOTO_JS = '';
 let APP_JS = '';    // js/app.js 原始碼（#30 拆檔後程式在這裡）
 let API_JS = '';    // js/api.js 原始碼（#478 呼叫 /api 都在這裡）
 let ANALYSIS_JS = ''; // js/analysis.js 原始碼（#59 分析頁）
@@ -256,7 +257,7 @@ function runTests() {
       // #478 起呼叫 /api 都經過 js/api.js 的 BQApi；app.js 不直接 fetch
       if (/\bfetch\(/.test(APP_JS)) throw new Error('app.js 不直接呼叫 fetch，要經過 BQApi');
       // V9（#141）拿掉我的備註，網站不再寫 /notes
-      if (/\/notes/.test(APP_JS + API_JS)) throw new Error('我的備註已拿掉，不該再讀寫 /notes');
+      if (/\/notes/.test(APP_JS + PHOTO_JS + API_JS)) throw new Error('我的備註已拿掉，不該再讀寫 /notes');
       // 寫入都送到同網址的 Worker（不是試算表）：照片（#48）、換代號（#96）、更新（只讀試算表）、溜了與備註（#138、#281）、
       // 休養、入所介紹、舊編號（#289）、出入所紀錄（#333）、常溜、身分（#267）、固定照顧、狗群、活動紀錄、開卡
       const writes = [...API_JS.matchAll(/send\('(POST|PUT)', `?'?(\/[\w/-]+)|send\(method, `(\/[\w-]+)|fetch\(`\$\{root\(\)\}(\/[\w-]+)/g)].map(m => m[2] || m[3] || m[4]).sort();
@@ -662,7 +663,7 @@ function runTests() {
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
       const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
-      eq(scripts.map(s => s.getAttribute('src')), ['js/dates.js', 'js/api.js', 'js/store.js', 'js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/walk-flow.js', 'js/detail-editor.js', 'js/tour.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/activities.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定、#270 活動紀錄）：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/dates.js', 'js/api.js', 'js/store.js', 'js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/walk-flow.js', 'js/detail-editor.js', 'js/tour.js', 'js/photo.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/activities.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定、#270 活動紀錄）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
@@ -873,6 +874,28 @@ async function runSerialTests() {
 }
 
 // #46 照片燈箱：會開關燈箱、動到瀏覽器上一頁紀錄，所以也一項一項跑
+// 照片測試走檔案選擇、預覽與確認按鈕，不讀取編輯器內部狀態。
+const previewUrl = () => document.querySelector('#detail .photo-preview')?.getAttribute('src') || null;
+const previewBlob = async () => (await fetch(previewUrl())).blob();
+const cropIsOpen = () => !!document.getElementById('cropper') && !document.getElementById('cropper').hidden;
+async function photoUntil(ok, what) {
+  for (let i = 0; i < 200; i++) { if (ok()) return; await new Promise(r => setTimeout(r, 10)); }
+  throw new Error('等不到' + what);
+}
+async function selectPhoto(file) {
+  hideToast();
+  document.getElementById('photoPick').click();
+  const input = document.getElementById('photoFile');
+  const files = new DataTransfer(); files.items.add(file); input.files = files.files;
+  input.dispatchEvent(new Event('change', { bubbles: true }));
+  await photoUntil(() => previewUrl() || !document.getElementById('toast').hidden, '照片預覽或錯誤');
+}
+async function confirmPhoto() {
+  document.getElementById('photoConfirm').click();
+  await photoUntil(() => !document.getElementById('photoConfirm')?.disabled, '上傳結果');
+}
+function cancelPhoto() { document.getElementById('photoCancel')?.click(); }
+
 async function runPhotoTests() {
   const saved = [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords];
   const PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
@@ -996,33 +1019,33 @@ async function runPhotoTests() {
       });
       await check('#48 選照片後壓成 JPEG（長邊 1280）並預覽，只有「裁切」「確認上傳」與取消；取消回到原狀', async () => {
         showDetail(allDogs[0]);
-        await preparePhoto(allDogs[0], await makeFile(3000, 1500));
-        eq(photoUpload && photoUpload.blob.type, 'image/jpeg', '格式：');
-        eq(await blobSize(photoUpload.blob), [1280, 640], '尺寸：');
+        await selectPhoto(await makeFile(3000, 1500));
+        eq((await previewBlob()).type, 'image/jpeg', '格式：');
+        eq(await blobSize(await previewBlob()), [1280, 640], '尺寸：');
         const preview = document.querySelector('#detail .photo-preview');
-        eq(preview && preview.getAttribute('src'), photoUpload.url, '預覽：');
+        eq(preview && preview.getAttribute('src'), previewUrl(), '預覽：');
         // 相簿批次上傳那次起多了「裁切」（相簿 K 2026-10-09 拿掉，主照片的裁切留著）
         eq([...document.querySelectorAll('#detail .photo-upload button')].map(b => b.textContent.trim()), ['裁切'], '照片下方：');
         // #146：確認上傳、取消在底部那列（溜了先收起來）
         eq([...document.querySelectorAll('#detail .detail-bar button')].map(b => b.textContent.trim()), ['取消換照片', '確認上傳'], '底部：');
         eq(document.activeElement.id, 'photoConfirm', '焦點在確認上傳：');
         document.getElementById('photoCancel').click();
-        eq([photoUpload, !!document.getElementById('photoPick')], [null, true], '取消後：');
-        await preparePhoto(allDogs[0], await makeFile(200, 300));
-        eq(await blobSize(photoUpload.blob), [200, 300], '小照片不放大：');
+        eq([previewUrl(), !!document.getElementById('photoPick')], [null, true], '取消後：');
+        await selectPhoto(await makeFile(200, 300));
+        eq(await blobSize(await previewBlob()), [200, 300], '小照片不放大：');
         hideDetail();
-        eq(photoUpload, null, '關掉詳細資訊就丟掉預覽：');
+        eq(previewUrl(), null, '關掉詳細資訊就丟掉預覽：');
       });
       await check('2026-10-04 主照片預覽就在大照片的位置、用一樣的框裁切，下面附狗卡上的小照片；取消後換回原照片', async () => {
         showDetail(allDogs[0]);
-        await preparePhoto(allDogs[0], await makeFile(1200, 400));
+        await selectPhoto(await makeFile(1200, 400));
         const hero = document.querySelector('#detail .detail-head .photo-wrap.hero');
-        eq([hero.classList.contains('pending'), hero.querySelector('.photo-preview').getAttribute('src'), hero.querySelector('.hero-tag').textContent], [true, photoUpload.url, '預覽'], '大照片位置換成預覽：');
+        eq([hero.classList.contains('pending'), hero.querySelector('.photo-preview').getAttribute('src'), hero.querySelector('.hero-tag').textContent], [true, previewUrl(), '預覽'], '大照片位置換成預覽：');
         eq([hero.querySelector('#photoPick'), hero.querySelector('[data-zoom]')], [null, null], '預覽時沒有相機鈕、不開燈箱：');
         // 測試頁沒載入樣式，改檢查用的是同一組樣式：大照片用 .detail-head .photo-wrap.hero .thumb（正方形、置中），小照片跟狗卡一樣 64×64
         eq(hero.querySelector('img').matches('.detail-head .photo-wrap.hero .thumb img'), true, '大照片跟上傳後同一個框：');
         const small = document.querySelector('#detail .photo-upload .card-thumb');
-        eq([small.classList.contains('thumb'), small.querySelector('img').getAttribute('src')], [true, photoUpload.url], '狗卡小照片：');
+        eq([small.classList.contains('thumb'), small.querySelector('img').getAttribute('src')], [true, previewUrl()], '狗卡小照片：');
         const css = await fetch('../public/css/app.css').then(r => r.text());
         const size = sel => (css.match(new RegExp(sel.replace(/[.]/g, '\\.') + ' \\{ width: (\\d+px); height: (\\d+px)')) || []).slice(1);
         eq(size('.photo-preview-row .card-thumb'), size('.card .thumb'), '小照片跟狗卡一樣大：');
@@ -1035,8 +1058,8 @@ async function runPhotoTests() {
       });
       await check('#48 不是圖片的檔案：顯示錯誤、不出現預覽', async () => {
         showDetail(allDogs[0]);
-        await preparePhoto(allDogs[0], new File(['hello'], 'a.txt', { type: 'text/plain' }));
-        eq(photoUpload, null, '沒有預覽：');
+        await selectPhoto(new File(['hello'], 'a.txt', { type: 'text/plain' }));
+        eq(previewUrl(), null, '沒有預覽：');
         if (!toastText().includes('請選擇照片檔')) throw new Error(`提示：${toastText()}`);
         hideToast(); hideDetail();
       });
@@ -1044,19 +1067,19 @@ async function runPhotoTests() {
         photoOverrides['9101'] = PX;
         render();
         showDetail(allDogs[0]);
-        await preparePhoto(allDogs[0], await makeFile(800, 600));
-        const url = photoUpload.url, blob = photoUpload.blob;
+        await selectPhoto(await makeFile(800, 600));
+        const url = previewUrl(), blob = await previewBlob();
         let release;
         const calls = fakeApi(() => new Promise(r => { release = () => r(apiJson({ ok: true, id: '9101', replaced: true })); }));
         document.getElementById('photoConfirm').click();
         await tick();
         const btn = document.getElementById('photoConfirm');
-        btn.click(); await uploadPhoto();
+        btn.click(); document.getElementById('photoConfirm').click();
         eq(calls.length, 1, '上傳中重按仍只送一張：');
         eq([btn.disabled, btn.textContent.trim(), document.getElementById('photoCancel')], [true, '上傳中…', null], '上傳中：');
         release(); await tick(); await tick();
         eq(calls.length, 1, '呼叫次數：');
-        eq([calls[0][0], calls[0][1], calls[0][2] === blob], ['uploadPhoto', '9101', true], '用編號送照片：');
+        eq([calls[0][0], calls[0][1], calls[0][2].type === blob.type && calls[0][2].size === blob.size], ['uploadPhoto', '9101', true], '用編號送照片：');
         eq(photoOverrides['9101'], url, '記下新照片：');
         eq(cardOf(0).querySelector('.thumb img').getAttribute('src'), url, '狗卡：');
         eq(document.querySelector('#detail [data-zoom] img').getAttribute('src'), url, '詳細資訊：');
@@ -1070,9 +1093,9 @@ async function runPhotoTests() {
         photoOverrides['9101'] = PX;
         render();
         showDetail(allDogs[0]);
-        await preparePhoto(allDogs[0], await makeFile(400, 300));
+        await selectPhoto(await makeFile(400, 300));
         fakeApi(() => apiJson({ ok: false, error: '找不到這個編號的狗狗' }, 404));
-        await uploadPhoto();
+        await confirmPhoto();
         eq(document.querySelector('#detail .photo-error').textContent.trim(), '找不到這個編號的狗狗', '服務回的錯誤：');
         eq(photoOverrides['9101'], PX, '原照片不變：');
         eq(cardOf(0).querySelector('.thumb img').getAttribute('src'), PX, '狗卡照片不變：');
@@ -1081,7 +1104,7 @@ async function runPhotoTests() {
         await tick(); await tick();
         if (!document.querySelector('#detail .photo-error').textContent.includes('請確認網路')) throw new Error('網路錯誤要提示');
         fakeApi(() => new Response('<html>502</html>', { status: 502 }));
-        await uploadPhoto();
+        await confirmPhoto();
         if (!document.querySelector('#detail .photo-error').textContent.includes('原本的照片不受影響')) throw new Error('非 JSON 錯誤也要說原照片沒事');
         eq(photoOverrides['9101'], PX, '原照片仍不變：');
         hideDetail();
@@ -1089,7 +1112,7 @@ async function runPhotoTests() {
     } finally {
       restoreApi();
       UPLOAD_URL = savedUrl;
-      clearPhotoUpload(); hideToast();
+      cancelPhoto(); hideToast();
     }
   } finally {
     hideLightbox(); hideDetail();
@@ -1595,10 +1618,10 @@ async function runCropTests() {
     const ctx = c.getContext('2d'); ctx.fillStyle = '#c33'; ctx.fillRect(0, 0, w / 2, h); ctx.fillStyle = '#33c'; ctx.fillRect(w / 2, 0, w / 2, h); return c.toDataURL('image/png'); };
   const blobSize = blob => new Promise((r, j) => { const img = new Image(); img.onload = () => r([img.naturalWidth, img.naturalHeight]); img.onerror = j; img.src = URL.createObjectURL(blob); });
   const cropEl = () => document.getElementById('cropper');
-  // 開裁切要先等照片 decode 完才出現（CI 慢時超過 50ms）；還沒出現就按 Esc 會關掉詳細資訊、清掉 photoUpload
+  // 開裁切要先等照片 decode 完才出現（CI 慢時超過 50ms）；還沒出現就按 Esc 會關掉詳細資訊、清掉照片預覽
   const until = async (ok, what) => { for (let i = 0; i < 200; i++) { if (ok()) return; await new Promise(r => setTimeout(r, 10)); } throw new Error(`等不到${what}`); };
-  const openCrop = async () => { document.getElementById('photoCrop').click(); await until(() => cropOpen() && cropView && cropView.frame, '裁切畫面出現'); };
-  const doneCrop = async old => { const p = popped(); document.getElementById('cropDone').click(); await p; await until(() => photoUpload && photoUpload.url !== old, '預覽換成裁好的'); };
+  const openCrop = async () => { document.getElementById('photoCrop').click(); await until(() => cropIsOpen() && document.querySelector('#cropper .crop-frame').style.width, '裁切畫面出現'); };
+  const doneCrop = async old => { const p = popped(); document.getElementById('cropDone').click(); await p; await until(() => previewUrl() && previewUrl() !== old, '預覽換成裁好的'); };
   try {
     box.classList.remove('hidden');
     UPLOAD_URL = 'https://worker.test';
@@ -1617,40 +1640,53 @@ async function runCropTests() {
       const p = popped(); closeLightbox(); await p;
       hideDetail();
     });
-    await check('裁切：主照片預覽按「裁切」預設正方形，拖曳不會露出空白，完成後預覽換成裁好的', async () => {
+    await check('裁切：主照片預覽按「裁切」預設正方形，放大、拖曳不會露出空白，完成後預覽換成裁好的', async () => {
       showDetail(allDogs[0]);
       const file = await (await fetch(colorPhoto(800, 400))).blob();
-      await preparePhoto(allDogs[0], new File([file], 'a.png', { type: 'image/png' }));
-      const old = photoUpload.url;
+      await selectPhoto(new File([file], 'a.png', { type: 'image/png' }));
+      const old = previewUrl();
       await openCrop();
-      eq([cropOpen(), cropEl().querySelector('[aria-pressed="true"]').textContent], [true, '正方形'], '開裁切：');
-      cropView.tx += 5000; drawCrop();
-      eq(cropView.tx <= cropView.frame.x, true, '拖太右不露空白：');
+      eq([cropIsOpen(), cropEl().querySelector('[aria-pressed="true"]').textContent], [true, '正方形'], '開裁切：');
+      const stage = cropEl().querySelector('.crop-stage');
+      stage.dispatchEvent(new WheelEvent('wheel', { deltaY: -1, clientX: 100, clientY: 100, bubbles: true, cancelable: true }));
+      // 合成 PointerEvent 沒有瀏覽器的活躍指標，僅略過 capture；移動仍走實際事件處理。
+      const capture = stage.setPointerCapture;
+      try {
+        stage.setPointerCapture = () => {};
+        stage.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, clientX: 100, clientY: 100, bubbles: true }));
+        stage.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientX: 5100, clientY: 100, bubbles: true }));
+        stage.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, bubbles: true }));
+      } finally { stage.setPointerCapture = capture; }
+      const frame = cropEl().querySelector('.crop-frame');
+      const image = stage.querySelector('img');
+      const transform = new DOMMatrix(image.style.transform);
+      eq(transform.m41 <= parseFloat(frame.style.left) && transform.m41 + parseFloat(image.style.width) >= parseFloat(frame.style.left) + parseFloat(frame.style.width), true, '放大、拖曳後不露空白：');
       await doneCrop(old);
-      eq([cropOpen(), photoUpload.url !== old], [false, true], '完成：');
-      const [w, h] = await blobSize(photoUpload.blob);
+      eq([cropIsOpen(), previewUrl() !== old], [false, true], '完成：');
+      const [w, h] = await blobSize(await previewBlob());
       eq(Math.abs(w - h) <= 1, true, `正方形（${w}×${h}）：`);
-      clearPhotoUpload();
+      cancelPhoto();
       hideDetail();
     });
     await check('裁切：可換比例；Esc 取消不改照片', async () => {
       showDetail(allDogs[0]);
       const file = await (await fetch(colorPhoto(600, 600))).blob();
-      await preparePhoto(allDogs[0], new File([file], 'a.png', { type: 'image/png' }));
-      const oldUrl = photoUpload.url;
+      await selectPhoto(new File([file], 'a.png', { type: 'image/png' }));
+      const oldUrl = previewUrl();
       await openCrop();
       const p = popped(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); await p;
-      eq([cropOpen(), photoUpload.url], [false, oldUrl], 'Esc 取消：');
+      eq([cropIsOpen(), previewUrl()], [false, oldUrl], 'Esc 取消：');
       await openCrop();
       cropEl().querySelector('[data-aspect="landscape"]').click();
       await doneCrop(oldUrl);
-      const [w, h] = await blobSize(photoUpload.blob);
-      eq([photoUpload.url !== oldUrl, Math.abs(w / h - 4 / 3) < 0.02], [true, true], `換成橫式（${w}×${h}）：`);
-      clearPhotoUpload();
+      const [w, h] = await blobSize(await previewBlob());
+      eq([previewUrl() !== oldUrl, Math.abs(w / h - 4 / 3) < 0.02], [true, true], `換成橫式（${w}×${h}）：`);
+      cancelPhoto();
       hideDetail();
     });
   } finally {
-    hideCropper(); hideLightbox(); hideDetail(); clearPhotoUpload(); hideToast();
+    if (cropIsOpen()) { const p = popped(); document.getElementById('cropCancel').click(); await p; }
+    hideLightbox(); hideDetail(); cancelPhoto(); hideToast();
     delete photoOverrides['9301'];
     box.classList.add('hidden');
     history.replaceState(null, '');
@@ -2699,7 +2735,7 @@ async function runTermTests() {
       .replace(/遛狗表|常遛狗群|勿遛|勿蹓|「誰遛的」|'誰遛的'|上次遛/g, ''); // K 2026-10-13 指定左側標題「上次遛」
     const old = ['遛', '移回', '一直收起', '今天先收起', '犬名', '犬隻', '狗狗', '狗卡資訊', '平均隔', '最久隔', '日期異常', '尚無', '已存到 Git', '代號服務'];
     const hits = [];
-    for (const [file, src] of [['index.html', INDEX_HTML.replace(/<!--[\s\S]*?-->/g, '')], ['app.js', APP_JS], ['tour.js', TOUR_JS], ['analysis.js', ANALYSIS_JS], ['find.js', FIND_JS]]) {
+    for (const [file, src] of [['index.html', INDEX_HTML.replace(/<!--[\s\S]*?-->/g, '')], ['app.js', APP_JS], ['tour.js', TOUR_JS], ['photo.js', PHOTO_JS], ['analysis.js', ANALYSIS_JS], ['find.js', FIND_JS]]) {
       const text = shown(src);
       for (const w of old) if (text.includes(w)) hits.push(`${file}：${w}`);
     }
@@ -3038,8 +3074,8 @@ async function runR2Tests() {
     if (!/make-thumbs\.py --site/.test(thumbs)) throw new Error('縮圖要用 make-thumbs.py --site');
   });
   await check('#130 換照片的提示：照片放 R2 後馬上生效，不再說要等幾分鐘', () => {
-    if (/其他志工幾分鐘內會看到/.test(APP_JS)) throw new Error('提示還寫幾分鐘');
-    if ((APP_JS.match(/其他志工重新整理就會看到/g) || []).length !== 1) throw new Error('主照片的提示要改');
+    if (/其他志工幾分鐘內會看到/.test(APP_JS + PHOTO_JS)) throw new Error('提示還寫幾分鐘');
+    if ((PHOTO_JS.match(/其他志工重新整理就會看到/g) || []).length !== 1) throw new Error('主照片的提示要改');
   });
 }
 
@@ -3837,7 +3873,7 @@ async function runWalkerChipTests() {
 
 // ── #146 選了照片時底部換成取消／確認上傳（K 2026-10-04 選方案一）──
 async function runPhotoBarTests() {
-  const saved = [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL, photoUpload];
+  const saved = [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL];
   const barTexts = () => [...document.querySelectorAll('#detail .detail-bar button')].map(b => b.textContent.trim());
   try {
     allDogs = [{ id: '9951', name: '換照甲', cage: 'A01', note: '', covered: false, walkedDate: null, formerIds: [] }];
@@ -3845,21 +3881,25 @@ async function runPhotoBarTests() {
     phoneStore = fakeStorage(); walkRecords = freshWalkRecords(); UPLOAD_URL = 'https://worker.test';
     render();
     showDetail(allDogs[0]);
-    await check('#146 平常底部是關閉／溜了；選了主照片：底部換成取消換照片／確認上傳（綠色），沒有溜了', () => {
+    await check('#146 平常底部是關閉／溜了；選了主照片：底部換成取消換照片／確認上傳（綠色），沒有溜了', async () => {
       if (!document.getElementById('groupWalk')) throw new Error('平常要有溜了');
-      photoUpload = { dog: allDogs[0], url: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=', blob: null, phase: 'ready' };
-      renderDetail();
+      const file = await (await fetch('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==')).blob();
+      await selectPhoto(new File([file], 'dog.png', { type: 'image/png' }));
       eq(barTexts(), ['取消換照片', '確認上傳'], '底部：');
       if (document.getElementById('groupWalk') || document.getElementById('detailClose')) throw new Error('溜了／關閉要收起來');
       if (!document.querySelector('#detail .detail-bar #photoConfirm.bar-confirm')) throw new Error('確認上傳要用綠色按鈕');
-      photoUpload.phase = 'uploading'; renderDetail();
+      let release;
+      fakeApi(() => new Promise(r => { release = () => r(apiJson({ ok: false, error: '測試取消上傳' }, 400)); }));
+      document.getElementById('photoConfirm').click();
       eq([barTexts(), document.getElementById('photoConfirm').disabled], [['上傳中…'], true], '上傳中：');
-      photoUpload = null; renderDetail();
+      release(); await photoUntil(() => !!document.querySelector('#detail .photo-error'), '上傳結果');
+      cancelPhoto();
       if (!document.getElementById('groupWalk')) throw new Error('取消後溜了回來');
     });
   } finally {
     hideDetail();
-    [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL, photoUpload] = saved;
+    restoreApi(); hideToast();
+    [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL] = saved;
     render();
   }
 }
@@ -4645,11 +4685,11 @@ async function runTourLayoutTests() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js', '../public/js/dates.js', '../public/js/api.js', '../public/js/store.js', '../public/js/walk-flow.js', '../public/js/detail-editor.js', '../public/js/tour.js'].map(u => fetch(u).then(res => {
+Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js', '../public/js/dates.js', '../public/js/api.js', '../public/js/store.js', '../public/js/walk-flow.js', '../public/js/detail-editor.js', '../public/js/tour.js', '../public/js/photo.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs, tourJs]) => {
+  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs, tourJs, photoJs]) => {
     const dates = document.createElement('script'); dates.textContent = datesJs; document.body.appendChild(dates);
     API_JS = apiJs;
     const api = document.createElement('script'); api.textContent = apiJs; document.body.appendChild(api);
@@ -4664,12 +4704,14 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     MANIFEST = JSON.parse(manifest);
     APP_JS = js;
     TOUR_JS = tourJs;
+    PHOTO_JS = photoJs;
     DOGS_JSON = JSON.parse(dogsJson);
     const dv = document.createElement('script'); dv.textContent = detailViewportJs; document.body.appendChild(dv);
     const wr = document.createElement('script'); wr.textContent = walkRegistrationJs; document.body.appendChild(wr);
     const wf = document.createElement('script'); wf.textContent = walkFlowJs; document.body.appendChild(wf);
     const de = document.createElement('script'); de.textContent = detailEditorJs; document.body.appendChild(de);
     const guide = document.createElement('script'); guide.textContent = tourJs; document.body.appendChild(guide);
+    const photo = document.createElement('script'); photo.textContent = photoJs; document.body.appendChild(photo);
     const s = document.createElement('script');
     s.textContent = js;
     document.body.appendChild(s);
