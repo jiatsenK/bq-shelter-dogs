@@ -1,4 +1,4 @@
-import { writeBudget, membersOf } from './walk-accept.js';
+import { writeBudget, membersOf, reconcileWalk } from './walk-accept.js';
 import { callSheet } from './sheet-write.js';
 
 const same = (a,b) => a.date===b.date && a.walker===b.walker;
@@ -58,47 +58,18 @@ export async function scanWalks(env,now) {
   if (next!==known) await env.DB.prepare('INSERT INTO v3_sync_state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(SCAN_SIG,next).run();
 }
 
-// 預算包含控制列、guard 與每日保留量；控制列不是同步成功證明。
-async function transition(db, env, statement) {
-  const result = await db.batch([...await writeBudget(db,env,8),statement,db.prepare('DELETE FROM v3_walk_guard')]);
-  return result[result.length-2].results || [];
-}
-
-// 改表通知＝馬上跑一次保險掃描（#460，原 walkCompare 已刪）。執行中再來的通知合併成跑完後補掃一次；
-// 失敗留 pending，由溜狗對帳排程補跑。
-export async function scanNotifiedWalks(db, env, recoverBefore = '') {
-  const owner = crypto.randomUUID(), started = new Date().toISOString();
-  const claimed = await transition(db,env,db.prepare("UPDATE v3_walk_compare SET status='running',owner=?,again=0,started_at=?,error='' WHERE id=1 AND (status<>'running' OR (started_at<=? AND ?<>'')) RETURNING id").bind(owner,started,recoverBefore,recoverBefore));
-  if (!claimed.length) {
-    await transition(db,env,db.prepare("UPDATE v3_walk_compare SET again=1 WHERE id=1 AND status='running' AND again=0"));
-    return { merged:true };
+// 有人編輯（#500，ADR 0018）：GAS 在同一 script lock 內直接讀出受影響的列送來，Worker 只比這幾隻，不回頭讀整張表。
+// 換籠、出現在「已出所」等非溜狗欄位交給狗清單同步（markChanged）；同狗兩處都有，GAS 已合併成最後出現的那筆。
+// ack：Worker 已持久接手（更新、無差異，或已記進 v3_walk_conflicts）；D1 失敗或功能開關關閉回 false，讓 GAS 保留待通知版本，開啟後補送。
+export async function reconcileEditedRows(db, rows, env, markChanged) {
+  const walks = env.D1_WALK_NOTIFY === '1';
+  if (!walks || rows.some(row => row.sheet !== 'main' || row.other)) await markChanged(db);
+  const results = [];
+  for (const row of rows) {
+    if (row.sheet !== 'main' || !row.current) { results.push({ ok:true, ack:true }); continue; }
+    if (!walks) { results.push({ ok:false, ack:false, error:'今日溜狗編輯同步尚未啟用' }); continue; }
+    try { results.push({ ok:true, ack:true, ...await reconcileWalk(db,row.dog,row.current,env) }); }
+    catch (error) { results.push({ ok:false, ack:!!error.status, error:error.status ? error.message : '比較失敗，保留待處理' }); }
   }
-  try {
-    for (let pass=0; pass<2; pass++) {
-      if (!env.SHEET_WRITE_URL || !env.SHEET_WRITE_KEY) throw new Error('trusted-sheet-reader-not-configured');
-      await scanWalks({ ...env,DB:db },Date.now());
-      const state = await db.prepare('SELECT again FROM v3_walk_compare WHERE id=1 AND owner=?').bind(owner).first();
-      if (!state) return { merged:true };
-      if (state.again && pass===0) {
-        await transition(db,env,db.prepare('UPDATE v3_walk_compare SET again=0 WHERE id=1 AND owner=?').bind(owner));
-        continue;
-      }
-      await transition(db,env,db.prepare("UPDATE v3_walk_compare SET status=CASE WHEN again=1 THEN 'pending' ELSE 'idle' END,owner='' WHERE id=1 AND owner=?").bind(owner));
-      return { compared:true };
-    }
-  } catch (error) {
-    await transition(db,env,db.prepare("UPDATE v3_walk_compare SET status='pending',owner='',error=? WHERE id=1 AND owner=?").bind(String(error.message).slice(0,200),owner));
-    console.warn('walk-scan-notify: retained pending scan');
-    return { pending:true };
-  }
-}
-
-// 排程只重啟掃描，不將逾時當作 Google 已完成。回傳 true 表示這輪已經掃過（或試過），排程不用再掃一次。
-export async function retryNotifiedScan(env,now) {
-  if (env.D1_WALK_NOTIFY!=='1') return false;
-  const cutoff=new Date(now-60000).toISOString();
-  const pending=await env.DB.prepare("SELECT id FROM v3_walk_compare WHERE id=1 AND (status='pending' OR (status='running' AND started_at<=?))").bind(cutoff).first();
-  if (!pending) return false;
-  await scanNotifiedWalks(env.DB,env,cutoff);
-  return true;
+  return results;
 }

@@ -92,3 +92,16 @@
 6. **驗收**：在試算表隨便改一格再改回來，等 10 分鐘左右，GitHub repo 的 **Actions** → **同步試算表** 應該多一筆 `workflow_dispatch` 的綠勾。
 
 沒做完這幾步也不會壞：網站照樣每天 6:30 同步，按「更新」時試算表有變也會同步。
+
+## 7. 今日溜狗：有人編輯才同步（#500，ADR 0018，**尚未授權啟用**）
+
+改「主清單」或「已出所」時，Apps Script 只把受影響的列（編號＋當下的日期、名單）送到 `POST /api/walk-writeback/rows`；Worker 只比這幾隻，不讀整張表。換籠、移到「已出所」標成狗清單有改，交給既有同步。送不出去會留在指令碼屬性 `WALK_EDITS_PENDING`，下次編輯或每 10 分鐘補送；Worker 確認收到才清，而且只清送出時的那一版。
+
+啟用前（需 K 另行授權）：
+
+1. 指令碼屬性要有 `WALK_WORKER_URL`（Worker 網址）與 `WRITE_KEY`（同 `SHEET_WRITE_KEY`）。
+2. 貼上最新 `apps-script/sheet-write.gs`，在編輯器選 `installWalkEditTriggers` 執行一次並授權：會建立「編輯時」→ `onWalkSheetEdit`、每 10 分鐘 → `flushWalkEdits`。第 6 節的 `notifyWorker`（變更時）照舊保留給狗清單同步，#501 再換掉。
+3. Worker 的 `D1_WALK_NOTIFY` 維持未設定時，送來的列只標記「有改」、不動今日溜狗。
+4. 先在測試試算表照 `docs/research/2026-10-23-gas-trigger-structure-changes.md` 的「需實測清單」逐項操作（貼上多格、剪下貼到「已出所」、清空、Ctrl+Z、手機 App），看 Apps Script 執行紀錄與 D1 結果。
+
+保險掃描改成每天台灣 09:43、13:53、23:53 由 Worker 向 Apps Script 要指紋（`walkScan`），一樣就結束；寫回重試每 10 分鐘只查 D1 有沒有待寫回，沒有就結束。

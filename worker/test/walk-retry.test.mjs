@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import worker from '../src/index.js';
 import { dispatchWalk, dispatchWalks } from '../src/walk-accept.js';
 import { retryWalks } from '../src/walk-retry.js';
@@ -362,24 +361,6 @@ test('#460 合併派送：一輪只呼叫 Apps Script 一次，成功的標成�
     const failed=await env.DB.prepare("SELECT error,next_attempt_at FROM v3_walk_outbox WHERE dog_key='9102' AND status='retry'").first();
     assert.match(failed.error,/唯一/);
     assert.ok(failed.next_attempt_at>new Date(now).toISOString());
-  } finally { globalThis.fetch=real; env.DB.close(); }
-});
-
-test('#460 兩個排程各跑一件：同步排程不跑溜狗對帳，對帳排程不跑同步', async () => {
-  const env={ ...await setup(),WALK_RETRY_ENABLED:'true' },real=globalThis.fetch;
-  const actions=[];
-  globalThis.fetch=async (url,init)=>{ actions.push(init?.body ? JSON.parse(init.body).action : String(url)); return Response.json({ ok:true,rows:[] }); };
-  const run=async cron=>{ const tasks=[]; await worker.scheduled({ scheduledTime:Date.now(),cron },env,{ waitUntil:p=>tasks.push(p) }); await Promise.allSettled(tasks); };
-  try {
-    await post(env,request('cron-split-0001','甲'));
-    await run('5-59/10 * * * *');
-    assert.ok(actions.includes('walkScan'));
-    assert.ok(!actions.some(a=>String(a).includes('gviz')));
-    actions.length=0;
-    await run('*/10 * * * *');
-    assert.ok(!actions.includes('walkScan'));
-    const wrangler=readFileSync(new URL('../../wrangler.jsonc',import.meta.url),'utf8');
-    assert.match(wrangler,/"5-59\/10 \* \* \* \*"/);
   } finally { globalThis.fetch=real; env.DB.close(); }
 });
 
