@@ -8,3 +8,5 @@
 - 未驗證：沒有實際跑 workflow（需要 Cloudflare token）；`d1 export` 匯出檔裡觸發器的順序、匯入時觸發器是否改寫資料，待 K 手動跑一次確認。測試庫會含正式庫的志工資料，預覽網址的存取範圍同正式。
 - 本機檢查：`check-local.ps1 -Full` Node 483 過、4 失敗，都在 `scripts/local-check.test.mjs`（不含本變更時同樣失敗，屬既有環境問題）；瀏覽器測試因 Node 失敗未跑，本變更不碰前端。
 - 相關 PR：見本分支草稿 PR。
+- 第一次在 PR 分支跑 workflow（run 40007686023）失敗：匯出、清空成功，匯入時 `statement too long: SQLITE_TOOBIG`。原因：Worker 存資料包每段到 1MB（參數綁定），匯出成 SQL 文字後 `v3_walk_packs` 一列 115KB，超過 D1 單句上限。此時測試庫是空的。
+- 修正：`splitLongInserts` 把超過 90KB 的 INSERT 中最長字串分段接到暫存表 `_copy_long`，原處換成子查詢讀回，結束後刪暫存表。用本機匯出的正式庫檔（看完即刪）驗證：拆後最長 90000 bytes，拆前拆後各灌一次記憶體 SQLite，54 張表內容相同。匯出檔裡觸發器排在所有 INSERT 之後，匯入時不會觸發。
