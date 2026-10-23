@@ -30,28 +30,6 @@ function bqTeamOf(cage) {
   const c = String(cage || '').replace(/\s/g, '');
   return BQ_TEAMS.find(t => t.test(c)) || BQ_FREE;
 }
-function bqMakeDate(y, m, d) {
-  const date = new Date(y, m - 1, d);
-  return date.getFullYear() === y && date.getMonth() === m - 1 && date.getDate() === d ? date : null;
-}
-function bqParseYmd(text) {
-  const m = String(text || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  return m ? bqMakeDate(+m[1], +m[2], +m[3]) : null;
-}
-function bqYmd(d) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-// 編號前 8 碼是入所日期（2024032902 → 2024/3/29）
-function bqIdDate(id) {
-  const m = String(id || '').match(/^(\d{4})(\d{2})(\d{2})\d{2}$/);
-  return m ? bqMakeDate(+m[1], +m[2], +m[3]) : null;
-}
-// 入所日（ADR 0011，跟 app.js 的 firstIntake 同一個規則）：現在的編號、舊編號、出入所紀錄的入所日，三者裡最早的那天
-function bqIntake(d) {
-  const stays = Array.isArray(d.stays) ? d.stays.map(r => bqParseYmd(r && r.in)) : [];
-  const dates = [...[d.id, ...(Array.isArray(d.formerIds) ? d.formerIds : [])].map(bqIdDate), ...stays].filter(Boolean);
-  return dates.length ? dates.reduce((a, b) => (b < a ? b : a)) : null;
-}
 function bqTier(years) {
   return BQ_TIERS.find(t => (years == null ? -1 : years) >= t.min);
 }
@@ -81,7 +59,7 @@ function bqQuote(intro) {
 function bqMonthOut(walks, today) {
   const seen = new Set(), out = new Map();
   for (const w of walks || []) {
-    const d = bqParseYmd(w && w.date);
+    const d = BQDates.parseYmd(w && w.date);
     if (!d || d.getFullYear() !== today.getFullYear() || d.getMonth() !== today.getMonth()) continue;
     const key = `${w.id}|${w.date}`;
     if (seen.has(key)) continue;
@@ -99,7 +77,7 @@ function bqPlayers(data, walks, today = new Date()) {
   const month = bqMonthOut(walks, today);
   const players = data.dogs.filter(d => d && text(d.id) && text(d.name) && !/^[(（].*[)）]$/.test(text(d.name))).map(d => {
     const id = text(d.id);
-    const intake = bqIntake({ id, formerIds: d.formerIds, stays: d.stays });
+    const intake = BQDates.firstIntake({ id, formerIds: d.formerIds, stays: d.stays });
     const years = intake ? (today - intake) / (365.25 * 86400000) : null;
     const thumb = `photos/thumbs/${id}.jpg`, full = `photos/${id}.jpg`;
     const ver = p => (pv[p] ? `${p}?v=${pv[p]}` : p);
@@ -142,8 +120,8 @@ function bqAlumni(data) {
   const text = v => (v == null ? '' : String(v).trim());
   return data.dogs.filter(d => d && text(d.id) && text(d.name)).map(d => {
     const number = text(d.number);
-    const intake = number || (Array.isArray(d.stays) && d.stays.length) ? bqIntake({ id: number, formerIds: d.formerIds, stays: d.stays }) : null;
-    const left = bqParseYmd(d.departed);
+    const intake = number || (Array.isArray(d.stays) && d.stays.length) ? BQDates.firstIntake({ id: number, formerIds: d.formerIds, stays: d.stays }) : null;
+    const left = BQDates.parseYmd(d.departed);
     return {
       id: text(d.id), number, name: text(d.name), nameOnly: !!d.nameOnly, intake, left,
       stay: intake && left ? bqStay(intake, left) : '—',
@@ -165,7 +143,7 @@ function bqLoadCodes(storage) {
 function bqTodayWrites(storage, today) {
   try {
     const raw = JSON.parse((storage && storage.getItem(BQ_WRITES_KEY)) || 'null');
-    if (!raw || raw.date !== bqYmd(today) || !raw.items || typeof raw.items !== 'object') return [];
+    if (!raw || raw.date !== BQDates.localDateKey(today) || !raw.items || typeof raw.items !== 'object') return [];
     return Object.values(raw.items).filter(it => it && it.mine && it.id && it.current && it.current.date === raw.date).map(it => ({ id: String(it.id), date: raw.date }));
   } catch (e) { return []; }
 }
@@ -174,12 +152,12 @@ function bqTodayWrites(storage, today) {
 function bqMineFrom(dogs, todayWrites = []) {
   const mine = new Map();
   for (const [id, m] of Object.entries(dogs || {})) {
-    const first = bqParseYmd(m && m.first), last = bqParseYmd(m && m.last);
+    const first = BQDates.parseYmd(m && m.first), last = BQDates.parseYmd(m && m.last);
     if (first && last && m.times > 0) mine.set(id, { times: m.times, first, last });
   }
   for (const { id, date } of todayWrites) {
-    const d = bqParseYmd(date), m = mine.get(id);
-    if (!d || (m && bqYmd(m.last) === date)) continue;
+    const d = BQDates.parseYmd(date), m = mine.get(id);
+    if (!d || (m && BQDates.localDateKey(m.last) === date)) continue;
     if (!m) mine.set(id, { times: 1, first: d, last: d });
     else { m.times++; if (d > m.last) m.last = d; if (d < m.first) m.first = d; }
   }
@@ -224,7 +202,7 @@ function bqOpenedIds(state, codes) {
 function bqMarkOpened(state, codes, ids, today) {
   for (const c of codes) {
     const book = state.codes[c] || (state.codes[c] = {});
-    for (const id of ids) if (!book[id]) book[id] = bqYmd(today);
+    for (const id of ids) if (!book[id]) book[id] = BQDates.localDateKey(today);
   }
 }
 // 還沒撕開的新卡：最近溜的先出；只算現在還在所裡的狗
