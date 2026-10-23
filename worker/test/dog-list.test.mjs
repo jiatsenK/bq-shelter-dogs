@@ -58,9 +58,10 @@ test('#501 遛狗日期變新：更新主清單列、名字換代號、追加溜
     assert.deepEqual((await env.DB.prepare('SELECT walker_code FROM v3_sheet_main_walkers ORDER BY position').all()).results.map(r => r.walker_code), codes);
     const walks = (await env.DB.prepare("SELECT walk_date,walker_code,dog_number FROM v3_walks WHERE dog_id='dog' ORDER BY position").all()).results;
     assert.deepEqual(walks.map(w => [w.walk_date, w.walker_code, w.dog_number]), codes.map(c => ['2026-10-05', c, '9001']));
-    // 日期改早不追加、不刪舊紀錄
+    // 日期改回較早（K 2026-10-24，例如 Ctrl+Z）：那天照表上名單重寫，表上不再寫的較新那天刪掉
     await send(env, [main({ hash:'h2', date:'2026-09-30', walker:'甲' })]);
-    assert.equal((await env.DB.prepare('SELECT COUNT(*) n FROM v3_walks').first()).n, 2);
+    const after = (await env.DB.prepare("SELECT walk_date,walker_code FROM v3_walks WHERE dog_id='dog' ORDER BY walk_date,position").all()).results;
+    assert.deepEqual(after.map(w => [w.walk_date, w.walker_code]), [['2026-09-30', codes[0]]]);
   } finally { env.DB.close(); }
 });
 
@@ -230,5 +231,32 @@ test('#501 新增狗先打名字、後補編號：補到同一隻，不多出一
     assert.equal((await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='9003'").first()).dog_id, before);
     const fp = JSON.parse((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_fp'").first()).value);
     assert.equal(fp['main:名:先打名'], undefined, '舊的名字單位不留，掃描不會列成多出來的');
+  } finally { env.DB.close(); }
+});
+
+test('#519 試算表「誰遛的」填了新名字：記進志工名單，/walkers 換得回名字（2026-10-24 實測「123」換不回來）', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    await send(env, [main({ date:'2026-10-05', walker:'新志工、甲' })]);
+    const code = await walkerCode('新志工', 'test');
+    assert.equal(await env.DB.prepare('SELECT name FROM v3_identity_names WHERE code=?').bind(code).first('name'), '新志工');
+    const res = await worker.fetch(new Request('https://bq-shelter-dogs.jiatsen-k.workers.dev/api/walkers', { headers:{ Origin:'https://bq-shelter-dogs.jiatsen-k.workers.dev' } }), env);
+    const body = await res.json();
+    assert.equal(body.walkers['9001'], '新志工、甲');
+    assert.ok(body.names.includes('新志工'));
+  } finally { env.DB.close(); }
+});
+
+test('#519 改錯再改回（2026-10-24 IU 實測）：同一天先換人、日期改新、再整格 Ctrl+Z，舊的那天救回原本的人', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    await send(env, [main({ date:'2026-10-20', walker:'甲' })]);
+    await send(env, [main({ hash:'h2', date:'2026-10-20', walker:'123' })]);
+    await send(env, [main({ hash:'h3', date:'2026-10-24', walker:'123' })]);
+    await send(env, [main({ hash:'h4', date:'2026-10-20', walker:'甲' })]);
+    const walks = (await env.DB.prepare("SELECT walk_date,walker_code FROM v3_walks WHERE dog_id='dog' ORDER BY walk_date,position").all()).results;
+    assert.deepEqual(walks.map(w => [w.walk_date, w.walker_code]), [['2026-10-20', await walkerCode('甲', 'test')]]);
   } finally { env.DB.close(); }
 });
