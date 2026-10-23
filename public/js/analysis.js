@@ -581,7 +581,7 @@ let infoPage = '';
 let infoUpdateTab = 'website';
 let websiteUpdates = null;
 
-const WEBSITE_UPDATES_CACHE = 'bq-website-updates';
+const WEBSITE_UPDATES_CACHE = BQStore.keys.websiteUpdates;
 const validWebsiteUpdates = entries => Array.isArray(entries) && entries.every(e => e && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && typeof e.text === 'string' && (e.version === undefined || typeof e.version === 'string'));
 
 // #421 先顯示上次讀到的內容，每次進頁面背景檢查新版；檢查失敗不清空，改標示「上次讀到的」。
@@ -589,7 +589,7 @@ function loadWebsiteUpdates() {
   if (websiteUpdates?.checking) return;
   if (!websiteUpdates) {
     let cached = null;
-    try { cached = JSON.parse(localStorage.getItem(WEBSITE_UPDATES_CACHE)); } catch {}
+    try { cached = BQStore.readJson(WEBSITE_UPDATES_CACHE); } catch {}
     websiteUpdates = validWebsiteUpdates(cached) ? { state: 'ready', entries: cached } : { state: 'loading', entries: [] };
   }
   websiteUpdates.checking = true;
@@ -599,7 +599,7 @@ function loadWebsiteUpdates() {
       const entries = await res.json();
       if (!validWebsiteUpdates(entries)) throw new Error('格式不對');
       websiteUpdates = { state: 'ready', entries };
-      try { localStorage.setItem(WEBSITE_UPDATES_CACHE, JSON.stringify(entries)); } catch {}
+      try { BQStore.writeJson(WEBSITE_UPDATES_CACHE, entries); } catch {}
     })
     .catch(() => { websiteUpdates = websiteUpdates.state === 'ready' ? { state: 'ready', stale: true, entries: websiteUpdates.entries } : { state: 'error', entries: [] }; })
     .then(() => { if (analysisOpen && infoPage === 'updates' && infoUpdateTab === 'website') render(); });

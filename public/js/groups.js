@@ -9,7 +9,7 @@ let gBusy = false;
 const gEsc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 // 編輯要先選好名字（ADR 0004 編輯紀錄）：跟溜狗表共用同一個 localStorage（js/app.js 的 WALKER_NAME_KEY）
 function gEditor() {
-  try { return String(localStorage.getItem('bq-walker-name') || '').trim().replace(/經常帶.*$/, '').trim(); } catch (e) { return ''; }
+  try { return String(BQStore.get(BQStore.keys.walkerName) || '').trim().replace(/經常帶.*$/, '').trim(); } catch (e) { return ''; }
 }
 const gKey = n => String(n || '').replace(/\s+/g, '').toLowerCase();
 

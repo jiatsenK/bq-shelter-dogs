@@ -44,6 +44,21 @@ module.exports = async (browser, base) => {
   try {
     await page.goto(base + '/public/index.html', { waitUntil: 'networkidle' });
     assert.equal(await page.locator('#main .walk-btn.done').count(), 0, '本機舊紀錄與試算表即時名單不能顯示已溜');
+    // #479：登記識別必須確實存入手機，記憶體備援不能當作持久儲存成功。
+    await page.evaluate(() => {
+      window.__save479 = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key, value) {
+        if (key === 'bq-walk-requests') throw new Error('QuotaExceededError');
+        return window.__save479.call(this, key, value);
+      };
+    });
+    await page.locator('#main .card[data-dog="0"] .walk-btn').click();
+    await page.waitForFunction(() => !document.querySelector('#main .card[data-dog="0"] .walk-btn')?.textContent.includes('登記中'));
+    assert.equal(sent.length, 0, '未存入登記識別時不得送出 D1 要求');
+    await page.getByText(/未全部登記成功/).waitFor();
+    assert.equal(await page.locator('#main .walk-btn.done').count(), 0, '未送出不得顯示已溜');
+    await page.evaluate(() => { Storage.prototype.setItem = window.__save479; delete window.__save479; });
+    await page.reload({ waitUntil: 'networkidle' });
     await page.locator('[data-tab="groups"]').click();
     await page.locator('#gwWalk').click();
     await page.getByText(/已登記 1 隻/).waitFor();
