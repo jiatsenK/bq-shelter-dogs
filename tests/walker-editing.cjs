@@ -44,6 +44,7 @@ module.exports = async (browser, base) => {
         : endpoint === 'rest' ? { rest: {} } : { ok: true, walks: [], departures: [] };
     return route.fulfill({ json: out });
   });
+  await require('./fixtures/legacy-walk-mode.cjs')(context);
   const page = await context.newPage();
   page.setDefaultTimeout(5000);
   await page.clock.install({ time: new Date('2026-10-18T02:00:00Z') });

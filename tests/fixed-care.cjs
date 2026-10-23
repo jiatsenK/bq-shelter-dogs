@@ -30,6 +30,7 @@ module.exports = async (browser, base) => {
     }
     return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'rest' ? { rest: {} } : { ok: true, walks: [], walkers: [] } });
   });
+  await require('./fixtures/legacy-walk-mode.cjs')(ctx);
   const page = await ctx.newPage(); page.setDefaultTimeout(6000);
   try {
     await page.goto(`${base}/public/index.html`);

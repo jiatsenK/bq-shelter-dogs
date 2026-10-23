@@ -17,7 +17,7 @@ module.exports = async (browser, base) => {
     if (u.pathname.includes('/photos/')) return route.fulfill({ contentType: 'image/svg+xml', body: '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="120" height="120" fill="#DDE9E3"/><text x="60" y="66" text-anchor="middle" font-size="18">測試照片</text></svg>' });
     if (!u.pathname.includes('/api/')) return route.continue();
     const endpoint = u.pathname.split('/api/')[1];
-    return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'rest' ? { rest: { [data.dogs[5].id]: { until: '2099-12-31' } } } : { ok: true, walks: [], walkers: [] } });
+    return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'rest' ? { rest: { [data.dogs[5].id]: { until: '2099-12-31' } } } : { ok: true, source: 'd1', walks: [], walkers: [] } });
   });
   const page = await ctx.newPage();
   try {

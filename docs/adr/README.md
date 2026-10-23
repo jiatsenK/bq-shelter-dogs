@@ -31,7 +31,7 @@
 
 | 開關 | 值 | 位置 |
 |---|---|---|
-| `SITE.d1WalkAccept` | `false` | public/js/site-config.js |
+| `SITE.d1WalkAccept` | `true` | public/js/site-config.js |
 
 ## Worker 讀的設定
 
