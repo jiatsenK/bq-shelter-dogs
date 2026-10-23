@@ -332,10 +332,13 @@ test('#56 公開檔案（dogs.json、快照、walks.json）都找不到志工名
   }
 });
 
-test('#56 #251 workflow 只跑寫 D1 的同步，不再提交快照與遛狗紀錄', async () => {
-  const yml = await readFile(new URL('../.github/workflows/sync-sheet.yml', import.meta.url), 'utf8');
-  assert.match(yml, /node scripts\/sync-compact-d1\.mjs/);
-  assert.doesNotMatch(yml, /git add|node scripts\/sync-sheet\.mjs/);
+// #501：試算表同步退出 Actions，排程與手動入口都不再叫同步程式
+test('#501 Actions 不再有試算表同步 workflow，其他 workflow 也不跑同步程式', async () => {
+  const { readdir } = await import('node:fs/promises');
+  const dir = new URL('../.github/workflows/', import.meta.url);
+  const files = await readdir(dir);
+  assert.ok(!files.includes('sync-sheet.yml'));
+  for (const f of files) assert.doesNotMatch(await readFile(new URL(f, dir), 'utf8'), /node scripts\/sync-compact-d1\.mjs|workflows\/sync-sheet\.yml/, f);
 });
 
 // ── #57 是不是我遛的（myWalked） ──
@@ -420,11 +423,6 @@ test('#57 升級：#56 的舊紀錄（沒有 mine）原樣保留；目前最後�
   assert.equal(dogOf(disk, '測試狗甲').myWalkedDate, '2026-09-16');
 }));
 
-test('#57 workflow 從 Secret 帶入 MY_NAME', async () => {
-  const yml = await readFile(new URL('../.github/workflows/sync-sheet.yml', import.meta.url), 'utf8');
-  assert.match(yml, /MY_NAME: \$\{\{ secrets\.MY_NAME \}\}/);
-});
-
 // ── #94 誰遛的代號（walkers）──
 // 假密鑰、假名字；真的密鑰只放在 Actions Secret／Worker Secret WALKER_KEY
 const KEY = 'test-walker-key';
@@ -498,11 +496,6 @@ test('#94 沒設定 WALKER_KEY：同步照常，dogs.json 的 walkers 是空的�
   assert.ok(disk.dogs.every(d => Array.isArray(d.walkers) && !d.walkers.length));
   assert.ok(walksOf(disk).every(w => !('walkers' in w)));
 }));
-
-test('#94 workflow 從 Secret 帶入 WALKER_KEY', async () => {
-  const yml = await readFile(new URL('../.github/workflows/sync-sheet.yml', import.meta.url), 'utf8');
-  assert.match(yml, /WALKER_KEY: \$\{\{ secrets\.WALKER_KEY \}\}/);
-});
 
 test('2026-10-04 誰遛的格子用句號、分號、冒號等隔開也拆成好幾個人；Worker 用同一組分隔符號', async () => {
   const names = sync.myNames('測試志工乙');

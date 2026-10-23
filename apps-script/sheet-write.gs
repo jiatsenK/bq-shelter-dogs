@@ -398,21 +398,14 @@ function planGroupWrite(values, req) {
   return { error: '不認得的狗群操作' };
 }
 
-// ── 試算表有人手動改時通知 Worker（ADR 0008）──
-// 觸發器：編輯 → 觸發條件 → 新增 → 函式 notifyWorker、活動來源「試算表」、類型「變更時」。
-// 網站經過 doPost 寫進來的不會觸發（Google 的規定：程式改的不觸發觸發器），本來就已經在 D1。
-// 指令碼屬性：NOTIFY_URL（例：https://bq-shelter-dogs.jiatsen-k.workers.dev/api/sheet-changed）、
-//            NOTIFY_KEY（跟 Cloudflare Worker 的 SHEET_NOTIFY_KEY 一樣，只能說「試算表有改」，不是 WALKER_KEY）
-function notifyWorker() {
-  var props = PropertiesService.getScriptProperties();
-  var url = props.getProperty('NOTIFY_URL');
-  var key = props.getProperty('NOTIFY_KEY');
-  if (!url || !key) return;
-  UrlFetchApp.fetch(url, { method: 'post', headers: { 'X-Notify-Key': key }, muteHttpExceptions: true });
-}
+// ── 試算表有人手動改時通知 Worker（ADR 0008）：#501 起退役 ──
+// 狗清單改由下方 onWalkSheetEdit 只送受影響的單位；installWalkEditTriggers 會刪掉舊的「變更時 → notifyWorker」觸發器。
+// 留著空函式，觸發器還沒刪掉前不會每次編輯都報錯。
+function notifyWorker() {}
 
 // ── 有人編輯才同步今日溜狗（#500，ADR 0018）──
-// 觸發器：執行一次 installWalkEditTriggers（會建立「編輯時」→ onWalkSheetEdit、每 10 分鐘 → flushWalkEdits）。
+// 觸發器：執行一次 installWalkEditTriggers（會建立「編輯時」→ onWalkSheetEdit、每 10 分鐘 → flushWalkEdits／flushDogList、每天三次 → dogListScan，
+// 並刪掉舊的 notifyWorker 觸發器）。
 // 只送受影響的列（編號＋改到的欄），Worker 依送來的列更新、不回頭讀整張表。網站寫回（doPost）是程式寫入，不會觸發。
 // 送不出去（缺設定、HTTP 失敗、結果不明）就留在 WALK_EDITS_PENDING，下次編輯或每 10 分鐘補送；確認只清同一版本。
 var DEPARTED_SHEET_NAME = '已出所';
@@ -423,25 +416,39 @@ var FLUSH_ROUNDS = 4; // 一次觸發最多送 4 批（200 隻），其餘留給
 function installWalkEditTriggers() {
   var id = sheetIdOf(PropertiesService.getScriptProperties().getProperty('SHEET_ID'));
   ScriptApp.getProjectTriggers().forEach(function (t) {
-    if (['onWalkSheetEdit', 'flushWalkEdits'].indexOf(t.getHandlerFunction()) !== -1) ScriptApp.deleteTrigger(t);
+    if (['onWalkSheetEdit', 'flushWalkEdits', 'flushDogList', 'dogListScan', 'notifyWorker'].indexOf(t.getHandlerFunction()) !== -1) ScriptApp.deleteTrigger(t);
   });
   ScriptApp.newTrigger('onWalkSheetEdit').forSpreadsheet(id).onEdit().create();
   ScriptApp.newTrigger('flushWalkEdits').timeBased().everyMinutes(10).create();
+  // 狗清單（#501）：送不出去的每 10 分鐘補送；保險掃描每天台灣 09:43、13:53、23:53（專案時區要是 Asia/Taipei；Google 只保證在那個小時內、約略那幾分）
+  ScriptApp.newTrigger('flushDogList').timeBased().everyMinutes(10).create();
+  [[9, 43], [13, 53], [23, 53]].forEach(function (t) { ScriptApp.newTrigger('dogListScan').timeBased().atHour(t[0]).nearMinute(t[1]).everyDays(1).create(); });
 }
 
 function onWalkSheetEdit(e) {
   var range = e && e.range;
   if (!range) return;
   var sheet = range.getSheet(), name = sheet.getName();
-  var kind = name === SHEET_NAME ? 'main' : name === DEPARTED_SHEET_NAME ? 'departed' : '';
+  var kind = name === SHEET_NAME ? 'main' : name === DEPARTED_SHEET_NAME ? 'departed' : name === GROUP_SHEET_NAME ? 'groups' : '';
   if (!kind || !sheet.getLastRow()) return;
-  var header = findHeader(sheet.getRange(1, 1, Math.min(20, sheet.getLastRow()), sheet.getLastColumn()).getValues());
-  if (!header) return;
-  var rows = sheet.getRange(range.getRow(), 1, range.getNumRows(), sheet.getLastColumn()).getValues();
-  var entries = editedRows(rows, header, range.getRow() - 1, range.getColumn() - 1, range.getLastColumn() - 1, kind);
-  if (!entries.length) return;
-  updatePending(function (p) { return queueEdits(p, entries); });
-  flushWalkEdits();
+  var values = sheet.getDataRange().getValues();
+  var header = kind === 'groups' ? null : findHeader(values);
+  // 狗清單（#501）：主清單、已出所、常遛狗群改到的單位都記下來送 Worker
+  var units = dogListKeysForEdit(kind, values, header, range.getRow() - 1, range.getNumRows(), range.getColumn() - 1, range.getLastColumn() - 1);
+  if (units.length) updateDogListPending(function (p) {
+    var next = { seq: p ? p.seq : 0, items: p ? p.items : {} };
+    units.forEach(function (k) { next.seq++; next.items[k] = { seq: next.seq }; });
+    return next;
+  });
+  if (kind !== 'groups' && header) {
+    var rows = values.slice(range.getRow() - 1, range.getRow() - 1 + range.getNumRows());
+    var entries = editedRows(rows, header, range.getRow() - 1, range.getColumn() - 1, range.getLastColumn() - 1, kind);
+    if (entries.length) {
+      updatePending(function (p) { return queueEdits(p, entries); });
+      flushWalkEdits();
+    }
+  }
+  if (units.length) flushDogList();
 }
 
 // 待通知版本只用短暫的使用者鎖保護；送通知時另拿 script lock（跟網站寫回同一把，讀到的值才不會夾在寫回中間），
@@ -531,4 +538,167 @@ function editPayload(snapshot, items) {
     var found = item.sheet === 'main' ? byKey[dogKey(item.dog)] : null;
     return found ? { sheet: 'main', dog: item.dog, other: item.other, current: found.current } : { sheet: item.sheet, dog: item.dog, other: true };
   });
+}
+
+// ── 狗清單有人編輯才同步（#501，ADR 0018 第 5–7 點）──
+// 取代每 10 分鐘叫 GitHub Actions 讀整張表：編輯觸發只把受影響的「單位」記進 DOG_LIST_PENDING，再送給 Worker（/api/walk-writeback/dog-list）。
+// 單位：主清單一隻狗（main:編號，沒編號用 main:名:犬名）、已出所一隻狗（departed:…）、常遛狗群一欄（groups:欄）、主清單下方異動紀錄整段（notes）。
+// 每天台灣 09:43、13:53、23:53（dogListScan）送每個單位的指紋，Worker 回不一樣的，再分批只送那幾個；D1 是空的時就等於全部重送。
+// 也可以在 Apps Script 編輯器手動執行 dogListScan 補漏或重新灌資料。觸發器由 installWalkEditTriggers 一起建立。
+var DOG_LIST_PENDING = 'DOG_LIST_PENDING';
+var DOG_LIST_BATCH = 10; // 跟 Worker 的 DOG_LIST_ROWS_MAX 一樣
+var DOG_LIST_ROUNDS = 10; // 一次觸發最多送 10 批，其餘留給下次
+var DOG_LIST_SCAN_ROUNDS = 60; // 保險掃描一次最多 600 個單位（約 3 分鐘），沒送完下一次掃描接著補
+var DEPART_DATE_HEADER = /(出所|離所|認養|領養|死亡)/; // 跟 scripts/sync-sheet.mjs 的 departedRows 一樣
+
+function dogListSheets() {
+  var book = SpreadsheetApp.openById(sheetIdOf(PropertiesService.getScriptProperties().getProperty('SHEET_ID')));
+  var values = function (name) { var s = book.getSheetByName(name); return s && s.getLastRow() ? s.getDataRange().getValues() : []; };
+  return { main: values(SHEET_NAME), departed: values(DEPARTED_SHEET_NAME), groups: values(GROUP_SHEET_NAME) };
+}
+function dogListHash(text) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.MD5, text, Utilities.Charset.UTF_8)
+    .map(function (b) { return ((b + 256) % 256).toString(16).replace(/^(.)$/, '0$1'); }).join('').slice(0, 16);
+}
+
+function flushDogList() {
+  var props = PropertiesService.getScriptProperties();
+  for (var round = 0; round < DOG_LIST_ROUNDS; round++) {
+    var pending = JSON.parse(props.getProperty(DOG_LIST_PENDING) || 'null');
+    var keys = pending ? Object.keys(pending.items) : [];
+    if (!keys.length) return;
+    var sent = keys.slice(0, DOG_LIST_BATCH).map(function (k) { return { key: k, seq: pending.items[k].seq }; });
+    var results;
+    var lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(15000);
+      var units = dogListUnits(dogListSheets(), ymdOf, dogListHash);
+      // 單位已經不在表上（例：狗改了編號、整列刪掉）就沒東西可送，直接清；保險掃描會把 D1 多出來的列出來
+      var rows = sent.map(function (s) { return units[s.key]; });
+      var live = rows.filter(Boolean);
+      var got = live.length ? walkWorker(props, 'dog-list', { rows: live }).results || [] : [];
+      var i = 0;
+      results = rows.map(function (r) { return r ? got[i++] : { ack: true }; });
+    } catch (err) {
+      console.warn('flushDogList: 保留待通知：' + (err && err.message ? err.message : err));
+      return;
+    } finally { lock.releaseLock(); }
+    updateDogListPending(function (p) { return clearSent(p, sent, results); });
+    if (results.some(function (r) { return !r || !r.ack; })) return;
+  }
+}
+
+function updateDogListPending(change) {
+  var props = PropertiesService.getScriptProperties(), lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    var next = change(JSON.parse(props.getProperty(DOG_LIST_PENDING) || 'null'));
+    props.setProperty(DOG_LIST_PENDING, JSON.stringify(next));
+    return next;
+  } finally { lock.releaseLock(); }
+}
+
+// 保險掃描：只送指紋，Worker 回要哪些；主清單先送（狗群要用主清單的犬名對）
+function dogListScan() {
+  var props = PropertiesService.getScriptProperties();
+  var lock = LockService.getScriptLock();
+  var units;
+  lock.waitLock(15000);
+  try { units = dogListUnits(dogListSheets(), ymdOf, dogListHash); } finally { lock.releaseLock(); }
+  var fingerprints = {};
+  Object.keys(units).forEach(function (k) { fingerprints[k] = units[k].hash; });
+  var out = walkWorker(props, 'dog-list-scan', { fingerprints: fingerprints });
+  if (out.extra && out.extra.length) console.warn('dogListScan: D1 有、試算表沒有（只列出來，不自動刪）：' + out.extra.join('、'));
+  var want = orderDogListKeys(out.want || []);
+  for (var round = 0; round < DOG_LIST_SCAN_ROUNDS && want.length; round++) {
+    var batch = want.splice(0, DOG_LIST_BATCH).map(function (k) { return units[k]; }).filter(Boolean);
+    var results = walkWorker(props, 'dog-list', { rows: batch }).results || [];
+    if (results.some(function (r) { return !r || !r.ack; })) { console.warn('dogListScan: Worker 沒接手，下次掃描再補'); return; }
+  }
+}
+
+// ── 下面不碰 Google 的東西，Node 測試也跑得到（worker/test/sheet-write.test.mjs）──
+
+function orderDogListKeys(keys) {
+  var rank = function (k) { return ['main', 'departed', 'groups', 'notes'].indexOf(k.split(':')[0]); };
+  return keys.slice().sort(function (a, b) { return rank(a) - rank(b); });
+}
+function dogUnitKey(kind, id, name) { return kind + ':' + (id || '名:' + name); }
+
+// 表上的值 → { 單位: 要送給 Worker 的列（含 hash） }。sheets：{ main, departed, groups } 各分頁 getValues()
+function dogListUnits(sheets, ymd, hash) {
+  var units = {};
+  var add = function (key, row) { row.hash = hash(JSON.stringify(row)); units[key] = row; };
+  var dateText = function (v) {
+    if (isDate(v)) return ymd(v);
+    var t = cellText(v).replace(/\//g, '-').replace(/-(\d)(?=-|$)/g, '-0$1');
+    return /^\d{4}-\d{2}-\d{2}$/.test(t) ? t : '';
+  };
+  var r;
+  var main = sheets.main || [], header = findHeader(main);
+  if (header) {
+    var c = header.cols, end = main.length;
+    for (r = header.row + 1; r < main.length; r++) if (c.cage !== undefined && /^備註/.test(cellText(main[r][c.cage]))) { end = r; break; }
+    for (r = header.row + 1; r < end; r++) {
+      var row = main[r], name = cellText(row[c.name]), cage = c.cage === undefined ? '' : cellText(row[c.cage]);
+      if (!name || !cage) continue;
+      var id = c.id === undefined ? '' : cellText(row[c.id]);
+      add(dogUnitKey('main', id, name), { sheet: 'main', dog: { id: id, name: name }, cage: cage,
+        note: c.note === undefined ? '' : cellText(row[c.note]), date: c.date === undefined ? '' : dateText(row[c.date]),
+        walker: c.walker === undefined ? '' : cellText(row[c.walker]) });
+    }
+    if (end < main.length && c.id !== undefined) {
+      var items = [];
+      for (r = end; r < Math.min(main.length, end + 400); r++) {
+        var text = cellText(main[r][c.id]);
+        if (text) items.push({ label: cellText(main[r][c.cage]), text: text });
+      }
+      add('notes', { sheet: 'notes', items: items });
+    }
+  }
+  var departed = sheets.departed || [], dh = findHeader(departed);
+  if (dh) {
+    var labels = departed[dh.row].map(function (v) { return cellText(v).replace(/\s+/g, ''); });
+    var dateCols = [];
+    labels.forEach(function (h, i) { if (DEPART_DATE_HEADER.test(h) && !/遛|溜/.test(h)) dateCols.push(i); });
+    for (r = dh.row + 1; r < departed.length; r++) {
+      var drow = departed[r], dname = cellText(drow[dh.cols.name]), did = dh.cols.id === undefined ? '' : cellText(drow[dh.cols.id]);
+      if (!dname && !did) continue;
+      add(dogUnitKey('departed', did, dname), { sheet: 'departed', dog: { id: did, name: dname },
+        texts: drow.map(function (v) { return isDate(v) ? ymd(v).replace(/-/g, '/') : cellText(v); }).filter(Boolean),
+        dates: dateCols.map(function (i) { return dateText(drow[i]); }).filter(Boolean) });
+    }
+  }
+  var groups = sheets.groups || [], layout = groups.length ? groupLayout(groups) : null;
+  if (layout) {
+    for (var col = 0; col < layout.width; col++) {
+      var names = [];
+      for (r = layout.first; r < layout.labelRow; r++) {
+        var n = cellText(groups[r][col]);
+        if (n && !/^\d+$/.test(n) && names.indexOf(n) === -1) names.push(n);
+      }
+      add('groups:' + col, { sheet: 'groups', column: col, names: names, label: cellText(groups[layout.labelRow][col]) });
+    }
+  }
+  return units;
+}
+
+// 編輯到哪些單位：values 是整個分頁、firstRow～firstRow+count-1 是改到的列（從 0 算）、firstCol～lastCol 是改到的欄
+function dogListKeysForEdit(kind, values, header, firstRow, count, firstCol, lastCol) {
+  var keys = [];
+  if (kind === 'groups') {
+    for (var col = firstCol; col <= lastCol; col++) keys.push('groups:' + col);
+    return keys;
+  }
+  if (!header) return keys;
+  var c = header.cols, notesFrom = -1;
+  if (kind === 'main' && c.cage !== undefined) {
+    for (var r = header.row + 1; r < values.length; r++) if (/^備註/.test(cellText(values[r][c.cage]))) { notesFrom = r; break; }
+  }
+  for (var at = Math.max(firstRow, header.row + 1); at < firstRow + count && at < values.length; at++) {
+    if (notesFrom !== -1 && at >= notesFrom) { if (keys.indexOf('notes') === -1) keys.push('notes'); continue; }
+    var row = values[at] || [], name = cellText(row[c.name]), id = c.id === undefined ? '' : cellText(row[c.id]);
+    if (name || id) keys.push(dogUnitKey(kind, id, name));
+  }
+  return keys;
 }

@@ -1,0 +1,181 @@
+// #501：狗清單改成有人編輯才同步（ADR 0018 第 5–7 點）。GAS 只送受影響的列，Worker 只改那幾隻；
+// 保險掃描只比指紋，不一樣的才要；照片垃圾桶每月 1 日自己的排程。
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import worker from '../src/index.js';
+import { setup } from './walk-fixture.mjs';
+import { walkerCode } from '../src/editlog.js';
+
+const post = (env, action, body, key = env.SHEET_WRITE_KEY) => worker.fetch(new Request(`https://worker.example/api/walk-writeback/${action}`, {
+  method:'POST', headers:{ 'X-Sheet-Write-Key':key }, body:JSON.stringify(body),
+}), env);
+const send = async (env, rows) => {
+  const res = await post(env, 'dog-list', { rows });
+  assert.equal(res.status, 200);
+  return (await res.json()).results;
+};
+const writes = async env => (await env.DB.prepare('SELECT total_changes() n').first()).n;
+const main = (extra = {}) => ({ sheet:'main', hash:'h1', dog:{ id:'9001', name:'測試狗' }, cage:'A01', note:'', date:'2026-10-01', walker:'', ...extra });
+const mainRows = async env => (await env.DB.prepare('SELECT number,name,cage,note,walked_date,covered FROM v3_sheet_main ORDER BY row_index').all()).results;
+
+test('#501 改狗清單一格只更新那隻狗；同樣內容再送不寫', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    assert.equal((await post(env, 'dog-list', { rows:[main()] }, 'forged')).status, 403);
+    assert.deepEqual((await send(env, [main({ cage:'B02' })])).map(r => r.ack), [true]);
+    assert.deepEqual(await mainRows(env), [{ number:'9001', name:'測試狗', cage:'B02', note:'', walked_date:'2026-10-01', covered:0 }]);
+    assert.match((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='synced_at'").first()).value, /\+08:00$/, '有改才更新「資料更新」時間');
+    const before = await writes(env);
+    assert.deepEqual((await send(env, [main({ cage:'B02' })])).map(r => r.ack), [true]);
+    assert.equal(await writes(env), before, '無差異不重寫業務資料（指紋也一樣）');
+  } finally { env.DB.close(); }
+});
+
+test('#501 新狗從編輯觸發進網站：建永久狗、編號、主清單列', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    await send(env, [main({ dog:{ id:'9002', name:'新來的' }, cage:'C03', date:'' })]);
+    const rows = await mainRows(env);
+    assert.deepEqual(rows.map(r => [r.number, r.name, r.cage]), [['9001', '測試狗', ''], ['9002', '新來的', 'C03']]);
+    assert.ok(await env.DB.prepare("SELECT 1 FROM v3_dog_numbers n JOIN v3_dogs d USING(dog_id) WHERE n.number='9002' AND d.name='新來的'").first());
+    // 沒有籠位的不是狗（表尾提示文字），回 ack 但不建
+    await send(env, [main({ dog:{ id:'', name:'今天週四' }, cage:'' })]);
+    assert.equal((await mainRows(env)).length, 2);
+  } finally { env.DB.close(); }
+});
+
+test('#501 遛狗日期變新：更新主清單列、名字換代號、追加溜狗紀錄', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    await send(env, [main({ date:'2026-10-05', walker:'甲、乙' })]);
+    const row = await env.DB.prepare("SELECT walked_date,covered FROM v3_sheet_main WHERE number='9001'").first();
+    assert.deepEqual({ ...row }, { walked_date:'2026-10-05', covered:1 });
+    const codes = [await walkerCode('甲', 'test'), await walkerCode('乙', 'test')];
+    assert.deepEqual((await env.DB.prepare('SELECT walker_code FROM v3_sheet_main_walkers ORDER BY position').all()).results.map(r => r.walker_code), codes);
+    const walks = (await env.DB.prepare("SELECT walk_date,walker_code,dog_number FROM v3_walks WHERE dog_id='dog' ORDER BY position").all()).results;
+    assert.deepEqual(walks.map(w => [w.walk_date, w.walker_code, w.dog_number]), codes.map(c => ['2026-10-05', c, '9001']));
+    // 日期改早不追加、不刪舊紀錄
+    await send(env, [main({ hash:'h2', date:'2026-09-30', walker:'甲' })]);
+    assert.equal((await env.DB.prepare('SELECT COUNT(*) n FROM v3_walks').first()).n, 2);
+  } finally { env.DB.close(); }
+});
+
+test('#501 出現在「已出所」：記離所（原因照共用規則）、從主清單移走', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    await send(env, [main({ cage:'A01', note:'親人' })]);
+    const results = await send(env, [{ sheet:'departed', hash:'d1', dog:{ id:'9001', name:'測試狗' }, texts:['9001', '測試狗', '2026/10/20被認養'], dates:[] }]);
+    assert.deepEqual(results.map(r => r.ack), [true]);
+    assert.deepEqual(await mainRows(env), []);
+    const d = await env.DB.prepare("SELECT reason,matched,departed_date,date_source,last_cage,last_note FROM v3_departures WHERE number='9001'").first();
+    assert.deepEqual({ ...d }, { reason:'adopt', matched:'被認養', departed_date:'2026-10-20', date_source:'note', last_cage:'A01', last_note:'親人' });
+    // 沒編號的狗記不了離所，不從主清單移走
+    await send(env, [main({ dog:{ id:'', name:'無號' }, cage:'Z1' }), { sheet:'departed', hash:'d2', dog:{ id:'', name:'無號' }, texts:['無號', '被認養'], dates:[] }]);
+    assert.deepEqual((await mainRows(env)).map(r => r.name), ['無號']);
+    await env.DB.prepare("DELETE FROM v3_sheet_main WHERE name='無號'").run();
+    // 又出現在主清單（例：退養回來）就不算離所
+    await send(env, [main({ hash:'h3' })]);
+    assert.equal(await env.DB.prepare("SELECT 1 FROM v3_departures WHERE number='9001'").first(), null);
+    assert.equal((await mainRows(env)).length, 1);
+  } finally { env.DB.close(); }
+});
+
+test('#501 常遛狗群一欄、異動紀錄整段：只換送來的那欄', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    await send(env, [main({ dog:{ id:'9002', name:'Mini' }, cage:'C03' })]);
+    await env.DB.prepare("INSERT INTO v3_sheet_groups VALUES(0,0,'別欄')").run();
+    await send(env, [{ sheet:'groups', hash:'g', column:1, names:['測試狗', 'mini', '不在清單'], label:'新十' },
+      { sheet:'notes', hash:'n', items:[{ label:'備註1', text:'1/7 換籠' }] }]);
+    assert.deepEqual((await env.DB.prepare('SELECT column_index,name FROM v3_sheet_groups ORDER BY column_index,row_index').all()).results.map(r => [r.column_index, r.name]),
+      [[0, '別欄'], [1, '測試狗'], [1, 'Mini']]);
+    assert.equal((await env.DB.prepare('SELECT label FROM v3_sheet_group_labels WHERE column_index=1').first()).label, '新十');
+    assert.deepEqual({ ...await env.DB.prepare('SELECT label,text FROM v3_sheet_changes').first() }, { label:'備註1', text:'1/7 換籠' });
+  } finally { env.DB.close(); }
+});
+
+test('#501 保險掃描：指紋一樣不要資料；不一樣只要那幾列；D1 有、試算表沒有的只列出來', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  const scan = async fingerprints => (await (await post(env, 'dog-list-scan', { fingerprints })).json());
+  try {
+    // D1 還沒有指紋（第一次）：全部要
+    assert.deepEqual((await scan({ 'main:9001':'h1', 'groups:0':'g' })).want.sort(), ['groups:0', 'main:9001']);
+    await send(env, [main(), { sheet:'groups', hash:'g', column:0, names:[], label:'' }]);
+    const before = await writes(env);
+    const same = await scan({ 'main:9001':'h1', 'groups:0':'g' });
+    assert.deepEqual(same.want, []);
+    assert.equal(await writes(env), before, '指紋一樣不寫');
+    await send(env, [main({ dog:{ id:'9002', name:'走了' }, hash:'x' })]);
+    const diff = await scan({ 'main:9001':'h9', 'groups:0':'g' });
+    assert.deepEqual(diff.want, ['main:9001']);
+    assert.deepEqual(diff.extra, ['main:9002']);
+    assert.equal((await mainRows(env)).length, 2, '不自動刪');
+    assert.match((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_extra'").first()).value, /9002/);
+  } finally { env.DB.close(); }
+});
+
+test('#501 每 10 分鐘的試算表同步排程已移除；照片垃圾桶每月 1 日清理並記下結果', async () => {
+  const config = readFileSync(new URL('../../wrangler.jsonc', import.meta.url), 'utf8');
+  assert.doesNotMatch(config, /"\*\/10 \* \* \* \*"/);
+  assert.match(config, /"17 2 1 \* \*"/);
+  const env = await setup();
+  const calls = [], real = globalThis.fetch;
+  globalThis.fetch = async url => { calls.push(String(url)); return new Response('', { status:204 }); };
+  let purged = 0;
+  env.PHOTOS = { list:async () => { purged++; return { objects:[], truncated:false }; } };
+  try {
+    for (const cron of ['5-59/10 * * * *', '43 1 * * *', '17 2 1 * *']) {
+      const tasks = [];
+      await worker.scheduled({ scheduledTime:Date.UTC(2026, 10, 1, 2, 17), cron }, env, { waitUntil:p => tasks.push(p) });
+      await Promise.allSettled(tasks);
+    }
+    assert.ok(!calls.some(u => u.includes('api.github.com')), '不再叫 GitHub 同步');
+    assert.equal(purged, 1, '只有每月排程清垃圾桶');
+    assert.match((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='trash_purged'").first()).value, /"purged":0/);
+  } finally { globalThis.fetch = real; env.DB.close(); }
+});
+
+// GAS（apps-script/sheet-write.gs）整理出的單位直接餵給 Worker：單位名稱兩邊要一樣，指紋一樣第二次掃描就不要資料
+test('#501 GAS 整理的單位與 Worker 對得上：第一次全送，第二次指紋一樣不送；只改一格只送那隻', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const vm = await import('node:vm');
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(await readFile(new URL('../../apps-script/sheet-write.gs', import.meta.url), 'utf8'), ctx);
+  const ymd = d => d.toISOString().slice(0, 10);
+  const hash = t => String([...t].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7));
+  const sheets = () => ({
+    main: [['籠位', '編號', '犬名', '遛狗日期', '誰遛的', '備註'], ['A01', '9001', '測試狗', '2026/10/1', '', ''], ['B01', '9003', '二號', '', '甲', '怕生'],
+      ['備註1', '1/7 換籠', '', '', '', '']],
+    departed: [['編號', '犬名', '出所日期', '備註'], ['8001', '舊狗', new Date('2026-09-01T00:00:00Z'), '被認養']],
+    groups: [['', ''], [2, 1], ['測試狗', '二號'], ['二號', ''], ['新十', '舊八']],
+  });
+  const units = vm.runInContext('dogListUnits', ctx)(sheets(), ymd, hash);
+  assert.deepEqual(JSON.parse(JSON.stringify(Object.keys(units).sort())), ['departed:8001', 'groups:0', 'groups:1', 'main:9001', 'main:9003', 'notes']);
+  const edited = vm.runInContext('dogListKeysForEdit', ctx)('main', sheets().main, vm.runInContext('findHeader', ctx)(sheets().main), 1, 3, 0, 0);
+  assert.deepEqual(JSON.parse(JSON.stringify(edited)), ['main:9001', 'main:9003', 'notes']);
+  const order = vm.runInContext('orderDogListKeys', ctx);
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    const fingerprints = Object.fromEntries(Object.entries(units).map(([k, u]) => [k, u.hash]));
+    const scan = async () => (await (await post(env, 'dog-list-scan', { fingerprints })).json()).want;
+    const want = order(await scan());
+    assert.equal(want[0].split(':')[0], 'main', '主清單先送，狗群才對得到犬名');
+    for (let i = 0; i < want.length; i += 10) assert.ok((await send(env, want.slice(i, i + 10).map(k => units[k]))).every(r => r.ack));
+    assert.deepEqual(await scan(), []);
+    assert.deepEqual((await env.DB.prepare('SELECT name FROM v3_sheet_groups WHERE column_index=0 ORDER BY row_index').all()).results.map(r => r.name), ['測試狗', '二號']);
+    const changed = sheets();
+    changed.main[2][0] = 'C09';
+    const again = vm.runInContext('dogListUnits', ctx)(changed, ymd, hash);
+    fingerprints['main:9003'] = again['main:9003'].hash;
+    assert.deepEqual(await scan(), ['main:9003']);
+  } finally { env.DB.close(); }
+});

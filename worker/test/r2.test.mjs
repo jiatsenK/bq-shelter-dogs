@@ -358,14 +358,14 @@ test('縮圖：列出還沒縮圖的、收 Action 傳回的縮圖；原圖不在
   assert.deepEqual((await json(await admin(call, 'thumbs'))).body.pending, ['photos/3.jpg']);
 });
 
-test('保險同步時清掉超過 30 天的 Trash；還沒縮圖的不再叫 Action（#305，只在上傳時叫）', async () => {
+test('每月排程清掉超過 30 天的 Trash（#501）；還沒縮圖的不再叫 Action（#305，只在上傳時叫）', async () => {
   const { env, PHOTOS, calls } = setup({ assets: { 'photos/1.jpg': OLD } });
   const now = Date.now();
   const oldId = await r2.toTrash(env, SITE, 'photos/1.jpg', { dogId: '1', kind: 'main' }, now - 31 * 86400000);
   const newId = await r2.toTrash(env, SITE, 'photos/1.jpg', { dogId: '1', kind: 'main' }, now - 29 * 86400000);
   await PHOTOS.put('photos/5.jpg', OLD);
   const r = await maintenance(env, now);
-  assert.deepEqual(r, { purged: 1 });
+  assert.deepEqual(r, { at: new Date(now).toISOString(), purged: 1 });
   assert.equal(PHOTOS.objects.has(`trash/${oldId}/photo.jpg`), false);
   assert.equal(PHOTOS.objects.has(`trash/${newId}/photo.jpg`), true);
   assert.equal(dispatched(calls), 0);

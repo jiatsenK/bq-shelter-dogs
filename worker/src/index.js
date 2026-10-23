@@ -12,7 +12,8 @@ import { retryWalks, scanTick } from './walk-retry.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
-import { markChanged, planTick, refreshPlan, rememberSignature, sheetSignature, taiwanYmd } from './sync-plan.js';
+import { taiwanYmd } from './sync-plan.js';
+import { applyDogListRows, scanDogList, DOG_LIST_ROWS_MAX } from './dog-list.js';
 import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache, previousWalk } from './today.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
@@ -22,6 +23,9 @@ import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readW
 // 保險掃描台灣 09:43、13:53、23:53（UTC 01:43、05:53、15:53）
 const RETRY_CRON = '5-59/10 * * * *';
 const SCAN_CRONS = ['43 1 * * *', '53 5,15 * * *'];
+// 照片垃圾桶每月 1 日台灣 10:17（#501，ADR 0018 第 7 點）；每 10 分鐘叫 GitHub 同步試算表的排程已移除，狗清單改由 GAS 編輯觸發送列（worker/src/dog-list.js）
+const TRASH_CRON = '17 2 1 * *';
+const DOG_LIST_SCAN_MAX_BYTES = 512 * 1024;
 const EDIT_ROWS_MAX = 50;
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
@@ -70,8 +74,6 @@ const WALK_LIMITS = [
   { windowMs: 60 * 1000, max: 30 },
   { windowMs: 60 * 60 * 1000, max: 200 },
 ];
-// 網站「更新」按鈕：同一個人 2 分鐘 1 次；同步本身要跑約 1 分鐘，按再多次也沒用
-const SYNC_LIMITS = [{ windowMs: 2 * 60 * 1000, max: 1 }];
 
 // 注意：Cloudflare 會同時開好幾份 Worker，下面這兩個暫存各自獨立，
 // 所以頻率限制是「盡量擋」，不是精確計數；目的是擋住一直狂傳，不是算帳
@@ -214,22 +216,6 @@ async function getDogs(env, origin) {
     } catch (e) { /* 沒有版本號只是照片可能用到快取，狗的資料照給 */ }
   }
   return reply(200, { ok: true, ...data }, origin);
-}
-
-// 定時叫 GitHub 跑同步試算表；成功時 GitHub 回 204
-const SYNC_WORKFLOW = 'sync-sheet.yml';
-// daily：台灣 6:30 的保險同步，同步會再核對每隻狗最後一次溜狗（ADR 0010）
-async function triggerSync(env, { daily = false } = {}) {
-  const cfg = config(env);
-  if (!cfg.token) throw new Error('沒有設定 GITHUB_TOKEN，無法叫同步');
-  const res = await github(cfg, `actions/workflows/${SYNC_WORKFLOW}/dispatches`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ref: cfg.branch, ...(daily ? { inputs: { daily: 'true' } } : {}) }),
-  });
-  // 403／404 多半是 token 沒開 Actions 寫入權限；丟錯誤讓 Cloudflare 的 Cron 紀錄顯示失敗
-  if (res.status !== 204) throw new Error(`叫同步失敗（GitHub ${res.status}）`);
-  return res.status;
 }
 
 // 編號 → 犬名：只讀 D1 主清單；未接 D1 時停止照片寫入。
@@ -547,37 +533,23 @@ async function queueThumbs(env) {
   });
 }
 
-// 每天保險同步時順便做：清掉超過 30 天的 Trash。縮圖只在上傳時叫一次（#305），沒縮圖的網站顯示原圖
+// 照片垃圾桶每月 1 日清一次（#501，ADR 0018 第 7 點），不再綁在同步上：清掉超過 30 天的，結果記在 v3_sync_state 的 trash_purged（GET /admin/trash 的 lastPurge）
 async function maintenance(env, now = Date.now()) {
-  return { purged: await r2.purgeTrash(env, now) };
+  const result = { at: new Date(now).toISOString(), purged: await r2.purgeTrash(env, now) };
+  // 記不進去不影響已清掉的照片，只是查不到這次結果
+  try { if (env && env.DB) await env.DB.prepare("INSERT INTO v3_sync_state(key,value) VALUES('trash_purged',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify(result)).run(); }
+  catch (e) { console.warn('trash_purged:', e.message); }
+  return result;
 }
 
-// Cron 每 10 分鐘一次（ADR 0012）：有改才叫同步，台灣 6:30 保險同步；叫完記下試算表指紋，之後按「更新」沒變就不用再叫
-async function syncTick(env, now) {
-  if (!env || !env.DB) return 'none';
-  const plan = await planTick(env.DB, now);
-  if (plan !== 'daily' && plan !== 'changed') return plan;
-  try {
-    await triggerSync(env, { daily: plan === 'daily' });
-  } catch (e) {
-    // 沒叫成就把「有改」放回去，下一格再試，不要等到隔天
-    await markChanged(env.DB, now).catch(() => {});
-    throw e;
-  }
-  const cfg = config(env);
-  if (cfg.sheetId) await sheetSignature(cfg.sheetId).then(sig => rememberSignature(env.DB, sig)).catch(() => {});
-  return plan;
-}
-
-// 通知只標記狗清單有改，請求內容不提供格子值；今日溜狗改由 /walk-writeback/rows 只送改到的列（#500）。
+// 舊的「試算表有改」通知（ADR 0012）：#501 起狗清單改由 /walk-writeback/dog-list 只送改到的列，這裡只驗證後回 ok，
+// 讓還沒換掉觸發器的舊 Apps Script 不報錯；不再記「有改」、不叫同步。
 async function sheetChanged(request, env) {
   const key = env && env.SHEET_NOTIFY_KEY ? String(env.SHEET_NOTIFY_KEY) : '';
   if (!key || !env.DB) return fail(503, '還沒設定試算表通知', '');
   if (env.PREVIEW) return fail(403, '這是預覽版，不收試算表通知', '');
   if (request.method !== 'POST') return fail(405, '試算表通知只能用 POST', '');
   if (!await sameSecret(request.headers.get('X-Notify-Key') || '',key)) return fail(403, '通知密碼不對', '');
-  // 非溜狗欄位仍須交既有同步；不因今日狀態已處理就消掉這個標記。
-  if (!await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='changed'").first()) await markChanged(env.DB);
   return reply(200, { ok: true }, '');
 }
 
@@ -730,7 +702,11 @@ async function admin(request, env, origin, path) {
   if (m === 'POST' && path === '/admin/verify') return verify(request, env, origin);
   if (m === 'GET' && path === '/admin/thumbs') return reply(200, { ok: true, pending: await r2.pendingThumbs(env) }, origin);
   if (m === 'PUT' && path.startsWith('/admin/thumbs/')) return putThumb(request, env, origin, decodeURIComponent(path.slice('/admin/thumbs/'.length)));
-  if (m === 'GET' && path === '/admin/trash') return reply(200, { ok: true, days: r2.TRASH_DAYS, trash: await r2.listTrash(env) }, origin);
+  if (m === 'GET' && path === '/admin/trash') {
+    let lastPurge = null;
+    try { lastPurge = JSON.parse(await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='trash_purged'").first('value') || 'null'); } catch { /* 沒接 D1 或還沒清過 */ }
+    return reply(200, { ok: true, days: r2.TRASH_DAYS, trash: await r2.listTrash(env), lastPurge }, origin);
+  }
   const restore = path.match(/^\/admin\/trash\/([^/]+)\/restore$/);
   if (m === 'POST' && restore) return restoreTrash(request, env, origin, decodeURIComponent(restore[1]));
   return fail(404, '沒有這個管理功能', origin);
@@ -1237,24 +1213,9 @@ const SITE_ROUTES = {
     } },
   '/groups': { method: 'POST', wrongMethod: '編輯狗群只能用 POST /groups', crash: [500, '編輯狗群發生錯誤'],
     run: ({ request, env, origin }) => writeGroup(request, env, origin) },
-  // 網站「更新」按鈕
-  '/sync': { method: 'POST', wrongMethod: '更新只能用 POST /sync', crash: [502, '叫同步失敗'],
-    async run({ request, env, origin, cfg }) {
-      const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-      if (!allow(`sync:${ip}`, SYNC_LIMITS, Date.now())) return fail(429, '剛剛已經在更新了，請稍等一下', origin);
-      // ADR 0012：先比對試算表指紋，沒變就不叫 GitHub；沒接 D1 或沒設試算表 ID 就照舊直接叫
-      if (env && env.DB && cfg.sheetId) {
-        if (await refreshPlan(env.DB, () => sheetSignature(cfg.sheetId)).catch(() => 'sync') === 'same') return reply(200, { ok: true, unchanged: true }, origin);
-      }
-      try {
-        await triggerSync(env);
-        return reply(200, { ok: true }, origin);
-      } catch (e) {
-        // 這次沒叫成，忘掉剛記的指紋，下次按「更新」才會再叫
-        if (env && env.DB && cfg.sheetId) await rememberSignature(env.DB, '').catch(() => {});
-        return fail(502, e.message || '叫同步失敗', origin);
-      }
-    } },
+  // 網站「更新」按鈕：#501 起狗清單有人編輯就直接進 D1，沒有要叫的同步；回 unchanged，網站照常重新讀 D1
+  '/sync': { method: 'POST', wrongMethod: '更新只能用 POST /sync', crash: [502, '更新發生錯誤'],
+    run: ({ origin }) => reply(200, { ok: true, unchanged: true }, origin) },
 };
 
 async function siteRoute(route, c) {
@@ -1270,20 +1231,16 @@ async function siteRoute(route, c) {
 
 export default {
   // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch 和 scheduled
-  testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, walkersDate, triggerSync, maintenance },
+  testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, walkersDate, maintenance },
 
   // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 wrangler.jsonc 的 triggers）
-  // 每個排程只跑一件（#500）：RETRY_CRON 寫回重試、SCAN_CRONS 保險掃描，其他跑試算表同步；沒帶 cron（測試）全部都跑
+  // 每個排程只跑一件（#500、#501）：RETRY_CRON 寫回重試、SCAN_CRONS 保險掃描、TRASH_CRON 照片垃圾桶；沒帶 cron（測試）跑溜狗兩件
   async scheduled(event, env, ctx) {
     const now = event && event.scheduledTime ? event.scheduledTime : Date.now();
     const cron = event && event.cron;
-    const walkOnly = cron === RETRY_CRON || SCAN_CRONS.includes(cron);
+    if (cron === TRASH_CRON) { if (r2.r2On(env)) ctx.waitUntil(maintenance(env, now)); return; }
     if (!cron || SCAN_CRONS.includes(cron)) ctx.waitUntil(cron ? scanTick(env, now) : scanTick(env, now).then(() => retryWalks(env, now)));
     else if (cron === RETRY_CRON) ctx.waitUntil(retryWalks(env, now));
-    if (walkOnly) return;
-    ctx.waitUntil(syncTick(env, now).then(plan => {
-      if (plan === 'daily' && r2.r2On(env)) return maintenance(env, now);
-    }));
   },
 
   async fetch(request, env, ctx) {
@@ -1347,7 +1304,7 @@ export default {
         return fail(500, '記錄試算表通知發生錯誤', '');
       }
     }
-    if (['/walk-writeback/target', '/walk-writeback/receipt', '/walk-writeback/legacy-check', '/walk-writeback/observe', '/walk-writeback/rows'].includes(path)) {
+    if (['/walk-writeback/target', '/walk-writeback/receipt', '/walk-writeback/legacy-check', '/walk-writeback/observe', '/walk-writeback/rows', '/walk-writeback/dog-list', '/walk-writeback/dog-list-scan'].includes(path)) {
       if (request.method !== 'POST' || env?.PREVIEW || !env?.DB || !cfg.sheetWriteKey) return fail(403, '不接受寫回要求', '');
       const supplied = request.headers.get('X-Sheet-Write-Key') || '';
       const digest = text => crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -1357,11 +1314,21 @@ export default {
       if (different) return fail(403, '寫回驗證失敗', '');
       try {
         const raw = await request.text();
-        if (raw.length > WALK_MAX_BYTES) return fail(413, '資料太大', '');
+        if (raw.length > (path.includes('/dog-list') ? DOG_LIST_SCAN_MAX_BYTES : WALK_MAX_BYTES)) return fail(413, '資料太大', '');
         const input = JSON.parse(raw);
+        // 狗清單（#501）：GAS 只送受影響的列；保險掃描只送指紋
+        if (path.endsWith('/dog-list')) {
+          if (!Array.isArray(input.rows) || input.rows.length > DOG_LIST_ROWS_MAX) return fail(400, `每批最多 ${DOG_LIST_ROWS_MAX} 列`, '');
+          return reply(200, { ok: true, results: await applyDogListRows(env.DB, input.rows, env) }, '');
+        }
+        if (path.endsWith('/dog-list-scan')) {
+          const fp = input.fingerprints;
+          if (!fp || typeof fp !== 'object' || Array.isArray(fp) || Object.values(fp).some(v => typeof v !== 'string')) return fail(400, '指紋格式不對', '');
+          return reply(200, { ok: true, ...await scanDogList(env.DB, fp) }, '');
+        }
         if (path.endsWith('/rows')) {
           if (!Array.isArray(input.rows) || input.rows.length > EDIT_ROWS_MAX) return fail(400,`每批最多 ${EDIT_ROWS_MAX} 列`,'');
-          return reply(200,{ ok:true, results:await reconcileEditedRows(env.DB,input.rows,env,markChanged) },'');
+          return reply(200,{ ok:true, results:await reconcileEditedRows(env.DB,input.rows,env) },'');
         }
         if (path.endsWith('/observe')) {
           if (!Array.isArray(input.observations) || input.observations.length > 10) return fail(400,'每批最多比對十隻狗','');
