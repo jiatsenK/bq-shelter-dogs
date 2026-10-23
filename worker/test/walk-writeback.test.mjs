@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import worker from '../src/index.js';
 import { dispatchWalk } from '../src/walk-accept.js';
+import { walkFingerprint } from '../src/walk-reconcile.js';
 import { setup, request, post, current } from './walk-fixture.mjs';
 
 const source = readFileSync(new URL('../../apps-script/sheet-write.gs', import.meta.url), 'utf8');
@@ -73,17 +74,14 @@ test('寫前可見人工修改、同名無編號歧義、狗已移走都停止�
   assert.deepEqual(script.writes, []);
 });
 
-test('保險掃描四欄指紋相同只回沒改；格子一改指紋就變、回整份', () => {
+test('保險掃描按狗比指紋：只回 D1 有記且不同的狗，算法跟 Worker 一樣；沒帶指紋回整份', async () => {
   const script = scriptAdapter(() => { throw new Error('掃描不回呼 Worker'); }, { forbidFullRead:true });
-  const first = script.run({ action:'walkScan',key:'test-secret',sig:'' });
-  assert.match(first.sig,/^[0-9a-f]{64}$/);
-  assert.equal(first.rows.length,1);
-  const same = script.run({ action:'walkScan',key:'test-secret',sig:first.sig });
-  assert.equal(same.same,true); assert.equal(same.rows,undefined);
-  script.replace([['編號','犬名','遛狗日期','誰遛的'],['9001','測試狗','2026/9/1','甲']]);
-  const changed = script.run({ action:'walkScan',key:'test-secret',sig:first.sig });
-  assert.notEqual(changed.sig,first.sig); assert.equal(changed.same,undefined);
-  assert.equal(changed.rows[0].current.walker,'甲');
+  const fp = { '9001': await walkFingerprint('2026-10-01','') };
+  assert.deepEqual(JSON.parse(JSON.stringify(script.run({ action:'walkScan',key:'test-secret',fingerprints:fp }))),{ ok:true,rows:[] });
+  script.replace([['編號','犬名','遛狗日期','誰遛的'],['9001','測試狗','2026/9/1','甲'],['9002','D1 沒記','2026/9/1','乙'],['','同名','2026/9/1',''],['','同名','','']]);
+  const changed = script.run({ action:'walkScan',key:'test-secret',fingerprints:{ ...fp,'名:同名':'x' } });
+  assert.deepEqual(JSON.parse(JSON.stringify(changed.rows)),[{ dog:{ id:'9001',name:'測試狗' },current:{ date:'2026-09-01',walker:'甲' } }]);
+  assert.equal(script.run({ action:'walkScan',key:'test-secret' }).rows.length,4);
   assert.deepEqual(script.writes,[]);
 });
 

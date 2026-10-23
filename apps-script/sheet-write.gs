@@ -117,13 +117,16 @@ function readWalkSnapshot(sheet) {
   return { ok: true, rows: rows };
 }
 // 合併派送（#460）：一次收最多 10 隻，同一個鎖內逐隻走 writeLatestWalk；單隻失敗只記在該隻，不影響其他隻。
-// 保險掃描（#460）：四欄指紋跟 Worker 上次記的一樣就只回「沒改」，省掉傳整份和 Worker 逐隻比對。
+// 保險掃描（ADR 0018 第 5 點）：Worker 送每隻狗在 D1 記的表上值指紋，這裡只回指紋不一樣的狗，不再整份傳回。
+// 沒帶 fingerprints（舊版 Worker）就回整份，讓兩邊不必同時部署。
 function scanWalkSnapshot(sheet, req) {
   var snapshot = readWalkSnapshot(sheet);
-  var sig = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, JSON.stringify(snapshot.rows), Utilities.Charset.UTF_8)
-    .map(function (b) { return ((b + 256) % 256).toString(16).replace(/^(.)$/, '0$1'); }).join('');
-  if (req.sig && req.sig === sig) return { ok: true, same: true, sig: sig };
-  return { ok: true, sig: sig, rows: snapshot.rows };
+  if (!req.fingerprints || typeof req.fingerprints !== 'object') return snapshot;
+  return { ok: true, rows: walkScanRows(snapshot.rows, req.fingerprints, walkScanHash) };
+}
+function walkScanHash(text) {
+  return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, text, Utilities.Charset.UTF_8)
+    .map(function (b) { return ((b + 256) % 256).toString(16).replace(/^(.)$/, '0$1'); }).join('').slice(0, 16);
 }
 function writeLatestWalks(sheet, req, props) {
   if (!Array.isArray(req.items) || !req.items.length || req.items.length > 10) throw new Error('合併派送數量不對');
@@ -622,6 +625,16 @@ function dogListScan() {
 function orderDogListKeys(keys) {
   var rank = function (k) { return ['main', 'departed', 'groups', 'notes'].indexOf(k.split(':')[0]); };
   return keys.slice().sort(function (a, b) { return rank(a) - rank(b); });
+}
+// 保險掃描：一隻狗的指紋 = hash(JSON [日期, 名單])，要跟 worker/src/walk-reconcile.js 的 walkFingerprint 完全一樣。
+// 只回 D1 有記、指紋不同的狗；同一隻在表上出現兩次時都不回（Worker 本來就不比對重複的狗）。
+function walkScanRows(rows, fingerprints, hash) {
+  var count = {};
+  rows.forEach(function (r) { var k = dogKey(r.dog); count[k] = (count[k] || 0) + 1; });
+  return rows.filter(function (r) {
+    var k = dogKey(r.dog);
+    return count[k] === 1 && Object.prototype.hasOwnProperty.call(fingerprints, k) && fingerprints[k] !== hash(JSON.stringify([r.current.date, r.current.walker]));
+  });
 }
 function dogUnitKey(kind, id, name) { return kind + ':' + (id || '名:' + name); }
 

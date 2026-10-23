@@ -40,22 +40,23 @@ export async function reconcileWalkSnapshot(db, snapshot, observedStates, env, n
   return { changed,deferred };
 }
 
-// 四欄指紋（#460）：上次掃描全部收完時記下；Apps Script 讀到一樣的指紋就只回「沒改」，不傳整份。
-// 還有差異沒收完（未決派送、一輪上限、失敗）就不記，下次照常拿整份比對。
-const SCAN_SIG='walk_scan_sig';
+// 一隻狗的指紋：D1 記的「表上值」（base_date／base_walker）；要跟 apps-script/sheet-write.gs 的 walkScanRows 算法完全一樣。
+export async function walkFingerprint(date,walker) {
+  const bytes=new Uint8Array(await crypto.subtle.digest('SHA-256',new TextEncoder().encode(JSON.stringify([date,walker]))));
+  return [...bytes.slice(0,8)].map(b=>b.toString(16).padStart(2,'0')).join('');
+}
 
+// 保險掃描（ADR 0018 第 5 點）：按狗送指紋，Apps Script 只回指紋不同的狗，Worker 只比那幾隻。
+// 指紋直接由 base 算出、不另外記：寫回確認或人工值收下時 base 就跟著更新；沒收完（未決派送、一輪上限）的狗 base 不變，下次自然再回來。
 export async function scanWalks(env,now) {
-  const [observedResult,sigResult]=await env.DB.batch([
-    env.DB.prepare(`SELECT s.*,o.status FROM v3_walk_state s
-    JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version`),
-    env.DB.prepare('SELECT value FROM v3_sync_state WHERE key=?').bind(SCAN_SIG)]);
-  const observed=observedResult.results || [], known=sigResult.results?.[0]?.value || '';
+  const observed=(await env.DB.prepare(`SELECT s.*,o.status FROM v3_walk_state s
+    JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version`).all()).results || [];
   if (!observed.length) return;
-  const body=await callSheet(env,{ action:'walkScan',sig:known }).catch(e=>{ throw new Error(`主清單直接讀回失敗：${e.message}`); });
-  if (known && body.same===true && body.sig===known) return;
-  const { deferred }=await reconcileWalkSnapshot(env.DB,body.rows,observed,env,now);
-  const next=!deferred && typeof body.sig==='string' ? body.sig : '';
-  if (next!==known) await env.DB.prepare('INSERT INTO v3_sync_state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(SCAN_SIG,next).run();
+  const fingerprints={};
+  for (const s of observed) fingerprints[s.dog_key]=await walkFingerprint(s.base_date,s.base_walker);
+  const body=await callSheet(env,{ action:'walkScan',fingerprints }).catch(e=>{ throw new Error(`主清單直接讀回失敗：${e.message}`); });
+  if (Array.isArray(body.rows) && !body.rows.length) return;
+  await reconcileWalkSnapshot(env.DB,body.rows,observed,env,now);
 }
 
 // 有人編輯（#500，ADR 0018）：GAS 在同一 script lock 內直接讀出受影響的列送來，Worker 只比這幾隻，不回頭讀整張表。

@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { setup, post, request, current, day } from './walk-fixture.mjs';
 import { resolveIdentity } from '../src/identity.js';
-import { scanWalks } from '../src/walk-reconcile.js';
+import { scanWalks, walkFingerprint } from '../src/walk-reconcile.js';
 
 async function machine(env, action, body) {
   const response = await worker.fetch(new Request(`https://worker.example/api/walk-writeback/${action}`, {
@@ -72,7 +72,6 @@ test('掃描回應只有 HTTP 200 或 ok、沒有整份四欄，不能宣稱已�
     await baseline(env,'甲');
     globalThis.fetch=async ()=>Response.json({ ok:true });
     await assert.rejects(scanWalks(env,Date.now()),/不完整/);
-    assert.equal(await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='walk_scan_sig'").first(),null);
   } finally { globalThis.fetch=real; env.DB.close(); }
 });
 
@@ -178,39 +177,38 @@ test('#408 單狗比對及 target 在主清單與同狗歷史十倍後，讀寫�
   assert.deepEqual(await sample(200),await sample(20));
 });
 
-test('保險掃描讀寫量不隨歷史增加；四欄指紋沒變就不再比對、不寫入', async () => {
+test('保險掃描按狗送指紋，讀寫量不隨歷史增加；沒有不同的狗就不比對、不寫入', async () => {
   const env=await setup(),real=globalThis.fetch;
   try {
     await baseline(env,'甲');
     const sent=[];
-    globalThis.fetch=async (_url,init)=>{
-      const body=JSON.parse(init.body); sent.push(body.sig);
-      return body.sig==='same' ? Response.json({ ok:true,same:true,sig:'same' }) : Response.json({ ok:true,sig:'same',rows:[] });
-    };
+    globalThis.fetch=async (_url,init)=>{ sent.push(JSON.parse(init.body)); return Response.json({ ok:true,rows:[] }); };
     const sample=async ()=>{
       const before=(await env.DB.prepare('SELECT total_changes() n').first()).n,read=env.DB.stats.rowsRead;
       await scanWalks(env,Date.now());
       return { reads:env.DB.stats.rowsRead-read,writes:(await env.DB.prepare('SELECT total_changes() n').first()).n-before };
     };
-    await sample(); // 第一次：記下指紋
-    assert.deepEqual(sent,['']);
     const small=await sample();
-    assert.deepEqual(sent,['','same']);
+    assert.equal(small.writes,0);
+    const base=await env.DB.prepare("SELECT base_date,base_walker FROM v3_walk_state WHERE dog_key='9001'").first();
+    assert.deepEqual(sent[0].fingerprints,{ '9001':await walkFingerprint(base.base_date,base.base_walker) });
+    assert.equal(sent[0].sig,undefined);
     await env.DB.batch(Array.from({ length:200 },(_,i)=>env.DB.prepare("INSERT INTO v3_walk_outbox(dog_key,version,operation_date,target_date,target_walker,status,next_attempt_at) VALUES('9001',?,'2020-01-01','2020-01-01','舊','synced','x')").bind(i+100)));
     assert.deepEqual(await sample(),small);
-    assert.equal((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='walk_scan_sig'").first()).value,'same');
   } finally { globalThis.fetch=real; env.DB.close(); }
 });
 
-test('還有差異沒收完（未決派送）就不記指紋，下次照常整份比對', async () => {
+test('還有差異沒收完（未決派送）base 不變，下次掃描同一隻還會被找出來', async () => {
   const env=await setup(),real=globalThis.fetch;
   try {
     await baseline(env,'甲');
     await post(env,request('pending-sig-0002','乙'));
-    globalThis.fetch=async ()=>Response.json({ ok:true,sig:'x',rows:[{ dog,current:{ date:'2026-09-01',walker:'丁' } }] });
+    const sent=[];
+    globalThis.fetch=async (_url,init)=>{ sent.push(JSON.parse(init.body).fingerprints); return Response.json({ ok:true,rows:[{ dog,current:{ date:'2026-09-01',walker:'丁' } }] }); };
     await scanWalks(env,Date.now());
-    assert.equal(await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='walk_scan_sig'").first(),null);
+    await scanWalks(env,Date.now());
     assert.equal((await current(env)).walks[0].walker,'甲、乙');
+    assert.deepEqual(sent[1],sent[0]);
   } finally { globalThis.fetch=real; env.DB.close(); }
 });
 
