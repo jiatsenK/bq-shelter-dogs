@@ -217,3 +217,18 @@ test('#501 主清單和已出所都有的狗：GAS 不送已出所單位，網�
   }, d => d.toISOString().slice(0, 10), t => t);
   assert.deepEqual(JSON.parse(JSON.stringify(Object.keys(units).sort())), ['departed:8001', 'main:9001', 'main:名:無號']);
 });
+
+test('#501 新增狗先打名字、後補編號：補到同一隻，不多出一隻沒編號的', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    await send(env, [{ ...main({ dog:{ id:'', name:'先打名' }, cage:'舊B07', date:'' }), hash:'n1' }]);
+    const before = (await env.DB.prepare("SELECT dog_id FROM v3_sheet_main WHERE name='先打名'").first()).dog_id;
+    await send(env, [{ ...main({ dog:{ id:'9003', name:'先打名' }, cage:'舊B07', date:'' }), hash:'n2' }]);
+    const rows = (await env.DB.prepare("SELECT number,dog_id FROM v3_sheet_main WHERE name='先打名'").all()).results;
+    assert.deepEqual(rows, [{ number:'9003', dog_id:before }]);
+    assert.equal((await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='9003'").first()).dog_id, before);
+    const fp = JSON.parse((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_fp'").first()).value);
+    assert.equal(fp['main:名:先打名'], undefined, '舊的名字單位不留，掃描不會列成多出來的');
+  } finally { env.DB.close(); }
+});

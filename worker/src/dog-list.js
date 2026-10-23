@@ -51,16 +51,26 @@ const dropMainRow = (db, rowIndex) => ['v3_sheet_main_walkers', 'v3_sheet_former
   .map(t => db.prepare(`DELETE FROM ${t} WHERE row_index=?`).bind(rowIndex));
 const dropDeparture = (db, number) => [db.prepare('DELETE FROM v3_departure_items WHERE number=?').bind(number), db.prepare('DELETE FROM v3_departures WHERE number=?').bind(number)];
 
-async function applyMain(db, row, list, env) {
+async function applyMain(db, row, list, env, fp) {
   const dog = cleanDog(row.dog), cage = text(row.cage), note = text(row.note).replace(/\r\n?/g, '\n');
   // 犬隻資料列一定有犬名和籠位；表尾提示文字不算狗（同 parseMainList）
   if (!dog.name || !cage || dog.name === '犬名') return false;
   const date = YMD.test(text(row.date)) ? text(row.date) : null;
   const { codes, keyed, mine } = await walkersOf(row.walker, env);
   const covered = text(row.walker) ? 1 : 0;
-  const old = findMain(list, dog);
+  let old = findMain(list, dog);
   const out = [];
   let returnedLog = null;
+  // 新增狗常先打名字、後補編號：主清單上同名沒編號的那隻就是牠，補上編號，不另建一隻（2026-10-24 驗收時多出一隻沒編號的 TEST）
+  const unnumbered = !old && dog.id && list.find(m => m.number === '' && m.name === dog.name);
+  if (unnumbered && !(await db.prepare('SELECT 1 FROM v3_dog_numbers WHERE number=?').bind(dog.id).first())) {
+    old = unnumbered;
+    out.push(db.prepare('UPDATE v3_sheet_main SET number=? WHERE row_index=?').bind(dog.id, old.row_index),
+      db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, old.dog_id),
+      db.prepare("UPDATE v3_walks SET dog_number=? WHERE dog_id=? AND dog_number=''").bind(dog.id, old.dog_id));
+    old.number = dog.id;
+    delete fp[`main:名:${dog.name}`];
+  }
   if (old) {
     const oldCodes = (await db.prepare('SELECT walker_code FROM v3_sheet_main_walkers WHERE row_index=? ORDER BY position').bind(old.row_index).all()).results.map(r => r.walker_code);
     const codesChanged = keyed && !sameList(oldCodes, codes);
@@ -204,7 +214,7 @@ export async function applyDogListRows(db, rows, env, now = Date.now()) {
     const key = row && unitKey(row);
     if (!key) { results.push({ ok: false, ack: true, error: '看不懂的列' }); continue; }
     try {
-      const changed = row.sheet === 'main' ? await applyMain(db, row, list, env)
+      const changed = row.sheet === 'main' ? await applyMain(db, row, list, env, fp)
         : row.sheet === 'departed' ? await applyDeparted(db, row, list, now, fp)
         : row.sheet === 'groups' ? await applyGroup(db, row, list)
         : await applyNotes(db, row);
