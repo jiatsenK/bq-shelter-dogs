@@ -1,13 +1,9 @@
 // 狗狗資料：試算表同步進 D1（#245），網站從 Worker 的 /api/dogs 讀；前端不直接連試算表（#32）
-const DATA_URL = 'api/dogs'; // #247 起從 Worker 讀 D1，形狀跟原本的 data/dogs.json 一樣
 // 照片上傳服務（Cloudflare Worker，#47／#48）的網址。這裡只放網址，GitHub 寫入權限只在 Worker 裡，網站碰不到
 // - 網站和 Worker 是同一個 Cloudflare Worker（#125）：API 就在同一個網址的 /api 底下（本機用 wrangler dev 也一樣）
 // - 舊的單獨照片上傳 Worker 和舊網址的判斷 2026-10 拿掉了（舊網址只剩轉址，#129）
-// 留空的話詳細資訊不顯示上傳按鈕（用 let 是讓 tests/index.html 能換成測試網址）
-function uploadUrlFor(loc) {
-  return loc && loc.origin && loc.origin !== 'null' ? `${loc.origin}/api` : '';
-}
-let UPLOAD_URL = uploadUrlFor(globalThis.location); // 同步腳本的測試在 Node 裡讀這個檔，沒有 location
+// 留空的話詳細資訊不顯示上傳按鈕（用 let 是讓 tests/index.html 能關掉或打開寫入）；呼叫 /api 都經過 js/api.js 的 BQApi（#478）
+let UPLOAD_URL = BQApi.base(); // 同步腳本的測試在 Node 裡讀這個檔，沒有 location，是空字串
 const fixedCareEdits = new Map(); // 每隻狗各自的儲存狀態，關閉詳細資訊不會取消已送出的設定。
 // 上傳前先在手機上壓成 JPEG：長邊最多 1280px，避免 repo 堆滿手機原圖；上限要跟 Worker 的 MAX_BYTES 一致
 const PHOTO_MAX_EDGE = 1280;
@@ -16,9 +12,7 @@ const PHOTO_MAX_BYTES = 2 * 1024 * 1024;
 const FIRST_SCREEN_CARDS = 8;
 // 我最近溜過（#58）：同步時累積的遛狗紀錄（#56）。#96 起每個志工看自己的：
 // 紀錄裡的 walkers 是遛的人的代號，志工在「我溜過」輸入名字、經 Worker 換成代號後記在這支手機
-const WALKS_URL = 'api/walks'; // #260 起從 Worker 讀 D1，形狀跟原本的 data/walks.json 一樣
 // 休養中（K 2026-10-09）：在網站上設定「到哪天前暫停帶出」，經 Worker 存 D1、記編輯紀錄，不碰試算表
-const REST_URL = 'api/rest'; // #250 起休養設定存 D1，從 Worker 讀
 const WALKER_CODES_KEY = 'bq-walker-codes';
 const WALKER_CODE_PATTERN = /^[0-9a-f]{12}$/; // 跟 Worker 的 WALKER_CODE_LENGTH 一致
 // 這間收容所的設定在 js/site-config.js（K 2026-10-10：以後其他收容所要用，只改那個檔）
@@ -136,18 +130,11 @@ function loadDogsData() {
 }
 async function fetchDogsData(signal) {
   const groupReadRevision = typeof groupRevision === 'undefined' ? 0 : groupRevision;
-  const early = window.__dogsEarly;
-  window.__dogsEarly = null;
-  let res;
-  try {
-    res = await (early || fetch(DATA_URL, { cache: 'no-cache', signal }));
-  } catch (e) {
-    throw new Error('連不到網站，可能是網路中斷。');
-  }
-  if (!res.ok) throw new Error(`讀取狗的資料失敗（HTTP ${res.status}）。`);
-  let data;
-  try { data = await res.json(); } catch (e) { throw new Error('狗的資料格式壞掉了。'); }
-  return { ...parseDogsData(data), groupReadRevision };
+  const r = await BQApi.dogs({ signal });
+  if (r.error === 'network') throw new Error('連不到網站，可能是網路中斷。');
+  if (r.error === 'http') throw new Error(`讀取狗的資料失敗（HTTP ${r.status}）。`);
+  if (r.error) throw new Error('狗的資料格式壞掉了。');
+  return { ...parseDogsData(r.data), groupReadRevision };
 }
 
 // ── 我最近溜過（#58）──
@@ -176,10 +163,14 @@ function parseMyWalks(data, codes = loadMyCodes()) {
   return list.sort((a, b) => b.date - a.date || b.i - a.i).map(({ i, ...w }) => w);
 }
 
+// 讀取用：成功回 JSON，不然丟錯（非 2xx 是 HTTP 狀態碼，其他是瀏覽器原文）
+function apiData(r) {
+  if (r.error === 'http') throw new Error(`HTTP ${r.status}`);
+  if (r.error) throw new Error(r.message);
+  return r.data;
+}
 async function fetchWalks() {
-  const res = await fetch(WALKS_URL, { cache: 'no-cache' });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return res.json();
+  return apiData(await BQApi.walks());
 }
 // 按年拿舊紀錄（ADR 0013，#346）：api/walks 的 years 是每年的版本號，網址帶版本號，瀏覽器快取過就不再下載。
 // 只有我溜過月曆翻到上個月 1 號以前、那一年還沒拿過才拿
@@ -199,9 +190,7 @@ async function loadWalkYear(month, today = new Date()) {
   if (!ver || month >= recentStartMonth(today) || walkYears[year] === 'ready' || walkYears[year] === 'loading') return;
   walkYears[year] = 'loading';
   try {
-    const res = await fetch(`${WALKS_URL}?year=${year}&v=${encodeURIComponent(ver)}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const body = await res.json();
+    const body = apiData(await BQApi.walksYear(year, ver));
     // 近期範圍以內以 api/walks 為準；那一年更早的換成拿回來的
     const cut = `${recentStartMonth(today)}-01`;
     const old = y => w => !(String(w.date || '').startsWith(y) && String(w.date || '') < cut);
@@ -286,9 +275,10 @@ function saveMyCodes(codes) {
 }
 
 async function identityRequest(action, body) {
-  const res = await fetch(UPLOAD_URL + '/identity' + action, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  const out = await res.json();
-  if (!res.ok || !out.ok) { const e = new Error(out.error || '身分設定失敗，請稍後再試'); e.targetCode = out.targetCode; throw e; }
+  const r = await BQApi.identity(action, body);
+  if (r.error === 'network' || !r.data) throw new Error(r.message);
+  const out = r.data;
+  if (!r.ok || !out.ok) { const e = new Error(out.error || '身分設定失敗，請稍後再試'); e.targetCode = out.targetCode; throw e; }
   return out;
 }
 async function renameWalker() {
@@ -396,13 +386,10 @@ async function setWalkerName(raw) {
 async function walkerCodesFor(names) {
   let out = null;
   try {
-    const res = await fetch(`${UPLOAD_URL}/walker-code`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ names: [...new Set(names)] }),
-    });
-    out = await res.json().catch(() => null);
-    if (!res.ok) throw new Error((out && out.error) || `HTTP ${res.status}`);
+    const r = await BQApi.walkerCodes([...new Set(names)]);
+    if (r.error === 'network') throw new Error(r.message);
+    out = r.data;
+    if (r.error === 'http') throw new Error((out && out.error) || `HTTP ${r.status}`);
   } catch (e) {
     console.error(e);
     return { codes: [], error: out && out.error ? out.error : '連不上網路，請稍後再試' };
@@ -850,16 +837,11 @@ function openFormerEdit(dog) {
 
 // 補或刪舊編號（method 由呼叫的人給）；回空字串是成功，不然是要給人看的原因
 async function sendFormer(dog, former, method) {
-  try {
-    const res = await fetch(`${UPLOAD_URL}/former/${encodeURIComponent(dog.id)}`, {
-      method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ editor: editorName(), former }),
-    });
-    const out = await res.json().catch(() => null);
-    if (!res.ok || !out || !out.ok) return (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
-    return '';
-  } catch (err) {
-    return '沒有存進去，請確認網路後再試';
-  }
+  const r = await BQApi.saveFormer(dog.id, method, { editor: editorName(), former });
+  if (r.error === 'network') return '沒有存進去，請確認網路後再試';
+  const out = r.data;
+  if (!r.ok || !out || !out.ok) return (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
+  return '';
 }
 
 // 存好就改這台的狗資料，天數、排序馬上重算
@@ -1175,14 +1157,12 @@ async function reconcileFavorites(state, codes, io) {
 }
 
 async function favoriteRequest(codes, op) {
-  const base = UPLOAD_URL + '/favorites';
   // 手機還有舊格式（編號／狗名）常溜時才帶 key，讓 Worker 換成狗 ID
-  const url = op ? base : base + '?codes=' + encodeURIComponent(codes[0]) + localFavs().map(k => '&key=' + encodeURIComponent(k)).join('');
-  const res = await fetch(url, op ? {
-    method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...op, codes: op.codes.slice(0, 1) }),
-  } : { cache: 'no-store' });
-  const out = await res.json();
-  if (!res.ok || !out.ok || (!op && (!Array.isArray(out.ids) || !out.aliases))) throw new Error('常溜同步失敗');
+  const r = op ? await BQApi.saveFavorite({ ...op, codes: op.codes.slice(0, 1) })
+    : await BQApi.favorites('codes=' + encodeURIComponent(codes[0]) + localFavs().map(k => '&key=' + encodeURIComponent(k)).join(''));
+  if (r.error === 'network' || !r.data) throw new Error(r.message);
+  const out = r.data;
+  if (!r.ok || !out.ok || (!op && (!Array.isArray(out.ids) || !out.aliases))) throw new Error('常溜同步失敗');
   return out;
 }
 
@@ -1251,18 +1231,16 @@ function setWalkerNamesOffline(on) {
 async function loadWalkerNames() {
   if (!UPLOAD_URL) return;
   const read = walkRegistration.beginRead();
-  let res;
-  try {
-    res = await fetch(`${UPLOAD_URL}/walkers`, { cache: 'no-cache' });
-  } catch (e) {
-    console.error(e);
+  const r = await BQApi.walkers();
+  if (r.error === 'network') {
+    console.error(r.message);
     setWalkerNamesOffline(true);
     return;
   }
   setWalkerNamesOffline(false);
   try {
-    if (!res.ok) return;
-    const out = await res.json();
+    if (r.error === 'http') return;
+    const out = apiData(r);
     if (out && out.walkers && typeof out.walkers === 'object') {
       walkerNames = out.walkers;
       walkerDates = out.dates && typeof out.dates === 'object' ? out.dates : {};
@@ -1282,13 +1260,11 @@ const TODAY_REFETCH_MS = 30 * 1000;
 let todayFetchedAt = 0;
 let todayState = 'loading'; // 初次請求完成後才呈現完整狀態；失敗沿用同步資料
 // 排序需要的兩份狀態不能無限等待；包含讀取回應內容的時間。
-async function fetchWalkStatus(url) {
+async function fetchWalkStatus(call) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 8000);
   try {
-    const res = await fetch(url, { cache: 'no-cache', signal: controller.signal });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return await res.json();
+    return apiData(await call(controller.signal));
   } finally { clearTimeout(timeout); }
 }
 async function loadTodayWalks() {
@@ -1297,7 +1273,7 @@ async function loadTodayWalks() {
   let received = false;
   try {
     if (!UPLOAD_URL) return;
-    const payload = await fetchWalkStatus(`${UPLOAD_URL}/today${SITE.d1WalkAccept ? '?source=d1' : ''}`);
+    const payload = await fetchWalkStatus(signal => BQApi.todayWalks({ d1: SITE.d1WalkAccept, signal }));
     if (SITE.d1WalkAccept && (payload?.source !== 'd1' || !Array.isArray(payload.walks))) return;
     walkRegistration.receiveToday(payload, allDogs, read);
     received = true;
@@ -1506,7 +1482,7 @@ const walkRegistration = createWalkRegistration({
     writeJsonKey('bq-walk-requests', items);
     if (JSON.stringify(readJsonKey('bq-walk-requests')) !== JSON.stringify(items)) throw new Error('無法保留登記識別，尚未送出');
   },
-  lookupRequest: id => fetchWalkStatus(`${UPLOAD_URL}/walk/result?requestId=${encodeURIComponent(id)}`),
+  lookupRequest: id => fetchWalkStatus(signal => BQApi.walkResult(id, { signal })),
   key: walkKey, date: () => BQDates.localDateKey(new Date()), walker: loadWalkerName, alias: myAliasIn,
   canonical: canonicalWalker, split: splitWalkers,
   names: () => loadMyCodes().map(code => walkerCodeNames[code]).filter(Boolean),
@@ -1519,10 +1495,11 @@ const walkRegistration = createWalkRegistration({
   save: (items, day) => saveSheetWrites(items, BQDates.parseYmd(day)),
   send: async payload => {
     if (!UPLOAD_URL || sheetWriteState === 'off' || (payload.action !== 'undo' && !payload.walker)) return { off: true };
-    const res = await fetch(`${UPLOAD_URL}/walk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    const out = await res.json().catch(() => null);
-    if (res.status === 503 && out?.code === 'off') { sheetWriteState = 'off'; return { off: true }; }
-    if (!res.ok || !out?.ok) return { ...out, ok: false, httpStatus: res.status, error: out?.error || `HTTP ${res.status}` };
+    const r = await BQApi.walk(payload);
+    if (r.error === 'network') throw new Error(r.message);
+    const out = r.data;
+    if (r.status === 503 && out?.code === 'off') { sheetWriteState = 'off'; return { off: true }; }
+    if (!r.ok || !out?.ok) return { ...out, ok: false, httpStatus: r.status, error: out?.error || `HTTP ${r.status}` };
     sheetWriteState = 'on';
     return out;
   },
@@ -1604,16 +1581,13 @@ async function sendAppend() {
   a.phase = 'busy'; a.error = '';
   rerenderAppend(a.kind);
   const payload = { action: a.kind, walker: who, editor: who, text: a.text.trim(), dogs: a.kind === 'note' ? [{ id: a.dog.id || '', name: a.dog.name }] : [] };
-  let res = null, out = null;
-  try {
-    res = await fetch(`${UPLOAD_URL}/walk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-    out = await res.json().catch(() => null);
-  } catch (e) { res = null; }
+  const res = await BQApi.walk(payload);
+  const out = res.data;
   if (sheetAppend !== a) return;
   const r = out && out.ok && Array.isArray(out.results) ? out.results[0] : null;
   if (!r || r.status !== 'written') {
     a.phase = 'preview';
-    a.error = !res ? '網路不通，沒寫進試算表，請稍後再試' : r && r.status === 'notFound' ? '試算表找不到這隻狗，沒寫進去' : `沒寫進試算表：${(out && out.error) || `HTTP ${res.status}`}`;
+    a.error = res.error === 'network' ? '網路不通，沒寫進試算表，請稍後再試' : r && r.status === 'notFound' ? '試算表找不到這隻狗，沒寫進去' : `沒寫進試算表：${(out && out.error) || `HTTP ${res.status}`}`;
     rerenderAppend(a.kind);
     return;
   }
@@ -1826,11 +1800,10 @@ async function toggleFixedCare(dog) {
   fixedCareEdits.set(key, state);
   renderDetail();
   try {
-    const res = await fetch(`${UPLOAD_URL}/fixed-care/${encodeURIComponent(key)}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ editor, enabled }),
-    });
-    const out = await res.json().catch(() => null);
-    if (!res.ok || !out?.ok || out.enabled !== enabled) throw new Error(out?.error || '沒有存進去，請稍後再試');
+    const r = await BQApi.saveFixedCare(key, { editor, enabled });
+    if (r.error === 'network') throw new Error(r.message);
+    const out = r.data;
+    if (!r.ok || !out?.ok || out.enabled !== enabled) throw new Error(out?.error || '沒有存進去，請稍後再試');
     dog.covered = enabled;
     for (const current of allDogs) if ((current.id || current.dogId) === key) current.covered = enabled;
     if (detailDog && (detailDog.id || detailDog.dogId) === key) detailDog.covered = enabled;
@@ -1999,18 +1972,11 @@ async function saveIntro() {
   if (e.events.reduce((n, row) => n + [...row.event].length, 0) > INTRO_MAX) { e.phase = 'error'; e.error = '原因合計最多 1000 字'; renderDetail(); return; }
   e.phase = 'saving'; e.error = ''; renderDetail();
   let out = null, error = '';
-  try {
-    const res = await fetch(`${UPLOAD_URL}/intro/${encodeURIComponent(e.dog.id)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ editor, text, events: e.events }),
-    });
-    out = await res.json().catch(() => null);
-    if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
-    else if (!Array.isArray(out.intakeEvents) && (e.events.length || intakeEventsOf(e.dog).length)) error = '伺服器尚未確認逐次紀錄已儲存，請稍後再試';
-  } catch (err) {
-    error = '沒有存進去，請確認網路後再試';
-  }
+  const r = await BQApi.saveIntro(e.dog.id, { editor, text, events: e.events });
+  out = r.data;
+  if (r.error === 'network') error = '沒有存進去，請確認網路後再試';
+  else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
+  else if (!Array.isArray(out.intakeEvents) && (e.events.length || intakeEventsOf(e.dog).length)) error = '伺服器尚未確認逐次紀錄已儲存，請稍後再試';
   if (introEdit !== e) return;
   if (error) {
     e.phase = 'error'; e.error = error; renderDetail();
@@ -2080,16 +2046,11 @@ async function saveStays() {
   if (problem) { e.phase = 'error'; e.error = problem; renderDetail(); return; }
   e.phase = 'saving'; e.error = ''; renderDetail();
   let out = null, error = '';
-  try {
-    const res = await fetch(`${UPLOAD_URL}/stays/${encodeURIComponent(e.dog.id)}`, {
-      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ editor, before: e.before, stays: rows }),
-    });
-    out = await res.json().catch(() => null);
-    if (res.status === 409) error = '別人剛改過，請重新整理再改';
-    else if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
-  } catch (err) {
-    error = '沒有存進去，請確認網路後再試';
-  }
+  const r = await BQApi.saveStays(e.dog.id, { editor, before: e.before, stays: rows });
+  out = r.data;
+  if (r.error === 'network') error = '沒有存進去，請確認網路後再試';
+  else if (r.status === 409) error = '別人剛改過，請重新整理再改';
+  else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
   if (staysEdit !== e) return;
   if (error) { e.phase = 'error'; e.error = error; renderDetail(); return; }
   e.dog.stays = Array.isArray(out.stays) ? out.stays : rows;
@@ -2120,17 +2081,10 @@ async function saveRest(end = false) {
   if (!end && !BQDates.parseYmd(e.until)) { e.phase = 'error'; e.error = '請選到哪一天'; renderDetail(); return; }
   e.phase = 'saving'; e.error = ''; renderDetail();
   let out = null, error = '';
-  try {
-    const res = await fetch(`${UPLOAD_URL}/rest/${encodeURIComponent(e.dog.id)}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(end ? { editor, end: true } : { editor, until: e.until, reason: e.reason.trim() }),
-    });
-    out = await res.json().catch(() => null);
-    if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
-  } catch (err) {
-    error = '沒有存進去，請確認網路後再試';
-  }
+  const r = await BQApi.saveRest(e.dog.id, end ? { editor, end: true } : { editor, until: e.until, reason: e.reason.trim() });
+  out = r.data;
+  if (r.error === 'network') error = '沒有存進去，請確認網路後再試';
+  else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
   if (restEdit !== e) return;
   if (error) {
     e.phase = 'error'; e.error = error; renderDetail();
@@ -2149,7 +2103,7 @@ async function saveRest(end = false) {
 async function loadRest() {
   const before = restMap;
   try {
-    const data = await fetchWalkStatus(REST_URL);
+    const data = await fetchWalkStatus(signal => BQApi.rest({ signal }));
     if (!data || !data.rest || typeof data.rest !== 'object' || Array.isArray(data.rest)) throw new Error('休養設定格式不對');
     // 讀的期間這支手機剛改過設定，不蓋掉自己的修改。
     if (restMap === before) restMap = data.rest;
@@ -2747,17 +2701,10 @@ async function uploadPhoto() {
   up.error = '';
   renderDetail();
   let error = '';
-  try {
-    const res = await fetch(`${UPLOAD_URL}/photos/${encodeURIComponent(up.dog.id)}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'image/jpeg', ...editorHeaders() },
-      body: up.blob,
-    });
-    const out = await res.json().catch(() => null);
-    if (!res.ok || !out || !out.ok) error = (out && out.error) || `網站暫時收不到照片（${res.status}），請稍後再試；原本的照片不受影響`;
-  } catch (e) {
-    error = '上傳失敗，請確認網路後再試；原本的照片不受影響';
-  }
+  const r = await BQApi.uploadPhoto(up.dog.id, up.blob, editorHeaders());
+  const out = r.data;
+  if (r.error === 'network') error = '上傳失敗，請確認網路後再試；原本的照片不受影響';
+  else if (!r.ok || !out || !out.ok) error = (out && out.error) || `網站暫時收不到照片（${r.status}），請稍後再試；原本的照片不受影響`;
   if (photoUpload !== up) return; // 保險：上傳中不會被清掉（見 preparePhoto、hideDetail）
   if (error) {
     if (detailDog !== up.dog) { // 上傳途中關掉或換看別隻：用提示條告訴結果
@@ -4123,23 +4070,20 @@ async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES
   btn.classList.add('syncing');
   btn.setAttribute('aria-busy', 'true');
   try {
-    let res = null;
-    try {
-      res = await fetch(`${UPLOAD_URL}/sync`, { method: 'POST' });
-    } catch (e) {
+    const r = await BQApi.sync();
+    if (r.error === 'network') {
       showToast('連不到更新服務，請檢查網路');
       return;
     }
     // 429 表示同一支手機剛按過，同步已經在跑，一樣等新資料
-    if (!res.ok && res.status !== 429) {
-      // 附上 Worker 說的原因（例：GitHub 403＝token 沒開 Actions 權限），設定出錯時才查得到
-      let why = '';
-      try { why = String((await res.json()).error || ''); } catch (e) { /* 沒有內容就只顯示狀態碼 */ }
-      showToast(`更新失敗：${why || `HTTP ${res.status}`}`);
+    if (r.error === 'http' && r.status !== 429) {
+      // 附上 Worker 說的原因（例：GitHub 403＝token 沒開 Actions 權限），設定出錯時才查得到；沒有內容就只顯示狀態碼
+      const why = String((r.data && r.data.error) || '');
+      showToast(`更新失敗：${why || `HTTP ${r.status}`}`);
       return;
     }
     // ADR 0012：Worker 比對過試算表沒變，沒有叫同步，不用等
-    if (res.ok && (await res.clone().json().catch(() => ({}))).unchanged) {
+    if (r.ok && r.data?.unchanged) {
       // #399 網站設定與試算表同步時間無關；即使試算表沒改，也要讀回其他人的設定。
       try { applyDogsData(await loadDogsData()); } catch (e) {
         showToast('暫時讀不到網站設定，請稍後再更新');

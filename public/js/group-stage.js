@@ -206,9 +206,10 @@ async function writeGroup(body) {
   groupRevision++;
   groupBusy = true; render();
   try {
-    const res = await fetch('api/groups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...body, editor }) });
-    const out = await res.json();
-    if (!res.ok || !out.ok || !Number.isInteger(out.group?.column) || !Array.isArray(out.group.names)) throw new Error(out.error || '寫入失敗');
+    const r = await BQApi.saveGroup({ ...body, editor });
+    if (r.error === 'network' || !r.data) throw new Error(r.message);
+    const out = r.data;
+    if (!r.ok || !out.ok || !Number.isInteger(out.group?.column) || !Array.isArray(out.group.names)) throw new Error(out.error || '寫入失敗');
     // 使用既有 API 從試算表讀回的群，不以送出內容樂觀修改。
     const groups = groupStageData.groups;
     const i = groups.findIndex(g => g.column === out.group.column);

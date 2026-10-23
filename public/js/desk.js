@@ -108,7 +108,7 @@ async function deskLoadWalks() {
   if (deskWalkDays || deskWalksLoading) return;
   deskWalksLoading = true;
   try {
-    const data = walksData || await fetch(WALKS_URL, { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null));
+    const data = walksData || await BQApi.walks().then(r => (r.error === 'http' ? null : apiData(r)));
     const map = new Map();
     for (const w of (data && data.walks) || []) {
       const key = w.id ? w.id : `名:${w.name}`;
@@ -345,13 +345,10 @@ async function deskFillUploadPhoto() {
   if (!p || !dog || p.phase === 'uploading') return;
   p.phase = 'uploading'; p.error = ''; render();
   let error = '';
-  try {
-    const res = await fetch(`${UPLOAD_URL}/photos/${encodeURIComponent(dog.id)}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', ...editorHeaders() }, body: p.blob });
-    const out = await res.json().catch(() => null);
-    if (!res.ok || !out || !out.ok) error = (out && out.error) || `網站暫時收不到照片（${res.status}），原本的照片不受影響`;
-  } catch (e) {
-    error = '請確認網路後再按一次「上傳」，原本的照片不受影響';
-  }
+  const r = await BQApi.uploadPhoto(dog.id, p.blob, editorHeaders());
+  const out = r.data;
+  if (r.error === 'network') error = '請確認網路後再按一次「上傳」，原本的照片不受影響';
+  else if (!r.ok || !out || !out.ok) error = (out && out.error) || `網站暫時收不到照片（${r.status}），原本的照片不受影響`;
   if (deskFillPhoto !== p) return;
   if (error) { p.phase = 'error'; p.error = error; render(); return; }
   photoOverrides[dog.id] = p.url; // 這台電腦馬上換成新照片（其他人重新整理就會看到）
@@ -379,13 +376,10 @@ async function deskFillSaveIntro() {
   if ([...text].length > INTRO_MAX) { fail(`最多 ${INTRO_MAX} 字`); return; }
   e.phase = 'saving'; e.error = ''; render();
   let out = null, error = '';
-  try {
-    const res = await fetch(`${UPLOAD_URL}/intro/${encodeURIComponent(dog.id)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ editor, text }) });
-    out = await res.json().catch(() => null);
-    if (!res.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
-  } catch (err) {
-    error = '請確認網路後再按一次「儲存」';
-  }
+  const r = await BQApi.saveIntro(dog.id, { editor, text });
+  out = r.data;
+  if (r.error === 'network') error = '請確認網路後再按一次「儲存」';
+  else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
   if (deskFillIntro !== e) return;
   if (error) {
     fail(error);
