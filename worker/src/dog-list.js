@@ -85,7 +85,7 @@ async function applyMain(db, row, list, env, fp) {
   if (old) {
     const oldCodes = (await db.prepare('SELECT walker_code FROM v3_sheet_main_walkers WHERE row_index=? ORDER BY position').bind(old.row_index).all()).results.map(r => r.walker_code);
     const codesChanged = keyed && !sameList(oldCodes, codes);
-    const next = { name: dog.name, cage, note, walked_date: date, covered, my_walked: mine ? 1 : 0 };
+    const next = { name: dog.name, cage, note, walked_date: date, covered, my_walked: mine ? 1 : 0, walker: text(row.walker) };
     if (mine && date && !(old.my_walked_date >= date)) next.my_walked_date = date;
     const changed = Object.keys(next).filter(c => next[c] !== old[c]);
     if (changed.length) out.push(db.prepare(`UPDATE v3_sheet_main SET ${changed.map(c => `${c}=?`).join(',')} WHERE row_index=?`).bind(...changed.map(c => next[c]), old.row_index));
@@ -115,9 +115,9 @@ async function applyMain(db, row, list, env, fp) {
       if (dog.id) out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
     } else out.push(db.prepare('UPDATE v3_dogs SET name=? WHERE dog_id=? AND name<>?').bind(dog.name, dogId, dog.name));
     const rowIndex = Math.max(-1, ...list.map(m => m.row_index)) + 1;
-    out.push(db.prepare(`INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note,covered,walked_date,my_walked,my_walked_date,synced_at,sex)
-      VALUES(?,?,?,?,?,?,?,?,?,?,'',COALESCE((SELECT sex FROM v3_dogs WHERE dog_id=?),''))`)
-      .bind(rowIndex, dogId, dog.id, dog.name, cage, note, covered, date, mine ? 1 : 0, mine ? date : null, dogId));
+    out.push(db.prepare(`INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note,covered,walked_date,my_walked,my_walked_date,synced_at,sex,walker)
+      VALUES(?,?,?,?,?,?,?,?,?,?,'',COALESCE((SELECT sex FROM v3_dogs WHERE dog_id=?),''),?)`)
+      .bind(rowIndex, dogId, dog.id, dog.name, cage, note, covered, date, mine ? 1 : 0, mine ? date : null, dogId, text(row.walker)));
     out.push(db.prepare('INSERT INTO v3_sheet_former_numbers SELECT ?,ROW_NUMBER() OVER (ORDER BY number)-1,number FROM v3_dog_numbers WHERE dog_id=? AND number<>?').bind(rowIndex, dogId, dog.id));
     codes.forEach((code, i) => out.push(db.prepare('INSERT INTO v3_sheet_main_walkers VALUES(?,?,?)').bind(rowIndex, i, code)));
     // 又回到主清單（例：誤移、退養回來）不算離所；換了新編號回來的，舊離所註明用哪個編號回所
@@ -221,7 +221,7 @@ export async function applyDogListRows(db, rows, env, now = Date.now()) {
   const fp = await readFp(db);
   const before = JSON.stringify(fp);
   // 主清單約 300 列，每批讀一次換來逐列不必各查一次（每次呼叫 50 次查詢上限）
-  const list = (await db.prepare('SELECT row_index,dog_id,number,name,cage,note,walked_date,covered,my_walked,my_walked_date FROM v3_sheet_main').all()).results;
+  const list = (await db.prepare('SELECT row_index,dog_id,number,name,cage,note,walked_date,covered,my_walked,my_walked_date,walker FROM v3_sheet_main').all()).results;
   const results = [];
   for (const row of rows) {
     const key = row && unitKey(row);
@@ -250,7 +250,9 @@ export async function applyDogListRows(db, rows, env, now = Date.now()) {
 // 保險掃描：fingerprints { 單位: 指紋 }。回 want（要 GAS 送的）、extra（D1 有、試算表沒有，只列出來）
 export async function scanDogList(db, fingerprints, now = Date.now()) {
   const fp = await readFp(db);
-  const want = Object.keys(fingerprints).filter(k => fp[k] !== fingerprints[k]);
+  // #519 補填「誰遛的」原文：主清單 walker 還是 NULL 的狗指紋一樣也要，補好就不再要
+  const unfilled = new Set((await db.prepare("SELECT number, name FROM v3_sheet_main WHERE walker IS NULL").all()).results.map(r => `main:${r.number || `名:${r.name}`}`));
+  const want = Object.keys(fingerprints).filter(k => fp[k] !== fingerprints[k] || unfilled.has(k));
   const extra = Object.keys(fp).filter(k => !(k in fingerprints)).sort();
   let prev = [];
   try { prev = JSON.parse(await state(db, EXTRA_KEY) || '{}').keys || []; } catch { /* 讀不懂就重記 */ }

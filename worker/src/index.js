@@ -760,11 +760,11 @@ const WALKERS_CACHE_MS = 60 * 1000;
 // 看過的名字寫資料庫很花寫入額度（每個名字一列），快取改 1 分鐘後另外限制：名單沒變就 30 分鐘才記一次
 const WALKER_NAMES_REMEMBER_MS = 30 * 60 * 1000;
 let walkerNamesRemembered = null; // { at, names: 'a,b', older }
-// 主清單每隻狗：有今日溜狗狀態（v3_walk_state）用它，沒有用主清單的遛狗日期與名單代號換回名字（跟 walk-accept 的 seedState 一樣）。
+// 主清單每隻狗：有今日溜狗狀態（v3_walk_state）用它，沒有用主清單的遛狗日期與「誰遛的」原文（沒補填的用名單代號換回名字，跟 walk-accept 的 seedState 一樣）。
 // 回 { walkers: { 狗的 key: 名單 }, dates: { 狗的 key: 'YYYY-MM-DD' 或 '' }, names: [最近出現的在前，同一天照名單順序] }
 export async function readWalkersD1(db) {
   const [main, people, states] = await db.batch([
-    db.prepare('SELECT row_index, number, name, walked_date FROM v3_sheet_main ORDER BY row_index'),
+    db.prepare('SELECT row_index, number, name, walked_date, walker FROM v3_sheet_main ORDER BY row_index'),
     db.prepare('SELECT w.row_index, COALESCE(n.name, v.name) AS name FROM v3_sheet_main_walkers w LEFT JOIN v3_identity_names n ON n.code=w.walker_code LEFT JOIN v3_volunteer_codes c ON c.code=w.walker_code LEFT JOIN v3_volunteers v ON v.volunteer_id=c.volunteer_id ORDER BY w.row_index, w.position'),
     db.prepare('SELECT dog_key, effective_date, walker FROM v3_walk_state'),
   ]);
@@ -779,7 +779,8 @@ export async function readWalkersD1(db) {
   for (const r of main.results || []) {
     const key = r.number || `名:${r.name}`;
     const s = stateOf.get(key);
-    const text = s ? s.walker || '' : (namesOf.get(r.row_index) || []).join('、');
+    // 主清單存了「誰遛的」原文就用原文（#519）；還沒補填（NULL）才用代號換名字
+    const text = s ? s.walker || '' : r.walker ?? (namesOf.get(r.row_index) || []).join('、');
     const date = (s ? s.effective_date : r.walked_date) || '';
     walkers[key] = text;
     dates[key] = date;

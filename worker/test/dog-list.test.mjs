@@ -260,3 +260,31 @@ test('#519 改錯再改回（2026-10-24 IU 實測）：同一天先換人、日�
     assert.deepEqual(walks.map(w => [w.walk_date, w.walker_code]), [['2026-10-20', await walkerCode('甲', 'test')]]);
   } finally { env.DB.close(); }
 });
+
+test('#519 「誰遛的」原文存進 D1 主清單：/walkers 直接回原文，不用代號換名字', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    await send(env, [main({ date:'2026-10-05', walker:'嘉文+俐葶' })]);
+    assert.equal(await env.DB.prepare("SELECT walker FROM v3_sheet_main WHERE number='9001'").first('walker'), '嘉文+俐葶');
+    const body = await (await worker.fetch(new Request('https://bq-shelter-dogs.jiatsen-k.workers.dev/api/walkers', { headers:{ Origin:'https://bq-shelter-dogs.jiatsen-k.workers.dev' } }), env)).json();
+    assert.equal(body.walkers['9001'], '嘉文+俐葶');
+    // 清空也記成空字串（不是 NULL），手機才知道被清掉
+    await send(env, [main({ hash:'h2', date:'2026-10-05', walker:'' })]);
+    assert.equal(await env.DB.prepare("SELECT walker FROM v3_sheet_main WHERE number='9001'").first('walker'), '');
+  } finally { env.DB.close(); }
+});
+
+test('#519 補填原文：主清單 walker 還是 NULL 的狗，保險掃描指紋一樣也要送', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  const scan = async fingerprints => (await (await post(env, 'dog-list-scan', { fingerprints })).json());
+  try {
+    await send(env, [main()]);
+    assert.deepEqual((await scan({ 'main:9001':'h1' })).want, []);
+    await env.DB.prepare("UPDATE v3_sheet_main SET walker=NULL WHERE number='9001'").run();
+    assert.deepEqual((await scan({ 'main:9001':'h1' })).want, ['main:9001']);
+    await send(env, [main()]);
+    assert.deepEqual((await scan({ 'main:9001':'h1' })).want, [], '補好就不再要');
+  } finally { env.DB.close(); }
+});

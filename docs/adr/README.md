@@ -25,6 +25,7 @@
 | [0016](0016-undo-walk-from-server-history.md) | 撤銷溜了改由伺服器找回上一次，不再限登記的那支手機 | 現行 |
 | [0017](0017-frontend-es-modules.md) | 前端分段整理，最後改成 ES module | 現行 |
 | [0018](0018-today-walks-d1-event-sync.md) | 今日溜狗以 D1 為準，有人編輯才同步、只送改動 | 現行 |
+| [0019](0019-walker-names-in-d1.md) | 「誰遛的」原文存進 D1，公開檔案仍只放代號 | 現行 |
 
 ## 網站開關
 
