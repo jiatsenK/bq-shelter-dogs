@@ -118,6 +118,8 @@ Cron 一輪派 10 隻（含回呼）從 166 次降到 66 次。`worker/test/walk
 
 ## Cron 收成兩件（K 2026-10-22 決定，討論見 `460-cron-cpu-handoff.md`）
 
+> 以下記錄既有實作與當時驗收。K 後續已同意拆開寫回重試與保險掃描，掃描改為每天台灣時間 09:43、13:53、23:53；尚未實作。最新決定見交接文件最後一節。
+
 - **兩個排程**：`wrangler.jsonc` 設 `*/10`（試算表同步）和 `5-59/10`（溜狗對帳），`scheduled()` 依 `event.cron` 只跑其中一件，各自有 10 ms。改排程要一起改 `worker/src/index.js` 的 `WALK_CRON`。
 - **溜狗對帳**（詞見 GLOSSARY）：改表通知、Cron 補漏、按下後背景派送都走同一路徑。通知改成直接跑一次保險掃描（`scanNotifiedWalks`），刪掉 `walk-notify.js` 和 Apps Script 的 `walkCompare`；重送合併、失敗留 pending 的控制列 `v3_walk_compare` 沿用。
 - **四欄指紋**：Worker 把上次記的指紋（`v3_sync_state.walk_scan_sig`）送給 `walkScan`；Apps Script 照常在鎖內讀四欄、算 SHA-256，一樣就只回 `same`，Worker 不比對、不寫入。還有差異沒收完（未決派送、一輪 10 隻上限、失敗）就不記指紋，下次照常整份比對。現有的 `sheet_sig` 不能沿用：它用 gviz 讀三個分頁，比四欄還多，而且可能是舊快照。
@@ -128,6 +130,8 @@ Cron 一輪派 10 隻（含回呼）從 166 次降到 66 次。`worker/test/walk
 - **驗收結果（2026-10-22，K 授權一次，[run 39784436803](https://github.com/jiatsenK/bq-shelter-dogs/actions/runs/39784436803)）：未通過。** 第 1 批 Cron 一輪 P50 31.95 ms、P99 57.89 ms（26 次、0 錯誤），回呼 P99 3.68 ms（520 次）；超過門檻，第 1 批後停止，測速 Worker 已刪。量的是最壞情況：假 Apps Script 每輪指紋都不同，Worker 每輪整份比對 200 列再派送 10 隻。合併前（第二次驗收）同樣情況 P99 約 50 ms，合併沒有讓 Cron 一輪降下來；原因還沒拆開量（掃描和派送各占多少）。
 
 ## 正式啟用（K 決定，這次不做）
+
+> 下列舊啟用步驟包含過時的每分鐘 Cron，不可直接照做。實作最新架構後須更新本節，再進行正式啟用。
 
 1. 通過上面的 CPU 驗收，並決定寫入保留量。
 2. `wrangler.jsonc`：Cron 加 `* * * * *`，vars 設 `WALK_RETRY_ENABLED=true`、`D1_WALK_NOTIFY=1`。
