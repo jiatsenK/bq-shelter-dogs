@@ -997,6 +997,7 @@ function sheetWillWrite() {
   return !!UPLOAD_URL && sheetWriteState !== 'off' && !!loadWalkerName();
 }
 const walkPending = new Set(); // 按了溜了、還在等試算表回應的狗（walkKey）
+const undoPending = new Set(); // 復原送出、還在等回應的狗（walkKey）
 function walkPendingNow(dog) {
   const key = walkKey(dog);
   return !!key && (walkPending.has(key) || walkRegistration.pending(dog));
@@ -1076,7 +1077,7 @@ let sheetUndoBusy = false;
 async function undoSheetWalks(dogs, retry = null, options = {}) {
   pinWalkOrder(dogs); // 復原的狗也留在原地
   if (sheetUndoBusy || !dogs.length) return '';
-  sheetUndoBusy = true; hideToast(); render();
+  sheetUndoBusy = true; dogs.forEach(d => undoPending.add(walkKey(d))); hideToast(); render();
   try {
     const pending = retry ? walkRegistration.retry(retry) : walkRegistration.undo(dogs, options);
     sheetQueue = pending;
@@ -1091,7 +1092,7 @@ async function undoSheetWalks(dogs, retry = null, options = {}) {
     const text = parts.join('；');
     if (!d1 || changed.length || left.length) showToast(text, null, result.retryDogs.length ? { label: '再試一次', fn: () => undoSheetWalks(result.retryDogs, result, options) } : null);
     return text;
-  } finally { sheetUndoBusy = false; render(); renderDetail(); }
+  } finally { sheetUndoBusy = false; undoPending.clear(); render(); renderDetail(); }
 }
 
 // ── 我的常溜（#267）：逐隻增刪，絕不把手機上的舊整份清單蓋到 D1 ──
@@ -1714,6 +1715,8 @@ function walkButton(dog) {
   if (!walkKey(dog)) return `<span class="more">${icon('chevron')}</span>`;
   if (restOf(dog)) return ''; // 休養中暫停帶出：不放溜了，免得順手按到
   if (walkPendingNow(dog) && !walkedNow(dog)) return `<button type="button" class="walk-btn pending" disabled aria-label="${esc(dog.name)} 正在登記">登記中</button>`;
+  // #498：復原按下後到伺服器回應前也要有回饋，不能看起來沒反應又被重按
+  if (undoPending.has(walkKey(dog))) return `<button type="button" class="walk-btn pending" disabled aria-label="${esc(dog.name)} 正在取消今天溜了">取消中</button>`;
   const state = walkRegistration.state(dog);
   const disabled = sheetWillWrite() && !state.canUndo && !state.canRevert && !walkPendingNow(dog) ? ' disabled' : '';
   return state.mine

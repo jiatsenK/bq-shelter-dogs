@@ -167,3 +167,31 @@ test('#460 D1 模式未接管的狗只看伺服器基準，不採本機已溜、
   assert.equal(r.state(dog).walker, '舊');
   assert.equal(r.today([dog]).length, 0);
 });
+
+test('#498 D1 整群 11 隻：逐狗接受，斷線的只重試那幾隻且沿用原識別，已成功的不建新操作', async () => {
+  const eleven = Array.from({ length: 11 }, (_, i) => ({ id: String(9100 + i), name: `狗${i}` }));
+  const sent = [], lostOnce = new Set(['9103', '9107']);
+  const reply = body => {
+    const d = body.dogs[0];
+    return { ok: true, source: 'd1', today: day, results: [{ ...d, status: 'written', accepted: true, requestId: body.requestId, operationDate: day, version: 1,
+      current: { date: day, walker: '甲' }, syncStatus: 'pending', at: new Date().toISOString() }] };
+  };
+  const { registration: r } = client(async body => {
+    sent.push({ id: body.dogs[0].id, requestId: body.requestId });
+    assert.equal(body.dogs.length, 1);
+    if (lostOnce.delete(body.dogs[0].id)) throw new Error('lost');
+    return reply(body);
+  });
+  const result = await r.register(eleven);
+  assert.equal(sent.length, 11);
+  assert.equal(result.successful.length, 9);
+  assert.deepEqual(result.retryDogs.map(d => d.id), ['9103', '9107']);
+  assert.equal(r.state(eleven[3]).today, false); // 結果不明不顯示成功
+  assert.equal(r.state(eleven[0]).today, true);
+  const first = new Map(sent.map(s => [s.id, s.requestId]));
+  const again = await r.retry(result);
+  assert.deepEqual(sent.slice(11).map(s => s.id), ['9103', '9107']);
+  assert.ok(sent.slice(11).every(s => s.requestId === first.get(s.id)));
+  assert.equal(again.successful.length, 2);
+  assert.ok(eleven.every(d => r.state(d).today));
+});

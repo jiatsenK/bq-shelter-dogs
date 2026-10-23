@@ -35,9 +35,9 @@ export async function callSheet(env, body) {
     });
     out = await res.json().catch(() => null);
   } catch (e) {
-    throw new SheetWriteError('連不上試算表，請稍後再試', 502);
+    throw new SheetWriteError('連不上試算表，請稍後再試', 502, 'unreachable');
   }
-  if (!res.ok || !out) throw new SheetWriteError(`試算表沒有回應（${res.status}）`, 502);
+  if (!res.ok || !out) throw new SheetWriteError(`試算表沒有回應（${res.status}）`, 502, 'unreachable');
   if (!out.ok) throw new SheetWriteError(out.code === 'key' ? '寫入試算表的金鑰不對，請 K 檢查設定' : scriptError(out.error), 502, out.code === 'key' ? 'key' : '');
   return out;
 }

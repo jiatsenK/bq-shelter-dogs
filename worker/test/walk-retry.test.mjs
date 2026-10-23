@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import worker from '../src/index.js';
-import { dispatchWalk } from '../src/walk-accept.js';
+import { dispatchWalk, dispatchWalks } from '../src/walk-accept.js';
 import { retryWalks } from '../src/walk-retry.js';
 import { setup, request, post, current } from './walk-fixture.mjs';
 
@@ -456,4 +456,30 @@ test('#498 預算拒絕不退回逐隻派送，工作留待下一輪', async t =
     assert.equal(wake,0);
     assert.equal((await env.DB.prepare("SELECT COUNT(*) n FROM v3_walk_outbox WHERE status='pending'").first()).n,3);
   } finally { globalThis.fetch=real;env.DB.close(); }
+});
+
+test('#498 遠端失敗分得出：沒設定、連不上（結果不明）、試算表明確拒絕；預算拒絕另記', async t => {
+  const now=Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now });
+  const env={ ...await setup(),WALK_RETRY_ENABLED:'true' },real=globalThis.fetch;
+  worker.testing.resetState();
+  const error=async id=>(await env.DB.prepare("SELECT o.error FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version WHERE o.dog_key=?").bind(id).first()).error;
+  const warns=[],warn=console.warn;
+  console.warn=(...a)=>warns.push(a.join(' '));
+  try {
+    await addDogs(env,2,'remote');
+    globalThis.fetch=async ()=>{ throw new Error('down'); };
+    await dispatchWalk(env.DB,{ id:'9200',name:'remote狗0' },env,now);
+    assert.match(await error('9200'),/^writeback-unconfirmed/);
+    globalThis.fetch=async (_url,init)=>{
+      const body=JSON.parse(init.body);
+      return Response.json({ ok:true,results:body.items.map(item=>({ ok:false,dispatchId:item.dispatchId,error:'找不到唯一的狗' })) });
+    };
+    await dispatchWalks(env.DB,[{ dog:{ id:'9200',name:'remote狗0' },recovery:null },{ dog:{ id:'9201',name:'remote狗1' },recovery:null }],env,now+10*60000);
+    assert.match(await error('9200'),/^writeback-rejected/);
+    assert.match(await error('9201'),/^writeback-rejected/);
+    const reserved=(await env.DB.prepare('SELECT reserved FROM v3_walk_write_budget').first()).reserved;
+    await retryWalks({ ...env,SYNC_DAILY_BUDGET:String(reserved+1) },now+60*60000);
+    assert.ok(warns.some(w=>w.includes('budget')),warns.join('\n'));
+  } finally { console.warn=warn;globalThis.fetch=real;env.DB.close(); }
 });

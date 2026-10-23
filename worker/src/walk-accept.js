@@ -169,78 +169,25 @@ export async function acceptWalk(db, input, env, now = Date.now()) {
   throw new WalkError(409, '登記競爭中，請用原請求再試');
 }
 
-export async function dispatchWalk(db, dog, env, clock = Date.now(), recovery = null) {
-  const key = keyOf(dog), dispatchId = crypto.randomUUID(), now = new Date(clock).toISOString();
-  const recoverDispatchId = recovery?.dispatchId || '';
-  const [[delivery], [job]] = await reads(db, ['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', key],
-    [`${CURRENT_JOB} AND (o.status IN ('pending','retry','unconfirmed') OR (?=1 AND o.status='dispatching'))`, key, Number(!!recovery)]);
-  if (delivery && delivery.dispatch_id !== recoverDispatchId) return;
-  if (!job || (!recovery && job.next_attempt_at > now)) return;
-  let claimed;
-  try { claimed = await db.batch([
-    db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?),\'\')=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?) THEN 1 ELSE 0 END').bind(key, recoverDispatchId, key, job.version),
-    ...await writeBudget(db, env, DISPATCH_COST, clock),
-    db.prepare('INSERT INTO v3_walk_retry(dog_key,version,failures,dispatch_id,reserved_day) VALUES(?,?,0,?,?) ON CONFLICT(dog_key) DO UPDATE SET failures=CASE WHEN version=excluded.version THEN failures ELSE 0 END,version=excluded.version,dispatch_id=excluded.dispatch_id,reserved_day=excluded.reserved_day').bind(key,job.version,dispatchId,now.slice(0,10)),
-    db.prepare('INSERT INTO v3_walk_delivery VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET dispatch_id=excluded.dispatch_id,started_at=excluded.started_at').bind(key, dispatchId, now),
-    db.prepare("UPDATE v3_walk_outbox SET status='dispatching',dispatch_id=?,error='' WHERE dog_key=? AND version=? AND (status IN ('pending','retry','unconfirmed') OR (?=1 AND status='dispatching')) RETURNING version").bind(dispatchId, key, job.version, Number(!!recovery)),
-    db.prepare('DELETE FROM v3_walk_guard'),
-  ]); } catch (error) {
-    if (await one(db, 'SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', key)) return;
-    throw error;
-  }
-  if (!claimed[claimed.length - 2].results?.length) {
-    await db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(key, dispatchId).run();
-    return;
-  }
-  let release = false, held;
-  try {
-    if (!env.SHEET_WRITE_URL || !env.SHEET_WRITE_KEY) throw new Error('writeback-not-configured');
-    const receipt = await callSheet(env, { action: 'walkWake', dog, dispatchId }).catch(e => { throw new Error(`writeback-unconfirmed: ${e.message}`); }); // callSheet 的訊息不含試算表 ID、金鑰
-    // 正常情況 Apps Script 的回執請求已確認完成：讀一次確認就好；沒完成才補走完整確認。
-    const [[done], [still]] = await reads(db,
-      ["SELECT o.version FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version WHERE o.dog_key=? AND o.version=? AND o.dispatch_id=? AND o.status='synced'", key, receipt.version, receipt.dispatchId],
-      ['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?', key, dispatchId]);
-    if (done) held = !!still;
-    else if (!(await confirmWalk(db, { ...receipt, dogKey: key }, env)).confirmed) throw new Error('writeback-unconfirmed');
-    release = true;
-  } catch (error) {
-    const failed = await one(db, "SELECT version FROM v3_walk_outbox WHERE dog_key=? AND dispatch_id=? AND status='dispatching'",key,dispatchId);
-    if (!failed) { release = true; return; }
-    const retry = await one(db, 'SELECT version,failures FROM v3_walk_retry WHERE dog_key=?', key);
-    const failures = retry?.version === failed.version ? retry.failures + 1 : 1;
-    const delay = [1,2,4,8,15][Math.min(failures - 1,4)] * 60000;
-    await db.batch([
-      ...await transitionBudget(db,env,key,dispatchId,24),
-      db.prepare('UPDATE v3_walk_retry SET version=?,failures=? WHERE dog_key=? AND dispatch_id=?').bind(failed.version,failures,key,dispatchId),
-      db.prepare("UPDATE v3_walk_outbox SET status='retry',error=?,next_attempt_at=? WHERE dog_key=? AND dispatch_id=? AND status='dispatching'")
-        .bind(String(error.message).slice(0, 100), new Date(Math.max(clock,Date.now()) + delay).toISOString(), key, dispatchId),
-      db.prepare('DELETE FROM v3_walk_guard'),
-      db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(key,dispatchId),
-    ]);
-    release = true;
-  } finally {
-    if (release && (held ?? await one(db,'SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?',key,dispatchId))) {
-      await db.batch([
-        ...await transitionBudget(db,env,key,dispatchId,8),
-        db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(key,dispatchId),
-        db.prepare('DELETE FROM v3_walk_guard'),
-      ]);
-    }
-  }
+// 單狗背景派送（網站接受後）也走同一個派送核心（#498）。
+export function dispatchWalk(db, dog, env, clock = Date.now(), recovery = null) {
+  return dispatchWalks(db, [{ dog, recovery }], env, clock);
 }
 
-// 合併派送（#460）：認領、交給 Apps Script、收尾各一次往返，不再逐隻。
-// #498：依單次寫入上限拆批，批量只是內部執行方式；預算拒絕或 D1 故障就停下留待下一輪，
-// 只有版本競爭才退回逐隻 dispatchWalk 各自判斷。items：[{ dog, recovery }]。
+// 派送核心（#460、#498）：單狗、多狗、背景派送與重試共用；認領、交給 Apps Script、收尾各一次往返。
+// 依單次寫入上限拆批，批量只是內部執行方式。預算拒絕或 D1 故障就停下留待下一輪（往外丟 DispatchError），
+// 只有版本競爭才逐隻重來各自判斷。items：[{ dog, recovery }]。
 const DISPATCH_COST = 96;
+export class DispatchError extends Error {
+  constructor(kind, cause) { super(`${kind}: ${cause.message}`); this.kind = kind; }
+}
 export async function dispatchWalks(db, items, env, clock = Date.now()) {
   const size = Math.max(1, Math.min(10, Math.floor(Number(env.SYNC_MAX_ROWS || 500) / DISPATCH_COST) || 1));
-  for (let i = 0; i < items.length; i += size) {
-    const chunk = items.slice(i, i + size);
-    if (chunk.length === 1) await dispatchWalk(db, chunk[0].dog, env, clock, chunk[0].recovery);
-    else await dispatchBatch(db, chunk, env, clock);
-  }
+  for (let i = 0; i < items.length; i += size) await dispatchBatch(db, items.slice(i, i + size), env, clock);
 }
+
+// 寫回失敗的種類寫進 outbox.error 前綴：沒設定、結果不明（逾時、連不上、沒回這隻）、試算表明確拒絕。
+const remoteError = error => error.code === 'unreachable' ? `writeback-unconfirmed: ${error.message}` : `writeback-rejected: ${error.message}`;
 
 async function dispatchBatch(db, items, env, clock) {
   const now = new Date(clock).toISOString(), day = now.slice(0, 10);
@@ -262,14 +209,19 @@ async function dispatchBatch(db, items, env, clock) {
       db.prepare('DELETE FROM v3_walk_guard'),
     ]),
   ]); } catch (error) {
-    // 整批沒寫進去。狀態都沒變＝預算拒絕或 D1 故障，逐隻重跑只會繞過預算，直接往外丟。
-    const again = await reads(db, ...jobs.flatMap(j => [['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', j.key],
-      ['SELECT version FROM v3_walk_state WHERE dog_key=?', j.key]]));
-    if (jobs.every((j, i) => (again[2 * i][0]?.dispatch_id || '') === (j.delivery?.dispatch_id || '') && again[2 * i + 1][0]?.version === j.job.version)) throw error;
-    // 有一隻的狀態在讀和認領之間變了（版本競爭）：改逐隻處理，各自判斷。
-    for (const { dog, recovery } of items) {
-      try { await dispatchWalk(db, dog, env, clock, recovery); } catch (e) { console.warn('walk-dispatch:', keyOf(dog), e.message); }
-    }
+    if (error instanceof WalkError) throw new DispatchError('budget', error); // 單次上限，寫入前就擋下
+    // 整批沒寫進去。重讀：狀態都沒變＝guard 只剩每日預算會擋，否則是 D1 故障；逐隻重跑只會繞過預算。
+    let latest;
+    try { latest = await reads(db, ...jobs.flatMap(j => [['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', j.key],
+      ['SELECT version FROM v3_walk_state WHERE dog_key=?', j.key]])); }
+    catch { throw new DispatchError('d1', error); }
+    const unchanged = jobs.every((j, i) => {
+      const [[delivery], [state]] = [latest[2 * i], latest[2 * i + 1]];
+      return (delivery?.dispatch_id || '') === (j.delivery?.dispatch_id || '') && state?.version === j.job.version;
+    });
+    if (unchanged) throw new DispatchError(/CHECK constraint/i.test(error.message) ? 'budget' : 'd1', error);
+    // 有一隻的狀態在讀和認領之間變了（版本競爭）：多隻就逐隻重來各自判斷；單隻已被別人處理，不用再派。
+    if (jobs.length > 1) for (const { dog, recovery } of jobs) await dispatchBatch(db, [{ dog, recovery }], env, clock);
     return;
   }
   const offset = claimed.length - jobs.length * 5;
@@ -280,22 +232,28 @@ async function dispatchBatch(db, items, env, clock) {
   const receipts = new Map();
   let batchError = '';
   try {
-    if (!env.SHEET_WRITE_URL || !env.SHEET_WRITE_KEY) throw new Error('writeback-not-configured');
-    const out = await callSheet(env, { action: 'walkWakeBatch', items: mine.map(j => ({ dog: j.dog, dispatchId: j.dispatchId })) });
-    for (const r of Array.isArray(out.results) ? out.results : []) if (r?.dispatchId) receipts.set(r.dispatchId, r);
-  } catch (error) { batchError = `writeback-unconfirmed: ${error.message}`; }
+    if (!env.SHEET_WRITE_URL || !env.SHEET_WRITE_KEY) throw Object.assign(new Error('writeback-not-configured'), { configured: false });
+    // 單隻沿用 walkWake（回應就是那隻的回執），多隻用 walkWakeBatch；收尾相同。
+    if (mine.length === 1) receipts.set(mine[0].dispatchId, { ...await callSheet(env, { action: 'walkWake', dog: mine[0].dog, dispatchId: mine[0].dispatchId }), ok: true });
+    else {
+      const out = await callSheet(env, { action: 'walkWakeBatch', items: mine.map(j => ({ dog: j.dog, dispatchId: j.dispatchId })) });
+      for (const r of Array.isArray(out.results) ? out.results : []) if (r?.dispatchId) receipts.set(r.dispatchId, r);
+    }
+  } catch (error) { batchError = error.configured === false ? error.message : remoteError(error); } // callSheet 的訊息不含試算表 ID、金鑰
   // 每隻剛認領時已在 v3_walk_retry 保留今天的預算，收尾的狀態轉換不用再扣。
   const prepaid = j => ({ dispatch_id: j.dispatchId, reserved_day: day });
   const after = await reads(db, ...mine.flatMap(j => {
     const r = receipts.get(j.dispatchId);
     return [["SELECT o.version FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version WHERE o.dog_key=? AND o.version=? AND o.dispatch_id=? AND o.status='synced'", j.key, r?.ok ? r.version : -1, j.dispatchId],
-      ["SELECT o.version,COALESCE(r.failures,0) AS failures,r.version AS retry_version FROM v3_walk_outbox o LEFT JOIN v3_walk_retry r ON r.dog_key=o.dog_key WHERE o.dog_key=? AND o.dispatch_id=? AND o.status='dispatching'", j.key, j.dispatchId]];
+      ["SELECT o.version,COALESCE(r.failures,0) AS failures,r.version AS retry_version FROM v3_walk_outbox o LEFT JOIN v3_walk_retry r ON r.dog_key=o.dog_key WHERE o.dog_key=? AND o.dispatch_id=? AND o.status='dispatching'", j.key, j.dispatchId],
+      ['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?', j.key, j.dispatchId]];
   }));
-  const failed = [];
+  const failed = [], held = [];
   for (const [i, j] of mine.entries()) {
-    const r = receipts.get(j.dispatchId), [done] = after[2 * i], [stuck] = after[2 * i + 1];
+    const r = receipts.get(j.dispatchId), [done] = after[3 * i], [stuck] = after[3 * i + 1], [still] = after[3 * i + 2];
+    if (still) held.push(j);
     if (done || !stuck) continue;
-    let error = batchError || (r ? (r.ok ? '' : `writeback-unconfirmed: ${r.error || ''}`) : 'writeback-unconfirmed: 沒有這隻的回應');
+    let error = batchError || (r ? (r.ok ? '' : `writeback-rejected: ${r.error || ''}`) : 'writeback-unconfirmed: 沒有這隻的回應');
     if (!error) {
       try { if ((await confirmWalk(db, { ...r, dogKey: j.key }, env)).confirmed) continue; error = 'writeback-unconfirmed'; }
       catch (e) { error = e.message; }
@@ -311,9 +269,9 @@ async function dispatchBatch(db, items, env, clock) {
       db.prepare("UPDATE v3_walk_outbox SET status='retry',error=?,next_attempt_at=? WHERE dog_key=? AND dispatch_id=? AND status='dispatching'")
         .bind(String(error).slice(0, 100), new Date(Math.max(clock, Date.now()) + delay).toISOString(), j.key, j.dispatchId));
   }
-  // 成功、失敗都放掉這次的派送識別；回執已確認的那幾隻早就刪了，DELETE 刪不到也無妨。
-  statements.push(...mine.map(j => db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(j.key, j.dispatchId)));
-  await db.batch(statements);
+  // 成功、失敗都放掉這次的派送識別；回執已確認的早就刪了，只刪還握著的，都刪了就省掉這次往返。
+  statements.push(...held.map(j => db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(j.key, j.dispatchId)));
+  if (statements.length) await db.batch(statements);
 }
 
 export async function confirmWalk(db, receipt, env) {
