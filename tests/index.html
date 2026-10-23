@@ -71,6 +71,36 @@ function fakeApi(fake) {
 function restoreApi() { if (API_REAL) Object.assign(BQApi, API_REAL); }
 const apiJson = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 let INDEX_HTML = ''; // index.html 原始碼，#10 唯讀檢查用
+// 導覽以實際按鈕換步，不讀寫內部狀態；減少動態效果讓測試穩定。
+function closeGuideIn(win = window) {
+  win.document.querySelector('#tour [data-tour="done"]')?.click();
+}
+async function guideAt(title, win = window) {
+  closeGuideIn(win);
+  const media = win.matchMedia;
+  win.matchMedia = q => q.includes('prefers-reduced-motion') ? { matches: true } : media.call(win, q);
+  try {
+    win.eval('openGuide()');
+    for (let i = 0; i < 10; i++) {
+      if (win.document.querySelector('#tourTitle')?.textContent === title) {
+        await new Promise(r => setTimeout(r, 30)); return;
+      }
+      const next = win.document.querySelector('#tour [data-tour="next"]');
+      if (!next) break;
+      next.click(); await new Promise(r => setTimeout(r, 30));
+    }
+    throw new Error('找不到導覽步驟：' + title);
+  } finally { win.matchMedia = media; }
+}
+function guideSpotlights(el) {
+  // 測試頁沒有載入導覽 CSS，讀取定位後的內嵌樣式；高度可能被可見範圍裁掉。
+  const hole = document.querySelector('#tour .tour-hole');
+  const target = el.getBoundingClientRect();
+  const left = parseFloat(hole.style.left), right = left + parseFloat(hole.style.width);
+  return Math.abs(left - target.left) < 10 && Math.abs(right - target.right) < 10;
+}
+
+let TOUR_JS = '';
 let APP_JS = '';    // js/app.js 原始碼（#30 拆檔後程式在這裡）
 let API_JS = '';    // js/api.js 原始碼（#478 呼叫 /api 都在這裡）
 let ANALYSIS_JS = ''; // js/analysis.js 原始碼（#59 分析頁）
@@ -632,7 +662,7 @@ function runTests() {
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
       const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
-      eq(scripts.map(s => s.getAttribute('src')), ['js/dates.js', 'js/api.js', 'js/store.js', 'js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/walk-flow.js', 'js/detail-editor.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/activities.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定、#270 活動紀錄）：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/dates.js', 'js/api.js', 'js/store.js', 'js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/walk-flow.js', 'js/detail-editor.js', 'js/tour.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/activities.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定、#270 活動紀錄）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
@@ -1941,11 +1971,11 @@ async function runV9Tests() {
       eq(document.documentElement.classList.contains('tour-open'), true, '導覽期間鎖住背景捲動：');
       eq([tour().querySelector('h2').textContent, tour().querySelector('.tour-n').textContent], ['溜狗表', '1 / 9'], '第一步：');
       eq(tour().querySelector('[data-tour="back"]'), null, '第一步沒有上一步：');
-      eq(tourTarget(0), document.querySelector('#main .card[data-dog]'), '亮的是最上面那張狗卡（最久沒溜）：');
+      eq(guideSpotlights(document.querySelector('#main .card[data-dog]')), true, '亮的是最上面那張狗卡（最久沒溜）：');
       if (!document.getElementById('main').closest('[inert]')) throw new Error('導覽時後面的網頁不能按');
       tour().querySelector('[data-tour="next"]').click();
       eq([document.activeElement === tour().querySelector('h2'), tour().querySelector('.tour-n').textContent], [true, '2 / 9'], '換一步焦點到標題：');
-      eq([tourTarget(1), tourTarget(3)], [document.querySelector('#main .card[data-dog] .last'), document.querySelector('#main .card[data-dog] .walk-btn')], '第二步亮色籤、第四步亮「溜了」（一個說明一個動作）：');
+      eq(guideSpotlights(document.querySelector('#main .card[data-dog] .last')), true, '第二步亮色籤：');
       tour().querySelector('[data-tour="back"]').click();
       eq(tour().querySelector('h2').textContent, '溜狗表', '上一步：');
       tour().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -1973,7 +2003,7 @@ async function runV9Tests() {
       eq(tour(), null, '關閉：');
     });
   } finally {
-    hideDetail(); hideToast(); onboard = null; renderOnboard(); tour = null; renderTour(); withSheet = null; renderWithSheet(); restoreApi();
+    hideDetail(); hideToast(); onboard = null; renderOnboard(); closeGuideIn(); withSheet = null; renderWithSheet(); restoreApi();
     [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL, walkerNames, walkerNameList, sheetWriteState, walkerNameMemory, walkerCodesMemory, myWalks, myWalksState] = saved;
     render();
   }
@@ -2669,7 +2699,7 @@ async function runTermTests() {
       .replace(/遛狗表|常遛狗群|勿遛|勿蹓|「誰遛的」|'誰遛的'|上次遛/g, ''); // K 2026-10-13 指定左側標題「上次遛」
     const old = ['遛', '移回', '一直收起', '今天先收起', '犬名', '犬隻', '狗狗', '狗卡資訊', '平均隔', '最久隔', '日期異常', '尚無', '已存到 Git', '代號服務'];
     const hits = [];
-    for (const [file, src] of [['index.html', INDEX_HTML.replace(/<!--[\s\S]*?-->/g, '')], ['app.js', APP_JS], ['analysis.js', ANALYSIS_JS], ['find.js', FIND_JS]]) {
+    for (const [file, src] of [['index.html', INDEX_HTML.replace(/<!--[\s\S]*?-->/g, '')], ['app.js', APP_JS], ['tour.js', TOUR_JS], ['analysis.js', ANALYSIS_JS], ['find.js', FIND_JS]]) {
       const text = shown(src);
       for (const w of old) if (text.includes(w)) hits.push(`${file}：${w}`);
     }
@@ -4352,24 +4382,23 @@ async function runRangeTests() {
   const ymdDash = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
   const dog = (walkedDate, covered = false) => parseDogsData({ dogs: [{ id: '2024100901', name: '範圍', cage: '舊A01', note: '', covered, walkedDate }] }).dogs[0];
   const ago = n => ymdDash(new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() - n));
-  await check('籠位查詢導覽：略過沒有籠號的區，只用舊／新犬舍有效籠位，示範與亮的狗一致', () => {
+  await check('籠位查詢導覽：略過沒有籠號的區，只用舊／新犬舍有效籠位，示範與亮的狗一致', async () => {
     const saved = [allDogs, activeTab, searchQuery, loadWalkView()];
     try {
       activeTab = 'walk'; searchQuery = ''; saveWalkView('photo');
-      const step = TOUR_STEPS.findIndex(st => st.demo === 'where');
       for (const cage of ['舊A03', '新B04']) {
         allDogs = [{ ...dog(ago(20)), id: 'demo0', cage: '母幼' }, { ...dog(ago(10)), id: 'demo1', cage }, { ...dog(ago(5)), id: 'demo2', cage: '舊A99' }];
         render();
-        const target = tourTarget(step);
-        eq(tourCageDog(target), allDogs[1], `${cage} 的示範目標：`);
-        TOUR_DEMOS.where.run(target);
+        await guideAt('籠位查詢');
         eq(whereDog, allDogs[1], '亮的籠位與打開的狗一致：');
         if (!document.getElementById('whereTitle').textContent.includes(cage)) throw new Error('面板應顯示實際籠號');
-        TOUR_DEMOS.where.undo();
+        closeGuideIn();
       }
       allDogs = [{ ...dog(ago(20)), cage: '母幼' }]; render();
-      eq(tourTarget(step), null, '沒有有效籠號時不拿其他區示範：');
+      await guideAt('籠位查詢');
+      eq([whereDog, document.querySelector('#tour').classList.contains('no-target')], [null, true], '沒有有效籠號時不拿其他區示範：');
     } finally {
+      closeGuideIn();
       if (whereDog) whereClose();
       saveWalkView(saved[3]); [allDogs, activeTab, searchQuery] = saved; render();
     }
@@ -4394,31 +4423,28 @@ async function runRangeTests() {
     try {
       allDogs = [dog(ago(12))]; activeTab = 'walk'; searchQuery = ''; render();
       calls = fakeApi(() => new Response('{}'));
-      tour = { step: 3, again: true, shown: null, undo: null, timers: [] };
-      TOUR_DEMOS.walk.run();
+      await guideAt('溜狗登記');
       await new Promise(r => setTimeout(r, 800));
       const btn = () => document.querySelector('#main .card[data-dog] .walk-btn');
       eq([btn().textContent.trim(), calls.length, walkedToday().has(allDogs[0])], ['已溜', 0, false], '畫面變已溜、沒送出、沒記：');
-      tour.undo = TOUR_DEMOS.walk.undo; tourReset();
+      closeGuideIn();
       eq(btn().textContent.trim(), '溜了', '收回：');
     } finally {
-      if (tour) tourReset(); tour = null;
+      closeGuideIn();
       [allDogs, activeTab, searchQuery] = saved; restoreApi(); render();
     }
   });
-  await check('K 2026-10-09 導覽教切換照片／列表：亮右上角切換鈕，示範切過去，收回切回原本的', () => {
+  await check('K 2026-10-09 導覽教切換照片／列表：亮右上角切換鈕，示範切過去，收回切回原本的', async () => {
     const saved = [allDogs, activeTab, searchQuery, loadWalkView()];
     try {
       allDogs = [dog(ago(12))]; activeTab = 'walk'; searchQuery = ''; saveWalkView('photo'); render();
-      const i = TOUR_STEPS.findIndex(st => st.demo === 'view');
-      eq([i > TOUR_STEPS.findIndex(st => st.demo === 'where'), tourTarget(i) === document.querySelector('#main .walk-tools .seg')], [true, true], '在籠位之後、亮切換鈕：');
-      tour = { step: i, again: true, shown: null, undo: null, timers: [] };
-      TOUR_DEMOS.view.run();
+      await guideAt('照片／列表');
+      eq(guideSpotlights(document.querySelector('#main .walk-tools .seg')), true, '亮切換鈕：');
       eq([loadWalkView(), !!document.querySelector('#main .row-dog')], ['list', true], '示範切到列表：');
-      tour.undo = TOUR_DEMOS.view.undo; tourReset();
+      closeGuideIn();
       eq([loadWalkView(), !!document.querySelector('#main .card[data-dog]')], ['photo', true], '收回切回照片：');
     } finally {
-      if (tour) tourReset(); tour = null;
+      closeGuideIn();
       saveWalkView(saved[3]);
       [allDogs, activeTab, searchQuery] = saved; render();
     }
@@ -4573,15 +4599,14 @@ async function runTourLayoutTests() {
     `);
     for (const demo of ['detail', 'view', 'tab', 'find']) {
       await check(`手機導覽 ${demo}：說明卡不遮擋示範目標、切換鈕不藏在搜尋框下`, async () => {
-        win.eval(`
-          if (tour) endTour(); activeTab = 'walk'; findZone = 'all'; findCage = null; searchQuery = ''; render(); window.scrollTo(0, 500);
-          tour = { step: TOUR_STEPS.findIndex(st => st.demo === '${demo}'), again: true, shown: null, undo: null, timers: [] };
-          renderTour(true);
-        `);
+        closeGuideIn(win);
+        win.eval("activeTab = 'walk'; findZone = 'all'; findCage = null; searchQuery = ''; render(); window.scrollTo(0, 500)");
+        const title = { detail: '狗資料', view: '照片／列表', tab: '我溜過', find: '找狗' }[demo];
+        await guideAt(title, win);
         await new Promise(r => setTimeout(r, 80));
         const result = win.eval(`(() => {
-          placeTour();
-          const el = tourShownTarget() || tourTarget(tour.step);
+          const selector = { detail: '#detail', view: '#main .walk-tools .seg', tab: '#main .mc-head', find: '#main .find-map-card .find-map' }['${demo}'];
+          const el = document.querySelector(selector);
           const a = document.querySelector('.tour-tip').getBoundingClientRect(), b = el.getBoundingClientRect();
           return { overlap: a.left < b.right && a.right > b.left && a.top < b.bottom && a.bottom > b.top,
             hiddenByHeader: '${demo}' === 'view' && b.top < appHeader.getBoundingClientRect().bottom,
@@ -4590,41 +4615,41 @@ async function runTourLayoutTests() {
         eq(result, { overlap: false, hiddenByHeader: false, calendar: true }, '手機 390×660：');
       });
     }
-    await check('手機導覽：工具列縮小可見範圍時，說明卡跟著可見高度定位', () => {
+    await check('手機導覽：工具列縮小可見範圍時，說明卡跟著可見高度定位', async () => {
       Object.defineProperty(win, 'visualViewport', { configurable: true, value: { width: 390, height: 500, offsetTop: 24 } });
-      win.eval('placeTour()');
+      await new Promise(r => setTimeout(r, 80));
       const r = frame.contentDocument.querySelector('.tour-tip').getBoundingClientRect();
       if (r.top < 24 || r.bottom > 524) throw new Error('說明卡超出可見範圍');
       delete win.visualViewport;
     });
-    await check('加入主畫面教學：手機有最後一步，桌機與主畫面模式省略；兩種手機都有步驟', () => {
-      win.eval('endTour()');
-      eq(win.eval('tourStepCount()'), 10, '手機：');
-      win.eval('tour = { step: 9, again: true, shown: null, undo: null, timers: [] }; renderTour(true)');
+    await check('加入主畫面教學：手機有最後一步，桌機與主畫面模式省略；兩種手機都有步驟', async () => {
+      await guideAt('加入手機主畫面', win);
       eq(frame.contentDocument.querySelector('.tour-n').textContent, '10 / 10', '手機最後一步：');
       eq(frame.contentDocument.querySelector('h2#tourTitle').textContent, '加入手機主畫面', '教學標題：');
-      frame.style.width = '1280px';
-      eq(win.eval('tourStepCount()'), 10, '教學開著時旋轉／改寬度，不遺失最後一步：');
-      win.eval('endTour()');
-      eq(win.eval('tourStepCount()'), 9, '桌機：');
-      frame.style.width = '390px';
-      win.eval(`window.matchMedia = q => q === '(display-mode: standalone)' ? { matches: true } : window.__tourMedia(q)`);
-      eq(win.eval('tourStepCount()'), 9, '主畫面模式：');
-      const html = win.eval('tourInstallHtml()');
+      const html = frame.contentDocument.querySelector('.tour-install').innerHTML;
       if (!html.includes('Safari') || !html.includes('Chrome') || !html.includes('加入主畫面')) throw new Error('缺少手機操作步驟');
+      frame.style.width = '1280px';
+      await new Promise(r => setTimeout(r, 80));
+      eq(frame.contentDocument.querySelector('.tour-n').textContent, '10 / 10', '教學開著時旋轉／改寬度，不遺失最後一步：');
+      await guideAt('溜狗表', win);
+      eq(frame.contentDocument.querySelector('.tour-n').textContent, '1 / 9', '桌機：');
+      frame.style.width = '390px';
+      win.eval("window.matchMedia = q => q === '(display-mode: standalone)' ? { matches: true } : window.__tourMedia(q)");
+      await guideAt('溜狗表', win);
+      eq(frame.contentDocument.querySelector('.tour-n').textContent, '1 / 9', '主畫面模式：');
     });
   } finally {
-    win.eval('if (tour) endTour()');
+    closeGuideIn(win);
     frame.remove();
   }
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js', '../public/js/dates.js', '../public/js/api.js', '../public/js/store.js', '../public/js/walk-flow.js', '../public/js/detail-editor.js'].map(u => fetch(u).then(res => {
+Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js', '../public/js/dates.js', '../public/js/api.js', '../public/js/store.js', '../public/js/walk-flow.js', '../public/js/detail-editor.js', '../public/js/tour.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs]) => {
+  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs, tourJs]) => {
     const dates = document.createElement('script'); dates.textContent = datesJs; document.body.appendChild(dates);
     API_JS = apiJs;
     const api = document.createElement('script'); api.textContent = apiJs; document.body.appendChild(api);
@@ -4638,11 +4663,13 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     INDEX_HTML = html;
     MANIFEST = JSON.parse(manifest);
     APP_JS = js;
+    TOUR_JS = tourJs;
     DOGS_JSON = JSON.parse(dogsJson);
     const dv = document.createElement('script'); dv.textContent = detailViewportJs; document.body.appendChild(dv);
     const wr = document.createElement('script'); wr.textContent = walkRegistrationJs; document.body.appendChild(wr);
     const wf = document.createElement('script'); wf.textContent = walkFlowJs; document.body.appendChild(wf);
     const de = document.createElement('script'); de.textContent = detailEditorJs; document.body.appendChild(de);
+    const guide = document.createElement('script'); guide.textContent = tourJs; document.body.appendChild(guide);
     const s = document.createElement('script');
     s.textContent = js;
     document.body.appendChild(s);
