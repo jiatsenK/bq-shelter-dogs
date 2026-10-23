@@ -13,13 +13,13 @@ export async function reconcileWalkSnapshot(db, snapshot, observedStates, env, n
     const key=row.dog.id || `名:${row.dog.name}`;
     byKey.set(key,byKey.has(key) ? null : row.current);
   }
-  let changed=0;
+  let changed=0,deferred=0;
   for (const state of observedStates) {
     const sheet=byKey.get(state.dog_key);
     if (!sheet || same(sheet,{ date:state.base_date,walker:state.base_walker })) continue;
     // 未決派送可能正好寫到中間值；沒有可信分類就留給同鎖 target 查明，不能當人工值。
-    if (state.status!=='synced' || !same({ date:state.effective_date,walker:state.walker },{ date:state.base_date,walker:state.base_walker })) continue;
-    if (changed===10) break;
+    if (state.status!=='synced' || !same({ date:state.effective_date,walker:state.walker },{ date:state.base_date,walker:state.base_walker })) { deferred++; continue; }
+    if (changed===10) { deferred++; continue; }
     try {
       const members=await membersOf(db,sheet.walker,env.WALKER_KEY);
       const version=state.version+1,at=new Date(now).toISOString();
@@ -35,15 +35,70 @@ export async function reconcileWalkSnapshot(db, snapshot, observedStates, env, n
         db.prepare('DELETE FROM v3_walk_guard'),
       ]);
       changed++;
-    } catch (error) { console.warn('walk-reconcile:',state.dog_key,error.message); }
+    } catch (error) { deferred++; console.warn('walk-reconcile:',state.dog_key,error.message); }
   }
-  return changed;
+  return { changed,deferred };
 }
 
+// 四欄指紋（#460）：上次掃描全部收完時記下；Apps Script 讀到一樣的指紋就只回「沒改」，不傳整份。
+// 還有差異沒收完（未決派送、一輪上限、失敗）就不記，下次照常拿整份比對。
+const SCAN_SIG='walk_scan_sig';
+
 export async function scanWalks(env,now) {
-  const observed=(await env.DB.prepare(`SELECT s.*,o.status FROM v3_walk_state s
-    JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version`).all()).results || [];
+  const [observedResult,sigResult]=await env.DB.batch([
+    env.DB.prepare(`SELECT s.*,o.status FROM v3_walk_state s
+    JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version`),
+    env.DB.prepare('SELECT value FROM v3_sync_state WHERE key=?').bind(SCAN_SIG)]);
+  const observed=observedResult.results || [], known=sigResult.results?.[0]?.value || '';
   if (!observed.length) return;
-  const body=await callSheet(env,{ action:'walkScan' }).catch(e=>{ throw new Error(`主清單直接讀回失敗：${e.message}`); });
-  await reconcileWalkSnapshot(env.DB,body.rows,observed,env,now);
+  const body=await callSheet(env,{ action:'walkScan',sig:known }).catch(e=>{ throw new Error(`主清單直接讀回失敗：${e.message}`); });
+  if (known && body.same===true && body.sig===known) return;
+  const { deferred }=await reconcileWalkSnapshot(env.DB,body.rows,observed,env,now);
+  const next=!deferred && typeof body.sig==='string' ? body.sig : '';
+  if (next!==known) await env.DB.prepare('INSERT INTO v3_sync_state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(SCAN_SIG,next).run();
+}
+
+// 預算包含控制列、guard 與每日保留量；控制列不是同步成功證明。
+async function transition(db, env, statement) {
+  const result = await db.batch([...await writeBudget(db,env,8),statement,db.prepare('DELETE FROM v3_walk_guard')]);
+  return result[result.length-2].results || [];
+}
+
+// 改表通知＝馬上跑一次保險掃描（#460，原 walkCompare 已刪）。執行中再來的通知合併成跑完後補掃一次；
+// 失敗留 pending，由溜狗對帳排程補跑。
+export async function scanNotifiedWalks(db, env, recoverBefore = '') {
+  const owner = crypto.randomUUID(), started = new Date().toISOString();
+  const claimed = await transition(db,env,db.prepare("UPDATE v3_walk_compare SET status='running',owner=?,again=0,started_at=?,error='' WHERE id=1 AND (status<>'running' OR (started_at<=? AND ?<>'')) RETURNING id").bind(owner,started,recoverBefore,recoverBefore));
+  if (!claimed.length) {
+    await transition(db,env,db.prepare("UPDATE v3_walk_compare SET again=1 WHERE id=1 AND status='running' AND again=0"));
+    return { merged:true };
+  }
+  try {
+    for (let pass=0; pass<2; pass++) {
+      if (!env.SHEET_WRITE_URL || !env.SHEET_WRITE_KEY) throw new Error('trusted-sheet-reader-not-configured');
+      await scanWalks({ ...env,DB:db },Date.now());
+      const state = await db.prepare('SELECT again FROM v3_walk_compare WHERE id=1 AND owner=?').bind(owner).first();
+      if (!state) return { merged:true };
+      if (state.again && pass===0) {
+        await transition(db,env,db.prepare('UPDATE v3_walk_compare SET again=0 WHERE id=1 AND owner=?').bind(owner));
+        continue;
+      }
+      await transition(db,env,db.prepare("UPDATE v3_walk_compare SET status=CASE WHEN again=1 THEN 'pending' ELSE 'idle' END,owner='' WHERE id=1 AND owner=?").bind(owner));
+      return { compared:true };
+    }
+  } catch (error) {
+    await transition(db,env,db.prepare("UPDATE v3_walk_compare SET status='pending',owner='',error=? WHERE id=1 AND owner=?").bind(String(error.message).slice(0,200),owner));
+    console.warn('walk-scan-notify: retained pending scan');
+    return { pending:true };
+  }
+}
+
+// 排程只重啟掃描，不將逾時當作 Google 已完成。回傳 true 表示這輪已經掃過（或試過），排程不用再掃一次。
+export async function retryNotifiedScan(env,now) {
+  if (env.D1_WALK_NOTIFY!=='1') return false;
+  const cutoff=new Date(now-60000).toISOString();
+  const pending=await env.DB.prepare("SELECT id FROM v3_walk_compare WHERE id=1 AND (status='pending' OR (status='running' AND started_at<=?))").bind(cutoff).first();
+  if (!pending) return false;
+  await scanNotifiedWalks(env.DB,env,cutoff);
+  return true;
 }

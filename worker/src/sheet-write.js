@@ -3,9 +3,11 @@
 // - walk／edit／undo：溜狗表的「遛狗日期」「誰遛的」兩欄（舊流程，#138）
 // - note／log：追加一隻狗的備註、新增一筆異動紀錄（#239、#281）
 // - group：常遛狗群分頁加狗、移出、開新群（K 2026-10-16）
-// - walkWake／walkScan：新登記流程寫回、讀回主清單（walk-accept.js、walk-reconcile.js）
-export const SHEET_ACTIONS = new Set(['walk', 'edit', 'undo', 'note', 'log', 'group', 'walkWake', 'walkScan']);
+// - walkWake／walkWakeBatch／walkScan：新登記流程寫回（單隻、合併最多 10 隻）、讀回主清單（walk-accept.js、walk-reconcile.js）
+export const SHEET_ACTIONS = new Set(['walk', 'edit', 'undo', 'note', 'log', 'group', 'walkWake', 'walkWakeBatch', 'walkScan']);
 const TIMEOUT_MS = 20 * 1000;
+// 合併派送在 Apps Script 鎖內逐隻寫、每隻各回呼 Worker 兩次，10 隻要比單隻久
+const BATCH_TIMEOUT_MS = 90 * 1000;
 
 // status：要回給網站的 HTTP 狀態；code 'off' 是還沒設定（網站就照舊只記在手機上）
 export class SheetWriteError extends Error {
@@ -29,13 +31,13 @@ export async function callSheet(env, body) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(TIMEOUT_MS),
+      signal: AbortSignal.timeout(body.action === 'walkWakeBatch' ? BATCH_TIMEOUT_MS : TIMEOUT_MS),
     });
     out = await res.json().catch(() => null);
   } catch (e) {
-    throw new SheetWriteError('連不上試算表，請稍後再試', 502);
+    throw new SheetWriteError('連不上試算表，請稍後再試', 502, 'unreachable');
   }
-  if (!res.ok || !out) throw new SheetWriteError(`試算表沒有回應（${res.status}）`, 502);
+  if (!res.ok || !out) throw new SheetWriteError(`試算表沒有回應（${res.status}）`, 502, 'unreachable');
   if (!out.ok) throw new SheetWriteError(out.code === 'key' ? '寫入試算表的金鑰不對，請 K 檢查設定' : scriptError(out.error), 502, out.code === 'key' ? 'key' : '');
   return out;
 }

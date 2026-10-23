@@ -36,7 +36,7 @@ function handleRequest(req) {
   if (!req) return { ok: false, error: '沒有資料' };
   // K 決定先不設金鑰（2026-10-04）；有設 WRITE_KEY 才檢查
   if (key && req.key !== key) return { ok: false, error: '金鑰不對', code: 'key' };
-  if (['walkWake','walkScan','walkCompare'].indexOf(req.action) !== -1 && (!key || req.key !== key)) return { ok: false, error: '寫回必須設定金鑰', code: 'key' };
+  if (['walkWake','walkWakeBatch','walkScan'].indexOf(req.action) !== -1 && (!key || req.key !== key)) return { ok: false, error: '寫回必須設定金鑰', code: 'key' };
   var lock = LockService.getScriptLock();
   lock.waitLock(15000); // 兩個人同時按，一個一個來，免得互相蓋掉
   try {
@@ -44,8 +44,8 @@ function handleRequest(req) {
     var sheet = SpreadsheetApp.openById(sheetIdOf(props.getProperty('SHEET_ID'))).getSheetByName(SHEET_NAME);
     if (!sheet) return { ok: false, error: '找不到「' + SHEET_NAME + '」分頁' };
     if (req.action === 'walkWake') return writeLatestWalk(sheet, req, props);
-    if (req.action === 'walkScan') return readWalkSnapshot(sheet);
-    if (req.action === 'walkCompare') return compareWalkCells(sheet, req, props);
+    if (req.action === 'walkScan') return scanWalkSnapshot(sheet, req);
+    if (req.action === 'walkWakeBatch') return writeLatestWalks(sheet, req, props);
     // 所有程式寫入共用此鎖；舊版喚醒延後抵達也不能繞過 D1 正本。
     if (props.getProperty('WALK_WORKER_URL') && ['walk', 'edit', 'undo'].indexOf(req.action) !== -1) {
       var gate = walkWorker(props, 'legacy-check', { dogs: req.dogs });
@@ -116,30 +116,21 @@ function readWalkSnapshot(sheet) {
   }
   return { ok: true, rows: rows };
 }
-// 一份同鎖直接讀值；不讀 gviz、不回傳其他欄位。通知每輪五隻，機器入口最多十隻。
-function compareWalkCells(sheet, req, props) {
-  if (!Array.isArray(req.known) || req.known.length > 500) throw new Error('比對基準不完整');
-  var byKey = {};
-  readWalkSnapshot(sheet).rows.forEach(function(row) {
-    var key=row.dog.id ? 'id:'+row.dog.id : 'name:'+row.dog.name;
-    if (!byKey[key]) byKey[key]=[];
-    byKey[key].push(row.current);
-  });
-  var observations=[], problems=[];
-  req.known.forEach(function(known) {
-    var matches=byKey[known.id ? 'id:'+known.id : 'name:'+known.name] || [];
-    if (matches.length !== 1) { problems.push('找不到唯一的狗：'+(known.id || known.name)); return; }
-    var current=matches[0];
-    if (!sameWalk(current,known)) observations.push({ dog:{ id:known.id,name:known.name },current:current });
-  });
-  var limit=Math.min(10,Math.max(1,Number(req.limit)||10));
-  var batch=observations.slice(0,limit);
-  if (batch.length) {
-    var result=walkWorker(props,'observe',{ observations:batch });
-    if (!Array.isArray(result.results) || result.results.length !== batch.length || result.results.some(function(r) { return !r.ok; })) problems.push('比較未完成');
-  }
-  return { ok:problems.length===0 && observations.length<=limit, protocol:'walkCompare-v1', compared:batch.length,
-    remaining:Math.max(0,observations.length-limit), error:problems.join(';') };
+// 合併派送（#460）：一次收最多 10 隻，同一個鎖內逐隻走 writeLatestWalk；單隻失敗只記在該隻，不影響其他隻。
+// 保險掃描（#460）：四欄指紋跟 Worker 上次記的一樣就只回「沒改」，省掉傳整份和 Worker 逐隻比對。
+function scanWalkSnapshot(sheet, req) {
+  var snapshot = readWalkSnapshot(sheet);
+  var sig = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, JSON.stringify(snapshot.rows), Utilities.Charset.UTF_8)
+    .map(function (b) { return ((b + 256) % 256).toString(16).replace(/^(.)$/, '0$1'); }).join('');
+  if (req.sig && req.sig === sig) return { ok: true, same: true, sig: sig };
+  return { ok: true, sig: sig, rows: snapshot.rows };
+}
+function writeLatestWalks(sheet, req, props) {
+  if (!Array.isArray(req.items) || !req.items.length || req.items.length > 10) throw new Error('合併派送數量不對');
+  return { ok: true, results: req.items.map(function (item) {
+    try { return writeLatestWalk(sheet, item, props); }
+    catch (err) { return { ok: false, dispatchId: item && item.dispatchId, error: String(err && err.message ? err.message : err) }; }
+  }) };
 }
 function writeLatestWalk(sheet, req, props) {
   if (!req.dog || !req.dispatchId) throw new Error('缺少寫回識別');
