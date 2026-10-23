@@ -1151,7 +1151,7 @@ let sheetWriteState = 'unknown'; // unknown／on／off
 let sheetQueue = Promise.resolve();
 
 // ── 誰遛的名字（#141 第 9 項）──
-// 名字不放進公開的 repo（dogs.json 只有代號）：打開網頁時跟 Worker 拿（GET /api/walkers，Worker 直接讀試算表），
+// 名字不放進公開的 repo（dogs.json 只有代號）：打開網頁時跟 Worker 拿（GET /api/walkers，Worker 從 D1 讀，#519），
 // 只在畫面上顯示。{ 狗的 key: '嘉文+俐葶+岑' }；拿不到就不顯示名字，其他照常
 let walkerNames = {};
 let walkerDates = {}; // 試算表現在的「遛狗日期」（狗的 key → 'YYYY-MM-DD'）：直接改試算表也 1 分鐘內看到（K 2026-10-20）

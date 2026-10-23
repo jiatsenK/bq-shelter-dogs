@@ -3,7 +3,7 @@ import { cleanIntakeEvents } from './intake.js';
 import { cleanStays } from './stays.js';
 import { saveFixedCare, mainNameMatcher, replaceGroup } from './compact.js';
 import { callSheet, SheetWriteError } from './sheet-write.js';
-import { gvizTable, cellText, findHeaderRow, columnMap, MAIN_COLUMNS, splitNames } from './sheet-read.js';
+import { splitNames } from './sheet-read.js';
 import { readDepartedCards } from './departed.js';
 import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, readActivities, resolveDogs, updateActivity } from './activities.js';
 import { acceptWalk, dispatchWalk, readAcceptedWalks, writebackTarget, confirmWalk, reconcileWalk } from './walk-accept.js';
@@ -752,66 +752,41 @@ async function walkerCodes(request, env, origin) {
 // 網站送 { action: 'walk' | 'undo', walker, dogs: [{ id, name, prev?, wrote? }] }；undo 沒帶 prev 時 Worker 從溜狗紀錄找（ADR 0016），這裡檢查完帶上金鑰（SHEET_WRITE_KEY）轉給
 // Google Apps Script 小程式（apps-script/sheet-write.gs，K 用自己的帳號部署）。小程式只改「遛狗日期」「誰遛的」兩欄。
 // ── 溜狗人名字（#141）：GET /walkers ──
-// 名字不進 repo（dogs.json 只有代號），網站打開時跟這裡拿：Worker 直接讀試算表主清單（跟同步一樣用 gviz，試算表要「知道連結的人可檢視」），
-// 回 { walkers: { 狗的 key: 「誰遛的」原文 }, names: [表上出現過的名字，出現多的在前], older: [以前看過、現在表上沒有的名字] }；狗的 key 跟網站 walkKey 一樣（有編號用編號，沒有用「名:犬名」）。
-// 1 分鐘內重複讀用快取，免得每個人都去讀 Google。沒設 SHEET_ID 回 503 + code: 'off'
+// 名字不進 repo（dogs.json 只有代號），網站打開時跟這裡拿：#519 起從 D1 讀（readWalkersD1），不連 Google，
+// 回 { walkers: { 狗的 key: 誰遛的 }, names: [主清單上的名字，最近出現的在前], older: [以前看過、現在表上沒有的名字] }；狗的 key 跟網站 walkKey 一樣（有編號用編號，沒有用「名:犬名」）。
+// 1 分鐘內重複讀用快取。沒接 DB 回 503 + code: 'off'
 // K 2026-10-20：不管在網站按還是直接改試算表，其他手機 1 分鐘內要看到（原本 5 分鐘）。手機每分鐘跟著今日紀錄一起抓
 const WALKERS_CACHE_MS = 60 * 1000;
 // 看過的名字寫資料庫很花寫入額度（每個名字一列），快取改 1 分鐘後另外限制：名單沒變就 30 分鐘才記一次
 const WALKER_NAMES_REMEMBER_MS = 30 * 60 * 1000;
 let walkerNamesRemembered = null; // { at, names: 'a,b', older }
-// 主清單跟同步一樣分兩次讀、用欄位標題對欄（worker/src/sheet-read.js）
-// 「遛狗日期」：日期格式（gviz 的 Date(年,月-1,日)）或文字（2026/10/20、10/20）→ 'YYYY-MM-DD'；讀不懂回 ''
-export function walkersDate(c, now = new Date()) {
-  if (!c || c.v == null) return '';
-  const ymd = (y, m, d) => (m >= 1 && m <= 12 && d >= 1 && d <= 31 ? `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}` : '');
-  const g = typeof c.v === 'string' && c.v.match(/^Date\((\d+),(\d+),(\d+)/);
-  if (g) return ymd(+g[1], +g[2] + 1, +g[3]);
-  const t = String(c.f || c.v).trim();
-  const full = t.match(/^(\d{4})[/.-](\d{1,2})[/.-](\d{1,2})/);
-  if (full) return ymd(+full[1], +full[2], +full[3]);
-  const short = t.match(/^(\d{1,2})[/.-](\d{1,2})$/);
-  if (short) return ymd(now.getFullYear(), +short[1], +short[2]);
-  return '';
-}
-// table：指定表頭列數重讀的結果；headerTexts：第一次讀到的表頭列。回 { walkers: { 狗的 key: 原文 }, dates: { 狗的 key: 'YYYY-MM-DD' }, names }
-export function parseWalkers(table, headerTexts = []) {
-  const map = columnMap(table, headerTexts);
-  if (map.name == null || map.walker == null) throw new Error('主清單找不到「犬名」或「誰遛的」欄');
-  const walkers = {};
-  const dates = {};
-  const count = new Map();
-  for (const r of table.rows || []) {
-    const raw = r.c || [];
-    const c = raw.map(cellText);
-    const name = c[map.name] || '', id = map.id == null ? '' : (c[map.id] || ''), text = c[map.walker] || '';
-    // 跟同步一樣：要有犬名和籠位才算狗（表尾的提示文字不算）
-    if (!name || (map.cage != null && !c[map.cage]) || name === MAIN_COLUMNS.name) continue;
-    // 試算表是正本（K 2026-10-20）：手機用這裡的日期蓋掉 dogs.json，直接改試算表也 1 分鐘內看到
-    // 清空的格子也要回（空字串），手機才知道被清掉；日期讀不懂就不回，手機沿用上次同步的
-    const key = id || `名:${name}`;
-    const cell = map.walkedDate == null ? null : raw[map.walkedDate];
-    const date = cell && cell.v != null && String(cell.f ?? cell.v).trim() ? walkersDate(cell) : '';
-    if (date || (map.walkedDate != null && !(cell && cell.v != null && String(cell.f ?? cell.v).trim()))) dates[key] = date;
-    walkers[key] = text;
-    if (!text) continue;
-    for (const n of new Set(splitNames(text))) count.set(n, (count.get(n) || 0) + 1);
+// 主清單每隻狗：有今日溜狗狀態（v3_walk_state）用它，沒有用主清單的遛狗日期與名單代號換回名字（跟 walk-accept 的 seedState 一樣）。
+// 回 { walkers: { 狗的 key: 名單 }, dates: { 狗的 key: 'YYYY-MM-DD' 或 '' }, names: [最近出現的在前，同一天照名單順序] }
+export async function readWalkersD1(db) {
+  const [main, people, states] = await db.batch([
+    db.prepare('SELECT row_index, number, name, walked_date FROM v3_sheet_main ORDER BY row_index'),
+    db.prepare('SELECT w.row_index, COALESCE(n.name, v.name) AS name FROM v3_sheet_main_walkers w LEFT JOIN v3_identity_names n ON n.code=w.walker_code LEFT JOIN v3_volunteer_codes c ON c.code=w.walker_code LEFT JOIN v3_volunteers v ON v.volunteer_id=c.volunteer_id ORDER BY w.row_index, w.position'),
+    db.prepare('SELECT dog_key, effective_date, walker FROM v3_walk_state'),
+  ]);
+  const namesOf = new Map();
+  for (const p of people.results || []) {
+    if (!p.name) continue;
+    if (!namesOf.has(p.row_index)) namesOf.set(p.row_index, []);
+    namesOf.get(p.row_index).push(p.name);
   }
-  // 名字（開頭畫面讓志工點選自己）：出現次數多的在前
-  const names = [...count].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'zh-Hant')).map(([n]) => n);
+  const stateOf = new Map((states.results || []).map(s => [s.dog_key, s]));
+  const walkers = {}, dates = {}, lastSeen = new Map(); // 名字 → 最近一次 { date, i: 名單裡第幾位 }
+  for (const r of main.results || []) {
+    const key = r.number || `名:${r.name}`;
+    const s = stateOf.get(key);
+    const text = s ? s.walker || '' : (namesOf.get(r.row_index) || []).join('、');
+    const date = (s ? s.effective_date : r.walked_date) || '';
+    walkers[key] = text;
+    dates[key] = date;
+    splitNames(text).forEach((n, i) => { const prev = lastSeen.get(n); if (!prev || date > prev.date || (date === prev.date && i < prev.i)) lastSeen.set(n, { date, i }); });
+  }
+  const names = [...lastSeen].sort((x, y) => y[1].date.localeCompare(x[1].date) || x[1].i - y[1].i || x[0].localeCompare(y[0], 'zh-Hant')).map(([n]) => n);
   return { walkers, dates, names };
-}
-async function readWalkers(sheetId, fetchImpl = fetch) {
-  const id = (sheetId.match(/\/d\/([A-Za-z0-9_-]+)/) || [])[1] || sheetId;
-  const read = async headers => {
-    const res = await fetchImpl(`https://docs.google.com/spreadsheets/d/${encodeURIComponent(id)}/gviz/tq?tqx=out:json&headers=${headers}&sheet=${encodeURIComponent('主清單')}`);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    return gvizTable(await res.text());
-  };
-  const raw = await read(0);
-  const h = findHeaderRow(raw);
-  if (h === -1) throw new Error('主清單找不到「犬名」表頭');
-  return parseWalkers(await read(h + 1), ((raw.rows[h] || {}).c || []).map(cellText));
 }
 // 看過的名字記進資料庫（K 2026-10-12）：回「以前看過、現在表上沒有」的名字，最近看到的在前（older）。
 // 沒接資料庫或資料庫出錯就回空的，名字清單照舊只有表上現在的
@@ -845,15 +820,15 @@ export async function walkerCodeMap(names, key) {
 }
 async function getWalkers(env, allowed, now = Date.now()) {
   const cfg = config(env);
-  if (!cfg.sheetId) return reply(503, { ok: false, code: 'off', error: '還沒設定試算表' }, allowed);
-  if (!walkersCache || walkersCache.id !== cfg.sheetId || now - walkersCache.at > WALKERS_CACHE_MS) {
-    const data = await readWalkers(cfg.sheetId);
+  if (!env || !env.DB) return reply(503, { ok: false, code: 'off', error: '還沒接資料庫' }, allowed);
+  if (!walkersCache || now - walkersCache.at > WALKERS_CACHE_MS) {
+    const data = await readWalkersD1(env.DB);
     const key = data.names.join(',');
     const r = walkerNamesRemembered;
     const older = r && r.names === key && now - r.at < WALKER_NAMES_REMEMBER_MS ? r.older : await rememberWalkerNames(env, data.names, now);
     if (!r || r.names !== key || now - r.at >= WALKER_NAMES_REMEMBER_MS) walkerNamesRemembered = { at: now, names: key, older };
-    // readAt：這份名單是什麼時候讀的。手機用它判斷今日溜狗紀錄是不是比試算表新（比它舊的以試算表為準）
-    walkersCache = { id: cfg.sheetId, at: now, data: { ...data, older, readAt: new Date(now).toISOString(), codes: await walkerCodeMap([...data.names, ...older], cfg.walkerKey) } };
+    // readAt：這份名單是什麼時候讀的。手機用它判斷今日溜狗紀錄是不是比這份名單新（比它舊的以這份為準）
+    walkersCache = { at: now, data: { ...data, older, readAt: new Date(now).toISOString(), codes: await walkerCodeMap([...data.names, ...older], cfg.walkerKey) } };
   }
   return reply(200, { ok: true, ...walkersCache.data }, allowed);
 }
@@ -1197,7 +1172,7 @@ const SITE_ROUTES = {
     run: async ({ env, origin, url }) => reply(200, { ok: true, edits: await readEdits(env.DB, Number(url.searchParams.get('limit') || '') || undefined) }, origin) },
   '/walker-code': { method: 'POST', wrongMethod: '代號只能用 POST /walker-code 換', crash: [500, '名字設定暫時失敗，請稍後再試'],
     run: ({ request, env, origin }) => walkerCodes(request, env, origin) },
-  '/walkers': { method: 'GET', wrongMethod: '溜狗人名字只能用 GET /walkers 讀', crash: [502, '暫時讀不到試算表的溜狗人'],
+  '/walkers': { method: 'GET', wrongMethod: '溜狗人名字只能用 GET /walkers 讀', crash: [502, '暫時讀不到溜狗人'],
     run: ({ env, origin }) => getWalkers(env, origin) },
   '/walk': { method: 'POST', wrongMethod: '寫入試算表只能用 POST /walk', crash: [500, '寫入試算表發生錯誤'],
     run: ({ request, env, origin, ctx }) => writeWalks(request, env, origin, ctx) },
@@ -1231,7 +1206,7 @@ async function siteRoute(route, c) {
 
 export default {
   // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch 和 scheduled
-  testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, walkersDate, maintenance },
+  testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, maintenance },
 
   // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 wrangler.jsonc 的 triggers）
   // 每個排程只跑一件（#500、#501）：RETRY_CRON 寫回重試、SCAN_CRONS 保險掃描、TRASH_CRON 照片垃圾桶；沒帶 cron（測試）跑溜狗兩件
