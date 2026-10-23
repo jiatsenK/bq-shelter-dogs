@@ -5,7 +5,7 @@
 // - D1 有、試算表沒有的只列出來（v3_sync_state 的 dog_list_extra），不自動刪。
 // 指紋只是「上次收過哪一版」，存在 v3_sync_state 一列 JSON；遺失只會讓下一次掃描多送幾列，不影響資料。
 import { splitNames } from './sheet-read.js';
-import { walkerCode } from './editlog.js';
+import { walkerCode, logEdit } from './editlog.js';
 import { judgeDeparture, nameKey } from './departure-rules.js';
 import { taiwanYmd } from './sync-plan.js';
 import { SYNCED_AT_KEY } from './compact.js';
@@ -60,6 +60,7 @@ async function applyMain(db, row, list, env) {
   const covered = text(row.walker) ? 1 : 0;
   const old = findMain(list, dog);
   const out = [];
+  let returnedLog = null;
   if (old) {
     const oldCodes = (await db.prepare('SELECT walker_code FROM v3_sheet_main_walkers WHERE row_index=? ORDER BY position').bind(old.row_index).all()).results.map(r => r.walker_code);
     const codesChanged = keyed && !sameList(oldCodes, codes);
@@ -79,7 +80,13 @@ async function applyMain(db, row, list, env) {
     let dogId = dog.id
       ? await db.prepare('SELECT dog_id FROM v3_dog_numbers WHERE number=?').bind(dog.id).first('dog_id')
       : await db.prepare("SELECT dog_id FROM v3_walks WHERE dog_number='' AND dog_name=? LIMIT 1").bind(dog.name).first('dog_id');
-    if (!dogId) {
+    let returned = null;
+    if (!dogId && dog.id) returned = await returnedDog(db, dog, list);
+    if (returned) {
+      dogId = returned.dog_id;
+      returnedLog = { editor: { name: '試算表（自動認回所）', code: '' }, kind: 'former', dogId, dogNumber: dog.id, before: { number: returned.number }, after: { number: dog.id, formerNumber: returned.number } };
+      out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
+    } else if (!dogId) {
       dogId = newId();
       out.push(db.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId, dog.name));
       if (dog.id) out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
@@ -90,13 +97,23 @@ async function applyMain(db, row, list, env) {
       .bind(rowIndex, dogId, dog.id, dog.name, cage, note, covered, date, mine ? 1 : 0, mine ? date : null, dogId));
     out.push(db.prepare('INSERT INTO v3_sheet_former_numbers SELECT ?,ROW_NUMBER() OVER (ORDER BY number)-1,number FROM v3_dog_numbers WHERE dog_id=? AND number<>?').bind(rowIndex, dogId, dog.id));
     codes.forEach((code, i) => out.push(db.prepare('INSERT INTO v3_sheet_main_walkers VALUES(?,?,?)').bind(rowIndex, i, code)));
-    // 又回到主清單（例：誤移、退養回來）不算離所
-    if (dog.id) out.push(...dropDeparture(db, dog.id));
+    // 又回到主清單（例：誤移、退養回來）不算離所；換了新編號回來的，舊離所註明用哪個編號回所
+    if (dog.id) out.push(...dropDeparture(db, dog.id),
+      db.prepare("UPDATE v3_departures SET returned_number=? WHERE dog_id=? AND number<>? AND COALESCE(returned_number,'')<>?").bind(dog.id, dogId, dog.id, dog.id));
     if (date && !(await db.prepare('SELECT 1 FROM v3_walks WHERE dog_id=? AND walk_date=? LIMIT 1').bind(dogId, date).first())) out.push(...walkDay(db, dogId, date, dog, codes));
     list.push({ row_index: rowIndex, dog_id: dogId, number: dog.id, name: dog.name, cage, note, walked_date: date, covered, my_walked: mine ? 1 : 0, my_walked_date: mine ? date : null });
   }
   if (out.length) await db.batch(out);
+  if (returnedLog) await logEdit(db, returnedLog);
   return out.length > 0;
+}
+
+// 狗回所會拿新編號，沒人會在網站上連舊編號（K 2026-10-24）：離所紀錄裡剛好一筆同名、主清單上沒別的同名，就是同一隻。
+// 認錯可在網站「舊編號」拆開（編輯紀錄記為系統自動）。同名多筆不猜，當新狗。
+async function returnedDog(db, dog, list) {
+  if (list.some(m => m.name === dog.name)) return null;
+  const found = (await db.prepare('SELECT number,dog_id FROM v3_departures WHERE name=? LIMIT 2').bind(dog.name).all()).results;
+  return found.length === 1 ? found[0] : null;
 }
 
 async function applyDeparted(db, row, list, now, fp) {

@@ -179,3 +179,25 @@ test('#501 GAS 整理的單位與 Worker 對得上：第一次全送，第二次
     assert.deepEqual(await scan(), ['main:9003']);
   } finally { env.DB.close(); }
 });
+
+// 狗回所會拿新編號，沒人會在網站上連舊編號：離所紀錄裡剛好一筆同名、主清單沒別的同名，就認定是同一隻（K 2026-10-24，取代 #252「有編號絕不按名字合併」）
+test('#501 新編號回所：同名的唯一一筆離所認成同一隻，連上新編號、註明回所並記編輯紀錄；同名多筆不合併', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    await send(env, [main({ note:'親人' }), { sheet:'departed', hash:'d1', dog:{ id:'9001', name:'測試狗' }, texts:['9001', '測試狗', '被認養'], dates:[] }]);
+    await send(env, [main({ dog:{ id:'9100', name:'測試狗' }, hash:'h9', cage:'R01' })]);
+    assert.equal(await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='9100'").first('dog_id'), 'dog', '新編號連到原本的狗');
+    assert.equal(await env.DB.prepare("SELECT returned_number FROM v3_departures WHERE number='9001'").first('returned_number'), '9100');
+    assert.deepEqual((await env.DB.prepare("SELECT number FROM v3_sheet_former_numbers").all()).results.map(r => r.number), ['9001']);
+    const log = await env.DB.prepare("SELECT kind,dog_id,dog_number FROM v3_edit_log").first();
+    assert.deepEqual({ ...log }, { kind:'former', dog_id:'dog', dog_number:'9100' });
+    // 同名兩筆離所：認不出來，當新狗
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('a','小黑'),('b','小黑')"),
+      env.DB.prepare("INSERT INTO v3_dog_numbers VALUES('7001','a'),('7002','b')"),
+      env.DB.prepare("INSERT INTO v3_departures(number,dog_id,name) VALUES('7001','a','小黑'),('7002','b','小黑')")]);
+    await send(env, [main({ dog:{ id:'9200', name:'小黑' }, hash:'h10', cage:'R02' })]);
+    assert.ok(!['a', 'b'].includes(await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='9200'").first('dog_id')));
+  } finally { env.DB.close(); }
+});
