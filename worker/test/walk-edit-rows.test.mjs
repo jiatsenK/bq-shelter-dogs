@@ -80,17 +80,16 @@ test('#500 沒有待寫回時，重試排程不讀試算表、不寫 D1', async 
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
 
-test('#500 保險掃描指紋一樣只比一次就結束；重試排程、垃圾桶排程不掃', async () => {
+test('#500 保險掃描沒有不同的狗只問一次就結束；重試排程、垃圾桶排程不掃', async () => {
   const env = { ...await setup(), WALK_RETRY_ENABLED:'true' }, real = globalThis.fetch;
   const actions = [];
   globalThis.fetch = async (url, init) => {
     const body = init?.body ? JSON.parse(init.body) : {};
     actions.push(body.action || String(url));
-    return body.sig === 'same' ? Response.json({ ok:true, same:true, sig:'same' }) : Response.json({ ok:true, sig:'same', rows:[{ dog, current:{ date:'2026-10-01', walker:'' } }] });
+    return Response.json({ ok:true, rows: body.fingerprints ? [] : [{ dog, current:{ date:'2026-10-01', walker:'' } }] });
   };
   try {
     await post(env, request('scan-0001', '甲'));
-    await env.DB.prepare("INSERT INTO v3_sync_state(key,value) VALUES('walk_scan_sig','same')").run();
     for (const cron of ['17 2 1 * *', '5-59/10 * * * *']) {
       actions.length = 0;
       await run(env, cron);
