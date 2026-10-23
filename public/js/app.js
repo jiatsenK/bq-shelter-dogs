@@ -13,7 +13,7 @@ const FIRST_SCREEN_CARDS = 8;
 // 我最近溜過（#58）：同步時累積的遛狗紀錄（#56）。#96 起每個志工看自己的：
 // 紀錄裡的 walkers 是遛的人的代號，志工在「我溜過」輸入名字、經 Worker 換成代號後記在這支手機
 // 休養中（K 2026-10-09）：在網站上設定「到哪天前暫停帶出」，經 Worker 存 D1、記編輯紀錄，不碰試算表
-const WALKER_CODES_KEY = 'bq-walker-codes';
+const WALKER_CODES_KEY = BQStore.keys.walkerCodes;
 const WALKER_CODE_PATTERN = /^[0-9a-f]{12}$/; // 跟 Worker 的 WALKER_CODE_LENGTH 一致
 // 這間收容所的設定在 js/site-config.js（K 2026-10-10：以後其他收容所要用，只改那個檔）
 // 警示關鍵字（#28）：備註含任一個，就把備註原文直接顯示在卡片第一層，字眼標紅；
@@ -261,16 +261,15 @@ let walkerCodesMemory = null;
 function loadMyCodes() {
   let list = walkerCodesMemory;
   try {
-    const raw = walkedStorage && walkedStorage.getItem(WALKER_CODES_KEY);
-    if (raw) list = JSON.parse(raw);
+    list = phoneStore.readJson(WALKER_CODES_KEY, list);
   } catch (e) { /* 讀不到就用記憶體裡的 */ }
   return Array.isArray(list) ? list.filter(c => WALKER_CODE_PATTERN.test(c)) : [];
 }
 function saveMyCodes(codes) {
   walkerCodesMemory = codes.length ? [...codes] : null;
   try {
-    if (walkedStorage && codes.length) walkedStorage.setItem(WALKER_CODES_KEY, JSON.stringify(codes));
-    else if (walkedStorage) walkedStorage.removeItem(WALKER_CODES_KEY);
+    if (phoneStore && codes.length) phoneStore.writeJson(WALKER_CODES_KEY, codes);
+    else if (phoneStore) phoneStore.remove(WALKER_CODES_KEY);
   } catch (e) { /* 存不了就只記在記憶體 */ }
   try { myWalks = walksData ? parseMyWalks(walksData, codes) : []; } catch (e) { myWalks = []; }
   syncFavs();
@@ -897,17 +896,16 @@ function warnNote(note, flag) {
 // 只存在瀏覽器 localStorage，不寫 GitHub、不用登入；#138 起另外寫進試算表（見 sheetWrite）。
 // 存成 { date: '2026-09-24', ids: [編號…] }（本地日期＋狗狗編號）：日期不是今天就當作沒有紀錄，
 // 所以隔天自動全部未勾選；前一天的紀錄不用刪，下次記錄時直接蓋掉。
-const WALKED_KEY = 'bq-walked-today';
+const WALKED_KEY = BQStore.keys.walkedToday;
 // 無痕模式等讀寫不了 localStorage 時，至少這次開著網頁的期間還記得
-let walkedStorage = (() => { try { return window.localStorage; } catch (e) { return null; } })();
+let phoneStore = BQStore;
 let walkedMemory = null;
 
 
 function loadWalkedIds(today = new Date()) {
   let data = walkedMemory;
   try {
-    const raw = walkedStorage && walkedStorage.getItem(WALKED_KEY);
-    if (raw) data = JSON.parse(raw);
+    data = phoneStore.readJson(WALKED_KEY, data);
   } catch (e) { /* 讀不到就用這次開網頁期間的紀錄 */ }
   if (!data || data.date !== BQDates.localDateKey(today) || !Array.isArray(data.ids)) return [];
   return data.ids.map(String);
@@ -915,12 +913,7 @@ function loadWalkedIds(today = new Date()) {
 
 function saveWalkedIds(ids, today = new Date()) {
   walkedMemory = { date: BQDates.localDateKey(today), ids: [...ids] };
-  try {
-    if (walkedStorage) walkedStorage.setItem(WALKED_KEY, JSON.stringify(walkedMemory));
-  } catch (e) {
-    // 仍可讀取的舊資料不能蓋掉剛寫入記憶體的紀錄。
-    walkedStorage = null;
-  }
+  phoneStore.writeJson(WALKED_KEY, walkedMemory);
 }
 
 // 今天已溜用編號記；新來還沒有編號的狗改用犬名記（K 說不會有同名的狗）
@@ -1078,19 +1071,19 @@ async function undoSheetWalks(dogs, retry = null, options = {}) {
 }
 
 // ── 我的常溜（#267）：逐隻增刪，絕不把手機上的舊整份清單蓋到 D1 ──
-const FAVS_KEY = 'bq-favs';
-const FAV_SYNC_KEY = 'bq-favs-sync';
+const FAVS_KEY = BQStore.keys.favs;
+const FAV_SYNC_KEY = BQStore.keys.favsSync;
 let favSyncMemory = null;
 let favSyncQueue = Promise.resolve();
 function favState() {
   if (!favSyncMemory) {
-    const saved = readJsonKey(FAV_SYNC_KEY);
+    const saved = phoneStore.readJson(FAV_SYNC_KEY);
     favSyncMemory = saved && saved.v === 1 ? saved : { v: 1, aliases: {}, books: {}, pending: [] };
   }
   return favSyncMemory;
 }
-function saveFavState() { writeJsonKey(FAV_SYNC_KEY, favState()); }
-function localFavs() { const v = readJsonKey(FAVS_KEY); return Array.isArray(v) ? v.map(String) : []; }
+function saveFavState() { phoneStore.writeJson(FAV_SYNC_KEY, favState()); }
+function localFavs() { const v = phoneStore.readJson(FAVS_KEY); return Array.isArray(v) ? v.map(String) : []; }
 function favoriteIds() {
   const state = favState(), codes = loadMyCodes();
   const ids = new Set(state.books[codes.join(',')] || []);
@@ -1116,10 +1109,10 @@ function toggleFav(dog) {
   if (codes.length && dogId) {
     // 讀取合併所有名字；取消時也要取消各個名字底下的這隻狗。
     state.pending.push({ codes: [codes[0]], dogId, on });
-    writeJsonKey(FAVS_KEY, localFavs().filter(x => state.aliases[x] !== dogId && x !== k));
+    phoneStore.writeJson(FAVS_KEY, localFavs().filter(x => state.aliases[x] !== dogId && x !== k));
     saveFavState();
   } else {
-    writeJsonKey(FAVS_KEY, on ? [k, ...localFavs()] : localFavs().filter(x => x !== k));
+    phoneStore.writeJson(FAVS_KEY, on ? [k, ...localFavs()] : localFavs().filter(x => x !== k));
   }
   syncFavs();
 }
@@ -1182,14 +1175,14 @@ function syncFavs() {
       if (loadMyCodes().join(',') !== original || loadWalkerName() !== name) return;
       saveWalkerName(out.identity.name);
       walkerCodesMemory = out.identity.codes;
-      try { walkedStorage?.setItem(WALKER_CODES_KEY, JSON.stringify(out.identity.codes)); } catch (e) { /* 本次仍可使用 */ }
+      try { phoneStore?.writeJson(WALKER_CODES_KEY, out.identity.codes); } catch (e) { /* 本次仍可使用 */ }
       codes = out.identity.codes;
       myWalks = walksData ? parseMyWalks(walksData, codes) : [];
     }
     await reconcileFavorites(favState(), codes, {
       codes: loadMyCodes, local: localFavs, save: saveFavState,
       read: codes => favoriteRequest(codes), write: op => favoriteRequest(null, op),
-      removeLegacy: matches => writeJsonKey(FAVS_KEY, localFavs().filter(key => !matches(key))),
+      removeLegacy: matches => phoneStore.writeJson(FAVS_KEY, localFavs().filter(key => !matches(key))),
     });
     if (loadMyCodes().join(',') === codes.join(',')) { render(); renderDetail(); }
   }).catch(() => {
@@ -1202,8 +1195,8 @@ function syncFavs() {
 // 經過 Worker 的 /walk 轉給 K 部署的 Google Apps Script，只改主清單的「遛狗日期」「誰遛的」。
 // 寫成功的記下試算表原本的內容（只記今天的），復原或放回時帶回去改回來；小程式只在格子還是我們寫的樣子時才改回。
 // Worker 還沒設定（回 code: 'off'）就照舊只記在手機上，不打擾
-const WALKER_NAME_KEY = 'bq-walker-name';
-const SHEET_WRITES_KEY = 'bq-sheet-writes';
+const WALKER_NAME_KEY = BQStore.keys.walkerName;
+const SHEET_WRITES_KEY = BQStore.keys.sheetWrites;
 // 跟 scripts/sync-sheet.mjs 的 NAME_SEP 一樣
 const WALKER_NAME_SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
 let walkerNameMemory = '';
@@ -1312,33 +1305,27 @@ function walkerList(dog, today = new Date()) {
 // ── 一起溜的人（#141 第 1 項，K：溜了要怎麼寫除了我以外的人）──
 // 按溜了先寫自己；提示條「＋一起溜的人」選名字，再寫進試算表同一格（小程式用「、」接在後面）。
 // 最近一起溜過的名字記在這支手機，下次排在前面一點就加；今天每隻狗加了誰也記著，畫面上顯示用
-const COMPANIONS_KEY = 'bq-companions';
-const WALK_WITH_KEY = 'bq-walk-with';
+const COMPANIONS_KEY = BQStore.keys.companions;
+const WALK_WITH_KEY = BQStore.keys.walkWith;
 const COMPANIONS_MAX = 8;
-function readJsonKey(key) {
-  try { const raw = walkedStorage && walkedStorage.getItem(key); return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
-}
-function writeJsonKey(key, v) {
-  try { if (walkedStorage) walkedStorage.setItem(key, JSON.stringify(v)); } catch (e) { /* 存不了就算了 */ }
-}
 function loadCompanions() {
-  const v = readJsonKey(COMPANIONS_KEY);
+  const v = phoneStore.readJson(COMPANIONS_KEY);
   return Array.isArray(v) ? v.map(String).filter(Boolean).slice(0, COMPANIONS_MAX) : [];
 }
 function loadWalkWith(today = new Date()) {
-  const v = readJsonKey(WALK_WITH_KEY);
+  const v = phoneStore.readJson(WALK_WITH_KEY);
   return v && v.date === BQDates.localDateKey(today) && v.map && typeof v.map === 'object' ? v.map : {};
 }
 function addWalkWith(dogs, names, today = new Date()) {
   const map = loadWalkWith(today);
   for (const d of dogs) { const k = walkKey(d); if (k) map[k] = [...new Set([...(map[k] || []), ...names])]; }
-  writeJsonKey(WALK_WITH_KEY, { date: BQDates.localDateKey(today), map });
-  writeJsonKey(COMPANIONS_KEY, [...new Set([...names, ...loadCompanions()])].slice(0, COMPANIONS_MAX));
+  phoneStore.writeJson(WALK_WITH_KEY, { date: BQDates.localDateKey(today), map });
+  phoneStore.writeJson(COMPANIONS_KEY, [...new Set([...names, ...loadCompanions()])].slice(0, COMPANIONS_MAX));
 }
 function clearWalkWith(dogs, today = new Date()) {
   const map = loadWalkWith(today);
   for (const d of dogs) delete map[walkKey(d)];
-  writeJsonKey(WALK_WITH_KEY, { date: BQDates.localDateKey(today), map });
+  phoneStore.writeJson(WALK_WITH_KEY, { date: BQDates.localDateKey(today), map });
 }
 let withSheet = null; // { dogs, picked: Set, text, add }
 // add：詳細資訊溜狗人旁的「＋」，選好的人接在目前名單後面（#141）；不是 add 就是溜了之後提示條的「＋一起溜的人」
@@ -1432,30 +1419,29 @@ function firstWalkerName(text) {
 }
 function loadWalkerName() {
   try {
-    if (walkedStorage) return (walkedStorage.getItem(WALKER_NAME_KEY) || '').trim();
+    if (phoneStore) return (phoneStore.get(WALKER_NAME_KEY) || '').trim();
   } catch (e) { /* 讀不到就用記憶體裡的 */ }
   return String(walkerNameMemory || '').trim();
 }
 function saveWalkerName(name) {
   walkerNameMemory = name || '';
   try {
-    if (walkedStorage && name) walkedStorage.setItem(WALKER_NAME_KEY, name);
-    else if (walkedStorage) walkedStorage.removeItem(WALKER_NAME_KEY);
+    if (phoneStore && name) phoneStore.set(WALKER_NAME_KEY, name);
+    else if (phoneStore) phoneStore.remove(WALKER_NAME_KEY);
   } catch (e) { /* 存不了就只記在記憶體 */ }
 }
 // { date: 今天, items: { 狗的 key: { id, name, prev, wrote } } }，不是今天的就丟掉
 function loadSheetWrites(today = new Date()) {
   let data = sheetWritesMemory;
   try {
-    const raw = walkedStorage && walkedStorage.getItem(SHEET_WRITES_KEY);
-    if (raw) data = JSON.parse(raw);
+    data = phoneStore.readJson(SHEET_WRITES_KEY, data);
   } catch (e) { /* 讀不到就用記憶體裡的 */ }
   return data && data.date === BQDates.localDateKey(today) && data.items && typeof data.items === 'object' ? { ...data.items } : {};
 }
 function saveSheetWrites(items, today = new Date()) {
   sheetWritesMemory = { date: BQDates.localDateKey(today), items };
   try {
-    if (walkedStorage) walkedStorage.setItem(SHEET_WRITES_KEY, JSON.stringify(sheetWritesMemory));
+    if (phoneStore) phoneStore.writeJson(SHEET_WRITES_KEY, sheetWritesMemory);
   } catch (e) { /* 存不了就只記在記憶體 */ }
 }
 
@@ -1484,10 +1470,10 @@ let sheetWriteFailText = '';
 // 資料存取 adapter：HTTP 與本機儲存由 app 提供，模組不依賴 DOM。
 const walkRegistration = createWalkRegistration({
   get d1() { return SITE.d1WalkAccept; },
-  readRequests: () => readJsonKey('bq-walk-requests') || {},
+  readRequests: () => phoneStore.readJson(BQStore.keys.walkRequests) || {},
   saveRequests: items => {
-    writeJsonKey('bq-walk-requests', items);
-    if (JSON.stringify(readJsonKey('bq-walk-requests')) !== JSON.stringify(items)) throw new Error('無法保留登記識別，尚未送出');
+    const persisted = phoneStore.writeJson(BQStore.keys.walkRequests, items);
+    if (!persisted || JSON.stringify(phoneStore.readJson(BQStore.keys.walkRequests)) !== JSON.stringify(items)) throw new Error('無法保留登記識別，尚未送出');
   },
   lookupRequest: id => fetchWalkStatus(signal => BQApi.walkResult(id, { signal })),
   key: walkKey, date: () => BQDates.localDateKey(new Date()), walker: loadWalkerName, alias: myAliasIn,
@@ -3240,15 +3226,15 @@ function resetWalkOrder() {
 }
 
 // 我的常溜（#155，K 2026-10-04 選兩頁都放）：溜狗表上面只剩「全部／★ 我的常溜」兩個選一個（2026-10-08）
-const WALK_FAV_KEY = 'bq-walk-fav';
+const WALK_FAV_KEY = BQStore.keys.walkFav;
 let walkFavMemory = false;
 function loadWalkFav() {
-  const v = readJsonKey(WALK_FAV_KEY);
+  const v = phoneStore.readJson(WALK_FAV_KEY);
   return typeof v === 'boolean' ? v : walkFavMemory;
 }
 function saveWalkFav(on) {
   walkFavMemory = on;
-  writeJsonKey(WALK_FAV_KEY, on);
+  phoneStore.writeJson(WALK_FAV_KEY, on);
 }
 
 function walkFilterHtml(total, fav, favN) {
@@ -3257,19 +3243,19 @@ function walkFilterHtml(total, fav, favN) {
 }
 
 // V9（#141 第 6 項）：照片模式／列表模式（收起照片，像試算表一列一隻）。選了哪個記在這支手機
-const WALK_VIEW_KEY = 'bq-walk-view';
+const WALK_VIEW_KEY = BQStore.keys.walkView;
 let walkViewMemory = 'photo';
 function loadWalkView() {
   let v = walkViewMemory;
   try {
-    if (walkedStorage) v = walkedStorage.getItem(WALK_VIEW_KEY) || v;
+    if (phoneStore) v = phoneStore.get(WALK_VIEW_KEY) || v;
   } catch (e) { /* 讀不到就用記憶體裡的 */ }
   return v === 'list' ? 'list' : 'photo';
 }
 function saveWalkView(v) {
   walkViewMemory = v;
   try {
-    if (walkedStorage) walkedStorage.setItem(WALK_VIEW_KEY, v);
+    if (phoneStore) phoneStore.set(WALK_VIEW_KEY, v);
   } catch (e) { /* 存不了就這次開著網頁的期間記得 */ }
 }
 function walkToolsHtml(chips, view = loadWalkView()) {
@@ -3493,8 +3479,8 @@ function pad2(n) {
 // 已經有名字（以前在我溜過設定過）只看說明；說明看過、名字被清掉了，只問名字
 // 介面評估第四輪（K 2026-10-08）：名字可以「先看看，等一下再設定」（現場沒訊號也進得去），
 // 沒名字的人按「溜了」時再問，設好直接幫他登記那隻；說明可以從資訊的「使用說明」再打開（#447 從我溜過搬過去）
-const ONBOARD_KEY = 'bq-onboarded';
-const NAME_LATER_KEY = 'bq-name-later';
+const ONBOARD_KEY = BQStore.keys.onboarded;
+const NAME_LATER_KEY = BQStore.keys.nameLater;
 // ── 使用說明導覽（K 2026-10-09：直接用實際的網頁；一個說明一個動作，用手指示範）──
 // 畫面變暗、只亮要說明的地方，旁邊小框一句話；有 demo 的步驟，手指會點一下示範那個動作。
 // 「溜了」只換畫面上的樣子，不會送出、不寫試算表；打開詳細資訊、在哪、換分頁本來就不改資料，真的做，換下一步時收回。
@@ -3662,7 +3648,7 @@ function startTour(again = false) {
 }
 function endTour() {
   tourReset();
-  try { walkedStorage && walkedStorage.setItem(ONBOARD_KEY, '1'); } catch (e) { /* 存不了下次再看一次 */ }
+  try { phoneStore && phoneStore.set(ONBOARD_KEY, '1'); } catch (e) { /* 存不了下次再看一次 */ }
   tour = null;
   renderTour();
 }
@@ -3806,13 +3792,13 @@ function renderTour(stepChanged = false) {
 //   walk: 名字設好後要登記的狗（按溜了才問名字）, again: 從資訊再打開說明 }
 let onboard = null;
 function onboardDone() {
-  try { return walkedStorage && walkedStorage.getItem(ONBOARD_KEY) === '1'; } catch (e) { return false; }
+  try { return phoneStore && phoneStore.get(ONBOARD_KEY) === '1'; } catch (e) { return false; }
 }
 function nameLater() {
-  try { return walkedStorage && walkedStorage.getItem(NAME_LATER_KEY) === '1'; } catch (e) { return false; }
+  try { return phoneStore && phoneStore.get(NAME_LATER_KEY) === '1'; } catch (e) { return false; }
 }
 function setNameLater(on) {
-  try { if (walkedStorage) on ? walkedStorage.setItem(NAME_LATER_KEY, '1') : walkedStorage.removeItem(NAME_LATER_KEY); } catch (e) { /* 存不了下次再問一次 */ }
+  try { if (phoneStore) on ? phoneStore.set(NAME_LATER_KEY, '1') : phoneStore.remove(NAME_LATER_KEY); } catch (e) { /* 存不了下次再問一次 */ }
 }
 function needOnboard() {
   return !onboardDone() || (!nameLater() && (!loadWalkerName() || !loadMyCodes().length));

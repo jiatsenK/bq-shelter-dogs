@@ -43,7 +43,7 @@ function editsItemHtml(e, names) {
 }
 
 // #421 先顯示上次讀到的紀錄，背景再抓最新；抓不到不清空，標示是上次讀到的。
-const EDITS_CACHE = 'bq-edits-cache';
+const EDITS_CACHE = BQStore.keys.editsCache;
 
 async function editsLoad() {
   const status = document.getElementById('status');
@@ -51,7 +51,7 @@ async function editsLoad() {
   if (!status || !list) return;
   let cached = null;
   try {
-    const c = JSON.parse(localStorage.getItem(EDITS_CACHE));
+    const c = BQStore.readJson(EDITS_CACHE);
     if (c && Array.isArray(c.edits) && c.names && typeof c.names === 'object') cached = c;
   } catch (e) { /* 沒有快取就照常讀取 */ }
   if (cached) {
@@ -73,7 +73,7 @@ async function editsLoad() {
     } catch (e) { /* 沒有狗名就只顯示編號 */ }
     list.innerHTML = out.edits.map(e => editsItemHtml(e, names)).join('');
     status.textContent = out.edits.length ? '' : '還沒有編輯紀錄';
-    try { localStorage.setItem(EDITS_CACHE, JSON.stringify({ edits: out.edits, names })); } catch (e) { /* 存不了下次就重新讀 */ }
+    try { BQStore.writeJson(EDITS_CACHE, { edits: out.edits, names }); } catch (e) { /* 存不了下次就重新讀 */ }
   } catch (e) {
     status.textContent = cached ? '暫時讀不到最新編輯紀錄，以下是上次讀到的' : '暫時讀不到編輯紀錄，請稍後重新整理';
   }
