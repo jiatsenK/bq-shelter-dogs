@@ -1,5 +1,5 @@
 // 活動紀錄頁（#270，ADR 0002）：資訊 → 活動紀錄。分析頁（analysis.js）只讀資料，會寫入的活動放這個檔。
-// 會用到 js/dates.js 的日期工具及 js/app.js 的 esc、ymdText、isoDay、searchKey、editorName、NEED_EDITOR、UPLOAD_URL、showToast、allDogs、analysisOpen，
+// 會用到 js/dates.js 的日期工具及 js/app.js 的 esc、ymdText、isoDay、searchKey、editorName、NEED_EDITOR、UPLOAD_URL、BQWalkUI.showToast、allDogs、analysisOpen，
 // 和 js/analysis.js 的 section、render、infoPage、departuresData、loadDepartures，所以要在兩個之後載入。
 
 // 動保小小兵、認養會每場出席的狗，存 D1（Worker 的 api/activities）。
@@ -158,7 +158,7 @@ async function saveActivity(remove = false) {
   list.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
   activitiesData = { state: 'ready', list };
   endActivityEdit(remove || !e.id ? '' : out.activity.id); // 焦點回到打開表單的按鈕；刪掉了就回到新增
-  showToast(remove ? `已刪除 ${activityTitle(e)}` : `${activityTitle(out.activity)} 已存好`);
+  BQWalkUI.showToast(remove ? `已刪除 ${activityTitle(e)}` : `${activityTitle(out.activity)} 已存好`);
 }
 
 function refreshActivityPicks() {

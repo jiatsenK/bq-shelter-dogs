@@ -295,7 +295,7 @@ const BQWelcome = (() => {
         onboard = null;
         renderOnboard();
         render();
-        if (walk) setWalked(walk, true);
+        if (walk) BQWalkUI.setWalked(walk, true);
         else if (!onboardDone()) BQTour.start();
       });
     }
