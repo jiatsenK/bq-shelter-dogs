@@ -7,7 +7,7 @@ const BQWalkUI = (() => {
   // 沒寫進去就退回未溜，提示條給「再試一次」。不寫試算表（還沒設定名字、Worker 沒設定）照舊直接記在手機
   function setWalked(dogs, on) {
     pinWalkOrder(dogs); // 按的狗留在原地，下一隻不會滑到手指下
-    if (on && needNameToWalk()) return askNameThenWalk(dogs); // 還沒設定名字（先看看）：先問名字，設好再登記
+    if (on && BQWelcome.needNameToWalk()) return BQWelcome.askNameThenWalk(dogs); // 還沒設定名字（先看看）：先問名字，設好再登記
     // #460：D1 模式所有入口（單狗、整群、一起溜）都等 D1 接受，不先記在手機
     if (!on && SITE.d1WalkAccept) return undoSheetWalks(dogs, null, { revert: true });
     if (on && (SITE.d1WalkAccept || sheetWillWrite())) walkThenRecord(dogs);
