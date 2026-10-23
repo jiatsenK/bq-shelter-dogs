@@ -1,7 +1,6 @@
 // 常溜狗群頁（groups.html，K 2026-10-16）：讀 api/dogs 的 groupColumns 列出每一群；加狗、移出、開新群送 POST api/groups，
 // Worker 轉給小程式改試算表「常遛狗群」分頁，成功後回這一群最新的名單，畫面直接換掉，不用等同步
-const GROUPS_DATA_URL = 'api/dogs';
-const GROUPS_WRITE_URL = 'api/groups';
+// 呼叫 /api 經過 js/api.js 的 BQApi（#478）；目前沒有頁面載入這支檔
 
 let gDogs = [];      // 主清單的狗 { name, cage }
 let gColumns = [];   // [{ column, label, names }]
@@ -61,9 +60,10 @@ async function gSend(body) {
   document.querySelectorAll('.g-main button').forEach(b => { b.disabled = true; });
   gMessage('寫入試算表中…');
   try {
-    const res = await fetch(GROUPS_WRITE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-    const out = await res.json().catch(() => null);
-    if (!res.ok || !out || !out.ok) throw new Error((out && out.error) || `寫入失敗（${res.status}）`);
+    const r = await BQApi.saveGroup(body);
+    if (r.error === 'network') throw new Error(r.message);
+    const out = r.data;
+    if (!r.ok || !out || !out.ok) throw new Error((out && out.error) || `寫入失敗（${r.status}）`);
     const i = gColumns.findIndex(g => g.column === out.group.column);
     if (i === -1) gColumns.push(out.group); else gColumns[i] = out.group;
     gColumns.sort((a, b) => a.column - b.column);
@@ -107,9 +107,9 @@ document.addEventListener('submit', async e => {
 
 async function gLoad() {
   try {
-    const res = await fetch(GROUPS_DATA_URL, { cache: 'no-cache' });
-    const data = await res.json();
-    if (!res.ok || !data || !Array.isArray(data.dogs)) throw new Error();
+    const r = await BQApi.dogs();
+    const data = r.data;
+    if (!r.ok || !data || !Array.isArray(data.dogs)) throw new Error();
     gDogs = data.dogs.filter(d => d && d.name).map(d => ({ name: String(d.name).trim(), cage: String(d.cage || '').trim() }));
     gColumns = Array.isArray(data.groupColumns) ? data.groupColumns : [];
     gRender();

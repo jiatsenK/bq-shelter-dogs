@@ -3,10 +3,7 @@
 // 「你是誰」用溜狗表「我溜過」設定的代號；開卡紀錄存 D1、localStorage 備援，不寫試算表、不顯示志工名字。
 // 純函式在前面（tests/index.html 會測），畫面在後面。
 
-const BQ_DATA_URL = 'api/dogs'; // #247 起從 Worker 讀 D1
-const BQ_WALKS_URL = 'api/walks'; // #260 起從 Worker 讀 D1
-const BQ_MINE_URL = 'api/walks/mine'; // #344 我溜過的狗由 Worker 彙總
-const BQ_ALUMNI_URL = 'api/departed-cards'; // #271 已出所狗卡
+// 呼叫 /api 都經過 js/api.js 的 BQApi（#478）
 const BQ_CODES_KEY = 'bq-walker-codes'; // 溜狗表（js/app.js）存的我的代號
 const BQ_WRITES_KEY = 'bq-sheet-writes'; // 溜狗表今天按過的溜了（還沒同步進 walks.json 的）
 const BQ_OPENED_KEY = 'bq-zukan'; // 撕開過的卡：{ v: 1, codes: { 代號: { 狗編號: 撕開那天 } } }
@@ -166,11 +163,8 @@ function bqMineFrom(dogs, todayWrites = []) {
 // POST /api/walks/mine：代號放在請求內容（不放網址）；讀不到回 null
 async function bqFetchMine(codes) {
   if (!codes.length) return {};
-  try {
-    const res = await fetch(BQ_MINE_URL, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codes }) });
-    const out = await res.json();
-    return res.ok && out.dogs && typeof out.dogs === 'object' ? out.dogs : null;
-  } catch (e) { return null; }
+  const r = await BQApi.myDogs(codes);
+  return r.ok && r.data && r.data.dogs && typeof r.data.dogs === 'object' ? r.data.dogs : null;
 }
 
 // ── 撕開過的卡：記在這個瀏覽器，跟著代號走（同一台電腦換人設定代號，就是另一個人的圖鑑） ──
@@ -292,11 +286,10 @@ function bqAlumniCardHtml(a) {
 const BQ = { alumni: { state: 'loading', list: [] }, players: [], byId: new Map(), storage: null, today: new Date(), codes: [], mine: new Map(), opened: null, pending: [], hand: [], still: false, walksOk: true, remote: 'loading', saving: false };
 
 async function bqRemoteOpened(codes, ids) {
-  const res = await fetch(ids ? '/api/cards/opened' : `/api/cards/opened?codes=${encodeURIComponent(codes[0])}`, ids
-    ? { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ codes: codes.slice(0, 1), ids }), signal: AbortSignal.timeout(15000) }
-    : { cache: 'no-store', signal: AbortSignal.timeout(15000) });
-  const out = await res.json();
-  if (!res.ok || !out.ok) throw new Error('開卡紀錄暫時無法同步');
+  const r = ids ? await BQApi.saveOpenedCards(codes.slice(0, 1), ids) : await BQApi.openedCards(codes[0]);
+  if (r.error === 'network' || !r.data) throw new Error(r.message);
+  const out = r.data;
+  if (!r.ok || !out.ok) throw new Error('開卡紀錄暫時無法同步');
   return out;
 }
 async function bqSyncOpened() {
@@ -583,9 +576,10 @@ function bqRenderAlumni() {
 }
 async function bqLoadAlumni() {
   try {
-    const res = await fetch(BQ_ALUMNI_URL, { cache: 'no-cache' });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    BQ.alumni = { state: 'ready', list: bqAlumni(await res.json()) };
+    const r = await BQApi.departedCards();
+    if (r.error === 'http') throw new Error(`HTTP ${r.status}`);
+    if (r.error) throw new Error(r.message);
+    BQ.alumni = { state: 'ready', list: bqAlumni(r.data) };
   } catch (e) {
     console.error(e);
     BQ.alumni = { state: 'error', list: [] };
@@ -681,11 +675,12 @@ async function bqInit() {
     const name = BQ.storage?.getItem('bq-walker-name');
     const originalCodes = BQ.codes.join(',');
     if (name && BQ.codes.length) {
-      const res = await fetch('/api/identity', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name }) });
-      const out = await res.json();
+      const r = await BQApi.identity('', { name });
+      if (r.error === 'network' || !r.data) throw new Error(r.message);
+      const out = r.data;
       if (BQ.storage?.getItem('bq-walker-name') !== name || bqLoadCodes(BQ.storage).join(',') !== originalCodes) {
         BQ.codes = bqLoadCodes(BQ.storage);
-      } else if (res.ok && out.identity) {
+      } else if (r.ok && out.identity) {
         BQ.codes = out.identity.codes;
         BQ.storage?.setItem(BQ_CODES_KEY, JSON.stringify(BQ.codes));
         BQ.storage?.setItem('bq-walker-name', out.identity.name);
@@ -698,12 +693,13 @@ async function bqInit() {
   let mine = null;
   try {
     const [res, w, m] = await Promise.all([
-      fetch(BQ_DATA_URL, { cache: 'no-cache' }),
-      fetch(BQ_WALKS_URL, { cache: 'no-cache' }).then(r => (r.ok ? r.json() : null)).catch(() => null),
+      BQApi.dogs(),
+      BQApi.walks().then(r => (r.ok ? r.data : null)),
       bqFetchMine(BQ.codes),
     ]);
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
+    if (res.error === 'http') throw new Error(`HTTP ${res.status}`);
+    if (res.error) throw new Error(res.message);
+    const data = res.data;
     const walks = w && Array.isArray(w.walks) ? w.walks : null;
     mine = m;
     BQ.walksOk = !!walks && !!mine;

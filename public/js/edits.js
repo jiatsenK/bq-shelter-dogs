@@ -1,8 +1,5 @@
 // 編輯紀錄頁（edits.html，ADR 0004）：列出最近的編輯，新到舊。純函式在前面（tests/index.html 會測），畫面在後面。
 
-const EDITS_URL = 'api/edits?limit=200';
-const EDITS_DOGS_URL = 'api/dogs';
-
 function editsEsc(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
@@ -62,12 +59,13 @@ async function editsLoad() {
     status.textContent = cached.edits.length ? '' : '還沒有編輯紀錄';
   }
   try {
-    const [res, dogsRes] = await Promise.all([fetch(EDITS_URL, { cache: 'no-cache' }), fetch(EDITS_DOGS_URL).catch(() => null)]);
-    const out = await res.json();
+    const [res, dogsRes] = await Promise.all([BQApi.edits(), BQApi.dogs()]);
+    const out = res.data;
+    if (!out) throw new Error(res.message);
     if (!res.ok || !out.ok) throw new Error(out.error || '讀不到');
     const names = {};
     try {
-      const d = dogsRes && dogsRes.ok ? await dogsRes.json() : null;
+      const d = dogsRes.ok ? dogsRes.data : null;
       for (const dog of (d && d.dogs) || []) {
         if (dog.id) names[dog.id] = dog.name;
         if (dog.dogId) names[dog.dogId] = dog.name;
