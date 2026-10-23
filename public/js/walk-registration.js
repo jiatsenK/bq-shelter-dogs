@@ -1,5 +1,6 @@
 // #396：登記、追加同行人、復原共用規則；畫面與測試走同一個介面。
 (function (root) {
+  const MAX_DOGS_PER_SEND = 10; // 與 worker/src/index.js 的 WALK_MAX_DOGS 一致
   function createWalkRegistration(deps) {
     let queue = Promise.resolve();
     const pending = new Map(), requests = new WeakMap();
@@ -29,6 +30,13 @@
         today: authoritative.walkedDate === day, mine: isMine({ date: authoritative.walkedDate, walker: authoritative.walker }, day),
         canUndo: false, canRevert: authoritative.walkedDate === day && !!deps.walker() && deps.split(authoritative.walker).length === 1,
         syncStatus: authoritative.syncStatus, version: authoritative.version };
+      if (deps.d1) {
+        // #460：D1 模式只認伺服器的資料；本機已溜、寫入紀錄與試算表即時名單都不能反駁。
+        const base = deps.base?.(dog) || {}, date = dateKey(base.date), walker = String(base.walker || '');
+        return { date, walker, walkers: [...new Set(deps.split(walker).map(deps.canonical).filter(Boolean))],
+          today: date === day, mine: isMine({ date, walker }, day), canUndo: false,
+          canRevert: date === day && !!deps.walker() && deps.split(walker).length === 1 };
+      }
       const item = activeItem(dog, day);
       const base = deps.base?.(dog) || {};
       const expired = !item && !!deps.read(day)[deps.key(dog)];
@@ -40,11 +48,11 @@
         canRevert: canRevert(dog, day, { date, walker }) };
     }
     function today(dogs, day = deps.date()) {
-      return dogs.filter(d => accepted.has(deps.key(d)) ? state(d, day).today : activeItem(d, day)?.current || (dateKey(deps.base?.(d)?.date) === day && deps.base(d).walker))
+      return dogs.filter(d => accepted.has(deps.key(d)) || deps.d1 ? state(d, day).today : activeItem(d, day)?.current || (dateKey(deps.base?.(d)?.date) === day && deps.base(d).walker))
         .map(dog => ({ dog, ...state(dog, day) }));
     }
     function canUndo(dog, day = deps.date()) {
-      if (accepted.has(deps.key(dog))) return false;
+      if (deps.d1 || accepted.has(deps.key(dog))) return false;
       const item = deps.read(day)[deps.key(dog)];
       const current = activeItem(dog, day) ? item.current : deps.base?.(dog);
       return !!(item && item.prev && item.wrote && (!current || (current.walker === item.wrote.walker
@@ -52,7 +60,7 @@
     }
     // ADR 0016：沒有本機復原證據，但今天只剩一個名字，可請 Worker 從溜狗紀錄找上一次再撤銷（任何人）
     function canRevert(dog, day = deps.date(), current = null) {
-      if (accepted.has(deps.key(dog))) return state(dog, day).canRevert;
+      if (deps.d1 || accepted.has(deps.key(dog))) return state(dog, day).canRevert;
       if (canUndo(dog, day)) return false;
       const now_ = current || state(dog, day);
       return now_.date === day && deps.split(now_.walker).length === 1;
@@ -97,6 +105,7 @@
         if (changed.length) deps.apply(changed, deps.read(day), day, []);
         return !!changed.length;
       }
+      if (deps.d1) return false; // 舊 today 回應不再是正本
       if (read.day !== day || payload?.date !== day || !Array.isArray(payload.walks) || read.sequence < acceptedToday) return false;
       acceptedToday = read.sequence;
       const records = { ...deps.read(day) }, changed = [];
@@ -115,7 +124,7 @@
     // 試算表名單是正本（K 2026-10-20：不管在網站按還是直接改試算表，都要同步）。
     // dates 有那隻狗的「遛狗日期」就連日期一起換；sheetAt 是 Worker 讀試算表的時間，比它新的今日紀錄才蓋得過名單。
     function receiveNames(names, dogs, read = beginRead(), dates = {}, sheetAt = read.at) {
-      if (read.day !== deps.date()) return false;
+      if (deps.d1 || read.day !== deps.date()) return false;
       const records = { ...deps.read(read.day) }, changed = [], dropped = [];
       const local = new Set(deps.local?.(read.day) || []);
       for (const dog of dogs) {
@@ -152,14 +161,14 @@
         .map(dog => ({ dog, key: deps.key(dog), id: dog.id || '', name: dog.name,
           walker: options.walker || deps.alias(dog) || me, expectedVersion: state(dog, day).version ?? 0 }));
       return enqueue({ entries, day, me, action: options.expected === undefined ? 'walk' : 'edit', expected: options.expected,
-        d1: !!deps.d1 && entries.length === 1 });
+        d1: !!deps.d1 });
     }
     // options.revert：沒有本機證據的狗改請 Worker 找上一次（ADR 0016）
     function undo(dogs, options = {}) {
       const seen = new Set();
       return enqueue({ entries: dogs.filter(d => d && !seen.has(deps.key(d)) && seen.add(deps.key(d)))
         .map(dog => ({ dog, key: deps.key(dog), id: dog.id || '', name: dog.name, expectedVersion: state(dog).version ?? 0 })),
-        day: deps.date(), me: deps.walker(), action: 'undo', revert: !!options.revert, d1: !!deps.d1 && dogs.length === 1 });
+        day: deps.date(), me: deps.walker(), action: 'undo', revert: !!options.revert, d1: !!deps.d1 });
     }
     function enqueue(request) {
       request.entries.forEach(e => pending.set(e.key, (pending.get(e.key) || 0) + 1));
@@ -176,7 +185,8 @@
       const { entries, day, me, action, expected, revert } = request;
       const groups = [];
       for (const entry of entries) {
-        let group = groups.find(g => g.walker === entry.walker);
+        // #498：Worker 一次最多 10 隻；整群超過就內部拆批，不成為志工的群組大小限制。
+        let group = groups.find(g => g.walker === entry.walker && g.entries.length < MAX_DOGS_PER_SEND);
         if (!group) groups.push(group = { walker: entry.walker, entries: [] });
         group.entries.push(entry);
       }
@@ -240,21 +250,32 @@
       requests.set(result, request);
       return result;
     }
+    // 整群也逐狗送單狗請求（D1 以狗為序列化單位），部分成功逐狗回報。
     async function executeAccepted(request) {
-      const entry = request.entries[0], key = entry.key;
+      const rows = [], errors = [];
+      for (const entry of request.entries) {
+        const one = await acceptOne(request, entry);
+        rows.push(one.row);
+        if (one.error) errors.push(one.error);
+      }
+      const response = { rows, error: [...new Set(errors)].join('；'), off: false,
+        successful: rows.filter(r => isSuccess(r.status)).map(r => r.dog),
+        retryDogs: rows.filter(r => isRetryable(r.status)).map(r => r.dog), source: 'd1' };
+      requests.set(response, request);
+      return response;
+    }
+    async function acceptOne(request, entry) {
+      const key = entry.key;
       const saved = { ...(deps.readRequests?.() || {}) };
       // 尚未查明的原要求優先；換名字或午夜都不能將它變成另一筆登記。
-      const payload = saved[key] || request.payload || { action: request.action, requestId: crypto.randomUUID(), operationDate: request.day,
+      const payload = saved[key] || entry.payload || { action: request.action, requestId: crypto.randomUUID(), operationDate: request.day,
         walker: request.action === 'undo' ? request.me : entry.walker,
         ...(request.action === 'edit' ? { editor: request.me } : {}),
         dogs: [{ id: entry.id, name: entry.name, ...(request.action !== 'walk' ? { expectedVersion: entry.expectedVersion } : {}) }] };
-      request.payload = payload;
+      entry.payload = payload;
       saved[key] = payload;
       try { deps.saveRequests?.(saved); } catch {
-        const response = { rows:[{ dog:entry.dog, status:'notSent', canUndo:false }], error:'無法保留登記識別，尚未送出', off:false,
-          successful:[], retryDogs:[entry.dog], source:'d1' };
-        requests.set(response, request);
-        return response;
+        return { row: { dog: entry.dog, status: 'notSent', canUndo: false }, error: '無法保留登記識別，尚未送出' };
       }
       let out;
       try { out = payload.operationDate !== deps.date() && deps.lookupRequest ? await deps.lookupRequest(payload.requestId) : await deps.send(payload); } catch { out = null; }
@@ -279,11 +300,8 @@
       }
       const completed = valid && payload.action === request.action && (request.action !== 'edit'
         || payload.walker === entry.walker && payload.editor === request.me);
-      const rows = [{ dog: entry.dog, status: completed ? result.status : valid || conflict || rejected ? 'changed' : 'unknown', canUndo: false }];
-      const response = { rows, error: valid && !completed ? '前次操作已確認，請先確認目前紀錄' : out?.error || '', off: false,
-        successful: completed ? [entry.dog] : [], retryDogs: valid || conflict || rejected ? [] : [entry.dog], source: 'd1' };
-      requests.set(response, request);
-      return response;
+      return { row: { dog: entry.dog, status: completed ? result.status : valid || conflict || rejected ? 'changed' : 'unknown', canUndo: false },
+        error: valid && !completed ? '前次操作已確認，請先確認目前紀錄' : completed ? '' : out?.error || '' };
     }
     function retry(result) {
       const request = requests.get(result);

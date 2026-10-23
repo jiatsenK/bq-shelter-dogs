@@ -26,11 +26,14 @@
   }],
   "vars": {
     "GITHUB_REPO": "jiatsenK/bq-shelter-dogs",
-    "GITHUB_BRANCH": "main"
+    "GITHUB_BRANCH": "main",
+    // #460：溜狗每天的寫入保留量上限（ADR 0008）；同時是帳號當日寫入量的檢查門檻。試算表同步另用 Actions 的同名變數（仍是 20,000）
+    "SYNC_DAILY_BUDGET": "40000"
   },
   // 每 10 分鐘看一次試算表有沒有人改，有改才叫 GitHub 同步；台灣 6:30（UTC 22:30）那一格保險同步一次（ADR 0008，worker/src/sync-plan.js）
+  // 第二個排程錯開 5 分鐘跑溜狗對帳（#460）：兩件各自一次 Cron 呼叫，各有自己的 CPU 上限。改這裡要一起改 worker/src/index.js 的 WALK_CRON
   "triggers": {
-    "crons": ["*/10 * * * *"]
+    "crons": ["*/10 * * * *", "5-59/10 * * * *"]
   },
   // 每個 PR 的預覽網址（#126，.github/workflows/preview-cloudflare.yml）：https://pr-<編號>-bq-shelter-dogs.<帳號>.workers.dev
   "preview_urls": true,

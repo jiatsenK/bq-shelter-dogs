@@ -1,7 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import worker from '../src/index.js';
-import { dispatchWalk } from '../src/walk-accept.js';
+import { dispatchWalk, dispatchWalks } from '../src/walk-accept.js';
+import { retryWalks } from '../src/walk-retry.js';
 import { setup, request, post, current } from './walk-fixture.mjs';
 
 async function machine(env, action, body) {
@@ -160,7 +162,8 @@ test('每輪最多十隻，失敗退避不擋其他到期工作；完成歷史�
   globalThis.fetch=async (_url,init) => {
     const body=JSON.parse(init.body);
     if (body.action==='walkScan') return Response.json({ ok:true,rows:[] });
-    sent.push(body.dog.id); throw new Error('lost');
+    // 合併派送一次送多隻（#460）
+    sent.push(...(body.items || [body]).map(item=>item.dog.id)); throw new Error('lost');
   };
   try {
     for (let i=0;i<12;i++) {
@@ -317,4 +320,166 @@ test('UTC 午夜前的預留不能繞過隔日預算，晚到回執保留待確�
     await assert.rejects(machine(env,'receipt',{ dogKey:'9001',...target }),{ status:503 });
     assert.equal((await current(env)).walks[0].syncStatus,'dispatching');
   } finally { env.SYNC_DAILY_BUDGET='20000';stop?.();if(a)await a;globalThis.fetch=real;env.DB.close(); }
+});
+
+test('#460 合併派送：一輪只呼叫 Apps Script 一次，成功的標成已同步，失敗的那隻各自退避', async t => {
+  const now=Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now });
+  const env={ ...await setup(),WALK_RETRY_ENABLED:'true' },real=globalThis.fetch;
+  worker.testing.resetState();
+  const batches=[], cells={};
+  globalThis.fetch=async (_url,init)=>{
+    const body=JSON.parse(init.body);
+    if (body.action==='walkScan') return Response.json({ ok:true,rows:[] });
+    assert.equal(body.action,'walkWakeBatch');
+    batches.push(body.items.map(item=>item.dog.id));
+    const results=[];
+    for (const item of body.items) {
+      if (item.dog.id==='9102') { results.push({ ok:false,dispatchId:item.dispatchId,error:'找不到唯一的狗，停止寫回' }); continue; }
+      const target=await machine(env,'target',{ dog:item.dog,dispatchId:item.dispatchId,current:cells[item.dog.id] || { date:'2026-10-01',walker:'' } });
+      cells[item.dog.id]=target.current;
+      const receipt={ dogKey:item.dog.id,version:target.version,dispatchId:target.dispatchId,current:target.current };
+      results.push({ ok:true,...receipt,...await machine(env,'receipt',receipt) });
+    }
+    return Response.json({ ok:true,results });
+  };
+  try {
+    for (let i=0;i<3;i++) {
+      const id=String(9100+i),dogId=`batch-${i}`,name=`合併狗${i}`;
+      await env.DB.batch([
+        env.DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId,name),
+        env.DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind(id,dogId),
+        env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(?,?,?,?, '2026-10-01','x')").bind(i+2,dogId,id,name),
+      ]);
+      assert.equal((await post(env,request(`batch-000${i}`,'甲',{ dogs:[{ id,name }] }))).status,200);
+    }
+    await tick(env,now);
+    assert.equal(batches.length,1);
+    assert.deepEqual([...batches[0]].sort(),['9100','9101','9102']);
+    const rows=(await env.DB.prepare("SELECT o.dog_key,o.status FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version ORDER BY o.dog_key").all()).results;
+    assert.deepEqual(rows.map(r=>[r.dog_key,r.status]),[['9100','synced'],['9101','synced'],['9102','retry']]);
+    assert.equal((await env.DB.prepare('SELECT COUNT(*) n FROM v3_walk_delivery').first()).n,0);
+    const failed=await env.DB.prepare("SELECT error,next_attempt_at FROM v3_walk_outbox WHERE dog_key='9102' AND status='retry'").first();
+    assert.match(failed.error,/唯一/);
+    assert.ok(failed.next_attempt_at>new Date(now).toISOString());
+  } finally { globalThis.fetch=real; env.DB.close(); }
+});
+
+test('#460 兩個排程各跑一件：同步排程不跑溜狗對帳，對帳排程不跑同步', async () => {
+  const env={ ...await setup(),WALK_RETRY_ENABLED:'true' },real=globalThis.fetch;
+  const actions=[];
+  globalThis.fetch=async (url,init)=>{ actions.push(init?.body ? JSON.parse(init.body).action : String(url)); return Response.json({ ok:true,rows:[] }); };
+  const run=async cron=>{ const tasks=[]; await worker.scheduled({ scheduledTime:Date.now(),cron },env,{ waitUntil:p=>tasks.push(p) }); await Promise.allSettled(tasks); };
+  try {
+    await post(env,request('cron-split-0001','甲'));
+    await run('5-59/10 * * * *');
+    assert.ok(actions.includes('walkScan'));
+    assert.ok(!actions.some(a=>String(a).includes('gviz')));
+    actions.length=0;
+    await run('*/10 * * * *');
+    assert.ok(!actions.includes('walkScan'));
+    const wrangler=readFileSync(new URL('../../wrangler.jsonc',import.meta.url),'utf8');
+    assert.match(wrangler,/"5-59\/10 \* \* \* \*"/);
+  } finally { globalThis.fetch=real; env.DB.close(); }
+});
+
+async function addDogs(env,count,prefix) {
+  for (let i=0;i<count;i++) {
+    const id=String(9200+i),dogId=`${prefix}-${i}`,name=`${prefix}狗${i}`;
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId,name),
+      env.DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind(id,dogId),
+      env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(?,?,?,?, '2026-10-01','x')").bind(i+2,dogId,id,name),
+    ]);
+    assert.equal((await post(env,request(`${prefix}-req-${String(i).padStart(4,'0')}`,'甲',{ dogs:[{ id,name }] }))).status,200);
+  }
+}
+
+test('#498 十隻到期工作依單次預算拆批合併派送，不退回逐隻', async t => {
+  const now=Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now });
+  const env={ ...await setup(),WALK_RETRY_ENABLED:'true' },real=globalThis.fetch;
+  worker.testing.resetState();
+  const batches=[],cells={};
+  globalThis.fetch=async (_url,init)=>{
+    const body=JSON.parse(init.body);
+    assert.equal(body.action,'walkWakeBatch');
+    batches.push(body.items.length);
+    const results=[];
+    for (const item of body.items) {
+      const target=await machine(env,'target',{ dog:item.dog,dispatchId:item.dispatchId,current:cells[item.dog.id] || { date:'2026-10-01',walker:'' } });
+      cells[item.dog.id]=target.current;
+      const receipt={ dogKey:item.dog.id,version:target.version,dispatchId:target.dispatchId,current:target.current };
+      results.push({ ok:true,...receipt,...await machine(env,'receipt',receipt) });
+    }
+    return Response.json({ ok:true,results });
+  };
+  try {
+    await addDogs(env,10,'chunk');
+    await retryWalks(env,now);
+    assert.ok(batches.length>=2 && batches.every(n=>n>1 && n*96<=500),`批次 ${batches}`);
+    assert.equal(batches.reduce((a,b)=>a+b,0),10);
+    const rows=(await env.DB.prepare("SELECT o.status FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version").all()).results;
+    assert.ok(rows.length===10 && rows.every(r=>r.status==='synced'));
+  } finally { globalThis.fetch=real;env.DB.close(); }
+});
+
+test('#498 寫回重試不掃表；沒有待處理工作就不呼叫 Apps Script', async t => {
+  const now=Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now });
+  const env={ ...await setup(),WALK_RETRY_ENABLED:'true' },real=globalThis.fetch;
+  worker.testing.resetState();
+  const actions=[];
+  globalThis.fetch=async (_url,init)=>{ actions.push(JSON.parse(init.body).action); throw new Error('lost'); };
+  try {
+    await post(env,request('noscan-0001'));
+    await retryWalks(env,now);
+    assert.deepEqual(actions,['walkWake']);
+    actions.length=0;
+    await retryWalks(env,now);
+    assert.deepEqual(actions,[]);
+  } finally { globalThis.fetch=real;env.DB.close(); }
+});
+
+test('#498 預算拒絕不退回逐隻派送，工作留待下一輪', async t => {
+  const now=Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now });
+  const env={ ...await setup(),WALK_RETRY_ENABLED:'true' },real=globalThis.fetch;
+  worker.testing.resetState();
+  let wake=0;
+  globalThis.fetch=async ()=>{ wake++; throw new Error('should not send'); };
+  try {
+    await addDogs(env,3,'budget');
+    // 每日剩餘只夠一隻：合併批次被拒時不能改逐隻偷跑。
+    const reserved=(await env.DB.prepare('SELECT reserved FROM v3_walk_write_budget').first()).reserved;
+    await retryWalks({ ...env,SYNC_DAILY_BUDGET:String(reserved+100) },now);
+    assert.equal(wake,0);
+    assert.equal((await env.DB.prepare("SELECT COUNT(*) n FROM v3_walk_outbox WHERE status='pending'").first()).n,3);
+  } finally { globalThis.fetch=real;env.DB.close(); }
+});
+
+test('#498 遠端失敗分得出：沒設定、連不上（結果不明）、試算表明確拒絕；預算拒絕另記', async t => {
+  const now=Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now });
+  const env={ ...await setup(),WALK_RETRY_ENABLED:'true' },real=globalThis.fetch;
+  worker.testing.resetState();
+  const error=async id=>(await env.DB.prepare("SELECT o.error FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version WHERE o.dog_key=?").bind(id).first()).error;
+  const warns=[],warn=console.warn;
+  console.warn=(...a)=>warns.push(a.join(' '));
+  try {
+    await addDogs(env,2,'remote');
+    globalThis.fetch=async ()=>{ throw new Error('down'); };
+    await dispatchWalk(env.DB,{ id:'9200',name:'remote狗0' },env,now);
+    assert.match(await error('9200'),/^writeback-unconfirmed/);
+    globalThis.fetch=async (_url,init)=>{
+      const body=JSON.parse(init.body);
+      return Response.json({ ok:true,results:body.items.map(item=>({ ok:false,dispatchId:item.dispatchId,error:'找不到唯一的狗' })) });
+    };
+    await dispatchWalks(env.DB,[{ dog:{ id:'9200',name:'remote狗0' },recovery:null },{ dog:{ id:'9201',name:'remote狗1' },recovery:null }],env,now+10*60000);
+    assert.match(await error('9200'),/^writeback-rejected/);
+    assert.match(await error('9201'),/^writeback-rejected/);
+    const reserved=(await env.DB.prepare('SELECT reserved FROM v3_walk_write_budget').first()).reserved;
+    await retryWalks({ ...env,SYNC_DAILY_BUDGET:String(reserved+1) },now+60*60000);
+    assert.ok(warns.some(w=>w.includes('budget')),warns.join('\n'));
+  } finally { console.warn=warn;globalThis.fetch=real;env.DB.close(); }
 });

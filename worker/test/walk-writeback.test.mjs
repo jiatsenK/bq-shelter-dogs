@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import worker from '../src/index.js';
 import { dispatchWalk } from '../src/walk-accept.js';
 import { setup, request, post, current } from './walk-fixture.mjs';
@@ -25,6 +26,9 @@ function scriptAdapter(callback, { mutate = () => {}, forbidFullRead = false } =
     PropertiesService: { getScriptProperties: () => props },
     LockService: { getScriptLock: () => ({ waitLock: () => { locked = true; }, releaseLock: () => { locked = false; } }) },
     SpreadsheetApp: { openById: () => ({ getSheetByName: () => sheet }), flush: () => {} },
+    // 只模擬指紋用到的部分；Google 回的是有正負號的位元組
+    Utilities: { DigestAlgorithm: { SHA_256: 'sha256' }, Charset: { UTF_8: 'utf8' },
+      computeDigest: (algorithm, text) => [...createHash(algorithm).update(text, 'utf8').digest()].map(b => (b > 127 ? b - 256 : b)) },
     UrlFetchApp: { fetch: (url, options) => { assert.equal(locked, true); return callback(url, JSON.parse(options.payload), options.headers); } },
   });
   vm.runInContext(source, context);
@@ -69,19 +73,33 @@ test('寫前可見人工修改、同名無編號歧義、狗已移走都停止�
   assert.deepEqual(script.writes, []);
 });
 
-test('通知讀表在同鎖內只送變更的四欄，排序與重送不造成格子寫入', () => {
-  const batches = [];
-  const script = scriptAdapter((url,body) => {
-    assert.ok(url.endsWith('/observe')); batches.push(body.observations);
-    return { getResponseCode:()=>200,getContentText:()=>JSON.stringify({ ok:true,results:body.observations.map(()=>({ ok:true })) }) };
-  },{ forbidFullRead:true });
-  const compare = { action:'walkCompare',key:'test-secret',known:[{ id:'9001',name:'測試狗',date:'2026-10-01',walker:'' }] };
-  assert.equal(script.run(compare).ok,true);
-  assert.equal(batches.length,0);
-  script.replace([['編號','犬名','遛狗日期','誰遛的'],['9999','新狗','',''],['9001','測試狗','2026/9/1','甲']]);
-  assert.equal(script.run(compare).ok,true);
-  assert.equal(batches[0].find(o=>o.dog.id==='9001').current.date,'2026-09-01');
+test('保險掃描四欄指紋相同只回沒改；格子一改指紋就變、回整份', () => {
+  const script = scriptAdapter(() => { throw new Error('掃描不回呼 Worker'); }, { forbidFullRead:true });
+  const first = script.run({ action:'walkScan',key:'test-secret',sig:'' });
+  assert.match(first.sig,/^[0-9a-f]{64}$/);
+  assert.equal(first.rows.length,1);
+  const same = script.run({ action:'walkScan',key:'test-secret',sig:first.sig });
+  assert.equal(same.same,true); assert.equal(same.rows,undefined);
+  script.replace([['編號','犬名','遛狗日期','誰遛的'],['9001','測試狗','2026/9/1','甲']]);
+  const changed = script.run({ action:'walkScan',key:'test-secret',sig:first.sig });
+  assert.notEqual(changed.sig,first.sig); assert.equal(changed.same,undefined);
+  assert.equal(changed.rows[0].current.walker,'甲');
   assert.deepEqual(script.writes,[]);
+});
+
+test('合併派送同鎖逐隻寫，單隻失敗只記在那隻，不擋其他隻', () => {
+  const script = scriptAdapter((url, body) => ({ getResponseCode: () => 200, getContentText: () => JSON.stringify(url.endsWith('/target')
+    ? { ok: true, version: 2, dispatchId: body.dispatchId, current: { date: '2026-10-21', walker: '甲' } }
+    : { ok: true, confirmed: true }) }));
+  const out = script.run({ action:'walkWakeBatch',key:'test-secret',items:[
+    { dog:{ id:'0000',name:'不在表上' },dispatchId:'d-missing' },
+    { dog:{ id:'9001',name:'測試狗' },dispatchId:'d-ok' }] });
+  assert.equal(out.ok,true);
+  assert.equal(out.results[0].ok,false); assert.equal(out.results[0].dispatchId,'d-missing'); assert.match(out.results[0].error,/唯一/);
+  assert.equal(out.results[1].ok,true); assert.equal(out.results[1].dispatchId,'d-ok');
+  assert.deepEqual(script.writes,[[2,3,'2026/10/21'],[2,4,'甲']]);
+  assert.throws(() => script.run({ action:'walkWakeBatch',key:'test-secret',items:Array.from({ length:11 },()=>({})) }),/數量/);
+  assert.equal(script.run({ action:'walkWakeBatch',key:'wrong',items:[] }).ok,false);
 });
 
 async function machine(env, action, body, key = 'test-secret') {
@@ -175,9 +193,10 @@ test('授予目標前版本已變，交易停止而不回傳過期目標', async
   const env = await setup(); worker.testing.resetState();
   await post(env,request('race-target-0001'));
   const batch = env.DB.batch;
-  let interfere = true;
+  // 拿目標先一次讀齊快照（第 1 次 batch），在授予目標的寫入（第 2 次）之前插入別人的登記。
+  let calls = 0;
   env.DB.batch = async statements => {
-    if (interfere) { interfere=false; assert.equal((await post(env,request('race-target-0002','乙'))).status,200); }
+    if (++calls === 2) { assert.equal((await post(env,request('race-target-0002','乙'))).status,200); }
     return batch(statements);
   };
   const out = await machine(env,'target',{ dog:{ id:'9001',name:'測試狗' },dispatchId:'race-dispatch',current:{ date:'2026-10-01',walker:'' } });

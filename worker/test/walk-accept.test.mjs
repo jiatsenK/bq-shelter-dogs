@@ -7,8 +7,9 @@ test('D1 接受後立即讀到日期、名單與同步中，不必等 Google', a
   const env = await setup();
   const tasks = [];
   const real = globalThis.fetch;
-  let release;
-  globalThis.fetch = () => new Promise((_, reject) => { release = () => reject(new Error('Google unavailable')); });
+  // 背景派送可能在測試結束後才呼叫 fetch：先放行的話，晚到的呼叫也立刻失敗，不會卡住。
+  let release, released = false;
+  globalThis.fetch = () => new Promise((_, reject) => { release = () => reject(new Error('Google unavailable')); if (released) release(); });
   try {
     const out = await post(env, request('request-0001'), { waitUntil: p => tasks.push(p) });
     assert.equal(out.status, 200);
@@ -19,7 +20,7 @@ test('D1 接受後立即讀到日期、名單與同步中，不必等 Google', a
     assert.equal(data.walks[0].walkedDate, day());
     assert.ok(['pending','dispatching'].includes(data.walks[0].syncStatus));
     assert.equal(tasks.length, 1);
-  } finally { release?.(); await Promise.all(tasks); globalThis.fetch = real; env.DB.close(); }
+  } finally { released = true; release?.(); await Promise.all(tasks); globalThis.fetch = real; env.DB.close(); }
 });
 
 test('同狗並行保留兩人；同識別重送零寫入；內容不同拒絕', async () => {
