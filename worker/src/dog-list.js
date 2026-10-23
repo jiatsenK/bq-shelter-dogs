@@ -253,7 +253,23 @@ export async function scanDogList(db, fingerprints, now = Date.now()) {
   // #519 補填「誰遛的」原文：主清單 walker 還是 NULL 的狗指紋一樣也要，補好就不再要
   const unfilled = new Set((await db.prepare("SELECT number, name FROM v3_sheet_main WHERE walker IS NULL").all()).results.map(r => `main:${r.number || `名:${r.name}`}`));
   const want = Object.keys(fingerprints).filter(k => fp[k] !== fingerprints[k] || unfilled.has(k));
-  const extra = Object.keys(fp).filter(k => !(k in fingerprints)).sort();
+  // #528 舊指紋：回所的狗（同一隻 main: 這次有送）、D1 已經沒有這隻狗的資料，只刪指紋，不算 D1 有、試算表沒有
+  const missing = Object.keys(fp).filter(k => !(k in fingerprints));
+  const stale = new Set(missing.filter(k => k.startsWith('departed:') && `main:${k.slice(9)}` in fingerprints));
+  for (const [sheet, table] of [['main', 'v3_sheet_main'], ['departed', 'v3_departures']]) {
+    const keys = missing.filter(k => k.startsWith(`${sheet}:`) && !stale.has(k)).map(k => k.slice(sheet.length + 1));
+    if (!keys.length) continue;
+    const numbers = keys.filter(k => !k.startsWith('名:')), names = keys.filter(k => k.startsWith('名:')).map(k => k.slice(2));
+    const marks = list => list.map(() => '?').join(',') || "''";
+    const found = new Set((await db.prepare(`SELECT number, name FROM ${table} WHERE number IN (${marks(numbers)}) OR (number = '' AND name IN (${marks(names)}))`)
+      .bind(...numbers, ...names).all()).results.map(r => r.number || `名:${r.name}`));
+    keys.filter(k => !found.has(k)).forEach(k => stale.add(`${sheet}:${k}`));
+  }
+  if (stale.size) {
+    for (const k of stale) delete fp[k];
+    await putState(db, FP_KEY, JSON.stringify(fp)).run();
+  }
+  const extra = missing.filter(k => !stale.has(k)).sort();
   let prev = [];
   try { prev = JSON.parse(await state(db, EXTRA_KEY) || '{}').keys || []; } catch { /* 讀不懂就重記 */ }
   if (!sameList(prev, extra)) await putState(db, EXTRA_KEY, JSON.stringify({ at: new Date(now).toISOString(), keys: extra })).run();

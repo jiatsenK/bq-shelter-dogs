@@ -288,3 +288,20 @@ test('#519 補填原文：主清單 walker 還是 NULL 的狗，保險掃描指�
     assert.deepEqual((await scan({ 'main:9001':'h1' })).want, [], '補好就不再要');
   } finally { env.DB.close(); }
 });
+
+test('#528 保險掃描清掉舊指紋：回所的狗（主清單有）、D1 已經沒有的狗不再列為 D1 有、試算表沒有', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  const scan = async fingerprints => (await (await post(env, 'dog-list-scan', { fingerprints })).json());
+  const fp = async () => JSON.parse(await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_fp'").first('value'));
+  try {
+    await send(env, [main({ dog:{ id:'9002', name:'走了' }, hash:'x' })]);
+    // #522 之前建的舊指紋：9001 回所（主清單有）、7777 測試狗已清掉
+    const old = { ...(await fp()), 'departed:9001':'d1', 'departed:7777':'d2', 'main:名:清掉的':'d3' };
+    await env.DB.prepare("UPDATE v3_sync_state SET value=? WHERE key='dog_list_fp'").bind(JSON.stringify(old)).run();
+    const out = await scan({ 'main:9001':'h1' });
+    assert.deepEqual(out.extra, ['main:9002'], 'D1 真的還有、試算表沒有的照舊列出');
+    assert.deepEqual(Object.keys(await fp()).sort(), ['main:9002'].concat(Object.keys(old).filter(k => k === 'main:9001')).sort(), '只刪舊指紋');
+    assert.equal((await mainRows(env)).length, 2, '不刪狗的資料');
+  } finally { env.DB.close(); }
+});
