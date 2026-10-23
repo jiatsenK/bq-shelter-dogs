@@ -28,10 +28,10 @@ const BQApi = (() => {
   const send = (method, path, body, init) => settle(fetch(root() + path, { method, headers: JSON_TYPE, body: JSON.stringify(body), ...init }));
 
   // 主頁 <head> 先發出的 api/dogs（index.html）在這裡接手，只用一次
-  function dogs({ signal } = {}) {
+  function dogs({ signal, cache = 'no-cache' } = {}) {
     const early = globalThis.window && window.__dogsEarly;
     if (early) window.__dogsEarly = null;
-    return settle(early || fetch(root() + '/dogs', { cache: 'no-cache', signal }));
+    return settle(early || fetch(root() + '/dogs', { cache, signal }));
   }
 
   return {

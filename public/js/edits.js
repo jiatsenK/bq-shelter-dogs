@@ -59,7 +59,7 @@ async function editsLoad() {
     status.textContent = cached.edits.length ? '' : '還沒有編輯紀錄';
   }
   try {
-    const [res, dogsRes] = await Promise.all([BQApi.edits(), BQApi.dogs()]);
+    const [res, dogsRes] = await Promise.all([BQApi.edits(), BQApi.dogs({ cache: 'default' })]);
     const out = res.data;
     if (!out) throw new Error(res.message);
     if (!res.ok || !out.ok) throw new Error(out.error || '讀不到');
