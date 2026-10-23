@@ -332,7 +332,7 @@ function deskFillPickPhoto(dog) {
 async function deskFillPreparePhoto(dog, file) {
   if (deskFillPhoto && deskFillPhoto.phase === 'uploading') { showToast('上一張照片還在上傳，請稍等一下'); return; }
   let blob;
-  try { blob = await compressPhoto(file); } catch (e) { showToast(e.message); return; }
+  try { blob = await BQPhoto.compress(file); } catch (e) { showToast(e.message); return; }
   if (deskFillPhoto) URL.revokeObjectURL(deskFillPhoto.url);
   deskFillPhoto = { key: walkKey(dog), blob, url: URL.createObjectURL(blob), phase: 'preview', error: '' };
   render();

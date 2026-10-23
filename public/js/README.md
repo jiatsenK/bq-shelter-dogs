@@ -8,13 +8,14 @@
 - `site-config.js`：`SITE` 收容所設定；無檔案依賴；index、cards 載入。
 - `detail-editor.js`：詳細資訊五種編輯器共用的草稿、儲存中、錯誤與重畫狀態；由主頁注入重畫函式，驗證、API 與焦點由主頁負責；無檔案依賴；index 在 app 前載入。
 - `tour.js`：`BQTour` 使用說明導覽的步驟、示範、定位、動態效果及主畫面安裝說明；透過 app 的開頭畫面、資料／重畫與儲存、analysis、find 及選配 desk 示範實際頁面；index 在 app 前載入，互動於頁面檔案載入後啟動。
-- `app.js`：主頁資料、狗卡詳細資訊、身分與溜狗操作；依賴 dates、api、store、site-config、detail-editor、detail-viewport、walk-flow、tour，搭配後載入的頁面檔案；index 載入。
+- `photo.js`：`BQPhoto` 主照片選檔、壓縮、預覽、裁切與上傳，內部管理預覽及裁切狀態；執行時依賴 app 的詳細資訊、共用重畫狀態與照片顯示、api；index 在 app 前載入，desk 共用壓縮。
+- `app.js`：主頁資料、狗卡詳細資訊、身分與溜狗操作；依賴 dates、api、store、site-config、detail-editor、detail-viewport、walk-flow、tour、photo，搭配後載入的頁面檔案；index 載入。
 - `analysis.js`：分析、離所名冊與資訊頁；依賴 dates、api、store、app，搭配 activities；index 在 app 後載入。
 - `cards.js`：圖鑑、開卡與已出所狗卡，保留卡片專用顯示格式；依賴 dates、api、store、site-config；cards 載入。
 - `activities.js`：活動紀錄及已出所狗卡的編輯；依賴 dates、api、app、analysis；index 載入。
 - `find.js`：找狗照片、搜尋與平面圖；依賴 app、analysis、group-stage；index 載入。
 - `group-stage.js`：可以一起溜的狗群畫面；依賴 dates、api、app、analysis；index 載入。
-- `desk.js`：電腦版簡報、全表與側欄；依賴 dates、api、app、analysis；index 載入。
+- `desk.js`：電腦版簡報、全表與側欄；依賴 dates、api、app、analysis、photo；index 載入。
 - `detail-viewport.js`：詳細資訊編輯欄位的可見範圍；無檔案依賴；index 載入，由 app 使用。
 - `keyboard-viewport.js`：螢幕鍵盤開啟時的欄位與面板定位；無檔案依賴；index 載入。
 - `walk-registration.js`：溜了、同行人、復原與核對規則；無檔案依賴，由 walk-flow 注入資料操作；index 載入。
