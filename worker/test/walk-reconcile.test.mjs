@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { setup, post, request, current, day } from './walk-fixture.mjs';
 import { resolveIdentity } from '../src/identity.js';
+import { scanWalks } from '../src/walk-reconcile.js';
 
 async function machine(env, action, body) {
   const response = await worker.fetch(new Request(`https://worker.example/api/walk-writeback/${action}`, {
@@ -54,28 +55,6 @@ test('舊基準不蓋網站新登記；無差異比較零寫入；未確認舊�
   } finally { env.DB.close(); }
 });
 
-test('通知執行中重送合併且補掃一次；失敗持久保留供排程補漏', async () => {
-  const env={ ...await setup(),SHEET_NOTIFY_KEY:'nk',D1_WALK_NOTIFY:'1' },real=globalThis.fetch;
-  await baseline(env,'甲');
-  const notify=()=>worker.fetch(new Request('https://worker.example/api/sheet-changed',{
-    method:'POST',headers:{ 'X-Notify-Key':'nk' },
-  }),env);
-  let release,reads=0;
-  try {
-    globalThis.fetch=async ()=>{ reads++; if (reads===1) await new Promise(resolve=>{ release=resolve; }); return Response.json({ ok:true,sig:'s1',rows:[] }); };
-    const first=notify();
-    while (!release) await new Promise(resolve=>setImmediate(resolve));
-    assert.equal((await (await notify()).json()).comparison.merged,true);
-    assert.equal((await (await notify()).json()).comparison.merged,true);
-    release(); await first; assert.equal(reads,2);
-    assert.equal((await env.DB.prepare('SELECT status FROM v3_walk_compare WHERE id=1').first()).status,'idle');
-    globalThis.fetch=async ()=>{ throw new Error('synthetic unavailable'); };
-    assert.equal((await (await notify()).json()).comparison.pending,true);
-    const retained=await env.DB.prepare('SELECT status,error FROM v3_walk_compare WHERE id=1').first();
-    assert.equal(retained.status,'pending'); assert.match(retained.error,/連不上試算表/);
-  } finally { release?.(); globalThis.fetch=real; env.DB.close(); }
-});
-
 test('未知派送可能只寫了一欄，不能把半格結果接受成新的人工修正', async () => {
   const env=await setup(); worker.testing.resetState();
   try {
@@ -88,14 +67,12 @@ test('未知派送可能只寫了一欄，不能把半格結果接受成新的�
 });
 
 test('掃描回應只有 HTTP 200 或 ok、沒有整份四欄，不能宣稱已完成比對', async () => {
-  const env={ ...await setup(),SHEET_NOTIFY_KEY:'nk',D1_WALK_NOTIFY:'1' },real=globalThis.fetch;
+  const env=await setup(),real=globalThis.fetch;
   try {
     await baseline(env,'甲');
     globalThis.fetch=async ()=>Response.json({ ok:true });
-    const response=await worker.fetch(new Request('https://worker.example/api/sheet-changed',{
-      method:'POST',headers:{ 'X-Notify-Key':'nk' },
-    }),env);
-    assert.equal((await response.json()).comparison.pending,true);
+    await assert.rejects(scanWalks(env,Date.now()),/不完整/);
+    assert.equal(await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='walk_scan_sig'").first(),null);
   } finally { globalThis.fetch=real; env.DB.close(); }
 });
 
@@ -165,27 +142,6 @@ test('復原可信人工前次名單中的未註冊名字，仍只驗證操作�
   } finally { env.DB.close(); }
 });
 
-test('通知失敗與中斷的 running 能經既有 scheduled 同鎖補漏，不冒充完成', async () => {
-  const env={ ...await setup(),SHEET_NOTIFY_KEY:'nk',D1_WALK_NOTIFY:'1',WALK_RETRY_ENABLED:'true',GITHUB_TOKEN:'test' },real=globalThis.fetch;
-  const tick=async ()=>{ const tasks=[]; await worker.scheduled({ scheduledTime:Date.now() },env,{ waitUntil:p=>tasks.push(p) }); await Promise.all(tasks); };
-  try {
-    await baseline(env,'甲');
-    globalThis.fetch=async ()=>{ throw new Error('synthetic unavailable'); };
-    await worker.fetch(new Request('https://worker.example/api/sheet-changed',{ method:'POST',headers:{ 'X-Notify-Key':'nk' } }),env);
-    globalThis.fetch=async (_url,init)=>{
-      if (String(_url).startsWith('https://api.github.com/')) return new Response(null,{ status:204 });
-      const body=JSON.parse(init.body);
-      assert.equal(body.action,'walkScan');
-      return Response.json({ ok:true,sig:'manual',rows:[{ dog,current:{ date:'2026-09-01',walker:'甲' } }] });
-    };
-    await tick(); assert.equal((await current(env)).walks[0].walkedDate,'2026-09-01');
-    assert.equal((await env.DB.prepare('SELECT status FROM v3_walk_compare WHERE id=1').first()).status,'idle');
-    await env.DB.prepare("UPDATE v3_walk_compare SET status='running',owner='lost-process',started_at='2020-01-01T00:00:00Z'").run();
-    await tick();
-    assert.equal((await env.DB.prepare('SELECT status FROM v3_walk_compare WHERE id=1').first()).status,'idle');
-  } finally { globalThis.fetch=real; env.DB.close(); }
-});
-
 test('#408 單狗比對及 target 在主清單與同狗歷史十倍後，讀寫量固定且歷史使用索引', async () => {
   async function sample(count) {
     const env=await setup(); worker.testing.resetState();
@@ -222,8 +178,8 @@ test('#408 單狗比對及 target 在主清單與同狗歷史十倍後，讀寫�
   assert.deepEqual(await sample(200),await sample(20));
 });
 
-test('通知掃描讀寫量不隨歷史增加；四欄指紋沒變就不再比對、不寫入', async () => {
-  const env={ ...await setup(),SHEET_NOTIFY_KEY:'nk',D1_WALK_NOTIFY:'1' },real=globalThis.fetch;
+test('保險掃描讀寫量不隨歷史增加；四欄指紋沒變就不再比對、不寫入', async () => {
+  const env=await setup(),real=globalThis.fetch;
   try {
     await baseline(env,'甲');
     const sent=[];
@@ -233,10 +189,10 @@ test('通知掃描讀寫量不隨歷史增加；四欄指紋沒變就不再比�
     };
     const sample=async ()=>{
       const before=(await env.DB.prepare('SELECT total_changes() n').first()).n,read=env.DB.stats.rowsRead;
-      await worker.fetch(new Request('https://worker.example/api/sheet-changed',{ method:'POST',headers:{ 'X-Notify-Key':'nk' } }),env);
+      await scanWalks(env,Date.now());
       return { reads:env.DB.stats.rowsRead-read,writes:(await env.DB.prepare('SELECT total_changes() n').first()).n-before };
     };
-    await sample(); // 第一次：非溜狗欄位 changed 標記、記下指紋
+    await sample(); // 第一次：記下指紋
     assert.deepEqual(sent,['']);
     const small=await sample();
     assert.deepEqual(sent,['','same']);
@@ -247,41 +203,14 @@ test('通知掃描讀寫量不隨歷史增加；四欄指紋沒變就不再比�
 });
 
 test('還有差異沒收完（未決派送）就不記指紋，下次照常整份比對', async () => {
-  const env={ ...await setup(),SHEET_NOTIFY_KEY:'nk',D1_WALK_NOTIFY:'1' },real=globalThis.fetch;
+  const env=await setup(),real=globalThis.fetch;
   try {
     await baseline(env,'甲');
     await post(env,request('pending-sig-0002','乙'));
     globalThis.fetch=async ()=>Response.json({ ok:true,sig:'x',rows:[{ dog,current:{ date:'2026-09-01',walker:'丁' } }] });
-    await worker.fetch(new Request('https://worker.example/api/sheet-changed',{ method:'POST',headers:{ 'X-Notify-Key':'nk' } }),env);
+    await scanWalks(env,Date.now());
     assert.equal(await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='walk_scan_sig'").first(),null);
     assert.equal((await current(env)).walks[0].walker,'甲、乙');
-  } finally { globalThis.fetch=real; env.DB.close(); }
-});
-
-test('通知立即啟動可信比對，外部格子值被忽略，重送無差異不更新版本', async () => {
-  const env = { ...await setup(), SHEET_NOTIFY_KEY:'notify-secret',D1_WALK_NOTIFY:'1' };
-  worker.testing.resetState();
-  const real = globalThis.fetch;
-  let reads = 0;
-  const notify = key => worker.fetch(new Request('https://worker.example/api/sheet-changed',{
-    method:'POST',headers:{ 'X-Notify-Key':key },body:JSON.stringify({ observations:[{ dog,current:{ date:'',walker:'偽造' } }] }),
-  }),env);
-  try {
-    await baseline(env,'甲');
-    globalThis.fetch = async (url,init) => {
-      assert.equal(url,env.SHEET_WRITE_URL);
-      const body = JSON.parse(init.body);
-      assert.equal(body.action,'walkScan'); assert.equal(body.key,'test-secret');
-      reads++;
-      return Response.json({ ok:true,sig:`v${reads}`,rows:[{ dog,current:{ date:'2026-09-01',walker:'甲' } }] });
-    };
-    assert.equal((await notify('forged')).status,403); assert.equal(reads,0);
-    assert.equal((await notify('notify-secret')).status,200); assert.equal(reads,1);
-    const first = await current(env);
-    assert.equal(first.walks[0].walkedDate,'2026-09-01');
-    assert.equal((await notify('notify-secret')).status,200);
-    assert.equal((await current(env)).version,first.version);
-    assert.ok(await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='changed'").first());
   } finally { globalThis.fetch=real; env.DB.close(); }
 });
 

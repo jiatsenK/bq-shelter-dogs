@@ -31,9 +31,10 @@
     "SYNC_DAILY_BUDGET": "40000"
   },
   // 每 10 分鐘看一次試算表有沒有人改，有改才叫 GitHub 同步；台灣 6:30（UTC 22:30）那一格保險同步一次（ADR 0008，worker/src/sync-plan.js）
-  // 第二個排程錯開 5 分鐘跑溜狗對帳（#460）：兩件各自一次 Cron 呼叫，各有自己的 CPU 上限。改這裡要一起改 worker/src/index.js 的 WALK_CRON
+  // 溜狗（#500，ADR 0018）：錯開 5 分鐘只跑寫回重試（沒工作就結束、不讀表）；台灣 09:43、13:53、23:53 保險掃描只比指紋。
+  // 改這裡要一起改 worker/src/index.js 的 RETRY_CRON、SCAN_CRONS
   "triggers": {
-    "crons": ["*/10 * * * *", "5-59/10 * * * *"]
+    "crons": ["*/10 * * * *", "5-59/10 * * * *", "43 1 * * *", "53 5,15 * * *"]
   },
   // 每個 PR 的預覽網址（#126，.github/workflows/preview-cloudflare.yml）：https://pr-<編號>-bq-shelter-dogs.<帳號>.workers.dev
   "preview_urls": true,
