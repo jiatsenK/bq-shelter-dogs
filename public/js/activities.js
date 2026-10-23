@@ -5,7 +5,6 @@
 // 動保小小兵、認養會每場出席的狗，存 D1（Worker 的 api/activities）。
 // 每場以日期＋類型當標題，下面直接列出席的狗；誰都能新增、修改、刪除（先選好名字，記編輯紀錄）。狗卡上不顯示活動。
 // 新增、修改就地展開（DESIGN_GUIDE「新增或編輯就地展開」）；改、刪帶打開時的 revision，別人剛改過會被擋下
-const ACTIVITIES_URL = 'api/activities';
 const ACTIVITY_KINDS = { kids: '動保小小兵', adoption: '認養會' };
 const ACTIVITY_MAX_DOGS = 60;
 const ACTIVITY_PICKS = 8;
@@ -15,8 +14,8 @@ let activityEdit = null; // { id（新增是 ''）, revision, date, kind, dogs, 
 function loadActivities(force = false) {
   if (activitiesData && !force) return;
   activitiesData = { state: 'loading', list: activitiesData ? activitiesData.list : [] };
-  fetch(ACTIVITIES_URL, { cache: 'no-cache' })
-    .then(res => (res.ok ? res.json() : Promise.reject(new Error(`HTTP ${res.status}`))))
+  BQApi.activities()
+    .then(apiData)
     .then(data => {
       if (!data || !Array.isArray(data.activities)) throw new Error('格式不對');
       activitiesData = { state: 'ready', list: data.activities };
@@ -144,16 +143,13 @@ async function saveActivity(remove = false) {
   const dogs = e.dogs.map(activityDogRef);
   const body = remove ? { editor, revision: e.revision } : { editor, ...(e.id ? { revision: e.revision } : {}), date: e.date, kind: e.kind, dogs };
   let out = null, error = '';
-  try {
-    const res = await fetch(`${UPLOAD_URL}/activities${e.id ? `/${encodeURIComponent(e.id)}` : ''}`, {
-      method: remove ? 'DELETE' : e.id ? 'PUT' : 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-    });
-    out = await res.json().catch(() => null);
-    if (!res.ok || !out || !out.ok || (!remove && !out.activity)) error = (out && out.error) || `沒有存進去（${res.status}），請稍後再試`;
+  const r = await BQApi.saveActivity(e.id, remove ? 'DELETE' : e.id ? 'PUT' : 'POST', body);
+  out = r.data;
+  if (r.error === 'network') error = '沒有存進去，請確認網路後再試';
+  else {
+    if (!r.ok || !out || !out.ok || (!remove && !out.activity)) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
     // 別人剛改過或刪掉：重讀名單，讓畫面跟伺服器一樣
-    if (res.status === 409 || res.status === 404) loadActivities(true);
-  } catch (err) {
-    error = '沒有存進去，請確認網路後再試';
+    if (r.status === 409 || r.status === 404) loadActivities(true);
   }
   if (activityEdit !== e) return;
   if (error) return activityFail(e, error);
