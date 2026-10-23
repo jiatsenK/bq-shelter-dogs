@@ -102,6 +102,7 @@ function guideSpotlights(el) {
 
 let TOUR_JS = '';
 let PHOTO_JS = '';
+let WALK_UI_JS = '';
 let APP_JS = '';    // js/app.js 原始碼（#30 拆檔後程式在這裡）
 let API_JS = '';    // js/api.js 原始碼（#478 呼叫 /api 都在這裡）
 let ANALYSIS_JS = ''; // js/analysis.js 原始碼（#59 分析頁）
@@ -545,7 +546,7 @@ function runTests() {
     check('詳細視窗 Tab 不跑到背景，重畫保留焦點，關閉回到原狗卡', () => {
       const saved = [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords];
       try {
-        hideToast();
+        BQWalkUI.hideToast();
         document.getElementById('main').parentElement.classList.remove('hidden'); // 真瀏覽器裡 display:none 的元素不能拿到焦點
         allDogs = [{ id: 'focus-test', name: '焦點測試', cage: 'A01', note: '', covered: false, walkedDate: null }];
         groupMap = {}; activeTab = 'walk'; searchQuery = '';
@@ -612,7 +613,7 @@ function runTests() {
         switchTab('today');
         eq(document.querySelectorAll('#main [data-walk="back"]').length, 1, '今天已溜看得到、可移回：');
       } finally {
-        hideToast();
+        BQWalkUI.hideToast();
         [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords] = saved;
         render();
       }
@@ -652,7 +653,7 @@ function runTests() {
         box.querySelector('.buddy').click();
         eq(document.getElementById('detailName').firstChild.textContent, '測試乙', '輕點照片照舊換看那隻：');
       } finally {
-        hideDetail(); hideToast();
+        hideDetail(); BQWalkUI.hideToast();
         if (history.state && history.state.bqDetail) history.replaceState(null, '');
         [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords] = saved;
         render();
@@ -663,7 +664,7 @@ function runTests() {
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
       const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
-      eq(scripts.map(s => s.getAttribute('src')), ['js/dates.js', 'js/api.js', 'js/store.js', 'js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/walk-flow.js', 'js/detail-editor.js', 'js/tour.js', 'js/photo.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/activities.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定、#270 活動紀錄）：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/dates.js', 'js/api.js', 'js/store.js', 'js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/walk-flow.js', 'js/detail-editor.js', 'js/tour.js', 'js/photo.js', 'js/walk-ui.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/activities.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定、#270 活動紀錄）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
@@ -883,7 +884,7 @@ async function photoUntil(ok, what) {
   throw new Error('等不到' + what);
 }
 async function selectPhoto(file) {
-  hideToast();
+  BQWalkUI.hideToast();
   document.getElementById('photoPick').click();
   const input = document.getElementById('photoFile');
   const files = new DataTransfer(); files.items.add(file); input.files = files.files;
@@ -1061,7 +1062,7 @@ async function runPhotoTests() {
         await selectPhoto(new File(['hello'], 'a.txt', { type: 'text/plain' }));
         eq(previewUrl(), null, '沒有預覽：');
         if (!toastText().includes('請選擇照片檔')) throw new Error(`提示：${toastText()}`);
-        hideToast(); hideDetail();
+        BQWalkUI.hideToast(); hideDetail();
       });
       await check('#48 確認上傳：用編號送到上傳服務，成功後狗卡、詳細資訊、燈箱立刻換新照片', async () => {
         photoOverrides['9101'] = PX;
@@ -1087,7 +1088,7 @@ async function runPhotoTests() {
         document.querySelector('#detail [data-zoom]').click();
         eq(lb().querySelector('img').getAttribute('src'), url, '燈箱：');
         const p = popped(); closeLightbox(); await p;
-        hideToast(); hideDetail();
+        BQWalkUI.hideToast(); hideDetail();
       });
       await check('#48 上傳失敗：顯示錯誤，原本的照片不變，可以再按確認上傳重試', async () => {
         photoOverrides['9101'] = PX;
@@ -1112,7 +1113,7 @@ async function runPhotoTests() {
     } finally {
       restoreApi();
       UPLOAD_URL = savedUrl;
-      cancelPhoto(); hideToast();
+      cancelPhoto(); BQWalkUI.hideToast();
     }
   } finally {
     hideLightbox(); hideDetail();
@@ -1686,7 +1687,7 @@ async function runCropTests() {
     });
   } finally {
     if (cropIsOpen()) { const p = popped(); document.getElementById('cropCancel').click(); await p; }
-    hideLightbox(); hideDetail(); cancelPhoto(); hideToast();
+    hideLightbox(); hideDetail(); cancelPhoto(); BQWalkUI.hideToast();
     delete photoOverrides['9301'];
     box.classList.add('hidden');
     history.replaceState(null, '');
@@ -1743,7 +1744,7 @@ async function runV52Tests() {
       render();
     });
   } finally {
-    hideDetail(); hideToast();
+    hideDetail(); BQWalkUI.hideToast();
     [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords] = saved;
     render();
   }
@@ -1816,7 +1817,7 @@ async function runV9Tests() {
       eq(main.querySelectorAll('.card').length, 4, '還在溜狗表：');
       btn.click();
       eq(main.querySelector('.card[data-dog="0"] .walk-btn').dataset.walk, 'add', '取消：');
-      hideToast();
+      BQWalkUI.hideToast();
     });
     await check('#141 溜了之後加一起溜的人：寫進同一格、詳細資訊顯示；復原時一起清掉', async () => {
       saveWalkerName('志工我'); sheetWriteState = 'unknown'; walkRecords = freshWalkRecords();
@@ -1825,7 +1826,7 @@ async function runV9Tests() {
         calls.push(body.walker);
         return json({ ok: true, results: body.dogs.map(d => ({ ...d, status: 'written', prev: { walker: calls.length === 1 ? '舊的' : '志工我' }, wrote: { walker: calls.join('、') } })) });
       });
-      setWalked([allDogs[1]], true);
+      BQWalkUI.setWalked([allDogs[1]], true);
       await sheetQueue;
       const extra = document.querySelector('#toast .toast-extra');
       eq([extra.hidden, extra.textContent], [false, '＋一起溜的人'], '提示條有加人：');
@@ -1838,15 +1839,15 @@ async function runV9Tests() {
       eq(walkerList(allDogs[1]), ['志工我', '阿華'], '畫面上：');
       eq(loadCompanions(), ['阿華'], '記住最近一起溜的人：');
       eq(loadSheetWrites()[walkKey(allDogs[1])].prev.walker, '舊的', '復原回到按溜了之前：');
-      hideToast();
+      BQWalkUI.hideToast();
     });
     await check('#396 整群只有部分狗已有同行人，仍可替其他狗補加', () => {
       const targets = allDogs.slice(0, 2);
       clearWalkWith(targets);
       addWalkWith([targets[0]], ['阿華']);
-      openWithSheet(targets);
+      BQWalkUI.openWithSheet(targets);
       eq(!!document.querySelector('#withBackdrop [data-with="阿華"]'), true, '只有全部狗都有的人才隱藏：');
-      withSheet = null; renderWithSheet(); clearWalkWith(targets);
+      BQWalkUI.closeWithSheet(); clearWalkWith(targets);
     });
     await check('#141 多人登記立即更新今天紀錄與統計；重新載入仍可編輯及復原，衝突不覆寫', async () => {
       phoneStore = fakeStorage(); walkRecords = freshWalkRecords();
@@ -1868,25 +1869,25 @@ async function runV9Tests() {
         } else { current = body.dogs[0].prev.walker; result = { status: 'restored' }; }
         return json({ ok: true, today, results: [{ id: dog.id, name: dog.name, ...result }] });
       });
-      await queueSheetWrite([dog], true);
+      await BQWalkUI.queueSheetWrite([dog], true);
       eq(walkerList(dog), ['志工乙', '志工我'], '完整名單：');
       eq(currentMyWalks().map(w => w.id), [dog.id], '立即出現：');
       eq(myWalksCount(''), 1, '數字：');
       if (!myMonthStats(currentMyWalks(), new Date()).includes('<b>1</b>')) throw new Error('統計沒有新登記');
       walkRecords = freshWalkRecords(); dog.walkedDate = originalDate;
       eq(computeStatus(dog, new Date()).days, 0, '重新載入日期：');
-      if (walkerEditBase(dog, new Date()) !== current) throw new Error('重新載入後仍可在名字旁加減');
-      await editWalkers(dog, ['志工乙'], '已拿掉 志工我');
+      if (BQWalkUI.walkerEditBase(dog, new Date()) !== current) throw new Error('重新載入後仍可在名字旁加減');
+      await BQWalkUI.editWalkers(dog, ['志工乙'], '已拿掉 志工我');
       eq([lastBody.action, lastBody.dogs[0].expected, lastBody.walker], ['edit', '志工乙、志工我', '志工乙'], '修改請求：');
       eq(currentMyWalks().length, 0, '移除自己不留今日紀錄：');
-      await queueSheetWrite([dog], false);
+      await BQWalkUI.queueSheetWrite([dog], false);
       eq(walkerList(dog), ['志工乙', '志工我'], '復原編輯：');
       eq(currentMyWalks().length, 1, '復原統計：');
       current = '志工乙、志工我、志工戊';
-      await editWalkers(dog, ['志工我'], '已拿掉 志工乙');
+      await BQWalkUI.editWalkers(dog, ['志工我'], '已拿掉 志工乙');
       eq(current, '志工乙、志工我、志工戊', '不蓋掉他人：');
       eq(walkerList(dog), ['志工乙', '志工我', '志工戊'], '更新衝突名單：');
-      withSheet = null; renderWithSheet(); hideToast();
+      BQWalkUI.closeWithSheet(); BQWalkUI.hideToast();
     });
     await check('#141 名字清理：去除經常帶敘述，岑合併佳岑，查詢含舊別名', async () => {
       UPLOAD_URL = 'https://worker.test';
@@ -2017,7 +2018,7 @@ async function runV9Tests() {
       tour().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       eq([tour(), needOnboard(), document.getElementById('main').closest('[inert]')], [null, false, null], 'Esc 等於略過，下次開不再問名字：');
       eq(document.documentElement.classList.contains('tour-open'), false, '關閉後解除背景捲動限制：');
-      setWalked([allDogs[0]], true);
+      BQWalkUI.setWalked([allDogs[0]], true);
       eq([!!box(), box().querySelector('.ob-next').textContent], [true, '設定並登記'], '按溜了才問名字：');
       const input = box().querySelector('#obInput');
       input.value = '阿名'; input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2029,7 +2030,7 @@ async function runV9Tests() {
       await tick(); await sheetQueue; await tick();
       eq([box(), loadWalkerName(), walkedToday().has(allDogs[0]), nameLater()], [null, '阿名', true, false], '設好直接登記：');
       eq(calls.filter(api => api !== 'favorites'), ['identity', 'identity', 'walk'], '送出：');
-      hideToast();
+      BQWalkUI.hideToast();
       activeTab = 'mine'; myWalks = []; myWalksState = 'ready'; render();
       eq(document.querySelector('#main [data-open-guide]'), null, '#447 我溜過不再放使用說明：');
       showAnalysis();
@@ -2039,7 +2040,7 @@ async function runV9Tests() {
       eq(tour(), null, '關閉：');
     });
   } finally {
-    hideDetail(); hideToast(); onboard = null; renderOnboard(); closeGuideIn(); withSheet = null; renderWithSheet(); restoreApi();
+    hideDetail(); BQWalkUI.hideToast(); onboard = null; renderOnboard(); closeGuideIn(); BQWalkUI.closeWithSheet(); restoreApi();
     [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL, walkerNames, walkerNameList, sheetWriteState, walkerNameMemory, walkerCodesMemory, myWalks, myWalksState] = saved;
     render();
   }
@@ -2115,7 +2116,7 @@ async function runRestTests() {
       await new Promise(r => setTimeout(r, 20));
       eq([calls.length, calls[0][0], calls[0][1], calls[0][2].reason, calls[0][2].editor, 'passcode' in calls[0][2]], [1, 'saveRest', '9612', '術後休養', '志工我', false], '送出：');
       eq([restEdit, computeStatus(allDogs[1], T).kind], [null, 'rest'], '成功：');
-      hideDetail(); hideToast();
+      hideDetail(); BQWalkUI.hideToast();
       eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['固定丙', '休養甲', '一般乙'], '設好的那隻也排到最下面：');
     });
     await check('#285 移除完整狗卡頂部警語，首頁警語與備註原文保留', () => {
@@ -2151,7 +2152,7 @@ async function runRestTests() {
         eq(calls, [{ editor: '志工我', text: dog.intro, events: [dog.intakeEvents[0], { ...dog.intakeEvents[1], event: '領養退回（補正）' }] }]);
         eq(document.querySelectorAll('.intake-list li').length, 2);
         eq(document.querySelectorAll('.intake-event')[1].textContent, '領養退回（補正）');
-      } finally { hideDetail(); hideToast(); delete introOverrides[dog.id]; }
+      } finally { hideDetail(); BQWalkUI.hideToast(); delete introOverrides[dog.id]; }
     });
     await check('入所介紹（10-10）：直接點那一段就能改（不另外放按鈕）、不用通關碼、帶 editor，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {
       const calls = fakeApi((name, id, b) => json({ ok: true, id: '9613', intro: b.text }));
@@ -2171,7 +2172,7 @@ async function runRestTests() {
       eq(document.querySelector('[data-section="intro"] .content').textContent, '親人\n喜歡散步', '馬上看到：');
       eq(document.getElementById('introEdit').getAttribute('aria-label'), '改入所介紹', '有介紹：點了是改：');
       if (calls.some(c => c[0] === 'walk')) throw new Error('不應該寫試算表');
-      hideDetail(); hideToast();
+      hideDetail(); BQWalkUI.hideToast();
       delete introOverrides['9613'];
     });
     await check('舊編號（#289）：誰都能補（不用通關碼、帶 editor），POST /former/編號；入所標籤馬上改從最舊的編號算；✕ 刪掉走 DELETE', async () => {
@@ -2211,7 +2212,7 @@ async function runRestTests() {
       } finally {
         window.confirm = realConfirm;
         dog.formerIds = before;
-        hideDetail(); hideToast();
+        hideDetail(); BQWalkUI.hideToast();
       }
     });
     await check('出入所紀錄（#333）：照時間列出；整份 PUT /stays/編號、帶改之前的內容；入所日取最早；別人剛改過就提示重新整理', async () => {
@@ -2268,7 +2269,7 @@ async function runRestTests() {
       } finally {
         dog.stays = before;
         staysEdit = null;
-        hideDetail(); hideToast();
+        hideDetail(); BQWalkUI.hideToast();
       }
     });
     // #481：只觀察表單與 API，保護共用狀態轉換前後的既有行為。
@@ -2306,7 +2307,7 @@ async function runRestTests() {
           eq(document.getElementById(spec.form), null, '取消關掉表單：');
         } finally {
           if (release) { release(); await tick(); }
-          hideDetail(); hideToast(); restoreApi();
+          hideDetail(); BQWalkUI.hideToast(); restoreApi();
         }
       });
     }
@@ -2316,7 +2317,7 @@ async function runRestTests() {
     });
   } finally {
     restoreApi();
-    hideDetail(); hideToast();
+    hideDetail(); BQWalkUI.hideToast();
     box.classList.add('hidden');
     history.replaceState(null, '');
     saveWalkerName('');
@@ -2594,7 +2595,7 @@ async function runSyncButtonTests() {
     });
   } finally {
     [allDogs, groupMap, activeTab, searchQuery, dataSyncedAt] = saved;
-    restoreApi(); hideToast();
+    restoreApi(); BQWalkUI.hideToast();
   }
 }
 
@@ -2735,7 +2736,7 @@ async function runTermTests() {
       .replace(/遛狗表|常遛狗群|勿遛|勿蹓|「誰遛的」|'誰遛的'|上次遛/g, ''); // K 2026-10-13 指定左側標題「上次遛」
     const old = ['遛', '移回', '一直收起', '今天先收起', '犬名', '犬隻', '狗狗', '狗卡資訊', '平均隔', '最久隔', '日期異常', '尚無', '已存到 Git', '代號服務'];
     const hits = [];
-    for (const [file, src] of [['index.html', INDEX_HTML.replace(/<!--[\s\S]*?-->/g, '')], ['app.js', APP_JS], ['tour.js', TOUR_JS], ['photo.js', PHOTO_JS], ['analysis.js', ANALYSIS_JS], ['find.js', FIND_JS]]) {
+    for (const [file, src] of [['index.html', INDEX_HTML.replace(/<!--[\s\S]*?-->/g, '')], ['app.js', APP_JS], ['tour.js', TOUR_JS], ['photo.js', PHOTO_JS], ['walk-ui.js', WALK_UI_JS], ['analysis.js', ANALYSIS_JS], ['find.js', FIND_JS]]) {
       const text = shown(src);
       for (const w of old) if (text.includes(w)) hits.push(`${file}：${w}`);
     }
@@ -3180,7 +3181,7 @@ async function runWalkSortTests() {
       document.querySelector('#main .card[data-dog="0"] [data-walk="add"]').click();
       eq(cards(), ['原地甲', '原地乙', '原地丙'], '按了溜了不動：');
       eq(document.querySelector('#main .card[data-dog="0"] .walk-btn').textContent.trim(), '已溜', '變已溜：');
-      hideToast();
+      BQWalkUI.hideToast();
       switchTab('mine'); switchTab('walk');
       eq(cards(), ['原地乙', '原地丙', '原地甲'], '換分頁回來重排：');
     });
@@ -3203,7 +3204,7 @@ async function runSheetWriteTests() {
     render();
     await check('#138 還沒設定名字（先看看）：按溜了先問名字，不送試算表；按取消就不記', async () => {
       const calls = fakeApi(() => json({ ok: true, results: [] }));
-      setWalked([allDogs[0]], true);
+      BQWalkUI.setWalked([allDogs[0]], true);
       await sheetQueue;
       eq(calls, [], '不送：');
       const box = document.getElementById('onboard');
@@ -3220,7 +3221,7 @@ async function runSheetWriteTests() {
         calls.push([name, body]);
         return json({ ok: true, today: '2026-10-04', results: body.dogs.map(d => ({ ...d, status: 'written', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' } })) });
       });
-      setWalked(allDogs, true);
+      BQWalkUI.setWalked(allDogs, true);
       await sheetQueue;
       eq(calls, [['walk', { action: 'walk', walker: '志工我', dogs: [{ id: '9801', name: '寫入甲' }, { id: '', name: '寫入乙' }] }]], '送出：');
       eq(Object.keys(loadSheetWrites()), ['9801', '名:寫入乙'], '記下：');
@@ -3236,25 +3237,25 @@ async function runSheetWriteTests() {
         { id: '', name: '寫入乙', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' } }] }], '復原送出：');
       eq(Object.values(loadSheetWrites()).map(item => [item.current.date, item.current.walker, !!item.prev]), [['2026-10-01', '志工乙', false], ['2026-10-01', '志工乙', false]], '保留還原結果但不留復原快照：');
       eq(walkedToday().has(allDogs[0]), false, '手機也放回：');
-      hideToast();
+      BQWalkUI.hideToast();
     });
     await check('#138 別人改過就不改回並提醒；送不出去提示自己去填；Worker 沒設定就安靜不再送', async () => {
       saveSheetWrites({ '9801': { id: '9801', name: '寫入甲', prev: { date: { text: '' }, walker: '' }, wrote: { walker: '志工我' } } });
       phoneStore.set(BQStore.keys.walkedToday, JSON.stringify({ date: BQDates.localDateKey(new Date()), ids: ['9801'] }));
       fakeApi(() => json({ ok: true, results: [{ id: '9801', name: '寫入甲', status: 'changed' }] }));
-      setWalked([allDogs[0]], false); await sheetQueue;
+      BQWalkUI.setWalked([allDogs[0]], false); await sheetQueue;
       if (!toastText().includes('已經被改過')) throw new Error(`改過：${toastText()}`);
       fakeApi(() => { throw new TypeError('Failed to fetch'); });
-      setWalked([allDogs[0]], true); await sheetQueue;
+      BQWalkUI.setWalked([allDogs[0]], true); await sheetQueue;
       if (!toastText().includes('尚未確認登記結果')) throw new Error(`網路：${toastText()}`);
-      setWalked([allDogs[0]], false); await sheetQueue;
+      BQWalkUI.setWalked([allDogs[0]], false); await sheetQueue;
       let n = 0;
       fakeApi(() => { n++; return json({ ok: false, code: 'off', error: '還沒設定' }, 503); });
-      setWalked([allDogs[0]], true); await sheetQueue;
-      setWalked([allDogs[0]], false); await sheetQueue;
-      setWalked([allDogs[0]], true); await sheetQueue;
+      BQWalkUI.setWalked([allDogs[0]], true); await sheetQueue;
+      BQWalkUI.setWalked([allDogs[0]], false); await sheetQueue;
+      BQWalkUI.setWalked([allDogs[0]], true); await sheetQueue;
       eq([n, sheetWriteState, toastText()], [1, 'off', '寫入甲 今天溜了'], '沒設定：');
-      hideToast();
+      BQWalkUI.hideToast();
     });
     await check('2026-10-17 溜了立刻變已溜，背景寫試算表，寫好提示條補「已寫進試算表」', async () => {
       phoneStore = fakeStorage(); walkRecords = freshWalkRecords(); sheetWriteState = 'unknown';
@@ -3272,18 +3273,18 @@ async function runSheetWriteTests() {
       fakeApi((name, body) => json({ ok: true, results: body.dogs.map(d => ({ id: d.id, name: d.name, status: 'restored' })) }));
       document.querySelector('#toast .toast-undo').click(); await sheetQueue;
       eq(walkedNow(allDogs[0]), false, '復原：');
-      hideToast();
+      BQWalkUI.hideToast();
     });
     await check('2026-10-17 網路不通就退回未溜，提示條有「再試一次」', async () => {
       fakeApi(() => { throw new TypeError('Failed to fetch'); });
-      setWalked([allDogs[0]], true); await sheetQueue;
+      BQWalkUI.setWalked([allDogs[0]], true); await sheetQueue;
       eq([walkedNow(allDogs[0]), toastText()], [false, '未全部登記成功；寫入甲 尚未確認登記結果（網路不通）'], '退回：');
       const retry = document.querySelector('#toast .toast-extra');
       eq([retry.hidden, retry.textContent], [false, '再試一次'], '再試一次：');
       fakeApi((name, body) => json({ ok: true, results: body.dogs.map(d => ({ ...d, status: 'written', prev: { walker: '' }, wrote: { walker: '志工我' } })) }));
       retry.click(); await sheetQueue;
       eq(walkedNow(allDogs[0]), true, '再試成功：');
-      hideToast();
+      BQWalkUI.hideToast();
     });
     // K 2026-10-16 正式站回報：按溜了馬上復原，試算表改回「志工隊」，但手機沒收到復原的回應（重新整理中斷），
     // 手機上「今天佳岑溜了」那筆一直留著，重新整理也還在「我溜過」。打開網頁拿到試算表現況時要核對
@@ -3335,7 +3336,7 @@ async function runSheetWriteTests() {
       await loadTodayWalks();
       eq(BQDates.localDateKey(effectiveWalkDate(allDogs[0])), '2026-10-02', '同步後以試算表為準：');
       // 抓不到：不顯示錯誤、不跳提示
-      hideToast();
+      BQWalkUI.hideToast();
       fakeApi(() => { throw new TypeError('Failed to fetch'); });
       await loadTodayWalks();
       eq(document.getElementById('toast')?.hidden !== false, true, '抓不到不提示：');
@@ -3347,8 +3348,8 @@ async function runSheetWriteTests() {
       dog.walkedDate = BQDates.parseYmd(BQDates.localDateKey(today));
       walkerNames = { [walkKey(dog)]: '志工我、同行人' };
       sheetWriteState = 'on';
-      eq([walkedNow(dog), sheetUndoable(dog), groupDateLabel(dog)], [true, false, '今天溜過']);
-      const card = document.createElement('div'); card.innerHTML = walkButton(dog);
+      eq([walkedNow(dog), BQWalkUI.sheetUndoable(dog), groupDateLabel(dog)], [true, false, '今天溜過']);
+      const card = document.createElement('div'); card.innerHTML = BQWalkUI.walkButton(dog);
       eq([card.querySelector('button').textContent, card.querySelector('button').disabled], ['已溜', true]);
       eq(walkerList(dog), ['志工我', '同行人']);
       if (!lastWalkSection(dog, today).includes('志工我')) throw new Error('詳細資訊缺自己名字');
@@ -3366,7 +3367,7 @@ async function runDeskTests() {
   const el = document.createElement('script');
   el.textContent = code;
   document.body.appendChild(el);
-  const saved = [allDogs, activeTab, searchQuery, sheetNotes, phoneStore, walkRecords, restMap, window.setWalked];
+  const saved = [allDogs, activeTab, searchQuery, sheetNotes, phoneStore, walkRecords, restMap, BQWalkUI.setWalked];
   const TODAY = new Date();
   const ago = n => new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() - n);
   const mk = (name, id, cage, days, note = '') => ({ name, id, cage, walkedDate: days == null ? null : ago(days), covered: false, note, intro: '', sex: '', formerIds: [] });
@@ -3419,10 +3420,10 @@ async function runDeskTests() {
         eq(cell(3).title, '', '沒溜：');
       } finally { [walkerCodeNames, walkerNames] = saved; deskWalkDays = null; deskWalkFirst = ''; deskView = 'sheet'; }
     });
-    await check('電腦版：勾兩隻按「今天 溜了」一次交給 setWalked（照舊只寫遛狗日期、誰遛的），勾的清掉', () => {
+    await check('電腦版：勾兩隻按「今天 溜了」一次交給 BQWalkUI.setWalked（照舊只寫遛狗日期、誰遛的），勾的清掉', () => {
       if (!deskOn()) return; // 測試的瀏覽器不夠寬就不測畫面
       const calls = [];
-      window.setWalked = (dogs, on) => calls.push([dogs.map(d => d.name), on]);
+      BQWalkUI.setWalked = (dogs, on) => calls.push([dogs.map(d => d.name), on]);
       activeTab = 'walk'; searchQuery = ''; render();
       const boxes = [...main.querySelectorAll('[data-desk-check]')];
       boxes[1].click(); boxes[2].click();
@@ -3485,7 +3486,7 @@ async function runDeskTests() {
         const row = main.querySelector('.df-row');
         eq([names(), row.classList.contains('done'), row.querySelector('.df-st.ok').textContent.includes('介紹已儲存'), row.querySelector('.df-intro-text').textContent], [before, true, true, '親人，好牽'], '補好了留在原位、打勾、看得到新介紹：');
         eq([deskFillIntro, main.querySelector('.df-done-n').textContent.includes('這次補好 1 隻'), names()[0]], [null, true, first], '上面寫這次補好幾隻：');
-        hideToast();
+        BQWalkUI.hideToast();
         // 換篩選才重排：補好的那隻不再算沒介紹
         main.querySelector('[data-desk-fill="all"]').click(); main.querySelector('[data-desk-fill="intro"]').click();
         eq(names().includes(first), false, '換篩選後才離開清單：');
@@ -3493,7 +3494,7 @@ async function runDeskTests() {
         [UPLOAD_URL, photoVersions] = saved2; restoreApi();
         for (const d of allDogs) delete introOverrides[d.id];
         allDogs[1].intro = ''; allDogs[2].intro = '';
-        deskFillIntro = null; deskFillDone.clear(); deskFillOrder = null; deskView = 'sheet'; deskFill = 'all'; saveWalkerName(''); hideToast(); render();
+        deskFillIntro = null; deskFillDone.clear(); deskFillOrder = null; deskView = 'sheet'; deskFill = 'all'; saveWalkerName(''); BQWalkUI.hideToast(); render();
       }
     });
     await check('補資料的照片：選了先在那一格預覽，按「上傳」才送；上傳中、已上傳都寫在那一列', async () => {
@@ -3518,7 +3519,7 @@ async function runDeskTests() {
         delete photoOverrides[dog.id];
       } finally {
         [UPLOAD_URL] = saved2; restoreApi();
-        deskFillPhoto = null; deskFillDone.clear(); deskFillOrder = null; deskView = 'sheet'; hideToast(); render();
+        deskFillPhoto = null; deskFillDone.clear(); deskFillOrder = null; deskView = 'sheet'; BQWalkUI.hideToast(); render();
       }
     });
     await check('電腦版全表（10-10 K）：同一欄再點一次反過來排、三角形跟著換；點整列開詳細資訊，勾選那一格不算', () => {
@@ -3545,14 +3546,14 @@ async function runDeskTests() {
         hideDetail(); history.replaceState(null, '');
       } finally { deskSort = 'days'; deskSortRev = false; render(); }
     });
-    await check('電腦版只靠 setWalked 登記，自己不送資料', () => {
+    await check('電腦版只靠 BQWalkUI.setWalked 登記，自己不送資料', () => {
       // 補資料（10-10）：照片 POST /photos、介紹 PUT /intro 都是送到 Worker（寫 R2／repo，不是試算表），其他地方不能再有寫入
       eq([...new Set([...code.matchAll(/BQApi\.(\w+)\(/g)].map(m => m[1]))].sort(), ['saveIntro', 'uploadPhoto', 'walks'], '只有補資料的照片、介紹兩個寫入，加上讀溜狗紀錄：');
       if (/\bfetch\(|method\s*:|sheet-write|\/walk\b|script\.google/.test(code)) throw new Error('js/desk.js 不應該自己送資料或寫試算表');
     });
   } finally {
     deskChecked.clear(); deskView = 'sheet';
-    [allDogs, activeTab, searchQuery, sheetNotes, phoneStore, walkRecords, restMap, window.setWalked] = saved;
+    [allDogs, activeTab, searchQuery, sheetNotes, phoneStore, walkRecords, restMap, BQWalkUI.setWalked] = saved;
     render();
   }
 }
@@ -3852,7 +3853,7 @@ async function runWalkerChipTests() {
       eq([bodies[0].action, bodies[0].walker], ['edit', '志工乙、志工丙、志工丁'], '送出：');
       eq(chips(), ['志工乙', '志工丙', '志工丁'], '名單：');
       eq(toastText(), '已加入 志工丁，已寫進試算表', '提示：');
-      hideToast();
+      BQWalkUI.hideToast();
     });
     await check('#141 別人先改過：不蓋掉，提示並換成最新名單', async () => {
       showDetail(allDogs[0]);
@@ -3862,10 +3863,10 @@ async function runWalkerChipTests() {
       eq(current, '志工乙、志工丙、志工丁、志工戊', '試算表沒被蓋：');
       eq(chips(), ['志工乙', '志工丙', '志工丁', '志工戊'], '最新名單：');
       if (!toastText().includes('沒有蓋掉')) throw new Error(`提示：${toastText()}`);
-      hideToast();
+      BQWalkUI.hideToast();
     });
   } finally {
-    hideDetail(); hideToast(); withSheet = null; renderWithSheet(); restoreApi();
+    hideDetail(); BQWalkUI.hideToast(); BQWalkUI.closeWithSheet(); restoreApi();
     [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL, walkerNames, walkerNameList, sheetWriteState, walkerNameMemory, walkerCodesMemory, myWalks, myWalksState] = saved;
     render();
   }
@@ -3898,7 +3899,7 @@ async function runPhotoBarTests() {
     });
   } finally {
     hideDetail();
-    restoreApi(); hideToast();
+    restoreApi(); BQWalkUI.hideToast();
     [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL] = saved;
     render();
   }
@@ -4151,7 +4152,7 @@ async function runFavSyncTests() {
   } finally {
     await favSyncQueue;
     [allDogs, phoneStore, walkerCodesMemory, favSyncMemory, UPLOAD_URL] = saved; restoreApi();
-    hideToast();
+    BQWalkUI.hideToast();
   }
 }
 
@@ -4512,9 +4513,9 @@ async function runCritique3Tests() {
       if (/var\(--green\s*,/.test(css)) throw new Error('還有 var(--green, …)');
     });
     await check('介面評估第三輪：提示條出現時內容底部多留空白，收起就拿掉', () => {
-      showToast('測試');
+      BQWalkUI.showToast('測試');
       if (!document.body.classList.contains('toast-on')) throw new Error('沒有 toast-on');
-      hideToast();
+      BQWalkUI.hideToast();
       if (document.body.classList.contains('toast-on')) throw new Error('收起後還有 toast-on');
     });
     await check('介面評估第三輪：沒網路時頁首和溜狗人會說沒網路', () => {
@@ -4522,15 +4523,15 @@ async function runCritique3Tests() {
       dataSyncedAt = new Date(2026, 9, 8, 9, 1);
       walkerNamesOffline = true; renderUpdatedLabel();
       eq(label.textContent, '沒網路・資料 10/8 09:01', '沒網路：');
-      if (!walkerChipsHtml(allDogs[1], [], new Date()).includes('讀不到（沒網路）')) throw new Error('溜狗人沒說沒網路');
+      if (!BQWalkUI.walkerChipsHtml(allDogs[1], [], new Date()).includes('讀不到（沒網路）')) throw new Error('溜狗人沒說沒網路');
       walkerNamesOffline = false; renderUpdatedLabel();
       eq(label.textContent, '資料更新 10/8 09:01', '有網路：');
-      eq(walkerChipsHtml(allDogs[1], [], new Date()), '<span class="lw-none">—</span>', '有網路沒名字：');
+      eq(BQWalkUI.walkerChipsHtml(allDogs[1], [], new Date()), '<span class="lw-none">—</span>', '有網路沒名字：');
     });
   } finally {
     [allDogs, groupMap, phoneStore, walkRecords, dataSyncedAt, walkerNamesOffline] = saved;
     renderUpdatedLabel();
-    hideToast();
+    BQWalkUI.hideToast();
   }
 }
 
@@ -4578,12 +4579,12 @@ async function runFix141Tests() {
       delete walkerNames['9890'];
     });
     await check('K 2026-10-05：整群明確送出已有「岑」的狗，仍沿用「岑」，其他狗送「佳岑」', async () => {
-      await queueSheetWrite([allDogs[0], allDogs[1]], true);
+      await BQWalkUI.queueSheetWrite([allDogs[0], allDogs[1]], true);
       await sheetQueue; await tick();
       eq(bodies.map(b => [b.action, b.walker, b.dogs.map(d => d.id)]), [['walk', '岑', ['9811']], ['walk', '佳岑', ['9812']]], '送出：');
       showDetail(allDogs[0]);
       eq([...document.querySelectorAll('.last-walk .who-chip')].map(c => c.firstChild.textContent), ['佳岑'], '顯示：');
-      hideDetail(); hideToast();
+      hideDetail(); BQWalkUI.hideToast();
     });
     await check('K 2026-10-05：只有自己一人、是這支手機登記的，名字旁有 ×，按了取消這次登記', async () => {
       showDetail(allDogs[1]);
@@ -4594,7 +4595,7 @@ async function runFix141Tests() {
       await sheetQueue; await tick();
       eq(bodies.map(b => [b.action, b.dogs.map(d => d.id)]), [['undo', ['9812']]], '送出：');
       eq(walkedNow(allDogs[1]), false, '今天已溜拿掉：');
-      hideDetail(); hideToast();
+      hideDetail(); BQWalkUI.hideToast();
     });
     await check('ADR 0016：別人唯一的登記、這支手機沒有復原證據，也有 ×；按了請 Worker 找上一次再撤銷', async () => {
       showDetail(allDogs[2]);
@@ -4605,10 +4606,10 @@ async function runFix141Tests() {
       await sheetQueue; await tick(); await tick();
       eq(bodies, [{ action: 'undo', walker: '佳岑', dogs: [{ id: '9813', name: '修正戊', wrote: { walker: '志工乙' } }] }], '送出：');
       eq(document.querySelector('.last-walk [data-who-undo]'), null, '撤銷後不是今天：');
-      hideDetail(); hideToast();
+      hideDetail(); BQWalkUI.hideToast();
     });
   } finally {
-    hideDetail(); hideToast(); restoreApi();
+    hideDetail(); BQWalkUI.hideToast(); restoreApi();
     [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL, walkerNames, walkerNameList, sheetWriteState, walkerNameMemory, walkerCodesMemory] = saved;
     render();
   }
@@ -4685,11 +4686,11 @@ async function runTourLayoutTests() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js', '../public/js/dates.js', '../public/js/api.js', '../public/js/store.js', '../public/js/walk-flow.js', '../public/js/detail-editor.js', '../public/js/tour.js', '../public/js/photo.js'].map(u => fetch(u).then(res => {
+Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js', '../public/js/dates.js', '../public/js/api.js', '../public/js/store.js', '../public/js/walk-flow.js', '../public/js/detail-editor.js', '../public/js/tour.js', '../public/js/photo.js', '../public/js/walk-ui.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs, tourJs, photoJs]) => {
+  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs, tourJs, photoJs, walkUiJs]) => {
     const dates = document.createElement('script'); dates.textContent = datesJs; document.body.appendChild(dates);
     API_JS = apiJs;
     const api = document.createElement('script'); api.textContent = apiJs; document.body.appendChild(api);
@@ -4705,6 +4706,7 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     APP_JS = js;
     TOUR_JS = tourJs;
     PHOTO_JS = photoJs;
+    WALK_UI_JS = walkUiJs;
     DOGS_JSON = JSON.parse(dogsJson);
     const dv = document.createElement('script'); dv.textContent = detailViewportJs; document.body.appendChild(dv);
     const wr = document.createElement('script'); wr.textContent = walkRegistrationJs; document.body.appendChild(wr);
@@ -4712,6 +4714,7 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     const de = document.createElement('script'); de.textContent = detailEditorJs; document.body.appendChild(de);
     const guide = document.createElement('script'); guide.textContent = tourJs; document.body.appendChild(guide);
     const photo = document.createElement('script'); photo.textContent = photoJs; document.body.appendChild(photo);
+    const walkUi = document.createElement('script'); walkUi.textContent = walkUiJs; document.body.appendChild(walkUi);
     const s = document.createElement('script');
     s.textContent = js;
     document.body.appendChild(s);

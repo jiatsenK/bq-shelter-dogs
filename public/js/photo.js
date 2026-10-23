@@ -76,7 +76,7 @@ const BQPhoto = (() => {
   async function openCropper(src, aspect = 'square') {
     const img = new Image();
     img.src = src;
-    try { await img.decode(); } catch (e) { showToast('這張照片讀不到，沒辦法裁切'); return null; }
+    try { await img.decode(); } catch (e) { BQWalkUI.showToast('這張照片讀不到，沒辦法裁切'); return null; }
     let el = document.getElementById('cropper');
     if (!el) {
       el = document.createElement('div');
@@ -223,7 +223,7 @@ const BQPhoto = (() => {
     const v = cropView;
     if (!v) return;
     const blob = await cropToBlob(v);
-    if (!blob) { showToast('裁好的照片太大，請再放大一點'); return; }
+    if (!blob) { BQWalkUI.showToast('裁好的照片太大，請再放大一點'); return; }
     closeCropper(blob);
   }
 
@@ -268,7 +268,7 @@ const BQPhoto = (() => {
     closeLightbox();
     const blob = await openCropper(src, 'square');
     if (!blob || detailDog !== dog) return;
-    if (photoUpload && photoUpload.phase === 'uploading') { showToast('上一張照片還在上傳，請稍等一下'); return; }
+    if (photoUpload && photoUpload.phase === 'uploading') { BQWalkUI.showToast('上一張照片還在上傳，請稍等一下'); return; }
     clearPhotoUpload();
     photoUpload = detailEdits.open(dog, { blob, url: URL.createObjectURL(blob) }, 'preview');
     renderDetail();
@@ -328,14 +328,14 @@ const BQPhoto = (() => {
 
   async function preparePhoto(dog, file) {
     if (photoUpload && photoUpload.phase === 'uploading') {
-      showToast('上一張照片還在上傳，請稍等一下');
+      BQWalkUI.showToast('上一張照片還在上傳，請稍等一下');
       return;
     }
     let blob;
     try {
       blob = await compressPhoto(file);
     } catch (e) {
-      showToast(e.message);
+      BQWalkUI.showToast(e.message);
       return;
     }
     if (detailDog !== dog) return; // 壓縮途中換看別隻或關掉了
@@ -369,7 +369,7 @@ const BQPhoto = (() => {
     if (error) {
       if (detailDog !== up.dog) { // 上傳途中關掉或換看別隻：用提示條告訴結果
         clearPhotoUpload();
-        showToast(`${up.dog.name} 的照片沒有上傳成功：${error}`);
+        BQWalkUI.showToast(`${up.dog.name} 的照片沒有上傳成功：${error}`);
         return;
       }
       detailEdits.fail(up, error);
@@ -381,7 +381,7 @@ const BQPhoto = (() => {
     photoOverrides[up.dog.id] = up.url;
     render();
     renderDetail();
-    showToast(`${up.dog.name} 的照片已更新（其他志工重新整理就會看到）`);
+    BQWalkUI.showToast(`${up.dog.name} 的照片已更新（其他志工重新整理就會看到）`);
   }
 
   // 介面評估第三輪（K 2026-10-08）：上傳失敗的說明可能在底部按鈕列後面，捲到看得到的地方

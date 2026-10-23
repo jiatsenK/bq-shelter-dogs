@@ -82,7 +82,7 @@ function refreshGroupStage() {
 function groupTile(dog, index, rear) {
   const blocked = groupBlocked(dog);
   const excluded = groupExcluded.has(dog.name);
-  return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}${searchQuery.trim() && !matchesSearch(dog, searchQuery.trim()) ? ' miss' : ''}" data-gw-dog="${index}" ${rear ? 'tabindex="-1"' : ''} ${!rear && groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}"><span class="gw-tile"><span class="gw-cage">${esc(dog.cage || '待確認')}</span><span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><strong>${esc(dog.name)}</strong></span>${dog.unavailable ? '' : walkSyncHtml(dog)}</button>`;
+  return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}${searchQuery.trim() && !matchesSearch(dog, searchQuery.trim()) ? ' miss' : ''}" data-gw-dog="${index}" ${rear ? 'tabindex="-1"' : ''} ${!rear && groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}"><span class="gw-tile"><span class="gw-cage">${esc(dog.cage || '待確認')}</span><span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><strong>${esc(dog.name)}</strong></span>${dog.unavailable ? '' : BQWalkUI.walkSyncHtml(dog)}</button>`;
 }
 function groupStageHtml() {
   const identity = loadWalkerName();
@@ -104,7 +104,7 @@ function groupStageHtml() {
   // 比照溜狗表的「溜了／已溜」：這群可登記的狗今天都溜了，按鈕就變「已溜」，再按一次復原（只撤這支手機寫的）
   const walkable = dogs.filter(d => !groupBlocked(d));
   const done = !groupExcept && walkable.length > 0 && walkable.every(d => walkedNow(d));
-  const undoable = done ? walkable.filter(d => sheetUndoable(d)) : [];
+  const undoable = done ? walkable.filter(d => BQWalkUI.sheetUndoable(d)) : [];
   const walkBtn = done
     ? `<button type="button" id="gwWalk" class="done" data-gw-action="undo" aria-label="這群今天已溜，按一下取消" ${!undoable.length || groupBusy ? 'disabled' : ''}>${icon('tick')}${groupBusy ? '處理中…' : `已溜 · ${walkable.length} 隻`}</button>`
     : `<button type="button" id="gwWalk" ${!selected.length || groupBusy ? 'disabled' : ''}>${groupBusy ? '登記中…' : groupExcept ? `登記其餘 ${selected.length} 隻` : `整群溜了 · ${selected.length} 隻`}</button><button type="button" data-gw-action="except" aria-pressed="${groupExcept}">${groupExcept ? '取消' : '有狗沒溜'}</button>`;
@@ -150,7 +150,7 @@ function changeGroup(step) {
 async function registerGroupWalk(retry = false) {
   if (groupBusy) return;
   if (!loadWalkerName()) { groupFeedback = '請先在「我溜過」選好你的名字再登記'; render(); return; }
-  if (!sheetWillWrite()) { groupFeedback = '目前無法寫入試算表，請稍後再試；尚未登記'; render(); return; }
+  if (!BQWalkUI.sheetWillWrite()) { groupFeedback = '目前無法寫入試算表，請稍後再試；尚未登記'; render(); return; }
   const identity = loadWalkerName();
   const before = JSON.stringify(currentGroup());
   const columnBefore = groupColumn;
@@ -174,7 +174,7 @@ async function registerGroupWalk(retry = false) {
     groupFeedback = '待重試的狗目前無法登記，請確認狗群狀態'; render(); return;
   }
   const dogs = retryDogs || currentDogs.filter(d => !groupExcluded.has(d.name) && !groupBlocked(d));
-  if (!dogs.length || dogs.some(walkPendingNow)) { render(); return; }
+  if (!dogs.length || dogs.some(BQWalkUI.walkPendingNow)) { render(); return; }
   const column = groupColumn;
   groupBusy = true;
   const pending = walkRegistration.register(dogs);
@@ -184,7 +184,7 @@ async function registerGroupWalk(retry = false) {
     const result = await pending;
     const successful = [...new Set([...(last?.successful || []), ...result.successful])];
     groupRegistrations.set(column, { result, successful });
-    groupFeedback = registrationText({ ...result, successful });
+    groupFeedback = BQWalkUI.registrationText({ ...result, successful });
     if (result.successful.length === result.rows.length && !result.off) { groupExcept = false; groupExcluded.clear(); }
   } catch (e) { groupFeedback = '尚未確認登記結果，請重試'; }
   finally { groupBusy = false; render(); document.getElementById('gwWalk')?.focus({ preventScroll: true }); }
@@ -192,10 +192,10 @@ async function registerGroupWalk(retry = false) {
 // 誤觸「整群溜了」：撤銷這一群今天由這支手機寫進試算表的紀錄（結果以試算表回應為準）
 async function undoGroupWalk() {
   if (groupBusy) return;
-  const dogs = groupDogs(currentGroup()).filter(d => !groupBlocked(d) && sheetUndoable(d));
+  const dogs = groupDogs(currentGroup()).filter(d => !groupBlocked(d) && BQWalkUI.sheetUndoable(d));
   if (!dogs.length) return;
   groupBusy = true; groupFeedback = ''; render();
-  try { groupFeedback = await undoSheetWalks(dogs); groupRegistrations.delete(groupColumn); }
+  try { groupFeedback = await BQWalkUI.undoSheetWalks(dogs); groupRegistrations.delete(groupColumn); }
   catch (e) { groupFeedback = '復原失敗，請重試；尚未確認復原'; }
   finally { groupBusy = false; render(); document.getElementById('gwWalk')?.focus({ preventScroll: true }); }
 }
@@ -246,7 +246,7 @@ groupMain.addEventListener('click', e => {
   const remove = e.target.closest('[data-gw-remove]');
   if (remove && confirm(`把「${remove.dataset.gwRemove}」移出「${currentGroup().label}」？`)) return writeGroup({ op: 'remove', column: groupColumn, name: remove.dataset.gwRemove });
   const action = e.target.closest('[data-gw-action]')?.dataset.gwAction;
-  if (action === 'companions') return openWithSheet(groupRegistrations.get(groupColumn)?.successful || []);
+  if (action === 'companions') return BQWalkUI.openWithSheet(groupRegistrations.get(groupColumn)?.successful || []);
   if (action === 'retry-walk') return registerGroupWalk(true);
   if (action === 'undo') return undoGroupWalk();
   if (e.target.closest('#gwWalk')) return registerGroupWalk();

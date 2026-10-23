@@ -706,7 +706,7 @@ whereBackdropEl().addEventListener('click', e => {
   const walk = e.target.closest('[data-where-walk]');
   if (walk) {
     whereClose();
-    setWalked([dog], walk.dataset.whereWalk === 'add');
+    BQWalkUI.setWalked([dog], walk.dataset.whereWalk === 'add');
   }
 });
 document.addEventListener('keydown', e => {
