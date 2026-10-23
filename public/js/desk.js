@@ -1,7 +1,7 @@
 // 電腦版溜狗表（K 2026-10-10，選「簡報＋全表」，全表可切「最近 30 天」）：寬螢幕（≥1100px）時溜狗表改成
 // 上面今天的簡報（紅黃綠各幾隻、各區狀況），下面像試算表的全表（勾好幾隻一次登記溜了），右邊異動紀錄和休養中。
 // 志工原本在試算表看整體狀況，電腦版要一樣一眼看完；手機照舊是 js/app.js 的狗卡／列表。
-// 登記一樣走 setWalked（只寫「遛狗日期」「誰遛的」兩欄），這裡不另外寫試算表。
+// 登記一樣走 BQWalkUI.setWalked（只寫「遛狗日期」「誰遛的」兩欄），這裡不另外寫試算表。
 
 const DESK_MEDIA = typeof matchMedia === 'function' ? matchMedia('(min-width: 1100px)') : null;
 function deskOn() {
@@ -134,7 +134,7 @@ function deskRowHtml(dog, today, days) {
   const flag = specialFlag(dog.note);
   const rest = s.kind === 'rest';
   const done = walkedNow(dog, today);
-  const pending = walkPendingNow(dog);
+  const pending = BQWalkUI.walkPendingNow(dog);
   const tag = s.kind === 'rest' ? `<span class="dr-day rest">休養</span>`
     : s.kind === 'covered' ? `<span class="dr-day sage">固定</span>`
     : s.kind === 'dated' ? (s.days < 0 ? '<span class="dr-day none">？</span>' : `<span class="dr-day ${s.level}">${s.days === 0 ? '今天' : `<b class="num">${s.days}</b>天`}</span>`)
@@ -176,7 +176,7 @@ function deskTableHtml(list, today) {
   const days = deskView === 'days30' ? deskDays(today) : null;
   if (days && !deskWalkDays) deskLoadWalks();
   const th = (k, t, cls) => `<th class="${cls}${deskSort === k ? ` sorted ${deskSortDir() === 'ascending' ? 'asc' : 'desc'}` : ''}" aria-sort="${deskSort === k ? deskSortDir() : 'none'}"><button type="button" data-desk-sort="${k}" title="${deskSort === k ? '再點一次反過來排' : `照${t}排`}">${t}</button></th>`;
-  const eligible = list.filter(d => walkKey(d) && !walkedNow(d, today) && !walkPendingNow(d) && computeStatus(d, today).kind !== 'rest');
+  const eligible = list.filter(d => walkKey(d) && !walkedNow(d, today) && !BQWalkUI.walkPendingNow(d) && computeStatus(d, today).kind !== 'rest');
   const allOn = eligible.length && eligible.every(d => deskChecked.has(walkKey(d)));
   const dayHead = days ? days.map(d => `<th class="dr-d${BQDates.localDateKey(d) === BQDates.localDateKey(today) ? ' today' : ''}${d.getDay() % 6 === 0 ? ' we' : ''}" scope="col"><span class="num">${d.getDate()}</span><span>${'日一二三四五六'[d.getDay()]}</span></th>`).join('') : '';
   return `<div class="desk-sheet${days ? ' days30' : ''}">
@@ -330,9 +330,9 @@ function deskFillPickPhoto(dog) {
   input.click();
 }
 async function deskFillPreparePhoto(dog, file) {
-  if (deskFillPhoto && deskFillPhoto.phase === 'uploading') { showToast('上一張照片還在上傳，請稍等一下'); return; }
+  if (deskFillPhoto && deskFillPhoto.phase === 'uploading') { BQWalkUI.showToast('上一張照片還在上傳，請稍等一下'); return; }
   let blob;
-  try { blob = await BQPhoto.compress(file); } catch (e) { showToast(e.message); return; }
+  try { blob = await BQPhoto.compress(file); } catch (e) { BQWalkUI.showToast(e.message); return; }
   if (deskFillPhoto) URL.revokeObjectURL(deskFillPhoto.url);
   deskFillPhoto = { key: walkKey(dog), blob, url: URL.createObjectURL(blob), phase: 'preview', error: '' };
   render();
@@ -355,11 +355,11 @@ async function deskFillUploadPhoto() {
   deskFillPhoto = null;
   deskFillDone.set(p.key, { ...(deskFillDone.get(p.key) || {}), photo: deskClock() });
   render();
-  showToast(`${dog.name} 的照片已上傳`);
+  BQWalkUI.showToast(`${dog.name} 的照片已上傳`);
 }
 function deskFillOpenIntro(dog) {
   if (!dog || !dog.id) return;
-  if (deskFillIntro && deskFillIntro.phase === 'saving') { showToast('上一筆介紹還在儲存，請稍等一下'); return; }
+  if (deskFillIntro && deskFillIntro.phase === 'saving') { BQWalkUI.showToast('上一筆介紹還在儲存，請稍等一下'); return; }
   deskFillIntro = { key: walkKey(dog), text: introOf(dog) || '', phase: 'edit', error: '' };
   render();
   const box = document.getElementById('dfIntroText');
@@ -391,7 +391,7 @@ async function deskFillSaveIntro() {
   render();
   const back = document.querySelector(`#main [data-fill-intro="${allDogs.indexOf(dog)}"]`);
   if (back) back.focus({ preventScroll: true });
-  showToast(`${dog.name} 的介紹已儲存`);
+  BQWalkUI.showToast(`${dog.name} 的介紹已儲存`);
 }
 
 function deskSideHtml(today) {
@@ -427,7 +427,7 @@ function deskWalkHtml(today, query, walkList) {
   // 勾了之後狗不見了（搜尋、資料更新、已經溜了）就拿掉
   for (const k of [...deskChecked]) {
     const d = allDogs.find(x => walkKey(x) === k);
-    if (!d || walkedNow(d, today) || walkPendingNow(d)) deskChecked.delete(k);
+    if (!d || walkedNow(d, today) || BQWalkUI.walkPendingNow(d)) deskChecked.delete(k);
   }
   const list = deskSorted(deskZone === 'all' ? walkList : walkList.filter(d => deskZoneOf(d) === deskZone));
   const empty = !list.length ? `<div class="status-msg">${query ? `找不到「${esc(query)}」` : '這一區沒有狗'}</div>` : '';
@@ -506,7 +506,7 @@ if (typeof document !== 'undefined' && document.getElementById('main')) {
     if (t.closest('[data-desk-go]')) {
       const dogs = [...deskChecked].map(k => allDogs.find(d => walkKey(d) === k)).filter(Boolean);
       deskChecked.clear();
-      if (dogs.length) setWalked(dogs, true);
+      if (dogs.length) BQWalkUI.setWalked(dogs, true);
       render();
     }
   });

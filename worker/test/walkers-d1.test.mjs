@@ -1,0 +1,38 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import worker from '../src/index.js';
+import { setup, post, request, day } from './walk-fixture.mjs';
+
+const SITE = 'https://bq-shelter-dogs.<子網域>.workers.dev';
+const getWalkers = env => worker.fetch(new Request(`${SITE}/api/walkers`, { headers: { Origin: SITE } }), env).then(async r => ({ status: r.status, body: await r.json() }));
+
+// #519：/walkers 從 D1（主清單、今日溜狗狀態、志工代號）讀，不連 Google
+test('#519 GET /walkers 從 D1 回每隻狗的誰遛的、日期與名字；最近出現的名字在前', async () => {
+  const env = await setup(); worker.testing.resetState();
+  const { DB } = env;
+  const code = async name => (await DB.prepare('SELECT code FROM v3_identity_names WHERE name=?').bind(name).first()).code;
+  await DB.batch([
+    DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('d2','甜甜'),('d3','新來的')"),
+    DB.prepare("INSERT INTO v3_dog_numbers VALUES('9002','d2')"),
+    DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(2,'d2','9002','甜甜','2026-09-01','x'),(3,'d3','','新來的',NULL,'x')"),
+    DB.prepare('INSERT INTO v3_sheet_main_walkers VALUES(2,0,?),(2,1,?)').bind(await code('丙'), await code('甲')),
+  ]);
+  const fetched = [];
+  globalThis.fetch = async url => { fetched.push(String(url)); throw new Error('不該連網路'); };
+  assert.equal((await post(env, request('walkers-0001', '乙'))).status, 200);
+  worker.testing.resetState();
+
+  const { status, body } = await getWalkers(env);
+  assert.equal(status, 200);
+  assert.deepEqual(body.walkers, { 9001: '乙', 9002: '丙、甲', '名:新來的': '' });
+  assert.deepEqual(body.dates, { 9001: day(), 9002: '2026-09-01', '名:新來的': '' });
+  assert.deepEqual(body.names, ['乙', '丙', '甲'], '今天遛的在前，同一天照表上順序');
+  assert.ok(Date.parse(body.readAt));
+  assert.equal(body.codes[await code('乙')], '乙');
+  assert.ok(!fetched.some(u => u.includes('docs.google.com')), '不讀試算表 gviz');
+});
+
+test('#519 GET /walkers：沒接資料庫回 off', async () => {
+  worker.testing.resetState();
+  assert.equal((await getWalkers({ SHEET_ID: 'abc' })).body.code, 'off');
+});

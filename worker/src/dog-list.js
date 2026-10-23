@@ -9,6 +9,7 @@ import { walkerCode, logEdit } from './editlog.js';
 import { judgeDeparture, nameKey } from './departure-rules.js';
 import { taiwanYmd } from './sync-plan.js';
 import { SYNCED_AT_KEY } from './compact.js';
+import { linkIdentityName } from './identity.js';
 
 export const DOG_LIST_ROWS_MAX = 10; // 每列最多 3–4 次 D1 往返，守住每次呼叫 50 次查詢
 const FP_KEY = 'dog_list_fp', EXTRA_KEY = 'dog_list_extra';
@@ -31,10 +32,20 @@ const findMain = (list, dog) => list.find(m => (dog.id ? m.number === dog.id : m
 const newId = () => [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
 
 // 「誰遛的」→ 代號（同 scripts/sync-sheet.mjs 的 walkerCodes）；是不是 K 遛的照 MY_NAME（沒設就都不是）
-async function walkersOf(walker, env) {
+// 代號是名字單向算出來的：D1 還沒有對照的新名字順便記進志工名單，/walkers 才換得回名字（#519，2026-10-24 實測「123」）
+async function walkersOf(walker, env, db) {
   const names = splitNames(walker);
   const key = env && env.WALKER_KEY ? String(env.WALKER_KEY) : '';
-  const codes = key ? [...new Set((await Promise.all(names.map(n => walkerCode(n, key)))).filter(Boolean))] : [];
+  const pairs = key ? await Promise.all(names.map(async n => [n, await walkerCode(n, key)])) : [];
+  const codes = [...new Set(pairs.map(p => p[1]).filter(Boolean))];
+  if (db && codes.length) {
+    const known = new Set((await db.prepare(`SELECT code FROM v3_identity_names WHERE code IN (${codes.map(() => '?').join(',')})`).bind(...codes).all()).results.map(r => r.code));
+    for (const [n, c] of pairs) {
+      if (!c || known.has(c)) continue;
+      known.add(c);
+      try { await linkIdentityName(db, n, c); } catch (e) { console.error('v3_identity_names', e); } // 同名多個身分（409）不猜，只是換不回名字
+    }
+  }
   const mine = splitNames(env && env.MY_NAME).map(nameKey);
   return { codes, keyed: !!key, mine: names.some(n => mine.includes(nameKey(n))) };
 }
@@ -56,7 +67,7 @@ async function applyMain(db, row, list, env, fp) {
   // 犬隻資料列一定有犬名和籠位；表尾提示文字不算狗（同 parseMainList）
   if (!dog.name || !cage || dog.name === '犬名') return false;
   const date = YMD.test(text(row.date)) ? text(row.date) : null;
-  const { codes, keyed, mine } = await walkersOf(row.walker, env);
+  const { codes, keyed, mine } = await walkersOf(row.walker, env, db);
   const covered = text(row.walker) ? 1 : 0;
   let old = findMain(list, dog);
   const out = [];
@@ -74,7 +85,7 @@ async function applyMain(db, row, list, env, fp) {
   if (old) {
     const oldCodes = (await db.prepare('SELECT walker_code FROM v3_sheet_main_walkers WHERE row_index=? ORDER BY position').bind(old.row_index).all()).results.map(r => r.walker_code);
     const codesChanged = keyed && !sameList(oldCodes, codes);
-    const next = { name: dog.name, cage, note, walked_date: date, covered, my_walked: mine ? 1 : 0 };
+    const next = { name: dog.name, cage, note, walked_date: date, covered, my_walked: mine ? 1 : 0, walker: text(row.walker) };
     if (mine && date && !(old.my_walked_date >= date)) next.my_walked_date = date;
     const changed = Object.keys(next).filter(c => next[c] !== old[c]);
     if (changed.length) out.push(db.prepare(`UPDATE v3_sheet_main SET ${changed.map(c => `${c}=?`).join(',')} WHERE row_index=?`).bind(...changed.map(c => next[c]), old.row_index));
@@ -83,8 +94,10 @@ async function applyMain(db, row, list, env, fp) {
       out.push(db.prepare('DELETE FROM v3_sheet_main_walkers WHERE row_index=?').bind(old.row_index));
       codes.forEach((code, i) => out.push(db.prepare('INSERT INTO v3_sheet_main_walkers VALUES(?,?,?)').bind(old.row_index, i, code)));
     }
-    // 日期變新、或同一天換人才記一筆；改早、清空不記也不刪（同 newWalks）
+    // 日期變新、或同一天換人才記一筆；清空不記也不刪（同 newWalks）
+    // 改回較早的日子（K 2026-10-24，例如 Ctrl+Z）：那天照表上名單重寫，表上不再寫的較新那天刪掉
     if (date && (!old.walked_date || date > old.walked_date || (date === old.walked_date && codesChanged))) out.push(...walkDay(db, old.dog_id, date, dog, codes));
+    else if (date && date < old.walked_date) out.push(db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(old.dog_id, old.walked_date), ...walkDay(db, old.dog_id, date, dog, codes));
     Object.assign(old, next);
   } else {
     let dogId = dog.id
@@ -102,9 +115,9 @@ async function applyMain(db, row, list, env, fp) {
       if (dog.id) out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
     } else out.push(db.prepare('UPDATE v3_dogs SET name=? WHERE dog_id=? AND name<>?').bind(dog.name, dogId, dog.name));
     const rowIndex = Math.max(-1, ...list.map(m => m.row_index)) + 1;
-    out.push(db.prepare(`INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note,covered,walked_date,my_walked,my_walked_date,synced_at,sex)
-      VALUES(?,?,?,?,?,?,?,?,?,?,'',COALESCE((SELECT sex FROM v3_dogs WHERE dog_id=?),''))`)
-      .bind(rowIndex, dogId, dog.id, dog.name, cage, note, covered, date, mine ? 1 : 0, mine ? date : null, dogId));
+    out.push(db.prepare(`INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note,covered,walked_date,my_walked,my_walked_date,synced_at,sex,walker)
+      VALUES(?,?,?,?,?,?,?,?,?,?,'',COALESCE((SELECT sex FROM v3_dogs WHERE dog_id=?),''),?)`)
+      .bind(rowIndex, dogId, dog.id, dog.name, cage, note, covered, date, mine ? 1 : 0, mine ? date : null, dogId, text(row.walker)));
     out.push(db.prepare('INSERT INTO v3_sheet_former_numbers SELECT ?,ROW_NUMBER() OVER (ORDER BY number)-1,number FROM v3_dog_numbers WHERE dog_id=? AND number<>?').bind(rowIndex, dogId, dog.id));
     codes.forEach((code, i) => out.push(db.prepare('INSERT INTO v3_sheet_main_walkers VALUES(?,?,?)').bind(rowIndex, i, code)));
     // 又回到主清單（例：誤移、退養回來）不算離所；換了新編號回來的，舊離所註明用哪個編號回所
@@ -208,7 +221,7 @@ export async function applyDogListRows(db, rows, env, now = Date.now()) {
   const fp = await readFp(db);
   const before = JSON.stringify(fp);
   // 主清單約 300 列，每批讀一次換來逐列不必各查一次（每次呼叫 50 次查詢上限）
-  const list = (await db.prepare('SELECT row_index,dog_id,number,name,cage,note,walked_date,covered,my_walked,my_walked_date FROM v3_sheet_main').all()).results;
+  const list = (await db.prepare('SELECT row_index,dog_id,number,name,cage,note,walked_date,covered,my_walked,my_walked_date,walker FROM v3_sheet_main').all()).results;
   const results = [];
   for (const row of rows) {
     const key = row && unitKey(row);
@@ -237,7 +250,9 @@ export async function applyDogListRows(db, rows, env, now = Date.now()) {
 // 保險掃描：fingerprints { 單位: 指紋 }。回 want（要 GAS 送的）、extra（D1 有、試算表沒有，只列出來）
 export async function scanDogList(db, fingerprints, now = Date.now()) {
   const fp = await readFp(db);
-  const want = Object.keys(fingerprints).filter(k => fp[k] !== fingerprints[k]);
+  // #519 補填「誰遛的」原文：主清單 walker 還是 NULL 的狗指紋一樣也要，補好就不再要
+  const unfilled = new Set((await db.prepare("SELECT number, name FROM v3_sheet_main WHERE walker IS NULL").all()).results.map(r => `main:${r.number || `名:${r.name}`}`));
+  const want = Object.keys(fingerprints).filter(k => fp[k] !== fingerprints[k] || unfilled.has(k));
   const extra = Object.keys(fp).filter(k => !(k in fingerprints)).sort();
   let prev = [];
   try { prev = JSON.parse(await state(db, EXTRA_KEY) || '{}').keys || []; } catch { /* 讀不懂就重記 */ }

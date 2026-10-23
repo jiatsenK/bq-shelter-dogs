@@ -1,4 +1,4 @@
-// 讀試算表（gviz）共用的部分：Worker（GET /walkers）和同步（scripts/sync-sheet.mjs）都 import 這一份，
+// 讀試算表（gviz）共用的部分：同步（scripts/sync-sheet.mjs）用；Worker 只用 splitNames（#519 起 /walkers 改讀 D1），
 // 欄位名稱、分隔符號只改這裡。只有純函式，不連網路。
 //
 // 主清單要分兩次讀：gviz 會照多數決猜欄位型別，表頭文字在數字欄會變空的，

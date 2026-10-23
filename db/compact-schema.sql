@@ -129,7 +129,8 @@ CREATE TABLE IF NOT EXISTS v3_sheet_main (
   synced_at TEXT NOT NULL,
   version INTEGER NOT NULL DEFAULT 1,
   sex TEXT NOT NULL DEFAULT '',
-  intro TEXT NOT NULL DEFAULT ''
+  intro TEXT NOT NULL DEFAULT '',
+  walker TEXT -- 試算表「誰遛的」原文（#519）；NULL＝還沒補填，保險掃描會要這隻
 );
 CREATE INDEX IF NOT EXISTS v3_sheet_main_number ON v3_sheet_main(number);
 CREATE INDEX IF NOT EXISTS v3_sheet_main_name ON v3_sheet_main(name) WHERE number='';
