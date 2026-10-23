@@ -30,9 +30,9 @@ function groupDateLabel(dog, now = new Date()) {
   if (groupBlocked(dog)) return groupBlocked(dog);
   const date = effectiveWalkDate(dog, now);
   if (!date) return '沒有溜狗紀錄';
-  const ymd = localDateKey(date);
+  const ymd = BQDates.localDateKey(date);
   // 用台灣日曆日計算，避免不同時區與日光節約差異。
-  const taiwan = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei', year: 'numeric', month: '2-digit', day: '2-digit' }).format(now);
+  const taiwan = BQDates.taipeiToday(now);
   const day = Math.round((Date.parse(taiwan) - Date.parse(ymd)) / 86400000);
   return day === 0 ? '今天溜過' : day === 1 ? '昨天溜過' : day === 2 ? '前天溜過' : day > 2 ? `${ymd.replaceAll('-', '/')} 溜過` : '日期無法確認';
 }

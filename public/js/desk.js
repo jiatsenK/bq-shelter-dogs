@@ -95,7 +95,7 @@ function deskDays(today) {
 function deskDayWalk(dog, key, today) {
   const names = [];
   let on = false;
-  const sheetDay = (localDateKey(today) === key && walkedNow(dog, today)) || (() => { const d = effectiveWalkDate(dog, today); return !!(d && localDateKey(d) === key); })();
+  const sheetDay = (BQDates.localDateKey(today) === key && walkedNow(dog, today)) || (() => { const d = effectiveWalkDate(dog, today); return !!(d && BQDates.localDateKey(d) === key); })();
   if (sheetDay) { on = true; names.push(...walkerList(dog, today)); }
   const codes = deskWalkDays && deskWalkDays.get(walkKey(dog)) && deskWalkDays.get(walkKey(dog)).get(key);
   if (codes) {
@@ -151,13 +151,13 @@ function deskRowHtml(dog, today, days) {
   const note = dog.note ? (flag ? highlightNote(dog.note, flag.terms) : esc(dog.note)) : '';
   const cells = days
     ? days.map(d => {
-      const k = localDateKey(d);
+      const k = BQDates.localDateKey(d);
       const { on, names } = deskDayWalk(dog, k, today);
       const pre = !on && deskWalkFirst && k < deskWalkFirst;
       // 格子裡寫第一個人名字的第一個字，好幾個人右上角加一點；滑過去看全名
       const tip = on ? `${d.getMonth() + 1}/${d.getDate()} ${names.length ? names.join('、') : '有溜'}` : '';
       const mark = names.length ? esc([...names[0]][0]) : '';
-      return `<td class="dr-d${k === localDateKey(today) ? ' today' : ''}"${tip ? ` title="${esc(tip)}"` : ''}><i class="${on ? 'on' : pre ? 'pre' : ''}${names.length > 1 ? ' multi' : ''}">${mark}</i></td>`;
+      return `<td class="dr-d${k === BQDates.localDateKey(today) ? ' today' : ''}"${tip ? ` title="${esc(tip)}"` : ''}><i class="${on ? 'on' : pre ? 'pre' : ''}${names.length > 1 ? ' multi' : ''}">${mark}</i></td>`;
     }).join('')
     : '';
   return `<tr class="dr${deskChecked.has(key) ? ' checked' : ''}${flag ? ' flagged' : ''}" data-desk-dog="${idx}">
@@ -178,7 +178,7 @@ function deskTableHtml(list, today) {
   const th = (k, t, cls) => `<th class="${cls}${deskSort === k ? ` sorted ${deskSortDir() === 'ascending' ? 'asc' : 'desc'}` : ''}" aria-sort="${deskSort === k ? deskSortDir() : 'none'}"><button type="button" data-desk-sort="${k}" title="${deskSort === k ? '再點一次反過來排' : `照${t}排`}">${t}</button></th>`;
   const eligible = list.filter(d => walkKey(d) && !walkedNow(d, today) && !walkPendingNow(d) && computeStatus(d, today).kind !== 'rest');
   const allOn = eligible.length && eligible.every(d => deskChecked.has(walkKey(d)));
-  const dayHead = days ? days.map(d => `<th class="dr-d${localDateKey(d) === localDateKey(today) ? ' today' : ''}${d.getDay() % 6 === 0 ? ' we' : ''}" scope="col"><span class="num">${d.getDate()}</span><span>${'日一二三四五六'[d.getDay()]}</span></th>`).join('') : '';
+  const dayHead = days ? days.map(d => `<th class="dr-d${BQDates.localDateKey(d) === BQDates.localDateKey(today) ? ' today' : ''}${d.getDay() % 6 === 0 ? ' we' : ''}" scope="col"><span class="num">${d.getDate()}</span><span>${'日一二三四五六'[d.getDay()]}</span></th>`).join('') : '';
   return `<div class="desk-sheet${days ? ' days30' : ''}">
     <table class="desk-table">
       <thead><tr>

@@ -58,19 +58,6 @@ let walkerSetup = null; // 正在設定我是誰（#96）：{ text, phase: 'edit
 let myWalksState = 'loading'; // loading／ready／error
 let loadState = 'loading'; // loading：還在讀 dogs.json；error：讀取失敗；ready：資料好了
 
-// 把年月日組成日期；不合理的日期（例：2/30）回傳 null
-function makeDate(y, m, d) {
-  const date = new Date(y, m - 1, d);
-  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return null;
-  return date;
-}
-
-// dogs.json 的日期是本地日期 YYYY-MM-DD（見 scripts/sync-sheet.mjs 的 formatDate）；空的或不合理的回 null
-function parseYmd(text) {
-  const m = String(text || '').match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
-  return m ? makeDate(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)) : null;
-}
-
 // 把 dogs.json 整理成畫面用的資料。狗清單不對就丟錯（整個內容區顯示失敗）；
 // 可以一起溜（groups）缺了只回 null，跟以前「常遛狗群」讀不到一樣只少這一塊
 function parseDogsData(data) {
@@ -81,7 +68,7 @@ function parseDogsData(data) {
     id: text(d.id),
     ...(d.dogId ? { dogId: text(d.dogId) } : {}),
     name: text(d.name),
-    walkedDate: parseYmd(d.walkedDate),
+    walkedDate: BQDates.parseYmd(d.walkedDate),
     // #460：主清單「誰遛的」代號，D1 模式未接管的狗用它換名字
     walkers: Array.isArray(d.walkers) ? d.walkers.map(text).filter(Boolean) : [],
     // #399：API 的 covered 只來自網站設定，不再由志工名字推定。
@@ -180,7 +167,7 @@ function parseMyWalks(data, codes = loadMyCodes()) {
   data.walks.forEach((w, i) => {
     if (!w || !Array.isArray(w.walkers) || !w.walkers.some(c => codes.includes(c))) return;
     if (!data.walks[lastOf.get(`${text(w.id) || text(w.name)}|${w.date}`)].walkers.some(c => codes.includes(c))) return;
-    const date = parseYmd(w.date);
+    const date = BQDates.parseYmd(w.date);
     const id = text(w.id), name = text(w.name);
     if (!date || (!id && !name)) return;
     const key = `${id || name}|${w.date}`;
@@ -257,12 +244,12 @@ async function loadMyWalks() {
 // 分類上的數字；還沒讀好或還沒設定我是誰時不顯示（null）
 function currentMyWalks(today = new Date()) {
   const list = [...myWalks];
-  const date = localDateKey(today);
+  const date = BQDates.localDateKey(today);
   for (const row of walkRegistration.today(allDogs, date)) {
     const dog = row.dog;
     const at = list.findIndex(w => (dog.id ? w.id === dog.id : !w.id && w.name === dog.name) && w.ymd === date);
     if (at !== -1) list.splice(at, 1);
-    if (row.mine) list.unshift({ id: dog.id || '', name: dog.name, date: parseYmd(date), ymd: date });
+    if (row.mine) list.unshift({ id: dog.id || '', name: dog.name, date: BQDates.parseYmd(date), ymd: date });
   }
   return list.sort((a, b) => b.date - a.date);
 }
@@ -519,7 +506,7 @@ let mineMonth = ''; // 我溜過月曆正在看的月份（YYYY-MM）；空的�
 let mineDay = ''; // 月曆上選的那一天（YYYY-MM-DD）；空的＝那個月最近一次到所
 function myWalksHtml(today, query) {
   const visibleWalks = currentMyWalks(today);
-  const confirmedToday = SITE.d1WalkAccept ? walkRegistration.today(allDogs, localDateKey(today)).some(row => row.mine) : Object.values(loadSheetWrites(today)).some(item => item.current?.date === localDateKey(today) && splitWalkers(item.current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())));
+  const confirmedToday = SITE.d1WalkAccept ? walkRegistration.today(allDogs, BQDates.localDateKey(today)).some(row => row.mine) : Object.values(loadSheetWrites(today)).some(item => item.current?.date === BQDates.localDateKey(today) && splitWalkers(item.current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())));
   if (todayState === 'loading' || (myWalksState === 'loading' && !confirmedToday)) return `<div class="status-msg">讀取溜狗紀錄中…</div>`;
   if (myWalksState === 'error' && !confirmedToday) {
     return `<div class="status-msg">溜狗紀錄讀不到，請確認網路後按「重新讀取」。<br><button class="retry-btn" id="mineRetry">重新讀取</button></div>`;
@@ -544,7 +531,7 @@ function myWalksHtml(today, query) {
 // 我溜過的月曆：有來的那幾天塗檔案綠、寫溜幾隻；點了下面換成那天溜的狗。可以往前翻到最早有紀錄的那個月
 function myCalendarState(groups, today) {
   const months = [...new Set(groups.map(g => g.ymd.slice(0, 7)))].sort();
-  const nowMonth = localDateKey(today).slice(0, 7);
+  const nowMonth = BQDates.localDateKey(today).slice(0, 7);
   // 還有沒拿的年份：可以翻到那年 1 月，翻到了再拿（#346）
   const missing = missingWalkYears(today)[0];
   const first = [months[0] || nowMonth, ...(missing ? [`${missing}-01`] : [])].sort()[0];
@@ -559,7 +546,7 @@ function myCalendarHtml(groups, today) {
   const y = +month.slice(0, 4), m = +month.slice(5, 7);
   const byDay = new Map(inMonth.map(g => [g.ymd, g]));
   const lead = new Date(y, m - 1, 1).getDay(), total = new Date(y, m, 0).getDate();
-  const todayKey = localDateKey(today);
+  const todayKey = BQDates.localDateKey(today);
   const cells = [];
   for (let i = 0; i < lead; i++) cells.push('<span class="mc-cell blank"></span>');
   for (let d = 1; d <= total; d++) {
@@ -611,7 +598,7 @@ function highlightNote(note, terms) {
 }
 
 function effectiveWalkDate(dog, today = new Date()) {
-  return parseYmd(walkRegistration.state(dog, localDateKey(today)).date);
+  return BQDates.parseYmd(walkRegistration.state(dog, BQDates.localDateKey(today)).date);
 }
 
 function computeStatus(dog, today) {
@@ -634,9 +621,9 @@ function computeStatus(dog, today) {
 // 休養中：今天還在設定的日期以內（含那一天）才算；過了自動恢復
 function restOf(dog, today = new Date()) {
   const r = dog && dog.id && restMap[dog.id];
-  const until = r && parseYmd(r.until);
+  const until = r && BQDates.parseYmd(r.until);
   if (!until) return null;
-  const day = makeDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
+  const day = BQDates.makeDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
   return day <= until ? { until, reason: r.reason || '' } : null;
 }
 const monthDay = d => `${d.getMonth() + 1}/${d.getDate()}`;
@@ -828,18 +815,6 @@ function metaLine(dog) {
   return `${dog.id ? `<div class="meta">編號 ${esc(dog.id)}</div>` : ''}${reentryLine(dog)}`;
 }
 
-// 編號前 8 碼是入所日期（例：2024032902 → 2024/03/29）；看不出來回 null
-function idDate(id) {
-  const m = String(id || '').match(/^(\d{4})(\d{2})(\d{2})\d{2}$/);
-  return m ? makeDate(parseInt(m[1], 10), parseInt(m[2], 10), parseInt(m[3], 10)) : null;
-}
-
-// 入所日（ADR 0011）：現在的編號、舊編號的前 8 碼、出入所紀錄的入所日，三者裡最早的那天；看不出來回 null。
-// 詳細資訊、分析頁都用這個，圖鑑（cards.js 的 bqIntake）照同一個規則
-function firstIntake(dog) {
-  const dates = [...[dog.id, ...(dog.formerIds || [])].map(idDate), ...(dog.stays || []).map(r => parseYmd(r.in))].filter(Boolean);
-  return dates.length ? dates.reduce((a, b) => (b < a ? b : a)) : null;
-}
 const ymdOf = d => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 
 // 舊編號（#75、#289）：編號下面一行「舊編號 …・最早入所 YYYY/M/D」，每個舊編號旁邊一個 ✕ 可以刪；
@@ -848,7 +823,7 @@ const ymdOf = d => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 function reentryLine(dog) {
   const former = dog.formerIds || [];
   const can = !!(dog.id && UPLOAD_URL) && !dog.departure;
-  const first = firstIntake(dog);
+  const first = BQDates.firstIntake(dog);
   const list = former.map(f => `<span class="former-num">${esc(f)}${can ? `<button type="button" class="former-del" data-former-del="${esc(f)}" aria-label="刪掉舊編號 ${esc(f)}">✕</button>` : ''}</span>`).join('');
   const e = formerEdit && formerEdit.dog === dog ? formerEdit : null;
   if (e) {
@@ -894,7 +869,7 @@ async function saveFormer() {
   const e = formerEdit;
   if (!e || e.phase === 'saving') return;
   const former = e.text.replace(/\s+/g, '');
-  if (!/^\d{10}$/.test(former) || !idDate(former)) { e.phase = 'error'; e.error = '舊編號要是 10 碼數字，前 8 碼是入所日期'; renderDetail(); return; }
+  if (!/^\d{10}$/.test(former) || !BQDates.idDate(former)) { e.phase = 'error'; e.error = '舊編號要是 10 碼數字，前 8 碼是入所日期'; renderDetail(); return; }
   if (!editorName()) { e.phase = 'error'; e.error = NEED_EDITOR; renderDetail(); return; }
   e.phase = 'saving'; e.error = ''; renderDetail();
   const error = await sendFormer(e.dog, former, 'POST');
@@ -908,7 +883,7 @@ async function saveFormer() {
   e.dog.formerIds = [...(e.dog.formerIds || []), former].sort();
   formerEdit = null;
   render(); renderDetail();
-  showToast(`${e.dog.name} 補上舊編號 ${former}，入所日改從 ${ymdOf(firstIntake(e.dog))} 算`);
+  showToast(`${e.dog.name} 補上舊編號 ${former}，入所日改從 ${ymdOf(BQDates.firstIntake(e.dog))} 算`);
 }
 
 async function removeFormer(dog, former) {
@@ -945,9 +920,6 @@ const WALKED_KEY = 'bq-walked-today';
 let walkedStorage = (() => { try { return window.localStorage; } catch (e) { return null; } })();
 let walkedMemory = null;
 
-function localDateKey(d) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 function loadWalkedIds(today = new Date()) {
   let data = walkedMemory;
@@ -955,12 +927,12 @@ function loadWalkedIds(today = new Date()) {
     const raw = walkedStorage && walkedStorage.getItem(WALKED_KEY);
     if (raw) data = JSON.parse(raw);
   } catch (e) { /* 讀不到就用這次開網頁期間的紀錄 */ }
-  if (!data || data.date !== localDateKey(today) || !Array.isArray(data.ids)) return [];
+  if (!data || data.date !== BQDates.localDateKey(today) || !Array.isArray(data.ids)) return [];
   return data.ids.map(String);
 }
 
 function saveWalkedIds(ids, today = new Date()) {
-  walkedMemory = { date: localDateKey(today), ids: [...ids] };
+  walkedMemory = { date: BQDates.localDateKey(today), ids: [...ids] };
   try {
     if (walkedStorage) walkedStorage.setItem(WALKED_KEY, JSON.stringify(walkedMemory));
   } catch (e) {
@@ -977,7 +949,7 @@ function walkKey(dog) {
 
 // 今天名單包含自己就算已登記；本機暫存只用於尚未收到寫入結果時。
 function walkedNow(dog, today = new Date()) {
-  return walkRegistration.state(dog, localDateKey(today)).mine;
+  return walkRegistration.state(dog, BQDates.localDateKey(today)).mine;
 }
 
 // 今天已溜的查詢入口（#85）：讀一次這支手機今天的紀錄，之後問「這隻溜了沒」、排今天已溜清單都用它，
@@ -1097,7 +1069,7 @@ function setWalkedLocal(dogs, on) {
 // 只認這支手機記下的 prev／wrote（sheetWrite 存的）；試算表那格已被別人改過（current 不是我們寫的）就不提供，
 // 撤銷時 Apps Script 也會再核對一次，不蓋掉別人後來改的
 function sheetUndoable(dog, today = new Date()) {
-  const day = localDateKey(today);
+  const day = BQDates.localDateKey(today);
   return walkRegistration.canUndo(dog, day) || (SITE.d1WalkAccept && walkRegistration.canRevert(dog, day));
 }
 let sheetUndoBusy = false;
@@ -1357,7 +1329,7 @@ function splitWalkers(text) {
 // 上次是誰溜的：這支手機今天按過溜了就是自己；否則用試算表的「誰遛的」
 // 同一個人的不同寫法只顯示一次（「岑」＝「佳岑」，K 2026-10-05）
 function walkerList(dog, today = new Date()) {
-  return walkRegistration.state(dog, localDateKey(today)).walkers;
+  return walkRegistration.state(dog, BQDates.localDateKey(today)).walkers;
 }
 
 // ── 一起溜的人（#141 第 1 項，K：溜了要怎麼寫除了我以外的人）──
@@ -1378,18 +1350,18 @@ function loadCompanions() {
 }
 function loadWalkWith(today = new Date()) {
   const v = readJsonKey(WALK_WITH_KEY);
-  return v && v.date === localDateKey(today) && v.map && typeof v.map === 'object' ? v.map : {};
+  return v && v.date === BQDates.localDateKey(today) && v.map && typeof v.map === 'object' ? v.map : {};
 }
 function addWalkWith(dogs, names, today = new Date()) {
   const map = loadWalkWith(today);
   for (const d of dogs) { const k = walkKey(d); if (k) map[k] = [...new Set([...(map[k] || []), ...names])]; }
-  writeJsonKey(WALK_WITH_KEY, { date: localDateKey(today), map });
+  writeJsonKey(WALK_WITH_KEY, { date: BQDates.localDateKey(today), map });
   writeJsonKey(COMPANIONS_KEY, [...new Set([...names, ...loadCompanions()])].slice(0, COMPANIONS_MAX));
 }
 function clearWalkWith(dogs, today = new Date()) {
   const map = loadWalkWith(today);
   for (const d of dogs) delete map[walkKey(d)];
-  writeJsonKey(WALK_WITH_KEY, { date: localDateKey(today), map });
+  writeJsonKey(WALK_WITH_KEY, { date: BQDates.localDateKey(today), map });
 }
 let withSheet = null; // { dogs, picked: Set, text, add }
 // add：詳細資訊溜狗人旁的「＋」，選好的人接在目前名單後面（#141）；不是 add 就是溜了之後提示條的「＋一起溜的人」
@@ -1501,10 +1473,10 @@ function loadSheetWrites(today = new Date()) {
     const raw = walkedStorage && walkedStorage.getItem(SHEET_WRITES_KEY);
     if (raw) data = JSON.parse(raw);
   } catch (e) { /* 讀不到就用記憶體裡的 */ }
-  return data && data.date === localDateKey(today) && data.items && typeof data.items === 'object' ? { ...data.items } : {};
+  return data && data.date === BQDates.localDateKey(today) && data.items && typeof data.items === 'object' ? { ...data.items } : {};
 }
 function saveSheetWrites(items, today = new Date()) {
-  sheetWritesMemory = { date: localDateKey(today), items };
+  sheetWritesMemory = { date: BQDates.localDateKey(today), items };
   try {
     if (walkedStorage) walkedStorage.setItem(SHEET_WRITES_KEY, JSON.stringify(sheetWritesMemory));
   } catch (e) { /* 存不了就只記在記憶體 */ }
@@ -1516,7 +1488,7 @@ function queueSheetWrite(dogs, on, toastText, toastUndo, walker, expected) {
 }
 function myAliasIn(dog, today = new Date()) {
   const me = loadWalkerName();
-  if (!me || !dog.walkedDate || localDateKey(dog.walkedDate) !== localDateKey(today)) return null;
+  if (!me || !dog.walkedDate || BQDates.localDateKey(dog.walkedDate) !== BQDates.localDateKey(today)) return null;
   return splitWalkers(walkerNames[walkKey(dog)]).find(n => n !== me && canonicalWalker(n) === canonicalWalker(me)) || null;
 }
 
@@ -1541,16 +1513,16 @@ const walkRegistration = createWalkRegistration({
     if (JSON.stringify(readJsonKey('bq-walk-requests')) !== JSON.stringify(items)) throw new Error('無法保留登記識別，尚未送出');
   },
   lookupRequest: id => fetchWalkStatus(`${UPLOAD_URL}/walk/result?requestId=${encodeURIComponent(id)}`),
-  key: walkKey, date: () => localDateKey(new Date()), walker: loadWalkerName, alias: myAliasIn,
+  key: walkKey, date: () => BQDates.localDateKey(new Date()), walker: loadWalkerName, alias: myAliasIn,
   canonical: canonicalWalker, split: splitWalkers,
   names: () => loadMyCodes().map(code => walkerCodeNames[code]).filter(Boolean),
-  base: dog => SITE.d1WalkAccept ? d1Base(dog) : ({ date: Object.hasOwn(walkerDates, walkKey(dog)) ? walkerDates[walkKey(dog)] : (dog.walkedDate ? localDateKey(dog.walkedDate) : ''), walker: walkerNames[walkKey(dog)] || '' }),
-  local: day => loadWalkedIds(parseYmd(day)),
-  saveLocal: (ids, day) => saveWalkedIds(ids, parseYmd(day)),
-  companions: (dog, day) => loadWalkWith(parseYmd(day))[walkKey(dog)] || [],
+  base: dog => SITE.d1WalkAccept ? d1Base(dog) : ({ date: Object.hasOwn(walkerDates, walkKey(dog)) ? walkerDates[walkKey(dog)] : (dog.walkedDate ? BQDates.localDateKey(dog.walkedDate) : ''), walker: walkerNames[walkKey(dog)] || '' }),
+  local: day => loadWalkedIds(BQDates.parseYmd(day)),
+  saveLocal: (ids, day) => saveWalkedIds(ids, BQDates.parseYmd(day)),
+  companions: (dog, day) => loadWalkWith(BQDates.parseYmd(day))[walkKey(dog)] || [],
   syncedAt: () => dataSyncedAt?.getTime() || 0,
-  read: day => loadSheetWrites(parseYmd(day)),
-  save: (items, day) => saveSheetWrites(items, parseYmd(day)),
+  read: day => loadSheetWrites(BQDates.parseYmd(day)),
+  save: (items, day) => saveSheetWrites(items, BQDates.parseYmd(day)),
   send: async payload => {
     if (!UPLOAD_URL || sheetWriteState === 'off' || (payload.action !== 'undo' && !payload.walker)) return { off: true };
     const res = await fetch(`${UPLOAD_URL}/walk`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
@@ -1561,14 +1533,14 @@ const walkRegistration = createWalkRegistration({
     return out;
   },
   apply: (dogs, items, day, restored) => {
-    if (restored.length) clearWalkWith(restored, parseYmd(day));
+    if (restored.length) clearWalkWith(restored, BQDates.parseYmd(day));
     render(); renderDetail();
   },
 });
 // #460：還沒經過新流程的狗，用 D1 狗清單（同步進 D1 的主清單）的日期與代號，不用試算表即時名單
 function d1Base(dog) {
   const walker = [...new Set((Array.isArray(dog.walkers) ? dog.walkers : []).map(code => walkerCodeNames[code]).filter(Boolean))].join('、');
-  return { date: dog.walkedDate ? localDateKey(dog.walkedDate) : '', walker };
+  return { date: dog.walkedDate ? BQDates.localDateKey(dog.walkedDate) : '', walker };
 }
 // 舊的編輯入口仍回傳布林值；新登記入口直接使用模組逐狗結果。
 async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expected = undefined) {
@@ -1598,11 +1570,7 @@ let toastExtra = null;
 // 狗卡在「試算表備註」下面，異動紀錄只在電腦版右欄（K 2026-10-16）
 const APPEND_MAX = 200;
 let sheetAppend = null; // { kind: 'note'|'log', dog, text, phase: 'edit'|'preview'|'busy', error }
-function taipeiStamp(now = new Date()) {
-  const [y, m, d] = now.toLocaleDateString('en-CA', { timeZone: 'Asia/Taipei' }).split('-').map(Number);
-  return `${y}/${m}/${d}`;
-}
-function appendEntry(text, who) { return `${taipeiStamp()}${text.trim()}（${who}）`; }
+function appendEntry(text, who) { return `${BQDates.taipeiStamp()}${text.trim()}（${who}）`; }
 function nextLogLabel() {
   const nums = (typeof sheetNotes !== 'undefined' ? sheetNotes : []).map(n => Number((String(n.label).match(/^備註\s*(\d+)/) || [])[1]) || 0);
   return `備註${Math.max(0, ...nums) + 1}`;
@@ -1937,7 +1905,7 @@ function intakePresentation(dog, intro) {
   for (;;) {
     const match = supplement.match(datedSentence);
     if (!match) break;
-    const date = makeDate(+match[1], +match[2], +match[3]);
+    const date = BQDates.makeDate(+match[1], +match[2], +match[3]);
     if (!date) break;
     events.push({ date: isoDay(date), event: match[4] });
     supplement = supplement.slice(match[0].length);
@@ -2106,7 +2074,7 @@ function openStaysEdit(dog) {
 function staysProblem(rows) {
   const today = isoDay(new Date());
   for (const r of rows) {
-    if (!parseYmd(r.in)) return '每一筆都要填入所日';
+    if (!BQDates.parseYmd(r.in)) return '每一筆都要填入所日';
     if (r.in > today || (r.out && r.out > today)) return '日期不能是未來的日子';
     if (r.out && r.out < r.in) return '出所日不能早於入所日';
   }
@@ -2140,7 +2108,7 @@ async function saveStays() {
   render(); renderDetail();
   const b = document.getElementById('staysEdit') || document.getElementById('introEdit');
   if (b) b.focus({ preventScroll: true });
-  const first = firstIntake(e.dog);
+  const first = BQDates.firstIntake(e.dog);
   showToast(`${e.dog.name} 的出入所紀錄已存好${first ? `，入所日從 ${ymdOf(first)} 算` : ''}`);
 }
 
@@ -2160,7 +2128,7 @@ async function saveRest(end = false) {
   if (!e || e.phase === 'saving') return;
   const editor = editorName();
   if (!editor) { e.phase = 'error'; e.error = NEED_EDITOR; renderDetail(); return; }
-  if (!end && !parseYmd(e.until)) { e.phase = 'error'; e.error = '請選到哪一天'; renderDetail(); return; }
+  if (!end && !BQDates.parseYmd(e.until)) { e.phase = 'error'; e.error = '請選到哪一天'; renderDetail(); return; }
   e.phase = 'saving'; e.error = ''; renderDetail();
   let out = null, error = '';
   try {
@@ -2186,7 +2154,7 @@ async function saveRest(end = false) {
   restEdit = null;
   resetWalkOrder();
   render(); renderDetail();
-  showToast(out.rest ? `${e.dog.name} 休養到 ${monthDay(parseYmd(out.rest.until))}，排到溜狗表最下面` : `${e.dog.name} 結束休養`);
+  showToast(out.rest ? `${e.dog.name} 休養到 ${monthDay(BQDates.parseYmd(out.rest.until))}，排到溜狗表最下面` : `${e.dog.name} 結束休養`);
 }
 // 初次讀取前不顯示未確認的排序；背景讀取失敗保留已知設定。
 async function loadRest() {
@@ -2243,7 +2211,7 @@ function departedDetailHtml(dog, today) {
     <div class="detail-bar"><button type="button" class="bar-btn" id="detailClose">關閉</button></div>
   `;
   function since(d) {
-    const s = firstIntake(d);
+    const s = BQDates.firstIntake(d);
     return s ? `<span class="badge plain">入所 ${s.getFullYear()}/${s.getMonth() + 1}</span>` : '';
   }
 }
@@ -2289,13 +2257,13 @@ function walkerEditBase(dog, today = new Date()) {
   if (!loadWalkerName() || isOffline() || walkPendingNow(dog)) return null;
   const key = walkKey(dog);
   if (!key) return null;
-  const state = walkRegistration.state(dog, localDateKey(today));
+  const state = walkRegistration.state(dog, BQDates.localDateKey(today));
   return state.today && state.walker ? state.walker : null;
 }
 // 只剩一個人時，那個 × 是取消這次登記：日期和名字改回登記前（K 2026-10-05）。
 // 這支手機登記的用本機記下的登記前；其他人、其他裝置由 Worker 從溜狗紀錄找上一次（ADR 0016，任何人都能撤銷）
 function walkerUndoable(dog, who, today = new Date()) {
-  const state = walkRegistration.state(dog, localDateKey(today));
+  const state = walkRegistration.state(dog, BQDates.localDateKey(today));
   return who.length === 1 && (state.mine && state.canUndo || state.canRevert);
 }
 
@@ -2346,7 +2314,7 @@ async function retryWalkerEdit(previous) {
 
 // 詳細資訊狗名下面的標籤：籠位、入所年月（天數標籤是 statusBadge）
 function detailChips(dog) {
-  const since = firstIntake(dog);
+  const since = BQDates.firstIntake(dog);
   const home = dog.homeCage ? `<small>暫住，原本 ${esc(dog.homeCage)}</small>` : '';
   // K 2026-10-09：詳細資訊的籠位也要能點開平面圖（找得到位置的籠位才做成按鈕）
   const where = typeof whereKnown === 'function' && whereKnown(dog);

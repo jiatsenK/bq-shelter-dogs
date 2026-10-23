@@ -1,5 +1,5 @@
 // 活動紀錄頁（#270，ADR 0002）：資訊 → 活動紀錄。分析頁（analysis.js）只讀資料，會寫入的活動放這個檔。
-// 會用到 js/app.js 的 esc、parseYmd、ymdText、isoDay、searchKey、editorName、NEED_EDITOR、UPLOAD_URL、showToast、allDogs、analysisOpen，
+// 會用到 js/dates.js 的日期工具及 js/app.js 的 esc、ymdText、isoDay、searchKey、editorName、NEED_EDITOR、UPLOAD_URL、showToast、allDogs、analysisOpen，
 // 和 js/analysis.js 的 section、render、infoPage、departuresData、loadDepartures，所以要在兩個之後載入。
 
 // 動保小小兵、認養會每場出席的狗，存 D1（Worker 的 api/activities）。
@@ -27,7 +27,7 @@ function loadActivities(force = false) {
 
 // 2026-10-11 → 2026/10/11（六）
 function activityDateText(ymd) {
-  const d = parseYmd(ymd);
+  const d = BQDates.parseYmd(ymd);
   return d ? `${ymdText(d)}（${'日一二三四五六'[d.getDay()]}）` : ymd;
 }
 const activityTitle = a => `${activityDateText(a.date)} ${ACTIVITY_KINDS[a.kind] || a.kind}`;
@@ -137,7 +137,7 @@ async function saveActivity(remove = false) {
   if (!e || e.phase === 'saving') return;
   const editor = editorName();
   if (!editor) return activityFail(e, NEED_EDITOR);
-  if (!remove && !parseYmd(e.date)) return activityFail(e, '請選活動日期');
+  if (!remove && !BQDates.parseYmd(e.date)) return activityFail(e, '請選活動日期');
   if (!remove && e.dogs.length > ACTIVITY_MAX_DOGS) return activityFail(e, `一場最多 ${ACTIVITY_MAX_DOGS} 隻`);
   e.phase = 'saving'; e.error = '';
   render();
