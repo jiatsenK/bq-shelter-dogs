@@ -664,6 +664,8 @@ function dogListUnits(sheets, ymd, hash) {
     for (r = dh.row + 1; r < departed.length; r++) {
       var drow = departed[r], dname = cellText(drow[dh.cols.name]), did = dh.cols.id === undefined ? '' : cellText(drow[dh.cols.id]);
       if (!dname && !did) continue;
+      // 主清單上還有的狗（以前出所又回來，已出所留著舊的一列）以主清單為準，不送（2026-10-24 栗子、MINI 被誤記離所）
+      if (units[dogUnitKey('main', did, dname)]) continue;
       add(dogUnitKey('departed', did, dname), { sheet: 'departed', dog: { id: did, name: dname },
         texts: drow.map(function (v) { return isDate(v) ? ymd(v).replace(/-/g, '/') : cellText(v); }).filter(Boolean),
         dates: dateCols.map(function (i) { return dateText(drow[i]); }).filter(Boolean) });
