@@ -31,6 +31,7 @@ let groupsReturnTab = 'walk';
 let detailDog = null; // 詳細資訊正在看的狗
 let detailOpener = null;
 let detailTrail = []; // 在詳細資訊裡點「可以一起溜」換過的狗（#99）：可以按「回到 ○○」一隻一隻回去
+const detailEdits = BQDetailEditor.create(renderDetail);
 let photoUpload = null; // 詳細資訊正在上傳的主照片：{ dog, blob, url, phase: 'preview'|'uploading'|'error', error }
 let restMap = {}; // 休養中：編號 → { until: 'YYYY-MM-DD', reason }
 let restState = 'loading'; // 初次休養設定未到齊前，不先排出不完整的溜狗表
@@ -830,7 +831,7 @@ function reentryLine(dog) {
 
 function openFormerEdit(dog) {
   if (!dog || !dog.id || !UPLOAD_URL) return;
-  formerEdit = { dog, text: '', phase: 'edit', error: '' };
+  formerEdit = detailEdits.open(dog, { text: '' });
   renderDetail();
   const box = document.getElementById('formerText');
   if (box) box.focus({ preventScroll: true });
@@ -850,13 +851,13 @@ async function saveFormer() {
   const e = formerEdit;
   if (!e || e.phase === 'saving') return;
   const former = e.text.replace(/\s+/g, '');
-  if (!/^\d{10}$/.test(former) || !BQDates.idDate(former)) { e.phase = 'error'; e.error = '舊編號要是 10 碼數字，前 8 碼是入所日期'; renderDetail(); return; }
-  if (!editorName()) { e.phase = 'error'; e.error = NEED_EDITOR; renderDetail(); return; }
-  e.phase = 'saving'; e.error = ''; renderDetail();
+  if (!/^\d{10}$/.test(former) || !BQDates.idDate(former)) { detailEdits.fail(e, '舊編號要是 10 碼數字，前 8 碼是入所日期'); return; }
+  if (!editorName()) { detailEdits.fail(e, NEED_EDITOR); return; }
+  detailEdits.saving(e);
   const error = await sendFormer(e.dog, former, 'POST');
   if (formerEdit !== e) return;
   if (error) {
-    e.phase = 'error'; e.error = error; renderDetail();
+    detailEdits.fail(e, error);
     const b = document.getElementById('formerText');
     if (b) b.focus({ preventScroll: true });
     return;
@@ -1829,7 +1830,7 @@ function introBarHtml(dog) {
 }
 function openIntroEdit(dog) {
   if (!dog || !dog.id || !UPLOAD_URL) return;
-  introEdit = { dog, text: introOf(dog) || '', events: intakeDraft(dog), phase: 'edit', error: '' };
+  introEdit = detailEdits.open(dog, { text: introOf(dog) || '', events: intakeDraft(dog) });
   renderDetail();
   const box = document.querySelector('#introForm [data-intake-field="date"]') || document.getElementById('introText');
   if (box) {
@@ -1840,11 +1841,11 @@ async function saveIntro() {
   const e = introEdit;
   if (!e || e.phase === 'saving') return;
   const editor = editorName();
-  if (!editor) { e.phase = 'error'; e.error = NEED_EDITOR; renderDetail(); return; }
+  if (!editor) { detailEdits.fail(e, NEED_EDITOR); return; }
   const text = e.text.replace(/\r\n?/g, '\n').trim();
-  if ([...text].length > INTRO_MAX) { e.phase = 'error'; e.error = `最多 ${INTRO_MAX} 字`; renderDetail(); return; }
-  if (e.events.reduce((n, row) => n + [...row.event].length, 0) > INTRO_MAX) { e.phase = 'error'; e.error = '原因合計最多 1000 字'; renderDetail(); return; }
-  e.phase = 'saving'; e.error = ''; renderDetail();
+  if ([...text].length > INTRO_MAX) { detailEdits.fail(e, `最多 ${INTRO_MAX} 字`); return; }
+  if (e.events.reduce((n, row) => n + [...row.event].length, 0) > INTRO_MAX) { detailEdits.fail(e, '原因合計最多 1000 字'); return; }
+  detailEdits.saving(e);
   let out = null, error = '';
   const r = await BQApi.saveIntro(e.dog.id, { editor, text, events: e.events });
   out = r.data;
@@ -1853,7 +1854,7 @@ async function saveIntro() {
   else if (!Array.isArray(out.intakeEvents) && (e.events.length || intakeEventsOf(e.dog).length)) error = '伺服器尚未確認逐次紀錄已儲存，請稍後再試';
   if (introEdit !== e) return;
   if (error) {
-    e.phase = 'error'; e.error = error; renderDetail();
+    detailEdits.fail(e, error);
     return;
   }
   introOverrides[e.dog.id] = typeof out.intro === 'string' ? out.intro : text;
@@ -1892,7 +1893,7 @@ function staysSectionHtml(dog) {
 function openStaysEdit(dog) {
   if (!dog || !dog.id || !UPLOAD_URL) return;
   const before = (dog.stays || []).map(r => ({ ...r }));
-  staysEdit = { dog, before, rows: before.length ? before.map(r => ({ ...r })) : [{ in: '', out: '', reason: '' }], phase: 'edit', error: '' };
+  staysEdit = detailEdits.open(dog, { before, rows: before.length ? before.map(r => ({ ...r })) : [{ in: '', out: '', reason: '' }] });
   renderDetail();
   const box = document.querySelector('#staysForm [data-stay-field="in"]');
   if (box) {
@@ -1913,12 +1914,12 @@ async function saveStays() {
   const e = staysEdit;
   if (!e || e.phase === 'saving') return;
   const editor = editorName();
-  if (!editor) { e.phase = 'error'; e.error = NEED_EDITOR; renderDetail(); return; }
+  if (!editor) { detailEdits.fail(e, NEED_EDITOR); return; }
   // 整列都空白的當成沒填
   const rows = e.rows.map(r => ({ in: r.in.trim(), out: r.out.trim(), reason: r.reason.trim() })).filter(r => r.in || r.out || r.reason);
   const problem = staysProblem(rows);
-  if (problem) { e.phase = 'error'; e.error = problem; renderDetail(); return; }
-  e.phase = 'saving'; e.error = ''; renderDetail();
+  if (problem) { detailEdits.fail(e, problem); return; }
+  detailEdits.saving(e);
   let out = null, error = '';
   const r = await BQApi.saveStays(e.dog.id, { editor, before: e.before, stays: rows });
   out = r.data;
@@ -1926,7 +1927,7 @@ async function saveStays() {
   else if (r.status === 409) error = '別人剛改過，請重新整理再改';
   else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
   if (staysEdit !== e) return;
-  if (error) { e.phase = 'error'; e.error = error; renderDetail(); return; }
+  if (error) { detailEdits.fail(e, error); return; }
   e.dog.stays = Array.isArray(out.stays) ? out.stays : rows;
   staysEdit = null;
   render(); renderDetail();
@@ -1939,7 +1940,7 @@ async function saveStays() {
 function openRestEdit(dog) {
   const r = restOf(dog);
   const until = r ? r.until : new Date(Date.now() + 10 * 86400000);
-  restEdit = { dog, until: isoDay(until), reason: r ? r.reason : '術後休養', phase: 'edit', error: '' };
+  restEdit = detailEdits.open(dog, { until: isoDay(until), reason: r ? r.reason : '術後休養' });
   renderDetail();
   const first = document.getElementById('restReason');
   if (first) {
@@ -1951,9 +1952,9 @@ async function saveRest(end = false) {
   const e = restEdit;
   if (!e || e.phase === 'saving') return;
   const editor = editorName();
-  if (!editor) { e.phase = 'error'; e.error = NEED_EDITOR; renderDetail(); return; }
-  if (!end && !BQDates.parseYmd(e.until)) { e.phase = 'error'; e.error = '請選到哪一天'; renderDetail(); return; }
-  e.phase = 'saving'; e.error = ''; renderDetail();
+  if (!editor) { detailEdits.fail(e, NEED_EDITOR); return; }
+  if (!end && !BQDates.parseYmd(e.until)) { detailEdits.fail(e, '請選到哪一天'); return; }
+  detailEdits.saving(e);
   let out = null, error = '';
   const r = await BQApi.saveRest(e.dog.id, end ? { editor, end: true } : { editor, until: e.until, reason: e.reason.trim() });
   out = r.data;
@@ -1961,7 +1962,7 @@ async function saveRest(end = false) {
   else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
   if (restEdit !== e) return;
   if (error) {
-    e.phase = 'error'; e.error = error; renderDetail();
+    detailEdits.fail(e, error);
     return;
   }
   // 換成新的物件：讀取中的 loadRest 才知道這裡改過（見 loadRest）
@@ -2467,9 +2468,7 @@ async function cropPhotoUpload() {
   URL.revokeObjectURL(up.url);
   up.blob = blob;
   up.url = URL.createObjectURL(blob);
-  up.phase = 'preview';
-  up.error = '';
-  renderDetail();
+  detailEdits.refresh(up, { phase: 'preview', error: '' });
   const btn = document.getElementById('photoConfirm');
   if (btn) btn.focus({ preventScroll: true });
 }
@@ -2482,7 +2481,7 @@ async function cropMainPhoto(dog) {
   if (!blob || detailDog !== dog) return;
   if (photoUpload && photoUpload.phase === 'uploading') { showToast('上一張照片還在上傳，請稍等一下'); return; }
   clearPhotoUpload();
-  photoUpload = { dog, blob, url: URL.createObjectURL(blob), phase: 'preview', error: '' };
+  photoUpload = detailEdits.open(dog, { blob, url: URL.createObjectURL(blob) }, 'preview');
   renderDetail();
   const btn = document.getElementById('photoConfirm');
   if (btn) {
@@ -2552,7 +2551,7 @@ async function preparePhoto(dog, file) {
   }
   if (detailDog !== dog) return; // 壓縮途中換看別隻或關掉了
   clearPhotoUpload();
-  photoUpload = { dog, blob, url: URL.createObjectURL(blob), phase: 'preview', error: '' };
+  photoUpload = detailEdits.open(dog, { blob, url: URL.createObjectURL(blob) }, 'preview');
   renderDetail();
   const confirm = document.getElementById('photoConfirm');
   if (confirm) {
@@ -2571,9 +2570,7 @@ function clearPhotoUpload() {
 async function uploadPhoto() {
   const up = photoUpload;
   if (!up || up.phase === 'uploading') return;
-  up.phase = 'uploading';
-  up.error = '';
-  renderDetail();
+  detailEdits.saving(up, 'uploading');
   let error = '';
   const r = await BQApi.uploadPhoto(up.dog.id, up.blob, editorHeaders());
   const out = r.data;
@@ -2586,9 +2583,7 @@ async function uploadPhoto() {
       showToast(`${up.dog.name} 的照片沒有上傳成功：${error}`);
       return;
     }
-    up.phase = 'error';
-    up.error = error;
-    renderDetail();
+    detailEdits.fail(up, error);
     showPhotoError();
     return;
   }
@@ -2681,24 +2676,24 @@ function wireDetail(box) {
   box.addEventListener('input', e => {
     if (staysEdit && e.target.dataset.stayField) {
       const row = staysEdit.rows[Number(e.target.dataset.stayRow)];
-      if (row) row[e.target.dataset.stayField] = e.target.value;
+      if (row) detailEdits.draft(row, { [e.target.dataset.stayField]: e.target.value });
       return;
     }
     if (introEdit && e.target.dataset.intakeField) {
       const row = introEdit.events[Number(e.target.dataset.intakeRow)];
-      if (row) row[e.target.dataset.intakeField] = e.target.value;
+      if (row) detailEdits.draft(row, { [e.target.dataset.intakeField]: e.target.value });
       return;
     }
     if (introEdit && e.target.id === 'introText') {
-      introEdit.text = e.target.value;
+      detailEdits.draft(introEdit, { text: e.target.value });
       const c = box.querySelector('.intro-count');
       if (c) { const n = [...introEdit.text].length; c.textContent = `${n} / ${INTRO_MAX} 字`; c.classList.toggle('over', n > INTRO_MAX); }
       return;
     }
-    if (formerEdit && e.target.id === 'formerText') { formerEdit.text = e.target.value; return; }
+    if (formerEdit && e.target.id === 'formerText') { detailEdits.draft(formerEdit, { text: e.target.value }); return; }
     if (!restEdit) return;
-    if (e.target.id === 'restReason') restEdit.reason = e.target.value;
-    else if (e.target.id === 'restUntil') restEdit.until = e.target.value;
+    if (e.target.id === 'restReason') detailEdits.draft(restEdit, { reason: e.target.value });
+    else if (e.target.id === 'restUntil') detailEdits.draft(restEdit, { until: e.target.value });
   });
   box.addEventListener('submit', e => {
     if (e.target.id === 'introForm') { e.preventDefault(); saveIntro(); return; }
