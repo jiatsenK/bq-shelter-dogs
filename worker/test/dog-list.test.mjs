@@ -201,3 +201,19 @@ test('#501 新編號回所：同名的唯一一筆離所認成同一隻，連上
     assert.ok(!['a', 'b'].includes(await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='9200'").first('dog_id')));
   } finally { env.DB.close(); }
 });
+
+// 2026-10-24 正式切換時：栗子、MINI 還在主清單，「已出所」也有舊的一列，保險掃描把牠們誤記離所。
+// 兩邊都有時以主清單為準（同舊同步），GAS 不送已出所那一列
+test('#501 主清單和已出所都有的狗：GAS 不送已出所單位，網站不會誤記離所', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const vm = await import('node:vm');
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(await readFile(new URL('../../apps-script/sheet-write.gs', import.meta.url), 'utf8'), ctx);
+  const units = vm.runInContext('dogListUnits', ctx)({
+    main: [['籠位', '編號', '犬名'], ['A01', '9001', '測試狗'], ['A02', '', '無號']],
+    departed: [['編號', '犬名', '備註'], ['9001', '測試狗', '以前退養'], ['', '無號', '舊'], ['8001', '走了', '被認養']],
+    groups: [],
+  }, d => d.toISOString().slice(0, 10), t => t);
+  assert.deepEqual(JSON.parse(JSON.stringify(Object.keys(units).sort())), ['departed:8001', 'main:9001', 'main:名:無號']);
+});
