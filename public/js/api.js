@@ -16,7 +16,9 @@ const BQApi = (() => {
   async function settle(pending) {
     let res;
     try { res = await pending; } catch (e) {
-      return { ok: false, status: 0, data: null, error: 'network', message: (e && e.message) || String(e) };
+      const raw = (e && e.message) || String(e);
+      // Safari 斷線是英文 Load failed，畫面上顯示中文（K 2026-10-23）
+      return { ok: false, status: 0, data: null, error: 'network', message: raw === 'Load failed' ? '網頁載入失敗' : raw };
     }
     let data = null, message = '';
     try { data = await res.json(); } catch (e) { message = (e && e.message) || String(e); }

@@ -33,6 +33,12 @@ test('非 2xx 帶回伺服器說的原因；非 JSON 與斷線各自分類', asy
   assert.deepEqual({ ...r }, { ok: false, status: 0, data: null, error: 'network', message: 'Failed to fetch' });
 });
 
+test('Safari 斷線的 Load failed 顯示成中文（K 2026-10-23）', async () => {
+  const r = await load(async () => { throw new TypeError('Load failed'); }).api.walks();
+  assert.equal(r.error, 'network');
+  assert.equal(r.message, '網頁載入失敗');
+});
+
 test('寫入端點送 JSON 內容與方法；路徑參數有編碼', async () => {
   const { api, calls } = load(json({ ok: true }));
   await api.saveIntro('a/b', { editor: '甲', text: '親人' });
