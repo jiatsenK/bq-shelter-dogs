@@ -410,3 +410,125 @@ function notifyWorker() {
   if (!url || !key) return;
   UrlFetchApp.fetch(url, { method: 'post', headers: { 'X-Notify-Key': key }, muteHttpExceptions: true });
 }
+
+// ── 有人編輯才同步今日溜狗（#500，ADR 0018）──
+// 觸發器：執行一次 installWalkEditTriggers（會建立「編輯時」→ onWalkSheetEdit、每 10 分鐘 → flushWalkEdits）。
+// 只送受影響的列（編號＋改到的欄），Worker 依送來的列更新、不回頭讀整張表。網站寫回（doPost）是程式寫入，不會觸發。
+// 送不出去（缺設定、HTTP 失敗、結果不明）就留在 WALK_EDITS_PENDING，下次編輯或每 10 分鐘補送；確認只清同一版本。
+var DEPARTED_SHEET_NAME = '已出所';
+var PENDING_EDITS = 'WALK_EDITS_PENDING';
+var EDIT_BATCH = 50; // 跟 Worker 的 EDIT_ROWS_MAX 一樣
+var FLUSH_ROUNDS = 4; // 一次觸發最多送 4 批（200 隻），其餘留給下次，避免單次執行過久
+
+function installWalkEditTriggers() {
+  var id = sheetIdOf(PropertiesService.getScriptProperties().getProperty('SHEET_ID'));
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (['onWalkSheetEdit', 'flushWalkEdits'].indexOf(t.getHandlerFunction()) !== -1) ScriptApp.deleteTrigger(t);
+  });
+  ScriptApp.newTrigger('onWalkSheetEdit').forSpreadsheet(id).onEdit().create();
+  ScriptApp.newTrigger('flushWalkEdits').timeBased().everyMinutes(10).create();
+}
+
+function onWalkSheetEdit(e) {
+  var range = e && e.range;
+  if (!range) return;
+  var sheet = range.getSheet(), name = sheet.getName();
+  var kind = name === SHEET_NAME ? 'main' : name === DEPARTED_SHEET_NAME ? 'departed' : '';
+  if (!kind || !sheet.getLastRow()) return;
+  var header = findHeader(sheet.getRange(1, 1, Math.min(20, sheet.getLastRow()), sheet.getLastColumn()).getValues());
+  if (!header) return;
+  var rows = sheet.getRange(range.getRow(), 1, range.getNumRows(), sheet.getLastColumn()).getValues();
+  var entries = editedRows(rows, header, range.getRow() - 1, range.getColumn() - 1, range.getLastColumn() - 1, kind);
+  if (!entries.length) return;
+  updatePending(function (p) { return queueEdits(p, entries); });
+  flushWalkEdits();
+}
+
+// 待通知版本只用短暫的使用者鎖保護；送通知時另拿 script lock（跟網站寫回同一把，讀到的值才不會夾在寫回中間），
+// 但不在拿著使用者鎖時等 HTTP。
+function updatePending(change) {
+  var props = PropertiesService.getScriptProperties(), lock = LockService.getUserLock();
+  lock.waitLock(10000);
+  try {
+    var next = change(JSON.parse(props.getProperty(PENDING_EDITS) || 'null'));
+    props.setProperty(PENDING_EDITS, JSON.stringify(next));
+    return next;
+  } finally { lock.releaseLock(); }
+}
+
+function flushWalkEdits() {
+  var props = PropertiesService.getScriptProperties();
+  for (var round = 0; round < FLUSH_ROUNDS; round++) {
+    var pending = JSON.parse(props.getProperty(PENDING_EDITS) || 'null');
+    var keys = pending ? Object.keys(pending.items) : [];
+    if (!keys.length) return;
+    var sent = keys.slice(0, EDIT_BATCH).map(function (k) { return { key: k, seq: pending.items[k].seq }; });
+    var results;
+    var lock = LockService.getScriptLock();
+    try {
+      lock.waitLock(15000);
+      var sheet = SpreadsheetApp.openById(sheetIdOf(props.getProperty('SHEET_ID'))).getSheetByName(SHEET_NAME);
+      if (!sheet) throw new Error('找不到「' + SHEET_NAME + '」分頁');
+      var rows = editPayload(readWalkSnapshot(sheet).rows, sent.map(function (s) { return pending.items[s.key]; }));
+      results = walkWorker(props, 'rows', { rows: rows }).results || [];
+    } catch (err) {
+      console.warn('flushWalkEdits: 保留待通知：' + (err && err.message ? err.message : err));
+      return;
+    } finally { lock.releaseLock(); }
+    updatePending(function (p) { return clearSent(p, sent, results); });
+    if (results.length < sent.length || results.some(function (r) { return !r || !r.ack; })) return;
+  }
+}
+
+// rows：受影響的那幾列（第一列是表上第 firstRow 列，從 0 算）；firstCol、lastCol 是改到的欄。
+// 改到「遛狗日期」「誰遛的」以外的欄（籠位、編號、犬名……）標 other，Worker 交給狗清單同步。
+function editedRows(rows, header, firstRow, firstCol, lastCol, kind) {
+  var walkCols = [header.cols.date, header.cols.walker];
+  var other = false;
+  for (var c = firstCol; c <= lastCol; c++) if (walkCols.indexOf(c) === -1) other = true;
+  var out = [];
+  rows.forEach(function (row, i) {
+    if (firstRow + i <= header.row) return;
+    var name = cellText(row[header.cols.name]);
+    if (!name) return;
+    var id = header.cols.id === undefined ? '' : cellText(row[header.cols.id]);
+    out.push({ sheet: kind, dog: { id: id, name: name }, other: other || kind !== 'main' });
+  });
+  return out;
+}
+
+// 同一隻狗只留最後出現的那筆（換籠、離所看狗新出現在哪裡）；每筆帶遞增版本，確認時用來核對。
+function dogKey(dog) { return dog.id || '名:' + dog.name; }
+
+function queueEdits(pending, entries) {
+  var next = { seq: pending ? pending.seq : 0, items: {} };
+  if (pending) Object.keys(pending.items).forEach(function (k) { next.items[k] = pending.items[k]; });
+  entries.forEach(function (e) {
+    next.seq++;
+    next.items[dogKey(e.dog)] = { seq: next.seq, sheet: e.sheet, dog: e.dog, other: e.other };
+  });
+  return next;
+}
+
+// Worker 已接手（ack）且還是送出時的同一版本才清；送出後又改過的新版本留著下次送。
+function clearSent(pending, sent, results) {
+  if (!pending) return pending;
+  sent.forEach(function (s, i) {
+    var item = pending.items[s.key];
+    if (results[i] && results[i].ack && item && item.seq === s.seq) delete pending.items[s.key];
+  });
+  return pending;
+}
+
+// 主清單的列送當下直接讀到的日期＋名單；主清單找不到唯一一列（已移走、重複）就只送 other，交給狗清單同步。
+function editPayload(snapshot, items) {
+  var byKey = {};
+  snapshot.forEach(function (r) {
+    var k = dogKey(r.dog);
+    byKey[k] = byKey.hasOwnProperty(k) ? null : r;
+  });
+  return items.map(function (item) {
+    var found = item.sheet === 'main' ? byKey[dogKey(item.dog)] : null;
+    return found ? { sheet: 'main', dog: item.dog, other: item.other, current: found.current } : { sheet: item.sheet, dog: item.dog, other: true };
+  });
+}

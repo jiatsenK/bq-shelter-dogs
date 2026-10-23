@@ -7,7 +7,7 @@ import { gvizTable, cellText, findHeaderRow, columnMap, MAIN_COLUMNS, splitNames
 import { readDepartedCards } from './departed.js';
 import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, readActivities, resolveDogs, updateActivity } from './activities.js';
 import { acceptWalk, dispatchWalk, readAcceptedWalks, writebackTarget, confirmWalk, reconcileWalk } from './walk-accept.js';
-import { scanNotifiedWalks } from './walk-reconcile.js';
+import { reconcileEditedRows } from './walk-reconcile.js';
 import { retryWalks, scanTick } from './walk-retry.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
@@ -18,8 +18,11 @@ import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey }
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
 import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
 
-// 溜狗對帳的排程，要跟 wrangler.jsonc 的 triggers.crons 一致（#460）
-const WALK_CRON = '5-59/10 * * * *';
+// 排程要跟 wrangler.jsonc 的 triggers.crons 一致（#500，ADR 0018）：寫回重試每 10 分鐘（沒工作就只查一次 D1），
+// 保險掃描台灣 09:43、13:53、23:53（UTC 01:43、05:53、15:53）
+const RETRY_CRON = '5-59/10 * * * *';
+const SCAN_CRONS = ['43 1 * * *', '53 5,15 * * *'];
+const EDIT_ROWS_MAX = 50;
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
@@ -566,7 +569,7 @@ async function syncTick(env, now) {
   return plan;
 }
 
-// 通知只負責喚醒可信讀表，請求內容不提供格子值。
+// 通知只標記狗清單有改，請求內容不提供格子值；今日溜狗改由 /walk-writeback/rows 只送改到的列（#500）。
 async function sheetChanged(request, env) {
   const key = env && env.SHEET_NOTIFY_KEY ? String(env.SHEET_NOTIFY_KEY) : '';
   if (!key || !env.DB) return fail(503, '還沒設定試算表通知', '');
@@ -575,8 +578,7 @@ async function sheetChanged(request, env) {
   if (!await sameSecret(request.headers.get('X-Notify-Key') || '',key)) return fail(403, '通知密碼不對', '');
   // 非溜狗欄位仍須交既有同步；不因今日狀態已處理就消掉這個標記。
   if (!await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='changed'").first()) await markChanged(env.DB);
-  const comparison = env.D1_WALK_NOTIFY === '1' ? await scanNotifiedWalks(env.DB,env) : { deferred:true };
-  return reply(200, { ok: true, comparison }, '');
+  return reply(200, { ok: true }, '');
 }
 
 const baseOf = request => new URL(request.url).origin;
@@ -1271,13 +1273,14 @@ export default {
   testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, walkersDate, triggerSync, maintenance },
 
   // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 wrangler.jsonc 的 triggers）
-  // 兩個排程各跑一件（#460）：WALK_CRON 跑溜狗對帳，其他跑試算表同步；沒帶 cron（測試）兩件都跑
+  // 每個排程只跑一件（#500）：RETRY_CRON 寫回重試、SCAN_CRONS 保險掃描，其他跑試算表同步；沒帶 cron（測試）全部都跑
   async scheduled(event, env, ctx) {
     const now = event && event.scheduledTime ? event.scheduledTime : Date.now();
     const cron = event && event.cron;
-    // 保險掃描與寫回重試是兩個入口（#498）；階段一仍同一排程、頻率不變。
-    if (!cron || cron === WALK_CRON) ctx.waitUntil(scanTick(env, now).then(() => retryWalks(env, now)));
-    if (cron === WALK_CRON) return;
+    const walkOnly = cron === RETRY_CRON || SCAN_CRONS.includes(cron);
+    if (!cron || SCAN_CRONS.includes(cron)) ctx.waitUntil(cron ? scanTick(env, now) : scanTick(env, now).then(() => retryWalks(env, now)));
+    else if (cron === RETRY_CRON) ctx.waitUntil(retryWalks(env, now));
+    if (walkOnly) return;
     ctx.waitUntil(syncTick(env, now).then(plan => {
       if (plan === 'daily' && r2.r2On(env)) return maintenance(env, now);
     }));
@@ -1344,7 +1347,7 @@ export default {
         return fail(500, '記錄試算表通知發生錯誤', '');
       }
     }
-    if (['/walk-writeback/target', '/walk-writeback/receipt', '/walk-writeback/legacy-check', '/walk-writeback/observe'].includes(path)) {
+    if (['/walk-writeback/target', '/walk-writeback/receipt', '/walk-writeback/legacy-check', '/walk-writeback/observe', '/walk-writeback/rows'].includes(path)) {
       if (request.method !== 'POST' || env?.PREVIEW || !env?.DB || !cfg.sheetWriteKey) return fail(403, '不接受寫回要求', '');
       const supplied = request.headers.get('X-Sheet-Write-Key') || '';
       const digest = text => crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -1356,6 +1359,10 @@ export default {
         const raw = await request.text();
         if (raw.length > WALK_MAX_BYTES) return fail(413, '資料太大', '');
         const input = JSON.parse(raw);
+        if (path.endsWith('/rows')) {
+          if (!Array.isArray(input.rows) || input.rows.length > EDIT_ROWS_MAX) return fail(400,`每批最多 ${EDIT_ROWS_MAX} 列`,'');
+          return reply(200,{ ok:true, results:await reconcileEditedRows(env.DB,input.rows,env,markChanged) },'');
+        }
         if (path.endsWith('/observe')) {
           if (!Array.isArray(input.observations) || input.observations.length > 10) return fail(400,'每批最多比對十隻狗','');
           const results = [];

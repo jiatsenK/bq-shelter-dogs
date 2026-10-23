@@ -1,12 +1,12 @@
 import { dispatchWalks } from './walk-accept.js';
-import { scanWalks, retryNotifiedScan } from './walk-reconcile.js';
+import { scanWalks } from './walk-reconcile.js';
 
 const enabled = env => env.WALK_RETRY_ENABLED === 'true' && !env.PREVIEW && !!env.DB;
 
-// 保險掃描（#498）：與寫回重試分開，只補漏；有沒跑完的改表通知就補跑它（它本身就是一次掃描）。
+// 保險掃描（#500，ADR 0018）：每天三次只比指紋，一樣就結束；不一樣才找出不同的狗。與寫回重試分開。
 export async function scanTick(env, now) {
   if (!enabled(env)) return;
-  try { if (!await retryNotifiedScan(env,now)) await scanWalks(env,now); }
+  try { await scanWalks(env,now); }
   catch (error) { console.warn('walk-scan:',error.message); }
 }
 

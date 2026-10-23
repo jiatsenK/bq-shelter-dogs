@@ -194,3 +194,47 @@ test('狗群：欄不存在、沒有狗名、不認得的操作都回錯誤', ()
   assert.ok(groupPlan({ op: 'add', column: 0, name: '' }).error);
   assert.ok(groupPlan({ op: 'move', column: 0, name: '測試甲' }).error);
 });
+
+// ── #500 有人編輯：只送受影響的列；待通知版本合併、只清同一版本 ──
+const fn = name => vm.runInContext(name, ctx);
+const plain = v => JSON.parse(JSON.stringify(v));
+
+test('#500 改「誰遛的」一格只排那一列；改籠位標記非溜狗欄位；表頭與空列不算', () => {
+  const values = sheet(), header = fn('findHeader')(values);
+  assert.deepEqual(plain(fn('editedRows')(values.slice(2, 3), header, 2, 4, 4, 'main')), [{ sheet: 'main', dog: { id: '9001', name: '測試甲' }, other: false }]);
+  assert.deepEqual(plain(fn('editedRows')(values.slice(2, 5), header, 2, 0, 0, 'main')).map(e => [e.dog.name, e.other]), [['測試甲', true], ['測試乙', true], ['測試丙', true]]);
+  assert.deepEqual(plain(fn('editedRows')(values.slice(0, 3), header, 0, 3, 4, 'main')).map(e => e.dog.name), ['測試甲']);
+  assert.deepEqual(plain(fn('editedRows')([['', '', '', '', '']], header, 7, 4, 4, 'main')), []);
+});
+
+test('#500 同一隻狗新出現在哪裡就以哪裡為準；版本號遞增', () => {
+  let pending = fn('queueEdits')(null, [{ sheet: 'main', dog: { id: '9001', name: '測試甲' }, other: false }]);
+  pending = fn('queueEdits')(pending, [{ sheet: 'departed', dog: { id: '9001', name: '測試甲' }, other: true }, { sheet: 'main', dog: { id: '', name: '測試丙' }, other: false }]);
+  assert.equal(pending.seq, 3);
+  assert.deepEqual(plain(pending.items['9001']), { seq: 2, sheet: 'departed', dog: { id: '9001', name: '測試甲' }, other: true });
+  assert.equal(pending.items['名:測試丙'].seq, 3);
+});
+
+test('#500 通知確認只清同一版本；送出後又改的新版本留著，沒 ack 的也留著', () => {
+  let pending = fn('queueEdits')(null, [{ sheet: 'main', dog: { id: '9001', name: '甲' }, other: false }, { sheet: 'main', dog: { id: '9002', name: '乙' }, other: false }]);
+  const sent = Object.keys(pending.items).map(k => ({ key: k, seq: pending.items[k].seq }));
+  pending = fn('queueEdits')(pending, [{ sheet: 'main', dog: { id: '9001', name: '甲' }, other: false }]);
+  pending = fn('clearSent')(pending, sent, [{ ack: true }, { ack: false }]);
+  assert.deepEqual(Object.keys(pending.items).sort(), ['9001', '9002']);
+  assert.equal(pending.items['9001'].seq, 3);
+  pending = fn('clearSent')(pending, [{ key: '9001', seq: 3 }, { key: '9002', seq: 2 }], [{ ack: true }, { ack: true }]);
+  assert.deepEqual(Object.keys(pending.items), []);
+});
+
+test('#500 主清單送當下讀到的值；找不到唯一一列或在已出所只送 other', () => {
+  const snapshot = [{ dog: { id: '9001', name: '甲' }, current: { date: '2026-10-04', walker: '乙' } },
+    { dog: { id: '', name: '重' }, current: { date: '', walker: '' } }, { dog: { id: '', name: '重' }, current: { date: '', walker: '' } }];
+  const out = plain(fn('editPayload')(snapshot, [
+    { sheet: 'main', dog: { id: '9001', name: '甲' }, other: false },
+    { sheet: 'main', dog: { id: '', name: '重' }, other: false },
+    { sheet: 'main', dog: { id: '9009', name: '走' }, other: false },
+    { sheet: 'departed', dog: { id: '9001', name: '甲' }, other: true },
+  ]));
+  assert.deepEqual(out[0], { sheet: 'main', dog: { id: '9001', name: '甲' }, other: false, current: { date: '2026-10-04', walker: '乙' } });
+  assert.deepEqual(out.slice(1).map(r => [r.sheet, r.other, r.current]), [['main', true, undefined], ['main', true, undefined], ['departed', true, undefined]]);
+});
