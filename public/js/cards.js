@@ -4,9 +4,9 @@
 // 純函式在前面（tests/index.html 會測），畫面在後面。
 
 // 呼叫 /api 都經過 js/api.js 的 BQApi（#478）
-const BQ_CODES_KEY = 'bq-walker-codes'; // 溜狗表（js/app.js）存的我的代號
-const BQ_WRITES_KEY = 'bq-sheet-writes'; // 溜狗表今天按過的溜了（還沒同步進 walks.json 的）
-const BQ_OPENED_KEY = 'bq-zukan'; // 撕開過的卡：{ v: 1, codes: { 代號: { 狗編號: 撕開那天 } } }
+const BQ_CODES_KEY = BQStore.keys.walkerCodes; // 溜狗表（js/app.js）存的我的代號
+const BQ_WRITES_KEY = BQStore.keys.sheetWrites; // 溜狗表今天按過的溜了（還沒同步進 walks.json 的）
+const BQ_OPENED_KEY = BQStore.keys.zukan; // 撕開過的卡：{ v: 1, codes: { 代號: { 狗編號: 撕開那天 } } }
 const BQ_CODE_PATTERN = /^[0-9a-f]{12}$/;
 const BQ_PACK_SIZE = 5;
 
@@ -132,14 +132,14 @@ function bqAlumni(data) {
 
 function bqLoadCodes(storage) {
   try {
-    const list = JSON.parse((storage && storage.getItem(BQ_CODES_KEY)) || 'null');
+    const list = storage?.readJson(BQ_CODES_KEY);
     return Array.isArray(list) ? list.filter(c => BQ_CODE_PATTERN.test(c)) : [];
   } catch (e) { return []; }
 }
 // 今天在溜狗表按的「溜了」（還沒同步）：跟 js/app.js 的 loadSheetWrites 同一份，只看今天、記成我的
 function bqTodayWrites(storage, today) {
   try {
-    const raw = JSON.parse((storage && storage.getItem(BQ_WRITES_KEY)) || 'null');
+    const raw = storage?.readJson(BQ_WRITES_KEY);
     if (!raw || raw.date !== BQDates.localDateKey(today) || !raw.items || typeof raw.items !== 'object') return [];
     return Object.values(raw.items).filter(it => it && it.mine && it.id && it.current && it.current.date === raw.date).map(it => ({ id: String(it.id), date: raw.date }));
   } catch (e) { return []; }
@@ -170,7 +170,7 @@ async function bqFetchMine(codes) {
 // ── 撕開過的卡：記在這個瀏覽器，跟著代號走（同一台電腦換人設定代號，就是另一個人的圖鑑） ──
 function bqLoadOpened(storage) {
   try {
-    const raw = JSON.parse((storage && storage.getItem(BQ_OPENED_KEY)) || 'null');
+    const raw = storage?.readJson(BQ_OPENED_KEY);
     if (raw && raw.v === 1 && raw.codes && typeof raw.codes === 'object') return raw;
   } catch (e) { /* 壞掉就重來 */ }
   return { v: 1, codes: {} };
@@ -184,8 +184,7 @@ function bqSaveOpened(storage, state) {
   try {
     if (!storage) return false;
     const text = JSON.stringify(state);
-    storage.setItem(BQ_OPENED_KEY, text);
-    return storage.getItem(BQ_OPENED_KEY) === text;
+    return storage.set(BQ_OPENED_KEY, text) && storage.get(BQ_OPENED_KEY) === text;
   } catch (e) { return false; } // 這次開著的期間仍保留記憶，畫面說明未能儲存
 }
 function bqOpenedIds(state, codes) {
@@ -668,22 +667,22 @@ function bqBind() {
 
 async function bqInit() {
   BQ.still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  try { BQ.storage = window.localStorage; } catch (e) { BQ.storage = null; }
+  BQ.storage = BQStore;
   BQ.codes = bqLoadCodes(BQ.storage);
   BQ.opened = bqLoadOpened(BQ.storage);
   try {
-    const name = BQ.storage?.getItem('bq-walker-name');
+    const name = BQ.storage?.get(BQStore.keys.walkerName);
     const originalCodes = BQ.codes.join(',');
     if (name && BQ.codes.length) {
       const r = await BQApi.identity('', { name });
       if (r.error === 'network' || !r.data) throw new Error(r.message);
       const out = r.data;
-      if (BQ.storage?.getItem('bq-walker-name') !== name || bqLoadCodes(BQ.storage).join(',') !== originalCodes) {
+      if (BQ.storage?.get(BQStore.keys.walkerName) !== name || bqLoadCodes(BQ.storage).join(',') !== originalCodes) {
         BQ.codes = bqLoadCodes(BQ.storage);
       } else if (r.ok && out.identity) {
         BQ.codes = out.identity.codes;
-        BQ.storage?.setItem(BQ_CODES_KEY, JSON.stringify(BQ.codes));
-        BQ.storage?.setItem('bq-walker-name', out.identity.name);
+        BQ.storage?.writeJson(BQ_CODES_KEY, BQ.codes);
+        BQ.storage?.set(BQStore.keys.walkerName, out.identity.name);
       }
     }
   } catch (e) { /* 離線保留原來的名字對照 */ }
