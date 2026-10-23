@@ -1,5 +1,6 @@
 // #396：登記、追加同行人、復原共用規則；畫面與測試走同一個介面。
 (function (root) {
+  const MAX_DOGS_PER_SEND = 10; // 與 worker/src/index.js 的 WALK_MAX_DOGS 一致
   function createWalkRegistration(deps) {
     let queue = Promise.resolve();
     const pending = new Map(), requests = new WeakMap();
@@ -184,7 +185,8 @@
       const { entries, day, me, action, expected, revert } = request;
       const groups = [];
       for (const entry of entries) {
-        let group = groups.find(g => g.walker === entry.walker);
+        // #498：Worker 一次最多 10 隻；整群超過就內部拆批，不成為志工的群組大小限制。
+        let group = groups.find(g => g.walker === entry.walker && g.entries.length < MAX_DOGS_PER_SEND);
         if (!group) groups.push(group = { walker: entry.walker, entries: [] });
         group.entries.push(entry);
       }

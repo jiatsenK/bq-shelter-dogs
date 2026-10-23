@@ -1,13 +1,19 @@
 import { dispatchWalks } from './walk-accept.js';
 import { scanWalks, retryNotifiedScan } from './walk-reconcile.js';
 
-// 溜狗對帳排程（#460，每 10 分鐘）：保險掃描一次，再把到期、未完成及中斷的派送合併送出；不讀已完成的歷史工作。
-export async function retryWalks(env, now) {
-  if (env.WALK_RETRY_ENABLED !== 'true' || env.PREVIEW || !env.DB) return;
-  const db = env.DB, at = new Date(now).toISOString();
-  // 有沒跑完的改表通知就補跑它（它本身就是一次掃描），否則照常掃描。
+const enabled = env => env.WALK_RETRY_ENABLED === 'true' && !env.PREVIEW && !!env.DB;
+
+// 保險掃描（#498）：與寫回重試分開，只補漏；有沒跑完的改表通知就補跑它（它本身就是一次掃描）。
+export async function scanTick(env, now) {
+  if (!enabled(env)) return;
   try { if (!await retryNotifiedScan(env,now)) await scanWalks(env,now); }
   catch (error) { console.warn('walk-scan:',error.message); }
+}
+
+// 寫回重試（#498）：只把到期、未完成及中斷的派送交給共用派送核心，不先掃表；不讀已完成的歷史工作。
+export async function retryWalks(env, now) {
+  if (!enabled(env)) return;
+  const db = env.DB, at = new Date(now).toISOString();
   const interrupted = (await db.prepare(`SELECT d.dog_key,d.dispatch_id,s.number,s.name
     FROM v3_walk_delivery d JOIN v3_walk_state s ON s.dog_key=d.dog_key
     WHERE d.started_at<=? ORDER BY d.started_at,d.dog_key LIMIT 10`)

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import worker from '../src/index.js';
 import { dispatchWalk } from '../src/walk-accept.js';
+import { retryWalks } from '../src/walk-retry.js';
 import { setup, request, post, current } from './walk-fixture.mjs';
 
 async function machine(env, action, body) {
@@ -380,4 +381,79 @@ test('#460 兩個排程各跑一件：同步排程不跑溜狗對帳，對帳排
     const wrangler=readFileSync(new URL('../../wrangler.jsonc',import.meta.url),'utf8');
     assert.match(wrangler,/"5-59\/10 \* \* \* \*"/);
   } finally { globalThis.fetch=real; env.DB.close(); }
+});
+
+async function addDogs(env,count,prefix) {
+  for (let i=0;i<count;i++) {
+    const id=String(9200+i),dogId=`${prefix}-${i}`,name=`${prefix}狗${i}`;
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId,name),
+      env.DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind(id,dogId),
+      env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(?,?,?,?, '2026-10-01','x')").bind(i+2,dogId,id,name),
+    ]);
+    assert.equal((await post(env,request(`${prefix}-req-${String(i).padStart(4,'0')}`,'甲',{ dogs:[{ id,name }] }))).status,200);
+  }
+}
+
+test('#498 十隻到期工作依單次預算拆批合併派送，不退回逐隻', async t => {
+  const now=Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now });
+  const env={ ...await setup(),WALK_RETRY_ENABLED:'true' },real=globalThis.fetch;
+  worker.testing.resetState();
+  const batches=[],cells={};
+  globalThis.fetch=async (_url,init)=>{
+    const body=JSON.parse(init.body);
+    assert.equal(body.action,'walkWakeBatch');
+    batches.push(body.items.length);
+    const results=[];
+    for (const item of body.items) {
+      const target=await machine(env,'target',{ dog:item.dog,dispatchId:item.dispatchId,current:cells[item.dog.id] || { date:'2026-10-01',walker:'' } });
+      cells[item.dog.id]=target.current;
+      const receipt={ dogKey:item.dog.id,version:target.version,dispatchId:target.dispatchId,current:target.current };
+      results.push({ ok:true,...receipt,...await machine(env,'receipt',receipt) });
+    }
+    return Response.json({ ok:true,results });
+  };
+  try {
+    await addDogs(env,10,'chunk');
+    await retryWalks(env,now);
+    assert.ok(batches.length>=2 && batches.every(n=>n>1 && n*96<=500),`批次 ${batches}`);
+    assert.equal(batches.reduce((a,b)=>a+b,0),10);
+    const rows=(await env.DB.prepare("SELECT o.status FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version").all()).results;
+    assert.ok(rows.length===10 && rows.every(r=>r.status==='synced'));
+  } finally { globalThis.fetch=real;env.DB.close(); }
+});
+
+test('#498 寫回重試不掃表；沒有待處理工作就不呼叫 Apps Script', async t => {
+  const now=Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now });
+  const env={ ...await setup(),WALK_RETRY_ENABLED:'true' },real=globalThis.fetch;
+  worker.testing.resetState();
+  const actions=[];
+  globalThis.fetch=async (_url,init)=>{ actions.push(JSON.parse(init.body).action); throw new Error('lost'); };
+  try {
+    await post(env,request('noscan-0001'));
+    await retryWalks(env,now);
+    assert.deepEqual(actions,['walkWake']);
+    actions.length=0;
+    await retryWalks(env,now);
+    assert.deepEqual(actions,[]);
+  } finally { globalThis.fetch=real;env.DB.close(); }
+});
+
+test('#498 預算拒絕不退回逐隻派送，工作留待下一輪', async t => {
+  const now=Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now });
+  const env={ ...await setup(),WALK_RETRY_ENABLED:'true' },real=globalThis.fetch;
+  worker.testing.resetState();
+  let wake=0;
+  globalThis.fetch=async ()=>{ wake++; throw new Error('should not send'); };
+  try {
+    await addDogs(env,3,'budget');
+    // 每日剩餘只夠一隻：合併批次被拒時不能改逐隻偷跑。
+    const reserved=(await env.DB.prepare('SELECT reserved FROM v3_walk_write_budget').first()).reserved;
+    await retryWalks({ ...env,SYNC_DAILY_BUDGET:String(reserved+100) },now);
+    assert.equal(wake,0);
+    assert.equal((await env.DB.prepare("SELECT COUNT(*) n FROM v3_walk_outbox WHERE status='pending'").first()).n,3);
+  } finally { globalThis.fetch=real;env.DB.close(); }
 });

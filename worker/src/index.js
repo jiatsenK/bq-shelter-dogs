@@ -8,7 +8,7 @@ import { readDepartedCards } from './departed.js';
 import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, readActivities, resolveDogs, updateActivity } from './activities.js';
 import { acceptWalk, dispatchWalk, readAcceptedWalks, writebackTarget, confirmWalk, reconcileWalk } from './walk-accept.js';
 import { scanNotifiedWalks } from './walk-reconcile.js';
-import { retryWalks } from './walk-retry.js';
+import { retryWalks, scanTick } from './walk-retry.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
@@ -1275,7 +1275,8 @@ export default {
   async scheduled(event, env, ctx) {
     const now = event && event.scheduledTime ? event.scheduledTime : Date.now();
     const cron = event && event.cron;
-    if (!cron || cron === WALK_CRON) ctx.waitUntil(retryWalks(env, now));
+    // 保險掃描與寫回重試是兩個入口（#498）；階段一仍同一排程、頻率不變。
+    if (!cron || cron === WALK_CRON) ctx.waitUntil(scanTick(env, now).then(() => retryWalks(env, now)));
     if (cron === WALK_CRON) return;
     ctx.waitUntil(syncTick(env, now).then(plan => {
       if (plan === 'daily' && r2.r2On(env)) return maintenance(env, now);

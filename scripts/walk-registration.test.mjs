@@ -187,3 +187,17 @@ test('沒說要伺服器撤銷時，沒有本機證據照舊不送', async () =>
   const result = await walks.undo([{ id: '1', name: '甲' }]);
   assert.deepEqual([calls.length, result.rows[0].status], [0, 'changed']);
 });
+
+test('#498 整群 11 隻：內部拆成每次最多 10 隻送出，逐狗回報全部成功', async () => {
+  const sizes = [];
+  const { walks } = setup(async payload => {
+    sizes.push(payload.dogs.length);
+    if (payload.dogs.length > 10) return { ok: false, error: '一次 1–10 隻' };
+    return { ok: true, today: '2026-10-18', results: payload.dogs.map(d => ({ ...d, status: 'written', prev: { walker: '' }, wrote: { walker: '我' } })) };
+  });
+  const eleven = Array.from({ length: 11 }, (_, i) => ({ id: String(100 + i), name: `狗${i}` }));
+  const result = await walks.register(eleven);
+  assert.deepEqual(sizes, [10, 1]);
+  assert.equal(result.successful.length, 11);
+  assert.ok(result.rows.every(r => r.status === 'written'));
+});

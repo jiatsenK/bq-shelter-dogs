@@ -179,7 +179,7 @@ export async function dispatchWalk(db, dog, env, clock = Date.now(), recovery = 
   let claimed;
   try { claimed = await db.batch([
     db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?),\'\')=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?) THEN 1 ELSE 0 END').bind(key, recoverDispatchId, key, job.version),
-    ...await writeBudget(db, env, 96, clock),
+    ...await writeBudget(db, env, DISPATCH_COST, clock),
     db.prepare('INSERT INTO v3_walk_retry(dog_key,version,failures,dispatch_id,reserved_day) VALUES(?,?,0,?,?) ON CONFLICT(dog_key) DO UPDATE SET failures=CASE WHEN version=excluded.version THEN failures ELSE 0 END,version=excluded.version,dispatch_id=excluded.dispatch_id,reserved_day=excluded.reserved_day').bind(key,job.version,dispatchId,now.slice(0,10)),
     db.prepare('INSERT INTO v3_walk_delivery VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET dispatch_id=excluded.dispatch_id,started_at=excluded.started_at').bind(key, dispatchId, now),
     db.prepare("UPDATE v3_walk_outbox SET status='dispatching',dispatch_id=?,error='' WHERE dog_key=? AND version=? AND (status IN ('pending','retry','unconfirmed') OR (?=1 AND status='dispatching')) RETURNING version").bind(dispatchId, key, job.version, Number(!!recovery)),
@@ -229,11 +229,20 @@ export async function dispatchWalk(db, dog, env, clock = Date.now(), recovery = 
   }
 }
 
-// 合併派送（#460）：Cron 補送一輪最多 10 隻，認領、交給 Apps Script、收尾各一次往返，不再逐隻。
-// items：[{ dog, recovery }]。認領批次被任一隻的 guard 擋下時，退回逐隻 dispatchWalk。
+// 合併派送（#460）：認領、交給 Apps Script、收尾各一次往返，不再逐隻。
+// #498：依單次寫入上限拆批，批量只是內部執行方式；預算拒絕或 D1 故障就停下留待下一輪，
+// 只有版本競爭才退回逐隻 dispatchWalk 各自判斷。items：[{ dog, recovery }]。
+const DISPATCH_COST = 96;
 export async function dispatchWalks(db, items, env, clock = Date.now()) {
-  if (!items.length) return;
-  if (items.length === 1) return dispatchWalk(db, items[0].dog, env, clock, items[0].recovery);
+  const size = Math.max(1, Math.min(10, Math.floor(Number(env.SYNC_MAX_ROWS || 500) / DISPATCH_COST) || 1));
+  for (let i = 0; i < items.length; i += size) {
+    const chunk = items.slice(i, i + size);
+    if (chunk.length === 1) await dispatchWalk(db, chunk[0].dog, env, clock, chunk[0].recovery);
+    else await dispatchBatch(db, chunk, env, clock);
+  }
+}
+
+async function dispatchBatch(db, items, env, clock) {
   const now = new Date(clock).toISOString(), day = now.slice(0, 10);
   const found = await reads(db, ...items.flatMap(({ dog, recovery }) => [
     ['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', keyOf(dog)],
@@ -244,7 +253,7 @@ export async function dispatchWalks(db, items, env, clock = Date.now()) {
   if (!jobs.length) return;
   let claimed;
   try { claimed = await db.batch([
-    ...await writeBudget(db, env, 96 * jobs.length, clock),
+    ...await writeBudget(db, env, DISPATCH_COST * jobs.length, clock),
     ...jobs.flatMap(j => [
       db.prepare("INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?),'')=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?) THEN 1 ELSE 0 END").bind(j.key, j.recoverId, j.key, j.job.version),
       db.prepare('INSERT INTO v3_walk_retry(dog_key,version,failures,dispatch_id,reserved_day) VALUES(?,?,0,?,?) ON CONFLICT(dog_key) DO UPDATE SET failures=CASE WHEN version=excluded.version THEN failures ELSE 0 END,version=excluded.version,dispatch_id=excluded.dispatch_id,reserved_day=excluded.reserved_day').bind(j.key, j.job.version, j.dispatchId, day),
@@ -253,7 +262,11 @@ export async function dispatchWalks(db, items, env, clock = Date.now()) {
       db.prepare('DELETE FROM v3_walk_guard'),
     ]),
   ]); } catch (error) {
-    // 有一隻的狀態在讀和認領之間變了：整批沒寫進去，改逐隻處理，各自判斷。
+    // 整批沒寫進去。狀態都沒變＝預算拒絕或 D1 故障，逐隻重跑只會繞過預算，直接往外丟。
+    const again = await reads(db, ...jobs.flatMap(j => [['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', j.key],
+      ['SELECT version FROM v3_walk_state WHERE dog_key=?', j.key]]));
+    if (jobs.every((j, i) => (again[2 * i][0]?.dispatch_id || '') === (j.delivery?.dispatch_id || '') && again[2 * i + 1][0]?.version === j.job.version)) throw error;
+    // 有一隻的狀態在讀和認領之間變了（版本競爭）：改逐隻處理，各自判斷。
     for (const { dog, recovery } of items) {
       try { await dispatchWalk(db, dog, env, clock, recovery); } catch (e) { console.warn('walk-dispatch:', keyOf(dog), e.message); }
     }
