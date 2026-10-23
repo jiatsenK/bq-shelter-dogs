@@ -101,6 +101,7 @@ function guideSpotlights(el) {
 }
 
 let TOUR_JS = '';
+let WELCOME_JS = '';
 let PHOTO_JS = '';
 let APP_JS = '';    // js/app.js 原始碼（#30 拆檔後程式在這裡）
 let API_JS = '';    // js/api.js 原始碼（#478 呼叫 /api 都在這裡）
@@ -257,7 +258,7 @@ function runTests() {
       // #478 起呼叫 /api 都經過 js/api.js 的 BQApi；app.js 不直接 fetch
       if (/\bfetch\(/.test(APP_JS)) throw new Error('app.js 不直接呼叫 fetch，要經過 BQApi');
       // V9（#141）拿掉我的備註，網站不再寫 /notes
-      if (/\/notes/.test(APP_JS + PHOTO_JS + API_JS)) throw new Error('我的備註已拿掉，不該再讀寫 /notes');
+      if (/\/notes/.test(APP_JS + PHOTO_JS + WELCOME_JS + API_JS)) throw new Error('我的備註已拿掉，不該再讀寫 /notes');
       // 寫入都送到同網址的 Worker（不是試算表）：照片（#48）、換代號（#96）、更新（只讀試算表）、溜了與備註（#138、#281）、
       // 休養、入所介紹、舊編號（#289）、出入所紀錄（#333）、常溜、身分（#267）、固定照顧、狗群、活動紀錄、開卡
       const writes = [...API_JS.matchAll(/send\('(POST|PUT)', `?'?(\/[\w/-]+)|send\(method, `(\/[\w-]+)|fetch\(`\$\{root\(\)\}(\/[\w-]+)/g)].map(m => m[2] || m[3] || m[4]).sort();
@@ -663,7 +664,7 @@ function runTests() {
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
       // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
       const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
-      eq(scripts.map(s => s.getAttribute('src')), ['js/dates.js', 'js/api.js', 'js/store.js', 'js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/walk-flow.js', 'js/detail-editor.js', 'js/tour.js', 'js/photo.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/activities.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定、#270 活動紀錄）：');
+      eq(scripts.map(s => s.getAttribute('src')), ['js/dates.js', 'js/api.js', 'js/store.js', 'js/site-config.js', 'js/detail-viewport.js', 'js/keyboard-viewport.js', 'js/walk-registration.js', 'js/walk-flow.js', 'js/detail-editor.js', 'js/tour.js', 'js/photo.js', 'js/welcome.js', 'js/app.js', 'js/analysis.js', 'js/group-stage.js', 'js/find.js', 'js/activities.js', 'js/desk.js'], 'script（#59 起多分析頁、#99 多找狗、2026-10-10 電腦版、這間收容所的設定、#270 活動紀錄）：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');
       if (doc.querySelector('#main .card')) throw new Error('狗狗資料不應寫死在 index.html');
@@ -831,7 +832,7 @@ async function runSerialTests() {
       eq(main.textContent.trim(), '讀取中…', '切回溜狗表仍在讀取：');
       release(); await done; await tick();
       eq(calls.filter(c => c[0] !== 'walkers')[0][0], 'dogs', '讀的資料（#141 溜狗人名字另外跟 Worker 拿）：');
-      onboard = null; renderOnboard(); // init 會開開頭畫面，測試不需要
+      BQWelcome.close(); // init 會開開頭畫面，測試不需要
       eq(names(), ['讀取甲', '讀取乙'], '狗卡（沒紀錄的在前）：');
       // 顯示成這台裝置的當地時間（在台灣就是 9/25 08:05）
       const t = new Date(DATA.syncedAt);
@@ -868,7 +869,7 @@ async function runSerialTests() {
   } finally {
     restoreApi();
     [allDogs, groupMap, activeTab, searchQuery, loadState, loadWarning] = saved;
-    onboard = null; renderOnboard(); // init 會開開頭畫面（後面的網頁設成不能點），關掉才不影響後面的測試
+    BQWelcome.close(); // init 會開開頭畫面（後面的網頁設成不能點），關掉才不影響後面的測試
     render();
   }
 }
@@ -1343,7 +1344,7 @@ async function runHistoryTests() {
 
 // #58 我最近溜過：會切分類、開詳細資訊、替換 BQApi，所以一項一項跑
 async function runMyWalksTests() {
-  const saved = [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState, walksData, walkerSetup, UPLOAD_URL];
+  const saved = [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState, walksData, UPLOAD_URL];
   // #96 起看自己的代號：我＝ME，別人＝OTHER（假代號）；測試完把這支手機原本的設定放回去
   const ME = 'aaaaaaaaaaaa', OTHER = 'bbbbbbbbbbbb';
   let savedCodes = null;
@@ -1369,12 +1370,12 @@ async function runMyWalksTests() {
   const setup = () => {
     allDogs = [dog('紀錄甲', '8001', new Date(2026, 8, 24)), dog('紀錄乙', '8002', new Date(2026, 8, 26)),
       dog('紀錄丙', '8003', null), dog('紀錄戊', '8005', new Date(2026, 8, 24))];
-    groupMap = {}; searchQuery = ''; walkerSetup = null;
+    groupMap = {}; searchQuery = '';
     walksData = WALKS;
     saveMyCodes([ME]);
     myWalks = parseMyWalks(WALKS); myWalksState = 'ready';
     mineMonth = ''; mineDay = '';
-    activeTab = 'mine'; render();
+    activeTab = 'mine'; render(); document.getElementById('whoCancel')?.click();
   };
   // 月曆上有來的每一天點一次（新到舊），回傳 [日期標題, 那天的狗, 幾隻]
   const eachDay = () => [...main.querySelectorAll('.mc-cell.on')].map(c => c.dataset.mineDay).reverse().map(k => {
@@ -1550,8 +1551,8 @@ async function runMyWalksTests() {
         if (path === '/identity') return json({ ok: true, identity: { volunteerId: 'person', name: loadWalkerName(), codes: loadMyCodes() } });
         return json({ ok: true, ids: [], aliases: {} });
       });
-      const change = async name => { walkerSetup = { text: name, phase: 'edit', error: '' }; render(); document.getElementById('whoRename').click(); for (let i=0;i<8;i++) await tick(); };
-      await change('甲新'); if(loadWalkerName() !== '甲新') throw new Error(JSON.stringify({requests, edit:walkerSetup, text:main.textContent}));
+      const change = async name => { document.getElementById('whoEdit').click(); const input = document.getElementById('whoInput'); input.value = name; input.dispatchEvent(new Event('input', { bubbles: true })); document.getElementById('whoRename').click(); for (let i=0;i<8;i++) await tick(); };
+      await change('甲新'); if(loadWalkerName() !== '甲新') throw new Error(JSON.stringify({requests, text:main.textContent}));
       conflict = true; await change('乙');
       if (!main.textContent.includes('常溜 2') || !main.textContent.includes('開卡 6')) throw new Error('未呈現雙方摘要');
       document.getElementById('whoCancel').click(); eq(requests.includes('/identity/merge'), false, '取消不合併：'); eq(loadWalkerName(), '甲新');
@@ -1598,7 +1599,7 @@ async function runMyWalksTests() {
   } finally {
     restoreApi();
     hideDetail();
-    [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState, walksData, walkerSetup, UPLOAD_URL] = saved;
+    [allDogs, groupMap, activeTab, searchQuery, myWalks, myWalksState, walksData, UPLOAD_URL] = saved;
     walkerCodesMemory = null;
     try { if (savedCodes == null) localStorage.removeItem(WALKER_CODES_KEY); else localStorage.setItem(WALKER_CODES_KEY, savedCodes); } catch (e) { /* 無痕模式 */ }
     render();
@@ -1893,20 +1894,23 @@ async function runV9Tests() {
       let payload;
       fakeApi((name, ...a) => {
         if (name === 'walkers') return json({ ok: true, names: ['志工甲經常帶', '岑', '佳岑'], walkers: {} });
-        payload = name === 'identity' ? a[1] : a[0]; return json({ ok: true, identity: { volunteerId: 'test-person', name: '佳岑', codes: ['aaaaaaaaaaaa', 'bbbbbbbbbbbb'] } });
+        if (name === 'identity') payload = a[1]; return json({ ok: true, identity: { volunteerId: 'test-person', name: '佳岑', codes: ['aaaaaaaaaaaa', 'bbbbbbbbbbbb'] } });
       });
       await loadWalkerNames();
       eq(walkerNameList, ['志工甲', '佳岑'], '可選人名：');
-      await setWalkerName('佳岑');
+      BQWelcome.askNameThenWalk([]);
+      const input = document.getElementById('obInput'); input.value = '佳岑'; input.dispatchEvent(new Event('input', { bubbles: true }));
+      document.querySelector('#onboard .ob-next').click();
+      for (let i=0;i<8;i++) await new Promise(r=>setTimeout(r,0));
       eq(payload.name, '佳岑', '以登記名字解析身分，不推測別名：');
       eq(loadMyCodes(), ['aaaaaaaaaaaa', 'bbbbbbbbbbbb'], '只採服務提供的名字對照：');
     });
     await check('#141 開頭畫面：沒設定名字先問名字，才進說明；說明看完不再出現', async () => {
-      phoneStore = fakeStorage(); walkerNameMemory = ''; walkerCodesMemory = null; onboard = null;
+      phoneStore = fakeStorage(); walkerNameMemory = ''; walkerCodesMemory = null; BQWelcome.close();
       UPLOAD_URL = 'https://worker.test';
       fakeApi((name, ...a) => json({ ok: true, codes: ['aaaaaaaaaaaa'], identity: { volunteerId: 'test-person', name: (name === 'identity' ? a[1] : a[0]).name || '志工新', codes: ['aaaaaaaaaaaa'] } }));
       walkerNameList = ['阿明', '阿華'];
-      startOnboard();
+      BQWelcome.start();
       const box = () => document.getElementById('onboard');
       if (!box() || !box().querySelector('#obInput')) throw new Error('要先問名字');
       eq(box().querySelectorAll('[data-ob-name]').length, 0, '沒打字不列名字（K 2026-10-12）：');
@@ -1928,15 +1932,15 @@ async function runV9Tests() {
       const tour = () => document.getElementById('tour');
       eq([loadWalkerName(), box(), !!tour()], ['志工新', null, true], '設好名字進導覽（K 2026-10-09 直接用實際的網頁）：');
       tour().querySelector('[data-tour="done"]').click();
-      eq([box(), tour(), needOnboard()], [null, null, false], '看完：');
-      startOnboard();
+      eq([box(), tour(), phoneStore.get(BQStore.keys.onboarded)], [null, null, '1'], '看完：');
+      BQWelcome.start();
       eq(box(), null, '不再出現：');
     });
     await check('K 2026-10-12：沒打字不列名字，打一個字出現推薦（開頭一樣的在前），以前溜過的也找得到', async () => {
       const box = () => document.getElementById('onboard');
-      phoneStore = fakeStorage(); walkRecords = freshWalkRecords(); walkerNameMemory = ''; walkerCodesMemory = null; onboard = null;
+      phoneStore = fakeStorage(); walkRecords = freshWalkRecords(); walkerNameMemory = ''; walkerCodesMemory = null; BQWelcome.close();
       walkerNameList = ['阿明', '小華', '明華', '美玲'];
-      startOnboard();
+      BQWelcome.start();
       const names = () => [...box().querySelectorAll('[data-ob-name]')].map(b => b.textContent);
       const input = box().querySelector('#obInput');
       input.value = '明'; input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -1945,24 +1949,24 @@ async function runV9Tests() {
       eq(names(), [], '沒有符合的就不列：');
       input.value = ''; input.dispatchEvent(new Event('input', { bubbles: true }));
       eq(names(), [], '清掉字就不列：');
-      onboard = null; renderOnboard();
+      BQWelcome.close();
       // 以前溜過、現在表上沒有的（Worker 記下來的）：沒打字不列，打字才推薦；點了也不算表上沒有
       walkerOlderNames = ['老K', '明哲'];
-      startOnboard();
+      BQWelcome.start();
       eq(names(), [], '沒打字不列：');
       const input2 = box().querySelector('#obInput');
       input2.value = '老'; input2.dispatchEvent(new Event('input', { bubbles: true }));
       eq(names(), ['老K'], '打字連以前的一起找：');
       box().querySelector('[data-ob-name="老K"]').click();
-      eq([names(), unknownWalkerNames('老K')], [['老K'], []], '點了以前的名字：');
+      eq([names(), box().querySelector('#obInput').value], [['老K'], '老K'], '點了以前的名字：');
       input2.value = '明'; box().querySelector('#obInput').value = '明'; box().querySelector('#obInput').dispatchEvent(new Event('input', { bubbles: true }));
       eq(names(), ['明華', '明哲', '阿明'], '開頭一樣的在前：');
-      walkerOlderNames = []; onboard = null; renderOnboard();
+      walkerOlderNames = []; BQWelcome.close();
     });
     await check('K 2026-10-12：名字清單上沒有、但遛狗紀錄裡有（最近沒溜的人）就不用再確認', async () => {
       const tick = async () => { for (let i = 0; i < 8; i++) await new Promise(r => setTimeout(r, 0)); };
       const box = () => document.getElementById('onboard');
-      phoneStore = fakeStorage(); walkRecords = freshWalkRecords(); walkerNameMemory = ''; walkerCodesMemory = null; onboard = null; walksData = null;
+      phoneStore = fakeStorage(); walkRecords = freshWalkRecords(); walkerNameMemory = ''; walkerCodesMemory = null; BQWelcome.close(); walksData = null;
       UPLOAD_URL = 'https://worker.test';
       fakeApi((api, ...a) => {
         if (api === 'identity' && a[0] === '') { const name = a[1].name; return json({ ok: true, identity: { volunteerId: 'test-person', name, codes: [name === '老K' ? 'abcabcabcabc' : 'cccccccccccc'] } }); }
@@ -1971,19 +1975,19 @@ async function runV9Tests() {
         throw new Error('不該送別的');
       });
       walkerNameList = ['阿明'];
-      startOnboard();
+      BQWelcome.start();
       const input = box().querySelector('#obInput');
       input.value = '老K'; input.dispatchEvent(new Event('input', { bubbles: true }));
       box().querySelector('.ob-next').click();
       await tick();
       eq([box() && box().querySelector('.ob-confirm'), loadWalkerName(), loadMyCodes()], [null, '老K', ['abcabcabcabc']], '紀錄裡有就直接設好：');
       const t = document.getElementById('tour'); if (t) t.querySelector('[data-tour="done"]').click();
-      onboard = null; renderOnboard(); walksData = null;
+      BQWelcome.close(); walksData = null;
     });
     await check('介面評估第四輪：先看看不設名字也能進；按溜了才問名字，設好直接登記；表上沒有的名字先確認；說明可以再打開', async () => {
       const tick = async () => { for (let i = 0; i < 6; i++) await new Promise(r => setTimeout(r, 0)); };
       const box = () => document.getElementById('onboard');
-      phoneStore = fakeStorage(); walkRecords = freshWalkRecords(); walkerNameMemory = ''; walkerCodesMemory = null; onboard = null;
+      phoneStore = fakeStorage(); walkRecords = freshWalkRecords(); walkerNameMemory = ''; walkerCodesMemory = null; BQWelcome.close();
       UPLOAD_URL = 'https://worker.test'; sheetWriteState = 'unknown';
       const calls = [];
       fakeApi((api, ...a) => {
@@ -1995,7 +1999,7 @@ async function runV9Tests() {
         return json({ ok: true, today: BQDates.localDateKey(new Date()), results: body.dogs.map(d => ({ ...d, status: 'written', prev: { date: null, walker: '' }, wrote: { walker: body.walker } })) });
       });
       walkerNameList = ['阿明', '阿華'];
-      startOnboard();
+      BQWelcome.start();
       eq(box().querySelector('[data-ob="later"]').textContent, '先看看，等一下再設定', '名字頁可以先看看：');
       const typed = box().querySelector('#obInput');
       typed.value = '阿'; typed.dispatchEvent(new Event('input', { bubbles: true }));
@@ -2003,7 +2007,7 @@ async function runV9Tests() {
       eq(box().querySelector('[data-ob-name="阿明"]').classList.contains('me-name'), true, '選自己的名字跟一起溜的人樣子不同：');
       box().querySelector('[data-ob="later"]').click();
       const tour = () => document.getElementById('tour');
-      eq([box(), !!tour(), nameLater(), activeTab], [null, true, true, 'walk'], '先看看進導覽，在溜狗表上：');
+      eq([box(), !!tour(), (phoneStore.get(BQStore.keys.nameLater) === '1'), activeTab], [null, true, true, 'walk'], '先看看進導覽，在溜狗表上：');
       eq(document.documentElement.classList.contains('tour-open'), true, '導覽期間鎖住背景捲動：');
       eq([tour().querySelector('h2').textContent, tour().querySelector('.tour-n').textContent], ['溜狗表', '1 / 9'], '第一步：');
       eq(tour().querySelector('[data-tour="back"]'), null, '第一步沒有上一步：');
@@ -2015,7 +2019,7 @@ async function runV9Tests() {
       tour().querySelector('[data-tour="back"]').click();
       eq(tour().querySelector('h2').textContent, '溜狗表', '上一步：');
       tour().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-      eq([tour(), needOnboard(), document.getElementById('main').closest('[inert]')], [null, false, null], 'Esc 等於略過，下次開不再問名字：');
+      eq([tour(), phoneStore.get(BQStore.keys.onboarded), document.getElementById('main').closest('[inert]')], [null, '1', null], 'Esc 等於略過，下次開不再問名字：');
       eq(document.documentElement.classList.contains('tour-open'), false, '關閉後解除背景捲動限制：');
       setWalked([allDogs[0]], true);
       eq([!!box(), box().querySelector('.ob-next').textContent], [true, '設定並登記'], '按溜了才問名字：');
@@ -2027,7 +2031,7 @@ async function runV9Tests() {
       calls.length = 0;
       box().querySelector('.ob-next').click();
       await tick(); await sheetQueue; await tick();
-      eq([box(), loadWalkerName(), walkedToday().has(allDogs[0]), nameLater()], [null, '阿名', true, false], '設好直接登記：');
+      eq([box(), loadWalkerName(), walkedToday().has(allDogs[0]), (phoneStore.get(BQStore.keys.nameLater) === '1')], [null, '阿名', true, false], '設好直接登記：');
       eq(calls.filter(api => api !== 'favorites'), ['identity', 'identity', 'walk'], '送出：');
       hideToast();
       activeTab = 'mine'; myWalks = []; myWalksState = 'ready'; render();
@@ -2039,7 +2043,7 @@ async function runV9Tests() {
       eq(tour(), null, '關閉：');
     });
   } finally {
-    hideDetail(); hideToast(); onboard = null; renderOnboard(); closeGuideIn(); withSheet = null; renderWithSheet(); restoreApi();
+    hideDetail(); hideToast(); BQWelcome.close(); closeGuideIn(); withSheet = null; renderWithSheet(); restoreApi();
     [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL, walkerNames, walkerNameList, sheetWriteState, walkerNameMemory, walkerCodesMemory, myWalks, myWalksState] = saved;
     render();
   }
@@ -2735,7 +2739,7 @@ async function runTermTests() {
       .replace(/遛狗表|常遛狗群|勿遛|勿蹓|「誰遛的」|'誰遛的'|上次遛/g, ''); // K 2026-10-13 指定左側標題「上次遛」
     const old = ['遛', '移回', '一直收起', '今天先收起', '犬名', '犬隻', '狗狗', '狗卡資訊', '平均隔', '最久隔', '日期異常', '尚無', '已存到 Git', '代號服務'];
     const hits = [];
-    for (const [file, src] of [['index.html', INDEX_HTML.replace(/<!--[\s\S]*?-->/g, '')], ['app.js', APP_JS], ['tour.js', TOUR_JS], ['photo.js', PHOTO_JS], ['analysis.js', ANALYSIS_JS], ['find.js', FIND_JS]]) {
+    for (const [file, src] of [['index.html', INDEX_HTML.replace(/<!--[\s\S]*?-->/g, '')], ['app.js', APP_JS], ['tour.js', TOUR_JS], ['photo.js', PHOTO_JS], ['welcome.js', WELCOME_JS], ['analysis.js', ANALYSIS_JS], ['find.js', FIND_JS]]) {
       const text = shown(src);
       for (const w of old) if (text.includes(w)) hits.push(`${file}：${w}`);
     }
@@ -3074,7 +3078,7 @@ async function runR2Tests() {
     if (!/make-thumbs\.py --site/.test(thumbs)) throw new Error('縮圖要用 make-thumbs.py --site');
   });
   await check('#130 換照片的提示：照片放 R2 後馬上生效，不再說要等幾分鐘', () => {
-    if (/其他志工幾分鐘內會看到/.test(APP_JS + PHOTO_JS)) throw new Error('提示還寫幾分鐘');
+    if (/其他志工幾分鐘內會看到/.test(APP_JS + PHOTO_JS + WELCOME_JS)) throw new Error('提示還寫幾分鐘');
     if ((PHOTO_JS.match(/其他志工重新整理就會看到/g) || []).length !== 1) throw new Error('主照片的提示要改');
   });
 }
@@ -4685,11 +4689,11 @@ async function runTourLayoutTests() {
 }
 
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js', '../public/js/dates.js', '../public/js/api.js', '../public/js/store.js', '../public/js/walk-flow.js', '../public/js/detail-editor.js', '../public/js/tour.js', '../public/js/photo.js'].map(u => fetch(u).then(res => {
+Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js', '../public/js/dates.js', '../public/js/api.js', '../public/js/store.js', '../public/js/walk-flow.js', '../public/js/detail-editor.js', '../public/js/tour.js', '../public/js/photo.js', '../public/js/welcome.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs, tourJs, photoJs]) => {
+  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs, tourJs, photoJs, welcomeJs]) => {
     const dates = document.createElement('script'); dates.textContent = datesJs; document.body.appendChild(dates);
     API_JS = apiJs;
     const api = document.createElement('script'); api.textContent = apiJs; document.body.appendChild(api);
@@ -4705,6 +4709,7 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     APP_JS = js;
     TOUR_JS = tourJs;
     PHOTO_JS = photoJs;
+    WELCOME_JS = welcomeJs;
     DOGS_JSON = JSON.parse(dogsJson);
     const dv = document.createElement('script'); dv.textContent = detailViewportJs; document.body.appendChild(dv);
     const wr = document.createElement('script'); wr.textContent = walkRegistrationJs; document.body.appendChild(wr);
@@ -4712,6 +4717,7 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     const de = document.createElement('script'); de.textContent = detailEditorJs; document.body.appendChild(de);
     const guide = document.createElement('script'); guide.textContent = tourJs; document.body.appendChild(guide);
     const photo = document.createElement('script'); photo.textContent = photoJs; document.body.appendChild(photo);
+    const welcome = document.createElement('script'); welcome.textContent = welcomeJs; document.body.appendChild(welcome);
     const s = document.createElement('script');
     s.textContent = js;
     document.body.appendChild(s);

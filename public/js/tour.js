@@ -155,8 +155,7 @@ const BQTour = (() => {
     }
   }
   function startTour(again = false) {
-    onboard = null;
-    renderOnboard();
+    BQWelcome.close();
     if (activeTab !== 'walk' || analysisOpen) {
       if (analysisOpen && typeof hideAnalysis === 'function') hideAnalysis();
       switchTab('walk');
@@ -167,7 +166,7 @@ const BQTour = (() => {
   }
   function endTour() {
     tourReset();
-    try { phoneStore && phoneStore.set(ONBOARD_KEY, '1'); } catch (e) { /* 存不了下次再看一次 */ }
+    try { phoneStore && phoneStore.set(BQStore.keys.onboarded, '1'); } catch (e) { /* 存不了下次再看一次 */ }
     tour = null;
     renderTour();
   }
@@ -254,7 +253,7 @@ const BQTour = (() => {
       document.documentElement.style.removeProperty('--tour-tip-height');
       document.documentElement.style.removeProperty('--tour-viewport-height');
       document.documentElement.style.removeProperty('--tour-viewport-top');
-      setOnboardInert(null);
+      BQWelcome.setInert(null);
       return;
     }
     if (!box) {
@@ -280,7 +279,7 @@ const BQTour = (() => {
         if (e.key === 'Escape') endTour();
       });
     }
-    setOnboardInert(box);
+    BQWelcome.setInert(box);
     queueTour();
     if (!stepChanged && box.querySelector('.tour-tip')) return placeTour(); // 資料重畫時只重新對位置
     const i = tour.step;
