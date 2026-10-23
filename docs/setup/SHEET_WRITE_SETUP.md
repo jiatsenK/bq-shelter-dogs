@@ -74,6 +74,8 @@
 
 ## 6. 試算表有改時通知網站（ADR 0012，#305）
 
+> #501 起退役：狗清單改由第 8 節的編輯觸發送 Worker，`installWalkEditTriggers` 會刪掉這裡的 `notifyWorker` 觸發器；Worker 的 `/api/sheet-changed` 只驗證後回 ok，不再叫同步。下面留作歷史。
+
 網站不再每 30 分鐘同步一次，改成：有人**直接在試算表畫面**改了東西，Apps Script 通知 Worker，Worker 每 10 分鐘看一次、有改才同步（一天最多 30 次）；另外每天台灣 6:30 保險同步一次。網站上按的（溜了、狗群等）本來就馬上進資料庫，不會觸發通知。
 
 通知用一組**專用密碼**，只能說「試算表有改」，不是 `WALKER_KEY`。K 自己設定，不要給別人。
@@ -100,8 +102,29 @@
 啟用前（需 K 另行授權）：
 
 1. 指令碼屬性要有 `WALK_WORKER_URL`（Worker 網址）與 `WRITE_KEY`（同 `SHEET_WRITE_KEY`）。
-2. 貼上最新 `apps-script/sheet-write.gs`，在編輯器選 `installWalkEditTriggers` 執行一次並授權：會建立「編輯時」→ `onWalkSheetEdit`、每 10 分鐘 → `flushWalkEdits`。第 6 節的 `notifyWorker`（變更時）照舊保留給狗清單同步，#501 再換掉。
-3. Worker 的 `D1_WALK_NOTIFY` 維持未設定時，送來的列只標記「有改」、不動今日溜狗。
+2. 貼上最新 `apps-script/sheet-write.gs`，在編輯器選 `installWalkEditTriggers` 執行一次並授權：會建立「編輯時」→ `onWalkSheetEdit`、每 10 分鐘 → `flushWalkEdits`。#501 起同一個函式也會建立狗清單的觸發器（見第 8 節），並刪掉第 6 節的 `notifyWorker`。
+3. Worker 的 `D1_WALK_NOTIFY` 維持未設定時，送來的列不動今日溜狗（狗清單由第 8 節另外送）。
 4. 先在測試試算表照 `docs/research/2026-10-23-gas-trigger-structure-changes.md` 的「需實測清單」逐項操作（貼上多格、剪下貼到「已出所」、清空、Ctrl+Z、手機 App），看 Apps Script 執行紀錄與 D1 結果。
 
 保險掃描改成每天台灣 09:43、13:53、23:53 由 Worker 向 Apps Script 要指紋（`walkScan`），一樣就結束；寫回重試每 10 分鐘只查 D1 有沒有待寫回，沒有就結束。
+
+## 8. 狗清單：有人編輯才同步（#501，ADR 0018 第 5–7 點，**正式切換需 K 授權**）
+
+取代 GitHub Actions「同步試算表」（`sync-sheet.yml` 已刪）。改「主清單」「已出所」「常遛狗群」時，Apps Script 把受影響的單位記進指令碼屬性 `DOG_LIST_PENDING`，在 script lock 內讀當下的值送到 `POST /api/walk-writeback/dog-list`（每批 10 個）；Worker 只改那幾隻、只寫有變的欄。送不出去就留著，下次編輯或每 10 分鐘（`flushDogList`）補送；Worker 確認收到才清，只清送出時的那一版。
+
+- 單位：主清單一隻狗（籠位、編號、犬名、遛狗日期、誰遛的、備註）、已出所一隻狗（整列文字＋出所日期欄）、常遛狗群一欄（名單＋最下面的群名）、主清單下方異動紀錄整段。
+- 換籠、離所：看狗新出現在哪裡。出現在「已出所」就記離所（原因照 `worker/src/departure-rules.js`，跟舊同步同一份規則）並從網站主清單移走；又出現在主清單就不算離所。
+- 回所：狗回來會拿新編號，如果離所紀錄裡剛好一筆同名、主清單上沒有別的同名，就認定是同一隻：新編號連到原本的狗、舊離所註明用哪個編號回所，並記一筆編輯紀錄（舊編號）。認錯就在網站「舊編號」拆開；同名多筆不猜，當新狗。
+- 名字換代號用 Worker 的 `WALKER_KEY`；「我溜過」要在 Worker 設 `MY_NAME`（跟原 Actions Secret 一樣），沒設就都不是。
+- 保險掃描：每天台灣 09:43、13:53、23:53（`dogListScan`，Google 只保證在那個小時內）送每個單位的指紋，Worker 回不一樣的，再分批只送那幾個；一樣就結束，不送資料、不寫 D1。D1 有、試算表沒有的只寫在執行紀錄和 D1 `v3_sync_state` 的 `dog_list_extra`，不自動刪。
+- 手動補漏／重新灌資料：在 Apps Script 編輯器執行 `dogListScan`；D1 是空的時會全部重送（每次最多 600 個單位，沒送完再執行一次）。本機備援仍可用 `scripts/sync-compact-d1.mjs`（需要 `SHEET_ID` 等環境變數與 wrangler，不再由 Actions 執行）。
+
+切換順序（K 授權後）：
+
+1. 先 `wrangler d1 export` 留一份正式 D1 還原點。
+2. 合併部署 Worker（`/api/walk-writeback/dog-list`、`dog-list-scan` 上線；每 10 分鐘叫 GitHub 的排程同時停止）。
+3. 貼上最新 `apps-script/sheet-write.gs`，確認專案時區是 Asia/Taipei，執行一次 `installWalkEditTriggers` 並授權。
+4. 手動執行一次 `dogListScan`，看執行紀錄：第一次 Worker 沒有指紋，會全部重送；之後再執行一次應該只回「沒有要送的」。
+5. 改一格籠位、新增一隻狗、把一隻狗剪下貼到「已出所」，看網站與 D1。
+
+照片垃圾桶：Worker 每月 1 日台灣 10:17 清掉超過 30 天的，結果在 `GET /admin/trash` 的 `lastPurge`（D1 `v3_sync_state` 的 `trash_purged`）。

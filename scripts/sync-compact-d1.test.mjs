@@ -172,10 +172,6 @@ test('#251 只寫 D1：同步不寫 data/、不呼叫 git／GitHub、不寫試�
     assert.doesNotMatch(text, /writeFile\([^)]*DATA_DIR/, name);
   }
   assert.match(code, /'d1', 'execute'/);
-  const workflow = await readFile(new URL('../.github/workflows/sync-sheet.yml', import.meta.url), 'utf8');
-  assert.doesNotMatch(workflow, /git (add|commit|push)/);
-  assert.match(workflow, /contents: read/);
-  assert.doesNotMatch(workflow, /contents: write/);
 });
 
 test('#252 沒有 dogs/：同步保留永久狗性別、舊編號與再入所身分，新狗不猜性別', async t => {

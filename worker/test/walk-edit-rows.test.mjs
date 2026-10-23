@@ -28,23 +28,17 @@ test('#500 改一格只送那一列：Worker 依送來的值更新，不讀整�
     assert.deepEqual((await response.json()).results.map(r => r.ack), [true]);
     assert.equal((await current(env)).walks[0].walker, '乙');
     assert.deepEqual(outside, [], '不回頭向試算表讀整張表');
-    // 只改溜狗欄位不用叫狗清單同步
-    assert.equal(await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='changed'").first(), null);
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
 
-test('#500 換籠、移到「已出所」交給狗清單同步；兩處都有時以最後出現為準（GAS 已合併）', async () => {
+test('#500 換籠、移到「已出所」的列在這裡只回 ack，由狗清單編輯觸發另外送（#501）', async () => {
   const env = { ...await setup(), D1_WALK_NOTIFY:'1' };
   worker.testing.resetState();
   try {
     const moved = await rows(env, { rows:[{ sheet:'departed', dog }] });
     assert.equal(moved.status, 200);
     assert.deepEqual((await moved.json()).results.map(r => r.ack), [true]);
-    assert.ok(await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='changed'").first(), '已出所要叫狗清單同步');
-    await env.DB.prepare("DELETE FROM v3_sync_state WHERE key='changed'").run();
-    const cage = await rows(env, { rows:[{ sheet:'main', dog, other:true, current:{ date:'2026-10-01', walker:'' } }] });
-    assert.equal(cage.status, 200);
-    assert.ok(await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='changed'").first(), '換籠要叫狗清單同步');
+    assert.equal(await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='changed'").first(), null, '不再標記叫 GitHub 同步');
   } finally { env.DB.close(); }
 });
 
@@ -64,14 +58,13 @@ test('#500 無法確認的列仍回 ack（已記衝突）；D1 寫不進去才�
   } finally { env.DB.close(); }
 });
 
-test('#500 功能開關關閉時只標記有改，不動今日溜狗，也不確認（GAS 保留待開啟後補送）', async () => {
+test('#500 功能開關關閉時不動今日溜狗，也不確認（GAS 保留待開啟後補送）', async () => {
   const env = await setup();
   worker.testing.resetState();
   try {
     const out = await (await rows(env, { rows:[{ sheet:'main', dog, current:{ date:day(), walker:'乙' } }, { sheet:'departed', dog }] })).json();
     assert.deepEqual(out.results.map(r => r.ack), [false, true]);
     assert.equal(await env.DB.prepare('SELECT dog_key FROM v3_walk_state').first(), null);
-    assert.ok(await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='changed'").first());
   } finally { env.DB.close(); }
 });
 
@@ -87,7 +80,7 @@ test('#500 沒有待寫回時，重試排程不讀試算表、不寫 D1', async 
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
 
-test('#500 保險掃描指紋一樣只比一次就結束；同步排程不掃、重試排程不掃', async () => {
+test('#500 保險掃描指紋一樣只比一次就結束；重試排程、垃圾桶排程不掃', async () => {
   const env = { ...await setup(), WALK_RETRY_ENABLED:'true' }, real = globalThis.fetch;
   const actions = [];
   globalThis.fetch = async (url, init) => {
@@ -98,7 +91,7 @@ test('#500 保險掃描指紋一樣只比一次就結束；同步排程不掃、
   try {
     await post(env, request('scan-0001', '甲'));
     await env.DB.prepare("INSERT INTO v3_sync_state(key,value) VALUES('walk_scan_sig','same')").run();
-    for (const cron of ['*/10 * * * *', '5-59/10 * * * *']) {
+    for (const cron of ['17 2 1 * *', '5-59/10 * * * *']) {
       actions.length = 0;
       await run(env, cron);
       assert.ok(!actions.includes('walkScan'), cron);
@@ -116,7 +109,7 @@ test('#500 保險掃描指紋一樣只比一次就結束；同步排程不掃、
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
 
-test('#500 試算表通知不再讀表比對溜狗，只標記狗清單有改', async () => {
+test('#500 試算表通知不再讀表比對溜狗（#501 起也不標記有改）', async () => {
   const env = { ...await setup(), SHEET_NOTIFY_KEY:'nk', D1_WALK_NOTIFY:'1' }, real = globalThis.fetch;
   let reads = 0;
   globalThis.fetch = async () => { reads++; return Response.json({ ok:true, rows:[] }); };
