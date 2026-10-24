@@ -45,10 +45,11 @@ jobs:
             }
           '
 
-      - name: 準備測試庫（結構、清掉舊測速資料、放 200 隻測速狗）
+      # #553：結構改成自動套 migrations/ 還沒套的（原本整份執行 db/compact-schema.sql）
+      - name: 準備測試庫（套 migration、清掉舊測速資料、放 200 隻測速狗）
         run: |
+          npx --yes wrangler@4 d1 migrations apply $DB_NAME --remote --config $CONFIG
           w="npx --yes wrangler@4 d1 execute $DB_NAME --remote --config $CONFIG --yes"
-          $w --file db/compact-schema.sql > /dev/null
           node scripts/cpu-bench.mjs sql cleanup > "$RUNNER_TEMP/cleanup.sql"
           node scripts/cpu-bench.mjs sql seed > "$RUNNER_TEMP/seed.sql"
           node scripts/cpu-bench.mjs sql reset > "$RUNNER_TEMP/reset.sql"

@@ -4,6 +4,7 @@
 # - 預覽版帶 PREVIEW 變數：可以看、可以讀，上傳照片、存備註、按「更新」都會被 Worker 擋下，正式資料不受影響
 # - 部署完在 PR 留一則留言貼網址，再推送時更新同一則，不會一直新增
 # - 還沒設 Cloudflare Secret、或是從別人 fork 開的 PR（拿不到 Secret）就跳過
+# - #553：上傳前把 migrations/ 還沒套的自動套到測試庫 bq-shelter-dogs-test（測試庫從正式庫複製時會帶著 d1_migrations）
 name: PR 預覽網址
 
 # 只有加上 preview 標籤、而且改到網站或 Worker 的 PR 才做預覽（#329，省 Actions 分鐘數）
@@ -16,6 +17,7 @@ on:
       - 'worker/src/**'
       - 'wrangler.jsonc'
       - '.github/workflows/preview-cloudflare.yml'
+      - 'migrations/**'
 
 permissions:
   contents: read
@@ -55,11 +57,16 @@ jobs:
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         run: node scripts/r2-bucket.mjs
 
-      # 預覽只綁隔離測試 D1；不套結構或匯入資料
+      # 預覽只綁隔離測試 D1；不匯入資料
       - name: 驗證測試資料庫（D1）
         id: d1
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         run: node scripts/d1-database.mjs --config "${{ steps.r2.outputs.config }}" --preview
+
+      # #553：測試庫自動套 migration，不用 K 按；只帶測試庫設定，碰不到正式庫
+      - name: 測試庫套用 migration
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: npx --yes wrangler@4 d1 migrations apply bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc
 
       - name: 上傳預覽版本
         id: upload
