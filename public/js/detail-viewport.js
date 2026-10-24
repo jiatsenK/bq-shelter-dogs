@@ -1,3 +1,5 @@
+
+
 // 詳細狗卡編輯：依可見視窗定位欄位，不改資料或表單內容。
 function createDetailEditorViewport(backdrop, detail) {
   const fields = 'textarea, select, input:not([type="hidden"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="submit"])';
@@ -100,3 +102,5 @@ function createDetailEditorViewport(backdrop, detail) {
   }
   return { sync, reset, capture, restore };
 }
+
+export { createDetailEditorViewport };

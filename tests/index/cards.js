@@ -2,7 +2,7 @@
 async function runCardsTests() {
   const code = await fetch('../public/js/cards.js').then(r => r.text());
   // 包在函式裡跑，不把 bq* 放進這頁的全域（測試頁沒有 #bqField，不會開始畫面）
-  const C = new Function(`${SITE_JS}\n${code}\nreturn { bqPlayers, bqTier, bqStay, bqQuote, bqMonthOut, bqAwards, bqTeamOf, bqLoadCodes, bqTodayWrites, bqMineFrom, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, BQ_OPENED_KEY, bqAlumni };`)();
+  const C = await import('../../public/js/cards.js');
   const TODAY = new Date(2026, 9, 9);
   const data = {
     photoVersions: { 'photos/2017041502.jpg': 'abc' },
@@ -125,7 +125,10 @@ async function runCardsTests() {
         if (${clearIdentity}) store.set('bq-walker-name', '原名');
       <\/script>`;
       // #478 假後端：api.js 載入後替換 BQApi 的端點，不替換瀏覽器 fetch
-      const fakeBackend = `<script>
+      const fakeBackend = `<script type="module">
+        import { BQApi } from './js/api.js';
+        import * as cards from './js/cards.js';
+        for (const key of Object.keys(cards)) Object.defineProperty(window, key, { configurable: true, get: () => cards[key] });
         const f = parent.__cardFixture, ok = body => BQApi.settle(Response.json(body));
         BQApi.identity = async () => {
           await new Promise(r => setTimeout(r, 20));
@@ -141,10 +144,11 @@ async function runCardsTests() {
           return ok({ ok: true });
         };
         BQApi.openedCards = async code => (f.fail ? BQApi.settle(Response.json({ ok: false }, { status: 503 })) : ok({ ok: true, opened: { v: 1, codes: { [code]: f.books[code] || {} } } }));
+        cards.bqInit();
       <\/script>`;
       await new Promise(resolve => {
         iframe.onload = resolve;
-        iframe.srcdoc = html.replace('<head>', `<head><base href="${new URL('../public/', location.href)}">${startup}`).replace('<script src="js/api.js"><\/script>', m => m + fakeBackend);
+        iframe.srcdoc = html.replace('<head>', `<head><base href="${new URL('../public/', location.href)}">${startup}`).replace('<script type="module" src="js/cards-entry.js"><\/script>', fakeBackend);
       });
       const w = iframe.contentWindow;
       for (let i = 0; i < 100 && w.eval('BQ.remote') === 'loading' && w.eval('BQ.codes.length'); i++) await new Promise(r => setTimeout(r, 20));

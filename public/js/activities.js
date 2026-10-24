@@ -1,3 +1,10 @@
+import { activitiesState, analysisState, appState } from './page-state.js';
+import { BQApi } from './api.js';
+import { NEED_EDITOR, apiData, editorName, esc, isoDay, render, searchKey, ymdText } from './app.js';
+import { BQDates } from './dates.js';
+import { loadDepartures, section } from './analysis.js';
+import { BQWalkUI } from './walk-ui.js';
+
 // 活動紀錄頁（#270，ADR 0002）：資訊 → 活動紀錄。分析頁（analysis.js）只讀資料，會寫入的活動放這個檔。
 // 會用到 js/dates.js 的日期工具及 js/app.js 的 esc、ymdText、isoDay、searchKey、editorName、NEED_EDITOR、UPLOAD_URL、BQWalkUI.showToast、allDogs、analysisOpen，
 // 和 js/analysis.js 的 section、render、infoPage、departuresData、loadDepartures，所以要在兩個之後載入。
@@ -8,20 +15,20 @@
 const ACTIVITY_KINDS = { kids: '動保小小兵', adoption: '認養會' };
 const ACTIVITY_MAX_DOGS = 60;
 const ACTIVITY_PICKS = 8;
-let activitiesData = null; // { state: 'loading' | 'ready' | 'error', list: [{ id, date, kind, revision, dogs: [{ dogId, number, name }] }] }
-let activityEdit = null; // { id（新增是 ''）, revision, date, kind, dogs, query, phase: 'edit' | 'saving' | 'error', error, confirmDelete }
 
+activitiesState.activitiesData = null; // { state: 'loading' | 'ready' | 'error', list: [{ id, date, kind, revision, dogs: [{ dogId, number, name }] }] }
+activitiesState.activityEdit = null; // { id（新增是 ''）, revision, date, kind, dogs, query, phase: 'edit' | 'saving' | 'error', error, confirmDelete }
 function loadActivities(force = false) {
-  if (activitiesData && !force) return;
-  activitiesData = { state: 'loading', list: activitiesData ? activitiesData.list : [] };
+  if (activitiesState.activitiesData && !force) return;
+  activitiesState.activitiesData = { state: 'loading', list: activitiesState.activitiesData ? activitiesState.activitiesData.list : [] };
   BQApi.activities()
     .then(apiData)
     .then(data => {
       if (!data || !Array.isArray(data.activities)) throw new Error('格式不對');
-      activitiesData = { state: 'ready', list: data.activities };
+      activitiesState.activitiesData = { state: 'ready', list: data.activities };
     })
-    .catch(() => { activitiesData = { state: 'error', list: [] }; })
-    .then(() => { if (analysisOpen) render(); });
+    .catch(() => { activitiesState.activitiesData = { state: 'error', list: [] }; })
+    .then(() => { if (appState.analysisOpen) render(); });
 }
 
 // 2026-10-11 → 2026/10/11（六）
@@ -41,8 +48,8 @@ function activityCandidates() {
     const pick = dog.id ? { number: dog.id, name: dog.name } : dog.dogId ? { dogId: dog.dogId, name: dog.name } : null;
     if (pick && !out.has(activityDogKey(pick))) out.set(activityDogKey(pick), { ...pick, departed, formerIds: dog.formerIds || [] });
   };
-  for (const dog of allDogs) add(dog, false);
-  if (departuresData && departuresData.state === 'ready') for (const dog of departuresData.list) add(dog, true);
+  for (const dog of appState.allDogs) add(dog, false);
+  if (analysisState.departuresData && analysisState.departuresData.state === 'ready') for (const dog of analysisState.departuresData.list) add(dog, true);
   return [...out.values()];
 }
 
@@ -92,16 +99,16 @@ function activityFormHtml(e) {
 }
 
 function activityItemHtml(a) {
-  if (activityEdit && activityEdit.id === a.id) return `<article class="act-item editing"><h3>${esc(activityTitle(a))}</h3>${activityFormHtml(activityEdit)}</article>`;
+  if (activitiesState.activityEdit && activitiesState.activityEdit.id === a.id) return `<article class="act-item editing"><h3>${esc(activityTitle(a))}</h3>${activityFormHtml(activitiesState.activityEdit)}</article>`;
   return `<article class="act-item"><div class="act-head"><h3>${esc(activityTitle(a))}</h3><button type="button" class="act-edit" data-act-edit="${esc(a.id)}" aria-label="修改 ${esc(activityTitle(a))}">修改</button></div>${activityDogsHtml(a.dogs)}</article>`;
 }
 
 function activitySectionHtml() {
   loadActivities();
   loadDepartures();
-  const data = activitiesData;
-  const adding = activityEdit && !activityEdit.id;
-  const top = adding ? activityFormHtml(activityEdit) : '<button type="button" class="dep-open" id="actNew">＋ 新增活動</button>';
+  const data = activitiesState.activitiesData;
+  const adding = activitiesState.activityEdit && !activitiesState.activityEdit.id;
+  const top = adding ? activityFormHtml(activitiesState.activityEdit) : '<button type="button" class="dep-open" id="actNew">＋ 新增活動</button>';
   let body;
   if (data.state === 'loading' && !data.list.length) body = '<p class="a-empty" role="status">讀取中…</p>';
   else if (data.state === 'error') body = '<p class="a-empty" role="alert">活動紀錄讀不到</p><button type="button" class="dep-open" id="retryActivities">重新讀取</button>';
@@ -110,9 +117,9 @@ function activitySectionHtml() {
 }
 
 function startActivityEdit(id) {
-  const a = id ? activitiesData.list.find(x => x.id === id) : null;
+  const a = id ? activitiesState.activitiesData.list.find(x => x.id === id) : null;
   if (id && !a) return;
-  activityEdit = a
+  activitiesState.activityEdit = a
     ? { id: a.id, revision: a.revision, date: a.date, kind: a.kind, dogs: a.dogs.map(d => ({ ...d })), query: '', phase: 'edit', error: '', confirmDelete: false }
     : { id: '', revision: 0, date: isoDay(new Date()), kind: 'kids', dogs: [], query: '', phase: 'edit', error: '', confirmDelete: false };
   render();
@@ -120,8 +127,8 @@ function startActivityEdit(id) {
 }
 
 function endActivityEdit(focusId) {
-  const back = focusId ?? (activityEdit && activityEdit.id);
-  activityEdit = null;
+  const back = focusId ?? (activitiesState.activityEdit && activitiesState.activityEdit.id);
+  activitiesState.activityEdit = null;
   render();
   (back ? document.querySelector(`[data-act-edit="${back}"]`) : document.getElementById('actNew'))?.focus({ preventScroll: true });
 }
@@ -132,7 +139,7 @@ function activityFail(e, msg) {
 }
 
 async function saveActivity(remove = false) {
-  const e = activityEdit;
+  const e = activitiesState.activityEdit;
   if (!e || e.phase === 'saving') return;
   const editor = editorName();
   if (!editor) return activityFail(e, NEED_EDITOR);
@@ -151,23 +158,23 @@ async function saveActivity(remove = false) {
     // 別人剛改過或刪掉：重讀名單，讓畫面跟伺服器一樣
     if (r.status === 409 || r.status === 404) loadActivities(true);
   }
-  if (activityEdit !== e) return;
+  if (activitiesState.activityEdit !== e) return;
   if (error) return activityFail(e, error);
-  const list = activitiesData.list.filter(a => a.id !== e.id);
+  const list = activitiesState.activitiesData.list.filter(a => a.id !== e.id);
   if (!remove) list.push(out.activity);
   list.sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
-  activitiesData = { state: 'ready', list };
+  activitiesState.activitiesData = { state: 'ready', list };
   endActivityEdit(remove || !e.id ? '' : out.activity.id); // 焦點回到打開表單的按鈕；刪掉了就回到新增
   BQWalkUI.showToast(remove ? `已刪除 ${activityTitle(e)}` : `${activityTitle(out.activity)} 已存好`);
 }
 
 function refreshActivityPicks() {
   const box = document.getElementById('actPicks');
-  if (box && activityEdit) box.innerHTML = activityPicksHtml(activityEdit);
+  if (box && activitiesState.activityEdit) box.innerHTML = activityPicksHtml(activitiesState.activityEdit);
 }
 
 function addActivityDog(dog) {
-  const e = activityEdit;
+  const e = activitiesState.activityEdit;
   if (!e || e.dogs.some(d => activityDogKey(d) === activityDogKey(dog))) return;
   e.dogs.push(dog);
   e.query = '';
@@ -176,38 +183,43 @@ function addActivityDog(dog) {
   document.getElementById('actSearch')?.focus({ preventScroll: true });
 }
 
-document.getElementById('main').addEventListener('click', e => {
-  if (!analysisOpen || infoPage !== 'activities' || !e.target.closest) return;
-  if (e.target.closest('#retryActivities')) { loadActivities(true); render(); return; }
-  if (e.target.closest('#actNew')) { startActivityEdit(''); return; }
-  const edit = e.target.closest('[data-act-edit]');
-  if (edit) { startActivityEdit(edit.dataset.actEdit); return; }
-  const ae = activityEdit;
-  if (!ae || ae.phase === 'saving') return;
-  const kind = e.target.closest('[data-act-kind]');
-  if (kind) { ae.kind = kind.dataset.actKind; render(); document.querySelector(`[data-act-kind="${ae.kind}"]`)?.focus({ preventScroll: true }); return; }
-  const remove = e.target.closest('[data-act-remove]');
-  if (remove) { ae.dogs.splice(Number(remove.dataset.actRemove), 1); ae.confirmDelete = false; render(); document.getElementById('actSearch')?.focus({ preventScroll: true }); return; }
-  const pick = e.target.closest('[data-act-pick]');
-  if (pick) {
-    const c = activityCandidates().find(x => activityDogKey(x) === pick.dataset.actPick);
-    if (c) addActivityDog(c.number ? { dogId: null, number: c.number, name: c.name } : { dogId: c.dogId, number: '', name: c.name });
-    return;
-  }
-  if (e.target.closest('[data-act-name]')) { addActivityDog({ dogId: null, number: '', name: ae.query.trim() }); return; }
-  if (e.target.closest('#actCancel')) { endActivityEdit(); return; }
-  if (e.target.closest('#actDelete')) {
-    if (!ae.confirmDelete) { ae.confirmDelete = true; render(); document.getElementById('actDelete')?.focus({ preventScroll: true }); return; }
-    saveActivity(true);
-  }
-});
-document.getElementById('main').addEventListener('input', e => {
-  if (!activityEdit) return;
-  if (e.target.id === 'actSearch') { activityEdit.query = e.target.value; refreshActivityPicks(); }
-  if (e.target.id === 'actDate') activityEdit.date = e.target.value;
-});
-document.getElementById('main').addEventListener('submit', e => {
-  if (e.target.id !== 'actForm') return;
-  e.preventDefault();
-  saveActivity();
-});
+export { ACTIVITY_KINDS, ACTIVITY_MAX_DOGS, ACTIVITY_PICKS, loadActivities, activityDateText, activityTitle, activityDogRef, activityDogKey, activityCandidates, activityMatches, activityDogsHtml, activityPicksHtml, activityFormHtml, activityItemHtml, activitySectionHtml, startActivityEdit, endActivityEdit, activityFail, saveActivity, refreshActivityPicks, addActivityDog };
+export { activitiesState } from './page-state.js';
+
+export function bindActivities() {
+  document.getElementById('main').addEventListener('click', e => {
+    if (!appState.analysisOpen || analysisState.infoPage !== 'activities' || !e.target.closest) return;
+    if (e.target.closest('#retryActivities')) { loadActivities(true); render(); return; }
+    if (e.target.closest('#actNew')) { startActivityEdit(''); return; }
+    const edit = e.target.closest('[data-act-edit]');
+    if (edit) { startActivityEdit(edit.dataset.actEdit); return; }
+    const ae = activitiesState.activityEdit;
+    if (!ae || ae.phase === 'saving') return;
+    const kind = e.target.closest('[data-act-kind]');
+    if (kind) { ae.kind = kind.dataset.actKind; render(); document.querySelector(`[data-act-kind="${ae.kind}"]`)?.focus({ preventScroll: true }); return; }
+    const remove = e.target.closest('[data-act-remove]');
+    if (remove) { ae.dogs.splice(Number(remove.dataset.actRemove), 1); ae.confirmDelete = false; render(); document.getElementById('actSearch')?.focus({ preventScroll: true }); return; }
+    const pick = e.target.closest('[data-act-pick]');
+    if (pick) {
+      const c = activityCandidates().find(x => activityDogKey(x) === pick.dataset.actPick);
+      if (c) addActivityDog(c.number ? { dogId: null, number: c.number, name: c.name } : { dogId: c.dogId, number: '', name: c.name });
+      return;
+    }
+    if (e.target.closest('[data-act-name]')) { addActivityDog({ dogId: null, number: '', name: ae.query.trim() }); return; }
+    if (e.target.closest('#actCancel')) { endActivityEdit(); return; }
+    if (e.target.closest('#actDelete')) {
+      if (!ae.confirmDelete) { ae.confirmDelete = true; render(); document.getElementById('actDelete')?.focus({ preventScroll: true }); return; }
+      saveActivity(true);
+    }
+  });
+  document.getElementById('main').addEventListener('input', e => {
+    if (!activitiesState.activityEdit) return;
+    if (e.target.id === 'actSearch') { activitiesState.activityEdit.query = e.target.value; refreshActivityPicks(); }
+    if (e.target.id === 'actDate') activitiesState.activityEdit.date = e.target.value;
+  });
+  document.getElementById('main').addEventListener('submit', e => {
+    if (e.target.id !== 'actForm') return;
+    e.preventDefault();
+    saveActivity();
+  });
+}

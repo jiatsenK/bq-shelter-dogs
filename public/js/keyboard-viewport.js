@@ -1,3 +1,5 @@
+
+
 // 手機鍵盤（#389）：鍵盤彈出時，固定面板跟著「看得到的範圍」走，輸入框只在自己的面板裡捲，不捲整頁。
 // 詳細狗卡另有 detail-viewport.js；這裡管全站：標記 html.kb-open、提供 --vv-top／--vv-height。
 (function () {

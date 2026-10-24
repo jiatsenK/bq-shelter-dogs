@@ -1,3 +1,5 @@
+
+
 // 手機資料的儲存邊界；鍵名與內容沿用既有格式（ADR 0001、#479）。
 const BQStore = (() => {
   const keys = Object.freeze({
@@ -56,3 +58,5 @@ const BQStore = (() => {
   try { storage = globalThis.localStorage; } catch { /* 無痕模式可能連取得儲存空間都不允許 */ }
   return { ...create(storage), create, keys };
 })();
+
+export { BQStore };

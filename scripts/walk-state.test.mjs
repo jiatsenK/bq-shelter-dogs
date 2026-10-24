@@ -1,7 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
-const { createWalkRegistration } = createRequire(import.meta.url)('../public/js/walk-registration.js');
+import { createWalkRegistration } from '../public/js/walk-registration.js';
 
 function setup(send) {
   let records = {}, ids = [], day = '2026-10-19', storedDay = day, time = Date.parse('2026-10-19T02:00:00Z'), since = 0;

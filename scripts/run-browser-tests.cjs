@@ -3,7 +3,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const SUITES = ['walk-accept', 'walk-d1-entries', 'walk-feedback', 'read-policy', 'startup-stability', 'walker-editing', 'intake-presentation', 'info-page', 'activities', 'departed-cards', 'fixed-care',
+const SUITES = ['es-modules', 'walk-accept', 'walk-d1-entries', 'walk-feedback', 'read-policy', 'startup-stability', 'walker-editing', 'intake-presentation', 'info-page', 'activities', 'departed-cards', 'fixed-care',
   'group-cache', 'group-walks', 'large-text', 'navigation', 'tab-focus', 'keyboard-viewport', 'index', 'detail-editing'];
 
 const ROOT = path.resolve(__dirname, '..');
@@ -17,6 +17,8 @@ const server = http.createServer((req, res) => {
   fs.readFile(file, (err, data) => {
     if (err) { res.statusCode = 404; return res.end(); }
     res.setHeader('Content-Type', TYPES[path.extname(file)] || 'application/octet-stream');
+    // Only this test server exposes legacy assertion names; shipped pages use native modules.
+    if (file === path.join(ROOT, 'public/js/main.js')) data = Buffer.concat([data, Buffer.from('\nimport "/tests/fixtures/module-globals.js";\n')]);
     res.end(data);
   });
 });

@@ -1,3 +1,5 @@
+
+
 // 後端用戶端（#478，ADR 0017）：網頁呼叫 /api 只經過這裡，每個端點一個函式。
 // 每個函式都回同一個形狀，不會丟錯：{ ok, status, data, error, message }
 // - error：null 成功；'network' 連不上（含逾時中斷，status 0）；'http' 非 2xx；'format' 2xx 但不是 JSON
@@ -72,3 +74,5 @@ const BQApi = (() => {
     sync: () => settle(fetch(`${root()}/sync`, { method: 'POST' })),
   };
 })();
+
+export { BQApi };

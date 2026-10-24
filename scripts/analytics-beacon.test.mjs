@@ -6,13 +6,13 @@ import { join } from 'node:path';
 import { insertBeacon, isBeaconToken, writeBeacon } from './analytics-beacon.mjs';
 
 const TOKEN = '0123456789abcdef0123456789abcdef';
-const HTML = '<html><body>\n<script src="js/app.js"></script>\n</body>\n</html>\n';
+const HTML = '<html><body>\n<script type="module" src="js/main.js"></script>\n</body>\n</html>\n';
 
 test('#128 beacon 插在 </body> 前、帶 token，只插一次', () => {
   const out = insertBeacon(HTML, TOKEN);
   assert.match(out, /static\.cloudflareinsights\.com\/beacon\.min\.js/);
   assert.ok(out.includes(`data-cf-beacon='{"token": "${TOKEN}"}'`));
-  assert.ok(out.indexOf('beacon.min.js') > out.indexOf('js/app.js'));
+  assert.ok(out.indexOf('beacon.min.js') > out.indexOf('js/main.js'));
   assert.ok(out.indexOf('beacon.min.js') < out.indexOf('</body>'));
   assert.equal(insertBeacon(out, TOKEN), out);
 });

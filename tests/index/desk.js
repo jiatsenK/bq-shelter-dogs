@@ -1,9 +1,10 @@
 // 電腦版溜狗表（K 2026-10-10）：簡報＋全表、勾選一次登記、異動紀錄；js/desk.js 最後才載入，前面的測試照手機版跑
 async function runDeskTests() {
   const code = await fetch('../public/js/desk.js').then(r => r.text());
-  const el = document.createElement('script');
-  el.textContent = code;
-  document.body.appendChild(el);
+  const module = await import('../../public/js/desk.js');
+  const { expose } = await import('../fixtures/module-globals.js');
+  module.startDesk();
+  expose([module]);
   const saved = [allDogs, activeTab, searchQuery, sheetNotes, phoneStore, walkRecords, restMap, BQWalkUI.setWalked];
   const TODAY = new Date();
   const ago = n => new Date(TODAY.getFullYear(), TODAY.getMonth(), TODAY.getDate() - n);
@@ -87,7 +88,7 @@ async function runDeskTests() {
     await check('這間收容所的設定集中在 js/site-config.js（10-10 K：以後其他收容所可以搬去用）：門檻、警示字、分區不寫死在別的檔', () => {
       eq([AMBER_DAYS, RED_DAYS, SPECIAL_KEYWORDS === SITE.warnKeywords, DESK_ZONES === SITE.zones], [SITE.days.amber, SITE.days.red, true, true], '都讀 SITE：');
       eq(SITE.zones.map(z => [z.key, z.test('新 A10'), z.test('c區13')]), [['new', true, false], ['old', false, false], ['mom', false, false], ['c', false, true], ['ward', false, false]], '分區比對（去空白、C 區不分大小寫）：');
-      if (INDEX_HTML.indexOf('js/site-config.js') < 0 || INDEX_HTML.indexOf('js/site-config.js') > INDEX_HTML.indexOf('src="js/app.js"')) throw new Error('index.html 要先載入 js/site-config.js');
+      if (!/from ['"]\.\/site-config\.js['"]/.test(APP_JS)) throw new Error('主頁要明確匯入 SITE');
       if (/const (AMBER_DAYS|RED_DAYS) = [0-9]/.test(APP_JS) || APP_JS.includes('[\'勿溜\'')) throw new Error('js/app.js 不該再寫死門檻或警示字');
     });
     await check('補資料直接在表格裡補（10-10 K）：點介紹原地編輯、儲存有狀態；補好的狗留在原位、打勾，順序不跳', async () => {
@@ -186,7 +187,7 @@ async function runDeskTests() {
     await check('電腦版只靠 BQWalkUI.setWalked 登記，自己不送資料', () => {
       // 補資料（10-10）：照片 POST /photos、介紹 PUT /intro 都是送到 Worker（寫 R2／repo，不是試算表），其他地方不能再有寫入
       eq([...new Set([...code.matchAll(/BQApi\.(\w+)\(/g)].map(m => m[1]))].sort(), ['saveIntro', 'uploadPhoto', 'walks'], '只有補資料的照片、介紹兩個寫入，加上讀溜狗紀錄：');
-      if (/\bfetch\(|method\s*:|sheet-write|\/walk\b|script\.google/.test(code)) throw new Error('js/desk.js 不應該自己送資料或寫試算表');
+      if (/\bfetch\(|method\s*:|sheet-write|['"]\/walk\b|script\.google/.test(code)) throw new Error('js/desk.js 不應該自己送資料或寫試算表');
     });
   } finally {
     deskChecked.clear(); deskView = 'sheet';

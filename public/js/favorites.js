@@ -1,3 +1,10 @@
+import { BQStore } from './store.js';
+import { appState } from './page-state.js';
+import { WALKER_CODES_KEY, loadMyCodes, loadWalkerName, parseMyWalks, render, renderDetail, saveWalkerName, walkKey } from './app.js';
+import { BQApi } from './api.js';
+import { BQWelcome } from './welcome.js';
+import { BQWalkUI } from './walk-ui.js';
+
 // 我的常溜同步：每個實例保留自己的快取與待送佇列，只公開 BQFavorites。
 // 執行時使用 app 的手機資料、身分及重畫入口；API 與儲存格式維持不變。
 const BQFavorites = (() => {
@@ -9,13 +16,13 @@ const BQFavorites = (() => {
     let favSyncQueue = Promise.resolve();
     function favState() {
       if (!favSyncMemory) {
-        const saved = phoneStore.readJson(FAV_SYNC_KEY);
+        const saved = appState.phoneStore.readJson(FAV_SYNC_KEY);
         favSyncMemory = saved && saved.v === 1 ? saved : { v: 1, aliases: {}, books: {}, pending: [] };
       }
       return favSyncMemory;
     }
-    function saveFavState() { phoneStore.writeJson(FAV_SYNC_KEY, favState()); }
-    function localFavs() { const v = phoneStore.readJson(FAVS_KEY); return Array.isArray(v) ? v.map(String) : []; }
+    function saveFavState() { appState.phoneStore.writeJson(FAV_SYNC_KEY, favState()); }
+    function localFavs() { const v = appState.phoneStore.readJson(FAVS_KEY); return Array.isArray(v) ? v.map(String) : []; }
     function favoriteIds() {
       const state = favState(), codes = loadMyCodes();
       const ids = new Set(state.books[codes.join(',')] || []);
@@ -27,7 +34,7 @@ const BQFavorites = (() => {
     }
     function loadFavs() {
       const ids = favoriteIds(), aliases = favState().aliases;
-      return [...new Set([...localFavs(), ...allDogs.filter(d => ids.has(aliases[walkKey(d)])).map(walkKey)])];
+      return [...new Set([...localFavs(), ...appState.allDogs.filter(d => ids.has(aliases[walkKey(d)])).map(walkKey)])];
     }
     function isFav(dog) { const k = walkKey(dog); return !!k && loadFavs().includes(k); }
     function toggleFav(dog) {
@@ -41,10 +48,10 @@ const BQFavorites = (() => {
       if (codes.length && dogId) {
         // 讀取合併所有名字；取消時也要取消各個名字底下的這隻狗。
         state.pending.push({ codes: [codes[0]], dogId, on });
-        phoneStore.writeJson(FAVS_KEY, localFavs().filter(x => state.aliases[x] !== dogId && x !== k));
+        appState.phoneStore.writeJson(FAVS_KEY, localFavs().filter(x => state.aliases[x] !== dogId && x !== k));
         saveFavState();
       } else {
-        phoneStore.writeJson(FAVS_KEY, on ? [k, ...localFavs()] : localFavs().filter(x => x !== k));
+        appState.phoneStore.writeJson(FAVS_KEY, on ? [k, ...localFavs()] : localFavs().filter(x => x !== k));
       }
       syncFavs();
     }
@@ -100,21 +107,21 @@ const BQFavorites = (() => {
       // 串行保留點擊順序；失敗的操作下次打開或恢復連線再試。
       favSyncQueue = favSyncQueue.then(async () => {
         let codes = loadMyCodes();
-        if (!codes.length || !UPLOAD_URL) return;
+        if (!codes.length || !appState.UPLOAD_URL) return;
         const original = codes.join(','), name = loadWalkerName();
         if (name) {
           const out = await BQWelcome.request('', { name });
           if (loadMyCodes().join(',') !== original || loadWalkerName() !== name) return;
           saveWalkerName(out.identity.name);
-          walkerCodesMemory = out.identity.codes;
-          try { phoneStore?.writeJson(WALKER_CODES_KEY, out.identity.codes); } catch (e) { /* 本次仍可使用 */ }
+          appState.walkerCodesMemory = out.identity.codes;
+          try { appState.phoneStore?.writeJson(WALKER_CODES_KEY, out.identity.codes); } catch (e) { /* 本次仍可使用 */ }
           codes = out.identity.codes;
-          myWalks = walksData ? parseMyWalks(walksData, codes) : [];
+          appState.myWalks = appState.walksData ? parseMyWalks(appState.walksData, codes) : [];
         }
         await reconcileFavorites(favState(), codes, {
           codes: loadMyCodes, local: localFavs, save: saveFavState,
           read: codes => favoriteRequest(codes), write: op => favoriteRequest(null, op),
-          removeLegacy: matches => phoneStore.writeJson(FAVS_KEY, localFavs().filter(key => !matches(key))),
+          removeLegacy: matches => appState.phoneStore.writeJson(FAVS_KEY, localFavs().filter(key => !matches(key))),
         });
         if (loadMyCodes().join(',') === codes.join(',')) { render(); renderDetail(); }
       }).catch(() => {
@@ -127,3 +134,5 @@ const BQFavorites = (() => {
   }
   return { create };
 })();
+
+export { BQFavorites };

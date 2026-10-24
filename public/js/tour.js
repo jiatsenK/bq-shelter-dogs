@@ -1,3 +1,11 @@
+import { FIND_CAGES, findCageOf, findPickCage, findZoneOf, whereClose, whereOpen } from './find.js';
+import { appState, deskState, findState } from './page-state.js';
+import { appHeader, closeDetail, esc, icon, loadWalkView, render, saveWalkView, showDetail, switchTab } from './app.js';
+import { deskOn } from './desk.js';
+import { BQWelcome } from './welcome.js';
+import { hideAnalysis } from './analysis.js';
+import { BQStore } from './store.js';
+
 // 導覽介面只公開 BQTour；步驟、示範、計時器與定位狀態均留在模組內。
 const BQTour = (() => {
   // ── 使用說明導覽（K 2026-10-09：直接用實際的網頁；一個說明一個動作，用手指示範）──
@@ -47,12 +55,12 @@ const BQTour = (() => {
     const row = el && el.closest('[data-dog], [data-desk-dog]');
     const i = el && el.dataset.dogI !== undefined ? el.dataset.dogI
       : row && (row.dataset.dog !== undefined ? row.dataset.dog : row.dataset.deskDog);
-    return i != null ? allDogs[Number(i)] : null;
+    return i != null ? appState.allDogs[Number(i)] : null;
   }
   // 示範用的狗：溜狗表最上面那隻
   function tourDog() {
     const el = document.querySelector('#main .card[data-dog], #main .row-dog[data-dog]');
-    return el ? allDogs[Number(el.dataset.dog)] : null;
+    return el ? appState.allDogs[Number(el.dataset.dog)] : null;
   }
   // 只換畫面上「溜了」按鈕和色籤的樣子（不送出）；收回時 render() 畫回原本的
   function tourFakeWalk(state) {
@@ -66,20 +74,20 @@ const BQTour = (() => {
     if (val) { val.className = 'val sage'; val.textContent = '今天'; }
   }
   const TOUR_DEMOS = {
-    detail: { run: () => { const d = tourDog(); if (d) showDetail(d); }, show: '#detail', undo: () => { if (detailDog) closeDetail(); } },
+    detail: { run: () => { const d = tourDog(); if (d) showDetail(d); }, show: '#detail', undo: () => { if (appState.detailDog) closeDetail(); } },
     walk: { run: () => { tourFakeWalk('pending'); tourLater(() => { tourFakeWalk('done'); placeTour(); }, 700); }, undo: () => render() },
     unwalk: { before: () => tourFakeWalk('done'), run: () => render(), undo: () => render() },
-    where: { run: el => { const d = tourCageDog(el); if (d) whereOpen(d); }, show: '#whereSheet', undo: () => { if (whereDog) whereClose(); } },
+    where: { run: el => { const d = tourCageDog(el); if (d) whereOpen(d); }, show: '#whereSheet', undo: () => { if (findState.whereDog) whereClose(); } },
     // 照片／列表（K 2026-10-09）：示範切到另一種，收回時切回原本的
     view: {
       // 電腦版沒有照片／列表：示範切到「最近 30 天」再切回全表
       run: () => {
-        if (typeof deskOn === 'function' && deskOn()) { tour.view = 'desk'; deskView = 'days30'; render(); return; }
+        if (typeof deskOn === 'function' && deskOn()) { tour.view = 'desk'; deskState.deskView = 'days30'; render(); return; }
         tour.view = loadWalkView(); saveWalkView(tour.view === 'list' ? 'photo' : 'list'); render();
       },
       show: '#main .walk-tools .seg, #main .dt-view',
       undo: () => {
-        if (tour && tour.view === 'desk') { deskView = 'sheet'; tour.view = null; }
+        if (tour && tour.view === 'desk') { deskState.deskView = 'sheet'; tour.view = null; }
         else if (tour && tour.view) { saveWalkView(tour.view); tour.view = null; }
         render();
       },
@@ -91,23 +99,23 @@ const BQTour = (() => {
       run: () => switchTab('find'),
       show: '#main .find-map-card .find-map',
       then: [
-        { at: tourZoneWithDogs, run: g => { findZone = g.dataset.findZone; findCage = null; render(); } },
+        { at: tourZoneWithDogs, run: g => { findState.findZone = g.dataset.findZone; findState.findCage = null; render(); } },
         { at: tourCageWithDogs, run: g => findPickCage(g.dataset.findCage) },
       ],
-      undo: () => { findCage = null; findZone = 'all'; switchTab('walk'); },
+      undo: () => { findState.findCage = null; findState.findZone = 'all'; switchTab('walk'); },
     },
   };
   // 全圖上隨便一個有逐籠、又有狗的區（找狗示範用）
   function tourZoneWithDogs() {
     const zones = [...document.querySelectorAll('#main g[data-find-zone]')].filter(g => {
       const key = g.dataset.findZone;
-      return allDogs.some(d => findZoneOf(d) === key && FIND_CAGES.cages.some(c => c.zone === key && c.id === findCageOf(d)));
+      return appState.allDogs.some(d => findZoneOf(d) === key && FIND_CAGES.cages.some(c => c.zone === key && c.id === findCageOf(d)));
     });
     return zones.length ? zones[Math.floor(Math.random() * zones.length)] : null;
   }
   // 放大的那一區裡隨便一個有狗的籠子（找狗示範用）
   function tourCageWithDogs() {
-    const cages = [...document.querySelectorAll(`#main g[data-find-zone="${findZone}"] g[data-find-cage]`)].filter(g => g.querySelector('rect.fm-cage.has'));
+    const cages = [...document.querySelectorAll(`#main g[data-find-zone="${findState.findZone}"] g[data-find-cage]`)].filter(g => g.querySelector('rect.fm-cage.has'));
     return cages.length ? cages[Math.floor(Math.random() * cages.length)] : null;
   }
   function tourLater(fn, ms) {
@@ -156,8 +164,8 @@ const BQTour = (() => {
   }
   function startTour(again = false) {
     BQWelcome.close();
-    if (activeTab !== 'walk' || analysisOpen) {
-      if (analysisOpen && typeof hideAnalysis === 'function') hideAnalysis();
+    if (appState.activeTab !== 'walk' || appState.analysisOpen) {
+      if (appState.analysisOpen && typeof hideAnalysis === 'function') hideAnalysis();
       switchTab('walk');
     }
     window.scrollTo(0, 0);
@@ -166,7 +174,7 @@ const BQTour = (() => {
   }
   function endTour() {
     tourReset();
-    try { phoneStore && phoneStore.set(BQStore.keys.onboarded, '1'); } catch (e) { /* 存不了下次再看一次 */ }
+    try { appState.phoneStore && appState.phoneStore.set(BQStore.keys.onboarded, '1'); } catch (e) { /* 存不了下次再看一次 */ }
     tour = null;
     renderTour();
   }
@@ -204,8 +212,8 @@ const BQTour = (() => {
     root.classList.toggle('tour-wide', wide);
     root.style.setProperty('--tour-viewport-height', `${viewport.height}px`);
     root.style.setProperty('--tour-viewport-top', `${viewport.top}px`);
-    const whereDemo = tour.shown === '#whereSheet' && !!whereDog;
-    const detailDemo = tour.shown === '#detail' && !!detailDog;
+    const whereDemo = tour.shown === '#whereSheet' && !!findState.whereDog;
+    const detailDemo = tour.shown === '#detail' && !!appState.detailDog;
     // 籠位面板固定在底部，先替上方說明卡留空間，再量面板位置（小螢幕也不重疊）。
     root.classList.toggle('tour-where-demo', whereDemo);
     root.classList.toggle('tour-detail-demo', detailDemo);
@@ -308,3 +316,5 @@ const BQTour = (() => {
   }
   return { start: startTour, queue: queueTour };
 })();
+
+export { BQTour };

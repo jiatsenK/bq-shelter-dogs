@@ -7,7 +7,6 @@ process.env.SHEET_ID = 'TEST_SHEET_ID';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import vm from 'node:vm';
 import * as sync from './sync-sheet.mjs';
 
 // 模擬 gviz（同 tests/index.html）：依每欄多數型別推斷欄位型別，少數型別的格子回成 null；
@@ -123,13 +122,7 @@ test('欄位被改掉、讀到 0 隻狗時丟錯', async () => {
 // 跟前端比對（#32 起前端只讀 dogs.json）：同步腳本讀到的狗，寫成 dogs.json 再交給前端的 parseDogsData，
 // 犬名、籠位、日期、可以一起溜都要跟同步前一樣，日期也不能因為存成文字而差一天
 async function loadFrontend() {
-  // 這間收容所的設定（js/site-config.js）在網頁上先載入，這裡也接在前面
-  const src = (await readFile(new URL('../public/js/dates.js', import.meta.url), 'utf8')) + '\n' + (await readFile(new URL('../public/js/api.js', import.meta.url), 'utf8')) + '\n' + (await readFile(new URL('../public/js/store.js', import.meta.url), 'utf8')) + '\n' + (await readFile(new URL('../public/js/site-config.js', import.meta.url), 'utf8')) + '\n' + (await readFile(new URL('../public/js/detail-viewport.js', import.meta.url), 'utf8')) + '\n' + (await readFile(new URL('../public/js/walk-registration.js', import.meta.url), 'utf8')) + '\n' + (await readFile(new URL('../public/js/walk-flow.js', import.meta.url), 'utf8')) + '\n' + (await readFile(new URL('../public/js/detail-editor.js', import.meta.url), 'utf8')) + '\n' + (await readFile(new URL('../public/js/tour.js', import.meta.url), 'utf8')) + '\n' + (await readFile(new URL('../public/js/photo.js', import.meta.url), 'utf8')) + '\n' + (await readFile(new URL('../public/js/walk-ui.js', import.meta.url), 'utf8')) + '\n' + (await readFile(new URL('../public/js/welcome.js', import.meta.url), 'utf8')) + '\n' + (await readFile(new URL('../public/js/favorites.js', import.meta.url), 'utf8')) + '\n' + (await readFile(new URL('../public/js/app.js', import.meta.url), 'utf8'));
-  // 只需要函式定義；頁面上的 DOM 事件綁定用空殼擋掉
-  const stub = () => new Proxy(function () {}, { get: (t, k) => k in t ? t[k] : k === Symbol.toPrimitive ? () => '' : stub(), apply: () => stub() });
-  const ctx = vm.createContext({ window: Object.assign(stub(), { __BQ_TEST__: true }), document: stub(), localStorage: stub(), fetch: undefined, Intl, URL, console });
-  vm.runInContext(`${src}\n;globalThis.__fe = { parseDogsData };`, ctx);
-  return ctx.__fe;
+  return import('../public/js/dog-data.js');
 }
 
 test('前端讀 dogs.json 的結果跟同步腳本讀試算表一致', async () => {
