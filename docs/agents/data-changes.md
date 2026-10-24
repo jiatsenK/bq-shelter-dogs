@@ -9,6 +9,6 @@
   - 活動紀錄、已出所狗卡 → `docs/adr/0002-activity-records.md`
   - 新增會改資料的功能（編輯紀錄、沒有通關碼）→ `docs/adr/0004-open-editing-and-edit-log.md`
   - 今天溜過要讓其他手機很快看到（今日溜狗紀錄、免費方案額度）→ `docs/adr/0018-today-walks-d1-event-sync.md`（取代 0007 的「試算表為正本」）
-  - 新增 D1 資料表、觸發器、預設列 → 寫進 `db/compact-schema.sql`；同步補建哪些以 `scripts/sync-compact-d1.mjs` 為準：整份送出，只排除 `SYNC_SCHEMA_SKIP` 明列的例外（#293、#321）
+  - 新增 D1 資料表、觸發器、預設列 → 寫進 `db/compact-schema.sql`。舊同步程式（會整份補建 schema，#293、#321）已隨 #512 刪除，正式 D1 目前沒有自動套 schema 的路徑：PR 要寫明怎麼套到正式庫
   - 狗清單、離所、休養讀到新的表 → 在 `db/compact-schema.sql` 補 `packs_<表>_INSERT／UPDATE／DELETE` 觸發器，不然改了資料網站不會更新；離所按出所年份讓 `v3_departure_versions` 那年加 1（`docs/adr/0009-d1-read-versioned-packs.md`、ADR 0014；`worker/test/packs.test.mjs` 會檢查，#322）
   - 改同步、或新增會寫 D1 的功能（每天寫入預算、只寫差異）→ `docs/adr/0008-diff-sync-and-write-budget.md`；同步預演已隨 #501 退役，改由 `worker/test/dog-list.test.mjs` 等測試驗證「無差異不寫」

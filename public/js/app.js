@@ -789,7 +789,7 @@ function recordWalked(dogs, on, today = new Date()) { return appState.walkRecord
 // Worker 還沒設定（回 code: 'off'）就照舊只記在手機上，不打擾
 appState.favorites = BQFavorites.create();
 const WALKER_NAME_KEY = BQStore.keys.walkerName;
-// 跟 scripts/sync-sheet.mjs 的 NAME_SEP 一樣
+// 跟 worker/src/sheet-read.js 的 NAME_SEP 一樣
 const WALKER_NAME_SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
 
 // ── 誰遛的名字（#141 第 9 項）──
@@ -2232,14 +2232,9 @@ function renderUpdatedLabel() {
 
 // 今日溜狗紀錄：顯示在螢幕上時每分鐘抓；鎖螢幕、切到別的 App 時不抓，切回來超過 30 秒就馬上抓
 
-// ── 頁首「更新」按鈕：請 Worker 叫 GitHub 同步試算表，再等讀到的資料換新 ──
-// 同步寫進 D1 約 1 分鐘（不用重新部署）；每 5 秒看一次，同步完不必再多等一輪 15 秒
-// 試算表沒有新東西時 syncedAt 不會變，等滿就告訴志工已經是最新
-const SYNC_POLL_MS = 5 * 1000;
-const SYNC_POLL_TRIES = 48; // 5 秒 × 48 ＝ 最多等 4 分鐘
-
-// 按「更新」一定重抓今日紀錄和試算表名單，再全部重排（K 2026-10-20：網站上按的不會讓試算表「有改」）
-// 不等回應：先照現有資料重排，讀到新的再排一次（抓不到就維持現況）
+// ── 頁首「更新」按鈕（#512）：狗清單有人編輯就直接進 D1，按了只重讀 D1，不叫同步 ──
+// 一定重抓狗清單、今日紀錄和試算表名單，再全部重排（K 2026-10-20：網站上按的不會讓試算表「有改」）
+// 今日紀錄、名單不等回應：先照現有資料重排，讀到新的再排一次（抓不到就維持現況）
 appState.syncing = false;
 function freshWalkList() {
   appState.todayFetchedAt = 0;
@@ -2247,54 +2242,18 @@ function freshWalkList() {
   resort();
   Promise.all([loadTodayWalks(), loadWalkerNames()]).then(resort, () => {});
 }
-async function requestSync(btn, { pollMs = SYNC_POLL_MS, tries = SYNC_POLL_TRIES } = {}) {
+async function refreshData(btn) {
   if (appState.syncing) return;
   appState.syncing = true;
   btn.classList.add('syncing');
   btn.setAttribute('aria-busy', 'true');
   try {
-    const r = await BQApi.sync();
-    if (r.error === 'network') {
-      BQWalkUI.showToast('連不到更新服務，請檢查網路');
+    try { applyDogsData(await loadDogsData()); } catch (e) {
+      BQWalkUI.showToast('暫時讀不到資料，請稍後再更新');
       return;
-    }
-    // 429 表示同一支手機剛按過，同步已經在跑，一樣等新資料
-    if (r.error === 'http' && r.status !== 429) {
-      // 附上 Worker 說的原因（例：GitHub 403＝token 沒開 Actions 權限），設定出錯時才查得到；沒有內容就只顯示狀態碼
-      const why = String((r.data && r.data.error) || '');
-      BQWalkUI.showToast(`更新失敗：${why || `HTTP ${r.status}`}`);
-      return;
-    }
-    // ADR 0012：Worker 比對過試算表沒變，沒有叫同步，不用等
-    if (r.ok && r.data?.unchanged) {
-      // #399 網站設定與試算表同步時間無關；即使試算表沒改，也要讀回其他人的設定。
-      try { applyDogsData(await loadDogsData()); } catch (e) {
-        BQWalkUI.showToast('暫時讀不到網站設定，請稍後再更新');
-        return;
-      }
-      freshWalkList();
-      BQWalkUI.showToast('試算表沒有新的修改，已經是最新的');
-      return;
-    }
-    BQWalkUI.showToast('正在更新，約 1 分鐘');
-    const before = appState.dataSyncedAt ? appState.dataSyncedAt.getTime() : 0;
-    for (let i = 0; i < tries; i++) {
-      await new Promise(r => setTimeout(r, pollMs));
-      let data;
-      try { data = await loadDogsData(); } catch (e) { continue; }
-      const careChanged = data.dogs.some(d => {
-        const old = appState.allDogs.find(o => (o.id || o.dogId) === (d.id || d.dogId));
-        return old && old.covered !== d.covered;
-      });
-      if ((data.syncedAt && data.syncedAt.getTime() > before) || careChanged) {
-        applyDogsData(data);
-        freshWalkList();
-        BQWalkUI.showToast('資料已更新');
-        return;
-      }
     }
     freshWalkList();
-    BQWalkUI.showToast('已經是最新的');
+    BQWalkUI.showToast('資料已更新');
   } finally {
     appState.syncing = false;
     btn.classList.remove('syncing');
@@ -2314,7 +2273,7 @@ if (!window.__BQ_TEST__) {
 }
 }
 
-export { fixedCareEdits, FIRST_SCREEN_CARDS, WALKER_CODES_KEY, WALKER_CODE_PATTERN, SPECIAL_KEYWORDS, AMBER_DAYS, RED_DAYS, detailEdits, introOverrides, mergeTempCages, loadDogsData, fetchDogsData, parseMyWalks, apiData, fetchWalks, walkYears, recentStartMonth, missingWalkYears, loadWalkYear, loadMyWalks, currentMyWalks, myWalksCount, mineTabNumber, mineTabLabel, loadMyCodes, saveMyCodes, walkerCodesFor, dogOfWalk, walkDateLabel, myWalkGroups, myVisitCard, myMonthStats, myProgressHtml, myWalksHtml, myCalendarState, myCalendarHtml, specialFlag, highlightNote, effectiveWalkDate, computeStatus, restOf, monthDay, esc, icon, versioned, photoOverrides, photoSrc, photoThumbSrc, thumbFallback, thumbAttrs, photoThumb, lightboxOpen, insidePhoto, openLightbox, showLightboxPhoto, hideLightbox, closeLightbox, statusBadge, lastWalk, cardMeta, tempCageText, metaLine, ymdOf, reentryLine, openFormerEdit, sendFormer, saveFormer, removeFormer, sexMark, warnNote, loadWalkedIds, saveWalkedIds, walkKey, walkedNow, walkedToday, recordWalked, WALKER_NAME_KEY, WALKER_NAME_SEP, allWalkerNames, isOffline, setWalkerNamesOffline, loadWalkerNames, TODAY_POLL_MS, TODAY_REFETCH_MS, fetchWalkStatus, loadTodayWalks, refreshTodayWalks, canonicalWalker, splitWalkers, walkerList, loadCompanions, loadWalkWith, addWalkWith, clearWalkWith, firstWalkerName, loadWalkerName, saveWalkerName, loadSheetWrites, saveSheetWrites, myAliasIn, walkRegistration, d1Base, NEED_EDITOR, editorName, editorHeaders, APPEND_MAX, appendEntry, nextLogLabel, appendPreview, sheetAppendHtml, rerenderAppend, sendAppend, dogCard, favButtonHtml, detailHtml, restNoteHtml, isoDay, fixedCareHtml, toggleFixedCare, restAdminHtml, INTRO_MAX, intakeEventsOf, intakeDraft, intakePresentation, intakeListHtml, intakeEditorHtml, introOf, introSectionHtml, introBarHtml, openIntroEdit, saveIntro, STAYS_MAX, staysSectionHtml, openStaysEdit, staysProblem, saveStays, openRestEdit, saveRest, loadRest, departedDetailHtml, DEPARTURE_LABELS, ymdText, departureBadge, departureBasis, lastWalkSection, detailChips, imageToLocal, buddyTile, cageMates, togetherSection, groupWalkButton, DETAIL_CLICKS, wireDetail, labelPhotoPick, detailEditorViewport, renderDetail, showDetail, hideDetail, closeDetail, cardFromEvent, searchKey, matchesSearch, TABS, buildTabs, switchTab, stepTab, mainEl, render, skeletonHtml, appHeader, syncHeaderShadow, appBrand, syncHeaderTuck, bottomBarEl, syncBottomBar, dayWord, rangeText, rangeLabel, syncRange, queueRange, dueDogs, walkPinned, sortWalkList, pinWalkOrder, resetWalkOrder, WALK_FAV_KEY, loadWalkFav, saveWalkFav, walkFilterHtml, WALK_VIEW_KEY, loadWalkView, saveWalkView, walkToolsHtml, walkRow, renderMain, searchInput, searchClear, syncSearchClear, pad2, openGuide, init, applyDogsData, renderUpdatedLabel, SYNC_POLL_MS, SYNC_POLL_TRIES, freshWalkList, requestSync, syncBtn, startApp };
+export { fixedCareEdits, FIRST_SCREEN_CARDS, WALKER_CODES_KEY, WALKER_CODE_PATTERN, SPECIAL_KEYWORDS, AMBER_DAYS, RED_DAYS, detailEdits, introOverrides, mergeTempCages, loadDogsData, fetchDogsData, parseMyWalks, apiData, fetchWalks, walkYears, recentStartMonth, missingWalkYears, loadWalkYear, loadMyWalks, currentMyWalks, myWalksCount, mineTabNumber, mineTabLabel, loadMyCodes, saveMyCodes, walkerCodesFor, dogOfWalk, walkDateLabel, myWalkGroups, myVisitCard, myMonthStats, myProgressHtml, myWalksHtml, myCalendarState, myCalendarHtml, specialFlag, highlightNote, effectiveWalkDate, computeStatus, restOf, monthDay, esc, icon, versioned, photoOverrides, photoSrc, photoThumbSrc, thumbFallback, thumbAttrs, photoThumb, lightboxOpen, insidePhoto, openLightbox, showLightboxPhoto, hideLightbox, closeLightbox, statusBadge, lastWalk, cardMeta, tempCageText, metaLine, ymdOf, reentryLine, openFormerEdit, sendFormer, saveFormer, removeFormer, sexMark, warnNote, loadWalkedIds, saveWalkedIds, walkKey, walkedNow, walkedToday, recordWalked, WALKER_NAME_KEY, WALKER_NAME_SEP, allWalkerNames, isOffline, setWalkerNamesOffline, loadWalkerNames, TODAY_POLL_MS, TODAY_REFETCH_MS, fetchWalkStatus, loadTodayWalks, refreshTodayWalks, canonicalWalker, splitWalkers, walkerList, loadCompanions, loadWalkWith, addWalkWith, clearWalkWith, firstWalkerName, loadWalkerName, saveWalkerName, loadSheetWrites, saveSheetWrites, myAliasIn, walkRegistration, d1Base, NEED_EDITOR, editorName, editorHeaders, APPEND_MAX, appendEntry, nextLogLabel, appendPreview, sheetAppendHtml, rerenderAppend, sendAppend, dogCard, favButtonHtml, detailHtml, restNoteHtml, isoDay, fixedCareHtml, toggleFixedCare, restAdminHtml, INTRO_MAX, intakeEventsOf, intakeDraft, intakePresentation, intakeListHtml, intakeEditorHtml, introOf, introSectionHtml, introBarHtml, openIntroEdit, saveIntro, STAYS_MAX, staysSectionHtml, openStaysEdit, staysProblem, saveStays, openRestEdit, saveRest, loadRest, departedDetailHtml, DEPARTURE_LABELS, ymdText, departureBadge, departureBasis, lastWalkSection, detailChips, imageToLocal, buddyTile, cageMates, togetherSection, groupWalkButton, DETAIL_CLICKS, wireDetail, labelPhotoPick, detailEditorViewport, renderDetail, showDetail, hideDetail, closeDetail, cardFromEvent, searchKey, matchesSearch, TABS, buildTabs, switchTab, stepTab, mainEl, render, skeletonHtml, appHeader, syncHeaderShadow, appBrand, syncHeaderTuck, bottomBarEl, syncBottomBar, dayWord, rangeText, rangeLabel, syncRange, queueRange, dueDogs, walkPinned, sortWalkList, pinWalkOrder, resetWalkOrder, WALK_FAV_KEY, loadWalkFav, saveWalkFav, walkFilterHtml, WALK_VIEW_KEY, loadWalkView, saveWalkView, walkToolsHtml, walkRow, renderMain, searchInput, searchClear, syncSearchClear, pad2, openGuide, init, applyDogsData, renderUpdatedLabel, freshWalkList, refreshData, syncBtn, startApp };
 export { appState } from './page-state.js';
 export { parseDogsData } from './dog-data.js';
 
@@ -2478,5 +2437,5 @@ export function bindApp() {
   document.addEventListener('visibilitychange', refreshTodayWalks);
   if (!window.__BQ_TEST__) setInterval(refreshTodayWalks, TODAY_POLL_MS);
 
-  if (syncBtn) syncBtn.addEventListener('click', () => requestSync(syncBtn));
+  if (syncBtn) syncBtn.addEventListener('click', () => refreshData(syncBtn));
 }

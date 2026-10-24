@@ -4,7 +4,7 @@ import { identityByCode } from './identity.js';
 import { previousWalk } from './today.js';
 import { callSheet } from './sheet-write.js';
 import { splitNames } from './sheet-read.js';
-import { todayRowsWritten } from '../../scripts/sync-diff.mjs';
+import { todayRowsWritten } from './d1-usage.js';
 
 const names = text => [...new Set(splitNames(text))];
 const keyOf = dog => dog.id || `名:${dog.name}`;
@@ -34,7 +34,7 @@ export async function readAcceptedWalks(db, today) {
 }
 
 // SQL 的每次寫入都預留含觸發器與索引的保守上界。帳號當日量不可取得時，
-// 與既有同步相同：警告＋單次門檻；本路徑另有持久每日保留量，不能靠重試繞過。
+// 只警告並看單次門檻；本路徑另有持久每日保留量，不能靠重試繞過。
 export async function writeBudget(db, env, cost, now = Date.now()) {
   const max = Number(env.SYNC_MAX_ROWS || 500), daily = Number(env.SYNC_DAILY_BUDGET || 20000);
   const observed = env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID ? await todayRowsWritten({ token: env.CLOUDFLARE_API_TOKEN,

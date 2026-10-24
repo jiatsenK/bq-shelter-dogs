@@ -163,7 +163,7 @@ const withTables = async env => { const DB = fakeD1(); await migrateCompactDatab
 
 // ── #95 誰遛的代號 ──
 const WALKER_ENV = { ...ENV, WALKER_KEY: 'test-walker-key' };
-// 跟 scripts/sync-sheet.test.mjs 的 WALKER_VECTORS 同一組：兩邊算出來要一樣
+// 固定的測試向量：D1 裡舊的代號都是這樣算的，算法改了就對不上
 const WALKER_VECTORS = [
   ['測試志工我', 'ecdf46de08b4'],
   ['志工 B', '2569554f699b'],
@@ -214,24 +214,18 @@ test('#95 首頁狀態顯示代號密鑰設了沒', async () => {
   assert.equal((await send(new Request('https://x.workers.dev/'), ENV)).body.walkerKey, '未設定');
 });
 
-// #501：狗清單改由 GAS 編輯觸發送列，Worker 不再叫 GitHub 同步；舊的「試算表有改」通知只驗證、回 ok
-test('#501 舊試算表通知與「更新」都不叫 GitHub；通知仍要專用密碼、預覽版不收', async () => {
-  const env = await withTables({ ...ENV, SHEET_ID: 'sheet', SHEET_NOTIFY_KEY: 'nk' });
+// #512：狗清單由 GAS 編輯觸發送列，舊的「試算表有改」通知與「更新」空殼都移除了
+test('#512 /sync、/sheet-changed 已移除；排程不叫 GitHub、不讀試算表', async () => {
+  const env = await withTables({ ...ENV, SHEET_ID: 'sheet' });
   const calls = [];
   globalThis.fetch = async url => { calls.push(String(url)); return new Response(null, { status: 204 }); };
-  const notify = (key = 'nk', e = env) => send(new Request('https://x.workers.dev/api/sheet-changed', { method: 'POST', headers: { 'X-Notify-Key': key } }), e);
-  assert.equal((await notify('wrong')).status, 403);
-  assert.equal((await notify()).status, 200);
-  assert.equal(await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='changed'").first(), null);
-  assert.equal((await notify('', { ...env, SHEET_NOTIFY_KEY: '' })).status, 503);
-  assert.equal((await notify('nk', { ...env, PREVIEW: '1' })).status, 403);
-  const press = (method = 'POST', origin = ORIGIN) => send(new Request('https://x.workers.dev/sync', { method, headers: { Origin: origin, 'CF-Connecting-IP': '5.5.5.5' } }), env);
-  const r = await press();
-  assert.deepEqual([r.status, r.body], [200, { ok: true, unchanged: true }]);
-  assert.equal(r.headers.get('Access-Control-Allow-Origin'), ORIGIN);
-  assert.equal((await press('GET')).status, 405);
-  assert.equal((await press('POST', 'https://evil.example')).status, 403);
-  assert.deepEqual(calls, [], '不叫 GitHub、不讀試算表');
+  // 舊 Apps Script 沒帶網站來源，跟其他不認得的要求一樣擋掉
+  const notify = await send(new Request('https://x.workers.dev/api/sheet-changed', { method: 'POST' }), env);
+  assert.equal(notify.status, 403);
+  // 舊版網頁還開著時按「更新」：請它重新整理
+  const press = await send(new Request('https://x.workers.dev/sync', { method: 'POST', headers: { Origin: ORIGIN, 'CF-Connecting-IP': '5.5.5.5' } }), env);
+  assert.deepEqual([press.status, press.body.error], [410, '更新方式改了，請重新整理網頁']);
+  assert.deepEqual(calls, []);
   for (const iso of ['2026-10-16T02:00:00Z', '2026-10-16T22:30:00Z']) {
     const waits = [];
     await worker.scheduled({ scheduledTime: new Date(iso).getTime() }, env, { waitUntil: p => waits.push(p) });
@@ -301,7 +295,6 @@ test('#126 預覽版：上傳、備註、更新都回 403 且不碰 GitHub；讀
   const writes = [
     new Request(`${SITE}/api/photos/2024032902`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'image/jpeg' }, body: JPEG.slice() }),
     new Request(`${SITE}/api/rest/2024032902`, { method: 'PUT', headers: h, body: JSON.stringify({ text: 'x', editor: '小明' }) }),
-    new Request(`${SITE}/api/sync`, { method: 'POST', headers: h }),
   ];
   for (const req of writes) {
     const r = await send(req, PENV);

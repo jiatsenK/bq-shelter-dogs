@@ -26,8 +26,8 @@ const EDITOR_NAME_MAX = 20;
 const WALKER_CODE_LENGTH = 12;
 
 // ── 誰遛的代號（#95）──
-// 算法要跟 scripts/sync-sheet.mjs 的 walkerCode 完全一樣：名字全形半形統一（NFKC）、去空白、轉小寫，
-// HMAC-SHA256(WALKER_KEY, 名字) 取前 12 碼十六進位。兩邊用同一組測試向量（WALKER_VECTORS）確認。
+// 算法不能改（D1 裡舊的代號都是這樣算的）：名字全形半形統一（NFKC）、去空白、轉小寫，
+// HMAC-SHA256(WALKER_KEY, 名字) 取前 12 碼十六進位。測試向量（WALKER_VECTORS）固定住結果。
 export function walkerNameKey(name) {
   return String(name || '').normalize('NFKC').replace(/\s+/g, '').toLowerCase();
 }

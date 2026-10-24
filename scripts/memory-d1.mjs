@@ -1,5 +1,5 @@
 // 記憶體 D1：node:sqlite 的記憶體資料庫，介面跟 Cloudflare D1 一樣（prepare／bind／run／all／first／batch）。
-// 正式同步（scripts/sync-compact-d1.mjs）先在這裡試算一次再算差異寫回正式 D1（ADR 0008）；測試也拿它當 D1（worker/test/fakes.mjs）。
+// 測試拿它當 D1（worker/test/fakes.mjs）。
 import { DatabaseSync } from 'node:sqlite';
 
 // 真實 SQLite 外鍵／唯一約束，batch 全部成功或全部回復。

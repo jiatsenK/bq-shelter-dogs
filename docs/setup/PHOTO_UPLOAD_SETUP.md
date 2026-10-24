@@ -152,9 +152,9 @@ K 2026-10-09：怕 Cloudflare 用量爆掉，相簿整個拿掉，只留主照�
 
 ### 服務的網址（給寫網站程式的人）
 
-- `POST /sync`（不用內容）：叫 GitHub 跑「同步試算表」。成功回 `{ "ok": true }`；同一個人 2 分鐘內第二次回 429；GitHub 拒絕（多半是 token 沒開 Actions 權限）回 502。
+- ~~`POST /sync`~~：#512 已移除，頁首「更新」只重讀資料。
 - `POST /walker-code`，內容 `{ "names": ["小明、明明"] }`（`Content-Type: application/json`）。每個字串再照試算表的規則拆開（頓號、逗號、斜線、空白等），最多 8 個名字、每個 20 字。成功回 `{ "ok": true, "codes": ["...", "..."] }`（12 碼十六進位，不重複）。同一個人 1 分鐘最多 20 次。沒設定 `WALKER_KEY` 回 500。
-- 算法：名字全形半形統一（NFKC）、去掉空白、英文轉小寫，`HMAC-SHA256(WALKER_KEY, 名字)` 取前 12 碼。跟 `scripts/sync-sheet.mjs` 的 `walkerCode` 一樣，兩邊的測試用同一組測試向量確認。
+- 算法：名字全形半形統一（NFKC）、去掉空白、英文轉小寫，`HMAC-SHA256(WALKER_KEY, 名字)` 取前 12 碼。算法不能改（D1 裡舊的代號都是這樣算的），測試向量固定住結果。
 
 ## 準時同步試算表（Cloudflare 定時叫 GitHub）
 

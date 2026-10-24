@@ -305,3 +305,7 @@ test('#528 保險掃描清掉舊指紋：回所的狗（主清單有）、D1 已
     assert.equal((await mainRows(env)).length, 2, '不刪狗的資料');
   } finally { env.DB.close(); }
 });
+
+test('#512 狗清單（取代舊同步）不擁有 fixed_care：收列時不讀不寫網站的固定照顧設定', () => {
+  assert.doesNotMatch(readFileSync(new URL('../src/dog-list.js', import.meta.url), 'utf8'), /fixed_care/);
+});

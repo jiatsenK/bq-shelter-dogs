@@ -44,8 +44,7 @@ test('寫入端點送 JSON 內容與方法；路徑參數有編碼', async () =>
   assert.equal(calls[0][1].method, 'PUT');
   assert.equal(calls[0][1].headers['Content-Type'], 'application/json');
   assert.deepEqual(JSON.parse(calls[0][1].body), { editor: '甲', text: '親人' });
-  await api.sync();
-  assert.deepEqual([calls[1][0], calls[1][1].method, calls[1][1].body], ['https://bq.test/api/sync', 'POST', undefined]);
+  assert.equal(api.sync, undefined, '#512 更新只重讀，不再 POST /sync');
 });
 
 test('狗清單先用主頁提前讀的那份，只用一次', async () => {

@@ -76,7 +76,7 @@ export async function readSyncedAt(db) {
   }
 }
 
-// 「常遛狗群」每一欄是一群：每隻狗對到同群的其他狗，好幾群就合起來（跟 scripts/sync-sheet.mjs 的 parseGroups 一樣）
+// 「常遛狗群」每一欄是一群：每隻狗對到同群的其他狗，好幾群就合起來
 function groupMap(cells) {
   const columns = new Map();
   for (const c of cells) {

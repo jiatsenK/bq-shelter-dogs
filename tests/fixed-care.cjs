@@ -15,7 +15,6 @@ module.exports = async (browser, base) => {
   const writes = [];
   await ctx.route('**/api/**', route => {
     const req = route.request(), endpoint = new URL(req.url()).pathname.split('/api/')[1];
-    if (endpoint === 'sync') return route.fulfill({ json: { ok: true, unchanged: true } });
     if (req.method() === 'PUT' && endpoint.startsWith('fixed-care/')) {
       const body = req.postDataJSON(); writes.push(body);
       if (fail) return route.fulfill({ status: 503, json: { ok: false, error: '測試：請稍後再試' } });

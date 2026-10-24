@@ -31,7 +31,7 @@ const sameList = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]
 const findMain = (list, dog) => list.find(m => (dog.id ? m.number === dog.id : m.number === '' && m.name === dog.name));
 const newId = () => [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
 
-// 「誰遛的」→ 代號（同 scripts/sync-sheet.mjs 的 walkerCodes）；是不是 K 遛的照 MY_NAME（沒設就都不是）
+// 「誰遛的」→ 代號；是不是 K 遛的照 MY_NAME（沒設就都不是）
 // 代號是名字單向算出來的：D1 還沒有對照的新名字順便記進志工名單，/walkers 才換得回名字（#519，2026-10-24 實測「123」）
 async function walkersOf(walker, env, db) {
   const names = splitNames(walker);

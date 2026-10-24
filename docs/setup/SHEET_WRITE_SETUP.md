@@ -74,7 +74,7 @@
 
 ## 6. 試算表有改時通知網站（ADR 0012，#305）
 
-> #501 起退役：狗清單改由第 8 節的編輯觸發送 Worker，`installWalkEditTriggers` 會刪掉這裡的 `notifyWorker` 觸發器；Worker 的 `/api/sheet-changed` 只驗證後回 ok，不再叫同步。下面留作歷史。
+> #501 起退役：狗清單改由第 8 節的編輯觸發送 Worker，`installWalkEditTriggers` 會刪掉這裡的 `notifyWorker` 觸發器；#512 起 Worker 的 `/api/sheet-changed`、小程式的 `notifyWorker` 與 Secret `SHEET_NOTIFY_KEY` 都已刪除（GitHub 上的 Secret 可以一併刪掉）。下面留作歷史。
 
 網站不再每 30 分鐘同步一次，改成：有人**直接在試算表畫面**改了東西，Apps Script 通知 Worker，Worker 每 10 分鐘看一次、有改才同步（一天最多 30 次）；另外每天台灣 6:30 保險同步一次。網站上按的（溜了、狗群等）本來就馬上進資料庫，不會觸發通知。
 
@@ -102,7 +102,7 @@
 啟用前（需 K 另行授權）：
 
 1. 指令碼屬性要有 `WALK_WORKER_URL`（Worker 網址）與 `WRITE_KEY`（同 `SHEET_WRITE_KEY`）。
-2. 貼上最新 `apps-script/sheet-write.gs`，在編輯器選 `installWalkEditTriggers` 執行一次並授權：會建立「編輯時」→ `onWalkSheetEdit`、每 10 分鐘 → `flushWalkEdits`。#501 起同一個函式也會建立狗清單的觸發器（見第 8 節），並刪掉第 6 節的 `notifyWorker`。
+2. 貼上最新 `apps-script/sheet-write.gs`，在編輯器選 `installWalkEditTriggers` 執行一次並授權：會建立「編輯時」→ `onWalkSheetEdit`、每 10 分鐘 → `flushWalkEdits`。#501 起同一個函式也會建立狗清單的觸發器（見第 8 節），並刪掉第 6 節留下的 `notifyWorker` 舊觸發器。
 3. Worker 的 `D1_WALK_NOTIFY` 維持未設定時，送來的列不動今日溜狗（狗清單由第 8 節另外送）。
 4. 先在測試試算表照 `docs/research/2026-10-23-gas-trigger-structure-changes.md` 的「需實測清單」逐項操作（貼上多格、剪下貼到「已出所」、清空、Ctrl+Z、手機 App），看 Apps Script 執行紀錄與 D1 結果。
 
@@ -117,7 +117,7 @@
 - 回所：狗回來會拿新編號，如果離所紀錄裡剛好一筆同名、主清單上沒有別的同名，就認定是同一隻：新編號連到原本的狗、舊離所註明用哪個編號回所，並記一筆編輯紀錄（舊編號）。認錯就在網站「舊編號」拆開；同名多筆不猜，當新狗。
 - 名字換代號用 Worker 的 `WALKER_KEY`；「我溜過」要在 Worker 設 `MY_NAME`（跟原 Actions Secret 一樣），沒設就都不是。
 - 保險掃描：每天台灣 09:43、13:53、23:53（`dogListScan`，Google 只保證在那個小時內）送每個單位的指紋，Worker 回不一樣的，再分批只送那幾個；一樣就結束，不送資料、不寫 D1。D1 有、試算表沒有的只寫在執行紀錄和 D1 `v3_sync_state` 的 `dog_list_extra`，不自動刪。
-- 手動補漏／重新灌資料：在 Apps Script 編輯器執行 `dogListScan`；D1 是空的時會全部重送（每次最多 600 個單位，沒送完再執行一次）。本機備援仍可用 `scripts/sync-compact-d1.mjs`（需要 `SHEET_ID` 等環境變數與 wrangler，不再由 Actions 執行）。
+- 手動補漏／重新灌資料：在 Apps Script 編輯器執行 `dogListScan`；D1 是空的時會全部重送（每次最多 600 個單位，沒送完再執行一次）。（本機備援腳本 `scripts/sync-compact-d1.mjs` 已隨 #512 刪除。）
 
 切換順序（K 授權後）：
 
