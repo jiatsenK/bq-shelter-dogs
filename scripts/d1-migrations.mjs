@@ -17,6 +17,8 @@ export const TARGETS = {
   test: { name: 'bq-shelter-dogs-test', config: 'wrangler.preview-db.jsonc' },
 };
 export const BACKUP_DB = 'bq-shelter-dogs-backup';
+// K 2026-10-24 建的專門備用庫（#553）；照名字查到的 ID 要跟這個一樣才複製
+export const BACKUP_DB_ID = 'd31b8371-c94a-4a04-960f-665a0365c5af';
 export const MIGRATIONS_DIR = fileURLToPath(new URL('../migrations/', import.meta.url));
 export const FILE_NAME = /^\d{4}_[a-z0-9_]+\.sql$/;
 
@@ -50,11 +52,12 @@ export function status(db, { run = runWrangler, files = migrationFiles() } = {})
   return { applied, pending: pendingMigrations(files, applied), unknown: applied.filter(f => !files.includes(f)) };
 }
 
-// 備用庫照名字查 ID（不寫進 repo），寫一份只有資料庫設定的暫存檔給 wrangler
-export function backupDb(list, { productionId, dir = mkdtempSync(join(tmpdir(), 'd1-backup-')) } = {}) {
+// 備用庫照名字查，ID 要等於 BACKUP_DB_ID；寫一份只有資料庫設定的暫存檔給 wrangler
+export function backupDb(list, { productionId, expectedId = BACKUP_DB_ID, dir = mkdtempSync(join(tmpdir(), 'd1-backup-')) } = {}) {
   const id = findDatabase(list, BACKUP_DB);
   if (!id) throw new Error(`備用庫 ${BACKUP_DB} 還沒建：請 K 執行 npx.cmd wrangler d1 create ${BACKUP_DB}`);
   if (id === productionId) throw new Error('備用庫不能是正式庫');
+  if (id !== expectedId) throw new Error(`${BACKUP_DB} 的 ID ${id} 跟 repo 記的 ${expectedId} 不同，停止（換了備用庫要改 scripts/d1-migrations.mjs 的 BACKUP_DB_ID）`);
   const config = join(dir, 'wrangler.backup.json');
   writeFileSync(config, JSON.stringify({ d1_databases: [{ binding: 'DB', database_name: BACKUP_DB, database_id: id }] }));
   return { name: BACKUP_DB, config };

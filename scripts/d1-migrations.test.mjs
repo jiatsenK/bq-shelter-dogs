@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fakeD1 } from '../worker/test/fakes.mjs';
 import { compactSchemaStatements, splitStatements } from './migrate-compact-db.mjs';
-import { MIGRATIONS_DIR, FILE_NAME, TARGETS, BACKUP_DB, migrationFiles, pendingMigrations, changesData, status, apply, backupDb, summary } from './d1-migrations.mjs';
+import { MIGRATIONS_DIR, FILE_NAME, TARGETS, BACKUP_DB, BACKUP_DB_ID, migrationFiles, pendingMigrations, changesData, status, apply, backupDb, summary } from './d1-migrations.mjs';
 
 // 表（欄位、外鍵、索引清單）、索引、觸發器、檢視，加上每張表的內容（預設列）。
 // 表的 CHECK 只寫在建表 SQL 裡，ALTER 補欄後 SQL 文字會不同，所以表不比 SQL 文字；索引、觸發器比空白正規化後的 SQL
@@ -98,7 +98,7 @@ function migrationsDir(files) {
   return dir;
 }
 
-const DBS = [{ name: 'bq-shelter-dogs', uuid: 'prod-id' }, { name: 'bq-shelter-dogs-test', uuid: 'test-id' }, { name: BACKUP_DB, uuid: 'backup-id' }];
+const DBS = [{ name: 'bq-shelter-dogs', uuid: 'prod-id' }, { name: 'bq-shelter-dogs-test', uuid: 'test-id' }, { name: BACKUP_DB, uuid: BACKUP_DB_ID }];
 
 test('apply：有刪資料的 migration 先複製到備用庫，再記書籤、套用', () => {
   const dir = migrationsDir({ '0000_a.sql': 'CREATE TABLE a (x);', '0001_b.sql': 'DELETE FROM a;' });
@@ -136,9 +136,10 @@ test('apply：套用後還有沒套上的就失敗', () => {
   assert.throws(() => apply({ target: 'test', run, dir, log: () => {} }), /套用後還有沒套上的/);
 });
 
-test('backupDb：備用庫還沒建就停，提示 K 用 npx.cmd 建；不能是正式庫', () => {
+test('backupDb：備用庫還沒建就停，提示 K 用 npx.cmd 建；不能是正式庫；ID 要跟 repo 記的一樣', () => {
   assert.throws(() => backupDb(DBS.slice(0, 2), { productionId: 'prod-id' }), /npx\.cmd wrangler d1 create bq-shelter-dogs-backup/);
   assert.throws(() => backupDb([{ name: BACKUP_DB, uuid: 'prod-id' }], { productionId: 'prod-id' }), /不能是正式庫/);
   const db = backupDb(DBS, { productionId: 'prod-id' });
-  assert.equal(JSON.parse(readFileSync(db.config, 'utf8')).d1_databases[0].database_id, 'backup-id');
+  assert.throws(() => backupDb([{ name: BACKUP_DB, uuid: 'other-id' }], { productionId: 'prod-id' }), /跟 repo 記的/);
+  assert.equal(JSON.parse(readFileSync(db.config, 'utf8')).d1_databases[0].database_id, BACKUP_DB_ID);
 });
