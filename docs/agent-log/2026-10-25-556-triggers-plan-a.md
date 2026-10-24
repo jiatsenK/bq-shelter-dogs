@@ -12,4 +12,5 @@
   - 「先加後刪」：DROP 的是觸發器、不是資料；identity 那 18 個正式庫本來就沒有，所以 migration 和程式放同一張 PR。先套 migration、再部署之間，正式庫行為跟現在一樣。
   - `changesData` 判定 0002 不用備份（只有 DROP／CREATE TRIGGER）。
 - 沒做：`packs_v3_departure_items_UPDATE` 也是 OLD、NEW 各加一次（同一個編號加 2），報告沒列進 9 個，沒動。
-- PR：（開好後補）
+- 本機 `check-local.ps1 -Full`：Node 441 個中 436 過；失敗 5 個＝連號測試 1 個（等 #571）＋ `scripts/local-check.test.mjs` 4 個（乾淨的 main 在本機也一樣失敗，跟本 PR 無關）。
+- PR：#572（草稿）。
