@@ -1,3 +1,5 @@
+> **已過時（2026-10-24）**：本設計已被 [ADR 0018](../../adr/0018-today-walks-d1-event-sync.md) 與實作取代，現況見 [`docs/ARCHITECTURE_NOW.md`](../../ARCHITECTURE_NOW.md)。只供查背景，不要照著實作。
+
 # #457 名單修改與復原先存 D1
 
 依據：#457、#456；固定規格 `444c33e:docs/design/441-d1-walk-sync-spec.md`、同版 ADR 0017 及 ADR 0016／0004／0006／0008。比較基準 `2701767`。

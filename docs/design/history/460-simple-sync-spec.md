@@ -1,3 +1,5 @@
+> **已過時（2026-10-24）**：本設計已被 [ADR 0018](../../adr/0018-today-walks-d1-event-sync.md) 與實作取代，現況見 [`docs/ARCHITECTURE_NOW.md`](../../ARCHITECTURE_NOW.md)。只供查背景，不要照著實作。
+
 # 溜狗同步簡化規格
 
 狀態：2026-10-23 K 確認先簡化同步流程，再處理人工改表 GAS；依此順序與驗收範圍發布規格，標記 ready-for-agent。尚未實作、部署或啟用。

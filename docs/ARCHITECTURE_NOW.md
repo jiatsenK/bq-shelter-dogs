@@ -1,0 +1,54 @@
+# 資料流現況
+
+資料在哪、誰寫、誰同步，以本檔為入口。最後核對：2026-10-24，main `9c8358a`。開關與排程的即時值以自動產生的 `docs/adr/README.md` 為準；決定的理由看 ADR。
+
+## 改版終點（K 2026-10-24）
+
+- **D1 是唯一正本**：網站讀 D1，網站上的操作先寫 D1。
+- **試算表只剩人工輸入介面**：管理者直接改表，Apps Script（GAS）把改到的列推給 Worker。網站不讀表。
+- **不再有 gviz 讀表、不再用 GitHub Actions 同步資料**。
+- 前端整理完（#471 系列）。
+
+還沒到終點的項目列在改版收尾母票 #538。
+
+## 誰寫、怎麼同步
+
+| 資料 | 寫入來源 | 進 D1 的方式 | 程式 |
+|---|---|---|---|
+| 今日溜狗（網站按溜了、復原、改溜狗人） | 網站 | 先存 D1（`SITE.d1WalkAccept=true`，PR #533），再由 Worker 寫回試算表兩欄 | `worker/src/walk-accept.js` |
+| 今日溜狗（人工改試算表） | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/rows`，Worker 只比那幾隻 | `apps-script/sheet-write.gs`、`worker/src/walk-reconcile.js` |
+| 狗清單：主清單、已出所、常遛狗群 | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/dog-list`，只寫有變的欄（#501） | `worker/src/dog-list.js` |
+| 常遛狗群（網站狗群頁） | 網站 | `POST /api/groups` 先寫試算表「常遛狗群」，成功後更新 D1（唯一仍以試算表為先的網站寫入，#474） | `worker/src/index.js` |
+| 休養、介紹、開卡、常溜、固定照顧、活動 | 網站 | 只存 D1，不碰試算表 | 見各 ADR |
+| 照片 | 網站 | 存 R2；縮圖由 Worker 叫 Actions `r2-thumbs.yml`（#503 待決） | `worker/src/index.js` |
+| 志工名字建議 `/walkers` | — | 讀 D1（#519） | ADR 0019 |
+
+GAS 送不出去時把待送內容留在指令碼屬性（`WALK_EDITS_PENDING`、`DOG_LIST_PENDING`），每 10 分鐘補送；Worker 確認收到才清。
+
+## 排程
+
+| 時間（台灣） | 做什麼 | 發起 |
+|---|---|---|
+| 每 10 分鐘（錯開 5 分） | 網站登記寫回試算表的重試；沒工作就結束、不讀表 | Worker cron |
+| 09:43、13:53、23:53 | 今日溜狗保險掃描：按狗比指紋，只回不同的狗（#525） | Worker cron → GAS `walkScan` |
+| 09:43、13:53、23:53 | 狗清單保險掃描：「D1 有、表沒有」只記錄不刪（#518 要做顯示頁） | GAS 時間觸發 `dogListScan` |
+| 每月 1 日 10:17 | 照片垃圾桶清理 | Worker cron |
+
+## 正式環境開關（repo 看不到）
+
+這兩個是 Cloudflare 密鑰，`wrangler.jsonc` 沒有，`docs/adr/README.md` 會顯示「repo 沒設定」。2026-10-24 K 授權設定、手動改表驗收通過（#498）：
+
+| 開關 | 值 | 管什麼 |
+|---|---|---|
+| `D1_WALK_NOTIFY` | `1` | 人工改表的今日溜狗是否寫進 D1；沒設時 GAS 會一直補送失敗 |
+| `WALK_RETRY_ENABLED` | `true` | 保險掃描與寫回重試；沒設時兩者都不跑 |
+
+查現值：`npx wrangler secret list`（只列名稱）。
+
+## 已退役，不要照著做
+
+- gviz 讀試算表（`docs.google.com/.../gviz`）：Worker 已不呼叫；`worker/src/sheet-read.js` 與 `scripts/sync-*.mjs` 是殘留，移除見 #512。
+- GitHub Actions `sync-sheet.yml`、Worker `syncTick`／`triggerSync`、每 10 分鐘同步：#501 已刪。
+- `/sync`、`/sheet-changed`：空殼，前端右上角更新仍會 POST，移除見 #512。
+- `data/*.json` 當資料來源、「試算表為正本」（ADR 0007）：已由 ADR 0018 取代。
+- 同步設計稿 456–460：已移到 `docs/design/history/`，只供查背景。
