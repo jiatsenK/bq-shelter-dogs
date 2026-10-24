@@ -31,6 +31,7 @@ module.exports = async (browser, base) => {
     }
     return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'rest' ? { rest: restMode ? { [data.dogs[0].id]: { until: '2099-12-31', reason: '測試休養' } } : {} } : endpoint === 'walkers' ? { walkers: ['測試志工'] } : { ok: true, walks: [], departures: [] } });
   });
+  await require('./fixtures/legacy-walk-mode.cjs')(context);
   const page = await context.newPage(); page.setDefaultTimeout(8000);
   try {
     await page.goto(base + '/public/index.html');

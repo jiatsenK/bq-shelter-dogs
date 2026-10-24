@@ -17,7 +17,7 @@ module.exports = async (browser, base) => {
     if (!url.pathname.includes('/api/')) return route.continue();
     const endpoint = url.pathname.split('/api/')[1];
     if (request.method() !== 'GET') writes.push({ endpoint, body: request.postDataJSON() });
-    return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'rest' ? { rest: {} } : { ok: true, walks: [], walkers: [] } });
+    return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'rest' ? { rest: {} } : { ok: true, source: 'd1', walks: [], walkers: [] } });
   });
   const page = await context.newPage(); page.setDefaultTimeout(6000);
   try {

@@ -5,7 +5,7 @@
 // index.html、cards.html 都在其他程式前面載入；這裡只放設定，不放邏輯。
 const SITE = {
   // #456 最小單狗路徑。正式切換留待 #441 最後子票，部署前須完成其餘入口與資料銜接。
-  d1WalkAccept: false,
+  d1WalkAccept: true,
   // 名字：頁首、導覽、分析頁用。index.html 的 <title>、manifest.webmanifest 是靜態檔，要另外改（見 docs/setup/SITE_CONFIG.md）
   name: '板收志工溜狗表',
   shelter: '板橋收容所',
