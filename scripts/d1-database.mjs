@@ -4,6 +4,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFile, writeFile, appendFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { parseJsonc } from './r2-bucket.mjs';
 
 export const DB_NAME = 'bq-shelter-dogs';
@@ -11,7 +12,12 @@ export const DB_BINDING = 'DB';
 export const DEPLOY_CONFIG = 'wrangler.deploy.json';
 export const PREVIEW_CONFIG = 'wrangler.preview.json';
 const PREVIEW_DB_CONFIG = 'wrangler.preview-db.jsonc';
-const wrangler = args => execFileSync('npx', ['--yes', 'wrangler@4', ...args], { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' });
+// npx wrangler@4；Windows 的 npx 是 .cmd，execFileSync 不能直接跑，改用 node 執行 npm 附的 npx-cli.js（本機演練用，#553）
+export function runWrangler(args, { stderr = 'pipe', maxBuffer } = {}) {
+  const npx = process.platform === 'win32' ? [process.execPath, [join(dirname(process.execPath), 'node_modules/npm/bin/npx-cli.js')]] : ['npx', []];
+  return execFileSync(npx[0], [...npx[1], '--yes', 'wrangler@4', ...args], { stdio: ['ignore', 'pipe', stderr], encoding: 'utf8', ...(maxBuffer && { maxBuffer }) });
+}
+const wrangler = args => runWrangler(args);
 
 export function parseJsonOutput(text) {
   const s = String(text || '');

@@ -18,7 +18,7 @@ if (!report.equal) throw new Error(JSON.stringify(report.differences));
 const dogs = await readCompactDogs(db);
 ```
 
-建表 SQL 是 `db/compact-schema.sql`；部署不會自動執行。正式套用須由 K 另行確認，後續票沿用這份表契約。私密匯出只放 `.migration-private/`，已加入忽略清單。
+建表 SQL 是 `db/compact-schema.sql`（現在的完整樣子）；#553 起正式庫改用 `migrations/` 由「套用 D1 migration」workflow 套用，流程見 `docs/agents/data-changes.md`。私密匯出只放 `.migration-private/`，已加入忽略清單。
 
 ## 表契約
 
