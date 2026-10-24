@@ -11,6 +11,7 @@
 
 | 情況 | 文件 |
 |---|---|
+| 資料在哪、誰寫、怎麼同步（先讀，舊設計稿與舊票常過時） | `docs/ARCHITECTURE_NOW.md` |
 | 查功能、版本與驗收範圍 | `docs/PROJECT_GOALS.md`，先定位最新相關段落 |
 | 改畫面 | `DESIGN.md` 路由到該頁現行規格；工具與 detect 見 `docs/agents/design-tools.md` |
 | 拆前端 JS、改載入方式 | `docs/adr/0017-frontend-es-modules.md` |

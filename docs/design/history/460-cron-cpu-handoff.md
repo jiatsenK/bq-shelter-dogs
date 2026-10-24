@@ -1,3 +1,5 @@
+> **已過時（2026-10-24）**：本設計已被 [ADR 0018](../../adr/0018-today-walks-d1-event-sync.md) 與實作取代，現況見 [`docs/ARCHITECTURE_NOW.md`](../../ARCHITECTURE_NOW.md)。只供查背景，不要照著實作。
+
 # #460 Cron CPU 討論交接（2026-10-22）
 
 給下一個視窗接著 `/grill-with-docs` 用。分支 `claude/460-d1-unified`、PR #487、worktree `C:\Users\User\repos\bq-460`。功能開關 `SITE.d1WalkAccept` 維持關閉；沒有新的線上測試授權。
@@ -59,7 +61,7 @@
 
 ### 降低掃描頻率前的必要驗收（K 補充）
 
-研究結果見 [簡化寫回責任與人工改表通知](../research/2026-10-22-460-simple-sync-and-notification.md)。內容是建議，尚未實作。Google change 事件也包含 EDIT，因此不能由目前採「變更時」直接斷言人工輸入不會觸發；仍須查正式安裝及實測。另須修正掃描 `deferred` 可能被標成 idle 的缺口。
+研究結果見 [簡化寫回責任與人工改表通知](../../research/2026-10-22-460-simple-sync-and-notification.md)。內容是建議，尚未實作。Google change 事件也包含 EDIT，因此不能由目前採「變更時」直接斷言人工輸入不會觸發；仍須查正式安裝及實測。另須修正掃描 `deferred` 可能被標成 idle 的缺口。
 
 - 必須確認志工實際在試算表輸入會觸發 GAS，並一路更新到 D1 與另一支手機；不能以手動執行 `notifyWorker` 或只有 HTTP 成功代替驗收。
 - 人工值修改使用已授權的安裝型「編輯時」觸發器；結構變更的「變更時」另行處理並避免重複通知。驗收涵蓋輸入、貼上多格、刪名、清空及改日期。
