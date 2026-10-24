@@ -40,6 +40,7 @@ module.exports = async (browser, base) => {
             : { ok: true, walks: [{ id: data.dogs[1].id, name: data.dogs[1].name, date: '2026-10-18', walkers: ['aaaaaaaaaaaa'] }], departures: [] };
     return route.fulfill({ json: body });
   });
+  await require('./fixtures/legacy-walk-mode.cjs')(context);
   const page = await context.newPage();
   page.on('pageerror', e => console.error(e.message));
   page.setDefaultTimeout(5000);

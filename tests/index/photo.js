@@ -266,7 +266,12 @@ async function runCropTests() {
   const until = async (ok, what) => { for (let i = 0; i < 200; i++) { if (ok()) return; await new Promise(r => setTimeout(r, 10)); } throw new Error(`等不到${what}`); };
   const openCrop = async () => { document.getElementById('photoCrop').click(); await until(() => cropIsOpen() && document.querySelector('#cropper .crop-frame').style.width, '裁切畫面出現'); };
   const doneCrop = async old => { const p = popped(); document.getElementById('cropDone').click(); await p; await until(() => previewUrl() && previewUrl() !== old, '預覽換成裁好的'); };
+  // 測試頁沒有載 css/app.css；沒有 .crop* 規則時裁切區高度只看照片當下撐開多少，載入時序一變就壓扁（#533）
+  const cropCss = new CSSStyleSheet(); cropCss.replaceSync(await fetch('../public/css/app.css').then(r => r.text()));
+  const cropStyle = document.createElement('style');
+  cropStyle.textContent = [...cropCss.cssRules].filter(r => /^\.crop/.test(r.selectorText || '')).map(r => r.cssText).join('\n');
   try {
+    document.head.append(cropStyle);
     box.classList.remove('hidden');
     UPLOAD_URL = 'https://worker.test';
     allDogs = [
@@ -334,6 +339,7 @@ async function runCropTests() {
     if (cropIsOpen()) { const p = popped(); document.getElementById('cropCancel').click(); await p; }
     hideLightbox(); hideDetail(); cancelPhoto(); BQWalkUI.hideToast();
     delete photoOverrides['9301'];
+    cropStyle.remove();
     box.classList.add('hidden');
     history.replaceState(null, '');
     [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL] = saved;

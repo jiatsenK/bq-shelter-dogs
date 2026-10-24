@@ -15,7 +15,7 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
     if (url.origin !== baseUrl) return route.abort();
     if (!url.pathname.includes('/api/')) return route.continue();
     const endpoint = url.pathname.split('/api/')[1];
-    return route.fulfill({ json: endpoint === 'dogs' ? fixture : endpoint === 'rest' ? { rest: {} } : endpoint === 'walkers' ? { walkers: [] } : { walks: [], departures: [] } });
+    return route.fulfill({ json: endpoint === 'dogs' ? fixture : endpoint === 'rest' ? { rest: {} } : endpoint === 'walkers' ? { walkers: [] } : { source: 'd1', walks: [], departures: [] } });
   });
   const page = await context.newPage();
   try {

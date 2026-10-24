@@ -16,7 +16,7 @@ module.exports = async (browser, base) => {
     const endpoint = url.pathname.split('/api/')[1];
     if (request.method() !== 'GET' || !['dogs', 'walks', 'walkers', 'rest', 'today'].includes(endpoint)) violations.push(`${request.method()} ${endpoint}`);
     const body = endpoint === 'dogs' ? fixture : endpoint === 'rest' ? { rest: {} }
-      : endpoint === 'walkers' ? { walkers: {}, names: [] } : { date: '2026-10-19', walks: [] };
+      : endpoint === 'walkers' ? { walkers: {}, names: [] } : { source: 'd1', date: '2026-10-19', walks: [] };
     return route.fulfill({ json: body });
   });
   try {
