@@ -34,16 +34,16 @@ GAS 送不出去時把待送內容留在指令碼屬性（`WALK_EDITS_PENDING`�
 | 09:43、13:53、23:53 | 狗清單保險掃描：「D1 有、表沒有」只記錄不刪（#518 要做顯示頁） | GAS 時間觸發 `dogListScan` |
 | 每月 1 日 10:17 | 照片垃圾桶清理 | Worker cron |
 
-## 正式環境開關（repo 看不到）
+## Worker 開關
 
-這兩個是 Cloudflare 密鑰，`wrangler.jsonc` 沒有，`docs/adr/README.md` 會顯示「repo 沒設定」。2026-10-24 K 授權設定、手動改表驗收通過（#498）：
+`wrangler.jsonc` 的 vars，現值見 `docs/adr/README.md`。2026-10-24 補開並驗收（#498）；原本是 Cloudflare 密鑰、repo 看不到，PR #540 改成 vars。
 
 | 開關 | 值 | 管什麼 |
 |---|---|---|
 | `D1_WALK_NOTIFY` | `1` | 人工改表的今日溜狗是否寫進 D1；沒設時 GAS 會一直補送失敗 |
 | `WALK_RETRY_ENABLED` | `true` | 保險掃描與寫回重試；沒設時兩者都不跑 |
 
-查現值：`npx wrangler secret list`（只列名稱）。
+開關不要再放 Cloudflare 密鑰：密鑰只放金鑰類的值，同名密鑰與 vars 不能並存。
 
 ## 已退役，不要照著做
 

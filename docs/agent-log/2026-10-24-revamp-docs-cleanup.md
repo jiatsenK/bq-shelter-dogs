@@ -24,5 +24,5 @@
 
 ## 未做
 
-- 兩個開關是 Cloudflare 密鑰，repo 看不到（`docs/adr/README.md` 顯示「repo 沒設定」）；是否改成 `wrangler.jsonc` vars 待 K 決定。
+- 兩個開關已由 PR #540 改成 `wrangler.jsonc` vars，`ARCHITECTURE_NOW.md` 開關段同步改寫。
 - `python` 在這台是 Windows 商店空殼，腳本請用 node。
