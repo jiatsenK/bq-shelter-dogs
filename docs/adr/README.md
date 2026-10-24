@@ -40,7 +40,7 @@
 | `ADMIN_KEY` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
 | `CLOUDFLARE_ACCOUNT_ID` | repo 沒設定：正式環境只可能是手動加的 Cloudflare 密鑰（後台加的一般變數部署時會被 keep_vars: false 清掉） | — |
 | `CLOUDFLARE_API_TOKEN` | repo 沒設定：正式環境只可能是手動加的 Cloudflare 密鑰（後台加的一般變數部署時會被 keep_vars: false 清掉） | — |
-| `D1_WALK_NOTIFY` | repo 沒設定：正式環境只可能是手動加的 Cloudflare 密鑰（後台加的一般變數部署時會被 keep_vars: false 清掉） | — |
+| `D1_WALK_NOTIFY` | `1` | wrangler.jsonc 的 vars |
 | `GITHUB_TOKEN` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
 | `MY_NAME` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
 | `PREVIEW` | 只有預覽版設定 | preview-cloudflare.yml |
@@ -51,7 +51,7 @@
 | `SYNC_DAILY_BUDGET` | `40000` | wrangler.jsonc 的 vars |
 | `SYNC_MAX_ROWS` | repo 沒設定：正式環境只可能是手動加的 Cloudflare 密鑰（後台加的一般變數部署時會被 keep_vars: false 清掉） | — |
 | `WALKER_KEY` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
-| `WALK_RETRY_ENABLED` | repo 沒設定：正式環境只可能是手動加的 Cloudflare 密鑰（後台加的一般變數部署時會被 keep_vars: false 清掉） | — |
+| `WALK_RETRY_ENABLED` | `true` | wrangler.jsonc 的 vars |
 
 ## 排程（wrangler.jsonc）
 
