@@ -134,6 +134,8 @@ CREATE TABLE IF NOT EXISTS v3_sheet_main (
 );
 CREATE INDEX IF NOT EXISTS v3_sheet_main_number ON v3_sheet_main(number);
 CREATE INDEX IF NOT EXISTS v3_sheet_main_name ON v3_sheet_main(name) WHERE number='';
+-- 用狗 ID 找主清單列不整張掃：開卡讀回、觸發器的 EXISTS（#555）
+CREATE INDEX IF NOT EXISTS v3_sheet_main_dog ON v3_sheet_main(dog_id);
 CREATE TABLE IF NOT EXISTS v3_sheet_main_walkers (
   row_index INTEGER NOT NULL REFERENCES v3_sheet_main(row_index) ON DELETE RESTRICT,
   position INTEGER NOT NULL,
