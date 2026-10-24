@@ -476,6 +476,111 @@ test('觸發器：離所只讓那一年加 1；離所狗的休養、出入所紀
   await assertSame(DB, '改完');
 });
 
+// #556（#548 方案甲）收窄觸發條件：網站不讀的欄改了不加；網站讀的每一欄改了都要加，漏一欄網站就不會更新
+test('觸發器收窄：主清單只改 walker 原文、covered、synced_at、intro 時 small 不變，改在所資料包讀的每一欄都加 1', async t => {
+  const DB = await seededDb(t);
+  await DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES(?,'換身分')").bind('f'.repeat(32)).run();
+  const where = "WHERE name LIKE '圓仔%'";
+  for (const set of ["walker='K'", 'covered=1-covered', "synced_at='2026-10-17'", "intro='同步帶來的介紹'"]) {
+    const before = await smallVer(DB);
+    await DB.prepare(`UPDATE v3_sheet_main SET ${set} ${where}`).run();
+    assert.equal(await smallVer(DB), before, set);
+  }
+  const read = { row_index: 'row_index+100', dog_id: `'${'f'.repeat(32)}'`, number: "number||'x'", name: "name||'x'", cage: "'B9'", note: "'新備註'",
+    walked_date: "'2026-10-01'", my_walked: '1-my_walked', my_walked_date: "'2026-10-02'", sex: "'母'", version: 'version+1' };
+  for (const [column, value] of Object.entries(read)) {
+    const before = await smallVer(DB);
+    await DB.prepare(`UPDATE v3_sheet_main SET ${column}=${value} ${where}`).run();
+    assert.equal(await smallVer(DB), before + 1, column);
+  }
+  await assertSame(DB, '改完');
+});
+
+test('觸發器收窄：回所的狗改主清單，只有編號、狗、列號變了才讓牠出所那年加 1', async t => {
+  const DB = await departedDb(t, 3);
+  await DB.prepare("INSERT INTO v3_departures(number,dog_id,name,departed_date) SELECT '2020999999',dog_id,'滿滿','2020-01-01' FROM v3_dog_numbers WHERE number='2025022703'").run();
+  const year = async () => (await depYears(DB))['2020'];
+  const where = "WHERE number LIKE '2025022703%'";
+  let before = await year();
+  await DB.prepare(`UPDATE v3_sheet_main SET name='滿滿2',cage='C3',walked_date='2026-10-15' ${where}`).run();
+  assert.equal(await year(), before, '只改犬名、籠位、溜狗日：離所不變');
+  await DB.prepare(`UPDATE v3_sheet_main SET number=number ${where}`).run();
+  assert.equal(await year(), before, '編號寫了同一個值：離所不變');
+  await DB.prepare(`UPDATE v3_sheet_main SET number='2025022703x' ${where}`).run();
+  assert.equal(await year(), before + 1, '改編號：那年加 1');
+  before = await year();
+  await DB.prepare(`UPDATE v3_sheet_main SET row_index=row_index+100 ${where}`).run();
+  assert.equal(await year(), before + 1, '改列號：那年加 1');
+});
+
+test('觸發器收窄：同一隻狗改介紹、入所、休養、出入所紀錄、編號，small 和出所那年都只加 1', async t => {
+  const DB = await departedDb(t, 5);
+  const main = "(SELECT dog_id FROM v3_dog_numbers WHERE number='2025022703')", gone = "(SELECT dog_id FROM v3_departures WHERE number='2010000003')";
+  await DB.prepare(`INSERT INTO v3_intros VALUES(${main},'介紹')`).run();
+  await DB.prepare(`INSERT INTO v3_intake_events(dog_id,position,number,event_date,event) VALUES(${main},0,'2025022703','2025-02-27','入所')`).run();
+  await DB.prepare(`INSERT INTO v3_stays VALUES(${main},'[]')`).run();
+  const onMain = ["UPDATE v3_intros SET intro='新介紹' WHERE", "UPDATE v3_intake_events SET event='退回' WHERE", "UPDATE v3_rest SET reason='好了' WHERE",
+    "UPDATE v3_stays SET stays_json='[{}]' WHERE", 'UPDATE v3_dog_numbers SET dog_id=dog_id WHERE'];
+  for (const sql of onMain) {
+    const before = await smallVer(DB);
+    await DB.prepare(`${sql} dog_id=${main}`).run();
+    assert.equal(await smallVer(DB), before + 1, sql);
+  }
+  for (const sql of onMain.slice(2)) {
+    const before = await depYears(DB), small = await smallVer(DB);
+    await DB.prepare(`${sql} dog_id=${gone}`).run();
+    assert.deepEqual(await depYears(DB), { ...before, 2013: before['2013'] + 1 }, sql);
+    assert.equal(await smallVer(DB), small, `${sql}：離所的狗不動在所`);
+  }
+  // 狗換了：舊、新兩隻都要算到（舊的在離所、新的在主清單）
+  const small = await smallVer(DB), years = await depYears(DB);
+  await DB.prepare(`UPDATE v3_dog_numbers SET dog_id=${main} WHERE number='2010000003'`).run();
+  assert.equal(await smallVer(DB), small + 1);
+  assert.equal((await depYears(DB))['2013'], years['2013'] + 1);
+  await assertSame(DB, '改完');
+});
+
+test('觸發器收窄：離所改同一年只加 1、換年兩年各加 1；溜狗紀錄改同一個月只加 1、換月兩個月各加 1', async t => {
+  const DB = await departedDb(t, 5);
+  let before = await depYears(DB);
+  await DB.prepare("UPDATE v3_departures SET reason='died' WHERE number='2010000004'").run();
+  assert.deepEqual(await depYears(DB), { ...before, 2014: before['2014'] + 1 });
+  before = await depYears(DB);
+  await DB.prepare("UPDATE v3_departures SET departed_date='2011-03-03' WHERE number='2010000004'").run();
+  assert.deepEqual(await depYears(DB), { ...before, 2011: before['2011'] + 1, 2014: before['2014'] + 1 });
+
+  for (const [date, c] of MONTHS) await addWalk(DB, date, 0, c.repeat(6));
+  await get('/walks', { DB });
+  const ver = async () => { const r = await DB.prepare('SELECT total,live,months FROM v3_walk_versions WHERE id=1').first(); return { ...r, months: JSON.parse(r.months) }; };
+  let v = await ver();
+  await DB.prepare("UPDATE v3_walks SET walker_code='cccccccccccc' WHERE walk_date='2026-08-31'").run();
+  assert.deepEqual(await ver(), { ...v, total: v.total + 1, months: { ...v.months, '2026-08': v.months['2026-08'] + 1 } });
+  v = await ver();
+  await DB.prepare("UPDATE v3_walks SET walk_date='2026-09-02' WHERE walk_date='2026-08-31'").run();
+  assert.deepEqual(await ver(), { ...v, total: v.total + 2, months: { ...v.months, '2026-08': v.months['2026-08'] + 1, '2026-09': v.months['2026-09'] + 1 } });
+  v = await ver();
+  await addWalk(DB, TODAY, 3, 'd'.repeat(12));
+  v = await ver();
+  await DB.prepare(`UPDATE v3_walks SET walker_code='eeeeeeeeeeee' WHERE walk_date='${TODAY}' AND position=3`).run();
+  assert.deepEqual(await ver(), { ...v, live: v.live + 1 }, '今天的紀錄只動 live 一次');
+});
+
+test('觸發器收窄：寫回成功只改 base_date／base_walker 時 v3_walk_pack 不變，改網站顯示的欄才加 1', async t => {
+  const DB = await seededDb(t);
+  await DB.prepare(`INSERT INTO v3_walk_state VALUES('2026051203',(SELECT dog_id FROM v3_dog_numbers WHERE number='2026051203'),'2026051203','圓仔',1,'${TODAY}','K','[]','','','','','2026-10-16T02:00:00Z')`).run();
+  const pack = async () => (await DB.prepare('SELECT version FROM v3_walk_pack WHERE id=1').first()).version;
+  let before = await pack();
+  await DB.prepare(`UPDATE v3_walk_state SET base_date='${TODAY}',base_walker='K',members_json='["K"]',previous_date='x',previous_walker='y'`).run();
+  assert.equal(await pack(), before);
+  for (const set of ['version=version+1', "effective_date='2026-10-15'", "walker='小明'", "updated_at='2026-10-16T03:00:00Z'"]) {
+    before = await pack();
+    await DB.prepare(`UPDATE v3_walk_state SET ${set}`).run();
+    assert.equal(await pack(), before + 1, set);
+  }
+  const shown = JSON.parse((await DB.prepare('SELECT payload FROM v3_walk_pack WHERE id=1').first()).payload)['2026051203'];
+  assert.deepEqual([shown.version, shown.walkedDate, shown.walker, shown.at], [2, '2026-10-15', '小明', '2026-10-16T03:00:00Z']);
+});
+
 test('讀取量不隨離所的狗變多：重算在所、某一年的離所，讀的列數 10 隻和 100 隻一樣', async t => {
   const reads = async n => {
     const DB = await departedDb(t, n);
