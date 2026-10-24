@@ -13,3 +13,4 @@ wrangler.preview.json
 db/seed.sql
 # 正式資料庫的匯出（搬遷用），不可以提交
 .migration-private/
+admin/public/shared/

@@ -15,8 +15,9 @@
 
 | 檔案 | 責任／介面 | 依賴 | 使用頁面 |
 | --- | --- | --- | --- |
-| `dates.js` | `BQDates`：日期解析、編號與最早入所日、本地日期鍵、台灣今天 | 無 | index、cards、Node |
-| `api.js` | `BQApi`：每個 API 端點一個函式，統一錯誤形狀，接手提前讀狗清單 | 無 | index、cards、edits |
+| `dates.js` | `BQDates`：日期解析、編號與最早入所日、本地日期鍵、台灣今天 | 無 | index、cards、Node、admin（建置複製） |
+| `api.js` | `BQApi`：每個 API 端點一個函式，統一錯誤形狀，接手提前讀狗清單 | api-response | index、cards、edits |
+| `api-response.js` | `settle`：純 API 回應／錯誤解析，不讀頁面狀態 | 無 | index、cards、edits、admin（建置複製） |
 | `store.js` | `BQStore`：手機資料鍵、字串／JSON 讀寫與記憶體備援，可注入儲存空間 | 無 | index、cards、edits |
 | `site-config.js` | `SITE`：收容所設定、警示、區域、功能開關 | 無 | index、cards |
 | `page-state.js` | 各頁模組的可變狀態物件；擁有狀態的模組負責初始化，其他模組明確匯入相同實例 | 無 | index、cards、groups |

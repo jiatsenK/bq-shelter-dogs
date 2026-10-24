@@ -1,5 +1,7 @@
 
 
+import { settle } from './api-response.js';
+
 // 後端用戶端（#478，ADR 0017）：網頁呼叫 /api 只經過這裡，每個端點一個函式。
 // 每個函式都回同一個形狀，不會丟錯：{ ok, status, data, error, message }
 // - error：null 成功；'network' 連不上（含逾時中斷，status 0）；'http' 非 2xx；'format' 2xx 但不是 JSON
@@ -15,19 +17,6 @@ const BQApi = (() => {
   const root = () => base() || 'api';
   const enc = encodeURIComponent;
 
-  async function settle(pending) {
-    let res;
-    try { res = await pending; } catch (e) {
-      const raw = (e && e.message) || String(e);
-      // Safari 斷線是英文 Load failed，畫面上顯示中文（K 2026-10-23）
-      return { ok: false, status: 0, data: null, error: 'network', message: raw === 'Load failed' ? '網頁載入失敗' : raw };
-    }
-    let data = null, message = '';
-    try { data = await res.json(); } catch (e) { message = (e && e.message) || String(e); }
-    if (!res.ok) return { ok: false, status: res.status, data, error: 'http', message };
-    if (message) return { ok: false, status: res.status, data: null, error: 'format', message };
-    return { ok: true, status: res.status, data, error: null, message: '' };
-  }
   const get = (path, init) => settle(fetch(root() + path, init));
   const send = (method, path, body, init) => settle(fetch(root() + path, { method, headers: JSON_TYPE, body: JSON.stringify(body), ...init }));
 
