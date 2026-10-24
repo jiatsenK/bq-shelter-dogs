@@ -6,6 +6,7 @@
 |---|---|---|
 | 志工版 `public/index.html`、常溜狗群、其他志工頁 | [視覺指引](docs/DESIGN_GUIDE.md) | `public/css/app.css`；桌機 `public/js/desk.js` |
 | 圖鑑 `public/cards.html` | [球員卡規格](docs/design/cards.md) | `public/css/cards.css`、`public/js/cards.js` |
+| 管理網站 `admin/public/index.html` | [管理網站規格](docs/design/admin.md) | `admin/public/admin.css`、`admin/public/js/` |
 
 功能範圍見 `docs/PROJECT_GOALS.md`；名詞見 `GLOSSARY.md`。實際 token 值由對應 CSS／JS 定義，指引記設計限制與用途。
 
