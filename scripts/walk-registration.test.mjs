@@ -1,8 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
-const require = createRequire(import.meta.url);
-const { createWalkRegistration } = require('../public/js/walk-registration.js');
+import { createWalkRegistration } from '../public/js/walk-registration.js';
 
 function setup(send) {
   let records = {};

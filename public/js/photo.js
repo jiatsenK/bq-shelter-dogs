@@ -1,3 +1,8 @@
+import { appState } from './page-state.js';
+import { closeLightbox, detailEdits, editorHeaders, esc, icon, lightboxOpen, photoOverrides, photoSrc, photoThumb, render, renderDetail } from './app.js';
+import { BQWalkUI } from './walk-ui.js';
+import { BQApi } from './api.js';
+
 // 照片裁切與上傳只公開 BQPhoto；預覽、裁切與非同步上傳狀態留在模組內。
 const BQPhoto = (() => {
   // 上傳前先在手機上壓成 JPEG：長邊最多 1280px，避免 repo 堆滿手機原圖；上限要跟 Worker 的 MAX_BYTES 一致
@@ -11,14 +16,14 @@ const BQPhoto = (() => {
   // 沒有編號（照片檔名要用編號）或上傳服務還沒設定就不顯示
   function photoPickButton(dog) {
     if (dog.departure) return ''; // 離所的狗（#164）不能換照片
-    if (!UPLOAD_URL || !dog.id) return '';
+    if (!appState.UPLOAD_URL || !dog.id) return '';
     return `<button type="button" class="photo-pick" id="photoPick" aria-label="上傳 ${esc(dog.name)} 的照片" title="上傳照片">${icon('camera')}</button>`;
   }
 
   // 詳細資訊最上面的大照片。選好新照片還沒上傳時，直接在這個位置換成新照片預覽（2026-10-04 K：要像社群網站，出現在按的地方），
   // 裁切方式跟上傳後一模一樣（同一個 .thumb 框）；下面再放一張狗卡上的小照片，兩個地方的樣子都看得到
   function photoPending(dog) {
-    return UPLOAD_URL && dog.id && photoUpload && photoUpload.dog === dog ? photoUpload : null;
+    return appState.UPLOAD_URL && dog.id && photoUpload && photoUpload.dog === dog ? photoUpload : null;
   }
   function photoHeroHtml(dog) {
     const up = photoPending(dog);
@@ -267,7 +272,7 @@ const BQPhoto = (() => {
     const src = photoSrc(dog);
     closeLightbox();
     const blob = await openCropper(src, 'square');
-    if (!blob || detailDog !== dog) return;
+    if (!blob || appState.detailDog !== dog) return;
     if (photoUpload && photoUpload.phase === 'uploading') { BQWalkUI.showToast('上一張照片還在上傳，請稍等一下'); return; }
     clearPhotoUpload();
     photoUpload = detailEdits.open(dog, { blob, url: URL.createObjectURL(blob) }, 'preview');
@@ -291,8 +296,8 @@ const BQPhoto = (() => {
       input.addEventListener('change', () => {
         const files = [...(input.files || [])];
         input.value = ''; // 同一張再選一次也會觸發
-        if (!files.length || !detailDog) return;
-        preparePhoto(detailDog, files[0]);
+        if (!files.length || !appState.detailDog) return;
+        preparePhoto(appState.detailDog, files[0]);
       });
       document.body.appendChild(input);
     }
@@ -338,7 +343,7 @@ const BQPhoto = (() => {
       BQWalkUI.showToast(e.message);
       return;
     }
-    if (detailDog !== dog) return; // 壓縮途中換看別隻或關掉了
+    if (appState.detailDog !== dog) return; // 壓縮途中換看別隻或關掉了
     clearPhotoUpload();
     photoUpload = detailEdits.open(dog, { blob, url: URL.createObjectURL(blob) }, 'preview');
     renderDetail();
@@ -367,7 +372,7 @@ const BQPhoto = (() => {
     else if (!r.ok || !out || !out.ok) error = (out && out.error) || `網站暫時收不到照片（${r.status}），請稍後再試；原本的照片不受影響`;
     if (photoUpload !== up) return; // 保險：上傳中不會被清掉（見 preparePhoto、hideDetail）
     if (error) {
-      if (detailDog !== up.dog) { // 上傳途中關掉或換看別隻：用提示條告訴結果
+      if (appState.detailDog !== up.dog) { // 上傳途中關掉或換看別隻：用提示條告訴結果
         clearPhotoUpload();
         BQWalkUI.showToast(`${up.dog.name} 的照片沒有上傳成功：${error}`);
         return;
@@ -402,3 +407,5 @@ const BQPhoto = (() => {
     cropOpen, hideCropper, closeCropper, compress: compressPhoto,
   };
 })();
+
+export { BQPhoto };

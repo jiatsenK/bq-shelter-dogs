@@ -1,3 +1,9 @@
+import { BQStore } from './store.js';
+import { SITE } from './site-config.js';
+import { BQDates } from './dates.js';
+import { BQApi } from './api.js';
+import { cardsState } from './page-state.js';
+
 // 板收圖鑑（cards.html）：電腦版溜狗表頁首「圖鑑」進來（K 2026-10-10）。
 // 每隻狗一張球員卡，你溜過的才拿得到；上次來之後新溜的狗包成卡包自己撕。沒溜過的狗也看得到，只是還沒有卡。
 // 「你是誰」用溜狗表「我溜過」設定的代號；開卡紀錄存 D1、localStorage 備援，不寫試算表、不顯示志工名字。
@@ -382,9 +388,9 @@ function bqRenderAll() {
   all.textContent = `一次全開（${BQ.pending.length} 張）`;
 }
 // 撕包、發牌的計時器；「跳過動畫」清掉它們，直接排好
-let bqTimers = [];
-function bqLater(fn, ms) { bqTimers.push(setTimeout(fn, ms)); }
-function bqClearTimers() { bqTimers.forEach(clearTimeout); bqTimers = []; }
+ cardsState.bqTimers = [];
+function bqLater(fn, ms) { cardsState.bqTimers.push(setTimeout(fn, ms)); }
+function bqClearTimers() { cardsState.bqTimers.forEach(clearTimeout); cardsState.bqTimers = []; }
 function bqFocusFirstCard() { const first = document.querySelector('#bqHand .bq-card'); if (first) first.focus({ preventScroll: true }); }
 function bqSkip() {
   bqClearTimers();
@@ -438,7 +444,7 @@ async function bqDeal(all = false, instant = false) {
   if (skipped) bqFocusFirstCard();
 }
 // 按「開卡包」：球場蓋住畫面、卡包掉進來；撕開、攤開五張；「收進圖鑑」或 Esc 回圖鑑
-let bqFieldOpener = null;
+ cardsState.bqFieldOpener = null;
 function bqRefreshOpened() {
   if (!BQ.opened) return;
   const saved = bqLoadOpened(BQ.storage);
@@ -458,7 +464,7 @@ async function bqOpenField(opener) {
   bqRefreshOpened();
   if (!BQ.pending.length) return;
   const field = document.getElementById('bqField');
-  bqFieldOpener = opener || null;
+  cardsState.bqFieldOpener = opener || null;
   field.classList.remove('tearing', 'opened');
   document.getElementById('bqPackNote').textContent = '點卡包撕開';
   document.getElementById('bqHand').innerHTML = '';
@@ -480,8 +486,8 @@ function bqCloseField() {
   field.classList.remove('tearing', 'opened');
   document.getElementById('bqHand').innerHTML = '';
   document.documentElement.classList.remove('bq-modal-open');
-  const back = document.getElementById('bqOpen') || (bqFieldOpener && bqFieldOpener.isConnected ? bqFieldOpener : document.getElementById('bqBinderTitle'));
-  bqFieldOpener = null;
+  const back = document.getElementById('bqOpen') || (cardsState.bqFieldOpener && cardsState.bqFieldOpener.isConnected ? cardsState.bqFieldOpener : document.getElementById('bqBinderTitle'));
+  cardsState.bqFieldOpener = null;
   if (back && back.focus) back.focus({ preventScroll: true });
 }
 function bqOpenPack() {
@@ -587,7 +593,7 @@ async function bqLoadAlumni() {
 }
 
 // 大卡：點圖鑑或獎項的照片，放大看、可以翻面
-let bqOpener = null;
+ cardsState.bqOpener = null;
 function bqOpen(id, opener) {
   const p = BQ.byId.get(id);
   if (!p) return;
@@ -595,7 +601,7 @@ function bqOpen(id, opener) {
   bqShowModal(bqCardHtml(p, { tag: 'button', big: true, mine }), opener);
 }
 function bqShowModal(html, opener) {
-  bqOpener = opener || null;
+  cardsState.bqOpener = opener || null;
   document.getElementById('bqModalCard').innerHTML = html;
   document.getElementById('bqModal').hidden = false;
   document.documentElement.classList.add('bq-modal-open');
@@ -611,8 +617,8 @@ function bqClose() {
   modal.hidden = true;
   document.documentElement.classList.remove('bq-modal-open');
   document.getElementById('bqModalCard').innerHTML = '';
-  if (bqOpener && bqOpener.isConnected) bqOpener.focus({ preventScroll: true });
-  bqOpener = null;
+  if (cardsState.bqOpener && cardsState.bqOpener.isConnected) cardsState.bqOpener.focus({ preventScroll: true });
+  cardsState.bqOpener = null;
 }
 
 function bqBind() {
@@ -724,4 +730,5 @@ async function bqInit() {
   await bqSyncOpened();
 }
 
-if (typeof document !== 'undefined' && document.getElementById('bqBinder')) bqInit();
+export { BQ_CODES_KEY, BQ_WRITES_KEY, BQ_OPENED_KEY, BQ_CODE_PATTERN, BQ_PACK_SIZE, BQ_TEAMS, BQ_FREE, BQ_TIERS, bqTeamOf, bqTier, bqStay, bqQuote, bqMonthOut, bqPlayers, bqAwards, BQ_DEPART_REASONS, bqAlumni, bqLoadCodes, bqTodayWrites, bqMineFrom, bqFetchMine, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, bqEsc, BQ_DOG, BQ_PAW, bqPhoto, bqDate, bqCardHtml, bqAlumniCardHtml, BQ, bqRemoteOpened, bqSyncOpened, bqOpenedSet, bqGotCount, bqRenderProgress, bqFan, bqShowHand, bqRenderCta, bqRenderAgain, bqRenderAll, bqLater, bqClearTimers, bqFocusFirstCard, bqSkip, bqDeal, bqRefreshOpened, bqOpenField, bqCloseField, bqOpenPack, bqOpenAll, bqTilt, bqUntilt, bqRenderAwards, bqRenderBinder, bqRenderAlumni, bqLoadAlumni, bqOpen, bqShowModal, bqOpenAlumni, bqClose, bqBind, bqInit };
+export { cardsState } from './page-state.js';

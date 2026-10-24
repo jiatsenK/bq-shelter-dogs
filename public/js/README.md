@@ -1,27 +1,49 @@
 # 前端 JavaScript
 
-一般 script 依序載入；新拆出的模組只公開一個全域名稱，最後統一改 ES module（ADR 0017）。下列依賴指其他前端檔案；呼叫 /api 只經過 api.js，DOM 由各頁使用。
+所有前端程式使用原生 ES module，以具名 `import`／`export` 表達依賴，不需要打包工具，也不在 `window` 公開模組名稱（ADR 0017、#489）。HTML 只載入自己的 `type="module"` 入口。呼叫 `/api` 仍只經過 `api.js`。
 
-- `dates.js`：`BQDates` 共用日期解析、編號與最早入所日、本地日期鍵、台灣今天及日期標記；無檔案依賴；index、cards、edits 載入。
-- `api.js`：`BQApi` 後端用戶端，每個 /api 端點一個函式，非 2xx、非 JSON、斷線都回同一形狀 { ok, status, data, error, message }，並接手主頁提前讀的狗清單；網頁測試替換它假裝後端；無檔案依賴；index、cards、edits 在 dates 後載入。
-- `store.js`：`BQStore` 集中所有 `bq-*` 手機資料鍵與字串／JSON 讀寫，可注入假儲存空間；無法存取時逐鍵退回記憶體，寫入／移除回傳是否存入持久儲存；無檔案依賴；index、cards、edits 在 api 後載入。
-- `site-config.js`：`SITE` 收容所設定；無檔案依賴；index、cards 載入。
-- `detail-editor.js`：詳細資訊五種編輯器共用的草稿、儲存中、錯誤與重畫狀態；由主頁注入重畫函式，驗證、API 與焦點由主頁負責；無檔案依賴；index 在 app 前載入。
-- `tour.js`：`BQTour` 使用說明導覽的步驟、示範、定位、動態效果及主畫面安裝說明；透過 welcome 的開頭畫面／背景互動封鎖、app 的資料／重畫與儲存、store、analysis、find 及選配 desk 示範實際頁面；index 在 app 前載入，互動於頁面檔案載入後啟動。
-- `welcome.js`：`BQWelcome` 開頭畫面、我是誰表單、名字推薦與確認、更名及合併；依賴 api、store、site-config，互動時讀取 app 的手機身分、名字清單及溜狗操作，搭配 tour、walk-ui；index 在 app 前載入。
-- `photo.js`：`BQPhoto` 主照片選檔、壓縮、預覽、裁切與上傳，內部管理預覽及裁切狀態；執行時依賴 app 的詳細資訊、共用重畫狀態與照片顯示、api、walk-ui；index 在 app 前載入，desk 共用壓縮。
-- `favorites.js`：`BQFavorites` 建立我的常溜實例，管理手機收藏、舊鍵搬移、逐隻增刪、離線佇列與身分同步；執行時依賴 app 的手機資料／身分／重畫、api、store、welcome、walk-ui；index 在 app 前載入。
-- `app.js`：主頁資料、狗卡詳細資訊與溜狗操作；依賴 dates、api、store、site-config、detail-editor、detail-viewport、walk-flow、tour、photo、welcome、walk-ui、favorites，搭配後載入的頁面檔案；index 載入。
-- `walk-ui.js`：`BQWalkUI` 今日溜狗登記與復原的畫面協調、提示條、同行人選單、溜狗人編輯及按鈕；執行時依賴 app 的資料／重畫、dates、walk-flow、welcome，其他頁面透過此名稱使用提示；index 在 app 前載入。
-- `analysis.js`：分析、離所名冊與資訊頁；依賴 dates、api、store、app，搭配 activities；index 在 app 後載入。
-- `cards.js`：圖鑑、開卡與已出所狗卡，保留卡片專用顯示格式；依賴 dates、api、store、site-config；cards 載入。
-- `activities.js`：活動紀錄及已出所狗卡的編輯；依賴 dates、api、app、analysis、walk-ui；index 載入。
-- `find.js`：找狗照片、搜尋與平面圖；依賴 app、analysis、group-stage、walk-ui，透過 app 的常溜實例使用 favorites；index 載入。
-- `group-stage.js`：可以一起溜的狗群畫面；依賴 dates、api、app、analysis、walk-ui；index 載入。
-- `desk.js`：電腦版簡報、全表與側欄；依賴 dates、api、app、analysis、photo、walk-ui；index 載入。
-- `detail-viewport.js`：詳細資訊編輯欄位的可見範圍；無檔案依賴；index 載入，由 app 使用。
-- `keyboard-viewport.js`：螢幕鍵盤開啟時的欄位與面板定位；無檔案依賴；index 載入。
-- `walk-registration.js`：溜了、同行人、復原與核對規則；無檔案依賴，由 walk-flow 注入資料操作；index 載入。
-- `walk-flow.js`：`BQWalks` 不碰 DOM 的寫試算表流程，串接排隊登記、同行人、今日紀錄核對、復原、失敗種類與提示，以及當日手機紀錄；依賴 dates、api、store、walk-registration；index 在 walk-registration 後、app 前載入。
-- `edits.js`：資料編輯紀錄清單；依賴 api、store；edits 載入。
-- `groups.js`：舊獨立狗群頁的讀取與編輯；依賴 api、store；目前沒有頁面載入，groups.html 已轉址至 index。
+## 頁面入口與初始化
+
+- `index.html` → `main.js`：匯入整個主頁模組圖；模組定義與狀態初始化完成後，依原本順序呼叫 app、analysis、group-stage、find、activities 的事件綁定，再啟動 desk 與 app。循環引用只在互動時使用，事件綁定不靠 import 評估順序。頁首提前抓狗清單的內嵌程式保留，`api.js` 接手該請求。
+- `cards.html` → `cards-entry.js`：載入 `cards.js` 與共用模組，再啟動圖鑑。
+- `edits.html` → `edits.js`：載入共用模組，再讀取編輯紀錄。
+- `groups.html` 仍轉址至主頁；保留的 `groups.js` 也改為 ES module，沒有頁面載入。
+
+## 模組責任與依賴
+
+下列依賴是直接匯入的前端檔案；同名 `BQ*` 介面現在是具名匯出，使用方式不變。
+
+| 檔案 | 責任／介面 | 依賴 | 使用頁面 |
+| --- | --- | --- | --- |
+| `dates.js` | `BQDates`：日期解析、編號與最早入所日、本地日期鍵、台灣今天 | 無 | index、cards、Node |
+| `api.js` | `BQApi`：每個 API 端點一個函式，統一錯誤形狀，接手提前讀狗清單 | 無 | index、cards、edits |
+| `store.js` | `BQStore`：手機資料鍵、字串／JSON 讀寫與記憶體備援，可注入儲存空間 | 無 | index、cards、edits |
+| `site-config.js` | `SITE`：收容所設定、警示、區域、功能開關 | 無 | index、cards |
+| `page-state.js` | 各頁模組的可變狀態物件；擁有狀態的模組負責初始化，其他模組明確匯入相同實例 | 無 | index、cards、groups |
+| `dog-data.js` | `parseDogsData`：將 API 狗清單整理為前端資料，不碰 DOM；Node 匯入的共用接縫 | dates | index、Node |
+| `detail-editor.js` | `BQDetailEditor`：五種編輯器的草稿、儲存中、錯誤與重畫狀態 | 無 | index |
+| `detail-viewport.js` | 詳細資訊編輯欄位的可見範圍 | 無 | index |
+| `keyboard-viewport.js` | 螢幕鍵盤開啟時的欄位與面板定位 | 無 | index |
+| `walk-registration.js` | `createWalkRegistration`：登記、同行人、復原與核對規則，純 ES module | 無 | index、Node |
+| `walk-flow.js` | `BQWalks`：不碰 DOM 的排隊登記、核對、復原、提示及當日手機紀錄 | store、walk-registration（日期介面由呼叫端注入） | index、Node |
+| `tour.js` | `BQTour`：導覽步驟、示範、定位、動態效果及安裝說明 | app、analysis、find、desk、welcome、store、page-state | index |
+| `welcome.js` | `BQWelcome`：開頭畫面、我是誰、名字推薦／確認、更名及合併 | app、api、store、site-config、tour、walk-ui、page-state | index |
+| `photo.js` | `BQPhoto`：主照片選檔、壓縮、預覽、裁切、上傳，保留內部狀態 | app、api、walk-ui、page-state | index |
+| `favorites.js` | `BQFavorites`：常溜實例、舊鍵搬移、逐隻增刪、離線佇列與身分同步 | app、api、store、welcome、walk-ui、page-state | index |
+| `walk-ui.js` | `BQWalkUI`：今日登記／復原的畫面、提示條、同行人、溜狗人編輯 | app、dates、walk-flow、welcome、page-state | index |
+| `app.js` | 主頁資料、狗卡詳細資訊、溜狗操作與事件綁定 | 共用模組、dog-data、所有主頁功能模組、page-state | index |
+| `analysis.js` | 分析、離所名冊與資訊頁 | app、dates、api、store、site-config、dog-data、activities、page-state | index |
+| `activities.js` | 活動紀錄與已出所狗卡編輯 | app、analysis、dates、api、walk-ui、page-state | index |
+| `find.js` | 找狗照片、搜尋與平面圖 | app、walk-ui、page-state | index |
+| `group-stage.js` | 可以一起溜的狗群畫面 | app、dates、api、walk-ui、page-state | index |
+| `desk.js` | 電腦版簡報、全表與側欄，明確啟動後啟用寬螢幕呈現 | app、dates、api、site-config、find、photo、walk-ui、page-state | index |
+| `cards.js` | 圖鑑、開卡與已出所狗卡，保留卡片專用格式 | dates、api、store、site-config、page-state | cards |
+| `edits.js` | 編輯紀錄清單 | api、store | edits |
+| `groups.js` | 舊獨立狗群頁讀取與編輯 | api、store、page-state | 無 |
+
+## 測試與 Node 消費者
+
+- 網頁測試直接載入真實模組。`tests/fixtures/module-globals.js` 只在測試環境，將既有斷言需要的名稱接到模組匯出／狀態；正式頁面不載入它。`es-modules` 套件另外驗證沒有橋接時，三個正式入口與主頁互動能正常執行，且不產生舊全域名稱。
+- 日期、溜狗規則與狗清單解析可直接由 Node `import`；需要隔離網路、儲存空間與時鐘的 API／store／walk-flow 測試，由 `scripts/frontend-module-test-helper.mjs` 用原生 `vm.SourceTextModule` 載入真實模組圖。Node 測試入口帶入 `--experimental-vm-modules`。
+- 匯入腳本不需執行整個網頁；原先拼接主頁原始碼的同步資料測試改直接匯入 `dog-data.js`。分析信標測試以模組入口的 HTML 驗證插入位置。試算表同步排程依 #517 已退役。
+- 本機測試仍統一從 `scripts/check-local.ps1` 執行，完整輸出與內容指紋留在 `.scratch/checks/`。repo 沒有 TypeScript／型別檢查入口；變更的 JS 另外做語法檢查。

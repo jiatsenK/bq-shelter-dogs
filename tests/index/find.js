@@ -119,7 +119,7 @@ async function runFindTests() {
       for (const id of ['i-grid', 'i-map']) {
         if (!INDEX_HTML.includes(`<symbol id="${id}"`)) throw new Error(`index.html 缺 ${id} 圖示`);
       }
-      if (!/<script src="js\/analysis\.js"><\/script>\s*<script src="js\/group-stage\.js"><\/script>\s*<script src="js\/find\.js"><\/script>/.test(INDEX_HTML)) throw new Error('find.js 要在 app.js、analysis.js 之後載入');
+      if (!/from ['"]\.\/app\.js['"]/.test(FIND_JS)) throw new Error('找狗頁要明確匯入主頁能力');
     });
     await check('#99 找狗不顯示未遛天數與「已遛」按鈕', () => {
       const html = findRowsHtml(allDogs, '');
@@ -439,7 +439,7 @@ async function runFindListTests() {
     const main = document.getElementById('main');
     await check('2026-10-08 找狗只有平面圖／列表兩種，一打開是平面圖；平面圖不再多一排區域，只留 ★ 我的常溜', async () => {
       const code = await fetch('../public/js/find.js').then(r => r.text());
-      if (!/let findView = 'map';/.test(code)) throw new Error('打開找狗應該是平面圖');
+      if (!/findState\.findView = 'map';/.test(code)) throw new Error('打開找狗應該是平面圖');
       findView = 'map'; render();
       eq([...main.querySelectorAll('[data-find-view]')].map(b => b.textContent.trim()), ['平面圖', '列表'], '顯示方式：');
       eq([!!main.querySelector('.find-map-card'), [...main.querySelectorAll('.find-chip')].map(c => c.dataset.findZone)], [true, ['fav']], '平面圖＋常溜：');

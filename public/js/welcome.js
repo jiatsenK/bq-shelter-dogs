@@ -1,3 +1,11 @@
+import { BQApi } from './api.js';
+import { allWalkerNames, canonicalWalker, esc, fetchWalks, icon, isOffline, loadMyCodes, loadWalkerName, mainEl, render, saveMyCodes, saveWalkerName, splitWalkers, walkerCodesFor } from './app.js';
+import { appState } from './page-state.js';
+import { BQStore } from './store.js';
+import { SITE } from './site-config.js';
+import { BQTour } from './tour.js';
+import { BQWalkUI } from './walk-ui.js';
+
 // 開頭畫面與我是誰設定；只公開 BQWelcome，頁面資料於互動時取用。
 const BQWelcome = (() => {
   let walkerSetup = null; // 正在設定我是誰：{ text, phase, error }
@@ -99,7 +107,7 @@ const BQWelcome = (() => {
   async function setWalkerName(raw) {
     const text = String(raw || '').trim();
     if (!text) return '請輸入你在試算表上寫的名字';
-    if (!UPLOAD_URL) return '暫時不能設定，網站這邊還沒準備好';
+    if (!appState.UPLOAD_URL) return '暫時不能設定，網站這邊還沒準備好';
     const oldName = loadWalkerName(), oldCodes = loadMyCodes().join(',');
     try {
       const out = await identityRequest('', { name: text });
@@ -114,11 +122,11 @@ const BQWelcome = (() => {
   // （溜狗紀錄只有代號，所以先跟 Worker 換代號再對），紀錄裡有就是本人、不用問；查不到或連不上才問
   async function namesToConfirm(text) {
     const unknown = unknownWalkerNames(text);
-    if (!unknown.length || !UPLOAD_URL) return unknown;
-    if (!walksData) {
-      try { walksData = await fetchWalks(); } catch (e) { console.error(e); }
+    if (!unknown.length || !appState.UPLOAD_URL) return unknown;
+    if (!appState.walksData) {
+      try { appState.walksData = await fetchWalks(); } catch (e) { console.error(e); }
     }
-    const walks = walksData && Array.isArray(walksData.walks) ? walksData.walks : null;
+    const walks = appState.walksData && Array.isArray(appState.walksData.walks) ? appState.walksData.walks : null;
     if (!walks) return unknown;
     const left = [];
     for (const n of unknown) {
@@ -127,7 +135,6 @@ const BQWelcome = (() => {
     }
     return left;
   }
-
 
   // ── 開頭畫面（#141 第 2 項）──
   // 第一次打開：先問你在試算表上的名字，接著幾頁說明（像新網站上線的導覽），按「開始使用」就不再出現。
@@ -140,25 +147,25 @@ const BQWelcome = (() => {
   //   walk: 名字設好後要登記的狗（按溜了才問名字）, again: 從資訊再打開說明 }
   let onboard = null;
   function onboardDone() {
-    try { return phoneStore && phoneStore.get(ONBOARD_KEY) === '1'; } catch (e) { return false; }
+    try { return appState.phoneStore && appState.phoneStore.get(ONBOARD_KEY) === '1'; } catch (e) { return false; }
   }
   function nameLater() {
-    try { return phoneStore && phoneStore.get(NAME_LATER_KEY) === '1'; } catch (e) { return false; }
+    try { return appState.phoneStore && appState.phoneStore.get(NAME_LATER_KEY) === '1'; } catch (e) { return false; }
   }
   function setNameLater(on) {
-    try { if (phoneStore) on ? phoneStore.set(NAME_LATER_KEY, '1') : phoneStore.remove(NAME_LATER_KEY); } catch (e) { /* 存不了下次再問一次 */ }
+    try { if (appState.phoneStore) on ? appState.phoneStore.set(NAME_LATER_KEY, '1') : appState.phoneStore.remove(NAME_LATER_KEY); } catch (e) { /* 存不了下次再問一次 */ }
   }
   function needOnboard() {
     return !onboardDone() || (!nameLater() && (!loadWalkerName() || !loadMyCodes().length));
   }
   // 按溜了要寫進試算表、卻還沒有名字：先問名字
   function needNameToWalk() {
-    return !!UPLOAD_URL && sheetWriteState !== 'off' && !loadWalkerName();
+    return !!appState.UPLOAD_URL && appState.sheetWriteState !== 'off' && !loadWalkerName();
   }
   // 自己打的名字裡，名字清單上沒有的（打錯字會寫進大家共用的試算表，送出前問一次）。
   // 清單只看主清單「誰遛的」現在寫的名字（每隻狗最後一個溜的人），最近沒溜的人不在上面，所以還要查遛狗紀錄（namesToConfirm）
   function unknownWalkerNames(text) {
-    if (!walkerNameList.length) return [];
+    if (!appState.walkerNameList.length) return [];
     const known = new Set(allWalkerNames());
     return splitWalkers(text).map(canonicalWalker).filter(n => n && !known.has(n));
   }
@@ -170,7 +177,7 @@ const BQWelcome = (() => {
     const o = onboard;
     if (o.step === 0) {
       const busy = o.phase === 'saving';
-      const names = walkerNameList.length > 0;
+      const names = appState.walkerNameList.length > 0;
       const head = o.walk
         ? `<h1 class="ob-ask">先告訴我們你是誰</h1>
         <p class="ob-lead">「溜了」會把你的名字寫進試算表「誰遛的」。設好就幫你登記 ${esc(o.walk.map(d => d.name).join('、'))}。</p>`
@@ -206,7 +213,7 @@ const BQWelcome = (() => {
     return [...all.filter(n => n.startsWith(q)), ...all.filter(n => !n.startsWith(q) && n.includes(q))];
   }
   function obNamesHtml(o, busy, kind = 'ob') {
-    if (!walkerNameList.length) return '';
+    if (!appState.walkerNameList.length) return '';
     const picked = new Set([canonicalWalker(o.text)]);
     return `<div class="ob-names" data-names="${kind}">${namesMatching(o.text).map(n =>
       `<button type="button" class="with-name me-name${picked.has(n) ? ' on' : ''}" data-${kind}-name="${esc(n)}" aria-pressed="${picked.has(n)}"${busy ? ' disabled' : ''}>${esc(n)}${picked.has(n) ? icon('tick') : ''}</button>`).join('')}</div>`;
@@ -391,3 +398,5 @@ const BQWelcome = (() => {
   return { start: startOnboard, close: closeOnboard, refresh, needsSetup, setupHtml: walkerSetupHtml,
     bindSetup, request: identityRequest, needNameToWalk, askNameThenWalk, setInert: setOnboardInert };
 })();
+
+export { BQWelcome };
