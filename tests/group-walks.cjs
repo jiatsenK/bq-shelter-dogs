@@ -130,6 +130,12 @@ module.exports = async (browser, base) => {
     // #443：換群箭頭在「溜了」兩側（#395），換群時不跟著狗數移動；長群也停在底部分類列上方
     for (const [width, height] of [[320, 844], [390, 844], [390, 568]]) {
       await page.setViewportSize({ width, height });
+      // 表頭／底部分類列高度變數在 resize 事件、ResizeObserver 裡才更新，比 setViewportSize 晚一幀；
+      // 1280 的底部列比手機高，沒等就量第一群會拿到舊高度，CI 偶發「狗數變化不移動切群按鈕」
+      await page.waitForFunction(() => {
+        const root = document.documentElement.style, px = s => `${document.querySelector(s).getBoundingClientRect().height}px`;
+        return root.getPropertyValue('--app-header-height') === px('header.app') && root.getPropertyValue('--bottom-bar-height') === px('#bottomBar');
+      });
       const total = Number((await page.locator('.gw-pages span').textContent()).split(' / ')[1]);
       let first;
       for (let i = 0; i < total; i++) {
