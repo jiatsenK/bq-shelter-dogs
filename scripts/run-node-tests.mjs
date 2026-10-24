@@ -37,5 +37,5 @@ if (args.includes('--only')) {
   nodeOptions = [];
 }
 localCheck.requireLocalCheck(args);
-const { status } = spawnSync(process.execPath, ['--test', ...nodeOptions, ...files], { cwd: root, stdio: 'inherit' });
+const { status } = spawnSync(process.execPath, ['--experimental-vm-modules', '--test', ...nodeOptions, ...files], { cwd: root, stdio: 'inherit' });
 process.exit(status ?? 1);

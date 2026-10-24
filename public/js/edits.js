@@ -1,3 +1,6 @@
+import { BQStore } from './store.js';
+import { BQApi } from './api.js';
+
 // 編輯紀錄頁（edits.html，ADR 0004）：列出最近的編輯，新到舊。純函式在前面（tests/index.html 會測），畫面在後面。
 
 function editsEsc(s) {
@@ -80,3 +83,5 @@ async function editsLoad() {
 }
 
 if (typeof document !== 'undefined' && document.getElementById('list')) editsLoad();
+
+export { editsEsc, editsWhen, editsValue, editsItemHtml, EDITS_CACHE, editsLoad };

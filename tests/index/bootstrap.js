@@ -3,46 +3,13 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs, tourJs, photoJs, walkUiJs, welcomeJs, favoritesJs]) => {
-    const dates = document.createElement('script'); dates.textContent = datesJs; document.body.appendChild(dates);
-    API_JS = apiJs;
-    const api = document.createElement('script'); api.textContent = apiJs; document.body.appendChild(api);
-    const store = document.createElement('script'); store.textContent = storeJs; document.body.appendChild(store);
-    SITE_JS = siteJs;
-    const c = document.createElement('script'); // 這間收容所的設定要在其他程式前面
-    c.textContent = siteJs;
-    document.body.appendChild(c);
-    ANALYSIS_JS = analysisJs;
-    FIND_JS = findJs;
-    INDEX_HTML = html;
-    MANIFEST = JSON.parse(manifest);
-    APP_JS = js;
-    TOUR_JS = tourJs;
-    PHOTO_JS = photoJs;
-    WALK_UI_JS = walkUiJs;
-    WELCOME_JS = welcomeJs;
-    FAVORITES_JS = favoritesJs;
-    DOGS_JSON = JSON.parse(dogsJson);
-    const dv = document.createElement('script'); dv.textContent = detailViewportJs; document.body.appendChild(dv);
-    const wr = document.createElement('script'); wr.textContent = walkRegistrationJs; document.body.appendChild(wr);
-    const wf = document.createElement('script'); wf.textContent = walkFlowJs; document.body.appendChild(wf);
-    const de = document.createElement('script'); de.textContent = detailEditorJs; document.body.appendChild(de);
-    const guide = document.createElement('script'); guide.textContent = tourJs; document.body.appendChild(guide);
-    const photo = document.createElement('script'); photo.textContent = photoJs; document.body.appendChild(photo);
-    const walkUi = document.createElement('script'); walkUi.textContent = walkUiJs; document.body.appendChild(walkUi);
-    const welcome = document.createElement('script'); welcome.textContent = welcomeJs; document.body.appendChild(welcome);
-    const fav = document.createElement('script'); fav.textContent = favoritesJs; document.body.appendChild(fav);
-    const s = document.createElement('script');
-    s.textContent = js;
-    document.body.appendChild(s);
-    const a = document.createElement('script');
-    a.textContent = analysisJs;
-    document.body.appendChild(a);
-    const gs = document.createElement('script'); gs.textContent = groupStageJs; document.body.appendChild(gs);
-    const f = document.createElement('script');
-    f.textContent = findJs;
-    document.body.appendChild(f);
-    const act = document.createElement('script'); act.textContent = activitiesJs; document.body.appendChild(act);
+  .then(async ([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs, tourJs, photoJs, walkUiJs, welcomeJs, favoritesJs]) => {
+    await import('../fixtures/module-globals.js');
+    bindApp(); bindAnalysis(); bindGroups(); bindFind(); bindActivities();
+    API_JS = apiJs; SITE_JS = siteJs; ANALYSIS_JS = analysisJs; FIND_JS = findJs;
+    INDEX_HTML = html; MANIFEST = JSON.parse(manifest); APP_JS = js;
+    TOUR_JS = tourJs; PHOTO_JS = photoJs; WALK_UI_JS = walkUiJs;
+    WELCOME_JS = welcomeJs; FAVORITES_JS = favoritesJs; DOGS_JSON = JSON.parse(dogsJson);
     phoneStore = fakeStorage(); // 其他測試也不碰真正的 localStorage
     loadState = 'ready'; // 測試頁不跑 init，直接當資料已讀好，各測試自己放假資料
     restState = 'ready'; todayState = 'ready'; // 初次狀態讀取另由 startup-stability.cjs 走真實頁面驗證

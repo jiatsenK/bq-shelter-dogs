@@ -1,7 +1,16 @@
+import { BQDates } from './dates.js';
+import { DEPARTURE_LABELS, apiData, computeStatus, esc, icon, photoSrc, photoThumb, render, renderDetail, searchKey, showDetail, switchTab, ymdText } from './app.js';
+import { activitiesState, analysisState, appState } from './page-state.js';
+import { BQApi } from './api.js';
+import { SITE } from './site-config.js';
+import { activitySectionHtml, loadActivities } from './activities.js';
+import { parseDogsData } from './dog-data.js';
+import { BQStore } from './store.js';
+
 // 分析頁（V5-4 #59、V5-5 #60）：目前 dogs.json 就能算的犬隻統計，加上 #56 累積的遛狗歷史與每日快照。
 // 統計都寫成純函式（輸入狗清單與今天日期，輸出數字），tests/index.html 直接測；畫面只負責把結果畫成 CSS／SVG 資訊圖表（大數字、圓環、直條圖）。
 // 頁首右上角的圖示打開（不佔分類：分類只放每天遛狗會用的）。
-// 會用到 js/dates.js 的日期工具及 js/app.js 的 computeStatus、esc、icon、photoSrc、showDetail、allDogs、analysisOpen，所以要在 app.js 之後載入。
+// 會用到 js/dates.js 的日期工具及 js/app.js 的 computeStatus、esc、icon、photoSrc、showDetail、allDogs、analysisOpen，透過具名 import 使用。
 
 // 長期在所＝在所滿 1 年；近期少遛＝超過 AMBER_DAYS 天沒遛（沿用溜狗表的黃色門檻，2026-10-09 起 3 天）
 const LONG_STAY_MONTHS = 12;
@@ -130,17 +139,17 @@ function dataCompleteness(rows, hasPhoto) {
 }
 
 // ── 照片檢查：用 HEAD 只問 photos/{編號}.jpg 在不在，不下載圖片；一次開網頁只查一遍 ──
-let photoCheck = null; // null：還沒開始；{ done, map: Map(編號 → true/false) }
+analysisState.photoCheck = null; // null：還沒開始；{ done, map: Map(編號 → true/false) }
 function checkPhotos(dogs) {
-  if (photoCheck) return;
-  photoCheck = { done: false, map: new Map() };
-  const state = photoCheck;
+  if (analysisState.photoCheck) return;
+  analysisState.photoCheck = { done: false, map: new Map() };
+  const state = analysisState.photoCheck;
   const ids = [...new Set(dogs.map(d => d.id).filter(Boolean))];
   Promise.all(ids.map(id => fetch(photoSrc({ id }), { method: 'HEAD', cache: 'no-cache' })
     .then(res => state.map.set(id, res.ok ? true : res.status === 404 ? false : null), () => state.map.set(id, null))))
     .then(() => {
       state.done = true;
-      if (analysisOpen && photoCheck === state) render();
+      if (appState.analysisOpen && analysisState.photoCheck === state) render();
     });
 }
 
@@ -201,18 +210,18 @@ function dogWalkHistory(dog, walks, start, today, n = 30) {
 }
 
 // 讀遛狗紀錄：打開詳細資訊才讀，一次開網頁只讀一遍
-let historyData = null; // { state: 'loading'|'ready'|'error', walks, dates }
+analysisState.historyData = null; // { state: 'loading'|'ready'|'error', walks, dates }
 function loadHistory() {
-  if (historyData) return;
-  const state = historyData = { state: 'loading', walks: [], dates: [] };
+  if (analysisState.historyData) return;
+  const state = analysisState.historyData = { state: 'loading', walks: [], dates: [] };
   BQApi.walks().then(apiData).then(w => {
     state.walks = parseWalks(w);
     state.dates = historyStartDates(w);
     state.state = 'ready';
   }, () => { state.state = 'error'; }).then(() => {
-    if (historyData !== state) return;
-    if (detailDog) renderDetail();
-    if (analysisOpen) render();
+    if (analysisState.historyData !== state) return;
+    if (appState.detailDog) renderDetail();
+    if (appState.analysisOpen) render();
   });
 }
 
@@ -239,7 +248,7 @@ function columnChart(items, { color = () => 'var(--primary)', hi = -1 } = {}) {
 
 // 狗的一列：點了開詳細資訊（data-adog 是 allDogs 的索引）
 function dogRow(r, right, { rank } = {}) {
-  return `<button type="button" class="a-dog" data-adog="${allDogs.indexOf(r.dog)}">
+  return `<button type="button" class="a-dog" data-adog="${appState.allDogs.indexOf(r.dog)}">
     ${rank ? `<span class="a-rank r${rank}">${rank}</span>` : ''}
     <span class="a-dog-name">${esc(r.dog.name)}</span>
     <span class="a-dog-meta">${esc(r.dog.cage || '')}${r.intake ? `｜${r.intake.getFullYear()}/${r.intake.getMonth() + 1}/${r.intake.getDate()} 入所` : ''}</span>
@@ -315,15 +324,15 @@ function analysisHtml(dogs, today, page = 'stay') {
 }
 
 function dataChecksHtml(rows) {
-  const photosDone = photoCheck && photoCheck.done;
-  const comp = dataCompleteness(rows, photosDone ? photoCheck.map : null);
+  const photosDone = analysisState.photoCheck && analysisState.photoCheck.done;
+  const comp = dataCompleteness(rows, photosDone ? analysisState.photoCheck.map : null);
   const compRows = comp.items.map(it => it.dogs.length
     ? `<details class="a-miss"><summary><span>${esc(it.label)}</span><b>${it.dogs.length} 隻</b></summary><p>${dogNames(it.dogs)}</p></details>`
     : `<div class="a-miss ok"><span>${esc(it.label)}</span><b>0 隻</b></div>`).join('');
   // 2026-10-08 distill：拿掉跟下面清單重複的圓環
   return section('狗的資料完整度', `共 ${comp.total} 隻；點項目看缺哪幾隻`,
     compRows +
-    (photosDone ? ([...photoCheck.map.values()].some(v => v === null) ? '<p role="alert">部分照片讀取失敗，未列入缺照片名單；請確認網路後重新整理。</p>' : '') : '<div class="a-miss"><span>沒有照片</span><b class="muted">檢查中…</b></div>'), 'note');
+    (photosDone ? ([...analysisState.photoCheck.map.values()].some(v => v === null) ? '<p role="alert">部分照片讀取失敗，未列入缺照片名單；請確認網路後重新整理。</p>' : '') : '<div class="a-miss"><span>沒有照片</span><b class="muted">檢查中…</b></div>'), 'note');
 }
 
 // ── 詳細資訊的遛狗紀錄 ──
@@ -340,10 +349,10 @@ function walkHistorySection(dog, today) {
   loadHistory();
   const head = `<h3>${icon('tick')}溜狗紀錄<span class="sub">所有人溜的都算</span></h3>`;
   const wrap = body => `<section class="detail-section" data-section="walks">${head}${body}</section>`;
-  if (!historyData || historyData.state === 'loading') return wrap('<div class="empty">讀取中…</div>');
-  if (historyData.state === 'error') return wrap('<div class="empty">溜狗紀錄讀不到</div>');
-  const { start } = historySpan(historyData.dates, today);
-  const h = dogWalkHistory(dog, historyData.walks, start, today);
+  if (!analysisState.historyData || analysisState.historyData.state === 'loading') return wrap('<div class="empty">讀取中…</div>');
+  if (analysisState.historyData.state === 'error') return wrap('<div class="empty">溜狗紀錄讀不到</div>');
+  const { start } = historySpan(analysisState.historyData.dates, today);
+  const h = dogWalkHistory(dog, analysisState.historyData.walks, start, today);
   const first = h.cells[0].date, last = h.cells[h.cells.length - 1].date;
   const cell = c => `<span class="${c.walked ? 'on' : c.recorded ? 'off' : 'none'}" title="${mdText(c.date)}${c.walked ? ' 有溜' : c.recorded ? ' 沒溜' : ' 還沒開始記錄'}"></span>`;
   // critique 2026-10-09 少一點格子：三格統計卡改成一行字；沒有間隔可算（不到兩次）就不寫平均、最久
@@ -351,7 +360,7 @@ function walkHistorySection(dog, today) {
   if (h.avgGap != null) sum.push(`平均 <b>${h.avgGap.toFixed(1)}</b> 天溜一次`);
   if (h.maxGap === 'over') sum.push('最久 <b>超過 62</b> 天沒溜');
   else if (h.maxGap != null) sum.push(`最久 <b>${h.maxGap}</b> 天沒溜`);
-  const open = typeof detailWalksOpen !== 'undefined' && detailWalksOpen;
+  const open = typeof appState.detailWalksOpen !== 'undefined' && appState.detailWalksOpen;
   // 一項一塊、塊裡不斷行：手機放不下就整項換到下一行，不會剩一個點在行尾
   const toggle = `<button type="button" class="w-toggle" id="walksToggle" aria-expanded="${open}"><span class="w-sum">${sum.map(t => `<span class="w-it">${t}</span>`).join('')}</span><span class="w-more">${open ? '收起' : '看每一天'}</span></button>`;
   if (!open) return wrap(toggle);
@@ -364,23 +373,23 @@ function walkHistorySection(dog, today) {
 
 // 分析頁整頁：「← 分析」在頁首（index.html 的 .head-back、.head-title，K 2026-10-09）；資料還沒好時顯示讀取中或失敗
 function analysisPageHtml(today) {
-  if (!infoPage) return infoHomeHtml();
-  if (infoPage === 'departures') return departureSectionHtml(today);
-  if (infoPage === 'activities') return activitySectionHtml();
-  if (infoPage === 'updates') return infoUpdatesHtml();
-  if (loadState === 'ready') return analysisHtml(allDogs, today, infoPage);
-  return `<div class="status-msg">${loadState === 'error' ? '狗的資料讀不到，請確認網路後重新整理。' : '讀取中…'}</div>`;
+  if (!analysisState.infoPage) return infoHomeHtml();
+  if (analysisState.infoPage === 'departures') return departureSectionHtml(today);
+  if (analysisState.infoPage === 'activities') return activitySectionHtml();
+  if (analysisState.infoPage === 'updates') return infoUpdatesHtml();
+  if (appState.loadState === 'ready') return analysisHtml(appState.allDogs, today, analysisState.infoPage);
+  return `<div class="status-msg">${appState.loadState === 'error' ? '狗的資料讀不到，請確認網路後重新整理。' : '讀取中…'}</div>`;
 }
 
 // 打開分析頁：手機按「返回」會回到原本的分類（跟詳細資訊一樣用 history）
 function showAnalysis() {
-  if (analysisOpen) return;
+  if (appState.analysisOpen) return;
   switchTab('info');
 }
 
 function hideAnalysis() {
-  if (!analysisOpen) return;
-  switchTab(activeTab, false);
+  if (!appState.analysisOpen) return;
+  switchTab(appState.activeTab, false);
 }
 
 function closeAnalysis() {
@@ -389,25 +398,9 @@ function closeAnalysis() {
 }
 
 const analysisBtn = document.getElementById('analysisBtn');
-if (analysisBtn) analysisBtn.addEventListener('click', () => (analysisOpen ? closeAnalysis() : showAnalysis()));
 
 // 分析頁的狗名列：點了開詳細資訊（事件委派，renderMain 重畫也不用重綁）
 const analysisBack = document.getElementById('analysisBack');
-if (analysisBack) analysisBack.addEventListener('click', () => {
-  if (analysisOpen && infoPage) {
-    if (history.state?.infoPage) history.back();
-    else restoreInfoPage('');
-  } else if (analysisOpen) closeAnalysis();
-  else if (activeTab === 'groups') {
-    if (history.state && history.state.bqNavigation) history.back();
-    else switchTab(groupsReturnTab, false);
-  }
-});
-document.getElementById('main').addEventListener('click', e => {
-  const row = e.target.closest('#main .a-dog[data-adog]');
-  const dog = row && allDogs[row.dataset.adog];
-  if (dog) showDetail(dog);
-});
 
 // ── 離所（#163 年度統計、#164 離所名冊）──
 // 離所紀錄（api/departures，存在 D1）由同步產生（scripts/sync-sheet.mjs 的 updateDepartures）：狗從主清單消失就記一筆，
@@ -417,14 +410,14 @@ document.getElementById('main').addEventListener('click', e => {
 // 名冊索引是 api/departures/index；每年詳細是 api/departures?year=YYYY|none&v=版本號，形狀跟原本的 data/departures.json 一樣（BQApi）
 const DEPARTURE_ORDER = ['adopt', 'death', 'other', 'unknown'];
 const DEPARTURE_COLORS = { adopt: 'var(--green-text)', death: '#8E8E93', other: 'var(--primary)', unknown: '#F0A030' };
-let departuresData = null; // { state: 'loading' | 'ready' | 'error', list, years: { 年: 版本號 } }
+analysisState.departuresData = null; // { state: 'loading' | 'ready' | 'error', list, years: { 年: 版本號 } }
 const departureDetails = new Map(); // 年 → Promise<Map<編號, 離所的狗（詳細）>>
 // #446 離所統計是專屬頁面，名冊預設展開（仍可收起）
 const depRosterDefault = () => ({ open: true, query: '', year: 'all', reason: 'all' });
-let depRoster = depRosterDefault();
 
 // departures.json（或名冊索引的 dogs）→ 離所的狗：跟在所的狗同一個樣子（parseDogsData），多一個 departure；
 // 索引沒有 last，舊編號放在 formerIds
+analysisState.depRoster = depRosterDefault();
 function parseDeparturesData(data) {
   const entries = data && (Array.isArray(data.departures) ? data.departures : data.dogs);
   if (!Array.isArray(entries)) throw new Error('departures.json 格式不對');
@@ -446,20 +439,20 @@ function parseDeparturesData(data) {
 }
 
 function loadDepartures() {
-  if (departuresData) return;
-  departuresData = { state: 'loading', list: [] };
+  if (analysisState.departuresData) return;
+  analysisState.departuresData = { state: 'loading', list: [] };
   BQApi.departures()
     .then(apiData)
-    .then(data => { departuresData = { state: 'ready', list: parseDeparturesData(data), years: (data && data.years) || {} }; })
-    .catch(() => { departuresData = { state: 'error', list: [] }; })
-    .then(() => { if (analysisOpen) render(); });
+    .then(data => { analysisState.departuresData = { state: 'ready', list: parseDeparturesData(data), years: (data && data.years) || {} }; })
+    .catch(() => { analysisState.departuresData = { state: 'error', list: [] }; })
+    .then(() => { if (appState.analysisOpen) render(); });
 }
 
 // 名冊點一隻狗：拿那一年的詳細資料再開；拿不到就用索引那一筆開（只少了籠位、介紹等）
 function departureDetail(dog) {
   const year = dog.depYear;
   if (!departureDetails.has(year)) {
-    const ver = (departuresData && departuresData.years[year]) || '';
+    const ver = (analysisState.departuresData && analysisState.departuresData.years[year]) || '';
     departureDetails.set(year, BQApi.departureYear(year, ver)
       .then(apiData)
       .then(data => new Map(parseDeparturesData(data).map(d => [d.id, d])))
@@ -498,7 +491,7 @@ function filterDepartures(list, { query = '', year = 'all', reason = 'all' } = {
 function stackedYears(years) {
   const max = Math.max(1, ...years.map(y => y.total));
   return `<div class="a-cols dep-cols" style="--n:${Math.max(years.length, 3)}">${years.map(y => `
-    <button type="button" class="a-col dep-col${String(depRoster.year) === String(y.year) && depRoster.open ? ' hi' : ''}" data-dep-year="${y.year}"
+    <button type="button" class="a-col dep-col${String(analysisState.depRoster.year) === String(y.year) && analysisState.depRoster.open ? ' hi' : ''}" data-dep-year="${y.year}"
       title="${y.year}：${DEPARTURE_ORDER.map(r => `${DEPARTURE_LABELS[r]} ${y[r]}`).join('、')}">
       <span class="a-col-v">${y.total}</span>
       <span class="dep-stack" style="height:${Math.max(3, y.total / max * 100)}%">${DEPARTURE_ORDER.filter(r => y[r]).map(r =>
@@ -510,7 +503,7 @@ function stackedYears(years) {
 
 function departureRow(d) {
   const dep = d.departure;
-  return `<button type="button" class="a-dog dep-row" data-dep-dog="${departuresData.list.indexOf(d)}">
+  return `<button type="button" class="a-dog dep-row" data-dep-dog="${analysisState.departuresData.list.indexOf(d)}">
     ${photoThumb(d, 40)}
     <span class="a-dog-name">${esc(d.name)}${dep.returned ? '<small class="dep-back">已再入所</small>' : ''}</span>
     <span class="a-dog-meta">${esc(ymdText(dep.date))}${dep.dateSource === 'seen' ? '（推估）' : ''}｜${esc(d.id)}</span>
@@ -519,7 +512,7 @@ function departureRow(d) {
 }
 
 function departureListHtml() {
-  const rows = filterDepartures(departuresData.list, depRoster);
+  const rows = filterDepartures(analysisState.departuresData.list, analysisState.depRoster);
   return rows.length ? rows.map(departureRow).join('') : '<p class="a-empty">沒有符合的狗</p>';
 }
 
@@ -527,9 +520,9 @@ function departureRosterHtml(years) {
   const opt = (v, label, cur) => `<option value="${v}"${String(cur) === String(v) ? ' selected' : ''}>${label}</option>`;
   return `<div class="dep-roster">
     <div class="dep-filters">
-      <input type="search" id="depSearch" class="dep-search" placeholder="狗名或編號" value="${esc(depRoster.query)}" autocomplete="off" aria-label="搜尋離所的狗">
-      <select id="depYear" aria-label="年份">${opt('all', '全部年份', depRoster.year)}${[...years].reverse().map(y => opt(y.year, `${y.year}`, depRoster.year)).join('')}</select>
-      <select id="depReason" aria-label="原因">${opt('all', '全部原因', depRoster.reason)}${DEPARTURE_ORDER.map(r => opt(r, DEPARTURE_LABELS[r], depRoster.reason)).join('')}</select>
+      <input type="search" id="depSearch" class="dep-search" placeholder="狗名或編號" value="${esc(analysisState.depRoster.query)}" autocomplete="off" aria-label="搜尋離所的狗">
+      <select id="depYear" aria-label="年份">${opt('all', '全部年份', analysisState.depRoster.year)}${[...years].reverse().map(y => opt(y.year, `${y.year}`, analysisState.depRoster.year)).join('')}</select>
+      <select id="depReason" aria-label="原因">${opt('all', '全部原因', analysisState.depRoster.reason)}${DEPARTURE_ORDER.map(r => opt(r, DEPARTURE_LABELS[r], analysisState.depRoster.reason)).join('')}</select>
     </div>
     <div class="a-list" id="depList">${departureListHtml()}</div>
   </div>`;
@@ -538,9 +531,9 @@ function departureRosterHtml(years) {
 function departureSectionHtml(today) {
   loadDepartures();
   const title = '離所';
-  if (departuresData.state === 'loading') return section(title, '', '<p class="a-empty">讀取中…</p>', 'paw');
-  if (departuresData.state === 'error') return section(title, '', '<p class="a-empty">離所紀錄讀不到</p>', 'paw');
-  const list = departuresData.list;
+  if (analysisState.departuresData.state === 'loading') return section(title, '', '<p class="a-empty">讀取中…</p>', 'paw');
+  if (analysisState.departuresData.state === 'error') return section(title, '', '<p class="a-empty">離所紀錄讀不到</p>', 'paw');
+  const list = analysisState.departuresData.list;
   if (!list.length) return section(title, '狗從試算表移走後會記在這裡', '<p class="a-empty">還沒有離所紀錄</p>', 'paw');
   const { years, noDate } = departureYears(list);
   const thisYear = years.find(y => y.year === today.getFullYear()) || { total: 0, adopt: 0, death: 0 };
@@ -549,78 +542,63 @@ function departureSectionHtml(today) {
     <p class="a-hint">從 2026 年 9 月開始記錄；原因看試算表「已出所」分頁${noDate ? `；${noDate} 隻日期不明，沒算進年份` : ''}</p>
     <p class="dep-line"><b>${today.getFullYear()} 年離所 ${thisYear.total} 隻</b>${thisYear.total ? `（${DEPARTURE_ORDER.filter(r => thisYear[r]).map(r => `${DEPARTURE_LABELS[r]} ${thisYear[r]}`).join('、')}）` : ''}</p>
     ${years.length > 1 ? stackedYears(years) : ''}
-    <button type="button" class="dep-open" id="depToggle" aria-expanded="${depRoster.open}">${depRoster.open ? '收起離所名冊' : `看離所名冊（${list.length} 隻）`}</button>
-    ${depRoster.open ? departureRosterHtml(years) : ''}
+    <button type="button" class="dep-open" id="depToggle" aria-expanded="${analysisState.depRoster.open}">${analysisState.depRoster.open ? '收起離所名冊' : `看離所名冊（${list.length} 隻）`}</button>
+    ${analysisState.depRoster.open ? departureRosterHtml(years) : ''}
   </section>`;
 }
 
 // 名冊的搜尋、篩選只重畫清單，輸入框不會失去焦點
 function refreshDepartureList() {
   const box = document.getElementById('depList');
-  if (box && departuresData) box.innerHTML = departureListHtml();
+  if (box && analysisState.departuresData) box.innerHTML = departureListHtml();
 }
-document.getElementById('main').addEventListener('click', e => {
-  if (!analysisOpen || !e.target.closest) return;
-  if (e.target.closest('#depToggle')) { depRoster.open = !depRoster.open; render(); return; }
-  const col = e.target.closest('[data-dep-year]');
-  if (col) { depRoster = { ...depRoster, open: true, year: col.dataset.depYear }; render(); return; }
-  const row = e.target.closest('[data-dep-dog]');
-  const dog = row && departuresData && departuresData.list[row.dataset.depDog];
-  if (dog) departureDetail(dog).then(full => { if (analysisOpen) showDetail(full); });
-});
-document.getElementById('main').addEventListener('input', e => {
-  if (e.target.id === 'depSearch') { depRoster.query = e.target.value; refreshDepartureList(); }
-});
-document.getElementById('main').addEventListener('change', e => {
-  if (e.target.id === 'depYear') { depRoster.year = e.target.value; refreshDepartureList(); }
-  if (e.target.id === 'depReason') { depRoster.reason = e.target.value; refreshDepartureList(); }
-});
+
 // #273 分類狀態只跟著當前 history entry，不跨裝置儲存。
 const INFO_PAGES = { stay: '在所統計', departures: '離所紀錄', activities: '活動紀錄', quality: '資料檢查', updates: '更新紀錄' };
-let infoPage = '';
-let infoUpdateTab = 'website';
-let websiteUpdates = null;
 
+analysisState.infoPage = '';
+analysisState.infoUpdateTab = 'website';
+analysisState.websiteUpdates = null;
 const WEBSITE_UPDATES_CACHE = BQStore.keys.websiteUpdates;
 const validWebsiteUpdates = entries => Array.isArray(entries) && entries.every(e => e && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && typeof e.text === 'string' && (e.version === undefined || typeof e.version === 'string'));
 
 // #421 先顯示上次讀到的內容，每次進頁面背景檢查新版；檢查失敗不清空，改標示「上次讀到的」。
 function loadWebsiteUpdates() {
-  if (websiteUpdates?.checking) return;
-  if (!websiteUpdates) {
+  if (analysisState.websiteUpdates?.checking) return;
+  if (!analysisState.websiteUpdates) {
     let cached = null;
     try { cached = BQStore.readJson(WEBSITE_UPDATES_CACHE); } catch {}
-    websiteUpdates = validWebsiteUpdates(cached) ? { state: 'ready', entries: cached } : { state: 'loading', entries: [] };
+    analysisState.websiteUpdates = validWebsiteUpdates(cached) ? { state: 'ready', entries: cached } : { state: 'loading', entries: [] };
   }
-  websiteUpdates.checking = true;
+  analysisState.websiteUpdates.checking = true;
   fetch('website-updates.json', { cache: 'no-cache' })
     .then(async res => {
       if (!res.ok) throw new Error('讀取失敗');
       const entries = await res.json();
       if (!validWebsiteUpdates(entries)) throw new Error('格式不對');
-      websiteUpdates = { state: 'ready', entries };
+      analysisState.websiteUpdates = { state: 'ready', entries };
       try { BQStore.writeJson(WEBSITE_UPDATES_CACHE, entries); } catch {}
     })
-    .catch(() => { websiteUpdates = websiteUpdates.state === 'ready' ? { state: 'ready', stale: true, entries: websiteUpdates.entries } : { state: 'error', entries: [] }; })
-    .then(() => { if (analysisOpen && infoPage === 'updates' && infoUpdateTab === 'website') render(); });
+    .catch(() => { analysisState.websiteUpdates = analysisState.websiteUpdates.state === 'ready' ? { state: 'ready', stale: true, entries: analysisState.websiteUpdates.entries } : { state: 'error', entries: [] }; })
+    .then(() => { if (appState.analysisOpen && analysisState.infoPage === 'updates' && analysisState.infoUpdateTab === 'website') render(); });
 }
 
 // #447 使用說明從我溜過搬來：不是子頁，按了直接開溜狗表上的導覽（文字沿用 #171 的 TOUR_STEPS）
 function infoHomeHtml() {
   loadDepartures();
   loadActivities();
-  const dogs = loadState === 'ready' ? `目前在所 ${allDogs.length} 隻` : loadState === 'error' ? '在所資料讀取失敗' : '在所資料讀取中…';
-  const dep = !departuresData || departuresData.state === 'loading' ? '離所紀錄讀取中…' : departuresData.state === 'error' ? '離所紀錄讀取失敗' : departuresData.list.length ? `共 ${departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
-  const act = activitiesData.state === 'loading' ? '活動紀錄讀取中…' : activitiesData.state === 'error' ? '活動紀錄讀取失敗' : activitiesData.list.length ? `共 ${activitiesData.list.length} 場活動` : '還沒有活動紀錄';
+  const dogs = appState.loadState === 'ready' ? `目前在所 ${appState.allDogs.length} 隻` : appState.loadState === 'error' ? '在所資料讀取失敗' : '在所資料讀取中…';
+  const dep = !analysisState.departuresData || analysisState.departuresData.state === 'loading' ? '離所紀錄讀取中…' : analysisState.departuresData.state === 'error' ? '離所紀錄讀取失敗' : analysisState.departuresData.list.length ? `共 ${analysisState.departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
+  const act = activitiesState.activitiesData.state === 'loading' ? '活動紀錄讀取中…' : activitiesState.activitiesData.state === 'error' ? '活動紀錄讀取失敗' : activitiesState.activitiesData.list.length ? `共 ${activitiesState.activitiesData.list.length} 場活動` : '還沒有活動紀錄';
   const summary = { stay: dogs, departures: dep, activities: act, quality: '查看缺照片、介紹及其他資料', updates: '網站更新與資料編輯' };
   return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
 }
 
 function infoUpdatesHtml() {
-  const tabs = `<div class="info-update-tabs" aria-label="更新紀錄種類"><button type="button" data-update-tab="website" aria-pressed="${infoUpdateTab === 'website'}">網站更新</button><button type="button" data-update-tab="edits" aria-pressed="${infoUpdateTab === 'edits'}">資料編輯</button></div>`;
-  if (infoUpdateTab === 'edits') return tabs + '<iframe id="infoEdits" class="info-edits" title="資料編輯紀錄" src="edits.html?embedded=1" data-navigation-scope></iframe>';
-  if (!websiteUpdates) loadWebsiteUpdates();
-  const data = websiteUpdates;
+  const tabs = `<div class="info-update-tabs" aria-label="更新紀錄種類"><button type="button" data-update-tab="website" aria-pressed="${analysisState.infoUpdateTab === 'website'}">網站更新</button><button type="button" data-update-tab="edits" aria-pressed="${analysisState.infoUpdateTab === 'edits'}">資料編輯</button></div>`;
+  if (analysisState.infoUpdateTab === 'edits') return tabs + '<iframe id="infoEdits" class="info-edits" title="資料編輯紀錄" src="edits.html?embedded=1" data-navigation-scope></iframe>';
+  if (!analysisState.websiteUpdates) loadWebsiteUpdates();
+  const data = analysisState.websiteUpdates;
   const body = data.state === 'loading' ? '<p role="status">讀取中…</p>' : data.state === 'error' ? '<p role="alert">網站更新讀取失敗，請重試。</p><button type="button" id="retryUpdates">重新讀取</button>' : data.entries.length ? `${data.stale ? '<p role="status">暫時讀不到最新內容，以下是上次讀到的</p>' : ''}<ol class="info-releases">${data.entries.map(e => `<li><time>${esc(e.version ? `${e.version} · ${e.date}` : e.date)}</time><p>${esc(e.text)}</p></li>`).join('')}</ol>` : '<p>還沒有網站更新紀錄</p>';
   return tabs + section('網站更新', '', body);
 }
@@ -628,30 +606,69 @@ function infoUpdatesHtml() {
 function openInfoPage(page) {
   if (!Object.hasOwn(INFO_PAGES, page)) return;
   history.replaceState({ ...history.state, infoPage: '' }, '');
-  infoPage = page;
+  analysisState.infoPage = page;
   history.pushState({ ...history.state, infoPage: page }, '');
-  if (page === 'updates' && infoUpdateTab === 'website') loadWebsiteUpdates();
+  if (page === 'updates' && analysisState.infoUpdateTab === 'website') loadWebsiteUpdates();
   render();
   window.scrollTo(0, 0);
   document.getElementById('analysisBack').focus();
 }
 
 function restoreInfoPage(page) {
-  const previous = infoPage;
-  infoPage = Object.hasOwn(INFO_PAGES, page) ? page : '';
+  const previous = analysisState.infoPage;
+  analysisState.infoPage = Object.hasOwn(INFO_PAGES, page) ? page : '';
   render();
-  if (!infoPage && previous) document.querySelector(`[data-info-page="${previous}"]`)?.focus();
+  if (!analysisState.infoPage && previous) document.querySelector(`[data-info-page="${previous}"]`)?.focus();
 }
 
-document.getElementById('main').addEventListener('click', e => {
-  const entry = e.target.closest('[data-info-page]');
-  if (entry) openInfoPage(entry.dataset.infoPage);
-  const tab = e.target.closest('[data-update-tab]');
-  if (tab) {
-    infoUpdateTab = tab.dataset.updateTab;
-    if (infoUpdateTab === 'website') loadWebsiteUpdates();
-    render();
-    document.querySelector(`[data-update-tab="${infoUpdateTab}"]`).focus();
-  }
-  if (e.target.closest('#retryUpdates')) { websiteUpdates = null; render(); }
-});
+export { LONG_STAY_MONTHS, STAY_BUCKETS, intakeDate, monthsBetween, daysBetween, analysisRows, zoneOf, formatStay, average, median, dated, stayDistribution, longestStay, zoneAverages, longStayShare, sexComparison, dataCompleteness, checkPhotos, dogKey, parseWalks, historyStartDates, historySpan, recentStart, dogWalkHistory, loadHistory, STAY_SHADES, STAY_SHORT, yearsText, columnChart, dogRow, section, dogNames, kpi, analysisHtml, dataChecksHtml, mdText, walkHistorySection, analysisPageHtml, showAnalysis, hideAnalysis, closeAnalysis, analysisBtn, analysisBack, DEPARTURE_ORDER, DEPARTURE_COLORS, departureDetails, depRosterDefault, parseDeparturesData, loadDepartures, departureDetail, departureYears, filterDepartures, stackedYears, departureRow, departureListHtml, departureRosterHtml, departureSectionHtml, refreshDepartureList, INFO_PAGES, WEBSITE_UPDATES_CACHE, validWebsiteUpdates, loadWebsiteUpdates, infoHomeHtml, infoUpdatesHtml, openInfoPage, restoreInfoPage };
+export { analysisState } from './page-state.js';
+
+export function bindAnalysis() {
+  if (analysisBtn) analysisBtn.addEventListener('click', () => (appState.analysisOpen ? closeAnalysis() : showAnalysis()));
+  if (analysisBack) analysisBack.addEventListener('click', () => {
+    if (appState.analysisOpen && analysisState.infoPage) {
+      if (history.state?.infoPage) history.back();
+      else restoreInfoPage('');
+    } else if (appState.analysisOpen) closeAnalysis();
+    else if (appState.activeTab === 'groups') {
+      if (history.state && history.state.bqNavigation) history.back();
+      else switchTab(appState.groupsReturnTab, false);
+    }
+  });
+  document.getElementById('main').addEventListener('click', e => {
+    const row = e.target.closest('#main .a-dog[data-adog]');
+    const dog = row && appState.allDogs[row.dataset.adog];
+    if (dog) showDetail(dog);
+  });
+
+  document.getElementById('main').addEventListener('click', e => {
+    if (!appState.analysisOpen || !e.target.closest) return;
+    if (e.target.closest('#depToggle')) { analysisState.depRoster.open = !analysisState.depRoster.open; render(); return; }
+    const col = e.target.closest('[data-dep-year]');
+    if (col) { analysisState.depRoster = { ...analysisState.depRoster, open: true, year: col.dataset.depYear }; render(); return; }
+    const row = e.target.closest('[data-dep-dog]');
+    const dog = row && analysisState.departuresData && analysisState.departuresData.list[row.dataset.depDog];
+    if (dog) departureDetail(dog).then(full => { if (appState.analysisOpen) showDetail(full); });
+  });
+  document.getElementById('main').addEventListener('input', e => {
+    if (e.target.id === 'depSearch') { analysisState.depRoster.query = e.target.value; refreshDepartureList(); }
+  });
+  document.getElementById('main').addEventListener('change', e => {
+    if (e.target.id === 'depYear') { analysisState.depRoster.year = e.target.value; refreshDepartureList(); }
+    if (e.target.id === 'depReason') { analysisState.depRoster.reason = e.target.value; refreshDepartureList(); }
+  });
+
+  document.getElementById('main').addEventListener('click', e => {
+    const entry = e.target.closest('[data-info-page]');
+    if (entry) openInfoPage(entry.dataset.infoPage);
+    const tab = e.target.closest('[data-update-tab]');
+    if (tab) {
+      analysisState.infoUpdateTab = tab.dataset.updateTab;
+      if (analysisState.infoUpdateTab === 'website') loadWebsiteUpdates();
+      render();
+      document.querySelector(`[data-update-tab="${analysisState.infoUpdateTab}"]`).focus();
+    }
+    if (e.target.closest('#retryUpdates')) { analysisState.websiteUpdates = null; render(); }
+  });
+}
