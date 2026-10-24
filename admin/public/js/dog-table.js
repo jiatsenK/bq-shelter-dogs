@@ -2,16 +2,16 @@ import { BQDates } from '../shared/dates.js';
 
 const collator = new Intl.Collator('zh-Hant', { numeric: true, sensitivity: 'base' });
 export const sexLabel = sex => ({ male: '公', female: '母' })[sex] || '待確認';
+const maintenanceLabels = { missingNumber: '缺編號', missingPhoto: '缺照片', missingIntro: '缺介紹',
+  unknownSex: '性別待確認', sexMismatch: '性別資料不一致', resting: '休養中', fixedCare: '固定照顧' };
+function maintenanceState(dog, today) {
+  return { missingNumber: !dog.number, missingPhoto: !dog.photoUrl, missingIntro: !dog.intro.trim(),
+    unknownSex: !['male', 'female'].includes(dog.sex), sexMismatch: dog.sexMismatch,
+    resting: Boolean(dog.rest && dog.rest.until >= today), fixedCare: dog.fixedCare };
+}
 export function maintenance(dog, today = BQDates.taipeiToday()) {
-  const labels = [];
-  if (!dog.number) labels.push('缺編號');
-  if (!dog.photoUrl) labels.push('缺照片');
-  if (!dog.intro.trim()) labels.push('缺介紹');
-  if (!['male', 'female'].includes(dog.sex)) labels.push('性別待確認');
-  if (dog.sexMismatch) labels.push('性別資料不一致');
-  if (dog.rest && dog.rest.until >= today) labels.push('休養中');
-  if (dog.fixedCare) labels.push('固定照顧');
-  return labels;
+  const flags = maintenanceState(dog, today);
+  return Object.keys(maintenanceLabels).filter(key => flags[key]).map(key => maintenanceLabels[key]);
 }
 export function parseManageDogs(data) {
   if (!data || !Array.isArray(data.dogs)) throw Error('管理資料格式不正確');
@@ -34,9 +34,9 @@ export function selectDogs(dogs, { query = '', presence = 'all', sex = '', care 
   const filtered = dogs.filter(dog => {
     if (presence === 'main' && !dog.onMain || presence === 'other' && dog.onMain) return false;
     if (sex && (sex === 'unknown' ? ['male', 'female'].includes(dog.sex) : dog.sex !== sex)) return false;
-    const labels = maintenance(dog, today);
-    if (care === 'rest' && !labels.includes('休養中') || care === 'fixed' && !dog.fixedCare) return false;
-    if (care === 'missing' && !labels.some(label => label.startsWith('缺') || label.includes('性別'))) return false;
+    const flags = maintenanceState(dog, today);
+    if (care === 'rest' && !flags.resting || care === 'fixed' && !flags.fixedCare) return false;
+    if (care === 'missing' && !(flags.missingNumber || flags.missingPhoto || flags.missingIntro || flags.unknownSex || flags.sexMismatch)) return false;
     return !search || [dog.dogId, dog.number, dog.name, dog.cage, dog.note, dog.intro].some(value => value.toLocaleLowerCase('zh-Hant').includes(search));
   });
   const key = ['number', 'name', 'cage', 'sex', 'dogId'].includes(sort) ? sort : 'number';

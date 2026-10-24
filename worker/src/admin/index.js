@@ -3,6 +3,8 @@ import { readManageDogs } from './dogs.js';
 import { isPhotoKey, isTomb, isThumbKey } from '../r2.js';
 
 const verifyAccess = createAccessVerifier();
+// Tabler uses data-image SVGs for select chevrons; executable content remains same-origin only.
+export const ADMIN_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
 const json = (data, status = 200) => Response.json(data, { status });
 function protectedResponse(response, method) {
   const out = new Response(method === 'HEAD' ? null : response.body, response);
@@ -11,7 +13,7 @@ function protectedResponse(response, method) {
   out.headers.set('X-Content-Type-Options', 'nosniff');
   out.headers.set('Referrer-Policy', 'no-referrer');
   out.headers.set('X-Frame-Options', 'DENY');
-  out.headers.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'");
+  out.headers.set('Content-Security-Policy', ADMIN_CSP);
   return out;
 }
 async function photoResponse(pathname, env) {
