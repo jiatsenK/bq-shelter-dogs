@@ -1,26 +1,32 @@
 # 重複 PR 提醒（scripts/pr-guard.mjs）：開 PR、改目標分支或內文時檢查，有問題就在 PR 留言，不擋合併
 # - 票已關閉（可能已有別的 PR 做完）、同一張票還有其他開著的 PR、目標分支不是 main
+# - 寫 Refs／Part of 合併後不會關票、要關的票還有沒勾的格子；合併後引用的票還開著或沒勾完，到票上留言（#541 寫 Refs #512 沒關票）
 # - 草稿也跑（重複要越早發現越好）；不跑 synchronize，推新提交不重跑，省 Actions 分鐘數（#329）
 name: 重複 PR 提醒
 
 on:
   pull_request:
-    types: [opened, reopened, edited]
+    types: [opened, reopened, edited, closed]
 
 permissions:
   contents: read
-  issues: read
+  issues: write
   pull-requests: write
 
 jobs:
   guard:
     runs-on: ubuntu-latest
     timeout-minutes: 3
-    if: github.event.action != 'edited' || github.event.changes.base || github.event.changes.body
+    if: >-
+      github.event.action == 'closed' && github.event.pull_request.merged ||
+      github.event.action != 'closed' && (github.event.action != 'edited' || github.event.changes.base || github.event.changes.body)
     steps:
       - uses: actions/checkout@v4
+        with:
+          # 合併後 PR 的合併參照可能已不在，改拿目標分支
+          ref: ${{ github.event.action == 'closed' && github.event.pull_request.base.ref || '' }}
       - name: 檢查
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-        run: node scripts/pr-guard.mjs ${{ github.event.pull_request.number }}
+        run: node scripts/pr-guard.mjs ${{ github.event.pull_request.number }} ${{ github.event.action == 'closed' && '--merged' || '' }}
