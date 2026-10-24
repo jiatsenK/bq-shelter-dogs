@@ -5,6 +5,23 @@ import { fakeD1 } from './fakes.mjs';
 import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
 const site='https://bq-shelter-dogs.<子網域>.workers.dev';
 const call=async(env,path,body)=>{const r=await worker.fetch(new Request(site+'/api'+path,{method:body?'POST':'GET',headers:{Origin:site,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}),env);return {status:r.status,...await r.json()};};
+
+test('#474 已銜接的身分重複讀取不全掃，志工十倍且名字格式不同時讀取量不變', async t => {
+ const DB=fakeD1();t.after(()=>DB.close());await migrateCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
+ const original=await call(env,'/identity',{name:'Ｍｉｎｉ'});
+ const readsOf=async()=>{
+  const before=DB.stats.rowsRead;
+  const result=await call(env,'/identity',{name:' mini '});
+  assert.equal(result.status,200);
+  assert.equal(result.identity.volunteerId,original.identity.volunteerId);
+  return DB.stats.rowsRead-before;
+ };
+ const small=await readsOf();
+ assert.ok(small>0);
+ for(let i=0;i<100;i++)await DB.prepare('INSERT INTO v3_volunteers(volunteer_id,name,last_seen) VALUES(?,?,?)').bind(`unrelated-${i}`,`無關志工${i}`,'2026-01-01').run();
+ assert.equal(await readsOf(),small,'已建立對照後只按 code／volunteer_id 索引讀取');
+});
+
 test('固定志工身分：兩裝置與舊名字在更名後找到同一人，並可追溯當時的編輯紀錄',async t=>{
  const DB=fakeD1();t.after(()=>DB.close());await migrateCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
  const a=await call(env,'/identity',{name:'小明'});assert.equal(a.status,200);assert.ok(a.identity.volunteerId);

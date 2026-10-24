@@ -2,9 +2,8 @@
 // 所有呼叫都經過這裡，小程式能做哪些動作就看 SHEET_ACTIONS：
 // - walk／edit／undo：溜狗表的「遛狗日期」「誰遛的」兩欄（舊流程，#138）
 // - note／log：追加一隻狗的備註、新增一筆異動紀錄（#239、#281）
-// - group：常遛狗群分頁加狗、移出、開新群（K 2026-10-16）
 // - walkWake／walkWakeBatch／walkScan：新登記流程寫回（單隻、合併最多 10 隻）、讀回主清單（walk-accept.js、walk-reconcile.js）
-export const SHEET_ACTIONS = new Set(['walk', 'edit', 'undo', 'note', 'log', 'group', 'walkWake', 'walkWakeBatch', 'walkScan']);
+export const SHEET_ACTIONS = new Set(['walk', 'edit', 'undo', 'note', 'log', 'walkWake', 'walkWakeBatch', 'walkScan']);
 const TIMEOUT_MS = 20 * 1000;
 // 合併派送在 Apps Script 鎖內逐隻寫、每隻各回呼 Worker 兩次，10 隻要比單隻久
 const BATCH_TIMEOUT_MS = 90 * 1000;

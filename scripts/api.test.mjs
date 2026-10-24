@@ -67,6 +67,6 @@ test('沒有網址（Node、file://）時 base 是空字串，呼叫端據此關
 test('沒有網址時照舊送相對路徑 api/，跟著頁面的 base 走', async () => {
   const { api, calls } = (await load(json({ walks: [] }), { location: { origin: 'null' } }));
   await api.walks();
-  await api.saveGroup({ names: [] });
-  assert.deepEqual(calls.map(c => c[0]), ['api/walks', 'api/groups']);
+  await api.saveActivity('', 'POST', { dogs: [] });
+  assert.deepEqual(calls.map(c => c[0]), ['api/walks', 'api/activities']);
 });
