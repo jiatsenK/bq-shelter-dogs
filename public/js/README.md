@@ -39,7 +39,7 @@
 | `desk.js` | 電腦版簡報、全表與側欄，明確啟動後啟用寬螢幕呈現 | app、dates、api、site-config、find、photo、walk-ui、page-state | index |
 | `cards.js` | 圖鑑、開卡與已出所狗卡，保留卡片專用格式 | dates、api、store、site-config、page-state | cards |
 | `edits.js` | 編輯紀錄清單 | api、store | edits |
-| `groups.js` | 舊獨立狗群頁讀取與編輯 | api、store、page-state | 無 |
+| `groups.js` | 舊獨立狗群頁只讀 | api、page-state | 無 |
 
 ## 測試與 Node 消費者
 

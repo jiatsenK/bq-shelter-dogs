@@ -20,12 +20,6 @@ module.exports = async (browser, base) => {
       const body = route.request().postDataJSON(); writes.push(body);
       return route.fulfill({ json: { ok: true, today: '2026-10-20', results: body.dogs.map((d, i) => ({ ...d, status: partial && i === 0 ? 'unknown' : 'written', prev: {}, wrote: { date: '2026-10-20', walker: body.walker } })) } });
     }
-    if (endpoint === 'groups' && route.request().method() === 'POST') {
-      const body = route.request().postDataJSON();
-      const group = data.groupColumns.find(g => g.column === body.column);
-      group.names.push(body.name);
-      return route.fulfill({ json: { ok: true, group } });
-    }
     if (endpoint === 'dogs') {
       reads++;
       const snapshot = structuredClone(data);
@@ -103,18 +97,6 @@ module.exports = async (browser, base) => {
     hold = false; release();
     await page.getByRole('button', { name: '重新讀取', exact: true }).click();
     await page.waitForFunction(() => !document.querySelector('#gwSource')?.textContent.includes('檢查中') && !document.querySelector('#gwSource')?.textContent.includes('檢查失敗'));
-    await page.locator('[data-tab="walk"]').click();
-    await page.clock.runFor(61000);
-    hold = true;
-    await page.locator('[data-tab="groups"]').click();
-    await page.locator('#gwSource').filter({ hasText: '檢查中' }).waitFor();
-    await page.getByRole('button', { name: '加入狗', exact: true }).click();
-    await page.locator('#gwForm input[name="name"]').fill(data.dogs[2].name);
-    await page.getByRole('button', { name: '儲存', exact: true }).click();
-    await page.getByText('狗群已更新', { exact: true }).waitFor();
-    hold = false; release();
-    await page.locator('#gwSource').filter({ hasText: '檢查失敗' }).waitFor();
-    assert.equal(await page.locator('.front [data-gw-dog]').count(), 2, '寫入前開始的舊讀取不覆蓋修改後讀回的群');
     // 直接以狗群入口重開文件時，首頁與狗群也只共用一個進行中的請求。
     const reopened = await context.newPage();
     hold = true;
@@ -140,6 +122,9 @@ module.exports = async (browser, base) => {
     await page.evaluate(() => { localStorage.removeItem('bq-sheet-writes'); localStorage.removeItem('bq-walked-today'); });
     await page.goto(base + '/public/index.html?retry#groups');
     await page.locator('#groupStage').waitFor();
+    data.groupColumns[0].names = data.dogs.slice(1, 3).map(d => d.name);
+    await page.reload();
+    await page.locator('#groupStage').waitFor();
     partial = true;
     await page.locator('#gwWalk').click();
     await page.getByText(/未全部登記成功/).waitFor();
@@ -159,6 +144,6 @@ module.exports = async (browser, base) => {
     await page.locator('[data-gw-action="retry-walk"]').click();
     await page.getByText('已登記 2 隻', { exact: true }).waitFor();
     assert.deepEqual(writes.at(-1).dogs.map(d => d.name), [data.dogs[1].name], '安全重試只送先前失敗項目');
-    console.log('#419 共用、背景檢查、舊名單／身分保護、逾時、修改競態與部分重試通過');
+    console.log('#419 共用、背景檢查、舊名單／身分保護、逾時與部分重試通過');
   } finally { await context.close(); }
 };

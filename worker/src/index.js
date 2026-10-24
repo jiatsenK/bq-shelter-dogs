@@ -1,7 +1,7 @@
 import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitiesForCodes, IdentityError } from './identity.js';
 import { cleanIntakeEvents } from './intake.js';
 import { cleanStays } from './stays.js';
-import { saveFixedCare, mainNameMatcher, replaceGroup } from './compact.js';
+import { saveFixedCare } from './compact.js';
 import { callSheet, SheetWriteError } from './sheet-write.js';
 import { splitNames } from './sheet-read.js';
 import { readDepartedCards } from './departed.js';
@@ -970,52 +970,6 @@ async function writeWalks(request, env, origin, ctx) {
   return reply(200, { ok: true, today: out.today, results }, origin);
 }
 
-// 編輯常遛狗群（K 2026-10-16 開放）：轉給小程式改「常遛狗群」分頁，成功後 D1 那一欄馬上換成小程式回的名單，
-// 狗群頁不用等下一次同步。狗名一定要是主清單上的狗（照 D1 主清單複本）
-const GROUP_LABEL_MAX_CHARS = 20;
-async function writeGroup(request, env, origin) {
-  const cfg = config(env);
-  if (!cfg.sheetWriteUrl) return fail(503, '還沒設定寫入試算表', origin, { code: 'off' });
-  if (!env?.DB) return fail(503, '狗群暫時無法編輯，請稍後再試', origin);
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (!allow(`walk:${ip}`, WALK_LIMITS, Date.now())) return fail(429, '太頻繁了，請稍等一下再試', origin);
-  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
-  if (type !== 'application/json') return fail(415, '格式不對', origin);
-  const input = await readJsonBody(request, 4 * 1024);
-  if (!input || !['add', 'remove', 'create'].includes(input.op)) return fail(400, '要說是加狗、移出還是開新群', origin);
-  const editor = await editorOf(input.editor, cfg.walkerKey);
-  if (!editor) return needEditor(origin);
-  if (!shortText(input.name, 30) || !input.name.trim()) return fail(400, '要選一隻狗', origin);
-  const body = { action: 'group', op: input.op, name: input.name.trim() };
-  if (input.op === 'create') {
-    if (!shortText(input.label, GROUP_LABEL_MAX_CHARS) || !input.label.trim()) return fail(400, `群名要 1–${GROUP_LABEL_MAX_CHARS} 個字`, origin);
-    body.label = input.label.trim();
-  } else {
-    if (!Number.isInteger(input.column) || input.column < 0 || input.column > 200) return fail(400, '找不到這一群', origin);
-    body.column = input.column;
-  }
-  const mainName = await mainNameMatcher(env.DB);
-  if (!mainName(body.name)) return fail(400, '主清單上沒有這隻狗', origin);
-  body.name = mainName(body.name);
-
-  let out;
-  try {
-    out = await callSheet(env, body);
-  } catch (e) {
-    return sheetFail(e, origin);
-  }
-  const r = out.result || {};
-  if (!Number.isInteger(r.column) || !Array.isArray(r.names)) return fail(502, '試算表回的資料不對', origin);
-  const names = [...new Set(r.names.map(mainName).filter(Boolean))];
-  const label = typeof r.label === 'string' ? r.label.trim() : '';
-  const prevNames = await replaceGroup(env.DB, r.column, names, label);
-  // 編輯紀錄（ADR 0004）：改前、改後都記這一群的名單；沒變（已經在、已經不在）不記
-  if (r.status === 'written') {
-    await logEdit(env.DB, { editor, kind: 'group', before: input.op === 'create' ? null : { label, names: prevNames }, after: { label, names } });
-  }
-  return reply(200, { ok: true, status: r.status || 'written', group: { column: r.column, label, names } }, origin);
-}
-
 // 小程式失敗（worker/src/sheet-write.js）換成給網站的回應；其他錯誤照常往外丟
 function sheetFail(e, origin) {
   if (!(e instanceof SheetWriteError)) throw e;
@@ -1174,8 +1128,6 @@ const SITE_ROUTES = {
       const result = JSON.parse(found.result_json);
       return reply(200, { ok: true, source: 'd1', today: result.operationDate, results: [result], snapshot: await readAcceptedWalks(env.DB, taiwanYmd(Date.now())) }, origin);
     } },
-  '/groups': { method: 'POST', wrongMethod: '編輯狗群只能用 POST /groups', crash: [500, '編輯狗群發生錯誤'],
-    run: ({ request, env, origin }) => writeGroup(request, env, origin) },
 };
 
 async function siteRoute(route, c) {
@@ -1339,6 +1291,8 @@ export default {
     if (path === '/gallery' || path.startsWith('/gallery/')) return fail(410, '相簿已經拿掉了，請重新整理網頁', allowed);
     // #512 「更新」改成只重讀 D1：舊版網頁還會 POST /sync
     if (path === '/sync') return fail(410, '更新方式改了，請重新整理網頁', allowed);
+    // #474：狗群寫入路由已刪；擋住舊頁面，避免落入相片上傳的預設處理。
+    if (path === '/groups') return fail(404, '找不到這個功能', allowed);
 
     if (request.method !== 'POST') return fail(405, '只接受上傳', allowed);
     try {
