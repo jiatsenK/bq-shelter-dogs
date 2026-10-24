@@ -17,7 +17,7 @@ module.exports = async (browser, base) => {
     if (!url.pathname.includes('/api/')) return route.continue();
     const endpoint = url.pathname.split('/api/')[1];
     const body = endpoint === 'dogs' ? fixture : endpoint === 'rest' ? { rest: {} }
-      : endpoint === 'walkers' ? { walkers: {}, names: [] } : { ok: true, walks: [], dogs: [], edits: [], opened: {} };
+      : endpoint === 'walkers' ? { walkers: {}, names: [] } : { ok: true, source: 'd1', walks: [], dogs: [], edits: [], opened: {} };
     return route.fulfill({ json: body });
   });
   const page = await context.newPage();
