@@ -1,62 +1,32 @@
 // #99 找狗：搜尋全部的狗（犬名、編號、籠位、舊編號）、籠位對到平面圖分區、區域篩選隻數
-// 頁首「更新」按鈕：POST Worker /sync，等 dogs.json 的 syncedAt 變新才換上資料
+// 頁首「更新」按鈕（#512）：狗清單有人編輯就直接進 D1，按了只重讀 D1，不再 POST /sync
 async function runSyncButtonTests() {
   const saved = [allDogs, groupMap, activeTab, searchQuery, dataSyncedAt];
   const btn = document.createElement('button');
   const toast = () => (document.querySelector('#toast .toast-text') || {}).textContent;
   const dogsFile = (at, name) => ({ version: 1, syncedAt: at, groups: {}, dogs: [{ name, id: '2024032902', cage: '新A03', walkedDate: null }] });
-  // 假後端：sync 回 status；狗清單依序回 files 的內容（用完就一直回最後一個）
-  const fakeNet = (status, files) => {
-    const calls = [];
-    fakeApi(name => {
-      calls.push(name);
-      if (name === 'sync') return apiJson({ ok: status === 200 }, status);
-      if (name === 'dogs') return apiJson(files.length > 1 ? files.shift() : files[0]);
-      return new Response('{}', { status: 404 });
-    });
-    return calls;
-  };
   try {
     activeTab = 'walk'; searchQuery = '';
     dataSyncedAt = new Date('2026-09-27T13:24:18+08:00');
-    await check('更新按鈕：每 5 秒內就看一次新資料，同步完不再多等一輪 15 秒；總共仍等滿 4 分鐘', async () => {
-      if (!(SYNC_POLL_MS <= 5000)) throw new Error(`輪詢間隔 ${SYNC_POLL_MS}ms 太長`);
-      eq(SYNC_POLL_MS * SYNC_POLL_TRIES >= 4 * 60 * 1000, true);
-    });
-    await check('更新按鈕：叫同步後等到 syncedAt 變新才換上資料、顯示更新時間', async () => {
-      const calls = fakeNet(200, [dogsFile('2026-09-27T13:24:18+08:00', '舊'), dogsFile('2026-09-27T15:02:00+08:00', '新狗')]);
-      await requestSync(btn, { pollMs: 0, tries: 5 });
-      eq(calls.slice(0, 1), ['sync']);
+    await check('更新按鈕：只重讀狗清單、今日紀錄與名單，不叫同步；換上資料、顯示更新時間', async () => {
+      const calls = fakeApi(name => name === 'dogs' ? apiJson(dogsFile('2026-09-27T15:02:00+08:00', '新狗')) : new Response('{}', { status: 404 }));
+      await refreshData(btn);
+      await new Promise(r => setTimeout(r, 0));
+      const names = calls.map(c => c[0]);
+      eq(names[0], 'dogs', '先讀狗清單：');
+      eq(names.filter(n => /^(sync|save|upload)/.test(n)), [], '只讀不寫：');
       eq(allDogs.map(d => d.name), ['新狗']);
       const t = new Date('2026-09-27T15:02:00+08:00'); // 測試機器時區不一定是台灣
       eq(document.getElementById('updatedLabel').textContent, `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${pad2(t.getHours())}:${pad2(t.getMinutes())}`);
       eq(toast(), '資料已更新');
       eq(btn.classList.contains('syncing'), false, '轉圈停了：');
     });
-    await check('更新按鈕：試算表沒新東西就說已是最新；Worker 失敗不去等', async () => {
-      fakeNet(200, [dogsFile('2026-09-27T15:02:00+08:00', '新狗')]);
-      await requestSync(btn, { pollMs: 0, tries: 3 });
-      eq(toast(), '已經是最新的');
-      const calls = fakeNet(502, [dogsFile('2026-09-27T16:00:00+08:00', '不該換')]);
-      await requestSync(btn, { pollMs: 0, tries: 3 });
-      eq(toast(), '更新失敗：HTTP 502', '沒有原因只顯示狀態碼：');
-      eq(calls, ['sync'], '失敗不讀 dogs.json：');
+    await check('更新按鈕：讀不到就提示、保留原本的資料', async () => {
+      fakeApi(() => new Response('{}', { status: 502 }));
+      await refreshData(btn);
+      eq(toast(), '暫時讀不到資料，請稍後再更新');
       eq(allDogs.map(d => d.name), ['新狗']);
-      fakeApi(() => apiJson({ ok: false, error: '叫同步失敗（GitHub 403）' }, 502));
-      await requestSync(btn, { pollMs: 0, tries: 1 });
-      eq(toast(), '更新失敗：叫同步失敗（GitHub 403）', 'Worker 說的原因：');
-    });
-    await check('更新按鈕：試算表沒變仍讀回網站設定，不等試算表同步（#305、#399）', async () => {
-      const calls = fakeApi(name => apiJson(name === 'sync' ? { ok: true, unchanged: true } : dogsFile('2026-09-27T16:25:00+08:00', '網站設定')));
-      await requestSync(btn, { pollMs: 0, tries: 3 });
-      eq(calls.slice(0, 2).map(c => c[0]), ['sync', 'dogs'], '重新讀回網站設定：');
-      eq(allDogs.map(d => d.name), ['網站設定']);
-      eq(toast(), '試算表沒有新的修改，已經是最新的');
-    });
-    await check('更新按鈕：剛按過（429）還是會等新資料', async () => {
-      fakeNet(429, [dogsFile('2026-09-27T16:30:00+08:00', '再新')]);
-      await requestSync(btn, { pollMs: 0, tries: 2 });
-      eq(allDogs.map(d => d.name), ['再新']);
+      eq(btn.classList.contains('syncing'), false, '轉圈停了：');
     });
     await check('更新按鈕在頁首', () => {
       if (!/id="syncBtn"[^>]*aria-label="更新資料"/.test(INDEX_HTML)) throw new Error('index.html 沒有更新按鈕');

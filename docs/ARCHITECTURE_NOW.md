@@ -47,8 +47,8 @@ GAS 送不出去時把待送內容留在指令碼屬性（`WALK_EDITS_PENDING`�
 
 ## 已退役，不要照著做
 
-- gviz 讀試算表（`docs.google.com/.../gviz`）：Worker 已不呼叫；`worker/src/sheet-read.js` 與 `scripts/sync-*.mjs` 是殘留，移除見 #512。
+- gviz 讀試算表（`docs.google.com/.../gviz`）、舊同步程式 `scripts/sync-*.mjs`：#512 已刪；`worker/src/sheet-read.js` 只剩拆名字（`splitNames`）。
 - GitHub Actions `sync-sheet.yml`、Worker `syncTick`／`triggerSync`、每 10 分鐘同步：#501 已刪。
-- `/sync`、`/sheet-changed`：空殼，前端右上角更新仍會 POST，移除見 #512。
+- `/sync`、`/sheet-changed`、GAS `notifyWorker`、Secret `SHEET_NOTIFY_KEY`：#512 已刪。頁首「更新」只重讀 D1；舊版網頁還 POST `/sync` 會收到 410 請它重新整理。
 - `data/*.json` 當資料來源、「試算表為正本」（ADR 0007）：已由 ADR 0018 取代。
 - 同步設計稿 456–460：已移到 `docs/design/history/`，只供查背景。

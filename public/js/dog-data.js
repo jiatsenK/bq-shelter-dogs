@@ -15,7 +15,7 @@ export function parseDogsData(data) {
     // #399：API 的 covered 只來自網站設定，不再由志工名字推定。
     covered: d.covered === true,
     note: text(d.note),
-    // 狗卡資訊與性別由同步腳本從 dogs/{編號}.md 整理好（scripts/sync-sheet.mjs 的 attachDogCards）
+    // 性別、介紹由 D1 帶（api/dogs）
     sex: d.sex === 'male' ? '♂' : d.sex === 'female' ? '♀' : '',
     intro: text(d.intro),
     // 再次入所的舊編號（#75，狗卡 frontmatter 的 formerIds）

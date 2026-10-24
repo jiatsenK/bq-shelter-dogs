@@ -73,7 +73,7 @@ async function runCloudflareTests() {
     const cfg = await fetch('../wrangler.jsonc').then(r => r.ok ? r.text() : '');
     if (!cfg) return; // 只有本機和 CI 讀得到
     if (!/"directory": "\.\/public"/.test(cfg)) throw new Error('assets.directory 要是 ./public');
-    for (const p of ['../public/wrangler.jsonc', '../public/AGENT_LOG.md', '../public/worker/src/index.js', '../public/scripts/sync-sheet.mjs']) {
+    for (const p of ['../public/wrangler.jsonc', '../public/AGENT_LOG.md', '../public/worker/src/index.js', '../public/scripts/memory-d1.mjs']) {
       if ((await fetch(p)).ok) throw new Error(`${p} 不該在網站資料夾`);
     }
   });

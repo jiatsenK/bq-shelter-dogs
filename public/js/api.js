@@ -71,7 +71,6 @@ const BQApi = (() => {
     departureYear: (year, ver) => get(`/departures?year=${enc(year)}&v=${enc(ver)}`),
     departedCards: () => get('/departed-cards', { cache: 'no-cache' }),
     edits: () => get('/edits?limit=200', { cache: 'no-cache' }),
-    sync: () => settle(fetch(`${root()}/sync`, { method: 'POST' })),
   };
 })();
 

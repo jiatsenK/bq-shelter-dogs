@@ -1,5 +1,5 @@
-// 離所判讀與日期解析（#162、#501）：從 scripts/sync-sheet.mjs 抽出的純函式，不連網路、不依賴 Node。
-// Worker 收「已出所」的列（worker/src/dog-list.js）和舊同步腳本共用同一份規則。日期用執行環境的本地時間。
+// 離所判讀與日期解析（#162、#501）：舊同步程式抽出來的純函式，不連網路、不依賴 Node。
+// Worker 收「已出所」的列（worker/src/dog-list.js）用。日期用執行環境的本地時間。
 
 // 把年月日組成日期；不合理的日期（例：2/30）回傳 null
 export function makeDate(y, m, d) {
