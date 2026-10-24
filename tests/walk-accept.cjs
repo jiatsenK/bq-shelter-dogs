@@ -52,6 +52,9 @@ module.exports = async (browser, base) => {
     await card.locator('.walk-btn.done').waitFor();
     assert.equal(await card.locator('.walk-sync').textContent(),'試算表同步中');
     assert.equal(await page.getByText('已寫進試算表',{ exact:true }).count(),0);
+    // K 2026-10-24：D1 接受後提示條照舊有「＋一起溜的人」（開關打開前就有的入口）
+    await page.locator('#toast .toast-extra',{ hasText:'＋一起溜的人' }).waitFor();
+    await page.locator('#toast .toast-text').click();
     await card.click();
     assert.equal(await page.locator('.last-walk .walk-sync').textContent(),'試算表同步中');
     await page.getByRole('button',{ name:'關閉',exact:true }).click();
