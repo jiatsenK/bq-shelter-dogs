@@ -304,7 +304,9 @@ async function runCropTests() {
       const frame = cropEl().querySelector('.crop-frame');
       const image = stage.querySelector('img');
       const transform = new DOMMatrix(image.style.transform);
-      eq(transform.m41 <= parseFloat(frame.style.left) && transform.m41 + parseFloat(image.style.width) >= parseFloat(frame.style.left) + parseFloat(frame.style.width), true, '放大、拖曳後不露空白：');
+      // DOMMatrix 讀回的是瀏覽器浮點座標，例如 613.440002 與 CSS 的 613.44；容許百分之一像素的捨入。
+      const rounding = 0.01;
+      eq(transform.m41 <= parseFloat(frame.style.left) + rounding && transform.m41 + parseFloat(image.style.width) + rounding >= parseFloat(frame.style.left) + parseFloat(frame.style.width), true, '放大、拖曳後不露空白：');
       await doneCrop(old);
       eq([cropIsOpen(), previewUrl() !== old], [false, true], '完成：');
       const [w, h] = await blobSize(await previewBlob());

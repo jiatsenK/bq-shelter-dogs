@@ -1,3 +1,6 @@
+import { BQStore } from './store.js';
+import { createWalkRegistration } from './walk-registration.js';
+
 // #480：寫試算表流程與手機紀錄；不讀取畫面，由呼叫端呈現結果。
 const BQWalks = (() => {
   function createRecords(deps) {
@@ -175,3 +178,5 @@ const BQWalks = (() => {
   }
   return { createRecords, create, registrationText, undoFeedback, fetchStatus };
 })();
+
+export { BQWalks };

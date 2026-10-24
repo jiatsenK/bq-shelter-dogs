@@ -123,7 +123,7 @@ async function runAnalysisTests() {
     if (/['`]data\/(history|walks|departures)/.test(code)) throw new Error('#260 起不再讀 data/ 的溜狗紀錄、快照、離所');
     const bad = [/fetch\(/, /method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /localStorage|sessionStorage|indexedDB|XMLHttpRequest|sendBeacon/];
     eq(bad.filter(re => re.test(code)).map(String), [], '寫入相關字眼：');
-    if (!/<script src="js\/app\.js"><\/script>\s*<script src="js\/analysis\.js"><\/script>/.test(INDEX_HTML)) throw new Error('analysis.js 要在 app.js 之後載入');
+    if (!/from ['"]\.\/app\.js['"]/.test(ANALYSIS_JS)) throw new Error('分析頁要明確匯入主頁能力');
   });
 }
 

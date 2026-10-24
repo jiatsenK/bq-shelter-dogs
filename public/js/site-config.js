@@ -1,3 +1,5 @@
+
+
 // 這間收容所的設定（K 2026-10-10：「這個網站以後若其他收容所要用可以整個搬去用，所以有些東西要分離出來」）。
 // 換一間收容所時先改這個檔；還沒搬進來、要另外改的地方列在 docs/setup/SITE_CONFIG.md。
 // index.html、cards.html 都在其他程式前面載入；這裡只放設定，不放邏輯。
@@ -43,3 +45,5 @@ for (const z of SITE.zones) {
   const re = new RegExp(z.match, z.flags || '');
   z.test = cage => re.test(String(cage || '').replace(/\s/g, ''));
 }
+
+export { SITE };

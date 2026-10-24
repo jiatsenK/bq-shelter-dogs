@@ -1,7 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
-const { createWalkRegistration } = createRequire(import.meta.url)('../public/js/walk-registration.js');
+import { createWalkRegistration } from '../public/js/walk-registration.js';
 const dog = { id: '9001', name: '測試狗' }, day = '2026-10-21';
 function client(send, saved = {}) {
   let records = {}, requests = saved;

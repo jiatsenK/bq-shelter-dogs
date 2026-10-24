@@ -1,9 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import vm from 'node:vm';
-
-const dates = vm.runInNewContext(`${readFileSync(new URL('../public/js/dates.js', import.meta.url), 'utf8')}\nBQDates`);
+import { BQDates as dates } from '../public/js/dates.js';
 
 test('編號前八碼推入所日，跨年仍取最早編號或出入所紀錄', () => {
   assert.equal(dates.localDateKey(dates.idDate('2024032902')), '2024-03-29');
