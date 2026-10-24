@@ -9,4 +9,4 @@
 - `docs/research/2026-10-24-group-list-source-of-truth.md`：背景代理人唯讀研究（正式 D1 只下 SELECT）。研究建議 C1，K 改選 C2（網站常溜狗群頁只能看），檔頭補上 K 的決定。
 - 同一場訪談在 GitHub 上做的（不在本 PR）：#503 寫回三項決定、改 `ready-for-agent`；開 #546（縮圖改前端）、#547（CPU workflow 退役）掛成 #503 子票；#474 改寫成刪網站狗群寫入；開 #550（整欄插入／刪除實測）；#538 那一格指向 #474、#550。
 - 例外／未完成：只改文件，沒改程式。`ARCHITECTURE_NOW.md`、`PROJECT_GOALS.md` 的狗群說法照 K 決定留給 #474 的 PR 一起改。
-- 相關 PR：（草稿，開好後補）。
+- 相關 PR：#552（草稿）。
