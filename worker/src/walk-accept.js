@@ -314,6 +314,20 @@ async function knownIntermediate(db,key,observed,version) {
     key,observed.date,observed.walker,await baselineVersion(db,key),version);
 }
 
+// 人工改表的版本：建立當下就 synced、沒派送過（dispatch_id 空白）；next_attempt_at 是建立時間。
+// 從 version 往回找 MANUAL_MERGE_MS 內連續的人工版本，回傳這串之前那一版的值；同一日期內改人名不影響「上一次」，所以只在改日期時用。
+const MANUAL_MERGE_MS = 120000;
+async function beforeManualEdits(db,key,version,now) {
+  const since=new Date(now-MANUAL_MERGE_MS).toISOString();
+  const chain=await rows(db,"SELECT version,target_date,target_walker,status,dispatch_id,next_attempt_at FROM v3_walk_outbox WHERE dog_key=? AND version<=? ORDER BY version DESC LIMIT 6",key,version);
+  const manual=row=>row.status==='synced' && row.dispatch_id==='' && row.next_attempt_at>=since;
+  if (!chain.length || chain[0].version!==version || !manual(chain[0])) return null;
+  let i=0;
+  while (i+1<chain.length && chain[i+1].version===chain[i].version-1 && manual(chain[i+1])) i++;
+  const prior=chain[i+1];
+  return prior?.version===chain[i].version-1 ? prior : null;
+}
+
 // 僅接受同鎖 GAS 直接讀值；通知內容與 gviz 都不能呼叫這個比較入口。
 export async function reconcileWalk(db, dog, observed, env, seen = {}) {
   if (!dog || typeof dog.id !== 'string' || typeof dog.name !== 'string' || !dog.name ||
@@ -379,8 +393,12 @@ async function compareTrustedWalk(db, dog, observed, env, seen = {}) {
   const members = await sourceMembers(db,target.walker,env.WALKER_KEY);
   const version = old.version + 1, at = new Date().toISOString();
   const status = same(target,observed) ? 'synced' : 'pending';
-  const previousDate=target.date===old.effective_date ? old.previous_date ?? '' : old.effective_date;
-  const previousWalker=target.date===old.effective_date ? old.previous_walker ?? '' : old.walker;
+  // 人工一格一格改（先改人名再改日期）時，上一次記這串連改之前的值，不記改一半的狀態。
+  let before=target.date===old.effective_date ? null : await beforeManualEdits(db,key,old.version,Date.now());
+  // 改回連改前的日期：那一版就是現在的值，當「上一次」沒有意義，照一般規則。
+  if (before?.target_date===target.date) before=null;
+  const previousDate=target.date===old.effective_date ? old.previous_date ?? '' : (before?.target_date ?? old.effective_date);
+  const previousWalker=target.date===old.effective_date ? old.previous_walker ?? '' : (before?.target_walker ?? old.walker);
   await db.batch([
     db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT version FROM v3_walk_state WHERE dog_key=?),0)=? THEN 1 ELSE 0 END').bind(key,old.version),
     ...await writeBudget(db,env,32),
