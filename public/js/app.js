@@ -105,12 +105,11 @@ function loadDogsData() {
   return appState.dogsRead;
 }
 async function fetchDogsData(signal) {
-  const groupReadRevision = typeof groupStageState.groupRevision === 'undefined' ? 0 : groupStageState.groupRevision;
   const r = await BQApi.dogs({ signal });
   if (r.error === 'network') throw new Error('連不到網站，可能是網路中斷。');
   if (r.error === 'http') throw new Error(`讀取狗的資料失敗（HTTP ${r.status}）。`);
   if (r.error) throw new Error('狗的資料格式壞掉了。');
-  return { ...parseDogsData(r.data), groupReadRevision };
+  return parseDogsData(r.data);
 }
 
 // ── 我最近溜過（#58）──

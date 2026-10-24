@@ -35,7 +35,8 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
     assert.equal(await page.locator('.gw-layer').count(), 1, '只顯示當前群');
     assert.equal(await page.locator('.gw-summary').count(), 0, '移除可變長度敘述');
     await page.locator('#groupPage h2').filter({ hasText: '測試群' }).waitFor();
-    assert(await page.locator('[data-gw-action="manage"]').isVisible(), '保留狗群管理');
+    assert.equal(await page.locator('[data-gw-action="manage"], [data-gw-action="add"], [data-gw-action="create"], [data-gw-remove], #gwForm').count(), 0, '#474 狗群沒有編輯入口');
+    await page.getByText('要改請到試算表「常遛狗群」分頁', { exact: true }).waitFor();
     assert(!(await page.locator('#analysisBack').isVisible()), '常遛狗群是主分頁，沒有返回');
     assert(await page.locator('header.app h1').filter({ hasText: '板收志工溜狗表' }).isVisible(), '常遛狗群顯示共用表頭');
     assert(!(await page.locator('.head-title').isVisible()), '常遛狗群不另放內頁標題');
