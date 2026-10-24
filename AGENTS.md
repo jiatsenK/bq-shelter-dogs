@@ -6,6 +6,7 @@
 - 前端檔案責任、依賴與載入頁面：`public/js/README.md`。
 - 修改前讀 `docs/agent-log/README.md` 與最近紀錄；同一 PR 維護一筆紀錄。
 - 使用者明確交辦建立 PR 時先開草稿；明確交辦轉正式且推送與本機檢查完成後才轉正式。需要手機預覽才加 `preview` 標籤。commit 不加 `[skip ci]`。
+- 要 K 動手的操作（寫正式 D1、跑 workflow）一律給網頁步驟：Cloudflare 後台 D1 → Console 貼 SQL、GitHub Actions「Run workflow」。K 不用終端機，指令只在 Agent 自己執行時用。
 
 ## 依任務載入
 

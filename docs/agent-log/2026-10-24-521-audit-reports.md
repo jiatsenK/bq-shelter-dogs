@@ -7,6 +7,7 @@
   - 正式 D1 只送 SELECT（`rows_written=0`）。
 - 發現：正式庫只有 57 個觸發器（沒有 18 個 `identity_*`），`v3_identity_revision` 沒有列，網站的改名字、身分合併一直失敗。K 決定現在修：補一列預設值，由 K 在正式庫執行。
 - K 已確認（2026-10-24）：schema 套用改用 `wrangler d1 migrations`；合併後手動跑 workflow 套用，部署發現沒套的就停下；觸發器方案乙（修訂 ADR 0009）先不做；兩份報告合成這張只有文件的 PR。
+- `AGENTS.md` 加一條：要 K 動手的操作給網頁步驟（Cloudflare 後台 D1 Console、GitHub「Run workflow」），K 不用終端機。K 提醒過多次。
 - 還在討論：還原方式；常溜要不要改 JSON 或改成一位志工一列；資料表第一階段範圍。
 - 沒做：沒改程式、沒改 schema、沒拆實作票。
 - 依據：#521、#548、#549；ADR 0008、0009、0014、0018。
