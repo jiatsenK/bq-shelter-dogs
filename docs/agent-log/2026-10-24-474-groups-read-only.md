@@ -9,6 +9,8 @@
 - 例外／未完成：本機 headless Chromium 需在沙箱外啟動（沙箱內 spawn EPERM）。impeccable detect 回報既有頁面樣式警告，本次不變動既有視覺規格。
 - 相關 PR：本次未建立。後續 PR 說明需附下面 Apps Script 部署步驟。#550 整欄插入／刪除驗收不在本票。
 
+- 後續交辦「推送 pr」：從最新 main `b1a3ea9` 建 `codex/474-groups-read-only`，只 cherry-pick 本票 `1772095` 為 `e974044`，保留共享目錄與其他人的未提交修改。避免將原分支 #545 測試網站設定帶入本 PR；程式內容與已完整驗證提交相同。已推送並建立草稿 PR #561：https://github.com/jiatsenK/bq-shelter-dogs/pull/561 。部署步驟已附於 PR。未轉正式、未部署、未交辦等待 CI。
+
 ## 合併後由 K 重新部署 Apps Script
 
 1. 開啟正式試算表綁定的 Apps Script 專案，將 `apps-script/sheet-write.gs` 完整內容貼回對應指令碼並儲存。
