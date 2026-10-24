@@ -1625,7 +1625,12 @@ async function runCropTests() {
   const until = async (ok, what) => { for (let i = 0; i < 200; i++) { if (ok()) return; await new Promise(r => setTimeout(r, 10)); } throw new Error(`等不到${what}`); };
   const openCrop = async () => { document.getElementById('photoCrop').click(); await until(() => cropIsOpen() && document.querySelector('#cropper .crop-frame').style.width, '裁切畫面出現'); };
   const doneCrop = async old => { const p = popped(); document.getElementById('cropDone').click(); await p; await until(() => previewUrl() && previewUrl() !== old, '預覽換成裁好的'); };
+  // 測試頁沒有載 css/app.css；沒有 .crop* 規則時裁切區高度只看照片當下撐開多少，載入時序一變就壓扁（#533）
+  const cropCss = new CSSStyleSheet(); cropCss.replaceSync(await fetch('../public/css/app.css').then(r => r.text()));
+  const cropStyle = document.createElement('style');
+  cropStyle.textContent = [...cropCss.cssRules].filter(r => /^\.crop/.test(r.selectorText || '')).map(r => r.cssText).join('\n');
   try {
+    document.head.append(cropStyle);
     box.classList.remove('hidden');
     UPLOAD_URL = 'https://worker.test';
     allDogs = [
@@ -1663,7 +1668,8 @@ async function runCropTests() {
       const frame = cropEl().querySelector('.crop-frame');
       const image = stage.querySelector('img');
       const transform = new DOMMatrix(image.style.transform);
-      eq(transform.m41 <= parseFloat(frame.style.left) && transform.m41 + parseFloat(image.style.width) >= parseFloat(frame.style.left) + parseFloat(frame.style.width), true, '放大、拖曳後不露空白：');
+      // DOMMatrix 讀回 transform 是 float32，貼齊框邊時會多出約 0.0003px
+      eq(transform.m41 <= parseFloat(frame.style.left) + 0.01 && transform.m41 + parseFloat(image.style.width) >= parseFloat(frame.style.left) + parseFloat(frame.style.width) - 0.01, true, '放大、拖曳後不露空白：');
       await doneCrop(old);
       eq([cropIsOpen(), previewUrl() !== old], [false, true], '完成：');
       const [w, h] = await blobSize(await previewBlob());
@@ -1691,6 +1697,7 @@ async function runCropTests() {
     if (cropIsOpen()) { const p = popped(); document.getElementById('cropCancel').click(); await p; }
     hideLightbox(); hideDetail(); cancelPhoto(); BQWalkUI.hideToast();
     delete photoOverrides['9301'];
+    cropStyle.remove();
     box.classList.add('hidden');
     history.replaceState(null, '');
     [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL] = saved;
