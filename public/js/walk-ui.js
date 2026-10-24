@@ -51,6 +51,8 @@ const BQWalkUI = (() => {
         const again = result.retryDogs;
         showToast(result.message, null, again.length ? { label: '再試一次', fn: () => walkThenRecord(again, result) } : null);
       } else if (!acceptsD1) addToToast(text, undoFn, '，已寫進試算表');
+      // K 2026-10-24：D1 接受後提示條照舊給「＋一起溜的人」（復原在狗卡名字旁的 ×）
+      else if (result.successful.length && loadWalkerName()) showToast(text, null, { label: '＋一起溜的人', fn: () => openWithSheet(result.successful) });
       return result;
     }).catch(e => console.error(e));
   }
