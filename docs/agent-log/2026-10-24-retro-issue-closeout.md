@@ -8,4 +8,4 @@
 - `.github/workflows/pr-guard.yml`：多觸發 `closed`（只在已合併時跑 `--merged`），`issues: write` 才能在票上留言；合併後 checkout 目標分支。
 - 驗證：`pr-guard.test.mjs` 先紅後綠（10 項）；用真的 PR 541、540 跑 `--dry-run`，541 列出 #512 原文 5 格沒勾。
 - 例外／未完成：合併後的檢查要等這張 PR 合進 main 之後的下一個 PR 合併才會真的跑。追蹤型的票（例如 #538 用 `Part of`）也會被提醒，這是預期的。回顧裡的第 3 項（母票、子票關錯）和第 4 項（票上一層疊一層）這次沒做。#512 還沒關，等 K 決定。
-- 相關 PR：本分支 `claude/retro-issue-closeout` 的草稿 PR。
+- 相關 PR：#544（草稿）。
