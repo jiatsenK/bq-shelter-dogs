@@ -36,3 +36,31 @@ test('#519 GET /walkers：沒接資料庫回 off', async () => {
   worker.testing.resetState();
   assert.equal((await getWalkers({ SHEET_ID: 'abc' })).body.code, 'off');
 });
+
+// #554：主清單「誰遛的」原文都補好（正式庫已經沒有 NULL）就不讀 walkers 三表 JOIN；正式庫一次白讀 772 列
+test('#554 GET /walkers：主清單都有「誰遛的」原文就不讀代號 JOIN，有 NULL 才只補那幾隻', async () => {
+  const env = await setup(); worker.testing.resetState();
+  const { DB } = env;
+  const code = async name => (await DB.prepare('SELECT code FROM v3_identity_names WHERE name=?').bind(name).first()).code;
+  await DB.batch([
+    DB.prepare("UPDATE v3_sheet_main SET walker='乙' WHERE row_index=1"),
+    DB.prepare('INSERT INTO v3_sheet_main_walkers VALUES(1,0,?)').bind(await code('甲')),
+  ]);
+  const sqls = [];
+  const prepare = DB.prepare;
+  DB.prepare = sql => { sqls.push(sql); return prepare(sql); };
+  let body = (await getWalkers(env)).body;
+  assert.deepEqual(body.walkers, { 9001: '乙' }, '有原文就用原文');
+  assert.ok(!sqls.some(s => s.includes('v3_sheet_main_walkers')), '沒有 NULL 不讀代號');
+
+  DB.prepare = prepare;
+  await DB.batch([
+    DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('d2','甜甜')"),
+    DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(2,'d2','9002','甜甜','2026-09-01','x')"),
+    DB.prepare('INSERT INTO v3_sheet_main_walkers VALUES(2,0,?)').bind(await code('丙')),
+  ]);
+  DB.prepare = sql => { sqls.push(sql); return prepare(sql); };
+  worker.testing.resetState();
+  body = (await getWalkers(env)).body;
+  assert.deepEqual(body.walkers, { 9001: '乙', 9002: '丙' }, 'NULL 的照舊用代號換名字');
+});
