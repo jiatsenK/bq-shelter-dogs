@@ -4,7 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const SUITES = ['es-modules', 'walk-accept', 'walk-d1-entries', 'walk-feedback', 'read-policy', 'startup-stability', 'walker-editing', 'intake-presentation', 'info-page', 'activities', 'departed-cards', 'fixed-care',
-  'group-cache', 'group-walks', 'large-text', 'navigation', 'tab-focus', 'keyboard-viewport', 'index', 'detail-editing'];
+  'group-cache', 'group-walks', 'large-text', 'navigation', 'tab-focus', 'keyboard-viewport', 'index', 'detail-editing', 'admin'];
 
 const ROOT = path.resolve(__dirname, '..');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css',
@@ -37,6 +37,7 @@ const server = http.createServer((req, res) => {
     selected = SUITES.filter(n => names.includes(n));
   }
   require('./local-check-record.cjs').requireLocalCheck(args);
+  await (await import('./build-admin-assets.mjs')).buildAdminAssets();
   const { chromium } = require('playwright'); // --list／參數檢查不需要安裝瀏覽器
   let browser;
   let ok = true;
