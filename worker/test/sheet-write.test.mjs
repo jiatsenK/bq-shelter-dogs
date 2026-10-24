@@ -238,3 +238,8 @@ test('#500 主清單送當下讀到的值；找不到唯一一列或在已出所
   assert.deepEqual(out[0], { sheet: 'main', dog: { id: '9001', name: '甲' }, other: false, current: { date: '2026-10-04', walker: '乙' } });
   assert.deepEqual(out.slice(1).map(r => [r.sheet, r.other, r.current]), [['main', true, undefined], ['main', true, undefined], ['departed', true, undefined]]);
 });
+
+test('#512 小程式不再有 notifyWorker 空殼；重裝觸發器時仍會刪掉留下來的舊觸發器', () => {
+  assert.doesNotMatch(code, /function notifyWorker\b/);
+  assert.match(code, /'dogListScan', 'notifyWorker'\]\.indexOf\(t\.getHandlerFunction\(\)\)/);
+});

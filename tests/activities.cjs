@@ -38,7 +38,6 @@ module.exports = async (browser, base) => {
     }
     if (endpoint === 'departures/index') return route.fulfill({ json: { version: 1, years: { 2026: '1' }, dogs: departures.departures } });
     if (endpoint === 'dogs') return route.fulfill({ json: data });
-    if (endpoint === 'sync') return route.fulfill({ json: { ok: true, unchanged: true } });
     return route.fulfill({ json: endpoint === 'rest' ? { rest: {} } : { ok: true, source: 'd1', walks: [], walkers: [] } });
   });
   const page = await ctx.newPage(); page.setDefaultTimeout(6000);

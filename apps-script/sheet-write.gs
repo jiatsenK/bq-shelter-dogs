@@ -11,7 +11,7 @@ var SHEET_NAME = '主清單';
 var GROUP_SHEET_NAME = '常遛狗群';
 var TIME_ZONE = 'Asia/Taipei';
 var HEADERS = { cage: '籠位', id: '編號', name: '犬名', date: '遛狗日期', walker: '誰遛的', note: '備註' };
-// 跟 scripts/sync-sheet.mjs 的 NAME_SEP 一樣：一格寫好幾個名字時用這些符號或空白隔開
+// 跟 worker/src/sheet-read.js 的 NAME_SEP 一樣（測試會比對）：一格寫好幾個名字時用這些符號或空白隔開
 var NAME_SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
 
 function doPost(e) {
@@ -401,14 +401,9 @@ function planGroupWrite(values, req) {
   return { error: '不認得的狗群操作' };
 }
 
-// ── 試算表有人手動改時通知 Worker（ADR 0008）：#501 起退役 ──
-// 狗清單改由下方 onWalkSheetEdit 只送受影響的單位；installWalkEditTriggers 會刪掉舊的「變更時 → notifyWorker」觸發器。
-// 留著空函式，觸發器還沒刪掉前不會每次編輯都報錯。
-function notifyWorker() {}
-
 // ── 有人編輯才同步今日溜狗（#500，ADR 0018）──
 // 觸發器：執行一次 installWalkEditTriggers（會建立「編輯時」→ onWalkSheetEdit、每 10 分鐘 → flushWalkEdits／flushDogList、每天三次 → dogListScan，
-// 並刪掉舊的 notifyWorker 觸發器）。
+// 並刪掉 #501 退役的「變更時 → notifyWorker」舊觸發器；#512 起函式已刪，留著的舊觸發器只會報錯、不影響其他功能）。
 // 只送受影響的列（編號＋改到的欄），Worker 依送來的列更新、不回頭讀整張表。網站寫回（doPost）是程式寫入，不會觸發。
 // 送不出去（缺設定、HTTP 失敗、結果不明）就留在 WALK_EDITS_PENDING，下次編輯或每 10 分鐘補送；確認只清同一版本。
 var DEPARTED_SHEET_NAME = '已出所';
@@ -552,7 +547,7 @@ var DOG_LIST_PENDING = 'DOG_LIST_PENDING';
 var DOG_LIST_BATCH = 10; // 跟 Worker 的 DOG_LIST_ROWS_MAX 一樣
 var DOG_LIST_ROUNDS = 10; // 一次觸發最多送 10 批，其餘留給下次
 var DOG_LIST_SCAN_ROUNDS = 60; // 保險掃描一次最多 600 個單位（約 3 分鐘），沒送完下一次掃描接著補
-var DEPART_DATE_HEADER = /(出所|離所|認養|領養|死亡)/; // 跟 scripts/sync-sheet.mjs 的 departedRows 一樣
+var DEPART_DATE_HEADER = /(出所|離所|認養|領養|死亡)/; // 已出所分頁的出所日期欄
 
 function dogListSheets() {
   var book = SpreadsheetApp.openById(sheetIdOf(PropertiesService.getScriptProperties().getProperty('SHEET_ID')));

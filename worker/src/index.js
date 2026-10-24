@@ -542,17 +542,6 @@ async function maintenance(env, now = Date.now()) {
   return result;
 }
 
-// 舊的「試算表有改」通知（ADR 0012）：#501 起狗清單改由 /walk-writeback/dog-list 只送改到的列，這裡只驗證後回 ok，
-// 讓還沒換掉觸發器的舊 Apps Script 不報錯；不再記「有改」、不叫同步。
-async function sheetChanged(request, env) {
-  const key = env && env.SHEET_NOTIFY_KEY ? String(env.SHEET_NOTIFY_KEY) : '';
-  if (!key || !env.DB) return fail(503, '還沒設定試算表通知', '');
-  if (env.PREVIEW) return fail(403, '這是預覽版，不收試算表通知', '');
-  if (request.method !== 'POST') return fail(405, '試算表通知只能用 POST', '');
-  if (!await sameSecret(request.headers.get('X-Notify-Key') || '',key)) return fail(403, '通知密碼不對', '');
-  return reply(200, { ok: true }, '');
-}
-
 const baseOf = request => new URL(request.url).origin;
 const siteMeta = now => ({ from: 'site', at: new Date(now).toISOString() });
 
@@ -713,11 +702,9 @@ async function admin(request, env, origin, path) {
 }
 
 // ── 誰遛的代號（#95）──
-// 算法要跟 scripts/sync-sheet.mjs 的 walkerCode 完全一樣：名字全形半形統一（NFKC）、去空白、轉小寫，
-// HMAC-SHA256(WALKER_KEY, 名字) 取前 12 碼十六進位。兩邊用同一組測試向量（WALKER_VECTORS）確認。
-// walkerNameKey、walkerCode 在 editlog.js（編輯者也用同一套代號）
+// walkerNameKey、walkerCode 在 editlog.js（算法說明在那裡，編輯者也用同一套代號）
 
-// 輸入的每個名字再照試算表的規則拆開（例：「小明 明明」算兩個），這樣跟同步時拆出來的代號對得上
+// 輸入的每個名字再照試算表的規則拆開（例：「小明 明明」算兩個），這樣跟 Worker 收狗清單時拆出來的代號對得上
 async function walkerCodes(request, env, origin) {
   const cfg = config(env);
   if (!cfg.walkerKey) return fail(500, '代號服務還沒設定好（缺 WALKER_KEY）', origin);
@@ -1189,9 +1176,6 @@ const SITE_ROUTES = {
     } },
   '/groups': { method: 'POST', wrongMethod: '編輯狗群只能用 POST /groups', crash: [500, '編輯狗群發生錯誤'],
     run: ({ request, env, origin }) => writeGroup(request, env, origin) },
-  // 網站「更新」按鈕：#501 起狗清單有人編輯就直接進 D1，沒有要叫的同步；回 unchanged，網站照常重新讀 D1
-  '/sync': { method: 'POST', wrongMethod: '更新只能用 POST /sync', crash: [502, '更新發生錯誤'],
-    run: ({ origin }) => reply(200, { ok: true, unchanged: true }, origin) },
 };
 
 async function siteRoute(route, c) {
@@ -1272,14 +1256,6 @@ export default {
         return fail(500, '管理功能發生錯誤', allowed);
       }
     }
-    // Apps Script 通知試算表有改（ADR 0012）：沒有網站來源，用專用密碼驗證
-    if (path === '/sheet-changed') {
-      try {
-        return await sheetChanged(request, env);
-      } catch (e) {
-        return fail(500, '記錄試算表通知發生錯誤', '');
-      }
-    }
     if (['/walk-writeback/target', '/walk-writeback/receipt', '/walk-writeback/legacy-check', '/walk-writeback/observe', '/walk-writeback/rows', '/walk-writeback/dog-list', '/walk-writeback/dog-list-scan'].includes(path)) {
       if (request.method !== 'POST' || env?.PREVIEW || !env?.DB || !cfg.sheetWriteKey) return fail(403, '不接受寫回要求', '');
       const supplied = request.headers.get('X-Sheet-Write-Key') || '';
@@ -1329,7 +1305,7 @@ export default {
     // 其他網站送來的一律不收（瀏覽器會擋掉沒有 CORS 回應的要求）
     if (!allowed) return fail(403, '不接受這個網站的要求', '');
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers: corsHeaders(allowed) });
-    // PR 預覽版（#126，部署時帶 PREVIEW 變數）：可以看、可以讀，但不能改正式資料（上傳、設主照片、刪除、備註、更新）。
+    // PR 預覽版（#126，部署時帶 PREVIEW 變數）：可以看、可以讀，但不能改正式資料（上傳、設主照片、刪除、備註）。
     // 換代號只是計算、不寫任何東西，照常可以用
     if (env && env.PREVIEW && request.method !== 'GET' && path !== '/walker-code') {
       return fail(403, '這是預覽版，不能存，正式資料不受影響。要改請到正式網址', allowed);
@@ -1361,6 +1337,8 @@ export default {
 
     // 相簿 K 2026-10-09 拿掉：舊版網頁還開著時送來的要求，老實說已經沒有這個功能
     if (path === '/gallery' || path.startsWith('/gallery/')) return fail(410, '相簿已經拿掉了，請重新整理網頁', allowed);
+    // #512 「更新」改成只重讀 D1：舊版網頁還會 POST /sync
+    if (path === '/sync') return fail(410, '更新方式改了，請重新整理網頁', allowed);
 
     if (request.method !== 'POST') return fail(405, '只接受上傳', allowed);
     try {

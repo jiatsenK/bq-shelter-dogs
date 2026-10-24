@@ -45,7 +45,6 @@
 | `MY_NAME` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
 | `PREVIEW` | 只有預覽版設定 | preview-cloudflare.yml |
 | `SHEET_ID` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
-| `SHEET_NOTIFY_KEY` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
 | `SHEET_WRITE_KEY` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
 | `SHEET_WRITE_URL` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
 | `SYNC_DAILY_BUDGET` | `40000` | wrangler.jsonc 的 vars |

@@ -49,8 +49,18 @@ test('D1 不整張讀：沒帶條件的 SELECT／DELETE 都要列在已知例外
   assert.deepEqual(stale, [], '這些例外已經不在程式裡，從 FULL_SCAN_OK 刪掉');
 });
 
-test('拆名字只用 sheet-read.js 的 splitNames，不各自 split(NAME_SEP)', async () => {
-  const files = [...sources, ['scripts/sync-sheet.mjs', await readFile(new URL('../../scripts/sync-sheet.mjs', import.meta.url), 'utf8')]];
-  const own = files.filter(([file, code]) => file !== 'sheet-read.js' && /\.split\(NAME_SEP\)/.test(code)).map(([file]) => file);
+test('拆名字只用 sheet-read.js 的 splitNames，不各自 split(NAME_SEP)', () => {
+  const own = sources.filter(([file, code]) => file !== 'sheet-read.js' && /\.split\(NAME_SEP\)/.test(code)).map(([file]) => file);
   assert.deepEqual(own, [], '改用 splitNames（會去掉前後空白、空的名字）');
+});
+
+// #512：GitHub 同步退役。試算表只由 GAS 讀（編輯觸發、保險掃描），repo 不再有 gviz 讀表或叫同步的路徑
+test('#512 不再有 gviz 讀表、舊同步程式；Worker 不 import scripts/', async () => {
+  const root = new URL('../../', import.meta.url);
+  const read = async dir => Promise.all((await readdir(new URL(dir, root))).filter(f => /\.(mjs|cjs|js)$/.test(f))
+    .map(async f => [`${dir}${f}`, await readFile(new URL(`${dir}${f}`, root), 'utf8')]));
+  const files = [...await read('worker/src/'), ...await read('scripts/'), ...await read('public/js/')];
+  assert.deepEqual(files.map(([f]) => f).filter(f => /^scripts\/(sync-|fixed-care-sync)/.test(f)), [], '舊同步程式已刪');
+  assert.deepEqual(files.filter(([, code]) => /\/gviz\/tq|gvizTable|fetchGviz/.test(code)).map(([f]) => f), [], 'gviz 讀表');
+  assert.deepEqual(sources.filter(([, code]) => /from '\.\.\/\.\.\/scripts\//.test(code)).map(([f]) => f), [], 'Worker 程式不依賴 scripts/');
 });

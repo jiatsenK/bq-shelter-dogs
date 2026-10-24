@@ -108,18 +108,6 @@ test('#500 保險掃描沒有不同的狗只問一次就結束；重試排程、
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
 
-test('#500 試算表通知不再讀表比對溜狗（#501 起也不標記有改）', async () => {
-  const env = { ...await setup(), SHEET_NOTIFY_KEY:'nk', D1_WALK_NOTIFY:'1' }, real = globalThis.fetch;
-  let reads = 0;
-  globalThis.fetch = async () => { reads++; return Response.json({ ok:true, rows:[] }); };
-  try {
-    await post(env, request('notify-0001', '甲'));
-    const response = await worker.fetch(new Request('https://worker.example/api/sheet-changed', { method:'POST', headers:{ 'X-Notify-Key':'nk' } }), env);
-    assert.equal(response.status, 200);
-    assert.equal(reads, 0);
-  } finally { globalThis.fetch = real; env.DB.close(); }
-});
-
 test('#500 11 隻整群逐狗接受並各自寫回；部分失敗只重試未成功者', async t => {
   const now = Date.parse('2026-10-22T02:00:00Z');
   t.mock.timers.enable({ apis:['Date'], now });

@@ -5,7 +5,7 @@
 ```
 GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ GitHub Action「部署到 Cloudflare」──▶ Cloudflare Worker
                                                                                          ├─ 網頁、data/、photos/
-                                                                                         └─ /api（上傳、備註、代號、更新）
+                                                                                         └─ /api（上傳、備註、代號）
 ```
 
 - 程式和資料一樣放 GitHub，Cloudflare 只負責「放網站、跑後端」。
@@ -40,7 +40,7 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 
 ## 步驟 3：建立 Worker 要用的 GitHub token
 
-新 Worker 要一把可以改 repo、叫同步的 GitHub token。舊 Worker 那把的字串看不到了，所以另外建一把（舊的不要刪，舊網址還在用）。
+新 Worker 要一把可以改 repo 的 GitHub token。舊 Worker 那把的字串看不到了，所以另外建一把（舊的不要刪，舊網址還在用）。
 
 1. GitHub 右上角頭像 → **Settings** → 左邊最下面 **Developer settings** → **Personal access tokens** → **Fine-grained tokens** → **Generate new token**。
 2. 照下面填：
@@ -75,6 +75,8 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 
 ## 步驟 6：刪掉舊 Worker 的鬧鐘
 
+> #512 起已沒有「叫同步」：狗清單由 Apps Script 編輯觸發送 Worker。下面這句是當時的紀錄。
+
 新 Worker 已經會自己叫同步（ADR 0012：有改才同步＋每天 6:30 保險一次），舊的也叫的話會多叫（不會壞，只是浪費 GitHub Actions 分鐘數）。
 
 Cloudflare → **Workers & Pages** → `bq-shelter-photos` → **Settings** → **Trigger Events**（舊版畫面叫 **Triggers**）→ 找到 `0,30 23,0-14 * * *` 那一筆 → 刪除。
@@ -105,7 +107,7 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
 ```
 
 - 用手機點開就能看到這個 PR 改完的樣子，不用等合併。同一個 PR 再改，網址不變，重新整理就是最新的。
-- 預覽版可以看、可以讀，但**上傳照片、存備註、按「更新」都不會存**，會顯示「這是預覽版，不能存」，正式資料不受影響。
+- 預覽版可以看、可以讀，但**上傳照片、存備註都不會存**，會顯示「這是預覽版，不能存」，正式資料不受影響。
 - 「我溜過」等手機上記的東西，預覽網址也要重新輸入一次（每個預覽網址都算不同網站）。
 - 不用另外設定，用的是步驟 4 已經設好的 Cloudflare Secret。
 
@@ -197,7 +199,7 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
 ## 給寫程式的人
 
 - 設定：repo 根目錄的 `wrangler.jsonc`（Worker 名稱、靜態檔案、Cron）；不公開的檔案列在 `.assetsignore`。
-- API 在 `/api` 底下（`/api/photos/{編號}`、`/api/notes`、`/api/gallery`、`/api/walker-code`、`/api/sync`），網站一律用同網址的 `/api`（`public/js/app.js` 的 `uploadUrlFor`）。Worker 只接受同網址的要求；要額外放行別的網站才設 `ALLOWED_ORIGINS`（預設空白）。
+- API 在 `/api` 底下（`/api/photos/{編號}`、`/api/notes`、`/api/gallery`、`/api/walker-code`），網站一律用同網址的 `/api`（`public/js/app.js` 的 `uploadUrlFor`）。Worker 只接受同網址的要求；要額外放行別的網站才設 `ALLOWED_ORIGINS`（預設空白）。
 - 本機試跑：在 repo 根目錄 `npx wrangler dev --persist-to /tmp/wrangler-state`（`--persist-to` 放 repo 外面，不然暫存寫進網站資料夾會一直重新載入）。
 - 照片快取（#127）：`public/_headers` 讓 `photos/` 在手機上快取 30 天；Worker 的 `/api/dogs` 回傳每張照片的內容雜湊（`photoVersions`），網站組照片網址加 `?v=雜湊`，換照片網址就變。
 - 瀏覽統計（#128）：部署前 `scripts/analytics-beacon.mjs` 把 Cloudflare Web Analytics 的 beacon 插進要上傳的 `public/index.html`（token 來自 Secret `CF_ANALYTICS_TOKEN`，不提交）；預覽版和舊網址沒有。

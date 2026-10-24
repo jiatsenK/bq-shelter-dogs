@@ -5,7 +5,7 @@
 # - Worker 要用的密碼也從 GitHub Secret 一起帶上去（有設才帶，沒設的保留 Cloudflare 上原本的）：
 #   WORKER_GITHUB_TOKEN → Worker 的 GITHUB_TOKEN（GitHub 不准 Secret 用 GITHUB_ 開頭，所以換個名字）、
 #   ADMIN_KEY（給 /api/admin 的 GitHub Action）、WALKER_KEY（同步試算表本來就在用這一個）、
-#   SHEET_NOTIFY_KEY（舊 Apps Script 通知用的專用密碼，ADR 0012，#501 起只驗證不叫同步）、MY_NAME（#501 狗清單判斷「我溜過」）
+#   MY_NAME（#501 狗清單判斷「我溜過」）
 # - 也可以在 Actions 頁選「部署到 Cloudflare」→「Run workflow」手動跑
 name: 部署到 Cloudflare
 
@@ -81,13 +81,12 @@ jobs:
           SHEET_WRITE_URL: ${{ secrets.SHEET_WRITE_URL }}
           SHEET_WRITE_KEY: ${{ secrets.SHEET_WRITE_KEY }}
           SHEET_ID: ${{ secrets.SHEET_ID }}
-          SHEET_NOTIFY_KEY: ${{ secrets.SHEET_NOTIFY_KEY }}
           # #501：狗清單編輯觸發在 Worker 判斷「是不是我遛的」，跟原 Actions 同步用同一個 Secret
           MY_NAME: ${{ secrets.MY_NAME }}
         run: |
           # 密碼寫進暫存檔交給 wrangler，不印出來；沒設的不放（不會蓋掉 Cloudflare 上原本的）
           node -e '
-            const s = { GITHUB_TOKEN: process.env.WORKER_GITHUB_TOKEN, ADMIN_KEY: process.env.ADMIN_KEY, WALKER_KEY: process.env.WALKER_KEY, SHEET_WRITE_URL: process.env.SHEET_WRITE_URL, SHEET_WRITE_KEY: process.env.SHEET_WRITE_KEY, SHEET_ID: process.env.SHEET_ID, SHEET_NOTIFY_KEY: process.env.SHEET_NOTIFY_KEY, MY_NAME: process.env.MY_NAME };
+            const s = { GITHUB_TOKEN: process.env.WORKER_GITHUB_TOKEN, ADMIN_KEY: process.env.ADMIN_KEY, WALKER_KEY: process.env.WALKER_KEY, SHEET_WRITE_URL: process.env.SHEET_WRITE_URL, SHEET_WRITE_KEY: process.env.SHEET_WRITE_KEY, SHEET_ID: process.env.SHEET_ID, MY_NAME: process.env.MY_NAME };
             for (const k of Object.keys(s)) if (!s[k]) delete s[k];
             require("fs").writeFileSync(process.argv[1], JSON.stringify(s), { mode: 0o600 });
             console.log("帶上去的密碼：" + (Object.keys(s).join("、") || "沒有"));

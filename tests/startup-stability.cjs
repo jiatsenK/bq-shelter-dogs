@@ -15,7 +15,7 @@ module.exports = async (browser, base) => {
     localStorage.setItem('bq-walker-name', '測試志工');
     localStorage.setItem('bq-walker-codes', JSON.stringify(['aaaaaaaaaaaa']));
   });
-  const held = new Set(['rest']), releases = new Map(), failed = new Set();
+  const held = new Set(['rest']), releases = new Map(), failed = new Set(), posts = [];
   const today = { date: '2026-10-19', walks: [] };
   const release = endpoint => { held.delete(endpoint); releases.get(endpoint)?.(); releases.delete(endpoint); };
   await context.route('**/*', async route => {
@@ -27,7 +27,7 @@ module.exports = async (browser, base) => {
     if (failed.has(endpoint)) return route.fulfill({ status: 503, json: {} });
     if (endpoint.startsWith('identity')) return route.fulfill({ json: { ok: true, identity: { name: '測試志工', codes: ['aaaaaaaaaaaa'] } } });
     if (endpoint.startsWith('favorites')) return route.fulfill({ json: { ok: true, ids: [], aliases: {} } });
-    if (endpoint === 'sync') return route.fulfill({ json: { ok: true, unchanged: true } });
+    if (endpoint === 'sync') posts.push('sync');
     if (endpoint === 'walk' && route.request().method() === 'POST') {
       const body = route.request().postDataJSON();
       today.walks = body.dogs.map(d => ({ key: d.id, walked: true, walkedDate: today.date, walker: body.walker, at: '2026-10-19T02:01:00Z' }));
@@ -75,7 +75,7 @@ module.exports = async (browser, base) => {
     await page.locator('#main [data-dog="1"] [data-walk="back"]').waitFor();
     assert.deepEqual(await order(), before, '登記後留在原位');
     await page.locator('#syncBtn').click();
-    await page.getByText('試算表沒有新的修改，已經是最新的', { exact: true }).waitFor();
+    await page.getByText('資料已更新', { exact: true }).waitFor();
     assert.deepEqual(await order(), ['2', '1', '0'], 'K 2026-10-20：按「更新」全部重排，剛溜的排到後面');
     assert.ok((await page.locator('#main [data-dog="1"]').textContent()).includes('今天'), '同步舊日期不能蓋掉較新的今日消息');
     today.walks.push({ key: data.dogs[2].id, walked: true, walkedDate: today.date, walker: '其他志工', at: '2026-10-19T02:02:00Z' });
@@ -86,7 +86,8 @@ module.exports = async (browser, base) => {
     failed.add('walks'); failed.add('rest');
     const failedRead = page.waitForResponse(r => r.url().endsWith('/api/walks'));
     await page.locator('#syncBtn').click();
-    await page.getByText('試算表沒有新的修改，已經是最新的', { exact: true }).waitFor();
+    await page.getByText('資料已更新', { exact: true }).waitFor();
+    assert.deepEqual(posts, [], '#512 按「更新」只重讀，不 POST /sync');
     assert.ok((await page.locator('#main [data-dog="2"]').textContent()).includes('今天'), '重讀狗清單時保留已讀到的較新今日消息，不等下一份回應才補回');
     await (await failedRead).finished();
     assert.equal(await page.locator('[data-tab="mine"] .n').textContent(), '2', '背景個人紀錄失敗保留已確認數字');

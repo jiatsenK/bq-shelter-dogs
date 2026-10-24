@@ -660,7 +660,7 @@ html.lightbox-open { overflow: hidden; }
   display: flex; align-items: center; justify-content: center; font-size: 22px;
 }
 .analysis-btn:active, .analysis-open .analysis-btn { background: var(--primary); color: #fff; }
-/* 更新按鈕：按了叫同步，等新資料時圖示一直轉 */
+/* 更新按鈕：按了重讀資料，等回應時圖示一直轉 */
 .sync-btn:active { background: var(--primary); color: #fff; }
 .sync-btn.syncing .icon { animation: sync-spin 1s linear infinite; }
 .analysis-open .sync-btn { display: none; }

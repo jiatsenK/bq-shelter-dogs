@@ -403,7 +403,7 @@ const analysisBtn = document.getElementById('analysisBtn');
 const analysisBack = document.getElementById('analysisBack');
 
 // ── 離所（#163 年度統計、#164 離所名冊）──
-// 離所紀錄（api/departures，存在 D1）由同步產生（scripts/sync-sheet.mjs 的 updateDepartures）：狗從主清單消失就記一筆，
+// 離所紀錄（api/departures，存在 D1）由 Worker 收狗清單時產生（worker/src/dog-list.js）：狗從主清單消失就記一筆，
 // 原因只讀試算表「已出所」分頁判讀，判不出來是待確認。打開分析頁才讀，不拖慢溜狗表。
 // #363 ADR 0014：長條圖、名冊搜尋（全部年份）用名冊索引（每隻只有編號、狗名、舊編號、出所日、原因）；
 // 點一隻狗才拿那一年的詳細資料（最後籠位、介紹、旗標、出入所），網址帶版本號，瀏覽器快取
