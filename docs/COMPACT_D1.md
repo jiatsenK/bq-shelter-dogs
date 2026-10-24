@@ -87,7 +87,9 @@ const report = await compareCompactProfiles(db, { walks, intros, names, rest, ph
 
 ## 同步寫進 D1（#251 第一步）
 
-`.github/workflows/sync-sheet.yml` 同步完會跑 `scripts/sync-compact-d1.mjs`：用 wrangler 讀正式 D1 現有的永久狗 ID，在記憶體 D1 匯入 dogs.json、walks.json 和常遛狗群（照試算表的欄存），比對一致才產生 SQL 寫回正式 D1。休養、介紹、開卡、志工、照片表不動。需要 repo Secrets `CLOUDFLARE_API_TOKEN`（要有 D1 編輯權限）和 `CLOUDFLARE_ACCOUNT_ID`。
+> 已退役（#501）：`sync-sheet.yml` 已刪，狗清單改由 Apps Script 編輯觸發送 Worker（`worker/src/dog-list.js`）。以下只供查背景，現況見 `docs/ARCHITECTURE_NOW.md`。
+
+當時 `.github/workflows/sync-sheet.yml` 同步完會跑 `scripts/sync-compact-d1.mjs`：用 wrangler 讀正式 D1 現有的永久狗 ID，在記憶體 D1 匯入 dogs.json、walks.json 和常遛狗群（照試算表的欄存），比對一致才產生 SQL 寫回正式 D1。休養、介紹、開卡、志工、照片表不動。需要 repo Secrets `CLOUDFLARE_API_TOKEN`（要有 D1 編輯權限）和 `CLOUDFLARE_ACCOUNT_ID`。
 
 （#251 起已拿掉 GitHub 提交，見下面「同步只寫 D1」。）
 

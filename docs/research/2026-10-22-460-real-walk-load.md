@@ -2,7 +2,7 @@
 
 - 日期：2026-10-22（台灣時間）。Agent：Claude Code 背景研究代理。
 - 問題（K）：「實際狀況有可能寫這麼多嗎？條件是同時多少人登記、多少隻狗？」
-- 比較基準：#460 CPU 驗收條件「200 隻狗同時待寫回，每輪 Cron 派最多 10 隻、20 輪派完，每輪再保險掃描比對 200 隻」，P99 110.86 ms（`docs/design/460-d1-walk-unified.md:64-77`）。
+- 比較基準：#460 CPU 驗收條件「200 隻狗同時待寫回，每輪 Cron 派最多 10 隻、20 輪派完，每輪再保險掃描比對 200 隻」，P99 110.86 ms（`docs/design/history/460-d1-walk-unified.md:64-77`）。
 - 範圍：只 GET 公開 API、讀 repo（分支 `claude/460-d1-unified`）。沒有寫入、部署或改程式，沒有操作瀏覽器。
 - API 查詢時間：2026-10-22 16:17（台灣時間），需帶 `Origin: https://bq-shelter-dogs.<子網域>.workers.dev`，否則回「不接受這個網站的要求」。
 
@@ -21,7 +21,7 @@
 
 ## 1. 在所狗數
 
-`GET /api/dogs` 回 116 隻（`syncedAt` 2026-10-22 15:37:49+08:00）。測試用 200 隻約是現在的 1.7 倍；設計文件也寫「現有約 200 隻」（`docs/design/460-d1-walk-unified.md:18`），跟 API 實測不符。
+`GET /api/dogs` 回 116 隻（`syncedAt` 2026-10-22 15:37:49+08:00）。測試用 200 隻約是現在的 1.7 倍；設計文件也寫「現有約 200 隻」（`docs/design/history/460-d1-walk-unified.md:18`），跟 API 實測不符。
 
 ## 2. 實際登記量
 
@@ -41,7 +41,7 @@
 
 ## 3. 由程式推導
 
-- 登記：D1 模式一次請求只接受並派送一隻（`worker/src/index.js:1011-1014`，`ctx.waitUntil(dispatchWalk(env.DB, dogs[0], env))`）；整群登記在前端拆成逐狗請求（`docs/design/460-d1-walk-unified.md`、`docs/agent-log/2026-10-22-460-d1-walk-unified.md:4`）。
+- 登記：D1 模式一次請求只接受並派送一隻（`worker/src/index.js:1011-1014`，`ctx.waitUntil(dispatchWalk(env.DB, dogs[0], env))`）；整群登記在前端拆成逐狗請求（`docs/design/history/460-d1-walk-unified.md`、`docs/agent-log/2026-10-22-460-d1-walk-unified.md:4`）。
 - Cron 每輪：先保險掃描，再取「中斷＋孤兒＋到期」合計最多 10 隻（`worker/src/walk-retry.js:11-29`）。派送失敗退避 1、2、4、8、15 分鐘（`worker/src/walk-accept.js:201`），所以同一批失敗狗不會每輪都回來。
 - 保險掃描：讀所有有 `v3_walk_state` 的狗（已接管），沒有就直接跳過；有就呼叫 Apps Script `walkScan` 後全部比對（`worker/src/walk-reconcile.js:42-50`）。數量上限＝曾被網站登記過的狗，最多等於在所狗數。
 - 正式 Cron 目前是每 10 分鐘（`wrangler.jsonc:35`），測試假設的是每分鐘；開關 `WALK_RETRY_ENABLED` 仍關（`worker/src/walk-retry.js:7`）。

@@ -16,9 +16,7 @@
 ## 資料來源與限制
 
 - 資料來源是 Google 試算表，志工**不是管理者**，無法修改、無法加欄位、無法用 Apps Script。
-- 讀取方式：試算表需設定為「知道連結的人可檢視」，前端透過 Google Visualization API 讀取：
-  `https://docs.google.com/spreadsheets/d/{sheetId}/gviz/tq?tqx=out:json`
-  不需要 API Key，純前端 fetch 即可。
+- 讀取方式（原始需求，已過時）：當初規劃前端用 gviz 直接讀試算表；現在前端只讀 Worker `/api`（資料在 D1），試算表的改動由 Apps Script 推進 D1。現況見 `docs/ARCHITECTURE_NOW.md`。
 - 因為後端（試算表結構）不可能更動，前端必須完全照現有欄位設計，不能假設資料會為了介面而調整格式。
 
 ### 分頁一：主清單
