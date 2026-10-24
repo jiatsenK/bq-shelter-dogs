@@ -168,3 +168,29 @@ test('#500 11 隻整群逐狗接受並各自寫回；部分失敗只重試未成
     assert.ok(Object.values(now11).every(s => s === 'synced'));
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
+
+test('人工連改兩格（先改人名再改日期）：上一次記改之前的值，不記改一半的狀態', async () => {
+  const env = { ...await setup(), D1_WALK_NOTIFY:'1' };
+  worker.testing.resetState();
+  const state = () => env.DB.prepare("SELECT version,effective_date,walker,previous_date,previous_walker FROM v3_walk_state WHERE number='9001'").first();
+  try {
+    await rows(env, { rows:[{ sheet:'main', dog, current:{ date:'2026-10-01', walker:'甲' } }] });
+    await env.DB.prepare("UPDATE v3_walk_outbox SET next_attempt_at='2000-01-01T00:00:00.000Z'").run();
+    await rows(env, { rows:[{ sheet:'main', dog, current:{ date:'2026-10-01', walker:'乙' } }] });
+    await rows(env, { rows:[{ sheet:'main', dog, current:{ date:day(), walker:'乙' } }] });
+    assert.deepEqual({ ...await state() }, { version:3, effective_date:day(), walker:'乙', previous_date:'2026-10-01', previous_walker:'甲' });
+  } finally { env.DB.close(); }
+});
+
+test('人工改表相隔超過合併時間：照一般規則，上一次記前一版', async () => {
+  const env = { ...await setup(), D1_WALK_NOTIFY:'1' };
+  worker.testing.resetState();
+  const state = () => env.DB.prepare("SELECT previous_date,previous_walker FROM v3_walk_state WHERE number='9001'").first();
+  try {
+    await rows(env, { rows:[{ sheet:'main', dog, current:{ date:'2026-10-01', walker:'甲' } }] });
+    await rows(env, { rows:[{ sheet:'main', dog, current:{ date:'2026-10-01', walker:'乙' } }] });
+    await env.DB.prepare("UPDATE v3_walk_outbox SET next_attempt_at='2000-01-01T00:00:00.000Z'").run();
+    await rows(env, { rows:[{ sheet:'main', dog, current:{ date:day(), walker:'乙' } }] });
+    assert.deepEqual({ ...await state() }, { previous_date:'2026-10-01', previous_walker:'乙' });
+  } finally { env.DB.close(); }
+});
