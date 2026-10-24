@@ -1,6 +1,7 @@
 // 預覽測試庫整份換成正式庫資料（.github/workflows/seed-preview-db.yml，#520）：試算表同步退役後（#501）沒有別的灌法。
 // 正式庫只跑 `d1 export`（只讀）；清空與匯入都明確帶 wrangler.preview-db.jsonc，只碰測試庫
-import { execFileSync } from 'node:child_process';
+// copyDatabase 也給套用 migration 前把正式庫複製到備用庫（scripts/d1-migrations.mjs，#553）
+import { runWrangler } from './d1-database.mjs';
 import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -60,14 +61,24 @@ export function splitLongInserts(sql, limit = 90_000) {
   return [lines[0], 'CREATE TABLE IF NOT EXISTS _copy_long (id INTEGER PRIMARY KEY, t TEXT NOT NULL);', ...lines.slice(1), 'DROP TABLE IF EXISTS _copy_long;'].join('\n');
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const testDb = ['bq-shelter-dogs-test', '--remote', '--config', 'wrangler.preview-db.jsonc'];
-  const wrangler = args => execFileSync('npx', ['--yes', 'wrangler@4', 'd1', ...args], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'], maxBuffer: 64 * 1024 * 1024 });
-  const dump = join(mkdtempSync(join(tmpdir(), 'prod-d1-')), 'prod.sql');
-  wrangler(['export', 'bq-shelter-dogs', '--remote', '--output', dump]);
+// from／to：{ name, config }。from 只跑 d1 export（只讀）；to 先清空再匯入，不能是正式庫。
+// 匯出含 d1_migrations，複製後的庫記得自己套過哪些 migration（#553）
+export function copyDatabase({ from, to, d1 = wranglerD1 }) {
+  if (to.name === PROD_DB) throw new Error('複製的目的地不能是正式庫');
+  const dump = join(mkdtempSync(join(tmpdir(), 'copy-d1-')), 'dump.sql');
+  d1(['export', from.name, '--remote', '--config', from.config, '--output', dump]);
   writeFileSync(dump, splitLongInserts(readFileSync(dump, 'utf8')));
-  const objects = JSON.parse(wrangler(['execute', ...testDb, '--json', '--command', "SELECT type, name, sql FROM sqlite_master WHERE type IN ('table','view','trigger')"]))[0].results;
-  wrangler(['execute', ...testDb, '--command', dropAllSql(objects)]);
-  wrangler(['execute', ...testDb, '--yes', '--file', dump]);
-  console.log(`測試庫清掉 ${objects.filter(o => !isSystem(o.name)).length} 個物件，已匯入正式庫匯出`);
+  const target = [to.name, '--remote', '--config', to.config];
+  const objects = JSON.parse(d1(['execute', ...target, '--json', '--command', "SELECT type, name, sql FROM sqlite_master WHERE type IN ('table','view','trigger')"]))[0].results;
+  d1(['execute', ...target, '--command', dropAllSql(objects)]);
+  d1(['execute', ...target, '--yes', '--file', dump]);
+  return objects.filter(o => !isSystem(o.name)).length;
+}
+
+const PROD_DB = 'bq-shelter-dogs';
+const wranglerD1 = args => runWrangler(['d1', ...args], { stderr: 'inherit', maxBuffer: 64 * 1024 * 1024 });
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  const n = copyDatabase({ from: { name: PROD_DB, config: 'wrangler.jsonc' }, to: { name: 'bq-shelter-dogs-test', config: 'wrangler.preview-db.jsonc' } });
+  console.log(`測試庫清掉 ${n} 個物件，已匯入正式庫匯出`);
 }

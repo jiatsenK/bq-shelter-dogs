@@ -7,10 +7,13 @@
 #   ADMIN_KEY（給 /api/admin 的 GitHub Action）、WALKER_KEY（同步試算表本來就在用這一個）、
 #   MY_NAME（#501 狗清單判斷「我溜過」）
 # - 也可以在 Actions 頁選「部署到 Cloudflare」→「Run workflow」手動跑
+# - #553：正式 D1 有還沒套的 migration（migrations/）就停下、紅叉，不部署；去按「套用 D1 migration」，它套完會呼叫這裡部署
 name: 部署到 Cloudflare
 
 on:
   workflow_dispatch:
+  # 「套用 D1 migration」（d1-migrations.yml）套完後呼叫
+  workflow_call:
   push:
     branches: [main]
     # 只有會放上網站的檔案改了才部署（#329，省 Actions 分鐘數）：文件、測試、同步程式、版本號都不用重新部署
@@ -23,6 +26,9 @@ on:
       - 'scripts/d1-database.mjs'
       - 'scripts/smoke-api.mjs'
       - '.github/workflows/deploy-cloudflare.yml'
+      # #553：合併新的 migration 也跑一次，沒套就紅叉提醒
+      - 'migrations/**'
+      - 'scripts/d1-migrations.mjs'
 
 permissions:
   contents: read
@@ -70,6 +76,11 @@ jobs:
         id: d1
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         run: node scripts/d1-database.mjs --config "${{ steps.r2.outputs.config }}"
+
+      # #553：只送 SELECT 比對 d1_migrations 與 migrations/；有還沒套的就停，提示按「套用 D1 migration」
+      - name: 確認正式庫 migration 都套過
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: node scripts/d1-migrations.mjs check --target production
 
       - name: 部署
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''

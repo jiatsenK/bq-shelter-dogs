@@ -34,6 +34,13 @@ GAS 送不出去時把待送內容留在指令碼屬性（`WALK_EDITS_PENDING`�
 | 09:43、13:53、23:53 | 狗清單保險掃描：「D1 有、表沒有」只記錄不刪（#518 要做顯示頁） | GAS 時間觸發 `dogListScan` |
 | 每月 1 日 10:17 | 照片垃圾桶清理 | Worker cron |
 
+## D1 結構怎麼改（#553）
+
+- 每個變更是 `migrations/NNNN_*.sql` 一個檔，正式庫的 `d1_migrations` 表記著套過哪些；`db/compact-schema.sql` 是現在的完整樣子，測試檢查兩邊一致。
+- 正式庫只由手動的「套用 D1 migration」workflow 套用（必要時先複製到備用庫 `bq-shelter-dogs-backup`、記 Time Travel 書籤、套用、接著部署）。部署發現有還沒套的就紅叉。
+- 預覽、測速自動套到測試庫 `bq-shelter-dogs-test`。
+- 流程細節與「先加後刪」見 `docs/agents/data-changes.md`。
+
 ## Worker 開關
 
 `wrangler.jsonc` 的 vars，現值見 `docs/adr/README.md`。2026-10-24 補開並驗收（#498）；原本是 Cloudflare 密鑰、repo 看不到，PR #540 改成 vars。
