@@ -64,7 +64,6 @@ const BQApi = (() => {
     saveStays: (id, body) => send('PUT', `/stays/${enc(id)}`, body),
     saveFixedCare: (key, body) => send('PUT', `/fixed-care/${enc(key)}`, body),
     uploadPhoto: (id, blob, headers) => settle(fetch(`${root()}/photos/${enc(id)}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', ...headers }, body: blob })),
-    saveGroup: body => send('POST', '/groups', body),
     activities: () => get('/activities', { cache: 'no-cache' }),
     saveActivity: (id, method, body) => send(method, `/activities${id ? `/${enc(id)}` : ''}`, body),
     departures: () => get('/departures/index', { cache: 'no-cache' }),

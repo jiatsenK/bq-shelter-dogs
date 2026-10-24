@@ -6,7 +6,7 @@ module.exports = async (browser, base) => {
   data.dogs[8].name = '名字很長也要完整顯示的測試狗';
   data.groupColumns = [{ column: 4, label: '同名群', names: data.dogs.slice(0, 2).map(d => d.name) }, { column: 7, label: '同名群', names: data.dogs.slice(0, 10).map(d => d.name) }, { column: 12, label: '空群', names: [] }];
   const writes = [];
-  let failWrite = false, partial = false, failRead = false, restMode = false, undoMode = 'ok';
+  let partial = false, failRead = false, restMode = false, undoMode = 'ok';
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Asia/Taipei', serviceWorkers: 'block' });
   await context.addInitScript(() => { localStorage.setItem('bq-onboarded', '1'); localStorage.setItem('bq-name-later', '1'); localStorage.setItem('bq-walker-name', '測試志工'); });
   await context.route('**/*', async route => {
@@ -17,17 +17,12 @@ module.exports = async (browser, base) => {
     if (failRead && endpoint === 'dogs') return route.fulfill({ status: 500, json: {} });
     if (route.request().method() === 'POST') {
       const body = route.request().postDataJSON(); writes.push({ endpoint, body });
-      if (failWrite) return route.fulfill({ status: 500, json: { ok: false, error: '測試寫入失敗' } });
       if (endpoint === 'walk' && body.action === 'undo') {
         if (undoMode === 'fail') return route.fulfill({ status: 500, json: { ok: false, error: '測試復原失敗' } });
         return route.fulfill({ json: { ok: true, today, results: body.dogs.map((d, i) => undoMode === 'partial' && i === 0 ? { id: d.id, name: d.name, status: 'changed', current: { date: today, walker: '別人' } } : { id: d.id, name: d.name, status: 'restored' }) } });
       }
       if (endpoint === 'walk') return route.fulfill({ json: { ok: true, today, results: body.dogs.map(d => ({ ...d, status: partial && d.name === body.dogs[0].name ? 'missing' : 'written', prev: {}, wrote: { date: today, walker: body.walker } })) } });
-      const group = data.groupColumns.find(g => g.column === body.column);
-      if (body.op === 'add' && !group.names.includes(body.name)) group.names.push(body.name);
-      if (body.op === 'remove') group.names = group.names.filter(n => n !== body.name);
-      if (body.op === 'create') { data.groupColumns.push({ column: 15, label: body.label, names: [body.name] }); }
-      return route.fulfill({ json: { ok: true, group: body.op === 'create' ? data.groupColumns.at(-1) : group } });
+      assert.fail('狗群頁只能送出溜狗登記');
     }
     return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'rest' ? { rest: restMode ? { [data.dogs[0].id]: { until: '2099-12-31', reason: '測試休養' } } : {} } : endpoint === 'walkers' ? { walkers: ['測試志工'] } : { ok: true, walks: [], departures: [] } });
   });
@@ -91,27 +86,6 @@ module.exports = async (browser, base) => {
     await page.locator('#gwWalk').click();
     await page.getByText('已登記 10 隻', { exact: true }).waitFor();
     assert(Math.abs(await sideTop() - beforeWalk) <= 1, '#443 按下溜了變「已溜」後箭頭不移動');
-    await page.getByRole('button', { name: '加入狗', exact: true }).click();
-    await page.locator('#gwForm input[name="name"]').fill(data.dogs[10].name);
-    failWrite = true;
-    await page.getByRole('button', { name: '儲存', exact: true }).click();
-    await page.getByText(/測試寫入失敗，請重試/).waitFor();
-    assert.equal(await page.locator('#gwForm input[name="name"]').inputValue(), data.dogs[10].name);
-    failWrite = false;
-    await page.getByRole('button', { name: '儲存', exact: true }).click();
-    await page.getByText('狗群已更新', { exact: true }).waitFor();
-    assert.equal(writes.at(-1).body.column, 7);
-    assert.equal(await page.locator('.front [data-gw-dog]').count(), 11);
-    await page.getByRole('button', { name: '管理', exact: true }).click();
-    await page.getByRole('button', { name: '＋狗群', exact: true }).click();
-    await page.locator('#gwForm input[name="label"]').fill('新測試群');
-    await page.locator('#gwForm input[name="name"]').fill(data.dogs[0].name);
-    await page.getByRole('button', { name: '儲存', exact: true }).click();
-    await page.getByRole('heading', { name: /新測試群/ }).waitFor();
-    await page.getByRole('button', { name: '管理', exact: true }).click();
-    page.once('dialog', dialog => dialog.accept());
-    await page.getByRole('button', { name: '移出 ' + data.dogs[0].name, exact: true }).click();
-    await page.waitForFunction(() => document.querySelectorAll('.front [data-gw-dog]').length === 0);
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 844 });
       await page.getByRole('button', { name: '上一群', exact: true }).click();
