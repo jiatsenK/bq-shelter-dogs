@@ -76,7 +76,13 @@ export async function saveDogPhoto(env, dogId, revision, images, identity, base)
   const old = oldKey ? await readPhoto(env, base, oldKey) : null;
   const oldThumb = oldKey ? await readPhoto(env, base, before.photo?.thumb || thumbKey(oldKey)) : null;
   const equal = (a, b) => (!a && !b) || (a && b && a.length === b.length && a.every((byte, i) => byte === b[i]));
-  if (equal(old?.bytes, images.original) && equal(oldThumb?.bytes, images.thumb)) return { ...before, trash: null };
+  if (equal(old?.bytes, images.original) && equal(oldThumb?.bytes, images.thumb)) {
+    return {
+      ...before,
+      photo: before.photo || { key: oldKey, thumb: oldThumb ? thumbKey(oldKey) : null },
+      trash: null
+    };
+  }
   let trash = null;
   if (old) trash = await toTrash(env, base, oldKey, { dogId, kind: 'main' });
   const key = `photos/${crypto.randomUUID().replaceAll('-', '')}.jpg`;

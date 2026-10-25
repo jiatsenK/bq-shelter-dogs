@@ -23,7 +23,7 @@
 - 性別只讀 `v3_dogs.sex`（主清單的性別複本 #557 不再讀，正式庫刪欄前比對 0 筆不同），不寫入補正；補正在 #566。
 - 每次載入／重新讀取：1 個 SELECT、0 寫入、0 版本觸發器。主清單分組掃描一次，其餘以既有主鍵／索引連接；回傳列數等於狗身分數 N。沒有額外同步、資料包更新或逐列 D1 查詢。
 - 搜尋（180 ms 節流）、篩選、排序、換頁：0 次 D1／R2 操作。一次載入完整小型清單，畫面每頁只顯示 25／50／100 隻，不新增背景輪詢。
-- 有沒有照片跟志工網站一樣看 R2 的 `photos/{編號}.jpg`：每次載入多 1 次 R2 list（`r2Versions`，同一個 Worker 30 秒內共用；照片超過 1000 張才多翻頁），不再讀已停用的 `v3_photos`（#557，那份清單 Worker 從沒更新過）。可見照片採 lazy loading。每個實際請求 1 次 R2 get；縮圖缺少時最多再取 1 次主照片；0 次 D1、0 次 R2 HEAD。不讀垃圾桶。檔案讀不到另行提示，不能當成已確認缺照片。
+- #566 新照片以 D1 不可覆寫版本引用為準，舊照片跟志工網站一樣看 R2 的 `photos/{編號}.jpg`：每次載入多 1 次 R2 list（`r2Versions`，同一個 Worker 30 秒內共用；照片超過 1000 張才多翻頁），本票開始由共用照片服務可靠維護 `v3_photos`，不能再照 #557 舊規劃刪表。可見照片採 lazy loading。每個實際請求 1 次 R2 get；縮圖缺少時最多再取 1 次主照片；0 次 D1、0 次 R2 HEAD。不讀垃圾桶。檔案讀不到另行提示，不能當成已確認缺照片。
 - 本機記憶體 SQLite 只計回傳列數，不能代表 Cloudflare 實際 `rows_read`；正式／測試遠端讀取列數需在隔離驗收時從 D1 metrics 記錄。本票未連正式 D1。
 
 ## 部署與權限驗收
@@ -39,3 +39,5 @@
 7. 驗收搜尋、複合篩選、排序、分頁、無編號狗、空清單、讀取失敗與登入失效重試；確認沒有寫入請求。另驗收志工站免登入、登記／復原／同步不受影響。
 
 官方依據：[Access JWT 驗證](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)、[Static Assets 先執行 Worker](https://developers.cloudflare.com/workers/static-assets/routing/worker-script/)、[Access 與 Static Assets 限制](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)。
+
+#566 的逐項儲存、CAS／紀錄、性別差異、照片復原、成本及待核准正式步驟見 `docs/operations/dog-editing.md`。舊性別差異只在 migration 留存，runtime 不讀停用欄位。

@@ -171,8 +171,6 @@ async function applyDeparted(db, row, list, now, fp) {
       items('flag', judged.flags || []); items('former', former); items('group', groups);
     }
     out.push(...dropMainRow(db, old.row_index));
-    list.splice(list.indexOf(old), 1);
-    delete fp[`main:${dogKey(dog)}`];
   } else {
     // 已經記過離所：志工之後補上原因或日期就改過來
     const prev = await db.prepare('SELECT reason,matched,departed_date,date_source FROM v3_departures WHERE number=?').bind(dog.id).first();
@@ -187,6 +185,10 @@ async function applyDeparted(db, row, list, now, fp) {
     }
   }
   if (out.length) await guardedDogBatch(db,old,out);
+  if(old && out.length) {
+    list.splice(list.indexOf(old), 1);
+    delete fp[`main:${dogKey(dog)}`];
+  }
   return out.length > 0;
 }
 
@@ -232,19 +234,21 @@ async function applyNotes(db, row) {
 
 // ack：Worker 已接手（更新或無差異）；D1 失敗回 false，GAS 保留待通知下次補送。
 export async function applyDogListRows(db, rows, env, now = Date.now()) {
-  const fp = await readFp(db);
+  let fp = await readFp(db);
   const before = JSON.stringify(fp);
   // 主清單約 300 列，每批讀一次換來逐列不必各查一次（每次呼叫 50 次查詢上限）
-  const list = (await db.prepare('SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,s.revision FROM v3_sheet_main m JOIN v3_dog_edit_state s USING(dog_id)').all()).results;
+  let list = (await db.prepare('SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,s.revision FROM v3_sheet_main m JOIN v3_dog_edit_state s USING(dog_id)').all()).results;
   const results = [];
   for (const row of rows) {
     const key = row && unitKey(row);
     if (!key) { results.push({ ok: false, ack: true, error: '看不懂的列' }); continue; }
     try {
-      const changed = row.sheet === 'main' ? await applyMain(db, row, list, env, fp)
-        : row.sheet === 'departed' ? await applyDeparted(db, row, list, now, fp)
-        : row.sheet === 'groups' ? await applyGroup(db, row, list)
+      const nextList=list.map(item=>({...item})),nextFp={...fp};
+      const changed = row.sheet === 'main' ? await applyMain(db, row, nextList, env, nextFp)
+        : row.sheet === 'departed' ? await applyDeparted(db, row, nextList, now, nextFp)
+        : row.sheet === 'groups' ? await applyGroup(db, row, nextList)
         : await applyNotes(db, row);
+      list=nextList;fp=nextFp;
       if (typeof row.hash === 'string' && row.hash) fp[key] = row.hash;
       results.push({ ok: true, ack: true, key, changed });
     } catch (error) {

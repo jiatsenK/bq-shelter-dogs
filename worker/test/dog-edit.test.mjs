@@ -11,6 +11,8 @@ import { readSmall, readDepartureYear } from '../src/packs.js';
 import { readEdits } from '../src/editlog.js';
 import { readFile } from 'node:fs/promises';
 import { splitStatements } from '../../scripts/migrate-compact-db.mjs';
+import { editsValue } from '../../public/js/edits.js';
+import { servePhoto } from '../src/r2.js';
 const dogId = 'a'.repeat(32);
 const actor = { subject: 'verified', email: 'private@example.org' };
 async function setup(t) {
@@ -142,7 +144,7 @@ test('性別舊複本、換號與再入所不覆寫正本；在所／離所快�
   await readSmall(db, 'dogs');
   await readDepartureYear(db, '2020');
   let before = await readDogEdit(db, dogId);
-  assert.deepEqual(before.sexCopies,[]);
+  assert.deepEqual(before.sexCopies, []);
   assert.equal(before.sex, 'male');
   await saveDogEdit(db, dogId, { revision: before.revision, field: 'sex', value: '' }, { actor });
   assert.equal((await readDogsPayload(db)).dogs[0].sex, '');
@@ -264,36 +266,285 @@ test('GAS 準備完才遇到人工修改：同交易拒絕舊身分快照，保�
   assert.equal(await DB.prepare('SELECT cage FROM v3_sheet_main').first('cage'), 'B1');
 });
 
-test('0004 留存舊性別差異、不以空白覆蓋有效值；無差異不製造待核對列',async t=>{
- const db=fakeD1();t.after(()=>db.close());
- for(const name of ['0000_compact_schema.sql','0001_sheet_main_dog_id_index.sql','0002_trigger_plan_a.sql','0003_feature_settings.sql']) {
-   const sql=await readFile(new URL('../../migrations/'+name,import.meta.url),'utf8');
-   for(const statement of splitStatements(sql))await db.prepare(statement).run();
- }
- await db.prepare("INSERT INTO v3_dogs(dog_id,name,sex) VALUES('a','甲','male'),('b','乙','female')").run();
- await db.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,name,sex,synced_at) VALUES(0,'a','甲','',''),(1,'b','乙','female','')").run();
- const sql=await readFile(new URL('../../migrations/0004_dog_edit.sql',import.meta.url),'utf8');
- await db.batch(splitStatements(sql).map(statement=>db.prepare(statement)));
- assert.equal(await db.prepare("SELECT sex FROM v3_dogs WHERE dog_id='a'").first('sex'),'male');
- const rows=(await db.prepare('SELECT dog_id,copies_json FROM v3_dog_sex_legacy').all()).results;
- assert.equal(rows.length,1);assert.equal(rows[0].dog_id,'a');assert.deepEqual(JSON.parse(rows[0].copies_json),[{row:0,sex:''}]);
- assert.deepEqual((await readDogEdit(db,'a')).sexCopies,[{row:0,sex:''}]);
+test('0007 留存舊性別差異、不以空白覆蓋有效值；無差異不製造待核對列', async (t) => {
+  const db = fakeD1();
+  t.after(() => db.close());
+  for (const name of [
+    '0000_compact_schema.sql',
+    '0001_sheet_main_dog_id_index.sql',
+    '0002_trigger_plan_a.sql',
+    '0003_feature_settings.sql'
+  ]) {
+    const sql = await readFile(new URL('../../migrations/' + name, import.meta.url), 'utf8');
+    for (const statement of splitStatements(sql)) await db.prepare(statement).run();
+  }
+  await db.prepare("INSERT INTO v3_dogs(dog_id,name,sex) VALUES('a','甲','male'),('b','乙','female')").run();
+  await db
+    .prepare(
+      "INSERT INTO v3_sheet_main(row_index,dog_id,name,sex,synced_at) VALUES(0,'a','甲','',''),(1,'b','乙','female','')"
+    )
+    .run();
+  const sql = await readFile(new URL('../../migrations/0007_dog_edit.sql', import.meta.url), 'utf8');
+  await db.batch(splitStatements(sql).map((statement) => db.prepare(statement)));
+  assert.equal(await db.prepare("SELECT sex FROM v3_dogs WHERE dog_id='a'").first('sex'), 'male');
+  const rows = (await db.prepare('SELECT dog_id,copies_json FROM v3_dog_sex_legacy').all()).results;
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].dog_id, 'a');
+  assert.deepEqual(JSON.parse(rows[0].copies_json), [{ row: 0, sex: '' }]);
+  assert.deepEqual((await readDogEdit(db, 'a')).sexCopies, [{ row: 0, sex: '' }]);
 });
 
-test('連續照片替換後舊版本 URL 仍取同一對原圖／縮圖，資料包給新版本',async t=>{
- const DB=await setup(t),PHOTOS=fakeR2(),env={DB,PHOTOS,ASSETS:{fetch:async()=>new Response('Not found',{status:404})}};
- await DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind('2020010101',dogId).run();
- await DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,synced_at) VALUES(0,?,?,'測試狗','A1','')").bind(dogId,'2020010101').run();
- const jpeg=n=>new Uint8Array([255,216,255,n]);
- const before=await readDogEdit(DB,dogId);
- const first=await saveDogPhoto(env,dogId,before.revision,{original:jpeg(1),thumb:jpeg(2)},{actor},'https://example.org');
- const second=await saveDogPhoto(env,dogId,first.revision,{original:jpeg(3),thumb:jpeg(4)},{actor},'https://example.org');
- const worker=(await import('../src/index.js')).default;worker.testing.resetState();
- for(const [key,bytes] of [['photos/2020010101.jpg',jpeg(1)],['photos/thumbs/2020010101.jpg',jpeg(2)]]) {
-   const response=await worker.fetch(new Request('https://example.org/'+key+'?v='+first.photo.key.slice(7,-4)),env);
-   assert.equal(response.status,200);assert.deepEqual(new Uint8Array(await response.arrayBuffer()),bytes);
- }
- const response=await worker.fetch(new Request('https://example.org/api/dogs',{headers:{Origin:'https://example.org'}}),env);
- const data=await response.json();assert.equal(data.photoVersions['photos/2020010101.jpg'],second.photo.key.slice(7,-4));
- assert.equal(data.dogs[0].photoVersion,second.photo.key.slice(7,-4));
+test('連續照片替換後舊版本 URL 仍取同一對原圖／縮圖，資料包給新版本', async (t) => {
+  const DB = await setup(t),
+    PHOTOS = fakeR2(),
+    env = { DB, PHOTOS, ASSETS: { fetch: async () => new Response('Not found', { status: 404 }) } };
+  await DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind('2020010101', dogId).run();
+  await DB.prepare(
+    "INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,synced_at) VALUES(0,?,?,'測試狗','A1','')"
+  )
+    .bind(dogId, '2020010101')
+    .run();
+  const jpeg = (n) => new Uint8Array([255, 216, 255, n]);
+  const before = await readDogEdit(DB, dogId);
+  const first = await saveDogPhoto(
+    env,
+    dogId,
+    before.revision,
+    { original: jpeg(1), thumb: jpeg(2) },
+    { actor },
+    'https://example.org'
+  );
+  const second = await saveDogPhoto(
+    env,
+    dogId,
+    first.revision,
+    { original: jpeg(3), thumb: jpeg(4) },
+    { actor },
+    'https://example.org'
+  );
+  const worker = (await import('../src/index.js')).default;
+  worker.testing.resetState();
+  for (const [key, bytes] of [
+    ['photos/2020010101.jpg', jpeg(1)],
+    ['photos/thumbs/2020010101.jpg', jpeg(2)]
+  ]) {
+    const response = await worker.fetch(
+      new Request('https://example.org/' + key + '?v=' + first.photo.key.slice(7, -4)),
+      env
+    );
+    assert.equal(response.status, 200);
+    assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes);
+  }
+  const response = await worker.fetch(
+    new Request('https://example.org/api/dogs', { headers: { Origin: 'https://example.org' } }),
+    env
+  );
+  const data = await response.json();
+  assert.equal(data.photoVersions['photos/2020010101.jpg'], second.photo.key.slice(7, -4));
+  assert.equal(data.dogs[0].photoVersion, second.photo.key.slice(7, -4));
+});
+
+test('照片與性別公開前後紀錄顯示新版及舊版格式', () => {
+  assert.equal(editsValue('photo', { key: 'photos/one.jpg', thumb: null }), '新照片');
+  assert.equal(editsValue('photo', { path: 'photos/old.jpg' }), '新照片');
+  assert.match(editsValue('photo', { key: 'photos/one.jpg', trash: 'backup' }), /backup/);
+  assert.equal(editsValue('sex', ''), '待確認');
+  assert.equal(editsValue('sex', 'female'), '母');
+});
+
+test('新增照片 GET／替換、編號增刪、事件更新：無關資料十倍仍固定讀寫量及索引計畫', async (t) => {
+  const DB = await setup(t),
+    PHOTOS = fakeR2(),
+    env = { DB, PHOTOS };
+  await DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind('2020010101', dogId).run();
+  await DB.prepare(
+    "INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,synced_at) VALUES(0,?,?,'測試狗','A1','')"
+  )
+    .bind(dogId, '2020010101')
+    .run();
+  const jpeg = (n) => new Uint8Array([255, 216, 255, n]);
+  let before = await readDogEdit(DB, dogId);
+  before = await saveDogEdit(
+    DB,
+    dogId,
+    { revision: before.revision, field: 'intro', value: '原介紹' },
+    { editor: { name: '自選' }, events: [{ number: '2020010101', date: '2020-01-01', event: '原事件' }] }
+  );
+  await saveDogPhoto(
+    env,
+    dogId,
+    before.revision,
+    { original: jpeg(1), thumb: jpeg(2) },
+    { actor },
+    'https://example.org'
+  );
+  async function measure(action) {
+    const total = await DB.prepare('SELECT total_changes() AS n').first('n'),
+      reads = DB.stats.rowsRead,
+      sql = [];
+    const spy = {
+      ...DB,
+      prepare(query) {
+        sql.push(query);
+        return DB.prepare(query);
+      }
+    };
+    await action(spy);
+    const result = {
+      reads: DB.stats.rowsRead - reads,
+      writes: (await DB.prepare('SELECT total_changes() AS n').first('n')) - total,
+      statements: sql.length
+    };
+    for (const query of sql.filter((q) => /^SELECT/.test(q))) {
+      const plan = (
+        await DB.prepare('EXPLAIN QUERY PLAN ' + query.replace(/\?/g, "'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'")).all()
+      ).results;
+      assert.ok(
+        plan.every((row) => !/SCAN (?!\(subquery)/.test(row.detail)),
+        query
+      );
+    }
+    return result;
+  }
+  const seed = async (start, end) => {
+    for (let n = start; n < end; n++) {
+      const id = n.toString(16).padStart(32, '0');
+      await DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)')
+        .bind(id, '無關' + n)
+        .run();
+      await DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)')
+        .bind('200001' + String(n).padStart(4, '0'), id)
+        .run();
+      await DB.prepare('INSERT INTO v3_photos(object_key,dog_id,is_primary) VALUES(?,?,1)')
+        .bind('photos/' + id + '.jpg', id)
+        .run();
+    }
+  };
+  async function measures(value) {
+    const result = {};
+    for (const [key, field, next] of [
+      ['add', 'numbers', ['2019010101', '2020010101']],
+      ['remove', 'numbers', ['2020010101']]
+    ]) {
+      const snapshot = await readDogEdit(DB, dogId);
+      result[key] = await measure((db) =>
+        saveDogEdit(db, dogId, { revision: snapshot.revision, field, value: next }, { actor })
+      );
+    }
+    let snapshot = await readDogEdit(DB, dogId);
+    result.events = await measure((db) =>
+      saveDogEdit(
+        db,
+        dogId,
+        { revision: snapshot.revision, field: 'intro', value: '介紹' + value },
+        { editor: { name: '自選' }, events: [{ number: '2020010101', date: '2020-01-01', event: '事件' + value }] }
+      )
+    );
+    snapshot = await readDogEdit(DB, dogId);
+    result.photo = await measure((db) =>
+      saveDogPhoto(
+        { ...env, DB: db },
+        dogId,
+        snapshot.revision,
+        { original: jpeg(value), thumb: jpeg(value + 1) },
+        { actor },
+        'https://example.org'
+      )
+    );
+    snapshot = await readDogEdit(DB, dogId);
+    result.photoGet = await measure(async (db) => {
+      const response = await servePhoto(
+        new Request('https://example.org/photos/2020010101.jpg?v=' + snapshot.photo.key.slice(7, -4)),
+        { ...env, DB: db }
+      );
+      assert.equal(response.status, 200);
+    });
+    result.noop = await measure((db) =>
+      saveDogPhoto(
+        { ...env, DB: db },
+        dogId,
+        snapshot.revision,
+        { original: jpeg(value), thumb: jpeg(value + 1) },
+        { actor },
+        'https://example.org'
+      )
+    );
+    assert.equal(result.noop.writes, 0);
+    return result;
+  }
+  await seed(1, 11);
+  const small = await measures(10);
+  await seed(11, 101);
+  assert.deepEqual(await measures(20), small);
+});
+
+test('離所 CAS 失敗不污染同批狗群或主清單 fingerprint', async (t) => {
+  const DB = await setup(t);
+  await DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('buddy','夥伴')").run();
+  await DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind('2020010101', dogId).run();
+  await DB.prepare(
+    "INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,synced_at) VALUES(0,?,?,'測試狗','A1',''),(1,'buddy','2020010102','夥伴','A2','')"
+  )
+    .bind(dogId, '2020010101')
+    .run();
+  await DB.prepare("INSERT INTO v3_sheet_groups VALUES(0,0,'測試狗'),(0,1,'夥伴')").run();
+  await DB.prepare("INSERT INTO v3_sync_state(key,value) VALUES('dog_list_fp',?)")
+    .bind(JSON.stringify({ 'main:2020010101': 'old' }))
+    .run();
+  let raced = false;
+  const spy = {
+    ...DB,
+    async batch(statements) {
+      if (!raced) {
+        raced = true;
+        const snapshot = await readDogEdit(DB, dogId);
+        await saveDogEdit(DB, dogId, { revision: snapshot.revision, field: 'intro', value: '競爭修改' }, { actor });
+      }
+      return DB.batch(statements);
+    }
+  };
+  const result = await applyDogListRows(
+    spy,
+    [
+      { sheet: 'departed', hash: 'departure', dog: { id: '2020010101', name: '測試狗' }, texts: ['被認養'], dates: [] },
+      { sheet: 'groups', hash: 'group', column: 0, names: ['測試狗', '夥伴'], label: '' }
+    ],
+    {}
+  );
+  assert.equal(result[0].ack, false);
+  assert.equal(result[1].ack, true);
+  assert.deepEqual(
+    (await DB.prepare('SELECT name FROM v3_sheet_groups ORDER BY row_index').all()).results.map((r) => r.name),
+    ['測試狗', '夥伴']
+  );
+  assert.equal(
+    JSON.parse(await DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_fp'").first('value'))[
+      'main:2020010101'
+    ],
+    'old'
+  );
+  assert.equal(await DB.prepare('SELECT COUNT(*) AS n FROM v3_departures').first('n'), 0);
+});
+
+test('既有固定路徑同圖重送無差異 0 寫，也回報有效照片', async (t) => {
+  const DB = await setup(t),
+    PHOTOS = fakeR2();
+  await DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind('2020010101', dogId).run();
+  const original = new Uint8Array([255, 216, 255, 1]),
+    thumb = new Uint8Array([255, 216, 255, 2]);
+  await PHOTOS.put('photos/2020010101.jpg', original);
+  await PHOTOS.put('photos/thumbs/2020010101.jpg', thumb);
+  const snapshot = await readDogEdit(DB, dogId),
+    before = await DB.prepare('SELECT total_changes() AS n').first('n');
+  const result = await saveDogPhoto(
+    { DB, PHOTOS },
+    dogId,
+    snapshot.revision,
+    { original, thumb },
+    { actor },
+    'https://example.org'
+  );
+  assert.equal(result.photo.key, 'photos/2020010101.jpg');
+  assert.equal(await DB.prepare('SELECT total_changes() AS n').first('n'), before);
+  assert.equal(PHOTOS.objects.size, 2);
 });

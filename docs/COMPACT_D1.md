@@ -36,7 +36,9 @@ const dogs = await readCompactDogs(db);
 | `v3_volunteers` | 志工；代號對照在 `v3_identity_names`（`v3_volunteer_codes` 跟它完全重複，#557 停用，第二步刪表） |
 | `v3_card_opened` | 代號＋永久狗 ID；開卡日期 |
 | `v3_rest` | 永久狗 ID；休養截止日、原因 |
-| `v3_photos` | **#557 停用，第二步刪表**；照片看 R2 的 `photos/{編號}.jpg`（志工網站與管理網站都用 `r2Versions`） |
+| `v3_photos` | #566 維護不可覆寫的照片版本引用，與狗編輯紀錄同交易提交；舊固定路徑仍由 R2 備援。此用途取代 #557 原先的刪表規劃，正式 migration 必須一併核對 |
+| `v3_dog_edit_state` / `v3_dog_edit_guard` | 每隻狗的 CAS 版本與 GAS 交易檢查；無差異不寫 |
+| `v3_dog_edit_actors` / `v3_dog_sex_legacy` | 私人操作者來源（公開 API 不回登入識別）／遷移時留存的舊性別差異，不自動補值 |
 | `v3_intros` | 永久狗 ID；入所介紹 |
 | `v3_edit_log` | 編輯紀錄：時間、編輯者代號與名字、種類、狗、改前／改後（JSON），見 `docs/adr/0004-open-editing-and-edit-log.md` |
 | `v3_activities` / `v3_activity_dogs` | 活動紀錄（#270，ADR 0002）：一場一列（日期、類型、revision）；出席的狗一列一隻，`dog_id` 是 NULL 表示只有名字、還沒對上狗。網站寫，同步不碰；舊名單用 `scripts/import-activities.mjs` 手動匯入 |

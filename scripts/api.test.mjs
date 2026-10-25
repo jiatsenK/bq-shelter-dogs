@@ -12,6 +12,19 @@ async function load(fetch, extra = {}) {
 }
 const json = (body, status = 200) => async () => new Response(JSON.stringify(body), { status });
 
+test('#566 背景重新讀取不升級既有草稿版本，成功回應版本只供後續草稿',async()=>{
+  let revision=2;
+  const {api,calls}=await load(async(url,init)=>Response.json(init?.method?{ok:true,revision:5}:{dogs:[{id:'2020010101',editRevision:revision}]}));
+  await api.dogs();revision=4;await api.dogs();
+  await api.saveIntro('2020010101',{editor:'自選',text:'舊草稿',revision:1});
+  assert.equal(JSON.parse(calls.at(-1)[1].body).revision,1);
+  await api.saveRest('2020010101',{editor:'自選',end:true,revision:1});
+  assert.equal(JSON.parse(calls.at(-1)[1].body).revision,1);
+  const {BQDetailEditor}=await loadFrontendModule('detail-editor.js',{});
+  const dog={editRevision:1},draft=BQDetailEditor.create(()=>{}).open(dog,{text:'草稿'});
+  dog.editRevision=4;assert.equal(draft.revision,1);
+});
+
 test('成功回應：ok、狀態碼與 JSON 內容', async () => {
   const { api, calls } = (await load(json({ walks: [] })));
   const r = await api.walks();

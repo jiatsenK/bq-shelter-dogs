@@ -15,7 +15,7 @@ module.exports = async (browser, base) => {
     onMain: true,
     fixedCare: false,
     rest: null,
-    photoUrl: null
+    photoUrl: '/photos/2020010101.jpg'
   };
   let snapshot = {
     dogId: dog.dogId,
@@ -49,6 +49,15 @@ module.exports = async (browser, base) => {
   });
   const page = await context.newPage(),
     errors = [];
+  await context.route('**/photos/**', (route) =>
+    route.fulfill({
+      contentType: 'image/png',
+      body: Buffer.from(
+        'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
+        'base64'
+      )
+    })
+  );
   page.on('pageerror', (e) => errors.push(e.message));
   try {
     await page.goto(base + '/admin/public/index.html');
@@ -91,6 +100,13 @@ module.exports = async (browser, base) => {
         fullPage: true
       });
     }
+    await page.locator('#edit-field').selectOption('photo');
+    await page.getByRole('button', { name: '預覽改前／改後' }).click();
+    assert.equal(
+      await page.getByAltText('改前照片').getAttribute('src'),
+      '/photos/2020010101.jpg',
+      '舊固定路徑沒有 D1 pointer 仍顯示改前圖'
+    );
     assert.equal(writes, 3);
     assert.deepEqual(errors, []);
     console.log('#566 管理狗編輯：預覽、無差異、409／失敗保留草稿、讀最新後核對、儲存及390／1440px通過');

@@ -39,12 +39,18 @@ test('空庫照順序跑完全部 migration，結構跟 db/compact-schema.sql �
   assert.deepEqual(await structure(fromMigrations), expected);
 });
 
-test('migration 檔名是 NNNN_小寫名稱.sql，從 0000 起連號不重複', () => {
+test('migration 編號唯一有序；並行 PR 已保留的編號不能碰撞或被拿來套用', () => {
   const files = migrationFiles();
+  const reserved = JSON.parse(readFileSync(join(MIGRATIONS_DIR,'reserved.json'),'utf8'));
   assert.equal(files[0], '0000_compact_schema.sql');
+  const seen=new Set();
   files.forEach((f, i) => {
     assert.match(f, FILE_NAME);
-    assert.equal(f.slice(0, 4), String(i).padStart(4, '0'), `${f} 要是第 ${i} 號`);
+    const prefix=f.slice(0,4),number=Number(prefix);
+    assert.ok(!seen.has(prefix),`${f} 編號重複`);seen.add(prefix);
+    if(reserved[prefix])assert.equal(f,reserved[prefix].file,'不能佔用其他 PR 保留的編號');
+    const previous=i?Number(files[i-1].slice(0,4)):-1;
+    for(let missing=previous+1;missing<number;missing++)assert.ok(reserved[String(missing).padStart(4,'0')],`缺少 migration ${missing}，也未保留`);
   });
 });
 

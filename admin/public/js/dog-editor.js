@@ -27,14 +27,18 @@ const call = (path, init = {}) =>
     })
   );
 const show = (value) => (typeof value === 'string' ? value : JSON.stringify(value, null, 2));
-const sexLabel = (value) => ({male:'公',female:'母'})[value] || '待確認';
-function displayValue(field,value) {
-  if(field==='sex')return sexLabel(value);
-  if(field==='fixedCare')return value?'開啟固定照顧':'關閉固定照顧';
-  if(field==='rest')return value?`休養至 ${value.until}；原因：${value.reason||'未填'}`:'未設定休養';
-  if(field==='numbers')return value.join('\n')||'無編號';
-  if(field==='stays')return value.map(row=>`入所 ${row.in}／出所 ${row.out||'尚未出所'}／${row.reason||'未填原因'}`).join('\n')||'無補登紀錄';
-  return show(value)||'（空白）';
+const sexLabel = (value) => ({ male: '公', female: '母' })[value] || '待確認';
+function displayValue(field, value) {
+  if (field === 'sex') return sexLabel(value);
+  if (field === 'fixedCare') return value ? '開啟固定照顧' : '關閉固定照顧';
+  if (field === 'rest') return value ? `休養至 ${value.until}；原因：${value.reason || '未填'}` : '未設定休養';
+  if (field === 'numbers') return value.join('\n') || '無編號';
+  if (field === 'stays')
+    return (
+      value.map((row) => `入所 ${row.in}／出所 ${row.out || '尚未出所'}／${row.reason || '未填原因'}`).join('\n') ||
+      '無補登紀錄'
+    );
+  return show(value) || '（空白）';
 }
 export function openDogEditor(dog, container, onSaved) {
   container.replaceChildren();
@@ -292,19 +296,28 @@ export function openDogEditor(dog, container, onSaved) {
     const next = value();
     diff.replaceChildren(
       text('h3', '改前／改後'),
-      text('h4','改前'),
-      text('pre', field.value==='photo'?'目前照片':displayValue(field.value,snapshot[field.value])),
-      text('h4','改後'),
-      text('pre', field.value==='photo'?'選取的照片':displayValue(field.value,next))
+      text('h4', '改前'),
+      text('pre', field.value === 'photo' ? '目前照片' : displayValue(field.value, snapshot[field.value])),
+      text('h4', '改後'),
+      text('pre', field.value === 'photo' ? '選取的照片' : displayValue(field.value, next))
     );
-    if(field.value==='photo') {
-      diff.replaceChildren(text('h3','改前／改後'));
-      for(const [label,src] of [['改前',snapshot.photo?'/'+snapshot.photo.key:null],['改後',images?.restore?base+'/trash/'+images.restore:previewUrl]]) {
-        diff.append(text('h4',label));
-        if(src){const img=document.createElement('img');img.className='edit-photo';img.alt=label+'照片';img.src=src;diff.append(img);}
-        else diff.append(text('p','尚無照片紀錄'));
+    if (field.value === 'photo') {
+      diff.replaceChildren(text('h3', '改前／改後'));
+      const oldPhoto = snapshot.photo ? '/' + snapshot.photo.key : dog.photoUrl?.replace('/photos/thumbs/', '/photos/');
+      for (const [label, src] of [
+        ['改前', oldPhoto],
+        ['改後', images?.restore ? base + '/trash/' + images.restore : previewUrl]
+      ]) {
+        diff.append(text('h4', label));
+        if (src) {
+          const img = document.createElement('img');
+          img.className = 'edit-photo';
+          img.alt = label + '照片';
+          img.src = src;
+          diff.append(img);
+        } else diff.append(text('p', '尚無照片紀錄'));
       }
-      diff.append(text('p','目前照片會保留於垃圾桶，可在 30 天內復原。'));
+      diff.append(text('p', '目前照片會保留於垃圾桶，可在 30 天內復原。'));
     }
     submit.disabled =
       field.value === 'photo' ? !images : JSON.stringify(next) === JSON.stringify(snapshot[field.value]);

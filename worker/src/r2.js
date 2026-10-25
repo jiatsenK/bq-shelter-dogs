@@ -88,7 +88,9 @@ export async function servePhoto(request, env, ctx) {
   const obj = await (request.method === 'HEAD' ? env.PHOTOS.head(key) : env.PHOTOS.get(key));
   if (isTomb(obj)) return new Response('Not found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
   if (!obj) {
-    const res = await env.ASSETS.fetch(request);
+    if(!env.ASSETS)return new Response('Not found',{status:404,headers:{'Cache-Control':'no-store'}});
+    const assetUrl=new URL(request.url);assetUrl.pathname='/'+key;
+    const res = await env.ASSETS.fetch(new Request(assetUrl,request));
     if (!res.ok) return res;
     const out = new Response(res.body, res);
     out.headers.set('Cache-Control', cache);

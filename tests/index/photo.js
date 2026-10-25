@@ -197,14 +197,14 @@ async function runPhotoTests() {
         let release;
         const calls = fakeApi(() => new Promise(r => { release = () => r(apiJson({ ok: true, id: '9101', replaced: true })); }));
         document.getElementById('photoConfirm').click();
-        await tick();
+        await photoUntil(()=>calls.length===1,'原圖與縮圖準備完成並開始上傳');
         const btn = document.getElementById('photoConfirm');
         btn.click(); document.getElementById('photoConfirm').click();
         eq(calls.length, 1, '上傳中重按仍只送一張：');
         eq([btn.disabled, btn.textContent.trim(), document.getElementById('photoCancel')], [true, '上傳中…', null], '上傳中：');
         release(); await tick(); await tick();
         eq(calls.length, 1, '呼叫次數：');
-        eq([calls[0][0], calls[0][1], calls[0][2].type === blob.type && calls[0][2].size === blob.size], ['uploadPhoto', '9101', true], '用編號送照片：');
+        eq([calls[0][0], calls[0][1], calls[0][2] instanceof FormData && calls[0][2].get('photo').type === 'image/jpeg' && calls[0][2].get('thumb').type === 'image/jpeg'], ['uploadPhoto', '9101', true], '用編號送照片：');
         eq(photoOverrides['9101'], url, '記下新照片：');
         eq(cardOf(0).querySelector('.thumb img').getAttribute('src'), url, '狗卡：');
         eq(document.querySelector('#detail [data-zoom] img').getAttribute('src'), url, '詳細資訊：');
@@ -226,7 +226,7 @@ async function runPhotoTests() {
         eq(cardOf(0).querySelector('.thumb img').getAttribute('src'), PX, '狗卡照片不變：');
         fakeApi(() => { throw new TypeError('Failed to fetch'); });
         document.getElementById('photoConfirm').click();
-        await tick(); await tick();
+        await photoUntil(()=>!!document.querySelector('#detail .photo-error'),'網路錯誤');
         if (!document.querySelector('#detail .photo-error').textContent.includes('請確認網路')) throw new Error('網路錯誤要提示');
         fakeApi(() => new Response('<html>502</html>', { status: 502 }));
         await confirmPhoto();
@@ -434,6 +434,7 @@ async function runPhotoBarTests() {
       fakeApi(() => new Promise(r => { release = () => r(apiJson({ ok: false, error: '測試取消上傳' }, 400)); }));
       document.getElementById('photoConfirm').click();
       eq([barTexts(), document.getElementById('photoConfirm').disabled], [['上傳中…'], true], '上傳中：');
+      await photoUntil(()=>typeof release==='function','開始上傳');
       release(); await photoUntil(() => !!document.querySelector('#detail .photo-error'), '上傳結果');
       cancelPhoto();
       if (!document.getElementById('groupWalk')) throw new Error('取消後溜了回來');

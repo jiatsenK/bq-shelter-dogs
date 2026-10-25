@@ -1,6 +1,6 @@
 # 資料流現況
 
-資料在哪、誰寫、誰同步，以本檔為入口。最後核對：2026-10-24，main `9c8358a`。開關與排程的即時值以自動產生的 `docs/adr/README.md` 為準；決定的理由看 ADR。
+資料在哪、誰寫、誰同步，以本檔為入口。最後核對：2026-10-25，開發基準 main `87338e8`（#566 新流程尚待正式 migration／部署核准）。開關與排程的即時值以自動產生的 `docs/adr/README.md` 為準；決定的理由看 ADR。
 
 ## 改版終點（K 2026-10-24）
 
@@ -20,7 +20,7 @@
 | 狗清單：主清單、已出所、常遛狗群 | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/dog-list`，只寫有變的欄（#501） | `worker/src/dog-list.js` |
 | 常溜狗群（網站狗群頁） | 管理者在試算表「常遛狗群」改 | GAS 編輯觸發送 D1；網站只讀（#474） | `worker/src/dog-list.js` |
 | 休養、介紹、開卡、常溜、固定照顧、活動 | 網站 | 只存 D1，不碰試算表 | 見各 ADR |
-| 照片 | 網站 | 存 R2；縮圖由 Worker 叫 Actions `r2-thumbs.yml`（#503 待決） | `worker/src/index.js` |
+| 照片 | 志工／Access 管理網站 | 共用前端縮圖，R2 不可覆寫版本＋D1 CAS 引用及紀錄；舊固定路徑相容，Actions 只供人工補圖（#566 承接 #546 契約） | `worker/src/dog-photo.js`、`public/js/photo-images.js` |
 | 志工名字建議 `/walkers` | — | 讀 D1（#519） | ADR 0019 |
 
 GAS 送不出去時把待送內容留在指令碼屬性（`WALK_EDITS_PENDING`、`DOG_LIST_PENDING`），每 10 分鐘補送；Worker 確認收到才清。

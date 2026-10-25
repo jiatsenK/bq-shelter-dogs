@@ -78,7 +78,9 @@ export default {
           else if(request.headers.get('Content-Type')?.split(';')[0].trim()!=='application/json') response=json({error:'請使用 JSON'},415);
           else if(!action&&request.method==='PUT') response=json(await saveDogEdit(env.DB,dogId,await settingsInput(request,16000),{actor}));
           else if(action==='restore'&&request.method==='POST') {
-            const input=await settingsInput(request);response=json(await restoreDogPhoto(env,dogId,input.revision,input.trashId,{actor},new URL(request.url).origin));
+            const input=await settingsInput(request);
+            if(!input||Object.keys(input).sort().join(',')!=='revision,trashId')response=json({error:'復原欄位不對'},400);
+            else response=json(await restoreDogPhoto(env,dogId,input.revision,input.trashId,{actor},new URL(request.url).origin));
           } else response=json({error:'方法不支援'},405);
         }
       } else if (!['GET', 'HEAD'].includes(request.method)) {
