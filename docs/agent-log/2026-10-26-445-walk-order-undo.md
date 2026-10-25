@@ -10,6 +10,7 @@
 - 測試：新增網頁套件 `walk-order-undo`（排序三入口、復原立刻顯示與捲動、5／8 秒提示條、D1 失敗改回與再試一次、連按、D1 接受但試算表寫回 `retry`）。逐片先紅後綠；另以突變確認捲動斷言會在關掉捲動時失敗。更新 `walk-feedback`（#498 復原改為立即恢復）、`startup-stability`、`index`（walks／rest／app-layout／desk）裡「留在原位」與 `resetWalkOrder` 的斷言。
 - 設計 detect：`walk-ui.js` 無發現；沒有改 CSS。
 - 兩軸審查（基準 `8d62135`）：Standards 無硬性違反，Spec 指出缺 × 入口與「再試一次」計時測試、連按測試沒真的連點。已補修：捲動改用 walkKey 找卡片（背景重讀換掉 `allDogs` 也找得到）；`restoring` 只由設它的那筆清除（同一隻排兩筆復原不提早跳回）；抽 `walkersOf`；測試補詳細資訊 ×、再試一次 7 秒仍在、狗卡連點兩下只送一次。保留：常遛狗群分頁整群復原不捲動、不跳「正在確認」（那頁沒有溜狗清單，進度看該頁的回饋文字）；試算表寫回只測 `retry`，D1 結果不明只測 503。
+- 最終檢查（HEAD `fdaeed7`）：網頁 24 套全過（index 264 項），紀錄 `1792946947691-535fd68a-f70e-471e-b597-1cc9c7a738e0.json`。Node 459／460：唯一失敗是 `scripts/local-check.test.mjs`，這台沒有 `pwsh`（預設用它開子程序）；改指定 `BQ_CHECK_PWSH=powershell` 後，Windows PowerShell 5.1 中文輸出變亂碼對不到 `/未知測試/`。本票沒動該測試與 `check-local.ps1`（`scripts/` 只在 SUITES 加一個套件名），所以 `-Full` 沒有完整綠燈，以 CI（Linux pwsh）為準。
 - 待 K 決定：票寫「有『復原』的提示條」拉長，但 D1 模式提示條本來就沒有「復原」按鈕；這次改成所有有按鈕的提示條（＋一起溜的人、再試一次）8 秒，其他 5 秒。
 - 未做：#442（再按導覽捲回頂部）、#401／PR #437；未合併、未部署。
 - 相關 PR：（開草稿後補）
