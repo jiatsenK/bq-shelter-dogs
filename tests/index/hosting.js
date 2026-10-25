@@ -8,6 +8,18 @@ function deployWriteProblem(deploy, preview) {
   return '';
 }
 
+// 測試網站部署：只准部署 wrangler.test-site.jsonc、只准對測試庫套 migration，不帶金鑰（金鑰另外設在測試 Worker 上）。回傳問題或 ''
+function testSiteDeployProblem(wf) {
+  const allowedApply = /d1 migrations apply bq-shelter-dogs-test --remote --config wrangler\.preview-db\.jsonc[ \t]*\r?$/gm;
+  const allowedDeploy = /wrangler@4 deploy --config wrangler\.test-site\.jsonc /g;
+  if (!wf.match(allowedDeploy)) return '要用 wrangler.test-site.jsonc 部署';
+  const rest = wf.replace(allowedApply, '').replace(allowedDeploy, '');
+  if (/migrations apply|d1 execute|continue-on-error|if:\s*always\(/.test(rest)) return '只能對測試庫套 migration，不能改其他結構或忽略錯誤';
+  if (/wrangler@4 (deploy|versions)/.test(rest)) return '不能部署或上傳其他設定';
+  if (/--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b)/.test(rest)) return '不能帶金鑰';
+  return '';
+}
+
 // #130 照片放 R2：Worker 讀 R2（照片、dogs.json 先經過 Worker）、部署前確認 bucket、縮圖與搬遷 Action
 async function runR2Tests() {
   const get = p => fetch(p).then(r => r.ok ? r.text() : '');
@@ -46,6 +58,28 @@ async function runR2Tests() {
       ['npx --yes wrangler@4 d1 migrations apply bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc\n', ''],
     ];
     bad.forEach(([d, p], i) => { if (!deployWriteProblem(d, p)) throw new Error(`反例 ${i + 1} 沒被擋`); });
+  });
+  const testSite = await get('../.github/workflows/deploy-test-site.yml');
+  await check('測試網站部署 Action：main 推送與手動指定分支、只部署測試網站設定、只對測試庫套 migration、不帶金鑰', () => {
+    if (!testSite) throw new Error('讀不到 deploy-test-site.yml');
+    if (!/workflow_dispatch:/.test(testSite) || !/push:\r?\n    branches: \[main\]/.test(testSite)) throw new Error('要有 main 推送與手動觸發');
+    const problem = testSiteDeployProblem(testSite);
+    if (problem) throw new Error(problem);
+  });
+  await check('測試網站部署擋關檢查的反例：部署正式設定、對正式庫套用、帶金鑰都會被擋', () => {
+    const apply = 'npx --yes wrangler@4 d1 migrations apply bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc\n';
+    const deploy = 'npx --yes wrangler@4 deploy --config wrangler.test-site.jsonc --message "x"\n';
+    if (testSiteDeployProblem(apply + deploy)) throw new Error('測試網站部署應該放行');
+    const bad = [
+      apply,
+      apply + deploy.replace('wrangler.test-site.jsonc', 'wrangler.jsonc'),
+      apply + deploy + 'npx --yes wrangler@4 deploy --config wrangler.jsonc\n',
+      deploy + 'npx --yes wrangler@4 d1 migrations apply bq-shelter-dogs --remote --config wrangler.preview-db.jsonc\n',
+      apply + deploy + 'npx --yes wrangler@4 d1 execute bq-shelter-dogs-test --remote --command "DROP TABLE x"\n',
+      apply + deploy + 'WALKER_KEY: ${{ secrets.WALKER_KEY }}\n',
+      apply + deploy.replace('--message', '--secrets-file s.json --message'),
+    ];
+    bad.forEach((wf, i) => { if (!testSiteDeployProblem(wf)) throw new Error(`反例 ${i + 1} 沒被擋`); });
   });
   const thumbs = await get('../.github/workflows/r2-thumbs.yml');
   await check('#130 縮圖（R2）Action：只能手動或由 Worker 叫、用管理金鑰、不提交 repo', () => {
