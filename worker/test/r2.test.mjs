@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
+import { SETTING_KEYS } from '../src/feature-settings.js';
 import { fakeR2, fakeAssets, sha } from './fakes.mjs';
 
 const { resetState, r2, maintenance } = worker.testing;
@@ -33,7 +34,7 @@ const dispatched = calls => calls.filter(c => c.path.endsWith('/actions/workflow
 function setup({ assets = {}, failPut, preview = false } = {}) {
   const PHOTOS = fakeR2({ failPut });
   const ASSETS = fakeAssets(assets);
-  const DB = { prepare: () => ({ all: async () => ({ results: DOGS.dogs.map(d => ({ number: d.id, name: d.name })) }) }) };
+  const DB = { prepare: sql => sql.includes('v3_feature_settings') ? {first:async()=>({revision:1,values_json:JSON.stringify(Object.fromEntries(SETTING_KEYS.map(key=>[key,true])))})} : ({ all: async () => ({ results: DOGS.dogs.map(d => ({ number: d.id, name: d.name })) }) }) };
   const calls = fakeGithub();
   const env = { GITHUB_TOKEN: 't', ADMIN_KEY: '通關碼', PHOTOS, ASSETS, DB, ...(preview ? { PREVIEW: '1' } : {}) };
   const pending = [];

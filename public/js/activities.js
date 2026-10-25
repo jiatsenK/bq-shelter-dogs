@@ -100,7 +100,7 @@ function activityFormHtml(e) {
 }
 
 function activityItemHtml(a) {
-  if (activitiesState.activityEdit && activitiesState.activityEdit.id === a.id) return `<article class="act-item editing"><h3>${esc(activityTitle(a))}</h3>${activityFormHtml(activitiesState.activityEdit)}</article>`;
+  if (canEdit('editActivity') && activitiesState.activityEdit && activitiesState.activityEdit.id === a.id) return `<article class="act-item editing"><h3>${esc(activityTitle(a))}</h3>${activityFormHtml(activitiesState.activityEdit)}</article>`;
   return `<article class="act-item"><div class="act-head"><h3>${esc(activityTitle(a))}</h3><button ${canEdit('editActivity') ? '' : 'hidden'} type="button" class="act-edit" data-act-edit="${esc(a.id)}" aria-label="修改 ${esc(activityTitle(a))}">修改</button></div>${activityDogsHtml(a.dogs)}</article>`;
 }
 

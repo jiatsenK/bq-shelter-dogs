@@ -15,6 +15,7 @@ test('十項 boolean 預設全開；無差異不寫，衝突不覆蓋，前後�
  const values = { ...initial.values, editIntro: false };
  const changed = await saveSettings(DB, { revision: initial.revision, values }, manager);
  assert.equal(changed.revision, initial.revision + 1);
+ assert.equal(await DB.prepare('SELECT total_changes() AS n').first('n') - before, 2, '設定一列及audit一列');
  await assert.rejects(saveSettings(DB, { ...initial, values }, manager), e => e.status === 409);
  const logs = (await DB.prepare('SELECT * FROM v3_feature_settings_log').all()).results;
  assert.equal(logs.length, 1); assert.deepEqual(JSON.parse(logs[0].before_json), initial.values);
@@ -70,4 +71,37 @@ test('公開路由：七項關閉拒絕舊頁；讀取服務與核心請求不�
  const walk=await call('/walk','POST'); assert.notEqual((await walk.json()).code,'feature-setting');
  const gas=await call('/walk-writeback/rows','POST'); assert.doesNotMatch(await gas.text(),/功能設定/);
  const machine=await call('/admin/trash'); assert.doesNotMatch(await machine.text(),/功能設定/);
+});
+
+test('設定讀取、gate、無差異與有差異儲存：資料十倍仍固定成本且走主鍵', async t => {
+ const DB = await db(t);
+ async function measure(action) {
+  const total = await DB.prepare('SELECT total_changes() AS n').first('n');
+  const readsBefore = DB.stats.rowsRead, sql = [];
+  const spy = { prepare(query) { sql.push(query); return DB.prepare(query); } };
+  await action(spy);
+  const reads = DB.stats.rowsRead - readsBefore;
+  const writes = await DB.prepare('SELECT total_changes() AS n').first('n') - total;
+  for (const query of sql.filter(q => q.startsWith('SELECT'))) {
+   const plan = (await DB.prepare('EXPLAIN QUERY PLAN '+query).all()).results;
+   assert.ok(plan.every(row => !/SCAN /.test(row.detail)), query);
+  }
+  return { reads, writes, statements: sql.length };
+ }
+ async function measures() {
+  const snapshot = await readSettings(DB);
+  const result = {
+   read: await measure(db => readSettings(db)),
+   gate: await measure(db => requireVolunteerEdit(db, 'editPhoto')),
+   unchanged: await measure(db => saveSettings(db, snapshot, manager)),
+   changed: await measure(db => saveSettings(db, { ...snapshot, values: { ...snapshot.values, editIntro: !snapshot.values.editIntro } }, manager)),
+  };
+  return result;
+ }
+ async function seed(from,to) {
+  for(let n=from;n<to;n++) await DB.prepare("INSERT INTO v3_feature_settings_log VALUES(?, '{}', '{}', 'fixture', 'fixture', '', ?)").bind(-n,'fixture-'+n).run();
+ }
+ await seed(1,11); const small = await measures();
+ await seed(11,101); assert.deepEqual(await measures(),small);
+ assert.deepEqual(small,{read:{reads:1,writes:0,statements:1},gate:{reads:1,writes:0,statements:1},unchanged:{reads:1,writes:0,statements:1},changed:{reads:1,writes:2,statements:2}});
 });

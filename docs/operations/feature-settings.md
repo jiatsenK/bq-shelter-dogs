@@ -18,7 +18,7 @@
 
 1. 主線現有 0000–0002；2026-10-25 核對進行中的 #574 沒有 migration，採 `0003_feature_settings.sql`。提交／合併前再核對編號；不可改已套用檔名。
 2. 本機隔離 SQLite 執行完整 migrations，與 compact-schema.sql 比對；設定、衝突、audit 失敗回復都用記憶體 D1，不連正式／共用測試資料庫。
-3. K 核准合併後，先以既有「套用 D1 migration」Actions workflow 套 schema，再部署。workflow 會記 Time Travel 書籤並接著部署志工 Worker；管理 Worker 使用既有管理部署流程更新，兩邊都要更新。新增表／預設列不碰既有狗資料；migration 的 INSERT 會讓現有工具判定需要備份。
+3. K 核准合併後，先以既有「套用 D1 migration」Actions workflow 套 schema，再部署。workflow 會記 Time Travel 書籤並接著部署志工 Worker；管理 Worker 使用既有管理部署流程更新，兩邊都要更新。新增表／預設列不碰既有狗資料；新增預設列 INSERT OR IGNORE 不被工具判為搬資料；auto 不會整庫複製，仍記 Time Travel 書籤。如需整庫備份，由 K 選 always。
 4. 正式操作前確認最新 migration 清單、備份與書籤。驗收預設十項 true，管理設定 GET，先挑一項顯示開關來回測試；志工關閉修改與管理可用以隔離資料驗證，不能任意修改正式狗資料。
 5. 本次未執行合併、正式 migration、部署、Access 設定或正式寫入。
 

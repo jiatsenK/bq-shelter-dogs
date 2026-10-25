@@ -2,7 +2,7 @@ import { BQApi } from './api.js';
 let current = null;
 const keys = ['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays','editFormer'];
 export function acceptSettings(data) {
-  current = data && Number.isSafeInteger(data.revision) && data.values && keys.every(k => typeof data.values[k] === 'boolean') ? data : null;
+  current = data && Number.isSafeInteger(data.revision) && data.revision >= 1 && data.values && Object.keys(data.values).length === keys.length && keys.every(k => typeof data.values[k] === 'boolean') ? data : null;
 }
 export const canEdit = key => current?.values[key] === true;
 export const canShow = page => {

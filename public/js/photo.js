@@ -48,7 +48,7 @@ const BQPhoto = (() => {
           <div class="photo-preview-hint">上面是詳細資訊、左邊是狗卡上的樣子，按下面「確認上傳」才會換（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
         </div>
         ${up.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(up.error)}</span></div>` : ''}
-        ${busy ? '' : `<button type="button" class="photo-crop" id="photoCrop">${icon('crop')}裁切</button>`}
+        ${busy || !canEdit('editPhoto') ? '' : `<button type="button" class="photo-crop" id="photoCrop">${icon('crop')}裁切</button>`}
       </div>`;
   }
 
@@ -59,7 +59,7 @@ const BQPhoto = (() => {
     if (!up) return '';
     const busy = up.phase === 'uploading';
     const cancel = `<button type="button" class="bar-btn" id="photoCancel">取消換照片</button>`;
-    const confirm = `<button type="button" class="bar-confirm" id="photoConfirm"${busy ? ' disabled' : ''}>${busy ? '上傳中…' : '確認上傳'}</button>`;
+    const confirm = `<button type="button" class="bar-confirm" id="photoConfirm"${busy || !canEdit('editPhoto') ? ' disabled' : ''}>${busy ? '上傳中…' : '確認上傳'}</button>`;
     return `<div class="detail-bar photo-bar">${busy ? '' : cancel}${confirm}</div>`;
   }
 

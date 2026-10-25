@@ -115,5 +115,5 @@ test('固定照顧 API：無關設定多 10 倍，單次讀寫量固定且只用
   const small = await measure(true);
   await seed(11, 101);
   assert.deepEqual(await measure(false), small);
-  assert.deepEqual(small, { reads: 2, writes: 3 });
+  assert.deepEqual(small, { reads: 3, writes: 3 });
 });
