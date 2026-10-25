@@ -28,7 +28,7 @@ export function editFilters(params) {
   if (f.source && !SOURCES.includes(f.source)) throw bad('操作來源不對');
   if (!['newest', 'oldest'].includes(f.order)) throw bad('排序方式不對');
   if (!SIZES.includes(f.size)) throw bad('每頁筆數只能是 25、50、100');
-  if (f.cursor !== null && (!Number.isSafeInteger(f.cursor) || f.cursor < 1)) throw bad('頁數不對');
+  if (f.cursor !== null && (!Number.isSafeInteger(f.cursor) || f.cursor < 1)) throw bad('翻頁位置不對，請回第一頁重查');
   if ((f.from && !ymd(f.from)) || (f.to && !ymd(f.to))) throw bad('日期看不懂');
   return f;
 }
