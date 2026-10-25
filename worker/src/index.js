@@ -14,7 +14,6 @@ import { retryWalks, scanTick } from './walk-retry.js';
 import * as r2 from './r2.js';
 import { taiwanYmd } from './sync-plan.js';
 import { applyDogListRows, scanDogList, DOG_LIST_ROWS_MAX } from './dog-list.js';
-import { todayRows, saveTodayWalks, readTodayWalks, resetTodayCache, previousWalk } from './today.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks, saveRest, saveIntro, addFormerNumber, removeFormerNumber, saveStays, readMainNames } from './compact.js';
 import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
@@ -86,7 +85,6 @@ function resetState() {
   walkerNamesRemembered = null;
   hits.clear();
   dogsCache = null;
-  resetTodayCache();
   resetPackCache();
 }
 
@@ -827,39 +825,15 @@ async function getWalkers(env, allowed, now = Date.now()) {
 // 沒設定 SHEET_WRITE_URL 時回 503（SHEET_WRITE_KEY 可不設） + code: 'off'，網站就照舊只記在手機上
 const shortText = (v, max) => typeof v === 'string' && [...v.trim()].length <= max && !/[\u0000-\u001f]/.test(v);
 const NOTE_MAX_CHARS = 200;
-const YMD_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
-function cleanWalkDog(d, action, accepted = false) {
+function cleanWalkDog(d, action) {
   if (!d || typeof d !== 'object') return null;
   const id = typeof d.id === 'string' ? d.id.trim() : '';
   if (id && !ID_PATTERN.test(id)) return null;
   if (!shortText(d.name, 30) || !d.name.trim()) return null;
   const out = { id, name: d.name.trim() };
-  if (accepted && ['edit', 'undo'].includes(action)) {
+  if (['edit', 'undo'].includes(action)) {
     if (!Number.isSafeInteger(d.expectedVersion) || d.expectedVersion < 0) return null;
     out.expectedVersion = d.expectedVersion;
-    return out;
-  }
-  if (action === 'edit') {
-    if (!shortText(d.expected, 200) || !d.expected.trim()) return null;
-    out.expected = d.expected.trim();
-  }
-  if (action === 'undo') {
-    const p = d.prev, w = d.wrote;
-    if (!w || typeof w !== 'object' || !shortText(w.walker || '', 200)) return null;
-    // 沒有 prev：手機沒有復原證據，Worker 從溜狗紀錄找上一次（ADR 0016）；只撤銷只剩一個名字的登記
-    if (p === undefined) {
-      if (splitNames(w.walker).length !== 1) return null;
-      out.wrote = { walker: w.walker.trim() };
-      out.lookup = true;
-      return out;
-    }
-    if (!p || typeof p !== 'object') return null;
-    const date = p.date || {};
-    if (date.date !== undefined && !YMD_PATTERN.test(date.date)) return null;
-    if (date.date === undefined && !shortText(date.text || '', 40)) return null;
-    if (!shortText(p.walker || '', 200) || !shortText(w.walker || '', 200)) return null;
-    out.prev = { date: date.date !== undefined ? { date: date.date } : { text: date.text || '' }, walker: p.walker || '' };
-    out.wrote = { walker: w.walker || '' };
   }
   return out;
 }
@@ -880,13 +854,17 @@ async function writeWalks(request, env, origin, ctx) {
   }
   const action = input && input.action;
   if (!['walk', 'undo', 'edit', 'note', 'log'].includes(action)) return fail(400, '要說是溜了、修改、復原還是加備註', origin);
+  // #558：溜了／修改／復原只走 D1 接受流程（ADR 0018）。沒帶 requestId 的是還沒重新整理的舊網頁：
+  // 不再寫試算表、v3_today_walks，回 410 讓它顯示「請重新整理」，志工更新網頁後再按一次，登記不會默默消失
+  const accepted = input.requestId !== undefined;
+  if (!accepted && ['walk', 'edit', 'undo'].includes(action)) return fail(410, '網頁版本太舊，這次沒有登記。請重新整理更新網頁後再按一次', origin);
   // #239、#281：note 追加一隻狗的備註、log 新增一筆異動紀錄；都要有名字和內容
   const maxDogs = action === 'note' ? 1 : action === 'log' ? 0 : WALK_MAX_DOGS;
   const rawDogs = action === 'log' ? [] : input.dogs;
   if (maxDogs && (!Array.isArray(rawDogs) || !rawDogs.length || rawDogs.length > maxDogs)) return fail(400, `一次 1–${maxDogs} 隻`, origin);
-  const dogs = rawDogs.map(d => cleanWalkDog(d, action, input.requestId !== undefined));
+  const dogs = rawDogs.map(d => cleanWalkDog(d, action));
   if (dogs.some(d => !d)) return fail(400, '狗的資料不對', origin);
-  if (input.requestId !== undefined) {
+  if (accepted) {
     if (!shortText(input.walker, action === 'edit' ? 200 : WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, '要先選好身分', origin);
     try {
       const result = await acceptWalk(env?.DB, { ...input, dogs }, env);
@@ -900,42 +878,10 @@ async function writeWalks(request, env, origin, ctx) {
       return fail(e.status || 503, e.status ? e.message : '登記尚未接受，請用原請求再試', origin);
     }
   }
-  // 已接管的狗不再允許舊手機從另一入口覆蓋試算表。
-  if (env?.DB && ['walk','edit','undo'].includes(action)) {
-    for (const d of dogs) {
-      if (await env.DB.prepare('SELECT dog_key FROM v3_walk_state WHERE dog_key=?').bind(d.id || `名:${d.name}`).first()) return fail(409, '此狗已使用新登記流程，請重新整理', origin);
-    }
-  }
   if (!cfg.sheetWriteUrl) return fail(503, '還沒設定寫入試算表', origin, { code: 'off' });
-  const body = { action, dogs };
-  if (action === 'note' || action === 'log') {
-    if (!shortText(input.walker, WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, '要先選好身分', origin);
-    if (!shortText(input.text, NOTE_MAX_CHARS) || !input.text.trim()) return fail(400, `內容要 1–${NOTE_MAX_CHARS} 個字，不能換行`, origin);
-    body.walker = input.walker.trim();
-    body.text = input.text.trim();
-  }
-  const lookups = action === 'undo' ? dogs.filter(d => d.lookup) : [];
-  let editor = null;
-  if (action === 'undo') {
-    // 撤銷記進編輯紀錄（ADR 0016）；用伺服器找上一次時一定要先選好身分
-    editor = await editorOf(input.walker, cfg.walkerKey);
-    if (lookups.length && (!editor || !env?.DB)) return !editor ? fail(400, '要先選好身分', origin) : fail(503, '暫時無法撤銷，請稍後再試', origin);
-  }
-  const skipped = [];
-  if (lookups.length) {
-    const today = taiwanYmd(Date.now());
-    for (const d of lookups) {
-      delete d.lookup;
-      const prev = await previousWalk(env.DB, d, today);
-      if (prev) d.prev = prev; else skipped.push(d);
-    }
-    body.dogs = dogs.filter(d => !skipped.includes(d));
-  }
-  if (action === 'undo' && !body.dogs.length) return reply(200, { ok: true, today: taiwanYmd(Date.now()), results: skipped.map(d => ({ id: d.id, name: d.name, status: 'notFound' })) }, origin);
-  if (action === 'walk' || action === 'edit') {
-    if (!shortText(input.walker, action === 'edit' ? 200 : WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, `名字要 1–${action === 'edit' ? 200 : WALKER_NAME_MAX_CHARS} 個字`, origin);
-    body.walker = input.walker.trim();
-  }
+  if (!shortText(input.walker, WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, '要先選好身分', origin);
+  if (!shortText(input.text, NOTE_MAX_CHARS) || !input.text.trim()) return fail(400, `內容要 1–${NOTE_MAX_CHARS} 個字，不能換行`, origin);
+  const body = { action, dogs, walker: input.walker.trim(), text: input.text.trim() };
 
   let out;
   try {
@@ -944,32 +890,10 @@ async function writeWalks(request, env, origin, ctx) {
     return sheetFail(e, origin);
   }
   walkersCache = null; // 寫入後重新讀取完整名單
-  // 今日溜狗紀錄（ADR 0007）：其他手機不用等同步；寫失敗只記日誌，按的人照常成功
-  if (['walk', 'edit', 'undo'].includes(action) && env && env.DB) {
-    const today = YMD_PATTERN.test(out.today || '') ? out.today : taiwanYmd(Date.now());
-    try {
-      await saveTodayWalks(env.DB, today, todayRows(action, dogs, out.results, today));
-    } catch (e) {
-      console.error('today-walks', e);
-    }
-  }
   const results = Array.isArray(out.results) ? out.results : [];
-  if (action === 'undo') {
-    const today = YMD_PATTERN.test(out.today || '') ? out.today : taiwanYmd(Date.now());
-    for (const r of results) {
-      const d = r && r.status === 'restored' && body.dogs.find(x => x.id === (r.id || '') && x.name === r.name);
-      if (!d) continue;
-      r.prev = d.prev; // 網站照這個顯示撤銷後的上次溜
-      const p = d.prev.date || {};
-      await logEdit(env && env.DB, { editor, kind: 'walkundo', dogNumber: d.id, before: { date: today, walker: d.wrote.walker }, after: { date: p.date || p.text || '', walker: d.prev.walker } });
-    }
-    results.push(...skipped.map(d => ({ id: d.id, name: d.name, status: 'notFound' })));
-  }
   // 備註、異動紀錄是只追加的編輯，記進編輯紀錄（ADR 0004）；名字用送來的 walker
-  if (action === 'note' || action === 'log') {
-    const editor = await editorOf(body.walker, cfg.walkerKey);
-    await logEdit(env && env.DB, { editor, kind: action === 'note' ? 'note' : 'sheetlog', dogNumber: action === 'note' ? dogs[0].id || '' : '', before: null, after: body.text });
-  }
+  const editor = await editorOf(body.walker, cfg.walkerKey);
+  await logEdit(env && env.DB, { editor, kind: action === 'note' ? 'note' : 'sheetlog', dogNumber: action === 'note' ? dogs[0].id || '' : '', before: null, after: body.text });
   return reply(200, { ok: true, today: out.today, results }, origin);
 }
 
@@ -1103,12 +1027,12 @@ const SITE_ROUTES = {
   // 已出所狗卡（#271）：圖鑑的「已出所」名單，誰都看得到
   '/departed-cards': { method: 'GET', wrongMethod: '只能用 GET /departed-cards 讀', crash: [503, '暫時讀不到已出所的狗', DB_DOWN],
     run: async ({ env, origin }) => reply(200, { ok: true, dogs: await readDepartedCards(needDb(env), taiwanYmd(Date.now())) }, origin) },
-  // 今日溜狗紀錄（ADR 0007）：網站每分鐘來讀今天的清單；讀不到網站就照舊不顯示錯誤
+  // 今日溜狗紀錄（ADR 0018）：網站每分鐘來讀 D1 接受的狀態；讀不到網站就照舊不顯示錯誤。
+  // 不帶 source=d1 的是舊網頁（#558）：不再讀 v3_today_walks，回 410；舊網頁讀不到會維持現況
   '/today': { method: 'GET', wrongMethod: '只能用 GET /today 讀', crash: [503, '暫時讀不到今日溜狗紀錄', DB_DOWN],
     async run({ env, origin, url }) {
-      const today = taiwanYmd(Date.now());
-      if (url.searchParams.get('source') === 'd1') return reply(200, { ok: true, ...await readAcceptedWalks(env.DB, today) }, origin);
-      return reply(200, { ok: true, date: today, walks: await readTodayWalks(needDb(env), today) }, origin);
+      if (url.searchParams.get('source') !== 'd1') return fail(410, '網頁版本太舊，請重新整理更新網頁', origin);
+      return reply(200, { ok: true, ...await readAcceptedWalks(env.DB, taiwanYmd(Date.now())) }, origin);
     } },
   '/rest': { method: 'GET', wrongMethod: '休養設定只能用 GET /rest 讀', crash: [503, '暫時讀不到休養設定', DB_DOWN],
     run: async ({ env, origin }) => reply(200, { ok: true, rest: await readSmall(env.DB, 'rest') }, origin) },

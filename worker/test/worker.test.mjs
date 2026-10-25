@@ -326,35 +326,25 @@ function fakeScript(reply = req => ({ ok: true, today: '2026-10-04', results: re
   return calls;
 }
 
-test('#138 POST /walk：帶金鑰轉給小程式，回傳每隻狗的結果；不碰 GitHub', async () => {
+// #558：溜了／修改／復原只走 D1 接受流程（帶 requestId，見 walk-accept.test.mjs）；沒帶的舊版回 410，細節在 today.test.mjs。
+// 這裡留下備註、異動紀錄（仍轉給小程式）共用的擋法與錯誤處理
+test('#138 POST /walk 備註：帶金鑰轉給小程式，回傳結果；不碰 GitHub', async () => {
   const calls = fakeScript();
-  const r = await send(postWalk({ action: 'walk', walker: ' 志工我 ', dogs: [{ id: '9001', name: '測試甲' }, { id: '', name: '測試丙' }] }), SHEET_ENV);
+  const r = await send(postWalk({ action: 'note', walker: ' 志工我 ', text: '很乖', dogs: [{ id: '9001', name: '測試甲' }] }), SHEET_ENV);
   assert.equal(r.status, 200);
   assert.deepEqual(calls.map(c => [c.url, c.method]), [['https://script.example/exec', 'POST']]);
-  assert.deepEqual(calls[0].body, { key: 'sheet-key', action: 'walk', dogs: [{ id: '9001', name: '測試甲' }, { id: '', name: '測試丙' }], walker: '志工我' });
-  assert.deepEqual(r.body.results.map(x => x.status), ['written', 'written']);
   assert.equal(r.headers.get('Access-Control-Allow-Origin'), ORIGIN);
-});
-
-test('#138 POST /walk 復原：只帶 prev／wrote 過去，不用名字', async () => {
-  const calls = fakeScript();
-  const dog = { id: '9001', name: '測試甲', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' }, extra: 'x' };
-  const r = await send(postWalk({ action: 'undo', dogs: [dog] }), SHEET_ENV);
-  assert.equal(r.status, 200);
-  assert.deepEqual(calls[0].body, { key: 'sheet-key', action: 'undo', dogs: [{ id: '9001', name: '測試甲', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' } }] });
 });
 
 test('#138 POST /walk 擋掉：沒設定、格式不對、名字太長、太多隻、別的網站、預覽版；小程式說金鑰不對', async () => {
   const calls = fakeScript();
-  const ok = { action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] };
+  const ok = { action: 'note', walker: '我', text: '乖', dogs: [{ id: '1', name: '甲' }] };
   const off = await send(postWalk(ok), ENV);
   assert.deepEqual([off.status, off.body.code], [503, 'off']);
   assert.equal((await send(postWalk({ ...ok, action: 'x' }), SHEET_ENV)).status, 400);
   assert.equal((await send(postWalk({ ...ok, walker: '名'.repeat(21) }), SHEET_ENV)).status, 400);
-  assert.equal((await send(postWalk({ ...ok, walker: '' }), SHEET_ENV)).status, 400);
-  assert.equal((await send(postWalk({ ...ok, dogs: Array.from({ length: 11 }, (_, i) => ({ id: String(i), name: '甲' })) }), SHEET_ENV)).status, 400);
+  assert.equal((await send(postWalk({ ...ok, dogs: [{ id: '1', name: '甲' }, { id: '2', name: '乙' }] }), SHEET_ENV)).status, 400);
   assert.equal((await send(postWalk({ ...ok, dogs: [{ id: '../x', name: '甲' }] }), SHEET_ENV)).status, 400);
-  assert.equal((await send(postWalk({ action: 'undo', dogs: [{ id: '1', name: '甲' }] }), SHEET_ENV)).status, 400);
   assert.equal((await send(postWalk('nope'), SHEET_ENV)).status, 400);
   assert.equal((await send(postWalk(ok, { type: 'text/plain' }), SHEET_ENV)).status, 415);
   assert.equal((await send(postWalk(ok, { origin: 'https://evil.example' }), SHEET_ENV)).status, 403);
@@ -371,21 +361,22 @@ test('#138 POST /walk 擋掉：沒設定、格式不對、名字太長、太多�
 test('#138 POST /walk 沒設通關碼也能用，不帶 key 過去', async () => {
   const calls = fakeScript();
   const env = { ...ENV, SHEET_WRITE_URL: 'https://script.example/exec' };
-  const r = await send(postWalk({ action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] }, { ip: '6.6.6.6' }), env);
+  const r = await send(postWalk({ action: 'note', walker: '我', text: '乖', dogs: [{ id: '1', name: '甲' }] }, { ip: '6.6.6.6' }), env);
   assert.equal(r.status, 200);
   assert.equal('key' in calls[0].body, false);
   assert.equal((await send(new Request('https://bq-shelter-photos.example.workers.dev/'), env)).body.sheetWrite, '已設定');
 });
 
-test('#138 POST /walk 太頻繁就擋', async () => {
+test('#138 POST /walk 太頻繁就擋（舊版溜了的 410 也算次數）', async () => {
   fakeScript();
-  const ok = { action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] };
-  for (let i = 0; i < 30; i++) assert.equal((await send(postWalk(ok, { ip: '5.5.5.5' }), SHEET_ENV)).status, 200);
+  const ok = { action: 'note', walker: '我', text: '乖', dogs: [{ id: '1', name: '甲' }] };
+  for (let i = 0; i < 29; i++) assert.equal((await send(postWalk(ok, { ip: '5.5.5.5' }), SHEET_ENV)).status, 200);
+  assert.equal((await send(postWalk({ action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] }, { ip: '5.5.5.5' }), SHEET_ENV)).status, 410);
   assert.equal((await send(postWalk(ok, { ip: '5.5.5.5' }), SHEET_ENV)).status, 429);
 });
 
 test('#138 POST /walk：小程式的原始錯誤不把試算表 ID 顯示給志工', async () => {
-  const ok = { action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] };
+  const ok = { action: 'note', walker: '我', text: '乖', dogs: [{ id: '1', name: '甲' }] };
   const id = 'AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcd';
   const cases = [
     ['小程式發生錯誤：Illegal spreadsheet id or key: ' + id, /試算表 ID 不對/],
@@ -403,19 +394,6 @@ test('#138 POST /walk：小程式的原始錯誤不把試算表 ID 顯示給志�
 });
 
 // #141 GET /walkers 的測試在 walkers-d1.test.mjs（#519 起從 D1 讀）
-
-test('#141 POST /walk 修改：必須帶原始名單快照；通過既有來源與預覽限制', async () => {
-  const calls = fakeScript();
-  const body = { action: 'edit', walker: '志工我、志工乙', dogs: [{ id: '9001', name: '測試甲', expected: '志工我' }] };
-  assert.equal((await send(postWalk(body), SHEET_ENV)).status, 200);
-  assert.equal(calls[0].body.action, 'edit');
-  assert.equal(calls[0].body.dogs[0].expected, '志工我');
-  assert.equal((await send(postWalk({ ...body, dogs: [{ id: '9001', name: '測試甲' }] }), SHEET_ENV)).status, 400);
-  assert.equal((await send(postWalk(body, { origin: 'https://evil.example' }), SHEET_ENV)).status, 403);
-  const req = new Request(`${SITE}/api/walk`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  assert.equal((await send(req, { ...SHEET_ENV, PREVIEW: '1' })).status, 403);
-  assert.equal(calls.length, 1);
-});
 
 test('舊網址拿掉後：沒設 ALLOWED_ORIGINS 時，舊網址 github.io 送來的要求一律擋，同網址照常', async () => {
   fakeGithub();
