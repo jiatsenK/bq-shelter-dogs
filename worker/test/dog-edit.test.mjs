@@ -265,7 +265,7 @@ test('GAS 準備完才遇到人工修改：同交易拒絕舊身分快照，保�
   assert.equal(await DB.prepare('SELECT cage FROM v3_sheet_main').first('cage'), 'B1');
 });
 
-test('0007 承接已刪除的性別副本，不造舊值或以空白覆蓋有效值', async (t) => {
+test('0008 承接已刪除的性別副本，不造舊值或以空白覆蓋有效值', async (t) => {
   const db = fakeD1();
   t.after(() => db.close());
   for (const name of [
@@ -289,7 +289,8 @@ test('0007 承接已刪除的性別副本，不造舊值或以空白覆蓋有效
     '0004_drop_unused_tables.sql',
     '0005_walkers_groups_json.sql',
     '0006_dog_departures.sql',
-    '0007_dog_edit.sql'
+    '0007_drop_walkers_groups_tables.sql',
+    '0008_dog_edit.sql'
   ]) {
     const sql = await readFile(new URL('../../migrations/' + name, import.meta.url), 'utf8');
     await db.batch(splitStatements(sql).map((statement) => db.prepare(statement)));

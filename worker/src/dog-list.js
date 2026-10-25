@@ -58,9 +58,7 @@ function walkDay(db, dogId, date, dog, codes) {
       .bind(dogId, date, i, code, dog.id, dog.name)),
   ];
 }
-// v3_sheet_main_walkers 不再讀寫（#559），但對主清單列有 ON DELETE RESTRICT 外鍵：刪表前照刪，不然記離所會被擋
-const dropMainRow = (db, rowIndex) => ['v3_sheet_main_walkers', 'v3_sheet_main']
-  .map(t => db.prepare(`DELETE FROM ${t} WHERE row_index=?`).bind(rowIndex));
+const dropMainRow = (db, rowIndex) => [db.prepare('DELETE FROM v3_sheet_main WHERE row_index=?').bind(rowIndex)];
 // 離所用狗 ID 記（#560，v3_dog_departures）；同步只處理有編號的離所，沒編號的是只有名字的已出所狗卡，不動
 const dropDeparture = (db, number) => db.prepare('DELETE FROM v3_dog_departures WHERE number=?').bind(number);
 

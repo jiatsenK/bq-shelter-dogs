@@ -25,3 +25,5 @@
 - 語法／diff檢查及共用管理assets建置通過。最新390／1440px截圖保留於本票證據；detect僅既有未使用Tabler animated-dots警告；documenter確認系統一致，未改既有過期sidecar。
 - 代表成本：一般固定照顧API5列回傳／8列寫（隔離SQLite含trigger）；照片／編號／事件分支都有10與100筆無關資料量測，無差異0寫。未取得正式計費meta或Codex精確費用。
 - 收尾只補本紀錄及fixture畫面證據，正式待K：轉正式與合併、核對0000–0007實際套用狀態／備份／migration、兩Worker部署及正式驗收。仍保持草稿，未加preview、不等待CI、不作正式試寫。
+
+- K 已核准合併及部署。再整合 main `1509425`（#581），本票未套用 migration 順延為0008；保留上游刪三張舊表及本票新交易表。Standards／Spec增量複審無阻擋，整合後Full全過（Node459、網頁23套／index264；stable=true）。正式部署檢查顯示上游0007尚未套用，依CORE_RULES §5刪表交K執行，未代跑。
