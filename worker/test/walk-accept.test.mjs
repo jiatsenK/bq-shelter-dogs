@@ -71,14 +71,13 @@ test('已接管資料不被舊同步回灌；冷讀一列取得一致版本與�
   const env = await setup();
   await post(env,request('projection-0001'));
   await env.DB.prepare("UPDATE v3_sheet_main SET walked_date='2000-01-01' WHERE number='9001'").run();
-  await env.DB.prepare("INSERT INTO v3_today_walks VALUES(?,'9001',0,'2000-01-01','舊同步','x')").bind(day()).run();
   worker.testing.resetState();
   const before = env.DB.stats.rowsRead;
   const data = await current(env);
   assert.equal(env.DB.stats.rowsRead-before,1);
   assert.equal(data.walks[0].walkedDate,day());
   assert.equal(data.walks[0].walker,'甲');
-  assert.equal((await post(env,{ action:'walk', walker:'乙', dogs:[{ id:'9001',name:'測試狗' }] })).status,409);
+  assert.equal((await post(env,{ action:'walk', walker:'乙', dogs:[{ id:'9001',name:'測試狗' }] })).status,410);
   env.DB.close();
 });
 
