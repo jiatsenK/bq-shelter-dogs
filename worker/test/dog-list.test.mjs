@@ -74,7 +74,7 @@ test('#501 出現在「已出所」：記離所（原因照共用規則）、從
     const results = await send(env, [{ sheet:'departed', hash:'d1', dog:{ id:'9001', name:'測試狗' }, texts:['9001', '測試狗', '2026/10/20被認養'], dates:[] }]);
     assert.deepEqual(results.map(r => r.ack), [true]);
     assert.deepEqual(await mainRows(env), []);
-    const d = await env.DB.prepare("SELECT reason,matched,departed_date,date_source,last_cage,last_note FROM v3_departures WHERE number='9001'").first();
+    const d = await env.DB.prepare("SELECT reason,matched,departed_date,date_source,last_cage,last_note FROM v3_dog_departures WHERE number='9001'").first();
     assert.deepEqual({ ...d }, { reason:'adopt', matched:'被認養', departed_date:'2026-10-20', date_source:'note', last_cage:'A01', last_note:'親人' });
     // 沒編號的狗記不了離所，不從主清單移走
     await send(env, [main({ dog:{ id:'', name:'無號' }, cage:'Z1' }), { sheet:'departed', hash:'d2', dog:{ id:'', name:'無號' }, texts:['無號', '被認養'], dates:[] }]);
@@ -82,7 +82,7 @@ test('#501 出現在「已出所」：記離所（原因照共用規則）、從
     await env.DB.prepare("DELETE FROM v3_sheet_main WHERE name='無號'").run();
     // 又出現在主清單（例：退養回來）就不算離所
     await send(env, [main({ hash:'h3' })]);
-    assert.equal(await env.DB.prepare("SELECT 1 FROM v3_departures WHERE number='9001'").first(), null);
+    assert.equal(await env.DB.prepare("SELECT 1 FROM v3_dog_departures WHERE number='9001'").first(), null);
     assert.equal((await mainRows(env)).length, 1);
   } finally { env.DB.close(); }
 });
@@ -98,7 +98,7 @@ test('#557 記離所的舊編號從 v3_dog_numbers 抄；刪掉的舊編號不�
     assert.deepEqual(await removeFormerNumber(env.DB, '9001', '8001'), { ok:true, dogId:row.dog_id });
     assert.deepEqual((await send(env, [{ sheet:'departed', hash:'d1', dog:{ id:'9001', name:'測試狗' }, texts:['9001', '測試狗', '被認養'], dates:[] }])).map(r => r.ack), [true]);
     assert.deepEqual(await mainRows(env), []);
-    assert.deepEqual((await env.DB.prepare("SELECT value FROM v3_departure_items WHERE number='9001' AND kind='former'").all()).results.map(r => r.value), ['8002']);
+    assert.deepEqual(JSON.parse(await env.DB.prepare("SELECT former_json FROM v3_dog_departures WHERE number='9001'").first('former_json')), ['8002']);
   } finally { env.DB.close(); }
 });
 
@@ -205,7 +205,7 @@ test('#501 新編號回所：同名的唯一一筆離所認成同一隻，連上
     await send(env, [main({ note:'親人' }), { sheet:'departed', hash:'d1', dog:{ id:'9001', name:'測試狗' }, texts:['9001', '測試狗', '被認養'], dates:[] }]);
     await send(env, [main({ dog:{ id:'9100', name:'測試狗' }, hash:'h9', cage:'R01' })]);
     assert.equal(await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='9100'").first('dog_id'), 'dog', '新編號連到原本的狗');
-    assert.equal(await env.DB.prepare("SELECT returned_number FROM v3_departures WHERE number='9001'").first('returned_number'), '9100');
+    assert.equal(await env.DB.prepare("SELECT returned_number FROM v3_dog_departures WHERE number='9001'").first('returned_number'), '9100');
     assert.deepEqual((await env.DB.prepare("SELECT number FROM v3_dog_numbers WHERE dog_id='dog' AND number<>'9100'").all()).results.map(r => r.number), ['9001']);
     const log = await env.DB.prepare("SELECT kind,dog_id,dog_number FROM v3_edit_log").first();
     assert.deepEqual({ ...log }, { kind:'former', dog_id:'dog', dog_number:'9100' });
@@ -213,7 +213,7 @@ test('#501 新編號回所：同名的唯一一筆離所認成同一隻，連上
     await env.DB.batch([
       env.DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('a','小黑'),('b','小黑')"),
       env.DB.prepare("INSERT INTO v3_dog_numbers VALUES('7001','a'),('7002','b')"),
-      env.DB.prepare("INSERT INTO v3_departures(number,dog_id,name) VALUES('7001','a','小黑'),('7002','b','小黑')")]);
+      env.DB.prepare("INSERT INTO v3_dog_departures(number,dog_id,name) VALUES('7001','a','小黑'),('7002','b','小黑')")]);
     await send(env, [main({ dog:{ id:'9200', name:'小黑' }, hash:'h10', cage:'R02' })]);
     assert.ok(!['a', 'b'].includes(await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='9200'").first('dog_id')));
   } finally { env.DB.close(); }
@@ -362,14 +362,14 @@ test('#554 記離所時 last_intro 抄 v3_intros；已經記過的離所再送�
   const env = await setup();
   worker.testing.resetState();
   const departed = (texts, hash = 'd1') => ({ sheet:'departed', hash, dog:{ id:'9001', name:'測試狗' }, texts:['9001', '測試狗', ...texts], dates:[] });
-  const lastIntro = async () => (await env.DB.prepare("SELECT last_intro FROM v3_departures WHERE number='9001'").first()).last_intro;
+  const lastIntro = async () => (await env.DB.prepare("SELECT last_intro FROM v3_dog_departures WHERE number='9001'").first()).last_intro;
   try {
     await send(env, [main()]);
     await env.DB.prepare("INSERT INTO v3_intros(dog_id,intro) VALUES('dog','2026/9 從板橋入所，親人')").run();
     await send(env, [departed(['被認養'])]);
     assert.equal(await lastIntro(), '2026/9 從板橋入所，親人');
 
-    await env.DB.prepare("UPDATE v3_departures SET last_intro='舊同步記的介紹' WHERE number='9001'").run();
+    await env.DB.prepare("UPDATE v3_dog_departures SET last_intro='舊同步記的介紹' WHERE number='9001'").run();
     await send(env, [departed(['2026/10/20被認養'], 'd2')]);
     assert.equal(await lastIntro(), '舊同步記的介紹', '補原因、日期只改原因欄');
   } finally { env.DB.close(); }
