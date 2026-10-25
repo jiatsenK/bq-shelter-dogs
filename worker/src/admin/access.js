@@ -24,7 +24,8 @@ export function createAccessVerifier({ fetchKeys = (...args) => fetch(...args), 
     if (cache.size >= 8) cache.delete(cache.keys().next().value);
     const entry = { until: now() + 300000 };
     entry.pending = (async () => {
-      const res = await fetchKeys(`${issuer}/cdn-cgi/access/certs`, { signal: AbortSignal.timeout(5000), redirect: 'error' });
+      // workerd supports follow/manual only; non-2xx responses below still fail closed.
+      const res = await fetchKeys(`${issuer}/cdn-cgi/access/certs`, { signal: AbortSignal.timeout(5000), redirect: 'manual' });
       if (!res.ok) deny(503);
       const body = await res.json();
       if (!Array.isArray(body.keys) || !body.keys.length) deny(503);

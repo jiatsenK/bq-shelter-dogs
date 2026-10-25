@@ -32,6 +32,28 @@ test('Access：有效簽章、issuer、audience、時間及人員識別；同 is
   await Promise.all([verify(request('/', jwt), env), verify(request('/', jwt), env)]);
   assert.equal(calls, 1);
 });
+test('Access：取金鑰使用 Workers 支援的手動轉址模式，成功可驗證且 302 不跟隨', async () => {
+  const jwt = await token();
+  let calls = 0;
+  const runtimeFetch = async (url, init) => {
+    calls++;
+    // workerd rejects redirect:error before sending a request; Node fetch does not.
+    if (!['follow', 'manual'].includes(init.redirect)) throw new TypeError('Invalid redirect value');
+    assert.equal(init.redirect, 'manual', 'signing keys must not follow redirects to another origin');
+    return fetchKeys(url);
+  };
+  const verify = createAccessVerifier({ fetchKeys: runtimeFetch });
+  assert.equal((await verify(request('/', jwt), env)).email, claims.email);
+  assert.equal(calls, 1);
+  let redirects = 0;
+  const redirected = createAccessVerifier({ fetchKeys: async (url, init) => {
+    redirects++;
+    assert.equal(init.redirect, 'manual');
+    return new Response(null, { status: 302, headers: { Location: 'https://untrusted.example/keys' } });
+  } });
+  await assert.rejects(redirected(request('/', jwt), env), error => error.status === 503);
+  assert.equal(redirects, 1, 'redirects never trigger a second request');
+});
 test('Access：缺設定、假 email、偽造、過期、錯 issuer／audience、未生效及非人員憑證全拒絕', async () => {
   const verify = createAccessVerifier({ fetchKeys });
   for (const setting of ['ADMIN_ORIGIN', 'ACCESS_TEAM_DOMAIN', 'ACCESS_AUD']) {
