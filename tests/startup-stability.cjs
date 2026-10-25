@@ -70,13 +70,13 @@ module.exports = async (browser, base) => {
     release('walks');
     await page.waitForFunction(() => document.querySelector('[data-tab="mine"] .n')?.textContent === '1');
     const order = () => page.locator('#main .card[data-dog]').evaluateAll(cards => cards.map(c => c.dataset.dog));
-    const before = await order();
+    assert.deepEqual(await order(), ['1', '2', '0']);
     await page.locator('#main [data-dog="1"] [data-walk="add"]').click();
     await page.locator('#main [data-dog="1"] [data-walk="back"]').waitFor();
-    assert.deepEqual(await order(), before, '登記後留在原位');
+    assert.deepEqual(await order(), ['2', '1', '0'], '#445 登記後直接照天數排到後面');
     await page.locator('#syncBtn').click();
     await page.getByText('資料已更新', { exact: true }).waitFor();
-    assert.deepEqual(await order(), ['2', '1', '0'], 'K 2026-10-20：按「更新」全部重排，剛溜的排到後面');
+    assert.deepEqual(await order(), ['2', '1', '0'], '按「更新」後順序不變');
     assert.ok((await page.locator('#main [data-dog="1"]').textContent()).includes('今天'), '同步舊日期不能蓋掉較新的今日消息');
     today.walks.push({ key: data.dogs[2].id, walked: true, walkedDate: today.date, walker: '其他志工', at: '2026-10-19T02:02:00Z' });
     await page.clock.runFor(61000);

@@ -55,7 +55,9 @@ module.exports = async (browser, base) => {
     await page.locator('#main .card .walk-sync', { hasText: '試算表同步中' }).waitFor();
 
     await button().click();
-    await page.locator('#main .card .walk-btn.pending', { hasText: '取消中' }).waitFor();
+    // #445：復原畫面立刻恢復；確認期間按鈕不能再按
+    assert.equal(await page.locator('#main .card .walk-btn.done').count(), 0, '復原立刻不顯示已溜');
+    assert.equal(await button().isDisabled(), true, '確認期間不能再按');
     await release('accept');
     await page.locator('#main .card .walk-btn[data-walk="add"]').waitFor();
 
@@ -64,6 +66,6 @@ module.exports = async (browser, base) => {
     await release('reject');
     await page.getByText(/未全部登記成功/).waitFor();
     assert.equal(await page.locator('#main .card .walk-btn.done').count(), 0, '被拒絕不能假報成功');
-    console.log('#498 登記與復原立即處理中、D1 接受不等試算表、拒絕不假報成功通過');
+    console.log('#498 登記立即處理中、復原立即恢復、D1 接受不等試算表、拒絕不假報成功通過');
   } finally { hold?.('reject'); await context.close(); }
 };
