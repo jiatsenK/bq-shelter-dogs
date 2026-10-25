@@ -7,3 +7,4 @@
 - 避開 #584：ADR、`docs/ARCHITECTURE_NOW.md`、`admin/README.md`、`docs/design/admin.md` 不改。#584 的 PROJECT_GOALS 最新段寫「待做 #568」，兩張合併後要更新。
 - 測試：先紅後綠（`tests/index/desk.js` 改成只有全表／最近 30 天、`desk.js` 只呼叫 `BQApi.walks`）。全部 25 個網頁套件通過（index 264 項）。`-Full`：本機沒有 `pwsh`，設 `BQ_CHECK_PWSH` 為 Windows PowerShell 後 Node 462／464，失敗的是 `local-check.test.mjs` 的 5.1 中文輸出亂碼（#567 已記，與本票無關），以及 `scripts/admin-stage4.test.mjs` 檔案層級失敗；後者單獨跑 4／4 通過、前一次 `-Full` 也通過，推測是與其他測試同時產生 `admin/public/shared/` 的偶發競爭，未在本票處理。`-Full` 因 Node 失敗停在網頁前，網頁另以 `-Suite` 全跑。impeccable detect 只剩既有 layout-transition（app.css 1676 行）。
 - 未做：合併、部署、正式 D1 查詢或寫入。志工 Worker 合併後由 main 自動部署；管理站本票未改，不需重新部署。
+- commit 後乾淨工作樹再跑 `-Full`：Node 466／467，只剩 local-check 的亂碼；admin-stage4 通過，證實是偶發。草稿 PR #598。
