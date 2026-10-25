@@ -1,19 +1,14 @@
 import { searchEdits, readWebsiteUpdates } from './api.js';
-import { editQuery, parseEditPage, formatWhen, sourceLabel, valueText } from './edit-log.js';
+import { FILTERS, editQuery, parseEditPage, formatWhen, sourceLabel, valueText } from './edit-log.js';
 import { showVolunteerState } from './volunteer-state.js';
+import { byId, element } from './dom.js';
 
 // #567 更新紀錄頁：資料編輯每次換條件都交給伺服器查全部紀錄（不在前端過濾最近幾筆）；網站更新讀同一份版本紀錄檔。
-const byId = id => document.getElementById(id);
-const FIELDS = ['q', 'kind', 'dog', 'actor', 'source', 'from', 'to', 'order'];
-const state = { page: 1, size: 25, pages: 1, seq: 0, kindsLoaded: false };
+// 分頁用伺服器給的游標：cursors[i] 是第 i+1 頁的起點（第 1 頁 null），上一頁照記下來的游標重查。
+const state = { cursors: [null], next: null, size: 25, seq: 0, kindsLoaded: false };
 let typingTimer;
-function element(tag, text, className) {
-  const node = document.createElement(tag);
-  if (text !== undefined) node.textContent = text;
-  if (className) node.className = className;
-  return node;
-}
-const filters = () => ({ ...Object.fromEntries(FIELDS.map(k => [k, byId(k).value])), page: state.page, size: state.size });
+const page = () => state.cursors.length;
+const filters = () => ({ ...Object.fromEntries(FILTERS.map(k => [k, byId(k).value])), cursor: state.cursors.at(-1), size: state.size });
 
 function renderRow(e) {
   const row = document.createElement('tr');
@@ -47,17 +42,18 @@ async function load() {
     byId('kind').append(...data.kinds.map(k => { const o = element('option', k.label); o.value = k.value; return o; }));
     state.kindsLoaded = true;
   }
-  state.page = data.page; state.pages = data.pages;
+  state.next = data.next;
   byId('edits').replaceChildren(...data.edits.map(renderRow));
   byId('table-region').hidden = !data.edits.length;
-  byId('pagination').hidden = !data.total;
-  status.textContent = data.total ? `符合 ${data.total} 筆（搜尋範圍是全部紀錄）。時間為台灣時間。` : '沒有符合條件的紀錄，請清除或調整條件。';
-  byId('count').textContent = `第 ${(data.page - 1) * data.pageSize + 1}–${Math.min(data.total, data.page * data.pageSize)} 筆，共 ${data.total} 筆`;
-  byId('page-number').textContent = `${data.page} / ${data.pages}`;
-  byId('previous').disabled = data.page <= 1;
-  byId('next').disabled = data.page >= data.pages;
+  byId('pagination').hidden = !data.edits.length && page() === 1;
+  status.textContent = data.edits.length ? '搜尋範圍是全部紀錄（不算總筆數，換頁接著往下找）。時間為台灣時間。' : page() > 1 ? '後面沒有更多符合的紀錄。' : '沒有符合條件的紀錄，請清除或調整條件。';
+  const first = (page() - 1) * data.pageSize + 1;
+  byId('count').textContent = data.edits.length ? `第 ${first}–${first + data.edits.length - 1} 筆${data.next ? '' : '（已到最後）'}` : '';
+  byId('page-number').textContent = `第 ${page()} 頁`;
+  byId('previous').disabled = page() <= 1;
+  byId('next').disabled = !data.next;
 }
-const restart = () => { state.page = 1; load(); };
+const restart = () => { state.cursors = [null]; load(); };
 
 async function loadReleases() {
   const status = byId('release-status'), list = byId('releases');
@@ -80,8 +76,8 @@ byId('filters').addEventListener('change', e => { if (e.target.tagName === 'SELE
 byId('filters').addEventListener('reset', () => setTimeout(restart));
 byId('filters').addEventListener('submit', e => { e.preventDefault(); clearTimeout(typingTimer); restart(); });
 byId('page-size').addEventListener('change', e => { state.size = Number(e.target.value); restart(); });
-byId('previous').addEventListener('click', () => { if (state.page > 1) { state.page--; load(); } });
-byId('next').addEventListener('click', () => { if (state.page < state.pages) { state.page++; load(); } });
+byId('previous').addEventListener('click', () => { if (page() > 1) { state.cursors.pop(); load(); } });
+byId('next').addEventListener('click', () => { if (state.next) { state.cursors.push(state.next); load(); } });
 byId('reload').addEventListener('click', () => { load(); loadReleases(); });
 showVolunteerState(byId('volunteer-state'), [['showUpdates', '更新紀錄顯示中', '更新紀錄已隱藏']]);
 load();

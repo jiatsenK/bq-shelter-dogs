@@ -154,47 +154,67 @@ test('#518 資料檢查 API：清單對上狗、標示過期／未記錄／讀�
   assert.equal((await worker.fetch(request('/api/manage/data-checks', jwt), { ...bindings, DB: { prepare() { throw Error('secret detail'); } } })).status, 503);
 });
 
-test('#567 資料編輯紀錄：搜尋涵蓋全部、白名單篩選、台灣日期、分頁，成本固定 2 個查詢', async t => {
+test('#567 資料編輯紀錄：搜尋涵蓋全部、白名單篩選、台灣日期、游標分頁，資料多 10 倍讀取量不變', async t => {
   const { DB, bindings, jwt } = await setup(t);
   const insert = DB.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) VALUES(?,?,?,?,?,?,?,?)');
   await insert.bind('2026-01-01T15:59:00.000Z', '', '最早的志工', 'intro', 'a'.repeat(32), '2026010101', '""', JSON.stringify('百分比 100% 的介紹')).run();
   for (let i = 0; i < 130; i++) await insert.bind(`2026-10-0${1 + (i % 9)}T02:00:00.000Z`, '', `志工${i}`, i % 2 ? 'rest' : 'photo', 'b'.repeat(32), '2026010202', 'null', 'null').run();
   const log = await DB.prepare("INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) VALUES('2026-10-20T01:00:00.000Z','','管理者','sex',?,'2026010101','\"\"','\"male\"')").bind('a'.repeat(32)).run();
   await DB.prepare("INSERT INTO v3_dog_edit_actors(request_id,log_id,actor_subject,actor_email,source) VALUES('r1',?,?,?,'access')").bind(log.meta.last_row_id, claims.sub, claims.email).run();
+  // 跟著游標翻完全部頁，回傳符合的總筆數
+  const count = async query => {
+    let total = 0, cursor = null;
+    do {
+      const page = await searchEdits(DB, new URLSearchParams(`${query}&size=100${cursor ? `&cursor=${cursor}` : ''}`));
+      total += page.edits.length; cursor = page.next;
+    } while (cursor);
+    return total;
+  };
 
   let queries = 0;
   const measured = { prepare(sql) { queries++; return DB.prepare(sql); }, batch: s => DB.batch(s) };
   const oldest = await searchEdits(measured, new URLSearchParams('q=最早'));
-  assert.equal(queries, 2, '總數與一頁各一個查詢');
-  assert.equal(oldest.total, 1, '搜尋涵蓋超過最近 100 筆的完整範圍');
+  assert.equal(queries, 1, '每次請求 1 個查詢，不算總數');
+  assert.equal(oldest.edits.length, 1, '搜尋涵蓋超過最近 100 筆的完整範圍');
   assert.equal(oldest.edits[0].editorName, '最早的志工');
-  assert.equal((await searchEdits(DB, new URLSearchParams('q=100%'))).total, 1, '% 視為文字不是萬用字元');
-  assert.equal((await searchEdits(DB, new URLSearchParams('q=_'))).total, 0);
+  assert.equal(oldest.next, null);
+  assert.equal(await count('q=100%'), 1, '% 視為文字不是萬用字元');
+  assert.equal(await count('q=_'), 0);
 
-  const page = await searchEdits(DB, new URLSearchParams('kind=photo&size=25&page=2'));
-  assert.equal(page.total, 65);
-  assert.equal(page.pages, 3);
-  assert.equal(page.edits.length, 25);
-  assert.ok(page.edits.every(e => e.kind === 'photo' && e.kindLabel === '照片'));
-  assert.equal((await searchEdits(DB, new URLSearchParams('kind=photo&page=99'))).page, 3, '超出頁數取最後一頁');
-  assert.equal((await searchEdits(DB, new URLSearchParams('dog=2026010101'))).total, 2, '對象可用編號找');
-  assert.equal((await searchEdits(DB, new URLSearchParams('dog=小黑'))).total, 130, '對象可用狗名找');
-  assert.equal((await searchEdits(DB, new URLSearchParams('from=2026-01-01&to=2026-01-01'))).total, 1, '15:59Z 是台灣 1/1 23:59');
-  assert.equal((await searchEdits(DB, new URLSearchParams('from=2026-01-02&to=2026-01-02'))).total, 0);
+  const first = await searchEdits(DB, new URLSearchParams('kind=photo&size=25'));
+  assert.equal(first.edits.length, 25);
+  assert.ok(first.edits.every(e => e.kind === 'photo' && e.kindLabel === '照片'));
+  const second = await searchEdits(DB, new URLSearchParams(`kind=photo&size=25&cursor=${first.next}`));
+  assert.ok(second.edits[0].id < first.edits.at(-1).id, '下一頁接在上一頁最後一筆之後');
+  assert.equal(await count('kind=photo'), 65);
+  assert.equal(await count('dog=2026010101'), 2, '對象可用編號找');
+  assert.equal(await count('dog=小黑'), 130, '對象可用狗名找');
+  assert.equal(await count('from=2026-01-01&to=2026-01-01'), 1, '15:59Z 是台灣 1/1 23:59');
+  assert.equal(await count('from=2026-01-02&to=2026-01-02'), 0);
   const admin = await searchEdits(DB, new URLSearchParams('source=access'));
-  assert.equal(admin.total, 1);
+  assert.equal(admin.edits.length, 1);
   assert.equal(admin.edits[0].actorEmail, claims.email, '後台看得到管理者登入身分');
-  assert.equal((await searchEdits(DB, new URLSearchParams('actor=manager@example'))).total, 1);
-  assert.equal((await searchEdits(DB, new URLSearchParams('order=oldest'))).edits[0].editorName, '最早的志工');
-  assert.ok(!('actorEmail' in (await searchEdits(DB, new URLSearchParams('q=最早'))).edits[0]), '志工紀錄不帶管理者欄位');
-  assert.ok(page.kinds.some(k => k.value === 'activity' && k.label === '活動紀錄'));
+  assert.equal(await count('actor=manager@example'), 1);
+  const asc = await searchEdits(DB, new URLSearchParams('order=oldest&size=25'));
+  assert.equal(asc.edits[0].editorName, '最早的志工');
+  assert.ok((await searchEdits(DB, new URLSearchParams(`order=oldest&size=25&cursor=${asc.next}`))).edits[0].id > asc.edits.at(-1).id);
+  assert.ok(!('actorEmail' in oldest.edits[0]), '志工紀錄不帶管理者欄位');
+  assert.ok(first.kinds.some(k => k.value === 'activity' && k.label === '活動紀錄'));
 
-  for (const bad of ['kind=drop', 'size=500', 'order=random', 'page=0', 'from=2026-13-01', 'q=' + 'x'.repeat(101), 'source=root', 'sort=at']) {
+  // 讀取量：不帶條件的一頁照主鍵順序走、LIMIT 停下，不排序整張表；紀錄多 10 倍，讀到的列數一樣
+  const readsOf = async query => { const before = DB.stats.rowsRead; await searchEdits(DB, new URLSearchParams(query)); return DB.stats.rowsRead - before; };
+  const small = await readsOf('size=25');
+  for (let i = 0; i < 1200; i++) await insert.bind('2025-01-01T00:00:00.000Z', '', '更早的無關紀錄', 'rest', null, '', 'null', 'null').run();
+  assert.equal(await readsOf('size=25'), small);
+  const plan = (await DB.prepare("EXPLAIN QUERY PLAN SELECT l.id FROM v3_edit_log l LEFT JOIN v3_dog_edit_actors a ON a.log_id=l.id LEFT JOIN v3_dogs d ON d.dog_id=l.dog_id WHERE l.id<? ORDER BY l.id DESC LIMIT 26").bind(999999).all()).results.map(r => r.detail).join(' | ');
+  assert.doesNotMatch(plan, /TEMP B-TREE/, plan);
+
+  for (const bad of ['kind=drop', 'size=500', 'order=random', 'cursor=0', 'cursor=x', 'page=2', 'from=2026-13-01', 'q=' + 'x'.repeat(101), 'source=root', 'sort=at']) {
     await assert.rejects(searchEdits(DB, new URLSearchParams(bad)), e => e.status === 400, bad);
   }
   const res = await worker.fetch(request('/api/manage/edits?kind=sex', jwt), bindings);
   assert.equal(res.status, 200);
-  assert.equal((await res.json()).total, 1);
+  assert.equal((await res.json()).edits.length, 1);
   assert.equal((await worker.fetch(request('/api/manage/edits?kind=drop', jwt), bindings)).status, 400);
   assert.equal((await worker.fetch(request('/api/manage/edits', jwt, { method: 'POST', body: '{}' }), bindings)).status, 405);
 });

@@ -165,13 +165,11 @@ export async function updateActivity(db, id, revision, { date, kind, dogs }, aud
 
 export async function deleteActivity(db, id, revision, audit) {
   const before = await readUnchanged(db, id, revision);
-  const results = await batchUnlessChanged(db, [
-    guard(db, id, revision),
-    ...auditOf(audit, { before, after: null }, unchangedWhen, [id, revision]),
-    db.prepare('DELETE FROM v3_activities WHERE activity_id=?').bind(id),
-    db.prepare('DELETE FROM v3_activity_guard'),
-  ]);
+  const statements = [guard(db, id, revision), ...auditOf(audit, { before, after: null }, unchangedWhen, [id, revision])];
+  const removeAt = statements.push(db.prepare('DELETE FROM v3_activities WHERE activity_id=?').bind(id)) - 1;
+  statements.push(db.prepare('DELETE FROM v3_activity_guard'));
+  const results = await batchUnlessChanged(db, statements);
   // 讀完到寫入之間被別人刪掉：什麼都沒刪，不回成功（只在管理網站檢查，志工網站行為不變）
-  if (audit && !results.at(-2).meta.changes) throw new ActivityError(404, '找不到這場活動（可能已經被刪掉），請重新整理');
+  if (audit && !results[removeAt].meta.changes) throw new ActivityError(404, '找不到這場活動（可能已經被刪掉），請重新整理');
   return { before };
 }

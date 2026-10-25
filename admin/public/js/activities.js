@@ -1,24 +1,18 @@
 import { readActivities, readDogs, createActivity, updateActivity, deleteActivity } from './api.js';
-import { KIND_LABELS, parseActivities, filterActivities, sameActivity, activityPayload, describeActivity, dogLabel, matchDog } from './activity-model.js';
+import { KIND_LABELS, parseActivities, filterActivities, sameActivity, activityPayload, describeActivity, dogLabel, dogText, matchDog } from './activity-model.js';
 import { parseManageDogs } from './dog-table.js';
 import { showVolunteerState } from './volunteer-state.js';
+import { byId, element } from './dom.js';
 import { BQDates } from '../shared/dates.js';
 
 // #567 活動紀錄頁：清單只在讀取時打 API；搜尋、篩選在已載入的資料上做。一次只編一場，儲存帶打開時的 revision。
-const byId = id => document.getElementById(id);
 const state = { list: [], dogs: null, loaded: false, busy: false, editor: null };
 // editor：{ saved: 活動或 null（新增）, draft: { date, kind, dogs }, conflict, gone, confirmDelete }
-function element(tag, text, className) {
-  const node = document.createElement(tag);
-  if (text !== undefined) node.textContent = text;
-  if (className) node.className = className;
-  return node;
-}
 function dogsCell(dogs) {
   const cell = element('td', undefined, 'activity-dog-cell');
   if (!dogs.length) cell.append(element('span', '沒有記出席的狗', 'text-secondary'));
   for (const d of dogs) {
-    const item = element('span', d.number ? `${d.name}（${d.number}）` : d.name, 'activity-dog');
+    const item = element('span', dogText(d), 'activity-dog');
     if (!d.dogId) item.append(element('span', '未對應', 'state-label'));
     cell.append(item);
   }
@@ -46,7 +40,7 @@ function renderDogs() {
   const { draft } = state.editor;
   list.replaceChildren(...draft.dogs.map((d, i) => {
     const item = element('li', undefined, 'activity-dog-row');
-    item.append(element('span', d.number ? `${d.name}（${d.number}）` : d.name));
+    item.append(element('span', dogText(d)));
     if (!d.dogId) item.append(element('span', '未對應狗身分，原樣保留', 'state-label'));
     const remove = element('button', '移除', 'btn btn-sm');
     remove.type = 'button'; remove.dataset.remove = String(i); remove.setAttribute('aria-label', `移除 ${d.name}`);

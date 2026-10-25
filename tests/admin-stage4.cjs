@@ -34,8 +34,8 @@ module.exports = async (browser, base) => {
     ] } } : { error: '管理資料暫時無法讀取，請稍後重試' } });
     if (url.pathname === '/api/manage/edits') {
       editQueries.push(url.search);
-      const page = Number(url.searchParams.get('page') || 1), size = Number(url.searchParams.get('size') || 25);
-      return route.fulfill({ json: { total: 60, page, pages: Math.ceil(60 / size), pageSize: size, kinds: [{ value: 'activity', label: '活動紀錄' }, { value: 'sex', label: '性別補正' }],
+      const size = Number(url.searchParams.get('size') || 25);
+      return route.fulfill({ json: { next: url.searchParams.get('cursor') ? null : 77, pageSize: size, kinds: [{ value: 'activity', label: '活動紀錄' }, { value: 'sex', label: '性別補正' }],
         edits: [{ id: 99, at: '2026-10-20T01:00:00.000Z', kind: 'sex', kindLabel: '性別補正', source: 'access', editorName: '管理者', dogId: A, dogNumber: '2026010101', dogName: '阿福', before: '', after: 'male', actorEmail: 'manager@example.org' },
           { id: 98, at: '2026-10-19T01:00:00.000Z', kind: 'activity', kindLabel: '活動紀錄', source: 'volunteer', editorName: '小明', dogId: null, dogNumber: '', dogName: '', before: null, after: { date: '2026-10-04', kind: 'adoption', dogs: ['阿福'] } }] } });
     }
@@ -109,7 +109,7 @@ module.exports = async (browser, base) => {
     await page.goto(`${base}/admin/public/checks.html`);
     await page.getByText('共 2 筆', { exact: false }).waitFor();
     assert.match(await status('gap-status'), /已過期/);
-    assert.match(await status('gap-status'), /最後掃描 10\/24 23:53/);
+    assert.match(await status('gap-status'), /最後掃描 2026\/10\/24 23:53/);
     assert.equal(await page.locator('#gaps tr').count(), 2);
     assert.match(await page.locator('#gaps').textContent(), /D1 已找不到這筆/);
     await page.getByText('主清單上共 2 隻', { exact: false }).waitFor();
@@ -124,17 +124,23 @@ module.exports = async (browser, base) => {
 
     // 更新紀錄
     await page.goto(`${base}/admin/public/updates.html`);
-    await page.getByText('符合 60 筆（搜尋範圍是全部紀錄）', { exact: false }).waitFor();
+    await page.getByText('搜尋範圍是全部紀錄', { exact: false }).waitFor();
     assert.equal(editQueries.at(-1), '');
     assert.match(await page.locator('#edits').textContent(), /manager@example\.org/);
     assert.match(await page.locator('#edits').textContent(), /2026\/10\/20 09:00/);
     assert.match(await page.locator('#edits').textContent(), /2026-10-04 認養會：阿福/);
     assert.equal(await page.locator('#kind option').count(), 3);
     await page.locator('#next').click();
-    await page.waitForFunction(() => document.getElementById('page-number').textContent === '2 / 3');
-    assert.equal(editQueries.at(-1), '?page=2');
+    await page.waitForFunction(() => document.getElementById('page-number').textContent === '第 2 頁');
+    assert.equal(editQueries.at(-1), '?cursor=77');
+    assert.equal(await page.locator('#next').isDisabled(), true, '伺服器說沒有下一頁');
+    await page.locator('#previous').click();
+    await page.waitForFunction(() => document.getElementById('page-number').textContent === '第 1 頁');
+    assert.equal(editQueries.at(-1), '');
+    await page.locator('#next').click();
+    await page.waitForFunction(() => document.getElementById('page-number').textContent === '第 2 頁');
     await page.locator('#kind').selectOption('sex');
-    await page.waitForFunction(() => document.getElementById('page-number').textContent === '1 / 3');
+    await page.waitForFunction(() => document.getElementById('page-number').textContent === '第 1 頁');
     assert.equal(editQueries.at(-1), '?kind=sex', '換條件回第一頁');
     const typed = page.waitForRequest(r => r.url().includes('/api/manage/edits?q='));
     await page.locator('#q').fill('阿福');
@@ -142,7 +148,7 @@ module.exports = async (browser, base) => {
     await page.waitForFunction(() => !document.getElementById('status').textContent.startsWith('正在'));
     assert.equal(editQueries.at(-1), '?q=%E9%98%BF%E7%A6%8F&kind=sex');
     await page.locator('#page-size').selectOption('50');
-    await page.waitForFunction(() => document.getElementById('page-number').textContent === '1 / 2');
+    await page.waitForFunction(() => !document.getElementById('status').textContent.startsWith('正在'));
     assert.equal(editQueries.at(-1), '?q=%E9%98%BF%E7%A6%8F&kind=sex&size=50');
     const releases = JSON.parse(fs.readFileSync(path.join(__dirname, '../public/website-updates.json'), 'utf8'));
     await page.waitForFunction(n => document.querySelectorAll('#releases li').length === n, releases.length);

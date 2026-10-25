@@ -2,15 +2,9 @@ import { readDogs, readDataChecks } from './api.js';
 import { parseManageDogs } from './dog-table.js';
 import { completeness, parseSheetGaps, gapStatus, SHEET_LABELS } from './data-checks.js';
 import { showVolunteerState } from './volunteer-state.js';
+import { byId, element } from './dom.js';
 
 // #567 資料檢查頁：兩個區塊各自讀取、各自顯示失敗；讀不到時明說「無法判斷」，不當成沒有缺漏。
-const byId = id => document.getElementById(id);
-function element(tag, text, className) {
-  const node = document.createElement(tag);
-  if (text !== undefined) node.textContent = text;
-  if (className) node.className = className;
-  return node;
-}
 const failed = (node, text) => { node.dataset.error = 'true'; node.textContent = text; };
 
 function renderGaps(result) {

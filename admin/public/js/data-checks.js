@@ -1,6 +1,7 @@
 // #567 資料檢查的純規則：缺漏項目沿用志工資料完整度（analysis.js dataCompleteness），只看主清單上的狗；
 // #518 掃描清單的狀態分成從未掃描、讀不懂、過期與正常。用已載入的狗資料，不另查 D1 或照片檔。
 import { BQDates } from '../shared/dates.js';
+import { formatWhen as when } from './edit-log.js';
 
 export const SHEET_LABELS = { main: '主清單', departed: '已出所', groups: '常遛狗群', notes: '異動紀錄' };
 
@@ -17,12 +18,6 @@ export function completeness(dogs) {
     { label: '沒有照片紀錄', dogs: pick(d => !d.photoUrl) },
   ] };
 }
-
-const when = iso => {
-  const d = new Date(Date.parse(iso) + 8 * 3600000);
-  const p = n => String(n).padStart(2, '0');
-  return `${d.getUTCMonth() + 1}/${d.getUTCDate()} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
-};
 
 export function parseSheetGaps(data) {
   const g = data && data.sheetGaps;

@@ -37,6 +37,7 @@ export function describeActivity(a) {
   return `${a.date} ${KIND_LABELS[a.kind] || a.kind}：${dogs}`;
 }
 
+export const dogText = d => (d.number ? `${d.name}（${d.number}）` : d.name);
 export const dogLabel = dog => (dog.number ? `${dog.number} ${dog.name}` : `${dog.name}（無編號）`);
 // 輸入框的字 → 一隻狗：選單上的完整標籤、編號，或只有一隻同名的狗名；對不上回 null
 export function matchDog(dogs, text) {

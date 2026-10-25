@@ -61,11 +61,11 @@ test('#567 資料檢查：主清單上的狗，缺漏規則同志工資料完整
 });
 
 test('#567 更新紀錄：查詢字串白名單、時間用台灣時間、來源標示', () => {
-  assert.equal(editQuery({ q: ' 阿福 ', kind: '', dog: '', actor: '', source: 'access', from: '2026-10-01', to: '', order: 'newest', page: 2, size: 50, extra: 'x' }), 'q=%E9%98%BF%E7%A6%8F&source=access&from=2026-10-01&page=2&size=50');
-  assert.equal(editQuery({ order: 'oldest', page: 1, size: 25 }), 'order=oldest');
-  const page = parseEditPage({ total: 1, page: 1, pages: 1, pageSize: 25, kinds: [{ value: 'intro', label: '入所介紹' }], edits: [{ id: 1, at: '2026-01-01T15:59:00.000Z', kind: 'intro', kindLabel: '入所介紹', source: 'access', editorName: '管理者', dogId: A, dogNumber: '2026010101', dogName: '阿福', before: '', after: '新介紹', actorEmail: 'manager@example.org' }] });
+  assert.equal(editQuery({ q: ' 阿福 ', kind: '', dog: '', actor: '', source: 'access', from: '2026-10-01', to: '', order: 'newest', cursor: 120, size: 50, extra: 'x' }), 'q=%E9%98%BF%E7%A6%8F&source=access&from=2026-10-01&cursor=120&size=50');
+  assert.equal(editQuery({ order: 'oldest', cursor: null, size: 25 }), 'order=oldest');
+  const page = parseEditPage({ next: null, pageSize: 25, kinds: [{ value: 'intro', label: '入所介紹' }], edits: [{ id: 1, at: '2026-01-01T15:59:00.000Z', kind: 'intro', kindLabel: '入所介紹', source: 'access', editorName: '管理者', dogId: A, dogNumber: '2026010101', dogName: '阿福', before: '', after: '新介紹', actorEmail: 'manager@example.org' }] });
   assert.equal(page.edits.length, 1);
-  assert.throws(() => parseEditPage({ total: '1', edits: [] }));
+  assert.throws(() => parseEditPage({ next: '1', pageSize: 25, kinds: [], edits: [] }));
   assert.equal(formatWhen('2026-01-01T15:59:00.000Z'), '2026/01/01 23:59');
   assert.equal(sourceLabel('access'), '管理網站');
   assert.equal(sourceLabel('volunteer'), '志工網站');
