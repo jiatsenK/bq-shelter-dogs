@@ -1416,7 +1416,6 @@ async function saveRest(end = false) {
   if (out.rest) next[e.dog.id] = out.rest; else delete next[e.dog.id];
   appState.restMap = next;
   appState.restEdit = null;
-  resetWalkOrder();
   render(); renderDetail();
   BQWalkUI.showToast(out.rest ? `${e.dog.name} 休養到 ${monthDay(BQDates.parseYmd(out.rest.until))}，排到溜狗表最下面` : `${e.dog.name} 結束休養`);
 }
@@ -1428,11 +1427,9 @@ async function loadRest() {
     if (!data || !data.rest || typeof data.rest !== 'object' || Array.isArray(data.rest)) throw new Error('休養設定格式不對');
     // 讀的期間這支手機剛改過設定，不蓋掉自己的修改。
     if (appState.restMap === before) appState.restMap = data.rest;
-    if (!appState.restLoaded) resetWalkOrder();
     appState.restLoaded = true;
     appState.restState = 'ready';
   } catch (e) { appState.restState = 'error'; }
-  // 已顯示的狗保留原位，避免背景讀取或按了溜了之後跳位。
   render();
   if (appState.detailDog) renderDetail();
 }
@@ -1620,7 +1617,7 @@ const DETAIL_CLICKS = [
   ['#photoCancel', () => { BQPhoto.clear(); renderDetail(); }],
   ['.buddy', el => { const d = appState.allDogs[el.dataset.dog]; if (d) showDetail(d); }],
   ['#whoAdd', () => BQWalkUI.openWithSheet([appState.detailDog], true)],
-  ['[data-who-undo]', () => BQWalkUI.sheetUndoable(appState.detailDog) ? BQWalkUI.setWalked([appState.detailDog], false) : BQWalkUI.undoSheetWalks([appState.detailDog], null, { revert: true })],
+  ['[data-who-undo]', () => BQWalkUI.sheetUndoable(appState.detailDog) ? BQWalkUI.setWalked([appState.detailDog], false) : BQWalkUI.undoSheetWalks([appState.detailDog], null, { revert: true, reveal: true })],
   ['[data-who-remove]', el => {
     const n = el.dataset.whoRemove;
     BQWalkUI.editWalkers(appState.detailDog, walkerList(appState.detailDog).filter(x => x !== n), `已拿掉 ${n}`);
@@ -1868,7 +1865,6 @@ function switchTab(id, pushHistory = true) {
   appState.analysisOpen = id === 'info';
   if (!appState.analysisOpen) appState.activeTab = id;
   if (pushHistory && changed) history.pushState({ bqNavigation: true, tab: id, base: appState.activeTab, returnTab: appState.groupsReturnTab, infoPage: typeof analysisState.infoPage === 'undefined' ? '' : analysisState.infoPage }, '');
-  if (changed) resetWalkOrder(); // 換分頁回來溜狗表時重排，剛溜的狗才會排到後面
   if (changed && id === 'groups') refreshGroupStage();
   const prevFocus = document.activeElement;
   render();
@@ -1983,31 +1979,7 @@ function dueDogs(dogs, today) {
 }
 
 // 溜狗表一律最久沒溜在前（2026-10-08 K 同意介面評估：拿掉排序切換和「幾天以上」篩選，天數的顏色就看得出來）。
-// 按了溜了的狗留在原地（介面評估 P0：重排的話下一隻會滑到手指下，容易按錯寫進試算表）：
-// 只有這支手機按過的狗留在原位（K 2026-10-20：別人溜的不是我按的，照天數排到後面）；換分頁或按「更新」才全部重排（#418）
-appState.walkOrder = null; // 上次畫出來的順序：walkKey → 第幾個
-appState.walkOrderFor = null; // 記順序時的 allDogs
-const walkPinned = new Set(); // 這次排好之後，這支手機按過溜了／復原的狗（walkKey）
-function sortWalkList(dogs, today) {
-  const due = dueDogs(dogs, today);
-  const k = d => walkKey(d) || d;
-  let out = due;
-  if (appState.walkOrder && appState.walkOrderFor === appState.allDogs && walkPinned.size) {
-    const pinned = due.filter(d => walkPinned.has(k(d)) && appState.walkOrder.has(k(d))).sort((a, b) => appState.walkOrder.get(k(a)) - appState.walkOrder.get(k(b)));
-    out = due.filter(d => !pinned.includes(d));
-    for (const d of pinned) out.splice(Math.min(appState.walkOrder.get(k(d)), out.length), 0, d);
-  }
-  appState.walkOrder = new Map(out.map((d, i) => [k(d), i]));
-  appState.walkOrderFor = appState.allDogs;
-  return out;
-}
-function pinWalkOrder(dogs) {
-  for (const d of dogs) if (d) walkPinned.add(walkKey(d) || d);
-}
-function resetWalkOrder() {
-  appState.walkOrder = null;
-  walkPinned.clear();
-}
+// K 2026-10-21（#445）：按了溜了直接照天數排到後面，不再固定在原位（取代 2026-10-08 介面評估 P0 與 #418）
 
 // 我的常溜（#155，K 2026-10-04 選兩頁都放）：溜狗表上面只剩「全部／★ 我的常溜」兩個選一個（2026-10-08）
 const WALK_FAV_KEY = BQStore.keys.walkFav;
@@ -2127,8 +2099,8 @@ function renderMain() {
     main.innerHTML = skeletonHtml();
     return;
   }
-  // V9（#141）：沒有今天已溜和收起了，全部的狗都在溜狗表；按過溜了的留在原地、顯示今天
-  const walkList = (appState.activeTab === 'walk' ? sortWalkList(appState.allDogs, today) : appState.allDogs).filter(hit);
+  // V9（#141）：沒有今天已溜和收起了，全部的狗都在溜狗表；按過溜了的顯示今天、照天數排到後面（#445）
+  const walkList = (appState.activeTab === 'walk' ? dueDogs(appState.allDogs, today) : appState.allDogs).filter(hit);
   // 介面評估第三輪（K 2026-10-08）：找狗分頁不放數字（跟溜狗表一樣是全部的狗）；
   // 我溜過一律是全部紀錄筆數，不跟著搜尋變（搜不到時「我溜過 0」像紀錄不見了）
   buildTabs({ walk: walkList.length, mine: myWalksCount('') });
@@ -2206,8 +2178,6 @@ async function init() {
 appState.dataSyncedAt = null;
 function applyDogsData(data) {
   appState.allDogs = mergeTempCages(data.dogs);
-  // 背景讀回不重排正在操作的清單；換分頁仍照原約定重排。
-  if (appState.walkOrder) appState.walkOrderFor = appState.allDogs;
   if (appState.detailDog) {
     const current = appState.allDogs.find(d => (d.id || d.dogId) === (appState.detailDog.id || appState.detailDog.dogId));
     if (current) appState.detailDog.covered = current.covered;
@@ -2248,9 +2218,8 @@ function renderUpdatedLabel() {
 appState.syncing = false;
 function freshWalkList() {
   appState.todayFetchedAt = 0;
-  const resort = () => { resetWalkOrder(); render(); };
-  resort();
-  Promise.all([loadTodayWalks(), loadWalkerNames()]).then(resort, () => {});
+  render();
+  Promise.all([loadTodayWalks(), loadWalkerNames()]).then(render, () => {});
 }
 async function refreshData(btn) {
   if (appState.syncing) return;
@@ -2286,7 +2255,7 @@ if (!window.__BQ_TEST__) {
 }
 }
 
-export { fixedCareEdits, FIRST_SCREEN_CARDS, WALKER_CODES_KEY, WALKER_CODE_PATTERN, SPECIAL_KEYWORDS, AMBER_DAYS, RED_DAYS, detailEdits, introOverrides, mergeTempCages, loadDogsData, fetchDogsData, parseMyWalks, apiData, fetchWalks, walkYears, recentStartMonth, missingWalkYears, loadWalkYear, loadMyWalks, currentMyWalks, myWalksCount, mineTabNumber, mineTabLabel, loadMyCodes, saveMyCodes, walkerCodesFor, dogOfWalk, walkDateLabel, myWalkGroups, myVisitCard, myMonthStats, myProgressHtml, myWalksHtml, myCalendarState, myCalendarHtml, specialFlag, highlightNote, effectiveWalkDate, computeStatus, restOf, monthDay, esc, icon, versioned, photoOverrides, photoSrc, photoThumbSrc, thumbFallback, thumbAttrs, photoThumb, lightboxOpen, insidePhoto, openLightbox, showLightboxPhoto, hideLightbox, closeLightbox, statusBadge, lastWalk, cardMeta, tempCageText, metaLine, ymdOf, reentryLine, openFormerEdit, sendFormer, saveFormer, removeFormer, sexMark, warnNote, loadWalkedIds, saveWalkedIds, walkKey, walkedNow, walkedToday, recordWalked, WALKER_NAME_KEY, WALKER_NAME_SEP, allWalkerNames, isOffline, setWalkerNamesOffline, loadWalkerNames, TODAY_POLL_MS, TODAY_REFETCH_MS, fetchWalkStatus, loadTodayWalks, refreshTodayWalks, canonicalWalker, splitWalkers, walkerList, loadCompanions, loadWalkWith, addWalkWith, clearWalkWith, firstWalkerName, loadWalkerName, saveWalkerName, loadSheetWrites, saveSheetWrites, myAliasIn, walkRegistration, d1Base, NEED_EDITOR, editorName, editorHeaders, APPEND_MAX, appendEntry, nextLogLabel, appendPreview, sheetAppendHtml, rerenderAppend, sendAppend, dogCard, favButtonHtml, detailHtml, restNoteHtml, isoDay, fixedCareHtml, toggleFixedCare, restAdminHtml, INTRO_MAX, intakeEventsOf, intakeDraft, intakePresentation, intakeListHtml, intakeEditorHtml, introOf, introSectionHtml, introBarHtml, openIntroEdit, saveIntro, STAYS_MAX, staysSectionHtml, openStaysEdit, staysProblem, saveStays, openRestEdit, saveRest, loadRest, departedDetailHtml, DEPARTURE_LABELS, ymdText, departureBadge, departureBasis, lastWalkSection, detailChips, imageToLocal, buddyTile, cageMates, togetherSection, groupWalkButton, DETAIL_CLICKS, wireDetail, labelPhotoPick, detailEditorViewport, renderDetail, showDetail, hideDetail, closeDetail, cardFromEvent, searchKey, matchesSearch, TABS, buildTabs, switchTab, stepTab, mainEl, render, skeletonHtml, appHeader, syncHeaderShadow, appBrand, syncHeaderTuck, bottomBarEl, syncBottomBar, dayWord, rangeText, rangeLabel, syncRange, queueRange, dueDogs, walkPinned, sortWalkList, pinWalkOrder, resetWalkOrder, WALK_FAV_KEY, loadWalkFav, saveWalkFav, walkFilterHtml, WALK_VIEW_KEY, loadWalkView, saveWalkView, walkToolsHtml, walkRow, renderMain, searchInput, searchClear, syncSearchClear, pad2, openGuide, init, applyDogsData, renderUpdatedLabel, freshWalkList, refreshData, syncBtn, startApp };
+export { fixedCareEdits, FIRST_SCREEN_CARDS, WALKER_CODES_KEY, WALKER_CODE_PATTERN, SPECIAL_KEYWORDS, AMBER_DAYS, RED_DAYS, detailEdits, introOverrides, mergeTempCages, loadDogsData, fetchDogsData, parseMyWalks, apiData, fetchWalks, walkYears, recentStartMonth, missingWalkYears, loadWalkYear, loadMyWalks, currentMyWalks, myWalksCount, mineTabNumber, mineTabLabel, loadMyCodes, saveMyCodes, walkerCodesFor, dogOfWalk, walkDateLabel, myWalkGroups, myVisitCard, myMonthStats, myProgressHtml, myWalksHtml, myCalendarState, myCalendarHtml, specialFlag, highlightNote, effectiveWalkDate, computeStatus, restOf, monthDay, esc, icon, versioned, photoOverrides, photoSrc, photoThumbSrc, thumbFallback, thumbAttrs, photoThumb, lightboxOpen, insidePhoto, openLightbox, showLightboxPhoto, hideLightbox, closeLightbox, statusBadge, lastWalk, cardMeta, tempCageText, metaLine, ymdOf, reentryLine, openFormerEdit, sendFormer, saveFormer, removeFormer, sexMark, warnNote, loadWalkedIds, saveWalkedIds, walkKey, walkedNow, walkedToday, recordWalked, WALKER_NAME_KEY, WALKER_NAME_SEP, allWalkerNames, isOffline, setWalkerNamesOffline, loadWalkerNames, TODAY_POLL_MS, TODAY_REFETCH_MS, fetchWalkStatus, loadTodayWalks, refreshTodayWalks, canonicalWalker, splitWalkers, walkerList, loadCompanions, loadWalkWith, addWalkWith, clearWalkWith, firstWalkerName, loadWalkerName, saveWalkerName, loadSheetWrites, saveSheetWrites, myAliasIn, walkRegistration, d1Base, NEED_EDITOR, editorName, editorHeaders, APPEND_MAX, appendEntry, nextLogLabel, appendPreview, sheetAppendHtml, rerenderAppend, sendAppend, dogCard, favButtonHtml, detailHtml, restNoteHtml, isoDay, fixedCareHtml, toggleFixedCare, restAdminHtml, INTRO_MAX, intakeEventsOf, intakeDraft, intakePresentation, intakeListHtml, intakeEditorHtml, introOf, introSectionHtml, introBarHtml, openIntroEdit, saveIntro, STAYS_MAX, staysSectionHtml, openStaysEdit, staysProblem, saveStays, openRestEdit, saveRest, loadRest, departedDetailHtml, DEPARTURE_LABELS, ymdText, departureBadge, departureBasis, lastWalkSection, detailChips, imageToLocal, buddyTile, cageMates, togetherSection, groupWalkButton, DETAIL_CLICKS, wireDetail, labelPhotoPick, detailEditorViewport, renderDetail, showDetail, hideDetail, closeDetail, cardFromEvent, searchKey, matchesSearch, TABS, buildTabs, switchTab, stepTab, mainEl, render, skeletonHtml, appHeader, syncHeaderShadow, appBrand, syncHeaderTuck, bottomBarEl, syncBottomBar, dayWord, rangeText, rangeLabel, syncRange, queueRange, dueDogs, WALK_FAV_KEY, loadWalkFav, saveWalkFav, walkFilterHtml, WALK_VIEW_KEY, loadWalkView, saveWalkView, walkToolsHtml, walkRow, renderMain, searchInput, searchClear, syncSearchClear, pad2, openGuide, init, applyDogsData, renderUpdatedLabel, freshWalkList, refreshData, syncBtn, startApp };
 export { appState } from './page-state.js';
 export { parseDogsData } from './dog-data.js';
 

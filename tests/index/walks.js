@@ -295,7 +295,7 @@ async function runWalkedModuleTests() {
   }
 }
 
-// 2026-10-08 介面評估 P0：按了溜了的狗留在原地，下一隻不會滑到手指下；重讀資料、換分頁才重排
+// #445（K 2026-10-21）：按了溜了直接照天數排到後面，不再固定在原位
 async function runWalkSortTests() {
   const saved = [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, sheetWriteState];
   const TODAY = new Date(2026, 9, 4);
@@ -307,20 +307,18 @@ async function runWalkSortTests() {
     groupMap = {}; activeTab = 'walk'; searchQuery = '';
     phoneStore = fakeStorage(); walkRecords = freshWalkRecords();
     await check('溜狗表一律最久沒溜在前', () => {
-      eq(sortWalkList(allDogs, TODAY).map(x => x.name), ['排序乙', '排序戊', '排序甲', '排序丙', '排序丁'], '最久沒溜：');
+      eq(dueDogs(allDogs, TODAY).map(x => x.name), ['排序乙', '排序戊', '排序甲', '排序丙', '排序丁'], '最久沒溜：');
     });
-    await check('2026-10-08 按了溜了的狗留在原地、顯示已溜；換分頁回來才排到後面', () => {
+    await check('#445 按了溜了顯示已溜，直接排到後面', () => {
       allDogs = [d('原地甲', '舊A1', 30, now), d('原地乙', '舊A2', 20, now), d('原地丙', '舊A3', 10, now)];
       sheetWriteState = 'off';
       render();
       const cards = () => [...document.querySelectorAll('#main .card .name')].map(n => n.firstChild.textContent);
       eq(cards(), ['原地甲', '原地乙', '原地丙'], '一開始：');
       document.querySelector('#main .card[data-dog="0"] [data-walk="add"]').click();
-      eq(cards(), ['原地甲', '原地乙', '原地丙'], '按了溜了不動：');
+      eq(cards(), ['原地乙', '原地丙', '原地甲'], '按了溜了直接排到後面：');
       eq(document.querySelector('#main .card[data-dog="0"] .walk-btn').textContent.trim(), '已溜', '變已溜：');
       BQWalkUI.hideToast();
-      switchTab('mine'); switchTab('walk');
-      eq(cards(), ['原地乙', '原地丙', '原地甲'], '換分頁回來重排：');
     });
   } finally {
     [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, sheetWriteState] = saved;

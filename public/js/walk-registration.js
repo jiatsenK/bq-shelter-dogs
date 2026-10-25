@@ -7,6 +7,8 @@ function createWalkRegistration(deps) {
   let queue = Promise.resolve();
   const pending = new Map(), requests = new WeakMap();
   const accepted = new Map();
+  // #445：D1 復原先顯示登記前的樣子，等 D1 回應再以回應為準；priors 是這支手機登記前看到的上次溜狗
+  const priors = new Map(), restoring = new Map();
   let acceptedVersion = -1;
   let revision = 0, readSequence = 0, acceptedToday = 0;
   const changedAt = new Map();
@@ -26,6 +28,10 @@ function createWalkRegistration(deps) {
     return since && (!item?.observedAt || item.observedAt <= since) ? null : item;
   }
   function state(dog, day = deps.date()) {
+    const restore = restoring.get(deps.key(dog));
+    if (restore) return { date: restore.date, walker: restore.walker,
+      walkers: [...new Set(deps.split(restore.walker).map(deps.canonical).filter(Boolean))],
+      today: restore.date === day, mine: false, canUndo: false, canRevert: false, restoring: true };
     const authoritative = accepted.get(deps.key(dog));
     if (authoritative) return { date: authoritative.walkedDate, walker: authoritative.walker,
       walkers: [...new Set(deps.split(authoritative.walker).map(deps.canonical).filter(Boolean))],
@@ -162,20 +168,34 @@ function createWalkRegistration(deps) {
     const entries = dogs.filter(d => d && deps.key(d) && !seen.has(deps.key(d)) && seen.add(deps.key(d)))
       .map(dog => ({ dog, key: deps.key(dog), id: dog.id || '', name: dog.name,
         walker: options.walker || deps.alias(dog) || me, expectedVersion: state(dog, day).version ?? 0 }));
+    if (deps.d1 && options.expected === undefined) entries.forEach(e => {
+      const before = state(e.dog, day);
+      if (!before.today) priors.set(e.key, { date: before.date, walker: before.walker });
+    });
     return enqueue({ entries, day, me, action: options.expected === undefined ? 'walk' : 'edit', expected: options.expected,
       d1: !!deps.d1 });
   }
   // options.revert：沒有本機證據的狗改請 Worker 找上一次（ADR 0016）
   function undo(dogs, options = {}) {
-    const seen = new Set();
+    const seen = new Set(), day = deps.date();
     return enqueue({ entries: dogs.filter(d => d && !seen.has(deps.key(d)) && seen.add(deps.key(d)))
-      .map(dog => ({ dog, key: deps.key(dog), id: dog.id || '', name: dog.name, expectedVersion: state(dog).version ?? 0 })),
+      .map(dog => ({ dog, key: deps.key(dog), id: dog.id || '', name: dog.name, expectedVersion: state(dog).version ?? 0,
+        prior: deps.d1 ? priorOf(dog, day) : null })),
       day: deps.date(), me: deps.walker(), action: 'undo', revert: !!options.revert, d1: !!deps.d1 });
+  }
+  // 登記前的樣子：這支手機登記時記下的，沒有就用狗清單還不是今天的日期；都沒有就等 D1 回應
+  function priorOf(dog, day) {
+    const key = deps.key(dog), base = deps.base?.(dog) || {};
+    if (priors.has(key)) return priors.get(key);
+    const date = dateKey(base.date);
+    return date && date !== day ? { date, walker: String(base.walker || '') } : null;
   }
   function enqueue(request) {
     request.entries.forEach(e => pending.set(e.key, (pending.get(e.key) || 0) + 1));
+    if (request.d1 && request.action === 'undo') request.entries.forEach(e => { if (e.prior) restoring.set(e.key, e.prior); });
     const work = queue.then(() => execute(request));
     const finished = work.finally(() => request.entries.forEach(e => {
+      restoring.delete(e.key);
       const n = pending.get(e.key) - 1;
       if (n) pending.set(e.key, n); else pending.delete(e.key);
     }));
@@ -281,6 +301,7 @@ function createWalkRegistration(deps) {
     }
     let out;
     try { out = payload.operationDate !== deps.date() && deps.lookupRequest ? await deps.lookupRequest(payload.requestId) : await deps.send(payload); } catch { out = null; }
+    restoring.delete(key); // 有回應（含失敗）就以 D1 為準
     const matches = out?.source === 'd1' && Array.isArray(out.results) ? out.results.filter(r => r.id === entry.id && r.name === entry.name) : [];
     const result = matches.length === 1 ? matches[0] : null;
     const valid = out?.ok && result?.accepted === true && result.status === (payload.action === 'undo' ? 'restored' : 'written') && result.requestId === payload.requestId && result.operationDate === payload.operationDate

@@ -31,7 +31,7 @@ async function runRestTests() {
     groupMap = {}; activeTab = 'walk'; searchQuery = '';
     phoneStore = fakeStorage(); walkRecords = freshWalkRecords(); walkerNameMemory = '';
     restMap = { '9611': { until: ymd(later(3)), reason: '術後休養' } };
-    resetWalkOrder(); render();
+    render();
     await check('休養中：排在溜狗表最下面（有人固定照顧也在它上面），色籤寫「休養中」，沒有溜了；過了日期自動恢復', () => {
       eq([...main.querySelectorAll('.card .name')].map(n => n.firstChild.textContent), ['一般乙', '固定丙', '休養甲'], '順序：');
       const card = main.querySelector('.card[data-dog="0"]');
@@ -265,6 +265,6 @@ async function runRestTests() {
     history.replaceState(null, '');
     saveWalkerName('');
     [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL, restMap, restEdit] = saved;
-    resetWalkOrder(); render();
+    render();
   }
 }
