@@ -30,12 +30,8 @@ const EDIT_ROWS_MAX = 50;
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
-  GITHUB_REPO: 'jiatsenK/bq-shelter-dogs',
-  GITHUB_BRANCH: 'main',
   // 除了同網址之外，另外接受哪些網站送來的要求（用逗號分隔）；網站和 Worker 同網址（#125）後不用設，舊網址 2026-10 拿掉
   ALLOWED_ORIGINS: '',
-  // 只有本機測試會換成假的 GitHub
-  GITHUB_API: 'https://api.github.com',
 };
 
 // 網站會先把照片壓成長邊約 1280px 的 JPEG（通常 100–400 KB），這裡留足空間
@@ -88,11 +84,7 @@ function resetState() {
 function config(env) {
   const get = k => (env && env[k] ? String(env[k]) : DEFAULTS[k]);
   return {
-    repo: get('GITHUB_REPO'),
-    branch: get('GITHUB_BRANCH'),
-    api: get('GITHUB_API').replace(/\/+$/, ''),
     origins: get('ALLOWED_ORIGINS').split(',').map(s => s.trim()).filter(Boolean),
-    token: env && env.GITHUB_TOKEN,
     adminKey: env && env.ADMIN_KEY ? String(env.ADMIN_KEY) : '',
     walkerKey: env && env.WALKER_KEY ? String(env.WALKER_KEY) : '',
     sheetWriteUrl: env && env.SHEET_WRITE_URL ? String(env.SHEET_WRITE_URL) : '',
@@ -881,12 +873,11 @@ export default {
       return env.ASSETS.fetch(request);
     }
 
-    // 打開 Worker 網址（合在一起時是 /api/）就能看到服務有沒有在跑、token 和金鑰設了沒（不會顯示內容）
+    // 打開 Worker 網址（合在一起時是 /api/）就能看到服務有沒有在跑、金鑰設了沒（不會顯示內容）
     if (request.method === 'GET' && path === '/') {
       return reply(200, {
         ok: true,
         service: '板收志工溜狗表 照片上傳服務',
-        token: cfg.token ? '已設定' : '未設定',
         adminKey: cfg.adminKey ? '已設定' : '未設定',
         walkerKey: cfg.walkerKey ? '已設定' : '未設定',
         sheetWrite: cfg.sheetWriteUrl ? '已設定' : '未設定',

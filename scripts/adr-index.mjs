@@ -45,7 +45,7 @@ export async function buildIndex() {
   for (const f of src) for (const m of (await read(`worker/src/${f}`)).matchAll(/\benv\??\.([A-Z][A-Z0-9_]+)/g)) envNames.add(m[1]);
   const bindings = new Set([...wrangler.matchAll(/"binding"\s*:\s*"(\w+)"/g)].map(m => m[1]));
   const deploy = await read('.github/workflows/deploy-cloudflare.yml');
-  // 部署時組成密鑰檔的那些鍵（const s = { GITHUB_TOKEN: …, … }）
+  // 部署時組成密鑰檔的那些鍵（const s = { ADMIN_KEY: …, … }）
   const deployed = new Set([...((deploy.match(/const s = \{([^}]*)\}/) || [, ''])[1]).matchAll(/(\w+):\s*process\.env/g)].map(m => m[1]));
   const preview = await read('.github/workflows/preview-cloudflare.yml');
   const previewOnly = new Set([...preview.matchAll(/--var\s+(\w+):/g)].map(m => m[1]));

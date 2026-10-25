@@ -23,8 +23,6 @@
     "database_id": "9e23a65c-c9dd-4f83-ad9c-2e01626910f0"
   }],
   "vars": {
-    "GITHUB_REPO": "jiatsenK/bq-shelter-dogs",
-    "GITHUB_BRANCH": "main",
     "SYNC_DAILY_BUDGET": "40000",
     "D1_WALK_NOTIFY": "1",
     "WALK_RETRY_ENABLED": "true"
