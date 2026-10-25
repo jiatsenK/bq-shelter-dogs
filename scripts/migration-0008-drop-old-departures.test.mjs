@@ -23,6 +23,8 @@ test('0008：舊離所三表和觸發器刪掉，新表的離所名冊、只有�
     db.prepare("INSERT INTO v3_departed_cards(dog_id,departed_date,reason,created_at) VALUES('m1','2024-06-01','adopt','2026-10-21T08:00:00Z')"),
   ]);
   for (const f of migrationFiles().filter(f => f >= '0006' && f < FILE)) await run(db, f);
+  // Current reader needs the additive dog-edit tables; keep both sides of the DROP comparison identical.
+  await run(db, '0009_dog_edit.sql');
   const departures = await readDepartures(db), cards = await readNameOnlyCards(db);
   assert.equal(departures.length, 1);
   await run(db, FILE);

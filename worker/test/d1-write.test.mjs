@@ -1,3 +1,4 @@
+import { currentEditRevision } from './edit-fixture.mjs';
 // #250 休養、入所介紹的寫入改存 D1（v3_rest、v3_intros），不再提交 GitHub；存完馬上讀得到
 // 執行：node --test worker/test/d1-write.test.mjs
 import test from 'node:test';
@@ -31,7 +32,7 @@ test.beforeEach(t => {
 const req = (method, path, body, ip = '1.1.1.1') => new Request(`${SITE}/api${path}`, {
   method, headers: { Origin: SITE, 'Content-Type': 'application/json', 'CF-Connecting-IP': ip }, body: body === undefined ? undefined : JSON.stringify(body),
 });
-const call = async (env, ...args) => { const res = await worker.fetch(req(...args), env); return { status: res.status, body: await res.json() }; };
+const call = async (env, ...args) => { if(args[2]&&typeof args[2]==='object')args[2]={...args[2],revision:await currentEditRevision(env.DB,args[1])}; const res = await worker.fetch(req(...args), env); return { status: res.status, body: await res.json() }; };
 const twDay = n => new Date(Date.now() + 8 * 3600 * 1000 + n * 86400000).toISOString().slice(0, 10);
 
 test('休養：存進 D1 後 GET /api/rest 馬上讀得到，不動別隻；結束休養就拿掉', async () => {
@@ -137,9 +138,9 @@ test('舊編號：補了 /api/dogs 馬上有，刪了就沒有，每次都記編
   assert.equal('formerIds' in (await dogOf(env, '2024032902')), false);
   const log = (await call(env, 'GET', '/edits')).body.edits.reverse();
   assert.deepEqual(log.map(r => [r.kind, r.kindLabel, r.editorName, r.dogNumber, r.before, r.after]), [
-    ['former', '舊編號', ME, '2024032902', null, '2015081801'],
-    ['former', '舊編號', ME, '2024032902', '2015081801', null],
-    ['former', '舊編號', ME, '2024032902', '2020010101', null],
+    ['former', '舊編號', ME, '2024032902', ['2020010101','2024032902'], ['2015081801','2020010101','2024032902']],
+    ['former', '舊編號', ME, '2024032902', ['2015081801','2020010101','2024032902'], ['2020010101','2024032902']],
+    ['former', '舊編號', ME, '2024032902', ['2020010101','2024032902'], ['2024032902']],
   ]);
 });
 

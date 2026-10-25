@@ -1,3 +1,6 @@
+import { readDogEdit, saveDogEdit } from '../dog-edit.js';
+import { photoInput, saveDogPhoto, restoreDogPhoto } from '../dog-photo.js';
+import { listTrash, readTrash } from '../r2.js';
 import { readSettings, saveSettings } from '../feature-settings.js';
 import { createAccessVerifier } from './access.js';
 import { readManageDogs } from './dogs.js';
@@ -5,7 +8,7 @@ import { isPhotoKey, isTomb, isThumbKey, r2Versions } from '../r2.js';
 
 const verifyAccess = createAccessVerifier();
 // Tabler uses data-image SVGs for select chevrons; executable content remains same-origin only.
-export const ADMIN_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
+export const ADMIN_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
 const json = (data, status = 200) => Response.json(data, { status });
 function protectedResponse(response, method) {
   const out = new Response(method === 'HEAD' ? null : response.body, response);
@@ -17,7 +20,7 @@ function protectedResponse(response, method) {
   out.headers.set('Content-Security-Policy', ADMIN_CSP);
   return out;
 }
-async function settingsInput(request) {
+async function settingsInput(request, maxBytes = 4096) {
   const reader = request.body?.getReader();
   if (!reader) throw Object.assign(new Error('設定格式不對'), { status: 400 });
   const chunks = []; let size = 0;
@@ -26,7 +29,7 @@ async function settingsInput(request) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > 4096) { await reader.cancel(); throw Object.assign(new Error('設定內容太大'), { status: 413 }); }
+      if (size > maxBytes) { await reader.cancel(); throw Object.assign(new Error('設定內容太大'), { status: 413 }); }
       chunks.push(value);
     }
   } finally { reader.releaseLock(); }
@@ -63,6 +66,23 @@ export default {
             response = json(await saveSettings(env.DB, await settingsInput(request), actor));
           }
         } else response = json({ error: '請使用 GET 或 PUT' }, 405);
+       } else if (/^\/api\/manage\/dogs\//.test(path)) {
+        const match=path.match(/^\/api\/manage\/dogs\/([a-f0-9]{32})(?:\/(photo|trash|restore)(?:\/([0-9]{13}-[a-f0-9]{4}))?)?$/);
+        if(!match) response=json({error:'找不到狗資料'},404);
+        else {
+          const [,dogId,action,trashId]=match;
+          if(['GET','HEAD'].includes(request.method)&&action==='trash'&&trashId) {const item=await readTrash(env,trashId);response=item?.meta.dogId===dogId?new Response(item.bytes,{headers:{'Content-Type':'image/jpeg'}}):json({error:'找不到這隻狗的備份'},404);}
+          else if(['GET','HEAD'].includes(request.method)) response=json(action==='trash'?{trash:(await listTrash(env)).filter(t=>t.dogId===dogId)}:await readDogEdit(env.DB,dogId));
+          else if(request.headers.get('Origin')!==env.ADMIN_ORIGIN||request.headers.get('Sec-Fetch-Site')==='cross-site') response=json({error:'請從管理網站儲存'},403);
+          else if(action==='photo' && request.method==='POST') response=json(await saveDogPhoto(env,dogId,Number(request.headers.get('X-Dog-Revision')),await photoInput(request),{actor},new URL(request.url).origin));
+          else if(request.headers.get('Content-Type')?.split(';')[0].trim()!=='application/json') response=json({error:'請使用 JSON'},415);
+          else if(!action&&request.method==='PUT') response=json(await saveDogEdit(env.DB,dogId,await settingsInput(request,16000),{actor}));
+          else if(action==='restore'&&request.method==='POST') {
+            const input=await settingsInput(request);
+            if(!input||Object.keys(input).sort().join(',')!=='revision,trashId')response=json({error:'復原欄位不對'},400);
+            else response=json(await restoreDogPhoto(env,dogId,input.revision,input.trashId,{actor},new URL(request.url).origin));
+          } else response=json({error:'方法不支援'},405);
+        }
       } else if (!['GET', 'HEAD'].includes(request.method)) {
         response = json({ error: '此階段僅提供唯讀查詢' }, 405);
         response.headers.set('Allow', 'GET, HEAD');

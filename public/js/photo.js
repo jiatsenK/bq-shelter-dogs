@@ -1,3 +1,4 @@
+import { prepareImages, imageForm } from './photo-images.js';
 import { canEdit } from './feature-settings.js';
 import { appState } from './page-state.js';
 import { closeLightbox, detailEdits, editorHeaders, esc, icon, lightboxOpen, photoOverrides, photoSrc, photoThumb, render, renderDetail } from './app.js';
@@ -367,7 +368,9 @@ const BQPhoto = (() => {
     if (!up || up.phase === 'uploading') return;
     detailEdits.saving(up, 'uploading');
     let error = '';
-    const r = await BQApi.uploadPhoto(up.dog.id, up.blob, editorHeaders());
+    let images;
+    try {images=await prepareImages(up.blob);} catch(e) {detailEdits.fail(up,e.message);showPhotoError();return;}
+    const r = await BQApi.uploadPhoto(up.dog.id, imageForm(images), {...editorHeaders(),'X-Dog-Revision':String(up.revision||'')});
     const out = r.data;
     if (r.error === 'network') error = '上傳失敗，請確認網路後再試；原本的照片不受影響';
     else if (!r.ok || !out || !out.ok) error = (out && out.error) || `網站暫時收不到照片（${r.status}），請稍後再試；原本的照片不受影響`;
@@ -382,6 +385,7 @@ const BQPhoto = (() => {
       showPhotoError();
       return;
     }
+    if(out.revision)up.dog.editRevision=out.revision;
     up.phase = 'done';
     photoUpload = null;
     photoOverrides[up.dog.id] = up.url;

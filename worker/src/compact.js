@@ -20,7 +20,7 @@ export async function readDogsPayload(db) {
   // 介紹是 D1 自己存的（#250 網站改了馬上看得到），不用主清單複本上同步帶來的那份
   // 「誰遛的」代號、狗群都是所屬那一列的 JSON（#559）
   const [main, former, groups, notes] = await db.batch([
-    db.prepare("SELECT m.row_index, m.dog_id, m.number, m.name, m.cage, m.note, m.walked_date, m.walker_codes, c.sex AS dog_sex, COALESCE(i.intro, '') AS d1_intro, c.fixed_care FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) JOIN v3_dogs c USING(dog_id) ORDER BY m.row_index"),
+    db.prepare("SELECT m.row_index, m.dog_id, m.number, m.name, m.cage, m.note, m.walked_date, m.walker_codes, c.sex AS dog_sex, COALESCE(i.intro, '') AS d1_intro, c.fixed_care, es.revision AS edit_revision, p.object_key AS photo_key FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) JOIN v3_dogs c USING(dog_id) JOIN v3_dog_edit_state es USING(dog_id) LEFT JOIN v3_photos p ON p.dog_id=m.dog_id AND p.is_primary=1 ORDER BY m.row_index"),
     db.prepare("SELECT m.row_index, n.number FROM v3_sheet_main m JOIN v3_dog_numbers n USING(dog_id) WHERE n.number <> m.number ORDER BY m.row_index, n.number"),
     db.prepare('SELECT column_index, label, names FROM v3_sheet_group_columns ORDER BY column_index'),
     db.prepare('SELECT label, text FROM v3_sheet_changes ORDER BY row_index'),
@@ -46,7 +46,8 @@ export async function readDogsPayload(db) {
   }
   const staysOf = await readAllStays(db, ON_MAIN);
   const dogs = rows.map(row => {
-    const dog = {};
+    const dog = {editRevision:row.edit_revision};
+    if(row.photo_key)dog.photoVersion=row.photo_key.slice(7,-4);
     for (const [key, column] of MAIN_FIELDS) dog[key] = BOOLEANS.has(key) ? Boolean(row[column]) : row[column];
     if (!row.number) dog.dogId = row.dog_id; // 無編號的狗也用永久身分設定固定照顧，不猜名字。
     dog.walkers = JSON.parse(row.walker_codes);
@@ -267,13 +268,15 @@ export const sortDepartures = list => list.sort((a, b) => (b.date || '').localeC
 // year 有給（ADR 0014）只讀那一年出所的。離所用狗 ID 記（#560）：沒有編號的（只有名字的已出所狗卡）不在名冊，見 readNameOnlyCards
 export async function readDepartures(db, year) {
   const where = ` WHERE number<>''${year ? ` AND ${departedIn(year)}` : ''}`;
-  const deps = await db.prepare(`SELECT * FROM v3_dog_departures${where}`).all();
+  const deps = await db.prepare(`SELECT v3_dog_departures.*,c.sex AS current_sex,es.revision AS edit_revision,(SELECT object_key FROM v3_photos WHERE dog_id=c.dog_id AND is_primary=1) AS photo_key FROM v3_dog_departures JOIN v3_dogs c USING(dog_id) JOIN v3_dog_edit_state es USING(dog_id)${where}`).all();
   const staysOf = await readAllStays(db, year ? `dog_id IN (SELECT dog_id FROM v3_dog_departures${where})` : '');
   const list = (deps.results || []).map(r => {
     const entry = {
+      editRevision:r.edit_revision,sex:r.current_sex,
       id: r.number, name: r.name, date: r.departed_date, dateSource: r.date_source, seen: r.seen_date,
       reason: r.reason, matched: r.matched, flags: JSON.parse(r.flags_json),
     };
+    if(r.photo_key)entry.photoVersion=r.photo_key.slice(7,-4);
     if (r.returned_number !== null) entry.returned = r.returned_number;
     if (staysOf.has(r.dog_id)) entry.stays = staysOf.get(r.dog_id);
     if (r.last_number !== null) {

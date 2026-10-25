@@ -1,3 +1,4 @@
+import { currentEditRevision } from './edit-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
@@ -21,6 +22,7 @@ async function setup(t) {
   return { DB, WALKER_KEY: 'test-key' };
 }
 async function call(env, method, path, body) {
+  if(body&&typeof body==='object')body={...body,revision:await currentEditRevision(env.DB,path)};
   const response = await worker.fetch(new Request(site + '/api' + path, {
     method, headers: { Origin: site, 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),

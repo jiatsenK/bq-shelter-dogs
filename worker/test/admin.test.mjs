@@ -120,7 +120,8 @@ test('管理 Worker：真實簽章可讀資產／狗表／照片；替代來源�
   assert.equal(data.dogs.length, 2);
   const dog = data.dogs.find(d => d.dogId === 'dog1');
   assert.equal(dog.intro, '網站介紹');
-  assert.equal(dog.sex, 'male', '性別只讀 v3_dogs（#557）');
+  assert.equal(dog.sex, 'male');
+  assert.equal(dog.sexMismatch, false);
   assert.equal(dog.fixedCare, true);
   assert.equal(dog.rest.until, '2099-01-01');
   assert.equal(dog.photoUrl, '/photos/2026010101.jpg', '照片看 R2，沒有縮圖用主照片');
@@ -169,4 +170,37 @@ test('管理設定：只有 Access 身分可改；同來源、型別、大小、
   const volunteer = await publicWorker.fetch(new Request('https://volunteer.example/api/intro/2026010101', { method: 'PUT', headers: { Origin: 'https://volunteer.example', 'Cf-Access-Authenticated-User-Email': claims.email, 'Cf-Access-Jwt-Assertion': jwt } }), { DB });
   assert.equal(volunteer.status, 403, 'public host never trusts manager email or JWT to bypass');
   assert.equal((await worker.fetch(request('/api/manage/settings', undefined, { method: 'PUT', body: '{}' }), bindings)).status, 401);
+});
+
+test('#566 真實 Access 狗資料 API：權限、CSRF、白名單、版本、管理者不受志工開關限制',async t=>{
+  t.mock.method(globalThis,'fetch',fetchKeys);
+  const DB=memoryD1();t.after(()=>DB.close());
+  await (await import('../../scripts/migrate-compact-db.mjs')).migrateCompactDatabase(DB);
+  const dogId='a'.repeat(32),jwt=await token(),bindings={...env,DB};
+  await DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId,'阿福').run();
+  const path='/api/manage/dogs/'+dogId;
+  const call=(body,headers={},auth=jwt)=>worker.fetch(request(path,auth,{method:'PUT',body:JSON.stringify(body),headers:{Origin:origin,'Content-Type':'application/json',...headers}}),bindings);
+  let snapshot=await (await worker.fetch(request(path,jwt),bindings)).json();
+  const input={revision:snapshot.revision,field:'sex',value:'female'};
+  assert.equal((await call(input,{},null)).status,401);
+  assert.equal((await call(input,{Origin:'https://other.example'})).status,403);
+  assert.equal((await call(input,{'Content-Type':'text/plain'})).status,415);
+  assert.equal((await call({...input,admin:true})).status,400);
+  assert.equal((await call({...input,field:'number'})).status,400);
+  assert.equal((await call(input)).status,200);
+  assert.equal((await call(input)).status,409);
+  const {readSettings,saveSettings}=await import('../src/feature-settings.js');
+  const settings=await readSettings(DB);
+  await saveSettings(DB,{...settings,values:{...settings.values,editIntro:false}},{subject:claims.sub,email:claims.email});
+  snapshot=await (await worker.fetch(request(path,jwt),bindings)).json();
+  assert.equal((await call({revision:snapshot.revision,field:'intro',value:'管理者仍可改'})).status,200);
+  assert.equal((await worker.fetch(request('/api/manage/dogs/'+'f'.repeat(32),jwt),bindings)).status,404);
+  const publicWorker=(await import('../src/index.js')).default;
+  const forged=await publicWorker.fetch(new Request('https://volunteer.example/api/intro/2026010101',{method:'PUT',headers:{Origin:'https://volunteer.example','Content-Type':'application/json','Cf-Access-Jwt-Assertion':jwt},body:JSON.stringify({editor:'管理者',revision:snapshot.revision,text:'偽造'})}),{DB});
+  assert.equal(forged.status,403);
+  const oldSex=await publicWorker.fetch(new Request('https://volunteer.example/api/sex/2026010101',{method:'POST',headers:{Origin:'https://volunteer.example','Content-Type':'image/jpeg','X-Editor':'self'},body:new Uint8Array([255,216,255])}),{DB});
+  assert.equal(oldSex.status,404,'未知路由不能繞過照片開關');
+  const logs=await (await publicWorker.fetch(new Request('https://volunteer.example/api/edits',{headers:{Origin:'https://volunteer.example'}}),{DB})).json();
+  assert.doesNotMatch(JSON.stringify(logs),/manager@example|manager-id/);
+  assert.equal(logs.edits[0].source,'access');
 });
