@@ -6,6 +6,7 @@
 - 前端檔案責任、依賴與載入頁面：`public/js/README.md`。
 - 修改前讀 `docs/agent-log/README.md` 與最近紀錄；同一 PR 維護一筆紀錄。
 - 使用者明確交辦建立 PR 時先開草稿；明確交辦轉正式且推送與本機檢查完成後才轉正式。需要手機預覽才加 `preview` 標籤。commit 不加 `[skip ci]`。
+- 給 K 在終端機跑的指令寫 `npx.cmd`、`npm.cmd`：K 的 PowerShell 停用指令碼執行，`npx` 會載入 `npx.ps1` 而被擋。
 
 ## 依任務載入
 
