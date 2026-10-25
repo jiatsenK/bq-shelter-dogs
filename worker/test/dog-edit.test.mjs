@@ -61,11 +61,12 @@ test('管理者／管理者、志工／管理者同版本只接受一筆；公�
     saveDogEdit(
       db,
       dogId,
-      { revision: before.revision, field: 'rest', value: null },
+      { revision: before.revision, field: 'intro', value: '乙' },
       { actor: { subject: 'second', email: 'second@example.org' } }
     )
   ]);
-  // A no-op is permitted to return the version it read, but cannot overwrite a change.
+  assert.equal(results.filter(result=>result.status==='fulfilled').length,1);
+  assert.equal(results.find(result=>result.status==='rejected').reason.status,409);
   assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM v3_edit_log').first('n'), 1);
   const snapshot = await readDogEdit(db, dogId);
   const race = await Promise.allSettled([

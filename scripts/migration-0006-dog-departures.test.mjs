@@ -37,12 +37,12 @@ test('0006 搬資料：離所名冊內容不變，附屬清單照順序變 JSON�
   const db = await oldDb(t);
   const before = await years(db);
   await run(db, FILE);
-  assert.deepEqual(await readDepartures(db), [
+  const expected = [
     { id: '2020010101', name: '阿福', date: '2026-10-10', dateSource: 'sheet', seen: '2026-10-11', reason: 'adopt', matched: '認養', flags: ['旗一', '旗二'],
       last: { cage: 'A1', id: '2020010101', name: '阿福', walkedDate: '2026-09-30', note: '備註', sex: '公', intro: '介紹', formerIds: ['2019010101'], groups: ['回來了', '小咪'] } },
     { id: '2021020202', name: '小咪', date: '2025-03-01', dateSource: 'note', seen: '2025-03-02', reason: 'death', matched: '死亡', flags: ['只有旗標'] },
     { id: '2022020202', name: '回來了', date: null, dateSource: null, seen: null, reason: 'unknown', matched: '', flags: [], returned: '2026010101' },
-  ]);
+  ];
   assert.deepEqual(await readNameOnlyCards(db), [{ dogId: 'm1', name: '老黃', date: '2024-06-01', reason: 'adopt' }]);
   // 搬進新表的每一年都加 1（網站的離所資料包會重算）；2024 是只有名字的卡帶來的新鍵
   const after = await years(db);
@@ -52,6 +52,9 @@ test('0006 搬資料：離所名冊內容不變，附屬清單照順序變 JSON�
   assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM v3_departures').first('n'), 3);
   assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM v3_departure_items').first('n'), 6);
   assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM v3_departed_cards').first('n'), 1);
+  // Current runtime requires 0007; verify 0006's versions above before adding its read prerequisites.
+  await run(db,'0007_dog_edit.sql');
+  assert.deepEqual((await readDepartures(db)).map(({editRevision,sex,photoVersion,...snapshot})=>snapshot),expected);
 });
 
 test('0006 重跑不重複搬、版本號不再動', async t => {
