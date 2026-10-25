@@ -39,6 +39,35 @@ test('空庫照順序跑完全部 migration，結構跟 db/compact-schema.sql �
   assert.deepEqual(await structure(fromMigrations), expected);
 });
 
+// #559：搬資料的 SQL 要跟舊表逐一對得上（代號、狗名照原本順序；只有群名的欄、沒人遛的狗也對），搬的時候不讓 small 加 1
+test('0005 從舊表組 JSON：代號、狗群、群名逐一對得上，small 不變', async t => {
+  const db = fakeD1();
+  t.after(() => db.close());
+  const files = migrationFiles();
+  const at = files.indexOf('0005_walkers_groups_json.sql');
+  for (const f of files.slice(0, at)) await run(db, splitStatements(readFileSync(join(MIGRATIONS_DIR, f), 'utf8')));
+  await run(db, [
+    "INSERT INTO v3_dogs(dog_id,name) VALUES('a','甲狗'),('b','乙狗'),('c','丙狗')",
+    "INSERT INTO v3_sheet_main(row_index,dog_id,number,name) VALUES(0,'a','1','甲狗'),(1,'b','2','乙狗'),(5,'c','3','丙狗')",
+    // 故意不照 position 順序寫入
+    "INSERT INTO v3_sheet_main_walkers VALUES(5,1,'c2'),(0,0,'a0'),(5,0,'c1'),(5,2,'c3')",
+    "INSERT INTO v3_sheet_groups VALUES(2,1,'丙狗'),(0,0,'甲狗'),(2,0,'乙狗'),(0,1,'丙狗')",
+    "INSERT INTO v3_sheet_group_labels VALUES(0,'一群'),(7,'只有群名')",
+  ]);
+  const small = async () => (await db.prepare('SELECT small FROM v3_pack_versions WHERE id=1').first()).small;
+  const before = await small();
+  await run(db, splitStatements(readFileSync(join(MIGRATIONS_DIR, files[at]), 'utf8')));
+  assert.deepEqual((await db.prepare('SELECT row_index,walker_codes FROM v3_sheet_main ORDER BY row_index').all()).results.map(r => [r.row_index, JSON.parse(r.walker_codes)]),
+    [[0, ['a0']], [1, []], [5, ['c1', 'c2', 'c3']]]);
+  assert.deepEqual((await db.prepare('SELECT column_index,label,names FROM v3_sheet_group_columns ORDER BY column_index').all()).results.map(r => [r.column_index, r.label, JSON.parse(r.names)]),
+    [[0, '一群', ['甲狗', '丙狗']], [2, '', ['乙狗', '丙狗']], [7, '只有群名', []]]);
+  assert.equal(await small(), before, '搬資料不讓在所資料包失效');
+  await db.prepare("UPDATE v3_sheet_main SET walker_codes='[\"x\"]' WHERE row_index=1").run();
+  assert.equal(await small(), before + 1, '之後改代號 small 加 1');
+  await db.prepare("UPDATE v3_sheet_group_columns SET names='[]' WHERE column_index=7").run();
+  assert.equal(await small(), before + 2, '改狗群 small 加 1');
+});
+
 test('migration 檔名是 NNNN_小寫名稱.sql，從 0000 起連號不重複', () => {
   const files = migrationFiles();
   assert.equal(files[0], '0000_compact_schema.sql');
