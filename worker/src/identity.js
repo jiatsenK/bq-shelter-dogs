@@ -42,6 +42,7 @@ export async function linkIdentityName(db, name, code) {
     db.prepare('INSERT INTO v3_volunteer_cards(volunteer_id,dog_id,opened_on) SELECT (SELECT volunteer_id FROM v3_volunteers WHERE name=?),dog_id,opened_on FROM v3_card_opened WHERE walker_code=? AND NOT EXISTS(SELECT 1 FROM v3_identity_names WHERE code=?)').bind(storedName, code, code),
     db.prepare('INSERT OR IGNORE INTO v3_identity_names(code,name_key,name,volunteer_id) VALUES(?,?,?,(SELECT volunteer_id FROM v3_volunteers WHERE name=?))').bind(code, nameKey, name, storedName),
     db.prepare('INSERT OR IGNORE INTO v3_volunteer_codes(code,volunteer_id) SELECT code,volunteer_id FROM v3_identity_names WHERE code=?').bind(code),
+    db.prepare('UPDATE v3_identity_revision SET revision=revision+1 WHERE id=1'),
   ]);
   return identityByCode(db, code);
 }
@@ -75,6 +76,7 @@ export async function renameIdentity(db, { code, name, operationId }, key) {
     db.prepare('INSERT OR IGNORE INTO v3_volunteer_codes(code,volunteer_id) VALUES(?,?)').bind(nextCode, source.volunteerId),
     db.prepare('UPDATE v3_volunteers SET name=? WHERE volunteer_id=?').bind(name, source.volunteerId),
     db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,before_json,after_json) VALUES(?,?,?,?,?,?)').bind(new Date().toISOString(), code, source.name, 'volunteer_rename', JSON.stringify(before), JSON.stringify(after)),
+    db.prepare('UPDATE v3_identity_revision SET revision=revision+1 WHERE id=1'),
     db.prepare('DELETE FROM v3_identity_guard'),
   ]);
   return identityOf(db, source.volunteerId);
@@ -138,6 +140,7 @@ export async function mergeIdentity(db, input, key) {
     db.prepare('UPDATE v3_volunteers SET name=? WHERE volunteer_id=?').bind('__merged:' + source.volunteerId, source.volunteerId),
     db.prepare('INSERT INTO v3_identity_redirects VALUES(?,?)').bind(source.volunteerId, target.volunteerId),
     db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,before_json,after_json) VALUES(?,?,?,?,?,?)').bind(new Date().toISOString(), code, source.name, 'volunteer_merge', JSON.stringify(before), JSON.stringify({ volunteerId: target.volunteerId, name: target.name })),
+    db.prepare('UPDATE v3_identity_revision SET revision=revision+1 WHERE id=1'),
     db.prepare('DELETE FROM v3_identity_guard'),
   ]);
   return identityOf(db, target.volunteerId);

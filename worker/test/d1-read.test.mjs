@@ -181,8 +181,8 @@ test('名字推薦改用 v3_volunteers：表上的名字記進去、以前看過
 test('存登記名字只寫有變的（#407）：同一天名字沒變寫 0 列、多一個新名字寫 1 列、隔天才更新 last_seen', async () => {
   const DB = await seededDb();
   const { rememberWalkerNames } = await import('../src/index.js');
-  // total_changes 也算觸發器：每寫 1 列名字，identity_v3_volunteers_* 會多寫 1 列 v3_identity_revision
-  const changes = async () => (await DB.prepare('SELECT total_changes() AS n').all()).results[0].n / 2;
+  // total_changes 也算觸發器；v3_volunteers 沒有觸發器（#556 拿掉 identity_v3_volunteers_*），寫 1 列就是 1
+  const changes = async () => (await DB.prepare('SELECT total_changes() AS n').all()).results[0].n;
   const t0 = Date.parse('2026-10-15T01:00:00Z');
   await rememberWalkerNames({ DB }, ['志工乙', '老K'], t0);
   let before = await changes();
