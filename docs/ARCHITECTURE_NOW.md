@@ -1,6 +1,6 @@
 # 資料流現況
 
-資料在哪、誰寫、誰同步，以本檔為入口。最後核對：2026-10-25，開發基準 main `87338e8`（#566 新流程尚待正式 migration／部署核准）。開關與排程的即時值以自動產生的 `docs/adr/README.md` 為準；決定的理由看 ADR。
+資料在哪、誰寫、誰同步，以本檔為入口。最後核對：2026-10-25，開發基準 main `9aca5d6`（#566 新流程尚待正式 migration／部署核准）。開關與排程的即時值以自動產生的 `docs/adr/README.md` 為準；決定的理由看 ADR。
 
 ## 改版終點（K 2026-10-24）
 
@@ -18,7 +18,7 @@
 | 今日溜狗（網站按溜了、復原、改溜狗人） | 網站 | 先存 D1（`SITE.d1WalkAccept=true`，PR #533），再由 Worker 寫回試算表兩欄 | `worker/src/walk-accept.js` |
 | 今日溜狗（人工改試算表） | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/rows`，Worker 只比那幾隻 | `apps-script/sheet-write.gs`、`worker/src/walk-reconcile.js` |
 | 狗清單：主清單、已出所、常遛狗群 | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/dog-list`，只寫有變的欄（#501） | `worker/src/dog-list.js` |
-| 常溜狗群（網站狗群頁） | 管理者在試算表「常遛狗群」改 | GAS 編輯觸發送 D1；網站只讀（#474） | `worker/src/dog-list.js` |
+| 常溜狗群（網站狗群頁） | 管理者在試算表「常遛狗群」改 | GAS 編輯觸發送 D1（一欄一列 `v3_sheet_group_columns`，#559）；網站只讀（#474） | `worker/src/dog-list.js` |
 | 休養、介紹、開卡、常溜、固定照顧、活動 | 網站 | 只存 D1，不碰試算表 | 見各 ADR |
 | 照片 | 志工／Access 管理網站 | 共用前端縮圖，R2 不可覆寫版本＋D1 CAS 引用及紀錄；舊固定路徑相容，Actions 只供人工補圖（#566 承接 #546 契約） | `worker/src/dog-photo.js`、`public/js/photo-images.js` |
 | 志工名字建議 `/walkers` | — | 讀 D1（#519） | ADR 0019 |

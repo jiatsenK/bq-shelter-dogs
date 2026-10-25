@@ -28,9 +28,9 @@ async function seededDb() {
   await importCompactDogs(DB, SOURCE);
   // 介紹是 D1 自己存的（#250）
   await DB.prepare("INSERT INTO v3_intros SELECT dog_id,'民眾拾獲' FROM v3_dog_numbers WHERE number='2025022703'").run();
-  // 分組：第 0 欄 滿滿＋圓仔，第 1 欄 圓仔＋沒編號
-  for (const [col, row, name] of [[0, 0, '滿滿'], [0, 1, '圓仔'], [1, 0, '圓仔'], [1, 1, '沒編號']]) {
-    await DB.prepare('INSERT INTO v3_sheet_groups VALUES(?,?,?)').bind(col, row, name).run();
+  // 分組：第 0 欄 滿滿＋圓仔，第 1 欄 圓仔＋沒編號（一欄一列，#559）
+  for (const [col, names] of [[0, ['滿滿', '圓仔']], [1, ['圓仔', '沒編號']]]) {
+    await DB.prepare('INSERT INTO v3_sheet_group_columns(column_index,names) VALUES(?,?)').bind(col, JSON.stringify(names)).run();
   }
   await DB.prepare('INSERT INTO v3_sheet_changes VALUES(?,?,?)').bind(0, '10/14', '圓仔移到新B08').run();
   await DB.prepare('INSERT INTO v3_sheet_changes VALUES(?,?,?)').bind(1, '', '').run();

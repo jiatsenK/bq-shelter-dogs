@@ -2,7 +2,7 @@
 // small：在所（狗清單、主清單上的狗的休養）；離所按出所年份一年一份（ADR 0014，#362）；溜狗紀錄：切點（cutoff，正常是今天）以前的按月分段（#320），一年存一份；今天的紀錄另外只讀今天的列。
 // 版本號由 db/compact-schema.sql 的觸發器自動加 1，所以網站、同步、別台 Worker 機器寫入都看得到。
 // 輸出和直接讀表（compact.js 的 readDogsPayload 等）逐字元相同
-import { readDogsPayload, readDepartures, readRest, readSyncedAt, sortDepartures, sortedRest, HISTORY_START } from './compact.js';
+import { readDogsPayload, readDepartures, readNameOnlyCards, readRest, readSyncedAt, sortDepartures, sortedRest, HISTORY_START } from './compact.js';
 import { summarize, addMine } from './walk-summary.js';
 
 // D1 一列上限 2 MB；資料包一律分段存，每段最多這麼多位元組（測試會調小）
@@ -105,7 +105,7 @@ async function smallPack(db, ver) {
 // ---- 離所按出所年份（ADR 0014，#362）：每年版本號在 v3_departure_versions.years（JSON，{"2026":3,"none":1}），
 // 觸發器依出所日的年份只讓那一年加 1；資料包存在 v3_packs，part 是 departures:年，一年一份 ----
 const depPart = year => `departures:${year}`;
-// 每年 { departures, rest }（rest 是那年離所、現在不在主清單上的狗）；只讀版本號變了的那幾年
+// 每年 { departures, cards, rest }（cards 是那年只有名字的已出所狗卡，#560；rest 是那年離所、現在不在主清單上的狗）；只讀版本號變了的那幾年
 async function departurePacks(db) {
   const years = JSON.parse((await versionRow(db, 'SELECT years FROM v3_departure_versions WHERE id=1')).years);
   const deps = mem.deps ||= {};
@@ -118,8 +118,10 @@ async function departurePacks(db) {
     for (const y of stale) {
       const segs = (rows.get(depPart(y)) || []).sort((a, b) => a.seq - b.seq);
       let body = segs.length && segs.every((r, i) => r.seq === i && r.ver === years[y]) ? JSON.parse(segs.map(r => r.body).join('')) : null;
+      // #560 以前的資料包沒有 cards（套 migration 到部署之間舊程式可能用新版本號存過）：當作過期重算
+      if (body && !Array.isArray(body.cards)) body = null;
       if (!body) {
-        body = { departures: await readDepartures(db, y), rest: await readRest(db, y) };
+        body = { departures: await readDepartures(db, y), cards: await readNameOnlyCards(db, y), rest: await readRest(db, y) };
         await savePack(db, depPart(y), years[y], '', body);
       }
       deps[y] = { ver: years[y], body };
@@ -292,11 +294,12 @@ async function packedWalks(db, today) {
   return [...Object.keys(months).sort().flatMap(m => months[m].list), ...await liveWalks(db, v)];
 }
 
-// part 是 dogs／departures／rest；dogs 是 null 表示主清單沒有狗。
+// part 是 dogs／departures／cards／rest；dogs 是 null 表示主清單沒有狗。
 // 離所由各年資料包接起來；休養是在所的加上各年離所的（同一隻狗回到主清單時以在所為準）
 export async function readSmall(db, part) {
   memFor(db);
   if (part === 'departures') return sortDepartures((await departurePacks(db)).packs.flatMap(p => p.departures));
+  if (part === 'cards') return (await departurePacks(db)).packs.flatMap(p => p.cards);
   const v = await versions(db);
   const small = await smallPack(db, v.small);
   if (part === 'dogs') return small.dogs;

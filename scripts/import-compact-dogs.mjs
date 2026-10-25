@@ -76,8 +76,8 @@ export async function importCompactDogs(db, input) {
   }
   const statements = [];
   // 只清掉本次重建的複本子列，不刪永久狗和編號，也不碰舊表。
-  // v3_sheet_former_numbers 不再寫（#557），但它對主清單列有外鍵：刪表前照清
-  for (const table of ['v3_sheet_main_walkers', 'v3_sheet_former_numbers', 'v3_sheet_main']) statements.push(db.prepare(`DELETE FROM ${table}`));
+  // v3_sheet_main_walkers 不再寫（#559），但對主清單列有外鍵：刪表前照清
+  for (const table of ['v3_sheet_main_walkers', 'v3_sheet_main']) statements.push(db.prepare(`DELETE FROM ${table}`));
   for (const [i, dog] of input.dogs.entries()) {
     const dogId = resolved.get(key(dog));
     statements.push(db.prepare('INSERT INTO v3_dogs(dog_id,name,sex) VALUES(?,?,?) ON CONFLICT(dog_id) DO UPDATE SET name=excluded.name,sex=excluded.sex').bind(dogId, dog.name, dog.sex || ''));
@@ -86,10 +86,9 @@ export async function importCompactDogs(db, input) {
     }
     const scalar = Object.keys(columns);
     const values = scalar.map(f => dog[f] ?? (nullable.has(f) ? null : ''));
-    // 同步時間不寫主清單（ADR 0014），另存 v3_sync_state；synced_at 欄沒有預設值，#557 第二步刪欄前先留空
-    const names = ['row_index', 'dog_id', 'synced_at', ...scalar.map(f => columns[f])];
-    statements.push(db.prepare(`INSERT INTO v3_sheet_main(${names.join(',')}) VALUES(${names.map(() => '?').join(',')})`).bind(i, dogId, '', ...values));
-    for (const [position, code] of (dog.walkers || []).entries()) statements.push(db.prepare('INSERT INTO v3_sheet_main_walkers VALUES(?,?,?)').bind(i, position, code));
+    // 同步時間不寫主清單（ADR 0014），另存 v3_sync_state；代號存同一列的 JSON（#559）
+    const names = ['row_index', 'dog_id', 'walker_codes', ...scalar.map(f => columns[f])];
+    statements.push(db.prepare(`INSERT INTO v3_sheet_main(${names.join(',')}) VALUES(${names.map(() => '?').join(',')})`).bind(i, dogId, JSON.stringify(dog.walkers || []), ...values));
   }
   if (input.syncedAt) statements.push(db.prepare(`INSERT INTO v3_sync_state(key,value) VALUES('${SYNCED_AT_KEY}',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).bind(input.syncedAt));
   if (statements.length) await db.batch(statements);
@@ -98,15 +97,14 @@ export async function importCompactDogs(db, input) {
 
 export async function readCompactDogs(db) {
   // 同一 batch 讀取，避免同步替換複本時混到不同版本。
-  const [main, walkers, former] = await db.batch([
+  const [main, former] = await db.batch([
     db.prepare('SELECT m.*, d.sex AS dog_sex FROM v3_sheet_main m JOIN v3_dogs d USING(dog_id) ORDER BY m.row_index'),
-    db.prepare('SELECT * FROM v3_sheet_main_walkers ORDER BY row_index,position'),
     db.prepare('SELECT m.row_index, n.number FROM v3_sheet_main m JOIN v3_dog_numbers n USING(dog_id) WHERE n.number<>m.number ORDER BY m.row_index, n.number'),
   ]);
   return main.results.map(row => {
     const dog = Object.fromEntries(Object.entries(columns).map(([f, c]) => [f, row[c]]));
     dog.sex = row.dog_sex;
-    dog.walkers = walkers.results.filter(r => r.row_index === row.row_index).map(r => r.walker_code);
+    dog.walkers = JSON.parse(row.walker_codes);
     dog.formerIds = former.results.filter(r => r.row_index === row.row_index).map(r => r.number);
     return normalize(dog);
   });

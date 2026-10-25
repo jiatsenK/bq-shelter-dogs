@@ -96,7 +96,7 @@ test('管理 Worker：真實簽章可讀資產／狗表／照片；替代來源�
   const { migrateCompactDatabase } = await import('../../scripts/migrate-compact-db.mjs');
   await migrateCompactDatabase(db);
   await db.prepare("INSERT INTO v3_dogs(dog_id,name,sex,fixed_care) VALUES('dog1','阿福','male',1),('dog2','無編號','',0)").run();
-  await db.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note,synced_at) VALUES(0,'dog1','2026010101','阿福','A1','表格備註','')").run();
+  await db.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note) VALUES(0,'dog1','2026010101','阿福','A1','表格備註')").run();
   await db.prepare("INSERT INTO v3_intros VALUES('dog1','網站介紹')").run();
   await db.prepare("INSERT INTO v3_rest VALUES('dog1','2099-01-01','休養原因')").run();
   const PHOTOS = fakeR2();

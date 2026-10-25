@@ -26,23 +26,22 @@ const dogs = await readCompactDogs(db);
 | --- | --- |
 | `v3_dogs` | 隨機永久 `dog_id`；狗名、性別；網站共用設定 `fixed_care` 預設 0，試算表同步不得寫入（ADR 0015） |
 | `v3_dog_numbers` | `number` → `dog_id`，多個編號可以對同狗 |
-| `v3_sheet_main` | `row_index`；主清單複本，保存順序、編號、狗名、籠位、備註、上次溜、「誰遛的」原文。`covered`、`my_walked`、`my_walked_date`、`synced_at`、`version`、`sex`、`intro` 7 欄 #557 起程式不讀不寫（`synced_at` 新列只寫空字串），第二步刪欄 |
-| `v3_sheet_main_walkers` | 主清單列＋順序；上次溜的代號 |
-| `v3_sheet_former_numbers` | **#557 停用，第二步刪表**；舊編號改讀 `v3_dog_numbers` |
+| `v3_sheet_main` | `row_index`；主清單複本，保存順序、編號、狗名、籠位、備註、上次溜、「誰遛的」原文與代號（`walker_codes`，JSON 陣列照名單順序，#559）。`covered`、`my_walked`、`my_walked_date`、`synced_at`、`version`、`sex`、`intro` 7 欄 #557 刪欄（migration 0004） |
+| `v3_sheet_main_walkers` | **#559 停用，下一步刪表**；代號改存 `v3_sheet_main.walker_codes`（刪主清單列時照刪，外鍵擋著） |
 | `v3_sheet_changes` | 來源列；實際來源的標籤 `label` 與完整文字 `text`，不猜拆日期或名字 |
-| `v3_sheet_departed` | **#557 停用（一直是空表），第二步刪表** |
-| `v3_sheet_groups` | 來源欄＋列；可以一起溜的狗名 |
+| `v3_sheet_group_columns` | 常遛狗群一欄一列（#559）：`column_index`、群名 `label`、狗名 `names`（JSON 陣列，照試算表由上往下）；群名和狗都空就刪掉那列 |
+| `v3_sheet_groups`／`v3_sheet_group_labels` | **#559 停用，下一步刪表**；改用 `v3_sheet_group_columns` |
 | `v3_walks` | 狗＋日期＋順序；那天的編號 `dog_number`、狗名 `dog_name`、志工名字／代號直接存在紀錄，不另建溜狗的人表 |
-| `v3_volunteers` | 志工；代號對照在 `v3_identity_names`（`v3_volunteer_codes` 跟它完全重複，#557 停用，第二步刪表） |
+| `v3_volunteers` | 志工；代號對照在 `v3_identity_names`（`v3_volunteer_codes` 跟它完全重複，#557 刪表） |
 | `v3_card_opened` | 代號＋永久狗 ID；開卡日期 |
 | `v3_rest` | 永久狗 ID；休養截止日、原因 |
-| `v3_photos` | #566 維護不可覆寫的照片版本引用，與狗編輯紀錄同交易提交；舊固定路徑仍由 R2 備援。此用途取代 #557 原先的刪表規劃，正式 migration 必須一併核對 |
-| `v3_dog_edit_state` / `v3_dog_edit_guard` | 每隻狗的 CAS 版本與 GAS 交易檢查；無差異不寫 |
-| `v3_dog_edit_actors` / `v3_dog_sex_legacy` | 私人操作者來源（公開 API 不回登入識別）／遷移時留存的舊性別差異，不自動補值 |
+| `v3_photos` | #566／0007 新的不可覆寫版本引用，與狗編輯紀錄同交易提交；0004 已刪的舊清單不恢復，舊固定路徑仍由 R2 備援 |
+| `v3_dog_edit_state` / `v3_dog_edit_guard` | 狗 CAS 版本／GAS 交易檢查；無差異不寫 |
+| `v3_dog_edit_actors` | 受保護操作者來源；公開 API 不回登入識別 |
 | `v3_intros` | 永久狗 ID；入所介紹 |
 | `v3_edit_log` | 編輯紀錄：時間、編輯者代號與名字、種類、狗、改前／改後（JSON），見 `docs/adr/0004-open-editing-and-edit-log.md` |
 | `v3_activities` / `v3_activity_dogs` | 活動紀錄（#270，ADR 0002）：一場一列（日期、類型、revision）；出席的狗一列一隻，`dog_id` 是 NULL 表示只有名字、還沒對上狗。網站寫，同步不碰；舊名單用 `scripts/import-activities.mjs` 手動匯入 |
-| `v3_departed_cards` | 只有名字的已出所狗卡（#271）：永久狗 ID（`v3_dogs` 一列、沒有編號）、離所日、原因。K 用 `scripts/departed-card.mjs` 手動建，同時接上活動紀錄同名、沒對上的出席 |
+| `v3_departed_cards` | **#560 停用，下一張 PR 刪表**；只有名字的已出所狗卡改記在 `v3_dog_departures`（編號留空）。K 用 `scripts/departed-card.mjs` 手動建，同時接上活動紀錄同名、沒對上的出席 |
 
 所有集合拆成列，沒有 JSON 欄位。讀回時每隻狗都有全部欄位，比對前來源 JSON 也補成同樣形狀，所以不另存欄位是否存在。沒有編號的狗以名字延續狗 ID（改名會變成新狗）。JSON 內的 `intro` 是主清單讀取結果的複本；D1 自存介紹放 `v3_intros`，實際匯入留給後續票。其餘試算表複本、分組和 D1 自存資料本票只建表，不填資料。
 
@@ -107,7 +106,8 @@ const report = await compareCompactProfiles(db, { walks, intros, names, rest, ph
 
 ## 離所紀錄（#259）
 
-- `v3_departures` 一隻離所的狗一列（編號、永久狗 ID、離所日期與來源、第一次不在主清單那天、原因、命中的字、回到主清單用的新編號、離開前最後一次的樣子）；判讀旗標、最後的舊編號、最後的常遛狗群拆在 `v3_departure_items`。
+- #560 起記在 `v3_dog_departures`：用永久狗 ID 記，一隻狗一次離所一列（主鍵是狗 ID＋離所時的編號；編號留空是只有名字的已出所狗卡）。欄位有離所日期與來源、第一次不在主清單那天、原因、命中的字、回到主清單用的新編號、離開前最後一次的樣子；判讀旗標、最後的舊編號、最後的常遛狗群是 JSON 陣列欄（`flags_json`、`former_json`、`groups_json`）。
+- 舊的 `v3_departures`、`v3_departure_items`（以編號為主鍵、附屬清單拆成列）資料已由 `migrations/0006_dog_departures.sql` 搬過去，程式不再讀寫，下一張 PR 刪表。以下兩點是 #259 當時的做法。
 - 同步（`sync-compact-d1.mjs`）每次把 `data/departures.json` 整份換進這兩張表，正式 D1 還沒有這兩張表時 SQL 開頭會先建，不用另外遷移。第一次同步就等於匯入既有紀錄，比對不一致就不寫。
 - 讀回用 `worker/src/compact.js` 的 `readDepartures`，形狀跟 `data/departures.json` 的 `departures` 一樣（#260 網站改讀時用）。
 - #251 起離所以 D1 上一次的內容為基準計算。

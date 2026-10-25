@@ -58,10 +58,11 @@ function walkDay(db, dogId, date, dog, codes) {
       .bind(dogId, date, i, code, dog.id, dog.name)),
   ];
 }
-// v3_sheet_former_numbers 不再讀寫（#557），但它對主清單列有 ON DELETE RESTRICT 外鍵：刪表（#557 第二步）前照刪，不然記離所會被擋
-const dropMainRow = (db, rowIndex) => ['v3_sheet_main_walkers', 'v3_sheet_former_numbers', 'v3_sheet_main']
+// v3_sheet_main_walkers 不再讀寫（#559），但對主清單列有 ON DELETE RESTRICT 外鍵：刪表前照刪，不然記離所會被擋
+const dropMainRow = (db, rowIndex) => ['v3_sheet_main_walkers', 'v3_sheet_main']
   .map(t => db.prepare(`DELETE FROM ${t} WHERE row_index=?`).bind(rowIndex));
-const dropDeparture = (db, number) => [db.prepare('DELETE FROM v3_departure_items WHERE number=?').bind(number), db.prepare('DELETE FROM v3_departures WHERE number=?').bind(number)];
+// 離所用狗 ID 記（#560，v3_dog_departures）；同步只處理有編號的離所，沒編號的是只有名字的已出所狗卡，不動
+const dropDeparture = (db, number) => db.prepare('DELETE FROM v3_dog_departures WHERE number=?').bind(number);
 
 async function applyMain(db, row, list, env, fp) {
   const dog = cleanDog(row.dog), cage = text(row.cage), note = text(row.note).replace(/\r\n?/g, '\n');
@@ -85,25 +86,19 @@ async function applyMain(db, row, list, env, fp) {
   }
   if (old) {
     expected=old;targetDogId=old.dog_id;
-    const oldCodes = (await db.prepare('SELECT walker_code FROM v3_sheet_main_walkers WHERE row_index=? ORDER BY position').bind(old.row_index).all()).results.map(r => r.walker_code);
-    const codesChanged = keyed && !sameList(oldCodes, codes);
-    const next = { name: dog.name, cage, note, walked_date: date, walker: text(row.walker) };
+    // 代號存在同一列的 JSON（#559）：跟其他欄同一句 UPDATE；沒有 WALKER_KEY 算不出代號就不動
+    const next = { name: dog.name, cage, note, walked_date: date, walker: text(row.walker), ...(keyed ? { walker_codes: JSON.stringify(codes) } : {}) };
     const changed = Object.keys(next).filter(c => next[c] !== old[c]);
+    const codesChanged = changed.includes('walker_codes');
     if (changed.length) out.push(db.prepare(`UPDATE v3_sheet_main SET ${changed.map(c => `${c}=?`).join(',')} WHERE row_index=?`).bind(...changed.map(c => next[c]), old.row_index));
     if (next.name !== old.name) out.push(db.prepare('UPDATE v3_dogs SET name=? WHERE dog_id=?').bind(dog.name, old.dog_id));
-    if (codesChanged) {
-      out.push(db.prepare('DELETE FROM v3_sheet_main_walkers WHERE row_index=?').bind(old.row_index));
-      codes.forEach((code, i) => out.push(db.prepare('INSERT INTO v3_sheet_main_walkers VALUES(?,?,?)').bind(old.row_index, i, code)));
-    }
     // 日期變新、或同一天換人才記一筆；清空不記也不刪（同 newWalks）
     // 改回較早的日子（K 2026-10-24，例如 Ctrl+Z）：那天照表上名單重寫，表上不再寫的較新那天刪掉
     if (date && (!old.walked_date || date > old.walked_date || (date === old.walked_date && codesChanged))) out.push(...walkDay(db, old.dog_id, date, dog, codes));
     else if (date && date < old.walked_date) out.push(db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(old.dog_id, old.walked_date), ...walkDay(db, old.dog_id, date, dog, codes));
     Object.assign(old, next);
   } else {
-    const identified=dog.id
-      ?await db.prepare('SELECT n.dog_id,s.revision FROM v3_dog_numbers n JOIN v3_dog_edit_state s USING(dog_id) WHERE number=?').bind(dog.id).first()
-      :await db.prepare("SELECT w.dog_id,s.revision FROM v3_walks w JOIN v3_dog_edit_state s USING(dog_id) WHERE dog_number='' AND dog_name=? LIMIT 1").bind(dog.name).first();
+    const identified=dog.id?await db.prepare('SELECT n.dog_id,s.revision FROM v3_dog_numbers n JOIN v3_dog_edit_state s USING(dog_id) WHERE number=?').bind(dog.id).first():await db.prepare("SELECT w.dog_id,s.revision FROM v3_walks w JOIN v3_dog_edit_state s USING(dog_id) WHERE dog_number='' AND dog_name=? LIMIT 1").bind(dog.name).first();
     let dogId=identified?.dog_id;expected=identified;
     let returned = null;
     if (!dogId && dog.id) returned = await returnedDog(db, dog, list);
@@ -118,22 +113,16 @@ async function applyMain(db, row, list, env, fp) {
     } else out.push(db.prepare('UPDATE v3_dogs SET name=? WHERE dog_id=? AND name<>?').bind(dog.name, dogId, dog.name));
     targetDogId=dogId;
     const rowIndex = Math.max(-1, ...list.map(m => m.row_index)) + 1;
-    // synced_at 沒有預設值，要等 #557 第二步刪欄才拿掉
-    out.push(db.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note,walked_date,synced_at,walker) VALUES(?,?,?,?,?,?,?,'',?)")
-      .bind(rowIndex, dogId, dog.id, dog.name, cage, note, date, text(row.walker)));
-    codes.forEach((code, i) => out.push(db.prepare('INSERT INTO v3_sheet_main_walkers VALUES(?,?,?)').bind(rowIndex, i, code)));
+    out.push(db.prepare('INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note,walked_date,walker,walker_codes) VALUES(?,?,?,?,?,?,?,?,?)')
+      .bind(rowIndex, dogId, dog.id, dog.name, cage, note, date, text(row.walker), JSON.stringify(codes)));
     // 又回到主清單（例：誤移、退養回來）不算離所；換了新編號回來的，舊離所註明用哪個編號回所
-    if (dog.id) out.push(...dropDeparture(db, dog.id),
-      db.prepare("UPDATE v3_departures SET returned_number=? WHERE dog_id=? AND number<>? AND COALESCE(returned_number,'')<>?").bind(dog.id, dogId, dog.id, dog.id));
+    if (dog.id) out.push(dropDeparture(db, dog.id),
+      db.prepare("UPDATE v3_dog_departures SET returned_number=? WHERE dog_id=? AND number NOT IN (?,'') AND COALESCE(returned_number,'')<>?").bind(dog.id, dogId, dog.id, dog.id));
     if (date && !(await db.prepare('SELECT 1 FROM v3_walks WHERE dog_id=? AND walk_date=? LIMIT 1').bind(dogId, date).first())) out.push(...walkDay(db, dogId, date, dog, codes));
-    list.push({ row_index: rowIndex, dog_id: dogId, number: dog.id, name: dog.name, cage, note, walked_date: date });
+    list.push({ row_index: rowIndex, dog_id: dogId, number: dog.id, name: dog.name, cage, note, walked_date: date, walker: text(row.walker), walker_codes: JSON.stringify(codes) });
   }
   if(returnedLog)out.push(db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) VALUES(?,?,?,?,?,?,?,?)').bind(new Date().toISOString(),'',returnedLog.editor.name,returnedLog.kind,returnedLog.dogId,returnedLog.dogNumber,JSON.stringify(returnedLog.before),JSON.stringify(returnedLog.after)));
-  if(out.length) {
-    const result=await guardedDogBatch(db,expected,[...out,db.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(targetDogId)]);
-    const revision=result.at(-1).results[0]?.revision;
-    for(const item of list)if(item.dog_id===targetDogId)item.revision=revision;
-  }
+  if(out.length){const result=await guardedDogBatch(db,expected,[...out,db.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(targetDogId)]);const revision=result.at(-1).results[0]?.revision;for(const item of list)if(item.dog_id===targetDogId)item.revision=revision;}
   return out.length > 0;
 }
 
@@ -141,7 +130,7 @@ async function applyMain(db, row, list, env, fp) {
 // 認錯可在網站「舊編號」拆開（編輯紀錄記為系統自動）。同名多筆不猜，當新狗。
 async function returnedDog(db, dog, list) {
   if (list.some(m => m.name === dog.name)) return null;
-  const found = (await db.prepare('SELECT d.number,d.dog_id,s.revision FROM v3_departures d JOIN v3_dog_edit_state s USING(dog_id) WHERE name=? LIMIT 2').bind(dog.name).all()).results;
+  const found = (await db.prepare("SELECT d.number,d.dog_id,s.revision FROM v3_dog_departures d JOIN v3_dog_edit_state s USING(dog_id) WHERE name=? AND number<>'' LIMIT 2").bind(dog.name).all()).results;
   return found.length === 1 ? found[0] : null;
 }
 
@@ -153,42 +142,36 @@ async function applyDeparted(db, row, list, now, fp) {
   const dates = (Array.isArray(row.dates) ? row.dates : []).map(text).filter(d => YMD.test(d) && d <= todayYmd);
   const departDate = dates.length ? new Date(`${dates[dates.length - 1]}T00:00:00`) : null;
   const judged = judgeDeparture(dog, [{ texts, departDate }], today);
-  // 沒編號的狗記不了離所（v3_departures 以編號為主鍵）：不從主清單移走，免得資料不見；保險掃描照常列出
+  // 沒編號的狗先不記離所、不從主清單移走（#560 第一步只換表；之後才開放），保險掃描照常列出
   if (!dog.id) return false;
   const old = findMain(list, dog);
   const out = [];
   if (old) {
     {
       const former = (await db.prepare('SELECT number FROM v3_dog_numbers WHERE dog_id=? AND number<>? ORDER BY number').bind(old.dog_id, dog.id).all()).results.map(r => r.number);
-      const groups = (await db.prepare('SELECT DISTINCT b.name FROM v3_sheet_groups a JOIN v3_sheet_groups b ON a.column_index=b.column_index WHERE a.name=? AND b.name<>? ORDER BY b.column_index,b.row_index').bind(old.name, old.name).all()).results.map(r => r.name);
+      const groups = (await db.prepare('SELECT DISTINCT b.value AS name FROM v3_sheet_group_columns g, json_each(g.names) a, json_each(g.names) b WHERE a.value=? AND b.value<>? ORDER BY g.column_index,b.key').bind(old.name, old.name).all()).results.map(r => r.name);
       // 性別在 v3_dogs、入所介紹在 v3_intros（#250）；主清單不再存這兩欄（#557）
       const extra = await db.prepare('SELECT d.sex, i.intro FROM v3_dogs d LEFT JOIN v3_intros i USING(dog_id) WHERE d.dog_id=?').bind(old.dog_id).first();
-      out.push(...dropDeparture(db, dog.id));
-      out.push(db.prepare(`INSERT INTO v3_departures(number,dog_id,name,departed_date,date_source,seen_date,reason,matched,last_number,last_name,last_cage,last_walked_date,last_note,last_sex,last_intro)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(dog.id, old.dog_id, old.name, judged.date || todayYmd, judged.date ? judged.dateSource : 'seen', todayYmd,
-        judged.reason, judged.matched || '', dog.id, old.name, old.cage, old.walked_date, old.note, extra?.sex || '', extra?.intro || ''));
-      const items = (kind, values) => values.forEach((v, i) => out.push(db.prepare('INSERT INTO v3_departure_items(number,kind,position,value) VALUES(?,?,?,?)').bind(dog.id, kind, i, v)));
-      items('flag', judged.flags || []); items('former', former); items('group', groups);
+      out.push(dropDeparture(db, dog.id));
+      out.push(db.prepare(`INSERT INTO v3_dog_departures(dog_id,number,name,departed_date,date_source,seen_date,reason,matched,flags_json,last_number,last_name,last_cage,last_walked_date,last_note,last_sex,last_intro,former_json,groups_json)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(old.dog_id, dog.id, old.name, judged.date || todayYmd, judged.date ? judged.dateSource : 'seen', todayYmd,
+        judged.reason, judged.matched || '', JSON.stringify(judged.flags || []), dog.id, old.name, old.cage, old.walked_date, old.note, extra?.sex || '', extra?.intro || '',
+        JSON.stringify(former), JSON.stringify(groups)));
     }
     out.push(...dropMainRow(db, old.row_index));
+
   } else {
     // 已經記過離所：志工之後補上原因或日期就改過來
-    const prev = await db.prepare('SELECT reason,matched,departed_date,date_source FROM v3_departures WHERE number=?').bind(dog.id).first();
+    const prev = await db.prepare('SELECT reason,matched,departed_date,date_source,flags_json FROM v3_dog_departures WHERE number=?').bind(dog.id).first();
     if (!prev) return false;
-    const flags = (await db.prepare("SELECT value FROM v3_departure_items WHERE number=? AND kind='flag' ORDER BY position").bind(dog.id).all()).results.map(r => r.value);
     const date = judged.date || prev.departed_date, source = judged.date ? judged.dateSource : prev.date_source;
-    if (prev.reason !== judged.reason || prev.matched !== (judged.matched || '') || prev.departed_date !== date || prev.date_source !== source)
-      out.push(db.prepare('UPDATE v3_departures SET reason=?,matched=?,departed_date=?,date_source=? WHERE number=?').bind(judged.reason, judged.matched || '', date, source, dog.id));
-    if (!sameList(flags, judged.flags || [])) {
-      out.push(db.prepare("DELETE FROM v3_departure_items WHERE number=? AND kind='flag'").bind(dog.id));
-      (judged.flags || []).forEach((v, i) => out.push(db.prepare("INSERT INTO v3_departure_items(number,kind,position,value) VALUES(?,'flag',?,?)").bind(dog.id, i, v)));
-    }
+    const flags = judged.flags || [];
+    // 旗標跟其他欄同一列：有變就一句 UPDATE（觸發器只跑一次）
+    if (prev.reason !== judged.reason || prev.matched !== (judged.matched || '') || prev.departed_date !== date || prev.date_source !== source || !sameList(JSON.parse(prev.flags_json), flags))
+      out.push(db.prepare('UPDATE v3_dog_departures SET reason=?,matched=?,departed_date=?,date_source=?,flags_json=? WHERE number=?').bind(judged.reason, judged.matched || '', date, source, JSON.stringify(flags), dog.id));
   }
-  if (out.length) await guardedDogBatch(db,old,out);
-  if(old && out.length) {
-    list.splice(list.indexOf(old), 1);
-    delete fp[`main:${dogKey(dog)}`];
-  }
+  if(out.length)await guardedDogBatch(db,old,out);
+  if(old&&out.length){list.splice(list.indexOf(old),1);delete fp[`main:${dogKey(dog)}`];}
   return out.length > 0;
 }
 
@@ -200,19 +183,14 @@ async function applyGroup(db, row, list) {
   const known = new Map(list.map(m => [groupKey(m.name), m.name]));
   const names = [...new Set((Array.isArray(row.names) ? row.names : []).map(text).filter(n => n && !/^\d+$/.test(n)).map(n => known.get(groupKey(n))).filter(Boolean))];
   const label = text(row.label) && !/^\d+$/.test(text(row.label)) && !known.has(groupKey(row.label)) ? text(row.label) : '';
-  const [had, hadLabel] = await db.batch([
-    db.prepare('SELECT name FROM v3_sheet_groups WHERE column_index=? ORDER BY row_index').bind(column),
-    db.prepare('SELECT label FROM v3_sheet_group_labels WHERE column_index=?').bind(column)]);
-  const out = [];
-  if (!sameList(had.results.map(r => r.name), names)) {
-    out.push(db.prepare('DELETE FROM v3_sheet_groups WHERE column_index=?').bind(column));
-    names.forEach((n, i) => out.push(db.prepare('INSERT INTO v3_sheet_groups(column_index,row_index,name) VALUES(?,?,?)').bind(column, i, n)));
-  }
-  if ((hadLabel.results[0]?.label || '') !== label) out.push(label
-    ? db.prepare('INSERT INTO v3_sheet_group_labels(column_index,label) VALUES(?,?) ON CONFLICT(column_index) DO UPDATE SET label=excluded.label').bind(column, label)
-    : db.prepare('DELETE FROM v3_sheet_group_labels WHERE column_index=?').bind(column));
-  if (out.length) await db.batch(out);
-  return out.length > 0;
+  // 一欄一列（#559）：群名、狗名有變就寫這一列（改一群約 2 列寫入，原本一隻狗一列整欄刪掉重寫約 54 列）；群名和狗都空就刪掉
+  const had = await db.prepare('SELECT label, names FROM v3_sheet_group_columns WHERE column_index=?').bind(column).first();
+  const json = JSON.stringify(names);
+  if ((had?.label || '') === label && (had?.names || '[]') === json) return false;
+  await (label || names.length
+    ? db.prepare('INSERT INTO v3_sheet_group_columns(column_index,label,names) VALUES(?,?,?) ON CONFLICT(column_index) DO UPDATE SET label=excluded.label,names=excluded.names').bind(column, label, json)
+    : db.prepare('DELETE FROM v3_sheet_group_columns WHERE column_index=?').bind(column)).run();
+  return true;
 }
 
 // 異動紀錄（主清單下方「備註」那段）：GAS 每次送整段，只寫有變的那幾段（#554，原本整段刪掉重寫，改一格約 84 列寫入）
@@ -237,7 +215,7 @@ export async function applyDogListRows(db, rows, env, now = Date.now()) {
   let fp = await readFp(db);
   const before = JSON.stringify(fp);
   // 主清單約 300 列，每批讀一次換來逐列不必各查一次（每次呼叫 50 次查詢上限）
-  let list = (await db.prepare('SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,s.revision FROM v3_sheet_main m JOIN v3_dog_edit_state s USING(dog_id)').all()).results;
+  let list = (await db.prepare('SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,m.walker_codes,s.revision FROM v3_sheet_main m JOIN v3_dog_edit_state s USING(dog_id)').all()).results;
   const results = [];
   for (const row of rows) {
     const key = row && unitKey(row);
@@ -274,7 +252,7 @@ export async function scanDogList(db, fingerprints, now = Date.now()) {
   // #528 舊指紋：回所的狗（同一隻 main: 這次有送）、D1 已經沒有這隻狗的資料，只刪指紋，不算 D1 有、試算表沒有
   const missing = Object.keys(fp).filter(k => !(k in fingerprints));
   const stale = new Set(missing.filter(k => k.startsWith('departed:') && `main:${k.slice(9)}` in fingerprints));
-  for (const [sheet, table] of [['main', 'v3_sheet_main'], ['departed', 'v3_departures']]) {
+  for (const [sheet, table] of [['main', 'v3_sheet_main'], ['departed', 'v3_dog_departures']]) {
     const keys = missing.filter(k => k.startsWith(`${sheet}:`) && !stale.has(k)).map(k => k.slice(sheet.length + 1));
     if (!keys.length) continue;
     const numbers = keys.filter(k => !k.startsWith('名:')), names = keys.filter(k => k.startsWith('名:')).map(k => k.slice(2));

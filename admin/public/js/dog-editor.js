@@ -119,7 +119,7 @@ export function openDogEditor(dog, container, onSaved) {
       controls.append(
         text(
           'p',
-          `狗正本：${sexLabel(snapshot.sex)}；遷移時試算表差異：${snapshot.sexCopies.map((r) => sexLabel(r.sex)).join('、') || '無留存差異'}。請逐隻核對，不依名字推測。`
+          `目前性別：${sexLabel(snapshot.sex)}。舊試算表副本已停止維護；請以狗正本逐隻確認，不依名字推測。`
         )
       );
       const node = document.createElement('select');

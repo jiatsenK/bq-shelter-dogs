@@ -137,7 +137,7 @@ test('#500 11 隻整群逐狗接受並各自寫回；部分失敗只重試未成
       await env.DB.batch([
         env.DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId, name),
         env.DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind(id, dogId),
-        env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(?,?,?,?,'2026-10-01','x')").bind(i + 2, dogId, id, name),
+        env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(?,?,?,?,'2026-10-01')").bind(i + 2, dogId, id, name),
       ]);
       const out = await post(env, request(`group-req-${String(i).padStart(4, '0')}`, '甲', { dogs:[{ id, name }] }), ctx);
       assert.equal(out.status, 200);

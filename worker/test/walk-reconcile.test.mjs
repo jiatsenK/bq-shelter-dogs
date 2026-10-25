@@ -92,7 +92,7 @@ test('D1 狗對應變成歧義，即使已接管也不能接受人工修正', as
   const env=await setup(); worker.testing.resetState();
   try {
     await baseline(env,'甲');
-    await env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(2,'dog','9001','測試狗','2026-10-01','x')").run();
+    await env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(2,'dog','9001','測試狗','2026-10-01')").run();
     const result=await machine(env,'observe',{ observations:[{ dog,current:{ date:'',walker:'' } }] });
     assert.equal(result.results[0].ok,false);
     assert.equal((await current(env)).walks[0].walker,'甲');
@@ -149,7 +149,7 @@ test('#408 單狗比對及 target 在主清單與同狗歷史十倍後，讀寫�
       await env.DB.batch(Array.from({ length:count },(_,i)=>env.DB.prepare("INSERT INTO v3_walk_outbox(dog_key,version,operation_date,target_date,target_walker,status,next_attempt_at,dispatch_id,readback_seen) VALUES('9001',?,'2020-01-01','2020-01-01','舊',?,'x','old-dispatch',?)").bind(-i-1,i%2 ? 'synced':'superseded',i%2)));
       for (let i=0;i<count;i++) await env.DB.batch([
         env.DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(`other${i}`,`別狗${i}`),
-        env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(?,?,?,?,'','x')").bind(i+2,`other${i}`,`B${i}`,`別狗${i}`),
+        env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(?,?,?,?,'')").bind(i+2,`other${i}`,`B${i}`,`別狗${i}`),
       ]);
       const prepare=env.DB.prepare, queries=[];
       const wrap=(sql,args=[])=>{
