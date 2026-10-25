@@ -27,21 +27,22 @@ function createWalkRegistration(deps) {
     // 舊版沒有時間證據，不能推定它比已同步正本新。
     return since && (!item?.observedAt || item.observedAt <= since) ? null : item;
   }
+  const walkersOf = walker => [...new Set(deps.split(walker).map(deps.canonical).filter(Boolean))];
   function state(dog, day = deps.date()) {
     const restore = restoring.get(deps.key(dog));
     if (restore) return { date: restore.date, walker: restore.walker,
-      walkers: [...new Set(deps.split(restore.walker).map(deps.canonical).filter(Boolean))],
+      walkers: walkersOf(restore.walker),
       today: restore.date === day, mine: false, canUndo: false, canRevert: false, restoring: true };
     const authoritative = accepted.get(deps.key(dog));
     if (authoritative) return { date: authoritative.walkedDate, walker: authoritative.walker,
-      walkers: [...new Set(deps.split(authoritative.walker).map(deps.canonical).filter(Boolean))],
+      walkers: walkersOf(authoritative.walker),
       today: authoritative.walkedDate === day, mine: isMine({ date: authoritative.walkedDate, walker: authoritative.walker }, day),
       canUndo: false, canRevert: authoritative.walkedDate === day && !!deps.walker() && deps.split(authoritative.walker).length === 1,
       syncStatus: authoritative.syncStatus, version: authoritative.version };
     if (deps.d1) {
       // #460：D1 模式只認伺服器的資料；本機已溜、寫入紀錄與試算表即時名單都不能反駁。
       const base = deps.base?.(dog) || {}, date = dateKey(base.date), walker = String(base.walker || '');
-      return { date, walker, walkers: [...new Set(deps.split(walker).map(deps.canonical).filter(Boolean))],
+      return { date, walker, walkers: walkersOf(walker),
         today: date === day, mine: isMine({ date, walker }, day), canUndo: false,
         canRevert: date === day && !!deps.walker() && deps.split(walker).length === 1 };
     }
@@ -51,7 +52,7 @@ function createWalkRegistration(deps) {
     const local = !expired && (deps.local?.(day) || []).includes(deps.key(dog));
     const current = item?.current || (local ? { date: day, walker: [base.walker, deps.walker() || '你', ...(deps.companions?.(dog, day) || [])].filter(Boolean).join('、') } : base);
     const date = dateKey(current.date), walker = String(current.walker || '');
-    return { date, walker, walkers: [...new Set(deps.split(walker).map(deps.canonical).filter(Boolean))],
+    return { date, walker, walkers: walkersOf(walker),
       today: date === day, mine: item?.current ? isMine({ date, walker }, day) : local || isMine({ date, walker }, day), canUndo: canUndo(dog, day),
       canRevert: canRevert(dog, day, { date, walker }) };
   }
@@ -186,7 +187,7 @@ function createWalkRegistration(deps) {
   // 登記前的樣子：這支手機登記時記下的，沒有就用狗清單還不是今天的日期；都沒有就等 D1 回應
   function priorOf(dog, day) {
     const key = deps.key(dog), base = deps.base?.(dog) || {};
-    if (priors.has(key)) return priors.get(key);
+    if (priors.has(key)) return { ...priors.get(key) }; // 每筆復原各自一份，清除時才分得出是誰設的
     const date = dateKey(base.date);
     return date && date !== day ? { date, walker: String(base.walker || '') } : null;
   }
@@ -195,7 +196,7 @@ function createWalkRegistration(deps) {
     if (request.d1 && request.action === 'undo') request.entries.forEach(e => { if (e.prior) restoring.set(e.key, e.prior); });
     const work = queue.then(() => execute(request));
     const finished = work.finally(() => request.entries.forEach(e => {
-      restoring.delete(e.key);
+      if (restoring.get(e.key) === e.prior) restoring.delete(e.key);
       const n = pending.get(e.key) - 1;
       if (n) pending.set(e.key, n); else pending.delete(e.key);
     }));
@@ -301,7 +302,8 @@ function createWalkRegistration(deps) {
     }
     let out;
     try { out = payload.operationDate !== deps.date() && deps.lookupRequest ? await deps.lookupRequest(payload.requestId) : await deps.send(payload); } catch { out = null; }
-    restoring.delete(key); // 有回應（含失敗）就以 D1 為準
+    // 有回應（含失敗）就以 D1 為準；同一隻後面還排著別筆復原時，只清自己設的
+    if (entry.prior && restoring.get(key) === entry.prior) restoring.delete(key);
     const matches = out?.source === 'd1' && Array.isArray(out.results) ? out.results.filter(r => r.id === entry.id && r.name === entry.name) : [];
     const result = matches.length === 1 ? matches[0] : null;
     const valid = out?.ok && result?.accepted === true && result.status === (payload.action === 'undo' ? 'restored' : 'written') && result.requestId === payload.requestId && result.operationDate === payload.operationDate

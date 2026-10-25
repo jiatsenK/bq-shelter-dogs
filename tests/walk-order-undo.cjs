@@ -117,6 +117,8 @@ module.exports = async (browser, base) => {
     assert.ok(await visible(2), '改回已溜的那隻也看得到');
     assert.doesNotMatch(await page.locator('#toast .toast-text').textContent(), /已取消/);
     failUndo = false; n = sent.length;
+    await page.clock.runFor(7000);
+    assert.equal(await page.locator('#toast').isVisible(), true, '有「再試一次」的提示條 7 秒時還在');
     await page.locator('#toast .toast-extra', { hasText: '再試一次' }).click();
     assert.equal(await card(2).locator('.walk-btn.done').count(), 0, '再試一次也立刻恢復');
     await waitSent(n + 1);
@@ -125,12 +127,12 @@ module.exports = async (browser, base) => {
     await page.locator('#toast .toast-text', { hasText: /^已取消 排序測試2 今天溜了$/ }).waitFor();
     assert.equal(await card(2).locator('.walk-btn.done').count(), 0);
 
-    // 4b. 連按復原：同一隻只送一次；接著按另一隻，兩隻都立刻恢復、依序送出
+    // 4b. 連按復原：同一隻連點兩下只送一次；接著按另一隻，兩隻都立刻恢復、依序送出
     hold = false;
     for (const i of [3, 4]) { await card(i).locator('[data-walk="add"]').click(); await card(i).locator('.walk-btn.done').waitFor(); }
     hold = true; n = sent.length;
-    await card(3).locator('[data-walk="back"]').click();
-    await card(3).locator('.walk-btn').click({ force: true }); // 第二下按到確認中的按鈕
+    await card(3).locator('[data-walk="back"]').dblclick();
+    assert.equal(await card(3).locator('.walk-btn').isDisabled(), true, '確認中的按鈕不能再按');
     await card(4).locator('[data-walk="back"]').click();
     const doneOf = async ids => (await Promise.all(ids.map(i => card(i).locator('.walk-btn.done').count()))).reduce((a, b) => a + b);
     assert.equal(await doneOf([3, 4]), 0, '兩隻都立刻恢復');
@@ -156,6 +158,20 @@ module.exports = async (browser, base) => {
     assert.equal(await card(5).locator('.walk-btn.done').count(), 0, '試算表寫回失敗不影響復原');
     assert.match(await card(5).locator('.last').textContent(), /45/, '顯示登記前的天數');
     assert.doesNotMatch(await page.locator('#toast .toast-text').textContent(), /尚未/);
+
+    // 6. 詳細資訊溜狗人旁的 × 也立刻恢復，關掉詳細資訊就看得到那隻
+    syncStatus = 'pending'; hold = true; n = sent.length;
+    await card(6).scrollIntoViewIfNeeded();
+    await card(6).click();
+    await page.getByRole('button', { name: '取消這次登記（甲）', exact: true }).click();
+    assert.equal(await page.getByRole('button', { name: '取消這次登記（甲）', exact: true }).count(), 0, '× 按了就收起，不能連按');
+    assert.equal(await card(6).locator('.walk-btn.done').count(), 0, '× 復原立刻恢復');
+    await waitSent(n + 1);
+    held.shift()();
+    await page.locator('#toast .toast-text', { hasText: /^已取消 排序測試6 今天溜了$/ }).waitFor();
+    assert.equal(sent.length, n + 1);
+    await page.getByRole('button', { name: '關閉', exact: true }).click();
+    assert.ok(await visible(6), '關掉詳細資訊後看得到復原的那隻');
     console.log('#445 按溜了往下排、復原立刻顯示並捲到那隻、提示條久一點、D1 失敗與連按、試算表寫回失敗通過');
   } finally { held.forEach(r => r()); await context.close(); }
 };

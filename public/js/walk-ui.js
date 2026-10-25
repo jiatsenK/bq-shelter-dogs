@@ -110,7 +110,9 @@ const BQWalkUI = (() => {
   }
   // 溜狗表上那隻狗不在頁首與提示條之間就捲到中間
   function revealDog(dog) {
-    const el = document.querySelector(`#main [data-dog="${appState.allDogs.indexOf(dog)}"]`);
+    // 背景重讀會換掉 allDogs，用 walkKey 找現在那一張
+    const i = appState.allDogs.findIndex(d => walkKey(d) === walkKey(dog));
+    const el = i >= 0 && document.querySelector(`#main [data-dog="${i}"]`);
     if (!el) return;
     const r = el.getBoundingClientRect(), top = document.querySelector('header')?.getBoundingClientRect().bottom || 0;
     const bottom = document.querySelector('#toast:not([hidden])')?.getBoundingClientRect().top ?? innerHeight;
