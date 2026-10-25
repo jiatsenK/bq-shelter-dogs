@@ -1,4 +1,4 @@
--- #245/#246：獨立精簡模型。只由明確的遷移入口執行，不由部署自動套用。
+-- 現在的完整結構（#553）：改結構時新增 migrations/NNNN_*.sql，同時改這份；scripts/d1-migrations.test.mjs 檢查空庫跑完全部 migration 跟這份建出來一樣。正式庫只由「套用 D1 migration」workflow 套用，不直接執行這份。
 -- #456：網站已接管的最新溜狗狀態獨立於試算表複本；舊同步不得寫入這些表。
 CREATE TABLE IF NOT EXISTS v3_walk_state (
   dog_key TEXT PRIMARY KEY,
@@ -134,6 +134,8 @@ CREATE TABLE IF NOT EXISTS v3_sheet_main (
 );
 CREATE INDEX IF NOT EXISTS v3_sheet_main_number ON v3_sheet_main(number);
 CREATE INDEX IF NOT EXISTS v3_sheet_main_name ON v3_sheet_main(name) WHERE number='';
+-- 用狗 ID 找主清單列不整張掃：開卡讀回、觸發器的 EXISTS（#555）
+CREATE INDEX IF NOT EXISTS v3_sheet_main_dog ON v3_sheet_main(dog_id);
 CREATE TABLE IF NOT EXISTS v3_sheet_main_walkers (
   row_index INTEGER NOT NULL REFERENCES v3_sheet_main(row_index) ON DELETE RESTRICT,
   position INTEGER NOT NULL,

@@ -6,10 +6,13 @@ import { pathToFileURL } from 'node:url';
 const ADDED = [['v3_walks', 'dog_number', "TEXT NOT NULL DEFAULT ''"], ['v3_walks', 'dog_name', "TEXT NOT NULL DEFAULT ''"],
   ['v3_dogs', 'fixed_care', 'INTEGER NOT NULL DEFAULT 0 CHECK(fixed_care IN (0,1))'], ['v3_sheet_main', 'walker', 'TEXT']];
 
-// db/compact-schema.sql 拆成一句一句（不含結尾分號）；觸發器裡面也有分號，整段算一句
+// SQL 拆成一句一句（不含結尾分號）；觸發器裡面也有分號，整段算一句。migrations/*.sql 也用這個（scripts/d1-migrations.mjs）
+export function splitStatements(sql) {
+  return (sql.replace(/--[^\n]*/g, '').match(/CREATE TRIGGER[\s\S]*?END;|(?:(?!CREATE TRIGGER)[^;])+;/g) || []).map(s => s.trim().replace(/;$/, '')).filter(Boolean);
+}
+
 export async function compactSchemaStatements() {
-  const sql = await readFile(new URL('../db/compact-schema.sql', import.meta.url), 'utf8');
-  return sql.replace(/--[^\n]*/g, '').match(/CREATE TRIGGER[\s\S]*?END;|(?:(?!CREATE TRIGGER)[^;])+;/g).map(s => s.trim().replace(/;$/, '')).filter(Boolean);
+  return splitStatements(await readFile(new URL('../db/compact-schema.sql', import.meta.url), 'utf8'));
 }
 
 // 不連線正式服務，也不套用舊模型的 migrations。

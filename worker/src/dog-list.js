@@ -155,7 +155,8 @@ async function applyDeparted(db, row, list, now, fp) {
     {
       const former = (await db.prepare('SELECT number FROM v3_sheet_former_numbers WHERE row_index=? ORDER BY position').bind(old.row_index).all()).results.map(r => r.number);
       const groups = (await db.prepare('SELECT DISTINCT b.name FROM v3_sheet_groups a JOIN v3_sheet_groups b ON a.column_index=b.column_index WHERE a.name=? AND b.name<>? ORDER BY b.column_index,b.row_index').bind(old.name, old.name).all()).results.map(r => r.name);
-      const extra = await db.prepare('SELECT sex,intro FROM v3_sheet_main WHERE row_index=?').bind(old.row_index).first();
+      // 入所介紹存在 v3_intros（#250），主清單的 intro 欄正式庫全空（#554）
+      const extra = await db.prepare('SELECT m.sex, COALESCE(i.intro, m.intro) AS intro FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) WHERE m.row_index=?').bind(old.row_index).first();
       out.push(...dropDeparture(db, dog.id));
       out.push(db.prepare(`INSERT INTO v3_departures(number,dog_id,name,departed_date,date_source,seen_date,reason,matched,last_number,last_name,last_cage,last_walked_date,last_note,last_sex,last_intro)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(dog.id, old.dog_id, old.name, judged.date || todayYmd, judged.date ? judged.dateSource : 'seen', todayYmd,
@@ -206,14 +207,21 @@ async function applyGroup(db, row, list) {
   return out.length > 0;
 }
 
-// 異動紀錄（主清單下方「備註」那段）整段換；跟上次一樣就不寫
+// 異動紀錄（主清單下方「備註」那段）：GAS 每次送整段，只寫有變的那幾段（#554，原本整段刪掉重寫，改一格約 84 列寫入）
 async function applyNotes(db, row) {
   const items = (Array.isArray(row.items) ? row.items : []).slice(0, 400)
     .map(n => ({ label: text(n && n.label), text: text(n && n.text).replace(/\r\n?/g, '\n') })).filter(n => n.text);
-  const had = (await db.prepare('SELECT label,text FROM v3_sheet_changes ORDER BY row_index').all()).results;
-  if (had.length === items.length && had.every((h, i) => h.label === items[i].label && h.text === items[i].text)) return false;
-  await db.batch([db.prepare('DELETE FROM v3_sheet_changes'), ...items.map((n, i) => db.prepare('INSERT INTO v3_sheet_changes(row_index,label,text) VALUES(?,?,?)').bind(i, n.label, n.text))]);
-  return true;
+  const had = new Map((await db.prepare('SELECT row_index,label,text FROM v3_sheet_changes').all()).results.map(h => [h.row_index, h]));
+  const out = [];
+  items.forEach((n, i) => {
+    const h = had.get(i);
+    if (h && h.label === n.label && h.text === n.text) return;
+    out.push(h ? db.prepare('UPDATE v3_sheet_changes SET label=?,text=? WHERE row_index=?').bind(n.label, n.text, i)
+      : db.prepare('INSERT INTO v3_sheet_changes(row_index,label,text) VALUES(?,?,?)').bind(i, n.label, n.text));
+  });
+  if ([...had.keys()].some(i => !(i >= 0 && i < items.length))) out.push(db.prepare('DELETE FROM v3_sheet_changes WHERE NOT (row_index BETWEEN 0 AND ?)').bind(items.length - 1));
+  if (out.length) await db.batch(out);
+  return out.length > 0;
 }
 
 // ack：Worker 已接手（更新或無差異）；D1 失敗回 false，GAS 保留待通知下次補送。

@@ -309,3 +309,52 @@ test('#528 保險掃描清掉舊指紋：回所的狗（主清單有）、D1 已
 test('#512 狗清單（取代舊同步）不擁有 fixed_care：收列時不讀不寫網站的固定照顧設定', () => {
   assert.doesNotMatch(readFileSync(new URL('../src/dog-list.js', import.meta.url), 'utf8'), /fixed_care/);
 });
+
+// #554：異動紀錄改一格只寫有變的那段，不再整段刪掉重寫（21 段原本約 84 列寫入）
+test('#554 異動紀錄改一段只寫那段；變長補新段、變短刪尾巴', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  const notes = items => ({ sheet:'notes', hash:`n${Math.random()}`, items });
+  const rows = async () => (await env.DB.prepare('SELECT row_index,label,text FROM v3_sheet_changes ORDER BY row_index').all()).results.map(r => [r.row_index, r.label, r.text]);
+  const changed = async () => (await env.DB.prepare('SELECT COUNT(*) n FROM v3_sheet_changes').first()).n;
+  try {
+    const items = Array.from({ length:21 }, (_, i) => ({ label:`備註${i + 1}`, text:`第 ${i + 1} 段` }));
+    await send(env, [notes(items)]);
+    assert.equal(await changed(), 21);
+    const small = async () => (await env.DB.prepare('SELECT small FROM v3_pack_versions WHERE id=1').first()).small;
+
+    let before = await small();
+    items[4] = { label:'備註5', text:'改過了' };
+    await send(env, [notes(items)]);
+    assert.equal(await small() - before, 1, '只改 1 段，觸發器只跑 1 次（原本刪 21＋寫 21）');
+    assert.deepEqual((await rows())[4], [4, '備註5', '改過了']);
+
+    before = await small();
+    await send(env, [notes([...items, { label:'備註22', text:'新的' }])]);
+    assert.equal(await small() - before, 1, '多 1 段只新增那段');
+    assert.equal(await changed(), 22);
+
+    before = await small();
+    await send(env, [notes(items.slice(0, 19))]);
+    assert.equal(await small() - before, 3, '少 3 段只刪那 3 段');
+    assert.deepEqual(await rows(), items.slice(0, 19).map((n, i) => [i, n.label, n.text]));
+  } finally { env.DB.close(); }
+});
+
+// #554：入所介紹存在 v3_intros（#250），主清單的 intro 欄在正式庫全空；記離所要抄 v3_intros，離所名冊才有介紹
+test('#554 記離所時 last_intro 抄 v3_intros；已經記過的離所再送不動介紹', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  const departed = (texts, hash = 'd1') => ({ sheet:'departed', hash, dog:{ id:'9001', name:'測試狗' }, texts:['9001', '測試狗', ...texts], dates:[] });
+  const lastIntro = async () => (await env.DB.prepare("SELECT last_intro FROM v3_departures WHERE number='9001'").first()).last_intro;
+  try {
+    await send(env, [main()]);
+    await env.DB.prepare("INSERT INTO v3_intros(dog_id,intro) VALUES('dog','2026/9 從板橋入所，親人')").run();
+    await send(env, [departed(['被認養'])]);
+    assert.equal(await lastIntro(), '2026/9 從板橋入所，親人');
+
+    await env.DB.prepare("UPDATE v3_departures SET last_intro='舊同步記的介紹' WHERE number='9001'").run();
+    await send(env, [departed(['2026/10/20被認養'], 'd2')]);
+    assert.equal(await lastIntro(), '舊同步記的介紹', '補原因、日期只改原因欄');
+  } finally { env.DB.close(); }
+});

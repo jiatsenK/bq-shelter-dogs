@@ -1,0 +1,50 @@
+# 套用 D1 migration 到正式庫，接著部署（#553）
+# - 只能手動跑：Actions 頁選「套用 D1 migration」→「Run workflow」。部署（deploy-cloudflare.yml）發現正式庫有還沒套的 migration 會紅叉，提示來按這個
+# - 依序（scripts/d1-migrations.mjs apply）：
+#   1. 有刪資料或搬資料的 migration → 正式庫整份複製到專門的備用庫 bq-shelter-dogs-backup（不是預覽用的 bq-shelter-dogs-test）
+#   2. 記下套用前的 Time Travel 書籤
+#   3. wrangler d1 migrations apply --remote
+#   4. 摘要印出書籤與還原指令（還原會覆蓋之後的寫入，交給 K 執行）
+#   5. 接著跑部署
+# - 先加後刪：加東西先套 migration 再部署；刪東西先部署不用它的程式，下一張 PR 才寫刪除的 migration（docs/agents/data-changes.md）
+name: 套用 D1 migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      backup:
+        description: '先複製到備用庫：auto＝有刪資料或搬資料才複製；always＝一定複製；never＝不複製'
+        type: choice
+        options: [auto, always, never]
+        default: auto
+
+permissions:
+  contents: read
+
+# 跟部署（deploy-cloudflare）用不同的群組：部署是這裡呼叫的，同一群組會互卡
+concurrency:
+  group: d1-migrations
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 備份、記書籤、套用
+        run: |
+          if [ -z "$CLOUDFLARE_API_TOKEN" ]; then echo "沒有設定 CLOUDFLARE_API_TOKEN，無法套用。"; exit 1; fi
+          node scripts/d1-migrations.mjs apply --target production --backup "${{ inputs.backup }}"
+
+  deploy:
+    needs: apply
+    uses: ./.github/workflows/deploy-cloudflare.yml
+    secrets: inherit
