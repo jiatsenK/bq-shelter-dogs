@@ -4,7 +4,7 @@ const http = require('http');
 const fs = require('fs');
 const path = require('path');
 const SUITES = ['es-modules', 'walk-accept', 'walk-d1-entries', 'walk-feedback', 'read-policy', 'startup-stability', 'walker-editing', 'intake-presentation', 'info-page', 'activities', 'departed-cards', 'fixed-care',
-  'group-cache', 'group-walks', 'large-text', 'navigation', 'tab-focus', 'keyboard-viewport', 'index', 'detail-editing', 'admin'];
+  'group-cache', 'group-walks', 'large-text', 'navigation', 'tab-focus', 'keyboard-viewport', 'index', 'detail-editing', 'admin', 'feature-settings'];
 
 const ROOT = path.resolve(__dirname, '..');
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css',
@@ -12,6 +12,10 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'applic
 
 // 簡單的靜態檔案伺服器：測試頁要用網址開，直接開檔案讀不到 js/app.js
 const server = http.createServer((req, res) => {
+  if (new URL(req.url, 'http://x').pathname === '/public/api/feature-settings' || new URL(req.url, 'http://x').pathname === '/api/feature-settings') {
+    res.setHeader('Content-Type', 'application/json');
+    return res.end(JSON.stringify({ok:true,revision:1,values:Object.fromEntries(['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays','editFormer'].map(k=>[k,true]))}));
+  }
   const file = path.join(ROOT, decodeURIComponent(new URL(req.url, 'http://x').pathname));
   if (!file.startsWith(ROOT)) { res.statusCode = 403; return res.end(); }
   fs.readFile(file, (err, data) => {

@@ -1,3 +1,4 @@
+import { canEdit } from './feature-settings.js';
 import { activitiesState, analysisState, appState } from './page-state.js';
 import { BQApi } from './api.js';
 import { NEED_EDITOR, apiData, editorName, esc, isoDay, render, searchKey, ymdText } from './app.js';
@@ -99,8 +100,8 @@ function activityFormHtml(e) {
 }
 
 function activityItemHtml(a) {
-  if (activitiesState.activityEdit && activitiesState.activityEdit.id === a.id) return `<article class="act-item editing"><h3>${esc(activityTitle(a))}</h3>${activityFormHtml(activitiesState.activityEdit)}</article>`;
-  return `<article class="act-item"><div class="act-head"><h3>${esc(activityTitle(a))}</h3><button type="button" class="act-edit" data-act-edit="${esc(a.id)}" aria-label="修改 ${esc(activityTitle(a))}">修改</button></div>${activityDogsHtml(a.dogs)}</article>`;
+  if (canEdit('editActivity') && activitiesState.activityEdit && activitiesState.activityEdit.id === a.id) return `<article class="act-item editing"><h3>${esc(activityTitle(a))}</h3>${activityFormHtml(activitiesState.activityEdit)}</article>`;
+  return `<article class="act-item"><div class="act-head"><h3>${esc(activityTitle(a))}</h3><button ${canEdit('editActivity') ? '' : 'hidden'} type="button" class="act-edit" data-act-edit="${esc(a.id)}" aria-label="修改 ${esc(activityTitle(a))}">修改</button></div>${activityDogsHtml(a.dogs)}</article>`;
 }
 
 function activitySectionHtml() {
@@ -108,7 +109,7 @@ function activitySectionHtml() {
   loadDepartures();
   const data = activitiesState.activitiesData;
   const adding = activitiesState.activityEdit && !activitiesState.activityEdit.id;
-  const top = adding ? activityFormHtml(activitiesState.activityEdit) : '<button type="button" class="dep-open" id="actNew">＋ 新增活動</button>';
+  const top = !canEdit('editActivity') ? '' : adding ? activityFormHtml(activitiesState.activityEdit) : '<button type="button" class="dep-open" id="actNew">＋ 新增活動</button>';
   let body;
   if (data.state === 'loading' && !data.list.length) body = '<p class="a-empty" role="status">讀取中…</p>';
   else if (data.state === 'error') body = '<p class="a-empty" role="alert">活動紀錄讀不到</p><button type="button" class="dep-open" id="retryActivities">重新讀取</button>';
@@ -117,6 +118,7 @@ function activitySectionHtml() {
 }
 
 function startActivityEdit(id) {
+  if (!canEdit('editActivity')) return;
   const a = id ? activitiesState.activitiesData.list.find(x => x.id === id) : null;
   if (id && !a) return;
   activitiesState.activityEdit = a

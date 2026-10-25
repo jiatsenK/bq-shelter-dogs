@@ -3,6 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
+import { SETTING_KEYS } from '../src/feature-settings.js';
 import { fakeD1 } from './fakes.mjs';
 import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
 
@@ -11,7 +12,7 @@ const { resetState, allowUpload, isJpeg, MAX_BYTES } = worker.testing;
 // 測試用另一個網址，用 ALLOWED_ORIGINS 放行（正式網站跟 Worker 同網址，不用設）
 const ORIGIN = 'https://allowed.example';
 let mainStatus = 200;
-const DB = { prepare: sql => sql.includes('v3_walk_state') ? { bind() { return this; }, first: async () => null } : ({ all: async () => { if (mainStatus !== 200) throw new Error('D1 read failed'); return { results: DOGS.dogs.filter(d => d.id).map(d => ({ number: d.id, name: d.name })) }; } }) };
+const DB = { prepare: sql => sql.includes('v3_feature_settings') ? { first: async () => ({ revision: 1, values_json: JSON.stringify(Object.fromEntries(SETTING_KEYS.map(key => [key,true]))) }) } : sql.includes('v3_walk_state') ? { bind() { return this; }, first: async () => null } : ({ all: async () => { if (mainStatus !== 200) throw new Error('D1 read failed'); return { results: DOGS.dogs.filter(d => d.id).map(d => ({ number: d.id, name: d.name })) }; } }) };
 const ENV = { GITHUB_TOKEN: 'test-token', ALLOWED_ORIGINS: ORIGIN, DB };
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
 const DOGS = { dogs: [{ id: '2024032902', name: '測試狗' }, { id: '', name: '沒編號' }] };
@@ -130,7 +131,7 @@ test('只接受 GitHub Pages 網站：其他網站、沒有 Origin 都擋；預�
 
 test('沒設 GITHUB_TOKEN：回「還沒設定好」；首頁顯示 token 有沒有設、不顯示內容', async () => {
   fakeGithub();
-  const r = await send(post('2024032902'), { ALLOWED_ORIGINS: ORIGIN });
+  const r = await send(post('2024032902'), { ALLOWED_ORIGINS: ORIGIN, DB });
   assert.equal(r.status, 500);
   assert.match(r.body.error, /GITHUB_TOKEN/);
   const home = await send(new Request('https://w.example/'), ENV);
@@ -473,5 +474,5 @@ test('出入所紀錄路由：405、415、413、壞 JSON、沒接 D1、限流 42
   for (let i = 0; i < 11; i++) last = await status(put({ ip: '9.9.9.2' }));
   assert.equal(last, 429);
   const broken = { ...env, DB: { prepare() { throw new Error('D1 壞了'); } } };
-  assert.equal(await status(put({ ip: '9.9.9.3' }), broken), 500);
+  assert.equal(await status(put({ ip: '9.9.9.3' }), broken), 503);
 });

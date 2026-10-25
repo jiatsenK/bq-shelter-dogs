@@ -1,3 +1,4 @@
+import { canEdit } from './feature-settings.js';
 import { appState } from './page-state.js';
 import { closeLightbox, detailEdits, editorHeaders, esc, icon, lightboxOpen, photoOverrides, photoSrc, photoThumb, render, renderDetail } from './app.js';
 import { BQWalkUI } from './walk-ui.js';
@@ -15,7 +16,7 @@ const BQPhoto = (() => {
   // 詳細資訊照片右下角的相機圖示（K 2026-09-25 問業界做法，比照大頭貼）：點照片看大圖、點相機換照片。
   // 沒有編號（照片檔名要用編號）或上傳服務還沒設定就不顯示
   function photoPickButton(dog) {
-    if (dog.departure) return ''; // 離所的狗（#164）不能換照片
+    if (!canEdit('editPhoto') || dog.departure) return ''; // 離所的狗（#164）不能換照片
     if (!appState.UPLOAD_URL || !dog.id) return '';
     return `<button type="button" class="photo-pick" id="photoPick" aria-label="上傳 ${esc(dog.name)} 的照片" title="上傳照片">${icon('camera')}</button>`;
   }
@@ -47,7 +48,7 @@ const BQPhoto = (() => {
           <div class="photo-preview-hint">上面是詳細資訊、左邊是狗卡上的樣子，按下面「確認上傳」才會換（${esc(dog.name)}，編號 ${esc(dog.id)}）</div>
         </div>
         ${up.phase === 'error' ? `<div class="photo-error" role="alert">${icon('alert')}<span>${esc(up.error)}</span></div>` : ''}
-        ${busy ? '' : `<button type="button" class="photo-crop" id="photoCrop">${icon('crop')}裁切</button>`}
+        ${busy || !canEdit('editPhoto') ? '' : `<button type="button" class="photo-crop" id="photoCrop">${icon('crop')}裁切</button>`}
       </div>`;
   }
 
@@ -58,7 +59,7 @@ const BQPhoto = (() => {
     if (!up) return '';
     const busy = up.phase === 'uploading';
     const cancel = `<button type="button" class="bar-btn" id="photoCancel">取消換照片</button>`;
-    const confirm = `<button type="button" class="bar-confirm" id="photoConfirm"${busy ? ' disabled' : ''}>${busy ? '上傳中…' : '確認上傳'}</button>`;
+    const confirm = `<button type="button" class="bar-confirm" id="photoConfirm"${busy || !canEdit('editPhoto') ? ' disabled' : ''}>${busy ? '上傳中…' : '確認上傳'}</button>`;
     return `<div class="detail-bar photo-bar">${busy ? '' : cancel}${confirm}</div>`;
   }
 

@@ -145,3 +145,29 @@ test('管理 Worker：真實簽章可讀資產／狗表／照片；替代來源�
   assert.equal(failed.status, 503);
   assert.doesNotMatch(await failed.text(), /private database details/);
 });
+
+test('管理設定：只有 Access 身分可改；同來源、型別、大小、白名單與版本驗證', async t => {
+  t.mock.method(globalThis, 'fetch', fetchKeys);
+  const DB = memoryD1(); t.after(() => DB.close());
+  await (await import('../../scripts/migrate-compact-db.mjs')).migrateCompactDatabase(DB);
+  const bindings = { ...env, DB }, jwt = await token();
+  const read = await worker.fetch(request('/api/manage/settings', jwt), bindings);
+  assert.equal(read.status, 200); const initial = await read.json();
+  const put = (body, headers = {}) => request('/api/manage/settings', jwt, { method: 'PUT', body: typeof body === 'string' ? body : JSON.stringify(body), headers: { Origin: origin, 'Content-Type': 'application/json', ...headers } });
+  const changed = { ...initial, values: { ...initial.values, editIntro: false } };
+  assert.equal((await worker.fetch(put(changed, { Origin: 'https://evil.org' }), bindings)).status, 403);
+  assert.equal((await worker.fetch(put(changed, { 'Content-Type': 'text/plain' }), bindings)).status, 415);
+  assert.equal((await worker.fetch(put('x'.repeat(4097)), bindings)).status, 413);
+  assert.equal((await worker.fetch(put('{'), bindings)).status, 400);
+  assert.equal((await worker.fetch(put({ ...changed, email: 'forged@example.org' }), bindings)).status, 400);
+  assert.equal((await worker.fetch(put(changed), bindings)).status, 200);
+  assert.equal((await worker.fetch(put(changed), bindings)).status, 409);
+  const log = await DB.prepare('SELECT * FROM v3_feature_settings_log').first();
+  assert.equal(log.actor_email, claims.email); assert.equal(log.actor_subject, claims.sub);
+  const publicWorker = (await import('../src/index.js')).default;
+  const publicRead = await publicWorker.fetch(new Request('https://volunteer.example/api/feature-settings', { headers: { Origin: 'https://volunteer.example' } }), { DB });
+  assert.equal(publicRead.status, 200); assert.doesNotMatch(await publicRead.text(), /manager@example|manager-id/);
+  const volunteer = await publicWorker.fetch(new Request('https://volunteer.example/api/intro/2026010101', { method: 'PUT', headers: { Origin: 'https://volunteer.example', 'Cf-Access-Authenticated-User-Email': claims.email, 'Cf-Access-Jwt-Assertion': jwt } }), { DB });
+  assert.equal(volunteer.status, 403, 'public host never trusts manager email or JWT to bypass');
+  assert.equal((await worker.fetch(request('/api/manage/settings', undefined, { method: 'PUT', body: '{}' }), bindings)).status, 401);
+});
