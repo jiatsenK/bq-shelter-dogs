@@ -8,18 +8,18 @@ import { readAllStays } from './stays.js';
 const ON_MAIN = 'dog_id IN (SELECT dog_id FROM v3_sheet_main)';
 
 // 主清單欄位 → dogs.json 欄位；formerIds 只在有舊編號時出現（跟同步寫出來的 JSON 一樣）。
-// 舊編號直接讀 v3_dog_numbers（同一隻狗的其他編號，#289 網站補了馬上看得到）
+// 舊編號直接讀 v3_dog_numbers（同一隻狗的其他編號，#289 網站補了馬上看得到）；性別讀 v3_dogs（#557）
 const MAIN_FIELDS = [
   ['cage', 'cage'], ['id', 'number'], ['name', 'name'], ['walkedDate', 'walked_date'], ['covered', 'fixed_care'],
-  ['myWalked', 'my_walked'], ['note', 'note'], ['sex', 'sex'], ['intro', 'd1_intro'], ['myWalkedDate', 'my_walked_date'],
+  ['note', 'note'], ['sex', 'dog_sex'], ['intro', 'd1_intro'],
 ];
-const BOOLEANS = new Set(['covered', 'myWalked']);
+const BOOLEANS = new Set(['covered']);
 
 // 不含同步時間（ADR 0014，見 readSyncedAt）。同一個 batch 讀，同步正在整份換掉複本時不會讀到一半新一半舊。主清單是空的就丟錯：沒有狗一定是資料出問題
 export async function readDogsPayload(db) {
   // 介紹是 D1 自己存的（#250 網站改了馬上看得到），不用主清單複本上同步帶來的那份
   const [main, walkers, former, groups, notes] = await db.batch([
-    db.prepare("SELECT m.*, COALESCE(i.intro, '') AS d1_intro, c.fixed_care FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) JOIN v3_dogs c USING(dog_id) ORDER BY m.row_index"),
+    db.prepare("SELECT m.row_index, m.dog_id, m.number, m.name, m.cage, m.note, m.walked_date, c.sex AS dog_sex, COALESCE(i.intro, '') AS d1_intro, c.fixed_care FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) JOIN v3_dogs c USING(dog_id) ORDER BY m.row_index"),
     db.prepare('SELECT row_index, walker_code FROM v3_sheet_main_walkers ORDER BY row_index, position'),
     db.prepare("SELECT m.row_index, n.number FROM v3_sheet_main m JOIN v3_dog_numbers n USING(dog_id) WHERE n.number <> m.number ORDER BY m.row_index, n.number"),
     db.prepare('SELECT column_index, name FROM v3_sheet_groups ORDER BY column_index, row_index'),
@@ -55,7 +55,7 @@ export async function readDogsPayload(db) {
     return dog;
   });
   return {
-    version: rows[0].version,
+    version: 1, // 格式版本；主清單的 version 欄全是 1，不再讀（#557）
     dogs,
     groups: groupMap(groups.results || []),
     groupColumns: groupColumns(groups.results || [], await groupLabels(db)),
@@ -64,16 +64,10 @@ export async function readDogsPayload(db) {
 }
 
 // 上一次同步的時間（ADR 0014，#361）：存在 v3_sync_state，改它不會讓 small 資料包失效。
-// 還沒有這列（新版同步還沒跑過）就用主清單第 0 列舊的那份；表還沒建也一樣
+// 還沒同步過就是空字串；主清單的 synced_at 舊欄不再讀（#557）
 export const SYNCED_AT_KEY = 'synced_at';
 export async function readSyncedAt(db) {
-  const sql = `SELECT COALESCE((SELECT value FROM v3_sync_state WHERE key='${SYNCED_AT_KEY}'), (SELECT synced_at FROM v3_sheet_main WHERE row_index=0)) AS v`;
-  try {
-    return (await db.prepare(sql).first('v')) ?? '';
-  } catch (e) {
-    if (!/no such table/i.test(e.message)) throw e;
-    return (await db.prepare('SELECT synced_at FROM v3_sheet_main WHERE row_index=0').first('synced_at')) ?? '';
-  }
+  return (await db.prepare(`SELECT value FROM v3_sync_state WHERE key='${SYNCED_AT_KEY}'`).first('value')) ?? '';
 }
 
 // 「常遛狗群」每一欄是一群：每隻狗對到同群的其他狗，好幾群就合起來
@@ -257,6 +251,7 @@ export async function removeFormerNumber(db, number, former) {
   if (ids.get(former) !== dogId) return { status: 404, error: '這隻狗沒有這個舊編號' };
   if (await db.prepare('SELECT 1 FROM v3_sheet_main WHERE number=?').bind(former).first()) return { status: 409, error: '這是主清單上現在用的編號，不能刪' };
   await db.batch([
+    // 舊編號表不再讀寫（#557），但它對編號有 ON DELETE RESTRICT 外鍵：刪表（#557 第二步）前照刪
     db.prepare('DELETE FROM v3_sheet_former_numbers WHERE number=?').bind(former),
     db.prepare('DELETE FROM v3_dog_numbers WHERE number=?').bind(former),
   ]);

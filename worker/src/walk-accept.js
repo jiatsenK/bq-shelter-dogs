@@ -68,7 +68,7 @@ async function uniqueMainDog(db,dog) {
 }
 async function seedState(db, dog, today) {
   const seed = await uniqueMainDog(db,dog);
-  const people = await rows(db, 'SELECT COALESCE(n.name,v.name) AS name FROM v3_sheet_main_walkers w LEFT JOIN v3_identity_names n ON n.code=w.walker_code LEFT JOIN v3_volunteer_codes c ON c.code=w.walker_code LEFT JOIN v3_volunteers v ON v.volunteer_id=c.volunteer_id WHERE w.row_index=? ORDER BY w.position', seed.row_index);
+  const people = await rows(db, 'SELECT n.name FROM v3_sheet_main_walkers w LEFT JOIN v3_identity_names n ON n.code=w.walker_code WHERE w.row_index=? ORDER BY w.position', seed.row_index);
   const previous = seed.walked_date === today ? await previousWalk(db, dog, today) : null;
   return { dog_id: seed.dog_id, effective_date: seed.walked_date || '', walker: people.map(p => p.name).filter(Boolean).join('、'), version: 0,
     ...(previous ? { previous_date: previous.date.date || '', previous_walker: previous.walker } : {}) };

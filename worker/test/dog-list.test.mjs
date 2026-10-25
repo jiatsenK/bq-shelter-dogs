@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import worker from '../src/index.js';
 import { setup } from './walk-fixture.mjs';
 import { walkerCode } from '../src/editlog.js';
+import { removeFormerNumber } from '../src/compact.js';
 
 const post = (env, action, body, key = env.SHEET_WRITE_KEY) => worker.fetch(new Request(`https://worker.example/api/walk-writeback/${action}`, {
   method:'POST', headers:{ 'X-Sheet-Write-Key':key }, body:JSON.stringify(body),
@@ -17,7 +18,7 @@ const send = async (env, rows) => {
 };
 const writes = async env => (await env.DB.prepare('SELECT total_changes() n').first()).n;
 const main = (extra = {}) => ({ sheet:'main', hash:'h1', dog:{ id:'9001', name:'測試狗' }, cage:'A01', note:'', date:'2026-10-01', walker:'', ...extra });
-const mainRows = async env => (await env.DB.prepare('SELECT number,name,cage,note,walked_date,covered FROM v3_sheet_main ORDER BY row_index').all()).results;
+const mainRows = async env => (await env.DB.prepare('SELECT number,name,cage,note,walked_date FROM v3_sheet_main ORDER BY row_index').all()).results;
 
 test('#501 改狗清單一格只更新那隻狗；同樣內容再送不寫', async () => {
   const env = await setup();
@@ -25,7 +26,7 @@ test('#501 改狗清單一格只更新那隻狗；同樣內容再送不寫', asy
   try {
     assert.equal((await post(env, 'dog-list', { rows:[main()] }, 'forged')).status, 403);
     assert.deepEqual((await send(env, [main({ cage:'B02' })])).map(r => r.ack), [true]);
-    assert.deepEqual(await mainRows(env), [{ number:'9001', name:'測試狗', cage:'B02', note:'', walked_date:'2026-10-01', covered:0 }]);
+    assert.deepEqual(await mainRows(env), [{ number:'9001', name:'測試狗', cage:'B02', note:'', walked_date:'2026-10-01' }]);
     assert.match((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='synced_at'").first()).value, /\+08:00$/, '有改才更新「資料更新」時間');
     const before = await writes(env);
     assert.deepEqual((await send(env, [main({ cage:'B02' })])).map(r => r.ack), [true]);
@@ -52,8 +53,8 @@ test('#501 遛狗日期變新：更新主清單列、名字換代號、追加溜
   worker.testing.resetState();
   try {
     await send(env, [main({ date:'2026-10-05', walker:'甲、乙' })]);
-    const row = await env.DB.prepare("SELECT walked_date,covered FROM v3_sheet_main WHERE number='9001'").first();
-    assert.deepEqual({ ...row }, { walked_date:'2026-10-05', covered:1 });
+    const row = await env.DB.prepare("SELECT walked_date,walker FROM v3_sheet_main WHERE number='9001'").first();
+    assert.deepEqual({ ...row }, { walked_date:'2026-10-05', walker:'甲、乙' });
     const codes = [await walkerCode('甲', 'test'), await walkerCode('乙', 'test')];
     assert.deepEqual((await env.DB.prepare('SELECT walker_code FROM v3_sheet_main_walkers ORDER BY position').all()).results.map(r => r.walker_code), codes);
     const walks = (await env.DB.prepare("SELECT walk_date,walker_code,dog_number FROM v3_walks WHERE dog_id='dog' ORDER BY position").all()).results;
@@ -83,6 +84,23 @@ test('#501 出現在「已出所」：記離所（原因照共用規則）、從
     await send(env, [main({ hash:'h3' })]);
     assert.equal(await env.DB.prepare("SELECT 1 FROM v3_departures WHERE number='9001'").first(), null);
     assert.equal((await mainRows(env)).length, 1);
+  } finally { env.DB.close(); }
+});
+
+// #557：舊編號表不再讀寫，舊編號從 v3_dog_numbers 推；正式庫還留著舊列（1 列）時，記離所、刪舊編號不能被它的外鍵擋下
+test('#557 舊編號表還有舊列：記離所照樣移走主清單列、舊編號從 v3_dog_numbers 抄；刪舊編號也不被擋', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    await send(env, [main()]);
+    const row = await env.DB.prepare("SELECT row_index,dog_id FROM v3_sheet_main WHERE number='9001'").first();
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?),(?,?)').bind('8001', row.dog_id, '8002', row.dog_id),
+      env.DB.prepare('INSERT INTO v3_sheet_former_numbers VALUES(?,0,?),(?,1,?)').bind(row.row_index, '8001', row.row_index, '8002')]);
+    assert.deepEqual(await removeFormerNumber(env.DB, '9001', '8001'), { ok:true, dogId:row.dog_id });
+    assert.deepEqual((await send(env, [{ sheet:'departed', hash:'d1', dog:{ id:'9001', name:'測試狗' }, texts:['9001', '測試狗', '被認養'], dates:[] }])).map(r => r.ack), [true]);
+    assert.deepEqual(await mainRows(env), []);
+    assert.deepEqual((await env.DB.prepare("SELECT value FROM v3_departure_items WHERE number='9001' AND kind='former'").all()).results.map(r => r.value), ['8002']);
   } finally { env.DB.close(); }
 });
 
@@ -190,7 +208,7 @@ test('#501 新編號回所：同名的唯一一筆離所認成同一隻，連上
     await send(env, [main({ dog:{ id:'9100', name:'測試狗' }, hash:'h9', cage:'R01' })]);
     assert.equal(await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='9100'").first('dog_id'), 'dog', '新編號連到原本的狗');
     assert.equal(await env.DB.prepare("SELECT returned_number FROM v3_departures WHERE number='9001'").first('returned_number'), '9100');
-    assert.deepEqual((await env.DB.prepare("SELECT number FROM v3_sheet_former_numbers").all()).results.map(r => r.number), ['9001']);
+    assert.deepEqual((await env.DB.prepare("SELECT number FROM v3_dog_numbers WHERE dog_id='dog' AND number<>'9100'").all()).results.map(r => r.number), ['9001']);
     const log = await env.DB.prepare("SELECT kind,dog_id,dog_number FROM v3_edit_log").first();
     assert.deepEqual({ ...log }, { kind:'former', dog_id:'dog', dog_number:'9100' });
     // 同名兩筆離所：認不出來，當新狗
