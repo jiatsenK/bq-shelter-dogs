@@ -1475,7 +1475,7 @@ function departedDetailHtml(dog, today) {
   }
 }
 
-const DEPARTURE_LABELS = { adopt: '認養', death: '死亡', other: '其他', unknown: '待確認' };
+const DEPARTURE_LABELS = { adopt: '認養', death: '離世', other: '其他', unknown: '待確認' };
 function ymdText(d) {
   return d ? `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}` : '日期不明';
 }
