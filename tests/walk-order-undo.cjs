@@ -172,6 +172,24 @@ module.exports = async (browser, base) => {
     assert.equal(sent.length, n + 1);
     await page.getByRole('button', { name: '關閉', exact: true }).click();
     assert.ok(await visible(6), '關掉詳細資訊後看得到復原的那隻');
-    console.log('#445 按溜了往下排、復原立刻顯示並捲到那隻、提示條久一點、D1 失敗與連按、試算表寫回失敗通過');
+
+    // 7. K 2026-10-26：按溜了狗會往下跳，提示條「＋一起溜的人」旁邊要有「復原」給按錯的人按
+    hold = false;
+    await page.evaluate(() => scrollTo(0, 0));
+    await card(8).locator('[data-walk="add"]').click();
+    await card(8).locator('.walk-btn.done').waitFor();
+    await page.locator('#toast .toast-extra', { hasText: '＋一起溜的人' }).waitFor();
+    assert.equal(await page.locator('#toast .toast-undo').isVisible(), true, '提示條有復原');
+    hold = true; n = sent.length;
+    await page.locator('#toast .toast-undo').click();
+    assert.equal(await card(8).locator('.walk-btn.done').count(), 0, '提示條復原也立刻恢復');
+    assert.ok(await visible(8), '捲到復原的那隻');
+    await waitSent(n + 1);
+    assert.equal(sent[n].action, 'undo');
+    assert.equal(sent[n].dogs[0].name, '排序測試8');
+    held.shift()();
+    await page.locator('#toast .toast-text', { hasText: /^已取消 排序測試8 今天溜了$/ }).waitFor();
+    assert.equal(await card(8).locator('.walk-btn.done').count(), 0);
+    console.log('#445 按溜了往下排、復原立刻顯示並捲到那隻、提示條久一點與提示條復原、D1 失敗與連按、試算表寫回失敗通過');
   } finally { held.forEach(r => r()); await context.close(); }
 };

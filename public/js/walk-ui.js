@@ -50,8 +50,10 @@ const BQWalkUI = (() => {
         const again = result.retryDogs;
         showToast(result.message, null, again.length ? { label: '再試一次', fn: () => walkThenRecord(again, result) } : null);
       } else if (!acceptsD1) addToToast(text, undoFn, '，已寫進試算表');
-      // K 2026-10-24：D1 接受後提示條照舊給「＋一起溜的人」（復原在狗卡名字旁的 ×）
-      else if (result.successful.length && loadWalkerName()) showToast(text, null, { label: '＋一起溜的人', fn: () => openWithSheet(result.successful) });
+      // K 2026-10-24：D1 接受後提示條照舊給「＋一起溜的人」；K 2026-10-26（#445）：狗會往下排，旁邊也給「復原」讓按錯的人不用找
+      else if (result.successful.length && loadWalkerName()) showToast(text,
+        () => undoSheetWalks(result.successful.filter(d => walkedNow(d)), null, { revert: true, reveal: true }),
+        { label: '＋一起溜的人', fn: () => openWithSheet(result.successful) });
       return result;
     }).catch(e => console.error(e));
   }
