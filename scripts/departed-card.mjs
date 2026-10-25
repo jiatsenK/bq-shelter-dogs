@@ -33,7 +33,7 @@ export async function planCard(query, o) {
     if (!unmatched) throw new Error(`活動紀錄沒有還沒對上的「${o.name}」`);
   } else {
     const same = await query(`SELECT d.dog_id, (SELECT MAX(number) FROM v3_dog_numbers n WHERE n.dog_id=d.dog_id) AS number,
-      EXISTS(SELECT 1 FROM v3_departed_cards c WHERE c.dog_id=d.dog_id) AS card FROM v3_dogs d WHERE d.name=${sqlValue(o.name)}`);
+      EXISTS(SELECT 1 FROM v3_dog_departures c WHERE c.dog_id=d.dog_id AND c.number='') AS card FROM v3_dogs d WHERE d.name=${sqlValue(o.name)}`);
     if (same.some(r => r.card)) throw new Error(`已經有「${o.name}」的已出所狗卡`);
     if (same.length) warnings.push(`D1 已經有 ${same.length} 隻叫「${o.name}」的狗（編號 ${same.map(r => r.number || '沒有').join('、')}）；如果是同一隻，改用 --to 編號`);
   }
@@ -46,7 +46,8 @@ export function cardSql(plan, { at = new Date().toISOString(), newId = () => cry
   const out = [];
   if (!target) {
     out.push(`INSERT INTO v3_dogs(dog_id,name) VALUES(${sqlValue(dogId)},${sqlValue(o.name)})`);
-    out.push(`INSERT INTO v3_departed_cards(dog_id,departed_date,reason,created_at) VALUES(${sqlValue(dogId)},${sqlValue(o.left)},${sqlValue(o.reason)},${sqlValue(at)})`);
+    // 只有名字的已出所狗卡是沒有編號的離所（#560）；seen_date 記建卡那天
+    out.push(`INSERT INTO v3_dog_departures(dog_id,number,name,departed_date,seen_date,reason) VALUES(${sqlValue(dogId)},'',${sqlValue(o.name)},${sqlValue(o.left)},${sqlValue(at.slice(0, 10))},${sqlValue(o.reason)})`);
   }
   out.push(`UPDATE v3_activity_dogs SET dog_id=${sqlValue(dogId)} WHERE dog_id IS NULL AND name=${sqlValue(o.name)}`);
   const after = target ? { name: o.name, linkedTo: o.to, attendances: plan.unmatched } : { name: o.name, departed: o.left, reason: o.reason, attendances: plan.unmatched };

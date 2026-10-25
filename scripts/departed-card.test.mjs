@@ -32,7 +32,7 @@ test('建只有名字的卡：活動紀錄同名、沒對上的出席接上；�
   const plan = await planCard(queryOf(db), cardOptions(['--name', '老黃', '--left', '2024-06-01', '--reason', 'adopt', '--editor', '佳岑']));
   assert.match(planText(plan), /會接上 1 筆出席/);
   await run(db, cardSql(plan, { at: '2026-10-21T00:00:00Z', newId: () => 'm'.repeat(32) }));
-  assert.deepEqual((await db.prepare('SELECT dog_id,departed_date,reason FROM v3_departed_cards').all()).results, [{ dog_id: 'm'.repeat(32), departed_date: '2024-06-01', reason: 'adopt' }]);
+  assert.deepEqual((await db.prepare('SELECT dog_id,number,name,departed_date,seen_date,reason FROM v3_dog_departures').all()).results, [{ dog_id: 'm'.repeat(32), number: '', name: '老黃', departed_date: '2024-06-01', seen_date: '2026-10-21', reason: 'adopt' }]);
   const [a] = await readActivities(db);
   assert.deepEqual(a.dogs.map(d => [d.name, d.dogId]), [['老黃', 'm'.repeat(32)], ['小黑', null], ['小黑', 'd1']]);
   const log = await db.prepare("SELECT editor_name, dog_id, after_json FROM v3_edit_log WHERE kind='departed-card'").first();
@@ -47,7 +47,7 @@ test('同名好幾隻：建卡前提醒改用 --to；--to 把沒對上的名字�
   const plan = await planCard(queryOf(db), cardOptions(['--name', '小黑', '--to', '2021010101']));
   await run(db, cardSql(plan));
   assert.equal(await db.prepare("SELECT dog_id FROM v3_activity_dogs WHERE position=1").first('dog_id'), 'd2');
-  assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM v3_departed_cards').first('n'), 0);
+  assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM v3_dog_departures').first('n'), 0);
   await assert.rejects(planCard(queryOf(db), cardOptions(['--name', '小黑', '--to', '2021010101'])), /沒有還沒對上的/);
   await assert.rejects(planCard(queryOf(db), cardOptions(['--name', '老黃', '--to', '1999999999'])), /沒有編號/);
 });

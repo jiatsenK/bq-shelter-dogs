@@ -151,7 +151,7 @@ const NUMBER_OF = `COALESCE(
 // scope（ADR 0014）：沒給是全部；'main' 是主清單上的狗；出所年份（departureYear）是那年離所、現在不在主清單上的狗
 export async function readRest(db, scope) {
   const where = !scope ? '' : scope === 'main' ? ` WHERE t.${ON_MAIN}`
-    : ` WHERE t.dog_id IN (SELECT dog_id FROM v3_departures WHERE ${departedIn(scope)}) AND NOT t.${ON_MAIN}`;
+    : ` WHERE t.dog_id IN (SELECT dog_id FROM v3_dog_departures WHERE ${departedIn(scope)}) AND NOT t.${ON_MAIN}`;
   const { results = [] } = await db.prepare(`SELECT ${NUMBER_OF} AS id, t.until_date, t.reason FROM v3_rest t${where}`).all();
   return sortedRest(results.filter(r => r.id).map(r => [r.id, { until: r.until_date, reason: r.reason }]));
 }
@@ -264,37 +264,35 @@ const sqlText = text => `'${String(text).replace(/'/g, "''")}'`;
 export const sortDepartures = list => list.sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.id.localeCompare(b.id));
 
 // 離所紀錄（#259）：形狀跟原本的 data/departures.json 的 departures 一樣，依日期新到舊、同一天依編號。
-// year 有給（ADR 0014）只讀那一年出所的
+// year 有給（ADR 0014）只讀那一年出所的。離所用狗 ID 記（#560）：沒有編號的（只有名字的已出所狗卡）不在名冊，見 readNameOnlyCards
 export async function readDepartures(db, year) {
-  const where = year ? ` WHERE ${departedIn(year)}` : '';
-  const inYear = column => year ? `${column} IN (SELECT ${column} FROM v3_departures${where})` : '';
-  const [deps, items] = await db.batch([
-    db.prepare(`SELECT * FROM v3_departures${where}`),
-    db.prepare(`SELECT number, kind, value FROM v3_departure_items${year ? ` WHERE ${inYear('number')}` : ''} ORDER BY number, kind, position`),
-  ]);
-  const staysOf = await readAllStays(db, inYear('dog_id'));
-  const listOf = new Map();
-  for (const r of items.results || []) {
-    const key = `${r.number}|${r.kind}`;
-    if (!listOf.has(key)) listOf.set(key, []);
-    listOf.get(key).push(r.value);
-  }
+  const where = ` WHERE number<>''${year ? ` AND ${departedIn(year)}` : ''}`;
+  const deps = await db.prepare(`SELECT * FROM v3_dog_departures${where}`).all();
+  const staysOf = await readAllStays(db, year ? `dog_id IN (SELECT dog_id FROM v3_dog_departures${where})` : '');
   const list = (deps.results || []).map(r => {
     const entry = {
       id: r.number, name: r.name, date: r.departed_date, dateSource: r.date_source, seen: r.seen_date,
-      reason: r.reason, matched: r.matched, flags: listOf.get(`${r.number}|flag`) || [],
+      reason: r.reason, matched: r.matched, flags: JSON.parse(r.flags_json),
     };
     if (r.returned_number !== null) entry.returned = r.returned_number;
     if (staysOf.has(r.dog_id)) entry.stays = staysOf.get(r.dog_id);
     if (r.last_number !== null) {
       const last = { cage: r.last_cage, id: r.last_number, name: r.last_name, walkedDate: r.last_walked_date, note: r.last_note, sex: r.last_sex, intro: r.last_intro };
-      if (listOf.has(`${r.number}|former`)) last.formerIds = listOf.get(`${r.number}|former`);
-      if (listOf.has(`${r.number}|group`)) last.groups = listOf.get(`${r.number}|group`);
+      // 空陣列不放（跟以前拆成列時「沒有列就沒有這個鍵」一樣）
+      const former = JSON.parse(r.former_json), groups = JSON.parse(r.groups_json);
+      if (former.length) last.formerIds = former;
+      if (groups.length) last.groups = groups;
       entry.last = last;
     }
     return entry;
   });
   return sortDepartures(list);
+}
+
+// 只有名字的已出所狗卡（#271，#560 起是 v3_dog_departures 沒有編號的列）：[{ dogId, name, date, reason }]，依狗 ID 排
+export async function readNameOnlyCards(db, year) {
+  const { results = [] } = await db.prepare(`SELECT dog_id, name, departed_date, reason FROM v3_dog_departures WHERE number=''${year ? ` AND ${departedIn(year)}` : ''}`).all();
+  return results.map(r => ({ dogId: r.dog_id, name: r.name, date: r.departed_date || '', reason: r.reason })).sort((a, b) => a.dogId.localeCompare(b.dogId));
 }
 
 // 溜狗歷史從這天開始累積（第一份每日快照，原本的 data/history/index.json 第一個日期）；之前的紀錄只是當時的「最後一次」
