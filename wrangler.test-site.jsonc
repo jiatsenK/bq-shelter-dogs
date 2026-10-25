@@ -1,6 +1,6 @@
 // #498 實機驗收用的測試網站：程式跟正式版同一份，只接測試 D1、測試照片空間、測試試算表（BENCH441）。
 // - 跟 PR 預覽版不同：不設 PREVIEW，可以按溜了、收改表通知、跑寫回重試與保險掃描。
-// - 測試 D1 跟 PR 預覽、cpu-bench 共用；seed-preview-db 會整份覆蓋它。
+// - 測試 D1 跟 PR 預覽共用；seed-preview-db 會整份覆蓋它。
 // - 部署：npx wrangler deploy -c wrangler.test-site.jsonc（手動，不進 GitHub Action）。
 // - 金鑰（SHEET_WRITE_URL、SHEET_WRITE_KEY、WALKER_KEY、ADMIN_KEY）用 wrangler secret put -c 這份設定另外設，跟正式版不同，不寫在這裡。
 {

@@ -1,6 +1,8 @@
 // #460 唯讀：讀 Cloudflare 分析裡正式 Worker 過去幾天的 CPU 紀錄，判斷新流程 Cron 一輪的固定花費。
 // node scripts/cpu-history.mjs [天數=7] → 印出 Markdown 表格。只查詢，不部署、不改設定。
 // 需要 CLOUDFLARE_API_TOKEN（Account Analytics 讀取）與 CLOUDFLARE_ACCOUNT_ID。
+// 本機跑（PowerShell，repo 根目錄）：$env:CLOUDFLARE_API_TOKEN = "<token>"; $env:CLOUDFLARE_ACCOUNT_ID = "<帳號 ID>"; node scripts/cpu-history.mjs 7
+// 原本的 cpu-history workflow 已退役（#547），只剩本機手動查。
 const days = Number(process.argv[2] || 7), script = 'bq-shelter-dogs';
 const token = process.env.CLOUDFLARE_API_TOKEN, account = process.env.CLOUDFLARE_ACCOUNT_ID;
 const until = new Date(), since = new Date(until - days * 86400000);

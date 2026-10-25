@@ -363,7 +363,7 @@ test('縮圖：列出還沒縮圖的、收 Action 傳回的縮圖；原圖不在
   assert.deepEqual((await json(await admin(call, 'thumbs'))).body.pending, ['photos/3.jpg']);
 });
 
-test('每月排程清掉超過 30 天的 Trash（#501）；還沒縮圖的不再叫 Action（#305，只在上傳時叫）', async () => {
+test('每月排程清掉超過 30 天的 Trash（#501）；不叫縮圖 Action（縮圖改由網站產生，#566）', async () => {
   const { env, PHOTOS, calls } = await setup({ assets: { 'photos/1.jpg': OLD } });
   const now = Date.now();
   const oldId = await r2.toTrash(env, SITE, 'photos/1.jpg', { dogId: '1', kind: 'main' }, now - 31 * 86400000);
