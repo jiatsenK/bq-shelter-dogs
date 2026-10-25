@@ -1,4 +1,4 @@
-// #259：把離所紀錄（data/departures.json 的 departures）整份換進 v3_departures，再逐筆比對讀回的內容。
+// #259：把離所紀錄（data/departures.json 的 departures）整份換進 v3_dog_departures（#560 起；只換有編號的，只有名字的已出所狗卡不動），再逐筆比對讀回的內容。
 // 只操作呼叫者提供的 D1，不連線試算表或 GitHub。讀回用 worker/src/compact.js 的 readDepartures（網站也讀這個）
 import { randomBytes } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
@@ -43,16 +43,15 @@ export async function importCompactDepartures(db, departures) {
   validate(departures);
   const list = plain(departures);
   const idOf = await dogIds(db, list);
-  const statements = [db.prepare('DELETE FROM v3_departure_items'), db.prepare('DELETE FROM v3_departures')];
-  const items = (number, kind, values = []) => values.forEach((v, i) => statements.push(db.prepare('INSERT INTO v3_departure_items(number,kind,position,value) VALUES(?,?,?,?)').bind(number, kind, i, v)));
+  const statements = [db.prepare("DELETE FROM v3_dog_departures WHERE number<>''")];
+  const json = (values = []) => JSON.stringify(values);
   for (const e of list) {
     const l = e.last;
-    statements.push(db.prepare(`INSERT INTO v3_departures(number,dog_id,name,departed_date,date_source,seen_date,reason,matched,returned_number,
-      last_number,last_name,last_cage,last_walked_date,last_note,last_sex,last_intro) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
-      e.id, idOf.get(e.id), e.name, e.date ?? null, e.dateSource ?? null, e.seen ?? null, e.reason || 'unknown', e.matched || '', e.returned ?? null,
-      l ? l.id : null, l ? l.name : null, l ? l.cage : null, l ? l.walkedDate ?? null : null, l ? l.note : null, l ? l.sex : null, l ? l.intro : null));
-    items(e.id, 'flag', e.flags);
-    if (l) { items(e.id, 'former', l.formerIds); items(e.id, 'group', l.groups); }
+    statements.push(db.prepare(`INSERT INTO v3_dog_departures(dog_id,number,name,departed_date,date_source,seen_date,reason,matched,flags_json,returned_number,
+      last_number,last_name,last_cage,last_walked_date,last_note,last_sex,last_intro,former_json,groups_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(
+      idOf.get(e.id), e.id, e.name, e.date ?? null, e.dateSource ?? null, e.seen ?? null, e.reason || 'unknown', e.matched || '', json(e.flags), e.returned ?? null,
+      l ? l.id : null, l ? l.name : null, l ? l.cage : null, l ? l.walkedDate ?? null : null, l ? l.note : null, l ? l.sex : null, l ? l.intro : null,
+      json(l && l.formerIds), json(l && l.groups)));
   }
   await db.batch(statements);
   return { departures: list.length };
@@ -62,7 +61,7 @@ export async function importCompactDepartures(db, departures) {
 export async function compareCompactDepartures(db, departures) {
   validate(departures);
   const want = new Map(plain(departures).map(e => [e.id, e]));
-  const got = new Map((await readDepartures(db)).map(e => [e.id, e]));
+  const got = new Map((await readDepartures(db)).map(({editRevision,sex,...e}) => [e.id, e]));
   const differences = [];
   for (const key of new Set([...want.keys(), ...got.keys()])) {
     const expected = want.get(key), actual = got.get(key);

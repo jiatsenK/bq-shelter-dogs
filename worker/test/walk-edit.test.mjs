@@ -83,7 +83,7 @@ test('接管今天既有紀錄後仍能找回歷史日期名單；從未溜過�
       if (history) {
         await env.DB.prepare('UPDATE v3_sheet_main SET walked_date=? WHERE row_index=1').bind(request('day').operationDate).run();
         const code = await walkerCode('甲', env.WALKER_KEY);
-        await env.DB.prepare('INSERT INTO v3_sheet_main_walkers(row_index,position,walker_code) VALUES(1,0,?)').bind(code).run();
+        await env.DB.prepare('UPDATE v3_sheet_main SET walker_codes=json_array(?) WHERE row_index=1').bind(code).run();
         await env.DB.prepare("INSERT INTO v3_walks(dog_id,walk_date,position,walker_code) VALUES('dog','2026-09-01',0,?)").bind(await walkerCode('丙', env.WALKER_KEY)).run();
       } else await env.DB.prepare("UPDATE v3_sheet_main SET walked_date='' WHERE row_index=1").run();
       await post(env, request('seed-existing'));

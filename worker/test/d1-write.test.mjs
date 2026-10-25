@@ -1,3 +1,4 @@
+import { currentEditRevision } from './edit-fixture.mjs';
 // #250 休養、入所介紹的寫入改存 D1（v3_rest、v3_intros），不再提交 GitHub；存完馬上讀得到
 // 執行：node --test worker/test/d1-write.test.mjs
 import test from 'node:test';
@@ -31,7 +32,7 @@ test.beforeEach(t => {
 const req = (method, path, body, ip = '1.1.1.1') => new Request(`${SITE}/api${path}`, {
   method, headers: { Origin: SITE, 'Content-Type': 'application/json', 'CF-Connecting-IP': ip }, body: body === undefined ? undefined : JSON.stringify(body),
 });
-const call = async (env, ...args) => { const res = await worker.fetch(req(...args), env); return { status: res.status, body: await res.json() }; };
+const call = async (env, ...args) => { if(args[2]&&typeof args[2]==='object')args[2]={...args[2],revision:await currentEditRevision(env.DB,args[1])}; const res = await worker.fetch(req(...args), env); return { status: res.status, body: await res.json() }; };
 const twDay = n => new Date(Date.now() + 8 * 3600 * 1000 + n * 86400000).toISOString().slice(0, 10);
 
 test('休養：存進 D1 後 GET /api/rest 馬上讀得到，不動別隻；結束休養就拿掉', async () => {
@@ -112,53 +113,13 @@ test('編輯紀錄（ADR 0004）：休養、介紹存好記一筆誰改的、改
   assert.equal((await call(env, 'POST', '/edits', {})).status, 405);
 });
 
-// ── 編輯常遛狗群（K 2026-10-16）：轉給小程式，成功後 D1 那一欄馬上換成小程式回的名單 ──
-async function groupEnv() {
+test('網站狗群寫入已退役，POST /groups 回 404 且不呼叫試算表', async t => {
   const env = await makeEnv({ SHEET_WRITE_URL: 'https://script.example/exec' });
-  await env.DB.prepare("UPDATE v3_sheet_main SET name = 'MINI' WHERE name = '別隻'").run(); // 主清單寫法是大寫
-  await env.DB.prepare('INSERT INTO v3_sheet_groups VALUES(4,0,?)').bind('測試狗').run();
-  return env;
-}
-function fakeGroupScript(t, reply) {
-  const calls = [];
   const real = globalThis.fetch;
-  globalThis.fetch = async (url, init) => { const body = JSON.parse(init.body); calls.push(body); return new Response(JSON.stringify(reply(body))); };
+  globalThis.fetch = async () => { assert.fail('不應呼叫試算表'); };
   t.after(() => { globalThis.fetch = real; });
-  return calls;
-}
-
-test('狗群 add：狗名換成主清單寫法再送小程式，D1 那一欄和群名馬上更新，api/dogs 讀得到', async t => {
-  const env = await groupEnv();
-  const calls = fakeGroupScript(t, () => ({ ok: true, result: { status: 'written', column: 4, label: '新十', names: ['測試狗', 'Mini'] } }));
-  const r = await call(env, 'POST', '/groups', { op: 'add', column: 4, name: 'mini', editor: '志工甲' });
-  assert.equal(r.status, 200);
-  assert.deepEqual(calls, [{ action: 'group', op: 'add', name: 'MINI', column: 4 }]);
-  assert.deepEqual(r.body.group, { column: 4, label: '新十', names: ['測試狗', 'MINI'] });
-  const rows = (await env.DB.prepare('SELECT column_index, row_index, name FROM v3_sheet_groups ORDER BY row_index').all()).results;
-  assert.deepEqual(rows, [{ column_index: 4, row_index: 0, name: '測試狗' }, { column_index: 4, row_index: 1, name: 'MINI' }]);
-  assert.deepEqual((await env.DB.prepare('SELECT * FROM v3_sheet_group_labels').all()).results, [{ column_index: 4, label: '新十' }]);
-  const log = (await env.DB.prepare('SELECT editor_name, kind, before_json, after_json FROM v3_edit_log').all()).results;
-  assert.deepEqual(log, [{ editor_name: '志工甲', kind: 'group', before_json: JSON.stringify({ label: '新十', names: ['測試狗'] }), after_json: JSON.stringify({ label: '新十', names: ['測試狗', 'MINI'] }) }]);
-});
-
-test('狗群：擋掉不在主清單的狗、沒群名的新群、壞的欄號，不連小程式', async t => {
-  const env = await groupEnv();
-  const calls = fakeGroupScript(t, () => ({ ok: true }));
-  assert.equal((await call(env, 'POST', '/groups', { op: 'add', column: 4, name: 'MINI' })).body.code, 'editor', '沒選名字不能編輯');
-  assert.equal((await call(env, 'POST', '/groups', { op: 'add', column: 4, name: '路人狗', editor: '志工甲' })).status, 400);
-  assert.equal((await call(env, 'POST', '/groups', { op: 'create', name: 'MINI', label: '' })).status, 400);
-  assert.equal((await call(env, 'POST', '/groups', { op: 'remove', column: -1, name: 'MINI' })).status, 400);
-  assert.equal((await call(env, 'POST', '/groups', { op: 'rename', column: 4, name: 'MINI' })).status, 400);
-  assert.equal((await call(env, 'GET', '/groups')).status, 405);
-  assert.equal(calls.length, 0);
-});
-
-test('狗群：小程式回錯誤就不動 D1', async t => {
-  const env = await groupEnv();
-  fakeGroupScript(t, () => ({ ok: false, error: '找不到這一群' }));
-  const r = await call(env, 'POST', '/groups', { op: 'remove', column: 4, name: '測試狗', editor: '志工甲' });
-  assert.equal(r.status, 502);
-  assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_sheet_groups').first()).n, 1);
+  const r = await call(env, 'POST', '/groups', { op: 'add', column: 4, name: '測試狗', editor: '志工甲' });
+  assert.equal(r.status, 404);
 });
 
 // #289 舊編號：誰都能補、都能刪，不用通關碼；/api/dogs 馬上讀得到，D1 留操作紀錄
@@ -177,9 +138,9 @@ test('舊編號：補了 /api/dogs 馬上有，刪了就沒有，每次都記編
   assert.equal('formerIds' in (await dogOf(env, '2024032902')), false);
   const log = (await call(env, 'GET', '/edits')).body.edits.reverse();
   assert.deepEqual(log.map(r => [r.kind, r.kindLabel, r.editorName, r.dogNumber, r.before, r.after]), [
-    ['former', '舊編號', ME, '2024032902', null, '2015081801'],
-    ['former', '舊編號', ME, '2024032902', '2015081801', null],
-    ['former', '舊編號', ME, '2024032902', '2020010101', null],
+    ['former', '舊編號', ME, '2024032902', ['2020010101','2024032902'], ['2015081801','2020010101','2024032902']],
+    ['former', '舊編號', ME, '2024032902', ['2015081801','2020010101','2024032902'], ['2020010101','2024032902']],
+    ['former', '舊編號', ME, '2024032902', ['2020010101','2024032902'], ['2024032902']],
   ]);
 });
 

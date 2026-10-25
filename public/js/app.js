@@ -1,3 +1,4 @@
+import { canEdit, canShow, loadSettings } from './feature-settings.js';
 import { BQApi } from './api.js';
 import { BQStore } from './store.js';
 import { SITE } from './site-config.js';
@@ -105,12 +106,11 @@ function loadDogsData() {
   return appState.dogsRead;
 }
 async function fetchDogsData(signal) {
-  const groupReadRevision = typeof groupStageState.groupRevision === 'undefined' ? 0 : groupStageState.groupRevision;
   const r = await BQApi.dogs({ signal });
   if (r.error === 'network') throw new Error('連不到網站，可能是網路中斷。');
   if (r.error === 'http') throw new Error(`讀取狗的資料失敗（HTTP ${r.status}）。`);
   if (r.error) throw new Error('狗的資料格式壞掉了。');
-  return { ...parseDogsData(r.data), groupReadRevision };
+  return parseDogsData(r.data);
 }
 
 // ── 我最近溜過（#58）──
@@ -482,7 +482,7 @@ function versioned(path) {
 // 前端剛上傳成功的照片（編號 → 本機圖片網址）：網站要一兩分鐘才會更新，這段期間先顯示剛傳的那張（#48）
 const photoOverrides = {};
 function photoSrc(dog) {
-  return photoOverrides[dog.id] || versioned(`photos/${encodeURIComponent(dog.id)}.jpg`);
+  return photoOverrides[dog.id] || versioned(`photos/${encodeURIComponent(dog.id||dog.dogId)}.jpg`);
 }
 
 // 縮圖（#83）：清單只載 photos/thumbs/ 的小圖，燈箱才看原圖；縮圖由 Action 產生（scripts/make-thumbs.py）
@@ -658,7 +658,7 @@ const ymdOf = d => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 // 最後一個「補舊編號」，點了原地變輸入框。誰都能補、都能刪（ADR 0005），要先選好名字（ADR 0004），離所的狗只看不改
 function reentryLine(dog) {
   const former = dog.formerIds || [];
-  const can = !!(dog.id && appState.UPLOAD_URL) && !dog.departure;
+  const can = canEdit('editFormer') && !!(dog.id && appState.UPLOAD_URL) && !dog.departure;
   const first = BQDates.firstIntake(dog);
   const list = former.map(f => `<span class="former-num">${esc(f)}${can ? `<button type="button" class="former-del" data-former-del="${esc(f)}" aria-label="刪掉舊編號 ${esc(f)}">✕</button>` : ''}</span>`).join('');
   const e = appState.formerEdit && appState.formerEdit.dog === dog ? appState.formerEdit : null;
@@ -688,10 +688,11 @@ function openFormerEdit(dog) {
 
 // 補或刪舊編號（method 由呼叫的人給）；回空字串是成功，不然是要給人看的原因
 async function sendFormer(dog, former, method) {
-  const r = await BQApi.saveFormer(dog.id, method, { editor: editorName(), former });
+  const r = await BQApi.saveFormer(dog.id, method, { editor: editorName(), former, revision:appState.formerEdit?.dog===dog?appState.formerEdit.revision:dog.editRevision });
   if (r.error === 'network') return '沒有存進去，請確認網路後再試';
   const out = r.data;
   if (!r.ok || !out || !out.ok) return (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
+  if(out.revision)dog.editRevision=out.revision;
   return '';
 }
 
@@ -1085,7 +1086,7 @@ function isoDay(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function fixedCareHtml(dog) {
-  if (!(dog.id || dog.dogId) || dog.departure || !appState.UPLOAD_URL) return '';
+  if (!canEdit('editFixedCare') || !(dog.id || dog.dogId) || dog.departure || !appState.UPLOAD_URL) return '';
   const state = fixedCareEdits.get(dog.id || dog.dogId);
   const busy = state?.busy;
   return `<section class="detail-section fixed-care" data-section="fixed-care">
@@ -1115,11 +1116,12 @@ async function toggleFixedCare(dog) {
   fixedCareEdits.set(key, state);
   renderDetail();
   try {
-    const r = await BQApi.saveFixedCare(key, { editor, enabled });
+    const r = await BQApi.saveFixedCare(key, { editor, enabled, revision:dog.editRevision });
     if (r.error === 'network') throw new Error(r.message);
     const out = r.data;
     if (!r.ok || !out?.ok || out.enabled !== enabled) throw new Error(out?.error || '沒有存進去，請稍後再試');
     dog.covered = enabled;
+    if(out.revision)dog.editRevision=out.revision;
     for (const current of appState.allDogs) if ((current.id || current.dogId) === key) current.covered = enabled;
     if (appState.detailDog && (appState.detailDog.id || appState.detailDog.dogId) === key) appState.detailDog.covered = enabled;
     BQWalkUI.showToast(`${dog.name} 的固定照顧已${enabled ? '開啟' : '關閉'}`);
@@ -1136,6 +1138,7 @@ async function toggleFixedCare(dog) {
 }
 
 function restAdminHtml(dog, today) {
+  if (!canEdit('editRest')) return '';
   if (!dog.id || !appState.UPLOAD_URL) return '';
   const r = restOf(dog, today);
   const e = appState.restEdit && appState.restEdit.dog === dog ? appState.restEdit : null;
@@ -1237,8 +1240,8 @@ function introSectionHtml(dog, intro) {
   if (appState.staysEdit && appState.staysEdit.dog === dog) return staysSectionHtml(dog);
   const e = appState.introEdit && appState.introEdit.dog === dog ? appState.introEdit : null;
   if (!e) {
-    const can = !!(dog.id && appState.UPLOAD_URL) && !dog.departure;
-    const canStays = !!(dog.id && appState.UPLOAD_URL);
+    const can = canEdit('editIntro') && !!(dog.id && appState.UPLOAD_URL) && !dog.departure;
+    const canStays = canEdit('editStays') && !!(dog.id && appState.UPLOAD_URL);
     const { events, supplement } = intakePresentation(dog, intro);
     if (!events.length && !supplement && !canStays) return '';
     return `<section class="detail-section" data-section="intro">
@@ -1252,7 +1255,7 @@ function introSectionHtml(dog, intro) {
   return `<section class="detail-section" data-section="intro">
     <form class="rest-form intro-form" id="introForm" autocomplete="on">
       <h3>${icon('card')}入所介紹</h3>
-      <button type="button" class="admin-btn" id="staysEdit"${busy ? ' disabled' : ''}>${(dog.stays || []).length ? '改' : '補'}出入所紀錄</button>
+      <button type="button" class="admin-btn" id="staysEdit"${!canEdit('editStays') || busy ? ' disabled' : ''}>${(dog.stays || []).length ? '改' : '補'}出入所紀錄</button>
       ${intakeEditorHtml(dog, e, busy)}
       <p class="rest-hint">存好後這台馬上看到，其他人幾分鐘後（下次更新資料）看到。只存在網站，不寫試算表。</p>
       <label>補充介紹（保留原文）<textarea id="introText" rows="7" maxlength="${INTRO_MAX}" placeholder="例：親人、喜歡散步，怕機車聲"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea><small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small></label>
@@ -1287,7 +1290,7 @@ async function saveIntro() {
   if (e.events.reduce((n, row) => n + [...row.event].length, 0) > INTRO_MAX) { detailEdits.fail(e, '原因合計最多 1000 字'); return; }
   detailEdits.saving(e);
   let out = null, error = '';
-  const r = await BQApi.saveIntro(e.dog.id, { editor, text, events: e.events });
+  const r = await BQApi.saveIntro(e.dog.id, { editor, text, events: e.events, revision:e.revision });
   out = r.data;
   if (r.error === 'network') error = '沒有存進去，請確認網路後再試';
   else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
@@ -1297,6 +1300,7 @@ async function saveIntro() {
     detailEdits.fail(e, error);
     return;
   }
+  if(out.revision)e.dog.editRevision=out.revision;
   introOverrides[e.dog.id] = typeof out.intro === 'string' ? out.intro : text;
   e.dog.intakeEvents = Array.isArray(out.intakeEvents) ? out.intakeEvents : e.events;
   appState.introEdit = null;
@@ -1361,13 +1365,14 @@ async function saveStays() {
   if (problem) { detailEdits.fail(e, problem); return; }
   detailEdits.saving(e);
   let out = null, error = '';
-  const r = await BQApi.saveStays(e.dog.id, { editor, before: e.before, stays: rows });
+  const r = await BQApi.saveStays(e.dog.id, { editor, before: e.before, stays: rows, revision:e.revision });
   out = r.data;
   if (r.error === 'network') error = '沒有存進去，請確認網路後再試';
   else if (r.status === 409) error = '別人剛改過，請重新整理再改';
   else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
   if (appState.staysEdit !== e) return;
   if (error) { detailEdits.fail(e, error); return; }
+  if(out.revision)e.dog.editRevision=out.revision;
   e.dog.stays = Array.isArray(out.stays) ? out.stays : rows;
   appState.staysEdit = null;
   render(); renderDetail();
@@ -1396,7 +1401,7 @@ async function saveRest(end = false) {
   if (!end && !BQDates.parseYmd(e.until)) { detailEdits.fail(e, '請選到哪一天'); return; }
   detailEdits.saving(e);
   let out = null, error = '';
-  const r = await BQApi.saveRest(e.dog.id, end ? { editor, end: true } : { editor, until: e.until, reason: e.reason.trim() });
+  const r = await BQApi.saveRest(e.dog.id, end ? { editor, end: true, revision:e.revision } : { editor, until: e.until, reason: e.reason.trim(), revision:e.revision });
   out = r.data;
   if (r.error === 'network') error = '沒有存進去，請確認網路後再試';
   else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
@@ -1406,6 +1411,7 @@ async function saveRest(end = false) {
     return;
   }
   // 換成新的物件：讀取中的 loadRest 才知道這裡改過（見 loadRest）
+  if(out.revision)e.dog.editRevision=out.revision;
   const next = { ...appState.restMap };
   if (out.rest) next[e.dog.id] = out.rest; else delete next[e.dog.id];
   appState.restMap = next;
@@ -1474,7 +1480,7 @@ function departedDetailHtml(dog, today) {
   }
 }
 
-const DEPARTURE_LABELS = { adopt: '認養', death: '死亡', other: '其他', unknown: '待確認' };
+const DEPARTURE_LABELS = { adopt: '認養', death: '離世', other: '其他', unknown: '待確認' };
 function ymdText(d) {
   return d ? `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}` : '日期不明';
 }
@@ -1569,7 +1575,7 @@ function togetherSection(dog, walked) {
       ${list.length
         ? `<div class="buddies">${list.map(d => buddyTile(d, d.name, walked, mates.includes(d))).join('')}</div>`
         : `<div class="empty">沒有同籠，也沒有登記可以一起溜的狗</div>`}
-      <a class="group-page-link" href="groups.html">看全部狗群、編輯</a>
+      <a class="group-page-link" href="groups.html">看全部狗群</a>
     </section>`;
 }
 
@@ -1720,6 +1726,9 @@ function labelPhotoPick(box) {
 const detailEditorViewport = createDetailEditorViewport(document.getElementById('detailBackdrop'), document.getElementById('detail'));
 
 function renderDetail() {
+  for (const [key, field] of [['editIntro','introEdit'],['editRest','restEdit'],['editStays','staysEdit'],['editFormer','formerEdit']]) {
+    if (!canEdit(key) && appState[field]?.phase !== 'saving') appState[field] = null;
+  }
   if (!appState.detailDog) return;
   const box = document.getElementById('detail');
   wireDetail(box);
@@ -2089,7 +2098,7 @@ function renderMain() {
   // #273 資訊分類與子頁。
   if (appState.analysisOpen) {
     buildTabs(appState.loadState === 'ready' ? { walk: appState.allDogs.filter(d => matchesSearch(d, appState.searchQuery.trim())).length, mine: myWalksCount('') } : {});
-    if (!(analysisState.infoPage === 'updates' && analysisState.infoUpdateTab === 'edits' && main.querySelector('#infoEdits'))) main.innerHTML = analysisPageHtml(today);
+    if (!(canShow('updates') && analysisState.infoPage === 'updates' && analysisState.infoUpdateTab === 'edits' && main.querySelector('#infoEdits'))) main.innerHTML = analysisPageHtml(today);
     return;
   }
   if (appState.activeTab === 'groups') {
@@ -2174,6 +2183,7 @@ function openGuide() {
 
 // 先畫出分類列與內容區的讀取中（標題、搜尋框本來就在 index.html），再背景讀 dogs.json
 async function init() {
+  void loadSettings().then(() => { render(); if (appState.detailDog) renderDetail(); });
   BQWelcome.start();
   loadWalkerNames(); // 開頭畫面的名字按鈕也要用，不等狗的資料
   appState.loadState = 'loading';
@@ -2245,6 +2255,9 @@ function freshWalkList() {
 async function refreshData(btn) {
   if (appState.syncing) return;
   appState.syncing = true;
+  await loadSettings();
+  render();
+  if (appState.detailDog) renderDetail();
   btn.classList.add('syncing');
   btn.setAttribute('aria-busy', 'true');
   try {

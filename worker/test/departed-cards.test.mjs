@@ -38,7 +38,7 @@ async function seeded(t) {
   await DB.prepare("INSERT INTO v3_activities(activity_id,activity_date,kind) VALUES('a1','2026-09-01','adoption'),('a2','2026-09-15','kids')").run();
   await DB.prepare("INSERT INTO v3_activity_dogs VALUES('a1',0,?,'阿福'),('a2',0,?,'阿福'),('a2',1,NULL,'老黃')").bind(await id('2020010101'), await id('2020010101')).run();
   await DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('manual1','老黃')").run();
-  await DB.prepare("INSERT INTO v3_departed_cards VALUES('manual1','','unknown','2026-10-20T00:00:00Z')").run();
+  await DB.prepare("INSERT INTO v3_dog_departures(dog_id,number,name,departed_date,seen_date) VALUES('manual1','','老黃','','2026-10-20')").run();
   await DB.prepare("UPDATE v3_activity_dogs SET dog_id='manual1' WHERE dog_id IS NULL AND name='老黃'").run();
   return DB;
 }
@@ -67,6 +67,20 @@ test('#271 以前存的摘要沒有每隻狗的天數：重算一次，答案一
     assert(dogs, '新摘要有 dogs');
     await DB.prepare('DELETE FROM v3_walk_summaries WHERE year=? AND seq>0').bind(year).run();
     await DB.prepare('UPDATE v3_walk_summaries SET body=? WHERE year=? AND seq=0').bind(JSON.stringify(old), year).run();
+  }
+  resetPackCache();
+  assert.deepEqual(brief(await get(DB)), first);
+});
+
+test('#560 以前存的離所資料包沒有 cards（套 migration 到部署之間舊程式存的）：重算一次，只有名字的卡照樣出現', async t => {
+  const DB = await seeded(t);
+  const first = brief(await get(DB));
+  const rows = (await DB.prepare("SELECT part,seq,body FROM v3_packs WHERE part LIKE 'departures:%' ORDER BY part,seq").all()).results;
+  for (const [part, list] of Object.entries(Object.groupBy(rows, r => r.part))) {
+    const { cards, ...old } = JSON.parse(list.map(r => r.body).join(''));
+    assert(Array.isArray(cards), '新資料包有 cards');
+    await DB.prepare('DELETE FROM v3_packs WHERE part=? AND seq>0').bind(part).run();
+    await DB.prepare('UPDATE v3_packs SET body=? WHERE part=? AND seq=0').bind(JSON.stringify(old), part).run();
   }
   resetPackCache();
   assert.deepEqual(brief(await get(DB)), first);

@@ -6,6 +6,7 @@ export function parseDogsData(data) {
   const text = v => (v == null ? '' : String(v).trim());
   const dogs = data.dogs.filter(d => d && text(d.name)).map(d => ({
     cage: text(d.cage),
+    ...(Number.isSafeInteger(d.editRevision)?{editRevision:d.editRevision}:{}),
     id: text(d.id),
     ...(d.dogId ? { dogId: text(d.dogId) } : {}),
     name: text(d.name),
@@ -36,7 +37,7 @@ export function parseDogsData(data) {
   const versions = {};
   if (data.photoVersions && typeof data.photoVersions === 'object' && !Array.isArray(data.photoVersions)) {
     for (const [path, v] of Object.entries(data.photoVersions)) {
-      if (typeof v === 'string' && /^[0-9a-f]{1,16}$/.test(v)) versions[path] = v;
+      if (typeof v === 'string' && /^[0-9a-f]{1,32}$/.test(v)) versions[path] = v;
     }
   }
   // 異動紀錄（K 2026-10-10）：試算表狗清單下面那段，電腦版右欄（js/desk.js）；沒有或格式不對就是空的

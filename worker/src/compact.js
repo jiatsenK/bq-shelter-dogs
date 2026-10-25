@@ -8,25 +8,27 @@ import { readAllStays } from './stays.js';
 const ON_MAIN = 'dog_id IN (SELECT dog_id FROM v3_sheet_main)';
 
 // 主清單欄位 → dogs.json 欄位；formerIds 只在有舊編號時出現（跟同步寫出來的 JSON 一樣）。
-// 舊編號直接讀 v3_dog_numbers（同一隻狗的其他編號，#289 網站補了馬上看得到）
+// 舊編號直接讀 v3_dog_numbers（同一隻狗的其他編號，#289 網站補了馬上看得到）；性別讀 v3_dogs（#557）
 const MAIN_FIELDS = [
   ['cage', 'cage'], ['id', 'number'], ['name', 'name'], ['walkedDate', 'walked_date'], ['covered', 'fixed_care'],
-  ['myWalked', 'my_walked'], ['note', 'note'], ['sex', 'sex'], ['intro', 'd1_intro'], ['myWalkedDate', 'my_walked_date'],
+  ['note', 'note'], ['sex', 'dog_sex'], ['intro', 'd1_intro'],
 ];
-const BOOLEANS = new Set(['covered', 'myWalked']);
+const BOOLEANS = new Set(['covered']);
 
 // 不含同步時間（ADR 0014，見 readSyncedAt）。同一個 batch 讀，同步正在整份換掉複本時不會讀到一半新一半舊。主清單是空的就丟錯：沒有狗一定是資料出問題
 export async function readDogsPayload(db) {
   // 介紹是 D1 自己存的（#250 網站改了馬上看得到），不用主清單複本上同步帶來的那份
-  const [main, walkers, former, groups, notes] = await db.batch([
-    db.prepare("SELECT m.*, COALESCE(i.intro, '') AS d1_intro, c.fixed_care FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) JOIN v3_dogs c USING(dog_id) ORDER BY m.row_index"),
-    db.prepare('SELECT row_index, walker_code FROM v3_sheet_main_walkers ORDER BY row_index, position'),
+  // 「誰遛的」代號、狗群都是所屬那一列的 JSON（#559）
+  const [main, former, groups, notes] = await db.batch([
+    db.prepare("SELECT m.row_index, m.dog_id, m.number, m.name, m.cage, m.note, m.walked_date, m.walker_codes, c.sex AS dog_sex, COALESCE(i.intro, '') AS d1_intro, c.fixed_care, es.revision AS edit_revision, p.object_key AS photo_key FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) JOIN v3_dogs c USING(dog_id) JOIN v3_dog_edit_state es USING(dog_id) LEFT JOIN v3_photos p ON p.dog_id=m.dog_id AND p.is_primary=1 ORDER BY m.row_index"),
     db.prepare("SELECT m.row_index, n.number FROM v3_sheet_main m JOIN v3_dog_numbers n USING(dog_id) WHERE n.number <> m.number ORDER BY m.row_index, n.number"),
-    db.prepare('SELECT column_index, name FROM v3_sheet_groups ORDER BY column_index, row_index'),
+    db.prepare('SELECT column_index, label, names FROM v3_sheet_group_columns ORDER BY column_index'),
     db.prepare('SELECT label, text FROM v3_sheet_changes ORDER BY row_index'),
   ]);
   const rows = main.results || [];
   if (!rows.length) throw new Error('v3_sheet_main 沒有資料');
+  // 狗群頁用：每一欄一群 { column（試算表第幾欄，0 起）, label, names }，照欄排；只有群名沒有狗的欄也有一列
+  const columns = (groups.results || []).map(g => ({ column: g.column_index, label: g.label, names: JSON.parse(g.names) }));
   const listBy = (res, field) => {
     const map = new Map();
     for (const r of res.results || []) {
@@ -35,7 +37,6 @@ export async function readDogsPayload(db) {
     }
     return map;
   };
-  const walkersOf = listBy(walkers, 'walker_code');
   const formerOf = listBy(former, 'number');
   const intake = await readAllIntakeEvents(db, ON_MAIN);
   const intakeOf = new Map();
@@ -45,46 +46,36 @@ export async function readDogsPayload(db) {
   }
   const staysOf = await readAllStays(db, ON_MAIN);
   const dogs = rows.map(row => {
-    const dog = {};
+    const dog = {editRevision:row.edit_revision};
+    if(row.photo_key)dog.photoVersion=row.photo_key.slice(7,-4);
     for (const [key, column] of MAIN_FIELDS) dog[key] = BOOLEANS.has(key) ? Boolean(row[column]) : row[column];
     if (!row.number) dog.dogId = row.dog_id; // 無編號的狗也用永久身分設定固定照顧，不猜名字。
-    dog.walkers = walkersOf.get(row.row_index) || [];
+    dog.walkers = JSON.parse(row.walker_codes);
     if (formerOf.has(row.row_index)) dog.formerIds = formerOf.get(row.row_index);
     if (intakeOf.has(row.dog_id)) dog.intakeEvents = intakeOf.get(row.dog_id);
     if (staysOf.has(row.dog_id)) dog.stays = staysOf.get(row.dog_id);
     return dog;
   });
   return {
-    version: rows[0].version,
+    version: 1, // 格式版本；主清單的 version 欄全是 1，不再讀（#557）
     dogs,
-    groups: groupMap(groups.results || []),
-    groupColumns: groupColumns(groups.results || [], await groupLabels(db)),
+    groups: groupMap(columns),
+    groupColumns: columns,
     sheetNotes: (notes.results || []).filter(n => n.text).map(n => ({ label: n.label, text: n.text })),
   };
 }
 
 // 上一次同步的時間（ADR 0014，#361）：存在 v3_sync_state，改它不會讓 small 資料包失效。
-// 還沒有這列（新版同步還沒跑過）就用主清單第 0 列舊的那份；表還沒建也一樣
+// 還沒同步過就是空字串；主清單的 synced_at 舊欄不再讀（#557）
 export const SYNCED_AT_KEY = 'synced_at';
 export async function readSyncedAt(db) {
-  const sql = `SELECT COALESCE((SELECT value FROM v3_sync_state WHERE key='${SYNCED_AT_KEY}'), (SELECT synced_at FROM v3_sheet_main WHERE row_index=0)) AS v`;
-  try {
-    return (await db.prepare(sql).first('v')) ?? '';
-  } catch (e) {
-    if (!/no such table/i.test(e.message)) throw e;
-    return (await db.prepare('SELECT synced_at FROM v3_sheet_main WHERE row_index=0').first('synced_at')) ?? '';
-  }
+  return (await db.prepare(`SELECT value FROM v3_sync_state WHERE key='${SYNCED_AT_KEY}'`).first('value')) ?? '';
 }
 
 // 「常遛狗群」每一欄是一群：每隻狗對到同群的其他狗，好幾群就合起來
-function groupMap(cells) {
-  const columns = new Map();
-  for (const c of cells) {
-    if (!columns.has(c.column_index)) columns.set(c.column_index, []);
-    columns.get(c.column_index).push(c.name);
-  }
+function groupMap(columns) {
   const out = {};
-  for (const names of columns.values()) {
+  for (const { names } of columns) {
     for (const name of names) {
       const set = new Set(out[name] || []);
       for (const other of names) if (other !== name) set.add(other);
@@ -92,47 +83,6 @@ function groupMap(cells) {
     }
   }
   return out;
-}
-
-// 群名表是 K 2026-10-16 才加的：第一次同步建表之前讀不到，當成都沒有群名，狗清單照常給
-async function groupLabels(db) {
-  try {
-    return new Map(((await db.prepare('SELECT column_index, label FROM v3_sheet_group_labels').all()).results || []).map(r => [r.column_index, r.label]));
-  } catch (e) {
-    return new Map();
-  }
-}
-
-// 狗群頁用：每一欄一群 { column（試算表第幾欄，0 起）, label, names }，照欄排；只有群名沒有狗的欄也列出來
-function groupColumns(cells, labels) {
-  const columns = new Map();
-  for (const c of cells) {
-    if (!columns.has(c.column_index)) columns.set(c.column_index, []);
-    columns.get(c.column_index).push(c.name);
-  }
-  for (const column of labels.keys()) if (!columns.has(column)) columns.set(column, []);
-  return [...columns.keys()].sort((a, b) => a - b).map(column => ({ column, label: labels.get(column) || '', names: columns.get(column) }));
-}
-
-// 網站編輯狗群（K 2026-10-16）：狗名要是主清單上的狗。回傳 名字 → 主清單寫法（不分空白、大小寫），對不到回 undefined
-export async function mainNameMatcher(db) {
-  const keyOf = n => String(n).replace(/\s+/g, '').toLowerCase();
-  const known = ((await db.prepare('SELECT name FROM v3_sheet_main').all()).results || []).map(r => r.name);
-  const byKey = new Map(known.map(n => [keyOf(n), n]));
-  return name => byKey.get(keyOf(name));
-}
-
-// 小程式改好常遛狗群分頁後，D1 那一欄馬上換成小程式回的名單，狗群頁不用等下一次同步。
-// 一群只有幾隻，整欄換掉；回改之前的名單給編輯紀錄
-export async function replaceGroup(db, column, names, label) {
-  const before = ((await db.prepare('SELECT name FROM v3_sheet_groups WHERE column_index = ? ORDER BY row_index').bind(column).all()).results || []).map(x => x.name);
-  await db.batch([
-    db.prepare('DELETE FROM v3_sheet_groups WHERE column_index = ?').bind(column),
-    ...names.map((n, i) => db.prepare('INSERT INTO v3_sheet_groups(column_index,row_index,name) VALUES(?,?,?)').bind(column, i, n)),
-    db.prepare('DELETE FROM v3_sheet_group_labels WHERE column_index = ?').bind(column),
-    ...(label ? [db.prepare('INSERT INTO v3_sheet_group_labels(column_index,label) VALUES(?,?)').bind(column, label)] : []),
-  ]);
-  return before;
 }
 
 // 編號 → 永久狗 ID；不認得的編號不在回傳的 Map 裡
@@ -202,7 +152,7 @@ const NUMBER_OF = `COALESCE(
 // scope（ADR 0014）：沒給是全部；'main' 是主清單上的狗；出所年份（departureYear）是那年離所、現在不在主清單上的狗
 export async function readRest(db, scope) {
   const where = !scope ? '' : scope === 'main' ? ` WHERE t.${ON_MAIN}`
-    : ` WHERE t.dog_id IN (SELECT dog_id FROM v3_departures WHERE ${departedIn(scope)}) AND NOT t.${ON_MAIN}`;
+    : ` WHERE t.dog_id IN (SELECT dog_id FROM v3_dog_departures WHERE ${departedIn(scope)}) AND NOT t.${ON_MAIN}`;
   const { results = [] } = await db.prepare(`SELECT ${NUMBER_OF} AS id, t.until_date, t.reason FROM v3_rest t${where}`).all();
   return sortedRest(results.filter(r => r.id).map(r => [r.id, { until: r.until_date, reason: r.reason }]));
 }
@@ -277,10 +227,7 @@ export async function removeFormerNumber(db, number, former) {
   if (!dogId) return { status: 404, error: '找不到這個編號的狗' };
   if (ids.get(former) !== dogId) return { status: 404, error: '這隻狗沒有這個舊編號' };
   if (await db.prepare('SELECT 1 FROM v3_sheet_main WHERE number=?').bind(former).first()) return { status: 409, error: '這是主清單上現在用的編號，不能刪' };
-  await db.batch([
-    db.prepare('DELETE FROM v3_sheet_former_numbers WHERE number=?').bind(former),
-    db.prepare('DELETE FROM v3_dog_numbers WHERE number=?').bind(former),
-  ]);
+  await db.prepare('DELETE FROM v3_dog_numbers WHERE number=?').bind(former).run();
   return { ok: true, dogId };
 }
 
@@ -318,37 +265,37 @@ const sqlText = text => `'${String(text).replace(/'/g, "''")}'`;
 export const sortDepartures = list => list.sort((a, b) => (b.date || '').localeCompare(a.date || '') || a.id.localeCompare(b.id));
 
 // 離所紀錄（#259）：形狀跟原本的 data/departures.json 的 departures 一樣，依日期新到舊、同一天依編號。
-// year 有給（ADR 0014）只讀那一年出所的
+// year 有給（ADR 0014）只讀那一年出所的。離所用狗 ID 記（#560）：沒有編號的（只有名字的已出所狗卡）不在名冊，見 readNameOnlyCards
 export async function readDepartures(db, year) {
-  const where = year ? ` WHERE ${departedIn(year)}` : '';
-  const inYear = column => year ? `${column} IN (SELECT ${column} FROM v3_departures${where})` : '';
-  const [deps, items] = await db.batch([
-    db.prepare(`SELECT * FROM v3_departures${where}`),
-    db.prepare(`SELECT number, kind, value FROM v3_departure_items${year ? ` WHERE ${inYear('number')}` : ''} ORDER BY number, kind, position`),
-  ]);
-  const staysOf = await readAllStays(db, inYear('dog_id'));
-  const listOf = new Map();
-  for (const r of items.results || []) {
-    const key = `${r.number}|${r.kind}`;
-    if (!listOf.has(key)) listOf.set(key, []);
-    listOf.get(key).push(r.value);
-  }
+  const where = ` WHERE number<>''${year ? ` AND ${departedIn(year)}` : ''}`;
+  const deps = await db.prepare(`SELECT v3_dog_departures.*,c.sex AS current_sex,es.revision AS edit_revision,(SELECT object_key FROM v3_photos WHERE dog_id=c.dog_id AND is_primary=1) AS photo_key FROM v3_dog_departures JOIN v3_dogs c USING(dog_id) JOIN v3_dog_edit_state es USING(dog_id)${where}`).all();
+  const staysOf = await readAllStays(db, year ? `dog_id IN (SELECT dog_id FROM v3_dog_departures${where})` : '');
   const list = (deps.results || []).map(r => {
     const entry = {
+      editRevision:r.edit_revision,sex:r.current_sex,
       id: r.number, name: r.name, date: r.departed_date, dateSource: r.date_source, seen: r.seen_date,
-      reason: r.reason, matched: r.matched, flags: listOf.get(`${r.number}|flag`) || [],
+      reason: r.reason, matched: r.matched, flags: JSON.parse(r.flags_json),
     };
+    if(r.photo_key)entry.photoVersion=r.photo_key.slice(7,-4);
     if (r.returned_number !== null) entry.returned = r.returned_number;
     if (staysOf.has(r.dog_id)) entry.stays = staysOf.get(r.dog_id);
     if (r.last_number !== null) {
       const last = { cage: r.last_cage, id: r.last_number, name: r.last_name, walkedDate: r.last_walked_date, note: r.last_note, sex: r.last_sex, intro: r.last_intro };
-      if (listOf.has(`${r.number}|former`)) last.formerIds = listOf.get(`${r.number}|former`);
-      if (listOf.has(`${r.number}|group`)) last.groups = listOf.get(`${r.number}|group`);
+      // 空陣列不放（跟以前拆成列時「沒有列就沒有這個鍵」一樣）
+      const former = JSON.parse(r.former_json), groups = JSON.parse(r.groups_json);
+      if (former.length) last.formerIds = former;
+      if (groups.length) last.groups = groups;
       entry.last = last;
     }
     return entry;
   });
   return sortDepartures(list);
+}
+
+// 只有名字的已出所狗卡（#271，#560 起是 v3_dog_departures 沒有編號的列）：[{ dogId, name, date, reason }]，依狗 ID 排
+export async function readNameOnlyCards(db, year) {
+  const { results = [] } = await db.prepare(`SELECT dog_id, name, departed_date, reason FROM v3_dog_departures WHERE number=''${year ? ` AND ${departedIn(year)}` : ''}`).all();
+  return results.map(r => ({ dogId: r.dog_id, name: r.name, date: r.departed_date || '', reason: r.reason })).sort((a, b) => a.dogId.localeCompare(b.dogId));
 }
 
 // 溜狗歷史從這天開始累積（第一份每日快照，原本的 data/history/index.json 第一個日期）；之前的紀錄只是當時的「最後一次」

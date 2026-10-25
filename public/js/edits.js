@@ -1,3 +1,4 @@
+import { loadSettings, canShow, settingsNotice } from './feature-settings.js';
 import { BQStore } from './store.js';
 import { BQApi } from './api.js';
 
@@ -18,6 +19,7 @@ function editsWhen(iso) {
 
 // 改前／改後內容寫成一行字
 function editsValue(kind, v) {
+  if (kind === 'sex') return ({ male: '公', female: '母', '': '待確認' })[v] || '待確認';
   if (kind === 'fixed-care') return v ? '開啟' : '關閉';
   if (v === null || v === undefined || v === '') return '（沒有）';
   if (kind === 'intro' && typeof v === 'object' && Array.isArray(v.events)) {
@@ -33,7 +35,7 @@ function editsValue(kind, v) {
   if (kind === 'activity') return `${v.date} ${{ kids: '動保小小兵', adoption: '認養會' }[v.kind] || v.kind}：${(v.dogs || []).join('、') || '（沒有狗）'}`;
   if (kind === 'departed-card') return v.linkedTo ? `「${v.name}」接到編號 ${v.linkedTo}（${v.attendances} 筆出席）` : `${v.name}（離所 ${v.departed || '日期不明'}，接上 ${v.attendances} 筆出席）`;
   if (kind === 'walkundo' || kind === 'walkedit') return `上次溜 ${v.date || '沒溜過'}${v.walker ? `（${v.walker}）` : ''}`;
-  if (kind === 'photo') return v.trash ? `舊照片在垃圾桶：${v.trash}` : (v.path ? '新照片' : '（沒有）');
+  if (kind === 'photo') return v.trash ? `舊照片在垃圾桶：${v.trash}` : (v.path || v.key ? '新照片' : '（沒有）');
   return typeof v === 'string' ? v : JSON.stringify(v);
 }
 
@@ -52,6 +54,8 @@ async function editsLoad() {
   const status = document.getElementById('status');
   const list = document.getElementById('list');
   if (!status || !list) return;
+  await loadSettings();
+  if (!canShow('updates')) { status.textContent = settingsNotice(); list.replaceChildren(); return; }
   let cached = null;
   try {
     const c = BQStore.readJson(EDITS_CACHE);

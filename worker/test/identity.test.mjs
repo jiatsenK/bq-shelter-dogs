@@ -5,6 +5,23 @@ import { fakeD1 } from './fakes.mjs';
 import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
 const site='https://bq-shelter-dogs.jiatsen-k.workers.dev';
 const call=async(env,path,body)=>{const r=await worker.fetch(new Request(site+'/api'+path,{method:body?'POST':'GET',headers:{Origin:site,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}),env);return {status:r.status,...await r.json()};};
+
+test('#474 已銜接的身分重複讀取不全掃，志工十倍且名字格式不同時讀取量不變', async t => {
+ const DB=fakeD1();t.after(()=>DB.close());await migrateCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
+ const original=await call(env,'/identity',{name:'Ｍｉｎｉ'});
+ const readsOf=async()=>{
+  const before=DB.stats.rowsRead;
+  const result=await call(env,'/identity',{name:' mini '});
+  assert.equal(result.status,200);
+  assert.equal(result.identity.volunteerId,original.identity.volunteerId);
+  return DB.stats.rowsRead-before;
+ };
+ const small=await readsOf();
+ assert.ok(small>0);
+ for(let i=0;i<100;i++)await DB.prepare('INSERT INTO v3_volunteers(volunteer_id,name,last_seen) VALUES(?,?,?)').bind(`unrelated-${i}`,`無關志工${i}`,'2026-01-01').run();
+ assert.equal(await readsOf(),small,'已建立對照後只按 code／volunteer_id 索引讀取');
+});
+
 test('固定志工身分：兩裝置與舊名字在更名後找到同一人，並可追溯當時的編輯紀錄',async t=>{
  const DB=fakeD1();t.after(()=>DB.close());await migrateCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
  const a=await call(env,'/identity',{name:'小明'});assert.equal(a.status,200);assert.ok(a.identity.volunteerId);
@@ -38,7 +55,7 @@ test('舊資料銜接可重跑，未知代號保留，取消後不因再登入�
  const {walkerCode}=await import('../src/editlog.js');const code=await walkerCode('舊名字',env.WALKER_KEY);
  await DB.prepare('INSERT INTO v3_volunteers(volunteer_id,name,last_seen) VALUES(?,?,?)').bind('original-person','舊名字','2026-01-01').run();
  await DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind('b'.repeat(32),'舊狗').run();
- await DB.prepare('INSERT INTO v3_favorites VALUES(?,?,?)').bind(code,'b'.repeat(32),'2026-01-01').run();
+ await DB.prepare('INSERT INTO v3_volunteer_favorites VALUES(?,?,?)').bind('original-person','b'.repeat(32),'2026-01-01').run();
  await DB.prepare('INSERT INTO v3_card_opened VALUES(?,?,?)').bind('ffffffffffff','b'.repeat(32),'2026-01-02').run();
  const {migrateVolunteerIdentity}=await import('../../scripts/migrate-volunteer-identity.mjs');
  const report=await migrateVolunteerIdentity(DB,env.WALKER_KEY);assert.deepEqual(report.unknownCodes,['ffffffffffff']);
@@ -101,4 +118,35 @@ test('合併同狗開卡保留最早日期、來源紀錄不刪；合併紀錄�
   assert.equal(edits[0].before.source.walkRows, 1); assert.equal(edits[0].before.target.walkRows, 1);
   await call(env, '/identity/rename', { code: a, name: '現在', operationId: 'after-merge' });
   assert.equal((await call(env, '/edits')).edits.find(e => e.kind === 'volunteer_merge').editorName, '先');
+});
+// #556：identity_* 觸發器拿掉，版本號改由 linkIdentityName、更名、合併在自己的 batch 加 1；樂觀鎖照樣擋住確認期間的變動
+test('名字對照的版本號由程式加 1：建立、更名、合併各加一次；送出前有人改了名字對照，更名、合併都被擋',async t=>{
+ worker.testing.resetState();const DB=fakeD1();t.after(()=>DB.close());await migrateCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
+ assert.equal((await DB.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='trigger' AND name GLOB 'identity_*'").first()).n,0);
+ const revision=async()=>(await DB.prepare('SELECT revision FROM v3_identity_revision WHERE id=1').first()).revision;
+ let r=await revision();
+ const a=(await call(env,'/identity',{name:'甲'})).identity;assert.equal(await revision(),r+1,'建立對照');
+ await call(env,'/identity',{name:'甲'});assert.equal(await revision(),r+1,'已有對照不加');
+ const b=(await call(env,'/identity',{name:'乙'})).identity;r=await revision();
+ assert.equal((await call(env,'/identity/rename',{code:a.codes[0],name:'甲二',operationId:'r1'})).status,200);assert.equal(await revision(),r+1,'更名');
+ // 讀完版本號、送出有 guard 的 batch 之前，先讓另一台手機做 race()
+ let race=null;
+ const tag=(st,sql)=>({...st,sql,bind:(...args)=>tag(st.bind(...args),sql)});
+ const racing={...env,DB:{...DB,prepare:sql=>tag(DB.prepare(sql),sql),async batch(list){
+  if(race&&list.some(s=>/v3_identity_guard SELECT/.test(s.sql||''))){const f=race;race=null;await f();}
+  return DB.batch(list);
+ }}};
+ race=()=>call(env,'/identity/rename',{code:a.codes[0],name:'甲三',operationId:'other-device'});
+ assert.equal((await call(racing,'/identity/rename',{code:a.codes[0],name:'甲四',operationId:'stale-rename'})).status,409);
+ assert.equal(race,null,'另一台的更名確實插在中間');
+ assert.equal((await call(env,'/identity',{name:'甲'})).identity.name,'甲三');
+ const preview=await call(env,'/identity/merge-preview',{code:a.codes[0],targetCode:b.codes[0]});assert.equal(preview.status,200);
+ race=()=>call(env,'/identity',{name:'丙'});
+ const body={code:a.codes[0],targetCode:b.codes[0],token:preview.token,confirm:true,operationId:'stale-merge'};
+ assert.equal((await call(racing,'/identity/merge',body)).status,409);
+ assert.equal(race,null,'另一台建立新名字確實插在中間');
+ assert.notEqual((await call(env,'/identity',{name:'甲'})).identity.volunteerId,b.volunteerId,'沒有合併');
+ const fresh=await call(env,'/identity/merge-preview',{code:a.codes[0],targetCode:b.codes[0]});r=await revision();
+ assert.equal((await call(env,'/identity/merge',{...body,token:fresh.token,operationId:'merge-ok'})).status,200);assert.equal(await revision(),r+1,'合併');
+ assert.equal((await call(env,'/identity',{name:'甲'})).identity.volunteerId,b.volunteerId);
 });

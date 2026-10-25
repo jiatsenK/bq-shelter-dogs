@@ -1,3 +1,4 @@
+import { canShow, settingsNotice } from './feature-settings.js';
 import { BQDates } from './dates.js';
 import { DEPARTURE_LABELS, apiData, computeStatus, esc, icon, photoSrc, photoThumb, render, renderDetail, searchKey, showDetail, switchTab, ymdText } from './app.js';
 import { activitiesState, analysisState, appState } from './page-state.js';
@@ -373,6 +374,7 @@ function walkHistorySection(dog, today) {
 
 // 分析頁整頁：「← 分析」在頁首（index.html 的 .head-back、.head-title，K 2026-10-09）；資料還沒好時顯示讀取中或失敗
 function analysisPageHtml(today) {
+  if (!canShow(analysisState.infoPage)) return `<p role="status">${settingsNotice()}</p>`;
   if (!analysisState.infoPage) return infoHomeHtml();
   if (analysisState.infoPage === 'departures') return departureSectionHtml(today);
   if (analysisState.infoPage === 'activities') return activitySectionHtml();
@@ -424,7 +426,8 @@ function parseDeparturesData(data) {
   const text = v => (v == null ? '' : String(v).trim());
   return entries.filter(e => e && text(e.id) && text(e.name)).map(e => {
     const last = e.last && typeof e.last === 'object' ? e.last : { formerIds: e.formerIds };
-    const dog = parseDogsData({ dogs: [{ ...last, id: text(e.id), name: text(last.name) || text(e.name), stays: e.stays }] }).dogs[0];
+    const dog = parseDogsData({ dogs: [{ ...last, editRevision:e.editRevision, sex:e.sex||'', id: text(e.id), name: text(last.name) || text(e.name), stays: e.stays }] }).dogs[0];
+    if(e.photoVersion){appState.photoVersions['photos/'+dog.id+'.jpg']=e.photoVersion;appState.photoVersions['photos/thumbs/'+dog.id+'.jpg']=e.photoVersion;}
     dog.depYear = text(e.date).slice(0, 4) || 'none';
     dog.departure = {
       reason: DEPARTURE_ORDER.includes(e.reason) ? e.reason : 'unknown',
@@ -591,7 +594,7 @@ function infoHomeHtml() {
   const dep = !analysisState.departuresData || analysisState.departuresData.state === 'loading' ? '離所紀錄讀取中…' : analysisState.departuresData.state === 'error' ? '離所紀錄讀取失敗' : analysisState.departuresData.list.length ? `共 ${analysisState.departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
   const act = activitiesState.activitiesData.state === 'loading' ? '活動紀錄讀取中…' : activitiesState.activitiesData.state === 'error' ? '活動紀錄讀取失敗' : activitiesState.activitiesData.list.length ? `共 ${activitiesState.activitiesData.list.length} 場活動` : '還沒有活動紀錄';
   const summary = { stay: dogs, departures: dep, activities: act, quality: '查看缺照片、介紹及其他資料', updates: '網站更新與資料編輯' };
-  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
+  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).filter(([id]) => canShow(id)).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
 }
 
 function infoUpdatesHtml() {

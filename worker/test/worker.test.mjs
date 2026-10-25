@@ -1,9 +1,12 @@
+import { currentEditRevision } from './edit-fixture.mjs';
+import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
 // 照片上傳服務的測試（#47）：用假的 GitHub API，不會真的連 GitHub 或 Cloudflare
 // 執行：node --test worker/test/worker.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
-import { fakeD1 } from './fakes.mjs';
+import { SETTING_KEYS } from '../src/feature-settings.js';
+import { fakeD1, fakeR2 } from './fakes.mjs';
 import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
 
 const { resetState, allowUpload, isJpeg, MAX_BYTES } = worker.testing;
@@ -11,7 +14,7 @@ const { resetState, allowUpload, isJpeg, MAX_BYTES } = worker.testing;
 // 測試用另一個網址，用 ALLOWED_ORIGINS 放行（正式網站跟 Worker 同網址，不用設）
 const ORIGIN = 'https://allowed.example';
 let mainStatus = 200;
-const DB = { prepare: sql => sql.includes('v3_walk_state') ? { bind() { return this; }, first: async () => null } : ({ all: async () => { if (mainStatus !== 200) throw new Error('D1 read failed'); return { results: DOGS.dogs.filter(d => d.id).map(d => ({ number: d.id, name: d.name })) }; } }) };
+const DB = { prepare: sql => sql.includes('v3_feature_settings') ? { first: async () => ({ revision: 1, values_json: JSON.stringify(Object.fromEntries(SETTING_KEYS.map(key => [key,true]))) }) } : sql.includes('v3_walk_state') ? { bind() { return this; }, first: async () => null } : ({ all: async () => { if (mainStatus !== 200) throw new Error('D1 read failed'); return { results: DOGS.dogs.filter(d => d.id).map(d => ({ number: d.id, name: d.name })) }; } }) };
 const ENV = { GITHUB_TOKEN: 'test-token', ALLOWED_ORIGINS: ORIGIN, DB };
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
 const DOGS = { dogs: [{ id: '2024032902', name: '測試狗' }, { id: '', name: '沒編號' }] };
@@ -45,75 +48,37 @@ function post(id, { body = JPEG.slice(), origin = ORIGIN, type = 'image/jpeg', i
   return new Request(`https://bq-shelter-photos.example.workers.dev/photos/${id}`, { method: 'POST', headers, body });
 }
 
+async function photoStorage() {
+  const DB=fakeD1();await migrateCompactDatabase(DB);await importCompactDogs(DB,DOGS);
+  return {...ENV,DB,PHOTOS:fakeR2()};
+}
 async function send(req, env = ENV) {
+  if(env.PHOTOS&&req.method==='POST'&&new URL(req.url).pathname.includes('/photos/')) {
+    const headers=new Headers(req.headers);headers.set('X-Dog-Revision',String(await currentEditRevision(env.DB,new URL(req.url).pathname)));
+    req=new Request(req,{headers});
+  }
   const res = await worker.fetch(req, env);
   return { status: res.status, body: await res.json().catch(() => null), headers: res.headers };
 }
 
 test.beforeEach(() => resetState());
 
-test('新照片：寫到 photos/{編號}.jpg，不帶 sha，回傳成功與 CORS', async () => {
-  const calls = fakeGithub();
-  const r = await send(post('2024032902'));
-  assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { ok: true, id: '2024032902', replaced: false, commit: 'c0ffee' });
-  assert.equal(r.headers.get('Access-Control-Allow-Origin'), ORIGIN);
-  const put = calls.find(c => c.method === 'PUT');
-  assert.equal(put.path, '/repos/jiatsenK/bq-shelter-dogs/contents/photos/2024032902.jpg');
-  assert.equal(put.body.sha, undefined);
-  assert.equal(put.body.branch, 'main');
-  assert.equal(put.body.content, Buffer.from(JPEG).toString('base64'));
-  assert.match(put.body.message, /^上傳照片：photos\/2024032902\.jpg（測試狗）/);
-  assert.equal(put.headers.Authorization, 'Bearer test-token');
+test('#566 照片只能透過 R2／D1 可靠流程，缺 R2 不退回 GitHub 寫入',async()=>{
+  const calls=fakeGithub();const result=await send(post('2024032902'));
+  assert.equal(result.status,503);assert.equal(result.body.code,'off');assert.deepEqual(calls,[]);
 });
-
-test('已有照片：帶舊 sha 更換', async () => {
-  const calls = fakeGithub({ files: { 'photos/2024032902.jpg': 'old-sha' } });
-  const r = await send(post('2024032902'));
-  assert.equal(r.body.replaced, true);
-  const put = calls.find(c => c.method === 'PUT');
-  assert.equal(put.body.sha, 'old-sha');
-  assert.match(put.body.message, /^更換照片/);
-});
-
-test('同時有人更換（sha 對不上）會重讀再試一次', async () => {
-  const calls = fakeGithub({ files: { 'photos/2024032902.jpg': 'old-sha' }, putStatus: [409] });
-  const r = await send(post('2024032902'));
-  assert.equal(r.status, 200);
-  assert.equal(calls.filter(c => c.method === 'PUT').length, 2);
-});
-
-test('GitHub 寫入失敗：回錯誤，說原本照片不受影響', async () => {
-  fakeGithub({ putStatus: [500] });
-  const r = await send(post('2024032902'));
-  assert.equal(r.status, 502);
-  assert.equal(r.body.ok, false);
-  assert.match(r.body.error, /原本的照片不受影響/);
-});
-
-test('編號不在 dogs.json、格式不對：不寫入', async () => {
-  const calls = fakeGithub();
-  assert.equal((await send(post('9999999999'))).status, 404);
-  assert.equal((await send(post('..%2Fdata%2Fdogs'))).status, 400);
-  assert.equal((await send(post('abc.jpg'))).status, 400);
-  assert.equal(calls.filter(c => c.method === 'PUT').length, 0);
-});
-
-test('dogs.json 讀不到：不寫入', async () => {
-  const calls = fakeGithub({ dogsStatus: 500 });
-  const r = await send(post('2024032902'));
-  assert.equal(r.status, 502);
-  assert.equal(calls.filter(c => c.method === 'PUT').length, 0);
-});
-
-test('只收 JPEG：型別不對、檔頭不對、空檔、太大都擋', async () => {
-  const calls = fakeGithub();
-  assert.equal((await send(post('2024032902', { type: 'image/png' }))).status, 415);
-  assert.equal((await send(post('2024032902', { body: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) }))).status, 415);
-  assert.equal((await send(post('2024032902', { body: new Uint8Array(0) }))).status, 400);
-  const big = new Uint8Array(MAX_BYTES + 1); big.set(JPEG);
-  assert.equal((await send(post('2024032902', { body: big }))).status, 413);
-  assert.equal(calls.filter(c => c.method === 'PUT').length, 0);
+test('#566 原圖-only 舊用戶端、JPEG 驗證與狗身分仍強制執行',async()=>{
+  const calls=fakeGithub(),env=await photoStorage();
+  try {
+    const r=await send(post('2024032902'),env);assert.equal(r.status,200);assert.match(r.body.path,/^photos\/[a-f0-9]{32}\.jpg$/);assert.deepEqual(calls,[]);
+    assert.equal((await send(post('9999999999'),env)).status,404);
+    assert.equal((await send(post('abc.jpg'),env)).status,400);
+    assert.equal((await send(post('2024032902',{type:'image/png'}),env)).status,415);
+    assert.equal((await send(post('2024032902',{body:new Uint8Array([0x89,0x50])}),env)).status,415);
+    assert.equal((await send(post('2024032902',{body:new Uint8Array(0)}),env)).status,400);
+    resetState();const big=new Uint8Array(MAX_BYTES+1);big.set(JPEG);
+    assert.equal((await send(post('2024032902',{body:big}),env)).status,413);
+  }finally{env.DB.close();}
 });
 
 test('只接受 GitHub Pages 網站：其他網站、沒有 Origin 都擋；預檢回 CORS', async () => {
@@ -128,11 +93,11 @@ test('只接受 GitHub Pages 網站：其他網站、沒有 Origin 都擋；預�
   assert.equal(calls.length, 0);
 });
 
-test('沒設 GITHUB_TOKEN：回「還沒設定好」；首頁顯示 token 有沒有設、不顯示內容', async () => {
+test('缺 R2 不寫；首頁顯示 token 有沒有設、不顯示內容', async () => {
   fakeGithub();
-  const r = await send(post('2024032902'), { ALLOWED_ORIGINS: ORIGIN });
-  assert.equal(r.status, 500);
-  assert.match(r.body.error, /GITHUB_TOKEN/);
+  const r = await send(post('2024032902'), { ALLOWED_ORIGINS: ORIGIN, DB });
+  assert.equal(r.status, 503);
+  assert.equal(r.body.code, 'off');
   const home = await send(new Request('https://w.example/'), ENV);
   assert.equal(home.body.token, '已設定');
   assert.ok(!JSON.stringify(home.body).includes('test-token'));
@@ -140,11 +105,13 @@ test('沒設 GITHUB_TOKEN：回「還沒設定好」；首頁顯示 token 有沒
 
 test('頻率限制：同一個 IP 1 分鐘最多 5 張，換 IP 不受影響；1 小時最多 30 張', async () => {
   fakeGithub();
-  for (let i = 0; i < 5; i++) assert.equal((await send(post('2024032902'))).status, 200);
-  const r = await send(post('2024032902'));
+  const photoEnv=await photoStorage();
+  for (let i = 0; i < 5; i++) assert.equal((await send(post('2024032902'),photoEnv)).status, 200);
+  const r = await send(post('2024032902'),photoEnv);
   assert.equal(r.status, 429);
   assert.match(r.body.error, /太頻繁/);
-  assert.equal((await send(post('2024032902', { ip: '2.2.2.2' }))).status, 200);
+  assert.equal((await send(post('2024032902', { ip: '2.2.2.2' }),photoEnv)).status, 200);
+  photoEnv.DB.close();
   resetState();
   let t = 0;
   for (let i = 0; i < 30; i++, t += 61 * 1000) assert.equal(allowUpload('3.3.3.3', t), true);
@@ -278,12 +245,11 @@ test('#125 合在一起時：不是 /api 的 GET 交給網站檔案（找不到�
   assert.deepEqual(assets.seen, ['/nope.html']);
 });
 
-test('#125 /api/photos/{編號}：跟舊路徑一樣寫到 photos/{編號}.jpg', async () => {
+test('#125 /api/photos/{編號}：共用可靠 R2 流程', async () => {
   const calls = fakeGithub();
   const req = new Request(`${SITE}/api/photos/2024032902`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'image/jpeg', 'CF-Connecting-IP': '9.9.9.9', 'X-Editor': encodeURIComponent('小明') }, body: JPEG.slice() });
-  const r = await send(req);
-  assert.equal(r.status, 200);
-  assert.ok(calls.some(c => c.method === 'PUT' && c.path.endsWith('/contents/photos/2024032902.jpg')));
+  const env=await photoStorage();
+  try{const r=await send(req,env);assert.equal(r.status,200);assert.ok(env.PHOTOS.objects.has(r.body.path));assert.deepEqual(calls,[]);}finally{env.DB.close();}
 });
 
 // ---- PR 預覽版（#126）：可以看、可以讀，不能改正式資料 ----
@@ -326,35 +292,25 @@ function fakeScript(reply = req => ({ ok: true, today: '2026-10-04', results: re
   return calls;
 }
 
-test('#138 POST /walk：帶金鑰轉給小程式，回傳每隻狗的結果；不碰 GitHub', async () => {
+// #558：溜了／修改／復原只走 D1 接受流程（帶 requestId，見 walk-accept.test.mjs）；沒帶的舊版回 410，細節在 today.test.mjs。
+// 這裡留下備註、異動紀錄（仍轉給小程式）共用的擋法與錯誤處理
+test('#138 POST /walk 備註：帶金鑰轉給小程式，回傳結果；不碰 GitHub', async () => {
   const calls = fakeScript();
-  const r = await send(postWalk({ action: 'walk', walker: ' 志工我 ', dogs: [{ id: '9001', name: '測試甲' }, { id: '', name: '測試丙' }] }), SHEET_ENV);
+  const r = await send(postWalk({ action: 'note', walker: ' 志工我 ', text: '很乖', dogs: [{ id: '9001', name: '測試甲' }] }), SHEET_ENV);
   assert.equal(r.status, 200);
   assert.deepEqual(calls.map(c => [c.url, c.method]), [['https://script.example/exec', 'POST']]);
-  assert.deepEqual(calls[0].body, { key: 'sheet-key', action: 'walk', dogs: [{ id: '9001', name: '測試甲' }, { id: '', name: '測試丙' }], walker: '志工我' });
-  assert.deepEqual(r.body.results.map(x => x.status), ['written', 'written']);
   assert.equal(r.headers.get('Access-Control-Allow-Origin'), ORIGIN);
-});
-
-test('#138 POST /walk 復原：只帶 prev／wrote 過去，不用名字', async () => {
-  const calls = fakeScript();
-  const dog = { id: '9001', name: '測試甲', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' }, extra: 'x' };
-  const r = await send(postWalk({ action: 'undo', dogs: [dog] }), SHEET_ENV);
-  assert.equal(r.status, 200);
-  assert.deepEqual(calls[0].body, { key: 'sheet-key', action: 'undo', dogs: [{ id: '9001', name: '測試甲', prev: { date: { date: '2026-10-01' }, walker: '志工乙' }, wrote: { walker: '志工我' } }] });
 });
 
 test('#138 POST /walk 擋掉：沒設定、格式不對、名字太長、太多隻、別的網站、預覽版；小程式說金鑰不對', async () => {
   const calls = fakeScript();
-  const ok = { action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] };
+  const ok = { action: 'note', walker: '我', text: '乖', dogs: [{ id: '1', name: '甲' }] };
   const off = await send(postWalk(ok), ENV);
   assert.deepEqual([off.status, off.body.code], [503, 'off']);
   assert.equal((await send(postWalk({ ...ok, action: 'x' }), SHEET_ENV)).status, 400);
   assert.equal((await send(postWalk({ ...ok, walker: '名'.repeat(21) }), SHEET_ENV)).status, 400);
-  assert.equal((await send(postWalk({ ...ok, walker: '' }), SHEET_ENV)).status, 400);
-  assert.equal((await send(postWalk({ ...ok, dogs: Array.from({ length: 11 }, (_, i) => ({ id: String(i), name: '甲' })) }), SHEET_ENV)).status, 400);
+  assert.equal((await send(postWalk({ ...ok, dogs: [{ id: '1', name: '甲' }, { id: '2', name: '乙' }] }), SHEET_ENV)).status, 400);
   assert.equal((await send(postWalk({ ...ok, dogs: [{ id: '../x', name: '甲' }] }), SHEET_ENV)).status, 400);
-  assert.equal((await send(postWalk({ action: 'undo', dogs: [{ id: '1', name: '甲' }] }), SHEET_ENV)).status, 400);
   assert.equal((await send(postWalk('nope'), SHEET_ENV)).status, 400);
   assert.equal((await send(postWalk(ok, { type: 'text/plain' }), SHEET_ENV)).status, 415);
   assert.equal((await send(postWalk(ok, { origin: 'https://evil.example' }), SHEET_ENV)).status, 403);
@@ -371,21 +327,22 @@ test('#138 POST /walk 擋掉：沒設定、格式不對、名字太長、太多�
 test('#138 POST /walk 沒設通關碼也能用，不帶 key 過去', async () => {
   const calls = fakeScript();
   const env = { ...ENV, SHEET_WRITE_URL: 'https://script.example/exec' };
-  const r = await send(postWalk({ action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] }, { ip: '6.6.6.6' }), env);
+  const r = await send(postWalk({ action: 'note', walker: '我', text: '乖', dogs: [{ id: '1', name: '甲' }] }, { ip: '6.6.6.6' }), env);
   assert.equal(r.status, 200);
   assert.equal('key' in calls[0].body, false);
   assert.equal((await send(new Request('https://bq-shelter-photos.example.workers.dev/'), env)).body.sheetWrite, '已設定');
 });
 
-test('#138 POST /walk 太頻繁就擋', async () => {
+test('#138 POST /walk 太頻繁就擋（舊版溜了的 410 也算次數）', async () => {
   fakeScript();
-  const ok = { action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] };
-  for (let i = 0; i < 30; i++) assert.equal((await send(postWalk(ok, { ip: '5.5.5.5' }), SHEET_ENV)).status, 200);
+  const ok = { action: 'note', walker: '我', text: '乖', dogs: [{ id: '1', name: '甲' }] };
+  for (let i = 0; i < 29; i++) assert.equal((await send(postWalk(ok, { ip: '5.5.5.5' }), SHEET_ENV)).status, 200);
+  assert.equal((await send(postWalk({ action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] }, { ip: '5.5.5.5' }), SHEET_ENV)).status, 410);
   assert.equal((await send(postWalk(ok, { ip: '5.5.5.5' }), SHEET_ENV)).status, 429);
 });
 
 test('#138 POST /walk：小程式的原始錯誤不把試算表 ID 顯示給志工', async () => {
-  const ok = { action: 'walk', walker: '我', dogs: [{ id: '1', name: '甲' }] };
+  const ok = { action: 'note', walker: '我', text: '乖', dogs: [{ id: '1', name: '甲' }] };
   const id = 'AbCdEfGhIjKlMnOpQrStUvWxYz0123456789_-abcd';
   const cases = [
     ['小程式發生錯誤：Illegal spreadsheet id or key: ' + id, /試算表 ID 不對/],
@@ -403,19 +360,6 @@ test('#138 POST /walk：小程式的原始錯誤不把試算表 ID 顯示給志�
 });
 
 // #141 GET /walkers 的測試在 walkers-d1.test.mjs（#519 起從 D1 讀）
-
-test('#141 POST /walk 修改：必須帶原始名單快照；通過既有來源與預覽限制', async () => {
-  const calls = fakeScript();
-  const body = { action: 'edit', walker: '志工我、志工乙', dogs: [{ id: '9001', name: '測試甲', expected: '志工我' }] };
-  assert.equal((await send(postWalk(body), SHEET_ENV)).status, 200);
-  assert.equal(calls[0].body.action, 'edit');
-  assert.equal(calls[0].body.dogs[0].expected, '志工我');
-  assert.equal((await send(postWalk({ ...body, dogs: [{ id: '9001', name: '測試甲' }] }), SHEET_ENV)).status, 400);
-  assert.equal((await send(postWalk(body, { origin: 'https://evil.example' }), SHEET_ENV)).status, 403);
-  const req = new Request(`${SITE}/api/walk`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  assert.equal((await send(req, { ...SHEET_ENV, PREVIEW: '1' })).status, 403);
-  assert.equal(calls.length, 1);
-});
 
 test('舊網址拿掉後：沒設 ALLOWED_ORIGINS 時，舊網址 github.io 送來的要求一律擋，同網址照常', async () => {
   fakeGithub();
@@ -473,5 +417,5 @@ test('出入所紀錄路由：405、415、413、壞 JSON、沒接 D1、限流 42
   for (let i = 0; i < 11; i++) last = await status(put({ ip: '9.9.9.2' }));
   assert.equal(last, 429);
   const broken = { ...env, DB: { prepare() { throw new Error('D1 壞了'); } } };
-  assert.equal(await status(put({ ip: '9.9.9.3' }), broken), 500);
+  assert.equal(await status(put({ ip: '9.9.9.3' }), broken), 503);
 });

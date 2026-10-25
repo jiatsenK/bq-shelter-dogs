@@ -28,9 +28,9 @@ async function seededDb() {
   await importCompactDogs(DB, SOURCE);
   // 介紹是 D1 自己存的（#250）
   await DB.prepare("INSERT INTO v3_intros SELECT dog_id,'民眾拾獲' FROM v3_dog_numbers WHERE number='2025022703'").run();
-  // 分組：第 0 欄 滿滿＋圓仔，第 1 欄 圓仔＋沒編號
-  for (const [col, row, name] of [[0, 0, '滿滿'], [0, 1, '圓仔'], [1, 0, '圓仔'], [1, 1, '沒編號']]) {
-    await DB.prepare('INSERT INTO v3_sheet_groups VALUES(?,?,?)').bind(col, row, name).run();
+  // 分組：第 0 欄 滿滿＋圓仔，第 1 欄 圓仔＋沒編號（一欄一列，#559）
+  for (const [col, names] of [[0, ['滿滿', '圓仔']], [1, ['圓仔', '沒編號']]]) {
+    await DB.prepare('INSERT INTO v3_sheet_group_columns(column_index,names) VALUES(?,?)').bind(col, JSON.stringify(names)).run();
   }
   await DB.prepare('INSERT INTO v3_sheet_changes VALUES(?,?,?)').bind(0, '10/14', '圓仔移到新B08').run();
   await DB.prepare('INSERT INTO v3_sheet_changes VALUES(?,?,?)').bind(1, '', '').run();
@@ -55,7 +55,7 @@ test('GET /api/dogs：從 D1 組回跟 dogs.json 一樣的形狀（順序、欄�
   assert.equal(body.version, 1);
   assert.equal(body.syncedAt, SOURCE.syncedAt);
   assert.match(body.dogs[2].dogId, /^[a-f0-9]{32}$/);
-  assert.deepEqual(body.dogs.map(({ dogId, ...dog }) => dog), SOURCE.dogs.map(d => ({ ...d, covered: false })));
+  assert.deepEqual(body.dogs.map(({ dogId, editRevision, ...dog }) => dog), SOURCE.dogs.map(({myWalked,myWalkedDate,...d}) => ({ ...d, covered: false })));
   assert.deepEqual(body.groups, { 滿滿: ['圓仔'], 圓仔: ['滿滿', '沒編號'], 沒編號: ['圓仔'] });
   assert.deepEqual(body.sheetNotes, [{ label: '10/14', text: '圓仔移到新B08' }]);
 });
@@ -181,8 +181,8 @@ test('名字推薦改用 v3_volunteers：表上的名字記進去、以前看過
 test('存登記名字只寫有變的（#407）：同一天名字沒變寫 0 列、多一個新名字寫 1 列、隔天才更新 last_seen', async () => {
   const DB = await seededDb();
   const { rememberWalkerNames } = await import('../src/index.js');
-  // total_changes 也算觸發器：每寫 1 列名字，identity_v3_volunteers_* 會多寫 1 列 v3_identity_revision
-  const changes = async () => (await DB.prepare('SELECT total_changes() AS n').all()).results[0].n / 2;
+  // total_changes 也算觸發器；v3_volunteers 沒有觸發器（#556 拿掉 identity_v3_volunteers_*），寫 1 列就是 1
+  const changes = async () => (await DB.prepare('SELECT total_changes() AS n').all()).results[0].n;
   const t0 = Date.parse('2026-10-15T01:00:00Z');
   await rememberWalkerNames({ DB }, ['嘉文', '老K'], t0);
   let before = await changes();
@@ -229,7 +229,7 @@ test('GET /api/departures：形狀跟 departures.json 一樣', async () => {
     last: { cage: 'C區11', id: '2021030913', name: '咪寶', walkedDate: '2026-10-13', note: '', sex: 'female', intro: '' } }];
   await importCompactDepartures(DB, departures);
   const body = await (await get('/departures', { DB })).json();
-  assert.deepEqual(body, { ok: true, version: 1, departures });
+  assert.deepEqual({...body,departures:body.departures.map(({editRevision,sex,...e})=>e)}, { ok: true, version: 1, departures });
 });
 
 test('#333 出入所紀錄：在所和離所的狗都帶 stays，沒補過的沒有；還沒建表照常讀', async () => {

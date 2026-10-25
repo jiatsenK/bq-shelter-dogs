@@ -265,7 +265,7 @@ async function runDepartureTests() {
   const saved = [allDogs, UPLOAD_URL, departuresData, depRoster, historyData];
   const tick = () => new Promise(r => setTimeout(r, 0));
   const OCT8 = new Date(2026, 9, 8, 10);
-  const entry = (id, name, date, reason, extra = {}) => ({ id, name, date, dateSource: 'sheet', seen: date, reason, matched: reason === 'adopt' ? '被認養' : reason === 'death' ? '過世' : '', flags: reason === 'unknown' ? ['not-in-sheet'] : [],
+  const entry = (id, name, date, reason, extra = {}) => ({ id, name, date, sex:'male', dateSource: 'sheet', seen: date, reason, matched: reason === 'adopt' ? '被認養' : reason === 'death' ? '過世' : '', flags: reason === 'unknown' ? ['not-in-sheet'] : [],
     last: { cage: 'C區35', id, name, walkedDate: '2026-09-30', note: '親人', sex: 'male', intro: '入所介紹文字' }, ...extra });
   const DATA = { version: 1, departures: [
     entry('2026021301', '雪寶', '2026-10-01', 'adopt', { returned: '2026100801' }),
@@ -302,7 +302,7 @@ async function runDepartureTests() {
       const box = document.createElement('div');
       box.innerHTML = departureSectionHtml(OCT8);
       eq(box.querySelectorAll('.a-kpi').length, 0, '沒有數字卡：');
-      eq(box.querySelector('.dep-line').textContent, '2026 年離所 3 隻（認養 1、死亡 1、待確認 1）');
+      eq(box.querySelector('.dep-line').textContent, '2026 年離所 3 隻（認養 1、離世 1、待確認 1）');
       eq([...box.querySelectorAll('[data-dep-year]')].map(c => c.dataset.depYear), ['2025', '2026']);
       departuresData = { state: 'ready', list: list.filter(d => d.departure.date && d.departure.date.getFullYear() === 2026) };
       box.innerHTML = departureSectionHtml(OCT8);

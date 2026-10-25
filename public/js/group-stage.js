@@ -2,14 +2,13 @@ import { appState, groupStageState } from './page-state.js';
 import { applyDogsData, effectiveWalkDate, esc, icon, init, loadDogsData, loadWalkerName, matchesSearch, photoThumbSrc, render, restOf, showDetail, walkKey, walkRegistration, walkedNow } from './app.js';
 import { BQDates } from './dates.js';
 import { BQWalkUI } from './walk-ui.js';
-import { BQApi } from './api.js';
+// #474：狗群名單只在試算表改；網站保留查看與整群溜狗登記。
 
 // #374：命名群用試算表欄號識別；登記與今日紀錄共用 app.js 的能力。
 
 groupStageState.groupStageData = null;
 groupStageState.groupRead = null;
 groupStageState.groupReadError = false;
-groupStageState.groupRevision = 0; // 寫群組前開始的讀取，不得覆蓋試算表寫入後讀回的內容。
 groupStageState.groupRegistrationIdentity = '';
 groupStageState.groupColumn = null;
 groupStageState.groupExcept = false;
@@ -17,8 +16,6 @@ const groupExcluded = new Set();
 
 groupStageState.groupBusy = false;
 groupStageState.groupFeedback = '';
-groupStageState.groupForm = null;
-groupStageState.groupManage = false;
 groupStageState.groupSearchSeen = '';
 const groupRegistrations = new Map();
 
@@ -50,7 +47,6 @@ function groupSummary(dogs) {
   return dates.every(d => d === dates[0]) && /溜過$/.test(dates[0]) ? `${dogs.length} 隻${dates[0].replace('溜過', '都溜過')}` : dogs.map((d, i) => `${d.name}${dates[i]}`).join('；');
 }
 function receiveGroupData(data) {
-  if (data.groupReadRevision !== undefined && data.groupReadRevision !== groupStageState.groupRevision) return false;
   const groups = data.groupColumns;
   if (!Array.isArray(groups) || groups.some(g => !g || !Number.isInteger(g.column) || typeof g.label !== 'string' || !Array.isArray(g.names) || g.names.some(n => typeof n !== 'string')) || new Set(groups.map(g => g.column)).size !== groups.length) {
     groupStageState.groupReadError = true;
@@ -116,12 +112,11 @@ function groupStageHtml() {
   const walkBtn = done
     ? `<button type="button" id="gwWalk" class="done" data-gw-action="undo" aria-label="這群今天已溜，按一下取消" ${!undoable.length || groupStageState.groupBusy ? 'disabled' : ''}>${icon('tick')}${groupStageState.groupBusy ? '處理中…' : `已溜 · ${walkable.length} 隻`}</button>`
     : `<button type="button" id="gwWalk" ${!selected.length || groupStageState.groupBusy ? 'disabled' : ''}>${groupStageState.groupBusy ? '登記中…' : groupStageState.groupExcept ? `登記其餘 ${selected.length} 隻` : `整群溜了 · ${selected.length} 隻`}</button><button type="button" data-gw-action="except" aria-pressed="${groupStageState.groupExcept}">${groupStageState.groupExcept ? '取消' : '有狗沒溜'}</button>`;
-  const layers = group ? `<div class="gw-layer front" data-column="${group.column}"><div class="gw-cards">${dogs.map((d, i) => groupTile(d, i, false)).join('')}<button type="button" class="gw-dog gw-add" data-gw-action="add" aria-label="加入狗"><span class="gw-tile">＋</span></button></div></div>` : '';
+  const layers = group ? `<div class="gw-layer front" data-column="${group.column}"><div class="gw-cards">${dogs.map((d, i) => groupTile(d, i, false)).join('')}</div></div>` : '';
   return `<section id="groupPage" data-navigation-scope aria-busy="${groupStageState.groupBusy}">
-    <div class="gw-heading"><h2>${esc(group?.label || '還沒有狗群')}<small>${dogs.length} 隻</small></h2><button type="button" data-gw-action="manage" aria-expanded="${groupStageState.groupManage}" aria-controls="gwManage">管理</button></div>
+    <div class="gw-heading"><h2>${esc(group?.label || '還沒有狗群')}<small>${dogs.length} 隻</small></h2></div>
     ${searchNote ? `<p class="gw-search-note" role="status">${esc(searchNote)}</p>` : ''}
-    <div id="gwManage" class="gw-manage" ${groupStageState.groupManage ? '' : 'hidden'}><button type="button" data-gw-action="create">＋狗群</button>${dogs.map(d => `<button type="button" data-gw-remove="${esc(d.name)}">移出 ${esc(d.name)}</button>`).join('')}</div>
-    ${groupFormHtml() /* 輸入框開在按鈕所在的群組上方，不把人帶到頁面下方（#388） */}
+    <p class="section-hint">要改請到試算表「常遛狗群」分頁</p>
 
     <div class="gw-stage-wrap"><div id="groupStage" class="gw-stage" style="--rows:${Math.max(1, Math.ceil((dogs.length + 2) / 4))}" aria-label="目前狗群">${layers}</div></div>
     <div class="gw-pages"><span>${groups.length ? index + 1 : 0} / ${groups.length}</span></div>
@@ -135,11 +130,7 @@ function groupStageHtml() {
     ${group ? `<div class="gw-walkbar"><button type="button" class="gw-side prev" data-gw-step="-1" aria-label="上一群" ${groups.length < 2 ? 'disabled' : ''}>${icon('back')}</button><div class="gw-actions">${walkBtn}</div><button type="button" class="gw-side next" data-gw-step="1" aria-label="下一群" ${groups.length < 2 ? 'disabled' : ''}>${icon('chevron')}</button></div>` : '' /* 「溜了」那排放最後、手機黏在底部分類列上方，換群箭頭不隨狗數移動（#443） */}
   </section>`;
 }
-function groupFormHtml() {
-  if (!groupStageState.groupForm) return '';
-  return `<form id="gwForm" class="gw-form"><h3>${groupStageState.groupForm.op === 'create' ? '建立狗群' : '加入狗'}</h3>${groupStageState.groupForm.op === 'create' ? `<label>群名<input name="label" required maxlength="20" value="${esc(groupStageState.groupForm.label || '')}"></label>` : ''}<label>狗名<input name="name" required maxlength="30" list="gwNames" value="${esc(groupStageState.groupForm.name || '')}"></label><datalist id="gwNames">${appState.allDogs.map(d => `<option value="${esc(d.name)}">`).join('')}</datalist><button type="submit">${groupStageState.groupBusy ? '寫入中…' : '儲存'}</button><button type="button" data-gw-action="cancel-form">取消</button></form>`;
-}
-function resetGroupSelection() { groupStageState.groupManage = false; groupStageState.groupExcept = false; groupExcluded.clear(); groupStageState.groupForm = null; groupStageState.groupFeedback = ''; }
+function resetGroupSelection() { groupStageState.groupExcept = false; groupExcluded.clear(); groupStageState.groupFeedback = ''; }
 function changeGroup(step) {
   if (groupStageState.groupBusy) return;
   const groups = namedGroups();
@@ -207,34 +198,9 @@ async function undoGroupWalk() {
   catch (e) { groupStageState.groupFeedback = '復原失敗，請重試；尚未確認復原'; }
   finally { groupStageState.groupBusy = false; render(); document.getElementById('gwWalk')?.focus({ preventScroll: true }); }
 }
-async function writeGroup(body) {
-  if (groupStageState.groupBusy) return false;
-  const editor = loadWalkerName();
-  if (!editor) { groupStageState.groupFeedback = '請先在「我溜過」選好你的名字再編輯'; render(); return false; }
-  groupStageState.groupRevision++;
-  groupStageState.groupBusy = true; render();
-  try {
-    const r = await BQApi.saveGroup({ ...body, editor });
-    if (r.error === 'network' || !r.data) throw new Error(r.message);
-    const out = r.data;
-    if (!r.ok || !out.ok || !Number.isInteger(out.group?.column) || !Array.isArray(out.group.names)) throw new Error(out.error || '寫入失敗');
-    // 使用既有 API 從試算表讀回的群，不以送出內容樂觀修改。
-    const groups = groupStageState.groupStageData.groups;
-    const i = groups.findIndex(g => g.column === out.group.column);
-    if (i < 0) groups.push(out.group); else groups[i] = out.group;
-    groups.sort((a, b) => a.column - b.column);
-    groupStageState.groupRevision++;
-    groupStageState.groupStageData.checkedAt = Date.now();
-    groupStageState.groupReadError = false;
-    groupStageState.groupColumn = out.group.column;
-    resetGroupSelection(); groupStageState.groupFeedback = out.status === 'already' ? '這隻狗本來就在這一群' : '狗群已更新';
-    return true;
-  } catch (e) { groupStageState.groupFeedback = `${e.message || '寫入失敗'}，請重試`; return false; }
-  finally { groupStageState.groupBusy = false; render(); }
-}
 const groupMain = document.getElementById('main');
 
-export { groupExcluded, groupRegistrations, namedGroups, currentGroup, groupDogs, groupBlocked, groupDateLabel, groupSummary, receiveGroupData, loadGroupStage, refreshGroupStage, groupTile, groupStageHtml, groupFormHtml, resetGroupSelection, changeGroup, registerGroupWalk, undoGroupWalk, writeGroup, groupMain };
+export { groupExcluded, groupRegistrations, namedGroups, currentGroup, groupDogs, groupBlocked, groupDateLabel, groupSummary, receiveGroupData, loadGroupStage, refreshGroupStage, groupTile, groupStageHtml, resetGroupSelection, changeGroup, registerGroupWalk, undoGroupWalk, groupMain };
 export { groupStageState } from './page-state.js';
 
 export function bindGroups() {
@@ -256,29 +222,12 @@ export function bindGroups() {
       } else if (!dog.unavailable) showDetail(dog);
       return;
     }
-    const remove = e.target.closest('[data-gw-remove]');
-    if (remove && confirm(`把「${remove.dataset.gwRemove}」移出「${currentGroup().label}」？`)) return writeGroup({ op: 'remove', column: groupStageState.groupColumn, name: remove.dataset.gwRemove });
     const action = e.target.closest('[data-gw-action]')?.dataset.gwAction;
     if (action === 'companions') return BQWalkUI.openWithSheet(groupRegistrations.get(groupStageState.groupColumn)?.successful || []);
     if (action === 'retry-walk') return registerGroupWalk(true);
     if (action === 'undo') return undoGroupWalk();
     if (e.target.closest('#gwWalk')) return registerGroupWalk();
-    if (action === 'manage') { groupStageState.groupManage = !groupStageState.groupManage; render(); document.querySelector('[data-gw-action="manage"]')?.focus({ preventScroll: true }); }
     if (action === 'except') { groupStageState.groupExcept = !groupStageState.groupExcept; groupExcluded.clear(); groupStageState.groupFeedback = ''; render(); document.querySelector('[data-gw-action="except"]')?.focus(); }
-    if (action === 'add' || action === 'create') { groupStageState.groupManage = false; groupStageState.groupForm = { op: action, column: groupStageState.groupColumn }; render(); document.querySelector('#gwForm input')?.focus(); }
-    if (action === 'cancel-form') { groupStageState.groupForm = null; render(); document.querySelector('.front [data-gw-action="add"]')?.focus({ preventScroll: true }); }
-  });
-  groupMain.addEventListener('input', e => {
-    if (e.target.closest('#gwForm') && groupStageState.groupForm) groupStageState.groupForm[e.target.name] = e.target.value;
-  });
-  groupMain.addEventListener('submit', e => {
-    if (e.target.id !== 'gwForm' || !groupStageState.groupForm) return;
-    e.preventDefault();
-    const form = e.target;
-    groupStageState.groupForm.name = form.elements.name.value.trim();
-    if (form.elements.label) groupStageState.groupForm.label = form.elements.label.value.trim();
-    if (appState.allDogs.filter(d => d.name === groupStageState.groupForm.name).length !== 1) { groupStageState.groupFeedback = '請選擇主清單中可唯一對應的狗名'; render(); return; }
-    writeGroup({ ...groupStageState.groupForm }).then(() => document.querySelector('#gwForm input, .front [data-gw-action="add"]')?.focus({ preventScroll: true }));
   });
   groupMain.addEventListener('keydown', e => {
     if (!e.target.closest('#groupPage') || e.target.matches('input')) return;

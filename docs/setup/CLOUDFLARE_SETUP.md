@@ -229,7 +229,9 @@ K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**�
 
 ### 結構改動與資料匯入
 
-資料表結構只有 `db/compact-schema.sql`（`v3_*`），說明見 `docs/COMPACT_D1.md`。舊的 `db/schema.sql`、`db/migrations/` 在舊表清除（#252，見 `docs/adr/0003-252-old-data-cleanup.md`）後已於 #275 移除，`wrangler*.jsonc` 也不再設定 `migrations_dir`，所以不要再跑 `d1 migrations apply`。
+資料表結構：現在的完整樣子在 `db/compact-schema.sql`（`v3_*`），說明見 `docs/COMPACT_D1.md`。#553 起每個變更寫成 repo 根目錄 `migrations/NNNN_*.sql`（wrangler 預設目錄，不用設 `migrations_dir`），正式庫只由 Actions「套用 D1 migration」（`.github/workflows/d1-migrations.yml`）套用，流程見 `docs/agents/data-changes.md`。舊的 `db/schema.sql`、`db/migrations/`（#252 前的舊表）已於 #275 移除，跟現在的 `migrations/` 無關。
+
+備用庫 `bq-shelter-dogs-backup`（2026-10-24 建立，#553）：套用會刪資料或搬資料的 migration 前，套用 workflow 先把正式庫整份複製到這裡。ID `d31b8371-c94a-4a04-960f-665a0365c5af`，記在 `scripts/d1-migrations.mjs` 的 `BACKUP_DB_ID`；workflow 照名字查，ID 不同或跟正式庫一樣就停。
 
 參考：[D1 migrations](https://developers.cloudflare.com/d1/reference/migrations/)、[D1 綁定設定](https://developers.cloudflare.com/workers/wrangler/configuration/#d1-databases)。目前沿用 repo 的版本網址預覽流程，沒有切換到另一套 Workers Previews 功能。
 

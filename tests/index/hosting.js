@@ -1,3 +1,13 @@
+// #214／#553：正式部署不准改結構或忽略綁定錯誤（d1-migrations.mjs check 只送 SELECT，可以有）；
+// 預覽只准「d1 migrations apply bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc」這一種寫入。回傳問題或 ''
+function deployWriteProblem(deploy, preview) {
+  const forbidden = /migrations apply|d1 execute|continue-on-error|if:\s*always\(/;
+  if (forbidden.test(deploy)) return '部署不能改結構或忽略綁定錯誤';
+  const allowed = /d1 migrations apply bq-shelter-dogs-test --remote --config wrangler\.preview-db\.jsonc[ \t]*\r?$/gm;
+  if (forbidden.test(preview.replace(allowed, ''))) return '預覽只能對測試庫套 migration，不能改其他結構或忽略綁定錯誤';
+  return '';
+}
+
 // #130 照片放 R2：Worker 讀 R2（照片、dogs.json 先經過 Worker）、部署前確認 bucket、縮圖與搬遷 Action
 async function runR2Tests() {
   const get = p => fetch(p).then(r => r.ok ? r.text() : '');
@@ -20,7 +30,22 @@ async function runR2Tests() {
     if (!/node scripts\/r2-bucket\.mjs\r?\n/.test(preview) || /r2-bucket\.mjs --create/.test(preview)) throw new Error('預覽只確認、不建 bucket');
     if (!preview.includes('node scripts/d1-database.mjs --config "${{ steps.r2.outputs.config }}" --preview')) throw new Error('預覽要查證測試 D1');
     if (!/versions upload\s*\\\s*\r?\n\s*--config "\$\{\{ steps\.d1\.outputs\.config \}\}"/.test(preview)) throw new Error('預覽上傳要用測試 D1 的設定');
-    if (/migrations apply|d1 execute|continue-on-error|if:\s*always\(/.test(deploy + preview)) throw new Error('部署不能改結構或忽略綁定錯誤');
+    const problem = deployWriteProblem(deploy, preview);
+    if (problem) throw new Error(problem);
+  });
+  // #553：預覽只准一種 migrations apply（測試庫＋測試庫設定）；正式部署照舊完全不准
+  await check('#553 擋關檢查的反例：預覽對正式庫、不帶測試庫設定、正式部署套用都會被擋', () => {
+    const ok = 'npx --yes wrangler@4 d1 migrations apply bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc\n';
+    if (deployWriteProblem('', ok)) throw new Error('預覽對測試庫套用應該放行');
+    const bad = [
+      ['', 'npx --yes wrangler@4 d1 migrations apply bq-shelter-dogs --remote --config wrangler.preview-db.jsonc\n'],
+      ['', 'npx --yes wrangler@4 d1 migrations apply bq-shelter-dogs-test --remote\n'],
+      ['', 'npx --yes wrangler@4 d1 migrations apply bq-shelter-dogs-test --remote --config wrangler.jsonc\n'],
+      ['', ok + 'npx --yes wrangler@4 d1 execute bq-shelter-dogs-test --remote --command "DROP TABLE x"\n'],
+      ['', ok + 'continue-on-error: true\n'],
+      ['npx --yes wrangler@4 d1 migrations apply bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc\n', ''],
+    ];
+    bad.forEach(([d, p], i) => { if (!deployWriteProblem(d, p)) throw new Error(`反例 ${i + 1} 沒被擋`); });
   });
   const thumbs = await get('../.github/workflows/r2-thumbs.yml');
   await check('#130 縮圖（R2）Action：只能手動或由 Worker 叫、用管理金鑰、不提交 repo', () => {
