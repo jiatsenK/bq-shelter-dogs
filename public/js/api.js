@@ -32,6 +32,7 @@ const BQApi = (() => {
     baseFor,
     settle, // 把 fetch 的回應（或丟出的錯）整理成上面的形狀；測試的假後端也用它
     dogs,
+    featureSettings: () => get('/feature-settings', { cache: 'no-cache', signal: AbortSignal.timeout(10000) }),
     walks: () => get('/walks', { cache: 'no-cache' }),
     // 網址帶版本號，瀏覽器快取過就不再下載（ADR 0013）
     walksYear: (year, ver) => get(`/walks?year=${year}&v=${enc(ver)}`),

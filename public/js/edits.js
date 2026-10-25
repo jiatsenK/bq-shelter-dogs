@@ -1,3 +1,4 @@
+import { loadSettings, canShow, settingsNotice } from './feature-settings.js';
 import { BQStore } from './store.js';
 import { BQApi } from './api.js';
 
@@ -52,6 +53,8 @@ async function editsLoad() {
   const status = document.getElementById('status');
   const list = document.getElementById('list');
   if (!status || !list) return;
+  await loadSettings();
+  if (!canShow('updates')) { status.textContent = settingsNotice(); list.replaceChildren(); return; }
   let cached = null;
   try {
     const c = BQStore.readJson(EDITS_CACHE);

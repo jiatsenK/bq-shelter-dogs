@@ -1,3 +1,4 @@
+import { readSettings, requireVolunteerEdit, settingForWrite } from './feature-settings.js';
 import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitiesForCodes, IdentityError } from './identity.js';
 import { cleanIntakeEvents } from './intake.js';
 import { cleanStays } from './stays.js';
@@ -1264,6 +1265,23 @@ export default {
     // 換代號只是計算、不寫任何東西，照常可以用
     if (env && env.PREVIEW && request.method !== 'GET' && path !== '/walker-code') {
       return fail(403, '這是預覽版，不能存，正式資料不受影響。要改請到正式網址', allowed);
+    }
+
+    if (path === '/feature-settings' && request.method === 'GET') {
+      try {
+        const settings = await readSettings(env.DB);
+        const etag = '"settings-' + settings.revision + '"';
+        const headers = { ...corsHeaders(allowed), ETag: etag, 'Cache-Control': 'private, no-cache' };
+        return request.headers.get('If-None-Match') === etag
+          ? new Response(null, { status: 304, headers })
+          : new Response(JSON.stringify({ ok: true, ...settings }), { headers: { ...headers, 'Content-Type': 'application/json' } });
+      }
+      catch (error) { return fail(503, error.message, allowed); }
+    }
+    const settingKey = settingForWrite(path, request.method);
+    if (settingKey) {
+      try { await requireVolunteerEdit(env.DB, settingKey); }
+      catch (error) { return fail(error.status || 503, error.message, allowed, { code: 'feature-setting' }); }
     }
 
     const route = Object.hasOwn(SITE_ROUTES, path) ? SITE_ROUTES[path] : null;

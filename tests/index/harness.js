@@ -22,7 +22,8 @@ function fakeStorage() {
 }
 // #478 假後端：替換 BQApi 的每個端點，不替換瀏覽器 fetch。fake(端點名, ...參數) 回 Response，丟錯表示斷線；
 // 要走真的端點就回 API_REAL[端點名](...參數)。回傳呼叫紀錄 [[端點名, ...參數]]。restoreApi() 換回真的
-const API_KEEP = ['base', 'baseFor', 'settle'];
+// Legacy unit cases retain the explicit all-open settings fixture; the feature-settings suite tests real settings loading and failures.
+const API_KEEP = ['base', 'baseFor', 'settle', 'featureSettings'];
 let API_REAL = null;
 function fakeApi(fake) {
   if (!API_REAL) API_REAL = { ...BQApi };

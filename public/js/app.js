@@ -1,3 +1,4 @@
+import { canEdit, canShow, loadSettings } from './feature-settings.js';
 import { BQApi } from './api.js';
 import { BQStore } from './store.js';
 import { SITE } from './site-config.js';
@@ -657,7 +658,7 @@ const ymdOf = d => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
 // 最後一個「補舊編號」，點了原地變輸入框。誰都能補、都能刪（ADR 0005），要先選好名字（ADR 0004），離所的狗只看不改
 function reentryLine(dog) {
   const former = dog.formerIds || [];
-  const can = !!(dog.id && appState.UPLOAD_URL) && !dog.departure;
+  const can = canEdit('editFormer') && !!(dog.id && appState.UPLOAD_URL) && !dog.departure;
   const first = BQDates.firstIntake(dog);
   const list = former.map(f => `<span class="former-num">${esc(f)}${can ? `<button type="button" class="former-del" data-former-del="${esc(f)}" aria-label="刪掉舊編號 ${esc(f)}">✕</button>` : ''}</span>`).join('');
   const e = appState.formerEdit && appState.formerEdit.dog === dog ? appState.formerEdit : null;
@@ -1084,7 +1085,7 @@ function isoDay(d) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 function fixedCareHtml(dog) {
-  if (!(dog.id || dog.dogId) || dog.departure || !appState.UPLOAD_URL) return '';
+  if (!canEdit('editFixedCare') || !(dog.id || dog.dogId) || dog.departure || !appState.UPLOAD_URL) return '';
   const state = fixedCareEdits.get(dog.id || dog.dogId);
   const busy = state?.busy;
   return `<section class="detail-section fixed-care" data-section="fixed-care">
@@ -1135,6 +1136,7 @@ async function toggleFixedCare(dog) {
 }
 
 function restAdminHtml(dog, today) {
+  if (!canEdit('editRest')) return '';
   if (!dog.id || !appState.UPLOAD_URL) return '';
   const r = restOf(dog, today);
   const e = appState.restEdit && appState.restEdit.dog === dog ? appState.restEdit : null;
@@ -1236,8 +1238,8 @@ function introSectionHtml(dog, intro) {
   if (appState.staysEdit && appState.staysEdit.dog === dog) return staysSectionHtml(dog);
   const e = appState.introEdit && appState.introEdit.dog === dog ? appState.introEdit : null;
   if (!e) {
-    const can = !!(dog.id && appState.UPLOAD_URL) && !dog.departure;
-    const canStays = !!(dog.id && appState.UPLOAD_URL);
+    const can = canEdit('editIntro') && !!(dog.id && appState.UPLOAD_URL) && !dog.departure;
+    const canStays = canEdit('editStays') && !!(dog.id && appState.UPLOAD_URL);
     const { events, supplement } = intakePresentation(dog, intro);
     if (!events.length && !supplement && !canStays) return '';
     return `<section class="detail-section" data-section="intro">
@@ -1251,7 +1253,7 @@ function introSectionHtml(dog, intro) {
   return `<section class="detail-section" data-section="intro">
     <form class="rest-form intro-form" id="introForm" autocomplete="on">
       <h3>${icon('card')}入所介紹</h3>
-      <button type="button" class="admin-btn" id="staysEdit"${busy ? ' disabled' : ''}>${(dog.stays || []).length ? '改' : '補'}出入所紀錄</button>
+      <button type="button" class="admin-btn" id="staysEdit"${!canEdit('editStays') || busy ? ' disabled' : ''}>${(dog.stays || []).length ? '改' : '補'}出入所紀錄</button>
       ${intakeEditorHtml(dog, e, busy)}
       <p class="rest-hint">存好後這台馬上看到，其他人幾分鐘後（下次更新資料）看到。只存在網站，不寫試算表。</p>
       <label>補充介紹（保留原文）<textarea id="introText" rows="7" maxlength="${INTRO_MAX}" placeholder="例：親人、喜歡散步，怕機車聲"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea><small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small></label>
@@ -1719,6 +1721,9 @@ function labelPhotoPick(box) {
 const detailEditorViewport = createDetailEditorViewport(document.getElementById('detailBackdrop'), document.getElementById('detail'));
 
 function renderDetail() {
+  for (const [key, field] of [['editIntro','introEdit'],['editRest','restEdit'],['editStays','staysEdit'],['editFormer','formerEdit']]) {
+    if (!canEdit(key) && appState[field]?.phase !== 'saving') appState[field] = null;
+  }
   if (!appState.detailDog) return;
   const box = document.getElementById('detail');
   wireDetail(box);
@@ -2088,7 +2093,7 @@ function renderMain() {
   // #273 資訊分類與子頁。
   if (appState.analysisOpen) {
     buildTabs(appState.loadState === 'ready' ? { walk: appState.allDogs.filter(d => matchesSearch(d, appState.searchQuery.trim())).length, mine: myWalksCount('') } : {});
-    if (!(analysisState.infoPage === 'updates' && analysisState.infoUpdateTab === 'edits' && main.querySelector('#infoEdits'))) main.innerHTML = analysisPageHtml(today);
+    if (!(canShow('updates') && analysisState.infoPage === 'updates' && analysisState.infoUpdateTab === 'edits' && main.querySelector('#infoEdits'))) main.innerHTML = analysisPageHtml(today);
     return;
   }
   if (appState.activeTab === 'groups') {
@@ -2173,6 +2178,7 @@ function openGuide() {
 
 // 先畫出分類列與內容區的讀取中（標題、搜尋框本來就在 index.html），再背景讀 dogs.json
 async function init() {
+  void loadSettings().then(() => { render(); if (appState.detailDog) renderDetail(); });
   BQWelcome.start();
   loadWalkerNames(); // 開頭畫面的名字按鈕也要用，不等狗的資料
   appState.loadState = 'loading';
@@ -2244,6 +2250,9 @@ function freshWalkList() {
 async function refreshData(btn) {
   if (appState.syncing) return;
   appState.syncing = true;
+  await loadSettings();
+  render();
+  if (appState.detailDog) renderDetail();
   btn.classList.add('syncing');
   btn.setAttribute('aria-busy', 'true');
   try {

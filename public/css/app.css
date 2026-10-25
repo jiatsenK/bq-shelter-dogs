@@ -2512,3 +2512,5 @@ html.kb-open .onboard { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-
 .fixed-care .rest-hint { margin-bottom: 0; }
 /* #396：同行人／重試共用一列，手機照片區保留同行人及狀態文字的操作空間。 */
 .gw-secondary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; }
+
+.desk-on .zukan-link[hidden] { display: none; }
