@@ -16,4 +16,5 @@
 - 測試網站（K 2026-10-26 同意）：測試 D1 `bq-shelter-dogs-test` 補套 `0009_dog_edit.sql`；把分支 `c5903c7`（main `da6396e`＋#445）用 `wrangler deploy -c wrangler.test-site.jsonc` 部署到 https://bq-shelter-dogs-test.jiatsen-k.workers.dev，版本 `89ac89bf-1300-4ad1-98a6-c7016e3a66d2`，供 K 手機實測。#586 合併後要從 main 再部署一次。
 - 測試網站設定不了名字（seed-preview-db 10-25 又覆蓋測試庫，開 #589、外觀區分開 #590）：K 同意後備份並清空測試庫 `v3_identity_names` 19 列，`v3_volunteers` 保留；正式庫未動。
 - K 2026-10-26 測試網站實測後追加：D1 接受溜了後提示條在「＋一起溜的人」旁加「復原」（取代 K 2026-10-24「復原在狗卡名字旁的 ×」），按了跟「✓ 已溜」一樣立刻恢復、捲到那隻；只送仍是已溜的狗。測試 `walk-order-undo` 第 7 段先紅後綠。
+- 2026-10-26 K 在測試網站（版本 `49cf7422`，分支 `803158d`）用手機實機測試，確認 OK。
 - 相關 PR：[#586](https://github.com/jiatsenK/bq-shelter-dogs/pull/586)，草稿；未加 preview 標籤（待 K 決定）。
