@@ -10,6 +10,6 @@
   - `worker/src/today.js`：只留 `previousWalk`（D1 接受流程還在用）。
   - 測試：`today.test.mjs` 改寫成退場測試（先紅 6 個再轉綠，含「刪表後照常」）；`undo-revert.test.mjs` 改成直接測 `previousWalk`；`worker.test.mjs` 的 #138 共用擋法改用 note；`walk-accept.test.mjs` 舊入口 409 → 410。
 - 選擇：回錯誤，不改走 D1 接受流程。理由寫在 PR 說明。
-- 本機：相關 Node 測試全過。`check-local.ps1 -Full`：Node 434 個中 430 過，失敗 4 個都是 `scripts/local-check.test.mjs`（#556 紀錄寫過乾淨 main 也一樣）；Node 失敗會停下全套，網頁套件另用 `-Suite` 全部跑。
+- 本機：相關 Node 測試全過。`check-local.ps1 -Full`：Node 434 個中 430 過，失敗 4 個都是 `scripts/local-check.test.mjs`（#556 紀錄寫過乾淨 main 也一樣）；Node 失敗會停下全套，網頁套件另用 `-Suite` 21 個全部跑過（index 264 項）。
 - 第二步（另一張 PR）：DROP `v3_today_walks`、`v3_data_versions`、`version_v3_today_walks_*` 3 個觸發器，同時改 `compact-schema.sql`、`scripts/compact-schema.test.mjs` 表清單、`today.test.mjs` 的 `oldTable`。
-- PR：見下方。
+- PR：#574（草稿）。
