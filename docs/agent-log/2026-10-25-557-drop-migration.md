@@ -23,4 +23,7 @@
 
 - 本機 Node：438／442，失敗 4 個是 `scripts/local-check.test.mjs`（乾淨 main 也一樣）。
 - 正式庫沒碰。合併後由 K 按「套用 D1 migration」。
-- PR：見下。
+
+- 預覽站（PR #577，`preview` 標籤）：首頁、`/api/dogs`、`/api/walkers`、`/api/today?source=d1` 正常。為了驗新程式在刪欄後重算資料包，在測試庫手動 `UPDATE v3_pack_versions SET small=small+1`（1 列）；重算結果正確。管理網站沒有預覽站，只在測試庫跑過它的 SELECT。
+- 網頁套件 21 套全過。
+- PR：#577（草稿，`preview` 標籤）。
