@@ -19,7 +19,6 @@ const FULL_SCAN_OK = {
   'compact.js: SELECT dog_id,walk_date,walker_code,dog_number,dog_name FROM v3_walks': 'readWalks 僅供離線對照與測試；正式 API 使用 packs.js 按月／按年讀取',
   'dog-list.js: SELECT row_index,dog_id,number,name,cage,note,walked_date,walker,walker_codes FROM v3_sheet_main': 'GAS 編輯觸發／保險掃描補送（≤10 單位一批）才跑；網站讀取與登記不跑，applyGroup 需完整主清單核對狗名（#501）',
   'dog-list.js: SELECT row_index,label,text FROM v3_sheet_changes': 'GAS 只在主清單下方異動紀錄被編輯或掃描發現指紋不同才讀（#501）；只寫有變的段（#554）',
-  'departed.js: SELECT c.dog_id, g.name, c.departed_date, c.reason FROM v3_departed_cards c': 'attendance 只在活動版本號變更或 Worker 冷啟動時重建出席摘要；同版本走記憶體快取',
   'identity.js: SELECT volunteer_id,name FROM v3_volunteers': 'linkIdentityName 僅首次遇到尚無對照的代號才核對既有名字（NFKC）；已有代號由 code 索引返回，不在一般身分請求跑',
   'identity.js: DELETE FROM v3_identity_guard': '更名／合併 batch 的交易檢查表；同一 batch 只插入 1 列並清空，筆數不隨志工總數成長',
   'packs.js: SELECT year,seq,vers,body FROM v3_walk_summaries': 'ADR 0013：yearSummaries 只在記憶體缺少摘要或月份版本變更才讀，按年存分段摘要，不讀溜狗歷史整表',

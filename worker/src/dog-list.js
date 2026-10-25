@@ -60,7 +60,8 @@ function walkDay(db, dogId, date, dog, codes) {
 // v3_sheet_main_walkers 不再讀寫（#559），但對主清單列有 ON DELETE RESTRICT 外鍵：刪表前照刪，不然記離所會被擋
 const dropMainRow = (db, rowIndex) => ['v3_sheet_main_walkers', 'v3_sheet_main']
   .map(t => db.prepare(`DELETE FROM ${t} WHERE row_index=?`).bind(rowIndex));
-const dropDeparture = (db, number) => [db.prepare('DELETE FROM v3_departure_items WHERE number=?').bind(number), db.prepare('DELETE FROM v3_departures WHERE number=?').bind(number)];
+// 離所用狗 ID 記（#560，v3_dog_departures）；同步只處理有編號的離所，沒編號的是只有名字的已出所狗卡，不動
+const dropDeparture = (db, number) => db.prepare('DELETE FROM v3_dog_departures WHERE number=?').bind(number);
 
 async function applyMain(db, row, list, env, fp) {
   const dog = cleanDog(row.dog), cage = text(row.cage), note = text(row.note).replace(/\r\n?/g, '\n');
@@ -112,8 +113,8 @@ async function applyMain(db, row, list, env, fp) {
     out.push(db.prepare('INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note,walked_date,walker,walker_codes) VALUES(?,?,?,?,?,?,?,?,?)')
       .bind(rowIndex, dogId, dog.id, dog.name, cage, note, date, text(row.walker), JSON.stringify(codes)));
     // 又回到主清單（例：誤移、退養回來）不算離所；換了新編號回來的，舊離所註明用哪個編號回所
-    if (dog.id) out.push(...dropDeparture(db, dog.id),
-      db.prepare("UPDATE v3_departures SET returned_number=? WHERE dog_id=? AND number<>? AND COALESCE(returned_number,'')<>?").bind(dog.id, dogId, dog.id, dog.id));
+    if (dog.id) out.push(dropDeparture(db, dog.id),
+      db.prepare("UPDATE v3_dog_departures SET returned_number=? WHERE dog_id=? AND number NOT IN (?,'') AND COALESCE(returned_number,'')<>?").bind(dog.id, dogId, dog.id, dog.id));
     if (date && !(await db.prepare('SELECT 1 FROM v3_walks WHERE dog_id=? AND walk_date=? LIMIT 1').bind(dogId, date).first())) out.push(...walkDay(db, dogId, date, dog, codes));
     list.push({ row_index: rowIndex, dog_id: dogId, number: dog.id, name: dog.name, cage, note, walked_date: date, walker: text(row.walker), walker_codes: JSON.stringify(codes) });
   }
@@ -126,7 +127,7 @@ async function applyMain(db, row, list, env, fp) {
 // 認錯可在網站「舊編號」拆開（編輯紀錄記為系統自動）。同名多筆不猜，當新狗。
 async function returnedDog(db, dog, list) {
   if (list.some(m => m.name === dog.name)) return null;
-  const found = (await db.prepare('SELECT number,dog_id FROM v3_departures WHERE name=? LIMIT 2').bind(dog.name).all()).results;
+  const found = (await db.prepare("SELECT number,dog_id FROM v3_dog_departures WHERE name=? AND number<>'' LIMIT 2").bind(dog.name).all()).results;
   return found.length === 1 ? found[0] : null;
 }
 
@@ -138,7 +139,7 @@ async function applyDeparted(db, row, list, now, fp) {
   const dates = (Array.isArray(row.dates) ? row.dates : []).map(text).filter(d => YMD.test(d) && d <= todayYmd);
   const departDate = dates.length ? new Date(`${dates[dates.length - 1]}T00:00:00`) : null;
   const judged = judgeDeparture(dog, [{ texts, departDate }], today);
-  // 沒編號的狗記不了離所（v3_departures 以編號為主鍵）：不從主清單移走，免得資料不見；保險掃描照常列出
+  // 沒編號的狗先不記離所、不從主清單移走（#560 第一步只換表；之後才開放），保險掃描照常列出
   if (!dog.id) return false;
   const old = findMain(list, dog);
   const out = [];
@@ -148,28 +149,24 @@ async function applyDeparted(db, row, list, now, fp) {
       const groups = (await db.prepare('SELECT DISTINCT b.value AS name FROM v3_sheet_group_columns g, json_each(g.names) a, json_each(g.names) b WHERE a.value=? AND b.value<>? ORDER BY g.column_index,b.key').bind(old.name, old.name).all()).results.map(r => r.name);
       // 性別在 v3_dogs、入所介紹在 v3_intros（#250）；主清單不再存這兩欄（#557）
       const extra = await db.prepare('SELECT d.sex, i.intro FROM v3_dogs d LEFT JOIN v3_intros i USING(dog_id) WHERE d.dog_id=?').bind(old.dog_id).first();
-      out.push(...dropDeparture(db, dog.id));
-      out.push(db.prepare(`INSERT INTO v3_departures(number,dog_id,name,departed_date,date_source,seen_date,reason,matched,last_number,last_name,last_cage,last_walked_date,last_note,last_sex,last_intro)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(dog.id, old.dog_id, old.name, judged.date || todayYmd, judged.date ? judged.dateSource : 'seen', todayYmd,
-        judged.reason, judged.matched || '', dog.id, old.name, old.cage, old.walked_date, old.note, extra?.sex || '', extra?.intro || ''));
-      const items = (kind, values) => values.forEach((v, i) => out.push(db.prepare('INSERT INTO v3_departure_items(number,kind,position,value) VALUES(?,?,?,?)').bind(dog.id, kind, i, v)));
-      items('flag', judged.flags || []); items('former', former); items('group', groups);
+      out.push(dropDeparture(db, dog.id));
+      out.push(db.prepare(`INSERT INTO v3_dog_departures(dog_id,number,name,departed_date,date_source,seen_date,reason,matched,flags_json,last_number,last_name,last_cage,last_walked_date,last_note,last_sex,last_intro,former_json,groups_json)
+        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(old.dog_id, dog.id, old.name, judged.date || todayYmd, judged.date ? judged.dateSource : 'seen', todayYmd,
+        judged.reason, judged.matched || '', JSON.stringify(judged.flags || []), dog.id, old.name, old.cage, old.walked_date, old.note, extra?.sex || '', extra?.intro || '',
+        JSON.stringify(former), JSON.stringify(groups)));
     }
     out.push(...dropMainRow(db, old.row_index));
     list.splice(list.indexOf(old), 1);
     delete fp[`main:${dogKey(dog)}`];
   } else {
     // 已經記過離所：志工之後補上原因或日期就改過來
-    const prev = await db.prepare('SELECT reason,matched,departed_date,date_source FROM v3_departures WHERE number=?').bind(dog.id).first();
+    const prev = await db.prepare('SELECT reason,matched,departed_date,date_source,flags_json FROM v3_dog_departures WHERE number=?').bind(dog.id).first();
     if (!prev) return false;
-    const flags = (await db.prepare("SELECT value FROM v3_departure_items WHERE number=? AND kind='flag' ORDER BY position").bind(dog.id).all()).results.map(r => r.value);
     const date = judged.date || prev.departed_date, source = judged.date ? judged.dateSource : prev.date_source;
-    if (prev.reason !== judged.reason || prev.matched !== (judged.matched || '') || prev.departed_date !== date || prev.date_source !== source)
-      out.push(db.prepare('UPDATE v3_departures SET reason=?,matched=?,departed_date=?,date_source=? WHERE number=?').bind(judged.reason, judged.matched || '', date, source, dog.id));
-    if (!sameList(flags, judged.flags || [])) {
-      out.push(db.prepare("DELETE FROM v3_departure_items WHERE number=? AND kind='flag'").bind(dog.id));
-      (judged.flags || []).forEach((v, i) => out.push(db.prepare("INSERT INTO v3_departure_items(number,kind,position,value) VALUES(?,'flag',?,?)").bind(dog.id, i, v)));
-    }
+    const flags = judged.flags || [];
+    // 旗標跟其他欄同一列：有變就一句 UPDATE（觸發器只跑一次）
+    if (prev.reason !== judged.reason || prev.matched !== (judged.matched || '') || prev.departed_date !== date || prev.date_source !== source || !sameList(JSON.parse(prev.flags_json), flags))
+      out.push(db.prepare('UPDATE v3_dog_departures SET reason=?,matched=?,departed_date=?,date_source=?,flags_json=? WHERE number=?').bind(judged.reason, judged.matched || '', date, source, JSON.stringify(flags), dog.id));
   }
   if (out.length) await db.batch(out);
   return out.length > 0;
@@ -250,7 +247,7 @@ export async function scanDogList(db, fingerprints, now = Date.now()) {
   // #528 舊指紋：回所的狗（同一隻 main: 這次有送）、D1 已經沒有這隻狗的資料，只刪指紋，不算 D1 有、試算表沒有
   const missing = Object.keys(fp).filter(k => !(k in fingerprints));
   const stale = new Set(missing.filter(k => k.startsWith('departed:') && `main:${k.slice(9)}` in fingerprints));
-  for (const [sheet, table] of [['main', 'v3_sheet_main'], ['departed', 'v3_departures']]) {
+  for (const [sheet, table] of [['main', 'v3_sheet_main'], ['departed', 'v3_dog_departures']]) {
     const keys = missing.filter(k => k.startsWith(`${sheet}:`) && !stale.has(k)).map(k => k.slice(sheet.length + 1));
     if (!keys.length) continue;
     const numbers = keys.filter(k => !k.startsWith('名:')), names = keys.filter(k => k.startsWith('名:')).map(k => k.slice(2));
