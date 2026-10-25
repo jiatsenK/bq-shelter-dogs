@@ -76,8 +76,7 @@ export async function importCompactDogs(db, input) {
   }
   const statements = [];
   // 只清掉本次重建的複本子列，不刪永久狗和編號，也不碰舊表。
-  // v3_sheet_main_walkers 不再寫（#559），但對主清單列有外鍵：刪表前照清
-  for (const table of ['v3_sheet_main_walkers', 'v3_sheet_main']) statements.push(db.prepare(`DELETE FROM ${table}`));
+  statements.push(db.prepare('DELETE FROM v3_sheet_main'));
   for (const [i, dog] of input.dogs.entries()) {
     const dogId = resolved.get(key(dog));
     statements.push(db.prepare('INSERT INTO v3_dogs(dog_id,name,sex) VALUES(?,?,?) ON CONFLICT(dog_id) DO UPDATE SET name=excluded.name,sex=excluded.sex').bind(dogId, dog.name, dog.sex || ''));
