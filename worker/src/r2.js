@@ -81,7 +81,9 @@ export async function servePhoto(request, env, ctx) {
     const name=key.replace('photos/thumbs/','').replace('photos/','').replace('.jpg','');
     const version=url.searchParams.get('v')||'';
     const versioned=/^[a-f0-9]{32}$/.test(version);
-    const pointer=await env.DB.prepare(`SELECT p.object_key,p.thumb_key FROM v3_photos p WHERE ${versioned?'p.object_key=?':'p.is_primary=1'} AND p.dog_id IN (SELECT dog_id FROM v3_dog_numbers WHERE number=? UNION SELECT dog_id FROM v3_dogs WHERE dog_id=?)`).bind(...(versioned?['photos/'+version+'.jpg']:[]),name,name).first();
+    const pointer=versioned
+      ?await env.DB.prepare('SELECT object_key,thumb_key FROM v3_photos WHERE object_key=?').bind('photos/'+version+'.jpg').first()
+      :await env.DB.prepare('SELECT p.object_key,p.thumb_key FROM v3_photos p WHERE p.is_primary=1 AND p.dog_id IN (SELECT dog_id FROM v3_dog_numbers WHERE number=? UNION SELECT dog_id FROM v3_dogs WHERE dog_id=?)').bind(name,name).first();
     if(versioned&&!pointer)return new Response('Not found',{status:404,headers:{'Cache-Control':'no-store'}});
     if(pointer){pointerVersion=pointer.object_key.slice(7,-4);key=isThumbKey(key)?pointer.thumb_key||pointer.object_key:pointer.object_key;}
   }
