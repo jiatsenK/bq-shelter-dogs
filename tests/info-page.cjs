@@ -17,6 +17,7 @@ module.exports = async (browser, base) => {
     if (!u.pathname.includes('/api/')) return route.continue();
     const endpoint = u.pathname.split('/api/')[1];
     if (failure && ['dogs', 'departures/index', 'edits', 'activities'].includes(endpoint)) return route.fulfill({ status: 503, json: { ok: false } });
+    if (endpoint === 'feature-settings') return route.fulfill({ json: {ok:true,revision:1,values:Object.fromEntries(['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays','editFormer'].map(k=>[k,true]))} });
     const json = endpoint === 'dogs' ? fixture : endpoint === 'edits' ? { ok: true, edits: [{ editorName: '志工甲', kind: 'group', at: '2026-10-17T00:00:00Z', before: { label: '舊群', names: ['小白'] }, after: { label: '新群', names: ['小黑'] } }] } : endpoint === 'departures/index' ? { departures: [], years: {} } : endpoint === 'activities' ? { ok: true, activities: [] } : { rest: {}, walkers: [], walks: [] };
     return route.fulfill({ json });
   });

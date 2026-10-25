@@ -503,3 +503,27 @@ CREATE TRIGGER IF NOT EXISTS packs_v3_stays_DELETE AFTER DELETE ON v3_stays BEGI
 CREATE TRIGGER IF NOT EXISTS packs_v3_dogs_INSERT AFTER INSERT ON v3_dogs BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_dogs_UPDATE AFTER UPDATE OF fixed_care ON v3_dogs WHEN OLD.fixed_care<>NEW.fixed_care BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_dogs_DELETE AFTER DELETE ON v3_dogs BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); END;
+-- #565：單列設定；同一 UPDATE 觸發可靠前後紀錄，失敗一併回復。
+CREATE TABLE v3_feature_settings (
+ id INTEGER PRIMARY KEY CHECK(id=1),
+ revision INTEGER NOT NULL CHECK(revision>=1),
+ values_json TEXT NOT NULL CHECK(json_valid(values_json)),
+ actor_subject TEXT NOT NULL DEFAULT '',
+ actor_email TEXT NOT NULL DEFAULT '',
+ changed_at TEXT NOT NULL DEFAULT '',
+ request_id TEXT NOT NULL DEFAULT ''
+);
+INSERT INTO v3_feature_settings(id,revision,values_json) VALUES(1,1,'{"showActivities":true,"showQuality":true,"showUpdates":true,"editIntro":true,"editPhoto":true,"editRest":true,"editActivity":true,"editFixedCare":true,"editStays":true,"editFormer":true}');
+CREATE TABLE v3_feature_settings_log (
+ revision INTEGER PRIMARY KEY,
+ before_json TEXT NOT NULL,
+ after_json TEXT NOT NULL,
+ actor_subject TEXT NOT NULL,
+ actor_email TEXT NOT NULL,
+ changed_at TEXT NOT NULL,
+ request_id TEXT NOT NULL UNIQUE
+);
+CREATE TRIGGER feature_settings_audit AFTER UPDATE ON v3_feature_settings BEGIN
+ INSERT INTO v3_feature_settings_log(revision,before_json,after_json,actor_subject,actor_email,changed_at,request_id)
+ VALUES(NEW.revision,OLD.values_json,NEW.values_json,NEW.actor_subject,NEW.actor_email,NEW.changed_at,NEW.request_id);
+END;
