@@ -33,6 +33,6 @@
 ## 例外、未完成
 
 - `worker/src/today.js`、`index.js` 只動了 `v3_volunteer_codes` 那一句；#558 第一步同時在改這兩個檔的舊入口，合併時可能要手動解衝突。
-- 本機 `check-local.ps1 -Full`：見 PR 說明（`scripts/local-check.test.mjs` 4 個在乾淨 main 也失敗，#556 紀錄已記）。
+- 本機 `check-local.ps1 -Full`：Node 437／441，失敗 4 個是 `scripts/local-check.test.mjs`（乾淨 origin/main 另開 worktree 也一樣 4 個）。-Full 遇 Node 失敗就停，網頁 21 套另用 `-Suite` 全跑：全過。
 - 第二步（0003、`compact-schema.sql`、synced_at／舊編號表的兩句清理、8 個測試檔的 INSERT、`compact-schema.test.mjs` 表清單、cpu-bench）見 PR 說明。
-- PR：草稿（見下方 PR 連結）。
+- PR：#575（草稿）。
