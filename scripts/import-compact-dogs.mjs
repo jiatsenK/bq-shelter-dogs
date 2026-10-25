@@ -2,23 +2,22 @@ import { randomBytes } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { SYNCED_AT_KEY } from '../worker/src/compact.js';
 
-// 讀回時每隻狗都有全部欄位（formerIds 只在有舊編號時出現）；比對前來源也補成同樣形狀。
-const columns = {
-  id: 'number', name: 'name', cage: 'cage', note: 'note', sex: 'sex', intro: 'intro',
-  covered: 'covered', walkedDate: 'walked_date', myWalked: 'my_walked', myWalkedDate: 'my_walked_date',
-  walkers: null, formerIds: null,
-};
-const fields = Object.keys(columns);
-const booleans = new Set(['covered', 'myWalked']);
-const nullable = new Set(['walkedDate', 'myWalkedDate']);
+// 讀回時每隻狗都有全部欄位（formerIds 只在有舊編號時出現，照編號排）；比對前來源也補成同樣形狀。
+// 主清單欄位 → v3_sheet_main；sex 存 v3_dogs、formerIds 存 v3_dog_numbers（#557 起主清單不再存性別、舊編號）
+const columns = { id: 'number', name: 'name', cage: 'cage', note: 'note', walkedDate: 'walked_date' };
+const lists = new Set(['walkers', 'formerIds']);
+const fields = [...Object.keys(columns), 'sex', ...lists];
+// 舊 dogs.json 還有的欄位：格式照驗，但不存也不比對（介紹在 v3_intros、固定照顧在 v3_dogs，myWalked 網站沒在讀，#557）
+const legacy = { intro: 'string', covered: 'boolean', myWalked: 'boolean', myWalkedDate: 'nullable' };
+const nullable = new Set(['walkedDate']);
 const key = dog => dog.id || `名:${dog.name}`;
-const isList = field => columns[field] === null;
+const isList = field => lists.has(field);
 
 function normalize(dog) {
   const out = {};
   for (const field of fields) {
-    if (field === 'formerIds') { if (dog.formerIds?.length) out.formerIds = dog.formerIds; continue; }
-    out[field] = isList(field) ? dog[field] || [] : booleans.has(field) ? Boolean(dog[field]) : dog[field] ?? (nullable.has(field) ? null : '');
+    if (field === 'formerIds') { if (dog.formerIds?.length) out.formerIds = [...dog.formerIds].sort(); continue; }
+    out[field] = isList(field) ? dog[field] || [] : dog[field] ?? (nullable.has(field) ? null : '');
   }
   return out;
 }
@@ -29,11 +28,12 @@ function validate(input) {
   for (const dog of input.dogs) {
     if (!dog || typeof dog.name !== 'string' || !dog.name.trim()) throw new Error('狗名不可空白');
     for (const [field, value] of Object.entries(dog)) {
-      if (!Object.hasOwn(columns, field)) throw new Error(`未支援欄位：${field}`);
+      if (!fields.includes(field) && !Object.hasOwn(legacy, field)) throw new Error(`未支援欄位：${field}`);
+      const type = legacy[field] || (nullable.has(field) ? 'nullable' : 'string');
       const valid = isList(field)
         ? Array.isArray(value) && value.every(v => typeof v === 'string' && v.length > 0)
-        : booleans.has(field) ? typeof value === 'boolean'
-          : nullable.has(field) ? value === null || typeof value === 'string' : typeof value === 'string';
+        : type === 'boolean' ? typeof value === 'boolean'
+          : type === 'nullable' ? value === null || typeof value === 'string' : typeof value === 'string';
       if (!valid) throw new Error(`欄位格式錯誤：${key(dog)}.${field}`);
     }
     if (keys.has(key(dog))) throw new Error(`來源鍵重複：${key(dog)}`);
@@ -76,6 +76,7 @@ export async function importCompactDogs(db, input) {
   }
   const statements = [];
   // 只清掉本次重建的複本子列，不刪永久狗和編號，也不碰舊表。
+  // v3_sheet_former_numbers 不再寫（#557），但它對主清單列有外鍵：刪表前照清
   for (const table of ['v3_sheet_main_walkers', 'v3_sheet_former_numbers', 'v3_sheet_main']) statements.push(db.prepare(`DELETE FROM ${table}`));
   for (const [i, dog] of input.dogs.entries()) {
     const dogId = resolved.get(key(dog));
@@ -83,13 +84,12 @@ export async function importCompactDogs(db, input) {
     for (const number of [dog.id, ...(dog.formerIds || [])].filter(Boolean)) {
       statements.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?) ON CONFLICT(number) DO NOTHING').bind(number, dogId));
     }
-    const scalar = fields.filter(f => columns[f]);
-    const values = scalar.map(f => booleans.has(f) ? Number(dog[f] || false) : dog[f] ?? (nullable.has(f) ? null : ''));
-    // 同步時間不寫主清單（ADR 0014），欄位留空，另存 v3_sync_state
-    const names = ['row_index', 'dog_id', 'synced_at', 'version', ...scalar.map(f => columns[f])];
-    statements.push(db.prepare(`INSERT INTO v3_sheet_main(${names.join(',')}) VALUES(${names.map(() => '?').join(',')})`).bind(i, dogId, '', input.version ?? 1, ...values));
+    const scalar = Object.keys(columns);
+    const values = scalar.map(f => dog[f] ?? (nullable.has(f) ? null : ''));
+    // 同步時間不寫主清單（ADR 0014），另存 v3_sync_state；synced_at 欄沒有預設值，#557 第二步刪欄前先留空
+    const names = ['row_index', 'dog_id', 'synced_at', ...scalar.map(f => columns[f])];
+    statements.push(db.prepare(`INSERT INTO v3_sheet_main(${names.join(',')}) VALUES(${names.map(() => '?').join(',')})`).bind(i, dogId, '', ...values));
     for (const [position, code] of (dog.walkers || []).entries()) statements.push(db.prepare('INSERT INTO v3_sheet_main_walkers VALUES(?,?,?)').bind(i, position, code));
-    for (const [position, number] of (dog.formerIds || []).entries()) statements.push(db.prepare('INSERT INTO v3_sheet_former_numbers VALUES(?,?,?)').bind(i, position, number));
   }
   if (input.syncedAt) statements.push(db.prepare(`INSERT INTO v3_sync_state(key,value) VALUES('${SYNCED_AT_KEY}',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).bind(input.syncedAt));
   if (statements.length) await db.batch(statements);
@@ -99,12 +99,13 @@ export async function importCompactDogs(db, input) {
 export async function readCompactDogs(db) {
   // 同一 batch 讀取，避免同步替換複本時混到不同版本。
   const [main, walkers, former] = await db.batch([
-    db.prepare('SELECT * FROM v3_sheet_main ORDER BY row_index'),
+    db.prepare('SELECT m.*, d.sex AS dog_sex FROM v3_sheet_main m JOIN v3_dogs d USING(dog_id) ORDER BY m.row_index'),
     db.prepare('SELECT * FROM v3_sheet_main_walkers ORDER BY row_index,position'),
-    db.prepare('SELECT * FROM v3_sheet_former_numbers ORDER BY row_index,position'),
+    db.prepare('SELECT m.row_index, n.number FROM v3_sheet_main m JOIN v3_dog_numbers n USING(dog_id) WHERE n.number<>m.number ORDER BY m.row_index, n.number'),
   ]);
   return main.results.map(row => {
-    const dog = Object.fromEntries(fields.filter(f => !isList(f)).map(f => [f, booleans.has(f) ? Boolean(row[columns[f]]) : row[columns[f]]]));
+    const dog = Object.fromEntries(Object.entries(columns).map(([f, c]) => [f, row[c]]));
+    dog.sex = row.dog_sex;
     dog.walkers = walkers.results.filter(r => r.row_index === row.row_index).map(r => r.walker_code);
     dog.formerIds = former.results.filter(r => r.row_index === row.row_index).map(r => r.number);
     return normalize(dog);

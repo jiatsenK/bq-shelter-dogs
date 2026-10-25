@@ -756,7 +756,7 @@ export async function readWalkersD1(db) {
   ]);
   // 代號換名字只給還沒補填原文（walker 是 NULL）的狗；正式庫已經沒有 NULL，平常不讀這段 JOIN（#554，原本一次白讀 772 列）
   const people = (main.results || []).some(r => r.walker == null)
-    ? await db.prepare('SELECT w.row_index, COALESCE(n.name, v.name) AS name FROM v3_sheet_main m JOIN v3_sheet_main_walkers w ON w.row_index=m.row_index LEFT JOIN v3_identity_names n ON n.code=w.walker_code LEFT JOIN v3_volunteer_codes c ON c.code=w.walker_code LEFT JOIN v3_volunteers v ON v.volunteer_id=c.volunteer_id WHERE m.walker IS NULL ORDER BY w.row_index, w.position').all()
+    ? await db.prepare('SELECT w.row_index, n.name FROM v3_sheet_main m JOIN v3_sheet_main_walkers w ON w.row_index=m.row_index LEFT JOIN v3_identity_names n ON n.code=w.walker_code WHERE m.walker IS NULL ORDER BY w.row_index, w.position').all()
     : { results: [] };
   const namesOf = new Map();
   for (const p of people.results || []) {
