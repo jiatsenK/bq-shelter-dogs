@@ -57,8 +57,7 @@ function walkDay(db, dogId, date, dog, codes) {
       .bind(dogId, date, i, code, dog.id, dog.name)),
   ];
 }
-// v3_sheet_former_numbers 不再讀寫（#557），但它對主清單列有 ON DELETE RESTRICT 外鍵：刪表（#557 第二步）前照刪，不然記離所會被擋
-const dropMainRow = (db, rowIndex) => ['v3_sheet_main_walkers', 'v3_sheet_former_numbers', 'v3_sheet_main']
+const dropMainRow = (db, rowIndex) => ['v3_sheet_main_walkers', 'v3_sheet_main']
   .map(t => db.prepare(`DELETE FROM ${t} WHERE row_index=?`).bind(rowIndex));
 const dropDeparture = (db, number) => [db.prepare('DELETE FROM v3_departure_items WHERE number=?').bind(number), db.prepare('DELETE FROM v3_departures WHERE number=?').bind(number)];
 
@@ -113,8 +112,7 @@ async function applyMain(db, row, list, env, fp) {
       if (dog.id) out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
     } else out.push(db.prepare('UPDATE v3_dogs SET name=? WHERE dog_id=? AND name<>?').bind(dog.name, dogId, dog.name));
     const rowIndex = Math.max(-1, ...list.map(m => m.row_index)) + 1;
-    // synced_at 沒有預設值，要等 #557 第二步刪欄才拿掉
-    out.push(db.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note,walked_date,synced_at,walker) VALUES(?,?,?,?,?,?,?,'',?)")
+    out.push(db.prepare('INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note,walked_date,walker) VALUES(?,?,?,?,?,?,?,?)')
       .bind(rowIndex, dogId, dog.id, dog.name, cage, note, date, text(row.walker)));
     codes.forEach((code, i) => out.push(db.prepare('INSERT INTO v3_sheet_main_walkers VALUES(?,?,?)').bind(rowIndex, i, code)));
     // 又回到主清單（例：誤移、退養回來）不算離所；換了新編號回來的，舊離所註明用哪個編號回所

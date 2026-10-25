@@ -250,11 +250,7 @@ export async function removeFormerNumber(db, number, former) {
   if (!dogId) return { status: 404, error: '找不到這個編號的狗' };
   if (ids.get(former) !== dogId) return { status: 404, error: '這隻狗沒有這個舊編號' };
   if (await db.prepare('SELECT 1 FROM v3_sheet_main WHERE number=?').bind(former).first()) return { status: 409, error: '這是主清單上現在用的編號，不能刪' };
-  await db.batch([
-    // 舊編號表不再讀寫（#557），但它對編號有 ON DELETE RESTRICT 外鍵：刪表（#557 第二步）前照刪
-    db.prepare('DELETE FROM v3_sheet_former_numbers WHERE number=?').bind(former),
-    db.prepare('DELETE FROM v3_dog_numbers WHERE number=?').bind(former),
-  ]);
+  await db.prepare('DELETE FROM v3_dog_numbers WHERE number=?').bind(former).run();
   return { ok: true, dogId };
 }
 

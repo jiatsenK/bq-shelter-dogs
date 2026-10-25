@@ -26,17 +26,14 @@ const dogs = await readCompactDogs(db);
 | --- | --- |
 | `v3_dogs` | 隨機永久 `dog_id`；狗名、性別；網站共用設定 `fixed_care` 預設 0，試算表同步不得寫入（ADR 0015） |
 | `v3_dog_numbers` | `number` → `dog_id`，多個編號可以對同狗 |
-| `v3_sheet_main` | `row_index`；主清單複本，保存順序、編號、狗名、籠位、備註、上次溜、「誰遛的」原文。`covered`、`my_walked`、`my_walked_date`、`synced_at`、`version`、`sex`、`intro` 7 欄 #557 起程式不讀不寫（`synced_at` 新列只寫空字串），第二步刪欄 |
+| `v3_sheet_main` | `row_index`；主清單複本，保存順序、編號、狗名、籠位、備註、上次溜、「誰遛的」原文。`covered`、`my_walked`、`my_walked_date`、`synced_at`、`version`、`sex`、`intro` 7 欄 #557 刪欄（migration 0004） |
 | `v3_sheet_main_walkers` | 主清單列＋順序；上次溜的代號 |
-| `v3_sheet_former_numbers` | **#557 停用，第二步刪表**；舊編號改讀 `v3_dog_numbers` |
 | `v3_sheet_changes` | 來源列；實際來源的標籤 `label` 與完整文字 `text`，不猜拆日期或名字 |
-| `v3_sheet_departed` | **#557 停用（一直是空表），第二步刪表** |
 | `v3_sheet_groups` | 來源欄＋列；可以一起溜的狗名 |
 | `v3_walks` | 狗＋日期＋順序；那天的編號 `dog_number`、狗名 `dog_name`、志工名字／代號直接存在紀錄，不另建溜狗的人表 |
-| `v3_volunteers` | 志工；代號對照在 `v3_identity_names`（`v3_volunteer_codes` 跟它完全重複，#557 停用，第二步刪表） |
+| `v3_volunteers` | 志工；代號對照在 `v3_identity_names`（`v3_volunteer_codes` 跟它完全重複，#557 刪表） |
 | `v3_card_opened` | 代號＋永久狗 ID；開卡日期 |
 | `v3_rest` | 永久狗 ID；休養截止日、原因 |
-| `v3_photos` | **#557 停用，第二步刪表**；照片看 R2 的 `photos/{編號}.jpg`（志工網站與管理網站都用 `r2Versions`） |
 | `v3_intros` | 永久狗 ID；入所介紹 |
 | `v3_edit_log` | 編輯紀錄：時間、編輯者代號與名字、種類、狗、改前／改後（JSON），見 `docs/adr/0004-open-editing-and-edit-log.md` |
 | `v3_activities` / `v3_activity_dogs` | 活動紀錄（#270，ADR 0002）：一場一列（日期、類型、revision）；出席的狗一列一隻，`dog_id` 是 NULL 表示只有名字、還沒對上狗。網站寫，同步不碰；舊名單用 `scripts/import-activities.mjs` 手動匯入 |

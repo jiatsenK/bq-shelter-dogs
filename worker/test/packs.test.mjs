@@ -477,22 +477,25 @@ test('觸發器：離所只讓那一年加 1；離所狗的休養、出入所紀
 });
 
 // #556（#548 方案甲）收窄觸發條件：網站不讀的欄改了不加；網站讀的每一欄改了都要加，漏一欄網站就不會更新
-test('觸發器收窄：主清單只改 walker 原文、covered、synced_at、intro 時 small 不變，改在所資料包讀的每一欄都加 1', async t => {
+test('觸發器收窄：主清單只改 walker 原文時 small 不變，改在所資料包讀的每一欄都加 1；性別在 v3_dogs，改了也加 1（#557）', async t => {
   const DB = await seededDb(t);
   await DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES(?,'換身分')").bind('f'.repeat(32)).run();
   const where = "WHERE name LIKE '圓仔%'";
-  for (const set of ["walker='K'", 'covered=1-covered', "synced_at='2026-10-17'", "intro='同步帶來的介紹'"]) {
+  for (const set of ["walker='K'"]) {
     const before = await smallVer(DB);
     await DB.prepare(`UPDATE v3_sheet_main SET ${set} ${where}`).run();
     assert.equal(await smallVer(DB), before, set);
   }
   const read = { row_index: 'row_index+100', dog_id: `'${'f'.repeat(32)}'`, number: "number||'x'", name: "name||'x'", cage: "'B9'", note: "'新備註'",
-    walked_date: "'2026-10-01'", my_walked: '1-my_walked', my_walked_date: "'2026-10-02'", sex: "'母'", version: 'version+1' };
+    walked_date: "'2026-10-01'" };
   for (const [column, value] of Object.entries(read)) {
     const before = await smallVer(DB);
     await DB.prepare(`UPDATE v3_sheet_main SET ${column}=${value} ${where}`).run();
     assert.equal(await smallVer(DB), before + 1, column);
   }
+  const before = await smallVer(DB);
+  await DB.prepare(`UPDATE v3_dogs SET sex=CASE sex WHEN 'male' THEN 'female' ELSE 'male' END WHERE dog_id IN (SELECT dog_id FROM v3_sheet_main ${where})`).run();
+  assert.equal(await smallVer(DB), before + 1, 'v3_dogs.sex');
   await assertSame(DB, '改完');
 });
 

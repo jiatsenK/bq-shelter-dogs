@@ -76,8 +76,7 @@ export async function importCompactDogs(db, input) {
   }
   const statements = [];
   // 只清掉本次重建的複本子列，不刪永久狗和編號，也不碰舊表。
-  // v3_sheet_former_numbers 不再寫（#557），但它對主清單列有外鍵：刪表前照清
-  for (const table of ['v3_sheet_main_walkers', 'v3_sheet_former_numbers', 'v3_sheet_main']) statements.push(db.prepare(`DELETE FROM ${table}`));
+  for (const table of ['v3_sheet_main_walkers', 'v3_sheet_main']) statements.push(db.prepare(`DELETE FROM ${table}`));
   for (const [i, dog] of input.dogs.entries()) {
     const dogId = resolved.get(key(dog));
     statements.push(db.prepare('INSERT INTO v3_dogs(dog_id,name,sex) VALUES(?,?,?) ON CONFLICT(dog_id) DO UPDATE SET name=excluded.name,sex=excluded.sex').bind(dogId, dog.name, dog.sex || ''));
@@ -86,9 +85,9 @@ export async function importCompactDogs(db, input) {
     }
     const scalar = Object.keys(columns);
     const values = scalar.map(f => dog[f] ?? (nullable.has(f) ? null : ''));
-    // 同步時間不寫主清單（ADR 0014），另存 v3_sync_state；synced_at 欄沒有預設值，#557 第二步刪欄前先留空
-    const names = ['row_index', 'dog_id', 'synced_at', ...scalar.map(f => columns[f])];
-    statements.push(db.prepare(`INSERT INTO v3_sheet_main(${names.join(',')}) VALUES(${names.map(() => '?').join(',')})`).bind(i, dogId, '', ...values));
+    // 同步時間不寫主清單（ADR 0014），另存 v3_sync_state
+    const names = ['row_index', 'dog_id', ...scalar.map(f => columns[f])];
+    statements.push(db.prepare(`INSERT INTO v3_sheet_main(${names.join(',')}) VALUES(${names.map(() => '?').join(',')})`).bind(i, dogId, ...values));
     for (const [position, code] of (dog.walkers || []).entries()) statements.push(db.prepare('INSERT INTO v3_sheet_main_walkers VALUES(?,?,?)').bind(i, position, code));
   }
   if (input.syncedAt) statements.push(db.prepare(`INSERT INTO v3_sync_state(key,value) VALUES('${SYNCED_AT_KEY}',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value`).bind(input.syncedAt));
