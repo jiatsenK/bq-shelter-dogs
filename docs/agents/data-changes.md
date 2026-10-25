@@ -22,6 +22,6 @@
   - 刪東西（DROP、搬資料）：先合併並部署不再用它的程式，下一張 PR 才寫刪除的 migration。
 - **正式庫套用**：合併後到 Actions 按「套用 D1 migration」→「Run workflow」（`.github/workflows/d1-migrations.yml`）。它依序：有刪資料或搬資料的 migration 時，先把正式庫整份複製到專門的備用庫 `bq-shelter-dogs-backup`（不是預覽用的 `bq-shelter-dogs-test`）→ 記下套用前的 Time Travel 書籤 → `d1 migrations apply --remote` → 摘要印出書籤與還原指令 → 部署。
 - **部署擋關**：`deploy-cloudflare.yml` 只送 SELECT 比對 `d1_migrations` 與 `migrations/`，有還沒套的就紅叉、不部署，提示按套用 workflow。合併含 migration 的 PR 會看到這個紅叉，按套用就好。
-- **測試庫自動套**：預覽（`preview-cloudflare.yml`）、測速（`cpu-bench.yml`）上傳前自動對 `bq-shelter-dogs-test` 跑 `d1 migrations apply`，不用 K 按。測試庫從正式庫複製（「準備預覽資料庫」）時會帶著 `d1_migrations`。注意：PR 還沒合併的 migration 套進測試庫後就記為已套用，之後改了那個檔不會重套；要重來就跑「準備預覽資料庫」。
+- **測試庫自動套**：預覽（`preview-cloudflare.yml`）上傳前自動對 `bq-shelter-dogs-test` 跑 `d1 migrations apply`，不用 K 按。測試庫從正式庫複製（「準備預覽資料庫」）時會帶著 `d1_migrations`。注意：PR 還沒合併的 migration 套進測試庫後就記為已套用，之後改了那個檔不會重套；要重來就跑「準備預覽資料庫」。
 - **本機演練**：`node scripts/d1-migrations.mjs apply --target test`（加 `--backup always` 連複製一起練），`node scripts/d1-migrations.mjs check --target production` 只讀查正式庫還有沒有沒套的。
 - **還原**：平常用 Time Travel 書籤；刪資料、搬資料的看備用庫。還原、DROP 這類覆蓋正式資料的指令交給 K 執行（CORE_RULES §5），寫成 `npx.cmd wrangler d1 time-travel restore bq-shelter-dogs --bookmark=<書籤>`。

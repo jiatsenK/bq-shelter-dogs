@@ -22,7 +22,7 @@ K 2026-10-10：「我希望網站當主人（未來），讓這個網站以後�
 - **找狗的平面圖**：`public/js/find.js` 的 `FIND_ZONES`（各區在平面圖上的位置）、`FIND_FACILITIES`、`FIND_OUTLINE`、`findCageLayout()`（每一籠排在哪）。這是最大的一塊，每間收容所都不一樣。
 - **試算表的長相**：`apps-script/sheet-write.gs` 的分頁名稱（「主清單」「已出所」）、欄位標題的認法與寫回的兩欄；`worker/src/departure-rules.js` 的離所原因關鍵字（`DEPARTURE_KEYWORDS`）。主人換成網站（資料庫）之後這一塊就不需要了。
 - **編號規則**：編號前 8 碼是入所日期（`public/js/app.js` 的 `idDate`、`public/js/cards.js` 的 `bqIntake`）。
-- **部署**：`wrangler.jsonc`（Worker 名稱、`GITHUB_REPO`、R2 bucket）、`worker/src/index.js` 的預設 repo、`.github/workflows/` 的 Secret；`public/index.html` 開頭的舊網址轉址（只有板收需要）。
+- **部署**：`wrangler.jsonc`（Worker 名稱、R2 bucket、D1）、`.github/workflows/` 的 Secret；`public/index.html` 開頭的舊網址轉址（只有板收需要）。
 - **圖示、顏色**：`public/icons/`、`public/css/app.css` 的 `:root` 色票（病歷夾綠）。
 
 ## 接下來（K 2026-10-10 同意的順序）

@@ -40,7 +40,7 @@ async function setup({ assets = {}, failPut, preview = false } = {}) {
   const ASSETS = fakeAssets(assets);
   const DB=fakeD1();await migrateCompactDatabase(DB);await importCompactDogs(DB,DOGS);
   const calls = fakeGithub();
-  const env = { GITHUB_TOKEN: 't', ADMIN_KEY: '通關碼', PHOTOS, ASSETS, DB, ...(preview ? { PREVIEW: '1' } : {}) };
+  const env = { ADMIN_KEY: '通關碼', PHOTOS, ASSETS, DB, ...(preview ? { PREVIEW: '1' } : {}) };
   const pending = [];
   const ctx = { waitUntil: p => pending.push(p) };
   const call = async (path, init = {}) => {
@@ -307,7 +307,7 @@ test('管理 API：沒給或打錯金鑰擋下；預覽版不能搬遷；沒有 
   assert.equal((await admin(call, 'trash')).status, 200);
   const p = await setup({ preview: true });
   assert.equal((await admin(p.call, 'migrate', { method: 'POST', body: '{"items":[]}' })).status, 403);
-  const res = await worker.fetch(new Request(`${SITE}/api/admin/trash`, { headers: { 'X-Admin-Key': encodeURIComponent('通關碼') } }), { GITHUB_TOKEN: 't', ADMIN_KEY: '通關碼' });
+  const res = await worker.fetch(new Request(`${SITE}/api/admin/trash`, { headers: { 'X-Admin-Key': encodeURIComponent('通關碼') } }), { ADMIN_KEY: '通關碼' });
   assert.equal((await res.json()).code, 'off');
 });
 
@@ -363,7 +363,7 @@ test('縮圖：列出還沒縮圖的、收 Action 傳回的縮圖；原圖不在
   assert.deepEqual((await json(await admin(call, 'thumbs'))).body.pending, ['photos/3.jpg']);
 });
 
-test('每月排程清掉超過 30 天的 Trash（#501）；還沒縮圖的不再叫 Action（#305，只在上傳時叫）', async () => {
+test('每月排程清掉超過 30 天的 Trash（#501）；不叫縮圖 Action（縮圖改由網站產生，#566）', async () => {
   const { env, PHOTOS, calls } = await setup({ assets: { 'photos/1.jpg': OLD } });
   const now = Date.now();
   const oldId = await r2.toTrash(env, SITE, 'photos/1.jpg', { dogId: '1', kind: 'main' }, now - 31 * 86400000);

@@ -12,7 +12,7 @@ const production = { binding: 'DB', database_name: DB_NAME, database_id: 'prod-i
 const testing = { binding: 'DB', database_name: 'bq-shelter-dogs-test', database_id: 'test-id' };
 async function repo(binding = production) {
   const root = await mkdtemp(join(tmpdir(), 'bq-d1-'));
-  await writeFile(join(root, 'wrangler.jsonc'), JSON.stringify({ name: 'x', r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos' }], vars: { GITHUB_BRANCH: 'main' }, d1_databases: binding ? [binding] : [] }));
+  await writeFile(join(root, 'wrangler.jsonc'), JSON.stringify({ name: 'x', r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos' }], vars: { SYNC_DAILY_BUDGET: '40000' }, d1_databases: binding ? [binding] : [] }));
   await writeFile(join(root, 'wrangler.preview-db.jsonc'), JSON.stringify({ d1_databases: [testing] }));
   return root;
 }
@@ -56,7 +56,7 @@ test('#214 預覽只查證隔離測試庫，保留 R2 並強制 PREVIEW', async 
   assert.equal(result.config, PREVIEW_CONFIG);
   assert.deepEqual(cfg.d1_databases, [testing]);
   assert.equal(cfg.vars.PREVIEW, '1');
-  assert.equal(cfg.vars.GITHUB_BRANCH, 'main');
+  assert.equal(cfg.vars.SYNC_DAILY_BUDGET, '40000');
   assert.equal(cfg.r2_buckets[0].bucket_name, 'photos');
   assert.equal(calls[1][2], testing.database_name);
 });

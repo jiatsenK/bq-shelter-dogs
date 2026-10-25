@@ -10,7 +10,7 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 
 - 程式和資料一樣放 GitHub，Cloudflare 只負責「放網站、跑後端」。
 - 以後改了 Worker 程式**不用再手動貼**，合併後 Action 會自動部署。
-- 密碼（token、管理金鑰、代號密鑰）**全部設在 GitHub 的 Secrets**，部署時自動帶到 Cloudflare。
+- 密碼（管理金鑰、代號密鑰、試算表寫入金鑰）**全部設在 GitHub 的 Secrets**，部署時自動帶到 Cloudflare。
 - 費用 NT$0（Cloudflare Workers 免費方案）。
 - 舊網址 https://jiatsenk.github.io/bq-shelter-dogs/ 從 #129 起一打開就轉到新網址同一頁（舊的書籤、主畫面捷徑都還能用）。舊的單獨照片上傳 Worker（`bq-shelter-photos`）2026-10 K 決定刪除，程式裡給它和舊網址的判斷也拿掉了。
 
@@ -38,7 +38,9 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 
 ⚠️ 這串 token 可以部署你帳號裡的 Worker，只貼到步驟 4 的 GitHub 欄位，不要貼到聊天或其他地方。
 
-## 步驟 3：建立 Worker 要用的 GitHub token
+## 步驟 3：建立 Worker 要用的 GitHub token（已不需要）
+
+> #547（2026-10-26）起 Worker 不再呼叫 GitHub：照片存 R2、縮圖由網站產生，部署也不再帶 `WORKER_GITHUB_TOKEN`。這一步不用做，下面是當時的紀錄。
 
 新 Worker 要一把可以改 repo 的 GitHub token。舊 Worker 那把的字串看不到了，所以另外建一把（舊的不要刪，舊網址還在用）。
 
@@ -58,7 +60,6 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 |---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | 步驟 1 複製的 Account ID |
 | `CLOUDFLARE_API_TOKEN` | 步驟 2 複製的 Cloudflare token |
-| `WORKER_GITHUB_TOKEN` | 步驟 3 複製的 GitHub token |
 | `ADMIN_KEY` | 管理 API（縮圖、搬照片、Trash）用的金鑰，只給 GitHub Action，自己想一組英數字。還沒設時沿用舊的 `NOTES_PASSCODE` Secret（ADR 0004） |
 
 `WALKER_KEY`（誰遛的代號密鑰）本來就在這裡，不用動，部署時會自動一起帶過去，代號不會變。
@@ -88,7 +89,7 @@ Cloudflare → **Workers & Pages** → `bq-shelter-photos` → **Settings** → 
 用手機打開步驟 5 的新網址，確認：
 
 1. 狗卡、照片都有出現。
-2. 打開 `新網址/api/`，看到 `"token":"已設定"`、`"notesPasscode":"已設定"`、`"walkerKey":"已設定"`。
+2. 打開 `新網址/api/`，看到 `"adminKey":"已設定"`、`"walkerKey":"已設定"`。
 3. 選一隻狗換一張照片，等一兩分鐘重新整理看得到。
 4. 存一則「我的備註」成功。
 5. 按頁首「更新」圓箭頭，沒有出現錯誤。
@@ -194,7 +195,6 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
 ## token 到期時
 
 - **Cloudflare token 到期**：照步驟 2 重建，更新 GitHub Secret `CLOUDFLARE_API_TOKEN`。網站不會壞，只是新的改動部署不上去。
-- **GitHub token 到期**：照步驟 3 重建，更新 GitHub Secret `WORKER_GITHUB_TOKEN`，再照步驟 5 手動部署一次。
 
 ## 給寫程式的人
 
