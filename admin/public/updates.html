@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>更新紀錄 · 板收管理網站</title>
+  <link rel="stylesheet" href="./vendor/tabler.min.css">
+  <link rel="stylesheet" href="./admin.css">
+  <script type="module" src="./js/updates.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#content">跳到更新紀錄</a>
+  <div class="admin-layout">
+    <aside class="admin-sidebar" aria-label="管理網站">
+      <a class="brand" href="./">板收<span>管理網站</span></a>
+      <nav aria-label="管理功能">
+        <a class="nav-item" href="./">狗資料</a>
+        <a class="nav-item" href="./settings.html">功能管理</a>
+        <a class="nav-item" href="./activities.html">活動紀錄</a>
+        <a class="nav-item" href="./checks.html">資料檢查</a>
+        <a class="nav-item active" href="./updates.html" aria-current="page">更新紀錄</a>
+      </nav>
+      <p class="sidebar-note">管理者<br><span>網站更新與資料編輯</span></p>
+    </aside>
+    <main id="content" class="admin-content" tabindex="-1">
+      <header class="admin-page-header">
+        <div><h1>更新紀錄</h1><p>搜尋網站上每一筆資料編輯，並查看網站版本更新。</p></div>
+        <button type="button" class="btn btn-primary" id="reload">重新讀取</button>
+      </header>
+      <p class="source-note" id="volunteer-state"></p>
+      <section class="card" aria-labelledby="edits-title">
+        <h2 id="edits-title" class="card-heading">資料編輯</h2>
+        <form class="table-filters" id="filters" role="search">
+          <div class="search-field"><label class="form-label" for="q">搜尋全部紀錄</label><input class="form-control" id="q" name="q" type="search" placeholder="操作者、狗名、編號或改前改後內容" maxlength="100" autocomplete="off"></div>
+          <div><label class="form-label" for="kind">類型</label><select class="form-select" id="kind" name="kind"><option value="">全部</option></select></div>
+          <div><label class="form-label" for="dog">對象</label><input class="form-control" id="dog" name="dog" placeholder="編號、狗名或永久 ID" maxlength="100" autocomplete="off"></div>
+          <div><label class="form-label" for="actor">操作者</label><input class="form-control" id="actor" name="actor" placeholder="名字或管理者帳號" maxlength="100" autocomplete="off"></div>
+          <div><label class="form-label" for="source">來源</label><select class="form-select" id="source" name="source"><option value="">全部</option><option value="access">管理網站</option><option value="volunteer">志工網站</option><option value="legacy">舊紀錄</option></select></div>
+          <div><label class="form-label" for="from">從</label><input class="form-control" id="from" name="from" type="date"></div>
+          <div><label class="form-label" for="to">到</label><input class="form-control" id="to" name="to" type="date"></div>
+          <div><label class="form-label" for="order">排序</label><select class="form-select" id="order" name="order"><option value="newest">新到舊</option><option value="oldest">舊到新</option></select></div>
+          <button class="btn" id="clear" type="reset">清除條件</button>
+        </form>
+        <div id="status" class="table-status" role="status" aria-live="polite">正在讀取資料編輯紀錄…</div>
+        <div class="table-responsive" tabindex="0" role="region" aria-label="資料編輯紀錄，可水平捲動" id="table-region" hidden>
+          <table class="table table-vcenter edit-table">
+            <caption class="visually-hidden">資料編輯紀錄，時間為台灣時間。</caption>
+            <thead><tr><th scope="col">時間</th><th scope="col">類型</th><th scope="col">對象</th><th scope="col">操作者</th><th scope="col">改前</th><th scope="col">改後</th></tr></thead>
+            <tbody id="edits"></tbody>
+          </table>
+        </div>
+        <footer class="table-footer" id="pagination" hidden>
+          <span id="count"></span>
+          <label class="page-size" for="page-size">每頁<select id="page-size" class="form-select"><option>25</option><option>50</option><option>100</option></select>筆</label>
+          <div class="page-controls"><button type="button" class="btn" id="previous">上一頁</button><span id="page-number"></span><button type="button" class="btn" id="next">下一頁</button></div>
+        </footer>
+      </section>
+      <section class="card check-card" aria-labelledby="releases-title">
+        <h2 id="releases-title">網站更新</h2>
+        <p id="release-status" class="check-status" role="status" aria-live="polite">正在讀取網站更新…</p>
+        <ol id="releases" class="release-list"></ol>
+        <p class="data-note">和志工網站「網站更新」同一份版本紀錄，唯讀。</p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

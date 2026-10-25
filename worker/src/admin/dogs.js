@@ -5,7 +5,7 @@ export async function readManageDogs(db, photoVersions = {}) {
   const { results = [] } = await db.prepare(`WITH current_rows AS (SELECT dog_id, MIN(row_index) AS row_index FROM v3_sheet_main GROUP BY dog_id)
     SELECT d.dog_id, COALESCE(m.name,d.name) AS name,
     COALESCE(m.number,'') AS number, COALESCE(m.cage,'') AS cage, COALESCE(m.note,'') AS note,
-    m.row_index, d.sex, d.fixed_care, COALESCE(NULLIF(m.number,''),(SELECT MAX(number) FROM v3_dog_numbers WHERE dog_id=d.dog_id)) AS photo_number,
+    m.row_index, COALESCE(m.walked_date,'') AS walked_date, d.sex, d.fixed_care, COALESCE(NULLIF(m.number,''),(SELECT MAX(number) FROM v3_dog_numbers WHERE dog_id=d.dog_id)) AS photo_number,
     COALESCE(i.intro,'') AS intro, r.until_date, r.reason, p.object_key, p.thumb_key
     FROM v3_dogs d
     LEFT JOIN current_rows c ON c.dog_id=d.dog_id
@@ -20,7 +20,7 @@ export async function readManageDogs(db, photoVersions = {}) {
     const photo = row.thumb_key || row.object_key || (!row.photo_number || !has(full) ? null : has(thumb) ? thumb : full);
     return {
       dogId: row.dog_id, number: row.number, name: row.name, cage: row.cage, note: row.note,
-      onMain: row.row_index !== null, intro: row.intro, sex: row.sex,
+      onMain: row.row_index !== null, walkedDate: row.walked_date, intro: row.intro, sex: row.sex,
       sexMismatch: false,
       fixedCare: Boolean(row.fixed_care),
       rest: row.until_date ? { until: row.until_date, reason: row.reason || '' } : null,

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>資料檢查 · 板收管理網站</title>
+  <link rel="stylesheet" href="./vendor/tabler.min.css">
+  <link rel="stylesheet" href="./admin.css">
+  <script type="module" src="./js/checks.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#content">跳到資料檢查</a>
+  <div class="admin-layout">
+    <aside class="admin-sidebar" aria-label="管理網站">
+      <a class="brand" href="./">板收<span>管理網站</span></a>
+      <nav aria-label="管理功能">
+        <a class="nav-item" href="./">狗資料</a>
+        <a class="nav-item" href="./settings.html">功能管理</a>
+        <a class="nav-item" href="./activities.html">活動紀錄</a>
+        <a class="nav-item active" href="./checks.html" aria-current="page">資料檢查</a>
+        <a class="nav-item" href="./updates.html">更新紀錄</a>
+      </nav>
+      <p class="sidebar-note">管理者<br><span>缺漏與試算表差異</span></p>
+    </aside>
+    <main id="content" class="admin-content" tabindex="-1">
+      <header class="admin-page-header">
+        <div><h1>資料檢查</h1><p>找出待補的狗資料，以及網站有、試算表已經沒有的狗。只列出來，不自動修改。</p></div>
+        <button type="button" class="btn btn-primary" id="reload">重新讀取</button>
+      </header>
+      <p class="source-note" id="volunteer-state"></p>
+      <section class="card check-card" aria-labelledby="gaps-title">
+        <h2 id="gaps-title">網站有、試算表沒有</h2>
+        <p id="gap-status" class="check-status" role="status" aria-live="polite">正在讀取掃描清單…</p>
+        <div class="table-responsive" tabindex="0" role="region" aria-label="網站有、試算表沒有的清單，可水平捲動" id="gap-region" hidden>
+          <table class="table table-vcenter compact-table">
+            <thead><tr><th scope="col">試算表分頁</th><th scope="col">編號</th><th scope="col">狗名／欄</th><th scope="col">籠位</th><th scope="col">永久 ID</th></tr></thead>
+            <tbody id="gaps"></tbody>
+          </table>
+        </div>
+        <p class="data-note">保險掃描發現狗從試算表消失、卻沒出現在「已出所」時只記在這裡。不會自動刪狗、記離所或合併；請先在試算表核對，再決定怎麼處理。</p>
+      </section>
+      <section class="card check-card" aria-labelledby="complete-title">
+        <h2 id="complete-title">主清單資料完整度</h2>
+        <p id="complete-status" class="check-status" role="status" aria-live="polite">正在讀取狗資料…</p>
+        <div id="complete-list" class="check-list"></div>
+        <p class="data-note">規則同志工網站的「狗的資料完整度」，只看目前主清單上的狗。照片依照片紀錄判斷，不逐張下載檢查；檔案讀不到會在狗資料表另外提示。</p>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

@@ -4,12 +4,17 @@ import { listTrash, readTrash } from '../r2.js';
 import { readSettings, saveSettings } from '../feature-settings.js';
 import { createAccessVerifier } from './access.js';
 import { readManageDogs } from './dogs.js';
+import { readActivities } from '../activities.js';
+import { writeActivity } from './activities.js';
+import { readSheetGaps } from './checks.js';
+import { searchEdits } from './edits.js';
 import { isPhotoKey, isTomb, isThumbKey, r2Versions } from '../r2.js';
 
 const verifyAccess = createAccessVerifier();
 // Tabler uses data-image SVGs for select chevrons; executable content remains same-origin only.
 export const ADMIN_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
 const json = (data, status = 200) => Response.json(data, { status });
+const sameOrigin = (request, env) => request.headers.get('Origin') === env.ADMIN_ORIGIN && request.headers.get('Sec-Fetch-Site') !== 'cross-site';
 function protectedResponse(response, method) {
   const out = new Response(method === 'HEAD' ? null : response.body, response);
   out.headers.set('Cache-Control', 'no-store');
@@ -60,7 +65,7 @@ export default {
       if (path === '/api/manage/settings') {
         if (['GET','HEAD'].includes(request.method)) response = json(await readSettings(env.DB));
         else if (request.method === 'PUT') {
-          if (request.headers.get('Origin') !== env.ADMIN_ORIGIN || request.headers.get('Sec-Fetch-Site') === 'cross-site') response = json({ error: '請從管理網站儲存' }, 403);
+          if (!sameOrigin(request, env)) response = json({ error: '請從管理網站儲存' }, 403);
           else if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json') response = json({ error: '請使用 JSON' }, 415);
           else {
             response = json(await saveSettings(env.DB, await settingsInput(request), actor));
@@ -73,7 +78,7 @@ export default {
           const [,dogId,action,trashId]=match;
           if(['GET','HEAD'].includes(request.method)&&action==='trash'&&trashId) {const item=await readTrash(env,trashId);response=item?.meta.dogId===dogId?new Response(item.bytes,{headers:{'Content-Type':'image/jpeg'}}):json({error:'找不到這隻狗的備份'},404);}
           else if(['GET','HEAD'].includes(request.method)) response=json(action==='trash'?{trash:(await listTrash(env)).filter(t=>t.dogId===dogId)}:await readDogEdit(env.DB,dogId));
-          else if(request.headers.get('Origin')!==env.ADMIN_ORIGIN||request.headers.get('Sec-Fetch-Site')==='cross-site') response=json({error:'請從管理網站儲存'},403);
+          else if(!sameOrigin(request,env)) response=json({error:'請從管理網站儲存'},403);
           else if(action==='photo' && request.method==='POST') response=json(await saveDogPhoto(env,dogId,Number(request.headers.get('X-Dog-Revision')),await photoInput(request),{actor},new URL(request.url).origin));
           else if(request.headers.get('Content-Type')?.split(';')[0].trim()!=='application/json') response=json({error:'請使用 JSON'},415);
           else if(!action&&request.method==='PUT') response=json(await saveDogEdit(env.DB,dogId,await settingsInput(request,16000),{actor}));
@@ -83,6 +88,13 @@ export default {
             else response=json(await restoreDogPhoto(env,dogId,input.revision,input.trashId,{actor},new URL(request.url).origin));
           } else response=json({error:'方法不支援'},405);
         }
+      } else if (path === '/api/manage/activities' || path.startsWith('/api/manage/activities/')) {
+        const match = path.match(/^\/api\/manage\/activities(?:\/([a-f0-9]{32}))?$/);
+        if (!match) response = json({ error: '找不到這場活動' }, 404);
+        else if (['GET', 'HEAD'].includes(request.method)) response = match[1] ? json({ error: '請使用 GET /api/manage/activities' }, 405) : json({ activities: await readActivities(env.DB) });
+        else if (!sameOrigin(request, env)) response = json({ error: '請從管理網站儲存' }, 403);
+        else if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json') response = json({ error: '請使用 JSON' }, 415);
+        else response = json(await writeActivity(env.DB, request.method, match[1], await settingsInput(request, 16000), actor));
       } else if (!['GET', 'HEAD'].includes(request.method)) {
         response = json({ error: '此階段僅提供唯讀查詢' }, 405);
         response.headers.set('Allow', 'GET, HEAD');
@@ -91,6 +103,8 @@ export default {
         const photos = env.PHOTOS ? (await r2Versions(env)).versions : {};
         response = json({ dogs: await readManageDogs(env.DB, photos) });
       }
+      else if (path === '/api/manage/data-checks') response = json({ sheetGaps: await readSheetGaps(env.DB) });
+      else if (path === '/api/manage/edits') response = json(await searchEdits(env.DB, new URL(request.url).searchParams));
       else if (path === '/api' || path.startsWith('/api/')) response = json({ error: '找不到管理功能' }, 404);
       else if (path.startsWith('/photos/')) response = await photoResponse(path, env);
       else response = await env.ASSETS.fetch(request);
