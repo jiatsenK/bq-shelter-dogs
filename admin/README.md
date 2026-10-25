@@ -1,8 +1,8 @@
 # 管理網站（#564）
 
-獨立 Worker／assets，以 Cloudflare Access 驗證管理者。不載入志工 app、不使用瀏覽器 ADMIN_KEY、不新增排程。志工入口與部署流程維持原有設定。
+獨立 Worker／assets，以 Cloudflare Access 驗證管理者。不載入志工 app、不使用瀏覽器 ADMIN_KEY、不新增排程。#564 起唯讀狗表；#565 起有功能設定、#566 狗資料、#567 活動的寫入路徑，全部走既有共用模組與同交易紀錄。志工入口與部署流程維持原有設定。
 
-> 2026-10-26 現況：第 1–3 階段已上線（#564 唯讀狗表、#565 功能管理、#566 狗資料編輯），2026-10-25 部署到正式環境。本文的「資料與成本」「部署與權限驗收」是 #564 第一階段寫的；功能管理和狗資料編輯見 `docs/operations/feature-settings.md`、`docs/operations/dog-editing.md`。決策見 ADR 0020。
+> 2026-10-26 現況：第 1–4 階段已上線（#564 唯讀狗表、#565 功能管理、#566 狗資料編輯、#567 活動／資料檢查／更新紀錄），已部署到正式環境。本文的「資料與成本」「部署與權限驗收」是 #564 第一階段寫的；功能管理、狗資料編輯、活動與紀錄見 `docs/operations/feature-settings.md`、`docs/operations/dog-editing.md`、`docs/operations/admin-records.md`。決策見 ADR 0020。
 
 ## 程式入口
 
@@ -16,6 +16,8 @@
 | `admin/public/js/api.js` | 同來源管理 API 呼叫；登入跳轉及非 JSON 回應視為錯誤 |
 | `admin/public/js/dog-table.js` | 格式驗證、搜尋、篩選、排序、有界分頁及維護標示 |
 | `admin/public/js/main.js` | DOM、讀取／重試與事件；不存手機個人資料 |
+| `worker/src/admin/activities.js`、`checks.js`、`edits.js` | #567 活動寫入（共用 activities.js＋同交易紀錄）、#518 掃描清單、資料編輯紀錄搜尋 |
+| `admin/public/activities.html`、`checks.html`、`updates.html` | #567 三頁；純規則在 `activity-model.js`、`data-checks.js`、`edit-log.js` |
 
 先跑 `node scripts/build-admin-assets.mjs` 可產出共用資產；不要手動改產出檔。Tabler 1.4.0 CSS 固定存於 `public/vendor/`，不載入其 JavaScript 或外部字型。上游：https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css；MIT 授權與檔頭一併保留。
 
@@ -34,12 +36,12 @@
 
 1. 選定獨立管理網址。建立 Access self-hosted application，涵蓋整個 host（所有路徑），Allow policy 只列經確認管理者；不可新增 Bypass／Everyone，第一版只有管理者角色。
 2. 製作環境專用 Wrangler 設定（勿覆蓋志工設定）：從 `wrangler.admin.jsonc` 複製，設定不同 Worker name、custom domain route，並填入 `ADMIN_ORIGIN`（完整 HTTPS origin、無結尾斜線）、`ACCESS_TEAM_DOMAIN`（團隊 hostname）、`ACCESS_AUD`（此 application 的 AUD）。保留 `run_worker_first: true`、`workers_dev: false`、`preview_urls: false`。
-3. 隔離驗收先將 D1／R2 bindings 改為已協調可用的隔離資源；不得重置共用測試庫或執行同步。正式上線才經 K 核准共用既有正式 bindings，不建第二套正式庫。此 Worker 沒有 schema 套用或寫入路徑。
+3. 隔離驗收先將 D1／R2 bindings 改為已協調可用的隔離資源；不得重置共用測試庫或執行同步。正式上線才經 K 核准共用既有正式 bindings，不建第二套正式庫。此 Worker 沒有 schema 套用路徑；寫入只有設定、狗資料與活動（同來源＋JSON＋Access 身分）。
 4. K 核准環境、Access policy 與實際設定後，才用該環境設定執行 Wrangler deploy；本票沒有自動管理站部署 workflow，也不會因 main 推送自動發布管理站。
 5. 未登入／非管理者測 `/`、`/index.html`、`/js/main.js`、`/vendor/tabler.min.css`、`/api/manage/dogs` 與照片：不可取得內容；管理者登入可讀。測 workers.dev／版本預覽不能繞過，替代 host 即使帶有效 token 也拒絕。
 6. 測失效／偽造／錯 AUD／錯 issuer token、缺 vars、無法取得金鑰；全部拒絕。只信 `Cf-Access-Jwt-Assertion` 的簽章，不信 email header 或 cookie。Access 金鑰每個 issuer 快取五分鐘；輪替未知 kid 在快取更新前會拒絕，無未驗證退路。
-7. 驗收搜尋、複合篩選、排序、分頁、無編號狗、空清單、讀取失敗與登入失效重試；確認沒有寫入請求。另驗收志工站免登入、登記／復原／同步不受影響。
+7. 驗收搜尋、複合篩選、排序、分頁、無編號狗、空清單、讀取失敗與登入失效重試；確認狗表本身沒有寫入請求。另驗收志工站免登入、登記／復原／同步不受影響。
 
 官方依據：[Access JWT 驗證](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)、[Static Assets 先執行 Worker](https://developers.cloudflare.com/workers/static-assets/routing/worker-script/)、[Access 與 Static Assets 限制](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)。
 
-#566 的逐項儲存、CAS／紀錄、性別差異、照片復原、成本及待核准正式步驟見 `docs/operations/dog-editing.md`。承接 #575 的性別正本核對；0004 schema 已刪舊副本，runtime 不讀停用欄位。
+#566 的逐項儲存、CAS／紀錄、性別差異、照片復原、成本及待核准正式步驟見 `docs/operations/dog-editing.md`。#567 活動、資料檢查、更新紀錄的契約、成本與四場活動核對見 `docs/operations/admin-records.md`。承接 #575 的性別正本核對；0004 schema 已刪舊副本，runtime 不讀停用欄位。

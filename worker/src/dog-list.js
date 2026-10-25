@@ -3,7 +3,7 @@ import { guardedDogBatch } from './dog-edit.js';
 // - GAS 編輯觸發只送受影響的列：主清單、已出所的狗（編號＋那一列）、常遛狗群的一欄、異動紀錄整段；Worker 只改那幾隻、只寫有變的欄。
 // - 換籠、離所看狗新出現在哪裡：出現在「已出所」就記離所並從主清單移走；又出現在主清單就不算離所。
 // - 每天三次保險掃描：GAS 送每個單位的指紋，Worker 回不一樣的（D1 還沒有指紋就全部要），GAS 再分批只送那幾個。
-// - D1 有、試算表沒有的只列出來（v3_sync_state 的 dog_list_extra），不自動刪。
+// - D1 有、試算表沒有的只列出來（v3_sync_state 的 dog_list_extra，含每次掃描時間），不自動刪；管理網站資料檢查顯示（#567）。
 // 指紋只是「上次收過哪一版」，存在 v3_sync_state 一列 JSON；遺失只會讓下一次掃描多送幾列，不影響資料。
 import { splitNames } from './sheet-read.js';
 import { walkerCode, logEdit } from './editlog.js';
@@ -13,7 +13,8 @@ import { SYNCED_AT_KEY } from './compact.js';
 import { linkIdentityName } from './identity.js';
 
 export const DOG_LIST_ROWS_MAX = 10; // 每列最多 3–4 次 D1 往返，守住每次呼叫 50 次查詢
-const FP_KEY = 'dog_list_fp', EXTRA_KEY = 'dog_list_extra';
+const FP_KEY = 'dog_list_fp';
+export const EXTRA_KEY = 'dog_list_extra';
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 const dogKey = dog => dog.id || `名:${dog.name}`;
@@ -264,8 +265,11 @@ export async function scanDogList(db, fingerprints, now = Date.now()) {
     await putState(db, FP_KEY, JSON.stringify(fp)).run();
   }
   const extra = missing.filter(k => !stale.has(k)).sort();
-  let prev = [];
-  try { prev = JSON.parse(await state(db, EXTRA_KEY) || '{}').keys || []; } catch { /* 讀不懂就重記 */ }
-  if (!sameList(prev, extra)) await putState(db, EXTRA_KEY, JSON.stringify({ at: new Date(now).toISOString(), keys: extra })).run();
+  let prev = {};
+  try { prev = JSON.parse(await state(db, EXTRA_KEY) || '{}'); } catch { /* 讀不懂就重記 */ }
+  // #567 管理網站要分辨「過期」：每次掃描都記 checkedAt（一天三次、1 列），at 只在清單變了才換
+  const at = new Date(now).toISOString();
+  const changed = !Array.isArray(prev.keys) || !sameList(prev.keys, extra) || !prev.at;
+  await putState(db, EXTRA_KEY, JSON.stringify({ at: changed ? at : prev.at, checkedAt: at, keys: extra })).run();
   return { want, extra };
 }

@@ -1,0 +1,75 @@
+# 把程式部署到測試網站 bq-shelter-dogs-test（設定 wrangler.test-site.jsonc，#498 建立）
+# - 網址 https://bq-shelter-dogs-test.jiatsen-k.workers.dev；只接測試 D1、測試照片空間、測試試算表，正式資料不受影響
+# - main 有推送、改到網站或 Worker 的檔案就跟著部署（跟 deploy-cloudflare.yml 同時機），測試網站的程式跟正式版一致
+# - 也可以手動指定分支：Actions 頁選「部署到測試網站」→「Run workflow」→ 填分支名稱。
+#   合併前用手機實測某張 PR 用這個（PR 預覽版擋寫入，不能按溜了）；之後 main 再有推送會換回 main 的程式
+# - 部署前把 migrations/ 還沒套的自動套到測試庫 bq-shelter-dogs-test（跟 PR 預覽同一個庫、同一行指令）
+# - 金鑰（SHEET_WRITE_URL、SHEET_WRITE_KEY、WALKER_KEY、ADMIN_KEY）K 已另外設在測試 Worker 上（見 wrangler.test-site.jsonc 開頭），
+#   跟正式版不同；這裡不帶金鑰，wrangler deploy 會保留 Worker 上原本的
+# - 還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID 時直接跳過，不會失敗
+name: 部署到測試網站
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: '要部署的分支（留空＝main）'
+        type: string
+        default: ''
+  push:
+    branches: [main]
+    paths:
+      - 'public/**'
+      - 'worker/src/**'
+      - 'wrangler.test-site.jsonc'
+      - 'migrations/**'
+      - 'scripts/smoke-api.mjs'
+      - '.github/workflows/deploy-test-site.yml'
+
+permissions:
+  contents: read
+
+# 一次只跑一個，排隊不取消：套 migration 做到一半被取消，測試庫會停在半套的狀態
+concurrency:
+  group: deploy-test-site
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: 還沒設定 Cloudflare 就跳過
+        if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
+        run: echo "還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID，這次不部署測試網站（步驟見 docs/setup/CLOUDFLARE_SETUP.md）。"
+
+      - uses: actions/checkout@v4
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - uses: actions/setup-node@v4
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        with:
+          node-version: 22
+
+      # #553：測試庫自動套 migration；只帶測試庫設定，碰不到正式庫
+      - name: 測試庫套用 migration
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: npx --yes wrangler@4 d1 migrations apply bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc
+
+      - name: 部署
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        env:
+          REF: ${{ inputs.ref || github.ref_name }}
+        run: |
+          sha=$(git rev-parse --short HEAD)
+          echo "部署到測試網站：${REF} ${sha}"
+          npx --yes wrangler@4 deploy --config wrangler.test-site.jsonc --message "${REF} ${sha}"
+
+      - name: 檢查測試網站 API
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
+        run: node scripts/smoke-api.mjs https://bq-shelter-dogs-test.jiatsen-k.workers.dev

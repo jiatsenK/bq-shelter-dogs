@@ -2,7 +2,7 @@
 
 日期：2026-10-24。狀態：K 已確認規劃範圍並交辦開票（Q8 加入性別補正）；不代表實作、合併或部署授權。
 
-> 2026-10-26：本文是 2026-10-24 開票時的計畫。第 1–3 階段已於 2026-10-25 上線，實際做法以 `admin/README.md`、`docs/operations/feature-settings.md`、`docs/operations/dog-editing.md` 為準；下表的表名（例如 `v3_departures`、`v3_sheet_main.sex`）是當時的結構，後來已由 #557、#559、#560 改掉。
+> 2026-10-26：本文是 2026-10-24 開票時的計畫。第 1–4 階段已於 2026-10-25／26 上線，實際做法以 `admin/README.md`、`docs/operations/feature-settings.md`、`docs/operations/dog-editing.md`、`docs/operations/admin-records.md` 為準；下表的表名（例如 `v3_departures`、`v3_sheet_main.sex`）是當時的結構，後來已由 #557、#559、#560 改掉。
 
 GitHub 母票：[\#562](https://github.com/jiatsenK/bq-shelter-dogs/issues/562)。階段子票依序：[\#564](https://github.com/jiatsenK/bq-shelter-dogs/issues/564)、[\#565](https://github.com/jiatsenK/bq-shelter-dogs/issues/565)、[\#566](https://github.com/jiatsenK/bq-shelter-dogs/issues/566)、[\#567](https://github.com/jiatsenK/bq-shelter-dogs/issues/567)、[\#568](https://github.com/jiatsenK/bq-shelter-dogs/issues/568)。票上保留需求、來源策略與驗收；本文 2026-10-26 才隨文件 PR 進 repo。
 

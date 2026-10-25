@@ -15,7 +15,7 @@ const { resetState, allowUpload, isJpeg, MAX_BYTES } = worker.testing;
 const ORIGIN = 'https://allowed.example';
 let mainStatus = 200;
 const DB = { prepare: sql => sql.includes('v3_feature_settings') ? { first: async () => ({ revision: 1, values_json: JSON.stringify(Object.fromEntries(SETTING_KEYS.map(key => [key,true]))) }) } : sql.includes('v3_walk_state') ? { bind() { return this; }, first: async () => null } : ({ all: async () => { if (mainStatus !== 200) throw new Error('D1 read failed'); return { results: DOGS.dogs.filter(d => d.id).map(d => ({ number: d.id, name: d.name })) }; } }) };
-const ENV = { GITHUB_TOKEN: 'test-token', ALLOWED_ORIGINS: ORIGIN, DB };
+const ENV = { ALLOWED_ORIGINS: ORIGIN, DB };
 const JPEG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3, 4]);
 const DOGS = { dogs: [{ id: '2024032902', name: '測試狗' }, { id: '', name: '沒編號' }] };
 
@@ -93,14 +93,15 @@ test('只接受 GitHub Pages 網站：其他網站、沒有 Origin 都擋；預�
   assert.equal(calls.length, 0);
 });
 
-test('缺 R2 不寫；首頁顯示 token 有沒有設、不顯示內容', async () => {
+test('缺 R2 不寫；首頁顯示金鑰有沒有設、不顯示內容，也不再有 GitHub token 欄（#547）', async () => {
   fakeGithub();
   const r = await send(post('2024032902'), { ALLOWED_ORIGINS: ORIGIN, DB });
   assert.equal(r.status, 503);
   assert.equal(r.body.code, 'off');
-  const home = await send(new Request('https://w.example/'), ENV);
-  assert.equal(home.body.token, '已設定');
-  assert.ok(!JSON.stringify(home.body).includes('test-token'));
+  const home = await send(new Request('https://w.example/'), { ...ENV, ADMIN_KEY: 'admin-secret' });
+  assert.equal(home.body.adminKey, '已設定');
+  assert.equal('token' in home.body, false);
+  assert.ok(!JSON.stringify(home.body).includes('admin-secret'));
 });
 
 test('頻率限制：同一個 IP 1 分鐘最多 5 張，換 IP 不受影響；1 小時最多 30 張', async () => {
@@ -363,7 +364,7 @@ test('#138 POST /walk：小程式的原始錯誤不把試算表 ID 顯示給志�
 
 test('舊網址拿掉後：沒設 ALLOWED_ORIGINS 時，舊網址 github.io 送來的要求一律擋，同網址照常', async () => {
   fakeGithub();
-  const env = { GITHUB_TOKEN: 'test-token' };
+  const env = {};
   assert.equal((await send(new Request(`${SITE}/api/rest`, { headers: { Origin: 'https://jiatsenk.github.io' } }), env)).status, 403);
   assert.equal((await send(new Request(`${SITE}/api/rest`, { headers: { Origin: SITE } }), env)).status, 503);
 });

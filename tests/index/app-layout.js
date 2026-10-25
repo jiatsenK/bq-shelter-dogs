@@ -65,7 +65,7 @@ async function runWarnLayoutTests() {
     ];
     groupMap = {}; activeTab = 'walk'; searchQuery = '';
     phoneStore = fakeStorage(); walkRecords = freshWalkRecords();
-    resetWalkOrder(); render();
+    render();
     await check('K 2026-10-09 警示排版：警示只排在照片到按鈕那一欄下面，不蓋過天數欄；天數字跟名字同一列', async () => {
       const card = main.querySelector('.card.flagged');
       if (!card.querySelector(':scope > .warn-note')) throw new Error('警示要是卡片的直接子元素，才排得到第二列');
@@ -94,7 +94,7 @@ async function runWarnLayoutTests() {
     box.classList.add('hidden');
     history.replaceState(null, '');
     [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords] = saved;
-    resetWalkOrder(); render();
+    render();
   }
 }
 

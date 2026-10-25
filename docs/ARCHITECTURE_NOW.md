@@ -34,7 +34,7 @@ GAS 送不出去時把待送內容留在指令碼屬性（`WALK_EDITS_PENDING`�
 |---|---|---|
 | 每 10 分鐘（錯開 5 分） | 網站登記寫回試算表的重試；沒工作就結束、不讀表 | Worker cron |
 | 09:43、13:53、23:53 | 今日溜狗保險掃描：按狗比指紋，只回不同的狗（#525） | Worker cron → GAS `walkScan` |
-| 09:43、13:53、23:53 | 狗清單保險掃描：「D1 有、表沒有」只記錄不刪（顯示頁併入管理網站 #567） | GAS 時間觸發 `dogListScan` |
+| 09:43、13:53、23:53 | 狗清單保險掃描：「D1 有、表沒有」只記錄不刪，每次記掃描時間；管理網站「資料檢查」顯示（#518／#567） | GAS 時間觸發 `dogListScan` |
 | 每月 1 日 10:17 | 照片垃圾桶清理 | Worker cron |
 
 **注意：試算表主清單刪掉的列，D1 不會跟著刪。** 例如暫時籠位的「(狗名)」列刪掉後，網站還會照舊顯示暫時籠位。K 2026-10-26 決定再發生時才處理。
@@ -43,13 +43,17 @@ GAS 送不出去時把待送內容留在指令碼屬性（`WALK_EDITS_PENDING`�
 
 - 獨立的管理 Worker（`wrangler.admin.jsonc`、`worker/src/admin/`、`admin/public/`），用 Cloudflare Access 驗證管理者，跟志工網站共用同一個 D1 和 R2，沒有自己的排程。
 - **沒有自動部署**：main 合併不會更新管理站，要手動部署（步驟在 `admin/README.md`）。改到兩站共用的程式時，兩個 Worker 都要部署。
-- 進度：第 1–3 階段已上線（#564–#566），第 4、5 階段待做（#567、#568）。
+- 進度：第 1–4 階段已上線（#564–#567），第 5 階段待做（#568）。
 
 ## D1 結構怎麼改（#553）
 
 - 每個變更是 `migrations/NNNN_*.sql` 一個檔，正式庫的 `d1_migrations` 表記著套過哪些；`db/compact-schema.sql` 是現在的完整樣子，測試檢查兩邊一致。
 - 正式庫只由手動的「套用 D1 migration」workflow 套用（必要時先複製到備用庫 `bq-shelter-dogs-backup`、記 Time Travel 書籤、套用、接著部署）。部署發現有還沒套的就紅叉。
-- 預覽、測速自動套到測試庫 `bq-shelter-dogs-test`。
+- 預覽、測速、測試網站部署自動套到測試庫 `bq-shelter-dogs-test`。
+
+## 測試網站
+
+`bq-shelter-dogs-test`（`wrangler.test-site.jsonc`，#498）：程式跟正式版同一份，只接測試 D1、測試照片空間 `bq-shelter-photos-test`、測試試算表；不擋寫入，可以按溜了。main 有推送時「部署到測試網站」（`.github/workflows/deploy-test-site.yml`）先對測試庫套 migration 再部署；合併前要實測某個分支，到 Actions 手動指定分支跑，之後 main 再推送會換回 main。金鑰跟正式版不同，設在測試 Worker 上，workflow 不帶。
 - 流程細節與「先加後刪」見 `docs/agents/data-changes.md`。
 
 ## Worker 開關
