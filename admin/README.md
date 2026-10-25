@@ -14,6 +14,8 @@
 | `admin/public/js/api.js` | 同來源管理 API 呼叫；登入跳轉及非 JSON 回應視為錯誤 |
 | `admin/public/js/dog-table.js` | 格式驗證、搜尋、篩選、排序、有界分頁及維護標示 |
 | `admin/public/js/main.js` | DOM、讀取／重試與事件；不存手機個人資料 |
+| `worker/src/admin/activities.js`、`checks.js`、`edits.js` | #567 活動寫入（共用 activities.js＋同交易紀錄）、#518 掃描清單、資料編輯紀錄搜尋 |
+| `admin/public/activities.html`、`checks.html`、`updates.html` | #567 三頁；純規則在 `activity-model.js`、`data-checks.js`、`edit-log.js` |
 
 先跑 `node scripts/build-admin-assets.mjs` 可產出共用資產；不要手動改產出檔。Tabler 1.4.0 CSS 固定存於 `public/vendor/`，不載入其 JavaScript 或外部字型。上游：https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css；MIT 授權與檔頭一併保留。
 
@@ -40,4 +42,4 @@
 
 官方依據：[Access JWT 驗證](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/authorization-cookie/validating-json/)、[Static Assets 先執行 Worker](https://developers.cloudflare.com/workers/static-assets/routing/worker-script/)、[Access 與 Static Assets 限制](https://developers.cloudflare.com/workers/configuration/cloudflare-access/)。
 
-#566 的逐項儲存、CAS／紀錄、性別差異、照片復原、成本及待核准正式步驟見 `docs/operations/dog-editing.md`。承接 #575 的性別正本核對；0004 schema 已刪舊副本，runtime 不讀停用欄位。
+#566 的逐項儲存、CAS／紀錄、性別差異、照片復原、成本及待核准正式步驟見 `docs/operations/dog-editing.md`。#567 活動、資料檢查、更新紀錄的契約、成本與四場活動核對見 `docs/operations/admin-records.md`。承接 #575 的性別正本核對；0004 schema 已刪舊副本，runtime 不讀停用欄位。

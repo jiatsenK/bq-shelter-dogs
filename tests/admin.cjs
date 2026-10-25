@@ -88,7 +88,7 @@ module.exports = async (browser, base) => {
     fs.mkdirSync(path.join(__dirname, '../.impeccable/review'), { recursive: true });
     await page.screenshot({ path: path.join(__dirname, '../.impeccable/review/desktop.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
-    assert.equal(await page.locator('.future small').first().isVisible(), true);
+    assert.equal(await page.locator('.admin-sidebar nav a[href="./updates.html"]').isVisible(), true, '#567 導覽五項都可進入');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'only table/nav regions may scroll horizontally');
     await page.screenshot({ path: path.join(__dirname, '../.impeccable/review/mobile.png'), fullPage: true });
     code = 401;

@@ -116,11 +116,17 @@ export function activityLog(a) {
 
 const insertDogs = (db, id, dogs) => dogs.map((d, i) => db.prepare('INSERT INTO v3_activity_dogs(activity_id,position,dog_id,name) VALUES(?,?,?,?)').bind(id, i, d.dogId, d.name));
 
-export async function createActivity(db, { date, kind, dogs }) {
+// audit（管理網站，#567）：({ before, after }, 條件 SQL, 條件參數) → 紀錄的 statements，跟活動修改放同一個 batch，
+// 紀錄寫不進去就整批回復。條件確保別人先改了／刪了時不留紀錄。志工網站不傳，照舊由 index.js 事後記。
+const auditOf = (audit, change, when = '1', args = []) => (audit ? audit(change, when, args) : []);
+const unchangedWhen = 'EXISTS(SELECT 1 FROM v3_activities WHERE activity_id=? AND revision=?)';
+
+export async function createActivity(db, { date, kind, dogs }, audit) {
   const id = crypto.randomUUID().replace(/-/g, '');
   await db.batch([
     db.prepare('INSERT INTO v3_activities(activity_id,activity_date,kind) VALUES(?,?,?)').bind(id, date, kind),
     ...insertDogs(db, id, dogs),
+    ...auditOf(audit, { before: null, after: { date, kind, dogs } }),
   ]);
   return readActivity(db, id);
 }
@@ -137,17 +143,18 @@ const guard = (db, id, revision) => db.prepare('INSERT INTO v3_activity_guard SE
 
 async function batchUnlessChanged(db, statements) {
   try {
-    await db.batch(statements);
+    return await db.batch(statements);
   } catch (e) {
     if (/CHECK constraint|FOREIGN KEY/i.test(e.message)) throw new ActivityError(409, CHANGED);
     throw e;
   }
 }
 
-export async function updateActivity(db, id, revision, { date, kind, dogs }) {
+export async function updateActivity(db, id, revision, { date, kind, dogs }, audit) {
   const before = await readUnchanged(db, id, revision);
   await batchUnlessChanged(db, [
     guard(db, id, revision),
+    ...auditOf(audit, { before, after: { date, kind, dogs } }, unchangedWhen, [id, revision]),
     db.prepare('UPDATE v3_activities SET activity_date=?, kind=?, revision=revision+1 WHERE activity_id=?').bind(date, kind, id),
     db.prepare('DELETE FROM v3_activity_dogs WHERE activity_id=?').bind(id),
     ...insertDogs(db, id, dogs),
@@ -156,12 +163,15 @@ export async function updateActivity(db, id, revision, { date, kind, dogs }) {
   return { before, after: await readActivity(db, id) };
 }
 
-export async function deleteActivity(db, id, revision) {
+export async function deleteActivity(db, id, revision, audit) {
   const before = await readUnchanged(db, id, revision);
-  await batchUnlessChanged(db, [
+  const results = await batchUnlessChanged(db, [
     guard(db, id, revision),
+    ...auditOf(audit, { before, after: null }, unchangedWhen, [id, revision]),
     db.prepare('DELETE FROM v3_activities WHERE activity_id=?').bind(id),
     db.prepare('DELETE FROM v3_activity_guard'),
   ]);
+  // 讀完到寫入之間被別人刪掉：什麼都沒刪，不回成功（只在管理網站檢查，志工網站行為不變）
+  if (audit && !results.at(-2).meta.changes) throw new ActivityError(404, '找不到這場活動（可能已經被刪掉），請重新整理');
   return { before };
 }

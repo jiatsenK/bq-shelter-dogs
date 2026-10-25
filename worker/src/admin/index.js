@@ -4,6 +4,10 @@ import { listTrash, readTrash } from '../r2.js';
 import { readSettings, saveSettings } from '../feature-settings.js';
 import { createAccessVerifier } from './access.js';
 import { readManageDogs } from './dogs.js';
+import { readActivities } from '../activities.js';
+import { writeActivity } from './activities.js';
+import { readSheetGaps } from './checks.js';
+import { searchEdits } from './edits.js';
 import { isPhotoKey, isTomb, isThumbKey, r2Versions } from '../r2.js';
 
 const verifyAccess = createAccessVerifier();
@@ -83,6 +87,13 @@ export default {
             else response=json(await restoreDogPhoto(env,dogId,input.revision,input.trashId,{actor},new URL(request.url).origin));
           } else response=json({error:'方法不支援'},405);
         }
+      } else if (path === '/api/manage/activities' || path.startsWith('/api/manage/activities/')) {
+        const match = path.match(/^\/api\/manage\/activities(?:\/([a-f0-9]{32}))?$/);
+        if (!match) response = json({ error: '找不到這場活動' }, 404);
+        else if (['GET', 'HEAD'].includes(request.method)) response = match[1] ? json({ error: '請使用 GET /api/manage/activities' }, 405) : json({ activities: await readActivities(env.DB) });
+        else if (request.headers.get('Origin') !== env.ADMIN_ORIGIN || request.headers.get('Sec-Fetch-Site') === 'cross-site') response = json({ error: '請從管理網站儲存' }, 403);
+        else if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json') response = json({ error: '請使用 JSON' }, 415);
+        else response = json(await writeActivity(env.DB, request.method, match[1], await settingsInput(request, 16000), actor));
       } else if (!['GET', 'HEAD'].includes(request.method)) {
         response = json({ error: '此階段僅提供唯讀查詢' }, 405);
         response.headers.set('Allow', 'GET, HEAD');
@@ -91,6 +102,8 @@ export default {
         const photos = env.PHOTOS ? (await r2Versions(env)).versions : {};
         response = json({ dogs: await readManageDogs(env.DB, photos) });
       }
+      else if (path === '/api/manage/data-checks') response = json({ sheetGaps: await readSheetGaps(env.DB) });
+      else if (path === '/api/manage/edits') response = json(await searchEdits(env.DB, new URL(request.url).searchParams));
       else if (path === '/api' || path.startsWith('/api/')) response = json({ error: '找不到管理功能' }, 404);
       else if (path.startsWith('/photos/')) response = await photoResponse(path, env);
       else response = await env.ASSETS.fetch(request);
