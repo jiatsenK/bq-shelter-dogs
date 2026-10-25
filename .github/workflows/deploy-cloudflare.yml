@@ -3,7 +3,6 @@
 # - 縮圖（#130 起存 R2）、同步試算表（#251 起只寫 D1）都不提交，跑完不用重新部署（#305 拿掉縮圖後部署）
 # - 還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID 時直接跳過，不會失敗；設定步驟見 docs/setup/CLOUDFLARE_SETUP.md
 # - Worker 要用的密碼也從 GitHub Secret 一起帶上去（有設才帶，沒設的保留 Cloudflare 上原本的）：
-#   WORKER_GITHUB_TOKEN → Worker 的 GITHUB_TOKEN（GitHub 不准 Secret 用 GITHUB_ 開頭，所以換個名字）、
 #   ADMIN_KEY（給 /api/admin 的 GitHub Action）、WALKER_KEY（同步試算表本來就在用這一個）、
 #   MY_NAME（#501 狗清單判斷「我溜過」）
 # - 也可以在 Actions 頁選「部署到 Cloudflare」→「Run workflow」手動跑
@@ -85,7 +84,6 @@ jobs:
       - name: 部署
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         env:
-          WORKER_GITHUB_TOKEN: ${{ secrets.WORKER_GITHUB_TOKEN }}
           # 還沒設 ADMIN_KEY 就沿用舊的 NOTES_PASSCODE Secret 的值（ADR 0004）
           ADMIN_KEY: ${{ secrets.ADMIN_KEY || secrets.NOTES_PASSCODE }}
           WALKER_KEY: ${{ secrets.WALKER_KEY }}
@@ -97,7 +95,7 @@ jobs:
         run: |
           # 密碼寫進暫存檔交給 wrangler，不印出來；沒設的不放（不會蓋掉 Cloudflare 上原本的）
           node -e '
-            const s = { GITHUB_TOKEN: process.env.WORKER_GITHUB_TOKEN, ADMIN_KEY: process.env.ADMIN_KEY, WALKER_KEY: process.env.WALKER_KEY, SHEET_WRITE_URL: process.env.SHEET_WRITE_URL, SHEET_WRITE_KEY: process.env.SHEET_WRITE_KEY, SHEET_ID: process.env.SHEET_ID, MY_NAME: process.env.MY_NAME };
+            const s = { ADMIN_KEY: process.env.ADMIN_KEY, WALKER_KEY: process.env.WALKER_KEY, SHEET_WRITE_URL: process.env.SHEET_WRITE_URL, SHEET_WRITE_KEY: process.env.SHEET_WRITE_KEY, SHEET_ID: process.env.SHEET_ID, MY_NAME: process.env.MY_NAME };
             for (const k of Object.keys(s)) if (!s[k]) delete s[k];
             require("fs").writeFileSync(process.argv[1], JSON.stringify(s), { mode: 0o600 });
             console.log("帶上去的密碼：" + (Object.keys(s).join("、") || "沒有"));

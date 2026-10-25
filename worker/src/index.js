@@ -16,7 +16,7 @@ import * as r2 from './r2.js';
 import { taiwanYmd } from './sync-plan.js';
 import { applyDogListRows, scanDogList, DOG_LIST_ROWS_MAX } from './dog-list.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
-import { dogIdsFor, readFavorites, saveFavorite, openedBooks, readMainNames } from './compact.js';
+import { dogIdsFor, readFavorites, saveFavorite, openedBooks } from './compact.js';
 import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
 
 // 排程要跟 wrangler.jsonc 的 triggers.crons 一致（#500，ADR 0018）：寫回重試每 10 分鐘（沒工作就只查一次 D1），
@@ -30,12 +30,8 @@ const EDIT_ROWS_MAX = 50;
 
 // 預設值；想改的話可以在 Cloudflare 的「變數」設定同名變數蓋過去
 const DEFAULTS = {
-  GITHUB_REPO: 'jiatsenK/bq-shelter-dogs',
-  GITHUB_BRANCH: 'main',
   // 除了同網址之外，另外接受哪些網站送來的要求（用逗號分隔）；網站和 Worker 同網址（#125）後不用設，舊網址 2026-10 拿掉
   ALLOWED_ORIGINS: '',
-  // 只有本機測試會換成假的 GitHub
-  GITHUB_API: 'https://api.github.com',
 };
 
 // 網站會先把照片壓成長邊約 1280px 的 JPEG（通常 100–400 KB），這裡留足空間
@@ -45,8 +41,6 @@ const RATE_LIMITS = [
   { windowMs: 60 * 1000, max: 5 },
   { windowMs: 60 * 60 * 1000, max: 30 },
 ];
-// 讀過的 dogs.json 暫存 5 分鐘，不用每張照片都去 GitHub 讀一次
-const DOGS_CACHE_MS = 5 * 60 * 1000;
 // 管理寫入頻率限制（介紹、休養共用）
 const NOTE_WRITE_LIMITS = [
   { windowMs: 60 * 1000, max: 10 },
@@ -75,28 +69,22 @@ const WALK_LIMITS = [
   { windowMs: 60 * 60 * 1000, max: 200 },
 ];
 
-// 注意：Cloudflare 會同時開好幾份 Worker，下面這兩個暫存各自獨立，
+// 注意：Cloudflare 會同時開好幾份 Worker，下面這些暫存各自獨立，
 // 所以頻率限制是「盡量擋」，不是精確計數；目的是擋住一直狂傳，不是算帳
 const hits = new Map(); // 種類:IP → 時間清單
-let dogsCache = null; // { at, dogs: Map(編號 → 犬名) }
 
 let walkersCache = null; // GET /walkers 的快取（#141）
 function resetState() {
   walkersCache = null;
   walkerNamesRemembered = null;
   hits.clear();
-  dogsCache = null;
   resetPackCache();
 }
 
 function config(env) {
   const get = k => (env && env[k] ? String(env[k]) : DEFAULTS[k]);
   return {
-    repo: get('GITHUB_REPO'),
-    branch: get('GITHUB_BRANCH'),
-    api: get('GITHUB_API').replace(/\/+$/, ''),
     origins: get('ALLOWED_ORIGINS').split(',').map(s => s.trim()).filter(Boolean),
-    token: env && env.GITHUB_TOKEN,
     adminKey: env && env.ADMIN_KEY ? String(env.ADMIN_KEY) : '',
     walkerKey: env && env.WALKER_KEY ? String(env.WALKER_KEY) : '',
     sheetWriteUrl: env && env.SHEET_WRITE_URL ? String(env.SHEET_WRITE_URL) : '',
@@ -160,28 +148,6 @@ function isJpeg(bytes) {
   return bytes.length > 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
 }
 
-function toBase64(bytes) {
-  let bin = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) {
-    bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
-  }
-  return btoa(bin);
-}
-
-
-function github(cfg, path, init = {}) {
-  return fetch(`${cfg.api}/repos/${cfg.repo}/${path}`, {
-    ...init,
-    headers: {
-      Authorization: `Bearer ${cfg.token}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      'User-Agent': 'bq-shelter-dogs-photo-upload',
-      ...(init.headers || {}),
-    },
-  });
-}
-
 // 資料庫（D1）：#247 起網站讀精簡新表（v3_，worker/src/compact.js），狀態頁報告新表有沒有接上、各幾筆。
 // #315 起從資料包數（worker/src/packs.js），不整表 COUNT(*)，讀不到也不退回整表數
 async function databaseStatus(env) {
@@ -216,94 +182,6 @@ async function getDogs(env, origin) {
     } catch (e) { /* 沒有版本號只是照片可能用到快取，狗的資料照給 */ }
   }
   return reply(200, { ok: true, ...data }, origin);
-}
-
-// 編號 → 犬名：只讀 D1 主清單；未接 D1 時停止照片寫入。
-async function loadDogs(cfg, now) {
-  if (!cfg.db) throw new Error('沒有接 D1，無法確認狗狗編號');
-  if (dogsCache && dogsCache.db === cfg.db && now - dogsCache.at < DOGS_CACHE_MS) return dogsCache.dogs;
-  const dogs = await readMainNames(cfg.db);
-  dogsCache = { at: now, db: cfg.db, dogs };
-  return dogs;
-}
-
-// 讀目前這張照片的 sha；沒有這張照片回 null
-async function currentSha(cfg, path) {
-  const res = await github(cfg, `contents/${path}?ref=${encodeURIComponent(cfg.branch)}`);
-  if (res.status === 404) return null;
-  if (!res.ok) throw new Error(`讀舊照片失敗（GitHub ${res.status}）`);
-  const info = await res.json();
-  return info.sha || null;
-}
-
-// 主照片的檢查：編號、JPEG、大小、頻率、編號在 dogs.json 裡。
-// 過了回 { bytes, dogs }，沒過回 { error: 回應 }
-async function checkPhoto(request, cfg, id, now, origin) {
-  if (!ID_PATTERN.test(id)) return { error: fail(400, '狗狗編號格式不對', origin) };
-
-  const type = (request.headers.get('Content-Type') || '').split(';')[0].trim().toLowerCase();
-  if (type !== 'image/jpeg') return { error: fail(415, '只接受 JPEG 照片', origin) };
-  const declared = Number(request.headers.get('Content-Length') || 0);
-  if (declared > MAX_BYTES) return { error: fail(413, '照片太大', origin) };
-  const bytes = new Uint8Array(await request.arrayBuffer());
-  if (!bytes.length) return { error: fail(400, '沒有收到照片', origin) };
-  if (bytes.length > MAX_BYTES) return { error: fail(413, '照片太大', origin) };
-  if (!isJpeg(bytes)) return { error: fail(415, '檔案不是 JPEG 照片', origin) };
-
-  const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
-  if (!allowUpload(ip, now)) return { error: fail(429, '上傳太頻繁，請稍等幾分鐘再試', origin) };
-
-  let dogs;
-  try {
-    dogs = await loadDogs(cfg, now);
-  } catch (e) {
-    return { error: fail(502, '暫時無法確認狗狗編號，請稍後再試', origin) };
-  }
-  if (!dogs.has(id)) return { error: fail(404, '找不到這個編號的狗狗', origin) };
-  return { bytes, dogs };
-}
-
-async function upload(request, env, origin) {
-  const cfg = config(env);
-  const now = Date.now();
-  if (!cfg.token) return fail(500, '上傳服務還沒設定好（缺 GITHUB_TOKEN）', origin);
-
-  const m = new URL(request.url).pathname.match(/^\/photos\/([^/]+)$/);
-  const id = m ? decodeURIComponent(m[1]) : '';
-  const checked = await checkPhoto(request, cfg, id, now, origin);
-  if (checked.error) return checked.error;
-  const { bytes, dogs } = checked;
-
-  const path = `photos/${id}.jpg`;
-  const content = toBase64(bytes);
-  // 有人同時換同一張照片時 sha 會對不上，重讀一次再試
-  for (let attempt = 0; attempt < 2; attempt++) {
-    let sha;
-    try {
-      sha = await currentSha(cfg, path);
-    } catch (e) {
-      return fail(502, '暫時無法連到 GitHub，請稍後再試', origin);
-    }
-    const name = dogs.get(id);
-    const body = {
-      message: `${sha ? '更換' : '上傳'}照片：${path}${name ? `（${name}）` : ''}\n\n網站匿名上傳（照片上傳服務）`,
-      content,
-      branch: cfg.branch,
-    };
-    if (sha) body.sha = sha;
-    const res = await github(cfg, `contents/${path}`, {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-    if (res.ok) {
-      const out = await res.json().catch(() => ({}));
-      return reply(200, { ok: true, id, replaced: !!sha, commit: out.commit && out.commit.sha }, origin);
-    }
-    if ((res.status === 409 || res.status === 422) && attempt === 0) continue;
-    return fail(502, `照片沒有存進去（GitHub ${res.status}），原本的照片不受影響`, origin);
-  }
-  return fail(502, '照片沒有存進去，原本的照片不受影響', origin);
 }
 
 // 介紹、休養共用的純文字整理
@@ -995,12 +873,11 @@ export default {
       return env.ASSETS.fetch(request);
     }
 
-    // 打開 Worker 網址（合在一起時是 /api/）就能看到服務有沒有在跑、token 和金鑰設了沒（不會顯示內容）
+    // 打開 Worker 網址（合在一起時是 /api/）就能看到服務有沒有在跑、金鑰設了沒（不會顯示內容）
     if (request.method === 'GET' && path === '/') {
       return reply(200, {
         ok: true,
         service: '板收志工溜狗表 照片上傳服務',
-        token: cfg.token ? '已設定' : '未設定',
         adminKey: cfg.adminKey ? '已設定' : '未設定',
         walkerKey: cfg.walkerKey ? '已設定' : '未設定',
         sheetWrite: cfg.sheetWriteUrl ? '已設定' : '未設定',

@@ -1,7 +1,7 @@
 // 網站＋API 合在一起的 Cloudflare Worker（#125）
 // - 網頁是靜態檔案（assets，只放 public/），API 在 /api 底下（worker/src/index.js）；照片放 R2（#130），repo 裡的舊照片當備援
 // - main 有推送就由 GitHub Action 自動部署（.github/workflows/deploy-cloudflare.yml），不用手動貼程式
-// - Secret（GITHUB_TOKEN、ADMIN_KEY、WALKER_KEY）不寫在這裡：設在 GitHub Secrets，部署時一起帶上去，步驟見 docs/setup/CLOUDFLARE_SETUP.md
+// - Secret（ADMIN_KEY、WALKER_KEY、SHEET_WRITE_KEY 等）不寫在這裡：設在 GitHub Secrets，部署時一起帶上去，步驟見 docs/setup/CLOUDFLARE_SETUP.md
 // - 只有 public/ 會放上網站，其他資料夾都不公開（#276 起不再需要 .assetsignore）
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -25,8 +25,6 @@
     "preview_database_id": "9e23a65c-c9dd-4f83-ad9c-2e01626910f0"
   }],
   "vars": {
-    "GITHUB_REPO": "jiatsenK/bq-shelter-dogs",
-    "GITHUB_BRANCH": "main",
     // #460：溜狗每天的寫入保留量上限（ADR 0008）；同時是帳號當日寫入量的檢查門檻。
     "SYNC_DAILY_BUDGET": "40000",
     // #498（ADR 0018）：人工改表的今日溜狗寫進 D1；沒設時 GAS 會一直補送失敗。2026-10-24 由密鑰改到這裡，讓 repo 看得到。
@@ -43,6 +41,6 @@
   // 每個 PR 的預覽網址（#126，.github/workflows/preview-cloudflare.yml）：https://pr-<編號>-bq-shelter-dogs.<帳號>.workers.dev
   "preview_urls": true,
   // 不保留 Cloudflare 網頁上另外加的變數：正式部署只用這裡的 vars，確保預覽版的 PREVIEW 不會被帶進正式版。
-  // Secret（GITHUB_TOKEN 等）不受影響，部署時一律保留
+  // Secret（ADMIN_KEY 等）不受影響，部署時一律保留
   "keep_vars": false
 }
