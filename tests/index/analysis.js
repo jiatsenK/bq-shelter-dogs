@@ -302,7 +302,7 @@ async function runDepartureTests() {
       const box = document.createElement('div');
       box.innerHTML = departureSectionHtml(OCT8);
       eq(box.querySelectorAll('.a-kpi').length, 0, '沒有數字卡：');
-      eq(box.querySelector('.dep-line').textContent, '2026 年離所 3 隻（認養 1、死亡 1、待確認 1）');
+      eq(box.querySelector('.dep-line').textContent, '2026 年離所 3 隻（認養 1、離世 1、待確認 1）');
       eq([...box.querySelectorAll('[data-dep-year]')].map(c => c.dataset.depYear), ['2025', '2026']);
       departuresData = { state: 'ready', list: list.filter(d => d.departure.date && d.departure.date.getFullYear() === 2026) };
       box.innerHTML = departureSectionHtml(OCT8);
