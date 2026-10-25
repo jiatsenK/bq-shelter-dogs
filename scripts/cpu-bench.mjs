@@ -13,7 +13,7 @@ export function benchSql(kind) {
     ...dogs.flatMap(d => [
       `INSERT INTO v3_dogs(dog_id,name) VALUES(${q(d.dogId)},${q(d.name)});`,
       `INSERT INTO v3_dog_numbers(number,dog_id) VALUES(${q(d.id)},${q(d.dogId)});`,
-      `INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(${d.row},${q(d.dogId)},${q(d.id)},${q(d.name)},${q(BENCH_VALUE.date)},${q(at)});`,
+      `INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(${d.row},${q(d.dogId)},${q(d.id)},${q(d.name)},${q(BENCH_VALUE.date)});`,
       `INSERT INTO v3_walk_state(dog_key,dog_id,number,name,version,effective_date,walker,members_json,base_date,base_walker,previous_date,previous_walker,updated_at) VALUES(${q(d.id)},${q(d.dogId)},${q(d.id)},${q(d.name)},1,${q(BENCH_VALUE.date)},${q(BENCH_VALUE.walker)},'[]',${q(BENCH_VALUE.date)},${q(BENCH_VALUE.walker)},'','',${q(at)});`,
       `INSERT INTO v3_walk_outbox(dog_key,version,operation_date,target_date,target_walker,status,next_attempt_at) VALUES(${q(d.id)},1,${q(BENCH_VALUE.date)},${q(BENCH_VALUE.date)},${q(BENCH_VALUE.walker)},'synced',${q(at)});`,
     ]),

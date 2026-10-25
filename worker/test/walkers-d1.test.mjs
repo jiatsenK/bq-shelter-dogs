@@ -14,7 +14,7 @@ test('#519 GET /walkers 從 D1 回每隻狗的誰遛的、日期與名字；最�
   await DB.batch([
     DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('d2','甜甜'),('d3','新來的')"),
     DB.prepare("INSERT INTO v3_dog_numbers VALUES('9002','d2')"),
-    DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(2,'d2','9002','甜甜','2026-09-01','x'),(3,'d3','','新來的',NULL,'x')"),
+    DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(2,'d2','9002','甜甜','2026-09-01'),(3,'d3','','新來的',NULL)"),
     DB.prepare('INSERT INTO v3_sheet_main_walkers VALUES(2,0,?),(2,1,?)').bind(await code('丙'), await code('甲')),
   ]);
   const fetched = [];
@@ -56,7 +56,7 @@ test('#554 GET /walkers：主清單都有「誰遛的」原文就不讀代號 JO
   DB.prepare = prepare;
   await DB.batch([
     DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('d2','甜甜')"),
-    DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(2,'d2','9002','甜甜','2026-09-01','x')"),
+    DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(2,'d2','9002','甜甜','2026-09-01')"),
     DB.prepare('INSERT INTO v3_sheet_main_walkers VALUES(2,0,?)').bind(await code('丙')),
   ]);
   DB.prepare = sql => { sqls.push(sql); return prepare(sql); };

@@ -170,7 +170,7 @@ test('每輪最多十隻，失敗退避不擋其他到期工作；完成歷史�
       await env.DB.batch([
         env.DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId,name),
         env.DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind(id,dogId),
-        env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(?,?,?,?, '2026-10-01','x')").bind(i+2,dogId,id,name),
+        env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(?,?,?,?, '2026-10-01')").bind(i+2,dogId,id,name),
       ]);
       assert.equal((await post(env,request(`limit-000${i}`, '甲',{ dogs:[{ id,name }] }))).status,200);
     }
@@ -348,7 +348,7 @@ test('#460 合併派送：一輪只呼叫 Apps Script 一次，成功的標成�
       await env.DB.batch([
         env.DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId,name),
         env.DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind(id,dogId),
-        env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(?,?,?,?, '2026-10-01','x')").bind(i+2,dogId,id,name),
+        env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(?,?,?,?, '2026-10-01')").bind(i+2,dogId,id,name),
       ]);
       assert.equal((await post(env,request(`batch-000${i}`,'甲',{ dogs:[{ id,name }] }))).status,200);
     }
@@ -370,7 +370,7 @@ async function addDogs(env,count,prefix) {
     await env.DB.batch([
       env.DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId,name),
       env.DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind(id,dogId),
-      env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(?,?,?,?, '2026-10-01','x')").bind(i+2,dogId,id,name),
+      env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(?,?,?,?, '2026-10-01')").bind(i+2,dogId,id,name),
     ]);
     assert.equal((await post(env,request(`${prefix}-req-${String(i).padStart(4,'0')}`,'甲',{ dogs:[{ id,name }] }))).status,200);
   }
