@@ -38,10 +38,8 @@ export async function linkIdentityName(db, name, code) {
   const storedName = matches[0]?.name || name;
   await db.batch([
     db.prepare('INSERT OR IGNORE INTO v3_volunteers(volunteer_id,name,last_seen) VALUES(?,?,?)').bind(id, name, new Date().toISOString()),
-    db.prepare('INSERT INTO v3_volunteer_favorites(volunteer_id,dog_id,added_on) SELECT (SELECT volunteer_id FROM v3_volunteers WHERE name=?),dog_id,added_on FROM v3_favorites WHERE walker_code=? AND NOT EXISTS(SELECT 1 FROM v3_identity_names WHERE code=?) ON CONFLICT(volunteer_id,dog_id) DO UPDATE SET added_on=MIN(added_on,excluded.added_on)').bind(storedName, code, code),
     db.prepare('INSERT INTO v3_volunteer_cards(volunteer_id,dog_id,opened_on) SELECT (SELECT volunteer_id FROM v3_volunteers WHERE name=?),dog_id,opened_on FROM v3_card_opened WHERE walker_code=? AND NOT EXISTS(SELECT 1 FROM v3_identity_names WHERE code=?)').bind(storedName, code, code),
     db.prepare('INSERT OR IGNORE INTO v3_identity_names(code,name_key,name,volunteer_id) VALUES(?,?,?,(SELECT volunteer_id FROM v3_volunteers WHERE name=?))').bind(code, nameKey, name, storedName),
-    db.prepare('INSERT OR IGNORE INTO v3_volunteer_codes(code,volunteer_id) SELECT code,volunteer_id FROM v3_identity_names WHERE code=?').bind(code),
     db.prepare('UPDATE v3_identity_revision SET revision=revision+1 WHERE id=1'),
   ]);
   return identityByCode(db, code);
@@ -69,11 +67,9 @@ export async function renameIdentity(db, { code, name, operationId }, key) {
   await db.batch([
     db.prepare('INSERT INTO v3_identity_guard SELECT CASE WHEN revision=? THEN 1 ELSE 0 END FROM v3_identity_revision WHERE id=1').bind(revision),
     db.prepare('INSERT INTO v3_identity_operations VALUES(?,?,?)').bind(operationId, signature, source.volunteerId),
-    ...[['v3_volunteer_favorites', 'v3_favorites', 'added_on'], ['v3_volunteer_cards', 'v3_card_opened', 'opened_on']].map(([owned, legacy, date]) => db.prepare(
-      `INSERT INTO ${owned}(volunteer_id,dog_id,${date}) SELECT ?,dog_id,${date} FROM ${legacy} WHERE walker_code=? AND NOT EXISTS(SELECT 1 FROM v3_identity_names WHERE code=?) ON CONFLICT(volunteer_id,dog_id) DO UPDATE SET ${date}=MIN(${owned}.${date},excluded.${date})`
-    ).bind(source.volunteerId, nextCode, nextCode)),
+    db.prepare('INSERT INTO v3_volunteer_cards(volunteer_id,dog_id,opened_on) SELECT ?,dog_id,opened_on FROM v3_card_opened WHERE walker_code=? AND NOT EXISTS(SELECT 1 FROM v3_identity_names WHERE code=?) ON CONFLICT(volunteer_id,dog_id) DO UPDATE SET opened_on=MIN(v3_volunteer_cards.opened_on,excluded.opened_on)')
+      .bind(source.volunteerId, nextCode, nextCode),
     db.prepare('INSERT INTO v3_identity_names(code,name_key,name,volunteer_id) VALUES(?,?,?,?) ON CONFLICT(code) DO NOTHING').bind(nextCode, walkerNameKey(name), name, source.volunteerId),
-    db.prepare('INSERT OR IGNORE INTO v3_volunteer_codes(code,volunteer_id) VALUES(?,?)').bind(nextCode, source.volunteerId),
     db.prepare('UPDATE v3_volunteers SET name=? WHERE volunteer_id=?').bind(name, source.volunteerId),
     db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,before_json,after_json) VALUES(?,?,?,?,?,?)').bind(new Date().toISOString(), code, source.name, 'volunteer_rename', JSON.stringify(before), JSON.stringify(after)),
     db.prepare('UPDATE v3_identity_revision SET revision=revision+1 WHERE id=1'),
@@ -135,7 +131,6 @@ export async function mergeIdentity(db, input, key) {
       db.prepare(`DELETE FROM ${table} WHERE volunteer_id=?`).bind(source.volunteerId),
     ]),
     db.prepare('UPDATE v3_identity_names SET volunteer_id=? WHERE volunteer_id=?').bind(target.volunteerId, source.volunteerId),
-    db.prepare('UPDATE v3_volunteer_codes SET volunteer_id=? WHERE volunteer_id=?').bind(target.volunteerId, source.volunteerId),
     db.prepare('UPDATE v3_identity_redirects SET target_id=? WHERE target_id=?').bind(target.volunteerId, source.volunteerId),
     db.prepare('UPDATE v3_volunteers SET name=? WHERE volunteer_id=?').bind('__merged:' + source.volunteerId, source.volunteerId),
     db.prepare('INSERT INTO v3_identity_redirects VALUES(?,?)').bind(source.volunteerId, target.volunteerId),

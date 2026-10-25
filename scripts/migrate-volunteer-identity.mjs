@@ -21,7 +21,7 @@ export async function inspectVolunteerIdentity(db, codeFor) {
   const known = new Set(confirmed.map(p => p.code));
   const categories = {};
   const unknown = new Set();
-  for (const [label, table] of [['favorites','v3_favorites'],['cards','v3_card_opened'],['walkRows','v3_walks']]) {
+  for (const [label, table] of [['cards','v3_card_opened'],['walkRows','v3_walks']]) { // 舊常溜 v3_favorites 已全部搬完、停用（#557）
     const data = (await db.prepare(`SELECT walker_code FROM ${table}`).all()).results;
     const matched = data.filter(r => known.has(r.walker_code)).length;
     data.forEach(r => { if (r.walker_code && !known.has(r.walker_code)) unknown.add(r.walker_code); });

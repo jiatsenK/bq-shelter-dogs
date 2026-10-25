@@ -15,7 +15,7 @@ export async function previousWalk(db, dog, today) {
   const names = new Map();
   if (codes.length) {
     const marks = codes.map(() => '?').join(',');
-    const { results = [] } = await db.prepare(`SELECT code,name FROM v3_identity_names WHERE code IN (${marks}) UNION ALL SELECT c.code,v.name FROM v3_volunteer_codes c JOIN v3_volunteers v USING(volunteer_id) WHERE c.code IN (${marks})`).bind(...codes, ...codes).all();
+    const { results = [] } = await db.prepare(`SELECT code,name FROM v3_identity_names WHERE code IN (${marks})`).bind(...codes).all();
     for (const r of results) if (!names.has(r.code)) names.set(r.code, r.name);
   }
   // 對不到名字的代號（舊資料）略過，不寫代號進試算表

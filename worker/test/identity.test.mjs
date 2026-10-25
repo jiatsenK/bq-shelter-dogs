@@ -55,7 +55,7 @@ test('舊資料銜接可重跑，未知代號保留，取消後不因再登入�
  const {walkerCode}=await import('../src/editlog.js');const code=await walkerCode('舊名字',env.WALKER_KEY);
  await DB.prepare('INSERT INTO v3_volunteers(volunteer_id,name,last_seen) VALUES(?,?,?)').bind('original-person','舊名字','2026-01-01').run();
  await DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind('b'.repeat(32),'舊狗').run();
- await DB.prepare('INSERT INTO v3_favorites VALUES(?,?,?)').bind(code,'b'.repeat(32),'2026-01-01').run();
+ await DB.prepare('INSERT INTO v3_volunteer_favorites VALUES(?,?,?)').bind('original-person','b'.repeat(32),'2026-01-01').run();
  await DB.prepare('INSERT INTO v3_card_opened VALUES(?,?,?)').bind('ffffffffffff','b'.repeat(32),'2026-01-02').run();
  const {migrateVolunteerIdentity}=await import('../../scripts/migrate-volunteer-identity.mjs');
  const report=await migrateVolunteerIdentity(DB,env.WALKER_KEY);assert.deepEqual(report.unknownCodes,['ffffffffffff']);
