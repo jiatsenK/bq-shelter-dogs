@@ -10,4 +10,4 @@
 - 更新 `wrangler.test-site.jsonc` 開頭說明、`docs/ARCHITECTURE_NOW.md`（新增「測試網站」段）、`docs/agents/data-changes.md`。
 - 未做：沒有觸發部署（交辦明訂不要）。#586 的手動部署由原工作階段處理。
 - 注意：手動部署某個分支後，main 再有推送會換回 main 的程式；分支裡還沒合併的 migration 套進測試庫後記為已套用（同預覽）。
-- 相關 PR：（開 PR 後補）。
+- 相關 PR：#588。
