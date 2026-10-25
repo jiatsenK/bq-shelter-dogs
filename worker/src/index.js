@@ -89,7 +89,6 @@ function config(env) {
     walkerKey: env && env.WALKER_KEY ? String(env.WALKER_KEY) : '',
     sheetWriteUrl: env && env.SHEET_WRITE_URL ? String(env.SHEET_WRITE_URL) : '',
     sheetWriteKey: env && env.SHEET_WRITE_KEY ? String(env.SHEET_WRITE_KEY) : '',
-    sheetId: env && env.SHEET_ID ? String(env.SHEET_ID).trim() : '',
     // 編號驗證一律讀 D1，不讀 GitHub／靜態舊檔。
     db: env && env.DB ? env.DB : null,
   };
@@ -881,8 +880,7 @@ export default {
         adminKey: cfg.adminKey ? '已設定' : '未設定',
         walkerKey: cfg.walkerKey ? '已設定' : '未設定',
         sheetWrite: cfg.sheetWriteUrl ? '已設定' : '未設定',
-        walkerNames: cfg.sheetId ? '已設定' : '未設定',
-        photos: r2.r2On(env) ? 'R2' : 'GitHub',
+        photos: r2.r2On(env) ? 'R2' : '未設定',
         database: await databaseStatus(env),
         ...(env && env.PREVIEW ? { preview: '預覽版，不能存' } : {}),
       });
