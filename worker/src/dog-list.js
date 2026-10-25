@@ -1,3 +1,4 @@
+import { guardedDogBatch } from './dog-edit.js';
 // 狗清單有人編輯才同步（#501，ADR 0018 第 5–7 點）：取代每 10 分鐘叫 GitHub Actions 讀整張表（ADR 0012）。
 // - GAS 編輯觸發只送受影響的列：主清單、已出所的狗（編號＋那一列）、常遛狗群的一欄、異動紀錄整段；Worker 只改那幾隻、只寫有變的欄。
 // - 換籠、離所看狗新出現在哪裡：出現在「已出所」就記離所並從主清單移走；又出現在主清單就不算離所。
@@ -70,6 +71,7 @@ async function applyMain(db, row, list, env, fp) {
   let old = findMain(list, dog);
   const out = [];
   let returnedLog = null;
+  let expected=null,targetDogId=null;
   // 新增狗常先打名字、後補編號：主清單上同名沒編號的那隻就是牠，補上編號，不另建一隻（2026-10-24 驗收時多出一隻沒編號的 TEST）
   const unnumbered = !old && dog.id && list.find(m => m.number === '' && m.name === dog.name);
   if (unnumbered && !(await db.prepare('SELECT 1 FROM v3_dog_numbers WHERE number=?').bind(dog.id).first())) {
@@ -81,6 +83,7 @@ async function applyMain(db, row, list, env, fp) {
     delete fp[`main:名:${dog.name}`];
   }
   if (old) {
+    expected=old;targetDogId=old.dog_id;
     // 代號存在同一列的 JSON（#559）：跟其他欄同一句 UPDATE；沒有 WALKER_KEY 算不出代號就不動
     const next = { name: dog.name, cage, note, walked_date: date, walker: text(row.walker), ...(keyed ? { walker_codes: JSON.stringify(codes) } : {}) };
     const changed = Object.keys(next).filter(c => next[c] !== old[c]);
@@ -93,13 +96,12 @@ async function applyMain(db, row, list, env, fp) {
     else if (date && date < old.walked_date) out.push(db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(old.dog_id, old.walked_date), ...walkDay(db, old.dog_id, date, dog, codes));
     Object.assign(old, next);
   } else {
-    let dogId = dog.id
-      ? await db.prepare('SELECT dog_id FROM v3_dog_numbers WHERE number=?').bind(dog.id).first('dog_id')
-      : await db.prepare("SELECT dog_id FROM v3_walks WHERE dog_number='' AND dog_name=? LIMIT 1").bind(dog.name).first('dog_id');
+    const identified=dog.id?await db.prepare('SELECT n.dog_id,s.revision FROM v3_dog_numbers n JOIN v3_dog_edit_state s USING(dog_id) WHERE number=?').bind(dog.id).first():await db.prepare("SELECT w.dog_id,s.revision FROM v3_walks w JOIN v3_dog_edit_state s USING(dog_id) WHERE dog_number='' AND dog_name=? LIMIT 1").bind(dog.name).first();
+    let dogId=identified?.dog_id;expected=identified;
     let returned = null;
     if (!dogId && dog.id) returned = await returnedDog(db, dog, list);
     if (returned) {
-      dogId = returned.dog_id;
+      dogId = returned.dog_id;expected=returned;
       returnedLog = { editor: { name: '試算表（自動認回所）', code: '' }, kind: 'former', dogId, dogNumber: dog.id, before: { number: returned.number }, after: { number: dog.id, formerNumber: returned.number } };
       out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
     } else if (!dogId) {
@@ -107,6 +109,7 @@ async function applyMain(db, row, list, env, fp) {
       out.push(db.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId, dog.name));
       if (dog.id) out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
     } else out.push(db.prepare('UPDATE v3_dogs SET name=? WHERE dog_id=? AND name<>?').bind(dog.name, dogId, dog.name));
+    targetDogId=dogId;
     const rowIndex = Math.max(-1, ...list.map(m => m.row_index)) + 1;
     out.push(db.prepare('INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note,walked_date,walker,walker_codes) VALUES(?,?,?,?,?,?,?,?,?)')
       .bind(rowIndex, dogId, dog.id, dog.name, cage, note, date, text(row.walker), JSON.stringify(codes)));
@@ -116,8 +119,8 @@ async function applyMain(db, row, list, env, fp) {
     if (date && !(await db.prepare('SELECT 1 FROM v3_walks WHERE dog_id=? AND walk_date=? LIMIT 1').bind(dogId, date).first())) out.push(...walkDay(db, dogId, date, dog, codes));
     list.push({ row_index: rowIndex, dog_id: dogId, number: dog.id, name: dog.name, cage, note, walked_date: date, walker: text(row.walker), walker_codes: JSON.stringify(codes) });
   }
-  if (out.length) await db.batch(out);
-  if (returnedLog) await logEdit(db, returnedLog);
+  if(returnedLog)out.push(db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) VALUES(?,?,?,?,?,?,?,?)').bind(new Date().toISOString(),'',returnedLog.editor.name,returnedLog.kind,returnedLog.dogId,returnedLog.dogNumber,JSON.stringify(returnedLog.before),JSON.stringify(returnedLog.after)));
+  if(out.length){const result=await guardedDogBatch(db,expected,[...out,db.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(targetDogId)]);const revision=result.at(-1).results[0]?.revision;for(const item of list)if(item.dog_id===targetDogId)item.revision=revision;}
   return out.length > 0;
 }
 
@@ -125,7 +128,7 @@ async function applyMain(db, row, list, env, fp) {
 // 認錯可在網站「舊編號」拆開（編輯紀錄記為系統自動）。同名多筆不猜，當新狗。
 async function returnedDog(db, dog, list) {
   if (list.some(m => m.name === dog.name)) return null;
-  const found = (await db.prepare("SELECT number,dog_id FROM v3_dog_departures WHERE name=? AND number<>'' LIMIT 2").bind(dog.name).all()).results;
+  const found = (await db.prepare("SELECT d.number,d.dog_id,s.revision FROM v3_dog_departures d JOIN v3_dog_edit_state s USING(dog_id) WHERE name=? AND number<>'' LIMIT 2").bind(dog.name).all()).results;
   return found.length === 1 ? found[0] : null;
 }
 
@@ -154,8 +157,7 @@ async function applyDeparted(db, row, list, now, fp) {
         JSON.stringify(former), JSON.stringify(groups)));
     }
     out.push(...dropMainRow(db, old.row_index));
-    list.splice(list.indexOf(old), 1);
-    delete fp[`main:${dogKey(dog)}`];
+
   } else {
     // 已經記過離所：志工之後補上原因或日期就改過來
     const prev = await db.prepare('SELECT reason,matched,departed_date,date_source,flags_json FROM v3_dog_departures WHERE number=?').bind(dog.id).first();
@@ -166,7 +168,8 @@ async function applyDeparted(db, row, list, now, fp) {
     if (prev.reason !== judged.reason || prev.matched !== (judged.matched || '') || prev.departed_date !== date || prev.date_source !== source || !sameList(JSON.parse(prev.flags_json), flags))
       out.push(db.prepare('UPDATE v3_dog_departures SET reason=?,matched=?,departed_date=?,date_source=?,flags_json=? WHERE number=?').bind(judged.reason, judged.matched || '', date, source, JSON.stringify(flags), dog.id));
   }
-  if (out.length) await db.batch(out);
+  if(out.length)await guardedDogBatch(db,old,out);
+  if(old&&out.length){list.splice(list.indexOf(old),1);delete fp[`main:${dogKey(dog)}`];}
   return out.length > 0;
 }
 
@@ -207,19 +210,21 @@ async function applyNotes(db, row) {
 
 // ack：Worker 已接手（更新或無差異）；D1 失敗回 false，GAS 保留待通知下次補送。
 export async function applyDogListRows(db, rows, env, now = Date.now()) {
-  const fp = await readFp(db);
+  let fp = await readFp(db);
   const before = JSON.stringify(fp);
   // 主清單約 300 列，每批讀一次換來逐列不必各查一次（每次呼叫 50 次查詢上限）
-  const list = (await db.prepare('SELECT row_index,dog_id,number,name,cage,note,walked_date,walker,walker_codes FROM v3_sheet_main').all()).results;
+  let list = (await db.prepare('SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,m.walker_codes,s.revision FROM v3_sheet_main m JOIN v3_dog_edit_state s USING(dog_id)').all()).results;
   const results = [];
   for (const row of rows) {
     const key = row && unitKey(row);
     if (!key) { results.push({ ok: false, ack: true, error: '看不懂的列' }); continue; }
     try {
-      const changed = row.sheet === 'main' ? await applyMain(db, row, list, env, fp)
-        : row.sheet === 'departed' ? await applyDeparted(db, row, list, now, fp)
-        : row.sheet === 'groups' ? await applyGroup(db, row, list)
+      const nextList=list.map(item=>({...item})),nextFp={...fp};
+      const changed = row.sheet === 'main' ? await applyMain(db, row, nextList, env, nextFp)
+        : row.sheet === 'departed' ? await applyDeparted(db, row, nextList, now, nextFp)
+        : row.sheet === 'groups' ? await applyGroup(db, row, nextList)
         : await applyNotes(db, row);
+      list=nextList;fp=nextFp;
       if (typeof row.hash === 'string' && row.hash) fp[key] = row.hash;
       results.push({ ok: true, ack: true, key, changed });
     } catch (error) {

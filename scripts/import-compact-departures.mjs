@@ -61,7 +61,7 @@ export async function importCompactDepartures(db, departures) {
 export async function compareCompactDepartures(db, departures) {
   validate(departures);
   const want = new Map(plain(departures).map(e => [e.id, e]));
-  const got = new Map((await readDepartures(db)).map(e => [e.id, e]));
+  const got = new Map((await readDepartures(db)).map(({editRevision,sex,...e}) => [e.id, e]));
   const differences = [];
   for (const key of new Set([...want.keys(), ...got.keys()])) {
     const expected = want.get(key), actual = got.get(key);

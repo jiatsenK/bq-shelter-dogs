@@ -33,6 +33,9 @@ const dogs = await readCompactDogs(db);
 | `v3_volunteers` | 志工；代號對照在 `v3_identity_names`（`v3_volunteer_codes` 跟它完全重複，#557 刪表） |
 | `v3_card_opened` | 代號＋永久狗 ID；開卡日期 |
 | `v3_rest` | 永久狗 ID；休養截止日、原因 |
+| `v3_photos` | #566／0007 新的不可覆寫版本引用，與狗編輯紀錄同交易提交；0004 已刪的舊清單不恢復，舊固定路徑仍由 R2 備援 |
+| `v3_dog_edit_state` / `v3_dog_edit_guard` | 狗 CAS 版本／GAS 交易檢查；無差異不寫 |
+| `v3_dog_edit_actors` | 受保護操作者來源；公開 API 不回登入識別 |
 | `v3_intros` | 永久狗 ID；入所介紹 |
 | `v3_edit_log` | 編輯紀錄：時間、編輯者代號與名字、種類、狗、改前／改後（JSON），見 `docs/adr/0004-open-editing-and-edit-log.md` |
 | `v3_activities` / `v3_activity_dogs` | 活動紀錄（#270，ADR 0002）：一場一列（日期、類型、revision）；出席的狗一列一隻，`dog_id` 是 NULL 表示只有名字、還沒對上狗。網站寫，同步不碰；舊名單用 `scripts/import-activities.mjs` 手動匯入 |

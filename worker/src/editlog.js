@@ -7,6 +7,7 @@ export const KIND_LABELS = {
   volunteer_rename: '志工更名',
   volunteer_merge: '身分合併',
   rest: '休養',
+  sex: '性別補正',
   'fixed-care': '有人固定照顧',
   intro: '入所介紹',
   photo: '照片',
@@ -69,10 +70,10 @@ export async function logEdit(db, { editor, kind, dogId = null, dogNumber = '', 
 // 新到舊
 export async function readEdits(db, limit = EDITS_DEFAULT) {
   const n = Math.min(Math.max(1, Number.isInteger(limit) ? limit : EDITS_DEFAULT), EDITS_MAX);
-  const { results = [] } = await db.prepare('SELECT * FROM v3_edit_log ORDER BY id DESC LIMIT ?').bind(n).all();
+  const { results = [] } = await db.prepare("SELECT l.*, COALESCE(a.source,'legacy') AS actor_source FROM v3_edit_log l LEFT JOIN v3_dog_edit_actors a ON a.log_id=l.id ORDER BY l.id DESC LIMIT ?").bind(n).all();
   const parse = s => { try { return JSON.parse(s); } catch (e) { return null; } };
   return results.map(r => ({
-    id: r.id, at: r.at, editorName: r.editor_name, editorCode: r.editor_code, kind: r.kind,
+    id: r.id, at: r.at, source: r.actor_source, editorName: r.editor_name, editorCode: r.editor_code, kind: r.kind,
     kindLabel: KIND_LABELS[r.kind] || r.kind, dogId: r.dog_id, dogNumber: r.dog_number,
     before: parse(r.before_json), after: parse(r.after_json),
     ...(['volunteer_rename', 'volunteer_merge'].includes(r.kind) ? { editorVolunteerId: parse(r.before_json)?.volunteerId || parse(r.before_json)?.source?.volunteerId } : {}),

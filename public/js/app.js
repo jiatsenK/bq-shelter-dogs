@@ -482,7 +482,7 @@ function versioned(path) {
 // 前端剛上傳成功的照片（編號 → 本機圖片網址）：網站要一兩分鐘才會更新，這段期間先顯示剛傳的那張（#48）
 const photoOverrides = {};
 function photoSrc(dog) {
-  return photoOverrides[dog.id] || versioned(`photos/${encodeURIComponent(dog.id)}.jpg`);
+  return photoOverrides[dog.id] || versioned(`photos/${encodeURIComponent(dog.id||dog.dogId)}.jpg`);
 }
 
 // 縮圖（#83）：清單只載 photos/thumbs/ 的小圖，燈箱才看原圖；縮圖由 Action 產生（scripts/make-thumbs.py）
@@ -688,10 +688,11 @@ function openFormerEdit(dog) {
 
 // 補或刪舊編號（method 由呼叫的人給）；回空字串是成功，不然是要給人看的原因
 async function sendFormer(dog, former, method) {
-  const r = await BQApi.saveFormer(dog.id, method, { editor: editorName(), former });
+  const r = await BQApi.saveFormer(dog.id, method, { editor: editorName(), former, revision:appState.formerEdit?.dog===dog?appState.formerEdit.revision:dog.editRevision });
   if (r.error === 'network') return '沒有存進去，請確認網路後再試';
   const out = r.data;
   if (!r.ok || !out || !out.ok) return (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
+  if(out.revision)dog.editRevision=out.revision;
   return '';
 }
 
@@ -1115,11 +1116,12 @@ async function toggleFixedCare(dog) {
   fixedCareEdits.set(key, state);
   renderDetail();
   try {
-    const r = await BQApi.saveFixedCare(key, { editor, enabled });
+    const r = await BQApi.saveFixedCare(key, { editor, enabled, revision:dog.editRevision });
     if (r.error === 'network') throw new Error(r.message);
     const out = r.data;
     if (!r.ok || !out?.ok || out.enabled !== enabled) throw new Error(out?.error || '沒有存進去，請稍後再試');
     dog.covered = enabled;
+    if(out.revision)dog.editRevision=out.revision;
     for (const current of appState.allDogs) if ((current.id || current.dogId) === key) current.covered = enabled;
     if (appState.detailDog && (appState.detailDog.id || appState.detailDog.dogId) === key) appState.detailDog.covered = enabled;
     BQWalkUI.showToast(`${dog.name} 的固定照顧已${enabled ? '開啟' : '關閉'}`);
@@ -1288,7 +1290,7 @@ async function saveIntro() {
   if (e.events.reduce((n, row) => n + [...row.event].length, 0) > INTRO_MAX) { detailEdits.fail(e, '原因合計最多 1000 字'); return; }
   detailEdits.saving(e);
   let out = null, error = '';
-  const r = await BQApi.saveIntro(e.dog.id, { editor, text, events: e.events });
+  const r = await BQApi.saveIntro(e.dog.id, { editor, text, events: e.events, revision:e.revision });
   out = r.data;
   if (r.error === 'network') error = '沒有存進去，請確認網路後再試';
   else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
@@ -1298,6 +1300,7 @@ async function saveIntro() {
     detailEdits.fail(e, error);
     return;
   }
+  if(out.revision)e.dog.editRevision=out.revision;
   introOverrides[e.dog.id] = typeof out.intro === 'string' ? out.intro : text;
   e.dog.intakeEvents = Array.isArray(out.intakeEvents) ? out.intakeEvents : e.events;
   appState.introEdit = null;
@@ -1362,13 +1365,14 @@ async function saveStays() {
   if (problem) { detailEdits.fail(e, problem); return; }
   detailEdits.saving(e);
   let out = null, error = '';
-  const r = await BQApi.saveStays(e.dog.id, { editor, before: e.before, stays: rows });
+  const r = await BQApi.saveStays(e.dog.id, { editor, before: e.before, stays: rows, revision:e.revision });
   out = r.data;
   if (r.error === 'network') error = '沒有存進去，請確認網路後再試';
   else if (r.status === 409) error = '別人剛改過，請重新整理再改';
   else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
   if (appState.staysEdit !== e) return;
   if (error) { detailEdits.fail(e, error); return; }
+  if(out.revision)e.dog.editRevision=out.revision;
   e.dog.stays = Array.isArray(out.stays) ? out.stays : rows;
   appState.staysEdit = null;
   render(); renderDetail();
@@ -1397,7 +1401,7 @@ async function saveRest(end = false) {
   if (!end && !BQDates.parseYmd(e.until)) { detailEdits.fail(e, '請選到哪一天'); return; }
   detailEdits.saving(e);
   let out = null, error = '';
-  const r = await BQApi.saveRest(e.dog.id, end ? { editor, end: true } : { editor, until: e.until, reason: e.reason.trim() });
+  const r = await BQApi.saveRest(e.dog.id, end ? { editor, end: true, revision:e.revision } : { editor, until: e.until, reason: e.reason.trim(), revision:e.revision });
   out = r.data;
   if (r.error === 'network') error = '沒有存進去，請確認網路後再試';
   else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
@@ -1407,6 +1411,7 @@ async function saveRest(end = false) {
     return;
   }
   // 換成新的物件：讀取中的 loadRest 才知道這裡改過（見 loadRest）
+  if(out.revision)e.dog.editRevision=out.revision;
   const next = { ...appState.restMap };
   if (out.rest) next[e.dog.id] = out.rest; else delete next[e.dog.id];
   appState.restMap = next;

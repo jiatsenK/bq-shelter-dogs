@@ -1,3 +1,4 @@
+import { openDogEditor } from './dog-editor.js';
 import { readDogs } from './api.js';
 import { parseManageDogs, selectDogs, maintenance, sexLabel } from './dog-table.js';
 
@@ -37,9 +38,11 @@ function renderRow(dog) {
   for (const label of labels) care.append(element('span', label, 'state-label'));
   if (!labels.length) care.append(element('span', '無待補項目', 'text-secondary'));
   if (dog.rest) care.append(element('p', `休養至 ${dog.rest.until}${dog.rest.reason ? ` · ${dog.rest.reason}` : ''}`, 'sheet-note'));
+  const edit=document.createElement('button');edit.type='button';edit.className='btn';edit.textContent='編輯';edit.setAttribute('aria-label','編輯'+dog.name);edit.onclick=()=>openDogEditor(dog,byId('dog-editor'),load);
+  const identity=element('td',dog.dogId,'identity');identity.append(edit);
   row.append(photo, element('td', dog.number || '未編號', 'dog-number'), name,
     element('td', dog.cage || '—'), element('td', sexLabel(dog.sex)), intro, care,
-    element('td', dog.dogId, 'identity'));
+    identity);
   return row;
 }
 function render() {

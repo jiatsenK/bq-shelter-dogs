@@ -19,7 +19,7 @@ test('合成離所資料 匯入後讀回一模一樣，重跑也一樣', async t
   const list = await repoDepartures();
   await importCompactDepartures(db, list);
   await importCompactDepartures(db, list);
-  assert.deepEqual(await readDepartures(db), list);
+  assert.deepEqual((await readDepartures(db)).map(({editRevision,sex,...e})=>e), list);
   assert.deepEqual(await compareCompactDepartures(db, list), { equal: true, differences: [] });
 });
 
@@ -31,7 +31,7 @@ test('舊編號、常遛狗群、旗標、又回來的編號、沒有 last 的�
     { id: 'A', name: '甲', date: '2026-10-02', dateSource: null, seen: '2026-10-02', reason: 'adopt', matched: '認養', flags: [] },
   ];
   await importCompactDepartures(db, list);
-  assert.deepEqual(await readDepartures(db), [list[1], list[0]]); // 同一天依編號
+  assert.deepEqual((await readDepartures(db)).map(({editRevision,sex,...e})=>e), [list[1], list[0]]); // 同一天依編號
 });
 
 test('比對抓得到少一筆或欄位不同', async t => {
@@ -48,5 +48,5 @@ test('來源格式錯或編號重複就丟錯，不寫', async t => {
   await importCompactDepartures(db, list);
   await assert.rejects(importCompactDepartures(db, [list[0], list[0]]), /重複/);
   await assert.rejects(importCompactDepartures(db, [{ ...list[0], date: '10/1' }]), /日期/);
-  assert.deepEqual(await readDepartures(db), list);
+  assert.deepEqual((await readDepartures(db)).map(({editRevision,sex,...e})=>e), list);
 });

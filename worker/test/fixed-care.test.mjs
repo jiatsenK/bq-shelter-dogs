@@ -1,3 +1,4 @@
+import { currentEditRevision } from './edit-fixture.mjs';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
@@ -14,6 +15,7 @@ async function setup() {
   return { DB, WALKER_KEY: 'test-key' };
 }
 async function call(env, path, body) {
+  if(body&&typeof body==='object')body={...body,revision:await currentEditRevision(env.DB,path)};
   const res = await worker.fetch(new Request(`${SITE}/api${path}`, {
     method: body === undefined ? 'GET' : 'PUT', headers: { Origin: SITE, 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -99,7 +101,7 @@ test('固定照顧 API：無關設定多 10 倍，單次讀寫量固定且只用
     const writes = (await env.DB.prepare('SELECT total_changes() AS n').first('n')) - before;
     for (const query of sql.filter(q => /^SELECT/.test(q))) {
       const plan = (await env.DB.prepare(`EXPLAIN QUERY PLAN ${query.replace(/\?/g, "'2024032902'")}`).all()).results;
-      assert.ok(plan.every(p => !/SCAN /.test(p.detail)), query);
+      assert.ok(plan.every(p => !/SCAN (?!\(subquery)/.test(p.detail)), query);
     }
     return { reads, writes };
   };
@@ -115,5 +117,5 @@ test('固定照顧 API：無關設定多 10 倍，單次讀寫量固定且只用
   const small = await measure(true);
   await seed(11, 101);
   assert.deepEqual(await measure(false), small);
-  assert.deepEqual(small, { reads: 3, writes: 3 });
+  assert.deepEqual(small, { reads: 6, writes: 8 });
 });

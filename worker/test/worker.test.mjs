@@ -1,10 +1,12 @@
+import { currentEditRevision } from './edit-fixture.mjs';
+import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
 // 照片上傳服務的測試（#47）：用假的 GitHub API，不會真的連 GitHub 或 Cloudflare
 // 執行：node --test worker/test/worker.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { SETTING_KEYS } from '../src/feature-settings.js';
-import { fakeD1 } from './fakes.mjs';
+import { fakeD1, fakeR2 } from './fakes.mjs';
 import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
 
 const { resetState, allowUpload, isJpeg, MAX_BYTES } = worker.testing;
@@ -46,75 +48,37 @@ function post(id, { body = JPEG.slice(), origin = ORIGIN, type = 'image/jpeg', i
   return new Request(`https://bq-shelter-photos.example.workers.dev/photos/${id}`, { method: 'POST', headers, body });
 }
 
+async function photoStorage() {
+  const DB=fakeD1();await migrateCompactDatabase(DB);await importCompactDogs(DB,DOGS);
+  return {...ENV,DB,PHOTOS:fakeR2()};
+}
 async function send(req, env = ENV) {
+  if(env.PHOTOS&&req.method==='POST'&&new URL(req.url).pathname.includes('/photos/')) {
+    const headers=new Headers(req.headers);headers.set('X-Dog-Revision',String(await currentEditRevision(env.DB,new URL(req.url).pathname)));
+    req=new Request(req,{headers});
+  }
   const res = await worker.fetch(req, env);
   return { status: res.status, body: await res.json().catch(() => null), headers: res.headers };
 }
 
 test.beforeEach(() => resetState());
 
-test('新照片：寫到 photos/{編號}.jpg，不帶 sha，回傳成功與 CORS', async () => {
-  const calls = fakeGithub();
-  const r = await send(post('2024032902'));
-  assert.equal(r.status, 200);
-  assert.deepEqual(r.body, { ok: true, id: '2024032902', replaced: false, commit: 'c0ffee' });
-  assert.equal(r.headers.get('Access-Control-Allow-Origin'), ORIGIN);
-  const put = calls.find(c => c.method === 'PUT');
-  assert.equal(put.path, '/repos/jiatsenK/bq-shelter-dogs/contents/photos/2024032902.jpg');
-  assert.equal(put.body.sha, undefined);
-  assert.equal(put.body.branch, 'main');
-  assert.equal(put.body.content, Buffer.from(JPEG).toString('base64'));
-  assert.match(put.body.message, /^上傳照片：photos\/2024032902\.jpg（測試狗）/);
-  assert.equal(put.headers.Authorization, 'Bearer test-token');
+test('#566 照片只能透過 R2／D1 可靠流程，缺 R2 不退回 GitHub 寫入',async()=>{
+  const calls=fakeGithub();const result=await send(post('2024032902'));
+  assert.equal(result.status,503);assert.equal(result.body.code,'off');assert.deepEqual(calls,[]);
 });
-
-test('已有照片：帶舊 sha 更換', async () => {
-  const calls = fakeGithub({ files: { 'photos/2024032902.jpg': 'old-sha' } });
-  const r = await send(post('2024032902'));
-  assert.equal(r.body.replaced, true);
-  const put = calls.find(c => c.method === 'PUT');
-  assert.equal(put.body.sha, 'old-sha');
-  assert.match(put.body.message, /^更換照片/);
-});
-
-test('同時有人更換（sha 對不上）會重讀再試一次', async () => {
-  const calls = fakeGithub({ files: { 'photos/2024032902.jpg': 'old-sha' }, putStatus: [409] });
-  const r = await send(post('2024032902'));
-  assert.equal(r.status, 200);
-  assert.equal(calls.filter(c => c.method === 'PUT').length, 2);
-});
-
-test('GitHub 寫入失敗：回錯誤，說原本照片不受影響', async () => {
-  fakeGithub({ putStatus: [500] });
-  const r = await send(post('2024032902'));
-  assert.equal(r.status, 502);
-  assert.equal(r.body.ok, false);
-  assert.match(r.body.error, /原本的照片不受影響/);
-});
-
-test('編號不在 dogs.json、格式不對：不寫入', async () => {
-  const calls = fakeGithub();
-  assert.equal((await send(post('9999999999'))).status, 404);
-  assert.equal((await send(post('..%2Fdata%2Fdogs'))).status, 400);
-  assert.equal((await send(post('abc.jpg'))).status, 400);
-  assert.equal(calls.filter(c => c.method === 'PUT').length, 0);
-});
-
-test('dogs.json 讀不到：不寫入', async () => {
-  const calls = fakeGithub({ dogsStatus: 500 });
-  const r = await send(post('2024032902'));
-  assert.equal(r.status, 502);
-  assert.equal(calls.filter(c => c.method === 'PUT').length, 0);
-});
-
-test('只收 JPEG：型別不對、檔頭不對、空檔、太大都擋', async () => {
-  const calls = fakeGithub();
-  assert.equal((await send(post('2024032902', { type: 'image/png' }))).status, 415);
-  assert.equal((await send(post('2024032902', { body: new Uint8Array([0x89, 0x50, 0x4e, 0x47]) }))).status, 415);
-  assert.equal((await send(post('2024032902', { body: new Uint8Array(0) }))).status, 400);
-  const big = new Uint8Array(MAX_BYTES + 1); big.set(JPEG);
-  assert.equal((await send(post('2024032902', { body: big }))).status, 413);
-  assert.equal(calls.filter(c => c.method === 'PUT').length, 0);
+test('#566 原圖-only 舊用戶端、JPEG 驗證與狗身分仍強制執行',async()=>{
+  const calls=fakeGithub(),env=await photoStorage();
+  try {
+    const r=await send(post('2024032902'),env);assert.equal(r.status,200);assert.match(r.body.path,/^photos\/[a-f0-9]{32}\.jpg$/);assert.deepEqual(calls,[]);
+    assert.equal((await send(post('9999999999'),env)).status,404);
+    assert.equal((await send(post('abc.jpg'),env)).status,400);
+    assert.equal((await send(post('2024032902',{type:'image/png'}),env)).status,415);
+    assert.equal((await send(post('2024032902',{body:new Uint8Array([0x89,0x50])}),env)).status,415);
+    assert.equal((await send(post('2024032902',{body:new Uint8Array(0)}),env)).status,400);
+    resetState();const big=new Uint8Array(MAX_BYTES+1);big.set(JPEG);
+    assert.equal((await send(post('2024032902',{body:big}),env)).status,413);
+  }finally{env.DB.close();}
 });
 
 test('只接受 GitHub Pages 網站：其他網站、沒有 Origin 都擋；預檢回 CORS', async () => {
@@ -129,11 +93,11 @@ test('只接受 GitHub Pages 網站：其他網站、沒有 Origin 都擋；預�
   assert.equal(calls.length, 0);
 });
 
-test('沒設 GITHUB_TOKEN：回「還沒設定好」；首頁顯示 token 有沒有設、不顯示內容', async () => {
+test('缺 R2 不寫；首頁顯示 token 有沒有設、不顯示內容', async () => {
   fakeGithub();
   const r = await send(post('2024032902'), { ALLOWED_ORIGINS: ORIGIN, DB });
-  assert.equal(r.status, 500);
-  assert.match(r.body.error, /GITHUB_TOKEN/);
+  assert.equal(r.status, 503);
+  assert.equal(r.body.code, 'off');
   const home = await send(new Request('https://w.example/'), ENV);
   assert.equal(home.body.token, '已設定');
   assert.ok(!JSON.stringify(home.body).includes('test-token'));
@@ -141,11 +105,13 @@ test('沒設 GITHUB_TOKEN：回「還沒設定好」；首頁顯示 token 有沒
 
 test('頻率限制：同一個 IP 1 分鐘最多 5 張，換 IP 不受影響；1 小時最多 30 張', async () => {
   fakeGithub();
-  for (let i = 0; i < 5; i++) assert.equal((await send(post('2024032902'))).status, 200);
-  const r = await send(post('2024032902'));
+  const photoEnv=await photoStorage();
+  for (let i = 0; i < 5; i++) assert.equal((await send(post('2024032902'),photoEnv)).status, 200);
+  const r = await send(post('2024032902'),photoEnv);
   assert.equal(r.status, 429);
   assert.match(r.body.error, /太頻繁/);
-  assert.equal((await send(post('2024032902', { ip: '2.2.2.2' }))).status, 200);
+  assert.equal((await send(post('2024032902', { ip: '2.2.2.2' }),photoEnv)).status, 200);
+  photoEnv.DB.close();
   resetState();
   let t = 0;
   for (let i = 0; i < 30; i++, t += 61 * 1000) assert.equal(allowUpload('3.3.3.3', t), true);
@@ -279,12 +245,11 @@ test('#125 合在一起時：不是 /api 的 GET 交給網站檔案（找不到�
   assert.deepEqual(assets.seen, ['/nope.html']);
 });
 
-test('#125 /api/photos/{編號}：跟舊路徑一樣寫到 photos/{編號}.jpg', async () => {
+test('#125 /api/photos/{編號}：共用可靠 R2 流程', async () => {
   const calls = fakeGithub();
   const req = new Request(`${SITE}/api/photos/2024032902`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'image/jpeg', 'CF-Connecting-IP': '9.9.9.9', 'X-Editor': encodeURIComponent('小明') }, body: JPEG.slice() });
-  const r = await send(req);
-  assert.equal(r.status, 200);
-  assert.ok(calls.some(c => c.method === 'PUT' && c.path.endsWith('/contents/photos/2024032902.jpg')));
+  const env=await photoStorage();
+  try{const r=await send(req,env);assert.equal(r.status,200);assert.ok(env.PHOTOS.objects.has(r.body.path));assert.deepEqual(calls,[]);}finally{env.DB.close();}
 });
 
 // ---- PR 預覽版（#126）：可以看、可以讀，不能改正式資料 ----
