@@ -14,4 +14,5 @@
 - 待 K 決定：票寫「有『復原』的提示條」拉長，但 D1 模式提示條本來就沒有「復原」按鈕；這次改成所有有按鈕的提示條（＋一起溜的人、再試一次）8 秒，其他 5 秒。
 - 未做：#442（再按導覽捲回頂部）、#401／PR #437；未合併、未部署。
 - 測試網站（K 2026-10-26 同意）：測試 D1 `bq-shelter-dogs-test` 補套 `0009_dog_edit.sql`；把分支 `c5903c7`（main `da6396e`＋#445）用 `wrangler deploy -c wrangler.test-site.jsonc` 部署到 https://bq-shelter-dogs-test.jiatsen-k.workers.dev，版本 `89ac89bf-1300-4ad1-98a6-c7016e3a66d2`，供 K 手機實測。#586 合併後要從 main 再部署一次。
+- 測試網站設定不了名字（seed-preview-db 10-25 又覆蓋測試庫，開 #589、外觀區分開 #590）：K 同意後備份並清空測試庫 `v3_identity_names` 19 列，`v3_volunteers` 保留；正式庫未動。
 - 相關 PR：[#586](https://github.com/jiatsenK/bq-shelter-dogs/pull/586)，草稿；未加 preview 標籤（待 K 決定）。
