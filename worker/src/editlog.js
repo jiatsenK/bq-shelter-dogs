@@ -1,4 +1,4 @@
-// 編輯紀錄（docs/adr/0004-open-editing-and-edit-log.md）：網站上任何人都能改休養、介紹、照片等，
+// 編輯紀錄（docs/adr/0004-open-editing-and-edit-log.md）：志工網站上開放編輯的休養、介紹、照片等（各項開關見 ADR 0020），
 // 改之前要先選好名字；每次改成功記一筆「誰、什麼時候、改了哪隻狗的什麼、改前→改後」到 D1 的 v3_edit_log。
 // 其他功能（活動紀錄、試算表備註）照 ADR 的寫法接上 editorOf + logEdit。
 
