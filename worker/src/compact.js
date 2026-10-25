@@ -11,7 +11,7 @@ const ON_MAIN = 'dog_id IN (SELECT dog_id FROM v3_sheet_main)';
 // 舊編號直接讀 v3_dog_numbers（同一隻狗的其他編號，#289 網站補了馬上看得到）
 const MAIN_FIELDS = [
   ['cage', 'cage'], ['id', 'number'], ['name', 'name'], ['walkedDate', 'walked_date'], ['covered', 'fixed_care'],
-  ['myWalked', 'my_walked'], ['note', 'note'], ['sex', 'sex'], ['intro', 'd1_intro'], ['myWalkedDate', 'my_walked_date'],
+  ['myWalked', 'my_walked'], ['note', 'note'], ['sex', 'current_sex'], ['intro', 'd1_intro'], ['myWalkedDate', 'my_walked_date'],
 ];
 const BOOLEANS = new Set(['covered', 'myWalked']);
 
@@ -19,7 +19,7 @@ const BOOLEANS = new Set(['covered', 'myWalked']);
 export async function readDogsPayload(db) {
   // 介紹是 D1 自己存的（#250 網站改了馬上看得到），不用主清單複本上同步帶來的那份
   const [main, walkers, former, groups, notes] = await db.batch([
-    db.prepare("SELECT m.*, COALESCE(i.intro, '') AS d1_intro, c.fixed_care FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) JOIN v3_dogs c USING(dog_id) ORDER BY m.row_index"),
+    db.prepare("SELECT m.*, COALESCE(i.intro, '') AS d1_intro, c.fixed_care, c.sex AS current_sex, es.revision AS edit_revision, p.object_key AS photo_key FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) JOIN v3_dogs c USING(dog_id) JOIN v3_dog_edit_state es USING(dog_id) LEFT JOIN v3_photos p ON p.dog_id=m.dog_id AND p.is_primary=1 ORDER BY m.row_index"),
     db.prepare('SELECT row_index, walker_code FROM v3_sheet_main_walkers ORDER BY row_index, position'),
     db.prepare("SELECT m.row_index, n.number FROM v3_sheet_main m JOIN v3_dog_numbers n USING(dog_id) WHERE n.number <> m.number ORDER BY m.row_index, n.number"),
     db.prepare('SELECT column_index, name FROM v3_sheet_groups ORDER BY column_index, row_index'),
@@ -45,7 +45,8 @@ export async function readDogsPayload(db) {
   }
   const staysOf = await readAllStays(db, ON_MAIN);
   const dogs = rows.map(row => {
-    const dog = {};
+    const dog = { editRevision: row.edit_revision };
+    if(row.photo_key)dog.photoVersion=row.photo_key.slice(7,-4);
     for (const [key, column] of MAIN_FIELDS) dog[key] = BOOLEANS.has(key) ? Boolean(row[column]) : row[column];
     if (!row.number) dog.dogId = row.dog_id; // 無編號的狗也用永久身分設定固定照顧，不猜名字。
     dog.walkers = walkersOf.get(row.row_index) || [];
@@ -302,7 +303,7 @@ export async function readDepartures(db, year) {
   const where = year ? ` WHERE ${departedIn(year)}` : '';
   const inYear = column => year ? `${column} IN (SELECT ${column} FROM v3_departures${where})` : '';
   const [deps, items] = await db.batch([
-    db.prepare(`SELECT * FROM v3_departures${where}`),
+    db.prepare(`SELECT v3_departures.*, c.sex AS current_sex, es.revision AS edit_revision, (SELECT object_key FROM v3_photos WHERE dog_id=c.dog_id AND is_primary=1) AS photo_key FROM v3_departures JOIN v3_dogs c USING(dog_id) JOIN v3_dog_edit_state es USING(dog_id)${where}`),
     db.prepare(`SELECT number, kind, value FROM v3_departure_items${year ? ` WHERE ${inYear('number')}` : ''} ORDER BY number, kind, position`),
   ]);
   const staysOf = await readAllStays(db, inYear('dog_id'));
@@ -314,9 +315,11 @@ export async function readDepartures(db, year) {
   }
   const list = (deps.results || []).map(r => {
     const entry = {
+      editRevision:r.edit_revision, sex:r.current_sex,
       id: r.number, name: r.name, date: r.departed_date, dateSource: r.date_source, seen: r.seen_date,
       reason: r.reason, matched: r.matched, flags: listOf.get(`${r.number}|flag`) || [],
     };
+    if(r.photo_key)entry.photoVersion=r.photo_key.slice(7,-4);
     if (r.returned_number !== null) entry.returned = r.returned_number;
     if (staysOf.has(r.dog_id)) entry.stays = staysOf.get(r.dog_id);
     if (r.last_number !== null) {

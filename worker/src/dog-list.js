@@ -1,3 +1,4 @@
+import { guardedDogBatch } from './dog-edit.js';
 // 狗清單有人編輯才同步（#501，ADR 0018 第 5–7 點）：取代每 10 分鐘叫 GitHub Actions 讀整張表（ADR 0012）。
 // - GAS 編輯觸發只送受影響的列：主清單、已出所的狗（編號＋那一列）、常遛狗群的一欄、異動紀錄整段；Worker 只改那幾隻、只寫有變的欄。
 // - 換籠、離所看狗新出現在哪裡：出現在「已出所」就記離所並從主清單移走；又出現在主清單就不算離所。
@@ -72,6 +73,7 @@ async function applyMain(db, row, list, env, fp) {
   let old = findMain(list, dog);
   const out = [];
   let returnedLog = null;
+  let expected=null,targetDogId=null;
   // 新增狗常先打名字、後補編號：主清單上同名沒編號的那隻就是牠，補上編號，不另建一隻（2026-10-24 驗收時多出一隻沒編號的 TEST）
   const unnumbered = !old && dog.id && list.find(m => m.number === '' && m.name === dog.name);
   if (unnumbered && !(await db.prepare('SELECT 1 FROM v3_dog_numbers WHERE number=?').bind(dog.id).first())) {
@@ -83,6 +85,7 @@ async function applyMain(db, row, list, env, fp) {
     delete fp[`main:名:${dog.name}`];
   }
   if (old) {
+    expected=old;targetDogId=old.dog_id;
     const oldCodes = (await db.prepare('SELECT walker_code FROM v3_sheet_main_walkers WHERE row_index=? ORDER BY position').bind(old.row_index).all()).results.map(r => r.walker_code);
     const codesChanged = keyed && !sameList(oldCodes, codes);
     const next = { name: dog.name, cage, note, walked_date: date, covered, my_walked: mine ? 1 : 0, walker: text(row.walker) };
@@ -100,13 +103,14 @@ async function applyMain(db, row, list, env, fp) {
     else if (date && date < old.walked_date) out.push(db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(old.dog_id, old.walked_date), ...walkDay(db, old.dog_id, date, dog, codes));
     Object.assign(old, next);
   } else {
-    let dogId = dog.id
-      ? await db.prepare('SELECT dog_id FROM v3_dog_numbers WHERE number=?').bind(dog.id).first('dog_id')
-      : await db.prepare("SELECT dog_id FROM v3_walks WHERE dog_number='' AND dog_name=? LIMIT 1").bind(dog.name).first('dog_id');
+    const identified=dog.id
+      ?await db.prepare('SELECT n.dog_id,s.revision FROM v3_dog_numbers n JOIN v3_dog_edit_state s USING(dog_id) WHERE number=?').bind(dog.id).first()
+      :await db.prepare("SELECT w.dog_id,s.revision FROM v3_walks w JOIN v3_dog_edit_state s USING(dog_id) WHERE dog_number='' AND dog_name=? LIMIT 1").bind(dog.name).first();
+    let dogId=identified?.dog_id;expected=identified;
     let returned = null;
     if (!dogId && dog.id) returned = await returnedDog(db, dog, list);
     if (returned) {
-      dogId = returned.dog_id;
+      dogId = returned.dog_id;expected=returned;
       returnedLog = { editor: { name: '試算表（自動認回所）', code: '' }, kind: 'former', dogId, dogNumber: dog.id, before: { number: returned.number }, after: { number: dog.id, formerNumber: returned.number } };
       out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
     } else if (!dogId) {
@@ -114,6 +118,7 @@ async function applyMain(db, row, list, env, fp) {
       out.push(db.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId, dog.name));
       if (dog.id) out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
     } else out.push(db.prepare('UPDATE v3_dogs SET name=? WHERE dog_id=? AND name<>?').bind(dog.name, dogId, dog.name));
+    targetDogId=dogId;
     const rowIndex = Math.max(-1, ...list.map(m => m.row_index)) + 1;
     out.push(db.prepare(`INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note,covered,walked_date,my_walked,my_walked_date,synced_at,sex,walker)
       VALUES(?,?,?,?,?,?,?,?,?,?,'',COALESCE((SELECT sex FROM v3_dogs WHERE dog_id=?),''),?)`)
@@ -126,8 +131,12 @@ async function applyMain(db, row, list, env, fp) {
     if (date && !(await db.prepare('SELECT 1 FROM v3_walks WHERE dog_id=? AND walk_date=? LIMIT 1').bind(dogId, date).first())) out.push(...walkDay(db, dogId, date, dog, codes));
     list.push({ row_index: rowIndex, dog_id: dogId, number: dog.id, name: dog.name, cage, note, walked_date: date, covered, my_walked: mine ? 1 : 0, my_walked_date: mine ? date : null });
   }
-  if (out.length) await db.batch(out);
-  if (returnedLog) await logEdit(db, returnedLog);
+  if(returnedLog)out.push(db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) VALUES(?,?,?,?,?,?,?,?)').bind(new Date().toISOString(),'',returnedLog.editor.name,returnedLog.kind,returnedLog.dogId,returnedLog.dogNumber,JSON.stringify(returnedLog.before),JSON.stringify(returnedLog.after)));
+  if(out.length) {
+    const result=await guardedDogBatch(db,expected,[...out,db.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(targetDogId)]);
+    const revision=result.at(-1).results[0]?.revision;
+    for(const item of list)if(item.dog_id===targetDogId)item.revision=revision;
+  }
   return out.length > 0;
 }
 
@@ -135,7 +144,7 @@ async function applyMain(db, row, list, env, fp) {
 // 認錯可在網站「舊編號」拆開（編輯紀錄記為系統自動）。同名多筆不猜，當新狗。
 async function returnedDog(db, dog, list) {
   if (list.some(m => m.name === dog.name)) return null;
-  const found = (await db.prepare('SELECT number,dog_id FROM v3_departures WHERE name=? LIMIT 2').bind(dog.name).all()).results;
+  const found = (await db.prepare('SELECT d.number,d.dog_id,s.revision FROM v3_departures d JOIN v3_dog_edit_state s USING(dog_id) WHERE name=? LIMIT 2').bind(dog.name).all()).results;
   return found.length === 1 ? found[0] : null;
 }
 
@@ -156,7 +165,7 @@ async function applyDeparted(db, row, list, now, fp) {
       const former = (await db.prepare('SELECT number FROM v3_sheet_former_numbers WHERE row_index=? ORDER BY position').bind(old.row_index).all()).results.map(r => r.number);
       const groups = (await db.prepare('SELECT DISTINCT b.name FROM v3_sheet_groups a JOIN v3_sheet_groups b ON a.column_index=b.column_index WHERE a.name=? AND b.name<>? ORDER BY b.column_index,b.row_index').bind(old.name, old.name).all()).results.map(r => r.name);
       // 入所介紹存在 v3_intros（#250），主清單的 intro 欄正式庫全空（#554）
-      const extra = await db.prepare('SELECT m.sex, COALESCE(i.intro, m.intro) AS intro FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) WHERE m.row_index=?').bind(old.row_index).first();
+      const extra = await db.prepare('SELECT d.sex, COALESCE(i.intro, m.intro) AS intro FROM v3_sheet_main m JOIN v3_dogs d USING(dog_id) LEFT JOIN v3_intros i USING(dog_id) WHERE m.row_index=?').bind(old.row_index).first();
       out.push(...dropDeparture(db, dog.id));
       out.push(db.prepare(`INSERT INTO v3_departures(number,dog_id,name,departed_date,date_source,seen_date,reason,matched,last_number,last_name,last_cage,last_walked_date,last_note,last_sex,last_intro)
         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(dog.id, old.dog_id, old.name, judged.date || todayYmd, judged.date ? judged.dateSource : 'seen', todayYmd,
@@ -180,7 +189,7 @@ async function applyDeparted(db, row, list, now, fp) {
       (judged.flags || []).forEach((v, i) => out.push(db.prepare("INSERT INTO v3_departure_items(number,kind,position,value) VALUES(?,'flag',?,?)").bind(dog.id, i, v)));
     }
   }
-  if (out.length) await db.batch(out);
+  if (out.length) await guardedDogBatch(db,old,out);
   return out.length > 0;
 }
 
@@ -229,7 +238,7 @@ export async function applyDogListRows(db, rows, env, now = Date.now()) {
   const fp = await readFp(db);
   const before = JSON.stringify(fp);
   // 主清單約 300 列，每批讀一次換來逐列不必各查一次（每次呼叫 50 次查詢上限）
-  const list = (await db.prepare('SELECT row_index,dog_id,number,name,cage,note,walked_date,covered,my_walked,my_walked_date,walker FROM v3_sheet_main').all()).results;
+  const list = (await db.prepare('SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.covered,m.my_walked,m.my_walked_date,m.walker,s.revision FROM v3_sheet_main m JOIN v3_dog_edit_state s USING(dog_id)').all()).results;
   const results = [];
   for (const row of rows) {
     const key = row && unitKey(row);

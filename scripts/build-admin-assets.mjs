@@ -5,7 +5,7 @@ import { pathToFileURL } from 'node:url';
 export async function buildAdminAssets() {
   const target = new URL('../admin/public/shared/', import.meta.url);
   await mkdir(target, { recursive: true });
-  for (const name of ['api-response.js', 'dates.js']) {
+  for (const name of ['api-response.js', 'dates.js', 'photo-images.js']) {
     await copyFile(new URL(`../public/js/${name}`, import.meta.url), new URL(name, target));
   }
 }

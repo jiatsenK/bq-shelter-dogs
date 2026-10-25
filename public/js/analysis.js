@@ -426,7 +426,8 @@ function parseDeparturesData(data) {
   const text = v => (v == null ? '' : String(v).trim());
   return entries.filter(e => e && text(e.id) && text(e.name)).map(e => {
     const last = e.last && typeof e.last === 'object' ? e.last : { formerIds: e.formerIds };
-    const dog = parseDogsData({ dogs: [{ ...last, id: text(e.id), name: text(last.name) || text(e.name), stays: e.stays }] }).dogs[0];
+    const dog = parseDogsData({ dogs: [{ ...last, editRevision:e.editRevision, sex:e.sex||'', id: text(e.id), name: text(last.name) || text(e.name), stays: e.stays }] }).dogs[0];
+    if(e.photoVersion){appState.photoVersions['photos/'+dog.id+'.jpg']=e.photoVersion;appState.photoVersions['photos/thumbs/'+dog.id+'.jpg']=e.photoVersion;}
     dog.depYear = text(e.date).slice(0, 4) || 'none';
     dog.departure = {
       reason: DEPARTURE_ORDER.includes(e.reason) ? e.reason : 'unknown',

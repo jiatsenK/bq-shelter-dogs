@@ -13,7 +13,7 @@ const BQDetailEditor = (() => {
     return {
       // 先讓呼叫端接住草稿，再重畫，避免重畫時仍讀到上一份狀態。
       open(dog, fields, phase = 'edit') {
-        return { dog, ...fields, phase, error: '' };
+        return { dog, revision:dog.editRevision, ...fields, phase, error: '' };
       },
       draft,
       refresh,

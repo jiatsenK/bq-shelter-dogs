@@ -1,0 +1,279 @@
+import { cleanStays } from './stays.js';
+import { cleanIntakeEvents } from './intake.js';
+
+export const editError = (status, message) => Object.assign(new Error(message), { status });
+const conflict = () => editError(409, '這隻狗的資料已變更，草稿仍保留；請重新讀取後核對再儲存');
+const json = JSON.stringify;
+const today = (now) => new Date(now + 8 * 3600000).toISOString().slice(0, 10);
+export async function dogIdentity(db, key) {
+  return db
+    .prepare('SELECT dog_id FROM v3_dogs WHERE dog_id=? UNION SELECT dog_id FROM v3_dog_numbers WHERE number=?')
+    .bind(key, key)
+    .first('dog_id');
+}
+// GAS may have prepared a change while a human removed an old number. Check
+// its observed identity version inside the same D1 transaction as those writes.
+export async function guardedDogBatch(db, expected, statements) {
+  if (!expected) return db.batch(statements);
+  const id = crypto.randomUUID();
+  const result = await db.batch([
+    db
+      .prepare(
+        'INSERT INTO v3_dog_edit_guard(id,valid) VALUES(?,EXISTS(SELECT 1 FROM v3_dog_edit_state WHERE dog_id=? AND revision=?))'
+      )
+      .bind(id, expected.dog_id, expected.revision),
+    ...statements,
+    db.prepare('DELETE FROM v3_dog_edit_guard WHERE id=?').bind(id)
+  ]);
+  return result.slice(1, -1);
+}
+// A single statement provides the complete editable snapshot and its CAS version.
+export async function readDogEdit(db, dogId) {
+  const row = await db
+    .prepare(
+      `SELECT d.dog_id,d.sex,d.fixed_care,s.revision,
+    COALESCE((SELECT intro FROM v3_intros WHERE dog_id=d.dog_id),'') AS intro,
+    (SELECT json_object('until',until_date,'reason',reason) FROM v3_rest WHERE dog_id=d.dog_id) AS rest,
+    COALESCE((SELECT stays_json FROM v3_stays WHERE dog_id=d.dog_id),'[]') AS stays,
+    (SELECT json_group_array(number) FROM (SELECT number FROM v3_dog_numbers WHERE dog_id=d.dog_id ORDER BY number)) AS numbers,
+    (SELECT json_group_array(number) FROM v3_sheet_main WHERE dog_id=d.dog_id AND number<>'') AS current_numbers,
+    (SELECT json_group_array(json_object('row',row_index,'sex',sex)) FROM v3_sheet_main WHERE dog_id=d.dog_id) AS sex_copies,
+    (SELECT json_group_array(json_object('number',number,'date',event_date,'event',event)) FROM (SELECT number,event_date,event FROM v3_intake_events WHERE dog_id=d.dog_id ORDER BY position)) AS events,
+    (SELECT json_object('key',object_key,'thumb',thumb_key) FROM v3_photos WHERE dog_id=d.dog_id AND is_primary=1) AS photo
+    FROM v3_dogs d JOIN v3_dog_edit_state s USING(dog_id) WHERE d.dog_id=?`
+    )
+    .bind(dogId)
+    .first();
+  if (!row) throw editError(404, '找不到這隻狗');
+  return {
+    dogId,
+    revision: row.revision,
+    intro: row.intro,
+    sex: row.sex,
+    fixedCare: Boolean(row.fixed_care),
+    rest: JSON.parse(row.rest),
+    stays: JSON.parse(row.stays),
+    numbers: JSON.parse(row.numbers),
+    currentNumbers: JSON.parse(row.current_numbers),
+    sexCopies: JSON.parse(row.sex_copies),
+    intakeEvents: JSON.parse(row.events),
+    photo: JSON.parse(row.photo)
+  };
+}
+export function validFormer(value, now = Date.now()) {
+  if (!/^\d{10}$/.test(value)) return false;
+  const day = `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+  return !isNaN(Date.parse(day)) && new Date(day).toISOString().slice(0, 10) === day && day <= today(now);
+}
+export function cleanDogValue(field, value, before, now) {
+  if (field === 'intro') {
+    if (typeof value !== 'string') throw editError(400, '介紹格式不對');
+    const text = value
+      .replace(/\r\n?/g, '\n')
+      .replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, '')
+      .trim();
+    if ([...text].length > 1000) throw editError(413, '介紹最多 1000 字');
+    return text;
+  }
+  if (field === 'sex') {
+    if (!['male', 'female', ''].includes(value)) throw editError(400, '性別請選公、母或待確認');
+    return value;
+  }
+  if (field === 'fixedCare') {
+    if (typeof value !== 'boolean') throw editError(400, '請指定開啟或關閉');
+    return value;
+  }
+  if (field === 'stays') {
+    if (!Array.isArray(value) || value.some((row) => !row || Object.keys(row).sort().join(',') !== 'in,out,reason'))
+      throw editError(400, '出入所欄位不對');
+    const cleaned = cleanStays(value, today(now));
+    if (cleaned.error) throw editError(400, cleaned.error);
+    return cleaned.stays;
+  }
+  if (field === 'rest') {
+    if (value === null) return null;
+    if (
+      !value ||
+      Object.keys(value).sort().join(',') !== 'reason,until' ||
+      typeof value.until !== 'string' ||
+      typeof value.reason !== 'string'
+    )
+      throw editError(400, '休養格式不對');
+    const days = (Date.parse(value.until + 'T00:00:00Z') - Date.parse(today(now))) / 86400000;
+    if (
+      !/^\d{4}-\d{2}-\d{2}$/.test(value.until) ||
+      !Number.isInteger(days) ||
+      new Date(value.until).toISOString().slice(0, 10) !== value.until ||
+      days < 0 ||
+      days > 180
+    )
+      throw editError(400, '休養日期須介於今天至 180 天內');
+    const reason = value.reason.replace(/\s+/g, ' ').trim();
+    if ([...reason].length > 40) throw editError(413, '原因最多 40 字');
+    return { until: value.until, reason };
+  }
+  if (field === 'numbers') {
+    if (
+      !Array.isArray(value) ||
+      value.length > 100 ||
+      value.some((n) => typeof n !== 'string' || !validFormer(n, now)) ||
+      new Set(value).size !== value.length
+    )
+      throw editError(400, '舊編號須為有效日期的 10 碼數字，不能重複');
+    if (before.currentNumbers.some((n) => !value.includes(n))) throw editError(409, '不能刪除目前編號');
+    const current = before.currentNumbers
+      .filter((n) => /^\d{10}$/.test(n))
+      .sort()
+      .at(-1);
+    if (current && value.some((n) => !before.numbers.includes(n) && n > current))
+      throw editError(400, '舊編號不能晚於目前編號');
+    return [...value].sort();
+  }
+  throw editError(400, '此欄位不能修改');
+}
+// D1 batch is one transaction. The token scopes every mutation and audit to the
+// winning CAS; a log failure rolls the claim and data changes back together.
+export async function saveDogEdit(
+  db,
+  dogId,
+  input,
+  { actor, editor, photo = false, photoBefore, dogNumber, events } = {}
+) {
+  if (!input || Object.keys(input).sort().join(',') !== 'field,revision,value' || !Number.isSafeInteger(input.revision))
+    throw editError(400, '請重新讀取後再改');
+  if (actor ? !actor.subject || !actor.email : !editor?.name) throw editError(403, '操作者未確認');
+  if (input.field === 'sex' && !actor) throw editError(403, '性別僅限管理者補正');
+  const before = await readDogEdit(db, dogId);
+  if (before.revision !== input.revision) throw conflict();
+  const field = input.field,
+    now = Date.now();
+  const value = field === 'photo' && photo ? input.value : cleanDogValue(field, input.value, before, now);
+  let nextEvents;
+  if (events !== undefined) {
+    if (field !== 'intro' || actor) throw editError(400, '此操作不修改逐次入所事件');
+    nextEvents = cleanIntakeEvents(events);
+    if (!nextEvents || nextEvents.some((e) => e.number && !before.numbers.includes(e.number)))
+      throw editError(400, '事件格式或編號不對');
+  }
+  if (
+    json(before[field]) === json(value) &&
+    (nextEvents === undefined || json(before.intakeEvents) === json(nextEvents))
+  )
+    return before;
+  if (field === 'numbers') {
+    for (const n of value.filter((n) => !before.numbers.includes(n))) {
+      const owner = await dogIdentity(db, n);
+      if (owner && owner !== dogId) throw editError(409, '編號屬於另一隻狗，不能合併');
+    }
+  }
+  const token = crypto.randomUUID();
+  const guard = 'EXISTS(SELECT 1 FROM v3_dog_edit_state WHERE dog_id=? AND token=?)';
+  const statement = (sql, args = []) => db.prepare(sql).bind(...args, dogId, token);
+  const writes = [
+    db
+      .prepare('UPDATE v3_dog_edit_state SET revision=revision+1,token=? WHERE dog_id=? AND revision=?')
+      .bind(token, dogId, input.revision)
+  ];
+  if (field === 'intro' && !value) writes.push(statement(`DELETE FROM v3_intros WHERE dog_id=? AND ${guard}`, [dogId]));
+  if (field === 'intro' && value)
+    writes.push(
+      statement(
+        `INSERT INTO v3_intros(dog_id,intro) SELECT ?,? WHERE ${guard} ON CONFLICT(dog_id) DO UPDATE SET intro=excluded.intro`,
+        [dogId, value]
+      )
+    );
+  if (nextEvents !== undefined) {
+    writes.push(statement(`DELETE FROM v3_intake_events WHERE dog_id=? AND ${guard}`, [dogId]));
+    nextEvents.forEach((event, position) =>
+      writes.push(
+        statement(
+          `INSERT INTO v3_intake_events(dog_id,position,number,event_date,event) SELECT ?,?,?,?,? WHERE ${guard}`,
+          [dogId, position, event.number, event.date, event.event]
+        )
+      )
+    );
+  }
+  if (field === 'sex' || field === 'fixedCare')
+    writes.push(
+      statement(`UPDATE v3_dogs SET ${field === 'sex' ? 'sex' : 'fixed_care'}=? WHERE dog_id=? AND ${guard}`, [
+        field === 'sex' ? value : Number(value),
+        dogId
+      ])
+    );
+  if (field === 'rest') {
+    writes.push(
+      value
+        ? statement(
+            `INSERT INTO v3_rest(dog_id,until_date,reason) SELECT ?,?,? WHERE ${guard} ON CONFLICT(dog_id) DO UPDATE SET until_date=excluded.until_date,reason=excluded.reason`,
+            [dogId, value.until, value.reason]
+          )
+        : statement(`DELETE FROM v3_rest WHERE dog_id=? AND ${guard}`, [dogId])
+    );
+  }
+  if (field === 'stays' && !value.length)
+    writes.push(statement(`DELETE FROM v3_stays WHERE dog_id=? AND ${guard}`, [dogId]));
+  if (field === 'stays' && value.length)
+    writes.push(
+      statement(
+        `INSERT INTO v3_stays(dog_id,stays_json) SELECT ?,? WHERE ${guard} ON CONFLICT(dog_id) DO UPDATE SET stays_json=excluded.stays_json`,
+        [dogId, json(value)]
+      )
+    );
+  if (field === 'numbers') {
+    for (const n of before.numbers.filter((n) => !value.includes(n))) {
+      writes.push(statement(`DELETE FROM v3_sheet_former_numbers WHERE number=? AND ${guard}`, [n]));
+      writes.push(statement(`DELETE FROM v3_dog_numbers WHERE number=? AND dog_id=? AND ${guard}`, [n, dogId]));
+    }
+    for (const n of value.filter((n) => !before.numbers.includes(n)))
+      writes.push(statement(`INSERT INTO v3_dog_numbers(number,dog_id) SELECT ?,? WHERE ${guard}`, [n, dogId]));
+  }
+  if (field === 'photo') {
+    writes.push(statement(`UPDATE v3_photos SET is_primary=0 WHERE dog_id=? AND is_primary=1 AND ${guard}`, [dogId]));
+    if (value)
+      writes.push(
+        statement(
+          `INSERT INTO v3_photos(object_key,dog_id,thumb_key,is_primary,uploaded_at) SELECT ?,?,?,1,? WHERE ${guard} ON CONFLICT(object_key) DO UPDATE SET is_primary=1`,
+          [value.key, dogId, value.thumb, new Date(now).toISOString()]
+        )
+      );
+  }
+  const kind = { fixedCare: 'fixed-care', numbers: 'former' }[field] || field;
+  writes.push(
+    statement(
+      `INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) SELECT ?,?,?,?,?,?,?,? WHERE ${guard}`,
+      [
+        new Date(now).toISOString(),
+        actor ? '' : editor.code || '',
+        actor ? '管理者' : editor.name,
+        kind,
+        dogId,
+        dogNumber ?? before.currentNumbers[0] ?? '',
+        json(
+          nextEvents === undefined
+            ? field === 'photo'
+              ? photoBefore
+              : field === 'stays' && !before.stays.length
+                ? null
+                : before[field]
+            : { text: before.intro, events: before.intakeEvents }
+        ),
+        json(
+          nextEvents === undefined
+            ? field === 'stays' && !value.length
+              ? null
+              : value
+            : { text: value, events: nextEvents }
+        )
+      ]
+    )
+  );
+  writes.push(
+    statement(
+      `INSERT INTO v3_dog_edit_actors(request_id,log_id,actor_subject,actor_email,source) SELECT ?,last_insert_rowid(),?,?,? WHERE ${guard}`,
+      [token, actor?.subject || '', actor?.email || '', actor ? 'access' : 'volunteer']
+    )
+  );
+  const result = await db.batch(writes);
+  if (!result[0].meta.changes) throw conflict();
+  return readDogEdit(db, dogId);
+}

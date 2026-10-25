@@ -1,3 +1,4 @@
+import { currentEditRevision } from './edit-fixture.mjs';
 // #315 歷史資料包＋只讀今天、#320 溜狗歷史按月分段（ADR 0009）：輸出和直接讀表逐字元相同，沒變時每次只讀 1 列版本號
 // 執行：node --test worker/test/packs.test.mjs
 import test from 'node:test';
@@ -35,9 +36,9 @@ async function seededDb(t) {
 }
 
 const get = (path, env) => worker.fetch(new Request(`${SITE}/api${path}`, { headers: { 'Sec-Fetch-Site': 'same-origin' } }), env);
-const send = (method, path, body, env) => worker.fetch(new Request(`${SITE}/api${path}`, {
+const send = async (method, path, body, env) => { body={...body,revision:await currentEditRevision(env.DB,path)};return worker.fetch(new Request(`${SITE}/api${path}`, {
   method, headers: { Origin: SITE, 'Content-Type': 'application/json' }, body: JSON.stringify(body),
-}), env);
+}), env); };
 const PATHS = ['/dogs', '/walks', '/departures', '/rest'];
 
 // 現在的讀法（直接讀表）算出來的回應

@@ -20,16 +20,17 @@
         <span class="nav-item future" aria-disabled="true">資料檢查<small>後續開放</small></span>
         <span class="nav-item future" aria-disabled="true">更新紀錄<small>後續開放</small></span>
       </nav>
-      <p class="sidebar-note">管理者<br><span>第一階段 · 唯讀查詢</span></p>
+      <p class="sidebar-note">管理者<br><span>逐隻編輯與核對</span></p>
     </aside>
     <main id="content" class="admin-content" tabindex="-1">
       <header class="admin-page-header">
-        <div><h1>狗資料</h1><p>查看狗的身分與維護狀態。</p></div>
+        <div><h1>狗資料</h1><p>查看狗的身分與維護狀態，逐項核對並儲存。</p></div>
         <button type="button" class="btn btn-primary" id="refresh">重新讀取</button>
       </header>
       <section class="source-note" aria-label="資料來源說明">
-        <strong>目前僅供查詢</strong>　編號、狗名、籠位、備註由試算表送入；介紹、休養與固定照顧由網站維護。性別暫沿用既有顯示，有差異會另行標示。
+        <strong>來源與編輯權限</strong>　編號、狗名、籠位、備註由試算表送入；介紹、休養與固定照顧由網站維護。性別以狗正本為準，補正前請核對舊值差異。
       </section>
+      <section id="dog-editor" class="card dog-editor" aria-label="編輯狗資料" hidden></section>
       <section class="card" aria-label="狗資料表">
         <form class="table-filters" id="filters" role="search">
           <div class="search-field"><label class="form-label" for="query">搜尋狗資料</label><input class="form-control" id="query" type="search" placeholder="狗名、編號、籠位、介紹或永久 ID" maxlength="200" autocomplete="off"></div>

@@ -55,7 +55,7 @@ test('GET /api/dogs：從 D1 組回跟 dogs.json 一樣的形狀（順序、欄�
   assert.equal(body.version, 1);
   assert.equal(body.syncedAt, SOURCE.syncedAt);
   assert.match(body.dogs[2].dogId, /^[a-f0-9]{32}$/);
-  assert.deepEqual(body.dogs.map(({ dogId, ...dog }) => dog), SOURCE.dogs.map(d => ({ ...d, covered: false })));
+  assert.deepEqual(body.dogs.map(({ dogId, editRevision, ...dog }) => dog), SOURCE.dogs.map(d => ({ ...d, covered: false })));
   assert.deepEqual(body.groups, { 滿滿: ['圓仔'], 圓仔: ['滿滿', '沒編號'], 沒編號: ['圓仔'] });
   assert.deepEqual(body.sheetNotes, [{ label: '10/14', text: '圓仔移到新B08' }]);
 });
@@ -229,7 +229,7 @@ test('GET /api/departures：形狀跟 departures.json 一樣', async () => {
     last: { cage: 'C區11', id: '2021030913', name: '咪寶', walkedDate: '2026-10-13', note: '', sex: 'female', intro: '' } }];
   await importCompactDepartures(DB, departures);
   const body = await (await get('/departures', { DB })).json();
-  assert.deepEqual(body, { ok: true, version: 1, departures });
+  assert.deepEqual({...body,departures:body.departures.map(({editRevision,sex,...e})=>e)}, { ok: true, version: 1, departures });
 });
 
 test('#333 出入所紀錄：在所和離所的狗都帶 stays，沒補過的沒有；還沒建表照常讀', async () => {

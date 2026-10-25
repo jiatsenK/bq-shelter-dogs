@@ -55,7 +55,7 @@ export async function removePhoto(env, key, now = Date.now()) {
 // 網址有 ?v=（版本號）就讓手機快取 30 天，換照片版本號會變；沒有版本號只快取 1 分鐘
 export async function servePhoto(request, env, ctx) {
   const url = new URL(request.url);
-  let key = '';
+  let key = '', pointerVersion='';
   try { key = decodeURIComponent(url.pathname.slice(1)); } catch (e) { /* 亂碼網址當作找不到 */ }
   const cache = url.searchParams.has('v') ? 'public, max-age=2592000, immutable' : 'public, max-age=60';
   // 不認得的路徑（含拿掉的相簿照片 photos/gallery/）直接找不到，不退回舊檔
@@ -75,6 +75,16 @@ export async function servePhoto(request, env, ctx) {
       return out;
     }
   }
+  // Legacy public URLs resolve the current D1 pointer. Object names themselves
+  // remain immutable; no replacement can pair a new original with an old thumb.
+  if(env.DB) {
+    const name=key.replace('photos/thumbs/','').replace('photos/','').replace('.jpg','');
+    const version=url.searchParams.get('v')||'';
+    const versioned=/^[a-f0-9]{32}$/.test(version);
+    const pointer=await env.DB.prepare(`SELECT p.object_key,p.thumb_key FROM v3_photos p WHERE ${versioned?'p.object_key=?':'p.is_primary=1'} AND p.dog_id IN (SELECT dog_id FROM v3_dog_numbers WHERE number=? UNION SELECT dog_id FROM v3_dogs WHERE dog_id=?)`).bind(...(versioned?['photos/'+version+'.jpg']:[]),name,name).first();
+    if(versioned&&!pointer)return new Response('Not found',{status:404,headers:{'Cache-Control':'no-store'}});
+    if(pointer){pointerVersion=pointer.object_key.slice(7,-4);key=isThumbKey(key)?pointer.thumb_key||pointer.object_key:pointer.object_key;}
+  }
   const obj = await (request.method === 'HEAD' ? env.PHOTOS.head(key) : env.PHOTOS.get(key));
   if (isTomb(obj)) return new Response('Not found', { status: 404, headers: { 'Cache-Control': 'no-store' } });
   if (!obj) {
@@ -88,7 +98,7 @@ export async function servePhoto(request, env, ctx) {
   if (request.headers.get('If-None-Match') === obj.httpEtag) return new Response(null, { status: 304, headers });
   const out = new Response(request.method === 'HEAD' ? null : obj.body, { headers });
   // 舊清單可能還帶舊版本號；不能把現在的照片存進不相符版本的邊緣快取。
-  if (edge && request.method === 'GET' && url.searchParams.get('v') === String(obj.etag || '').replace(/"/g, '').slice(0, 8)) {
+  if (edge && request.method === 'GET' && (url.searchParams.get('v') === String(obj.etag || '').replace(/"/g, '').slice(0, 8) || pointerVersion && url.searchParams.get('v')===pointerVersion)) {
     out.headers.set('CF-Cache-Status', 'MISS');
     const pending = (async () => {
       try { await edge.put(cacheKey, out.clone()); }
@@ -111,7 +121,7 @@ export async function r2Versions(env, now = Date.now()) {
     else if (isPhotoKey(o.key)) versions[o.key] = String(o.etag || '').replace(/"/g, '').slice(0, 8); // 相簿照片拿掉了，不給版本號
   }
   versionsCache = { at: now, versions, deleted };
-  return versionsCache;
+  return currentAliases(env,versionsCache);
 }
 
 async function listAll(env, prefix) {
@@ -171,6 +181,12 @@ export async function purgeTrash(env, now = Date.now()) {
   for (const t of await listTrash(env)) {
     const at = Date.parse(t.deletedAt);
     if (!isNaN(at) && at < limit) {
+      // Versioned originals live for the same 30-day recovery window. Never
+      // remove a currently referenced pair, and never clean legacy fixed paths.
+      if(env.DB && /^photos\/[a-f0-9]{32}\.jpg$/.test(t.path||'')) {
+        const current=await env.DB.prepare('SELECT 1 FROM v3_photos WHERE object_key=? AND is_primary=1').bind(t.path).first();
+        if(!current)await env.PHOTOS.delete([t.path,thumbKey(t.path)]);
+      }
       await deleteTrash(env, t.id);
       n++;
     }

@@ -9,6 +9,18 @@ import { settle } from './api-response.js';
 // - message：連不上或格式壞時瀏覽器給的原文，沿用舊畫面用它當錯誤訊息的地方
 // 測試替換這裡的函式來假裝後端回應，不替換瀏覽器的 fetch
 const BQApi = (() => {
+  const revisions = new Map();
+  function remember(result) {
+    for(const d of result.data?.dogs||result.data?.departures||[]) {
+      for(const key of [d.id,d.dogId,...(d.formerIds||[])].filter(Boolean))revisions.set(key,d.editRevision);
+    }
+    return result;
+  }
+  const edit = async (method,path,id,body) => {
+    const result=await send(method,path,{...body,revision:body.revision??revisions.get(id)});
+    if(result.ok&&result.data?.revision)revisions.set(id,result.data.revision);
+    return result;
+  };
   const JSON_TYPE = { 'Content-Type': 'application/json' };
   // 網站和 Worker 是同一個網址（#125），API 在 /api 底下；沒有網址（Node 測試、file://）回空字串，呼叫端據此關掉寫入
   const baseFor = loc => (loc && loc.origin && loc.origin !== 'null' ? `${loc.origin}/api` : '');
@@ -24,7 +36,7 @@ const BQApi = (() => {
   function dogs({ signal, cache = 'no-cache' } = {}) {
     const early = globalThis.window && window.__dogsEarly;
     if (early) window.__dogsEarly = null;
-    return settle(early || fetch(root() + '/dogs', { cache, signal }));
+    return settle(early || fetch(root() + '/dogs', { cache, signal })).then(remember);
   }
 
   return {
@@ -48,16 +60,16 @@ const BQApi = (() => {
     openedCards: code => get(`/cards/opened?codes=${enc(code)}`, { cache: 'no-store', signal: AbortSignal.timeout(15000) }),
     saveOpenedCards: (codes, ids) => send('PUT', '/cards/opened', { codes, ids }, { signal: AbortSignal.timeout(15000) }),
     rest: ({ signal } = {}) => get('/rest', { cache: 'no-cache', signal }),
-    saveRest: (id, body) => send('PUT', `/rest/${enc(id)}`, body),
-    saveFormer: (id, method, body) => send(method, `/former/${enc(id)}`, body),
-    saveIntro: (id, body) => send('PUT', `/intro/${enc(id)}`, body),
-    saveStays: (id, body) => send('PUT', `/stays/${enc(id)}`, body),
-    saveFixedCare: (key, body) => send('PUT', `/fixed-care/${enc(key)}`, body),
-    uploadPhoto: (id, blob, headers) => settle(fetch(`${root()}/photos/${enc(id)}`, { method: 'POST', headers: { 'Content-Type': 'image/jpeg', ...headers }, body: blob })),
+    saveRest: (id, body) => edit('PUT', `/rest/${enc(id)}`, id, body),
+    saveFormer: (id, method, body) => edit(method, `/former/${enc(id)}`, id, body),
+    saveIntro: (id, body) => edit('PUT', `/intro/${enc(id)}`, id, body),
+    saveStays: (id, body) => edit('PUT', `/stays/${enc(id)}`, id, body),
+    saveFixedCare: (key, body) => edit('PUT', `/fixed-care/${enc(key)}`, key, body),
+    uploadPhoto: (id, blob, headers) => settle(fetch(`${root()}/photos/${enc(id)}`, { method: 'POST', headers: { ...(blob instanceof FormData ? {} : {'Content-Type': 'image/jpeg'}), 'X-Dog-Revision': String(revisions.get(id)||''), ...headers }, body: blob })).then(result=>{if(result.ok&&result.data?.revision)revisions.set(id,result.data.revision);return result;}),
     activities: () => get('/activities', { cache: 'no-cache' }),
     saveActivity: (id, method, body) => send(method, `/activities${id ? `/${enc(id)}` : ''}`, body),
     departures: () => get('/departures/index', { cache: 'no-cache' }),
-    departureYear: (year, ver) => get(`/departures?year=${enc(year)}&v=${enc(ver)}`),
+    departureYear: (year, ver) => get(`/departures?year=${enc(year)}&v=${enc(ver)}`).then(remember),
     departedCards: () => get('/departed-cards', { cache: 'no-cache' }),
     edits: () => get('/edits?limit=200', { cache: 'no-cache' }),
   };
