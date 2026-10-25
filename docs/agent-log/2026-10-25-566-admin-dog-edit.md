@@ -27,3 +27,5 @@
 - 收尾只補本紀錄及fixture畫面證據，正式待K：轉正式與合併、核對0000–0007實際套用狀態／備份／migration、兩Worker部署及正式驗收。仍保持草稿，未加preview、不等待CI、不作正式試寫。
 
 - K 已核准合併及部署。再整合 main `1509425`（#581），本票未套用 migration 順延為0008；保留上游刪三張舊表及本票新交易表。Standards／Spec增量複審無阻擋，整合後Full全過（Node459、網頁23套／index264；stable=true）。正式部署檢查顯示上游0007尚未套用，依CORE_RULES §5刪表交K執行，未代跑。
+
+- 主線又合入 `455613d`（#582），本票最終migration改0009；保留上游刪舊離所三表。新增上游測試需現行reader前置，重現缺表後補齊，Standards P2複審resolved，Spec無新增阻擋。Full再跑Node460／460、網頁23套（index264）全過，stable=true；管理正式設定dry-run通過。唯讀核對正式尚缺0007／0008／0009，刪表前離所對照無未搬資料；未執行刪表、正式migration或部署。

@@ -39,7 +39,7 @@ const dogs = await readCompactDogs(db);
 | `v3_intros` | 永久狗 ID；入所介紹 |
 | `v3_edit_log` | 編輯紀錄：時間、編輯者代號與名字、種類、狗、改前／改後（JSON），見 `docs/adr/0004-open-editing-and-edit-log.md` |
 | `v3_activities` / `v3_activity_dogs` | 活動紀錄（#270，ADR 0002）：一場一列（日期、類型、revision）；出席的狗一列一隻，`dog_id` 是 NULL 表示只有名字、還沒對上狗。網站寫，同步不碰；舊名單用 `scripts/import-activities.mjs` 手動匯入 |
-| `v3_departed_cards` | **#560 停用，下一張 PR 刪表**；只有名字的已出所狗卡改記在 `v3_dog_departures`（編號留空）。K 用 `scripts/departed-card.mjs` 手動建，同時接上活動紀錄同名、沒對上的出席 |
+| `v3_dog_departures` | 離所紀錄（#560，用永久狗 ID 記），見下方〈離所紀錄〉。只有名字的已出所狗卡（#271）是編號留空的列，K 用 `scripts/departed-card.mjs` 手動建，同時接上活動紀錄同名、沒對上的出席 |
 
 所有集合拆成列，沒有 JSON 欄位。讀回時每隻狗都有全部欄位，比對前來源 JSON 也補成同樣形狀，所以不另存欄位是否存在。沒有編號的狗以名字延續狗 ID（改名會變成新狗）。JSON 內的 `intro` 是主清單讀取結果的複本；D1 自存介紹放 `v3_intros`，實際匯入留給後續票。其餘試算表複本、分組和 D1 自存資料本票只建表，不填資料。
 
@@ -105,8 +105,7 @@ const report = await compareCompactProfiles(db, { walks, intros, names, rest, ph
 ## 離所紀錄（#259）
 
 - #560 起記在 `v3_dog_departures`：用永久狗 ID 記，一隻狗一次離所一列（主鍵是狗 ID＋離所時的編號；編號留空是只有名字的已出所狗卡）。欄位有離所日期與來源、第一次不在主清單那天、原因、命中的字、回到主清單用的新編號、離開前最後一次的樣子；判讀旗標、最後的舊編號、最後的常遛狗群是 JSON 陣列欄（`flags_json`、`former_json`、`groups_json`）。
-- 舊的 `v3_departures`、`v3_departure_items`（以編號為主鍵、附屬清單拆成列）資料已由 `migrations/0006_dog_departures.sql` 搬過去，程式不再讀寫，下一張 PR 刪表。以下兩點是 #259 當時的做法。
-- 同步（`sync-compact-d1.mjs`）每次把 `data/departures.json` 整份換進這兩張表，正式 D1 還沒有這兩張表時 SQL 開頭會先建，不用另外遷移。第一次同步就等於匯入既有紀錄，比對不一致就不寫。
+- 舊的 `v3_departures`、`v3_departure_items`（以編號為主鍵、附屬清單拆成列）與 `v3_departed_cards`：資料由 `migrations/0006_dog_departures.sql` 搬過去，`migrations/0008_drop_old_departures.sql` 刪表。
 - 讀回用 `worker/src/compact.js` 的 `readDepartures`，形狀跟 `data/departures.json` 的 `departures` 一樣（#260 網站改讀時用）。
 - #251 起離所以 D1 上一次的內容為基準計算。
 

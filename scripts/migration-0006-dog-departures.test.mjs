@@ -52,8 +52,8 @@ test('0006 搬資料：離所名冊內容不變，附屬清單照順序變 JSON�
   assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM v3_departures').first('n'), 3);
   assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM v3_departure_items').first('n'), 6);
   assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM v3_departed_cards').first('n'), 1);
-  // Current runtime requires 0007; verify 0006's versions above before adding its read prerequisites.
-  await run(db,'0008_dog_edit.sql');
+  // Current runtime requires 0009; verify 0006's versions above before adding its read prerequisites.
+  await run(db,'0009_dog_edit.sql');
   assert.deepEqual((await readDepartures(db)).map(({editRevision,sex,photoVersion,...snapshot})=>snapshot),expected);
 });
 
