@@ -56,7 +56,7 @@ test('#501 遛狗日期變新：更新主清單列、名字換代號、追加溜
     const row = await env.DB.prepare("SELECT walked_date,walker FROM v3_sheet_main WHERE number='9001'").first();
     assert.deepEqual({ ...row }, { walked_date:'2026-10-05', walker:'甲、乙' });
     const codes = [await walkerCode('甲', 'test'), await walkerCode('乙', 'test')];
-    assert.deepEqual((await env.DB.prepare('SELECT walker_code FROM v3_sheet_main_walkers ORDER BY position').all()).results.map(r => r.walker_code), codes);
+    assert.deepEqual(JSON.parse((await env.DB.prepare("SELECT walker_codes FROM v3_sheet_main WHERE number='9001'").first()).walker_codes), codes);
     const walks = (await env.DB.prepare("SELECT walk_date,walker_code,dog_number FROM v3_walks WHERE dog_id='dog' ORDER BY position").all()).results;
     assert.deepEqual(walks.map(w => [w.walk_date, w.walker_code, w.dog_number]), codes.map(c => ['2026-10-05', c, '9001']));
     // 日期改回較早（K 2026-10-24，例如 Ctrl+Z）：那天照表上名單重寫，表上不再寫的較新那天刪掉
@@ -107,12 +107,12 @@ test('#501 常遛狗群一欄、異動紀錄整段：只換送來的那欄', asy
   worker.testing.resetState();
   try {
     await send(env, [main({ dog:{ id:'9002', name:'Mini' }, cage:'C03' })]);
-    await env.DB.prepare("INSERT INTO v3_sheet_groups VALUES(0,0,'別欄')").run();
+    await env.DB.prepare("INSERT INTO v3_sheet_group_columns(column_index,names) VALUES(0,'[\"別欄\"]')").run();
     await send(env, [{ sheet:'groups', hash:'g', column:1, names:['測試狗', 'mini', '不在清單'], label:'新十' },
       { sheet:'notes', hash:'n', items:[{ label:'備註1', text:'1/7 換籠' }] }]);
-    assert.deepEqual((await env.DB.prepare('SELECT column_index,name FROM v3_sheet_groups ORDER BY column_index,row_index').all()).results.map(r => [r.column_index, r.name]),
-      [[0, '別欄'], [1, '測試狗'], [1, 'Mini']]);
-    assert.equal((await env.DB.prepare('SELECT label FROM v3_sheet_group_labels WHERE column_index=1').first()).label, '新十');
+    // 一欄一列（#559）：只換送來的第 1 欄，群名和狗名在同一列
+    assert.deepEqual((await env.DB.prepare('SELECT column_index,label,names FROM v3_sheet_group_columns ORDER BY column_index').all()).results.map(r => [r.column_index, r.label, JSON.parse(r.names)]),
+      [[0, '', ['別欄']], [1, '新十', ['測試狗', 'Mini']]]);
     assert.deepEqual({ ...await env.DB.prepare('SELECT label,text FROM v3_sheet_changes').first() }, { label:'備註1', text:'1/7 換籠' });
   } finally { env.DB.close(); }
 });
@@ -188,7 +188,7 @@ test('#501 GAS 整理的單位與 Worker 對得上：第一次全送，第二次
     assert.equal(want[0].split(':')[0], 'main', '主清單先送，狗群才對得到犬名');
     for (let i = 0; i < want.length; i += 10) assert.ok((await send(env, want.slice(i, i + 10).map(k => units[k]))).every(r => r.ack));
     assert.deepEqual(await scan(), []);
-    assert.deepEqual((await env.DB.prepare('SELECT name FROM v3_sheet_groups WHERE column_index=0 ORDER BY row_index').all()).results.map(r => r.name), ['測試狗', '二號']);
+    assert.deepEqual(JSON.parse((await env.DB.prepare('SELECT names FROM v3_sheet_group_columns WHERE column_index=0').first()).names), ['測試狗', '二號']);
     const changed = sheets();
     changed.main[2][0] = 'C09';
     const again = vm.runInContext('dogListUnits', ctx)(changed, ymd, hash);

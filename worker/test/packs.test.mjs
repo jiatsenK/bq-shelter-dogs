@@ -487,7 +487,7 @@ test('觸發器收窄：主清單只改 walker 原文時 small 不變，改在�
     assert.equal(await smallVer(DB), before, set);
   }
   const read = { row_index: 'row_index+100', dog_id: `'${'f'.repeat(32)}'`, number: "number||'x'", name: "name||'x'", cage: "'B9'", note: "'新備註'",
-    walked_date: "'2026-10-01'" };
+    walked_date: "'2026-10-01'", walker_codes: `'["${'a'.repeat(12)}"]'` };
   for (const [column, value] of Object.entries(read)) {
     const before = await smallVer(DB);
     await DB.prepare(`UPDATE v3_sheet_main SET ${column}=${value} ${where}`).run();

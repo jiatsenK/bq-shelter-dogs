@@ -18,15 +18,17 @@ const BOOLEANS = new Set(['covered']);
 // 不含同步時間（ADR 0014，見 readSyncedAt）。同一個 batch 讀，同步正在整份換掉複本時不會讀到一半新一半舊。主清單是空的就丟錯：沒有狗一定是資料出問題
 export async function readDogsPayload(db) {
   // 介紹是 D1 自己存的（#250 網站改了馬上看得到），不用主清單複本上同步帶來的那份
-  const [main, walkers, former, groups, notes] = await db.batch([
-    db.prepare("SELECT m.row_index, m.dog_id, m.number, m.name, m.cage, m.note, m.walked_date, c.sex AS dog_sex, COALESCE(i.intro, '') AS d1_intro, c.fixed_care FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) JOIN v3_dogs c USING(dog_id) ORDER BY m.row_index"),
-    db.prepare('SELECT row_index, walker_code FROM v3_sheet_main_walkers ORDER BY row_index, position'),
+  // 「誰遛的」代號、狗群都是所屬那一列的 JSON（#559）
+  const [main, former, groups, notes] = await db.batch([
+    db.prepare("SELECT m.row_index, m.dog_id, m.number, m.name, m.cage, m.note, m.walked_date, m.walker_codes, c.sex AS dog_sex, COALESCE(i.intro, '') AS d1_intro, c.fixed_care FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) JOIN v3_dogs c USING(dog_id) ORDER BY m.row_index"),
     db.prepare("SELECT m.row_index, n.number FROM v3_sheet_main m JOIN v3_dog_numbers n USING(dog_id) WHERE n.number <> m.number ORDER BY m.row_index, n.number"),
-    db.prepare('SELECT column_index, name FROM v3_sheet_groups ORDER BY column_index, row_index'),
+    db.prepare('SELECT column_index, label, names FROM v3_sheet_group_columns ORDER BY column_index'),
     db.prepare('SELECT label, text FROM v3_sheet_changes ORDER BY row_index'),
   ]);
   const rows = main.results || [];
   if (!rows.length) throw new Error('v3_sheet_main 沒有資料');
+  // 狗群頁用：每一欄一群 { column（試算表第幾欄，0 起）, label, names }，照欄排；只有群名沒有狗的欄也有一列
+  const columns = (groups.results || []).map(g => ({ column: g.column_index, label: g.label, names: JSON.parse(g.names) }));
   const listBy = (res, field) => {
     const map = new Map();
     for (const r of res.results || []) {
@@ -35,7 +37,6 @@ export async function readDogsPayload(db) {
     }
     return map;
   };
-  const walkersOf = listBy(walkers, 'walker_code');
   const formerOf = listBy(former, 'number');
   const intake = await readAllIntakeEvents(db, ON_MAIN);
   const intakeOf = new Map();
@@ -48,7 +49,7 @@ export async function readDogsPayload(db) {
     const dog = {};
     for (const [key, column] of MAIN_FIELDS) dog[key] = BOOLEANS.has(key) ? Boolean(row[column]) : row[column];
     if (!row.number) dog.dogId = row.dog_id; // 無編號的狗也用永久身分設定固定照顧，不猜名字。
-    dog.walkers = walkersOf.get(row.row_index) || [];
+    dog.walkers = JSON.parse(row.walker_codes);
     if (formerOf.has(row.row_index)) dog.formerIds = formerOf.get(row.row_index);
     if (intakeOf.has(row.dog_id)) dog.intakeEvents = intakeOf.get(row.dog_id);
     if (staysOf.has(row.dog_id)) dog.stays = staysOf.get(row.dog_id);
@@ -57,8 +58,8 @@ export async function readDogsPayload(db) {
   return {
     version: 1, // 格式版本；主清單的 version 欄全是 1，不再讀（#557）
     dogs,
-    groups: groupMap(groups.results || []),
-    groupColumns: groupColumns(groups.results || [], await groupLabels(db)),
+    groups: groupMap(columns),
+    groupColumns: columns,
     sheetNotes: (notes.results || []).filter(n => n.text).map(n => ({ label: n.label, text: n.text })),
   };
 }
@@ -71,14 +72,9 @@ export async function readSyncedAt(db) {
 }
 
 // 「常遛狗群」每一欄是一群：每隻狗對到同群的其他狗，好幾群就合起來
-function groupMap(cells) {
-  const columns = new Map();
-  for (const c of cells) {
-    if (!columns.has(c.column_index)) columns.set(c.column_index, []);
-    columns.get(c.column_index).push(c.name);
-  }
+function groupMap(columns) {
   const out = {};
-  for (const names of columns.values()) {
+  for (const { names } of columns) {
     for (const name of names) {
       const set = new Set(out[name] || []);
       for (const other of names) if (other !== name) set.add(other);
@@ -86,26 +82,6 @@ function groupMap(cells) {
     }
   }
   return out;
-}
-
-// 群名表是 K 2026-10-16 才加的：第一次同步建表之前讀不到，當成都沒有群名，狗清單照常給
-async function groupLabels(db) {
-  try {
-    return new Map(((await db.prepare('SELECT column_index, label FROM v3_sheet_group_labels').all()).results || []).map(r => [r.column_index, r.label]));
-  } catch (e) {
-    return new Map();
-  }
-}
-
-// 狗群頁用：每一欄一群 { column（試算表第幾欄，0 起）, label, names }，照欄排；只有群名沒有狗的欄也列出來
-function groupColumns(cells, labels) {
-  const columns = new Map();
-  for (const c of cells) {
-    if (!columns.has(c.column_index)) columns.set(c.column_index, []);
-    columns.get(c.column_index).push(c.name);
-  }
-  for (const column of labels.keys()) if (!columns.has(column)) columns.set(column, []);
-  return [...columns.keys()].sort((a, b) => a - b).map(column => ({ column, label: labels.get(column) || '', names: columns.get(column) }));
 }
 
 // 編號 → 永久狗 ID；不認得的編號不在回傳的 Map 裡
