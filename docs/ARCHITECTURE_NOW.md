@@ -38,7 +38,11 @@ GAS 送不出去時把待送內容留在指令碼屬性（`WALK_EDITS_PENDING`�
 
 - 每個變更是 `migrations/NNNN_*.sql` 一個檔，正式庫的 `d1_migrations` 表記著套過哪些；`db/compact-schema.sql` 是現在的完整樣子，測試檢查兩邊一致。
 - 正式庫只由手動的「套用 D1 migration」workflow 套用（必要時先複製到備用庫 `bq-shelter-dogs-backup`、記 Time Travel 書籤、套用、接著部署）。部署發現有還沒套的就紅叉。
-- 預覽、測速自動套到測試庫 `bq-shelter-dogs-test`。
+- 預覽、測速、測試網站部署自動套到測試庫 `bq-shelter-dogs-test`。
+
+## 測試網站
+
+`bq-shelter-dogs-test`（`wrangler.test-site.jsonc`，#498）：程式跟正式版同一份，只接測試 D1、測試照片空間 `bq-shelter-photos-test`、測試試算表；不擋寫入，可以按溜了。main 有推送時「部署到測試網站」（`.github/workflows/deploy-test-site.yml`）先對測試庫套 migration 再部署；合併前要實測某個分支，到 Actions 手動指定分支跑，之後 main 再推送會換回 main。金鑰跟正式版不同，設在測試 Worker 上，workflow 不帶。
 - 流程細節與「先加後刪」見 `docs/agents/data-changes.md`。
 
 ## Worker 開關

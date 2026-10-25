@@ -23,7 +23,7 @@ async function runDeskTests() {
       eq(parseDogsData({ dogs: [] }).sheetNotes, []);
     });
     await check('電腦版：簡報各幾隻、全表一列一隻（警示字紅色）、異動紀錄新的在上面', () => {
-      const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', sortWalkList(allDogs, TODAY)), 'text/html');
+      const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', dueDogs(allDogs, TODAY)), 'text/html');
       eq([...doc.querySelectorAll('.db-count b')].map(b => b.textContent), ['1', '1', '1', '1'], '紅、黃、綠、沒紀錄：');
       eq([...doc.querySelectorAll('tbody .dr-name button')].map(b => b.textContent), ['桌無', '桌紅', '桌黃', '桌綠'], '跟手機溜狗表同一個順序：');
       eq(doc.querySelectorAll('[data-desk-check]').length, 4, '每隻都能勾：');
@@ -34,7 +34,7 @@ async function runDeskTests() {
     await check('電腦版：最近 30 天有 30 格，今天框起來', () => {
       deskView = 'days30';
       deskWalkDays = new Map(); deskWalkFirst = '';
-      const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', sortWalkList(allDogs, TODAY)), 'text/html');
+      const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', dueDogs(allDogs, TODAY)), 'text/html');
       eq([doc.querySelectorAll('thead th.dr-d').length, doc.querySelectorAll('thead th.dr-d.today').length], [30, 1]);
       const row = [...doc.querySelectorAll('tbody tr')].find(tr => tr.textContent.includes('桌綠'));
       eq(row.querySelectorAll('i.on').length, 1, '上次溜那天塗色：');
@@ -49,7 +49,7 @@ async function runDeskTests() {
         walkerNames = { 2026010103: '俐葶' };
         deskWalkDays = new Map([['2026010103', new Map([[k(5), new Set(['aaa', 'bbb'])], [k(8), new Set(['zzz'])], [k(1), new Set()]])]]);
         deskWalkFirst = k(20);
-        const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', sortWalkList(allDogs, TODAY)), 'text/html');
+        const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', dueDogs(allDogs, TODAY)), 'text/html');
         const row = [...doc.querySelectorAll('tbody tr')].find(tr => tr.textContent.includes('桌綠'));
         const cell = n => row.querySelectorAll('td.dr-d')[29 - n];
         eq([cell(5).querySelector('i').textContent, cell(5).querySelector('i').classList.contains('multi'), cell(5).title], ['嘉', true, `${ago(5).getMonth() + 1}/${ago(5).getDate()} 嘉文、佳岑`], '兩個人：');
@@ -77,7 +77,7 @@ async function runDeskTests() {
         allDogs[1].intro = '有介紹'; allDogs[2].intro = '有介紹';
         eq(allDogs.map(d => deskFillNeeds(d)), [{ photo: true, intro: true }, { photo: false, intro: false }, { photo: false, intro: false }, { photo: true, intro: true }], '缺什麼：');
         deskView = 'fill'; deskFill = 'all'; deskFillOrder = null;
-        const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', sortWalkList(allDogs, TODAY)), 'text/html');
+        const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', dueDogs(allDogs, TODAY)), 'text/html');
         eq([...doc.querySelectorAll('.df-chip b')].map(b => b.textContent), ['2', '2', '4'], '沒照片、沒介紹、全部：');
         eq([...doc.querySelectorAll('.df-row .dr-name button')].map(b => b.textContent).slice(0, 2).sort(), ['桌無', '桌紅'], '兩樣都缺的在前面：');
         eq([doc.querySelectorAll('.df-drop').length, doc.querySelector('.desk-brief')], [2, null], '沒照片的格子、補資料不放簡報：');
