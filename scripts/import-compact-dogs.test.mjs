@@ -29,7 +29,8 @@ test('合成 JSON 讀回完全一致，改一筆時指出狗編號和欄位', as
   const db = await setup(t);
   const input = JSON.parse(await readFile(new URL('../tests/fixtures/dogs.json', import.meta.url), 'utf8'));
   await importCompactDogs(db, input);
-  assert.deepEqual(await readCompactDogs(db), input.dogs);
+  // 舊 dogs.json 的介紹、固定照顧、myWalked 不存在主清單（#557）
+  assert.deepEqual(await readCompactDogs(db), input.dogs.map(({ intro, covered, myWalked, myWalkedDate, ...dog }) => dog));
   assert.deepEqual(await compareCompactDogs(db, input), { equal: true, differences: [] });
   await db.prepare("UPDATE v3_sheet_main SET cage='測試籠位' WHERE row_index=0").run();
   assert.deepEqual(await compareCompactDogs(db, input), {

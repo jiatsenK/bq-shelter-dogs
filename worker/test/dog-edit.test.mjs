@@ -9,6 +9,8 @@ import { readDogsPayload, readDepartures } from '../src/compact.js';
 import { applyDogListRows } from '../src/dog-list.js';
 import { readSmall, readDepartureYear } from '../src/packs.js';
 import { readEdits } from '../src/editlog.js';
+import { readFile } from 'node:fs/promises';
+import { splitStatements } from '../../scripts/migrate-compact-db.mjs';
 const dogId = 'a'.repeat(32);
 const actor = { subject: 'verified', email: 'private@example.org' };
 async function setup(t) {
@@ -140,7 +142,7 @@ test('性別舊複本、換號與再入所不覆寫正本；在所／離所快�
   await readSmall(db, 'dogs');
   await readDepartureYear(db, '2020');
   let before = await readDogEdit(db, dogId);
-  assert.equal(before.sexCopies[0].sex, 'female');
+  assert.deepEqual(before.sexCopies,[]);
   assert.equal(before.sex, 'male');
   await saveDogEdit(db, dogId, { revision: before.revision, field: 'sex', value: '' }, { actor });
   assert.equal((await readDogsPayload(db)).dogs[0].sex, '');
@@ -260,4 +262,38 @@ test('GAS 準備完才遇到人工修改：同交易拒絕舊身分快照，保�
   assert.equal((await readDogEdit(DB, dogId)).intro, '競爭中存的介紹');
   assert.equal((await applyDogListRows(DB, [row], {}))[0].ok, true);
   assert.equal(await DB.prepare('SELECT cage FROM v3_sheet_main').first('cage'), 'B1');
+});
+
+test('0004 留存舊性別差異、不以空白覆蓋有效值；無差異不製造待核對列',async t=>{
+ const db=fakeD1();t.after(()=>db.close());
+ for(const name of ['0000_compact_schema.sql','0001_sheet_main_dog_id_index.sql','0002_trigger_plan_a.sql','0003_feature_settings.sql']) {
+   const sql=await readFile(new URL('../../migrations/'+name,import.meta.url),'utf8');
+   for(const statement of splitStatements(sql))await db.prepare(statement).run();
+ }
+ await db.prepare("INSERT INTO v3_dogs(dog_id,name,sex) VALUES('a','甲','male'),('b','乙','female')").run();
+ await db.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,name,sex,synced_at) VALUES(0,'a','甲','',''),(1,'b','乙','female','')").run();
+ const sql=await readFile(new URL('../../migrations/0004_dog_edit.sql',import.meta.url),'utf8');
+ await db.batch(splitStatements(sql).map(statement=>db.prepare(statement)));
+ assert.equal(await db.prepare("SELECT sex FROM v3_dogs WHERE dog_id='a'").first('sex'),'male');
+ const rows=(await db.prepare('SELECT dog_id,copies_json FROM v3_dog_sex_legacy').all()).results;
+ assert.equal(rows.length,1);assert.equal(rows[0].dog_id,'a');assert.deepEqual(JSON.parse(rows[0].copies_json),[{row:0,sex:''}]);
+ assert.deepEqual((await readDogEdit(db,'a')).sexCopies,[{row:0,sex:''}]);
+});
+
+test('連續照片替換後舊版本 URL 仍取同一對原圖／縮圖，資料包給新版本',async t=>{
+ const DB=await setup(t),PHOTOS=fakeR2(),env={DB,PHOTOS,ASSETS:{fetch:async()=>new Response('Not found',{status:404})}};
+ await DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind('2020010101',dogId).run();
+ await DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,synced_at) VALUES(0,?,?,'測試狗','A1','')").bind(dogId,'2020010101').run();
+ const jpeg=n=>new Uint8Array([255,216,255,n]);
+ const before=await readDogEdit(DB,dogId);
+ const first=await saveDogPhoto(env,dogId,before.revision,{original:jpeg(1),thumb:jpeg(2)},{actor},'https://example.org');
+ const second=await saveDogPhoto(env,dogId,first.revision,{original:jpeg(3),thumb:jpeg(4)},{actor},'https://example.org');
+ const worker=(await import('../src/index.js')).default;worker.testing.resetState();
+ for(const [key,bytes] of [['photos/2020010101.jpg',jpeg(1)],['photos/thumbs/2020010101.jpg',jpeg(2)]]) {
+   const response=await worker.fetch(new Request('https://example.org/'+key+'?v='+first.photo.key.slice(7,-4)),env);
+   assert.equal(response.status,200);assert.deepEqual(new Uint8Array(await response.arrayBuffer()),bytes);
+ }
+ const response=await worker.fetch(new Request('https://example.org/api/dogs',{headers:{Origin:'https://example.org'}}),env);
+ const data=await response.json();assert.equal(data.photoVersions['photos/2020010101.jpg'],second.photo.key.slice(7,-4));
+ assert.equal(data.dogs[0].photoVersion,second.photo.key.slice(7,-4));
 });

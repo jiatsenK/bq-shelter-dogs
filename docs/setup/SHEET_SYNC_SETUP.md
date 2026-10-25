@@ -25,6 +25,8 @@
 
 ## 「是不是我遛的」：設定 Secret `MY_NAME`（選填）
 
+> #557 起 Worker 不再讀 `MY_NAME`、`/api/dogs` 不回 `myWalked`／`myWalkedDate`（網站早就沒在讀）；這個 Secret 可以刪掉。
+
 同步時會比對試算表「誰遛的」欄位是不是你，公開的資料只寫「是／不是」（`myWalked`），你的名字不會出現在網站或 repo 裡。
 
 1. 同上面第 2–3 步，按 **New repository secret**：

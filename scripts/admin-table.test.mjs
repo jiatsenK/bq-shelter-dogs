@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { buildAdminAssets } from './build-admin-assets.mjs';
 await buildAdminAssets();
 const { parseManageDogs, selectDogs, maintenance } = await import('../admin/public/js/dog-table.js');
-const dog = (i, extra = {}) => ({ dogId: `dog${i}`, number: String(i), name: `狗${i}`, cage: `A${i}`, intro: '', note: '', sex: 'male', onMain: true, fixedCare: false, sexMismatch: false, rest: null, photoUrl: null, ...extra });
+const dog = (i, extra = {}) => ({ dogId: `dog${i}`, number: String(i), name: `狗${i}`, cage: `A${i}`, intro: '', note: '', sex: 'male', onMain: true, fixedCare: false, rest: null, photoUrl: null, ...extra });
 test('管理表格：搜尋全欄位、複合篩選、自然排序及有界分頁', () => {
   const dogs = Array.from({ length: 65 }, (_, i) => dog(i + 1));
   dogs.push(dog(66, { name: '阿福', number: '', cage: 'B1', note: '表格備註', intro: '喜歡散步', sex: '', onMain: false, fixedCare: true, rest: { until: '2099-01-01', reason: '' } }));

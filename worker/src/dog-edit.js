@@ -37,7 +37,7 @@ export async function readDogEdit(db, dogId) {
     COALESCE((SELECT stays_json FROM v3_stays WHERE dog_id=d.dog_id),'[]') AS stays,
     (SELECT json_group_array(number) FROM (SELECT number FROM v3_dog_numbers WHERE dog_id=d.dog_id ORDER BY number)) AS numbers,
     (SELECT json_group_array(number) FROM v3_sheet_main WHERE dog_id=d.dog_id AND number<>'') AS current_numbers,
-    (SELECT json_group_array(json_object('row',row_index,'sex',sex)) FROM v3_sheet_main WHERE dog_id=d.dog_id) AS sex_copies,
+    COALESCE((SELECT copies_json FROM v3_dog_sex_legacy WHERE dog_id=d.dog_id),'[]') AS sex_copies,
     (SELECT json_group_array(json_object('number',number,'date',event_date,'event',event)) FROM (SELECT number,event_date,event FROM v3_intake_events WHERE dog_id=d.dog_id ORDER BY position)) AS events,
     (SELECT json_object('key',object_key,'thumb',thumb_key) FROM v3_photos WHERE dog_id=d.dog_id AND is_primary=1) AS photo
     FROM v3_dogs d JOIN v3_dog_edit_state s USING(dog_id) WHERE d.dog_id=?`

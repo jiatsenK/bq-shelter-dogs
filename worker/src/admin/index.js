@@ -4,7 +4,7 @@ import { listTrash, readTrash } from '../r2.js';
 import { readSettings, saveSettings } from '../feature-settings.js';
 import { createAccessVerifier } from './access.js';
 import { readManageDogs } from './dogs.js';
-import { isPhotoKey, isTomb, isThumbKey } from '../r2.js';
+import { isPhotoKey, isTomb, isThumbKey, r2Versions } from '../r2.js';
 
 const verifyAccess = createAccessVerifier();
 // Tabler uses data-image SVGs for select chevrons; executable content remains same-origin only.
@@ -84,7 +84,11 @@ export default {
       } else if (!['GET', 'HEAD'].includes(request.method)) {
         response = json({ error: '此階段僅提供唯讀查詢' }, 405);
         response.headers.set('Allow', 'GET, HEAD');
-      } else if (path === '/api/manage/dogs') response = json({ dogs: await readManageDogs(env.DB) });
+      } else if (path === '/api/manage/dogs') {
+        // 有沒有照片看 R2 清單（同志工網站 /api/dogs 的 photoVersions，30 秒快取）；讀不到就整份 503，不把全部當成缺照片
+        const photos = env.PHOTOS ? (await r2Versions(env)).versions : {};
+        response = json({ dogs: await readManageDogs(env.DB, photos) });
+      }
       else if (path === '/api' || path.startsWith('/api/')) response = json({ error: '找不到管理功能' }, 404);
       else if (path.startsWith('/photos/')) response = await photoResponse(path, env);
       else response = await env.ASSETS.fetch(request);

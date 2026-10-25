@@ -96,10 +96,9 @@ test('管理 Worker：真實簽章可讀資產／狗表／照片；替代來源�
   const { migrateCompactDatabase } = await import('../../scripts/migrate-compact-db.mjs');
   await migrateCompactDatabase(db);
   await db.prepare("INSERT INTO v3_dogs(dog_id,name,sex,fixed_care) VALUES('dog1','阿福','male',1),('dog2','無編號','',0)").run();
-  await db.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note,synced_at,sex) VALUES(0,'dog1','2026010101','阿福','A1','表格備註','2026-10-24','female')").run();
+  await db.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note,synced_at) VALUES(0,'dog1','2026010101','阿福','A1','表格備註','')").run();
   await db.prepare("INSERT INTO v3_intros VALUES('dog1','網站介紹')").run();
   await db.prepare("INSERT INTO v3_rest VALUES('dog1','2099-01-01','休養原因')").run();
-  await db.prepare("INSERT INTO v3_photos VALUES('photos/2026010101.jpg','dog1',NULL,1,'2026-10-24')").run();
   const PHOTOS = fakeR2();
   await PHOTOS.put('photos/2026010101.jpg', new Uint8Array([1, 2, 3]));
   let assetCalls = 0;
@@ -122,10 +121,11 @@ test('管理 Worker：真實簽章可讀資產／狗表／照片；替代來源�
   const dog = data.dogs.find(d => d.dogId === 'dog1');
   assert.equal(dog.intro, '網站介紹');
   assert.equal(dog.sex, 'male');
-  assert.equal(dog.sexMismatch, true);
+  assert.equal(dog.sexMismatch, false);
   assert.equal(dog.fixedCare, true);
   assert.equal(dog.rest.until, '2099-01-01');
-  assert.equal(dog.photoUrl, '/photos/2026010101.jpg');
+  assert.equal(dog.photoUrl, '/photos/2026010101.jpg', '照片看 R2，沒有縮圖用主照片');
+  assert.equal(data.dogs.find(d => d.dogId === 'dog2').photoUrl, null);
   assert.equal(data.dogs.find(d => d.dogId === 'dog2').onMain, false);
   assert.equal(data.dogs.find(d => d.dogId === 'dog2').number, '');
   assert.equal((await worker.fetch(request('/photos/2026010101.jpg', jwt), bindings)).status, 200);

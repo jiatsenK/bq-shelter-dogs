@@ -121,7 +121,7 @@ export async function r2Versions(env, now = Date.now()) {
     else if (isPhotoKey(o.key)) versions[o.key] = String(o.etag || '').replace(/"/g, '').slice(0, 8); // 相簿照片拿掉了，不給版本號
   }
   versionsCache = { at: now, versions, deleted };
-  return currentAliases(env,versionsCache);
+  return versionsCache;
 }
 
 async function listAll(env, prefix) {

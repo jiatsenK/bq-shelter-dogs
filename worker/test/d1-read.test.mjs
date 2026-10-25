@@ -55,7 +55,7 @@ test('GET /api/dogs：從 D1 組回跟 dogs.json 一樣的形狀（順序、欄�
   assert.equal(body.version, 1);
   assert.equal(body.syncedAt, SOURCE.syncedAt);
   assert.match(body.dogs[2].dogId, /^[a-f0-9]{32}$/);
-  assert.deepEqual(body.dogs.map(({ dogId, editRevision, ...dog }) => dog), SOURCE.dogs.map(d => ({ ...d, covered: false })));
+  assert.deepEqual(body.dogs.map(({ dogId, editRevision, ...dog }) => dog), SOURCE.dogs.map(({myWalked,myWalkedDate,...d}) => ({ ...d, covered: false })));
   assert.deepEqual(body.groups, { 滿滿: ['圓仔'], 圓仔: ['滿滿', '沒編號'], 沒編號: ['圓仔'] });
   assert.deepEqual(body.sheetNotes, [{ label: '10/14', text: '圓仔移到新B08' }]);
 });

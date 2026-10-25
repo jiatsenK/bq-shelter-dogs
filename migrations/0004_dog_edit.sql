@@ -16,7 +16,7 @@ CREATE TRIGGER IF NOT EXISTS dog_edit_v3_dogs_INSERT AFTER INSERT ON v3_dogs BEG
 CREATE TRIGGER IF NOT EXISTS dog_edit_v3_dogs_UPDATE AFTER UPDATE ON v3_dogs BEGIN UPDATE v3_dog_edit_state SET revision=revision+1 WHERE dog_id IN (OLD.dog_id,NEW.dog_id); END;
 CREATE TRIGGER IF NOT EXISTS dog_edit_v3_dogs_DELETE AFTER DELETE ON v3_dogs BEGIN DELETE FROM v3_dog_edit_state WHERE dog_id=OLD.dog_id; END;
 CREATE TRIGGER IF NOT EXISTS dog_edit_v3_sheet_main_INSERT AFTER INSERT ON v3_sheet_main BEGIN UPDATE v3_dog_edit_state SET revision=revision+1 WHERE dog_id IN (NEW.dog_id); END;
-CREATE TRIGGER IF NOT EXISTS dog_edit_v3_sheet_main_UPDATE AFTER UPDATE OF dog_id,number,name,cage,note,sex ON v3_sheet_main BEGIN UPDATE v3_dog_edit_state SET revision=revision+1 WHERE dog_id IN (OLD.dog_id,NEW.dog_id); END;
+CREATE TRIGGER IF NOT EXISTS dog_edit_v3_sheet_main_UPDATE AFTER UPDATE OF dog_id,number,name,cage,note ON v3_sheet_main BEGIN UPDATE v3_dog_edit_state SET revision=revision+1 WHERE dog_id IN (OLD.dog_id,NEW.dog_id); END;
 CREATE TRIGGER IF NOT EXISTS dog_edit_v3_sheet_main_DELETE AFTER DELETE ON v3_sheet_main BEGIN UPDATE v3_dog_edit_state SET revision=revision+1 WHERE dog_id IN (OLD.dog_id); END;
 CREATE TRIGGER IF NOT EXISTS dog_edit_v3_dog_numbers_INSERT AFTER INSERT ON v3_dog_numbers BEGIN UPDATE v3_dog_edit_state SET revision=revision+1 WHERE dog_id IN (NEW.dog_id); END;
 CREATE TRIGGER IF NOT EXISTS dog_edit_v3_dog_numbers_UPDATE AFTER UPDATE ON v3_dog_numbers BEGIN UPDATE v3_dog_edit_state SET revision=revision+1 WHERE dog_id IN (OLD.dog_id,NEW.dog_id); END;
@@ -60,3 +60,13 @@ CREATE TRIGGER IF NOT EXISTS packs_v3_photos_INSERT AFTER INSERT ON v3_photos BE
 CREATE TRIGGER IF NOT EXISTS packs_v3_photos_UPDATE AFTER UPDATE ON v3_photos BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id IN (OLD.dog_id,NEW.dog_id)); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id IN (OLD.dog_id,NEW.dog_id)))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id IN (OLD.dog_id,NEW.dog_id)); END;
 
 CREATE TRIGGER IF NOT EXISTS packs_v3_photos_DELETE AFTER DELETE ON v3_photos BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_departures d WHERE d.dog_id=OLD.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_departures d WHERE d.dog_id=OLD.dog_id); END;
+
+-- Capture only historical disagreements, never choose or overwrite a sex value.
+CREATE TABLE IF NOT EXISTS v3_dog_sex_legacy (
+ dog_id TEXT PRIMARY KEY REFERENCES v3_dogs(dog_id),
+ copies_json TEXT NOT NULL CHECK(json_valid(copies_json)),
+ sampled_at TEXT NOT NULL
+);
+INSERT OR IGNORE INTO v3_dog_sex_legacy(dog_id,copies_json,sampled_at)
+SELECT d.dog_id,json_group_array(json_object('row',m.row_index,'sex',m.sex)),strftime('%Y-%m-%dT%H:%M:%fZ','now')
+FROM v3_dogs d JOIN v3_sheet_main m USING(dog_id) WHERE m.sex<>d.sex GROUP BY d.dog_id;

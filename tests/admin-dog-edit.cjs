@@ -79,7 +79,7 @@ module.exports = async (browser, base) => {
     await page.getByText('這一項已儲存，重新讀取確認完成。', { exact: true }).waitFor();
     assert.equal(snapshot.intro, '草稿介紹');
     await page.locator('#edit-field').selectOption('sex');
-    assert.match(await page.locator('#dog-editor').textContent(), /試算表舊值：母/);
+    assert.match(await page.locator('#dog-editor').textContent(), /遷移時試算表差異：母/);
     await page.locator('#edit-value').selectOption('');
     await page.getByRole('button', { name: '預覽改前／改後' }).click();
     fs.mkdirSync(path.join(__dirname, '../.scratch/566-evidence'), { recursive: true });
