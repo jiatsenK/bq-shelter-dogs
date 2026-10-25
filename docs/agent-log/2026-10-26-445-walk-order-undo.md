@@ -13,4 +13,4 @@
 - 最終檢查（HEAD `fdaeed7`）：網頁 24 套全過（index 264 項），紀錄 `1792946947691-535fd68a-f70e-471e-b597-1cc9c7a738e0.json`。Node 459／460：唯一失敗是 `scripts/local-check.test.mjs`，這台沒有 `pwsh`（預設用它開子程序）；改指定 `BQ_CHECK_PWSH=powershell` 後，Windows PowerShell 5.1 中文輸出變亂碼對不到 `/未知測試/`。本票沒動該測試與 `check-local.ps1`（`scripts/` 只在 SUITES 加一個套件名），所以 `-Full` 沒有完整綠燈，以 CI（Linux pwsh）為準。
 - 待 K 決定：票寫「有『復原』的提示條」拉長，但 D1 模式提示條本來就沒有「復原」按鈕；這次改成所有有按鈕的提示條（＋一起溜的人、再試一次）8 秒，其他 5 秒。
 - 未做：#442（再按導覽捲回頂部）、#401／PR #437；未合併、未部署。
-- 相關 PR：（開草稿後補）
+- 相關 PR：[#586](https://github.com/jiatsenK/bq-shelter-dogs/pull/586)，草稿；未加 preview 標籤（待 K 決定）。
