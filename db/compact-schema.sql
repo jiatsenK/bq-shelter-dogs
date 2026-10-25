@@ -120,30 +120,13 @@ CREATE INDEX IF NOT EXISTS v3_sheet_main_number ON v3_sheet_main(number);
 CREATE INDEX IF NOT EXISTS v3_sheet_main_name ON v3_sheet_main(name) WHERE number='';
 -- 用狗 ID 找主清單列不整張掃：開卡讀回、觸發器的 EXISTS（#555）
 CREATE INDEX IF NOT EXISTS v3_sheet_main_dog ON v3_sheet_main(dog_id);
-CREATE TABLE IF NOT EXISTS v3_sheet_main_walkers (
-  row_index INTEGER NOT NULL REFERENCES v3_sheet_main(row_index) ON DELETE RESTRICT,
-  position INTEGER NOT NULL,
-  walker_code TEXT NOT NULL,
-  PRIMARY KEY(row_index,position)
-);
 CREATE TABLE IF NOT EXISTS v3_sheet_changes (
   row_index INTEGER PRIMARY KEY,
   label TEXT NOT NULL DEFAULT '',
   text TEXT NOT NULL DEFAULT ''
 );
-CREATE TABLE IF NOT EXISTS v3_sheet_groups (
-  column_index INTEGER NOT NULL,
-  row_index INTEGER NOT NULL,
-  name TEXT NOT NULL,
-  PRIMARY KEY(column_index,row_index)
-);
--- 常遛狗群每一欄的群名（分頁最下面一列，K 2026-10-16）
-CREATE TABLE IF NOT EXISTS v3_sheet_group_labels (
-  column_index INTEGER PRIMARY KEY,
-  label TEXT NOT NULL
-);
--- 常遛狗群一欄一列（#559）：群名＋狗名 JSON 陣列（照試算表由上往下）。取代上面 v3_sheet_groups、v3_sheet_group_labels（不讀不寫，下一張 PR 刪表）。
--- 只有群名、沒有狗的欄也有一列；群名和狗都空就刪掉那列
+-- 常遛狗群一欄一列（#559）：群名（分頁最下面一列，K 2026-10-16）＋狗名 JSON 陣列（照試算表由上往下）。
+-- 取代一隻狗一列的 v3_sheet_groups 和 v3_sheet_group_labels（migration 0007 刪表）。只有群名、沒有狗的欄也有一列；群名和狗都空就刪掉那列
 CREATE TABLE IF NOT EXISTS v3_sheet_group_columns (
   column_index INTEGER PRIMARY KEY,
   label TEXT NOT NULL DEFAULT '',
@@ -381,18 +364,9 @@ CREATE TABLE IF NOT EXISTS v3_pack_versions (id INTEGER PRIMARY KEY CHECK(id=1),
 INSERT OR IGNORE INTO v3_pack_versions(id) VALUES(1);
 CREATE TABLE IF NOT EXISTS v3_packs (part TEXT NOT NULL, seq INTEGER NOT NULL, ver INTEGER NOT NULL, cutoff TEXT NOT NULL DEFAULT '', body TEXT NOT NULL, PRIMARY KEY(part,seq));
 CREATE INDEX IF NOT EXISTS v3_walks_date ON v3_walks(walk_date);
-CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_main_walkers_INSERT AFTER INSERT ON v3_sheet_main_walkers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_main_walkers_UPDATE AFTER UPDATE ON v3_sheet_main_walkers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_main_walkers_DELETE AFTER DELETE ON v3_sheet_main_walkers BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_groups_INSERT AFTER INSERT ON v3_sheet_groups BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_groups_UPDATE AFTER UPDATE ON v3_sheet_groups BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_groups_DELETE AFTER DELETE ON v3_sheet_groups BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_changes_INSERT AFTER INSERT ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_changes_UPDATE AFTER UPDATE ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_changes_DELETE AFTER DELETE ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_group_labels_INSERT AFTER INSERT ON v3_sheet_group_labels BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_group_labels_UPDATE AFTER UPDATE ON v3_sheet_group_labels BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
-CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_group_labels_DELETE AFTER DELETE ON v3_sheet_group_labels BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_group_columns_INSERT AFTER INSERT ON v3_sheet_group_columns BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_group_columns_UPDATE AFTER UPDATE ON v3_sheet_group_columns BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_group_columns_DELETE AFTER DELETE ON v3_sheet_group_columns BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
