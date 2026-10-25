@@ -13,6 +13,12 @@
 
 - `node scripts/d1-migrations.mjs apply --target test --backup never` 套上 0007（13 句）。套用前書籤 `0000013d-00000002-0000510f-5beb34dffa90da78b370f5b239fec190`。
 - 套用後：表 55 → 52、觸發器 64 → 55，三張表和觸發器沒有殘留；small 1383 不變；主清單 116 列、狗群 11 欄還在。
+- 預覽網站 pr-581（本分支程式＋測試庫）：四個 API 都 200，`/api/dogs` 的 walkers、groupColumns 跟新欄／新表一致，狗清單、常遛狗群分頁正常，console 沒有錯誤。
+
+## 本機檢查
+
+- 相關 7 個測試檔通過。
+- `check-local.ps1 -Full`：Node 443／447，失敗 4 個是 `scripts/local-check.test.mjs`（乾淨 main 也一樣），Node 失敗後網頁測試沒跑；另用 `-Suite` 跑全部網頁測試 264／264 通過。
 
 ## 例外、未完成
 
