@@ -15,7 +15,7 @@ async function makeDb() {
   await DB.batch([
     DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('d1','老大'),('d2','新來的'),('d3','無編號')"),
     DB.prepare("INSERT INTO v3_dog_numbers(number,dog_id) VALUES('2025061101','d1'),('2026100101','d2')"),
-    DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,synced_at) VALUES(1,'d3','','無編號','2026-10-01T00:00:00Z')"),
+    DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name) VALUES(1,'d3','','無編號')"),
     DB.prepare("INSERT INTO v3_volunteers(volunteer_id,name,last_seen) VALUES('v1','志工甲','2026-10-01'),('v2','小明','2026-10-01')"),
     DB.prepare("INSERT INTO v3_identity_names(code,name_key,name,volunteer_id) VALUES('c1','志工甲','志工甲','v1'),('c2','小明','小明','v2')"),
     DB.prepare("INSERT INTO v3_walks(dog_id,walk_date,position,walker_code,dog_number,dog_name) VALUES('d1','2026-01-02',0,'c2','2025061101','老大'),('d1','2026-03-04',0,'c1','2025061101','老大'),('d1','2026-03-04',1,'c2','2025061101','老大'),('d1',?,0,'c9','2025061101','老大'),('d3','2025-12-31',0,'c1','','無編號')").bind(TODAY),

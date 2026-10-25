@@ -11,7 +11,7 @@ export async function setup() {
   await DB.batch([
     DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('dog','測試狗')"),
     DB.prepare("INSERT INTO v3_dog_numbers VALUES('9001','dog')"),
-    DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date,synced_at) VALUES(1,'dog','9001','測試狗','2026-10-01','x')"),
+    DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(1,'dog','9001','測試狗','2026-10-01')"),
   ]);
   for (const name of ['甲','乙','丙']) await resolveIdentity(DB, name, 'test');
   return { DB, WALKER_KEY: 'test', SHEET_WRITE_URL: 'https://script.example/exec', SHEET_WRITE_KEY: 'test-secret' };

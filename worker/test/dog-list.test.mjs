@@ -87,16 +87,14 @@ test('#501 出現在「已出所」：記離所（原因照共用規則）、從
   } finally { env.DB.close(); }
 });
 
-// #557：舊編號表不再讀寫，舊編號從 v3_dog_numbers 推；正式庫還留著舊列（1 列）時，記離所、刪舊編號不能被它的外鍵擋下
-test('#557 舊編號表還有舊列：記離所照樣移走主清單列、舊編號從 v3_dog_numbers 抄；刪舊編號也不被擋', async () => {
+// #557：舊編號表 v3_sheet_former_numbers 已刪，舊編號從 v3_dog_numbers 推
+test('#557 記離所的舊編號從 v3_dog_numbers 抄；刪掉的舊編號不會抄進去', async () => {
   const env = await setup();
   worker.testing.resetState();
   try {
     await send(env, [main()]);
     const row = await env.DB.prepare("SELECT row_index,dog_id FROM v3_sheet_main WHERE number='9001'").first();
-    await env.DB.batch([
-      env.DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?),(?,?)').bind('8001', row.dog_id, '8002', row.dog_id),
-      env.DB.prepare('INSERT INTO v3_sheet_former_numbers VALUES(?,0,?),(?,1,?)').bind(row.row_index, '8001', row.row_index, '8002')]);
+    await env.DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?),(?,?)').bind('8001', row.dog_id, '8002', row.dog_id).run();
     assert.deepEqual(await removeFormerNumber(env.DB, '9001', '8001'), { ok:true, dogId:row.dog_id });
     assert.deepEqual((await send(env, [{ sheet:'departed', hash:'d1', dog:{ id:'9001', name:'測試狗' }, texts:['9001', '測試狗', '被認養'], dates:[] }])).map(r => r.ack), [true]);
     assert.deepEqual(await mainRows(env), []);
