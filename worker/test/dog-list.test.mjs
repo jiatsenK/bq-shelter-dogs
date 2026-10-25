@@ -128,7 +128,8 @@ test('#501 保險掃描：指紋一樣不要資料；不一樣只要那幾列；
     const before = await writes(env);
     const same = await scan({ 'main:9001':'h1', 'groups:0':'g' });
     assert.deepEqual(same.want, []);
-    assert.equal(await writes(env), before, '指紋一樣不寫');
+    assert.equal(await writes(env), before + 1, '指紋一樣不寫資料，只更新掃描時間 1 列（#567）');
+    assert.ok(JSON.parse((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_extra'").first()).value).checkedAt);
     await send(env, [main({ dog:{ id:'9002', name:'走了' }, hash:'x' })]);
     const diff = await scan({ 'main:9001':'h9', 'groups:0':'g' });
     assert.deepEqual(diff.want, ['main:9001']);
