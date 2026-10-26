@@ -32,6 +32,18 @@ function testSiteDeployProblem(wf) {
   return '';
 }
 
+// #622：會動正式環境的 workflow 每個 job 都要 `if: github.ref == 'refs/heads/main'`，也不能另外指定分支。回傳問題或 ''
+function mainOnlyProblem(wf) {
+  const jobs = wf.replace(/\r/g, '').split(/^jobs:\n/m)[1];
+  const blocks = (jobs || '').split(/^(?=  [\w-]+:\n)/m).filter(b => /^  [\w-]+:\n/.test(b));
+  if (!blocks.length) return '找不到 job';
+  for (const b of blocks) {
+    if (!/^    if: github\.ref == 'refs\/heads\/main'$/m.test(b)) return `job ${b.match(/^  ([\w-]+):/)[1]} 要限定 main`;
+  }
+  if (/inputs\.ref\b|^\s+ref:/m.test(wf)) return '不能另外指定分支';
+  return '';
+}
+
 // #130 照片放 R2：Worker 讀 R2（照片、dogs.json 先經過 Worker）、部署前確認 bucket、縮圖與搬遷 Action
 async function runR2Tests() {
   const get = p => fetch(p).then(r => r.ok ? r.text() : '');
@@ -116,6 +128,35 @@ async function runR2Tests() {
       head + deploy + 'ADMIN_KEY: ${{ secrets.ADMIN_KEY }}\n',
     ];
     bad.forEach((wf, i) => { if (!adminDeployProblem(wf)) throw new Error(`反例 ${i + 1} 沒被擋`); });
+  });
+  const prodManual = {
+    'deploy-cloudflare.yml': deploy,
+    'd1-migrations.yml': await get('../.github/workflows/d1-migrations.yml'),
+    'deploy-admin.yml': adminDeploy,
+    'seed-preview-db.yml': await get('../.github/workflows/seed-preview-db.yml'),
+  };
+  await check('#622 會動正式環境的 workflow 只准 main；測試網站照舊可以填分支', () => {
+    for (const [f, wf] of Object.entries(prodManual)) {
+      if (!wf) throw new Error(`讀不到 ${f}`);
+      const problem = mainOnlyProblem(wf);
+      if (problem) throw new Error(`${f}：${problem}`);
+    }
+    if (!/inputs\.ref/.test(testSite) || !mainOnlyProblem(testSite)) throw new Error('測試網站要保留手動指定分支');
+  });
+  await check('#622 只准 main 檢查的反例：少一個 job、條件放寬、能填分支都會被擋', () => {
+    const job = (name, extra = '') => `  ${name}:\n    if: github.ref == 'refs/heads/main'\n    runs-on: ubuntu-latest\n${extra}`;
+    if (mainOnlyProblem('on:\n  workflow_dispatch:\njobs:\n' + job('a') + '\n' + job('b'))) throw new Error('每個 job 都限定 main 應該放行');
+    const bad = [
+      'jobs:\n' + job('a') + '  b:\n    runs-on: ubuntu-latest\n',
+      "jobs:\n  a:\n    if: github.ref == 'refs/heads/main' || inputs.force\n",
+      "jobs:\n  a:\n    steps:\n      - if: github.ref == 'refs/heads/main'\n",
+      'jobs:\n' + job('a', '    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: ${{ inputs.ref }}\n'),
+      'on:\n  workflow_dispatch:\n',
+    ];
+    bad.forEach((wf, i) => { if (!mainOnlyProblem(wf)) throw new Error(`反例 ${i + 1} 沒被擋`); });
+  });
+  await check('#622 志工站部署排隊不取消：套完 migration 後呼叫的部署不會被 push 部署砍掉', () => {
+    if (!/^concurrency:\r?\n  group: deploy-cloudflare\r?\n  cancel-in-progress: false\r?$/m.test(deploy)) throw new Error('deploy-cloudflare 要 cancel-in-progress: false');
   });
   const thumbs = await get('../.github/workflows/r2-thumbs.yml');
   await check('#130 縮圖（R2）Action：只能手動或由 Worker 叫、用管理金鑰、不提交 repo', () => {
