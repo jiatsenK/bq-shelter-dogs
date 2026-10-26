@@ -78,6 +78,7 @@ header.app {
   border: none;
   border-radius: 12px;
   padding: 11px 44px 11px 38px;
+  min-height: 44px; /* 高度不靠字型行高撐（#648） */
   font-size: 16px;
   font-family: inherit;
   background: var(--surface-soft);
@@ -214,7 +215,7 @@ main { overflow-wrap: anywhere; }
   display: block; width: 100%; box-sizing: border-box;
   border: 1px solid var(--line); border-radius: 12px;
   background: var(--surface-soft); color: var(--ink);
-  font-family: inherit; font-size: 16px; padding: 10px 12px;
+  font-family: inherit; font-size: 16px; padding: 10px 12px; min-height: 44px;
 }
 .who-box input:focus { outline: 2px solid var(--primary); outline-offset: 0; background: var(--surface); }
 .who-clear {
@@ -1267,8 +1268,8 @@ html.onboard-open { overflow: hidden; }
 .with-name { border: none; border-radius: 18px; padding: 8px 14px; background: var(--surface-soft); color: var(--ink); font-family: inherit; font-size: 15px; display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .with-name.on { background: var(--primary); color: #fff; }
 .with-add { display: flex; gap: 8px; }
-.with-add input { flex: 1; min-width: 0; border: none; border-radius: 12px; background: var(--surface-soft); font-family: inherit; font-size: 16px; padding: 11px 12px; color: var(--ink); }
-.with-add button { border: none; background: none; color: var(--primary); font-family: inherit; font-size: 16px; font-weight: 600; padding: 0 6px; cursor: pointer; }
+.with-add input { flex: 1; min-width: 0; border: none; border-radius: 12px; background: var(--surface-soft); font-family: inherit; font-size: 16px; padding: 11px 12px; min-height: 44px; color: var(--ink); }
+.with-add button { border: none; background: none; color: var(--primary); font-family: inherit; font-size: 16px; font-weight: 600; padding: 0 6px; min-height: 44px; cursor: pointer; }
 .with-bar { display: flex; gap: 8px; margin-top: 16px; }
 .with-bar .bar-btn { flex: 1; min-height: 48px; border: none; border-radius: 14px; background: var(--surface-soft); font-family: inherit; font-size: 16px; font-weight: 600; color: var(--ink); cursor: pointer; }
 .with-ok { flex: 1.6; min-height: 48px; border: none; border-radius: 14px; background: var(--primary); color: #fff; font-family: inherit; font-size: 16px; font-weight: 600; cursor: pointer; }
