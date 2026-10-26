@@ -12,6 +12,8 @@
 - 拿掉頁首範圍字「畫面上：N 天前 ～ N 天前」：`#rangeLabel`、`dayWord`／`rangeText`／`syncRange`／`queueRange`、相關 CSS、`desk.js` 搬移範圍字的程式。
 - 測試：`tests/index/app-layout.js` 範圍字的兩項改成確認 `#rangeLabel` 不存在；頁首收起測試多一項手機 `#pageSearch` 捲動後仍貼在表頭下面。
 
+- K 測試網站看過：搜尋框跟「全部」太遠。`.page-search` 下緣 10px→6px，手機有搜尋框時 `main` 上緣 14px→4px（分析頁不動），間距從 24px 變 10px。
+
 ## 檢查
 
 - `check-local.ps1 -Suite index`：252 項通過。
