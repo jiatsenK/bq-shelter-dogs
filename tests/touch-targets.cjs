@@ -6,7 +6,6 @@ const assert = require('node:assert/strict');
 // 比 at 更差算新違規；修好後要從 KNOWN 拿掉，否則測試失敗。
 const MIN = 44, GAP = 8;
 const KNOWN = [
-  { kind: 'size', match: /^#formerAdd$/, at: 32, ticket: '#647', note: '詳細資訊「＋補舊編號」32px 高' },
   { kind: 'size', match: /^button\.my-note-edit\.append-open$/, at: 36, ticket: '#647', note: '詳細資訊「加備註」36～38px 高（依字型）' },
   { kind: 'size', match: /^a\.group-page-link$/, at: 30, ticket: '#647', note: '詳細資訊「看全部狗群」30～32px 高（依字型）' },
   { kind: 'size', match: /^#whereClose$/, at: 40, ticket: '#647', note: '「在哪」關閉 40×40' },
