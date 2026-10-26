@@ -15,7 +15,7 @@
 
 | 資料 | 寫入來源 | 進 D1 的方式 | 程式 |
 |---|---|---|---|
-| 今日溜狗（網站按溜了、復原、改溜狗人） | 網站 | 先存 D1（`SITE.d1WalkAccept=true`，PR #533），再由 Worker 寫回試算表兩欄 | `worker/src/walk-accept.js` |
+| 今日溜狗（網站按溜了、復原、改溜狗人） | 網站 | 先存 D1（PR #533 起；舊的直接寫回試算表路徑已刪），再由 Worker 寫回試算表兩欄 | `worker/src/walk-accept.js` |
 | 今日溜狗（人工改試算表） | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/rows`，Worker 只比那幾隻 | `apps-script/sheet-write.gs`、`worker/src/walk-reconcile.js` |
 | 狗清單：主清單、已出所、常遛狗群 | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/dog-list`，只寫有變的欄（#501） | `worker/src/dog-list.js` |
 | 常溜狗群（網站狗群頁） | 管理者在試算表「常遛狗群」改 | GAS 編輯觸發送 D1（一欄一列 `v3_sheet_group_columns`，#559）；網站只讀（#474） | `worker/src/dog-list.js` |

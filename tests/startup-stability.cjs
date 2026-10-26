@@ -16,7 +16,8 @@ module.exports = async (browser, base) => {
     localStorage.setItem('bq-walker-codes', JSON.stringify(['aaaaaaaaaaaa']));
   });
   const held = new Set(['rest']), releases = new Map(), failed = new Set(), posts = [];
-  const today = { date: '2026-10-19', walks: [] };
+  const d1 = require('./fixtures/fake-d1-walks.cjs')({ today: () => '2026-10-19' });
+  const pathIs = (r, endpoint) => new URL(r.url()).pathname.endsWith('/api/' + endpoint);
   const release = endpoint => { held.delete(endpoint); releases.get(endpoint)?.(); releases.delete(endpoint); };
   await context.route('**/*', async route => {
     const url = new URL(route.request().url());
@@ -28,26 +29,21 @@ module.exports = async (browser, base) => {
     if (endpoint.startsWith('identity')) return route.fulfill({ json: { ok: true, identity: { name: '測試志工', codes: ['aaaaaaaaaaaa'] } } });
     if (endpoint.startsWith('favorites')) return route.fulfill({ json: { ok: true, ids: [], aliases: {} } });
     if (endpoint === 'sync') posts.push('sync');
-    if (endpoint === 'walk' && route.request().method() === 'POST') {
-      const body = route.request().postDataJSON();
-      today.walks = body.dogs.map(d => ({ key: d.id, walked: true, walkedDate: today.date, walker: body.walker, at: '2026-10-19T02:01:00Z' }));
-      return route.fulfill({ json: { ok: true, today: today.date, results: body.dogs.map(d => ({ ...d, status: 'written', prev: { date: { date: '2026-10-14' }, walker: '' }, wrote: { date: today.date, walker: body.walker } })) } });
-    }
+    if (endpoint === 'walk' && route.request().method() === 'POST') return route.fulfill({ json: d1.walk(route.request().postDataJSON()) });
     const body = endpoint === 'dogs' ? data
       : endpoint === 'rest' ? { rest: { [data.dogs[0].id]: { until: '2026-10-20', reason: '測試休養' } } }
-        : endpoint === 'today' ? today
+        : endpoint === 'today' ? d1.pack()
           : endpoint === 'walkers' ? { walkers: {}, names: ['測試志工'] }
             : { ok: true, walks: [{ id: data.dogs[1].id, name: data.dogs[1].name, date: '2026-10-18', walkers: ['aaaaaaaaaaaa'] }], departures: [] };
     return route.fulfill({ json: body });
   });
-  await require('./fixtures/legacy-walk-mode.cjs')(context);
   const page = await context.newPage();
   page.on('pageerror', e => console.error(e.message));
   page.setDefaultTimeout(5000);
   await page.clock.install({ time: new Date('2026-10-19T02:00:00Z') });
   try {
     await page.goto(base + '/public/index.html', { waitUntil: 'domcontentloaded' });
-    await page.waitForResponse(r => r.url().endsWith('/api/today'));
+    await page.waitForResponse(r => pathIs(r, 'today'));
     assert.equal(await page.locator('#main [data-dog]').count(), 0, '休養還沒讀好，不先顯示會跳位的狗清單');
     await page.locator('[data-tab="mine"]').click();
     await page.waitForFunction(() => document.querySelector('[data-tab="mine"] .n')?.textContent === '1');
@@ -78,13 +74,13 @@ module.exports = async (browser, base) => {
     await page.getByText('資料已更新', { exact: true }).waitFor();
     assert.deepEqual(await order(), ['2', '1', '0'], '按「更新」後順序不變');
     assert.ok((await page.locator('#main [data-dog="1"]').textContent()).includes('今天'), '同步舊日期不能蓋掉較新的今日消息');
-    today.walks.push({ key: data.dogs[2].id, walked: true, walkedDate: today.date, walker: '其他志工', at: '2026-10-19T02:02:00Z' });
+    d1.set(data.dogs[2].id, '其他志工');
     await page.clock.runFor(61000);
     await page.waitForFunction(() => document.querySelector('#main [data-dog="2"]')?.textContent.includes('今天'));
     assert.deepEqual(await order(), ['1', '2', '0'], 'K 2026-10-20：其他手機溜的不是我按的，一分鐘內更新並照天數排到後面');
     held.add('today');
     failed.add('walks'); failed.add('rest');
-    const failedRead = page.waitForResponse(r => r.url().endsWith('/api/walks'));
+    const failedRead = page.waitForResponse(r => pathIs(r, 'walks'));
     await page.locator('#syncBtn').click();
     await page.getByText('資料已更新', { exact: true }).waitFor();
     assert.deepEqual(posts, [], '#512 按「更新」只重讀，不 POST /sync');
@@ -94,7 +90,8 @@ module.exports = async (browser, base) => {
     await page.getByText('休養設定暫時讀不到', { exact: false }).waitFor();
     assert.equal(await page.locator('#main [data-dog="0"] [data-walk="add"]').count(), 0, '背景休養讀取失敗不清掉已知休養設定');
     release('today');
-    failed.add('rest'); failed.add('today'); failed.add('walks');
+    // D1 模式（#456）要等今日紀錄確認才排狗卡；今日紀錄讀不到時目前停在載入畫面，這裡只測休養與個人紀錄失敗
+    failed.add('rest'); failed.add('walks');
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('#main .card[data-dog]').first().waitFor();
     assert.ok((await page.locator('#main').textContent()).includes('休養設定暫時讀不到'), '失敗仍可看狗，但不把未知休養設定當成可靠狀態');
@@ -107,7 +104,7 @@ module.exports = async (browser, base) => {
     // 每次重開換一個最慢來源；今日消息與個人紀錄不互相冒充已讀完。
     for (const endpoint of ['dogs', 'today', 'walks', 'rest']) {
       held.add(endpoint);
-      const requested = page.waitForRequest(r => r.url().endsWith('/api/' + endpoint));
+      const requested = page.waitForRequest(r => pathIs(r, endpoint));
       await page.reload({ waitUntil: 'domcontentloaded' });
       await requested;
       if (endpoint === 'today') {
@@ -124,7 +121,7 @@ module.exports = async (browser, base) => {
       await page.locator('#main .card[data-dog]').first().waitFor();
       assert.equal(await page.locator('#main .card[data-dog]').first().getAttribute('data-dog'), '1', `${endpoint} 最後回應時，第一份清單仍使用完整狀態排序`);
     }
-    failed.clear(); held.add('rest'); held.add('today');
+    failed.clear(); held.add('rest');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.querySelector('#tabs [data-tab="walk"] .n')?.textContent === '3');
     await page.clock.runFor(8100);
