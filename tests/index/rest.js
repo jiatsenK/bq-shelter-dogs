@@ -77,10 +77,10 @@ async function runRestTests() {
       ] }] }).dogs[0];
       try {
         showDetail(dog);
-        eq([...document.querySelectorAll('.intake-list time')].map(el => el.textContent), ['2021/02/17', '2026/01/02']);
+        eq([...document.querySelectorAll('.intake-list time')].map(el => el.textContent), ['2015/08/18', '2021/02/17', '2026/01/02'], '舊編號那次也列成入所：');
         eq(document.querySelectorAll('.intake-number').length, 0, '閱讀不逐筆重複編號，編輯仍保留對應編號：');
         eq(document.querySelector('[data-section="intro"] .content').textContent, dog.intro);
-        if (!document.querySelector('[data-section="walks"]') || !document.querySelector('.reentry')) throw new Error('保留早上其他區塊');
+        if (!document.querySelector('[data-section="walks"]') || !document.getElementById('staysEdit')) throw new Error('保留早上其他區塊');
         document.getElementById('introEdit').click();
         eq([...document.querySelectorAll('[data-intake-field="number"]')].map(el => el.value), ['2021021703', '2021021703']);
         const reason = document.querySelector('[data-intake-row="1"][data-intake-field="event"]');
@@ -93,7 +93,7 @@ async function runRestTests() {
         document.getElementById('introForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         await new Promise(r => setTimeout(r, 20));
         eq(calls, [{ editor: '志工我', text: dog.intro, events: [dog.intakeEvents[0], { ...dog.intakeEvents[1], event: '領養退回（補正）' }] }]);
-        eq(document.querySelectorAll('.intake-list li').length, 2);
+        eq(document.querySelectorAll('.intake-list li').length, 3);
         eq(document.querySelectorAll('.intake-event')[1].textContent, '領養退回（補正）');
       } finally { hideDetail(); BQWalkUI.hideToast(); delete introOverrides[dog.id]; }
     });
@@ -145,7 +145,7 @@ async function runRestTests() {
       try {
         delete dog.stays; dog.formerIds = [];
         showDetail(dog);
-        eq([document.querySelector('#detail .stays-table'), document.getElementById('staysEdit').textContent], [null, '＋補出入所紀錄'], '只有目前編號：不列表，只留補的入口：');
+        eq([document.querySelector('#detail .stay-lines'), document.getElementById('staysEdit').textContent], [null, '＋補出入所紀錄'], '只有目前編號：不列，只留補的入口：');
         edit();
         eq([document.querySelector('[data-stay-row="0"][data-stay-field="number"]').readOnly, document.querySelector('[data-stay-remove="0"]')], [true, null], '目前編號那列不能改、不能刪：');
         document.getElementById('staysAdd').click();
@@ -162,7 +162,7 @@ async function runRestTests() {
         eq([calls.length, calls[1][0], calls[1][2].editor, calls[1][2].stays[1]], [2, 'saveStays', '志工我', { number: '2015081801', in: '2015-08-18', out: '', reason: '' }], '送出：帶選好的名字、整張表：');
         eq([staysEdit, dog.formerIds, ymd(BQDates.firstIntake(dog))], [null, ['2015081801'], '2015-08-18'], '成功：舊編號跟著表、入所日改從最舊的編號算：');
         if (!document.querySelector('#detail .chips').textContent.includes('入所 2015/8')) throw new Error('入所標籤沒有跟著改');
-        if (!document.querySelector('#detail .stays-table').textContent.includes('2015081801')) throw new Error('出入所表沒有列出補的編號');
+        if (!document.querySelector('#detail .stay-lines').textContent.includes('2015/08/18入所')) throw new Error('出入所紀錄沒有列出補的編號那次入所');
         edit();
         document.querySelector('[data-stay-remove="1"]').click();
         await submit();
@@ -194,28 +194,27 @@ async function runRestTests() {
         document.getElementById('staysAdd').click();
         set(1, 'in', '2019-03-01'); set(1, 'out', '2019-02-01');
         await submit();
-        eq([calls.length, document.querySelector('#staysForm [role="alert"]').textContent], [0, '出所日不能早於入所日'], '出所早於入所先擋：');
-        set(1, 'out', '2019-06-01'); set(1, 'reason', '整修移所');
+        eq([calls.length, document.querySelector('#staysForm [role="alert"]').textContent], [0, '離所日不能早於入所日'], '離所早於入所先擋：');
+        set(1, 'out', '2019-06-01'); set(1, 'outReason', '整修移所');
         document.getElementById('staysAdd').click();
         set(2, 'in', '2015-08-18'); set(2, 'reason', '迷路');
         await submit();
         eq([calls.length, calls[0][0], calls[0][1], calls[0][2].editor, calls[0][2].before], [1, 'saveStays', '9613', '志工我', [current]], '送出：帶名字和改之前的表：');
-        eq(calls[0][2].stays, [current, { number: '', in: '2019-03-01', out: '2019-06-01', reason: '整修移所' }, { number: '', in: '2015-08-18', out: '', reason: '迷路' }], '整張送出：');
+        eq(calls[0][2].stays, [current, { number: '', in: '2019-03-01', out: '2019-06-01', reason: '', outReason: '整修移所' }, { number: '', in: '2015-08-18', out: '', reason: '迷路' }], '整張送出（離所原因有填才帶）：');
         eq([staysEdit, ymd(BQDates.firstIntake(dog))], [null, '2015-08-18'], '成功：入所日改從最早那次算：');
-        eq([...document.querySelectorAll('[data-section="intro"] .intake-list li')].map(li => li.textContent), ['2015/08/18迷路入所', '2019/03/01入所', '2019/06/01整修移所'], '入所介紹照樣列日期與經過：');
-        eq([...document.querySelectorAll('#detail .stays-table tbody tr')].map(tr => tr.textContent), ['9613—在所—', '查不到2015/8/18—迷路', '查不到2019/3/12019/6/1整修移所'], '編號下面的出入所表：');
+        eq([...document.querySelectorAll('[data-section="intro"] .stay-lines li')].map(li => li.textContent), ['2015/08/18入所迷路', '2019/03/01入所', '2019/06/01離所整修移所', '日期未確認入所'], '一行一件事，入所／離所在原因前面：');
         if (!document.querySelector('#detail .chips').textContent.includes('入所 2015/8')) throw new Error('入所標籤沒有跟著改');
         // 刪掉一列：送出的 before 是剛剛存好的表
         edit();
         document.querySelector('[data-stay-remove="1"]').click();
         await submit();
-        eq([calls[1][2].before.length, calls[1][2].stays], [3, [current, { number: '', in: '2019-03-01', out: '2019-06-01', reason: '整修移所' }]], '刪一列：');
+        eq([calls[1][2].before.length, calls[1][2].stays], [3, [current, { number: '', in: '2019-03-01', out: '2019-06-01', reason: '', outReason: '整修移所' }]], '刪一列：');
         eq(ymd(BQDates.firstIntake(dog)), '2019-03-01', '刪了就回到剩下最早的：');
         conflict = true;
         edit();
-        set(1, 'reason', '移所');
+        set(1, 'outReason', '移所');
         await submit();
-        eq([document.querySelector('#staysForm [role="alert"]').textContent, dog.stays[1].reason], ['別人剛改過，請重新整理再改', '整修移所'], '別人剛改過：提示、不改這台的資料：');
+        eq([document.querySelector('#staysForm [role="alert"]').textContent, dog.stays[1].outReason], ['別人剛改過，請重新整理再改', '整修移所'], '別人剛改過：提示、不改這台的資料：');
         if (calls.some(c => c[0] === 'walk')) throw new Error('不應該寫試算表');
       } finally {
         Object.assign(dog, before);

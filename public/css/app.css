@@ -729,8 +729,6 @@ html.lightbox-open { overflow: hidden; }
 }
 
 /* 再次入所（#75）：詳細資訊編號下面一行小字 */
-.detail-head .reentry { font-size: 12.5px; color: var(--ink-soft); margin-top: 4px; line-height: 1.5; }
-.detail-head .reentry > span { white-space: nowrap; }
 
 /* 收起（#79）：詳細資訊照片下方的按鈕列、溜狗表最下面的「已收起」 */
 .hide-bar {
@@ -2217,19 +2215,6 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 }
 @media (min-width: 1100px) and (prefers-reduced-motion: reduce) { .desk-batch { animation: none; } }
 
-/* 舊編號（#289）：編號下面一行小字；每個舊編號旁 ✕、最後「＋補舊編號」，點了原地變輸入框（跟入所介紹一樣直接改，不另開表單） */
-.detail-head .reentry { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
-.reentry .former-num { display: inline-flex; align-items: center; gap: 2px; font-variant-numeric: tabular-nums; color: var(--ink); }
-.reentry .former-add { border: 0; background: none; color: var(--primary); font: inherit; font-size: 12.5px; min-height: 32px; padding: 0 2px; cursor: pointer; }
-.reentry .former-add:hover { text-decoration: underline; }
-/* 出入所表（#639，ADR 0021）：取代舊編號一行，一個編號一列；窄螢幕時表格自己橫捲，不撐開整頁 */
-.detail-head .reentry.stays-table { display: block; max-width: 100%; overflow-x: auto; }
-.stays-table table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
-.stays-table caption { text-align: left; color: var(--ink-soft); }
-.stays-table caption .former-add { margin-left: 6px; }
-.stays-table th { font-weight: 500; color: var(--ink-soft); text-align: left; padding: 0 10px 0 0; white-space: nowrap; }
-.stays-table td { color: var(--ink); padding: 0 10px 0 0; white-space: nowrap; }
-.stays-table td:last-child { white-space: normal; min-width: 4em; }
 /* 編輯限定：跟著鍵盤展開後的可見高度，其他狗卡版面維持原樣。 */
 @media (max-width: 599px) {
   .detail-backdrop.detail-editing-viewport { top: var(--detail-edit-top); bottom: auto; height: var(--detail-edit-height); }
@@ -2240,11 +2225,17 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .intro-heading-edit { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 44px; height: 44px; padding: 0; border: 0; background: none; color: var(--primary); cursor: pointer; }
 .intro-heading-edit .icon { width: 16px; height: 16px; }
 .intro-heading-edit:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+/* 改出入所紀錄（#639）：標題旁的文字按鈕，點得到的高度跟筆的按鈕一樣 */
+.stays-edit { border: 0; background: none; color: var(--primary); font: inherit; font-size: 14px; font-weight: 400; min-height: 44px; padding: 0 6px; cursor: pointer; }
+.stays-edit:hover { text-decoration: underline; }
+.stays-edit:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .intake-list { list-style: none; display: grid; gap: 10px; margin: 0 0 12px; padding: 0; }
 .intake-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; font-size: 16px; line-height: 1.7; overflow-wrap: anywhere; }
 .intake-list time, .intake-date-empty { font-weight: 700; font-variant-numeric: tabular-nums; }
 .intake-number { color: var(--ink-soft); font-size: 13px; font-variant-numeric: tabular-nums; }
 .intake-date-empty { color: var(--ink-soft); }
+/* 出入所紀錄一行一件事（K 2026-10-26）：入所／離所放在日期後面 */
+.stay-kind { color: var(--ink-soft); font-size: 14px; }
 .intake-row { display: grid; gap: 8px; min-width: 0; margin: 12px 0; padding: 0; border: 0; }
 .intake-row label { display: grid; gap: 4px; min-width: 0; }
 .intake-row input, .intake-row select { box-sizing: border-box; width: 100%; min-width: 0; min-height: 44px; padding: 8px; font: inherit; font-size: 16px; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 3px; }

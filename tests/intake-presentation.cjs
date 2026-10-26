@@ -25,25 +25,27 @@ module.exports = async (browser, base) => {
     await page.goto(`${base}/public/index.html`);
     await page.locator('#main .card').filter({ hasText: '墨西哥' }).click();
     const section = page.locator('#detail [data-section="intro"]');
-    assert.equal(await page.locator('#detail [data-section="stays"]').count(), 0, '閱讀時只有一段入所介紹');
-    assert.equal(await section.locator('h3').textContent(), '入所介紹');
-    assert.deepEqual(await section.locator('time').allTextContents(), ['2015/08/18', '2017/09/05']);
-    assert.deepEqual(await section.locator('.intake-event').allTextContents(), ['迷路入所', '整修移所']);
+    assert.equal(await page.locator('#detail [data-section="stays"]').count(), 0, '閱讀時只有一段');
+    // K 2026-10-26：出入所紀錄一行一件事（日期、入所／離所、原因），入所介紹的補充原文接在下面
+    assert.deepEqual(await section.locator('h3').evaluateAll(hs => hs.map(h => h.firstChild.nextSibling.textContent)), ['出入所紀錄', '入所介紹']);
+    assert.deepEqual(await section.locator('time').allTextContents(), ['2015/08/18', '2017/09/05', '2017/09/05']);
+    assert.deepEqual(await section.locator('.intake-event').allTextContents(), ['迷路', '整修移所']);
     assert.equal(await section.locator('.content').textContent(), '親人，怕機車聲。', '其他補充接在下面');
     assert.equal(await section.locator('details, [role="tablist"]').count(), 0, '直接呈現，不加展開或切換');
-    assert.equal(await section.locator('button').count(), 1, '閱讀時只有既有的編輯入口');
-    // #639 驗收：墨西哥的出入所表兩列，入所日仍是 2015-08-18
-    assert.deepEqual(await page.locator('#detail .stays-table tbody tr').allTextContents(), ['查不到2015/8/182017/9/5整修移所', '20170905082017/9/5在所—']);
+    assert.equal(await section.locator('button').count(), 2, '閱讀時只有改出入所紀錄、改入所介紹兩個入口');
+    // #639 驗收：墨西哥的入所日仍是 2015-08-18；舊資料的「整修移所」（#392）先列在離所那行，#651 會搬到離所原因
+    assert.deepEqual(await section.locator('.stay-lines li').allTextContents(), ['2015/08/18入所迷路', '2017/09/05離所整修移所', '2017/09/05入所']);
     assert.match(await page.locator('#detail .chips').textContent(), /入所 2015\/8/);
     assert.equal(writes.length, 0, '整理呈現不寫入資料');
     await section.locator('#introEdit').click();
     assert.equal(await page.locator('#introText').inputValue(), data.dogs[0].intro, '編輯仍看到完整原文');
     await page.locator('#introText').fill('尚未儲存的介紹');
+    // 出入所紀錄跟入所介紹在同一段：改介紹時那段換成介紹表單，不會同時開兩個表單
+    assert.equal(await page.locator('#staysEdit').count(), 0, '改介紹時不另外開出入所紀錄');
+    await page.locator('#introCancel').click();
     await page.locator('#staysEdit').click();
     assert.equal(await page.locator('[form="introForm"]').count(), 0, '補登期間不留錯誤的儲存介紹按鈕');
     await page.locator('#staysCancel').click();
-    assert.equal(await page.locator('#introText').inputValue(), '尚未儲存的介紹', '從補登返回不丟失介紹草稿');
-    await page.locator('#introCancel').click();
     await page.locator('#introEdit').click();
     await page.locator('[form="introForm"]').click();
     await page.locator('#introForm').waitFor({ state: 'detached' });
@@ -66,7 +68,7 @@ module.exports = async (browser, base) => {
       await page.setViewportSize({ width, height: 900 });
       assert.equal(await page.locator('#detail [data-section="intro"]').count(), 1, '離所也共用一段介紹');
       assert.equal(await page.locator('#detail [data-section="stays"]').count(), 0);
-      assert.deepEqual(await section.locator('.intake-event').allTextContents(), ['迷路入所', '整修移所']);
+      assert.deepEqual(await section.locator('.intake-event').allTextContents(), ['迷路', '整修移所']);
       assert.equal(await section.locator('#introEdit').count(), 0, '保留離所介紹唯讀權限');
     }
     await page.locator('#staysEdit').click();
@@ -76,9 +78,9 @@ module.exports = async (browser, base) => {
     const cases = [
       { intro: '主人不擬續養而入所。怕機車聲。', stays: [], intakeEvents: [], expected: [], supplement: '主人不擬續養而入所。怕機車聲。' },
       { intro: '2025年2月30日迷路入所。不要猜日期。', stays: [], intakeEvents: [], expected: [], supplement: '2025年2月30日迷路入所。不要猜日期。' },
-      { intro: '2020年1月2日迷路入所。請保持距離。', stays: [{ in: '2020-01-02', out: '', reason: '迷路' }], intakeEvents: [{ date: '2020-01-02', event: '迷路入所', number: '2020010201' }], expected: ['2020/01/02迷路入所'], supplement: '請保持距離。' },
-      { intro: '2020年1月2日迷路入所，有晶片但沒人領回。', stays: [{ in: '2020-01-02', out: '', reason: '迷路' }], intakeEvents: [], expected: ['2020/01/02迷路入所，有晶片但沒人領回'], supplement: '' },
-      { intro: '2019年1月2日迷路入所。', stays: [{ in: '2020-01-02', out: '', reason: '迷路' }], intakeEvents: [{ date: '', event: '退回，日期待確認', number: '' }], expected: ['2019/01/02迷路入所', '2020/01/02迷路入所', '日期未確認退回，日期待確認'], supplement: '' },
+      { intro: '2020年1月2日迷路入所。請保持距離。', stays: [{ in: '2020-01-02', out: '', reason: '迷路' }], intakeEvents: [{ date: '2020-01-02', event: '迷路入所', number: '2020010201' }], expected: ['2020/01/02入所迷路'], supplement: '請保持距離。' },
+      { intro: '2020年1月2日迷路入所，有晶片但沒人領回。', stays: [{ in: '2020-01-02', out: '', reason: '迷路' }], intakeEvents: [], expected: ['2020/01/02入所迷路入所，有晶片但沒人領回'], supplement: '' },
+      { intro: '2019年1月2日迷路入所。', stays: [{ in: '2020-01-02', out: '', reason: '迷路' }], intakeEvents: [{ date: '', event: '退回，日期待確認', number: '' }], expected: ['2019/01/02入所迷路', '2020/01/02入所迷路', '日期未確認入所退回，日期待確認'], supplement: '' },
       { intro: '', stays: [], intakeEvents: [], expected: [], supplement: '' },
     ];
     for (const test of cases) {

@@ -1,7 +1,7 @@
 // 出入所表（ADR 0021，#639）：編號、離所、手填合成一張表；存檔只留手填的部分
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { stayTable, cleanStayTable, storedStays, joinStays } from '../src/stays.js';
+import { stayTable, cleanStayTable, storedStays, joinStays, sameStays, withoutStays } from '../src/stays.js';
 
 const TODAY = '2026-10-26';
 
@@ -114,4 +114,37 @@ test('合併：兩邊的手填紀錄全部接在一起，照入所日排', () =>
     { number: '2010010101', in: '2010-01-01', out: '2011-01-01', reason: '退養' },
     { in: '2015-08-18', out: '2017-09-05', reason: '整修移所' },
   ]);
+});
+
+test('手填的離所原因（K 2026-10-26）：沒離所紀錄的那列可以填，有離所紀錄的照離所紀錄、送來的不存', () => {
+  const before = { numbers: ['2017090508', '2016010101'], currentNumbers: ['2017090508'], departures: [{ number: '2016010101', date: '2016-06-06', reason: 'adopt' }] };
+  const ok = cleanStayTable([
+    { number: '', in: '2015-08-18', out: '2017-09-05', reason: '迷路', outReason: ' 整修移所 ' },
+    { number: '2016010101', in: '', out: '', reason: '', outReason: '亂填' },
+    { number: '2017090508', in: '', out: '', reason: '整修移所', outReason: '' },
+  ], before, TODAY);
+  assert.deepEqual(ok.rows, [
+    { number: '', in: '2015-08-18', out: '2017-09-05', reason: '迷路', outReason: '整修移所' },
+    { number: '2016010101', in: '2016-01-01', out: '2016-06-06', reason: '', departed: true, departure: '認養' },
+    { number: '2017090508', in: '2017-09-05', out: '', reason: '整修移所' },
+  ]);
+  // 只有離所原因的編號列也要存；存回去讀出來一樣
+  const stored = storedStays(ok.rows);
+  assert.deepEqual(stored, [
+    { number: '', in: '2015-08-18', out: '2017-09-05', reason: '迷路', outReason: '整修移所' },
+    { number: '2017090508', in: '2017-09-05', out: '', reason: '整修移所' },
+  ]);
+  assert.deepEqual(stayTable(stored, before.numbers.sort(), before.departures), ok.rows);
+  assert.deepEqual(storedStays([{ number: '2018010101', in: '2018-01-01', out: '', reason: '', outReason: '轉所' }]),
+    [{ number: '2018010101', in: '2018-01-01', out: '', reason: '', outReason: '轉所' }]);
+  const fail = (rows, message) => assert.match(cleanStayTable(rows, before, TODAY).error, message);
+  fail([{ number: '2017090508', in: '', out: '', reason: '' }, { number: '2016010101', in: '', out: '', reason: '' }, { number: '', in: '2010-01-01', out: '2011-01-01', reason: '', outReason: 'x'.repeat(41) }], /40 字/);
+});
+
+test('離所原因也算內容：比對、取消合併拆回都看它', () => {
+  const a = [{ number: '', in: '2015-08-18', out: '2017-09-05', reason: '', outReason: '整修移所' }];
+  assert.equal(sameStays(a, [{ ...a[0], outReason: '' }]), false);
+  assert.equal(sameStays(a, a.map(r => ({ ...r }))), true);
+  const mine = JSON.stringify([...a, { number: '', in: '2015-08-18', out: '2017-09-05', reason: '', outReason: '轉所' }]);
+  assert.deepEqual(JSON.parse(withoutStays(mine, JSON.stringify(a), [])), [{ number: '', in: '2015-08-18', out: '2017-09-05', reason: '', outReason: '轉所' }]);
 });

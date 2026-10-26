@@ -21,8 +21,8 @@ export const REST_REASON_MAX = 40;
 
 export const sexLabel = (value) => ({ male: '公', female: '母' })[value] || '待確認';
 
-// 出入所表的一列，比較與送出用（不帶 departed、departure：那是後端照離所紀錄算的）
-export const stayRow = (row) => ({ number: row.number || '', in: row.in || '', out: row.out || '', reason: row.reason || '' });
+// 出入所表的一列，比較與送出用（不帶 departed、departure：那是後端照離所紀錄算的；有離所紀錄的那列沒有手填離所原因）
+export const stayRow = (row) => ({ number: row.number || '', in: row.in || '', out: row.out || '', reason: row.reason || '', outReason: row.departed ? '' : row.outReason || '' });
 
 export function restBounds(today = BQDates.taipeiToday()) {
   const [y, m, d] = today.split('-').map(Number);
@@ -63,7 +63,7 @@ export function displayValue(field, value) {
       value
         .map(
           (row) =>
-            `${row.number || '沒有編號'}：入所 ${row.in || '日期不明'}／出所 ${row.out || '尚未出所'}${row.departure ? `（${row.departure}）` : ''}／入所原因 ${row.reason || '未填'}`
+            `${row.number || '沒有編號'}：入所 ${row.in || '日期不明'}（${row.reason || '原因未填'}）／${row.out || row.departed ? `離所 ${row.out || '日期不明'}（${row.departure || row.outReason || '原因未填'}）` : '還在所'}`
         )
         .join('\n') || '沒有出入所紀錄'
     );

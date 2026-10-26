@@ -7,28 +7,48 @@ import { BQWalkUI } from './walk-ui.js';
 import { NEED_EDITOR, editorName, render } from './app.js';
 import { detailEdits, renderDetail } from './detail.js';
 
-// 出入所紀錄（#333、#639，ADR 0011、0021）：一個編號一列，查不到編號的那次編號空著。編號下面列成一張表，取代原本的「舊編號」一行。
-// 有編號那列的入所日就是編號前 8 碼；出所日有離所紀錄就照它（不能改），離所原因寫在出所日旁邊。原因欄是入所原因，每列都手填。補舊編號＝新增一列填編號，刪掉那一列＝刪掉那個舊編號；
+// 出入所紀錄（#333、#639，ADR 0011、0021）：一個編號一筆，查不到編號的那次編號空著。
+// 閱讀時一行一件事（K 2026-10-26）：日期、入所／離所、原因，照日期排；入所介紹的逐次事件（入所、退回、轉所）也排進來當入所。
+// 有編號那筆的入所日就是編號前 8 碼；離所日有離所紀錄就照它（不能改），離所原因也照它，沒有就手填。原因欄是入所原因。補舊編號＝新增一筆填編號，刪掉那一筆＝刪掉那個舊編號；
 // 目前編號、有離所紀錄的編號不能刪。誰都能改（要先選名字，ADR 0004），離所的狗也可以改（ADR 0011）。
 // 整張表一次存（Worker 的 /stays），連同打開時看到的表一起送，別人剛改過會被擋下來
 const STAYS_MAX = 100;
 const canStays = dog => canEdit('editStays') && !!(dog.id && appState.UPLOAD_URL);
 // 這一列不能刪：主清單上的目前編號（離所的狗沒有目前編號）、有離所紀錄的編號
 const kept = (dog, row) => !!row.number && (row.departed || (!dog.departure && row.number === dog.id));
-// 只有編號、沒有其他紀錄時表上沒什麼好看，只留「補」的入口
-const plain = rows => rows.every(r => r.number && !r.out && !r.reason) && rows.length <= 1;
-const dayText = day => (day ? ymdText(BQDates.parseYmd(day)) : '—');
+// 只有編號、沒有其他紀錄時沒什麼好列，只留「補」的入口
+const plain = rows => rows.every(r => r.number && !r.out && !r.reason && !r.outReason) && rows.length <= 1;
+// #392 盤點的舊資料：這兩種原因記的是那次怎麼離所，還沒搬到離所原因的（#651）先照離所原因列
+const ENDING = ['整修移所', '領養後退養'];
+const sameText = value => String(value || '').replace(/[\s。]+/g, '');
 
-function staysTableHtml(dog) {
+// 出入所紀錄 → 一行一件事 [{ date, kind: '入所'|'離所', reason }]；閱讀時不逐行重複編號（#285），編號在改的表單裡；events 是入所介紹整理出的逐次事件（intakePresentation）
+function stayLines(dog, events = []) {
+  const lines = [];
+  for (const r of BQDates.stayRows(dog)) {
+    const legacy = !r.departed && r.out && !r.outReason && ENDING.includes(r.reason);
+    lines.push({ date: r.in, kind: '入所', reason: legacy ? '' : r.reason });
+    if (r.departed || r.out) lines.push({ date: r.out, kind: '離所', reason: r.departed ? r.departure : legacy ? r.reason : r.outReason || '' });
+  }
+  for (const e of events) {
+    const reason = String(e.event || '').replace(/入所$/, '');
+    const same = lines.find(l => l.kind === '入所' && l.date && l.date === e.date);
+    // 同一天的入所：事件寫得比較完整（開頭就是手填的入所原因）就用事件那句，不然另列一行
+    if (same && sameText(reason).startsWith(sameText(same.reason))) same.reason = reason;
+    else lines.push({ date: e.date, kind: '入所', reason });
+  }
+  // 同一天照原本順序（先離所再入所）；沒日期的排最後
+  return lines.map((l, i) => [l, i]).sort(([a, i], [b, j]) => (a.date || '9999').localeCompare(b.date || '9999') || i - j).map(([l]) => l);
+}
+function stayLinesHtml(lines) {
+  return `<ul class="intake-list stay-lines">${lines.map(l => `<li>${l.date ? `<time datetime="${esc(l.date)}">${esc(l.date.replace(/-/g, '/'))}</time>` : '<span class="intake-date-empty">日期未確認</span>'}<span class="stay-kind">${l.kind}</span>${l.reason ? `<span class="intake-event">${esc(l.reason)}</span>` : ''}</li>`).join('')}</ul>`;
+}
+// 閱讀時的出入所紀錄：{ list（沒東西好列是 ''）, button（不能改是 ''）}
+function staysView(dog, events) {
   const rows = BQDates.stayRows(dog);
-  const can = canStays(dog);
-  const button = can ? `<button type="button" class="former-add" id="staysEdit">${plain(rows) ? '＋補出入所紀錄' : '改出入所紀錄'}</button>` : '';
-  if (plain(rows)) return button ? `<div class="reentry">${button}</div>` : '';
-  return `<div class="reentry stays-table"><table>
-    <caption>出入所紀錄${button}</caption>
-    <thead><tr><th scope="col">編號</th><th scope="col">入所</th><th scope="col">出所</th><th scope="col">入所原因</th></tr></thead>
-    <tbody>${rows.map(r => `<tr><td>${r.number ? esc(r.number) : '查不到'}</td><td>${dayText(r.in)}</td><td>${r.out ? dayText(r.out) : r.number === dog.id && !dog.departure ? '在所' : '—'}${r.departure ? ` ${esc(r.departure)}` : ''}</td><td>${esc(r.reason) || '—'}</td></tr>`).join('')}</tbody>
-  </table></div>`;
+  const shown = !(plain(rows) && !events.length);
+  const button = canStays(dog) ? `<button type="button" class="stays-edit" id="staysEdit">${shown ? '改出入所紀錄' : '＋補出入所紀錄'}</button>` : '';
+  return { list: shown ? stayLinesHtml(stayLines(dog, events)) : '', button };
 }
 
 function staysSectionHtml(dog) {
@@ -40,16 +60,16 @@ function staysSectionHtml(dog) {
   return `<section class="detail-section" data-section="intro">
     <form class="rest-form stays-form" id="staysForm" autocomplete="off">
       <h3>出入所紀錄</h3>
-      <p class="rest-hint">每次在所一列，還在所就不填出所日；原因填這次為什麼入所。有編號的入所日就是編號前 8 碼；查不到編號的那次，編號留空、自己填入所日。補舊編號就新增一列填編號，刪掉那一列就刪掉那個舊編號。入所日從最早那一列算。</p>
+      <p class="rest-hint">每次在所一列，還在所就不填離所日。入所原因填這次為什麼入所，離所原因填這次為什麼離開。有編號的入所日就是編號前 8 碼；查不到編號的那次，編號留空、自己填入所日。補舊編號就新增一列填編號，刪掉那一列就刪掉那個舊編號。入所日從最早那一列算。</p>
       <div class="intake-rows">${e.rows.map((row, i) => {
         const locked = kept(dog, row);
         const left = row.departed ? ' readonly' : '';
         return `<fieldset class="intake-row"><legend>第 ${i + 1} 列${row.number ? `（編號 ${esc(row.number)}）` : ''}</legend>
         <label>編號（查不到留空）<input inputmode="numeric" maxlength="12" data-stay-row="${i}" data-stay-field="number" value="${esc(row.number)}" placeholder="例：2015081801"${locked ? ' readonly' : ''}${off}></label>
         <label>入所日<input type="date" max="${today}" data-stay-row="${i}" data-stay-field="in" value="${esc(row.number ? BQDates.idDay(row.number) : row.in)}"${row.number ? ' readonly' : ''}${off}></label>
-        <label>出所日<input type="date" max="${today}" data-stay-row="${i}" data-stay-field="out" value="${esc(row.out)}"${left}${off}></label>
         <label>入所原因<input type="text" maxlength="40" data-stay-row="${i}" data-stay-field="reason" value="${esc(row.reason)}" placeholder="例：迷路、被棄養、退養"${off}></label>
-        ${row.departed ? `<small class="rest-hint">出所日照離所紀錄（${esc(row.departure || '待確認')}）。</small>` : ''}
+        <label>離所日<input type="date" max="${today}" data-stay-row="${i}" data-stay-field="out" value="${esc(row.out)}"${left}${off}></label>
+        ${row.departed ? `<small class="rest-hint">離所日和離所原因照離所紀錄（${esc(row.departure || '待確認')}）。</small>` : `<label>離所原因<input type="text" maxlength="40" data-stay-row="${i}" data-stay-field="outReason" value="${esc(row.outReason || '')}" placeholder="例：整修移所、轉所"${off}></label>`}
         ${locked ? '' : `<button type="button" class="intake-remove" data-stay-remove="${i}"${off}>刪掉第 ${i + 1} 列</button>`}
       </fieldset>`;
       }).join('')}</div>
@@ -62,7 +82,7 @@ function staysSectionHtml(dog) {
 function openStaysEdit(dog) {
   if (!dog || !dog.id || !appState.UPLOAD_URL) return;
   const before = BQDates.stayRows(dog).map(r => ({ ...r }));
-  const rows = before.length ? before.map(r => ({ ...r })) : [{ number: '', in: '', out: '', reason: '' }];
+  const rows = before.length ? before.map(r => ({ outReason: '', ...r })) : [{ number: '', in: '', out: '', reason: '', outReason: '' }];
   appState.staysEdit = detailEdits.open(dog, { before, rows });
   renderDetail();
   const box = document.querySelector('#staysForm input:not([readonly])');
@@ -81,7 +101,7 @@ function staysProblem(rows, known = []) {
       if (!known.includes(r.number) && (!/^\d{10}$/.test(r.number) || !BQDates.idDate(r.number))) return '編號要是 10 碼數字，前 8 碼是入所日期';
     } else if (!BQDates.parseYmd(r.in)) return '查不到編號的那次要填入所日';
     if (r.in > today || (r.out && r.out > today)) return '日期不能是未來的日子';
-    if (r.out && r.in && r.out < r.in) return '出所日不能早於入所日';
+    if (r.out && r.in && r.out < r.in) return '離所日不能早於入所日';
   }
   return '';
 }
@@ -93,8 +113,10 @@ async function saveStays() {
   // 整列都空白的當成沒填；有編號的入所日跟著編號
   const rows = e.rows.map(r => {
     const number = r.number.replace(/\s+/g, '');
-    return { number, in: number ? BQDates.idDay(number) : r.in.trim(), out: r.out.trim(), reason: r.reason.trim() };
-  }).filter(r => r.number || r.in || r.out || r.reason);
+    // 離所原因有填才帶（跟 Worker 一樣，沒填的列跟改之前一模一樣）
+    const outReason = (r.outReason || '').trim();
+    return { number, in: number ? BQDates.idDay(number) : r.in.trim(), out: r.out.trim(), reason: r.reason.trim(), ...(outReason ? { outReason } : {}) };
+  }).filter(r => r.number || r.in || r.out || r.reason || r.outReason);
   const problem = staysProblem(rows, e.before.map(r => r.number).filter(Boolean));
   if (problem) { detailEdits.fail(e, problem); return; }
   detailEdits.saving(e);
@@ -130,7 +152,7 @@ function closeStaysEdit() {
 function staysRowClick(e, box) {
   if (!appState.staysEdit || appState.staysEdit.phase === 'saving') return;
   if (e.target.closest('#staysAdd') && appState.staysEdit.rows.length < STAYS_MAX) {
-    appState.staysEdit.rows.push({ number: '', in: '', out: '', reason: '' });
+    appState.staysEdit.rows.push({ number: '', in: '', out: '', reason: '', outReason: '' });
     renderDetail(); box.querySelector('.stays-form .intake-row:last-child input')?.focus({ preventScroll: true });
   }
   const remove = e.target.closest('[data-stay-remove]');
@@ -154,4 +176,4 @@ function staysInput(e) {
   return true;
 }
 
-export { STAYS_MAX, staysTableHtml, staysSectionHtml, openStaysEdit, staysProblem, saveStays, closeStaysEdit, staysRowClick, staysInput };
+export { STAYS_MAX, staysView, staysSectionHtml, openStaysEdit, staysProblem, saveStays, closeStaysEdit, staysRowClick, staysInput };

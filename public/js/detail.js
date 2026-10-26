@@ -16,7 +16,7 @@ import { sheetAppendHtml } from './sheet-append.js';
 import { fixedCareHtml, toggleFixedCare } from './detail-fixed-care.js';
 import { closeRestEdit, openRestEdit, restAdminHtml, restInput, restNoteHtml, saveRest } from './detail-rest.js';
 import { closeIntroEdit, introBarHtml, introInput, introOf, introRowClick, introSectionHtml, openIntroEdit, saveIntro } from './detail-intro.js';
-import { closeStaysEdit, openStaysEdit, saveStays, staysInput, staysRowClick, staysTableHtml } from './detail-stays.js';
+import { closeStaysEdit, openStaysEdit, saveStays, staysInput, staysRowClick } from './detail-stays.js';
 import { closeOverlay, pushOverlay, registerOverlay } from './overlays.js';
 
 const detailEdits = BQDetailEditor.create(renderDetail);
@@ -33,9 +33,9 @@ function statusBadge(dog, today) {
   return `<span class="badge muted">沒有紀錄</span>`;
 }
 
-// 詳細資訊：籠位已經在標籤上（#112），這裡只寫編號和出入所表（#639 取代舊編號一行）
+// 詳細資訊：籠位已經在標籤上（#112），這裡只寫編號；出入所紀錄在入所介紹那段（K 2026-10-26）
 function metaLine(dog) {
-  return `${dog.id ? `<div class="meta">編號 ${esc(dog.id)}</div>` : ''}${staysTableHtml(dog)}`;
+  return dog.id ? `<div class="meta">編號 ${esc(dog.id)}</div>` : '';
 }
 
 // 詳細資訊：備註（志工後續補充，試算表備註欄）／可以一起溜的狗／狗卡資訊（dogs/{編號}.md 的入所原始介紹，同步時已寫進 dogs.json）

@@ -6,7 +6,7 @@ import { esc, icon, isoDay } from './ui-kit.js';
 import { BQWalkUI } from './walk-ui.js';
 import { NEED_EDITOR, editorName, render } from './app.js';
 import { detailEdits, renderDetail } from './detail.js';
-import { staysSectionHtml } from './detail-stays.js';
+import { staysSectionHtml, staysView } from './detail-stays.js';
 
 // ── 入所介紹（K 2026-10-10）：志工可不可以改看功能管理的 editIntro（ADR 0020），記編輯紀錄（ADR 0004）；存 D1，不寫試算表 ──
 const INTRO_MAX = 1000;
@@ -17,7 +17,7 @@ function intakeEventsOf(dog) {
 function intakeDraft(dog) {
   return intakeEventsOf(dog).map(row => ({ ...row }));
 }
-// #390：僅整理閱讀畫面，不修改原介紹、stays 或入所日算法。
+// #390：僅整理閱讀畫面，不修改原介紹或入所日算法。出入所紀錄（stays）由 detail-stays.js 的 stayLines 接上這些事件（K 2026-10-26）
 function intakePresentation(dog, intro) {
   const events = intakeEventsOf(dog).map(e => ({ date: e.date, event: e.event }));
   let supplement = intro || '';
@@ -32,20 +32,6 @@ function intakePresentation(dog, intro) {
     supplement = supplement.slice(match[0].length);
   }
   const sameText = value => String(value || '').replace(/[\s。]+/g, '');
-  const add = row => {
-    if (!events.some(e => e.date === row.date && sameText(e.event) === sameText(row.event))) events.push(row);
-  };
-  // 出入所表（ADR 0021）只拿手填的那幾筆：只有編號的列、離所紀錄帶的出所日，改之前不在這裡（#639 刻意不改閱讀畫面）
-  const typed = (dog.stays || []).map(s => (s.departed ? { ...s, out: '' } : s)).filter(s => !s.number || s.out || s.reason);
-  for (const stay of typed) {
-    // #392 盤點的舊資料：這兩種原因記的是該段怎麼結束，不能改標成入所原因。
-    const ending = stay.out && ['整修移所', '領養後退養'].includes(stay.reason);
-    const reason = ending ? '' : stay.reason;
-    const arrival = reason ? (/入所$/.test(reason) ? reason : `${reason}入所`) : '入所';
-    const hasArrival = events.some(e => e.date === stay.in && (sameText(e.event) === sameText(arrival) || (!reason && /入所|轉來|退回/.test(e.event))));
-    if (!hasArrival) add({ date: stay.in, event: arrival });
-    if (stay.out) add({ date: stay.out, event: ending ? stay.reason : '出所' });
-  }
   const unique = [];
   const covers = (longer, shorter) => {
     const a = sameText(longer), b = sameText(shorter);
@@ -60,10 +46,6 @@ function intakePresentation(dog, intro) {
   }
   unique.sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
   return { events: unique, supplement };
-}
-function intakeListHtml(events) {
-  if (!events.length) return '';
-  return `<ul class="intake-list">${events.map(e => `<li>${e.date ? `<time datetime="${esc(e.date)}">${esc(e.date.replace(/-/g, '/'))}</time>` : '<span class="intake-date-empty">日期未確認</span>'}<span class="intake-event">${esc(e.event || '原因未填')}</span></li>`).join('')}</ul>`;
 }
 function intakeEditorHtml(dog, e, busy) {
   const numbers = [...new Set([...(dog.formerIds || []), dog.id, ...e.events.map(row => row.number)].filter(Boolean))].sort();
@@ -83,13 +65,14 @@ function introSectionHtml(dog, intro) {
   if (appState.staysEdit && appState.staysEdit.dog === dog) return staysSectionHtml(dog);
   const e = appState.introEdit && appState.introEdit.dog === dog ? appState.introEdit : null;
   if (!e) {
-    // 出入所紀錄的入口在編號下面的出入所表（#639）
+    // 一段兩部分（K 2026-10-26）：出入所紀錄一行一件事（逐次事件也排進去），下面是入所介紹的補充原文
     const can = canEdit('editIntro') && !!(dog.id && appState.UPLOAD_URL) && !dog.departure;
     const { events, supplement } = intakePresentation(dog, intro);
-    if (!events.length && !supplement && !can) return '';
+    const stays = staysView(dog, events);
+    if (!stays.list && !stays.button && !supplement && !can) return '';
     return `<section class="detail-section" data-section="intro">
-      <h3 class="intro-heading">${icon('card')}入所介紹${can ? `<button type="button" class="intro-heading-edit" id="introEdit" aria-label="${events.length || supplement ? '改' : '補'}入所介紹">${icon('write')}</button>` : ''}</h3>
-      ${intakeListHtml(events)}
+      ${stays.list || stays.button ? `<h3 class="intro-heading">${icon('card')}出入所紀錄${stays.button}</h3>${stays.list}` : ''}
+      ${supplement || can ? `<h3 class="intro-heading">${icon('card')}入所介紹${can ? `<button type="button" class="intro-heading-edit" id="introEdit" aria-label="${events.length || supplement ? '改' : '補'}入所介紹">${icon('write')}</button>` : ''}</h3>` : ''}
       ${supplement ? `<div class="content">${esc(supplement)}</div>` : ''}
     </section>`;
   }
@@ -188,4 +171,4 @@ function introInput(e, box) {
   return true;
 }
 
-export { INTRO_MAX, introOverrides, intakeEventsOf, intakeDraft, intakePresentation, intakeListHtml, intakeEditorHtml, introOf, introSectionHtml, introBarHtml, openIntroEdit, saveIntro, closeIntroEdit, introRowClick, introInput };
+export { INTRO_MAX, introOverrides, intakeEventsOf, intakeDraft, intakePresentation, intakeEditorHtml, introOf, introSectionHtml, introBarHtml, openIntroEdit, saveIntro, closeIntroEdit, introRowClick, introInput };

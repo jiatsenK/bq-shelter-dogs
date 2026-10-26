@@ -140,10 +140,14 @@ module.exports = async (browser, base) => {
     assert.equal(await save.isDisabled(), true);
     assert.match(await page.locator('.drawer-dirty').textContent(), /出入所紀錄要先按「預覽改前／改後」/);
     await drawer.locator('[data-preview="stays"]').click();
-    assert.match(await stays.locator('.field-diff').textContent(), /改後2020010101：入所 2020-01-01／出所 尚未出所／入所原因 未填\n2019010101：入所 2019-01-01／出所 尚未出所／入所原因 未填/);
+    assert.match(await stays.locator('.field-diff').textContent(), /改後2020010101：入所 2020-01-01（原因未填）／還在所\n2019010101：入所 2019-01-01（原因未填）／還在所/);
     assert.equal(await save.isDisabled(), false);
     await added.locator('[data-key="out"]').fill('2019-05-01');
     assert.equal(await save.isDisabled(), true, '預覽後又改要重新預覽');
+    // 沒有離所紀錄的那列，離所原因手填（K 2026-10-26）
+    await added.locator('[data-key="outReason"]').fill('整修移所');
+    await drawer.locator('[data-preview="stays"]').click();
+    assert.match(await stays.locator('.field-diff').textContent(), /2019010101：入所 2019-01-01（原因未填）／離所 2019-05-01（整修移所）/);
     await added.getByRole('button', { name: '刪掉這列' }).click();
 
     // 照片：舊固定路徑沒有 D1 引用，預覽仍顯示改前圖
@@ -176,10 +180,11 @@ module.exports = async (browser, base) => {
     await page.getByText('改完按「儲存」', { exact: false }).waitFor();
     assert.equal(await drawer.locator('#drawer-title').textContent(), '球球');
     assert.equal(await page.locator('.drawer-dirty').textContent(), '沒有修改。', '後端帶的離所旗標不算改了出入所紀錄');
-    assert.equal(await drawer.locator('[data-field="stays"] .stay-row').first().locator('[data-key="out"]').getAttribute('readonly'), '', '離所的出所日照離所紀錄');
+    assert.equal(await drawer.locator('[data-field="stays"] .stay-row').first().locator('[data-key="out"]').getAttribute('readonly'), '', '離所的離所日照離所紀錄');
     const departedRow = drawer.locator('[data-field="stays"] .stay-row').first();
     assert.equal(await departedRow.locator('[data-key="reason"]').getAttribute('readonly'), null, '入所原因有離所紀錄也能填');
-    assert.match(await departedRow.textContent(), /出所日照離所紀錄（認養）/);
+    assert.match(await departedRow.textContent(), /離所日和離所原因照離所紀錄（認養）/);
+    assert.equal(await departedRow.locator('[data-key="outReason"]').count(), 0, '有離所紀錄的那列不另填離所原因');
     // 焦點不在抽屜裡時 Esc 也關得掉
     await page.locator('#query').focus();
     await page.keyboard.press('Escape');

@@ -319,7 +319,7 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
     const rows = el('div');
     rows.id = 'edit-stays';
     controls.append(rows);
-    const addRow = (stay = { number: '', in: '', out: '', reason: '' }) => {
+    const addRow = (stay = { number: '', in: '', out: '', reason: '', outReason: '' }) => {
       const row = el('fieldset', undefined, 'stay-row');
       const current = snapshot.currentNumbers.includes(stay.number);
       const legend = el('legend', '');
@@ -328,8 +328,10 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
       for (const [key, label, type] of [
         ['number', '編號（查不到留空）', 'text'],
         ['in', '入所日', 'date'],
-        ['out', '出所日（還在所留空）', 'date'],
-        ['reason', '入所原因', 'text']
+        ['reason', '入所原因', 'text'],
+        ['out', '離所日（還在所留空）', 'date'],
+        // 有離所紀錄的離所原因照離所紀錄，不另外填（K 2026-10-26）
+        ...(stay.departed ? [] : [['outReason', '離所原因', 'text']])
       ]) {
         const wrap = el('label', label, 'form-label');
         const node = textInput(type);
@@ -342,7 +344,7 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
       }
       inputs.number.readOnly = current || Boolean(stay.departed);
       inputs.out.readOnly = Boolean(stay.departed);
-      if (stay.departed) row.append(el('p', `出所日照離所紀錄（${stay.departure || '待確認'}）。`, 'form-hint'));
+      if (stay.departed) row.append(el('p', `離所日和離所原因照離所紀錄（${stay.departure || '待確認'}）。`, 'form-hint'));
       // 有編號：入所日跟著編號，不能另外改
       const sync = () => {
         const number = inputs.number.value.trim();

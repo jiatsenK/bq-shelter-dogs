@@ -29,8 +29,8 @@
 | `detail.js` | 詳細資訊的畫面總控：內容（在所／離所）、同籠與可以一起溜、按鈕分派（`DETAIL_CLICKS`）、`renderDetail`／`showDetail`／`hideDetail`／`closeDetail` 與焦點還原；換狗或關閉時由 `leaveDetailDog` 收掉暫時狀態，儲存中的編輯留著 | app、overlays、各 `detail-*.js`、sheet-append、ui-kit、dog-status、dates、detail-editor、detail-viewport、photo、walk-ui、find、analysis、feature-settings、page-state | index |
 | `detail-rest.js` | 休養中說明與休養設定編輯器（開、改、存、結束、取消、輸入） | app、detail、api、dates、ui-kit、walk-ui、feature-settings、page-state | index |
 | `detail-fixed-care.js` | 有人固定照顧開關與每隻狗的儲存狀態 | app、detail、api、ui-kit、walk-ui、feature-settings、page-state | index |
-| `detail-intro.js` | 入所介紹：閱讀時的逐次紀錄整理（`intakePresentation`）、介紹與逐次紀錄編輯器、剛存好的介紹 | app、detail、detail-stays、api、dates、ui-kit、walk-ui、feature-settings、page-state | index |
-| `detail-stays.js` | 出入所表（#639，ADR 0021）：編號下面的閱讀表格與編輯器（每列編號可空；補、刪舊編號就是增、刪一列；檢查、存） | app、detail、api、dates、ui-kit、walk-ui、feature-settings、page-state | index |
+| `detail-intro.js` | 出入所紀錄＋入所介紹那一段：閱讀時的逐次紀錄整理（`intakePresentation`）、介紹與逐次紀錄編輯器、剛存好的介紹 | app、detail、detail-stays、api、dates、ui-kit、walk-ui、feature-settings、page-state | index |
+| `detail-stays.js` | 出入所紀錄（#639，ADR 0021）：閱讀時一行一件事（`staysView`，接上入所介紹的逐次事件）、編輯表（每列編號可空；補、刪舊編號就是增、刪一列；手填離所原因；檢查、存） | app、detail、api、dates、ui-kit、walk-ui、feature-settings、page-state | index |
 | `sheet-append.js` | 加備註（詳細資訊）與新增異動紀錄（電腦版右欄）：預覽、送出與整頁事件委派 | app、detail、api、dates、ui-kit、walk-ui、page-state | index |
 | `detail-viewport.js` | 詳細資訊編輯欄位的可見範圍 | 無 | index |
 | `keyboard-viewport.js` | 螢幕鍵盤開啟時的欄位與面板定位 | 無 | index |
