@@ -5,4 +5,4 @@
 - 查證：兩個 bucket 的 `wrangler r2 bucket lifecycle list` 都只有預設 multipart 7 天中止規則。
 - 改文件：`docs/ARCHITECTURE_NOW.md` 排程表、ADR 0018 第 7 點補註、`docs/setup/CLOUDFLARE_SETUP.md`（記錄規則在 bucket 上、目前沒有刪除規則）。
 - 未做：沒有改任何 bucket 設定，也沒有在測試 bucket 實測（選 C 後不需要）。`purgeTrash`／`maintenance` 的修正由另一個 session（照片垃圾桶清理首跑前修正）負責。
-- 相關 PR：（開 PR 後補）
+- 相關 PR：#604。
