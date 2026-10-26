@@ -6,7 +6,7 @@ import { parseDogsData } from './dog-data.js';
 import { BQDates } from './dates.js';
 import { BQWelcome } from './welcome.js';
 import { BQPhoto } from './photo.js';
-import { findPageHtml, findZoomHide, findZoomOpen, whereHide, whereKnown, whereOpen } from './find.js';
+import { findPageHtml, whereKnown, whereOpen } from './find.js';
 import { BQWalkUI } from './walk-ui.js';
 import { BQWalks } from './walk-flow.js';
 import { BQFavorites } from './favorites.js';
@@ -16,8 +16,9 @@ import { BQTour } from './tour.js';
 import { deskOn, deskWalkHtml } from './desk.js';
 import { esc, highlightNote, icon, matchesSearch, monthDay, pad2, searchKey } from './ui-kit.js';
 import { dogStatus, restFrom, sortDue, specialFlag, walkKey } from './dog-status.js';
-import { closeDetail, hideDetail, renderDetail, showDetail } from './detail.js';
+import { closeDetail, renderDetail, showDetail } from './detail.js';
 import { bindSheetAppend } from './sheet-append.js';
+import { bindOverlays, closeOverlay, pushOverlay, pushPage, registerOverlay, trapFocus } from './overlays.js';
 
 // 狗狗資料：試算表同步進 D1（#245），網站從 Worker 的 /api/dogs 讀；前端不直接連試算表（#32）
 // 照片上傳服務（Cloudflare Worker，#47／#48）的網址。這裡只放網址，GitHub 寫入權限只在 Worker 裡，網站碰不到
@@ -510,7 +511,7 @@ function openLightbox(dog, opener) {
   el.hidden = false;
   document.documentElement.classList.add('lightbox-open');
   // 手機按「返回」時只關掉燈箱
-  history.pushState({ bqPhoto: true }, '');
+  pushOverlay('lightbox');
   el.querySelector('.lightbox-close').focus({ preventScroll: true });
 }
 
@@ -542,9 +543,9 @@ function hideLightbox() {
 }
 
 function closeLightbox() {
-  if (history.state && history.state.bqPhoto) history.back(); // popstate 會接著 hideLightbox
-  else hideLightbox();
+  closeOverlay('lightbox');
 }
+registerOverlay('lightbox', { isOpen: lightboxOpen, hide: hideLightbox });
 
 // 卡片天數比照列表：今天／X天；完整意思保留給輔助閱讀。
 function lastWalk(dog, today) {
@@ -834,18 +835,20 @@ function buildTabs(counts) {
 
 // 切換分類：標籤跟著亮起，畫面回到內容最上面
 appState.lastInputTouch = false;
+// 頁籤的歷史紀錄：按返回時照這筆換回頁籤（bindOverlays 的 navigate）
+function navigationState(tab) {
+  return { bqNavigation: true, tab, base: appState.activeTab, returnTab: appState.groupsReturnTab, infoPage: typeof analysisState.infoPage === 'undefined' ? '' : analysisState.infoPage };
+}
 function switchTab(id, pushHistory = true) {
   // find 保留給舊入口與操作教學，底部不再佔一格。
   if (id !== 'find' && !TABS.some(t => t.id === id)) return;
   const changed = id !== (appState.analysisOpen ? 'info' : appState.activeTab);
-  if (pushHistory && changed) {
-    history.replaceState({ bqNavigation: true, tab: appState.analysisOpen ? 'info' : appState.activeTab, base: appState.activeTab, returnTab: appState.groupsReturnTab, infoPage: typeof analysisState.infoPage === 'undefined' ? '' : analysisState.infoPage }, '');
-  }
+  const before = pushHistory && changed ? navigationState(appState.analysisOpen ? 'info' : appState.activeTab) : null;
   if (id === 'groups' && appState.activeTab !== 'groups') appState.groupsReturnTab = appState.analysisOpen ? 'info' : appState.activeTab;
   if (pushHistory && changed && id === 'info') analysisState.infoPage = '';
   appState.analysisOpen = id === 'info';
   if (!appState.analysisOpen) appState.activeTab = id;
-  if (pushHistory && changed) history.pushState({ bqNavigation: true, tab: id, base: appState.activeTab, returnTab: appState.groupsReturnTab, infoPage: typeof analysisState.infoPage === 'undefined' ? '' : analysisState.infoPage }, '');
+  if (before) pushPage(before, navigationState(id));
   if (changed && id === 'groups') refreshGroupStage();
   const prevFocus = document.activeElement;
   render();
@@ -1229,13 +1232,9 @@ export { parseDogsData } from './dog-data.js';
 
 export function bindApp() {
   bindSheetAppend();
-  window.addEventListener('popstate', e => {
-    if (findZoomOpen()) findZoomHide(); // 找狗平面圖全螢幕（#102，js/find.js）
-    else if (BQPhoto.cropOpen()) BQPhoto.hideCropper();
-    else if (lightboxOpen()) hideLightbox();
-    else if (findState.whereDog) whereHide(); // 在哪面板（#111，js/find.js）
-    else if (appState.detailDog) hideDetail();
-    else if (e.state && e.state.bqNavigation) {
+  // 覆蓋層（平面圖放大、裁切、燈箱、在哪、詳細資訊）由 overlays.js 先關；都沒開才換頁籤
+  bindOverlays(e => {
+    if (e.state && e.state.bqNavigation) {
       appState.activeTab = e.state.base || 'walk';
       appState.groupsReturnTab = e.state.returnTab || 'walk';
       switchTab(e.state.tab, false);
@@ -1252,37 +1251,20 @@ export function bindApp() {
     if (BQPhoto.cropOpen()) {
       // 裁切畫面：Esc 取消，Tab 只在裁切畫面的按鈕間移動
       if (e.key === 'Escape') BQPhoto.closeCropper(null);
-      if (e.key === 'Tab') {
-        const items = [...document.querySelectorAll('#cropper button, #cropper input')];
-        const at = items.indexOf(document.activeElement);
-        e.preventDefault();
-        items[(at + (e.shiftKey ? -1 : 1) + items.length) % items.length].focus({ preventScroll: true });
-      }
+      trapFocus(e, [...document.querySelectorAll('#cropper button, #cropper input')]);
       return;
     }
     if (lightboxOpen()) {
       // Esc 關燈箱，Tab 只在燈箱裡的按鈕間移動
       if (e.key === 'Escape') closeLightbox();
-      if (e.key === 'Tab') {
-        const items = [...document.querySelectorAll('#lightbox button:not([hidden]):not(:disabled), #lightbox input:not([hidden]):not(:disabled)')]
-          .filter(b => !b.closest('[hidden]'));
-        const at = items.indexOf(document.activeElement);
-        e.preventDefault();
-        const next = items[(at + (e.shiftKey ? -1 : 1) + items.length) % items.length] || items[0];
-        if (next) next.focus({ preventScroll: true });
-      }
+      trapFocus(e, [...document.querySelectorAll('#lightbox button:not([hidden]):not(:disabled), #lightbox input:not([hidden]):not(:disabled)')]
+        .filter(b => !b.closest('[hidden]')));
       return;
     }
     if (e.key === 'Escape' && appState.detailDog) closeDetail();
     if (e.key !== 'Tab' || !appState.detailDog) return;
     // 我的備註編輯時（#62）文字框和欄位也要能用 Tab 走到
-    const buttons = [...document.querySelectorAll('#detail button:not(:disabled), #detail textarea:not(:disabled), #detail select:not(:disabled), #detail input:not([hidden]):not(:disabled), #toast:not([hidden]) button:not([hidden])')];
-    const first = buttons[0], last = buttons[buttons.length - 1];
-    if (!first) return;
-    if (!buttons.includes(document.activeElement) || (e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
-      e.preventDefault();
-      (e.shiftKey ? last : first).focus({ preventScroll: true });
-    }
+    trapFocus(e, [...document.querySelectorAll('#detail button:not(:disabled), #detail textarea:not(:disabled), #detail select:not(:disabled), #detail input:not([hidden]):not(:disabled), #toast:not([hidden]) button:not([hidden])')], { edgesOnly: true });
   });
   document.getElementById('main').addEventListener('click', e => {
     const favBtn = e.target.closest('[data-walk-fav]');
