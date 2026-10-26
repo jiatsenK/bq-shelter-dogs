@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "marquee",
+        "value": "*",
+        "files": [
+          "admin/public/links.html"
+        ],
+        "createdAt": "2026-10-26T10:04:23.856Z",
+        "reason": "Claude 判讀：links.html、admin.css、links.js 都沒有 marquee 或自動捲動，只有靜態表格；應是 vendor Tabler CSS 的動畫被誤判（同 #624 detect 只剩 vendor 的 animated-dots）"
+      }
+    ]
+  }
+}

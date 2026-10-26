@@ -8,8 +8,9 @@ function deployWriteProblem(deploy, preview) {
   return '';
 }
 
-// 帶金鑰的寫法。Cloudflare 部署用的兩個 Secret 之外，只准 WORKERS_SUBDOMAIN：它不是金鑰，放 Secret 是為了讓日誌把子網域遮成 ***（#493）
-const CARRIES_SECRET = /--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b|WORKERS_SUBDOMAIN\b)/;
+// 帶金鑰的寫法。Cloudflare 部署用的兩個 Secret 之外，只准 WORKERS_SUBDOMAIN 與管理網站連結頁的 GAS_URL、TEST_GAS_URL：
+// 它們不是金鑰，放 Secret 是為了不寫進公開 repo、日誌遮成 ***（#493）
+const CARRIES_SECRET = /--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b|WORKERS_SUBDOMAIN\b|GAS_URL\b|TEST_GAS_URL\b)/;
 
 // 管理網站部署：只能手動、只准部署 wrangler.admin.jsonc 且帶 --message，不套 migration、不帶金鑰。回傳問題或 ''
 function adminDeployProblem(wf) {

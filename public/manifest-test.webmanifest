@@ -1,0 +1,16 @@
+{
+  "name": "板收志工溜狗表（測試版）",
+  "short_name": "板收測試版",
+  "description": "板收志工溜狗表的測試網站，接測試試算表與測試資料，不會動到正式資料",
+  "lang": "zh-Hant",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#E3E9E5",
+  "theme_color": "#5A2A5E",
+  "icons": [
+    { "src": "icons/icon-test-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-test-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-test.svg", "sizes": "any", "type": "image/svg+xml" }
+  ]
+}
