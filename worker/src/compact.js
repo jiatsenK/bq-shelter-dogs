@@ -2,7 +2,7 @@ import { identitiesForCodes } from './identity.js';
 import { readIntakeEvents, readAllIntakeEvents } from './intake.js';
 import { readAllStays } from './stays.js';
 // 精簡 D1（v3_ 表，#245／#247）：網站要的狗清單從這裡讀，形狀跟原本的 data/dogs.json 一樣。
-// 表結構見 db/compact-schema.sql、docs/COMPACT_D1.md
+// 表結構見 db/compact-schema.sql
 
 // 只讀主清單上的狗（ADR 0014）：入所、休養照主鍵讀，不整張讀，讀取量不隨離所的狗變多
 const ON_MAIN = 'dog_id IN (SELECT dog_id FROM v3_sheet_main)';

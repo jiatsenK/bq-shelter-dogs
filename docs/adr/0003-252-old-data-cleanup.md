@@ -4,7 +4,7 @@
 
 ## 決策
 
-網站資料搬到 D1 的 `v3_*` 表（見 `docs/COMPACT_D1.md`）後，舊資料全部退役：
+網站資料搬到 D1 的 `v3_*` 表（見 `docs/design/history/COMPACT_D1.md`）後，舊資料全部退役：
 
 - repo 刪除 `data/`、`dogs/`；刪除前的 main 打上 `data-final` 標籤封存，Git 歷史不改寫。
 - 正式 D1 `bq-shelter-dogs` 刪除 6 張舊表（`card_opened`、`walker_names`、`changes`、`walks`、`dogs`、`kv`）；預覽 D1 `bq-shelter-dogs-test` 刪除第一版與 `v2_*` 共 25 張候選表。`v3_*` 不動。
