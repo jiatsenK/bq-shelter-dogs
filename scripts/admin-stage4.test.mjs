@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { buildAdminAssets } from './build-admin-assets.mjs';
 await buildAdminAssets();
 const { parseActivities, filterActivities, activityPayload, sameActivity, describeActivity, matchDog } = await import('../admin/public/js/activity-model.js');
-const { completeness, parseSheetGaps, gapStatus, parseCronStatus, cronStatus } = await import('../admin/public/js/data-checks.js');
+const { completeness, careLink, parseSheetGaps, gapStatus, parseCronStatus, cronStatus } = await import('../admin/public/js/data-checks.js');
 const { editQuery, parseEditPage, formatWhen, sourceLabel, valueText } = await import('../admin/public/js/edit-log.js');
 
 const A = 'a'.repeat(32), B = 'b'.repeat(32);
@@ -38,18 +38,26 @@ test('#567 活動加狗：只接受明確對上的狗，不猜同名', () => {
   assert.equal(matchDog(dogs, '不存在'), null);
 });
 
-test('#567 資料檢查：主清單上的狗，缺漏規則同志工資料完整度；#518 狀態分缺漏／讀取失敗／過期', () => {
+test('#567 待補清單（原資料檢查）：主清單上的狗，缺漏規則同志工資料完整度；#518 狀態分缺漏／讀取失敗／過期', async () => {
   const base = { dogId: A, number: '2026010101', name: '阿福', cage: 'A1', note: '', intro: '介紹', sex: 'male', onMain: true, fixedCare: false, rest: null, photoUrl: '/photos/2026010101.jpg', walkedDate: '2026-10-01' };
   const dogs = [base, { ...base, dogId: B, number: '', intro: ' ', sex: '', photoUrl: null, walkedDate: '' }, { ...base, dogId: 'e'.repeat(32), number: '12345', onMain: true }, { ...base, dogId: 'f'.repeat(32), number: '', onMain: false }];
   const result = completeness(dogs);
   assert.equal(result.total, 3, '未列主清單的狗不算進完整度');
   const count = label => result.items.find(i => i.label === label).dogs.length;
-  assert.equal(count('沒有編號'), 1);
+  assert.equal(count('缺編號'), 1);
   assert.equal(count('編號看不出入所日期'), 1);
-  assert.equal(count('沒有溜狗日期'), 1);
-  assert.equal(count('沒有性別'), 1);
-  assert.equal(count('沒有入所介紹'), 1);
-  assert.equal(count('沒有照片紀錄'), 1);
+  assert.equal(count('缺溜狗日期'), 1);
+  assert.equal(count('性別待確認'), 1);
+  assert.equal(count('缺介紹'), 1);
+  assert.equal(count('缺照片'), 1);
+  // #624 每項都對得到狗資料表的維護狀態篩選，連過去看到同一批狗
+  const { CARE_FILTERS, orderDogs } = await import('../admin/public/js/dog-table.js');
+  for (const item of result.items) {
+    assert.equal(CARE_FILTERS[item.care], item.label, '用語和狗資料表一致');
+    assert.deepEqual(orderDogs(dogs, { presence: 'main', care: item.care }).map(d => d.dogId).sort(), item.dogs.map(d => d.dogId).sort(), item.label);
+  }
+  assert.equal(careLink('missingIntro'), './?presence=main&care=missingIntro');
+  assert.equal(careLink('missingIntro', A), `./?presence=main&care=missingIntro&dog=${A}`);
 
   const ok = parseSheetGaps({ sheetGaps: { state: 'ok', recordedAt: '2026-10-25T01:43:00.000Z', checkedAt: '2026-10-25T05:53:00.000Z', stale: false, total: 1, items: [{ sheet: 'main', key: 'main:1', number: '1', name: '阿福', dogId: A, cage: 'A1' }] } });
   assert.match(gapStatus(ok), /10\/25 13:53/);

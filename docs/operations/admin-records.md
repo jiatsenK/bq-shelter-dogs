@@ -1,4 +1,6 @@
-# 活動紀錄、資料檢查與更新紀錄（#567）
+# 活動紀錄、待補清單、修改紀錄與網站更新（#567）
+
+> 2026-10-26 #624：管理網站頁名改了，API 與契約不變。「資料檢查」→「待補清單」（完整度各項連到已篩選的狗資料表，狗名直接開編輯抽屜）；「更新紀錄」拆成「修改紀錄」（`updates.html`，資料編輯）與「網站更新」（`releases.html`）。志工網站的頁名不變。
 
 2026-10-26。基準 main `8d62135`（含 #564–#566）。依 #562、#567、ADR 0020（草稿 PR #584）。沒有新增 migration、資料表或排程。
 
@@ -21,14 +23,14 @@ npx.cmd wrangler d1 execute bq-shelter-dogs --remote --command "SELECT a.activit
 
 核對日期、類型、出席隻數與未對應數。不足四場、重複或內容不同時先列差異，不用管理頁自動補登或合併。
 
-## 資料檢查 `checks.html`
+## 待補清單 `checks.html`（原資料檢查）
 
 - 主清單資料完整度：沿用志工 `dataCompleteness` 規則（沒有編號、編號看不出入所日期、沒有溜狗日期、沒有性別、沒有入所介紹、沒有照片），只算主清單上的狗；資料用 `/api/manage/dogs`（多回 `walkedDate`，同一個 SELECT）。照片看 D1 照片引用／R2 清單，命名為「沒有照片紀錄」，不逐張 HEAD 下載；沒有實物巡檢。
 - 網站有、試算表沒有（#518）：GET `/api/manage/data-checks` 只讀 `v3_sync_state` 的 `dog_list_extra`，主清單／已出所的鍵各用最多 ceil(N/90) 個 SELECT 對回狗名、籠位、永久 ID（最多顯示 200 筆）。不刪狗、不記離所、不合併。
 - 狀態分開：讀取失敗（API 錯）、讀不懂（紀錄壞掉）、從未掃描、過期（最後掃描超過 24 小時）、正常。前兩者明說「不代表沒有差異／缺漏」。
 - 掃描時間：`scanDogList` 每次掃描都把 `checkedAt` 寫進 `dog_list_extra`（`at` 仍只在清單變動時換）。一天三次、每次 1 列，取代原本「指紋一樣就不寫 D1」。志工 Worker 部署前的舊格式沒有 `checkedAt`，頁面顯示「掃描時間還沒記錄」並視為無法確認是否過期。
 
-## 更新紀錄 `updates.html`
+## 修改紀錄 `updates.html`、網站更新 `releases.html`（原更新紀錄）
 
 - 網站更新：建置時把 `public/website-updates.json` 複製到 `admin/public/shared/`，管理頁唯讀顯示；不存 D1。
 - 資料編輯：GET `/api/manage/edits`，參數白名單 `q`（操作者、編號、狗名、改前改後文字，`%`／`_` 視為文字）、`kind`（`KIND_LABELS`）、`dog`（編號、舊編號、永久 ID 或狗名）、`actor`（名字或管理者 email）、`source`（access／volunteer／legacy）、`from`／`to`（台灣日期）、`order`（newest／oldest）、`cursor`（上一頁最後一筆的 id）、`size`（25／50／100）；未知參數或超過 100 字回 400。

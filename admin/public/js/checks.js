@@ -1,10 +1,10 @@
 import { readDogs, readDataChecks, readCronStatus } from './api.js';
 import { parseManageDogs } from './dog-table.js';
-import { completeness, parseSheetGaps, gapStatus, SHEET_LABELS, CRON_LABELS, parseCronStatus, cronStatus } from './data-checks.js';
+import { completeness, careLink, parseSheetGaps, gapStatus, SHEET_LABELS, CRON_LABELS, parseCronStatus, cronStatus } from './data-checks.js';
 import { showVolunteerState } from './volunteer-state.js';
 import { byId, element } from './dom.js';
 
-// #567 資料檢查頁：每個區塊各自讀取、各自顯示失敗；讀不到時明說「無法判斷」，不當成沒有缺漏。
+// #567 待補清單（原資料檢查）頁：每個區塊各自讀取、各自顯示失敗；讀不到時明說「無法判斷」，不當成沒有缺漏。
 const failed = (node, text) => { node.dataset.error = 'true'; node.textContent = text; };
 
 function renderGaps(result) {
@@ -44,7 +44,7 @@ function renderCompleteness(result) {
     return;
   }
   const { total, items } = completeness(dogs);
-  status.textContent = `主清單上共 ${total} 隻；點項目看是哪幾隻。`;
+  status.textContent = `主清單上共 ${total} 隻；展開項目看是哪幾隻，點狗名直接編輯。`;
   list.append(...items.map(item => {
     if (!item.dogs.length) {
       const ok = element('div', undefined, 'check-item ok');
@@ -54,9 +54,17 @@ function renderCompleteness(result) {
     const details = element('details', undefined, 'check-item');
     const summary = element('summary');
     summary.append(element('span', item.label), element('b', `${item.dogs.length} 隻`));
+    // #624 項目連到已篩選的狗資料表，狗名直接開那隻狗的編輯抽屜
+    const filtered = element('a', `在狗資料表看這 ${item.dogs.length} 隻`, 'check-filter-link');
+    filtered.href = careLink(item.care);
     const names = element('ul', undefined, 'check-dogs');
-    names.append(...item.dogs.map(d => element('li', d.number ? `${d.name}（${d.number}）` : `${d.name}（無編號）`)));
-    details.append(summary, names);
+    names.append(...item.dogs.map(d => {
+      const li = element('li'), link = element('a', d.name || '未命名');
+      link.href = careLink(item.care, d.dogId);
+      li.append(link, ` ${d.number ? `（${d.number}）` : '（無編號）'}`);
+      return li;
+    }));
+    details.append(summary, filtered, names);
     return details;
   }));
 }
