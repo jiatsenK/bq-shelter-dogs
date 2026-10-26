@@ -100,7 +100,7 @@ async function runRestTests() {
     await check('入所介紹（10-10）：直接點那一段就能改（不另外放按鈕）、不用通關碼、帶 editor，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {
       const calls = fakeApi((name, id, b) => json({ ok: true, id: '9613', intro: b.text }));
       showDetail(allDogs[2]);
-      eq([document.getElementById('introEdit').closest('[data-section]').dataset.section, document.getElementById('introEdit').getAttribute('aria-label'), document.querySelectorAll('#detail [data-section="rest"] .admin-btn').length], ['intro', '補入所介紹', 1], '沒介紹：那一段本身可以點，管理用只剩設定休養中：');
+      eq([document.getElementById('introEdit').closest('[data-section]').dataset.section, document.getElementById('introEdit').getAttribute('aria-label'), document.querySelectorAll('#detail [data-section="rest"] .admin-btn').length], ['intro', '補介紹', 1], '沒介紹：那一段本身可以點，管理用只剩設定休養中：');
       document.getElementById('introEdit').click();
       eq([!!document.querySelector('#detail .detail-bar [form="introForm"]'), !!document.querySelector('#detail .detail-bar #groupWalk')], [true, false], '底部列換成儲存介紹、溜了收起來：');
       const text = document.getElementById('introText');
@@ -113,7 +113,7 @@ async function runRestTests() {
       eq(calls[0][2].editor, '志工我', '帶名字：');
       eq([introEdit, introOf(allDogs[2])], [null, '親人\n喜歡散步'], '成功：');
       eq(document.querySelector('[data-section="intro"] .content').textContent, '親人\n喜歡散步', '馬上看到：');
-      eq(document.getElementById('introEdit').getAttribute('aria-label'), '改入所介紹', '有介紹：點了是改：');
+      eq(document.getElementById('introEdit').getAttribute('aria-label'), '改介紹', '有介紹：點了是改：');
       if (calls.some(c => c[0] === 'walk')) throw new Error('不應該寫試算表');
       hideDetail(); BQWalkUI.hideToast();
       delete introOverrides['9613'];
@@ -225,7 +225,7 @@ async function runRestTests() {
     });
     // #481：只觀察表單與 API，保護共用狀態轉換前後的既有行為。
     for (const spec of [
-      { name: '入所介紹', open: 'introEdit', form: 'introForm', field: '#introText', value: '保留這份介紹草稿', api: 'saveIntro', cancel: 'introCancel' },
+      { name: '介紹', open: 'introEdit', form: 'introForm', field: '#introText', value: '保留這份介紹草稿', api: 'saveIntro', cancel: 'introCancel' },
       { name: '出入所紀錄', open: 'staysEdit', form: 'staysForm', field: '[data-stay-field="reason"]', value: '迷路', api: 'saveStays', cancel: 'staysCancel' },
       { name: '休養設定', open: 'restEdit', form: 'restForm', field: '#restReason', value: '保留休養原因', api: 'saveRest', cancel: 'restCancel' },
     ]) {

@@ -52,7 +52,7 @@ async function runAnalysisTests() {
     const c = dataCompleteness(rows, null);
     eq(c.items.map(i => `${i.label}:${names(i.dogs).join('/')}`), [
       '沒有編號:沒號', '編號看不出入所日期:怪號/未來', '沒有溜狗日期:無日/照顧',
-      '沒有性別:小二/無日/照顧/沒號/怪號/未來', '沒有入所介紹:乙長/小一/小二/無日/照顧/沒號/怪號/未來']);
+      '沒有性別:小二/無日/照顧/沒號/怪號/未來', '沒有介紹:乙長/小一/小二/無日/照顧/沒號/怪號/未來']);
     const photos = new Map(dogs.filter(d => d.id).map(d => [d.id, d.name !== '乙長']));
     eq(names(dataCompleteness(rows, photos).items[5].dogs), ['乙長', '沒號'], '沒有照片：');
   });

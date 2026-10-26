@@ -23,3 +23,4 @@
   - 文件：ADR 0021、GLOSSARY、`dog-editing.md`、`docs/design/admin.md`、`public/js/README.md`。
 - 沒做／要 K：正式資料 `editStays` 與 `editFormer` 是否一樣（沒查正式 D1）；部署（志工站合併後自動、管理站要按「部署管理網站」）；正式資料實測墨西哥、納卡西、合併。
 - 相關 PR：[#652](https://github.com/jiatsenK/bq-shelter-dogs/pull/652)，草稿（K 2026-10-26 交辦）。
+- K 2026-10-26 看截圖：逐次事件搬到出入所紀錄後，下面那段不再是「入所介紹」。改叫「介紹」（志工網站標題、改／補按鈕、分析頁「沒有介紹」、修改紀錄的種類名稱、GLOSSARY），跟管理網站原本的「介紹」一致。

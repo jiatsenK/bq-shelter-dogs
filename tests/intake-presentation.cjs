@@ -26,13 +26,13 @@ module.exports = async (browser, base) => {
     await page.locator('#main .card').filter({ hasText: '墨西哥' }).click();
     const section = page.locator('#detail [data-section="intro"]');
     assert.equal(await page.locator('#detail [data-section="stays"]').count(), 0, '閱讀時只有一段');
-    // K 2026-10-26：出入所紀錄一行一件事（日期、入所／離所、原因），入所介紹的補充原文接在下面
-    assert.deepEqual(await section.locator('h3').evaluateAll(hs => hs.map(h => h.firstChild.nextSibling.textContent)), ['出入所紀錄', '入所介紹']);
+    // K 2026-10-26：出入所紀錄一行一件事（日期、入所／離所、原因），介紹接在下面（事件搬上去後不再叫入所介紹）
+    assert.deepEqual(await section.locator('h3').evaluateAll(hs => hs.map(h => h.firstChild.nextSibling.textContent)), ['出入所紀錄', '介紹']);
     assert.deepEqual(await section.locator('time').allTextContents(), ['2015/08/18', '2017/09/05', '2017/09/05']);
     assert.deepEqual(await section.locator('.intake-event').allTextContents(), ['迷路', '整修移所']);
     assert.equal(await section.locator('.content').textContent(), '親人，怕機車聲。', '其他補充接在下面');
     assert.equal(await section.locator('details, [role="tablist"]').count(), 0, '直接呈現，不加展開或切換');
-    assert.equal(await section.locator('button').count(), 2, '閱讀時只有改出入所紀錄、改入所介紹兩個入口');
+    assert.equal(await section.locator('button').count(), 2, '閱讀時只有改出入所紀錄、改介紹兩個入口');
     // #639 驗收：墨西哥的入所日仍是 2015-08-18；舊資料的「整修移所」（#392）先列在離所那行，#651 會搬到離所原因
     assert.deepEqual(await section.locator('.stay-lines li').allTextContents(), ['2015/08/18入所迷路', '2017/09/05離所整修移所', '2017/09/05入所']);
     assert.match(await page.locator('#detail .chips').textContent(), /入所 2015\/8/);

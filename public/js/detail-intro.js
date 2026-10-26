@@ -65,14 +65,14 @@ function introSectionHtml(dog, intro) {
   if (appState.staysEdit && appState.staysEdit.dog === dog) return staysSectionHtml(dog);
   const e = appState.introEdit && appState.introEdit.dog === dog ? appState.introEdit : null;
   if (!e) {
-    // 一段兩部分（K 2026-10-26）：出入所紀錄一行一件事（逐次事件也排進去），下面是入所介紹的補充原文
+    // 一段兩部分（K 2026-10-26）：出入所紀錄一行一件事（逐次事件也排進去），下面是介紹（原本叫入所介紹，事件搬上去後只剩介紹文字）
     const can = canEdit('editIntro') && !!(dog.id && appState.UPLOAD_URL) && !dog.departure;
     const { events, supplement } = intakePresentation(dog, intro);
     const stays = staysView(dog, events);
     if (!stays.list && !stays.button && !supplement && !can) return '';
     return `<section class="detail-section" data-section="intro">
       ${stays.list || stays.button ? `<h3 class="intro-heading">${icon('card')}出入所紀錄${stays.button}</h3>${stays.list}` : ''}
-      ${supplement || can ? `<h3 class="intro-heading">${icon('card')}入所介紹${can ? `<button type="button" class="intro-heading-edit" id="introEdit" aria-label="${events.length || supplement ? '改' : '補'}入所介紹">${icon('write')}</button>` : ''}</h3>` : ''}
+      ${supplement || can ? `<h3 class="intro-heading">${icon('card')}介紹${can ? `<button type="button" class="intro-heading-edit" id="introEdit" aria-label="${events.length || supplement ? '改' : '補'}介紹">${icon('write')}</button>` : ''}</h3>` : ''}
       ${supplement ? `<div class="content">${esc(supplement)}</div>` : ''}
     </section>`;
   }
@@ -80,7 +80,7 @@ function introSectionHtml(dog, intro) {
   const n = [...e.text].length;
   return `<section class="detail-section" data-section="intro">
     <form class="rest-form intro-form" id="introForm" autocomplete="on">
-      <h3>${icon('card')}入所介紹</h3>
+      <h3>${icon('card')}介紹</h3>
       ${intakeEditorHtml(dog, e, busy)}
       <p class="rest-hint">存好後這台馬上看到，其他人幾分鐘後（下次更新資料）看到。只存在網站，不寫試算表。</p>
       <label>補充介紹（保留原文）<textarea id="introText" rows="7" maxlength="${INTRO_MAX}" placeholder="例：親人、喜歡散步，怕機車聲"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea><small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small></label>

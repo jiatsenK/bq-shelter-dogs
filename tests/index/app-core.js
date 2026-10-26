@@ -315,7 +315,7 @@ function runTests() {
         groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '出入所紀錄', '入所介紹', '休養設定'].slice(0, box.querySelector('[data-section="rest"]') ? 6 : 5)); // #390、K 2026-10-26：出入所紀錄跟入所介紹同一段
+        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '出入所紀錄', '介紹', '休養設定'].slice(0, box.querySelector('[data-section="rest"]') ? 6 : 5)); // #390、K 2026-10-26：出入所紀錄跟入所介紹同一段
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/thumbs/2.jpg', '一起溜的照片：');

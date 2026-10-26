@@ -136,7 +136,7 @@ function dataCompleteness(rows, hasPhoto) {
     { label: '編號看不出入所日期', dogs: pick(r => r.dog.id && !r.intake) },
     { label: '沒有溜狗日期', dogs: pick(r => !r.dog.walkedDate) },
     { label: '沒有性別', dogs: pick(r => !r.dog.sex) },
-    { label: '沒有入所介紹', dogs: pick(r => !r.dog.intro) },
+    { label: '沒有介紹', dogs: pick(r => !r.dog.intro) },
   ];
   if (hasPhoto) items.push({ label: '沒有照片', dogs: pick(r => !r.dog.id || hasPhoto.get(r.dog.id) === false) });
   return { total: rows.length, items };
