@@ -17,3 +17,4 @@
 - `worker/test/packs.test.mjs`：直接讀表的對照也合併今日溜狗；「沒變時只讀版本號」的 /dogs 從 2 列改 3 列（多今日溜狗資料包 1 列）。
 - 本機 `check-local.ps1`：Node 全套 453／454，唯一失敗 `admin-stage4` 為既有偶發、單獨重跑通過；本機沒有 pwsh 7，`local-check.test.mjs` 以 `BQ_CHECK_PWSH=powershell.exe` 跑通過。網頁 25 套全過（index 253 項）。
 - 未在手機上實際看過。
+- 草稿 PR #618（加 preview 標籤）。
