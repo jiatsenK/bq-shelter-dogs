@@ -9,3 +9,4 @@
   - 文件：ADR 0018 第 5、7 點；`docs/ARCHITECTURE_NOW.md` 排程表；`docs/setup/SHEET_WRITE_SETUP.md`；重新產生 `docs/adr/README.md`。
   - GAS 不用動：`dogListScan` 仍是 09:43、13:53、23:53（前後差 15 分鐘）。
 - 測試：排程字串相關測試（cron-status、dog-list 垃圾桶、walk-edit-rows）改新時間；`sheet-call.test.mjs` 新增逾時測試。
+- 相關 PR：[#620](https://github.com/jiatsenK/bq-shelter-dogs/pull/620)，草稿。
