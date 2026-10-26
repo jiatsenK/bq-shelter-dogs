@@ -26,4 +26,5 @@
   - Standards 沒有硬性違規。已修：三處重複的金鑰正則抽成 `CARRIES_SECRET`、smoke-api 改用 `URL` 解析、測試函式改名 `accountHosts` 且不 export、預覽留言重複的 PR 編號變數；網頁測試覆蓋的 4 張 `.scratch/*-evidence` 截圖還原。四個 workflow 各有一份「沒設就停」步驟，要共用得做 composite action，這次不做。
   - Spec：已修 `docs/PROJECT_GOALS.md` 的轉址舊說法；Secret 遮罩、`--var` 與 `keep_vars: false`、workflow_call 拿得到 Secret 都核對過。
 - 本機測試：Node 467 項只有 `scripts/local-check.test.mjs` 4 項失敗（本機本來就失敗）；網頁 26 套全過。
-- 相關 PR：（開 PR 後補）。
+- 2026-10-26 16:52：K 同意後設好 GitHub Secret `WORKERS_SUBDOMAIN`；合併最新 main（#591、#593、#595），解 `r2-thumbs.yml`、`CLOUDFLARE_SETUP.md` 衝突（照 #595 拿掉 `NOTES_PASSCODE` 備援），重跑 index、admin 與受影響的 Node 測試，全過。
+- 相關 PR：#641（草稿）。
