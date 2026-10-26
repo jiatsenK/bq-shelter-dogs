@@ -2,6 +2,7 @@
 
 - Agent：Claude Code（Opus 5.5）
 - 分支：`claude/mobile-search-sticky`（從 origin/main `ced3f38` 開）
+- PR：#661（草稿）
 - 依據：K 2026-10-26「手機板搜尋欄沒辦法跟著下滑跑動，要修這個 BUG；另外畫面上：天～天描述刪掉」
 
 ## 做了什麼
@@ -21,4 +22,5 @@
 
 ## 未完成
 
-- 尚未 commit／開 PR；未跑 `-Full`。
+- 測試網站部署 a21274d，K 看過間距可以。
+- 草稿 PR #661；未跑 `-Full`（交給 CI）。
