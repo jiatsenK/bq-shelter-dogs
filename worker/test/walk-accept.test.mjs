@@ -52,6 +52,21 @@ test('接受交易任一步失敗皆回復；預算不足不留半份狀態', as
   env.DB.close();
 });
 
+// #591：寫入預算只看單次上限與每日保留量，不查 Cloudflare 帳號用量，也不每次記警告
+test('#591 預算不查帳號用量、不記警告；每日保留量照擋', async () => {
+  const env = { ...await setup(), CLOUDFLARE_API_TOKEN: 't', CLOUDFLARE_ACCOUNT_ID: 'a' };
+  const real = globalThis.fetch, warn = console.warn, calls = [], warns = [];
+  globalThis.fetch = async url => { calls.push(String(url)); return Response.json({}); };
+  console.warn = (...a) => warns.push(a.join(' '));
+  try {
+    assert.equal((await post(env, request('budget-0101'))).status, 200);
+    assert.deepEqual(calls.filter(u => u.includes('api.cloudflare.com')), []);
+    assert.deepEqual(warns.filter(w => w.includes('walk-budget')), []);
+    const reserved = (await env.DB.prepare('SELECT reserved FROM v3_walk_write_budget').first()).reserved;
+    assert.equal((await post({ ...env, SYNC_DAILY_BUDGET: String(reserved) }, request('budget-0102', '乙'))).status, 503);
+  } finally { console.warn = warn; globalThis.fetch = real; env.DB.close(); }
+});
+
 test('空白拆名沿用既有規則與固定身分；午夜保留最新狀態且拒絕重放昨天操作', async () => {
   const env = await setup();
   const req = request('spaces-0001','甲 乙');
