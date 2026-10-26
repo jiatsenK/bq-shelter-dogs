@@ -22,3 +22,4 @@
 ## 未完成／例外
 
 - 無。
+- 轉正式後 CI（Linux pwsh 7）失敗：pwsh 7 的 stderr ErrorRecord 沒把原文放在 `TargetObject`，錯誤行寫成空白，第 36 行那項看不到「未知測試」。改成 `TargetObject` 是字串才用，否則用 `Exception.Message`。另外推送與轉正式同時觸發，草稿那次被略過的 run 取消了正式那次，已手動重跑。

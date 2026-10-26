@@ -39,12 +39,12 @@ function Invoke-Check([string]$Name, [string[]]$NodeArgs) {
   $timer = [System.Diagnostics.Stopwatch]::StartNew()
   $code = 1
   # 5.1 在 Stop 下會把原生命令的第一行 stderr 當終止錯誤，*> 又寫成 UTF-16；改逐行寫 UTF-8。
-  # stderr 行包成 ErrorRecord，原文在 TargetObject（空行的訊息會變成 RemoteException）。
+  # stderr 行包成 ErrorRecord：5.1 原文在 TargetObject（空行的訊息會變成 RemoteException），pwsh 7 只在訊息裡。
   $ErrorActionPreference = 'Continue'
   $writer = [IO.StreamWriter]::new($log, $false, [Text.UTF8Encoding]::new($false))
   try {
     & node @NodeArgs 2>&1 | ForEach-Object {
-      $writer.WriteLine($(if ($_ -is [Management.Automation.ErrorRecord]) { "$($_.TargetObject)" } else { "$_" }))
+      $writer.WriteLine($(if ($_ -is [Management.Automation.ErrorRecord]) { if ($_.TargetObject -is [string]) { $_.TargetObject } else { $_.Exception.Message } } else { "$_" }))
     }
     $code = $LASTEXITCODE
   } finally {
