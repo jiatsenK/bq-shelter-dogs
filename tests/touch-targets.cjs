@@ -138,6 +138,8 @@ function measure({ root, MIN, GAP }) {
     + (el.dataset.tab ? `[data-tab=${el.dataset.tab}]` : '') + (el.dataset.walkView ? `[data-walk-view=${el.dataset.walkView}]` : '');
   const labelOf = el => (el.getAttribute('aria-label') || el.textContent || el.placeholder || '').trim().replace(/\s+/g, ' ').slice(0, 16);
   const targets = [...scope.querySelectorAll(selector)]
+    // 整張可點的卡片裡、鍵盤到不了的按鈕（狗卡的狗名，#644）跟卡片做同一件事，算卡片的一部分，不另外量
+    .filter(el => !(el.tabIndex === -1 && el.parentElement.closest('[role=button]')))
     .filter(el => !el.closest('[hidden], [inert]') && el.checkVisibility({ visibilityProperty: true, opacityProperty: true }) && getComputedStyle(el).pointerEvents !== 'none')
     .map(el => ({ el, box: area(el), layer: layerOf(el), key: keyOf(el), label: labelOf(el) }))
     .filter(t => t.box.right - t.box.left > 0 && t.box.bottom - t.box.top > 0);

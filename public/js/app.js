@@ -767,6 +767,7 @@ const NEED_EDITOR = '請先選好你的名字再編輯（開頭畫面點自己�
 const editorName = () => loadWalkerName();
 const editorHeaders = () => ({ 'X-Editor': encodeURIComponent(editorName()) });
 
+// 狗名是 tabindex=-1 的按鈕（#644）：鍵盤停在整張卡就好；手機的觸控修正會把點擊吸到最近的可點元素，狗名不可點時吸到籠位標籤、開成在哪
 // 所有分頁、搜尋、籠位共用這張卡片。第一層只放照片、犬名、天數、籠位｜編號，
 // 備註命中警示關鍵字才把原文放上來；一般備註、可一起遛、狗卡資訊點卡片看詳細資訊
 // eager：第一屏的卡片（#91），照片不等延後載入、優先下載
@@ -778,7 +779,7 @@ function dogCard(dog, today, eager = false) {
       <div class="body">
         <div class="row">
           <div class="who">
-            <div class="name">${esc(dog.name)}${sexMark(dog)}</div>
+            <button type="button" class="name" tabindex="-1">${esc(dog.name)}${sexMark(dog)}</button>
             ${cardMeta(dog)}
           </div>
           ${lastWalk(dog, today)}
@@ -1018,7 +1019,7 @@ function walkRow(dog, today) {
     : s.kind === 'rest' ? `休養<span class="sr-only">中，${monthDay(s.until)} 前暫停帶出</span>` : '—<span class="sr-only">沒有紀錄</span>';
   return `<div class="row-dog${flag ? ' flagged' : ''}" data-dog="${appState.allDogs.indexOf(dog)}" role="button" tabindex="0" aria-haspopup="dialog">
     <span class="r-date ${s.kind === 'rest' ? 'rest' : s.level || 'muted'}">${days}</span>
-    <span class="r-name">${esc(dog.name)}</span>
+    <button type="button" class="r-name" tabindex="-1">${esc(dog.name)}</button>
     ${typeof whereKnown === 'function' && whereKnown(dog)
       ? `<button type="button" class="r-cage cage-pill" data-where aria-label="${esc(dog.name)} 在哪：${esc(dog.cage)}${dog.homeCage ? '（暫住）' : ''}">${icon('pin')}${esc(dog.cage)}</button>`
       : `<span class="r-cage plain">${esc(dog.cage)}</span>`}
