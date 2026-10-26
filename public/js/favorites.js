@@ -1,10 +1,10 @@
 import { BQStore } from './store.js';
 import { appState } from './page-state.js';
-import { WALKER_CODES_KEY, loadMyCodes, loadWalkerName, parseMyWalks, render, saveWalkerName } from './app.js';
+import { currentIdentity, loadMyCodes, loadWalkerName, render, saveIdentity } from './app.js';
 import { renderDetail } from './detail.js';
 import { walkKey } from './dog-status.js';
 import { BQApi } from './api.js';
-import { BQWelcome } from './welcome.js';
+import { refreshIdentity } from './identity.js';
 import { BQWalkUI } from './walk-ui.js';
 
 // 我的常溜同步：每個實例保留自己的快取與待送佇列，只公開 BQFavorites。
@@ -110,15 +110,12 @@ const BQFavorites = (() => {
       favSyncQueue = favSyncQueue.then(async () => {
         let codes = loadMyCodes();
         if (!codes.length || !appState.UPLOAD_URL) return;
-        const original = codes.join(','), name = loadWalkerName();
+        const name = loadWalkerName();
         if (name) {
-          const out = await BQWelcome.request('', { name });
-          if (loadMyCodes().join(',') !== original || loadWalkerName() !== name) return;
-          saveWalkerName(out.identity.name);
-          appState.walkerCodesMemory = out.identity.codes;
-          try { appState.phoneStore?.writeJson(WALKER_CODES_KEY, out.identity.codes); } catch (e) { /* 本次仍可使用 */ }
-          codes = out.identity.codes;
-          appState.myWalks = appState.walksData ? parseMyWalks(appState.walksData, codes) : [];
+          // 中途換了身分就整次跳過，下一次同步用新的身分
+          const result = await refreshIdentity(name, { read: currentIdentity, write: identity => saveIdentity(identity, { syncFavs: false }) });
+          if (result.status === 'changed') return;
+          codes = result.identity.codes;
         }
         await reconcileFavorites(favState(), codes, {
           codes: loadMyCodes, local: localFavs, save: saveFavState,

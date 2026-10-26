@@ -185,8 +185,10 @@ async function runCardsTests() {
       eq(cleared.localStorage.getItem('bq-walker-name'), null);
     } finally { frames.forEach(f => f.remove()); delete window.__cardFixture; }
   });
-  await check('圖鑑只讀狗與遛狗資料，另透過開卡 API 儲存，不寫試算表', () => {
-    const used = [...new Set([...code.matchAll(/BQApi\.(\w+)\(/g)].map(m => m[1]))].sort();
+  await check('圖鑑只讀狗與遛狗資料，另透過開卡 API 儲存，不寫試算表', async () => {
+    // 身分解析從 #623 R8 起經 identity.js，一起算進圖鑑用到的 API
+    const identityCode = await fetch('../public/js/identity.js').then(r => r.text());
+    const used = [...new Set([...(code + identityCode).matchAll(/BQApi\.(\w+)\(/g)].map(m => m[1]))].sort();
     eq(used, ['departedCards', 'dogs', 'identity', 'myDogs', 'openedCards', 'saveOpenedCards', 'walks'], '狗、歷史、我溜過的狗、身分解析、開卡與已出所（#271）：');
     if (!API_JS.includes("departedCards: () => get('/departed-cards'")) throw new Error('已出所只用 GET 讀');
     if (/\bfetch\(|script\.google\.com|sheets\.googleapis\.com|UPLOAD_URL/.test(code)) throw new Error('cards.js 只能經 BQApi 寫開卡 API');
