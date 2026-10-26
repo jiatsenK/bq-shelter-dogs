@@ -1,6 +1,6 @@
 import { FIND_CAGES, findCageOf, findPickCage, findZoneOf, whereClose, whereOpen } from './find.js';
 import { appState, deskState, findState } from './page-state.js';
-import { appHeader, loadWalkView, render, saveWalkView, switchTab } from './app.js';
+import { appHeader, loadWalkView, render, saveWalkView, stickyTopBottom, switchTab } from './app.js';
 import { closeDetail, showDetail } from './detail.js';
 import { esc, icon } from './ui-kit.js';
 import { deskOn } from './desk.js';
@@ -183,7 +183,7 @@ const BQTour = (() => {
   // 目標不在畫面上（被頁首或底部列擋住）就捲過去
   function scrollTourTarget(el) {
     const r = el.getBoundingClientRect();
-    const top = appHeader ? appHeader.getBoundingClientRect().bottom : 0;
+    const top = stickyTopBottom();
     const bar = document.getElementById('bottomBar');
     if (bar && bar.contains(el)) return; // 底部分類列一直在畫面上，不用捲
     const bottom = bar ? bar.getBoundingClientRect().top : window.innerHeight;
@@ -223,7 +223,7 @@ const BQTour = (() => {
     const el = tourShownTarget() || tourTarget(tour.step);
     box.classList.toggle('no-target', !el);
     if (!el) { tip.style.top = ''; return; }
-    if (!whereDemo && !detailDemo && el.closest('#main') && el.getBoundingClientRect().top < (appHeader ? appHeader.getBoundingClientRect().bottom : viewport.top) + 8) scrollTourTarget(el);
+    if (!whereDemo && !detailDemo && el.closest('#main') && el.getBoundingClientRect().top < (appHeader ? stickyTopBottom() : viewport.top) + 8) scrollTourTarget(el);
     const r = el.getBoundingClientRect();
     const pad = 6;
     // 只亮畫面裡看得到的部分（換到我溜過、找狗時亮整個內容區）
@@ -245,7 +245,7 @@ const BQTour = (() => {
     const tipTop = `${Math.round(Math.max(viewport.top + 12, Math.min(viewBottom - h - 12, y)))}px`;
     if (tip.style.top !== tipTop) tip.style.top = tipTop;
   }
-  // 導覽開著時每一格都重新對位置（K 2026-10-09 黃框歪了）：頁首範圍字晚一格出現、狗卡重畫、在哪面板滑上來，
+  // 導覽開著時每一格都重新對位置（K 2026-10-09 黃框歪了）：狗卡重畫、在哪面板滑上來，
   // 內容都會移動，只在捲動、重畫時對一次會跟不上
   let tourFrame = 0;
   function tourLoop() {

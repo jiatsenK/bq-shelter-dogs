@@ -881,7 +881,6 @@ function render() {
   if (appState.loadState === 'ready' && appState.activeTab === 'walk' && !appState.analysisOpen && appState.restState === 'error') {
     mainEl.insertAdjacentHTML('afterbegin', `<div class="alert-box warn" role="status"><span>休養設定暫時讀不到，帶出前請確認。已讀到的設定會保留。<br><button type="button" class="retry-btn" id="restRetry">重讀休養設定</button></span></div>`);
   }
-  queueRange();
   BQTour.queue();
 }
 
@@ -897,14 +896,20 @@ function syncHeaderShadow() {
   if (appHeader) appHeader.classList.toggle('scrolled', window.scrollY > 4);
 }
 
-// 頁首收起（critique 2026-10-09 P1）：往下捲時標題那一行跟著捲走，只留搜尋框和範圍字黏在上面，
+// 頁首收起（critique 2026-10-09 P1）：往下捲時標題那一行跟著捲走，手機搜尋框在表頭下面另外黏住（.page-search），
 // 狗卡多看得到一兩隻；捲回最上面就回來。用 sticky 負 top 做，不判斷捲動方向，畫面不會跳
 const appBrand = appHeader && appHeader.querySelector('.brand');
 function syncHeaderTuck() {
   if (!appHeader || !appBrand || typeof getComputedStyle !== 'function') return; // node 測試的假 DOM 沒有
   document.documentElement.style.setProperty('--app-header-height', `${appHeader.getBoundingClientRect().height}px`);
   const pad = parseFloat(getComputedStyle(appHeader).paddingTop) || 0;
-  appHeader.style.setProperty('--brand-h', `${Math.round(pad + appBrand.offsetHeight)}px`);
+  document.documentElement.style.setProperty('--brand-h', `${Math.round(pad + appBrand.offsetHeight)}px`);
+}
+// 上面黏住的頁首＋手機搜尋框蓋到哪裡：捲狗卡進畫面時要躲開（K 2026-10-26 搜尋框跟著捲）
+function stickyTopBottom() {
+  const page = document.getElementById('pageSearch');
+  const head = appHeader ? appHeader.getBoundingClientRect().bottom : 0;
+  return page && page.offsetHeight ? Math.max(head, page.getBoundingClientRect().bottom) : head;
 }
 
 // 常溜狗群「溜了」那排黏在底部分類列上方（#443）：分類列高度隨字級、安全區變，量實際高度
@@ -913,45 +918,6 @@ function syncBottomBar() {
   if (typeof bottomBarEl?.getBoundingClientRect !== 'function') return; // node 測試的假 DOM 沒有
   document.documentElement.style.setProperty('--bottom-bar-height', `${bottomBarEl.getBoundingClientRect().height}px`);
 }
-
-// 頁首範圍字（K 2026-10-09 病歷夾色籤）：溜狗表捲動時，頁首寫出畫面上第一隻到最後一隻多久沒溜，
-// 像檔案櫃抽屜上的範圍標籤。照片、列表模式都用「N 天前」（從資料算，不抄畫面上的字：列表模式顯示的是日期）
-function dayWord(dog, today) {
-  const s = computeStatus(dog, today);
-  if (s.kind === 'dated') return s.days < 0 ? '日期看不懂' : s.days === 0 ? '今天' : `${s.days} 天前`;
-  return s.kind === 'covered' ? '有人固定照顧' : s.kind === 'rest' ? '休養中' : '沒有紀錄';
-}
-function rangeText(words) {
-  if (!words.length) return '';
-  const a = words[0], b = words[words.length - 1];
-  return a === b ? `畫面上：${a}` : `畫面上：${a} ～ ${b}`;
-}
-const rangeLabel = document.getElementById('rangeLabel');
-
-appState.rangeFrame = 0;
-function syncRange() {
-  appState.rangeFrame = 0;
-  if (!rangeLabel) return;
-  let text = '';
-  if (appState.activeTab === 'walk' && !appState.analysisOpen) {
-    const top = appHeader ? appHeader.getBoundingClientRect().bottom : 0;
-    const bar = document.getElementById('bottomBar');
-    const bottom = bar ? bar.getBoundingClientRect().top : window.innerHeight;
-    const today = new Date();
-    const words = [];
-    for (const el of mainEl.querySelectorAll('.card[data-dog], .row-dog[data-dog]')) {
-      const r = el.getBoundingClientRect();
-      if (r.bottom > top + 8 && r.top < bottom - 8) {
-        const dog = appState.allDogs[Number(el.dataset.dog)];
-        if (dog) words.push(dayWord(dog, today));
-      } else if (words.length) break;
-    }
-    text = rangeText(words);
-  }
-  if (rangeLabel.textContent !== text) rangeLabel.textContent = text;
-  rangeLabel.hidden = !text;
-}
-function queueRange() { if (!appState.rangeFrame) appState.rangeFrame = requestAnimationFrame(syncRange); }
 
 // 溜狗表排序規則在 js/dog-status.js
 function dueDogs(dogs, today) {
@@ -1237,7 +1203,7 @@ if (!window.__BQ_TEST__) {
 }
 }
 
-export { FIRST_SCREEN_CARDS, WALKER_CODES_KEY, WALKER_CODE_PATTERN, saveIdentity, currentIdentity, mergeTempCages, loadDogsData, fetchDogsData, parseMyWalks, apiData, fetchWalks, walkYears, recentStartMonth, missingWalkYears, loadWalkYear, loadMyWalks, currentMyWalks, myWalksCount, mineTabNumber, mineTabLabel, loadMyCodes, saveMyCodes, walkerCodesFor, dogOfWalk, walkDateLabel, myWalkGroups, myVisitCard, myMonthStats, myProgressHtml, myWalksHtml, myCalendarState, myCalendarHtml, effectiveWalkDate, computeStatus, restOf, versioned, photoOverrides, photoSrc, photoThumbSrc, thumbFallback, thumbAttrs, photoThumb, lightboxOpen, insidePhoto, openLightbox, showLightboxPhoto, hideLightbox, closeLightbox, lastWalk, cardMeta, tempCageText, sexMark, warnNote, walkedNow, walkedToday, WALKER_NAME_KEY, WALKER_NAME_SEP, allWalkerNames, isOffline, setWalkerNamesOffline, loadWalkerNames, TODAY_POLL_MS, TODAY_REFETCH_MS, fetchWalkStatus, loadTodayWalks, refreshTodayWalks, canonicalWalker, splitWalkers, walkerList, loadCompanions, loadWalkWith, addWalkWith, clearWalkWith, firstWalkerName, loadWalkerName, saveWalkerName, myAliasIn, walkRegistration, d1Base, NEED_EDITOR, editorName, editorHeaders, dogCard, loadRest, cardFromEvent, TABS, buildTabs, switchTab, mainEl, render, skeletonHtml, appHeader, syncHeaderShadow, appBrand, syncHeaderTuck, bottomBarEl, syncBottomBar, dayWord, rangeText, rangeLabel, syncRange, queueRange, dueDogs, WALK_FAV_KEY, loadWalkFav, saveWalkFav, walkFilterHtml, WALK_VIEW_KEY, loadWalkView, saveWalkView, walkToolsHtml, walkRow, renderMain, searchInput, searchClear, syncSearchClear, openGuide, init, applyDogsData, renderUpdatedLabel, freshWalkList, refreshData, syncBtn, startApp };
+export { FIRST_SCREEN_CARDS, WALKER_CODES_KEY, WALKER_CODE_PATTERN, saveIdentity, currentIdentity, mergeTempCages, loadDogsData, fetchDogsData, parseMyWalks, apiData, fetchWalks, walkYears, recentStartMonth, missingWalkYears, loadWalkYear, loadMyWalks, currentMyWalks, myWalksCount, mineTabNumber, mineTabLabel, loadMyCodes, saveMyCodes, walkerCodesFor, dogOfWalk, walkDateLabel, myWalkGroups, myVisitCard, myMonthStats, myProgressHtml, myWalksHtml, myCalendarState, myCalendarHtml, effectiveWalkDate, computeStatus, restOf, versioned, photoOverrides, photoSrc, photoThumbSrc, thumbFallback, thumbAttrs, photoThumb, lightboxOpen, insidePhoto, openLightbox, showLightboxPhoto, hideLightbox, closeLightbox, lastWalk, cardMeta, tempCageText, sexMark, warnNote, walkedNow, walkedToday, WALKER_NAME_KEY, WALKER_NAME_SEP, allWalkerNames, isOffline, setWalkerNamesOffline, loadWalkerNames, TODAY_POLL_MS, TODAY_REFETCH_MS, fetchWalkStatus, loadTodayWalks, refreshTodayWalks, canonicalWalker, splitWalkers, walkerList, loadCompanions, loadWalkWith, addWalkWith, clearWalkWith, firstWalkerName, loadWalkerName, saveWalkerName, myAliasIn, walkRegistration, d1Base, NEED_EDITOR, editorName, editorHeaders, dogCard, loadRest, cardFromEvent, TABS, buildTabs, switchTab, mainEl, render, skeletonHtml, appHeader, syncHeaderShadow, appBrand, syncHeaderTuck, stickyTopBottom, bottomBarEl, syncBottomBar, dueDogs, WALK_FAV_KEY, loadWalkFav, saveWalkFav, walkFilterHtml, WALK_VIEW_KEY, loadWalkView, saveWalkView, walkToolsHtml, walkRow, renderMain, searchInput, searchClear, syncSearchClear, openGuide, init, applyDogsData, renderUpdatedLabel, freshWalkList, refreshData, syncBtn, startApp };
 export { appState } from './page-state.js';
 export { parseDogsData } from './dog-data.js';
 
@@ -1305,9 +1271,6 @@ export function bindApp() {
   window.addEventListener('resize', syncHeaderTuck);
   syncBottomBar();
   if (bottomBarEl && typeof ResizeObserver === 'function') new ResizeObserver(syncBottomBar).observe(bottomBarEl);
-
-  window.addEventListener('scroll', queueRange, { passive: true });
-  window.addEventListener('resize', queueRange);
 
   mainEl.addEventListener('click', e => {
     if (e.target.closest('#restRetry')) { loadRest(); return; }
