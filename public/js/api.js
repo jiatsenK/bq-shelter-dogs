@@ -61,7 +61,6 @@ const BQApi = (() => {
     saveOpenedCards: (codes, ids) => send('PUT', '/cards/opened', { codes, ids }, { signal: AbortSignal.timeout(15000) }),
     rest: ({ signal } = {}) => get('/rest', { cache: 'no-cache', signal }),
     saveRest: (id, body) => edit('PUT', `/rest/${enc(id)}`, id, body),
-    saveFormer: (id, method, body) => edit(method, `/former/${enc(id)}`, id, body),
     saveIntro: (id, body) => edit('PUT', `/intro/${enc(id)}`, id, body),
     saveStays: (id, body) => edit('PUT', `/stays/${enc(id)}`, id, body),
     saveFixedCare: (key, body) => edit('PUT', `/fixed-care/${enc(key)}`, key, body),

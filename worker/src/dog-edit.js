@@ -1,4 +1,4 @@
-import { cleanStays } from './stays.js';
+import { cleanStayTable, stayTable, storedStays } from './stays.js';
 import { cleanIntakeEvents } from './intake.js';
 
 export const editError = (status, message) => Object.assign(new Error(message), { status });
@@ -37,6 +37,7 @@ export async function readDogEdit(db, dogId) {
     COALESCE((SELECT stays_json FROM v3_stays WHERE dog_id=d.dog_id),'[]') AS stays,
     (SELECT json_group_array(number) FROM (SELECT number FROM v3_dog_numbers WHERE dog_id=d.dog_id ORDER BY number)) AS numbers,
     (SELECT json_group_array(number) FROM v3_sheet_main WHERE dog_id=d.dog_id AND number<>'') AS current_numbers,
+    (SELECT json_group_array(json_object('number',number,'date',departed_date,'reason',reason)) FROM v3_dog_departures WHERE dog_id=d.dog_id AND number<>'') AS departures,
     '[]' AS sex_copies,
     (SELECT json_group_array(json_object('number',number,'date',event_date,'event',event)) FROM (SELECT number,event_date,event FROM v3_intake_events WHERE dog_id=d.dog_id ORDER BY position)) AS events,
     (SELECT json_object('key',object_key,'thumb',thumb_key) FROM v3_photos WHERE dog_id=d.dog_id AND is_primary=1) AS photo
@@ -45,6 +46,8 @@ export async function readDogEdit(db, dogId) {
     .bind(dogId)
     .first();
   if (!row) throw editError(404, '找不到這隻狗');
+  const numbers = JSON.parse(row.numbers),
+    departures = JSON.parse(row.departures);
   return {
     dogId,
     revision: row.revision,
@@ -52,9 +55,11 @@ export async function readDogEdit(db, dogId) {
     sex: row.sex,
     fixedCare: Boolean(row.fixed_care),
     rest: JSON.parse(row.rest),
-    stays: JSON.parse(row.stays),
-    numbers: JSON.parse(row.numbers),
+    // 出入所表（ADR 0021）：每個編號一列＋沒編號的手填紀錄
+    stays: stayTable(JSON.parse(row.stays), numbers, departures),
+    numbers,
     currentNumbers: JSON.parse(row.current_numbers),
+    departures,
     sexCopies: JSON.parse(row.sex_copies),
     intakeEvents: JSON.parse(row.events),
     photo: JSON.parse(row.photo)
@@ -84,11 +89,10 @@ export function cleanDogValue(field, value, before, now) {
     return value;
   }
   if (field === 'stays') {
-    if (!Array.isArray(value) || value.some((row) => !row || Object.keys(row).sort().join(',') !== 'in,out,reason'))
-      throw editError(400, '出入所欄位不對');
-    const cleaned = cleanStays(value, today(now));
-    if (cleaned.error) throw editError(400, cleaned.error);
-    return cleaned.stays;
+    // 補編號就是補一列、刪編號就是刪那一列（ADR 0021）；目前編號不能刪
+    const cleaned = cleanStayTable(value, before, today(now));
+    if (cleaned.error) throw editError(cleaned.conflict ? 409 : 400, cleaned.error);
+    return cleaned.rows;
   }
   if (field === 'rest') {
     if (value === null) return null;
@@ -160,8 +164,11 @@ export async function saveDogEdit(
     (nextEvents === undefined || json(before.intakeEvents) === json(nextEvents))
   )
     return before;
-  if (field === 'numbers') {
-    for (const n of value.filter((n) => !before.numbers.includes(n))) {
+  // 出入所表改到的編號：跟舊編號（/former）同一套寫法
+  const nextNumbers =
+    field === 'numbers' ? value : field === 'stays' ? value.filter((r) => r.number).map((r) => r.number) : null;
+  if (nextNumbers) {
+    for (const n of nextNumbers.filter((n) => !before.numbers.includes(n))) {
       const owner = await dogIdentity(db, n);
       if (owner && owner !== dogId) throw editError(409, '編號屬於另一隻狗，不能合併');
     }
@@ -210,20 +217,20 @@ export async function saveDogEdit(
         : statement(`DELETE FROM v3_rest WHERE dog_id=? AND ${guard}`, [dogId])
     );
   }
-  if (field === 'stays' && !value.length)
-    writes.push(statement(`DELETE FROM v3_stays WHERE dog_id=? AND ${guard}`, [dogId]));
-  if (field === 'stays' && value.length)
+  const stored = field === 'stays' ? storedStays(value) : null;
+  if (stored && !stored.length) writes.push(statement(`DELETE FROM v3_stays WHERE dog_id=? AND ${guard}`, [dogId]));
+  if (stored?.length)
     writes.push(
       statement(
         `INSERT INTO v3_stays(dog_id,stays_json) SELECT ?,? WHERE ${guard} ON CONFLICT(dog_id) DO UPDATE SET stays_json=excluded.stays_json`,
-        [dogId, json(value)]
+        [dogId, json(stored)]
       )
     );
-  if (field === 'numbers') {
-    for (const n of before.numbers.filter((n) => !value.includes(n))) {
+  if (nextNumbers) {
+    for (const n of before.numbers.filter((n) => !nextNumbers.includes(n))) {
       writes.push(statement(`DELETE FROM v3_dog_numbers WHERE number=? AND dog_id=? AND ${guard}`, [n, dogId]));
     }
-    for (const n of value.filter((n) => !before.numbers.includes(n)))
+    for (const n of nextNumbers.filter((n) => !before.numbers.includes(n)))
       writes.push(statement(`INSERT INTO v3_dog_numbers(number,dog_id) SELECT ?,? WHERE ${guard}`, [n, dogId]));
   }
   if (field === 'photo') {

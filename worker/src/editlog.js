@@ -9,7 +9,7 @@ export const KIND_LABELS = {
   rest: '休養',
   sex: '性別補正',
   'fixed-care': '有人固定照顧',
-  intro: '入所介紹',
+  intro: '介紹',
   photo: '照片',
   activity: '活動紀錄',
   'departed-card': '已出所狗卡',

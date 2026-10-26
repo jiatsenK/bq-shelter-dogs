@@ -12,15 +12,27 @@ async function runV52Tests() {
     allDogs = dogs; groupMap = {}; activeTab = 'walk'; searchQuery = '';
     phoneStore = fakeStorage(); walkRecords = freshWalkRecords();
 
-    await check('#75 再次入所：讀 formerIds、詳細資訊標第 2 次入所與舊編號、分析在所時間從第一次算', () => {
+    await check('#75／#639 再次入所：讀 formerIds、詳細資訊一行一件事列出入所紀錄、分析在所時間從第一次算', () => {
       eq([dogs[0].formerIds, dogs[1].formerIds], [['2018041318'], []]);
       eq(ymd(intakeDate(dogs[0], T)), '2018/4/13', '入所日取最早：');
       eq(ymd(intakeDate(dogs[1], T)), '2024/1/5', '沒舊編號照舊：');
       const html = detailHtml(dogs[0], T);
       const box = document.createElement('div');
       box.innerHTML = html;
-      eq([[...box.querySelectorAll('.former-num')].map(n => n.firstChild.textContent), box.querySelector('.reentry').textContent.includes('最早入所 2018/4/13'), box.querySelector('.reentry').textContent.includes('次入所')], [['2018041318'], true, false], '詳細資訊標舊編號和最早入所，不標第幾次入所：');
-      if (detailHtml(dogs[1], T).includes('former-num')) throw new Error('沒舊編號不列舊編號');
+      const lines = () => [...box.querySelectorAll('[data-section="intro"] .stay-lines li')].map(li => li.textContent);
+      eq(lines(), ['2018/04/13入所', '2026/05/12入所'], '一個編號一行入所，照日期排、不逐行重複編號：');
+      eq(box.querySelector('[data-section="intro"] h3').firstChild.nextSibling.textContent, '出入所紀錄', '標題叫出入所紀錄：');
+      if (box.querySelector('.stay-lines').textContent.includes('次入所')) throw new Error('不標第幾次入所');
+      if (detailHtml(dogs[1], T).includes('stay-lines')) throw new Error('只有目前編號不列');
+      // 有離所紀錄：離所那行照離所紀錄的日期與原因；入所那行是手填的入所原因；沒離所紀錄的手填離所原因（K 2026-10-26）
+      const [left] = parseDogsData({ dogs: [{ id: '2026051203', name: '再入', cage: 'A', stays: [
+        { number: '', in: '2015-01-02', out: '2016-03-04', reason: '被棄養', outReason: '轉所' },
+        { number: '2018041318', in: '2018-04-13', out: '2020-05-14', reason: '迷路', departed: true, departure: '認養' },
+        { number: '2026051203', in: '2026-05-12', out: '', reason: '' },
+      ] }] }).dogs;
+      box.innerHTML = detailHtml(left, T);
+      eq(lines(), ['2015/01/02入所被棄養', '2016/03/04離所轉所', '2018/04/13入所迷路', '2020/05/14離所認養', '2026/05/12入所'], '入所／離所放在原因前面：');
+      eq(box.querySelectorAll('.stays-table, .reentry').length, 0, '編號下面不再有表：');
     });
 
     await check('#76 詳細資訊標題沒有說明文字；分析頁沒有散布圖、Top 10 沒有長條', () => {

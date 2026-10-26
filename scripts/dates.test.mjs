@@ -21,3 +21,17 @@ test('台灣今天在 UTC 下午四點換日與跨年，本地日期鍵仍保留
   assert.equal(dates.taipeiStamp(new Date('2025-12-31T16:00:00Z')), '2026/1/1');
   assert.equal(dates.localDateKey(dates.makeDate(2025, 12, 31)), '2025-12-31');
 });
+
+// #639（ADR 0021）：只有編號的狗，出入所表從編號排；Worker 有給整張表就照用
+test('出入所表：編號日期、只有編號的狗照入所日排、看不出日期的排最後；有給 stays 就照用', () => {
+  assert.equal(dates.idDay('2017090508'), '2017-09-05');
+  assert.equal(dates.idDay('A12'), '');
+  assert.deepEqual(dates.stayRows({ id: 'A12', formerIds: ['2026010101', '2015081801'] }), [
+    { number: '2015081801', in: '2015-08-18', out: '', reason: '' },
+    { number: '2026010101', in: '2026-01-01', out: '', reason: '' },
+    { number: 'A12', in: '', out: '', reason: '' },
+  ]);
+  const stays = [{ number: '', in: '2015-08-18', out: '2017-09-05', reason: '整修移所' }];
+  assert.equal(dates.stayRows({ id: '2017090508', stays }), stays);
+  assert.deepEqual(dates.stayRows({ id: '' }), []);
+});

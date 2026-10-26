@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { SETTING_KEYS } from '../worker/src/feature-settings.js';
+import { SETTING_KEYS, RETIRED_KEYS } from '../worker/src/feature-settings.js';
 import { SETTING_KEYS as PUBLIC_KEYS } from '../public/js/feature-settings.js';
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -22,8 +22,9 @@ test('管理網站設定頁列出的鍵名與後端相同', async () => {
   assert.deepEqual(sorted(keys), sorted(SETTING_KEYS));
 });
 
+// 退役的鍵（RETIRED_KEYS）初始值裡還在、讀的時候拿掉（#639：舊編號併進出入所紀錄）
 test('D1 初始設定的鍵名與後端相同', async () => {
   for (const path of ['migrations/0003_feature_settings.sql', 'db/compact-schema.sql']) {
-    assert.deepEqual(sorted(seedKeys(await read(path))), sorted(SETTING_KEYS), path);
+    assert.deepEqual(sorted(seedKeys(await read(path))), sorted([...SETTING_KEYS, ...RETIRED_KEYS]), path);
   }
 });

@@ -1,6 +1,6 @@
 import { identitiesForCodes } from './identity.js';
 import { readIntakeEvents, readAllIntakeEvents } from './intake.js';
-import { readAllStays } from './stays.js';
+import { readStayTables } from './stays.js';
 // 精簡 D1（v3_ 表，#245／#247）：網站要的狗清單從這裡讀，形狀跟原本的 data/dogs.json 一樣。
 // 表結構見 db/compact-schema.sql
 
@@ -44,7 +44,7 @@ export async function readDogsPayload(db) {
     if (!intakeOf.has(r.dog_id)) intakeOf.set(r.dog_id, []);
     intakeOf.get(r.dog_id).push({ number: r.number, date: r.event_date, event: r.event });
   }
-  const staysOf = await readAllStays(db, ON_MAIN);
+  const staysOf = await readStayTables(db, ON_MAIN);
   const dogs = rows.map(row => {
     const dog = {editRevision:row.edit_revision};
     if(row.photo_key)dog.photoVersion=row.photo_key.slice(7,-4);
@@ -254,7 +254,7 @@ export const sortDepartures = list => list.sort((a, b) => (b.date || '').localeC
 export async function readDepartures(db, year) {
   const where = ` WHERE number<>''${year ? ` AND ${departedIn(year)}` : ''}`;
   const deps = await db.prepare(`SELECT v3_dog_departures.*,c.sex AS current_sex,es.revision AS edit_revision,(SELECT object_key FROM v3_photos WHERE dog_id=c.dog_id AND is_primary=1) AS photo_key FROM v3_dog_departures JOIN v3_dogs c USING(dog_id) JOIN v3_dog_edit_state es USING(dog_id)${where}`).all();
-  const staysOf = await readAllStays(db, year ? `dog_id IN (SELECT dog_id FROM v3_dog_departures${where})` : '');
+  const staysOf = await readStayTables(db, year ? `dog_id IN (SELECT dog_id FROM v3_dog_departures${where})` : '');
   const list = (deps.results || []).map(r => {
     const entry = {
       editRevision:r.edit_revision,sex:r.current_sex,

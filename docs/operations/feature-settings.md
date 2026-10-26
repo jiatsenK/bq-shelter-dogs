@@ -8,7 +8,9 @@
 
 ## 契約
 
-`v3_feature_settings` 只保存一份十項 boolean＋revision。三項顯示是活動紀錄、資料檢查、更新紀錄；七項編輯是介紹、照片、休養、活動、固定照顧、出入所紀錄、舊編號。初始化全部 true，沿用現況。核心登記／復原、個人資料、GAS、機器管理、同步與重試開關維持原路徑。
+`v3_feature_settings` 只保存一份九項 boolean＋revision。三項顯示是活動紀錄、資料檢查、更新紀錄；六項編輯是介紹、照片、休養、活動、固定照顧、出入所紀錄。初始化全部 true，沿用現況。
+
+#639（ADR 0021，K 2026-10-26）把「舊編號」開關（`editFormer`）併進「出入所紀錄」（`editStays`），管整張出入所表（有編號、沒編號的列都算）；舊網頁的 `/former` 也看 `editStays`。D1 初始值與正式那一列在管理網站存過新設定以前還帶著 `editFormer`，讀的時候拿掉（`RETIRED_KEYS`），不寫 migration。上線前正式資料裡兩個值不一樣的話，先問 K。核心登記／復原、個人資料、GAS、機器管理、同步與重試開關維持原路徑。
 
 管理頁 `settings.html` 經既有管理 Worker Access 驗證；GET／PUT `/api/manage/settings`。PUT 要同 Origin、JSON、最多 4096 bytes（串流讀取時限制），只收完整白名單 values 與正整數 revision。操作者只來自既有 Access 驗證結果，body email 或 email 標頭不具授權效果。
 
