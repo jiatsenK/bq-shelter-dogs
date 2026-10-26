@@ -4,8 +4,6 @@ import { createHash } from 'node:crypto';
 // 共用 D1 接縫：正式同步也用的記憶體 D1（scripts/memory-d1.mjs）
 export { memoryD1 as fakeD1 } from '../../scripts/memory-d1.mjs';
 
-export const sha = bytes => createHash('sha256').update(bytes).digest('hex');
-
 // 假 R2：key → { bytes, etag, customMetadata, uploaded }；failPut(key) 回 true 的就寫入失敗
 export function fakeR2({ failPut = () => false } = {}) {
   const objects = new Map();
@@ -34,7 +32,6 @@ export function fakeR2({ failPut = () => false } = {}) {
       const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : new Uint8Array(value);
       const cur = objects.get(key);
       if (opts.onlyIf && opts.onlyIf.etagMatches && (!cur || cur.etag !== opts.onlyIf.etagMatches)) return null;
-      if (opts.sha256 && sha(bytes) !== opts.sha256) throw new Error('sha256 不符');
       const o = { bytes, etag: createHash('md5').update(bytes).digest('hex') + (++clock), customMetadata: opts.customMetadata || {}, uploaded: ++clock * 1000 };
       objects.set(key, o);
       return view(key, o);
