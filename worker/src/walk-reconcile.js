@@ -1,4 +1,4 @@
-import { writeBudget, membersOf, reconcileWalk } from './walk-accept.js';
+import { writeBudget, membersOf, reconcileWalk, droppedDay } from './walk-accept.js';
 import { callSheet } from './sheet-write.js';
 
 const same = (a,b) => a.date===b.date && a.walker===b.walker;
@@ -23,9 +23,11 @@ export async function reconcileWalkSnapshot(db, snapshot, observedStates, env, n
     try {
       const members=await membersOf(db,sheet.walker,env.WALKER_KEY);
       const version=state.version+1,at=new Date(now).toISOString();
+      const dropped=droppedDay(db,state,sheet.date); // 改回較早的日子：溜狗紀錄刪掉原本較新那天（walk-accept.js）
       await db.batch([
         db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN EXISTS(SELECT 1 FROM v3_walk_state s JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version WHERE s.dog_key=? AND s.version=? AND o.status=\'synced\') THEN 1 ELSE 0 END').bind(state.dog_key,state.version),
-        ...await writeBudget(db,env,40,now),
+        ...await writeBudget(db,env,40+dropped.cost,now),
+        ...dropped.statements,
         // 同日人工改名單保留原復原基準，不將今天被移除的人當成上一次。
         db.prepare('UPDATE v3_walk_state SET version=?,effective_date=?,walker=?,members_json=?,base_date=?,base_walker=?,previous_date=CASE WHEN effective_date=? THEN previous_date ELSE effective_date END,previous_walker=CASE WHEN effective_date=? THEN previous_walker ELSE walker END,updated_at=? WHERE dog_key=? AND version=?')
           .bind(version,sheet.date,sheet.walker,JSON.stringify(members),sheet.date,sheet.walker,sheet.date,sheet.date,at,state.dog_key,state.version),

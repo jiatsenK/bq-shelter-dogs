@@ -166,7 +166,7 @@ function runTests() {
       // #62 另外讀我的備註：只從 Worker 的 /notes 或網站上的 data/my-notes.json 讀
       // #58 我最近溜過另外讀溜狗紀錄（#260 起是 api/walks）；ADR 0007 今日溜狗紀錄讀 api/today
       if (/readJsonObject|GALLERY_URL|\/gallery/.test(APP_JS)) throw new Error('相簿已拿掉（K 2026-10-09），不該再讀相簿清單');
-      for (const read of ["'/dogs'", "'/walks'", "'/rest'", '`/today']) if (!API_JS.includes(read)) throw new Error(`BQApi 要從 Worker 讀 ${read}（#247、#260、#250、ADR 0007）`);
+      for (const read of ["'/dogs'", "'/walks'", "'/rest'", "'/today?source=d1'"]) if (!API_JS.includes(read)) throw new Error(`BQApi 要從 Worker 讀 ${read}（#247、#260、#250、ADR 0007）`);
       if (/docs\.google\.com|gviz/.test(APP_JS)) throw new Error('前端不應再連 Google 試算表');
     }),
     check('#10／#28 卡片沒有連結，也不會跳到別頁（點了只開詳細資訊）', () => {
@@ -412,24 +412,6 @@ function runTests() {
         render();
       }
     }),
-    // ── #35 今天已溜（只存在這支手機的 localStorage） ──
-    check('儲存空間滿但仍可讀取舊紀錄：新增、移回與隔日判斷仍使用最新記憶體', () => {
-      const saved = [phoneStore, walkRecords];
-      try {
-        const day = new Date(2026, 8, 24);
-        walkRecords = freshWalkRecords();
-        phoneStore = BQStore.create({
-          getItem: () => JSON.stringify({ date: '2026-09-24', ids: ['old'] }),
-          setItem() { throw new Error('QuotaExceededError'); },
-        });
-        eq(loadWalkedIds(day), ['old']);
-        saveWalkedIds(['new', 'old'], day);
-        eq(loadWalkedIds(day), ['new', 'old']);
-        saveWalkedIds(['new'], day);
-        eq(loadWalkedIds(day), ['new']);
-        eq(loadWalkedIds(new Date(2026, 8, 25)), []);
-      } finally { [phoneStore, walkRecords] = saved; }
-    }),
     check('詳細視窗 Tab 不跑到背景，重畫保留焦點，關閉回到原狗卡', () => {
       const saved = [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords];
       try {
@@ -460,88 +442,6 @@ function runTests() {
         hideDetail();
         document.getElementById('main').parentElement.classList.add('hidden');
         history.replaceState(null, '');
-        [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords] = saved;
-        render();
-      }
-    }),
-    check('#35 紀錄以本地日期＋編號存；重新整理還在，隔天自動視為未勾選', () => {
-      const store = fakeStorage();
-      const saved = [phoneStore, walkRecords];
-      try {
-        phoneStore = store; walkRecords = freshWalkRecords();
-        const day1 = new Date(2026, 8, 24, 23, 50), day2 = new Date(2026, 8, 25, 0, 5);
-        eq(BQDates.localDateKey(day1), '2026-09-24', '本地日期：');
-        saveWalkedIds(['2024032902', '2'], day1);
-        eq(JSON.parse(store.get(BQStore.keys.walkedToday)), { date: '2026-09-24', ids: ['2024032902', '2'] }, '存的內容：');
-        walkRecords = freshWalkRecords(); // 模擬重新整理：只剩 localStorage
-        eq(loadWalkedIds(new Date(2026, 8, 24, 8)), ['2024032902', '2'], '同一天重新整理：');
-        eq(loadWalkedIds(day2), [], '隔天：');
-        eq(JSON.parse(store.get(BQStore.keys.walkedToday)).date, '2026-09-24', '前一天的紀錄不用刪：');
-        store.set(BQStore.keys.walkedToday, '壞掉的資料');
-        eq(loadWalkedIds(day1), [], '資料壞掉當成沒有紀錄：');
-        phoneStore = BQStore.create({ getItem() { throw new Error('blocked'); }, setItem() { throw new Error('blocked'); } });
-        saveWalkedIds(['9'], day1);
-        eq(loadWalkedIds(day1), ['9'], '無痕模式存不進去時，這次開著期間仍記得：');
-      } finally { [phoneStore, walkRecords] = saved; }
-    }),
-    check('沒有編號的狗也有「已遛」，改用犬名記', () => {
-      const saved = [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords];
-      try {
-        phoneStore = fakeStorage(); walkRecords = freshWalkRecords();
-        allDogs = [
-          { name: '新來甲', cage: 'B04', id: '', walkedDate: null, covered: false, note: '' },
-          { name: '', cage: 'B05', id: '', walkedDate: null, covered: false, note: '' },
-        ];
-        groupMap = {}; activeTab = 'walk'; searchQuery = '';
-        render();
-        eq(document.querySelectorAll('#main [data-walk="add"]').length, 1, '有犬名就有按鈕，連犬名都沒有才沒有：');
-        document.querySelector('#main .card[data-dog="0"] [data-walk="add"]').click();
-        eq(loadWalkedIds(), ['名:新來甲'], '用犬名記：');
-        switchTab('today');
-        eq(document.querySelectorAll('#main [data-walk="back"]').length, 1, '今天已溜看得到、可移回：');
-      } finally {
-        BQWalkUI.hideToast();
-        [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords] = saved;
-        render();
-      }
-    }),
-    check('#35 可以一起溜：勾選後按一次，連同這隻一起記；已溜的不顯示圓圈', () => {
-      const saved = [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords];
-      try {
-        phoneStore = fakeStorage(); walkRecords = freshWalkRecords();
-        allDogs = [
-          { name: '測試甲', cage: 'A01', id: '1', walkedDate: null, covered: false, note: '' },
-          { name: '測試乙', cage: 'A02', id: '2', walkedDate: null, covered: false, note: '' },
-          { name: '測試丙', cage: 'A03', id: '3', walkedDate: null, covered: false, note: '' },
-          { name: '測試丁', cage: 'A04', id: '', walkedDate: null, covered: false, note: '' },
-        ];
-        groupMap = { '測試甲': new Set(['測試乙', '測試丙', '測試丁']) };
-        activeTab = 'walk'; searchQuery = '';
-        render();
-        showDetail(allDogs[0]);
-        const box = document.getElementById('detail');
-        eq(box.querySelectorAll('.pick').length, 3, '沒編號的也有勾選圓圈：');
-        eq(box.querySelector('#groupWalk').textContent.trim(), '溜了', '沒勾選時只記這隻：');
-        box.querySelector('.pick[data-pick="2"]').click();
-        eq(box.querySelector('.pick[data-pick="2"]').classList.contains('on'), true, '勾選：');
-        eq(box.querySelector('#groupWalk').textContent.trim(), '和勾選的 1 隻都溜了', '按鈕文字：');
-        box.querySelector('#groupWalk').click();
-        eq(loadWalkedIds(), ['2', '1'], '一次記兩隻：');
-        eq(document.getElementById('detailBackdrop').hidden, false, '記完詳細資訊還開著：');
-        eq(box.querySelectorAll('.pick').length, 2, '已溜的不再顯示圓圈：');
-        eq(box.querySelectorAll('.walked-tag').length, 1, '已溜的標「今天已溜」：');
-        eq(!!box.querySelector('#groupWalk'), false, '這隻已溜又沒勾選時不顯示按鈕：');
-        box.querySelector('.pick[data-pick="3"]').click();
-        eq(box.querySelector('#groupWalk').textContent.trim(), '勾選的 1 隻都溜了', '這隻已溜，只記勾選的：');
-        box.querySelector('#groupWalk').click();
-        eq(loadWalkedIds(), ['3', '2', '1'], '記下丙：');
-        document.getElementById('toast').querySelector('.toast-undo').click();
-        eq(loadWalkedIds(), ['2', '1'], '復原：');
-        box.querySelector('.buddy').click();
-        eq(document.getElementById('detailName').firstChild.textContent, '測試乙', '輕點照片照舊換看那隻：');
-      } finally {
-        hideDetail(); BQWalkUI.hideToast();
-        if (history.state && history.state.bqDetail) history.replaceState(null, '');
         [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords] = saved;
         render();
       }
@@ -684,4 +584,82 @@ function runTests() {
       if (APP_JS.includes('has-note')) throw new Error('js/app.js 還會畫備註圖示');
     }),
   ]);
+}
+
+
+// #558 起溜了只走 D1：要等回應的登記測試依序跑，不和上面同時進行的檢查互相改 allDogs
+async function runD1PickTests() {
+  await check('沒有編號的狗也有「已遛」，改用犬名送出', async () => {
+    const saved = [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL, sheetWriteState, walkerNameMemory];
+    try {
+      phoneStore = fakeStorage(); walkRecords = freshWalkRecords();
+      UPLOAD_URL = 'https://worker.test'; sheetWriteState = 'unknown'; saveWalkerName('志工我');
+      const calls = fakeApi(fakeD1.api());
+      allDogs = [
+        { name: '新來甲', cage: 'B04', id: '', walkedDate: null, covered: false, note: '' },
+        { name: '', cage: 'B05', id: '', walkedDate: null, covered: false, note: '' },
+      ];
+      groupMap = {}; activeTab = 'walk'; searchQuery = '';
+      render();
+      eq(document.querySelectorAll('#main [data-walk="add"]').length, 1, '有犬名就有按鈕，連犬名都沒有才沒有：');
+      fakeD1.forget(allDogs.filter(walkKey));
+      document.querySelector('#main .card[data-dog="0"] [data-walk="add"]').click();
+      await until(() => walkedNow(allDogs[0]), '登記：');
+      eq(calls.filter(c => c[0] === 'walk').map(c => c[1].dogs), [[{ id: '', name: '新來甲' }]], '用犬名送：');
+      await until(() => document.querySelectorAll('#main [data-walk="back"]').length === 1, '變已溜、可取消：');
+    } finally {
+      BQWalkUI.hideToast(); restoreApi();
+      [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL, sheetWriteState, walkerNameMemory] = saved;
+      render();
+    }
+  });
+  await check('#35 可以一起溜：勾選後按一次，連同這隻一起記；已溜的不顯示圓圈', async () => {
+    const saved = [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL, sheetWriteState, walkerNameMemory];
+    try {
+      phoneStore = fakeStorage(); walkRecords = freshWalkRecords();
+      UPLOAD_URL = 'https://worker.test'; sheetWriteState = 'unknown'; saveWalkerName('志工我');
+      fakeApi(fakeD1.api());
+      allDogs = [
+        { name: '測試甲', cage: 'A01', id: '9711', walkedDate: null, covered: false, note: '' },
+        { name: '測試乙', cage: 'A02', id: '9712', walkedDate: null, covered: false, note: '' },
+        { name: '測試丙', cage: 'A03', id: '9713', walkedDate: null, covered: false, note: '' },
+        { name: '測試丁', cage: 'A04', id: '', walkedDate: null, covered: false, note: '' },
+      ];
+      fakeD1.forget(allDogs);
+      const walked = () => allDogs.filter(d => walkedNow(d)).map(d => d.name);
+      groupMap = { '測試甲': new Set(['測試乙', '測試丙', '測試丁']) };
+      activeTab = 'walk'; searchQuery = '';
+      render();
+      showDetail(allDogs[0]);
+      const box = document.getElementById('detail');
+      eq(box.querySelectorAll('.pick').length, 3, '沒編號的也有勾選圓圈：');
+      eq(box.querySelector('#groupWalk').textContent.trim(), '溜了', '沒勾選時只記這隻：');
+      box.querySelector('.pick[data-pick="9712"]').click();
+      eq(box.querySelector('.pick[data-pick="9712"]').classList.contains('on'), true, '勾選：');
+      eq(box.querySelector('#groupWalk').textContent.trim(), '和勾選的 1 隻都溜了', '按鈕文字：');
+      box.querySelector('#groupWalk').click();
+      await until(() => walked().length === 2, '一次記兩隻：');
+      eq(walked(), ['測試甲', '測試乙'], '一次記兩隻：');
+      await until(() => box.querySelectorAll('.pick').length === 2, '已溜的不再顯示圓圈：');
+      eq(document.getElementById('detailBackdrop').hidden, false, '記完詳細資訊還開著：');
+      eq(box.querySelectorAll('.pick').length, 2, '已溜的不再顯示圓圈：');
+      eq(box.querySelectorAll('.walked-tag').length, 1, '已溜的標「今天已溜」：');
+      eq(!!box.querySelector('#groupWalk'), false, '這隻已溜又沒勾選時不顯示按鈕：');
+      box.querySelector('.pick[data-pick="9713"]').click();
+      eq(box.querySelector('#groupWalk').textContent.trim(), '勾選的 1 隻都溜了', '這隻已溜，只記勾選的：');
+      box.querySelector('#groupWalk').click();
+      await until(() => walked().length === 3, '記下丙：');
+      await until(() => !document.getElementById('toast').hidden && !document.getElementById('toast').querySelector('.toast-undo').hidden, '提示條有復原：');
+      document.getElementById('toast').querySelector('.toast-undo').click();
+      await until(() => walked().length === 2, '復原：');
+      eq(walked(), ['測試甲', '測試乙'], '復原：');
+      box.querySelector('.buddy').click();
+      eq(document.getElementById('detailName').firstChild.textContent, '測試乙', '輕點照片照舊換看那隻：');
+    } finally {
+      hideDetail(); BQWalkUI.hideToast(); restoreApi();
+      if (history.state && history.state.bqDetail) history.replaceState(null, '');
+      [allDogs, groupMap, activeTab, searchQuery, phoneStore, walkRecords, UPLOAD_URL, sheetWriteState, walkerNameMemory] = saved;
+      render();
+    }
+  });
 }

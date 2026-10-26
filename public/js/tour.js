@@ -1,6 +1,8 @@
 import { FIND_CAGES, findCageOf, findPickCage, findZoneOf, whereClose, whereOpen } from './find.js';
 import { appState, deskState, findState } from './page-state.js';
-import { appHeader, closeDetail, esc, icon, loadWalkView, render, saveWalkView, showDetail, switchTab } from './app.js';
+import { appHeader, loadWalkView, render, saveWalkView, switchTab } from './app.js';
+import { closeDetail, showDetail } from './detail.js';
+import { esc, icon } from './ui-kit.js';
 import { deskOn } from './desk.js';
 import { BQWelcome } from './welcome.js';
 import { hideAnalysis } from './analysis.js';

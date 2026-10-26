@@ -39,6 +39,57 @@ function fakeApi(fake) {
   return calls;
 }
 function restoreApi() { if (API_REAL) Object.assign(BQApi, API_REAL); }
+// D1 登記是非同步的：等到 fn() 成立，最多約 1 秒
+async function until(fn, label = '') {
+  for (let i = 0; i < 100; i++) { if (fn()) return; await new Promise(r => setTimeout(r, 10)); }
+  throw new Error(`${label}等不到`);
+}
+// #558 起溜了只走 D1。整頁共用一個假 D1：版本一路遞增，登記狀態留在 walkRegistration 裡跨測試，
+// 測試開始時用 fakeD1.forget(狗) 改回狗清單的日期與名字，或 fakeD1.show(狗, 名單) 當作今天已有人溜。
+const fakeD1 = (() => {
+  let version = Date.now();
+  const rows = new Map(), before = new Map();
+  const today = () => BQDates.localDateKey(new Date());
+  const pack = () => ({ ok: true, source: 'd1', date: today(), version: version++, walks: [...rows.values()] });
+  function set(key, walker, walkedDate = today()) {
+    const row = { key, version: version++, walkedDate, walker, syncStatus: 'synced', at: new Date().toISOString() };
+    rows.set(key, row);
+    return row;
+  }
+  // override(dog, body) 回傳單狗結果時改成那個結果，例如 { status: 'unknown' }
+  function walk(body, override = () => null) {
+    const results = body.dogs.map(d => {
+      const key = d.id || `名:${d.name}`, old = rows.get(key), dog = allDogs.find(x => walkKey(x) === key) || d;
+      const forced = override(d, body);
+      if (forced) return { id: d.id, name: d.name, ...forced };
+      if (body.action !== 'walk' && old && d.expectedVersion !== undefined && d.expectedVersion !== old.version)
+        return { id: d.id, name: d.name, status: 'changed', version: old.version, current: { date: old.walkedDate, walker: old.walker } };
+      let current;
+      if (body.action === 'undo') current = before.get(key) || d1Base(dog);
+      else {
+        const same = old && old.walkedDate === today();
+        if (!same) before.set(key, old ? { date: old.walkedDate, walker: old.walker } : d1Base(dog));
+        // 同一天再登記（一起溜的人）接在原名單後面，跟 worker/src/walk-accept.js 一樣
+        const people = body.action === 'walk' && same ? [...splitWalkers(old.walker), ...splitWalkers(body.walker)] : splitWalkers(body.walker);
+        current = { date: today(), walker: [...new Set(people)].join('、') };
+      }
+      const row = set(key, current.walker, current.date);
+      return { id: d.id, name: d.name, status: body.action === 'undo' ? 'restored' : 'written', accepted: true,
+        requestId: body.requestId, operationDate: body.operationDate, version: row.version, current, syncStatus: 'synced', at: row.at };
+    });
+    return { ok: results.every(r => r.accepted), source: 'd1', today: today(), snapshot: pack(), results };
+  }
+  function receive(dogs) { walkRegistration.receiveToday(pack(), dogs); }
+  function forget(dogs) {
+    for (const d of dogs) { const base = d1Base(d); set(walkKey(d), base.walker, base.date); before.delete(walkKey(d)); }
+    receive(dogs);
+  }
+  function show(dogs, walker) { for (const d of dogs) set(walkKey(d), walker); receive(dogs); }
+  // fakeApi 用：walk、todayWalks 走假 D1，其他端點交給 other
+  const api = (other = () => apiJson({ ok: true })) => (name, ...args) =>
+    name === 'walk' ? apiJson(walk(args[0])) : name === 'todayWalks' ? apiJson(pack()) : other(name, ...args);
+  return { walk, pack, set, forget, show, api, rows };
+})();
 const apiJson = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 let INDEX_HTML = ''; // index.html 原始碼，#10 唯讀檢查用
 // 導覽以實際按鈕換步，不讀寫內部狀態；減少動態效果讓測試穩定。

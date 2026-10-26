@@ -43,5 +43,7 @@ export function parseDogsData(data) {
   // 異動紀錄（K 2026-10-10）：試算表狗清單下面那段，電腦版右欄（js/desk.js）；沒有或格式不對就是空的
   const sheetNotes = Array.isArray(data.sheetNotes) ? data.sheetNotes.filter(n => n && text(n.text)).map(n => ({ label: text(n.label), text: text(n.text) })) : [];
   return { dogs, groups, syncedAt: synced && !isNaN(synced) ? synced : null, photoVersions: versions, sheetNotes,
-    ...(Object.hasOwn(data, 'groupColumns') ? { groupColumns: data.groupColumns } : {}) };
+    ...(Object.hasOwn(data, 'groupColumns') ? { groupColumns: data.groupColumns } : {}),
+    // 今日溜狗紀錄（ADR 0018）：Worker 跟狗清單一起帶，形狀同 /today?source=d1；交給 walkRegistration 檢查
+    ...(data.today && typeof data.today === 'object' ? { today: data.today } : {}) };
 }

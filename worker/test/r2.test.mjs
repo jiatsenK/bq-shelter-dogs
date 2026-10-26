@@ -1,6 +1,6 @@
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
-import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
+import { importCompactDogs } from './compact-fixtures.mjs';
 import { currentEditRevision } from './edit-fixture.mjs';
 // 照片放 R2（#130）的測試：用假的 R2、假的靜態檔（舊照片）、假的 GitHub，不會真的連 Cloudflare 或 GitHub
 // 執行：node --test worker/test/r2.test.mjs
@@ -9,6 +9,7 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { SETTING_KEYS } from '../src/feature-settings.js';
 import { fakeR2, fakeAssets } from './fakes.mjs';
+import { listDogTrash, readDogTrash, restoreDogPhoto } from '../src/dog-photo.js';
 
 const { resetState, r2, maintenance } = worker.testing;
 
@@ -38,7 +39,7 @@ const dispatched = calls => calls.filter(c => c.path.endsWith('/actions/workflow
 async function setup({ assets = {}, failPut, preview = false } = {}) {
   const PHOTOS = fakeR2({ failPut });
   const ASSETS = fakeAssets(assets);
-  const DB=fakeD1();await migrateCompactDatabase(DB);await importCompactDogs(DB,DOGS);
+  const DB=fakeD1();await createCompactDatabase(DB);await importCompactDogs(DB,DOGS);
   const calls = fakeGithub();
   const env = { ADMIN_KEY: '通關碼', PHOTOS, ASSETS, DB, ...(preview ? { PREVIEW: '1' } : {}) };
   const pending = [];
@@ -345,11 +346,77 @@ test('每月排程清掉超過 30 天的 Trash（#501）；不叫縮圖 Action�
   const oldId = await r2.toTrash(env, SITE, 'photos/1.jpg', { dogId: '1', kind: 'main' }, now - 31 * 86400000);
   const newId = await r2.toTrash(env, SITE, 'photos/1.jpg', { dogId: '1', kind: 'main' }, now - 29 * 86400000);
   await PHOTOS.put('photos/5.jpg', OLD);
+  await PHOTOS.put('photos/1.jpg', OLD);
   const r = await maintenance(env, now);
-  assert.deepEqual(r, { at: new Date(now).toISOString(), purged: 1 });
+  assert.deepEqual(r, { at: new Date(now).toISOString(), purged: 1, failed: 0 });
   assert.equal(PHOTOS.objects.has(`trash/${oldId}/photo.jpg`), false);
   assert.equal(PHOTOS.objects.has(`trash/${newId}/photo.jpg`), true);
+  assert.ok(PHOTOS.objects.has('photos/1.jpg'), '固定路徑的舊原圖不刪');
   assert.equal(dispatched(calls), 0);
+});
+
+test('清理：一筆刪不掉就記下來、接著清下一筆；備份留著，排程記成出錯', async () => {
+  const { env, PHOTOS } = await setup({ assets: { 'photos/1.jpg': OLD } });
+  const now = Date.now();
+  const bad = await r2.toTrash(env, SITE, 'photos/1.jpg', { dogId: '1' }, now - 40 * 86400000);
+  const good = await r2.toTrash(env, SITE, 'photos/1.jpg', { dogId: '1' }, now - 35 * 86400000);
+  const del = PHOTOS.delete;
+  PHOTOS.delete = async keys => { if ([].concat(keys).some(k => k.includes(bad))) throw new Error('R2 刪除失敗'); return del(keys); };
+  await assert.rejects(maintenance(env, now), /1 筆清不掉.*R2 刪除失敗/);
+  assert.ok(PHOTOS.objects.has(`trash/${bad}/photo.jpg`), '失敗那筆留到下個月');
+  assert.equal(PHOTOS.objects.has(`trash/${good}/photo.jpg`), false);
+  const saved = JSON.parse(await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='trash_purged'").first('value'));
+  assert.deepEqual(saved, { at: new Date(now).toISOString(), purged: 1, failed: 1, errors: [{ id: bad, error: 'R2 刪除失敗' }] });
+});
+
+test('清理：只剩縮圖的備份照代號時間清；D1 記得的舊原圖連同那列一起刪，主照片和 D1 沒記的不碰', async () => {
+  const { env, PHOTOS } = await setup();
+  const now = Date.now(), old = now - 31 * 86400000;
+  const dogId = await env.DB.prepare('SELECT dog_id FROM v3_dog_numbers WHERE number=?').bind(ID).first('dog_id');
+  await PHOTOS.put(`trash/${old}-aaaa/thumb.jpg`, OLD);
+  await PHOTOS.put(`trash/${now}-bbbb/thumb.jpg`, OLD);
+  const key = c => `photos/${c.repeat(32)}.jpg`;
+  for (const c of ['a', 'b', 'c']) { await PHOTOS.put(key(c), OLD); await PHOTOS.put(r2.thumbKey(key(c)), OLD); }
+  await env.DB.prepare('INSERT INTO v3_photos(object_key,dog_id,thumb_key,is_primary) VALUES(?,?,?,0),(?,?,?,1)')
+    .bind(key('a'), dogId, r2.thumbKey(key('a')), key('b'), dogId, r2.thumbKey(key('b'))).run();
+  const ids = [];
+  for (const c of ['a', 'b', 'c']) ids.push(await r2.toTrash(env, SITE, key(c), { dogId }, old));
+  assert.deepEqual(await maintenance(env, now), { at: new Date(now).toISOString(), purged: 4, failed: 0 });
+  assert.equal(PHOTOS.objects.has(`trash/${old}-aaaa/thumb.jpg`), false);
+  assert.ok(PHOTOS.objects.has(`trash/${now}-bbbb/thumb.jpg`));
+  assert.equal(PHOTOS.objects.has(key('a')) || PHOTOS.objects.has(r2.thumbKey(key('a'))), false, '不再用的舊原圖刪掉');
+  assert.ok(PHOTOS.objects.has(key('b')) && PHOTOS.objects.has(key('c')), '主照片、D1 沒記的不刪');
+  assert.deepEqual((await env.DB.prepare('SELECT object_key FROM v3_photos').all()).results.map(r => r.object_key), [key('b')]);
+  assert.deepEqual(ids.filter(id => PHOTOS.objects.has(`trash/${id}/photo.jpg`)), []);
+});
+
+test('清理：刪掉 D1 那列失敗時備份留著，下個月重跑會補完', async () => {
+  const { env, PHOTOS } = await setup();
+  const now = Date.now(), key = `photos/${'d'.repeat(32)}.jpg`;
+  const dogId = await env.DB.prepare('SELECT dog_id FROM v3_dog_numbers WHERE number=?').bind(ID).first('dog_id');
+  await PHOTOS.put(key, OLD);
+  await env.DB.prepare('INSERT INTO v3_photos(object_key,dog_id,is_primary) VALUES(?,?,0)').bind(key, dogId).run();
+  const id = await r2.toTrash(env, SITE, key, { dogId }, now - 31 * 86400000);
+  await env.DB.prepare("CREATE TRIGGER fail_photo_delete BEFORE DELETE ON v3_photos BEGIN SELECT RAISE(ABORT,'D1 寫入失敗'); END").run();
+  await assert.rejects(maintenance(env, now), /D1 寫入失敗/);
+  assert.ok(PHOTOS.objects.has(`trash/${id}/photo.jpg`));
+  await env.DB.prepare('DROP TRIGGER fail_photo_delete').run();
+  assert.equal((await maintenance(env, now)).purged, 1);
+  assert.equal(await env.DB.prepare('SELECT COUNT(*) n FROM v3_photos').first('n'), 0);
+});
+
+test('#566 以前用編號記的備份：管理網站列得出來、也能復原', async () => {
+  const { env, PHOTOS } = await setup({ assets: { [`photos/${ID}.jpg`]: NEW } });
+  const dogId = await env.DB.prepare('SELECT dog_id FROM v3_dog_numbers WHERE number=?').bind(ID).first('dog_id');
+  const [old, other] = ['1700000000000-abcd', '1700000000000-ef01'];
+  const meta = n => ({ customMetadata: { dogId: n, kind: 'main', path: `photos/${n}.jpg`, deletedAt: new Date().toISOString() } });
+  await PHOTOS.put(`trash/${old}/photo.jpg`, OLD, meta(ID));
+  await PHOTOS.put(`trash/${other}/photo.jpg`, OLD, meta('1999010101'));
+  assert.deepEqual((await listDogTrash(env, dogId)).map(t => t.id), [old]);
+  assert.equal(await readDogTrash(env, dogId, other), null);
+  const revision = (await env.DB.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(dogId).first('revision'));
+  const back = await restoreDogPhoto(env, dogId, revision, old, { actor: { subject: 's', email: 'e@example.org' } }, SITE);
+  assert.ok(same(PHOTOS.objects.get(back.photo.key).bytes, OLD));
 });
 
 test('沒有 R2：照片、dogs.json 照舊給靜態檔', async () => {

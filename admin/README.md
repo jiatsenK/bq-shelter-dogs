@@ -15,15 +15,16 @@
 | `scripts/build-admin-assets.mjs` | 從單一來源產出 `admin/public/shared/`，Wrangler build 與網頁測試會執行 |
 | `admin/public/js/api.js` | 同來源管理 API 呼叫；登入跳轉及非 JSON 回應視為錯誤 |
 | `admin/public/js/dog-table.js` | 格式驗證、搜尋、篩選、排序、有界分頁及維護標示 |
-| `admin/public/js/main.js` | DOM、讀取／重試與事件；不存手機個人資料 |
+| `admin/public/js/main.js` | DOM、讀取／重試與事件；篩選條件放網址（`?care=`、`?dog=` 開抽屜）；不存手機個人資料 |
+| `admin/public/js/dog-editor.js`、`dog-edit-model.js` | #624 右側編輯抽屜（DOM、依序儲存）與純規則（欄位順序、哪些要預覽、待補、介紹差異） |
 | `worker/src/admin/activities.js`、`checks.js`、`edits.js` | #567 活動寫入（共用 activities.js＋同交易紀錄）、#518 掃描清單、資料編輯紀錄搜尋 |
-| `admin/public/activities.html`、`checks.html`、`updates.html` | #567 三頁；純規則在 `activity-model.js`、`data-checks.js`、`edit-log.js` |
+| `admin/public/activities.html`、`checks.html`、`updates.html`、`releases.html` | #567 活動紀錄、待補清單、修改紀錄；#624 網站更新拆到 `releases.html`。純規則在 `activity-model.js`、`data-checks.js`、`edit-log.js` |
 
 先跑 `node scripts/build-admin-assets.mjs` 可產出共用資產；不要手動改產出檔。Tabler 1.4.0 CSS 固定存於 `public/vendor/`，不載入其 JavaScript 或外部字型。上游：https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css；MIT 授權與檔頭一併保留。
 
 ## 資料與成本
 
-- 顯示所有既有永久狗身分；主清單欄位優先，未列主清單不自動判定離所。重複主清單身分只取最前列，不複製狗。
+- 顯示所有既有永久狗身分；主清單欄位優先。狀態：在主清單＝在所、有離所紀錄＝已出所、都沒有＝待核對（K 2026-10-26，多半是 #621 改編號留下的重複，可在編輯抽屜底下合併，見 `docs/operations/dog-editing.md`）。重複主清單身分只取最前列，不複製狗。
 - 性別只讀 `v3_dogs.sex`（主清單的性別複本 #557 不再讀，正式庫刪欄前比對 0 筆不同），不寫入補正；補正在 #566。
 - 每次載入／重新讀取：1 個 SELECT、0 寫入、0 版本觸發器。主清單分組掃描一次，其餘以既有主鍵／索引連接；回傳列數等於狗身分數 N。沒有額外同步、資料包更新或逐列 D1 查詢。
 - 搜尋（180 ms 節流）、篩選、排序、換頁：0 次 D1／R2 操作。一次載入完整小型清單，畫面每頁只顯示 25／50／100 隻，不新增背景輪詢。
@@ -32,12 +33,27 @@
 
 ## 部署與權限驗收
 
-正式環境已依下列步驟部署（#564，2026-10-25）；之後每次更新都要手動部署，main 合併不會自動發布管理站。預設設定缺值會拒絕存取，不能直接拿空設定當可用管理站。新環境依序：
+### 現況（2026-10-26 唯讀核對）
+
+- 網址 `https://bq-shelter-dogs-admin.jiatsen-k.workers.dev`（workers.dev，`workers_dev: true`）；版本預覽網址關閉。Cloudflare Access application 涵蓋整個 host，沒登入的請求一律轉到 Access 登入頁。
+- 正式 D1（`bq-shelter-dogs`）與正式照片空間（`bq-shelter-photos`）直接讀寫；沒有排程、沒有密鑰。
+- `wrangler.admin.jsonc` 就是線上設定：三個 vars（`ADMIN_ORIGIN`、`ACCESS_TEAM_DOMAIN`、`ACCESS_AUD`）都寫在裡面。它們不是密鑰；`keep_vars: false`，部署以檔案為準。換網址或重建 Access application 時三個值一起改，否則全部請求被拒。
+
+### 怎麼部署
+
+- Actions 頁選「部署管理網站」（`.github/workflows/deploy-admin.yml`）→「Run workflow」，分支選 main。main 推送**不會**自動部署（K 2026-10-26），因為管理網站直接寫正式資料。
+- 只部署 main（#622）：不能填分支，選別的分支整個略過。合併前要試某張 PR，用測試網站或 PR 預覽。
+- workflow 先確認正式庫 migration 都套過，部署時把「main commit」寫進 Cloudflare 部署紀錄的 Message，部署後確認沒登入會被轉到 Access 登入頁。
+- 改到兩站共用的程式（`worker/src/` 共用模組、`public/js/api-response.js`、`dates.js`）時，志工網站由 main 推送自動部署，管理網站要另外按一次。
+- 本機部署（不建議）也要帶紀錄：`npx.cmd wrangler deploy --config wrangler.admin.jsonc --message "<分支> <commit>"`。
+- 2026-10-25～26 的前 5 次部署是本機手動、沒有 Message，看不出是哪個 commit。
+
+### 新環境（重建或換網址）依序
 
 1. 選定獨立管理網址。建立 Access self-hosted application，涵蓋整個 host（所有路徑），Allow policy 只列經確認管理者；不可新增 Bypass／Everyone，第一版只有管理者角色。
-2. 製作環境專用 Wrangler 設定（勿覆蓋志工設定）：從 `wrangler.admin.jsonc` 複製，設定不同 Worker name、custom domain route，並填入 `ADMIN_ORIGIN`（完整 HTTPS origin、無結尾斜線）、`ACCESS_TEAM_DOMAIN`（團隊 hostname）、`ACCESS_AUD`（此 application 的 AUD）。保留 `run_worker_first: true`、`workers_dev: false`、`preview_urls: false`。
+2. 改 `wrangler.admin.jsonc`（不覆蓋志工設定）：填入 `ADMIN_ORIGIN`（完整 HTTPS origin、無結尾斜線）、`ACCESS_TEAM_DOMAIN`（團隊 hostname）、`ACCESS_AUD`（此 application 的 AUD）。換成自訂網域時加 custom domain route、`workers_dev` 改 false，並同步改 `scripts/admin-table.test.mjs` 的網址檢查。保留 `run_worker_first: true`、`preview_urls: false`。
 3. 隔離驗收先將 D1／R2 bindings 改為已協調可用的隔離資源；不得重置共用測試庫或執行同步。正式上線才經 K 核准共用既有正式 bindings，不建第二套正式庫。此 Worker 沒有 schema 套用路徑；寫入只有設定、狗資料與活動（同來源＋JSON＋Access 身分）。
-4. K 核准環境、Access policy 與實際設定後，才用該環境設定執行 Wrangler deploy；本票沒有自動管理站部署 workflow，也不會因 main 推送自動發布管理站。
+4. K 核准環境、Access policy 與實際設定後，才跑「部署管理網站」。
 5. 未登入／非管理者測 `/`、`/index.html`、`/js/main.js`、`/vendor/tabler.min.css`、`/api/manage/dogs` 與照片：不可取得內容；管理者登入可讀。測 workers.dev／版本預覽不能繞過，替代 host 即使帶有效 token 也拒絕。
 6. 測失效／偽造／錯 AUD／錯 issuer token、缺 vars、無法取得金鑰；全部拒絕。只信 `Cf-Access-Jwt-Assertion` 的簽章，不信 email header 或 cookie。Access 金鑰每個 issuer 快取五分鐘；輪替未知 kid 在快取更新前會拒絕，無未驗證退路。
 7. 驗收搜尋、複合篩選、排序、分頁、無編號狗、空清單、讀取失敗與登入失效重試；確認狗表本身沒有寫入請求。另驗收志工站免登入、登記／復原／同步不受影響。

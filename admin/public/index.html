@@ -14,29 +14,39 @@
     <aside class="admin-sidebar" aria-label="管理網站">
       <a class="brand" href="./">板收<span>管理網站</span></a>
       <nav aria-label="管理功能">
-        <a class="nav-item active" href="./" aria-current="page">狗資料</a>
-        <a class="nav-item" href="./settings.html">功能管理</a>
-        <a class="nav-item" href="./activities.html">活動紀錄</a>
-        <a class="nav-item" href="./checks.html">資料檢查</a>
-        <a class="nav-item" href="./updates.html">更新紀錄</a>
+        <div class="nav-group" role="group" aria-labelledby="nav-data">
+          <p class="nav-heading" id="nav-data">資料</p>
+          <a class="nav-item active" href="./" aria-current="page">狗資料</a>
+          <a class="nav-item" href="./activities.html">活動紀錄</a>
+          <a class="nav-item" href="./checks.html">待補清單</a>
+        </div>
+        <div class="nav-group" role="group" aria-labelledby="nav-volunteer">
+          <p class="nav-heading" id="nav-volunteer">志工網站</p>
+          <a class="nav-item" href="./settings.html">志工網站設定</a>
+          <a class="nav-item" href="./updates.html">修改紀錄</a>
+          <a class="nav-item" href="./releases.html">網站更新</a>
+        </div>
       </nav>
-      <p class="sidebar-note">管理者<br><span>逐隻編輯與核對</span></p>
     </aside>
     <main id="content" class="admin-content" tabindex="-1">
       <header class="admin-page-header">
-        <div><h1>狗資料</h1><p>查看狗的身分與維護狀態，逐項核對並儲存。</p></div>
-        <button type="button" class="btn btn-primary" id="refresh">重新讀取</button>
+        <div><h1>狗資料</h1><p>查看狗的身分與維護狀態；按「編輯」在右側修改，存完可直接開下一隻。</p></div>
+        <button type="button" class="btn" id="refresh">重新讀取</button>
       </header>
       <section class="source-note" aria-label="資料來源說明">
         <strong>來源與編輯權限</strong>　編號、狗名、籠位、備註由試算表送入；介紹、休養與固定照顧由網站維護。性別以狗正本為準，補正前請核對舊值差異。
       </section>
-      <section id="dog-editor" class="card dog-editor" aria-label="編輯狗資料" hidden></section>
       <section class="card" aria-label="狗資料表">
+        <div class="status-tabs" role="group" aria-label="狗的狀態">
+          <button type="button" class="btn btn-primary" data-status="main" aria-pressed="true">在所 <span data-count="main"></span></button>
+          <button type="button" class="btn" data-status="departed" aria-pressed="false">已出所 <span data-count="departed"></span></button>
+          <button type="button" class="btn" data-status="unknown" aria-pressed="false">待核對 <span data-count="unknown"></span></button>
+          <button type="button" class="btn" data-status="all" aria-pressed="false">全部 <span data-count="all"></span></button>
+        </div>
         <form class="table-filters" id="filters" role="search">
           <div class="search-field"><label class="form-label" for="query">搜尋狗資料</label><input class="form-control" id="query" type="search" placeholder="狗名、編號、籠位、介紹或永久 ID" maxlength="200" autocomplete="off"></div>
-          <div><label class="form-label" for="presence">名單</label><select class="form-select" id="presence"><option value="all">全部</option><option value="main">主清單上</option><option value="other">未列主清單</option></select></div>
           <div><label class="form-label" for="sex">性別</label><select class="form-select" id="sex"><option value="">全部</option><option value="male">公</option><option value="female">母</option><option value="unknown">待確認</option></select></div>
-          <div><label class="form-label" for="care">維護狀態</label><select class="form-select" id="care"><option value="">全部</option><option value="missing">有待補資料</option><option value="rest">休養中</option><option value="fixed">固定照顧</option></select></div>
+          <div><label class="form-label" for="care">維護狀態</label><select class="form-select" id="care"><option value="">全部</option><optgroup label="待補"><option value="missing">有待補資料</option><option value="missingIntro">缺介紹</option><option value="missingPhoto">缺照片</option><option value="missingNumber">缺編號</option><option value="unknownSex">性別待確認</option></optgroup><optgroup label="試算表"><option value="badNumberDate">編號看不出入所日期</option><option value="missingWalk">缺溜狗日期</option></optgroup><optgroup label="照顧"><option value="rest">休養中</option><option value="fixed">固定照顧</option></optgroup></select></div>
           <button class="btn" id="clear" type="reset">清除條件</button>
         </form>
         <div id="status" class="table-status" role="status" aria-live="polite">正在讀取狗資料…</div>
@@ -44,13 +54,14 @@
           <table class="table table-vcenter">
             <caption class="visually-hidden">狗的永久身分與資料來源。點選欄名切換排序。</caption>
             <thead><tr>
+              <th scope="col" class="edit-cell"><span class="visually-hidden">編輯</span></th>
               <th scope="col">照片</th>
-              <th scope="col" aria-sort="ascending"><button type="button" data-sort="number">目前編號<span class="source-label">試算表</span></button></th>
+              <th scope="col" aria-sort="ascending"><button type="button" data-sort="number">編號<span class="source-label">試算表</span></button></th>
               <th scope="col"><button type="button" data-sort="name">狗名<span class="source-label">試算表</span></button></th>
-              <th scope="col"><button type="button" data-sort="cage">籠位<span class="source-label">試算表</span></button></th>
-              <th scope="col"><button type="button" data-sort="sex">性別</button></th>
-              <th scope="col">介紹／備註</th><th scope="col">維護狀態</th>
-              <th scope="col"><button type="button" data-sort="dogId">永久 ID</button></th>
+              <th scope="col" class="col-wide"><button type="button" data-sort="cage">籠位<span class="source-label">試算表</span></button></th>
+              <th scope="col" class="col-wide"><button type="button" data-sort="sex">性別</button></th>
+              <th scope="col" class="col-wide">介紹／備註</th><th scope="col">維護狀態</th>
+              <th scope="col" class="col-wide"><button type="button" data-sort="dogId">永久 ID</button></th>
             </tr></thead>
             <tbody id="dogs"></tbody>
           </table>
@@ -61,8 +72,9 @@
           <div class="page-controls"><button type="button" class="btn" id="previous">上一頁</button><span id="page-number"></span><button type="button" class="btn" id="next">下一頁</button></div>
         </footer>
       </section>
-      <p class="data-note">「未列主清單」僅表示目前不在試算表主清單，不能據此判定離所。缺照片依照片紀錄判斷，實際檔案讀不到時會另外提示。</p>
+      <p class="data-note">在所＝在試算表主清單上；已出所＝有離所紀錄；待核對＝不在主清單也沒有離所紀錄，多半是試算表改編號時多出來的重複，可在編輯抽屜底下併到同一隻。不在所的狗顯示最新的舊編號。缺照片依照片紀錄判斷，實際檔案讀不到時會另外提示。</p>
     </main>
+    <aside id="dog-drawer" class="dog-drawer" role="dialog" aria-modal="false" aria-labelledby="drawer-title" hidden></aside>
   </div>
 </body>
 </html>

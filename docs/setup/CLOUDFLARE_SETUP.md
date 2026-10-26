@@ -4,7 +4,7 @@
 
 ```
 GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ GitHub Action「部署到 Cloudflare」──▶ Cloudflare Worker
-                                                                                         ├─ 網頁、data/、photos/
+                                                                                         ├─ 網頁、photos/
                                                                                          └─ /api（上傳、備註、代號）
 ```
 
@@ -104,13 +104,22 @@ Cloudflare → **Workers & Pages** → `bq-shelter-photos` → **Settings** → 
 之後每開一個 PR，GitHub 會自動部署一份預覽版，並在 PR 頁面留一則「📱 預覽網址」留言，網址固定是：
 
 ```
-https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
+https://pr-<PR 編號>-bq-shelter-dogs-preview.jiatsen-k.workers.dev
 ```
 
 - 用手機點開就能看到這個 PR 改完的樣子，不用等合併。同一個 PR 再改，網址不變，重新整理就是最新的。
 - 預覽版可以看、可以讀，但**上傳照片、存備註都不會存**，會顯示「這是預覽版，不能存」，正式資料不受影響。
 - 「我溜過」等手機上記的東西，預覽網址也要重新輸入一次（每個預覽網址都算不同網站）。
-- 不用另外設定，用的是步驟 4 已經設好的 Cloudflare Secret。
+- 稽核第 3 項（2026-10-26）起，預覽上傳到**獨立的預覽 Worker `bq-shelter-dogs-preview`**，不是正式 Worker 的版本：照片讀測試空間 `bq-shelter-photos-test`、資料讀測試 D1，Worker 上**只有 `WALKER_KEY`**（算志工代號，不能寫任何東西；K 2026-10-26 決定跟正式同一把，代號才對得上測試庫），沒有正式試算表的密鑰、沒有 `ADMIN_KEY`，預覽也不跑排程。所以 PR 的程式就算有漏洞，也碰不到正式照片和正式試算表。測試照片空間是 2026-10-24 從正式複製的，之後正式新換的照片在預覽看不到。
+- 正式 Worker 關掉預覽網址（`wrangler.jsonc` 的 `"preview_urls": false`），舊的 `pr-<編號>-bq-shelter-dogs` 網址在下次正式部署後失效。
+- 每次上傳前 `node scripts/d1-database.mjs --config wrangler.jsonc --preview` 會檢查：Worker 名稱、照片空間、資料庫都不是正式的，預覽 Worker 除了 `WALKER_KEY` 沒有別的密鑰；任何一項不符就停止、不上傳。**不要在預覽 Worker 上設其他密鑰**，設了預覽就會停。
+- **第一次要先建預覽 Worker（只做一次）**：在 repo 根目錄跑下面三行。第二行只在 Worker 還不存在時部署一次（預覽設定、沒有密鑰、沒有排程），已經存在就停；第三行貼上跟正式版同一把 `WALKER_KEY`。
+
+  ```
+  npx.cmd wrangler login
+  node scripts/d1-database.mjs --config wrangler.jsonc --preview --create-preview-worker
+  npx.cmd wrangler secret put WALKER_KEY --name bq-shelter-dogs-preview
+  ```
 
 ## 瀏覽統計（#128）
 
@@ -170,7 +179,7 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
 
 1. 溜狗表、詳細資訊、放大照片、找狗、分析頁的照片都正常。
 2. 選一隻狗換主照片：換完重新整理還是新照片；另一支手機（或無痕視窗）也馬上看得到。
-3. 過一兩分鐘清單上的小圖也換成新的（縮圖由「產生照片縮圖（R2）」Action 做，做好前先顯示原圖）。
+3. 清單上的小圖也換成新的（#546 起縮圖由網站換照片時自己產生；沒有縮圖的照片先顯示原圖，要補就手動跑「產生照片縮圖（R2）」Action）。
 4. GitHub 的提交紀錄（https://github.com/jiatsenK/bq-shelter-dogs/commits/main ）**沒有**多出照片的提交。
 
 （2026-10-04 K 驗收通過；舊照片 2026-10-05 已從 repo 刪除。）
@@ -203,17 +212,21 @@ https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
 - 本機試跑：在 repo 根目錄 `npx wrangler dev --persist-to /tmp/wrangler-state`（`--persist-to` 放 repo 外面，不然暫存寫進網站資料夾會一直重新載入）。
 - 照片快取（#127）：`public/_headers` 讓 `photos/` 在手機上快取 30 天；Worker 的 `/api/dogs` 回傳每張照片的內容雜湊（`photoVersions`），網站組照片網址加 `?v=雜湊`，換照片網址就變。
 - 瀏覽統計（#128）：部署前 `scripts/analytics-beacon.mjs` 把 Cloudflare Web Analytics 的 beacon 插進要上傳的 `public/index.html`（token 來自 Secret `CF_ANALYTICS_TOKEN`，不提交）；預覽版和舊網址沒有。
-- 部署：`.github/workflows/deploy-cloudflare.yml`。同步試算表、產生縮圖這兩個 Action 用 GitHub 內建 token 提交，不會觸發推送事件，所以用 `workflow_run` 接著部署。
+- 部署：`.github/workflows/deploy-cloudflare.yml`。推到 main 且改到會放上網站的檔案時部署，也可以手動跑；「套用 D1 migration」套完會呼叫它（`workflow_call`）。
+  - 部署排隊、不取消（#622）：正在跑的部署跑完才換下一個。還在排隊的會被更新的那次換掉，那次用更新的 main，一樣先確認 migration 再部署。原本會取消正在跑的部署，「套用 D1 migration」套完後呼叫的部署曾被砍掉（2026-10-25）。
+  - 只准 main（#622）：「部署到 Cloudflare」「套用 D1 migration」「部署管理網站」「準備預覽資料庫」每個 job 都有 `if: github.ref == 'refs/heads/main'`，在 Actions 頁選別的分支按，整個略過（灰色），不碰正式環境。只有「部署到測試網站」可以填分支。結構檢查在 `tests/index/hosting.js`（`mainOnlyProblem`）。
+  - 這只擋手誤：有推送權限的人能連 workflow 一起改。正式部署目前不等測試通過（另開票討論）。
 - 照片放 R2（#130）：`wrangler.jsonc` 的 `r2_buckets`（binding `PHOTOS`，bucket `bq-shelter-photos`），程式在 `worker/src/r2.js`。
-  `/photos/*`、`/data/dogs.json`（蓋上 R2 照片的版本號）先經過 Worker（相簿 2026-10-09 拿掉，`photos/gallery/` 一律 404）；R2 沒有的照片退回靜態檔，刪掉的照片放 0 位元組的刪除標記（`customMetadata.deleted`）擋住退回。
+  `/photos/*` 先經過 Worker（`wrangler.jsonc` 的 `run_worker_first`；狗清單和照片版本號改由 `/api/dogs` 提供）（相簿 2026-10-09 拿掉，`photos/gallery/` 一律 404）；R2 沒有的照片退回靜態檔，刪掉的照片放 0 位元組的刪除標記（`customMetadata.deleted`）擋住退回。
   換掉、刪掉前複製到 `trash/{時間-亂數}/photo.jpg`（customMetadata 記 path、dogId、kind、file、addedAt、deletedAt）＋`thumb.jpg`，Cron 清掉超過 30 天的。
+  Lifecycle 規則存在 bucket 上、不在 repo：`bq-shelter-photos`、`bq-shelter-photos-test` 都只有預設的「未完成分段上傳 7 天中止」，沒有刪除規則。K 2026-10-26 決定不加（理由見 ADR 0018 第 7 點補註）；要查就跑 `npx.cmd wrangler r2 bucket lifecycle list bq-shelter-photos`。
   管理 API（標頭 `X-Admin-Key: encodeURIComponent(金鑰)`）：`GET /api/admin/thumbs`、`PUT /api/admin/thumbs/{原圖路徑}`、`GET /api/admin/trash`、`POST /api/admin/trash/{代號}/restore`。
-  部署前 `scripts/r2-bucket.mjs` 只查證既有 bucket，失敗以非零狀態結束、停止部署。縮圖：`.github/workflows/r2-thumbs.yml`（`scripts/make-thumbs.py --site`）。
+  部署前 `scripts/r2-bucket.mjs` 只查證既有 bucket，失敗以非零狀態結束、停止部署。補縮圖（只有人工手動跑）：`.github/workflows/r2-thumbs.yml`（`scripts/make-thumbs.py --site`）。
   repo 的 `photos/` 已經不放照片（原本的 `photos/README.md` 併到這裡）。R2 找不到照片時 Worker 仍會退回讀部署的靜態檔，這是搬遷過渡期的備援，請不要再把 `.jpg` 放進 repo。
 
 ## 資料庫（D1）
 
-K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**（結構見 `docs/COMPACT_D1.md`、`db/compact-schema.sql`）。免費額度 5 GB，現在的資料不到 1 MB，費用 NT$0。
+K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**（結構見 `db/compact-schema.sql`；#246 當時的說明 `docs/design/history/COMPACT_D1.md` 已過時）。免費額度 5 GB，現在的資料不到 1 MB，費用 NT$0。
 目前只是把資料庫建起來、把現有資料放進去；**網站還是讀原本的檔案**，所以資料庫沒接上網站也完全不受影響。
 
 **#214 起部署不改資料庫。** `scripts/d1-database.mjs` 只驗證既有資料庫名稱／ID 並執行 `SELECT 1`，缺少、ID 不符或讀取失敗就停止部署。即使資料庫是空的也不建表或匯入。新增結構在 #215 之後走有版本的 migration，與網站部署分開執行。
@@ -225,11 +238,11 @@ K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**�
 
 測試 D1 已在 2026-10-14 建立，ID `9e23a65c-c9dd-4f83-ad9c-2e01626910f0`，與正式 `6cd6c304-0fed-4ddb-b9ec-799e60a4adb4` 不同。建立後 API 讀回、SELECT 1=1、業務表數=0、rows_written=0。這張票只建測試庫，不匯入正式資料；API 回應裡的 version=production 是 D1 的產品版本，不能用來判斷它是否為本專案正式庫，須看名稱與 ID。
 
-預覽仍透過既有 `versions upload --preview-alias` 上傳版本，不部署正式 Worker；準備腳本將 DB 明確切成測試 ID 並帶 PREVIEW=1，仍保留既有預覽寫入限制。R2 讀既有照片空間。測試庫一開始沒有資料表，預覽會顯示「狗的資料讀不到」。到 Actions 選「準備預覽資料庫」→「Run workflow」（`.github/workflows/seed-preview-db.yml`）：把正式 D1 匯出（只讀），清空測試庫後整份匯入（#520），最後核對兩邊狗清單一致。只寫測試庫；測試庫原有資料會被覆蓋，想讓預覽資料跟上正式庫就再跑一次。
+預覽透過 `versions upload --preview-alias` 上傳到獨立的預覽 Worker `bq-shelter-dogs-preview`（稽核第 3 項），不部署；準備腳本把 Worker 名稱、DB、R2 換成 `wrangler.preview-db.jsonc` 的測試資源並帶 PREVIEW=1，查證預覽 Worker 除了 `WALKER_KEY` 沒有密鑰。R2 讀測試照片空間 `bq-shelter-photos-test`。測試庫一開始沒有資料表，預覽會顯示「狗的資料讀不到」。到 Actions 選「準備預覽資料庫」→「Run workflow」（`.github/workflows/seed-preview-db.yml`）：把正式 D1 匯出（只讀），清空測試庫後整份匯入（#520），最後核對兩邊狗清單一致。只寫測試庫；測試庫原有資料會被覆蓋，想讓預覽資料跟上正式庫就再跑一次。
 
 ### 結構改動與資料匯入
 
-資料表結構：現在的完整樣子在 `db/compact-schema.sql`（`v3_*`），說明見 `docs/COMPACT_D1.md`。#553 起每個變更寫成 repo 根目錄 `migrations/NNNN_*.sql`（wrangler 預設目錄，不用設 `migrations_dir`），正式庫只由 Actions「套用 D1 migration」（`.github/workflows/d1-migrations.yml`）套用，流程見 `docs/agents/data-changes.md`。舊的 `db/schema.sql`、`db/migrations/`（#252 前的舊表）已於 #275 移除，跟現在的 `migrations/` 無關。
+資料表結構：現在的完整樣子在 `db/compact-schema.sql`（`v3_*`），#246 當時的說明 `docs/design/history/COMPACT_D1.md` 已過時，只供查背景。#553 起每個變更寫成 repo 根目錄 `migrations/NNNN_*.sql`（wrangler 預設目錄，不用設 `migrations_dir`），正式庫只由 Actions「套用 D1 migration」（`.github/workflows/d1-migrations.yml`）套用，流程見 `docs/agents/data-changes.md`。舊的 `db/schema.sql`、`db/migrations/`（#252 前的舊表）已於 #275 移除，跟現在的 `migrations/` 無關。
 
 備用庫 `bq-shelter-dogs-backup`（2026-10-24 建立，#553）：套用會刪資料或搬資料的 migration 前，套用 workflow 先把正式庫整份複製到這裡。ID `d31b8371-c94a-4a04-960f-665a0365c5af`，記在 `scripts/d1-migrations.mjs` 的 `BACKUP_DB_ID`；workflow 照名字查，ID 不同或跟正式庫一樣就停。
 

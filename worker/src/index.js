@@ -7,11 +7,12 @@ import { callSheet, SheetWriteError } from './sheet-write.js';
 import { splitNames } from './sheet-read.js';
 import { readDepartedCards } from './departed.js';
 import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, readActivities, resolveDogs, updateActivity } from './activities.js';
-import { acceptWalk, dispatchWalk, readAcceptedWalks, writebackTarget, confirmWalk, reconcileWalk } from './walk-accept.js';
+import { acceptWalk, dispatchWalk, readAcceptedWalks, withTodayWalks, writebackTarget, confirmWalk, reconcileWalk } from './walk-accept.js';
 import { reconcileEditedRows } from './walk-reconcile.js';
 import { retryWalks, scanTick } from './walk-retry.js';
+import { recordRun } from './cron-status.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
-// 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
+// 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；這裡的 /api/admin 只給 GitHub Action，用 ADMIN_KEY；管理者用的管理網站是另一個 Worker（worker/src/admin/、wrangler.admin.jsonc，ADR 0020）。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
 import { taiwanYmd } from './sync-plan.js';
 import { applyDogListRows, scanDogList, DOG_LIST_ROWS_MAX } from './dog-list.js';
@@ -19,12 +20,12 @@ import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey }
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks } from './compact.js';
 import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
 
-// 排程要跟 wrangler.jsonc 的 triggers.crons 一致（#500，ADR 0018）：寫回重試每 10 分鐘（沒工作就只查一次 D1），
-// 保險掃描台灣 09:43、13:53、23:53（UTC 01:43、05:53、15:53）
+// 排程要跟 wrangler.jsonc 的 triggers.crons 一致（#500，ADR 0018）。排程數量算整個 Cloudflare 帳號，免費方案上限 5 個（稽核第 5 項），
+// 正式版只用兩個：寫回重試每 10 分鐘（沒工作就只查一次 D1，再記一列跑完時間）；保險掃描台灣 09:23、13:23、23:23（UTC 01:23、05:23、15:23），跟 GAS 的 dogListScan（09:43／13:53／23:53 前後 15 分鐘）錯開。
+// 照片垃圾桶（#501，ADR 0018 第 7 點）不另佔排程：每月 1 日 09:23 那次保險掃描順便清。測試網站只有寫回重試（wrangler.test-site.jsonc）
 const RETRY_CRON = '5-59/10 * * * *';
-const SCAN_CRONS = ['43 1 * * *', '53 5,15 * * *'];
-// 照片垃圾桶每月 1 日台灣 10:17（#501，ADR 0018 第 7 點）；每 10 分鐘叫 GitHub 同步試算表的排程已移除，狗清單改由 GAS 編輯觸發送列（worker/src/dog-list.js）
-const TRASH_CRON = '17 2 1 * *';
+const SCAN_CRON = '23 1,5,15 * * *';
+const trashDue = now => { const d = new Date(now); return d.getUTCDate() === 1 && d.getUTCHours() === 1; };
 const DOG_LIST_SCAN_MAX_BYTES = 512 * 1024;
 const EDIT_ROWS_MAX = 50;
 
@@ -174,6 +175,9 @@ async function getDogs(env, origin) {
     console.error('dogs', e);
     return off();
   }
+  try {
+    Object.assign(data, withTodayWalks(data.dogs, await readAcceptedWalks(env.DB, taiwanYmd(Date.now()))));
+  } catch (e) { console.error('dogs-today', e); } // 讀不到今日溜狗就照試算表複本給，網站再自己讀 /today
   if (r2.r2On(env)) {
     try {
       const { versions } = await r2.r2Versions(env);
@@ -318,17 +322,19 @@ async function activities(request, env, origin) {
 
 const THUMB_MAX_BYTES = 512 * 1024;
 
-// 照片垃圾桶每月 1 日清一次（#501，ADR 0018 第 7 點），不再綁在同步上：清掉超過 30 天的，結果記在 v3_sync_state 的 trash_purged（GET /admin/trash 的 lastPurge）
+// 照片垃圾桶每月 1 日清一次（#501，ADR 0018 第 7 點），不再綁在同步上：清掉超過 30 天的，結果記在 v3_sync_state 的 trash_purged
+// （{ at, purged, failed, errors }，GET /admin/trash 的 lastPurge）。有清不掉的就丟錯，排程紀錄 cron_trash 才會記成出錯
 async function maintenance(env, now = Date.now()) {
-  const result = { at: new Date(now).toISOString(), purged: await r2.purgeTrash(env, now) };
+  const { purged, failed, errors } = await r2.purgeTrash(env, now);
+  const result = { at: new Date(now).toISOString(), purged, failed, ...(errors.length ? { errors } : {}) };
   // 記不進去不影響已清掉的照片，只是查不到這次結果
   try { if (env && env.DB) await env.DB.prepare("INSERT INTO v3_sync_state(key,value) VALUES('trash_purged',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify(result)).run(); }
-  catch (e) { console.warn('trash_purged:', e.message); }
+  catch (e) { console.error('trash_purged:', e.message); }
+  if (failed) throw new Error(`照片垃圾桶 ${failed} 筆清不掉：${errors.map(e => `${e.id} ${e.error}`).join('；')}`);
   return result;
 }
 
 const baseOf = request => new URL(request.url).origin;
-const siteMeta = now => ({ from: 'site', at: new Date(now).toISOString() });
 
 async function uploadR2(request, env, origin, ctx) {
   const id=decodeURIComponent(new URL(request.url).pathname.split('/').at(-1));
@@ -441,9 +447,9 @@ async function walkerCodes(request, env, origin) {
   return reply(200, { ok: true, codes }, origin);
 }
 
-// ── 按「溜了」寫進試算表（#138）──
-// 網站送 { action: 'walk' | 'undo', walker, dogs: [{ id, name, prev?, wrote? }] }；undo 沒帶 prev 時 Worker 從溜狗紀錄找（ADR 0016），這裡檢查完帶上金鑰（SHEET_WRITE_KEY）轉給
-// Google Apps Script 小程式（apps-script/sheet-write.gs，K 用自己的帳號部署）。小程式只改「遛狗日期」「誰遛的」兩欄。
+// ── POST /walk：溜了／修改／復原與備註、異動紀錄 ──
+// 溜了／修改／復原先存 D1（ADR 0018），再由 dispatchWalk 叫 Apps Script 的 walkWake 寫回；舊版直寫小程式已退場（#597）。
+// note／log 檢查完帶上金鑰（SHEET_WRITE_KEY）轉給 Google Apps Script 小程式（apps-script/sheet-write.gs，K 用自己的帳號部署）。
 // ── 溜狗人名字（#141）：GET /walkers ──
 // 名字不進 repo（dogs.json 只有代號），網站打開時跟這裡拿：#519 起從 D1 讀（readWalkersD1），不連 Google，
 // 回 { walkers: { 狗的 key: 誰遛的 }, names: [主清單上的名字，最近出現的在前], older: [以前看過、現在表上沒有的名字] }；狗的 key 跟網站 walkKey 一樣（有編號用編號，沒有用「名:犬名」）。
@@ -781,13 +787,19 @@ export default {
   testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, maintenance },
 
   // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 wrangler.jsonc 的 triggers）
-  // 每個排程只跑一件（#500、#501）：RETRY_CRON 寫回重試、SCAN_CRONS 保險掃描、TRASH_CRON 照片垃圾桶；沒帶 cron（測試）跑溜狗兩件
+  // RETRY_CRON 寫回重試；SCAN_CRON 保險掃描，每月 1 日第一次順便清照片垃圾桶；沒帶 cron（測試）跑溜狗兩件。
+  // 每件跑完或出錯都記時間給管理網站看（worker/src/cron-status.js）
   async scheduled(event, env, ctx) {
     const now = event && event.scheduledTime ? event.scheduledTime : Date.now();
     const cron = event && event.cron;
-    if (cron === TRASH_CRON) { if (r2.r2On(env)) ctx.waitUntil(maintenance(env, now)); return; }
-    if (!cron || SCAN_CRONS.includes(cron)) ctx.waitUntil(cron ? scanTick(env, now) : scanTick(env, now).then(() => retryWalks(env, now)));
-    else if (cron === RETRY_CRON) ctx.waitUntil(retryWalks(env, now));
+    const retry = () => recordRun(env, 'retry', now, () => retryWalks(env, now));
+    const scan = () => recordRun(env, 'scan', now, () => scanTick(env, now));
+    if (!cron) ctx.waitUntil(scan().then(retry));
+    else if (cron === RETRY_CRON) ctx.waitUntil(retry());
+    else if (cron === SCAN_CRON) {
+      ctx.waitUntil(scan());
+      if (trashDue(now) && r2.r2On(env)) ctx.waitUntil(recordRun(env, 'trash', now, () => maintenance(env, now)));
+    }
   },
 
   async fetch(request, env, ctx) {
@@ -842,7 +854,7 @@ export default {
         return fail(500, '管理功能發生錯誤', allowed);
       }
     }
-    if (['/walk-writeback/target', '/walk-writeback/receipt', '/walk-writeback/legacy-check', '/walk-writeback/observe', '/walk-writeback/rows', '/walk-writeback/dog-list', '/walk-writeback/dog-list-scan'].includes(path)) {
+    if (['/walk-writeback/target', '/walk-writeback/receipt', '/walk-writeback/observe', '/walk-writeback/rows', '/walk-writeback/dog-list', '/walk-writeback/dog-list-scan'].includes(path)) {
       if (request.method !== 'POST' || env?.PREVIEW || !env?.DB || !cfg.sheetWriteKey) return fail(403, '不接受寫回要求', '');
       const supplied = request.headers.get('X-Sheet-Write-Key') || '';
       const digest = text => crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -876,13 +888,6 @@ export default {
             catch (error) { results.push({ ok:false, error:error.status ? error.message : '比較失敗，保留待處理' }); }
           }
           return reply(200,{ ok:true, results },'');
-        }
-        if (path.endsWith('/legacy-check')) {
-          if (!Array.isArray(input.dogs) || input.dogs.length > WALK_MAX_DOGS) return fail(400, '狗的資料不對', '');
-          for (const dog of input.dogs) {
-            if (await env.DB.prepare('SELECT dog_key FROM v3_walk_state WHERE dog_key=?').bind(dog.id || `名:${dog.name}`).first()) return reply(200, { ok: true, allowed: false }, '');
-          }
-          return reply(200, { ok: true, allowed: true }, '');
         }
         const result = path.endsWith('/target') ? await writebackTarget(env.DB, input, env) : await confirmWalk(env.DB, input, env);
         return reply(200, { ok: true, ...result }, '');

@@ -5,6 +5,7 @@ import { previousWalk } from './today.js';
 import { callSheet } from './sheet-write.js';
 import { splitNames } from './sheet-read.js';
 import { todayRowsWritten } from './d1-usage.js';
+import { walkDay } from './dog-list.js';
 
 const names = text => [...new Set(splitNames(text))];
 const keyOf = dog => dog.id || `名:${dog.name}`;
@@ -33,6 +34,20 @@ export async function readAcceptedWalks(db, today) {
     .map(w => ({ ...w, walked: w.walkedDate === today })) };
 }
 
+// 狗清單的遛狗日期是試算表複本，要等狗清單保險掃描才更新；今日溜狗（ADR 0018）是正本，
+// 有的狗用它的日期，並附上同一份今日紀錄，網站開頁就拿得到（K 2026-10-26）。
+// 資料包快取裡的狗是共用的，換日期時複製一份，不改到快取
+export function withTodayWalks(dogs, today) {
+  const byKey = new Map(today.walks.map(w => [w.key, w])), onList = new Set();
+  const merged = dogs.map(dog => {
+    const w = byKey.get(dog.id || `名:${dog.name}`);
+    if (!w) return dog;
+    onList.add(w.key);
+    return w.walkedDate === dog.walkedDate ? dog : { ...dog, walkedDate: w.walkedDate || null };
+  });
+  return { dogs: merged, today: { ...today, walks: today.walks.filter(w => onList.has(w.key)) } };
+}
+
 // SQL 的每次寫入都預留含觸發器與索引的保守上界。帳號當日量不可取得時，
 // 只警告並看單次門檻；本路徑另有持久每日保留量，不能靠重試繞過。
 export async function writeBudget(db, env, cost, now = Date.now()) {
@@ -58,6 +73,17 @@ async function transitionBudget(db,env,dogKey,dispatchId,cost,retry) {
   const prepaid=retry!==undefined ? retry?.dispatch_id===dispatchId && retry.reserved_day===day
     : await one(db,'SELECT dispatch_id FROM v3_walk_retry WHERE dog_key=? AND dispatch_id=? AND reserved_day=?',dogKey,dispatchId,day);
   return prepaid ? [] : writeBudget(db,env,cost);
+}
+
+// 溜狗紀錄（v3_walks，圖鑑／我溜過讀）跟著今日溜狗紀錄同一批寫（稽核第 4 項，K 2026-10-26）。
+// 網站寫回試算表是程式寫入、不觸發狗清單同步，以前要等保險掃描才進溜狗紀錄。
+// 改回較早的日子（復原、人工改回）刪掉原本較新那天；清空日期不刪（同 dog-list.js）。人工改的新那天仍由狗清單同步照表寫。
+const HISTORY_ROW_COST = 4; // 表＋主鍵＋日期索引＋walkpack 觸發器
+const countOf = state => state.members_json ? JSON.parse(state.members_json).length : names(state.walker).length;
+const dropDay = (db, dogId, date) => db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(dogId, date);
+export function droppedDay(db, old, nextDate) {
+  if (!old.dog_id || !nextDate || !old.effective_date || nextDate >= old.effective_date) return { statements: [], cost: 0 };
+  return { statements: [dropDay(db, old.dog_id, old.effective_date)], cost: HISTORY_ROW_COST * Math.max(1, countOf(old)) };
 }
 
 const MAIN_DOG = dog => `SELECT dog_id,walked_date,row_index FROM v3_sheet_main WHERE ${dog.id ? 'number=?' : "number='' AND name=?"}`;
@@ -145,15 +171,20 @@ export async function acceptWalk(db, input, env, now = Date.now()) {
     const result = { ...dog, status: input.action === 'undo' ? 'restored' : 'written', accepted: true, requestId: input.requestId, operationDate: input.operationDate,
       version, current: { date: effectiveDate, walker }, wrote: { walker },
       prev: { date: { date: previousDate }, walker: previousWalker }, syncStatus: 'pending', at };
+    // 今天照名單重寫那天；復原就刪掉今天（上一次那天本來就在溜狗紀錄裡，不動）。
+    const codes = effectiveDate === input.operationDate ? [...new Set(await Promise.all(members.map(m => walkerCode(m.name, env.WALKER_KEY))))] : [];
+    const history = effectiveDate === input.operationDate ? walkDay(db, old.dog_id, effectiveDate, dog, codes) : [dropDay(db, old.dog_id, input.operationDate)];
+    const historyCost = HISTORY_ROW_COST * ((old.effective_date === input.operationDate ? countOf(old) : 0) + codes.length);
     try {
       await db.batch([
         db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT version FROM v3_walk_state WHERE dog_key=?),0)=? THEN 1 ELSE 0 END').bind(key, old.version),
-        ...await writeBudget(db, env, editor ? 40 : 32, now),
+        ...await writeBudget(db, env, (editor ? 40 : 32) + historyCost, now),
         db.prepare('INSERT INTO v3_walk_state(dog_key,dog_id,number,name,version,effective_date,walker,members_json,base_date,base_walker,previous_date,previous_walker,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dog_key) DO UPDATE SET version=excluded.version,effective_date=excluded.effective_date,walker=excluded.walker,members_json=excluded.members_json,previous_date=excluded.previous_date,previous_walker=excluded.previous_walker,updated_at=excluded.updated_at')
           .bind(key, old.dog_id, dog.id, dog.name, version, effectiveDate, walker, JSON.stringify(members), baseDate, baseWalker, previousDate, previousWalker, at),
         db.prepare('INSERT INTO v3_walk_requests VALUES(?,?,?,?,?)').bind(input.requestId, key, input.operationDate, fingerprint, JSON.stringify(result)),
         db.prepare("UPDATE v3_walk_outbox SET status='superseded' WHERE dog_key=? AND status NOT IN ('synced','superseded')").bind(key),
         db.prepare("INSERT INTO v3_walk_outbox(dog_key,version,operation_date,target_date,target_walker,status,next_attempt_at) VALUES(?,?,?,?,?,'pending',?)").bind(key, version, input.operationDate, effectiveDate, walker, at),
+        ...history,
         ...(editor ? [db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) VALUES(?,?,?,?,?,?,?,?)')
           .bind(at, editor.code, editor.name, input.action === 'undo' ? 'walkundo' : 'walkedit', old.dog_id, dog.id, JSON.stringify({ date: old.effective_date, walker: old.walker }), JSON.stringify(result.current))] : []),
         db.prepare('DELETE FROM v3_walk_guard'),
@@ -399,9 +430,11 @@ async function compareTrustedWalk(db, dog, observed, env, seen = {}) {
   if (before?.target_date===target.date) before=null;
   const previousDate=target.date===old.effective_date ? old.previous_date ?? '' : (before?.target_date ?? old.effective_date);
   const previousWalker=target.date===old.effective_date ? old.previous_walker ?? '' : (before?.target_walker ?? old.walker);
+  const dropped=droppedDay(db,old,target.date);
   await db.batch([
     db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT version FROM v3_walk_state WHERE dog_key=?),0)=? THEN 1 ELSE 0 END').bind(key,old.version),
-    ...await writeBudget(db,env,32),
+    ...await writeBudget(db,env,32+dropped.cost),
+    ...dropped.statements,
     db.prepare('INSERT INTO v3_walk_state(dog_key,dog_id,number,name,version,effective_date,walker,members_json,base_date,base_walker,previous_date,previous_walker,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dog_key) DO UPDATE SET version=excluded.version,effective_date=excluded.effective_date,walker=excluded.walker,members_json=excluded.members_json,base_date=excluded.base_date,base_walker=excluded.base_walker,previous_date=excluded.previous_date,previous_walker=excluded.previous_walker,updated_at=excluded.updated_at')
       .bind(key,old.dog_id,dog.id,dog.name,version,target.date,target.walker,JSON.stringify(members),observed.date,observed.walker,previousDate,previousWalker,at),
     db.prepare('INSERT INTO v3_walk_baselines VALUES(?,?) ON CONFLICT(dog_key) DO UPDATE SET version=excluded.version').bind(key,version),

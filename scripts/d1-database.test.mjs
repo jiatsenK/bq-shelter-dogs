@@ -6,23 +6,31 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { ensureDatabase, parseJsonOutput, findDatabase, DB_NAME, DEPLOY_CONFIG, PREVIEW_CONFIG } from './d1-database.mjs';
+import { ensureDatabase, parseJsonOutput, findDatabase, previewIsolationProblem, DB_NAME, DEPLOY_CONFIG, PREVIEW_CONFIG } from './d1-database.mjs';
 
 const production = { binding: 'DB', database_name: DB_NAME, database_id: 'prod-id', preview_database_id: 'test-id' };
 const testing = { binding: 'DB', database_name: 'bq-shelter-dogs-test', database_id: 'test-id' };
+const isolated = { name: 'x-preview', triggers: { crons: [] }, r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos-test' }], d1_databases: [testing] };
 async function repo(binding = production) {
   const root = await mkdtemp(join(tmpdir(), 'bq-d1-'));
-  await writeFile(join(root, 'wrangler.jsonc'), JSON.stringify({ name: 'x', r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos' }], vars: { SYNC_DAILY_BUDGET: '40000' }, d1_databases: binding ? [binding] : [] }));
-  await writeFile(join(root, 'wrangler.preview-db.jsonc'), JSON.stringify({ d1_databases: [testing] }));
+  await writeFile(join(root, 'wrangler.jsonc'), JSON.stringify({ name: 'x', r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos' }], vars: { SYNC_DAILY_BUDGET: '40000' }, d1_databases: binding ? [binding] : [], triggers: { crons: ['17 2 1 * *'] }, preview_urls: false }));
+  await writeFile(join(root, 'wrangler.preview-db.jsonc'), JSON.stringify(isolated));
   return root;
 }
-function fake({ dbs = [ { uuid: 'prod-id', name: DB_NAME }, { uuid: 'test-id', name: testing.database_name } ], fail = '', probe = [{ success: true, results: [{ ok: 1 }] }] } = {}) {
+// secrets：預覽 Worker 上的密鑰清單；null 表示 Worker 還不存在
+function fake({ dbs = [ { uuid: 'prod-id', name: DB_NAME }, { uuid: 'test-id', name: testing.database_name } ], fail = '', probe = [{ success: true, results: [{ ok: 1 }] }], secrets = [] } = {}) {
   const calls = [];
   const run = args => {
     calls.push(args);
     if (fail && args.join(' ').includes(fail)) throw new Error('authentication failure');
-    if (args[1] === 'list') return `notice\n${JSON.stringify(dbs)}`;
-    if (args[1] === 'execute') return JSON.stringify(probe);
+    if (args[0] === 'd1' && args[1] === 'list') return `notice\n${JSON.stringify(dbs)}`;
+    if (args[0] === 'd1' && args[1] === 'execute') return JSON.stringify(probe);
+    if (args[0] === 'r2' && args[1] === 'bucket' && args[2] === 'info') return 'ok';
+    if (args[0] === 'secret' && args[1] === 'list') {
+      if (secrets === null) throw Object.assign(new Error('Command failed'), { stderr: 'This Worker does not exist on your account. [code: 10007]' });
+      return `⛅️ wrangler\n${JSON.stringify(secrets)}`;
+    }
+    if (args[0] === 'deploy' && args.at(-1) === PREVIEW_CONFIG) return 'deployed';
     throw new Error('Unexpected Cloudflare mutation');
   };
   return { run, calls };
@@ -48,17 +56,64 @@ test('#214 正式部署不管空庫或有資料，都只查證不建表／匯入
   await assert.rejects(readFile(join(root, 'db/seed.sql'), 'utf8'), /ENOENT/);
 });
 
-test('#214 預覽只查證隔離測試庫，保留 R2 並強制 PREVIEW', async () => {
+test('稽核 3 預覽改用獨立 Worker、測試 R2、測試 D1，不跑排程、強制 PREVIEW、查證沒有密鑰', async () => {
   const root = await repo();
   const { run, calls } = fake();
   const result = await ensureDatabase({ root, run, preview: true });
   const cfg = JSON.parse(await readFile(join(root, result.config), 'utf8'));
   assert.equal(result.config, PREVIEW_CONFIG);
+  assert.equal(result.worker, 'x-preview');
+  assert.equal(cfg.name, 'x-preview');
+  assert.deepEqual(cfg.r2_buckets, isolated.r2_buckets);
   assert.deepEqual(cfg.d1_databases, [testing]);
   assert.equal(cfg.vars.PREVIEW, '1');
   assert.equal(cfg.vars.SYNC_DAILY_BUDGET, '40000');
-  assert.equal(cfg.r2_buckets[0].bucket_name, 'photos');
-  assert.equal(calls[1][2], testing.database_name);
+  assert.deepEqual(cfg.triggers, { crons: [] });
+  assert.equal(cfg.preview_urls, true);
+  assert.equal(calls.find(c => c[1] === 'execute')[2], testing.database_name);
+  assert.deepEqual(calls.find(c => c[0] === 'r2'), ['r2', 'bucket', 'info', 'photos-test']);
+  assert.deepEqual(calls.at(-1), ['secret', 'list', '--config', PREVIEW_CONFIG]);
+  assert.ok(!calls.some(c => c[0] === 'deploy' || c[0] === 'versions'), '查證時不能部署');
+});
+
+test('稽核 3 預覽 Worker 只准有 WALKER_KEY；多了其他密鑰、還沒建立、查不到密鑰清單或測試 R2 都停止', async () => {
+  const root = await repo();
+  await ensureDatabase({ root, preview: true, run: fake({ secrets: [{ name: 'WALKER_KEY', type: 'secret_text' }] }).run });
+  for (const name of ['SHEET_WRITE_URL', 'SHEET_WRITE_KEY', 'ADMIN_KEY']) {
+    const secrets = [{ name: 'WALKER_KEY', type: 'secret_text' }, { name, type: 'secret_text' }];
+    await assert.rejects(ensureDatabase({ root, preview: true, run: fake({ secrets }).run }), new RegExp(`只准有 WALKER_KEY，多了 ${name}`));
+  }
+  await assert.rejects(ensureDatabase({ root, preview: true, run: fake({ secrets: null }).run }), /預覽 Worker 還沒建立/);
+  await assert.rejects(ensureDatabase({ root, preview: true, run: fake({ fail: 'secret list' }).run }), /預覽密鑰查證失敗/);
+  await assert.rejects(ensureDatabase({ root, preview: true, run: fake({ fail: 'r2 bucket' }).run }), /R2 檢核失敗/);
+});
+
+test('稽核 3 建立預覽 Worker：只在不存在時 deploy 隔離設定一次，已存在就停', async () => {
+  const root = await repo();
+  const created = fake({ secrets: null });
+  await ensureDatabase({ root, preview: true, create: true, run: created.run });
+  assert.deepEqual(created.calls.at(-1), ['deploy', '--config', PREVIEW_CONFIG]);
+  const exists = fake();
+  await assert.rejects(ensureDatabase({ root, preview: true, create: true, run: exists.run }), /已經存在/);
+  assert.ok(!exists.calls.some(c => c[0] === 'deploy'));
+});
+
+test('稽核 3 預覽設定若沿用正式 Worker 名稱或正式照片空間就停止，不接觸 Cloudflare', async () => {
+  const base = { name: 'x', r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos' }] };
+  assert.equal(previewIsolationProblem(base, isolated), '');
+  for (const bad of [
+    { ...isolated, name: 'x' },
+    { ...isolated, name: undefined },
+    { ...isolated, r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos' }] },
+    { ...isolated, r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos-test' }, { binding: 'OTHER', bucket_name: 'photos' }] },
+    { ...isolated, r2_buckets: [] },
+    { ...isolated, triggers: undefined },
+    { ...isolated, triggers: { crons: ['5-59/10 * * * *'] } },
+  ]) {
+    const root = await repo();
+    await writeFile(join(root, 'wrangler.preview-db.jsonc'), JSON.stringify(bad));
+    await assert.rejects(ensureDatabase({ root, preview: true, run: () => assert.fail('must not query') }), /預覽要用獨立 Worker|預覽不能使用正式 R2|預覽缺少照片空間|crons/);
+  }
 });
 
 for (const [title, options] of [ ['不存在', { dbs: [] }], ['名稱對但 ID 不符', { dbs: [{ uuid: 'other-id', name: DB_NAME }] }], ['查證失敗', { fail: 'd1 list' }], ['唯讀查詢失敗', { fail: 'd1 execute' }], ['查詢回失敗', { probe: [{ success: false, results: [{ ok: 1 }] }] }], ['查詢不完整', { probe: [] }] ]) {
@@ -73,7 +128,7 @@ for (const [title, options] of [ ['不存在', { dbs: [] }], ['名稱對但 ID �
 test('#214 預覽若指向正式 ID 或同名即停止，不接觸 Cloudflare', async () => {
   for (const bad of [{ ...testing, database_id: production.database_id }, { ...testing, database_name: production.database_name }]) {
     const root = await repo();
-    await writeFile(join(root, 'wrangler.preview-db.jsonc'), JSON.stringify({ d1_databases: [bad] }));
+    await writeFile(join(root, 'wrangler.preview-db.jsonc'), JSON.stringify({ ...isolated, d1_databases: [bad] }));
     await assert.rejects(ensureDatabase({ root, preview: true, run: () => assert.fail('must not query') }), /預覽不能使用正式 D1/);
   }
 });

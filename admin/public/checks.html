@@ -3,31 +3,53 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>資料檢查 · 板收管理網站</title>
+  <title>待補清單 · 板收管理網站</title>
   <link rel="stylesheet" href="./vendor/tabler.min.css">
   <link rel="stylesheet" href="./admin.css">
   <script type="module" src="./js/checks.js"></script>
 </head>
 <body>
-  <a class="skip-link" href="#content">跳到資料檢查</a>
+  <a class="skip-link" href="#content">跳到待補清單</a>
   <div class="admin-layout">
     <aside class="admin-sidebar" aria-label="管理網站">
       <a class="brand" href="./">板收<span>管理網站</span></a>
       <nav aria-label="管理功能">
-        <a class="nav-item" href="./">狗資料</a>
-        <a class="nav-item" href="./settings.html">功能管理</a>
-        <a class="nav-item" href="./activities.html">活動紀錄</a>
-        <a class="nav-item active" href="./checks.html" aria-current="page">資料檢查</a>
-        <a class="nav-item" href="./updates.html">更新紀錄</a>
+        <div class="nav-group" role="group" aria-labelledby="nav-data">
+          <p class="nav-heading" id="nav-data">資料</p>
+          <a class="nav-item" href="./">狗資料</a>
+          <a class="nav-item" href="./activities.html">活動紀錄</a>
+          <a class="nav-item active" href="./checks.html" aria-current="page">待補清單</a>
+        </div>
+        <div class="nav-group" role="group" aria-labelledby="nav-volunteer">
+          <p class="nav-heading" id="nav-volunteer">志工網站</p>
+          <a class="nav-item" href="./settings.html">志工網站設定</a>
+          <a class="nav-item" href="./updates.html">修改紀錄</a>
+          <a class="nav-item" href="./releases.html">網站更新</a>
+        </div>
       </nav>
-      <p class="sidebar-note">管理者<br><span>缺漏與試算表差異</span></p>
     </aside>
     <main id="content" class="admin-content" tabindex="-1">
       <header class="admin-page-header">
-        <div><h1>資料檢查</h1><p>找出待補的狗資料，以及網站有、試算表已經沒有的狗。只列出來，不自動修改。</p></div>
-        <button type="button" class="btn btn-primary" id="reload">重新讀取</button>
+        <div><h1>待補清單</h1><p>待補的狗資料點進去直接補；另列可能重複的狗、網站有但試算表已經沒有的狗，並確認排程有在跑。這頁只列出來，不自動修改。</p></div>
+        <div class="header-actions"><a class="volunteer-chip" id="volunteer-state" href="./settings.html">志工網站開關讀取中…</a><button type="button" class="btn" id="reload">重新讀取</button></div>
       </header>
-      <p class="source-note" id="volunteer-state"></p>
+      <section class="card check-card" aria-labelledby="complete-title">
+        <h2 id="complete-title">主清單資料完整度</h2>
+        <p id="complete-status" class="check-status" role="status" aria-live="polite">正在讀取狗資料…</p>
+        <div id="complete-list" class="check-list"></div>
+        <p class="data-note">規則同志工網站的「狗的資料完整度」，只看目前主清單上的狗。點項目名稱看狗資料表的篩選結果，點狗名直接開編輯。照片依照片紀錄判斷，不逐張下載檢查；檔案讀不到會在狗資料表另外提示。</p>
+      </section>
+      <section class="card check-card" aria-labelledby="dup-title">
+        <h2 id="dup-title">可能重複</h2>
+        <p id="dup-status" class="check-status" role="status" aria-live="polite">正在讀取狗資料…</p>
+        <div class="table-responsive" tabindex="0" role="region" aria-label="可能重複的狗，可水平捲動" id="dup-region" hidden>
+          <table class="table table-vcenter compact-table">
+            <thead><tr><th scope="col">在所</th><th scope="col">同名、不在所</th><th scope="col">處理</th></tr></thead>
+            <tbody id="dups"></tbody>
+          </table>
+        </div>
+        <p class="data-note">名字一樣（不看括號），一隻在試算表主清單、一隻不在。試算表改編號或先打名字後補編號時會多出一隻，溜狗紀錄留在舊的那隻。也可能真的是兩隻同名的狗，請看照片與編號再決定；不會自動合併。</p>
+      </section>
       <section class="card check-card" aria-labelledby="gaps-title">
         <h2 id="gaps-title">網站有、試算表沒有</h2>
         <p id="gap-status" class="check-status" role="status" aria-live="polite">正在讀取掃描清單…</p>
@@ -39,11 +61,16 @@
         </div>
         <p class="data-note">保險掃描發現狗從試算表消失、卻沒出現在「已出所」時只記在這裡。不會自動刪狗、記離所或合併；請先在試算表核對，再決定怎麼處理。</p>
       </section>
-      <section class="card check-card" aria-labelledby="complete-title">
-        <h2 id="complete-title">主清單資料完整度</h2>
-        <p id="complete-status" class="check-status" role="status" aria-live="polite">正在讀取狗資料…</p>
-        <div id="complete-list" class="check-list"></div>
-        <p class="data-note">規則同志工網站的「狗的資料完整度」，只看目前主清單上的狗。照片依照片紀錄判斷，不逐張下載檢查；檔案讀不到會在狗資料表另外提示。</p>
+      <section class="card check-card" aria-labelledby="cron-title">
+        <h2 id="cron-title">排程</h2>
+        <p id="cron-status" class="check-status" role="status" aria-live="polite">正在讀取排程紀錄…</p>
+        <div class="table-responsive" tabindex="0" role="region" aria-label="排程最後一次跑完的時間，可水平捲動" id="cron-region" hidden>
+          <table class="table table-vcenter compact-table">
+            <thead><tr><th scope="col">工作</th><th scope="col">多久一次</th><th scope="col">最後一次跑完</th><th scope="col">狀況</th></tr></thead>
+            <tbody id="cron-jobs"></tbody>
+          </table>
+        </div>
+        <p class="data-note">志工網站的 Worker 時間到自己做的事。寫回重試把寫回試算表失敗的狗再送一次；保險掃描補回改表通知漏掉的人工修改；照片垃圾桶清掉放超過 30 天的照片。過期或失敗時，請聯絡維護者看 Cloudflare 的紀錄。</p>
       </section>
     </main>
   </div>

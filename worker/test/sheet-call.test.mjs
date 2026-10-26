@@ -16,20 +16,22 @@ const json = (body, status = 200) => new Response(JSON.stringify(body), { status
 
 test('ADR 0006：只送小程式認得的動作，跟 apps-script/sheet-write.gs 對得上', async () => {
   await assert.rejects(callSheet(ENV, { action: 'deleteRow' }), /沒有這個動作/);
+  // #597：舊版直寫已退場，Worker 不會再送 walk／edit／undo 給小程式
+  for (const action of ['walk', 'edit', 'undo']) await assert.rejects(callSheet(ENV, { action }), /沒有這個動作/);
   const gs = await readFile(new URL('../../apps-script/sheet-write.gs', import.meta.url), 'utf8');
   for (const action of SHEET_ACTIONS) assert.match(gs, new RegExp(`req\\.action === '${action}'`), action);
 });
 
 test('帶上金鑰送出；成功回小程式的回應', () => withFetch(() => json({ ok: true, today: '2026-10-22' }), async calls => {
-  const out = await callSheet(ENV, { action: 'walk', dogs: [] });
+  const out = await callSheet(ENV, { action: 'log', dogs: [] });
   assert.equal(out.today, '2026-10-22');
-  assert.deepEqual(calls[0].body, { action: 'walk', dogs: [], key: 'k' });
-  await callSheet({ SHEET_WRITE_URL: ENV.SHEET_WRITE_URL }, { action: 'walk', dogs: [] });
+  assert.deepEqual(calls[0].body, { action: 'log', dogs: [], key: 'k' });
+  await callSheet({ SHEET_WRITE_URL: ENV.SHEET_WRITE_URL }, { action: 'log', dogs: [] });
   assert.equal('key' in calls[1].body, false, '沒設金鑰就不帶');
 }));
 
 test('失敗都是 SheetWriteError，訊息可以直接給志工看', async () => {
-  const fails = async (env, handler) => withFetch(handler, () => callSheet(env, { action: 'walk' }).then(() => assert.fail('應該失敗'), e => e));
+  const fails = async (env, handler) => withFetch(handler, () => callSheet(env, { action: 'log' }).then(() => assert.fail('應該失敗'), e => e));
   let e = await fails({}, () => json({ ok: true }));
   assert.ok(e instanceof SheetWriteError);
   assert.deepEqual([e.status, e.code], [503, 'off']);
@@ -47,3 +49,12 @@ test('小程式錯誤不帶出試算表 ID', () => {
   assert.equal(scriptError(''), '試算表沒有寫進去');
   assert.equal(scriptError('別的錯 1AbCdEfGhIjKlMnOpQrStUvWxYz0123'), '別的錯 …');
 });
+
+test('逾時：保險掃描讀回等 45 秒、合併寫回 90 秒、其他 20 秒（研究 2026-10-26）', () => withFetch(() => json({ ok: true }), async () => {
+  const saved = AbortSignal.timeout, seen = [];
+  AbortSignal.timeout = ms => { seen.push(ms); return saved.call(AbortSignal, ms); };
+  try {
+    for (const action of ['walkScan', 'walkWakeBatch', 'walkWake']) await callSheet(ENV, { action });
+  } finally { AbortSignal.timeout = saved; }
+  assert.deepEqual(seen, [45000, 90000, 20000]);
+}));

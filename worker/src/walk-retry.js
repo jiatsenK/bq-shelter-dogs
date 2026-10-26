@@ -3,16 +3,17 @@ import { scanWalks } from './walk-reconcile.js';
 
 const enabled = env => env.WALK_RETRY_ENABLED === 'true' && !env.PREVIEW && !!env.DB;
 
+// 兩件都是：功能沒開回 false；出錯往外丟，由排程記下失敗時間給管理網站看（worker/src/cron-status.js）。
+
 // 保險掃描（#500，ADR 0018）：每天三次只比指紋，一樣就結束；不一樣才找出不同的狗。與寫回重試分開。
 export async function scanTick(env, now) {
-  if (!enabled(env)) return;
-  try { await scanWalks(env,now); }
-  catch (error) { console.warn('walk-scan:',error.message); }
+  if (!enabled(env)) return false;
+  await scanWalks(env,now);
 }
 
 // 寫回重試（#498）：只把到期、未完成及中斷的派送交給共用派送核心，不先掃表；不讀已完成的歷史工作。
 export async function retryWalks(env, now) {
-  if (!enabled(env)) return;
+  if (!enabled(env)) return false;
   const db = env.DB, at = new Date(now).toISOString();
   const interrupted = (await db.prepare(`SELECT d.dog_key,d.dispatch_id,s.number,s.name
     FROM v3_walk_delivery d JOIN v3_walk_state s ON s.dog_key=d.dog_key
@@ -31,6 +32,5 @@ export async function retryWalks(env, now) {
     ORDER BY o.next_attempt_at,o.dog_key LIMIT ?`).bind(at,10-interrupted.length-orphaned.length).all()).results || [];
   const recoveries=[...interrupted,...orphaned].map(dog=>({ ...dog,recovery:{ dispatchId:dog.dispatch_id || '' } }));
   // 逾時只允許同鎖重新讀回，不表示舊 Google 執行已停止。
-  try { await dispatchWalks(db,[...recoveries,...due].map(dog=>({ dog:{ id:dog.number,name:dog.name },recovery:dog.recovery })),env,now); }
-  catch (error) { console.warn('walk-retry:',error.message); }
+  await dispatchWalks(db,[...recoveries,...due].map(dog=>({ dog:{ id:dog.number,name:dog.name },recovery:dog.recovery })),env,now);
 }
