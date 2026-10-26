@@ -771,6 +771,13 @@ const TODAY_REFETCH_MS = 30 * 1000;
 appState.todayFetchedAt = 0;
 appState.todayState = 'loading'; // 初次請求完成後才呈現完整狀態；失敗沿用同步資料
 function fetchWalkStatus(call) { return BQWalks.fetchStatus(call); }
+function receiveTodayWithDogs(today) {
+  if (today?.source !== 'd1' || today.date !== BQDates.localDateKey(new Date()) || !Array.isArray(today.walks)) return false;
+  walkRegistration.receiveToday(today, appState.allDogs);
+  appState.todayFetchedAt = Date.now();
+  appState.todayState = 'ready';
+  return true;
+}
 async function loadTodayWalks() {
   appState.todayFetchedAt = Date.now();
   const received = await walkRegistration.loadToday(() => appState.allDogs);
@@ -2076,11 +2083,13 @@ function applyDogsData(data, { groupCheck = false } = {}) {
   appState.dataSyncedAt = data.syncedAt;
   renderUpdatedLabel();
   appState.loadState = 'ready';
+  // 狗清單帶了今天的紀錄（K 2026-10-26）：開頁不用再等 /today，讀到狗清單就能排溜狗表
+  const withToday = receiveTodayWithDogs(data.today);
   render();
   if (!groupCheck) loadMyWalks();
   loadRest();
   if (!groupCheck) appState.favorites.syncFavs();
-  loadTodayWalks();
+  if (!withToday) loadTodayWalks();
   if (appState.detailDog) renderDetail();
 }
 

@@ -73,6 +73,34 @@ test('GET /api/dogs：D1 失敗、沒接、還沒有狗都回 503 和清楚的�
   }
 });
 
+test('GET /api/dogs：有今日溜狗的狗用 D1 的日期，並附上同一份今日紀錄（K 2026-10-26）', async () => {
+  const DB = await seededDb();
+  const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  const row = (key, walkedDate, version) => ({ key, version, walkedDate, walker: '志工乙', at: '', syncStatus: 'synced' });
+  // 圓仔今天溜了、沒編號被復原回較早那天、9999 不在主清單（已離所）
+  const pack = { 2026051203: row('2026051203', today, 3), '名:沒編號': row('名:沒編號', '2026-10-01', 2), 9999: row('9999', today, 1) };
+  await DB.prepare('UPDATE v3_walk_pack SET version=7,payload=? WHERE id=1').bind(JSON.stringify(pack)).run();
+  const body = await (await get('/dogs', { DB })).json();
+  assert.deepEqual(body.dogs.map(d => d.walkedDate), [null, today, '2026-10-01'], '滿滿沒有今日紀錄，照試算表複本：');
+  assert.deepEqual([body.today.source, body.today.version, body.today.date], ['d1', 7, today]);
+  assert.deepEqual(body.today.walks.map(w => [w.key, w.walked]), [['2026051203', true], ['名:沒編號', false]], '只帶主清單上的狗：');
+  // 資料包快取裡的狗不能被改到：今日紀錄清掉後回到試算表複本的日期
+  await DB.prepare("UPDATE v3_walk_pack SET version=8,payload='{}' WHERE id=1").run();
+  const again = await (await get('/dogs', { DB })).json();
+  assert.deepEqual(again.dogs.map(d => d.walkedDate), SOURCE.dogs.map(d => d.walkedDate));
+  assert.deepEqual(again.today.walks, []);
+});
+
+test('GET /api/dogs：今日溜狗讀不到時照試算表複本給，不帶 today', async () => {
+  const DB = await seededDb();
+  await DB.prepare('DELETE FROM v3_walk_pack').run();
+  const res = await get('/dogs', { DB });
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.deepEqual(body.dogs.map(d => d.walkedDate), SOURCE.dogs.map(d => d.walkedDate));
+  assert.equal(body.today, undefined);
+});
+
 test('GET /api/dogs：只收 GET；別的網站擋掉；預覽版照常可讀', async () => {
   const DB = await seededDb();
   assert.equal((await get('/dogs', { DB, PREVIEW: '1' })).status, 200);
