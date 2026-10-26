@@ -1,5 +1,7 @@
 import { appState, findState } from './page-state.js';
-import { AMBER_DAYS, cageMates, closeDetail, computeStatus, dogCard, dueDogs, esc, icon, monthDay, photoThumb, render, searchKey, sexMark, showDetail, specialFlag, switchTab, walkKey, walkedToday, warnNote } from './app.js';
+import { cageMates, closeDetail, computeStatus, dogCard, dueDogs, photoThumb, render, sexMark, showDetail, switchTab, walkedToday, warnNote } from './app.js';
+import { esc, icon, monthDay, searchKey } from './ui-kit.js';
+import { AMBER_DAYS, specialFlag, walkKey } from './dog-status.js';
 import { BQWalkUI } from './walk-ui.js';
 
 // 找狗（#99）：照片圖鑑＋全域搜尋＋平面圖分區。K 2026-09-26 看過原型後同意。

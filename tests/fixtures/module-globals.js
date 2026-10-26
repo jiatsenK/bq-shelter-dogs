@@ -21,6 +21,8 @@ import * as datesModule from '../../public/js/dates.js';
 import * as apiModule from '../../public/js/api.js';
 import * as storeModule from '../../public/js/store.js';
 import * as siteModule from '../../public/js/site-config.js';
+import * as uiKitModule from '../../public/js/ui-kit.js';
+import * as dogStatusModule from '../../public/js/dog-status.js';
 
 export function expose(modules) {
   for (const module of modules) for (const [name, value] of Object.entries(module)) {
@@ -30,4 +32,4 @@ export function expose(modules) {
   }
 }
 
-expose([appModule, analysisModule, groupsModule, findModule, activitiesModule, tourModule, photoModule, walkUiModule, welcomeModule, favoritesModule, detailViewportModule, walkFlowModule, walkRegistrationModule, detailEditorModule, datesModule, apiModule, storeModule, siteModule]);
+expose([appModule, analysisModule, groupsModule, findModule, activitiesModule, tourModule, photoModule, walkUiModule, welcomeModule, favoritesModule, detailViewportModule, walkFlowModule, walkRegistrationModule, detailEditorModule, datesModule, apiModule, storeModule, siteModule, uiKitModule, dogStatusModule]);
