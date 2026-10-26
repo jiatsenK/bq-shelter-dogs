@@ -182,6 +182,13 @@ test('#95 首頁狀態顯示代號密鑰設了沒', async () => {
   assert.equal((await send(new Request('https://x.workers.dev/'), ENV)).body.walkerKey, '未設定');
 });
 
+// #595：志工名字建議讀 D1（#519），首頁不再顯示試算表 ID；照片沒有 GitHub 退路（#547）
+test('#595 首頁狀態不顯示 SHEET_ID，照片沒接 R2 顯示未設定', async () => {
+  const body = (await send(new Request('https://x.workers.dev/'), { ...ENV, SHEET_ID: 'sheet' })).body;
+  assert.equal(Object.hasOwn(body, 'walkerNames'), false);
+  assert.equal(body.photos, '未設定');
+});
+
 // #512：狗清單由 GAS 編輯觸發送列，舊的「試算表有改」通知與「更新」空殼都移除了
 test('#512 /sync、/sheet-changed 已移除；排程不叫 GitHub、不讀試算表', async () => {
   const env = await withTables({ ...ENV, SHEET_ID: 'sheet' });

@@ -1,4 +1,6 @@
 > #501 起 GitHub Actions 不再同步試算表（`sync-sheet.yml` 已刪），狗清單改由 Apps Script 編輯觸發送 Worker，見 `SHEET_WRITE_SETUP.md` 第 8 節；#512 起本機備援腳本 `scripts/sync-compact-d1.mjs` 也已刪除。下面留作歷史。
+>
+> #595 起部署也不再把 GitHub Secret `SHEET_ID`、`MY_NAME` 帶到 Worker（Worker 沒在讀），兩個 Secret 都可以刪。Apps Script 指令碼屬性的 `SHEET_ID` 還在用，不要刪（見 `SHEET_WRITE_SETUP.md`）。
 
 # 試算表 ID 設定（GitHub Secret）
 

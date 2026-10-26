@@ -3,8 +3,8 @@
 # - 縮圖（#130 起存 R2）、同步試算表（#251 起只寫 D1）都不提交，跑完不用重新部署（#305 拿掉縮圖後部署）
 # - 還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID 時直接跳過，不會失敗；設定步驟見 docs/setup/CLOUDFLARE_SETUP.md
 # - Worker 要用的密碼也從 GitHub Secret 一起帶上去（有設才帶，沒設的保留 Cloudflare 上原本的）：
-#   ADMIN_KEY（給 /api/admin 的 GitHub Action）、WALKER_KEY（同步試算表本來就在用這一個）、
-#   MY_NAME（#501 狗清單判斷「我溜過」）
+#   ADMIN_KEY（給 /api/admin 的 GitHub Action）、WALKER_KEY（登記名字換代號）、SHEET_WRITE_URL、SHEET_WRITE_KEY（寫回試算表）
+# - #595：MY_NAME、SHEET_ID 不再帶（Worker 沒在讀），NOTES_PASSCODE 備援拿掉；Cloudflare 上已有的要另外刪
 # - 也可以在 Actions 頁選「部署到 Cloudflare」→「Run workflow」手動跑
 # - #553：正式 D1 有還沒套的 migration（migrations/）就停下、紅叉，不部署；去按「套用 D1 migration」，它套完會呼叫這裡部署
 # - #622：只准 main（手動選別的分支、從別的分支呼叫都略過）；部署排隊不取消，見下方 concurrency
@@ -89,18 +89,14 @@ jobs:
       - name: 部署
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
         env:
-          # 還沒設 ADMIN_KEY 就沿用舊的 NOTES_PASSCODE Secret 的值（ADR 0004）
-          ADMIN_KEY: ${{ secrets.ADMIN_KEY || secrets.NOTES_PASSCODE }}
+          ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
           WALKER_KEY: ${{ secrets.WALKER_KEY }}
           SHEET_WRITE_URL: ${{ secrets.SHEET_WRITE_URL }}
           SHEET_WRITE_KEY: ${{ secrets.SHEET_WRITE_KEY }}
-          SHEET_ID: ${{ secrets.SHEET_ID }}
-          # #501：狗清單編輯觸發在 Worker 判斷「是不是我遛的」，跟原 Actions 同步用同一個 Secret
-          MY_NAME: ${{ secrets.MY_NAME }}
         run: |
           # 密碼寫進暫存檔交給 wrangler，不印出來；沒設的不放（不會蓋掉 Cloudflare 上原本的）
           node -e '
-            const s = { ADMIN_KEY: process.env.ADMIN_KEY, WALKER_KEY: process.env.WALKER_KEY, SHEET_WRITE_URL: process.env.SHEET_WRITE_URL, SHEET_WRITE_KEY: process.env.SHEET_WRITE_KEY, SHEET_ID: process.env.SHEET_ID, MY_NAME: process.env.MY_NAME };
+            const s = { ADMIN_KEY: process.env.ADMIN_KEY, WALKER_KEY: process.env.WALKER_KEY, SHEET_WRITE_URL: process.env.SHEET_WRITE_URL, SHEET_WRITE_KEY: process.env.SHEET_WRITE_KEY };
             for (const k of Object.keys(s)) if (!s[k]) delete s[k];
             require("fs").writeFileSync(process.argv[1], JSON.stringify(s), { mode: 0o600 });
             console.log("帶上去的密碼：" + (Object.keys(s).join("、") || "沒有"));
