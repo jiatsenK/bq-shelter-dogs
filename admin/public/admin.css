@@ -150,6 +150,20 @@ h1 { margin: 0 0 8px; font-size: 1.75rem; line-height: 1.3; }
 .admin-content .btn-outline-danger:hover, .admin-content .btn-outline-danger:focus-visible { color: #fff; background: #a52828; border-color: #a52828; }
 
 /* #624 志工網站開關：頁首右側小標記，連到志工網站設定；狀態用文字說，圓點只是輔助 */
+/* 網站連結頁：網址可換行，主機名稱粗體、完整網址小字 */
+.links-table th[scope="row"] { white-space: nowrap; }
+.links-table td { overflow-wrap: anywhere; }
+.link-url { font-weight: 600; }
+.link-hint { display: block; margin-top: 4px; color: var(--admin-muted); font-size: .75rem; }
+.link-test { margin-left: 8px; color: #6b2f6f; border-color: #dcc3dd; background: #f7eff7; }
+/* 手機：表格橫捲會把網址藏起來，改成每個版本一段直排，欄名寫在網址上面 */
+@media (max-width: 900px) {
+  .links-table thead { display: none; }
+  .links-table, .links-table tbody, .links-table tr, .links-table th, .links-table td { display: block; }
+  .links-table tr { padding: 12px 0; border-bottom: 1px solid var(--admin-border); }
+  .links-table th, .links-table td { padding: 4px 0; border: 0; }
+  .links-table td::before { content: attr(data-label); display: block; color: var(--admin-muted); font-size: .75rem; font-weight: 600; }
+}
 .volunteer-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px; border: 1px solid var(--admin-border); border-radius: 999px; background: #fff; color: var(--admin-muted); font-size: .75rem; line-height: 1.4; }
 .volunteer-chip::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: var(--admin-border); flex-shrink: 0; }
 .volunteer-chip[data-state="on"]::before { background: #2f7d4f; }

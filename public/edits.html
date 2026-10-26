@@ -27,6 +27,9 @@
   html.embedded header, html.embedded .hint { display: none; }
   html.embedded { --bg: #E3E9E5; --ink: #16211D; --muted: #4E5E57; --line: #C4CFC9; --accent: #1F5C4D; }
   html.embedded main { padding: 0 16px 16px; }
+  /* 測試網站（worker/src/test-site.js 加 data-site="test"）：頁首換測試紫、標題旁「測試版」，跟溜狗表一樣 */
+  html[data-site="test"] header { background: #5A2A5E; }
+  html[data-site="test"] header h1::after { content: "測試版"; display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 3px; background: #F2B21B; color: #2A1230; font-size: 13px; font-weight: 800; line-height: 1.4; vertical-align: 2px; }
 </style>
 <script>if (self !== top && new URLSearchParams(location.search).get('embedded') === '1') document.documentElement.classList.add('embedded');</script>
 </head>
