@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { runWrangler, parseJsonOutput, findDatabase } from './d1-database.mjs';
-import { splitStatements } from './migrate-compact-db.mjs';
+import { splitStatements } from './compact-schema.mjs';
 import { copyDatabase } from './copy-prod-d1.mjs';
 
 export const TARGETS = {

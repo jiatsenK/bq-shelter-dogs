@@ -8,10 +8,11 @@
   - 各編輯器的取消、逐筆增刪與輸入處理搬進各自檔案（`closeXxxEdit`、`xxxRowClick`、`xxxInput`）；`wireDetail` 只分派，順序照舊（出入所 → 入所逐次紀錄 → 介紹文字 → 舊編號 → 休養）。
   - showDetail／hideDetail 重複的「收掉編輯」合成 `leaveDetailDog`（兩邊原本做的事一樣：清 viewport、勾選、展開、非儲存中的四種編輯、照片暫存）。
   - 舊編號、出入所的 `ymdOf` 改用 ui-kit 既有的 `ymdText`（三處都保證有日期，輸出相同）。
-  - 其他模組改從新檔匯入；`imageToLocal`（沒人用，R9 #594 的範圍）留在 app.js 不動。
+  - 其他模組改從新檔匯入。
 - 測試：`scripts/frontend-modules.test.mjs` 新增三項 Node 測試（具名匯入對方都有匯出、`public/js` 每支檔列在 README、app.js 不再有詳細資訊函式且收掉編輯只有一份）；`tests/fixtures/module-globals.js` 接上新模組；`tests/index/bootstrap.js` 的 `APP_JS` 改成 app.js 加新檔原始碼，原有原始碼檢查照樣涵蓋。
 - README 順帶補上原本漏列的 `photo-images.js`。
 - 本機：`check-local.ps1 -Full` 通過；另跑 detail-editing、fixed-care、intake-presentation、keyboard-viewport、departed-cards、es-modules、index。這台沒有 `pwsh`，`local-check.test.mjs` 要設 `$env:BQ_CHECK_PWSH = 'powershell'` 才能跑。
 - 未做：手機實際檢查（詳細資訊開關、各編輯器）待 K。
 - 相關 PR：[#627](https://github.com/jiatsenK/bq-shelter-dogs/pull/627)，草稿。
-- 2026-10-26 補修：#630 的 CI 在 `scripts/admin-table.test.mjs` 失敗（`../shared/dates.js` 沒有 `BQDates`）。原因是 admin-table、admin-stage4 兩個測試平行跑 `buildAdminAssets`，一邊讀到另一邊複製到一半的檔案；main 也會發生（本機 15 次重現 1 次）。`scripts/build-admin-assets.mjs` 改成內容一樣就不動，不一樣先寫暫存檔再改名蓋過去（Windows 被擋時稍等重試）。本機連跑 30 次（每 3 次清空重建）都通過。修在最底層的本分支，再合到 R6、R8。
+- 2026-10-26 補修：#630 的 CI 在 `scripts/admin-table.test.mjs` 偶發失敗（admin-table、admin-stage4 平行建置管理網站共用檔）。本分支曾自己修，合併 main 時改用 main 的 #634（同樣做法），本分支不再改 `scripts/build-admin-assets.mjs`。
+- 2026-10-26 合併 main：#633 刪了 app.js 的 `imageToLocal`、`stepTab`，照刪。

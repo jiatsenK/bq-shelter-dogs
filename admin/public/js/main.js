@@ -1,10 +1,11 @@
-import { openDogEditor } from './dog-editor.js';
+import { createDogDrawer } from './dog-editor.js';
 import { readDogs } from './api.js';
-import { parseManageDogs, selectDogs, maintenance, sexLabel } from './dog-table.js';
+import { parseManageDogs, selectDogs, orderDogs, maintenance, sexLabel, CARE_FILTERS } from './dog-table.js';
 
 const byId = id => document.getElementById(id);
 const state = { dogs: [], loaded: false, page: 1, pageSize: 25, sort: 'number', direction: 'asc' };
 const status = byId('status');
+const FILTER_IDS = ['query', 'presence', 'sex', 'care'];
 let searchTimer;
 function element(tag, text, className) {
   const node = document.createElement(tag);
@@ -12,8 +13,60 @@ function element(tag, text, className) {
   if (className) node.className = className;
   return node;
 }
+// #624 編輯在右側抽屜：表格不動、只更新存過的那一列，關閉後焦點回到原列的「編輯」
+const drawer = createDogDrawer(byId('dog-drawer'), {
+  onSaved: dog => {
+    state.dogs = state.dogs.map(old => (old.dogId === dog.dogId ? dog : old));
+    const row = rowOf(dog.dogId);
+    if (row) row.replaceWith(renderRow(dog));
+  },
+  onNext: (dogId, notice) => openNext(dogId, notice),
+  onClose: dogId => {
+    markSelected(null);
+    (editButton(dogId) || byId('content')).focus();
+  },
+});
+const rowOf = dogId => [...byId('dogs').rows].find(row => row.dataset.dogId === dogId);
+const editButton = dogId => rowOf(dogId)?.querySelector('.edit-button');
+function markSelected(dogId) {
+  for (const row of byId('dogs').rows) {
+    const on = row.dataset.dogId === dogId;
+    row.classList.toggle('is-selected', on);
+    row.querySelector('.edit-button')?.setAttribute('aria-expanded', String(on));
+  }
+}
+function openDog(dog, options) {
+  if (drawer.open(dog, options)) markSelected(dog.dogId);
+}
+function filters() {
+  return { ...state, query: byId('query').value, presence: byId('presence').value, sex: byId('sex').value, care: byId('care').value };
+}
+function openNext(dogId, notice) {
+  const ordered = orderDogs(state.dogs, filters());
+  const index = ordered.findIndex(dog => dog.dogId === dogId);
+  const next = ordered[index + 1];
+  if (!next) {
+    drawer.close();
+    status.textContent = `${notice}${index === -1 ? '這隻狗不在目前的篩選結果裡。' : '已經是目前清單的最後一隻。'}`;
+    return;
+  }
+  const page = Math.floor((index + 1) / state.pageSize) + 1;
+  if (page !== state.page) { state.page = page; render(); }
+  openDog(next, { notice, force: true });
+  rowOf(next.dogId)?.scrollIntoView({ block: 'nearest' });
+}
 function renderRow(dog) {
   const row = document.createElement('tr');
+  row.dataset.dogId = dog.dogId;
+  if (drawer.dogId === dog.dogId) row.classList.add('is-selected');
+  const editCell = element('td', undefined, 'edit-cell');
+  const edit = element('button', '編輯', 'btn btn-sm edit-button');
+  edit.type = 'button';
+  edit.setAttribute('aria-label', '編輯' + (dog.name || '未命名'));
+  edit.setAttribute('aria-controls', 'dog-drawer');
+  edit.setAttribute('aria-expanded', String(drawer.dogId === dog.dogId));
+  edit.addEventListener('click', () => openDog(state.dogs.find(d => d.dogId === dog.dogId)));
+  editCell.append(edit);
   const photo = element('td', undefined, 'photo-cell');
   if (dog.photoUrl) {
     const img = element('img', undefined, 'dog-photo');
@@ -38,25 +91,40 @@ function renderRow(dog) {
   for (const label of labels) care.append(element('span', label, 'state-label'));
   if (!labels.length) care.append(element('span', '無待補項目', 'text-secondary'));
   if (dog.rest) care.append(element('p', `休養至 ${dog.rest.until}${dog.rest.reason ? ` · ${dog.rest.reason}` : ''}`, 'sheet-note'));
-  const edit=document.createElement('button');edit.type='button';edit.className='btn';edit.textContent='編輯';edit.setAttribute('aria-label','編輯'+dog.name);edit.onclick=()=>openDogEditor(dog,byId('dog-editor'),load);
-  const identity=element('td',dog.dogId,'identity');identity.append(edit);
-  row.append(photo, element('td', dog.number || '未編號', 'dog-number'), name,
+  row.append(editCell, photo, element('td', dog.number || '未編號', 'dog-number'), name,
     element('td', dog.cage || '—'), element('td', sexLabel(dog.sex)), intro, care,
-    identity);
+    element('td', dog.dogId, 'identity'));
   return row;
+}
+// 篩選條件放進網址（待補清單連過來、重新整理都保留）；dog 參數只在進頁時用來開抽屜
+function syncUrl() {
+  const params = new URLSearchParams();
+  for (const id of FILTER_IDS) {
+    const value = byId(id).value.trim();
+    if (value && !(id === 'presence' && value === 'all')) params.set(id, value);
+  }
+  const search = params.toString();
+  history.replaceState(null, '', search ? `?${search}` : location.pathname);
+}
+function readUrl() {
+  const params = new URLSearchParams(location.search);
+  const allowed = { presence: ['all', 'main', 'other'], sex: ['', 'male', 'female', 'unknown'], care: ['', ...Object.keys(CARE_FILTERS)] };
+  if (params.has('query')) byId('query').value = params.get('query').slice(0, 200);
+  for (const [id, values] of Object.entries(allowed)) if (values.includes(params.get(id))) byId(id).value = params.get(id);
+  return params.get('dog');
 }
 function render() {
   if (!state.loaded) return;
-  const result = selectDogs(state.dogs, { ...state, query: byId('query').value,
-    presence: byId('presence').value, sex: byId('sex').value, care: byId('care').value });
+  const result = selectDogs(state.dogs, filters());
   state.page = result.page;
   byId('dogs').replaceChildren(...result.rows.map(renderRow));
   byId('table-region').hidden = !result.total;
   byId('pagination').hidden = !result.total;
   status.dataset.error = 'false';
+  const care = byId('care').value;
   status.textContent = !state.dogs.length ? '目前沒有狗資料。可按「重新讀取」再確認。'
     : !result.total ? '沒有符合條件的狗，請清除或調整搜尋條件。'
-    : `找到 ${result.total} 隻狗，共 ${state.dogs.length} 隻。`;
+    : `找到 ${result.total} 隻狗${care ? `（${CARE_FILTERS[care]}）` : ''}，共 ${state.dogs.length} 隻。`;
   const start = (result.page - 1) * result.pageSize + 1;
   byId('count').textContent = `${start}–${Math.min(start + result.pageSize - 1, result.total)} / ${result.total} 隻`;
   byId('page-number').textContent = `${result.page} / ${result.pages}`;
@@ -68,7 +136,7 @@ function render() {
     else th.removeAttribute('aria-sort');
   }
 }
-async function load() {
+async function load(openId) {
   state.loaded = false;
   state.dogs = [];
   byId('dogs').replaceChildren();
@@ -85,20 +153,29 @@ async function load() {
     }
     state.dogs = parseManageDogs(response.data);
     state.loaded = true;
+    if (openId) {
+      const index = orderDogs(state.dogs, filters()).findIndex(dog => dog.dogId === openId);
+      if (index >= 0) state.page = Math.floor(index / state.pageSize) + 1;
+    }
     render();
+    const target = openId && state.dogs.find(dog => dog.dogId === openId);
+    if (target) openDog(target);
+    else if (openId) status.textContent += ' 找不到網址指定的那隻狗。';
   } catch (error) {
     status.dataset.error = 'true';
     status.textContent = error.message;
   } finally { byId('refresh').disabled = false; }
 }
-byId('refresh').addEventListener('click', load);
+const filtersChanged = () => { state.page = 1; syncUrl(); render(); };
+// 重新讀取只換表格；抽屜裡的草稿不動，選取底色由 renderRow 依抽屜目前的狗補回
+byId('refresh').addEventListener('click', () => load());
 byId('filters').addEventListener('submit', event => event.preventDefault());
 byId('query').addEventListener('input', () => {
   clearTimeout(searchTimer);
-  searchTimer = setTimeout(() => { state.page = 1; render(); }, 180);
+  searchTimer = setTimeout(filtersChanged, 180);
 });
-for (const id of ['presence', 'sex', 'care']) byId(id).addEventListener('change', () => { state.page = 1; render(); });
-byId('filters').addEventListener('reset', () => { clearTimeout(searchTimer); state.page = 1; setTimeout(render, 0); });
+for (const id of ['presence', 'sex', 'care']) byId(id).addEventListener('change', filtersChanged);
+byId('filters').addEventListener('reset', () => { clearTimeout(searchTimer); setTimeout(filtersChanged, 0); });
 byId('page-size').addEventListener('change', event => { state.pageSize = Number(event.target.value); state.page = 1; render(); });
 for (const button of document.querySelectorAll('[data-sort]')) button.addEventListener('click', () => {
   state.direction = state.sort === button.dataset.sort && state.direction === 'asc' ? 'desc' : 'asc';
@@ -106,4 +183,4 @@ for (const button of document.querySelectorAll('[data-sort]')) button.addEventLi
 });
 byId('previous').addEventListener('click', () => { state.page--; render(); });
 byId('next').addEventListener('click', () => { state.page++; render(); });
-load();
+load(readUrl());

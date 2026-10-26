@@ -14,20 +14,25 @@
     <aside class="admin-sidebar" aria-label="管理網站">
       <a class="brand" href="./">板收<span>管理網站</span></a>
       <nav aria-label="管理功能">
-        <a class="nav-item" href="./">狗資料</a>
-        <a class="nav-item" href="./settings.html">功能管理</a>
-        <a class="nav-item active" href="./activities.html" aria-current="page">活動紀錄</a>
-        <a class="nav-item" href="./checks.html">資料檢查</a>
-        <a class="nav-item" href="./updates.html">更新紀錄</a>
+        <div class="nav-group" role="group" aria-labelledby="nav-data">
+          <p class="nav-heading" id="nav-data">資料</p>
+          <a class="nav-item" href="./">狗資料</a>
+          <a class="nav-item active" href="./activities.html" aria-current="page">活動紀錄</a>
+          <a class="nav-item" href="./checks.html">待補清單</a>
+        </div>
+        <div class="nav-group" role="group" aria-labelledby="nav-volunteer">
+          <p class="nav-heading" id="nav-volunteer">志工網站</p>
+          <a class="nav-item" href="./settings.html">志工網站設定</a>
+          <a class="nav-item" href="./updates.html">修改紀錄</a>
+          <a class="nav-item" href="./releases.html">網站更新</a>
+        </div>
       </nav>
-      <p class="sidebar-note">管理者<br><span>活動與出席狗</span></p>
     </aside>
     <main id="content" class="admin-content" tabindex="-1">
       <header class="admin-page-header">
         <div><h1>活動紀錄</h1><p>動保小小兵與認養會的出席狗，和志工網站共用同一份資料。</p></div>
-        <div class="header-actions"><button type="button" class="btn" id="reload">重新讀取</button><button type="button" class="btn btn-primary" id="new-activity" disabled>新增活動</button></div>
+        <div class="header-actions"><a class="volunteer-chip" id="volunteer-state" href="./settings.html">志工網站開關讀取中…</a><button type="button" class="btn" id="reload">重新讀取</button><button type="button" class="btn btn-primary" id="new-activity" disabled>新增活動</button></div>
       </header>
-      <p class="source-note" id="volunteer-state"></p>
       <section id="activity-editor" class="card dog-editor" aria-labelledby="editor-title" hidden>
         <form id="activity-form" class="dog-edit-form" novalidate>
           <h2 id="editor-title">新增活動</h2>
@@ -69,7 +74,7 @@
           </table>
         </div>
       </section>
-      <p class="data-note">只有名字、還沒對上狗身分的出席紀錄會原樣保留並標示「未對應」，不自動合併或猜同名的狗。每次新增、修改、刪除都和紀錄一起儲存，可在「更新紀錄」查到。</p>
+      <p class="data-note">只有名字、還沒對上狗身分的出席紀錄會原樣保留並標示「未對應」，不自動合併或猜同名的狗。每次新增、修改、刪除都和紀錄一起儲存，可在「修改紀錄」查到。</p>
     </main>
   </div>
 </body>

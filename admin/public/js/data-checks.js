@@ -1,4 +1,4 @@
-// #567 資料檢查的純規則：缺漏項目沿用志工資料完整度（analysis.js dataCompleteness），只看主清單上的狗；
+// #567 待補清單（原資料檢查）的純規則：缺漏項目沿用志工資料完整度（analysis.js dataCompleteness），只看主清單上的狗；
 // #518 掃描清單的狀態分成從未掃描、讀不懂、過期與正常。用已載入的狗資料，不另查 D1 或照片檔。
 import { BQDates } from '../shared/dates.js';
 import { formatWhen as when } from './edit-log.js';
@@ -9,13 +9,14 @@ export function completeness(dogs) {
   const rows = dogs.filter(d => d.onMain);
   const pick = fn => rows.filter(fn);
   return { total: rows.length, items: [
-    { label: '沒有編號', dogs: pick(d => !d.number) },
-    { label: '編號看不出入所日期', dogs: pick(d => d.number && !BQDates.idDate(d.number)) },
-    { label: '沒有溜狗日期', dogs: pick(d => !d.walkedDate) },
-    { label: '沒有性別', dogs: pick(d => !['male', 'female'].includes(d.sex)) },
-    { label: '沒有入所介紹', dogs: pick(d => !d.intro.trim()) },
+    // #624 用語和狗資料表一致；care 是狗資料表「維護狀態」篩選的值（dog-table.js CARE_FILTERS），連過去直接看這幾隻
+    { care: 'missingNumber', label: '缺編號', dogs: pick(d => !d.number) },
+    { care: 'badNumberDate', label: '編號看不出入所日期', dogs: pick(d => d.number && !BQDates.idDate(d.number)) },
+    { care: 'missingWalk', label: '缺溜狗日期', dogs: pick(d => !d.walkedDate) },
+    { care: 'unknownSex', label: '性別待確認', dogs: pick(d => !['male', 'female'].includes(d.sex)) },
+    { care: 'missingIntro', label: '缺介紹', dogs: pick(d => !d.intro.trim()) },
     // 照片紀錄＝D1 照片引用或 R2 清單；檔案本身讀不讀得到另外在狗資料表提示
-    { label: '沒有照片紀錄', dogs: pick(d => !d.photoUrl) },
+    { care: 'missingPhoto', label: '缺照片', dogs: pick(d => !d.photoUrl) },
   ] };
 }
 
@@ -61,3 +62,6 @@ export function cronStatus(j) {
   if (j.stale) problems.push(j.okAt ? '已過期，最近幾次都沒有跑完' : '還沒有成功跑完過');
   return { last: j.okAt ? when(j.okAt) : '—', problem: problems.join('；') || '正常', bad: Boolean(failing || j.stale) };
 }
+
+// #624 待補清單 → 狗資料表：帶篩選條件；給 dogId 時直接開那隻狗的編輯抽屜
+export const careLink = (care, dogId) => `./?${new URLSearchParams({ presence: 'main', care, ...(dogId ? { dog: dogId } : {}) })}`;

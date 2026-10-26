@@ -6,6 +6,7 @@
 #   3. wrangler d1 migrations apply --remote
 #   4. 摘要印出書籤與還原指令（還原會覆蓋之後的寫入，交給 K 執行）
 #   5. 接著跑部署
+# - #622：只准從 main 跑；選別的分支整個略過
 # - 先加後刪：加東西先套 migration 再部署；刪東西先部署不用它的程式，下一張 PR 才寫刪除的 migration（docs/agents/data-changes.md）
 name: 套用 D1 migration
 
@@ -28,6 +29,8 @@ concurrency:
 
 jobs:
   apply:
+    # #622：只准 main，從別的分支按會整個略過（灰色），不碰正式環境
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -46,5 +49,6 @@ jobs:
 
   deploy:
     needs: apply
+    if: github.ref == 'refs/heads/main'
     uses: ./.github/workflows/deploy-cloudflare.yml
     secrets: inherit

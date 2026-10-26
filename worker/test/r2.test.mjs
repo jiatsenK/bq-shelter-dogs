@@ -1,6 +1,6 @@
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
-import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
+import { importCompactDogs } from './compact-fixtures.mjs';
 import { currentEditRevision } from './edit-fixture.mjs';
 // 照片放 R2（#130）的測試：用假的 R2、假的靜態檔（舊照片）、假的 GitHub，不會真的連 Cloudflare 或 GitHub
 // 執行：node --test worker/test/r2.test.mjs
@@ -39,7 +39,7 @@ const dispatched = calls => calls.filter(c => c.path.endsWith('/actions/workflow
 async function setup({ assets = {}, failPut, preview = false } = {}) {
   const PHOTOS = fakeR2({ failPut });
   const ASSETS = fakeAssets(assets);
-  const DB=fakeD1();await migrateCompactDatabase(DB);await importCompactDogs(DB,DOGS);
+  const DB=fakeD1();await createCompactDatabase(DB);await importCompactDogs(DB,DOGS);
   const calls = fakeGithub();
   const env = { ADMIN_KEY: '通關碼', PHOTOS, ASSETS, DB, ...(preview ? { PREVIEW: '1' } : {}) };
   const pending = [];

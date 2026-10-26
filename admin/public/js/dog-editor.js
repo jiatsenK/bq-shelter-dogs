@@ -1,20 +1,32 @@
 import { settle } from '../shared/api-response.js';
 import { prepareImages, imageForm } from '../shared/photo-images.js';
+import {
+  FIELDS,
+  FIELD_LABELS,
+  PREVIEW_FIELDS,
+  INTRO_MAX,
+  REST_REASON_MAX,
+  restBounds,
+  fieldSummary,
+  displayValue,
+  sameValue,
+  introDiff,
+  restProblem,
+  patchDog
+} from './dog-edit-model.js';
 
-const labels = {
-  intro: '介紹',
-  rest: '休養',
-  fixedCare: '固定照顧',
-  numbers: '編號',
-  stays: '出入所紀錄',
-  sex: '性別補正',
-  photo: '照片'
+// #624 右側抽屜：七個欄位全部展開；介紹、休養、固定照顧、性別改完直接可存（行內標改前→改後），
+// 編號、出入所紀錄、照片要先預覽。後端不變：一欄一筆 PUT／POST，每欄帶上一筆回應的 revision。
+const el = (tag, value, className) => {
+  const node = document.createElement(tag);
+  if (value !== undefined) node.textContent = value;
+  if (className) node.className = className;
+  return node;
 };
-const text = (tag, value, className) => {
-  const el = document.createElement(tag);
-  el.textContent = value;
-  if (className) el.className = className;
-  return el;
+const button = (label, className = 'btn') => {
+  const node = el('button', label, className);
+  node.type = 'button';
+  return node;
 };
 const call = (path, init = {}) =>
   settle(
@@ -36,356 +48,548 @@ export function trashLabel(deletedAt, days) {
   if (run <= due.getTime()) run = Date.UTC(due.getUTCFullYear(), due.getUTCMonth() + 1, 1, 1, 53);
   return `${taiwan(at)} 換掉，${taiwan(run).slice(0, 10)} 清理時刪除`;
 }
-const show = (value) => (typeof value === 'string' ? value : JSON.stringify(value, null, 2));
-const sexLabel = (value) => ({ male: '公', female: '母' })[value] || '待確認';
-function displayValue(field, value) {
-  if (field === 'sex') return sexLabel(value);
-  if (field === 'fixedCare') return value ? '開啟固定照顧' : '關閉固定照顧';
-  if (field === 'rest') return value ? `休養至 ${value.until}；原因：${value.reason || '未填'}` : '未設定休養';
-  if (field === 'numbers') return value.join('\n') || '無編號';
-  if (field === 'stays')
-    return (
-      value.map((row) => `入所 ${row.in}／出所 ${row.out || '尚未出所'}／${row.reason || '未填原因'}`).join('\n') ||
-      '無補登紀錄'
-    );
-  return show(value) || '（空白）';
-}
-export function openDogEditor(dog, container, onSaved) {
-  container.replaceChildren();
-  container.hidden = false;
-  const title = text('h2', `編輯 ${dog.name || '未命名'} 的資料`);
-  title.tabIndex = -1;
-  container.append(title);
-  container.append(text('p', `永久 ID：${dog.dogId}。目前編號、狗名、籠位及試算表備註只能查閱。`));
-  const status = text('p', '正在讀取…');
-  status.setAttribute('role', 'status');
-  status.setAttribute('aria-live', 'polite');
-  container.append(status);
-  const form = document.createElement('form');
-  form.className = 'dog-edit-form';
-  container.append(form);
-  const close = text('button', '關閉編輯', 'btn');
-  close.type = 'button';
-  close.addEventListener('click', () => {
-    container.hidden = true;
-  });
-  container.append(close);
-  const base = `/api/manage/dogs/${encodeURIComponent(dog.dogId)}`;
-  let snapshot = null,
+const stayRow = (row) => ({ in: row.in || '', out: row.out || '', reason: row.reason || '' });
+
+export function createDogDrawer(root, { onSaved, onNext, onClose }) {
+  let dog = null,
+    snapshot = null,
+    busy = false,
+    leaveArmed = false,
     images = null,
     previewUrl = null,
-    busy = false;
-  const field = document.createElement('select');
-  field.className = 'form-select';
-  field.id = 'edit-field';
-  for (const [key, label] of Object.entries(labels)) {
-    const option = text('option', label);
-    option.value = key;
-    field.append(option);
+    previewed = new Map(),
+    sections = {},
+    loadSeq = 0;
+  const base = () => `/api/manage/dogs/${encodeURIComponent(dog.dogId)}`;
+
+  const head = el('header', undefined, 'drawer-head');
+  const status = el('p', '', 'drawer-status');
+  status.setAttribute('role', 'status');
+  status.setAttribute('aria-live', 'polite');
+  const reload = button('讀取最新資料並保留草稿');
+  reload.hidden = true;
+  const statusBar = el('div', undefined, 'drawer-status-bar');
+  statusBar.append(status, reload);
+  const form = el('form', undefined, 'drawer-form');
+  form.noValidate = true;
+  const fields = el('fieldset', undefined, 'drawer-fields');
+  const body = el('div', undefined, 'drawer-body');
+  body.append(fields);
+  const dirtyLine = el('p', '', 'drawer-dirty');
+  dirtyLine.id = 'drawer-dirty';
+  const save = el('button', '儲存', 'btn btn-primary');
+  save.type = 'submit';
+  save.setAttribute('aria-describedby', dirtyLine.id);
+  const next = button('存並開下一隻');
+  next.setAttribute('aria-describedby', dirtyLine.id);
+  const foot = el('footer', undefined, 'drawer-foot');
+  const actions = el('div', undefined, 'drawer-actions');
+  actions.append(save, next);
+  foot.append(dirtyLine, actions);
+  form.append(statusBar, body, foot);
+  root.replaceChildren(head, form);
+
+  function renderHead() {
+    const photo = el('div', undefined, 'drawer-photo');
+    if (dog.photoUrl) {
+      const img = el('img');
+      img.src = dog.photoUrl;
+      img.alt = `${dog.name || '未命名'}的照片`;
+      img.width = 72;
+      img.height = 72;
+      img.addEventListener('error', () => photo.replaceChildren(el('span', '照片讀不到', 'photo-unavailable')), { once: true });
+      photo.append(img);
+    } else photo.append(el('span', '無照片紀錄', 'photo-unavailable'));
+    const title = el('h2', dog.name || '未命名');
+    title.id = 'drawer-title';
+    title.tabIndex = -1;
+    const meta = el('p', `${dog.number || '未編號'} · 籠位 ${dog.cage || '—'}`, 'drawer-meta');
+    const identity = el('p', `永久 ID ${dog.dogId}`, 'drawer-identity');
+    const text = el('div', undefined, 'drawer-title');
+    text.append(title, meta, identity);
+    const close = button('關閉', 'btn drawer-close');
+    close.setAttribute('aria-label', '關閉編輯');
+    close.addEventListener('click', () => api.close());
+    head.replaceChildren(photo, text, close);
   }
-  const fieldLabel = text('label', '修改項目', 'form-label');
-  fieldLabel.htmlFor = field.id;
-  const controls = document.createElement('div'),
-    diff = document.createElement('div');
-  diff.className = 'edit-diff';
-  const submit = text('button', '確認儲存這一項', 'btn btn-primary');
-  submit.type = 'submit';
-  submit.disabled = true;
-  const reload = text('button', '讀取最新資料並保留草稿', 'btn');
-  reload.type = 'button';
-  const preview = text('button', '預覽改前／改後', 'btn');
-  preview.type = 'button';
-  form.append(fieldLabel, field, controls, preview, diff, submit, reload);
-  function input(type, id, label, value = '') {
-    const wrap = document.createElement('div'),
-      caption = text('label', label, 'form-label');
-    caption.htmlFor = id;
-    const node = document.createElement(type === 'textarea' ? 'textarea' : 'input');
-    if (type !== 'textarea') node.type = type;
-    node.id = id;
-    node.className = 'form-control';
-    node.value = value;
-    wrap.append(caption, node);
-    controls.append(wrap);
+
+  // ---- 各欄位 ----
+  function section(field) {
+    const wrap = el('section', undefined, 'edit-field');
+    wrap.dataset.field = field;
+    const heading = el('h3', undefined, 'edit-field-head');
+    heading.id = `field-${field}`;
+    const now = el('span', '', 'edit-field-now');
+    heading.append(el('span', FIELD_LABELS[field]), now);
+    wrap.setAttribute('aria-labelledby', heading.id);
+    const controls = el('div', undefined, 'edit-field-controls');
+    const diff = el('div', undefined, 'field-diff');
+    diff.setAttribute('aria-live', 'polite');
+    wrap.append(heading, controls, diff);
+    fields.append(wrap);
+    sections[field] = { wrap, now, controls, diff };
+    return controls;
+  }
+  // hidden：欄名已經在區塊標題，標籤只留給螢幕報讀
+  function labelled(controls, node, label, id, hidden = false) {
+    const caption = el('label', label, hidden ? 'visually-hidden' : 'form-label');
+    caption.htmlFor = node.id = id;
+    controls.append(caption, node);
     return node;
   }
-  function renderControls() {
-    controls.replaceChildren();
-    diff.replaceChildren();
-    submit.disabled = true;
-    images = null;
-    status.textContent = '草稿尚未儲存；修改後請預覽，再確認儲存。';
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
+  function textInput(type, className = 'form-control') {
+    const node = el(type === 'textarea' ? 'textarea' : 'input', undefined, className);
+    if (type !== 'textarea') node.type = type;
+    return node;
+  }
+  function checkRow(controls, id, label) {
+    const row = el('label', undefined, 'form-check edit-check');
+    const node = textInput('checkbox', 'form-check-input');
+    node.id = id;
+    row.append(node, el('span', label, 'form-check-label'));
+    controls.append(row);
+    return node;
+  }
+
+  function buildIntro() {
+    const controls = section('intro');
+    const node = labelled(controls, textInput('textarea'), `介紹（最多 ${INTRO_MAX} 字）`, 'edit-intro', true);
+    node.rows = 6;
+    node.maxLength = INTRO_MAX;
+    node.value = snapshot.intro;
+    const count = el('p', '', 'form-hint');
+    count.id = 'edit-intro-count';
+    node.setAttribute('aria-describedby', count.id);
+    controls.append(count);
+  }
+  function buildRest() {
+    const controls = section('rest');
+    const { min, max } = restBounds();
+    const off = checkRow(controls, 'edit-rest-end', snapshot.rest ? '結束休養' : '不設定休養');
+    off.checked = !snapshot.rest;
+    const until = labelled(controls, textInput('date'), `休養至（${min} 到 ${max}）`, 'edit-until');
+    until.min = min;
+    until.max = max;
+    until.value = snapshot.rest?.until || '';
+    const reason = labelled(controls, textInput('text'), `原因（最多 ${REST_REASON_MAX} 字）`, 'edit-reason');
+    reason.maxLength = REST_REASON_MAX;
+    reason.value = snapshot.rest?.reason || '';
+  }
+  function buildFixedCare() {
+    checkRow(section('fixedCare'), 'edit-fixed-care', '有人固定照顧').checked = snapshot.fixedCare;
+  }
+  function buildSex() {
+    const controls = section('sex');
+    controls.append(el('p', '舊試算表副本已停止維護；請以狗正本逐隻確認，不依名字推測。', 'form-hint'));
+    const node = labelled(controls, el('select', undefined, 'form-select'), '性別', 'edit-sex', true);
+    for (const [value, label] of [
+      ['', '待確認'],
+      ['male', '公'],
+      ['female', '母']
+    ]) {
+      const option = el('option', label);
+      option.value = value;
+      node.append(option);
+    }
+    node.value = snapshot.sex;
+  }
+  function previewButton(field) {
+    const node = button('預覽改前／改後');
+    node.dataset.preview = field;
+    node.addEventListener('click', () => preview(field));
+    sections[field].controls.append(node);
+  }
+  function buildNumbers() {
+    const controls = section('numbers');
+    controls.append(
+      el('p', `目前編號不可移除：${snapshot.currentNumbers.join('、') || '無編號'}。每行一個編號，不可移給另一隻狗。`, 'form-hint')
+    );
+    labelled(controls, textInput('textarea'), '所有編號（每行一個）', 'edit-numbers').rows = 3;
+    controls.querySelector('#edit-numbers').value = snapshot.numbers.join('\n');
+    previewButton('numbers');
+  }
+  function buildStays() {
+    const controls = section('stays');
+    const rows = el('div');
+    rows.id = 'edit-stays';
+    controls.append(rows);
+    const addRow = (stay = { in: '', out: '', reason: '' }) => {
+      const row = el('fieldset', undefined, 'stay-row');
+      row.append(el('legend', '一次出入所'));
+      for (const [key, label, type] of [
+        ['in', '入所日', 'date'],
+        ['out', '出所日（還在所留空）', 'date'],
+        ['reason', '原因', 'text']
+      ]) {
+        const wrap = el('label', label, 'form-label');
+        const node = textInput(type);
+        node.dataset.key = key;
+        node.value = stay[key] || '';
+        wrap.append(node);
+        row.append(wrap);
+      }
+      const remove = button('移除這筆');
+      remove.addEventListener('click', () => {
+        row.remove();
+        update();
+      });
+      row.append(remove);
+      rows.append(row);
+    };
+    snapshot.stays.forEach(addRow);
+    const add = button('新增一次出入所');
+    add.addEventListener('click', () => {
+      addRow();
+      update();
+    });
+    controls.append(add);
+    previewButton('stays');
+  }
+  function buildPhoto() {
+    const controls = section('photo');
+    const file = labelled(controls, textInput('file'), '選擇新照片', 'edit-photo');
+    file.accept = 'image/*';
+    const image = el('img', undefined, 'edit-photo');
+    image.alt = '新照片預覽';
+    image.hidden = true;
+    controls.append(image);
+    file.addEventListener('change', async () => {
+      images = null;
+      update();
+      if (!file.files[0]) return;
+      try {
+        images = await prepareImages(file.files[0]);
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        previewUrl = URL.createObjectURL(images.original);
+        image.src = previewUrl;
+        image.hidden = false;
+        status.textContent = images.thumb ? '照片與縮圖已準備好，請預覽後儲存。' : '縮圖未產生，將使用原圖；請預覽後儲存。';
+      } catch (e) {
+        status.textContent = e.message;
+        images = null;
+      }
+      update();
+    });
+    const trash = button('查看這隻狗的照片垃圾桶');
+    controls.append(trash);
+    previewButton('photo');
+    trash.addEventListener('click', async () => {
+      const result = await call(base() + '/trash');
+      if (!result.ok) {
+        status.textContent = '垃圾桶暫時無法讀取，請重試';
+        return;
+      }
+      document.getElementById('photo-trash')?.remove();
+      const list = el('div', undefined, 'photo-trash');
+      list.id = 'photo-trash';
+      controls.append(list);
+      if (!result.data.trash.length) list.append(el('p', '沒有可復原的照片。', 'form-hint'));
+      for (const item of result.data.trash) {
+        const pick = button(`預覽復原：${trashLabel(item.deletedAt, result.data.days)}`);
+        pick.addEventListener('click', () => {
+          images = { restore: item.id };
+          preview('photo');
+        });
+        list.append(pick);
+      }
+    });
+  }
+  const builders = {
+    intro: buildIntro,
+    rest: buildRest,
+    fixedCare: buildFixedCare,
+    sex: buildSex,
+    numbers: buildNumbers,
+    stays: buildStays,
+    photo: buildPhoto
+  };
+  function rebuild(field) {
+    const old = sections[field]?.wrap;
+    const holder = el('div');
+    if (old) old.replaceWith(holder);
+    if (field === 'photo') {
+      images = null;
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
       previewUrl = null;
     }
-    const key = field.value;
-    if (key === 'intro') {
-      const node = input('textarea', 'edit-value', '介紹（最多 1000 字）', snapshot.intro);
-      node.rows = 6;
-      node.maxLength = 2000;
-    }
-    if (key === 'sex') {
-      controls.append(
-        text(
-          'p',
-          `目前性別：${sexLabel(snapshot.sex)}。舊試算表副本已停止維護；請以狗正本逐隻確認，不依名字推測。`
-        )
-      );
-      const node = document.createElement('select');
-      node.className = 'form-select';
-      node.id = 'edit-value';
-      const label = text('label', '性別', 'form-label');
-      label.htmlFor = node.id;
-      for (const [value, label] of [
-        ['', '待確認'],
-        ['male', '公'],
-        ['female', '母']
-      ]) {
-        const option = text('option', label);
-        option.value = value;
-        node.append(option);
-      }
-      node.value = snapshot.sex;
-      controls.append(label, node);
-    }
-    if (key === 'fixedCare') {
-      const node = input('checkbox', 'edit-value', '有人固定照顧');
-      node.checked = snapshot.fixedCare;
-    }
-    if (key === 'rest') {
-      const off = input('checkbox', 'edit-rest-end', '結束休養');
-      off.checked = !snapshot.rest;
-      input('date', 'edit-until', '休養至（今天至 180 天內）', snapshot.rest?.until || '');
-      input('text', 'edit-reason', '原因（最多 40 字）', snapshot.rest?.reason || '');
-    }
-    if (key === 'numbers') {
-      controls.append(
-        text(
-          'p',
-          `目前編號不可移除：${snapshot.currentNumbers.join('、') || '無編號'}。每行一個編號，不可移給另一隻狗。`
-        )
-      );
-      input('textarea', 'edit-value', '所有編號（每行一個）', snapshot.numbers.join('\n')).rows = 5;
-    }
-    if (key === 'stays') {
-      const rows = document.createElement('div');
-      rows.id = 'edit-stays';
-      controls.append(rows);
-      const addRow = (stay = { in: '', out: '', reason: '' }) => {
-        const row = document.createElement('fieldset');
-        row.className = 'stay-row';
-        row.append(text('legend', '一次出入所'));
-        for (const [key, label, type] of [
-          ['in', '入所日', 'date'],
-          ['out', '出所日（還在所留空）', 'date'],
-          ['reason', '原因', 'text']
-        ]) {
-          const wrap = text('label', label);
-          const node = document.createElement('input');
-          node.className = 'form-control';
-          node.type = type;
-          node.dataset.key = key;
-          node.value = stay[key];
-          wrap.append(node);
-          row.append(wrap);
-        }
-        const remove = text('button', '移除這筆', 'btn');
-        remove.type = 'button';
-        remove.onclick = () => {
-          row.remove();
-          submit.disabled = true;
-        };
-        row.append(remove);
-        rows.append(row);
-      };
-      snapshot.stays.forEach(addRow);
-      const add = text('button', '新增一次出入所', 'btn');
-      add.type = 'button';
-      add.onclick = () => {
-        addRow();
-        submit.disabled = true;
-      };
-      controls.append(add);
-    }
-    if (key === 'photo') {
-      const file = input('file', 'edit-value', '選擇新照片');
-      file.accept = 'image/*';
-      const image = document.createElement('img');
-      image.className = 'edit-photo';
-      image.alt = '新照片預覽';
-      image.hidden = true;
-      controls.append(image);
-      file.addEventListener('change', async () => {
-        submit.disabled = true;
-        if (!file.files[0]) return;
-        try {
-          images = await prepareImages(file.files[0]);
-          if (previewUrl) URL.revokeObjectURL(previewUrl);
-          previewUrl = URL.createObjectURL(images.original);
-          image.src = previewUrl;
-          image.hidden = false;
-          status.textContent = images.thumb ? '照片與縮圖已準備好，請預覽後儲存。' : '縮圖未產生，將使用原圖。';
-        } catch (e) {
-          status.textContent = e.message;
-          images = null;
-        }
-      });
-      const trash = text('button', '查看這隻狗的照片垃圾桶', 'btn');
-      trash.type = 'button';
-      controls.append(trash);
-      trash.onclick = async () => {
-        const result = await call(base + '/trash');
-        if (!result.ok) {
-          status.textContent = '垃圾桶暫時無法讀取，請重試';
-          return;
-        }
-        let list = document.getElementById('photo-trash');
-        if (list) list.remove();
-        list = document.createElement('div');
-        list.id = 'photo-trash';
-        controls.append(list);
-        if (!result.data.trash.length) list.append(text('p', '沒有可復原的照片。'));
-        for (const item of result.data.trash) {
-          const button = text('button', `預覽復原：${trashLabel(item.deletedAt, result.data.days)}`, 'btn');
-          button.type = 'button';
-          button.onclick = () => {
-            images = { restore: item.id };
-            renderPreview();
-            submit.disabled = false;
-          };
-          list.append(button);
-        }
-      };
-    }
+    previewed.delete(field);
+    builders[field]();
+    if (old) holder.replaceWith(sections[field].wrap);
   }
-  function value() {
-    const node = controls.querySelector('#edit-value');
-    if (field.value === 'fixedCare') return node.checked;
-    if (field.value === 'rest')
-      return controls.querySelector('#edit-rest-end').checked
-        ? null
-        : { until: controls.querySelector('#edit-until').value, reason: controls.querySelector('#edit-reason').value };
-    if (field.value === 'numbers') return node.value.split(/\s+/).filter(Boolean).sort();
-    if (field.value === 'stays')
-      return [...controls.querySelectorAll('.stay-row')].map((row) =>
+
+  // ---- 草稿 ----
+  const q = (selector) => fields.querySelector(selector);
+  function value(field) {
+    if (field === 'intro') return q('#edit-intro').value;
+    if (field === 'rest') return q('#edit-rest-end').checked ? null : { until: q('#edit-until').value, reason: q('#edit-reason').value };
+    if (field === 'fixedCare') return q('#edit-fixed-care').checked;
+    if (field === 'sex') return q('#edit-sex').value;
+    if (field === 'numbers') return q('#edit-numbers').value.split(/\s+/).filter(Boolean).sort();
+    if (field === 'stays')
+      return [...fields.querySelectorAll('.stay-row')].map((row) =>
         Object.fromEntries([...row.querySelectorAll('input')].map((n) => [n.dataset.key, n.value]))
       );
-    if (field.value === 'photo') return images;
-    return node.value;
+    return images;
   }
-  async function load(preserve = false) {
-    if (busy) return;
-    busy = true;
-    submit.disabled = true;
-    reload.disabled = true;
-    const result = await call(base);
-    busy = false;
-    reload.disabled = false;
-    if (!result.ok) {
-      status.textContent = result.data?.error || '資料無法讀取，請重試或重新登入';
-      return;
+  const before = (field) => (field === 'stays' ? snapshot.stays.map(stayRow) : snapshot[field]);
+  const changed = (field) => (field === 'photo' ? Boolean(images) : !sameValue(value(field), before(field)));
+  const draftKey = (field) => (field === 'photo' ? images : JSON.stringify(value(field)));
+  const dirtyFields = () => (snapshot ? FIELDS.map(([f]) => f).filter(changed) : []);
+  function problems() {
+    const list = [];
+    for (const field of dirtyFields()) {
+      if (field === 'rest' && restProblem(value('rest'))) list.push(restProblem(value('rest')));
+      if (PREVIEW_FIELDS.has(field) && previewed.get(field) !== draftKey(field)) list.push(`${FIELD_LABELS[field]}要先按「預覽改前／改後」。`);
     }
-    snapshot = result.data;
-    if (!preserve) renderControls();
-    diff.replaceChildren();
-    status.textContent = preserve
-      ? '已讀取最新資料，草稿保留；請重新預覽改前／改後。'
-      : '選擇項目，修改後預覽，再逐項儲存。';
+    return list;
   }
-  field.addEventListener('change', () => {
-    if (snapshot) renderControls();
-  });
-  controls.addEventListener('input', () => {
-    submit.disabled = true;
-    diff.replaceChildren();
-    status.textContent = '草稿尚未儲存；修改後請重新預覽。';
-  });
-  function renderPreview() {
+
+  function inlineDiff(field) {
+    const { diff } = sections[field];
+    if (!changed(field)) return diff.replaceChildren();
+    const line = el('p', undefined, 'diff-line');
+    line.append(el('span', '改前→改後：', 'diff-caption'));
+    if (field === 'intro') {
+      const part = introDiff(snapshot.intro, value('intro'));
+      if (part.lead) line.append(part.lead);
+      if (part.removed) line.append(el('del', part.removed));
+      if (part.added) line.append(el('ins', part.added));
+      if (part.tail) line.append(part.tail);
+    } else {
+      line.append(el('del', displayValue(field, before(field))), ' → ', el('ins', displayValue(field, value(field))));
+    }
+    diff.replaceChildren(line);
+    if (field === 'rest' && restProblem(value('rest'))) diff.append(el('p', restProblem(value('rest')), 'field-problem'));
+  }
+
+  function preview(field) {
     if (!snapshot || busy) return;
-    const next = value();
-    diff.replaceChildren(
-      text('h3', '改前／改後'),
-      text('h4', '改前'),
-      text('pre', field.value === 'photo' ? '目前照片' : displayValue(field.value, snapshot[field.value])),
-      text('h4', '改後'),
-      text('pre', field.value === 'photo' ? '選取的照片' : displayValue(field.value, next))
-    );
-    if (field.value === 'photo') {
-      diff.replaceChildren(text('h3', '改前／改後'));
+    const { diff } = sections[field];
+    if (!changed(field)) {
+      diff.replaceChildren(el('p', '內容沒有變更，無須儲存。', 'form-hint'));
+      previewed.delete(field);
+      return update();
+    }
+    diff.replaceChildren(el('h4', '改前／改後'));
+    if (field === 'photo') {
       const oldPhoto = snapshot.photo ? '/' + snapshot.photo.key : dog.photoUrl?.replace('/photos/thumbs/', '/photos/');
+      const pair = el('div', undefined, 'photo-pair');
       for (const [label, src] of [
         ['改前', oldPhoto],
-        ['改後', images?.restore ? base + '/trash/' + images.restore : previewUrl]
+        ['改後', images.restore ? base() + '/trash/' + images.restore : previewUrl]
       ]) {
-        diff.append(text('h4', label));
+        const figure = el('figure');
         if (src) {
-          const img = document.createElement('img');
-          img.className = 'edit-photo';
+          const img = el('img', undefined, 'edit-photo');
           img.alt = label + '照片';
           img.src = src;
-          diff.append(img);
-        } else diff.append(text('p', '尚無照片紀錄'));
+          figure.append(img);
+        } else figure.append(el('p', '尚無照片紀錄', 'form-hint'));
+        figure.append(el('figcaption', label));
+        pair.append(figure);
       }
-      diff.append(text('p', '目前照片會保留於垃圾桶，可在 30 天內復原。'));
+      diff.append(pair, el('p', '目前照片會保留於垃圾桶，可在 30 天內復原。', 'form-hint'));
+    } else {
+      for (const [label, shown] of [
+        ['改前', displayValue(field, before(field))],
+        ['改後', displayValue(field, value(field))]
+      ])
+        diff.append(el('h5', label), el('pre', shown));
     }
-    submit.disabled =
-      field.value === 'photo' ? !images : JSON.stringify(next) === JSON.stringify(snapshot[field.value]);
-    status.textContent = submit.disabled ? '內容沒有變更，無須儲存。' : '預覽完成，草稿尚未儲存；請核對後確認儲存。';
+    previewed.set(field, draftKey(field));
+    update();
   }
-  preview.onclick = renderPreview;
-  reload.onclick = () => load(true);
-  form.onsubmit = async (event) => {
-    event.preventDefault();
-    if (!snapshot || submit.disabled || busy) return;
-    busy = true;
-    submit.disabled = true;
-    field.disabled = true;
-    reload.disabled = true;
-    close.disabled = true;
-    preview.disabled = true;
-    const fieldset = document.createElement('fieldset');
-    fieldset.disabled = true;
-    while (controls.firstChild) fieldset.append(controls.firstChild);
-    controls.append(fieldset);
-    status.textContent = '正在儲存，請稍候…';
-    const next = value();
-    let path = base,
-      init = {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ revision: snapshot.revision, field: field.value, value: next })
-      };
-    if (field.value === 'photo') {
-      if (images.restore) {
-        path += '/restore';
-        init = {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ revision: snapshot.revision, trashId: images.restore })
-        };
-      } else {
-        path += '/photo';
-        init = { method: 'POST', headers: { 'X-Dog-Revision': String(snapshot.revision) }, body: imageForm(images) };
+
+  function update() {
+    if (!snapshot) return;
+    for (const [field] of FIELDS) {
+      const summary = fieldSummary(field, snapshot, dog.photoUrl);
+      const { now, wrap, diff } = sections[field];
+      now.replaceChildren(summary.missing ? el('span', '待補', 'state-label state-missing') : summary.text);
+      wrap.dataset.dirty = String(changed(field));
+      if (!PREVIEW_FIELDS.has(field)) inlineDiff(field);
+      else if (previewed.has(field) && previewed.get(field) !== draftKey(field)) {
+        previewed.delete(field);
+        diff.replaceChildren(el('p', '內容改過了，請重新預覽。', 'form-hint'));
       }
     }
-    const result = await call(path, init);
+    const intro = q('#edit-intro');
+    q('#edit-intro-count').textContent = `${[...intro.value].length} / ${INTRO_MAX} 字`;
+    const restOff = q('#edit-rest-end').checked;
+    q('#edit-until').disabled = restOff;
+    q('#edit-reason').disabled = restOff;
+    const dirty = dirtyFields(),
+      blocked = problems();
+    dirtyLine.textContent = dirty.length
+      ? `改了 ${dirty.length} 項：${dirty.map((f) => FIELD_LABELS[f]).join('、')}。${blocked.join('')}`
+      : '沒有修改。';
+    dirtyLine.dataset.blocked = String(blocked.length > 0);
+    save.disabled = busy || !dirty.length || blocked.length > 0;
+    next.disabled = busy || (dirty.length > 0 && blocked.length > 0);
+    next.textContent = dirty.length ? '存並開下一隻' : '下一隻';
+  }
+
+  // ---- 讀取與儲存 ----
+  async function load(preserve = false) {
+    const seq = ++loadSeq;
+    busy = true;
+    reload.disabled = true;
+    update();
+    const result = await call(base());
+    if (seq !== loadSeq) return;
     busy = false;
-    field.disabled = false;
     reload.disabled = false;
-    close.disabled = false;
-    preview.disabled = false;
-    while (fieldset.firstChild) controls.insertBefore(fieldset.firstChild, fieldset);
-    fieldset.remove();
     if (!result.ok) {
-      status.textContent = result.data?.error || '未能確認儲存，草稿保留；請讀取最新資料核對後再試';
-      return;
+      status.dataset.error = 'true';
+      status.textContent = result.data?.error || '資料無法讀取，請重試或重新登入';
+      reload.hidden = false;
+      reload.textContent = preserve ? '讀取最新資料並保留草稿' : '重新讀取這隻狗';
+      update();
+      return false;
     }
     snapshot = result.data;
-    renderControls();
-    status.textContent = '這一項已儲存，重新讀取確認完成。';
-    onSaved();
+    if (!preserve || !Object.keys(sections).length) {
+      sections = {};
+      fields.replaceChildren();
+      previewed = new Map();
+      for (const [field] of FIELDS) builders[field]();
+    } else {
+      previewed = new Map();
+      for (const field of PREVIEW_FIELDS) sections[field].diff.replaceChildren();
+    }
+    update();
+    return true;
+  }
+
+  function requestFor(field, revision) {
+    const json = (body) => ({ method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    if (field !== 'photo') return [base(), json({ revision, field, value: value(field) })];
+    if (images.restore)
+      return [base() + '/restore', { ...json({ revision, trashId: images.restore }), method: 'POST' }];
+    return [base() + '/photo', { method: 'POST', headers: { 'X-Dog-Revision': String(revision) }, body: imageForm(images) }];
+  }
+
+  async function saveAll(thenNext) {
+    if (!snapshot || busy) return;
+    const dirty = dirtyFields();
+    if (!dirty.length) return thenNext && onNext(dog.dogId, '');
+    if (problems().length) return update();
+    busy = true;
+    fields.disabled = true;
+    reload.hidden = true;
+    delete status.dataset.error;
+    update();
+    const saved = [];
+    let failure = null;
+    for (const field of dirty) {
+      status.textContent = `正在儲存${FIELD_LABELS[field]}…`;
+      const result = await call(...requestFor(field, snapshot.revision));
+      if (!result.ok) {
+        failure = { field, error: result.data?.error || '未能確認儲存', conflict: result.status === 409 };
+        break;
+      }
+      snapshot = result.data;
+      dog = patchDog(dog, snapshot);
+      saved.push(FIELD_LABELS[field]);
+      rebuild(field);
+      onSaved(dog);
+    }
+    busy = false;
+    fields.disabled = false;
+    if (saved.length) renderHead();
+    const done = saved.length ? `已儲存：${saved.join('、')}。` : '';
+    if (failure) {
+      status.dataset.error = 'true';
+      status.textContent = `${done}${FIELD_LABELS[failure.field]}沒存成：${failure.error}。還沒存的草稿保留${
+        failure.conflict ? '；請按「讀取最新資料並保留草稿」核對後再存。' : '，可再按儲存重試。'
+      }`;
+      reload.hidden = false;
+      reload.textContent = '讀取最新資料並保留草稿';
+      update();
+      return;
+    }
+    status.textContent = `${done}伺服器已確認。`;
+    update();
+    if (thenNext) onNext(dog.dogId, `${dog.name || '未命名'} ${done}`);
+  }
+
+  form.addEventListener('submit', (event) => {
+    event.preventDefault();
+    saveAll(false);
+  });
+  next.addEventListener('click', () => saveAll(true));
+  reload.addEventListener('click', async () => {
+    if (await load(true)) {
+      reload.hidden = true;
+      delete status.dataset.error;
+      status.textContent = '已讀取最新資料，草稿保留；改前→改後已依最新資料重算，編號、出入所紀錄、照片請重新預覽。';
+    }
+  });
+  fields.addEventListener('input', () => {
+    leaveArmed = false;
+    update();
+  });
+  fields.addEventListener('change', () => update());
+  root.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && !event.defaultPrevented) {
+      event.preventDefault();
+      api.close();
+    }
+  });
+
+  // 有沒存的修改時，第一次關閉／換狗只提醒，再按一次才放棄（不擋，只避免誤丟）
+  function mayLeave() {
+    const dirty = dirtyFields();
+    if (busy) return false;
+    if (!dirty.length || leaveArmed) return true;
+    leaveArmed = true;
+    status.dataset.error = 'true';
+    status.textContent = `${dog.name || '這隻狗'}還有沒存的修改（${dirty.map((f) => FIELD_LABELS[f]).join('、')}）。再按一次就放棄這些修改。`;
+    status.scrollIntoView?.({ block: 'nearest' });
+    return false;
+  }
+
+  const api = {
+    get dogId() {
+      return root.hidden ? null : dog?.dogId;
+    },
+    open(nextDog, { notice = '', force = false } = {}) {
+      if (!root.hidden && dog && !force && !mayLeave()) return false;
+      dog = nextDog;
+      snapshot = null;
+      sections = {};
+      leaveArmed = false;
+      images = null;
+      fields.replaceChildren();
+      body.scrollTop = 0;
+      reload.hidden = true;
+      delete status.dataset.error;
+      status.textContent = notice ? `${notice}正在讀取${dog.name || '這隻狗'}…` : '正在讀取…';
+      dirtyLine.textContent = '';
+      save.disabled = true;
+      next.disabled = true;
+      renderHead();
+      root.hidden = false;
+      document.body.classList.add('drawer-open');
+      root.querySelector('#drawer-title').focus();
+      load().then((ok) => {
+        if (ok && dog === nextDog)
+          status.textContent = notice ? `${notice}現在編輯${dog.name || '未命名'}。` : '改完按「儲存」；編號、出入所紀錄、照片要先預覽。';
+      });
+      return true;
+    },
+    close() {
+      if (root.hidden || !mayLeave()) return false;
+      loadSeq++;
+      root.hidden = true;
+      document.body.classList.remove('drawer-open');
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = null;
+      const closed = dog.dogId;
+      dog = snapshot = null;
+      onClose(closed);
+      return true;
+    }
   };
-  load();
-  title.focus();
+  return api;
 }

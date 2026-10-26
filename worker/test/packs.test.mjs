@@ -8,10 +8,8 @@ import { setPackChunkBytes, swapPackCache, readSmall, readWalksPacked, yearVersi
 import { readDogsPayload, readWalks, readDepartures, readRest, readSyncedAt } from '../src/compact.js';
 import { readAcceptedWalks, withTodayWalks } from '../src/walk-accept.js';
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
-import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
-import { importCompactProfiles } from '../../scripts/import-compact-profiles.mjs';
-import { importCompactDepartures } from '../../scripts/import-compact-departures.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
+import { importCompactDogs, importCompactProfiles, importCompactDepartures } from './compact-fixtures.mjs';
 
 const SITE = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
 // 台灣時間 2026-10-16 10:00
@@ -28,7 +26,7 @@ const WALKS = [
 
 async function seededDb(t) {
   const DB = fakeD1(); t.after(() => DB.close());
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   await importCompactDogs(DB, SOURCE);
   await importCompactProfiles(DB, { walks: { version: 1, walks: WALKS } });
   await importCompactDepartures(DB, [{ id: '2021030913', name: '咪寶', date: '2026-10-13', dateSource: 'note', seen: '2026-10-13', reason: 'adopt', matched: '被領養', flags: [] }]);
@@ -630,11 +628,11 @@ test('在所、某一年的離所不整張讀：入所、出入所紀錄照主�
 test('正式 D1 第一次補建 v3_departure_versions：從現有離所紀錄補上每年的鍵，之後重跑不動', async t => {
   const DB = await departedDb(t, 3);
   await DB.prepare('DROP TABLE v3_departure_versions').run();
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   assert.deepEqual(Object.keys(await depYears(DB)).sort(), ['2010', '2011', '2012', '2026', 'none']);
   await DB.prepare("UPDATE v3_dog_departures SET reason='died' WHERE number='2010000000'").run();
   const years = await depYears(DB);
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   assert.deepEqual(await depYears(DB), years);
   await assertSame(DB, '補建後');
 });

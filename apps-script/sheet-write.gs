@@ -11,8 +11,6 @@ var SHEET_NAME = '主清單';
 var GROUP_SHEET_NAME = '常遛狗群';
 var TIME_ZONE = 'Asia/Taipei';
 var HEADERS = { cage: '籠位', id: '編號', name: '犬名', date: '遛狗日期', walker: '誰遛的', note: '備註' };
-// 跟 worker/src/sheet-read.js 的 NAME_SEP 一樣（測試會比對）：一格寫好幾個名字時用這些符號或空白隔開
-var NAME_SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
 
 function doPost(e) {
   var out;
@@ -37,6 +35,8 @@ function handleRequest(req) {
   // K 決定先不設金鑰（2026-10-04）；有設 WRITE_KEY 才檢查
   if (key && req.key !== key) return { ok: false, error: '金鑰不對', code: 'key' };
   if (['walkWake','walkWakeBatch','walkScan'].indexOf(req.action) !== -1 && (!key || req.key !== key)) return { ok: false, error: '寫回必須設定金鑰', code: 'key' };
+  // #597：舊版網頁直寫（walk／edit／undo）退場；溜了、修改、復原都先存 D1，再由 walkWake 寫回，這裡不再改表
+  if (['walk', 'edit', 'undo'].indexOf(req.action) !== -1) return { ok: false, error: '已使用新登記流程，請重新整理網頁' };
   var lock = LockService.getScriptLock();
   lock.waitLock(15000); // 兩個人同時按，一個一個來，免得互相蓋掉
   try {
@@ -45,17 +45,12 @@ function handleRequest(req) {
     if (req.action === 'walkWake') return writeLatestWalk(sheet, req, props);
     if (req.action === 'walkScan') return scanWalkSnapshot(sheet, req);
     if (req.action === 'walkWakeBatch') return writeLatestWalks(sheet, req, props);
-    // 所有程式寫入共用此鎖；舊版喚醒延後抵達也不能繞過 D1 正本。
-    if (props.getProperty('WALK_WORKER_URL') && ['walk', 'edit', 'undo'].indexOf(req.action) !== -1) {
-      var gate = walkWorker(props, 'legacy-check', { dogs: req.dogs });
-      if (!gate.ok || !gate.allowed) return { ok: false, error: '已使用新登記流程，請重新整理' };
-    }
     var values = sheet.getDataRange().getValues();
     var today = Utilities.formatDate(new Date(), TIME_ZONE, 'yyyy-MM-dd');
-    var plan = planSheetWrites(values, req, today, ymdOf);
+    var plan = planSheetWrites(values, req, today);
     if (plan.error) return { ok: false, error: plan.error };
     plan.cells.forEach(function (c) {
-      sheet.getRange(c.row + 1, c.col + 1).setValue(c.date ? toSheetDate(c.date) : c.value);
+      sheet.getRange(c.row + 1, c.col + 1).setValue(c.value);
     });
     return { ok: true, today: today, results: plan.results };
   } finally {
@@ -184,12 +179,6 @@ function cellText(v) {
   return v === null || v === undefined ? '' : String(v).trim();
 }
 
-// 存「原本的內容」用：日期格存成 { date: 'yyyy-MM-dd' }，其他存文字
-function serializeCell(v, ymd) {
-  if (isDate(v)) return { date: ymd(v) };
-  return { text: cellText(v) };
-}
-
 function findHeader(values) {
   for (var r = 0; r < Math.min(values.length, 30); r++) {
     var norm = values[r].map(function (v) { return cellText(v).replace(/\s+/g, ''); });
@@ -217,61 +206,13 @@ function findDogRow(values, header, dog) {
   return -1;
 }
 
-function namesIn(text) {
-  return cellText(text).split(NAME_SEP).filter(function (n) { return n; });
-}
-
-// req.action：
-//   walk：每隻狗的遛狗日期改成今天、誰遛的填 req.walker；今天已經有別人寫了就接在後面（「甲、我」），已經有我就不動
-//   undo：每隻狗如果還是我們寫的樣子（今天、誰遛的跟 wrote 一樣），寫回 prev；被別人改過就不動
-// 回傳 { cells: [{ row, col, value | date }], results: [每隻狗的結果] } 或 { error }
-function planSheetWrites(values, req, today, ymd) {
+// 只剩 note／log（只追加）；walk／edit／undo 在 handleRequest 就擋掉（#597）
+// 回傳 { cells: [{ row, col, value }], results: [結果] } 或 { error }
+function planSheetWrites(values, req, today) {
   var header = findHeader(values);
   if (!header) return { error: '主清單找不到「犬名」表頭' };
   if (req.action === 'note' || req.action === 'log') return planAppend(values, header, req, today);
-  var missing = ['id', 'date', 'walker'].filter(function (k) { return header.cols[k] === undefined; });
-  if (missing.length) return { error: '主清單找不到「' + missing.map(function (k) { return HEADERS[k]; }).join('」「') + '」欄' };
-  var cols = header.cols;
-  var cells = [];
-  var results = (req.dogs || []).map(function (dog) {
-    var r = findDogRow(values, header, dog);
-    var base = { id: dog.id, name: dog.name };
-    if (r === -1) return Object.assign(base, { status: 'notFound' });
-    var dateCell = values[r][cols.date];
-    var walkerNow = cellText(values[r][cols.walker]);
-    var dateNow = isDate(dateCell) ? ymd(dateCell) : cellText(dateCell).replace(/\//g, '-').replace(/-(\d)(?=-|$)/g, '-0$1');
-    var isToday = dateNow === today;
-    if (req.action === 'walk') {
-      var me = cellText(req.walker);
-      var prev = { date: serializeCell(dateCell, ymd), walker: walkerNow };
-      var walker = me;
-      if (isToday && walkerNow) {
-        var added = namesIn(me).filter(function (n) { return namesIn(walkerNow).indexOf(n) === -1; });
-        if (!added.length) return Object.assign(base, { status: 'already', current: { date: today, walker: walkerNow } });
-        walker = walkerNow + '、' + added.join('、');
-      }
-      if (!isToday) cells.push({ row: r, col: cols.date, date: today });
-      cells.push({ row: r, col: cols.walker, value: walker });
-      return Object.assign(base, { status: 'written', prev: prev, wrote: { walker: walker } });
-    }
-    if (req.action === 'edit') {
-      if (!isToday || walkerNow !== cellText(dog.expected)) return Object.assign(base, { status: 'changed', current: { date: dateNow, walker: walkerNow } });
-      var replacement = namesIn(req.walker).filter(function (n, i, list) { return list.indexOf(n) === i; }).join('、');
-      if (!replacement) return Object.assign(base, { status: 'badAction' });
-      cells.push({ row: r, col: cols.walker, value: replacement });
-      return Object.assign(base, { status: 'written', prev: { date: serializeCell(dateCell, ymd), walker: walkerNow }, wrote: { walker: replacement } });
-    }
-    if (req.action === 'undo') {
-      if (!dog.prev || !dog.wrote || !isToday || walkerNow !== cellText(dog.wrote.walker)) return Object.assign(base, { status: 'changed', current: { date: dateNow, walker: walkerNow } });
-      var p = dog.prev.date || {};
-      if (p.date) cells.push({ row: r, col: cols.date, date: p.date });
-      else cells.push({ row: r, col: cols.date, value: p.text || '' });
-      cells.push({ row: r, col: cols.walker, value: cellText(dog.prev.walker) });
-      return Object.assign(base, { status: 'restored' });
-    }
-    return Object.assign(base, { status: 'badAction' });
-  });
-  return { cells: cells, results: results };
+  return { error: '小程式沒有這個動作' };
 }
 
 // ── 只追加（#239、#281）：日期用今天（台灣時間），月日不補 0；名字用全形括號；不刪、不改原本的字 ──
