@@ -1,4 +1,4 @@
-const assert = require('node:assert/strict');
+﻿const assert = require('node:assert/strict');
 
 // 單手操作規範（docs/DESIGN_GUIDE.md）：手機 390、360 寬時，志工版主要畫面的可點元素至少 44×44px、相鄰兩個至少隔 8px。
 // 有效範圍含 ::before／::after 擴大的點擊範圍。既有違規列在 KNOWN，at 是現在量到的值（尺寸取短邊、間距取距離；
@@ -6,20 +6,9 @@ const assert = require('node:assert/strict');
 // 比 at 更差算新違規；修好後要從 KNOWN 拿掉，否則測試失敗。
 const MIN = 44, GAP = 8;
 const KNOWN = [
-  { kind: 'size', match: /^#formerAdd$/, at: 32, ticket: '#647', note: '詳細資訊「＋補舊編號」32px 高' },
-  { kind: 'size', match: /^button\.my-note-edit\.append-open$/, at: 36, ticket: '#647', note: '詳細資訊「加備註」36～38px 高（依字型）' },
-  { kind: 'size', match: /^a\.group-page-link$/, at: 30, ticket: '#647', note: '詳細資訊「看全部狗群」30～32px 高（依字型）' },
-  { kind: 'size', match: /^#whereClose$/, at: 40, ticket: '#647', note: '「在哪」關閉 40×40' },
-  { kind: 'gap', match: /^button\.chip ↔ button\.chip\.on$/, at: 4, ticket: '#647', note: '全部／我的常溜相距 4px' },
-  { kind: 'gap', match: /^button(\.on)?\[data-walk-view=(list|photo)\] ↔ button(\.on)?\[data-walk-view=(list|photo)\]$/, at: 2, ticket: '#647', note: '照片／列表切換相距 2px' },
-  { kind: 'gap', match: /^button(\.active)?\[data-tab=\w+\] ↔ button(\.active)?\[data-tab=\w+\]$/, at: 6, ticket: '#647', note: '底部分頁相距 6px' },
-  { kind: 'gap', match: /^button\.ob-later ↔ button\.ob-next$/, at: 6, ticket: '#647', note: '開頭畫面「先看看」與「下一步」相距 6px' },
   { kind: 'gap', match: /^button(\.r-cage)?\.cage-pill ↔ div\.(card|row-dog)(\.flagged)?$/, at: 0, ticket: '#644', note: '籠位擴大範圍貼到隔壁狗卡（360 寬照片模式 0px）' },
-  { kind: 'gap', match: /^button\.r-cage\.cage-pill ↔ button\.r-cage\.cage-pill$/, at: 7.5, ticket: '#644', note: '列表上下兩列籠位擴大範圍相距 7.5px' },
-  { kind: 'gap', match: /^button\.walk-btn(\.done)? ↔ div\.row-dog(\.flagged)?$/, at: 7, ticket: '#647', note: '列表「溜了」「已溜」離隔壁列 7～7.5px' },
   { kind: 'gap', match: /^#photoPick ↔ button\.thumb\.zoom$/, at: -60, ticket: '#647', note: '詳細資訊相機鈕疊在照片上' },
   { kind: 'gap', match: /^button\.buddy ↔ button\.pick$/, at: -31, ticket: '#647', note: '同行狗勾選框疊在狗名格上' },
-  { kind: 'gap', match: /^button\.gw-dog ↔ button\.gw-dog$/, at: 5, ticket: '#647', note: '常遛狗群狗卡相距 5px' },
 ];
 
 module.exports = async (browser, base) => {

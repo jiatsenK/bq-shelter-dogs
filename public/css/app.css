@@ -2449,6 +2449,19 @@ html.kb-open .onboard { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-
 
 .desk-on .zukan-link[hidden] { display: none; }
 
+/* #647 單手操作（docs/DESIGN_GUIDE.md）：手機可點元素至少 44×44px、相鄰至少隔 8px；外觀大小盡量不變，只撐高點擊範圍或拉開間距 */
+.reentry .former-add { min-height: 44px; padding: 0 6px; }
+.my-note-edit { min-height: 44px; }
+.group-page-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 4px; padding: 0; }
+.where-close { width: 44px; height: 44px; flex-shrink: 0; }
+.walk-tools .chips { gap: 8px; }
+.seg { gap: 8px; }
+.tabs { gap: 8px; }
+.ob-name .ob-foot { gap: 8px; }
+/* 列表每列上下至少 9px，「溜了」離隔壁列 9px 以上；有警示備註的列鈕靠上，也靠這個 padding */
+.row-dog { min-height: 62px; padding-block: 9px; }
+.gw-cards { column-gap: 8px; }
+
 /* 測試網站（worker/src/test-site.js 在 <html> 加 data-site="test"；正式版沒有這個屬性，不受影響）：
    檔案櫃（頁首、底部列、選中分頁）換成測試紫，標題旁一顆黃底「測試版」，一眼分得出不是正式版。
    「溜了」、天數色籤等主色不變，綠色仍只代表最近溜過。對比：白字 10.9、淡紫字 7.1、標籤字 9.1 */
