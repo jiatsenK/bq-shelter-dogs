@@ -1,6 +1,8 @@
 import { appState, deskState } from './page-state.js';
 import { SITE } from './site-config.js';
-import { apiData, canonicalWalker, computeStatus, effectiveWalkDate, render, restOf, sheetAppendHtml, showDetail, walkedNow, walkerList } from './app.js';
+import { apiData, canonicalWalker, computeStatus, effectiveWalkDate, render, restOf, walkedNow, walkerList } from './app.js';
+import { sheetAppendHtml } from './sheet-append.js';
+import { showDetail } from './detail.js';
 import { esc, highlightNote, icon, monthDay } from './ui-kit.js';
 import { AMBER_DAYS, RED_DAYS, specialFlag, walkKey } from './dog-status.js';
 import { BQDates } from './dates.js';

@@ -1,5 +1,6 @@
 import { appState, groupStageState } from './page-state.js';
-import { applyDogsData, effectiveWalkDate, init, loadDogsData, loadWalkerName, photoThumbSrc, render, restOf, showDetail, walkRegistration, walkedNow } from './app.js';
+import { applyDogsData, effectiveWalkDate, init, loadDogsData, loadWalkerName, photoThumbSrc, render, restOf, walkRegistration, walkedNow } from './app.js';
+import { showDetail } from './detail.js';
 import { esc, icon, matchesSearch } from './ui-kit.js';
 import { walkKey } from './dog-status.js';
 import { BQDates } from './dates.js';
