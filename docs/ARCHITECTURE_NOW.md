@@ -79,6 +79,7 @@ Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，
 - gviz 讀試算表（`docs.google.com/.../gviz`）、舊同步程式 `scripts/sync-*.mjs`：#512 已刪；`worker/src/sheet-read.js` 只剩拆名字（`splitNames`）。
 - GitHub Actions `sync-sheet.yml`、Worker `syncTick`／`triggerSync`、每 10 分鐘同步：#501 已刪。
 - `/sync`、`/sheet-changed`、GAS `notifyWorker`、Secret `SHEET_NOTIFY_KEY`：#512 已刪。頁首「更新」只重讀 D1；舊版網頁還 POST `/sync` 會收到 410 請它重新整理。
+- 舊版網頁直寫試算表（GAS `walk`／`edit`／`undo`）與 Worker `/api/walk-writeback/legacy-check`：#597 已刪。小程式收到這三個動作只回「已使用新登記流程，請重新整理網頁」，不改表；試算表只剩 `walkWake`／`walkWakeBatch` 寫回、`note`／`log` 只追加兩條程式寫入路徑。
 - `data/*.json` 當資料來源、「試算表為正本」（ADR 0007）：已由 ADR 0018 取代。
 - 同步設計稿 456–460：已移到 `docs/design/history/`，只供查背景。
 - 2026-10-26 也移到 `docs/design/history/` 的舊文件（內容描述已退役的架構，只供查背景）：`COMPACT_D1.md`（#246 精簡 D1 第一階段）、`SHEET_SYNC_SETUP.md`（Actions 同步試算表）、`PHOTO_UPLOAD_SETUP.md`（照片存 GitHub）、`FRONTEND_REQUIREMENTS.md`（V3 需求）、`267-identity-rollout.md`／`267-identity-dry-run.json`、`273-info-page.md`、`285-intake-events.md`、`390-intake-presentation.md`、`INTRO_REWRITE.md`、`mobile-ui-implementation-spec.md`、`mobile-ui-tickets-handoff.md`、`implementation-tickets/`。

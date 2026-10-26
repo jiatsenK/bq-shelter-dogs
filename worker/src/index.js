@@ -908,7 +908,7 @@ export default {
         return fail(500, '管理功能發生錯誤', allowed);
       }
     }
-    if (['/walk-writeback/target', '/walk-writeback/receipt', '/walk-writeback/legacy-check', '/walk-writeback/observe', '/walk-writeback/rows', '/walk-writeback/dog-list', '/walk-writeback/dog-list-scan'].includes(path)) {
+    if (['/walk-writeback/target', '/walk-writeback/receipt', '/walk-writeback/observe', '/walk-writeback/rows', '/walk-writeback/dog-list', '/walk-writeback/dog-list-scan'].includes(path)) {
       if (request.method !== 'POST' || env?.PREVIEW || !env?.DB || !cfg.sheetWriteKey) return fail(403, '不接受寫回要求', '');
       const supplied = request.headers.get('X-Sheet-Write-Key') || '';
       const digest = text => crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -942,13 +942,6 @@ export default {
             catch (error) { results.push({ ok:false, error:error.status ? error.message : '比較失敗，保留待處理' }); }
           }
           return reply(200,{ ok:true, results },'');
-        }
-        if (path.endsWith('/legacy-check')) {
-          if (!Array.isArray(input.dogs) || input.dogs.length > WALK_MAX_DOGS) return fail(400, '狗的資料不對', '');
-          for (const dog of input.dogs) {
-            if (await env.DB.prepare('SELECT dog_key FROM v3_walk_state WHERE dog_key=?').bind(dog.id || `名:${dog.name}`).first()) return reply(200, { ok: true, allowed: false }, '');
-          }
-          return reply(200, { ok: true, allowed: true }, '');
         }
         const result = path.endsWith('/target') ? await writebackTarget(env.DB, input, env) : await confirmWalk(env.DB, input, env);
         return reply(200, { ok: true, ...result }, '');
