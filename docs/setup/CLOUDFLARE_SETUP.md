@@ -60,7 +60,7 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 |---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | 步驟 1 複製的 Account ID |
 | `CLOUDFLARE_API_TOKEN` | 步驟 2 複製的 Cloudflare token |
-| `ADMIN_KEY` | 管理 API（縮圖、搬照片、Trash）用的金鑰，只給 GitHub Action，自己想一組英數字。還沒設時沿用舊的 `NOTES_PASSCODE` Secret（ADR 0004） |
+| `ADMIN_KEY` | 管理 API（縮圖、Trash）用的金鑰，只給 GitHub Action，自己想一組英數字。部署時帶到 Worker，縮圖 Action 也用同一個；#595 起不再沿用舊的 `NOTES_PASSCODE` |
 | `WORKERS_SUBDOMAIN` | 帳號的 workers.dev 子網域（Cloudflare **Workers & Pages** 右側「Subdomain」，`<子網域>.workers.dev` 前面那段）。不是密碼，但 repo 公開（#493），放 Secret 讓 Actions 日誌把它顯示成 `***`，網址不會出現在公開的日誌與 PR。沒設的話部署、預覽、縮圖都會停在第一步 |
 
 `WALKER_KEY`（誰遛的代號密鑰）本來就在這裡，不用動，部署時會自動一起帶過去，代號不會變。
@@ -221,7 +221,7 @@ https://pr-<PR 編號>-bq-shelter-dogs-preview.<子網域>.workers.dev
   `/photos/*` 先經過 Worker（`wrangler.jsonc` 的 `run_worker_first`；狗清單和照片版本號改由 `/api/dogs` 提供）（相簿 2026-10-09 拿掉，`photos/gallery/` 一律 404）；R2 沒有的照片退回靜態檔，刪掉的照片放 0 位元組的刪除標記（`customMetadata.deleted`）擋住退回。
   換掉、刪掉前複製到 `trash/{時間-亂數}/photo.jpg`（customMetadata 記 path、dogId、kind、file、addedAt、deletedAt）＋`thumb.jpg`，Cron 清掉超過 30 天的。
   Lifecycle 規則存在 bucket 上、不在 repo：`bq-shelter-photos`、`bq-shelter-photos-test` 都只有預設的「未完成分段上傳 7 天中止」，沒有刪除規則。K 2026-10-26 決定不加（理由見 ADR 0018 第 7 點補註）；要查就跑 `npx.cmd wrangler r2 bucket lifecycle list bq-shelter-photos`。
-  管理 API（標頭 `X-Admin-Key: encodeURIComponent(金鑰)`）：`POST /api/admin/migrate`、`POST /api/admin/verify`、`GET /api/admin/thumbs`、`PUT /api/admin/thumbs/{原圖路徑}`、`GET /api/admin/trash`、`POST /api/admin/trash/{代號}/restore`。
+  管理 API（標頭 `X-Admin-Key: encodeURIComponent(金鑰)`）：`GET /api/admin/thumbs`、`PUT /api/admin/thumbs/{原圖路徑}`、`GET /api/admin/trash`、`POST /api/admin/trash/{代號}/restore`。
   部署前 `scripts/r2-bucket.mjs` 只查證既有 bucket，失敗以非零狀態結束、停止部署。補縮圖（只有人工手動跑）：`.github/workflows/r2-thumbs.yml`（`scripts/make-thumbs.py --site`）。
   repo 的 `photos/` 已經不放照片（原本的 `photos/README.md` 併到這裡）。R2 找不到照片時 Worker 仍會退回讀部署的靜態檔，這是搬遷過渡期的備援，請不要再把 `.jpg` 放進 repo。
 

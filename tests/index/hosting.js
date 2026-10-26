@@ -74,6 +74,10 @@ async function runR2Tests() {
     const problem = deployWriteProblem(deploy, preview);
     if (problem) throw new Error(problem);
   });
+  await check('#595 部署不帶 Worker 用不到的密鑰（MY_NAME、SHEET_ID、NOTES_PASSCODE）', () => {
+    const left = ['MY_NAME', 'SHEET_ID', 'NOTES_PASSCODE'].filter(name => new RegExp(`secrets\\.${name}\\b|process\\.env\\.${name}\\b`).test(deploy));
+    if (left.length) throw new Error(`還在帶 ${left.join('、')}`);
+  });
   // #553：預覽只准一種 migrations apply（測試庫＋測試庫設定）；正式部署照舊完全不准
   await check('#553 擋關檢查的反例：預覽對正式庫、不帶測試庫設定、正式部署套用都會被擋', () => {
     const ok = 'npx --yes wrangler@4 d1 migrations apply bq-shelter-dogs-test --remote --config wrangler.preview-db.jsonc\n';
@@ -165,7 +169,8 @@ async function runR2Tests() {
   await check('#130 縮圖（R2）Action：只能手動或由 Worker 叫、用管理金鑰、不提交 repo', () => {
     if (!thumbs) throw new Error('讀不到 r2-thumbs.yml');
     if (!/on:\r?\n  workflow_dispatch:\r?\n\r?\n/.test(thumbs)) throw new Error('只能用 workflow_dispatch 觸發');
-    if (!/ADMIN_KEY: \$\{\{ secrets\.ADMIN_KEY \|\| secrets\.NOTES_PASSCODE \}\}/.test(thumbs)) throw new Error('金鑰要用 Secret ADMIN_KEY');
+    if (!/ADMIN_KEY: \$\{\{ secrets\.ADMIN_KEY \}\}/.test(thumbs)) throw new Error('金鑰要用 Secret ADMIN_KEY');
+    if (/NOTES_PASSCODE/.test(thumbs)) throw new Error('#595 不再沿用 NOTES_PASSCODE');
     if (!/contents: read/.test(thumbs) || /git push|git commit/.test(thumbs)) throw new Error('不能提交 repo');
     if (!/make-thumbs\.py --site/.test(thumbs)) throw new Error('縮圖要用 make-thumbs.py --site');
   });
