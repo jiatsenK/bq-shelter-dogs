@@ -5,6 +5,8 @@
 {
   "name": "bq-shelter-dogs-preview",
   "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "bq-shelter-photos-test" }],
+  // 稽核第 5 項：排程上限算整個帳號，預覽不准有排程；不是空的話 d1-database.mjs --preview 會停
+  "triggers": { "crons": [] },
   "d1_databases": [{
     "binding": "DB",
     "database_name": "bq-shelter-dogs-test",

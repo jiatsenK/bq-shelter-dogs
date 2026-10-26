@@ -11,6 +11,7 @@
   - `scripts/d1-database.mjs --preview` 改成換掉 Worker 名稱、R2、D1，拿掉排程，帶 PREVIEW。它會先查證設定不是正式的、測試 R2 存在、預覽 Worker 上只有 `WALKER_KEY`，不符就停止。另外加 `--create-preview-worker`：Worker 不存在時才 deploy 一次。
   - `preview-cloudflare.yml` 拿掉正式 R2 檢查，改跑上述查證。
   - `wrangler.jsonc` 的 `preview_urls` 改 false，正式 Worker 不再有預覽網址。
+- 依稽核第 5 項（cron-health session 協調）：`wrangler.preview-db.jsonc` 明寫 `"triggers": { "crons": [] }`，不是空的就停止；產生的預覽設定也寫空排程。
 - 測試：`scripts/d1-database.test.mjs`（隔離設定、密鑰白名單、建立一次），`tests/index/hosting.js`（workflow 不帶金鑰、正式關預覽網址、預覽設定用測試資源）。
 - 未做（要 K 動手或同意）：
   - 建立預覽 Worker、設 `WALKER_KEY`，指令見 `docs/setup/CLOUDFLARE_SETUP.md`「PR 預覽網址」。

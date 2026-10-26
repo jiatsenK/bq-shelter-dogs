@@ -118,6 +118,7 @@ async function runPreviewTests() {
     if (!/"preview_urls": false/.test(cfg)) throw new Error('正式 Worker 要關 preview_urls，它的版本會帶正式密鑰');
     if (!/"name": "bq-shelter-dogs-preview"/.test(isolated)) throw new Error('預覽要用獨立 Worker bq-shelter-dogs-preview');
     if (!/"r2_buckets": \[\{ "binding": "PHOTOS", "bucket_name": "bq-shelter-photos-test" \}\]/.test(isolated)) throw new Error('預覽要用測試照片空間');
+    if (!/"triggers": \{ "crons": \[\] \}/.test(isolated)) throw new Error('預覽不准有排程，要明寫 crons: []');
     if (!/"keep_vars": false/.test(cfg)) throw new Error('keep_vars 要是 false，免得 PREVIEW 被帶進正式版');
   });
 }

@@ -35,6 +35,9 @@ export function findDatabase(list, name = DB_NAME) {
 // 預覽要跟正式完全分開：Worker 名稱、照片空間都不能跟正式設定一樣。只看設定，不接觸 Cloudflare。回傳問題或 ''
 export function previewIsolationProblem(base, isolated) {
   if (!isolated?.name || isolated.name === base.name) return '預覽要用獨立 Worker，停止部署';
+  // 稽核第 5 項：排程上限算整個帳號，預覽一個都不准有
+  const crons = isolated.triggers?.crons;
+  if (!Array.isArray(crons) || crons.length) return '預覽 Worker 要明寫 "triggers": { "crons": [] }，停止部署';
   const buckets = isolated.r2_buckets || [];
   if (!buckets.some(b => b.binding === 'PHOTOS' && b.bucket_name)) return '預覽缺少照片空間綁定，停止部署';
   const production = new Set((base.r2_buckets || []).map(b => b.bucket_name));
@@ -96,9 +99,8 @@ export async function ensureDatabase({ config = 'wrangler.jsonc', preview = fals
   delete binding.preview_database_id;
   const target = { ...base, d1_databases: [binding] };
   if (preview) {
-    Object.assign(target, { name: isolated.name, r2_buckets: isolated.r2_buckets, vars: { ...base.vars, PREVIEW: '1' }, preview_urls: true });
-    // 預覽 Worker 不跑排程（寫回重試、保險掃描、清照片垃圾桶）
-    delete target.triggers;
+    // 預覽 Worker 不跑排程（寫回重試、保險掃描、清照片垃圾桶）：明寫空的，deploy 時會清掉
+    Object.assign(target, { name: isolated.name, r2_buckets: isolated.r2_buckets, vars: { ...base.vars, PREVIEW: '1' }, preview_urls: true, triggers: { crons: [] } });
   }
   await writeFile(`${root}/${output}`, `${JSON.stringify(target, null, 2)}\n`);
   try {

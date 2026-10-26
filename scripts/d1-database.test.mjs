@@ -10,7 +10,7 @@ import { ensureDatabase, parseJsonOutput, findDatabase, previewIsolationProblem,
 
 const production = { binding: 'DB', database_name: DB_NAME, database_id: 'prod-id', preview_database_id: 'test-id' };
 const testing = { binding: 'DB', database_name: 'bq-shelter-dogs-test', database_id: 'test-id' };
-const isolated = { name: 'x-preview', r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos-test' }], d1_databases: [testing] };
+const isolated = { name: 'x-preview', triggers: { crons: [] }, r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos-test' }], d1_databases: [testing] };
 async function repo(binding = production) {
   const root = await mkdtemp(join(tmpdir(), 'bq-d1-'));
   await writeFile(join(root, 'wrangler.jsonc'), JSON.stringify({ name: 'x', r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos' }], vars: { SYNC_DAILY_BUDGET: '40000' }, d1_databases: binding ? [binding] : [], triggers: { crons: ['17 2 1 * *'] }, preview_urls: false }));
@@ -68,7 +68,7 @@ test('稽核 3 預覽改用獨立 Worker、測試 R2、測試 D1，不跑排程�
   assert.deepEqual(cfg.d1_databases, [testing]);
   assert.equal(cfg.vars.PREVIEW, '1');
   assert.equal(cfg.vars.SYNC_DAILY_BUDGET, '40000');
-  assert.equal(cfg.triggers, undefined);
+  assert.deepEqual(cfg.triggers, { crons: [] });
   assert.equal(cfg.preview_urls, true);
   assert.equal(calls.find(c => c[1] === 'execute')[2], testing.database_name);
   assert.deepEqual(calls.find(c => c[0] === 'r2'), ['r2', 'bucket', 'info', 'photos-test']);
@@ -107,10 +107,12 @@ test('稽核 3 預覽設定若沿用正式 Worker 名稱或正式照片空間就
     { ...isolated, r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos' }] },
     { ...isolated, r2_buckets: [{ binding: 'PHOTOS', bucket_name: 'photos-test' }, { binding: 'OTHER', bucket_name: 'photos' }] },
     { ...isolated, r2_buckets: [] },
+    { ...isolated, triggers: undefined },
+    { ...isolated, triggers: { crons: ['5-59/10 * * * *'] } },
   ]) {
     const root = await repo();
     await writeFile(join(root, 'wrangler.preview-db.jsonc'), JSON.stringify(bad));
-    await assert.rejects(ensureDatabase({ root, preview: true, run: () => assert.fail('must not query') }), /預覽要用獨立 Worker|預覽不能使用正式 R2|預覽缺少照片空間/);
+    await assert.rejects(ensureDatabase({ root, preview: true, run: () => assert.fail('must not query') }), /預覽要用獨立 Worker|預覽不能使用正式 R2|預覽缺少照片空間|crons/);
   }
 });
 
