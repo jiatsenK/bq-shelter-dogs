@@ -41,6 +41,10 @@ module.exports = async (browser, base) => {
     await page.getByText('還沒有編輯紀錄', { exact: true }).waitFor();
     assert.deepEqual(errors, []);
     console.log('#489 正式模組入口：主頁切頁／狗卡、圖鑑、編輯紀錄及無全域依賴通過');
+  } catch (error) {
+    // 循環引用的模組在頂層讀到 app.js 尚未初始化的 const，頁面只會卡住等不到狗卡；把真正的錯誤一起印出
+    if (errors.length) throw new Error(`頁面錯誤：${errors.join('；')}（${error.message.split('\n')[0]}）`, { cause: error });
+    throw error;
   } finally {
     await context.close();
   }
