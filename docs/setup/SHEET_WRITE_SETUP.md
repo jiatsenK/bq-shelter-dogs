@@ -40,7 +40,7 @@
 1. 打開 GitHub 上的這個 repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**，加一個：
    - `SHEET_WRITE_URL`：第 3 步複製的網址
 2. 到 **Actions** → 「部署到 Cloudflare」→ **Run workflow** 手動跑一次，讓 Worker 拿到新的設定。
-3. 打開 <https://bq-shelter-dogs.jiatsen-k.workers.dev/api/>，看到 `"sheetWrite":"已設定"` 就完成了。
+3. 打開 <https://bq-shelter-dogs.<子網域>.workers.dev/api/>，看到 `"sheetWrite":"已設定"` 就完成了。
 
 ## 5. 志工這邊要做的
 
@@ -99,10 +99,10 @@
    -join ((48..57) + (97..122) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
    ```
 2. **交給 Worker**：GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**，名稱 `SHEET_NOTIFY_KEY`，貼上密碼。下次部署（推到 main 或手動跑「部署到 Cloudflare」）會一起帶上去。
-   確認：打開 `https://bq-shelter-dogs.jiatsen-k.workers.dev/api/sheet-changed`，看到「試算表通知只能用 POST」就是設好了；看到「還沒設定試算表通知」就是還沒帶上去。
+   確認：打開 `https://bq-shelter-dogs.<子網域>.workers.dev/api/sheet-changed`，看到「試算表通知只能用 POST」就是設好了；看到「還沒設定試算表通知」就是還沒帶上去。
 3. **更新小程式**：照「之後要改小程式」把最新的 `apps-script/sheet-write.gs` 整份貼上、存檔（這次多了 `notifyWorker`，不用重新部署網頁應用程式）。
 4. **指令碼屬性**：專案設定 → 指令碼屬性，新增兩個：
-   - `NOTIFY_URL`：`https://bq-shelter-dogs.jiatsen-k.workers.dev/api/sheet-changed`
+   - `NOTIFY_URL`：`https://bq-shelter-dogs.<子網域>.workers.dev/api/sheet-changed`
    - `NOTIFY_KEY`：第 1 步的密碼
 5. **觸發器**：左邊鬧鐘圖示「觸發條件」→ 右下 **新增觸發條件**：函式選 `notifyWorker`、活動來源「試算表」、活動類型「變更時」→ 儲存，照畫面授權（會多要一個「連線到外部服務」的權限）。
 6. **驗收**：在試算表隨便改一格再改回來，等 10 分鐘左右，GitHub repo 的 **Actions** → **同步試算表** 應該多一筆 `workflow_dispatch` 的綠勾。

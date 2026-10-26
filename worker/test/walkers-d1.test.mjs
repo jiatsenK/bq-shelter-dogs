@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { setup, post, request, day } from './walk-fixture.mjs';
 
-const SITE = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
+const SITE = 'https://bq-shelter-dogs.example.workers.dev';
 const getWalkers = env => worker.fetch(new Request(`${SITE}/api/walkers`, { headers: { Origin: SITE } }), env).then(async r => ({ status: r.status, body: await r.json() }));
 
 // #519：/walkers 從 D1（主清單、今日溜狗狀態、志工代號）讀，不連 Google

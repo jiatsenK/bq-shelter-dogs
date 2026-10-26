@@ -4,7 +4,7 @@
 - 問題（K）：「實際狀況有可能寫這麼多嗎？條件是同時多少人登記、多少隻狗？」
 - 比較基準：#460 CPU 驗收條件「200 隻狗同時待寫回，每輪 Cron 派最多 10 隻、20 輪派完，每輪再保險掃描比對 200 隻」，P99 110.86 ms（`docs/design/history/460-d1-walk-unified.md:64-77`）。
 - 範圍：只 GET 公開 API、讀 repo（分支 `claude/460-d1-unified`）。沒有寫入、部署或改程式，沒有操作瀏覽器。
-- API 查詢時間：2026-10-22 16:17（台灣時間），需帶 `Origin: https://bq-shelter-dogs.jiatsen-k.workers.dev`，否則回「不接受這個網站的要求」。
+- API 查詢時間：2026-10-22 16:17（台灣時間），需帶 `Origin: https://bq-shelter-dogs.<子網域>.workers.dev`，否則回「不接受這個網站的要求」。
 
 ## 結論
 

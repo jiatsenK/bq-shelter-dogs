@@ -16,4 +16,5 @@ export const readCronStatus = () => call('/api/manage/cron-status');
 export const readDog = dogId => call(`/api/manage/dogs/${encodeURIComponent(dogId)}`);
 export const unmergeDog = (dogId, body) => call(`/api/manage/dogs/${encodeURIComponent(dogId)}/unmerge`, 'POST', body);
 export const searchEdits = query => call(`/api/manage/edits${query ? `?${query}` : ''}`);
+export const readSiteLinks = () => call('/api/manage/links');
 export const readWebsiteUpdates = () => settle(fetch('./shared/website-updates.json', { cache: 'no-cache', redirect: 'error', signal: AbortSignal.timeout(15000) }));

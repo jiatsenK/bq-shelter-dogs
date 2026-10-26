@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { fakeD1 } from './fakes.mjs';
 import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
-const site='https://bq-shelter-dogs.jiatsen-k.workers.dev';
+const site='https://bq-shelter-dogs.example.workers.dev';
 const call=async(env,path,body)=>{const r=await worker.fetch(new Request(site+'/api'+path,{method:body?'POST':'GET',headers:{Origin:site,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}),env);return {status:r.status,...await r.json()};};
 
 test('#474 已銜接的身分重複讀取不全掃，志工十倍且名字格式不同時讀取量不變', async t => {

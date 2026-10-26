@@ -45,7 +45,7 @@ Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，
 
 ## 管理網站（ADR 0020）
 
-- 獨立的管理 Worker `bq-shelter-dogs-admin`（`wrangler.admin.jsonc`、`worker/src/admin/`、`admin/public/`），網址 `https://bq-shelter-dogs-admin.jiatsen-k.workers.dev`，整個 host 由 Cloudflare Access 擋住、程式再驗 Access 簽章。直接讀寫正式 D1 和 R2（設定、狗資料、照片、活動），沒有自己的排程、沒有密鑰；三個 vars 都在 `wrangler.admin.jsonc`，repo 就是線上設定。
+- 獨立的管理 Worker `bq-shelter-dogs-admin`（`wrangler.admin.jsonc`、`worker/src/admin/`、`admin/public/`），網址 `https://bq-shelter-dogs-admin.<子網域>.workers.dev`，整個 host 由 Cloudflare Access 擋住、程式再驗 Access 簽章。直接讀寫正式 D1 和 R2（設定、狗資料、照片、活動），沒有自己的排程、沒有密鑰；三個 vars 都在 `wrangler.admin.jsonc`，repo 就是線上設定。
 - **沒有自動部署**：main 合併不會更新管理站，要在 Actions 頁手動跑「部署管理網站」（`deploy-admin.yml`，部署紀錄記分支與 commit；說明在 `admin/README.md`）。改到兩站共用的程式時，兩個 Worker 都要部署。
 - 進度：第 1–5 階段都已上線（#564–#568）；#568 刪了電腦版「補資料」。
 
@@ -62,6 +62,8 @@ Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，
 ## 測試網站
 
 `bq-shelter-dogs-test`（`wrangler.test-site.jsonc`，#498）：程式跟正式版同一份，只接測試 D1、測試照片空間 `bq-shelter-photos-test`、測試試算表；不擋寫入，可以按溜了。main 有推送時「部署到測試網站」（`.github/workflows/deploy-test-site.yml`）先對測試庫套 migration 再部署；合併前要實測某個分支，到 Actions 手動指定分支跑，之後 main 再推送會換回 main。金鑰跟正式版不同，設在測試 Worker 上，workflow 不帶。
+
+測試網站長得跟正式版不一樣（K 2026-10-26）：設定帶 `SITE_ENV=test`，網頁也先經過 Worker（`run_worker_first` 列了每一頁），`worker/src/test-site.js` 在送出前給 `<html>` 加 `data-site="test"`、標題加「測試｜」、換網址列顏色、主畫面圖示（`public/icons/*-test.*`）與 `manifest-test.webmanifest`；各頁 CSS 依這個屬性把頁首換成測試紫並加「測試版」標籤。正式版不設 `SITE_ENV`、網頁不經過 Worker，不受影響。`public/` 新增網頁要加進 `run_worker_first`（`worker/test/test-site.test.mjs` 會抓）。
 - 流程細節與「先加後刪」見 `docs/agents/data-changes.md`。
 
 ## Worker 開關

@@ -18,6 +18,7 @@ import { taiwanYmd } from './sync-plan.js';
 import { applyDogListRows, scanDogList, DOG_LIST_ROWS_MAX } from './dog-list.js';
 import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks } from './compact.js';
+import { isTestSite, testSiteResponse } from './test-site.js';
 import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
 
 // 排程要跟 wrangler.jsonc 的 triggers.crons 一致（#500，ADR 0018）。排程數量算整個 Cloudflare 帳號，免費方案上限 5 個（稽核第 5 項），
@@ -828,7 +829,8 @@ export default {
           if (path.startsWith('/photos/')) return await r2.servePhoto(request, env, ctx);
         } catch (e) { /* R2 出問題就照舊給靜態檔 */ }
       }
-      return env.ASSETS.fetch(request);
+      // 測試網站的網頁也經過這裡（wrangler.test-site.jsonc），換成測試版的顏色、標題與圖示
+      return isTestSite(env) ? testSiteResponse(await env.ASSETS.fetch(request)) : env.ASSETS.fetch(request);
     }
 
     // 打開 Worker 網址（合在一起時是 /api/）就能看到服務有沒有在跑、金鑰設了沒（不會顯示內容）

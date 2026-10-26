@@ -26,6 +26,7 @@ module.exports = async (browser, base) => {
     if (url.origin !== base) return route.abort();
     const page = url.pathname.match(/^\/admin\/public\/(activities|checks|updates|releases)\.html$/);
     if (page) return route.fulfill({ body: fs.readFileSync(path.join(__dirname, `../admin/public/${page[1]}.html`)), headers: { 'Content-Type': 'text/html', 'Content-Security-Policy': ADMIN_CSP } });
+    if (url.pathname === '/api/manage/links') return route.fulfill({ json: { site: 'https://site.example.org/', testSite: 'https://test.example.org/', gas: 'https://script.google.com/macros/s/abc/exec', testGas: null } });
     if (url.pathname === '/api/manage/settings') return route.fulfill({ json: { revision: 2, values: { showActivities: false, showQuality: true, showUpdates: true, editActivity: true } } });
     if (url.pathname === '/api/manage/dogs') return route.fulfill({ status: dogsCode, json: dogsCode === 200 ? { dogs } : { error: '狗資料暫時讀不到' } });
     if (url.pathname === '/api/manage/data-checks') return route.fulfill({ status: checksCode, json: checksCode === 200 ? { sheetGaps: { state: 'ok', recordedAt: '2026-10-24T01:43:00.000Z', checkedAt: '2026-10-24T15:53:00.000Z', stale: true, total: 2, items: [
@@ -175,12 +176,21 @@ module.exports = async (browser, base) => {
     await page.waitForFunction(n => document.querySelectorAll('#releases li').length === n, releases.length);
     await page.getByText('更新紀錄顯示中', { exact: false }).waitFor();
 
+    // 網站連結：正式版／測試版各一列，有網址就新分頁開，沒設定寫出要設哪個 Secret
+    await page.goto(`${base}/admin/public/links.html`);
+    await page.locator('#links tr').nth(1).waitFor();
+    assert.deepEqual(await page.locator('#links th').allTextContents(), ['正式版', '測試版測試資料']);
+    assert.equal(await page.locator('#links a[href="https://test.example.org/"][target="_blank"][rel="noopener noreferrer"]').count(), 1);
+    assert.equal(await page.locator('#links a').count(), 3);
+    await page.getByText('GitHub Secret TEST_GAS_URL').waitFor();
+    assert.equal(await page.locator('#links-status').textContent(), '有 1 個網址還沒設定。');
+
     // 手機寬度不讓整頁橫向溢出；截圖留給人眼檢查
     const shots = path.join(__dirname, '../.impeccable/review');
     fs.mkdirSync(shots, { recursive: true });
     for (const width of [1440, 390]) {
       await page.setViewportSize({ width, height: width > 400 ? 1000 : 844 });
-      for (const name of ['activities', 'checks', 'updates', 'releases']) {
+      for (const name of ['activities', 'checks', 'updates', 'releases', 'links']) {
         await page.goto(`${base}/admin/public/${name}.html`);
         await page.waitForLoadState('networkidle');
         if (name === 'activities') await page.locator('#activities [data-edit]').first().click();

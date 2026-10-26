@@ -449,8 +449,8 @@ function runTests() {
     check('#30 檔案拆分：index.html 只有結構，樣式在 css/app.css、程式在 js/app.js', () => {
       const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
       if (doc.querySelector('style')) throw new Error('index.html 不應再有 <style>');
-      // 頁首內嵌程式只有舊網址轉址（#129，見 runOldUrlTests）和提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/
-      const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly') && !s.textContent.includes("location.hostname === 'jiatsenk.github.io'"));
+      // 頁首內嵌程式只有提早抓 dogs.json（見 runFastOpenTests），其他程式都在 js/（舊網址轉址 #129 在 #493 拿掉：GitHub Pages 已關閉）
+      const scripts = [...doc.querySelectorAll('script')].filter(s => !s.textContent.includes('window.__dogsEarly'));
       eq(scripts.map(s => [s.getAttribute('type'), s.getAttribute('src')]), [['module', 'js/main.js']], 'ES module 入口：');
       if (scripts.some(s => s.textContent.trim())) throw new Error('index.html 不應有內嵌程式');
       if (!doc.querySelector('link[rel="stylesheet"][href="css/app.css"]')) throw new Error('要載入 css/app.css');

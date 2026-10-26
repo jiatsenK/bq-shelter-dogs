@@ -8,7 +8,7 @@ import { fakeD1 } from './fakes.mjs';
 import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 import { importCompactDogs } from './compact-fixtures.mjs';
 
-const SITE = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
+const SITE = 'https://bq-shelter-dogs.example.workers.dev';
 const ME = '小明';
 
 async function makeEnv(extra = {}) {

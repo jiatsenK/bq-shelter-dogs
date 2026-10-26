@@ -308,3 +308,11 @@ html.bq-modal-open { overflow: hidden; }
   .bq-card.fresh .bq-face, .bq-modal-in, .tearing .bq-pack-strip { animation: none; }
   .tearing .bq-pack-strip { opacity: 0; }
 }
+
+/* 測試網站（worker/src/test-site.js 加 data-site="test"）：圖鑑保留自己的球場配色，頁首右上角一顆「測試版」，跟溜狗表同一個樣子。
+   放角落不跟在標題後面：手機標題不換行，跟在後面會被擠出畫面 */
+html[data-site="test"] .bq-mast::after {
+  content: "測試版"; position: absolute; top: 8px; right: 48px; padding: 2px 8px; border-radius: 3px;
+  background: #F2B21B; color: #2A1230; font: 800 13px/1.4 "Noto Sans TC", sans-serif; white-space: nowrap;
+}
+@media (max-width: 900px) { html[data-site="test"] .bq-mast::after { right: 18px; top: 24px; } }

@@ -115,3 +115,7 @@ Operate 模式。K 已選定 Tabler 免費後台、左側導覽、原生 ES modu
 - **選取列對比**：被選列的「編輯」實心藍白字，hover／focus 一樣，並關掉 Tabler 的 0.3 秒顏色過場（剛選取時停在淺色，評審量到 2.1:1）。淺藍底上的次要小字改用 `--admin-muted`（約 5.5:1）。測試逐一量被選列文字的實際底色對比，都要 ≥ 4.5。
 
 驗證：`tests/admin-dog-edit.cjs` 用假資料跑 1440／1100／375px 並截圖到 `.impeccable/review/624-drawer-*.png`；`impeccable detect` 只剩 vendor Tabler 的 `animated-dots`。
+
+## 網站連結（K 2026-10-26）
+
+側欄「志工網站」組最後一項「網站連結」（`links.html`）：一張卡片、一張表，列是正式版／測試版（測試版旁淡紫「測試資料」標籤），欄是志工網站、Apps Script（GAS）。有網址就顯示主機名稱連結（新分頁開）、下面小字完整網址；沒設寫灰字「還沒設定」與要設哪個 GitHub Secret。900px 以下表格改直排，欄名寫在網址上面，不靠橫捲。網址不寫在 repo（公開），部署時由 `deploy-admin.yml` 帶入：網站網址用 `WORKERS_SUBDOMAIN` 組，GAS 是 Secret `GAS_URL`、`TEST_GAS_URL`；API `GET /api/manage/links` 只回 https，GAS 只准 Google 網址。
