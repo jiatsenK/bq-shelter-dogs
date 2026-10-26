@@ -5,6 +5,8 @@
 # - 正式 D1 有還沒套的 migration 就停（跟「部署到 Cloudflare」同一行檢查），先去按「套用 D1 migration」
 # - 不帶金鑰：管理網站沒有密鑰。ACCESS_TEAM_DOMAIN、ACCESS_AUD 在 wrangler.admin.jsonc；
 #   ADMIN_ORIGIN 含帳號子網域，部署時用 --var 從 GitHub Secret WORKERS_SUBDOMAIN 組出來（#493，日誌裡子網域顯示成 ***）
+# - 網站連結頁的四個網址也用 --var 帶上（repo 公開，不寫在檔案裡）：正式／測試網站由 WORKERS_SUBDOMAIN 組出；
+#   GAS 連結是 GitHub Secret GAS_URL、TEST_GAS_URL，沒設就不帶，頁面寫「還沒設定」
 # - 部署完沒登入打一次首頁，要被轉到 Access 登入頁；沒被擋就紅叉
 # - 改到兩站共用的程式（worker/src/ 共用模組、public/js/ 共用檔）時，志工網站由 main 推送自動部署，管理網站要另外按這裡
 name: 部署管理網站
@@ -30,6 +32,10 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       WORKERS_SUBDOMAIN: ${{ secrets.WORKERS_SUBDOMAIN }}
       ADMIN_ORIGIN: https://bq-shelter-dogs-admin.${{ secrets.WORKERS_SUBDOMAIN }}.workers.dev
+      SITE_URL: https://bq-shelter-dogs.${{ secrets.WORKERS_SUBDOMAIN }}.workers.dev
+      TEST_SITE_URL: https://bq-shelter-dogs-test.${{ secrets.WORKERS_SUBDOMAIN }}.workers.dev
+      GAS_URL: ${{ secrets.GAS_URL }}
+      TEST_GAS_URL: ${{ secrets.TEST_GAS_URL }}
     steps:
       - name: 沒設定 Cloudflare 就停
         if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == '' || env.WORKERS_SUBDOMAIN == ''
@@ -52,7 +58,10 @@ jobs:
         run: |
           sha=$(git rev-parse --short HEAD)
           echo "部署管理網站：${REF} ${sha}"
-          npx --yes wrangler@4 deploy --config wrangler.admin.jsonc --message "${REF} ${sha}" --var "ADMIN_ORIGIN:${ADMIN_ORIGIN}"
+          links=(--var "SITE_URL:${SITE_URL}" --var "TEST_SITE_URL:${TEST_SITE_URL}")
+          if [ -n "$GAS_URL" ]; then links+=(--var "GAS_URL:${GAS_URL}"); fi
+          if [ -n "$TEST_GAS_URL" ]; then links+=(--var "TEST_GAS_URL:${TEST_GAS_URL}"); fi
+          npx --yes wrangler@4 deploy --config wrangler.admin.jsonc --message "${REF} ${sha}" --var "ADMIN_ORIGIN:${ADMIN_ORIGIN}" "${links[@]}"
 
       - name: 確認沒登入會被 Access 擋
         run: |

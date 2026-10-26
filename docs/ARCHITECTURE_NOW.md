@@ -62,6 +62,8 @@ Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，
 ## 測試網站
 
 `bq-shelter-dogs-test`（`wrangler.test-site.jsonc`，#498）：程式跟正式版同一份，只接測試 D1、測試照片空間 `bq-shelter-photos-test`、測試試算表；不擋寫入，可以按溜了。main 有推送時「部署到測試網站」（`.github/workflows/deploy-test-site.yml`）先對測試庫套 migration 再部署；合併前要實測某個分支，到 Actions 手動指定分支跑，之後 main 再推送會換回 main。金鑰跟正式版不同，設在測試 Worker 上，workflow 不帶。
+
+測試網站長得跟正式版不一樣（K 2026-10-26）：設定帶 `SITE_ENV=test`，網頁也先經過 Worker（`run_worker_first` 列了每一頁），`worker/src/test-site.js` 在送出前給 `<html>` 加 `data-site="test"`、標題加「測試｜」、換網址列顏色、主畫面圖示（`public/icons/*-test.*`）與 `manifest-test.webmanifest`；各頁 CSS 依這個屬性把頁首換成測試紫並加「測試版」標籤。正式版不設 `SITE_ENV`、網頁不經過 Worker，不受影響。`public/` 新增網頁要加進 `run_worker_first`（`worker/test/test-site.test.mjs` 會抓）。
 - 流程細節與「先加後刪」見 `docs/agents/data-changes.md`。
 
 ## Worker 開關

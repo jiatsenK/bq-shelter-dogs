@@ -3,6 +3,7 @@
 // - 測試 D1 跟 PR 預覽共用；seed-preview-db 會整份覆蓋它。
 // - 部署：main 有推送時由 .github/workflows/deploy-test-site.yml 自動部署（先對測試 D1 套 migration），跟正式版同步；
 //   合併前實測某個分支：Actions「部署到測試網站」→ Run workflow → 填分支。手動部署仍可用 npx wrangler deploy -c wrangler.test-site.jsonc。
+// - 網頁也經過 Worker（SITE_ENV=test、run_worker_first 列每一頁）：換成紫色頁首、「測試｜」標題與測試版主畫面圖示（worker/src/test-site.js），正式版不受影響。
 // - 金鑰（SHEET_WRITE_URL、SHEET_WRITE_KEY、WALKER_KEY、ADMIN_KEY）用 wrangler secret put -c 這份設定另外設，跟正式版不同，不寫在這裡；workflow 不帶金鑰，部署會保留 Worker 上原本的。
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -14,7 +15,9 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/api", "/photos/*"]
+    // 網頁也先經過 Worker（SITE_ENV=test）：換成紫色頁首、「測試｜」標題、測試版主畫面圖示（worker/src/test-site.js）。
+    // public/ 新增網頁要加在這裡（tests 會檢查）；.html 會被轉到沒有副檔名的網址，兩種都列
+    "run_worker_first": ["/api/*", "/api", "/photos/*", "/", "/index.html", "/groups", "/groups.html", "/cards", "/cards.html", "/edits", "/edits.html"]
   },
   // 從 bq-shelter-photos 複製的測試照片空間；在測試網站換照片、刪照片都不會動到正式照片
   "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "bq-shelter-photos-test" }],
@@ -24,6 +27,7 @@
     "database_id": "9e23a65c-c9dd-4f83-ad9c-2e01626910f0"
   }],
   "vars": {
+    "SITE_ENV": "test",
     "SYNC_DAILY_BUDGET": "40000",
     "D1_WALK_NOTIFY": "1",
     "WALK_RETRY_ENABLED": "true"
