@@ -1,13 +1,13 @@
 import worker from '../src/index.js';
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 import { resolveIdentity } from '../src/identity.js';
 
 const SITE = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
 export const day = () => new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
 export async function setup() {
   const DB = fakeD1();
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   await DB.batch([
     DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('dog','測試狗')"),
     DB.prepare("INSERT INTO v3_dog_numbers VALUES('9001','dog')"),

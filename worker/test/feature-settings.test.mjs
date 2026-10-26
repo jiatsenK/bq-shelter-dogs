@@ -1,10 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 import { readSettings, saveSettings, requireVolunteerEdit, settingForWrite } from '../src/feature-settings.js';
 const manager = { subject: 'verified-subject', email: 'private@example.org' };
-async function db(t) { const db = fakeD1(); t.after(() => db.close()); await migrateCompactDatabase(db); return db; }
+async function db(t) { const db = fakeD1(); t.after(() => db.close()); await createCompactDatabase(db); return db; }
 test('十項 boolean 預設全開；無差異不寫，衝突不覆蓋，前後紀錄一致', async t => {
  const DB = await db(t), initial = await readSettings(DB);
  assert.equal(Object.keys(initial.values).length, 10);

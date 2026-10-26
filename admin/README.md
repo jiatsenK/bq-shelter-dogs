@@ -15,9 +15,10 @@
 | `scripts/build-admin-assets.mjs` | 從單一來源產出 `admin/public/shared/`，Wrangler build 與網頁測試會執行 |
 | `admin/public/js/api.js` | 同來源管理 API 呼叫；登入跳轉及非 JSON 回應視為錯誤 |
 | `admin/public/js/dog-table.js` | 格式驗證、搜尋、篩選、排序、有界分頁及維護標示 |
-| `admin/public/js/main.js` | DOM、讀取／重試與事件；不存手機個人資料 |
+| `admin/public/js/main.js` | DOM、讀取／重試與事件；篩選條件放網址（`?care=`、`?dog=` 開抽屜）；不存手機個人資料 |
+| `admin/public/js/dog-editor.js`、`dog-edit-model.js` | #624 右側編輯抽屜（DOM、依序儲存）與純規則（欄位順序、哪些要預覽、待補、介紹差異） |
 | `worker/src/admin/activities.js`、`checks.js`、`edits.js` | #567 活動寫入（共用 activities.js＋同交易紀錄）、#518 掃描清單、資料編輯紀錄搜尋 |
-| `admin/public/activities.html`、`checks.html`、`updates.html` | #567 三頁；純規則在 `activity-model.js`、`data-checks.js`、`edit-log.js` |
+| `admin/public/activities.html`、`checks.html`、`updates.html`、`releases.html` | #567 活動紀錄、待補清單、修改紀錄；#624 網站更新拆到 `releases.html`。純規則在 `activity-model.js`、`data-checks.js`、`edit-log.js` |
 
 先跑 `node scripts/build-admin-assets.mjs` 可產出共用資產；不要手動改產出檔。Tabler 1.4.0 CSS 固定存於 `public/vendor/`，不載入其 JavaScript 或外部字型。上游：https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css；MIT 授權與檔頭一併保留。
 
@@ -40,8 +41,9 @@
 
 ### 怎麼部署
 
-- Actions 頁選「部署管理網站」（`.github/workflows/deploy-admin.yml`）→「Run workflow」，可填分支（留空＝main）。main 推送**不會**自動部署（K 2026-10-26），因為管理網站直接寫正式資料。
-- workflow 先確認正式庫 migration 都套過，部署時把「分支 commit」寫進 Cloudflare 部署紀錄的 Message，部署後確認沒登入會被轉到 Access 登入頁。
+- Actions 頁選「部署管理網站」（`.github/workflows/deploy-admin.yml`）→「Run workflow」，分支選 main。main 推送**不會**自動部署（K 2026-10-26），因為管理網站直接寫正式資料。
+- 只部署 main（#622）：不能填分支，選別的分支整個略過。合併前要試某張 PR，用測試網站或 PR 預覽。
+- workflow 先確認正式庫 migration 都套過，部署時把「main commit」寫進 Cloudflare 部署紀錄的 Message，部署後確認沒登入會被轉到 Access 登入頁。
 - 改到兩站共用的程式（`worker/src/` 共用模組、`public/js/api-response.js`、`dates.js`）時，志工網站由 main 推送自動部署，管理網站要另外按一次。
 - 本機部署（不建議）也要帶紀錄：`npx.cmd wrangler deploy --config wrangler.admin.jsonc --message "<分支> <commit>"`。
 - 2026-10-25～26 的前 5 次部署是本機手動、沒有 Message，看不出是哪個 commit。

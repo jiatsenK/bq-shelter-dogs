@@ -187,7 +187,7 @@ CREATE TABLE IF NOT EXISTS v3_stays (
 -- 離所紀錄（#259；#560 起用狗 ID 記，取代以編號為主鍵的 v3_departures、v3_departure_items 與 v3_departed_cards）：
 -- 同步發現狗從主清單消失就記一筆，原因只讀「已出所」分頁判讀。一隻狗一次離所一列。
 -- last_* 是離開主清單前最後一次的樣子（離所名冊的詳細資訊用）；last_number 是 NULL 表示沒有這份資料。
--- number 是離所時的編號；'' 是沒有編號、只有名字的已出所狗卡（scripts/departed-card.mjs 建，沒有 last_*）。
+-- number 是離所時的編號；'' 是沒有編號、只有名字的已出所狗卡（#271 由 K 手動建，沒有 last_*；建卡腳本 #596 退役）。
 -- 判讀旗標、最後的舊編號、最後的常遛狗群是 JSON 陣列（flags_json、former_json、groups_json），整組讀寫。
 CREATE TABLE IF NOT EXISTS v3_dog_departures (
   dog_id TEXT NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,

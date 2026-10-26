@@ -44,11 +44,6 @@ function groupDateLabel(dog, now = new Date()) {
   const day = Math.round((Date.parse(taiwan) - Date.parse(ymd)) / 86400000);
   return day === 0 ? '今天溜過' : day === 1 ? '昨天溜過' : day === 2 ? '前天溜過' : day > 2 ? `${ymd.replaceAll('-', '/')} 溜過` : '日期無法確認';
 }
-function groupSummary(dogs) {
-  if (!dogs.length) return '這一群還沒有狗';
-  const dates = dogs.map(d => groupDateLabel(d));
-  return dates.every(d => d === dates[0]) && /溜過$/.test(dates[0]) ? `${dogs.length} 隻${dates[0].replace('溜過', '都溜過')}` : dogs.map((d, i) => `${d.name}${dates[i]}`).join('；');
-}
 function receiveGroupData(data) {
   const groups = data.groupColumns;
   if (!Array.isArray(groups) || groups.some(g => !g || !Number.isInteger(g.column) || typeof g.label !== 'string' || !Array.isArray(g.names) || g.names.some(n => typeof n !== 'string')) || new Set(groups.map(g => g.column)).size !== groups.length) {
@@ -203,7 +198,7 @@ async function undoGroupWalk() {
 }
 const groupMain = document.getElementById('main');
 
-export { groupExcluded, groupRegistrations, namedGroups, currentGroup, groupDogs, groupBlocked, groupDateLabel, groupSummary, receiveGroupData, loadGroupStage, refreshGroupStage, groupTile, groupStageHtml, resetGroupSelection, changeGroup, registerGroupWalk, undoGroupWalk, groupMain };
+export { groupExcluded, groupRegistrations, namedGroups, currentGroup, groupDogs, groupBlocked, groupDateLabel, receiveGroupData, loadGroupStage, refreshGroupStage, groupTile, groupStageHtml, resetGroupSelection, changeGroup, registerGroupWalk, undoGroupWalk, groupMain };
 export { groupStageState } from './page-state.js';
 
 export function bindGroups() {

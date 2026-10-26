@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fakeD1 } from '../worker/test/fakes.mjs';
-import { splitStatements } from './migrate-compact-db.mjs';
+import { splitStatements } from './compact-schema.mjs';
 import { MIGRATIONS_DIR, migrationFiles, changesData } from './d1-migrations.mjs';
 import { readDepartures, readNameOnlyCards } from '../worker/src/compact.js';
 
