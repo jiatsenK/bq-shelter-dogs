@@ -32,6 +32,11 @@ module.exports = async (browser, base) => {
       { sheet: 'main', key: 'main:2026010202', number: '2026010202', name: '小花', dogId: 'e'.repeat(32), cage: 'C3' },
       { sheet: 'departed', key: 'departed:名:無名', number: '', name: '無名', dogId: null, cage: '' },
     ] } } : { error: '管理資料暫時無法讀取，請稍後重試' } });
+    if (url.pathname === '/api/manage/cron-status') return route.fulfill({ status: checksCode, json: checksCode === 200 ? { jobs: [
+      { job: 'retry', state: 'ok', okAt: '2026-10-26T05:45:00.000Z', failAt: null, error: '', stale: false },
+      { job: 'scan', state: 'ok', okAt: '2026-10-25T15:53:00.000Z', failAt: '2026-10-26T01:53:00.000Z', error: '主清單直接讀回失敗', stale: false },
+      { job: 'trash', state: 'never', okAt: null, failAt: null, error: '', stale: true },
+    ] } : { error: '管理資料暫時無法讀取，請稍後重試' } });
     if (url.pathname === '/api/manage/edits') {
       editQueries.push(url.search);
       const size = Number(url.searchParams.get('size') || 25);
@@ -115,10 +120,16 @@ module.exports = async (browser, base) => {
     await page.getByText('主清單上共 2 隻', { exact: false }).waitFor();
     assert.match(await page.locator('#complete-list').textContent(), /沒有編號1 隻/);
     assert.match(await page.locator('#complete-list').textContent(), /沒有照片紀錄2 隻/);
+    await page.getByText('1 件排程需要注意', { exact: false }).waitFor();
+    assert.equal(await page.locator('#cron-jobs tr').count(), 3);
+    assert.match(await page.locator('#cron-jobs').textContent(), /2026\/10\/26 13:45/);
+    assert.match(await page.locator('#cron-jobs').textContent(), /2026\/10\/26 09:53 失敗：主清單直接讀回失敗/);
     checksCode = 503; dogsCode = 503;
     await page.locator('#reload').click();
     await page.getByText('這不代表沒有差異', { exact: false }).waitFor();
     await page.getByText('不代表沒有缺漏', { exact: false }).waitFor();
+    await page.getByText('這不代表排程有在跑', { exact: false }).waitFor();
+    assert.equal(await page.locator('#cron-region').isHidden(), true);
     assert.equal(await page.locator('#gap-region').isHidden(), true);
     checksCode = 200; dogsCode = 200;
 

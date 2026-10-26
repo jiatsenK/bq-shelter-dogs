@@ -1,5 +1,6 @@
 import { BQApi } from './api.js';
-import { allWalkerNames, canonicalWalker, esc, fetchWalks, icon, isOffline, loadMyCodes, loadWalkerName, mainEl, render, saveMyCodes, saveWalkerName, splitWalkers, walkerCodesFor } from './app.js';
+import { allWalkerNames, canonicalWalker, fetchWalks, isOffline, loadMyCodes, loadWalkerName, mainEl, render, saveMyCodes, saveWalkerName, splitWalkers, walkerCodesFor } from './app.js';
+import { esc, icon } from './ui-kit.js';
 import { appState } from './page-state.js';
 import { BQStore } from './store.js';
 import { SITE } from './site-config.js';

@@ -10,8 +10,9 @@ import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivi
 import { acceptWalk, dispatchWalk, readAcceptedWalks, writebackTarget, confirmWalk, reconcileWalk } from './walk-accept.js';
 import { reconcileEditedRows } from './walk-reconcile.js';
 import { retryWalks, scanTick } from './walk-retry.js';
+import { recordRun } from './cron-status.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
-// 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
+// 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；這裡的 /api/admin 只給 GitHub Action，用 ADMIN_KEY；管理者用的管理網站是另一個 Worker（worker/src/admin/、wrangler.admin.jsonc，ADR 0020）。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
 import { taiwanYmd } from './sync-plan.js';
 import { applyDogListRows, scanDogList, DOG_LIST_ROWS_MAX } from './dog-list.js';
@@ -19,12 +20,12 @@ import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey }
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks } from './compact.js';
 import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
 
-// 排程要跟 wrangler.jsonc 的 triggers.crons 一致（#500，ADR 0018）：寫回重試每 10 分鐘（沒工作就只查一次 D1），
-// 保險掃描台灣 09:43、13:53、23:53（UTC 01:43、05:53、15:53）
+// 排程要跟 wrangler.jsonc 的 triggers.crons 一致（#500，ADR 0018）。排程數量算整個 Cloudflare 帳號，免費方案上限 5 個（稽核第 5 項），
+// 正式版只用兩個：寫回重試每 10 分鐘（沒工作就只查一次 D1，再記一列跑完時間）；保險掃描台灣 09:53、13:53、23:53（UTC 01:53、05:53、15:53）。
+// 照片垃圾桶（#501，ADR 0018 第 7 點）不另佔排程：每月 1 日 09:53 那次保險掃描順便清。測試網站只有寫回重試（wrangler.test-site.jsonc）
 const RETRY_CRON = '5-59/10 * * * *';
-const SCAN_CRONS = ['43 1 * * *', '53 5,15 * * *'];
-// 照片垃圾桶每月 1 日台灣 10:17（#501，ADR 0018 第 7 點）；每 10 分鐘叫 GitHub 同步試算表的排程已移除，狗清單改由 GAS 編輯觸發送列（worker/src/dog-list.js）
-const TRASH_CRON = '17 2 1 * *';
+const SCAN_CRON = '53 1,5,15 * * *';
+const trashDue = now => { const d = new Date(now); return d.getUTCDate() === 1 && d.getUTCHours() === 1; };
 const DOG_LIST_SCAN_MAX_BYTES = 512 * 1024;
 const EDIT_ROWS_MAX = 50;
 
@@ -49,7 +50,7 @@ const NOTE_WRITE_LIMITS = [
 // 管理金鑰打錯：1 小時最多 10 次，超過就先不給試（擋住一直猜）
 const ADMIN_FAIL_LIMITS = [{ windowMs: 60 * 60 * 1000, max: 10 }];
 // 休養中：原因最多幾個字、最多設多久（天）
-// 入所介紹（K 2026-10-10 電腦版補資料）：存 D1 的 v3_intros（#250），不寫試算表
+// 入所介紹（K 2026-10-10）：存 D1 的 v3_intros（#250），不寫試算表
 const INTRO_MAX_CHARS = 1000;
 const REST_REASON_MAX = 40;
 const REST_MAX_DAYS = 180;
@@ -346,7 +347,7 @@ async function uploadR2(request, env, origin, ctx) {
 }
 
 // ── 管理用 API（/api/admin/...）：搬遷、縮圖、Trash ──
-// 只給 GitHub Action 用（ADR 0004，不做管理後台）：不看網站來源，改看標頭 X-Admin-Key（GitHub Secret ADMIN_KEY）
+// 只給 GitHub Action 用：不看網站來源，改看標頭 X-Admin-Key（GitHub Secret ADMIN_KEY）。人用的管理網站是另一個 Worker（admin/、ADR 0020），不用這把金鑰
 async function checkAdmin(request, cfg, origin) {
   if (!cfg.adminKey) return fail(500, '還沒設定 ADMIN_KEY', origin);
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
@@ -834,13 +835,19 @@ export default {
   testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, maintenance },
 
   // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 wrangler.jsonc 的 triggers）
-  // 每個排程只跑一件（#500、#501）：RETRY_CRON 寫回重試、SCAN_CRONS 保險掃描、TRASH_CRON 照片垃圾桶；沒帶 cron（測試）跑溜狗兩件
+  // RETRY_CRON 寫回重試；SCAN_CRON 保險掃描，每月 1 日第一次順便清照片垃圾桶；沒帶 cron（測試）跑溜狗兩件。
+  // 每件跑完或出錯都記時間給管理網站看（worker/src/cron-status.js）
   async scheduled(event, env, ctx) {
     const now = event && event.scheduledTime ? event.scheduledTime : Date.now();
     const cron = event && event.cron;
-    if (cron === TRASH_CRON) { if (r2.r2On(env)) ctx.waitUntil(maintenance(env, now)); return; }
-    if (!cron || SCAN_CRONS.includes(cron)) ctx.waitUntil(cron ? scanTick(env, now) : scanTick(env, now).then(() => retryWalks(env, now)));
-    else if (cron === RETRY_CRON) ctx.waitUntil(retryWalks(env, now));
+    const retry = () => recordRun(env, 'retry', now, () => retryWalks(env, now));
+    const scan = () => recordRun(env, 'scan', now, () => scanTick(env, now));
+    if (!cron) ctx.waitUntil(scan().then(retry));
+    else if (cron === RETRY_CRON) ctx.waitUntil(retry());
+    else if (cron === SCAN_CRON) {
+      ctx.waitUntil(scan());
+      if (trashDue(now) && r2.r2On(env)) ctx.waitUntil(recordRun(env, 'trash', now, () => maintenance(env, now)));
+    }
   },
 
   async fetch(request, env, ctx) {

@@ -8,6 +8,18 @@ function deployWriteProblem(deploy, preview) {
   return '';
 }
 
+// 管理網站部署：只能手動、只准部署 wrangler.admin.jsonc 且帶 --message，不套 migration、不帶金鑰。回傳問題或 ''
+function adminDeployProblem(wf) {
+  if (!/^on:\r?\n  workflow_dispatch:/m.test(wf) || /^\s+(push|pull_request|schedule|workflow_call|workflow_run):/m.test(wf)) return '只能手動觸發';
+  const allowedDeploy = /wrangler@4 deploy --config wrangler\.admin\.jsonc --message /g;
+  if (!wf.match(allowedDeploy)) return '要用 wrangler.admin.jsonc 部署並帶 --message';
+  const rest = wf.replace(allowedDeploy, '');
+  if (/migrations apply|d1 execute|continue-on-error|if:\s*always\(/.test(rest)) return '不能改結構或忽略錯誤';
+  if (/wrangler@4 (deploy|versions)/.test(rest)) return '不能部署或上傳其他設定';
+  if (/--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b)/.test(rest)) return '不能帶金鑰';
+  return '';
+}
+
 // 測試網站部署：只准部署 wrangler.test-site.jsonc、只准對測試庫套 migration，不帶金鑰（金鑰另外設在測試 Worker 上）。回傳問題或 ''
 function testSiteDeployProblem(wf) {
   const allowedApply = /d1 migrations apply bq-shelter-dogs-test --remote --config wrangler\.preview-db\.jsonc[ \t]*\r?$/gm;
@@ -82,6 +94,28 @@ async function runR2Tests() {
       apply + deploy.replace('--message', '--secrets-file s.json --message'),
     ];
     bad.forEach((wf, i) => { if (!testSiteDeployProblem(wf)) throw new Error(`反例 ${i + 1} 沒被擋`); });
+  });
+  const adminDeploy = await get('../.github/workflows/deploy-admin.yml');
+  await check('管理網站部署 Action：只能手動、只部署 wrangler.admin.jsonc 並記 commit、不套 migration、不帶金鑰、部署後確認 Access 擋住', () => {
+    if (!adminDeploy) throw new Error('讀不到 deploy-admin.yml');
+    const problem = adminDeployProblem(adminDeploy);
+    if (problem) throw new Error(problem);
+    if (!/d1-migrations\.mjs check --target production/.test(adminDeploy)) throw new Error('部署前要確認正式庫 migration 都套過');
+    if (!/cloudflareaccess\.com\/cdn-cgi\/access\/login/.test(adminDeploy)) throw new Error('部署後要確認沒登入會被轉到 Access 登入頁');
+  });
+  await check('管理網站部署擋關檢查的反例：自動觸發、部署志工設定、沒記 commit、套 migration、帶金鑰都會被擋', () => {
+    const head = 'on:\n  workflow_dispatch:\n';
+    const deploy = 'npx --yes wrangler@4 deploy --config wrangler.admin.jsonc --message "x"\n';
+    if (adminDeployProblem(head + deploy)) throw new Error('管理網站部署應該放行');
+    const bad = [
+      'on:\n  workflow_dispatch:\n  push:\n    branches: [main]\n' + deploy,
+      head + deploy.replace('wrangler.admin.jsonc', 'wrangler.jsonc'),
+      head + deploy.replace(' --message "x"', ''),
+      head + deploy + 'npx --yes wrangler@4 deploy --config wrangler.jsonc\n',
+      head + deploy + 'npx --yes wrangler@4 d1 migrations apply bq-shelter-dogs --remote\n',
+      head + deploy + 'ADMIN_KEY: ${{ secrets.ADMIN_KEY }}\n',
+    ];
+    bad.forEach((wf, i) => { if (!adminDeployProblem(wf)) throw new Error(`反例 ${i + 1} 沒被擋`); });
   });
   const thumbs = await get('../.github/workflows/r2-thumbs.yml');
   await check('#130 縮圖（R2）Action：只能手動或由 Worker 叫、用管理金鑰、不提交 repo', () => {

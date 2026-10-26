@@ -32,11 +32,12 @@
     // #498：保險掃描（每天三次）與網站登記寫回試算表的重試；預覽版另有 PREVIEW 擋下。
     "WALK_RETRY_ENABLED": "true"
   },
-  // 狗清單（#501，ADR 0018）：有人編輯才由 GAS 送列，不再每 10 分鐘叫 GitHub 同步；照片垃圾桶每月 1 日台灣 10:17 清一次（UTC 02:17）。
-  // 溜狗（#500，ADR 0018）：錯開 5 分鐘只跑寫回重試（沒工作就結束、不讀表）；台灣 09:43、13:53、23:53 保險掃描只比指紋。
-  // 改這裡要一起改 worker/src/index.js 的 RETRY_CRON、SCAN_CRONS、TRASH_CRON
+  // 排程數量算整個 Cloudflare 帳號，免費方案上限 5 個（稽核第 5 項）：正式版 2 個＋測試網站 1 個，留 2 個給其他專案。
+  // 狗清單（#501，ADR 0018）：有人編輯才由 GAS 送列，不再每 10 分鐘叫 GitHub 同步。
+  // 溜狗（#500，ADR 0018）：錯開 5 分鐘只跑寫回重試（沒工作就結束、不讀表）；台灣 09:53、13:53、23:53 保險掃描只比指紋，
+  // 每月 1 日 09:53 那次順便清照片垃圾桶。改這裡要一起改 worker/src/index.js 的 RETRY_CRON、SCAN_CRON
   "triggers": {
-    "crons": ["5-59/10 * * * *", "43 1 * * *", "53 5,15 * * *", "17 2 1 * *"]
+    "crons": ["5-59/10 * * * *", "53 1,5,15 * * *"]
   },
   // 稽核第 3 項（2026-10-26）：PR 預覽改上傳到獨立 Worker bq-shelter-dogs-preview（.github/workflows/preview-cloudflare.yml）。
   // 正式 Worker 的版本會帶著正式密鑰，所以關掉正式 Worker 的預覽網址，舊的 pr-<編號>-bq-shelter-dogs 網址一起失效

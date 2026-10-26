@@ -1,0 +1,21 @@
+name: 臨時：複製 WALKER_KEY 到預覽 Worker
+on:
+  push:
+    branches: [tmp/copy-walker-key-preview]
+permissions:
+  contents: read
+jobs:
+  copy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WALKER_KEY: ${{ secrets.WALKER_KEY }}
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: |
+          if [ -z "$WALKER_KEY" ]; then echo "WALKER_KEY 是空的"; exit 1; fi
+          printf '%s' "$WALKER_KEY" | npx --yes wrangler@4 secret put WALKER_KEY --name bq-shelter-dogs-preview

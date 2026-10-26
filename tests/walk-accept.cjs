@@ -15,7 +15,6 @@ module.exports = async (browser, base) => {
   await context.route('**/*', async route => {
     const req = route.request(), url = new URL(req.url());
     if (url.origin !== base) return route.abort();
-    if (url.pathname.endsWith('/js/site-config.js')) return route.fulfill({ contentType:'application/javascript', body:fs.readFileSync(require.resolve('../public/js/site-config.js'),'utf8').replace('d1WalkAccept: false','d1WalkAccept: true') });
     if (!url.pathname.includes('/api/')) return route.continue();
     const endpoint = url.pathname.split('/api/')[1];
     if (endpoint === 'walk') {

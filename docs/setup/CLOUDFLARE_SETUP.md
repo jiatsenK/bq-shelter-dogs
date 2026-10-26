@@ -199,7 +199,7 @@ https://pr-<PR 編號>-bq-shelter-dogs-preview.jiatsen-k.workers.dev
 ### 要注意的地方
 
 - 照片改由 Worker 從 R2 讀，會算進 Cloudflare Workers 免費方案的**每天 10 萬次**。照片在手機上快取 30 天，正常用不會超過；Cloudflare 的 Worker 頁面 **Metrics** 看得到每天用量。
-- 管理用的功能（縮圖、Trash 清單和復原）要 GitHub Secret `ADMIN_KEY`；不做管理後台（ADR 0004，#143 廢除）。
+- 機器用的管理功能（縮圖、Trash 清單和復原）要 GitHub Secret `ADMIN_KEY`。人用的管理網站是另一個 Worker，以 Cloudflare Access 驗證、不用這把金鑰（ADR 0020，見 `admin/README.md`）。
 
 ## token 到期時
 
@@ -216,6 +216,7 @@ https://pr-<PR 編號>-bq-shelter-dogs-preview.jiatsen-k.workers.dev
 - 照片放 R2（#130）：`wrangler.jsonc` 的 `r2_buckets`（binding `PHOTOS`，bucket `bq-shelter-photos`），程式在 `worker/src/r2.js`。
   `/photos/*`、`/data/dogs.json`（蓋上 R2 照片的版本號）先經過 Worker（相簿 2026-10-09 拿掉，`photos/gallery/` 一律 404）；R2 沒有的照片退回靜態檔，刪掉的照片放 0 位元組的刪除標記（`customMetadata.deleted`）擋住退回。
   換掉、刪掉前複製到 `trash/{時間-亂數}/photo.jpg`（customMetadata 記 path、dogId、kind、file、addedAt、deletedAt）＋`thumb.jpg`，Cron 清掉超過 30 天的。
+  Lifecycle 規則存在 bucket 上、不在 repo：`bq-shelter-photos`、`bq-shelter-photos-test` 都只有預設的「未完成分段上傳 7 天中止」，沒有刪除規則。K 2026-10-26 決定不加（理由見 ADR 0018 第 7 點補註）；要查就跑 `npx.cmd wrangler r2 bucket lifecycle list bq-shelter-photos`。
   管理 API（標頭 `X-Admin-Key: encodeURIComponent(金鑰)`）：`POST /api/admin/migrate`、`POST /api/admin/verify`、`GET /api/admin/thumbs`、`PUT /api/admin/thumbs/{原圖路徑}`、`GET /api/admin/trash`、`POST /api/admin/trash/{代號}/restore`。
   部署前 `scripts/r2-bucket.mjs` 只查證既有 bucket，失敗以非零狀態結束、停止部署。縮圖：`.github/workflows/r2-thumbs.yml`（`scripts/make-thumbs.py --site`）。
   repo 的 `photos/` 已經不放照片（原本的 `photos/README.md` 併到這裡）。R2 找不到照片時 Worker 仍會退回讀部署的靜態檔，這是搬遷過渡期的備援，請不要再把 `.jpg` 放進 repo。
