@@ -1,4 +1,4 @@
-﻿const assert = require('node:assert/strict');
+const assert = require('node:assert/strict');
 
 // 單手操作規範（docs/DESIGN_GUIDE.md）：手機 390、360 寬時，志工版主要畫面的可點元素至少 44×44px、相鄰兩個至少隔 8px。
 // 有效範圍含 ::before／::after 擴大的點擊範圍。既有違規列在 KNOWN，at 是現在量到的值（尺寸取短邊、間距取距離；
