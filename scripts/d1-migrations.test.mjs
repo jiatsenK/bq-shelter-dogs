@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fakeD1 } from '../worker/test/fakes.mjs';
-import { compactSchemaStatements, splitStatements } from './migrate-compact-db.mjs';
+import { compactSchemaStatements, splitStatements } from './compact-schema.mjs';
 import { MIGRATIONS_DIR, FILE_NAME, TARGETS, BACKUP_DB, BACKUP_DB_ID, migrationFiles, pendingMigrations, changesData, status, apply, backupDb, summary } from './d1-migrations.mjs';
 
 // 表（欄位、外鍵、索引清單）、索引、觸發器、檢視，加上每張表的內容（預設列）。
