@@ -150,13 +150,30 @@ h1 { margin: 0 0 8px; font-size: 1.75rem; line-height: 1.3; }
 /* #624 狗資料表：編輯在第一欄，水平捲動時黏在左邊；抽屜開著的那一列加底色 */
 .table .edit-cell { width: 1%; white-space: nowrap; position: sticky; left: 0; z-index: 1; background: var(--tblr-bg-surface, #fff); }
 .table tr.is-selected > td { background: #e9f1fb; }
-.table tr.is-selected .edit-button { color: #fff; background: var(--admin-accent); border-color: var(--admin-accent); }
+.table tr.is-selected .edit-button, .table tr.is-selected .edit-button:hover, .table tr.is-selected .edit-button:focus-visible, .table tr.is-selected .edit-button:active { color: #fff; background: var(--admin-accent); border-color: var(--admin-accent); }
+.table tr.is-selected .edit-button:hover { background: #1558a6; border-color: #1558a6; }
+/* Tabler 按鈕顏色有 0.3 秒過場，剛選取時會先停在淺色（評審量到 2.1:1）；選取狀態直接到位 */
+.table tr.is-selected .edit-button { transition: none; }
+/* 淺藍底上的次要文字要比白底再深一點才過 AA（#526478 on #e9f1fb 約 5.5:1） */
+.table tr.is-selected .text-secondary, .table tr.is-selected .sheet-note, .table tr.is-selected .photo-unavailable, .table tr.is-selected .identity { color: var(--admin-muted) !important; }
+/* #624 第二輪：抽屜開著時表格切精簡欄（編輯、照片、編號、狗名、維護狀態），篩選列不換行，被點的列不被蓋住 */
+body.drawer-open .table .col-wide { display: none; }
+body.drawer-open .table { min-width: 0; }
 .check-filter-link { display: inline-block; margin-top: 12px; }
 .check-dogs a { font-weight: 600; }
 
 /* #624 右側抽屜：表格不動；寬螢幕把內容往左讓出抽屜寬度，900px 以下抽屜全寬 */
 .dog-drawer { position: fixed; top: 0; right: 0; bottom: 0; z-index: 900; width: 480px; max-width: 100vw; display: flex; flex-direction: column; background: #fff; border-left: 1px solid var(--admin-border); box-shadow: -12px 0 32px rgba(24, 36, 51, .10); }
-@media (min-width: 1200px) { body.drawer-open .admin-content { padding-right: 512px; } }
+@media (min-width: 1200px) {
+  body.drawer-open .admin-content { padding-right: 512px; }
+  body.drawer-open .table-filters { flex-wrap: nowrap; gap: 12px; }
+  body.drawer-open .table-filters > div { flex: 1 1 0; min-width: 0 !important; }
+  body.drawer-open .table-filters > .search-field { flex: 2 1 0; }
+  body.drawer-open .table-filters .form-select, body.drawer-open .table-filters .form-control { text-overflow: ellipsis; }
+  body.drawer-open #clear { flex: none; white-space: nowrap; }
+}
+/* 901–1199px 也讓位：內容窄、表格在自己的捲動區，被點的列留在左邊看得到（篩選列會換行，列位置由 main.js openDog 補回） */
+@media (min-width: 901px) and (max-width: 1199px) { body.drawer-open .admin-content { padding-right: 504px; } }
 .drawer-head { display: grid; grid-template-columns: 72px minmax(0, 1fr) auto; gap: 16px; align-items: start; padding: 20px 24px; border-bottom: 1px solid var(--admin-border); }
 .drawer-photo img { width: 72px; height: 72px; object-fit: cover; border-radius: 4px; display: block; }
 .drawer-photo .photo-unavailable { display: grid; place-items: center; width: 72px; height: 72px; border: 1px dashed var(--admin-border); border-radius: 4px; text-align: center; }
