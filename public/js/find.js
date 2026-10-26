@@ -1,5 +1,9 @@
 import { appState, findState } from './page-state.js';
-import { AMBER_DAYS, cageMates, closeDetail, computeStatus, dogCard, dueDogs, esc, icon, monthDay, photoThumb, render, searchKey, sexMark, showDetail, specialFlag, switchTab, walkKey, walkedToday, warnNote } from './app.js';
+import { computeStatus, dogCard, dueDogs, photoThumb, render, sexMark, switchTab, walkedToday, warnNote } from './app.js';
+import { cageMates, closeDetail, showDetail } from './detail.js';
+import { closeOverlay, forgetOverlay, pushOverlay, registerOverlay, trapFocus } from './overlays.js';
+import { esc, icon, monthDay, searchKey } from './ui-kit.js';
+import { AMBER_DAYS, specialFlag, walkKey } from './dog-status.js';
 import { BQWalkUI } from './walk-ui.js';
 
 // 找狗（#99）：照片圖鑑＋全域搜尋＋平面圖分區。K 2026-09-26 看過原型後同意。
@@ -422,7 +426,7 @@ function findPickCage(id) {
 // ── 平面圖全螢幕放大（#102，K 2026-09-27「平面圖應該要可以放大」）──
 // 找狗平面圖的「放大」、詳細資訊的小地圖都能開。全螢幕跟頁面一樣畫橫的（K 2026-09-27「點開是橫的」），
 // 右上角 －／＋ 調大小（100%～300%），放大後上下左右捲動；點區域就關掉、到找狗平面圖選那一區。
-// 手機「返回」、Esc、右上角 X 都能關（app.js 的 popstate 先處理這層）。
+// 手機「返回」、Esc、右上角 X 都能關（overlays.js 的返回鍵先處理這層）。
 const FIND_ZOOM_STEPS = [1, 1.5, 2, 3];
 
 findState.findZoomState = null; // { selected, step, opener }
@@ -486,11 +490,11 @@ function findZoomShow(selected, cage = null) {
   findZoomRender();
   box.hidden = false;
   document.documentElement.classList.add('find-zoom-open');
-  history.pushState({ bqFindZoom: true }, '');
+  pushOverlay('findZoom');
   box.querySelector('.find-zoom-close').focus({ preventScroll: true });
 }
 
-// 關掉全螢幕（popstate 呼叫，或 findZoomClose 經由 history.back 間接呼叫）
+// 關掉全螢幕（返回鍵呼叫，或 findZoomClose 經由上一頁間接呼叫）
 function findZoomHide() {
   if (!findState.findZoomState) return;
   const { opener } = findState.findZoomState;
@@ -502,15 +506,15 @@ function findZoomHide() {
 }
 
 function findZoomClose() {
-  if (history.state && history.state.bqFindZoom) history.back(); // popstate 會接著 findZoomHide
-  else findZoomHide();
+  closeOverlay('findZoom');
 }
+registerOverlay('findZoom', { isOpen: findZoomOpen, hide: findZoomHide });
 
 // 在全螢幕點區域或籠子：關掉放大（從詳細資訊開的也一起關），到找狗平面圖選那一區／那一籠
 function findZoomPick(key, cage = null) {
   if (cage) key = FIND_CAGES.cages.find(c => c.id === cage).zone;
   findZoomHide();
-  if (history.state && history.state.bqFindZoom) history.replaceState(null, '');
+  forgetOverlay('findZoom');
   if (appState.detailDog) closeDetail();
   findState.findView = 'map';
   findState.findZone = key;
@@ -621,7 +625,7 @@ function whereOpen(dog, opener) {
   whereRender();
   whereBackdropEl().hidden = false;
   document.documentElement.classList.add('where-open');
-  history.pushState({ bqWhere: true }, '');
+  pushOverlay('where');
   const first = document.querySelector('#whereSheet .where-btn.primary') || document.getElementById('whereDetail');
   if (first) first.focus({ preventScroll: true });
 }
@@ -641,9 +645,9 @@ function whereHide() {
 }
 
 function whereClose() {
-  if (history.state && history.state.bqWhere) history.back(); // popstate 會接著 whereHide
-  else whereHide();
+  closeOverlay('where');
 }
+registerOverlay('where', { isOpen: () => !!findState.whereDog, hide: whereHide });
 
 export { FIND_ZONES, FIND_FACILITIES, FIND_MAP_TURN, FIND_MAP_W, FIND_MAP_H, findTurn, findLabel, findZoneOf, findZoneInfo, findMatches, findSorted, findList, findMark, findDogHtml, findCageRowsHtml, findChipsHtml, findRowsHtml, FIND_MAP_GAP, FIND_MAP_PAD, FIND_OUTLINE, findFromLand, findToLand, findCageLayout, FIND_CAGES, FIND_CAGE_FS, findCageOf, findBandLabel, findMapSvg, findMapSvgNow, findMapTitle, findMapHtml, findMapBox, findMapAnimate, findPageHtml, findPickCage, FIND_ZOOM_STEPS, findZoomOpen, findZoomRender, findZoomShow, findZoomHide, findZoomClose, findZoomPick, whereBackdropEl, whereKnown, whereDirections, whereMapSvg, whereHtml, whereRender, whereOpen, whereHide, whereClose };
 export { findState } from './page-state.js';
@@ -710,7 +714,7 @@ export function bindFind() {
     if (e.target.closest('#whereDetail')) {
       // 先換掉在哪的歷史紀錄再開詳細資訊，按返回直接回到清單
       whereHide();
-      if (history.state && history.state.bqWhere) history.replaceState(null, '');
+      forgetOverlay('where');
       showDetail(dog);
       return;
     }
@@ -723,10 +727,6 @@ export function bindFind() {
   document.addEventListener('keydown', e => {
     if (!findState.whereDog) return;
     if (e.key === 'Escape') { whereClose(); return; }
-    if (e.key !== 'Tab') return;
-    const items = [...document.querySelectorAll('#whereSheet button')];
-    const at = items.indexOf(document.activeElement);
-    e.preventDefault();
-    items[(at + (e.shiftKey ? -1 : 1) + items.length) % items.length].focus({ preventScroll: true });
+    trapFocus(e, [...document.querySelectorAll('#whereSheet button')]);
   });
 }

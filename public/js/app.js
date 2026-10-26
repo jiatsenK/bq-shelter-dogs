@@ -1,22 +1,24 @@
-import { canEdit, canShow, loadSettings } from './feature-settings.js';
+import { canShow, loadSettings } from './feature-settings.js';
 import { BQApi } from './api.js';
 import { BQStore } from './store.js';
-import { SITE } from './site-config.js';
-import { BQDetailEditor } from './detail-editor.js';
 import { analysisState, appState, findState, groupStageState } from './page-state.js';
 import { parseDogsData } from './dog-data.js';
 import { BQDates } from './dates.js';
 import { BQWelcome } from './welcome.js';
 import { BQPhoto } from './photo.js';
-import { findPageHtml, findZoomHide, findZoomOpen, whereHide, whereKnown, whereOpen } from './find.js';
+import { findPageHtml, whereKnown, whereOpen } from './find.js';
 import { BQWalkUI } from './walk-ui.js';
 import { BQWalks } from './walk-flow.js';
 import { BQFavorites } from './favorites.js';
-import { INFO_PAGES, analysisPageHtml, hideAnalysis, restoreInfoPage, walkHistorySection } from './analysis.js';
-import { createDetailEditorViewport } from './detail-viewport.js';
+import { INFO_PAGES, analysisPageHtml, hideAnalysis, restoreInfoPage } from './analysis.js';
 import { groupStageHtml, receiveGroupData, refreshGroupStage } from './group-stage.js';
 import { BQTour } from './tour.js';
 import { deskOn, deskWalkHtml } from './desk.js';
+import { esc, highlightNote, icon, matchesSearch, monthDay, pad2, searchKey } from './ui-kit.js';
+import { dogStatus, restFrom, sortDue, specialFlag, walkKey } from './dog-status.js';
+import { closeDetail, renderDetail, showDetail } from './detail.js';
+import { bindSheetAppend } from './sheet-append.js';
+import { bindOverlays, closeOverlay, pushOverlay, pushPage, registerOverlay, trapFocus } from './overlays.js';
 
 // 狗狗資料：試算表同步進 D1（#245），網站從 Worker 的 /api/dogs 讀；前端不直接連試算表（#32）
 // 照片上傳服務（Cloudflare Worker，#47／#48）的網址。這裡只放網址，GitHub 寫入權限只在 Worker 裡，網站碰不到
@@ -24,7 +26,6 @@ import { deskOn, deskWalkHtml } from './desk.js';
 // - 舊的單獨照片上傳 Worker 和舊網址的判斷 2026-10 拿掉了（舊網址只剩轉址，#129）
 // 留空的話詳細資訊不顯示上傳按鈕；測試可經 appState 開關寫入。呼叫 /api 都經過 BQApi。
 appState.UPLOAD_URL = BQApi.base();
-const fixedCareEdits = new Map(); // 每隻狗各自的儲存狀態，關閉詳細資訊不會取消已送出的設定。
 // 手機第一屏大約看得到幾張狗卡：這幾張的照片不延後載入、優先下載（#91）
 const FIRST_SCREEN_CARDS = 8;
 // 我最近溜過（#58）：同步時累積的遛狗紀錄（#56）。#96 起每個志工看自己的：
@@ -32,13 +33,7 @@ const FIRST_SCREEN_CARDS = 8;
 // 休養中（K 2026-10-09）：在網站上設定「到哪天前暫停帶出」，經 Worker 存 D1、記編輯紀錄，不碰試算表
 const WALKER_CODES_KEY = BQStore.keys.walkerCodes;
 const WALKER_CODE_PATTERN = /^[0-9a-f]{12}$/; // 跟 Worker 的 WALKER_CODE_LENGTH 一致
-// 這間收容所的設定在 js/site-config.js（K 2026-10-10：以後其他收容所要用，只改那個檔）
-// 警示關鍵字（#28）：備註含任一個，就把備註原文直接顯示在卡片第一層，字眼標紅；
-// 只用來判斷要不要顯示，不改寫原文、不另外產生標籤。狗照樣留在待巡房，由志工自己判斷。
-const SPECIAL_KEYWORDS = SITE.warnKeywords;
-// 天數色標：0～AMBER_DAYS-1 天綠、AMBER_DAYS 天起黃、RED_DAYS 天起紅
-const AMBER_DAYS = SITE.days.amber;
-const RED_DAYS = SITE.days.red;
+// 這間收容所的設定在 js/site-config.js（K 2026-10-10：以後其他收容所要用，只改那個檔）；天數色標與警示關鍵字見 js/dog-status.js
 
 // 圖鑑（cards.html）的「去設定」連到 index.html#mine，直接打開我溜過
 
@@ -49,7 +44,6 @@ appState.groupsReturnTab = 'walk';
 appState.detailDog = null; // 詳細資訊正在看的狗
 appState.detailOpener = null;
 appState.detailTrail = []; // 在詳細資訊裡點「可以一起溜」換過的狗（#99）：可以按「回到 ○○」一隻一隻回去
-const detailEdits = BQDetailEditor.create(renderDetail);
 appState.restMap = {}; // 休養中：編號 → { until: 'YYYY-MM-DD', reason }
 appState.restState = 'loading'; // 初次休養設定未到齊前，不先排出不完整的溜狗表
 appState.restLoaded = false; // 首次失敗後重試，必須補建可靠排序
@@ -57,7 +51,6 @@ appState.detailWalksOpen = false; // 詳細資訊的溜狗紀錄有沒有展開�
 appState.formerEdit = null; // 詳細資訊正在補的舊編號（#289）：{ dog, text, phase: 'edit'|'saving'|'error', error }
 appState.staysEdit = null; // 詳細資訊正在改的出入所紀錄（#333）：{ dog, before, rows, phase: 'edit'|'saving'|'error', error }
 appState.introEdit = null; // 詳細資訊正在改的入所介紹（K 2026-10-10 補資料）：{ dog, text, phase: 'edit'|'saving'|'error', error }
-const introOverrides = {}; // 編號 → 剛存好的介紹：這台電腦不用重新讀就看到（#250 起存 D1，其他人重新整理就看得到）
 
 // 把 dogs.json 整理成畫面用的資料。狗清單不對就丟錯（整個內容區顯示失敗）；
 // 可以一起溜（groups）缺了只回 null，跟以前「常遛狗群」讀不到一樣只少這一塊
@@ -240,15 +233,23 @@ function loadMyCodes() {
   } catch (e) { /* 讀不到就用記憶體裡的 */ }
   return Array.isArray(list) ? list.filter(c => WALKER_CODE_PATTERN.test(c)) : [];
 }
-function saveMyCodes(codes) {
+// syncFavs：常溜同步自己換身分時傳 false，不然會再排一次同步、一直循環
+function saveMyCodes(codes, { syncFavs = true } = {}) {
   appState.walkerCodesMemory = codes.length ? [...codes] : null;
   try {
     if (appState.phoneStore && codes.length) appState.phoneStore.writeJson(WALKER_CODES_KEY, codes);
     else if (appState.phoneStore) appState.phoneStore.remove(WALKER_CODES_KEY);
   } catch (e) { /* 存不了就只記在記憶體 */ }
   try { appState.myWalks = appState.walksData ? parseMyWalks(appState.walksData, codes) : []; } catch (e) { appState.myWalks = []; }
-  appState.favorites.syncFavs();
+  if (syncFavs) appState.favorites.syncFavs();
 }
+// Worker 回的志工身分（identity.js）存進這支手機：登記名字和代號一起換
+function saveIdentity(identity, options) {
+  saveWalkerName(identity.name);
+  saveMyCodes(identity.codes, options);
+}
+// 跟 Worker 換身分時比對的這支手機現況（identity.js 的 read）
+const currentIdentity = () => ({ name: loadWalkerName(), codes: loadMyCodes() });
 
 // 名字送 Worker 換代號：回 { codes } 或 { codes: [], error: 原因 }
 async function walkerCodesFor(names) {
@@ -341,7 +342,7 @@ appState.mineMonth = ''; // 我溜過月曆正在看的月份（YYYY-MM）；空
 appState.mineDay = ''; // 月曆上選的那一天（YYYY-MM-DD）；空的＝那個月最近一次到所
 function myWalksHtml(today, query) {
   const visibleWalks = currentMyWalks(today);
-  const confirmedToday = SITE.d1WalkAccept ? walkRegistration.today(appState.allDogs, BQDates.localDateKey(today)).some(row => row.mine) : Object.values(loadSheetWrites(today)).some(item => item.current?.date === BQDates.localDateKey(today) && splitWalkers(item.current.walker).map(canonicalWalker).includes(canonicalWalker(loadWalkerName())));
+  const confirmedToday = walkRegistration.today(appState.allDogs, BQDates.localDateKey(today)).some(row => row.mine);
   if (appState.todayState === 'loading' || (appState.myWalksState === 'loading' && !confirmedToday)) return `<div class="status-msg">讀取溜狗紀錄中…</div>`;
   if (appState.myWalksState === 'error' && !confirmedToday) {
     return `<div class="status-msg">溜狗紀錄讀不到，請確認網路後按「重新讀取」。<br><button class="retry-btn" id="mineRetry">重新讀取</button></div>`;
@@ -407,69 +408,22 @@ function myCalendarHtml(groups, today) {
   </section>${sel ? myVisitCard(sel) : ''}`;
 }
 
-// 回傳備註命中的關鍵字（顯示用）與實際出現的寫法（標示用）；沒命中回 null
-function specialFlag(note) {
-  const keywords = [], terms = [];
-  for (const [label, ...variants] of SPECIAL_KEYWORDS) {
-    const hit = [label, ...variants].filter(t => (note || '').includes(t));
-    if (!hit.length) continue;
-    keywords.push(label);
-    terms.push(...hit);
-  }
-  return keywords.length ? { keywords, terms } : null;
-}
 
-// 把備註原文裡所有命中的字眼標成紅色粗體；其餘文字照樣跳脫
-function highlightNote(note, terms) {
-  if (!terms || !terms.length) return esc(note);
-  const sorted = [...new Set(terms)].sort((a, b) => b.length - a.length);
-  const re = new RegExp(sorted.map(t => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|'), 'g');
-  let html = '', last = 0;
-  for (const m of note.matchAll(re)) {
-    html += esc(note.slice(last, m.index)) + `<mark>${esc(m[0])}</mark>`;
-    last = m.index + m[0].length;
-  }
-  return html + esc(note.slice(last));
-}
 
 function effectiveWalkDate(dog, today = new Date()) {
   return BQDates.parseYmd(walkRegistration.state(dog, BQDates.localDateKey(today)).date);
 }
 
+// 規則在 js/dog-status.js；這裡帶入今天的登記狀態與休養設定
 function computeStatus(dog, today) {
-  const rest = restOf(dog, today);
-  if (rest) return { kind: 'rest', ...rest };
-  if (dog.covered) return { kind: 'covered' };
-  // V9（#141）拿掉今天已溜分類：這支手機今天按過溜了的狗（也寫進試算表了）直接當作今天溜的
-  if (walkedNow(dog, today)) return { kind: 'dated', days: 0, level: 'sage', mine: true };
-  const date = effectiveWalkDate(dog, today);
-  if (date) {
-    const days = Math.floor((today - date) / 86400000);
-    let level = 'sage';
-    if (days >= RED_DAYS) level = 'red';
-    else if (days >= AMBER_DAYS) level = 'amber';
-    return { kind: 'dated', days, level };
-  }
-  return { kind: 'unknown' };
+  return dogStatus(dog, today, { rest: restOf(dog, today), walk: walkRegistration.state(dog, BQDates.localDateKey(today)) });
 }
 
-// 休養中：今天還在設定的日期以內（含那一天）才算；過了自動恢復
 function restOf(dog, today = new Date()) {
-  const r = dog && dog.id && appState.restMap[dog.id];
-  const until = r && BQDates.parseYmd(r.until);
-  if (!until) return null;
-  const day = BQDates.makeDate(today.getFullYear(), today.getMonth() + 1, today.getDate());
-  return day <= until ? { until, reason: r.reason || '' } : null;
-}
-const monthDay = d => `${d.getMonth() + 1}/${d.getDate()}`;
-
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+  return restFrom(dog, today, appState.restMap);
 }
 
-function icon(id) {
-  return `<svg class="icon"><use href="#i-${id}"/></svg>`;
-}
+
 
 // 照片網址加版本號（#127）：Cloudflare 讓照片在手機上快取 30 天（_headers），換了照片內容雜湊就變、網址跟著變，
 // 手機就會抓新的。沒有版本（舊網址 GitHub Pages、剛上傳還沒部署）就不加，照舊用原本的短快取
@@ -565,7 +519,7 @@ function openLightbox(dog, opener) {
   el.hidden = false;
   document.documentElement.classList.add('lightbox-open');
   // 手機按「返回」時只關掉燈箱
-  history.pushState({ bqPhoto: true }, '');
+  pushOverlay('lightbox');
   el.querySelector('.lightbox-close').focus({ preventScroll: true });
 }
 
@@ -597,21 +551,9 @@ function hideLightbox() {
 }
 
 function closeLightbox() {
-  if (history.state && history.state.bqPhoto) history.back(); // popstate 會接著 hideLightbox
-  else hideLightbox();
+  closeOverlay('lightbox');
 }
-
-function statusBadge(dog, today) {
-  const s = computeStatus(dog, today);
-  if (s.kind === 'dated') {
-    if (s.days < 0) return `<span class="badge muted">日期看不懂</span>`;
-    const label = s.days === 0 ? '今天' : `${s.days} 天前`;
-    return `<span class="badge ${s.level}">${label}</span>`;
-  }
-  if (s.kind === 'covered') return `<span class="badge sage">有人固定照顧</span>`;
-  if (s.kind === 'rest') return `<span class="badge rest">休養中・到 ${monthDay(s.until)}</span>`;
-  return `<span class="badge muted">沒有紀錄</span>`;
-}
+registerOverlay('lightbox', { isOpen: lightboxOpen, hide: hideLightbox });
 
 // 卡片天數比照列表：今天／X天；完整意思保留給輔助閱讀。
 function lastWalk(dog, today) {
@@ -646,88 +588,6 @@ function tempCageText(dog) {
   return dog.homeCage ? `<span class="temp-cage">暫住，原本 ${esc(dog.homeCage)}</span>` : '';
 }
 
-// 詳細資訊：籠位已經在標籤上（#112），這裡只寫編號和再入所
-function metaLine(dog) {
-  return `${dog.id ? `<div class="meta">編號 ${esc(dog.id)}</div>` : ''}${reentryLine(dog)}`;
-}
-
-const ymdOf = d => `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
-
-// 舊編號（#75、#289）：編號下面一行「舊編號 …・最早入所 YYYY/M/D」，每個舊編號旁邊一個 ✕ 可以刪；
-// 換新編號就是再入所（GLOSSARY），但畫面不標第幾次入所（K 2026-10-16）。
-// 最後一個「補舊編號」，點了原地變輸入框。誰都能補、都能刪（ADR 0005），要先選好名字（ADR 0004），離所的狗只看不改
-function reentryLine(dog) {
-  const former = dog.formerIds || [];
-  const can = canEdit('editFormer') && !!(dog.id && appState.UPLOAD_URL) && !dog.departure;
-  const first = BQDates.firstIntake(dog);
-  const list = former.map(f => `<span class="former-num">${esc(f)}${can ? `<button type="button" class="former-del" data-former-del="${esc(f)}" aria-label="刪掉舊編號 ${esc(f)}">✕</button>` : ''}</span>`).join('');
-  const e = appState.formerEdit && appState.formerEdit.dog === dog ? appState.formerEdit : null;
-  if (e) {
-    const busy = e.phase === 'saving';
-    return `<div class="reentry">${former.length ? `<span>舊編號</span>${list}` : ''}
-      <form class="former-form" id="formerForm" autocomplete="off">
-        <label for="formerText">補舊編號</label>
-        <input id="formerText" inputmode="numeric" maxlength="12" placeholder="例：2015081801" value="${esc(e.text)}"${busy ? ' disabled' : ''}>
-        <button type="submit" class="former-save"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存'}</button>
-        ${busy ? '' : '<button type="button" class="former-cancel" id="formerCancel">取消</button>'}
-        <small class="former-hint">轉所、退回或換號前的編號，前 8 碼是入所日期。誰都能補，補錯了按 ✕ 刪掉。</small>
-        ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
-      </form></div>`;
-  }
-  if (!former.length && !can) return '';
-  return `<div class="reentry">${former.length ? `<span>舊編號</span>${list}${first ? `<span>・最早入所 ${ymdOf(first)}</span>` : ''}` : ''}${can ? `<button type="button" class="former-add" id="formerAdd">＋補舊編號</button>` : ''}</div>`;
-}
-
-function openFormerEdit(dog) {
-  if (!dog || !dog.id || !appState.UPLOAD_URL) return;
-  appState.formerEdit = detailEdits.open(dog, { text: '' });
-  renderDetail();
-  const box = document.getElementById('formerText');
-  if (box) box.focus({ preventScroll: true });
-}
-
-// 補或刪舊編號（method 由呼叫的人給）；回空字串是成功，不然是要給人看的原因
-async function sendFormer(dog, former, method) {
-  const r = await BQApi.saveFormer(dog.id, method, { editor: editorName(), former, revision:appState.formerEdit?.dog===dog?appState.formerEdit.revision:dog.editRevision });
-  if (r.error === 'network') return '沒有存進去，請確認網路後再試';
-  const out = r.data;
-  if (!r.ok || !out || !out.ok) return (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
-  if(out.revision)dog.editRevision=out.revision;
-  return '';
-}
-
-// 存好就改這台的狗資料，天數、排序馬上重算
-async function saveFormer() {
-  const e = appState.formerEdit;
-  if (!e || e.phase === 'saving') return;
-  const former = e.text.replace(/\s+/g, '');
-  if (!/^\d{10}$/.test(former) || !BQDates.idDate(former)) { detailEdits.fail(e, '舊編號要是 10 碼數字，前 8 碼是入所日期'); return; }
-  if (!editorName()) { detailEdits.fail(e, NEED_EDITOR); return; }
-  detailEdits.saving(e);
-  const error = await sendFormer(e.dog, former, 'POST');
-  if (appState.formerEdit !== e) return;
-  if (error) {
-    detailEdits.fail(e, error);
-    const b = document.getElementById('formerText');
-    if (b) b.focus({ preventScroll: true });
-    return;
-  }
-  e.dog.formerIds = [...(e.dog.formerIds || []), former].sort();
-  appState.formerEdit = null;
-  render(); renderDetail();
-  BQWalkUI.showToast(`${e.dog.name} 補上舊編號 ${former}，入所日改從 ${ymdOf(BQDates.firstIntake(e.dog))} 算`);
-}
-
-async function removeFormer(dog, former) {
-  if (!editorName()) { BQWalkUI.showToast(NEED_EDITOR); return; }
-  if (!confirm(`刪掉 ${dog.name} 的舊編號 ${former}？`)) return;
-  const error = await sendFormer(dog, former, 'DELETE');
-  if (error) { BQWalkUI.showToast(error); return; }
-  dog.formerIds = (dog.formerIds || []).filter(f => f !== former);
-  render(); if (appState.detailDog === dog) renderDetail();
-  BQWalkUI.showToast(`已刪掉 ${dog.name} 的舊編號 ${former}`);
-}
-
 // 性別：狗卡 frontmatter 有寫 sex 才顯示 ♂／♀，沒寫就留空位；♂ 藍色、♀ 紅色
 // 用內嵌 SVG 不用文字符號：iPhone 內建字型沒有 ♂♀，會換成基線不同的字型而下沉（#93）
 function sexMark(dog) {
@@ -743,51 +603,24 @@ function warnNote(note, flag) {
 }
 
 // ── 今天已溜（V3 第 4 節，#35）──
-// 只記「這支手機、這個瀏覽器的人」今天自己溜過哪些狗，不是所有志工的紀錄。
-// 只存在瀏覽器 localStorage，不寫 GitHub、不用登入；#138 起另外寫進試算表（見 BQWalkUI.sheetWrite）。
-// 存成 { date: '2026-09-24', ids: [編號…] }（本地日期＋狗狗編號）：日期不是今天就當作沒有紀錄，
-// 所以隔天自動全部未勾選；前一天的紀錄不用刪，下次記錄時直接蓋掉。
-// 無痕模式等讀寫不了 localStorage 時，至少這次開著網頁的期間還記得
+// #558 起以 D1 今日紀錄為準（walkRegistration）；手機只記同行人與尚未查明的登記識別。
 
 appState.phoneStore = BQStore;
 appState.walkRecords = BQWalks.createRecords({ store: () => appState.phoneStore, dates: BQDates, key: walkKey });
-function loadWalkedIds(today = new Date()) { return appState.walkRecords.loadWalkedIds(today); }
-
-function saveWalkedIds(ids, today = new Date()) { return appState.walkRecords.saveWalkedIds(ids, today); }
-
-// 今天已溜用編號記；新來還沒有編號的狗改用犬名記（K 說不會有同名的狗）
-function walkKey(dog) {
-  if (dog.id) return dog.id;
-  return dog.name ? `名:${dog.name}` : '';
-}
 
 // 今天名單包含自己就算已登記；本機暫存只用於尚未收到寫入結果時。
 function walkedNow(dog, today = new Date()) {
   return walkRegistration.state(dog, BQDates.localDateKey(today)).mine;
 }
 
-// 今天已溜的查詢入口（#85）：讀一次這支手機今天的紀錄，之後問「這隻溜了沒」、排今天已溜清單都用它，
-// 不用再把編號陣列傳來傳去
+// 今天已溜的查詢入口（#85）：問「這隻溜了沒」都用它
 function walkedToday(today = new Date()) {
-  const ids = loadWalkedIds(today);
-  const has = dog => walkedNow(dog, today);
-  return {
-    has,
-    // 今天已溜清單：最近記的排最上面
-    dogs: list => list.filter(has).sort((a, b) => ids.indexOf(walkKey(a)) - ids.indexOf(walkKey(b))),
-  };
+  return { has: dog => walkedNow(dog, today) };
 }
-
-// 加入（on=true）或移回（on=false）今天已溜；連犬名都沒有的狗記不了，直接略過，新加入的排在最上面。
-// 回傳真的有變的狗和 undo（回到記之前的樣子）；都沒變就不寫入
-function recordWalked(dogs, on, today = new Date()) { return appState.walkRecords.recordWalked(dogs, on, today); }
 
 // 我的常溜的快取、排隊及同步由 favorites.js 管理。
 
-// ── 按「溜了」寫進試算表（#138）──
-// 經過 Worker 的 /walk 轉給 K 部署的 Google Apps Script，只改主清單的「遛狗日期」「誰遛的」。
-// 寫成功的記下試算表原本的內容（只記今天的），復原或放回時帶回去改回來；小程式只在格子還是我們寫的樣子時才改回。
-// Worker 還沒設定（回 code: 'off'）就照舊只記在手機上，不打擾
+// ── 按「溜了」：經過 Worker 的 /walk 寫進 D1（#558、ADR 0018），Worker 再同步到試算表 ──
 appState.favorites = BQFavorites.create();
 const WALKER_NAME_KEY = BQStore.keys.walkerName;
 // 跟 worker/src/sheet-read.js 的 NAME_SEP 一樣
@@ -801,7 +634,6 @@ appState.walkerNameMemory = '';
 appState.sheetWriteState = 'unknown'; // unknown／on／off
 appState.sheetQueue = Promise.resolve();
 appState.walkerNames = {};
-appState.walkerDates = {}; // 試算表現在的「遛狗日期」（狗的 key → 'YYYY-MM-DD'）：直接改試算表也 1 分鐘內看到（K 2026-10-20）
 appState.walkerNameList = []; // 表上出現過的名字（開頭畫面讓志工點選自己，#141）
 appState.walkerOlderNames = []; // 以前溜過、現在表上沒有的名字（Worker 記下來的，K 2026-10-12）：打字時才推薦
 appState.walkerCodeNames = {}; // 代號 → 名字（Worker 用名單換的，K 2026-10-12）：電腦版最近 30 天寫每天誰遛的
@@ -822,7 +654,6 @@ function setWalkerNamesOffline(on) {
 }
 async function loadWalkerNames() {
   if (!appState.UPLOAD_URL) return;
-  const read = walkRegistration.beginRead();
   const r = await BQApi.walkers();
   if (r.error === 'network') {
     console.error(r.message);
@@ -835,11 +666,9 @@ async function loadWalkerNames() {
     const out = apiData(r);
     if (out && out.walkers && typeof out.walkers === 'object') {
       appState.walkerNames = out.walkers;
-      appState.walkerDates = out.dates && typeof out.dates === 'object' ? out.dates : {};
       appState.walkerNameList = [...new Set((Array.isArray(out.names) ? out.names : []).map(canonicalWalker).filter(Boolean))];
       appState.walkerOlderNames = [...new Set((Array.isArray(out.older) ? out.older : []).map(canonicalWalker).filter(Boolean))];
       appState.walkerCodeNames = out.codes && typeof out.codes === 'object' ? out.codes : {};
-      walkRegistration.receiveNames(out.walkers, appState.allDogs, read, appState.walkerDates, Date.parse(out.readAt) || read.at);
       render();
       renderDetail();
       BQWelcome.refresh();
@@ -854,18 +683,22 @@ const TODAY_REFETCH_MS = 30 * 1000;
 appState.todayFetchedAt = 0;
 appState.todayState = 'loading'; // 初次請求完成後才呈現完整狀態；失敗沿用同步資料
 function fetchWalkStatus(call) { return BQWalks.fetchStatus(call); }
+function receiveTodayWithDogs(today) {
+  if (today?.source !== 'd1' || today.date !== BQDates.localDateKey(new Date()) || !Array.isArray(today.walks)) return false;
+  walkRegistration.receiveToday(today, appState.allDogs);
+  appState.todayFetchedAt = Date.now();
+  appState.todayState = 'ready';
+  return true;
+}
 async function loadTodayWalks() {
   appState.todayFetchedAt = Date.now();
   const received = await walkRegistration.loadToday(() => appState.allDogs);
-  if (appState.todayState === 'loading' && (!SITE.d1WalkAccept || received)) { appState.todayState = 'ready'; render(); }
+  if (appState.todayState === 'loading' && received) { appState.todayState = 'ready'; render(); }
 }
 function refreshTodayWalks() {
   if (typeof document !== 'undefined' && document.hidden) return;
   if (Date.now() - appState.todayFetchedAt < TODAY_REFETCH_MS) return;
-  loadTodayWalks();
-  // 試算表名單也每分鐘重讀：直接改試算表的也要同步（K 2026-10-20）。
-  // #460：D1 模式人工改表由伺服器比對後進 D1 資料包，手機不再每分鐘讀試算表名單
-  if (!SITE.d1WalkAccept) loadWalkerNames();
+  loadTodayWalks(); // #460：人工改表由伺服器比對後進 D1 資料包，手機不再每分鐘讀試算表名單
 }
 // 一格好幾個名字（「嘉文+俐葶+岑」「維芬。佳岑」）拆開，用頓號接起來，不重複
 function canonicalWalker(name) {
@@ -904,9 +737,6 @@ function saveWalkerName(name) {
     else if (appState.phoneStore) appState.phoneStore.remove(WALKER_NAME_KEY);
   } catch (e) { /* 存不了就只記在記憶體 */ }
 }
-// { date: 今天, items: { 狗的 key: { id, name, prev, wrote } } }，不是今天的就丟掉
-function loadSheetWrites(today = new Date()) { return appState.walkRecords.loadSheetWrites(today); }
-function saveSheetWrites(items, today = new Date()) { return appState.walkRecords.saveSheetWrites(items, today); }
 
 function myAliasIn(dog, today = new Date()) {
   const me = loadWalkerName();
@@ -914,19 +744,15 @@ function myAliasIn(dog, today = new Date()) {
   return splitWalkers(appState.walkerNames[walkKey(dog)]).find(n => n !== me && canonicalWalker(n) === canonicalWalker(me)) || null;
 }
 
-// walker：加「一起溜的人」時傳那幾個名字（試算表那格已經有今天的名字，小程式會用「、」接在後面）
-// 回傳 true：寫進去了；false：沒寫進去且已跳提示；null：沒送
 // 畫面提供當下身分與狗清單；HTTP、手機紀錄與結果分類由 BQWalks 處理。
 const walkRegistration = BQWalks.create({
-  get d1() { return SITE.d1WalkAccept; },
   records: () => appState.walkRecords, store: () => appState.phoneStore, api: BQApi, dates: BQDates,
   enabled: () => !!appState.UPLOAD_URL,
   getWriteState: () => appState.sheetWriteState, setWriteState: state => { appState.sheetWriteState = state; },
   key: walkKey, date: () => BQDates.localDateKey(new Date()), walker: loadWalkerName, alias: myAliasIn,
   canonical: canonicalWalker, split: splitWalkers,
   names: () => loadMyCodes().map(code => appState.walkerCodeNames[code]).filter(Boolean),
-  base: dog => SITE.d1WalkAccept ? d1Base(dog) : ({ date: Object.hasOwn(appState.walkerDates, walkKey(dog)) ? appState.walkerDates[walkKey(dog)] : (dog.walkedDate ? BQDates.localDateKey(dog.walkedDate) : ''), walker: appState.walkerNames[walkKey(dog)] || '' }),
-  syncedAt: () => appState.dataSyncedAt?.getTime() || 0,
+  base: d1Base,
   apply: () => { render(); renderDetail(); },
 });
 // #460：還沒經過新流程的狗，用 D1 狗清單（同步進 D1 的主清單）的日期與代號，不用試算表即時名單
@@ -938,72 +764,6 @@ function d1Base(dog) {
 const NEED_EDITOR = '請先選好你的名字再編輯（開頭畫面點自己的名字）';
 const editorName = () => loadWalkerName();
 const editorHeaders = () => ({ 'X-Editor': encodeURIComponent(editorName()) });
-
-// ── 加備註、新增異動紀錄（#239、#281）：只追加，寫進試算表前先預覽；日期用台灣時間、名字用「我是誰」 ──
-// 狗卡在「試算表備註」下面，異動紀錄只在電腦版右欄（K 2026-10-16）
-const APPEND_MAX = 200;
-appState.sheetAppend = null; // { kind: 'note'|'log', dog, text, phase: 'edit'|'preview'|'busy', error }
-function appendEntry(text, who) { return `${BQDates.taipeiStamp()}${text.trim()}（${who}）`; }
-function nextLogLabel() {
-  const nums = (typeof appState.sheetNotes !== 'undefined' ? appState.sheetNotes : []).map(n => Number((String(n.label).match(/^備註\s*(\d+)/) || [])[1]) || 0);
-  return `備註${Math.max(0, ...nums) + 1}`;
-}
-function appendPreview(a, who) {
-  const entry = appendEntry(a.text, who);
-  if (a.kind === 'log') return `<div class="append-preview"><span class="append-label">${esc(nextLogLabel())}</span>${esc(entry)}</div>`;
-  const now = a.dog.note || '';
-  return `<div class="append-preview note-text">${now.trim() ? `${esc(now)};` : ''}<mark>${esc(entry)}</mark></div>`;
-}
-function sheetAppendHtml(kind, dog = null) {
-  if (!appState.UPLOAD_URL || appState.sheetWriteState === 'off' || (dog && dog.departure)) return '';
-  const a = appState.sheetAppend && appState.sheetAppend.kind === kind && appState.sheetAppend.dog === dog ? appState.sheetAppend : null;
-  const label = kind === 'note' ? '加備註' : '新增一筆';
-  if (!a) return `<button type="button" class="my-note-edit append-open" data-append-open="${kind}">${icon('note')}${label}</button>`;
-  const who = loadWalkerName();
-  const busy = a.phase === 'busy';
-  const err = a.error ? `<p class="append-error" role="alert">${esc(a.error)}</p>` : '';
-  if (!who) return `<div class="my-note-form append-form"><p class="append-hint">要先在「我溜過」設定名字，才能寫進試算表。</p>
-    <div class="my-note-actions"><button type="button" class="photo-cancel" data-append-cancel>取消</button></div></div>`;
-  if (a.phase === 'edit') return `<form class="my-note-form append-form" data-append-form>
-    <label class="my-note-pass-label" for="appendText">${kind === 'note' ? '要接在備註後面的內容' : '要加在異動紀錄最下面的內容'}</label>
-    <input type="text" id="appendText" maxlength="${APPEND_MAX}" value="${esc(a.text)}" autocomplete="off">
-    <p class="append-hint">日期和名字（${esc(who)}）會自動加上；已經寫在試算表的字不會被改。</p>${err}
-    <div class="my-note-actions"><button type="submit" class="my-note-save"${a.text.trim() ? '' : ' disabled'}>預覽</button>
-      <button type="button" class="photo-cancel" data-append-cancel>取消</button></div></form>`;
-  return `<div class="my-note-form append-form">
-    <p class="my-note-pass-label">${kind === 'note' ? '送出後這格會變成：' : '送出後會在最下面新增：'}</p>
-    ${appendPreview(a, who)}${err}
-    <div class="my-note-actions"><button type="button" class="my-note-save" data-append-send${busy ? ' disabled' : ''}>${busy ? '寫入中…' : '送出'}</button>
-      ${busy ? '' : '<button type="button" class="photo-cancel" data-append-back>改一下</button>'}</div></div>`;
-}
-function rerenderAppend(kind, focusSel) {
-  if (kind === 'note') renderDetail(); else render();
-  const el = focusSel && document.querySelector(focusSel);
-  if (el) el.focus({ preventScroll: true });
-}
-async function sendAppend() {
-  const a = appState.sheetAppend;
-  const who = loadWalkerName();
-  if (!a || a.phase !== 'preview' || !who) return;
-  a.phase = 'busy'; a.error = '';
-  rerenderAppend(a.kind);
-  const payload = { action: a.kind, walker: who, editor: who, text: a.text.trim(), dogs: a.kind === 'note' ? [{ id: a.dog.id || '', name: a.dog.name }] : [] };
-  const res = await BQApi.walk(payload);
-  const out = res.data;
-  if (appState.sheetAppend !== a) return;
-  const r = out && out.ok && Array.isArray(out.results) ? out.results[0] : null;
-  if (!r || r.status !== 'written') {
-    a.phase = 'preview';
-    a.error = res.error === 'network' ? '網路不通，沒寫進試算表，請稍後再試' : r && r.status === 'notFound' ? '試算表找不到這隻狗，沒寫進去' : `沒寫進試算表：${(out && out.error) || `HTTP ${res.status}`}`;
-    rerenderAppend(a.kind);
-    return;
-  }
-  appState.sheetAppend = null;
-  if (a.kind === 'note') a.dog.note = r.wrote.note;
-  else if (typeof appState.sheetNotes !== 'undefined') appState.sheetNotes.push({ label: r.wrote.label, text: r.wrote.text });
-  rerenderAppend(a.kind);
-  BQWalkUI.showToast(a.kind === 'note' ? `已加進 ${a.dog.name} 的試算表備註` : '已加進異動紀錄');
-}
 
 // 所有分頁、搜尋、籠位共用這張卡片。第一層只放照片、犬名、天數、籠位｜編號，
 // 備註命中警示關鍵字才把原文放上來；一般備註、可一起遛、狗卡資訊點卡片看詳細資訊
@@ -1029,396 +789,6 @@ function dogCard(dog, today, eager = false) {
   `;
 }
 
-// 詳細資訊：備註（志工後續補充，試算表備註欄）／可以一起溜的狗／狗卡資訊（dogs/{編號}.md 的入所原始介紹，同步時已寫進 dogs.json）
-// 詳細資訊名字旁的「☆ 常溜」／「★ 我的常溜」
-function favButtonHtml(dog) {
-  if (!walkKey(dog) || dog.departure) return '';
-  const on = appState.favorites.isFav(dog);
-  return `<button type="button" class="fav-btn${on ? ' on' : ''}" id="favToggle" aria-pressed="${on}">${on ? '★ 我的常溜' : '☆ 常溜'}</button>`;
-}
-
-function detailHtml(dog, today) {
-  if (dog.departure) return departedDetailHtml(dog, today);
-  const flag = specialFlag(dog.note);
-  const intro = introOf(dog);
-  const walked = walkedToday(today);
-  // V7（#112）：上面大照片，下面狗名和天數／籠位／入所標籤；關閉、在哪、溜了在底部固定列（在哪裡卡片 V7 小修正拿掉，改用底部「在哪」）
-  return `
-    <div class="detail-head">
-      ${BQPhoto.heroHtml(dog)}
-      ${BQPhoto.uploadHtml(dog)}
-      <div class="info">
-        <div class="name-row"><h2 class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</h2>${favButtonHtml(dog)}</div>
-        <div class="chips">${statusBadge(dog, today)}${detailChips(dog)}</div>
-        ${metaLine(dog)}
-        ${restNoteHtml(dog, today)}
-      </div>
-    </div>
-    ${lastWalkSection(dog, today)}
-    ${appState.detailTrail.length ? `<button type="button" class="detail-back" id="detailBack">${icon('back')}回到 ${esc(appState.detailTrail[appState.detailTrail.length - 1].name)}</button>` : ''}
-    <section class="detail-section" data-section="note">
-      <h3>${icon('note')}試算表備註</h3>
-      ${!dog.note ? `<div class="empty">目前沒有備註</div>`
-        : `<div class="content note-text">${flag ? highlightNote(dog.note, flag.terms) : esc(dog.note)}</div>`}
-      ${sheetAppendHtml('note', dog)}
-    </section>
-    ${togetherSection(dog, walked)}
-    ${walkHistorySection(dog, today)}
-    ${introSectionHtml(dog, intro)}
-    ${fixedCareHtml(dog)}
-    ${restAdminHtml(dog, today)}
-    ${BQPhoto.barHtml(dog) || introBarHtml(dog) || `<div class="detail-bar">
-      <button type="button" class="bar-btn" id="detailClose">關閉</button>
-      ${typeof whereKnown === 'function' && whereKnown(dog) ? `<button type="button" class="bar-btn" id="detailWhere">${icon('pin')}在哪</button>` : ''}
-      ${groupWalkButton(dog, walked)}
-    </div>`}
-  `;
-}
-
-// ── 休養中（K 2026-10-09：剛動完手術不能溜，「排到下面、休養中、10/20 前暫停帶出」，不動試算表）──
-// 名字下面一行說明；改設定在詳細資訊最下面，任何人都能改、記編輯紀錄
-function restNoteHtml(dog, today) {
-  const r = restOf(dog, today);
-  return r ? `<div class="rest-note"><b>休養中</b>，${monthDay(r.until)} 前暫停帶出${r.reason ? `（${esc(r.reason)}）` : ''}</div>` : '';
-}
-// 日期 → YYYY-MM-DD（日期輸入框、送給 Worker 用）
-function isoDay(d) {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
-function fixedCareHtml(dog) {
-  if (!canEdit('editFixedCare') || !(dog.id || dog.dogId) || dog.departure || !appState.UPLOAD_URL) return '';
-  const state = fixedCareEdits.get(dog.id || dog.dogId);
-  const busy = state?.busy;
-  return `<section class="detail-section fixed-care" data-section="fixed-care">
-    <div class="fixed-care-row">
-      <span id="fixedCareLabel">有人固定照顧</span>
-      <button type="button" id="fixedCareToggle" class="care-switch" role="switch" aria-labelledby="fixedCareLabel" aria-describedby="fixedCareHint" aria-checked="${dog.covered ? 'true' : 'false'}"${busy ? ' disabled aria-busy="true"' : ''}>
-        <span class="care-switch-state" aria-hidden="true">${dog.covered ? '開啟' : '關閉'}</span><span class="care-switch-track" aria-hidden="true"></span>
-      </button>
-    </div>
-    <p class="rest-hint" id="fixedCareHint">所有人共用。開啟後排在一般待溜狗之後、不計入天數統計，仍可溜。</p>
-    ${busy ? '<p class="rest-hint" role="status">儲存中…</p>' : ''}
-    ${state?.error ? `<p class="photo-error" role="alert">${esc(state.error)}</p>` : ''}
-  </section>`;
-}
-
-async function toggleFixedCare(dog) {
-  const key = dog?.id || dog?.dogId;
-  if (!key || fixedCareEdits.get(key)?.busy) return;
-  const editor = editorName();
-  if (!editor) {
-    fixedCareEdits.set(key, { error: NEED_EDITOR });
-    renderDetail();
-    return;
-  }
-  const enabled = !dog.covered;
-  const state = { busy: true, error: '' };
-  fixedCareEdits.set(key, state);
-  renderDetail();
-  try {
-    const r = await BQApi.saveFixedCare(key, { editor, enabled, revision:dog.editRevision });
-    if (r.error === 'network') throw new Error(r.message);
-    const out = r.data;
-    if (!r.ok || !out?.ok || out.enabled !== enabled) throw new Error(out?.error || '沒有存進去，請稍後再試');
-    dog.covered = enabled;
-    if(out.revision)dog.editRevision=out.revision;
-    for (const current of appState.allDogs) if ((current.id || current.dogId) === key) current.covered = enabled;
-    if (appState.detailDog && (appState.detailDog.id || appState.detailDog.dogId) === key) appState.detailDog.covered = enabled;
-    BQWalkUI.showToast(`${dog.name} 的固定照顧已${enabled ? '開啟' : '關閉'}`);
-    render();
-  } catch (e) {
-    state.error = e.message === 'Failed to fetch' ? '沒有存進去，請確認網路後再試' : e.message;
-  } finally {
-    state.busy = false;
-    if (appState.detailDog && (appState.detailDog.id || appState.detailDog.dogId) === key) {
-      renderDetail();
-      document.getElementById('fixedCareToggle')?.focus({ preventScroll: true });
-    }
-  }
-}
-
-function restAdminHtml(dog, today) {
-  if (!canEdit('editRest')) return '';
-  if (!dog.id || !appState.UPLOAD_URL) return '';
-  const r = restOf(dog, today);
-  const e = appState.restEdit && appState.restEdit.dog === dog ? appState.restEdit : null;
-  if (!e) {
-    // 管理用（K 2026-10-10）：只剩設定休養中；入所介紹直接點那一段就能改。正在改介紹時先收起來
-    if (appState.introEdit && appState.introEdit.dog === dog) return '';
-    return `<section class="detail-section rest-admin" data-section="rest">
-      <h3>${icon('write')}休養設定<span class="sub">會記在編輯紀錄</span></h3>
-      <div class="admin-btns">
-        <button type="button" class="admin-btn" id="restEdit">${icon('paw')}${r ? '改休養設定' : '設定休養中'}</button>
-      </div>
-    </section>`;
-  }
-  const busy = e.phase === 'saving';
-  return `<section class="detail-section rest-admin" data-section="rest">
-    <form class="rest-form" id="restForm" autocomplete="on">
-      <h3>休養中</h3>
-      <p class="rest-hint">排到溜狗表最下面、不能按溜了；過了那天自動恢復。</p>
-      <label>原因<input type="text" id="restReason" maxlength="40" value="${esc(e.reason)}" placeholder="例：術後休養"${busy ? ' disabled' : ''}></label>
-      <label>到哪一天（含那天）<input type="date" id="restUntil" value="${esc(e.until)}" min="${isoDay(today)}" required${busy ? ' disabled' : ''}></label>
-      ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
-      <div class="rest-actions">
-        <button type="submit" class="rest-save"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存'}</button>
-        ${r && !busy ? `<button type="button" class="rest-end" id="restEnd">結束休養</button>` : ''}
-        ${busy ? '' : `<button type="button" class="rest-cancel" id="restCancel">取消</button>`}
-      </div>
-    </form>
-  </section>`;
-}
-// ── 入所介紹（K 2026-10-10 補資料）：任何人都能改、記編輯紀錄（ADR 0004）；存 D1，不寫試算表 ──
-const INTRO_MAX = 1000;
-function intakeEventsOf(dog) {
-  return dog.intakeEvents || [];
-}
-function intakeDraft(dog) {
-  return intakeEventsOf(dog).map(row => ({ ...row }));
-}
-// #390：僅整理閱讀畫面，不修改原介紹、stays 或入所日算法。
-function intakePresentation(dog, intro) {
-  const events = intakeEventsOf(dog).map(e => ({ date: e.date, event: e.event }));
-  let supplement = intro || '';
-  // 只排版開頭明寫完整日期的句子；沒有年份、不合理日期與其餘文字照原樣保留。
-  const datedSentence = /^(\d{4})年(\d{1,2})月(\d{1,2})日([^。\n]+)(?:[。\n]+|$)/;
-  for (;;) {
-    const match = supplement.match(datedSentence);
-    if (!match) break;
-    const date = BQDates.makeDate(+match[1], +match[2], +match[3]);
-    if (!date) break;
-    events.push({ date: isoDay(date), event: match[4] });
-    supplement = supplement.slice(match[0].length);
-  }
-  const sameText = value => String(value || '').replace(/[\s。]+/g, '');
-  const add = row => {
-    if (!events.some(e => e.date === row.date && sameText(e.event) === sameText(row.event))) events.push(row);
-  };
-  for (const stay of dog.stays || []) {
-    // #392 盤點的舊資料：這兩種原因記的是該段怎麼結束，不能改標成入所原因。
-    const ending = stay.out && ['整修移所', '領養後退養'].includes(stay.reason);
-    const reason = ending ? '' : stay.reason;
-    const arrival = reason ? (/入所$/.test(reason) ? reason : `${reason}入所`) : '入所';
-    const hasArrival = events.some(e => e.date === stay.in && (sameText(e.event) === sameText(arrival) || (!reason && /入所|轉來|退回/.test(e.event))));
-    if (!hasArrival) add({ date: stay.in, event: arrival });
-    if (stay.out) add({ date: stay.out, event: ending ? stay.reason : '出所' });
-  }
-  const unique = [];
-  const covers = (longer, shorter) => {
-    const a = sameText(longer), b = sameText(shorter);
-    return a === b || (b && ['，', ',', '；', ';'].some(mark => a.startsWith(b + mark)));
-  };
-  for (const row of events) {
-    if (unique.some(e => e.date === row.date && covers(e.event, row.event))) continue;
-    for (let i = unique.length - 1; i >= 0; i--) {
-      if (unique[i].date === row.date && covers(row.event, unique[i].event)) unique.splice(i, 1);
-    }
-    unique.push(row);
-  }
-  unique.sort((a, b) => (a.date || '9999').localeCompare(b.date || '9999'));
-  return { events: unique, supplement };
-}
-function intakeListHtml(events) {
-  if (!events.length) return '';
-  return `<ul class="intake-list">${events.map(e => `<li>${e.date ? `<time datetime="${esc(e.date)}">${esc(e.date.replace(/-/g, '/'))}</time>` : '<span class="intake-date-empty">日期未確認</span>'}<span class="intake-event">${esc(e.event || '原因未填')}</span></li>`).join('')}</ul>`;
-}
-function intakeEditorHtml(dog, e, busy) {
-  const numbers = [...new Set([...(dog.formerIds || []), dog.id, ...e.events.map(row => row.number)].filter(Boolean))].sort();
-  return `<p class="rest-hint">一次入所、退回或轉所一列。日期依確認的資料填寫，不確定就留空，不以編號推定。原因可留空。</p>
-    <div class="intake-rows">${e.events.map((row, i) => `<fieldset class="intake-row"><legend>第 ${i + 1} 筆</legend>
-      <label>日期<input type="date" data-intake-row="${i}" data-intake-field="date" value="${esc(row.date)}"${busy ? ' disabled' : ''}></label>
-      <label>原因<input type="text" maxlength="1000" data-intake-row="${i}" data-intake-field="event" value="${esc(row.event)}" placeholder="例：迷路入所、認養後退回"${busy ? ' disabled' : ''}></label>
-      <label>對應編號<select data-intake-row="${i}" data-intake-field="number"${busy ? ' disabled' : ''}><option value="">尚未確認</option>${numbers.map(n => `<option value="${esc(n)}"${n === row.number ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select></label>
-      <button type="button" class="intake-remove" data-intake-remove="${i}"${busy ? ' disabled' : ''}>移除第 ${i + 1} 筆</button>
-    </fieldset>`).join('')}</div>
-    <button type="button" id="intakeAdd"${busy || e.events.length >= 30 ? ' disabled' : ''}>新增一筆</button>`;
-}
-function introOf(dog) {
-  return dog.id && Object.prototype.hasOwnProperty.call(introOverrides, dog.id) ? introOverrides[dog.id] : dog.intro;
-}
-function introSectionHtml(dog, intro) {
-  if (appState.staysEdit && appState.staysEdit.dog === dog) return staysSectionHtml(dog);
-  const e = appState.introEdit && appState.introEdit.dog === dog ? appState.introEdit : null;
-  if (!e) {
-    const can = canEdit('editIntro') && !!(dog.id && appState.UPLOAD_URL) && !dog.departure;
-    const canStays = canEdit('editStays') && !!(dog.id && appState.UPLOAD_URL);
-    const { events, supplement } = intakePresentation(dog, intro);
-    if (!events.length && !supplement && !canStays) return '';
-    return `<section class="detail-section" data-section="intro">
-      <h3 class="intro-heading">${icon('card')}入所介紹${can ? `<button type="button" class="intro-heading-edit" id="introEdit" aria-label="${events.length || supplement ? '改' : '補'}入所介紹">${icon('write')}</button>` : canStays ? `<button type="button" class="intro-heading-edit" id="staysEdit" aria-label="${(dog.stays || []).length ? '改' : '補'}出入所紀錄">${icon('write')}</button>` : ''}</h3>
-      ${intakeListHtml(events)}
-      ${supplement ? `<div class="content">${esc(supplement)}</div>` : ''}
-    </section>`;
-  }
-  const busy = e.phase === 'saving';
-  const n = [...e.text].length;
-  return `<section class="detail-section" data-section="intro">
-    <form class="rest-form intro-form" id="introForm" autocomplete="on">
-      <h3>${icon('card')}入所介紹</h3>
-      <button type="button" class="admin-btn" id="staysEdit"${!canEdit('editStays') || busy ? ' disabled' : ''}>${(dog.stays || []).length ? '改' : '補'}出入所紀錄</button>
-      ${intakeEditorHtml(dog, e, busy)}
-      <p class="rest-hint">存好後這台馬上看到，其他人幾分鐘後（下次更新資料）看到。只存在網站，不寫試算表。</p>
-      <label>補充介紹（保留原文）<textarea id="introText" rows="7" maxlength="${INTRO_MAX}" placeholder="例：親人、喜歡散步，怕機車聲"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea><small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small></label>
-      ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
-    </form>
-  </section>`;
-}
-// 介紹表單打開時的底部列：取消＋儲存介紹（送出 #introForm）；溜了先收起來，跟換照片同一個做法（#146）
-function introBarHtml(dog) {
-  if (appState.staysEdit && appState.staysEdit.dog === dog) return '';
-  const e = appState.introEdit && appState.introEdit.dog === dog ? appState.introEdit : null;
-  if (!e) return '';
-  const busy = e.phase === 'saving';
-  return `<div class="detail-bar photo-bar">${busy ? '' : '<button type="button" class="bar-btn" id="introCancel">取消</button>'}<button type="submit" form="introForm" class="bar-confirm"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存介紹'}</button></div>`;
-}
-function openIntroEdit(dog) {
-  if (!dog || !dog.id || !appState.UPLOAD_URL) return;
-  appState.introEdit = detailEdits.open(dog, { text: introOf(dog) || '', events: intakeDraft(dog) });
-  renderDetail();
-  const box = document.querySelector('#introForm [data-intake-field="date"]') || document.getElementById('introText');
-  if (box) {
-    box.focus({ preventScroll: true }); // 捲到看得見交給 detail-viewport.js，只捲狗卡不捲整頁（#389）
-  }
-}
-async function saveIntro() {
-  const e = appState.introEdit;
-  if (!e || e.phase === 'saving') return;
-  const editor = editorName();
-  if (!editor) { detailEdits.fail(e, NEED_EDITOR); return; }
-  const text = e.text.replace(/\r\n?/g, '\n').trim();
-  if ([...text].length > INTRO_MAX) { detailEdits.fail(e, `最多 ${INTRO_MAX} 字`); return; }
-  if (e.events.reduce((n, row) => n + [...row.event].length, 0) > INTRO_MAX) { detailEdits.fail(e, '原因合計最多 1000 字'); return; }
-  detailEdits.saving(e);
-  let out = null, error = '';
-  const r = await BQApi.saveIntro(e.dog.id, { editor, text, events: e.events, revision:e.revision });
-  out = r.data;
-  if (r.error === 'network') error = '沒有存進去，請確認網路後再試';
-  else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
-  else if (!Array.isArray(out.intakeEvents) && (e.events.length || intakeEventsOf(e.dog).length)) error = '伺服器尚未確認逐次紀錄已儲存，請稍後再試';
-  if (appState.introEdit !== e) return;
-  if (error) {
-    detailEdits.fail(e, error);
-    return;
-  }
-  if(out.revision)e.dog.editRevision=out.revision;
-  introOverrides[e.dog.id] = typeof out.intro === 'string' ? out.intro : text;
-  e.dog.intakeEvents = Array.isArray(out.intakeEvents) ? out.intakeEvents : e.events;
-  appState.introEdit = null;
-  render(); renderDetail();
-  const b = document.getElementById('introEdit');
-  if (b) b.focus({ preventScroll: true });
-  BQWalkUI.showToast(`${e.dog.name} 的介紹已存好（其他人重新整理就看得到）`);
-}
-
-// 出入所紀錄（#333，ADR 0011）：照時間列出每一次在所；誰都能補、改、刪（要先選名字），離所的狗也可以改（ADR 0011）。
-// 整隻狗一次存（Worker 的 /stays），連同打開時看到的內容一起送，別人剛改過會被擋下來
-const STAYS_MAX = 30;
-function staysSectionHtml(dog) {
-  const e = appState.staysEdit && appState.staysEdit.dog === dog ? appState.staysEdit : null;
-  if (!e) return '';
-  const busy = e.phase === 'saving';
-  const today = isoDay(new Date());
-  return `<section class="detail-section" data-section="intro">
-    <form class="rest-form stays-form" id="staysForm" autocomplete="off">
-      <h3>${icon('card')}入所介紹</h3>
-      <p class="rest-hint">每次在所一筆，還在所就不填出所日。入所日從現在的編號、舊編號和這裡最早的那天算。</p>
-      <div class="intake-rows">${e.rows.map((row, i) => `<fieldset class="intake-row"><legend>第 ${i + 1} 筆</legend>
-        <label>入所日<input type="date" max="${today}" data-stay-row="${i}" data-stay-field="in" value="${esc(row.in)}"${busy ? ' disabled' : ''}></label>
-        <label>出所日<input type="date" max="${today}" data-stay-row="${i}" data-stay-field="out" value="${esc(row.out)}"${busy ? ' disabled' : ''}></label>
-        <label>原因<input type="text" maxlength="40" data-stay-row="${i}" data-stay-field="reason" value="${esc(row.reason)}" placeholder="例：迷路、退養、整修移所"${busy ? ' disabled' : ''}></label>
-        <button type="button" class="intake-remove" data-stay-remove="${i}"${busy ? ' disabled' : ''}>刪掉第 ${i + 1} 筆</button>
-      </fieldset>`).join('')}</div>
-      <button type="button" id="staysAdd"${busy || e.rows.length >= STAYS_MAX ? ' disabled' : ''}>新增一筆</button>
-      ${e.error ? `<div class="photo-error" role="alert">${esc(e.error)}</div>` : ''}
-      <div class="stays-actions">${busy ? '' : '<button type="button" class="former-cancel" id="staysCancel">取消</button>'}<button type="submit" class="former-save"${busy ? ' disabled' : ''}>${busy ? '儲存中…' : '儲存'}</button></div>
-    </form>
-  </section>`;
-}
-function openStaysEdit(dog) {
-  if (!dog || !dog.id || !appState.UPLOAD_URL) return;
-  const before = (dog.stays || []).map(r => ({ ...r }));
-  appState.staysEdit = detailEdits.open(dog, { before, rows: before.length ? before.map(r => ({ ...r })) : [{ in: '', out: '', reason: '' }] });
-  renderDetail();
-  const box = document.querySelector('#staysForm [data-stay-field="in"]');
-  if (box) {
-    box.focus({ preventScroll: true }); // 捲到看得見交給 detail-viewport.js，只捲狗卡不捲整頁（#389）
-  }
-}
-// 先在這台檢查一次（伺服器也會檢查）；回空字串是沒問題
-function staysProblem(rows) {
-  const today = isoDay(new Date());
-  for (const r of rows) {
-    if (!BQDates.parseYmd(r.in)) return '每一筆都要填入所日';
-    if (r.in > today || (r.out && r.out > today)) return '日期不能是未來的日子';
-    if (r.out && r.out < r.in) return '出所日不能早於入所日';
-  }
-  return '';
-}
-async function saveStays() {
-  const e = appState.staysEdit;
-  if (!e || e.phase === 'saving') return;
-  const editor = editorName();
-  if (!editor) { detailEdits.fail(e, NEED_EDITOR); return; }
-  // 整列都空白的當成沒填
-  const rows = e.rows.map(r => ({ in: r.in.trim(), out: r.out.trim(), reason: r.reason.trim() })).filter(r => r.in || r.out || r.reason);
-  const problem = staysProblem(rows);
-  if (problem) { detailEdits.fail(e, problem); return; }
-  detailEdits.saving(e);
-  let out = null, error = '';
-  const r = await BQApi.saveStays(e.dog.id, { editor, before: e.before, stays: rows, revision:e.revision });
-  out = r.data;
-  if (r.error === 'network') error = '沒有存進去，請確認網路後再試';
-  else if (r.status === 409) error = '別人剛改過，請重新整理再改';
-  else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
-  if (appState.staysEdit !== e) return;
-  if (error) { detailEdits.fail(e, error); return; }
-  if(out.revision)e.dog.editRevision=out.revision;
-  e.dog.stays = Array.isArray(out.stays) ? out.stays : rows;
-  appState.staysEdit = null;
-  render(); renderDetail();
-  const b = document.getElementById('staysEdit') || document.getElementById('introEdit');
-  if (b) b.focus({ preventScroll: true });
-  const first = BQDates.firstIntake(e.dog);
-  BQWalkUI.showToast(`${e.dog.name} 的出入所紀錄已存好${first ? `，入所日從 ${ymdOf(first)} 算` : ''}`);
-}
-
-function openRestEdit(dog) {
-  const r = restOf(dog);
-  const until = r ? r.until : new Date(Date.now() + 10 * 86400000);
-  appState.restEdit = detailEdits.open(dog, { until: isoDay(until), reason: r ? r.reason : '術後休養' });
-  renderDetail();
-  const first = document.getElementById('restReason');
-  if (first) {
-    first.focus({ preventScroll: true }); // 同上（#389）
-  }
-}
-// 送到 Worker：end＝結束休養。成功後這支手機馬上生效，其他志工重新整理就看得到（#250 存 D1）
-async function saveRest(end = false) {
-  const e = appState.restEdit;
-  if (!e || e.phase === 'saving') return;
-  const editor = editorName();
-  if (!editor) { detailEdits.fail(e, NEED_EDITOR); return; }
-  if (!end && !BQDates.parseYmd(e.until)) { detailEdits.fail(e, '請選到哪一天'); return; }
-  detailEdits.saving(e);
-  let out = null, error = '';
-  const r = await BQApi.saveRest(e.dog.id, end ? { editor, end: true, revision:e.revision } : { editor, until: e.until, reason: e.reason.trim(), revision:e.revision });
-  out = r.data;
-  if (r.error === 'network') error = '沒有存進去，請確認網路後再試';
-  else if (!r.ok || !out || !out.ok) error = (out && out.error) || `沒有存進去（${r.status}），請稍後再試`;
-  if (appState.restEdit !== e) return;
-  if (error) {
-    detailEdits.fail(e, error);
-    return;
-  }
-  // 換成新的物件：讀取中的 loadRest 才知道這裡改過（見 loadRest）
-  if(out.revision)e.dog.editRevision=out.revision;
-  const next = { ...appState.restMap };
-  if (out.rest) next[e.dog.id] = out.rest; else delete next[e.dog.id];
-  appState.restMap = next;
-  appState.restEdit = null;
-  render(); renderDetail();
-  BQWalkUI.showToast(out.rest ? `${e.dog.name} 休養到 ${monthDay(BQDates.parseYmd(out.rest.until))}，排到溜狗表最下面` : `${e.dog.name} 結束休養`);
-}
 // 初次讀取前不顯示未確認的排序；背景讀取失敗保留已知設定。
 async function loadRest() {
   const before = appState.restMap;
@@ -1434,377 +804,6 @@ async function loadRest() {
   if (appState.detailDog) renderDetail();
 }
 
-// 離所的狗（#164）：同一個詳細資訊，頂部標離所原因和日期取代天數，多一區離所紀錄；
-// 沒有溜了、在哪、☆、換照片，也不放同籠和可以一起溜（那是在所時的事）
-function departedDetailHtml(dog, today) {
-  const dep = dog.departure;
-  const flag = specialFlag(dog.note);
-  const back = dep.returned && appState.allDogs.find(d => d.id === dep.returned);
-  return `
-    <div class="detail-head">
-      ${BQPhoto.heroHtml(dog)}
-      <div class="info">
-        <div class="name-row"><h2 class="name" id="detailName">${esc(dog.name)}${sexMark(dog)}</h2></div>
-        <div class="chips">${departureBadge(dep)}${since(dog)}</div>
-        ${metaLine(dog)}
-      </div>
-    </div>
-    ${appState.detailTrail.length ? `<button type="button" class="detail-back" id="detailBack">${icon('back')}回到 ${esc(appState.detailTrail[appState.detailTrail.length - 1].name)}</button>` : ''}
-    <section class="detail-section departed" data-section="departure">
-      <h3>${icon('note')}離所紀錄</h3>
-      <div class="lw-row"><span class="lw-k">原因</span><span class="lw-v">${esc(DEPARTURE_LABELS[dep.reason])}</span></div>
-      <div class="lw-row"><span class="lw-k">日期</span><span class="lw-v">${esc(ymdText(dep.date))}${dep.dateSource === 'seen' ? '<small>（從試算表消失的那天）</small>' : ''}</span></div>
-      <div class="lw-row"><span class="lw-k">依據</span><span class="lw-v">${esc(departureBasis(dep))}</span></div>
-      <div class="lw-row"><span class="lw-k">最後籠位</span><span class="lw-v">${esc(dog.cage || '—')}</span></div>
-      ${back ? `<button type="button" class="detail-back" data-departed-back="${appState.allDogs.indexOf(back)}">${icon('paw')}已再入所，看現在的 ${esc(back.name)}</button>` : ''}
-    </section>
-    <section class="detail-section last-walk" data-section="last">
-      <div class="lw-row"><span class="lw-k">上次溜</span><span class="lw-v">${esc(dog.walkedDate ? ymdText(dog.walkedDate) : '沒有紀錄')}</span></div>
-    </section>
-    <section class="detail-section" data-section="note">
-      <h3>${icon('note')}試算表備註<span class="sub">離所前最後一次</span></h3>
-      ${!dog.note ? `<div class="empty">沒有備註</div>`
-        : flag ? warnNote(dog.note, flag)
-        : `<div class="content note-text">${esc(dog.note)}</div>`}
-    </section>
-    ${walkHistorySection(dog, today)}
-    ${introSectionHtml(dog, introOf(dog))}
-    <div class="detail-bar"><button type="button" class="bar-btn" id="detailClose">關閉</button></div>
-  `;
-  function since(d) {
-    const s = BQDates.firstIntake(d);
-    return s ? `<span class="badge plain">入所 ${s.getFullYear()}/${s.getMonth() + 1}</span>` : '';
-  }
-}
-
-const DEPARTURE_LABELS = { adopt: '認養', death: '離世', other: '其他', unknown: '待確認' };
-function ymdText(d) {
-  return d ? `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}` : '日期不明';
-}
-function departureBadge(dep) {
-  const label = dep.reason === 'unknown' ? '待確認' : `已${DEPARTURE_LABELS[dep.reason] === '其他' ? '離所' : DEPARTURE_LABELS[dep.reason]}`;
-  return `<span class="badge dep-${dep.reason}">${esc(label)}${dep.date ? ` · ${dep.date.getMonth() + 1}/${dep.date.getDate()}` : ''}</span>`;
-}
-// 判讀依據：只寫命中的關鍵字，不放已出所分頁的原文（K 2026-10-08）
-function departureBasis(dep) {
-  if (dep.reason !== 'unknown') return `已出所分頁寫了「${dep.matched}」`;
-  if (dep.flags.includes('not-in-sheet')) return '已出所分頁找不到這隻狗';
-  if (dep.flags.includes('conflict')) return `已出所分頁同時寫了「${dep.matched}」，看不出是哪一個`;
-  if (dep.flags.includes('duplicate')) return '已出所分頁有好幾列，寫的不一樣';
-  if (dep.flags.includes('unsure')) return `已出所分頁寫了「${dep.matched}」，還沒定案`;
-  return '已出所分頁沒寫原因';
-}
-
-// V9（#141 第 9 項）：上次溜的日期和溜狗人，放在照片和名字下面第一個
-function lastWalkSection(dog, today) {
-  const s = computeStatus(dog, today);
-  const d = s.mine ? today : effectiveWalkDate(dog, today);
-  const date = d ? `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}（${'日一二三四五六'[d.getDay()]}）` : (s.kind === 'covered' ? '有人固定照顧' : '沒有紀錄');
-  const who = walkerList(dog, today);
-  return `<section class="detail-section last-walk" data-section="last">
-    <div class="lw-row"><span class="lw-k">上次溜</span><span class="lw-v">${esc(date)}</span></div>
-    <div class="lw-row"><span class="lw-k">溜狗人</span><span class="lw-v">${BQWalkUI.walkerChipsHtml(dog, who, today)}</span></div>
-    ${BQWalkUI.walkSyncHtml(dog)}
-  </section>`;
-}
-
-// 詳細資訊狗名下面的標籤：籠位、入所年月（天數標籤是 statusBadge）
-function detailChips(dog) {
-  const since = BQDates.firstIntake(dog);
-  const home = dog.homeCage ? `<small>暫住，原本 ${esc(dog.homeCage)}</small>` : '';
-  // K 2026-10-09：詳細資訊的籠位也要能點開平面圖（找得到位置的籠位才做成按鈕）
-  const where = typeof whereKnown === 'function' && whereKnown(dog);
-  return (dog.cage ? (where
-    ? `<button type="button" class="badge plain cage-badge" data-where aria-label="${esc(dog.name)} 在哪：${esc(dog.cage)}">${icon('pin')}${esc(dog.cage)}${home}</button>`
-    : `<span class="badge plain">${icon('pin')}${esc(dog.cage)}${home}</span>`) : '')
-    + (since ? `<span class="badge plain">入所 ${since.getFullYear()}/${since.getMonth() + 1}</span>` : '');
-}
-
-// 已經顯示過的照片畫成這支手機上的本機圖片（網站要幾分鐘才更新，換好後先用這個顯示）；讀不到回 null
-async function imageToLocal(src) {
-  try {
-    const img = new Image();
-    img.src = src;
-    await img.decode();
-    const canvas = document.createElement('canvas');
-    canvas.width = img.naturalWidth;
-    canvas.height = img.naturalHeight;
-    canvas.getContext('2d').drawImage(img, 0, 0);
-    const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.9));
-    return blob ? URL.createObjectURL(blob) : null;
-  } catch (e) {
-    return null;
-  }
-}
-
-// 可以一起溜的每一隻：輕點照片換看那隻；右上角圓圈勾選，之後用下方按鈕一起記（#35，K 選 C）。
-// 今天已溜的不顯示圓圈，改標「今天已溜」
-function buddyTile(d, name, walkedNow, mate) {
-  const walked = walkedNow.has(d);
-  const canPick = walkKey(d) && !walked && appState.allDogs.includes(d);
-  const picked = canPick && appState.pickedBuddies.has(walkKey(d));
-  return `<div class="buddy-tile">
-    <button class="buddy" data-dog="${appState.allDogs.indexOf(d)}"${appState.allDogs.includes(d) ? '' : ' disabled'}>${photoThumb(d, 64)}<span class="bname">${esc(name)}</span></button>
-    ${mate ? `<span class="mate-tag">同籠</span>` : ''}
-    ${walked ? `<span class="walked-tag">今天已溜</span>` : ''}
-    ${canPick ? `<button type="button" class="pick${picked ? ' on' : ''}" data-pick="${esc(walkKey(d))}" aria-pressed="${picked}" aria-label="勾選 ${esc(name)} 一起記">${icon('tick')}</button>` : ''}
-  </div>`;
-}
-
-// 同籠的狗（K 2026-09-27）：籠位欄位一樣的其他狗，跟「可以一起溜」同一種格子，也能勾選一起記。
-// 「○○區」（住院區、C區）是整區不是一籠，不算同籠；母幼區（母幼A…）也是各自一籠（K 2026-10-16）；沒有同籠的狗整段不顯示
-function cageMates(dog) {
-  const cage = String(dog.cage || '').replace(/\s+/g, '');
-  if (!cage || /區$/.test(cage) || /^母幼/.test(cage)) return [];
-  return appState.allDogs.filter(d => d !== dog && String(d.cage || '').replace(/\s+/g, '') === cage);
-}
-
-// 同籠＋可以一起溜合成一段（K 2026-10-10 減法：兩段常常是同一批狗）：同籠的排前面、標「同籠」，
-// 登記可以一起溜又不同籠的接在後面；同一隻只出現一次
-function togetherSection(dog, walked) {
-  const byName = new Map(appState.allDogs.map(d => [d.name, d]));
-  const mates = cageMates(dog);
-  const buddies = [...(appState.groupMap[dog.name] || [])].map(n => byName.get(n) || { name: n, id: '' });
-  const list = [...mates, ...buddies.filter(d => !mates.includes(d))];
-  return `
-    <section class="detail-section" data-section="group">
-      <h3>${icon('group')}同籠、可以一起溜的狗</h3>
-      ${list.length
-        ? `<div class="buddies">${list.map(d => buddyTile(d, d.name, walked, mates.includes(d))).join('')}</div>`
-        : `<div class="empty">沒有同籠，也沒有登記可以一起溜的狗</div>`}
-      <a class="group-page-link" href="groups.html">看全部狗群</a>
-    </section>`;
-}
-
-// 「可以一起溜」下方的按鈕：把目前這隻連同勾選的狗一次記進今天已溜。
-// 目前這隻已溜又沒勾選時，就顯示目前這隻今天已溜，不放按鈕
-function groupWalkButton(dog, walked) {
-  if (BQWalkUI.walkPendingNow(dog) && !walkedNow(dog)) return `<button type="button" class="group-walk" id="groupWalk" disabled>登記中</button>`;
-  const rest = restOf(dog);
-  const self = !!walkKey(dog) && !walked.has(dog) && !rest;
-  const n = [...appState.pickedBuddies].length;
-  if (!self && !n) {
-    if (rest) return `<div class="self-walked rest">休養中，暫停帶出</div>`;
-    return walked.has(dog) ? `<div class="self-walked">${icon('tick')}今天已溜</div>` : '';
-  }
-  // 底部列空間小（#112）：只有自己寫「溜了」，有勾選才寫幾隻
-  const label = !n ? '溜了'
-    : self ? `和勾選的 ${n} 隻都溜了`
-    : `勾選的 ${n} 隻都溜了`;
-  return `<button type="button" class="group-walk" id="groupWalk">${icon('tick')}${label}</button>`;
-}
-
-// 詳細資訊的按鈕（#86）：在外框綁一次，依按下的是哪個按鈕分派，每次重畫內容不用重新綁。
-// 由上往下找第一個符合的，所以同一個按鈕只會做一件事
-const DETAIL_CLICKS = [
-  ['#fixedCareToggle', () => toggleFixedCare(appState.detailDog)],
-  ['#detailClose', () => closeDetail()],
-  ['[data-zoom]', el => { if (!el.classList.contains('no-photo')) openLightbox(appState.detailDog, el); }],
-  ['#photoCrop', () => BQPhoto.cropPreview()],
-  ['#photoPick', () => BQPhoto.pick()],
-  ['#restEdit', () => openRestEdit(appState.detailDog)],
-  ['#introEdit', () => openIntroEdit(appState.detailDog)],
-  ['#formerAdd', () => openFormerEdit(appState.detailDog)],
-  ['#staysEdit', () => openStaysEdit(appState.detailDog)],
-  ['#staysCancel', () => { appState.staysEdit = null; renderDetail(); const b = document.getElementById('staysEdit') || document.getElementById('introEdit'); if (b) b.focus({ preventScroll: true }); }],
-  ['#formerCancel', () => { appState.formerEdit = null; renderDetail(); const b = document.getElementById('formerAdd'); if (b) b.focus({ preventScroll: true }); }],
-  ['[data-former-del]', el => removeFormer(appState.detailDog, el.dataset.formerDel)],
-  ['#walksToggle', () => { appState.detailWalksOpen = !appState.detailWalksOpen; renderDetail(); const b = document.getElementById('walksToggle'); if (b) b.focus({ preventScroll: true }); }],
-  ['#introCancel', () => { appState.introEdit = null; renderDetail(); const b = document.getElementById('introEdit'); if (b) b.focus({ preventScroll: true }); }],
-  ['#restEnd', () => saveRest(true)],
-  ['#restCancel', () => { appState.restEdit = null; renderDetail(); const b = document.getElementById('restEdit'); if (b) b.focus({ preventScroll: true }); }],
-  ['#photoConfirm', () => BQPhoto.upload()],
-  ['#photoCancel', () => { BQPhoto.clear(); renderDetail(); }],
-  ['.buddy', el => { const d = appState.allDogs[el.dataset.dog]; if (d) showDetail(d); }],
-  ['#whoAdd', () => BQWalkUI.openWithSheet([appState.detailDog], true)],
-  ['[data-who-undo]', () => BQWalkUI.sheetUndoable(appState.detailDog) ? BQWalkUI.setWalked([appState.detailDog], false) : BQWalkUI.undoSheetWalks([appState.detailDog], null, { revert: true, reveal: true })],
-  ['[data-who-remove]', el => {
-    const n = el.dataset.whoRemove;
-    BQWalkUI.editWalkers(appState.detailDog, walkerList(appState.detailDog).filter(x => x !== n), `已拿掉 ${n}`);
-  }],
-  ['#favToggle', () => { appState.favorites.toggleFav(appState.detailDog); renderDetail(); render(); }],
-  ['#detailBack', () => { const d = appState.detailTrail.pop(); if (d) showDetail(d, false); }],
-  ['[data-departed-back]', el => { const d = appState.allDogs[el.dataset.departedBack]; if (d) showDetail(d); }],
-  ['#detailWhere', el => whereOpen(appState.detailDog, el)],
-  ['[data-where]', el => whereOpen(appState.detailDog, el)],
-  ['.pick', el => {
-    const id = el.dataset.pick;
-    if (appState.pickedBuddies.has(id)) appState.pickedBuddies.delete(id); else appState.pickedBuddies.add(id);
-    renderDetail();
-  }],
-  ['#groupWalk', () => {
-    const picked = [...appState.pickedBuddies].map(id => appState.allDogs.find(d => walkKey(d) === id));
-    BQWalkUI.setWalked([appState.detailDog, ...picked], true);
-  }],
-];
-
-function wireDetail(box) {
-  if (box.bqWired) return;
-  box.bqWired = true;
-  box.addEventListener('click', e => {
-    if (!appState.staysEdit || appState.staysEdit.phase === 'saving') return;
-    if (e.target.closest('#staysAdd') && appState.staysEdit.rows.length < STAYS_MAX) {
-      appState.staysEdit.rows.push({ in: '', out: '', reason: '' });
-      renderDetail(); box.querySelector('.stays-form .intake-row:last-child input')?.focus({ preventScroll: true });
-    }
-    const remove = e.target.closest('[data-stay-remove]');
-    if (remove) {
-      appState.staysEdit.rows.splice(Number(remove.dataset.stayRemove), 1);
-      renderDetail(); box.querySelector('#staysAdd')?.focus({ preventScroll: true });
-    }
-  });
-  box.addEventListener('click', e => {
-    if (!appState.introEdit || appState.introEdit.phase === 'saving') return;
-    if (e.target.closest('#intakeAdd') && appState.introEdit.events.length < 30) {
-      appState.introEdit.events.push({ number: appState.introEdit.dog.id, date: '', event: '' });
-      renderDetail(); box.querySelector('.intake-row:last-child input')?.focus({ preventScroll: true });
-    }
-    const remove = e.target.closest('[data-intake-remove]');
-    if (remove) {
-      appState.introEdit.events.splice(Number(remove.dataset.intakeRemove), 1);
-      renderDetail(); box.querySelector('#intakeAdd')?.focus({ preventScroll: true });
-    }
-  });
-  // 休養設定表單：打的字記在 restEdit，重畫不會不見；送出走 saveRest
-  box.addEventListener('input', e => {
-    if (appState.staysEdit && e.target.dataset.stayField) {
-      const row = appState.staysEdit.rows[Number(e.target.dataset.stayRow)];
-      if (row) detailEdits.draft(row, { [e.target.dataset.stayField]: e.target.value });
-      return;
-    }
-    if (appState.introEdit && e.target.dataset.intakeField) {
-      const row = appState.introEdit.events[Number(e.target.dataset.intakeRow)];
-      if (row) detailEdits.draft(row, { [e.target.dataset.intakeField]: e.target.value });
-      return;
-    }
-    if (appState.introEdit && e.target.id === 'introText') {
-      detailEdits.draft(appState.introEdit, { text: e.target.value });
-      const c = box.querySelector('.intro-count');
-      if (c) { const n = [...appState.introEdit.text].length; c.textContent = `${n} / ${INTRO_MAX} 字`; c.classList.toggle('over', n > INTRO_MAX); }
-      return;
-    }
-    if (appState.formerEdit && e.target.id === 'formerText') { detailEdits.draft(appState.formerEdit, { text: e.target.value }); return; }
-    if (!appState.restEdit) return;
-    if (e.target.id === 'restReason') detailEdits.draft(appState.restEdit, { reason: e.target.value });
-    else if (e.target.id === 'restUntil') detailEdits.draft(appState.restEdit, { until: e.target.value });
-  });
-  box.addEventListener('submit', e => {
-    if (e.target.id === 'introForm') { e.preventDefault(); saveIntro(); return; }
-    if (e.target.id === 'formerForm') { e.preventDefault(); saveFormer(); return; }
-    if (e.target.id === 'staysForm') { e.preventDefault(); saveStays(); return; }
-    if (e.target.id !== 'restForm') return;
-    e.preventDefault();
-    saveRest();
-  });
-  box.addEventListener('click', e => {
-    if (!appState.detailDog || !e.target.closest) return;
-    for (const [sel, run] of DETAIL_CLICKS) {
-      const el = e.target.closest(sel);
-      if (!el || !box.contains(el)) continue;
-      if (!el.disabled) run(el);
-      return;
-    }
-  });
-}
-
-// 已經有照片就把相機按鈕叫「更換照片」；照片晚一點才載入完也會改（詳細資訊已關就不管）
-function labelPhotoPick(box) {
-  const pick = box.querySelector('#photoPick');
-  const img = box.querySelector('[data-zoom] img');
-  if (!pick || !img) return;
-  const dog = appState.detailDog;
-  const label = () => {
-    if (img.naturalWidth && pick.isConnected) { pick.setAttribute('aria-label', `更換 ${dog.name} 的照片`); pick.title = '更換照片'; }
-  };
-  label();
-  img.addEventListener('load', label);
-}
-
-const detailEditorViewport = createDetailEditorViewport(document.getElementById('detailBackdrop'), document.getElementById('detail'));
-
-function renderDetail() {
-  for (const [key, field] of [['editIntro','introEdit'],['editRest','restEdit'],['editStays','staysEdit'],['editFormer','formerEdit']]) {
-    if (!canEdit(key) && appState[field]?.phase !== 'saving') appState[field] = null;
-  }
-  if (!appState.detailDog) return;
-  const box = document.getElementById('detail');
-  wireDetail(box);
-  const editingFocus = detailEditorViewport.capture();
-  const focused = box.contains(document.activeElement) ? document.activeElement : null;
-  // 重畫後留在原本捲到的位置（K 2026-10-10：補完資料「整個卡片就會跳掉」）；換看別隻時 showDetail 會自己捲回最上面
-  const top = box.scrollTop;
-  box.innerHTML = detailHtml(appState.detailDog, new Date());
-  box.scrollTop = top;
-  labelPhotoPick(box);
-  if (focused) {
-    const replacement = [...box.querySelectorAll('button, textarea, input:not([hidden])')].find(btn =>
-      (focused.id && btn.id === focused.id) ||
-      (focused.dataset.pick && btn.dataset.pick === focused.dataset.pick) ||
-      (focused.classList.contains('buddy') && btn.classList.contains('buddy') && btn.dataset.dog === focused.dataset.dog) ||
-      (focused.dataset.gFile && btn.dataset.gFile === focused.dataset.gFile) ||
-      (focused.hasAttribute('data-g-main') && btn.hasAttribute('data-g-main')));
-    // 選了照片時底部換成取消／確認上傳（#146），沒有關閉鈕就落到那列第一顆
-    const fallback = box.querySelector('#detailClose') || box.querySelector('.photo-bar button');
-    if (replacement || fallback) (replacement || fallback).focus({ preventScroll: true });
-  }
-  detailEditorViewport.restore(editingFocus);
-}
-
-// 在詳細資訊裡點「可以一起溜的狗」會直接換成那隻，不多疊一層；換之前的狗記在 detailTrail，可以按「回到 ○○」
-function showDetail(dog, remember = true) {
-  const wasOpen = !!appState.detailDog;
-  if (!wasOpen) appState.detailOpener = { element: document.activeElement, index: appState.allDogs.indexOf(dog) };
-  if (wasOpen && remember && dog !== appState.detailDog) appState.detailTrail.push(appState.detailDog);
-  if (dog !== appState.detailDog) {
-    detailEditorViewport.reset();
-    appState.pickedBuddies.clear();
-    appState.detailWalksOpen = false;
-    if (!appState.restEdit || appState.restEdit.phase !== 'saving') appState.restEdit = null;
-    if (!appState.introEdit || appState.introEdit.phase !== 'saving') appState.introEdit = null;
-    if (!appState.formerEdit || appState.formerEdit.phase !== 'saving') appState.formerEdit = null;
-    if (!appState.staysEdit || appState.staysEdit.phase !== 'saving') appState.staysEdit = null;
-    BQPhoto.leaveDetail();
-  }
-  appState.detailDog = dog;
-  renderDetail();
-  document.getElementById('detailBackdrop').hidden = false;
-  detailEditorViewport.sync();
-  document.documentElement.classList.add('detail-open');
-  document.getElementById('detail').scrollTop = 0;
-  // 手機按「返回」時只關掉詳細資訊，不離開網頁
-  if (!wasOpen) history.pushState({ bqDetail: true }, '');
-  const first = document.getElementById('detailClose') || document.querySelector('#detail .photo-bar button');
-  if (first) first.focus({ preventScroll: true });
-}
-
-function hideDetail() {
-  if (!appState.detailDog) return;
-  detailEditorViewport.reset();
-  appState.detailDog = null;
-  appState.detailWalksOpen = false;
-  appState.detailTrail = [];
-  appState.pickedBuddies.clear();
-  if (!appState.restEdit || appState.restEdit.phase !== 'saving') appState.restEdit = null;
-  if (!appState.introEdit || appState.introEdit.phase !== 'saving') appState.introEdit = null;
-  if (!appState.formerEdit || appState.formerEdit.phase !== 'saving') appState.formerEdit = null;
-  if (!appState.staysEdit || appState.staysEdit.phase !== 'saving') appState.staysEdit = null;
-  BQPhoto.leaveDetail();
-  document.getElementById('detailBackdrop').hidden = true;
-  document.getElementById('detail').innerHTML = '';
-  document.documentElement.classList.remove('detail-open');
-  if (appState.detailOpener) {
-    const card = document.querySelector(`#main .card[data-dog="${appState.detailOpener.index}"]`);
-    const opener = appState.detailOpener.element;
-    (card || (opener && opener.isConnected && opener !== document.body ? opener : searchInput)).focus({ preventScroll: true });
-    appState.detailOpener = null;
-  }
-}
-
-function closeDetail() {
-  if (history.state && history.state.bqDetail) history.back(); // popstate 會接著 hideDetail
-  else hideDetail();
-}
-
 // 燈箱開著時「返回」只關燈箱，詳細資訊留著
 
 // 狗卡用事件委派：renderMain 每次重畫卡片都不用重新綁
@@ -1814,16 +813,7 @@ function cardFromEvent(e) {
 }
 // 點「已遛／移回」只記錄，不開詳細資訊；點照片開燈箱（#46，沒照片就照舊開詳細資訊）；點卡片其他地方開詳細資訊
 
-// 搜尋比對用：去掉空白、全形轉半形、英文不分大小寫
-function searchKey(text) {
-  return String(text || '').normalize('NFKC').replace(/\s+/g, '').toLowerCase();
-}
 
-// 犬名部分符合即算；沒輸入（或只有空白）時每隻都符合
-function matchesSearch(dog, query) {
-  const q = searchKey(query);
-  return !q || searchKey(dog.name).includes(q);
-}
 
 // 主分類（V3，#33）：順序就是左右滑動切換的順序
 const TABS = [
@@ -1853,18 +843,20 @@ function buildTabs(counts) {
 
 // 切換分類：標籤跟著亮起，畫面回到內容最上面
 appState.lastInputTouch = false;
+// 頁籤的歷史紀錄：按返回時照這筆換回頁籤（bindOverlays 的 navigate）
+function navigationState(tab) {
+  return { bqNavigation: true, tab, base: appState.activeTab, returnTab: appState.groupsReturnTab, infoPage: typeof analysisState.infoPage === 'undefined' ? '' : analysisState.infoPage };
+}
 function switchTab(id, pushHistory = true) {
   // find 保留給舊入口與操作教學，底部不再佔一格。
   if (id !== 'find' && !TABS.some(t => t.id === id)) return;
   const changed = id !== (appState.analysisOpen ? 'info' : appState.activeTab);
-  if (pushHistory && changed) {
-    history.replaceState({ bqNavigation: true, tab: appState.analysisOpen ? 'info' : appState.activeTab, base: appState.activeTab, returnTab: appState.groupsReturnTab, infoPage: typeof analysisState.infoPage === 'undefined' ? '' : analysisState.infoPage }, '');
-  }
+  const before = pushHistory && changed ? navigationState(appState.analysisOpen ? 'info' : appState.activeTab) : null;
   if (id === 'groups' && appState.activeTab !== 'groups') appState.groupsReturnTab = appState.analysisOpen ? 'info' : appState.activeTab;
   if (pushHistory && changed && id === 'info') analysisState.infoPage = '';
   appState.analysisOpen = id === 'info';
   if (!appState.analysisOpen) appState.activeTab = id;
-  if (pushHistory && changed) history.pushState({ bqNavigation: true, tab: id, base: appState.activeTab, returnTab: appState.groupsReturnTab, infoPage: typeof analysisState.infoPage === 'undefined' ? '' : analysisState.infoPage }, '');
+  if (before) pushPage(before, navigationState(id));
   if (changed && id === 'groups') refreshGroupStage();
   const prevFocus = document.activeElement;
   render();
@@ -1875,15 +867,6 @@ function switchTab(id, pushHistory = true) {
   if (btn && (prevFocus?.closest?.('#tabs') || (!appState.lastInputTouch && focusRemoved))) btn.focus({ preventScroll: true });
   if (btn && btn.scrollIntoView) btn.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   if (changed) window.scrollTo(0, 0);
-}
-
-// step：+1 下一個分類、-1 上一個；第一頁再往前、最後一頁再往後都不動（不循環）
-function stepTab(step) {
-  const i = TABS.findIndex(t => t.id === appState.activeTab);
-  const next = i + step;
-  if (next < 0 || next >= TABS.length) return false;
-  switchTab(TABS[next].id);
-  return true;
 }
 
 const mainEl = document.getElementById('main');
@@ -1968,14 +951,9 @@ function syncRange() {
 }
 function queueRange() { if (!appState.rangeFrame) appState.rangeFrame = requestAnimationFrame(syncRange); }
 
-// 溜狗表（沿用原待巡房）：所有狗依幾天沒遛由久到近；沒有遛狗紀錄的排最前，有人固定照顧的排最後
+// 溜狗表排序規則在 js/dog-status.js
 function dueDogs(dogs, today) {
-  // 休養中排最下面（K 2026-10-09），有人固定照顧在它上面
-  const key = s => s.kind === 'unknown' ? Infinity : s.kind === 'dated' ? Math.max(0, s.days) : s.kind === 'covered' ? -1 : -2;
-  return dogs
-    .map(d => ({ d, k: key(computeStatus(d, today)) }))
-    .sort((a, b) => (b.k === a.k ? 0 : b.k > a.k ? 1 : -1))
-    .map(x => x.d);
+  return sortDue(dogs, d => computeStatus(d, today));
 }
 
 // 溜狗表一律最久沒溜在前（2026-10-08 K 同意介面評估：拿掉排序切換和「幾天以上」篩選，天數的顏色就看得出來）。
@@ -2144,9 +1122,6 @@ function syncSearchClear() {
 
 // 點 X：清空文字、回到目前分頁的完整內容，不換分頁；游標留在搜尋框方便重打
 
-function pad2(n) {
-  return String(n).padStart(2, '0');
-}
 
 // 資訊的「使用說明」（#447）：回到溜狗表從第一步再看一次，不動名字
 function openGuide() {
@@ -2174,9 +1149,11 @@ async function init() {
 }
 
 // 換上讀到的 dogs.json（打開網頁時、按「更新」拿到新資料時）
+// groupCheck：狗群頁登記前與背景檢查重讀狗清單時，只補休養與今日登記（登記前要擋休養中的狗）；
+// 我溜過、常溜照開頁與按「更新」的時機讀，不跟著每次狗群檢查重抓（R7）
 
 appState.dataSyncedAt = null;
-function applyDogsData(data) {
+function applyDogsData(data, { groupCheck = false } = {}) {
   appState.allDogs = mergeTempCages(data.dogs);
   if (appState.detailDog) {
     const current = appState.allDogs.find(d => (d.id || d.dogId) === (appState.detailDog.id || appState.detailDog.dogId));
@@ -2191,11 +1168,13 @@ function applyDogsData(data) {
   appState.dataSyncedAt = data.syncedAt;
   renderUpdatedLabel();
   appState.loadState = 'ready';
+  // 狗清單帶了今天的紀錄（K 2026-10-26）：開頁不用再等 /today，讀到狗清單就能排溜狗表
+  const withToday = receiveTodayWithDogs(data.today);
   render();
-  loadMyWalks();
+  if (!groupCheck) loadMyWalks();
   loadRest();
-  appState.favorites.syncFavs();
-  loadTodayWalks();
+  if (!groupCheck) appState.favorites.syncFavs();
+  if (!withToday) loadTodayWalks();
   if (appState.detailDog) renderDetail();
 }
 
@@ -2255,47 +1234,15 @@ if (!window.__BQ_TEST__) {
 }
 }
 
-export { fixedCareEdits, FIRST_SCREEN_CARDS, WALKER_CODES_KEY, WALKER_CODE_PATTERN, SPECIAL_KEYWORDS, AMBER_DAYS, RED_DAYS, detailEdits, introOverrides, mergeTempCages, loadDogsData, fetchDogsData, parseMyWalks, apiData, fetchWalks, walkYears, recentStartMonth, missingWalkYears, loadWalkYear, loadMyWalks, currentMyWalks, myWalksCount, mineTabNumber, mineTabLabel, loadMyCodes, saveMyCodes, walkerCodesFor, dogOfWalk, walkDateLabel, myWalkGroups, myVisitCard, myMonthStats, myProgressHtml, myWalksHtml, myCalendarState, myCalendarHtml, specialFlag, highlightNote, effectiveWalkDate, computeStatus, restOf, monthDay, esc, icon, versioned, photoOverrides, photoSrc, photoThumbSrc, thumbFallback, thumbAttrs, photoThumb, lightboxOpen, insidePhoto, openLightbox, showLightboxPhoto, hideLightbox, closeLightbox, statusBadge, lastWalk, cardMeta, tempCageText, metaLine, ymdOf, reentryLine, openFormerEdit, sendFormer, saveFormer, removeFormer, sexMark, warnNote, loadWalkedIds, saveWalkedIds, walkKey, walkedNow, walkedToday, recordWalked, WALKER_NAME_KEY, WALKER_NAME_SEP, allWalkerNames, isOffline, setWalkerNamesOffline, loadWalkerNames, TODAY_POLL_MS, TODAY_REFETCH_MS, fetchWalkStatus, loadTodayWalks, refreshTodayWalks, canonicalWalker, splitWalkers, walkerList, loadCompanions, loadWalkWith, addWalkWith, clearWalkWith, firstWalkerName, loadWalkerName, saveWalkerName, loadSheetWrites, saveSheetWrites, myAliasIn, walkRegistration, d1Base, NEED_EDITOR, editorName, editorHeaders, APPEND_MAX, appendEntry, nextLogLabel, appendPreview, sheetAppendHtml, rerenderAppend, sendAppend, dogCard, favButtonHtml, detailHtml, restNoteHtml, isoDay, fixedCareHtml, toggleFixedCare, restAdminHtml, INTRO_MAX, intakeEventsOf, intakeDraft, intakePresentation, intakeListHtml, intakeEditorHtml, introOf, introSectionHtml, introBarHtml, openIntroEdit, saveIntro, STAYS_MAX, staysSectionHtml, openStaysEdit, staysProblem, saveStays, openRestEdit, saveRest, loadRest, departedDetailHtml, DEPARTURE_LABELS, ymdText, departureBadge, departureBasis, lastWalkSection, detailChips, imageToLocal, buddyTile, cageMates, togetherSection, groupWalkButton, DETAIL_CLICKS, wireDetail, labelPhotoPick, detailEditorViewport, renderDetail, showDetail, hideDetail, closeDetail, cardFromEvent, searchKey, matchesSearch, TABS, buildTabs, switchTab, stepTab, mainEl, render, skeletonHtml, appHeader, syncHeaderShadow, appBrand, syncHeaderTuck, bottomBarEl, syncBottomBar, dayWord, rangeText, rangeLabel, syncRange, queueRange, dueDogs, WALK_FAV_KEY, loadWalkFav, saveWalkFav, walkFilterHtml, WALK_VIEW_KEY, loadWalkView, saveWalkView, walkToolsHtml, walkRow, renderMain, searchInput, searchClear, syncSearchClear, pad2, openGuide, init, applyDogsData, renderUpdatedLabel, freshWalkList, refreshData, syncBtn, startApp };
+export { FIRST_SCREEN_CARDS, WALKER_CODES_KEY, WALKER_CODE_PATTERN, saveIdentity, currentIdentity, mergeTempCages, loadDogsData, fetchDogsData, parseMyWalks, apiData, fetchWalks, walkYears, recentStartMonth, missingWalkYears, loadWalkYear, loadMyWalks, currentMyWalks, myWalksCount, mineTabNumber, mineTabLabel, loadMyCodes, saveMyCodes, walkerCodesFor, dogOfWalk, walkDateLabel, myWalkGroups, myVisitCard, myMonthStats, myProgressHtml, myWalksHtml, myCalendarState, myCalendarHtml, effectiveWalkDate, computeStatus, restOf, versioned, photoOverrides, photoSrc, photoThumbSrc, thumbFallback, thumbAttrs, photoThumb, lightboxOpen, insidePhoto, openLightbox, showLightboxPhoto, hideLightbox, closeLightbox, lastWalk, cardMeta, tempCageText, sexMark, warnNote, walkedNow, walkedToday, WALKER_NAME_KEY, WALKER_NAME_SEP, allWalkerNames, isOffline, setWalkerNamesOffline, loadWalkerNames, TODAY_POLL_MS, TODAY_REFETCH_MS, fetchWalkStatus, loadTodayWalks, refreshTodayWalks, canonicalWalker, splitWalkers, walkerList, loadCompanions, loadWalkWith, addWalkWith, clearWalkWith, firstWalkerName, loadWalkerName, saveWalkerName, myAliasIn, walkRegistration, d1Base, NEED_EDITOR, editorName, editorHeaders, dogCard, loadRest, cardFromEvent, TABS, buildTabs, switchTab, mainEl, render, skeletonHtml, appHeader, syncHeaderShadow, appBrand, syncHeaderTuck, bottomBarEl, syncBottomBar, dayWord, rangeText, rangeLabel, syncRange, queueRange, dueDogs, WALK_FAV_KEY, loadWalkFav, saveWalkFav, walkFilterHtml, WALK_VIEW_KEY, loadWalkView, saveWalkView, walkToolsHtml, walkRow, renderMain, searchInput, searchClear, syncSearchClear, openGuide, init, applyDogsData, renderUpdatedLabel, freshWalkList, refreshData, syncBtn, startApp };
 export { appState } from './page-state.js';
 export { parseDogsData } from './dog-data.js';
 
 export function bindApp() {
-  document.addEventListener('click', e => {
-    const t = e.target && e.target.closest ? e.target : null;
-    if (!t) return;
-    const open = t.closest('[data-append-open]');
-    if (open) {
-      const kind = open.dataset.appendOpen;
-      appState.sheetAppend = { kind, dog: kind === 'note' ? appState.detailDog : null, text: '', phase: 'edit', error: '' };
-      rerenderAppend(kind, '#appendText');
-      return;
-    }
-    if (!appState.sheetAppend) return;
-    const kind = appState.sheetAppend.kind;
-    if (t.closest('[data-append-cancel]')) { appState.sheetAppend = null; rerenderAppend(kind, `[data-append-open="${kind}"]`); return; }
-    if (t.closest('[data-append-back]')) { appState.sheetAppend.phase = 'edit'; appState.sheetAppend.error = ''; rerenderAppend(kind, '#appendText'); return; }
-    if (t.closest('[data-append-send]')) sendAppend();
-  });
-  document.addEventListener('input', e => {
-    if (!appState.sheetAppend || !e.target || e.target.id !== 'appendText') return;
-    appState.sheetAppend.text = e.target.value;
-    const btn = e.target.form && e.target.form.querySelector('.my-note-save');
-    if (btn) btn.disabled = !e.target.value.trim();
-  });
-  document.addEventListener('submit', e => {
-    if (!appState.sheetAppend || !e.target.matches || !e.target.matches('[data-append-form]')) return;
-    e.preventDefault();
-    if (!appState.sheetAppend.text.trim()) return;
-    appState.sheetAppend.phase = 'preview'; appState.sheetAppend.error = '';
-    rerenderAppend(appState.sheetAppend.kind, '[data-append-send]');
-  });
-  window.addEventListener('popstate', e => {
-    if (findZoomOpen()) findZoomHide(); // 找狗平面圖全螢幕（#102，js/find.js）
-    else if (BQPhoto.cropOpen()) BQPhoto.hideCropper();
-    else if (lightboxOpen()) hideLightbox();
-    else if (findState.whereDog) whereHide(); // 在哪面板（#111，js/find.js）
-    else if (appState.detailDog) hideDetail();
-    else if (e.state && e.state.bqNavigation) {
+  bindSheetAppend();
+  // 覆蓋層（平面圖放大、裁切、燈箱、在哪、詳細資訊）由 overlays.js 先關；都沒開才換頁籤
+  bindOverlays(e => {
+    if (e.state && e.state.bqNavigation) {
       appState.activeTab = e.state.base || 'walk';
       appState.groupsReturnTab = e.state.returnTab || 'walk';
       switchTab(e.state.tab, false);
@@ -2312,37 +1259,20 @@ export function bindApp() {
     if (BQPhoto.cropOpen()) {
       // 裁切畫面：Esc 取消，Tab 只在裁切畫面的按鈕間移動
       if (e.key === 'Escape') BQPhoto.closeCropper(null);
-      if (e.key === 'Tab') {
-        const items = [...document.querySelectorAll('#cropper button, #cropper input')];
-        const at = items.indexOf(document.activeElement);
-        e.preventDefault();
-        items[(at + (e.shiftKey ? -1 : 1) + items.length) % items.length].focus({ preventScroll: true });
-      }
+      trapFocus(e, [...document.querySelectorAll('#cropper button, #cropper input')]);
       return;
     }
     if (lightboxOpen()) {
       // Esc 關燈箱，Tab 只在燈箱裡的按鈕間移動
       if (e.key === 'Escape') closeLightbox();
-      if (e.key === 'Tab') {
-        const items = [...document.querySelectorAll('#lightbox button:not([hidden]):not(:disabled), #lightbox input:not([hidden]):not(:disabled)')]
-          .filter(b => !b.closest('[hidden]'));
-        const at = items.indexOf(document.activeElement);
-        e.preventDefault();
-        const next = items[(at + (e.shiftKey ? -1 : 1) + items.length) % items.length] || items[0];
-        if (next) next.focus({ preventScroll: true });
-      }
+      trapFocus(e, [...document.querySelectorAll('#lightbox button:not([hidden]):not(:disabled), #lightbox input:not([hidden]):not(:disabled)')]
+        .filter(b => !b.closest('[hidden]')));
       return;
     }
     if (e.key === 'Escape' && appState.detailDog) closeDetail();
     if (e.key !== 'Tab' || !appState.detailDog) return;
     // 我的備註編輯時（#62）文字框和欄位也要能用 Tab 走到
-    const buttons = [...document.querySelectorAll('#detail button:not(:disabled), #detail textarea:not(:disabled), #detail select:not(:disabled), #detail input:not([hidden]):not(:disabled), #toast:not([hidden]) button:not([hidden])')];
-    const first = buttons[0], last = buttons[buttons.length - 1];
-    if (!first) return;
-    if (!buttons.includes(document.activeElement) || (e.shiftKey && document.activeElement === first) || (!e.shiftKey && document.activeElement === last)) {
-      e.preventDefault();
-      (e.shiftKey ? last : first).focus({ preventScroll: true });
-    }
+    trapFocus(e, [...document.querySelectorAll('#detail button:not(:disabled), #detail textarea:not(:disabled), #detail select:not(:disabled), #detail input:not([hidden]):not(:disabled), #toast:not([hidden]) button:not([hidden])')], { edgesOnly: true });
   });
   document.getElementById('main').addEventListener('click', e => {
     const favBtn = e.target.closest('[data-walk-fav]');

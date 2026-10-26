@@ -1,5 +1,5 @@
 import { currentEditRevision } from './edit-fixture.mjs';
-import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
+import { importCompactDogs } from './compact-fixtures.mjs';
 // 照片上傳服務的測試（#47）：用假的 GitHub API，不會真的連 GitHub 或 Cloudflare
 // 執行：node --test worker/test/worker.test.mjs
 import test from 'node:test';
@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { SETTING_KEYS } from '../src/feature-settings.js';
 import { fakeD1, fakeR2 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 
 const { resetState, allowUpload, isJpeg, MAX_BYTES } = worker.testing;
 
@@ -49,7 +49,7 @@ function post(id, { body = JPEG.slice(), origin = ORIGIN, type = 'image/jpeg', i
 }
 
 async function photoStorage() {
-  const DB=fakeD1();await migrateCompactDatabase(DB);await importCompactDogs(DB,DOGS);
+  const DB=fakeD1();await createCompactDatabase(DB);await importCompactDogs(DB,DOGS);
   return {...ENV,DB,PHOTOS:fakeR2()};
 }
 async function send(req, env = ENV) {
@@ -127,7 +127,7 @@ test('isJpeg 看檔頭', () => {
 
 const NENV = { ...ENV, ADMIN_KEY: '管理金鑰' };
 // 讀資料包要有版本號表（ADR 0009，讀不到不退回整表讀取）
-const withTables = async env => { const DB = fakeD1(); await migrateCompactDatabase(DB); return { ...env, DB }; };
+const withTables = async env => { const DB = fakeD1(); await createCompactDatabase(DB); return { ...env, DB }; };
 
 // ── #95 誰遛的代號 ──
 const WALKER_ENV = { ...ENV, WALKER_KEY: 'test-walker-key' };
@@ -405,11 +405,11 @@ test('#281 POST /walk 加備註、新增異動紀錄：轉給小程式；沒名�
 
 // #333 出入所紀錄 PUT /stays/{編號}：路由層的擋法（方法、格式、大小、沒接 D1、限流、D1 出錯）
 test('出入所紀錄路由：405、415、413、壞 JSON、沒接 D1、限流 429、D1 出錯回 500', async () => {
-  const { migrateCompactDatabase } = await import('../../scripts/migrate-compact-db.mjs');
-  const { importCompactDogs } = await import('../../scripts/import-compact-dogs.mjs');
+  const { createCompactDatabase } = await import('../../scripts/compact-schema.mjs');
+  const { importCompactDogs } = await import('./compact-fixtures.mjs');
   resetState();
   const db = fakeD1();
-  await migrateCompactDatabase(db);
+  await createCompactDatabase(db);
   await importCompactDogs(db, { syncedAt: '2026-10-15T12:00:00+08:00', dogs: [{ id: '2024032902', name: '測試狗' }] });
   const env = { ALLOWED_ORIGINS: ORIGIN, DB: db, WALKER_KEY: 'k' };
   const put = ({ method = 'PUT', type = 'application/json', body = JSON.stringify({ editor: '小明', before: [], stays: [] }), ip = '9.9.9.1' } = {}) =>

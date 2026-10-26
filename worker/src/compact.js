@@ -2,7 +2,7 @@ import { identitiesForCodes } from './identity.js';
 import { readIntakeEvents, readAllIntakeEvents } from './intake.js';
 import { readAllStays } from './stays.js';
 // 精簡 D1（v3_ 表，#245／#247）：網站要的狗清單從這裡讀，形狀跟原本的 data/dogs.json 一樣。
-// 表結構見 db/compact-schema.sql、docs/COMPACT_D1.md
+// 表結構見 db/compact-schema.sql
 
 // 只讀主清單上的狗（ADR 0014）：入所、休養照主鍵讀，不整張讀，讀取量不隨離所的狗變多
 const ON_MAIN = 'dog_id IN (SELECT dog_id FROM v3_sheet_main)';
@@ -203,21 +203,6 @@ export async function saveIntro(db, number, text, events) {
   if (text) await db.prepare('INSERT INTO v3_intros(dog_id,intro) VALUES(?,?) ON CONFLICT(dog_id) DO UPDATE SET intro=excluded.intro').bind(dogId, text).run();
   else await db.prepare('DELETE FROM v3_intros WHERE dog_id=?').bind(dogId).run();
   return { dogId, before };
-}
-
-// 舊編號（#289，ADR 0005）：誰都能補、都能刪；編輯紀錄由 Worker 記（ADR 0004）。
-// 回 { ok: true, dogId } 或 { status, error }；number 是這隻狗現在（或任何一個）認得的編號
-export async function addFormerNumber(db, number, former) {
-  const ids = await dogIdsFor(db, [number, former]);
-  const dogId = ids.get(number);
-  if (!dogId) return { status: 404, error: '找不到這個編號的狗' };
-  if (ids.has(former)) {
-    if (ids.get(former) === dogId) return { status: 409, error: '這隻狗已經有這個編號了' };
-    const other = await db.prepare('SELECT name FROM v3_dogs WHERE dog_id=?').bind(ids.get(former)).first('name');
-    return { status: 409, error: `${former} 已經是另一隻狗（${other || '沒有名字'}）的編號，要合併請找 K` };
-  }
-  await db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(former, dogId).run();
-  return { ok: true, dogId };
 }
 
 // 刪舊編號：只能刪這隻狗的，不能刪主清單上現在用的編號

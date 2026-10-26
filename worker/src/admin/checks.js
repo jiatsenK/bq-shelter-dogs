@@ -1,6 +1,7 @@
 // #518／#567「網站有、試算表沒有」：只讀保險掃描留在 v3_sync_state 的清單，對上 D1 的狗給管理者看。
 // 不刪狗、不記離所、不合併；讀不懂與從未掃描分開標示，不當成「沒有差異」。
 import { EXTRA_KEY } from '../dog-list.js';
+import { CRON_JOBS, cronKey } from '../cron-status.js';
 
 const STALE_MS = 24 * 3600000; // 掃描一天三次，超過一天沒有新掃描就是過期
 const SHOW_MAX = 200;
@@ -52,4 +53,25 @@ export async function readSheetGaps(db, now = Date.now()) {
     state: 'ok', recordedAt, checkedAt, total: saved.keys.length, items,
     stale: !checkedAt || now - Date.parse(checkedAt) > STALE_MS,
   };
+}
+
+// 稽核第 5 項：排程有沒有在跑。讀志工網站 Worker 每次跑完記的 cron_<工作>（worker/src/cron-status.js），
+// 超過幾次沒跑完就算過期；讀不懂與從未記錄分開標示。
+const CRON_STALE_MS = { retry: 40 * 60000, scan: 13 * 3600000, trash: 32 * 86400000 };
+
+export async function readCronStatus(db, now = Date.now()) {
+  const keys = CRON_JOBS.map(cronKey);
+  const { results = [] } = await db.prepare(`SELECT key, value FROM v3_sync_state WHERE key IN (${keys.map(() => '?').join(',')})`).bind(...keys).all();
+  const saved = new Map(results.map(r => [r.key, r.value]));
+  const valid = s => (typeof s === 'string' && !isNaN(Date.parse(s)) ? s : null);
+  return CRON_JOBS.map(job => {
+    const raw = saved.get(cronKey(job));
+    if (raw === undefined || raw === null) return { job, state: 'never', okAt: null, failAt: null, error: '', stale: true };
+    let v;
+    try { v = JSON.parse(raw); } catch { v = null; }
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return { job, state: 'error', okAt: null, failAt: null, error: '', stale: true };
+    const okAt = valid(v.okAt), failAt = valid(v.failAt);
+    return { job, state: 'ok', okAt, failAt, error: failAt && typeof v.error === 'string' ? v.error : '',
+      stale: !okAt || now - Date.parse(okAt) > CRON_STALE_MS[job] };
+  });
 }

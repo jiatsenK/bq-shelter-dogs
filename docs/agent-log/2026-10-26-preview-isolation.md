@@ -1,0 +1,22 @@
+# PR 預覽站資料隔離（稽核第 3 項）
+
+- 日期：2026-10-26。Agent：Claude。分支 `claude/preview-isolation`（從 main `0fadda8` 開）。
+- 依據：2026-10-26 唯讀架構稽核第 3 項。預覽是正式 Worker 的版本，密鑰跟著 Worker 走，所以預覽一定拿到正式 GAS 的 `SHEET_WRITE_URL`／`SHEET_WRITE_KEY` 與 `ADMIN_KEY`，R2 也綁正式 bucket；唯一防線是 PR 自己程式裡的 `PREVIEW` 判斷。
+- K 2026-10-26 決定：
+  - 預覽改用新的獨立 Worker `bq-shelter-dogs-preview`，綁測試 R2 `bq-shelter-photos-test`＋測試 D1；
+  - 測試 D1 先不跟測試網站分開；
+  - 預覽 Worker 只放跟正式同一把 `WALKER_KEY`（算代號，不能寫）。
+- 改動：
+  - `wrangler.preview-db.jsonc` 加 `name`、`r2_buckets`。
+  - `scripts/d1-database.mjs --preview` 改成換掉 Worker 名稱、R2、D1，拿掉排程，帶 PREVIEW。它會先查證設定不是正式的、測試 R2 存在、預覽 Worker 上只有 `WALKER_KEY`，不符就停止。另外加 `--create-preview-worker`：Worker 不存在時才 deploy 一次。
+  - `preview-cloudflare.yml` 拿掉正式 R2 檢查，改跑上述查證。
+  - `wrangler.jsonc` 的 `preview_urls` 改 false，正式 Worker 不再有預覽網址。
+- 依稽核第 5 項（cron-health session 協調）：`wrangler.preview-db.jsonc` 明寫 `"triggers": { "crons": [] }`，不是空的就停止；產生的預覽設定也寫空排程。
+- 測試：`scripts/d1-database.test.mjs`（隔離設定、密鑰白名單、建立一次），`tests/index/hosting.js`（workflow 不帶金鑰、正式關預覽網址、預覽設定用測試資源）。
+- 未做（要 K 動手或同意）：
+  - 建立預覽 Worker、設 `WALKER_KEY`，指令見 `docs/setup/CLOUDFLARE_SETUP.md`「PR 預覽網址」。
+  - 合併後正式部署才會關掉正式 Worker 的預覽網址。
+  - `scheduled()` TRASH 分支的 PREVIEW 防呆由「照片垃圾桶清理首跑前修正與驗收」session（trash-purge）處理。預覽 Worker 已經沒有排程、也不綁正式 R2，這條路徑在預覽不會發生。
+- 預覽 Worker 已於 2026-10-26 建立（K 同意，本機 `--create-preview-worker`）；`WALKER_KEY` 由 K 在 main 上加的臨時 workflow 從 GitHub Secret 複製過去（值沒經過任何人），本 PR 刪掉那個臨時 workflow。查證：預覽 `/api/` 顯示 walkerKey 已設定，其他密鑰都是未設定。
+- 注意：測試 R2 是 2026-10-24 從正式複製的，正式之後新換的照片在預覽看不到。
+- 相關 PR：#606（草稿）。

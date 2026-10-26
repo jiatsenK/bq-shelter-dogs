@@ -8,6 +8,18 @@ function deployWriteProblem(deploy, preview) {
   return '';
 }
 
+// 管理網站部署：只能手動、只准部署 wrangler.admin.jsonc 且帶 --message，不套 migration、不帶金鑰。回傳問題或 ''
+function adminDeployProblem(wf) {
+  if (!/^on:\r?\n  workflow_dispatch:/m.test(wf) || /^\s+(push|pull_request|schedule|workflow_call|workflow_run):/m.test(wf)) return '只能手動觸發';
+  const allowedDeploy = /wrangler@4 deploy --config wrangler\.admin\.jsonc --message /g;
+  if (!wf.match(allowedDeploy)) return '要用 wrangler.admin.jsonc 部署並帶 --message';
+  const rest = wf.replace(allowedDeploy, '');
+  if (/migrations apply|d1 execute|continue-on-error|if:\s*always\(/.test(rest)) return '不能改結構或忽略錯誤';
+  if (/wrangler@4 (deploy|versions)/.test(rest)) return '不能部署或上傳其他設定';
+  if (/--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b)/.test(rest)) return '不能帶金鑰';
+  return '';
+}
+
 // 測試網站部署：只准部署 wrangler.test-site.jsonc、只准對測試庫套 migration，不帶金鑰（金鑰另外設在測試 Worker 上）。回傳問題或 ''
 function testSiteDeployProblem(wf) {
   const allowedApply = /d1 migrations apply bq-shelter-dogs-test --remote --config wrangler\.preview-db\.jsonc[ \t]*\r?$/gm;
@@ -17,6 +29,18 @@ function testSiteDeployProblem(wf) {
   if (/migrations apply|d1 execute|continue-on-error|if:\s*always\(/.test(rest)) return '只能對測試庫套 migration，不能改其他結構或忽略錯誤';
   if (/wrangler@4 (deploy|versions)/.test(rest)) return '不能部署或上傳其他設定';
   if (/--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b)/.test(rest)) return '不能帶金鑰';
+  return '';
+}
+
+// #622：會動正式環境的 workflow 每個 job 都要 `if: github.ref == 'refs/heads/main'`，也不能另外指定分支。回傳問題或 ''
+function mainOnlyProblem(wf) {
+  const jobs = wf.replace(/\r/g, '').split(/^jobs:\n/m)[1];
+  const blocks = (jobs || '').split(/^(?=  [\w-]+:\n)/m).filter(b => /^  [\w-]+:\n/.test(b));
+  if (!blocks.length) return '找不到 job';
+  for (const b of blocks) {
+    if (!/^    if: github\.ref == 'refs\/heads\/main'$/m.test(b)) return `job ${b.match(/^  ([\w-]+):/)[1]} 要限定 main`;
+  }
+  if (/inputs\.ref\b|^\s+ref:/m.test(wf)) return '不能另外指定分支';
   return '';
 }
 
@@ -35,13 +59,15 @@ async function runR2Tests() {
   });
   const deploy = await get('../.github/workflows/deploy-cloudflare.yml');
   const preview = await get('../.github/workflows/preview-cloudflare.yml');
-  await check('#214 部署：R2 只查證，正式 D1 與隔離測試 D1 分開，失敗不繼續部署', () => {
+  await check('#214／稽核 3 部署：R2 只查證，正式與預覽的 Worker、D1、R2 分開，失敗不繼續部署', () => {
     if (!/node scripts\/r2-bucket\.mjs\r?\n/.test(deploy) || /r2-bucket\.mjs --create/.test(deploy)) throw new Error('正式 R2 只能查證');
     if (!deploy.includes('node scripts/d1-database.mjs --config "${{ steps.r2.outputs.config }}"')) throw new Error('準備資料庫要接著 R2 那一步的設定');
     if (!deploy.includes('wrangler@4 deploy --config "${{ steps.d1.outputs.config }}"')) throw new Error('正式部署要用確認後的設定');
-    if (!/node scripts\/r2-bucket\.mjs\r?\n/.test(preview) || /r2-bucket\.mjs --create/.test(preview)) throw new Error('預覽只確認、不建 bucket');
-    if (!preview.includes('node scripts/d1-database.mjs --config "${{ steps.r2.outputs.config }}" --preview')) throw new Error('預覽要查證測試 D1');
-    if (!/versions upload\s*\\\s*\r?\n\s*--config "\$\{\{ steps\.d1\.outputs\.config \}\}"/.test(preview)) throw new Error('預覽上傳要用測試 D1 的設定');
+    if (/r2-bucket\.mjs/.test(preview)) throw new Error('預覽不查正式 R2，測試 R2 由 d1-database.mjs --preview 查證');
+    if (!preview.includes('node scripts/d1-database.mjs --config wrangler.jsonc --preview')) throw new Error('預覽要查證隔離（測試 D1、測試 R2、沒有密鑰）');
+    if (/--create-preview-worker/.test(preview)) throw new Error('預覽 Worker 只由 K 手動建立一次');
+    if (!/versions upload\s*\\\s*\r?\n\s*--config "\$\{\{ steps\.d1\.outputs\.config \}\}"/.test(preview)) throw new Error('預覽上傳要用驗證過的隔離設定');
+    if (/--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b)/.test(preview)) throw new Error('預覽不能帶金鑰');
     const problem = deployWriteProblem(deploy, preview);
     if (problem) throw new Error(problem);
   });
@@ -85,6 +111,57 @@ async function runR2Tests() {
     ];
     bad.forEach((wf, i) => { if (!testSiteDeployProblem(wf)) throw new Error(`反例 ${i + 1} 沒被擋`); });
   });
+  const adminDeploy = await get('../.github/workflows/deploy-admin.yml');
+  await check('管理網站部署 Action：只能手動、只部署 wrangler.admin.jsonc 並記 commit、不套 migration、不帶金鑰、部署後確認 Access 擋住', () => {
+    if (!adminDeploy) throw new Error('讀不到 deploy-admin.yml');
+    const problem = adminDeployProblem(adminDeploy);
+    if (problem) throw new Error(problem);
+    if (!/d1-migrations\.mjs check --target production/.test(adminDeploy)) throw new Error('部署前要確認正式庫 migration 都套過');
+    if (!/cloudflareaccess\.com\/cdn-cgi\/access\/login/.test(adminDeploy)) throw new Error('部署後要確認沒登入會被轉到 Access 登入頁');
+  });
+  await check('管理網站部署擋關檢查的反例：自動觸發、部署志工設定、沒記 commit、套 migration、帶金鑰都會被擋', () => {
+    const head = 'on:\n  workflow_dispatch:\n';
+    const deploy = 'npx --yes wrangler@4 deploy --config wrangler.admin.jsonc --message "x"\n';
+    if (adminDeployProblem(head + deploy)) throw new Error('管理網站部署應該放行');
+    const bad = [
+      'on:\n  workflow_dispatch:\n  push:\n    branches: [main]\n' + deploy,
+      head + deploy.replace('wrangler.admin.jsonc', 'wrangler.jsonc'),
+      head + deploy.replace(' --message "x"', ''),
+      head + deploy + 'npx --yes wrangler@4 deploy --config wrangler.jsonc\n',
+      head + deploy + 'npx --yes wrangler@4 d1 migrations apply bq-shelter-dogs --remote\n',
+      head + deploy + 'ADMIN_KEY: ${{ secrets.ADMIN_KEY }}\n',
+    ];
+    bad.forEach((wf, i) => { if (!adminDeployProblem(wf)) throw new Error(`反例 ${i + 1} 沒被擋`); });
+  });
+  const prodManual = {
+    'deploy-cloudflare.yml': deploy,
+    'd1-migrations.yml': await get('../.github/workflows/d1-migrations.yml'),
+    'deploy-admin.yml': adminDeploy,
+    'seed-preview-db.yml': await get('../.github/workflows/seed-preview-db.yml'),
+  };
+  await check('#622 會動正式環境的 workflow 只准 main；測試網站照舊可以填分支', () => {
+    for (const [f, wf] of Object.entries(prodManual)) {
+      if (!wf) throw new Error(`讀不到 ${f}`);
+      const problem = mainOnlyProblem(wf);
+      if (problem) throw new Error(`${f}：${problem}`);
+    }
+    if (!/inputs\.ref/.test(testSite) || !mainOnlyProblem(testSite)) throw new Error('測試網站要保留手動指定分支');
+  });
+  await check('#622 只准 main 檢查的反例：少一個 job、條件放寬、能填分支都會被擋', () => {
+    const job = (name, extra = '') => `  ${name}:\n    if: github.ref == 'refs/heads/main'\n    runs-on: ubuntu-latest\n${extra}`;
+    if (mainOnlyProblem('on:\n  workflow_dispatch:\njobs:\n' + job('a') + '\n' + job('b'))) throw new Error('每個 job 都限定 main 應該放行');
+    const bad = [
+      'jobs:\n' + job('a') + '  b:\n    runs-on: ubuntu-latest\n',
+      "jobs:\n  a:\n    if: github.ref == 'refs/heads/main' || inputs.force\n",
+      "jobs:\n  a:\n    steps:\n      - if: github.ref == 'refs/heads/main'\n",
+      'jobs:\n' + job('a', '    steps:\n      - uses: actions/checkout@v4\n        with:\n          ref: ${{ inputs.ref }}\n'),
+      'on:\n  workflow_dispatch:\n',
+    ];
+    bad.forEach((wf, i) => { if (!mainOnlyProblem(wf)) throw new Error(`反例 ${i + 1} 沒被擋`); });
+  });
+  await check('#622 志工站部署排隊不取消：套完 migration 後呼叫的部署不會被 push 部署砍掉', () => {
+    if (!/^concurrency:\r?\n  group: deploy-cloudflare\r?\n  cancel-in-progress: false\r?$/m.test(deploy)) throw new Error('deploy-cloudflare 要 cancel-in-progress: false');
+  });
   const thumbs = await get('../.github/workflows/r2-thumbs.yml');
   await check('#130 縮圖（R2）Action：只能手動或由 Worker 叫、用管理金鑰、不提交 repo', () => {
     if (!thumbs) throw new Error('讀不到 r2-thumbs.yml');
@@ -115,9 +192,13 @@ async function runPreviewTests() {
   });
   // wrangler.jsonc 不在網站資料夾，只有本機和 CI 讀得到，讀不到就跳過
   const cfg = await get('../wrangler.jsonc');
-  await check('#126 wrangler.jsonc：開預覽網址、正式部署不保留網頁上加的變數', () => {
+  const isolated = await get('../wrangler.preview-db.jsonc');
+  await check('稽核 3 wrangler.jsonc：正式 Worker 關預覽網址、不保留網頁上加的變數；預覽用獨立 Worker 與測試照片空間', () => {
     if (!cfg) return;
-    if (!/"preview_urls": true/.test(cfg)) throw new Error('要開 preview_urls');
+    if (!/"preview_urls": false/.test(cfg)) throw new Error('正式 Worker 要關 preview_urls，它的版本會帶正式密鑰');
+    if (!/"name": "bq-shelter-dogs-preview"/.test(isolated)) throw new Error('預覽要用獨立 Worker bq-shelter-dogs-preview');
+    if (!/"r2_buckets": \[\{ "binding": "PHOTOS", "bucket_name": "bq-shelter-photos-test" \}\]/.test(isolated)) throw new Error('預覽要用測試照片空間');
+    if (!/"triggers": \{ "crons": \[\] \}/.test(isolated)) throw new Error('預覽不准有排程，要明寫 crons: []');
     if (!/"keep_vars": false/.test(cfg)) throw new Error('keep_vars 要是 false，免得 PREVIEW 被帶進正式版');
   });
 }

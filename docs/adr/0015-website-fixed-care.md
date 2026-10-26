@@ -16,7 +16,7 @@ K 確認的操作方式：志工先選好身分，即可在狗的詳細資訊切
 
 設定存 D1 永久狗表的 `v3_dogs.fixed_care`，不另建表（K 在檢視 PR #413 後確認），只寫有變動的一隻狗，不掃全表重寫；相同設定不寫入、不新增編輯紀錄。每次實際變更的直接寫入為設定 1 列、在所資料包版本 1 列、編輯紀錄 1 列，索引成本另計；下一次讀狗清單時，另外重建在所資料包（刪舊段、寫新段，不重建歷史溜狗包）。若每天切換 100 次、在所包維持 1 段且每次都有人讀，約寫 500 列加索引成本，列入 ADR 0008 的每天 20,000 列共用預算；這是容量估算，不是正式用量實測，也不另加每日停寫門檻。沿用每個來源每分鐘 10 次、每小時 60 次的編輯限流。
 
-既有正式狗表上線前先補 `fixed_care INTEGER NOT NULL DEFAULT 0 CHECK(fixed_care IN (0,1))` 欄位，再由既有 schema 同步流程補上 `packs_v3_dogs_INSERT／UPDATE／DELETE` 觸發器；不搬入試算表標記。`CREATE TABLE IF NOT EXISTS` 不會替既有表補欄位；本機遷移入口 `scripts/migrate-compact-db.mjs` 已能補欄位並可重跑，正式補欄位仍須擁有者另行確認。同步新增狗時沿用預設關閉，只更新狗名與性別；差異同步明確排除 `v3_dogs.fixed_care`，避免預演後網站才變更時被寫回舊值。新 Worker 第一次讀到舊格式資料包時重算一次，避免舊快取繼續使用試算表 covered。正式 schema、合併及部署由擁有者決定；本次實作不直接操作正式 D1。
+既有正式狗表上線前先補 `fixed_care INTEGER NOT NULL DEFAULT 0 CHECK(fixed_care IN (0,1))` 欄位，再由既有 schema 同步流程補上 `packs_v3_dogs_INSERT／UPDATE／DELETE` 觸發器；不搬入試算表標記。`CREATE TABLE IF NOT EXISTS` 不會替既有表補欄位；當時由本機遷移入口 `scripts/migrate-compact-db.mjs` 補欄位（已完成；該腳本於 #596 退役，程式見 commit `2feead4`，之後的結構變更走 `migrations/`）。同步新增狗時沿用預設關閉，只更新狗名與性別；差異同步明確排除 `v3_dogs.fixed_care`，避免預演後網站才變更時被寫回舊值。新 Worker 第一次讀到舊格式資料包時重算一次，避免舊快取繼續使用試算表 covered。正式 schema、合併及部署由擁有者決定；本次實作不直接操作正式 D1。
 
 ## 存放方式的取捨
 

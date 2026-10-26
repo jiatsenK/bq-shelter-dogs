@@ -1,0 +1,62 @@
+# 部署管理網站 bq-shelter-dogs-admin（ADR 0020，設定 wrangler.admin.jsonc）
+# - 只能手動跑：Actions 頁選「部署管理網站」→「Run workflow」。管理網站直接寫正式 D1／R2，所以 main 推送不會自動部署（K 2026-10-26）
+# - #622：只部署 main，不能填分支；選別的分支整個略過。要先試某張 PR 用測試網站或預覽
+# - 部署紀錄的 Message 寫「main commit」，從 Cloudflare 部署紀錄就看得出線上是哪一版
+# - 正式 D1 有還沒套的 migration 就停（跟「部署到 Cloudflare」同一行檢查），先去按「套用 D1 migration」
+# - 不帶金鑰：管理網站沒有密鑰，三個 vars 都在 wrangler.admin.jsonc
+# - 部署完沒登入打一次首頁，要被轉到 Access 登入頁；沒被擋就紅叉
+# - 改到兩站共用的程式（worker/src/ 共用模組、public/js/ 共用檔）時，志工網站由 main 推送自動部署，管理網站要另外按這裡
+name: 部署管理網站
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-admin
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # #622：只准 main，從別的分支按會整個略過（灰色），不碰正式環境
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: 沒設定 Cloudflare 就停
+        if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
+        run: |
+          echo "還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID（步驟見 docs/setup/CLOUDFLARE_SETUP.md）。"
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 確認正式庫 migration 都套過
+        run: node scripts/d1-migrations.mjs check --target production
+
+      - name: 部署
+        env:
+          REF: ${{ github.ref_name }}
+        run: |
+          sha=$(git rev-parse --short HEAD)
+          echo "部署管理網站：${REF} ${sha}"
+          npx --yes wrangler@4 deploy --config wrangler.admin.jsonc --message "${REF} ${sha}"
+
+      - name: 確認沒登入會被 Access 擋
+        run: |
+          origin=$(node -e 'const t=require("fs").readFileSync("wrangler.admin.jsonc","utf8").replace(/^\s*\/\/.*$/gm,"");console.log(JSON.parse(t).vars.ADMIN_ORIGIN)')
+          code=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$origin/")
+          echo "$origin/ → $code"
+          case "$code" in
+            "302 https://"*.cloudflareaccess.com/cdn-cgi/access/login/*) ;;
+            *) echo "沒被轉到 Access 登入頁，檢查 Cloudflare Access 設定"; exit 1 ;;
+          esac

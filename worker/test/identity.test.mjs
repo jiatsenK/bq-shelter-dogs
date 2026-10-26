@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 const site='https://bq-shelter-dogs.jiatsen-k.workers.dev';
 const call=async(env,path,body)=>{const r=await worker.fetch(new Request(site+'/api'+path,{method:body?'POST':'GET',headers:{Origin:site,'Content-Type':'application/json'},body:body?JSON.stringify(body):undefined}),env);return {status:r.status,...await r.json()};};
 
 test('#474 已銜接的身分重複讀取不全掃，志工十倍且名字格式不同時讀取量不變', async t => {
- const DB=fakeD1();t.after(()=>DB.close());await migrateCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
+ const DB=fakeD1();t.after(()=>DB.close());await createCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
  const original=await call(env,'/identity',{name:'Ｍｉｎｉ'});
  const readsOf=async()=>{
   const before=DB.stats.rowsRead;
@@ -23,7 +23,7 @@ test('#474 已銜接的身分重複讀取不全掃，志工十倍且名字格式
 });
 
 test('固定志工身分：兩裝置與舊名字在更名後找到同一人，並可追溯當時的編輯紀錄',async t=>{
- const DB=fakeD1();t.after(()=>DB.close());await migrateCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
+ const DB=fakeD1();t.after(()=>DB.close());await createCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
  const a=await call(env,'/identity',{name:'小明'});assert.equal(a.status,200);assert.ok(a.identity.volunteerId);
  const b=await call(env,'/identity',{name:'小明'});assert.equal(b.identity.volunteerId,a.identity.volunteerId);
  const renamed=await call(env,'/identity/rename',{code:a.identity.codes[0],name:'明明',operationId:'rename-1'});assert.equal(renamed.status,200);
@@ -32,7 +32,7 @@ test('固定志工身分：兩裝置與舊名字在更名後找到同一人，�
  const edits=await call(env,'/edits');assert.equal(edits.edits[0].kind,'volunteer_rename');assert.equal(edits.edits[0].editorName,'小明');
 });
 test('名字衝突須確認才合併，聯集常溜與開卡、保留最早日期及兩邊歷史，舊代號重試安全',async t=>{
- const DB=fakeD1();t.after(()=>DB.close());await migrateCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
+ const DB=fakeD1();t.after(()=>DB.close());await createCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
  const a=(await call(env,'/identity',{name:'甲'})).identity,b=(await call(env,'/identity',{name:'乙'})).identity;
  await DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)").bind('a'.repeat(32),'狗').run();
  const put=async(path,body)=>{const r=await worker.fetch(new Request(site+'/api'+path,{method:'PUT',headers:{Origin:site,'Content-Type':'application/json'},body:JSON.stringify(body)}),env);return r.status;};
@@ -50,26 +50,27 @@ test('名字衝突須確認才合併，聯集常溜與開卡、保留最早日�
  const opened=await call(env,'/cards/opened?codes='+a.codes[0]);assert.ok(opened.opened.codes[a.codes[0]].old);
  const edits=await call(env,'/edits');assert.equal(edits.edits.filter(e=>e.kind==='volunteer_merge').length,1);
 });
-test('舊資料銜接可重跑，未知代號保留，取消後不因再登入復活；更名與編輯紀錄失敗一起回復',async t=>{
- const DB=fakeD1();t.after(()=>DB.close());await migrateCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
+test('舊資料銜接重接不出錯，未知代號保留，取消後不因再登入復活；更名與編輯紀錄失敗一起回復',async t=>{
+ const DB=fakeD1();t.after(()=>DB.close());await createCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
  const {walkerCode}=await import('../src/editlog.js');const code=await walkerCode('舊名字',env.WALKER_KEY);
  await DB.prepare('INSERT INTO v3_volunteers(volunteer_id,name,last_seen) VALUES(?,?,?)').bind('original-person','舊名字','2026-01-01').run();
  await DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind('b'.repeat(32),'舊狗').run();
  await DB.prepare('INSERT INTO v3_volunteer_favorites VALUES(?,?,?)').bind('original-person','b'.repeat(32),'2026-01-01').run();
  await DB.prepare('INSERT INTO v3_card_opened VALUES(?,?,?)').bind('ffffffffffff','b'.repeat(32),'2026-01-02').run();
- const {migrateVolunteerIdentity}=await import('../../scripts/migrate-volunteer-identity.mjs');
- const report=await migrateVolunteerIdentity(DB,env.WALKER_KEY);assert.deepEqual(report.unknownCodes,['ffffffffffff']);
+ const {linkIdentityName}=await import('../src/identity.js');
+ assert.equal((await linkIdentityName(DB,'舊名字',code)).volunteerId,'original-person');
+ assert.equal(await DB.prepare("SELECT COUNT(*) AS n FROM v3_card_opened WHERE walker_code='ffffffffffff'").first('n'),1);
  assert.equal((await call(env,'/identity',{name:'舊名字'})).identity.volunteerId,'original-person');
  assert.deepEqual((await call(env,'/favorites?codes='+code)).ids,['b'.repeat(32)]);
  await worker.fetch(new Request(site+'/api/favorites',{method:'PUT',headers:{Origin:site,'Content-Type':'application/json'},body:JSON.stringify({codes:[code],dogId:'b'.repeat(32),on:false})}),env);
- await migrateVolunteerIdentity(DB, async name => { assert.equal(name, '舊名字'); return code; });assert.deepEqual((await call(env,'/favorites?codes='+code)).ids,[]);
+ await linkIdentityName(DB,'舊名字',code);assert.deepEqual((await call(env,'/favorites?codes='+code)).ids,[]);
  await DB.prepare("CREATE TRIGGER reject_identity_log BEFORE INSERT ON v3_edit_log WHEN NEW.kind='volunteer_rename' BEGIN SELECT RAISE(ABORT,'test log failure'); END").run();
  assert.equal((await call(env,'/identity/rename',{code,name:'新名字',operationId:'failed-rename'})).status,409);
  assert.equal((await call(env,'/identity',{name:'舊名字'})).identity.name,'舊名字');
  assert.deepEqual((await call(env,'/edits')).edits,[]);
 });
 test('確認期間資料變動時拒絕舊合併；跨站、預覽與缺少確認均不寫入',async t=>{
- const DB=fakeD1();t.after(()=>DB.close());await migrateCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
+ const DB=fakeD1();t.after(()=>DB.close());await createCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
  const a=(await call(env,'/identity',{name:'A'})).identity,b=(await call(env,'/identity',{name:'B'})).identity;
  const preview=await call(env,'/identity/merge-preview',{code:a.codes[0],targetCode:b.codes[0]});
  await call(env,'/identity/rename',{code:b.codes[0],name:'B2',operationId:'changed'});
@@ -81,7 +82,7 @@ test('確認期間資料變動時拒絕舊合併；跨站、預覽與缺少確�
  assert.equal((await call(env,'/identity',{name:'A'})).identity.volunteerId,a.volunteerId);
 });
 test('兩裝置同時設定同名只持有同一身分；合併後可改回舊名字，不分裂身分',async t=>{
- worker.testing.resetState();const DB=fakeD1();t.after(()=>DB.close());await migrateCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
+ worker.testing.resetState();const DB=fakeD1();t.after(()=>DB.close());await createCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
  const [a,b]=await Promise.all([call(env,'/identity',{name:'同名'}),call(env,'/identity',{name:'同名'})]);
  assert.equal(a.status,200);assert.equal(b.status,200);assert.equal(a.identity.volunteerId,b.identity.volunteerId);
  const other=(await call(env,'/identity',{name:'另名'})).identity;
@@ -92,7 +93,7 @@ test('兩裝置同時設定同名只持有同一身分；合併後可改回舊�
 test('合併同狗開卡保留最早日期、來源紀錄不刪；合併紀錄失敗回復兩邊資料', async t => {
   worker.testing.resetState();
   const DB = fakeD1(); t.after(() => DB.close());
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   const env = { DB, WALKER_KEY: 'test-key' };
   const { walkerCode } = await import('../src/editlog.js');
   const a = await walkerCode('先', env.WALKER_KEY), b = await walkerCode('後', env.WALKER_KEY);
@@ -121,7 +122,7 @@ test('合併同狗開卡保留最早日期、來源紀錄不刪；合併紀錄�
 });
 // #556：identity_* 觸發器拿掉，版本號改由 linkIdentityName、更名、合併在自己的 batch 加 1；樂觀鎖照樣擋住確認期間的變動
 test('名字對照的版本號由程式加 1：建立、更名、合併各加一次；送出前有人改了名字對照，更名、合併都被擋',async t=>{
- worker.testing.resetState();const DB=fakeD1();t.after(()=>DB.close());await migrateCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
+ worker.testing.resetState();const DB=fakeD1();t.after(()=>DB.close());await createCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
  assert.equal((await DB.prepare("SELECT COUNT(*) AS n FROM sqlite_master WHERE type='trigger' AND name GLOB 'identity_*'").first()).n,0);
  const revision=async()=>(await DB.prepare('SELECT revision FROM v3_identity_revision WHERE id=1').first()).revision;
  let r=await revision();
