@@ -30,7 +30,7 @@
     </aside>
     <main id="content" class="admin-content" tabindex="-1">
       <header class="admin-page-header">
-        <div><h1>待補清單</h1><p>待補的狗資料點進去直接補；另列網站有但試算表已經沒有的狗，並確認排程有在跑。這頁只列出來，不自動修改。</p></div>
+        <div><h1>待補清單</h1><p>待補的狗資料點進去直接補；另列可能重複的狗、網站有但試算表已經沒有的狗，並確認排程有在跑。這頁只列出來，不自動修改。</p></div>
         <div class="header-actions"><a class="volunteer-chip" id="volunteer-state" href="./settings.html">志工網站開關讀取中…</a><button type="button" class="btn" id="reload">重新讀取</button></div>
       </header>
       <section class="card check-card" aria-labelledby="complete-title">
@@ -38,6 +38,17 @@
         <p id="complete-status" class="check-status" role="status" aria-live="polite">正在讀取狗資料…</p>
         <div id="complete-list" class="check-list"></div>
         <p class="data-note">規則同志工網站的「狗的資料完整度」，只看目前主清單上的狗。點項目名稱看狗資料表的篩選結果，點狗名直接開編輯。照片依照片紀錄判斷，不逐張下載檢查；檔案讀不到會在狗資料表另外提示。</p>
+      </section>
+      <section class="card check-card" aria-labelledby="dup-title">
+        <h2 id="dup-title">可能重複</h2>
+        <p id="dup-status" class="check-status" role="status" aria-live="polite">正在讀取狗資料…</p>
+        <div class="table-responsive" tabindex="0" role="region" aria-label="可能重複的狗，可水平捲動" id="dup-region" hidden>
+          <table class="table table-vcenter compact-table">
+            <thead><tr><th scope="col">在所</th><th scope="col">同名、不在所</th><th scope="col">處理</th></tr></thead>
+            <tbody id="dups"></tbody>
+          </table>
+        </div>
+        <p class="data-note">名字一樣（不看括號），一隻在試算表主清單、一隻不在。試算表改編號或先打名字後補編號時會多出一隻，溜狗紀錄留在舊的那隻。也可能真的是兩隻同名的狗，請看照片與編號再決定；不會自動合併。</p>
       </section>
       <section class="card check-card" aria-labelledby="gaps-title">
         <h2 id="gaps-title">網站有、試算表沒有</h2>

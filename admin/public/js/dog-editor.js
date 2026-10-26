@@ -14,6 +14,8 @@ import {
   restProblem,
   patchDog
 } from './dog-edit-model.js';
+import { mergeCandidates, mergeSides, mergePreviewText } from './dog-merge.js';
+import { shownNumber } from './dog-table.js';
 
 // #624 右側抽屜：七個欄位全部展開；介紹、休養、固定照顧、性別改完直接可存（行內標改前→改後），
 // 編號、出入所紀錄、照片要先預覽。後端不變：一欄一筆 PUT／POST，每欄帶上一筆回應的 revision。
@@ -48,9 +50,107 @@ export function trashLabel(deletedAt, days) {
   if (run <= due.getTime()) run = Date.UTC(due.getUTCFullYear(), due.getUTCMonth() + 1, 1, 1, 53);
   return `${taiwan(at)} 換掉，${taiwan(run).slice(0, 10)} 清理時刪除`;
 }
+// 合併重複的狗（K 2026-10-26）：選另一隻→預覽→按兩次確認；成功前不改任何資料。放在欄位外面，不算進抽屜的草稿
+function mergeSection(dog, dogs, onMerged) {
+  const wrap = el('section', undefined, 'merge-section');
+  wrap.setAttribute('aria-labelledby', 'merge-title');
+  const heading = el('h3', '合併重複的狗');
+  heading.id = 'merge-title';
+  wrap.append(heading, el('p', '試算表改編號時可能多出一隻同名的狗。選另一隻預覽：溜狗紀錄、舊編號、介紹、照片等會搬到留下的那隻，被併的那筆從狗資料刪掉；修改紀錄可取消合併。主清單上的狗只能當留下的那隻。', 'text-secondary'));
+  const candidates = mergeCandidates(dog, dogs);
+  if (!candidates.length) {
+    wrap.append(el('p', '沒有可以合併的狗（兩隻都在主清單上時不能合併）。', 'text-secondary'));
+    return wrap;
+  }
+  const select = el('select', undefined, 'form-select');
+  select.id = 'merge-with';
+  const caption = el('label', '跟哪一隻合併', 'form-label');
+  caption.htmlFor = select.id;
+  for (const c of candidates) {
+    const option = el('option', c.text);
+    option.value = c.dogId;
+    select.append(option);
+  }
+  const preview = button('預覽合併');
+  const result = el('pre', '', 'merge-preview');
+  result.hidden = true;
+  const confirm = button('合併', 'btn btn-outline-danger');
+  confirm.hidden = true;
+  const note = el('p', '');
+  note.setAttribute('role', 'status');
+  note.setAttribute('aria-live', 'polite');
+  wrap.append(caption, select, preview, result, confirm, note);
+  let planned = null,
+    armed = false,
+    busy = false;
+  const reset = () => {
+    planned = null;
+    armed = false;
+    result.hidden = true;
+    confirm.hidden = true;
+    confirm.textContent = '合併';
+    confirm.className = 'btn btn-outline-danger';
+  };
+  select.addEventListener('change', () => {
+    reset();
+    note.textContent = '';
+  });
+  preview.addEventListener('click', async () => {
+    if (busy) return;
+    reset();
+    const other = dogs.find((d) => d.dogId === select.value);
+    const sides = other && mergeSides(dog, other);
+    if (!sides) return;
+    busy = true;
+    preview.disabled = true;
+    note.textContent = '正在預覽…';
+    const response = await call(
+      `/api/manage/dogs/${encodeURIComponent(sides.target.dogId)}/merge?source=${encodeURIComponent(sides.source.dogId)}`
+    );
+    busy = false;
+    preview.disabled = false;
+    if (!response.ok) {
+      note.textContent = response.data?.error || '預覽失敗，請重試';
+      return;
+    }
+    planned = response.data;
+    result.textContent = mergePreviewText(planned);
+    result.hidden = false;
+    confirm.hidden = false;
+    note.textContent = '請核對預覽；確認無誤再按「合併」，還要再按一次才會寫入。';
+  });
+  confirm.addEventListener('click', async () => {
+    if (!planned || busy) return;
+    const gone = `${planned.source.name || '未命名'} ${planned.source.number || '無編號'}`;
+    if (!armed) {
+      armed = true;
+      confirm.className = 'btn btn-danger';
+      confirm.textContent = `確定合併：刪掉「${gone}」這筆`;
+      note.textContent = '再按一次才會合併。';
+      return;
+    }
+    busy = true;
+    confirm.disabled = preview.disabled = select.disabled = true;
+    note.textContent = '正在合併，請稍候…';
+    const response = await call(`/api/manage/dogs/${encodeURIComponent(planned.target.dogId)}/merge`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sourceId: planned.source.dogId, revision: planned.target.revision, sourceRevision: planned.source.revision })
+    });
+    busy = false;
+    confirm.disabled = preview.disabled = select.disabled = false;
+    if (!response.ok) {
+      reset();
+      note.textContent = response.data?.error || '未能確認合併，資料沒有改；請重新預覽';
+      return;
+    }
+    onMerged(`已把「${gone}」併到「${planned.target.name || '未命名'} ${planned.target.number || ''}」。要拆回來，到修改紀錄找這筆「合併狗」按「取消合併」。`);
+  });
+  return wrap;
+}
 const stayRow = (row) => ({ in: row.in || '', out: row.out || '', reason: row.reason || '' });
 
-export function createDogDrawer(root, { onSaved, onNext, onClose }) {
+export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [], onMerged = () => {} }) {
   let dog = null,
     snapshot = null,
     busy = false,
@@ -76,7 +176,8 @@ export function createDogDrawer(root, { onSaved, onNext, onClose }) {
   form.noValidate = true;
   const fields = el('fieldset', undefined, 'drawer-fields');
   const body = el('div', undefined, 'drawer-body');
-  body.append(fields);
+  const mergeHost = el('div');
+  body.append(fields, mergeHost);
   const dirtyLine = el('p', '', 'drawer-dirty');
   dirtyLine.id = 'drawer-dirty';
   const save = el('button', '儲存', 'btn btn-primary');
@@ -105,7 +206,8 @@ export function createDogDrawer(root, { onSaved, onNext, onClose }) {
     const title = el('h2', dog.name || '未命名');
     title.id = 'drawer-title';
     title.tabIndex = -1;
-    const meta = el('p', `${dog.number || '未編號'} · 籠位 ${dog.cage || '—'}`, 'drawer-meta');
+    const number = dog.number || (shownNumber(dog) ? `舊編號 ${shownNumber(dog)}` : '未編號');
+    const meta = el('p', `${number} · 籠位 ${dog.cage || '—'}`, 'drawer-meta');
     const identity = el('p', `永久 ID ${dog.dogId}`, 'drawer-identity');
     const text = el('div', undefined, 'drawer-title');
     text.append(title, meta, identity);
@@ -568,6 +670,14 @@ export function createDogDrawer(root, { onSaved, onNext, onClose }) {
       leaveArmed = false;
       images = null;
       fields.replaceChildren();
+      // 合併成功後被併的那隻可能就是正在編輯的這隻：直接關抽屜、重讀狗表
+      mergeHost.replaceChildren(
+        mergeSection(dog, dogs(), (message) => {
+          leaveArmed = true;
+          api.close();
+          onMerged(message);
+        })
+      );
       body.scrollTop = 0;
       reload.hidden = true;
       delete status.dataset.error;

@@ -1,4 +1,4 @@
-import { searchEdits } from './api.js';
+import { searchEdits, readDog, unmergeDog } from './api.js';
 import { FILTERS, editQuery, parseEditPage, formatWhen, sourceLabel, valueText } from './edit-log.js';
 import { showVolunteerState } from './volunteer-state.js';
 import { byId, element } from './dom.js';
@@ -17,9 +17,44 @@ function renderRow(e) {
   who.append(element('div', e.editorName), element('span', sourceLabel(e.source), 'state-label'));
   if (e.actorEmail) who.append(element('div', e.actorEmail, 'identity'));
   const value = v => { const cell = element('td', undefined, 'edit-value'); cell.append(element('pre', valueText(e.kind, v))); return cell; };
-  row.append(element('td', formatWhen(e.at), 'dog-number'), element('td', e.kindLabel || e.kind), element('td', dog), who, value(e.before), value(e.after));
+  const after = value(e.after);
+  if (e.kind === 'merge' && e.dogId) after.append(unmergeButton(e));
+  row.append(element('td', formatWhen(e.at), 'dog-number'), element('td', e.kindLabel || e.kind), element('td', dog), who, value(e.before), after);
   return row;
 }
+// 取消合併（K 2026-10-26）：按兩次才送；伺服器照這筆的快照拆回來，已取消過或之後又合併過會說明原因
+function unmergeButton(e) {
+  const wrap = element('div', undefined, 'unmerge-actions');
+  const button = element('button', '取消合併', 'btn btn-outline-danger');
+  button.type = 'button';
+  const note = element('span');
+  note.setAttribute('role', 'status');
+  let armed = false;
+  const disarm = () => { armed = false; button.textContent = '取消合併'; button.className = 'btn btn-outline-danger'; };
+  button.addEventListener('click', async () => {
+    if (!armed) {
+      armed = true;
+      button.textContent = `確定取消：拆回「${e.before?.name || '未命名'}」`;
+      button.className = 'btn btn-danger';
+      return;
+    }
+    button.disabled = true;
+    note.textContent = '正在取消合併…';
+    const dog = await readDog(e.dogId);
+    const result = dog.ok ? await unmergeDog(e.dogId, { logId: e.id, revision: dog.data.revision }) : dog;
+    button.disabled = false;
+    if (!result.ok) {
+      disarm();
+      note.textContent = result.data?.error || '未能取消合併，資料沒有改；請重新讀取再試';
+      return;
+    }
+    note.textContent = '已取消合併。';
+    restart();
+  });
+  wrap.append(button, note);
+  return wrap;
+}
+
 
 async function load() {
   const seq = ++state.seq;
