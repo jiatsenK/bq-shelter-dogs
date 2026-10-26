@@ -27,4 +27,5 @@
   - Spec：已修 `docs/PROJECT_GOALS.md` 的轉址舊說法；Secret 遮罩、`--var` 與 `keep_vars: false`、workflow_call 拿得到 Secret 都核對過。
 - 本機測試：Node 467 項只有 `scripts/local-check.test.mjs` 4 項失敗（本機本來就失敗）；網頁 26 套全過。
 - 2026-10-26 16:52：K 同意後設好 GitHub Secret `WORKERS_SUBDOMAIN`；合併最新 main（#591、#593、#595），解 `r2-thumbs.yml`、`CLOUDFLARE_SETUP.md` 衝突（照 #595 拿掉 `NOTES_PASSCODE` 備援），重跑 index、admin 與受影響的 Node 測試，全過。
-- 相關 PR：#641（草稿）。
+- 2026-10-26 合併前實測（K 要求）：手動把本分支部署到測試網站（run 40296245326）、#641 暫加 `preview` 標籤跑預覽（run 40296256762），兩份公開日誌子網域 0 次、網址顯示成 `***`；測試網站 API 檢查通過；PR 預覽留言只有別名與 `<子網域>`。驗完拿掉標籤。正式部署、管理網站 `--var`（只准 main）與主控台連結要合併後才驗得到。測試網站現在跑的是本分支，main 下次推送會換回。
+- 相關 PR：#641。
