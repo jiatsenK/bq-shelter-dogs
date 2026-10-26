@@ -18,8 +18,8 @@
 - 暫改 `tests/es-modules.cjs` 讓斷言失敗（未提交），5.1 跑 `-Suite es-modules`：log 為 UTF-8，有完整 AssertionError、中文 diff 與堆疊，紀錄 JSON `exitCode: 1`。
 - 本機沒有 pwsh，Linux pwsh 行為由 CI 確認。
 - K 同意合併後併入 main（#602、#607–#609），5.1 跑 `-Full`：第一次 `walk-order-undo` 的「約 8 秒收起」失敗，單獨重跑通過；第二次 `-Full` 全過。判定為偶發計時問題，與本 PR 無關，未處理。
+- 轉正式後 CI（Linux pwsh 7）失敗：pwsh 7 的 stderr ErrorRecord 沒把原文放在 `TargetObject`，錯誤行寫成空白，第 36 行那項看不到「未知測試」。改成 `TargetObject` 是字串才用，否則用 `Exception.Message`。另外推送與轉正式同時觸發，草稿那次被略過的 run 取消了正式那次，已手動重跑。
 
 ## 未完成／例外
 
-- 無。
-- 轉正式後 CI（Linux pwsh 7）失敗：pwsh 7 的 stderr ErrorRecord 沒把原文放在 `TargetObject`，錯誤行寫成空白，第 36 行那項看不到「未知測試」。改成 `TargetObject` 是字串才用，否則用 `Exception.Message`。另外推送與轉正式同時觸發，草稿那次被略過的 run 取消了正式那次，已手動重跑。
+- `scripts/wait-pr-checks.ps1` 也沒有 BOM，5.1 下中文摘要亂碼，且 check 失敗時退出碼仍是 0；未在本 PR 處理。
