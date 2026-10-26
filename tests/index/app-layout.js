@@ -171,17 +171,30 @@ async function runHeaderTuckTests() {
   document.body.appendChild(frame);
   const doc = frame.contentDocument;
   doc.open();
-  doc.write(`<!doctype html><style>${css}</style><body>${INDEX_HTML.match(/<header class="app">[\s\S]*?<\/header>/)[0]}<main style="height:3000px"></main></body>`);
+  doc.write(`<!doctype html><style>${css}</style><body>${INDEX_HTML.match(/<header class="app">[\s\S]*?<\/header>/)[0]}<div class="page-search" id="pageSearch"></div><main style="height:3000px"></main></body>`);
   doc.close();
   const win = frame.contentWindow;
   const header = doc.querySelector('header.app');
   // 跟 js/app.js 的 syncHeaderTuck 一樣算
-  header.style.setProperty('--brand-h', `${Math.round(parseFloat(win.getComputedStyle(header).paddingTop) + doc.querySelector('.brand').offsetHeight)}px`);
+  const tuck = () => {
+    const root = doc.documentElement.style;
+    root.setProperty('--app-header-height', `${header.getBoundingClientRect().height}px`);
+    root.setProperty('--brand-h', `${Math.round(parseFloat(win.getComputedStyle(header).paddingTop) + doc.querySelector('.brand').offsetHeight)}px`);
+  };
+  tuck();
   try {
     await check('頁首收起：往下捲時標題那一行捲走，搜尋框還貼在畫面最上面', () => {
       win.scrollTo(0, 900);
       eq(header.getBoundingClientRect().top < -30, true, '標題那一行要捲走：');
       eq(Math.round(doc.getElementById('searchInput').getBoundingClientRect().top) >= 0, true, '搜尋框要看得到：');
+    });
+    await check('K 2026-10-26 手機搜尋框在表頭下面（#pageSearch），往下捲也跟著、不被表頭蓋住', () => {
+      win.scrollTo(0, 0);
+      doc.getElementById('pageSearch').append(doc.querySelector('header.app .search'));
+      tuck();
+      win.scrollTo(0, 900);
+      const box = doc.getElementById('searchInput').getBoundingClientRect();
+      eq(box.top >= Math.floor(header.getBoundingClientRect().bottom) && box.bottom < 120, true, `搜尋框要貼在表頭下面（top ${Math.round(box.top)}）：`);
     });
     await check('頁首收起：分析頁的頁首整個留著（返回、分析按鈕在標題那一行）', () => {
       doc.documentElement.classList.add('analysis-open');
@@ -193,7 +206,7 @@ async function runHeaderTuckTests() {
   }
 }
 
-// K 2026-10-09 病歷夾色籤：頁首範圍字（畫面上第一隻到最後一隻多久沒溜）、網址列顏色
+// K 2026-10-09 病歷夾色籤：網址列顏色（頁首範圍字 K 2026-10-26 拿掉）
 async function runRangeTests() {
   const TODAY = new Date();
   const ymdDash = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`;
@@ -220,17 +233,9 @@ async function runRangeTests() {
       saveWalkView(saved[3]); [allDogs, activeTab, searchQuery] = saved; render();
     }
   });
-  await check('2026-10-09 範圍字：跟狗卡同一種說法（N 天前、今天、沒有紀錄）', () => {
-    eq([dayWord(dog(ago(45)), TODAY), dayWord(dog(ago(0)), TODAY), dayWord(dog(''), TODAY)], ['45 天前', '今天', '沒有紀錄']);
-  });
-  await check('2026-10-09 範圍字：頭尾兩隻；一樣只寫一次；沒有狗就不寫', () => {
-    eq(rangeText(['45 天前', '20 天前', '4 天前']), '畫面上：45 天前 ～ 4 天前');
-    eq(rangeText(['2 天前', '2 天前']), '畫面上：2 天前');
-    eq(rangeText([]), '');
-  });
-  await check('2026-10-09 頁首有範圍字的位置；網址列顏色是檔案綠', () => {
+  await check('K 2026-10-26 拿掉頁首範圍字（畫面上：N 天前 ～ N 天前）；網址列顏色是檔案綠', () => {
     const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
-    eq(!!doc.querySelector('header.app #rangeLabel[hidden]'), true, '範圍字在頁首、一開始藏著：');
+    eq(doc.getElementById('rangeLabel'), null, '範圍字不再有：');
     eq(doc.querySelector('meta[name="theme-color"]').getAttribute('content'), '#1F5C4D', 'theme-color：');
     eq(MANIFEST.theme_color, '#1F5C4D', '主畫面捷徑：');
   });
