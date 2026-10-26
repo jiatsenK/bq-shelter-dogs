@@ -9,5 +9,5 @@
 - **合併前 K 要做**：GitHub 目前沒有 `ADMIN_KEY` Secret（2026-10-26 `gh secret list`），正式部署與縮圖 Action 都是靠 `NOTES_PASSCODE` 備援拿到金鑰。合併前先新增 GitHub Secret `ADMIN_KEY`。不知道舊值也沒關係：設一組新值，合併後的部署會把新值帶到 Worker，縮圖 Action 也用同一個。
 - **合併部署後 K 要做**：刪 Cloudflare 密鑰 `MY_NAME`、`SHEET_ID`（部署只會新增或更新，不會刪）；刪 GitHub Secrets `MY_NAME`、`SHEET_ID`、`NOTES_PASSCODE`。Apps Script 指令碼屬性的 `SHEET_ID` 不能刪。
 - 本機檢查：`scripts/local-check.test.mjs` 在這台電腦用 `pwsh` 跑腳本會被指令碼執行原則擋，乾淨的 main 也一樣 4 個失敗，與本票無關，另計；其他 Node 測試與全部網頁套件見交付回報。
-- 未做：沒有推送、沒有開 PR（未交辦）。
-- 相關 PR：尚未建立。
+- K 2026-10-26 交辦推送並開草稿 PR。
+- 相關 PR：#599（草稿）。
