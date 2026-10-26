@@ -11,5 +11,4 @@
   - 其他程式不動；`removeFormerNumber`、`dogIdsFor`、`groupDateLabel` 仍有人用，保留。
 - 測試：`check-local.ps1 -Full`：Node 467 項 463 過，失敗 4 項都是 `scripts/local-check.test.mjs`（這台 pwsh 執行原則，乾淨 main 也一樣，不在範圍）；Node 失敗後 -Full 不跑網頁，另用 `-Suite` 指定全部 25 套網頁測試：253 項全過（第一次在背景跑卡住 30 分鐘沒有輸出，中止後重跑正常）。
 - 審查：code-review 兩軸（Standards／Spec）都沒有硬性問題；Standards 提醒補上本行測試結果。
-- 未做：沒推送、沒開 PR，等 K 交辦。
-- 相關 PR：尚未開。
+- 相關 PR：[#633](https://github.com/jiatsenK/bq-shelter-dogs/pull/633)，K 在 app 按「Create PR」直接開正式 PR（不是草稿）。
