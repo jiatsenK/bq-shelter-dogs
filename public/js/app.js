@@ -2057,9 +2057,11 @@ async function init() {
 }
 
 // 換上讀到的 dogs.json（打開網頁時、按「更新」拿到新資料時）
+// groupCheck：狗群頁登記前與背景檢查重讀狗清單時，只補休養與今日登記（登記前要擋休養中的狗）；
+// 我溜過、常溜照開頁與按「更新」的時機讀，不跟著每次狗群檢查重抓（R7）
 
 appState.dataSyncedAt = null;
-function applyDogsData(data) {
+function applyDogsData(data, { groupCheck = false } = {}) {
   appState.allDogs = mergeTempCages(data.dogs);
   if (appState.detailDog) {
     const current = appState.allDogs.find(d => (d.id || d.dogId) === (appState.detailDog.id || appState.detailDog.dogId));
@@ -2075,9 +2077,9 @@ function applyDogsData(data) {
   renderUpdatedLabel();
   appState.loadState = 'ready';
   render();
-  loadMyWalks();
+  if (!groupCheck) loadMyWalks();
   loadRest();
-  appState.favorites.syncFavs();
+  if (!groupCheck) appState.favorites.syncFavs();
   loadTodayWalks();
   if (appState.detailDog) renderDetail();
 }

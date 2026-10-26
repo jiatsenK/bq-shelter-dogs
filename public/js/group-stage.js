@@ -68,7 +68,7 @@ async function loadGroupStage(retry = false) {
     try {
       const data = await loadDogsData();
       if (!receiveGroupData(data)) throw new Error('狗群格式無法確認');
-      applyDogsData(data);
+      applyDogsData(data, { groupCheck: true });
       return true;
     } catch (e) {
       groupStageState.groupReadError = true;
