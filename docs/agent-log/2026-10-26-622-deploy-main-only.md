@@ -15,6 +15,6 @@
   - 文件：`docs/setup/CLOUDFLARE_SETUP.md`（部署段寫明新規則）、`admin/README.md`、`docs/agents/data-changes.md`。
 - 為什麼不把被呼叫的部署分到另一組 concurrency：兩組會同時跑，舊程式可能比新程式晚部署完，反而蓋掉新版。排隊不取消時，還在排隊的那次只會被更新的那次換掉，那次用更新的 main，一樣先確認 migration 再部署；失敗就是 main 推送那次的紅叉。
 - 限定 main 只擋手誤，有推送權限的人能連 workflow 一起改；選別的分支按時 job 顯示略過（灰色），不是紅叉。
-- 驗證：本機 `check-local.ps1 -Suite index` 256 項全過；把 `cancel-in-progress` 暫時改回 `true` 再跑，`#622 志工站部署排隊不取消` 那項失敗，證明檢查有作用（已改回）。沒有手動觸發任何 workflow 試正式部署。
+- 驗證：本機 `check-local.ps1 -Full` 通過（本機沒有 pwsh，設 `BQ_CHECK_PWSH=powershell.exe`），index 256 項全過；把 `cancel-in-progress` 暫時改回 `true` 再跑，`#622 志工站部署排隊不取消` 那項失敗，證明檢查有作用（已改回）。沒有手動觸發任何 workflow 試正式部署。
 - 未處理（範圍外）：`r2-thumbs.yml` 也寫正式 R2（由 Worker 觸發或手動），沒有限定 main，#622 沒列。
-- 相關 PR：（開 PR 後補）
+- 相關 PR：#632（草稿）。等測試另開 #629。
