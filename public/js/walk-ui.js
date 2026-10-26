@@ -1,4 +1,4 @@
-import { canonicalWalker, isOffline, loadCompanions, loadWalkWith, loadWalkerName, render, restOf, splitWalkers, walkRegistration, walkedNow, walkerList } from './app.js';
+import { canonicalWalker, isOffline, loadCompanions, loadWalkWith, loadWalkerName, render, restOf, splitWalkers, stickyTopBottom, walkRegistration, walkedNow, walkerList } from './app.js';
 import { renderDetail } from './detail.js';
 import { esc, icon } from './ui-kit.js';
 import { walkKey } from './dog-status.js';
@@ -82,7 +82,7 @@ const BQWalkUI = (() => {
     const i = appState.allDogs.findIndex(d => walkKey(d) === walkKey(dog));
     const el = i >= 0 && document.querySelector(`#main [data-dog="${i}"]`);
     if (!el) return;
-    const r = el.getBoundingClientRect(), top = document.querySelector('header')?.getBoundingClientRect().bottom || 0;
+    const r = el.getBoundingClientRect(), top = stickyTopBottom();
     const bottom = document.querySelector('#toast:not([hidden])')?.getBoundingClientRect().top ?? innerHeight;
     if (r.top < top || r.bottom > Math.min(innerHeight, bottom)) el.scrollIntoView({ block: 'center' });
   }

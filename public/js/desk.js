@@ -251,13 +251,12 @@ function deskPlaceTabs() {
   const bar = document.getElementById('bottomBar');
   const head = document.querySelector('header.app .header-inner');
   const search = document.getElementById('searchInput')?.closest('.search');
-  const range = document.getElementById('rangeLabel');
   const page = document.getElementById('pageSearch');
   if (!bar || !head || !search) return;
   // 搜尋框（K 2026-10-17）：桌機在表頭；手機搬到表頭下面，表頭四頁同高
   if (deskOn()) {
-    if (search.parentElement !== head) { const at = head.querySelector('.zukan-link'); head.insertBefore(search, at); if (range) head.insertBefore(range, at); }
-  } else if (page && search.parentElement !== page) { page.append(search); if (range) page.append(range); }
+    if (search.parentElement !== head) head.insertBefore(search, head.querySelector('.zukan-link'));
+  } else if (page && search.parentElement !== page) page.append(search);
   if (deskOn()) {
     if (bar.parentElement !== head) head.insertBefore(bar, search);
   } else if (bar.parentElement === head) {

@@ -1667,10 +1667,7 @@ header.app :focus-visible, .bottom-bar :focus-visible { outline-color: var(--tab
 
 .badge.dep-death { color: var(--muted-text); }
 
-/* 頁首範圍字（2026-10-09）：搜尋框下面一行，像抽屜上的範圍標籤；只有溜狗表有 */
 .zukan-link { display: none; }
-.range { margin: 8px 2px 0; font-size: 13px; font-weight: 600; line-height: 1.3; color: var(--shell-soft); font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.range[hidden], .analysis-open .range { display: none; }
 
 /* 使用說明導覽（K 2026-10-09：直接用實際的網頁）：畫面變暗，只亮要說明的地方（黃框），旁邊白色小框寫說明 */
 /* 導覽只接受說明卡操作，背景不能被手指／滾輪捲走；程式仍可把下一個目標捲進畫面。 */
@@ -1761,7 +1758,6 @@ header.app { padding-top: calc(10px + env(safe-area-inset-top, 0px)); padding-bo
 .brand h1 { font-size: 17px; }
 .search { margin-top: 8px; }
 .search input { padding-top: 9px; padding-bottom: 9px; }
-.range { margin-top: 6px; }
 
 /* 選中的分頁：白底在前、上緣一條深綠，像抽出來的那份檔案；不再是實心深色塊 */
 .chip.on, .find-top .find-view button.on, .find-top .find-chip.on {
@@ -1788,7 +1784,7 @@ h2.name { margin: 0; }
 /* 找狗全圖（critique 2026-10-09 P2）：js/find.js 不畫籠子、區名和隻數照放大的字排（K 2026-10-09 iPhone 上字疊在一起，不再用 CSS 硬改字級） */
 .find-map-card + .find-zone-head h2 { font-size: 17px; }
 
-/* 頁首收起（critique 2026-10-09 P1）：標題那一行捲走，搜尋框和範圍字留在上面；--brand-h 由 js/app.js 的 syncHeaderTuck 算。
+/* 頁首收起（critique 2026-10-09 P1）：標題那一行捲走，電腦版搜尋框留在上面（手機的在 .page-search 另外黏）；--brand-h 由 js/app.js 的 syncHeaderTuck 算。
    分析頁沒有搜尋框，頁首整個留著（返回、分析按鈕在標題那一行） */
 header.app { top: calc(-1 * var(--brand-h, 0px)); }
 .analysis-open header.app { top: 0; }
@@ -2051,7 +2047,6 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .desk-on .brand { flex: none; align-items: center; gap: 10px; }
   .desk-on .brand .titles { flex: none; }
   .desk-on .brand .sub { justify-content: flex-start; gap: 12px; }
-  .desk-on .range { display: none !important; }
   .desk-on .bottom-bar { position: static; padding: 0; background: none; box-shadow: none; display: flex; align-items: flex-end; }
   .desk-on .bottom-inner { max-width: none; margin: 0; }
   .desk-on .tabs { display: flex; gap: 4px; }
@@ -2410,12 +2405,15 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .analysis-open body::before { content: ""; display: block; height: var(--app-header-height, 64px); }
 }
 
-/* 手機搜尋框在表頭下面（K 2026-10-17 選 A）：溜狗表、常遛狗群、我溜過同一個位置，資訊沒有 */
-.page-search { max-width: 480px; margin: 0 auto; padding: 12px 14px 0; }
+/* 手機搜尋框在表頭下面（K 2026-10-17 選 A）：溜狗表、常遛狗群、我溜過同一個位置，資訊沒有。
+   K 2026-10-26：往下捲要跟著，黏在收起後的表頭下面（表頭只剩下緣那條，高度＝--app-header-height − --brand-h） */
+.page-search { max-width: 480px; margin: 0 auto; padding: 12px 14px 6px; position: sticky; top: calc(var(--app-header-height, 64px) - var(--brand-h, 0px)); z-index: 9; background: var(--bg); }
+html.tour-open .page-search { top: var(--app-header-height, 64px); }
+/* K 2026-10-26：搜尋框跟「全部」不用那麼遠；搜尋框下緣 6px＋這裡 4px */
+html:not(.analysis-open) .page-search:not(:empty) + main { padding-top: 4px; }
 .page-search:empty, .analysis-open:not(.head-search) .page-search { display: none; }
 .page-search .search { margin: 0; }
 .page-search .search input { box-shadow: inset 0 0 0 1px var(--line); }
-.page-search .range { margin: 8px 2px 0; color: var(--ink-soft); }
 
 /* 手機鍵盤（#389）：鍵盤彈出時（html.kb-open，js/keyboard-viewport.js）底部分類列先收起來，
    底部面板貼齊看得到的範圍，輸入框只在面板裡捲，整頁不跟著跳 */
