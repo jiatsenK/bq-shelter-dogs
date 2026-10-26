@@ -39,8 +39,8 @@ export function gapStatus(g) {
 // 稽核第 5 項：排程有沒有在跑。工作名稱與頻率跟 wrangler.jsonc 的排程一致（worker/src/index.js 的 RETRY_CRON、SCAN_CRON）。
 export const CRON_LABELS = {
   retry: { name: '寫回重試', every: '每 10 分鐘' },
-  scan: { name: '保險掃描', every: '每天 09:53、13:53、23:53' },
-  trash: { name: '照片垃圾桶', every: '每月 1 日 09:53' },
+  scan: { name: '保險掃描', every: '每天 09:23、13:23、23:23' },
+  trash: { name: '照片垃圾桶', every: '每月 1 日 09:23' },
 };
 
 export function parseCronStatus(data) {

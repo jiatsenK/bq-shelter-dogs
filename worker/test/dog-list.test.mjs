@@ -149,9 +149,9 @@ test('#501 每 10 分鐘的試算表同步排程已移除；照片垃圾桶每�
   let purged = 0;
   env.PHOTOS = { list:async () => { purged++; return { objects:[], truncated:false }; } };
   try {
-    // 只有每月 1 日 UTC 01:53（台灣 09:53）那次保險掃描順便清；同一天其他時段、其他天、重試排程都不清
-    for (const [cron, at] of [['5-59/10 * * * *', Date.UTC(2026, 10, 1, 1, 55)], ['53 1,5,15 * * *', Date.UTC(2026, 10, 1, 5, 53)],
-      ['53 1,5,15 * * *', Date.UTC(2026, 10, 2, 1, 53)], ['53 1,5,15 * * *', Date.UTC(2026, 10, 1, 1, 53)]]) {
+    // 只有每月 1 日 UTC 01:23（台灣 09:23）那次保險掃描順便清；同一天其他時段、其他天、重試排程都不清
+    for (const [cron, at] of [['5-59/10 * * * *', Date.UTC(2026, 10, 1, 1, 55)], ['23 1,5,15 * * *', Date.UTC(2026, 10, 1, 5, 23)],
+      ['23 1,5,15 * * *', Date.UTC(2026, 10, 2, 1, 23)], ['23 1,5,15 * * *', Date.UTC(2026, 10, 1, 1, 23)]]) {
       const tasks = [];
       await worker.scheduled({ scheduledTime:at, cron }, env, { waitUntil:p => tasks.push(p) });
       await Promise.allSettled(tasks);
@@ -159,7 +159,7 @@ test('#501 每 10 分鐘的試算表同步排程已移除；照片垃圾桶每�
     assert.ok(!calls.some(u => u.includes('api.github.com')), '不再叫 GitHub 同步');
     assert.equal(purged, 1, '只有每月 1 日第一次保險掃描清垃圾桶');
     assert.match((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='trash_purged'").first()).value, /"purged":0/);
-    assert.equal(JSON.parse((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='cron_trash'").first()).value).okAt, '2026-11-01T01:53:00.000Z');
+    assert.equal(JSON.parse((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='cron_trash'").first()).value).okAt, '2026-11-01T01:23:00.000Z');
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
 
