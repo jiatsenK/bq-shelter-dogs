@@ -1,6 +1,12 @@
-// #214 隔離測試 D1；供預覽準備使用。
-// 這份只有資料庫設定，不可直接部署 Worker。
+// #214 隔離測試 D1；供預覽準備、測試庫 migration、seed-preview-db 使用。
+// 稽核第 3 項（2026-10-26）：PR 預覽改上傳到獨立 Worker bq-shelter-dogs-preview，照片讀測試空間 bq-shelter-photos-test，
+//   Worker 上不設任何密鑰；scripts/d1-database.mjs --preview 用這裡的 name、r2_buckets、d1_databases 換掉正式設定。
+// 這份沒有程式進入點，不可直接部署 Worker。
 {
+  "name": "bq-shelter-dogs-preview",
+  "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "bq-shelter-photos-test" }],
+  // 稽核第 5 項：排程上限算整個帳號，預覽不准有排程；不是空的話 d1-database.mjs --preview 會停
+  "triggers": { "crons": [] },
   "d1_databases": [{
     "binding": "DB",
     "database_name": "bq-shelter-dogs-test",
