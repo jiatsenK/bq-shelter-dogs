@@ -12,5 +12,5 @@
 - 文件：ADR 0002、ADR 0015 註明已完成、腳本退役、程式見 commit `2feead4`；`docs/design/history/COMPACT_D1.md`、`267-identity-rollout.md` 開頭加同樣註記（內文是歷史，不改）；`db/compact-schema.sql`、`worker/src/dog-list.js` 改掉指向已刪腳本的註解。研究文件、`migrations/0000` 註解不改。
 - 審查：code-review 兩軸。Spec 無阻擋項。Standards 無硬性違規；採納「fixtures 檔頭註明測試專用、不搬進 worker/src（#408）」；其餘命名、重複查編號表的建議是原腳本照搬的寫法，測試輔助不另重構。
 - 測試：`check-local.ps1 -Full` Node 440 個測試 436 過，4 個失敗都在 `scripts/local-check.test.mjs`（這台 pwsh 執行原則問題，乾淨 main 也一樣，不在本票範圍）；Node 失敗所以全套沒接著跑網頁測試，另用 `-Suite` 跑全部 25 個網頁套件：253 項全過。
-- 未做：沒推送、沒開 PR，等 K 交辦。
-- 相關 PR：無（尚未開）。
+- 推送與 PR：K 2026-10-26 交辦推送並開草稿 PR。
+- 相關 PR：[#625](https://github.com/jiatsenK/bq-shelter-dogs/pull/625)，草稿。
