@@ -9,6 +9,8 @@ function createWalkRegistration(deps) {
   const accepted = new Map();
   // #445：D1 復原先顯示登記前的樣子，等 D1 回應再以回應為準；priors 是這支手機登記前看到的上次溜狗
   const priors = new Map(), restoring = new Map();
+  // #643：按溜了沒登記成功的狗，狗卡留著失敗狀態，直到登記成功或志工再按一次；只記當天
+  const failures = new Map();
   let acceptedVersion = -1;
   const isSuccess = status => ['written', 'restored'].includes(status);
   const isRetryable = status => ['unknown', 'notSent'].includes(status);
@@ -84,6 +86,7 @@ function createWalkRegistration(deps) {
   }
   function enqueue(request) {
     request.entries.forEach(e => pending.set(e.key, (pending.get(e.key) || 0) + 1));
+    if (request.action === 'walk') request.entries.forEach(e => failures.delete(e.key));
     if (request.action === 'undo') request.entries.forEach(e => { if (e.prior) restoring.set(e.key, e.prior); });
     const work = queue.then(() => execute(request));
     const finished = work.finally(() => request.entries.forEach(e => {
@@ -101,6 +104,10 @@ function createWalkRegistration(deps) {
       const one = await acceptOne(request, entry);
       rows.push(one.row);
       if (one.error) errors.push(one.error);
+      if (request.action === 'walk') {
+        if (isSuccess(one.row.status)) failures.delete(entry.key);
+        else failures.set(entry.key, { day: request.day, status: one.row.status, error: one.row.error });
+      }
     }
     const response = { rows, error: [...new Set(errors)].join('；'),
       successful: rows.filter(r => isSuccess(r.status)).map(r => r.dog),
@@ -119,10 +126,13 @@ function createWalkRegistration(deps) {
     entry.payload = payload;
     saved[key] = payload;
     try { deps.saveRequests?.(saved); } catch {
-      return { row: { dog: entry.dog, status: 'notSent' }, error: '無法保留登記識別，尚未送出' };
+      const error = '無法保留登記識別，尚未送出';
+      return { row: { dog: entry.dog, status: 'notSent', error }, error };
     }
     let out;
     try { out = payload.operationDate !== deps.date() && deps.lookupRequest ? await deps.lookupRequest(payload.requestId) : await deps.send(payload); } catch { out = null; }
+    // #643：沒送出（例：手機沒網路）是確定沒登記到，跟送出後沒收到回應分開
+    if (out?.notSent) return { row: { dog: entry.dog, status: 'notSent', error: out.error }, error: out.error };
     // 有回應（含失敗）就以 D1 為準；同一隻後面還排著別筆復原時，只清自己設的
     if (entry.prior && restoring.get(key) === entry.prior) restoring.delete(key);
     const matches = out?.source === 'd1' && Array.isArray(out.results) ? out.results.filter(r => r.id === entry.id && r.name === entry.name) : [];
@@ -146,8 +156,8 @@ function createWalkRegistration(deps) {
     }
     const completed = valid && payload.action === request.action && (request.action !== 'edit'
       || payload.walker === entry.walker && payload.editor === request.me);
-    return { row: { dog: entry.dog, status: completed ? result.status : valid || conflict || rejected ? 'changed' : 'unknown' },
-      error: valid && !completed ? '前次操作已確認，請先確認目前紀錄' : completed ? '' : out?.error || '' };
+    const error = valid && !completed ? '前次操作已確認，請先確認目前紀錄' : completed ? '' : out?.error || (out ? '' : '連線中斷');
+    return { row: { dog: entry.dog, status: completed ? result.status : valid || conflict || rejected ? 'changed' : 'unknown', error }, error };
   }
   function retry(result) {
     const request = requests.get(result);
@@ -155,7 +165,12 @@ function createWalkRegistration(deps) {
     const entries = request.entries.filter((e, i) => isRetryable(result.rows[i].status));
     return enqueue({ ...request, entries });
   }
-  return { register, retry, undo, canRevert, state, today, beginRead, receiveToday, pending: dog => pending.has(deps.key(dog)) };
+  // unsure：送出了但不知道有沒有登記到；其他是確定沒登記到
+  function failure(dog, day = deps.date()) {
+    const f = failures.get(deps.key(dog));
+    return f && f.day === day ? { status: f.status, error: f.error, unsure: f.status === 'unknown' } : null;
+  }
+  return { register, retry, undo, canRevert, state, today, beginRead, receiveToday, failure, pending: dog => pending.has(deps.key(dog)) };
 }
 
 export { createWalkRegistration };

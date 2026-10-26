@@ -42,6 +42,7 @@ const BQWalks = (() => {
       lookupRequest: id => fetchStatus(signal => api.walkResult(id, { signal })),
       send: async payload => {
         if (!deps.enabled() || deps.getWriteState() === 'off' || (payload.action !== 'undo' && !payload.walker)) return { off: true };
+        if (deps.offline?.()) return { notSent: true, error: '沒網路' };
         const r = await api.walk(payload);
         if (r.error === 'network') throw new Error(r.message);
         const out = r.data;
@@ -80,17 +81,18 @@ const BQWalks = (() => {
     }
     return { ...registration, loadToday, walkCandidates, startWalk, addCompanions };
   }
+  // #643：分清楚「確定沒登記到」（沒送出、被拒絕）和「還不知道有沒有登記到」（送出了沒收到確認），寫出原因和下一步
   function registrationText(result) {
     const parts = [];
     if (result.successful.length) parts.push(`已登記 ${result.successful.length} 隻`);
-    const failed = result.rows.filter(r => r.status !== 'written');
-    if (failed.length) {
-      parts.push('未全部登記成功');
-      const unknown = failed.filter(r => r.status === 'unknown');
-      const changed = failed.filter(r => r.status === 'changed');
-      if (unknown.length) parts.push(`${unknown.map(r => r.dog.name).join('、')} 尚未確認登記結果${result.error ? '（' + result.error + '）' : ''}`);
-      if (changed.length) parts.push(`${changed.map(r => r.dog.name).join('、')} 紀錄已經被改過，沒有蓋掉別人的紀錄`);
-    }
+    const names = rows => rows.map(r => r.dog.name).join('、');
+    const why = rows => { const e = [...new Set(rows.map(r => r.error).filter(Boolean))].join('、'); return e ? `（${e}）` : ''; };
+    const missed = result.rows.filter(r => r.status === 'notSent');
+    const unknown = result.rows.filter(r => r.status === 'unknown');
+    const changed = result.rows.filter(r => r.status === 'changed');
+    if (missed.length) parts.push(`${names(missed)} 沒登記到${why(missed)}，${missed.every(r => r.error === '沒網路') ? '有訊號再按一次' : '再按一次'}`);
+    if (unknown.length) parts.push(`${names(unknown)} 還不知道有沒有登記到${why(unknown)}，按「再試一次」確認`);
+    if (changed.length) parts.push(`${names(changed)} 沒登記到：紀錄已經被改過，沒有蓋掉別人的紀錄`);
     return parts.join('；');
   }
   // 全部復原成功只換提示條文字；有衝突或未確認才另外說明

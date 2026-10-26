@@ -28,6 +28,7 @@ async function setup(walk, todayWalks, options = {}) {
       key: d => d.id, date: () => '2026-10-23', walker: () => '我', alias: () => null,
       canonical: n => n, split: n => (n || '').split('、').filter(Boolean),
       base: () => ({ date: '', walker: '' }), apply: () => {},
+      offline: () => !!options.offline?.(),
     });
     return { flow, records, store, feedback: BQWalks.undoFeedback, writeState: () => writeState };
   })`, context)(walk, todayWalks, options, phone);
@@ -96,7 +97,7 @@ for (const [label, reply, status] of [
     assert.equal(result.rows[0].status, status);
     assert.equal(result.retryDogs.length, status === 'unknown' ? 1 : 0);
     assert.equal(JSON.stringify(result.failed.map(d => d.id)), '["1"]');
-    assert.match(result.message, status === 'unknown' ? /^未全部登記成功；甲 尚未確認登記結果/ : /^未全部登記成功；甲 紀錄已經被改過，沒有蓋掉別人的紀錄$/);
+    assert.match(result.message, status === 'unknown' ? /^甲 還不知道有沒有登記到（.+），按「再試一次」確認$/ : /^甲 沒登記到：紀錄已經被改過，沒有蓋掉別人的紀錄$/);
     if (status === 'changed') assert.equal(flow.state(dog).walker, '別人');
   });
 }
@@ -156,4 +157,38 @@ test('D1 識別存不進持久儲存時不送出，沿用原本提示', async ()
   assert.equal(sent, false);
   assert.equal(result.rows[0].status, 'notSent');
   assert.equal(result.error, '無法保留登記識別，尚未送出');
+});
+
+// #643：狗卡留失敗狀態，分清楚確定沒登記到和還不知道
+test('沒網路不送出，文案寫原因和有訊號再按一次；狗卡記確定沒登記到', async () => {
+  let sent = 0, offline = true;
+  const { flow } = await setup(async payload => { sent++; return accepted(payload); }, null, { offline: () => offline });
+  const result = await flow.startWalk([dog]);
+  assert.equal(sent, 0);
+  assert.equal(result.rows[0].status, 'notSent');
+  assert.equal(result.message, '甲 沒登記到（沒網路），有訊號再按一次');
+  assert.equal(result.retryDogs.length, 1);
+  assert.deepEqual({ ...flow.failure(dog) }, { status: 'notSent', error: '沒網路', unsure: false });
+  offline = false;
+  const again = await flow.startWalk([], result);
+  assert.equal(again.rows[0].status, 'written');
+  assert.equal(flow.failure(dog), null, '登記成功就拿掉失敗狀態');
+});
+
+test('送出後沒收到回應記成還不知道；再按一次就先清掉，整群只標失敗的狗', async () => {
+  const other = { id: '2', name: '乙' };
+  let fail = true;
+  const { flow } = await setup(async payload => {
+    if (fail && payload.dogs[0].id === '1') return { ok: false, status: 0, error: 'network', message: '網頁載入失敗' };
+    return accepted(payload);
+  });
+  const result = await flow.startWalk([dog, other]);
+  assert.match(result.message, /^已登記 1 隻；甲 還不知道有沒有登記到（連線中斷），按「再試一次」確認$/);
+  assert.equal(flow.failure(dog).unsure, true);
+  assert.equal(flow.failure(other), null);
+  fail = false;
+  const pending = flow.register([dog]);
+  assert.equal(flow.failure(dog), null, '再按一次就不再顯示失敗');
+  await pending;
+  assert.equal(flow.failure(dog), null);
 });
