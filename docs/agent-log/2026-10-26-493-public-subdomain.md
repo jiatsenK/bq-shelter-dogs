@@ -19,4 +19,11 @@
   - D1 database_id、Access 的團隊網域與 AUD 還在設定檔裡：沒有 API token 用不了，而且 AUD 和團隊網域本來就出現在登入轉址網址裡，這次不動。
   - Git 歷史、既有 PR 留言、舊的 Actions 日誌裡的網址都還在（第 4、6 項後半，要另外授權）。
   - 合併前 K 要先在 GitHub 設 `WORKERS_SUBDOMAIN`，否則合併後的自動部署會停在第一步（紅叉、不部署）。
+  - 第 2 項原句也包含「Worker 名稱、資料來源位置改由私有設定注入」。Worker 名稱跟 repo 名稱一樣、Q4 未定，D1 ID 理由見上，這次都沒抽，待 K 決定是否接受。
+  - 驗收條件有「舊址轉址不退化」：舊網址從 Pages 關閉（10-15）起就是 404，轉址程式已不會執行，拿掉不改變現況；K 若要恢復舊網址，要另外處理。
+  - 預覽留言裡的 Cloudflare 主控台連結（`?to=/:account/...`）沒有實際點開驗證。
+- 審查（Standards／Spec 兩軸，基準 origin/main）：
+  - Standards 沒有硬性違規。已修：三處重複的金鑰正則抽成 `CARRIES_SECRET`、smoke-api 改用 `URL` 解析、測試函式改名 `accountHosts` 且不 export、預覽留言重複的 PR 編號變數；網頁測試覆蓋的 4 張 `.scratch/*-evidence` 截圖還原。四個 workflow 各有一份「沒設就停」步驟，要共用得做 composite action，這次不做。
+  - Spec：已修 `docs/PROJECT_GOALS.md` 的轉址舊說法；Secret 遮罩、`--var` 與 `keep_vars: false`、workflow_call 拿得到 Secret 都核對過。
+- 本機測試：Node 467 項只有 `scripts/local-check.test.mjs` 4 項失敗（本機本來就失敗）；網頁 26 套全過。
 - 相關 PR：（開 PR 後補）。

@@ -27,11 +27,9 @@ export async function smokeApi(base, { fetchFn = fetch, tries = 3, waitMs = 5000
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   // 子網域沒設時 CI 會組出「bq-shelter-dogs..workers.dev」，一併擋下
-  if (!/^https:\/\/[^/]+$/.test((process.argv[2] || '').replace(/\/$/, '')) || process.argv[2].includes('..')) {
-    console.error('要給網址：node scripts/smoke-api.mjs https://…');
-    process.exit(1);
-  }
-  const base = process.argv[2].replace(/\/$/, '');
+  let base = '';
+  try { const url = new URL(process.argv[2]); if (url.protocol === 'https:' && !url.hostname.includes('..')) base = url.origin; } catch {}
+  if (!base) { console.error('要給網址：node scripts/smoke-api.mjs https://…'); process.exit(1); }
   const failures = await smokeApi(base);
   if (failures.length) { console.error(`正式站 API 有問題：\n${failures.join('\n')}`); process.exit(1); }
   console.log(`正式站 ${READ_PATHS.length} 支讀取 API 都正常`);

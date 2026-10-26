@@ -8,6 +8,9 @@ function deployWriteProblem(deploy, preview) {
   return '';
 }
 
+// 帶金鑰的寫法。Cloudflare 部署用的兩個 Secret 之外，只准 WORKERS_SUBDOMAIN：它不是金鑰，放 Secret 是為了讓日誌把子網域遮成 ***（#493）
+const CARRIES_SECRET = /--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b|WORKERS_SUBDOMAIN\b)/;
+
 // 管理網站部署：只能手動、只准部署 wrangler.admin.jsonc 且帶 --message，不套 migration、不帶金鑰。回傳問題或 ''
 function adminDeployProblem(wf) {
   if (!/^on:\r?\n  workflow_dispatch:/m.test(wf) || /^\s+(push|pull_request|schedule|workflow_call|workflow_run):/m.test(wf)) return '只能手動觸發';
@@ -16,7 +19,7 @@ function adminDeployProblem(wf) {
   const rest = wf.replace(allowedDeploy, '');
   if (/migrations apply|d1 execute|continue-on-error|if:\s*always\(/.test(rest)) return '不能改結構或忽略錯誤';
   if (/wrangler@4 (deploy|versions)/.test(rest)) return '不能部署或上傳其他設定';
-  if (/--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b|WORKERS_SUBDOMAIN\b)/.test(rest)) return '不能帶金鑰';
+  if (CARRIES_SECRET.test(rest)) return '不能帶金鑰';
   return '';
 }
 
@@ -28,7 +31,7 @@ function testSiteDeployProblem(wf) {
   const rest = wf.replace(allowedApply, '').replace(allowedDeploy, '');
   if (/migrations apply|d1 execute|continue-on-error|if:\s*always\(/.test(rest)) return '只能對測試庫套 migration，不能改其他結構或忽略錯誤';
   if (/wrangler@4 (deploy|versions)/.test(rest)) return '不能部署或上傳其他設定';
-  if (/--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b|WORKERS_SUBDOMAIN\b)/.test(rest)) return '不能帶金鑰';
+  if (CARRIES_SECRET.test(rest)) return '不能帶金鑰';
   return '';
 }
 
@@ -67,7 +70,7 @@ async function runR2Tests() {
     if (!preview.includes('node scripts/d1-database.mjs --config wrangler.jsonc --preview')) throw new Error('預覽要查證隔離（測試 D1、測試 R2、沒有密鑰）');
     if (/--create-preview-worker/.test(preview)) throw new Error('預覽 Worker 只由 K 手動建立一次');
     if (!/versions upload\s*\\\s*\r?\n\s*--config "\$\{\{ steps\.d1\.outputs\.config \}\}"/.test(preview)) throw new Error('預覽上傳要用驗證過的隔離設定');
-    if (/--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b|WORKERS_SUBDOMAIN\b)/.test(preview)) throw new Error('預覽不能帶金鑰');
+    if (CARRIES_SECRET.test(preview)) throw new Error('預覽不能帶金鑰');
     const problem = deployWriteProblem(deploy, preview);
     if (problem) throw new Error(problem);
   });

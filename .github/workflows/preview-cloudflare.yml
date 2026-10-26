@@ -99,14 +99,13 @@ jobs:
         with:
           script: |
             const marker = '<!-- cloudflare-preview -->';
-            const pr = context.payload.pull_request.number;
+            const issue_number = context.payload.pull_request.number;
             // :account 由 Cloudflare 換成登入中的帳號，連結本身不含帳號 ID
             const dash = 'https://dash.cloudflare.com/?to=/:account/workers/services/view/bq-shelter-dogs-preview/production/deployments';
-            const body = `${marker}\n📱 **預覽已更新**（別名 \`pr-${pr}\`）。repo 公開，網址不貼在這裡（#493）：` +
-              `打開 \`https://pr-${pr}-bq-shelter-dogs-preview.<子網域>.workers.dev\`，或到 [Cloudflare 預覽 Worker 版本頁](${dash}) 登入後找 \`pr-${pr}\`。\n\n` +
+            const body = `${marker}\n📱 **預覽已更新**（別名 \`pr-${issue_number}\`）。repo 公開，網址不貼在這裡（#493）：` +
+              `打開 \`https://pr-${issue_number}-bq-shelter-dogs-preview.<子網域>.workers.dev\`，或到 [Cloudflare 預覽 Worker 版本頁](${dash}) 登入後找 \`pr-${issue_number}\`。\n\n` +
               `對應這個 PR 最新的提交（${process.env.SHA.slice(0, 7)}）。預覽版接的是測試照片與測試資料庫，可以看、可以讀，但上傳照片、存備註、按「更新」都不會存，正式資料不受影響。`;
             const { owner, repo } = context.repo;
-            const issue_number = context.payload.pull_request.number;
             const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });
             const old = comments.find(c => c.body && c.body.startsWith(marker));
             if (old) await github.rest.issues.updateComment({ owner, repo, comment_id: old.id, body });

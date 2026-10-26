@@ -11,15 +11,15 @@ const ROOT = new URL('..', import.meta.url);
 const SKIP = /^(docs\/agent-log\/|AGENT_LOG\.md$)/;
 const BINARY = /\.(png|jpe?g|gif|webp|ico|woff2?|zip|pdf)$/i;
 
-export function realSubdomains(text) {
+function accountHosts(text) {
   return [...text.matchAll(/[a-z0-9-]+\.([a-z0-9-]+)\.workers\.dev/g)].filter(m => m[1] !== 'example').map(m => m[0]);
 }
 
 test('#493 判斷：佔位子網域放行，真的子網域會被抓到', () => {
-  assert.deepEqual(realSubdomains('https://bq-shelter-dogs.example.workers.dev https://pr-1-bq-shelter-dogs-preview.<子網域>.workers.dev "https://bq-shelter-dogs-test.${WORKERS_SUBDOMAIN}.workers.dev" https://x.workers.dev'), []);
+  assert.deepEqual(accountHosts('https://bq-shelter-dogs.example.workers.dev https://pr-1-bq-shelter-dogs-preview.<子網域>.workers.dev "https://bq-shelter-dogs-test.${WORKERS_SUBDOMAIN}.workers.dev" https://x.workers.dev'), []);
   // 拆開寫，免得這個檔自己被抓到
   const real = ['bq-shelter-dogs', 'someone-1', 'workers', 'dev'].join('.');
-  assert.deepEqual(realSubdomains(`打開 https://${real}/api/`), [real]);
+  assert.deepEqual(accountHosts(`打開 https://${real}/api/`), [real]);
 });
 
 test('#493 追蹤的檔案不含帳號子網域（交接紀錄除外）', () => {
@@ -28,7 +28,7 @@ test('#493 追蹤的檔案不含帳號子網域（交接紀錄除外）', () => 
   for (const f of files) {
     let text;
     try { text = readFileSync(new URL(f, ROOT), 'utf8'); } catch { continue; }
-    for (const hit of realSubdomains(text)) found.push(`${f}：${hit}`);
+    for (const hit of accountHosts(text)) found.push(`${f}：${hit}`);
   }
   assert.deepEqual(found, []);
 });
