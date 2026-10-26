@@ -68,7 +68,9 @@ test('#500 功能開關關閉時不動今日溜狗，也不確認（GAS 保留�
   } finally { env.DB.close(); }
 });
 
-test('#500 沒有待寫回時，重試排程不讀試算表、不寫 D1', async () => {
+const cronRow = async (env, job) => JSON.parse((await env.DB.prepare('SELECT value FROM v3_sync_state WHERE key=?').bind(`cron_${job}`).first('value')) || 'null');
+
+test('#500 沒有待寫回時，重試排程不讀試算表；D1 只寫一列跑完時間（稽核第 5 項）', async () => {
   const env = { ...await setup(), WALK_RETRY_ENABLED:'true' }, real = globalThis.fetch;
   const outside = [];
   globalThis.fetch = async url => { outside.push(String(url)); return Response.json({ ok:true, rows:[] }); };
@@ -76,11 +78,12 @@ test('#500 沒有待寫回時，重試排程不讀試算表、不寫 D1', async 
     const before = await writes(env);
     await run(env, '5-59/10 * * * *');
     assert.deepEqual(outside, []);
-    assert.equal(await writes(env), before);
+    assert.equal(await writes(env), before + 1);
+    assert.ok((await cronRow(env, 'retry')).okAt);
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
 
-test('#500 保險掃描沒有不同的狗只問一次就結束；重試排程、垃圾桶排程不掃', async () => {
+test('#500 保險掃描沒有不同的狗只問一次就結束；重試排程不掃（稽核第 5 項：正式版只剩兩個排程）', async () => {
   const env = { ...await setup(), WALK_RETRY_ENABLED:'true' }, real = globalThis.fetch;
   const actions = [];
   globalThis.fetch = async (url, init) => {
@@ -90,21 +93,20 @@ test('#500 保險掃描沒有不同的狗只問一次就結束；重試排程、
   };
   try {
     await post(env, request('scan-0001', '甲'));
-    for (const cron of ['17 2 1 * *', '5-59/10 * * * *']) {
+    for (const cron of ['17 2 1 * *', '43 1 * * *', '5-59/10 * * * *']) {
       actions.length = 0;
       await run(env, cron);
       assert.ok(!actions.includes('walkScan'), cron);
     }
-    for (const cron of ['43 1 * * *', '53 5,15 * * *']) {
-      actions.length = 0;
-      const before = await writes(env);
-      await run(env, cron);
-      assert.deepEqual(actions, ['walkScan'], cron);
-      assert.equal(await writes(env), before);
-    }
-    const wrangler = readFileSync(new URL('../../wrangler.jsonc', import.meta.url), 'utf8');
-    assert.match(wrangler, /"43 1 \* \* \*"/);
-    assert.match(wrangler, /"53 5,15 \* \* \*"/);
+    actions.length = 0;
+    const before = await writes(env);
+    await run(env, '53 1,5,15 * * *');
+    assert.deepEqual(actions, ['walkScan']);
+    assert.equal(await writes(env), before + 1, '只多記一列跑完時間');
+    assert.ok((await cronRow(env, 'scan')).okAt);
+    const crons = config => JSON.parse(readFileSync(new URL(`../../${config}`, import.meta.url), 'utf8').match(/"crons":\s*(\[[^\]]*\])/)[1]);
+    assert.deepEqual(crons('wrangler.jsonc'), ['5-59/10 * * * *', '53 1,5,15 * * *']);
+    assert.deepEqual(crons('wrangler.test-site.jsonc'), ['5-59/10 * * * *'], '帳號免費方案上限 5 個：測試網站只留寫回重試');
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
 

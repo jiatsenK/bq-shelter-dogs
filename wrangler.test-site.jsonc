@@ -28,9 +28,10 @@
     "D1_WALK_NOTIFY": "1",
     "WALK_RETRY_ENABLED": "true"
   },
-  // 跟正式版同一組排程（worker/src/index.js 的 RETRY_CRON、SCAN_CRONS、TRASH_CRON）；保險掃描找的是測試試算表的 Apps Script
+  // 排程數量算整個 Cloudflare 帳號，免費方案上限 5 個（稽核第 5 項）：測試網站只留寫回重試（worker/src/index.js 的 RETRY_CRON）。
+  // 要測保險掃描或照片垃圾桶時，暫時在這裡加正式版的 SCAN_CRON 再部署，測完拿掉
   "triggers": {
-    "crons": ["5-59/10 * * * *", "43 1 * * *", "53 5,15 * * *", "17 2 1 * *"]
+    "crons": ["5-59/10 * * * *"]
   },
   "keep_vars": false
 }

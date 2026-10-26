@@ -11,5 +11,6 @@ export const createActivity = body => call('/api/manage/activities', 'POST', bod
 export const updateActivity = (id, body) => call(`/api/manage/activities/${id}`, 'PUT', body);
 export const deleteActivity = (id, revision) => call(`/api/manage/activities/${id}`, 'DELETE', { revision });
 export const readDataChecks = () => call('/api/manage/data-checks');
+export const readCronStatus = () => call('/api/manage/cron-status');
 export const searchEdits = query => call(`/api/manage/edits${query ? `?${query}` : ''}`);
 export const readWebsiteUpdates = () => settle(fetch('./shared/website-updates.json', { cache: 'no-cache', redirect: 'error', signal: AbortSignal.timeout(15000) }));

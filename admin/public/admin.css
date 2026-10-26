@@ -116,7 +116,7 @@ h1 { margin: 0 0 8px; font-size: 1.75rem; line-height: 1.3; }
 .check-card h2, .card-heading { font-size: 1.25rem; margin: 0 0 12px; }
 .card-heading { padding: 24px 24px 0; }
 .check-status { color: var(--admin-muted); max-width: 90ch; line-height: 1.8; }
-.check-status[data-error="true"], .check-status[data-stale="true"] { color: #9c2424; }
+.check-status[data-error="true"], .check-status[data-stale="true"], #cron-jobs td[data-stale="true"] { color: #9c2424; }
 .check-list { display: grid; gap: 8px; max-width: 72ch; }
 .check-item { padding: 12px; border: 1px solid var(--admin-border); border-radius: 4px; }
 .check-item > summary, .check-item.ok { display: flex; justify-content: space-between; gap: 12px; cursor: pointer; }

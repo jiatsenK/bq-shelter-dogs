@@ -1,10 +1,10 @@
-import { readDogs, readDataChecks } from './api.js';
+import { readDogs, readDataChecks, readCronStatus } from './api.js';
 import { parseManageDogs } from './dog-table.js';
-import { completeness, parseSheetGaps, gapStatus, SHEET_LABELS } from './data-checks.js';
+import { completeness, parseSheetGaps, gapStatus, SHEET_LABELS, CRON_LABELS, parseCronStatus, cronStatus } from './data-checks.js';
 import { showVolunteerState } from './volunteer-state.js';
 import { byId, element } from './dom.js';
 
-// #567 資料檢查頁：兩個區塊各自讀取、各自顯示失敗；讀不到時明說「無法判斷」，不當成沒有缺漏。
+// #567 資料檢查頁：每個區塊各自讀取、各自顯示失敗；讀不到時明說「無法判斷」，不當成沒有缺漏。
 const failed = (node, text) => { node.dataset.error = 'true'; node.textContent = text; };
 
 function renderGaps(result) {
@@ -61,13 +61,41 @@ function renderCompleteness(result) {
   }));
 }
 
+// 稽核第 5 項：排程最後一次跑完的時間；讀不到不當成有在跑
+function renderCron(result) {
+  const status = byId('cron-status'), region = byId('cron-region');
+  status.removeAttribute('data-error'); status.removeAttribute('data-stale'); region.hidden = true;
+  let jobs;
+  try {
+    if (!result.ok) throw Error(result.data?.error);
+    jobs = parseCronStatus(result.data);
+  } catch (error) {
+    failed(status, `${error.message || '排程紀錄讀取失敗'}。這不代表排程有在跑，請重新讀取。`);
+    return;
+  }
+  const rows = jobs.map(j => ({ j, s: cronStatus(j) }));
+  const bad = rows.filter(r => r.s.bad).length;
+  status.textContent = bad ? `${bad} 件排程需要注意。` : '排程都有按時跑完。';
+  if (bad) status.dataset.stale = 'true';
+  byId('cron-jobs').replaceChildren(...rows.map(({ j, s }) => {
+    const row = document.createElement('tr');
+    const problem = element('td', s.problem);
+    if (s.bad) problem.dataset.stale = 'true';
+    row.append(element('td', CRON_LABELS[j.job].name), element('td', CRON_LABELS[j.job].every), element('td', s.last), problem);
+    return row;
+  }));
+  region.hidden = false;
+}
+
 async function load() {
   byId('reload').disabled = true;
   byId('gap-status').textContent = '正在讀取掃描清單…';
   byId('complete-status').textContent = '正在讀取狗資料…';
-  const [gaps, dogs] = await Promise.all([readDataChecks(), readDogs()]);
+  byId('cron-status').textContent = '正在讀取排程紀錄…';
+  const [gaps, dogs, cron] = await Promise.all([readDataChecks(), readDogs(), readCronStatus()]);
   renderGaps(gaps);
   renderCompleteness(dogs);
+  renderCron(cron);
   byId('reload').disabled = false;
 }
 byId('reload').addEventListener('click', load);
