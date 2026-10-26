@@ -1,14 +1,14 @@
 const assert = require('node:assert/strict');
 
 // 單手操作規範（docs/DESIGN_GUIDE.md）：手機 390、360 寬時，志工版主要畫面的可點元素至少 44×44px、相鄰兩個至少隔 8px。
-// 有效範圍含 ::before／::after 擴大的點擊範圍。既有違規列在 KNOWN，at 是現在量到的值（尺寸取短邊、間距取距離）：
+// 有效範圍含 ::before／::after 擴大的點擊範圍。既有違規列在 KNOWN，at 是現在量到的值（尺寸取短邊、間距取距離；
+// 靠字型行高撐高度的取 CI 的 Linux 字型量到的較小值）：
 // 比 at 更差算新違規；修好後要從 KNOWN 拿掉，否則測試失敗。
 const MIN = 44, GAP = 8;
 const KNOWN = [
-  { kind: 'size', match: /^#searchInput$/, at: 42, ticket: '#647', note: '搜尋框高 42px' },
   { kind: 'size', match: /^#formerAdd$/, at: 32, ticket: '#647', note: '詳細資訊「＋補舊編號」32px 高' },
-  { kind: 'size', match: /^button\.my-note-edit\.append-open$/, at: 38, ticket: '#647', note: '詳細資訊「加備註」38px 高' },
-  { kind: 'size', match: /^a\.group-page-link$/, at: 32, ticket: '#647', note: '詳細資訊「看全部狗群」32px 高' },
+  { kind: 'size', match: /^button\.my-note-edit\.append-open$/, at: 36, ticket: '#647', note: '詳細資訊「加備註」36～38px 高（依字型）' },
+  { kind: 'size', match: /^a\.group-page-link$/, at: 30, ticket: '#647', note: '詳細資訊「看全部狗群」30～32px 高（依字型）' },
   { kind: 'size', match: /^#whereClose$/, at: 40, ticket: '#647', note: '「在哪」關閉 40×40' },
   { kind: 'gap', match: /^button\.chip ↔ button\.chip\.on$/, at: 4, ticket: '#647', note: '全部／我的常溜相距 4px' },
   { kind: 'gap', match: /^button(\.on)?\[data-walk-view=(list|photo)\] ↔ button(\.on)?\[data-walk-view=(list|photo)\]$/, at: 2, ticket: '#647', note: '照片／列表切換相距 2px' },

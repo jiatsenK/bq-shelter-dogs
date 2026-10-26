@@ -14,5 +14,6 @@
   - 本機 `touch-targets` 通過。暫時把「溜了」改成 30px 高、把「在哪」關閉改成 20px，測試都會失敗並列出元素。
   - 全部網頁套件通過。
   - Node 全套 466 項有 4 項失敗，都在 `scripts/local-check.test.mjs`，本機沒有 pwsh，跟這次改動無關。
-- 例外與未完成：`KNOWN` 共 15 項。籠位相關 2 項掛 #644，其餘 13 項開總票 #647（K 2026-10-26 決定）。
+- 例外與未完成：`KNOWN` 共 14 項。籠位相關 2 項掛 #644，其餘 12 項開總票 #647（K 2026-10-26 決定）。
+- CI 第一次失敗（Linux 沒有中文字型，靠行高撐高度的元素變矮）：`.search input`、`.who-box input`、`.with-add input`／`button` 加 `min-height: 44px`，原本夠高的不變；搜尋框因此修好，從 KNOWN 拿掉（#647 第一項）。「加備註」「看全部狗群」的 at 改成 CI 量到的 36、30。
 - 相關 PR：[#648](https://github.com/jiatsenK/bq-shelter-dogs/pull/648)，草稿。
