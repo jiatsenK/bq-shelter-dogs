@@ -1,0 +1,22 @@
+# #493 公開 repo 清理：正式網址抽到 Secret、預覽留言不貼網址
+
+- 日期：2026-10-26。Agent：Claude。分支 `claude/493-public-prep`（從 main `c2ae88f` 開）。
+- 依據：#493 第 2 項（抽離正式部署設定）、第 4 項（預覽流程不把網址寫進日誌或 PR 留言）。K 2026-10-26 對話：repo 是 K 自己轉成公開的，維持公開，直接開始清理。
+- 查到的現況：
+  - 帳號的 workers.dev 子網域（拼得回正式網址）出現在 main 的 32 個檔案；最近一次正式部署、管理網站、測試網站、PR 預覽、縮圖的 Actions 日誌都印出了完整網址。
+  - GitHub Pages 2026-10-15 已關閉，`public/index.html`、`tests/index.html` 的舊網址轉址（#129）已經不會執行。
+  - 第 5 項（機器寫入）抽查：寫回端點沒設 `SHEET_WRITE_KEY` 回 403、`/api/admin` 沒設 `ADMIN_KEY` 回 500 拒絕，符合票上要求。
+- 做了什麼：
+  - 新的 GitHub Secret `WORKERS_SUBDOMAIN`（子網域）。五個 workflow 的 job 都引用它，GitHub 會把日誌裡的子網域顯示成 `***`；沒設就在第一步停下，不會把網址原樣印出。
+  - 正式／測試網站部署後的 API 檢查、縮圖、管理網站的 Access 檢查，網址都從 Secret 組出來；`scripts/smoke-api.mjs` 改成一定要給網址。
+  - `wrangler.admin.jsonc` 拿掉 `ADMIN_ORIGIN`，`deploy-admin.yml` 用 `--var` 帶上。沒帶的話管理網站會全部拒絕（fail closed）。
+  - PR 預覽留言不貼網址，改寫別名 `pr-<編號>`、網址格式（`<子網域>`）和 Cloudflare 主控台預覽 Worker 版本頁連結（`?to=/:account/...`，連結不含帳號 ID）。
+  - 拿掉失效的舊網址轉址與它的測試。
+  - 測試用 `example.workers.dev`，文件寫 `<子網域>.workers.dev`。新增 `scripts/public-repo.test.mjs`：追蹤的檔案出現真的子網域就失敗（測試本身不寫子網域）。
+- 例外與未完成：
+  - 交接紀錄（`docs/agent-log/` 3 個檔、`AGENT_LOG.md`）裡還有子網域：不改別人的紀錄，留給第 6 項跟 Git 歷史一起清理。
+  - 子網域跟 GitHub 帳號名幾乎一樣、Worker 名稱跟 repo 名稱一樣，網址猜得到。這張只做到「不直接寫出來」；要真的藏起來得換子網域或改自訂網域，會動到正式網址（K 先前決定不動），待 K 決定。
+  - D1 database_id、Access 的團隊網域與 AUD 還在設定檔裡：沒有 API token 用不了，而且 AUD 和團隊網域本來就出現在登入轉址網址裡，這次不動。
+  - Git 歷史、既有 PR 留言、舊的 Actions 日誌裡的網址都還在（第 4、6 項後半，要另外授權）。
+  - 合併前 K 要先在 GitHub 設 `WORKERS_SUBDOMAIN`，否則合併後的自動部署會停在第一步（紅叉、不部署）。
+- 相關 PR：（開 PR 後補）。

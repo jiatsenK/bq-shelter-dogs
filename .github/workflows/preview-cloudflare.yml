@@ -1,10 +1,11 @@
 # 每個 PR 自動產生預覽網址（#126）：K 合併前就能用手機打開看實際畫面
-# - 網址固定是 https://pr-<PR 編號>-bq-shelter-dogs-preview.<帳號>.workers.dev，同一個 PR 再推送會更新同一個網址
+# - 網址固定是 https://pr-<PR 編號>-bq-shelter-dogs-preview.<子網域>.workers.dev，同一個 PR 再推送會更新同一個網址
 # - 稽核第 3 項（2026-10-26）：上傳到獨立的預覽 Worker bq-shelter-dogs-preview，不是正式 Worker 的版本；
 #   只綁測試照片空間 bq-shelter-photos-test、測試 D1，Worker 上只有 WALKER_KEY（算代號、不能寫；沒有正式試算表、ADMIN_KEY），程式有漏洞也碰不到正式資料
 # - 只上傳一個「版本」，不部署；預覽 Worker 不跑排程
 # - 預覽版另帶 PREVIEW 變數當第二層：可以看、可以讀，上傳照片、存備註、按「更新」都會被 Worker 擋下
-# - 部署完在 PR 留一則留言貼網址，再推送時更新同一則，不會一直新增
+# - 部署完在 PR 留一則留言，再推送時更新同一則，不會一直新增。#493 起 repo 公開：留言不貼網址，改給 Cloudflare
+#   主控台預覽 Worker 的版本頁連結（登入 K 的帳號才看得到網址）；子網域放 GitHub Secret，日誌裡顯示成 ***
 # - 還沒設 Cloudflare Secret、或是從別人 fork 開的 PR（拿不到 Secret）就跳過
 # - #553：上傳前把 migrations/ 還沒套的自動套到測試庫 bq-shelter-dogs-test（測試庫從正式庫複製時會帶著 d1_migrations）
 name: PR 預覽網址
@@ -40,10 +41,19 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # #493：子網域放 GitHub Secret；這個 job 的日誌裡出現的子網域（wrangler 印的網址也是）一律顯示成 ***
+      WORKERS_SUBDOMAIN: ${{ secrets.WORKERS_SUBDOMAIN }}
     steps:
       - name: 還沒設定 Cloudflare 就跳過
         if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
         run: echo "還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID，這次不產生預覽（步驟見 docs/setup/CLOUDFLARE_SETUP.md）。"
+
+      # #493：沒設子網域就停，免得 wrangler 把網址原樣印進公開日誌
+      - name: 沒設 WORKERS_SUBDOMAIN 就停
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != '' && env.WORKERS_SUBDOMAIN == ''
+        run: |
+          echo "還沒在 GitHub 設 WORKERS_SUBDOMAIN（帳號的 workers.dev 子網域，步驟見 docs/setup/CLOUDFLARE_SETUP.md）。"
+          exit 1
 
       - uses: actions/checkout@v4
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
@@ -77,20 +87,23 @@ jobs:
             --var PREVIEW:1 \
             --tag "pr-${PR}" \
             --message "PR #${PR} ${SHA:0:7}" | tee "$RUNNER_TEMP/upload.log"
-          url=$(grep -oE "https://pr-${PR}-[a-z0-9.-]+\.workers\.dev" "$RUNNER_TEMP/upload.log" | head -1)
-          if [ -z "$url" ]; then echo "找不到預覽網址"; exit 1; fi
-          echo "url=$url" >> "$GITHUB_OUTPUT"
+          # 只確認有產生預覽網址；網址本身不放進 output，免得被帶到留言
+          grep -qE "https://pr-${PR}-[a-z0-9.-]+\.workers\.dev" "$RUNNER_TEMP/upload.log" || { echo "找不到預覽網址"; exit 1; }
+          echo "ok=1" >> "$GITHUB_OUTPUT"
 
-      - name: 在 PR 貼預覽網址（再推送時更新同一則留言）
-        if: steps.upload.outputs.url != ''
+      - name: 在 PR 留言預覽已更新（再推送時更新同一則留言）
+        if: steps.upload.outputs.ok == '1'
         uses: actions/github-script@v7
         env:
-          URL: ${{ steps.upload.outputs.url }}
           SHA: ${{ github.event.pull_request.head.sha }}
         with:
           script: |
             const marker = '<!-- cloudflare-preview -->';
-            const body = `${marker}\n📱 **預覽網址**：${process.env.URL}\n\n` +
+            const pr = context.payload.pull_request.number;
+            // :account 由 Cloudflare 換成登入中的帳號，連結本身不含帳號 ID
+            const dash = 'https://dash.cloudflare.com/?to=/:account/workers/services/view/bq-shelter-dogs-preview/production/deployments';
+            const body = `${marker}\n📱 **預覽已更新**（別名 \`pr-${pr}\`）。repo 公開，網址不貼在這裡（#493）：` +
+              `打開 \`https://pr-${pr}-bq-shelter-dogs-preview.<子網域>.workers.dev\`，或到 [Cloudflare 預覽 Worker 版本頁](${dash}) 登入後找 \`pr-${pr}\`。\n\n` +
               `對應這個 PR 最新的提交（${process.env.SHA.slice(0, 7)}）。預覽版接的是測試照片與測試資料庫，可以看、可以讀，但上傳照片、存備註、按「更新」都不會存，正式資料不受影響。`;
             const { owner, repo } = context.repo;
             const issue_number = context.payload.pull_request.number;

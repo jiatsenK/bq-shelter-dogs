@@ -21,9 +21,17 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
-      SITE_URL: ${{ vars.SITE_URL || 'https://bq-shelter-dogs.jiatsen-k.workers.dev' }}
+      # #493：帳號子網域放 GitHub Secret，日誌裡顯示成 ***
+      WORKERS_SUBDOMAIN: ${{ secrets.WORKERS_SUBDOMAIN }}
+      SITE_URL: https://bq-shelter-dogs.${{ secrets.WORKERS_SUBDOMAIN }}.workers.dev
       ADMIN_KEY: ${{ secrets.ADMIN_KEY || secrets.NOTES_PASSCODE }}
     steps:
+      - name: 沒設 WORKERS_SUBDOMAIN 就停
+        if: env.WORKERS_SUBDOMAIN == ''
+        run: |
+          echo "還沒在 GitHub 設 WORKERS_SUBDOMAIN（帳號的 workers.dev 子網域，步驟見 docs/setup/CLOUDFLARE_SETUP.md）。"
+          exit 1
+
       - uses: actions/checkout@v4
 
       - uses: actions/setup-python@v5

@@ -8,7 +8,7 @@ import { fakeD1 } from './fakes.mjs';
 import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 import { importCompactDogs, importCompactProfiles } from './compact-fixtures.mjs';
 
-const SITE = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
+const SITE = 'https://bq-shelter-dogs.example.workers.dev';
 const NOW = Date.parse('2026-10-16T02:00:00Z'); // 台灣 2026-10-16 10:00
 const TODAY = '2026-10-16';
 const A = 'aaaaaaaaaaaa', A2 = 'a2a2a2a2a2a2', B = 'bbbbbbbbbbbb';

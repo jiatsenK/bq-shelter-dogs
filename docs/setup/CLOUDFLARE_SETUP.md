@@ -12,7 +12,7 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 - 以後改了 Worker 程式**不用再手動貼**，合併後 Action 會自動部署。
 - 密碼（管理金鑰、代號密鑰、試算表寫入金鑰）**全部設在 GitHub 的 Secrets**，部署時自動帶到 Cloudflare。
 - 費用 NT$0（Cloudflare Workers 免費方案）。
-- 舊網址 https://jiatsenk.github.io/bq-shelter-dogs/ 從 #129 起一打開就轉到新網址同一頁（舊的書籤、主畫面捷徑都還能用）。舊的單獨照片上傳 Worker（`bq-shelter-photos`）2026-10 K 決定刪除，程式裡給它和舊網址的判斷也拿掉了。
+- 舊網址 https://jiatsenk.github.io/bq-shelter-dogs/ 從 #129 起一打開就轉到新網址同一頁；GitHub Pages 2026-10-15 關閉後轉址不再有作用，#493 拿掉。舊的單獨照片上傳 Worker（`bq-shelter-photos`）2026-10 K 決定刪除，程式裡給它和舊網址的判斷也拿掉了。
 
 > Cloudflare 和 GitHub 的網頁偶爾會改版，按鈕名稱可能跟這裡寫的略有不同，找意思相近的就可以。
 
@@ -61,6 +61,7 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 | `CLOUDFLARE_ACCOUNT_ID` | 步驟 1 複製的 Account ID |
 | `CLOUDFLARE_API_TOKEN` | 步驟 2 複製的 Cloudflare token |
 | `ADMIN_KEY` | 管理 API（縮圖、搬照片、Trash）用的金鑰，只給 GitHub Action，自己想一組英數字。還沒設時沿用舊的 `NOTES_PASSCODE` Secret（ADR 0004） |
+| `WORKERS_SUBDOMAIN` | 帳號的 workers.dev 子網域（Cloudflare **Workers & Pages** 右側「Subdomain」，`<子網域>.workers.dev` 前面那段）。不是密碼，但 repo 公開（#493），放 Secret 讓 Actions 日誌把它顯示成 `***`，網址不會出現在公開的日誌與 PR。沒設的話部署、預覽、縮圖都會停在第一步 |
 
 `WALKER_KEY`（誰遛的代號密鑰）本來就在這裡，不用動，部署時會自動一起帶過去，代號不會變。
 
@@ -101,10 +102,10 @@ Cloudflare → **Workers & Pages** → `bq-shelter-photos` → **Settings** → 
 
 ## PR 預覽網址（#126）
 
-之後每開一個 PR，GitHub 會自動部署一份預覽版，並在 PR 頁面留一則「📱 預覽網址」留言，網址固定是：
+在 PR 加上 `preview` 標籤後，GitHub 會部署一份預覽版，並在 PR 頁面留一則「📱 預覽已更新」留言。repo 公開（#493），留言不貼網址，只寫別名 `pr-<PR 編號>` 和 Cloudflare 主控台預覽 Worker 版本頁的連結（登入才看得到）。網址固定是：
 
 ```
-https://pr-<PR 編號>-bq-shelter-dogs-preview.jiatsen-k.workers.dev
+https://pr-<PR 編號>-bq-shelter-dogs-preview.<子網域>.workers.dev
 ```
 
 - 用手機點開就能看到這個 PR 改完的樣子，不用等合併。同一個 PR 再改，網址不變，重新整理就是最新的。
@@ -127,7 +128,7 @@ https://pr-<PR 編號>-bq-shelter-dogs-preview.jiatsen-k.workers.dev
 
 1. 打開 https://dash.cloudflare.com ，左邊選單找 **Web Analytics**（可能在 **Analytics & Logs** 底下）。
 2. 按 **Add a site**。
-3. **Hostname** 填 `bq-shelter-dogs.jiatsen-k.workers.dev` → 按 **Done**。
+3. **Hostname** 填 `bq-shelter-dogs.<子網域>.workers.dev` → 按 **Done**。
 4. 畫面會出現一段程式碼，裡面有 `"token": "一串 32 個英數字"`。**只複製引號裡那串英數字**（如果畫面跳掉了，在 Web Analytics 清單點這個網址 → **Manage site** 就看得到）。
 5. 打開 https://github.com/jiatsenK/bq-shelter-dogs/settings/secrets/actions → **New repository secret**，**Name** 填 `CF_ANALYTICS_TOKEN`，**Secret** 貼上那串 → **Add secret**。
 6. 照步驟 5 手動部署一次（或等下一次同步，會自動部署）。
@@ -166,7 +167,7 @@ https://pr-<PR 編號>-bq-shelter-dogs-preview.jiatsen-k.workers.dev
 ### 步驟 2：部署一次，確認接上了
 
 1. 打開 https://github.com/jiatsenK/bq-shelter-dogs/actions/workflows/deploy-cloudflare.yml → **Run workflow** → 綠色 **Run workflow**，等綠勾勾。
-2. 手機打開 https://bq-shelter-dogs.jiatsen-k.workers.dev/api/ ，看到 `"photos":"R2"` 就是接上了。
+2. 手機打開 https://bq-shelter-dogs.<子網域>.workers.dev/api/ ，看到 `"photos":"R2"` 就是接上了。
 3. 如果看到 `"photos":"GitHub"`：點進剛剛那次部署，**Summary** 會寫原因。通常是 Cloudflare token 沒有 R2 權限：
    右上角頭像 → **My Profile** → **API Tokens** → 找到部署用的那把 → **Edit** → **Permissions** 加一行
    `Account`｜`Workers R2 Storage`｜`Edit` → **Continue to summary** → **Update token**，再回到第 1 步部署一次（token 字串不會變，GitHub 不用改）。
@@ -251,7 +252,7 @@ K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**�
 ### 確認有沒有接上
 
 1. 合併後等「部署到 Cloudflare」綠勾勾（或到 https://github.com/jiatsenK/bq-shelter-dogs/actions/workflows/deploy-cloudflare.yml 按 **Run workflow**）。
-2. 手機打開 https://bq-shelter-dogs.jiatsen-k.workers.dev/api/ ，看到 `"database":"D1（狗 125、溜狗紀錄 732、異動紀錄 53）"` 這樣的字（數字會不一樣）就是接上了。
+2. 手機打開 https://bq-shelter-dogs.<子網域>.workers.dev/api/ ，看到 `"database":"D1（狗 125、溜狗紀錄 732、異動紀錄 53）"` 這樣的字（數字會不一樣）就是接上了。
 3. 如果看到 `"database":"未設定"`：點進剛剛那次部署，**Summary** 會寫原因。通常是 Cloudflare token 沒有 D1 權限：
    https://dash.cloudflare.com 右上角頭像 → **My Profile** → **API Tokens** → 找到部署用的那把 → **Edit** → **Permissions** 加一行
    `Account`｜`D1`｜`Edit` → **Continue to summary** → **Update token**，再部署一次（token 字串不會變，GitHub 不用改）。

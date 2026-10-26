@@ -6,7 +6,7 @@ import { fakeD1 } from './fakes.mjs';
 import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 import { importCompactDogs } from './compact-fixtures.mjs';
 
-const site = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
+const site = 'https://bq-shelter-dogs.example.workers.dev';
 async function setup(t) {
   const DB = fakeD1();
   t.after(() => DB.close());

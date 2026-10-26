@@ -9,7 +9,7 @@ import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 import { importCompactDogs, importCompactProfiles, importCompactDepartures } from './compact-fixtures.mjs';
 import { readMainNames, HISTORY_START } from '../src/compact.js';
 
-const SITE = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
+const SITE = 'https://bq-shelter-dogs.example.workers.dev';
 const SOURCE = {
   version: 1,
   syncedAt: '2026-10-15T12:00:55+08:00',

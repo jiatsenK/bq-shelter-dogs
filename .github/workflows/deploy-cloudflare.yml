@@ -49,10 +49,19 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      # #493：帳號的 workers.dev 子網域放 GitHub Secret；有用到 Secret 的 job，日誌裡出現的子網域一律顯示成 ***（wrangler 印的網址也是）
+      WORKERS_SUBDOMAIN: ${{ secrets.WORKERS_SUBDOMAIN }}
     steps:
       - name: 還沒設定 Cloudflare 就跳過
         if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
         run: echo "還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID，這次不部署（步驟見 docs/setup/CLOUDFLARE_SETUP.md）。"
+
+      # #493：沒設子網域就停，免得 wrangler 把正式網址原樣印進公開日誌
+      - name: 沒設 WORKERS_SUBDOMAIN 就停
+        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != '' && env.WORKERS_SUBDOMAIN == ''
+        run: |
+          echo "還沒在 GitHub 設 WORKERS_SUBDOMAIN（帳號的 workers.dev 子網域，步驟見 docs/setup/CLOUDFLARE_SETUP.md）。"
+          exit 1
 
       - uses: actions/checkout@v4
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
@@ -111,4 +120,4 @@ jobs:
       # 部署完打一次正式站讀取 API：正式 D1 缺表、密碼沒設這類 CI 測不到的問題在這裡變紅叉（#293 回顧）
       - name: 檢查正式站 API
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
-        run: node scripts/smoke-api.mjs
+        run: node scripts/smoke-api.mjs "https://bq-shelter-dogs.${WORKERS_SUBDOMAIN}.workers.dev"
