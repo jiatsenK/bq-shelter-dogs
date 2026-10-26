@@ -26,6 +26,16 @@ const call = (path, init = {}) =>
       ...init
     })
   );
+// 垃圾桶每筆：台灣時間的刪除時間，和哪一天清理會刪掉（每月 1 日 UTC 01:53 清超過 days 天的，worker/src/index.js trashDue）
+const taiwan = (ms) => new Date(ms + 8 * 3600000).toISOString().slice(0, 16).replace('T', ' ');
+export function trashLabel(deletedAt, days) {
+  const at = Date.parse(deletedAt);
+  if (isNaN(at)) return '刪除時間不明';
+  const due = new Date(at + days * 86400000);
+  let run = Date.UTC(due.getUTCFullYear(), due.getUTCMonth(), 1, 1, 53);
+  if (run <= due.getTime()) run = Date.UTC(due.getUTCFullYear(), due.getUTCMonth() + 1, 1, 1, 53);
+  return `${taiwan(at)} 換掉，${taiwan(run).slice(0, 10)} 清理時刪除`;
+}
 const show = (value) => (typeof value === 'string' ? value : JSON.stringify(value, null, 2));
 const sexLabel = (value) => ({ male: '公', female: '母' })[value] || '待確認';
 function displayValue(field, value) {
@@ -237,7 +247,7 @@ export function openDogEditor(dog, container, onSaved) {
         controls.append(list);
         if (!result.data.trash.length) list.append(text('p', '沒有可復原的照片。'));
         for (const item of result.data.trash) {
-          const button = text('button', `預覽復原 ${item.deletedAt} 的照片`, 'btn');
+          const button = text('button', `預覽復原：${trashLabel(item.deletedAt, result.data.days)}`, 'btn');
           button.type = 'button';
           button.onclick = () => {
             images = { restore: item.id };
