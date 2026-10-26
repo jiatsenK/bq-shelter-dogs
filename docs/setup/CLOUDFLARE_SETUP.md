@@ -60,7 +60,7 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 |---|---|
 | `CLOUDFLARE_ACCOUNT_ID` | 步驟 1 複製的 Account ID |
 | `CLOUDFLARE_API_TOKEN` | 步驟 2 複製的 Cloudflare token |
-| `ADMIN_KEY` | 管理 API（縮圖、搬照片、Trash）用的金鑰，只給 GitHub Action，自己想一組英數字。還沒設時沿用舊的 `NOTES_PASSCODE` Secret（ADR 0004） |
+| `ADMIN_KEY` | 管理 API（縮圖、Trash）用的金鑰，只給 GitHub Action，自己想一組英數字。部署時帶到 Worker，縮圖 Action 也用同一個；#595 起不再沿用舊的 `NOTES_PASSCODE` |
 
 `WALKER_KEY`（誰遛的代號密鑰）本來就在這裡，不用動，部署時會自動一起帶過去，代號不會變。
 

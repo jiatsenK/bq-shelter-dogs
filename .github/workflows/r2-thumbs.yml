@@ -22,7 +22,7 @@ jobs:
     timeout-minutes: 10
     env:
       SITE_URL: ${{ vars.SITE_URL || 'https://bq-shelter-dogs.<子網域>.workers.dev' }}
-      ADMIN_KEY: ${{ secrets.ADMIN_KEY || secrets.NOTES_PASSCODE }}
+      ADMIN_KEY: ${{ secrets.ADMIN_KEY }}
     steps:
       - uses: actions/checkout@v4
 
