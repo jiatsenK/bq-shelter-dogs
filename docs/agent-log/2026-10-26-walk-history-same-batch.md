@@ -10,4 +10,5 @@
   - 文件：ADR 0018 加補充；`docs/ARCHITECTURE_NOW.md` 表格加溜狗紀錄一列。
 - 測試：新增 `worker/test/walk-history.test.mjs`（溜了馬上進、第二人重寫、live 版本號跳、復原只刪今天、改溜狗人、寫入失敗整批回復、人工改回較早刪今天、清空不刪）。
 - 未做：正式 D1 唯讀查有沒有已經漏記的日子（要 K 同意）；保險掃描時段錯開（K 沒決定）；前端 `cards.js` 的 `bqTodayWrites` 沒動。
+- 相關 PR：[#613](https://github.com/jiatsenK/bq-shelter-dogs/pull/613)，草稿。
 - 上線後：已經登記但還沒進溜狗紀錄的，下一次狗清單保險掃描會照表補，不用手動。
