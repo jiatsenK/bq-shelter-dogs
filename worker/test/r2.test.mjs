@@ -8,7 +8,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { SETTING_KEYS } from '../src/feature-settings.js';
-import { fakeR2, fakeAssets, sha } from './fakes.mjs';
+import { fakeR2, fakeAssets } from './fakes.mjs';
 import { listDogTrash, readDogTrash, restoreDogPhoto } from '../src/dog-photo.js';
 
 const { resetState, r2, maintenance } = worker.testing;
@@ -301,48 +301,24 @@ test('Trash 復原主照片：現在的主照片先進 Trash', async () => {
   assert.ok(PHOTOS.objects.has('trash/'+r.body.trash+'/photo.jpg'),'復原不消耗備份');
 });
 
-test('管理 API：沒給或打錯金鑰擋下；預覽版不能搬遷；沒有 R2 回 off', async () => {
+test('管理 API：沒給或打錯金鑰擋下；預覽版不能寫；沒有 R2 回 off', async () => {
   const { call } = await setup();
   assert.equal((await admin(call, 'trash', {}, '')).status, 401);
   assert.equal((await admin(call, 'trash', {}, '錯')).status, 401);
   assert.equal((await admin(call, 'trash')).status, 200);
   const p = await setup({ preview: true });
-  assert.equal((await admin(p.call, 'migrate', { method: 'POST', body: '{"items":[]}' })).status, 403);
+  assert.equal((await admin(p.call, 'trash/1700000000000-abcd/restore', { method: 'POST' })).status, 403);
   const res = await worker.fetch(new Request(`${SITE}/api/admin/trash`, { headers: { 'X-Admin-Key': encodeURIComponent('通關碼') } }), { ADMIN_KEY: '通關碼' });
   assert.equal((await res.json()).code, 'off');
 });
 
-test('搬遷：從舊檔複製到 R2、用 sha256 驗證；已經有的（含刪除標記）不蓋掉；核對結果', async () => {
-  const A = jpeg(1), B = jpeg(2), C = jpeg(3);
-  const { env, PHOTOS, call } = await setup({
-    assets: { 'photos/1.jpg': A, 'photos/2.jpg': B, 'photos/3.jpg': C, 'photos/thumbs/1.jpg': A },
-  });
-  await PHOTOS.put('photos/2.jpg', NEW, { customMetadata: { from: 'site' } });
-  await r2.removePhoto(env, 'photos/3.jpg');
-  const items = [
-    { path: 'photos/1.jpg', sha256: sha(A), size: A.length },
-    { path: 'photos/2.jpg', sha256: sha(B), size: B.length },
-    { path: 'photos/3.jpg', sha256: sha(C), size: C.length },
-    { path: 'photos/thumbs/1.jpg', sha256: sha(B), size: A.length }, // 內容跟 repo 對不上
-    { path: 'photos/4.jpg', sha256: sha(A), size: A.length }, // 舊檔沒有
-  ];
-  const r = await json(await admin(call, 'migrate', { method: 'POST', body: JSON.stringify({ items }) }));
-  assert.equal(r.status, 200);
-  assert.deepEqual(r.body.results.map(x => x.status), ['copied', 'exists', 'deleted', 'mismatch', 'missing']);
-  assert.ok(same(PHOTOS.objects.get('photos/1.jpg').bytes, A));
-  assert.ok(same(PHOTOS.objects.get('photos/2.jpg').bytes, NEW), '網站換過的不被舊檔蓋掉');
-  assert.equal(PHOTOS.objects.has('photos/thumbs/1.jpg'), false);
-
-  const again = await json(await admin(call, 'migrate', { method: 'POST', body: JSON.stringify({ items: items.slice(0, 1) }) }));
-  assert.equal(again.body.results[0].status, 'exists');
-
-  const v = await json(await admin(call, 'verify', { method: 'POST', body: JSON.stringify({ items }) }));
-  assert.deepEqual(v.body.results.map(x => x.status), ['ok', 'changed', 'deleted', 'missing', 'missing']);
-
-  const tooMany = Array.from({ length: 11 }, () => items[0]);
-  assert.equal((await admin(call, 'migrate', { method: 'POST', body: JSON.stringify({ items: tooMany }) })).status, 400);
-  const bad = [{ path: '../data/dogs.json', sha256: sha(A), size: 1 }];
-  assert.equal((await admin(call, 'migrate', { method: 'POST', body: JSON.stringify({ items: bad }) })).status, 400);
+// #593：#130 照片搬到 R2 用的一次性 API 已拿掉（舊檔 public/photos/ 與搬遷腳本早就刪了）
+test('#593 搬遷用的 /admin/migrate、/admin/verify 已拿掉', async () => {
+  const { call } = await setup();
+  for (const path of ['migrate', 'verify']) {
+    const r = await json(await admin(call, path, { method: 'POST', body: '{"items":[]}' }));
+    assert.deepEqual([r.status, r.body.error], [404, '沒有這個管理功能'], path);
+  }
 });
 
 test('縮圖：列出還沒縮圖的、收 Action 傳回的縮圖；原圖不在就不收', async () => {
