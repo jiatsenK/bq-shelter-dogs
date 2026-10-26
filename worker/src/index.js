@@ -320,12 +320,15 @@ async function activities(request, env, origin) {
 const THUMB_MAX_BYTES = 512 * 1024;
 const MIGRATE_MAX_ITEMS = 10;
 
-// 照片垃圾桶每月 1 日清一次（#501，ADR 0018 第 7 點），不再綁在同步上：清掉超過 30 天的，結果記在 v3_sync_state 的 trash_purged（GET /admin/trash 的 lastPurge）
+// 照片垃圾桶每月 1 日清一次（#501，ADR 0018 第 7 點），不再綁在同步上：清掉超過 30 天的，結果記在 v3_sync_state 的 trash_purged
+// （{ at, purged, failed, errors }，GET /admin/trash 的 lastPurge）。有清不掉的就丟錯，排程紀錄 cron_trash 才會記成出錯
 async function maintenance(env, now = Date.now()) {
-  const result = { at: new Date(now).toISOString(), purged: await r2.purgeTrash(env, now) };
+  const { purged, failed, errors } = await r2.purgeTrash(env, now);
+  const result = { at: new Date(now).toISOString(), purged, failed, ...(errors.length ? { errors } : {}) };
   // 記不進去不影響已清掉的照片，只是查不到這次結果
   try { if (env && env.DB) await env.DB.prepare("INSERT INTO v3_sync_state(key,value) VALUES('trash_purged',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value").bind(JSON.stringify(result)).run(); }
-  catch (e) { console.warn('trash_purged:', e.message); }
+  catch (e) { console.error('trash_purged:', e.message); }
+  if (failed) throw new Error(`照片垃圾桶 ${failed} 筆清不掉：${errors.map(e => `${e.id} ${e.error}`).join('；')}`);
   return result;
 }
 

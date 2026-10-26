@@ -1,6 +1,6 @@
 import { readDogEdit, saveDogEdit } from '../dog-edit.js';
-import { photoInput, saveDogPhoto, restoreDogPhoto } from '../dog-photo.js';
-import { listTrash, readTrash } from '../r2.js';
+import { photoInput, saveDogPhoto, restoreDogPhoto, listDogTrash, readDogTrash } from '../dog-photo.js';
+import { TRASH_DAYS } from '../r2.js';
 import { readSettings, saveSettings } from '../feature-settings.js';
 import { createAccessVerifier } from './access.js';
 import { readManageDogs } from './dogs.js';
@@ -76,8 +76,8 @@ export default {
         if(!match) response=json({error:'找不到狗資料'},404);
         else {
           const [,dogId,action,trashId]=match;
-          if(['GET','HEAD'].includes(request.method)&&action==='trash'&&trashId) {const item=await readTrash(env,trashId);response=item?.meta.dogId===dogId?new Response(item.bytes,{headers:{'Content-Type':'image/jpeg'}}):json({error:'找不到這隻狗的備份'},404);}
-          else if(['GET','HEAD'].includes(request.method)) response=json(action==='trash'?{trash:(await listTrash(env)).filter(t=>t.dogId===dogId)}:await readDogEdit(env.DB,dogId));
+          if(['GET','HEAD'].includes(request.method)&&action==='trash'&&trashId) {const item=await readDogTrash(env,dogId,trashId);response=item?new Response(item.bytes,{headers:{'Content-Type':'image/jpeg'}}):json({error:'找不到這隻狗的備份'},404);}
+          else if(['GET','HEAD'].includes(request.method)) response=json(action==='trash'?{days:TRASH_DAYS,trash:await listDogTrash(env,dogId)}:await readDogEdit(env.DB,dogId));
           else if(!sameOrigin(request,env)) response=json({error:'請從管理網站儲存'},403);
           else if(action==='photo' && request.method==='POST') response=json(await saveDogPhoto(env,dogId,Number(request.headers.get('X-Dog-Revision')),await photoInput(request),{actor},new URL(request.url).origin));
           else if(request.headers.get('Content-Type')?.split(';')[0].trim()!=='application/json') response=json({error:'請使用 JSON'},415);

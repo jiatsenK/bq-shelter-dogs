@@ -4,6 +4,13 @@ import { readFile } from 'node:fs/promises';
 import { buildAdminAssets } from './build-admin-assets.mjs';
 await buildAdminAssets();
 const { parseManageDogs, selectDogs, maintenance } = await import('../admin/public/js/dog-table.js');
+const { trashLabel } = await import('../admin/public/js/dog-editor.js');
+test('垃圾桶每筆顯示台灣時間的換掉時間，和哪一次每月清理會刪掉', () => {
+  assert.equal(trashLabel('2026-10-26T03:00:00.000Z', 30), '2026-10-26 11:00 換掉，2026-12-01 清理時刪除');
+  assert.equal(trashLabel('2026-10-01T16:00:00.000Z', 30), '2026-10-02 00:00 換掉，2026-11-01 清理時刪除');
+  assert.equal(trashLabel('2026-10-02T02:00:00.000Z', 30), '2026-10-02 10:00 換掉，2026-12-01 清理時刪除');
+  assert.equal(trashLabel('', 30), '刪除時間不明');
+});
 const dog = (i, extra = {}) => ({ dogId: `dog${i}`, number: String(i), name: `狗${i}`, cage: `A${i}`, intro: '', note: '', sex: 'male', onMain: true, fixedCare: false, rest: null, photoUrl: null, ...extra });
 test('管理表格：搜尋全欄位、複合篩選、自然排序及有界分頁', () => {
   const dogs = Array.from({ length: 65 }, (_, i) => dog(i + 1));
