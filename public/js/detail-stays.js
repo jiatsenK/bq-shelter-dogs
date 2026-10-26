@@ -8,7 +8,7 @@ import { NEED_EDITOR, editorName, render } from './app.js';
 import { detailEdits, renderDetail } from './detail.js';
 
 // 出入所紀錄（#333、#639，ADR 0011、0021）：一個編號一列，查不到編號的那次編號空著。編號下面列成一張表，取代原本的「舊編號」一行。
-// 有編號那列的入所日就是編號前 8 碼；出所日、原因有離所紀錄就照它（不能改）。補舊編號＝新增一列填編號，刪掉那一列＝刪掉那個舊編號；
+// 有編號那列的入所日就是編號前 8 碼；出所日有離所紀錄就照它（不能改），離所原因寫在出所日旁邊。原因欄是入所原因，每列都手填。補舊編號＝新增一列填編號，刪掉那一列＝刪掉那個舊編號；
 // 目前編號、有離所紀錄的編號不能刪。誰都能改（要先選名字，ADR 0004），離所的狗也可以改（ADR 0011）。
 // 整張表一次存（Worker 的 /stays），連同打開時看到的表一起送，別人剛改過會被擋下來
 const STAYS_MAX = 100;
@@ -26,8 +26,8 @@ function staysTableHtml(dog) {
   if (plain(rows)) return button ? `<div class="reentry">${button}</div>` : '';
   return `<div class="reentry stays-table"><table>
     <caption>出入所紀錄${button}</caption>
-    <thead><tr><th scope="col">編號</th><th scope="col">入所</th><th scope="col">出所</th><th scope="col">原因</th></tr></thead>
-    <tbody>${rows.map(r => `<tr><td>${r.number ? esc(r.number) : '查不到'}</td><td>${dayText(r.in)}</td><td>${r.out ? dayText(r.out) : r.number === dog.id && !dog.departure ? '在所' : '—'}</td><td>${esc(r.reason) || '—'}</td></tr>`).join('')}</tbody>
+    <thead><tr><th scope="col">編號</th><th scope="col">入所</th><th scope="col">出所</th><th scope="col">入所原因</th></tr></thead>
+    <tbody>${rows.map(r => `<tr><td>${r.number ? esc(r.number) : '查不到'}</td><td>${dayText(r.in)}</td><td>${r.out ? dayText(r.out) : r.number === dog.id && !dog.departure ? '在所' : '—'}${r.departure ? ` ${esc(r.departure)}` : ''}</td><td>${esc(r.reason) || '—'}</td></tr>`).join('')}</tbody>
   </table></div>`;
 }
 
@@ -40,7 +40,7 @@ function staysSectionHtml(dog) {
   return `<section class="detail-section" data-section="intro">
     <form class="rest-form stays-form" id="staysForm" autocomplete="off">
       <h3>出入所紀錄</h3>
-      <p class="rest-hint">每次在所一列，還在所就不填出所日。有編號的入所日就是編號前 8 碼；查不到編號的那次，編號留空、自己填入所日。補舊編號就新增一列填編號，刪掉那一列就刪掉那個舊編號。入所日從最早那一列算。</p>
+      <p class="rest-hint">每次在所一列，還在所就不填出所日；原因填這次為什麼入所。有編號的入所日就是編號前 8 碼；查不到編號的那次，編號留空、自己填入所日。補舊編號就新增一列填編號，刪掉那一列就刪掉那個舊編號。入所日從最早那一列算。</p>
       <div class="intake-rows">${e.rows.map((row, i) => {
         const locked = kept(dog, row);
         const left = row.departed ? ' readonly' : '';
@@ -48,8 +48,8 @@ function staysSectionHtml(dog) {
         <label>編號（查不到留空）<input inputmode="numeric" maxlength="12" data-stay-row="${i}" data-stay-field="number" value="${esc(row.number)}" placeholder="例：2015081801"${locked ? ' readonly' : ''}${off}></label>
         <label>入所日<input type="date" max="${today}" data-stay-row="${i}" data-stay-field="in" value="${esc(row.number ? BQDates.idDay(row.number) : row.in)}"${row.number ? ' readonly' : ''}${off}></label>
         <label>出所日<input type="date" max="${today}" data-stay-row="${i}" data-stay-field="out" value="${esc(row.out)}"${left}${off}></label>
-        <label>原因<input type="text" maxlength="40" data-stay-row="${i}" data-stay-field="reason" value="${esc(row.reason)}" placeholder="例：迷路、退養、整修移所"${left}${off}></label>
-        ${row.departed ? '<small class="rest-hint">出所日、原因照離所紀錄。</small>' : ''}
+        <label>入所原因<input type="text" maxlength="40" data-stay-row="${i}" data-stay-field="reason" value="${esc(row.reason)}" placeholder="例：迷路、被棄養、退養"${off}></label>
+        ${row.departed ? `<small class="rest-hint">出所日照離所紀錄（${esc(row.departure || '待確認')}）。</small>` : ''}
         ${locked ? '' : `<button type="button" class="intake-remove" data-stay-remove="${i}"${off}>刪掉第 ${i + 1} 列</button>`}
       </fieldset>`;
       }).join('')}</div>

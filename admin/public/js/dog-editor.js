@@ -304,7 +304,7 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
     sections[field].controls.append(node);
   }
   // 出入所表（ADR 0021）：一個編號一列，查不到編號的那次編號空著。有編號的入所日就是編號前 8 碼；
-  // 有離所紀錄的出所日、原因照離所紀錄（唯讀），那列跟目前編號那列都不能刪。補編號＝新增一列填編號，刪編號＝刪那一列。
+  // 有離所紀錄的出所日照離所紀錄（唯讀，離所原因寫在提示），那列跟目前編號那列都不能刪；入所原因每列都手填。補編號＝新增一列填編號，刪編號＝刪那一列。
   function buildStays() {
     const controls = section('stays');
     controls.append(
@@ -329,7 +329,7 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
         ['number', '編號（查不到留空）', 'text'],
         ['in', '入所日', 'date'],
         ['out', '出所日（還在所留空）', 'date'],
-        ['reason', '原因', 'text']
+        ['reason', '入所原因', 'text']
       ]) {
         const wrap = el('label', label, 'form-label');
         const node = textInput(type);
@@ -341,8 +341,8 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
         inputs[key] = node;
       }
       inputs.number.readOnly = current || Boolean(stay.departed);
-      inputs.out.readOnly = inputs.reason.readOnly = Boolean(stay.departed);
-      if (stay.departed) row.append(el('p', '出所日、原因照離所紀錄。', 'form-hint'));
+      inputs.out.readOnly = Boolean(stay.departed);
+      if (stay.departed) row.append(el('p', `出所日照離所紀錄（${stay.departure || '待確認'}）。`, 'form-hint'));
       // 有編號：入所日跟著編號，不能另外改
       const sync = () => {
         const number = inputs.number.value.trim();

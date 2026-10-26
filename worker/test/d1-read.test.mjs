@@ -256,7 +256,7 @@ test('GET /api/departures：形狀跟 departures.json 一樣', async () => {
   await importCompactDepartures(DB, departures);
   const body = await (await get('/departures', { DB })).json();
   // 出入所表（#639）：離所那個編號一列，出所日、原因照離所紀錄
-  const stays = [{ number: '2021030913', in: '2021-03-09', out: '2026-10-13', reason: '認養', departed: true }];
+  const stays = [{ number: '2021030913', in: '2021-03-09', out: '2026-10-13', reason: '', departed: true, departure: '認養' }];
   assert.deepEqual({...body,departures:body.departures.map(({editRevision,sex,...e})=>e)}, { ok: true, version: 1, departures: departures.map(d => ({ ...d, stays })) });
 });
 
@@ -271,7 +271,7 @@ test('#333／#639 出入所紀錄：在所和離所的狗都帶出入所表（�
   const typed = { number: '', in: '2015-08-18', out: '', reason: '迷路' };
   assert.deepEqual(dogs.map(d => d.stays), [undefined, [typed, { number: '2018041318', in: '2018-04-13', out: '', reason: '' }, { number: '2026051203', in: '2026-05-12', out: '', reason: '' }], undefined]);
   const deps = (await (await get('/departures', { DB })).json()).departures;
-  assert.deepEqual(deps[0].stays, [typed, { number: '2021030913', in: '2021-03-09', out: '2026-10-13', reason: '認養', departed: true }]);
+  assert.deepEqual(deps[0].stays, [typed, { number: '2021030913', in: '2021-03-09', out: '2026-10-13', reason: '', departed: true, departure: '認養' }]);
 });
 
 test('GET /api/walks、/api/departures：D1 壞了或沒接回 503；只收 GET', async () => {

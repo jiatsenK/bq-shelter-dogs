@@ -1,7 +1,8 @@
 // 出入所紀錄（#333，ADR 0011、0021）：一個編號就是一筆，查不到編號的那次編號空著。
-// 存在 v3_stays（一隻狗一列）的只有手填的部分：沒編號的 { number: '', in, out, reason }，有編號、沒有離所紀錄時手填的 { number, in, out, reason }。
+// 原因＝入所原因（K 2026-10-19 #390、2026-10-26 確認），一律手填；離所原因是另一件事，跟出所日一起放在 departure。
+// 存在 v3_stays（一隻狗一列）的只有手填的部分：沒編號的 { number: '', in, out, reason }，有編號的 { number, in, out, reason }（有離所紀錄時 out 不存）。
 // 沒有 number 這個鍵的是 #639 以前（或還沒部署新版的管理網站）寫的舊格式。
-// 畫面上的出入所表＝這隻狗的每個編號（入所日是前 8 碼，有離所紀錄就帶出所日與原因）＋沒編號的那幾筆，照入所日排（stayTable）。
+// 畫面上的出入所表＝這隻狗的每個編號（入所日是前 8 碼，有離所紀錄就帶出所日與離所原因）＋沒編號的那幾筆，照入所日排（stayTable）。
 // 有編號的那筆也存 in（就是編號日期），舊版程式讀到還是一筆完整的出入所紀錄。
 export const STAYS_MAX = 100;
 export const STAY_REASON_MAX = 40;
@@ -36,16 +37,16 @@ export function stayTable(stored, numbers, departures) {
   for (const number of numbers) {
     const left = departures.find(d => d.number === number), typed = manual.get(number);
     rows.push(left
-      ? { number, in: numberDay(number), out: left.date || '', reason: DEPARTURE_REASON_TEXT[left.reason] || DEPARTURE_REASON_TEXT.unknown, departed: true }
+      ? { number, in: numberDay(number), out: left.date || '', reason: typed?.reason || '', departed: true, departure: DEPARTURE_REASON_TEXT[left.reason] || DEPARTURE_REASON_TEXT.unknown }
       : { number, in: numberDay(number), out: typed?.out || '', reason: typed?.reason || '' });
   }
   return rows.sort(byIn);
 }
 
-// 出入所表 → v3_stays 要存的陣列（空陣列＝刪掉那一列）
+// 出入所表 → v3_stays 要存的陣列（空陣列＝刪掉那一列）。有離所紀錄的那列只存入所原因，出所日照離所紀錄
 export function storedStays(rows) {
-  return rows.filter(r => !r.departed && (!r.number || r.out || r.reason))
-    .map(r => ({ number: r.number || '', in: r.in, out: r.out, reason: r.reason }));
+  return rows.filter(r => !r.number || r.reason || (!r.departed && r.out))
+    .map(r => ({ number: r.number || '', in: r.in, out: r.departed ? '' : r.out, reason: r.reason }));
 }
 
 // 整理送來的出入所表；before 是 { numbers, currentNumbers, departures }，today 是台灣日期。
@@ -55,7 +56,7 @@ export function cleanStayTable(value, before, today) {
   const current = before.currentNumbers.filter(n => numberDay(n)).sort().at(-1);
   const stored = [], numbers = [];
   for (const row of value) {
-    if (!row || typeof row !== 'object' || Object.keys(row).some(k => !['number', 'in', 'out', 'reason', 'departed'].includes(k))) return { error: '出入所欄位不對' };
+    if (!row || typeof row !== 'object' || Object.keys(row).some(k => !['number', 'in', 'out', 'reason', 'departed', 'departure'].includes(k))) return { error: '出入所欄位不對' };
     const number = String(row.number ?? '').replace(/\s+/g, '');
     const out = String(row.out ?? '').trim(), reason = String(row.reason ?? '').replace(/\s+/g, ' ').trim();
     const stayIn = number ? numberDay(number) : String(row.in ?? '').trim();
@@ -66,8 +67,12 @@ export function cleanStayTable(value, before, today) {
         if (current && number > current) return { error: '舊編號不能晚於目前編號' };
       }
       numbers.push(number);
-      // 有離所紀錄的那筆：出所日、原因照離所紀錄，送來的不看
-      if (before.departures.some(d => d.number === number)) { stored.push({ number, in: stayIn, out: '', reason: '' }); continue; }
+      // 有離所紀錄的那筆：出所日照離所紀錄，送來的不看；入所原因照樣手填
+      if (before.departures.some(d => d.number === number)) {
+        if ([...reason].length > STAY_REASON_MAX) return { error: `原因最多 ${STAY_REASON_MAX} 字` };
+        stored.push({ number, in: stayIn, out: '', reason });
+        continue;
+      }
     } else if (!validYmd(stayIn)) return { error: '日期請用 YYYY-MM-DD' };
     if (out && !validYmd(out)) return { error: '日期請用 YYYY-MM-DD' };
     if (stayIn > today || out > today) return { error: '日期不能是未來的日子' };
@@ -128,7 +133,7 @@ export async function readStayTables(db, where) {
   return out;
 }
 
-// 兩張出入所表內容一樣（送出的人改之前看到的 vs D1 現在的）；不比 departed 旗標
+// 兩張出入所表內容一樣（送出的人改之前看到的 vs D1 現在的）；不比 departed、departure（後端照離所紀錄算的）
 export function sameStays(a, b) {
   const plain = rows => (Array.isArray(rows) ? JSON.stringify(rows.map(r => [r?.number || '', r?.in ?? '', r?.out ?? '', r?.reason ?? ''])) : null);
   return plain(a) !== null && plain(a) === plain(b);

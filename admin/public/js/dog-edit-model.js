@@ -21,7 +21,7 @@ export const REST_REASON_MAX = 40;
 
 export const sexLabel = (value) => ({ male: '公', female: '母' })[value] || '待確認';
 
-// 出入所表的一列，比較與送出用（不帶 departed：那是後端照離所紀錄算的）
+// 出入所表的一列，比較與送出用（不帶 departed、departure：那是後端照離所紀錄算的）
 export const stayRow = (row) => ({ number: row.number || '', in: row.in || '', out: row.out || '', reason: row.reason || '' });
 
 export function restBounds(today = BQDates.taipeiToday()) {
@@ -63,7 +63,7 @@ export function displayValue(field, value) {
       value
         .map(
           (row) =>
-            `${row.number || '沒有編號'}：入所 ${row.in || '日期不明'}／出所 ${row.out || '尚未出所'}／${row.reason || '未填原因'}`
+            `${row.number || '沒有編號'}：入所 ${row.in || '日期不明'}／出所 ${row.out || '尚未出所'}${row.departure ? `（${row.departure}）` : ''}／入所原因 ${row.reason || '未填'}`
         )
         .join('\n') || '沒有出入所紀錄'
     );

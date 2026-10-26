@@ -703,7 +703,7 @@ test('觸發器：再入所的狗舊編號的離所改了，small 失效、/dogs
   await DB.prepare(`INSERT INTO v3_dog_numbers(number,dog_id) SELECT '2020999999',dog_id FROM v3_dog_numbers WHERE number='2025022703'`).run();
   await DB.prepare(`INSERT INTO v3_dog_departures(number,dog_id,name,departed_date,reason) SELECT '2020999999',${main},'滿滿','2020-01-01','adopt'`).run();
   const row = async () => (await (await get('/dogs', { DB })).json()).dogs.find(d => d.id === '2025022703').stays.find(s => s.number === '2020999999');
-  assert.deepEqual(await row(), { number: '2020999999', in: '', out: '2020-01-01', reason: '認養', departed: true });
+  assert.deepEqual(await row(), { number: '2020999999', in: '', out: '2020-01-01', reason: '', departed: true, departure: '認養' });
   let small = await smallVer(DB);
   await DB.prepare("UPDATE v3_dog_departures SET departed_date='2020-02-02' WHERE number='2020999999'").run();
   assert.ok(await smallVer(DB) > small);

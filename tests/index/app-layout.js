@@ -22,6 +22,14 @@ async function runV52Tests() {
       eq([...box.querySelectorAll('.stays-table tbody tr')].map(tr => tr.textContent), ['20180413182018/4/13——', '20260512032026/5/12在所—'], '一個編號一列，照入所日排：');
       if (box.querySelector('.stays-table').textContent.includes('次入所')) throw new Error('不標第幾次入所');
       if (detailHtml(dogs[1], T).includes('stays-table')) throw new Error('只有目前編號不列表');
+      // 有離所紀錄的那列：離所原因跟著出所日，入所原因欄照手填的（K 2026-10-26）
+      const [left] = parseDogsData({ dogs: [{ id: '2026051203', name: '再入', cage: 'A', stays: [
+        { number: '2018041318', in: '2018-04-13', out: '2020-05-14', reason: '迷路', departed: true, departure: '認養' },
+        { number: '2026051203', in: '2026-05-12', out: '', reason: '' },
+      ] }] }).dogs;
+      box.innerHTML = detailHtml(left, T);
+      eq([...box.querySelectorAll('.stays-table tbody tr')].map(tr => tr.textContent), ['20180413182018/4/132020/5/14 認養迷路', '20260512032026/5/12在所—'], '離所原因在出所日旁：');
+      eq(box.querySelector('.stays-table thead').textContent, '編號入所出所入所原因', '欄名寫入所原因：');
     });
 
     await check('#76 詳細資訊標題沒有說明文字；分析頁沒有散布圖、Top 10 沒有長條', () => {

@@ -640,7 +640,7 @@ test('出入所表：舊資料同一天接到編號（納卡西）、離所帶�
   await db.prepare('INSERT INTO v3_stays VALUES(?,?)').bind(dogId, '[{"in":"2026-04-21","out":"2026-10-18","reason":""}]').run();
   const before = await readDogEdit(db, dogId);
   assert.deepEqual(before.stays, [
-    { number: '2025010101', in: '2025-01-01', out: '2025-06-01', reason: '認養', departed: true },
+    { number: '2025010101', in: '2025-01-01', out: '2025-06-01', reason: '', departed: true, departure: '認養' },
     { number: '2026042101', in: '2026-04-21', out: '2026-10-18', reason: '' },
   ]);
   // 跟看到的一樣就不寫（舊格式的資料也不會因此被改寫）

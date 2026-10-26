@@ -26,7 +26,7 @@ module.exports = async (browser, base) => {
   const snapshots = Object.fromEntries(dogs.map((dog) => [dog.dogId, snap(dog)]));
   // 球球有離所過的舊編號：後端帶的 departed 不算進草稿比較，打開不能顯示「改了出入所紀錄」
   snapshots[C].numbers = ['2019120101', '2020010103'];
-  snapshots[C].stays = [stay('2019120101', { out: '2020-01-01', reason: '認養', departed: true }), stay('2020010103')];
+  snapshots[C].stays = [stay('2019120101', { out: '2020-01-01', reason: '迷路', departed: true, departure: '認養' }), stay('2020010103')];
   let fail = false,
     conflict = false,
     dogReads = 0;
@@ -140,7 +140,7 @@ module.exports = async (browser, base) => {
     assert.equal(await save.isDisabled(), true);
     assert.match(await page.locator('.drawer-dirty').textContent(), /出入所紀錄要先按「預覽改前／改後」/);
     await drawer.locator('[data-preview="stays"]').click();
-    assert.match(await stays.locator('.field-diff').textContent(), /改後2020010101：入所 2020-01-01／出所 尚未出所／未填原因\n2019010101：入所 2019-01-01／出所 尚未出所／未填原因/);
+    assert.match(await stays.locator('.field-diff').textContent(), /改後2020010101：入所 2020-01-01／出所 尚未出所／入所原因 未填\n2019010101：入所 2019-01-01／出所 尚未出所／入所原因 未填/);
     assert.equal(await save.isDisabled(), false);
     await added.locator('[data-key="out"]').fill('2019-05-01');
     assert.equal(await save.isDisabled(), true, '預覽後又改要重新預覽');
@@ -177,6 +177,9 @@ module.exports = async (browser, base) => {
     assert.equal(await drawer.locator('#drawer-title').textContent(), '球球');
     assert.equal(await page.locator('.drawer-dirty').textContent(), '沒有修改。', '後端帶的離所旗標不算改了出入所紀錄');
     assert.equal(await drawer.locator('[data-field="stays"] .stay-row').first().locator('[data-key="out"]').getAttribute('readonly'), '', '離所的出所日照離所紀錄');
+    const departedRow = drawer.locator('[data-field="stays"] .stay-row').first();
+    assert.equal(await departedRow.locator('[data-key="reason"]').getAttribute('readonly'), null, '入所原因有離所紀錄也能填');
+    assert.match(await departedRow.textContent(), /出所日照離所紀錄（認養）/);
     // 焦點不在抽屜裡時 Esc 也關得掉
     await page.locator('#query').focus();
     await page.keyboard.press('Escape');

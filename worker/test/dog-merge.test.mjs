@@ -190,7 +190,7 @@ test('合併：兩邊的出入所紀錄全部接在一起、預覽不列會丟�
   assert.deepEqual((await readDogEdit(db, T)).stays, [
     { number: '', in: '2010-01-01', out: '2011-01-01', reason: '退養' },
     { number: '', in: '2015-08-18', out: '2017-09-05', reason: '整修移所' },
-    { number: '2019042407', in: '2019-04-24', out: '2020-01-01', reason: '認養', departed: true },
+    { number: '2019042407', in: '2019-04-24', out: '2020-01-01', reason: '', departed: true, departure: '認養' },
     { number: '2026082501', in: '2026-08-25', out: '', reason: '' },
   ]);
   await unmergeDogs(db, T, { logId, revision: (await readDogEdit(db, T)).revision }, { actor });

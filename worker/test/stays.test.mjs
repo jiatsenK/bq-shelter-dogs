@@ -23,21 +23,21 @@ test('新格式（帶空的 number）的沒編號紀錄，入所日剛好跟編�
   const rows = stayTable([{ number: '', in: '2016-01-01', out: '2016-03-01', reason: '走失' }], ['2016010101'], departed);
   assert.deepEqual(rows, [
     { number: '', in: '2016-01-01', out: '2016-03-01', reason: '走失' },
-    { number: '2016010101', in: '2016-01-01', out: '2016-06-06', reason: '認養', departed: true },
+    { number: '2016010101', in: '2016-01-01', out: '2016-06-06', reason: '', departed: true, departure: '認養' },
   ]);
   // 存回去還是同一張表（志工存完再改不會 409）
   assert.deepEqual(stayTable(storedStays(rows), ['2016010101'], departed), rows);
 });
 
-test('有離所紀錄的編號：出所日、原因照離所紀錄，手填的不用', () => {
+test('有離所紀錄的編號：出所日照離所紀錄（手填的不用），離所原因另外帶；原因欄是入所原因，照樣用手填的', () => {
   const rows = stayTable(
     [{ number: '2020010101', in: '2020-01-01', out: '2020-02-02', reason: '手填' }],
     ['2020010101', '2021030301'],
     [{ number: '2020010101', date: '2020-05-05', reason: 'adopt' }, { number: '2021030301', date: null, reason: 'unknown' }],
   );
   assert.deepEqual(rows, [
-    { number: '2020010101', in: '2020-01-01', out: '2020-05-05', reason: '認養', departed: true },
-    { number: '2021030301', in: '2021-03-03', out: '', reason: '待確認', departed: true },
+    { number: '2020010101', in: '2020-01-01', out: '2020-05-05', reason: '手填', departed: true, departure: '認養' },
+    { number: '2021030301', in: '2021-03-03', out: '', reason: '', departed: true, departure: '待確認' },
   ]);
 });
 
@@ -50,24 +50,26 @@ test('編號已經不屬於這隻狗的手填紀錄當成沒編號；看不出�
   ]);
 });
 
-test('存檔：沒編號的照存；有編號的只在手填出所日或原因時存；有離所的不存', () => {
+test('存檔：沒編號的照存；有編號的只在手填出所日或入所原因時存；有離所的只存入所原因', () => {
   const table = [
     { number: '', in: '2015-08-18', out: '2017-09-05', reason: '整修移所' },
     { number: '2017090508', in: '2017-09-05', out: '', reason: '' },
     { number: '2018010101', in: '2018-01-01', out: '2018-03-03', reason: '退養' },
-    { number: '2019010101', in: '2019-01-01', out: '2019-05-05', reason: '認養', departed: true },
+    { number: '2019010101', in: '2019-01-01', out: '2019-05-05', reason: '', departed: true, departure: '認養' },
+    { number: '2016010101', in: '2016-01-01', out: '2016-05-05', reason: '迷路', departed: true, departure: '認養' },
   ];
   assert.deepEqual(storedStays(table), [
     { number: '', in: '2015-08-18', out: '2017-09-05', reason: '整修移所' },
     { number: '2018010101', in: '2018-01-01', out: '2018-03-03', reason: '退養' },
+    { number: '2016010101', in: '2016-01-01', out: '', reason: '迷路' },
   ]);
 });
 
-test('整理送來的表：補編號、刪編號、目前編號不能刪、入所日照編號、有離所的出所日不能改', () => {
+test('整理送來的表：補編號、刪編號、目前編號不能刪、入所日照編號、有離所的出所日不能改但入所原因可以填', () => {
   const before = { numbers: ['2017090508', '2016010101'], currentNumbers: ['2017090508'], departures: [{ number: '2016010101', date: '2016-06-06', reason: 'adopt' }] };
   const ok = cleanStayTable([
     { number: '2017090508', in: '1999-01-01', out: '', reason: '' },
-    { number: '2016010101', in: '2016-01-01', out: '2020-01-01', reason: '亂改' },
+    { number: '2016010101', in: '2016-01-01', out: '2020-01-01', reason: '迷路' },
     { number: '2015081801', in: '', out: '2015-12-01', reason: '轉所' },
     { number: '', in: '2010-01-01', out: '', reason: '  迷路 ' },
   ], before, TODAY);
@@ -75,7 +77,7 @@ test('整理送來的表：補編號、刪編號、目前編號不能刪、入�
     rows: [
       { number: '', in: '2010-01-01', out: '', reason: '迷路' },
       { number: '2015081801', in: '2015-08-18', out: '2015-12-01', reason: '轉所' },
-      { number: '2016010101', in: '2016-01-01', out: '2016-06-06', reason: '認養', departed: true },
+      { number: '2016010101', in: '2016-01-01', out: '2016-06-06', reason: '迷路', departed: true, departure: '認養' },
       { number: '2017090508', in: '2017-09-05', out: '', reason: '' },
     ],
     numbers: ['2015081801', '2016010101', '2017090508'],

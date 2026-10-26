@@ -35,8 +35,9 @@ function intakePresentation(dog, intro) {
   const add = row => {
     if (!events.some(e => e.date === row.date && sameText(e.event) === sameText(row.event))) events.push(row);
   };
-  // 出入所表（ADR 0021）只拿手填的那幾筆：只有編號、或出所照離所紀錄的列，改之前不在這裡（#639 刻意不改閱讀畫面）
-  for (const stay of (dog.stays || []).filter(s => !s.departed && (!s.number || s.out || s.reason))) {
+  // 出入所表（ADR 0021）只拿手填的那幾筆：只有編號的列、離所紀錄帶的出所日，改之前不在這裡（#639 刻意不改閱讀畫面）
+  const typed = (dog.stays || []).map(s => (s.departed ? { ...s, out: '' } : s)).filter(s => !s.number || s.out || s.reason);
+  for (const stay of typed) {
     // #392 盤點的舊資料：這兩種原因記的是該段怎麼結束，不能改標成入所原因。
     const ending = stay.out && ['整修移所', '領養後退養'].includes(stay.reason);
     const reason = ending ? '' : stay.reason;

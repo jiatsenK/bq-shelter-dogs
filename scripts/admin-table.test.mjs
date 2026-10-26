@@ -81,7 +81,9 @@ test('#624／#639 抽屜規則：欄位順序（編號併進出入所紀錄）�
   const stays = [{ number: '', in: '2015-08-18', out: '2017-09-05', reason: '整修移所' }, { number: '2017090508', in: '2017-09-05', out: '', reason: '' }];
   assert.deepEqual(fieldSummary('stays', { stays }), { text: '2 筆（2017090508）', missing: false });
   assert.equal(fieldSummary('stays', { stays: stays.slice(0, 1) }).missing, true);
-  assert.equal(displayValue('stays', stays), '沒有編號：入所 2015-08-18／出所 2017-09-05／整修移所\n2017090508：入所 2017-09-05／出所 尚未出所／未填原因');
+  assert.equal(displayValue('stays', stays), '沒有編號：入所 2015-08-18／出所 2017-09-05／入所原因 整修移所\n2017090508：入所 2017-09-05／出所 尚未出所／入所原因 未填');
+  // 有離所紀錄：離所原因跟著出所日，原因欄是入所原因
+  assert.equal(displayValue('stays', [{ number: '2016010101', in: '2016-01-01', out: '2016-06-06', reason: '迷路', departed: true, departure: '認養' }]), '2016010101：入所 2016-01-01／出所 2016-06-06（認養）／入所原因 迷路');
   assert.deepEqual(stayRow({ number: '2017090508', in: '2017-09-05', departed: true }), { number: '2017090508', in: '2017-09-05', out: '', reason: '' });
   assert.equal(fieldSummary('photo', snap, '/photos/1.jpg').missing, false, '舊固定路徑有照片');
   assert.equal(displayValue('rest', { until: '2026-11-01', reason: '術後' }), '休養至 2026-11-01（術後）');
