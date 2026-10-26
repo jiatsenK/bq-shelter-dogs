@@ -1,11 +1,14 @@
-// Independent, read-only admin entry point. No cron or machine credentials.
-// Set the three required vars and a protected custom domain in a reviewed deployment config.
+// 管理網站（ADR 0020、admin/README.md）：獨立 Worker，直接讀寫正式 D1 與正式照片空間（R2）；沒有排程、沒有機器金鑰。
+// - 網址就是 workers.dev（workers_dev: true），整個 host 由 Cloudflare Access 擋住，程式再驗 Access 簽章（worker/src/admin/access.js）
+// - 三個 vars 不是密鑰（AUD 與團隊網域本來就出現在公開的登入轉址網址），寫在這裡讓 repo 能重現線上設定；keep_vars: false，部署以這裡為準
+// - 換網址或重建 Access application 時三個值要一起改，否則全部請求被拒（fail closed）
+// - 部署：Actions 頁手動跑「部署管理網站」（deploy-admin.yml）；main 推送不會自動部署
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "bq-shelter-dogs-admin",
   "main": "worker/src/admin/index.js",
   "compatibility_date": "2026-09-01",
-  "workers_dev": false,
+  "workers_dev": true,
   "preview_urls": false,
   "build": { "command": "node scripts/build-admin-assets.mjs" },
   "assets": {
@@ -20,6 +23,10 @@
     "database_id": "6cd6c304-0fed-4ddb-b9ec-799e60a4adb4"
   }],
   "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "bq-shelter-photos" }],
-  "vars": { "ADMIN_ORIGIN": "", "ACCESS_TEAM_DOMAIN": "", "ACCESS_AUD": "" },
+  "vars": {
+    "ADMIN_ORIGIN": "https://bq-shelter-dogs-admin.<子網域>.workers.dev",
+    "ACCESS_TEAM_DOMAIN": "hidden-fire-f52c.cloudflareaccess.com",
+    "ACCESS_AUD": "c91936bc94a0f2d78b4ae0eaedee99f16e20b97dc53f05a6e99d1785e450ce73"
+  },
   "keep_vars": false
 }

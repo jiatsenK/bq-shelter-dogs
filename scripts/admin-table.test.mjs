@@ -26,11 +26,16 @@ test('管理表格：格式錯誤及重複永久 ID 不當成空清單成功', (
   assert.deepEqual(parseManageDogs({ dogs: [] }), []);
   for (const data of [{}, { dogs: [dog(1), dog(1)] }, { dogs: [dog(1, { dogId: '' })] }, { dogs: [dog(1, { photoUrl: 'https://other.example/photo' })] }, { dogs: [dog(1, { rest: { until: '2026-02-30', reason: '' } })] }]) assert.throws(() => parseManageDogs(data));
 });
-test('管理資產：純模組來自同一份來源，部署設定沒有資產／替代網址繞過', async () => {
+test('管理資產：純模組來自同一份來源，部署設定跟線上一致、沒有資產／預覽網址繞過', async () => {
   for (const name of ['api-response.js', 'dates.js']) assert.equal(await readFile(new URL(`../admin/public/shared/${name}`, import.meta.url), 'utf8'), await readFile(new URL(`../public/js/${name}`, import.meta.url), 'utf8'));
   const config = JSON.parse((await readFile(new URL('../wrangler.admin.jsonc', import.meta.url), 'utf8')).replace(/^\s*\/\/.*$/gm, ''));
   assert.equal(config.assets.run_worker_first, true);
-  assert.equal(config.workers_dev, false);
+  // 管理網站就是 workers.dev 網址（Access 擋整個 host）；ADMIN_ORIGIN 要指向它，替代 host 一律被程式拒絕
+  assert.equal(config.workers_dev, true);
+  assert.equal(config.vars.ADMIN_ORIGIN, `https://${config.name}.<子網域>.workers.dev`);
+  assert.match(config.vars.ACCESS_TEAM_DOMAIN, /^[a-z0-9-]+\.cloudflareaccess\.com$/);
+  assert.match(config.vars.ACCESS_AUD, /^[a-f0-9]{64}$/);
+  assert.equal(config.keep_vars, false);
   assert.equal(config.preview_urls, false);
   assert.equal(config.triggers, undefined);
   assert.equal(config.assets.directory, './admin/public');

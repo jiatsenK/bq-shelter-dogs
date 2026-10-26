@@ -12,7 +12,7 @@ import { reconcileEditedRows } from './walk-reconcile.js';
 import { retryWalks, scanTick } from './walk-retry.js';
 import { recordRun } from './cron-status.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
-// 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；管理 API 只給 GitHub Action，用 ADMIN_KEY。試算表只寫原有兩欄。
+// 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；這裡的 /api/admin 只給 GitHub Action，用 ADMIN_KEY；管理者用的管理網站是另一個 Worker（worker/src/admin/、wrangler.admin.jsonc，ADR 0020）。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
 import { taiwanYmd } from './sync-plan.js';
 import { applyDogListRows, scanDogList, DOG_LIST_ROWS_MAX } from './dog-list.js';

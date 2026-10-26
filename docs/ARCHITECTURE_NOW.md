@@ -44,8 +44,8 @@ Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，
 
 ## 管理網站（ADR 0020）
 
-- 獨立的管理 Worker（`wrangler.admin.jsonc`、`worker/src/admin/`、`admin/public/`），用 Cloudflare Access 驗證管理者，跟志工網站共用同一個 D1 和 R2，沒有自己的排程。
-- **沒有自動部署**：main 合併不會更新管理站，要手動部署（步驟在 `admin/README.md`）。改到兩站共用的程式時，兩個 Worker 都要部署。
+- 獨立的管理 Worker `bq-shelter-dogs-admin`（`wrangler.admin.jsonc`、`worker/src/admin/`、`admin/public/`），網址 `https://bq-shelter-dogs-admin.<子網域>.workers.dev`，整個 host 由 Cloudflare Access 擋住、程式再驗 Access 簽章。直接讀寫正式 D1 和 R2（設定、狗資料、照片、活動），沒有自己的排程、沒有密鑰；三個 vars 都在 `wrangler.admin.jsonc`，repo 就是線上設定。
+- **沒有自動部署**：main 合併不會更新管理站，要在 Actions 頁手動跑「部署管理網站」（`deploy-admin.yml`，部署紀錄記分支與 commit；說明在 `admin/README.md`）。改到兩站共用的程式時，兩個 Worker 都要部署。
 - 進度：第 1–5 階段都已上線（#564–#568）；#568 刪了電腦版「補資料」。
 
 ## D1 結構怎麼改（#553）
