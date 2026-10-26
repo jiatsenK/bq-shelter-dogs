@@ -22,4 +22,4 @@
 
 ## PR
 
-- 草稿 PR：待補
+- 草稿 PR：https://github.com/jiatsenK/bq-shelter-dogs/pull/601
