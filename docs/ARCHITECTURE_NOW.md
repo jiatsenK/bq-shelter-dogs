@@ -18,7 +18,7 @@
 | 今日溜狗（網站按溜了、復原、改溜狗人） | 網站 | 先存 D1（PR #533 起；舊的直接寫回試算表路徑已刪），再由 Worker 寫回試算表兩欄 | `worker/src/walk-accept.js` |
 | 今日溜狗（人工改試算表） | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/rows`，Worker 只比那幾隻 | `apps-script/sheet-write.gs`、`worker/src/walk-reconcile.js` |
 | 溜狗紀錄（每狗每天一筆；圖鑑、我溜過讀） | 網站、管理者 | 網站按溜了／改溜狗人／復原：跟今日溜狗同一批寫（稽核第 4 項，K 2026-10-26），不等保險掃描。人工改表：狗清單編輯觸發照表寫。改回較早日子時刪掉較新那天，清空日期不刪 | `worker/src/walk-accept.js`、`worker/src/dog-list.js` |
-| 狗清單：主清單、已出所、常遛狗群 | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/dog-list`，只寫有變的欄（#501） | `worker/src/dog-list.js` |
+| 狗清單：主清單、已出所、常遛狗群 | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/dog-list`，只寫有變的欄（#501）。網站讀 `/api/dogs` 時，遛狗日期以今日溜狗為準並附上今日紀錄（只在回應時換，不寫表；K 2026-10-26） | `worker/src/dog-list.js`、`worker/src/walk-accept.js` 的 `withTodayWalks` |
 | 常溜狗群（網站狗群頁） | 管理者在試算表「常遛狗群」改 | GAS 編輯觸發送 D1（一欄一列 `v3_sheet_group_columns`，#559）；網站只讀（#474） | `worker/src/dog-list.js` |
 | 休養、介紹、開卡、常溜、固定照顧、活動 | 網站 | 只存 D1，不碰試算表 | 見各 ADR |
 | 離所 | 管理者把狗搬到試算表「已出所」 | GAS 編輯觸發送 D1，以狗 ID 記在 `v3_dog_departures`（#560）；沒編號的狗還不能記離所（`worker/src/dog-list.js` 的 `applyDeparted`） | `worker/src/dog-list.js` |

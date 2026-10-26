@@ -34,6 +34,20 @@ export async function readAcceptedWalks(db, today) {
     .map(w => ({ ...w, walked: w.walkedDate === today })) };
 }
 
+// 狗清單的遛狗日期是試算表複本，要等狗清單保險掃描才更新；今日溜狗（ADR 0018）是正本，
+// 有的狗用它的日期，並附上同一份今日紀錄，網站開頁就拿得到（K 2026-10-26）。
+// 資料包快取裡的狗是共用的，換日期時複製一份，不改到快取
+export function withTodayWalks(dogs, today) {
+  const byKey = new Map(today.walks.map(w => [w.key, w])), onList = new Set();
+  const merged = dogs.map(dog => {
+    const w = byKey.get(dog.id || `名:${dog.name}`);
+    if (!w) return dog;
+    onList.add(w.key);
+    return w.walkedDate === dog.walkedDate ? dog : { ...dog, walkedDate: w.walkedDate || null };
+  });
+  return { dogs: merged, today: { ...today, walks: today.walks.filter(w => onList.has(w.key)) } };
+}
+
 // SQL 的每次寫入都預留含觸發器與索引的保守上界。帳號當日量不可取得時，
 // 只警告並看單次門檻；本路徑另有持久每日保留量，不能靠重試繞過。
 export async function writeBudget(db, env, cost, now = Date.now()) {

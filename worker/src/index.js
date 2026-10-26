@@ -7,7 +7,7 @@ import { callSheet, SheetWriteError } from './sheet-write.js';
 import { splitNames } from './sheet-read.js';
 import { readDepartedCards } from './departed.js';
 import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, readActivities, resolveDogs, updateActivity } from './activities.js';
-import { acceptWalk, dispatchWalk, readAcceptedWalks, writebackTarget, confirmWalk, reconcileWalk } from './walk-accept.js';
+import { acceptWalk, dispatchWalk, readAcceptedWalks, withTodayWalks, writebackTarget, confirmWalk, reconcileWalk } from './walk-accept.js';
 import { reconcileEditedRows } from './walk-reconcile.js';
 import { retryWalks, scanTick } from './walk-retry.js';
 import { recordRun } from './cron-status.js';
@@ -175,6 +175,9 @@ async function getDogs(env, origin) {
     console.error('dogs', e);
     return off();
   }
+  try {
+    Object.assign(data, withTodayWalks(data.dogs, await readAcceptedWalks(env.DB, taiwanYmd(Date.now()))));
+  } catch (e) { console.error('dogs-today', e); } // 讀不到今日溜狗就照試算表複本給，網站再自己讀 /today
   if (r2.r2On(env)) {
     try {
       const { versions } = await r2.r2Versions(env);

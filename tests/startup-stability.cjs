@@ -16,6 +16,7 @@ module.exports = async (browser, base) => {
     localStorage.setItem('bq-walker-codes', JSON.stringify(['aaaaaaaaaaaa']));
   });
   const held = new Set(['rest']), releases = new Map(), failed = new Set(), posts = [];
+  let withToday = false; // K 2026-10-26：Worker 的狗清單帶今天的紀錄
   const d1 = require('./fixtures/fake-d1-walks.cjs')({ today: () => '2026-10-19' });
   const pathIs = (r, endpoint) => new URL(r.url()).pathname.endsWith('/api/' + endpoint);
   const release = endpoint => { held.delete(endpoint); releases.get(endpoint)?.(); releases.delete(endpoint); };
@@ -30,7 +31,7 @@ module.exports = async (browser, base) => {
     if (endpoint.startsWith('favorites')) return route.fulfill({ json: { ok: true, ids: [], aliases: {} } });
     if (endpoint === 'sync') posts.push('sync');
     if (endpoint === 'walk' && route.request().method() === 'POST') return route.fulfill({ json: d1.walk(route.request().postDataJSON()) });
-    const body = endpoint === 'dogs' ? data
+    const body = endpoint === 'dogs' ? (withToday ? { ...data, today: d1.pack() } : data)
       : endpoint === 'rest' ? { rest: { [data.dogs[0].id]: { until: '2026-10-20', reason: '測試休養' } } }
         : endpoint === 'today' ? d1.pack()
           : endpoint === 'walkers' ? { walkers: {}, names: ['測試志工'] }
@@ -90,7 +91,7 @@ module.exports = async (browser, base) => {
     await page.getByText('休養設定暫時讀不到', { exact: false }).waitFor();
     assert.equal(await page.locator('#main [data-dog="0"] [data-walk="add"]').count(), 0, '背景休養讀取失敗不清掉已知休養設定');
     release('today');
-    // D1 模式（#456）要等今日紀錄確認才排狗卡；今日紀錄讀不到時目前停在載入畫面，這裡只測休養與個人紀錄失敗
+    // 狗清單沒帶今日紀錄（舊 Worker）時，D1 模式（#456）要等 /today 確認才排狗卡；這裡只測休養與個人紀錄失敗
     failed.add('rest'); failed.add('walks');
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('#main .card[data-dog]').first().waitFor();
@@ -121,6 +122,13 @@ module.exports = async (browser, base) => {
       await page.locator('#main .card[data-dog]').first().waitFor();
       assert.equal(await page.locator('#main .card[data-dog]').first().getAttribute('data-dog'), '1', `${endpoint} 最後回應時，第一份清單仍使用完整狀態排序`);
     }
+    // K 2026-10-26：狗清單帶了今天的紀錄，/today 讀不到也直接排狗卡，不停在載入畫面
+    withToday = true; failed.add('today');
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('#main .card[data-dog]').first().waitFor();
+    assert.ok((await page.locator('#main [data-dog="2"]').textContent()).includes('今天'), '狗清單帶的今日紀錄直接用上');
+    assert.equal(await page.locator('#main .card[data-dog]').first().getAttribute('data-dog'), '1', '跟讀到 /today 時同一個排序');
+    withToday = false;
     failed.clear(); held.add('rest');
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.waitForFunction(() => document.querySelector('#tabs [data-tab="walk"] .n')?.textContent === '3');
