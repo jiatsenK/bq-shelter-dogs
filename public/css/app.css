@@ -2427,6 +2427,8 @@ html.kb-open .bottom-bar { display: none; }
 html.kb-open .with-backdrop { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-height, 100%); }
 html.kb-open .with-sheet { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
 html.kb-open .onboard { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-height, 100%); }
+/* 開頭畫面輸入名字時鍵盤打開：下一步不黏在看得到的範圍底部（會蓋住輸入框），排在輸入框下面、往下捲才看到 */
+html.kb-open .ob-name .ob-foot { position: static; margin-bottom: 0; padding-bottom: 0; }
 
 /* #399 固定照顧：沿用詳細資訊白紙、細線、內建字型與主色。 */
 .fixed-care-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }

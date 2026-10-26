@@ -8,8 +8,8 @@ module.exports = async function verifyKeyboardViewport(browser, baseUrl) {
   const fixtures = JSON.parse(fs.readFileSync(path.join(__dirname, 'fixtures/dogs.json'), 'utf8'));
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
   await context.addInitScript(() => {
-    localStorage.setItem('bq-onboarded', '1');
-    localStorage.setItem('bq-name-later', '1');
+    if (location.search.includes('onboard')) localStorage.clear(); // 開頭畫面那段要從沒設定過的手機開始
+    else { localStorage.setItem('bq-onboarded', '1'); localStorage.setItem('bq-name-later', '1'); }
     const fake = new EventTarget();
     Object.assign(fake, { width: 390, height: 844, offsetTop: 0, offsetLeft: 0, scale: 1 });
     Object.defineProperty(window, 'visualViewport', { configurable: true, value: fake });
@@ -67,7 +67,18 @@ module.exports = async function verifyKeyboardViewport(browser, baseUrl) {
     await page.locator('#introEdit').click();
     await settle();
     assert.equal(await page.evaluate(() => window.scrollY), 0, '打開編輯介紹不捲整頁');
-    console.log('#389 手機鍵盤：整頁不跳、分類列收起、底部面板貼齊可見範圍通過');
+    // #646 開頭畫面輸入名字：鍵盤打開時下一步不黏在可見範圍底部蓋住輸入框，排在輸入框下面
+    const onboardPage = await context.newPage();
+    await onboardPage.goto(baseUrl + '/public/index.html?onboard', { waitUntil: 'networkidle' });
+    await onboardPage.locator('#obInput').focus();
+    await onboardPage.evaluate(() => window.__keyboard(420));
+    await onboardPage.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+    const input = await onboardPage.locator('#obInput').boundingBox();
+    const next = await onboardPage.locator('.ob-foot').boundingBox(); // 整個按鈕區（有白底），不只按鈕
+    assert(input.y + input.height <= 420, `輸入框被鍵盤擋住：${JSON.stringify(input)}`);
+    assert(next.y >= input.y + input.height, `下一步那區蓋住輸入框：輸入框 ${JSON.stringify(input)}，下一步 ${JSON.stringify(next)}`);
+    await onboardPage.close();
+    console.log('#389 手機鍵盤：整頁不跳、分類列收起、底部面板貼齊可見範圍、開頭畫面下一步不蓋輸入框通過');
   } finally {
     await context.close();
   }
