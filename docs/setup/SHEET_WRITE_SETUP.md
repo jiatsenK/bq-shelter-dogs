@@ -81,9 +81,10 @@
 小程式的 `walk`／`edit`／`undo` 改成只回「已使用新登記流程，請重新整理網頁」，不再改表、也不再問 Worker；Worker 的 `/api/walk-writeback/legacy-check` 已刪。Worker 與小程式先後部署都可以：新 Worker 不會再收到 `legacy-check`，舊小程式只有在舊網頁送舊動作時才會問，問不到也是停寫。
 
 1. 開啟原「溜狗表寫入」Apps Script 專案，把 `apps-script/sheet-write.gs` 整份貼上、儲存。
-2. **部署 → 管理部署作業 → 鉛筆 → 版本：新版本 → 部署**。網址、指令碼屬性、觸發器都不用改，不用重跑 `installWalkEditTriggers`。
-3. 在網站按一次溜了再復原（測試犬），確認試算表兩欄跟著變（`walkWake` 仍正常）。
-4. 到試算表直接改一格「誰遛的」再改回來，等一兩分鐘看網站，確認編輯觸發仍送進 D1（Apps Script **執行作業**有 `onWalkSheetEdit`／`flushWalkEdits` 成功紀錄）。
+2. **部署 → 管理部署作業 → 鉛筆 → 版本：新版本 → 部署**。網址、指令碼屬性不用改。編輯觸發器跑最新存檔，`doPost` 跑這次部署的版本，兩個都要是新版。
+3. 順便清舊觸發器：左邊鬧鐘「觸發條件」頁應該只剩 `onWalkSheetEdit`、`flushWalkEdits`、`flushDogList`、`dogListScan` 這幾種；看到 `notifyWorker`（#512 已退役，每次都會報錯）就在編輯器執行一次 `installWalkEditTriggers`，它會刪掉舊的再重建。
+4. 在網站按一次溜了再復原（測試犬），確認試算表兩欄跟著變（`walkWake` 仍正常）。
+5. 到試算表直接改一格「誰遛的」再改回來，等一兩分鐘看網站，確認編輯觸發仍送進 D1（Apps Script **執行作業**有 `onWalkSheetEdit`／`flushWalkEdits` 成功紀錄）。
 
 ## 6. 試算表有改時通知網站（ADR 0012，#305）
 

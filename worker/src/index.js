@@ -501,9 +501,9 @@ async function walkerCodes(request, env, origin) {
   return reply(200, { ok: true, codes }, origin);
 }
 
-// ── 按「溜了」寫進試算表（#138）──
-// 網站送 { action: 'walk' | 'undo', walker, dogs: [{ id, name, prev?, wrote? }] }；undo 沒帶 prev 時 Worker 從溜狗紀錄找（ADR 0016），這裡檢查完帶上金鑰（SHEET_WRITE_KEY）轉給
-// Google Apps Script 小程式（apps-script/sheet-write.gs，K 用自己的帳號部署）。小程式只改「遛狗日期」「誰遛的」兩欄。
+// ── POST /walk：溜了／修改／復原與備註、異動紀錄 ──
+// 溜了／修改／復原先存 D1（ADR 0018），再由 dispatchWalk 叫 Apps Script 的 walkWake 寫回；舊版直寫小程式已退場（#597）。
+// note／log 檢查完帶上金鑰（SHEET_WRITE_KEY）轉給 Google Apps Script 小程式（apps-script/sheet-write.gs，K 用自己的帳號部署）。
 // ── 溜狗人名字（#141）：GET /walkers ──
 // 名字不進 repo（dogs.json 只有代號），網站打開時跟這裡拿：#519 起從 D1 讀（readWalkersD1），不連 Google，
 // 回 { walkers: { 狗的 key: 誰遛的 }, names: [主清單上的名字，最近出現的在前], older: [以前看過、現在表上沒有的名字] }；狗的 key 跟網站 walkKey 一樣（有編號用編號，沒有用「名:犬名」）。

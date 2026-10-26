@@ -22,7 +22,7 @@ const sheet = () => [
 ];
 
 // 用假的 Google 服務跑 handleRequest：記下寫了哪些格子、有沒有開試算表、有沒有連 Worker
-const run = (props, req) => {
+const runHandle = (props, req) => {
   const writes = [], fetched = [];
   let opened = 0;
   const g = {
@@ -45,7 +45,7 @@ test('#597 舊版直寫 walk／edit／undo 退場：回「請重新整理網頁�
   const dogs = [{ id: '9001', name: '測試甲', expected: '志工乙', prev: { date: { text: '' }, walker: '' }, wrote: { walker: '志工我' } }];
   const props = [{ SHEET_ID: 'x' }, { SHEET_ID: 'x', WRITE_KEY: 'k', WALK_WORKER_URL: 'https://worker.example' }];
   for (const p of props) for (const action of ['walk', 'edit', 'undo']) {
-    const r = run(p, { action, walker: '志工我', dogs, key: 'k' });
+    const r = runHandle(p, { action, walker: '志工我', dogs, key: 'k' });
     assert.deepEqual(r.out, { ok: false, error: '已使用新登記流程，請重新整理網頁' }, action);
     assert.deepEqual([r.writes.length, r.opened, r.fetched.length], [0, 0, 0], action);
   }
@@ -58,12 +58,12 @@ test('#138 表頭找不到就不寫', () => {
 
 test('#138 金鑰：沒設 WRITE_KEY 就照常寫；有設就要一樣', () => {
   const req = { action: 'log', walker: '志工我', text: '測試' };
-  const open = run({ SHEET_ID: 'x' }, req);
+  const open = runHandle({ SHEET_ID: 'x' }, req);
   assert.equal(open.out.ok, true);
   assert.equal(open.writes.length, 2);
-  const bad = run({ SHEET_ID: 'x', WRITE_KEY: 'k' }, { ...req, key: 'nope' });
+  const bad = runHandle({ SHEET_ID: 'x', WRITE_KEY: 'k' }, { ...req, key: 'nope' });
   assert.deepEqual([bad.out.code, bad.writes.length], ['key', 0]);
-  assert.equal(run({ SHEET_ID: 'x', WRITE_KEY: 'k' }, { ...req, key: 'k' }).out.ok, true);
+  assert.equal(runHandle({ SHEET_ID: 'x', WRITE_KEY: 'k' }, { ...req, key: 'k' }).out.ok, true);
 });
 
 test('#138 SHEET_ID 貼成網址或多了空白也認得', () => {

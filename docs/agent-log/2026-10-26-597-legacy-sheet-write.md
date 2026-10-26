@@ -11,3 +11,5 @@
 - 測試：`worker/test/sheet-write.test.mjs` 舊直寫測試改成「三個舊動作有沒有金鑰、有沒有設 `WALK_WORKER_URL` 都回請重新整理，不開表、不寫格子、不連 Worker」；金鑰測試改用 `log`；`worker/test/sheet-call.test.mjs` 改用 `log`，並確認 `callSheet` 拒絕舊動作。
 - 本機檢查：`check-local.ps1` 這次因為要帶 `-ExecutionPolicy Bypass` 被權限擋下，改直接 `node --test` 跑相關檔與全部 Node 測試（排除本機已知會失敗的 `scripts/local-check.test.mjs`）；網頁（Playwright）測試沒跑，這次沒改前端。
 - 未做（要 K）：GAS 手動貼上新版、重新部署、試算表改一格確認編輯觸發仍送進 D1（步驟在 `SHEET_WRITE_SETUP.md`「#597 舊直寫入口退場」）。沒有推送、沒開 PR。
+- 兩軸審查（code-review）：Spec 沒有實質錯誤；處理了過時註解（`worker/src/sheet-read.js` 的 GAS NAME_SEP 比對、`worker/src/index.js` `/walk` 段落開頭）、稽核補充留言要 K 同一次確認舊 `notifyWorker` 觸發器（寫進手動步驟第 3 步）、測試 helper 改名 `runHandle`。留著沒改：`planSheetWrites` 只剩找表頭再轉 `planAppend`（測試靠它驗表頭，名字保留）；舊動作回應不帶 `code`（規格沒要求）。
+- 最終 Node 測試：`node --experimental-vm-modules --test --test-concurrency=1` 跑 `scripts/`、`worker/` 全部 `*.test.mjs`（排除 `scripts/local-check.test.mjs`），457 項全過。第一次平行跑時 `scripts/admin-stage4.test.mjs` 因為 Windows EBUSY 鎖檔失敗一次，單獨跑和序列跑都通過。
