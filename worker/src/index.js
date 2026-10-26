@@ -500,9 +500,9 @@ async function walkerCodes(request, env, origin) {
   return reply(200, { ok: true, codes }, origin);
 }
 
-// ── 按「溜了」寫進試算表（#138）──
-// 網站送 { action: 'walk' | 'undo', walker, dogs: [{ id, name, prev?, wrote? }] }；undo 沒帶 prev 時 Worker 從溜狗紀錄找（ADR 0016），這裡檢查完帶上金鑰（SHEET_WRITE_KEY）轉給
-// Google Apps Script 小程式（apps-script/sheet-write.gs，K 用自己的帳號部署）。小程式只改「遛狗日期」「誰遛的」兩欄。
+// ── POST /walk：溜了／修改／復原與備註、異動紀錄 ──
+// 溜了／修改／復原先存 D1（ADR 0018），再由 dispatchWalk 叫 Apps Script 的 walkWake 寫回；舊版直寫小程式已退場（#597）。
+// note／log 檢查完帶上金鑰（SHEET_WRITE_KEY）轉給 Google Apps Script 小程式（apps-script/sheet-write.gs，K 用自己的帳號部署）。
 // ── 溜狗人名字（#141）：GET /walkers ──
 // 名字不進 repo（dogs.json 只有代號），網站打開時跟這裡拿：#519 起從 D1 讀（readWalkersD1），不連 Google，
 // 回 { walkers: { 狗的 key: 誰遛的 }, names: [主清單上的名字，最近出現的在前], older: [以前看過、現在表上沒有的名字] }；狗的 key 跟網站 walkKey 一樣（有編號用編號，沒有用「名:犬名」）。
@@ -907,7 +907,7 @@ export default {
         return fail(500, '管理功能發生錯誤', allowed);
       }
     }
-    if (['/walk-writeback/target', '/walk-writeback/receipt', '/walk-writeback/legacy-check', '/walk-writeback/observe', '/walk-writeback/rows', '/walk-writeback/dog-list', '/walk-writeback/dog-list-scan'].includes(path)) {
+    if (['/walk-writeback/target', '/walk-writeback/receipt', '/walk-writeback/observe', '/walk-writeback/rows', '/walk-writeback/dog-list', '/walk-writeback/dog-list-scan'].includes(path)) {
       if (request.method !== 'POST' || env?.PREVIEW || !env?.DB || !cfg.sheetWriteKey) return fail(403, '不接受寫回要求', '');
       const supplied = request.headers.get('X-Sheet-Write-Key') || '';
       const digest = text => crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
@@ -941,13 +941,6 @@ export default {
             catch (error) { results.push({ ok:false, error:error.status ? error.message : '比較失敗，保留待處理' }); }
           }
           return reply(200,{ ok:true, results },'');
-        }
-        if (path.endsWith('/legacy-check')) {
-          if (!Array.isArray(input.dogs) || input.dogs.length > WALK_MAX_DOGS) return fail(400, '狗的資料不對', '');
-          for (const dog of input.dogs) {
-            if (await env.DB.prepare('SELECT dog_key FROM v3_walk_state WHERE dog_key=?').bind(dog.id || `名:${dog.name}`).first()) return reply(200, { ok: true, allowed: false }, '');
-          }
-          return reply(200, { ok: true, allowed: true }, '');
         }
         const result = path.endsWith('/target') ? await writebackTarget(env.DB, input, env) : await confirmWalk(env.DB, input, env);
         return reply(200, { ok: true, ...result }, '');
