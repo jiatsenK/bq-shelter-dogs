@@ -8,3 +8,4 @@
   - 10 個功能模組改成直接從新檔匯入，向 `app.js` 拿的名稱從 130 個減為 93 個；循環引用還在（仍要 `render`、`showDetail` 等），沒有宣稱已拆圈。
   - `app.js` 不再匯入 `SITE`；`tests/index/desk.js` 的設定集中檢查改成要求主頁從 `dog-status.js` 取門檻與警示字。`tests/fixtures/module-globals.js` 加入兩個新模組。
 - 測試：新增 `scripts/dog-status.test.mjs`（8 項：色標門檻、休養／固定照顧／自己登記的優先順序、休養日期、排序、walkKey、警示字、跳脫與搜尋）。網頁 25 套全過（index 251 項）；`-Full` 的 Node 只剩既有 `local-check.test.mjs` 5.1 亂碼與 `admin-stage4` 偶發（單獨重跑通過）。
+- 草稿 PR #608（目標分支 claude/front-r1-legacy-walk，#607 合併後改回 main）。
