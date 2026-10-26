@@ -4,10 +4,8 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { resetPackCache } from '../src/packs.js';
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
-import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
-import { importCompactDepartures } from '../../scripts/import-compact-departures.mjs';
-import { importCompactProfiles } from '../../scripts/import-compact-profiles.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
+import { importCompactDogs, importCompactDepartures, importCompactProfiles } from './compact-fixtures.mjs';
 
 const SITE = 'https://bq-shelter-dogs.<子網域>.workers.dev';
 const A = 'aaaaaaaaaaaa', B = 'bbbbbbbbbbbb';
@@ -25,7 +23,7 @@ const WALKS = [
 async function seeded(t) {
   const DB = fakeD1(); t.after(() => DB.close());
   resetPackCache();
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   await importCompactDogs(DB, { version: 1, syncedAt: '2026-10-16T08:00:00+08:00', dogs: [dog('2025022703', '在所狗'), dog('2026010101', '回來了')] });
   await importCompactDepartures(DB, [
     dep('2020010101', '阿福', '2026-10-10', { last: { cage: 'A1', id: '2020010101', name: '阿福', walkedDate: '2026-09-30', note: '', sex: '', intro: '', formerIds: ['2019010101'] } }),

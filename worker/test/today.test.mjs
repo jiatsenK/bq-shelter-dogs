@@ -5,13 +5,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 
 const SITE = 'https://bq-shelter-dogs.<子網域>.workers.dev';
 
 async function makeEnv() {
   const DB = fakeD1();
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   return { DB, SHEET_WRITE_URL: 'https://script.example/exec' };
 }
 let calls = [];

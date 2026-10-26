@@ -3,14 +3,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
-import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
+import { importCompactDogs } from './compact-fixtures.mjs';
 
 const site = 'https://bq-shelter-dogs.<子網域>.workers.dev';
 async function setup(t) {
   const DB = fakeD1();
   t.after(() => DB.close());
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   await importCompactDogs(DB, { dogs: [
     { id: '2024022801', name: '測試狗', formerIds: ['2019042401'] },
     { id: '2017090505', name: '別隻狗' },

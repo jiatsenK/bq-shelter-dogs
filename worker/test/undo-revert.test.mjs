@@ -5,13 +5,13 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { previousWalk } from '../src/today.js';
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 
 const TODAY = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
 
 async function makeDb() {
   const DB = fakeD1();
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   await DB.batch([
     DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('d1','老大'),('d2','新來的'),('d3','無編號')"),
     DB.prepare("INSERT INTO v3_dog_numbers(number,dog_id) VALUES('2025061101','d1'),('2026100101','d2')"),
