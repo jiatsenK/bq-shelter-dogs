@@ -14,3 +14,4 @@
 - 本機：`check-local.ps1 -Full` 通過；另跑 detail-editing、fixed-care、intake-presentation、keyboard-viewport、departed-cards、es-modules、index。這台沒有 `pwsh`，`local-check.test.mjs` 要設 `$env:BQ_CHECK_PWSH = 'powershell'` 才能跑。
 - 未做：手機實際檢查（詳細資訊開關、各編輯器）待 K。
 - 相關 PR：[#627](https://github.com/jiatsenK/bq-shelter-dogs/pull/627)，草稿。
+- 2026-10-26 補修：#630 的 CI 在 `scripts/admin-table.test.mjs` 失敗（`../shared/dates.js` 沒有 `BQDates`）。原因是 admin-table、admin-stage4 兩個測試平行跑 `buildAdminAssets`，一邊讀到另一邊複製到一半的檔案；main 也會發生（本機 15 次重現 1 次）。`scripts/build-admin-assets.mjs` 改成內容一樣就不動，不一樣先寫暫存檔再改名蓋過去（Windows 被擋時稍等重試）。本機連跑 30 次（每 3 次清空重建）都通過。修在最底層的本分支，再合到 R6、R8。
