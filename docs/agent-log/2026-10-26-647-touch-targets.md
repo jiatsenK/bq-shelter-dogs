@@ -1,6 +1,6 @@
 # #647 手機點擊目標 44px、間距 8px 既有項目
 
-- 日期：2026-10-26。Agent：Claude。分支 `claude/647-touch-targets`（從 #648 的 `claude/mobile-touch-targets` `009c144` 開，因為 `tests/touch-targets.cjs` 還在 #648）。
+- 日期：2026-10-26。Agent：Claude。分支 `claude/647-touch-targets`（從 #648 的 `claude/mobile-touch-targets` `009c144` 開；#648 合併後已合進 main）。
 - 依據：#647；K 2026-10-26 對話：先部署到測試網站給 K 確認，確認後再開 PR 進正式網站。
 - 改 `public/css/app.css` 末段一個 #647 區塊（外觀盡量不變，只撐高點擊範圍或拉開間距）：
   - 尺寸：「＋補舊編號」、「加備註」、「看全部狗群」最少 44px 高；「在哪」關閉鈕 44×44。
