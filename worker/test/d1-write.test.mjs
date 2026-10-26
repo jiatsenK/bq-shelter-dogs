@@ -5,15 +5,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
-import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
+import { importCompactDogs } from './compact-fixtures.mjs';
 
 const SITE = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
 const ME = '小明';
 
 async function makeEnv(extra = {}) {
   const DB = fakeD1();
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   await importCompactDogs(DB, { syncedAt: '2026-10-15T12:00:00+08:00', dogs: [
     { id: '2024032902', name: '測試狗', formerIds: ['2020010101'] },
     { id: '2024010101', name: '別隻' },

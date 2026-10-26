@@ -28,7 +28,7 @@ async function setup(t) {
   t.mock.method(globalThis, 'fetch', fetchKeys);
   const DB = memoryD1();
   t.after(() => DB.close());
-  await (await import('../../scripts/migrate-compact-db.mjs')).migrateCompactDatabase(DB);
+  await (await import('../../scripts/compact-schema.mjs')).createCompactDatabase(DB);
   await DB.prepare("INSERT INTO v3_dogs(dog_id,name,sex) VALUES(?,?,'male'),(?,?,'')").bind('a'.repeat(32), '阿福', 'b'.repeat(32), '小黑').run();
   await DB.prepare("INSERT INTO v3_dog_numbers(number,dog_id) VALUES('2026010101',?),('2026010202',?)").bind('a'.repeat(32), 'b'.repeat(32)).run();
   await DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note) VALUES(0,?,'2026010101','阿福','A1','')").bind('a'.repeat(32)).run();
@@ -37,7 +37,7 @@ async function setup(t) {
 
 test('#567 新管理路徑：未登入一律 401，不讀 D1', async () => {
   const forbidden = () => { throw Error('unauthorized resource read'); };
-  for (const path of ['/api/manage/activities', '/api/manage/activities/' + 'c'.repeat(32), '/api/manage/data-checks', '/api/manage/edits', '/activities.html', '/checks.html', '/updates.html']) {
+  for (const path of ['/api/manage/activities', '/api/manage/activities/' + 'c'.repeat(32), '/api/manage/data-checks', '/api/manage/cron-status', '/api/manage/edits', '/activities.html', '/checks.html', '/updates.html']) {
     const res = await worker.fetch(request(path), { ...env, DB: { prepare: forbidden }, ASSETS: { fetch: forbidden } });
     assert.equal(res.status, 401, path);
   }

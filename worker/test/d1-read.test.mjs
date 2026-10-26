@@ -5,10 +5,8 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { resolveIdentity } from '../src/identity.js';
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
-import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
-import { importCompactProfiles } from '../../scripts/import-compact-profiles.mjs';
-import { importCompactDepartures } from '../../scripts/import-compact-departures.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
+import { importCompactDogs, importCompactProfiles, importCompactDepartures } from './compact-fixtures.mjs';
 import { readMainNames, HISTORY_START } from '../src/compact.js';
 
 const SITE = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
@@ -24,7 +22,7 @@ const SOURCE = {
 
 async function seededDb() {
   const DB = fakeD1();
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   await importCompactDogs(DB, SOURCE);
   // 介紹是 D1 自己存的（#250）
   await DB.prepare("INSERT INTO v3_intros SELECT dog_id,'民眾拾獲' FROM v3_dog_numbers WHERE number='2025022703'").run();
@@ -62,7 +60,7 @@ test('GET /api/dogs：從 D1 組回跟 dogs.json 一樣的形狀（順序、欄�
 
 test('GET /api/dogs：D1 失敗、沒接、還沒有狗都回 503 和清楚的錯誤，不回空清單', async () => {
   const broken = { prepare: () => ({ bind() { return this; } }), batch: async () => { throw new Error('D1_ERROR'); } };
-  for (const env of [{ DB: broken }, {}, { DB: await (async () => { const DB = fakeD1(); await migrateCompactDatabase(DB); return DB; })() }]) {
+  for (const env of [{ DB: broken }, {}, { DB: await (async () => { const DB = fakeD1(); await createCompactDatabase(DB); return DB; })() }]) {
     const res = await get('/dogs', env);
     const body = await res.json();
     assert.equal(res.status, 503);
@@ -71,6 +69,34 @@ test('GET /api/dogs：D1 失敗、沒接、還沒有狗都回 503 和清楚的�
     assert.match(body.error, /資料庫/);
     assert.equal(body.dogs, undefined);
   }
+});
+
+test('GET /api/dogs：有今日溜狗的狗用 D1 的日期，並附上同一份今日紀錄（K 2026-10-26）', async () => {
+  const DB = await seededDb();
+  const today = new Date(Date.now() + 8 * 3600e3).toISOString().slice(0, 10);
+  const row = (key, walkedDate, version) => ({ key, version, walkedDate, walker: '嘉文', at: '', syncStatus: 'synced' });
+  // 圓仔今天溜了、沒編號被復原回較早那天、9999 不在主清單（已離所）
+  const pack = { 2026051203: row('2026051203', today, 3), '名:沒編號': row('名:沒編號', '2026-10-01', 2), 9999: row('9999', today, 1) };
+  await DB.prepare('UPDATE v3_walk_pack SET version=7,payload=? WHERE id=1').bind(JSON.stringify(pack)).run();
+  const body = await (await get('/dogs', { DB })).json();
+  assert.deepEqual(body.dogs.map(d => d.walkedDate), [null, today, '2026-10-01'], '滿滿沒有今日紀錄，照試算表複本：');
+  assert.deepEqual([body.today.source, body.today.version, body.today.date], ['d1', 7, today]);
+  assert.deepEqual(body.today.walks.map(w => [w.key, w.walked]), [['2026051203', true], ['名:沒編號', false]], '只帶主清單上的狗：');
+  // 資料包快取裡的狗不能被改到：今日紀錄清掉後回到試算表複本的日期
+  await DB.prepare("UPDATE v3_walk_pack SET version=8,payload='{}' WHERE id=1").run();
+  const again = await (await get('/dogs', { DB })).json();
+  assert.deepEqual(again.dogs.map(d => d.walkedDate), SOURCE.dogs.map(d => d.walkedDate));
+  assert.deepEqual(again.today.walks, []);
+});
+
+test('GET /api/dogs：今日溜狗讀不到時照試算表複本給，不帶 today', async () => {
+  const DB = await seededDb();
+  await DB.prepare('DELETE FROM v3_walk_pack').run();
+  const res = await get('/dogs', { DB });
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.deepEqual(body.dogs.map(d => d.walkedDate), SOURCE.dogs.map(d => d.walkedDate));
+  assert.equal(body.today, undefined);
 });
 
 test('GET /api/dogs：只收 GET；別的網站擋掉；預覽版照常可讀', async () => {
@@ -263,6 +289,6 @@ test('GET /api/walks、/api/departures：D1 壞了或沒接回 503；只收 GET'
 test('照片、備註確認編號改讀 D1 主清單：只收有編號的狗；主清單空的丟錯', async () => {
   const DB = await seededDb();
   assert.deepEqual([...await readMainNames(DB)], [['2025022703', '滿滿'], ['2026051203', '圓仔']]);
-  const empty = fakeD1(); await migrateCompactDatabase(empty);
+  const empty = fakeD1(); await createCompactDatabase(empty);
   await assert.rejects(readMainNames(empty), /沒有資料/);
 });

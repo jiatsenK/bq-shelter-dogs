@@ -1,5 +1,6 @@
-import { BQApi } from './api.js';
-import { allWalkerNames, canonicalWalker, esc, fetchWalks, icon, isOffline, loadMyCodes, loadWalkerName, mainEl, render, saveMyCodes, saveWalkerName, splitWalkers, walkerCodesFor } from './app.js';
+import { identityRequest, refreshIdentity } from './identity.js';
+import { allWalkerNames, canonicalWalker, currentIdentity, fetchWalks, isOffline, loadMyCodes, loadWalkerName, mainEl, render, saveIdentity, saveMyCodes, saveWalkerName, splitWalkers, walkerCodesFor } from './app.js';
+import { esc, icon } from './ui-kit.js';
 import { appState } from './page-state.js';
 import { BQStore } from './store.js';
 import { SITE } from './site-config.js';
@@ -9,13 +10,6 @@ import { BQWalkUI } from './walk-ui.js';
 // 開頭畫面與我是誰設定；只公開 BQWelcome，頁面資料於互動時取用。
 const BQWelcome = (() => {
   let walkerSetup = null; // 正在設定我是誰：{ text, phase, error }
-  async function identityRequest(action, body) {
-    const r = await BQApi.identity(action, body);
-    if (r.error === 'network' || !r.data) throw new Error(r.message);
-    const out = r.data;
-    if (!r.ok || !out.ok) { const e = new Error(out.error || '身分設定失敗，請稍後再試'); e.targetCode = out.targetCode; throw e; }
-    return out;
-  }
   async function renameWalker() {
     const edit = walkerSetup;
     if (!edit || edit.phase === 'saving') return;
@@ -24,7 +18,7 @@ const BQWelcome = (() => {
     try {
       const out = await identityRequest('/rename', { code: loadMyCodes()[0], name: edit.text.trim(), operationId: edit.operationId || (edit.operationId = crypto.randomUUID()) });
       if (walkerSetup !== edit || loadMyCodes().join(',') !== originalCodes) return;
-      saveWalkerName(out.identity.name); saveMyCodes(out.identity.codes); walkerSetup = null;
+      saveIdentity(out.identity); walkerSetup = null;
     } catch (e) {
       edit.phase = 'error'; edit.error = e.message;
       if (e.targetCode) {
@@ -42,7 +36,7 @@ const BQWelcome = (() => {
     try {
       const out = await identityRequest('/merge', { code: loadMyCodes()[0], targetCode: edit.targetCode, token: edit.merge.token, confirm: true, operationId: edit.mergeOperationId || (edit.mergeOperationId = crypto.randomUUID()) });
       if (walkerSetup !== edit || loadMyCodes().join(',') !== originalCodes) return;
-      saveWalkerName(out.identity.name); saveMyCodes(out.identity.codes); walkerSetup = null;
+      saveIdentity(out.identity); walkerSetup = null;
     } catch (e) { edit.phase = 'error'; edit.error = e.message; edit.merge = null; }
     render();
   }
@@ -108,12 +102,9 @@ const BQWelcome = (() => {
     const text = String(raw || '').trim();
     if (!text) return '請輸入你在試算表上寫的名字';
     if (!appState.UPLOAD_URL) return '暫時不能設定，網站這邊還沒準備好';
-    const oldName = loadWalkerName(), oldCodes = loadMyCodes().join(',');
     try {
-      const out = await identityRequest('', { name: text });
-      if (loadWalkerName() !== oldName || loadMyCodes().join(',') !== oldCodes) return '身分設定已變動，請重新設定';
-      saveWalkerName(out.identity.name);
-      saveMyCodes(out.identity.codes);
+      const result = await refreshIdentity(text, { read: currentIdentity, write: saveIdentity });
+      if (result.status === 'changed') return '身分設定已變動，請重新設定';
     } catch (e) { return e.message; }
     return '';
   }
@@ -396,7 +387,7 @@ const BQWelcome = (() => {
   function needsSetup() { return !!walkerSetup || !loadMyCodes().length; }
   function refresh() { if (onboard && onboard.step === 0 && onboard.phase !== 'saving') renderOnboard(); }
   return { start: startOnboard, close: closeOnboard, refresh, needsSetup, setupHtml: walkerSetupHtml,
-    bindSetup, request: identityRequest, needNameToWalk, askNameThenWalk, setInert: setOnboardInert };
+    bindSetup, needNameToWalk, askNameThenWalk, setInert: setOnboardInert };
 })();
 
 export { BQWelcome };

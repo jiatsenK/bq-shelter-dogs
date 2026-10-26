@@ -1,7 +1,8 @@
 import { canEdit } from './feature-settings.js';
 import { activitiesState, analysisState, appState } from './page-state.js';
 import { BQApi } from './api.js';
-import { NEED_EDITOR, apiData, editorName, esc, isoDay, render, searchKey, ymdText } from './app.js';
+import { NEED_EDITOR, apiData, editorName, render } from './app.js';
+import { esc, isoDay, searchKey, ymdText } from './ui-kit.js';
 import { BQDates } from './dates.js';
 import { loadDepartures, section } from './analysis.js';
 import { BQWalkUI } from './walk-ui.js';

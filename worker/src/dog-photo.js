@@ -1,5 +1,5 @@
 import { readDogEdit, saveDogEdit, editError } from './dog-edit.js';
-import { readPhoto, putPhoto, thumbKey, toTrash, readTrash, isTrashId, resetR2State } from './r2.js';
+import { readPhoto, putPhoto, thumbKey, toTrash, readTrash, listTrash, isTrashId, resetR2State } from './r2.js';
 
 const MAX_BYTES = 2 * 1024 * 1024,
   THUMB_MAX = 512 * 1024;
@@ -103,9 +103,22 @@ export async function saveDogPhoto(env, dogId, revision, images, identity, base)
   resetR2State();
   return { ...after, trash };
 }
+// 備份的 dogId：#566 以後記 32 碼狗代碼，以前記當時的編號（現在可能是舊編號）
+async function trashOwners(db, dogId) {
+  const { results } = await db.prepare('SELECT number FROM v3_dog_numbers WHERE dog_id=?').bind(dogId).all();
+  return new Set([dogId, ...results.map((r) => r.number)]);
+}
+export async function listDogTrash(env, dogId) {
+  const owners = await trashOwners(env.DB, dogId);
+  return (await listTrash(env)).filter((t) => owners.has(t.dogId));
+}
+export async function readDogTrash(env, dogId, trashId) {
+  const item = isTrashId(trashId) ? await readTrash(env, trashId) : null;
+  return item && (await trashOwners(env.DB, dogId)).has(item.meta.dogId) ? item : null;
+}
 export async function restoreDogPhoto(env, dogId, revision, trashId, identity, base) {
   if (!isTrashId(trashId)) throw editError(400, '垃圾桶編號不對');
-  const old = await readTrash(env, trashId);
-  if (!old || old.meta.dogId !== dogId) throw editError(404, '找不到這隻狗的照片備份');
+  const old = await readDogTrash(env, dogId, trashId);
+  if (!old) throw editError(404, '找不到這隻狗的照片備份');
   return saveDogPhoto(env, dogId, revision, { original: old.bytes, thumb: old.thumb }, identity, base);
 }

@@ -1,6 +1,8 @@
-import { canonicalWalker, clearWalkWith, esc, icon, isOffline, loadCompanions, loadWalkWith, loadWalkerName, recordWalked, render, renderDetail, restOf, splitWalkers, walkKey, walkRegistration, walkedNow, walkerList } from './app.js';
+import { canonicalWalker, isOffline, loadCompanions, loadWalkWith, loadWalkerName, render, restOf, splitWalkers, walkRegistration, walkedNow, walkerList } from './app.js';
+import { renderDetail } from './detail.js';
+import { esc, icon } from './ui-kit.js';
+import { walkKey } from './dog-status.js';
 import { BQWelcome } from './welcome.js';
-import { SITE } from './site-config.js';
 import { appState } from './page-state.js';
 import { BQWalks } from './walk-flow.js';
 import { BQDates } from './dates.js';
@@ -8,82 +10,45 @@ import { BQDates } from './dates.js';
 // 今日溜狗介面只公開 BQWalkUI；提示、同行人及編輯中的狀態留在模組內。
 // 執行時使用 app 的資料與重畫函式；排隊、核對與資料寫入仍交給 BQWalks。
 const BQWalkUI = (() => {
-  // 按「溜了」、一起記、移回：記下後重畫，底部跳提示條，可以按「復原」。
-  // #138：溜了同時寫進試算表；復原、放回就把試算表改回原本的樣子
-  // K 2026-10-17：會寫試算表時，按了溜了立刻變「已溜」，背景寫試算表（取代 2026-10-08 先等回應的做法，Apps Script 要好幾秒）；
-  // 沒寫進去就退回未溜，提示條給「再試一次」。不寫試算表（還沒設定名字、Worker 沒設定）照舊直接記在手機
+  // 按「溜了」、復原：送 D1 後重畫，底部跳提示條，可以按「復原」。
   function setWalked(dogs, on) {
     if (on && BQWelcome.needNameToWalk()) return BQWelcome.askNameThenWalk(dogs); // 還沒設定名字（先看看）：先問名字，設好再登記
-    // #460：D1 模式所有入口（單狗、整群、一起溜）都等 D1 接受，不先記在手機
-    if (!on && SITE.d1WalkAccept) return undoSheetWalks(dogs, null, { revert: true, reveal: true });
-    if (on && (SITE.d1WalkAccept || sheetWillWrite())) walkThenRecord(dogs);
-    else setWalkedLocal(dogs, on);
+    // #460：所有入口（單狗、整群、一起溜）都等 D1 接受，不先記在手機
+    if (!on) return undoSheetWalks(dogs, null, { reveal: true });
+    walkThenRecord(dogs);
   }
   function sheetWillWrite() {
     return !!appState.UPLOAD_URL && appState.sheetWriteState !== 'off' && !!loadWalkerName();
   }
-  const walkPending = new Set(); // 按了溜了、還在等試算表回應的狗（walkKey）
   const undoPending = new Set(); // 復原送出、還在等回應的狗（walkKey）
   function walkPendingNow(dog) {
     const key = walkKey(dog);
-    return !!key && (walkPending.has(key) || walkRegistration.pending(dog));
+    return !!key && walkRegistration.pending(dog);
   }
   function walkThenRecord(dogs, retry = null) {
     const todo = walkRegistration.walkCandidates(dogs);
     if (!todo.length) return;
-    const acceptsD1 = SITE.d1WalkAccept;
     appState.pickedBuddies.clear();
     const text = `${todo.map(d => d.name).join('、')} 今天溜了`;
-    let confirmed = null;
     const write = walkRegistration.startWalk(todo, retry);
-    const undoFn = () => appState.sheetQueue = write.then(result => undoSheetWalks(result.successful));
-    if (!acceptsD1) showToast(text, undoFn, { label: '＋一起溜的人', fn: () => {
-      const open = result => { if (result.successful.length) openWithSheet(result.successful); };
-      if (confirmed) open(confirmed); else write.then(open);
-    } });
     render(); renderDetail();
     appState.sheetQueue = write.then(result => {
-      confirmed = result;
-      if (result.off) return result; // 舊有僅記手機的備援
       render(); renderDetail();
       if (result.failed.length) {
         const again = result.retryDogs;
         showToast(result.message, null, again.length ? { label: '再試一次', fn: () => walkThenRecord(again, result) } : null);
-      } else if (!acceptsD1) addToToast(text, undoFn, '，已寫進試算表');
+      }
       // K 2026-10-24：D1 接受後提示條照舊給「＋一起溜的人」；K 2026-10-26（#445）：狗會往下排，旁邊也給「復原」讓按錯的人不用找
       else if (result.successful.length && loadWalkerName()) showToast(text,
-        () => undoSheetWalks(result.successful.filter(d => walkedNow(d)), null, { revert: true, reveal: true }),
+        () => undoSheetWalks(result.successful.filter(d => walkedNow(d)), null, { reveal: true }),
         { label: '＋一起溜的人', fn: () => openWithSheet(result.successful) });
       return result;
     }).catch(e => console.error(e));
   }
   function registrationText(result) { return BQWalks.registrationText(result); }
-  function setWalkedLocal(dogs, on) {
-    const { changed, undo } = recordWalked(dogs, on);
-    if (!changed.length) return;
-    appState.pickedBuddies.clear();
-    render();
-    renderDetail();
-    const names = changed.map(d => d.name).join('、');
-    const text = on ? `${names} 今天溜了` : `${names} 取消今天溜了`;
-    const undoFn = () => {
-      undo();
-      if (on) clearWalkWith(changed);
-      render();
-      renderDetail();
-      queueSheetWrite(changed, !on);
-    };
-    const extra = on && loadWalkerName() ? { label: '＋一起溜的人', fn: () => openWithSheet(changed) } : null;
-    showToast(text, undoFn, extra);
-    queueSheetWrite(changed, on, text, undoFn);
-  }
-
-  // ── 誤觸復原：這支手機今天寫進試算表的溜了，事後也能從狗群頁的「已溜」撤銷 ──
-  // 只認這支手機記下的 prev／wrote（sheetWrite 存的）；試算表那格已被別人改過（current 不是我們寫的）就不提供，
-  // 撤銷時 Apps Script 也會再核對一次，不蓋掉別人後來改的
+  // 今天只剩一個名字的登記，任何人都能請 Worker 改回上一次（ADR 0016）
   function sheetUndoable(dog, today = new Date()) {
-    const day = BQDates.localDateKey(today);
-    return walkRegistration.canUndo(dog, day) || (SITE.d1WalkAccept && walkRegistration.canRevert(dog, day));
+    return walkRegistration.canRevert(dog, BQDates.localDateKey(today));
   }
   // #445：D1 復原畫面立刻恢復（walkRegistration 先顯示登記前的樣子），D1 失敗才改回並給再試一次。
   // options.reveal：單狗入口（狗卡「已溜」、溜狗人旁的 ×）用提示條說明進度，並捲到那隻狗
@@ -92,10 +57,10 @@ const BQWalkUI = (() => {
     if (!dogs.length) return '';
     dogs.forEach(d => undoPending.add(walkKey(d)));
     try {
-      const pending = retry ? walkRegistration.retry(retry) : walkRegistration.undo(dogs, options);
+      const pending = retry ? walkRegistration.retry(retry) : walkRegistration.undo(dogs);
       appState.sheetQueue = pending;
       const done = `已取消 ${dogs.map(d => d.name).join('、')} 今天溜了`, progress = `${done}，正在確認`;
-      if (options.reveal && SITE.d1WalkAccept) showToast(progress); else hideToast();
+      if (options.reveal) showToast(progress); else hideToast();
       render(); renderDetail();
       if (options.reveal) revealDog(dogs[0]);
       const result = await pending;
@@ -190,7 +155,7 @@ const BQWalkUI = (() => {
       const dog = w.dogs[0];
       const now = walkerList(dog);
       const added = names.filter(n => !now.map(canonicalWalker).includes(canonicalWalker(n)));
-      if (added.length) editWalkers(dog, [...now, ...added], `已加入 ${added.join('、')}`);
+      if (added.length) editWalkers(dog, [...now, ...added]);
       return;
     }
     withSheet = null;
@@ -206,32 +171,10 @@ const BQWalkUI = (() => {
     showToast(result.message, null, result.retryDogs.length ? { label: '再試一次', fn: () => submitCompanions(result.retryDogs, names, result) } : null);
   }
 
-  // 一個一個送，按了溜了馬上復原時，復原會等溜了寫完才送（才知道要改回什麼）
-  function queueSheetWrite(dogs, on, toastText, toastUndo, walker, expected) {
-    return appState.sheetQueue = sheetWrite(dogs, on, toastText, toastUndo, walker, expected);
-  }
-
   // 提示條還是剛剛那則（使用者還沒按別的）才換成確認後的說法
   function replaceToast(from, to) {
     const el = document.getElementById('toast');
     if (el && !el.hidden && el.querySelector('.toast-text').textContent === from) el.querySelector('.toast-text').textContent = to;
-  }
-  // 提示條還是剛剛那則（使用者還沒按別的）才在後面補一句，不蓋掉「復原」
-  function addToToast(text, undo, extra) {
-    const el = document.getElementById('toast');
-    if (!el || el.hidden || toastUndo !== undo) return false;
-    el.querySelector('.toast-text').textContent = `${text}${extra}`;
-    return true;
-  }
-
-  // 舊的編輯入口仍回傳布林值；新登記入口直接使用模組逐狗結果。
-  async function sheetWrite(dogs, on, toastText, toastUndo, walker = null, expected = undefined) {
-    const outcome = await walkRegistration.write(dogs, on, walker, expected);
-    if (outcome.value === null) return null;
-    if (outcome.failure) showToast(outcome.message);
-    else if (on && toastText) addToToast(toastText, toastUndo, '，已寫進試算表');
-    render(); renderDetail();
-    return outcome.value;
   }
 
   // #445（K 2026-10-21）：有按鈕（復原、再試一次、＋一起溜的人）的提示條要來得及按，顯示久一點
@@ -296,7 +239,7 @@ const BQWalkUI = (() => {
     if (undoPending.has(walkKey(dog))) return `<button type="button" class="walk-btn pending" disabled aria-label="${esc(dog.name)} 正在取消今天溜了">取消中</button>`;
     if (walkPendingNow(dog) && !walkedNow(dog)) return `<button type="button" class="walk-btn pending" disabled aria-label="${esc(dog.name)} 正在登記">登記中</button>`;
     const state = walkRegistration.state(dog);
-    const disabled = sheetWillWrite() && !state.canUndo && !state.canRevert && !walkPendingNow(dog) ? ' disabled' : '';
+    const disabled = sheetWillWrite() && !state.canRevert && !walkPendingNow(dog) ? ' disabled' : '';
     return state.mine
       ? `<button type="button" class="walk-btn done" data-walk="back" aria-label="${esc(dog.name)} 今天已溜，按一下取消"${disabled}>${icon('tick')}已溜</button>`
       : `<button type="button" class="walk-btn" data-walk="add" aria-label="${esc(dog.name)} 溜了">溜了</button>`;
@@ -320,11 +263,9 @@ const BQWalkUI = (() => {
     const state = walkRegistration.state(dog, BQDates.localDateKey(today));
     return state.today && state.walker ? state.walker : null;
   }
-  // 只剩一個人時，那個 × 是取消這次登記：日期和名字改回登記前（K 2026-10-05）。
-  // 這支手機登記的用本機記下的登記前；其他人、其他裝置由 Worker 從溜狗紀錄找上一次（ADR 0016，任何人都能撤銷）
+  // 只剩一個人時，那個 × 是取消這次登記：日期和名字改回登記前（K 2026-10-05），由 Worker 從溜狗紀錄找上一次（ADR 0016，任何人都能撤銷）
   function walkerUndoable(dog, who, today = new Date()) {
-    const state = walkRegistration.state(dog, BQDates.localDateKey(today));
-    return who.length === 1 && (state.mine && state.canUndo || state.canRevert);
+    return who.length === 1 && walkRegistration.state(dog, BQDates.localDateKey(today)).canRevert;
   }
 
   function walkerChipsHtml(dog, who, today) {
@@ -343,26 +284,17 @@ const BQWalkUI = (() => {
     return who.map(n => `<span class="who-chip${x(n) ? ' editable' : ''}">${esc(n)}${x(n)}</span>`).join('')
       + `<button type="button" class="who-plus" id="whoAdd" aria-label="加入溜狗人"${dis}>${busy ? '…' : '＋'}</button>`;
   }
-  async function editWalkers(dog, names, text) {
+  async function editWalkers(dog, names) {
     const expected = walkerEditBase(dog);
     const key = walkKey(dog);
     if (!expected || walkerEditBusy) return;
     walkerEditBusy = key;
     renderDetail();
-    if (SITE.d1WalkAccept) {
-      try {
-        const result = await walkRegistration.register([dog], { walker: [...new Set(names)].join('、'), expected });
-        if (!result.successful.length) showToast(registrationText(result), null,
-          result.retryDogs.length ? { label: '再試一次', fn: () => retryWalkerEdit(result) } : null);
-      } finally { walkerEditBusy = ''; render(); renderDetail(); }
-      return;
-    }
-    const ok = await queueSheetWrite([dog], true, null, null, [...new Set(names)].join('、'), expected);
-    walkerEditBusy = '';
-    renderDetail();
-    if (!ok) return; // 失敗、別人改過的提示 sheetWrite 已經跳了
-    const undo = () => queueSheetWrite([dog], false);
-    showToast(`${text}，已寫進試算表`, undo);
+    try {
+      const result = await walkRegistration.register([dog], { walker: [...new Set(names)].join('、'), expected });
+      if (!result.successful.length) showToast(registrationText(result), null,
+        result.retryDogs.length ? { label: '再試一次', fn: () => retryWalkerEdit(result) } : null);
+    } finally { walkerEditBusy = ''; render(); renderDetail(); }
   }
   async function retryWalkerEdit(previous) {
     const result = await walkRegistration.retry(previous);
@@ -377,7 +309,7 @@ const BQWalkUI = (() => {
   return {
     setWalked, walkPendingNow, sheetUndoable, undoSheetWalks,
     openWithSheet, closeWithSheet, walkerChipsHtml, walkerEditBase, editWalkers,
-    sheetWillWrite, sheetWrite, queueSheetWrite, registrationText,
+    sheetWillWrite, registrationText,
     walkButton, walkSyncHtml, showToast, hideToast
   };
 })();

@@ -12,7 +12,7 @@ module.exports = async (browser, base) => {
   const dogs = Array.from({ length: 63 }, (_, i) => ({ dogId: (i + 1).toString(16).padStart(32, '0'),
     number: String(2026010101 + i), name: i ? `測試狗 ${i + 1}` : '阿福', cage: i % 2 ? 'B2' : 'A1',
     intro: i % 3 ? '親人，喜歡散步。牽繩時請放慢腳步，給牠一點時間。' : '', note: i ? '' : '<img src=x onerror=alert(1)>',
-    sex: i % 4 ? 'male' : '', onMain: i !== 62, fixedCare: i === 2,
+    sex: i % 4 ? 'male' : '', onMain: i !== 62, status: i !== 62 ? 'main' : 'unknown', formerNumber: '', departure: null, fixedCare: i === 2,
     rest: i === 1 ? { until: '2099-01-01', reason: '術後休養' } : null, photoUrl: i === 2 ? '/photos/missing.jpg' : null }));
   let result = { dogs }, code = 200, apiCalls = 0;
   const methods = [];
@@ -39,6 +39,11 @@ module.exports = async (browser, base) => {
     await page.goto(`${base}/admin/public/index.html`);
     await loaded();
     assert.equal(await rows.count(), 25);
+    // #624 側欄分「資料」「志工網站」兩組；重新讀取是次要按鈕
+    assert.deepEqual(await page.locator('.nav-heading').allTextContents(), ['資料', '志工網站']);
+    assert.deepEqual(await page.locator('.nav-group').evaluateAll(groups => groups.map(g => [...g.querySelectorAll('a')].map(a => a.textContent))),
+      [['狗資料', '活動紀錄', '待補清單'], ['志工網站設定', '修改紀錄', '網站更新']]);
+    assert.equal(await page.locator('#refresh.btn-primary').count(), 0);
     assert.equal(await page.locator('#next').isEnabled(), true);
     assert.equal(await page.locator('#previous').isDisabled(), true);
     assert.equal(await page.locator('#dogs img[src="x"]').count(), 0);
@@ -52,9 +57,14 @@ module.exports = async (browser, base) => {
     assert.match(await rows.first().textContent(), /阿福/);
     await page.locator('#clear').click();
     await page.waitForFunction(() => document.querySelectorAll('#dogs tr').length === 50);
-    await page.locator('#presence').selectOption('other');
+    assert.equal(await page.locator('[data-count="main"]').textContent(), '62');
+    assert.equal(await page.locator('[data-count="unknown"]').textContent(), '1');
+    await page.locator('[data-status="unknown"]').click();
     assert.equal(await rows.count(), 1);
-    await page.locator('#clear').click();
+    assert.match(await rows.first().textContent(), /待核對/);
+    assert.equal(await page.locator('[data-status="unknown"]').getAttribute('aria-pressed'), 'true');
+    await page.locator('[data-status="all"]').click();
+    await page.waitForFunction(() => document.querySelectorAll('#dogs tr').length === 50);
     await page.locator('#care').selectOption('rest');
     assert.equal(await rows.count(), 1);
     assert.match(await rows.first().textContent(), /術後休養/);
@@ -80,7 +90,7 @@ module.exports = async (browser, base) => {
       return (Math.max(a, b) + .05) / (Math.min(a, b) + .05);
     });
     await page.locator('#refresh').hover();
-    assert.ok(await contrast('#refresh') >= 4.5, 'primary hover contrast meets AA');
+    assert.ok(await contrast('#refresh') >= 4.5, 'reload hover contrast meets AA');
     await page.locator('.skip-link').focus();
     await page.locator('.skip-link').hover();
     assert.ok(await contrast('.skip-link') >= 4.5, 'skip-link hover contrast meets AA');
@@ -88,7 +98,7 @@ module.exports = async (browser, base) => {
     fs.mkdirSync(path.join(__dirname, '../.impeccable/review'), { recursive: true });
     await page.screenshot({ path: path.join(__dirname, '../.impeccable/review/desktop.png'), fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });
-    assert.equal(await page.locator('.admin-sidebar nav a[href="./updates.html"]').isVisible(), true, '#567 導覽五項都可進入');
+    assert.equal(await page.locator('.admin-sidebar nav a[href="./releases.html"]').isVisible(), true, '#624 導覽六項都可進入');
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'only table/nav regions may scroll horizontally');
     await page.screenshot({ path: path.join(__dirname, '../.impeccable/review/mobile.png'), fullPage: true });
     code = 401;

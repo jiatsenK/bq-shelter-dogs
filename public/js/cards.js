@@ -1,4 +1,6 @@
 import { BQStore } from './store.js';
+import { trapFocus } from './overlays.js';
+import { refreshIdentity } from './identity.js';
 import { SITE } from './site-config.js';
 import { BQDates } from './dates.js';
 import { BQApi } from './api.js';
@@ -11,7 +13,6 @@ import { cardsState } from './page-state.js';
 
 // 呼叫 /api 都經過 js/api.js 的 BQApi（#478）
 const BQ_CODES_KEY = BQStore.keys.walkerCodes; // 溜狗表（js/app.js）存的我的代號
-const BQ_WRITES_KEY = BQStore.keys.sheetWrites; // 溜狗表今天按過的溜了（還沒同步進 walks.json 的）
 const BQ_OPENED_KEY = BQStore.keys.zukan; // 撕開過的卡：{ v: 1, codes: { 代號: { 狗編號: 撕開那天 } } }
 const BQ_CODE_PATTERN = /^[0-9a-f]{12}$/;
 const BQ_PACK_SIZE = 5;
@@ -142,27 +143,13 @@ function bqLoadCodes(storage) {
     return Array.isArray(list) ? list.filter(c => BQ_CODE_PATTERN.test(c)) : [];
   } catch (e) { return []; }
 }
-// 今天在溜狗表按的「溜了」（還沒同步）：跟 js/app.js 的 loadSheetWrites 同一份，只看今天、記成我的
-function bqTodayWrites(storage, today) {
-  try {
-    const raw = storage?.readJson(BQ_WRITES_KEY);
-    if (!raw || raw.date !== BQDates.localDateKey(today) || !raw.items || typeof raw.items !== 'object') return [];
-    return Object.values(raw.items).filter(it => it && it.mine && it.id && it.current && it.current.date === raw.date).map(it => ({ id: String(it.id), date: raw.date }));
-  } catch (e) { return []; }
-}
 // 我溜過的狗：{ 編號: { times: 幾天, first, last } }。Worker 照各年摘要加總（ADR 0013，#344，規則跟「我溜過」一樣：同一隻狗同一天以最後一筆為準）；
-// 今天剛按、還沒同步的溜了另外加，Worker 已經算到今天的就不重複
-function bqMineFrom(dogs, todayWrites = []) {
+// 手機不再記試算表寫入紀錄（#558 起只走 D1），只用 Worker 的摘要
+function bqMineFrom(dogs) {
   const mine = new Map();
   for (const [id, m] of Object.entries(dogs || {})) {
     const first = BQDates.parseYmd(m && m.first), last = BQDates.parseYmd(m && m.last);
     if (first && last && m.times > 0) mine.set(id, { times: m.times, first, last });
-  }
-  for (const { id, date } of todayWrites) {
-    const d = BQDates.parseYmd(date), m = mine.get(id);
-    if (!d || (m && BQDates.localDateKey(m.last) === date)) continue;
-    if (!m) mine.set(id, { times: 1, first: d, last: d });
-    else { m.times++; if (d > m.last) m.last = d; if (d < m.first) m.first = d; }
   }
   return mine;
 }
@@ -656,17 +643,12 @@ function bqBind() {
       const field = document.getElementById('bqField');
       if (field.hidden) return;
       if (e.key === 'Escape') { bqCloseField(); return; }
-      if (e.key === 'Tab') {
-        const items = [...field.querySelectorAll('button:not([hidden]):not(:disabled), [tabindex="0"]')].filter(el => el.offsetParent !== null);
-        if (!items.length) return;
-        const at = items.indexOf(document.activeElement);
-        e.preventDefault();
-        items[(at + (e.shiftKey ? -1 : 1) + items.length) % items.length].focus();
-      }
+      trapFocus(e, [...field.querySelectorAll('button:not([hidden]):not(:disabled), [tabindex="0"]')].filter(el => el.offsetParent !== null), { preventScroll: false });
       return;
     }
     if (e.key === 'Escape') bqClose();
-    if (e.key === 'Tab') { e.preventDefault(); const c = document.querySelector('#bqModalCard .bq-card'); (document.activeElement === c ? document.getElementById('bqClose') : c).focus(); }
+    // 卡片和關閉鈕兩個來回
+    trapFocus(e, [document.querySelector('#bqModalCard .bq-card'), document.getElementById('bqClose')], { preventScroll: false });
   });
   addEventListener('resize', () => document.querySelectorAll('#bqHand .bq-card').forEach((c, i, all) => { c.dataset.base = bqFan(i, all.length); c.style.transform = c.dataset.base; }));
 }
@@ -678,20 +660,19 @@ async function bqInit() {
   BQ.opened = bqLoadOpened(BQ.storage);
   try {
     const name = BQ.storage?.get(BQStore.keys.walkerName);
-    const originalCodes = BQ.codes.join(',');
     if (name && BQ.codes.length) {
-      const r = await BQApi.identity('', { name });
-      if (r.error === 'network' || !r.data) throw new Error(r.message);
-      const out = r.data;
-      if (BQ.storage?.get(BQStore.keys.walkerName) !== name || bqLoadCodes(BQ.storage).join(',') !== originalCodes) {
-        BQ.codes = bqLoadCodes(BQ.storage);
-      } else if (r.ok && out.identity) {
-        BQ.codes = out.identity.codes;
-        BQ.storage?.writeJson(BQ_CODES_KEY, BQ.codes);
-        BQ.storage?.set(BQStore.keys.walkerName, out.identity.name);
-      }
+      const result = await refreshIdentity(name, {
+        read: () => ({ name: BQ.storage?.get(BQStore.keys.walkerName), codes: bqLoadCodes(BQ.storage) }),
+        write: identity => {
+          BQ.codes = identity.codes;
+          BQ.storage?.writeJson(BQ_CODES_KEY, BQ.codes);
+          BQ.storage?.set(BQStore.keys.walkerName, identity.name);
+        },
+      });
+      // 溜狗表那邊剛換了身分：用手機上現在的代號
+      if (result.status === 'changed') BQ.codes = bqLoadCodes(BQ.storage);
     }
-  } catch (e) { /* 離線保留原來的名字對照 */ }
+  } catch (e) { /* 離線或伺服器出錯：保留原來的名字對照 */ }
   bqBind();
   bqRenderAlumni();
   bqLoadAlumni(); // 已出所跟開卡無關，自己讀，在所資料讀不到也照樣顯示
@@ -719,7 +700,7 @@ async function bqInit() {
     document.getElementById('bqCta').innerHTML = '<p class="bq-cta-note">狗的資料讀不到，請重新整理頁面。</p>';
     return;
   }
-  BQ.mine = BQ.codes.length ? bqMineFrom(mine, bqTodayWrites(BQ.storage, BQ.today)) : new Map();
+  BQ.mine = BQ.codes.length ? bqMineFrom(mine) : new Map();
   BQ.pending = bqPending(BQ.players, BQ.mine, bqOpenedSet());
   document.getElementById('bqField').classList.add('ready');
   bqRenderCta();
@@ -730,5 +711,5 @@ async function bqInit() {
   await bqSyncOpened();
 }
 
-export { BQ_CODES_KEY, BQ_WRITES_KEY, BQ_OPENED_KEY, BQ_CODE_PATTERN, BQ_PACK_SIZE, BQ_TEAMS, BQ_FREE, BQ_TIERS, bqTeamOf, bqTier, bqStay, bqQuote, bqMonthOut, bqPlayers, bqAwards, BQ_DEPART_REASONS, bqAlumni, bqLoadCodes, bqTodayWrites, bqMineFrom, bqFetchMine, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, bqEsc, BQ_DOG, BQ_PAW, bqPhoto, bqDate, bqCardHtml, bqAlumniCardHtml, BQ, bqRemoteOpened, bqSyncOpened, bqOpenedSet, bqGotCount, bqRenderProgress, bqFan, bqShowHand, bqRenderCta, bqRenderAgain, bqRenderAll, bqLater, bqClearTimers, bqFocusFirstCard, bqSkip, bqDeal, bqRefreshOpened, bqOpenField, bqCloseField, bqOpenPack, bqOpenAll, bqTilt, bqUntilt, bqRenderAwards, bqRenderBinder, bqRenderAlumni, bqLoadAlumni, bqOpen, bqShowModal, bqOpenAlumni, bqClose, bqBind, bqInit };
+export { BQ_CODES_KEY, BQ_OPENED_KEY, BQ_CODE_PATTERN, BQ_PACK_SIZE, BQ_TEAMS, BQ_FREE, BQ_TIERS, bqTeamOf, bqTier, bqStay, bqQuote, bqMonthOut, bqPlayers, bqAwards, BQ_DEPART_REASONS, bqAlumni, bqLoadCodes, bqMineFrom, bqFetchMine, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, bqEsc, BQ_DOG, BQ_PAW, bqPhoto, bqDate, bqCardHtml, bqAlumniCardHtml, BQ, bqRemoteOpened, bqSyncOpened, bqOpenedSet, bqGotCount, bqRenderProgress, bqFan, bqShowHand, bqRenderCta, bqRenderAgain, bqRenderAll, bqLater, bqClearTimers, bqFocusFirstCard, bqSkip, bqDeal, bqRefreshOpened, bqOpenField, bqCloseField, bqOpenPack, bqOpenAll, bqTilt, bqUntilt, bqRenderAwards, bqRenderBinder, bqRenderAlumni, bqLoadAlumni, bqOpen, bqShowModal, bqOpenAlumni, bqClose, bqBind, bqInit };
 export { cardsState } from './page-state.js';

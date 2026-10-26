@@ -6,11 +6,10 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { setPackChunkBytes, swapPackCache, readSmall, readWalksPacked, yearVersions, recentStart } from '../src/packs.js';
 import { readDogsPayload, readWalks, readDepartures, readRest, readSyncedAt } from '../src/compact.js';
+import { readAcceptedWalks, withTodayWalks } from '../src/walk-accept.js';
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
-import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
-import { importCompactProfiles } from '../../scripts/import-compact-profiles.mjs';
-import { importCompactDepartures } from '../../scripts/import-compact-departures.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
+import { importCompactDogs, importCompactProfiles, importCompactDepartures } from './compact-fixtures.mjs';
 
 const SITE = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
 // 台灣時間 2026-10-16 10:00
@@ -27,7 +26,7 @@ const WALKS = [
 
 async function seededDb(t) {
   const DB = fakeD1(); t.after(() => DB.close());
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   await importCompactDogs(DB, SOURCE);
   await importCompactProfiles(DB, { walks: { version: 1, walks: WALKS } });
   await importCompactDepartures(DB, [{ id: '2021030913', name: '咪寶', date: '2026-10-13', dateSource: 'note', seen: '2026-10-13', reason: 'adopt', matched: '被領養', flags: [] }]);
@@ -43,7 +42,11 @@ const PATHS = ['/dogs', '/walks', '/departures', '/rest'];
 
 // 現在的讀法（直接讀表）算出來的回應
 async function direct(DB, path) {
-  if (path === '/dogs') { const { version, ...rest } = await readDogsPayload(DB); return { ok: true, version, syncedAt: await readSyncedAt(DB), ...rest }; }
+  if (path === '/dogs') {
+    const { version, ...rest } = await readDogsPayload(DB);
+    const out = { ok: true, version, syncedAt: await readSyncedAt(DB), ...rest };
+    return Object.assign(out, withTodayWalks(out.dogs, await readAcceptedWalks(DB, taiwanToday())));
+  }
   if (path === '/walks') {
     const { version, historyStart, walks } = await readWalks(DB);
     const v = await DB.prepare('SELECT cutoff,live,months FROM v3_walk_versions WHERE id=1').first();
@@ -135,10 +138,10 @@ test('跨過午夜：昨天的紀錄併進歷史，今天從空的開始', async
   await assertSame(DB, '補登昨天');
 });
 
-test('沒有資料變動時，每次請求只讀版本號（狗清單再加 1 列同步時間；休養是在所＋離所各 1 列）', async t => {
+test('沒有資料變動時，每次請求只讀版本號（狗清單再加同步時間、今日溜狗各 1 列；休養是在所＋離所各 1 列）', async t => {
   const DB = await seededDb(t);
   for (const path of PATHS) await get(path, { DB });
-  for (const path of PATHS) assert.equal(await readsOf(DB, path), path === '/dogs' || path === '/rest' ? 2 : 1, path);
+  for (const path of PATHS) assert.equal(await readsOf(DB, path), path === '/dogs' ? 3 : path === '/rest' ? 2 : 1, path);
 });
 
 test('今天新增一筆：只重讀今天的列，不重算歷史資料包', async t => {
@@ -149,7 +152,7 @@ test('今天新增一筆：只重讀今天的列，不重算歷史資料包', as
   // 版本號 1 列＋今天 2 列
   assert.equal(await readsOf(DB, '/walks'), 3);
   assert.deepEqual(await packRows(DB, 'walks'), pack);
-  assert.equal(await readsOf(DB, '/dogs'), 2, '狗清單沒變：版本號＋同步時間');
+  assert.equal(await readsOf(DB, '/dogs'), 3, '狗清單沒變：版本號＋同步時間＋今日溜狗');
 });
 
 test('別台機器算好的資料包直接拿來用：只讀版本號、資料包和今天的列', async t => {
@@ -625,11 +628,11 @@ test('在所、某一年的離所不整張讀：入所、出入所紀錄照主�
 test('正式 D1 第一次補建 v3_departure_versions：從現有離所紀錄補上每年的鍵，之後重跑不動', async t => {
   const DB = await departedDb(t, 3);
   await DB.prepare('DROP TABLE v3_departure_versions').run();
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   assert.deepEqual(Object.keys(await depYears(DB)).sort(), ['2010', '2011', '2012', '2026', 'none']);
   await DB.prepare("UPDATE v3_dog_departures SET reason='died' WHERE number='2010000000'").run();
   const years = await depYears(DB);
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   assert.deepEqual(await depYears(DB), years);
   await assertSame(DB, '補建後');
 });

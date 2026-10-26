@@ -13,6 +13,8 @@ module.exports = async (browser, base) => {
   });
   let fail = false;
   const writes = [];
+  const d1 = require('./fixtures/fake-d1-walks.cjs')({ today: () => new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date()),
+    prior: () => ({ date: '2026-01-01', walker: '' }) });
   await ctx.route('**/api/**', route => {
     const req = route.request(), endpoint = new URL(req.url()).pathname.split('/api/')[1];
     if (req.method() === 'PUT' && endpoint.startsWith('fixed-care/')) {
@@ -21,15 +23,9 @@ module.exports = async (browser, base) => {
       data.dogs.find(d => d.id === endpoint.split('/')[1]).covered = body.enabled;
       return route.fulfill({ json: { ok: true, enabled: body.enabled } });
     }
-    if (req.method() === 'POST' && endpoint === 'walk') {
-      const body = req.postDataJSON();
-      if (body.action === 'undo') return route.fulfill({ json: { ok: true, results: body.dogs.map(d => ({ id: d.id, name: d.name, status: 'restored' })) } });
-      const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Taipei' }).format(new Date());
-      return route.fulfill({ json: { ok: true, today, results: body.dogs.map(d => ({ ...d, status: 'written', prev: { date: { date: '2026-01-01' }, walker: '' }, wrote: { date: today, walker: body.walker } })) } });
-    }
-    return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'rest' ? { rest: {} } : { ok: true, walks: [], walkers: [] } });
+    if (req.method() === 'POST' && endpoint === 'walk') return route.fulfill({ json: d1.walk(req.postDataJSON()) });
+    return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'today' ? d1.pack() : endpoint === 'rest' ? { rest: {} } : { ok: true, walks: [], walkers: [] } });
   });
-  await require('./fixtures/legacy-walk-mode.cjs')(ctx);
   const page = await ctx.newPage(); page.setDefaultTimeout(6000);
   try {
     await page.goto(`${base}/public/index.html`);

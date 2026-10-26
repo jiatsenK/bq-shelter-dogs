@@ -178,24 +178,41 @@ export async function deleteTrash(env, id) {
   await env.PHOTOS.delete([`trash/${id}/photo.jpg`, `trash/${id}/thumb.jpg`]);
 }
 
-// 超過 30 天的清掉（Cron 呼叫）；回傳清掉幾筆
+// 超過 30 天的清掉（每月 1 日排程呼叫）；回傳 { purged, failed, errors }。
+// 一筆出錯記下來、接著清下一筆；出錯那筆的備份留著，下個月再試。
+// 備份是網站唯一記得「舊原圖要刪」的地方（ADR 0018 第 7 點），所以舊原圖刪掉、D1 那列刪掉之後才刪備份。
+// 舊原圖（#566 以後的 32 碼檔名）只在 D1 記得它、而且已經不是主照片時才刪；D1 沒這列（例如測試 D1 配正式 R2）就不碰。
+// 固定路徑 photos/{編號}.jpg 永遠不刪。只剩縮圖的備份（寫原圖前失敗）用代號開頭的時間判斷
 export async function purgeTrash(env, now = Date.now()) {
   const limit = now - TRASH_DAYS * 24 * 60 * 60 * 1000;
-  let n = 0;
-  for (const t of await listTrash(env)) {
-    const at = Date.parse(t.deletedAt);
-    if (!isNaN(at) && at < limit) {
-      // Versioned originals live for the same 30-day recovery window. Never
-      // remove a currently referenced pair, and never clean legacy fixed paths.
-      if(env.DB && /^photos\/[a-f0-9]{32}\.jpg$/.test(t.path||'')) {
-        const current=await env.DB.prepare('SELECT 1 FROM v3_photos WHERE object_key=? AND is_primary=1').bind(t.path).first();
-        if(!current)await env.PHOTOS.delete([t.path,thumbKey(t.path)]);
+  const items = new Map();
+  for (const o of await listAll(env, 'trash/')) {
+    const id = o.key.split('/')[1];
+    const t = items.get(id) || { id, deletedAt: '' };
+    if (o.key.endsWith('/photo.jpg')) Object.assign(t, o.customMetadata || {});
+    items.set(id, t);
+  }
+  const out = { purged: 0, failed: 0, errors: [] };
+  for (const t of items.values()) {
+    const at = t.deletedAt ? Date.parse(t.deletedAt) : Number(t.id.split('-')[0]);
+    if (isNaN(at) || at >= limit) continue;
+    try {
+      if (env.DB && /^photos\/[a-f0-9]{32}\.jpg$/.test(t.path || '')) {
+        const row = await env.DB.prepare('SELECT is_primary FROM v3_photos WHERE object_key=?').bind(t.path).first();
+        if (row && !row.is_primary) {
+          await env.PHOTOS.delete([t.path, thumbKey(t.path)]);
+          await env.DB.prepare('DELETE FROM v3_photos WHERE object_key=? AND is_primary=0').bind(t.path).run();
+        }
       }
       await deleteTrash(env, t.id);
-      n++;
+      out.purged++;
+    } catch (e) {
+      out.failed++;
+      if (out.errors.length < 5) out.errors.push({ id: t.id, error: String((e && e.message) || e).slice(0, 120) });
     }
   }
-  return n;
+  if (out.purged) versionsCache = null;
+  return out;
 }
 
 // ── 縮圖 ──

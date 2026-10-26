@@ -1,7 +1,10 @@
 import { prepareImages, imageForm } from './photo-images.js';
+import { closeOverlay, pushOverlay, registerOverlay } from './overlays.js';
 import { canEdit } from './feature-settings.js';
 import { appState } from './page-state.js';
-import { closeLightbox, detailEdits, editorHeaders, esc, icon, lightboxOpen, photoOverrides, photoSrc, photoThumb, render, renderDetail } from './app.js';
+import { closeLightbox, editorHeaders, lightboxOpen, photoOverrides, photoSrc, photoThumb, render } from './app.js';
+import { detailEdits, renderDetail } from './detail.js';
+import { esc, icon } from './ui-kit.js';
 import { BQWalkUI } from './walk-ui.js';
 import { BQApi } from './api.js';
 
@@ -152,7 +155,7 @@ const BQPhoto = (() => {
     el.querySelector('img').src = src;
     el.hidden = false;
     document.documentElement.classList.add('lightbox-open');
-    history.pushState({ bqCrop: true }, '');
+    pushOverlay('crop');
     return new Promise(resolve => {
       cropView = { img, aspect, scale: 1, minScale: 1, tx: 0, ty: 0, frame: null, resolve, pointers: new Map(), opener: document.activeElement };
       setCropAspect(aspect);
@@ -251,9 +254,9 @@ const BQPhoto = (() => {
   // 關掉走「上一頁」，手機返回鍵也等於取消
   function closeCropper(result) {
     if (cropView) cropView.result = result;
-    if (history.state && history.state.bqCrop) history.back(); // popstate 會接著 hideCropper
-    else hideCropper();
+    closeOverlay('crop');
   }
+  registerOverlay('crop', { isOpen: cropOpen, hide: hideCropper });
 
   // 主照片預覽的「裁切」：裁好的換掉預覽
   async function cropPhotoUpload() {

@@ -2,6 +2,7 @@
 # - 只能手動跑：Actions 頁選「準備預覽資料庫」→「Run workflow」。每次都把測試庫整份換成正式庫當下的資料
 # - #520 起從正式 D1 匯出再匯入（#501 退役試算表同步後沒有別的灌法）：正式庫只跑 d1 export（只讀），清空與匯入都明確帶 wrangler.preview-db.jsonc
 # - 測試庫原有資料（含預覽時寫的）會被覆蓋
+# - #622：只准從 main 跑（會讀正式庫、覆蓋測試庫）；選別的分支整個略過
 name: 準備預覽資料庫
 
 on:
@@ -12,6 +13,8 @@ permissions:
 
 jobs:
   seed:
+    # #622：只准 main，從別的分支按會整個略過（灰色），不碰正式環境
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:

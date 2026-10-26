@@ -31,7 +31,7 @@ node scripts/run-node-tests.mjs --list
 .\scripts\wait-pr-checks.ps1 -Number 424
 ```
 
-等待結束後回報對應 SHA 與 check 狀態；退出碼須與實際 check／run 結果一致。剛開 PR 尚無 checks 時回報目前狀態。
+等待結束後回報對應 SHA 與 check 狀態；退出碼須與實際 check／run 結果一致：失敗、被取消或還沒跑完都不是 0（gh 對被取消的 check 回 0，腳本另外讀狀態判斷）。剛開 PR 尚無 checks 時回報目前狀態。
 
 ## 查找與載入
 

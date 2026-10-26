@@ -51,8 +51,8 @@ async function walkersOf(walker, env, db) {
   return { codes, keyed: !!key };
 }
 
-// 溜狗紀錄一隻狗一天一組（同一天以最後一次為準，跟 importCompactProfiles 合併的結果一樣）
-function walkDay(db, dogId, date, dog, codes) {
+// 溜狗紀錄一隻狗一天一組（同一天以最後一次為準，跟當初從 GitHub JSON 匯入時合併的規則一樣）；網站按溜了也用這個（walk-accept.js）
+export function walkDay(db, dogId, date, dog, codes) {
   return [
     db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(dogId, date),
     ...(codes.length ? codes : [null]).map((code, i) => db.prepare('INSERT INTO v3_walks(dog_id,walk_date,position,walker_code,dog_number,dog_name) VALUES(?,?,?,?,?,?)')

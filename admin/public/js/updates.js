@@ -1,9 +1,9 @@
-import { searchEdits, readWebsiteUpdates } from './api.js';
+import { searchEdits, readDog, unmergeDog } from './api.js';
 import { FILTERS, editQuery, parseEditPage, formatWhen, sourceLabel, valueText } from './edit-log.js';
 import { showVolunteerState } from './volunteer-state.js';
 import { byId, element } from './dom.js';
 
-// #567 更新紀錄頁：資料編輯每次換條件都交給伺服器查全部紀錄（不在前端過濾最近幾筆）；網站更新讀同一份版本紀錄檔。
+// #567 修改紀錄頁（#624 起網站更新拆到 releases.html）：每次換條件都交給伺服器查全部紀錄（不在前端過濾最近幾筆）。
 // 分頁用伺服器給的游標：cursors[i] 是第 i+1 頁的起點（第 1 頁 null），上一頁照記下來的游標重查。
 const state = { cursors: [null], next: null, size: 25, seq: 0, kindsLoaded: false };
 let typingTimer;
@@ -17,9 +17,44 @@ function renderRow(e) {
   who.append(element('div', e.editorName), element('span', sourceLabel(e.source), 'state-label'));
   if (e.actorEmail) who.append(element('div', e.actorEmail, 'identity'));
   const value = v => { const cell = element('td', undefined, 'edit-value'); cell.append(element('pre', valueText(e.kind, v))); return cell; };
-  row.append(element('td', formatWhen(e.at), 'dog-number'), element('td', e.kindLabel || e.kind), element('td', dog), who, value(e.before), value(e.after));
+  const after = value(e.after);
+  if (e.kind === 'merge' && e.dogId) after.append(unmergeButton(e));
+  row.append(element('td', formatWhen(e.at), 'dog-number'), element('td', e.kindLabel || e.kind), element('td', dog), who, value(e.before), after);
   return row;
 }
+// 取消合併（K 2026-10-26）：按兩次才送；伺服器照這筆的快照拆回來，已取消過或之後又合併過會說明原因
+function unmergeButton(e) {
+  const wrap = element('div', undefined, 'unmerge-actions');
+  const button = element('button', '取消合併', 'btn btn-outline-danger');
+  button.type = 'button';
+  const note = element('span');
+  note.setAttribute('role', 'status');
+  let armed = false;
+  const disarm = () => { armed = false; button.textContent = '取消合併'; button.className = 'btn btn-outline-danger'; };
+  button.addEventListener('click', async () => {
+    if (!armed) {
+      armed = true;
+      button.textContent = `確定取消：拆回「${e.before?.name || '未命名'}」`;
+      button.className = 'btn btn-danger';
+      return;
+    }
+    button.disabled = true;
+    note.textContent = '正在取消合併…';
+    const dog = await readDog(e.dogId);
+    const result = dog.ok ? await unmergeDog(e.dogId, { logId: e.id, revision: dog.data.revision }) : dog;
+    button.disabled = false;
+    if (!result.ok) {
+      disarm();
+      note.textContent = result.data?.error || '未能取消合併，資料沒有改；請重新讀取再試';
+      return;
+    }
+    note.textContent = '已取消合併。';
+    restart();
+  });
+  wrap.append(button, note);
+  return wrap;
+}
+
 
 async function load() {
   const seq = ++state.seq;
@@ -55,20 +90,6 @@ async function load() {
 }
 const restart = () => { state.cursors = [null]; load(); };
 
-async function loadReleases() {
-  const status = byId('release-status'), list = byId('releases');
-  const result = await readWebsiteUpdates();
-  const entries = result.ok && Array.isArray(result.data) && result.data.every(e => e && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && typeof e.text === 'string') ? result.data : null;
-  if (!entries) { status.dataset.error = 'true'; status.textContent = '網站更新讀取失敗，請重新讀取。'; return; }
-  status.removeAttribute('data-error');
-  status.textContent = entries.length ? `共 ${entries.length} 則，新到舊。` : '還沒有網站更新紀錄。';
-  list.replaceChildren(...entries.map(e => {
-    const item = element('li');
-    item.append(element('time', e.version ? `${e.version} · ${e.date}` : e.date), element('p', e.text));
-    return item;
-  }));
-}
-
 byId('filters').addEventListener('input', e => {
   if (e.target.type === 'search' || e.target.type === 'text' || !e.target.type) { clearTimeout(typingTimer); typingTimer = setTimeout(restart, 300); }
 });
@@ -78,7 +99,6 @@ byId('filters').addEventListener('submit', e => { e.preventDefault(); clearTimeo
 byId('page-size').addEventListener('change', e => { state.size = Number(e.target.value); restart(); });
 byId('previous').addEventListener('click', () => { if (page() > 1) { state.cursors.pop(); load(); } });
 byId('next').addEventListener('click', () => { if (state.next) { state.cursors.push(state.next); load(); } });
-byId('reload').addEventListener('click', () => { load(); loadReleases(); });
+byId('reload').addEventListener('click', load);
 showVolunteerState(byId('volunteer-state'), [['showUpdates', '更新紀錄顯示中', '更新紀錄已隱藏']]);
 load();
-loadReleases();

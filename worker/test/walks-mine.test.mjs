@@ -5,9 +5,8 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { readWalks } from '../src/compact.js';
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
-import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
-import { importCompactProfiles } from '../../scripts/import-compact-profiles.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
+import { importCompactDogs, importCompactProfiles } from './compact-fixtures.mjs';
 
 const SITE = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
 const NOW = Date.parse('2026-10-16T02:00:00Z'); // 台灣 2026-10-16 10:00
@@ -45,7 +44,7 @@ function reference(walks, codes) {
 
 async function seededDb(t) {
   const DB = fakeD1(); t.after(() => DB.close());
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   await importCompactDogs(DB, SOURCE);
   await importCompactProfiles(DB, { walks: { version: 1, walks: WALKS } });
   return DB;

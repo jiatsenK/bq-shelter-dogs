@@ -1,13 +1,13 @@
 // 讀進 index.html（結構檢查用）與 js/app.js 後執行程式，函式就能在這頁直接呼叫
-Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js', '../public/js/dates.js', '../public/js/api.js', '../public/js/store.js', '../public/js/walk-flow.js', '../public/js/detail-editor.js', '../public/js/tour.js', '../public/js/photo.js', '../public/js/walk-ui.js', '../public/js/welcome.js', '../public/js/favorites.js'].map(u => fetch(u).then(res => {
+Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.webmanifest', 'fixtures/dogs.json', '../public/js/analysis.js', '../public/js/find.js', '../public/js/site-config.js', '../public/js/detail-viewport.js', '../public/js/group-stage.js', '../public/js/walk-registration.js', '../public/js/activities.js', '../public/js/dates.js', '../public/js/api.js', '../public/js/store.js', '../public/js/walk-flow.js', '../public/js/detail-editor.js', '../public/js/tour.js', '../public/js/photo.js', '../public/js/walk-ui.js', '../public/js/welcome.js', '../public/js/favorites.js', '../public/js/detail.js', '../public/js/sheet-append.js', '../public/js/detail-fixed-care.js', '../public/js/detail-rest.js', '../public/js/detail-intro.js', '../public/js/detail-stays.js', '../public/js/detail-former.js'].map(u => fetch(u).then(res => {
   if (!res.ok) throw new Error(`讀不到 ${u}（HTTP ${res.status}）`);
   return res.text();
 })))
-  .then(async ([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs, tourJs, photoJs, walkUiJs, welcomeJs, favoritesJs]) => {
+  .then(async ([html, js, manifest, dogsJson, analysisJs, findJs, siteJs, detailViewportJs, groupStageJs, walkRegistrationJs, activitiesJs, datesJs, apiJs, storeJs, walkFlowJs, detailEditorJs, tourJs, photoJs, walkUiJs, welcomeJs, favoritesJs, ...detailJs]) => {
     await import('../fixtures/module-globals.js');
     bindApp(); bindAnalysis(); bindGroups(); bindFind(); bindActivities();
     API_JS = apiJs; SITE_JS = siteJs; ANALYSIS_JS = analysisJs; FIND_JS = findJs;
-    INDEX_HTML = html; MANIFEST = JSON.parse(manifest); APP_JS = js;
+    INDEX_HTML = html; MANIFEST = JSON.parse(manifest); APP_JS = [js, ...detailJs].join('\n'); // R4（#623）起詳細資訊拆成 detail*.js、sheet-append.js，原始碼檢查一起看
     TOUR_JS = tourJs; PHOTO_JS = photoJs; WALK_UI_JS = walkUiJs;
     WELCOME_JS = welcomeJs; FAVORITES_JS = favoritesJs; DOGS_JSON = JSON.parse(dogsJson);
     phoneStore = fakeStorage(); // 其他測試也不碰真正的 localStorage
@@ -18,6 +18,7 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     return runTests();
   })
   .then(runSerialTests)
+  .then(runD1PickTests)
   .then(runPhotoTests)
   .then(runAnalysisTests)
   .then(runHistoryTests)
@@ -28,7 +29,6 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
   .then(runMonthWalkTests)
   .then(runV52Tests)
   .then(runThumbTests)
-  .then(runWalkedModuleTests)
   .then(runDetailWiringTests)
   .then(runFirstScreenTests)
   .then(runFindTests)
