@@ -57,3 +57,16 @@ test('詳細資訊拆出 app.js 後，app.js 不再自己畫詳細資訊或處�
   assert.equal((files['detail.js'].match(/if \(!appState\[field\] \|\| appState\[field\]\.phase !== 'saving'\)/g) || []).length, 1);
   assert.doesNotMatch(files['detail.js'], /appState\.(rest|intro|former|stays)Edit = null/);
 });
+
+test('返回鍵集中在 overlays.js：其他模組不自己 pushState 或決定按返回關哪層（#623 R6）', async () => {
+  const files = await frontendFiles();
+  const hits = [];
+  for (const [file, source] of Object.entries(files)) {
+    if (file === 'overlays.js') continue;
+    if (/history\.(pushState|replaceState|back)\(/.test(source)) hits.push(`${file} 直接改歷史紀錄`);
+    // group-stage.js 只在返回到常遛狗群時重讀狗群，不決定關哪一層
+    if (file !== 'group-stage.js' && /addEventListener\('popstate'/.test(source)) hits.push(`${file} 自己接返回鍵`);
+    if (/% items\.length/.test(source)) hits.push(`${file} 自己寫焦點圈`);
+  }
+  assert.deepEqual(hits, []);
+});

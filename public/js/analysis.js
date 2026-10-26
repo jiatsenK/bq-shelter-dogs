@@ -9,6 +9,7 @@ import { SITE } from './site-config.js';
 import { activitySectionHtml, loadActivities } from './activities.js';
 import { parseDogsData } from './dog-data.js';
 import { BQStore } from './store.js';
+import { backFrom, pushPage } from './overlays.js';
 
 // 分析頁（V5-4 #59、V5-5 #60）：目前 dogs.json 就能算的犬隻統計，加上 #56 累積的遛狗歷史與每日快照。
 // 統計都寫成純函式（輸入狗清單與今天日期，輸出數字），tests/index.html 直接測；畫面只負責把結果畫成 CSS／SVG 資訊圖表（大數字、圓環、直條圖）。
@@ -397,8 +398,7 @@ function hideAnalysis() {
 }
 
 function closeAnalysis() {
-  if (history.state && (history.state.bqAnalysis || history.state.bqNavigation)) history.back();
-  else hideAnalysis();
+  backFrom(s => s && (s.bqAnalysis || s.bqNavigation), hideAnalysis);
 }
 
 const analysisBtn = document.getElementById('analysisBtn');
@@ -610,9 +610,9 @@ function infoUpdatesHtml() {
 
 function openInfoPage(page) {
   if (!Object.hasOwn(INFO_PAGES, page)) return;
-  history.replaceState({ ...history.state, infoPage: '' }, '');
+  const current = { ...history.state, infoPage: '' };
   analysisState.infoPage = page;
-  history.pushState({ ...history.state, infoPage: page }, '');
+  pushPage(current, { ...current, infoPage: page });
   if (page === 'updates' && analysisState.infoUpdateTab === 'website') loadWebsiteUpdates();
   render();
   window.scrollTo(0, 0);
@@ -633,12 +633,10 @@ export function bindAnalysis() {
   if (analysisBtn) analysisBtn.addEventListener('click', () => (appState.analysisOpen ? closeAnalysis() : showAnalysis()));
   if (analysisBack) analysisBack.addEventListener('click', () => {
     if (appState.analysisOpen && analysisState.infoPage) {
-      if (history.state?.infoPage) history.back();
-      else restoreInfoPage('');
+      backFrom(s => s?.infoPage, () => restoreInfoPage(''));
     } else if (appState.analysisOpen) closeAnalysis();
     else if (appState.activeTab === 'groups') {
-      if (history.state && history.state.bqNavigation) history.back();
-      else switchTab(appState.groupsReturnTab, false);
+      backFrom(s => s && s.bqNavigation, () => switchTab(appState.groupsReturnTab, false));
     }
   });
   document.getElementById('main').addEventListener('click', e => {

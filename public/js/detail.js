@@ -18,6 +18,7 @@ import { closeRestEdit, openRestEdit, restAdminHtml, restInput, restNoteHtml, sa
 import { closeIntroEdit, introBarHtml, introInput, introOf, introRowClick, introSectionHtml, openIntroEdit, saveIntro } from './detail-intro.js';
 import { closeStaysEdit, openStaysEdit, saveStays, staysInput, staysRowClick } from './detail-stays.js';
 import { closeFormerEdit, formerInput, openFormerEdit, reentryLine, removeFormer, saveFormer } from './detail-former.js';
+import { closeOverlay, pushOverlay, registerOverlay } from './overlays.js';
 
 const detailEdits = BQDetailEditor.create(renderDetail);
 
@@ -364,7 +365,7 @@ function showDetail(dog, remember = true) {
   document.documentElement.classList.add('detail-open');
   document.getElementById('detail').scrollTop = 0;
   // 手機按「返回」時只關掉詳細資訊，不離開網頁
-  if (!wasOpen) history.pushState({ bqDetail: true }, '');
+  if (!wasOpen) pushOverlay('detail');
   const first = document.getElementById('detailClose') || document.querySelector('#detail .photo-bar button');
   if (first) first.focus({ preventScroll: true });
 }
@@ -386,8 +387,8 @@ function hideDetail() {
 }
 
 function closeDetail() {
-  if (history.state && history.state.bqDetail) history.back(); // popstate 會接著 hideDetail
-  else hideDetail();
+  closeOverlay('detail');
 }
+registerOverlay('detail', { isOpen: () => !!appState.detailDog, hide: hideDetail });
 
 export { detailEdits, statusBadge, metaLine, favButtonHtml, detailHtml, departedDetailHtml, DEPARTURE_LABELS, departureBadge, departureBasis, lastWalkSection, detailChips, buddyTile, cageMates, togetherSection, groupWalkButton, DETAIL_CLICKS, wireDetail, labelPhotoPick, detailEditorViewport, renderDetail, showDetail, hideDetail, closeDetail };
