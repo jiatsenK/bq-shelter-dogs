@@ -2,6 +2,8 @@
 
 獨立 Worker／assets，以 Cloudflare Access 驗證管理者。不載入志工 app、不使用瀏覽器 ADMIN_KEY、不新增排程。#564 起唯讀狗表；#565 起有功能設定、#566 狗資料、#567 活動的寫入路徑，全部走既有共用模組與同交易紀錄。志工入口與部署流程維持原有設定。
 
+> 2026-10-26 現況：第 1–5 階段都已上線（#564 唯讀狗表、#565 功能管理、#566 狗資料編輯、#567 活動／資料檢查／更新紀錄、#568 清理重複介面），已部署到正式環境。本文的「資料與成本」「部署與權限驗收」是 #564 第一階段寫的；功能管理、狗資料編輯、活動與紀錄見 `docs/operations/feature-settings.md`、`docs/operations/dog-editing.md`、`docs/operations/admin-records.md`。決策見 ADR 0020。
+
 ## 程式入口
 
 | 路徑 | 責任 |
@@ -30,7 +32,7 @@
 
 ## 部署與權限驗收
 
-目前未部署。預設設定缺值會拒絕存取，不能直接拿空設定當可用管理站。正式與隔離環境都依序：
+正式環境已依下列步驟部署（#564，2026-10-25）；之後每次更新都要手動部署，main 合併不會自動發布管理站。預設設定缺值會拒絕存取，不能直接拿空設定當可用管理站。新環境依序：
 
 1. 選定獨立管理網址。建立 Access self-hosted application，涵蓋整個 host（所有路徑），Allow policy 只列經確認管理者；不可新增 Bypass／Everyone，第一版只有管理者角色。
 2. 製作環境專用 Wrangler 設定（勿覆蓋志工設定）：從 `wrangler.admin.jsonc` 複製，設定不同 Worker name、custom domain route，並填入 `ADMIN_ORIGIN`（完整 HTTPS origin、無結尾斜線）、`ACCESS_TEAM_DOMAIN`（團隊 hostname）、`ACCESS_AUD`（此 application 的 AUD）。保留 `run_worker_first: true`、`workers_dev: false`、`preview_urls: false`。
