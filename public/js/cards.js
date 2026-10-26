@@ -1,4 +1,5 @@
 import { BQStore } from './store.js';
+import { trapFocus } from './overlays.js';
 import { SITE } from './site-config.js';
 import { BQDates } from './dates.js';
 import { BQApi } from './api.js';
@@ -641,17 +642,12 @@ function bqBind() {
       const field = document.getElementById('bqField');
       if (field.hidden) return;
       if (e.key === 'Escape') { bqCloseField(); return; }
-      if (e.key === 'Tab') {
-        const items = [...field.querySelectorAll('button:not([hidden]):not(:disabled), [tabindex="0"]')].filter(el => el.offsetParent !== null);
-        if (!items.length) return;
-        const at = items.indexOf(document.activeElement);
-        e.preventDefault();
-        items[(at + (e.shiftKey ? -1 : 1) + items.length) % items.length].focus();
-      }
+      trapFocus(e, [...field.querySelectorAll('button:not([hidden]):not(:disabled), [tabindex="0"]')].filter(el => el.offsetParent !== null), { preventScroll: false });
       return;
     }
     if (e.key === 'Escape') bqClose();
-    if (e.key === 'Tab') { e.preventDefault(); const c = document.querySelector('#bqModalCard .bq-card'); (document.activeElement === c ? document.getElementById('bqClose') : c).focus(); }
+    // 卡片和關閉鈕兩個來回
+    trapFocus(e, [document.querySelector('#bqModalCard .bq-card'), document.getElementById('bqClose')], { preventScroll: false });
   });
   addEventListener('resize', () => document.querySelectorAll('#bqHand .bq-card').forEach((c, i, all) => { c.dataset.base = bqFan(i, all.length); c.style.transform = c.dataset.base; }));
 }
