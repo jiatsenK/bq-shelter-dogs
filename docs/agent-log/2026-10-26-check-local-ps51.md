@@ -17,6 +17,7 @@
 - 修正後：5.1 跑同一檔 6／6 通過。
 - 暫改 `tests/es-modules.cjs` 讓斷言失敗（未提交），5.1 跑 `-Suite es-modules`：log 為 UTF-8，有完整 AssertionError、中文 diff 與堆疊，紀錄 JSON `exitCode: 1`。
 - 本機沒有 pwsh，Linux pwsh 行為由 CI 確認。
+- K 同意合併後併入 main（#602、#607–#609），5.1 跑 `-Full`：第一次 `walk-order-undo` 的「約 8 秒收起」失敗，單獨重跑通過；第二次 `-Full` 全過。判定為偶發計時問題，與本 PR 無關，未處理。
 
 ## 未完成／例外
 
