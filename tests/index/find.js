@@ -64,8 +64,8 @@ async function runFindTests() {
       eq(names(findList('', 'all')), ['小白', '花花', '阿黑', '布布', '滿滿', '咪寶', '老大', '神秘']);
     });
     await check('#99 搜尋範圍是全部的狗：今天已溜、收起的也找得到', () => {
-      recordWalked([allDogs[0]], true);
-      eq(names(findList('小白', 'all')), ['小白']);
+      fakeD1.show([allDogs[0]], '志工我');
+      try { eq(names(findList('小白', 'all')), ['小白']); } finally { fakeD1.forget([allDogs[0]]); }
     });
     await check('#99 找狗分頁：區域按鈕的隻數跟著搜尋變，點區域只列那區', () => {
       activeTab = 'find'; searchQuery = '新';
@@ -166,7 +166,7 @@ async function runFindTests() {
 
 // V7 #111：分類和搜尋在底部列；狗卡上的籠位點了跳「在哪」面板（平面圖放大到那一區、那一籠橘框、找路的話）
 async function runWhereTests() {
-  const saved = [allDogs, groupMap, phoneStore, walkRecords, activeTab, searchQuery];
+  const saved = [allDogs, groupMap, phoneStore, walkRecords, activeTab, searchQuery, UPLOAD_URL, sheetWriteState, walkerNameMemory];
   const wait = () => new Promise(r => setTimeout(r, 60));
   try {
     phoneStore = fakeStorage(); walkRecords = freshWalkRecords();
@@ -175,6 +175,7 @@ async function runWhereTests() {
       dog('測試甲', '2024032901', '舊A03', 12), dog('測試乙', '2024032902', '舊A03', 3), dog('測試丙', '2024032903', '新獨11', 40),
       dog('測試丁', '2024032904', '住院區', 2), dog('測試戊', '2024032905', '後院', 1),
     ];
+    fakeD1.forget(allDogs);
     groupMap = {};
     await check('#111 底部列：搜尋框和分類列在畫面最下面，分類有圖示', () => {
       const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
@@ -218,13 +219,16 @@ async function runWhereTests() {
       eq([whereDog, box.hidden], [null, true], '關閉：');
     });
     await check('#111 在哪面板按「溜了」記進今天已溜並關掉；按「詳細資訊」換開詳細資訊', async () => {
-      activeTab = 'walk'; render();
+      activeTab = 'walk';
+      UPLOAD_URL = 'https://worker.test'; sheetWriteState = 'unknown'; saveWalkerName('志工我'); fakeApi(fakeD1.api());
+      render();
       document.querySelector('#main .card[data-dog="2"] [data-where]').click();
       const box = document.getElementById('whereBackdrop');
       eq(box.querySelector('.mates').textContent, '這籠只有牠', '獨自一籠：');
       box.querySelector('[data-where-walk="add"]').click();
-      await wait();
+      await until(() => walkedToday().has(allDogs[2]), 'D1 接受：');
       eq([whereDog, box.hidden, walkedToday().has(allDogs[2])], [null, true, true], '溜了：');
+      BQWalkUI.hideToast(); restoreApi(); fakeD1.forget([allDogs[2]]);
       document.querySelector('#main .card[data-dog="3"] [data-where]').click();
       eq(document.querySelectorAll('#whereBackdrop .where-ring').length, 0, '住院區不分籠，沒有橘框：');
       document.getElementById('whereDetail').click();
@@ -260,7 +264,8 @@ async function runWhereTests() {
   } finally {
     if (whereDog) whereHide();
     if (detailDog) hideDetail();
-    [allDogs, groupMap, phoneStore, walkRecords, activeTab, searchQuery] = saved;
+    restoreApi();
+    [allDogs, groupMap, phoneStore, walkRecords, activeTab, searchQuery, UPLOAD_URL, sheetWriteState, walkerNameMemory] = saved;
   }
 }
 
@@ -350,6 +355,7 @@ async function runCageMateTests() {
       dog('老大', '2024032904', '新A04'), dog('布布', '2024032905', '住院區'), dog('咪寶', '2024032906', '住院區'),
       dog('滿滿', '2024032907', '母幼A'), dog('宙斯', '2024032908', '母幼A'),
     ];
+    fakeD1.forget(allDogs);
     groupMap = {};
     await check('同籠：籠位一樣（忽略空白）才算，不含自己；「○○區」不算同籠', () => {
       eq(cageMates(allDogs[0]).map(d => d.name), ['阿黑', '花花'], '新A03：');
@@ -370,9 +376,11 @@ async function runCageMateTests() {
         eq([...sec.querySelectorAll('.bname')].map(n => n.textContent), ['阿黑', '花花', allDogs[3].name], '不重複、同籠在前：');
         eq([...sec.querySelectorAll('.buddy-tile')].map(t => !!t.querySelector('.mate-tag')), [true, true, false], '同籠的標出來：');
         eq(sec.querySelectorAll('.pick').length, 3, '勾選圓圈：');
-        recordWalked([allDogs[1]], true, TODAY);
+        const name = walkerNameMemory; saveWalkerName('志工我');
+        fakeD1.show([allDogs[1]], '志工我');
         const box2 = document.createElement('div');
-        box2.innerHTML = togetherSection(allDogs[0], walkedToday(TODAY));
+        box2.innerHTML = togetherSection(allDogs[0], walkedToday());
+        fakeD1.forget([allDogs[1]]); saveWalkerName(name);
         eq(box2.querySelectorAll('.pick').length, 2, '今天已溜的不顯示圓圈：');
         if (!box2.querySelector('.walked-tag')) throw new Error('今天已溜的要標「今天已溜」');
         groupMap = savedGroups;

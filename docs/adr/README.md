@@ -30,9 +30,7 @@
 
 ## 網站開關
 
-| 開關 | 值 | 位置 |
-|---|---|---|
-| `SITE.d1WalkAccept` | `true` | public/js/site-config.js |
+目前 `public/js/site-config.js` 沒有布林開關（`SITE.d1WalkAccept` 已隨舊寫回試算表路徑刪除）。
 
 ## Worker 讀的設定
 

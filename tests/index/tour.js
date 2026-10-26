@@ -19,6 +19,7 @@ async function runTourLayoutTests() {
       const fixtureWalks = { walks: parseDogsData(window.__tourFixture).dogs.slice(0, 9).map(d => ({ id: d.id, name: d.name, date: BQDates.localDateKey(new Date()), walkers: ['abcdef123456'] })) };
       BQApi.walks = BQApi.walksYear = BQApi.myDogs = () => BQApi.settle(Response.json(fixtureWalks));
       applyDogsData(parseDogsData(window.__tourFixture));
+      todayState = 'ready'; render(); // D1 今日紀錄讀到才排狗卡（#456）；導覽版面測試沒有 Worker，直接當作已讀到
       walksData = fixtureWalks; myWalks = parseMyWalks(fixtureWalks); myWalksState = 'ready';
     `);
     for (const demo of ['detail', 'view', 'tab', 'find']) {

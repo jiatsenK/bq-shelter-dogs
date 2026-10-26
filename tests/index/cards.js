@@ -65,19 +65,14 @@ async function runCardsTests() {
     eq(C.bqAwards(players, TODAY).map(a => [a.title, a.who.name, a.value]), [['出門王', '中堅', 2], ['資深球星', '老將', 9], ['新人王', '新人', 38]]);
   });
   const ME = 'aaaaaaaaaaaa', ME2 = 'bbbbbbbbbbbb', OTHER = 'cccccccccccc';
-  await check('圖鑑：我溜過的狗讀 Worker 的彙總（#344），今天剛按的溜了也算、不重複', () => {
-    const mine = C.bqMineFrom({ '2022061001': { times: 2, first: '2026-10-01', last: '2026-10-03' }, '2017041502': { times: 1, first: '2026-10-09', last: '2026-10-09' }, bad: { times: 1, first: 'x', last: 'y' } },
-      [{ id: '2026090101', date: '2026-10-09' }, { id: '2017041502', date: '2026-10-09' }, { id: '2022061001', date: '2026-10-09' }]);
-    eq([...mine.keys()].sort(), ['2017041502', '2022061001', '2026090101'], '溜過的：');
-    eq([mine.get('2022061001').times, mine.get('2022061001').first.getDate(), mine.get('2022061001').last.getDate()], [3, 1, 9], '次數、第一次、最近（加今天）：');
-    eq(mine.get('2017041502').times, 1, 'Worker 已經算到今天的不重複：');
-    eq(C.bqMineFrom(null, []).size, 0, '讀不到：');
+  await check('圖鑑：我溜過的狗讀 Worker 的彙總（#344），不再另加手機記的試算表寫入', () => {
+    const mine = C.bqMineFrom({ '2022061001': { times: 2, first: '2026-10-01', last: '2026-10-03' }, '2017041502': { times: 1, first: '2026-10-09', last: '2026-10-09' }, bad: { times: 1, first: 'x', last: 'y' } });
+    eq([...mine.keys()].sort(), ['2017041502', '2022061001'], '溜過的：');
+    eq([mine.get('2022061001').times, mine.get('2022061001').first.getDate(), mine.get('2022061001').last.getDate()], [2, 1, 3], '次數、第一次、最近：');
+    eq(C.bqMineFrom(null).size, 0, '讀不到：');
     const st = fakeStorage();
     st.set('bq-walker-codes', JSON.stringify([ME, 'not-a-code']));
     eq(C.bqLoadCodes(st), [ME], '代號：');
-    st.set('bq-sheet-writes', JSON.stringify({ date: '2026-10-09', items: { a: { id: '2026090101', mine: true, current: { date: '2026-10-09' } }, b: { id: '2022061001', mine: false, current: { date: '2026-10-09' } } } }));
-    eq(C.bqTodayWrites(st, TODAY), [{ id: '2026090101', date: '2026-10-09' }], '今天按的：');
-    eq(C.bqTodayWrites(st, new Date(2026, 9, 10)), [], '昨天按的不算：');
   });
   await check('圖鑑：撕開過的記在這個瀏覽器、跟著代號走；新卡是溜過還沒撕的，最近溜的先出', () => {
     const mine = C.bqMineFrom({
