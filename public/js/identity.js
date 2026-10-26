@@ -3,13 +3,20 @@
 // 各頁自己的手機資料怎麼讀、怎麼存由呼叫的地方帶進來，這裡不碰頁面狀態。
 import { BQApi } from './api.js';
 
-// 身分相關的 /api/identity 請求；失敗丟 Error（訊息給人看），名字已被別的身分使用時帶 targetCode
+// 身分相關的 /api/identity 請求；失敗丟 Error（訊息給人看，帶 forVolunteer），名字已被別的身分使用時帶 targetCode。
+// 連不上時瀏覽器給的是英文原文，改成中文說明，原文留在 console（#646）
 export async function identityRequest(action, body) {
   const r = await BQApi.identity(action, body);
-  if (r.error === 'network' || !r.data) throw new Error(r.message);
+  if (r.error === 'network' || !r.data) { console.error(r.message); throw volunteerError('連不上網站，請有訊號時再試'); }
   const out = r.data;
-  if (!r.ok || !out.ok) { const e = new Error(out.error || '身分設定失敗，請稍後再試'); e.targetCode = out.targetCode; throw e; }
+  if (!r.ok || !out.ok) { const e = volunteerError(out.error || '身分設定失敗，請稍後再試'); e.targetCode = out.targetCode; throw e; }
   return out;
+}
+
+function volunteerError(message) {
+  const e = new Error(message);
+  e.forVolunteer = true;
+  return e;
 }
 
 const snapshot = ({ name, codes }) => `${name}\n${codes.join(',')}`;
