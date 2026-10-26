@@ -20,7 +20,12 @@ export const KIND_LABELS = {
   stays: '出入所紀錄',
   walkundo: '撤銷溜了',
   walkedit: '溜狗名單',
+  merge: '合併狗',
+  unmerge: '取消合併',
 };
+// 合併狗的紀錄存整份快照（snapshot、rows）給管理網站取消合併用；公開的編輯紀錄只看摘要
+const MERGE_KINDS = new Set(['merge', 'unmerge']);
+export const slimMergeValue = v => (v && typeof v === 'object' ? (({ snapshot, rows, ...rest }) => rest)(v) : v);
 export const EDITS_DEFAULT = 100;
 export const EDITS_MAX = 500;
 const EDITOR_NAME_MAX = 20;
@@ -75,7 +80,8 @@ export async function readEdits(db, limit = EDITS_DEFAULT) {
   return results.map(r => ({
     id: r.id, at: r.at, source: r.actor_source, editorName: r.editor_name, editorCode: r.editor_code, kind: r.kind,
     kindLabel: KIND_LABELS[r.kind] || r.kind, dogId: r.dog_id, dogNumber: r.dog_number,
-    before: parse(r.before_json), after: parse(r.after_json),
+    before: MERGE_KINDS.has(r.kind) ? slimMergeValue(parse(r.before_json)) : parse(r.before_json),
+    after: MERGE_KINDS.has(r.kind) ? slimMergeValue(parse(r.after_json)) : parse(r.after_json),
     ...(['volunteer_rename', 'volunteer_merge'].includes(r.kind) ? { editorVolunteerId: parse(r.before_json)?.volunteerId || parse(r.before_json)?.source?.volunteerId } : {}),
   }));
 }

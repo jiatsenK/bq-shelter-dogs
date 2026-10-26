@@ -7,8 +7,8 @@ module.exports = async (browser, base) => {
   const { ADMIN_CSP } = await import('../worker/src/admin/index.js');
   const A = 'a'.repeat(32), B = 'b'.repeat(32), C = 'c'.repeat(32), D = 'd'.repeat(32);
   const dogs = [
-    { dogId: A, number: '2026010101', name: '阿福', cage: 'A1', note: '', intro: '親人', sex: 'male', onMain: true, fixedCare: false, rest: null, photoUrl: null, walkedDate: '2026-10-01' },
-    { dogId: B, number: '', name: '小黑', cage: 'B2', note: '', intro: '', sex: '', onMain: true, fixedCare: false, rest: null, photoUrl: null, walkedDate: '' },
+    { dogId: A, number: '2026010101', name: '阿福', cage: 'A1', note: '', intro: '親人', sex: 'male', onMain: true, status: 'main', formerNumber: '', departure: null, fixedCare: false, rest: null, photoUrl: null, walkedDate: '2026-10-01' },
+    { dogId: B, number: '', name: '小黑', cage: 'B2', note: '', intro: '', sex: '', onMain: true, status: 'main', formerNumber: '', departure: null, fixedCare: false, rest: null, photoUrl: null, walkedDate: '' },
   ];
   let activities = [
     { id: D, date: '2026-10-04', kind: 'adoption', revision: 1, dogs: [{ dogId: A, number: '2026010101', name: '阿福' }] },
@@ -124,8 +124,8 @@ module.exports = async (browser, base) => {
     assert.match(await page.locator('#complete-list').textContent(), /缺照片2 隻/);
     // #624 項目連到已篩選的狗資料表，狗名直接開抽屜
     await page.locator('#complete-list summary', { hasText: '缺編號' }).click();
-    assert.equal(await page.getByRole('link', { name: '在狗資料表看這 1 隻' }).getAttribute('href'), './?presence=main&care=missingNumber');
-    assert.equal(await page.getByRole('link', { name: '小黑', exact: true }).first().getAttribute('href'), `./?presence=main&care=missingNumber&dog=${B}`);
+    assert.equal(await page.getByRole('link', { name: '在狗資料表看這 1 隻' }).getAttribute('href'), './?care=missingNumber');
+    assert.equal(await page.getByRole('link', { name: '小黑', exact: true }).first().getAttribute('href'), `./?care=missingNumber&dog=${B}`);
     await page.getByText('1 件排程需要注意', { exact: false }).waitFor();
     assert.equal(await page.locator('#cron-jobs tr').count(), 3);
     assert.match(await page.locator('#cron-jobs').textContent(), /2026\/10\/26 13:45/);

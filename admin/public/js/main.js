@@ -1,11 +1,12 @@
 import { createDogDrawer } from './dog-editor.js';
 import { readDogs } from './api.js';
-import { parseManageDogs, selectDogs, orderDogs, maintenance, sexLabel, CARE_FILTERS } from './dog-table.js';
+import { parseManageDogs, selectDogs, orderDogs, maintenance, sexLabel, CARE_FILTERS, STATUS_LABELS, STATUS_TABS, statusCounts, statusText, shownNumber } from './dog-table.js';
 
 const byId = id => document.getElementById(id);
-const state = { dogs: [], loaded: false, page: 1, pageSize: 25, sort: 'number', direction: 'asc' };
+// 狀態分頁預設在所（K 2026-10-26）；清除條件不換分頁
+const state = { dogs: [], loaded: false, status: 'main', page: 1, pageSize: 25, sort: 'number', direction: 'asc' };
 const status = byId('status');
-const FILTER_IDS = ['query', 'presence', 'sex', 'care'];
+const FILTER_IDS = ['query', 'sex', 'care'];
 let searchTimer;
 function element(tag, text, className) {
   const node = document.createElement(tag);
@@ -25,6 +26,9 @@ const drawer = createDogDrawer(byId('dog-drawer'), {
     markSelected(null);
     (editButton(dogId) || byId('content')).focus();
   },
+  // 合併要從整張狗表挑另一隻；合併完被併的那隻消失，整張重讀
+  dogs: () => state.dogs,
+  onMerged: message => load().then(() => { status.textContent = `${message} ${status.textContent}`; }),
 });
 const rowOf = dogId => [...byId('dogs').rows].find(row => row.dataset.dogId === dogId);
 const editButton = dogId => rowOf(dogId)?.querySelector('.edit-button');
@@ -50,7 +54,7 @@ function openDog(dog, { keepQueue = false, ...options } = {}) {
   row.scrollIntoView({ block: 'nearest', behavior: 'instant' });
 }
 function filters() {
-  return { ...state, query: byId('query').value, presence: byId('presence').value, sex: byId('sex').value, care: byId('care').value };
+  return { ...state, query: byId('query').value, sex: byId('sex').value, care: byId('care').value };
 }
 // 從記下的順序裡這隻的下一個開始找，跳過已經不符合目前篩選的（例如別人剛補好）
 function openNext(dogId, notice) {
@@ -89,7 +93,7 @@ function renderRow(dog) {
   } else photo.append(element('span', '無照片紀錄', 'photo-unavailable'));
   const name = element('td', undefined, 'dog-name');
   name.append(element('div', dog.name || '未命名'));
-  if (!dog.onMain) name.append(element('small', '未列主清單', 'text-secondary'));
+  if (dog.status !== 'main') name.append(element('small', statusText(dog), 'text-secondary'));
   const intro = element('td', undefined, 'intro-cell col-wide');
   if (dog.intro) {
     const detail = element('details');
@@ -102,7 +106,9 @@ function renderRow(dog) {
   for (const label of labels) care.append(element('span', label, 'state-label'));
   if (!labels.length) care.append(element('span', '無待補項目', 'text-secondary'));
   if (dog.rest) care.append(element('p', `休養至 ${dog.rest.until}${dog.rest.reason ? ` · ${dog.rest.reason}` : ''}`, 'sheet-note'));
-  row.append(editCell, photo, element('td', dog.number || '未編號', 'dog-number'), name,
+  const number = element('td', shownNumber(dog) || '未編號', 'dog-number');
+  if (!dog.number && dog.formerNumber) number.append(element('small', '舊編號', 'text-secondary'));
+  row.append(editCell, photo, number, name,
     element('td', dog.cage || '—', 'col-wide'), element('td', sexLabel(dog.sex), 'col-wide'), intro, care,
     element('td', dog.dogId, 'identity col-wide'));
   return row;
@@ -112,14 +118,16 @@ function syncUrl() {
   const params = new URLSearchParams();
   for (const id of FILTER_IDS) {
     const value = byId(id).value.trim();
-    if (value && !(id === 'presence' && value === 'all')) params.set(id, value);
+    if (value) params.set(id, value);
   }
+  if (state.status !== 'main') params.set('status', state.status);
   const search = params.toString();
   history.replaceState(null, '', search ? `?${search}` : location.pathname);
 }
 function readUrl() {
   const params = new URLSearchParams(location.search);
-  const allowed = { presence: ['all', 'main', 'other'], sex: ['', 'male', 'female', 'unknown'], care: ['', ...Object.keys(CARE_FILTERS)] };
+  if (STATUS_TABS.includes(params.get('status'))) state.status = params.get('status');
+  const allowed = { sex: ['', 'male', 'female', 'unknown'], care: ['', ...Object.keys(CARE_FILTERS)] };
   if (params.has('query')) byId('query').value = params.get('query').slice(0, 200);
   for (const [id, values] of Object.entries(allowed)) if (values.includes(params.get(id))) byId(id).value = params.get(id);
   return params.get('dog');
@@ -128,6 +136,13 @@ function render() {
   if (!state.loaded) return;
   const result = selectDogs(state.dogs, filters());
   state.page = result.page;
+  const counts = statusCounts(state.dogs);
+  for (const button of document.querySelectorAll('[data-status]')) {
+    const active = button.dataset.status === state.status;
+    button.setAttribute('aria-pressed', String(active));
+    button.classList.toggle('btn-primary', active);
+    button.querySelector('[data-count]').textContent = counts[button.dataset.status];
+  }
   byId('dogs').replaceChildren(...result.rows.map(renderRow));
   byId('table-region').hidden = !result.total;
   byId('pagination').hidden = !result.total;
@@ -135,7 +150,7 @@ function render() {
   const care = byId('care').value;
   status.textContent = !state.dogs.length ? '目前沒有狗資料。可按「重新讀取」再確認。'
     : !result.total ? '沒有符合條件的狗，請清除或調整搜尋條件。'
-    : `找到 ${result.total} 隻狗${care ? `（${CARE_FILTERS[care]}）` : ''}，共 ${state.dogs.length} 隻。`;
+    : `${STATUS_LABELS[state.status] || '全部'}找到 ${result.total} 隻狗${care ? `（${CARE_FILTERS[care]}）` : ''}，資料庫共 ${state.dogs.length} 隻。`;
   const start = (result.page - 1) * result.pageSize + 1;
   byId('count').textContent = `${start}–${Math.min(start + result.pageSize - 1, result.total)} / ${result.total} 隻`;
   byId('page-number').textContent = `${result.page} / ${result.pages}`;
@@ -185,7 +200,8 @@ byId('query').addEventListener('input', () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(filtersChanged, 180);
 });
-for (const id of ['presence', 'sex', 'care']) byId(id).addEventListener('change', filtersChanged);
+for (const id of ['sex', 'care']) byId(id).addEventListener('change', filtersChanged);
+for (const button of document.querySelectorAll('[data-status]')) button.addEventListener('click', () => { state.status = button.dataset.status; filtersChanged(); });
 byId('filters').addEventListener('reset', () => { clearTimeout(searchTimer); setTimeout(filtersChanged, 0); });
 byId('page-size').addEventListener('change', event => { state.pageSize = Number(event.target.value); state.page = 1; render(); });
 for (const button of document.querySelectorAll('[data-sort]')) button.addEventListener('click', () => {

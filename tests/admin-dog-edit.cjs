@@ -16,10 +16,10 @@ module.exports = async (browser, base) => {
     C = 'c'.repeat(32),
     D = 'd'.repeat(32);
   const dogs = [
-    { dogId: A, name: '阿福', number: '2020010101', cage: 'A1', note: '試算表唯讀', intro: '原介紹', sex: 'male', sexMismatch: false, onMain: true, fixedCare: false, rest: null, photoUrl: '/photos/2020010101.jpg', walkedDate: '2026-10-20' },
-    { dogId: B, name: '小黑', number: '2020010102', cage: 'B2', note: '', intro: '', sex: '', sexMismatch: false, onMain: true, fixedCare: false, rest: null, photoUrl: null, walkedDate: '' },
-    { dogId: C, name: '球球', number: '2020010103', cage: 'C3', note: '', intro: '', sex: 'female', sexMismatch: false, onMain: true, fixedCare: false, rest: null, photoUrl: null, walkedDate: '2026-10-21' },
-    { dogId: D, name: '花花', number: '2020010104', cage: 'D4', note: '', intro: '', sex: 'female', sexMismatch: false, onMain: true, fixedCare: false, rest: null, photoUrl: null, walkedDate: '2026-10-21' }
+    { dogId: A, name: '阿福', number: '2020010101', cage: 'A1', note: '試算表唯讀', intro: '原介紹', sex: 'male', sexMismatch: false, onMain: true, status: 'main', formerNumber: '', departure: null, fixedCare: false, rest: null, photoUrl: '/photos/2020010101.jpg', walkedDate: '2026-10-20' },
+    { dogId: B, name: '小黑', number: '2020010102', cage: 'B2', note: '', intro: '', sex: '', sexMismatch: false, onMain: true, status: 'main', formerNumber: '', departure: null, fixedCare: false, rest: null, photoUrl: null, walkedDate: '' },
+    { dogId: C, name: '球球', number: '2020010103', cage: 'C3', note: '', intro: '', sex: 'female', sexMismatch: false, onMain: true, status: 'main', formerNumber: '', departure: null, fixedCare: false, rest: null, photoUrl: null, walkedDate: '2026-10-21' },
+    { dogId: D, name: '花花', number: '2020010104', cage: 'D4', note: '', intro: '', sex: 'female', sexMismatch: false, onMain: true, status: 'main', formerNumber: '', departure: null, fixedCare: false, rest: null, photoUrl: null, walkedDate: '2026-10-21' }
   ];
   const snap = (dog) => ({ dogId: dog.dogId, revision: 1, intro: dog.intro, sex: dog.sex, sexCopies: [], fixedCare: false, rest: null, numbers: [dog.number], currentNumbers: [dog.number], stays: [], photo: null, intakeEvents: [] });
   const snapshots = Object.fromEntries(dogs.map((dog) => [dog.dogId, snap(dog)]));
@@ -66,7 +66,8 @@ module.exports = async (browser, base) => {
     await page.getByRole('button', { name: '編輯阿福', exact: true }).waitFor();
     assert.equal(await page.locator('#dogs tr').first().locator('td').first().locator('.edit-button').count(), 1, '編輯按鈕在第一欄');
     await page.setViewportSize({ width: 1440, height: 400 });
-    const scrolled = await page.evaluate(() => { scrollTo({ top: 120, behavior: 'instant' }); return scrollY; });
+    // 先把第一列捲到畫面中間（不靠固定像素：表格上方多了狀態分頁），點編輯時 Playwright 不必自己捲
+    const scrolled = await page.evaluate(() => { document.querySelector('#dogs tr').scrollIntoView({ block: 'center', behavior: 'instant' }); return scrollY; });
     assert.ok(scrolled > 0, '測試頁要能捲動');
     await page.getByRole('button', { name: '編輯阿福', exact: true }).click();
     await page.getByText('改完按「儲存」', { exact: false }).waitFor();
@@ -174,7 +175,7 @@ module.exports = async (browser, base) => {
     assert.equal(await page.evaluate(() => document.activeElement.getAttribute('aria-label')), '編輯球球');
 
     // 網址帶篩選與 dog：待補清單連過來直接開抽屜；在篩選清單裡存第 2 隻，要開第 3 隻，不是跳回第 1 隻
-    await page.goto(`${base}/admin/public/index.html?presence=main&care=missingIntro&dog=${C}`);
+    await page.goto(`${base}/admin/public/index.html?care=missingIntro&dog=${C}`);
     await page.getByText('改完按「儲存」', { exact: false }).waitFor();
     assert.equal(await page.locator('#care').inputValue(), 'missingIntro');
     assert.equal(await page.locator('#dogs tr').count(), 3);
@@ -186,7 +187,7 @@ module.exports = async (browser, base) => {
     await page.getByRole('button', { name: '存並開下一隻' }).click();
     await drawer.waitFor({ state: 'hidden' });
     assert.equal(await page.locator('#status').textContent(), '花花 已儲存：介紹。這份清單處理完了。');
-    await page.goto(`${base}/admin/public/index.html?presence=main&care=missingIntro&dog=${B}`);
+    await page.goto(`${base}/admin/public/index.html?care=missingIntro&dog=${B}`);
     await page.getByText('改完按「儲存」', { exact: false }).waitFor();
     assert.equal(await drawer.locator('#drawer-title').textContent(), '小黑');
     await page.locator('#sex').selectOption('unknown');
