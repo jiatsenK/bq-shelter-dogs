@@ -247,7 +247,7 @@ const BQWalkUI = (() => {
   function walkSyncHtml(dog) {
     const status = walkRegistration.state(dog).syncStatus;
     if (!status || status === 'synced') return '';
-    return `<small class="walk-sync">${status === 'retry' || status === 'unconfirmed' ? '試算表尚未同步，會自動重試' : '試算表同步中'}</small>`;
+    return `<small class="walk-sync">${status === 'retry' || status === 'unconfirmed' ? '寫回試算表失敗，會自動重試' : '寫回試算表中'}</small>`;
   }
 
   // ── 溜狗人旁的＋／×（#141，K 2026-10-04 確認）──

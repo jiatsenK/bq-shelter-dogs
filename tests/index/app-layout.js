@@ -140,7 +140,7 @@ async function runTermTests() {
     const shown = src => src
       .replace(/\/\*[\s\S]*?\*\//g, '')
       .replace(/(^|[^:])\/\/.*$/gm, '$1')
-      .replace(/遛狗表|常遛狗群|勿遛|勿蹓|「誰遛的」|'誰遛的'|上次遛/g, ''); // K 2026-10-13 指定左側標題「上次遛」
+      .replace(/常遛狗群|勿遛|勿蹓|「誰遛的」|'誰遛的'|上次遛/g, ''); // K 2026-10-13 指定左側標題「上次遛」
     const old = ['遛', '移回', '一直收起', '今天先收起', '犬名', '犬隻', '狗狗', '狗卡資訊', '平均隔', '最久隔', '日期異常', '尚無', '已存到 Git', '代號服務'];
     const hits = [];
     for (const [file, src] of [['index.html', INDEX_HTML.replace(/<!--[\s\S]*?-->/g, '')], ['app.js', APP_JS], ['tour.js', TOUR_JS], ['photo.js', PHOTO_JS], ['walk-ui.js', WALK_UI_JS], ['welcome.js', WELCOME_JS], ['favorites.js', FAVORITES_JS], ['analysis.js', ANALYSIS_JS], ['find.js', FIND_JS]]) {

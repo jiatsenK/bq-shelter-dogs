@@ -445,7 +445,7 @@ function photoThumbSrc(dog) {
   return photoOverrides[dog.id] || versioned(`photos/thumbs/${encodeURIComponent(dog.id)}.jpg`);
 }
 // 放在 img 的 onerror 最前面：還有原圖可試就換原圖、這次不算讀取失敗。
-// 縮圖只在上傳時產生一次（#305），沒產生的框標 thumb-full 顯示小圖示，正式畫面看得到要補哪張
+// 縮圖只在上傳時產生一次（#305），沒產生的框標 thumb-full（#646 起畫面不顯示小圓點，查哪張沒縮圖用開發者工具）
 const thumbFallback = "if (this.dataset.full) { this.src = this.dataset.full; this.removeAttribute('data-full'); this.parentNode.classList.add('thumb-full'); return; }";
 function thumbAttrs(thumb, full) {
   return thumb === full ? `src="${esc(full)}"` : `src="${esc(thumb)}" data-full="${esc(full)}"`;
@@ -817,7 +817,7 @@ function cardFromEvent(e) {
 
 // 主分類（V3，#33）：順序就是左右滑動切換的順序
 const TABS = [
-  { id: 'walk', label: '遛狗表', icon: 'list' },
+  { id: 'walk', label: '溜狗表', icon: 'list' },
   { id: 'groups', label: '常遛狗群', icon: 'group' },
   { id: 'mine', label: '我溜過', icon: 'paw' }, // #58 取代原本的「相關資訊（編輯中）」
   { id: 'info', label: '資訊', icon: 'chart' },
@@ -1053,6 +1053,7 @@ function renderMain() {
   }
   if (appState.activeTab === 'groups') {
     buildTabs(appState.loadState === 'ready' ? { walk: appState.allDogs.filter(d => matchesSearch(d, appState.searchQuery.trim())).length, mine: myWalksCount('') } : {});
+    searchInput.placeholder = '搜尋狗名'; // 狗群只比對狗名（#646）
     // 沿用正式狗群頁及既有 API；獨立文件的觸控事件不會冒泡到主分類。
     main.innerHTML = groupStageHtml();
     return;
@@ -1082,7 +1083,7 @@ function renderMain() {
   // 介面評估第三輪（K 2026-10-08）：找狗分頁不放數字（跟溜狗表一樣是全部的狗）；
   // 我溜過一律是全部紀錄筆數，不跟著搜尋變（搜不到時「我溜過 0」像紀錄不見了）
   buildTabs({ walk: walkList.length, mine: myWalksCount('') });
-  searchInput.placeholder = appState.activeTab === 'find' ? '狗名、編號或籠位' : '搜尋狗名';
+  searchInput.placeholder = '狗名、編號或籠位';
   if (appState.activeTab === 'find') {
     // 找狗（#99）搜尋全部的狗：犬名、編號、籠位都算
     main.innerHTML = findPageHtml(q);

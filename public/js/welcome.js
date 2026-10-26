@@ -10,6 +10,12 @@ import { BQWalkUI } from './walk-ui.js';
 // 開頭畫面與我是誰設定；只公開 BQWelcome，頁面資料於互動時取用。
 const BQWelcome = (() => {
   let walkerSetup = null; // 正在設定我是誰：{ text, phase, error }
+  // 只把 identityRequest 給人看的原因顯示給志工；程式錯誤（英文例外）換成固定說明，原文寫進 console（#646）
+  function shownError(e) {
+    if (e && e.forVolunteer) return e.message;
+    console.error(e);
+    return '暫時設定不了名字，請稍後再試';
+  }
   async function renameWalker() {
     const edit = walkerSetup;
     if (!edit || edit.phase === 'saving') return;
@@ -20,10 +26,10 @@ const BQWelcome = (() => {
       if (walkerSetup !== edit || loadMyCodes().join(',') !== originalCodes) return;
       saveIdentity(out.identity); walkerSetup = null;
     } catch (e) {
-      edit.phase = 'error'; edit.error = e.message;
+      edit.phase = 'error'; edit.error = shownError(e);
       if (e.targetCode) {
         try { edit.merge = await identityRequest('/merge-preview', { code: loadMyCodes()[0], targetCode: e.targetCode }); edit.targetCode = e.targetCode; }
-        catch (previewError) { edit.error = previewError.message; }
+        catch (previewError) { edit.error = shownError(previewError); }
       }
     }
     render();
@@ -37,7 +43,7 @@ const BQWelcome = (() => {
       const out = await identityRequest('/merge', { code: loadMyCodes()[0], targetCode: edit.targetCode, token: edit.merge.token, confirm: true, operationId: edit.mergeOperationId || (edit.mergeOperationId = crypto.randomUUID()) });
       if (walkerSetup !== edit || loadMyCodes().join(',') !== originalCodes) return;
       saveIdentity(out.identity); walkerSetup = null;
-    } catch (e) { edit.phase = 'error'; edit.error = e.message; edit.merge = null; }
+    } catch (e) { edit.phase = 'error'; edit.error = shownError(e); edit.merge = null; }
     render();
   }
 
@@ -105,7 +111,7 @@ const BQWelcome = (() => {
     try {
       const result = await refreshIdentity(text, { read: currentIdentity, write: saveIdentity });
       if (result.status === 'changed') return '身分設定已變動，請重新設定';
-    } catch (e) { return e.message; }
+    } catch (e) { return shownError(e); }
     return '';
   }
 

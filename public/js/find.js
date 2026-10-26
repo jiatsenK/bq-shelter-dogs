@@ -548,11 +548,12 @@ function whereKnown(dog) {
   return !!(dog && dog.cage && findZoneInfo(findZoneOf(dog)).rect);
 }
 
-// 找路的話（K 2026-09-27 手繪標註）：舊犬舍四排由下往上數、新犬舍三排由左往右數；不分籠的區只說進去找
+// 找路的話（K 2026-09-27 手繪標註）：舊犬舍四排由下往上數、新犬舍三排由左往右數；不分籠的區只說進去找；
+// 有畫籠子的區但籠位對不到圖上（打錯、新籠）就說圖上找不到，不說不分籠（#646）
 function whereDirections(dog) {
   const z = findZoneInfo(findZoneOf(dog));
   const m = searchKey(dog.cage).toUpperCase().match(/^(舊|新)(A|B|獨)0*(\d+)$/);
-  if (!m || !findCageOf(dog)) return { title: `${z.name}・${dog.cage}`, how: `${z.name}不分籠，進去找「${dog.cage}」` };
+  if (!m || !findCageOf(dog)) return { title: `${z.name}・${dog.cage}`, how: FIND_CAGES.cages.some(c => c.zone === z.key) ? `圖上找不到「${dog.cage}」，請到${z.name}找` : `${z.name}不分籠，進去找「${dog.cage}」` };
   const n = Number(m[3]);
   if (m[1] === '舊') {
     const col = m[2] === 'A' ? (n > 10 ? '最左排' : '左邊第二排') : (n > 10 ? '最右排' : '右邊第二排');

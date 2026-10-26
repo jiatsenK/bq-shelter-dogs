@@ -43,7 +43,7 @@ function runTests() {
       eq(img.getAttribute('src'), 'photos/thumbs/202101234.jpg');
       eq(img.dataset.full, 'photos/202101234.jpg', '備用原圖：');
       eq(img.getAttribute('loading'), 'lazy');
-      // #305：縮圖讀不到改用原圖時，框上標 thumb-full（顯示小圖示），讓 K 在正式畫面看得到哪張還沒縮圖
+      // #305：縮圖讀不到改用原圖時，框上標 thumb-full（#646 起畫面不顯示小圓點，留給開發者工具查）
       img.onerror();
       eq(img.getAttribute('src'), 'photos/202101234.jpg');
       eq(img.parentNode.classList.contains('thumb-full'), true, '沒縮圖的標記：');
@@ -69,6 +69,19 @@ function runTests() {
       eq(matchesSearch(dog, 'ＬＵＣＫＹ丁'), true, '全形、空白：');
       eq(matchesSearch(dog, '  '), true, '只有空白當作沒搜尋：');
       eq(matchesSearch(dog, '測試戊'), false);
+    }),
+    check('#646 主畫面搜尋：籠位、編號也算；籠位不管前面的 0', () => {
+      const dog = { name: '小黑', cage: '新B05', id: '2025081801' };
+      eq(matchesSearch(dog, '新B05'), true, '完整籠位：');
+      eq(matchesSearch(dog, '新b5'), true, '省略 0、小寫：');
+      eq(matchesSearch(dog, 'B05'), true, '部分籠位：');
+      eq(matchesSearch(dog, '0818'), true, '部分編號：');
+      eq(matchesSearch(dog, '新B6'), false, '別籠：');
+      eq(matchesSearch({ name: '小白' }, '新B5'), false, '沒有籠位、編號：');
+      allDogs = [{ cage: '新B05', id: '1', name: '小黑', walkedDate: null, covered: false, note: '' }, { cage: '舊A01', id: '2', name: '小白', walkedDate: null, covered: false, note: '' }];
+      activeTab = 'walk'; searchQuery = '新B5'; renderMain();
+      eq([...document.querySelectorAll('#main .card .name')].map(n => n.textContent), ['小黑'], '溜狗表搜尋籠位：');
+      searchQuery = ''; renderMain();
     }),
     check('搜尋：只篩選目前分類，溜狗表數字跟著變、找狗不放數字，清空回到原本內容', () => {
       const daysAgo = n => new Date(Date.now() - n * 86400000);
@@ -133,7 +146,7 @@ function runTests() {
       eq(inputs.map(el => el.id), ['searchInput'], '可輸入元素：');
       const box = inputs[0];
       eq(box.type, 'search', '搜尋框型別：');
-      eq(box.placeholder, '搜尋狗名', '提示文字：');
+      eq(box.placeholder, '狗名、編號或籠位', '提示文字：');
       if (!box.parentElement.querySelector('use[href="#i-search"]')) throw new Error('搜尋框旁要有放大鏡圖示');
       if (doc.querySelector('form')) throw new Error('頁面不應有表單');
       const symbols = [...doc.querySelectorAll('symbol')].map(el => el.id).join(' ');
@@ -369,7 +382,7 @@ function runTests() {
         groupMap = {}; activeTab = 'walk'; searchQuery = '';
         render();
         const tabs = () => [...document.querySelectorAll('#tabs button')];
-        eq(tabs().map(b => b.querySelector('.t').textContent), ['遛狗表', '常遛狗群', '我溜過', '資訊'], '分類（#99 加找狗）：');
+        eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '常遛狗群', '我溜過', '資訊'], '分類（#99 加找狗）：');
         eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '', '', ''], '數字（遛狗紀錄還沒讀；找狗不放數字）：');
         const active = () => tabs().filter(b => b.classList.contains('active')).map(b => b.dataset.tab);
         eq(active(), ['walk'], '預設：');

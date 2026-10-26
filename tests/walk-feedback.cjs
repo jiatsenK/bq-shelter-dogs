@@ -50,8 +50,8 @@ module.exports = async (browser, base) => {
     assert.equal(await page.locator('#main .card .walk-btn.done').count(), 0, '尚未接受前不能顯示已溜');
     await release('accept');
     await page.locator('#main .card .walk-btn.done').waitFor();
-    // D1 接受就更新，試算表另外標同步中
-    await page.locator('#main .card .walk-sync', { hasText: '試算表同步中' }).waitFor();
+    // D1 接受就更新，試算表另外標寫回中
+    await page.locator('#main .card .walk-sync', { hasText: '寫回試算表中' }).waitFor();
 
     await button().click();
     // #445：復原畫面立刻恢復；確認期間按鈕不能再按
