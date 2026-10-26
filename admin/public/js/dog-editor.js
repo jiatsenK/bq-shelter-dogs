@@ -64,6 +64,8 @@ export function createDogDrawer(root, { onSaved, onNext, onClose }) {
 
   const head = el('header', undefined, 'drawer-head');
   const status = el('p', '', 'drawer-status');
+  // 存檔時儲存鈕會停用、焦點會掉，存完把焦點放這裡，讀得到結果、Esc 也還關得掉
+  status.tabIndex = -1;
   status.setAttribute('role', 'status');
   status.setAttribute('aria-live', 'polite');
   const reload = button('讀取最新資料並保留草稿');
@@ -331,7 +333,9 @@ export function createDogDrawer(root, { onSaved, onNext, onClose }) {
       );
     return images;
   }
-  const before = (field) => (field === 'stays' ? snapshot.stays.map(stayRow) : snapshot[field]);
+  // 草稿和原值用同一套正規化比較：編號排序、出入所補齊欄位，不靠後端回傳的順序
+  const before = (field) =>
+    field === 'stays' ? snapshot.stays.map(stayRow) : field === 'numbers' ? [...snapshot.numbers].sort() : snapshot[field];
   const changed = (field) => (field === 'photo' ? Boolean(images) : !sameValue(value(field), before(field)));
   const draftKey = (field) => (field === 'photo' ? images : JSON.stringify(value(field)));
   const dirtyFields = () => (snapshot ? FIELDS.map(([f]) => f).filter(changed) : []);
@@ -506,11 +510,13 @@ export function createDogDrawer(root, { onSaved, onNext, onClose }) {
       reload.hidden = false;
       reload.textContent = '讀取最新資料並保留草稿';
       update();
+      status.focus();
       return;
     }
     status.textContent = `${done}伺服器已確認。`;
     update();
     if (thenNext) onNext(dog.dogId, `${dog.name || '未命名'} ${done}`);
+    else status.focus();
   }
 
   form.addEventListener('submit', (event) => {
@@ -530,11 +536,12 @@ export function createDogDrawer(root, { onSaved, onNext, onClose }) {
     update();
   });
   fields.addEventListener('change', () => update());
-  root.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && !event.defaultPrevented) {
-      event.preventDefault();
-      api.close();
-    }
+  // Esc 掛在 document：焦點不在抽屜裡（例如存完、點了表格）也關得掉；有其他對話框開著時不搶
+  document.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || event.defaultPrevented || root.hidden) return;
+    if (document.querySelector('dialog[open], [aria-modal="true"]:not([hidden])')) return;
+    event.preventDefault();
+    api.close();
   });
 
   // 有沒存的修改時，第一次關閉／換狗只提醒，再按一次才放棄（不擋，只避免誤丟）
