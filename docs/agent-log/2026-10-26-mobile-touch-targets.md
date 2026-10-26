@@ -15,4 +15,4 @@
   - 全部網頁套件通過。
   - Node 全套 466 項有 4 項失敗，都在 `scripts/local-check.test.mjs`，本機沒有 pwsh，跟這次改動無關。
 - 例外與未完成：`KNOWN` 共 15 項。籠位相關 2 項掛 #644，其餘 13 項開總票 #647（K 2026-10-26 決定）。
-- 相關 PR：尚未建立。
+- 相關 PR：[#648](https://github.com/jiatsenK/bq-shelter-dogs/pull/648)，草稿。
