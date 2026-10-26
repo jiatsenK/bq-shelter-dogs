@@ -753,6 +753,8 @@ const walkRegistration = BQWalks.create({
   canonical: canonicalWalker, split: splitWalkers,
   names: () => loadMyCodes().map(code => appState.walkerCodeNames[code]).filter(Boolean),
   base: d1Base,
+  // #643：手機說沒網路就不送，算確定沒登記到
+  offline: () => typeof navigator !== 'undefined' && navigator.onLine === false,
   apply: () => { render(); renderDetail(); },
 });
 // #460：還沒經過新流程的狗，用 D1 狗清單（同步進 D1 的主清單）的日期與代號，不用試算表即時名單

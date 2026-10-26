@@ -54,14 +54,14 @@ module.exports = async (browser, base) => {
     await page.locator('#main .card[data-dog="0"] .walk-btn').click();
     await page.waitForFunction(() => !document.querySelector('#main .card[data-dog="0"] .walk-btn')?.textContent.includes('登記中'));
     assert.equal(sent.length, 0, '未存入登記識別時不得送出 D1 要求');
-    await page.getByText(/未全部登記成功/).waitFor();
+    await page.getByText(/沒登記到|還不知道有沒有登記到/).first().waitFor();
     assert.equal(await page.locator('#main .walk-btn.done').count(), 0, '未送出不得顯示已溜');
     await page.evaluate(() => { Storage.prototype.setItem = window.__save479; delete window.__save479; });
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('[data-tab="groups"]').click();
     await page.locator('#gwWalk').click();
     await page.getByText(/已登記 1 隻/).waitFor();
-    assert.match(await page.locator('body').innerText(), /未全部登記成功/);
+    assert.match(await page.locator('body').innerText(), /沒登記到|還不知道有沒有登記到/);
     assert.equal(sent.length, 2);
     assert.ok(sent.every(b => b.dogs.length === 1 && b.requestId), '整群逐狗送 D1 單狗請求');
     assert.notEqual(sent[0].requestId, sent[1].requestId);

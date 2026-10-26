@@ -1496,6 +1496,10 @@ header.app .sync-btn:active, header.app .analysis-btn:active, .analysis-open hea
 .walk-btn:active { background: var(--primary-soft); }
 .walk-btn.done { background: var(--green-bg); color: var(--green-text); box-shadow: inset 0 0 0 1.5px var(--green-text); }
 .walk-btn.pending { background: var(--primary-soft); color: var(--primary); }
+/* #643：按了溜了沒登記到，紅框留到成功或再按一次（紅色只用在天數和警示） */
+.walk-btn.failed, .row-dog .walk-btn.failed { background: var(--red-bg); color: var(--red-text); box-shadow: inset 0 0 0 2px var(--red-text); font-size: 13px; line-height: 1.15; }
+.walk-btn.failed small { font-size: 11px; font-weight: 600; }
+.walk-btn.failed:active { background: #fff; }
 
 /* 籠位：黑框白底的檔案標籤 */
 .cage-pill {
@@ -1558,6 +1562,10 @@ header.app .sync-btn:active, header.app .analysis-btn:active, .analysis-open hea
 .toast { border-radius: 3px; background: var(--ink); }
 .toast-undo { color: var(--tab-amber); }
 .toast-extra { border-radius: 3px; }
+/* #643：登記失敗的提示條不自動消失，左邊紅條，右邊 × 自己關 */
+.toast.error { box-shadow: inset 4px 0 0 var(--tab-red), 0 6px 24px rgba(0, 0, 0, 0.25); }
+.toast-close { flex-shrink: 0; min-width: 44px; min-height: 44px; border: none; background: none; color: #fff; font-family: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
+.toast-close[hidden] { display: none; }
 
 /* 平面圖：檔案綠的線和字，選到的區淡綠、那一籠黃籤 */
 .find-map {
