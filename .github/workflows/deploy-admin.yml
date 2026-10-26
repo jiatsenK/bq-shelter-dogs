@@ -1,7 +1,7 @@
 # 部署管理網站 bq-shelter-dogs-admin（ADR 0020，設定 wrangler.admin.jsonc）
-# - 只能手動跑：Actions 頁選「部署管理網站」→「Run workflow」，可填分支（留空＝main）。
-#   管理網站直接寫正式 D1／R2，所以 main 推送不會自動部署（K 2026-10-26）
-# - 部署紀錄的 Message 寫「分支 commit」，從 Cloudflare 部署紀錄就看得出線上是哪一版
+# - 只能手動跑：Actions 頁選「部署管理網站」→「Run workflow」。管理網站直接寫正式 D1／R2，所以 main 推送不會自動部署（K 2026-10-26）
+# - #622：只部署 main，不能填分支；選別的分支整個略過。要先試某張 PR 用測試網站或預覽
+# - 部署紀錄的 Message 寫「main commit」，從 Cloudflare 部署紀錄就看得出線上是哪一版
 # - 正式 D1 有還沒套的 migration 就停（跟「部署到 Cloudflare」同一行檢查），先去按「套用 D1 migration」
 # - 不帶金鑰：管理網站沒有密鑰，三個 vars 都在 wrangler.admin.jsonc
 # - 部署完沒登入打一次首頁，要被轉到 Access 登入頁；沒被擋就紅叉
@@ -10,11 +10,6 @@ name: 部署管理網站
 
 on:
   workflow_dispatch:
-    inputs:
-      ref:
-        description: '要部署的分支（留空＝main）'
-        type: string
-        default: ''
 
 permissions:
   contents: read
@@ -25,6 +20,8 @@ concurrency:
 
 jobs:
   deploy:
+    # #622：只准 main，從別的分支按會整個略過（灰色），不碰正式環境
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -38,8 +35,6 @@ jobs:
           exit 1
 
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.ref || github.ref }}
 
       - uses: actions/setup-node@v4
         with:
@@ -50,7 +45,7 @@ jobs:
 
       - name: 部署
         env:
-          REF: ${{ inputs.ref || github.ref_name }}
+          REF: ${{ github.ref_name }}
         run: |
           sha=$(git rev-parse --short HEAD)
           echo "部署管理網站：${REF} ${sha}"

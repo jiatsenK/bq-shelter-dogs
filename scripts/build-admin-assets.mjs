@@ -1,17 +1,25 @@
-import { mkdir, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 
-// 內容一樣就不動；不一樣先寫暫存檔再改名蓋過去。admin-table、admin-stage4 測試平行建置時，
-// 另一邊才不會讀到寫到一半的檔案（CI 偶發 dates.js 沒有 BQDates）。Windows 對方正在讀時改名會被擋，稍等再試
-async function copyWhole(from, to) {
-  const data = await readFile(from);
-  try { if (data.equals(await readFile(to))) return; } catch (e) { /* 還沒有這個檔 */ }
-  const tmp = new URL(`${to.pathname.split('/').pop()}.${process.pid}.tmp`, to);
-  await writeFile(tmp, data);
-  for (let tries = 0; ; tries++) {
-    try { await rename(tmp, to); return; } catch (e) {
-      if (tries >= 40 || !['EPERM', 'EBUSY', 'EACCES'].includes(e.code)) { await rm(tmp, { force: true }); throw e; }
-      await new Promise(r => setTimeout(r, 25));
+// node --test 平行跑時，多個測試行程會同時建置同一個資料夾：
+// 內容相同就不重寫；要寫時先寫暫存檔再 rename，別的行程只會讀到舊檔或完整新檔。
+async function publish(source, dest) {
+  const content = await readFile(source);
+  const current = await readFile(dest).catch(() => null);
+  if (current && current.equals(content)) return;
+  const temp = new URL(`${dest.href}.${process.pid}.${Date.now()}.tmp`);
+  await writeFile(temp, content);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      await rename(temp, dest);
+      return;
+    } catch (error) {
+      // Windows 上目的檔正被別的行程開著時 rename 會暫時失敗
+      if (!['EPERM', 'EBUSY', 'EACCES'].includes(error.code) || attempt >= 20) {
+        await rm(temp, { force: true });
+        throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 25 * attempt));
     }
   }
 }
@@ -21,9 +29,9 @@ export async function buildAdminAssets() {
   const target = new URL('../admin/public/shared/', import.meta.url);
   await mkdir(target, { recursive: true });
   for (const name of ['api-response.js', 'dates.js', 'photo-images.js', 'edit-values.js']) {
-    await copyWhole(new URL(`../public/js/${name}`, import.meta.url), new URL(name, target));
+    await publish(new URL(`../public/js/${name}`, import.meta.url), new URL(name, target));
   }
   // #567 網站更新唯讀：沿用志工網站的版本紀錄檔，不另存 D1
-  await copyWhole(new URL('../public/website-updates.json', import.meta.url), new URL('website-updates.json', target));
+  await publish(new URL('../public/website-updates.json', import.meta.url), new URL('website-updates.json', target));
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await buildAdminAssets();

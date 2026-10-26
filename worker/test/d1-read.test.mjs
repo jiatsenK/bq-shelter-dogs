@@ -5,10 +5,8 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { resolveIdentity } from '../src/identity.js';
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
-import { importCompactDogs } from '../../scripts/import-compact-dogs.mjs';
-import { importCompactProfiles } from '../../scripts/import-compact-profiles.mjs';
-import { importCompactDepartures } from '../../scripts/import-compact-departures.mjs';
+import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
+import { importCompactDogs, importCompactProfiles, importCompactDepartures } from './compact-fixtures.mjs';
 import { readMainNames, HISTORY_START } from '../src/compact.js';
 
 const SITE = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
@@ -24,7 +22,7 @@ const SOURCE = {
 
 async function seededDb() {
   const DB = fakeD1();
-  await migrateCompactDatabase(DB);
+  await createCompactDatabase(DB);
   await importCompactDogs(DB, SOURCE);
   // 介紹是 D1 自己存的（#250）
   await DB.prepare("INSERT INTO v3_intros SELECT dog_id,'民眾拾獲' FROM v3_dog_numbers WHERE number='2025022703'").run();
@@ -62,7 +60,7 @@ test('GET /api/dogs：從 D1 組回跟 dogs.json 一樣的形狀（順序、欄�
 
 test('GET /api/dogs：D1 失敗、沒接、還沒有狗都回 503 和清楚的錯誤，不回空清單', async () => {
   const broken = { prepare: () => ({ bind() { return this; } }), batch: async () => { throw new Error('D1_ERROR'); } };
-  for (const env of [{ DB: broken }, {}, { DB: await (async () => { const DB = fakeD1(); await migrateCompactDatabase(DB); return DB; })() }]) {
+  for (const env of [{ DB: broken }, {}, { DB: await (async () => { const DB = fakeD1(); await createCompactDatabase(DB); return DB; })() }]) {
     const res = await get('/dogs', env);
     const body = await res.json();
     assert.equal(res.status, 503);
@@ -291,6 +289,6 @@ test('GET /api/walks、/api/departures：D1 壞了或沒接回 503；只收 GET'
 test('照片、備註確認編號改讀 D1 主清單：只收有編號的狗；主清單空的丟錯', async () => {
   const DB = await seededDb();
   assert.deepEqual([...await readMainNames(DB)], [['2025022703', '滿滿'], ['2026051203', '圓仔']]);
-  const empty = fakeD1(); await migrateCompactDatabase(empty);
+  const empty = fakeD1(); await createCompactDatabase(empty);
   await assert.rejects(readMainNames(empty), /沒有資料/);
 });
