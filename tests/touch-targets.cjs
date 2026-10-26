@@ -7,8 +7,8 @@ const assert = require('node:assert/strict');
 const MIN = 44, GAP = 8;
 const KNOWN = [
   { kind: 'gap', match: /^button(\.r-cage)?\.cage-pill ↔ div\.(card|row-dog)(\.flagged)?$/, at: 0, ticket: '#644', note: '籠位擴大範圍貼到隔壁狗卡（360 寬照片模式 0px）' },
-  { kind: 'gap', match: /^#photoPick ↔ button\.thumb\.zoom$/, at: -60, ticket: '#647', note: '詳細資訊相機鈕疊在照片上' },
-  { kind: 'gap', match: /^button\.buddy ↔ button\.pick$/, at: -31, ticket: '#647', note: '同行狗勾選框疊在狗名格上' },
+  { kind: 'gap', match: /^#photoPick ↔ button\.thumb\.zoom$/, at: -60, ticket: '#647', note: '詳細資訊相機鈕疊在照片上：K 2026-10-26 決定保留（比照大頭貼換照片）' },
+  { kind: 'gap', match: /^button\.buddy ↔ button\.pick$/, at: -31, ticket: '#647', note: '同行狗勾選框疊在狗名格上：K 2026-10-26 決定保留（K 2026-09-24 選「分開點」）' },
 ];
 
 module.exports = async (browser, base) => {
