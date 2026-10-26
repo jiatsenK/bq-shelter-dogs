@@ -9,4 +9,4 @@
   - `docs/setup/CLOUDFLARE_SETUP.md` 留在原位，只改過時的地方：縮圖改由網站產生（#546）、`r2-thumbs.yml` 只供人工補圖、部署觸發條件（沒有 `workflow_run`）、Worker 不再攔 `/data/dogs.json`、表結構以 `db/compact-schema.sql` 為準。
   - `worker/src/compact.js`、`scripts/import-compact-profiles.mjs` 的註解拿掉 `COMPACT_D1.md`，只指向 `db/compact-schema.sql`。
 - 沒做：`docs/agent-log/` 和 `AGENT_LOG.md` 裡的舊路徑不改（紀錄保持原樣）。`docs/design/` 裡其他 10/17 的交接文件（`info-page-interview.md`、`mobile-home-and-groups-decisions.md`、`issue-*/`）不在稽核清單，沒有搬。
-- 相關 PR：見本分支 `claude/docs-history-move` 的草稿 PR。
+- 相關 PR：#616（草稿）。
