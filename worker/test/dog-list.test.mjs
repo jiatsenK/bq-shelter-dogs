@@ -261,7 +261,7 @@ test('#519 試算表「誰遛的」填了新名字：記進志工名單，/walke
     await send(env, [main({ date:'2026-10-05', walker:'新志工、甲' })]);
     const code = await walkerCode('新志工', 'test');
     assert.equal(await env.DB.prepare('SELECT name FROM v3_identity_names WHERE code=?').bind(code).first('name'), '新志工');
-    const res = await worker.fetch(new Request('https://bq-shelter-dogs.<子網域>.workers.dev/api/walkers', { headers:{ Origin:'https://bq-shelter-dogs.<子網域>.workers.dev' } }), env);
+    const res = await worker.fetch(new Request('https://bq-shelter-dogs.example.workers.dev/api/walkers', { headers:{ Origin:'https://bq-shelter-dogs.example.workers.dev' } }), env);
     const body = await res.json();
     assert.equal(body.walkers['9001'], '新志工、甲');
     assert.ok(body.names.includes('新志工'));
@@ -287,7 +287,7 @@ test('#519 「誰遛的」原文存進 D1 主清單：/walkers 直接回原文�
   try {
     await send(env, [main({ date:'2026-10-05', walker:'志工乙+志工丙' })]);
     assert.equal(await env.DB.prepare("SELECT walker FROM v3_sheet_main WHERE number='9001'").first('walker'), '志工乙+志工丙');
-    const body = await (await worker.fetch(new Request('https://bq-shelter-dogs.<子網域>.workers.dev/api/walkers', { headers:{ Origin:'https://bq-shelter-dogs.<子網域>.workers.dev' } }), env)).json();
+    const body = await (await worker.fetch(new Request('https://bq-shelter-dogs.example.workers.dev/api/walkers', { headers:{ Origin:'https://bq-shelter-dogs.example.workers.dev' } }), env)).json();
     assert.equal(body.walkers['9001'], '志工乙+志工丙');
     // 清空也記成空字串（不是 NULL），手機才知道被清掉
     await send(env, [main({ hash:'h2', date:'2026-10-05', walker:'' })]);

@@ -3,7 +3,8 @@
 # - #622：只部署 main，不能填分支；選別的分支整個略過。要先試某張 PR 用測試網站或預覽
 # - 部署紀錄的 Message 寫「main commit」，從 Cloudflare 部署紀錄就看得出線上是哪一版
 # - 正式 D1 有還沒套的 migration 就停（跟「部署到 Cloudflare」同一行檢查），先去按「套用 D1 migration」
-# - 不帶金鑰：管理網站沒有密鑰，三個 vars 都在 wrangler.admin.jsonc
+# - 不帶金鑰：管理網站沒有密鑰。ACCESS_TEAM_DOMAIN、ACCESS_AUD 在 wrangler.admin.jsonc；
+#   ADMIN_ORIGIN 含帳號子網域，部署時用 --var 從 GitHub Secret WORKERS_SUBDOMAIN 組出來（#493，日誌裡子網域顯示成 ***）
 # - 部署完沒登入打一次首頁，要被轉到 Access 登入頁；沒被擋就紅叉
 # - 改到兩站共用的程式（worker/src/ 共用模組、public/js/ 共用檔）時，志工網站由 main 推送自動部署，管理網站要另外按這裡
 name: 部署管理網站
@@ -27,11 +28,13 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      WORKERS_SUBDOMAIN: ${{ secrets.WORKERS_SUBDOMAIN }}
+      ADMIN_ORIGIN: https://bq-shelter-dogs-admin.${{ secrets.WORKERS_SUBDOMAIN }}.workers.dev
     steps:
       - name: 沒設定 Cloudflare 就停
-        if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == ''
+        if: env.CLOUDFLARE_API_TOKEN == '' || env.CLOUDFLARE_ACCOUNT_ID == '' || env.WORKERS_SUBDOMAIN == ''
         run: |
-          echo "還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID（步驟見 docs/setup/CLOUDFLARE_SETUP.md）。"
+          echo "還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID、WORKERS_SUBDOMAIN（步驟見 docs/setup/CLOUDFLARE_SETUP.md）。"
           exit 1
 
       - uses: actions/checkout@v4
@@ -49,13 +52,12 @@ jobs:
         run: |
           sha=$(git rev-parse --short HEAD)
           echo "部署管理網站：${REF} ${sha}"
-          npx --yes wrangler@4 deploy --config wrangler.admin.jsonc --message "${REF} ${sha}"
+          npx --yes wrangler@4 deploy --config wrangler.admin.jsonc --message "${REF} ${sha}" --var "ADMIN_ORIGIN:${ADMIN_ORIGIN}"
 
       - name: 確認沒登入會被 Access 擋
         run: |
-          origin=$(node -e 'const t=require("fs").readFileSync("wrangler.admin.jsonc","utf8").replace(/^\s*\/\/.*$/gm,"");console.log(JSON.parse(t).vars.ADMIN_ORIGIN)')
-          code=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$origin/")
-          echo "$origin/ → $code"
+          code=$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' "$ADMIN_ORIGIN/")
+          echo "$ADMIN_ORIGIN/ → $code"
           case "$code" in
             "302 https://"*.cloudflareaccess.com/cdn-cgi/access/login/*) ;;
             *) echo "沒被轉到 Access 登入頁，檢查 Cloudflare Access 設定"; exit 1 ;;

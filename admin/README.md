@@ -37,7 +37,7 @@
 
 - 網址 `https://bq-shelter-dogs-admin.<子網域>.workers.dev`（workers.dev，`workers_dev: true`）；版本預覽網址關閉。Cloudflare Access application 涵蓋整個 host，沒登入的請求一律轉到 Access 登入頁。
 - 正式 D1（`bq-shelter-dogs`）與正式照片空間（`bq-shelter-photos`）直接讀寫；沒有排程、沒有密鑰。
-- `wrangler.admin.jsonc` 就是線上設定：三個 vars（`ADMIN_ORIGIN`、`ACCESS_TEAM_DOMAIN`、`ACCESS_AUD`）都寫在裡面。它們不是密鑰；`keep_vars: false`，部署以檔案為準。換網址或重建 Access application 時三個值一起改，否則全部請求被拒。
+- `wrangler.admin.jsonc` 是線上設定：`ACCESS_TEAM_DOMAIN`、`ACCESS_AUD` 寫在裡面，它們不是密鑰；`keep_vars: false`，部署以檔案為準。`ADMIN_ORIGIN` 含帳號子網域，repo 公開後（#493）不寫在檔案裡，由「部署管理網站」用 `--var` 從 GitHub Secret `WORKERS_SUBDOMAIN` 組出來。換網址或重建 Access application 時三個值一起改，否則全部請求被拒。
 
 ### 怎麼部署
 
@@ -45,13 +45,13 @@
 - 只部署 main（#622）：不能填分支，選別的分支整個略過。合併前要試某張 PR，用測試網站或 PR 預覽。
 - workflow 先確認正式庫 migration 都套過，部署時把「main commit」寫進 Cloudflare 部署紀錄的 Message，部署後確認沒登入會被轉到 Access 登入頁。
 - 改到兩站共用的程式（`worker/src/` 共用模組、`public/js/api-response.js`、`dates.js`）時，志工網站由 main 推送自動部署，管理網站要另外按一次。
-- 本機部署（不建議）也要帶紀錄：`npx.cmd wrangler deploy --config wrangler.admin.jsonc --message "<分支> <commit>"`。
+- 本機部署（不建議）也要帶紀錄和網址：`npx.cmd wrangler deploy --config wrangler.admin.jsonc --message "<分支> <commit>" --var "ADMIN_ORIGIN:https://bq-shelter-dogs-admin.<子網域>.workers.dev"`。沒帶 `ADMIN_ORIGIN` 會全部拒絕。
 - 2026-10-25～26 的前 5 次部署是本機手動、沒有 Message，看不出是哪個 commit。
 
 ### 新環境（重建或換網址）依序
 
 1. 選定獨立管理網址。建立 Access self-hosted application，涵蓋整個 host（所有路徑），Allow policy 只列經確認管理者；不可新增 Bypass／Everyone，第一版只有管理者角色。
-2. 改 `wrangler.admin.jsonc`（不覆蓋志工設定）：填入 `ADMIN_ORIGIN`（完整 HTTPS origin、無結尾斜線）、`ACCESS_TEAM_DOMAIN`（團隊 hostname）、`ACCESS_AUD`（此 application 的 AUD）。換成自訂網域時加 custom domain route、`workers_dev` 改 false，並同步改 `scripts/admin-table.test.mjs` 的網址檢查。保留 `run_worker_first: true`、`preview_urls: false`。
+2. 改 `wrangler.admin.jsonc`（不覆蓋志工設定）：填入 `ACCESS_TEAM_DOMAIN`（團隊 hostname）、`ACCESS_AUD`（此 application 的 AUD）；`ADMIN_ORIGIN`（完整 HTTPS origin、無結尾斜線）改 `deploy-admin.yml` 組網址的那一行。換成自訂網域時加 custom domain route、`workers_dev` 改 false，並同步改 `scripts/admin-table.test.mjs` 的網址檢查。保留 `run_worker_first: true`、`preview_urls: false`。
 3. 隔離驗收先將 D1／R2 bindings 改為已協調可用的隔離資源；不得重置共用測試庫或執行同步。正式上線才經 K 核准共用既有正式 bindings，不建第二套正式庫。此 Worker 沒有 schema 套用路徑；寫入只有設定、狗資料與活動（同來源＋JSON＋Access 身分）。
 4. K 核准環境、Access policy 與實際設定後，才跑「部署管理網站」。
 5. 未登入／非管理者測 `/`、`/index.html`、`/js/main.js`、`/vendor/tabler.min.css`、`/api/manage/dogs` 與照片：不可取得內容；管理者登入可讀。測 workers.dev／版本預覽不能繞過，替代 host 即使帶有效 token 也拒絕。

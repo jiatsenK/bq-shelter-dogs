@@ -7,7 +7,7 @@ import { setup, request, post, current } from './walk-fixture.mjs';
 test.beforeEach(() => worker.testing.resetState());
 const undo = (id, version) => request(id, '乙', { action: 'undo', dogs: [{ id: '9001', name: '測試狗', expectedVersion: version }] });
 async function edits(env) {
-  return (await worker.fetch(new Request('https://bq-shelter-dogs.<子網域>.workers.dev/api/edits', { headers: { Origin: 'https://bq-shelter-dogs.<子網域>.workers.dev' } }), env)).json();
+  return (await worker.fetch(new Request('https://bq-shelter-dogs.example.workers.dev/api/edits', { headers: { Origin: 'https://bq-shelter-dogs.example.workers.dev' } }), env)).json();
 }
 
 test('另一位志工換手機復原：前次日期取自伺服器，不相信手機提供的前值，且原請求重送只生效一次', async () => {

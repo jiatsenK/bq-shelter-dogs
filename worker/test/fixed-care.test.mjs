@@ -6,7 +6,7 @@ import { fakeD1 } from './fakes.mjs';
 import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 import { importCompactDogs } from './compact-fixtures.mjs';
 
-const SITE = 'https://bq-shelter-dogs.<子網域>.workers.dev';
+const SITE = 'https://bq-shelter-dogs.example.workers.dev';
 async function setup() {
   worker.testing.resetState();
   const DB = fakeD1();

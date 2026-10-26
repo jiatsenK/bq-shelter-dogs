@@ -7,7 +7,7 @@ import worker from '../src/index.js';
 import { fakeD1 } from './fakes.mjs';
 import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 
-const SITE = 'https://bq-shelter-dogs.<子網域>.workers.dev';
+const SITE = 'https://bq-shelter-dogs.example.workers.dev';
 
 async function makeEnv() {
   const DB = fakeD1();

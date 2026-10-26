@@ -243,6 +243,6 @@ K 2026-09-25 實測後說「完成定版」（2026-09-27 由 V6 接替）。
   ```
 - 一律用「編號」比對，不用犬名——編號入所即固定、終身不變，籠位變動不影響對應。
 - 沒有的檔案（404）視為無資料，前端安靜略過，不需要另外維護「哪些狗有資料」的清單。
-- 網站本身從同一個 repo 部署（V8 起是 Cloudflare Worker https://bq-shelter-dogs.<子網域>.workers.dev ，main 有變動由 Action 自動部署；舊網址 jiatsenk.github.io 打開就轉到新網址，#129），圖片/內容一律用相對路徑讀取，不需要外部網址。
+- 網站本身從同一個 repo 部署（V8 起是 Cloudflare Worker https://bq-shelter-dogs.<子網域>.workers.dev ，main 有變動由 Action 自動部署；舊網址 jiatsenk.github.io 打開就轉到新網址，#129；GitHub Pages 2026-10-15 關閉，轉址 #493 拿掉），圖片/內容一律用相對路徑讀取，不需要外部網址。
 
 **v1 明確排除**：試算表寫入。若未來要做，需要試算表管理者另外架設 Google Apps Script Web App 作為寫入入口（涉及編輯權限，非前端工程問題），現階段不預留相關程式碼。

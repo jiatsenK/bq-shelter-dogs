@@ -8,6 +8,9 @@ function deployWriteProblem(deploy, preview) {
   return '';
 }
 
+// 帶金鑰的寫法。Cloudflare 部署用的兩個 Secret 之外，只准 WORKERS_SUBDOMAIN：它不是金鑰，放 Secret 是為了讓日誌把子網域遮成 ***（#493）
+const CARRIES_SECRET = /--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b|WORKERS_SUBDOMAIN\b)/;
+
 // 管理網站部署：只能手動、只准部署 wrangler.admin.jsonc 且帶 --message，不套 migration、不帶金鑰。回傳問題或 ''
 function adminDeployProblem(wf) {
   if (!/^on:\r?\n  workflow_dispatch:/m.test(wf) || /^\s+(push|pull_request|schedule|workflow_call|workflow_run):/m.test(wf)) return '只能手動觸發';
@@ -16,7 +19,7 @@ function adminDeployProblem(wf) {
   const rest = wf.replace(allowedDeploy, '');
   if (/migrations apply|d1 execute|continue-on-error|if:\s*always\(/.test(rest)) return '不能改結構或忽略錯誤';
   if (/wrangler@4 (deploy|versions)/.test(rest)) return '不能部署或上傳其他設定';
-  if (/--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b)/.test(rest)) return '不能帶金鑰';
+  if (CARRIES_SECRET.test(rest)) return '不能帶金鑰';
   return '';
 }
 
@@ -28,7 +31,7 @@ function testSiteDeployProblem(wf) {
   const rest = wf.replace(allowedApply, '').replace(allowedDeploy, '');
   if (/migrations apply|d1 execute|continue-on-error|if:\s*always\(/.test(rest)) return '只能對測試庫套 migration，不能改其他結構或忽略錯誤';
   if (/wrangler@4 (deploy|versions)/.test(rest)) return '不能部署或上傳其他設定';
-  if (/--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b)/.test(rest)) return '不能帶金鑰';
+  if (CARRIES_SECRET.test(rest)) return '不能帶金鑰';
   return '';
 }
 
@@ -67,7 +70,7 @@ async function runR2Tests() {
     if (!preview.includes('node scripts/d1-database.mjs --config wrangler.jsonc --preview')) throw new Error('預覽要查證隔離（測試 D1、測試 R2、沒有密鑰）');
     if (/--create-preview-worker/.test(preview)) throw new Error('預覽 Worker 只由 K 手動建立一次');
     if (!/versions upload\s*\\\s*\r?\n\s*--config "\$\{\{ steps\.d1\.outputs\.config \}\}"/.test(preview)) throw new Error('預覽上傳要用驗證過的隔離設定');
-    if (/--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b)/.test(preview)) throw new Error('預覽不能帶金鑰');
+    if (CARRIES_SECRET.test(preview)) throw new Error('預覽不能帶金鑰');
     const problem = deployWriteProblem(deploy, preview);
     if (problem) throw new Error(problem);
   });
@@ -206,13 +209,13 @@ async function runPreviewTests() {
 // #125 網站搬到 Cloudflare：同一個網址的 /api 是 Worker；舊網址和本機照舊用原本的照片上傳 Worker
 async function runCloudflareTests() {
   await check('#125 照片上傳服務網址：一律用同網址 /api，舊的單獨 Worker 拿掉了', () => {
-    eq(BQApi.baseFor({ hostname: 'bq-shelter-dogs.<子網域>.workers.dev', origin: 'https://bq-shelter-dogs.<子網域>.workers.dev' }),
-      'https://bq-shelter-dogs.<子網域>.workers.dev/api', '新網址：');
-    eq(BQApi.baseFor({ hostname: 'pr-12-bq-shelter-dogs.<子網域>.workers.dev', origin: 'https://pr-12-bq-shelter-dogs.<子網域>.workers.dev' }),
-      'https://pr-12-bq-shelter-dogs.<子網域>.workers.dev/api', '預覽網址：');
+    eq(BQApi.baseFor({ hostname: 'bq-shelter-dogs.example.workers.dev', origin: 'https://bq-shelter-dogs.example.workers.dev' }),
+      'https://bq-shelter-dogs.example.workers.dev/api', '新網址：');
+    eq(BQApi.baseFor({ hostname: 'pr-12-bq-shelter-dogs-preview.example.workers.dev', origin: 'https://pr-12-bq-shelter-dogs-preview.example.workers.dev' }),
+      'https://pr-12-bq-shelter-dogs-preview.example.workers.dev/api', '預覽網址：');
     eq(BQApi.baseFor({ hostname: 'localhost', origin: 'http://localhost:8787' }), 'http://localhost:8787/api', '本機（wrangler dev）：');
     eq([BQApi.baseFor(undefined), BQApi.baseFor({ origin: 'null' })], ['', ''], '沒有網址（同步腳本測試、直接開檔案）不上傳：');
-    if (/bq-shelter-photos\.jiatsen-k|OLD_UPLOAD_URL/.test(APP_JS + API_JS)) throw new Error('js/app.js、js/api.js 不該再有舊的照片上傳服務網址');
+    if (/bq-shelter-photos\.|OLD_UPLOAD_URL/.test(APP_JS + API_JS)) throw new Error('js/app.js、js/api.js 不該再有舊的照片上傳服務網址');
   });
   await check('#276 部署設定：只公開 public/，Worker 程式、腳本、部署設定、交接紀錄都不在網站資料夾', async () => {
     const cfg = await fetch('../wrangler.jsonc').then(r => r.ok ? r.text() : '');
@@ -221,35 +224,5 @@ async function runCloudflareTests() {
     for (const p of ['../public/wrangler.jsonc', '../public/AGENT_LOG.md', '../public/worker/src/index.js', '../public/scripts/memory-d1.mjs']) {
       if ((await fetch(p)).ok) throw new Error(`${p} 不該在網站資料夾`);
     }
-  });
-}
-async function runOldUrlTests() {
-  const testHtml = await fetch('index.html').then(r => r.text());
-  // 把頁面裡的轉址程式拿出來，用假的 location 跑
-  const redirectOf = (html, loc) => {
-    const code = (html.match(/<script>(if \(location\.hostname === 'jiatsenk\.github\.io'\)[^<]*)<\/script>/) || [])[1];
-    if (!code) throw new Error('找不到舊網址轉址程式');
-    let to = null;
-    new Function('location', code)({ search: '', hash: '', ...loc, replace: u => { to = u; } });
-    return to;
-  };
-  const NEW = 'https://bq-shelter-dogs.<子網域>.workers.dev';
-  await check('#129 舊網址（首頁、# 分類、/tests/）換到新網址同一頁', () => {
-    for (const [name, html] of [['index.html', INDEX_HTML], ['tests/index.html', testHtml]]) {
-      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs/' }), `${NEW}/`, `${name} 首頁：`);
-      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs/', hash: '#find' }), `${NEW}/#find`, `${name} 分類：`);
-      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs/index.html', search: '?a=1' }), `${NEW}/index.html?a=1`, `${name} 帶參數：`);
-      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs/tests/' }), `${NEW}/tests/`, `${name} 測試頁：`);
-      eq(redirectOf(html, { hostname: 'jiatsenk.github.io', pathname: '/bq-shelter-dogs' }), NEW, `${name} 沒有結尾斜線：`);
-    }
-  });
-  await check('#129 新網址、預覽版、本機不轉址（沒有轉址迴圈）', () => {
-    for (const hostname of ['bq-shelter-dogs.<子網域>.workers.dev', 'pr-12-bq-shelter-dogs.<子網域>.workers.dev', 'localhost']) {
-      eq(redirectOf(INDEX_HTML, { hostname, pathname: '/' }), null, `${hostname}：`);
-    }
-  });
-  await check('#129 轉址放在 index.html 最前面（比提早抓 dogs.json 早）', () => {
-    const at = INDEX_HTML.indexOf("location.hostname === 'jiatsenk.github.io'");
-    if (at < 0 || at > INDEX_HTML.indexOf('window.__dogsEarly')) throw new Error('轉址要在其他程式前面');
   });
 }

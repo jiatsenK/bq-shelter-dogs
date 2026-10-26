@@ -12,7 +12,7 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 - 以後改了 Worker 程式**不用再手動貼**，合併後 Action 會自動部署。
 - 密碼（管理金鑰、代號密鑰、試算表寫入金鑰）**全部設在 GitHub 的 Secrets**，部署時自動帶到 Cloudflare。
 - 費用 NT$0（Cloudflare Workers 免費方案）。
-- 舊網址 https://jiatsenk.github.io/bq-shelter-dogs/ 從 #129 起一打開就轉到新網址同一頁（舊的書籤、主畫面捷徑都還能用）。舊的單獨照片上傳 Worker（`bq-shelter-photos`）2026-10 K 決定刪除，程式裡給它和舊網址的判斷也拿掉了。
+- 舊網址 https://jiatsenk.github.io/bq-shelter-dogs/ 從 #129 起一打開就轉到新網址同一頁；GitHub Pages 2026-10-15 關閉後轉址不再有作用，#493 拿掉。舊的單獨照片上傳 Worker（`bq-shelter-photos`）2026-10 K 決定刪除，程式裡給它和舊網址的判斷也拿掉了。
 
 > Cloudflare 和 GitHub 的網頁偶爾會改版，按鈕名稱可能跟這裡寫的略有不同，找意思相近的就可以。
 
@@ -61,6 +61,7 @@ GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ 
 | `CLOUDFLARE_ACCOUNT_ID` | 步驟 1 複製的 Account ID |
 | `CLOUDFLARE_API_TOKEN` | 步驟 2 複製的 Cloudflare token |
 | `ADMIN_KEY` | 管理 API（縮圖、Trash）用的金鑰，只給 GitHub Action，自己想一組英數字。部署時帶到 Worker，縮圖 Action 也用同一個；#595 起不再沿用舊的 `NOTES_PASSCODE` |
+| `WORKERS_SUBDOMAIN` | 帳號的 workers.dev 子網域（Cloudflare **Workers & Pages** 右側「Subdomain」，`<子網域>.workers.dev` 前面那段）。不是密碼，但 repo 公開（#493），放 Secret 讓 Actions 日誌把它顯示成 `***`，網址不會出現在公開的日誌與 PR。沒設的話部署、預覽、縮圖都會停在第一步 |
 
 `WALKER_KEY`（誰遛的代號密鑰）本來就在這裡，不用動，部署時會自動一起帶過去，代號不會變。
 
@@ -101,7 +102,7 @@ Cloudflare → **Workers & Pages** → `bq-shelter-photos` → **Settings** → 
 
 ## PR 預覽網址（#126）
 
-之後每開一個 PR，GitHub 會自動部署一份預覽版，並在 PR 頁面留一則「📱 預覽網址」留言，網址固定是：
+在 PR 加上 `preview` 標籤後，GitHub 會部署一份預覽版，並在 PR 頁面留一則「📱 預覽已更新」留言。repo 公開（#493），留言不貼網址，只寫別名 `pr-<PR 編號>` 和 Cloudflare 主控台預覽 Worker 版本頁的連結（登入才看得到）。網址固定是：
 
 ```
 https://pr-<PR 編號>-bq-shelter-dogs-preview.<子網域>.workers.dev

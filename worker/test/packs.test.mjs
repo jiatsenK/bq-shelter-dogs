@@ -11,7 +11,7 @@ import { fakeD1 } from './fakes.mjs';
 import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 import { importCompactDogs, importCompactProfiles, importCompactDepartures } from './compact-fixtures.mjs';
 
-const SITE = 'https://bq-shelter-dogs.<子網域>.workers.dev';
+const SITE = 'https://bq-shelter-dogs.example.workers.dev';
 // 台灣時間 2026-10-16 10:00
 const NOW = Date.parse('2026-10-16T02:00:00Z');
 const TODAY = '2026-10-16';

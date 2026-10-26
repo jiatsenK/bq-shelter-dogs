@@ -7,7 +7,7 @@ import { fakeD1 } from './fakes.mjs';
 import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 import { importCompactDogs, importCompactDepartures, importCompactProfiles } from './compact-fixtures.mjs';
 
-const SITE = 'https://bq-shelter-dogs.<子網域>.workers.dev';
+const SITE = 'https://bq-shelter-dogs.example.workers.dev';
 const A = 'aaaaaaaaaaaa', B = 'bbbbbbbbbbbb';
 const dog = (id, name) => ({ cage: 'A1', id, name, walkedDate: null, covered: false, myWalked: false, walkers: [], note: '', sex: '', intro: '' , myWalkedDate: null });
 const dep = (id, name, date, extra = {}) => ({ id, name, date, dateSource: 'sheet', seen: date, reason: 'adopt', matched: '認養', flags: [], ...extra });

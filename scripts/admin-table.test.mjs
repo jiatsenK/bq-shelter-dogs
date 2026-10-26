@@ -48,15 +48,19 @@ test('管理資產：純模組來自同一份來源，部署設定跟線上一�
   const config = JSON.parse((await readFile(new URL('../wrangler.admin.jsonc', import.meta.url), 'utf8')).replace(/^\s*\/\/.*$/gm, ''));
   assert.equal(config.assets.run_worker_first, true);
   // 管理網站就是 workers.dev 網址（Access 擋整個 host）；ADMIN_ORIGIN 要指向它，替代 host 一律被程式拒絕
+  // #493：ADMIN_ORIGIN 含帳號子網域，不寫在公開設定，部署時由 deploy-admin.yml 用 Secret 組出來
   assert.equal(config.workers_dev, true);
-  assert.equal(config.vars.ADMIN_ORIGIN, `https://${config.name}.<子網域>.workers.dev`);
+  assert.equal(config.vars.ADMIN_ORIGIN, undefined);
+  const deploy = await readFile(new URL('../.github/workflows/deploy-admin.yml', import.meta.url), 'utf8');
+  assert.ok(deploy.includes(`ADMIN_ORIGIN: https://${config.name}.\${{ secrets.WORKERS_SUBDOMAIN }}.workers.dev`));
+  assert.ok(deploy.includes('--var "ADMIN_ORIGIN:${ADMIN_ORIGIN}"'));
   assert.match(config.vars.ACCESS_TEAM_DOMAIN, /^[a-z0-9-]+\.cloudflareaccess\.com$/);
   assert.match(config.vars.ACCESS_AUD, /^[a-f0-9]{64}$/);
   assert.equal(config.keep_vars, false);
   assert.equal(config.preview_urls, false);
   assert.equal(config.triggers, undefined);
   assert.equal(config.assets.directory, './admin/public');
-  assert.deepEqual(Object.keys(config.vars).sort(), ['ACCESS_AUD', 'ACCESS_TEAM_DOMAIN', 'ADMIN_ORIGIN']);
+  assert.deepEqual(Object.keys(config.vars).sort(), ['ACCESS_AUD', 'ACCESS_TEAM_DOMAIN']);
 });
 
 test('#624 抽屜規則：欄位順序、只有編號／出入所／照片要預覽、介紹只標差異', () => {
