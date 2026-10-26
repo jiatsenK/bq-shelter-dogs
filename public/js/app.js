@@ -1076,7 +1076,7 @@ function detailHtml(dog, today) {
 }
 
 // ── 休養中（K 2026-10-09：剛動完手術不能溜，「排到下面、休養中、10/20 前暫停帶出」，不動試算表）──
-// 名字下面一行說明；改設定在詳細資訊最下面，任何人都能改、記編輯紀錄
+// 名字下面一行說明；改設定在詳細資訊最下面，志工可不可以改看功能管理的 editRest（ADR 0020），改了記編輯紀錄
 function restNoteHtml(dog, today) {
   const r = restOf(dog, today);
   return r ? `<div class="rest-note"><b>休養中</b>，${monthDay(r.until)} 前暫停帶出${r.reason ? `（${esc(r.reason)}）` : ''}</div>` : '';
@@ -1168,7 +1168,7 @@ function restAdminHtml(dog, today) {
     </form>
   </section>`;
 }
-// ── 入所介紹（K 2026-10-10 補資料）：任何人都能改、記編輯紀錄（ADR 0004）；存 D1，不寫試算表 ──
+// ── 入所介紹（K 2026-10-10）：志工可不可以改看功能管理的 editIntro（ADR 0020），記編輯紀錄（ADR 0004）；存 D1，不寫試算表 ──
 const INTRO_MAX = 1000;
 function intakeEventsOf(dog) {
   return dog.intakeEvents || [];

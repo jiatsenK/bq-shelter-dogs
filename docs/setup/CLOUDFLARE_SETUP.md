@@ -190,7 +190,7 @@ https://pr-<PR 編號>-bq-shelter-dogs.<子網域>.workers.dev
 ### 要注意的地方
 
 - 照片改由 Worker 從 R2 讀，會算進 Cloudflare Workers 免費方案的**每天 10 萬次**。照片在手機上快取 30 天，正常用不會超過；Cloudflare 的 Worker 頁面 **Metrics** 看得到每天用量。
-- 管理用的功能（縮圖、Trash 清單和復原）要 GitHub Secret `ADMIN_KEY`；不做管理後台（ADR 0004，#143 廢除）。
+- 機器用的管理功能（縮圖、Trash 清單和復原）要 GitHub Secret `ADMIN_KEY`。人用的管理網站是另一個 Worker，以 Cloudflare Access 驗證、不用這把金鑰（ADR 0020，見 `admin/README.md`）。
 
 ## token 到期時
 
