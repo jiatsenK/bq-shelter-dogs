@@ -4,7 +4,6 @@ import { identityByCode } from './identity.js';
 import { previousWalk } from './today.js';
 import { callSheet } from './sheet-write.js';
 import { splitNames } from './sheet-read.js';
-import { todayRowsWritten } from './d1-usage.js';
 
 const names = text => [...new Set(splitNames(text))];
 const keyOf = dog => dog.id || `名:${dog.name}`;
@@ -33,16 +32,11 @@ export async function readAcceptedWalks(db, today) {
     .map(w => ({ ...w, walked: w.walkedDate === today })) };
 }
 
-// SQL 的每次寫入都預留含觸發器與索引的保守上界。帳號當日量不可取得時，
-// 只警告並看單次門檻；本路徑另有持久每日保留量，不能靠重試繞過。
-export async function writeBudget(db, env, cost, now = Date.now()) {
+// SQL 的每次寫入都預留含觸發器與索引的保守上界：看單次門檻與持久每日保留量，不能靠重試繞過。
+// #591：不查 Cloudflare 帳號當日用量（正式環境沒設 token，從沒查到過）。
+export function writeBudget(db, env, cost, now = Date.now()) {
   const max = Number(env.SYNC_MAX_ROWS || 500), daily = Number(env.SYNC_DAILY_BUDGET || 20000);
-  const observed = env.CLOUDFLARE_API_TOKEN && env.CLOUDFLARE_ACCOUNT_ID ? await todayRowsWritten({ token: env.CLOUDFLARE_API_TOKEN,
-    accountId: env.CLOUDFLARE_ACCOUNT_ID, now: new Date(now), fetchImpl: (url, init) => fetch(url, { ...init, signal: AbortSignal.timeout(3000) }) }) : null;
-  if (!Number.isFinite(max) || !Number.isFinite(daily) || cost > max || (observed !== null && (!Number.isFinite(observed) || observed + cost > daily))) {
-    throw new WalkError(503, '溜狗寫入預算不足');
-  }
-  if (observed === null) console.warn('walk-budget: account analytics unavailable; checking single-operation and reserved daily budget');
+  if (!Number.isFinite(max) || !Number.isFinite(daily) || cost > max) throw new WalkError(503, '溜狗寫入預算不足');
   const day = new Date(now).toISOString().slice(0, 10); // D1 帳號額度 UTC 午夜重置。
   return [
     db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT reserved FROM v3_walk_write_budget WHERE day=?),0)+?<=? THEN 1 ELSE 0 END').bind(day, cost, daily),
