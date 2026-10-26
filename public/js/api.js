@@ -49,7 +49,7 @@ const BQApi = (() => {
     // 網址帶版本號，瀏覽器快取過就不再下載（ADR 0013）
     walksYear: (year, ver) => get(`/walks?year=${year}&v=${enc(ver)}`),
     myDogs: codes => send('POST', '/walks/mine', { codes }),
-    todayWalks: ({ d1, signal } = {}) => get(`/today${d1 ? '?source=d1' : ''}`, { cache: 'no-cache', signal }),
+    todayWalks: ({ signal } = {}) => get('/today?source=d1', { cache: 'no-cache', signal }),
     walkResult: (requestId, { signal } = {}) => get(`/walk/result?requestId=${enc(requestId)}`, { cache: 'no-cache', signal }),
     walk: payload => send('POST', '/walk', payload),
     walkers: () => get('/walkers', { cache: 'no-cache' }),

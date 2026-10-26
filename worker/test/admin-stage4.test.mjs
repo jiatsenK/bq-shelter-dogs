@@ -37,7 +37,7 @@ async function setup(t) {
 
 test('#567 新管理路徑：未登入一律 401，不讀 D1', async () => {
   const forbidden = () => { throw Error('unauthorized resource read'); };
-  for (const path of ['/api/manage/activities', '/api/manage/activities/' + 'c'.repeat(32), '/api/manage/data-checks', '/api/manage/edits', '/activities.html', '/checks.html', '/updates.html']) {
+  for (const path of ['/api/manage/activities', '/api/manage/activities/' + 'c'.repeat(32), '/api/manage/data-checks', '/api/manage/cron-status', '/api/manage/edits', '/activities.html', '/checks.html', '/updates.html']) {
     const res = await worker.fetch(request(path), { ...env, DB: { prepare: forbidden }, ASSETS: { fetch: forbidden } });
     assert.equal(res.status, 401, path);
   }

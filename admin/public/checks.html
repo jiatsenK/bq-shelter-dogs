@@ -24,7 +24,7 @@
     </aside>
     <main id="content" class="admin-content" tabindex="-1">
       <header class="admin-page-header">
-        <div><h1>資料檢查</h1><p>找出待補的狗資料，以及網站有、試算表已經沒有的狗。只列出來，不自動修改。</p></div>
+        <div><h1>資料檢查</h1><p>找出待補的狗資料、網站有但試算表已經沒有的狗，並確認排程有在跑。只列出來，不自動修改。</p></div>
         <button type="button" class="btn btn-primary" id="reload">重新讀取</button>
       </header>
       <p class="source-note" id="volunteer-state"></p>
@@ -44,6 +44,17 @@
         <p id="complete-status" class="check-status" role="status" aria-live="polite">正在讀取狗資料…</p>
         <div id="complete-list" class="check-list"></div>
         <p class="data-note">規則同志工網站的「狗的資料完整度」，只看目前主清單上的狗。照片依照片紀錄判斷，不逐張下載檢查；檔案讀不到會在狗資料表另外提示。</p>
+      </section>
+      <section class="card check-card" aria-labelledby="cron-title">
+        <h2 id="cron-title">排程</h2>
+        <p id="cron-status" class="check-status" role="status" aria-live="polite">正在讀取排程紀錄…</p>
+        <div class="table-responsive" tabindex="0" role="region" aria-label="排程最後一次跑完的時間，可水平捲動" id="cron-region" hidden>
+          <table class="table table-vcenter compact-table">
+            <thead><tr><th scope="col">工作</th><th scope="col">多久一次</th><th scope="col">最後一次跑完</th><th scope="col">狀況</th></tr></thead>
+            <tbody id="cron-jobs"></tbody>
+          </table>
+        </div>
+        <p class="data-note">志工網站的 Worker 時間到自己做的事。寫回重試把寫回試算表失敗的狗再送一次；保險掃描補回改表通知漏掉的人工修改；照片垃圾桶清掉放超過 30 天的照片。過期或失敗時，請聯絡維護者看 Cloudflare 的紀錄。</p>
       </section>
     </main>
   </div>

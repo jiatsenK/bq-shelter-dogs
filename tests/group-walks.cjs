@@ -6,6 +6,7 @@ module.exports = async (browser, base) => {
   data.dogs[8].name = '名字很長也要完整顯示的測試狗';
   data.groupColumns = [{ column: 4, label: '同名群', names: data.dogs.slice(0, 2).map(d => d.name) }, { column: 7, label: '同名群', names: data.dogs.slice(0, 10).map(d => d.name) }, { column: 12, label: '空群', names: [] }];
   const writes = [];
+  const d1 = require('./fixtures/fake-d1-walks.cjs')({ today: () => today });
   let partial = false, failRead = false, restMode = false, undoMode = 'ok';
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Asia/Taipei', serviceWorkers: 'block' });
   await context.addInitScript(() => { localStorage.setItem('bq-onboarded', '1'); localStorage.setItem('bq-name-later', '1'); localStorage.setItem('bq-walker-name', '測試志工'); });
@@ -19,14 +20,21 @@ module.exports = async (browser, base) => {
       const body = route.request().postDataJSON(); writes.push({ endpoint, body });
       if (endpoint === 'walk' && body.action === 'undo') {
         if (undoMode === 'fail') return route.fulfill({ status: 500, json: { ok: false, error: '測試復原失敗' } });
-        return route.fulfill({ json: { ok: true, today, results: body.dogs.map((d, i) => undoMode === 'partial' && i === 0 ? { id: d.id, name: d.name, status: 'changed', current: { date: today, walker: '別人' } } : { id: d.id, name: d.name, status: 'restored' }) } });
+        // D1 整群逐狗送；partial 讓這次的第一隻被別人改過
+        const changed = undoMode === 'partial';
+        if (changed) undoMode = 'used';
+        return route.fulfill({ json: d1.walk(body, d => changed ? { status: 'changed', version: 900, current: { date: today, walker: '別人' } } : null) });
       }
-      if (endpoint === 'walk') return route.fulfill({ json: { ok: true, today, results: body.dogs.map(d => ({ ...d, status: partial && d.name === body.dogs[0].name ? 'missing' : 'written', prev: {}, wrote: { date: today, walker: body.walker } })) } });
+      if (endpoint === 'walk') {
+        // partial：這次整群的第一隻被別人改過（D1 不可重試的失敗）
+        const changed = partial === true;
+        if (changed) partial = 'used';
+        return route.fulfill({ json: d1.walk(body, () => changed ? { status: 'changed', version: 900, current: { date: '2026-01-01', walker: '別人' } } : null) });
+      }
       assert.fail('狗群頁只能送出溜狗登記');
     }
-    return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'rest' ? { rest: restMode ? { [data.dogs[0].id]: { until: '2099-12-31', reason: '測試休養' } } : {} } : endpoint === 'walkers' ? { walkers: ['測試志工'] } : { ok: true, walks: [], departures: [] } });
+    return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'today' ? d1.pack() : endpoint === 'rest' ? { rest: restMode ? { [data.dogs[0].id]: { until: '2099-12-31', reason: '測試休養' } } : {} } : endpoint === 'walkers' ? { walkers: ['測試志工'] } : { ok: true, walks: [], departures: [] } });
   });
-  await require('./fixtures/legacy-walk-mode.cjs')(context);
   const page = await context.newPage(); page.setDefaultTimeout(8000);
   try {
     await page.goto(base + '/public/index.html');
@@ -178,8 +186,8 @@ module.exports = async (browser, base) => {
     // 休養與復原情境從未登記開始，不沿用前面整群登記的快照。
     await page.evaluate(() => {
       localStorage.setItem('bq-walker-name', '測試志工');
-      localStorage.removeItem('bq-sheet-writes'); localStorage.removeItem('bq-walked-today');
     });
+    d1.rows.clear();
     await page.reload();
     await page.locator('[data-tab="groups"]').click();
     await page.locator('.gw-restrictions').filter({ hasText: '休養中' }).waitFor();
@@ -193,13 +201,13 @@ module.exports = async (browser, base) => {
     assert.equal(await page.getByRole('button', { name: /復原今天登記/ }).count(), 0, '不另放復原按鈕');
     undoMode = 'fail';
     await undoBtn.click();
-    await page.getByText(/試算表沒改回來：測試復原失敗/).first().waitFor();
+    await page.getByText(/尚未確認：測試復原失敗/).first().waitFor();
     assert.equal(writes.at(-1).body.action, 'undo');
     assert.deepEqual(writes.at(-1).body.dogs.map(d => d.name), [data.dogs[1].name]);
     assert(await undoBtn.isVisible(), '失敗後仍可重試');
     undoMode = 'ok';
     await undoBtn.click();
-    await page.getByText('已從試算表復原 1 隻').first().waitFor();
+    // D1 復原成功不另跳結果提示，畫面直接回到可登記
     await page.getByRole('button', { name: '整群溜了 · 1 隻', exact: true }).waitFor();
     // 別人改過的不蓋掉；我溜過不另放取消那排
     await page.getByRole('button', { name: '整群溜了 · 1 隻', exact: true }).click();

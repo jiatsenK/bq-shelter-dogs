@@ -35,3 +35,29 @@ export function gapStatus(g) {
   if (!g.checkedAt) return `${recorded}；掃描時間還沒記錄（志工網站更新後的下一次掃描開始記），無法確認是否過期。`;
   return `${recorded}；最後掃描 ${when(g.checkedAt)}${g.stale ? '，已過期（超過一天沒有新掃描），清單可能不是最新' : ''}。`;
 }
+
+// 稽核第 5 項：排程有沒有在跑。工作名稱與頻率跟 wrangler.jsonc 的排程一致（worker/src/index.js 的 RETRY_CRON、SCAN_CRON）。
+export const CRON_LABELS = {
+  retry: { name: '寫回重試', every: '每 10 分鐘' },
+  scan: { name: '保險掃描', every: '每天 09:53、13:53、23:53' },
+  trash: { name: '照片垃圾桶', every: '每月 1 日 09:53' },
+};
+
+export function parseCronStatus(data) {
+  const jobs = data && data.jobs;
+  const time = v => v === null || (typeof v === 'string' && !isNaN(Date.parse(v)));
+  if (!Array.isArray(jobs) || !jobs.every(j => j && CRON_LABELS[j.job] && ['ok', 'never', 'error'].includes(j.state)
+    && time(j.okAt) && time(j.failAt) && typeof j.error === 'string' && typeof j.stale === 'boolean')) throw Error('排程紀錄格式不正確');
+  return jobs;
+}
+
+// 每件工作一行：最後一次跑完、最近失敗（比最後跑完還新才算現在有問題）、是否過期
+export function cronStatus(j) {
+  if (j.state === 'never') return { last: '還沒有紀錄', problem: j.job === 'trash' ? '每月 1 日才跑，第一次跑完後才會出現' : '志工網站更新後下一次排程跑完才會出現', bad: j.job !== 'trash' };
+  if (j.state === 'error') return { last: '紀錄讀不懂', problem: '不能當成有在跑；請聯絡維護者', bad: true };
+  const failing = j.failAt && (!j.okAt || Date.parse(j.failAt) > Date.parse(j.okAt));
+  const problems = [];
+  if (failing) problems.push(`${when(j.failAt)} 失敗${j.error ? `：${j.error}` : ''}`);
+  if (j.stale) problems.push(j.okAt ? '已過期，最近幾次都沒有跑完' : '還沒有成功跑完過');
+  return { last: j.okAt ? when(j.okAt) : '—', problem: problems.join('；') || '正常', bad: Boolean(failing || j.stale) };
+}

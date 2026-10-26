@@ -1,5 +1,7 @@
 import { appState, groupStageState } from './page-state.js';
-import { applyDogsData, effectiveWalkDate, esc, icon, init, loadDogsData, loadWalkerName, matchesSearch, photoThumbSrc, render, restOf, showDetail, walkKey, walkRegistration, walkedNow } from './app.js';
+import { applyDogsData, effectiveWalkDate, init, loadDogsData, loadWalkerName, photoThumbSrc, render, restOf, showDetail, walkRegistration, walkedNow } from './app.js';
+import { esc, icon, matchesSearch } from './ui-kit.js';
+import { walkKey } from './dog-status.js';
 import { BQDates } from './dates.js';
 import { BQWalkUI } from './walk-ui.js';
 // #474：狗群名單只在試算表改；網站保留查看與整群溜狗登記。
@@ -66,7 +68,7 @@ async function loadGroupStage(retry = false) {
     try {
       const data = await loadDogsData();
       if (!receiveGroupData(data)) throw new Error('狗群格式無法確認');
-      applyDogsData(data);
+      applyDogsData(data, { groupCheck: true });
       return true;
     } catch (e) {
       groupStageState.groupReadError = true;

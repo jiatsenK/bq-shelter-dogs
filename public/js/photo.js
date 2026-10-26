@@ -1,7 +1,8 @@
 import { prepareImages, imageForm } from './photo-images.js';
 import { canEdit } from './feature-settings.js';
 import { appState } from './page-state.js';
-import { closeLightbox, detailEdits, editorHeaders, esc, icon, lightboxOpen, photoOverrides, photoSrc, photoThumb, render, renderDetail } from './app.js';
+import { closeLightbox, detailEdits, editorHeaders, lightboxOpen, photoOverrides, photoSrc, photoThumb, render, renderDetail } from './app.js';
+import { esc, icon } from './ui-kit.js';
 import { BQWalkUI } from './walk-ui.js';
 import { BQApi } from './api.js';
 
