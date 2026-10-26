@@ -53,7 +53,6 @@ const server = http.createServer((req, res) => {
       if (suite !== 'index') { await require(`../tests/${suite}.cjs`)(browser, base); continue; }
       const page = await browser.newPage();
       page.on('pageerror', e => console.error('頁面錯誤（不影響結果，只供參考）：', e.message));
-      await require('../tests/fixtures/legacy-walk-mode.cjs')(page); // 單元測試是開關打開前寫的（iframe 也要吃到）
       await page.goto(`${base}/tests/index.html`);
       await page.waitForFunction(() => /通過|失敗/.test(document.getElementById('summary').textContent), null, { timeout: 120000 });
       const summary = await page.textContent('#summary');

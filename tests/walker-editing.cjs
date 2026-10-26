@@ -8,7 +8,9 @@ module.exports = async (browser, base) => {
   data.syncedAt = '2026-10-18 06:30';
   data.dogs = data.dogs.slice(0, 2).map((d, i) => ({ ...d, name: `編輯測試${i + 1}`, walkedDate: day }));
   data.groupColumns = [{ column: 4, label: '測試群', names: data.dogs.map(d => d.name) }];
-  const names = Object.fromEntries(data.dogs.map(d => [d.id, '測試志工、同行甲']));
+  const d1 = require('./fixtures/fake-d1-walks.cjs')({ today: () => day });
+  data.dogs.forEach(d => d1.set(d.id, '測試志工、同行甲'));
+  const walkerOf = dog => d1.rows.get(dog.id).walker;
   const writes = [];
   let releaseWrite = null, holdWrite = false, failWrite = false;
   let delayedRead = '', releaseRead = null;
@@ -31,23 +33,18 @@ module.exports = async (browser, base) => {
       const body = req.postDataJSON(); writes.push(body);
       if (holdWrite) await new Promise(resolve => { releaseWrite = resolve; });
       if (failWrite) return route.fulfill({ status: 503, json: { ok: false, error: '測試寫入失敗' } });
-      const results = body.dogs.map(d => {
-        const current = { date: day, walker: names[d.id] };
-        if (body.action === 'edit' && d.expected !== current.walker) return { ...d, status: 'changed', current };
-        names[d.id] = body.walker;
-        return { ...d, status: 'written', prev: { date: { date: day }, walker: current.walker }, wrote: { date: day, walker: body.walker } };
-      });
-      return route.fulfill({ json: { ok: true, today: day, results } });
+      return route.fulfill({ json: d1.walk(body) });
     }
-    const out = endpoint === 'dogs' ? data : endpoint === 'walkers' ? { walkers: names, names: ['測試志工', '同行甲', '同行乙'] }
-      : endpoint === 'today' ? { date: day, walks: data.dogs.filter(d => d.walkedDate === day).map(d => ({ key: d.id, walked: true, walkedDate: day, walker: names[d.id], at: '2026-10-18T01:00:00Z' })) }
+    const out = endpoint === 'dogs' ? data : endpoint === 'walkers' ? { walkers: {}, names: ['測試志工', '同行甲', '同行乙'] }
+      : endpoint === 'today' ? d1.pack()
         : endpoint === 'rest' ? { rest: {} } : { ok: true, walks: [], departures: [] };
     return route.fulfill({ json: out });
   });
-  await require('./fixtures/legacy-walk-mode.cjs')(context);
   const page = await context.newPage();
   page.setDefaultTimeout(5000);
   await page.clock.install({ time: new Date('2026-10-18T02:00:00Z') });
+  const pathIs = (r, endpoint) => new URL(r.url()).pathname.endsWith('/api/' + endpoint);
+  const lastWalk = () => page.locator('.last-walk').textContent();
   const openDog = async () => {
     const close = page.getByRole('button', { name: '關閉', exact: true });
     if (await close.isVisible()) await close.click();
@@ -59,29 +56,31 @@ module.exports = async (browser, base) => {
     await openDog();
     // 今日消息確認自己已溜，但這支手機沒有寫入快照，仍應可編輯。
     assert.equal(await page.locator('#whoAdd').count(), 1, '今日資料讀回後，不應因自己已溜而隱藏編輯入口');
+    // D1 改名單成功不跳提示條（#457），以名單本身確認
     await page.getByRole('button', { name: '拿掉 同行甲', exact: true }).click();
-    await page.getByText('已拿掉 同行甲，已寫進試算表', { exact: true }).waitFor();
-    assert.equal(writes.at(-1).dogs[0].expected, '測試志工、同行甲');
+    await page.waitForFunction(() => !document.querySelector('.last-walk')?.textContent.includes('同行甲'));
+    assert.deepEqual([writes.at(-1).action, writes.at(-1).walker, writes.at(-1).editor], ['edit', '測試志工', '測試志工']);
+    assert.equal(walkerOf(data.dogs[0]), '測試志工');
     await page.locator('#whoAdd').click();
     await page.locator('[data-with="同行乙"]').click();
     await page.locator('[data-with-ok]').click();
-    await page.getByText('已加入 同行乙，已寫進試算表', { exact: true }).waitFor();
-    assert.equal(names[data.dogs[0].id], '測試志工、同行乙');
+    await page.waitForFunction(() => document.querySelector('.last-walk')?.textContent.includes('同行乙'));
+    assert.equal(walkerOf(data.dogs[0]), '測試志工、同行乙');
     await page.reload({ waitUntil: 'networkidle' });
     await openDog();
     assert.equal(await page.locator('#whoAdd').count(), 1, '重開後仍能編輯');
-    assert.match(await page.locator('.last-walk').textContent(), /同行乙/);
-    // 別人先改名單：原文比對必須保留，不得覆蓋新名字。
-    names[data.dogs[0].id] = '測試志工、同行乙、同行丙';
+    assert.match(await lastWalk(), /同行乙/);
+    // 別人先改名單：帶版本比對，不得覆蓋新名字，改顯示伺服器現況。
+    d1.set(data.dogs[0].id, '測試志工、同行乙、同行丙');
     await page.getByRole('button', { name: '拿掉 同行乙', exact: true }).click();
     await page.getByText(/沒有蓋掉/).waitFor();
-    assert.equal(names[data.dogs[0].id], '測試志工、同行乙、同行丙');
-    assert.match(await page.locator('.last-walk').textContent(), /同行丙/);
+    assert.equal(walkerOf(data.dogs[0]), '測試志工、同行乙、同行丙');
+    assert.match(await lastWalk(), /同行丙/);
     failWrite = true;
     await page.getByRole('button', { name: '拿掉 同行丙', exact: true }).click();
     await page.getByText(/測試寫入失敗/).waitFor();
-    assert.equal(names[data.dogs[0].id], '測試志工、同行乙、同行丙');
-    assert.match(await page.locator('.last-walk').textContent(), /同行丙/);
+    assert.equal(walkerOf(data.dogs[0]), '測試志工、同行乙、同行丙');
+    assert.match(await lastWalk(), /同行丙/);
     failWrite = false;
     await context.setOffline(true);
     await openDog();
@@ -95,7 +94,7 @@ module.exports = async (browser, base) => {
     assert.match(await page.locator('.last-walk').textContent(), /選好.*名字/);
     await page.evaluate(() => localStorage.setItem('bq-walker-name', '測試志工'));
     data.dogs[1].walkedDate = '2026-10-17';
-    names[data.dogs[1].id] = '同行甲';
+    d1.set(data.dogs[1].id, '同行甲', '2026-10-17');
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('#main [data-dog="1"]').first().click();
     holdWrite = true;
@@ -107,7 +106,7 @@ module.exports = async (browser, base) => {
     holdWrite = false; releaseWrite();
     await page.locator('#whoAdd').waitFor();
     // 模擬重開後尚未登記的另一隻狗，再驗證整群入口。
-    await page.evaluate(() => { localStorage.removeItem('bq-sheet-writes'); localStorage.removeItem('bq-walked-today'); });
+    d1.set(data.dogs[1].id, '同行甲', '2026-10-17');
     await page.reload({ waitUntil: 'networkidle' });
     await page.locator('[data-tab="groups"]').click();
     await page.locator('#gwWalk').waitFor();
@@ -128,9 +127,8 @@ module.exports = async (browser, base) => {
     assert.doesNotMatch(await page.locator('.last-walk').textContent(), /僅能編輯已確認的今天溜狗人/, '刪除提示後不顯示該文案，昨天名單仍不可編輯');
     await page.clock.setSystemTime(new Date('2026-10-18T02:00:00Z'));
     for (const endpoint of ['walkers', 'today']) {
-      await page.evaluate(() => { localStorage.removeItem('bq-sheet-writes'); localStorage.removeItem('bq-walked-today'); });
       delayedRead = endpoint; releaseRead = null;
-      const first = page.waitForResponse(r => r.url().endsWith('/api/' + (endpoint === 'walkers' ? 'today' : 'walkers')));
+      const first = page.waitForResponse(r => pathIs(r, endpoint === 'walkers' ? 'today' : 'walkers'));
       await page.reload({ waitUntil: 'domcontentloaded' });
       await first;
       if (endpoint === 'walkers') {
@@ -140,7 +138,7 @@ module.exports = async (browser, base) => {
         // #418：初次今日消息尚未確認時，溜狗表先維持載入狀態。
         assert.equal(await page.locator('#main [data-dog]').count(), 0);
       }
-      const last = page.waitForResponse(r => r.url().endsWith('/api/' + endpoint));
+      const last = page.waitForResponse(r => pathIs(r, endpoint));
       delayedRead = ''; releaseRead();
       await last;
       await page.waitForLoadState('networkidle');
