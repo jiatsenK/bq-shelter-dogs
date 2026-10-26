@@ -36,7 +36,8 @@ const BQWalkUI = (() => {
       render(); renderDetail();
       if (result.failed.length) {
         const again = result.retryDogs;
-        showToast(result.message, null, again.length ? { label: '再試一次', fn: () => walkThenRecord(again, result) } : null);
+        // #643：失敗的提示條不自動消失，等志工按再試一次或關掉；狗卡也留著「沒登記到」
+        showToast(result.message, null, again.length ? { label: '再試一次', fn: () => walkThenRecord(again, result) } : null, { sticky: true });
       }
       // K 2026-10-24：D1 接受後提示條照舊給「＋一起溜的人」；K 2026-10-26（#445）：狗會往下排，旁邊也給「復原」讓按錯的人不用找
       else if (result.successful.length && loadWalkerName()) showToast(text,
@@ -67,7 +68,7 @@ const BQWalkUI = (() => {
       dogs.forEach(d => undoPending.delete(walkKey(d)));
       render(); renderDetail();
       const { text, show } = BQWalks.undoFeedback(result);
-      if (show) showToast(text, null, result.retryDogs.length ? { label: '再試一次', fn: () => undoSheetWalks(result.retryDogs, result, options) } : null);
+      if (show) showToast(text, null, result.retryDogs.length ? { label: '再試一次', fn: () => undoSheetWalks(result.retryDogs, result, options) } : null, { sticky: true });
       else replaceToast(progress, done);
       // 沒復原的狗改回已溜、排回後面，再捲過去讓人看得到
       const left = dogs.find(d => !result.successful.includes(d));
@@ -168,7 +169,8 @@ const BQWalkUI = (() => {
     appState.sheetQueue = pending;
     const result = await pending;
     render(); renderDetail();
-    showToast(result.message, null, result.retryDogs.length ? { label: '再試一次', fn: () => submitCompanions(result.retryDogs, names, result) } : null);
+    const failed = result.successful.length < result.rows.length;
+    showToast(result.message, null, result.retryDogs.length ? { label: '再試一次', fn: () => submitCompanions(result.retryDogs, names, result) } : null, { sticky: failed });
   }
 
   // 提示條還是剛剛那則（使用者還沒按別的）才換成確認後的說法
@@ -183,15 +185,16 @@ const BQWalkUI = (() => {
   let toastUndo = null;
   let toastExtra = null;
   // extra：{ label, fn } 提示條上多一顆按鈕（例：溜了之後「＋一起溜的人」）
+  // options.sticky：#643 登記失敗的提示條不自動消失，加一顆 × 讓志工自己關
 
-  function showToast(text, undo, extra) {
+  function showToast(text, undo, extra, options = {}) {
     let el = document.getElementById('toast');
     if (!el) {
       el = document.createElement('div');
       el.id = 'toast';
       el.className = 'toast';
-      el.setAttribute('role', 'status');
-      el.innerHTML = `<span class="toast-text"></span><button type="button" class="toast-extra" hidden></button><button type="button" class="toast-undo">復原</button>`;
+      el.innerHTML = `<span class="toast-text"></span><button type="button" class="toast-extra" hidden></button><button type="button" class="toast-undo">復原</button><button type="button" class="toast-close" aria-label="關閉提示" hidden>×</button>`;
+      el.querySelector('.toast-close').addEventListener('click', hideToast);
       el.querySelector('.toast-extra').addEventListener('click', () => {
         const fn = toastExtra;
         hideToast();
@@ -213,10 +216,14 @@ const BQWalkUI = (() => {
     const ex = el.querySelector('.toast-extra');
     ex.hidden = !extra;
     ex.textContent = extra ? extra.label : '';
+    const sticky = !!options.sticky;
+    el.classList.toggle('error', sticky);
+    el.setAttribute('role', sticky ? 'alert' : 'status');
+    el.querySelector('.toast-close').hidden = !sticky;
     el.hidden = false;
     document.body.classList.add('toast-on');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(hideToast, undo || extra ? TOAST_ACTION_MS : TOAST_MS);
+    if (!sticky) toastTimer = setTimeout(hideToast, undo || extra ? TOAST_ACTION_MS : TOAST_MS);
   }
 
   function hideToast() {
@@ -240,6 +247,9 @@ const BQWalkUI = (() => {
     if (walkPendingNow(dog) && !walkedNow(dog)) return `<button type="button" class="walk-btn pending" disabled aria-label="${esc(dog.name)} 正在登記">登記中</button>`;
     const state = walkRegistration.state(dog);
     const disabled = sheetWillWrite() && !state.canRevert && !walkPendingNow(dog) ? ' disabled' : '';
+    // #643：按了溜了沒登記成功，留紅框直到成功或再按；unsure 是送出了但沒收到確認
+    const failed = !state.mine && walkRegistration.failure(dog);
+    if (failed) return `<button type="button" class="walk-btn failed" data-walk="add" aria-label="${esc(dog.name)} ${failed.unsure ? '還不知道有沒有登記到' : '沒登記到'}，按一下再登記一次">${failed.unsure ? '未確認' : '沒登記到'}<small>再按一次</small></button>`;
     return state.mine
       ? `<button type="button" class="walk-btn done" data-walk="back" aria-label="${esc(dog.name)} 今天已溜，按一下取消"${disabled}>${icon('tick')}已溜</button>`
       : `<button type="button" class="walk-btn" data-walk="add" aria-label="${esc(dog.name)} 溜了">溜了</button>`;
@@ -293,13 +303,13 @@ const BQWalkUI = (() => {
     try {
       const result = await walkRegistration.register([dog], { walker: [...new Set(names)].join('、'), expected });
       if (!result.successful.length) showToast(registrationText(result), null,
-        result.retryDogs.length ? { label: '再試一次', fn: () => retryWalkerEdit(result) } : null);
+        result.retryDogs.length ? { label: '再試一次', fn: () => retryWalkerEdit(result) } : null, { sticky: true });
     } finally { walkerEditBusy = ''; render(); renderDetail(); }
   }
   async function retryWalkerEdit(previous) {
     const result = await walkRegistration.retry(previous);
     if (!result.successful.length) showToast(registrationText(result), null,
-      result.retryDogs.length ? { label: '再試一次', fn: () => retryWalkerEdit(result) } : null);
+      result.retryDogs.length ? { label: '再試一次', fn: () => retryWalkerEdit(result) } : null, { sticky: true });
     else hideToast();
     render(); renderDetail();
   }

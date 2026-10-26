@@ -287,6 +287,8 @@ main { overflow-wrap: anywhere; }
 .card .name { font-size: 18px; font-weight: 700; line-height: 1.3; word-break: break-all; }
 /* 犬名＋性別排成一列：長犬名在左邊自己換行，性別圖示固定貼在第一行右邊，不會單獨掉行（#93） */
 .card .name, .detail-head .name { display: flex; align-items: flex-start; }
+/* 狗卡、列表的狗名是按鈕（#644），長相跟一般文字一樣；:where 不加權重，字級、粗細照原本的 .card .name、.r-name */
+:where(.card button.name, .row-dog button.r-name) { width: 100%; margin: 0; padding: 0; border: none; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 /* 性別：♂ 藍色、♀ 紅色，沒有資料時不佔位；高度跟犬名一行一樣，圖示垂直置中 */
 .sex { flex-shrink: 0; display: inline-flex; align-items: center; height: 1.3em; margin-left: 4px; color: var(--ink-soft); }
 .sex .icon { width: 0.8em; height: 0.8em; }
@@ -982,7 +984,10 @@ html.find-zoom-open { overflow: hidden; }
   color: #B45A0C; background: #FFF1E4; border-radius: 8px; padding: 2px 7px 2px 4px;
   cursor: pointer; position: relative;
 }
-.cage-pill::after { content: ''; position: absolute; inset: -9px -6px; } /* 手指點的範圍大一點 */
+/* 手指點的範圍大一點，但不往上擴：往上會蓋到狗名那一列，手機點狗名會開成在哪（#644）。標籤本身加高、往下和左右擴，合起來至少 44px。
+   往下只擴 9px：360px 寬籠位在狗卡最下面，再多會蓋到下一張狗卡 */
+.cage-pill::after { content: ''; position: absolute; inset: 0 -6px -9px; }
+.card .cage-pill { min-height: 35px; }
 .cage-pill .icon { color: #E8730C; font-size: 13px; }
 .cage-pill:active { background: #FFE0C2; }
 .cage-pill:focus-visible { outline: 2px solid #E8730C; outline-offset: 2px; }
@@ -1489,6 +1494,10 @@ header.app .sync-btn:active, header.app .analysis-btn:active, .analysis-open hea
 .walk-btn:active { background: var(--primary-soft); }
 .walk-btn.done { background: var(--green-bg); color: var(--green-text); box-shadow: inset 0 0 0 1.5px var(--green-text); }
 .walk-btn.pending { background: var(--primary-soft); color: var(--primary); }
+/* #643：按了溜了沒登記到，紅框留到成功或再按一次（紅色只用在天數和警示） */
+.walk-btn.failed, .row-dog .walk-btn.failed { background: var(--red-bg); color: var(--red-text); box-shadow: inset 0 0 0 2px var(--red-text); font-size: 13px; line-height: 1.15; }
+.walk-btn.failed small { font-size: 11px; font-weight: 600; }
+.walk-btn.failed:active { background: #fff; }
 
 /* 籠位：黑框白底的檔案標籤 */
 .cage-pill {
@@ -1551,6 +1560,10 @@ header.app .sync-btn:active, header.app .analysis-btn:active, .analysis-open hea
 .toast { border-radius: 3px; background: var(--ink); }
 .toast-undo { color: var(--tab-amber); }
 .toast-extra { border-radius: 3px; }
+/* #643：登記失敗的提示條不自動消失，左邊紅條，右邊 × 自己關 */
+.toast.error { box-shadow: inset 4px 0 0 var(--tab-red), 0 6px 24px rgba(0, 0, 0, 0.25); }
+.toast-close { flex-shrink: 0; min-width: 44px; min-height: 44px; border: none; background: none; color: #fff; font-family: inherit; font-size: 20px; line-height: 1; cursor: pointer; }
+.toast-close[hidden] { display: none; }
 
 /* 平面圖：檔案綠的線和字，選到的區淡綠、那一籠黃籤 */
 .find-map {
@@ -2431,6 +2444,19 @@ html.kb-open .onboard { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-
 .gw-secondary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; }
 
 .desk-on .zukan-link[hidden] { display: none; }
+
+/* #647 單手操作（docs/DESIGN_GUIDE.md）：手機可點元素至少 44×44px、相鄰至少隔 8px；外觀大小盡量不變，只撐高點擊範圍或拉開間距 */
+.reentry .former-add { min-height: 44px; padding: 0 6px; }
+.my-note-edit { min-height: 44px; }
+.group-page-link { display: inline-flex; align-items: center; min-height: 44px; margin-top: 4px; padding: 0; }
+.where-close { width: 44px; height: 44px; flex-shrink: 0; }
+.walk-tools .chips { gap: 8px; }
+.seg { gap: 8px; }
+.tabs { gap: 8px; }
+.ob-name .ob-foot { gap: 8px; }
+/* 列表每列上下至少 9px，「溜了」離隔壁列 9px 以上；有警示備註的列鈕靠上，也靠這個 padding */
+.row-dog { min-height: 62px; padding-block: 9px; }
+.gw-cards { column-gap: 8px; }
 
 /* 測試網站（worker/src/test-site.js 在 <html> 加 data-site="test"；正式版沒有這個屬性，不受影響）：
    檔案櫃（頁首、底部列、選中分頁）換成測試紫，標題旁一顆黃底「測試版」，一眼分得出不是正式版。

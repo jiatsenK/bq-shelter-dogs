@@ -135,7 +135,7 @@ module.exports = async (browser, base) => {
     await page.locator('#groupStage').waitFor();
     partial = true;
     await page.locator('#gwWalk').click();
-    await page.getByText(/未全部登記成功/).waitFor();
+    await page.getByText(/沒登記到|還不知道有沒有登記到/).first().waitFor();
     partial = false;
     const beforeRetry = writes.length;
     data.dogs[1].note = '禁止溜狗';

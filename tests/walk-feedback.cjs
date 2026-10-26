@@ -63,7 +63,7 @@ module.exports = async (browser, base) => {
     await button().click();
     await page.locator('#main .card .walk-btn.pending', { hasText: '登記中' }).waitFor();
     await release('reject');
-    await page.getByText(/未全部登記成功/).waitFor();
+    await page.getByText(/沒登記到|還不知道有沒有登記到/).first().waitFor();
     assert.equal(await page.locator('#main .card .walk-btn.done').count(), 0, '被拒絕不能假報成功');
     console.log('#498 登記立即處理中、復原立即恢復、D1 接受不等試算表、拒絕不假報成功通過');
   } finally { hold?.('reject'); await context.close(); }

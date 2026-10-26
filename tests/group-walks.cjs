@@ -87,7 +87,7 @@ module.exports = async (browser, base) => {
     assert.equal(await page.locator('.front [aria-pressed="true"]').count(), 0);
     partial = true;
     await page.locator('#gwWalk').click();
-    await page.getByText(/未全部登記成功/).waitFor();
+    await page.getByText(/沒登記到|還不知道有沒有登記到/).first().waitFor();
     partial = false;
     const sideTop = () => page.evaluate(() => { scrollTo(0, 0); return document.querySelector('.gw-side.next').getBoundingClientRect().top; });
     const beforeWalk = await sideTop();
