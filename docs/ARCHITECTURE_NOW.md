@@ -43,7 +43,7 @@ GAS 送不出去時把待送內容留在指令碼屬性（`WALK_EDITS_PENDING`�
 
 - 獨立的管理 Worker（`wrangler.admin.jsonc`、`worker/src/admin/`、`admin/public/`），用 Cloudflare Access 驗證管理者，跟志工網站共用同一個 D1 和 R2，沒有自己的排程。
 - **沒有自動部署**：main 合併不會更新管理站，要手動部署（步驟在 `admin/README.md`）。改到兩站共用的程式時，兩個 Worker 都要部署。
-- 進度：第 1–4 階段已上線（#564–#567），第 5 階段待做（#568）。
+- 進度：第 1–5 階段都已上線（#564–#568）；#568 刪了電腦版「補資料」。
 
 ## D1 結構怎麼改（#553）
 

@@ -2,7 +2,7 @@
 
 獨立 Worker／assets，以 Cloudflare Access 驗證管理者。不載入志工 app、不使用瀏覽器 ADMIN_KEY、不新增排程。#564 起唯讀狗表；#565 起有功能設定、#566 狗資料、#567 活動的寫入路徑，全部走既有共用模組與同交易紀錄。志工入口與部署流程維持原有設定。
 
-> 2026-10-26 現況：第 1–4 階段已上線（#564 唯讀狗表、#565 功能管理、#566 狗資料編輯、#567 活動／資料檢查／更新紀錄），已部署到正式環境。本文的「資料與成本」「部署與權限驗收」是 #564 第一階段寫的；功能管理、狗資料編輯、活動與紀錄見 `docs/operations/feature-settings.md`、`docs/operations/dog-editing.md`、`docs/operations/admin-records.md`。決策見 ADR 0020。
+> 2026-10-26 現況：第 1–5 階段都已上線（#564 唯讀狗表、#565 功能管理、#566 狗資料編輯、#567 活動／資料檢查／更新紀錄、#568 清理重複介面），已部署到正式環境。本文的「資料與成本」「部署與權限驗收」是 #564 第一階段寫的；功能管理、狗資料編輯、活動與紀錄見 `docs/operations/feature-settings.md`、`docs/operations/dog-editing.md`、`docs/operations/admin-records.md`。決策見 ADR 0020。
 
 ## 程式入口
 
