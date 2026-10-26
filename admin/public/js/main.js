@@ -35,25 +35,36 @@ function markSelected(dogId) {
     row.querySelector('.edit-button')?.setAttribute('aria-expanded', String(on));
   }
 }
-function openDog(dog, options) {
-  if (drawer.open(dog, options)) markSelected(dog.dogId);
+// 開抽屜時記下當時的篩選＋排序順序；「存並開下一隻」照這份順序往後走，
+// 不在存檔後重算（剛補完的狗會掉出篩選，重算會跳回開頭）
+let queue = [];
+// 開抽屜會讓表格切精簡欄、內容讓位，列高跟著變：把被點的列留在原本的螢幕位置，看不到時才捲進來
+function openDog(dog, { keepQueue = false, ...options } = {}) {
+  const top = rowOf(dog.dogId)?.getBoundingClientRect().top;
+  if (!drawer.open(dog, options)) return;
+  if (!keepQueue) queue = orderDogs(state.dogs, filters()).map(d => d.dogId);
+  markSelected(dog.dogId);
+  const row = rowOf(dog.dogId);
+  if (!row) return;
+  if (top !== undefined) scrollBy({ top: row.getBoundingClientRect().top - top, behavior: 'instant' });
+  row.scrollIntoView({ block: 'nearest', behavior: 'instant' });
 }
 function filters() {
   return { ...state, query: byId('query').value, presence: byId('presence').value, sex: byId('sex').value, care: byId('care').value };
 }
+// 從記下的順序裡這隻的下一個開始找，跳過已經不符合目前篩選的（例如別人剛補好）
 function openNext(dogId, notice) {
   const ordered = orderDogs(state.dogs, filters());
-  const index = ordered.findIndex(dog => dog.dogId === dogId);
-  const next = ordered[index + 1];
+  const position = new Map(ordered.map((dog, i) => [dog.dogId, i]));
+  const next = queue.slice(queue.indexOf(dogId) + 1).find(id => position.has(id));
   if (!next) {
     drawer.close();
-    status.textContent = `${notice}${index === -1 ? '這隻狗不在目前的篩選結果裡。' : '已經是目前清單的最後一隻。'}`;
+    status.textContent = `${notice}這份清單處理完了。`;
     return;
   }
-  const page = Math.floor((index + 1) / state.pageSize) + 1;
+  const page = Math.floor(position.get(next) / state.pageSize) + 1;
   if (page !== state.page) { state.page = page; render(); }
-  openDog(next, { notice, force: true });
-  rowOf(next.dogId)?.scrollIntoView({ block: 'nearest' });
+  openDog(ordered[position.get(next)], { notice, force: true, keepQueue: true });
 }
 function renderRow(dog) {
   const row = document.createElement('tr');
@@ -79,7 +90,7 @@ function renderRow(dog) {
   const name = element('td', undefined, 'dog-name');
   name.append(element('div', dog.name || '未命名'));
   if (!dog.onMain) name.append(element('small', '未列主清單', 'text-secondary'));
-  const intro = element('td', undefined, 'intro-cell');
+  const intro = element('td', undefined, 'intro-cell col-wide');
   if (dog.intro) {
     const detail = element('details');
     detail.append(element('summary', '查看介紹'), element('p', dog.intro));
@@ -92,8 +103,8 @@ function renderRow(dog) {
   if (!labels.length) care.append(element('span', '無待補項目', 'text-secondary'));
   if (dog.rest) care.append(element('p', `休養至 ${dog.rest.until}${dog.rest.reason ? ` · ${dog.rest.reason}` : ''}`, 'sheet-note'));
   row.append(editCell, photo, element('td', dog.number || '未編號', 'dog-number'), name,
-    element('td', dog.cage || '—'), element('td', sexLabel(dog.sex)), intro, care,
-    element('td', dog.dogId, 'identity'));
+    element('td', dog.cage || '—', 'col-wide'), element('td', sexLabel(dog.sex), 'col-wide'), intro, care,
+    element('td', dog.dogId, 'identity col-wide'));
   return row;
 }
 // 篩選條件放進網址（待補清單連過來、重新整理都保留）；dog 參數只在進頁時用來開抽屜
