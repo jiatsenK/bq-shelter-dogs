@@ -287,6 +287,8 @@ main { overflow-wrap: anywhere; }
 .card .name { font-size: 18px; font-weight: 700; line-height: 1.3; word-break: break-all; }
 /* 犬名＋性別排成一列：長犬名在左邊自己換行，性別圖示固定貼在第一行右邊，不會單獨掉行（#93） */
 .card .name, .detail-head .name { display: flex; align-items: flex-start; }
+/* 狗卡、列表的狗名是按鈕（#644），長相跟一般文字一樣；:where 不加權重，字級、粗細照原本的 .card .name、.r-name */
+:where(.card button.name, .row-dog button.r-name) { width: 100%; margin: 0; padding: 0; border: none; background: none; color: inherit; font: inherit; text-align: left; cursor: pointer; }
 /* 性別：♂ 藍色、♀ 紅色，沒有資料時不佔位；高度跟犬名一行一樣，圖示垂直置中 */
 .sex { flex-shrink: 0; display: inline-flex; align-items: center; height: 1.3em; margin-left: 4px; color: var(--ink-soft); }
 .sex .icon { width: 0.8em; height: 0.8em; }
@@ -984,7 +986,10 @@ html.find-zoom-open { overflow: hidden; }
   color: #B45A0C; background: #FFF1E4; border-radius: 8px; padding: 2px 7px 2px 4px;
   cursor: pointer; position: relative;
 }
-.cage-pill::after { content: ''; position: absolute; inset: -9px -6px; } /* 手指點的範圍大一點 */
+/* 手指點的範圍大一點，但不往上擴：往上會蓋到狗名那一列，手機點狗名會開成在哪（#644）。標籤本身加高、往下和左右擴，合起來至少 44px。
+   往下只擴 9px：360px 寬籠位在狗卡最下面，再多會蓋到下一張狗卡 */
+.cage-pill::after { content: ''; position: absolute; inset: 0 -6px -9px; }
+.card .cage-pill { min-height: 35px; }
 .cage-pill .icon { color: #E8730C; font-size: 13px; }
 .cage-pill:active { background: #FFE0C2; }
 .cage-pill:focus-visible { outline: 2px solid #E8730C; outline-offset: 2px; }
