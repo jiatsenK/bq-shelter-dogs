@@ -13,4 +13,4 @@
   - 測試：`scripts/admin-table.test.mjs` 改檢查 workers.dev 與 vars 格式；`tests/index/hosting.js` 加部署 workflow 擋關檢查與反例。
   - 文件：`admin/README.md` 部署段、`docs/ARCHITECTURE_NOW.md` 管理網站段、`worker/src/index.js` 開頭註解（/api/admin 與管理網站分開說）。
 - 未做：沒有部署、沒有跑新 workflow、沒有改 Access 設定。合併後線上仍是 `3c76039f`，要 K 按一次「部署管理網站」才會換成 main 並留下 commit 紀錄。CI 的 Cloudflare token 有沒有管理網站 Worker 的權限，第一次跑才知道。
-- 相關 PR：待補。
+- 相關 PR：#605（草稿）。
