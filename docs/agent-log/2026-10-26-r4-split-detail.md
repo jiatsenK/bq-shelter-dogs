@@ -13,4 +13,4 @@
 - README 順帶補上原本漏列的 `photo-images.js`。
 - 本機：`check-local.ps1 -Full` 通過；另跑 detail-editing、fixed-care、intake-presentation、keyboard-viewport、departed-cards、es-modules、index。這台沒有 `pwsh`，`local-check.test.mjs` 要設 `$env:BQ_CHECK_PWSH = 'powershell'` 才能跑。
 - 未做：手機實際檢查（詳細資訊開關、各編輯器）待 K。
-- 相關 PR：待開（草稿）。
+- 相關 PR：[#627](https://github.com/jiatsenK/bq-shelter-dogs/pull/627)，草稿。
