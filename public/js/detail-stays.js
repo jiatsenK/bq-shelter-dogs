@@ -2,7 +2,7 @@ import { canEdit } from './feature-settings.js';
 import { BQApi } from './api.js';
 import { BQDates } from './dates.js';
 import { appState } from './page-state.js';
-import { esc, isoDay, ymdText } from './ui-kit.js';
+import { esc, icon, isoDay, ymdText } from './ui-kit.js';
 import { BQWalkUI } from './walk-ui.js';
 import { NEED_EDITOR, editorName, render } from './app.js';
 import { detailEdits, renderDetail } from './detail.js';
@@ -47,7 +47,8 @@ function stayLinesHtml(lines) {
 function staysView(dog, events) {
   const rows = BQDates.stayRows(dog);
   const shown = !(plain(rows) && !events.length);
-  const button = canStays(dog) ? `<button type="button" class="stays-edit" id="staysEdit">${shown ? '改出入所紀錄' : '＋補出入所紀錄'}</button>` : '';
+  // 跟介紹的筆一樣（K 2026-10-26 統一圖示）
+  const button = canStays(dog) ? `<button type="button" class="intro-heading-edit" id="staysEdit" aria-label="${shown ? '改' : '補'}出入所紀錄">${icon('write')}</button>` : '';
   return { list: shown ? stayLinesHtml(stayLines(dog, events)) : '', button };
 }
 

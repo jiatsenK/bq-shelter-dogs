@@ -2225,10 +2225,6 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .intro-heading-edit { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 44px; height: 44px; padding: 0; border: 0; background: none; color: var(--primary); cursor: pointer; }
 .intro-heading-edit .icon { width: 16px; height: 16px; }
 .intro-heading-edit:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
-/* 改出入所紀錄（#639）：標題旁的文字按鈕，點得到的高度跟筆的按鈕一樣 */
-.stays-edit { border: 0; background: none; color: var(--primary); font: inherit; font-size: 14px; font-weight: 400; min-height: 44px; padding: 0 6px; cursor: pointer; }
-.stays-edit:hover { text-decoration: underline; }
-.stays-edit:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .intake-list { list-style: none; display: grid; gap: 10px; margin: 0 0 12px; padding: 0; }
 .intake-list li { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 8px; font-size: 16px; line-height: 1.7; overflow-wrap: anywhere; }
 .intake-list time, .intake-date-empty { font-weight: 700; font-variant-numeric: tabular-nums; }

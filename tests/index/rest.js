@@ -145,7 +145,7 @@ async function runRestTests() {
       try {
         delete dog.stays; dog.formerIds = [];
         showDetail(dog);
-        eq([document.querySelector('#detail .stay-lines'), document.getElementById('staysEdit').textContent], [null, '＋補出入所紀錄'], '只有目前編號：不列，只留補的入口：');
+        eq([document.querySelector('#detail .stay-lines'), document.getElementById('staysEdit').getAttribute('aria-label')], [null, '補出入所紀錄'], '只有目前編號：不列，只留補的入口：');
         edit();
         eq([document.querySelector('[data-stay-row="0"][data-stay-field="number"]').readOnly, document.querySelector('[data-stay-remove="0"]')], [true, null], '目前編號那列不能改、不能刪：');
         document.getElementById('staysAdd').click();

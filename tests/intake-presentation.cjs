@@ -33,6 +33,9 @@ module.exports = async (browser, base) => {
     assert.equal(await section.locator('.content').textContent(), '親人，怕機車聲。', '其他補充接在下面');
     assert.equal(await section.locator('details, [role="tablist"]').count(), 0, '直接呈現，不加展開或切換');
     assert.equal(await section.locator('button').count(), 2, '閱讀時只有改出入所紀錄、改介紹兩個入口');
+    // 兩個入口同一種筆圖示（K 2026-10-26）
+    assert.deepEqual(await section.locator('button').evaluateAll(bs => bs.map(b => [b.className, b.getAttribute('aria-label'), b.textContent.trim(), !!b.querySelector('svg')])),
+      [['intro-heading-edit', '改出入所紀錄', '', true], ['intro-heading-edit', '改介紹', '', true]]);
     // #639 驗收：墨西哥的入所日仍是 2015-08-18；舊資料的「整修移所」（#392）先列在離所那行，#651 會搬到離所原因
     assert.deepEqual(await section.locator('.stay-lines li').allTextContents(), ['2015/08/18入所迷路', '2017/09/05離所整修移所', '2017/09/05入所']);
     assert.match(await page.locator('#detail .chips').textContent(), /入所 2015\/8/);
