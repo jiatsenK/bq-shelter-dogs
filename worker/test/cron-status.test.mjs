@@ -39,7 +39,7 @@ test('排程：保險掃描讀試算表失敗、寫回重試讀 D1 失敗都記�
   try {
     await post(env, request('cron-0001', '甲'));
     globalThis.fetch = async () => { throw new Error('network'); };
-    await run(env, '53 1,5,15 * * *', T);
+    await run(env, '23 1,5,15 * * *', T);
     const scan = await row(env, 'scan');
     assert.equal(scan.okAt, undefined);
     assert.equal(scan.failAt, '2026-10-26T05:53:00.000Z');
@@ -56,7 +56,7 @@ test('預覽版、功能沒開：排程不跑也不記', async () => {
   const env = { ...await setup(), WALK_RETRY_ENABLED:'true', PREVIEW:'1' };
   try {
     await run(env, '5-59/10 * * * *', T);
-    await run(env, '53 1,5,15 * * *', T);
+    await run(env, '23 1,5,15 * * *', T);
     assert.equal(await row(env, 'retry'), null);
     assert.equal(await row(env, 'scan'), null);
   } finally { env.DB.close(); }

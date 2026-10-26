@@ -47,3 +47,12 @@ test('小程式錯誤不帶出試算表 ID', () => {
   assert.equal(scriptError(''), '試算表沒有寫進去');
   assert.equal(scriptError('別的錯 1AbCdEfGhIjKlMnOpQrStUvWxYz0123'), '別的錯 …');
 });
+
+test('逾時：保險掃描讀回等 45 秒、合併寫回 90 秒、其他 20 秒（研究 2026-10-26）', () => withFetch(() => json({ ok: true }), async () => {
+  const saved = AbortSignal.timeout, seen = [];
+  AbortSignal.timeout = ms => { seen.push(ms); return saved.call(AbortSignal, ms); };
+  try {
+    for (const action of ['walkScan', 'walkWakeBatch', 'walkWake']) await callSheet(ENV, { action });
+  } finally { AbortSignal.timeout = saved; }
+  assert.deepEqual(seen, [45000, 90000, 20000]);
+}));
