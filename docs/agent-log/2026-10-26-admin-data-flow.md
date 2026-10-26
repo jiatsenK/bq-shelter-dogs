@@ -10,5 +10,5 @@
 - 測試：`worker/test/admin-flow.test.mjs`（API 讀值、空庫、預算常數、未登入 401、只准讀）、`scripts/admin-flow-model.test.mjs`（圖自洽、燈號門檻、格式錯丟錯）、`tests/admin-flow.cjs`（兩張圖、燈號、詳細、網址、讀取失敗、1440／1100／390px、CSP）；`scripts/admin-table.test.mjs` 側欄改成八頁。截圖在 `.impeccable/review/flow-*.png`。
 - detect：只剩 vendor Tabler 的 `animated-dots`（既有誤判）；節點原本的單邊色條被抓 side-tab，已改成整張淡色底框。
 - 未做：沒開 PR、沒部署。管理網站要合併後手動跑「部署管理網站」才會出現這頁。
-- 相關 PR：尚未建立。
+- 相關 PR：尚未建立。待決定的做法記在 [#658](https://github.com/jiatsenK/bq-shelter-dogs/issues/658)，分支先放著。
 - 2026-10-26 追加：背景研究員核對圖與程式，結果在 `docs/research/2026-10-26-flow-diagram-maintenance.md`（6 處不符、8 處不精確；燈號「一直失敗的狗永遠是綠的」、紅燈分類太寬）。K 之後說主要想要像 Cloudflare 那樣的視覺化、而且是真實資料，做法（資源圖自動產生／加流量／維持手畫；部署時讀、開頁即時讀、只讀 repo）還沒決定，圖與燈號都先不改。
