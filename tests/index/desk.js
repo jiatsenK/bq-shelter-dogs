@@ -81,7 +81,7 @@ async function runDeskTests() {
     await check('這間收容所的設定集中在 js/site-config.js（10-10 K：以後其他收容所可以搬去用）：門檻、警示字、分區不寫死在別的檔', () => {
       eq([AMBER_DAYS, RED_DAYS, SPECIAL_KEYWORDS === SITE.warnKeywords, DESK_ZONES === SITE.zones], [SITE.days.amber, SITE.days.red, true, true], '都讀 SITE：');
       eq(SITE.zones.map(z => [z.key, z.test('新 A10'), z.test('c區13')]), [['new', true, false], ['old', false, false], ['mom', false, false], ['c', false, true], ['ward', false, false]], '分區比對（去空白、C 區不分大小寫）：');
-      if (!/from ['"]\.\/site-config\.js['"]/.test(APP_JS)) throw new Error('主頁要明確匯入 SITE');
+      if (!/from ['"]\.\/dog-status\.js['"]/.test(APP_JS)) throw new Error('主頁的門檻與警示字要從 dog-status.js（讀 SITE）來');
       if (/const (AMBER_DAYS|RED_DAYS) = [0-9]/.test(APP_JS) || APP_JS.includes('[\'勿溜\'')) throw new Error('js/app.js 不該再寫死門檻或警示字');
     });
     await check('電腦版全表（10-10 K）：同一欄再點一次反過來排、三角形跟著換；點整列開詳細資訊，勾選那一格不算', () => {
