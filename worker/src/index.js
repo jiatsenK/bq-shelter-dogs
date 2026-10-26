@@ -336,7 +336,6 @@ async function maintenance(env, now = Date.now()) {
 }
 
 const baseOf = request => new URL(request.url).origin;
-const siteMeta = now => ({ from: 'site', at: new Date(now).toISOString() });
 
 async function uploadR2(request, env, origin, ctx) {
   const id=decodeURIComponent(new URL(request.url).pathname.split('/').at(-1));
