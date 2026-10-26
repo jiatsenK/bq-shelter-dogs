@@ -320,7 +320,6 @@ async function activities(request, env, origin) {
 // 不產生提交、馬上生效。換掉、刪掉之前先備份到 Trash，備份成功才動原檔
 
 const THUMB_MAX_BYTES = 512 * 1024;
-const MIGRATE_MAX_ITEMS = 10;
 
 // 照片垃圾桶每月 1 日清一次（#501，ADR 0018 第 7 點），不再綁在同步上：清掉超過 30 天的，結果記在 v3_sync_state 的 trash_purged
 // （{ at, purged, failed, errors }，GET /admin/trash 的 lastPurge）。有清不掉的就丟錯，排程紀錄 cron_trash 才會記成出錯
@@ -350,7 +349,7 @@ async function uploadR2(request, env, origin, ctx) {
   }catch(error){return fail(error.status||502,error.status?error.message:'照片未完成，請重新讀取後重試；舊圖仍保留',origin);}
 }
 
-// ── 管理用 API（/api/admin/...）：搬遷、縮圖、Trash ──
+// ── 管理用 API（/api/admin/...）：縮圖、Trash（#593 拿掉 #130 的搬遷）──
 // 只給 GitHub Action 用：不看網站來源，改看標頭 X-Admin-Key（GitHub Secret ADMIN_KEY）。人用的管理網站是另一個 Worker（admin/、ADR 0020），不用這把金鑰
 async function checkAdmin(request, cfg, origin) {
   if (!cfg.adminKey) return fail(500, '還沒設定 ADMIN_KEY', origin);
@@ -369,56 +368,6 @@ async function readJsonBody(request, maxBytes) {
   const raw = await request.text();
   if (new TextEncoder().encode(raw).length > maxBytes) return null;
   try { return JSON.parse(raw); } catch (e) { return null; }
-}
-
-const cleanItems = items => Array.isArray(items) && items.length <= MIGRATE_MAX_ITEMS &&
-  items.every(i => i && r2.isPhotoKey(i.path) && /^[0-9a-f]{64}$/.test(i.sha256) && Number.isInteger(i.size) && i.size > 0)
-  ? items : null;
-
-// 一次性搬遷：Action 送 repo 裡照片的路徑、sha256、大小（一次最多 10 張），Worker 從部署上去的舊檔複製到 R2。
-// R2 已經有（網站換過、刪過）的不蓋掉；R2 寫入時用 sha256 驗證內容，跟 repo 的不一樣就不存
-async function migrate(request, env, origin) {
-  const cfg = config(env);
-  const base = baseOf(request);
-  const input = await readJsonBody(request, 16 * 1024);
-  const items = input && cleanItems(input.items || []);
-  if (!items) return fail(400, `要送 items：[{ path, sha256, size }]，一次最多 ${MIGRATE_MAX_ITEMS} 張`, origin);
-  const results = [];
-  for (const it of items) {
-    const head = await env.PHOTOS.head(it.path);
-    if (head) { results.push({ path: it.path, status: r2.isTomb(head) ? 'deleted' : 'exists' }); continue; }
-    const res = await env.ASSETS.fetch(new Request(`${base}/${it.path}`));
-    if (!res.ok) { results.push({ path: it.path, status: 'missing' }); continue; }
-    const bytes = new Uint8Array(await res.arrayBuffer());
-    if (bytes.length !== it.size) { results.push({ path: it.path, status: 'mismatch' }); continue; }
-    try {
-      await env.PHOTOS.put(it.path, bytes, { httpMetadata: { contentType: 'image/jpeg' }, customMetadata: { sha256: it.sha256, from: 'github' }, sha256: it.sha256 });
-      results.push({ path: it.path, status: 'copied' });
-    } catch (e) {
-      results.push({ path: it.path, status: 'mismatch' });
-    }
-  }
-  r2.resetR2State();
-  return reply(200, { ok: true, results }, origin);
-}
-
-// 搬完核對：R2 裡每張的大小、sha256 跟 repo 的一樣嗎（網站後來換過、刪過的分開算，不算錯）
-async function verify(request, env, origin) {
-  const input = await readJsonBody(request, 16 * 1024);
-  const items = input && cleanItems(input.items || []);
-  if (!items) return fail(400, `要送 items：[{ path, sha256, size }]，一次最多 ${MIGRATE_MAX_ITEMS} 張`, origin);
-  const results = [];
-  for (const it of items) {
-    const head = await env.PHOTOS.head(it.path);
-    const meta = (head && head.customMetadata) || {};
-    let status = 'missing';
-    if (r2.isTomb(head)) status = 'deleted';
-    else if (head && head.size === it.size && meta.sha256 === it.sha256) status = 'ok';
-    else if (head && meta.from === 'site') status = 'changed';
-    else if (head) status = 'mismatch';
-    results.push({ path: it.path, status });
-  }
-  return reply(200, { ok: true, results }, origin);
 }
 
 // 縮圖 Action 傳回來的縮圖：PUT /admin/thumbs/photos/...（原圖的路徑）
@@ -451,8 +400,6 @@ async function admin(request, env, origin, path) {
   const denied = await checkAdmin(request, cfg, origin);
   if (denied) return denied;
   const m = request.method;
-  if (m === 'POST' && path === '/admin/migrate') return migrate(request, env, origin);
-  if (m === 'POST' && path === '/admin/verify') return verify(request, env, origin);
   if (m === 'GET' && path === '/admin/thumbs') return reply(200, { ok: true, pending: await r2.pendingThumbs(env) }, origin);
   if (m === 'PUT' && path.startsWith('/admin/thumbs/')) return putThumb(request, env, origin, decodeURIComponent(path.slice('/admin/thumbs/'.length)));
   if (m === 'GET' && path === '/admin/trash') {
