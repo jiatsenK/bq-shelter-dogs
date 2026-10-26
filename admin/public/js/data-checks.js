@@ -63,5 +63,5 @@ export function cronStatus(j) {
   return { last: j.okAt ? when(j.okAt) : '—', problem: problems.join('；') || '正常', bad: Boolean(failing || j.stale) };
 }
 
-// #624 待補清單 → 狗資料表：帶篩選條件；給 dogId 時直接開那隻狗的編輯抽屜
-export const careLink = (care, dogId) => `./?${new URLSearchParams({ presence: 'main', care, ...(dogId ? { dog: dogId } : {}) })}`;
+// #624 待補清單 → 狗資料表：帶篩選條件；給 dogId 時直接開那隻狗的編輯抽屜（狀態分頁預設在所，不用另外帶）
+export const careLink = (care, dogId) => `./?${new URLSearchParams({ care, ...(dogId ? { dog: dogId } : {}) })}`;

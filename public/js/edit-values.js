@@ -1,5 +1,8 @@
 // 編輯紀錄的改前／改後顯示（純函式）：志工編輯紀錄頁與管理網站更新紀錄共用（#567，由 build-admin-assets 複製）。
 
+// 合併狗的筆數：{ 溜狗紀錄: 3 } → 「溜狗紀錄 3 筆」（管理網站預覽也用）
+export const countsText = c => Object.entries(c || {}).map(([k, n]) => `${k} ${n} 筆`).join('、');
+
 // 改前／改後內容寫成一行字
 export function editsValue(kind, v) {
   if (kind === 'sex') return ({ male: '公', female: '母', '': '待確認' })[v] || '待確認';
@@ -12,6 +15,14 @@ export function editsValue(kind, v) {
   if (kind === 'volunteer_merge') {
     const person = p => p.name + '（常溜 ' + p.favorites + '、開卡 ' + p.cards + '、溜狗來源紀錄 ' + p.walkRows + '）';
     return v.source ? person(v.source) + ' ＋ ' + person(v.target) : v.name;
+  }
+  if (kind === 'merge' || kind === 'unmerge') {
+    // 合併狗（管理網站）：改前＝被併那隻與牠的資料筆數；改後＝併到哪隻、搬了什麼（取消合併反過來）
+    const counts = c => countsText(c) || '沒有資料';
+    const dog = (name, numbers) => `${name || '未命名'}（${(numbers || []).join('、') || '無編號'}）`;
+    if (v.moved) return `併到 ${dog(v.name, [v.number].filter(Boolean))}；搬過去：${counts(v.moved)}${Object.keys(v.kept || {}).length ? `；兩邊都有、留原本的：${counts(v.kept)}` : ''}`;
+    if (v.mergeLogId) return `${dog(v.name, [v.number].filter(Boolean))}，取消第 ${v.mergeLogId} 筆合併`;
+    return `${dog(v.name, v.numbers)}：${counts(v.counts)}`;
   }
   if (kind === 'rest') return `休養到 ${v.until}${v.reason ? `（${v.reason}）` : ''}`;
   if (kind === 'group') return `${v.label || '（沒有群名）'}：${(v.names || []).join('、') || '（沒有狗）'}`;

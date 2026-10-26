@@ -12,7 +12,7 @@ module.exports = async (browser, base) => {
   const dogs = Array.from({ length: 63 }, (_, i) => ({ dogId: (i + 1).toString(16).padStart(32, '0'),
     number: String(2026010101 + i), name: i ? `測試狗 ${i + 1}` : '阿福', cage: i % 2 ? 'B2' : 'A1',
     intro: i % 3 ? '親人，喜歡散步。牽繩時請放慢腳步，給牠一點時間。' : '', note: i ? '' : '<img src=x onerror=alert(1)>',
-    sex: i % 4 ? 'male' : '', onMain: i !== 62, fixedCare: i === 2,
+    sex: i % 4 ? 'male' : '', onMain: i !== 62, status: i !== 62 ? 'main' : 'unknown', formerNumber: '', departure: null, fixedCare: i === 2,
     rest: i === 1 ? { until: '2099-01-01', reason: '術後休養' } : null, photoUrl: i === 2 ? '/photos/missing.jpg' : null }));
   let result = { dogs }, code = 200, apiCalls = 0;
   const methods = [];
@@ -57,9 +57,14 @@ module.exports = async (browser, base) => {
     assert.match(await rows.first().textContent(), /阿福/);
     await page.locator('#clear').click();
     await page.waitForFunction(() => document.querySelectorAll('#dogs tr').length === 50);
-    await page.locator('#presence').selectOption('other');
+    assert.equal(await page.locator('[data-count="main"]').textContent(), '62');
+    assert.equal(await page.locator('[data-count="unknown"]').textContent(), '1');
+    await page.locator('[data-status="unknown"]').click();
     assert.equal(await rows.count(), 1);
-    await page.locator('#clear').click();
+    assert.match(await rows.first().textContent(), /待核對/);
+    assert.equal(await page.locator('[data-status="unknown"]').getAttribute('aria-pressed'), 'true');
+    await page.locator('[data-status="all"]').click();
+    await page.waitForFunction(() => document.querySelectorAll('#dogs tr').length === 50);
     await page.locator('#care').selectOption('rest');
     assert.equal(await rows.count(), 1);
     assert.match(await rows.first().textContent(), /術後休養/);
