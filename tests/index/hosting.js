@@ -47,13 +47,15 @@ async function runR2Tests() {
   });
   const deploy = await get('../.github/workflows/deploy-cloudflare.yml');
   const preview = await get('../.github/workflows/preview-cloudflare.yml');
-  await check('#214 部署：R2 只查證，正式 D1 與隔離測試 D1 分開，失敗不繼續部署', () => {
+  await check('#214／稽核 3 部署：R2 只查證，正式與預覽的 Worker、D1、R2 分開，失敗不繼續部署', () => {
     if (!/node scripts\/r2-bucket\.mjs\r?\n/.test(deploy) || /r2-bucket\.mjs --create/.test(deploy)) throw new Error('正式 R2 只能查證');
     if (!deploy.includes('node scripts/d1-database.mjs --config "${{ steps.r2.outputs.config }}"')) throw new Error('準備資料庫要接著 R2 那一步的設定');
     if (!deploy.includes('wrangler@4 deploy --config "${{ steps.d1.outputs.config }}"')) throw new Error('正式部署要用確認後的設定');
-    if (!/node scripts\/r2-bucket\.mjs\r?\n/.test(preview) || /r2-bucket\.mjs --create/.test(preview)) throw new Error('預覽只確認、不建 bucket');
-    if (!preview.includes('node scripts/d1-database.mjs --config "${{ steps.r2.outputs.config }}" --preview')) throw new Error('預覽要查證測試 D1');
-    if (!/versions upload\s*\\\s*\r?\n\s*--config "\$\{\{ steps\.d1\.outputs\.config \}\}"/.test(preview)) throw new Error('預覽上傳要用測試 D1 的設定');
+    if (/r2-bucket\.mjs/.test(preview)) throw new Error('預覽不查正式 R2，測試 R2 由 d1-database.mjs --preview 查證');
+    if (!preview.includes('node scripts/d1-database.mjs --config wrangler.jsonc --preview')) throw new Error('預覽要查證隔離（測試 D1、測試 R2、沒有密鑰）');
+    if (/--create-preview-worker/.test(preview)) throw new Error('預覽 Worker 只由 K 手動建立一次');
+    if (!/versions upload\s*\\\s*\r?\n\s*--config "\$\{\{ steps\.d1\.outputs\.config \}\}"/.test(preview)) throw new Error('預覽上傳要用驗證過的隔離設定');
+    if (/--secrets-file|secret put|secrets\.(?!CLOUDFLARE_API_TOKEN\b|CLOUDFLARE_ACCOUNT_ID\b)/.test(preview)) throw new Error('預覽不能帶金鑰');
     const problem = deployWriteProblem(deploy, preview);
     if (problem) throw new Error(problem);
   });
@@ -144,9 +146,13 @@ async function runPreviewTests() {
   });
   // wrangler.jsonc 不在網站資料夾，只有本機和 CI 讀得到，讀不到就跳過
   const cfg = await get('../wrangler.jsonc');
-  await check('#126 wrangler.jsonc：開預覽網址、正式部署不保留網頁上加的變數', () => {
+  const isolated = await get('../wrangler.preview-db.jsonc');
+  await check('稽核 3 wrangler.jsonc：正式 Worker 關預覽網址、不保留網頁上加的變數；預覽用獨立 Worker 與測試照片空間', () => {
     if (!cfg) return;
-    if (!/"preview_urls": true/.test(cfg)) throw new Error('要開 preview_urls');
+    if (!/"preview_urls": false/.test(cfg)) throw new Error('正式 Worker 要關 preview_urls，它的版本會帶正式密鑰');
+    if (!/"name": "bq-shelter-dogs-preview"/.test(isolated)) throw new Error('預覽要用獨立 Worker bq-shelter-dogs-preview');
+    if (!/"r2_buckets": \[\{ "binding": "PHOTOS", "bucket_name": "bq-shelter-photos-test" \}\]/.test(isolated)) throw new Error('預覽要用測試照片空間');
+    if (!/"triggers": \{ "crons": \[\] \}/.test(isolated)) throw new Error('預覽不准有排程，要明寫 crons: []');
     if (!/"keep_vars": false/.test(cfg)) throw new Error('keep_vars 要是 false，免得 PREVIEW 被帶進正式版');
   });
 }

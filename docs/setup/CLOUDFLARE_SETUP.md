@@ -104,13 +104,22 @@ Cloudflare → **Workers & Pages** → `bq-shelter-photos` → **Settings** → 
 之後每開一個 PR，GitHub 會自動部署一份預覽版，並在 PR 頁面留一則「📱 預覽網址」留言，網址固定是：
 
 ```
-https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev
+https://pr-<PR 編號>-bq-shelter-dogs-preview.jiatsen-k.workers.dev
 ```
 
 - 用手機點開就能看到這個 PR 改完的樣子，不用等合併。同一個 PR 再改，網址不變，重新整理就是最新的。
 - 預覽版可以看、可以讀，但**上傳照片、存備註都不會存**，會顯示「這是預覽版，不能存」，正式資料不受影響。
 - 「我溜過」等手機上記的東西，預覽網址也要重新輸入一次（每個預覽網址都算不同網站）。
-- 不用另外設定，用的是步驟 4 已經設好的 Cloudflare Secret。
+- 稽核第 3 項（2026-10-26）起，預覽上傳到**獨立的預覽 Worker `bq-shelter-dogs-preview`**，不是正式 Worker 的版本：照片讀測試空間 `bq-shelter-photos-test`、資料讀測試 D1，Worker 上**只有 `WALKER_KEY`**（算志工代號，不能寫任何東西；K 2026-10-26 決定跟正式同一把，代號才對得上測試庫），沒有正式試算表的密鑰、沒有 `ADMIN_KEY`，預覽也不跑排程。所以 PR 的程式就算有漏洞，也碰不到正式照片和正式試算表。測試照片空間是 2026-10-24 從正式複製的，之後正式新換的照片在預覽看不到。
+- 正式 Worker 關掉預覽網址（`wrangler.jsonc` 的 `"preview_urls": false`），舊的 `pr-<編號>-bq-shelter-dogs` 網址在下次正式部署後失效。
+- 每次上傳前 `node scripts/d1-database.mjs --config wrangler.jsonc --preview` 會檢查：Worker 名稱、照片空間、資料庫都不是正式的，預覽 Worker 除了 `WALKER_KEY` 沒有別的密鑰；任何一項不符就停止、不上傳。**不要在預覽 Worker 上設其他密鑰**，設了預覽就會停。
+- **第一次要先建預覽 Worker（只做一次）**：在 repo 根目錄跑下面三行。第二行只在 Worker 還不存在時部署一次（預覽設定、沒有密鑰、沒有排程），已經存在就停；第三行貼上跟正式版同一把 `WALKER_KEY`。
+
+  ```
+  npx.cmd wrangler login
+  node scripts/d1-database.mjs --config wrangler.jsonc --preview --create-preview-worker
+  npx.cmd wrangler secret put WALKER_KEY --name bq-shelter-dogs-preview
+  ```
 
 ## 瀏覽統計（#128）
 
@@ -226,7 +235,7 @@ K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**�
 
 測試 D1 已在 2026-10-14 建立，ID `9e23a65c-c9dd-4f83-ad9c-2e01626910f0`，與正式 `6cd6c304-0fed-4ddb-b9ec-799e60a4adb4` 不同。建立後 API 讀回、SELECT 1=1、業務表數=0、rows_written=0。這張票只建測試庫，不匯入正式資料；API 回應裡的 version=production 是 D1 的產品版本，不能用來判斷它是否為本專案正式庫，須看名稱與 ID。
 
-預覽仍透過既有 `versions upload --preview-alias` 上傳版本，不部署正式 Worker；準備腳本將 DB 明確切成測試 ID 並帶 PREVIEW=1，仍保留既有預覽寫入限制。R2 讀既有照片空間。測試庫一開始沒有資料表，預覽會顯示「狗的資料讀不到」。到 Actions 選「準備預覽資料庫」→「Run workflow」（`.github/workflows/seed-preview-db.yml`）：把正式 D1 匯出（只讀），清空測試庫後整份匯入（#520），最後核對兩邊狗清單一致。只寫測試庫；測試庫原有資料會被覆蓋，想讓預覽資料跟上正式庫就再跑一次。
+預覽透過 `versions upload --preview-alias` 上傳到獨立的預覽 Worker `bq-shelter-dogs-preview`（稽核第 3 項），不部署；準備腳本把 Worker 名稱、DB、R2 換成 `wrangler.preview-db.jsonc` 的測試資源並帶 PREVIEW=1，查證預覽 Worker 除了 `WALKER_KEY` 沒有密鑰。R2 讀測試照片空間 `bq-shelter-photos-test`。測試庫一開始沒有資料表，預覽會顯示「狗的資料讀不到」。到 Actions 選「準備預覽資料庫」→「Run workflow」（`.github/workflows/seed-preview-db.yml`）：把正式 D1 匯出（只讀），清空測試庫後整份匯入（#520），最後核對兩邊狗清單一致。只寫測試庫；測試庫原有資料會被覆蓋，想讓預覽資料跟上正式庫就再跑一次。
 
 ### 結構改動與資料匯入
 

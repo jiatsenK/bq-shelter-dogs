@@ -36,7 +36,7 @@ GAS 送不出去時把待送內容留在指令碼屬性（`WALK_EDITS_PENDING`�
 | 每 10 分鐘（錯開 5 分） | 網站登記寫回試算表的重試；沒工作就結束、不讀表 | Worker cron |
 | 09:53、13:53、23:53 | 今日溜狗保險掃描：按狗比指紋，只回不同的狗（#525） | Worker cron → GAS `walkScan` |
 | 09:43、13:53、23:53 | 狗清單保險掃描：「D1 有、表沒有」只記錄不刪，每次記掃描時間；管理網站「資料檢查」顯示（#518／#567） | GAS 時間觸發 `dogListScan` |
-| 每月 1 日 09:53 | 照片垃圾桶清理，跟那次保險掃描同一個排程：`trash/` 標記滿 30 天且已不是主照片的，連 `photos/` 舊原圖、縮圖一起刪（實際保留 30～約 61 天）。R2 不設 Lifecycle 刪除規則（K 2026-10-26） | Worker cron |
+| 每月 1 日 09:53 | 照片垃圾桶清理，跟那次保險掃描同一個排程：`trash/` 標記滿 30 天的備份刪掉；`photos/` 32 碼舊原圖與縮圖只在 D1 `v3_photos` 記得它、且 `is_primary=0` 時一起刪，並刪掉那列（D1 沒這列就不碰，防測試 D1 配正式 R2）；固定路徑 `photos/{編號}.jpg` 不刪。只剩縮圖的備份照代號開頭的時間清。一筆出錯記下來、接著清下一筆，出錯那筆的備份留到下個月；結果記在 `v3_sync_state.trash_purged`（`{at, purged, failed, errors}`），有失敗時 `cron_trash` 記成出錯（實際保留 30～約 61 天）。R2 不設 Lifecycle 刪除規則（K 2026-10-26） | Worker cron |
 
 Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，2026-10-26）：正式版 2 個（`5-59/10 * * * *`、`53 1,5,15 * * *`），測試網站只有寫回重試 1 個，預覽與管理 Worker 都不設。Worker 的三件排程工作每次跑完或出錯都記在 D1 `v3_sync_state` 的 `cron_retry`、`cron_scan`、`cron_trash`（寫回重試每 10 分鐘寫這一列），管理網站「資料檢查」的「排程」顯示最後一次跑完的時間與最近失敗。
 
@@ -53,6 +53,10 @@ Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，
 - 每個變更是 `migrations/NNNN_*.sql` 一個檔，正式庫的 `d1_migrations` 表記著套過哪些；`db/compact-schema.sql` 是現在的完整樣子，測試檢查兩邊一致。
 - 正式庫只由手動的「套用 D1 migration」workflow 套用（必要時先複製到備用庫 `bq-shelter-dogs-backup`、記 Time Travel 書籤、套用、接著部署）。部署發現有還沒套的就紅叉。
 - 預覽、測速、測試網站部署自動套到測試庫 `bq-shelter-dogs-test`。
+
+## PR 預覽
+
+`bq-shelter-dogs-preview`（稽核第 3 項，2026-10-26）：PR 加 `preview` 標籤時上傳成這個獨立 Worker 的版本，網址 `pr-<編號>-bq-shelter-dogs-preview`。只綁測試 D1（跟測試網站共用）、測試照片空間 `bq-shelter-photos-test`，Worker 上只有 `WALKER_KEY`（算代號，不能寫）、不跑排程；另帶 PREVIEW 擋寫入。正式 Worker 關預覽網址，因為它的版本會帶正式密鑰。設定在 `wrangler.preview-db.jsonc`，上傳前由 `scripts/d1-database.mjs --preview` 查證。
 
 ## 測試網站
 
