@@ -40,7 +40,7 @@
 ## 負責與來源
 
 - 負責：Claude（依網站／Worker 分工）；一票一分支／PR、一票一個新實作視窗。
-- 本機交接入口：`docs/design/mobile-ui-implementation-spec.md`；定版原型與兩張參考圖：`docs/design/common-walk-groups-approved-2026-10-17/`。尚未 commit／推送，須在可讀本工作區的視窗接手。
+- 本機交接入口：`docs/design/history/mobile-ui-implementation-spec.md`；定版原型與兩張參考圖：`docs/design/common-walk-groups-approved-2026-10-17/`。尚未 commit／推送，須在可讀本工作區的視窗接手。
 - 定版是白話日期版本；不要改用舊的無照片、圓泡泡、深綠籠號或卡片日期稿。原型只示範兩群與固定快照，不能直接部署。
 - 先讀 ADR 0006、0004、0007，個人身分延續 0001／0005；若動同步／D1 再核對 0008／0009。沿用現有後端與資料來源，未要求新的 schema 或遷移。
 

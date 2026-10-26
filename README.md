@@ -7,7 +7,7 @@
 - Android（Chrome）：右上角「⋮」→「加到主畫面」
 
 - 規格（V3 定版）：[`docs/PROJECT_GOALS.md`](docs/PROJECT_GOALS.md)
-- 前端設計需求（細節）：[`docs/FRONTEND_REQUIREMENTS.md`](docs/FRONTEND_REQUIREMENTS.md)
+- 舊版前端需求（V3 時期，已過時，只供查背景）：[`docs/design/history/FRONTEND_REQUIREMENTS.md`](docs/design/history/FRONTEND_REQUIREMENTS.md)
 - 視覺風格指引：[`docs/DESIGN_GUIDE.md`](docs/DESIGN_GUIDE.md)
 - 工作分票：見 GitHub Issues（標籤 `v4`、`v3`；舊版 `v1`）
 - 網站、照片上傳、R2 設定：[`docs/setup/CLOUDFLARE_SETUP.md`](docs/setup/CLOUDFLARE_SETUP.md)

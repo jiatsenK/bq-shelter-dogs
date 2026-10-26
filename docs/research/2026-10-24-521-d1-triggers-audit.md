@@ -122,7 +122,7 @@
 
 | 觸發器 | 判定 | 證據與理由 |
 |---|---|---|
-| `identity_v3_walks_INSERT/UPDATE/DELETE` | 刪除 | 更名、合併不會改 `v3_walks`（歷史保留當時的代號，`docs/267-identity-rollout.md`）。版本號一變，只影響合併預覽上「溜過幾列」的顯示數字。每寫 1 列溜狗紀錄就多寫 1 列，是最大的連帶寫入來源（量測：一天溜了一隻狗多 2 列）。 |
+| `identity_v3_walks_INSERT/UPDATE/DELETE` | 刪除 | 更名、合併不會改 `v3_walks`（歷史保留當時的代號，`docs/design/history/267-identity-rollout.md`）。版本號一變，只影響合併預覽上「溜過幾列」的顯示數字。每寫 1 列溜狗紀錄就多寫 1 列，是最大的連帶寫入來源（量測：一天溜了一隻狗多 2 列）。 |
 | `identity_v3_volunteer_favorites_*`、`identity_v3_volunteer_cards_*` | 刪除 | 同上，合併時會在 batch 內一起搬；只影響預覽上的數字。每次加常溜、開卡都會多寫 1 列。 |
 | `identity_v3_volunteers_*` | 刪除 | UPDATE 主要來自 `index.js:787` 每天更新 last_seen，跟身分無關，屬於過度觸發。改名（`identity.js:76`）、合併（`:138`）都在 identity 自己的 batch 裡，可以自己加 1。 |
 | `identity_v3_identity_names_*`、`identity_v3_identity_redirects_*` | 合併 | 寫入點只有 `identity.js` 的 `linkIdentityName`、`renameIdentity`、`mergeIdentity`（`dog-list.js:46` 也是呼叫 `linkIdentityName`）。改成這三個 batch 自己 `UPDATE v3_identity_revision SET revision=revision+1`，並先補上 revision 那一列（正式庫目前沒有）。 |

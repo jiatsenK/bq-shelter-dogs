@@ -14,7 +14,7 @@ GitHub 的寫入權限（token）只放在 Cloudflare 裡，網站程式和 repo
 
 還沒做完這些步驟前，網站不會出現上傳按鈕，其他功能照常。
 
-> ⚠️ **這份已經過時，只留作紀錄。** V8（#125）起照片上傳服務跟網站合在同一個 Worker、自動部署，設定見 [`CLOUDFLARE_SETUP.md`](CLOUDFLARE_SETUP.md)。這份說明的單獨 Worker `bq-shelter-photos` 和 `worker/wrangler.toml` 在 2026-10 拿掉了（K 決定刪除）。下面的「誰遛的代號」密鑰說明仍然適用，只是密鑰現在設在 GitHub Secret `WALKER_KEY`、部署時自動帶上去。
+> ⚠️ **這份已經過時，只留作紀錄。** V8（#125）起照片上傳服務跟網站合在同一個 Worker、自動部署，設定見 [`CLOUDFLARE_SETUP.md`](../../setup/CLOUDFLARE_SETUP.md)。這份說明的單獨 Worker `bq-shelter-photos` 和 `worker/wrangler.toml` 在 2026-10 拿掉了（K 決定刪除）。下面的「誰遛的代號」密鑰說明仍然適用，只是密鑰現在設在 GitHub Secret `WALKER_KEY`、部署時自動帶上去。
 
 ---
 
@@ -158,7 +158,7 @@ K 2026-10-09：怕 Cloudflare 用量爆掉，相簿整個拿掉，只留主照�
 
 ## 準時同步試算表（Cloudflare 定時叫 GitHub）
 
-> 2026-10-16 起（#305、ADR 0012）改成「有改才同步＋每天 6:30 保險一次」，GitHub 自己的排程拿掉了；設定見 [SHEET_WRITE_SETUP.md](SHEET_WRITE_SETUP.md) 第 6 節。下面是舊 Worker 當時的步驟，留著當紀錄。
+> 2026-10-16 起（#305、ADR 0012）改成「有改才同步＋每天 6:30 保險一次」，GitHub 自己的排程拿掉了；設定見 [SHEET_WRITE_SETUP.md](../../setup/SHEET_WRITE_SETUP.md) 第 6 節。下面是舊 Worker 當時的步驟，留著當紀錄。
 
 GitHub 自己的定時同步常被跳過（2026-09-27 從早上到下午只跑了一次），網站就一直是舊的。所以改由這個 Worker 當鬧鐘：台灣時間 7:00–22:30 每 30 分鐘叫 GitHub 跑一次「同步試算表」。GitHub 原本的排程（每小時 17、47 分）留著當備援。網站頁首的「更新」圓箭頭也是叫這個 Worker 馬上同步一次（同一支手機 2 分鐘 1 次），一樣要做完下面第 1、2 步才會動。
 

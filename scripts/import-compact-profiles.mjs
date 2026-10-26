@@ -1,5 +1,5 @@
 // #248：把 GitHub JSON 的溜狗紀錄、介紹、休養匯入 v3_ 表，再逐筆比對讀回的內容。照片在 R2，不再匯入清單（v3_photos 停用，#557）。
-// 只操作呼叫者提供的 D1，不連線試算表、GitHub 或 R2。表結構見 db/compact-schema.sql、docs/COMPACT_D1.md
+// 只操作呼叫者提供的 D1，不連線試算表、GitHub 或 R2。表結構見 db/compact-schema.sql
 import { randomBytes } from 'node:crypto';
 import { isDeepStrictEqual } from 'node:util';
 import { readWalks } from '../worker/src/compact.js';
