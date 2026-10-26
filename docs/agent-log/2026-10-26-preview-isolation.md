@@ -15,6 +15,6 @@
 - 未做（要 K 動手或同意）：
   - 建立預覽 Worker、設 `WALKER_KEY`，指令見 `docs/setup/CLOUDFLARE_SETUP.md`「PR 預覽網址」。
   - 合併後正式部署才會關掉正式 Worker 的預覽網址。
-  - `scheduled()` TRASH 分支的 PREVIEW 防呆由「照片清理改用 R2 Lifecycle」session 處理。預覽 Worker 已經沒有排程、也不綁正式 R2，這條路徑在預覽不會發生。
+  - `scheduled()` TRASH 分支的 PREVIEW 防呆由「照片垃圾桶清理首跑前修正與驗收」session（trash-purge）處理。預覽 Worker 已經沒有排程、也不綁正式 R2，這條路徑在預覽不會發生。
 - 注意：測試 R2 是 2026-10-24 從正式複製的，正式之後新換的照片在預覽看不到。
 - 相關 PR：#606（草稿）。
