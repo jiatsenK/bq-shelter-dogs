@@ -1,3 +1,4 @@
+﻿# 本檔保留 UTF-8 BOM：Windows PowerShell 5.1 沒有 BOM 會用系統字碼頁讀中文字串。
 param(
   [string[]]$Suite,
   [string[]]$NodeTest,
@@ -7,8 +8,12 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# 5.1 預設用系統字碼頁解讀 node 輸出並寫出 stdout；執行期間改 UTF-8，結束還原。
+$previousConsoleEncoding = [Console]::OutputEncoding
+try { [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false) } catch {}
 if (($Full -and ($Suite -or $NodeTest)) -or (!$Full -and !$Suite -and !$NodeTest)) {
   Write-Output '用法：scripts/check-local.ps1 (-NodeTest scripts/example.test.mjs | -Suite startup-stability | -Full) -Reason 原因 [-RepeatReason 重跑原因]'
+  try { [Console]::OutputEncoding = $previousConsoleEncoding } catch {}
   exit 1
 }
 $root = Split-Path $PSScriptRoot -Parent
@@ -33,16 +38,23 @@ function Invoke-Check([string]$Name, [string[]]$NodeArgs) {
   $log = Join-Path $logs "$Name-$runId.log"
   $timer = [System.Diagnostics.Stopwatch]::StartNew()
   $code = 1
+  # 5.1 在 Stop 下會把原生命令的第一行 stderr 當終止錯誤，*> 又寫成 UTF-16；改逐行寫 UTF-8。
+  # stderr 行包成 ErrorRecord，原文在 TargetObject（空行的訊息會變成 RemoteException）。
+  $ErrorActionPreference = 'Continue'
+  $writer = [IO.StreamWriter]::new($log, $false, [Text.UTF8Encoding]::new($false))
   try {
-    & node @NodeArgs *> $log
+    & node @NodeArgs 2>&1 | ForEach-Object {
+      $writer.WriteLine($(if ($_ -is [Management.Automation.ErrorRecord]) { "$($_.TargetObject)" } else { "$_" }))
+    }
     $code = $LASTEXITCODE
   } finally {
+    $writer.Dispose()
     $timer.Stop()
     $checks.Add(@{ command = $NodeArgs; exitCode = $code; durationMs = $timer.ElapsedMilliseconds; log = $log })
   }
   Write-Output "$Name exit=$code；完整輸出：$log"
-  if ($code -ne 0) { Get-Content $log -Tail 30; return }
-  Get-Content $log -Tail 5
+  if ($code -ne 0) { Get-Content $log -Encoding UTF8 -Tail 30; return }
+  Get-Content $log -Encoding UTF8 -Tail 5
 }
 Push-Location $root
 $previousRecord = $env:BQ_LOCAL_CHECK_RECORD
@@ -69,6 +81,7 @@ try {
     if ($LASTEXITCODE -ne 0) { $exitCode = 1 }
   }
   $env:BQ_LOCAL_CHECK_RECORD = $previousRecord
+  try { [Console]::OutputEncoding = $previousConsoleEncoding } catch {}
   Pop-Location
 }
 exit $exitCode

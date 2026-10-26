@@ -129,3 +129,24 @@ test('Windows PowerShell 5.1 能傳遞中文原因與空的重跑原因', { skip
   assert.equal(record.result, 'passed');
   assert.match(record.initial.runtime.shellVersion, /^5\.1\./);
 });
+
+test('Windows PowerShell 5.1 遇到 stderr 仍寫完整 UTF-8 日誌與實際退出碼', { skip: process.platform !== 'win32' }, t => {
+  const f = fixture(t);
+  const legacyShell = join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe');
+  const check = (...args) => f.run(legacyShell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/check-local.ps1', ...args]);
+  const unknown = check('-NodeTest', 'scripts/missing.test.mjs', '-Reason', '驗證錯字');
+  assert.notEqual(unknown.status, 0);
+  assert.match(unknown.stdout, /node exit=1；完整輸出：/);
+  assert.match(unknown.stdout, /未知測試/);
+  writeFileSync(join(f.root, 'worker/b.test.mjs'), "console.error('stderr 第一行\\n\\nstderr 空行後'); console.log('stdout 中文'); throw Error('fixture failure');\n");
+  assert.notEqual(check('-NodeTest', 'worker/b.test.mjs', '-Reason', '診斷 5.1 失敗').status, 0);
+  const record = f.records().at(-1);
+  assert.equal(record.result, 'failed');
+  assert.equal(record.checks[0].exitCode, 1);
+  const log = readFileSync(record.checks[0].log, 'utf8');
+  assert.match(log, /stderr 第一行\r?\n\r?\nstderr 空行後/);
+  assert.match(log, /stdout 中文/);
+  assert.match(log, /Error: fixture failure\s+at /);
+  assert.match(log, /tests 1/);
+  assert.doesNotMatch(log, /NativeCommandError|RemoteException/);
+});
