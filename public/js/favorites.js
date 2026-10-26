@@ -1,6 +1,7 @@
 import { BQStore } from './store.js';
 import { appState } from './page-state.js';
-import { WALKER_CODES_KEY, loadMyCodes, loadWalkerName, parseMyWalks, render, renderDetail, saveWalkerName } from './app.js';
+import { WALKER_CODES_KEY, loadMyCodes, loadWalkerName, parseMyWalks, render, saveWalkerName } from './app.js';
+import { renderDetail } from './detail.js';
 import { walkKey } from './dog-status.js';
 import { BQApi } from './api.js';
 import { BQWelcome } from './welcome.js';

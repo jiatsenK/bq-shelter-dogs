@@ -1,6 +1,7 @@
 import { canShow, settingsNotice } from './feature-settings.js';
 import { BQDates } from './dates.js';
-import { DEPARTURE_LABELS, apiData, computeStatus, photoSrc, photoThumb, render, renderDetail, showDetail, switchTab } from './app.js';
+import { apiData, computeStatus, photoSrc, photoThumb, render, switchTab } from './app.js';
+import { DEPARTURE_LABELS, renderDetail, showDetail } from './detail.js';
 import { esc, icon, searchKey, ymdText } from './ui-kit.js';
 import { activitiesState, analysisState, appState } from './page-state.js';
 import { BQApi } from './api.js';

@@ -1,5 +1,6 @@
 import { appState, findState } from './page-state.js';
-import { cageMates, closeDetail, computeStatus, dogCard, dueDogs, photoThumb, render, sexMark, showDetail, switchTab, walkedToday, warnNote } from './app.js';
+import { computeStatus, dogCard, dueDogs, photoThumb, render, sexMark, switchTab, walkedToday, warnNote } from './app.js';
+import { cageMates, closeDetail, showDetail } from './detail.js';
 import { esc, icon, monthDay, searchKey } from './ui-kit.js';
 import { AMBER_DAYS, specialFlag, walkKey } from './dog-status.js';
 import { BQWalkUI } from './walk-ui.js';

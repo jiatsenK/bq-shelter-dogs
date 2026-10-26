@@ -1,4 +1,5 @@
-import { canonicalWalker, isOffline, loadCompanions, loadWalkWith, loadWalkerName, render, renderDetail, restOf, splitWalkers, walkRegistration, walkedNow, walkerList } from './app.js';
+import { canonicalWalker, isOffline, loadCompanions, loadWalkWith, loadWalkerName, render, restOf, splitWalkers, walkRegistration, walkedNow, walkerList } from './app.js';
+import { renderDetail } from './detail.js';
 import { esc, icon } from './ui-kit.js';
 import { walkKey } from './dog-status.js';
 import { BQWelcome } from './welcome.js';
