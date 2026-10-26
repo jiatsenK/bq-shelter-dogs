@@ -100,12 +100,12 @@ test('#500 保險掃描沒有不同的狗只問一次就結束；重試排程不
     }
     actions.length = 0;
     const before = await writes(env);
-    await run(env, '53 1,5,15 * * *');
+    await run(env, '23 1,5,15 * * *');
     assert.deepEqual(actions, ['walkScan']);
     assert.equal(await writes(env), before + 1, '只多記一列跑完時間');
     assert.ok((await cronRow(env, 'scan')).okAt);
     const crons = config => JSON.parse(readFileSync(new URL(`../../${config}`, import.meta.url), 'utf8').match(/"crons":\s*(\[[^\]]*\])/)[1]);
-    assert.deepEqual(crons('wrangler.jsonc'), ['5-59/10 * * * *', '53 1,5,15 * * *']);
+    assert.deepEqual(crons('wrangler.jsonc'), ['5-59/10 * * * *', '23 1,5,15 * * *']);
     assert.deepEqual(crons('wrangler.test-site.jsonc'), ['5-59/10 * * * *'], '帳號免費方案上限 5 個：測試網站只留寫回重試');
   } finally { globalThis.fetch = real; env.DB.close(); }
 });

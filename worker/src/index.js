@@ -21,10 +21,10 @@ import { dogIdsFor, readFavorites, saveFavorite, openedBooks } from './compact.j
 import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
 
 // 排程要跟 wrangler.jsonc 的 triggers.crons 一致（#500，ADR 0018）。排程數量算整個 Cloudflare 帳號，免費方案上限 5 個（稽核第 5 項），
-// 正式版只用兩個：寫回重試每 10 分鐘（沒工作就只查一次 D1，再記一列跑完時間）；保險掃描台灣 09:53、13:53、23:53（UTC 01:53、05:53、15:53）。
-// 照片垃圾桶（#501，ADR 0018 第 7 點）不另佔排程：每月 1 日 09:53 那次保險掃描順便清。測試網站只有寫回重試（wrangler.test-site.jsonc）
+// 正式版只用兩個：寫回重試每 10 分鐘（沒工作就只查一次 D1，再記一列跑完時間）；保險掃描台灣 09:23、13:23、23:23（UTC 01:23、05:23、15:23），跟 GAS 的 dogListScan（09:43／13:53／23:53 前後 15 分鐘）錯開。
+// 照片垃圾桶（#501，ADR 0018 第 7 點）不另佔排程：每月 1 日 09:23 那次保險掃描順便清。測試網站只有寫回重試（wrangler.test-site.jsonc）
 const RETRY_CRON = '5-59/10 * * * *';
-const SCAN_CRON = '53 1,5,15 * * *';
+const SCAN_CRON = '23 1,5,15 * * *';
 const trashDue = now => { const d = new Date(now); return d.getUTCDate() === 1 && d.getUTCHours() === 1; };
 const DOG_LIST_SCAN_MAX_BYTES = 512 * 1024;
 const EDIT_ROWS_MAX = 50;

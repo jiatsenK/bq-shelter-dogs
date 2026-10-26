@@ -7,6 +7,9 @@ export const SHEET_ACTIONS = new Set(['walk', 'edit', 'undo', 'note', 'log', 'wa
 const TIMEOUT_MS = 20 * 1000;
 // 合併派送在 Apps Script 鎖內逐隻寫、每隻各回呼 Worker 兩次，10 隻要比單隻久
 const BATCH_TIMEOUT_MS = 90 * 1000;
+// 保險掃描讀回主清單要在 Apps Script 等鎖（waitLock 15 秒）再讀整欄算指紋；有人整群登記時佔鎖較久，20 秒容易先放棄（研究 2026-10-26）
+const SCAN_TIMEOUT_MS = 45 * 1000;
+const timeoutOf = action => action === 'walkWakeBatch' ? BATCH_TIMEOUT_MS : action === 'walkScan' ? SCAN_TIMEOUT_MS : TIMEOUT_MS;
 
 // status：要回給網站的 HTTP 狀態；code 'off' 是還沒設定（網站就照舊只記在手機上）
 export class SheetWriteError extends Error {
@@ -30,7 +33,7 @@ export async function callSheet(env, body) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
-      signal: AbortSignal.timeout(body.action === 'walkWakeBatch' ? BATCH_TIMEOUT_MS : TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutOf(body.action)),
     });
     out = await res.json().catch(() => null);
   } catch (e) {
