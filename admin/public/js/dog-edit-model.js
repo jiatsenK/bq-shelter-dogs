@@ -8,18 +8,21 @@ export const FIELDS = [
   ['rest', '休養'],
   ['fixedCare', '固定照顧'],
   ['sex', '性別補正'],
-  ['numbers', '編號'],
+  // 編號併進出入所表（ADR 0021，#639）：每個編號一列，補編號就是補一列
   ['stays', '出入所紀錄'],
   ['photo', '照片']
 ];
 export const FIELD_LABELS = Object.fromEntries(FIELDS);
 // 改錯不容易看出來或影響照片／身分對應的欄位：先預覽改前／改後才能存。其餘改完直接可存，行內標差異。
-export const PREVIEW_FIELDS = new Set(['numbers', 'stays', 'photo']);
+export const PREVIEW_FIELDS = new Set(['stays', 'photo']);
 export const INTRO_MAX = 1000;
 export const REST_DAYS = 180;
 export const REST_REASON_MAX = 40;
 
 export const sexLabel = (value) => ({ male: '公', female: '母' })[value] || '待確認';
+
+// 出入所表的一列，比較與送出用（不帶 departed、departure：那是後端照離所紀錄算的；有離所紀錄的那列沒有手填離所原因）
+export const stayRow = (row) => ({ number: row.number || '', in: row.in || '', out: row.out || '', reason: row.reason || '', outReason: row.departed ? '' : row.outReason || '' });
 
 export function restBounds(today = BQDates.taipeiToday()) {
   const [y, m, d] = today.split('-').map(Number);
@@ -40,9 +43,13 @@ export function fieldSummary(field, snapshot, photoUrl = null) {
     const known = ['male', 'female'].includes(snapshot.sex);
     return { text: known ? sexLabel(snapshot.sex) : '待確認', missing: !known };
   }
-  if (field === 'numbers')
-    return snapshot.numbers.length ? { text: snapshot.numbers.join('、'), missing: false } : { text: '待補', missing: true };
-  if (field === 'stays') return { text: snapshot.stays.length ? `${snapshot.stays.length} 筆` : '沒有補登', missing: false };
+  if (field === 'stays') {
+    // 一個編號都沒有＝狗資料表的「缺編號」
+    const numbers = snapshot.stays.filter((row) => row.number).map((row) => row.number);
+    return numbers.length
+      ? { text: `${snapshot.stays.length} 筆（${numbers.join('、')}）`, missing: false }
+      : { text: '待補', missing: true };
+  }
   if (field === 'photo') return snapshot.photo || photoUrl ? { text: '有照片', missing: false } : { text: '待補', missing: true };
   return { text: '', missing: false };
 }
@@ -51,9 +58,15 @@ export function displayValue(field, value) {
   if (field === 'sex') return sexLabel(value);
   if (field === 'fixedCare') return value ? '有人固定照顧' : '沒有固定照顧';
   if (field === 'rest') return value ? `休養至 ${value.until}${value.reason ? `（${value.reason}）` : ''}` : '沒有休養';
-  if (field === 'numbers') return value.join('\n') || '無編號';
   if (field === 'stays')
-    return value.map((row) => `入所 ${row.in}／出所 ${row.out || '尚未出所'}／${row.reason || '未填原因'}`).join('\n') || '無補登紀錄';
+    return (
+      value
+        .map(
+          (row) =>
+            `${row.number || '沒有編號'}：入所 ${row.in || '日期不明'}（${row.reason || '原因未填'}）／${row.out || row.departed ? `離所 ${row.out || '日期不明'}（${row.departure || row.outReason || '原因未填'}）` : '還在所'}`
+        )
+        .join('\n') || '沒有出入所紀錄'
+    );
   if (field === 'intro') return value || '（空白）';
   return String(value ?? '');
 }

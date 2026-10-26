@@ -255,10 +255,12 @@ test('GET /api/departures：形狀跟 departures.json 一樣', async () => {
     last: { cage: 'C區11', id: '2021030913', name: '咪寶', walkedDate: '2026-10-13', note: '', sex: 'female', intro: '' } }];
   await importCompactDepartures(DB, departures);
   const body = await (await get('/departures', { DB })).json();
-  assert.deepEqual({...body,departures:body.departures.map(({editRevision,sex,...e})=>e)}, { ok: true, version: 1, departures });
+  // 出入所表（#639）：離所那個編號一列，出所日、原因照離所紀錄
+  const stays = [{ number: '2021030913', in: '2021-03-09', out: '2026-10-13', reason: '', departed: true, departure: '認養' }];
+  assert.deepEqual({...body,departures:body.departures.map(({editRevision,sex,...e})=>e)}, { ok: true, version: 1, departures: departures.map(d => ({ ...d, stays })) });
 });
 
-test('#333 出入所紀錄：在所和離所的狗都帶 stays，沒補過的沒有；還沒建表照常讀', async () => {
+test('#333／#639 出入所紀錄：在所和離所的狗都帶出入所表（編號＋手填＋離所），只有編號的沒有', async () => {
   const DB = await seededDb();
   await importCompactDepartures(DB, [{ id: '2021030913', name: '咪寶', date: '2026-10-13', dateSource: 'note', seen: '2026-10-13', reason: 'adopt', matched: '被領養', flags: [] }]);
   const list = [{ in: '2015-08-18', out: '', reason: '迷路' }];
@@ -266,12 +268,10 @@ test('#333 出入所紀錄：在所和離所的狗都帶 stays，沒補過的沒
     await DB.prepare('INSERT INTO v3_stays SELECT dog_id,? FROM v3_dog_numbers WHERE number=?').bind(JSON.stringify(list), number).run();
   }
   const dogs = (await (await get('/dogs', { DB })).json()).dogs;
-  assert.deepEqual(dogs.map(d => d.stays), [undefined, list, undefined]);
+  const typed = { number: '', in: '2015-08-18', out: '', reason: '迷路' };
+  assert.deepEqual(dogs.map(d => d.stays), [undefined, [typed, { number: '2018041318', in: '2018-04-13', out: '', reason: '' }, { number: '2026051203', in: '2026-05-12', out: '', reason: '' }], undefined]);
   const deps = (await (await get('/departures', { DB })).json()).departures;
-  assert.deepEqual(deps[0].stays, list);
-  await DB.prepare('DROP TABLE v3_stays').run();
-  worker.testing.resetState();
-  assert.equal((await get('/dogs', { DB })).status, 200);
+  assert.deepEqual(deps[0].stays, [typed, { number: '2021030913', in: '2021-03-09', out: '2026-10-13', reason: '', departed: true, departure: '認養' }]);
 });
 
 test('GET /api/walks、/api/departures：D1 壞了或沒接回 503；只收 GET', async () => {

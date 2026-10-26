@@ -14,7 +14,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'applic
 const server = http.createServer((req, res) => {
   if (new URL(req.url, 'http://x').pathname === '/public/api/feature-settings' || new URL(req.url, 'http://x').pathname === '/api/feature-settings') {
     res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ok:true,revision:1,values:Object.fromEntries(['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays','editFormer'].map(k=>[k,true]))}));
+    return res.end(JSON.stringify({ok:true,revision:1,values:Object.fromEntries(['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays'].map(k=>[k,true]))}));
   }
   const file = path.join(ROOT, decodeURIComponent(new URL(req.url, 'http://x').pathname));
   if (!file.startsWith(ROOT)) { res.statusCode = 403; return res.end(); }

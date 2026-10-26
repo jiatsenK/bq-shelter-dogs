@@ -48,7 +48,6 @@ appState.restMap = {}; // 休養中：編號 → { until: 'YYYY-MM-DD', reason }
 appState.restState = 'loading'; // 初次休養設定未到齊前，不先排出不完整的溜狗表
 appState.restLoaded = false; // 首次失敗後重試，必須補建可靠排序
 appState.detailWalksOpen = false; // 詳細資訊的溜狗紀錄有沒有展開每一天（K 2026-10-10 減法：預設只有一行字）
-appState.formerEdit = null; // 詳細資訊正在補的舊編號（#289）：{ dog, text, phase: 'edit'|'saving'|'error', error }
 appState.staysEdit = null; // 詳細資訊正在改的出入所紀錄（#333）：{ dog, before, rows, phase: 'edit'|'saving'|'error', error }
 appState.introEdit = null; // 詳細資訊正在改的入所介紹（K 2026-10-10 補資料）：{ dog, text, phase: 'edit'|'saving'|'error', error }
 

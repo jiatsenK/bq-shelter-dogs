@@ -693,3 +693,28 @@ test('讀取量不隨離所的狗變多：名冊索引、點一年的詳細資�
   assert.equal(small.same, 1, '沒變只讀 1 列版本號');
   assert.deepEqual(big, small);
 });
+
+// #639（ADR 0021）：出入所表的出所日、原因從離所紀錄帶，在所的狗也帶舊編號的離所。
+// 不另外加觸發器：離所紀錄一改，dog_edit_v3_dog_departures_* 讓這隻狗的 revision 加 1，
+// packs_v3_dog_edit_state_UPDATE 就讓 small（在主清單上時）和這隻狗每一年的離所資料包失效
+test('觸發器：再入所的狗舊編號的離所改了，small 失效、/dogs 帶到新的出所日；同一隻狗另一年的離所資料包也失效', async t => {
+  const DB = await departedDb(t, 5);
+  const main = "(SELECT dog_id FROM v3_dog_numbers WHERE number='2025022703')", gone = "(SELECT dog_id FROM v3_dog_departures WHERE number='2010000003')";
+  await DB.prepare(`INSERT INTO v3_dog_numbers(number,dog_id) SELECT '2020999999',dog_id FROM v3_dog_numbers WHERE number='2025022703'`).run();
+  await DB.prepare(`INSERT INTO v3_dog_departures(number,dog_id,name,departed_date,reason) SELECT '2020999999',${main},'滿滿','2020-01-01','adopt'`).run();
+  const row = async () => (await (await get('/dogs', { DB })).json()).dogs.find(d => d.id === '2025022703').stays.find(s => s.number === '2020999999');
+  assert.deepEqual(await row(), { number: '2020999999', in: '', out: '2020-01-01', reason: '', departed: true, departure: '認養' });
+  let small = await smallVer(DB);
+  await DB.prepare("UPDATE v3_dog_departures SET departed_date='2020-02-02' WHERE number='2020999999'").run();
+  assert.ok(await smallVer(DB) > small);
+  assert.equal((await row()).out, '2020-02-02');
+  // 同一隻狗離所兩次（2013、2015）：改 2013 那筆，2015 的資料包也帶同一張表，兩年各加 1
+  await DB.prepare(`INSERT INTO v3_dog_numbers(number,dog_id) SELECT '2014010101',${gone}`).run();
+  await DB.prepare(`INSERT INTO v3_dog_departures(number,dog_id,name,departed_date,reason) SELECT '2014010101',${gone},'狗','2015-06-01','other'`).run();
+  await get('/departures', { DB });
+  const before = await depYears(DB);
+  await DB.prepare("UPDATE v3_dog_departures SET reason='death' WHERE number='2010000003'").run();
+  const after = await depYears(DB);
+  assert.deepEqual(Object.keys(after).filter(y => after[y] !== before[y]).sort(), ['2013', '2015']);
+  await assertSame(DB, '改完');
+});

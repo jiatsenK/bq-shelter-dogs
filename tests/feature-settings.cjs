@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const keys=['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays','editFormer'];
+const keys=['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays'];
 module.exports = async (browser,base) => {
  const context=await browser.newContext({viewport:{width:1440,height:1000},serviceWorkers:'block'});
  await context.addInitScript(()=>{window.__BQ_FEATURE_TEST__=true;localStorage.setItem('bq-onboarded','1');localStorage.setItem('bq-name-later','1');});
@@ -22,7 +22,7 @@ module.exports = async (browser,base) => {
  try {
   await page.goto(base+'/admin/public/settings.html');
   await page.getByText('已讀取版本 1。調整後按儲存。').waitFor();
-  assert.equal(await page.locator('input[type=checkbox]').count(),10);
+  assert.equal(await page.locator('input[type=checkbox]').count(),9,'舊編號併進出入所紀錄（#639）');
   assert.equal(await page.locator('#save-settings').isDisabled(),true);
   await page.locator('[name=showActivities]').uncheck();await page.locator('#save-settings').click();
   await page.getByText(/已儲存，版本 2/).waitFor();assert.equal(puts,1);

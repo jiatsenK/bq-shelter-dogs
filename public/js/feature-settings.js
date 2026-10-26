@@ -1,7 +1,7 @@
 import { BQApi } from './api.js';
 let current = null;
 // 跟 worker/src/feature-settings.js 的 SETTING_KEYS 同一份清單，鍵數不同就整份拒收（scripts/feature-setting-keys.test.mjs 比對）
-export const SETTING_KEYS = Object.freeze(['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays','editFormer']);
+export const SETTING_KEYS = Object.freeze(['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays']);
 export function acceptSettings(data) {
   current = data && Number.isSafeInteger(data.revision) && data.revision >= 1 && data.values && Object.keys(data.values).length === SETTING_KEYS.length && SETTING_KEYS.every(k => typeof data.values[k] === 'boolean') ? data : null;
 }

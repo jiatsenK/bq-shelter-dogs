@@ -631,3 +631,40 @@ test('移除離所舊編號映射後，不可覆寫版本仍解析正確原圖�
     assert.deepEqual(new Uint8Array(await response.arrayBuffer()), bytes);
   }
 });
+
+// #639（ADR 0021）：出入所表＝每個編號一列＋沒編號的手填；補、刪編號在同一筆交易
+test('出入所表：舊資料同一天接到編號（納卡西）、離所帶出所日；沒改不寫；補編號、手填出所日同一筆交易記一筆紀錄', async (t) => {
+  const db = await setup(t);
+  await db.prepare("INSERT INTO v3_dog_numbers VALUES('2026042101',?),('2025010101',?)").bind(dogId, dogId).run();
+  await db.prepare("INSERT INTO v3_dog_departures(dog_id,number,name,departed_date,reason) VALUES(?,'2025010101','測試狗','2025-06-01','adopt')").bind(dogId).run();
+  await db.prepare('INSERT INTO v3_stays VALUES(?,?)').bind(dogId, '[{"in":"2026-04-21","out":"2026-10-18","reason":""}]').run();
+  const before = await readDogEdit(db, dogId);
+  assert.deepEqual(before.stays, [
+    { number: '2025010101', in: '2025-01-01', out: '2025-06-01', reason: '', departed: true, departure: '認養' },
+    { number: '2026042101', in: '2026-04-21', out: '2026-10-18', reason: '' },
+  ]);
+  // 跟看到的一樣就不寫（舊格式的資料也不會因此被改寫）
+  const count = await db.prepare('SELECT total_changes() AS n').first('n');
+  await saveDogEdit(db, dogId, { revision: before.revision, field: 'stays', value: before.stays }, { actor });
+  assert.equal(await db.prepare('SELECT total_changes() AS n').first('n'), count);
+  const next = [...before.stays, { number: '2020010101', in: '', out: '2020-05-05', reason: '轉所' }];
+  const after = await saveDogEdit(db, dogId, { revision: before.revision, field: 'stays', value: next }, { actor });
+  assert.deepEqual(after.numbers, ['2020010101', '2025010101', '2026042101']);
+  assert.deepEqual(after.stays[0], { number: '2020010101', in: '2020-01-01', out: '2020-05-05', reason: '轉所' });
+  assert.deepEqual(JSON.parse(await db.prepare('SELECT stays_json FROM v3_stays WHERE dog_id=?').bind(dogId).first('stays_json')), [
+    { number: '2020010101', in: '2020-01-01', out: '2020-05-05', reason: '轉所' },
+    { number: '2026042101', in: '2026-04-21', out: '2026-10-18', reason: '' },
+  ]);
+  const logs = (await db.prepare("SELECT kind,before_json,after_json FROM v3_edit_log WHERE kind='stays'").all()).results;
+  assert.equal(logs.length, 1);
+  assert.deepEqual(JSON.parse(logs[0].after_json), after.stays);
+  // 刪掉那一列就刪掉那個編號；別隻的編號不能搶
+  const removed = await saveDogEdit(db, dogId, { revision: after.revision, field: 'stays', value: after.stays.slice(1) }, { actor });
+  assert.deepEqual(removed.numbers, ['2025010101', '2026042101']);
+  await db.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('other','別隻')").run();
+  await db.prepare("INSERT INTO v3_dog_numbers VALUES('2019010101','other')").run();
+  await assert.rejects(
+    saveDogEdit(db, dogId, { revision: removed.revision, field: 'stays', value: [...removed.stays, { number: '2019010101', in: '', out: '', reason: '' }] }, { actor }),
+    (e) => e.status === 409
+  );
+});

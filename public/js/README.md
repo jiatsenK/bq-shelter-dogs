@@ -15,7 +15,7 @@
 
 | 檔案 | 責任／介面 | 依賴 | 使用頁面 |
 | --- | --- | --- | --- |
-| `dates.js` | `BQDates`：日期解析、編號與最早入所日、本地日期鍵、台灣今天 | 無 | index、cards、Node、admin（建置複製） |
+| `dates.js` | `BQDates`：日期解析、編號日期（`idDay`）與最早入所日、只有編號的狗排出入所表（`stayRows`，#639）、本地日期鍵、台灣今天 | 無 | index、cards、Node、admin（建置複製） |
 | `api.js` | `BQApi`：每個 API 端點一個函式，統一錯誤形狀，接手提前讀狗清單 | api-response | index、cards、edits |
 | `api-response.js` | `settle`：純 API 回應／錯誤解析，不讀頁面狀態 | 無 | index、cards、edits、admin（建置複製） |
 | `feature-settings.js` | 志工功能設定、載入與 fail-closed UI gate；初始化／手動更新讀取，不輪詢。匯出 `SETTING_KEYS`，與後端、管理網站、D1 初始值的鍵名由 `scripts/feature-setting-keys.test.mjs` 比對 | api | index、edits、Node |
@@ -25,13 +25,12 @@
 | `dog-data.js` | `parseDogsData`：將 API 狗清單整理為前端資料，不碰 DOM；Node 匯入的共用接縫 | dates | index、Node |
 | `ui-kit.js` | HTML 跳脫、圖示、備註標示、日期文字、搜尋比對；純函式 | 無 | index、Node |
 | `dog-status.js` | `walkKey`、警示關鍵字、天數色標（`dogStatus`）、休養判斷（`restFrom`）與溜狗表排序（`sortDue`）；今天的登記狀態與休養設定由呼叫端帶入，app.js 的 `computeStatus`／`dueDogs`／`restOf` 是帶好狀態的包裝 | dates、site-config | index、Node |
-| `detail-editor.js` | `BQDetailEditor`：五種編輯器的草稿、儲存中、錯誤與重畫狀態 | 無 | index |
+| `detail-editor.js` | `BQDetailEditor`：四種編輯器的草稿、儲存中、錯誤與重畫狀態 | 無 | index |
 | `detail.js` | 詳細資訊的畫面總控：內容（在所／離所）、同籠與可以一起溜、按鈕分派（`DETAIL_CLICKS`）、`renderDetail`／`showDetail`／`hideDetail`／`closeDetail` 與焦點還原；換狗或關閉時由 `leaveDetailDog` 收掉暫時狀態，儲存中的編輯留著 | app、overlays、各 `detail-*.js`、sheet-append、ui-kit、dog-status、dates、detail-editor、detail-viewport、photo、walk-ui、find、analysis、feature-settings、page-state | index |
 | `detail-rest.js` | 休養中說明與休養設定編輯器（開、改、存、結束、取消、輸入） | app、detail、api、dates、ui-kit、walk-ui、feature-settings、page-state | index |
 | `detail-fixed-care.js` | 有人固定照顧開關與每隻狗的儲存狀態 | app、detail、api、ui-kit、walk-ui、feature-settings、page-state | index |
-| `detail-intro.js` | 入所介紹：閱讀時的逐次紀錄整理（`intakePresentation`）、介紹與逐次紀錄編輯器、剛存好的介紹 | app、detail、detail-stays、api、dates、ui-kit、walk-ui、feature-settings、page-state | index |
-| `detail-stays.js` | 出入所紀錄編輯器（逐筆增刪、檢查、存） | app、detail、api、dates、ui-kit、walk-ui、page-state | index |
-| `detail-former.js` | 舊編號一行與補／刪舊編號 | app、detail、api、dates、ui-kit、walk-ui、feature-settings、page-state | index |
+| `detail-intro.js` | 出入所紀錄＋介紹那一段（原入所介紹）：閱讀時的逐次紀錄整理（`intakePresentation`）、介紹與逐次紀錄編輯器、剛存好的介紹 | app、detail、detail-stays、api、dates、ui-kit、walk-ui、feature-settings、page-state | index |
+| `detail-stays.js` | 出入所紀錄（#639，ADR 0021）：閱讀時一行一件事（`staysView`，接上介紹裡的逐次事件）、編輯表（每列編號可空；補、刪舊編號就是增、刪一列；手填離所原因；檢查、存） | app、detail、api、dates、ui-kit、walk-ui、feature-settings、page-state | index |
 | `sheet-append.js` | 加備註（詳細資訊）與新增異動紀錄（電腦版右欄）：預覽、送出與整頁事件委派 | app、detail、api、dates、ui-kit、walk-ui、page-state | index |
 | `detail-viewport.js` | 詳細資訊編輯欄位的可見範圍 | 無 | index |
 | `keyboard-viewport.js` | 螢幕鍵盤開啟時的欄位與面板定位 | 無 | index |

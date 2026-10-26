@@ -99,7 +99,8 @@ module.exports = async function verifyDetailEditing(browser, baseUrl) {
       { number: '2021021703', date: '2021-02-17', event: '迷路入所' },
       { number: '2021021703', date: '2026-01-02', event: '領養退回' },
     ]; renderDetail(); });
-    assert.deepEqual(await page.locator('.intake-list time').allTextContents(), ['2021/02/17', '2026/01/02']);
+    // 舊編號那次也列成入所（出入所紀錄跟逐次事件同一串，K 2026-10-26）
+    assert.deepEqual(await page.locator('.intake-list time').allTextContents(), ['2015/08/18', '2021/02/17', '2026/01/02']);
     await page.locator('#introEdit').click();
     await page.locator('#intakeAdd').click();
     const reason = page.locator('[data-intake-row="2"][data-intake-field="event"]');
@@ -114,10 +115,10 @@ module.exports = async function verifyDetailEditing(browser, baseUrl) {
     failIntro = false;
     await page.locator('[form="introForm"]').click();
     await page.locator('#introForm').waitFor({ state: 'detached' });
-    assert.equal(await page.locator('.intake-list li').count(), 3);
+    assert.equal(await page.locator('.intake-list li').count(), 4);
     assert.match(await page.locator('.intake-list').textContent(), /第三次入所的原因/);
     assert.equal(await page.locator('#detail .info .warn-note').count(), 0);
-    assert.equal(await page.locator('#detail .reentry').count(), 1);
+    assert.equal(await page.locator('#detail #staysEdit').count(), 1);
     assert.equal(await page.locator('#detail [data-section=walks]').count(), 1);
     await page.setViewportSize({ width: 1280, height: 900 });
     await page.locator('#restEdit').click();

@@ -147,11 +147,11 @@ function runTests() {
       // V9（#141）拿掉我的備註，網站不再寫 /notes
       if (/\/notes/.test(APP_JS + PHOTO_JS + WELCOME_JS + API_JS)) throw new Error('我的備註已拿掉，不該再讀寫 /notes');
       // 寫入都送到同網址的 Worker（不是試算表）：照片（#48）、換代號（#96）、溜了與備註（#138、#281）、
-      // 休養、入所介紹、舊編號（#289）、出入所紀錄（#333）、常溜、身分（#267）、固定照顧、活動紀錄、開卡
+      // 休養、入所介紹、出入所紀錄（#333；舊編號 #639 起在出入所表裡改）、常溜、身分（#267）、固定照顧、活動紀錄、開卡
       const writes = [...API_JS.matchAll(/(?:send|edit)\('(POST|PUT)', `?'?(\/[\w/-]+)|(?:send|edit)\(method, `(\/[\w-]+)|fetch\(`\$\{root\(\)\}(\/[\w-]+)/g)].map(m => m[2] || m[3] || m[4]).sort();
-      eq(writes, ['/activities', '/cards/opened', '/favorites', '/fixed-care/', '/former', '/identity', '/intro/', '/photos', '/rest/', '/stays/', '/walk', '/walker-code', '/walks/mine'].sort(), 'BQApi 的寫入端點：');
+      eq(writes, ['/activities', '/cards/opened', '/favorites', '/fixed-care/', '/identity', '/intro/', '/photos', '/rest/', '/stays/', '/walk', '/walker-code', '/walks/mine'].sort(), 'BQApi 的寫入端點：');
       if (/script\.google\.com|sheets\.googleapis\.com|api\.github\.com|Authorization|Bearer/i.test(API_JS)) throw new Error('BQApi 不連 Google、GitHub，也不帶憑證');
-      const code = APP_JS.replace("sendFormer(e.dog, former, 'POST')", '').replace("sendFormer(dog, former, 'DELETE')", '');
+      const code = APP_JS;
       const bad = [/method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /script\.google\.com|macros\/s\//, /sheets\.googleapis\.com/,
         /appendRow|setValue|batchUpdate|XMLHttpRequest|sendBeacon|indexedDB|sessionStorage|document\.cookie/];
       const hits = bad.filter(re => re.test(code)).map(String);
@@ -315,7 +315,7 @@ function runTests() {
         groupMap = { '測試狗': new Set(['好朋友']) };
         const box = document.createElement('div');
         box.innerHTML = detailHtml(dog, TODAY);
-        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '入所介紹', '休養設定'].slice(0, box.querySelector('[data-section="rest"]') ? 5 : 4)); // #390：出入所紀錄併入入所介紹
+        eq([...box.querySelectorAll('section h3')].map(h => h.firstChild.nextSibling.textContent), ['試算表備註', '同籠、可以一起溜的狗', '溜狗紀錄', '出入所紀錄', '介紹', '休養設定'].slice(0, box.querySelector('[data-section="rest"]') ? 6 : 5)); // #390、K 2026-10-26：出入所紀錄跟入所介紹同一段
         eq(box.querySelector('[data-section="note"] .content').textContent, '親人，好牽\n怕機車', '備註原文：');
         const buddy = box.querySelector('.buddy');
         eq(buddy.querySelector('img').getAttribute('src'), 'photos/thumbs/2.jpg', '一起溜的照片：');

@@ -412,7 +412,9 @@ test('出入所紀錄路由：405、415、413、壞 JSON、沒接 D1、限流 42
   await createCompactDatabase(db);
   await importCompactDogs(db, { syncedAt: '2026-10-15T12:00:00+08:00', dogs: [{ id: '2024032902', name: '測試狗' }] });
   const env = { ALLOWED_ORIGINS: ORIGIN, DB: db, WALKER_KEY: 'k' };
-  const put = ({ method = 'PUT', type = 'application/json', body = JSON.stringify({ editor: '小明', before: [], stays: [] }), ip = '9.9.9.1' } = {}) =>
+  // 出入所表（#639）：只有目前編號那一列；送一樣的表（沒改不寫），才走得到限流
+  const table = [{ number: '2024032902', in: '2024-03-29', out: '', reason: '' }];
+  const put = ({ method = 'PUT', type = 'application/json', body = JSON.stringify({ editor: '小明', before: table, stays: table }), ip = '9.9.9.1' } = {}) =>
     new Request('https://w.example/stays/2024032902', { method, headers: { Origin: ORIGIN, 'Content-Type': type, 'CF-Connecting-IP': ip }, body: method === 'GET' ? undefined : body });
   const status = async (r, e = env) => (await worker.fetch(r, e)).status;
   assert.equal(await status(put({ method: 'POST' })), 405);

@@ -1,6 +1,6 @@
 
 
-// 詳細資訊五種編輯器的草稿與狀態；畫面、驗證、API 與成功後的資料更新由主頁負責。
+// 詳細資訊四種編輯器的草稿與狀態；畫面、驗證、API 與成功後的資料更新由主頁負責。
 const BQDetailEditor = (() => {
   function create(redraw) {
     function draft(edit, fields) {
