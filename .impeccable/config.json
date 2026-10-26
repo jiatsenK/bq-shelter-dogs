@@ -11,6 +11,15 @@
         ],
         "createdAt": "2026-10-26T10:04:23.856Z",
         "reason": "Claude 判讀：links.html、admin.css、links.js 都沒有 marquee 或自動捲動，只有靜態表格；應是 vendor Tabler CSS 的動畫被誤判（同 #624 detect 只剩 vendor 的 animated-dots）"
+      },
+      {
+        "rule": "marquee",
+        "value": "*",
+        "files": [
+          "admin/public/flow.html"
+        ],
+        "createdAt": "2026-10-26T11:03:27.558Z",
+        "reason": "Claude 判讀：flow.html、admin.css、flow.js 沒有 marquee 或自動捲動；animated-dots 來自 vendor Tabler CSS，同 links.html 的既有誤判"
       }
     ]
   }
