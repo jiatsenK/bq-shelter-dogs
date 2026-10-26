@@ -49,19 +49,19 @@ module.exports = async (browser, base) => {
     assert.equal(await card.locator('.walk-btn.done').count(),0,'未接受前不能顯示已溜');
     release();
     await card.locator('.walk-btn.done').waitFor();
-    assert.equal(await card.locator('.walk-sync').textContent(),'試算表同步中');
+    assert.equal(await card.locator('.walk-sync').textContent(),'寫回試算表中');
     assert.equal(await page.getByText('已寫進試算表',{ exact:true }).count(),0);
     // K 2026-10-24：D1 接受後提示條照舊有「＋一起溜的人」（開關打開前就有的入口）
     await page.locator('#toast .toast-extra',{ hasText:'＋一起溜的人' }).waitFor();
     await page.locator('#toast .toast-text').click();
     await card.click();
-    assert.equal(await page.locator('.last-walk .walk-sync').textContent(),'試算表同步中');
+    assert.equal(await page.locator('.last-walk .walk-sync').textContent(),'寫回試算表中');
     await page.getByRole('button',{ name:'關閉',exact:true }).click();
     await page.locator('[data-tab="groups"]').click();
-    assert.equal(await page.locator('.front .walk-sync').textContent(),'試算表同步中');
+    assert.equal(await page.locator('.front .walk-sync').textContent(),'寫回試算表中');
     pack = { ...pack, version:2, walks:[{ ...pack.walks[0], syncStatus:'retry' }] };
     await page.evaluate(() => loadTodayWalks());
-    await page.getByText('試算表尚未同步，會自動重試',{ exact:true }).waitFor();
+    await page.getByText('寫回試算表失敗，會自動重試',{ exact:true }).waitFor();
     pack = { ...pack, version:3, walks:[{ ...pack.walks[0], syncStatus:'synced' }] };
     await page.evaluate(() => loadTodayWalks());
     assert.equal(await page.locator('.walk-sync').count(),0);
@@ -83,7 +83,7 @@ module.exports = async (browser, base) => {
     assert.match(await page.locator('.last-walk').textContent(),/甲/,'接受前保留原名單');
     release();
     await page.waitForFunction(() => document.querySelector('.last-walk')?.textContent.includes('乙') && !document.querySelector('.last-walk')?.textContent.includes('甲'));
-    assert.equal(await page.locator('.last-walk .walk-sync').textContent(),'試算表同步中');
+    assert.equal(await page.locator('.last-walk .walk-sync').textContent(),'寫回試算表中');
     assert.equal(await page.getByText(/已寫進試算表/).count(),0);
     await page.reload({ waitUntil:'networkidle' });
     await page.locator('#main .card[data-dog="0"]').click();
@@ -102,7 +102,7 @@ module.exports = async (browser, base) => {
     assert.equal(sent.dogs[0].prev,undefined);
     release();
     await page.waitForFunction(() => !document.querySelector('[data-who-undo]'));
-    assert.equal(await page.locator('.last-walk .walk-sync').textContent(),'試算表同步中');
+    assert.equal(await page.locator('.last-walk .walk-sync').textContent(),'寫回試算表中');
     assert.equal(await page.getByText(/已從試算表復原/).count(),0);
     assert.equal(await page.locator('#main .card[data-dog="0"] .walk-btn.done').count(),0);
     pack = { ...pack,version:pack.version+1,walks:[{ ...pack.walks[0],version:5,walkedDate:day,walker:'乙' }] };

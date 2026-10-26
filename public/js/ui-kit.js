@@ -41,8 +41,10 @@ export function searchKey(text) {
   return String(text || '').normalize('NFKC').replace(/\s+/g, '').toLowerCase();
 }
 
-// 犬名部分符合即算；沒輸入（或只有空白）時每隻都符合
+// 犬名、籠位、編號部分符合即算（站在籠子前打籠位也找得到，#646）；沒輸入（或只有空白）時每隻都符合。
+// 籠位不管前面的 0：打「新B5」找得到「新B05」
+const cageKey = text => searchKey(text).replace(/(^|\D)0+(?=\d)/g, '$1');
 export function matchesSearch(dog, query) {
   const q = searchKey(query);
-  return !q || searchKey(dog.name).includes(q);
+  return !q || [dog.name, dog.id].some(v => searchKey(v).includes(q)) || cageKey(dog.cage).includes(cageKey(q));
 }

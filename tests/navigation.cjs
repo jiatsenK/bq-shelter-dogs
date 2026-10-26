@@ -21,7 +21,7 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
   try {
     await page.goto(baseUrl + '/public/index.html');
     await page.locator('#main .card').first().waitFor();
-    assert.deepEqual(await page.locator('#tabs .t').allTextContents(), ['遛狗表', '常遛狗群', '我溜過', '資訊']);
+    assert.deepEqual(await page.locator('#tabs .t').allTextContents(), ['溜狗表', '常遛狗群', '我溜過', '資訊']);
     
     const selected = async id => {
       await page.locator('#tabs [data-tab="' + id + '"][aria-current="page"]').waitFor();
