@@ -19,7 +19,7 @@
 1. repo 的 AGENTS.md、現行全域規則與 `docs/agents/agent-split.md`。
 2. [本批正式規格](mobile-ui-implementation-spec.md)。
 3. 所接 Issue 的完整內容、留言、最新原生相依與 PR。
-4. [主頁定版圖](mobile-home-approved-2026-10-17.png)；接狗群票時另讀 [狗群定版參考](common-walk-groups-approved-2026-10-17/README.md)；接資訊票時讀 [#273 規格](../273-info-page.md)。
+4. [主頁定版圖](../mobile-home-approved-2026-10-17.png)；接狗群票時另讀 [狗群定版參考](../common-walk-groups-approved-2026-10-17/README.md)；接資訊票時讀 [#273 規格](273-info-page.md)。
 
 本機另保留逐票發佈內容：[第一票](implementation-tickets/01-mobile-navigation.md)、[#273 交接補充](implementation-tickets/02-info-page-273-handoff.md)、[第三票](implementation-tickets/03-common-walk-groups.md)。後續以 GitHub 票與最新已確認規格為準，不用這些副本代替讀票。
 
@@ -27,7 +27,7 @@
 
 **第一個實作視窗：**
 
-> 在 bq-shelter-dogs 實作 #373。先讀 AGENTS.md、docs/design/mobile-ui-implementation-spec.md 與 Issue 全部內容，核對最新遠端、既有 PR 和本機未提交工作。保持主頁定版，只完成這一票的四格導覽與可用切換。依 implement 流程執行測試與適當 code-review，一票一分支／PR；不要開始 #273／#374，不合併或部署。
+> 在 bq-shelter-dogs 實作 #373。先讀 AGENTS.md、docs/design/history/mobile-ui-implementation-spec.md 與 Issue 全部內容，核對最新遠端、既有 PR 和本機未提交工作。保持主頁定版，只完成這一票的四格導覽與可用切換。依 implement 流程執行測試與適當 code-review，一票一分支／PR；不要開始 #273／#374，不合併或部署。
 
 **第二個實作視窗（第一票完成後）：**
 

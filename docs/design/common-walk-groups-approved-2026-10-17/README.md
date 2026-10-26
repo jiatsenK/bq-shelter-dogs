@@ -9,7 +9,7 @@
 
 密集斜照片卡、淡灰綠籠號窄邊、下緣姓名、每群「＋」空白卡、左右前後景切群。日期離開卡片，移至群名下用白話說明；登記以整群為主，例外在原卡片上排除。
 
-詳見 [實作規格](../mobile-ui-implementation-spec.md) 與 [決策交接](../mobile-home-and-groups-decisions.md)。較早的無照片、圓泡泡、深綠籠號、卡片日期版本都不是定版。
+詳見 [實作規格](../history/mobile-ui-implementation-spec.md) 與 [決策交接](../mobile-home-and-groups-decisions.md)。較早的無照片、圓泡泡、深綠籠號、卡片日期版本都不是定版。
 
 ## 樣本與界線
 

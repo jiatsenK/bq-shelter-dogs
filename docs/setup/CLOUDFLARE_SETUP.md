@@ -4,7 +4,7 @@
 
 ```
 GitHub repo（程式、狗卡、資料、照片）──main 有變動──▶ GitHub Action「部署到 Cloudflare」──▶ Cloudflare Worker
-                                                                                         ├─ 網頁、data/、photos/
+                                                                                         ├─ 網頁、photos/
                                                                                          └─ /api（上傳、備註、代號）
 ```
 
@@ -170,7 +170,7 @@ https://pr-<PR 編號>-bq-shelter-dogs.<子網域>.workers.dev
 
 1. 溜狗表、詳細資訊、放大照片、找狗、分析頁的照片都正常。
 2. 選一隻狗換主照片：換完重新整理還是新照片；另一支手機（或無痕視窗）也馬上看得到。
-3. 過一兩分鐘清單上的小圖也換成新的（縮圖由「產生照片縮圖（R2）」Action 做，做好前先顯示原圖）。
+3. 清單上的小圖也換成新的（#546 起縮圖由網站換照片時自己產生；沒有縮圖的照片先顯示原圖，要補就手動跑「產生照片縮圖（R2）」Action）。
 4. GitHub 的提交紀錄（https://github.com/jiatsenK/bq-shelter-dogs/commits/main ）**沒有**多出照片的提交。
 
 （2026-10-04 K 驗收通過；舊照片 2026-10-05 已從 repo 刪除。）
@@ -203,18 +203,18 @@ https://pr-<PR 編號>-bq-shelter-dogs.<子網域>.workers.dev
 - 本機試跑：在 repo 根目錄 `npx wrangler dev --persist-to /tmp/wrangler-state`（`--persist-to` 放 repo 外面，不然暫存寫進網站資料夾會一直重新載入）。
 - 照片快取（#127）：`public/_headers` 讓 `photos/` 在手機上快取 30 天；Worker 的 `/api/dogs` 回傳每張照片的內容雜湊（`photoVersions`），網站組照片網址加 `?v=雜湊`，換照片網址就變。
 - 瀏覽統計（#128）：部署前 `scripts/analytics-beacon.mjs` 把 Cloudflare Web Analytics 的 beacon 插進要上傳的 `public/index.html`（token 來自 Secret `CF_ANALYTICS_TOKEN`，不提交）；預覽版和舊網址沒有。
-- 部署：`.github/workflows/deploy-cloudflare.yml`。同步試算表、產生縮圖這兩個 Action 用 GitHub 內建 token 提交，不會觸發推送事件，所以用 `workflow_run` 接著部署。
+- 部署：`.github/workflows/deploy-cloudflare.yml`。推到 main 且改到會放上網站的檔案時部署，也可以手動跑；「套用 D1 migration」套完會呼叫它（`workflow_call`）。
 - 照片放 R2（#130）：`wrangler.jsonc` 的 `r2_buckets`（binding `PHOTOS`，bucket `bq-shelter-photos`），程式在 `worker/src/r2.js`。
-  `/photos/*`、`/data/dogs.json`（蓋上 R2 照片的版本號）先經過 Worker（相簿 2026-10-09 拿掉，`photos/gallery/` 一律 404）；R2 沒有的照片退回靜態檔，刪掉的照片放 0 位元組的刪除標記（`customMetadata.deleted`）擋住退回。
+  `/photos/*` 先經過 Worker（`wrangler.jsonc` 的 `run_worker_first`；狗清單和照片版本號改由 `/api/dogs` 提供）（相簿 2026-10-09 拿掉，`photos/gallery/` 一律 404）；R2 沒有的照片退回靜態檔，刪掉的照片放 0 位元組的刪除標記（`customMetadata.deleted`）擋住退回。
   換掉、刪掉前複製到 `trash/{時間-亂數}/photo.jpg`（customMetadata 記 path、dogId、kind、file、addedAt、deletedAt）＋`thumb.jpg`，Cron 清掉超過 30 天的。
   Lifecycle 規則存在 bucket 上、不在 repo：`bq-shelter-photos`、`bq-shelter-photos-test` 都只有預設的「未完成分段上傳 7 天中止」，沒有刪除規則。K 2026-10-26 決定不加（理由見 ADR 0018 第 7 點補註）；要查就跑 `npx.cmd wrangler r2 bucket lifecycle list bq-shelter-photos`。
   管理 API（標頭 `X-Admin-Key: encodeURIComponent(金鑰)`）：`POST /api/admin/migrate`、`POST /api/admin/verify`、`GET /api/admin/thumbs`、`PUT /api/admin/thumbs/{原圖路徑}`、`GET /api/admin/trash`、`POST /api/admin/trash/{代號}/restore`。
-  部署前 `scripts/r2-bucket.mjs` 只查證既有 bucket，失敗以非零狀態結束、停止部署。縮圖：`.github/workflows/r2-thumbs.yml`（`scripts/make-thumbs.py --site`）。
+  部署前 `scripts/r2-bucket.mjs` 只查證既有 bucket，失敗以非零狀態結束、停止部署。補縮圖（只有人工手動跑）：`.github/workflows/r2-thumbs.yml`（`scripts/make-thumbs.py --site`）。
   repo 的 `photos/` 已經不放照片（原本的 `photos/README.md` 併到這裡）。R2 找不到照片時 Worker 仍會退回讀部署的靜態檔，這是搬遷過渡期的備援，請不要再把 `.jpg` 放進 repo。
 
 ## 資料庫（D1）
 
-K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**（結構見 `docs/COMPACT_D1.md`、`db/compact-schema.sql`）。免費額度 5 GB，現在的資料不到 1 MB，費用 NT$0。
+K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**（結構見 `db/compact-schema.sql`；#246 當時的說明 `docs/design/history/COMPACT_D1.md` 已過時）。免費額度 5 GB，現在的資料不到 1 MB，費用 NT$0。
 目前只是把資料庫建起來、把現有資料放進去；**網站還是讀原本的檔案**，所以資料庫沒接上網站也完全不受影響。
 
 **#214 起部署不改資料庫。** `scripts/d1-database.mjs` 只驗證既有資料庫名稱／ID 並執行 `SELECT 1`，缺少、ID 不符或讀取失敗就停止部署。即使資料庫是空的也不建表或匯入。新增結構在 #215 之後走有版本的 migration，與網站部署分開執行。
@@ -230,7 +230,7 @@ K 2026-10-10：資料從 repo 裡的檔案搬到 Cloudflare 的資料庫 **D1**�
 
 ### 結構改動與資料匯入
 
-資料表結構：現在的完整樣子在 `db/compact-schema.sql`（`v3_*`），說明見 `docs/COMPACT_D1.md`。#553 起每個變更寫成 repo 根目錄 `migrations/NNNN_*.sql`（wrangler 預設目錄，不用設 `migrations_dir`），正式庫只由 Actions「套用 D1 migration」（`.github/workflows/d1-migrations.yml`）套用，流程見 `docs/agents/data-changes.md`。舊的 `db/schema.sql`、`db/migrations/`（#252 前的舊表）已於 #275 移除，跟現在的 `migrations/` 無關。
+資料表結構：現在的完整樣子在 `db/compact-schema.sql`（`v3_*`），#246 當時的說明 `docs/design/history/COMPACT_D1.md` 已過時，只供查背景。#553 起每個變更寫成 repo 根目錄 `migrations/NNNN_*.sql`（wrangler 預設目錄，不用設 `migrations_dir`），正式庫只由 Actions「套用 D1 migration」（`.github/workflows/d1-migrations.yml`）套用，流程見 `docs/agents/data-changes.md`。舊的 `db/schema.sql`、`db/migrations/`（#252 前的舊表）已於 #275 移除，跟現在的 `migrations/` 無關。
 
 備用庫 `bq-shelter-dogs-backup`（2026-10-24 建立，#553）：套用會刪資料或搬資料的 migration 前，套用 workflow 先把正式庫整份複製到這裡。ID `d31b8371-c94a-4a04-960f-665a0365c5af`，記在 `scripts/d1-migrations.mjs` 的 `BACKUP_DB_ID`；workflow 照名字查，ID 不同或跟正式庫一樣就停。
 

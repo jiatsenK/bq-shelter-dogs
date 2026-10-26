@@ -26,7 +26,7 @@
 - 負責：Claude（依現行網站／Worker 分工）。
 - 一票一分支／PR，完成本票驗收後結束該實作對話；下一票從票開始。
 - 先核對遠端 main、既有 PR 與其他未提交工作，不直接清空目前工作樹。
-- 本機設計交接入口：`docs/design/mobile-ui-implementation-spec.md`；主頁與狗群定版資料分別保存，先讀其中的來源說明。這些參考目前尚未 commit／推送，須使用能讀此工作區的本機實作視窗。
+- 本機設計交接入口：`docs/design/history/mobile-ui-implementation-spec.md`；主頁與狗群定版資料分別保存，先讀其中的來源說明。這些參考目前尚未 commit／推送，須使用能讀此工作區的本機實作視窗。
 
 ## Out of Scope
 
