@@ -10,7 +10,12 @@
 - 不碰：`walkWake`、`walkWakeBatch`、`walkScan`、編輯觸發（`rows`、`dog-list`）、`dogListScan`、`observe`、`target`、`receipt`。
 - 測試：`worker/test/sheet-write.test.mjs` 舊直寫測試改成「三個舊動作有沒有金鑰、有沒有設 `WALK_WORKER_URL` 都回請重新整理，不開表、不寫格子、不連 Worker」；金鑰測試改用 `log`；`worker/test/sheet-call.test.mjs` 改用 `log`，並確認 `callSheet` 拒絕舊動作。
 - 本機檢查：`check-local.ps1` 這次因為要帶 `-ExecutionPolicy Bypass` 被權限擋下，改直接 `node --test` 跑相關檔與全部 Node 測試（排除本機已知會失敗的 `scripts/local-check.test.mjs`）；網頁（Playwright）測試沒跑，這次沒改前端。
-- 未做（要 K）：GAS 手動貼上新版、重新部署、試算表改一格確認編輯觸發仍送進 D1（步驟在 `SHEET_WRITE_SETUP.md`「#597 舊直寫入口退場」）。
+- 開 PR 時未做（要 K）：GAS 手動貼上新版、重新部署、試算表改一格確認編輯觸發仍送進 D1（步驟在 `SHEET_WRITE_SETUP.md`「#597 舊直寫入口退場」）；後來改由 clasp 部署，見下方。
 - 兩軸審查（code-review）：Spec 沒有實質錯誤；處理了過時註解（`worker/src/sheet-read.js` 的 GAS NAME_SEP 比對、`worker/src/index.js` `/walk` 段落開頭）、稽核補充留言要 K 同一次確認舊 `notifyWorker` 觸發器（寫進手動步驟第 3 步）、測試 helper 改名 `runHandle`。留著沒改：`planSheetWrites` 只剩找表頭再轉 `planAppend`（測試靠它驗表頭，名字保留）；舊動作回應不帶 `code`（規格沒要求）。
 - 最終 Node 測試：`node --experimental-vm-modules --test --test-concurrency=1` 跑 `scripts/`、`worker/` 全部 `*.test.mjs`（排除 `scripts/local-check.test.mjs`），457 項全過。第一次平行跑時 `scripts/admin-stage4.test.mjs` 因為 Windows EBUSY 鎖檔失敗一次，單獨跑和序列跑都通過。
-- 相關 PR：[#628](https://github.com/jiatsenK/bq-shelter-dogs/pull/628)，草稿。K 2026-10-26 交辦推送並開草稿。
+- 相關 PR：[#628](https://github.com/jiatsenK/bq-shelter-dogs/pull/628)。K 2026-10-26 交辦推送並開草稿。
+- CI：第一次 `scripts/admin-table.test.mjs` 失敗，是 `admin-table`、`admin-stage4` 兩支測試平行複製 `admin/public/shared/` 的競爭（讀到複製一半的 `dates.js`），跟 #597 無關；重跑通過，競爭另由 #634 修正。
+- 合併：K 2026-10-26 交辦合併。合併前用「本分支＋最新 main（`4fd578c`）」重跑完整 Node 測試 432 項全過；squash 合併為 main `50b3482`。「部署到 Cloudflare」run 40287282307、「部署到測試網站」run 40287282226 都成功。線上 `POST /api/walk-writeback/legacy-check` 回「不接受這個網站的要求」（路徑已刪），`/target` 照常回「寫回驗證失敗」（沒帶金鑰）。
+- 正式 Apps Script：K 2026-10-26 交辦用 clasp（本機已用 K 帳號登入）部署。`clasp list` 找到「溜狗表寫入_20261024_v3」，推送前抓下來跟 repo 合併前的 `sheet-write.gs` 逐行相同。只換程式檔、沿用原本的設定檔後 `clasp push`，`clasp deploy -i <原部署作業>` 從版本 4 換到版本 5（說明「#597 舊直寫入口退場」），部署 ID 與網址不變。抓回版本 5 跟 main 差異 0 行，網頁應用程式網址回 ok。「板收溜狗表寫入(封存)」沒動。
+- 測試網站的 Apps Script 綁在 BENCH441 測試試算表內，clasp 列不到，沒更新；舊版問不到 `legacy-check` 就停寫，不影響。
+- 驗收：K 2026-10-26 確認觸發條件頁只有 `onWalkSheetEdit`、`flushWalkEdits`、`flushDogList`、`dogListScan`，沒有 `notifyWorker`（不用重跑 `installWalkEditTriggers`）；正式網站按溜了、復原，以及人工改表同步都正常。#597 已關閉，驗收結果留言在票上。
