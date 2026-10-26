@@ -8,4 +8,5 @@
 - 測試輔助：`worker/test/fakes.mjs` 拿掉只給搬遷用的 `sha` 匯出與假 R2 的 `sha256` 檢查（正式程式已沒有傳 `sha256`）。
 - 文件：`docs/setup/CLOUDFLARE_SETUP.md` 管理 API 清單拿掉這兩個。同檔第 63 行 `ADMIN_KEY` 列的「搬照片」沒改，因為草稿 PR #599 也改那一行，等它合併後再順手改，避免衝突。
 - 本機檢查：Worker 測試 fail 0；網頁 25 套 264 項全過。完整 Node 時 `scripts/admin-stage4.test.mjs` 又失敗（#591 那次也是），單獨跑會過，與本票無關。`scripts/local-check.test.mjs` 本機 `pwsh` 執行原則問題另計。
-- 相關 PR：尚未建立。
+- K 2026-10-26 交辦推送並開草稿 PR。
+- 相關 PR：#603（草稿）。
