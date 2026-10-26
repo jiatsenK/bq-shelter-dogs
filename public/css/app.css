@@ -2448,3 +2448,12 @@ html.kb-open .onboard { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-
 .gw-secondary-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-height: 44px; }
 
 .desk-on .zukan-link[hidden] { display: none; }
+
+/* 測試網站（worker/src/test-site.js 在 <html> 加 data-site="test"；正式版沒有這個屬性，不受影響）：
+   檔案櫃（頁首、底部列、選中分頁）換成測試紫，標題旁一顆黃底「測試版」，一眼分得出不是正式版。
+   「溜了」、天數色籤等主色不變，綠色仍只代表最近溜過。對比：白字 10.9、淡紫字 7.1、標籤字 9.1 */
+html[data-site="test"] { --shell: #5A2A5E; --shell-deep: #431F46; --shell-soft: #E3C9E2; }
+html[data-site="test"] .brand h1::after {
+  content: "測試版"; display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 3px;
+  background: var(--tab-amber); color: #2A1230; font-size: 13px; font-weight: 800; letter-spacing: 0; line-height: 1.4; vertical-align: 3px; white-space: nowrap;
+}

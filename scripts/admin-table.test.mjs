@@ -88,8 +88,8 @@ test('#624 抽屜規則：欄位順序、只有編號／出入所／照片要預
     { ...row, intro: '新', sex: 'female', fixedCare: true, photoUrl: '/photos/thumbs/x.jpg' });
   assert.equal(patchDog(row, { ...snap, intro: '' }).photoUrl, '/photos/1.jpg', '沒有 D1 照片引用時保留原本的照片');
 });
-test('#624 六頁側欄一致：資料／志工網站兩組、目前頁標 aria-current、沒有 sidebar-note', async () => {
-  const pages = { 'index.html': './', 'activities.html': './activities.html', 'checks.html': './checks.html', 'settings.html': './settings.html', 'updates.html': './updates.html', 'releases.html': './releases.html' };
+test('#624 七頁側欄一致：資料／志工網站兩組、目前頁標 aria-current、沒有 sidebar-note', async () => {
+  const pages = { 'index.html': './', 'activities.html': './activities.html', 'checks.html': './checks.html', 'settings.html': './settings.html', 'updates.html': './updates.html', 'releases.html': './releases.html', 'links.html': './links.html' };
   let first;
   for (const [file, href] of Object.entries(pages)) {
     const html = (await readFile(new URL(`../admin/public/${file}`, import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
@@ -102,7 +102,7 @@ test('#624 六頁側欄一致：資料／志工網站兩組、目前頁標 aria-
     assert.equal(plain, first, file + ' 側欄跟其他頁一樣');
     assert.ok(!/id="(?:reload|refresh|reload-settings)"[^>]*btn-primary|btn-primary[^>]*id="(?:reload|refresh|reload-settings)"/.test(html), file + ' 重新讀取是次要按鈕');
   }
-  assert.match(first, /資料[\s\S]*狗資料[\s\S]*活動紀錄[\s\S]*待補清單[\s\S]*志工網站[\s\S]*志工網站設定[\s\S]*修改紀錄[\s\S]*網站更新/);
+  assert.match(first, /資料[\s\S]*狗資料[\s\S]*活動紀錄[\s\S]*待補清單[\s\S]*志工網站[\s\S]*志工網站設定[\s\S]*修改紀錄[\s\S]*網站更新[\s\S]*網站連結/);
 });
 test('狀態分頁：在所／已出所／待核對各自篩選，數量不受搜尋影響；不在所的狗用舊編號', () => {
   const dogs = [dog(1), dog(2), dog(3, { number: '', formerNumber: '2020010101', onMain: false, status: 'departed', departure: { date: '2026-10-01', reason: 'adopt' } }),

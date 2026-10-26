@@ -42,6 +42,7 @@
 | `PREVIEW` | 只有預覽版設定 | preview-cloudflare.yml |
 | `SHEET_WRITE_KEY` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
 | `SHEET_WRITE_URL` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
+| `SITE_ENV` | repo 沒設定：正式環境只可能是手動加的 Cloudflare 密鑰（後台加的一般變數部署時會被 keep_vars: false 清掉） | — |
 | `SYNC_DAILY_BUDGET` | `40000` | wrangler.jsonc 的 vars |
 | `SYNC_MAX_ROWS` | repo 沒設定：正式環境只可能是手動加的 Cloudflare 密鑰（後台加的一般變數部署時會被 keep_vars: false 清掉） | — |
 | `WALKER_KEY` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
