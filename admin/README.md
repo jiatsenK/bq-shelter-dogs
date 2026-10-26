@@ -41,8 +41,9 @@
 
 ### 怎麼部署
 
-- Actions 頁選「部署管理網站」（`.github/workflows/deploy-admin.yml`）→「Run workflow」，可填分支（留空＝main）。main 推送**不會**自動部署（K 2026-10-26），因為管理網站直接寫正式資料。
-- workflow 先確認正式庫 migration 都套過，部署時把「分支 commit」寫進 Cloudflare 部署紀錄的 Message，部署後確認沒登入會被轉到 Access 登入頁。
+- Actions 頁選「部署管理網站」（`.github/workflows/deploy-admin.yml`）→「Run workflow」，分支選 main。main 推送**不會**自動部署（K 2026-10-26），因為管理網站直接寫正式資料。
+- 只部署 main（#622）：不能填分支，選別的分支整個略過。合併前要試某張 PR，用測試網站或 PR 預覽。
+- workflow 先確認正式庫 migration 都套過，部署時把「main commit」寫進 Cloudflare 部署紀錄的 Message，部署後確認沒登入會被轉到 Access 登入頁。
 - 改到兩站共用的程式（`worker/src/` 共用模組、`public/js/api-response.js`、`dates.js`）時，志工網站由 main 推送自動部署，管理網站要另外按一次。
 - 本機部署（不建議）也要帶紀錄：`npx.cmd wrangler deploy --config wrangler.admin.jsonc --message "<分支> <commit>"`。
 - 2026-10-25～26 的前 5 次部署是本機手動、沒有 Message，看不出是哪個 commit。

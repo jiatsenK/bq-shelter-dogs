@@ -213,6 +213,9 @@ https://pr-<PR 編號>-bq-shelter-dogs-preview.<子網域>.workers.dev
 - 照片快取（#127）：`public/_headers` 讓 `photos/` 在手機上快取 30 天；Worker 的 `/api/dogs` 回傳每張照片的內容雜湊（`photoVersions`），網站組照片網址加 `?v=雜湊`，換照片網址就變。
 - 瀏覽統計（#128）：部署前 `scripts/analytics-beacon.mjs` 把 Cloudflare Web Analytics 的 beacon 插進要上傳的 `public/index.html`（token 來自 Secret `CF_ANALYTICS_TOKEN`，不提交）；預覽版和舊網址沒有。
 - 部署：`.github/workflows/deploy-cloudflare.yml`。推到 main 且改到會放上網站的檔案時部署，也可以手動跑；「套用 D1 migration」套完會呼叫它（`workflow_call`）。
+  - 部署排隊、不取消（#622）：正在跑的部署跑完才換下一個。還在排隊的會被更新的那次換掉，那次用更新的 main，一樣先確認 migration 再部署。原本會取消正在跑的部署，「套用 D1 migration」套完後呼叫的部署曾被砍掉（2026-10-25）。
+  - 只准 main（#622）：「部署到 Cloudflare」「套用 D1 migration」「部署管理網站」「準備預覽資料庫」每個 job 都有 `if: github.ref == 'refs/heads/main'`，在 Actions 頁選別的分支按，整個略過（灰色），不碰正式環境。只有「部署到測試網站」可以填分支。結構檢查在 `tests/index/hosting.js`（`mainOnlyProblem`）。
+  - 這只擋手誤：有推送權限的人能連 workflow 一起改。正式部署目前不等測試通過（另開票討論）。
 - 照片放 R2（#130）：`wrangler.jsonc` 的 `r2_buckets`（binding `PHOTOS`，bucket `bq-shelter-photos`），程式在 `worker/src/r2.js`。
   `/photos/*` 先經過 Worker（`wrangler.jsonc` 的 `run_worker_first`；狗清單和照片版本號改由 `/api/dogs` 提供）（相簿 2026-10-09 拿掉，`photos/gallery/` 一律 404）；R2 沒有的照片退回靜態檔，刪掉的照片放 0 位元組的刪除標記（`customMetadata.deleted`）擋住退回。
   換掉、刪掉前複製到 `trash/{時間-亂數}/photo.jpg`（customMetadata 記 path、dogId、kind、file、addedAt、deletedAt）＋`thumb.jpg`，Cron 清掉超過 30 天的。
