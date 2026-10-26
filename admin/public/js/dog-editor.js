@@ -12,13 +12,15 @@ import {
   sameValue,
   introDiff,
   restProblem,
-  patchDog
+  patchDog,
+  stayRow
 } from './dog-edit-model.js';
 import { mergeCandidates, mergeSides, mergePreviewText } from './dog-merge.js';
 import { shownNumber } from './dog-table.js';
+import { BQDates } from '../shared/dates.js';
 
-// #624 右側抽屜：七個欄位全部展開；介紹、休養、固定照顧、性別改完直接可存（行內標改前→改後），
-// 編號、出入所紀錄、照片要先預覽。後端不變：一欄一筆 PUT／POST，每欄帶上一筆回應的 revision。
+// #624 右側抽屜：六個欄位全部展開（#639 編號併進出入所紀錄）；介紹、休養、固定照顧、性別改完直接可存（行內標改前→改後），
+// 出入所紀錄（含編號，ADR 0021）、照片要先預覽。後端不變：一欄一筆 PUT／POST，每欄帶上一筆回應的 revision。
 const el = (tag, value, className) => {
   const node = document.createElement(tag);
   if (value !== undefined) node.textContent = value;
@@ -148,8 +150,6 @@ function mergeSection(dog, dogs, onMerged) {
   });
   return wrap;
 }
-const stayRow = (row) => ({ in: row.in || '', out: row.out || '', reason: row.reason || '' });
-
 export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [], onMerged = () => {} }) {
   let dog = null,
     snapshot = null,
@@ -303,24 +303,30 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
     node.addEventListener('click', () => preview(field));
     sections[field].controls.append(node);
   }
-  function buildNumbers() {
-    const controls = section('numbers');
-    controls.append(
-      el('p', `目前編號不可移除：${snapshot.currentNumbers.join('、') || '無編號'}。每行一個編號，不可移給另一隻狗。`, 'form-hint')
-    );
-    labelled(controls, textInput('textarea'), '所有編號（每行一個）', 'edit-numbers').rows = 3;
-    controls.querySelector('#edit-numbers').value = snapshot.numbers.join('\n');
-    previewButton('numbers');
-  }
+  // 出入所表（ADR 0021）：一個編號一列，查不到編號的那次編號空著。有編號的入所日就是編號前 8 碼；
+  // 有離所紀錄的出所日、原因照離所紀錄（唯讀），那列跟目前編號那列都不能刪。補編號＝新增一列填編號，刪編號＝刪那一列。
   function buildStays() {
     const controls = section('stays');
+    controls.append(
+      el(
+        'p',
+        `每次在所一列。有編號的入所日自動用編號前 8 碼；查不到編號的那次，編號留空、自己填入所日。目前編號（${
+          snapshot.currentNumbers.join('、') || '無'
+        }）不能刪，編號不能移給另一隻狗。`,
+        'form-hint'
+      )
+    );
     const rows = el('div');
     rows.id = 'edit-stays';
     controls.append(rows);
-    const addRow = (stay = { in: '', out: '', reason: '' }) => {
+    const addRow = (stay = { number: '', in: '', out: '', reason: '' }) => {
       const row = el('fieldset', undefined, 'stay-row');
-      row.append(el('legend', '一次出入所'));
+      const current = snapshot.currentNumbers.includes(stay.number);
+      const legend = el('legend', '');
+      row.append(legend);
+      const inputs = {};
       for (const [key, label, type] of [
+        ['number', '編號（查不到留空）', 'text'],
         ['in', '入所日', 'date'],
         ['out', '出所日（還在所留空）', 'date'],
         ['reason', '原因', 'text']
@@ -329,19 +335,35 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
         const node = textInput(type);
         node.dataset.key = key;
         node.value = stay[key] || '';
+        if (key === 'number') node.inputMode = 'numeric';
         wrap.append(node);
         row.append(wrap);
+        inputs[key] = node;
       }
-      const remove = button('移除這筆');
-      remove.addEventListener('click', () => {
-        row.remove();
-        update();
-      });
-      row.append(remove);
+      inputs.number.readOnly = current || Boolean(stay.departed);
+      inputs.out.readOnly = inputs.reason.readOnly = Boolean(stay.departed);
+      if (stay.departed) row.append(el('p', '出所日、原因照離所紀錄。', 'form-hint'));
+      // 有編號：入所日跟著編號，不能另外改
+      const sync = () => {
+        const number = inputs.number.value.trim();
+        legend.textContent = number ? `編號 ${number}` : '查不到編號的那次';
+        inputs.in.readOnly = Boolean(number);
+        if (number) inputs.in.value = BQDates.idDay(number);
+      };
+      inputs.number.addEventListener('input', sync);
+      sync();
+      if (!current && !stay.departed) {
+        const remove = button(stay.number ? `刪掉這列（刪掉編號 ${stay.number}）` : '刪掉這列');
+        remove.addEventListener('click', () => {
+          row.remove();
+          update();
+        });
+        row.append(remove);
+      }
       rows.append(row);
     };
     snapshot.stays.forEach(addRow);
-    const add = button('新增一次出入所');
+    const add = button('新增一列');
     add.addEventListener('click', () => {
       addRow();
       update();
@@ -403,7 +425,6 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
     rest: buildRest,
     fixedCare: buildFixedCare,
     sex: buildSex,
-    numbers: buildNumbers,
     stays: buildStays,
     photo: buildPhoto
   };
@@ -428,16 +449,15 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
     if (field === 'rest') return q('#edit-rest-end').checked ? null : { until: q('#edit-until').value, reason: q('#edit-reason').value };
     if (field === 'fixedCare') return q('#edit-fixed-care').checked;
     if (field === 'sex') return q('#edit-sex').value;
-    if (field === 'numbers') return q('#edit-numbers').value.split(/\s+/).filter(Boolean).sort();
     if (field === 'stays')
-      return [...fields.querySelectorAll('.stay-row')].map((row) =>
-        Object.fromEntries([...row.querySelectorAll('input')].map((n) => [n.dataset.key, n.value]))
-      );
+      return [...fields.querySelectorAll('.stay-row')].map((row) => {
+        const input = Object.fromEntries([...row.querySelectorAll('input')].map((n) => [n.dataset.key, n.value]));
+        return stayRow({ ...input, number: input.number.replace(/\s+/g, '') });
+      });
     return images;
   }
-  // 草稿和原值用同一套正規化比較：編號排序、出入所補齊欄位，不靠後端回傳的順序
-  const before = (field) =>
-    field === 'stays' ? snapshot.stays.map(stayRow) : field === 'numbers' ? [...snapshot.numbers].sort() : snapshot[field];
+  // 草稿和原值用同一套正規化比較：出入所補齊欄位、不比 departed
+  const before = (field) => (field === 'stays' ? snapshot.stays.map(stayRow) : snapshot[field]);
   const changed = (field) => (field === 'photo' ? Boolean(images) : !sameValue(value(field), before(field)));
   const draftKey = (field) => (field === 'photo' ? images : JSON.stringify(value(field)));
   const dirtyFields = () => (snapshot ? FIELDS.map(([f]) => f).filter(changed) : []);
@@ -630,7 +650,7 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
     if (await load(true)) {
       reload.hidden = true;
       delete status.dataset.error;
-      status.textContent = '已讀取最新資料，草稿保留；改前→改後已依最新資料重算，編號、出入所紀錄、照片請重新預覽。';
+      status.textContent = '已讀取最新資料，草稿保留；改前→改後已依最新資料重算，出入所紀錄、照片請重新預覽。';
     }
   });
   fields.addEventListener('input', () => {
@@ -691,7 +711,7 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
       root.querySelector('#drawer-title').focus();
       load().then((ok) => {
         if (ok && dog === nextDog)
-          status.textContent = notice ? `${notice}現在編輯${dog.name || '未命名'}。` : '改完按「儲存」；編號、出入所紀錄、照片要先預覽。';
+          status.textContent = notice ? `${notice}現在編輯${dog.name || '未命名'}。` : '改完按「儲存」；出入所紀錄、照片要先預覽。';
       });
       return true;
     },

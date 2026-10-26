@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-// #566／#624 管理狗編輯：右側抽屜、七欄全開、低風險欄位直接存、高風險先預覽、存並開下一隻、焦點回原列。
+// #566／#624 管理狗編輯：右側抽屜、六欄全開（#639 編號併進出入所紀錄）、低風險欄位直接存、高風險先預覽、存並開下一隻、焦點回原列。
 // API 全部是假回應，不碰正式資料。
 module.exports = async (browser, base) => {
   const { ADMIN_CSP } = await import('../worker/src/admin/index.js');
@@ -21,10 +21,12 @@ module.exports = async (browser, base) => {
     { dogId: C, name: '球球', number: '2020010103', cage: 'C3', note: '', intro: '', sex: 'female', sexMismatch: false, onMain: true, status: 'main', formerNumber: '', departure: null, fixedCare: false, rest: null, photoUrl: null, walkedDate: '2026-10-21' },
     { dogId: D, name: '花花', number: '2020010104', cage: 'D4', note: '', intro: '', sex: 'female', sexMismatch: false, onMain: true, status: 'main', formerNumber: '', departure: null, fixedCare: false, rest: null, photoUrl: null, walkedDate: '2026-10-21' }
   ];
-  const snap = (dog) => ({ dogId: dog.dogId, revision: 1, intro: dog.intro, sex: dog.sex, sexCopies: [], fixedCare: false, rest: null, numbers: [dog.number], currentNumbers: [dog.number], stays: [], photo: null, intakeEvents: [] });
+  const stay = (n, extra = {}) => ({ number: n, in: `${n.slice(0, 4)}-${n.slice(4, 6)}-${n.slice(6, 8)}`, out: '', reason: '', ...extra });
+  const snap = (dog) => ({ dogId: dog.dogId, revision: 1, intro: dog.intro, sex: dog.sex, sexCopies: [], fixedCare: false, rest: null, numbers: [dog.number], currentNumbers: [dog.number], stays: [stay(dog.number)], photo: null, intakeEvents: [] });
   const snapshots = Object.fromEntries(dogs.map((dog) => [dog.dogId, snap(dog)]));
-  // 球球有舊編號，回傳順序故意不排序：草稿與原值都要正規化，打開不能顯示「改了編號」
-  snapshots[C].numbers = ['2020010103', '2019120101'];
+  // 球球有離所過的舊編號：後端帶的 departed 不算進草稿比較，打開不能顯示「改了出入所紀錄」
+  snapshots[C].numbers = ['2019120101', '2020010103'];
+  snapshots[C].stays = [stay('2019120101', { out: '2020-01-01', reason: '認養', departed: true }), stay('2020010103')];
   let fail = false,
     conflict = false,
     dogReads = 0;
@@ -74,7 +76,7 @@ module.exports = async (browser, base) => {
     assert.ok((await page.evaluate(() => scrollY)) > 0, '不捲回頁首（列位置在後面的寬度檢查量）');
     assert.equal(await page.evaluate(() => document.activeElement.id), 'drawer-title', '焦點進抽屜標題');
     assert.match(await row(A).getAttribute('class'), /is-selected/);
-    assert.equal(await drawer.locator('.edit-field').count(), 7, '七個欄位全部展開');
+    assert.equal(await drawer.locator('.edit-field').count(), 6, '六個欄位全部展開');
     assert.match(await drawer.locator('.drawer-head').textContent(), /阿福.*2020010101.*A1/);
     assert.match(await drawer.locator('[data-field="intro"] .edit-field-head').textContent(), /3 字/);
     assert.equal(await page.locator('#edit-intro').getAttribute('maxlength'), '1000');
@@ -127,16 +129,22 @@ module.exports = async (browser, base) => {
     assert.match(await row(A).textContent(), /性別待確認/);
     assert.match(await drawer.locator('[data-field="sex"] .edit-field-head').textContent(), /待補/);
 
-    // 編號是高風險欄位：沒預覽不能存，改了要重新預覽
-    await page.locator('#edit-numbers').fill('2020010101\n2019010101');
+    // 出入所紀錄（含編號，ADR 0021）是高風險欄位：沒預覽不能存，改了要重新預覽。補編號＝新增一列填編號，入所日跟著編號
+    const stays = drawer.locator('[data-field="stays"]');
+    assert.equal(await stays.locator('.stay-row').first().getByRole('button').count(), 0, '目前編號那列不能刪');
+    await stays.getByRole('button', { name: '新增一列' }).click();
+    const added = stays.locator('.stay-row').last();
+    await added.locator('[data-key="number"]').fill('2019010101');
+    assert.equal(await added.locator('[data-key="in"]').inputValue(), '2019-01-01');
+    assert.equal(await added.locator('[data-key="in"]').getAttribute('readonly'), '', '有編號的入所日不能另外改');
     assert.equal(await save.isDisabled(), true);
-    assert.match(await page.locator('.drawer-dirty').textContent(), /編號要先按「預覽改前／改後」/);
-    await drawer.locator('[data-preview="numbers"]').click();
-    assert.match(await drawer.locator('[data-field="numbers"] .field-diff').textContent(), /改前2020010101改後2019010101\n?2020010101/);
+    assert.match(await page.locator('.drawer-dirty').textContent(), /出入所紀錄要先按「預覽改前／改後」/);
+    await drawer.locator('[data-preview="stays"]').click();
+    assert.match(await stays.locator('.field-diff').textContent(), /改後2020010101：入所 2020-01-01／出所 尚未出所／未填原因\n2019010101：入所 2019-01-01／出所 尚未出所／未填原因/);
     assert.equal(await save.isDisabled(), false);
-    await page.locator('#edit-numbers').fill('2020010101\n2018010101');
+    await added.locator('[data-key="out"]').fill('2019-05-01');
     assert.equal(await save.isDisabled(), true, '預覽後又改要重新預覽');
-    await page.locator('#edit-numbers').fill('2020010101');
+    await added.getByRole('button', { name: '刪掉這列' }).click();
 
     // 照片：舊固定路徑沒有 D1 引用，預覽仍顯示改前圖
     await page.getByRole('button', { name: '查看這隻狗的照片垃圾桶' }).click();
@@ -167,7 +175,8 @@ module.exports = async (browser, base) => {
     await page.getByRole('button', { name: '下一隻', exact: true }).click();
     await page.getByText('改完按「儲存」', { exact: false }).waitFor();
     assert.equal(await drawer.locator('#drawer-title').textContent(), '球球');
-    assert.equal(await page.locator('.drawer-dirty').textContent(), '沒有修改。', '後端編號沒排序也不算改了編號');
+    assert.equal(await page.locator('.drawer-dirty').textContent(), '沒有修改。', '後端帶的離所旗標不算改了出入所紀錄');
+    assert.equal(await drawer.locator('[data-field="stays"] .stay-row').first().locator('[data-key="out"]').getAttribute('readonly'), '', '離所的出所日照離所紀錄');
     // 焦點不在抽屜裡時 Esc 也關得掉
     await page.locator('#query').focus();
     await page.keyboard.press('Escape');
@@ -251,7 +260,7 @@ module.exports = async (browser, base) => {
     }
     assert.deepEqual(await page.evaluate(() => window.cspViolations), []);
     assert.deepEqual(errors, []);
-    console.log('#624 管理狗編輯抽屜：表格不動、七欄全開、低風險直接存／高風險先預覽、409／失敗保留草稿、多欄依序存只更新一列、焦點回原列、存並開下一隻、網址開抽屜、切精簡欄、列不移位、選取列對比 AA、篩選清單照原順序往下、存後焦點與 Esc、編號正規化、375／1100／1440px通過');
+    console.log('#624 管理狗編輯抽屜：表格不動、六欄全開、低風險直接存／高風險先預覽、409／失敗保留草稿、多欄依序存只更新一列、焦點回原列、存並開下一隻、網址開抽屜、切精簡欄、列不移位、選取列對比 AA、篩選清單照原順序往下、存後焦點與 Esc、出入所表帶編號、375／1100／1440px通過');
   } finally {
     await context.close();
   }

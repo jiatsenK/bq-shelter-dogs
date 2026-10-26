@@ -1,5 +1,5 @@
 // 詳細資訊的畫面總控：畫內容、在外框綁一次事件、開關與焦點還原。
-// 各編輯器（休養、固定照顧、入所介紹、出入所、舊編號）在各自的 detail-*.js；試算表備註在 sheet-append.js
+// 各編輯器（休養、固定照顧、入所介紹、出入所紀錄（含舊編號，#639））在各自的 detail-*.js；試算表備註在 sheet-append.js
 import { canEdit } from './feature-settings.js';
 import { BQDates } from './dates.js';
 import { BQDetailEditor } from './detail-editor.js';
@@ -16,8 +16,7 @@ import { sheetAppendHtml } from './sheet-append.js';
 import { fixedCareHtml, toggleFixedCare } from './detail-fixed-care.js';
 import { closeRestEdit, openRestEdit, restAdminHtml, restInput, restNoteHtml, saveRest } from './detail-rest.js';
 import { closeIntroEdit, introBarHtml, introInput, introOf, introRowClick, introSectionHtml, openIntroEdit, saveIntro } from './detail-intro.js';
-import { closeStaysEdit, openStaysEdit, saveStays, staysInput, staysRowClick } from './detail-stays.js';
-import { closeFormerEdit, formerInput, openFormerEdit, reentryLine, removeFormer, saveFormer } from './detail-former.js';
+import { closeStaysEdit, openStaysEdit, saveStays, staysInput, staysRowClick, staysTableHtml } from './detail-stays.js';
 import { closeOverlay, pushOverlay, registerOverlay } from './overlays.js';
 
 const detailEdits = BQDetailEditor.create(renderDetail);
@@ -34,9 +33,9 @@ function statusBadge(dog, today) {
   return `<span class="badge muted">沒有紀錄</span>`;
 }
 
-// 詳細資訊：籠位已經在標籤上（#112），這裡只寫編號和再入所
+// 詳細資訊：籠位已經在標籤上（#112），這裡只寫編號和出入所表（#639 取代舊編號一行）
 function metaLine(dog) {
-  return `${dog.id ? `<div class="meta">編號 ${esc(dog.id)}</div>` : ''}${reentryLine(dog)}`;
+  return `${dog.id ? `<div class="meta">編號 ${esc(dog.id)}</div>` : ''}${staysTableHtml(dog)}`;
 }
 
 // 詳細資訊：備註（志工後續補充，試算表備註欄）／可以一起溜的狗／狗卡資訊（dogs/{編號}.md 的入所原始介紹，同步時已寫進 dogs.json）
@@ -235,11 +234,8 @@ const DETAIL_CLICKS = [
   ['#photoPick', () => BQPhoto.pick()],
   ['#restEdit', () => openRestEdit(appState.detailDog)],
   ['#introEdit', () => openIntroEdit(appState.detailDog)],
-  ['#formerAdd', () => openFormerEdit(appState.detailDog)],
   ['#staysEdit', () => openStaysEdit(appState.detailDog)],
   ['#staysCancel', () => closeStaysEdit()],
-  ['#formerCancel', () => closeFormerEdit()],
-  ['[data-former-del]', el => removeFormer(appState.detailDog, el.dataset.formerDel)],
   ['#walksToggle', () => { appState.detailWalksOpen = !appState.detailWalksOpen; renderDetail(); const b = document.getElementById('walksToggle'); if (b) b.focus({ preventScroll: true }); }],
   ['#introCancel', () => closeIntroEdit()],
   ['#restEnd', () => saveRest(true)],
@@ -269,7 +265,7 @@ const DETAIL_CLICKS = [
   }],
 ];
 // 各表單送出時存哪一種編輯
-const DETAIL_FORMS = { introForm: saveIntro, formerForm: saveFormer, staysForm: saveStays, restForm: () => saveRest() };
+const DETAIL_FORMS = { introForm: saveIntro, staysForm: saveStays, restForm: () => saveRest() };
 
 function wireDetail(box) {
   if (box.bqWired) return;
@@ -278,7 +274,7 @@ function wireDetail(box) {
   box.addEventListener('click', e => introRowClick(e, box));
   // 打的字記在各自的編輯狀態，重畫不會不見
   box.addEventListener('input', e => {
-    if (staysInput(e) || introInput(e, box) || formerInput(e)) return;
+    if (staysInput(e) || introInput(e, box)) return;
     restInput(e);
   });
   box.addEventListener('submit', e => {
@@ -314,7 +310,7 @@ function labelPhotoPick(box) {
 const detailEditorViewport = createDetailEditorViewport(document.getElementById('detailBackdrop'), document.getElementById('detail'));
 
 function renderDetail() {
-  for (const [key, field] of [['editIntro','introEdit'],['editRest','restEdit'],['editStays','staysEdit'],['editFormer','formerEdit']]) {
+  for (const [key, field] of [['editIntro','introEdit'],['editRest','restEdit'],['editStays','staysEdit']]) {
     if (!canEdit(key) && appState[field]?.phase !== 'saving') appState[field] = null;
   }
   if (!appState.detailDog) return;
@@ -346,7 +342,7 @@ function leaveDetailDog() {
   detailEditorViewport.reset();
   appState.pickedBuddies.clear();
   appState.detailWalksOpen = false;
-  for (const field of ['restEdit', 'introEdit', 'formerEdit', 'staysEdit']) {
+  for (const field of ['restEdit', 'introEdit', 'staysEdit']) {
     if (!appState[field] || appState[field].phase !== 'saving') appState[field] = null;
   }
   BQPhoto.leaveDetail();

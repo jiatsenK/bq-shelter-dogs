@@ -2,7 +2,7 @@ import { dogIdentity, readDogEdit, saveDogEdit, cleanDogValue, validFormer } fro
 import { photoInput, saveDogPhoto } from './dog-photo.js';
 import { readSettings, requireVolunteerEdit, settingForWrite } from './feature-settings.js';
 import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitiesForCodes, IdentityError } from './identity.js';
-import { cleanStays } from './stays.js';
+import { sameStays } from './stays.js';
 import { callSheet, SheetWriteError } from './sheet-write.js';
 import { splitNames } from './sheet-read.js';
 import { readDepartedCards } from './departed.js';
@@ -251,8 +251,7 @@ async function editDog(request, env, origin, edit) {
     const snapshot=await readDogEdit(env.DB,dogId),field=edit.field;
     const raw=edit.value(input);let value=raw;
     if(field==='stays') {
-      const before=cleanStays(input.before,taiwanYmd(Date.now()));
-      if(before.error||JSON.stringify(before.stays)!==JSON.stringify(snapshot.stays))return fail(409,'別人剛改過，請重新整理再改',origin);
+      if(!sameStays(input.before,snapshot.stays))return fail(409,'別人剛改過，請重新整理再改',origin);
     }
     if(field==='numbers') {
       if(!validFormer(raw))return fail(400,'舊編號要是 10 碼數字，前 8 碼是入所日期',origin);
@@ -274,6 +273,7 @@ const DOG_EDITS = {
   rest: {kind:'rest',field:'rest',label:'休養設定',methods:['PUT'],value:input=>input.end===true?null:{until:input.until,reason:typeof input.reason==='string'?input.reason:''},respond:(_,saved)=>({rest:saved.rest,commit:null})},
   'fixed-care': {kind:'fixed-care',field:'fixedCare',label:'固定照顧設定',methods:['PUT'],value:input=>input.enabled,respond:(_,saved)=>({enabled:saved.fixedCare})},
   intro: {kind:'intro',field:'intro',label:'介紹',methods:['PUT'],maxBytes:EDIT_BODY_MAX_BYTES,value:input=>input.text,respond:(_,saved)=>({intro:saved.intro,commit:null,...(saved.intakeEvents?{intakeEvents:saved.intakeEvents}:{})})},
+  // 只留給還沒重新整理的舊網頁：#639 起補、刪舊編號在出入所表（/stays）裡做，開關也看 editStays
   former: {kind:'former',field:'numbers',label:'舊編號',methods:['POST','DELETE'],value:input=>String(input.former||'').replace(/\s+/g,''),respond:value=>({former:value})},
   stays: {kind:'stays',field:'stays',label:'出入所紀錄',methods:['PUT'],maxBytes:EDIT_BODY_MAX_BYTES,value:input=>input.stays,respond:(_,saved)=>({stays:saved.stays})},
 };

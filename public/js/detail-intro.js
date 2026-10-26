@@ -35,7 +35,8 @@ function intakePresentation(dog, intro) {
   const add = row => {
     if (!events.some(e => e.date === row.date && sameText(e.event) === sameText(row.event))) events.push(row);
   };
-  for (const stay of dog.stays || []) {
+  // 出入所表（ADR 0021）只拿手填的那幾筆：只有編號、或出所照離所紀錄的列，改之前不在這裡（#639 刻意不改閱讀畫面）
+  for (const stay of (dog.stays || []).filter(s => !s.departed && (!s.number || s.out || s.reason))) {
     // #392 盤點的舊資料：這兩種原因記的是該段怎麼結束，不能改標成入所原因。
     const ending = stay.out && ['整修移所', '領養後退養'].includes(stay.reason);
     const reason = ending ? '' : stay.reason;
@@ -81,12 +82,12 @@ function introSectionHtml(dog, intro) {
   if (appState.staysEdit && appState.staysEdit.dog === dog) return staysSectionHtml(dog);
   const e = appState.introEdit && appState.introEdit.dog === dog ? appState.introEdit : null;
   if (!e) {
+    // 出入所紀錄的入口在編號下面的出入所表（#639）
     const can = canEdit('editIntro') && !!(dog.id && appState.UPLOAD_URL) && !dog.departure;
-    const canStays = canEdit('editStays') && !!(dog.id && appState.UPLOAD_URL);
     const { events, supplement } = intakePresentation(dog, intro);
-    if (!events.length && !supplement && !canStays) return '';
+    if (!events.length && !supplement && !can) return '';
     return `<section class="detail-section" data-section="intro">
-      <h3 class="intro-heading">${icon('card')}入所介紹${can ? `<button type="button" class="intro-heading-edit" id="introEdit" aria-label="${events.length || supplement ? '改' : '補'}入所介紹">${icon('write')}</button>` : canStays ? `<button type="button" class="intro-heading-edit" id="staysEdit" aria-label="${(dog.stays || []).length ? '改' : '補'}出入所紀錄">${icon('write')}</button>` : ''}</h3>
+      <h3 class="intro-heading">${icon('card')}入所介紹${can ? `<button type="button" class="intro-heading-edit" id="introEdit" aria-label="${events.length || supplement ? '改' : '補'}入所介紹">${icon('write')}</button>` : ''}</h3>
       ${intakeListHtml(events)}
       ${supplement ? `<div class="content">${esc(supplement)}</div>` : ''}
     </section>`;
@@ -96,7 +97,6 @@ function introSectionHtml(dog, intro) {
   return `<section class="detail-section" data-section="intro">
     <form class="rest-form intro-form" id="introForm" autocomplete="on">
       <h3>${icon('card')}入所介紹</h3>
-      <button type="button" class="admin-btn" id="staysEdit"${!canEdit('editStays') || busy ? ' disabled' : ''}>${(dog.stays || []).length ? '改' : '補'}出入所紀錄</button>
       ${intakeEditorHtml(dog, e, busy)}
       <p class="rest-hint">存好後這台馬上看到，其他人幾分鐘後（下次更新資料）看到。只存在網站，不寫試算表。</p>
       <label>補充介紹（保留原文）<textarea id="introText" rows="7" maxlength="${INTRO_MAX}" placeholder="例：親人、喜歡散步，怕機車聲"${busy ? ' disabled' : ''}>${esc(e.text)}</textarea><small class="intro-count${n > INTRO_MAX ? ' over' : ''}">${n} / ${INTRO_MAX} 字</small></label>

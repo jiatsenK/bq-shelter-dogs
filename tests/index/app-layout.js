@@ -12,15 +12,16 @@ async function runV52Tests() {
     allDogs = dogs; groupMap = {}; activeTab = 'walk'; searchQuery = '';
     phoneStore = fakeStorage(); walkRecords = freshWalkRecords();
 
-    await check('#75 再次入所：讀 formerIds、詳細資訊標第 2 次入所與舊編號、分析在所時間從第一次算', () => {
+    await check('#75／#639 再次入所：讀 formerIds、詳細資訊在編號下面列出入所表、分析在所時間從第一次算', () => {
       eq([dogs[0].formerIds, dogs[1].formerIds], [['2018041318'], []]);
       eq(ymd(intakeDate(dogs[0], T)), '2018/4/13', '入所日取最早：');
       eq(ymd(intakeDate(dogs[1], T)), '2024/1/5', '沒舊編號照舊：');
       const html = detailHtml(dogs[0], T);
       const box = document.createElement('div');
       box.innerHTML = html;
-      eq([[...box.querySelectorAll('.former-num')].map(n => n.firstChild.textContent), box.querySelector('.reentry').textContent.includes('最早入所 2018/4/13'), box.querySelector('.reentry').textContent.includes('次入所')], [['2018041318'], true, false], '詳細資訊標舊編號和最早入所，不標第幾次入所：');
-      if (detailHtml(dogs[1], T).includes('former-num')) throw new Error('沒舊編號不列舊編號');
+      eq([...box.querySelectorAll('.stays-table tbody tr')].map(tr => tr.textContent), ['20180413182018/4/13——', '20260512032026/5/12在所—'], '一個編號一列，照入所日排：');
+      if (box.querySelector('.stays-table').textContent.includes('次入所')) throw new Error('不標第幾次入所');
+      if (detailHtml(dogs[1], T).includes('stays-table')) throw new Error('只有目前編號不列表');
     });
 
     await check('#76 詳細資訊標題沒有說明文字；分析頁沒有散布圖、Top 10 沒有長條', () => {

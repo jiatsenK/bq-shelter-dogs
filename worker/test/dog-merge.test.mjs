@@ -174,6 +174,44 @@ test('出所過的狗併進在所的狗：出所紀錄搬過去並記用哪個�
   assert.deepEqual(await dump(db), original);
 });
 
+// ADR 0021（#639）：出入所紀錄不再「只留一份」，兩邊全部接在一起
+test('合併：兩邊的出入所紀錄全部接在一起、預覽不列會丟的；取消合併兩隻都回原樣', async t => {
+  const { db, run } = await setup(t);
+  await run("INSERT INTO v3_stays VALUES(?,'[{\"in\":\"2015-08-18\",\"out\":\"2017-09-05\",\"reason\":\"整修移所\"}]')", T);
+  await run("INSERT INTO v3_stays VALUES(?,'[{\"in\":\"2010-01-01\",\"out\":\"2011-01-01\",\"reason\":\"退養\"}]')", S);
+  await run("INSERT INTO v3_dog_numbers(number,dog_id) VALUES('2019042407',?)", S);
+  await run("INSERT INTO v3_dog_departures(dog_id,number,name,departed_date,reason) VALUES(?,'2019042407','米香','2020-01-01','adopt')", S);
+  const p = await previewMerge(db, T, S);
+  assert.equal('出入所紀錄' in p.lost, false);
+  assert.equal(p.moved.出入所紀錄, 1);
+  assert.equal('出入所紀錄' in p.kept, false);
+  const original = await dump(db), sourceStays = (await readDogEdit(db, S)).stays, targetStays = (await readDogEdit(db, T)).stays;
+  const { logId } = await merge(db);
+  assert.deepEqual((await readDogEdit(db, T)).stays, [
+    { number: '', in: '2010-01-01', out: '2011-01-01', reason: '退養' },
+    { number: '', in: '2015-08-18', out: '2017-09-05', reason: '整修移所' },
+    { number: '2019042407', in: '2019-04-24', out: '2020-01-01', reason: '認養', departed: true },
+    { number: '2026082501', in: '2026-08-25', out: '', reason: '' },
+  ]);
+  await unmergeDogs(db, T, { logId, revision: (await readDogEdit(db, T)).revision }, { actor });
+  assert.deepEqual(await dump(db), original);
+  assert.deepEqual((await readDogEdit(db, S)).stays, sourceStays);
+  assert.deepEqual((await readDogEdit(db, T)).stays, targetStays);
+});
+
+test('取消合併：合併後留下那隻又改過出入所紀錄，保留改過的、拿掉被併那隻的部分，被併那隻照快照拆回來', async t => {
+  const { db, run } = await setup(t);
+  await run("INSERT INTO v3_stays VALUES(?,'[{\"in\":\"2015-08-18\",\"out\":\"\",\"reason\":\"\"}]'),(?,'[{\"in\":\"2010-01-01\",\"out\":\"\",\"reason\":\"\"}]')", T, S);
+  const { logId } = await merge(db);
+  const merged = await readDogEdit(db, T);
+  // 改自己那筆、被併那隻的 2010 那筆留著：取消後 2010 只回到被併那隻，不會兩隻都有
+  const edited = merged.stays.map(r => (r.in === '2015-08-18' ? { ...r, reason: '改過' } : r));
+  const after = await saveDogEdit(db, T, { revision: merged.revision, field: 'stays', value: edited }, { actor });
+  await unmergeDogs(db, T, { logId, revision: after.revision }, { actor });
+  assert.deepEqual((await readDogEdit(db, T)).stays, edited.filter(r => r.in !== '2010-01-01'));
+  assert.deepEqual((await readDogEdit(db, S)).stays, [{ number: '', in: '2010-01-01', out: '', reason: '' }]);
+});
+
 test('D1 查詢數：每張表都有資料時，合併與取消合併各自在免費方案每次呼叫 50 句以內', async t => {
   const { db, run } = await setup(t);
   // 讓每張表兩邊都有列（最多句的情況）

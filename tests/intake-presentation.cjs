@@ -4,7 +4,8 @@ const assert = require('node:assert/strict');
 module.exports = async (browser, base) => {
   const data = structuredClone(require('./fixtures/dogs.json'));
   data.dogs = [{ ...data.dogs[0], id: '2017090508', name: '墨西哥', intro: '2015年8月18日迷路入所。親人，怕機車聲。',
-    stays: [{ in: '2015-08-18', out: '2017-09-05', reason: '整修移所' }], formerIds: [], intakeEvents: [] }];
+    // Worker 給的出入所表（ADR 0021）：查不到編號的那次＋目前編號那列
+    stays: [{ number: '', in: '2015-08-18', out: '2017-09-05', reason: '整修移所' }, { number: '2017090508', in: '2017-09-05', out: '', reason: '' }], formerIds: [], intakeEvents: [] }];
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
   await context.addInitScript(() => {
     localStorage.setItem('bq-onboarded', '1'); localStorage.setItem('bq-name-later', '1');
@@ -31,6 +32,9 @@ module.exports = async (browser, base) => {
     assert.equal(await section.locator('.content').textContent(), '親人，怕機車聲。', '其他補充接在下面');
     assert.equal(await section.locator('details, [role="tablist"]').count(), 0, '直接呈現，不加展開或切換');
     assert.equal(await section.locator('button').count(), 1, '閱讀時只有既有的編輯入口');
+    // #639 驗收：墨西哥的出入所表兩列，入所日仍是 2015-08-18
+    assert.deepEqual(await page.locator('#detail .stays-table tbody tr').allTextContents(), ['查不到2015/8/182017/9/5整修移所', '20170905082017/9/5在所—']);
+    assert.match(await page.locator('#detail .chips').textContent(), /入所 2015\/8/);
     assert.equal(writes.length, 0, '整理呈現不寫入資料');
     await section.locator('#introEdit').click();
     assert.equal(await page.locator('#introText').inputValue(), data.dogs[0].intro, '編輯仍看到完整原文');

@@ -167,69 +167,94 @@ test('舊編號：預覽版不能存', async () => {
   assert.equal((await call(env, 'POST', '/former/2024032902', { editor: ME, former: '2015081801' })).status, 403);
 });
 
-// #333 出入所紀錄（ADR 0011）：一隻狗一列、整份覆蓋；送出改之前的內容，別人剛改過就擋（409）
+// #333 出入所紀錄（ADR 0011、0021）：整張出入所表覆蓋，每個編號一列、沒編號的手填；送出改之前的表，別人剛改過就擋（409）
 const stays = (env, id, body) => call(env, 'PUT', `/stays/${id}`, { editor: ME, ...body });
+// 測試狗：目前編號 2024032902、舊編號 2020010101，還沒手填過
+const NUMS = [{ number: '2020010101', in: '2020-01-01', out: '', reason: '' }, { number: '2024032902', in: '2024-03-29', out: '', reason: '' }];
 
-test('出入所紀錄：存了 /api/dogs 馬上有、照入所日排，空陣列就刪掉這一列，每次都記編輯紀錄', async () => {
+test('出入所紀錄：存了 /api/dogs 馬上有、照入所日排，只剩編號就刪掉那一列，每次都記編輯紀錄', async () => {
   const env = await makeEnv();
-  const list = [{ in: '2019-03-01', out: '2019-06-01', reason: ' 整修移所 ' }, { in: '2015-08-18', out: '', reason: '迷路' }];
-  const r = await stays(env, '2024032902', { before: [], stays: list });
+  const list = [...NUMS, { number: '', in: '2019-03-01', out: '2019-06-01', reason: ' 整修移所 ' }, { number: '', in: '2015-08-18', out: '', reason: '迷路' }];
+  const r = await stays(env, '2024032902', { before: NUMS, stays: list });
   assert.equal(r.status, 200);
-  const saved = [{ in: '2015-08-18', out: '', reason: '迷路' }, { in: '2019-03-01', out: '2019-06-01', reason: '整修移所' }];
+  const saved = [{ number: '', in: '2015-08-18', out: '', reason: '迷路' }, { number: '', in: '2019-03-01', out: '2019-06-01', reason: '整修移所' }, ...NUMS];
   assert.deepEqual(r.body.stays, saved);
   assert.deepEqual((await dogOf(env, '2024032902')).stays, saved);
   assert.equal('stays' in (await dogOf(env, '2024010101')), false);
   // 用舊編號改也是同一隻
-  assert.equal((await stays(env, '2020010101', { before: saved, stays: [] })).status, 200);
+  assert.equal((await stays(env, '2020010101', { before: saved, stays: NUMS })).status, 200);
   assert.equal('stays' in (await dogOf(env, '2024032902')), false);
   assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_stays').first('n'), 0);
   const log = (await call(env, 'GET', '/edits')).body.edits.reverse();
   assert.deepEqual(log.map(e => [e.kind, e.kindLabel, e.editorName, e.before, e.after]), [
-    ['stays', '出入所紀錄', ME, null, saved],
-    ['stays', '出入所紀錄', ME, saved, null],
+    ['stays', '出入所紀錄', ME, NUMS, saved],
+    ['stays', '出入所紀錄', ME, saved, NUMS],
   ]);
 });
 
-test('出入所紀錄：兩支手機同時改，後送的人帶的舊內容對不上就回 409，不蓋掉', async () => {
+test('出入所紀錄：補編號就是補一列、刪編號就是刪那一列（ADR 0021），目前編號不能刪、別隻的編號不能搶', async () => {
   const env = await makeEnv();
-  const a = [{ in: '2015-08-18', out: '', reason: '迷路' }];
-  assert.equal((await stays(env, '2024032902', { before: [], stays: a })).status, 200);
-  const late = await stays(env, '2024032902', { before: [], stays: [{ in: '2016-01-01', out: '', reason: '流浪' }] });
+  const added = { number: '2015081801', in: '', out: '2016-01-01', reason: '轉所' };
+  const r = await stays(env, '2024032902', { before: NUMS, stays: [added, ...NUMS] });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.stays[0], { ...added, in: '2015-08-18' });
+  const dog = await dogOf(env, '2024032902');
+  assert.deepEqual(dog.formerIds, ['2015081801', '2020010101']);
+  assert.deepEqual(dog.stays, r.body.stays);
+  // 刪掉 2020010101 那一列＝刪掉那個舊編號
+  assert.equal((await stays(env, '2024032902', { before: r.body.stays, stays: [r.body.stays[0], NUMS[1]] })).status, 200);
+  assert.deepEqual((await dogOf(env, '2024032902')).formerIds, ['2015081801']);
+  const now = (await dogOf(env, '2024032902')).stays;
+  assert.equal((await stays(env, '2024032902', { before: now, stays: [now[0]] })).status, 409); // 目前編號
+  assert.equal((await stays(env, '2024032902', { before: now, stays: [...now, { number: '2024010101', in: '', out: '', reason: '' }] })).status, 409); // 別隻的
+  assert.equal((await stays(env, '2024032902', { before: now, stays: [...now, { number: '2025010101', in: '', out: '', reason: '' }] })).status, 400); // 晚於目前編號
+  assert.deepEqual((await dogOf(env, '2024032902')).stays, now);
+});
+
+test('出入所紀錄：兩支手機同時改，後送的人帶的舊表對不上就回 409，不蓋掉', async () => {
+  const env = await makeEnv();
+  const a = [...NUMS, { number: '', in: '2015-08-18', out: '', reason: '迷路' }];
+  assert.equal((await stays(env, '2024032902', { before: NUMS, stays: a })).status, 200);
+  const late = await stays(env, '2024032902', { before: NUMS, stays: [...NUMS, { number: '', in: '2016-01-01', out: '', reason: '流浪' }] });
   assert.equal(late.status, 409);
   assert.match(late.body.error, /別人剛改過/);
-  assert.equal((await stays(env, '2024032902', { stays: [] })).status, 409); // 沒帶舊內容也不行
-  assert.deepEqual((await dogOf(env, '2024032902')).stays, a);
+  assert.equal((await stays(env, '2024032902', { stays: NUMS })).status, 409); // 沒帶舊內容也不行
+  // 舊版網頁（每筆沒有編號）送來的舊內容也對不上
+  assert.equal((await stays(env, '2024032902', { before: [{ in: '2015-08-18', out: '', reason: '迷路' }], stays: [] })).status, 409);
+  assert.deepEqual((await dogOf(env, '2024032902')).stays, [a[2], ...NUMS]);
 });
 
 test('出入所紀錄：日期格式、未來的日子、出所早於入所、原因太長、沒選名字、找不到狗都擋', async () => {
   const env = await makeEnv();
-  const bad = async (body, status, id = '2024032902') => assert.equal((await call(env, 'PUT', `/stays/${id}`, { before: [], ...body })).status, status, JSON.stringify(body));
-  const one = s => ({ editor: ME, stays: [s] });
+  const bad = async (body, status, id = '2024032902') => assert.equal((await call(env, 'PUT', `/stays/${id}`, { before: NUMS, ...body })).status, status, JSON.stringify(body));
+  const one = s => ({ editor: ME, stays: [...NUMS, { number: '', ...s }] });
   await bad(one({ in: '2015/08/18', out: '', reason: '' }), 400);
   await bad(one({ in: '2015-02-30', out: '', reason: '' }), 400);
   await bad(one({ in: twDay(1), out: '', reason: '' }), 400);
   await bad(one({ in: '2015-08-18', out: twDay(1), reason: '' }), 400);
   await bad(one({ in: '2015-08-18', out: '2015-08-17', reason: '' }), 400);
   await bad(one({ in: '2015-08-18', out: '', reason: '字'.repeat(41) }), 400);
+  await bad({ editor: ME, stays: [{ ...NUMS[0], out: '2019-12-31' }, NUMS[1]] }, 400); // 有編號那列的出所日早於編號日期
   await bad({ editor: ME, stays: 'x' }, 400);
-  await bad({ stays: [] }, 400); // 沒選名字
+  await bad({ stays: NUMS }, 400); // 沒選名字
   await bad(one({ in: '2015-08-18', out: '', reason: '' }), 404, '2030010101');
-  assert.equal((await call(env, 'POST', '/stays/2024032902', { editor: ME, before: [], stays: [] })).status, 405);
+  assert.equal((await call(env, 'POST', '/stays/2024032902', { editor: ME, before: NUMS, stays: NUMS })).status, 405);
   assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_stays').first('n'), 0);
   assert.equal(await env.DB.prepare("SELECT COUNT(*) AS n FROM v3_edit_log WHERE kind='stays'").first('n'), 0);
 });
 
 test('出入所紀錄：今天可以、預覽版不能存', async () => {
   const env = await makeEnv();
-  assert.equal((await stays(env, '2024032902', { before: [], stays: [{ in: twDay(0), out: '', reason: '' }] })).status, 200);
+  assert.equal((await stays(env, '2024032902', { before: NUMS, stays: [...NUMS, { number: '', in: twDay(0), out: '', reason: '' }] })).status, 200);
   const preview = await makeEnv({ PREVIEW: '1' });
-  assert.equal((await stays(preview, '2024032902', { before: [], stays: [] })).status, 403);
+  assert.equal((await stays(preview, '2024032902', { before: NUMS, stays: NUMS })).status, 403);
 });
 
 test('出入所紀錄：Worker 不看在不在所，用編號找得到狗就能補（ADR 0011，離所的狗也能改）', async () => {
   const env = await makeEnv();
   const id = await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='2024010101'").first('dog_id');
-  const r = await stays(env, '2024010101', { before: [], stays: [{ in: '2015-08-18', out: '', reason: '迷路' }] });
+  const mine = [{ number: '2024010101', in: '2024-01-01', out: '', reason: '' }];
+  const r = await stays(env, '2024010101', { before: mine, stays: [...mine, { number: '', in: '2015-08-18', out: '', reason: '迷路' }] });
   assert.equal(r.status, 200);
   assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_stays WHERE dog_id=?').bind(id).first('n'), 1);
 });

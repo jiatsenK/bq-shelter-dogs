@@ -5,9 +5,11 @@ import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 import { readSettings, saveSettings, requireVolunteerEdit, settingForWrite } from '../src/feature-settings.js';
 const manager = { subject: 'verified-subject', email: 'private@example.org' };
 async function db(t) { const db = fakeD1(); t.after(() => db.close()); await createCompactDatabase(db); return db; }
-test('十項 boolean 預設全開；無差異不寫，衝突不覆蓋，前後紀錄一致', async t => {
+test('九項 boolean 預設全開；無差異不寫，衝突不覆蓋，前後紀錄一致', async t => {
  const DB = await db(t), initial = await readSettings(DB);
- assert.equal(Object.keys(initial.values).length, 10);
+ assert.equal(Object.keys(initial.values).length, 9);
+ // 舊編號開關併進出入所紀錄（#639）：D1 初始值還帶著，讀的時候拿掉
+ assert.equal('editFormer' in initial.values, false);
  assert.ok(Object.values(initial.values).every(v => v === true));
  const before = await DB.prepare('SELECT total_changes() AS n').first('n');
  assert.equal((await saveSettings(DB, initial, manager)).revision, initial.revision);
@@ -18,7 +20,9 @@ test('十項 boolean 預設全開；無差異不寫，衝突不覆蓋，前後�
  assert.equal(await DB.prepare('SELECT total_changes() AS n').first('n') - before, 2, '設定一列及audit一列');
  await assert.rejects(saveSettings(DB, { ...initial, values }, manager), e => e.status === 409);
  const logs = (await DB.prepare('SELECT * FROM v3_feature_settings_log').all()).results;
- assert.equal(logs.length, 1); assert.deepEqual(JSON.parse(logs[0].before_json), initial.values);
+ // 紀錄是 D1 那一列原本的樣子：第一次存以前還帶著退役的舊編號開關
+ const { editFormer, ...logged } = JSON.parse(logs[0].before_json);
+ assert.equal(logs.length, 1); assert.deepEqual(logged, initial.values); assert.equal(editFormer, true);
  assert.deepEqual(JSON.parse(logs[0].after_json), values); assert.equal(logs[0].actor_email, manager.email);
  assert.ok(!JSON.stringify(await readSettings(DB)).includes(manager.email));
 });
@@ -28,11 +32,12 @@ test('未知鍵、缺鍵、非 boolean、錯 revision 均拒絕', async t => {
   await assert.rejects(saveSettings(DB, input, manager), e => e.status === 400);
  }
 });
-test('七項寫入各自檢查；機器與核心路由不進 gate；關閉與故障拒絕新編輯', async t => {
+test('七種寫入各自檢查（舊編號 /former 跟出入所紀錄同一個開關）；機器與核心路由不進 gate；關閉與故障拒絕新編輯', async t => {
  const DB = await db(t), initial = await readSettings(DB);
- const routes = [['/intro/1','PUT','editIntro'],['/photos/1','POST','editPhoto'],['/rest/1','PUT','editRest'],['/activities','POST','editActivity'],['/fixed-care/1','PUT','editFixedCare'],['/stays/1','PUT','editStays'],['/former/1','DELETE','editFormer']];
+ const routes = [['/intro/1','PUT','editIntro'],['/photos/1','POST','editPhoto'],['/rest/1','PUT','editRest'],['/activities','POST','editActivity'],['/fixed-care/1','PUT','editFixedCare'],['/stays/1','PUT','editStays'],['/former/1','DELETE','editStays']];
  for (const [path, method, key] of routes) {
   assert.equal(settingForWrite(path, method), key);
+  if (path.startsWith('/former')) { await assert.rejects(requireVolunteerEdit(DB, key), e => e.status === 403); continue; }
   await requireVolunteerEdit(DB, key);
   const current = await readSettings(DB);
   await saveSettings(DB, { revision: current.revision, values: { ...current.values, [key]: false } }, manager);

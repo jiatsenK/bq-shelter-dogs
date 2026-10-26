@@ -5,7 +5,7 @@ import { buildAdminAssets } from './build-admin-assets.mjs';
 await buildAdminAssets();
 const { parseManageDogs, selectDogs, orderDogs, maintenance, statusCounts, departureLabel } = await import('../admin/public/js/dog-table.js');
 const { trashLabel } = await import('../admin/public/js/dog-editor.js');
-const { FIELDS, PREVIEW_FIELDS, introDiff, restBounds, restProblem, fieldSummary, displayValue, patchDog } = await import('../admin/public/js/dog-edit-model.js');
+const { FIELDS, PREVIEW_FIELDS, introDiff, restBounds, restProblem, fieldSummary, displayValue, patchDog, stayRow } = await import('../admin/public/js/dog-edit-model.js');
 test('垃圾桶每筆顯示台灣時間的換掉時間，和哪一次每月清理會刪掉', () => {
   assert.equal(trashLabel('2026-10-26T03:00:00.000Z', 30), '2026-10-26 11:00 換掉，2026-12-01 清理時刪除');
   assert.equal(trashLabel('2026-10-01T16:00:00.000Z', 30), '2026-10-02 00:00 換掉，2026-11-01 清理時刪除');
@@ -59,9 +59,9 @@ test('管理資產：純模組來自同一份來源，部署設定跟線上一�
   assert.deepEqual(Object.keys(config.vars).sort(), ['ACCESS_AUD', 'ACCESS_TEAM_DOMAIN', 'ADMIN_ORIGIN']);
 });
 
-test('#624 抽屜規則：欄位順序、只有編號／出入所／照片要預覽、介紹只標差異', () => {
-  assert.deepEqual(FIELDS.map(([f]) => f), ['intro', 'rest', 'fixedCare', 'sex', 'numbers', 'stays', 'photo']);
-  assert.deepEqual([...PREVIEW_FIELDS].sort(), ['numbers', 'photo', 'stays']);
+test('#624／#639 抽屜規則：欄位順序（編號併進出入所紀錄）、只有出入所／照片要預覽、介紹只標差異', () => {
+  assert.deepEqual(FIELDS.map(([f]) => f), ['intro', 'rest', 'fixedCare', 'sex', 'stays', 'photo']);
+  assert.deepEqual([...PREVIEW_FIELDS].sort(), ['photo', 'stays']);
   assert.deepEqual(introDiff('親人，喜歡散步', '親人，很喜歡散步'), { lead: '親人，', removed: '', added: '很', tail: '喜歡散步' });
   assert.deepEqual(introDiff('abc', 'axc'), { lead: 'a', removed: 'b', added: 'x', tail: 'c' });
   const long = '一'.repeat(40);
@@ -76,7 +76,13 @@ test('#624 抽屜規則：欄位順序、只有編號／出入所／照片要預
   assert.match(restProblem({ until: '2027-04-25', reason: '' }, '2026-10-26'), /之間/);
   assert.equal(restProblem({ until: '2027-04-24', reason: '術後' }, '2026-10-26'), '');
   const snap = { intro: ' ', sex: '', fixedCare: false, rest: null, numbers: [], stays: [], photo: null };
-  for (const field of ['intro', 'sex', 'numbers', 'photo']) assert.equal(fieldSummary(field, snap).missing, true, field + ' 待補');
+  for (const field of ['intro', 'sex', 'stays', 'photo']) assert.equal(fieldSummary(field, snap).missing, true, field + ' 待補');
+  // 出入所表：一個編號都沒有才算缺編號；顯示帶編號
+  const stays = [{ number: '', in: '2015-08-18', out: '2017-09-05', reason: '整修移所' }, { number: '2017090508', in: '2017-09-05', out: '', reason: '' }];
+  assert.deepEqual(fieldSummary('stays', { stays }), { text: '2 筆（2017090508）', missing: false });
+  assert.equal(fieldSummary('stays', { stays: stays.slice(0, 1) }).missing, true);
+  assert.equal(displayValue('stays', stays), '沒有編號：入所 2015-08-18／出所 2017-09-05／整修移所\n2017090508：入所 2017-09-05／出所 尚未出所／未填原因');
+  assert.deepEqual(stayRow({ number: '2017090508', in: '2017-09-05', departed: true }), { number: '2017090508', in: '2017-09-05', out: '', reason: '' });
   assert.equal(fieldSummary('photo', snap, '/photos/1.jpg').missing, false, '舊固定路徑有照片');
   assert.equal(displayValue('rest', { until: '2026-11-01', reason: '術後' }), '休養至 2026-11-01（術後）');
   const row = dog(1, { photoUrl: '/photos/1.jpg' });
