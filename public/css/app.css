@@ -2426,7 +2426,7 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 html.kb-open .bottom-bar { display: none; }
 html.kb-open .with-backdrop { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-height, 100%); }
 html.kb-open .with-sheet { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
-html.kb-open .onboard { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-height, 100%); }
+html.kb-open .onboard { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-height, 100%); box-shadow: 0 0 0 100vh var(--surface); } /* 外面一圈同色，鍵盤旁、捲動時露出的地方看不到後面的狗卡（#646） */
 /* 開頭畫面輸入名字時鍵盤打開：下一步不黏在看得到的範圍底部（會蓋住輸入框），排在輸入框下面、往下捲才看到 */
 html.kb-open .ob-name .ob-foot { position: static; margin-bottom: 0; padding-bottom: 0; }
 

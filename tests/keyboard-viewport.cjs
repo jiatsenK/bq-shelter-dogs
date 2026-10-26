@@ -77,6 +77,9 @@ module.exports = async function verifyKeyboardViewport(browser, baseUrl) {
     const next = await onboardPage.locator('.ob-foot').boundingBox(); // 整個按鈕區（有白底），不只按鈕
     assert(input.y + input.height <= 420, `輸入框被鍵盤擋住：${JSON.stringify(input)}`);
     assert(next.y >= input.y + input.height, `下一步那區蓋住輸入框：輸入框 ${JSON.stringify(input)}，下一步 ${JSON.stringify(next)}`);
+    // 開頭畫面只剩可見範圍那麼高，外面要用同色蓋住，不露出後面的狗卡
+    const cover = await onboardPage.evaluate(() => getComputedStyle(document.querySelector('.onboard')).boxShadow.match(/0px 0px 0px (\d+)px/));
+    assert(cover && Number(cover[1]) >= 844, `開頭畫面外面沒蓋住：${cover}`);
     await onboardPage.close();
     console.log('#389 手機鍵盤：整頁不跳、分類列收起、底部面板貼齊可見範圍、開頭畫面下一步不蓋輸入框通過');
   } finally {

@@ -14,4 +14,5 @@
 - 測試：本機網頁測試全部 255 項通過；Node 測試只有 `scripts/local-check.test.mjs` 4 項在本機本來就失敗。
 - 測試網站：推分支後用「部署到測試網站」workflow 指定 `claude/646-volunteer-copy` 部署（run 40309163352）。本機直接 `wrangler deploy` 會被同時間的 main 部署蓋掉；之後 main 再有推送，測試網站會換回 main。
 - 2026-10-26 K 在測試網站發現：開頭畫面輸入名字時，下一步被鍵盤擠上來蓋住輸入框（main 本來就有，不是 #646 造成）。原因是黏底的 `@media (min-height: 560px)` 看的是整頁高度，鍵盤打開不會變；改成 `html.kb-open` 時按鈕區不黏，排在輸入框下面。`tests/keyboard-viewport.cjs` 補一段（拿掉修正會失敗）。
+- K 接著發現鍵盤打開時開頭畫面下面露出狗卡：開頭畫面高度只剩可見範圍，改成外面一圈同色（box-shadow）蓋住，測試補檢查。
 - 相關 PR：待 K 確認後開。
