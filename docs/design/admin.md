@@ -1,6 +1,6 @@
 ---
 name: 板收管理網站
-description: Tabler 唯讀狗資料表
+description: Tabler 狗資料表、功能管理與狗資料編輯
 colors:
   primary: "#206bc4"
   ink: "#182433"
@@ -27,7 +27,7 @@ spacing:
 
 ## Overview
 
-Operate 模式。K 已選定 Tabler 免費後台、左側導覽、原生 ES module 及唯讀狗表；採直接實作，不另開視覺提案或產生 mock。品質基準為 Tabler 的成熟表格與原生表單：資訊可掃讀、來源清楚、錯誤可重試。#564 只完成狗資料，其餘導覽明列後續開放。
+Operate 模式。K 已選定 Tabler 免費後台、左側導覽、原生 ES module 及唯讀狗表；採直接實作，不另開視覺提案或產生 mock。品質基準為 Tabler 的成熟表格與原生表單：資訊可掃讀、來源清楚、錯誤可重試。#564 做唯讀狗表，#565 加功能管理頁（`settings.html`），#566 加逐隻狗編輯；活動、資料檢查、更新紀錄在 #567。
 
 ## Colors
 
