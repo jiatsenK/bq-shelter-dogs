@@ -38,7 +38,7 @@
 | `activities.js` | 活動紀錄與已出所狗卡編輯 | app、analysis、dates、api、walk-ui、page-state | index |
 | `find.js` | 找狗照片、搜尋與平面圖 | app、walk-ui、page-state | index |
 | `group-stage.js` | 可以一起溜的狗群畫面 | app、dates、api、walk-ui、page-state | index |
-| `desk.js` | 電腦版簡報、全表與側欄，明確啟動後啟用寬螢幕呈現 | app、dates、api、site-config、find、photo、walk-ui、page-state | index |
+| `desk.js` | 電腦版簡報、全表／最近 30 天與側欄，明確啟動後啟用寬螢幕呈現；補資料由管理網站取代（#568） | app、dates、api、site-config、find、walk-ui、page-state | index |
 | `cards.js` | 圖鑑、開卡與已出所狗卡，保留卡片專用格式 | dates、api、store、site-config、page-state | cards |
 | `edit-values.js` | `editsValue`：編輯紀錄改前／改後的文字，純函式 | 無 | edits、admin（建置複製） |
 | `edits.js` | 編輯紀錄清單 | api、store、edit-values | edits |
