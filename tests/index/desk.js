@@ -41,12 +41,15 @@ async function runDeskTests() {
       deskView = 'sheet';
     });
     await check('電腦版最近 30 天（K 2026-10-12）：格子寫誰遛的第一個字、好幾個人加一點、滑過去看全名；換不到名字只有綠格', () => {
-      const saved = [walkerCodeNames, walkerNames];
+      const saved = [walkerCodeNames];
+      const green = allDogs.find(d => d.id === '2026010103');
       try {
         deskView = 'days30';
         const k = n => BQDates.localDateKey(ago(n));
         walkerCodeNames = { aaa: '嘉文', bbb: '岑' };
-        walkerNames = { 2026010103: '俐葶' };
+        // 上次溜那天的「誰遛的」來自 D1 今日紀錄（狗清單同步進 D1 的那一格）
+        fakeD1.set(walkKey(green), '俐葶', BQDates.localDateKey(effectiveWalkDate(green, TODAY)));
+        walkRegistration.receiveToday(fakeD1.pack(), [green]);
         deskWalkDays = new Map([['2026010103', new Map([[k(5), new Set(['aaa', 'bbb'])], [k(8), new Set(['zzz'])], [k(1), new Set()]])]]);
         deskWalkFirst = k(20);
         const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', dueDogs(allDogs, TODAY)), 'text/html');
@@ -56,7 +59,7 @@ async function runDeskTests() {
         eq([cell(1).querySelector('i').textContent, cell(1).title.endsWith(' 俐葶')], ['俐', true], '上次溜那天用試算表的誰遛的：');
         eq([cell(8).querySelector('i.on').textContent, cell(8).title.endsWith(' 有溜')], ['', true], '換不到名字：');
         eq(cell(3).title, '', '沒溜：');
-      } finally { [walkerCodeNames, walkerNames] = saved; deskWalkDays = null; deskWalkFirst = ''; deskView = 'sheet'; }
+      } finally { [walkerCodeNames] = saved; fakeD1.forget([green]); deskWalkDays = null; deskWalkFirst = ''; deskView = 'sheet'; }
     });
     await check('電腦版：勾兩隻按「今天 溜了」一次交給 BQWalkUI.setWalked（照舊只寫遛狗日期、誰遛的），勾的清掉', () => {
       if (!deskOn()) return; // 測試的瀏覽器不夠寬就不測畫面

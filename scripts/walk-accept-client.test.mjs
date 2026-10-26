@@ -3,10 +3,9 @@ import assert from 'node:assert/strict';
 import { createWalkRegistration } from '../public/js/walk-registration.js';
 const dog = { id: '9001', name: '測試狗' }, day = '2026-10-21';
 function client(send, saved = {}) {
-  let records = {}, requests = saved;
-  const registration = createWalkRegistration({ d1: true, key: d => d.id, date: () => day, walker: () => '甲', alias: () => '', split: s => s.split('、').filter(Boolean), canonical: s => s,
-    base: () => ({ date: '2026-10-01', walker: '舊' }), syncedAt: () => Date.now() + 10000,
-    read: () => records, save: r => { records = r; }, local: () => [], apply: () => {}, send,
+  let requests = saved;
+  const registration = createWalkRegistration({ key: d => d.id, date: () => day, walker: () => '甲', alias: () => '', split: s => s.split('、').filter(Boolean), canonical: s => s,
+    base: () => ({ date: '2026-10-01', walker: '舊' }), apply: () => {}, send,
     readRequests: () => requests, saveRequests: r => { requests = r; } });
   return { registration, requests: () => requests };
 }
@@ -76,13 +75,12 @@ test('尚未接管的狗也用衝突結果更新狀態，空資料包不使手�
   assert.equal(r.state(dog).walker,'乙');
 });
 
-test('已接管狀態不被舊 today、walkers 或同步時間覆蓋；較舊版本拒絕', async () => {
+test('已接管狀態不被舊格式 today 覆蓋；較舊版本拒絕', async () => {
   const { registration:r } = client(async body => accepted(body));
   await r.register([dog]);
   const row = { key:dog.id, version:2, walkedDate:day, walker:'甲、乙', syncStatus:'retry', at:'2026-10-21T02:00:00Z' };
   r.receiveToday({ source:'d1', version:5, date:day, walks:[row] },[dog]);
   r.receiveToday({ source:'d1', version:4, date:day, walks:[{ ...row, walker:'甲', syncStatus:'synced' }] },[dog]);
-  r.receiveNames({ [dog.id]:'舊名字' },[dog]);
   r.receiveToday({ date:day, walks:[{ ...row, walker:'舊消息' }] },[dog]);
   assert.equal(r.state(dog).walker,'甲、乙');
   assert.equal(r.state(dog).syncStatus,'retry');
@@ -152,16 +150,13 @@ test('#460 整群復原在 D1 模式逐狗帶版本', async () => {
   assert.equal(r.state(dog2).today, false);
 });
 
-test('#460 D1 模式未接管的狗只看伺服器基準，不採本機已溜、本機寫入紀錄或試算表即時名單', () => {
-  let records = { [dog.id]: { id: dog.id, name: dog.name, current: { date: day, walker: '本機' }, observedAt: Date.now() + 99999, prev: { walker: '' }, wrote: { walker: '本機' } } };
-  const r = createWalkRegistration({ d1: true, key: d => d.id, date: () => day, walker: () => '甲', alias: () => '', split: s => s.split('、').filter(Boolean), canonical: s => s,
-    base: () => ({ date: '2026-10-01', walker: '舊' }), syncedAt: () => 0,
-    read: () => records, save: x => { records = x; }, local: () => [dog.id], saveLocal: () => {}, apply: () => {}, send: async () => ({}) });
+test('#460 未接管的狗只看伺服器基準，不採舊格式今日回應', () => {
+  const r = createWalkRegistration({ key: d => d.id, date: () => day, walker: () => '甲', alias: () => '', split: s => s.split('、').filter(Boolean), canonical: s => s,
+    base: () => ({ date: '2026-10-01', walker: '舊' }), apply: () => {}, send: async () => ({}) });
   assert.equal(r.state(dog).today, false);
   assert.equal(r.state(dog).mine, false);
   assert.equal(r.state(dog).walker, '舊');
-  assert.equal(r.canUndo(dog), false);
-  r.receiveNames({ [dog.id]: '試算表乙' }, [dog], r.beginRead(), { [dog.id]: day }, Date.now() + 999999);
+  assert.equal(r.canRevert(dog), false);
   r.receiveToday({ date: day, walks: [{ key: dog.id, walkedDate: day, walker: '舊消息', at: new Date(Date.now() + 99999).toISOString() }] }, [dog]);
   assert.equal(r.state(dog).walker, '舊');
   assert.equal(r.today([dog]).length, 0);

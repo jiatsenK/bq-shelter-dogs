@@ -18,6 +18,7 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
     return runTests();
   })
   .then(runSerialTests)
+  .then(runD1PickTests)
   .then(runPhotoTests)
   .then(runAnalysisTests)
   .then(runHistoryTests)
@@ -28,7 +29,6 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
   .then(runMonthWalkTests)
   .then(runV52Tests)
   .then(runThumbTests)
-  .then(runWalkedModuleTests)
   .then(runDetailWiringTests)
   .then(runFirstScreenTests)
   .then(runFindTests)

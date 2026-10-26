@@ -20,14 +20,14 @@
 | `api-response.js` | `settle`：純 API 回應／錯誤解析，不讀頁面狀態 | 無 | index、cards、edits、admin（建置複製） |
 | `feature-settings.js` | 志工功能設定、載入與 fail-closed UI gate；初始化／手動更新讀取，不輪詢 | api | index、edits |
 | `store.js` | `BQStore`：手機資料鍵、字串／JSON 讀寫與記憶體備援，可注入儲存空間 | 無 | index、cards、edits |
-| `site-config.js` | `SITE`：收容所設定、警示、區域、功能開關 | 無 | index、cards |
+| `site-config.js` | `SITE`：收容所設定、警示、區域 | 無 | index、cards |
 | `page-state.js` | 各頁模組的可變狀態物件；擁有狀態的模組負責初始化，其他模組明確匯入相同實例 | 無 | index、cards、groups |
 | `dog-data.js` | `parseDogsData`：將 API 狗清單整理為前端資料，不碰 DOM；Node 匯入的共用接縫 | dates | index、Node |
 | `detail-editor.js` | `BQDetailEditor`：五種編輯器的草稿、儲存中、錯誤與重畫狀態 | 無 | index |
 | `detail-viewport.js` | 詳細資訊編輯欄位的可見範圍 | 無 | index |
 | `keyboard-viewport.js` | 螢幕鍵盤開啟時的欄位與面板定位 | 無 | index |
-| `walk-registration.js` | `createWalkRegistration`：登記、同行人、復原與核對規則，純 ES module | 無 | index、Node |
-| `walk-flow.js` | `BQWalks`：不碰 DOM 的排隊登記、核對、復原、提示及當日手機紀錄 | store、walk-registration（日期介面由呼叫端注入） | index、Node |
+| `walk-registration.js` | `createWalkRegistration`：D1 接受流程的登記、同行人、復原與今日紀錄核對規則，純 ES module（#558 起沒有寫回試算表的舊路徑） | 無 | index、Node |
+| `walk-flow.js` | `BQWalks`：不碰 DOM 的排隊登記、核對、復原、提示及同行人手機紀錄 | store、walk-registration（日期介面由呼叫端注入） | index、Node |
 | `tour.js` | `BQTour`：導覽步驟、示範、定位、動態效果及安裝說明 | app、analysis、find、desk、welcome、store、page-state | index |
 | `welcome.js` | `BQWelcome`：開頭畫面、我是誰、名字推薦／確認、更名及合併 | app、api、store、site-config、tour、walk-ui、page-state | index |
 | `photo.js` | `BQPhoto`：主照片選檔、壓縮、預覽、裁切、上傳，保留內部狀態 | app、api、walk-ui、page-state | index |

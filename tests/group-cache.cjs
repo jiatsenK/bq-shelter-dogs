@@ -6,6 +6,7 @@ module.exports = async (browser, base) => {
   let reads = 0;
   let hold = false, fail = false, partial = false, release;
   const writes = [];
+  const d1 = require('./fixtures/fake-d1-walks.cjs')({ today: () => '2026-10-20' });
   const context = await browser.newContext({ serviceWorkers: 'block', viewport: { width: 390, height: 844 } });
   await context.addInitScript(() => {
     localStorage.setItem('bq-onboarded', '1'); localStorage.setItem('bq-name-later', '1');
@@ -18,7 +19,10 @@ module.exports = async (browser, base) => {
     const endpoint = url.pathname.split('/api/')[1];
     if (endpoint === 'walk' && route.request().method() === 'POST') {
       const body = route.request().postDataJSON(); writes.push(body);
-      return route.fulfill({ json: { ok: true, today: '2026-10-20', results: body.dogs.map((d, i) => ({ ...d, status: partial && i === 0 ? 'unknown' : 'written', prev: {}, wrote: { date: '2026-10-20', walker: body.walker } })) } });
+      // D1 整群逐狗送；partial 只讓這次整群的第一隻結果不明
+      const unknown = partial === true;
+      if (unknown) partial = 'used';
+      return route.fulfill({ json: d1.walk(body, () => unknown ? { status: 'unknown' } : null) });
     }
     if (endpoint === 'dogs') {
       reads++;
@@ -27,9 +31,8 @@ module.exports = async (browser, base) => {
       if (fail) return route.fulfill({ status: 503, json: {} });
       return route.fulfill({ json: snapshot });
     }
-    return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'rest' ? { rest: {} } : { ok: true, walks: [], departures: [] } });
+    return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'today' ? d1.pack() : endpoint === 'rest' ? { rest: {} } : { ok: true, walks: [], departures: [] } });
   });
-  await require('./fixtures/legacy-walk-mode.cjs')(context);
   const page = await context.newPage(); page.setDefaultTimeout(5000);
   await page.clock.install({ time: new Date('2026-10-20T02:00:00Z') });
   try {
@@ -119,7 +122,6 @@ module.exports = async (browser, base) => {
         await page.screenshot({ path: `${process.env.BQ_SCREENSHOTS}/groups-${width}.png`, fullPage: true });
       }
     }
-    await page.evaluate(() => { localStorage.removeItem('bq-sheet-writes'); localStorage.removeItem('bq-walked-today'); });
     await page.goto(base + '/public/index.html?retry#groups');
     await page.locator('#groupStage').waitFor();
     data.groupColumns[0].names = data.dogs.slice(1, 3).map(d => d.name);
