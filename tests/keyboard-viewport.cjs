@@ -67,21 +67,22 @@ module.exports = async function verifyKeyboardViewport(browser, baseUrl) {
     await page.locator('#introEdit').click();
     await settle();
     assert.equal(await page.evaluate(() => window.scrollY), 0, '打開編輯介紹不捲整頁');
-    // #646 開頭畫面輸入名字：鍵盤打開時下一步不黏在可見範圍底部蓋住輸入框，排在輸入框下面
+    // #646 開頭畫面輸入名字：鍵盤打開時開頭畫面照樣蓋滿整頁（縮到鍵盤上方會露出狗卡、切掉下一步），
+    // 輸入框在看得到的範圍裡，下一步那區不蓋住輸入框
     const onboardPage = await context.newPage();
     await onboardPage.goto(baseUrl + '/public/index.html?onboard', { waitUntil: 'networkidle' });
     await onboardPage.locator('#obInput').focus();
     await onboardPage.evaluate(() => window.__keyboard(420));
     await onboardPage.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
+    assert.equal(await onboardPage.evaluate(() => document.documentElement.classList.contains('kb-open')), true, '開頭畫面鍵盤彈出要標記 kb-open');
+    const screen = await onboardPage.locator('.onboard').boundingBox();
+    assert(screen.y <= 0 && screen.y + screen.height >= 844, `開頭畫面沒蓋滿整頁：${JSON.stringify(screen)}`);
     const input = await onboardPage.locator('#obInput').boundingBox();
-    const next = await onboardPage.locator('.ob-foot').boundingBox(); // 整個按鈕區（有白底），不只按鈕
+    const foot = await onboardPage.locator('.ob-foot').boundingBox(); // 整個按鈕區（有白底），不只按鈕
     assert(input.y + input.height <= 420, `輸入框被鍵盤擋住：${JSON.stringify(input)}`);
-    assert(next.y >= input.y + input.height, `下一步那區蓋住輸入框：輸入框 ${JSON.stringify(input)}，下一步 ${JSON.stringify(next)}`);
-    // 開頭畫面只剩可見範圍那麼高，外面要用同色蓋住，不露出後面的狗卡
-    const cover = await onboardPage.evaluate(() => getComputedStyle(document.querySelector('.onboard')).boxShadow.match(/0px 0px 0px (\d+)px/));
-    assert(cover && Number(cover[1]) >= 844, `開頭畫面外面沒蓋住：${cover}`);
+    assert(foot.y >= input.y + input.height, `下一步那區蓋住輸入框：輸入框 ${JSON.stringify(input)}，下一步 ${JSON.stringify(foot)}`);
     await onboardPage.close();
-    console.log('#389 手機鍵盤：整頁不跳、分類列收起、底部面板貼齊可見範圍、開頭畫面下一步不蓋輸入框通過');
+    console.log('#389 手機鍵盤：整頁不跳、分類列收起、底部面板貼齊可見範圍、開頭畫面蓋滿整頁、下一步不蓋輸入框通過');
   } finally {
     await context.close();
   }

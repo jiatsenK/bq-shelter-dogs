@@ -2426,9 +2426,8 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 html.kb-open .bottom-bar { display: none; }
 html.kb-open .with-backdrop { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-height, 100%); }
 html.kb-open .with-sheet { max-height: 100%; overflow-y: auto; overscroll-behavior: contain; }
-html.kb-open .onboard { top: var(--vv-top, 0px); bottom: auto; height: var(--vv-height, 100%); box-shadow: 0 0 0 100vh var(--surface); } /* 外面一圈同色，鍵盤旁、捲動時露出的地方看不到後面的狗卡（#646） */
-/* 開頭畫面輸入名字時鍵盤打開：下一步不黏在看得到的範圍底部（會蓋住輸入框），排在輸入框下面、往下捲才看到 */
-html.kb-open .ob-name .ob-foot { position: static; margin-bottom: 0; padding-bottom: 0; }
+/* 開頭畫面（.onboard）不跟著縮到鍵盤上方：縮了以後有些手機看得到的範圍比 visualViewport 回報的大，
+   下面會露出狗卡、下一步被切掉（#646）。整頁蓋住，輸入框在上半部本來就看得到，下一步留在鍵盤後面，按鍵盤的完成送出 */
 
 /* #399 固定照顧：沿用詳細資訊白紙、細線、內建字型與主色。 */
 .fixed-care-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
