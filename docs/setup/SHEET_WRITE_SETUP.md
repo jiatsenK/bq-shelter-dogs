@@ -106,7 +106,7 @@
 3. Worker 的 `D1_WALK_NOTIFY` 維持未設定時，送來的列不動今日溜狗（狗清單由第 8 節另外送）。
 4. 先在測試試算表照 `docs/research/2026-10-23-gas-trigger-structure-changes.md` 的「需實測清單」逐項操作（貼上多格、剪下貼到「已出所」、清空、Ctrl+Z、手機 App），看 Apps Script 執行紀錄與 D1 結果。
 
-保險掃描改成每天台灣 09:43、13:53、23:53 由 Worker 向 Apps Script 要指紋（`walkScan`），一樣就結束；寫回重試每 10 分鐘只查 D1 有沒有待寫回，沒有就結束。
+保險掃描改成每天台灣 09:53、13:53、23:53（稽核第 5 項起 09:43 改 09:53）由 Worker 向 Apps Script 要指紋（`walkScan`），一樣就結束；寫回重試每 10 分鐘只查 D1 有沒有待寫回，沒有就結束。
 
 ## 8. 狗清單：有人編輯才同步（#501，ADR 0018 第 5–7 點，**正式切換需 K 授權**）
 
@@ -127,4 +127,4 @@
 4. 手動執行一次 `dogListScan`，看執行紀錄：第一次 Worker 沒有指紋，會全部重送；之後再執行一次應該只回「沒有要送的」。
 5. 改一格籠位、新增一隻狗、把一隻狗剪下貼到「已出所」，看網站與 D1。
 
-照片垃圾桶：Worker 每月 1 日台灣 10:17 清掉超過 30 天的，結果在 `GET /admin/trash` 的 `lastPurge`（D1 `v3_sync_state` 的 `trash_purged`）。
+照片垃圾桶：Worker 每月 1 日台灣 09:53（跟保險掃描同一個排程）清掉超過 30 天的，結果在 `GET /admin/trash` 的 `lastPurge`（D1 `v3_sync_state` 的 `trash_purged`）。

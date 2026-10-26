@@ -83,7 +83,7 @@ test('排程按 1、2、4、8、15 分鐘持久退避，重啟不重設', async 
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
 
-test('通知遺失時排程直接讀表補漏，人工改早日期以新版本接受；無差異不寫心跳', async t => {
+test('通知遺失時排程直接讀表補漏，人工改早日期以新版本接受；無差異只記排程跑完時間（稽核第 5 項）', async t => {
   const now=Date.parse('2026-10-22T02:00:00Z');
   t.mock.timers.enable({ apis:['Date'],now });
   const env={ ...await setup(),WALK_RETRY_ENABLED:'true' },real=globalThis.fetch;
@@ -102,7 +102,7 @@ test('通知遺失時排程直接讀表補漏，人工改早日期以新版本�
     assert.equal(latest.syncStatus,'synced');
     const before=(await env.DB.prepare('SELECT total_changes() n').first()).n;
     await tick(env,now+120000);
-    assert.equal((await env.DB.prepare('SELECT total_changes() n').first()).n,before);
+    assert.equal((await env.DB.prepare('SELECT total_changes() n').first()).n,before+2,'只多寫 cron_scan、cron_retry 兩列');
     assert.equal(calls.length,1,'人工修正不產生反向寫入');
   } finally { globalThis.fetch=real;env.DB.close(); }
 });
@@ -433,7 +433,7 @@ test('#498 預算拒絕不退回逐隻派送，工作留待下一輪', async t =
     await addDogs(env,3,'budget');
     // 每日剩餘只夠一隻：合併批次被拒時不能改逐隻偷跑。
     const reserved=(await env.DB.prepare('SELECT reserved FROM v3_walk_write_budget').first()).reserved;
-    await retryWalks({ ...env,SYNC_DAILY_BUDGET:String(reserved+100) },now);
+    await assert.rejects(retryWalks({ ...env,SYNC_DAILY_BUDGET:String(reserved+100) },now),/budget/,'排程記成失敗，管理網站看得到');
     assert.equal(wake,0);
     assert.equal((await env.DB.prepare("SELECT COUNT(*) n FROM v3_walk_outbox WHERE status='pending'").first()).n,3);
   } finally { globalThis.fetch=real;env.DB.close(); }
@@ -460,7 +460,6 @@ test('#498 遠端失敗分得出：沒設定、連不上（結果不明）、試
     assert.match(await error('9200'),/^writeback-rejected/);
     assert.match(await error('9201'),/^writeback-rejected/);
     const reserved=(await env.DB.prepare('SELECT reserved FROM v3_walk_write_budget').first()).reserved;
-    await retryWalks({ ...env,SYNC_DAILY_BUDGET:String(reserved+1) },now+60*60000);
-    assert.ok(warns.some(w=>w.includes('budget')),warns.join('\n'));
+    await assert.rejects(retryWalks({ ...env,SYNC_DAILY_BUDGET:String(reserved+1) },now+60*60000),/budget/);
   } finally { console.warn=warn;globalThis.fetch=real;env.DB.close(); }
 });

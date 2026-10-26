@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { buildAdminAssets } from './build-admin-assets.mjs';
 await buildAdminAssets();
 const { parseActivities, filterActivities, activityPayload, sameActivity, describeActivity, matchDog } = await import('../admin/public/js/activity-model.js');
-const { completeness, parseSheetGaps, gapStatus } = await import('../admin/public/js/data-checks.js');
+const { completeness, parseSheetGaps, gapStatus, parseCronStatus, cronStatus } = await import('../admin/public/js/data-checks.js');
 const { editQuery, parseEditPage, formatWhen, sourceLabel, valueText } = await import('../admin/public/js/edit-log.js');
 
 const A = 'a'.repeat(32), B = 'b'.repeat(32);
@@ -72,4 +72,19 @@ test('#567 更新紀錄：查詢字串白名單、時間用台灣時間、來源
   assert.equal(sourceLabel('legacy'), '舊紀錄');
   assert.equal(valueText('sex', 'female'), '母');
   assert.equal(valueText('intro', ''), '（沒有）');
+});
+
+test('稽核第 5 項 排程：最後跑完時間、最近失敗、過期、從未記錄', () => {
+  const job = (j, extra = {}) => ({ job: j, state: 'ok', okAt: '2026-10-26T05:45:00.000Z', failAt: null, error: '', stale: false, ...extra });
+  const jobs = parseCronStatus({ jobs: [job('retry'), job('scan'), job('trash', { state: 'never', okAt: null, stale: true })] });
+  assert.deepEqual(cronStatus(jobs[0]), { last: '2026/10/26 13:45', problem: '正常', bad: false });
+  assert.equal(cronStatus(jobs[2]).bad, false, '垃圾桶每月才跑，還沒紀錄不算異常');
+  assert.equal(cronStatus({ ...jobs[2], job: 'retry' }).bad, true);
+  const failing = cronStatus(job('scan', { failAt: '2026-10-26T05:53:00.000Z', error: '主清單直接讀回失敗' }));
+  assert.equal(failing.bad, true);
+  assert.match(failing.problem, /13:53 失敗：主清單直接讀回失敗/);
+  assert.equal(cronStatus(job('scan', { failAt: '2026-10-26T01:53:00.000Z', error: 'x' })).bad, false, '失敗後又跑完就恢復正常');
+  assert.match(cronStatus(job('retry', { stale: true })).problem, /已過期/);
+  assert.equal(cronStatus(job('retry', { state: 'error', okAt: null })).bad, true);
+  for (const bad of [{}, { jobs: [job('sync')] }, { jobs: [job('retry', { okAt: 'x' })] }, { jobs: [job('retry', { stale: 'no' })] }]) assert.throws(() => parseCronStatus(bad));
 });
