@@ -12,3 +12,4 @@
   - index：刪 13 項舊模式專用（#85 本機已溜 3、#35 本機儲存 2、#138 寫試算表 3、10-17 兩項、10-16、ADR 0007 舊 today、#445 排序；D1 版分別由 walk-feedback、walk-order-undo、walk-accept、walker-editing 涵蓋），其餘改成 D1；264 → 251 項全過。
 - 發現、未改（行為問題，留給 K）：D1 模式一開頁讀今日紀錄失敗時，溜狗表停在載入畫面，要等下一次每分鐘重讀成功（#456 起的設計）。startup-stability 原本「今日紀錄失敗仍可看狗」的步驟改成只讓休養與個人紀錄失敗，並在測試註明。
 - 環境：本機 PowerShell 5.1 下 `check-local.ps1` 遇到第一行 stderr 就中止，失敗日誌只剩一行；診斷期間暫時把 `run-browser-tests.cjs` 的錯誤改印到 stdout，已還原、未提交。
+- 草稿 PR #607。
