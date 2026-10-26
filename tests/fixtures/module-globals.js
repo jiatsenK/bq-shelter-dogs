@@ -4,6 +4,13 @@ acceptSettings(defaultSettings);
 if (!window.__BQ_FEATURE_TEST__) apiModule.BQApi.featureSettings = async () => ({ok:true,data:defaultSettings});
 // Compatibility for existing assertions only. Production pages never load this adapter.
 import * as appModule from '../../public/js/app.js';
+import * as detailModule from '../../public/js/detail.js';
+import * as sheetAppendModule from '../../public/js/sheet-append.js';
+import * as detailFixedCareModule from '../../public/js/detail-fixed-care.js';
+import * as detailRestModule from '../../public/js/detail-rest.js';
+import * as detailIntroModule from '../../public/js/detail-intro.js';
+import * as detailStaysModule from '../../public/js/detail-stays.js';
+import * as detailFormerModule from '../../public/js/detail-former.js';
 import * as analysisModule from '../../public/js/analysis.js';
 import * as groupsModule from '../../public/js/group-stage.js';
 import * as findModule from '../../public/js/find.js';
@@ -32,4 +39,4 @@ export function expose(modules) {
   }
 }
 
-expose([appModule, analysisModule, groupsModule, findModule, activitiesModule, tourModule, photoModule, walkUiModule, welcomeModule, favoritesModule, detailViewportModule, walkFlowModule, walkRegistrationModule, detailEditorModule, datesModule, apiModule, storeModule, siteModule, uiKitModule, dogStatusModule]);
+expose([appModule, detailModule, sheetAppendModule, detailFixedCareModule, detailRestModule, detailIntroModule, detailStaysModule, detailFormerModule, analysisModule, groupsModule, findModule, activitiesModule, tourModule, photoModule, walkUiModule, welcomeModule, favoritesModule, detailViewportModule, walkFlowModule, walkRegistrationModule, detailEditorModule, datesModule, apiModule, storeModule, siteModule, uiKitModule, dogStatusModule]);
