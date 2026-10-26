@@ -93,8 +93,8 @@ test('管理 Worker：真實簽章可讀資產／狗表／照片；替代來源�
   t.mock.method(globalThis, 'fetch', fetchKeys);
   const db = memoryD1();
   t.after(() => db.close());
-  const { migrateCompactDatabase } = await import('../../scripts/migrate-compact-db.mjs');
-  await migrateCompactDatabase(db);
+  const { createCompactDatabase } = await import('../../scripts/compact-schema.mjs');
+  await createCompactDatabase(db);
   await db.prepare("INSERT INTO v3_dogs(dog_id,name,sex,fixed_care) VALUES('dog1','阿福','male',1),('dog2','無編號','',0)").run();
   await db.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note) VALUES(0,'dog1','2026010101','阿福','A1','表格備註')").run();
   await db.prepare("INSERT INTO v3_intros VALUES('dog1','網站介紹')").run();
@@ -149,7 +149,7 @@ test('管理 Worker：真實簽章可讀資產／狗表／照片；替代來源�
 test('管理設定：只有 Access 身分可改；同來源、型別、大小、白名單與版本驗證', async t => {
   t.mock.method(globalThis, 'fetch', fetchKeys);
   const DB = memoryD1(); t.after(() => DB.close());
-  await (await import('../../scripts/migrate-compact-db.mjs')).migrateCompactDatabase(DB);
+  await (await import('../../scripts/compact-schema.mjs')).createCompactDatabase(DB);
   const bindings = { ...env, DB }, jwt = await token();
   const read = await worker.fetch(request('/api/manage/settings', jwt), bindings);
   assert.equal(read.status, 200); const initial = await read.json();
@@ -175,7 +175,7 @@ test('管理設定：只有 Access 身分可改；同來源、型別、大小、
 test('#566 真實 Access 狗資料 API：權限、CSRF、白名單、版本、管理者不受志工開關限制',async t=>{
   t.mock.method(globalThis,'fetch',fetchKeys);
   const DB=memoryD1();t.after(()=>DB.close());
-  await (await import('../../scripts/migrate-compact-db.mjs')).migrateCompactDatabase(DB);
+  await (await import('../../scripts/compact-schema.mjs')).createCompactDatabase(DB);
   const dogId='a'.repeat(32),jwt=await token(),bindings={...env,DB};
   await DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId,'阿福').run();
   const path='/api/manage/dogs/'+dogId;

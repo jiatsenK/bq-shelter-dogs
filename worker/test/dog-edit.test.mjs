@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { fakeD1 } from './fakes.mjs';
-import { migrateCompactDatabase } from '../../scripts/migrate-compact-db.mjs';
+import { createCompactDatabase, splitStatements } from '../../scripts/compact-schema.mjs';
 import { readDogEdit, saveDogEdit } from '../src/dog-edit.js';
 import { fakeR2 } from './fakes.mjs';
 import { saveDogPhoto, restoreDogPhoto } from '../src/dog-photo.js';
@@ -10,7 +10,6 @@ import { applyDogListRows } from '../src/dog-list.js';
 import { readSmall, readDepartureYear } from '../src/packs.js';
 import { readEdits } from '../src/editlog.js';
 import { readFile } from 'node:fs/promises';
-import { splitStatements } from '../../scripts/migrate-compact-db.mjs';
 import { editsValue } from '../../public/js/edits.js';
 import { servePhoto } from '../src/r2.js';
 const dogId = 'a'.repeat(32);
@@ -18,7 +17,7 @@ const actor = { subject: 'verified', email: 'private@example.org' };
 async function setup(t) {
   const db = fakeD1();
   t.after(() => db.close());
-  await migrateCompactDatabase(db);
+  await createCompactDatabase(db);
   await db.prepare('INSERT INTO v3_dogs(dog_id,name,sex) VALUES(?,?,?)').bind(dogId, '測試狗', 'male').run();
   return db;
 }
