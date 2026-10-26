@@ -38,11 +38,12 @@
 | `overlays.js` | 返回鍵與焦點圈：覆蓋層（平面圖放大、裁切、燈箱、在哪、詳細資訊）註冊怎麼判斷開著／怎麼關，按返回的關閉順序集中在 `BACK_ORDER`；開一層、關一層、換掉歷史紀錄、頁籤／資訊子頁的歷史紀錄、`trapFocus` | 無 | index、cards、Node |
 | `walk-registration.js` | `createWalkRegistration`：D1 接受流程的登記、同行人、復原與今日紀錄核對規則，純 ES module（#558 起沒有寫回試算表的舊路徑） | 無 | index、Node |
 | `walk-flow.js` | `BQWalks`：不碰 DOM 的排隊登記、核對、復原、提示及同行人手機紀錄 | store、walk-registration（日期介面由呼叫端注入） | index、Node |
+| `identity.js` | 志工身分：`identityRequest`（/identity 請求與錯誤）、`refreshIdentity`（用登記名字換最新的名字與代號；送出前後手機上的名字和代號都沒變才存，不然回 `changed`）。設定名字、常溜同步、圖鑑共用，各頁的讀、存與被改過時的反應由呼叫端帶入 | api | index、cards、Node |
 | `tour.js` | `BQTour`：導覽步驟、示範、定位、動態效果及安裝說明 | app、detail、ui-kit、analysis、find、desk、welcome、store、page-state | index |
-| `welcome.js` | `BQWelcome`：開頭畫面、我是誰、名字推薦／確認、更名及合併 | app、ui-kit、api、store、site-config、tour、walk-ui、page-state | index |
+| `welcome.js` | `BQWelcome`：開頭畫面、我是誰、名字推薦／確認、更名及合併 | app、identity、ui-kit、store、site-config、tour、walk-ui、page-state | index |
 | `photo.js` | `BQPhoto`：主照片選檔、壓縮、預覽、裁切、上傳，保留內部狀態 | app、detail、ui-kit、api、walk-ui、photo-images、overlays、page-state | index |
 | `photo-images.js` | 裁切結果轉成上傳用的原圖與縮圖 | 無 | index、admin（建置複製） |
-| `favorites.js` | `BQFavorites`：常溜實例、舊鍵搬移、逐隻增刪、離線佇列與身分同步 | app、detail、dog-status、api、store、welcome、walk-ui、page-state | index |
+| `favorites.js` | `BQFavorites`：常溜實例、舊鍵搬移、逐隻增刪、離線佇列與身分同步 | app、detail、dog-status、api、store、identity、walk-ui、page-state | index |
 | `walk-ui.js` | `BQWalkUI`：今日登記／復原的畫面、提示條、同行人、溜狗人編輯 | app、detail、ui-kit、dog-status、dates、walk-flow、welcome、page-state | index |
 | `app.js` | 主頁資料、狗卡、燈箱、頁籤、溜狗操作與整頁事件綁定；詳細資訊在 detail.js；返回鍵交給 overlays.js，app.js 只處理都沒開覆蓋層時的頁籤切換 | 共用模組、dog-data、所有主頁功能模組、page-state | index |
 | `analysis.js` | 分析、離所名冊與資訊頁 | app、detail、ui-kit、dates、api、store、site-config、dog-data、activities、overlays、page-state | index |
@@ -50,7 +51,7 @@
 | `find.js` | 找狗照片、搜尋與平面圖 | app、detail、ui-kit、dog-status、walk-ui、overlays、page-state | index |
 | `group-stage.js` | 可以一起溜的狗群畫面 | app、detail、ui-kit、dog-status、dates、api、walk-ui、page-state | index |
 | `desk.js` | 電腦版簡報、全表／最近 30 天與側欄，明確啟動後啟用寬螢幕呈現；補資料由管理網站取代（#568） | app、detail、sheet-append、ui-kit、dog-status、dates、api、site-config、find、walk-ui、page-state | index |
-| `cards.js` | 圖鑑、開卡與已出所狗卡，保留卡片專用格式 | dates、api、store、site-config、overlays、page-state | cards |
+| `cards.js` | 圖鑑、開卡與已出所狗卡，保留卡片專用格式 | dates、api、store、site-config、overlays、identity、page-state | cards |
 | `edit-values.js` | `editsValue`：編輯紀錄改前／改後的文字，純函式 | 無 | edits、admin（建置複製） |
 | `edits.js` | 編輯紀錄清單 | api、store、edit-values | edits |
 | `groups.js` | 舊獨立狗群頁只讀 | api、page-state | 無 |
@@ -62,5 +63,6 @@
 - 主頁有循環引用（app.js 與多個功能模組互相匯入），其他模組會先於 app.js 執行。頂層呼叫 app.js 的函式宣告沒問題（已提升），讀 app.js 的 `const`／`let` 會在載入時丟錯；`es-modules` 套件載入正式入口時會攔下，失敗訊息第一行印出頁面錯誤。
 - `scripts/frontend-modules.test.mjs` 只讀原始碼：每個 `import { … } from './x.js'` 的名稱都要在 x.js 匯出、`public/js` 每支檔都要列在本表；拆檔搬函式時漏改的匯入在 Node 就擋下。詳細資訊拆檔（#623 R4）後，`tests/index/bootstrap.js` 的 `APP_JS` 是 app.js 加上 detail*.js、sheet-append.js 的原始碼，原有原始碼檢查照樣涵蓋搬走的程式。
 - `scripts/overlays.test.mjs` 用假的 history 驗返回鍵關閉順序、開關一層與焦點圈（#623 R6）；`frontend-modules.test.mjs` 另外擋 overlays.js 以外的模組直接改歷史紀錄、自己接返回鍵或自己寫焦點圈。
+- `scripts/identity.test.mjs` 用假的 fetch 驗志工身分更新：沒被改過才存、中途被改過回 changed、錯誤訊息（#623 R8）。
 - 匯入腳本不需執行整個網頁；原先拼接主頁原始碼的同步資料測試改直接匯入 `dog-data.js`。分析信標測試以模組入口的 HTML 驗證插入位置。試算表同步排程依 #517 已退役。
 - 本機測試仍統一從 `scripts/check-local.ps1` 執行，完整輸出與內容指紋留在 `.scratch/checks/`。repo 沒有 TypeScript／型別檢查入口；變更的 JS 另外做語法檢查。
