@@ -1,7 +1,9 @@
 # 每個 PR 自動產生預覽網址（#126）：K 合併前就能用手機打開看實際畫面
-# - 網址固定是 https://pr-<PR 編號>-bq-shelter-dogs.<帳號>.workers.dev，同一個 PR 再推送會更新同一個網址
-# - 只上傳一個「版本」，不影響正式網站（正式網站只有 deploy-cloudflare.yml 會換）
-# - 預覽版帶 PREVIEW 變數：可以看、可以讀，上傳照片、存備註、按「更新」都會被 Worker 擋下，正式資料不受影響
+# - 網址固定是 https://pr-<PR 編號>-bq-shelter-dogs-preview.<帳號>.workers.dev，同一個 PR 再推送會更新同一個網址
+# - 稽核第 3 項（2026-10-26）：上傳到獨立的預覽 Worker bq-shelter-dogs-preview，不是正式 Worker 的版本；
+#   只綁測試照片空間 bq-shelter-photos-test、測試 D1，Worker 上只有 WALKER_KEY（算代號、不能寫；沒有正式試算表、ADMIN_KEY），程式有漏洞也碰不到正式資料
+# - 只上傳一個「版本」，不部署；預覽 Worker 不跑排程
+# - 預覽版另帶 PREVIEW 變數當第二層：可以看、可以讀，上傳照片、存備註、按「更新」都會被 Worker 擋下
 # - 部署完在 PR 留一則留言貼網址，再推送時更新同一則，不會一直新增
 # - 還沒設 Cloudflare Secret、或是從別人 fork 開的 PR（拿不到 Secret）就跳過
 # - #553：上傳前把 migrations/ 還沒套的自動套到測試庫 bq-shelter-dogs-test（測試庫從正式庫複製時會帶著 d1_migrations）
@@ -51,17 +53,11 @@ jobs:
         with:
           node-version: 22
 
-      # #214：照片仍讀既有 R2，失敗停止，預覽不能寫照片
-      - name: 確認照片空間（R2）
-        id: r2
-        if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
-        run: node scripts/r2-bucket.mjs
-
-      # 預覽只綁隔離測試 D1；不匯入資料
-      - name: 驗證測試資料庫（D1）
+      # 預覽只綁測試 D1、測試 R2，查證預覽 Worker 除了 WALKER_KEY 沒有密鑰；任何一項不符就停止，不上傳
+      - name: 驗證預覽隔離（Worker、R2、D1、密鑰）
         id: d1
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''
-        run: node scripts/d1-database.mjs --config "${{ steps.r2.outputs.config }}" --preview
+        run: node scripts/d1-database.mjs --config wrangler.jsonc --preview
 
       # #553：測試庫自動套 migration，不用 K 按；只帶測試庫設定，碰不到正式庫
       - name: 測試庫套用 migration
@@ -95,7 +91,7 @@ jobs:
           script: |
             const marker = '<!-- cloudflare-preview -->';
             const body = `${marker}\n📱 **預覽網址**：${process.env.URL}\n\n` +
-              `對應這個 PR 最新的提交（${process.env.SHA.slice(0, 7)}）。預覽版可以看、可以讀，但上傳照片、存備註、按「更新」都不會存，正式資料不受影響。`;
+              `對應這個 PR 最新的提交（${process.env.SHA.slice(0, 7)}）。預覽版接的是測試照片與測試資料庫，可以看、可以讀，但上傳照片、存備註、按「更新」都不會存，正式資料不受影響。`;
             const { owner, repo } = context.repo;
             const issue_number = context.payload.pull_request.number;
             const comments = await github.paginate(github.rest.issues.listComments, { owner, repo, issue_number, per_page: 100 });

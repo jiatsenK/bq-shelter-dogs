@@ -40,6 +40,10 @@ GAS 送不出去時把待送內容留在指令碼屬性（`WALK_EDITS_PENDING`�
 - 正式庫只由手動的「套用 D1 migration」workflow 套用（必要時先複製到備用庫 `bq-shelter-dogs-backup`、記 Time Travel 書籤、套用、接著部署）。部署發現有還沒套的就紅叉。
 - 預覽、測速、測試網站部署自動套到測試庫 `bq-shelter-dogs-test`。
 
+## PR 預覽
+
+`bq-shelter-dogs-preview`（稽核第 3 項，2026-10-26）：PR 加 `preview` 標籤時上傳成這個獨立 Worker 的版本，網址 `pr-<編號>-bq-shelter-dogs-preview`。只綁測試 D1（跟測試網站共用）、測試照片空間 `bq-shelter-photos-test`，Worker 上只有 `WALKER_KEY`（算代號，不能寫）、不跑排程；另帶 PREVIEW 擋寫入。正式 Worker 關預覽網址，因為它的版本會帶正式密鑰。設定在 `wrangler.preview-db.jsonc`，上傳前由 `scripts/d1-database.mjs --preview` 查證。
+
 ## 測試網站
 
 `bq-shelter-dogs-test`（`wrangler.test-site.jsonc`，#498）：程式跟正式版同一份，只接測試 D1、測試照片空間 `bq-shelter-photos-test`、測試試算表；不擋寫入，可以按溜了。main 有推送時「部署到測試網站」（`.github/workflows/deploy-test-site.yml`）先對測試庫套 migration 再部署；合併前要實測某個分支，到 Actions 手動指定分支跑，之後 main 再推送會換回 main。金鑰跟正式版不同，設在測試 Worker 上，workflow 不帶。

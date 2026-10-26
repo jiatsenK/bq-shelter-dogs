@@ -38,8 +38,9 @@
   "triggers": {
     "crons": ["5-59/10 * * * *", "43 1 * * *", "53 5,15 * * *", "17 2 1 * *"]
   },
-  // 每個 PR 的預覽網址（#126，.github/workflows/preview-cloudflare.yml）：https://pr-<編號>-bq-shelter-dogs.<帳號>.workers.dev
-  "preview_urls": true,
+  // 稽核第 3 項（2026-10-26）：PR 預覽改上傳到獨立 Worker bq-shelter-dogs-preview（.github/workflows/preview-cloudflare.yml）。
+  // 正式 Worker 的版本會帶著正式密鑰，所以關掉正式 Worker 的預覽網址，舊的 pr-<編號>-bq-shelter-dogs 網址一起失效
+  "preview_urls": false,
   // 不保留 Cloudflare 網頁上另外加的變數：正式部署只用這裡的 vars，確保預覽版的 PREVIEW 不會被帶進正式版。
   // Secret（ADMIN_KEY 等）不受影響，部署時一律保留
   "keep_vars": false
