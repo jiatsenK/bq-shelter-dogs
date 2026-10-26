@@ -1,5 +1,6 @@
 import { BQStore } from './store.js';
 import { trapFocus } from './overlays.js';
+import { refreshIdentity } from './identity.js';
 import { SITE } from './site-config.js';
 import { BQDates } from './dates.js';
 import { BQApi } from './api.js';
@@ -659,20 +660,19 @@ async function bqInit() {
   BQ.opened = bqLoadOpened(BQ.storage);
   try {
     const name = BQ.storage?.get(BQStore.keys.walkerName);
-    const originalCodes = BQ.codes.join(',');
     if (name && BQ.codes.length) {
-      const r = await BQApi.identity('', { name });
-      if (r.error === 'network' || !r.data) throw new Error(r.message);
-      const out = r.data;
-      if (BQ.storage?.get(BQStore.keys.walkerName) !== name || bqLoadCodes(BQ.storage).join(',') !== originalCodes) {
-        BQ.codes = bqLoadCodes(BQ.storage);
-      } else if (r.ok && out.identity) {
-        BQ.codes = out.identity.codes;
-        BQ.storage?.writeJson(BQ_CODES_KEY, BQ.codes);
-        BQ.storage?.set(BQStore.keys.walkerName, out.identity.name);
-      }
+      const result = await refreshIdentity(name, {
+        read: () => ({ name: BQ.storage?.get(BQStore.keys.walkerName), codes: bqLoadCodes(BQ.storage) }),
+        write: identity => {
+          BQ.codes = identity.codes;
+          BQ.storage?.writeJson(BQ_CODES_KEY, BQ.codes);
+          BQ.storage?.set(BQStore.keys.walkerName, identity.name);
+        },
+      });
+      // 溜狗表那邊剛換了身分：用手機上現在的代號
+      if (result.status === 'changed') BQ.codes = bqLoadCodes(BQ.storage);
     }
-  } catch (e) { /* 離線保留原來的名字對照 */ }
+  } catch (e) { /* 離線或伺服器出錯：保留原來的名字對照 */ }
   bqBind();
   bqRenderAlumni();
   bqLoadAlumni(); // 已出所跟開卡無關，自己讀，在所資料讀不到也照樣顯示

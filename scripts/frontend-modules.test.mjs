@@ -70,3 +70,9 @@ test('返回鍵集中在 overlays.js：其他模組不自己 pushState 或決定
   }
   assert.deepEqual(hits, []);
 });
+
+test('志工身分更新只在 identity.js 呼叫 /identity（#623 R8）', async () => {
+  const files = await frontendFiles();
+  const hits = Object.entries(files).filter(([file, source]) => file !== 'identity.js' && /BQApi\.identity\(/.test(source)).map(([file]) => file);
+  assert.deepEqual(hits, []);
+});

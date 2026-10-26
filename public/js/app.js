@@ -233,15 +233,23 @@ function loadMyCodes() {
   } catch (e) { /* 讀不到就用記憶體裡的 */ }
   return Array.isArray(list) ? list.filter(c => WALKER_CODE_PATTERN.test(c)) : [];
 }
-function saveMyCodes(codes) {
+// syncFavs：常溜同步自己換身分時傳 false，不然會再排一次同步、一直循環
+function saveMyCodes(codes, { syncFavs = true } = {}) {
   appState.walkerCodesMemory = codes.length ? [...codes] : null;
   try {
     if (appState.phoneStore && codes.length) appState.phoneStore.writeJson(WALKER_CODES_KEY, codes);
     else if (appState.phoneStore) appState.phoneStore.remove(WALKER_CODES_KEY);
   } catch (e) { /* 存不了就只記在記憶體 */ }
   try { appState.myWalks = appState.walksData ? parseMyWalks(appState.walksData, codes) : []; } catch (e) { appState.myWalks = []; }
-  appState.favorites.syncFavs();
+  if (syncFavs) appState.favorites.syncFavs();
 }
+// Worker 回的志工身分（identity.js）存進這支手機：登記名字和代號一起換
+function saveIdentity(identity, options) {
+  saveWalkerName(identity.name);
+  saveMyCodes(identity.codes, options);
+}
+// 跟 Worker 換身分時比對的這支手機現況（identity.js 的 read）
+const currentIdentity = () => ({ name: loadWalkerName(), codes: loadMyCodes() });
 
 // 名字送 Worker 換代號：回 { codes } 或 { codes: [], error: 原因 }
 async function walkerCodesFor(names) {
@@ -1252,7 +1260,7 @@ if (!window.__BQ_TEST__) {
 }
 }
 
-export { FIRST_SCREEN_CARDS, WALKER_CODES_KEY, WALKER_CODE_PATTERN, mergeTempCages, loadDogsData, fetchDogsData, parseMyWalks, apiData, fetchWalks, walkYears, recentStartMonth, missingWalkYears, loadWalkYear, loadMyWalks, currentMyWalks, myWalksCount, mineTabNumber, mineTabLabel, loadMyCodes, saveMyCodes, walkerCodesFor, dogOfWalk, walkDateLabel, myWalkGroups, myVisitCard, myMonthStats, myProgressHtml, myWalksHtml, myCalendarState, myCalendarHtml, effectiveWalkDate, computeStatus, restOf, versioned, photoOverrides, photoSrc, photoThumbSrc, thumbFallback, thumbAttrs, photoThumb, lightboxOpen, insidePhoto, openLightbox, showLightboxPhoto, hideLightbox, closeLightbox, lastWalk, cardMeta, tempCageText, sexMark, warnNote, walkedNow, walkedToday, WALKER_NAME_KEY, WALKER_NAME_SEP, allWalkerNames, isOffline, setWalkerNamesOffline, loadWalkerNames, TODAY_POLL_MS, TODAY_REFETCH_MS, fetchWalkStatus, loadTodayWalks, refreshTodayWalks, canonicalWalker, splitWalkers, walkerList, loadCompanions, loadWalkWith, addWalkWith, clearWalkWith, firstWalkerName, loadWalkerName, saveWalkerName, myAliasIn, walkRegistration, d1Base, NEED_EDITOR, editorName, editorHeaders, dogCard, loadRest, imageToLocal, cardFromEvent, TABS, buildTabs, switchTab, stepTab, mainEl, render, skeletonHtml, appHeader, syncHeaderShadow, appBrand, syncHeaderTuck, bottomBarEl, syncBottomBar, dayWord, rangeText, rangeLabel, syncRange, queueRange, dueDogs, WALK_FAV_KEY, loadWalkFav, saveWalkFav, walkFilterHtml, WALK_VIEW_KEY, loadWalkView, saveWalkView, walkToolsHtml, walkRow, renderMain, searchInput, searchClear, syncSearchClear, openGuide, init, applyDogsData, renderUpdatedLabel, freshWalkList, refreshData, syncBtn, startApp };
+export { FIRST_SCREEN_CARDS, WALKER_CODES_KEY, WALKER_CODE_PATTERN, saveIdentity, currentIdentity, mergeTempCages, loadDogsData, fetchDogsData, parseMyWalks, apiData, fetchWalks, walkYears, recentStartMonth, missingWalkYears, loadWalkYear, loadMyWalks, currentMyWalks, myWalksCount, mineTabNumber, mineTabLabel, loadMyCodes, saveMyCodes, walkerCodesFor, dogOfWalk, walkDateLabel, myWalkGroups, myVisitCard, myMonthStats, myProgressHtml, myWalksHtml, myCalendarState, myCalendarHtml, effectiveWalkDate, computeStatus, restOf, versioned, photoOverrides, photoSrc, photoThumbSrc, thumbFallback, thumbAttrs, photoThumb, lightboxOpen, insidePhoto, openLightbox, showLightboxPhoto, hideLightbox, closeLightbox, lastWalk, cardMeta, tempCageText, sexMark, warnNote, walkedNow, walkedToday, WALKER_NAME_KEY, WALKER_NAME_SEP, allWalkerNames, isOffline, setWalkerNamesOffline, loadWalkerNames, TODAY_POLL_MS, TODAY_REFETCH_MS, fetchWalkStatus, loadTodayWalks, refreshTodayWalks, canonicalWalker, splitWalkers, walkerList, loadCompanions, loadWalkWith, addWalkWith, clearWalkWith, firstWalkerName, loadWalkerName, saveWalkerName, myAliasIn, walkRegistration, d1Base, NEED_EDITOR, editorName, editorHeaders, dogCard, loadRest, imageToLocal, cardFromEvent, TABS, buildTabs, switchTab, stepTab, mainEl, render, skeletonHtml, appHeader, syncHeaderShadow, appBrand, syncHeaderTuck, bottomBarEl, syncBottomBar, dayWord, rangeText, rangeLabel, syncRange, queueRange, dueDogs, WALK_FAV_KEY, loadWalkFav, saveWalkFav, walkFilterHtml, WALK_VIEW_KEY, loadWalkView, saveWalkView, walkToolsHtml, walkRow, renderMain, searchInput, searchClear, syncSearchClear, openGuide, init, applyDogsData, renderUpdatedLabel, freshWalkList, refreshData, syncBtn, startApp };
 export { appState } from './page-state.js';
 export { parseDogsData } from './dog-data.js';
 
