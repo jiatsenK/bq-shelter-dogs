@@ -4,6 +4,7 @@ module.exports = async (browser, base) => {
   const data = structuredClone(fixture);
   data.groupColumns = [{ column: 4, label: '測試群', names: data.dogs.slice(0, 2).map(d => d.name) }];
   let reads = 0;
+  const hits = {}; // 各端點被讀幾次（R7：狗群檢查不重抓我溜過、常溜）
   let hold = false, fail = false, partial = false, release;
   const writes = [];
   const d1 = require('./fixtures/fake-d1-walks.cjs')({ today: () => '2026-10-20' });
@@ -17,6 +18,7 @@ module.exports = async (browser, base) => {
     if (url.origin !== base) return route.abort();
     if (!url.pathname.includes('/api/')) return route.continue();
     const endpoint = url.pathname.split('/api/')[1];
+    hits[endpoint] = (hits[endpoint] || 0) + 1;
     if (endpoint === 'walk' && route.request().method() === 'POST') {
       const body = route.request().postDataJSON(); writes.push(body);
       // D1 整群逐狗送；partial 只讓這次整群的第一隻結果不明
@@ -45,6 +47,7 @@ module.exports = async (browser, base) => {
     assert.equal(await page.locator('#gwSource').textContent(), '', '狗群頁平常不顯示讀取時間');
     assert.equal(await page.locator('#groupPage').getByText(/讀取 \d/).count(), 0, '狗群頁沒有讀取時間');
     assert.match(await page.locator('#updatedLabel').textContent(), /資料更新 \d/, '頁首右上角仍有資料時間');
+    const before = { ...hits };
     await page.locator('[data-tab="walk"]').click();
     await page.clock.runFor(61000);
     hold = true;
@@ -60,6 +63,9 @@ module.exports = async (browser, base) => {
     await page.getByRole('button', { name: '重新讀取', exact: true }).click();
     await page.waitForFunction(() => document.querySelectorAll('.front [data-gw-dog]').length === 1);
     assert.equal(reads, 3, '重試讀回其他手機更新的群');
+    await page.waitForFunction(() => document.querySelector('#gwWalk'));
+    assert.equal(hits.walks || 0, before.walks || 0, '狗群重讀不重抓我溜過的紀錄');
+    assert.ok((hits.rest || 0) > (before.rest || 0), '狗群重讀照樣補休養，登記前擋得到休養中的狗');
     data.groupColumns[0].names = [data.dogs[0].name];
     await page.locator('#gwWalk').click();
     await page.getByText('狗群名單已變更，請確認後再登記', { exact: true }).waitFor();
