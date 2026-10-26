@@ -70,95 +70,16 @@ async function runDeskTests() {
       eq(calls, [[['桌紅', '桌黃'], true]], '一次登記：');
       eq([deskChecked.size, main.querySelector('.desk-batch')], [0, null], '清掉：');
     });
-    await check('電腦版補資料（10-10）：沒照片、沒介紹的狗一列一隻，兩樣都缺的在最前面；照片、介紹都走詳細資訊', () => {
-      const pv = photoVersions;
-      try {
-        photoVersions = { 'photos/2026010102.jpg': 'a', 'photos/2026010103.jpg': 'b' };
-        allDogs[1].intro = '有介紹'; allDogs[2].intro = '有介紹';
-        eq(allDogs.map(d => deskFillNeeds(d)), [{ photo: true, intro: true }, { photo: false, intro: false }, { photo: false, intro: false }, { photo: true, intro: true }], '缺什麼：');
-        deskView = 'fill'; deskFill = 'all'; deskFillOrder = null;
-        const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', dueDogs(allDogs, TODAY)), 'text/html');
-        eq([...doc.querySelectorAll('.df-chip b')].map(b => b.textContent), ['2', '2', '4'], '沒照片、沒介紹、全部：');
-        eq([...doc.querySelectorAll('.df-row .dr-name button')].map(b => b.textContent).slice(0, 2).sort(), ['桌無', '桌紅'], '兩樣都缺的在前面：');
-        eq([doc.querySelectorAll('.df-drop').length, doc.querySelector('.desk-brief')], [2, null], '沒照片的格子、補資料不放簡報：');
-        eq(doc.querySelectorAll('[data-fill-photo]').length + doc.querySelectorAll('[data-fill-intro]').length, 8, '照片、介紹那兩格本身可以點：');
-        eq(doc.querySelectorAll('.df-btn, .df-act').length, 0, '不另外設按鈕（10-10 K）：');
-      } finally { photoVersions = pv; deskView = 'sheet'; deskFill = 'all'; deskFillOrder = null; allDogs[1].intro = ''; allDogs[2].intro = ''; }
+    await check('電腦版不再有補資料（#568：管理網站取代）：表格只剩全表、最近 30 天；照片、介紹從詳細資訊改', () => {
+      const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', dueDogs(allDogs, TODAY)), 'text/html');
+      eq([...doc.querySelectorAll('[data-desk-view]')].map(b => b.dataset.deskView), ['sheet', 'days30'], '表格種類：');
+      eq([doc.querySelector('.desk-fill, [data-fill-photo], [data-fill-intro], [data-desk-fill]'), /deskFill|data-fill/.test(code)], [null, false], '沒有補資料畫面與程式：');
     });
     await check('這間收容所的設定集中在 js/site-config.js（10-10 K：以後其他收容所可以搬去用）：門檻、警示字、分區不寫死在別的檔', () => {
       eq([AMBER_DAYS, RED_DAYS, SPECIAL_KEYWORDS === SITE.warnKeywords, DESK_ZONES === SITE.zones], [SITE.days.amber, SITE.days.red, true, true], '都讀 SITE：');
       eq(SITE.zones.map(z => [z.key, z.test('新 A10'), z.test('c區13')]), [['new', true, false], ['old', false, false], ['mom', false, false], ['c', false, true], ['ward', false, false]], '分區比對（去空白、C 區不分大小寫）：');
       if (!/from ['"]\.\/site-config\.js['"]/.test(APP_JS)) throw new Error('主頁要明確匯入 SITE');
       if (/const (AMBER_DAYS|RED_DAYS) = [0-9]/.test(APP_JS) || APP_JS.includes('[\'勿溜\'')) throw new Error('js/app.js 不該再寫死門檻或警示字');
-    });
-    await check('補資料直接在表格裡補（10-10 K）：點介紹原地編輯、儲存有狀態；補好的狗留在原位、打勾，順序不跳', async () => {
-      if (!deskOn()) return; // 測試的瀏覽器不夠寬就不測畫面
-      const saved2 = [UPLOAD_URL, photoVersions];
-      const names = () => [...main.querySelectorAll('.df-row .dr-name button')].map(b => b.textContent);
-      try {
-        UPLOAD_URL = 'https://worker.test'; saveWalkerName('');
-        photoVersions = { 'photos/2026010102.jpg': 'a', 'photos/2026010103.jpg': 'b', 'photos/2026010104.jpg': 'c' };
-        allDogs[1].intro = '有介紹'; allDogs[2].intro = '有介紹';
-        deskView = 'fill'; deskFill = 'intro'; deskFillOrder = null; deskFillDone.clear(); deskFillIntro = null;
-        activeTab = 'walk'; searchQuery = ''; render();
-        const before = names();
-        eq(before.slice().sort(), ['桌無', '桌紅'], '沒介紹的兩隻：');
-        const calls = [];
-        fakeApi((name, id, body) => {
-          calls.push([name, id, body]);
-          return apiJson({ ok: true, intro: body.text });
-        });
-        const first = before[0];
-        main.querySelector('.df-row [data-fill-intro]').click();
-        const box = document.getElementById('dfIntroText');
-        eq([!!box, !!main.querySelector('.df-form input[type="password"]'), !!detailDog], [true, false, false], '原地變成文字框、沒有通關碼、不開詳細資訊：');
-        box.value = '親人，好牽'; box.dispatchEvent(new Event('input', { bubbles: true }));
-        main.querySelector('[data-fill-form]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-        await new Promise(r => setTimeout(r, 20));
-        eq([main.querySelector('.df-st.err').textContent.includes('請先選好你的名字'), document.getElementById('dfIntroText').value, calls.length], [true, '親人，好牽', 0], '沒選名字：寫原因、打的字還在：');
-        saveWalkerName('志工我');
-        main.querySelector('[data-fill-form]').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
-        eq(main.querySelector('.df-st.busy').textContent, '介紹儲存中…', '按了馬上寫儲存中：');
-        await new Promise(r => setTimeout(r, 20));
-        eq([calls.length, calls[0][0], allDogs.some(d => d.id === calls[0][1]), calls[0][2].text, calls[0][2].editor], [1, 'saveIntro', true, '親人，好牽', '志工我'], '送出：');
-        const row = main.querySelector('.df-row');
-        eq([names(), row.classList.contains('done'), row.querySelector('.df-st.ok').textContent.includes('介紹已儲存'), row.querySelector('.df-intro-text').textContent], [before, true, true, '親人，好牽'], '補好了留在原位、打勾、看得到新介紹：');
-        eq([deskFillIntro, main.querySelector('.df-done-n').textContent.includes('這次補好 1 隻'), names()[0]], [null, true, first], '上面寫這次補好幾隻：');
-        BQWalkUI.hideToast();
-        // 換篩選才重排：補好的那隻不再算沒介紹
-        main.querySelector('[data-desk-fill="all"]').click(); main.querySelector('[data-desk-fill="intro"]').click();
-        eq(names().includes(first), false, '換篩選後才離開清單：');
-      } finally {
-        [UPLOAD_URL, photoVersions] = saved2; restoreApi();
-        for (const d of allDogs) delete introOverrides[d.id];
-        allDogs[1].intro = ''; allDogs[2].intro = '';
-        deskFillIntro = null; deskFillDone.clear(); deskFillOrder = null; deskView = 'sheet'; deskFill = 'all'; saveWalkerName(''); BQWalkUI.hideToast(); render();
-      }
-    });
-    await check('補資料的照片：選了先在那一格預覽，按「上傳」才送；上傳中、已上傳都寫在那一列', async () => {
-      if (!deskOn()) return;
-      const saved2 = [UPLOAD_URL];
-      try {
-        UPLOAD_URL = 'https://worker.test';
-        deskView = 'fill'; deskFill = 'all'; deskFillOrder = null; deskFillDone.clear();
-        activeTab = 'walk'; searchQuery = ''; render();
-        const dog = allDogs[Number(main.querySelector('.df-row[data-fill-dog]').dataset.fillDog)];
-        const calls = [];
-        fakeApi((name, id, blob) => { calls.push([name, id, blob.type]); return apiJson({ ok: true }); });
-        deskFillPhoto = { key: walkKey(dog), blob: new Blob(['x'], { type: 'image/jpeg' }), url: 'data:image/gif;base64,R0lGODlhAQABAAAAACw=', phase: 'preview', error: '' };
-        render();
-        const row = main.querySelector('.df-row');
-        eq([!!row.querySelector('.df-photo.pending img'), row.querySelector('.df-st.hint').textContent, calls.length], [true, '這是預覽，按「上傳」才會換', 0], '先預覽、還沒送：');
-        row.querySelector('[data-fill-photo-go]').click();
-        eq(main.querySelector('.df-st.busy').textContent, '照片上傳中…', '按了馬上寫上傳中：');
-        await new Promise(r => setTimeout(r, 20));
-        eq([calls, deskFillPhoto, !!photoOverrides[dog.id]], [[['uploadPhoto', dog.id, 'image/jpeg']], null, true], '送到 Worker：');
-        eq(main.querySelector('.df-row .df-st.ok').textContent.includes('照片已上傳'), true, '寫已上傳：');
-        delete photoOverrides[dog.id];
-      } finally {
-        [UPLOAD_URL] = saved2; restoreApi();
-        deskFillPhoto = null; deskFillDone.clear(); deskFillOrder = null; deskView = 'sheet'; BQWalkUI.hideToast(); render();
-      }
     });
     await check('電腦版全表（10-10 K）：同一欄再點一次反過來排、三角形跟著換；點整列開詳細資訊，勾選那一格不算', () => {
       if (!deskOn()) return;
@@ -185,8 +106,8 @@ async function runDeskTests() {
       } finally { deskSort = 'days'; deskSortRev = false; render(); }
     });
     await check('電腦版只靠 BQWalkUI.setWalked 登記，自己不送資料', () => {
-      // 補資料（10-10）：照片 POST /photos、介紹 PUT /intro 都是送到 Worker（寫 R2／repo，不是試算表），其他地方不能再有寫入
-      eq([...new Set([...code.matchAll(/BQApi\.(\w+)\(/g)].map(m => m[1]))].sort(), ['saveIntro', 'uploadPhoto', 'walks'], '只有補資料的照片、介紹兩個寫入，加上讀溜狗紀錄：');
+      // #568 補資料刪除後，電腦版只讀溜狗紀錄；照片、介紹在詳細資訊改（依志工編輯開關）
+      eq([...new Set([...code.matchAll(/BQApi\.(\w+)\(/g)].map(m => m[1]))].sort(), ['walks'], '只讀溜狗紀錄：');
       if (/\bfetch\(|method\s*:|sheet-write|['"]\/walk\b|script\.google/.test(code)) throw new Error('js/desk.js 不應該自己送資料或寫試算表');
     });
   } finally {

@@ -49,7 +49,7 @@ const NOTE_WRITE_LIMITS = [
 // 管理金鑰打錯：1 小時最多 10 次，超過就先不給試（擋住一直猜）
 const ADMIN_FAIL_LIMITS = [{ windowMs: 60 * 60 * 1000, max: 10 }];
 // 休養中：原因最多幾個字、最多設多久（天）
-// 入所介紹（K 2026-10-10 電腦版補資料）：存 D1 的 v3_intros（#250），不寫試算表
+// 入所介紹（K 2026-10-10）：存 D1 的 v3_intros（#250），不寫試算表
 const INTRO_MAX_CHARS = 1000;
 const REST_REASON_MAX = 40;
 const REST_MAX_DAYS = 180;
@@ -346,7 +346,7 @@ async function uploadR2(request, env, origin, ctx) {
 }
 
 // ── 管理用 API（/api/admin/...）：搬遷、縮圖、Trash ──
-// 只給 GitHub Action 用（ADR 0004，不做管理後台）：不看網站來源，改看標頭 X-Admin-Key（GitHub Secret ADMIN_KEY）
+// 只給 GitHub Action 用：不看網站來源，改看標頭 X-Admin-Key（GitHub Secret ADMIN_KEY）。人用的管理網站是另一個 Worker（admin/、ADR 0020），不用這把金鑰
 async function checkAdmin(request, cfg, origin) {
   if (!cfg.adminKey) return fail(500, '還沒設定 ADMIN_KEY', origin);
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
