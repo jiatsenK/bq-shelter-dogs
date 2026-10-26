@@ -18,7 +18,7 @@
 | `dates.js` | `BQDates`：日期解析、編號與最早入所日、本地日期鍵、台灣今天 | 無 | index、cards、Node、admin（建置複製） |
 | `api.js` | `BQApi`：每個 API 端點一個函式，統一錯誤形狀，接手提前讀狗清單 | api-response | index、cards、edits |
 | `api-response.js` | `settle`：純 API 回應／錯誤解析，不讀頁面狀態 | 無 | index、cards、edits、admin（建置複製） |
-| `feature-settings.js` | 志工功能設定、載入與 fail-closed UI gate；初始化／手動更新讀取，不輪詢 | api | index、edits |
+| `feature-settings.js` | 志工功能設定、載入與 fail-closed UI gate；初始化／手動更新讀取，不輪詢。匯出 `SETTING_KEYS`，與後端、管理網站、D1 初始值的鍵名由 `scripts/feature-setting-keys.test.mjs` 比對 | api | index、edits、Node |
 | `store.js` | `BQStore`：手機資料鍵、字串／JSON 讀寫與記憶體備援，可注入儲存空間 | 無 | index、cards、edits |
 | `site-config.js` | `SITE`：收容所設定、警示、區域、功能開關 | 無 | index、cards |
 | `page-state.js` | 各頁模組的可變狀態物件；擁有狀態的模組負責初始化，其他模組明確匯入相同實例 | 無 | index、cards、groups |
@@ -48,5 +48,6 @@
 
 - 網頁測試直接載入真實模組。`tests/fixtures/module-globals.js` 只在測試環境，將既有斷言需要的名稱接到模組匯出／狀態；正式頁面不載入它。`es-modules` 套件另外驗證沒有橋接時，三個正式入口與主頁互動能正常執行，且不產生舊全域名稱。
 - 日期、溜狗規則與狗清單解析可直接由 Node `import`；需要隔離網路、儲存空間與時鐘的 API／store／walk-flow 測試，由 `scripts/frontend-module-test-helper.mjs` 用原生 `vm.SourceTextModule` 載入真實模組圖。Node 測試入口帶入 `--experimental-vm-modules`。
+- 主頁有循環引用（app.js 與多個功能模組互相匯入），其他模組會先於 app.js 執行。頂層呼叫 app.js 的函式宣告沒問題（已提升），讀 app.js 的 `const`／`let` 會在載入時丟錯；`es-modules` 套件載入正式入口時會攔下，失敗訊息第一行印出頁面錯誤。
 - 匯入腳本不需執行整個網頁；原先拼接主頁原始碼的同步資料測試改直接匯入 `dog-data.js`。分析信標測試以模組入口的 HTML 驗證插入位置。試算表同步排程依 #517 已退役。
 - 本機測試仍統一從 `scripts/check-local.ps1` 執行，完整輸出與內容指紋留在 `.scratch/checks/`。repo 沒有 TypeScript／型別檢查入口；變更的 JS 另外做語法檢查。
