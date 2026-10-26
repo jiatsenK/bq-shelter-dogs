@@ -10,14 +10,14 @@
 | [0002](0002-activity-records.md) | 活動紀錄與已出所狗卡存 D1 | 現行 |
 | [0003](0003-252-old-data-cleanup.md) | 舊資料與舊 D1 表清除（#252） | 現行 |
 | [0004](0004-open-editing-and-edit-log.md) | 開放編輯與編輯紀錄 | 部分或全部被 [0020](0020-independent-admin-site.md) 修訂，一起讀、以新的為準 |
-| [0005](0005-intake-date-from-oldest-number.md) | 入所日照最舊編號算，舊編號誰都能補 | 現行 |
+| [0005](0005-intake-date-from-oldest-number.md) | 入所日照最舊編號算，舊編號誰都能補 | 部分或全部被 [0021](0021-stays-carry-number.md) 修訂，一起讀、以新的為準 |
 | [0005](0005-volunteer-identity.md) | 志工身分固定，登記名字可以更改與合併 | 現行 |
 | [0006](0006-sheet-write-scope.md) | 網站寫入試算表的範圍 | 現行 |
 | [0007](0007-today-walks-live.md) | 今日溜狗紀錄：其他手機很快看到今天溜過 | 部分或全部被 [0018](0018-today-walks-d1-event-sync.md) 修訂，一起讀、以新的為準 |
 | [0008](0008-diff-sync-and-write-budget.md) | 同步只寫差異，D1 每天有寫入預算 | 部分或全部被 [0018](0018-today-walks-d1-event-sync.md) 修訂，一起讀、以新的為準 |
 | [0009](0009-d1-read-versioned-packs.md) | 減少 D1 讀取：版本號＋資料包＋只讀今天 | 部分或全部被 [0010](0010-sync-recent-walks-only.md) 修訂，一起讀、以新的為準 |
 | [0010](0010-sync-recent-walks-only.md) | 同步只比對最近一段溜狗紀錄，舊紀錄定下來 | 部分或全部被 [0018](0018-today-walks-d1-event-sync.md) 修訂，一起讀、以新的為準 |
-| [0011](0011-intake-date-manual-backfill.md) | 每次出入所都可以補登，入所日取最早那次 | 現行 |
+| [0011](0011-intake-date-manual-backfill.md) | 每次出入所都可以補登，入所日取最早那次 | 部分或全部被 [0021](0021-stays-carry-number.md) 修訂，一起讀、以新的為準 |
 | [0012](0012-sync-on-change.md) | 同步改成「有改才同步＋每天保險一次」 | 部分或全部被 [0010](0010-sync-recent-walks-only.md)、[0018](0018-today-walks-d1-event-sync.md) 修訂，一起讀、以新的為準 |
 | [0013](0013-walks-recent-and-yearly.md) | 網站只拿近期溜狗紀錄，舊的按年拿，「我溜過的狗」由 Worker 彙總 | 現行 |
 | [0014](0014-small-pack-split-and-settled-departures.md) | small 資料包拆成在所／離所，離所按年存，同步只讀最近 60 天的離所 | 現行 |
@@ -27,6 +27,7 @@
 | [0018](0018-today-walks-d1-event-sync.md) | 今日溜狗以 D1 為準，有人編輯才同步、只送改動 | 現行 |
 | [0019](0019-walker-names-in-d1.md) | 「誰遛的」原文存進 D1，公開檔案仍只放代號 | 現行 |
 | [0020](0020-independent-admin-site.md) | 獨立管理網站與可控制的志工編輯 | 現行 |
+| [0021](0021-stays-carry-number.md) | 一個編號就是一筆出入所紀錄 | 現行 |
 
 ## 網站開關
 

@@ -4,7 +4,7 @@
 - **動到資料寫入前，先讀對應的 ADR**（K 的決定，以 ADR 為準）：
   - 寫試算表（任何欄位、分頁）→ `docs/adr/0006-sheet-write-scope.md`
   - 存使用者資料（開卡、常溜等）→ `docs/adr/0001-volunteer-data-follows-code.md`
-  - 入所日、舊編號、補登舊入所日 → `docs/adr/0005-intake-date-from-oldest-number.md`、`docs/adr/0011-intake-date-manual-backfill.md`
+  - 入所日、舊編號、補登舊入所日 → `docs/adr/0005-intake-date-from-oldest-number.md`、`docs/adr/0011-intake-date-manual-backfill.md`、`docs/adr/0021-stays-carry-number.md`（編號就是一筆出入所紀錄）
   - 志工身分、更名、合併 → `docs/adr/0005-volunteer-identity.md`、`GLOSSARY.md`
   - 活動紀錄、已出所狗卡 → `docs/adr/0002-activity-records.md`
   - 新增會改資料的功能（編輯紀錄、沒有通關碼）→ `docs/adr/0004-open-editing-and-edit-log.md`
