@@ -42,7 +42,7 @@ module.exports = async (browser, base) => {
     // #624 側欄分「資料」「志工網站」兩組；重新讀取是次要按鈕
     assert.deepEqual(await page.locator('.nav-heading').allTextContents(), ['資料', '志工網站']);
     assert.deepEqual(await page.locator('.nav-group').evaluateAll(groups => groups.map(g => [...g.querySelectorAll('a')].map(a => a.textContent))),
-      [['狗資料', '活動紀錄', '待補清單'], ['志工網站設定', '修改紀錄', '網站更新', '網站連結']]);
+      [['狗資料', '活動紀錄', '待補清單', '資料流'], ['志工網站設定', '修改紀錄', '網站更新', '網站連結']]);
     assert.equal(await page.locator('#refresh.btn-primary').count(), 0);
     assert.equal(await page.locator('#next').isEnabled(), true);
     assert.equal(await page.locator('#previous').isDisabled(), true);

@@ -12,6 +12,8 @@ export const updateActivity = (id, body) => call(`/api/manage/activities/${id}`,
 export const deleteActivity = (id, revision) => call(`/api/manage/activities/${id}`, 'DELETE', { revision });
 export const readDataChecks = () => call('/api/manage/data-checks');
 export const readCronStatus = () => call('/api/manage/cron-status');
+// 資料流頁的燈號（K 2026-10-26）
+export const readFlowStatus = () => call('/api/manage/flow-status');
 // 取消合併狗：先讀留下那隻的版本再送（K 2026-10-26）
 export const readDog = dogId => call(`/api/manage/dogs/${encodeURIComponent(dogId)}`);
 export const unmergeDog = (dogId, body) => call(`/api/manage/dogs/${encodeURIComponent(dogId)}/unmerge`, 'POST', body);

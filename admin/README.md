@@ -18,6 +18,7 @@
 | `admin/public/js/main.js` | DOM、讀取／重試與事件；篩選條件放網址（`?care=`、`?dog=` 開抽屜）；不存手機個人資料 |
 | `admin/public/js/dog-editor.js`、`dog-edit-model.js` | #624 右側編輯抽屜（DOM、依序儲存）與純規則（欄位順序、哪些要預覽、待補、介紹差異） |
 | `worker/src/admin/activities.js`、`checks.js`、`edits.js` | #567 活動寫入（共用 activities.js＋同交易紀錄）、#518 掃描清單、資料編輯紀錄搜尋 |
+| `worker/src/admin/flow.js`、`admin/public/flow.html`、`js/flow.js`、`js/flow-model.js` | 資料流頁（K 2026-10-26）：兩張節點圖（資料流向、網站登記傳輸鏈）與燈號。`GET /api/manage/flow-status` 一次 batch 只讀、0 寫入；圖的位置、連線與說明在 `flow-model.js`，架構改了要跟著改 |
 | `worker/src/admin/links.js`、`admin/public/links.html`、`js/links.js` | 網站連結頁：正式版／測試版的志工網站與 GAS 網址。值由部署時 `--var` 帶入（`SITE_URL`、`TEST_SITE_URL` 從 `WORKERS_SUBDOMAIN` 組；`GAS_URL`、`TEST_GAS_URL` 是同名 GitHub Secret，沒設就顯示還沒設定） |
 | `admin/public/activities.html`、`checks.html`、`updates.html`、`releases.html` | #567 活動紀錄、待補清單、修改紀錄；#624 網站更新拆到 `releases.html`。純規則在 `activity-model.js`、`data-checks.js`、`edit-log.js` |
 
