@@ -3,7 +3,7 @@ import { fakeD1 } from './fakes.mjs';
 import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 import { resolveIdentity } from '../src/identity.js';
 
-const SITE = 'https://bq-shelter-dogs.jiatsen-k.workers.dev';
+const SITE = 'https://bq-shelter-dogs.example.workers.dev';
 export const day = () => new Date(Date.now() + 8 * 3600000).toISOString().slice(0, 10);
 export async function setup() {
   const DB = fakeD1();

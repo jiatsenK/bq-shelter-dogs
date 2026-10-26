@@ -42,7 +42,6 @@ Promise.all(['../public/index.html', '../public/js/app.js', '../public/manifest.
   .then(runCloudflareTests)
   .then(runPreviewTests)
   .then(runPhotoVersionTests)
-  .then(runOldUrlTests)
   .then(runWalkSortTests)
   .then(runSheetWriteTests)
   .then(runV9Tests)

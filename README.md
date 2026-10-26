@@ -32,9 +32,11 @@ docs/             ← 規格、設計指引；設定步驟在 docs/setup/，決�
 
 ## 部署
 
-網站和後端 API 部署成同一個 Cloudflare Worker：https://bq-shelter-dogs.jiatsen-k.workers.dev 。`main` 有變動（合併 PR、同步試算表、網站上傳照片）時 GitHub Action「部署到 Cloudflare」會自動部署，一、兩分鐘網站就會更新，不用另外操作。設定和第一次怎麼開見 `docs/setup/CLOUDFLARE_SETUP.md`。
+網站和後端 API 部署成同一個 Cloudflare Worker：https://bq-shelter-dogs.<子網域>.workers.dev 。`main` 有變動（合併 PR、同步試算表、網站上傳照片）時 GitHub Action「部署到 Cloudflare」會自動部署，一、兩分鐘網站就會更新，不用另外操作。設定和第一次怎麼開見 `docs/setup/CLOUDFLARE_SETUP.md`。
 
-每個 PR 會自動部署一份預覽版，網址貼在 PR 留言（`https://pr-<PR 編號>-bq-shelter-dogs.jiatsen-k.workers.dev`）。
+加上 `preview` 標籤的 PR 會部署一份預覽版（`https://pr-<PR 編號>-bq-shelter-dogs-preview.<子網域>.workers.dev`）。
+
+repo 是公開的（#493）：正式網址、帳號子網域不寫進程式、文件、PR 留言或 Actions 日誌，文件一律寫 `<子網域>`；實際值在 GitHub Secret `WORKERS_SUBDOMAIN`。
 
 舊網址 https://jiatsenk.github.io/bq-shelter-dogs/ 的 GitHub Pages 已經關閉（2026-10-15 查證回 404），`.nojekyll` 因此在 #275 移除。
 

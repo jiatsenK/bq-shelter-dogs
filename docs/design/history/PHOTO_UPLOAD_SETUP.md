@@ -114,7 +114,7 @@ https://bq-shelter-photos.你的帳號名稱.workers.dev
    - **Value**：自己想一組通關碼（建議 8 個字以上，可以用中文；不要跟其他帳號密碼一樣）
    
    按 **Deploy**（或 Save）。`GITHUB_TOKEN` 不用動，現在這把 token 就能寫 `data/my-notes.json`。
-3. **確認**：打開服務網址（例：https://bq-shelter-photos.jiatsen-k.workers.dev/ ），看到 `"token":"已設定"` 和 `"notesPasscode":"已設定"` 就完成了。
+3. **確認**：打開服務網址（例：https://bq-shelter-photos.<子網域>.workers.dev/ ），看到 `"token":"已設定"` 和 `"notesPasscode":"已設定"` 就完成了。
 
 想換通關碼：到同一個地方把 `NOTES_PASSCODE` 的值改掉、Deploy；舊手機下次寫備註時會被要求重新輸入。想暫停寫備註：把 `NOTES_PASSCODE` 刪掉（讀備註和上傳照片不受影響）。
 
