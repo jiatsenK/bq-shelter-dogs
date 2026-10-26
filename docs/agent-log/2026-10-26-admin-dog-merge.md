@@ -13,7 +13,7 @@
 - 測試：新增 `worker/test/dog-merge.test.mjs`、`tests/admin-dog-merge.cjs`，改 `worker/test/admin.test.mjs`、`scripts/admin-table.test.mjs`、`tests/admin.cjs` 等夾具。
 - 注意：`scripts/admin-table.test.mjs` 與 `scripts/admin-stage4.test.mjs` 同時跑時，兩邊都在重建 `admin/public/shared/`，有一次讀到寫一半的檔（`edit-values.js` 沒有 export）；重跑通過，跟本次改動無關，沒修。
 - 未做：沒有部署（管理網站要 K 在 Actions 按「部署管理網站」）、沒有動正式資料、沒有開 PR。不需要新 migration。
-- 相關 PR：無（K 尚未交辦）。
+- 相關 PR：#637（草稿，K 2026-10-26 交辦開草稿）。
 - 接上 main：開工後 main 合併了 #626（右側抽屜編輯、側欄分兩組、資料檢查改名待補清單、更新紀錄改名修改紀錄、`presence` 網址參數）。rebase 後合併區改放在抽屜欄位下方（不算進抽屜草稿），狀態分頁取代 `presence`、存在網址 `status`；待補清單的連結不再帶 `presence=main`。#626 的抽屜測試原本固定捲 120px，表格上方多了分頁後第一列被擠出 400px 高的視窗，改成把第一列捲到畫面中間再量。
 - 兩軸審查（Standards／Spec 子代理）後補修：同一天兩邊都有溜狗時改成接在後面、不丟（K：「溜過的紀錄不會消失」）；照片只當一般照片搬、不蓋掉留下那隻的主照片（照計畫）；刪除先用 dog_id 篩走索引，沒有 dog_id 索引的五張小表列在 `SCAN_OK` 並加查詢計畫測試；預覽列出不採用的介紹／休養／出入所內容；用詞「日期待確認」；紀錄 ID 不靠句子順序；共用 `statusText`、`shownNumber`、`countsText`。
 - 審查提到但沒改：取消合併時，合併後留下那隻又改過的列不動（計畫原本寫拒絕），改成「被併那隻照快照還原、留下那隻保留後來的修改」，寫在 `docs/operations/dog-editing.md`；被併那隻離所過、留下那隻在所時補 `returned_number`（同再入所）；`onMain` 與 `status` 並存，給既有完整度規則用。
