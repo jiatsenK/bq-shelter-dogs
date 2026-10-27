@@ -22,4 +22,7 @@
 
 ## 本機測試
 
-見 PR 說明。
+- 修正前：`-NodeTest scripts/local-check.test.mjs` 6 支 4 失敗（同票描述）。
+- 修正後：同一檔 6/6 過。
+- `check-local.ps1 -Full`（HEAD `c93b08d`）：Node 532/532、網頁全部套件通過，紀錄 passed／stable。
+- 網頁測試會改 `.scratch/` 下已追蹤的截圖（既有行為，指紋不算 `.scratch/`），沒有提交。
