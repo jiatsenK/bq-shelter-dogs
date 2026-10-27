@@ -52,10 +52,16 @@ async function walkersOf(walker, env, db) {
 }
 
 // 溜狗紀錄一隻狗一天一組（同一天以最後一次為準，跟當初從 GitHub JSON 匯入時合併的規則一樣）；網站按溜了也用這個（walk-accept.js）
+// 只寫不一樣的位置（#682，ADR 0008）：網站登記過的狗，保險掃描再送同一份名單時寫入 0 列、溜狗紀錄資料包不失效。
+// - 名單照位置比，順序不同算有變；沒有溜狗人存一列 null，用 IS NOT 比，null 對 null 算一樣；人數變少刪掉多出的位置。
+// - 那天的編號和狗名照第一次記的（#248），之後改名、換編號不改那天，加人也沿用。
 export function walkDay(db, dogId, date, dog, codes) {
+  const list = codes.length ? codes : [null];
   return [
-    db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(dogId, date),
-    ...(codes.length ? codes : [null]).map((code, i) => db.prepare('INSERT INTO v3_walks(dog_id,walk_date,position,walker_code,dog_number,dog_name) VALUES(?,?,?,?,?,?)')
+    db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=? AND position>=?').bind(dogId, date, list.length),
+    ...list.map((code, i) => db.prepare(`INSERT INTO v3_walks(dog_id,walk_date,position,walker_code,dog_number,dog_name)
+      SELECT ?1,?2,?3,?4,COALESCE((SELECT dog_number FROM v3_walks WHERE dog_id=?1 AND walk_date=?2 AND position=0),?5),COALESCE((SELECT dog_name FROM v3_walks WHERE dog_id=?1 AND walk_date=?2 AND position=0),?6) WHERE true
+      ON CONFLICT(dog_id,walk_date,position) DO UPDATE SET walker_code=excluded.walker_code,walker_name=NULL WHERE walker_code IS NOT excluded.walker_code`)
       .bind(dogId, date, i, code, dog.id, dog.name)),
   ];
 }

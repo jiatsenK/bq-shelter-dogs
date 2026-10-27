@@ -4,7 +4,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import worker from '../src/index.js';
-import { setup } from './walk-fixture.mjs';
+import { setup, request, post as postWalk, day } from './walk-fixture.mjs';
+import { walkDay } from '../src/dog-list.js';
 import { walkerCode } from '../src/editlog.js';
 import { removeFormerNumber } from '../src/compact.js';
 
@@ -407,5 +408,52 @@ test('#663 手動修正的離所日：同步不改日期，原因照樣更新', 
     assert.deepEqual(await row(), { departed_date:'2026-10-18', date_source:'manual', reason:'adopt' });
     await send(env, [departed(['10/9過世'], 'd3')]);
     assert.deepEqual(await row(), { departed_date:'2026-10-18', date_source:'manual', reason:'death' });
+  } finally { env.DB.close(); }
+});
+
+// #682：網站登記過的狗，保險掃描再送一樣的名單，不刪掉重寫那天的溜狗紀錄，溜狗紀錄資料包也不失效（ADR 0008 只寫有變的列）
+const walkRows = async env => (await env.DB.prepare("SELECT walk_date,position,walker_code,dog_number,dog_name FROM v3_walks WHERE dog_id='dog' ORDER BY walk_date,position").all()).results.map(r => ({ ...r }));
+const walkVersion = async env => ({ ...(await env.DB.prepare('SELECT total,live,months FROM v3_walk_versions WHERE id=1').first()) });
+
+test('#682 網站登記過的狗：保險掃描送同一份名單不重寫溜狗紀錄；網站登記不改主清單的溜狗日期', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    assert.equal((await postWalk(env, request('682-walk', '甲、乙'))).status, 200);
+    assert.equal((await env.DB.prepare("SELECT walked_date FROM v3_sheet_main WHERE number='9001'").first()).walked_date, '2026-10-01', '主清單仍是試算表上次的日期');
+    const rows = await walkRows(env), version = await walkVersion(env);
+    assert.deepEqual(rows.map(r => [r.walk_date, r.position]), [[day(), 0], [day(), 1]]);
+    await send(env, [main({ hash:'h682', date:day(), walker:'甲、乙' })]);
+    assert.equal((await env.DB.prepare("SELECT walked_date FROM v3_sheet_main WHERE number='9001'").first()).walked_date, day(), '主清單跟上試算表');
+    assert.deepEqual(await walkRows(env), rows);
+    assert.deepEqual(await walkVersion(env), version, '溜狗紀錄觸發器沒跑，資料包不失效');
+  } finally { env.DB.close(); }
+});
+
+test('#682 溜狗紀錄照位置比：順序不同算有變、人數變少刪多的、沒有溜狗人比對正確、改名換編號不改那天', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  const [甲, 乙, 丙] = await Promise.all(['甲', '乙', '丙'].map(n => walkerCode(n, 'test')));
+  const dog = { id:'9001', name:'測試狗' }, date = '2026-10-05';
+  const write = async (codes, d = dog) => {
+    const before = await writes(env), version = await walkVersion(env);
+    await env.DB.batch(walkDay(env.DB, 'dog', date, d, codes));
+    return { changes: await writes(env) - before, invalidated: JSON.stringify(await walkVersion(env)) !== JSON.stringify(version) };
+  };
+  const day5 = async () => (await walkRows(env)).map(r => [r.position, r.walker_code, r.dog_number, r.dog_name]);
+  try {
+    await write([甲, 乙]);
+    assert.deepEqual(await write([甲, 乙]), { changes:0, invalidated:false }, '同一份名單寫 0 列');
+    await write([乙, 甲]);
+    assert.deepEqual(await day5(), [[0, 乙, '9001', '測試狗'], [1, 甲, '9001', '測試狗']], '順序不同照位置改寫');
+    await write([乙]);
+    assert.deepEqual(await day5(), [[0, 乙, '9001', '測試狗']], '人數變少刪掉多出的位置');
+    await write([]);
+    assert.deepEqual(await day5(), [[0, null, '9001', '測試狗']]);
+    assert.deepEqual(await write([]), { changes:0, invalidated:false }, '沒有溜狗人：null 對 null 算一樣');
+    const renamed = { id:'9100', name:'改名了' };
+    assert.deepEqual(await write([], renamed), { changes:0, invalidated:false }, '名單一樣、狗改名換編號不寫');
+    await write([丙, 甲], renamed);
+    assert.deepEqual(await day5(), [[0, 丙, '9001', '測試狗'], [1, 甲, '9001', '測試狗']], '那天的編號和狗名照第一次記的（#248）');
   } finally { env.DB.close(); }
 });
