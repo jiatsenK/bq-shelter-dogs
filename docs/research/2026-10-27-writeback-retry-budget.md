@@ -8,7 +8,7 @@
 - **怎麼排重試**：寫回失敗時，`worker/src/walk-accept.js:286` 把 `failures` 加 1，`:291` 依次數決定等多久：1、2、4、8 分鐘，第 5 次以後固定 15 分鐘，**沒有次數上限**，也沒有隨機抖動。`:294` 把 outbox 改成 `retry`、寫入 `next_attempt_at`。
 - **誰來撿**：排程 `wrangler.jsonc:40` 每 10 分鐘（`5-59/10`）跑一次 `retryWalks`（`worker/src/walk-retry.js:15-36`），每次最多撿 10 隻到期的狗（`:21`、`:27`、`:32`），交回共用派送核心 `dispatchWalks`。所以固定 15 分鐘的等待，實際上會落在下一次排程，大約每 20 分鐘一次。
 - **預算怎麼扣**：每次派送（包含每次重試）認領時先保留 `DISPATCH_COST = 96` 列（`walk-accept.js:205`、`:228`），走 `writeBudget`（`:52-61`）累加到 `v3_walk_write_budget`，超過 `SYNC_DAILY_BUDGET`（`wrangler.jsonc:29`，40,000）就整批不寫。失敗收尾的 24 列與回執的 16 列因為 `v3_walk_retry` 已記下今天的保留，不再另扣（`:65-70`、`:290`）。稽核在本機量到一次實際只寫約 24 列，所以預留是實際的約 4 倍。
-- **什麼會讓重試結束**：只有寫成功（回執確認、outbox 變 `synced`）、或這隻狗被新的登記換成新版本（`failures` 歸零，`:231`）。錯誤種類有記在 `error` 前綴（`:212` 的 `remoteError`：`writeback-unconfirmed`／`writeback-rejected`；沒設定是 `writeback-not-configured`），`worker/src/sheet-write.js:42-43` 也分得出「連不上／HTTP 非 2xx」（`unreachable`）、「金鑰錯」（`key`）與 Apps Script 回的其他錯誤（試算表 ID 錯、沒權限等，`:49-55`），但**這些分類沒有拿來決定要不要再試**，全部照樣排下一次。
+- **什麼會讓重試結束**：只有寫成功（回執確認、outbox 變 `synced`）、或這隻狗被新的登記換成新版本（`failures` 歸零，`:231`）。錯誤種類有記在 `error` 前綴（`:215` 的 `remoteError`：`writeback-unconfirmed`／`writeback-rejected`；沒設定是 `writeback-not-configured`），`worker/src/sheet-write.js:42-43` 也分得出「連不上／HTTP 非 2xx」（`unreachable`）、「金鑰錯」（`key`）與 Apps Script 回的其他錯誤（試算表 ID 錯、沒權限等，`:49-55`），但**這些分類沒有拿來決定要不要再試**，全部照樣排下一次。
 
 ## 問題與最壞情況估算
 
