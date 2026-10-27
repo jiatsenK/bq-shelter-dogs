@@ -24,8 +24,6 @@ const FULL_SCAN_OK = {
   'packs.js: SELECT year,seq,vers,body FROM v3_walk_summaries': 'ADR 0013：yearSummaries 只在記憶體缺少摘要或月份版本變更才讀，按年存分段摘要，不讀溜狗歷史整表',
   'index.js: SELECT row_index, number, name, walked_date, walker FROM v3_sheet_main': '#519 /walkers 要每隻狗的誰遛的，約 300 列；每個 Worker 1 分鐘最多讀一次（取代每分鐘讀 gviz）',
   'index.js: SELECT dog_key, effective_date, walker FROM v3_walk_state': '#519 同上，最多一隻狗一列',
-  'walk-accept.js: DELETE FROM v3_walk_guard': '溜狗 batch 的交易檢查表；單一交易只有固定數量檢查列，末尾清空，不隨狗或歷史總數成長',
-  'walk-reconcile.js: DELETE FROM v3_walk_guard': '人工改表收值 batch 的交易檢查表；同一 batch 只插入固定數量檢查列並清空',
   'walk-reconcile.js: SELECT s.*,o.status FROM v3_walk_state s': 'scanWalks 只在每日三次 cron 保險掃描跑，用每隻狗 base 值算指紋（ADR 0018）；不在網站請求跑',
 };
 
