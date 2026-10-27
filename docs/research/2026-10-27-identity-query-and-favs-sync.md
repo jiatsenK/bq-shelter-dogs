@@ -116,3 +116,7 @@ plan('SELECT code,name FROM v3_identity_names WHERE volunteer_id=? ORDER BY code
 - Cloudflare D1 官方文件：Pricing（rows read／rows written 計費）https://developers.cloudflare.com/d1/platform/pricing/ ；Use indexes https://developers.cloudflare.com/d1/best-practices/use-indexes/ ；Batch statements（D1 Worker API `batch`）https://developers.cloudflare.com/d1/worker-api/d1-database/
 - SQLite：EXPLAIN QUERY PLAN https://www.sqlite.org/eqp.html
 - WHATWG HTML 規格 Page visibility：https://html.spec.whatwg.org/multipage/interaction.html#page-visibility
+
+## 定案（K，2026-10-27）
+
+- 節流 5 分鐘；索引與合併查詢一起做（先加索引再合併）。實作票 #680。

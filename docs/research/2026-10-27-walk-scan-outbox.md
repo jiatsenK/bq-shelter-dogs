@@ -97,3 +97,7 @@ frontier＝`max(v3_walk_baselines.version, 最新 synced 版本)`（`walk-accept
   ```
 - 改寫後實際每次讀幾列（D1 的 `rows_read` 對 `SEARCH` 怎麼算）沒有量；預期約「在所狗數」到兩倍之間，實作後看 `meta.rows_read` 確認。
 - 安全刪除範圍是讀程式推論，沒有跑測試；實作時要補「刪掉舊列後，人工改表／未確認派送／中間值判斷結果不變」的測試。
+
+## 定案（K，2026-10-27）
+
+- 改 `CROSS JOIN`，不跑 `PRAGMA optimize`，不清舊資料。實作票 #676。

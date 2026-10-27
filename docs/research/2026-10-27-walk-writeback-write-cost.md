@@ -232,3 +232,9 @@ npx.cmd wrangler d1 execute bq-shelter-dogs --remote --command "SELECT operation
 4. SQLite CREATE TRIGGER（RAISE）— https://www.sqlite.org/lang_createtrigger.html
 5. SQLite Partial Indexes — https://www.sqlite.org/partialindex.html
 6. 本 repo：`worker/src/walk-accept.js`、`worker/src/walk-reconcile.js`、`worker/src/walk-retry.js`、`worker/src/dog-list.js:55-61`、`db/compact-schema.sql:1-90`、`docs/adr/0018-today-walks-d1-event-sync.md:31`、Issue #456、#498（`gh issue view`）、`docs/research/2026-10-27-d1-efficiency-audit.md` 第 3 項。
+
+## 定案（K，2026-10-27）
+
+- K 重新開放寫回協定：guard 改寫、索引整理（刪沒用到的、合併 `unknown*`）都做。
+- 實作前先跑「85 vs 40」的唯讀查詢、本機 EXPLAIN 確認要刪的索引沒人用、量出實際寫入列數。
+- 實作票 #681。

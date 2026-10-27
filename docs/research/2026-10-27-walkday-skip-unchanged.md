@@ -86,3 +86,10 @@
 - 決策：`docs/adr/0018-today-walks-d1-event-sync.md`（第 5 點、兩則 2026-10-26 補充）。
 - 前一份研究：`docs/research/2026-10-26-walk-history-source.md`。
 - 官方：https://www.sqlite.org/lang_upsert.html 、https://developers.cloudflare.com/d1/platform/pricing/ 。
+
+## 定案（K，2026-10-27）
+
+- 用 B（UPSERT）。實作前在本機確認內容一樣時寫入 0 列，不是 0 就改用 A。
+- 第 5 節第 1 點：照位置比。第 2 點：不更新當天紀錄的狗名（#248）。
+- 不採 C：網站登記不改 `walked_date`。
+- 實作票 #682。

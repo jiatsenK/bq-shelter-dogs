@@ -118,3 +118,8 @@
   - Cache API（不會複製到其他資料中心）：https://developers.cloudflare.com/workers/runtime-apis/cache/
   - Durable Objects：https://developers.cloudflare.com/durable-objects/concepts/what-are-durable-objects/
   - D1 read replication／Sessions API：https://developers.cloudflare.com/d1/best-practices/read-replication/
+
+## 定案（K，2026-10-27）
+
+- 拆：溜狗日期與溜狗人拆成另一個溜狗日期包，有自己的版本號。同一台機器上的共用重算順手做，不做 Durable Object。實作票 #679。
+- 落後 22 版：先不開 Workers Logs，拆完後再檢查；仍落後很多再討論。
