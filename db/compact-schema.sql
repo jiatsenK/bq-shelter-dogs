@@ -70,8 +70,8 @@ CREATE TABLE IF NOT EXISTS v3_walk_pack (
 INSERT OR IGNORE INTO v3_walk_pack VALUES(1,0,'{}');
 -- 交易 guard：比較版本失敗必須整筆回復，不能留下去重結果或工作。條件不成立才插 0 讓 CHECK 失敗，成立時不寫任何列，表一直是空的（#681）。
 CREATE TABLE IF NOT EXISTS v3_walk_guard (ok INTEGER NOT NULL CHECK(ok=1));
--- 保守計量包含索引與觸發器；不是帳號分析用量的替代品。
-CREATE TABLE IF NOT EXISTS v3_walk_write_budget (day TEXT PRIMARY KEY, reserved INTEGER NOT NULL);
+-- 保守計量包含索引與觸發器；不是帳號分析用量的替代品。retry：其中寫回重試的部分，另有每日上限（#685）。
+CREATE TABLE IF NOT EXISTS v3_walk_write_budget (day TEXT PRIMARY KEY, reserved INTEGER NOT NULL, retry INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS v3_walk_conflicts (
   dog_key TEXT PRIMARY KEY,
   observation TEXT NOT NULL CHECK(json_valid(observation)),
