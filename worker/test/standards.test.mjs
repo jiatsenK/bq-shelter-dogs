@@ -21,6 +21,7 @@ const FULL_SCAN_OK = {
   'dog-list.js: SELECT row_index,label,text FROM v3_sheet_changes': 'GAS 只在主清單下方異動紀錄被編輯或掃描發現指紋不同才讀（#501）；只寫有變的段（#554）',
   'identity.js: SELECT volunteer_id,name FROM v3_volunteers': 'linkIdentityName 僅首次遇到尚無對照的代號才核對既有名字（NFKC）；已有代號由 code 索引返回，不在一般身分請求跑',
   'identity.js: DELETE FROM v3_identity_guard': '更名／合併 batch 的交易檢查表；同一 batch 只插入 1 列並清空，筆數不隨志工總數成長',
+  'packs.js: SELECT number,name,walked_date,walker_codes FROM v3_sheet_main': '#679 溜狗日期包只在 walked 版本變更、需要重建時讀主清單（約 120 列）；沒變只讀 1 列版本號',
   'packs.js: SELECT year,seq,vers,body FROM v3_walk_summaries': 'ADR 0013：yearSummaries 只在記憶體缺少摘要或月份版本變更才讀，按年存分段摘要，不讀溜狗歷史整表',
   'index.js: SELECT row_index, number, name, walked_date, walker FROM v3_sheet_main': '#519 /walkers 要每隻狗的誰遛的，約 300 列；每個 Worker 1 分鐘最多讀一次（取代每分鐘讀 gviz）',
   'index.js: SELECT dog_key, effective_date, walker FROM v3_walk_state': '#519 同上，最多一隻狗一列',
