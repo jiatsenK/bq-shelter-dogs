@@ -1302,7 +1302,7 @@ html.onboard-open { overflow: hidden; }
 .fav-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
 .fav-mark { font-style: normal; color: var(--amber-text); font-size: 13px; margin-left: 2px; }
 
-/* 離所（#163 年度統計、#164 離所名冊與詳細資訊）：認養綠、死亡灰、其他藍、待確認橘，四類固定顏色 */
+/* 離所（#163 年度統計、#164 離所名冊與詳細資訊）：認養綠、離世灰、其他藍、待確認橘，四類固定顏色 */
 .badge.dep-adopt { background: var(--green-bg); color: var(--green-text); }
 .badge.dep-death { background: var(--muted-bg); color: #636366; }
 .badge.dep-other { background: var(--primary-soft); color: var(--primary); }
