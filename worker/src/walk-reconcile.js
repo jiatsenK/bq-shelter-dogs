@@ -1,4 +1,4 @@
-import { writeBudget, membersOf, reconcileWalk, droppedDay, sheetWalkLog } from './walk-accept.js';
+import { guard, writeBudget, membersOf, reconcileWalk, droppedDay, sheetWalkLog } from './walk-accept.js';
 import { callSheet } from './sheet-write.js';
 
 const same = (a,b) => a.date===b.date && a.walker===b.walker;
@@ -26,7 +26,7 @@ export async function reconcileWalkSnapshot(db, snapshot, observedStates, env, n
       const dropped=droppedDay(db,state,sheet.date); // 改回較早的日子：溜狗紀錄刪掉原本較新那天（walk-accept.js）
       const logged=sheetWalkLog(db,state,sheet,sheet,state.number,at); // 修改紀錄「溜了／試算表」（#672）
       await db.batch([
-        db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN EXISTS(SELECT 1 FROM v3_walk_state s JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version WHERE s.dog_key=? AND s.version=? AND o.status=\'synced\') THEN 1 ELSE 0 END').bind(state.dog_key,state.version),
+        guard(db, 'EXISTS(SELECT 1 FROM v3_walk_state s JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version WHERE s.dog_key=? AND s.version=? AND o.status=\'synced\')', state.dog_key,state.version),
         ...await writeBudget(db,env,40+dropped.cost+logged.cost,now),
         ...dropped.statements,
         ...logged.statements,
@@ -36,7 +36,6 @@ export async function reconcileWalkSnapshot(db, snapshot, observedStates, env, n
         db.prepare("INSERT INTO v3_walk_outbox(dog_key,version,operation_date,target_date,target_walker,status,next_attempt_at) VALUES(?,?,?,?,?,'pending',?)")
           .bind(state.dog_key,version,at.slice(0,10),sheet.date,sheet.walker,at),
         db.prepare("UPDATE v3_walk_outbox SET status='synced',readback_seen=1 WHERE dog_key=? AND version=?").bind(state.dog_key,version),
-        db.prepare('DELETE FROM v3_walk_guard'),
       ]);
       changed++;
     } catch (error) { deferred++; console.warn('walk-reconcile:',state.dog_key,error.message); }
