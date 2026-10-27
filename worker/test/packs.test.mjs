@@ -436,6 +436,7 @@ async function departedDb(t, n) {
 }
 const depYears = async DB => JSON.parse((await DB.prepare('SELECT years FROM v3_departure_versions WHERE id=1').first()).years);
 const smallVer = async DB => (await DB.prepare('SELECT small FROM v3_pack_versions WHERE id=1').first()).small;
+const walkedVer = async DB => (await DB.prepare('SELECT walked FROM v3_pack_versions WHERE id=1').first()).walked;
 
 test('離所按年：輸出逐字元相同，一年一份資料包，日期不明另一份', async t => {
   const DB = await departedDb(t, 20);
@@ -498,10 +499,13 @@ test('觸發器收窄：主清單只改 walker 原文時 small 不變，改在�
   }
   const read = { row_index: 'row_index+100', dog_id: `'${'f'.repeat(32)}'`, number: "number||'x'", name: "name||'x'", cage: "'B9'", note: "'新備註'",
     walked_date: "'2026-10-01'", walker_codes: `'["${'a'.repeat(12)}"]'` };
+  // #679 溜狗日期、溜狗人只動溜狗日期包；溜狗日期包照主清單順序存編號、狗名，所以列號、編號、狗名兩包都動
+  const walkedOnly = ['walked_date', 'walker_codes'], both = ['row_index', 'number', 'name'];
   for (const [column, value] of Object.entries(read)) {
-    const before = await smallVer(DB);
+    const before = await smallVer(DB), walked = await walkedVer(DB);
     await DB.prepare(`UPDATE v3_sheet_main SET ${column}=${value} ${where}`).run();
-    assert.equal(await smallVer(DB), before + (['walked_date','walker_codes'].includes(column)?1:2), column);
+    assert.equal(await smallVer(DB), before + (walkedOnly.includes(column) ? 0 : 2), column);
+    assert.equal(await walkedVer(DB), walked + (walkedOnly.includes(column) || both.includes(column) ? 1 : 0), `${column} walked`);
   }
   const before = await smallVer(DB);
   await DB.prepare(`UPDATE v3_dogs SET sex=CASE sex WHEN 'male' THEN 'female' ELSE 'male' END WHERE dog_id IN (SELECT dog_id FROM v3_sheet_main ${where})`).run();
@@ -717,4 +721,92 @@ test('觸發器：再入所的狗舊編號的離所改了，small 失效、/dogs
   const after = await depYears(DB);
   assert.deepEqual(Object.keys(after).filter(y => after[y] !== before[y]).sort(), ['2013', '2015']);
   await assertSame(DB, '改完');
+});
+
+// #679 溜狗日期包：GAS 送「溜過了」只改溜狗日期、溜狗人，在所資料包不失效，只重算主清單 1 張表的溜狗日期包
+const MAIN_JOIN = /FROM v3_sheet_main m LEFT JOIN v3_intros/;
+function countingDb(DB) {
+  const counts = { main: 0, walked: 0 };
+  const spy = { ...DB, prepare(sql) {
+    if (MAIN_JOIN.test(sql)) counts.main++;
+    if (/SELECT number,name,walked_date,walker_codes FROM v3_sheet_main/.test(sql)) counts.walked++;
+    return DB.prepare(sql);
+  } };
+  return { spy, counts };
+}
+
+test('溜狗日期包：只改溜狗日期、溜狗人時 small 不變、walked 加 1，狗清單只重算溜狗日期包，輸出跟直接讀表相同', async t => {
+  const DB = await seededDb(t);
+  const { spy, counts } = countingDb(DB);
+  await assertSame(spy, '一開始');
+  const small = await smallVer(DB), walked = await walkedVer(DB), main = counts.main;
+  // 一批改兩隻，跟狗清單同步一樣一隻一句 UPDATE
+  await DB.prepare(`UPDATE v3_sheet_main SET walked_date='2026-10-15',walker_codes='["${'a'.repeat(12)}"]' WHERE number='2025022703'`).run();
+  await DB.prepare("UPDATE v3_sheet_main SET walked_date='2026-10-14',walker='K' WHERE number='2026051203'").run();
+  assert.equal(await smallVer(DB), small, '在所資料包版本不變');
+  assert.equal(await walkedVer(DB), walked + 2, '溜狗日期包每列加 1');
+  const before = await packRows(DB, 'main');
+  const counted = counts.walked;
+  assert.equal((await get('/dogs', { DB: spy })).status, 200);
+  assert.equal(counts.main, main, '沒有重算在所資料包');
+  assert.equal(counts.walked, counted + 1, '只重算溜狗日期包一次');
+  assert.deepEqual(await packRows(DB, 'main'), before, '在所資料包沒有重存');
+  await assertSame(spy, '改溜狗日期、溜狗人');
+  const dogs = (await (await get('/dogs', { DB })).json()).dogs;
+  assert.deepEqual(dogs.map(d => [d.id, d.walkedDate, d.walkers]).slice(0, 2), [['2025022703', '2026-10-15', ['a'.repeat(12)]], ['2026051203', '2026-10-14', []]]);
+  // 別台機器：讀 D1 裡的兩個資料包就好，不重算
+  worker.testing.resetState();
+  const { spy: other, counts: c2 } = countingDb(DB);
+  assert.equal((await get('/dogs', { DB: other })).status, 200);
+  assert.deepEqual([c2.main, c2.walked], [0, 0]);
+  await assertSame(other, '別台機器');
+});
+
+test('溜狗日期包：主清單加狗、刪狗、改名、換順序，兩包都失效，輸出跟直接讀表相同', async t => {
+  const DB = await seededDb(t);
+  await assertSame(DB, '一開始');
+  await DB.prepare(`UPDATE v3_sheet_main SET walked_date='2026-10-10',walker_codes='["${'b'.repeat(12)}"]' WHERE name='沒編號'`).run();
+  await assertSame(DB, '沒編號的狗溜過');
+  await DB.prepare("UPDATE v3_sheet_main SET row_index=row_index+10 WHERE number='2025022703'").run();
+  await assertSame(DB, '換順序');
+  await DB.prepare("UPDATE v3_sheet_main SET name='圓仔仔' WHERE number='2026051203'").run();
+  await assertSame(DB, '改名');
+  await DB.prepare("DELETE FROM v3_sheet_main WHERE name='沒編號'").run();
+  await assertSame(DB, '刪狗');
+});
+
+test('溜狗日期包和在所資料包不是同一刻算的：照編號＋狗名對回去，對不到的留在所資料包的值', async t => {
+  const DB = await seededDb(t);
+  const { walked } = await DB.prepare('SELECT walked FROM v3_pack_versions WHERE id=1').first();
+  const expected = await readSmall(DB, 'dogs');
+  // 這台機器記憶體裡的溜狗日期包順序不同、少了一隻
+  const list = expected.dogs.map(d => [d.id, d.name, d.walkedDate, d.walkers]).reverse().slice(1);
+  list[0] = [list[0][0], list[0][1], '2026-10-01', ['c'.repeat(12)]];
+  const prev = swapPackCache({ db: DB, walks: { total: null, months: {} }, walked: { ver: walked, list } });
+  t.after(() => swapPackCache(prev));
+  const dogs = (await readSmall(DB, 'dogs')).dogs;
+  assert.deepEqual(dogs.map(d => d.id), expected.dogs.map(d => d.id));
+  const changed = dogs.find(d => d.id === list[0][0] && d.name === list[0][1]);
+  assert.deepEqual([changed.walkedDate, changed.walkers], ['2026-10-01', ['c'.repeat(12)]]);
+  assert.deepEqual(dogs[0], expected.dogs[0], '對不到的狗照在所資料包');
+});
+
+test('同一台機器同時進來的請求共用同一次重算；等的那次失敗就自己再算', async t => {
+  const DB = await seededDb(t);
+  const { spy, counts } = countingDb(DB);
+  const [a, b, c] = await Promise.all([readSmall(spy, 'dogs'), readSmall(spy, 'dogs'), readSmall(spy, 'rest')]);
+  assert.deepEqual(a, b);
+  assert.ok(c);
+  assert.deepEqual([counts.main, counts.walked], [1, 1], '在所資料包、溜狗日期包各只算一次');
+  // 第一個請求的重算失敗：一起等的請求自己再算一次
+  worker.testing.resetState();
+  await DB.prepare('DELETE FROM v3_packs').run();
+  let fail = true;
+  const flaky = { ...DB, prepare(sql) {
+    if (MAIN_JOIN.test(sql) && fail) { fail = false; throw new Error('第一次讀失敗'); }
+    return spy.prepare(sql);
+  } };
+  const results = await Promise.allSettled([readSmall(flaky, 'dogs'), readSmall(flaky, 'dogs')]);
+  assert.deepEqual(results.map(r => r.status).sort(), ['fulfilled', 'rejected'], '算的那個失敗，等的那個自己再算成功');
+  assert.deepEqual(results.find(r => r.status === 'fulfilled').value, a);
 });
