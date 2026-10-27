@@ -18,6 +18,7 @@ export const KIND_LABELS = {
   group: '常溜狗群',
   former: '舊編號',
   stays: '出入所紀錄',
+  walk: '溜了', // #672：只在管理網站修改紀錄顯示，志工網站編輯紀錄（readEdits）不列
   walkundo: '撤銷溜了',
   walkedit: '溜狗名單',
   merge: '合併狗',
@@ -59,12 +60,12 @@ export function editorHeader(request) {
   try { return decodeURIComponent(request.headers.get('X-Editor') || ''); } catch (e) { return ''; }
 }
 
-// 記一筆；記失敗不影響編輯本身（編輯已經存好了）
-export async function logEdit(db, { editor, kind, dogId = null, dogNumber = '', before = null, after = null }, now = Date.now()) {
+// 記一筆；記失敗不影響編輯本身（編輯已經存好了）。source：volunteer＝志工網站、access＝管理網站、sheet＝試算表（#672）
+export async function logEdit(db, { editor, kind, dogId = null, dogNumber = '', before = null, after = null, source = 'volunteer' }, now = Date.now()) {
   if (!db || !editor) return false;
   try {
-    await db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) VALUES(?,?,?,?,?,?,?,?)')
-      .bind(new Date(now).toISOString(), editor.code || '', editor.name, kind, dogId, dogNumber || '', JSON.stringify(before), JSON.stringify(after)).run();
+    await db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json,source) VALUES(?,?,?,?,?,?,?,?,?)')
+      .bind(new Date(now).toISOString(), editor.code || '', editor.name, kind, dogId, dogNumber || '', JSON.stringify(before), JSON.stringify(after), source).run();
     return true;
   } catch (e) {
     console.error('edit log', e);
@@ -72,10 +73,10 @@ export async function logEdit(db, { editor, kind, dogId = null, dogNumber = '', 
   }
 }
 
-// 新到舊
+// 新到舊；不列「溜了」（#672，量大，只在管理網站看）。這頁之後會拿掉，不為了跳過溜了加索引
 export async function readEdits(db, limit = EDITS_DEFAULT) {
   const n = Math.min(Math.max(1, Number.isInteger(limit) ? limit : EDITS_DEFAULT), EDITS_MAX);
-  const { results = [] } = await db.prepare("SELECT l.*, COALESCE(a.source,'legacy') AS actor_source FROM v3_edit_log l LEFT JOIN v3_dog_edit_actors a ON a.log_id=l.id ORDER BY l.id DESC LIMIT ?").bind(n).all();
+  const { results = [] } = await db.prepare("SELECT l.*, COALESCE(a.source,l.source,'legacy') AS actor_source FROM v3_edit_log l LEFT JOIN v3_dog_edit_actors a ON a.log_id=l.id WHERE l.kind<>'walk' ORDER BY l.id DESC LIMIT ?").bind(n).all();
   const parse = s => { try { return JSON.parse(s); } catch (e) { return null; } };
   return results.map(r => ({
     id: r.id, at: r.at, source: r.actor_source, editorName: r.editor_name, editorCode: r.editor_code, kind: r.kind,

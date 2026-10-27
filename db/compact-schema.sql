@@ -214,6 +214,7 @@ CREATE TABLE IF NOT EXISTS v3_dog_departures (
 
 -- 編輯紀錄（docs/adr/0004-open-editing-and-edit-log.md）：網站上的編輯誰改了什麼；只增不刪。
 -- before_json／after_json 是 JSON 文字（null 表示沒有）
+-- source（#672）：access＝管理網站、volunteer＝志工網站、sheet＝試算表；NULL＝舊紀錄。管理網站有 v3_dog_edit_actors 時以那邊為準
 CREATE TABLE IF NOT EXISTS v3_edit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   at TEXT NOT NULL,
@@ -223,7 +224,8 @@ CREATE TABLE IF NOT EXISTS v3_edit_log (
   dog_id TEXT,
   dog_number TEXT NOT NULL DEFAULT '',
   before_json TEXT,
-  after_json TEXT
+  after_json TEXT,
+  source TEXT
 );
 -- 活動紀錄（#270，ADR 0002）：一場一列，類型固定兩種（kids＝動保小小兵、adoption＝認養會）。網站寫，同步不碰。
 -- revision 每改一次加 1，兩支手機同時改時後送的會被擋下（不互相蓋掉）

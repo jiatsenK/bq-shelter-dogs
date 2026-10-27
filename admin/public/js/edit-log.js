@@ -28,5 +28,5 @@ export function formatWhen(iso) {
   return `${d.getUTCFullYear()}/${p(d.getUTCMonth() + 1)}/${p(d.getUTCDate())} ${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`;
 }
 
-export const sourceLabel = source => ({ access: '管理網站', volunteer: '志工網站' })[source] || '舊紀錄';
+export const sourceLabel = source => ({ access: '管理網站', volunteer: '志工網站', sheet: '試算表' })[source] || '舊紀錄';
 export { editsValue as valueText };
