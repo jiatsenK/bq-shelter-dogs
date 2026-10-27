@@ -90,12 +90,10 @@ frontier＝`max(v3_walk_baselines.version, 最新 synced 版本)`（`walk-accept
 
 ## 缺口
 
-- **沒在正式 D1 跑 `EXPLAIN QUERY PLAN`**：不知道正式庫有沒有 `sqlite_stat1`。若有，原句可能已經是 `SCAN s`，那稽核量到的 110 列就要另外解釋。下一步可用唯讀指令確認：
+- **正式 D1 已確認〔實測 2026-10-27〕**：K 對正式庫（`database_id` 6cd6c304…，即 `wrangler.jsonc` 的正式庫；wrangler 輸出寫「preview database」只是它的字樣）跑原句的 `EXPLAIN QUERY PLAN`，結果是 `SCAN o; SEARCH s USING INDEX sqlite_autoindex_v3_walk_state_1 (dog_key=?)`，跟本機沒統計時一樣，第 1、2 點的結論在正式庫成立。`sqlite_stat1` 沒有另外查；從計畫看應該沒有統計資料，要確認可跑：
 
   ```bash
   npx.cmd wrangler d1 execute bq-shelter-dogs --remote --command "SELECT * FROM sqlite_stat1"
   ```
-
-  以及對原句加 `EXPLAIN QUERY PLAN` 跑一次。
 - 改寫後實際每次讀幾列（D1 的 `rows_read` 對 `SEARCH` 怎麼算）沒有量；預期約「在所狗數」到兩倍之間，實作後看 `meta.rows_read` 確認。
 - 安全刪除範圍是讀程式推論，沒有跑測試；實作時要補「刪掉舊列後，人工改表／未確認派送／中間值判斷結果不變」的測試。
