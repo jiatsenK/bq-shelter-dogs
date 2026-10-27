@@ -52,15 +52,18 @@ export function withTodayWalks(dogs, today) {
 
 // SQL 的每次寫入都預留含觸發器與索引的保守上界：看單次門檻與持久每日保留量，不能靠重試繞過。
 // #591：不查 Cloudflare 帳號當日用量（正式環境沒設 token，從沒查到過）。
-export function writeBudget(db, env, cost, now = Date.now()) {
-  const max = Number(env.SYNC_MAX_ROWS || 500), daily = Number(env.SYNC_DAILY_BUDGET || 20000);
-  if (!Number.isFinite(max) || !Number.isFinite(daily) || cost > max) throw new WalkError(503, '溜狗寫入預算不足');
+// retry：其中屬於寫回重試的列數（#685），同時算進總預算與重試自己的每日上限。
+export function writeBudget(db, env, cost, now = Date.now(), retry = 0) {
+  const max = Number(env.SYNC_MAX_ROWS || 500), daily = Number(env.SYNC_DAILY_BUDGET || 20000), retryDaily = retryBudget(env);
+  if (!Number.isFinite(max) || !Number.isFinite(daily) || !Number.isFinite(retryDaily) || cost > max) throw new WalkError(503, '溜狗寫入預算不足');
   const day = new Date(now).toISOString().slice(0, 10); // D1 帳號額度 UTC 午夜重置。
   return [
     guard(db, 'COALESCE((SELECT reserved FROM v3_walk_write_budget WHERE day=?),0)+?<=?', day, cost, daily),
-    db.prepare('INSERT INTO v3_walk_write_budget(day,reserved) VALUES(?,?) ON CONFLICT(day) DO UPDATE SET reserved=reserved+excluded.reserved').bind(day, cost),
+    ...retry ? [guard(db, 'COALESCE((SELECT retry FROM v3_walk_write_budget WHERE day=?),0)+?<=?', day, retry, retryDaily)] : [],
+    db.prepare('INSERT INTO v3_walk_write_budget(day,reserved,retry) VALUES(?,?,?) ON CONFLICT(day) DO UPDATE SET reserved=reserved+excluded.reserved,retry=retry+excluded.retry').bind(day, cost, retry),
   ];
 }
+const retryBudget = env => Number(env.SYNC_RETRY_DAILY_BUDGET || 5000);
 
 // 派送前一次保留整條協定（含失敗／釋放）的索引及觸發器上界。
 // 同派送重送的 target／receipt 是冪等的，不可重複消耗這份保留量。
@@ -240,18 +243,38 @@ export const STOPPED_AT = '9999-12-31T00:00:00.000Z';
 // 寫回失敗的種類寫進 outbox.error 前綴：沒設定、結果不明（逾時、連不上、沒回這隻）、試算表明確拒絕。
 const remoteError = error => error.code === 'unreachable' ? `writeback-unconfirmed: ${error.message}` : `writeback-rejected: ${error.message}`;
 
+// 重試每日上限（#685）：失敗過的工作再派送算重試，另外扣自己的每日上限（SYNC_RETRY_DAILY_BUDGET）；第一次派送只扣總預算。
+// 用完時重試延到隔天（UTC 午夜，跟預算同時重置），不擋同一輪的第一次派送，也不佔排程每輪十隻的名額。
+// 中斷後的恢復派送不算重試：它沒有下次時間可延，失敗後轉成重試才受上限管。
+const retrying = j => !j.recovery && j.job.status !== 'pending';
+const DEFER_COST = 4; // outbox 一列＋到期索引，保守上界
+
 async function dispatchBatch(db, items, env, clock) {
   const now = new Date(clock).toISOString(), day = now.slice(0, 10);
   const found = await reads(db, ...items.flatMap(({ dog, recovery }) => [
     ['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', keyOf(dog)],
-    [`${CURRENT_JOB} AND (o.status IN ('pending','retry','unconfirmed') OR (?=1 AND o.status='dispatching'))`, keyOf(dog), Number(!!recovery)]]));
-  const jobs = items.map((item, i) => ({ ...item, key: keyOf(item.dog), delivery: found[2 * i][0], job: found[2 * i + 1][0],
+    [`${CURRENT_JOB} AND (o.status IN ('pending','retry','unconfirmed') OR (?=1 AND o.status='dispatching'))`, keyOf(dog), Number(!!recovery)]]),
+    ['SELECT retry FROM v3_walk_write_budget WHERE day=?', day]);
+  const ready = items.map((item, i) => ({ ...item, key: keyOf(item.dog), delivery: found[2 * i][0], job: found[2 * i + 1][0],
     recoverId: item.recovery?.dispatchId || '', dispatchId: crypto.randomUUID() }))
     .filter(j => !(j.delivery && j.delivery.dispatch_id !== j.recoverId) && j.job && (j.recovery || j.job.next_attempt_at <= now));
+  let retryLeft = retryBudget(env) - (found.at(-1)[0]?.retry || 0);
+  const jobs = [], deferred = [];
+  for (const j of ready) {
+    if (!retrying(j)) jobs.push(j);
+    else if (retryLeft >= DISPATCH_COST) { jobs.push(j); retryLeft -= DISPATCH_COST; }
+    else deferred.push(j);
+  }
+  if (deferred.length) {
+    const tomorrow = new Date(Date.parse(day) + 86400000).toISOString();
+    try { await db.batch([...writeBudget(db, env, DEFER_COST * deferred.length, clock),
+      ...deferred.map(j => db.prepare("UPDATE v3_walk_outbox SET next_attempt_at=? WHERE dog_key=? AND version=? AND status IN ('retry','unconfirmed')").bind(tomorrow, j.key, j.job.version))]); }
+    catch (error) { throw new DispatchError(error instanceof WalkError || /CHECK constraint/i.test(error.message) ? 'budget' : 'd1', error); }
+  }
   if (!jobs.length) return;
   let claimed;
   try { claimed = await db.batch([
-    ...await writeBudget(db, env, DISPATCH_COST * jobs.length, clock),
+    ...await writeBudget(db, env, DISPATCH_COST * jobs.length, clock, DISPATCH_COST * jobs.filter(retrying).length),
     ...jobs.flatMap(j => [
       guard(db, "COALESCE((SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?),'')=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?)", j.key, j.recoverId, j.key, j.job.version),
       db.prepare('INSERT INTO v3_walk_retry(dog_key,version,failures,dispatch_id,reserved_day) VALUES(?,?,0,?,?) ON CONFLICT(dog_key) DO UPDATE SET failures=CASE WHEN version=excluded.version THEN failures ELSE 0 END,version=excluded.version,dispatch_id=excluded.dispatch_id,reserved_day=excluded.reserved_day').bind(j.key, j.job.version, j.dispatchId, day),
