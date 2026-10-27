@@ -198,6 +198,34 @@ test('保險掃描按狗送指紋，讀寫量不隨歷史增加；沒有不同�
   } finally { globalThis.fetch=real; env.DB.close(); }
 });
 
+test('#676 保險掃描先掃在所的狗再用主鍵查寫回紀錄，結果跟原本 JOIN 相同', async () => {
+  const env=await setup(),real=globalThis.fetch,prepare=env.DB.prepare;
+  try {
+    await baseline(env,'甲');
+    // 多隻狗、每隻多版本（含 superseded 舊版），再加一隻沒有任何寫回紀錄的狗：兩種寫法都不能回它。
+    for (let i=0;i<5;i++) {
+      const key=`scan${i}`;
+      await env.DB.batch([
+        env.DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(key,`掃描狗${i}`),
+        env.DB.prepare("INSERT INTO v3_walk_state(dog_key,dog_id,number,name,version,effective_date,walker,members_json,base_date,base_walker,previous_date,previous_walker,updated_at) VALUES(?,?,?,?,3,'2026-10-01','乙','[]','2026-10-01','乙','','','x')").bind(key,key,`S${i}`,`掃描狗${i}`),
+        ...(i===4 ? [] : [1,2,3].map(v=>env.DB.prepare("INSERT INTO v3_walk_outbox(dog_key,version,operation_date,target_date,target_walker,status,next_attempt_at) VALUES(?,?,'2026-10-01','2026-10-01','乙',?,'x')").bind(key,v,v===3 ? (i%2 ? 'pending':'synced') : 'superseded'))),
+      ]);
+    }
+    const queries=[];
+    env.DB.prepare=sql=>{ queries.push(sql); return prepare(sql); };
+    globalThis.fetch=async ()=>Response.json({ ok:true,rows:[] });
+    await scanWalks(env,Date.now());
+    env.DB.prepare=prepare;
+    const sql=queries.find(q=>q.includes('FROM v3_walk_state s'));
+    const plan=(await prepare(`EXPLAIN QUERY PLAN ${sql}`).all()).results.map(p=>p.detail).join(';');
+    assert.match(plan,/^SCAN s;SEARCH o USING .*\(dog_key=\? AND version=\?\)$/);
+    const rows=async q=>(await prepare(`${q} ORDER BY s.dog_key`).all()).results;
+    const now=await rows(sql);
+    assert.deepEqual(now,await rows('SELECT s.*,o.status FROM v3_walk_state s JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version'));
+    assert.deepEqual(now.map(r=>[r.dog_key,r.status]),[['9001','synced'],['scan0','synced'],['scan1','pending'],['scan2','synced'],['scan3','pending']]);
+  } finally { env.DB.prepare=prepare; globalThis.fetch=real; env.DB.close(); }
+});
+
 test('還有差異沒收完（未決派送）base 不變，下次掃描同一隻還會被找出來', async () => {
   const env=await setup(),real=globalThis.fetch;
   try {
