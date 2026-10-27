@@ -6,6 +6,7 @@ import { setup, post, request, day } from './walk-fixture.mjs';
 import { reconcileWalk, writebackTarget, confirmWalk } from '../src/walk-accept.js';
 import { reconcileWalkSnapshot } from '../src/walk-reconcile.js';
 import { searchEdits } from '../src/admin/edits.js';
+import { applyDogListRows } from '../src/dog-list.js';
 
 const SITE = 'https://bq-shelter-dogs.example.workers.dev';
 const dog = { id: '9001', name: '測試狗' };
@@ -113,5 +114,68 @@ test('管理網站來源篩選試算表只出現試算表紀錄；志工網站�
     assert.deepEqual((await searchEdits(env.DB, new URLSearchParams('source=volunteer'))).edits.map(e => e.kind), ['walk', 'walk']);
     const res = await worker.fetch(new Request(`${SITE}/api/edits`, { headers: { Origin: SITE } }), env);
     assert.deepEqual((await res.json()).edits, []);
+  } finally { env.DB.close(); }
+});
+
+// #700：網站上還沒有溜狗狀態（v3_walk_state 沒有這隻）的狗，試算表改溜狗人
+const listRow = (date, walker) => ({ sheet: 'main', dog, cage: 'A1', note: '', date, walker });
+
+test('沒有溜狗狀態的狗：狗清單同步先跑完，再比對，仍記一筆「溜了／試算表」', async () => {
+  const env = await setup();
+  try {
+    assert.equal((await applyDogListRows(env.DB, [listRow(day(), '丙')], env))[0].ok, true);
+    await reconcileWalk(env.DB, dog, { date: day(), walker: '丙' }, env);
+    assert.deepEqual(await logs(env), [{ kind: 'walk', source: 'sheet', editor: '丙', dogId: 'dog', number: '9001',
+      before: { date: '2026-10-01', walker: '' }, after: { date: day(), walker: '丙' } }]);
+  } finally { env.DB.close(); }
+});
+
+test('沒有溜狗狀態的狗：先比對再狗清單同步，只記一筆', async () => {
+  const env = await setup();
+  try {
+    await reconcileWalk(env.DB, dog, { date: day(), walker: '丙' }, env);
+    await applyDogListRows(env.DB, [listRow(day(), '丙')], env);
+    assert.deepEqual((await logs(env)).map(l => [l.source, l.editor, l.after]), [['sheet', '丙', { date: day(), walker: '丙' }]]);
+  } finally { env.DB.close(); }
+});
+
+test('沒有溜狗狀態的狗：比對讀完基準值後、寫入前狗清單同步搶先，只記一筆', async () => {
+  const env = await setup();
+  try {
+    const db = env.DB, batch = db.batch.bind(db);
+    let raced = false;
+    // 比對收下那一批（寫 v3_walk_state 的那批）送出前，先讓狗清單同步寫完
+    db.batch = async statements => {
+      if (!raced && statements.length >= 8) { raced = true; await applyDogListRows(db, [listRow(day(), '丙')], env); }
+      return batch(statements);
+    };
+    await reconcileWalk(db, dog, { date: day(), walker: '丙' }, env);
+    assert.equal(raced, true);
+    assert.deepEqual((await logs(env)).map(l => [l.source, l.editor]), [['sheet', '丙']]);
+  } finally { env.DB.close(); }
+});
+
+test('沒有溜狗狀態的狗：試算表清空日期、只改籠位不記', async () => {
+  const env = await setup();
+  try {
+    await applyDogListRows(env.DB, [{ ...listRow('2026-10-01', ''), cage: 'B2' }], env);
+    await applyDogListRows(env.DB, [listRow('', '')], env);
+    await reconcileWalk(env.DB, dog, { date: '', walker: '' }, env);
+    assert.deepEqual(await logs(env), []);
+  } finally { env.DB.close(); }
+});
+
+test('有溜狗狀態的狗：狗清單同步不記，網站寫回後狗清單讀回也不多記', async () => {
+  const env = await setup();
+  try {
+    await written(env);
+    // 保險掃描把網站寫回的值帶進狗清單
+    await applyDogListRows(env.DB, [listRow(day(), '甲')], env);
+    await reconcileWalk(env.DB, dog, { date: day(), walker: '甲' }, env);
+    assert.deepEqual((await logs(env)).map(l => l.source), ['volunteer']);
+    // 人工改表：狗清單先跑也只由比對記一筆
+    await applyDogListRows(env.DB, [listRow(day(), '丙')], env);
+    await reconcileWalk(env.DB, dog, { date: day(), walker: '丙' }, env);
+    assert.deepEqual((await logs(env)).map(l => [l.source, l.editor]), [['volunteer', '甲'], ['sheet', '丙']]);
   } finally { env.DB.close(); }
 });

@@ -89,19 +89,32 @@ export function droppedDay(db, old, nextDate) {
 // 修改紀錄（#672，ADR 0004 修訂）：溜了（網站按、試算表改）、撤銷、改溜狗人跟今日溜狗紀錄同一批記一筆。
 // source：volunteer＝志工網站、sheet＝試算表（editlog.js logEdit）；改前、改後都是 { date, walker }
 const EDIT_LOG_COST = 8; // 表＋主鍵＋AUTOINCREMENT 序號，保守上界
-const walkLog = (db, { at, kind = 'walk', source, code = '', name, dogId, number, before, after }) =>
-  db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json,source) VALUES(?,?,?,?,?,?,?,?,?)')
-    .bind(at, code, name, kind, dogId, number || '', JSON.stringify(before), JSON.stringify(after), source);
+// when：[條件 SQL, ...參數]，寫入當下條件成立才記（#700 防狗清單同步與比對兩邊都記）
+const walkLog = (db, { at, kind = 'walk', source, code = '', name, dogId, number, before, after }, [when, ...args] = ['1']) =>
+  db.prepare(`INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json,source) SELECT ?,?,?,?,?,?,?,?,? WHERE ${when}`)
+    .bind(at, code, name, kind, dogId, number || '', JSON.stringify(before), JSON.stringify(after), source, ...args);
 // 收下人工改表時：表上有日期、且收下後日期或溜狗人變了才記（清空日期不記；改回較早一天記成那天）。
 // 操作者只能寫表上的溜狗人（sheet）；改後是收下後的值（after，同日跟網站名單合併時會多網站上的人）。
 // 網站寫回又讀回的值在比對時就認出來、不會走到收下，所以不會重複記
-export function sheetWalkLog(db, old, sheet, after, number, at) {
+export function sheetWalkLog(db, old, sheet, after, number, at, when) {
   if (!sheet.date || (after.date === old.effective_date && after.walker === old.walker)) return { statements: [], cost: 0 };
   return { statements: [walkLog(db, { at, source: 'sheet', name: sheet.walker, dogId: old.dog_id, number,
-    before: { date: old.effective_date, walker: old.walker }, after: { date: after.date, walker: after.walker } })], cost: EDIT_LOG_COST };
+    before: { date: old.effective_date, walker: old.walker }, after: { date: after.date, walker: after.walker } }, when)], cost: EDIT_LOG_COST };
 }
 
-const MAIN_DOG = dog => `SELECT dog_id,walked_date,row_index FROM v3_sheet_main WHERE ${dog.id ? 'number=?' : "number='' AND name=?"}`;
+// #700：網站上還沒有溜狗狀態的狗，網站沒寫回過（登記會先建狀態），表上溜狗欄變了一定是人工改表。
+// 狗清單同步常比今日溜狗比對先把新值寫進主清單，比對拿主清單當基準值就看不出有改，所以由狗清單同步在同一批記（dog-list.js applyMain）。
+// 比對先收下時狀態已建，這裡就不記；比對讀完基準值後才被狗清單同步搶先時，比對那邊看主清單已變就不記（compareTrustedWalk），兩邊只會記一筆。
+// old：主清單改前那列；sheet：表上新的 { date, walker }
+export async function listWalkLog(db, env, dog, old, sheet, at) {
+  const key = keyOf(dog);
+  if (await one(db, 'SELECT 1 FROM v3_walk_state WHERE dog_key=?', key)) return [];
+  const { statements, cost } = sheetWalkLog(db, { dog_id: old.dog_id, effective_date: old.walked_date || '', walker: old.walker ?? '' }, sheet, sheet, dog.id, at,
+    ['NOT EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=?)', key]);
+  return statements.length ? [...writeBudget(db, env, cost), ...statements] : [];
+}
+
+const MAIN_DOG = dog => `SELECT dog_id,walked_date,walker_codes,row_index FROM v3_sheet_main WHERE ${dog.id ? 'number=?' : "number='' AND name=?"}`;
 async function uniqueMainDog(db,dog) {
   const matches = await rows(db, MAIN_DOG(dog), dog.id || dog.name);
   if (matches.length !== 1) throw new WalkError(409, '找不到唯一的主清單狗');
@@ -111,7 +124,7 @@ async function seedState(db, dog, today) {
   const seed = await uniqueMainDog(db,dog);
   const people = await rows(db, 'SELECT n.name FROM v3_sheet_main m, json_each(m.walker_codes) w LEFT JOIN v3_identity_names n ON n.code=w.value WHERE m.row_index=? ORDER BY w.key', seed.row_index);
   const previous = seed.walked_date === today ? await previousWalk(db, dog, today) : null;
-  return { dog_id: seed.dog_id, effective_date: seed.walked_date || '', walker: people.map(p => p.name).filter(Boolean).join('、'), version: 0,
+  return { dog_id: seed.dog_id, effective_date: seed.walked_date || '', walker: people.map(p => p.name).filter(Boolean).join('、'), version: 0, main: seed,
     ...(previous ? { previous_date: previous.date.date || '', previous_walker: previous.walker } : {}) };
 }
 
@@ -474,7 +487,9 @@ async function compareTrustedWalk(db, dog, observed, env, seen = {}) {
   if (before?.target_date===target.date) before=null;
   const previousDate=target.date===old.effective_date ? old.previous_date ?? '' : (before?.target_date ?? old.effective_date);
   const previousWalker=target.date===old.effective_date ? old.previous_walker ?? '' : (before?.target_walker ?? old.walker);
-  const dropped=droppedDay(db,old,target.date),logged=sheetWalkLog(db,old,observed,target,dog.id,at);
+  // 沒有溜狗狀態（基準值從主清單推）：主清單的日期或代號在讀完後被狗清單同步改了，就是它記過了（listWalkLog），這裡不再記
+  const unchanged=old.main ? ['EXISTS(SELECT 1 FROM v3_sheet_main WHERE row_index=? AND walked_date IS ? AND walker_codes=?)',old.main.row_index,old.main.walked_date,old.main.walker_codes] : undefined;
+  const dropped=droppedDay(db,old,target.date),logged=sheetWalkLog(db,old,observed,target,dog.id,at,unchanged);
   await db.batch([
     guard(db, 'COALESCE((SELECT version FROM v3_walk_state WHERE dog_key=?),0)=?', key,old.version),
     ...await writeBudget(db,env,32+dropped.cost+logged.cost),
