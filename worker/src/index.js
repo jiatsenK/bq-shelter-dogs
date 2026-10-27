@@ -22,7 +22,7 @@ import { isTestSite, testSiteResponse } from './test-site.js';
 import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
 
 // 排程要跟 wrangler.jsonc 的 triggers.crons 一致（#500，ADR 0018）。排程數量算整個 Cloudflare 帳號，免費方案上限 5 個（稽核第 5 項），
-// 正式版只用兩個：寫回重試每 10 分鐘（沒工作就只查一次 D1，再記一列跑完時間）；保險掃描台灣 09:23、13:23、23:23（UTC 01:23、05:23、15:23），跟 GAS 的 dogListScan（09:43／13:53／23:53 前後 15 分鐘）錯開。
+// 正式版只用兩個：寫回重試每 10 分鐘（沒工作也照樣查三次 D1 找待辦，再記一列跑完時間給管理網站看排程有沒有在跑，ADR 0018 第 2 點）；保險掃描台灣 09:23、13:23、23:23（UTC 01:23、05:23、15:23），跟 GAS 的 dogListScan（09:43／13:53／23:53 前後 15 分鐘）錯開。
 // 照片垃圾桶（#501，ADR 0018 第 7 點）不另佔排程：每月 1 日 09:23 那次保險掃描順便清。測試網站只有寫回重試（wrangler.test-site.jsonc）
 const RETRY_CRON = '5-59/10 * * * *';
 const SCAN_CRON = '23 1,5,15 * * *';
@@ -454,7 +454,7 @@ async function walkerCodes(request, env, origin) {
 // 名字不進 repo（dogs.json 只有代號），網站打開時跟這裡拿：#519 起從 D1 讀（readWalkersD1），不連 Google，
 // 回 { walkers: { 狗的 key: 誰遛的 }, names: [主清單上的名字，最近出現的在前], older: [以前看過、現在表上沒有的名字] }；狗的 key 跟網站 walkKey 一樣（有編號用編號，沒有用「名:犬名」）。
 // 1 分鐘內重複讀用快取。沒接 DB 回 503 + code: 'off'
-// K 2026-10-20：不管在網站按還是直接改試算表，其他手機 1 分鐘內要看到（原本 5 分鐘）。手機每分鐘跟著今日紀錄一起抓
+// K 2026-10-20：不管在網站按還是直接改試算表，其他手機 1 分鐘內要看到（原本 5 分鐘）。手機每分鐘只輪詢今日紀錄（/today）；/walkers 在打開網頁、按「更新」、恢復連線時才抓
 const WALKERS_CACHE_MS = 60 * 1000;
 // 看過的名字寫資料庫很花寫入額度（每個名字一列），快取改 1 分鐘後另外限制：名單沒變就 30 分鐘才記一次
 const WALKER_NAMES_REMEMBER_MS = 30 * 60 * 1000;
