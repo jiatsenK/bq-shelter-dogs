@@ -31,7 +31,7 @@
     </aside>
     <main id="content" class="admin-content" tabindex="-1">
       <header class="admin-page-header">
-        <div><h1>網站連結</h1><p>志工網站與寫回試算表的 Apps Script，正式版和測試版各一組。</p></div>
+        <div><h1>網站連結</h1><p>志工網站、試算表與寫回試算表的 Apps Script，正式版和測試版各一組。</p></div>
         <button type="button" class="btn" id="reload">重新讀取</button>
       </header>
       <section class="card check-card" aria-labelledby="links-heading">
@@ -39,12 +39,12 @@
         <p id="links-status" class="check-status" role="status" aria-live="polite">正在讀取網址…</p>
         <div class="table-responsive">
           <table class="table links-table">
-            <thead><tr><th scope="col">版本</th><th scope="col">志工網站</th><th scope="col">Apps Script（GAS）</th></tr></thead>
+            <thead><tr><th scope="col">版本</th><th scope="col">志工網站</th><th scope="col">試算表</th><th scope="col">Apps Script（GAS）</th></tr></thead>
             <tbody id="links"></tbody>
           </table>
         </div>
         <p class="data-note">正式版接正式試算表與正式資料庫；測試版接測試試算表（BENCH441）、測試資料庫與測試照片，在測試版按溜了、改資料都不會動到正式資料。測試版頁首是紫色、標題前有「測試」，手機加到主畫面的圖示也不同。</p>
-        <p class="data-note">網址在部署管理網站時從 GitHub Secret 帶入（repo 是公開的，網址不寫在檔案裡）：網站網址由 <code>WORKERS_SUBDOMAIN</code> 組出，GAS 連結是 <code>GAS_URL</code>、<code>TEST_GAS_URL</code>。改了 Secret 要重新跑一次「部署管理網站」。</p>
+        <p class="data-note">網址在部署管理網站時從 GitHub Secret 帶入（repo 是公開的，網址不寫在檔案裡）：網站網址由 <code>WORKERS_SUBDOMAIN</code> 組出，試算表連結是 <code>SHEET_URL</code>、<code>TEST_SHEET_URL</code>，GAS 連結是 <code>GAS_URL</code>、<code>TEST_GAS_URL</code>。改了 Secret 要重新跑一次「部署管理網站」。</p>
       </section>
     </main>
   </div>

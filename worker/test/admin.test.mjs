@@ -245,17 +245,17 @@ test('合併狗 API：預覽、CSRF、JSON、合併、取消合併都走 Access 
   assert.equal((await post('unmerge', { logId, revision })).status, 200);
   assert.equal(await DB.prepare('SELECT dog_id FROM v3_walks').first('dog_id'), S);
 });
-test('網站連結：Access 身分才讀得到；只回 https、GAS 只准 Google 網址，沒設就是 null', async t => {
+test('網站連結：Access 身分才讀得到；只回 https、試算表與 GAS 只准 Google 網址，沒設就是 null', async t => {
   t.mock.method(globalThis, 'fetch', fetchKeys);
   const forbidden = () => { throw Error('links do not read D1'); };
-  const links = { SITE_URL: 'https://site.example.org', TEST_SITE_URL: 'https://test.example.org/', GAS_URL: 'https://script.google.com/macros/s/abc/exec' };
+  const links = { SITE_URL: 'https://site.example.org', TEST_SITE_URL: 'https://test.example.org/', SHEET_URL: 'https://docs.google.com/spreadsheets/d/abc/edit', GAS_URL: 'https://script.google.com/macros/s/abc/exec' };
   assert.equal((await worker.fetch(request('/api/manage/links'), { ...env, ...links })).status, 401);
   const res = await worker.fetch(request('/api/manage/links', await token()), { ...env, ...links, DB: { prepare: forbidden } });
   assert.equal(res.status, 200);
   assert.equal(res.headers.get('Cache-Control'), 'no-store');
-  assert.deepEqual(await res.json(), { site: 'https://site.example.org/', testSite: 'https://test.example.org/', gas: 'https://script.google.com/macros/s/abc/exec', testGas: null });
+  assert.deepEqual(await res.json(), { site: 'https://site.example.org/', testSite: 'https://test.example.org/', sheet: 'https://docs.google.com/spreadsheets/d/abc/edit', testSheet: null, gas: 'https://script.google.com/macros/s/abc/exec', testGas: null });
   const { readSiteLinks } = await import('../src/admin/links.js');
-  assert.deepEqual(readSiteLinks({ SITE_URL: 'http://site.example.org', TEST_SITE_URL: 'javascript:alert(1)', GAS_URL: 'https://evil.example/exec', TEST_GAS_URL: 'https://u:p@script.google.com/x' }),
-    { site: null, testSite: null, gas: null, testGas: null });
+  assert.deepEqual(readSiteLinks({ SITE_URL: 'http://site.example.org', TEST_SITE_URL: 'javascript:alert(1)', SHEET_URL: 'https://script.google.com/x', TEST_SHEET_URL: 'http://docs.google.com/spreadsheets/d/x', GAS_URL: 'https://evil.example/exec', TEST_GAS_URL: 'https://u:p@script.google.com/x' }),
+    { site: null, testSite: null, sheet: null, testSheet: null, gas: null, testGas: null });
   assert.equal((await worker.fetch(request('/api/manage/links', await token(), { method: 'POST' }), env)).status, 405);
 });
