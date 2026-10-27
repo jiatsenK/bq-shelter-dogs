@@ -159,6 +159,59 @@ test('#684 其他錯誤第 10 次失敗後停；這隻狗再登記就換新版�
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
 
+const budgetRow = env => env.DB.prepare('SELECT reserved,retry FROM v3_walk_write_budget').first();
+
+test('#685 重試用量超過每日上限時延到隔天（UTC 午夜），第一次派送不算重試', async t => {
+  const start = Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now:start });
+  // 上限只夠一次重試（每次派送預留 96 列）
+  const env = { ...await setup(),WALK_RETRY_ENABLED:'true',SYNC_RETRY_DAILY_BUDGET:'96' }, real = globalThis.fetch, calls = [];
+  worker.testing.resetState();
+  globalThis.fetch = failingSheet(() => { throw new Error('lost'); }, calls);
+  try {
+    await post(env, request('cap-000001'));
+    await tick(env, start);
+    assert.deepEqual([calls.length, (await budgetRow(env)).retry], [1, 0], '第一次派送只扣總預算');
+    let now = Date.parse((await job(env)).next_attempt_at);
+    worker.testing.resetState(); await tick(env, now);
+    assert.deepEqual([calls.length, (await budgetRow(env)).retry], [2, 96]);
+    now = Date.parse((await job(env)).next_attempt_at);
+    worker.testing.resetState(); await tick(env, now);
+    assert.equal(calls.length, 2, '上限用完不再呼叫試算表');
+    const row = await job(env);
+    assert.deepEqual([row.status, row.failures, row.next_attempt_at], ['retry', 2, '2026-10-23T00:00:00.000Z']);
+    worker.testing.resetState(); await tick(env, Date.parse('2026-10-22T23:55:00Z'));
+    assert.equal(calls.length, 2, '當天都不再試');
+    worker.testing.resetState(); await tick(env, Date.parse('2026-10-23T00:05:00Z'));
+    assert.equal(calls.length, 3, '隔天上限重置，照常重試');
+    assert.equal((await job(env)).failures, 3);
+  } finally { globalThis.fetch = real; env.DB.close(); }
+});
+
+test('#685 重試用光自己的上限時，新的登記照常接受、第一次派送照常送出', async t => {
+  const start = Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now:start });
+  const env = { ...await setup(),WALK_RETRY_ENABLED:'true',SYNC_RETRY_DAILY_BUDGET:'0' }, real = globalThis.fetch, sent = [];
+  worker.testing.resetState();
+  globalThis.fetch = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    if (body.action === 'walkScan') return Response.json({ ok:true,rows:[] });
+    sent.push((body.items || [body]).map(item => item.dog.id)); throw new Error('lost');
+  };
+  try {
+    await post(env, request('cap-stuck-01'));
+    await tick(env, start);
+    const now = Date.parse((await job(env)).next_attempt_at);
+    // 卡住的狗到期了，同一輪另一隻狗剛登記、還沒送過
+    await addDogs(env, 1, 'fresh');
+    worker.testing.resetState(); await tick(env, now);
+    assert.deepEqual(sent, [['9001'], ['9200']], '只送新登記，卡住的重試延到隔天');
+    assert.equal((await job(env)).next_attempt_at, '2026-10-23T00:00:00.000Z');
+    assert.equal((await budgetRow(env)).retry, 0);
+    assert.equal((await post(env, request('cap-fresh-02','乙',{ dogs:[{ id:'9200',name:'fresh狗0',expectedVersion:1 }] }))).status, 200, '新的登記不受重試上限影響');
+  } finally { globalThis.fetch = real; env.DB.close(); }
+});
+
 test('通知遺失時排程直接讀表補漏，人工改早日期以新版本接受；無差異只記排程跑完時間（稽核第 5 項）', async t => {
   const now=Date.parse('2026-10-22T02:00:00Z');
   t.mock.timers.enable({ apis:['Date'],now });
