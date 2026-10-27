@@ -304,7 +304,8 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
     sections[field].controls.append(node);
   }
   // 出入所表（ADR 0021）：一個編號一列，查不到編號的那次編號空著。有編號的入所日就是編號前 8 碼；
-  // 有離所紀錄的出所日照離所紀錄（唯讀，離所原因寫在提示），那列跟目前編號那列都不能刪；入所原因每列都手填。補編號＝新增一列填編號，刪編號＝刪那一列。
+  // 有離所紀錄的出所日照離所紀錄（離所原因寫在提示）；同步從備註讀錯日期時管理者可以改，存檔就改離所紀錄、同步不再蓋回去（#663）。
+  // 那列跟目前編號那列都不能刪；入所原因每列都手填。補編號＝新增一列填編號，刪編號＝刪那一列。
   function buildStays() {
     const controls = section('stays');
     controls.append(
@@ -343,8 +344,14 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
         inputs[key] = node;
       }
       inputs.number.readOnly = current || Boolean(stay.departed);
-      inputs.out.readOnly = Boolean(stay.departed);
-      if (stay.departed) row.append(el('p', `離所日和離所原因照離所紀錄（${stay.departure || '待確認'}）。`, 'form-hint'));
+      if (stay.departed)
+        row.append(
+          el(
+            'p',
+            `離所原因照離所紀錄（${stay.departure || '待確認'}）。離所日讀錯可以直接改，存檔後同步不會再改回去。`,
+            'form-hint'
+          )
+        );
       // 有編號：入所日跟著編號，不能另外改
       const sync = () => {
         const number = inputs.number.value.trim();

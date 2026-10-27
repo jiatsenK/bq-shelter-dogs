@@ -58,11 +58,12 @@ export function storedStays(rows) {
 }
 
 // 整理送來的出入所表；before 是 { numbers, currentNumbers, departures }，today 是台灣日期。
+// admin：管理者可以改有離所紀錄那列的離所日（#663，同步從備註讀錯日期時修正），志工送來的照舊不看。
 // 回 { rows（跟 stayTable 同樣子）, numbers（存檔後這隻狗的編號）} 或 { error }；刪了不能刪的編號另帶 conflict: true（409）
-export function cleanStayTable(value, before, today) {
+export function cleanStayTable(value, before, today, { admin = false } = {}) {
   if (!Array.isArray(value) || value.length > STAYS_MAX) return { error: `出入所紀錄格式不對（最多 ${STAYS_MAX} 筆）` };
   const current = before.currentNumbers.filter(n => numberDay(n)).sort().at(-1);
-  const stored = [], numbers = [];
+  const stored = [], numbers = [], departures = before.departures.map(d => ({ ...d }));
   for (const row of value) {
     if (!row || typeof row !== 'object' || Object.keys(row).some(k => !['number', 'in', 'out', 'reason', 'outReason', 'departed', 'departure'].includes(k))) return { error: '出入所欄位不對' };
     const number = String(row.number ?? '').replace(/\s+/g, '');
@@ -76,9 +77,17 @@ export function cleanStayTable(value, before, today) {
         if (current && number > current) return { error: '舊編號不能晚於目前編號' };
       }
       numbers.push(number);
-      // 有離所紀錄的那筆：出所日、離所原因照離所紀錄，送來的不看；入所原因照樣手填
-      if (before.departures.some(d => d.number === number)) {
+      // 有離所紀錄的那筆：出所日（管理者除外）、離所原因照離所紀錄，送來的不看；入所原因照樣手填
+      const left = departures.find(d => d.number === number);
+      if (left) {
         if ([...reason].length > STAY_REASON_MAX) return { error: `原因最多 ${STAY_REASON_MAX} 字` };
+        if (admin && out !== (left.date || '')) {
+          if (!out) return { error: '離所日不能清空' };
+          if (!validYmd(out)) return { error: '日期請用 YYYY-MM-DD' };
+          if (out > today) return { error: '日期不能是未來的日子' };
+          if (stayIn && out < stayIn) return { error: '出所日不能早於入所日' };
+          left.date = out;
+        }
         stored.push({ number, in: stayIn, out: '', reason });
         continue;
       }
@@ -92,7 +101,7 @@ export function cleanStayTable(value, before, today) {
   if (before.currentNumbers.some(n => !numbers.includes(n))) return { error: '目前編號不能刪', conflict: true };
   // 離所紀錄（試算表「已出所」）用這個編號記，刪了出入所表就對不到那次離所
   if (before.departures.some(d => before.numbers.includes(d.number) && !numbers.includes(d.number))) return { error: '有離所紀錄的編號不能刪', conflict: true };
-  return { rows: stayTable(stored, numbers, before.departures), numbers: numbers.sort() };
+  return { rows: stayTable(stored, numbers, departures), numbers: numbers.sort() };
 }
 
 // 合併重複的狗：兩邊存的手填紀錄接在一起（一模一樣的只留一筆），照入所日排

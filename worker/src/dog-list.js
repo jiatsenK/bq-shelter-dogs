@@ -163,7 +163,9 @@ async function applyDeparted(db, row, list, now, fp) {
     // 已經記過離所：志工之後補上原因或日期就改過來
     const prev = await db.prepare('SELECT reason,matched,departed_date,date_source,flags_json FROM v3_dog_departures WHERE number=?').bind(dog.id).first();
     if (!prev) return false;
-    const date = judged.date || prev.departed_date, source = judged.date ? judged.dateSource : prev.date_source;
+    // 管理者手動修正過的離所日（#663，date_source='manual'）不再跟著試算表改
+    const keep = !judged.date || prev.date_source === 'manual';
+    const date = keep ? prev.departed_date : judged.date, source = keep ? prev.date_source : judged.dateSource;
     const flags = judged.flags || [];
     // 旗標跟其他欄同一列：有變就一句 UPDATE（觸發器只跑一次）
     if (prev.reason !== judged.reason || prev.matched !== (judged.matched || '') || prev.departed_date !== date || prev.date_source !== source || !sameList(JSON.parse(prev.flags_json), flags))

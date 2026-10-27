@@ -668,3 +668,25 @@ test('出入所表：舊資料同一天接到編號（納卡西）、離所帶�
     (e) => e.status === 409
   );
 });
+
+// #663：管理者改離所日＝改離所紀錄（date_source 記 manual），同一筆交易記編輯紀錄；志工送來的不採用
+test('出入所表：管理者改有離所紀錄那列的離所日，寫進離所紀錄並標成手動修正', async (t) => {
+  const db = await setup(t);
+  await db.prepare("INSERT INTO v3_dog_numbers VALUES('2026042101',?)").bind(dogId).run();
+  await db.prepare("INSERT INTO v3_dog_departures(dog_id,number,name,departed_date,date_source,reason) VALUES(?,'2026042101','測試狗','2026-10-08','note','adopt')").bind(dogId).run();
+  const before = await readDogEdit(db, dogId);
+  const fixed = [{ ...before.stays[0], out: '2026-10-18' }];
+  const volunteer = await saveDogEdit(db, dogId, { revision: before.revision, field: 'stays', value: fixed }, { editor: { name: '自選' } });
+  assert.equal(volunteer.stays[0].out, '2026-10-08');
+  const after = await saveDogEdit(db, dogId, { revision: volunteer.revision, field: 'stays', value: fixed }, { actor });
+  assert.deepEqual(after.stays, [{ number: '2026042101', in: '2026-04-21', out: '2026-10-18', reason: '', departed: true, departure: '認養' }]);
+  assert.deepEqual({ ...(await db.prepare("SELECT departed_date,date_source FROM v3_dog_departures WHERE number='2026042101'").first()) }, { departed_date: '2026-10-18', date_source: 'manual' });
+  const log = await db.prepare("SELECT editor_name,before_json,after_json FROM v3_edit_log WHERE kind='stays'").first();
+  assert.equal(log.editor_name, '管理者');
+  assert.equal(JSON.parse(log.before_json)[0].out, '2026-10-08');
+  assert.equal(JSON.parse(log.after_json)[0].out, '2026-10-18');
+  // 再存一次一樣的不寫
+  const count = await db.prepare('SELECT total_changes() AS n').first('n');
+  await saveDogEdit(db, dogId, { revision: after.revision, field: 'stays', value: after.stays }, { actor });
+  assert.equal(await db.prepare('SELECT total_changes() AS n').first('n'), count);
+});
