@@ -105,6 +105,16 @@ test('讀取量：沒變時只讀版本號，不隨狗、活動、溜狗紀錄�
   assert(small <= 5, `沒變時只讀幾列版本號：${small}`);
 });
 
+test('#678 一次請求只讀一次離所版本號（離所和只有名字的卡共用同一份資料包），回應不變', async t => {
+  const DB = await seeded(t);
+  const first = await get(DB);
+  const prepare = DB.prepare.bind(DB);
+  let reads = 0;
+  DB.prepare = sql => { if (/FROM v3_departure_versions/.test(sql)) reads++; return prepare(sql); };
+  assert.deepEqual(await get(DB), first);
+  assert.equal(reads, 1);
+});
+
 test('沒有 D1 回 503，不是空名單', async () => {
   const res = await worker.fetch(new Request(`${SITE}/api/departed-cards`, { headers: { 'Sec-Fetch-Site': 'same-origin' } }), {});
   assert.equal(res.status, 503);

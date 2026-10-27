@@ -309,6 +309,20 @@ test('#519 補填原文：主清單 walker 還是 NULL 的狗，保險掃描指�
   } finally { env.DB.close(); }
 });
 
+test('#678 保險掃描找 walker 還是 NULL 的列走部分索引，不整張掃主清單（管理用途的同條件查詢也一樣）', async () => {
+  const env = await setup();
+  try {
+    for (const sql of [
+      'SELECT number, name FROM v3_sheet_main WHERE walker IS NULL',
+      'SELECT m.row_index, n.name FROM v3_sheet_main m, json_each(m.walker_codes) w LEFT JOIN v3_identity_names n ON n.code=w.value WHERE m.walker IS NULL ORDER BY m.row_index, w.key',
+    ]) {
+      const plan = (await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).all()).results.map(r => r.detail).join(' | ');
+      assert.match(plan, /USING (COVERING )?INDEX v3_sheet_main_walker_null/, plan);
+      assert.doesNotMatch(plan, /SCAN (m|v3_sheet_main)(?! USING)/, plan);
+    }
+  } finally { env.DB.close(); }
+});
+
 test('#528 保險掃描清掉舊指紋：回所的狗（主清單有）、D1 已經沒有的狗不再列為 D1 有、試算表沒有', async () => {
   const env = await setup();
   worker.testing.resetState();

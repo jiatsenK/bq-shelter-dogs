@@ -1,7 +1,7 @@
 // 已出所狗卡（#271，docs/adr/0002-activity-records.md）：圖鑑的「已出所」名單，每個人都直接收藏，不用開卡。
 // 離所的狗從離所資料包讀（ADR 0014，不讀離所表）；溜過幾天用各年摘要（同 /walks/mine，不整表讀 v3_walks）；
 // 出席活動次數從活動紀錄算；網站開始記錄前就離所的，是 K 建的只有名字的卡（#560 起是離所資料包的 cards，跟離所同一個版本號）。
-import { readSmall, readDogWalkDays } from './packs.js';
+import { readDeparted, readDogWalkDays } from './packs.js';
 
 const REASONS = new Set(['adopt', 'death', 'other', 'unknown']);
 
@@ -26,9 +26,8 @@ async function attendance(db) {
 
 // 回 [{ id, number, dogId, name, formerIds, stays, departed, reason, walkDays, activities, nameOnly }]，離所日新到舊
 export async function readDepartedCards(db, today) {
-  const departures = await readSmall(db, 'departures');
+  const { departures, cards } = await readDeparted(db);
   const walkDays = await readDogWalkDays(db, today);
-  const cards = await readSmall(db, 'cards');
   const { byDog, byNumber } = await attendance(db);
   const out = [];
   // 再入所（現在又在主清單上）的不算；同一隻離所兩次（舊編號在較新那筆的 formerIds 裡）只留最新那筆
