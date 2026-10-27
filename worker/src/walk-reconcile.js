@@ -52,9 +52,10 @@ export async function walkFingerprint(date,walker) {
 
 // 保險掃描（ADR 0018 第 5 點）：按狗送指紋，Apps Script 只回指紋不同的狗，Worker 只比那幾隻。
 // 指紋直接由 base 算出、不另外記：寫回確認或人工值收下時 base 就跟著更新；沒收完（未決派送、一輪上限）的狗 base 不變，下次自然再回來。
+// CROSS JOIN 固定先掃在所的狗、再用主鍵查寫回紀錄：結果跟 JOIN 相同，讀取量不隨只增不刪的 outbox 歷史長大（#676；不靠 PRAGMA optimize）。
 export async function scanWalks(env,now) {
   const observed=(await env.DB.prepare(`SELECT s.*,o.status FROM v3_walk_state s
-    JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version`).all()).results || [];
+    CROSS JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version`).all()).results || [];
   if (!observed.length) return;
   const fingerprints={};
   for (const s of observed) fingerprints[s.dog_key]=await walkFingerprint(s.base_date,s.base_walker);

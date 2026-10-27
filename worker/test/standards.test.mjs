@@ -34,7 +34,7 @@ test('D1 不整張讀：沒帶條件的 SELECT／DELETE 都要列在已知例外
   for (const [file, code] of sources) {
     for (const [, , sql] of code.matchAll(/(['"`])(\s*(?:SELECT|DELETE)\b(?:(?!\1)[\s\S])*?\bFROM\b[\s\S]*?)\1/g)) {
       if (/\bWHERE\b|\bLIMIT\b|\$\{/i.test(sql)) continue;
-      found.add(`${file}: ${sql.trim().replace(/\s+/g, ' ').replace(/( LEFT)? (JOIN|ORDER BY|GROUP BY)\b.*$/, '')}`);
+      found.add(`${file}: ${sql.trim().replace(/\s+/g, ' ').replace(/( LEFT| CROSS)? (JOIN|ORDER BY|GROUP BY)\b.*$/, '')}`);
     }
   }
   const unlisted = [...found].filter(k => !Object.hasOwn(FULL_SCAN_OK, k));
