@@ -1311,7 +1311,7 @@ export function bindApp() {
 
   window.addEventListener('offline', () => { renderUpdatedLabel(); render(); renderDetail(); });
   window.addEventListener('online', () => { renderUpdatedLabel(); render(); renderDetail(); loadWalkerNames(); appState.favorites.syncFavs(); });
-  document.addEventListener('visibilitychange', () => { if (!document.hidden) appState.favorites.syncFavs(); });
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) appState.favorites.syncFavsOnReturn(); });
   document.addEventListener('visibilitychange', refreshTodayWalks);
   if (!window.__BQ_TEST__) setInterval(refreshTodayWalks, TODAY_POLL_MS);
 
