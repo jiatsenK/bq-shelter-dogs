@@ -1,6 +1,7 @@
-// 介紹搬家 migration 產生器（#665，ADR 0022）：讀 K 勾完的核對表 → migrations/ 的 SQL。
-// 寫 v3_stays（入所原因、離所原因、補沒編號那筆，存法照 worker/src/stays.js 的 storedStays），v3_intros 與離所的 last_intro 改成「剩下的介紹」。
-// 只寫有變的狗；每隻先記編輯紀錄（改前的原文從 D1 讀，SQL 檔裡不出現原文，地址不會進公開 repo），再寫資料。
+// 介紹搬家 migration 產生器（#665，ADR 0022）：讀 K 勾完的核對表（一列＝搬完後的一筆出入所紀錄）→ migrations/ 的 SQL。
+// 「對」用表上的值，「改」用「改成的…」欄（空的就用表上的值，K 也可能直接改了表上的格子）；編號、入所日、出所日照表上寫的。
+// 一隻狗的出入所表＝核對表上那隻狗的全部列（表上沒列到的編號照舊）。檢查照 worker/src/stays.js 的 cleanStayTable，存法照 storedStays。
+// 介紹、離所時的介紹改成剩下的字（多半清空）。只寫有變的狗；每隻先記編輯紀錄（改前的原文從 D1 讀，SQL 檔裡不出現原文，地址不會進公開 repo），再寫資料。
 // 每句都帶「這隻狗還是核對表那時的樣子」的條件：核對表之後被改過的狗整隻跳過，不會蓋掉別人的修改。
 // 觸發器（packs_*、dog_edit_*）會讓資料包版本與每隻狗的編輯版本加 1，網站會重讀，這是要的。
 // 用法：node scripts/intro-split/migration.mjs --csv .scratch/intro-split/checklist.csv --out migrations/0010_intro_split.sql [--offline]
@@ -9,15 +10,19 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { DatabaseSync } from 'node:sqlite';
-import { stayTable, storedStays, numberDay, STAY_REASON_MAX } from '../../worker/src/stays.js';
+import { stayTable, storedStays, cleanStayTable, numberDay } from '../../worker/src/stays.js';
 import { splitStatements } from '../compact-schema.mjs';
-import { parseCsv, decodeCsv, CHOICES } from './csv.mjs';
-import { KINDS, NEW_STAY, chars } from './suggest.mjs';
+import { parseCsv, decodeCsv, CHOICES, ID_COLUMN, NO_NUMBER } from './csv.mjs';
+import { chars, suggestDog } from './suggest.mjs';
 import { readSnapshot } from './snapshot.mjs';
 import { DEFAULT_DIR } from './checklist.mjs';
 
-const validYmd = s => /^\d{4}-\d{2}-\d{2}$/.test(s) && new Date(s + 'T00:00:00Z').toISOString().slice(0, 10) === s;
 export const taiwanToday = (now = new Date()) => new Date(now.getTime() + 8 * 3600000).toISOString().slice(0, 10);
+// Excel 存回來的日期可能是 2017/9/23
+export function normalDay(text) {
+  const m = String(text || '').trim().match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+  return m ? `${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}` : String(text || '').trim();
+}
 
 // SQL 字串：分號、連續的減號拆開接，scripts/compact-schema.mjs 的 splitStatements（測試）和 wrangler 都切得對
 export function sqlText(value) {
@@ -25,74 +30,60 @@ export function sqlText(value) {
   return `'${String(value).replace(/'/g, "''").replace(/;/g, "'||char(59)||'").replace(/-(?=-)/g, "-'||'")}'`;
 }
 
-// K 勾的結果 → 每隻狗要改成什麼。回 { plans: [{ dog, intro?, stays?, lasts: [{ number, text }] }], errors: [] }
+// K 勾的結果 → 每隻狗要改成什麼。
+// 回 { plans: [{ dog, intro?, stays?, lasts }], errors（有就整份不產生）, skipped（「對嗎」有空白、先不寫的狗）, cantChange（K 改了但這裡改不了的，要另外處理）}
 export function planChanges(snapshot, csvRows, today) {
-  const errors = [], byDog = new Map();
+  const errors = [], skipped = [], cantChange = [], byDog = new Map();
   const dogs = new Map(snapshot.dogs.map(d => [d.dogId, d]));
   for (const r of csvRows) {
-    const at = `第 ${r.line} 列（${r.狗名 || r.dog_id}，${r.項目}）`;
-    if (!CHOICES.includes(r.K勾選)) { errors.push(`${at}：K勾選要填 ${CHOICES.join('／')}`); continue; }
-    if (r.K勾選 === '不改') continue;
-    if (!dogs.has(r.dog_id)) { errors.push(`${at}：找不到這隻狗（dog_id 被改過？）`); continue; }
-    if (r.K勾選 === '改成' && !r.K改成) { errors.push(`${at}：勾了改成但 K改成 是空的（要清空請勾同意、建議值留空）`); continue; }
-    const value = (r.K勾選 === '改成' ? r.K改成 : r.建議值).replace(/\s+/g, ' ').trim();
-    if (!byDog.has(r.dog_id)) byDog.set(r.dog_id, []);
-    byDog.get(r.dog_id).push({ ...r, at, value });
+    const id = r[ID_COLUMN];
+    const at = `第 ${r.line} 列（${r.狗名 || dogs.get(id)?.name || id}${r.編號 && r.編號 !== NO_NUMBER ? ` ${r.編號}` : ''}）`;
+    if (!dogs.has(id)) { errors.push(`${at}：最右邊那欄被改過，找不到這隻狗`); continue; }
+    if (r.對嗎 && !CHOICES.includes(r.對嗎)) { errors.push(`${at}：「對嗎」要填 ${CHOICES.join('、')}，或空著（這隻先不寫）`); continue; }
+    const fix = r.對嗎 === '不對' || r.對嗎 === '改';
+    const pick = (fixed, own) => (fix && fixed ? fixed : own).replace(/\s+/g, ' ').trim();
+    const row = { choice: r.對嗎, number: r.編號 === NO_NUMBER ? '' : r.編號.replace(/\s+/g, ''), in: normalDay(r.入所日), out: normalDay(r.出所日),
+      reason: pick(r.改成的入所原因, r.入所原因), outReason: pick(r.改成的離所原因, r.離所原因), at };
+    if (!byDog.has(id)) byDog.set(id, []);
+    byDog.get(id).push(row);
   }
   const plans = [];
-  for (const [dogId, decisions] of byDog) {
+  for (const [dogId, list] of byDog) {
     const dog = dogs.get(dogId), problems = [];
+    if (list.some(r => !r.choice)) { skipped.push(dog.name); continue; }
     const numbers = [...dog.numbers].sort();
     const departures = dog.departures.filter(d => d.number).map(d => ({ number: d.number, date: d.date, reason: d.reason }));
     const stored = dog.stays ? JSON.parse(dog.stays) : [];
     const before = stayTable(stored, numbers, departures);
-    const rows = before.map(r => ({ ...r }));
-    const set = new Map(); // 同一筆同一欄只能有一個值
-    const put = (d, key, value, apply) => {
-      if (set.has(key) && set.get(key) !== value) problems.push(`${d.at}：跟第 ${set.get(key + ':line')} 列寫的不一樣`);
-      else { set.set(key, value); set.set(key + ':line', d.line); apply(); }
-    };
-    const plan = { dog, lasts: [] };
-    for (const d of decisions) {
-      if (d.項目 === KINDS.intro) {
-        if (d.value !== (dog.intro || '')) put(d, 'intro', d.value, () => { plan.intro = d.value; });
-        continue;
-      }
-      if (d.項目 === KINDS.lastIntro) {
-        const dep = dog.departures.find(p => p.number === d.放哪一筆);
-        if (!dep) { problems.push(`${d.at}：離所紀錄沒有編號 ${d.放哪一筆}`); continue; }
-        if (d.value !== (dep.lastIntro || '')) put(d, `last:${dep.number}`, d.value, () => plan.lasts.push({ number: dep.number, text: d.value }));
-        continue;
-      }
-      if (d.項目 !== KINDS.reason && d.項目 !== KINDS.outReason) { problems.push(`${d.at}：看不懂的項目`); continue; }
-      if (chars(d.value) > STAY_REASON_MAX) { problems.push(`${d.at}：原因最多 ${STAY_REASON_MAX} 字（現在 ${chars(d.value)} 字）`); continue; }
-      let row;
-      if (d.放哪一筆 === NEW_STAY) {
-        if (!validYmd(d.入所日) || d.入所日 > today) { problems.push(`${d.at}：新增沒編號要填入所日（YYYY-MM-DD，不能是未來）`); continue; }
-        row = rows.find(x => !x.number && x.in === d.入所日);
-        if (!row) rows.push(row = { number: '', in: d.入所日, out: '', reason: '' });
-      } else {
-        row = rows.find(x => x.number === d.放哪一筆);
-        if (!row) { problems.push(`${d.at}：這隻狗沒有編號 ${d.放哪一筆}（要放沒編號的寫「${NEW_STAY}」）`); continue; }
-      }
-      const where = row.number || `${NEW_STAY}:${row.in}`;
-      if (d.出所日 && !row.departed) {
-        if (!validYmd(d.出所日) || d.出所日 > today || d.出所日 < row.in) { problems.push(`${d.at}：出所日不對（YYYY-MM-DD，不能早於入所日、不能是未來）`); continue; }
-        const r0 = row;
-        put(d, `${where}:out`, d.出所日, () => { r0.out = d.出所日; });
-      }
-      if (d.項目 === KINDS.outReason && row.departed) { problems.push(`${d.at}：${row.number} 有離所紀錄，離所原因照離所紀錄，不能手填`); continue; }
-      const field = d.項目 === KINDS.reason ? 'reason' : 'outReason';
-      const r1 = row;
-      put(d, `${where}:${field}`, d.value, () => { r1[field] = d.value; });
+    const rows = [];
+    for (const r of list) {
+      if (r.number && !numbers.includes(r.number)) { problems.push(`${r.at}：這隻狗沒有這個編號（沒有編號的請寫「${NO_NUMBER}」）`); continue; }
+      // 重複的狗：這筆不寫。編號那筆刪不掉（編號由主清單管），照舊留著
+      if (r.choice === '重複的狗') { if (r.number) cantChange.push(`${r.at}：有編號的那筆不能在這裡刪，照舊留著（重複的狗請在管理網站合併）`); continue; }
+      if (r.number && r.in !== numberDay(r.number)) { problems.push(`${r.at}：有編號的入所日就是編號前 8 碼（${numberDay(r.number)}），不能改`); continue; }
+      const left = before.find(b => b.departed && b.number === r.number);
+      if (left) {
+        // 有離所紀錄那筆：離所日、離所原因照離所紀錄（ADR 0021），這裡只寫入所原因
+        if (r.out !== left.out) cantChange.push(`${r.at}：離所日照離所紀錄（${left.out || '空白'}），這裡改不了；要改請到管理網站出入所表（表上寫 ${r.out || '空白'}）`);
+        if (r.outReason !== left.departure) cantChange.push(`${r.at}：離所原因照離所紀錄（「${left.departure}」），這裡改不了（表上寫「${r.outReason}」）`);
+        rows.push({ number: r.number, in: r.in, out: left.out, reason: r.reason, departed: true, departure: left.departure });
+      } else rows.push({ number: r.number, in: r.in, out: r.out, reason: r.reason, outReason: r.outReason });
     }
+    // 表上沒列到的編號照舊（編號不能刪）
+    for (const b of before.filter(b => b.number && !rows.some(r => r.number === b.number))) rows.push(b);
+    const clean = problems.length ? null : cleanStayTable(rows, { numbers, currentNumbers: dog.mainNumber ? [dog.mainNumber] : [], departures }, today);
+    if (clean?.error) problems.push(`${dog.name}：${clean.error}`);
     if (problems.length) { errors.push(...problems); continue; }
-    const canon = list => storedStays(stayTable(list, numbers, departures));
-    const next = canon(storedStays(rows));
+    const plan = { dog, lasts: [] };
+    const canon = s => storedStays(stayTable(s, numbers, departures));
+    const next = canon(storedStays(clean.rows));
     if (JSON.stringify(next) !== JSON.stringify(canon(stored))) plan.stays = { before: stored.length ? before : null, after: stayTable(next, numbers, departures), json: JSON.stringify(next) };
+    const left = suggestDog(dog);
+    if (dog.intro && left.intro !== dog.intro) plan.intro = left.intro;
+    for (const l of left.lasts) if (l.text !== (dog.departures.find(p => p.number === l.number).lastIntro || '')) plan.lasts.push(l);
     if (plan.intro !== undefined || plan.stays || plan.lasts.length) plans.push(plan);
   }
-  return { plans, errors };
+  return { plans, errors, skipped, cantChange };
 }
 
 // 原文的條件：有地址那句時只比前面那段＋總字數，SQL 檔裡不出現地址
@@ -196,7 +187,7 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const csvPath = arg('--csv') || join(DEFAULT_DIR, 'checklist.csv');
   const snapshot = JSON.parse(readFileSync(arg('--snapshot') || join(DEFAULT_DIR, 'snapshot.json'), 'utf8'));
   const csvRows = parseCsv(decodeCsv(readFileSync(csvPath)));
-  const { plans, errors } = planChanges(snapshot, csvRows, taiwanToday());
+  const { plans, errors, skipped, cantChange } = planChanges(snapshot, csvRows, taiwanToday());
   if (errors.length) { console.error(`核對表有 ${errors.length} 個問題，沒有產生 migration：\n${errors.join('\n')}`); process.exit(1); }
   if (!process.argv.includes('--offline')) {
     const changed = changedDogs(snapshot, readSnapshot(), new Set(plans.map(p => p.dog.dogId)));
@@ -206,6 +197,8 @@ if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const result = preview(snapshot, sql);
   result.db.close();
   console.log(`預演：${plans.length} 隻狗、${result.statements} 句，會寫 ${result.rowsWritten} 列（含觸發器的版本號；跳過 ${result.skipped} 句）`);
+  if (skipped.length) console.log(`「對嗎」有空白、這次不寫的狗（${skipped.length} 隻）：${skipped.join('、')}`);
+  if (cantChange.length) console.log(`這些改不了（${cantChange.length} 筆，要另外處理）：\n${cantChange.join('\n')}`);
   const out = arg('--out');
   if (out) { writeFileSync(out, sql); console.log(`寫好 ${out}`); }
   else console.log('沒給 --out，只預演不寫檔');

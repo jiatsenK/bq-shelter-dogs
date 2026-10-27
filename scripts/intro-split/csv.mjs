@@ -1,6 +1,11 @@
 // 核對表 CSV：寫的時候加 UTF-8 BOM、CRLF，Excel 直接開不會亂碼；讀的時候也認 Excel 另存的 Big5（「CSV（逗號分隔）」）。
-export const COLUMNS = ['狗名', 'dog_id', '在所', '項目', '放哪一筆', '入所日', '出所日', '介紹原文', '現有的值', '建議值', '建議字數', '注意', 'K勾選', 'K改成'];
-export const CHOICES = ['同意', '改成', '不改'];
+export const ID_COLUMN = '（程式用，不用看）';
+export const NO_NUMBER = '（沒有編號）';
+export const COLUMNS = ['狗名', '原本的介紹', '編號', '入所日', '入所原因', '出所日', '離所原因', '說明', '對嗎', '改成的入所原因', '改成的離所原因', ID_COLUMN];
+// 「對」照表上寫；「不對」「改」有填改成的就用改成的；「重複的狗」那筆不寫（刪掉）；空白＝這隻先不寫
+export const CHOICES = ['對', '不對', '改', '重複的狗'];
+// K 可能刪欄、移欄：用欄名找；這幾欄一定要在（少了入所原因、離所原因，「對」會把原因寫成空的）
+export const REQUIRED = ['編號', '入所日', '入所原因', '出所日', '離所原因', '對嗎', ID_COLUMN];
 
 const cell = v => {
   const s = String(v ?? '');
@@ -35,7 +40,8 @@ export function parseCsv(text) {
   if (field || row.length) { row.push(field); records.push(row); }
   const [head, ...body] = records.filter(r => r.some(v => v.trim()));
   if (!head) return [];
-  const missing = COLUMNS.filter(c => !head.includes(c));
+  const names = head.map(h => (h.trim() === 'dog_id' ? ID_COLUMN : h.trim()));
+  const missing = REQUIRED.filter(c => !names.includes(c));
   if (missing.length) throw new Error(`核對表少了欄位：${missing.join('、')}`);
-  return body.map((r, i) => ({ ...Object.fromEntries(head.map((h, j) => [h, (r[j] ?? '').trim()])), line: i + 2 }));
+  return body.map((r, i) => ({ ...Object.fromEntries(COLUMNS.map(c => [c, ''])), ...Object.fromEntries(names.map((h, j) => [h, (r[j] ?? '').trim()])), line: i + 2 }));
 }

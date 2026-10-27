@@ -1,49 +1,56 @@
-// 介紹搬家核對表（#665，ADR 0022）：唯讀正式 D1 → .scratch/intro-split/checklist.csv（K 用 Excel 逐列勾）＋ snapshot.json。
+// 介紹搬家核對表（#665，ADR 0022）：唯讀正式 D1 → .scratch/intro-split/checklist.csv（K 用 Excel 逐列看）＋ snapshot.json。
+// 一列＝搬完後的一筆出入所紀錄，同一隻狗排在一起；K 只核對出入所紀錄，介紹搬完會清空（之後另寫狗自己的介紹）。
 // 核對表含捕獲地址等原文：只放 .scratch（.gitignore），不 commit、不貼 GitHub。摘要只印狗名。
 // 用法：node scripts/intro-split/checklist.mjs [--out .scratch/intro-split]
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readSnapshot } from './snapshot.mjs';
-import { suggestRows, needsLook, KINDS, NEW_STAY, chars } from './suggest.mjs';
-import { toCsv } from './csv.mjs';
-import { STAY_REASON_MAX } from '../../worker/src/stays.js';
+import { suggestDog } from './suggest.mjs';
+import { toCsv, ID_COLUMN, NO_NUMBER } from './csv.mjs';
 
 export const DEFAULT_DIR = fileURLToPath(new URL('../../.scratch/intro-split/', import.meta.url));
 
-// 有介紹、離所時的介紹或入所事件的狗才列
+// 有介紹、離所時的介紹或入所事件的狗才列；在所的在前、離所的在後，再照狗名排
+export const listedDogs = snapshot => snapshot.dogs.filter(d => d.intro || d.departures.some(p => p.lastIntro) || d.events.length)
+  .sort((a, b) => Number(b.onMain) - Number(a.onMain) || a.name.localeCompare(b.name, 'zh-Hant') || a.dogId.localeCompare(b.dogId));
+
 export function checklistRows(snapshot) {
-  const dogs = snapshot.dogs.filter(d => d.intro || d.departures.some(p => p.lastIntro) || d.events.length)
-    .sort((a, b) => Number(b.onMain) - Number(a.onMain) || (a.mainNumber || a.numbers.at(-1) || '').localeCompare(b.mainNumber || b.numbers.at(-1) || ''));
-  return dogs.flatMap(dog => suggestRows(dog).map((r, i) => ({
-    狗名: r.name, dog_id: r.dogId, 在所: r.place, 項目: r.kind, 放哪一筆: r.target, 入所日: r.in, 出所日: r.out,
-    介紹原文: i === 0 || r.kind === KINDS.lastIntro ? r.original : '', 現有的值: r.current, 建議值: r.suggest, 建議字數: chars(r.suggest),
-    注意: r.note, K勾選: '', K改成: '',
-  })));
+  return listedDogs(snapshot).flatMap(dog => {
+    const { records, notes } = suggestDog(dog);
+    return records.map((r, i) => ({
+      狗名: dog.name,
+      原本的介紹: i === 0 ? dog.intro || '' : '',
+      編號: r.number || NO_NUMBER,
+      入所日: r.in,
+      入所原因: r.reason,
+      出所日: r.out,
+      離所原因: r.departed ? r.departure : r.outReason || '',
+      說明: [...(i === 0 ? notes : []), ...r.notes].join('；'),
+      對嗎: '', 改成的入所原因: '', 改成的離所原因: '',
+      [ID_COLUMN]: dog.dogId,
+    }));
+  });
 }
 
 export function summary(rows) {
-  const dogs = new Set(rows.map(r => r.dog_id));
-  const count = f => rows.filter(f).length;
   const names = f => [...new Set(rows.filter(f).map(r => r.狗名))];
-  const reason = r => r.項目 === KINDS.reason;
+  const look = re => names(r => re.test(r.說明));
   return {
-    dogs: dogs.size,
+    dogs: new Set(rows.map(r => r[ID_COLUMN])).size,
     rows: rows.length,
-    byKind: Object.fromEntries(Object.values(KINDS).map(k => [k, count(r => r.項目 === k)])),
-    reasonOnNumber: count(r => reason(r) && r.放哪一筆 !== NEW_STAY),
-    reasonNewStay: count(r => reason(r) && r.放哪一筆 === NEW_STAY),
-    needsLook: count(r => needsLook({ note: r.注意 })),
-    tooLong: names(r => r.建議字數 > STAY_REASON_MAX && r.項目 !== KINDS.intro && r.項目 !== KINDS.lastIntro),
-    addressRemoved: names(r => r.dog_id && rows.some(x => x.dog_id === r.dog_id && /捕獲地址|拾獲地點/.test(x.介紹原文))),
-    mismatched: names(r => /對不上|不完整/.test(r.注意)),
-    nearTypo: names(r => /差一點/.test(r.注意)),
-    multi: names(r => /好幾件事|入所和退回/.test(r.注意)),
-    replay: names(r => /舊資料重放|推測/.test(r.注意)),
-    keptManual: names(r => /已手填/.test(r.注意)),
-    events: names(r => /入所事件/.test(r.注意)),
-    lastIntroDiffers: names(r => /不一樣/.test(r.注意)),
-    introLeft: names(r => r.項目 === KINDS.intro && r.建議值),
+    noNumber: rows.filter(r => r.編號 === NO_NUMBER).length,
+    withNote: rows.filter(r => r.說明).length,
+    tooLong: look(/超過 40 字/),
+    addressRemoved: look(/拿掉了(捕獲|拾獲)/),
+    mismatched: look(/沒有這天的編號|請填入所日/),
+    nearTypo: look(/可能打錯/),
+    multi: look(/好幾件事|入所和退回/),
+    moved: look(/改放到離所原因|推測/),
+    keptManual: look(/先保留/),
+    events: look(/入所事件/),
+    lastIntroDiffers: look(/離所時存的介紹不一樣/),
+    introLeft: look(/介紹還會留下/),
   };
 }
 
