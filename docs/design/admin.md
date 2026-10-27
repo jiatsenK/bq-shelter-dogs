@@ -118,4 +118,4 @@ Operate 模式。K 已選定 Tabler 免費後台、左側導覽、原生 ES modu
 
 ## 網站連結（K 2026-10-26）
 
-側欄「志工網站」組最後一項「網站連結」（`links.html`）：一張卡片、一張表，列是正式版／測試版（測試版旁淡紫「測試資料」標籤），欄是志工網站、Apps Script（GAS）。有網址就顯示主機名稱連結（新分頁開）、下面小字完整網址；沒設寫灰字「還沒設定」與要設哪個 GitHub Secret。900px 以下表格改直排，欄名寫在網址上面，不靠橫捲。網址不寫在 repo（公開），部署時由 `deploy-admin.yml` 帶入：網站網址用 `WORKERS_SUBDOMAIN` 組，GAS 是 Secret `GAS_URL`、`TEST_GAS_URL`；API `GET /api/manage/links` 只回 https，GAS 只准 Google 網址。
+側欄「志工網站」組最後一項「網站連結」（`links.html`）：一張卡片、一張表，列是正式版／測試版（測試版旁淡紫「測試資料」標籤），欄是志工網站、試算表、Apps Script（GAS）。有網址就顯示主機名稱連結（新分頁開）、下面小字完整網址；沒設寫灰字「還沒設定」與要設哪個 GitHub Secret。900px 以下表格改直排，欄名寫在網址上面，不靠橫捲。網址不寫在 repo（公開），部署時由 `deploy-admin.yml` 帶入：網站網址用 `WORKERS_SUBDOMAIN` 組，試算表是 Secret `SHEET_URL`、`TEST_SHEET_URL`，GAS 是 Secret `GAS_URL`、`TEST_GAS_URL`；API `GET /api/manage/links` 只回 https，試算表只准 `docs.google.com`，GAS 只准 Google 網址。

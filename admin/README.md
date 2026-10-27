@@ -18,7 +18,7 @@
 | `admin/public/js/main.js` | DOM、讀取／重試與事件；篩選條件放網址（`?care=`、`?dog=` 開抽屜）；不存手機個人資料 |
 | `admin/public/js/dog-editor.js`、`dog-edit-model.js` | #624 右側編輯抽屜（DOM、依序儲存）與純規則（欄位順序、哪些要預覽、待補、介紹差異） |
 | `worker/src/admin/activities.js`、`checks.js`、`edits.js` | #567 活動寫入（共用 activities.js＋同交易紀錄）、#518 掃描清單、資料編輯紀錄搜尋 |
-| `worker/src/admin/links.js`、`admin/public/links.html`、`js/links.js` | 網站連結頁：正式版／測試版的志工網站與 GAS 網址。值由部署時 `--var` 帶入（`SITE_URL`、`TEST_SITE_URL` 從 `WORKERS_SUBDOMAIN` 組；`GAS_URL`、`TEST_GAS_URL` 是同名 GitHub Secret，沒設就顯示還沒設定） |
+| `worker/src/admin/links.js`、`admin/public/links.html`、`js/links.js` | 網站連結頁：正式版／測試版的志工網站、試算表與 GAS 網址。值由部署時 `--var` 帶入（`SITE_URL`、`TEST_SITE_URL` 從 `WORKERS_SUBDOMAIN` 組；`SHEET_URL`、`TEST_SHEET_URL`、`GAS_URL`、`TEST_GAS_URL` 是同名 GitHub Secret，沒設就顯示還沒設定） |
 | `admin/public/activities.html`、`checks.html`、`updates.html`、`releases.html` | #567 活動紀錄、待補清單、修改紀錄；#624 網站更新拆到 `releases.html`。純規則在 `activity-model.js`、`data-checks.js`、`edit-log.js` |
 
 先跑 `node scripts/build-admin-assets.mjs` 可產出共用資產；不要手動改產出檔。Tabler 1.4.0 CSS 固定存於 `public/vendor/`，不載入其 JavaScript 或外部字型。上游：https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css；MIT 授權與檔頭一併保留。

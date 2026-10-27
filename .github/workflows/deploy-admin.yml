@@ -34,6 +34,8 @@ jobs:
       ADMIN_ORIGIN: https://bq-shelter-dogs-admin.${{ secrets.WORKERS_SUBDOMAIN }}.workers.dev
       SITE_URL: https://bq-shelter-dogs.${{ secrets.WORKERS_SUBDOMAIN }}.workers.dev
       TEST_SITE_URL: https://bq-shelter-dogs-test.${{ secrets.WORKERS_SUBDOMAIN }}.workers.dev
+      SHEET_URL: ${{ secrets.SHEET_URL }}
+      TEST_SHEET_URL: ${{ secrets.TEST_SHEET_URL }}
       GAS_URL: ${{ secrets.GAS_URL }}
       TEST_GAS_URL: ${{ secrets.TEST_GAS_URL }}
     steps:
@@ -59,6 +61,8 @@ jobs:
           sha=$(git rev-parse --short HEAD)
           echo "部署管理網站：${REF} ${sha}"
           links=(--var "SITE_URL:${SITE_URL}" --var "TEST_SITE_URL:${TEST_SITE_URL}")
+          if [ -n "$SHEET_URL" ]; then links+=(--var "SHEET_URL:${SHEET_URL}"); fi
+          if [ -n "$TEST_SHEET_URL" ]; then links+=(--var "TEST_SHEET_URL:${TEST_SHEET_URL}"); fi
           if [ -n "$GAS_URL" ]; then links+=(--var "GAS_URL:${GAS_URL}"); fi
           if [ -n "$TEST_GAS_URL" ]; then links+=(--var "TEST_GAS_URL:${TEST_GAS_URL}"); fi
           npx --yes wrangler@4 deploy --config wrangler.admin.jsonc --message "${REF} ${sha}" --var "ADMIN_ORIGIN:${ADMIN_ORIGIN}" "${links[@]}"
