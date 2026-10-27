@@ -15,6 +15,9 @@ const reads = async (db, ...queries) => (await db.batch(queries.map(([sql, ...ar
 const CURRENT_JOB = 'SELECT o.* FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version WHERE o.dog_key=?';
 const RETRY = 'SELECT dispatch_id,reserved_day FROM v3_walk_retry WHERE dog_key=?';
 const dayOf = now => new Date(now + 8 * 3600000).toISOString().slice(0, 10);
+// 交易 guard（#681）：條件不成立或是 NULL 才插一列 0，違反 CHECK(ok=1) 讓整個 batch 回復；成立時一列都不寫，batch 結尾也不用清。
+// 要用 IS NOT 1，不能寫 WHERE NOT(條件)：條件是 NULL 時 NOT 也是 NULL，guard 會靜靜放行。
+export const guard = (db, condition, ...args) => db.prepare(`INSERT INTO v3_walk_guard SELECT 0 WHERE (${condition}) IS NOT 1`).bind(...args);
 export class WalkError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
@@ -54,7 +57,7 @@ export function writeBudget(db, env, cost, now = Date.now()) {
   if (!Number.isFinite(max) || !Number.isFinite(daily) || cost > max) throw new WalkError(503, '溜狗寫入預算不足');
   const day = new Date(now).toISOString().slice(0, 10); // D1 帳號額度 UTC 午夜重置。
   return [
-    db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT reserved FROM v3_walk_write_budget WHERE day=?),0)+?<=? THEN 1 ELSE 0 END').bind(day, cost, daily),
+    guard(db, 'COALESCE((SELECT reserved FROM v3_walk_write_budget WHERE day=?),0)+?<=?', day, cost, daily),
     db.prepare('INSERT INTO v3_walk_write_budget(day,reserved) VALUES(?,?) ON CONFLICT(day) DO UPDATE SET reserved=reserved+excluded.reserved').bind(day, cost),
   ];
 }
@@ -191,7 +194,7 @@ export async function acceptWalk(db, input, env, now = Date.now()) {
         name: added.map(m => m.name).join('、'), dogId: old.dog_id, number: dog.id, before, after: result.current })] : [];
     try {
       await db.batch([
-        db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT version FROM v3_walk_state WHERE dog_key=?),0)=? THEN 1 ELSE 0 END').bind(key, old.version),
+        guard(db, 'COALESCE((SELECT version FROM v3_walk_state WHERE dog_key=?),0)=?', key, old.version),
         ...await writeBudget(db, env, 32 + EDIT_LOG_COST * logs.length + historyCost, now),
         db.prepare('INSERT INTO v3_walk_state(dog_key,dog_id,number,name,version,effective_date,walker,members_json,base_date,base_walker,previous_date,previous_walker,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(dog_key) DO UPDATE SET version=excluded.version,effective_date=excluded.effective_date,walker=excluded.walker,members_json=excluded.members_json,previous_date=excluded.previous_date,previous_walker=excluded.previous_walker,updated_at=excluded.updated_at')
           .bind(key, old.dog_id, dog.id, dog.name, version, effectiveDate, walker, JSON.stringify(members), baseDate, baseWalker, previousDate, previousWalker, at),
@@ -200,7 +203,6 @@ export async function acceptWalk(db, input, env, now = Date.now()) {
         db.prepare("INSERT INTO v3_walk_outbox(dog_key,version,operation_date,target_date,target_walker,status,next_attempt_at) VALUES(?,?,?,?,?,'pending',?)").bind(key, version, input.operationDate, effectiveDate, walker, at),
         ...history,
         ...logs,
-        db.prepare('DELETE FROM v3_walk_guard'),
       ]);
       return result;
     } catch (error) {
@@ -246,11 +248,10 @@ async function dispatchBatch(db, items, env, clock) {
   try { claimed = await db.batch([
     ...await writeBudget(db, env, DISPATCH_COST * jobs.length, clock),
     ...jobs.flatMap(j => [
-      db.prepare("INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?),'')=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?) THEN 1 ELSE 0 END").bind(j.key, j.recoverId, j.key, j.job.version),
+      guard(db, "COALESCE((SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?),'')=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?)", j.key, j.recoverId, j.key, j.job.version),
       db.prepare('INSERT INTO v3_walk_retry(dog_key,version,failures,dispatch_id,reserved_day) VALUES(?,?,0,?,?) ON CONFLICT(dog_key) DO UPDATE SET failures=CASE WHEN version=excluded.version THEN failures ELSE 0 END,version=excluded.version,dispatch_id=excluded.dispatch_id,reserved_day=excluded.reserved_day').bind(j.key, j.job.version, j.dispatchId, day),
       db.prepare('INSERT INTO v3_walk_delivery VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET dispatch_id=excluded.dispatch_id,started_at=excluded.started_at').bind(j.key, j.dispatchId, now),
       db.prepare("UPDATE v3_walk_outbox SET status='dispatching',dispatch_id=?,error='' WHERE dog_key=? AND version=? AND (status IN ('pending','retry','unconfirmed') OR (?=1 AND status='dispatching')) RETURNING version").bind(j.dispatchId, j.key, j.job.version, Number(!!j.recovery)),
-      db.prepare('DELETE FROM v3_walk_guard'),
     ]),
   ]); } catch (error) {
     if (error instanceof WalkError) throw new DispatchError('budget', error); // 單次上限，寫入前就擋下
@@ -268,8 +269,8 @@ async function dispatchBatch(db, items, env, clock) {
     if (jobs.length > 1) for (const { dog, recovery } of jobs) await dispatchBatch(db, [{ dog, recovery }], env, clock);
     return;
   }
-  const offset = claimed.length - jobs.length * 5;
-  const mine = jobs.filter((j, i) => claimed[offset + i * 5 + 3].results?.length);
+  const offset = claimed.length - jobs.length * 4; // 每隻 4 句，第 4 句是認領的 UPDATE … RETURNING
+  const mine = jobs.filter((j, i) => claimed[offset + i * 4 + 3].results?.length);
   const lost = jobs.filter(j => !mine.includes(j));
   if (lost.length) await db.batch(lost.map(j => db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(j.key, j.dispatchId)));
   if (!mine.length) return;
@@ -331,19 +332,17 @@ export async function confirmWalk(db, receipt, env) {
     if (!job.readback_seen) await db.batch([
       ...await transitionBudget(db,env,dogKey,dispatchId,16,retry),
       db.prepare('UPDATE v3_walk_outbox SET readback_seen=1 WHERE dog_key=? AND version=? AND dispatch_id=? AND readback_seen=0').bind(dogKey,version,dispatchId),
-      db.prepare('DELETE FROM v3_walk_guard'),
     ]);
     return { confirmed:false };
   }
   if (job.status === 'synced') return { confirmed:true };
   await db.batch([
-    db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN EXISTS(SELECT 1 FROM v3_walk_state s JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version WHERE s.dog_key=? AND s.version=? AND o.dispatch_id=?) THEN 1 ELSE 0 END').bind(dogKey,version,dispatchId),
+    guard(db, 'EXISTS(SELECT 1 FROM v3_walk_state s JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version WHERE s.dog_key=? AND s.version=? AND o.dispatch_id=?)', dogKey,version,dispatchId),
     ...await transitionBudget(db,env,dogKey,dispatchId,16,retry),
     db.prepare('UPDATE v3_walk_state SET base_date=?,base_walker=? WHERE dog_key=? AND version=?').bind(current.date, current.walker, dogKey, version),
     db.prepare('INSERT INTO v3_walk_baselines VALUES(?,?) ON CONFLICT(dog_key) DO UPDATE SET version=excluded.version').bind(dogKey,version),
     db.prepare("UPDATE v3_walk_outbox SET status='synced',readback_seen=1,error='' WHERE dog_key=? AND version=? AND dispatch_id=?").bind(dogKey, version, dispatchId),
     db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(dogKey,dispatchId),
-    db.prepare('DELETE FROM v3_walk_guard'),
   ]);
   return { confirmed: true };
 }
@@ -380,14 +379,14 @@ export async function reconcileWalk(db, dog, observed, env, seen = {}) {
   try {
     const result = await compareTrustedWalk(db,dog,observed,env,seen);
     if (seen.conflict) {
-      await db.batch([...await writeBudget(db,env,8),db.prepare('DELETE FROM v3_walk_conflicts WHERE dog_key=?').bind(key),db.prepare('DELETE FROM v3_walk_guard')]);
+      await db.batch([...await writeBudget(db,env,8),db.prepare('DELETE FROM v3_walk_conflicts WHERE dog_key=?').bind(key)]);
     }
     return result;
   } catch (error) {
     const observation = JSON.stringify(observed ?? null), reason = error.status ? error.message : '比較失敗，保留待處理';
     const previous = await one(db,'SELECT observation,error FROM v3_walk_conflicts WHERE dog_key=?',key);
     if (previous?.observation !== observation || previous?.error !== reason) {
-      await db.batch([...await writeBudget(db,env,8),db.prepare('INSERT INTO v3_walk_conflicts VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET observation=excluded.observation,error=excluded.error').bind(key,observation,reason),db.prepare('DELETE FROM v3_walk_guard')]);
+      await db.batch([...await writeBudget(db,env,8),db.prepare('INSERT INTO v3_walk_conflicts VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET observation=excluded.observation,error=excluded.error').bind(key,observation,reason)]);
     }
     throw error;
   }
@@ -445,7 +444,7 @@ async function compareTrustedWalk(db, dog, observed, env, seen = {}) {
   const previousWalker=target.date===old.effective_date ? old.previous_walker ?? '' : (before?.target_walker ?? old.walker);
   const dropped=droppedDay(db,old,target.date),logged=sheetWalkLog(db,old,observed,target,dog.id,at);
   await db.batch([
-    db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN COALESCE((SELECT version FROM v3_walk_state WHERE dog_key=?),0)=? THEN 1 ELSE 0 END').bind(key,old.version),
+    guard(db, 'COALESCE((SELECT version FROM v3_walk_state WHERE dog_key=?),0)=?', key,old.version),
     ...await writeBudget(db,env,32+dropped.cost+logged.cost),
     ...dropped.statements,
     ...logged.statements,
@@ -455,7 +454,6 @@ async function compareTrustedWalk(db, dog, observed, env, seen = {}) {
     db.prepare("UPDATE v3_walk_outbox SET status='superseded' WHERE dog_key=? AND status NOT IN ('synced','superseded')").bind(key),
     db.prepare("INSERT INTO v3_walk_outbox(dog_key,version,operation_date,target_date,target_walker,status,next_attempt_at) VALUES(?,?,?,?,?,'pending',?)").bind(key,version,dayOf(Date.now()),target.date,target.walker,at),
     db.prepare('UPDATE v3_walk_outbox SET status=? WHERE dog_key=? AND version=?').bind(status,key,version),
-    db.prepare('DELETE FROM v3_walk_guard'),
   ]);
   return { changed:true, version, current:target };
 }
@@ -486,11 +484,10 @@ export async function writebackTarget(db, input, env) {
   }
   // 舊喚醒也只取目前版本；在 script lock 中授予目前版本派送識別。
   await db.batch([
-    db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?) THEN 1 ELSE 0 END').bind(key,state.version),
+    guard(db, 'EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?)', key,state.version),
     ...await transitionBudget(db,env,key,input.dispatchId,16,snap ? snap.retry : undefined),
     db.prepare('INSERT INTO v3_walk_delivery VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET dispatch_id=excluded.dispatch_id,started_at=excluded.started_at').bind(key,input.dispatchId,new Date().toISOString()),
     db.prepare("UPDATE v3_walk_outbox SET dispatch_id=?,status='dispatching' WHERE dog_key=? AND version=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?)").bind(input.dispatchId, key, state.version, key, state.version),
-    db.prepare('DELETE FROM v3_walk_guard'),
   ]);
   return { version: state.version, dispatchId: input.dispatchId, current: { date: state.effective_date, walker: state.walker } };
 }

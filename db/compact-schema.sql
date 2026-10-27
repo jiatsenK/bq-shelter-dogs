@@ -38,12 +38,9 @@ CREATE TABLE IF NOT EXISTS v3_walk_outbox (
 );
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_due ON v3_walk_outbox(next_attempt_at,dog_key) WHERE status IN ('pending','retry','unconfirmed');
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_active ON v3_walk_outbox(dog_key) WHERE status NOT IN ('synced','superseded');
-CREATE INDEX IF NOT EXISTS v3_walk_outbox_readback ON v3_walk_outbox(dog_key,target_date,target_walker) WHERE readback_seen=1;
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_agreed ON v3_walk_outbox(dog_key,version) WHERE status='synced';
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_causal ON v3_walk_outbox(dog_key,target_date,target_walker,version) WHERE readback_seen=1 AND status='superseded';
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_unknown ON v3_walk_outbox(dog_key,target_date,target_walker,version) WHERE readback_seen=0 AND dispatch_id<>'';
-CREATE INDEX IF NOT EXISTS v3_walk_outbox_unknown_date ON v3_walk_outbox(dog_key,target_date,version) WHERE readback_seen=0 AND dispatch_id<>'';
-CREATE INDEX IF NOT EXISTS v3_walk_outbox_unknown_walker ON v3_walk_outbox(dog_key,target_walker,version) WHERE readback_seen=0 AND dispatch_id<>'';
 -- 一致基準／已接受人工觀測的因果界線；更早歷史值不能作派送中間值授權。
 CREATE TABLE IF NOT EXISTS v3_walk_baselines (
   dog_key TEXT PRIMARY KEY REFERENCES v3_walk_state(dog_key),
@@ -71,7 +68,7 @@ CREATE TABLE IF NOT EXISTS v3_walk_pack (
   payload TEXT NOT NULL CHECK(json_valid(payload))
 );
 INSERT OR IGNORE INTO v3_walk_pack VALUES(1,0,'{}');
--- 交易 guard：比較版本失敗必須整筆回復，不能留下去重結果或工作。
+-- 交易 guard：比較版本失敗必須整筆回復，不能留下去重結果或工作。條件不成立才插 0 讓 CHECK 失敗，成立時不寫任何列，表一直是空的（#681）。
 CREATE TABLE IF NOT EXISTS v3_walk_guard (ok INTEGER NOT NULL CHECK(ok=1));
 -- 保守計量包含索引與觸發器；不是帳號分析用量的替代品。
 CREATE TABLE IF NOT EXISTS v3_walk_write_budget (day TEXT PRIMARY KEY, reserved INTEGER NOT NULL);
