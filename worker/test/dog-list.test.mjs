@@ -378,3 +378,20 @@ test('#554 記離所時 last_intro 抄 v3_intros；已經記過的離所再送�
     assert.equal(await lastIntro(), '舊同步記的介紹', '補原因、日期只改原因欄');
   } finally { env.DB.close(); }
 });
+
+// #663：管理者手動修正過的離所日，同步再送那一列也不蓋掉；離所原因照樣跟著試算表
+test('#663 手動修正的離所日：同步不改日期，原因照樣更新', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  const departed = (texts, hash) => ({ sheet:'departed', hash, dog:{ id:'9001', name:'測試狗' }, texts:['9001', '測試狗', ...texts], dates:[] });
+  const row = async () => ({ ...(await env.DB.prepare("SELECT departed_date,date_source,reason FROM v3_dog_departures WHERE number='9001'").first()) });
+  try {
+    await send(env, [main()]);
+    await send(env, [departed(['10/8被認養'], 'd1')]);
+    await env.DB.prepare("UPDATE v3_dog_departures SET departed_date='2026-10-18',date_source='manual' WHERE number='9001'").run();
+    await send(env, [departed(['10/9被認養'], 'd2')]);
+    assert.deepEqual(await row(), { departed_date:'2026-10-18', date_source:'manual', reason:'adopt' });
+    await send(env, [departed(['10/9過世'], 'd3')]);
+    assert.deepEqual(await row(), { departed_date:'2026-10-18', date_source:'manual', reason:'death' });
+  } finally { env.DB.close(); }
+});
