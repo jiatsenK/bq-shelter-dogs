@@ -46,15 +46,21 @@ function renderCompleteness(result) {
   }
   const { total, items } = completeness(dogs);
   status.textContent = `主清單上共 ${total} 隻；展開項目看是哪幾隻，點狗名直接編輯。`;
+  // 有說明的項目在名稱下面多一行灰字
+  const label = item => {
+    const node = element('span', item.label);
+    if (item.hint) node.append(element('small', item.hint, 'check-hint'));
+    return node;
+  };
   list.append(...items.map(item => {
     if (!item.dogs.length) {
       const ok = element('div', undefined, 'check-item ok');
-      ok.append(element('span', item.label), element('b', '0 隻'));
+      ok.append(label(item), element('b', '0 隻'));
       return ok;
     }
     const details = element('details', undefined, 'check-item');
     const summary = element('summary');
-    summary.append(element('span', item.label), element('b', `${item.dogs.length} 隻`));
+    summary.append(label(item), element('b', `${item.dogs.length} 隻`));
     // #624 項目連到已篩選的狗資料表，狗名直接開那隻狗的編輯抽屜
     const filtered = element('a', `在狗資料表看這 ${item.dogs.length} 隻`, 'check-filter-link');
     filtered.href = careLink(item.care);

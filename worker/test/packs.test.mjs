@@ -355,7 +355,8 @@ async function missingTriggers(DB) {
 test('狗清單、離所、休養讀到的表都有 packs_ 觸發器', async t => {
   const DB = await seededDb(t);
   const tables = await readTables(DB);
-  assert.ok(tables.includes('v3_intake_events') && tables.includes('v3_rest') && tables.includes('v3_dog_departures'), tables.join(','));
+  assert.ok(tables.includes('v3_rest') && tables.includes('v3_dog_departures'), tables.join(','));
+  assert.ok(!tables.includes('v3_intake_events'), '入所事件不再讀（ADR 0022，#667）；觸發器留到 DROP 那張 PR');
   assert.ok(tables.includes('v3_dogs') && !tables.includes('v3_sheet_former_numbers'), tables.join(','));
   assert.deepEqual(await missingTriggers(DB), []);
 });

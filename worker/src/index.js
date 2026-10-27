@@ -244,7 +244,7 @@ async function editDog(request, env, origin, edit) {
   const input=body.input;
   const editor=await editorOf(input?.editor,config(env).walkerKey);
   if(!editor)return needEditor(origin);
-  const allowed={rest:['until','reason','end'],intro:['text','events'],'fixed-care':['enabled'],former:['former'],stays:['before','stays']}[edit.kind];
+  const allowed={rest:['until','reason','end'],intro:['text','events']/* events：#667 前的舊網頁還會送，收下不理 */,'fixed-care':['enabled'],former:['former'],stays:['before','stays']}[edit.kind];
   if(Object.keys(input).some(key=>!['editor','revision',...allowed].includes(key)))return fail(400,'此欄位不能修改',origin);
   try {
     const dogId=await dogIdentity(env.DB,id);
@@ -264,7 +264,7 @@ async function editDog(request, env, origin, edit) {
     value=cleanDogValue(field,value,snapshot,Date.now());
     const ip=request.headers.get('CF-Connecting-IP')||'unknown';
     if(!allow(edit.kind+':'+ip,NOTE_WRITE_LIMITS,Date.now()))return fail(429,'改得太頻繁，請稍等幾分鐘再試',origin);
-    const saved=await saveDogEdit(env.DB,dogId,{revision:input.revision,field,value},{editor,dogNumber:id===dogId?'':id,...(field==='intro'&&Object.hasOwn(input,'events')?{events:input.events}:{})});
+    const saved=await saveDogEdit(env.DB,dogId,{revision:input.revision,field,value},{editor,dogNumber:id===dogId?'':id});
     return reply(200,{ok:true,id,revision:saved.revision,...edit.respond(raw,saved)},origin);
   }catch(error){if(error.status)return fail(error.status,error.message,origin);throw error;}
 }
@@ -273,7 +273,7 @@ async function editDog(request, env, origin, edit) {
 const DOG_EDITS = {
   rest: {kind:'rest',field:'rest',label:'休養設定',methods:['PUT'],value:input=>input.end===true?null:{until:input.until,reason:typeof input.reason==='string'?input.reason:''},respond:(_,saved)=>({rest:saved.rest,commit:null})},
   'fixed-care': {kind:'fixed-care',field:'fixedCare',label:'固定照顧設定',methods:['PUT'],value:input=>input.enabled,respond:(_,saved)=>({enabled:saved.fixedCare})},
-  intro: {kind:'intro',field:'intro',label:'介紹',methods:['PUT'],maxBytes:EDIT_BODY_MAX_BYTES,value:input=>input.text,respond:(_,saved)=>({intro:saved.intro,commit:null,...(saved.intakeEvents?{intakeEvents:saved.intakeEvents}:{})})},
+  intro: {kind:'intro',field:'intro',label:'介紹',methods:['PUT'],maxBytes:EDIT_BODY_MAX_BYTES,value:input=>input.text,respond:(_,saved)=>({intro:saved.intro,commit:null})},
   // 只留給還沒重新整理的舊網頁：#639 起補、刪舊編號在出入所表（/stays）裡做，開關也看 editStays
   former: {kind:'former',field:'numbers',label:'舊編號',methods:['POST','DELETE'],value:input=>String(input.former||'').replace(/\s+/g,''),respond:value=>({former:value})},
   stays: {kind:'stays',field:'stays',label:'出入所紀錄',methods:['PUT'],maxBytes:EDIT_BODY_MAX_BYTES,value:input=>input.stays,respond:(_,saved)=>({stays:saved.stays})},

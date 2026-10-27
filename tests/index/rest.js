@@ -70,31 +70,25 @@ async function runRestTests() {
       const card = document.createElement('div'); card.innerHTML = dogCard(dog, new Date());
       eq(card.querySelector('.warn-note .text').textContent, dog.note);
     });
-    await check('#285 保留早上版面，入所逐次列日期與原因並可編輯，同號可有不同事件', async () => {
-      const dog = parseDogsData({ dogs: [{ id: '2021021703', name: '測試狗', cage: 'A1', intro: '保留完整原介紹', formerIds: ['2015081801'], intakeEvents: [
-        { number: '2021021703', date: '2021-02-17', event: '迷路入所' },
-        { number: '2021021703', date: '2026-01-02', event: '領養退回' },
-      ] }] }).dogs[0];
+    await check('ADR 0022：出入所紀錄只列出入所表，介紹原文照顯示、表單只有一個文字框，存的時候不帶入所事件', async () => {
+      const intro = '2021年2月17日迷路入所。親人，怕機車聲。';
+      // 舊後端還帶 intakeEvents 也不讀（#667）
+      const dog = parseDogsData({ dogs: [{ id: '2021021703', name: '測試狗', cage: 'A1', intro, formerIds: ['2015081801'], intakeEvents: [{ number: '2021021703', date: '2026-01-02', event: '領養退回' }] }] }).dogs[0];
       try {
+        eq('intakeEvents' in dog, false, '不留入所事件：');
         showDetail(dog);
-        eq([...document.querySelectorAll('.intake-list time')].map(el => el.textContent), ['2015/08/18', '2021/02/17', '2026/01/02'], '舊編號那次也列成入所：');
-        eq(document.querySelectorAll('.intake-number').length, 0, '閱讀不逐筆重複編號，編輯仍保留對應編號：');
-        eq(document.querySelector('[data-section="intro"] .content').textContent, dog.intro);
+        eq([...document.querySelectorAll('.stay-lines li')].map(el => el.textContent), ['2015/08/18入所', '2021/02/17入所'], '只列兩個編號那兩次：');
+        eq(document.querySelector('[data-section="intro"] .content').textContent, intro, '介紹原文不抽日期句：');
         if (!document.querySelector('[data-section="walks"]') || !document.getElementById('staysEdit')) throw new Error('保留早上其他區塊');
         document.getElementById('introEdit').click();
-        eq([...document.querySelectorAll('[data-intake-field="number"]')].map(el => el.value), ['2021021703', '2021021703']);
-        const reason = document.querySelector('[data-intake-row="1"][data-intake-field="event"]');
-        reason.value = '領養退回（補正）'; reason.dispatchEvent(new Event('input', { bubbles: true }));
-        document.getElementById('intakeAdd').click();
-        eq(document.querySelectorAll('.intake-row').length, 3);
-        document.querySelector('[data-intake-remove="2"]').click();
+        eq([document.querySelectorAll('#introForm input, #introForm select, #introForm textarea').length, document.querySelectorAll('#introForm .intake-row').length], [1, 0], '只有一個文字框：');
+        eq(document.querySelector('#introForm label').firstChild.textContent, '介紹', '標籤：');
         const calls = [];
-        fakeApi((name, id, body) => { calls.push(body); return json({ ok: true, intro: body.text, intakeEvents: body.events }); });
+        fakeApi((name, id, body) => { calls.push(body); return json({ ok: true, intro: body.text }); });
         document.getElementById('introForm').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
         await new Promise(r => setTimeout(r, 20));
-        eq(calls, [{ editor: '志工我', text: dog.intro, events: [dog.intakeEvents[0], { ...dog.intakeEvents[1], event: '領養退回（補正）' }] }]);
-        eq(document.querySelectorAll('.intake-list li').length, 3);
-        eq(document.querySelectorAll('.intake-event')[1].textContent, '領養退回（補正）');
+        eq(JSON.parse(JSON.stringify(calls)), [{ editor: '志工我', text: intro }], '送出只有名字和文字：');
+        eq(document.querySelectorAll('.stay-lines li').length, 2);
       } finally { hideDetail(); BQWalkUI.hideToast(); delete introOverrides[dog.id]; }
     });
     await check('入所介紹（10-10）：直接點那一段就能改（不另外放按鈕）、不用通關碼、帶 editor，PUT /intro/編號；存好這台馬上看到，不寫試算表', async () => {

@@ -9,11 +9,11 @@ function createDetailEditorViewport(backdrop, detail) {
   const editing = () => hasEditor() && window.innerWidth < 600;
   const activeField = () => detail.contains(document.activeElement) && document.activeElement.matches(fields) ? document.activeElement : null;
   function describe(field) {
-    return { id: field.id, row: field.dataset.intakeRow, key: field.dataset.intakeField,
+    return { id: field.id, row: field.dataset.stayRow, key: field.dataset.stayField,
       start: field.selectionStart, end: field.selectionEnd };
   }
   function find(state) {
-    return state && [...detail.querySelectorAll(fields)].find(el => state.id ? el.id === state.id : el.dataset.intakeRow === state.row && el.dataset.intakeField === state.key);
+    return state && [...detail.querySelectorAll(fields)].find(el => state.id ? el.id === state.id : el.dataset.stayRow === state.row && el.dataset.stayField === state.key);
   }
   function reveal() {
     frame = 0;

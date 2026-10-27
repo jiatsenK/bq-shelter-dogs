@@ -261,10 +261,13 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
     node.rows = 6;
     node.maxLength = INTRO_MAX;
     node.value = snapshot.intro;
+    // ADR 0022（#667）：介紹只寫狗自己；入所、退回、離所的經過寫在出入所紀錄的原因
+    const hint = el('p', '寫狗的個性、狀況；入所經過寫在出入所紀錄。', 'form-hint');
+    hint.id = 'edit-intro-hint';
     const count = el('p', '', 'form-hint');
     count.id = 'edit-intro-count';
-    node.setAttribute('aria-describedby', count.id);
-    controls.append(count);
+    node.setAttribute('aria-describedby', `${hint.id} ${count.id}`);
+    controls.append(hint, count);
   }
   function buildRest() {
     const controls = section('rest');

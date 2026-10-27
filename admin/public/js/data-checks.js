@@ -14,7 +14,8 @@ export function completeness(dogs) {
     { care: 'badNumberDate', label: '編號看不出入所日期', dogs: pick(d => d.number && !BQDates.idDate(d.number)) },
     { care: 'missingWalk', label: '缺溜狗日期', dogs: pick(d => !d.walkedDate) },
     { care: 'unknownSex', label: '性別待確認', dogs: pick(d => !['male', 'female'].includes(d.sex)) },
-    { care: 'missingIntro', label: '缺介紹', dogs: pick(d => !d.intro.trim()) },
+    // ADR 0022（#667）：介紹只寫狗自己，入所經過搬進出入所紀錄後，大多數狗要重寫
+    { care: 'missingIntro', label: '缺介紹', hint: '還沒寫狗自己的介紹', dogs: pick(d => !d.intro.trim()) },
     // 照片紀錄＝D1 照片引用或 R2 清單；檔案本身讀不讀得到另外在狗資料表提示
     { care: 'missingPhoto', label: '缺照片', dogs: pick(d => !d.photoUrl) },
   ] };

@@ -34,7 +34,6 @@ const TABLES = [
   { table: 'v3_intros', label: '介紹', move: (row, { mine }) => (mine.length ? null : row) },
   { table: 'v3_rest', label: '休養', move: (row, { mine }) => (mine.length ? null : row) },
   { table: 'v3_stays', label: '出入所紀錄', replaces: true, move: (row, { mine }) => (mine.length ? { ...row, stays_json: joinStays(mine[0].stays_json, row.stays_json) } : row) },
-  { table: 'v3_intake_events', label: '入所事件', move: (row, { mine }) => ({ ...row, position: row.position + Math.max(-1, ...mine.map(e => e.position)) + 1 }) },
   // 只當一般照片搬過去：留下那隻的主照片可能在舊固定路徑（R2），不能被蓋掉
   { table: 'v3_photos', label: '照片', move: row => ({ ...row, is_primary: 0 }) },
   // 被併的狗離所過、留下的狗在所：跟再入所一樣，記用哪個編號回來
@@ -160,6 +159,8 @@ export async function mergeDogs(db, targetId, input, { actor } = {}) {
     if (moved[table].length) writes.push(insertRows(db, table, moved[table]));
   }
   if (rows.v3_walk_state.length) writes.push(db.prepare('UPDATE v3_walk_state SET dog_id=? WHERE dog_id=?').bind(targetId, sourceId));
+  // 入所事件（#285）不再用（ADR 0022，#667），表等下一張 PR 才 DROP；被併那隻還留著的列不搬，只刪掉，不然外鍵擋住刪狗。DROP 時一起拿掉這句
+  writes.push(db.prepare('DELETE FROM v3_intake_events WHERE dog_id=?').bind(sourceId));
   // 沒刪乾淨（讀完後又多了列）時，刪狗會被外鍵擋下，整批不寫
   writes.push(db.prepare('DELETE FROM v3_dog_edit_state WHERE dog_id=?').bind(sourceId),
     db.prepare('DELETE FROM v3_dogs WHERE dog_id=?').bind(sourceId),
@@ -178,6 +179,7 @@ export async function mergeDogs(db, targetId, input, { actor } = {}) {
 
 // 取消合併：照快照重建被併的那隻、插回牠原本的每一列；當時搬過去的列只在「每一欄都沒變」時從留下那隻刪掉。
 // 合併後留下那隻又改過的列（例如試算表重寫了那天的溜狗）算留下那隻自己的資料，不動。
+// #667 以前的快照還有 v3_intake_events：不在 TABLES 裡，照樣跳過，不插回也不刪。
 export async function unmergeDogs(db, targetId, input, { actor } = {}) {
   checkInput(input, 'logId,revision', actor);
   if (!Number.isSafeInteger(input.logId)) throw editError(400, '找不到這筆合併紀錄');

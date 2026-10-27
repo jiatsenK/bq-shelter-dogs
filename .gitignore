@@ -14,3 +14,6 @@ db/seed.sql
 # 正式資料庫的匯出（搬遷用），不可以提交
 .migration-private/
 admin/public/shared/
+
+# 介紹搬家核對表（#665）：含原文地址，不可以提交
+.scratch/intro-split/
