@@ -63,7 +63,7 @@ export function writeBudget(db, env, cost, now = Date.now(), retry = 0) {
     db.prepare('INSERT INTO v3_walk_write_budget(day,reserved,retry) VALUES(?,?,?) ON CONFLICT(day) DO UPDATE SET reserved=reserved+excluded.reserved,retry=retry+excluded.retry').bind(day, cost, retry),
   ];
 }
-const retryBudget = env => Number(env.SYNC_RETRY_DAILY_BUDGET || 5000);
+const retryBudget = env => Number(env.SYNC_RETRY_DAILY_BUDGET || 10000);
 
 // 派送前一次保留整條協定（含失敗／釋放）的索引及觸發器上界。
 // 同派送重送的 target／receipt 是冪等的，不可重複消耗這份保留量。

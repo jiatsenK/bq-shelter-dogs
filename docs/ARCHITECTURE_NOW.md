@@ -45,7 +45,7 @@ Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，
 
 寫回重試有上限（#684，ADR 0018 補充）：試算表明確拒絕（沒設定、金鑰、試算表 ID、權限錯）失敗一次就停，其他錯誤第 10 次失敗後停。停住的工作在 `v3_walk_outbox` 照舊是 `retry`，`next_attempt_at` 設成 `9999-12-31T00:00:00.000Z`（`walk-accept.js` 的 `STOPPED_AT`），排程永遠撿不到；次數在 `v3_walk_retry.failures`。管理網站「資料檢查」的「停止重試的狗」列出來。志工網站的狗只看得到 `retry`，照舊顯示「寫回試算表失敗，會自動重試」。
 
-重試另有每天上限（#685，ADR 0018 補充）：`v3_walk_write_budget` 每天一列，`reserved` 是全部保留量（跟 `SYNC_DAILY_BUDGET` 比），`retry` 是其中寫回重試的部分（跟 `SYNC_RETRY_DAILY_BUDGET` 比，`wrangler.jsonc` 設 5,000 列）。失敗過的工作再派送才算重試；第一次派送、中斷後的恢復派送不算。上限用完時，`walk-accept.js` 的 `dispatchBatch` 把那些工作的 `next_attempt_at` 改成隔天 UTC 午夜，同一輪的第一次派送照送。
+重試另有每天上限（#685，ADR 0018 補充）：`v3_walk_write_budget` 每天一列，`reserved` 是全部保留量（跟 `SYNC_DAILY_BUDGET` 比），`retry` 是其中寫回重試的部分（跟 `SYNC_RETRY_DAILY_BUDGET` 比，`wrangler.jsonc` 設 10,000 列，K 2026-10-27 定）。失敗過的工作再派送才算重試；第一次派送、中斷後的恢復派送不算。上限用完時，`walk-accept.js` 的 `dispatchBatch` 把那些工作的 `next_attempt_at` 改成隔天 UTC 午夜，同一輪的第一次派送照送。
 
 **注意：試算表主清單刪掉的列，D1 不會跟著刪。** 例如暫時籠位的「(狗名)」列刪掉後，網站還會照舊顯示暫時籠位。K 2026-10-26 決定再發生時才處理。
 

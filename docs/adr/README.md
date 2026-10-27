@@ -45,7 +45,7 @@
 | `SITE_ENV` | repo 沒設定：正式環境只可能是手動加的 Cloudflare 密鑰（後台加的一般變數部署時會被 keep_vars: false 清掉） | — |
 | `SYNC_DAILY_BUDGET` | `40000` | wrangler.jsonc 的 vars |
 | `SYNC_MAX_ROWS` | repo 沒設定：正式環境只可能是手動加的 Cloudflare 密鑰（後台加的一般變數部署時會被 keep_vars: false 清掉） | — |
-| `SYNC_RETRY_DAILY_BUDGET` | `5000` | wrangler.jsonc 的 vars |
+| `SYNC_RETRY_DAILY_BUDGET` | `10000` | wrangler.jsonc 的 vars |
 | `WALKER_KEY` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
 | `WALK_RETRY_ENABLED` | `true` | wrangler.jsonc 的 vars |
 
