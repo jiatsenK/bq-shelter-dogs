@@ -290,7 +290,12 @@ function markSheetChanged(props) {
   runMark = Date.now().toString(36) + Math.random().toString(36).slice(2);
   props.setProperty(SHEET_MARK, runMark);
 }
-// 拿著 script lock、讀表前呼叫：第一次記下記號；之後記號變了就回 true（這次執行不要再送）
+// 讀表前記下當時的記號（這次執行已經記過就不動，例如編輯觸發換記號時已記好）
+function rememberSheetMark(props) {
+  if (runMark === null) runMark = props.getProperty(SHEET_MARK) || '';
+}
+// 拿著 script lock、送出前核對：記號跟讀表前記下的不同就回 true（這次執行不要送）。
+// 副作用：這次執行還沒記過時，這次就當成記下（flushWalkEdits、flushDogList 定時觸發時，核對完同一把鎖內才讀表）。
 function sheetChangedSinceRead(props) {
   var now = props.getProperty(SHEET_MARK) || '';
   if (runMark === null) runMark = now;
@@ -488,23 +493,32 @@ function updateDogListPending(change) {
 }
 
 // 保險掃描：只送指紋，Worker 回要哪些；主清單先送（狗群要用主清單的犬名對）
+// 讀表、每一批的「核對記號 → 送出」都拿著 script lock（跟網站寫回同一把），核對完到送出之間網站寫回插不進來（#701）。
+// 每批不重讀表：同一次執行再讀也是第一次的內容；記號沒變就表示一開始讀到的仍是表上現在的值。
 function dogListScan() {
   var props = PropertiesService.getScriptProperties();
   var lock = LockService.getScriptLock();
   var units;
   lock.waitLock(15000);
-  try { sheetChangedSinceRead(props); units = dogListUnits(dogListSheets(), ymdOf, dogListHash); } finally { lock.releaseLock(); }
+  try { rememberSheetMark(props); units = dogListUnits(dogListSheets(), ymdOf, dogListHash); } finally { lock.releaseLock(); }
   var fingerprints = {};
   Object.keys(units).forEach(function (k) { fingerprints[k] = units[k].hash; });
   var out = walkWorker(props, 'dog-list-scan', { fingerprints: fingerprints });
   if (out.extra && out.extra.length) console.warn('dogListScan: D1 有、試算表沒有（只列出來，不自動刪）：' + out.extra.join('、'));
   var want = orderDogListKeys(out.want || []);
   for (var round = 0; round < DOG_LIST_SCAN_ROUNDS && want.length; round++) {
-    // 掃描讀表後有人改過：剩下的是舊內容，有人改的會由編輯觸發送，其餘下次掃描再補
-    if (sheetChangedSinceRead(props)) { console.warn('dogListScan: 掃描中有人改表，下次掃描再補'); return; }
-    var batch = want.splice(0, DOG_LIST_BATCH).map(function (k) { return units[k]; }).filter(Boolean);
-    var results = walkWorker(props, 'dog-list', { rows: batch }).results || [];
-    if (results.some(function (r) { return !r || !r.ack; })) { console.warn('dogListScan: Worker 沒接手，下次掃描再補'); return; }
+    var stop = '';
+    lock.waitLock(15000);
+    try {
+      // 掃描讀表後有人改過：剩下的是舊內容，有人改的會由編輯觸發送，其餘下次掃描再補
+      if (sheetChangedSinceRead(props)) stop = '掃描中有人改表';
+      else {
+        var batch = want.splice(0, DOG_LIST_BATCH).map(function (k) { return units[k]; }).filter(Boolean);
+        var results = walkWorker(props, 'dog-list', { rows: batch }).results || [];
+        if (results.some(function (r) { return !r || !r.ack; })) stop = 'Worker 沒接手';
+      }
+    } finally { lock.releaseLock(); }
+    if (stop) { console.warn('dogListScan: ' + stop + '，下次掃描再補'); return; }
   }
 }
 
