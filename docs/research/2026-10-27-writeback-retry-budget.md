@@ -1,0 +1,51 @@
+# 寫回重試沒有上限、吃掉每日溜狗預算（D1 稽核第 6 項）
+
+日期：2026-10-27。只做研究，沒改程式。
+資料基準：10/24–10/26 是測試人員流量，真的使用從 10/27 開始；下面的列數是程式碼推算，不是正式量測。
+
+## 現況
+
+- **怎麼排重試**：寫回失敗時，`worker/src/walk-accept.js:286` 把 `failures` 加 1，`:291` 依次數決定等多久：1、2、4、8 分鐘，第 5 次以後固定 15 分鐘，**沒有次數上限**，也沒有隨機抖動。`:294` 把 outbox 改成 `retry`、寫入 `next_attempt_at`。
+- **誰來撿**：排程 `wrangler.jsonc:40` 每 10 分鐘（`5-59/10`）跑一次 `retryWalks`（`worker/src/walk-retry.js:15-36`），每次最多撿 10 隻到期的狗（`:21`、`:27`、`:32`），交回共用派送核心 `dispatchWalks`。所以固定 15 分鐘的等待，實際上會落在下一次排程，大約每 20 分鐘一次。
+- **預算怎麼扣**：每次派送（包含每次重試）認領時先保留 `DISPATCH_COST = 96` 列（`walk-accept.js:205`、`:228`），走 `writeBudget`（`:52-61`）累加到 `v3_walk_write_budget`，超過 `SYNC_DAILY_BUDGET`（`wrangler.jsonc:29`，40,000）就整批不寫。失敗收尾的 24 列與回執的 16 列因為 `v3_walk_retry` 已記下今天的保留，不再另扣（`:65-70`、`:290`）。稽核在本機量到一次實際只寫約 24 列，所以預留是實際的約 4 倍。
+- **什麼會讓重試結束**：只有寫成功（回執確認、outbox 變 `synced`）、或這隻狗被新的登記換成新版本（`failures` 歸零，`:231`）。錯誤種類有記在 `error` 前綴（`:212` 的 `remoteError`：`writeback-unconfirmed`／`writeback-rejected`；沒設定是 `writeback-not-configured`），`worker/src/sheet-write.js:42-43` 也分得出「連不上／HTTP 非 2xx」（`unreachable`）、「金鑰錯」（`key`）與 Apps Script 回的其他錯誤（試算表 ID 錯、沒權限等，`:49-55`），但**這些分類沒有拿來決定要不要再試**，全部照樣排下一次。
+
+## 問題與最壞情況估算
+
+- 一隻卡住的狗，前 5 次在約 30 分鐘內用完，之後約每 20 分鐘一次，一天約 72 次 × 96 列 ≈ 6,900 列保留。
+- 40,000 ÷ 6,900 ≈ 5.8：**卡住 6 隻，當天的預算就被重試用光**，之後所有志工按「溜了」都會因 `writeBudget` 回 503 失敗，直到 UTC 午夜（台灣早上 8 點）重置。
+- 最容易一次卡很多隻的情境，正好是「明確拒絕」：金鑰換了沒同步、試算表 ID 錯、Apps Script 權限掉了、欄位被改壞。這時每隻狗都會失敗，再試也不會好，而且排程每輪最多派 10 隻，幾小時內就到上限。
+- 真正的 D1 免費額度是每天 100,000 列、UTC 00:00 重置（https://developers.cloudflare.com/d1/platform/pricing/）。保留量是自訂的保守上界，不等於真的寫了那麼多，所以實際會先撞到的是我們自己的 40,000 門檻，不是 Cloudflare 額度。這對資料安全是好事，但對志工來說一樣是「按了失敗」。
+- 10/24–10/27 實測沒有發生（稽核原文標註）。
+
+## 外部資料重點
+
+- **哪些錯誤不該重試**：Google Cloud Storage 的重試策略把 408、429、5xx、連線逾時／中斷列為可重試；授權失敗、請求本身不合法這類永久錯誤「要先修好才重試」（https://docs.cloud.google.com/storage/docs/retry-strategy）。AWS Builders' Library 也說用戶端錯誤不要用同樣的請求重試（https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter）。
+- **次數要設上限**：Google Sheets API 建議指數退避到上限後可以用固定間隔繼續，但要限制總次數，不要無限重試（https://developers.google.com/workspace/sheets/api/limits）。GCS 各語言程式庫的預設也都有總時間或次數上限，例如 Java 6 次、gcloud 32 次、C++ 最多 900 秒（https://docs.cloud.google.com/storage/docs/retry-strategy）。
+- **要加抖動**：Sheets API 的退避公式是 `min(2^n + 隨機毫秒, 最大退避)`，用隨機量避免很多用戶端同時重試（https://developers.google.com/workspace/sheets/api/limits）；AWS 也建議退避和排程工作都加抖動（同上 AWS 連結）。
+- **重試另設額度**：AWS 建議在本機用 token bucket 限制重試：有 token 時照常重試，用完就降到固定速率，AWS SDK 從 2016 年起這樣做（同上 AWS 連結）。
+- **配額回應**：Sheets API 每分鐘每專案寫入 300 次、每使用者 60 次，超過回 429（https://developers.google.com/workspace/sheets/api/limits）。我們走 Apps Script 的 `SpreadsheetApp`，不一定直接拿到 429，但 Apps Script 本身的逾時或配額錯誤在 Worker 這邊會看到非 2xx 或 `ok:false`，應歸類為暫時性。
+
+## 選項比較
+
+| 選項 | 做法 | 好處 | 代價／風險 |
+|---|---|---|---|
+| A. 明確拒絕就停 | `key`、試算表 ID 錯、沒權限、`writeback-not-configured` 改成新狀態（例如 `failed`），不再排程；管理網站顯示給 K | 最常見的「一次卡很多隻」直接消失 | 要定義哪些訊息算明確拒絕；K 修好設定後需要一個「全部重送」的動作（或下次登記自然換版本） |
+| B. 次數上限 | 例如 `failures >= 10`（約 2–3 小時）就停，標成需要人工處理 | 不管錯誤怎麼分類都有天花板：一隻最多 10 × 96 = 960 列，40 隻才用光預算 | 長時間 Google 故障時要人工重送；保險掃描（ADR 0018）仍會在下次比對時發現差異 |
+| C. 重試另設預算 | 第一次派送照用 `SYNC_DAILY_BUDGET`；重試另計，例如每日上限 5,000 列，或只准用總預算的 10–20%（token bucket 概念） | 重試再怎麼失控，志工新的登記仍有預算 | `v3_walk_write_budget` 要多一欄或多一個 key；要決定比例 |
+| D. 預留貼近實際 | 把 96 依實際量測（約 24，再加觸發器餘量）調小，或重試時用較小的成本 | 所有路徑都受惠，最壞情況直接變成約 1/2–1/4 | 預留是安全上界，調太低會讓 `SYNC_MAX_ROWS` 擋不住真的大寫入；需要在正式資料重測，觸發器變動時要跟著改 |
+| E. 抖動 | 退避加隨機，或固定每隻狗的偏移 | 避免多隻同時重試 | 目前排程每 10 分鐘才跑，抖動效果有限，優先度低 |
+
+## 建議
+
+1. **先做 A + B**：改動小、立刻消除「6 隻用光」的最壞情況。上限建議 10 次左右（前 5 次約 30 分鐘，之後再 5 次約 100 分鐘），停下後狀態可在管理網站看到。
+2. **再做 C**：用簡單的「重試每日上限」即可，不必做完整 token bucket；超過時重試等明天，第一次派送不受影響。
+3. **D 等真的使用累積幾天後再量**（10/27 起的資料），確認實際每次寫入列數再調；不要拿 10/24–10/26 測試流量當基準。
+4. E 暫不做。
+
+## 未決問題
+
+- Apps Script 回的錯誤中，哪些確定是「永久」？目前只有 `key` 有明確代碼（`sheet-write.js:43`），其餘靠訊息比對（`:49-55`），是否要請 Apps Script 回固定的 `code`？
+- 停止重試後，K 要怎麼重送：管理網站按鈕，還是等保險掃描或下一次登記？
+- 重試預算的數字（固定 5,000 列，或總預算的比例）由 K 決定。
+- 96 列預留的組成要在正式庫重新驗證（含觸發器），本文的「約 24 列」來自稽核的本機量測。
