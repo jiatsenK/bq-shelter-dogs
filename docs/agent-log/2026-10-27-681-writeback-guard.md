@@ -17,6 +17,6 @@
 - ADR 0018 新增「寫回流程少寫的 guard 與索引」補充；`standards.test.mjs` 拿掉兩條已不存在的例外；`walk-accept.test.mjs` 新增 NULL／不成立都擋下的測試。
 - 本機量測（Miniflare D1 `rows_written`）：一次完整流程 49 → 36 列，同日加人 51 → 38 列。
 - 例外／未完成：
-  - `-Full` 只有 `scripts/local-check.test.mjs` 4 項失敗。乾淨的 `origin/main` 在這台機器上也是同樣 4 項失敗，跟這次的改動無關。Node 失敗時全套會停下，所以網頁測試沒有在本機跑，交給 CI。
+  - `-Full` 第一次跑 `scripts/local-check.test.mjs` 有 4 項失敗，原因是這台機器沒有 pwsh。設 `BQ_CHECK_PWSH=powershell` 重跑後，Node 505 項和網頁測試全部通過。
   - 寫入預算的保留量沒有調（研究說要另外決定）。
   - 合併後要按「套用 D1 migration」。
