@@ -13,7 +13,7 @@
 ## 實作
 
 - guard 改成 `guard(db, 條件, ...參數)`（`worker/src/walk-accept.js`）：`INSERT INTO v3_walk_guard SELECT 0 WHERE (條件) IS NOT 1`。溜狗與保險掃描的 7 處 guard 都換掉，拿掉 9 處 `DELETE FROM v3_walk_guard`；派送認領的回傳位置從每隻 5 句改 4 句。
-- migration `0011_walk_outbox_indexes.sql`：刪 `readback`、`unknown_date`、`unknown_walker`；`db/compact-schema.sql` 同步。migration 必須連號，0011 也被 #678／#679／#680 用了，後合併的改號。
+- migration `0012_walk_outbox_indexes.sql`：刪 `readback`、`unknown_date`、`unknown_walker`；`db/compact-schema.sql` 同步。原本取 0011，跟 #678（PR #689，0011）撞號；分派 session 排定 #689 先合併，所以 rebase 後改成 0012。
 - ADR 0018 新增「寫回流程少寫的 guard 與索引」補充；`standards.test.mjs` 拿掉兩條已不存在的例外；`walk-accept.test.mjs` 新增 NULL／不成立都擋下的測試。
 - 本機量測（Miniflare D1 `rows_written`）：一次完整流程 49 → 36 列，同日加人 51 → 38 列。
 - 例外／未完成：
