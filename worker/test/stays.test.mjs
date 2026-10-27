@@ -148,3 +148,18 @@ test('離所原因也算內容：比對、取消合併拆回都看它', () => {
   const mine = JSON.stringify([...a, { number: '', in: '2015-08-18', out: '2017-09-05', reason: '', outReason: '轉所' }]);
   assert.deepEqual(JSON.parse(withoutStays(mine, JSON.stringify(a), [])), [{ number: '', in: '2015-08-18', out: '2017-09-05', reason: '', outReason: '轉所' }]);
 });
+
+// #663：同步從備註讀錯離所日（納卡西 10-08，其實 10-18），管理者可以在出入所表改；志工送來的照舊不採用
+test('管理者改有離所紀錄那列的離所日：照送來的；志工的照舊用離所紀錄；不能清空、未來、早於入所日', () => {
+  const before = { numbers: ['2026042101'], currentNumbers: [], departures: [{ number: '2026042101', date: '2026-10-08', reason: 'adopt' }] };
+  const sent = [{ number: '2026042101', in: '2026-04-21', out: '2026-10-18', reason: '', departed: true, departure: '認養' }];
+  assert.deepEqual(cleanStayTable(sent, before, TODAY, { admin: true }).rows, [
+    { number: '2026042101', in: '2026-04-21', out: '2026-10-18', reason: '', departed: true, departure: '認養' },
+  ]);
+  assert.equal(cleanStayTable(sent, before, TODAY).rows[0].out, '2026-10-08');
+  const fail = (out, message) => assert.match(cleanStayTable([{ ...sent[0], out }], before, TODAY, { admin: true }).error, message);
+  fail('', /離所日不能清空/);
+  fail('2026-10-27', /未來/);
+  fail('2026-04-20', /早於入所日/);
+  fail('2026/10/18', /YYYY-MM-DD/);
+});

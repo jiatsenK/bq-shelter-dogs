@@ -70,7 +70,7 @@ export function validFormer(value, now = Date.now()) {
   const day = `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
   return !isNaN(Date.parse(day)) && new Date(day).toISOString().slice(0, 10) === day && day <= today(now);
 }
-export function cleanDogValue(field, value, before, now) {
+export function cleanDogValue(field, value, before, now, { admin = false } = {}) {
   if (field === 'intro') {
     if (typeof value !== 'string') throw editError(400, '介紹格式不對');
     const text = value
@@ -89,8 +89,8 @@ export function cleanDogValue(field, value, before, now) {
     return value;
   }
   if (field === 'stays') {
-    // 補編號就是補一列、刪編號就是刪那一列（ADR 0021）；目前編號不能刪
-    const cleaned = cleanStayTable(value, before, today(now));
+    // 補編號就是補一列、刪編號就是刪那一列（ADR 0021）；目前編號不能刪。管理者可以改離所日（#663）
+    const cleaned = cleanStayTable(value, before, today(now), { admin });
     if (cleaned.error) throw editError(cleaned.conflict ? 409 : 400, cleaned.error);
     return cleaned.rows;
   }
@@ -151,7 +151,7 @@ export async function saveDogEdit(
   if (before.revision !== input.revision) throw conflict();
   const field = input.field,
     now = Date.now();
-  const value = field === 'photo' && photo ? input.value : cleanDogValue(field, input.value, before, now);
+  const value = field === 'photo' && photo ? input.value : cleanDogValue(field, input.value, before, now, { admin: Boolean(actor) });
   let nextEvents;
   if (events !== undefined) {
     if (field !== 'intro' || actor) throw editError(400, '此操作不修改逐次入所事件');
@@ -226,6 +226,17 @@ export async function saveDogEdit(
         [dogId, json(stored)]
       )
     );
+  // 管理者改了有離所紀錄那列的離所日（#663）：改離所紀錄本身，記成手動修正，同步就不再從試算表蓋回去
+  if (field === 'stays')
+    for (const row of value.filter(
+      (r) => r.departed && r.out !== (before.departures.find((d) => d.number === r.number)?.date || '')
+    ))
+      writes.push(
+        statement(
+          `UPDATE v3_dog_departures SET departed_date=?,date_source='manual' WHERE number=? AND dog_id=? AND ${guard}`,
+          [row.out, row.number, dogId]
+        )
+      );
   if (nextNumbers) {
     for (const n of before.numbers.filter((n) => !nextNumbers.includes(n))) {
       writes.push(statement(`DELETE FROM v3_dog_numbers WHERE number=? AND dog_id=? AND ${guard}`, [n, dogId]));
