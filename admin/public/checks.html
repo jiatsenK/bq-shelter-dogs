@@ -73,6 +73,17 @@
         </div>
         <p class="data-note">志工網站的 Worker 時間到自己做的事。寫回重試把寫回試算表失敗的狗再送一次；保險掃描補回改表通知漏掉的人工修改；照片垃圾桶清掉放超過 30 天的照片。過期或失敗時，請聯絡維護者看 Cloudflare 的紀錄。</p>
       </section>
+      <section class="card check-card" aria-labelledby="stopped-title">
+        <h2 id="stopped-title">停止重試的狗</h2>
+        <p id="stopped-status" class="check-status" role="status" aria-live="polite">正在讀取停止重試的狗…</p>
+        <div class="table-responsive" tabindex="0" role="region" aria-label="寫回試算表停止重試的狗，可水平捲動" id="stopped-region" hidden>
+          <table class="table table-vcenter compact-table">
+            <thead><tr><th scope="col">狗</th><th scope="col">登記日</th><th scope="col">失敗次數</th><th scope="col">原因</th></tr></thead>
+            <tbody id="stopped-dogs"></tbody>
+          </table>
+        </div>
+        <p class="data-note">寫回試算表時，試算表明確拒絕（金鑰、試算表 ID、權限錯，或志工網站沒設定）就不再重試；其他錯誤重試 10 次還失敗也停下。網站上的紀錄不受影響，只是試算表還沒寫進去。</p>
+      </section>
     </main>
   </div>
 </body>

@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
-import { dispatchWalk, dispatchWalks } from '../src/walk-accept.js';
+import { dispatchWalk, dispatchWalks, RETRY_LIMIT, STOPPED_AT } from '../src/walk-accept.js';
+import { readStoppedWalks } from '../src/admin/checks.js';
 import { retryWalks } from '../src/walk-retry.js';
 import { setup, request, post, current } from './walk-fixture.mjs';
 
@@ -80,6 +81,81 @@ test('排程按 1、2、4、8、15 分鐘持久退避，重啟不重設', async 
       now += minutes * 60000;
       t.mock.timers.setTime(now);
     }
+  } finally { globalThis.fetch = real; env.DB.close(); }
+});
+
+// #684：重試有上限。tick 會跑保險掃描與寫回重試，掃描回空清單不影響。
+function failingSheet(answer, calls) {
+  return async (_url, init) => {
+    if (JSON.parse(init.body).action === 'walkScan') return Response.json({ ok:true,rows:[] });
+    calls.push(1); return answer();
+  };
+}
+const job = env => env.DB.prepare('SELECT o.status,o.next_attempt_at,o.error,r.failures FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version LEFT JOIN v3_walk_retry r ON r.dog_key=o.dog_key').first();
+
+test('#684 試算表明確拒絕（金鑰、試算表 ID、權限、沒設定）失敗一次就停，排程不再撿，管理網站看得到', async t => {
+  const start = Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now:start });
+  const real = globalThis.fetch;
+  const cases = [
+    [{}, () => Response.json({ ok:false,code:'key' }), '寫入試算表的金鑰不對，請 K 檢查設定'],
+    [{}, () => Response.json({ ok:false,error:'Illegal spreadsheet id' }), '試算表 ID 不對，請 K 檢查小程式設定'],
+    [{}, () => Response.json({ ok:false,error:'You do not have permission to access' }), '小程式沒有試算表的編輯權限，請 K 檢查設定'],
+    [{ SHEET_WRITE_KEY:'' }, () => Response.json({ ok:true,rows:[] }), '志工網站還沒設定寫入試算表'],
+  ];
+  try {
+    for (const [extra, answer, reason] of cases) {
+      const env = { ...await setup(),WALK_RETRY_ENABLED:'true',...extra }, calls = [];
+      worker.testing.resetState();
+      t.mock.timers.setTime(start);
+      globalThis.fetch = failingSheet(answer, calls);
+      try {
+        await post(env, request('refused-0001'));
+        await tick(env, start);
+        const sent = calls.length;
+        const row = await job(env);
+        assert.deepEqual([row.status, row.next_attempt_at, row.failures], ['retry', STOPPED_AT, 1]);
+        assert.equal((await current(env)).walks[0].syncStatus, 'retry');
+        for (const minutes of [1, 60, 24 * 60]) { worker.testing.resetState(); await tick(env, start + minutes * 60000); }
+        assert.equal(calls.length, sent, '停住後排程不再呼叫試算表');
+        const [dog] = await readStoppedWalks(env.DB);
+        assert.deepEqual(dog, { number:'9001',name:'測試狗',dogId:'dog',date:request('x').operationDate,failures:1,reason });
+      } finally { env.DB.close(); }
+    }
+  } finally { globalThis.fetch = real; }
+});
+
+test('#684 其他錯誤第 10 次失敗後停；這隻狗再登記就換新版本、次數歸零重新寫回', async t => {
+  const start = Date.parse('2026-10-22T02:00:00Z');
+  t.mock.timers.enable({ apis:['Date'],now:start });
+  const env = { ...await setup(),WALK_RETRY_ENABLED:'true' }, real = globalThis.fetch, calls = [];
+  worker.testing.resetState();
+  globalThis.fetch = failingSheet(() => { throw new Error('lost'); }, calls);
+  try {
+    await post(env, request('limit-00001'));
+    let now = start;
+    for (let i = 1; i <= RETRY_LIMIT; i++) {
+      await tick(env, now);
+      const row = await job(env);
+      assert.equal(row.failures, i);
+      if (i < RETRY_LIMIT) assert.notEqual(row.next_attempt_at, STOPPED_AT, `第 ${i} 次失敗還會再試`);
+      worker.testing.resetState();
+      now = Date.parse(row.next_attempt_at === STOPPED_AT ? new Date(now + 60000).toISOString() : row.next_attempt_at);
+      t.mock.timers.setTime(now);
+    }
+    assert.equal(calls.length, RETRY_LIMIT);
+    assert.equal((await job(env)).next_attempt_at, STOPPED_AT);
+    await tick(env, now + 86400000);
+    assert.equal(calls.length, RETRY_LIMIT, '第 10 次失敗後不再試');
+    const [dog] = await readStoppedWalks(env.DB);
+    assert.deepEqual([dog.failures, dog.reason], [RETRY_LIMIT, '連不上試算表，請稍後再試']);
+    const version = (await current(env)).walks[0].version;
+    assert.equal((await post(env, request('limit-00002','乙',{ dogs:[{ id:'9001',name:'測試狗',expectedVersion:version }] }))).status, 200);
+    worker.testing.resetState();
+    await tick(env, now + 86400000 + 60000);
+    assert.equal(calls.length, RETRY_LIMIT + 1, '新版本照常派送');
+    assert.deepEqual([(await job(env)).failures, (await job(env)).next_attempt_at === STOPPED_AT], [1, false]);
+    assert.deepEqual(await readStoppedWalks(env.DB), [], '舊版本已被取代，不再列出');
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
 

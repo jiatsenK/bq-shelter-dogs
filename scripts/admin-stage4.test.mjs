@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { buildAdminAssets } from './build-admin-assets.mjs';
 await buildAdminAssets();
 const { parseActivities, filterActivities, activityPayload, sameActivity, describeActivity, matchDog } = await import('../admin/public/js/activity-model.js');
-const { completeness, careLink, parseSheetGaps, gapStatus, parseCronStatus, cronStatus } = await import('../admin/public/js/data-checks.js');
+const { completeness, careLink, parseSheetGaps, gapStatus, parseCronStatus, cronStatus, parseStoppedWalks, stoppedStatus } = await import('../admin/public/js/data-checks.js');
 const { editQuery, parseEditPage, formatWhen, sourceLabel, valueText } = await import('../admin/public/js/edit-log.js');
 
 const A = 'a'.repeat(32), B = 'b'.repeat(32);
@@ -98,4 +98,13 @@ test('稽核第 5 項 排程：最後跑完時間、最近失敗、過期、從�
   assert.match(cronStatus(job('retry', { stale: true })).problem, /已過期/);
   assert.equal(cronStatus(job('retry', { state: 'error', okAt: null })).bad, true);
   for (const bad of [{}, { jobs: [job('sync')] }, { jobs: [job('retry', { okAt: 'x' })] }, { jobs: [job('retry', { stale: 'no' })] }]) assert.throws(() => parseCronStatus(bad));
+});
+
+test('#684 停止重試的狗：格式驗證、舊版 Worker 沒回當成沒有、有狗時說明試算表還是舊的', () => {
+  const dog = { number: '9001', name: '測試狗', dogId: 'dog', date: '2026-10-27', failures: 10, reason: '連不上試算表，請稍後再試' };
+  assert.deepEqual(parseStoppedWalks({ jobs: [] }), []);
+  assert.deepEqual(parseStoppedWalks({ stopped: [dog] }), [dog]);
+  for (const bad of [{ stopped: {} }, { stopped: [{ ...dog, failures: '10' }] }, { stopped: [{ ...dog, reason: null }] }]) assert.throws(() => parseStoppedWalks(bad));
+  assert.equal(stoppedStatus([]), '目前沒有停止重試的狗。');
+  assert.match(stoppedStatus([dog, dog]), /^2 隻狗.*已停止重試/);
 });
