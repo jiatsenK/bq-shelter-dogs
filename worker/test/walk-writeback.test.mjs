@@ -13,7 +13,8 @@ function scriptAdapter(callback, { mutate = () => {}, forbidFullRead = false } =
   let values = [['編號','犬名','遛狗日期','誰遛的'],['9001','測試狗','2026/10/1','']];
   const writes = [];
   let locked = false, reads = 0;
-  const props = { getProperty: key => ({ SHEET_ID: 'test', WRITE_KEY: 'test-secret', WALK_WORKER_URL: 'https://worker.example' })[key] };
+  const stored = { SHEET_ID: 'test', WRITE_KEY: 'test-secret', WALK_WORKER_URL: 'https://worker.example' };
+  const props = { getProperty: key => stored[key] ?? null, setProperty: (key, value) => { stored[key] = value; } };
   const sheet = {
     getLastRow: () => values.length,
     getLastColumn: () => values[0].length,
@@ -33,7 +34,7 @@ function scriptAdapter(callback, { mutate = () => {}, forbidFullRead = false } =
     UrlFetchApp: { fetch: (url, options) => { assert.equal(locked, true); return callback(url, JSON.parse(options.payload), options.headers); } },
   });
   vm.runInContext(source, context);
-  return { run: body => context.handleRequest(body), writes, values: () => values, replace: rows => { values = rows; } };
+  return { run: body => context.handleRequest(body), writes, values: () => values, replace: rows => { values = rows; }, mark: () => stored.SHEET_EDIT_MARK };
 }
 
 test('保險掃描在相同鎖內只回四個必要欄位，不寫格子且必須驗證',() => {
@@ -55,6 +56,8 @@ test('接收端同鎖重定位、忽略舊 payload 目標、整格替換並讀�
   assert.equal(out.version, 2);
   assert.deepEqual(script.writes, [[3,3,'2026/10/21'],[3,4,'甲、乙']]);
   assert.equal(calls[1][1].current.walker, '甲、乙');
+  // 寫回改了格子就換表上變動記號，讀表較早的編輯通知不會再送寫回前的舊值
+  assert.ok(script.mark());
 });
 
 test('寫前可見人工修改、同名無編號歧義、狗已移走都停止寫入', () => {

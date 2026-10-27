@@ -144,6 +144,7 @@ function writeLatestWalk(sheet, req, props) {
     sheet.getRange(before.row + 1, before.cols.date + 1).setValue(target.current.date ? toSheetDate(target.current.date) : '');
     sheet.getRange(before.row + 1, before.cols.walker + 1).setValue(target.current.walker);
     SpreadsheetApp.flush();
+    markSheetChanged(props);
   }
   var after = directWalkCell(sheet, req.dog);
   if (!sameWalk(after.current, target.current)) throw new Error('試算表讀回不符');
@@ -278,6 +279,24 @@ var PENDING_EDITS = 'WALK_EDITS_PENDING';
 var EDIT_BATCH = 50; // 跟 Worker 的 EDIT_ROWS_MAX 一樣
 var FLUSH_ROUNDS = 4; // 一次觸發最多送 4 批（200 隻），其餘留給下次，避免單次執行過久
 
+// 同一次執行裡，Apps Script 會沿用第一次讀到的表內容，之後別人改的讀不到（2026-10-27 測試試算表：先改日期那次執行
+// 等鎖後又讀出改名單前的值送出，把剛收下的新名單蓋掉，狗清單也記成舊名單）。所以有人改表、網站寫回改了格子，
+// 就換一個新的「表上變動記號」；這次執行讀表前記下當時的記號，送出前記號被別人換掉，表示讀到的可能是舊內容，
+// 就不送、待通知留著，交給較新的那次執行（它在改動之後才開始，讀得到新值）或每 10 分鐘補送。
+var SHEET_MARK = 'SHEET_EDIT_MARK';
+var runMark = null; // 每次執行重新載入程式時歸零
+
+function markSheetChanged(props) {
+  runMark = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  props.setProperty(SHEET_MARK, runMark);
+}
+// 拿著 script lock、讀表前呼叫：第一次記下記號；之後記號變了就回 true（這次執行不要再送）
+function sheetChangedSinceRead(props) {
+  var now = props.getProperty(SHEET_MARK) || '';
+  if (runMark === null) runMark = now;
+  return now !== runMark;
+}
+
 function installWalkEditTriggers() {
   var id = sheetIdOf(PropertiesService.getScriptProperties().getProperty('SHEET_ID'));
   ScriptApp.getProjectTriggers().forEach(function (t) {
@@ -295,7 +314,9 @@ function onWalkSheetEdit(e) {
   if (!range) return;
   var sheet = range.getSheet(), name = sheet.getName();
   var kind = name === SHEET_NAME ? 'main' : name === DEPARTED_SHEET_NAME ? 'departed' : name === GROUP_SHEET_NAME ? 'groups' : '';
-  if (!kind || !sheet.getLastRow()) return;
+  if (!kind) return;
+  markSheetChanged(PropertiesService.getScriptProperties()); // 這次執行還沒讀表，讀到的一定包含這次改動
+  if (!sheet.getLastRow()) return;
   var values = sheet.getDataRange().getValues();
   var header = kind === 'groups' ? null : findHeader(values);
   // 狗清單（#501）：主清單、已出所、常遛狗群改到的單位都記下來送 Worker
@@ -331,14 +352,16 @@ function updatePending(change) {
 function flushWalkEdits() {
   var props = PropertiesService.getScriptProperties();
   for (var round = 0; round < FLUSH_ROUNDS; round++) {
-    var pending = JSON.parse(props.getProperty(PENDING_EDITS) || 'null');
-    var keys = pending ? Object.keys(pending.items) : [];
-    if (!keys.length) return;
-    var sent = keys.slice(0, EDIT_BATCH).map(function (k) { return { key: k, seq: pending.items[k].seq }; });
-    var results;
+    var sent, results;
     var lock = LockService.getScriptLock();
     try {
       lock.waitLock(15000);
+      // 等鎖期間別的執行可能已送出、清掉，所以拿到鎖才讀待通知
+      if (sheetChangedSinceRead(props)) { console.info('flushWalkEdits: 讀表後有人改過，交給較新的執行送'); return; }
+      var pending = JSON.parse(props.getProperty(PENDING_EDITS) || 'null');
+      var keys = pending ? Object.keys(pending.items) : [];
+      if (!keys.length) return;
+      sent = keys.slice(0, EDIT_BATCH).map(function (k) { return { key: k, seq: pending.items[k].seq }; });
       var sheet = SpreadsheetApp.openById(sheetIdOf(props.getProperty('SHEET_ID'))).getSheetByName(SHEET_NAME);
       if (!sheet) throw new Error('找不到「' + SHEET_NAME + '」分頁');
       var rows = editPayload(readWalkSnapshot(sheet).rows, sent.map(function (s) { return pending.items[s.key]; }));
@@ -429,14 +452,15 @@ function dogListHash(text) {
 function flushDogList() {
   var props = PropertiesService.getScriptProperties();
   for (var round = 0; round < DOG_LIST_ROUNDS; round++) {
-    var pending = JSON.parse(props.getProperty(DOG_LIST_PENDING) || 'null');
-    var keys = pending ? Object.keys(pending.items) : [];
-    if (!keys.length) return;
-    var sent = keys.slice(0, DOG_LIST_BATCH).map(function (k) { return { key: k, seq: pending.items[k].seq }; });
-    var results;
+    var sent, results;
     var lock = LockService.getScriptLock();
     try {
       lock.waitLock(15000);
+      if (sheetChangedSinceRead(props)) { console.info('flushDogList: 讀表後有人改過，交給較新的執行送'); return; }
+      var pending = JSON.parse(props.getProperty(DOG_LIST_PENDING) || 'null');
+      var keys = pending ? Object.keys(pending.items) : [];
+      if (!keys.length) return;
+      sent = keys.slice(0, DOG_LIST_BATCH).map(function (k) { return { key: k, seq: pending.items[k].seq }; });
       var units = dogListUnits(dogListSheets(), ymdOf, dogListHash);
       // 單位已經不在表上（例：狗改了編號、整列刪掉）就沒東西可送，直接清；保險掃描會把 D1 多出來的列出來
       var rows = sent.map(function (s) { return units[s.key]; });
@@ -469,13 +493,15 @@ function dogListScan() {
   var lock = LockService.getScriptLock();
   var units;
   lock.waitLock(15000);
-  try { units = dogListUnits(dogListSheets(), ymdOf, dogListHash); } finally { lock.releaseLock(); }
+  try { sheetChangedSinceRead(props); units = dogListUnits(dogListSheets(), ymdOf, dogListHash); } finally { lock.releaseLock(); }
   var fingerprints = {};
   Object.keys(units).forEach(function (k) { fingerprints[k] = units[k].hash; });
   var out = walkWorker(props, 'dog-list-scan', { fingerprints: fingerprints });
   if (out.extra && out.extra.length) console.warn('dogListScan: D1 有、試算表沒有（只列出來，不自動刪）：' + out.extra.join('、'));
   var want = orderDogListKeys(out.want || []);
   for (var round = 0; round < DOG_LIST_SCAN_ROUNDS && want.length; round++) {
+    // 掃描讀表後有人改過：剩下的是舊內容，有人改的會由編輯觸發送，其餘下次掃描再補
+    if (sheetChangedSinceRead(props)) { console.warn('dogListScan: 掃描中有人改表，下次掃描再補'); return; }
     var batch = want.splice(0, DOG_LIST_BATCH).map(function (k) { return units[k]; }).filter(Boolean);
     var results = walkWorker(props, 'dog-list', { rows: batch }).results || [];
     if (results.some(function (r) { return !r || !r.ack; })) { console.warn('dogListScan: Worker 沒接手，下次掃描再補'); return; }
