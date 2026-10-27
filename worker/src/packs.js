@@ -294,12 +294,11 @@ async function packedWalks(db, today) {
   return [...Object.keys(months).sort().flatMap(m => months[m].list), ...await liveWalks(db, v)];
 }
 
-// part 是 dogs／departures／cards／rest；dogs 是 null 表示主清單沒有狗。
+// part 是 dogs／departures／rest（只有名字的卡用 readDeparted）；dogs 是 null 表示主清單沒有狗。
 // 離所由各年資料包接起來；休養是在所的加上各年離所的（同一隻狗回到主清單時以在所為準）
 export async function readSmall(db, part) {
   memFor(db);
-  if (part === 'departures') return sortDepartures((await departurePacks(db)).packs.flatMap(p => p.departures));
-  if (part === 'cards') return (await departurePacks(db)).packs.flatMap(p => p.cards);
+  if (part === 'departures') return (await readDeparted(db)).departures;
   const v = await versions(db);
   const small = await smallPack(db, v.small);
   if (part === 'dogs') return small.dogs;
@@ -307,6 +306,13 @@ export async function readSmall(db, part) {
   for (const p of (await departurePacks(db)).packs) for (const [id, r] of Object.entries(p.rest)) rest.set(id, r);
   for (const [id, r] of Object.entries(small.rest)) rest.set(id, r);
   return sortedRest([...rest]);
+}
+
+// 離所和只有名字的已出所狗卡一起拿（已出所狗卡兩個都要）：同一份離所資料包，版本號只讀一次（#678）
+export async function readDeparted(db) {
+  memFor(db);
+  const { packs } = await departurePacks(db);
+  return { departures: sortDepartures(packs.flatMap(p => p.departures)), cards: packs.flatMap(p => p.cards) };
 }
 
 // 離所名冊索引（ADR 0014，#363）：每隻只留編號、狗名、舊編號、出所日、原因（和名冊那一行要顯示的推估、再入所），
