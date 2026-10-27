@@ -120,7 +120,7 @@ async function applyMain(db, row, list, env, fp) {
     if (date && !(await db.prepare('SELECT 1 FROM v3_walks WHERE dog_id=? AND walk_date=? LIMIT 1').bind(dogId, date).first())) out.push(...walkDay(db, dogId, date, dog, codes));
     list.push({ row_index: rowIndex, dog_id: dogId, number: dog.id, name: dog.name, cage, note, walked_date: date, walker: text(row.walker), walker_codes: JSON.stringify(codes) });
   }
-  if(returnedLog)out.push(db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) VALUES(?,?,?,?,?,?,?,?)').bind(new Date().toISOString(),'',returnedLog.editor.name,returnedLog.kind,returnedLog.dogId,returnedLog.dogNumber,JSON.stringify(returnedLog.before),JSON.stringify(returnedLog.after)));
+  if(returnedLog)out.push(db.prepare("INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json,source) VALUES(?,?,?,?,?,?,?,?,'sheet')").bind(new Date().toISOString(),'',returnedLog.editor.name,returnedLog.kind,returnedLog.dogId,returnedLog.dogNumber,JSON.stringify(returnedLog.before),JSON.stringify(returnedLog.after)));
   if(out.length){const result=await guardedDogBatch(db,expected,[...out,db.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(targetDogId)]);const revision=result.at(-1).results[0]?.revision;for(const item of list)if(item.dog_id===targetDogId)item.revision=revision;}
   return out.length > 0;
 }

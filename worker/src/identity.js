@@ -71,7 +71,7 @@ export async function renameIdentity(db, { code, name, operationId }, key) {
       .bind(source.volunteerId, nextCode, nextCode),
     db.prepare('INSERT INTO v3_identity_names(code,name_key,name,volunteer_id) VALUES(?,?,?,?) ON CONFLICT(code) DO NOTHING').bind(nextCode, walkerNameKey(name), name, source.volunteerId),
     db.prepare('UPDATE v3_volunteers SET name=? WHERE volunteer_id=?').bind(name, source.volunteerId),
-    db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,before_json,after_json) VALUES(?,?,?,?,?,?)').bind(new Date().toISOString(), code, source.name, 'volunteer_rename', JSON.stringify(before), JSON.stringify(after)),
+    db.prepare("INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,before_json,after_json,source) VALUES(?,?,?,?,?,?,'volunteer')").bind(new Date().toISOString(), code, source.name, 'volunteer_rename', JSON.stringify(before), JSON.stringify(after)),
     db.prepare('UPDATE v3_identity_revision SET revision=revision+1 WHERE id=1'),
     db.prepare('DELETE FROM v3_identity_guard'),
   ]);
@@ -134,7 +134,7 @@ export async function mergeIdentity(db, input, key) {
     db.prepare('UPDATE v3_identity_redirects SET target_id=? WHERE target_id=?').bind(target.volunteerId, source.volunteerId),
     db.prepare('UPDATE v3_volunteers SET name=? WHERE volunteer_id=?').bind('__merged:' + source.volunteerId, source.volunteerId),
     db.prepare('INSERT INTO v3_identity_redirects VALUES(?,?)').bind(source.volunteerId, target.volunteerId),
-    db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,before_json,after_json) VALUES(?,?,?,?,?,?)').bind(new Date().toISOString(), code, source.name, 'volunteer_merge', JSON.stringify(before), JSON.stringify({ volunteerId: target.volunteerId, name: target.name })),
+    db.prepare("INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,before_json,after_json,source) VALUES(?,?,?,?,?,?,'volunteer')").bind(new Date().toISOString(), code, source.name, 'volunteer_merge', JSON.stringify(before), JSON.stringify({ volunteerId: target.volunteerId, name: target.name })),
     db.prepare('UPDATE v3_identity_revision SET revision=revision+1 WHERE id=1'),
     db.prepare('DELETE FROM v3_identity_guard'),
   ]);

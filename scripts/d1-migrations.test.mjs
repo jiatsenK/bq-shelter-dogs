@@ -68,6 +68,25 @@ test('0005 從舊表組 JSON：代號、狗群、群名逐一對得上，small �
   assert.equal(await small(), before + 2, '改狗群 small 加 1');
 });
 
+// #672：加 source 欄，舊資料都在；只有「試算表（自動認回所）」的舊編號紀錄改成試算表，其他舊紀錄維持 NULL（顯示舊紀錄）
+test('0010 修改紀錄加來源：舊資料都在，自動認回所的紀錄來源變試算表', async t => {
+  const db = fakeD1();
+  t.after(() => db.close());
+  const files = migrationFiles();
+  const at = files.indexOf('0010_edit_log_source.sql');
+  for (const f of files.slice(0, at)) await run(db, splitStatements(readFileSync(join(MIGRATIONS_DIR, f), 'utf8')));
+  await run(db, [
+    `INSERT INTO v3_edit_log(at,editor_name,kind,dog_id,dog_number,before_json,after_json) VALUES('2026-10-20T00:00:00.000Z','試算表（自動認回所）','former','a','2','{"number":"1"}','{"number":"2"}')`,
+    `INSERT INTO v3_edit_log(at,editor_name,kind,dog_id,dog_number,before_json,after_json) VALUES('2026-10-21T00:00:00.000Z','管理者','former','a','2','[]','["3"]')`,
+    `INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,before_json,after_json) VALUES('2026-10-22T00:00:00.000Z','c1','甲','note','null','"備註"')`,
+  ]);
+  const before = (await db.prepare('SELECT * FROM v3_edit_log ORDER BY id').all()).results;
+  await run(db, splitStatements(readFileSync(join(MIGRATIONS_DIR, files[at]), 'utf8')));
+  const after = (await db.prepare('SELECT * FROM v3_edit_log ORDER BY id').all()).results;
+  assert.deepEqual(after.map(({ source, ...rest }) => rest), before);
+  assert.deepEqual(after.map(r => r.source), ['sheet', null, null]);
+});
+
 test('migration 檔名是 NNNN_小寫名稱.sql，從 0000 起連號不重複', () => {
   const files = migrationFiles();
   assert.equal(files[0], '0000_compact_schema.sql');
