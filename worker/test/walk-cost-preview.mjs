@@ -27,5 +27,5 @@ try {
   const undo = modify('preview-undo','undo',2);
   report.push(await measure('undo accepted',async () => { if ((await post(env,undo)).status !== 200) throw new Error('undo failed'); }));
   report.push(await measure('same undo replay',() => post(env,undo)));
-  console.log(JSON.stringify({ report, conservativeReservations:{ accept:32, edit:40, undo:40, completeAttempt:96, standaloneTargetOrReceipt:16, manualSnapshotChange:40 }, note:'changedRows includes guards, budget, projection and version triggers; index costs covered by conservative reservations; not production CPU or account-budget acceptance' },null,2));
+  console.log(JSON.stringify({ report, conservativeReservations:{ accept:40, acceptUnchangedMembers:32, edit:40, undo:40, completeAttempt:96, standaloneTargetOrReceipt:16, manualSnapshotChange:48 }, note:'changedRows includes guards, budget, projection and version triggers; index costs covered by conservative reservations; not production CPU or account-budget acceptance' },null,2));
 } finally { globalThis.fetch=real; env.DB.close(); }

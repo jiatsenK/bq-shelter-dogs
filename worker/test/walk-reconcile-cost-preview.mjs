@@ -19,7 +19,7 @@ try {
   globalThis.fetch=async ()=>Response.json({ ok:true,sig:'preview',rows:[] });
   await measure('insurance scan; fingerprint recorded; no data differences',()=>scanWalks(env,Date.now()));
   await measure('edited row (#500); no difference',()=>reconcileEditedRows(env.DB,[{ sheet:'main',dog,current:{ date:'2026-09-01',walker:'甲' } }],{ ...env,D1_WALK_NOTIFY:'1' },async ()=>{}));
-  console.log(JSON.stringify({ report,conservativeReservations:{ comparison:32,diagnosticOrCleanup:8 },
-    bound:'Insurance scan (3 per day) at most 10 changes x 40 = 400 reserved rows; edited rows (#500) max 50 x (32+8) = 2000 per request, only rows someone edited; machine observe max 10 x (32+8) = 400. Single-row writeback uses existing reservations separately.',
+  console.log(JSON.stringify({ report,conservativeReservations:{ comparison:32,comparisonWithWalkLog:40,diagnosticOrCleanup:8 },
+    bound:'Insurance scan (3 per day) at most 10 changes x 48 = 480 reserved rows (incl. #672 walk log); edited rows (#500) max 50 x (32+8) = 2000 per request, only rows someone edited; machine observe max 10 x (32+8) = 400. Single-row writeback uses existing reservations separately.',
     note:'total_changes includes data, guards, budget and projection/version triggers; indexes use conservative reservations. Not a live CPU, trigger delivery latency or account-wide budget acceptance.' },null,2));
 } finally { globalThis.fetch=real; env.DB.close(); }

@@ -6,7 +6,7 @@ import { KIND_LABELS } from '../editlog.js';
 
 const PARAMS = new Set(['q', 'kind', 'dog', 'actor', 'source', 'from', 'to', 'order', 'cursor', 'size']);
 const SIZES = [25, 50, 100];
-const SOURCES = ['access', 'volunteer', 'legacy'];
+const SOURCES = ['access', 'volunteer', 'sheet', 'legacy']; // v3_edit_log.source 沒有 CHECK，允許的值以這裡為準（#672）
 const TEXT_MAX = 100;
 const bad = message => Object.assign(new Error(message), { status: 400 });
 const like = s => `%${s.replace(/[\\%_]/g, c => `\\${c}`)}%`;
@@ -41,7 +41,7 @@ function whereOf(f) {
     add("(l.editor_name LIKE ? ESCAPE '\\' OR l.dog_number LIKE ? ESCAPE '\\' OR COALESCE(d.name,'') LIKE ? ESCAPE '\\' OR COALESCE(l.before_json,'') LIKE ? ESCAPE '\\' OR COALESCE(l.after_json,'') LIKE ? ESCAPE '\\')", q, q, q, q, q);
   }
   if (f.kind) add('l.kind=?', f.kind);
-  if (f.source) add("COALESCE(a.source,'legacy')=?", f.source);
+  if (f.source) add("COALESCE(a.source,l.source,'legacy')=?", f.source);
   if (f.actor) add("(l.editor_name LIKE ? ESCAPE '\\' OR COALESCE(a.actor_email,'') LIKE ? ESCAPE '\\')", like(f.actor), like(f.actor));
   if (f.dog) add('(l.dog_number=? OR l.dog_id=? OR d.name=? OR l.dog_id IN (SELECT dog_id FROM v3_dog_numbers WHERE number=?))', f.dog, f.dog, f.dog, f.dog);
   if (f.from) add('l.at>=?', taipeiStart(f.from));
@@ -57,7 +57,7 @@ const kinds = Object.entries(KIND_LABELS).map(([value, label]) => ({ value, labe
 export async function searchEdits(db, params) {
   const f = editFilters(params);
   const { sql, args } = whereOf(f);
-  const { results = [] } = await db.prepare(`SELECT l.*, d.name AS dog_name, COALESCE(a.source,'legacy') AS actor_source, a.actor_email ${FROM} ${sql} ORDER BY l.id ${f.order === 'oldest' ? 'ASC' : 'DESC'} LIMIT ?`)
+  const { results = [] } = await db.prepare(`SELECT l.*, d.name AS dog_name, COALESCE(a.source,l.source,'legacy') AS actor_source, a.actor_email ${FROM} ${sql} ORDER BY l.id ${f.order === 'oldest' ? 'ASC' : 'DESC'} LIMIT ?`)
     .bind(...args, f.size + 1).all();
   const rows = results.slice(0, f.size);
   return {

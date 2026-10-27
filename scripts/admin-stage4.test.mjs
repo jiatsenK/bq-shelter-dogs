@@ -77,7 +77,10 @@ test('#567 更新紀錄：查詢字串白名單、時間用台灣時間、來源
   assert.equal(formatWhen('2026-01-01T15:59:00.000Z'), '2026/01/01 23:59');
   assert.equal(sourceLabel('access'), '管理網站');
   assert.equal(sourceLabel('volunteer'), '志工網站');
+  assert.equal(sourceLabel('sheet'), '試算表');
   assert.equal(sourceLabel('legacy'), '舊紀錄');
+  assert.equal(valueText('walk', { date: '2026-10-27', walker: '甲、乙' }), '2026-10-27（甲、乙）');
+  assert.equal(valueText('walk', { date: '', walker: '' }), '沒溜過');
   assert.equal(valueText('sex', 'female'), '母');
   assert.equal(valueText('intro', ''), '（沒有）');
 });
