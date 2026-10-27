@@ -110,6 +110,34 @@ async function runFavSyncTests() {
       eq(allDogs.map(favorites.isFav), [true, true], '常溜的狗仍認得：');
       phoneStore.writeJson(BQStore.keys.favs, ['無法辨識']);
     });
+    await check('#680 切回網頁 5 分鐘內不重抓；有待送常溜、換身分或超過 5 分鐘才同步', async () => {
+      const realNow = Date.now;
+      try {
+        let now = realNow(); Date.now = () => now;
+        await favorites.syncFavs();
+        const reads = () => keyCalls.length;
+        const start = reads();
+        now += 4 * 60 * 1000; await favorites.syncFavsOnReturn();
+        eq(reads(), start, '4 分鐘內：');
+        offline = true; favorites.toggleFav(allDogs[1]); await favorites.whenIdle(); offline = false;
+        const pending = calls.length;
+        await favorites.syncFavsOnReturn();
+        eq(calls.length, pending + 1, '有待送的常溜照常重送：');
+        const afterRetry = reads();
+        now += 60 * 1000; await favorites.syncFavsOnReturn();
+        eq(reads(), afterRetry, '重送後重新計時：');
+        now += 5 * 60 * 1000; await favorites.syncFavsOnReturn();
+        eq(reads(), afterRetry + 1, '超過 5 分鐘：');
+        saveMyCodes([alias, code]); await favorites.whenIdle();
+        const switched = reads();
+        saveMyCodes([code, alias], { syncFavs: false });
+        await favorites.syncFavsOnReturn();
+        eq(reads(), switched + 1, '換了身分：');
+        await favorites.syncFavs();
+        eq(reads(), switched + 2, '直接同步（同步鈕、恢復連線）不受限：');
+        favorites.toggleFav(allDogs[1]); await favorites.whenIdle();
+      } finally { Date.now = realNow; }
+    });
     const firstPhone = phoneStore;
     await check('#267 第二台讀回同一份；各自取消不同狗後兩邊改動都保留', async () => {
       device(); saveMyCodes([code, alias]); await favorites.whenIdle();

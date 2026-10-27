@@ -42,7 +42,7 @@
 | `welcome.js` | `BQWelcome`：開頭畫面、我是誰、名字推薦／確認、更名及合併 | app、identity、ui-kit、store、site-config、tour、walk-ui、page-state | index |
 | `photo.js` | `BQPhoto`：主照片選檔、壓縮、預覽、裁切、上傳，保留內部狀態 | app、detail、ui-kit、api、walk-ui、photo-images、overlays、page-state | index |
 | `photo-images.js` | 裁切結果轉成上傳用的原圖與縮圖 | 無 | index、admin（建置複製） |
-| `favorites.js` | `BQFavorites`：常溜實例、舊鍵搬移、逐隻增刪、離線佇列與身分同步 | app、detail、dog-status、api、store、identity、walk-ui、page-state | index |
+| `favorites.js` | `BQFavorites`：常溜實例、舊鍵搬移、逐隻增刪、離線佇列與身分同步；切回網頁 5 分鐘內不重抓 | app、detail、dog-status、api、store、identity、walk-ui、page-state | index |
 | `walk-ui.js` | `BQWalkUI`：今日登記／復原的畫面、提示條、同行人、溜狗人編輯 | app、detail、ui-kit、dog-status、dates、walk-flow、welcome、page-state | index |
 | `app.js` | 主頁資料、狗卡、燈箱、頁籤、溜狗操作與整頁事件綁定；詳細資訊在 detail.js；返回鍵交給 overlays.js，app.js 只處理都沒開覆蓋層時的頁籤切換 | 共用模組、dog-data、所有主頁功能模組、page-state | index |
 | `analysis.js` | 分析、離所名冊與資訊頁 | app、detail、ui-kit、dates、api、store、site-config、dog-data、activities、overlays、page-state | index |

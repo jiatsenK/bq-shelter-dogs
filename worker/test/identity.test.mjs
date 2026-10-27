@@ -151,3 +151,42 @@ test('名字對照的版本號由程式加 1：建立、更名、合併各加一
  assert.equal((await call(env,'/identity/merge',{...body,token:fresh.token,operationId:'merge-ok'})).status,200);assert.equal(await revision(),r+1,'合併');
  assert.equal((await call(env,'/identity',{name:'甲'})).identity.volunteerId,b.volunteerId);
 });
+test('#680 依志工找名字走索引；身分查詢合成一句，回應與分開查相同', async t => {
+ const DB=fakeD1();t.after(()=>DB.close());await createCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
+ const plan=async sql=>(await DB.prepare('EXPLAIN QUERY PLAN '+sql).all()).results.map(r=>r.detail);
+ assert.deepEqual(await plan('SELECT code,name FROM v3_identity_names WHERE volunteer_id=? ORDER BY code'),['SEARCH v3_identity_names USING INDEX v3_identity_names_volunteer (volunteer_id=?)']);
+ const {identityByCode,identitiesForCodes,IdentityError}=await import('../src/identity.js');
+ // 合併前的寫法（4 句）當對照
+ const one=(sql,...a)=>DB.prepare(sql).bind(...a).first();
+ const before=async code=>{
+  const person=await one('SELECT v.volunteer_id, v.name FROM v3_identity_names n JOIN v3_volunteers v USING(volunteer_id) WHERE n.code=?',code);
+  if(!person)throw new IdentityError(409,'請重新設定登記名字以接回志工身分');
+  let id=person.volunteer_id;const redirect=await one('SELECT target_id FROM v3_identity_redirects WHERE volunteer_id=?',id);if(redirect)id=redirect.target_id;
+  const p=await one('SELECT volunteer_id,name FROM v3_volunteers WHERE volunteer_id=?',id);if(!p)throw new IdentityError(404,'找不到志工身分');
+  const names=(await DB.prepare('SELECT code,name FROM v3_identity_names WHERE volunteer_id=? ORDER BY code').bind(id).all()).results;
+  return {volunteerId:id,name:p.name,codes:names.map(n=>n.code),names:names.map(n=>n.name)};
+ };
+ const outcome=async f=>{try{return await f();}catch(e){return {status:e.status,message:e.message};}};
+ const a=(await call(env,'/identity',{name:'甲'})).identity,b=(await call(env,'/identity',{name:'乙'})).identity,c=(await call(env,'/identity',{name:'丙'})).identity;
+ await call(env,'/identity/rename',{code:c.codes[0],name:'丙丙',operationId:'r'});
+ const preview=await call(env,'/identity/merge-preview',{code:a.codes[0],targetCode:b.codes[0]});
+ assert.equal((await call(env,'/identity/merge',{code:a.codes[0],targetCode:b.codes[0],token:preview.token,confirm:true,operationId:'m'})).status,200);
+ await DB.prepare('PRAGMA foreign_keys=OFF').run();
+ await DB.prepare('INSERT INTO v3_volunteers(volunteer_id,name,last_seen) VALUES(?,?,?)').bind('gone','走了','x').run();
+ await DB.prepare('INSERT INTO v3_identity_names VALUES(?,?,?,?)').bind('0123456789ab','走了','走了','gone').run();
+ await DB.prepare('INSERT INTO v3_identity_redirects VALUES(?,?)').bind('gone','missing').run();
+ const cases=[a.codes[0],b.codes[0],c.codes[0],'0123456789ab','ffffffffffff'];
+ for(const code of cases)assert.deepEqual(await outcome(()=>identityByCode(DB,code)),await outcome(()=>before(code)),code);
+ // 一個代號只送一句，計畫裡沒有整張掃名字表
+ const sent=[],prepare=DB.prepare;DB.prepare=sql=>{sent.push(sql);return prepare(sql);};
+ const merged=await identityByCode(DB,a.codes[0]);DB.prepare=prepare;
+ assert.equal(sent.length,1);
+ assert.ok(!(await plan(sent[0])).some(d=>/^SCAN (n|v3_identity_names)/.test(d)),'合併後的查詢依索引找名字');
+ assert.equal(merged.volunteerId,b.volunteerId);assert.equal(merged.codes.length,2);
+ assert.deepEqual(await outcome(()=>identityByCode(DB,'0123456789ab')),{status:404,message:'找不到志工身分'});
+ assert.deepEqual(await outcome(()=>identityByCode(DB,'ffffffffffff')),{status:409,message:'請重新設定登記名字以接回志工身分'});
+ // 多個代號一次 batch，同一人只回一次；有查不到的代號照舊回錯
+ assert.deepEqual(await identitiesForCodes(DB,[a.codes[0],b.codes[0],c.codes[0]]),[merged,await before(c.codes[0])]);
+ assert.deepEqual(await identitiesForCodes(DB,[]),[]);
+ assert.equal((await outcome(()=>identitiesForCodes(DB,[c.codes[0],'ffffffffffff']))).status,409);
+});

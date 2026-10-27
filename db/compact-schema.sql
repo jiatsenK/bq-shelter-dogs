@@ -263,6 +263,8 @@ CREATE TABLE IF NOT EXISTS v3_identity_names (
  name TEXT NOT NULL,
  volunteer_id TEXT NOT NULL REFERENCES v3_volunteers(volunteer_id)
 );
+-- #680：依志工找名字走索引，不整張掃
+CREATE INDEX IF NOT EXISTS v3_identity_names_volunteer ON v3_identity_names(volunteer_id, code);
 CREATE TABLE IF NOT EXISTS v3_identity_redirects (
  volunteer_id TEXT PRIMARY KEY NOT NULL REFERENCES v3_volunteers(volunteer_id),
  target_id TEXT NOT NULL REFERENCES v3_volunteers(volunteer_id),

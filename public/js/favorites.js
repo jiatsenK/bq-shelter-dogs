@@ -16,6 +16,9 @@ const BQFavorites = (() => {
     const FAV_SYNC_KEY = BQStore.keys.favsSync;
     let favSyncMemory = null;
     let favSyncQueue = Promise.resolve();
+    // 上次同步成功的時間與身分，只放記憶體：重開網頁本來就會同步（#680）
+    let lastSync = null;
+    const RETURN_SYNC_MS = 5 * 60 * 1000;
     function favState() {
       if (!favSyncMemory) {
         const saved = appState.phoneStore.readJson(FAV_SYNC_KEY);
@@ -122,14 +125,21 @@ const BQFavorites = (() => {
           read: codes => favoriteRequest(codes), write: op => favoriteRequest(null, op),
           removeLegacy: matches => appState.phoneStore.writeJson(FAVS_KEY, localFavs().filter(key => !matches(key))),
         });
-        if (loadMyCodes().join(',') === codes.join(',')) { render(); renderDetail(); }
+        if (loadMyCodes().join(',') === codes.join(',')) { lastSync = { at: Date.now(), codes: codes.join(',') }; render(); renderDetail(); }
       }).catch(() => {
         if (loadMyCodes().length) BQWalkUI.showToast('常溜暫存在這支手機，連線恢復後會再同步');
       });
       return favSyncQueue;
     }
 
-    return { loadFavs, isFav, toggleFav, syncFavs, whenIdle: () => favSyncQueue };
+    // 切回網頁：5 分鐘內同步過就不重抓（#680）；有還沒送出的常溜或換了身分照常同步。
+    // 按同步鈕、恢復連線、自己改常溜直接呼叫 syncFavs，不受限制。
+    function syncFavsOnReturn() {
+      const fresh = lastSync && Date.now() - lastSync.at < RETURN_SYNC_MS && lastSync.codes === loadMyCodes().join(',');
+      return fresh && !favState().pending.length ? favSyncQueue : syncFavs();
+    }
+
+    return { loadFavs, isFav, toggleFav, syncFavs, syncFavsOnReturn, whenIdle: () => favSyncQueue };
   }
   return { create };
 })();

@@ -6,18 +6,26 @@ export class IdentityError extends Error {
 const rows = async (db, sql, ...args) => (await db.prepare(sql).bind(...args).all()).results || [];
 const one = (db, sql, ...args) => db.prepare(sql).bind(...args).first();
 
+// 身分查詢合成一句（#680）：從代號或志工 ID 起頭、追一層轉址（合併時已把轉址改指最後的目標），帶出志工與全部名字；
+// 依志工找名字走 v3_identity_names_volunteer 索引。每個名字一列，沒有名字時也有一列（code 是 NULL）。
+const identitySql = start => `WITH start AS (${start}),
+ id AS (SELECT COALESCE(r.target_id, s.volunteer_id) AS vid FROM start s LEFT JOIN v3_identity_redirects r ON r.volunteer_id=s.volunteer_id)
+SELECT id.vid, v.name, n.code, n.name AS alias FROM id LEFT JOIN v3_volunteers v ON v.volunteer_id=id.vid
+LEFT JOIN v3_identity_names n ON n.volunteer_id=id.vid ORDER BY n.code`;
+const BY_CODE = identitySql('SELECT n.volunteer_id FROM v3_identity_names n JOIN v3_volunteers v USING(volunteer_id) WHERE n.code=?');
+const BY_ID = identitySql('SELECT ? AS volunteer_id');
+// 查不到代號回 409、轉址後找不到志工回 404，跟分開查時一樣。
+function identityFrom(found) {
+  if (!found.length) throw new IdentityError(409, '請重新設定登記名字以接回志工身分');
+  if (found[0].name == null) throw new IdentityError(404, '找不到志工身分');
+  const names = found.filter(n => n.code != null);
+  return { volunteerId: found[0].vid, name: found[0].name, codes: names.map(n => n.code), names: names.map(n => n.alias) };
+}
 export async function identityByCode(db, code) {
-  const person = await one(db, 'SELECT v.volunteer_id, v.name FROM v3_identity_names n JOIN v3_volunteers v USING(volunteer_id) WHERE n.code=?', code);
-  if (!person) throw new IdentityError(409, '請重新設定登記名字以接回志工身分');
-  return identityOf(db, person.volunteer_id);
+  return identityFrom(await rows(db, BY_CODE, code));
 }
 async function identityOf(db, id) {
-  const redirect = await one(db, 'SELECT target_id FROM v3_identity_redirects WHERE volunteer_id=?', id);
-  if (redirect) id = redirect.target_id;
-  const person = await one(db, 'SELECT volunteer_id,name FROM v3_volunteers WHERE volunteer_id=?', id);
-  if (!person) throw new IdentityError(404, '找不到志工身分');
-  const names = await rows(db, 'SELECT code,name FROM v3_identity_names WHERE volunteer_id=? ORDER BY code', id);
-  return { volunteerId: id, name: person.name, codes: names.map(n => n.code), names: names.map(n => n.name) };
+  return identityFrom(await rows(db, BY_ID, id));
 }
 
 // 只有相同正規化名字及同一算法的代號才建立對照，不推測不同名字。
@@ -29,8 +37,8 @@ export async function resolveIdentity(db, name, key) {
 export async function linkIdentityName(db, name, code) {
   if (!/^[a-f0-9]{12}$/.test(code)) throw new IdentityError(400, '名字代號格式不對');
   const nameKey = walkerNameKey(name);
-  const existing = await one(db, 'SELECT volunteer_id FROM v3_identity_names WHERE code=?', code);
-  if (existing) return identityOf(db, existing.volunteer_id);
+  const existing = await rows(db, BY_CODE, code);
+  if (existing.length) return identityFrom(existing);
   const people = await rows(db, 'SELECT volunteer_id,name FROM v3_volunteers ORDER BY volunteer_id');
   const matches = people.filter(p => walkerNameKey(p.name) === nameKey);
   if (matches.length > 1) throw new IdentityError(409, '這個名字有多個既有身分，請先確認對照');
@@ -78,10 +86,12 @@ export async function renameIdentity(db, { code, name, operationId }, key) {
   return identityOf(db, source.volunteerId);
 }
 
+// 多個代號一次送出（D1 batch 一次往返、依序執行）；照代號順序，第一個查不到的代號照舊回錯。
 export async function identitiesForCodes(db, codes) {
+  if (!codes.length) return [];
   const people = [];
-  for (const code of codes) {
-    const person = await identityByCode(db, code);
+  for (const { results } of await db.batch(codes.map(code => db.prepare(BY_CODE).bind(code)))) {
+    const person = identityFrom(results || []);
     if (!people.some(p => p.volunteerId === person.volunteerId)) people.push(person);
   }
   return people;
