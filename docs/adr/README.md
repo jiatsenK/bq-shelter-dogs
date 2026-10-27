@@ -27,7 +27,8 @@
 | [0018](0018-today-walks-d1-event-sync.md) | 今日溜狗以 D1 為準，有人編輯才同步、只送改動 | 現行 |
 | [0019](0019-walker-names-in-d1.md) | 「誰遛的」原文存進 D1，公開檔案仍只放代號 | 現行 |
 | [0020](0020-independent-admin-site.md) | 獨立管理網站與可控制的志工編輯 | 現行 |
-| [0021](0021-stays-carry-number.md) | 一個編號就是一筆出入所紀錄 | 現行 |
+| [0021](0021-stays-carry-number.md) | 一個編號就是一筆出入所紀錄 | 部分或全部被 [0022](0022-intro-is-the-dog-stays-hold-history.md) 修訂，一起讀、以新的為準 |
+| [0022](0022-intro-is-the-dog-stays-hold-history.md) | 介紹只寫狗自己，出入所經過記在出入所紀錄 | 現行 |
 
 ## 網站開關
 
