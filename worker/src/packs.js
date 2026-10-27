@@ -1,5 +1,5 @@
 // 資料包（ADR 0009，#315）：很少變的資料預先算好存在 D1，Worker 每次只讀 1 列版本號，有變才讀資料包或重算。
-// small：在所（狗清單、主清單上的狗的休養）；離所按出所年份一年一份（ADR 0014，#362）；溜狗紀錄：切點（cutoff，正常是今天）以前的按月分段（#320），一年存一份；今天的紀錄另外只讀今天的列。
+// small：在所（狗清單、主清單上的狗的休養）；溜狗日期、溜狗人另外一包 walked（#679），GAS 送「溜過了」不讓 small 整份重算；離所按出所年份一年一份（ADR 0014，#362）；溜狗紀錄：切點（cutoff，正常是今天）以前的按月分段（#320），一年存一份；今天的紀錄另外只讀今天的列。
 // 版本號由 db/compact-schema.sql 的觸發器自動加 1，所以網站、同步、別台 Worker 機器寫入都看得到。
 // 輸出和直接讀表（compact.js 的 readDogsPayload 等）逐字元相同
 import { readDogsPayload, readDepartures, readNameOnlyCards, readRest, readSyncedAt, sortDepartures, sortedRest, HISTORY_START } from './compact.js';
@@ -9,7 +9,7 @@ import { summarize, addMine } from './walk-summary.js';
 let chunkBytes = 1_000_000;
 export function setPackChunkBytes(n) { chunkBytes = n; }
 
-let mem = null; // { db, small, deps: { 年: { ver, body } }, walks: { total, months: { 月: { ver, list } } }, live: { ver, cutoff, list } }
+let mem = null; // { db, small, walked, dogs, pending, deps: { 年: { ver, body } }, walks: { total, months: { 月: { ver, list } } }, live: { ver, cutoff, list } }
 export function resetPackCache() { mem = null; }
 // 測試換一台機器用：換上 next（null 是空的記憶體），回傳原本的
 export function swapPackCache(next) { const prev = mem; mem = next; return prev; }
@@ -84,9 +84,26 @@ async function savePack(db, part, ver, cutoff, body) {
   }
 }
 
+// 同一台機器上同一版本號正在重算時，後進來的請求等同一次的結果（#679）。只在同一個 isolate 有效，不保證全域只算一次；
+// 等的那次失敗（例如發出查詢的請求先結束被取消）就自己再算
+async function once(name, ver, build) {
+  const pending = mem.pending ||= {};
+  if (pending[name]?.ver === ver) {
+    try { return await pending[name].promise; } catch (e) { /* 自己再算 */ }
+  }
+  const promise = build();
+  pending[name] = { ver, promise };
+  try { return await promise; } finally { if (pending[name]?.promise === promise) delete pending[name]; }
+}
+
 // ver 一律用「開始重算前」讀到的版本號：重算途中有人改，版本號已經往前，下次會再算
 async function smallPack(db, ver) {
   if (mem.small && mem.small.ver === ver) return mem.small.body;
+  return once('small', ver, () => buildSmall(db, ver));
+}
+// 狗清單裡的 walkedDate、walkers 是重算當時的值，讀的時候一律用溜狗日期包蓋過（dogsPack）
+async function buildSmall(db, ver) {
+  const m = mem;
   let body = await loadPack(db, 'main', ver, ''); // 在所資料包（ADR 0014 以前叫 small、含離所）
   // #399：部署前的包使用試算表 covered，版本未變也必須重算一次。
   if (body && body.fixedCareVersion !== 1) body = null;
@@ -98,7 +115,49 @@ async function smallPack(db, ver) {
     if (!dogs) return body;
     await savePack(db, 'main', ver, '', body);
   }
-  mem.small = { ver, body };
+  m.small = { ver, body };
+  return body;
+}
+
+// ---- 溜狗日期包（#679）：主清單順序的 [編號, 狗名, 溜狗日期, 溜狗人代號]，版本號 v3_pack_versions.walked；重算只讀主清單 1 張表 ----
+async function walkedPack(db, ver) {
+  if (mem.walked && mem.walked.ver === ver) return mem.walked.list;
+  return once('walked', ver, async () => {
+    const m = mem;
+    let list = await loadPack(db, 'walked', ver, '');
+    if (!list) {
+      const { results = [] } = await db.prepare('SELECT number,name,walked_date,walker_codes FROM v3_sheet_main ORDER BY row_index').all();
+      list = results.map(r => [r.number, r.name, r.walked_date, JSON.parse(r.walker_codes)]);
+      await savePack(db, 'walked', ver, '', list);
+    }
+    m.walked = { ver, list };
+    return list;
+  });
+}
+
+// 在所資料包的狗清單蓋上溜狗日期包：照位置對，編號、狗名對不上（兩包不是同一刻算的）才照編號＋狗名找，找不到就留在所資料包的值。
+// 換掉的狗複製一份，不改到快取；欄位順序不變，輸出跟直接讀表逐字元相同
+function withWalked(dogs, list) {
+  const key = (id, name) => `${id}\n${name}`;
+  let byKey = null;
+  const merged = dogs.dogs.map((dog, i) => {
+    let w = list[i];
+    if (!w || w[0] !== dog.id || w[1] !== dog.name) {
+      byKey ||= new Map([...list].reverse().map(x => [key(x[0], x[1]), x]));
+      w = byKey.get(key(dog.id, dog.name));
+    }
+    return w ? { ...dog, walkedDate: w[2], walkers: w[3] } : dog;
+  });
+  return { ...dogs, dogs: merged };
+}
+// 狗清單（null 是主清單沒有狗）：兩個版本號都沒變就用記憶體裡合好的那份
+async function dogsPack(db, v) {
+  const small = await smallPack(db, v.small);
+  if (!small.dogs) return null;
+  const done = mem.dogs;
+  if (done && done.small === v.small && done.walked === v.walked) return done.body;
+  const body = withWalked(small.dogs, await walkedPack(db, v.walked));
+  mem.dogs = { small: v.small, walked: v.walked, body };
   return body;
 }
 
@@ -275,7 +334,7 @@ async function versionRow(db, sql) {
   if (!v) throw new Error('D1 沒有資料包版本號，等同步補建');
   return v;
 }
-const versions = db => versionRow(db, 'SELECT small FROM v3_pack_versions WHERE id=1');
+const versions = db => versionRow(db, 'SELECT small,walked FROM v3_pack_versions WHERE id=1');
 const walkVersions = db => versionRow(db, 'SELECT total,live,cutoff,months FROM v3_walk_versions WHERE id=1');
 
 // 溜狗紀錄（依日期排好）。切點以前讀資料包、以後讀 live，不管切點在哪天都是完整的一份：
@@ -300,8 +359,8 @@ export async function readSmall(db, part) {
   memFor(db);
   if (part === 'departures') return (await readDeparted(db)).departures;
   const v = await versions(db);
+  if (part === 'dogs') return dogsPack(db, v);
   const small = await smallPack(db, v.small);
-  if (part === 'dogs') return small.dogs;
   const rest = new Map();
   for (const p of (await departurePacks(db)).packs) for (const [id, r] of Object.entries(p.rest)) rest.set(id, r);
   for (const [id, r] of Object.entries(small.rest)) rest.set(id, r);
