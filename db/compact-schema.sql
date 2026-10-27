@@ -328,6 +328,7 @@ CREATE TABLE IF NOT EXISTS v3_pack_versions (id INTEGER PRIMARY KEY CHECK(id=1),
 INSERT OR IGNORE INTO v3_pack_versions(id) VALUES(1);
 CREATE TABLE IF NOT EXISTS v3_packs (part TEXT NOT NULL, seq INTEGER NOT NULL, ver INTEGER NOT NULL, cutoff TEXT NOT NULL DEFAULT '', body TEXT NOT NULL, PRIMARY KEY(part,seq));
 CREATE INDEX IF NOT EXISTS v3_walks_date ON v3_walks(walk_date);
+CREATE INDEX IF NOT EXISTS v3_walks_nameonly ON v3_walks(dog_name) WHERE dog_number='';
 CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_changes_INSERT AFTER INSERT ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_changes_UPDATE AFTER UPDATE ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_changes_DELETE AFTER DELETE ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
