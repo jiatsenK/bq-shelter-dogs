@@ -9,7 +9,7 @@
 
 ## 做了什麼
 
-- `migrations/0011_walked_pack.sql`：`v3_pack_versions` 加 `walked`；`packs_v3_sheet_main_UPDATE` 重建（監看欄位拿掉 `walked_date`、`walker_codes`，離所年份那段不變）；新增 `walked_v3_sheet_main_INSERT／UPDATE／DELETE`（UPDATE 監看 `row_index,number,name,walked_date,walker_codes`）。`db/compact-schema.sql` 同步。只加東西、沒有搬資料。
+- `migrations/0013_walked_pack.sql`：`v3_pack_versions` 加 `walked`；`packs_v3_sheet_main_UPDATE` 重建（監看欄位拿掉 `walked_date`、`walker_codes`，離所年份那段不變）；新增 `walked_v3_sheet_main_INSERT／UPDATE／DELETE`（UPDATE 監看 `row_index,number,name,walked_date,walker_codes`）。`db/compact-schema.sql` 同步。只加東西、沒有搬資料。
 - `worker/src/packs.js`：新增溜狗日期包（part=`walked`，主清單順序 `[編號, 狗名, 溜狗日期, 溜狗人代號]`，重算只讀 `v3_sheet_main` 1 張表）；`readSmall('dogs')` 把它蓋回在所資料包（照位置，對不上才照編號＋狗名），兩個版本號都沒變就用記憶體裡合好的那份。`once()`：同一版本號正在重算時，同一台機器後進來的請求等同一次；等的那次失敗就自己再算。版本號查詢改讀 `small,walked`（同一列，讀取列數不變）。
 - ADR 0009、0014 補決策段落（不寫量測數字，#670）；`docs/ARCHITECTURE_NOW.md` 狗清單那列補一句。
 
@@ -22,3 +22,7 @@
 - 合併後按「套用 D1 migration」（接著部署）。套 migration 到部署完成之間，舊程式只看 `small`，溜狗日期可能短暫舊一點（今天的日期有今日溜狗蓋過，不受影響）。
 - 上線後檢查正式庫 `v3_packs` part=`main` 的 `ver` 是否仍落後 `v3_pack_versions.small` 很多；仍落後再跟 K 討論開 Workers Logs。
 - 研究未定問題 1（`withTodayWalks` 只蓋 `walkedDate` 不蓋 `walkers`）不在這張票範圍，沒動。
+
+## 2026-10-27 rebase
+
+- rebase 到 origin/main e29f63c（含 #688、#690、#689 的 0011、#693 的 0012），沒有衝突；migration 改名為 `0013_walked_pack.sql`。
