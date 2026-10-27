@@ -93,7 +93,7 @@ frontier＝`max(v3_walk_baselines.version, 最新 synced 版本)`（`walk-accept
 - **沒在正式 D1 跑 `EXPLAIN QUERY PLAN`**：不知道正式庫有沒有 `sqlite_stat1`。若有，原句可能已經是 `SCAN s`，那稽核量到的 110 列就要另外解釋。下一步可用唯讀指令確認：
 
   ```bash
-  npx.cmd wrangler d1 execute <DB 名稱> --remote --command "SELECT * FROM sqlite_stat1"
+  npx.cmd wrangler d1 execute bq-shelter-dogs --remote --command "SELECT * FROM sqlite_stat1"
   ```
 
   以及對原句加 `EXPLAIN QUERY PLAN` 跑一次。
