@@ -47,10 +47,16 @@
           <button class="btn" id="clear" type="reset">清除條件</button>
         </form>
         <div id="status" class="table-status" role="status" aria-live="polite">正在讀取資料編輯紀錄…</div>
+        <div class="edit-hide-bar" id="hide-bar" hidden>
+          <button type="button" class="btn" id="hide-selected" disabled>隱藏所選</button>
+          <button type="button" class="btn" id="unhide-selected" hidden disabled>取消隱藏所選</button>
+          <label class="form-check form-switch"><input class="form-check-input" type="checkbox" id="show-hidden"><span class="form-check-label" id="show-hidden-label">顯示已隱藏</span></label>
+          <span id="hide-note" role="status" aria-live="polite"></span>
+        </div>
         <div class="table-responsive" tabindex="0" role="region" aria-label="資料編輯紀錄，可水平捲動" id="table-region" hidden>
           <table class="table table-vcenter edit-table">
             <caption class="visually-hidden">資料編輯紀錄，時間為台灣時間。</caption>
-            <thead><tr><th scope="col">時間</th><th scope="col">類型</th><th scope="col">對象</th><th scope="col">操作者</th><th scope="col">改前</th><th scope="col">改後</th></tr></thead>
+            <thead><tr><th scope="col" class="select-cell"><input class="form-check-input" type="checkbox" id="select-page" aria-label="選取這頁全部"></th><th scope="col">時間</th><th scope="col">類型</th><th scope="col">對象</th><th scope="col">操作者</th><th scope="col">改前</th><th scope="col">改後</th></tr></thead>
             <tbody id="edits"></tbody>
           </table>
         </div>
