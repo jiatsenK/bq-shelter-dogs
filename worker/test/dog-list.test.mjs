@@ -324,6 +324,26 @@ test('#678 保險掃描找 walker 還是 NULL 的列走部分索引，不整張�
   } finally { env.DB.close(); }
 });
 
+test('#683 新增沒編號的狗用名字找溜狗紀錄走部分索引，不整張掃；照樣對回原本那隻', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    const sql = "SELECT w.dog_id,s.revision FROM v3_walks w JOIN v3_dog_edit_state s USING(dog_id) WHERE dog_number='' AND dog_name=? LIMIT 1";
+    const plan = (await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind('無號').all()).results.map(r => r.detail).join(' | ');
+    assert.match(plan, /SEARCH w USING (COVERING )?INDEX v3_walks_nameonly/, plan);
+    assert.doesNotMatch(plan, /SCAN w/, plan);
+    await send(env, [main({ dog:{ id:'', name:'無號' }, hash:'n1', walker:'嘉文' })]);
+    const before = await env.DB.prepare("SELECT dog_id FROM v3_sheet_main WHERE name='無號'").first('dog_id');
+    assert.equal(await env.DB.prepare("SELECT count(*) n FROM v3_walks WHERE dog_id=? AND dog_number=''").bind(before).first('n'), 1);
+    // 主清單那列不見了、之後又出現：靠溜狗紀錄的名字認回同一隻，不多出一隻
+    await env.DB.prepare("DELETE FROM v3_sheet_main WHERE name='無號'").run();
+    worker.testing.resetState();
+    await send(env, [main({ dog:{ id:'', name:'無號' }, hash:'n2', walker:'嘉文' })]);
+    assert.equal(await env.DB.prepare("SELECT dog_id FROM v3_sheet_main WHERE name='無號'").first('dog_id'), before);
+    assert.equal(await env.DB.prepare("SELECT count(*) n FROM v3_dogs WHERE name='無號'").first('n'), 1);
+  } finally { env.DB.close(); }
+});
+
 test('#528 保險掃描清掉舊指紋：回所的狗（主清單有）、D1 已經沒有的狗不再列為 D1 有、試算表沒有', async () => {
   const env = await setup();
   worker.testing.resetState();
