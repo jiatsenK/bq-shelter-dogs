@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { callSheet, SheetWriteError, SHEET_ACTIONS, scriptError } from '../src/sheet-write.js';
+import { callSheet, SheetWriteError, SHEET_ACTIONS, scriptError, REFUSED_CODES } from '../src/sheet-write.js';
 
 const ENV = { SHEET_WRITE_URL: 'https://script.example/exec', SHEET_WRITE_KEY: 'k' };
 function withFetch(handler, fn) {
@@ -42,7 +42,12 @@ test('失敗都是 SheetWriteError，訊息可以直接給志工看', async () =
   e = await fails(ENV, () => json({ ok: false, code: 'key' }));
   assert.deepEqual([e.message, e.code], ['寫入試算表的金鑰不對，請 K 檢查設定', 'key']);
   e = await fails(ENV, () => json({ ok: false, error: 'Exception: Illegal spreadsheet id: 1AbCdEfGhIjKlMnOpQrStUvWxYz' }));
-  assert.equal(e.message, '試算表 ID 不對，請 K 檢查小程式設定');
+  assert.deepEqual([e.message, e.code], ['試算表 ID 不對，請 K 檢查小程式設定', 'sheet-id']);
+  e = await fails(ENV, () => json({ ok: false, error: 'You do not have permission to access the requested document.' }));
+  assert.deepEqual([e.message, e.code], ['小程式沒有試算表的編輯權限，請 K 檢查設定', 'permission']);
+  e = await fails(ENV, () => json({ ok: false, error: 'Service invoked too many times' }));
+  assert.equal(e.code, '', '其他小程式錯誤（配額、逾時）不算明確拒絕，照常重試（#684）');
+  assert.deepEqual([...REFUSED_CODES].sort(), ['key', 'permission', 'sheet-id']);
 });
 
 test('小程式錯誤不帶出試算表 ID', () => {

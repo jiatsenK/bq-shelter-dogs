@@ -2,7 +2,7 @@
 import { walkerCode, editorOf } from './editlog.js';
 import { identityByCode } from './identity.js';
 import { previousWalk } from './today.js';
-import { callSheet } from './sheet-write.js';
+import { callSheet, REFUSED_CODES } from './sheet-write.js';
 import { splitNames } from './sheet-read.js';
 import { walkDay } from './dog-list.js';
 
@@ -232,6 +232,11 @@ export async function dispatchWalks(db, items, env, clock = Date.now()) {
   for (let i = 0; i < items.length; i += size) await dispatchBatch(db, items.slice(i, i + size), env, clock);
 }
 
+// 重試上限（#684）：沒設定、試算表明確拒絕（金鑰、試算表 ID、權限錯）再試也不會好，失敗一次就停；其他錯誤第 10 次失敗後停。
+// 停住的工作狀態照舊是 retry，下次時間設成永遠不到期，排程就不再撿；管理網站「資料檢查」列出來。這隻狗有新登記會換版本、次數歸零。
+export const RETRY_LIMIT = 10;
+export const STOPPED_AT = '9999-12-31T00:00:00.000Z';
+
 // 寫回失敗的種類寫進 outbox.error 前綴：沒設定、結果不明（逾時、連不上、沒回這隻）、試算表明確拒絕。
 const remoteError = error => error.code === 'unreachable' ? `writeback-unconfirmed: ${error.message}` : `writeback-rejected: ${error.message}`;
 
@@ -275,7 +280,7 @@ async function dispatchBatch(db, items, env, clock) {
   if (lost.length) await db.batch(lost.map(j => db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(j.key, j.dispatchId)));
   if (!mine.length) return;
   const receipts = new Map();
-  let batchError = '';
+  let batchError = '', refused = false;
   try {
     if (!env.SHEET_WRITE_URL || !env.SHEET_WRITE_KEY) throw Object.assign(new Error('writeback-not-configured'), { configured: false });
     // 單隻沿用 walkWake（回應就是那隻的回執），多隻用 walkWakeBatch；收尾相同。
@@ -284,7 +289,10 @@ async function dispatchBatch(db, items, env, clock) {
       const out = await callSheet(env, { action: 'walkWakeBatch', items: mine.map(j => ({ dog: j.dog, dispatchId: j.dispatchId })) });
       for (const r of Array.isArray(out.results) ? out.results : []) if (r?.dispatchId) receipts.set(r.dispatchId, r);
     }
-  } catch (error) { batchError = error.configured === false ? error.message : remoteError(error); } // callSheet 的訊息不含試算表 ID、金鑰
+  } catch (error) { // callSheet 的訊息不含試算表 ID、金鑰
+    batchError = error.configured === false ? error.message : remoteError(error);
+    refused = error.configured === false || REFUSED_CODES.has(error.code);
+  }
   // 每隻剛認領時已在 v3_walk_retry 保留今天的預算，收尾的狀態轉換不用再扣。
   const prepaid = j => ({ dispatch_id: j.dispatchId, reserved_day: day });
   const after = await reads(db, ...mine.flatMap(j => {
@@ -308,11 +316,12 @@ async function dispatchBatch(db, items, env, clock) {
   }
   const statements = [];
   for (const { j, version, failures, error } of failed) {
-    const delay = [1,2,4,8,15][Math.min(failures - 1,4)] * 60000;
+    const next = refused || failures >= RETRY_LIMIT ? STOPPED_AT
+      : new Date(Math.max(clock, Date.now()) + [1,2,4,8,15][Math.min(failures - 1,4)] * 60000).toISOString();
     statements.push(...await transitionBudget(db, env, j.key, j.dispatchId, 24, prepaid(j)),
       db.prepare('UPDATE v3_walk_retry SET version=?,failures=? WHERE dog_key=? AND dispatch_id=?').bind(version, failures, j.key, j.dispatchId),
       db.prepare("UPDATE v3_walk_outbox SET status='retry',error=?,next_attempt_at=? WHERE dog_key=? AND dispatch_id=? AND status='dispatching'")
-        .bind(String(error).slice(0, 100), new Date(Math.max(clock, Date.now()) + delay).toISOString(), j.key, j.dispatchId));
+        .bind(String(error).slice(0, 100), next, j.key, j.dispatchId));
   }
   // 成功、失敗都放掉這次的派送識別；回執已確認的早就刪了，只刪還握著的，都刪了就省掉這次往返。
   statements.push(...held.map(j => db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(j.key, j.dispatchId)));

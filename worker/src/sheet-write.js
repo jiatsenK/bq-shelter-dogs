@@ -40,16 +40,25 @@ export async function callSheet(env, body) {
     throw new SheetWriteError('連不上試算表，請稍後再試', 502, 'unreachable');
   }
   if (!res.ok || !out) throw new SheetWriteError(`試算表沒有回應（${res.status}）`, 502, 'unreachable');
-  if (!out.ok) throw new SheetWriteError(out.code === 'key' ? '寫入試算表的金鑰不對，請 K 檢查設定' : scriptError(out.error), 502, out.code === 'key' ? 'key' : '');
+  if (!out.ok) throw out.code === 'key' ? new SheetWriteError('寫入試算表的金鑰不對，請 K 檢查設定', 502, 'key')
+    : new SheetWriteError(scriptError(out.error), 502, refusalOf(out.error)?.code || '');
   return out;
 }
+
+// 試算表明確拒絕（設定錯，再試也不會好）：金鑰錯是 code 'key'，下面兩種靠訊息比對，code 給寫回重試判斷要不要停（#684）
+const REFUSALS = [
+  { code: 'sheet-id', pattern: /spreadsheet id|Illegal spreadsheet|找不到.*檔案|not found/i, message: '試算表 ID 不對，請 K 檢查小程式設定' },
+  { code: 'permission', pattern: /permission|權限|access/i, message: '小程式沒有試算表的編輯權限，請 K 檢查設定' },
+];
+const refusalOf = msg => typeof msg === 'string' && msg ? REFUSALS.find(r => r.pattern.test(msg)) : undefined;
+export const REFUSED_CODES = new Set(['key', ...REFUSALS.map(r => r.code)]);
 
 // 小程式的錯誤訊息會顯示給志工看：Google 的原始錯誤可能帶試算表 ID，換成白話、不帶 ID
 export function scriptError(msg) {
   const text = typeof msg === 'string' ? msg : '';
   if (!text) return '試算表沒有寫進去';
-  if (/spreadsheet id|Illegal spreadsheet|找不到.*檔案|not found/i.test(text)) return '試算表 ID 不對，請 K 檢查小程式設定';
-  if (/permission|權限|access/i.test(text)) return '小程式沒有試算表的編輯權限，請 K 檢查設定';
+  const refusal = refusalOf(text);
+  if (refusal) return refusal.message;
   if (text.startsWith('小程式發生錯誤')) return '小程式發生錯誤，請 K 查看 Apps Script 的執行紀錄';
   return [...text.replace(/[A-Za-z0-9_-]{25,}/g, '…')].slice(0, 100).join('');
 }
