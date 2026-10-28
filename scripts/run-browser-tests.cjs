@@ -1,5 +1,5 @@
 // 用無頭瀏覽器打開 tests/index.html，全部通過才算成功（#84，PR 自動跑測試用）
-// 本機：npm install --no-save playwright && npx playwright install chromium，再 node scripts/run-browser-tests.cjs
+// 本機：npm install --no-save --no-package-lock playwright@1.56.1 && npx playwright install --only-shell chromium，再 node scripts/run-browser-tests.cjs
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -7,6 +7,10 @@ const SUITES = ['es-modules', 'walk-accept', 'walk-d1-entries', 'walk-order-undo
   'group-cache', 'group-walks', 'large-text', 'touch-targets', 'navigation', 'tab-focus', 'name-tap', 'keyboard-viewport', 'index', 'detail-editing', 'admin', 'admin-dog-edit', 'admin-dog-merge', 'feature-settings', 'admin-stage4', 'admin-hide-edits', 'test-site'];
 
 const ROOT = path.resolve(__dirname, '..');
+// 單一套件平常不到 15 秒；套件時限要比 index 自己等的時間長（#713）
+const INDEX_WAIT_MS = 120000;
+const SUITE_TIMEOUT_MS = INDEX_WAIT_MS + 30000;
+const CLOSE_WAIT_MS = 10000;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'application/json', '.css': 'text/css',
   '.jpg': 'image/jpeg', '.png': 'image/png', '.svg': 'image/svg+xml', '.webmanifest': 'application/manifest+json' };
 
@@ -43,6 +47,7 @@ const server = http.createServer((req, res) => {
   require('./local-check-record.cjs').requireLocalCheck(args);
   await (await import('./build-admin-assets.mjs')).buildAdminAssets();
   const { chromium } = require('playwright'); // --list／參數檢查不需要安裝瀏覽器
+  const { withSuiteTimeout } = require('./suite-timeout.cjs');
   let browser;
   let ok = true;
   try {
@@ -50,22 +55,27 @@ const server = http.createServer((req, res) => {
     browser = await chromium.launch();
     const base = `http://localhost:${server.address().port}`;
     for (const suite of selected) {
-      if (suite !== 'index') { await require(`../tests/${suite}.cjs`)(browser, base); continue; }
-      const page = await browser.newPage();
-      page.on('pageerror', e => console.error('頁面錯誤（不影響結果，只供參考）：', e.message));
-      await page.goto(`${base}/tests/index.html`);
-      await page.waitForFunction(() => /通過|失敗/.test(document.getElementById('summary').textContent), null, { timeout: 120000 });
-      const summary = await page.textContent('#summary');
-      const failed = await page.$$eval('li.fail', lis => lis.map(li => li.innerText));
-      console.log(summary);
-      failed.forEach(f => console.log(`✗ ${f.replace(/^✗\s*/, '')}`));
-      ok = !failed.length && /^全部 \d+ 項通過$/.test(summary.trim());
-      await page.close();
+      ok = await withSuiteTimeout(suite, SUITE_TIMEOUT_MS, () => runSuite(suite, browser, base));
       if (!ok) break;
     }
   } finally {
-    await browser?.close();
+    // 套件卡住時頁面可能也關不掉，最多等 10 秒，不讓收尾再卡住整個 job
+    await Promise.race([browser?.close(), new Promise(r => setTimeout(r, CLOSE_WAIT_MS).unref())]);
     server.close();
   }
   process.exit(ok ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(1); });
+
+async function runSuite(suite, browser, base) {
+  if (suite !== 'index') { await require(`../tests/${suite}.cjs`)(browser, base); return true; }
+  const page = await browser.newPage();
+  page.on('pageerror', e => console.error('頁面錯誤（不影響結果，只供參考）：', e.message));
+  await page.goto(`${base}/tests/index.html`);
+  await page.waitForFunction(() => /通過|失敗/.test(document.getElementById('summary').textContent), null, { timeout: INDEX_WAIT_MS });
+  const summary = await page.textContent('#summary');
+  const failed = await page.$$eval('li.fail', lis => lis.map(li => li.innerText));
+  console.log(summary);
+  failed.forEach(f => console.log(`✗ ${f.replace(/^✗\s*/, '')}`));
+  await page.close();
+  return !failed.length && /^全部 \d+ 項通過$/.test(summary.trim());
+}

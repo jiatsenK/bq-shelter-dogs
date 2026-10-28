@@ -5,6 +5,8 @@
 # - 測試本身只讀 repo 裡的檔案和假資料，不碰試算表、Worker 或任何密鑰
 # - 草稿 PR 不跑（#329）：agent 先開草稿，推完最後一次再轉正式（gh pr ready），轉正式時才跑一次
 # - 同步預演（#309、#329）#501 起拿掉：試算表同步不再由 Actions 執行，狗清單改由 GAS 編輯觸發送 Worker
+# - 卡住要變「失敗」不是「取消」（#659、#713）：取消的 run 在 PR 上不顯眼，容易被當成沒問題合併。
+#   每個步驟各自設時限，加總（2＋9＋5 分鐘）小於 job 的 17 分鐘，job 時限只當最後防線；網頁測試每個套件另有 150 秒時限（scripts/suite-timeout.cjs）
 name: 測試
 
 # 只改文件（docs/、根目錄的 .md）不跑（#305）。repo 沒有設必要檢查（私人 repo 免費方案不能設），跳過不會卡住 PR
@@ -29,7 +31,7 @@ concurrency:
 jobs:
   test:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 17
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     env:
       TZ: Asia/Taipei
@@ -42,12 +44,27 @@ jobs:
 
       # 自動找 scripts/、worker/ 底下全部 *.test.mjs，新增測試不用改這裡
       - name: node 測試
+        timeout-minutes: 2
         run: node scripts/run-node-tests.mjs
 
+      # 平常約 30 秒；偶爾 apt 下載字型等系統套件卡住 10 分鐘（#659），每次最多 4 分鐘、卡住重試一次
+      # --only-shell：無頭模式本來就只用 chromium-headless-shell，不下載用不到的完整版 Chromium（#503 方案 4）
       - name: 安裝無頭瀏覽器
+        timeout-minutes: 9
         run: |
-          npm install --no-save --no-package-lock playwright@1.56.1
-          npx playwright install --with-deps chromium
+          for attempt in 1 2; do
+            if timeout -k 10 240 bash -c 'npm install --no-save --no-package-lock playwright@1.56.1 && npx playwright install --with-deps --only-shell chromium'; then
+              exit 0
+            fi
+            echo "::warning::安裝無頭瀏覽器第 ${attempt} 次失敗或超過 4 分鐘"
+            # timeout 的 SIGKILL 傳不進 sudo，root 的 apt-get／dpkg 可能還活著占住鎖；先清掉再收拾 dpkg
+            sudo pkill -9 -x apt-get || true
+            sudo pkill -9 -x dpkg || true
+            sudo dpkg --configure -a || true
+          done
+          exit 1
 
+      # 平常約 1.5 分鐘
       - name: 網頁測試（tests/index.html）
+        timeout-minutes: 5
         run: node scripts/run-browser-tests.cjs
