@@ -2,6 +2,8 @@
 .wrangler/
 node_modules/
 .scratch/checks/
+# 網頁測試自動拍的截圖：每次跑測試都會重拍覆蓋，不提交，避免誤 commit
+.scratch/**/*.png
 .dev.vars
 # impeccable 比較頁的暫存
 .impeccable/questions/
