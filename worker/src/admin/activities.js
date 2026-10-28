@@ -2,17 +2,12 @@
 // 管理者不受志工活動開關限制；每次修改的紀錄（editor_name「管理者」＋Access 身分）跟活動同一個交易。
 import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, resolveDogs, updateActivity } from '../activities.js';
 import { taiwanYmd } from '../sync-plan.js';
-
-const json = value => JSON.stringify(value);
+import { editLogWrites } from '../editlog.js';
 
 function auditor(db, actor, now) {
   const requestId = crypto.randomUUID(), at = new Date(now).toISOString();
-  return ({ before, after }, when, args) => [
-    db.prepare(`INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) SELECT ?,'','管理者','activity',NULL,'',?,? WHERE ${when}`)
-      .bind(at, json(activityLog(before)), json(activityLog(after)), ...args),
-    db.prepare(`INSERT INTO v3_dog_edit_actors(request_id,log_id,actor_subject,actor_email,source) SELECT ?,last_insert_rowid(),?,?,'access' WHERE ${when}`)
-      .bind(requestId, actor.subject, actor.email, ...args),
-  ];
+  return ({ before, after }, when, args) => editLogWrites(db, { at, name: '管理者', kind: 'activity', before: activityLog(before), after: activityLog(after),
+    source: 'access', actor: { requestId, subject: actor.subject, email: actor.email } }, [when, ...args]);
 }
 
 export async function writeActivity(db, method, id, input, actor, now = Date.now()) {

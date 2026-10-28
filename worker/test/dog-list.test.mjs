@@ -212,8 +212,9 @@ test('#501 新編號回所：同名的唯一一筆離所認成同一隻，連上
     assert.equal(await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='9100'").first('dog_id'), 'dog', '新編號連到原本的狗');
     assert.equal(await env.DB.prepare("SELECT returned_number FROM v3_dog_departures WHERE number='9001'").first('returned_number'), '9100');
     assert.deepEqual((await env.DB.prepare("SELECT number FROM v3_dog_numbers WHERE dog_id='dog' AND number<>'9100'").all()).results.map(r => r.number), ['9001']);
-    const log = await env.DB.prepare("SELECT kind,dog_id,dog_number FROM v3_edit_log").first();
-    assert.deepEqual({ ...log }, { kind:'former', dog_id:'dog', dog_number:'9100' });
+    const log = await env.DB.prepare("SELECT editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json,source FROM v3_edit_log").first();
+    assert.deepEqual({ ...log }, { editor_code:'', editor_name:'試算表（自動認回所）', kind:'former', dog_id:'dog', dog_number:'9100',
+      before_json:'{"number":"9001"}', after_json:'{"number":"9100","formerNumber":"9001"}', source:'sheet' });
     // 同名兩筆離所：認不出來，當新狗
     await env.DB.batch([
       env.DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('a','小黑'),('b','小黑')"),
