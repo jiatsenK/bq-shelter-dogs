@@ -81,11 +81,12 @@ async function loadGroupStage(retry = false) {
 function refreshGroupStage() {
   if (groupStageState.groupStageData?.state === 'ready' && Date.now() - groupStageState.groupStageData.checkedAt >= 30000 && !groupStageState.groupBusy) loadGroupStage(true);
 }
-// #738：一列一隻（每列 50px）：天數色籤（同溜狗表列表）｜照片｜名字＋性別＋籠位；整列點開詳細資訊
+// #738：一列一隻：天數色籤（同溜狗表列表）｜照片｜名字＋性別、下一行籠位；整列點開詳細資訊。
+// 按「有狗沒溜」後才在右邊出現勾（K 2026-10-28）：預設全勾，點一隻拿掉勾＝這隻沒溜、不登記
 function groupTile(dog, index, today) {
   const blocked = groupBlocked(dog);
   const excluded = groupExcluded.has(dog.name);
-  return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}${appState.searchQuery.trim() && !matchesSearch(dog, appState.searchQuery.trim()) ? ' miss' : ''}" data-gw-dog="${index}" ${groupStageState.groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${groupStageState.groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}">${dayChip(dog, today)}<span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><span class="gw-who"><span class="gw-line"><strong class="gw-name">${esc(dog.name)}${dog.unavailable ? '' : sexMark(dog)}</strong><span class="gw-cage">${esc(dog.cage || '待確認')}</span></span>${dog.unavailable ? '' : BQWalkUI.walkSyncHtml(dog)}</span></button>`;
+  return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}${appState.searchQuery.trim() && !matchesSearch(dog, appState.searchQuery.trim()) ? ' miss' : ''}" data-gw-dog="${index}" ${groupStageState.groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${groupStageState.groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}">${dayChip(dog, today)}<span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><span class="gw-who"><strong class="gw-name">${esc(dog.name)}${dog.unavailable ? '' : sexMark(dog)}</strong><span class="gw-cage">${esc(dog.cage || '待確認')}</span>${dog.unavailable ? '' : BQWalkUI.walkSyncHtml(dog)}</span>${groupStageState.groupExcept && !blocked ? `<span class="gw-check${excluded ? '' : ' on'}" aria-hidden="true"></span>` : ''}</button>`;
 }
 function groupStageHtml() {
   const identity = loadWalkerName();
@@ -111,7 +112,7 @@ function groupStageHtml() {
   const undoable = done ? walkable.filter(d => BQWalkUI.sheetUndoable(d)) : [];
   const walkBtn = done
     ? `<button type="button" id="gwWalk" class="done" data-gw-action="undo" aria-label="這群今天已溜，按一下取消" ${!undoable.length || groupStageState.groupBusy ? 'disabled' : ''}>${icon('tick')}${groupStageState.groupBusy ? '處理中…' : '已溜'}</button>`
-    : `<button type="button" id="gwWalk" ${!selected.length || groupStageState.groupBusy ? 'disabled' : ''}>${groupStageState.groupBusy ? '登記中…' : groupStageState.groupExcept ? `登記其餘 ${selected.length} 隻` : '整群溜了'}</button><button type="button" data-gw-action="except" aria-pressed="${groupStageState.groupExcept}">${groupStageState.groupExcept ? '取消' : '有狗沒溜'}</button>`;
+    : `<button type="button" id="gwWalk" ${!selected.length || groupStageState.groupBusy ? 'disabled' : ''}>${groupStageState.groupBusy ? '登記中…' : groupStageState.groupExcept ? `溜了 ${selected.length} 隻` : '整群溜了'}</button><button type="button" data-gw-action="except" aria-pressed="${groupStageState.groupExcept}">${groupStageState.groupExcept ? '取消' : '有狗沒溜'}</button>`;
   // .gw-layer.front 的 data-column 標出目前這群（換群、測試靠它確認）；沒有另外的樣式
   const layers = group ? `<div class="gw-layer front" data-column="${group.column}"><div class="gw-cards">${dogs.map((d, i) => groupTile(d, i, today)).join('')}</div></div>` : '';
   // D 版（K 2026-10-28）：換群箭頭在群名兩側，位置固定、不隨狗數移動（#443）；
