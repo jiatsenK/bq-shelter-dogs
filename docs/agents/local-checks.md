@@ -20,12 +20,12 @@ node scripts/run-node-tests.mjs --list
 - **同條件已通過仍要重跑，另填 `-RepeatReason`**；合理診斷照常執行。沒有理由只留下 blocked 紀錄，不跑測試；失敗可直接補跑，不算通過。此階段沒有快取或自動略過。
 - `.scratch/checks/*.json` 記錄開始／結束時間、HEAD、未提交狀態、內容指紋、命令範圍、執行／重跑原因、先前通過紀錄、結果、退出碼、耗時及完整日誌路徑。逐次保存，包含 failed／blocked；中斷可能留下 running，不視為通過。日誌不提交。指紋保守涵蓋全部 Git 追蹤及未忽略的未追蹤檔（排除 `.scratch/`），以及 Node／PowerShell／Playwright 版本、平台、相關環境變數雜湊；不是依賴分析或效能快取，文件變更也可能形成新條件。環境變數值不直接寫入紀錄。
 - 既有兩種 runner 在本機缺少有效入口紀錄時拒絕執行；GitHub Actions 的原命令保留。這是防誤用，不是安全隔離：任意 `node --test`、自寫腳本或偽造環境仍可繞過。AI 依此文件使用統一入口；本次不新增 agent／shell hook，不宣稱全面攔截任意命令。
-- 日常先跑相關套件，補修與審查完成後保留一次 `-Full`；GitHub CI 仍跑完整 Node＋網頁測試。成功只顯示末幾行，失敗顯示末 30 行。PR／CI 的交付範圍依全域 workflow。
+- 日常先跑相關套件，補修與審查完成後保留一次 `-Full`；GitHub CI 仍跑完整 Node＋網頁測試。成功只顯示末幾行，失敗顯示末 30 行。PR／CI 分工依全域 workflow「PR 與 CI」：推送與開正式 PR 直接做，等待或重跑 CI 要使用者明說，merge 由使用者做。
 - worktree 可沿用主工作目錄已安裝的 Playwright：將 `$env:NODE_PATH` 指到該目錄的 node_modules，再執行入口。
 
-## 明確交辦等待 CI 時
+## 使用者明說要等待 CI 時
 
-授權範圍依全域 workflow；以下命令只用於使用者明確交辦的 CI 等待工作。
+開 PR 後預設只回報 PR 連結、SHA 與 CI 當下狀態，不等待、不輪詢。使用者明說要等待或重跑 CI 時才用以下命令；merge 由使用者做。
 
 ```powershell
 .\scripts\wait-pr-checks.ps1 -Number 424
