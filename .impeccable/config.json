@@ -16,7 +16,11 @@
         "rule": "tiny-text",
         "value": "*",
         "files": [
-          "docs/diagrams/architecture.html"
+          "docs/diagrams/architecture.html",
+          "docs/diagrams/writeback-sequence.html",
+          "docs/diagrams/sheet-sync-sequence.html",
+          "docs/diagrams/daily-schedule.html",
+          "docs/diagrams/data-flows.html"
         ],
         "createdAt": "2026-10-28T03:03:49.286Z",
         "reason": "Claude: diagram-design skill type ramp specifies 7-9px Geist Mono tags/sublabels inside SVG diagrams"
@@ -25,7 +29,11 @@
         "rule": "overused-font",
         "value": "geist",
         "files": [
-          "docs/diagrams/architecture.html"
+          "docs/diagrams/architecture.html",
+          "docs/diagrams/writeback-sequence.html",
+          "docs/diagrams/sheet-sync-sequence.html",
+          "docs/diagrams/daily-schedule.html",
+          "docs/diagrams/data-flows.html"
         ],
         "createdAt": "2026-10-28T03:04:42.665Z",
         "reason": "Claude: diagram-design skill mandates Geist/Geist Mono/Instrument Serif typography for its diagrams"
@@ -34,7 +42,11 @@
         "rule": "overused-font",
         "value": "geist mono",
         "files": [
-          "docs/diagrams/architecture.html"
+          "docs/diagrams/architecture.html",
+          "docs/diagrams/writeback-sequence.html",
+          "docs/diagrams/sheet-sync-sequence.html",
+          "docs/diagrams/daily-schedule.html",
+          "docs/diagrams/data-flows.html"
         ],
         "createdAt": "2026-10-28T03:04:42.857Z",
         "reason": "Claude: diagram-design skill mandates Geist/Geist Mono/Instrument Serif typography for its diagrams"
@@ -43,7 +55,11 @@
         "rule": "overused-font",
         "value": "instrument serif",
         "files": [
-          "docs/diagrams/architecture.html"
+          "docs/diagrams/architecture.html",
+          "docs/diagrams/writeback-sequence.html",
+          "docs/diagrams/sheet-sync-sequence.html",
+          "docs/diagrams/daily-schedule.html",
+          "docs/diagrams/data-flows.html"
         ],
         "createdAt": "2026-10-28T03:04:43.086Z",
         "reason": "Claude: diagram-design skill mandates Geist/Geist Mono/Instrument Serif typography for its diagrams"

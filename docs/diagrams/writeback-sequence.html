@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>網站登記寫回試算表</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&family=Noto+Sans+TC:wght@400;500;600&family=Noto+Serif+TC:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --font-sans:     'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif TC', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1120px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 1.5rem;
+    }
+    .note {
+      margin-top: 1rem;
+      font-size: 0.8rem;
+      line-height: 1.6;
+      color: var(--color-muted);
+    }
+    svg { width: 100%; min-width: 1120px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Sequence · 寫回與同步</p>
+    <h1>網站登記寫回試算表</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1120 932" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="writeback-sequence-title writeback-sequence-desc">
+        <title id="writeback-sequence-title">網站登記寫回試算表</title>
+        <desc id="writeback-sequence-desc">志工按溜了後，志工網站先把狀態與待寫回清單存進 D1 就回成功，再於背景經 Apps Script 寫回試算表兩欄並讀回確認；失敗則改成待重試，由排程重派。</desc>
+        <defs>
+          <style>
+            .n  { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 13px; font-weight: 600; fill: #2d3142; text-anchor: middle; }
+            .s  { font-family: 'Geist Mono', 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 9px; fill: #4f5d75; text-anchor: middle; }
+            .zh { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 11px; fill: #4f5d75; text-anchor: middle; }
+            .t  { font-family: 'Geist Mono', monospace; font-size: 7px; text-anchor: middle; letter-spacing: 0.08em; }
+            .al { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 12px; font-weight: 500; text-anchor: middle; }
+            .am { font-family: 'Geist Mono', monospace; font-size: 8px; text-anchor: middle; letter-spacing: 0.08em; }
+            .g  { font-family: 'Geist Mono', 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 10px; fill: #4f5d75; }
+            .op { font-family: 'Geist Mono', monospace; font-size: 8px; fill: #4f5d75; text-anchor: middle; letter-spacing: 0.12em; }
+            .z  { font-family: 'Geist Mono', monospace; font-size: 8px; fill: #4f5d75; letter-spacing: 0.14em; }
+            .ln { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 13px; font-weight: 600; fill: #2d3142; }
+            .ls { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 11px; fill: #4f5d75; }
+            .lg { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 12px; fill: #4f5d75; }
+            .cb { font-family: 'Instrument Serif', 'Noto Serif TC', serif; font-style: italic; font-size: 15px; fill: #4f5d75; }
+            .ax { font-family: 'Geist Mono', monospace; font-size: 9px; fill: #4f5d75; text-anchor: middle; }
+          </style>
+          <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r="0.9" fill="rgba(45,49,66,0.10)"/>
+          </pattern>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+          <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#4f5d75" stroke-width="1.2"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+        <rect width="100%" height="100%" fill="url(#dots)" opacity="0.55"/>
+        <!-- Lifelines -->
+        <line x1="120" y1="136" x2="120" y2="748" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="340" y1="136" x2="340" y2="748" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="560" y1="136" x2="560" y2="748" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="780" y1="136" x2="780" y2="748" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+        <line x1="1000" y1="136" x2="1000" y2="748" stroke="rgba(45,49,66,0.22)" stroke-width="1" stroke-dasharray="3,3"/>
+        <!-- Fragments -->
+        <rect x="268" y="340" width="804" height="392" rx="4" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+        <rect x="268" y="340" width="44" height="16" rx="2" fill="#f5f5f5" stroke="rgba(45,49,66,0.22)" stroke-width="1"/>
+        <text class="op" x="290" y="351">ALT</text>
+        <line x1="276" y1="644" x2="1064" y2="644" stroke="rgba(45,49,66,0.20)" stroke-width="1" stroke-dasharray="4,3"/>
+        <rect x="276" y="353" width="127" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="g" x="280" y="364">[GAS 連得上、寫得進去]</text>
+        <rect x="276" y="657" width="121" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="g" x="280" y="668">[逾時、連不上、寫失敗]</text>
+        <!-- Messages -->
+        <line x1="120" y1="184" x2="338" y2="184" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <line x1="340" y1="228" x2="558" y2="228" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="340" y1="272" x2="122" y2="272" stroke="#eb6c36" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#arrow-accent)"/>
+        <line x1="340" y1="316" x2="778" y2="316" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow-open)"/>
+        <line x1="780" y1="400" x2="342" y2="400" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <line x1="340" y1="444" x2="778" y2="444" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <line x1="780" y1="488" x2="998" y2="488" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="1000" y1="532" x2="782" y2="532" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <line x1="780" y1="576" x2="342" y2="576" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <line x1="340" y1="620" x2="558" y2="620" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="340" y1="708" x2="558" y2="708" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- Message labels -->
+        <rect x="170" y="160" width="120" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="230" y="172" fill="#2e5aa8">按溜了／修改／復原</text>
+        <rect x="384" y="204" width="132" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="450" y="216" fill="#4f5d75">同一批寫狀態與待寫回</text>
+        <rect x="158" y="248" width="144" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="230" y="260" fill="#eb6c36">回成功（試算表還沒寫）</text>
+        <rect x="390" y="292" width="120" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="450" y="304" fill="#4f5d75">背景通知 walkWake</text>
+        <rect x="612" y="376" width="116" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="670" y="388" fill="#2e5aa8">問目標值 /target</text>
+        <rect x="414" y="420" width="72" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="450" y="432" fill="#4f5d75">回最新登記</text>
+        <rect x="830" y="464" width="120" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="890" y="476" fill="#4f5d75">寫遛狗日期、誰遛的</text>
+        <rect x="860" y="508" width="60" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="890" y="520" fill="#4f5d75">讀回比對</text>
+        <rect x="610" y="552" width="120" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="670" y="564" fill="#2e5aa8">回報完成 /receipt</text>
+        <rect x="414" y="596" width="72" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="450" y="608" fill="#4f5d75">標記已同步</text>
+        <rect x="414" y="684" width="72" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="450" y="696" fill="#4f5d75">改成待重試</text>
+        <!-- Actors -->
+        <rect x="36" y="72" width="168" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="36" y="72" width="168" height="64" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <rect x="44" y="80" width="32" height="12" rx="2" fill="transparent" stroke="rgba(122,131,153,0.40)" stroke-width="0.8"/>
+        <text class="t" x="60" y="89" fill="#7a8399">USER</text>
+        <text class="n" x="120" y="108">志工</text>
+        <text class="s" x="120" y="123">手機瀏覽器</text>
+        <rect x="256" y="72" width="168" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="256" y="72" width="168" height="64" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="264" y="80" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.30)" stroke-width="0.8"/>
+        <text class="t" x="286" y="89" fill="#4f5d75">WORKER</text>
+        <text class="n" x="340" y="108">志工網站</text>
+        <text class="s" x="340" y="123">bq-shelter-dogs</text>
+        <rect x="476" y="72" width="168" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="476" y="72" width="168" height="64" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <rect x="484" y="80" width="24" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text class="t" x="496" y="89" fill="#eb6c36">D1</text>
+        <text class="n" x="560" y="108">D1</text>
+        <text class="s" x="560" y="123">狀態＋待寫回清單</text>
+        <rect x="696" y="72" width="168" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="696" y="72" width="168" height="64" rx="6" fill="rgba(46,90,168,0.06)" stroke="#2e5aa8" stroke-width="1"/>
+        <rect x="704" y="80" width="28" height="12" rx="2" fill="transparent" stroke="rgba(46,90,168,0.40)" stroke-width="0.8"/>
+        <text class="t" x="718" y="89" fill="#2e5aa8">GAS</text>
+        <text class="n" x="780" y="108">Apps Script</text>
+        <text class="s" x="780" y="123">sheet-write.gs</text>
+        <rect x="916" y="72" width="168" height="64" rx="6" fill="#f5f5f5"/>
+        <rect x="916" y="72" width="168" height="64" rx="6" fill="rgba(46,90,168,0.06)" stroke="#2e5aa8" stroke-width="1"/>
+        <rect x="924" y="80" width="36" height="12" rx="2" fill="transparent" stroke="rgba(46,90,168,0.40)" stroke-width="0.8"/>
+        <text class="t" x="942" y="89" fill="#2e5aa8">SHEET</text>
+        <text class="n" x="1000" y="108">Google 試算表</text>
+        <text class="s" x="1000" y="123">主清單兩欄</text>
+        <!-- Callouts -->
+        <text class="cb" x="120" y="776">重試：間隔 1、2、4、8、15 分鐘，由每 10 分鐘的排程（每小時 :05 起）撿到期的重派；</text>
+        <text class="cb" x="120" y="796">第 10 次失敗、或試算表明確拒絕（金鑰、試算表 ID、權限）就停，列在管理網站「資料檢查」。</text>
+        <text class="cb" x="120" y="836">寫之前 GAS 會再讀一次格子：發現已被人改過，就回報 /observe 並停寫，以人工改的為準。</text>
+        <line x1="56" y1="868" x2="1064" y2="868" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text class="z" x="56" y="886">LEGEND</text>
+        <rect x="56" y="896" width="16" height="12" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <text class="lg" x="80" y="908">D1（先寫這裡）</text>
+        <line x1="193" y1="904" x2="221" y2="904" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text class="lg" x="229" y="908">HTTP 呼叫</text>
+        <line x1="314" y1="904" x2="342" y2="904" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text class="lg" x="350" y="908">寫入</text>
+        <line x1="402" y1="904" x2="430" y2="904" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow)"/>
+        <text class="lg" x="438" y="908">回應</text>
+        <line x1="490" y1="904" x2="518" y2="904" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow-open)"/>
+        <text class="lg" x="526" y="908">背景、不等回應</text>
+        <line x1="638" y1="904" x2="666" y2="904" stroke="#eb6c36" stroke-width="1.4" stroke-dasharray="5,4" marker-end="url(#arrow-accent)"/>
+        <text class="lg" x="674" y="908">志工看到的結果</text>
+      </svg>
+    </div>
+    <p class="note">依程式碼核對（main c2da5f0）：worker/src/walk-accept.js、worker/src/walk-retry.js、apps-script/sheet-write.gs 的 writeLatestWalk。一次按多隻會合併成 walkWakeBatch，每批最多 10 隻，流程相同。例外：加備註、新增異動紀錄不走這條，是 Worker 同步請 GAS 直接寫表，失敗不重試。</p>
+  </div>
+</body>
+</html>
