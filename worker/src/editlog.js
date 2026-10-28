@@ -71,18 +71,19 @@ const checkSource = source => {
 // when：[條件 SQL, ...參數]，寫入當下條件成立才記（跟同一批的 guard 一起用）；沒給就直接 VALUES 寫
 export function editLogWrites(db, { at, code = '', name, kind, dogId = null, number = '', before, after, source, actor = null }, [when, ...args] = []) {
   checkSource(source);
-  const values = n => when ? `SELECT ${Array(n).fill('?').join(',')} WHERE ${when}` : `VALUES(${Array(n).fill('?').join(',')})`;
-  const writes = [db.prepare(`INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json,source) ${values(9)}`)
+  // exprs：每欄的值（? 或 SQL 運算式）
+  const values = exprs => when ? `SELECT ${exprs.join(',')} WHERE ${when}` : `VALUES(${exprs.join(',')})`;
+  const writes = [db.prepare(`INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json,source) ${values(Array(9).fill('?'))}`)
     .bind(at, code, name, kind, dogId, number || '', JSON.stringify(before), JSON.stringify(after), actor ? null : source, ...args)];
-  if (actor) writes.push(db.prepare(`INSERT INTO v3_dog_edit_actors(request_id,log_id,actor_subject,actor_email,source) ${values(4).replace('?,', '?,last_insert_rowid(),')}`)
+  if (actor) writes.push(db.prepare(`INSERT INTO v3_dog_edit_actors(request_id,log_id,actor_subject,actor_email,source) ${values(['?', 'last_insert_rowid()', '?', '?', '?'])}`)
     .bind(actor.requestId, actor.subject, actor.email, source, ...args));
   return writes;
 }
 
 // 記一筆；記失敗不影響編輯本身（編輯已經存好了）。來源沒傳或不對直接丟錯，不吞掉
 export async function logEdit(db, { editor, kind, dogId = null, dogNumber = '', before = null, after = null, source }, now = Date.now()) {
-  if (!db || !editor) return false;
   checkSource(source);
+  if (!db || !editor) return false;
   try {
     const [write] = editLogWrites(db, { at: new Date(now).toISOString(), code: editor.code || '', name: editor.name, kind, dogId, number: dogNumber, before, after, source });
     await write.run();

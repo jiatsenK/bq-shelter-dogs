@@ -90,13 +90,12 @@ export function droppedDay(db, old, nextDate) {
 // source：volunteer＝志工網站、sheet＝試算表（editlog.js EDIT_SOURCES）；改前、改後都是 { date, walker }
 const EDIT_LOG_COST = 8; // 表＋主鍵＋AUTOINCREMENT 序號，保守上界
 // when：[條件 SQL, ...參數]，寫入當下條件成立才記（#700 防狗清單同步與比對兩邊都記）
-const walkLog = (db, { kind = 'walk', ...entry }, when) => editLogWrites(db, { kind, ...entry }, when);
 // 收下人工改表時：表上有日期、且收下後日期或溜狗人變了才記（清空日期不記；改回較早一天記成那天）。
 // 操作者只能寫表上的溜狗人（sheet）；改後是收下後的值（after，同日跟網站名單合併時會多網站上的人）。
 // 網站寫回又讀回的值在比對時就認出來、不會走到收下，所以不會重複記
 export function sheetWalkLog(db, old, sheet, after, number, at, when) {
   if (!sheet.date || (after.date === old.effective_date && after.walker === old.walker)) return { statements: [], cost: 0 };
-  return { statements: walkLog(db, { at, source: 'sheet', name: sheet.walker, dogId: old.dog_id, number,
+  return { statements: editLogWrites(db, { at, kind: 'walk', source: 'sheet', name: sheet.walker, dogId: old.dog_id, number,
     before: { date: old.effective_date, walker: old.walker }, after: { date: after.date, walker: after.walker } }, when), cost: EDIT_LOG_COST };
 }
 
@@ -203,8 +202,8 @@ export async function acceptWalk(db, input, env, now = Date.now()) {
     const historyCost = HISTORY_ROW_COST * ((old.effective_date === input.operationDate ? countOf(old) : 0) + codes.length);
     const before = { date: old.effective_date, walker: old.walker };
     // 按溜了：操作者是這次按的人（一起溜就全部）；已經在今天名單裡、名單沒變就不記
-    const logs = editor ? walkLog(db, { at, kind: input.action === 'undo' ? 'walkundo' : 'walkedit', source: 'volunteer', code: editor.code, name: editor.name, dogId: old.dog_id, number: dog.id, before, after: result.current })
-      : before.date !== effectiveDate || before.walker !== walker ? walkLog(db, { at, source: 'volunteer', code: added.length === 1 ? await walkerCode(added[0].name, env.WALKER_KEY) : '',
+    const logs = editor ? editLogWrites(db, { at, kind: input.action === 'undo' ? 'walkundo' : 'walkedit', source: 'volunteer', code: editor.code, name: editor.name, dogId: old.dog_id, number: dog.id, before, after: result.current })
+      : before.date !== effectiveDate || before.walker !== walker ? editLogWrites(db, { at, kind: 'walk', source: 'volunteer', code: added.length === 1 ? await walkerCode(added[0].name, env.WALKER_KEY) : '',
         name: added.map(m => m.name).join('、'), dogId: old.dog_id, number: dog.id, before, after: result.current }) : [];
     try {
       await db.batch([

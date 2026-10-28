@@ -18,6 +18,15 @@
 - 沒給條件時用 `VALUES(...)`、有條件時用 `SELECT ... WHERE 條件`，SQL 跟各處原本一樣（`SELECT ... WHERE 1` 會讓 `dog-merge.test.mjs` 的查詢計畫檢查看到 SCAN CONSTANT ROW）。網站按溜了那筆原本是 `SELECT ... WHERE 1`，現在是 `VALUES`，寫入的列一樣。
 - 寫入預算（ADR 0008 `writeBudget`）沒動：`EDIT_LOG_COST` 與各 batch 的句數不變。
 
+## 審查後補修（code-review，K：「修必修＋小建議」）
+
+- 拿掉 `walk-accept.js` 只補 kind 預設值的 `walkLog`，三處直接呼叫 `editLogWrites` 並寫明 `kind: 'walk'`。
+- `editLogWrites` 組 `v3_dog_edit_actors` 那句不再用字串取代插 `last_insert_rowid()`，改成直接給每欄的值。
+- `logEdit` 先檢查來源再看有沒有編輯者：沒有編輯者時漏傳來源也會丟錯。
+- 防堵測試改成整份檔案比（拆行也抓得到），也算 `REPLACE INTO`、`INSERT OR …`、`main.v3_edit_log`；表名用變數組的 INSERT（dog-merge、identity）列成已知例外，多一處就失敗。三種繞法都暫時加檔驗證過會擋。
+- 補欄位逐欄比對：志工更名（`identity.test.mjs`）、試算表自動認回所（`dog-list.test.mjs`）。
+- 沒處理（另開票再看）：`when` 改成 `{ sql, args }`、`actor` 組法三處重複。
+
 ## 相關 PR
 
-- （開好後補）
+- #721

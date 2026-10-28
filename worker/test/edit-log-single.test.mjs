@@ -9,18 +9,28 @@ import { setup } from './walk-fixture.mjs';
 const SRC = new URL('../src/', import.meta.url);
 const files = (await readdir(SRC, { recursive: true })).filter(f => f.endsWith('.js')).map(f => f.replaceAll('\\', '/'));
 
+// 整份檔案一起比（SQL 拆行也抓得到），註解先拿掉（保留換行，行號才對）；INSERT OR …、REPLACE、加 schema 前綴都算
+const strip = code => code.replace(/\/\*[\s\S]*?\*\//g, m => m.replace(/[^\n]/g, ' ')).replace(/^[ \t]*\/\/.*$/gm, '');
+const lineOf = (code, index) => code.slice(0, index).split('\n').length;
+const EDIT_LOG_INSERT = /\b(?:INSERT(?:\s+OR\s+\w+)?|REPLACE)\s+INTO\s+["'`[]?(?:\w+\.)?v3_edit_log\b/gi;
+// 表名用變數組的 INSERT 看不出寫哪張表：已知的列在這裡，多了一處就要確認不是寫修改紀錄
+const DYNAMIC_INSERT_OK = {
+  'dog-merge.js': '合併狗搬資料表的列（copyRows），表清單不含 v3_edit_log',
+  'identity.js': '身分合併只搬常溜、開卡兩張表',
+};
+const DYNAMIC_INSERT = /\bINTO\s+\$\{/g;
+
 test('worker/src 只有 editlog.js 一處 INSERT INTO v3_edit_log', async () => {
-  const found = [];
+  const found = [], dynamic = [];
   for (const file of files) {
-    const lines = (await readFile(new URL(file, SRC), 'utf8')).split(/\r?\n/);
-    lines.forEach((line, i) => {
-      // 註解提到不算
-      if (/^\s*(\/\/|\*)/.test(line)) return;
-      if (/INSERT\s+(OR\s+\w+\s+)?INTO\s+["`']?v3_edit_log\b/i.test(line)) found.push(`${file}:${i + 1}`);
-    });
+    const code = strip(await readFile(new URL(file, SRC), 'utf8'));
+    for (const m of code.matchAll(EDIT_LOG_INSERT)) found.push(`${file}:${lineOf(code, m.index)}`);
+    for (const m of code.matchAll(DYNAMIC_INSERT)) dynamic.push(`${file}:${lineOf(code, m.index)}`);
   }
   assert.equal(found.length, 1, `修改紀錄要交給 editlog.js editLogWrites 寫，不要另寫 INSERT：${found.join('、')}`);
   assert.match(found[0], /^editlog\.js:/);
+  assert.deepEqual(dynamic.map(d => d.split(':')[0]).sort(), Object.keys(DYNAMIC_INSERT_OK).sort(),
+    `表名用變數組的 INSERT 有變動：${dynamic.join('、')}；確認不是寫 v3_edit_log 後更新 DYNAMIC_INSERT_OK`);
 });
 
 test('來源沒傳或不在白名單就丟錯', async () => {
@@ -30,6 +40,8 @@ test('來源沒傳或不在白名單就丟錯', async () => {
     for (const source of [undefined, '', 'legacy', 'system']) {
       assert.throws(() => editLogWrites(env.DB, { ...entry, source }), /修改紀錄來源不對/);
       await assert.rejects(logEdit(env.DB, { editor: { name: '甲', code: '' }, kind: 'note', after: '備註', source }), /修改紀錄來源不對/);
+      // 沒有編輯者（本來就不寫）也要抓到漏傳
+      await assert.rejects(logEdit(env.DB, { editor: null, kind: 'note', after: '備註', source }), /修改紀錄來源不對/);
     }
     assert.deepEqual(EDIT_SOURCES, ['access', 'volunteer', 'sheet']);
     assert.equal((await env.DB.prepare('SELECT COUNT(*) n FROM v3_edit_log').first()).n, 0);
