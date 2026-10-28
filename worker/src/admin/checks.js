@@ -2,6 +2,7 @@
 // 不刪狗、不記離所、不合併；讀不懂與從未掃描分開標示，不當成「沒有差異」。
 import { EXTRA_KEY } from '../dog-list.js';
 import { CRON_JOBS, cronKey } from '../cron-status.js';
+import { STOPPED_AT } from '../walk-accept.js';
 
 const STALE_MS = 24 * 3600000; // 掃描一天三次，超過一天沒有新掃描就是過期
 const SHOW_MAX = 200;
@@ -74,4 +75,19 @@ export async function readCronStatus(db, now = Date.now()) {
     return { job, state: 'ok', okAt, failAt, error: failAt && typeof v.error === 'string' ? v.error : '',
       stale: !okAt || now - Date.parse(okAt) > CRON_STALE_MS[job] };
   });
+}
+
+// #684 寫回停止重試的狗：只列各狗目前版本的工作（舊版本已被新登記取代）。條件照 v3_walk_outbox_due 部分索引寫，走索引不掃表。
+// 原因由 outbox.error 換成白話（前綴見 walk-accept.js 的 remoteError），次數讀 v3_walk_retry。
+const stopReason = error => error === 'writeback-not-configured' ? '志工網站還沒設定寫入試算表'
+  : String(error || '').replace(/^writeback-[a-z]+:\s*/, '') || '試算表沒有寫進去';
+
+export async function readStoppedWalks(db) {
+  const { results = [] } = await db.prepare(`SELECT s.number, s.name, s.dog_id, o.operation_date, o.error, COALESCE(r.failures, 0) AS failures
+    FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version
+    LEFT JOIN v3_walk_retry r ON r.dog_key=o.dog_key AND r.version=o.version
+    WHERE o.status IN ('pending','retry','unconfirmed') AND o.next_attempt_at=?
+    ORDER BY o.operation_date DESC, s.number LIMIT ?`).bind(STOPPED_AT, SHOW_MAX).all();
+  return results.map(r => ({ number: r.number || '', name: r.name || '', dogId: r.dog_id || null, date: r.operation_date,
+    failures: r.failures, reason: stopReason(r.error) }));
 }

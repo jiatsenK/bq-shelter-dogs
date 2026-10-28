@@ -7,7 +7,7 @@ import { createAccessVerifier } from './access.js';
 import { readManageDogs } from './dogs.js';
 import { readActivities } from '../activities.js';
 import { writeActivity } from './activities.js';
-import { readSheetGaps, readCronStatus } from './checks.js';
+import { readSheetGaps, readCronStatus, readStoppedWalks } from './checks.js';
 import { searchEdits } from './edits.js';
 import { readSiteLinks } from './links.js';
 import { isPhotoKey, isTomb, isThumbKey, r2Versions } from '../r2.js';
@@ -111,7 +111,7 @@ export default {
         response = json({ dogs: await readManageDogs(env.DB, photos) });
       }
       else if (path === '/api/manage/data-checks') response = json({ sheetGaps: await readSheetGaps(env.DB) });
-      else if (path === '/api/manage/cron-status') response = json({ jobs: await readCronStatus(env.DB) });
+      else if (path === '/api/manage/cron-status') response = json({ jobs: await readCronStatus(env.DB), stopped: await readStoppedWalks(env.DB) });
       else if (path === '/api/manage/links') response = json(readSiteLinks(env));
       else if (path === '/api/manage/edits') response = json(await searchEdits(env.DB, new URL(request.url).searchParams));
       else if (path === '/api' || path.startsWith('/api/')) response = json({ error: '找不到管理功能' }, 404);

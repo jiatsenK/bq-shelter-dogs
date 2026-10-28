@@ -1,6 +1,6 @@
 import { readDogs, readDataChecks, readCronStatus } from './api.js';
 import { parseManageDogs, statusText, shownNumber } from './dog-table.js';
-import { completeness, careLink, parseSheetGaps, gapStatus, SHEET_LABELS, CRON_LABELS, parseCronStatus, cronStatus } from './data-checks.js';
+import { completeness, careLink, parseSheetGaps, gapStatus, SHEET_LABELS, CRON_LABELS, parseCronStatus, cronStatus, parseStoppedWalks, stoppedStatus } from './data-checks.js';
 import { showVolunteerState } from './volunteer-state.js';
 import { possibleDuplicates } from './dog-merge.js';
 import { byId, element } from './dom.js';
@@ -107,6 +107,8 @@ function renderCron(result) {
     jobs = parseCronStatus(result.data);
   } catch (error) {
     failed(status, `${error.message || '排程紀錄讀取失敗'}。這不代表排程有在跑，請重新讀取。`);
+    byId('stopped-region').hidden = true;
+    failed(byId('stopped-status'), '讀不到停止重試的狗，不能當成沒有，請重新讀取。');
     return;
   }
   const rows = jobs.map(j => ({ j, s: cronStatus(j) }));
@@ -121,6 +123,24 @@ function renderCron(result) {
     return row;
   }));
   region.hidden = false;
+  renderStopped(result.data);
+}
+
+// #684 寫回停止重試的狗，放在排程下面；格式不對只說讀不懂，不當成沒有
+function renderStopped(data) {
+  const status = byId('stopped-status'), region = byId('stopped-region');
+  status.removeAttribute('data-error'); region.hidden = true;
+  let list;
+  try { list = parseStoppedWalks(data); } catch (error) { failed(status, `${error.message}，不能當成沒有停住的狗。`); return; }
+  status.textContent = stoppedStatus(list);
+  if (list.length) status.dataset.stale = 'true'; else status.removeAttribute('data-stale');
+  byId('stopped-dogs').replaceChildren(...list.map(d => {
+    const row = document.createElement('tr');
+    row.append(element('td', d.number ? `${d.number} ${d.name}` : d.name, 'dog-name'), element('td', d.date),
+      element('td', `${d.failures} 次`), element('td', d.reason));
+    return row;
+  }));
+  region.hidden = !list.length;
 }
 
 async function load() {
@@ -129,6 +149,7 @@ async function load() {
   byId('complete-status').textContent = '正在讀取狗資料…';
   byId('dup-status').textContent = '正在讀取狗資料…';
   byId('cron-status').textContent = '正在讀取排程紀錄…';
+  byId('stopped-status').textContent = '正在讀取停止重試的狗…';
   const [gaps, dogs, cron] = await Promise.all([readDataChecks(), readDogs(), readCronStatus()]);
   renderGaps(gaps);
   renderDuplicates(renderCompleteness(dogs));

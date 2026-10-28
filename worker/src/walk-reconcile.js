@@ -1,4 +1,4 @@
-import { writeBudget, membersOf, reconcileWalk, droppedDay } from './walk-accept.js';
+import { guard, writeBudget, membersOf, reconcileWalk, droppedDay, sheetWalkLog } from './walk-accept.js';
 import { callSheet } from './sheet-write.js';
 
 const same = (a,b) => a.date===b.date && a.walker===b.walker;
@@ -24,17 +24,18 @@ export async function reconcileWalkSnapshot(db, snapshot, observedStates, env, n
       const members=await membersOf(db,sheet.walker,env.WALKER_KEY);
       const version=state.version+1,at=new Date(now).toISOString();
       const dropped=droppedDay(db,state,sheet.date); // 改回較早的日子：溜狗紀錄刪掉原本較新那天（walk-accept.js）
+      const logged=sheetWalkLog(db,state,sheet,sheet,state.number,at); // 修改紀錄「溜了／試算表」（#672）
       await db.batch([
-        db.prepare('INSERT INTO v3_walk_guard SELECT CASE WHEN EXISTS(SELECT 1 FROM v3_walk_state s JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version WHERE s.dog_key=? AND s.version=? AND o.status=\'synced\') THEN 1 ELSE 0 END').bind(state.dog_key,state.version),
-        ...await writeBudget(db,env,40+dropped.cost,now),
+        guard(db, 'EXISTS(SELECT 1 FROM v3_walk_state s JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version WHERE s.dog_key=? AND s.version=? AND o.status=\'synced\')', state.dog_key,state.version),
+        ...await writeBudget(db,env,40+dropped.cost+logged.cost,now),
         ...dropped.statements,
+        ...logged.statements,
         // 同日人工改名單保留原復原基準，不將今天被移除的人當成上一次。
         db.prepare('UPDATE v3_walk_state SET version=?,effective_date=?,walker=?,members_json=?,base_date=?,base_walker=?,previous_date=CASE WHEN effective_date=? THEN previous_date ELSE effective_date END,previous_walker=CASE WHEN effective_date=? THEN previous_walker ELSE walker END,updated_at=? WHERE dog_key=? AND version=?')
           .bind(version,sheet.date,sheet.walker,JSON.stringify(members),sheet.date,sheet.walker,sheet.date,sheet.date,at,state.dog_key,state.version),
         db.prepare("INSERT INTO v3_walk_outbox(dog_key,version,operation_date,target_date,target_walker,status,next_attempt_at) VALUES(?,?,?,?,?,'pending',?)")
           .bind(state.dog_key,version,at.slice(0,10),sheet.date,sheet.walker,at),
         db.prepare("UPDATE v3_walk_outbox SET status='synced',readback_seen=1 WHERE dog_key=? AND version=?").bind(state.dog_key,version),
-        db.prepare('DELETE FROM v3_walk_guard'),
       ]);
       changed++;
     } catch (error) { deferred++; console.warn('walk-reconcile:',state.dog_key,error.message); }
@@ -50,9 +51,10 @@ export async function walkFingerprint(date,walker) {
 
 // 保險掃描（ADR 0018 第 5 點）：按狗送指紋，Apps Script 只回指紋不同的狗，Worker 只比那幾隻。
 // 指紋直接由 base 算出、不另外記：寫回確認或人工值收下時 base 就跟著更新；沒收完（未決派送、一輪上限）的狗 base 不變，下次自然再回來。
+// CROSS JOIN 固定先掃在所的狗、再用主鍵查寫回紀錄：結果跟 JOIN 相同，讀取量不隨只增不刪的 outbox 歷史長大（#676；不靠 PRAGMA optimize）。
 export async function scanWalks(env,now) {
   const observed=(await env.DB.prepare(`SELECT s.*,o.status FROM v3_walk_state s
-    JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version`).all()).results || [];
+    CROSS JOIN v3_walk_outbox o ON o.dog_key=s.dog_key AND o.version=s.version`).all()).results || [];
   if (!observed.length) return;
   const fingerprints={};
   for (const s of observed) fingerprints[s.dog_key]=await walkFingerprint(s.base_date,s.base_walker);

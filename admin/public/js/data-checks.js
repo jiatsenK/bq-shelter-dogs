@@ -64,5 +64,18 @@ export function cronStatus(j) {
   return { last: j.okAt ? when(j.okAt) : '—', problem: problems.join('；') || '正常', bad: Boolean(failing || j.stale) };
 }
 
+// #684 寫回停止重試的狗：試算表明確拒絕就停、其他錯誤 10 次後停。舊版 Worker 沒回 stopped 時當成沒有。
+export function parseStoppedWalks(data) {
+  const list = data && data.stopped;
+  if (list === undefined) return [];
+  if (!Array.isArray(list) || !list.every(d => d && typeof d.name === 'string' && typeof d.number === 'string' && typeof d.reason === 'string'
+    && typeof d.date === 'string' && Number.isSafeInteger(d.failures))) throw Error('停止重試清單格式不正確');
+  return list;
+}
+
+export const stoppedStatus = list => list.length
+  ? `${list.length} 隻狗寫回試算表失敗、已停止重試，試算表上還是舊的溜狗紀錄。修好設定後，下次有人登記這隻狗就會再寫回。`
+  : '目前沒有停止重試的狗。';
+
 // #624 待補清單 → 狗資料表：帶篩選條件；給 dogId 時直接開那隻狗的編輯抽屜（狀態分頁預設在所，不用另外帶）
 export const careLink = (care, dogId) => `./?${new URLSearchParams({ care, ...(dogId ? { dog: dogId } : {}) })}`;

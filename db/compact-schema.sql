@@ -38,12 +38,9 @@ CREATE TABLE IF NOT EXISTS v3_walk_outbox (
 );
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_due ON v3_walk_outbox(next_attempt_at,dog_key) WHERE status IN ('pending','retry','unconfirmed');
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_active ON v3_walk_outbox(dog_key) WHERE status NOT IN ('synced','superseded');
-CREATE INDEX IF NOT EXISTS v3_walk_outbox_readback ON v3_walk_outbox(dog_key,target_date,target_walker) WHERE readback_seen=1;
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_agreed ON v3_walk_outbox(dog_key,version) WHERE status='synced';
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_causal ON v3_walk_outbox(dog_key,target_date,target_walker,version) WHERE readback_seen=1 AND status='superseded';
 CREATE INDEX IF NOT EXISTS v3_walk_outbox_unknown ON v3_walk_outbox(dog_key,target_date,target_walker,version) WHERE readback_seen=0 AND dispatch_id<>'';
-CREATE INDEX IF NOT EXISTS v3_walk_outbox_unknown_date ON v3_walk_outbox(dog_key,target_date,version) WHERE readback_seen=0 AND dispatch_id<>'';
-CREATE INDEX IF NOT EXISTS v3_walk_outbox_unknown_walker ON v3_walk_outbox(dog_key,target_walker,version) WHERE readback_seen=0 AND dispatch_id<>'';
 -- 一致基準／已接受人工觀測的因果界線；更早歷史值不能作派送中間值授權。
 CREATE TABLE IF NOT EXISTS v3_walk_baselines (
   dog_key TEXT PRIMARY KEY REFERENCES v3_walk_state(dog_key),
@@ -71,10 +68,10 @@ CREATE TABLE IF NOT EXISTS v3_walk_pack (
   payload TEXT NOT NULL CHECK(json_valid(payload))
 );
 INSERT OR IGNORE INTO v3_walk_pack VALUES(1,0,'{}');
--- 交易 guard：比較版本失敗必須整筆回復，不能留下去重結果或工作。
+-- 交易 guard：比較版本失敗必須整筆回復，不能留下去重結果或工作。條件不成立才插 0 讓 CHECK 失敗，成立時不寫任何列，表一直是空的（#681）。
 CREATE TABLE IF NOT EXISTS v3_walk_guard (ok INTEGER NOT NULL CHECK(ok=1));
--- 保守計量包含索引與觸發器；不是帳號分析用量的替代品。
-CREATE TABLE IF NOT EXISTS v3_walk_write_budget (day TEXT PRIMARY KEY, reserved INTEGER NOT NULL);
+-- 保守計量包含索引與觸發器；不是帳號分析用量的替代品。retry：其中寫回重試的部分，另有每日上限（#685）。
+CREATE TABLE IF NOT EXISTS v3_walk_write_budget (day TEXT PRIMARY KEY, reserved INTEGER NOT NULL, retry INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS v3_walk_conflicts (
   dog_key TEXT PRIMARY KEY,
   observation TEXT NOT NULL CHECK(json_valid(observation)),
@@ -120,6 +117,8 @@ CREATE INDEX IF NOT EXISTS v3_sheet_main_number ON v3_sheet_main(number);
 CREATE INDEX IF NOT EXISTS v3_sheet_main_name ON v3_sheet_main(name) WHERE number='';
 -- 用狗 ID 找主清單列不整張掃：開卡讀回、觸發器的 EXISTS（#555）
 CREATE INDEX IF NOT EXISTS v3_sheet_main_dog ON v3_sheet_main(dog_id);
+-- 保險掃描找還沒補填「誰遛的」原文的列不整張掃；平常是空的（#678）
+CREATE INDEX IF NOT EXISTS v3_sheet_main_walker_null ON v3_sheet_main(row_index) WHERE walker IS NULL;
 CREATE TABLE IF NOT EXISTS v3_sheet_changes (
   row_index INTEGER PRIMARY KEY,
   label TEXT NOT NULL DEFAULT '',
@@ -214,6 +213,7 @@ CREATE TABLE IF NOT EXISTS v3_dog_departures (
 
 -- 編輯紀錄（docs/adr/0004-open-editing-and-edit-log.md）：網站上的編輯誰改了什麼；只增不刪。
 -- before_json／after_json 是 JSON 文字（null 表示沒有）
+-- source（#672）：access＝管理網站、volunteer＝志工網站、sheet＝試算表；NULL＝舊紀錄。管理網站有 v3_dog_edit_actors 時以那邊為準
 CREATE TABLE IF NOT EXISTS v3_edit_log (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   at TEXT NOT NULL,
@@ -223,7 +223,8 @@ CREATE TABLE IF NOT EXISTS v3_edit_log (
   dog_id TEXT,
   dog_number TEXT NOT NULL DEFAULT '',
   before_json TEXT,
-  after_json TEXT
+  after_json TEXT,
+  source TEXT
 );
 -- 活動紀錄（#270，ADR 0002）：一場一列，類型固定兩種（kids＝動保小小兵、adoption＝認養會）。網站寫，同步不碰。
 -- revision 每改一次加 1，兩支手機同時改時後送的會被擋下（不互相蓋掉）
@@ -262,6 +263,8 @@ CREATE TABLE IF NOT EXISTS v3_identity_names (
  name TEXT NOT NULL,
  volunteer_id TEXT NOT NULL REFERENCES v3_volunteers(volunteer_id)
 );
+-- #680：依志工找名字走索引，不整張掃
+CREATE INDEX IF NOT EXISTS v3_identity_names_volunteer ON v3_identity_names(volunteer_id, code);
 CREATE TABLE IF NOT EXISTS v3_identity_redirects (
  volunteer_id TEXT PRIMARY KEY NOT NULL REFERENCES v3_volunteers(volunteer_id),
  target_id TEXT NOT NULL REFERENCES v3_volunteers(volunteer_id),
@@ -318,13 +321,14 @@ CREATE TABLE IF NOT EXISTS v3_sync_state (
 );
 
 -- 資料包（ADR 0009，#315，worker/src/packs.js）：small（在所：狗清單、主清單上的狗的休養，存在 part=main；離所按年見最後，ADR 0014）、walks（切點以前的溜狗紀錄）算好存在 v3_packs，
--- 一律分段存（每段最多 1 MB，D1 一列上限 2 MB）。v3_pack_versions 一列：small 版本號由觸發器自動加 1。
+-- 一律分段存（每段最多 1 MB，D1 一列上限 2 MB）。v3_pack_versions 一列：small、walked（溜狗日期包，#679）版本號由觸發器自動加 1。
 -- 溜狗紀錄按月分段（#320）後改用 v3_walk_versions，這張表只剩 small（#354）；正式 D1 舊欄 walks／live／cutoff 由 migration 0004 整張重建拿掉（#557）。
 -- 獨立一張表（不加在 v3_data_versions）：同步補建只跑 IF NOT EXISTS，不用 ALTER TABLE
-CREATE TABLE IF NOT EXISTS v3_pack_versions (id INTEGER PRIMARY KEY CHECK(id=1), small INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS v3_pack_versions (id INTEGER PRIMARY KEY CHECK(id=1), small INTEGER NOT NULL DEFAULT 0, walked INTEGER NOT NULL DEFAULT 0);
 INSERT OR IGNORE INTO v3_pack_versions(id) VALUES(1);
 CREATE TABLE IF NOT EXISTS v3_packs (part TEXT NOT NULL, seq INTEGER NOT NULL, ver INTEGER NOT NULL, cutoff TEXT NOT NULL DEFAULT '', body TEXT NOT NULL, PRIMARY KEY(part,seq));
 CREATE INDEX IF NOT EXISTS v3_walks_date ON v3_walks(walk_date);
+CREATE INDEX IF NOT EXISTS v3_walks_nameonly ON v3_walks(dog_name) WHERE dog_number='';
 CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_changes_INSERT AFTER INSERT ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_changes_UPDATE AFTER UPDATE ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_changes_DELETE AFTER DELETE ON v3_sheet_changes BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
@@ -397,8 +401,12 @@ DROP TRIGGER IF EXISTS pack_v3_stays_UPDATE;
 DROP TRIGGER IF EXISTS pack_v3_stays_DELETE;
 DELETE FROM v3_packs WHERE part='small';
 CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_main_INSERT AFTER INSERT ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_dog_departures d WHERE d.dog_id=NEW.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_dog_departures d WHERE d.dog_id=NEW.dog_id); END;
-CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_main_UPDATE AFTER UPDATE OF row_index,dog_id,number,name,cage,note,walked_date,walker_codes ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_dog_departures d WHERE d.dog_id IN (OLD.dog_id,NEW.dog_id)))) FROM json_each(years) j) WHERE id=1 AND (OLD.row_index<>NEW.row_index OR OLD.dog_id<>NEW.dog_id OR OLD.number<>NEW.number) AND EXISTS(SELECT 1 FROM v3_dog_departures d WHERE d.dog_id IN (OLD.dog_id,NEW.dog_id)); END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_main_UPDATE AFTER UPDATE OF row_index,dog_id,number,name,cage,note ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_dog_departures d WHERE d.dog_id IN (OLD.dog_id,NEW.dog_id)))) FROM json_each(years) j) WHERE id=1 AND (OLD.row_index<>NEW.row_index OR OLD.dog_id<>NEW.dog_id OR OLD.number<>NEW.number) AND EXISTS(SELECT 1 FROM v3_dog_departures d WHERE d.dog_id IN (OLD.dog_id,NEW.dog_id)); END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_main_DELETE AFTER DELETE ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_dog_departures d WHERE d.dog_id=OLD.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_dog_departures d WHERE d.dog_id=OLD.dog_id); END;
+-- #679 溜狗日期包：溜狗日期、溜狗人和它照主清單順序用到的列號、編號、狗名改了，walked 加 1（small 不再看 walked_date／walker_codes）
+CREATE TRIGGER IF NOT EXISTS walked_v3_sheet_main_INSERT AFTER INSERT ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET walked=walked+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS walked_v3_sheet_main_UPDATE AFTER UPDATE OF row_index,number,name,walked_date,walker_codes ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET walked=walked+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS walked_v3_sheet_main_DELETE AFTER DELETE ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET walked=walked+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_intros_INSERT AFTER INSERT ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_intros_UPDATE AFTER UPDATE ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id IN (OLD.dog_id,NEW.dog_id)); END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_intros_DELETE AFTER DELETE ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); END;

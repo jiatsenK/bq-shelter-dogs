@@ -247,3 +247,10 @@ body.drawer-open .table { min-width: 0; }
   .drawer-body { padding: 0 16px; }
   .drawer-actions .btn { flex: 1; min-height: 44px; }
 }
+/* #671 修改紀錄勾選隱藏：只存瀏覽器；顯示已隱藏時被藏的列用底色區分，另有「已隱藏」文字 */
+.edit-hide-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 16px; padding: 0 24px 16px; }
+.edit-hide-bar .form-switch { margin: 0; }
+.edit-hide-bar [role="status"] { color: var(--admin-muted); }
+.edit-table .select-cell { width: 1%; }
+.edit-table .select-cell .form-check-input { float: none; margin: 0; width: 1.25rem; height: 1.25rem; cursor: pointer; }
+.edit-table tr[data-hidden] > td { --tblr-table-bg-state: var(--admin-ground); --tblr-table-color-state: var(--admin-muted); }

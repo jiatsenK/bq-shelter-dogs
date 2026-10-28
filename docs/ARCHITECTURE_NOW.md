@@ -18,7 +18,7 @@
 | 今日溜狗（網站按溜了、復原、改溜狗人） | 網站 | 先存 D1（PR #533 起；舊的直接寫回試算表路徑已刪），再由 Worker 寫回試算表兩欄 | `worker/src/walk-accept.js` |
 | 今日溜狗（人工改試算表） | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/rows`，Worker 只比那幾隻 | `apps-script/sheet-write.gs`、`worker/src/walk-reconcile.js` |
 | 溜狗紀錄（每狗每天一筆；圖鑑、我溜過讀） | 網站、管理者 | 網站按溜了／改溜狗人／復原：跟今日溜狗同一批寫（稽核第 4 項，K 2026-10-26），不等保險掃描。人工改表：狗清單編輯觸發照表寫。改回較早日子時刪掉較新那天，清空日期不刪 | `worker/src/walk-accept.js`、`worker/src/dog-list.js` |
-| 狗清單：主清單、已出所、常遛狗群 | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/dog-list`，只寫有變的欄（#501）。網站讀 `/api/dogs` 時，遛狗日期以今日溜狗為準並附上今日紀錄（只在回應時換，不寫表；K 2026-10-26） | `worker/src/dog-list.js`、`worker/src/walk-accept.js` 的 `withTodayWalks` |
+| 狗清單：主清單、已出所、常遛狗群 | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/dog-list`，只寫有變的欄（#501）。網站讀 `/api/dogs` 時，遛狗日期以今日溜狗為準並附上今日紀錄（只在回應時換，不寫表；K 2026-10-26）。Worker 端遛狗日期、遛狗人另存溜狗日期包（`v3_pack_versions.walked`），只改這兩欄不讓在所資料包重算（#679） | `worker/src/dog-list.js`、`worker/src/walk-accept.js` 的 `withTodayWalks` |
 | 常溜狗群（網站狗群頁） | 管理者在試算表「常遛狗群」改 | GAS 編輯觸發送 D1（一欄一列 `v3_sheet_group_columns`，#559）；網站只讀（#474） | `worker/src/dog-list.js` |
 | 休養、介紹、開卡、常溜、固定照顧、活動 | 網站 | 只存 D1，不碰試算表 | 見各 ADR |
 | 合併重複的狗（試算表改編號多出來的，#621） | 管理網站 | 只存 D1，可在修改紀錄取消合併 | `worker/src/dog-merge.js` |
@@ -30,6 +30,8 @@
 
 GAS 送不出去時把待送內容留在指令碼屬性（`WALK_EDITS_PENDING`、`DOG_LIST_PENDING`），每 10 分鐘補送；Worker 確認收到才清。
 
+Apps Script 同一次執行會沿用第一次讀到的表內容，之後別人改的讀不到（#694 起處理）。所以有人改表、網站寫回改了格子都換一個表上變動記號（指令碼屬性 `SHEET_EDIT_MARK`）；執行讀表後記號被換掉就不送，待通知留給較新的執行或每 10 分鐘補送，舊讀值不會晚到蓋掉新的人工修改。核對記號與送出都在同一把 script lock 內（`flushWalkEdits`、`flushDogList`、`dogListScan` 每一批，#701），核對完到送出之間網站寫回插不進來。
+
 ## 排程
 
 | 時間（台灣） | 做什麼 | 發起 |
@@ -39,7 +41,11 @@ GAS 送不出去時把待送內容留在指令碼屬性（`WALK_EDITS_PENDING`�
 | 09:43、13:53、23:53（Google 前後差 15 分鐘） | 狗清單保險掃描：「D1 有、表沒有」只記錄不刪，每次記掃描時間；管理網站「資料檢查」顯示（#518／#567） | GAS 時間觸發 `dogListScan` |
 | 每月 1 日 09:23 | 照片垃圾桶清理，跟那次保險掃描同一個排程：`trash/` 標記滿 30 天的備份刪掉；`photos/` 32 碼舊原圖與縮圖只在 D1 `v3_photos` 記得它、且 `is_primary=0` 時一起刪，並刪掉那列（D1 沒這列就不碰，防測試 D1 配正式 R2）；固定路徑 `photos/{編號}.jpg` 不刪。只剩縮圖的備份照代號開頭的時間清。一筆出錯記下來、接著清下一筆，出錯那筆的備份留到下個月；結果記在 `v3_sync_state.trash_purged`（`{at, purged, failed, errors}`），有失敗時 `cron_trash` 記成出錯（實際保留 30～約 61 天）。R2 不設 Lifecycle 刪除規則（K 2026-10-26） | Worker cron |
 
-Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，2026-10-26）：正式版 2 個（`5-59/10 * * * *`、`53 1,5,15 * * *`），測試網站只有寫回重試 1 個，預覽與管理 Worker 都不設。Worker 的三件排程工作每次跑完或出錯都記在 D1 `v3_sync_state` 的 `cron_retry`、`cron_scan`、`cron_trash`（寫回重試每 10 分鐘寫這一列），管理網站「資料檢查」的「排程」顯示最後一次跑完的時間與最近失敗。
+Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，2026-10-26）：正式版 2 個（`5-59/10 * * * *`、`23 1,5,15 * * *`），測試網站只有寫回重試 1 個，預覽與管理 Worker 都不設。Worker 的三件排程工作每次跑完或出錯都記在 D1 `v3_sync_state` 的 `cron_retry`、`cron_scan`、`cron_trash`（寫回重試每 10 分鐘寫這一列），管理網站「資料檢查」的「排程」顯示最後一次跑完的時間與最近失敗。
+
+寫回重試有上限（#684，ADR 0018 補充）：試算表明確拒絕（沒設定、金鑰、試算表 ID、權限錯）失敗一次就停，其他錯誤第 10 次失敗後停。停住的工作在 `v3_walk_outbox` 照舊是 `retry`，`next_attempt_at` 設成 `9999-12-31T00:00:00.000Z`（`walk-accept.js` 的 `STOPPED_AT`），排程永遠撿不到；次數在 `v3_walk_retry.failures`。管理網站「資料檢查」的「停止重試的狗」列出來。志工網站的狗只看得到 `retry`，照舊顯示「寫回試算表失敗，會自動重試」。
+
+重試另有每天上限（#685，ADR 0018 補充）：`v3_walk_write_budget` 每天一列，`reserved` 是全部保留量（跟 `SYNC_DAILY_BUDGET` 比），`retry` 是其中寫回重試的部分（跟 `SYNC_RETRY_DAILY_BUDGET` 比，`wrangler.jsonc` 設 10,000 列，K 2026-10-27 定）。失敗過的工作再派送才算重試；第一次派送、中斷後的恢復派送不算。上限用完時，`walk-accept.js` 的 `dispatchBatch` 把那些工作的 `next_attempt_at` 改成隔天 UTC 午夜，同一輪的第一次派送照送。
 
 **注意：試算表主清單刪掉的列，D1 不會跟著刪。** 例如暫時籠位的「(狗名)」列刪掉後，網站還會照舊顯示暫時籠位。K 2026-10-26 決定再發生時才處理。
 

@@ -11,8 +11,9 @@ import { judgeDeparture, nameKey } from './departure-rules.js';
 import { taiwanYmd } from './sync-plan.js';
 import { SYNCED_AT_KEY } from './compact.js';
 import { linkIdentityName } from './identity.js';
+import { listWalkLog } from './walk-accept.js';
 
-export const DOG_LIST_ROWS_MAX = 10; // 每列最多 3–4 次 D1 往返，守住每次呼叫 50 次查詢
+export const DOG_LIST_ROWS_MAX = 10; // 每列最多 3–4 次 D1 往返（溜狗欄有變再查一次溜狗狀態，#700），守住每次呼叫 50 次查詢
 const FP_KEY = 'dog_list_fp';
 export const EXTRA_KEY = 'dog_list_extra';
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -52,10 +53,16 @@ async function walkersOf(walker, env, db) {
 }
 
 // 溜狗紀錄一隻狗一天一組（同一天以最後一次為準，跟當初從 GitHub JSON 匯入時合併的規則一樣）；網站按溜了也用這個（walk-accept.js）
+// 只寫不一樣的位置（#682，ADR 0008）：網站登記過的狗，保險掃描再送同一份名單時寫入 0 列、溜狗紀錄資料包不失效。
+// - 名單照位置比，順序不同算有變；沒有溜狗人存一列 null，用 IS NOT 比，null 對 null 算一樣；人數變少刪掉多出的位置。
+// - 那天的編號和狗名照第一次記的（#248），之後改名、換編號不改那天，加人也沿用。
 export function walkDay(db, dogId, date, dog, codes) {
+  const list = codes.length ? codes : [null];
   return [
-    db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(dogId, date),
-    ...(codes.length ? codes : [null]).map((code, i) => db.prepare('INSERT INTO v3_walks(dog_id,walk_date,position,walker_code,dog_number,dog_name) VALUES(?,?,?,?,?,?)')
+    db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=? AND position>=?').bind(dogId, date, list.length),
+    ...list.map((code, i) => db.prepare(`INSERT INTO v3_walks(dog_id,walk_date,position,walker_code,dog_number,dog_name)
+      SELECT ?1,?2,?3,?4,COALESCE((SELECT dog_number FROM v3_walks WHERE dog_id=?1 AND walk_date=?2 AND position=0),?5),COALESCE((SELECT dog_name FROM v3_walks WHERE dog_id=?1 AND walk_date=?2 AND position=0),?6) WHERE true
+      ON CONFLICT(dog_id,walk_date,position) DO UPDATE SET walker_code=excluded.walker_code,walker_name=NULL WHERE walker_code IS NOT excluded.walker_code`)
       .bind(dogId, date, i, code, dog.id, dog.name)),
   ];
 }
@@ -95,6 +102,8 @@ async function applyMain(db, row, list, env, fp) {
     // 改回較早的日子（K 2026-10-24，例如 Ctrl+Z）：那天照表上名單重寫，表上不再寫的較新那天刪掉
     if (date && (!old.walked_date || date > old.walked_date || (date === old.walked_date && codesChanged))) out.push(...walkDay(db, old.dog_id, date, dog, codes));
     else if (date && date < old.walked_date) out.push(db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(old.dog_id, old.walked_date), ...walkDay(db, old.dog_id, date, dog, codes));
+    // 網站上還沒有溜狗狀態的狗，日期或溜狗人（照代號比，#519 補填原文不算）改了記「溜了／試算表」（#700，walk-accept.js listWalkLog）
+    if (changed.includes('walked_date') || (keyed ? codesChanged : changed.includes('walker'))) out.push(...await listWalkLog(db, env, dog, old, { date: date || '', walker: next.walker }, new Date().toISOString()));
     Object.assign(old, next);
   } else {
     const identified=dog.id?await db.prepare('SELECT n.dog_id,s.revision FROM v3_dog_numbers n JOIN v3_dog_edit_state s USING(dog_id) WHERE number=?').bind(dog.id).first():await db.prepare("SELECT w.dog_id,s.revision FROM v3_walks w JOIN v3_dog_edit_state s USING(dog_id) WHERE dog_number='' AND dog_name=? LIMIT 1").bind(dog.name).first();
@@ -120,7 +129,7 @@ async function applyMain(db, row, list, env, fp) {
     if (date && !(await db.prepare('SELECT 1 FROM v3_walks WHERE dog_id=? AND walk_date=? LIMIT 1').bind(dogId, date).first())) out.push(...walkDay(db, dogId, date, dog, codes));
     list.push({ row_index: rowIndex, dog_id: dogId, number: dog.id, name: dog.name, cage, note, walked_date: date, walker: text(row.walker), walker_codes: JSON.stringify(codes) });
   }
-  if(returnedLog)out.push(db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) VALUES(?,?,?,?,?,?,?,?)').bind(new Date().toISOString(),'',returnedLog.editor.name,returnedLog.kind,returnedLog.dogId,returnedLog.dogNumber,JSON.stringify(returnedLog.before),JSON.stringify(returnedLog.after)));
+  if(returnedLog)out.push(db.prepare("INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json,source) VALUES(?,?,?,?,?,?,?,?,'sheet')").bind(new Date().toISOString(),'',returnedLog.editor.name,returnedLog.kind,returnedLog.dogId,returnedLog.dogNumber,JSON.stringify(returnedLog.before),JSON.stringify(returnedLog.after)));
   if(out.length){const result=await guardedDogBatch(db,expected,[...out,db.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(targetDogId)]);const revision=result.at(-1).results[0]?.revision;for(const item of list)if(item.dog_id===targetDogId)item.revision=revision;}
   return out.length > 0;
 }

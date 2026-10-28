@@ -29,6 +29,7 @@
   "vars": {
     "SITE_ENV": "test",
     "SYNC_DAILY_BUDGET": "40000",
+    "SYNC_RETRY_DAILY_BUDGET": "10000",
     "D1_WALK_NOTIFY": "1",
     "WALK_RETRY_ENABLED": "true"
   },
