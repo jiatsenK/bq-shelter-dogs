@@ -16,17 +16,19 @@ import { recordRun } from './cron-status.js';
 import * as r2 from './r2.js';
 import { taiwanYmd } from './sync-plan.js';
 import { applyDogListRows, scanDogList, DOG_LIST_ROWS_MAX } from './dog-list.js';
-import { editorOf, editorHeader, logEdit, readEdits, walkerCode, walkerNameKey } from './editlog.js';
+import { editorOf, editorHeader, logEdit, pruneEdits, readEdits, walkerCode, walkerNameKey } from './editlog.js';
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks } from './compact.js';
 import { isTestSite, testSiteResponse } from './test-site.js';
 import { readSmall, readDepartureIndex, readDepartureYear, readDogsPacked, readWalksPacked, readWalksYear, readMineWalks, packStatus, resetPackCache } from './packs.js';
 
 // 排程要跟 wrangler.jsonc 的 triggers.crons 一致（#500，ADR 0018）。排程數量算整個 Cloudflare 帳號，免費方案上限 5 個（稽核第 5 項），
 // 正式版只用兩個：寫回重試每 10 分鐘（沒工作也照樣查三次 D1 找待辦，再記一列跑完時間給管理網站看排程有沒有在跑，ADR 0018 第 2 點）；保險掃描台灣 09:23、13:23、23:23（UTC 01:23、05:23、15:23），跟 GAS 的 dogListScan（09:43／13:53／23:53 前後 15 分鐘）錯開。
-// 照片垃圾桶（#501，ADR 0018 第 7 點）不另佔排程：每月 1 日 09:23 那次保險掃描順便清。測試網站只有寫回重試（wrangler.test-site.jsonc）
+// 照片垃圾桶（#501，ADR 0018 第 7 點）不另佔排程：每月 1 日 09:23 那次保險掃描順便清；修改紀錄（ADR 0004 修訂：保留 14 天）每天 09:23 那次順便清。測試網站只有寫回重試（wrangler.test-site.jsonc）
 const RETRY_CRON = '5-59/10 * * * *';
 const SCAN_CRON = '23 1,5,15 * * *';
 const trashDue = now => { const d = new Date(now); return d.getUTCDate() === 1 && d.getUTCHours() === 1; };
+// 每天第一次保險掃描（SCAN_CRON 的 UTC 1 點）。trashDue 不改用它：scripts/diagram-facts.test.mjs 照原文核對架構圖
+const firstScanOfDay = now => new Date(now).getUTCHours() === 1;
 const DOG_LIST_SCAN_MAX_BYTES = 512 * 1024;
 const EDIT_ROWS_MAX = 50;
 
@@ -787,7 +789,7 @@ export default {
   testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, maintenance },
 
   // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 wrangler.jsonc 的 triggers）
-  // RETRY_CRON 寫回重試；SCAN_CRON 保險掃描，每月 1 日第一次順便清照片垃圾桶；沒帶 cron（測試）跑溜狗兩件。
+  // RETRY_CRON 寫回重試；SCAN_CRON 保險掃描，每天第一次順便清修改紀錄、每月 1 日第一次再清照片垃圾桶；沒帶 cron（測試）跑溜狗兩件。
   // 每件跑完或出錯都記時間給管理網站看（worker/src/cron-status.js）
   async scheduled(event, env, ctx) {
     const now = event && event.scheduledTime ? event.scheduledTime : Date.now();
@@ -798,6 +800,7 @@ export default {
     else if (cron === RETRY_CRON) ctx.waitUntil(retry());
     else if (cron === SCAN_CRON) {
       ctx.waitUntil(scan());
+      if (firstScanOfDay(now)) ctx.waitUntil(recordRun(env, 'editlog', now, () => pruneEdits(env.DB, now)));
       if (trashDue(now) && r2.r2On(env)) ctx.waitUntil(recordRun(env, 'trash', now, () => maintenance(env, now)));
     }
   },

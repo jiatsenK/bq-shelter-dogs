@@ -43,6 +43,7 @@ export const CRON_LABELS = {
   retry: { name: '寫回重試', every: '每 10 分鐘' },
   scan: { name: '保險掃描', every: '每天 09:23、13:23、23:23' },
   trash: { name: '照片垃圾桶', every: '每月 1 日 09:23' },
+  editlog: { name: '修改紀錄清理', every: '每天 09:23（清 14 天前的）' },
 };
 
 export function parseCronStatus(data) {

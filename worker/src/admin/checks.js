@@ -58,7 +58,7 @@ export async function readSheetGaps(db, now = Date.now()) {
 
 // 稽核第 5 項：排程有沒有在跑。讀志工網站 Worker 每次跑完記的 cron_<工作>（worker/src/cron-status.js），
 // 超過幾次沒跑完就算過期；讀不懂與從未記錄分開標示。
-const CRON_STALE_MS = { retry: 40 * 60000, scan: 13 * 3600000, trash: 32 * 86400000 };
+const CRON_STALE_MS = { retry: 40 * 60000, scan: 13 * 3600000, trash: 32 * 86400000, editlog: 26 * 3600000 };
 
 export async function readCronStatus(db, now = Date.now()) {
   const keys = CRON_JOBS.map(cronKey);
