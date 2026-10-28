@@ -27,4 +27,4 @@
 
 ## 相關 PR
 
-（開 PR 後補）
+- https://github.com/jiatsenK/bq-shelter-dogs/pull/733
