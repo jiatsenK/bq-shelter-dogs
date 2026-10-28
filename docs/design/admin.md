@@ -11,12 +11,19 @@ colors:
 typography:
   body:
     fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans TC", sans-serif'
-    fontSize: "0.875rem"
-    lineHeight: 1.4285714286
+    fontSize: "0.9375rem"
+    lineHeight: 1.5
   heading:
     fontSize: "1.75rem"
     fontWeight: 700
     lineHeight: 1.3
+  title:
+    fontSize: "1.25rem"
+    fontWeight: 700
+    lineHeight: 1.4
+  meta:
+    fontSize: "0.8125rem"
+    lineHeight: 1.5
 rounded:
   small: "4px"
 spacing:
@@ -35,7 +42,18 @@ Operate 模式。K 已選定 Tabler 免費後台、左側導覽、原生 ES modu
 
 ## Typography
 
-沿用 Tabler 系統無襯線字體及固定 rem 字級；不載外部字型。表格使用等寬數字，永久 ID 可換行；狗名和編號優先掃讀。
+沿用 Tabler 系統無襯線字體；不載外部字型。表格使用等寬數字，永久 ID 可換行；狗名和編號優先掃讀。
+
+字級只有四級（2026-10-28 K：原本九種大小太亂），定義在 `admin.css` 的 `--admin-text-*`，新規則一律用這四個變數，不寫數字：
+
+| 變數 | 大小 | 用在 |
+|---|---|---|
+| `--admin-text-page` | 28px | 頁名 h1 |
+| `--admin-text-title` | 20px | 卡片標題 h2、設定分組 legend、抽屜狗名、側欄「板收」 |
+| `--admin-text-body` | 15px | 內文、表格內容、輸入框、按鈕、表單標籤、抽屜欄名（粗體） |
+| `--admin-text-meta` | 13px | 表頭、標籤、提示、附註、時間、永久 ID、小按鈕（`btn-sm`）、`small` |
+
+Tabler 的輸入框、按鈕、`small` 原本各自寫死 14px／12px，`admin.css` 開頭統一接回這四級。改前／改後、合併預覽的 `pre` 用內文字型，不用等寬。內文行高 1.5；沒照片的列撐到照片高度、維護狀態欄至少 240px，抽屜開關時列高不變（`tests/admin-dog-edit.cjs`「列不移位」）。
 
 ## Layout
 
