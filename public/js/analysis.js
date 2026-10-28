@@ -236,6 +236,9 @@ function yearsText(days) {
   return (days / 365.25).toFixed(1);
 }
 
+// 狗那一列右邊的在所年數（Top 10、點長條的名單共用）
+const stayYears = r => `<b>${yearsText(r.stayDays)}</b><small> 年</small>`;
+
 // 直條圖（入所多久分布，#739）：整欄（上方數字、長條、下方標籤）是一顆按鈕，點了在下面列那一格的狗；
 // 數字和標籤對螢幕閱讀器隱藏、按鈕名稱念完整句，免得念兩次；0 隻的不能選。sel 是選中的那根
 function columnChart(items, sel = -1) {
@@ -249,11 +252,12 @@ function columnChart(items, sel = -1) {
 }
 
 // 點長條列的名單（3e）：同一張白卡、細線加指向長條的小箭頭；先列 STAY_PICK_FIRST 隻，一隻一行（狗名、籠位、年數）
-function stayPickHtml(b, at, n, all) {
-  const shown = all ? b.rows : b.rows.slice(0, STAY_PICK_FIRST);
-  return `<div class="a-pick" style="--at:${at};--n:${n}">
+function stayPickHtml(dist, pick) {
+  const b = dist[pick.bucket];
+  const shown = pick.all ? b.rows : b.rows.slice(0, STAY_PICK_FIRST);
+  return `<div class="a-pick" style="--at:${pick.bucket};--n:${dist.length}">
     <h3><b>${esc(b.head)}</b> <span>${b.count} 隻 · 久的排前面</span></h3>
-    <div class="a-list">${shown.map(r => dogRow(r, `<b>${yearsText(r.stayDays)}</b><small> 年</small>`, { line: true })).join('')}</div>
+    <div class="a-list">${shown.map(r => dogRow(r, stayYears(r), { line: true })).join('')}</div>
     <div class="a-pick-foot">${shown.length < b.count ? `<button type="button" class="a-link" data-stay-all>看全部 ${b.count} 隻</button>` : ''}<button type="button" class="a-link" data-stay-close>收起</button></div>
   </div>`;
 }
@@ -305,11 +309,11 @@ function analysisHtml(dogs, today, page = 'stay') {
   const pick = analysisState.stayPick && dist[analysisState.stayPick.bucket]?.count ? analysisState.stayPick : null;
   out.push(section('入所多久分布', '點長條看是哪些狗',
     columnChart(dist, pick ? pick.bucket : -1) + '<p class="a-unit">單位：滿幾年（0＝未滿 1 年）</p>' +
-    (pick ? stayPickHtml(dist[pick.bucket], pick.bucket, dist.length, pick.all) : '')));
+    (pick ? stayPickHtml(dist, pick) : '')));
 
   const top = longestStay(rows);
   out.push(section('在所最久 Top 10', '點狗名看詳細資訊',
-    `<div class="a-list">${top.map((r, i) => dogRow(r, `<b>${yearsText(r.stayDays)}</b><small> 年</small>`, { rank: i + 1 })).join('')}</div>`));
+    `<div class="a-list">${top.map((r, i) => dogRow(r, stayYears(r), { rank: i + 1 })).join('')}</div>`));
 
   const zones = zoneAverages(rows);
   const zMax = Math.max(1, ...zones.map(z => z.avgDays));

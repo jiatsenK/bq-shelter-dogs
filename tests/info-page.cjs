@@ -89,6 +89,7 @@ module.exports = async (browser, base) => {
     await pick.waitFor();
     assert.equal(await page.getByRole('button', { name: '滿 3 年，7 隻', exact: true }).getAttribute('aria-pressed'), 'true', '鍵盤選得到');
     assert.equal((await pick.locator('h3').innerText()).replace(/\s+/g, ' '), '滿 3 年 7 隻 · 久的排前面');
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '390px 選了長條也不橫向溢出');
     const pickNames = () => pick.locator('.a-dog-name').allTextContents();
     assert.deepEqual(await pickNames(), ['測試狗8', '測試狗7', '測試狗6', '測試狗5', '測試狗4'], '先列 5 隻、久的排前面');
     await pick.getByRole('button', { name: '看全部 7 隻', exact: true }).click();

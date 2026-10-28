@@ -587,6 +587,7 @@ html.lightbox-open { overflow: hidden; }
 .a-stay.picked .a-col-bar { background: #8FB5A6; }
 .a-stay .a-col.on .a-col-bar { background: var(--primary); }
 .a-stay .a-col.on .a-col-v { background: var(--primary); color: #fff; }
+.a-stay .a-col-l { font-size: 12px; }
 .a-stay .a-col.on .a-col-l { color: var(--ink); font-weight: 800; }
 .a-unit { margin: 6px 0 0; font-size: 12px; color: var(--ink-soft); text-align: right; }
 /* 點長條列的名單（3e）：同一張白卡，一條細線加指向選中長條的小箭頭；一隻一行 */
@@ -602,7 +603,7 @@ html.lightbox-open { overflow: hidden; }
 .a-pick .a-dog.a-dog-line .a-dog-right { grid-column: 3; grid-row: 1; }
 .a-pick-foot { display: flex; justify-content: space-between; border-top: 1px solid var(--line); }
 .a-pick-foot [data-stay-close] { margin-left: auto; }
-.a-link { min-height: 44px; padding: 0 2px; border: none; background: none; font: inherit; font-size: 15px; font-weight: 700; color: var(--primary); text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.a-link { min-width: 44px; min-height: 44px; padding: 0 2px; border: none; background: none; font: inherit; font-size: 15px; font-weight: 700; color: var(--primary); text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
 
 /* 橫條圖（各區）：數字寫在條子裡 */
 .a-hbars { display: grid; grid-template-columns: max-content 1fr max-content; gap: 8px 8px; align-items: center; }
@@ -627,7 +628,7 @@ html.lightbox-open { overflow: hidden; }
 .a-rank.r1 { background: #F5C343; color: #fff; }
 .a-rank.r2 { background: #B8C2D1; color: #fff; }
 .a-rank.r3 { background: #D69A6A; color: #fff; }
-.a-dog-name { font-size: 15.5px; font-weight: 700; grid-column: 2; }
+.a-dog-name { font-size: 15.5px; font-weight: 800; grid-column: 2; }
 .a-dog-meta { font-size: 12.5px; color: var(--ink-soft); grid-column: 2; }
 .a-dog-right { grid-column: 3; grid-row: 1 / 3; font-size: 18px; white-space: nowrap; color: var(--ink); }
 .a-dog-right b { font-weight: 900; }
