@@ -7,12 +7,13 @@ module.exports = async (browser, base) => {
   data.groupColumns = [{ column: 4, label: '同名群', names: data.dogs.slice(0, 2).map(d => d.name) }, { column: 7, label: '同名群', names: data.dogs.slice(0, 10).map(d => d.name) }, { column: 12, label: '空群', names: [] }];
   const writes = [];
   const d1 = require('./fixtures/fake-d1-walks.cjs')({ today: () => today });
-  let partial = false, failRead = false, restMode = false, undoMode = 'ok';
+  let partial = false, failRead = false, restMode = false, undoMode = 'ok', photosHeld = null;
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, timezoneId: 'Asia/Taipei', serviceWorkers: 'block' });
   await context.addInitScript(() => { localStorage.setItem('bq-onboarded', '1'); localStorage.setItem('bq-name-later', '1'); localStorage.setItem('bq-walker-name', '測試志工'); });
   await context.route('**/*', async route => {
     const u = new URL(route.request().url());
     if (u.origin !== base) return route.abort();
+    if (photosHeld && u.pathname.includes('/photos/')) await photosHeld.promise;
     if (!u.pathname.includes('/api/')) return route.continue();
     const endpoint = u.pathname.split('/api/')[1];
     if (failRead && endpoint === 'dogs') return route.fulfill({ status: 500, json: {} });
@@ -142,6 +143,11 @@ module.exports = async (browser, base) => {
     await page.keyboard.press('ArrowLeft');
     assert.equal(await page.locator('[data-tab="groups"][aria-current="page"]').count(), 1);
     await page.emulateMedia({ reducedMotion: 'reduce' });
+    // #724：拖曳若按到還在讀的照片會變成原生拖曳；照片接著 404 被藏起來，Playwright 的 mouse.move 會一直等。
+    // 照片先不回應，讓「還在讀」穩定重現；拖曳檢查只能拖到狗群本身，不能觸發原生拖曳。
+    // 記下後取消原生拖曳，回歸時直接失敗，不會卡到套件時限
+    photosHeld = Promise.withResolvers();
+    await page.evaluate(() => { window.nativeDrags = []; addEventListener('dragstart', e => { nativeDrags.push(e.target.outerHTML.slice(0, 80)); e.preventDefault(); }, true); });
     const before = await page.locator('.front').getAttribute('data-column');
 
     await page.getByRole('button', { name: '下一群', exact: true }).click();
@@ -163,11 +169,17 @@ module.exports = async (browser, base) => {
     await page.mouse.move(region.x + region.width * .6, region.y + 15, { steps: 4 });
     await page.mouse.up();
     assert.equal(await page.locator('.front').getAttribute('data-column'), current, '拖動反向回起點不換群');
+    // 拖回起點放開等於點那隻狗，會打開狗卡；先關掉，下一次拖曳才是拖狗群，不會按到狗卡大照片（#724）
+    assert(await page.evaluate(() => document.documentElement.classList.contains('detail-open')), '拖回起點放開等於點狗，打開狗卡');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.documentElement.classList.contains('detail-open'));
     await page.mouse.move(region.x + region.width * .6, region.y + 15);
     await page.mouse.down();
     await page.mouse.move(region.x + region.width * .6, region.y + 90, { steps: 4 });
     await page.mouse.up();
     assert.equal(await page.locator('.front').getAttribute('data-column'), current, '上下移動不換群');
+    assert.deepEqual(await page.evaluate(() => nativeDrags), [], '#724 拖曳檢查不觸發原生拖曳');
+    photosHeld.resolve(); photosHeld = null;
     await page.goto(base + '/public/groups.html');
     await page.locator('#groupStage').waitFor();
     await page.evaluate(() => { localStorage.removeItem('bq-walker-name'); render(); });
@@ -219,5 +231,5 @@ module.exports = async (browser, base) => {
     assert.equal(await page.locator('.mine-undo, [data-undo-walk]').count(), 0, '我溜過沒有取消那排');
     undoMode = 'ok';
     console.log('#374 全量欄號、同名群、例外登記與空群通過');
-  } finally { await context.close(); }
+  } finally { photosHeld?.resolve(); await context.close(); }
 };
