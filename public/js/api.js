@@ -53,6 +53,8 @@ const BQApi = (() => {
     walkResult: (requestId, { signal } = {}) => get(`/walk/result?requestId=${enc(requestId)}`, { cache: 'no-cache', signal }),
     walk: payload => send('POST', '/walk', payload),
     walkers: () => get('/walkers', { cache: 'no-cache' }),
+    // 分享網站成功一次（ADR 0023）：method 是 share 或 copy
+    countShare: method => send('POST', '/share', { method }, { keepalive: true }),
     walkerCodes: names => send('POST', '/walker-code', { names }),
     identity: (action, body) => send('POST', `/identity${action}`, body),
     favorites: query => get(`/favorites?${query}`, { cache: 'no-store' }),

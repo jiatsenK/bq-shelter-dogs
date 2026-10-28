@@ -1,6 +1,7 @@
 import { dogIdentity, readDogEdit, saveDogEdit, cleanDogValue, validFormer } from './dog-edit.js';
 import { photoInput, saveDogPhoto } from './dog-photo.js';
 import { readSettings, requireVolunteerEdit, settingForWrite } from './feature-settings.js';
+import { SHARE_METHODS, countShare } from './share-counts.js';
 import { resolveIdentity, renameIdentity, previewMerge, mergeIdentity, identitiesForCodes, IdentityError } from './identity.js';
 import { sameStays } from './stays.js';
 import { callSheet, SheetWriteError } from './sheet-write.js';
@@ -711,6 +712,14 @@ const SITE_ROUTES = {
     run: ({ env, origin }) => getDogs(env, origin) },
   // 志工身分、更名、合併（ADR 0005）
   '/identity': IDENTITY, '/identity/rename': IDENTITY, '/identity/merge-preview': IDENTITY, '/identity/merge': IDENTITY,
+  // 分享網站的次數（ADR 0023）：開關由 settingForWrite 擋，只記方式不記人
+  '/share': { method: 'POST', wrongMethod: '只能用 POST /share', crash: [503, '分享次數暫時記不下來'],
+    async run({ request, env, origin }) {
+      const input = await readJsonBody(request, 256);
+      if (!input || !SHARE_METHODS.includes(input.method)) return fail(400, '分享方式不對', origin);
+      await countShare(needDb(env), input.method);
+      return reply(200, { ok: true }, origin);
+    } },
   '/cards/opened': { method: null, crash: [503, '開卡紀錄暫時讀寫失敗，請稍後再試'], run: ({ request, env, origin }) => openedCards(request, env, origin) },
   '/favorites': { method: null, crash: [503, '常溜暫時讀寫失敗，請稍後再試'], run: ({ request, env, origin }) => favorites(request, env, origin) },
   // 我溜過的狗（ADR 0013，#344）：代號放在請求內容，不放網址
@@ -908,11 +917,14 @@ export default {
     if (path === '/feature-settings' && request.method === 'GET') {
       try {
         const settings = await readSettings(env.DB);
-        const etag = '"settings-' + settings.revision + '"';
+        // ADR 0023：分享網址跟著部署變，ETag 一起算，不然已快取的手機一直拿不到新網址
+        const shareUrl = (env && env.SHARE_URL) || url.origin;
+        const etag = '"settings-' + settings.revision + '-' + encodeURIComponent(shareUrl) + '"';
         const headers = { ...corsHeaders(allowed), ETag: etag, 'Cache-Control': 'private, no-cache' };
         return request.headers.get('If-None-Match') === etag
           ? new Response(null, { status: 304, headers })
-          : new Response(JSON.stringify({ ok: true, ...settings }), { headers: { ...headers, 'Content-Type': 'application/json' } });
+          // 正式站沒設 SHARE_URL 就是自己，測試站和預覽部署時用 --var 帶正式網址（不進 repo）
+          : new Response(JSON.stringify({ ok: true, ...settings, shareUrl }), { headers: { ...headers, 'Content-Type': 'application/json' } });
       }
       catch (error) { return fail(503, error.message, allowed); }
     }

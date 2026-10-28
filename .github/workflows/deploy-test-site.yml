@@ -77,7 +77,8 @@ jobs:
         run: |
           sha=$(git rev-parse --short HEAD)
           echo "部署到測試網站：${REF} ${sha}"
-          npx --yes wrangler@4 deploy --config wrangler.test-site.jsonc --message "${REF} ${sha}"
+          # ADR 0023：分享按鈕傳正式網址；從 Secret 組，不寫進 repo（wrangler 輸出顯示 (hidden)）
+          npx --yes wrangler@4 deploy --config wrangler.test-site.jsonc --var "SHARE_URL:https://bq-shelter-dogs.${WORKERS_SUBDOMAIN}.workers.dev" --message "${REF} ${sha}"
 
       - name: 檢查測試網站 API
         if: env.CLOUDFLARE_API_TOKEN != '' && env.CLOUDFLARE_ACCOUNT_ID != ''

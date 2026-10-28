@@ -1,4 +1,4 @@
-import { canShow, settingsNotice } from './feature-settings.js';
+import { canShow, settingsNotice, shareUrl } from './feature-settings.js';
 import { BQDates } from './dates.js';
 import { apiData, computeStatus, photoSrc, photoThumb, render, switchTab } from './app.js';
 import { DEPARTURE_LABELS, renderDetail, showDetail } from './detail.js';
@@ -9,6 +9,8 @@ import { SITE } from './site-config.js';
 import { activitySectionHtml, loadActivities } from './activities.js';
 import { parseDogsData } from './dog-data.js';
 import { backFrom, pushPage } from './overlays.js';
+import { shareSite } from './share.js';
+import { BQWalkUI } from './walk-ui.js';
 
 // 分析頁（V5-4 #59、V5-5 #60）：目前 dogs.json 就能算的犬隻統計，加上 #56 累積的遛狗歷史與每日快照。
 // 統計都寫成純函式（輸入狗清單與今天日期，輸出數字），tests/index.html 直接測；畫面只負責把結果畫成 CSS／SVG 資訊圖表（大數字、圓環、直條圖）。
@@ -570,7 +572,30 @@ function infoHomeHtml() {
   const dep = !analysisState.departuresData || analysisState.departuresData.state === 'loading' ? '離所紀錄讀取中…' : analysisState.departuresData.state === 'error' ? '離所紀錄讀取失敗' : analysisState.departuresData.list.length ? `共 ${analysisState.departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
   const act = activitiesState.activitiesData.state === 'loading' ? '活動紀錄讀取中…' : activitiesState.activitiesData.state === 'error' ? '活動紀錄讀取失敗' : activitiesState.activitiesData.list.length ? `共 ${activitiesState.activitiesData.list.length} 場活動` : '還沒有活動紀錄';
   const summary = { stay: dogs, departures: dep, activities: act, quality: '查看缺照片、介紹及其他資料', updates: '誰、什麼時候改了哪些資料' };
-  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).filter(([id]) => canShow(id)).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
+  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).filter(([id]) => canShow(id)).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}${shareSiteHtml()}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
+}
+
+// ADR 0023 分享網站：只在手機版（電腦版由 CSS 藏起來）；分享和複製都不行時把網址放進可選取的欄位
+function shareSiteHtml() {
+  const url = shareUrl();
+  if (!url || !canShow('share')) return '';
+  const manual = analysisState.shareManual ? `<label class="share-manual"><span>長按下面的網址複製</span><input type="text" readonly value="${esc(url)}" data-share-url></label>` : '';
+  return `<div class="share-site"><button type="button" data-share-site><strong>分享網站連結</strong><span>把網站傳到 LINE 或其他 App</span></button>${manual}</div>`;
+}
+
+let sharing = false;
+async function shareFromInfo() {
+  // 分享選單還開著時再按一次，瀏覽器會拒絕、變成複製；等上一次結束
+  if (sharing) return;
+  sharing = true;
+  const result = await shareSite(shareUrl(), navigator).finally(() => { sharing = false; });
+  // 只記成功的分享和複製；記不下來不打擾志工
+  if (result === 'share' || result === 'copy') BQApi.countShare(result);
+  if (result === 'copy') BQWalkUI.showToast('已複製，貼給其他志工就好');
+  if (result !== 'manual') return;
+  analysisState.shareManual = true;
+  render();
+  document.querySelector('[data-share-url]')?.select();
 }
 
 // K 2026-10-28：拿掉人工寫的網站更新，更新紀錄只剩資料編輯（網站版本改在管理網站看 GitHub Releases）
@@ -595,7 +620,7 @@ function restoreInfoPage(page) {
   if (!analysisState.infoPage && previous) document.querySelector(`[data-info-page="${previous}"]`)?.focus();
 }
 
-export { LONG_STAY_MONTHS, STAY_BUCKETS, intakeDate, monthsBetween, daysBetween, analysisRows, zoneOf, formatStay, average, median, dated, stayDistribution, longestStay, zoneAverages, longStayShare, sexComparison, dataCompleteness, checkPhotos, dogKey, parseWalks, historyStartDates, historySpan, recentStart, dogWalkHistory, loadHistory, STAY_SHADES, STAY_SHORT, yearsText, columnChart, dogRow, section, dogNames, kpi, analysisHtml, dataChecksHtml, mdText, walkHistorySection, analysisPageHtml, showAnalysis, hideAnalysis, closeAnalysis, analysisBtn, analysisBack, DEPARTURE_ORDER, DEPARTURE_COLORS, departureDetails, depRosterDefault, parseDeparturesData, loadDepartures, departureDetail, departureYears, filterDepartures, stackedYears, departureRow, departureListHtml, departureRosterHtml, departureSectionHtml, refreshDepartureList, INFO_PAGES, infoHomeHtml, infoUpdatesHtml, openInfoPage, restoreInfoPage };
+export { LONG_STAY_MONTHS, STAY_BUCKETS, intakeDate, monthsBetween, daysBetween, analysisRows, zoneOf, formatStay, average, median, dated, stayDistribution, longestStay, zoneAverages, longStayShare, sexComparison, dataCompleteness, checkPhotos, dogKey, parseWalks, historyStartDates, historySpan, recentStart, dogWalkHistory, loadHistory, STAY_SHADES, STAY_SHORT, yearsText, columnChart, dogRow, section, dogNames, kpi, analysisHtml, dataChecksHtml, mdText, walkHistorySection, analysisPageHtml, showAnalysis, hideAnalysis, closeAnalysis, analysisBtn, analysisBack, DEPARTURE_ORDER, DEPARTURE_COLORS, departureDetails, depRosterDefault, parseDeparturesData, loadDepartures, departureDetail, departureYears, filterDepartures, stackedYears, departureRow, departureListHtml, departureRosterHtml, departureSectionHtml, refreshDepartureList, INFO_PAGES, infoHomeHtml, shareFromInfo, infoUpdatesHtml, openInfoPage, restoreInfoPage };
 export { analysisState } from './page-state.js';
 
 export function bindAnalysis() {

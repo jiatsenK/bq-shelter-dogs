@@ -3,7 +3,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const SUITES = ['es-modules', 'walk-accept', 'walk-d1-entries', 'walk-order-undo', 'walk-feedback', 'walk-failed-state', 'read-policy', 'startup-stability', 'walker-editing', 'intake-presentation', 'info-page', 'activities', 'departed-cards', 'fixed-care',
+const SUITES = ['es-modules', 'walk-accept', 'walk-d1-entries', 'walk-order-undo', 'walk-feedback', 'walk-failed-state', 'read-policy', 'startup-stability', 'walker-editing', 'intake-presentation', 'info-page', 'share-site', 'activities', 'departed-cards', 'fixed-care',
   'group-cache', 'group-walks', 'large-text', 'touch-targets', 'navigation', 'tab-focus', 'name-tap', 'keyboard-viewport', 'index', 'detail-editing', 'admin', 'admin-dog-edit', 'admin-dog-merge', 'feature-settings', 'admin-stage4', 'admin-hide-edits', 'admin-diagrams', 'test-site'];
 
 const ROOT = path.resolve(__dirname, '..');
@@ -18,7 +18,7 @@ const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.json': 'applic
 const server = http.createServer((req, res) => {
   if (new URL(req.url, 'http://x').pathname === '/public/api/feature-settings' || new URL(req.url, 'http://x').pathname === '/api/feature-settings') {
     res.setHeader('Content-Type', 'application/json');
-    return res.end(JSON.stringify({ok:true,revision:1,values:Object.fromEntries(['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays'].map(k=>[k,true]))}));
+    return res.end(JSON.stringify({ok:true,revision:1,values:Object.fromEntries(['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays','showShare'].map(k=>[k,true]))}));
   }
   const file = path.join(ROOT, decodeURIComponent(new URL(req.url, 'http://x').pathname));
   if (!file.startsWith(ROOT)) { res.statusCode = 403; return res.end(); }

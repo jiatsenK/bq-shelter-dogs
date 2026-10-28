@@ -1,0 +1,23 @@
+# 分享網站：手機版資訊頁「分享網站連結」、showShare 開關、分享次數（ADR 0023）
+
+- 日期：2026-10-28。Agent：Claude Code。
+- 依據：K 2026-10-28 需求訪談逐題確認（ADR 0023）；研究 `docs/research/2026-10-28-share-button-url-and-web-share.md`。
+- 志工網站：
+  - `public/js/share.js`：`shareSite` 先用分享選單，取消（`AbortError`）回 cancel，不行就複製文字＋網址，都不行回 manual。
+  - 資訊頁首頁在「使用說明」前多一張「分享網站連結」：要 `showShare` 開著、而且拿得到分享網址才出現；電腦版（`desk-on`）用 CSS 藏。manual 時顯示可選取的網址欄位。分享、複製成功才 `POST /api/share`；分享選單開著時再按不重複叫。
+  - `feature-settings.js` 多 `shareUrl()`，從 `/api/feature-settings` 回應拿。
+- Worker：
+  - `showShare` 加進 `SETTING_KEYS`；D1 那列沒有時讀成關閉（`ADDED_DEFAULTS`），不寫 migration 改那列（會觸發設定紀錄、動版本號）。
+  - `/api/feature-settings` 多回 `shareUrl = env.SHARE_URL || 請求 origin`。
+  - `POST /api/share`：開關由 `settingForWrite` 擋（關著 403，預覽版照舊 403），方式只收 share／copy。
+  - `share-counts.js`＋`migrations/0017_share_counts.sql`（`v3_share_counts`：台灣日期、方式、次數，不記人；`v3_share_totals`：總數另存，管理網站不用整張加總，附讀寫量測試）；`db/compact-schema.sql` 同步。
+- 管理網站：設定頁多「分享網站連結」開關；開關下面顯示總數和最近 30 天每天的次數（`GET /api/manage/share-counts`，只讀）。K 把位置從「首頁」改成開關旁（首頁是狗資料表）。
+- 部署：測試網站（`deploy-test-site.yml`）與 PR 預覽（`preview-cloudflare.yml`）多帶 `--var SHARE_URL`，從 Secret `WORKERS_SUBDOMAIN` 組正式網址；正式部署不變。
+- 文件：ADR 0023、GLOSSARY「分享網站」「分享次數」、`ARCHITECTURE_NOW.md`、`docs/operations/feature-settings.md`、`public/js/README.md`。
+- 兩軸審查補修：ETag 加上分享網址（不然已快取設定的手機拿不到網址）；開關關著時 `/api/share` 回「這項功能目前未開放」；總數改讀 `v3_share_totals`（原本整張加總，違反 CODING_STANDARDS「不整張讀」）並補讀寫量測試；管理網站分享次數沿用設定頁的 `request()`。
+- K 在預覽版確認按鈕 OK 後改文案：「分享給其他志工」改成「分享網站連結」（志工網站卡片與管理網站開關）。
+- 例外與未完成：
+  - 合併後要到 Actions 按「套用 D1 migration」（0017）才會部署。
+  - `showShare` 預設關閉；K 用 iPhone、Android 在 LINE 裡實機測過再到管理網站打開。LINE 內建瀏覽器能不能叫出分享選單、能不能複製，查不到官方資料。
+  - 全站「溜／遛」統一另開票（只有分享文字用「遛」）。
+- 相關 PR：見本分支 PR。

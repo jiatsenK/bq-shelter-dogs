@@ -85,6 +85,7 @@ jobs:
             --config "${{ steps.d1.outputs.config }}" \
             --preview-alias "pr-${PR}" \
             --var PREVIEW:1 \
+            --var "SHARE_URL:https://bq-shelter-dogs.${WORKERS_SUBDOMAIN}.workers.dev" \
             --tag "pr-${PR}" \
             --message "PR #${PR} ${SHA:0:7}" | tee "$RUNNER_TEMP/upload.log"
           # 只確認有產生預覽網址；網址本身不放進 output，免得被帶到留言

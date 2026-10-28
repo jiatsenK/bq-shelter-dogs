@@ -45,7 +45,8 @@
 | `favorites.js` | `BQFavorites`：常溜實例、舊鍵搬移、逐隻增刪、離線佇列與身分同步；切回網頁 5 分鐘內不重抓 | app、detail、dog-status、api、store、identity、walk-ui、page-state | index |
 | `walk-ui.js` | `BQWalkUI`：今日登記／復原的畫面、提示條、同行人、溜狗人編輯 | app、detail、ui-kit、dog-status、dates、walk-flow、welcome、page-state | index |
 | `app.js` | 主頁資料、狗卡、燈箱、頁籤、溜狗操作與整頁事件綁定；詳細資訊在 detail.js；返回鍵交給 overlays.js，app.js 只處理都沒開覆蓋層時的頁籤切換 | 共用模組、dog-data、所有主頁功能模組、page-state | index |
-| `analysis.js` | 分析、離所名冊與資訊頁 | app、detail、ui-kit、dates、api、site-config、dog-data、activities、overlays、page-state | index |
+| `analysis.js` | 分析、離所名冊與資訊頁；資訊頁的「分享網站連結」（ADR 0023） | app、detail、ui-kit、dates、api、site-config、dog-data、activities、overlays、share、walk-ui、feature-settings、page-state | index |
+| `share.js` | `shareSite`：分享網站先用分享選單，不行就複製，都不行回 manual 由畫面顯示網址；navigator 由呼叫端帶入，不碰 DOM（ADR 0023） | 無 | index、Node |
 | `activities.js` | 活動紀錄與已出所狗卡編輯 | app、ui-kit、analysis、dates、api、walk-ui、page-state | index |
 | `find.js` | 找狗照片、搜尋與平面圖 | app、detail、ui-kit、dog-status、walk-ui、overlays、page-state | index |
 | `group-stage.js` | 可以一起溜的狗群畫面 | app、detail、ui-kit、dog-status、dates、api、walk-ui、page-state | index |

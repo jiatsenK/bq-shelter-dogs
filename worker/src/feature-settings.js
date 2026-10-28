@@ -1,6 +1,8 @@
-export const SETTING_KEYS = Object.freeze(['showActivities', 'showQuality', 'showUpdates', 'editIntro', 'editPhoto', 'editRest', 'editActivity', 'editFixedCare', 'editStays']);
+export const SETTING_KEYS = Object.freeze(['showActivities', 'showQuality', 'showUpdates', 'editIntro', 'editPhoto', 'editRest', 'editActivity', 'editFixedCare', 'editStays', 'showShare']);
 // ADR 0020 原本的「舊編號」開關（#639 併進「出入所紀錄」，ADR 0021）：管理網站存過新設定以前，D1 那一列還帶著它，讀的時候拿掉
 export const RETIRED_KEYS = Object.freeze(['editFormer']);
+// 後來加的開關：管理網站存過新設定以前 D1 那一列沒有它，讀的時候補預設值（ADR 0023 分享網站預設關閉）
+export const ADDED_DEFAULTS = Object.freeze({ showShare: false });
 const fault = (status, message) => Object.assign(new Error(message), { status });
 function validValues(values) {
   return values && typeof values === 'object' && !Array.isArray(values) && Object.keys(values).length === SETTING_KEYS.length && SETTING_KEYS.every(key => Object.hasOwn(values, key) && typeof values[key] === 'boolean');
@@ -11,6 +13,7 @@ export async function readSettings(db) {
     const row = await db.prepare('SELECT revision, values_json FROM v3_feature_settings WHERE id=1').first();
     const values = JSON.parse(row?.values_json);
     for (const key of RETIRED_KEYS) if (values && typeof values === 'object') delete values[key];
+    for (const [key, value] of Object.entries(ADDED_DEFAULTS)) if (values && typeof values === 'object' && !Object.hasOwn(values, key)) values[key] = value;
     if (!validValues(values) || !Number.isSafeInteger(row.revision) || row.revision < 1) throw Error('invalid settings');
     return { revision: row.revision, values };
   } catch { throw fault(503, '功能設定暫時無法確認，請重新讀取後再試'); }
@@ -29,11 +32,11 @@ export async function saveSettings(db, input, actor) {
 }
 export function settingForWrite(path, method) {
   if (['GET','HEAD','OPTIONS'].includes(method)) return null;
-  const routes = { intro: 'editIntro', photos: 'editPhoto', rest: 'editRest', activities: 'editActivity', 'fixed-care': 'editFixedCare', stays: 'editStays', former: 'editStays' };
+  const routes = { intro: 'editIntro', photos: 'editPhoto', rest: 'editRest', activities: 'editActivity', 'fixed-care': 'editFixedCare', stays: 'editStays', former: 'editStays', share: 'showShare' };
   const name = path.split('/')[1];
   return Object.hasOwn(routes, name) ? routes[name] : null;
 }
 export async function requireVolunteerEdit(db, key) {
   const settings = await readSettings(db);
-  if (!settings.values[key]) throw fault(403, '這項志工編輯目前未開放');
+  if (!settings.values[key]) throw fault(403, key.startsWith('show') ? '這項功能目前未開放' : '這項志工編輯目前未開放');
 }

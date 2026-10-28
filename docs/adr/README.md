@@ -29,6 +29,7 @@
 | [0020](0020-independent-admin-site.md) | 獨立管理網站與可控制的志工編輯 | 現行 |
 | [0021](0021-stays-carry-number.md) | 一個編號就是一筆出入所紀錄 | 部分或全部被 [0022](0022-intro-is-the-dog-stays-hold-history.md) 修訂，一起讀、以新的為準 |
 | [0022](0022-intro-is-the-dog-stays-hold-history.md) | 介紹只寫狗自己，出入所經過記在出入所紀錄 | 現行 |
+| [0023](0023-share-site-and-share-count.md) | 分享網站：正式網址不進 repo，分享次數只記每天總數 | 現行 |
 
 ## 網站開關
 
@@ -41,6 +42,7 @@
 | `ADMIN_KEY` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
 | `D1_WALK_NOTIFY` | `1` | wrangler.jsonc 的 vars |
 | `PREVIEW` | 只有預覽版設定 | preview-cloudflare.yml |
+| `SHARE_URL` | repo 沒設定：正式環境只可能是手動加的 Cloudflare 密鑰（後台加的一般變數部署時會被 keep_vars: false 清掉） | — |
 | `SHEET_WRITE_KEY` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
 | `SHEET_WRITE_URL` | GitHub Secret，部署時帶上（值不在 repo） | deploy-cloudflare.yml |
 | `SITE_ENV` | repo 沒設定：正式環境只可能是手動加的 Cloudflare 密鑰（後台加的一般變數部署時會被 keep_vars: false 清掉） | — |

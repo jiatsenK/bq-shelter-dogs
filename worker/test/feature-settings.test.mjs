@@ -5,12 +5,15 @@ import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 import { readSettings, saveSettings, requireVolunteerEdit, settingForWrite } from '../src/feature-settings.js';
 const manager = { subject: 'verified-subject', email: 'private@example.org' };
 async function db(t) { const db = fakeD1(); t.after(() => db.close()); await createCompactDatabase(db); return db; }
-test('九項 boolean 預設全開；無差異不寫，衝突不覆蓋，前後紀錄一致', async t => {
+test('十項 boolean：原本九項預設全開、分享網站預設關；無差異不寫，衝突不覆蓋，前後紀錄一致', async t => {
  const DB = await db(t), initial = await readSettings(DB);
- assert.equal(Object.keys(initial.values).length, 9);
+ assert.equal(Object.keys(initial.values).length, 10);
+ // ADR 0023：分享網站的開關 D1 那列還沒有，讀的時候補成關閉；管理網站第一次存就寫進去
+ assert.equal(initial.values.showShare, false);
  // 舊編號開關併進出入所紀錄（#639）：D1 初始值還帶著，讀的時候拿掉
  assert.equal('editFormer' in initial.values, false);
- assert.ok(Object.values(initial.values).every(v => v === true));
+ const { showShare, ...original } = initial.values;
+ assert.ok(Object.values(original).every(v => v === true));
  const before = await DB.prepare('SELECT total_changes() AS n').first('n');
  assert.equal((await saveSettings(DB, initial, manager)).revision, initial.revision);
  assert.equal(await DB.prepare('SELECT total_changes() AS n').first('n'), before);
@@ -20,9 +23,9 @@ test('九項 boolean 預設全開；無差異不寫，衝突不覆蓋，前後�
  assert.equal(await DB.prepare('SELECT total_changes() AS n').first('n') - before, 2, '設定一列及audit一列');
  await assert.rejects(saveSettings(DB, { ...initial, values }, manager), e => e.status === 409);
  const logs = (await DB.prepare('SELECT * FROM v3_feature_settings_log').all()).results;
- // 紀錄是 D1 那一列原本的樣子：第一次存以前還帶著退役的舊編號開關
+ // 紀錄是 D1 那一列原本的樣子：第一次存以前還帶著退役的舊編號開關、還沒有分享網站開關
  const { editFormer, ...logged } = JSON.parse(logs[0].before_json);
- assert.equal(logs.length, 1); assert.deepEqual(logged, initial.values); assert.equal(editFormer, true);
+ assert.equal(logs.length, 1); assert.deepEqual(logged, original); assert.equal(editFormer, true);
  assert.deepEqual(JSON.parse(logs[0].after_json), values); assert.equal(logs[0].actor_email, manager.email);
  assert.ok(!JSON.stringify(await readSettings(DB)).includes(manager.email));
 });
