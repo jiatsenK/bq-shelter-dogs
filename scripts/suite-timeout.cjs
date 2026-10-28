@@ -3,8 +3,8 @@
 function withSuiteTimeout(name, ms, run) {
   let timer;
   const timeout = new Promise((_, reject) => {
+    // 不 unref：卡住的套件可能沒有其他東西撐住事件迴圈，計時器要能讓程序等到時限再失敗；跑完就 clearTimeout
     timer = setTimeout(() => reject(new Error(`網頁測試套件 ${name} 超過 ${ms / 1000} 秒沒跑完，視為卡住（#713）`)), ms);
-    timer.unref();
   });
   return Promise.race([Promise.resolve().then(run), timeout]).finally(() => clearTimeout(timer));
 }
