@@ -54,10 +54,16 @@ module.exports = async (browser, base) => {
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 844 });
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '無水平溢出：' + width);
-      for (const id of ['mineStats', 'whoEdit']) {
-        const b = await page.locator('#' + id).boundingBox();
-        assert(b.width >= 44 && b.height >= 44, `${id} 點擊區 44px：${JSON.stringify(b)}`);
-      }
+      const [stats, edit] = await Promise.all(['#mineStats', '#whoEdit'].map(s => page.locator(s).boundingBox()));
+      for (const b of [stats, edit]) assert(b.width >= 44 && b.height >= 44, `點擊區 44px：${JSON.stringify(b)}`);
+      assert(edit.x - (stats.x + stats.width) >= 8, '統計、修改相隔 8px：' + JSON.stringify({ stats, edit }));
+    }
+    // 大字模式（字級加倍）：統計、修改仍在名字那排可點，不橫向溢出
+    await page.addStyleTag({ content: await page.evaluate(() => ['body', '.who-name', '#mineStats', '#whoEdit', '.mc-title', '.walk-date', '.mine-dog .bname']
+      .map(s => `${s} { font-size: ${parseFloat(getComputedStyle(document.querySelector(s)).fontSize) * 2}px !important; }`).join(' ')) });
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '大字無水平溢出：' + width);
     }
     console.log('#738 我溜過次要按鈕收斂通過');
   } finally { await context.close(); }
