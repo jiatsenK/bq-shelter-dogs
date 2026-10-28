@@ -2454,9 +2454,12 @@ main:has(> #groupPage) { padding-top: 4px; }
   html.desk-on .gw-dog .r-date b { font-size: 18px; }
   html.desk-on .gw-dog .r-date.sage b { font-size: 16px; }
   html.desk-on .gw-group .gw-cage { font-size: 14px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  html.desk-on .gw-group .gw-who { gap: 0; padding-block: 5px; }
+  /* 警示原文接在狗名同一行、放不下就刪節（全文在右欄「有警示的狗」），列維持 44px；寫回狀態另起一行 */
+  html.desk-on .gw-group .gw-who { grid-template-columns: auto minmax(0, 1fr); align-items: baseline; gap: 0 10px; padding-block: 5px; }
+  html.desk-on .gw-group .gw-who .walk-sync { grid-column: 1 / -1; }
   html.desk-on .gw-group .gw-name { font-size: 16px; font-weight: 800; }
-  html.desk-on .gw-group .gw-warn { font-size: 13px; }
+  html.desk-on .gw-group .gw-warn { min-width: 0; font-size: 13px; }
+  html.desk-on .gw-group .gw-warn > span { -webkit-line-clamp: 1; }
   html.desk-on .gw-group .gw-warn .icon { width: 14px; height: 14px; margin-top: 2px; }
   html.desk-on .gw-group .gw-check { width: 36px; height: 36px; }
   html.desk-on .gw-group .gw-check::before { width: 22px; height: 22px; }

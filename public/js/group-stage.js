@@ -110,11 +110,7 @@ function groupStageHtml() {
   const dogs = groupDogs(group);
   const today = new Date();
   const index = groups.indexOf(group);
-  const selected = dogs.filter(d => !groupExcluded.has(d.name) && !groupBlocked(d));
-  // 比照溜狗表的「溜了／已溜」：這群可登記的狗今天都溜了，按鈕就變「已溜」，再按一次復原（只撤這支手機寫的）
-  const walkable = dogs.filter(d => !groupBlocked(d));
-  const done = !groupStageState.groupExcept && walkable.length > 0 && walkable.every(d => walkedNow(d));
-  const undoable = done ? walkable.filter(d => BQWalkUI.sheetUndoable(d)) : [];
+  const { walkDogs: selected, done, undoable } = groupWalkState(dogs, groupStageState.groupExcept);
   const walkBtn = done
     ? `<button type="button" id="gwWalk" class="done" data-gw-action="undo" aria-label="這群今天已溜，按一下取消" ${!undoable.length || groupStageState.groupBusy ? 'disabled' : ''}>${icon('tick')}${groupStageState.groupBusy ? '處理中…' : '已溜'}</button>`
     : `<button type="button" id="gwWalk" ${!selected.length || groupStageState.groupBusy ? 'disabled' : ''}>${groupStageState.groupBusy ? '登記中…' : groupStageState.groupExcept ? `溜了 ${selected.length} 隻` : '整群溜了'}</button><button type="button" data-gw-action="except" aria-pressed="${groupStageState.groupExcept}">${groupStageState.groupExcept ? '取消' : '有狗沒溜'}</button>`;
@@ -135,23 +131,31 @@ function groupStageHtml() {
     ${groupRegistrations.get(groupStageState.groupColumn)?.successful.length ? `<button type="button" class="bar-btn" data-gw-action="companions" ${groupStageState.groupBusy ? 'disabled' : ''}>＋一起溜的人</button>` : ''}
     ${groupRegistrations.get(groupStageState.groupColumn)?.result.retryDogs.length ? `<button type="button" class="bar-btn" data-gw-action="retry-walk" ${groupStageState.groupBusy ? 'disabled' : ''}>再試一次</button>` : ''}
     </div>
-    <p id="gwSource" class="section-hint" role="status">${/* 讀取時間只留頁首右上角（#444）；這裡只說背景檢查的狀態 */ groupStageState.groupRead ? '檢查中…' : groupStageState.groupReadError ? '檢查失敗，保留先前內容' : ''}${groupStageState.groupReadError ? '<button type="button" data-gw-action="retry">重新讀取</button>' : ''}</p>
+    ${groupSourceHtml()}
   </section>`;
 }
-// 電腦版（≥1100px，K 2026-10-29）：所有群並排成群卡、右欄 300px 放選中那一群；選中＝groupColumn，登記、復原、有狗沒溜跟手機同一套。
-// 每張群卡都有「整群溜了」，判斷同手機；只有選中那一群帶 #gwWalk、能「有狗沒溜」
-function groupWalkButtons(dogs, selectedGroup) {
-  const except = selectedGroup && groupStageState.groupExcept;
-  const busy = selectedGroup && groupStageState.groupBusy;
-  const selected = dogs.filter(d => !(except && groupExcluded.has(d.name)) && !groupBlocked(d));
+// 比照溜狗表的「溜了／已溜」：這群可登記的狗今天都溜了，按鈕就變「已溜」，再按一次復原（只撤這支手機寫的）。手機、電腦版共用
+// （有狗沒溜以外 groupExcluded 一定是空的：切換、換群、登記成功都會清掉）
+function groupWalkState(dogs, except) {
   const walkable = dogs.filter(d => !groupBlocked(d));
   const done = !except && walkable.length > 0 && walkable.every(d => walkedNow(d));
-  const undoable = done ? walkable.filter(d => BQWalkUI.sheetUndoable(d)) : [];
+  return { walkDogs: walkable.filter(d => !groupExcluded.has(d.name)), done, undoable: done ? walkable.filter(d => BQWalkUI.sheetUndoable(d)) : [] };
+}
+function groupSourceHtml() {
+  return `<p id="gwSource" class="section-hint" role="status">${/* 讀取時間只留頁首右上角（#444）；這裡只說背景檢查的狀態 */ groupStageState.groupRead ? '檢查中…' : groupStageState.groupReadError ? '檢查失敗，保留先前內容' : ''}${groupStageState.groupReadError ? '<button type="button" data-gw-action="retry">重新讀取</button>' : ''}</p>`;
+}
+// 電腦版（≥1100px，K 2026-10-29）：所有群並排成群卡、右欄 300px 放選中那一群；選中＝groupColumn，登記、復原、有狗沒溜跟手機同一套。
+// 每張群卡都有「整群溜了」；只有選中那一群帶 #gwWalk、能「有狗沒溜」、顯示登記中
+function groupWalkButtons(dogs, selectedGroup) {
+  const except = selectedGroup && groupStageState.groupExcept;
+  const busyHere = selectedGroup && groupStageState.groupBusy; // 按鈕字只在選中的群換成登記中；登記中時每一群的按鈕都停用
+  const { walkDogs, done, undoable } = groupWalkState(dogs, except);
   const id = selectedGroup ? ' id="gwWalk"' : '';
   return done
-    ? `<button type="button"${id} class="gw-walk done" data-gw-action="undo" aria-label="這群今天已溜，按一下取消" ${!undoable.length || groupStageState.groupBusy ? 'disabled' : ''}>${icon('tick')}${busy ? '處理中…' : '已溜'}</button>`
-    : `<button type="button"${id} class="gw-walk" data-gw-action="walk" ${!selected.length || groupStageState.groupBusy ? 'disabled' : ''}>${busy ? '登記中…' : except ? `溜了 ${selected.length} 隻` : '整群溜了'}</button><button type="button" data-gw-action="except" aria-pressed="${!!except}" ${groupStageState.groupBusy ? 'disabled' : ''}>${except ? '取消' : '有狗沒溜'}</button>`;
+    ? `<button type="button"${id} class="gw-walk done" data-gw-action="undo" aria-label="這群今天已溜，按一下取消" ${!undoable.length || groupStageState.groupBusy ? 'disabled' : ''}>${icon('tick')}${busyHere ? '處理中…' : '已溜'}</button>`
+    : `<button type="button"${id} class="gw-walk" data-gw-action="walk" ${!walkDogs.length || groupStageState.groupBusy ? 'disabled' : ''}>${busyHere ? '登記中…' : except ? `溜了 ${walkDogs.length} 隻` : '整群溜了'}</button><button type="button" data-gw-action="except" aria-pressed="${!!except}" ${groupStageState.groupBusy ? 'disabled' : ''}>${except ? '取消' : '有狗沒溜'}</button>`;
 }
+function focusSelectedGroup() { document.querySelector('#groupPage .gw-group.selected [data-gw-pick]')?.focus({ preventScroll: true }); }
 // 電腦版一列一隻（40～46px）：天數色籤｜籠位｜狗名＋性別，警示原文在名字下面；選中的群按「有狗沒溜」才出現勾
 function groupDeskRow(dog, index, today, selectedGroup) {
   const blocked = groupBlocked(dog);
@@ -182,15 +186,18 @@ function groupDeskSideHtml(group, today) {
   const days = deskDays(today).map(d => BQDates.localDateKey(d));
   deskLoadWalks();
   const ready = !!deskState.deskWalkDays;
-  const counts = ready ? dogs.map(d => ({ dog: d, n: days.filter(k => deskDayWalk(d, k, today).on).length })) : [];
-  const anyDays = ready ? days.filter(k => dogs.some(d => deskDayWalk(d, k, today).on)).length : 0;
-  const since = ready && deskState.deskWalkFirst && deskState.deskWalkFirst > days[0] ? deskState.deskWalkFirst : '';
+  // 每隻溜過的日子各算一次；「幾天有溜這群」是這些日子合起來
+  const counts = ready ? dogs.map(d => ({ dog: d, on: days.filter(k => deskDayWalk(d, k, today).on) })) : [];
+  const anyDays = new Set(counts.flatMap(c => c.on)).size;
+  const first = ready && deskState.deskWalkFirst > days[0] ? deskState.deskWalkFirst : '';
+  // 日期寫法同溜狗表「最近 30 天」頁尾（10/5）
+  const since = first ? `${+first.slice(5, 7)}/${+first.slice(8)}` : '';
   const flagged = dogs.filter(d => specialFlag(d.note));
   return `<aside class="desk-side gw-side-col" aria-label="選中的群：${esc(group.label)}">
     <section class="ds-panel" aria-labelledby="gwsWalks">
       <h2 id="gwsWalks">${esc(group.label)}<small>近 30 天</small></h2>
-      ${ready ? `<p class="gws-total"><b class="num">${anyDays}</b> 天有溜這群的狗${since ? `<small>紀錄從 ${esc(since.slice(5).replace('-', '/'))} 開始</small>` : ''}</p>
-        <ol class="gws-counts">${counts.map(({ dog, n }) => `<li><button type="button" data-gw-open="${appState.allDogs.indexOf(dog)}">${esc(dog.name)}</button><span class="num">${n} 天</span></li>`).join('')}</ol>`
+      ${ready ? `<p class="gws-total"><b class="num">${anyDays}</b> 天有溜這群的狗${since ? `<small>紀錄從 ${since} 開始</small>` : ''}</p>
+        <ol class="gws-counts">${counts.map(({ dog, on }) => `<li><button type="button" data-gw-open="${appState.allDogs.indexOf(dog)}">${esc(dog.name)}</button><span class="num">${on.length} 天</span></li>`).join('')}</ol>`
         : '<p class="ds-empty">溜狗紀錄讀取中…</p>'}
     </section>
     ${flagged.length ? `<section class="ds-panel" aria-labelledby="gwsWarn"><h2 id="gwsWarn">有警示的狗<small>${flagged.length} 隻</small></h2>
@@ -206,7 +213,7 @@ function groupDeskHtml(groups, hits, query) {
     <div class="gw-desk-main">
       <div class="gw-desk-head"><h2>常溜狗群<small>${groups.length} 群</small></h2>${note ? `<p class="gw-search-note" role="status">${esc(note)}</p>` : ''}</div>
       ${groups.length ? `<div id="groupStage" class="gw-grid" aria-label="全部狗群">${groups.map(g => groupDeskCard(g, today, g === group, query ? hits.includes(g) : null)).join('')}</div>` : '<div class="status-msg">還沒有狗群</div>'}
-      <p id="gwSource" class="section-hint" role="status">${groupStageState.groupRead ? '檢查中…' : groupStageState.groupReadError ? '檢查失敗，保留先前內容' : ''}${groupStageState.groupReadError ? '<button type="button" data-gw-action="retry">重新讀取</button>' : ''}</p>
+      ${groupSourceHtml()}
     </div>
     ${groupDeskSideHtml(group, today)}
   </section>`;
@@ -224,7 +231,7 @@ function changeGroup(step) {
   if (groups.length < 2) return;
   const next = groups[(groups.indexOf(currentGroup()) + step + groups.length) % groups.length];
   groupStageState.groupColumn = next.column; resetGroupSelection(); render();
-  if (deskOn()) return document.querySelector('#groupPage .gw-group.selected [data-gw-pick]')?.focus({ preventScroll: true });
+  if (deskOn()) return focusSelectedGroup();
   document.querySelector('#groupPage h2')?.setAttribute('tabindex', '-1');
   document.querySelector('#groupPage h2')?.focus({ preventScroll: true });
 }
@@ -297,7 +304,7 @@ export function bindGroups() {
     const card = deskOn() && e.target.closest('[data-gw-column]');
     const switched = !!card && Number(card.dataset.gwColumn) !== groupStageState.groupColumn;
     if (switched) { groupStageState.groupColumn = Number(card.dataset.gwColumn); resetGroupSelection(); }
-    if (switched && !e.target.closest('[data-gw-dog], [data-gw-action]')) { render(); return document.querySelector('#groupPage .gw-group.selected [data-gw-pick]')?.focus({ preventScroll: true }); }
+    if (switched && !e.target.closest('[data-gw-dog], [data-gw-action]')) { render(); return focusSelectedGroup(); }
     const open = e.target.closest('[data-gw-open]');
     if (open) return showDetail(appState.allDogs[Number(open.dataset.gwOpen)]);
     const step = e.target.closest('[data-gw-step]');

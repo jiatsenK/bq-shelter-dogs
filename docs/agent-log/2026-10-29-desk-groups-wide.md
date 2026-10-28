@@ -9,6 +9,10 @@
   - `public/css/app.css`：新樣式全在 `@media (min-width: 1100px)`、選擇器加 `html.desk-on`。左邊線 24、上緣 20（原本手機的 `padding 0 4px`、`main padding-top 4px` 讓電腦版變 28／4）；列有滑鼠移過底色。
   - 測試：`tests/desk-layout.cjs` 加第二群，1280／1440 查主內容 > 480、右欄 300、左邊線 24、上緣 20、兩群並排、列高 40～46、沒有橫向捲動；點群卡右欄跟著換、只有一個 `#gwWalk`、滑鼠移過有底色、有狗沒溜在電腦版照樣只登記勾著的狗。`tests/group-walks.cjs` 原本在 1280 用手機版面測換群箭頭、44px 與滑鼠拖曳：1280 改成只查溢出與狗列完整，滑鼠拖曳段改在 1099（還是一次一群）跑。
   - `public/js/README.md`：group-stage 依賴加 desk。
+- 審查（Standards／Spec 兩軸，基準 0197195d）後補修：「整群溜了／已溜」判斷抽成 `groupWalkState` 手機與電腦版共用（手機 HTML 不變）、`#gwSource` 抽成 `groupSourceHtml`、選中群的焦點抽成 `focusSelectedGroup`、30 天每隻只算一次、「紀錄從 10/1 開始」寫法同溜狗表頁尾；電腦版警示接在狗名同一行（放不下刪節，全文在右欄），有警示的列也維持 44px。
+- 截圖：`docs/design/desk-groups-wide/`（390 前後、1366 前後、1366 有狗沒溜）。
 - 手機版：390px 截圖跟改之前逐位元組相同（headless 假資料）。
+- 本機 `-Full`：node 段 591 過、1 項 `scripts/diagram-reminder.test.mjs` 失敗，原因是 worktree 用 CRLF（`core.autocrlf=true`），`docs/ARCHITECTURE.md` 以 `\n` 切不到標題；這幾個檔案跟 base 相同，CI（Linux、LF）不受影響。網頁套件另外全部跑過。
+- 待 K 確認：右欄「近 30 天」算的是「這群有任何一隻狗溜過的天數」＋每隻各幾天，不是「整群一起溜」的次數（溜狗紀錄沒有記是不是整群一起溜）。
 - 未做：`docs/DESIGN_GUIDE.md` 第 21、25 行留給收尾統一改，建議文字寫在 PR 說明。電腦版群卡的鍵盤左右鍵沿用手機的換群（改選中的群）。
 - 相關 PR：本筆所在 PR（base `claude/volunteer-critique-p1-p2`）。

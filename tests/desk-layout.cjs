@@ -154,7 +154,8 @@ module.exports = async (browser, base) => {
         const cards = [...document.querySelectorAll('#groupPage .gw-group')].map(c => [Math.round(r(c).left), Math.round(r(c).top)]);
         return { main: Math.round(r(document.querySelector('.gw-desk-main')).width), side: Math.round(r(document.querySelector('.gw-side-col')).width),
           left: Math.round(r(document.querySelector('#groupPage h2')).left), top: Math.round(r(document.querySelector('#groupPage')).top), cards,
-          row: Math.round(r(document.querySelector('.gw-group:last-child .gw-dog')).height), scroll: document.documentElement.scrollWidth <= innerWidth };
+          row: Math.round(r(document.querySelector('.gw-group:last-child .gw-dog')).height), scroll: document.documentElement.scrollWidth <= innerWidth,
+          warnRow: Math.round(r(document.querySelector('.gw-dog.flagged')).height) };
       });
       assert(box.main > 480, `${width}px 主內容寬 ${box.main} 不卡在 480`);
       assert.equal(box.side, 300, `${width}px 右欄 300`);
@@ -162,6 +163,7 @@ module.exports = async (browser, base) => {
       assert.equal(box.cards.length, 2, '兩群都畫出來');
       assert(box.cards[0][1] === box.cards[1][1] && box.cards[1][0] > box.cards[0][0], `${width}px 兩群並排`);
       assert(box.row >= 40 && box.row <= 46, `${width}px 一列 40～46px（${box.row}）`);
+      assert(box.warnRow <= 46, `${width}px 有警示的列也不超過 46px（${box.warnRow}）`);
       assert(box.scroll, `${width}px 沒有橫向捲動`);
     }
     // 點群卡選中，右欄跟著換；滑鼠移過的列有底色
