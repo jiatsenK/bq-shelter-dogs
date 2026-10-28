@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
 
-const FROZEN = '536db767b56d845e28ff715c78d490724332f48576805ae5f21d57c92189b3f7';
+// 2026-10-28 #493：repo 公開，去掉志工真名與正式子網域後重算（只有這種去識別才改）
+const FROZEN = '29e807154e2ff9eedfdec6def1efd6807e5c08a756c98d0c672235e938dbed09';
 
 test('AGENT_LOG.md 已封存，內容不能再改', async () => {
   const text = (await readFile(new URL('../AGENT_LOG.md', import.meta.url), 'utf8')).replace(/\r\n/g, '\n');

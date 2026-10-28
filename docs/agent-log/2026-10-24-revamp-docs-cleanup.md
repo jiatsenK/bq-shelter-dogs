@@ -7,7 +7,7 @@
 
 - 發現 #533 打開 `d1WalkAccept` 時，正式 Worker 沒有 `D1_WALK_NOTIFY`、`WALK_RETRY_ENABLED`：人工改表不進 D1，保險掃描與寫回重試都沒跑。設定前查 D1：outbox 6 筆皆 synced、衝突 0。
 - `wrangler secret put` 設 `D1_WALK_NOTIFY=1`、`WALK_RETRY_ENABLED=true`。
-- 驗收：K 手動改馬克（2020122507）→ 2026/10/24 佳岑，D1 `v3_walk_state` 08:03:45 UTC 更新為 version 2，衝突 0。
+- 驗收：K 手動改馬克（2020122507）→ 2026/10/24 K，D1 `v3_walk_state` 08:03:45 UTC 更新為 version 2，衝突 0。
 
 ## Issue
 

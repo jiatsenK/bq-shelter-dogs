@@ -13,7 +13,7 @@
 - 最終檢查（HEAD `fdaeed7`）：網頁 24 套全過（index 264 項），紀錄 `1792946947691-535fd68a-f70e-471e-b597-1cc9c7a738e0.json`。Node 459／460：唯一失敗是 `scripts/local-check.test.mjs`，這台沒有 `pwsh`（預設用它開子程序）；改指定 `BQ_CHECK_PWSH=powershell` 後，Windows PowerShell 5.1 中文輸出變亂碼對不到 `/未知測試/`。本票沒動該測試與 `check-local.ps1`（`scripts/` 只在 SUITES 加一個套件名），所以 `-Full` 沒有完整綠燈，以 CI（Linux pwsh）為準。
 - 待 K 決定：票寫「有『復原』的提示條」拉長，但 D1 模式提示條本來就沒有「復原」按鈕；這次改成所有有按鈕的提示條（＋一起溜的人、再試一次）8 秒，其他 5 秒。
 - 未做：#442（再按導覽捲回頂部）、#401／PR #437；未合併、未部署。
-- 測試網站（K 2026-10-26 同意）：測試 D1 `bq-shelter-dogs-test` 補套 `0009_dog_edit.sql`；把分支 `c5903c7`（main `da6396e`＋#445）用 `wrangler deploy -c wrangler.test-site.jsonc` 部署到 https://bq-shelter-dogs-test.jiatsen-k.workers.dev，版本 `89ac89bf-1300-4ad1-98a6-c7016e3a66d2`，供 K 手機實測。#586 合併後要從 main 再部署一次。
+- 測試網站（K 2026-10-26 同意）：測試 D1 `bq-shelter-dogs-test` 補套 `0009_dog_edit.sql`；把分支 `c5903c7`（main `da6396e`＋#445）用 `wrangler deploy -c wrangler.test-site.jsonc` 部署到 https://bq-shelter-dogs-test.<子網域>.workers.dev，版本 `89ac89bf-1300-4ad1-98a6-c7016e3a66d2`，供 K 手機實測。#586 合併後要從 main 再部署一次。
 - 測試網站設定不了名字（seed-preview-db 10-25 又覆蓋測試庫，開 #589、外觀區分開 #590）：K 同意後備份並清空測試庫 `v3_identity_names` 19 列，`v3_volunteers` 保留；正式庫未動。
 - K 2026-10-26 測試網站實測後追加：D1 接受溜了後提示條在「＋一起溜的人」旁加「復原」（取代 K 2026-10-24「復原在狗卡名字旁的 ×」），按了跟「✓ 已溜」一樣立刻恢復、捲到那隻；只送仍是已溜的狗。測試 `walk-order-undo` 第 7 段先紅後綠。
 - 2026-10-26 K 在測試網站（版本 `49cf7422`，分支 `803158d`）用手機實機測試，確認 OK。
