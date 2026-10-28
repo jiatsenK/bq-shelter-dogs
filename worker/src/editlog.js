@@ -94,6 +94,20 @@ export async function logEdit(db, { editor, kind, dogId = null, dogNumber = '', 
   }
 }
 
+// 清修改紀錄只在這裡（ADR 0004 修訂：保留 14 天；worker/test/edit-log-single.test.mjs 擋別處 DELETE FROM v3_edit_log）。
+// 超過 14 天的清掉，合併狗快照（MERGE_KINDS）永久保留：被併那隻的資料只存在這裡，取消合併也要看後面同一隻的合併／取消合併。
+// v3_dog_edit_actors 有外鍵指向紀錄，同一批先刪。排程一天跑一次（at 沒索引，兩句各掃整張一次），表維持約 14 天份。回傳清掉幾筆
+const KEEP_DAYS = 14;
+export async function pruneEdits(db, now = Date.now()) {
+  const cutoff = new Date(now - KEEP_DAYS * 86400000).toISOString();
+  const expiredWhere = `at<? AND kind NOT IN (${[...MERGE_KINDS].map(() => '?').join(',')})`;
+  const [, deleted] = await db.batch([
+    db.prepare(`DELETE FROM v3_dog_edit_actors WHERE log_id IN (SELECT id FROM v3_edit_log WHERE ${expiredWhere})`).bind(cutoff, ...MERGE_KINDS),
+    db.prepare(`DELETE FROM v3_edit_log WHERE ${expiredWhere}`).bind(cutoff, ...MERGE_KINDS),
+  ]);
+  return deleted.meta.changes;
+}
+
 // 新到舊；不列「溜了」（#672，量大，只在管理網站看）。這頁之後會拿掉，不為了跳過溜了加索引
 export async function readEdits(db, limit = EDITS_DEFAULT) {
   const n = Math.min(Math.max(1, Number.isInteger(limit) ? limit : EDITS_DEFAULT), EDITS_MAX);

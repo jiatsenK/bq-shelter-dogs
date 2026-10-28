@@ -33,6 +33,19 @@ test('worker/src 只有 editlog.js 一處 INSERT INTO v3_edit_log', async () => 
     `表名用變數組的 INSERT 有變動：${dynamic.join('、')}；確認不是寫 v3_edit_log 後更新 DYNAMIC_INSERT_OK`);
 });
 
+// ADR 0004 修訂（保留 14 天）：清紀錄的規則（天數、合併快照不清）只在 editlog.js pruneEdits
+// 表名用變數組的 DELETE（合併狗、身分合併搬表）表清單都不含 v3_edit_log，同上方 DYNAMIC_INSERT_OK
+const EDIT_LOG_DELETE = /\bDELETE\s+FROM\s+["'`[]?(?:\w+\.)?v3_edit_log\b/gi;
+test('worker/src 只有 editlog.js 一處 DELETE FROM v3_edit_log', async () => {
+  const found = [];
+  for (const file of files) {
+    const code = strip(await readFile(new URL(file, SRC), 'utf8'));
+    for (const m of code.matchAll(EDIT_LOG_DELETE)) found.push(`${file}:${lineOf(code, m.index)}`);
+  }
+  assert.equal(found.length, 1, `清修改紀錄交給 editlog.js pruneEdits，不要另寫 DELETE：${found.join('、')}`);
+  assert.match(found[0], /^editlog\.js:/);
+});
+
 test('來源沒傳或不在白名單就丟錯', async () => {
   const env = await setup();
   try {

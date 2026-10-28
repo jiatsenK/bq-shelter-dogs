@@ -1,8 +1,8 @@
-// 排程有沒有在跑（稽核第 5 項）：寫回重試、保險掃描、照片垃圾桶每次跑完，記在 v3_sync_state 的 cron_<工作> 一列 JSON，
+// 排程有沒有在跑（稽核第 5 項）：寫回重試、保險掃描、照片垃圾桶、修改紀錄清理每次跑完，記在 v3_sync_state 的 cron_<工作> 一列 JSON，
 // 管理網站「資料檢查」讀出來顯示（worker/src/admin/checks.js 的 readCronStatus）。
 // 跑完記 okAt；出錯記 failAt 和訊息，不蓋掉上次的 okAt。工作回傳 false 表示功能沒開、沒跑，不記。
 // 記不進去只警告，不影響工作本身。寫回重試每 10 分鐘寫這一列，一天約 144 列寫入。
-export const CRON_JOBS = ['retry', 'scan', 'trash'];
+export const CRON_JOBS = ['retry', 'scan', 'trash', 'editlog'];
 export const cronKey = job => `cron_${job}`;
 
 export async function recordRun(env, job, now, work) {

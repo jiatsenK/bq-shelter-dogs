@@ -211,7 +211,7 @@ CREATE TABLE IF NOT EXISTS v3_dog_departures (
   PRIMARY KEY(dog_id,number)
 );
 
--- 編輯紀錄（docs/adr/0004-open-editing-and-edit-log.md）：網站上的編輯誰改了什麼；只增不刪。
+-- 編輯紀錄（docs/adr/0004-open-editing-and-edit-log.md）：網站上的編輯誰改了什麼；保留 14 天，合併狗快照（merge、unmerge）永久保留（editlog.js 的 pruneEdits）。
 -- before_json／after_json 是 JSON 文字（null 表示沒有）
 -- source（#672）：access＝管理網站、volunteer＝志工網站、sheet＝試算表；NULL＝舊紀錄。管理網站有 v3_dog_edit_actors 時以那邊為準
 CREATE TABLE IF NOT EXISTS v3_edit_log (
