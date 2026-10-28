@@ -2266,14 +2266,8 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .info-home button strong { font-size: 18px; }
 .info-home button span { color: var(--ink-soft); font-size: 14px; }
 .info-home button:hover { background: var(--surface-soft); }
-.info-home button:focus-visible, .info-update-tabs button:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
-.info-update-tabs { display: flex; gap: 8px; padding: 12px 16px; background: var(--surface); }
-.info-update-tabs button, #retryUpdates { min-width: 44px; min-height: 44px; padding: 8px 16px; background: var(--surface); color: var(--ink); font: inherit; border: 1px solid var(--line); cursor: pointer; }
-.info-update-tabs button[aria-pressed="true"] { font-weight: 800; border-bottom: 3px solid var(--primary); }
+.info-home button:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
 .info-edits { display: block; border: 0; width: 100%; height: calc(100dvh - 240px - env(safe-area-inset-bottom)); min-height: 300px; }
-.info-releases { list-style: none; margin: 0; padding: 0; }
-.info-releases li { border-bottom: 1px solid var(--line); padding: 16px 0; overflow-wrap: anywhere; }
-.info-releases time { color: var(--ink-soft); font-variant-numeric: tabular-nums; }
 /* #270 活動紀錄：每場標題下直接列出席的狗；新增、修改就地展開 */
 .act-list { margin-top: 8px; }
 .act-item { border-top: 1px solid var(--line); padding: 12px 0; }

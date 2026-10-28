@@ -8,7 +8,6 @@ import { BQApi } from './api.js';
 import { SITE } from './site-config.js';
 import { activitySectionHtml, loadActivities } from './activities.js';
 import { parseDogsData } from './dog-data.js';
-import { BQStore } from './store.js';
 import { backFrom, pushPage } from './overlays.js';
 
 // 分析頁（V5-4 #59、V5-5 #60）：目前 dogs.json 就能算的犬隻統計，加上 #56 累積的遛狗歷史與每日快照。
@@ -562,31 +561,6 @@ function refreshDepartureList() {
 const INFO_PAGES = { stay: '在所統計', departures: '離所紀錄', activities: '活動紀錄', quality: '資料檢查', updates: '更新紀錄' };
 
 analysisState.infoPage = '';
-analysisState.infoUpdateTab = 'website';
-analysisState.websiteUpdates = null;
-const WEBSITE_UPDATES_CACHE = BQStore.keys.websiteUpdates;
-const validWebsiteUpdates = entries => Array.isArray(entries) && entries.every(e => e && /^\d{4}-\d{2}-\d{2}$/.test(e.date) && typeof e.text === 'string' && (e.version === undefined || typeof e.version === 'string'));
-
-// #421 先顯示上次讀到的內容，每次進頁面背景檢查新版；檢查失敗不清空，改標示「上次讀到的」。
-function loadWebsiteUpdates() {
-  if (analysisState.websiteUpdates?.checking) return;
-  if (!analysisState.websiteUpdates) {
-    let cached = null;
-    try { cached = BQStore.readJson(WEBSITE_UPDATES_CACHE); } catch {}
-    analysisState.websiteUpdates = validWebsiteUpdates(cached) ? { state: 'ready', entries: cached } : { state: 'loading', entries: [] };
-  }
-  analysisState.websiteUpdates.checking = true;
-  fetch('website-updates.json', { cache: 'no-cache' })
-    .then(async res => {
-      if (!res.ok) throw new Error('讀取失敗');
-      const entries = await res.json();
-      if (!validWebsiteUpdates(entries)) throw new Error('格式不對');
-      analysisState.websiteUpdates = { state: 'ready', entries };
-      try { BQStore.writeJson(WEBSITE_UPDATES_CACHE, entries); } catch {}
-    })
-    .catch(() => { analysisState.websiteUpdates = analysisState.websiteUpdates.state === 'ready' ? { state: 'ready', stale: true, entries: analysisState.websiteUpdates.entries } : { state: 'error', entries: [] }; })
-    .then(() => { if (appState.analysisOpen && analysisState.infoPage === 'updates' && analysisState.infoUpdateTab === 'website') render(); });
-}
 
 // #447 使用說明從我溜過搬來：不是子頁，按了直接開溜狗表上的導覽（文字沿用 #171 的 TOUR_STEPS）
 function infoHomeHtml() {
@@ -595,17 +569,13 @@ function infoHomeHtml() {
   const dogs = appState.loadState === 'ready' ? `目前在所 ${appState.allDogs.length} 隻` : appState.loadState === 'error' ? '在所資料讀取失敗' : '在所資料讀取中…';
   const dep = !analysisState.departuresData || analysisState.departuresData.state === 'loading' ? '離所紀錄讀取中…' : analysisState.departuresData.state === 'error' ? '離所紀錄讀取失敗' : analysisState.departuresData.list.length ? `共 ${analysisState.departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
   const act = activitiesState.activitiesData.state === 'loading' ? '活動紀錄讀取中…' : activitiesState.activitiesData.state === 'error' ? '活動紀錄讀取失敗' : activitiesState.activitiesData.list.length ? `共 ${activitiesState.activitiesData.list.length} 場活動` : '還沒有活動紀錄';
-  const summary = { stay: dogs, departures: dep, activities: act, quality: '查看缺照片、介紹及其他資料', updates: '網站更新與資料編輯' };
+  const summary = { stay: dogs, departures: dep, activities: act, quality: '查看缺照片、介紹及其他資料', updates: '誰、什麼時候改了哪些資料' };
   return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).filter(([id]) => canShow(id)).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
 }
 
+// K 2026-10-28：拿掉人工寫的網站更新，更新紀錄只剩資料編輯（網站版本改在管理網站看 GitHub Releases）
 function infoUpdatesHtml() {
-  const tabs = `<div class="info-update-tabs" aria-label="更新紀錄種類"><button type="button" data-update-tab="website" aria-pressed="${analysisState.infoUpdateTab === 'website'}">網站更新</button><button type="button" data-update-tab="edits" aria-pressed="${analysisState.infoUpdateTab === 'edits'}">資料編輯</button></div>`;
-  if (analysisState.infoUpdateTab === 'edits') return tabs + '<iframe id="infoEdits" class="info-edits" title="資料編輯紀錄" src="edits.html?embedded=1" data-navigation-scope></iframe>';
-  if (!analysisState.websiteUpdates) loadWebsiteUpdates();
-  const data = analysisState.websiteUpdates;
-  const body = data.state === 'loading' ? '<p role="status">讀取中…</p>' : data.state === 'error' ? '<p role="alert">網站更新讀取失敗，請重試。</p><button type="button" id="retryUpdates">重新讀取</button>' : data.entries.length ? `${data.stale ? '<p role="status">暫時讀不到最新內容，以下是上次讀到的</p>' : ''}<ol class="info-releases">${data.entries.map(e => `<li><time>${esc(e.version ? `${e.version} · ${e.date}` : e.date)}</time><p>${esc(e.text)}</p></li>`).join('')}</ol>` : '<p>還沒有網站更新紀錄</p>';
-  return tabs + section('網站更新', '', body);
+  return '<iframe id="infoEdits" class="info-edits" title="資料編輯紀錄" src="edits.html?embedded=1" data-navigation-scope></iframe>';
 }
 
 function openInfoPage(page) {
@@ -613,7 +583,6 @@ function openInfoPage(page) {
   const current = { ...history.state, infoPage: '' };
   analysisState.infoPage = page;
   pushPage(current, { ...current, infoPage: page });
-  if (page === 'updates' && analysisState.infoUpdateTab === 'website') loadWebsiteUpdates();
   render();
   window.scrollTo(0, 0);
   document.getElementById('analysisBack').focus();
@@ -626,7 +595,7 @@ function restoreInfoPage(page) {
   if (!analysisState.infoPage && previous) document.querySelector(`[data-info-page="${previous}"]`)?.focus();
 }
 
-export { LONG_STAY_MONTHS, STAY_BUCKETS, intakeDate, monthsBetween, daysBetween, analysisRows, zoneOf, formatStay, average, median, dated, stayDistribution, longestStay, zoneAverages, longStayShare, sexComparison, dataCompleteness, checkPhotos, dogKey, parseWalks, historyStartDates, historySpan, recentStart, dogWalkHistory, loadHistory, STAY_SHADES, STAY_SHORT, yearsText, columnChart, dogRow, section, dogNames, kpi, analysisHtml, dataChecksHtml, mdText, walkHistorySection, analysisPageHtml, showAnalysis, hideAnalysis, closeAnalysis, analysisBtn, analysisBack, DEPARTURE_ORDER, DEPARTURE_COLORS, departureDetails, depRosterDefault, parseDeparturesData, loadDepartures, departureDetail, departureYears, filterDepartures, stackedYears, departureRow, departureListHtml, departureRosterHtml, departureSectionHtml, refreshDepartureList, INFO_PAGES, WEBSITE_UPDATES_CACHE, validWebsiteUpdates, loadWebsiteUpdates, infoHomeHtml, infoUpdatesHtml, openInfoPage, restoreInfoPage };
+export { LONG_STAY_MONTHS, STAY_BUCKETS, intakeDate, monthsBetween, daysBetween, analysisRows, zoneOf, formatStay, average, median, dated, stayDistribution, longestStay, zoneAverages, longStayShare, sexComparison, dataCompleteness, checkPhotos, dogKey, parseWalks, historyStartDates, historySpan, recentStart, dogWalkHistory, loadHistory, STAY_SHADES, STAY_SHORT, yearsText, columnChart, dogRow, section, dogNames, kpi, analysisHtml, dataChecksHtml, mdText, walkHistorySection, analysisPageHtml, showAnalysis, hideAnalysis, closeAnalysis, analysisBtn, analysisBack, DEPARTURE_ORDER, DEPARTURE_COLORS, departureDetails, depRosterDefault, parseDeparturesData, loadDepartures, departureDetail, departureYears, filterDepartures, stackedYears, departureRow, departureListHtml, departureRosterHtml, departureSectionHtml, refreshDepartureList, INFO_PAGES, infoHomeHtml, infoUpdatesHtml, openInfoPage, restoreInfoPage };
 export { analysisState } from './page-state.js';
 
 export function bindAnalysis() {
@@ -665,13 +634,5 @@ export function bindAnalysis() {
   document.getElementById('main').addEventListener('click', e => {
     const entry = e.target.closest('[data-info-page]');
     if (entry) openInfoPage(entry.dataset.infoPage);
-    const tab = e.target.closest('[data-update-tab]');
-    if (tab) {
-      analysisState.infoUpdateTab = tab.dataset.updateTab;
-      if (analysisState.infoUpdateTab === 'website') loadWebsiteUpdates();
-      render();
-      document.querySelector(`[data-update-tab="${analysisState.infoUpdateTab}"]`).focus();
-    }
-    if (e.target.closest('#retryUpdates')) { analysisState.websiteUpdates = null; render(); }
   });
 }

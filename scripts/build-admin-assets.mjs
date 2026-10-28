@@ -35,8 +35,6 @@ export async function buildAdminAssets() {
   for (const name of ['api-response.js', 'dates.js', 'photo-images.js', 'edit-values.js']) {
     await publish(new URL(`../public/js/${name}`, import.meta.url), new URL(name, target));
   }
-  // #567 網站更新唯讀：沿用志工網站的版本紀錄檔，不另存 D1
-  await publish(new URL('../public/website-updates.json', import.meta.url), new URL('website-updates.json', target));
   // 系統架構圖頁：正本在 docs/diagrams/，抽出圖、說明與版本資訊
   const root = fileURLToPath(new URL('..', import.meta.url));
   const diagrams = [];

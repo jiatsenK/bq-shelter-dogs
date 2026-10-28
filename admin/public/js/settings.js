@@ -1,6 +1,6 @@
 import { readSettings, saveSettings } from './settings-api.js';
 const groups = [
- ['功能顯示', '關閉後隱藏志工入口，舊連結顯示未開放。', [['showActivities','活動紀錄'],['showQuality','資料檢查'],['showUpdates','更新紀錄（網站更新與資料編輯）']]],
+ ['功能顯示', '關閉後隱藏志工入口，舊連結顯示未開放。', [['showActivities','活動紀錄'],['showQuality','資料檢查'],['showUpdates','更新紀錄（資料編輯）']]],
  ['志工可編輯', '關閉後拒絕新的志工修改，已接受的操作繼續完成。', [['editIntro','介紹'],['editPhoto','照片'],['editRest','休養'],['editActivity','活動'],['editFixedCare','固定照顧'],['editStays','出入所紀錄']]],
 ];
 const form = document.getElementById('settings-form'), status = document.getElementById('settings-status');

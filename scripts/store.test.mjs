@@ -102,7 +102,6 @@ test('所有現有手機資料沿用鍵名與格式，沒有改名或清除舊�
     ['onboarded', 'bq-onboarded', '1'],
     ['nameLater', 'bq-name-later', '1'],
     ['zukan', 'bq-zukan', '{"v":1,"codes":{"abcdef123456":{"2024100502":"2026-10-23"}}}'],
-    ['websiteUpdates', 'bq-website-updates', '[{"date":"2026-10-23","text":"更新"}]'],
     ['editsCache', 'bq-edits-cache', '{"edits":[],"names":{}}'],
   ];
   const storage = fakeStorage(Object.fromEntries(fixtures.map(([, key, value]) => [key, value])));

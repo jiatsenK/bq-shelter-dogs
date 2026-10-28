@@ -17,5 +17,7 @@ export const readDog = dogId => call(`/api/manage/dogs/${encodeURIComponent(dogI
 export const unmergeDog = (dogId, body) => call(`/api/manage/dogs/${encodeURIComponent(dogId)}/unmerge`, 'POST', body);
 export const searchEdits = query => call(`/api/manage/edits${query ? `?${query}` : ''}`);
 export const readSiteLinks = () => call('/api/manage/links');
-export const readWebsiteUpdates = () => settle(fetch('./shared/website-updates.json', { cache: 'no-cache', redirect: 'error', signal: AbortSignal.timeout(15000) }));
+// 網站更新：公開 repo 的 GitHub Releases，不帶登入（每個 IP 每小時 60 次，管理者手動開頁夠用）
+export const RELEASES_URL = 'https://api.github.com/repos/jiatsenK/bq-shelter-dogs/releases?per_page=30';
+export const readReleases = () => settle(fetch(RELEASES_URL, { cache: 'no-cache', credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(15000) }));
 export const readDiagrams = () => settle(fetch('./shared/diagrams.json', { cache: 'no-cache', redirect: 'error', signal: AbortSignal.timeout(15000) }));
