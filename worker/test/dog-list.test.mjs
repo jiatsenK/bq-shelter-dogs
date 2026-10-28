@@ -287,10 +287,10 @@ test('#519 「誰遛的」原文存進 D1 主清單：/walkers 直接回原文�
   const env = await setup();
   worker.testing.resetState();
   try {
-    await send(env, [main({ date:'2026-10-05', walker:'志工乙+志工丙' })]);
-    assert.equal(await env.DB.prepare("SELECT walker FROM v3_sheet_main WHERE number='9001'").first('walker'), '志工乙+志工丙');
+    await send(env, [main({ date:'2026-10-05', walker:'阿文+阿華' })]);
+    assert.equal(await env.DB.prepare("SELECT walker FROM v3_sheet_main WHERE number='9001'").first('walker'), '阿文+阿華');
     const body = await (await worker.fetch(new Request('https://bq-shelter-dogs.example.workers.dev/api/walkers', { headers:{ Origin:'https://bq-shelter-dogs.example.workers.dev' } }), env)).json();
-    assert.equal(body.walkers['9001'], '志工乙+志工丙');
+    assert.equal(body.walkers['9001'], '阿文+阿華');
     // 清空也記成空字串（不是 NULL），手機才知道被清掉
     await send(env, [main({ hash:'h2', date:'2026-10-05', walker:'' })]);
     assert.equal(await env.DB.prepare("SELECT walker FROM v3_sheet_main WHERE number='9001'").first('walker'), '');
@@ -333,13 +333,13 @@ test('#683 新增沒編號的狗用名字找溜狗紀錄走部分索引，不整
     const plan = (await env.DB.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind('無號').all()).results.map(r => r.detail).join(' | ');
     assert.match(plan, /SEARCH w USING (COVERING )?INDEX v3_walks_nameonly/, plan);
     assert.doesNotMatch(plan, /SCAN w/, plan);
-    await send(env, [main({ dog:{ id:'', name:'無號' }, hash:'n1', walker:'志工乙' })]);
+    await send(env, [main({ dog:{ id:'', name:'無號' }, hash:'n1', walker:'阿文' })]);
     const before = await env.DB.prepare("SELECT dog_id FROM v3_sheet_main WHERE name='無號'").first('dog_id');
     assert.equal(await env.DB.prepare("SELECT count(*) n FROM v3_walks WHERE dog_id=? AND dog_number=''").bind(before).first('n'), 1);
     // 主清單那列不見了、之後又出現：靠溜狗紀錄的名字認回同一隻，不多出一隻
     await env.DB.prepare("DELETE FROM v3_sheet_main WHERE name='無號'").run();
     worker.testing.resetState();
-    await send(env, [main({ dog:{ id:'', name:'無號' }, hash:'n2', walker:'志工乙' })]);
+    await send(env, [main({ dog:{ id:'', name:'無號' }, hash:'n2', walker:'阿文' })]);
     assert.equal(await env.DB.prepare("SELECT dog_id FROM v3_sheet_main WHERE name='無號'").first('dog_id'), before);
     assert.equal(await env.DB.prepare("SELECT count(*) n FROM v3_dogs WHERE name='無號'").first('n'), 1);
   } finally { env.DB.close(); }

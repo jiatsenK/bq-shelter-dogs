@@ -99,6 +99,15 @@
         ],
         "createdAt": "2026-10-28T03:41:28.628Z",
         "reason": "Claude: diagram-design skill mandates this typography and 7-9px mono tags/sublabels in SVG diagrams"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "public/js/app.js"
+        ],
+        "createdAt": "2026-10-28T05:22:42.211Z",
+        "reason": "Claude: lightbox <img alt=\"\"> 的 src 由程式在開燈箱時設定，不是壞圖（既有程式，本次未改）"
       }
     ]
   }

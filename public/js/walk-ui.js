@@ -105,7 +105,7 @@ const BQWalkUI = (() => {
       <h3 id="withTitle">${w.add ? '加入溜狗人：' : '誰跟你一起溜 ' }${esc(w.dogs.map(d => d.name).join('、'))}${w.add ? '' : '？'}</h3>
       ${names.length ? `<div class="with-names">${names.map(n => `<button type="button" class="with-name${w.picked.has(n) ? ' on' : ''}" data-with="${esc(n)}" aria-pressed="${w.picked.has(n)}">${w.picked.has(n) ? icon('tick') : ''}${esc(n)}</button>`).join('')}</div>` : ''}
       <form class="with-add" id="withAdd" autocomplete="off">
-        <input type="text" id="withInput" maxlength="20" placeholder="${names.length ? '其他人：輸入名字' : '輸入名字，例：志工乙'}" value="${esc(w.text)}" enterkeyhint="done">
+        <input type="text" id="withInput" maxlength="20" placeholder="${names.length ? '其他人：輸入名字' : '輸入名字，例：小明'}" value="${esc(w.text)}" enterkeyhint="done">
         <button type="submit">加入</button>
       </form>
       ${w.error ? `<p role="alert">${esc(w.error)}</p>` : ''}

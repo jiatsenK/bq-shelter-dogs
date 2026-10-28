@@ -46,17 +46,17 @@ async function runDeskTests() {
       try {
         deskView = 'days30';
         const k = n => BQDates.localDateKey(ago(n));
-        walkerCodeNames = { aaa: '志工乙', bbb: '岑' };
+        walkerCodeNames = { aaa: '阿明', bbb: '小美' };
         // 上次溜那天的「誰遛的」來自 D1 今日紀錄（狗清單同步進 D1 的那一格）
-        fakeD1.set(walkKey(green), '志工丙', BQDates.localDateKey(effectiveWalkDate(green, TODAY)));
+        fakeD1.set(walkKey(green), '小華', BQDates.localDateKey(effectiveWalkDate(green, TODAY)));
         walkRegistration.receiveToday(fakeD1.pack(), [green]);
         deskWalkDays = new Map([['2026010103', new Map([[k(5), new Set(['aaa', 'bbb'])], [k(8), new Set(['zzz'])], [k(1), new Set()]])]]);
         deskWalkFirst = k(20);
         const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', dueDogs(allDogs, TODAY)), 'text/html');
         const row = [...doc.querySelectorAll('tbody tr')].find(tr => tr.textContent.includes('桌綠'));
         const cell = n => row.querySelectorAll('td.dr-d')[29 - n];
-        eq([cell(5).querySelector('i').textContent, cell(5).querySelector('i').classList.contains('multi'), cell(5).title], ['嘉', true, `${ago(5).getMonth() + 1}/${ago(5).getDate()} 志工乙、K`], '兩個人：');
-        eq([cell(1).querySelector('i').textContent, cell(1).title.endsWith(' 志工丙')], ['俐', true], '上次溜那天用試算表的誰遛的：');
+        eq([cell(5).querySelector('i').textContent, cell(5).querySelector('i').classList.contains('multi'), cell(5).title], ['阿', true, `${ago(5).getMonth() + 1}/${ago(5).getDate()} 阿明、小美`], '兩個人：');
+        eq([cell(1).querySelector('i').textContent, cell(1).title.endsWith(' 小華')], ['小', true], '上次溜那天用試算表的誰遛的：');
         eq([cell(8).querySelector('i.on').textContent, cell(8).title.endsWith(' 有溜')], ['', true], '換不到名字：');
         eq(cell(3).title, '', '沒溜：');
       } finally { [walkerCodeNames] = saved; fakeD1.forget([green]); deskWalkDays = null; deskWalkFirst = ''; deskView = 'sheet'; }
