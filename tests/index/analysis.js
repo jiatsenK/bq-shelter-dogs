@@ -27,8 +27,16 @@ async function runAnalysisTests() {
     eq([zoneOf('新A07'), zoneOf('C區12'), zoneOf('住院區'), zoneOf('')], ['新A', 'C區', '住院區', '未填籠位']);
   });
   await check('#59 入所多久分布（2026-10-08 入所年度分布拿掉，跟這張同一份資料）', () => {
-    eq(stayDistribution(rows).map(b => b.count), [1, 0, 1, 1, 0, 0, 4]);
-    eq(stayDistribution(rows).map(b => b.label)[6], '5 年以上');
+    // #739 K 定 3h：滿 0～9 年每年一格＋10+，固定 11 根；每格的狗久的排前面
+    const dist = stayDistribution(rows);
+    eq(dist.map(b => b.short), ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10+']);
+    eq(dist.map(b => b.count), [2, 1, 0, 0, 0, 0, 1, 2, 0, 1, 0]);
+    eq([dist[1].label, dist[10].label], ['滿 1 年', '滿 10 年以上']);
+    eq(names(dist[0].rows), ['小一', '小二'], '久的排前面：');
+    eq(names(dist[7].rows), ['無日', '照顧'], '同一天入所照犬名：');
+    const old = analysisRows([D('老狗', '2016092501', '新A01', 1), D('更老', '2010010101', '新A03', 1)], T);
+    eq(stayDistribution(old).map(b => b.count)[10], 2, '10 年以上都在最後一根：');
+    eq(names(stayDistribution(old)[10].rows), ['更老', '老狗']);
     eq(typeof intakeYears, 'undefined', '入所年度分布已拿掉：');
   });
   await check('#59 在所最久 Top N：依入所日由早到晚，沒入所日期的不列', () => {
@@ -80,7 +88,7 @@ async function runAnalysisTests() {
       if (titles.includes('長期在所＋近期少遛')) throw new Error('K 說長期在所＋少遛不需要');
       ['入所多久分布', '在所最久 Top 10', '各區平均在所時間',
         '公母在所時間差異'].forEach(t => { if (!titles.includes(t)) throw new Error(`少了 ${t}`); });
-      if (![...document.querySelectorAll('#main .a-card')].find(c => c.querySelector('h2').textContent.includes('入所多久分布')).querySelector('.a-hint').textContent.includes('滿 1 年的')) throw new Error('入所多久分布要寫滿 1 年幾隻');
+      if (![...document.querySelectorAll('#main .a-card')].find(c => c.querySelector('h2').textContent.includes('入所多久分布')).querySelector('.a-hint').textContent === '點長條看是哪些狗') throw new Error('#739 入所多久分布說明改成點長條看是哪些狗');
       eq(document.querySelectorAll('#main .a-ring').length, 0, '不再有圓環：');
       infoPage = 'quality'; render();
       if (!document.getElementById('main').textContent.includes('檢查中')) throw new Error('照片還沒查完要顯示檢查中');

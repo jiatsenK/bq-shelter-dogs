@@ -19,16 +19,15 @@ import { BQWalkUI } from './walk-ui.js';
 
 // 長期在所＝在所滿 1 年；近期少遛＝超過 AMBER_DAYS 天沒遛（沿用溜狗表的黃色門檻，2026-10-09 起 3 天）
 const LONG_STAY_MONTHS = 12;
-// 入所多久分布的區間（以滿幾個月算）
+// 入所多久分布的區間（以滿幾個月算）：#739 K 定 3h，滿 0～9 年每年一格＋「10+」，固定 11 根
+// （狗多半住到過世，年數只會變多；以後「10+」的狗變多再把最後一根往後拉，根數不變）
+// label 是螢幕閱讀器念的完整說法，short 是長條下面的數字，head 是名單標題
 const STAY_BUCKETS = [
-  { label: '未滿 3 個月', max: 3 },
-  { label: '3–6 個月', max: 6 },
-  { label: '6 個月–1 年', max: 12 },
-  { label: '1–2 年', max: 24 },
-  { label: '2–3 年', max: 36 },
-  { label: '3–5 年', max: 60 },
-  { label: '5 年以上', max: Infinity },
+  ...Array.from({ length: 10 }, (_, y) => ({ label: `滿 ${y} 年`, short: String(y), head: `滿 ${y} 年`, max: (y + 1) * 12 })),
+  { label: '滿 10 年以上', short: '10+', head: '10 年以上', max: Infinity },
 ];
+// 點長條列名單：先列幾隻，其他收進「看全部 N 隻」
+const STAY_PICK_FIRST = 5;
 
 // 入所日（ADR 0011）：編號、舊編號、出入所紀錄裡最早的那天（BQDates.firstIntake）；看不出來或在未來的回 null
 function intakeDate(dog, today) {
@@ -86,18 +85,19 @@ function median(list) {
 
 const dated = rows => rows.filter(r => r.intake);
 
-// 1. 入所多久分布
+// 久的排前面（同一天入所的照犬名排，結果固定）
+const byLongest = (a, b) => a.intake - b.intake || a.dog.name.localeCompare(b.dog.name, 'zh-Hant');
+
+// 1. 入所多久分布：每格的隻數和狗（久的排前面，點長條列名單用）
 function stayDistribution(rows) {
-  const counts = STAY_BUCKETS.map(b => ({ label: b.label, count: 0 }));
-  for (const r of dated(rows)) counts[STAY_BUCKETS.findIndex(b => r.stayMonths < b.max)].count++;
-  return counts;
+  const buckets = STAY_BUCKETS.map(b => ({ label: b.label, short: b.short, head: b.head, rows: [] }));
+  for (const r of dated(rows).sort(byLongest)) buckets[STAY_BUCKETS.findIndex(b => r.stayMonths < b.max)].rows.push(r);
+  return buckets.map(b => ({ ...b, count: b.rows.length }));
 }
 
-// 2. 在所最久 Top N（同一天入所的照犬名排，結果固定）
+// 2. 在所最久 Top N
 function longestStay(rows, n = 10) {
-  return dated(rows)
-    .sort((a, b) => a.intake - b.intake || a.dog.name.localeCompare(b.dog.name, 'zh-Hant'))
-    .slice(0, n);
+  return dated(rows).sort(byLongest).slice(0, n);
 }
 
 // 4. 各區平均在所時間（由久到短）；count 是有入所日期的隻數
@@ -232,31 +232,42 @@ function loadHistory() {
 
 // ── 畫面（資訊圖表風格：大數字、圓環、直條圖；顏色只用 css/app.css 的色票）──
 
-// 在所越久顏色越深（同一個藍色由淺到深），入所多久分布用
-const STAY_SHADES = ['#CFE0FA', '#A9C8F6', '#80AEF1', '#5794EC', '#2F7BEA', '#2262C7', '#184A9C'];
-const STAY_SHORT = ['<3月', '3–6月', '6–12月', '1–2年', '2–3年', '3–5年', '5年+'];
-
 function yearsText(days) {
   return (days / 365.25).toFixed(1);
 }
 
-// 直條圖：每根柱子上方標數字，下方標名稱；hi 是要特別標出的柱子（例：最多的那年）
-function columnChart(items, { color = () => 'var(--primary)', hi = -1 } = {}) {
+// 狗那一列右邊的在所年數（Top 10、點長條的名單共用）
+const stayYears = r => `<b>${yearsText(r.stayDays)}</b><small> 年</small>`;
+
+// 直條圖（入所多久分布，#739）：整欄（上方數字、長條、下方標籤）是一顆按鈕，點了在下面列那一格的狗；
+// 數字和標籤對螢幕閱讀器隱藏、按鈕名稱念完整句，免得念兩次；0 隻的不能選。sel 是選中的那根
+function columnChart(items, sel = -1) {
   const max = Math.max(1, ...items.map(it => it.count));
-  return `<div class="a-cols" style="--n:${items.length}">${items.map((it, i) => `
-    <div class="a-col${i === hi ? ' hi' : ''}" title="${esc(it.label)}：${it.count} 隻">
-      <span class="a-col-v">${it.count}</span>
-      <span class="a-col-bar" style="height:${it.count ? Math.max(3, it.count / max * 100) : 0}%;background:${color(i)}"></span>
-      <span class="a-col-l">${esc(it.short || it.label)}</span>
-    </div>`).join('')}</div>`;
+  return `<div class="a-cols a-stay${sel >= 0 ? ' picked' : ''}" style="--n:${items.length}">${items.map((it, i) => `
+    <button type="button" class="a-col${i === sel ? ' on' : ''}" data-stay-bucket="${i}" aria-pressed="${i === sel}" aria-label="${esc(it.label)}，${it.count} 隻"${it.count ? '' : ' disabled'}>
+      <span class="a-col-v" aria-hidden="true">${it.count}</span>
+      <span class="a-col-bar" style="height:${it.count ? Math.max(3, it.count / max * 100) : 0}%"></span>
+      <span class="a-col-l" aria-hidden="true">${esc(it.short)}</span>
+    </button>`).join('')}</div>`;
 }
 
-// 狗的一列：點了開詳細資訊（data-adog 是 allDogs 的索引）
-function dogRow(r, right, { rank } = {}) {
-  return `<button type="button" class="a-dog" data-adog="${appState.allDogs.indexOf(r.dog)}">
+// 點長條列的名單（3e）：同一張白卡、細線加指向長條的小箭頭；先列 STAY_PICK_FIRST 隻，一隻一行（狗名、籠位、年數）
+function stayPickHtml(dist, pick) {
+  const b = dist[pick.bucket];
+  const shown = pick.all ? b.rows : b.rows.slice(0, STAY_PICK_FIRST);
+  return `<div class="a-pick" style="--at:${pick.bucket};--n:${dist.length}">
+    <h3><b>${esc(b.head)}</b> <span>${b.count} 隻 · 久的排前面</span></h3>
+    <div class="a-list">${shown.map(r => dogRow(r, stayYears(r), { line: true })).join('')}</div>
+    <div class="a-pick-foot">${shown.length < b.count ? `<button type="button" class="a-link" data-stay-all>看全部 ${b.count} 隻</button>` : ''}<button type="button" class="a-link" data-stay-close>收起</button></div>
+  </div>`;
+}
+
+// 狗的一列：點了開詳細資訊（data-adog 是 allDogs 的索引）；line 是一行版（不寫入所日，點長條的名單用）
+function dogRow(r, right, { rank, line } = {}) {
+  return `<button type="button" class="a-dog${line ? ' a-dog-line' : ''}" data-adog="${appState.allDogs.indexOf(r.dog)}">
     ${rank ? `<span class="a-rank r${rank}">${rank}</span>` : ''}
     <span class="a-dog-name">${esc(r.dog.name)}</span>
-    <span class="a-dog-meta">${esc(r.dog.cage || '')}${r.intake ? `｜${r.intake.getFullYear()}/${r.intake.getMonth() + 1}/${r.intake.getDate()} 入所` : ''}</span>
+    <span class="a-dog-meta">${esc(r.dog.cage || '')}${r.intake && !line ? `｜${r.intake.getFullYear()}/${r.intake.getMonth() + 1}/${r.intake.getDate()} 入所` : ''}</span>
     <span class="a-dog-right">${right}</span>
   </button>`;
 }
@@ -280,13 +291,12 @@ function analysisHtml(dogs, today, page = 'stay') {
   const rows = analysisRows(dogs, today);
   if (page === 'quality') return dataChecksHtml(rows);
   const noIntake = rows.filter(r => !r.intake);
-  const share = longStayShare(rows);
   const avgStay = average(rows.filter(r => r.intake).map(r => r.stayDays));
   const out = [];
 
   // 最上面三格大數字（V7 #114 白底；2026-10-08 拿掉「在所滿 1 年 %」，下面圓環已經有）
   out.push(`<section class="a-hero">
-    <div class="a-hero-title">${icon('paw')}${esc(SITE.shelterShort)}在所的狗</div>
+    <div class="a-hero-title">${esc(SITE.shelterShort)}在所的狗</div>
     <div class="a-kpis">
       ${kpi(rows.length, '隻', '目前在所')}
       ${kpi(avgStay == null ? '–' : yearsText(avgStay), '年', '平均在所')}
@@ -294,15 +304,16 @@ function analysisHtml(dogs, today, page = 'stay') {
     <div class="a-hero-note">入所日期取編號（含舊編號）前 8 碼和出入所紀錄裡最早的那天${noIntake.length ? `；${noIntake.length} 隻編號看不出入所日期，不列入時間統計（${dogNames(noIntake.map(r => r.dog))}）` : ''}</div>
   </section>`);
 
-  const dist = stayDistribution(rows).map((b, i) => ({ ...b, short: STAY_SHORT[i] }));
-  const topBucket = dist.reduce((m, b, i) => (b.count > dist[m].count ? i : m), 0);
-  // 2026-10-08 distill：「在所滿 1 年的比例」圓環和「入所年度分布」跟這張是同一份資料，併成這一張的說明
-  out.push(section('入所多久分布', `滿 1 年的 ${share.long} 隻（${share.pct.toFixed(0)}%）；最多的是「${dist[topBucket].label}」，共 ${dist[topBucket].count} 隻`,
-    columnChart(dist, { color: i => STAY_SHADES[i] }), 'pin'));
+  // #739 點長條在下面同一張白卡列那一格的狗（analysisState.stayPick：{ bucket, all }，換子頁時清掉）
+  const dist = stayDistribution(rows);
+  const pick = analysisState.stayPick && dist[analysisState.stayPick.bucket]?.count ? analysisState.stayPick : null;
+  out.push(section('入所多久分布', '點長條看是哪些狗',
+    columnChart(dist, pick ? pick.bucket : -1) + '<p class="a-unit">單位：滿幾年（0＝未滿 1 年）</p>' +
+    (pick ? stayPickHtml(dist, pick) : '')));
 
   const top = longestStay(rows);
   out.push(section('在所最久 Top 10', '點狗名看詳細資訊',
-    `<div class="a-list">${top.map((r, i) => dogRow(r, `<b>${yearsText(r.stayDays)}</b><small> 年</small>`, { rank: i + 1 })).join('')}</div>`, 'paw'));
+    `<div class="a-list">${top.map((r, i) => dogRow(r, stayYears(r), { rank: i + 1 })).join('')}</div>`));
 
   const zones = zoneAverages(rows);
   const zMax = Math.max(1, ...zones.map(z => z.avgDays));
@@ -312,7 +323,7 @@ function analysisHtml(dogs, today, page = 'stay') {
         <span class="a-hbar-l">${esc(z.zone)}</span>
         <span class="a-hbar-track"><span class="a-hbar-fill" style="width:${Math.max(8, z.avgDays / zMax * 100)}%"><b>${yearsText(z.avgDays)} 年</b></span></span>
         <span class="a-hbar-n">${z.count} 隻</span>
-      </div>`).join('')}</div>`, 'pin'));
+      </div>`).join('')}</div>`));
 
   const sex = sexComparison(rows);
   const known = sex.male.count + sex.female.count;
@@ -324,7 +335,7 @@ function analysisHtml(dogs, today, page = 'stay') {
     `<div class="a-split" title="公 ${sex.male.count} 隻、母 ${sex.female.count} 隻">
        <span class="male" style="width:${mPct}%">${sexMark({ sex: '♂' })}${sex.male.count}</span><span class="female" style="width:${100 - mPct}%">${sexMark({ sex: '♀' })}${sex.female.count}</span>
      </div>
-     <p class="a-sex-line">平均在所　${sexAvg('♂', sex.male)}　${sexAvg('♀', sex.female)}</p>`, 'group'));
+     <p class="a-sex-line">平均在所　${sexAvg('♂', sex.male)}　${sexAvg('♀', sex.female)}</p>`));
 
   return out.join('');
 }
@@ -608,6 +619,7 @@ function openInfoPage(page) {
   if (!Object.hasOwn(INFO_PAGES, page)) return;
   const current = { ...history.state, infoPage: '' };
   analysisState.infoPage = page;
+  analysisState.stayPick = null;
   pushPage(current, { ...current, infoPage: page });
   render();
   window.scrollTo(0, 0);
@@ -621,7 +633,7 @@ function restoreInfoPage(page) {
   if (!analysisState.infoPage && previous) document.querySelector(`[data-info-page="${previous}"]`)?.focus();
 }
 
-export { LONG_STAY_MONTHS, STAY_BUCKETS, intakeDate, monthsBetween, daysBetween, analysisRows, zoneOf, formatStay, average, median, dated, stayDistribution, longestStay, zoneAverages, longStayShare, sexComparison, dataCompleteness, checkPhotos, dogKey, parseWalks, historyStartDates, historySpan, recentStart, dogWalkHistory, loadHistory, STAY_SHADES, STAY_SHORT, yearsText, columnChart, dogRow, section, dogNames, kpi, analysisHtml, dataChecksHtml, mdText, walkHistorySection, analysisPageHtml, showAnalysis, hideAnalysis, closeAnalysis, analysisBtn, analysisBack, DEPARTURE_ORDER, DEPARTURE_COLORS, departureDetails, depRosterDefault, parseDeparturesData, loadDepartures, departureDetail, departureYears, filterDepartures, stackedYears, departureRow, departureListHtml, departureRosterHtml, departureSectionHtml, refreshDepartureList, INFO_PAGES, infoHomeHtml, shareFromInfo, infoUpdatesHtml, openInfoPage, restoreInfoPage };
+export { LONG_STAY_MONTHS, STAY_BUCKETS, intakeDate, monthsBetween, daysBetween, analysisRows, zoneOf, formatStay, average, median, dated, stayDistribution, longestStay, zoneAverages, longStayShare, sexComparison, dataCompleteness, checkPhotos, dogKey, parseWalks, historyStartDates, historySpan, recentStart, dogWalkHistory, loadHistory, STAY_PICK_FIRST, yearsText, columnChart, stayPickHtml, dogRow, section, dogNames, kpi, analysisHtml, dataChecksHtml, mdText, walkHistorySection, analysisPageHtml, showAnalysis, hideAnalysis, closeAnalysis, analysisBtn, analysisBack, DEPARTURE_ORDER, DEPARTURE_COLORS, departureDetails, depRosterDefault, parseDeparturesData, loadDepartures, departureDetail, departureYears, filterDepartures, stackedYears, departureRow, departureListHtml, departureRosterHtml, departureSectionHtml, refreshDepartureList, INFO_PAGES, infoHomeHtml, shareFromInfo, infoUpdatesHtml, openInfoPage, restoreInfoPage };
 export { analysisState } from './page-state.js';
 
 export function bindAnalysis() {
@@ -633,6 +645,22 @@ export function bindAnalysis() {
     else if (appState.activeTab === 'groups') {
       backFrom(s => s && s.bqNavigation, () => switchTab(appState.groupsReturnTab, false));
     }
+  });
+  // #739 入所多久分布：點長條列名單、再點同一根或「收起」收回；重畫後焦點留在剛按的地方
+  document.getElementById('main').addEventListener('click', e => {
+    if (!appState.analysisOpen || !e.target.closest) return;
+    const bar = e.target.closest('[data-stay-bucket]');
+    const all = e.target.closest('[data-stay-all]');
+    const close = e.target.closest('[data-stay-close]');
+    if (!bar && !all && !close) return;
+    const current = analysisState.stayPick;
+    const bucket = bar ? Number(bar.dataset.stayBucket) : current?.bucket;
+    if (bar) analysisState.stayPick = current?.bucket === bucket ? null : { bucket, all: false };
+    else if (all) analysisState.stayPick = { ...current, all: true };
+    else analysisState.stayPick = null;
+    render();
+    const target = all ? document.querySelectorAll('#main .a-pick .a-dog')[STAY_PICK_FIRST] : document.querySelector(`#main [data-stay-bucket="${bucket}"]`);
+    target?.focus();
   });
   document.getElementById('main').addEventListener('click', e => {
     const row = e.target.closest('#main .a-dog[data-adog]');

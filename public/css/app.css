@@ -546,8 +546,7 @@ html.lightbox-open { overflow: hidden; }
 /* 分析頁（V5-4，#59）：資訊圖表風格。白色圓角卡片，大數字、圓環、直條圖都是純 CSS／SVG */
 /* V7（#114）：最上面拿掉整塊藍底，改成白底四格大數字 */
 .a-hero { margin-bottom: 14px; }
-.a-hero-title { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--ink-soft); margin: 0 4px 10px; }
-.a-hero-title .icon { font-size: 20px; color: var(--primary); }
+.a-hero-title { font-size: 20px; font-weight: 800; color: var(--ink); margin: 0 4px 10px; }
 .a-kpis { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
 .a-kpi { background: var(--surface); border-radius: var(--radius-card); box-shadow: var(--shadow-card); padding: 12px 14px; }
 .a-kpi-v { font-size: 32px; font-weight: 900; line-height: 1.1; letter-spacing: -0.01em; color: var(--ink); font-variant-numeric: tabular-nums; }
@@ -577,7 +576,34 @@ html.lightbox-open { overflow: hidden; }
 .a-col-bar { align-self: end; border-radius: 6px 6px 2px 2px; min-height: 0; margin: 3px 0 0; }
 .a-col-l { font-size: 11.5px; color: var(--ink-soft); padding-top: 5px; white-space: nowrap; border-top: 1px solid var(--line); }
 .a-col.hi .a-col-v { color: var(--primary); font-size: 14px; }
-.a-cols:has(.hi) .a-col:not(.hi) .a-col-bar { background: #A9C8F6 !important; }
+/* 入所多久分布（#739）：同一個檔案綠；整欄是按鈕，欄之間不留空隙（320px 寬每欄仍有 24px 可點，WCAG 2.5.8），長條自己左右留白。
+   選了一根：那根深綠、數字反白、標籤加粗，其他根中間深淺的綠（看得出高低，值靠上面的數字讀） */
+.a-stay { gap: 0; }
+.a-stay .a-col { border: none; background: none; font: inherit; color: inherit; padding: 0; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.a-stay .a-col:disabled { cursor: default; }
+.a-stay .a-col:focus-visible { outline: 3px solid var(--primary); outline-offset: -2px; }
+.a-stay .a-col-v { justify-self: center; min-width: 22px; padding: 0 3px; border-radius: 3px; }
+.a-stay .a-col-bar { margin: 3px 3px 0; background: var(--primary); }
+.a-stay.picked .a-col-bar { background: #8FB5A6; }
+.a-stay .a-col.on .a-col-bar { background: var(--primary); }
+.a-stay .a-col.on .a-col-v { background: var(--primary); color: #fff; }
+.a-stay .a-col-l { font-size: 12px; }
+.a-stay .a-col.on .a-col-l { color: var(--ink); font-weight: 800; }
+.a-unit { margin: 6px 0 0; font-size: 12px; color: var(--ink-soft); text-align: right; }
+/* 點長條列的名單（3e）：同一張白卡，一條細線加指向選中長條的小箭頭；一隻一行 */
+.a-pick { position: relative; margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); }
+.a-pick::before, .a-pick::after { content: ''; position: absolute; left: calc((var(--at) + .5) * 100% / var(--n)); border: 8px solid transparent; transform: translateX(-50%); }
+.a-pick::before { top: -17px; border-bottom-color: var(--line); }
+.a-pick::after { top: -15px; border-bottom-color: var(--surface); }
+.a-pick h3 { margin: 0 0 2px; font-size: 17px; font-weight: 800; }
+.a-pick h3 span { margin-left: 4px; font-size: 14px; font-weight: 700; color: var(--ink-soft); }
+.a-pick .a-dog.a-dog-line { grid-template-columns: auto 1fr auto; padding: 11px 2px; }
+.a-pick .a-dog.a-dog-line .a-dog-name { grid-column: 1; }
+.a-pick .a-dog.a-dog-line .a-dog-meta { grid-column: 2; font-size: 14px; }
+.a-pick .a-dog.a-dog-line .a-dog-right { grid-column: 3; grid-row: 1; }
+.a-pick-foot { display: flex; justify-content: space-between; border-top: 1px solid var(--line); }
+.a-pick-foot [data-stay-close] { margin-left: auto; }
+.a-link { min-width: 44px; min-height: 44px; padding: 0 2px; border: none; background: none; font: inherit; font-size: 15px; font-weight: 700; color: var(--primary); text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
 
 /* 橫條圖（各區）：數字寫在條子裡 */
 .a-hbars { display: grid; grid-template-columns: max-content 1fr max-content; gap: 8px 8px; align-items: center; }
@@ -602,7 +628,7 @@ html.lightbox-open { overflow: hidden; }
 .a-rank.r1 { background: #F5C343; color: #fff; }
 .a-rank.r2 { background: #B8C2D1; color: #fff; }
 .a-rank.r3 { background: #D69A6A; color: #fff; }
-.a-dog-name { font-size: 15.5px; font-weight: 700; grid-column: 2; }
+.a-dog-name { font-size: 15.5px; font-weight: 800; grid-column: 2; }
 .a-dog-meta { font-size: 12.5px; color: var(--ink-soft); grid-column: 2; }
 .a-dog-right { grid-column: 3; grid-row: 1 / 3; font-size: 18px; white-space: nowrap; color: var(--ink); }
 .a-dog-right b { font-weight: 900; }
@@ -1597,15 +1623,6 @@ header.app .sync-btn:active, header.app .analysis-btn:active, .analysis-open hea
 .a-h-icon, .a-rank { border-radius: 3px; }
 .a-hbar-track, .a-hbar-fill, .a-split { border-radius: 2px; }
 .a-col-bar, .dep-stack { border-radius: 2px 2px 0 0; }
-/* 入所多久分布：JS 給的藍色深淺換成檔案綠深淺 */
-.a-cols:not(.dep-cols) .a-col:nth-child(1) .a-col-bar { background: #D6E5DE !important; }
-.a-cols:not(.dep-cols) .a-col:nth-child(2) .a-col-bar { background: #B5CFC4 !important; }
-.a-cols:not(.dep-cols) .a-col:nth-child(3) .a-col-bar { background: #8FB5A6 !important; }
-.a-cols:not(.dep-cols) .a-col:nth-child(4) .a-col-bar { background: #6A9B89 !important; }
-.a-cols:not(.dep-cols) .a-col:nth-child(5) .a-col-bar { background: #46816D !important; }
-.a-cols:not(.dep-cols) .a-col:nth-child(6) .a-col-bar { background: #2C6A57 !important; }
-.a-cols:not(.dep-cols) .a-col:nth-child(7) .a-col-bar { background: #1F5C4D !important; }
-.a-cols:has(.hi) .a-col:not(.hi) .a-col-bar { background: #B5CFC4 !important; }
 .dep-open, .dep-filters input, .dep-filters select { border-radius: 3px; }
 .hidden-toggle, .hide-btn, .my-note-edit, .photo-crop { border-radius: 3px; }
 .sk, .sk-thumb, .sk-btn { border-radius: 2px; }
@@ -2010,10 +2027,10 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
    平常藏起來；分析頁打開時換掉腳掌和網站名稱，右上角的分析按鈕也收起來（返回只留一個） */
 .head-back, .head-title { display: none; }
 .analysis-open .brand .logo, .analysis-open .brand .titles, .analysis-open .analysis-btn { display: none !important; }
-/* 10-10 K：只有箭頭看不懂，寫出回哪裡；跟電腦版頁首「圖鑑」同一種細框按鈕 */
+/* 10-10 K：只有箭頭看不懂，寫出回哪裡；K 2026-10-28（#739）拿掉外框，只留箭頭和字 */
 .analysis-open .head-back {
   flex: none; display: flex; align-items: center; gap: 2px; height: 44px; margin-left: -6px; padding: 0 14px 0 6px;
-  border: none; border-radius: 3px; background: none; box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .35);
+  border: none; border-radius: 3px; background: none; box-shadow: none;
   color: #fff; font: inherit; font-size: 15px; font-weight: 700; white-space: nowrap; cursor: pointer;
 }
 .analysis-open .head-back .icon { font-size: 22px; }
