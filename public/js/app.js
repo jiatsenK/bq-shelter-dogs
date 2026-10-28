@@ -627,7 +627,7 @@ const WALKER_NAME_SEP = /[、,，\/／&＆+＋。｡．.;；:：|｜·・\s]+/;
 
 // ── 誰遛的名字（#141 第 9 項）──
 // 名字不放進公開的 repo（dogs.json 只有代號）：打開網頁時跟 Worker 拿（GET /api/walkers，Worker 從 D1 讀，#519），
-// 只在畫面上顯示。{ 狗的 key: '嘉文+俐葶+岑' }；拿不到就不顯示名字，其他照常
+// 只在畫面上顯示。{ 狗的 key: '志工甲+志工乙' }；拿不到就不顯示名字，其他照常
 
 appState.walkerNameMemory = '';
 appState.sheetWriteState = 'unknown'; // unknown／on／off
@@ -699,16 +699,15 @@ function refreshTodayWalks() {
   if (Date.now() - appState.todayFetchedAt < TODAY_REFETCH_MS) return;
   loadTodayWalks(); // #460：人工改表由伺服器比對後進 D1 資料包，手機不再每分鐘讀試算表名單
 }
-// 一格好幾個名字（「嘉文+俐葶+岑」「維芬。佳岑」）拆開，用頓號接起來，不重複
+// 一格好幾個名字（「志工甲+志工乙」「志工丙。志工丁」）拆開，用頓號接起來，不重複；名字後面的「經常帶」敘述去掉
 function canonicalWalker(name) {
-  const n = String(name || '').trim().replace(/經常帶.*$/, '').trim();
-  return n === '岑' ? '佳岑' : n;
+  return String(name || '').trim().replace(/經常帶.*$/, '').trim();
 }
 function splitWalkers(text) {
   return [...new Set(String(text || '').split(WALKER_NAME_SEP).map(n => n.trim()).filter(Boolean))];
 }
 // 上次是誰溜的：這支手機今天按過溜了就是自己；否則用試算表的「誰遛的」
-// 同一個人的不同寫法只顯示一次（「岑」＝「佳岑」，K 2026-10-05）
+// 同一個人的不同寫法（例：名字後面多了「經常帶」）只顯示一次
 function walkerList(dog, today = new Date()) {
   return walkRegistration.state(dog, BQDates.localDateKey(today)).walkers;
 }

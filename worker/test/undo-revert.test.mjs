@@ -16,8 +16,8 @@ async function makeDb() {
     DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('d1','老大'),('d2','新來的'),('d3','無編號')"),
     DB.prepare("INSERT INTO v3_dog_numbers(number,dog_id) VALUES('2025061101','d1'),('2026100101','d2')"),
     DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name) VALUES(1,'d3','','無編號')"),
-    DB.prepare("INSERT INTO v3_volunteers(volunteer_id,name,last_seen) VALUES('v1','維芬','2026-10-01'),('v2','小明','2026-10-01')"),
-    DB.prepare("INSERT INTO v3_identity_names(code,name_key,name,volunteer_id) VALUES('c1','維芬','維芬','v1'),('c2','小明','小明','v2')"),
+    DB.prepare("INSERT INTO v3_volunteers(volunteer_id,name,last_seen) VALUES('v1','小美','2026-10-01'),('v2','小明','2026-10-01')"),
+    DB.prepare("INSERT INTO v3_identity_names(code,name_key,name,volunteer_id) VALUES('c1','小美','小美','v1'),('c2','小明','小明','v2')"),
     DB.prepare("INSERT INTO v3_walks(dog_id,walk_date,position,walker_code,dog_number,dog_name) VALUES('d1','2026-01-02',0,'c2','2025061101','老大'),('d1','2026-03-04',0,'c1','2025061101','老大'),('d1','2026-03-04',1,'c2','2025061101','老大'),('d1',?,0,'c9','2025061101','老大'),('d3','2025-12-31',0,'c1','','無編號')").bind(TODAY),
   ]);
   return DB;
@@ -25,12 +25,12 @@ async function makeDb() {
 
 test('今天以前最後一次的日期與那天的名字；今天的紀錄不算', async () => {
   const db = await makeDb();
-  assert.deepEqual(await previousWalk(db, { id: '2025061101', name: '老大' }, TODAY), { date: { date: '2026-03-04' }, walker: '維芬、小明' });
+  assert.deepEqual(await previousWalk(db, { id: '2025061101', name: '老大' }, TODAY), { date: { date: '2026-03-04' }, walker: '小美、小明' });
 });
 
 test('從沒溜過留空白；沒編號的狗用名字找；找不到這隻狗回 null', async () => {
   const db = await makeDb();
   assert.deepEqual(await previousWalk(db, { id: '2026100101', name: '新來的' }, TODAY), { date: { text: '' }, walker: '' });
-  assert.deepEqual(await previousWalk(db, { id: '', name: '無編號' }, TODAY), { date: { date: '2025-12-31' }, walker: '維芬' });
+  assert.deepEqual(await previousWalk(db, { id: '', name: '無編號' }, TODAY), { date: { date: '2025-12-31' }, walker: '小美' });
   assert.equal(await previousWalk(db, { id: '1999', name: '誰' }, TODAY), null);
 });

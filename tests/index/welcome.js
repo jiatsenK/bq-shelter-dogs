@@ -29,7 +29,7 @@ async function runV9Tests() {
     await check('#141 列表模式（收起照片）：一列一隻 天數｜狗名｜籠位｜溜了（K 2026-10-09 拿掉溜狗人），溜狗人在詳細資訊、一格好幾人拆開', async () => {
       UPLOAD_URL = 'https://worker.test';
       // 溜狗人來自 D1 今日紀錄（狗清單同步進 D1 的那一格）
-      fakeD1.set('9902', '嘉文+俐葶。阿明', BQDates.localDateKey(allDogs[1].walkedDate));
+      fakeD1.set('9902', '阿文+阿華。阿明', BQDates.localDateKey(allDogs[1].walkedDate));
       walkRegistration.receiveToday(fakeD1.pack(), allDogs);
       main.querySelector('[data-walk-view="list"]').click();
       const row = main.querySelector('.row-dog[data-dog="1"]');
@@ -55,7 +55,7 @@ async function runV9Tests() {
       eq([warnRow.classList.contains('flagged'), !!warnRow.querySelector(':scope > .warn-note .text'), !warnRow.querySelector('.r-name .icon')], [true, true, true], '警示原文放在那一列下面：');
       eq(phoneStore.get(WALK_VIEW_KEY), 'list', '記住：');
       main.querySelector('.row-dog[data-dog="1"] .r-name').click();
-      eq([...document.querySelectorAll('#detail .last-walk .who-chip')].map(c => c.textContent), ['嘉文', '俐葶', '阿明'], '詳細資訊溜狗人：');
+      eq([...document.querySelectorAll('#detail .last-walk .who-chip')].map(c => c.textContent), ['阿文', '阿華', '阿明'], '詳細資訊溜狗人：');
       hideDetail();
       main.querySelector('[data-walk-view="photo"]').click();
     });
@@ -130,20 +130,20 @@ async function runV9Tests() {
       restoreApi(); fakeD1.forget([dog]); dog.walkedDate = originalDate;
       BQWalkUI.closeWithSheet(); BQWalkUI.hideToast();
     });
-    await check('#141 名字清理：去除經常帶敘述，岑合併佳岑，查詢含舊別名', async () => {
+    await check('#141 名字清理：去除經常帶敘述，查詢含舊別名', async () => {
       UPLOAD_URL = 'https://worker.test';
       let payload;
       fakeApi((name, ...a) => {
-        if (name === 'walkers') return json({ ok: true, names: ['志工甲經常帶', '岑', '佳岑'], walkers: {} });
-        if (name === 'identity') payload = a[1]; return json({ ok: true, identity: { volunteerId: 'test-person', name: '佳岑', codes: ['aaaaaaaaaaaa', 'bbbbbbbbbbbb'] } });
+        if (name === 'walkers') return json({ ok: true, names: ['志工甲經常帶', '志工丙'], walkers: {} });
+        if (name === 'identity') payload = a[1]; return json({ ok: true, identity: { volunteerId: 'test-person', name: '志工丙', codes: ['aaaaaaaaaaaa', 'bbbbbbbbbbbb'] } });
       });
       await loadWalkerNames();
-      eq(walkerNameList, ['志工甲', '佳岑'], '可選人名：');
+      eq(walkerNameList, ['志工甲', '志工丙'], '可選人名：');
       BQWelcome.askNameThenWalk([]);
-      const input = document.getElementById('obInput'); input.value = '佳岑'; input.dispatchEvent(new Event('input', { bubbles: true }));
+      const input = document.getElementById('obInput'); input.value = '志工丙'; input.dispatchEvent(new Event('input', { bubbles: true }));
       document.querySelector('#onboard .ob-next').click();
       for (let i=0;i<8;i++) await new Promise(r=>setTimeout(r,0));
-      eq(payload.name, '佳岑', '以登記名字解析身分，不推測別名：');
+      eq(payload.name, '志工丙', '以登記名字解析身分，不推測別名：');
       eq(loadMyCodes(), ['aaaaaaaaaaaa', 'bbbbbbbbbbbb'], '只採服務提供的名字對照：');
     });
     await check('#141 開頭畫面：沒設定名字先問名字，才進說明；說明看完不再出現', async () => {
@@ -314,25 +314,25 @@ async function runFix141Tests() {
     ];
     groupMap = {}; activeTab = 'walk'; searchQuery = '';
     phoneStore = fakeStorage(); walkRecords = freshWalkRecords(); sheetWriteState = 'unknown';
-    saveWalkerName('佳岑'); UPLOAD_URL = 'https://worker.test';
-    // /walkers 的試算表名單用來認出「岑」是自己；今日狀態來自 D1
-    walkerNames = { '9811': '岑', '9813': '志工乙' }; walkerNameList = [];
-    fakeD1.forget([allDogs[1]]); fakeD1.show([allDogs[0]], '岑'); fakeD1.show([allDogs[2]], '志工乙');
+    saveWalkerName('志工我'); UPLOAD_URL = 'https://worker.test';
+    // /walkers 的試算表名單用來認出「志工我經常帶」是自己；今日狀態來自 D1
+    walkerNames = { '9811': '志工我經常帶', '9813': '志工乙' }; walkerNameList = [];
+    fakeD1.forget([allDogs[1]]); fakeD1.show([allDogs[0]], '志工我經常帶'); fakeD1.show([allDogs[2]], '志工乙');
     const bodies = [], d1Api = fakeD1.api();
     fakeApi((name, body) => { if (name === 'walk') bodies.push(body); return d1Api(name, body); });
-    await check('K 2026-10-05：「岑」和「佳岑」是同一人，只顯示一次', () => {
+    await check('K 2026-10-05：同一人的不同寫法（名字後多了經常帶）只顯示一次', () => {
       const other = { id: '9890', name: '假' };
       fakeD1.forget([other]);
       eq(walkerList(other), [], '沒名字：');
-      fakeD1.show([other], '岑、佳岑、志工乙');
-      eq(walkerList(other), ['佳岑', '志工乙']);
+      fakeD1.show([other], '志工我經常帶、志工我、志工乙');
+      eq(walkerList(other), ['志工我', '志工乙']);
       fakeD1.forget([other]);
     });
-    await check('K 2026-10-05：整群明確送出已有「岑」的狗，仍沿用「岑」，其他狗送「佳岑」', async () => {
+    await check('K 2026-10-05：整群明確送出已有「志工我經常帶」的狗，仍沿用原寫法，其他狗送「志工我」', async () => {
       await walkRegistration.register([allDogs[0], allDogs[1]]); // 狗群頁整群送出
-      eq(bodies.map(b => [b.action, b.walker, b.dogs.map(d => d.id)]), [['walk', '岑', ['9811']], ['walk', '佳岑', ['9812']]], '送出：');
+      eq(bodies.map(b => [b.action, b.walker, b.dogs.map(d => d.id)]), [['walk', '志工我經常帶', ['9811']], ['walk', '志工我', ['9812']]], '送出：');
       showDetail(allDogs[0]);
-      eq([...document.querySelectorAll('.last-walk .who-chip')].map(c => c.firstChild.textContent), ['佳岑'], '顯示：');
+      eq([...document.querySelectorAll('.last-walk .who-chip')].map(c => c.firstChild.textContent), ['志工我'], '顯示：');
       hideDetail(); BQWalkUI.hideToast();
     });
     await check('K 2026-10-05：只有自己一人、是這支手機登記的，名字旁有 ×，按了取消這次登記', async () => {
@@ -353,7 +353,7 @@ async function runFix141Tests() {
       x.click();
       await until(() => bodies.length === 1 && !walkRegistration.pending(allDogs[2]), '撤銷送出：');
       eq(document.querySelector('.last-walk [data-who-undo]'), null, '撤銷後不能再撤：');
-      eq(bodies.map(b => [b.action, b.walker, b.dogs.map(d => [d.id, d.name])]), [['undo', '佳岑', [['9813', '修正戊']]]], '送出：');
+      eq(bodies.map(b => [b.action, b.walker, b.dogs.map(d => [d.id, d.name])]), [['undo', '志工我', [['9813', '修正戊']]]], '送出：');
       hideDetail(); BQWalkUI.hideToast();
     });
   } finally {
