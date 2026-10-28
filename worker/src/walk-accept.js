@@ -114,17 +114,20 @@ export async function listWalkLog(db, env, dog, old, sheet, at) {
   return statements.length ? [...writeBudget(db, env, cost), ...statements] : [];
 }
 
-const MAIN_DOG = dog => `SELECT dog_id,walked_date,walker_codes,row_index FROM v3_sheet_main WHERE ${dog.id ? 'number=?' : "number='' AND name=?"}`;
+const MAIN_DOG = dog => `SELECT dog_id,walked_date,walker,walker_codes,row_index FROM v3_sheet_main WHERE ${dog.id ? 'number=?' : "number='' AND name=?"}`;
 async function uniqueMainDog(db,dog) {
   const matches = await rows(db, MAIN_DOG(dog), dog.id || dog.name);
   if (matches.length !== 1) throw new WalkError(409, '找不到唯一的主清單狗');
   return matches[0];
 }
+// 基準值的溜狗人用主清單存的試算表原文（#707）：代號換名字再以「、」接起來，表上用逗號、空白分隔或名字換不回代號時，
+// 比對會把沒改的表當成人工改表，跟狗清單同步各記一筆。原文還沒補填（NULL，#519）才退回用代號換名字
 async function seedState(db, dog, today) {
   const seed = await uniqueMainDog(db,dog);
-  const people = await rows(db, 'SELECT n.name FROM v3_sheet_main m, json_each(m.walker_codes) w LEFT JOIN v3_identity_names n ON n.code=w.value WHERE m.row_index=? ORDER BY w.key', seed.row_index);
+  const walker = seed.walker ?? (await rows(db, 'SELECT n.name FROM v3_sheet_main m, json_each(m.walker_codes) w LEFT JOIN v3_identity_names n ON n.code=w.value WHERE m.row_index=? ORDER BY w.key', seed.row_index))
+    .map(p => p.name).filter(Boolean).join('、');
   const previous = seed.walked_date === today ? await previousWalk(db, dog, today) : null;
-  return { dog_id: seed.dog_id, effective_date: seed.walked_date || '', walker: people.map(p => p.name).filter(Boolean).join('、'), version: 0, main: seed,
+  return { dog_id: seed.dog_id, effective_date: seed.walked_date || '', walker, version: 0, main: seed,
     ...(previous ? { previous_date: previous.date.date || '', previous_walker: previous.walker } : {}) };
 }
 
