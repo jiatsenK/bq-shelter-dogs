@@ -1,5 +1,5 @@
 import { appState, groupStageState } from './page-state.js';
-import { applyDogsData, effectiveWalkDate, init, loadDogsData, loadWalkerName, photoThumbSrc, render, restOf, walkRegistration, walkedNow } from './app.js';
+import { applyDogsData, dayChip, effectiveWalkDate, init, loadDogsData, loadWalkerName, photoThumbSrc, render, restOf, sexMark, walkRegistration, walkedNow } from './app.js';
 import { showDetail } from './detail.js';
 import { esc, icon, matchesSearch } from './ui-kit.js';
 import { walkKey } from './dog-status.js';
@@ -81,10 +81,11 @@ async function loadGroupStage(retry = false) {
 function refreshGroupStage() {
   if (groupStageState.groupStageData?.state === 'ready' && Date.now() - groupStageState.groupStageData.checkedAt >= 30000 && !groupStageState.groupBusy) loadGroupStage(true);
 }
-function groupTile(dog, index, rear) {
+// #738：一列一隻（每列 50px）：天數色籤（同溜狗表列表）｜照片｜名字＋性別＋籠位；整列點開詳細資訊
+function groupTile(dog, index, today) {
   const blocked = groupBlocked(dog);
   const excluded = groupExcluded.has(dog.name);
-  return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}${appState.searchQuery.trim() && !matchesSearch(dog, appState.searchQuery.trim()) ? ' miss' : ''}" data-gw-dog="${index}" ${rear ? 'tabindex="-1"' : ''} ${!rear && groupStageState.groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${groupStageState.groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}"><span class="gw-tile"><span class="gw-cage">${esc(dog.cage || '待確認')}</span><span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><strong>${esc(dog.name)}</strong></span>${dog.unavailable ? '' : BQWalkUI.walkSyncHtml(dog)}</button>`;
+  return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}${appState.searchQuery.trim() && !matchesSearch(dog, appState.searchQuery.trim()) ? ' miss' : ''}" data-gw-dog="${index}" ${groupStageState.groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${groupStageState.groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}">${dayChip(dog, today)}<span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><span class="gw-who"><span class="gw-line"><span class="gw-nm"><strong class="gw-name">${esc(dog.name)}</strong>${dog.unavailable ? '' : sexMark(dog)}</span><span class="gw-cage">${esc(dog.cage || '待確認')}</span></span>${dog.unavailable ? '' : BQWalkUI.walkSyncHtml(dog)}</span></button>`;
 }
 function groupStageHtml() {
   const identity = loadWalkerName();
@@ -101,6 +102,7 @@ function groupStageHtml() {
   const searchNote = !query ? '' : hits.length ? (hits.length > 1 ? `有 ${hits.length} 群有「${query}」，用下方箭頭切換` : '') : `沒有狗群有「${query}」`;
   const group = currentGroup();
   const dogs = groupDogs(group);
+  const today = new Date();
   const index = groups.indexOf(group);
   const selected = dogs.filter(d => !groupExcluded.has(d.name) && !groupBlocked(d));
   // 比照溜狗表的「溜了／已溜」：這群可登記的狗今天都溜了，按鈕就變「已溜」，再按一次復原（只撤這支手機寫的）
@@ -110,14 +112,14 @@ function groupStageHtml() {
   const walkBtn = done
     ? `<button type="button" id="gwWalk" class="done" data-gw-action="undo" aria-label="這群今天已溜，按一下取消" ${!undoable.length || groupStageState.groupBusy ? 'disabled' : ''}>${icon('tick')}${groupStageState.groupBusy ? '處理中…' : `已溜 · ${walkable.length} 隻`}</button>`
     : `<button type="button" id="gwWalk" ${!selected.length || groupStageState.groupBusy ? 'disabled' : ''}>${groupStageState.groupBusy ? '登記中…' : groupStageState.groupExcept ? `登記其餘 ${selected.length} 隻` : `整群溜了 · ${selected.length} 隻`}</button><button type="button" data-gw-action="except" aria-pressed="${groupStageState.groupExcept}">${groupStageState.groupExcept ? '取消' : '有狗沒溜'}</button>`;
-  const layers = group ? `<div class="gw-layer front" data-column="${group.column}"><div class="gw-cards">${dogs.map((d, i) => groupTile(d, i, false)).join('')}</div></div>` : '';
+  // .gw-layer.front 的 data-column 標出目前這群（換群、測試靠它確認）；沒有另外的樣式
+  const layers = group ? `<div class="gw-layer front" data-column="${group.column}"><div class="gw-cards">${dogs.map((d, i) => groupTile(d, i, today)).join('')}</div></div>` : '';
   return `<section id="groupPage" data-navigation-scope aria-busy="${groupStageState.groupBusy}">
-    <div class="gw-heading"><h2>${esc(group?.label || '還沒有狗群')}<small>${dogs.length} 隻</small></h2></div>
+    <div class="gw-heading"><h2>${esc(group?.label || '還沒有狗群')}<small>${dogs.length} 隻 · 第 ${groups.length ? index + 1 : 0}／${groups.length} 群</small></h2></div>
     ${searchNote ? `<p class="gw-search-note" role="status">${esc(searchNote)}</p>` : ''}
     <p class="section-hint">要改請到試算表「常遛狗群」分頁</p>
 
-    <div class="gw-stage-wrap"><div id="groupStage" class="gw-stage" style="--rows:${Math.max(1, Math.ceil((dogs.length + 2) / 4))}" aria-label="目前狗群">${layers}</div></div>
-    <div class="gw-pages"><span>${groups.length ? index + 1 : 0} / ${groups.length}</span></div>
+    <div id="groupStage" class="gw-stage" aria-label="目前狗群">${layers}</div>
     <p id="gwFeedback" role="status">${esc(groupStageState.groupBusy ? '處理中…' : groupStageState.groupFeedback)}</p>
     ${group ? `<p class="gw-restrictions">${dogs.some(groupBlocked) ? `不登記：${dogs.filter(groupBlocked).map(d => `${esc(d.name)}（${esc(groupBlocked(d))}）`).join('、')}` : ''}</p>` : ''}
     <div class="gw-secondary-actions">
@@ -135,12 +137,7 @@ function changeGroup(step) {
   // 頭尾相接（K 2026-10-17）：最後一群再按下一群回到第一群，反之亦然
   if (groups.length < 2) return;
   const next = groups[(groups.indexOf(currentGroup()) + step + groups.length) % groups.length];
-  const previous = new Map([...document.querySelectorAll('.gw-layer')].map(el => [el.dataset.column, { transform: getComputedStyle(el).transform, opacity: getComputedStyle(el).opacity }]));
   groupStageState.groupColumn = next.column; resetGroupSelection(); render();
-  if (!matchMedia('(prefers-reduced-motion: reduce)').matches) document.querySelectorAll('.gw-layer').forEach(el => {
-    const before = previous.get(el.dataset.column);
-    if (before) el.animate([before, { transform: getComputedStyle(el).transform, opacity: getComputedStyle(el).opacity }], { duration: 320, easing: 'cubic-bezier(.16,1,.3,1)' });
-  });
   document.querySelector('#groupPage h2')?.setAttribute('tabindex', '-1');
   document.querySelector('#groupPage h2')?.focus({ preventScroll: true });
 }
