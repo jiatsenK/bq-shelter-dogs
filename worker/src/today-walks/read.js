@@ -52,7 +52,7 @@ export async function readWalkers(db) {
   const stateOf = new Map((states.results || []).map(s => [s.dog_key, s]));
   const walkers = {}, dates = {}, lastSeen = new Map(); // 名字 → 最近一次 { date, i: 名單裡第幾位 }
   for (const r of main.results || []) {
-    const key = r.number || `名:${r.name}`;
+    const key = keyOf({ id: r.number, name: r.name });
     const { date, walker } = currentWalk(stateOf.get(key), r, namesOf.get(r.row_index));
     walkers[key] = walker;
     dates[key] = date;

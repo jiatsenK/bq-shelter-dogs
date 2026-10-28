@@ -5,7 +5,7 @@
 // 建立：todayWalks(env, { sheet, now })。sheet 是叫 Apps Script 小程式的函式（預設 sheet-write.js 的 callSheet），
 // now 是時鐘（預設 Date.now；排程傳排程時間）。每個入口只收領域資料。
 import { callSheet } from '../sheet-write.js';
-import { taiwanDay } from './shared.js';
+import { one, taiwanDay } from './shared.js';
 import { acceptWalk } from './accept.js';
 import { observeAll, listWalkLog } from './observe.js';
 import { confirmWalk } from './receipt.js';
@@ -41,6 +41,11 @@ export function todayWalks(env, { sheet = callSheet, now = Date.now } = {}) {
     async scan() {
       if (!background(env)) return false;
       return scanWalks(db, env, sheet, now());
+    },
+    // 志工接受過的請求結果（網頁沒收到回應時用同一個 requestId 來問）；沒有回 null
+    async result(requestId) {
+      const found = await one(db, 'SELECT result_json FROM v3_walk_requests WHERE request_id=?', requestId);
+      return found ? JSON.parse(found.result_json) : null;
     },
     today: () => readAcceptedWalks(db, taiwanDay(now())),
     walkers: () => readWalkers(db),

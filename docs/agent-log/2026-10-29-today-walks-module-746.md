@@ -19,7 +19,13 @@
   - `walk-reconcile.test.mjs`「還有差異沒收完」原本測「pending 不收」，跟新規則（同日合併要收 pending）衝突；改成測「派送結果不明不收」。
 - 新的保留量比舊常數小（例如一次派送 96 → 71、一次溜了 32＋8＋4n → 約 27＋2＋6n）；每列成本照結構算，SQLite `total_changes()` 測試確認都夠。
 - `apps-script/sheet-write.gs:531` 註解仍寫 `walk-reconcile.js`，為了不動 GAS 檔沒改（只是註解）。
-- 時鐘統一用 `now()`：排程傳排程時間；寫回退避原本是 `max(排程時間, 現在)`，改成排程時間。
+- 時鐘統一用 `now()`（排程傳排程時間）；只有寫回退避保留 `max(now, 現在)`，叫 Apps Script 花的時間不能讓重試提早到期（審查指出後補回）。
+
+## 審查（Standards／Spec 兩軸，固定基準 main）
+
+- 已補修：`scripts/adr-index.mjs` 只讀 `worker/src` 第一層，搬家後 `docs/adr/README.md` 少了 4 個環境變數 → 改讀子資料夾（不含 admin/）；`/walk/result` 改走 module 的 `result()`；保險掃描比對時重查目前工作的狀態（讀表期間剛被派送的不收）；退避時鐘；`dispatch.js` 改用 `same()`、`read.js` 改用 `keyOf`；預算測試補「清掉衝突」。
+- 沒改、留給之後判斷：測試檔仍可 import 內部檔（standards 測試只管 worker/src、scripts 的程式）；`listWalkLog`（狗清單同步）與中斷後恢復派送沒有單獨的 total_changes 測試；`date`＋`walker` 一對、`shared.js` 什麼都放等寫法建議。
+- `scripts/diagram-reminder.test.mjs` 在這台 Windows 上 main 原本就失敗（同一份 main 另開 worktree 也一樣），不是這次造成。
 
 ## 相關 PR
 

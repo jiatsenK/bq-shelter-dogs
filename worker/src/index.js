@@ -742,10 +742,9 @@ const SITE_ROUTES = {
       if (!env?.DB) return fail(405, '只能讀取登記結果', origin);
       const id = url.searchParams.get('requestId') || '';
       if (!/^[A-Za-z0-9_-]{8,100}$/.test(id)) return fail(400, '請求識別不對', origin);
-      const found = await env.DB.prepare('SELECT result_json FROM v3_walk_requests WHERE request_id=?').bind(id).first();
-      if (!found) return fail(404, '尚未找到接受結果', origin);
-      const result = JSON.parse(found.result_json);
-      return reply(200, { ok: true, source: 'd1', today: result.operationDate, results: [result], snapshot: await todayWalks(env).today() }, origin);
+      const walks = todayWalks(env), result = await walks.result(id);
+      if (!result) return fail(404, '尚未找到接受結果', origin);
+      return reply(200, { ok: true, source: 'd1', today: result.operationDate, results: [result], snapshot: await walks.today() }, origin);
     } },
 };
 

@@ -2,7 +2,7 @@
 // 依單次寫入上限拆批，批量只是內部執行方式。預算拒絕或 D1 故障就停下留待下一輪（往外丟 DispatchError），
 // 只有版本競爭才逐隻重來各自判斷。
 import { REFUSED_CODES } from '../sheet-write.js';
-import { guard, keyOf, one, reads, CURRENT_JOB, WalkError } from './shared.js';
+import { guard, keyOf, same, one, reads, CURRENT_JOB, WalkError } from './shared.js';
 import { costOf, reserve, retryBudget, transitionBudget, DISPATCH_COST, FAILURE, GRANT } from './budget.js';
 import { confirmWalk } from './receipt.js';
 import { observeOne, knownIntermediate } from './observe.js';
@@ -144,8 +144,9 @@ async function dispatchBatch(db, env, sheet, now, items) {
   }
   const statements = [];
   for (const { j, version, failures, error } of failed) {
+    // 退避從「現在」起算：排程的 now 固定在排程時間，叫 Apps Script 可能已經花了幾十秒，不能讓重試提早到期
     const next = refused || failures >= RETRY_LIMIT ? STOPPED_AT
-      : new Date(now + BACKOFF_MINUTES[Math.min(failures - 1, BACKOFF_MINUTES.length - 1)] * 60000).toISOString();
+      : new Date(Math.max(now, Date.now()) + BACKOFF_MINUTES[Math.min(failures - 1, BACKOFF_MINUTES.length - 1)] * 60000).toISOString();
     statements.push(...await transitionBudget(db, env, now, j.key, j.dispatchId, FAILURE, prepaid(j)),
       db.prepare('UPDATE v3_walk_retry SET version=?,failures=? WHERE dog_key=? AND dispatch_id=?').bind(version, failures, j.key, j.dispatchId),
       db.prepare("UPDATE v3_walk_outbox SET status='retry',error=?,next_attempt_at=? WHERE dog_key=? AND dispatch_id=? AND status='dispatching'")
@@ -166,19 +167,20 @@ export async function writebackTarget(db, env, now, input) {
   const state = snap ? snap.state : await one(db, 'SELECT * FROM v3_walk_state WHERE dog_key=?', key);
   if (!state) throw new WalkError(404, '尚未接管這隻狗');
   const job = snap ? snap.job : await one(db, 'SELECT * FROM v3_walk_outbox WHERE dog_key=? AND version=?', key, state.version);
-  if (job?.status === 'synced' && input.current?.date === state.effective_date && input.current?.walker === state.walker) {
+  const target = { date: state.effective_date, walker: state.walker };
+  if (job?.status === 'synced' && input.current && same(input.current, target)) {
     return { skip: true, version: state.version, dispatchId: input.dispatchId, current: input.current };
   }
-  if (!input.current || (input.current.date !== state.base_date || input.current.walker !== state.base_walker)) {
+  if (!input.current || !same(input.current, { date: state.base_date, walker: state.base_walker })) {
     // 目前目標相符可處理回應遺失；其他已觀測修改留待重新比對，絕不盲寫。
-    const matchesCurrent = input.current?.date === state.effective_date && input.current?.walker === state.walker && !!job?.dispatch_id;
+    const matchesCurrent = !!input.current && same(input.current, target) && !!job?.dispatch_id;
     const intermediate = input.current && await knownIntermediate(db, key, input.current, state.version);
     if (!matchesCurrent && !intermediate) throw new WalkError(409, '觀測到試算表衝突，停止覆寫');
   }
   if (!job || !['dispatching', 'retry', 'unconfirmed', 'pending'].includes(job.status)) throw new WalkError(409, '沒有待寫回目標');
   if (job.dispatch_id === input.dispatchId && job.status === 'dispatching') {
     const granted = snap ? snap.delivery?.dispatch_id === input.dispatchId : await one(db, 'SELECT version FROM v3_walk_state WHERE dog_key=? AND version=? AND EXISTS(SELECT 1 FROM v3_walk_outbox WHERE dog_key=? AND version=? AND dispatch_id=? AND status=\'dispatching\') AND EXISTS(SELECT 1 FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?)', key, state.version, key, state.version, input.dispatchId, key, input.dispatchId);
-    if (granted) return { version: state.version, dispatchId: input.dispatchId, current: { date: state.effective_date, walker: state.walker } };
+    if (granted) return { version: state.version, dispatchId: input.dispatchId, current: target };
   }
   // 舊喚醒也只取目前版本；在 script lock 中授予目前版本派送識別。
   await db.batch([
@@ -187,5 +189,5 @@ export async function writebackTarget(db, env, now, input) {
     db.prepare('INSERT INTO v3_walk_delivery VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET dispatch_id=excluded.dispatch_id,started_at=excluded.started_at').bind(key, input.dispatchId, new Date(now).toISOString()),
     db.prepare("UPDATE v3_walk_outbox SET dispatch_id=?,status='dispatching' WHERE dog_key=? AND version=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?)").bind(input.dispatchId, key, state.version, key, state.version),
   ]);
-  return { version: state.version, dispatchId: input.dispatchId, current: { date: state.effective_date, walker: state.walker } };
+  return { version: state.version, dispatchId: input.dispatchId, current: target };
 }

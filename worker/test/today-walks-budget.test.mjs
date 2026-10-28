@@ -96,6 +96,8 @@ test('收下人工改表：同日刪人、改回較早的日子（刪溜狗紀�
     await measure(env, '保險掃描收下', async () => assert.equal((await todayWalks({ ...env, WALK_RETRY_ENABLED: 'true' }).scan()).changed, 1));
     await env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(2,'dog','9001','測試狗','2026-10-01')").run();
     await measure(env, '比對失敗記進 v3_walk_conflicts', async () => assert.equal((await observe({ date: '2026-09-03', walker: '乙' }))[0].ok, false));
+    await env.DB.prepare('DELETE FROM v3_sheet_main WHERE row_index=2').run();
+    await measure(env, '比對成功清掉 v3_walk_conflicts', async () => assert.equal((await observe({ date: '2026-09-03', walker: '乙' }))[0].changed, true));
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
 

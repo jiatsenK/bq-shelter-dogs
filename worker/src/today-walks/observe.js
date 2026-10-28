@@ -58,7 +58,8 @@ const validObserved = observed => observed && typeof observed.walker === 'string
     Number.isFinite(Date.parse(observed.date)) && new Date(observed.date).toISOString().slice(0, 10) === observed.date));
 
 // seen：回填同一次讀到的衝突紀錄；狀態沒變時也回填快照，給 target 沿用，不再重讀。
-// expected：保險掃描讀表前看到的版本；讀表期間有新登記（版本變了）就先不收，留給下一輪，避免新登記被撤銷。
+// expected：保險掃描讀表前看到的版本；讀表期間有新登記（版本變了），或這一版剛交給 Apps Script（派送中、結果不明、等重試），
+// 就先不收，留給下一輪或派送自己收尾，避免新登記被撤銷。
 async function compare(db, env, now, dog, observed, seen, expected) {
   if (!validObserved(observed)) throw new WalkError(409, '試算表日期或名單無法確認');
   const key = keyOf(dog);
@@ -67,7 +68,7 @@ async function compare(db, env, now, dog, observed, seen, expected) {
     ['SELECT dog_key FROM v3_walk_conflicts WHERE dog_key=?', key], [CURRENT_JOB, key],
     ['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', key], [RETRY, key]);
   seen.conflict = !!conflict;
-  if (expected !== undefined && (stateRow?.version || 0) !== expected) return { changed: false, deferred: true };
+  if (expected !== undefined && ((stateRow?.version || 0) !== expected || (currentJob && !['synced', 'pending'].includes(currentJob.status)))) return { changed: false, deferred: true };
   const old = stateRow || await seedState(db, dog, taiwanDay(now));
   if (mains.length !== 1 || mains[0].dog_id !== old.dog_id) throw new WalkError(409, '找不到唯一的主清單狗');
   const base = { date: old.base_date ?? old.effective_date, walker: old.base_walker ?? old.walker };
