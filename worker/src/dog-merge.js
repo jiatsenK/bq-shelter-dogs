@@ -9,6 +9,7 @@
 // - 讀寫都用 dog_id 篩；SCAN_OK 這幾張表沒有 dog_id 開頭的索引，會整張掃。合併是管理者偶爾按的操作、這幾張表都小，
 //   不為它加索引（加索引每次寫入都多寫一列）；dog-merge.test.mjs 用查詢計畫確認其他表都走索引（CODING_STANDARDS.md D1）。
 import { editError } from './dog-edit.js';
+import { editLogWrites } from './editlog.js';
 import { joinStays, withoutStays } from './stays.js';
 
 export const SCAN_OK = {
@@ -129,12 +130,8 @@ function guard(db, id, dogId, revision) {
   return db.prepare('INSERT INTO v3_dog_edit_guard(id,valid) VALUES(?,EXISTS(SELECT 1 FROM v3_dog_edit_state WHERE dog_id=? AND revision=?))').bind(id, dogId, revision);
 }
 function logStatements(db, kind, targetId, number, before, after, actor, requestId) {
-  return [
-    db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) VALUES(?,?,?,?,?,?,?,?)')
-      .bind(new Date().toISOString(), '', '管理者', kind, targetId, number, json(before), json(after)),
-    db.prepare("INSERT INTO v3_dog_edit_actors(request_id,log_id,actor_subject,actor_email,source) VALUES(?,last_insert_rowid(),?,?,'access')")
-      .bind(requestId, actor.subject, actor.email),
-  ];
+  return editLogWrites(db, { at: new Date().toISOString(), name: '管理者', kind, dogId: targetId, number, before, after, source: 'access',
+    actor: { requestId, subject: actor.subject, email: actor.email } });
 }
 function checkInput(input, keys, actor) {
   if (!input || Object.keys(input).sort().join(',') !== keys || !Number.isSafeInteger(input.revision)) throw editError(400, '請重新預覽後再合併');

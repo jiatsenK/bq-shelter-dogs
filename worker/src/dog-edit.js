@@ -1,4 +1,5 @@
 import { cleanStayTable, stayTable, storedStays } from './stays.js';
+import { editLogWrites } from './editlog.js';
 
 export const editError = (status, message) => Object.assign(new Error(message), { status });
 const conflict = () => editError(409, '這隻狗的資料已變更，草稿仍保留；請重新讀取後核對再儲存');
@@ -231,24 +232,21 @@ export async function saveDogEdit(
   }
   const kind = { fixedCare: 'fixed-care', numbers: 'former' }[field] || field;
   writes.push(
-    statement(
-      `INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json) SELECT ?,?,?,?,?,?,?,? WHERE ${guard}`,
-      [
-        new Date(now).toISOString(),
-        actor ? '' : editor.code || '',
-        actor ? '管理者' : editor.name,
+    ...editLogWrites(
+      db,
+      {
+        at: new Date(now).toISOString(),
+        code: actor ? '' : editor.code || '',
+        name: actor ? '管理者' : editor.name,
         kind,
         dogId,
-        dogNumber ?? before.currentNumbers[0] ?? '',
-        json(field === 'photo' ? photoBefore : field === 'stays' && !before.stays.length ? null : before[field]),
-        json(field === 'stays' && !value.length ? null : value)
-      ]
-    )
-  );
-  writes.push(
-    statement(
-      `INSERT INTO v3_dog_edit_actors(request_id,log_id,actor_subject,actor_email,source) SELECT ?,last_insert_rowid(),?,?,? WHERE ${guard}`,
-      [token, actor?.subject || '', actor?.email || '', actor ? 'access' : 'volunteer']
+        number: dogNumber ?? before.currentNumbers[0] ?? '',
+        before: field === 'photo' ? photoBefore : field === 'stays' && !before.stays.length ? null : before[field],
+        after: field === 'stays' && !value.length ? null : value,
+        source: actor ? 'access' : 'volunteer',
+        actor: { requestId: token, subject: actor?.subject || '', email: actor?.email || '' }
+      },
+      [guard, dogId, token]
     )
   );
   const result = await db.batch(writes);

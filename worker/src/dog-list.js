@@ -6,7 +6,7 @@ import { guardedDogBatch } from './dog-edit.js';
 // - D1 有、試算表沒有的只列出來（v3_sync_state 的 dog_list_extra，含每次掃描時間），不自動刪；管理網站資料檢查顯示（#567）。
 // 指紋只是「上次收過哪一版」，存在 v3_sync_state 一列 JSON；遺失只會讓下一次掃描多送幾列，不影響資料。
 import { splitNames } from './sheet-read.js';
-import { walkerCode, logEdit } from './editlog.js';
+import { walkerCode, editLogWrites } from './editlog.js';
 import { judgeDeparture, nameKey } from './departure-rules.js';
 import { taiwanYmd } from './sync-plan.js';
 import { SYNCED_AT_KEY } from './compact.js';
@@ -129,7 +129,7 @@ async function applyMain(db, row, list, env, fp) {
     if (date && !(await db.prepare('SELECT 1 FROM v3_walks WHERE dog_id=? AND walk_date=? LIMIT 1').bind(dogId, date).first())) out.push(...walkDay(db, dogId, date, dog, codes));
     list.push({ row_index: rowIndex, dog_id: dogId, number: dog.id, name: dog.name, cage, note, walked_date: date, walker: text(row.walker), walker_codes: JSON.stringify(codes) });
   }
-  if(returnedLog)out.push(db.prepare("INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json,source) VALUES(?,?,?,?,?,?,?,?,'sheet')").bind(new Date().toISOString(),'',returnedLog.editor.name,returnedLog.kind,returnedLog.dogId,returnedLog.dogNumber,JSON.stringify(returnedLog.before),JSON.stringify(returnedLog.after)));
+  if(returnedLog)out.push(...editLogWrites(db,{at:new Date().toISOString(),name:returnedLog.editor.name,kind:returnedLog.kind,dogId:returnedLog.dogId,number:returnedLog.dogNumber,before:returnedLog.before,after:returnedLog.after,source:'sheet'}));
   if(out.length){const result=await guardedDogBatch(db,expected,[...out,db.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(targetDogId)]);const revision=result.at(-1).results[0]?.revision;for(const item of list)if(item.dog_id===targetDogId)item.revision=revision;}
   return out.length > 0;
 }

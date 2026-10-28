@@ -2,11 +2,11 @@
 // 參數全走白名單，任何未知參數回 400。每次請求 1 個查詢：照主鍵（id）順序走，游標接續、LIMIT 一頁＋1 判斷有沒有下一頁，
 // 不算總數。沒有篩選時只讀一頁的列；有篩選時 SQLite 沿主鍵往下找到湊滿一頁為止，符合的很少時最多走完整張表（搜尋全部的代價，見 docs/operations/admin-records.md）。
 // Access 身分（actor_email）只回後台，公開的 /api/edits 不帶。
-import { KIND_LABELS } from '../editlog.js';
+import { EDIT_SOURCES, KIND_LABELS } from '../editlog.js';
 
 const PARAMS = new Set(['q', 'kind', 'dog', 'actor', 'source', 'from', 'to', 'order', 'cursor', 'size']);
 const SIZES = [25, 50, 100];
-const SOURCES = ['access', 'volunteer', 'sheet', 'legacy']; // v3_edit_log.source 沒有 CHECK，允許的值以這裡為準（#672）
+const SOURCES = [...EDIT_SOURCES, 'legacy']; // legacy：沒有來源的舊紀錄，只用來篩選
 const TEXT_MAX = 100;
 const bad = message => Object.assign(new Error(message), { status: 400 });
 const like = s => `%${s.replace(/[\\%_]/g, c => `\\${c}`)}%`;
