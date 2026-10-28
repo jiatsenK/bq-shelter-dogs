@@ -45,7 +45,10 @@ jobs:
           echo "還沒在 GitHub 設 CLOUDFLARE_API_TOKEN、CLOUDFLARE_ACCOUNT_ID、WORKERS_SUBDOMAIN（步驟見 docs/setup/CLOUDFLARE_SETUP.md）。"
           exit 1
 
+      # 系統架構圖頁的「第幾版、哪天更新」從 git 歷史數，只抓 1 個 commit 會全部變成第 1 版（scripts/admin-diagrams.mjs）
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:

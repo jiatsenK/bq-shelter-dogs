@@ -108,6 +108,15 @@
         ],
         "createdAt": "2026-10-28T05:22:42.211Z",
         "reason": "Claude: lightbox <img alt=\"\"> 的 src 由程式在開燈箱時設定，不是壞圖（既有程式，本次未改）"
+      },
+      {
+        "rule": "marquee",
+        "value": "*",
+        "files": [
+          "admin/public/diagrams.html"
+        ],
+        "createdAt": "2026-10-28T06:30:35.842Z",
+        "reason": "Claude 判讀：diagrams.html、diagrams.js、admin.css 沒有動畫或自動捲動；被抓到的 .animated-dots 是 vendor Tabler CSS（同 links.html 的既有判讀）"
       }
     ]
   }

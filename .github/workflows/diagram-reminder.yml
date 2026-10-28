@@ -1,0 +1,38 @@
+# 架構圖重畫提醒（scripts/diagram-reminder.mjs，K 2026-10-28）：PR 改到架構相關檔案但沒改對應的圖，就在 PR 留言列出來，不擋合併
+# - 只在 PR 碰到下面這些路徑時才跑，省 Actions 分鐘數；推新提交會重跑並更新同一則留言，不洗版
+# - 名稱、時間、次數不一致由測試（scripts/diagram-facts.test.mjs）擋，這裡只提醒測試比不了的流程與箭頭
+name: 架構圖重畫提醒
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - 'wrangler*.jsonc'
+      - 'worker/src/**'
+      - 'apps-script/**'
+      - 'migrations/**'
+      - '.github/workflows/**'
+      - 'docs/ARCHITECTURE_NOW.md'
+      - 'docs/diagrams/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: diagram-reminder-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  remind:
+    # fork 來的 PR 沒有寫入權限，留言會失敗
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - name: 檢查
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: node scripts/diagram-reminder.mjs ${{ github.event.pull_request.number }}
