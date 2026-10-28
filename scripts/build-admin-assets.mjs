@@ -5,10 +5,10 @@ import { DIAGRAMS, extractDiagram, gitHistory, diagramsCss } from './admin-diagr
 // node --test 平行跑時，多個測試行程會同時建置同一個資料夾：
 // 內容相同就不重寫；要寫時先寫暫存檔再 rename，別的行程只會讀到舊檔或完整新檔。
 async function publish(source, dest) {
-  await publishText(await readFile(source), dest);
+  await publishContent(await readFile(source), dest);
 }
-async function publishText(text, dest) {
-  const content = Buffer.from(text);
+async function publishContent(data, dest) {
+  const content = Buffer.from(data);
   const current = await readFile(dest).catch(() => null);
   if (current && current.equals(content)) return;
   const temp = new URL(`${dest.href}.${process.pid}.${Date.now()}.tmp`);
@@ -44,7 +44,7 @@ export async function buildAdminAssets() {
     const file = `docs/diagrams/${name}.html`;
     diagrams.push({ ...extractDiagram(await readFile(new URL(`../${file}`, import.meta.url), 'utf8'), name), ...gitHistory(file, root) });
   }
-  await publishText(diagramsCss(diagrams), new URL('diagrams.css', target));
-  await publishText(JSON.stringify(diagrams.map(({ css, ...d }) => d)), new URL('diagrams.json', target));
+  await publishContent(diagramsCss(diagrams), new URL('diagrams.css', target));
+  await publishContent(JSON.stringify(diagrams.map(({ css, ...d }) => d)), new URL('diagrams.json', target));
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await buildAdminAssets();

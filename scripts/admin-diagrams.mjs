@@ -4,7 +4,12 @@ import { execFileSync } from 'node:child_process';
 // 管理網站 CSP 是 style-src 'self'，所以圖裡的 <style> 拆成外部 CSS（每張圖各自加範圍，避免同名 class 互相蓋）；
 // 字型也不能連 Google Fonts，改用 admin/public/vendor/fonts/ 自架的拉丁字型，中文用電腦內建字型。
 // 順序：先看整體，再看兩條資料路線，最後看排程與環境（K 2026-10-28）。
-export const DIAGRAMS = ['architecture', 'data-flows', 'writeback-sequence', 'sheet-sync-sequence', 'daily-schedule', 'environments'];
+// 標題是每張圖 <h1> 裡一定有的字，事實核對與 PR 提醒共用
+export const DIAGRAM_TITLES = {
+  'architecture': '系統架構', 'data-flows': '各類資料的流向', 'writeback-sequence': '網站登記寫回試算表',
+  'sheet-sync-sequence': '試算表改動回到 D1', 'daily-schedule': '一天裡的排程', 'environments': '環境與部署',
+};
+export const DIAGRAMS = Object.keys(DIAGRAM_TITLES);
 
 const FONT_FACES = [
   ['Geist', 400, 'normal', 'geist-sans-latin-400-normal'],
@@ -15,8 +20,8 @@ const FONT_FACES = [
 ].map(([family, weight, style, file]) => `@font-face { font-family: '${family}'; font-weight: ${weight}; font-style: ${style}; font-display: swap; src: url('../vendor/fonts/${file}.woff2') format('woff2'); }`).join('\n');
 
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', '#39': "'" };
-const text = html => html.replace(/<[^>]+>/g, '').replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => ENTITIES[e]).replace(/\s+/g, ' ').trim();
-const one = (html, re, what, name) => {
+export const plainText = html => html.replace(/<[^>]+>/g, '').replace(/&(amp|lt|gt|quot|#39);/g, (_, e) => ENTITIES[e]).replace(/\s+/g, ' ').trim();
+const matchOne = (html, re, what, name) => {
   const match = html.match(re);
   if (!match) throw new Error(`${name}.html 找不到${what}`);
   return match[1];
@@ -38,14 +43,14 @@ export function scopeCss(css, scope) {
 }
 
 export function extractDiagram(html, name) {
-  const svgFull = one(html, /(<svg[\s\S]*<\/svg>)/, ' <svg>', name);
-  const css = one(svgFull, /<style>([\s\S]*?)<\/style>/, '圖裡的 <style>', name);
+  const svgFull = matchOne(html, /(<svg[\s\S]*<\/svg>)/, ' <svg>', name);
+  const css = matchOne(svgFull, /<style>([\s\S]*?)<\/style>/, '圖裡的 <style>', name);
   const svg = prefixIds(svgFull.replace(/\s*<style>[\s\S]*?<\/style>/, ''), name);
   if (/\sstyle="/.test(svg)) throw new Error(`${name}.html 的圖有 style 屬性，管理網站 CSP 會擋；改用 class`);
   return {
     name,
-    title: text(one(html, /<h1[^>]*>([\s\S]*?)<\/h1>/, '標題 <h1>', name)),
-    note: text(one(html, /<p class="note">([\s\S]*?)<\/p>/, '說明 <p class="note">', name)),
+    title: plainText(matchOne(html, /<h1[^>]*>([\s\S]*?)<\/h1>/, '標題 <h1>', name)),
+    note: plainText(matchOne(html, /<p class="note">([\s\S]*?)<\/p>/, '說明 <p class="note">', name)),
     svg,
     css: scopeCss(css, `#diagram-${name}`),
   };

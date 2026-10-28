@@ -15,8 +15,8 @@ async function loadDiagrams() {
   const status = byId('diagram-status');
   const result = await readDiagrams();
   const diagrams = result.ok && Array.isArray(result.data) && result.data.every(d => d && typeof d.name === 'string' && typeof d.svg === 'string') ? result.data : null;
-  if (!diagrams) { status.dataset.error = 'true'; status.textContent = '架構圖讀取失敗，請重新整理。'; return; }
   try {
+    if (!diagrams) throw new Error('架構圖格式不對');
     byId('diagrams').replaceChildren(...diagrams.map(d => {
       const section = element('section', undefined, 'card check-card diagram-card');
       section.id = `diagram-${d.name}`;
@@ -29,7 +29,8 @@ async function loadDiagrams() {
       return section;
     }));
   } catch {
-    status.dataset.error = 'true'; status.textContent = '架構圖讀取失敗，請重新整理。'; return;
+    status.dataset.error = 'true'; status.textContent = '架構圖讀取失敗，請重新整理。';
+    return;
   }
   byId('diagram-jump').replaceChildren(...diagrams.map(d => {
     const link = element('a', d.title);

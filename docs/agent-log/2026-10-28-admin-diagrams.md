@@ -11,6 +11,9 @@
   - `scripts/diagram-facts.test.mjs`：Worker／D1／R2 名稱、排程數量與台灣時間、GAS 補送與掃描時間、錯開分鐘、垃圾桶天數、重試間隔與上限、端點、GAS 動作、待通知名稱、preview 標籤。
   - `scripts/diagram-reminder.mjs`＋`.github/workflows/diagram-reminder.yml`：PR 碰到架構相關路徑才跑，同一則留言更新不洗版。
   - 測試：`scripts/admin-diagrams.test.mjs`、`scripts/diagram-reminder.test.mjs`、`tests/admin-diagrams.cjs`（正式 CSP 下無違規、字型載入、marker 不串圖）；`scripts/admin-table.test.mjs` 側欄改八頁三組。
+- 審查（Standards／Spec 兩軸）後補修：圖名與標題收成 `scripts/admin-diagrams.mjs` 的 `DIAGRAM_TITLES` 一份，事實核對與提醒共用；HTML 轉文字共用 `plainText`。`.github/workflows/tests.yml` 原本 `paths-ignore: docs/**`，只改圖的 PR 不會跑事實核對，改成 `paths` 排除文件後再加回 `docs/diagrams/**`。`tests/admin.cjs` 側欄斷言加「系統」組。
+- 限制：repo 沒有設必要檢查（tests.yml 註解：私人 repo 免費方案不能設），事實核對失敗是 PR 上的紅叉，不會真的鎖住合併；靠 K 合併前看。
+- impeccable detect 在 `diagrams.html` 抓到 marquee，是 vendor Tabler 的 `.animated-dots`，比照 links.html 加窄範圍忽略。
 - 例外：測試照片空間圖上寫「photos-test」（省略 `bq-shelter-` 開頭），測試照這個省略規則比對，沒改圖。
 - 未完成：合併後要手動跑一次「部署管理網站」，頁面才看得到；版號從現有 git 歷史算起，architecture 目前是第 2 版、其他第 1 版。
 - 相關 PR：見本分支 PR。

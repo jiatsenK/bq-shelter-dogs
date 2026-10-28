@@ -1,18 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, access } from 'node:fs/promises';
-import { DIAGRAMS } from './admin-diagrams.mjs';
+import { DIAGRAMS, DIAGRAM_TITLES as TITLES, plainText } from './admin-diagrams.mjs';
 
 // 架構圖事實核對（K 2026-10-28）：圖是手工畫的，程式改了名稱、時間、次數而圖沒跟著改，這裡會失敗。
 // 只比得了寫死在設定或程式裡的值；箭頭方向、步驟先後要人看（docs/research/2026-10-28-diagram-auto-sync.md 第 3.3 節）。
 const read = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const jsonc = text => JSON.parse(text.replace(/^\s*\/\/.*$/gm, ''));
-const TITLES = {
-  'architecture': '系統架構', 'data-flows': '各類資料的流向', 'writeback-sequence': '網站登記寫回試算表',
-  'sheet-sync-sequence': '試算表改動回到 D1', 'daily-schedule': '一天裡的排程', 'environments': '環境與部署',
-};
-const text = async name => (await read(`docs/diagrams/${name}.html`)).match(/<body[\s\S]*<\/body>/)[0]
-  .replace(/<[^>]+>/g, '\n').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>');
+// 每個標籤前面先補空白，不同 <text> 的字才不會黏在一起
+const text = async name => plainText((await read(`docs/diagrams/${name}.html`)).match(/<body[\s\S]*<\/body>/)[0].replace(/</g, ' <'));
 const shows = async (name, value, why) => {
   assert.ok((await text(name)).includes(value), `「${TITLES[name]}」圖上找不到「${value}」：${why}。請改圖（docs/diagrams/${name}.html）或確認程式是不是改錯了`);
 };
@@ -30,8 +26,7 @@ const gasScans = JSON.parse(gas.match(/(\[\[\d+, \d+\](?:, \[\d+, \d+\])*\])\.fo
 const scanTimes = twHours(scanCron.split(' ')[1]).map(h => `${pad(h)}:${pad(scanCron.split(' ')[0])}`);
 const gasTimes = gasScans.map(([h, m]) => `${pad(h)}:${pad(m)}`);
 
-test('六張圖都在、順序跟管理網站一樣', async () => {
-  assert.deepEqual(Object.keys(TITLES), DIAGRAMS);
+test('六張圖都在，標題對得上', async () => {
   for (const name of DIAGRAMS) assert.ok((await read(`docs/diagrams/${name}.html`)).includes(TITLES[name]), name);
 });
 

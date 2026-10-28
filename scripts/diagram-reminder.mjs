@@ -3,12 +3,9 @@
 // 用法：node scripts/diagram-reminder.mjs <PR 編號> [--dry-run]（需要 gh，CI 用 GITHUB_TOKEN）；本機試跑一定加 --dry-run
 import { execFileSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
+import { DIAGRAMS, DIAGRAM_TITLES as TITLES } from './admin-diagrams.mjs';
 
 const MARK = '<!-- diagram-reminder -->';
-const TITLES = {
-  'architecture': '系統架構', 'data-flows': '各類資料的流向', 'writeback-sequence': '網站登記寫回試算表',
-  'sheet-sync-sequence': '試算表改動回到 D1', 'daily-schedule': '一天裡的排程', 'environments': '環境與部署',
-};
 // 哪些檔案改了，哪幾張圖可能要跟著改
 export const WATCH = [
   [/^wrangler[^/]*\.jsonc$/, ['architecture', 'environments', 'daily-schedule']],
@@ -20,7 +17,7 @@ export const WATCH = [
   [/^apps-script\//, ['architecture', 'writeback-sequence', 'sheet-sync-sequence', 'daily-schedule']],
   [/^migrations\//, ['data-flows']],
   [/^\.github\/workflows\/(deploy-[^/]+|preview-cloudflare|seed-preview-db|d1-migrations)\.yml$/, ['environments']],
-  [/^docs\/ARCHITECTURE_NOW\.md$/, Object.keys(TITLES)],
+  [/^docs\/ARCHITECTURE_NOW\.md$/, DIAGRAMS],
 ];
 
 export function affectedDiagrams(files) {
@@ -32,7 +29,7 @@ export function affectedDiagrams(files) {
       for (const name of names) if (!touched.has(name)) out.set(name, [...(out.get(name) || []), file]);
     }
   }
-  return Object.keys(TITLES).filter(name => out.has(name)).map(name => ({ name, title: TITLES[name], files: [...new Set(out.get(name))] }));
+  return DIAGRAMS.filter(name => out.has(name)).map(name => ({ name, title: TITLES[name], files: [...new Set(out.get(name))] }));
 }
 
 export function reminderBody(list) {
