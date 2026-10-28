@@ -1,10 +1,14 @@
 import { mkdir, readFile, writeFile, rename, rm } from 'node:fs/promises';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { DIAGRAMS, extractDiagram, gitHistory, diagramsCss } from './admin-diagrams.mjs';
 
 // node --test 平行跑時，多個測試行程會同時建置同一個資料夾：
 // 內容相同就不重寫；要寫時先寫暫存檔再 rename，別的行程只會讀到舊檔或完整新檔。
 async function publish(source, dest) {
-  const content = await readFile(source);
+  await publishContent(await readFile(source), dest);
+}
+async function publishContent(data, dest) {
+  const content = Buffer.from(data);
   const current = await readFile(dest).catch(() => null);
   if (current && current.equals(content)) return;
   const temp = new URL(`${dest.href}.${process.pid}.${Date.now()}.tmp`);
@@ -33,5 +37,14 @@ export async function buildAdminAssets() {
   }
   // #567 網站更新唯讀：沿用志工網站的版本紀錄檔，不另存 D1
   await publish(new URL('../public/website-updates.json', import.meta.url), new URL('website-updates.json', target));
+  // 系統架構圖頁：正本在 docs/diagrams/，抽出圖、說明與版本資訊
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const diagrams = [];
+  for (const name of DIAGRAMS) {
+    const file = `docs/diagrams/${name}.html`;
+    diagrams.push({ ...extractDiagram(await readFile(new URL(`../${file}`, import.meta.url), 'utf8'), name), ...gitHistory(file, root) });
+  }
+  await publishContent(diagramsCss(diagrams), new URL('diagrams.css', target));
+  await publishContent(JSON.stringify(diagrams.map(({ css, ...d }) => d)), new URL('diagrams.json', target));
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) await buildAdminAssets();

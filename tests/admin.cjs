@@ -39,10 +39,10 @@ module.exports = async (browser, base) => {
     await page.goto(`${base}/admin/public/index.html`);
     await loaded();
     assert.equal(await rows.count(), 25);
-    // #624 側欄分「資料」「志工網站」兩組；重新讀取是次要按鈕
-    assert.deepEqual(await page.locator('.nav-heading').allTextContents(), ['資料', '志工網站']);
+    // #624 側欄分「資料」「志工網站」兩組，2026-10-28 加「系統」；重新讀取是次要按鈕
+    assert.deepEqual(await page.locator('.nav-heading').allTextContents(), ['資料', '志工網站', '系統']);
     assert.deepEqual(await page.locator('.nav-group').evaluateAll(groups => groups.map(g => [...g.querySelectorAll('a')].map(a => a.textContent))),
-      [['狗資料', '活動紀錄', '待補清單'], ['志工網站設定', '修改紀錄', '網站更新', '網站連結']]);
+      [['狗資料', '活動紀錄', '待補清單'], ['志工網站設定', '修改紀錄', '網站更新', '網站連結'], ['系統架構圖']]);
     assert.equal(await page.locator('#refresh.btn-primary').count(), 0);
     assert.equal(await page.locator('#next').isEnabled(), true);
     assert.equal(await page.locator('#previous').isDisabled(), true);
