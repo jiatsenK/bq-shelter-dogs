@@ -187,7 +187,7 @@ main { overflow-wrap: anywhere; }
 }
 .walk-date {
   display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
-  font-size: 16px; font-weight: 700; color: var(--ink);
+  font-size: 17px; font-weight: 800; color: var(--ink);
   margin: 0 0 10px;
 }
 .walk-date .n { font-size: 13px; font-weight: 500; color: var(--ink-soft); }
@@ -198,7 +198,7 @@ main { overflow-wrap: anywhere; }
 }
 .mine-dog:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 10px; }
 .mine-dog .thumb { width: 56px; height: 56px; }
-.mine-dog .bname { font-size: 13px; font-weight: 700; line-height: 1.3; text-align: center; word-break: break-all; }
+.mine-dog .bname { font-size: 13px; font-weight: 800; line-height: 1.3; text-align: center; word-break: break-all; }
 .mine-dog .first { font-size: 11px; font-weight: 700; color: var(--green-text); background: var(--green-bg); border-radius: 6px; padding: 0 5px; }
 .mine-dog.gone { opacity: 0.55; cursor: default; }
 
@@ -1276,7 +1276,6 @@ html.onboard-open { overflow: hidden; }
 .ob-dots { display: flex; gap: 8px; }
 .ob-dots i { width: 8px; height: 8px; border-radius: 50%; background: #8E8E93; }
 .ob-dots i.on { background: var(--ink); }
-.who-hint .who-edit .icon { color: inherit; }
 .find-chip { background: var(--surface) !important; }
 .find-chip.on { background: var(--ink) !important; color: #fff !important; }
 .find-view { background: #E3E3E8 !important; }
@@ -1923,7 +1922,7 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .mc-title { flex: 1; margin: 0; display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 18px; font-weight: 800; }
 .mc-title span { font-size: 13px; font-weight: 500; color: var(--ink-soft); }
 .mc-title span b { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
-.mc-nav { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: none; border-radius: 3px; background: var(--surface-soft); color: var(--ink); font-size: 20px; cursor: pointer; }
+.mc-nav { flex: none; width: 44px; height: 44px; display: grid; place-items: center; border: none; border-radius: 3px; background: none; color: var(--ink); font-size: 20px; cursor: pointer; }
 .mc-nav.next .icon { transform: scaleX(-1); }
 .mc-nav:disabled { opacity: .35; cursor: default; }
 .mc-week, .mc-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 2px; }
@@ -1940,12 +1939,10 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .mc-cell.on.sel.today { box-shadow: inset 0 0 0 2px var(--shell), inset 0 0 0 4px #fff; }
 .who-hint .who-edit { white-space: nowrap; flex: none; }
 /* #738 次要按鈕收斂（K 2026-10-28）：排版不動；統計、修改是綠色底線字，名字 20px 粗、前面不放腳掌；月份箭頭只留箭頭；日期標題、狗名加粗 */
+.who-hint { gap: 8px; }
 .who-hint .who-name { font-size: 20px; font-weight: 700; }
 .who-hint .who-edit, .who-hint .who-edit.on { padding: 0 8px; border-radius: 0; background: none; box-shadow: none; color: var(--primary); font-size: 15px; font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
 .who-hint .who-edit.on { text-decoration-thickness: 2px; }
-.mc-nav { background: none; }
-.walk-date { font-size: 17px; font-weight: 800; }
-.mine-dog .bname { font-weight: 800; }
 /* 入所介紹直接點了改（K 2026-10-10）：整段是按鈕，右邊一支筆；字照原本的內文 */
 .intro-btn { display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 44px; margin: 0; padding: 0; border: none; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
 .intro-btn > .content, .intro-btn > .empty { flex: 1; }
@@ -2341,6 +2338,8 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .gw-heading h2 { margin: 2px 4px 0; font-size: 20px; font-weight: 800; line-height: 1.4; overflow-wrap: anywhere; }
 .gw-heading small { margin-left: 8px; font-size: 13px; font-weight: 400; color: var(--ink-soft); white-space: nowrap; }
 #groupPage .section-hint { margin-bottom: 6px; }
+/* 狗群頁沒有「全部／我的常溜」那排，main 上緣跟其他頁一樣只留 4px，標題貼近搜尋欄 */
+main:has(> #groupPage) { padding-top: 4px; }
 .gw-search-note { margin: 0 4px 4px; font-size: 14px; color: var(--ink-soft); }
 .gw-cards { display: grid; border-top: 1px solid var(--line); background: var(--surface); }
 #groupPage .gw-dog { display: grid; grid-template-columns: 64px 40px minmax(0, 1fr); align-items: center; column-gap: 10px; width: 100%; min-height: 50px; padding: 0 12px 0 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: left; user-select: none; }
@@ -2351,7 +2350,7 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .gw-who { min-width: 0; padding-block: 4px; }
 .gw-line { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; }
 .gw-name { font-size: 16px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
-.gw-line .sex { margin-left: -6px; }
+.gw-nm { display: inline-flex; align-items: center; }
 .gw-cage { color: var(--ink-soft); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .gw-who .walk-sync { display: block; }
 .gw-dog.excluded .gw-photo { opacity: .35; }
