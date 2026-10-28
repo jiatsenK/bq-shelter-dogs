@@ -349,9 +349,9 @@ function myWalksHtml(today, query) {
   if (BQWelcome.needsSetup()) return BQWelcome.setupHtml();
   // #138 之前設定的只有代號、沒記名字：請他再輸入一次，按溜了才能寫進試算表
   const named = !!loadWalkerName();
-  // V9（#141 第 11 項）：小計收進「統計」按鈕，按了才展開
-  const statsBtn = visibleWalks.length ? `<button type="button" class="who-edit${appState.mineStatsOpen ? ' on' : ''}" id="mineStats" aria-expanded="${appState.mineStatsOpen}">${icon('chart')}統計</button>` : '';
-  const who = query ? '' : `<div class="section-hint who-hint">${icon('paw')}<span class="who-name">${named ? esc(loadWalkerName()) : '再按「修改」輸入一次名字'}</span>${statsBtn}<button type="button" class="who-edit" id="whoEdit">修改</button></div>`;
+  // V9（#141 第 11 項）：小計收進「統計」按鈕，按了才展開；統計、修改是綠色底線字，名字前不放腳掌（#738）
+  const statsBtn = visibleWalks.length ? `<button type="button" class="who-edit${appState.mineStatsOpen ? ' on' : ''}" id="mineStats" aria-expanded="${appState.mineStatsOpen}">統計</button>` : '';
+  const who = query ? '' : `<div class="section-hint who-hint"><span class="who-name">${named ? esc(loadWalkerName()) : '再按「修改」輸入一次名字'}</span>${statsBtn}<button type="button" class="who-edit" id="whoEdit">修改</button></div>`;
   if (!visibleWalks.length) return who + `<div class="status-msg">還沒有你的溜狗紀錄。<br>試算表「誰遛的」寫上你設定的名字，同步後就會出現在這裡。</div>`;
   // 所有到所紀錄新到舊一路往下排（K 2026-09-25：不要選日期）；搜尋時不顯示小計
   const groups = myWalkGroups(currentMyWalks(), query);
@@ -974,15 +974,19 @@ function walkToolsHtml(chips, view = loadWalkView()) {
 // K 2026-10-09：溜狗人拿掉（點進詳細資訊看得到），籠位跟狗卡一樣點了開平面圖
 // critique 2026-10-09：列表模式也是天數優先，天數排最前面、寫「20天」不寫日期（不用心算）；
 // 警示原文跟狗卡一樣放在那一列下面，不只一個小三角
-function walkRow(dog, today) {
+// 列表模式的天數色籤；常溜狗群的狗列共用（#738），同一隻狗兩邊文字與顏色一樣
+function dayChip(dog, today) {
   const s = computeStatus(dog, today);
-  const flag = specialFlag(dog.note);
   const days = s.kind === 'dated'
     ? (s.days < 0 ? '?<span class="sr-only">日期看不懂</span>' : s.days === 0 ? '今天' : `<b>${s.days}</b>天<span class="sr-only">前</span>`)
     : s.kind === 'covered' ? '固定<span class="sr-only">有人照顧</span>'
     : s.kind === 'rest' ? `休養<span class="sr-only">中，${monthDay(s.until)} 前暫停帶出</span>` : '—<span class="sr-only">沒有紀錄</span>';
+  return `<span class="r-date ${s.kind === 'rest' ? 'rest' : s.level || 'muted'}">${days}</span>`;
+}
+function walkRow(dog, today) {
+  const flag = specialFlag(dog.note);
   return `<div class="row-dog${flag ? ' flagged' : ''}" data-dog="${appState.allDogs.indexOf(dog)}" role="button" tabindex="0" aria-haspopup="dialog">
-    <span class="r-date ${s.kind === 'rest' ? 'rest' : s.level || 'muted'}">${days}</span>
+    ${dayChip(dog, today)}
     <button type="button" class="r-name" tabindex="-1">${esc(dog.name)}</button>
     ${typeof whereKnown === 'function' && whereKnown(dog)
       ? `<button type="button" class="r-cage cage-pill" data-where aria-label="${esc(dog.name)} 在哪：${esc(dog.cage)}${dog.homeCage ? '（暫住）' : ''}">${icon('pin')}${esc(dog.cage)}</button>`
@@ -1202,7 +1206,7 @@ if (!window.__BQ_TEST__) {
 }
 }
 
-export { FIRST_SCREEN_CARDS, WALKER_CODES_KEY, WALKER_CODE_PATTERN, saveIdentity, currentIdentity, mergeTempCages, loadDogsData, fetchDogsData, parseMyWalks, apiData, fetchWalks, walkYears, recentStartMonth, missingWalkYears, loadWalkYear, loadMyWalks, currentMyWalks, myWalksCount, mineTabNumber, mineTabLabel, loadMyCodes, saveMyCodes, walkerCodesFor, dogOfWalk, walkDateLabel, myWalkGroups, myVisitCard, myMonthStats, myProgressHtml, myWalksHtml, myCalendarState, myCalendarHtml, effectiveWalkDate, computeStatus, restOf, versioned, photoOverrides, photoSrc, photoThumbSrc, thumbFallback, thumbAttrs, photoThumb, lightboxOpen, insidePhoto, openLightbox, showLightboxPhoto, hideLightbox, closeLightbox, lastWalk, cardMeta, tempCageText, sexMark, warnNote, walkedNow, walkedToday, WALKER_NAME_KEY, WALKER_NAME_SEP, allWalkerNames, isOffline, setWalkerNamesOffline, loadWalkerNames, TODAY_POLL_MS, TODAY_REFETCH_MS, fetchWalkStatus, loadTodayWalks, refreshTodayWalks, canonicalWalker, splitWalkers, walkerList, loadCompanions, loadWalkWith, addWalkWith, clearWalkWith, firstWalkerName, loadWalkerName, saveWalkerName, myAliasIn, walkRegistration, d1Base, NEED_EDITOR, editorName, editorHeaders, dogCard, loadRest, cardFromEvent, TABS, buildTabs, switchTab, mainEl, render, skeletonHtml, appHeader, syncHeaderShadow, appBrand, syncHeaderTuck, stickyTopBottom, bottomBarEl, syncBottomBar, dueDogs, WALK_FAV_KEY, loadWalkFav, saveWalkFav, walkFilterHtml, WALK_VIEW_KEY, loadWalkView, saveWalkView, walkToolsHtml, walkRow, renderMain, searchInput, searchClear, syncSearchClear, openGuide, init, applyDogsData, renderUpdatedLabel, freshWalkList, refreshData, syncBtn, startApp };
+export { FIRST_SCREEN_CARDS, WALKER_CODES_KEY, WALKER_CODE_PATTERN, saveIdentity, currentIdentity, mergeTempCages, loadDogsData, fetchDogsData, parseMyWalks, apiData, fetchWalks, walkYears, recentStartMonth, missingWalkYears, loadWalkYear, loadMyWalks, currentMyWalks, myWalksCount, mineTabNumber, mineTabLabel, loadMyCodes, saveMyCodes, walkerCodesFor, dogOfWalk, walkDateLabel, myWalkGroups, myVisitCard, myMonthStats, myProgressHtml, myWalksHtml, myCalendarState, myCalendarHtml, effectiveWalkDate, computeStatus, restOf, versioned, photoOverrides, photoSrc, photoThumbSrc, thumbFallback, thumbAttrs, photoThumb, lightboxOpen, insidePhoto, openLightbox, showLightboxPhoto, hideLightbox, closeLightbox, lastWalk, cardMeta, tempCageText, sexMark, warnNote, walkedNow, walkedToday, WALKER_NAME_KEY, WALKER_NAME_SEP, allWalkerNames, isOffline, setWalkerNamesOffline, loadWalkerNames, TODAY_POLL_MS, TODAY_REFETCH_MS, fetchWalkStatus, loadTodayWalks, refreshTodayWalks, canonicalWalker, splitWalkers, walkerList, loadCompanions, loadWalkWith, addWalkWith, clearWalkWith, firstWalkerName, loadWalkerName, saveWalkerName, myAliasIn, walkRegistration, d1Base, NEED_EDITOR, editorName, editorHeaders, dogCard, loadRest, cardFromEvent, TABS, buildTabs, switchTab, mainEl, render, skeletonHtml, appHeader, syncHeaderShadow, appBrand, syncHeaderTuck, stickyTopBottom, bottomBarEl, syncBottomBar, dueDogs, WALK_FAV_KEY, loadWalkFav, saveWalkFav, walkFilterHtml, WALK_VIEW_KEY, loadWalkView, saveWalkView, walkToolsHtml, dayChip, walkRow, renderMain, searchInput, searchClear, syncSearchClear, openGuide, init, applyDogsData, renderUpdatedLabel, freshWalkList, refreshData, syncBtn, startApp };
 export { appState } from './page-state.js';
 export { parseDogsData } from './dog-data.js';
 

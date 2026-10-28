@@ -40,6 +40,15 @@ module.exports = async (browser, base) => {
   try {
     await page.goto(base + '/public/index.html');
     await page.locator('#main .card').first().waitFor();
+    // #738：先記下溜狗表列表模式每隻狗的天數色籤，常溜狗群要一模一樣
+    await page.locator('[data-walk-view="list"]').click();
+    await page.locator('#main .row-dog').first().waitFor();
+    const chipOf = el => { const s = getComputedStyle(el); return { text: el.textContent, color: s.color, background: s.backgroundColor }; };
+    const walkChips = Object.fromEntries(await page.locator('#main .row-dog').evaluateAll((rows, f) => {
+      const chip = new Function('return ' + f)();
+      return rows.map(r => [r.querySelector('.r-name').textContent, chip(r.querySelector('.r-date'))]);
+    }, chipOf.toString()));
+    await page.locator('[data-walk-view="photo"]').click();
     await page.locator('[data-tab="groups"]').click();
     await page.locator('#groupStage').waitFor();
     assert.equal(await page.locator('.gw-layer').count(), 1, '多群資料仍只渲染當前群');
@@ -51,6 +60,38 @@ module.exports = async (browser, base) => {
     await page.locator('#searchInput').fill('不存在的狗');
     await page.getByText('沒有狗群有「不存在的狗」').waitFor();
     await page.locator('#searchClear').click();
+    // #738：一列一隻、每列 50px，390×844 一群 10 隻全部在浮條上方看得到；天數色籤跟溜狗表同一隻狗一致
+    assert.equal(await page.locator('.front [data-gw-dog]').count(), 10);
+    assert.match(await page.locator('.gw-heading').textContent(), /10 隻 · 第 2／3 群/);
+    assert.equal(await page.locator('.gw-pages').count(), 0, '拿掉單獨一行的「1 / 2」');
+    await page.evaluate(() => scrollTo(0, 0));
+    const rows = await page.locator('.front [data-gw-dog]').evaluateAll((els, f) => {
+      const chip = new Function('return ' + f)();
+      return els.map(el => ({ name: el.querySelector('.gw-name').textContent, box: el.getBoundingClientRect().toJSON(), chip: el.querySelector('.r-date') && chip(el.querySelector('.r-date')) }));
+    }, chipOf.toString());
+    const barTop = await page.locator('.gw-walkbar').evaluate(el => el.getBoundingClientRect().top);
+    // 測試資料有一隻名字特別長、換行多佔的高度不算（正式資料的名字一行放得下）
+    const extra = Math.max(0, rows.find(r => r.name === data.dogs[8].name).box.height - 50);
+    for (const r of rows) {
+      // 名字太長會換行、列跟著長高，不裁字
+      assert(r.name === data.dogs[8].name ? r.box.height > 50 : Math.abs(r.box.height - 50) <= 1, '每列 50px：' + JSON.stringify(r));
+      assert(r.box.bottom - extra <= barTop, '10 隻都在浮條上方：' + JSON.stringify({ r, barTop }));
+      assert.deepEqual(r.chip, walkChips[r.name], '天數色籤文字與顏色同溜狗表：' + r.name);
+    }
+    // 浮條：白底；「整群溜了」實心綠、「有狗沒溜」綠色底線字
+    const bar = await page.evaluate(() => {
+      const css = s => getComputedStyle(document.querySelector(s));
+      const root = getComputedStyle(document.documentElement);
+      return { bar: css('.gw-walkbar').backgroundColor, walk: css('#gwWalk').backgroundColor, walkText: css('#gwWalk').color,
+        except: { line: css('[data-gw-action="except"]').textDecorationLine, background: css('[data-gw-action="except"]').backgroundColor, color: css('[data-gw-action="except"]').color },
+        next: css('.gw-side.next').color, primary: root.getPropertyValue('--primary').trim() };
+    });
+    const hex = rgb => '#' + rgb.match(/\d+/g).slice(0, 3).map(n => Number(n).toString(16).padStart(2, '0')).join('').toUpperCase();
+    assert.equal(bar.bar, 'rgb(255, 255, 255)', '浮條白底');
+    assert.equal(hex(bar.walk), bar.primary.toUpperCase(), '「整群溜了」實心綠');
+    assert.equal(bar.walkText, 'rgb(255, 255, 255)');
+    assert.deepEqual([bar.except.line, bar.except.background, hex(bar.except.color)], ['underline', 'rgba(0, 0, 0, 0)', bar.primary.toUpperCase()], '「有狗沒溜」綠色底線字');
+    assert.equal(hex(bar.next), bar.primary.toUpperCase(), '換群箭頭綠色');
     await page.getByRole('button', { name: '上一群', exact: true }).click();
     await page.getByRole('button', { name: '有狗沒溜', exact: true }).click();
     await page.locator('.gw-layer:not([inert]) [data-gw-dog]').first().click();
@@ -77,7 +118,7 @@ module.exports = async (browser, base) => {
     // 頭尾相接：最後一群按下一群回第一群，再按上一群回最後一群
     const lastCol = await page.locator('.front').getAttribute('data-column');
     await page.getByRole('button', { name: '下一群', exact: true }).click();
-    assert.equal(await page.locator('.gw-pages span').textContent(), `1 / ${await page.locator('.gw-pages span').textContent().then(t => t.split(' / ')[1])}`);
+    assert.match(await page.locator('.gw-heading small').textContent(), /第 1／3 群/);
     await page.getByRole('button', { name: '上一群', exact: true }).click();
     assert.equal(await page.locator('.front').getAttribute('data-column'), lastCol);
     await page.getByRole('button', { name: '上一群', exact: true }).click();
@@ -101,10 +142,10 @@ module.exports = async (browser, base) => {
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '無水平溢出');
       await page.mouse.move(0, 0);
       await page.waitForTimeout(350);
-      assert(await page.locator('.front .gw-tile').evaluateAll(els => els.every(el => {
+      assert(await page.locator('.front [data-gw-dog]').evaluateAll(els => els.every(el => {
         const b = el.getBoundingClientRect(), root = document.getElementById('groupPage').getBoundingClientRect();
         return b.left >= root.left && b.right <= root.right;
-      })), '前景卡完整可見');
+      })), '狗列完整可見');
       for (const el of await page.locator('#groupPage button:visible').all()) {
         if (await el.evaluate(e => !!e.closest('[inert]'))) continue;
         const b = await el.boundingBox(); assert(b.width >= 44 && b.height >= 44, '點擊區44px');
@@ -119,7 +160,7 @@ module.exports = async (browser, base) => {
         const root = document.documentElement.style, px = s => `${document.querySelector(s).getBoundingClientRect().height}px`;
         return root.getPropertyValue('--app-header-height') === px('header.app') && root.getPropertyValue('--bottom-bar-height') === px('#bottomBar');
       });
-      const total = Number((await page.locator('.gw-pages span').textContent()).split(' / ')[1]);
+      const total = Number((await page.locator('.gw-heading small').textContent()).match(/／(\d+) 群/)[1]);
       let first;
       for (let i = 0; i < total; i++) {
         await page.evaluate(() => scrollTo(0, 0));
@@ -160,6 +201,10 @@ module.exports = async (browser, base) => {
     await page.mouse.move(stage.x + stage.width * .2, stage.y + 15, { steps: 6 });
     await page.mouse.up();
     assert.equal(await page.locator('.front').getAttribute('data-column'), before, '滑動不換群');
+    // #738 起一列一隻、整列可點：在同一列裡橫拖放開等於點那隻狗，先關掉狗卡
+    assert(await page.evaluate(() => document.documentElement.classList.contains('detail-open')), '同一列裡橫拖放開等於點狗');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.documentElement.classList.contains('detail-open'));
     assert.equal(await page.locator('[data-tab="groups"][aria-current="page"]').count(), 1);
     const current = await page.locator('.front').getAttribute('data-column');
     const region = await page.locator('#groupStage').boundingBox();
