@@ -21,3 +21,11 @@
 - **正式庫沒動**。migration SQL 放在 `.scratch/intro-split/`（不 commit），還沒決定要不要進公開 repo。
 - 正式上線時要照順序：先在正式庫套 SQL，再部署程式；中間有人改過的狗會整隻跳過，要重產核對表再比一次。
 - main 之後有推送，測試網站會換回 main 的程式，要再手動部署這個分支。
+
+## 同日上線（K：「測試網站看過沒問題」「確認上線」）
+
+- 合併 main 進分支，補改兩個還寫「死亡」的測試（`scripts/admin-table.test.mjs`、`scripts/intro-split/intro-split.test.mjs`），本機完整測試通過。
+- 寫正式庫前再比一次：正式庫從核對表後沒被改過，SQL 跟測試庫套的一樣。用 `wrangler d1 execute bq-shelter-dogs --remote --file` 套（SQL 不進 repo，留在本機 `.scratch/intro-split/`），實際 1,239 列；抽查 `v3_stays` 122 隻、介紹只剩仲基與豆花、JOJO 兩筆正確。
+- PR 轉正式時，草稿那次推送的事件把正式那次測試取消掉（同一組 concurrency），手動重跑後通過；squash 合併 #668，「部署到 Cloudflare」成功。
+- 收尾：刪掉本機與 GitHub 的 `claude/intro-split`、移除工作資料夾 `merge-intro`（沒進 git 的檔案先複製到主資料夾 `.scratch/`）。
+- 還沒做：仲基（要 K 給 2018 年入所日）、豆花（K 先不管）、DROP `v3_intake_events`（下一張 PR）。
