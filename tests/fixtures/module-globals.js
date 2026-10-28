@@ -1,5 +1,5 @@
 import { acceptSettings } from '../../public/js/feature-settings.js';
-const defaultSettings = {revision:1,values:Object.fromEntries(['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays'].map(k=>[k,true]))};
+const defaultSettings = {revision:1,values:Object.fromEntries(['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays','showShare'].map(k=>[k,true]))};
 acceptSettings(defaultSettings);
 if (!window.__BQ_FEATURE_TEST__) apiModule.BQApi.featureSettings = async () => ({ok:true,data:defaultSettings});
 // Compatibility for existing assertions only. Production pages never load this adapter.

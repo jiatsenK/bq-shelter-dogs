@@ -115,7 +115,7 @@ async function runAnalysisTests() {
   await check('#59 分析程式只讀：網路呼叫只有 HEAD 查照片與讀溜狗、離所紀錄（#60、#260），不寫入、不存資料', () => {
     const code = ANALYSIS_JS.replace("fetch(photoSrc({ id }), { method: 'HEAD', cache: 'no-cache' })", '');
     // #60 讀溜狗紀錄、離所紀錄：只用 BQApi 讀的端點；#363 點離所的狗才拿那一年（網址帶版本號，瀏覽器快取）
-    eq([...new Set([...ANALYSIS_JS.matchAll(/BQApi\.(\w+)\(/g)].map(m => m[1]))].sort(), ['departureYear', 'departures', 'walks'], '#60 #260 溜狗紀錄、離所紀錄從 Worker 讀：');
+    eq([...new Set([...ANALYSIS_JS.matchAll(/BQApi\.(\w+)\(/g)].map(m => m[1]))].sort(), ['countShare', 'departureYear', 'departures', 'walks'], '#60 #260 溜狗紀錄、離所紀錄從 Worker 讀；資訊頁的分享只記次數（ADR 0023）：');
     for (const read of ["get('/walks'", "get('/departures/index'", 'get(`/departures?year=']) if (!API_JS.includes(read)) throw new Error(`BQApi 要用 GET 讀 ${read}`);
     if (/['`]data\/(history|walks|departures)/.test(code)) throw new Error('#260 起不再讀 data/ 的溜狗紀錄、快照、離所');
     const bad = [/fetch\(/, /method\s*:/i, /\bPOST\b|\bPUT\b|\bPATCH\b|\bDELETE\b/, /localStorage|sessionStorage|indexedDB|XMLHttpRequest|sendBeacon/];

@@ -10,7 +10,7 @@ import { findPageHtml, whereKnown, whereOpen } from './find.js';
 import { BQWalkUI } from './walk-ui.js';
 import { BQWalks } from './walk-flow.js';
 import { BQFavorites } from './favorites.js';
-import { INFO_PAGES, analysisPageHtml, hideAnalysis, restoreInfoPage } from './analysis.js';
+import { INFO_PAGES, analysisPageHtml, hideAnalysis, restoreInfoPage, shareFromInfo } from './analysis.js';
 import { groupStageHtml, receiveGroupData, refreshGroupStage } from './group-stage.js';
 import { BQTour } from './tour.js';
 import { deskOn, deskWalkHtml } from './desk.js';
@@ -1286,6 +1286,7 @@ export function bindApp() {
     }
     else if (e.target.closest('[data-mine-day]')) { appState.mineDay = e.target.closest('[data-mine-day]').dataset.mineDay; render(); const b = document.querySelector('#main .mc-cell.sel'); if (b) b.focus({ preventScroll: true }); }
     else if (e.target.closest('[data-open-guide]')) openGuide();
+    else if (e.target.closest('[data-share-site]')) shareFromInfo();
 
   });
   BQWelcome.bindSetup();

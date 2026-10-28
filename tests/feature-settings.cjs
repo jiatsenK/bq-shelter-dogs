@@ -1,5 +1,5 @@
 const assert = require('node:assert/strict');
-const keys=['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays'];
+const keys=['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays','showShare'];
 module.exports = async (browser,base) => {
  const context=await browser.newContext({viewport:{width:1440,height:1000},serviceWorkers:'block'});
  await context.addInitScript(()=>{window.__BQ_FEATURE_TEST__=true;localStorage.setItem('bq-onboarded','1');localStorage.setItem('bq-name-later','1');});
@@ -13,6 +13,7 @@ module.exports = async (browser,base) => {
    }
    return route.fulfill({status:fail?503:200,json:fail?{error:'設定讀取失敗'}:{revision,values}});
   }
+  if(endpoint==='manage/share-counts')return route.fulfill({json:{total:{share:5,copy:2},days:[{day:'2026-10-28',share:2,copy:1},{day:'2026-10-27',share:3,copy:0}]}});
   if(endpoint==='feature-settings')return route.fulfill({status:fail?503:200,json:{ok:!fail,revision,values}});
   if(endpoint==='activities')return route.fulfill({json:{ok:true,activities:[{id:'testactivity',revision:1,date:'2026-10-24',kind:'kids',dogs:[]}]}});
   if(endpoint==='dogs')return route.fulfill({json:{dogs:[{id:'2026010101',dogId:'dog1',name:'阿福',cage:'A1',intro:'親人',formerIds:['2025010101']}],syncedAt:'2026-10-24T00:00:00Z'}});
@@ -22,7 +23,9 @@ module.exports = async (browser,base) => {
  try {
   await page.goto(base+'/admin/public/settings.html');
   await page.getByText('已讀取版本 1。調整後按儲存。').waitFor();
-  assert.equal(await page.locator('input[type=checkbox]').count(),9,'舊編號併進出入所紀錄（#639）');
+  assert.equal(await page.locator('input[type=checkbox]').count(),10,'舊編號併進出入所紀錄（#639）；加分享給其他志工（ADR 0023）');
+  await page.getByText('到目前為止：分享 5 次、複製連結 2 次',{exact:false}).waitFor();
+  assert.deepEqual(await page.locator('#share-counts li').allTextContents(),['10/28　分享 2、複製 1','10/27　分享 3、複製 0'],'ADR 0023 分享次數放在開關旁');
   assert.equal(await page.locator('#save-settings').isDisabled(),true);
   await page.locator('[name=showActivities]').uncheck();await page.locator('#save-settings').click();
   await page.getByText(/已儲存，版本 2/).waitFor();assert.equal(puts,1);

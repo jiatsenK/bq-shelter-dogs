@@ -37,7 +37,7 @@ async function setup(t) {
 
 test('#567 新管理路徑：未登入一律 401，不讀 D1', async () => {
   const forbidden = () => { throw Error('unauthorized resource read'); };
-  for (const path of ['/api/manage/activities', '/api/manage/activities/' + 'c'.repeat(32), '/api/manage/data-checks', '/api/manage/cron-status', '/api/manage/edits', '/activities.html', '/checks.html', '/updates.html']) {
+  for (const path of ['/api/manage/activities', '/api/manage/activities/' + 'c'.repeat(32), '/api/manage/data-checks', '/api/manage/cron-status', '/api/manage/edits', '/api/manage/share-counts', '/activities.html', '/checks.html', '/updates.html']) {
     const res = await worker.fetch(request(path), { ...env, DB: { prepare: forbidden }, ASSETS: { fetch: forbidden } });
     assert.equal(res.status, 401, path);
   }
@@ -217,4 +217,18 @@ test('#567 資料編輯紀錄：搜尋涵蓋全部、白名單篩選、台灣日
   assert.equal((await res.json()).edits.length, 1);
   assert.equal((await worker.fetch(request('/api/manage/edits?kind=drop', jwt), bindings)).status, 400);
   assert.equal((await worker.fetch(request('/api/manage/edits', jwt, { method: 'POST', body: '{}' }), bindings)).status, 405);
+});
+
+test('ADR 0023 分享次數：管理者讀總數和最近 30 天，只讀不寫', async t => {
+  const { DB, bindings, jwt } = await setup(t);
+  const { countShare } = await import('../src/share-counts.js');
+  await countShare(DB, 'share');
+  await countShare(DB, 'copy');
+  const before = await DB.prepare('SELECT total_changes() AS n').first('n');
+  const res = await worker.fetch(request('/api/manage/share-counts', jwt), bindings);
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.deepEqual(body.total, { share: 1, copy: 1 });
+  assert.equal(body.days.length, 1);
+  assert.equal(await DB.prepare('SELECT total_changes() AS n').first('n'), before);
 });

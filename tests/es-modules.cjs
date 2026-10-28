@@ -16,7 +16,7 @@ module.exports = async (browser, base) => {
       body: fs.readFileSync(require.resolve('../public/js/main.js'), 'utf8') });
     if (!url.pathname.includes('/api/')) return route.continue();
     const endpoint = url.pathname.split('/api/')[1];
-    if (endpoint === 'feature-settings') return route.fulfill({json:{ok:true,revision:1,values:Object.fromEntries(['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays'].map(k=>[k,true]))}});
+    if (endpoint === 'feature-settings') return route.fulfill({json:{ok:true,revision:1,values:Object.fromEntries(['showActivities','showQuality','showUpdates','editIntro','editPhoto','editRest','editActivity','editFixedCare','editStays','showShare'].map(k=>[k,true]))}});
     const body = endpoint === 'dogs' ? fixture : endpoint === 'rest' ? { rest: {} }
       : endpoint === 'walkers' ? { walkers: {}, names: [] } : { ok: true, source: 'd1', walks: [], dogs: [], edits: [], opened: {} };
     return route.fulfill({ json: body });

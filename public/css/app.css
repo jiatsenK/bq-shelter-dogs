@@ -2267,6 +2267,10 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .info-home button span { color: var(--ink-soft); font-size: 14px; }
 .info-home button:hover { background: var(--surface-soft); }
 .info-home button:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+/* ADR 0023 分享網站只在手機版；分享、複製都不行時顯示網址讓人長按複製 */
+.desk-on .share-site { display: none; }
+.share-manual { display: grid; gap: 8px; padding: 14px 0 20px; border-bottom: 1px solid var(--line); color: var(--ink-soft); font-size: 14px; }
+.share-manual input { width: 100%; min-height: 44px; padding: 0 12px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); color: var(--ink); font: inherit; font-size: 16px; }
 .info-edits { display: block; border: 0; width: 100%; height: calc(100dvh - 240px - env(safe-area-inset-bottom)); min-height: 300px; }
 /* #270 活動紀錄：每場標題下直接列出席的狗；新增、修改就地展開 */
 .act-list { margin-top: 8px; }
