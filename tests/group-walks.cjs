@@ -40,6 +40,15 @@ module.exports = async (browser, base) => {
   try {
     await page.goto(base + '/public/index.html');
     await page.locator('#main .card').first().waitFor();
+    // #738：先記下溜狗表列表模式每隻狗的天數色籤，常溜狗群要一模一樣
+    await page.locator('[data-walk-view="list"]').click();
+    await page.locator('#main .row-dog').first().waitFor();
+    const chipOf = el => { const s = getComputedStyle(el); return { text: el.textContent, color: s.color, background: s.backgroundColor }; };
+    const walkChips = Object.fromEntries(await page.locator('#main .row-dog').evaluateAll((rows, f) => {
+      const chip = new Function('return ' + f)();
+      return rows.map(r => [r.querySelector('.r-name').textContent, chip(r.querySelector('.r-date'))]);
+    }, chipOf.toString()));
+    await page.locator('[data-walk-view="photo"]').click();
     await page.locator('[data-tab="groups"]').click();
     await page.locator('#groupStage').waitFor();
     assert.equal(await page.locator('.gw-layer').count(), 1, '多群資料仍只渲染當前群');
@@ -51,10 +60,44 @@ module.exports = async (browser, base) => {
     await page.locator('#searchInput').fill('不存在的狗');
     await page.getByText('沒有狗群有「不存在的狗」').waitFor();
     await page.locator('#searchClear').click();
+    // #738（K 2026-10-28 D 版）：一列一隻、每列 64px（名字、籠位兩行）；天數色籤跟溜狗表同一隻狗一致；「整群溜了」不用捲就按得到
+    assert.equal(await page.locator('.front [data-gw-dog]').count(), 10);
+    assert.match(await page.locator('.gw-heading').textContent(), /10 隻 · 第 2／3 群/);
+    assert.equal(await page.locator('.gw-pages').count(), 0, '拿掉單獨一行的「1 / 2」');
+    await page.evaluate(() => scrollTo(0, 0));
+    const rows = await page.locator('.front [data-gw-dog]').evaluateAll((els, f) => {
+      const chip = new Function('return ' + f)();
+      return els.map(el => ({ name: el.querySelector('.gw-name').textContent, box: el.getBoundingClientRect().toJSON(), chip: el.querySelector('.r-date') && chip(el.querySelector('.r-date')) }));
+    }, chipOf.toString());
+    for (const r of rows) {
+      // 名字太長會換行、列跟著長高，不裁字
+      assert(r.name === data.dogs[8].name ? r.box.height > 64 : Math.abs(r.box.height - 64) <= 1, '每列 64px：' + JSON.stringify(r));
+      assert.deepEqual(r.chip, walkChips[r.name], '天數色籤文字與顏色同溜狗表：' + r.name);
+    }
+    const [walkBox, barBox] = await Promise.all(['#gwWalk', '#bottomBar'].map(s => page.locator(s).boundingBox()));
+    assert(walkBox.y + walkBox.height <= barBox.y, '狗多超出畫面時「整群溜了」停在底部分類列上方：' + JSON.stringify({ walkBox, barBox }));
+    // 不放白底橫條；「整群溜了」實心綠、「有狗沒溜」綠色底線字、換群箭頭綠色
+    const bar = await page.evaluate(() => {
+      const css = s => getComputedStyle(document.querySelector(s));
+      const root = getComputedStyle(document.documentElement);
+      return { bar: [css('.gw-walkbar').backgroundColor, css('.gw-walkbar').boxShadow], walk: css('#gwWalk').backgroundColor, walkText: css('#gwWalk').color,
+        except: { line: css('[data-gw-action="except"]').textDecorationLine, background: css('[data-gw-action="except"]').backgroundColor, color: css('[data-gw-action="except"]').color },
+        next: css('.gw-side.next').color, primary: root.getPropertyValue('--primary').trim() };
+    });
+    const hex = rgb => '#' + rgb.match(/\d+/g).slice(0, 3).map(n => Number(n).toString(16).padStart(2, '0')).join('').toUpperCase();
+    assert.deepEqual(bar.bar, ['rgba(0, 0, 0, 0)', 'none'], '沒有白底橫條');
+    assert.equal(hex(bar.walk), bar.primary.toUpperCase(), '「整群溜了」實心綠');
+    assert.equal(bar.walkText, 'rgb(255, 255, 255)');
+    assert.deepEqual([bar.except.line, bar.except.background, hex(bar.except.color)], ['underline', 'rgba(0, 0, 0, 0)', bar.primary.toUpperCase()], '「有狗沒溜」綠色底線字');
+    assert.equal(hex(bar.next), bar.primary.toUpperCase(), '換群箭頭綠色');
     await page.getByRole('button', { name: '上一群', exact: true }).click();
+    // 平常不顯示勾；按「有狗沒溜」才出現、預設全勾，點一隻拿掉勾（K 2026-10-28）
+    assert.equal(await page.locator('.gw-check').count(), 0, '平常不顯示勾');
     await page.getByRole('button', { name: '有狗沒溜', exact: true }).click();
+    assert.equal(await page.locator('.front .gw-check.on').count(), 2, '有狗沒溜後每隻出現勾、預設全勾');
     await page.locator('.gw-layer:not([inert]) [data-gw-dog]').first().click();
-    await page.getByRole('button', { name: '登記其餘 1 隻', exact: true }).click();
+    assert.equal(await page.locator('.front .gw-check.on').count(), 1, '點一隻拿掉那隻的勾');
+    await page.getByRole('button', { name: '溜了 1 隻', exact: true }).click();
     await page.getByText('已登記 1 隻', { exact: true }).waitFor();
     assert.deepEqual(writes.find(w => w.endpoint === 'walk').body.dogs.map(d => d.name), [data.dogs[1].name]);
     for (const width of [320, 390]) {
@@ -77,13 +120,13 @@ module.exports = async (browser, base) => {
     // 頭尾相接：最後一群按下一群回第一群，再按上一群回最後一群
     const lastCol = await page.locator('.front').getAttribute('data-column');
     await page.getByRole('button', { name: '下一群', exact: true }).click();
-    assert.equal(await page.locator('.gw-pages span').textContent(), `1 / ${await page.locator('.gw-pages span').textContent().then(t => t.split(' / ')[1])}`);
+    assert.match(await page.locator('.gw-heading small').textContent(), /第 1／3 群/);
     await page.getByRole('button', { name: '上一群', exact: true }).click();
     assert.equal(await page.locator('.front').getAttribute('data-column'), lastCol);
     await page.getByRole('button', { name: '上一群', exact: true }).click();
     await page.getByRole('button', { name: '有狗沒溜', exact: true }).click();
     for (const dog of await page.locator('.front [data-gw-dog]').all()) await dog.click();
-    assert(await page.getByRole('button', { name: '登記其餘 0 隻', exact: true }).isDisabled());
+    assert(await page.getByRole('button', { name: '溜了 0 隻', exact: true }).isDisabled());
     await page.getByRole('button', { name: '取消', exact: true }).click();
     assert.equal(await page.locator('.front [aria-pressed="true"]').count(), 0);
     partial = true;
@@ -101,16 +144,16 @@ module.exports = async (browser, base) => {
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '無水平溢出');
       await page.mouse.move(0, 0);
       await page.waitForTimeout(350);
-      assert(await page.locator('.front .gw-tile').evaluateAll(els => els.every(el => {
+      assert(await page.locator('.front [data-gw-dog]').evaluateAll(els => els.every(el => {
         const b = el.getBoundingClientRect(), root = document.getElementById('groupPage').getBoundingClientRect();
         return b.left >= root.left && b.right <= root.right;
-      })), '前景卡完整可見');
+      })), '狗列完整可見');
       for (const el of await page.locator('#groupPage button:visible').all()) {
         if (await el.evaluate(e => !!e.closest('[inert]'))) continue;
         const b = await el.boundingBox(); assert(b.width >= 44 && b.height >= 44, '點擊區44px');
       }
     }
-    // #443：換群箭頭在「溜了」兩側（#395），換群時不跟著狗數移動；長群也停在底部分類列上方
+    // #443：換群箭頭在群名兩側（K 2026-10-28 D 版），換群時不跟著狗數移動；「整群溜了」接在清單後面，長群停在底部分類列上方
     for (const [width, height] of [[320, 844], [390, 844], [390, 568]]) {
       await page.setViewportSize({ width, height });
       // 表頭／底部分類列高度變數在 resize 事件、ResizeObserver 裡才更新，比 setViewportSize 晚一幀；
@@ -119,20 +162,20 @@ module.exports = async (browser, base) => {
         const root = document.documentElement.style, px = s => `${document.querySelector(s).getBoundingClientRect().height}px`;
         return root.getPropertyValue('--app-header-height') === px('header.app') && root.getPropertyValue('--bottom-bar-height') === px('#bottomBar');
       });
-      const total = Number((await page.locator('.gw-pages span').textContent()).split(' / ')[1]);
+      const total = Number((await page.locator('.gw-heading small').textContent()).match(/／(\d+) 群/)[1]);
       let first;
       for (let i = 0; i < total; i++) {
         await page.evaluate(() => scrollTo(0, 0));
-        const box = await page.evaluate(() => Object.fromEntries(['.gw-side.prev', '#gwWalk', '.gw-side.next', '#bottomBar', '#groupPage'].map(s => {
+        const box = await page.evaluate(() => Object.fromEntries(['.gw-side.prev', '.gw-heading h2', '#gwWalk', '.gw-walkbar', '.gw-side.next', '#bottomBar', '#groupPage', '#groupStage'].map(s => {
           const b = document.querySelector(s).getBoundingClientRect();
           return [s, { left: b.left, right: b.right, top: b.top, bottom: b.bottom, mid: (b.top + b.bottom) / 2 }];
         })));
-        const prev = box['.gw-side.prev'], walk = box['#gwWalk'], next = box['.gw-side.next'], groupBox = box['#groupPage'];
-        const info = JSON.stringify({ width, height, group: i, prev, walk, next });
-        assert(Math.abs(prev.mid - walk.mid) <= 2 && Math.abs(next.mid - walk.mid) <= 2, '箭頭跟「溜了」同一排：' + info);
-        assert(prev.right + 16 <= walk.left && walk.right + 16 <= next.left, '箭頭在「溜了」左右兩側，留 16px 防誤按：' + info);
+        const prev = box['.gw-side.prev'], title = box['.gw-heading h2'], walk = box['#gwWalk'], next = box['.gw-side.next'], groupBox = box['#groupPage'], stage = box['#groupStage'];
+        const info = JSON.stringify({ width, height, group: i, prev, title, walk, next });
+        assert(prev.right <= title.left && title.right <= next.left && prev.bottom > title.top && next.top < title.bottom, '箭頭在群名左右兩側：' + info);
         assert(prev.left - groupBox.left <= 24 && groupBox.right - next.right <= 24, '箭頭貼齊畫面左右邊：' + info);
-        assert(next.bottom <= box['#bottomBar'].top, '箭頭不被底部分類列遮住：' + info);
+        assert(walk.bottom <= box['#bottomBar'].top, '「整群溜了」不被底部分類列遮住：' + info);
+        assert(walk.top >= stage.bottom || box['#bottomBar'].top - box['.gw-walkbar'].bottom <= 1, '「整群溜了」接在清單後面，長群才停在底部：' + info);
         if (!first) first = { prev, next };
         else assert(Math.abs(first.prev.top - prev.top) <= 1 && Math.abs(first.next.top - next.top) <= 1, '狗數變化不移動切群按鈕：' + info);
         await page.getByRole('button', { name: '下一群', exact: true }).click();
@@ -151,7 +194,7 @@ module.exports = async (browser, base) => {
     const before = await page.locator('.front').getAttribute('data-column');
 
     await page.getByRole('button', { name: '下一群', exact: true }).click();
-    assert(await page.locator('.gw-side.next').evaluate(el => el.getBoundingClientRect().top >= document.querySelector('#groupStage').getBoundingClientRect().bottom), '#400 切群按鈕隨狗卡自然增高，保持在內容之後');
+    assert(await page.locator('#gwWalk').evaluate(el => el.getBoundingClientRect().top >= document.querySelector('#groupStage').getBoundingClientRect().bottom), '#400 電腦版「整群溜了」接在狗列之後');
     await page.getByRole('button', { name: '上一群', exact: true }).click();
     await page.locator('#groupStage').scrollIntoViewIfNeeded();
     const stage = await page.locator('#groupStage').boundingBox();
@@ -160,6 +203,10 @@ module.exports = async (browser, base) => {
     await page.mouse.move(stage.x + stage.width * .2, stage.y + 15, { steps: 6 });
     await page.mouse.up();
     assert.equal(await page.locator('.front').getAttribute('data-column'), before, '滑動不換群');
+    // #738 起一列一隻、整列可點：在同一列裡橫拖放開等於點那隻狗，先關掉狗卡
+    assert(await page.evaluate(() => document.documentElement.classList.contains('detail-open')), '同一列裡橫拖放開等於點狗');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.documentElement.classList.contains('detail-open'));
     assert.equal(await page.locator('[data-tab="groups"][aria-current="page"]').count(), 1);
     const current = await page.locator('.front').getAttribute('data-column');
     const region = await page.locator('#groupStage').boundingBox();
@@ -203,13 +250,13 @@ module.exports = async (browser, base) => {
     await page.reload();
     await page.locator('[data-tab="groups"]').click();
     await page.locator('.gw-restrictions').filter({ hasText: '休養中' }).waitFor();
-    await page.getByRole('button', { name: '整群溜了 · 1 隻', exact: true }).click();
+    await page.getByRole('button', { name: '整群溜了', exact: true }).click();
     await page.getByText('已登記 1 隻', { exact: true }).waitFor();
     assert.deepEqual(writes.at(-1).body.dogs.map(d => d.name), [data.dogs[1].name], '休養狗不送出');
     // 誤觸「整群溜了」：比照溜狗表，整群溜了變「已溜」，再按一次復原；失敗不能假裝已復原
     const undoBtn = page.getByRole('button', { name: '這群今天已溜，按一下取消', exact: true });
     await undoBtn.waitFor();
-    assert.equal((await undoBtn.textContent()).trim(), '已溜 · 1 隻');
+    assert.equal((await undoBtn.textContent()).trim(), '已溜');
     assert.equal(await page.getByRole('button', { name: /復原今天登記/ }).count(), 0, '不另放復原按鈕');
     undoMode = 'fail';
     await undoBtn.click();
@@ -220,9 +267,9 @@ module.exports = async (browser, base) => {
     undoMode = 'ok';
     await undoBtn.click();
     // D1 復原成功不另跳結果提示，畫面直接回到可登記
-    await page.getByRole('button', { name: '整群溜了 · 1 隻', exact: true }).waitFor();
+    await page.getByRole('button', { name: '整群溜了', exact: true }).waitFor();
     // 別人改過的不蓋掉；我溜過不另放取消那排
-    await page.getByRole('button', { name: '整群溜了 · 1 隻', exact: true }).click();
+    await page.getByRole('button', { name: '整群溜了', exact: true }).click();
     await page.getByText('已登記 1 隻', { exact: true }).waitFor();
     undoMode = 'partial';
     await undoBtn.click();
