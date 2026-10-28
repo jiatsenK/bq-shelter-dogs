@@ -21,7 +21,9 @@ test('從 patch 找出 docs/ARCHITECTURE.md 改到哪幾段', async () => {
   assert.deepEqual(touchedSections(markdown, [1, 2]), [], '開頭不算任何一段');
   assert.deepEqual(touchedSections(markdown, [at(DIAGRAM_TITLES['daily-schedule']) + 2]), ['daily-schedule']);
   assert.deepEqual(touchedSections(markdown, [at(DIAGRAM_TITLES.environments), lines.length]), ['environments'], '檔尾的「從哪裡開始讀」不是任何一段');
-  assert.deepEqual(touchedSections(markdown, [at('從哪裡開始讀') - 2]), ['code-architecture'], '元件圖段落到下一個標題前為止');
+  // 元件圖後面接的段落（決策、風險）不在管理網站的圖裡，照實際的下一個標題算
+  const next = lines.findIndex((line, i) => i >= at(DIAGRAM_TITLES['code-architecture']) && line.startsWith('## ')) + 1;
+  assert.deepEqual(touchedSections(markdown, [next - 2]), ['code-architecture'], '元件圖段落到下一個標題前為止');
 });
 
 test('留言內容：列出段落與檔案；都改了就說都改了', () => {

@@ -1,6 +1,6 @@
 # 架構圖：志工溜狗表
 
-> 核對日：2026-10-28｜依據 commit：`6406afa`
+> 核對日：2026-10-28｜依據 commit：`d8a565b`
 > 改到圖上的元件、連線、排程或部署方式時，在同一個 PR 更新這份檔案。規則見 agent-hub `docs/rules/architecture-diagrams.md`。
 > 名稱、排程時間、重試次數、端點跟程式不一致時 `scripts/diagram-facts.test.mjs` 會失敗；PR 改到架構相關檔案卻沒改對應段落，「架構圖重畫提醒」會在 PR 留言。管理網站「系統架構圖」頁也是從這份檔案產生。
 
@@ -332,6 +332,87 @@ flowchart LR
 - D1 的線省略不畫：進入點、溜狗登記與寫回、狗清單同步、讀取打包、志工身分、設定・活動・分享、狗資料與照片、管理查詢都直接讀寫 D1（例如 `worker/src/walk-accept.js:14`、`worker/src/packs.js:69`、`worker/src/identity.js:6`、`worker/src/feature-settings.js:13`、`worker/src/dog-edit.js:26`、`worker/src/admin/checks.js:27`）。
 - 修改紀錄 editlog.js 也省略不畫：寫資料的模組都匯入它，紀錄跟資料同一批寫進 D1（`worker/src/index.js:20`、`worker/src/walk-accept.js:2`、`worker/src/dog-list.js:9`、`worker/src/identity.js:1`、`worker/src/dog-edit.js:2`、`worker/src/admin/edits.js:5`、`worker/src/admin/activities.js:5`）。
 - 沒畫：同一框內的匯入（例如 walk-retry.js 呼叫 walk-reconcile.js）；小工具 sync-plan.js（台灣日期）、sheet-read.js（拆名字）、test-site.js（測試網站換外觀）；只拿常數的匯入：狗清單同步拿讀取打包的 SYNCED_AT_KEY（`worker/src/dog-list.js:12`），管理查詢拿 EXTRA_KEY、STOPPED_AT（`worker/src/admin/checks.js:3, 5`）。各前端模組怎麼拆見 `public/js/README.md`。
+
+## 決策｜志工溜狗表
+
+```mermaid
+flowchart LR
+  vweb["志工網站<br/>［畫面・HTML/JS］"]
+  vapi["志工網站 API<br/>［我寫的程式・Worker］"]
+  aweb["管理網站<br/>［畫面・HTML/JS］"]
+  aapi["管理 API<br/>［我寫的程式・Worker］"]
+  access["Cloudflare Access<br/>［別人的服務］"]
+  d1[("D1 資料庫<br/>［資料存放・SQLite］")]
+  gas["Apps Script<br/>［我寫的程式・Apps Script］"]
+  sheet[("Google 試算表<br/>［資料存放・試算表］")]
+  a0004{{"ADR 0004<br/>開放編輯與編輯紀錄"}}
+  a0009{{"ADR 0009<br/>版本號＋資料包"}}
+  a0013{{"ADR 0013<br/>只拿近期溜狗紀錄"}}
+  a0018{{"ADR 0018<br/>今日溜狗以 D1 為準"}}
+  a0006{{"ADR 0006<br/>網站寫試算表的範圍"}}
+  a0020{{"ADR 0020<br/>獨立管理網站"}}
+
+  vweb --> a0004
+  d1 --> a0004
+  vapi --> a0009
+  d1 --> a0009
+  vapi --> a0013
+  vapi --> a0018
+  d1 --> a0018
+  gas --> a0018
+  gas --> a0006
+  sheet --> a0006
+  aweb --> a0020
+  aapi --> a0020
+  access --> a0020
+
+  class vweb,aweb ui
+  class vapi,aapi,gas code
+  class d1,sheet data
+  class access ext
+  class a0004,a0009,a0013,a0018,a0006,a0020 decision
+  classDef ui stroke:#2f7fd0,stroke-width:2px
+  classDef code stroke:#d9822b,stroke-width:2px
+  classDef data stroke:#2e9d6a,stroke-width:2px
+  classDef ext stroke:#8a63c9,stroke-width:2px
+  classDef decision stroke:#b8458f,stroke-width:2px
+```
+
+- **[ADR 0004 開放編輯與編輯紀錄](adr/0004-open-editing-and-edit-log.md)**：選了網站上不用通關碼，選好名字就能改休養、介紹、照片，事後看修改紀錄；放棄通關碼（管理後台原本也放棄，後來由 ADR 0020 加回）；代價是名字是自己選的、不是驗證過的身分，紀錄只能當線索，誤改要照改前內容手動改回，而且紀錄只留 14 天。
+- **[ADR 0009 減少 D1 讀取：版本號＋資料包＋只讀今天](adr/0009-d1-read-versioned-packs.md)**：選了 D1 觸發器自動加版本號、算好的資料包存回 D1，Worker 每次只讀 1 列版本號，今天的紀錄另外讀；放棄每次 API 都讀整張表（當時一天約 110 萬列）；代價是其他手機看到改介紹、休養從馬上變成最慢 1 分鐘，觸發器每改一列多寫 1 列。
+- **[ADR 0013 網站只拿近期溜狗紀錄，舊的按年拿，「我溜過的狗」由 Worker 彙總](adr/0013-walks-recent-and-yearly.md)**：選了 `/api/walks` 只回上個月 1 號到今天，更舊的按年拿，「我溜過的狗」由 Worker 彙總；放棄每次回傳全部溜狗紀錄（估 20 年後約 30 MB）；代價是單隻狗「最久隔幾天」最多只能說到「超過 62 天」。
+- **[ADR 0018 今日溜狗以 D1 為準，有人編輯才同步、只送改動](adr/0018-today-walks-d1-event-sync.md)**：選了 D1 保存最新已接受狀態，網站操作 D1 接受後畫面就更新，背景把改動的狗寫回試算表，試算表改了 Apps Script 只送改動的格子；放棄 Cron 每 10 分鐘讀整張表逐狗比對再派送（CPU 超過 10 ms）；代價是接受最後核對到寫入之間的人工競爭，而且觸發器會漏，每天三次的保險掃描要留著補漏。
+- **[ADR 0006 網站寫入試算表的範圍](adr/0006-sheet-write-scope.md)**：選了網站只寫主清單「遛狗日期」「誰遛的」兩欄、備註只追加、異動紀錄只新增一列；原文沒有列其他做法，其他欄位與分頁（含已出所，常遛狗群 2026-10-24 起也不寫）一律不寫，等「以誰為準」定案再逐項討論；代價是需要另外記的資料只能放 D1 或 repo，不放試算表。理由是試算表是志工和所方共用的主要紀錄，網站寫錯會直接影響現場。
+- **[ADR 0020 獨立管理網站與可控制的志工編輯](adr/0020-independent-admin-site.md)**：選了同一個 repo 裡另一個管理 Worker 和網址，用 Cloudflare Access 驗證，共用 D1、R2 和資料操作模組；放棄同一個 Worker 依網址分流、把機器用的 `ADMIN_KEY` 交給瀏覽器；代價是多一個部署單位（ADR 認為這也讓管理站能獨立保護與驗收），第一版試算表送來的欄位在管理網站只能看、不能改。
+
+## 風險｜志工溜狗表
+
+```mermaid
+quadrantChart
+  x-axis "很少發生" --> "常常發生"
+  y-axis "影響小" --> "影響大"
+  quadrant-1 "先處理"
+  quadrant-2 "排進待辦"
+  quadrant-3 "接受"
+  quadrant-4 "觀察"
+  "R1 Apps Script 沒貼新版": [0.55, 0.7]
+  "R2 寫回停住的狗": [0.3, 0.7]
+  "R3 D1 寫入額度用完": [0.15, 0.45]
+  "R4 管理網站忘了部署": [0.7, 0.4]
+  "R5 備註晚約 10 小時進 D1": [0.8, 0.2]
+  "R6 架構圖頁沒畫成 SVG": [0.35, 0.15]
+  "R7 備註寫表失敗不重試": [0.2, 0.3]
+  "R8 測試 D1 被整份蓋掉": [0.15, 0.1]
+```
+
+- **R1 Apps Script 沒貼新版**：`sheet-write.gs` 沒有自動部署，要 K 手動貼到 Google，正式、測試各一份；repo 改了卻沒貼，線上寫表、編輯觸發的行為就跟程式不一樣，測試也測不到。依據：`apps-script/sheet-write.gs:1-2`。處理：修，做法待討論（例如寫回回呼帶版本號，對不上時在管理網站提醒）。
+- **R2 寫回停住的狗**：試算表明確拒絕（金鑰、試算表 ID、權限錯）就停，其他錯誤第 10 次失敗後停；停住的狗列在管理網站「資料檢查」，設定修好後怎麼重送還沒做。依據：`worker/src/walk-accept.js:252-255`、https://github.com/jiatsenK/bq-shelter-dogs/issues/675。處理：修，照 #675。
+- **R3 D1 寫入額度用完**：免費額度整個 Cloudflare 帳號每天 10 萬列，2026-10-16 用完過，用完後按溜了、常溜、開卡都會失敗。現在寫回前先照每日預算檢查，重試另有自己的上限，用完延到隔天，影響已經壓低。依據：`wrangler.jsonc:29-31`、[ADR 0008](adr/0008-diff-sync-and-write-budget.md)。處理：接受，額度變緊時再調 `SYNC_DAILY_BUDGET`。
+- **R4 管理網站忘了部署**：管理網站只能手動部署；改到兩站共用的程式時志工網站自動部署，管理網站要另外按，忘了按兩站就跑不同版本。依據：`.github/workflows/deploy-admin.yml:1-11`。處理：觀察，改到共用模組的 PR 在內文提醒。
+- **R5 備註晚約 10 小時進 D1**：網站新增的備註、異動紀錄是程式寫表，不會觸發編輯觸發，要等下一次狗清單保險掃描才進 D1。依據：`apps-script/sheet-write.gs:275`。處理：觀察，網站送出成功時試算表已經寫好；志工反映網站上看不到剛加的備註再處理。
+- **R6 架構圖頁沒畫成 SVG**：部署管理網站時無頭瀏覽器沒裝起來，「系統架構圖」頁改顯示 GitHub 連結，只在 workflow 留警告。依據：`.github/workflows/deploy-admin.yml:61`、`scripts/build-admin-assets.mjs:52-55`。處理：接受，部署後看一次那一頁就知道，GitHub 上的圖照常能看。
+- **R7 備註寫表失敗不重試**：加備註、新增異動紀錄是同步請 Apps Script 直接寫，失敗就回錯誤給志工，不存 D1、不重試。依據：`worker/src/index.js:598-614`。處理：接受，志工看到錯誤再送一次。
+- **R8 測試 D1 被整份蓋掉**：「準備預覽資料庫」把正式 D1 整份蓋掉測試 D1，測試網站上的實測資料也會不見。依據：`.github/workflows/seed-preview-db.yml:1-4`。處理：接受，只能手動跑。
 
 ## 從哪裡開始讀
 
