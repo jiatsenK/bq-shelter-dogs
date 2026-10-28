@@ -1,6 +1,6 @@
 // 其他頁統一成溜狗表樣子的示意圖：在真的網頁上換掉 #main 內容（頁首、底部列、狗卡都是真的）。
 // 用法：node mock.cjs <outDir>（假資料伺服器要先開在 8795）
-const { chromium } = require('C:/Users/User/projects/bq-shelter-dogs/node_modules/playwright');
+const { chromium } = require('playwright');
 const out = process.argv[2];
 
 const CSS = `

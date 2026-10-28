@@ -1,5 +1,5 @@
 // 點分布長條 → 跳出整個園區平面圖，這段時間入所的狗所在籠位亮橘點（示意）
-const { chromium } = require('C:/Users/User/projects/bq-shelter-dogs/node_modules/playwright');
+const { chromium } = require('playwright');
 const out = process.argv[2];
 (async () => {
   const b = await chromium.launch();

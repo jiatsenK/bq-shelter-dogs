@@ -1,5 +1,5 @@
 // 我溜過：排版不動，只統一按鈕、圖示、字。現在和改成都先放同樣的假資料（12、19 號有溜、上個月可按）
-const { chromium } = require('C:/Users/User/projects/bq-shelter-dogs/node_modules/playwright');
+const { chromium } = require('playwright');
 const out = process.argv[2];
 const CSS = `
 .who-hint > .icon:first-child { display: none; }

@@ -1,5 +1,5 @@
 // 在所統計：排版不動，只統一樣式。現在和改成都先把分布改成像真的資料（假資料全部 1.8 年）
-const { chromium } = require('C:/Users/User/projects/bq-shelter-dogs/node_modules/playwright');
+const { chromium } = require('playwright');
 const out = process.argv[2];
 const CSS = `
 .head-back { box-shadow: none !important; border: 0 !important; background: none !important; padding-left: 4px !important; }

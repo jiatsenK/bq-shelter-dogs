@@ -55,4 +55,4 @@ K：「第一頁溜狗表沒有意見，其他頁沒有統一很醜。」逐頁�
 
 ## 重做示意圖
 
-`scripts/`：`mock-server.cjs` 是假後端（`node mock-server.cjs <repo> 8795`），其他腳本用 Playwright 開 390px 手機、換 `#main` 內容後截圖，輸出資料夾當第一個參數。腳本裡的 Playwright 路徑、`compose.html` 的圖片路徑是當時那台電腦的絕對路徑，換電腦要改。
+`scripts/`：`mock-server.cjs` 是假後端（`node mock-server.cjs <repo> 8795`），其他腳本用 Playwright 開 390px 手機、換 `#main` 內容後截圖，輸出資料夾當第一個參數。腳本用 `require('playwright')`，要在裝了 Playwright 的地方跑；`compose.html` 讀同資料夾下 `mk/` 裡的截圖（`now-*.png`、`mock-*.png`），截圖要先放到那裡。
