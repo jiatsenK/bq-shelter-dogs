@@ -21,7 +21,7 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
   try {
     await page.goto(baseUrl + '/public/index.html');
     await page.locator('#main .card').first().waitFor();
-    assert.deepEqual(await page.locator('#tabs .t').allTextContents(), ['溜狗表', '常遛狗群', '我溜過', '資訊']);
+    assert.deepEqual(await page.locator('#tabs .t').allTextContents(), ['溜狗表', '常溜狗群', '我溜過', '資訊']);
     
     const selected = async id => {
       await page.locator('#tabs [data-tab="' + id + '"][aria-current="page"]').waitFor();
@@ -37,9 +37,9 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
     await page.locator('#groupPage h2').filter({ hasText: '測試群' }).waitFor();
     assert.equal(await page.locator('[data-gw-action="manage"], [data-gw-action="add"], [data-gw-action="create"], [data-gw-remove], #gwForm').count(), 0, '#474 狗群沒有編輯入口');
     await page.getByText('要改請到試算表「常遛狗群」分頁', { exact: true }).waitFor();
-    assert(!(await page.locator('#analysisBack').isVisible()), '常遛狗群是主分頁，沒有返回');
-    assert(await page.locator('header.app h1').filter({ hasText: '板收志工溜狗表' }).isVisible(), '常遛狗群顯示共用表頭');
-    assert(!(await page.locator('.head-title').isVisible()), '常遛狗群不另放內頁標題');
+    assert(!(await page.locator('#analysisBack').isVisible()), '常溜狗群是主分頁，沒有返回');
+    assert(await page.locator('header.app h1').filter({ hasText: '板收志工溜狗表' }).isVisible(), '常溜狗群顯示共用表頭');
+    assert(!(await page.locator('.head-title').isVisible()), '常溜狗群不另放內頁標題');
     await page.locator('#tabs [data-tab="walk"]').click();
     await selected('walk');
     await page.locator('#tabs [data-tab="mine"]').click();

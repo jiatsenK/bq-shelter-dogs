@@ -222,6 +222,7 @@ function runTests() {
       eq(hit('不要跟小白一起遛'), ['不要']);
       eq(hit('勿溜，治療中'), ['勿溜']);
       eq(hit('勿蹓'), ['勿溜'], '舊有異體字照樣算：');
+      eq([hit('目前不可帶出'), hit('禁止遛')], [['不可帶出'], ['禁止溜']], '常溜狗群以前擋的字眼也算警示（K 2026-10-29）：');
       eq(hit('親人，好牽，會撒嬌'), null, '一般備註：');
       const box = document.createElement('div');
       for (const note of ['不親狗，請單獨遛', '會攻擊黑色狗', '不要跟小白一起遛', '勿溜，治療中']) {
@@ -382,7 +383,7 @@ function runTests() {
         groupMap = {}; activeTab = 'walk'; searchQuery = '';
         render();
         const tabs = () => [...document.querySelectorAll('#tabs button')];
-        eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '常遛狗群', '我溜過', '資訊'], '分類（#99 加找狗）：');
+        eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '常溜狗群', '我溜過', '資訊'], '分類（#99 加找狗）：');
         eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '', '', ''], '數字（遛狗紀錄還沒讀；找狗不放數字）：');
         const active = () => tabs().filter(b => b.classList.contains('active')).map(b => b.dataset.tab);
         eq(active(), ['walk'], '預設：');

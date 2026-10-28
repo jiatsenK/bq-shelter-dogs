@@ -1,8 +1,8 @@
 import { appState, groupStageState } from './page-state.js';
 import { applyDogsData, dayChip, effectiveWalkDate, init, loadDogsData, loadWalkerName, photoThumbSrc, render, restOf, sexMark, walkRegistration, walkedNow } from './app.js';
 import { showDetail } from './detail.js';
-import { esc, icon, matchesSearch } from './ui-kit.js';
-import { walkKey } from './dog-status.js';
+import { esc, highlightNote, icon, matchesSearch } from './ui-kit.js';
+import { specialFlag, walkKey } from './dog-status.js';
 import { BQDates } from './dates.js';
 import { BQWalkUI } from './walk-ui.js';
 // #474：狗群名單只在試算表改；網站保留查看與整群溜狗登記。
@@ -30,8 +30,9 @@ function groupDogs(group) {
     return matches.length === 1 ? matches[0] : { name, unavailable: true };
   });
 }
+// 只擋對不到的狗和休養中；備註寫勿溜等警示字照樣登記、只顯示警示（K 2026-10-29：溜狗表、電腦版、常溜狗群同一個規則）
 function groupBlocked(dog) {
-  return dog.unavailable ? '主清單無法唯一對應' : restOf(dog) ? '休養中' : /勿[溜遛蹓]|不可帶出|不要[溜遛蹓]|禁止[溜遛蹓]/.test(dog.note || '') ? '暫停帶出' : '';
+  return dog.unavailable ? '主清單無法唯一對應' : restOf(dog) ? '休養中' : '';
 }
 function groupDateLabel(dog, now = new Date()) {
   if (dog.unavailable) return '資料無法確認';
@@ -86,7 +87,9 @@ function refreshGroupStage() {
 function groupTile(dog, index, today) {
   const blocked = groupBlocked(dog);
   const excluded = groupExcluded.has(dog.name);
-  return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}${appState.searchQuery.trim() && !matchesSearch(dog, appState.searchQuery.trim()) ? ' miss' : ''}" data-gw-dog="${index}" ${groupStageState.groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${groupStageState.groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}">${dayChip(dog, today)}<span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><span class="gw-who"><strong class="gw-name">${esc(dog.name)}${dog.unavailable ? '' : sexMark(dog)}</strong><span class="gw-cage">${esc(dog.cage || '待確認')}</span>${dog.unavailable ? '' : BQWalkUI.walkSyncHtml(dog)}</span>${groupStageState.groupExcept && !blocked ? `<span class="gw-check${excluded ? '' : ' on'}" aria-hidden="true"></span>` : ''}</button>`;
+  // 警示備註（勿溜、攻擊…）跟溜狗表一樣放原文、命中字標紅；不擋登記，按「有狗沒溜」可以拿掉這隻
+  const flag = dog.unavailable ? null : specialFlag(dog.note);
+  return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}${flag ? ' flagged' : ''}${appState.searchQuery.trim() && !matchesSearch(dog, appState.searchQuery.trim()) ? ' miss' : ''}" data-gw-dog="${index}" ${groupStageState.groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${flag ? `，注意：${esc(dog.note)}` : ''}${groupStageState.groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}">${dayChip(dog, today)}<span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><span class="gw-who"><strong class="gw-name">${esc(dog.name)}${dog.unavailable ? '' : sexMark(dog)}</strong><span class="gw-cage">${esc(dog.cage || '待確認')}</span>${flag ? `<span class="gw-warn">${icon('warn')}<span>${highlightNote(dog.note, flag.terms)}</span></span>` : ''}${dog.unavailable ? '' : BQWalkUI.walkSyncHtml(dog)}</span>${groupStageState.groupExcept && !blocked ? `<span class="gw-check${excluded ? '' : ' on'}" aria-hidden="true"></span>` : ''}</button>`;
 }
 function groupStageHtml() {
   const identity = loadWalkerName();
@@ -132,6 +135,11 @@ function groupStageHtml() {
     </div>
     <p id="gwSource" class="section-hint" role="status">${/* 讀取時間只留頁首右上角（#444）；這裡只說背景檢查的狀態 */ groupStageState.groupRead ? '檢查中…' : groupStageState.groupReadError ? '檢查失敗，保留先前內容' : ''}${groupStageState.groupReadError ? '<button type="button" data-gw-action="retry">重新讀取</button>' : ''}</p>
   </section>`;
+}
+// 從詳細資訊「看全部狗群」進來：停在有這隻狗的第一群（沒有就維持目前這群）
+function focusGroupOf(name) {
+  const hit = namedGroups().find(g => g.names.includes(name));
+  if (hit && groupStageState.groupColumn !== hit.column) { groupStageState.groupColumn = hit.column; resetGroupSelection(); }
 }
 function resetGroupSelection() { groupStageState.groupExcept = false; groupExcluded.clear(); groupStageState.groupFeedback = ''; }
 function changeGroup(step) {
@@ -198,7 +206,7 @@ async function undoGroupWalk() {
 }
 const groupMain = document.getElementById('main');
 
-export { groupExcluded, groupRegistrations, namedGroups, currentGroup, groupDogs, groupBlocked, groupDateLabel, receiveGroupData, loadGroupStage, refreshGroupStage, groupTile, groupStageHtml, resetGroupSelection, changeGroup, registerGroupWalk, undoGroupWalk, groupMain };
+export { groupExcluded, groupRegistrations, namedGroups, currentGroup, groupDogs, groupBlocked, groupDateLabel, receiveGroupData, loadGroupStage, refreshGroupStage, groupTile, groupStageHtml, focusGroupOf, resetGroupSelection, changeGroup, registerGroupWalk, undoGroupWalk, groupMain };
 export { groupStageState } from './page-state.js';
 
 export function bindGroups() {

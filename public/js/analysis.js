@@ -11,6 +11,7 @@ import { parseDogsData } from './dog-data.js';
 import { backFrom, pushPage } from './overlays.js';
 import { shareSite } from './share.js';
 import { BQWalkUI } from './walk-ui.js';
+import { deskOn } from './desk.js';
 
 // 分析頁（V5-4 #59、V5-5 #60）：目前 dogs.json 就能算的犬隻統計，加上 #56 累積的遛狗歷史與每日快照。
 // 統計都寫成純函式（輸入狗清單與今天日期，輸出數字），tests/index.html 直接測；畫面只負責把結果畫成 CSS／SVG 資訊圖表（大數字、圓環、直條圖）。
@@ -392,6 +393,10 @@ function walkHistorySection(dog, today) {
 function analysisPageHtml(today) {
   if (!canShow(analysisState.infoPage)) return `<p role="status">${settingsNotice()}</p>`;
   if (!analysisState.infoPage) return infoHomeHtml();
+  // 電腦版頁首每頁一樣（DESIGN_GUIDE 電腦版，K 2026-10-29）：子頁的「回資訊＋標題」放在內容最上面，不換掉網站名稱；手機在頁首
+  return (deskOn() ? `<div class="info-subhead"><button type="button" data-info-back>${icon('back')}回資訊</button><h2>${esc(INFO_PAGES[analysisState.infoPage])}</h2></div>` : '') + infoSubPageHtml(today);
+}
+function infoSubPageHtml(today) {
   if (analysisState.infoPage === 'departures') return departureSectionHtml(today);
   if (analysisState.infoPage === 'activities') return activitySectionHtml();
   if (analysisState.infoPage === 'updates') return infoUpdatesHtml();
@@ -623,7 +628,8 @@ function openInfoPage(page) {
   pushPage(current, { ...current, infoPage: page });
   render();
   window.scrollTo(0, 0);
-  document.getElementById('analysisBack').focus();
+  // 電腦版的「回資訊」在內容最上面（頁首不換），手機在頁首
+  (document.querySelector('#main [data-info-back]') || document.getElementById('analysisBack')).focus();
 }
 
 function restoreInfoPage(page) {
@@ -636,16 +642,20 @@ function restoreInfoPage(page) {
 export { LONG_STAY_MONTHS, STAY_BUCKETS, intakeDate, monthsBetween, daysBetween, analysisRows, zoneOf, formatStay, average, median, dated, stayDistribution, longestStay, zoneAverages, longStayShare, sexComparison, dataCompleteness, checkPhotos, dogKey, parseWalks, historyStartDates, historySpan, recentStart, dogWalkHistory, loadHistory, STAY_PICK_FIRST, yearsText, columnChart, stayPickHtml, dogRow, section, dogNames, kpi, analysisHtml, dataChecksHtml, mdText, walkHistorySection, analysisPageHtml, showAnalysis, hideAnalysis, closeAnalysis, analysisBtn, analysisBack, DEPARTURE_ORDER, DEPARTURE_COLORS, departureDetails, depRosterDefault, parseDeparturesData, loadDepartures, departureDetail, departureYears, filterDepartures, stackedYears, departureRow, departureListHtml, departureRosterHtml, departureSectionHtml, refreshDepartureList, INFO_PAGES, infoHomeHtml, shareFromInfo, infoUpdatesHtml, openInfoPage, restoreInfoPage };
 export { analysisState } from './page-state.js';
 
+// 頁首「回資訊／回溜狗表」與電腦版內容上方的「回資訊」共用：子頁回資訊首頁、資訊首頁回原本的分頁、常溜狗群回進來前的分頁
+function infoBack() {
+  if (appState.analysisOpen && analysisState.infoPage) {
+    backFrom(s => s?.infoPage, () => restoreInfoPage(''));
+  } else if (appState.analysisOpen) closeAnalysis();
+  else if (appState.activeTab === 'groups') {
+    backFrom(s => s && s.bqNavigation, () => switchTab(appState.groupsReturnTab, false));
+  }
+}
+
 export function bindAnalysis() {
   if (analysisBtn) analysisBtn.addEventListener('click', () => (appState.analysisOpen ? closeAnalysis() : showAnalysis()));
-  if (analysisBack) analysisBack.addEventListener('click', () => {
-    if (appState.analysisOpen && analysisState.infoPage) {
-      backFrom(s => s?.infoPage, () => restoreInfoPage(''));
-    } else if (appState.analysisOpen) closeAnalysis();
-    else if (appState.activeTab === 'groups') {
-      backFrom(s => s && s.bqNavigation, () => switchTab(appState.groupsReturnTab, false));
-    }
-  });
+  if (analysisBack) analysisBack.addEventListener('click', infoBack);
+  document.getElementById('main').addEventListener('click', e => { if (e.target.closest?.('[data-info-back]')) infoBack(); });
   // #739 入所多久分布：點長條列名單、再點同一根或「收起」收回；重畫後焦點留在剛按的地方
   document.getElementById('main').addEventListener('click', e => {
     if (!appState.analysisOpen || !e.target.closest) return;

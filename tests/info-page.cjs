@@ -62,7 +62,8 @@ module.exports = async (browser, base) => {
           assert(!(await frame.locator('.hint').isVisible()), '#421 資料編輯不放說明文字');
         }
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '頁面不橫向溢出');
-        await page.locator('#analysisBack').click();
+        // 手機的「回資訊」在頁首；電腦版頁首每頁一樣，「回資訊」在內容最上面（K 2026-10-29）
+        await page.locator('#analysisBack:visible, #main [data-info-back]:visible').click();
         await page.locator('[data-info-page="' + key + '"]').waitFor();
         assert(await page.locator('[data-info-page="' + key + '"]').evaluate(el => el === document.activeElement), '返回分類恢復焦點');
       }

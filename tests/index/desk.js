@@ -31,6 +31,15 @@ async function runDeskTests() {
       eq([...doc.querySelectorAll('.ds-notes li')].map(li => li.textContent), ['10/1阿湯移至C區35', '1/7新獨10奈威移至新B03休養'], '新的在上面：');
       eq(doc.querySelector('.desk-batch'), null, '還沒勾就沒有登記列：');
     });
+    await check('電腦版簡報（critique 2026-10-28 #10）：有人固定照顧不算進 0–2 天，另一格', () => {
+      const saved = allDogs;
+      try {
+        allDogs = [...saved, { ...mk('桌顧', '2026010105', '新A11', null), covered: true }];
+        const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', dueDogs(allDogs, TODAY)), 'text/html');
+        const n = cls => doc.querySelector(`.db-count.${cls} b`)?.textContent;
+        eq([n('sage'), n('covered')], ['1', '1'], '0–2 天、固定照顧：');
+      } finally { allDogs = saved; }
+    });
     await check('電腦版：最近 30 天有 30 格，今天框起來', () => {
       deskView = 'days30';
       deskWalkDays = new Map(); deskWalkFirst = '';

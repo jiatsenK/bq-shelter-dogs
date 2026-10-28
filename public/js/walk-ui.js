@@ -248,11 +248,16 @@ const BQWalkUI = (() => {
     const state = walkRegistration.state(dog);
     const disabled = sheetWillWrite() && !state.canRevert && !walkPendingNow(dog) ? ' disabled' : '';
     // #643：按了溜了沒登記成功，留紅框直到成功或再按；unsure 是送出了但沒收到確認
-    const failed = !state.mine && walkRegistration.failure(dog);
-    if (failed) return `<button type="button" class="walk-btn failed" data-walk="add" aria-label="${esc(dog.name)} ${failed.unsure ? '還不知道有沒有登記到' : '沒登記到'}，按一下再登記一次">${failed.unsure ? '未確認' : '沒登記到'}<small>再按一次</small></button>`;
+    const failed = walkFailure(dog);
+    if (failed) return `<button type="button" class="walk-btn failed" data-walk="add" aria-label="${esc(failed.aria)}">${failed.label}<small>再按一次</small></button>`;
     return state.mine
       ? `<button type="button" class="walk-btn done" data-walk="back" aria-label="${esc(dog.name)} 今天已溜，按一下取消"${disabled}>${icon('tick')}已溜</button>`
       : `<button type="button" class="walk-btn" data-walk="add" aria-label="${esc(dog.name)} 溜了">溜了</button>`;
+  }
+  // #643 沒登記到／未確認：狗卡「溜了」與電腦版全表共用同一個判斷和說法；自己今天已溜就不算
+  function walkFailure(dog) {
+    const failed = !walkRegistration.state(dog).mine && walkRegistration.failure(dog);
+    return failed ? { label: failed.unsure ? '未確認' : '沒登記到', aria: `${dog.name} ${failed.unsure ? '還不知道有沒有登記到' : '沒登記到'}，按一下再登記一次` } : null;
   }
   function walkSyncHtml(dog) {
     const status = walkRegistration.state(dog).syncStatus;
@@ -320,7 +325,7 @@ const BQWalkUI = (() => {
     setWalked, walkPendingNow, sheetUndoable, undoSheetWalks,
     openWithSheet, closeWithSheet, walkerChipsHtml, walkerEditBase, editWalkers,
     sheetWillWrite, registrationText,
-    walkButton, walkSyncHtml, showToast, hideToast
+    walkButton, walkFailure, walkSyncHtml, showToast, hideToast
   };
 })();
 

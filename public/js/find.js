@@ -5,6 +5,7 @@ import { closeOverlay, forgetOverlay, pushOverlay, registerOverlay, trapFocus } 
 import { esc, icon, monthDay, searchKey } from './ui-kit.js';
 import { AMBER_DAYS, specialFlag, walkKey } from './dog-status.js';
 import { BQWalkUI } from './walk-ui.js';
+import { SITE } from './site-config.js';
 
 // 找狗（#99）：照片圖鑑＋全域搜尋＋平面圖分區。K 2026-09-26 看過原型後同意。
 // 溜狗表是決定「接下來遛誰」；找狗是現場「眼前這隻是誰、在哪」，所以不顯示未遛天數、沒有「已遛」按鈕。
@@ -14,12 +15,14 @@ import { BQWalkUI } from './walk-ui.js';
 // 籠位 → 平面圖分區（K 2026-09-26 確認：新A／新B／新獨＝新犬舍區，舊A／舊B＝舊犬舍區，母幼＝幼母犬舍區，
 // C區（原本叫幼犬舍區，K 2026-09-28 改成跟後台一樣叫 C區），住院區＝隔離區）。對不到的籠位歸「其他籠位」（沒有 rect），放在圖下方的提示框。
 // rect 是平面圖上的位置 [x, y, 寬, 高]，照所內看板重畫（viewBox 380×600）；順序＝照片分段的順序（圖上由上到下）
+// 哪一籠在哪一區用 SITE.zones 的比對（js/site-config.js，電腦版、圖鑑同一份；critique 2026-10-28 #11）
+const siteZone = key => SITE.zones.find(z => z.key === key).test;
 const FIND_ZONES = [
-  { key: 'new', name: '新犬舍區', short: '新犬舍', test: c => /^新/.test(c), rect: [230, 0, 150, 240] },
-  { key: 'iso', name: '隔離區', short: '隔離', test: c => /^住院/.test(c), rect: [140, 40, 90, 200] },
-  { key: 'mom', name: '幼母犬舍區', short: '幼母犬舍', test: c => /^母幼/.test(c), rect: [0, 270, 250, 80] },
-  { key: 'pup', name: 'C區', short: 'C區', test: c => /^C/.test(c), rect: [250, 270, 130, 80] },
-  { key: 'old', name: '舊犬舍區', short: '舊犬舍', test: c => /^舊/.test(c), rect: [0, 350, 250, 250] },
+  { key: 'new', name: '新犬舍區', short: '新犬舍', test: siteZone('new'), rect: [230, 0, 150, 240] },
+  { key: 'iso', name: '隔離區', short: '隔離', test: siteZone('ward'), rect: [140, 40, 90, 200] },
+  { key: 'mom', name: '幼母犬舍區', short: '幼母犬舍', test: siteZone('mom'), rect: [0, 270, 250, 80] },
+  { key: 'pup', name: 'C區', short: 'C區', test: siteZone('c'), rect: [250, 270, 130, 80] },
+  { key: 'old', name: '舊犬舍區', short: '舊犬舍', test: siteZone('old'), rect: [0, 350, 250, 250] },
 ];
 const FIND_FACILITIES = [
   // K 2026-09-28 用圖示；2026-10-09 K 覺得空框裡一個圖示很突兀，改成虛線框＋小字（不是犬舍、不能點）

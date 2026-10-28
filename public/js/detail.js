@@ -11,13 +11,14 @@ import { BQPhoto } from './photo.js';
 import { BQWalkUI } from './walk-ui.js';
 import { whereKnown, whereOpen } from './find.js';
 import { walkHistorySection } from './analysis.js';
-import { computeStatus, effectiveWalkDate, openLightbox, photoThumb, render, restOf, searchInput, sexMark, walkedNow, walkedToday, walkerList, warnNote } from './app.js';
+import { focusGroupOf } from './group-stage.js';
+import { computeStatus, effectiveWalkDate, openLightbox, photoThumb, render, restOf, searchInput, sexMark, switchTab, walkedNow, walkedToday, walkerList, warnNote } from './app.js';
 import { sheetAppendHtml } from './sheet-append.js';
 import { fixedCareHtml, toggleFixedCare } from './detail-fixed-care.js';
 import { closeRestEdit, openRestEdit, restAdminHtml, restInput, restNoteHtml, saveRest } from './detail-rest.js';
 import { closeIntroEdit, introBarHtml, introInput, introOf, introSectionHtml, openIntroEdit, saveIntro } from './detail-intro.js';
 import { closeStaysEdit, openStaysEdit, saveStays, staysInput, staysRowClick } from './detail-stays.js';
-import { closeOverlay, pushOverlay, registerOverlay } from './overlays.js';
+import { closeOverlay, forgetOverlay, pushOverlay, registerOverlay } from './overlays.js';
 
 const detailEdits = BQDetailEditor.create(renderDetail);
 
@@ -202,7 +203,7 @@ function togetherSection(dog, walked) {
       ${list.length
         ? `<div class="buddies">${list.map(d => buddyTile(d, d.name, walked, mates.includes(d))).join('')}</div>`
         : `<div class="empty">沒有同籠，也沒有登記可以一起溜的狗</div>`}
-      <a class="group-page-link" href="groups.html">看全部狗群</a>
+      <button type="button" class="group-page-link" data-detail-groups>看全部狗群</button>
     </section>`;
 }
 
@@ -252,6 +253,7 @@ const DETAIL_CLICKS = [
   ['#favToggle', () => { appState.favorites.toggleFav(appState.detailDog); renderDetail(); render(); }],
   ['#detailBack', () => { const d = appState.detailTrail.pop(); if (d) showDetail(d, false); }],
   ['[data-departed-back]', el => { const d = appState.allDogs[el.dataset.departedBack]; if (d) showDetail(d); }],
+  ['[data-detail-groups]', () => openGroupsOf(appState.detailDog)],
   ['#detailWhere', el => whereOpen(appState.detailDog, el)],
   ['[data-where]', el => whereOpen(appState.detailDog, el)],
   ['.pick', el => {
@@ -384,6 +386,13 @@ function hideDetail() {
 function closeDetail() {
   closeOverlay('detail');
 }
+// 「看全部狗群」直接切到常溜狗群分頁，停在有這隻狗的第一群（critique 2026-10-28 #7：不再經 groups.html 整頁重新載入）
+function openGroupsOf(dog) {
+  focusGroupOf(dog.name);
+  forgetOverlay('detail');
+  hideDetail();
+  switchTab('groups');
+}
 registerOverlay('detail', { isOpen: () => !!appState.detailDog, hide: hideDetail });
 
-export { detailEdits, statusBadge, metaLine, favButtonHtml, detailHtml, departedDetailHtml, DEPARTURE_LABELS, departureBadge, departureBasis, lastWalkSection, detailChips, buddyTile, cageMates, togetherSection, groupWalkButton, DETAIL_CLICKS, wireDetail, labelPhotoPick, detailEditorViewport, renderDetail, showDetail, hideDetail, closeDetail };
+export { detailEdits, statusBadge, metaLine, favButtonHtml, detailHtml, departedDetailHtml, DEPARTURE_LABELS, departureBadge, departureBasis, lastWalkSection, detailChips, buddyTile, cageMates, togetherSection, groupWalkButton, DETAIL_CLICKS, wireDetail, labelPhotoPick, detailEditorViewport, renderDetail, showDetail, hideDetail, closeDetail, openGroupsOf };

@@ -13,7 +13,7 @@ import { BQFavorites } from './favorites.js';
 import { INFO_PAGES, analysisPageHtml, hideAnalysis, restoreInfoPage, shareFromInfo } from './analysis.js';
 import { groupStageHtml, receiveGroupData, refreshGroupStage } from './group-stage.js';
 import { BQTour } from './tour.js';
-import { deskOn, deskWalkHtml } from './desk.js';
+import { deskClearChecked, deskOn, deskWalkHtml } from './desk.js';
 import { esc, highlightNote, icon, matchesSearch, monthDay, pad2, searchKey } from './ui-kit.js';
 import { dogStatus, restFrom, sortDue, specialFlag, walkKey } from './dog-status.js';
 import { closeDetail, renderDetail, showDetail } from './detail.js';
@@ -819,7 +819,7 @@ function cardFromEvent(e) {
 // 主分類（V3，#33）：順序就是左右滑動切換的順序
 const TABS = [
   { id: 'walk', label: '溜狗表', icon: 'list' },
-  { id: 'groups', label: '常遛狗群', icon: 'group' },
+  { id: 'groups', label: '常溜狗群', icon: 'group' },
   { id: 'mine', label: '我溜過', icon: 'paw' }, // #58 取代原本的「相關資訊（編輯中）」
   { id: 'info', label: '資訊', icon: 'chart' },
 ];
@@ -859,6 +859,7 @@ function switchTab(id, pushHistory = true) {
   if (!appState.analysisOpen) appState.activeTab = id;
   if (before) pushPage(before, navigationState(id));
   if (changed && id === 'groups') refreshGroupStage();
+  if (changed) deskClearChecked();
   const prevFocus = document.activeElement;
   render();
   const btn = document.querySelector(`#tabs button[data-tab="${id}"]`);
@@ -1006,11 +1007,11 @@ function renderMain() {
   document.documentElement.classList.toggle('analysis-open', appState.analysisOpen || appState.activeTab === 'groups');
   // 四個主分頁都用網站共用表頭（K 2026-10-17）；只有資訊子頁換成「回資訊」＋子頁標題
   document.documentElement.classList.toggle('head-shared', appState.analysisOpen ? !analysisState.infoPage : appState.activeTab === 'groups');
-  // 常遛狗群也有搜尋狗名（K 2026-10-17）：前三個主分頁都能搜尋，資訊沒有
+  // 常溜狗群也有搜尋狗名（K 2026-10-17）：前三個主分頁都能搜尋，資訊沒有
   document.documentElement.classList.toggle('head-search', !appState.analysisOpen && appState.activeTab === 'groups');
   document.documentElement.classList.toggle('head-sub', appState.analysisOpen && !!analysisState.infoPage);
   const title = document.querySelector('.head-title');
-  if (title) title.textContent = appState.analysisOpen ? (INFO_PAGES[analysisState.infoPage] || '資訊') : '常遛狗群';
+  if (title) title.textContent = appState.analysisOpen ? (INFO_PAGES[analysisState.infoPage] || '資訊') : '常溜狗群';
   const back = document.getElementById('analysisBack');
   if (back) back.innerHTML = `${icon('back')}回${(TABS.find(t => t.id === (appState.analysisOpen ? appState.activeTab : appState.groupsReturnTab)) || TABS[0]).label}`;
 

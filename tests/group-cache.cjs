@@ -138,11 +138,7 @@ module.exports = async (browser, base) => {
     await page.getByText(/沒登記到|還不知道有沒有登記到/).first().waitFor();
     partial = false;
     const beforeRetry = writes.length;
-    data.dogs[1].note = '禁止溜狗';
-    await page.locator('[data-gw-action="retry-walk"]').click();
-    await page.getByText('待重試的狗目前無法登記，請確認狗群狀態', { exact: true }).waitFor();
-    assert.equal(writes.length, beforeRetry, '部分失敗重試也必須重新檢查狗的限制');
-    data.dogs[1].note = '';
+    // 備註的警示字（勿溜、禁止溜…）K 2026-10-29 起只提醒不擋；重試前重新檢查狗的限制，用同名換編號（對不到原本那隻）驗
     const originalId = data.dogs[1].id;
     data.dogs[1].id = '20991231001';
     await page.locator('[data-gw-action="retry-walk"]').click();

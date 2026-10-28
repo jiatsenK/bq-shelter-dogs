@@ -26,7 +26,7 @@
 | `ui-kit.js` | HTML 跳脫、圖示、備註標示、日期文字、搜尋比對；純函式 | 無 | index、Node |
 | `dog-status.js` | `walkKey`、警示關鍵字、天數色標（`dogStatus`）、休養判斷（`restFrom`）與溜狗表排序（`sortDue`）；今天的登記狀態與休養設定由呼叫端帶入，app.js 的 `computeStatus`／`dueDogs`／`restOf` 是帶好狀態的包裝 | dates、site-config | index、Node |
 | `detail-editor.js` | `BQDetailEditor`：四種編輯器的草稿、儲存中、錯誤與重畫狀態 | 無 | index |
-| `detail.js` | 詳細資訊的畫面總控：內容（在所／離所）、同籠與可以一起溜、按鈕分派（`DETAIL_CLICKS`）、`renderDetail`／`showDetail`／`hideDetail`／`closeDetail` 與焦點還原；換狗或關閉時由 `leaveDetailDog` 收掉暫時狀態，儲存中的編輯留著 | app、overlays、各 `detail-*.js`、sheet-append、ui-kit、dog-status、dates、detail-editor、detail-viewport、photo、walk-ui、find、analysis、feature-settings、page-state | index |
+| `detail.js` | 詳細資訊的畫面總控：內容（在所／離所）、同籠與可以一起溜、按鈕分派（`DETAIL_CLICKS`）、`renderDetail`／`showDetail`／`hideDetail`／`closeDetail` 與焦點還原；換狗或關閉時由 `leaveDetailDog` 收掉暫時狀態，儲存中的編輯留著；「看全部狗群」直接切到常溜狗群分頁（`openGroupsOf`） | app、overlays、各 `detail-*.js`、sheet-append、ui-kit、dog-status、dates、detail-editor、detail-viewport、photo、walk-ui、find、analysis、group-stage、feature-settings、page-state | index |
 | `detail-rest.js` | 休養中說明與休養設定編輯器（開、改、存、結束、取消、輸入） | app、detail、api、dates、ui-kit、walk-ui、feature-settings、page-state | index |
 | `detail-fixed-care.js` | 有人固定照顧開關與每隻狗的儲存狀態 | app、detail、api、ui-kit、walk-ui、feature-settings、page-state | index |
 | `detail-intro.js` | 出入所紀錄＋介紹那一段：介紹原文照顯示（ADR 0022）、介紹編輯器（一個文字框）、剛存好的介紹 | app、detail、detail-stays、api、ui-kit、walk-ui、feature-settings、page-state | index |
@@ -43,13 +43,13 @@
 | `photo.js` | `BQPhoto`：主照片選檔、壓縮、預覽、裁切、上傳，保留內部狀態 | app、detail、ui-kit、api、walk-ui、photo-images、overlays、page-state | index |
 | `photo-images.js` | 裁切結果轉成上傳用的原圖與縮圖 | 無 | index、admin（建置複製） |
 | `favorites.js` | `BQFavorites`：常溜實例、舊鍵搬移、逐隻增刪、離線佇列與身分同步；切回網頁 5 分鐘內不重抓 | app、detail、dog-status、api、store、identity、walk-ui、page-state | index |
-| `walk-ui.js` | `BQWalkUI`：今日登記／復原的畫面、提示條、同行人、溜狗人編輯 | app、detail、ui-kit、dog-status、dates、walk-flow、welcome、page-state | index |
+| `walk-ui.js` | `BQWalkUI`：今日登記／復原的畫面、提示條、同行人、溜狗人編輯；沒登記到的判斷與說法（`walkFailure`，狗卡和電腦版全表共用） | app、detail、ui-kit、dog-status、dates、walk-flow、welcome、page-state | index |
 | `app.js` | 主頁資料、狗卡、燈箱、頁籤、溜狗操作與整頁事件綁定；詳細資訊在 detail.js；返回鍵交給 overlays.js，app.js 只處理都沒開覆蓋層時的頁籤切換 | 共用模組、dog-data、所有主頁功能模組、page-state | index |
-| `analysis.js` | 分析、離所名冊與資訊頁；資訊頁的「分享網站連結」（ADR 0023） | app、detail、ui-kit、dates、api、site-config、dog-data、activities、overlays、share、walk-ui、feature-settings、page-state | index |
+| `analysis.js` | 分析、離所名冊與資訊頁；資訊頁的「分享網站連結」（ADR 0023）；電腦版資訊子頁的「回資訊」在內容最上面（`infoBack` 跟頁首共用） | app、detail、ui-kit、dates、api、site-config、dog-data、activities、overlays、share、walk-ui、desk、feature-settings、page-state | index |
 | `share.js` | `shareSite`：分享網站先用分享選單，不行就複製，都不行回 manual 由畫面顯示網址；navigator 由呼叫端帶入，不碰 DOM（ADR 0023） | 無 | index、Node |
 | `activities.js` | 活動紀錄與已出所狗卡編輯 | app、ui-kit、analysis、dates、api、walk-ui、page-state | index |
-| `find.js` | 找狗照片、搜尋與平面圖 | app、detail、ui-kit、dog-status、walk-ui、overlays、page-state | index |
-| `group-stage.js` | 可以一起溜的狗群畫面 | app、detail、ui-kit、dog-status、dates、api、walk-ui、page-state | index |
+| `find.js` | 找狗照片、搜尋與平面圖；籠位在哪一區用 `SITE.zones` | app、detail、ui-kit、dog-status、walk-ui、overlays、site-config、page-state | index |
+| `group-stage.js` | 可以一起溜的狗群畫面；從詳細資訊進來時停在有這隻狗的群（`focusGroupOf`） | app、detail、ui-kit、dog-status、dates、api、walk-ui、page-state | index |
 | `desk.js` | 電腦版簡報、全表／最近 30 天與側欄，明確啟動後啟用寬螢幕呈現；補資料由管理網站取代（#568） | app、detail、sheet-append、ui-kit、dog-status、dates、api、site-config、find、walk-ui、page-state | index |
 | `cards.js` | 圖鑑、開卡與已出所狗卡，保留卡片專用格式 | dates、api、store、site-config、overlays、identity、page-state | cards |
 | `edit-values.js` | `editsValue`：編輯紀錄改前／改後的文字，純函式 | 無 | edits、admin（建置複製） |
