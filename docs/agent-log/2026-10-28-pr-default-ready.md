@@ -5,4 +5,4 @@
 - 本 repo：`AGENTS.md` 的草稿／轉正式條件式改成預設推送並開正式 PR；`docs/agents/local-checks.md` 的交付範圍說法與 CI 等待段落對齊。搜尋其他「草稿」「轉正式」「wait-pr-checks」「等待 CI」，其餘出現都在舊紀錄或產品功能（活動草稿等），不需改。
 - 代價：`.github/workflows/tests.yml` 對草稿 PR 不跑測試；改成預設正式 PR 後每個 PR、每次推送都會跑 CI。本次不改 workflow。
 - 驗證：僅文件變更，檢查 diff 與殘留文字；未執行程式測試，未等待 CI。
-- 相關 PR：本分支 `docs/pr-default-ready` 的 PR。
+- 相關 PR：#719（正式 PR，不等待 CI、不 merge）。
