@@ -187,7 +187,7 @@ module.exports = async (browser, base) => {
     assert.deepEqual(await page.locator('#releases > li').first().locator('ul li').allTextContents(), ['名單修改與復原先存 D1', '狗群換群箭頭固定位置'], '拿掉 PR／commit 連結');
     assert.equal(await page.locator('#releases > li').nth(1).locator('p').textContent(), '這版沒有列出改動。');
     assert.equal(await page.locator('#releases a[href="https://github.com/o/r/releases/tag/v9.3.0"][target="_blank"]').count(), 1);
-    await page.getByText('更新紀錄顯示中', { exact: false }).waitFor();
+    assert.equal(await page.locator('#volunteer-state').count(), 0, '志工網站不顯示網站更新，不放志工開關標記');
     releasesCode = 403;
     await page.locator('#reload').click();
     await page.getByText('GitHub 暫時限制讀取次數', { exact: false }).waitFor();

@@ -32,7 +32,7 @@ npx.cmd wrangler d1 execute bq-shelter-dogs --remote --command "SELECT a.activit
 
 ## 修改紀錄 `updates.html`、網站更新 `releases.html`（原更新紀錄）
 
-- 網站更新（K 2026-10-28 改）：頁面在瀏覽器直接讀公開 repo 的 GitHub Releases（`api.github.com/repos/…/releases`，不帶登入，每個 IP 每小時 60 次），release-please 發版就有，不用重新部署管理網站；CSP 的 `connect-src` 因此多放 `https://api.github.com`。純規則在 `admin/public/js/release-notes.js`：草稿與預先發布不列、日期換台灣日期、拿掉每條結尾的 PR／commit 連結，版本號連到 GitHub 的 Release 頁。不存 D1。志工網站的網站更新仍讀人工寫的 `public/website-updates.json`（`docs/website-updates.md`），管理網站不再複製這份檔。
+- 網站更新（K 2026-10-28 改）：頁面在瀏覽器直接讀公開 repo 的 GitHub Releases（`api.github.com/repos/…/releases`，不帶登入，每個 IP 每小時 60 次），release-please 發版就有，不用重新部署管理網站；CSP 的 `connect-src` 因此多放 `https://api.github.com`。純規則在 `admin/public/js/release-notes.js`：草稿與預先發布不列、日期換台灣日期、拿掉每條結尾的 PR／commit 連結，版本號連到 GitHub 的 Release 頁。不存 D1。同一天 K 決定不再人工寫：`public/website-updates.json`、`docs/website-updates.md` 刪掉，志工網站資訊 → 更新紀錄只剩資料編輯。
 - Release PR 合併就會改 `.release-please-manifest.json`，`release-please.yml` 照這個路徑馬上跑一次打 tag、建 Release；平常仍每週一 9:00 跑一次整理 Release PR。
 - 資料編輯：GET `/api/manage/edits`，參數白名單 `q`（操作者、編號、狗名、改前改後文字，`%`／`_` 視為文字）、`kind`（`KIND_LABELS`）、`dog`（編號、舊編號、永久 ID 或狗名）、`actor`（名字或管理者 email）、`source`（access／volunteer／legacy）、`from`／`to`（台灣日期）、`order`（newest／oldest）、`cursor`（上一頁最後一筆的 id）、`size`（25／50／100）；未知參數或超過 100 字回 400。
 - 查詢在 D1 涵蓋整張 `v3_edit_log`，每次 1 個查詢：照主鍵順序、游標接續、`LIMIT` 一頁＋1 判斷下一頁，不算總筆數（CODING_STANDARDS「量不能隨資料變大」）。不帶條件的載入與換頁只讀一頁的列，測試證明紀錄多 10 倍讀取列數不變、查詢計畫不排序整張表。

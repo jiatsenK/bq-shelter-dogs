@@ -113,10 +113,7 @@ async function runAnalysisTests() {
     }
   });
   await check('#59 分析程式只讀：網路呼叫只有 HEAD 查照片與讀溜狗、離所紀錄（#60、#260），不寫入、不存資料', () => {
-    const code = ANALYSIS_JS.replace("fetch(photoSrc({ id }), { method: 'HEAD', cache: 'no-cache' })", '')
-      .replace("fetch('website-updates.json', { cache: 'no-cache' })", '')
-      // #421 網站更新只在本機留一份上次讀到的內容，先顯示再背景檢查
-      .replace('localStorage.getItem(WEBSITE_UPDATES_CACHE)', '').replace('localStorage.setItem(WEBSITE_UPDATES_CACHE, JSON.stringify(entries))', '');
+    const code = ANALYSIS_JS.replace("fetch(photoSrc({ id }), { method: 'HEAD', cache: 'no-cache' })", '');
     // #60 讀溜狗紀錄、離所紀錄：只用 BQApi 讀的端點；#363 點離所的狗才拿那一年（網址帶版本號，瀏覽器快取）
     eq([...new Set([...ANALYSIS_JS.matchAll(/BQApi\.(\w+)\(/g)].map(m => m[1]))].sort(), ['departureYear', 'departures', 'walks'], '#60 #260 溜狗紀錄、離所紀錄從 Worker 讀：');
     for (const read of ["get('/walks'", "get('/departures/index'", 'get(`/departures?year=']) if (!API_JS.includes(read)) throw new Error(`BQApi 要用 GET 讀 ${read}`);

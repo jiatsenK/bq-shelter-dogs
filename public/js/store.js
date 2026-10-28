@@ -17,7 +17,6 @@ const BQStore = (() => {
     onboarded: 'bq-onboarded',
     nameLater: 'bq-name-later',
     zukan: 'bq-zukan',
-    websiteUpdates: 'bq-website-updates',
     editsCache: 'bq-edits-cache',
   });
   function create(storage) {

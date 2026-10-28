@@ -1015,7 +1015,7 @@ function renderMain() {
   // #273 資訊分類與子頁。
   if (appState.analysisOpen) {
     buildTabs(appState.loadState === 'ready' ? { walk: appState.allDogs.filter(d => matchesSearch(d, appState.searchQuery.trim())).length, mine: myWalksCount('') } : {});
-    if (!(canShow('updates') && analysisState.infoPage === 'updates' && analysisState.infoUpdateTab === 'edits' && main.querySelector('#infoEdits'))) main.innerHTML = analysisPageHtml(today);
+    if (!(canShow('updates') && analysisState.infoPage === 'updates' && main.querySelector('#infoEdits'))) main.innerHTML = analysisPageHtml(today);
     return;
   }
   if (appState.activeTab === 'groups') {

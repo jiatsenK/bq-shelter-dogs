@@ -1,10 +1,8 @@
 import { readReleases } from './api.js';
 import { toReleaseEntries } from './release-notes.js';
-import { showVolunteerState } from './volunteer-state.js';
 import { byId, element } from './dom.js';
 
-// #624 網站更新頁（從原更新紀錄頁拆出），唯讀。改讀 GitHub Releases：發版就有，不用重新部署管理網站。
-// 志工網站的「網站更新」仍讀人工寫的 public/website-updates.json（docs/website-updates.md）。
+// #624 網站更新頁（從原更新紀錄頁拆出），唯讀。K 2026-10-28 改讀 GitHub Releases：發版就有，不用重新部署管理網站；不再人工寫，志工網站也不顯示。
 async function loadReleases() {
   const status = byId('release-status'), list = byId('releases');
   const result = await readReleases();
@@ -38,5 +36,4 @@ byId('reload').addEventListener('click', async () => {
   await loadReleases();
   byId('reload').disabled = false;
 });
-showVolunteerState(byId('volunteer-state'), [['showUpdates', '更新紀錄顯示中', '更新紀錄已隱藏']]);
 loadReleases();
