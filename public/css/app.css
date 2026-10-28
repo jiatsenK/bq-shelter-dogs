@@ -2485,3 +2485,77 @@ html[data-site="test"] .brand h1::after {
   content: "測試版"; display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 3px;
   background: var(--tab-amber); color: #2A1230; font-size: 13px; font-weight: 800; letter-spacing: 0; line-height: 1.4; vertical-align: 3px; white-space: nowrap;
 }
+
+/* ── 電腦版我溜過（critique 2026-10-28，K 2026-10-29 解除 480 單欄；js/desk-mine.js）──
+   名字列是頁面標題列；月曆撐滿主內容、每格寫當天溜的狗名；右欄 300px 是選中那天的狗和這個月的統計。只在 html.desk-on，手機不受影響 */
+@media (min-width: 1100px) {
+  html.desk-on .mine-desk.solo { grid-template-columns: minmax(0, 1fr); }
+  html.desk-on .mine-head { display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0 0 12px; }
+  html.desk-on .mine-who { margin: 0 8px 0 0; font-size: 24px; font-weight: 800; line-height: 1.2; }
+  html.desk-on .mine-ask { font-size: 14px; color: var(--ink-soft); }
+  html.desk-on .mine-head .who-edit { min-height: 36px; margin: 0; padding: 0 8px; border-radius: 0; background: none; box-shadow: none; color: var(--primary); font-size: 15px; font-weight: 700; text-decoration: underline; text-underline-offset: 4px; }
+  html.desk-on .mine-head .who-edit:hover { text-decoration-thickness: 2px; }
+  html.desk-on .mine-head .who-edit:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+
+  /* 月曆：月份在左、換月箭頭靠右；格子寬了就寫狗名，不只寫幾隻 */
+  html.desk-on .mine-desk .mine-cal { margin: 0; padding: 16px 20px 20px; }
+  html.desk-on .mine-desk .mc-head { margin-bottom: 12px; padding: 0; gap: 4px; }
+  html.desk-on .mine-desk .mc-title { flex-direction: row; align-items: baseline; gap: 12px; font-size: 20px; }
+  html.desk-on .mine-desk .mc-nav:not(:disabled):hover { background: var(--surface-soft); }
+  html.desk-on .mine-desk .mc-nav:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+  html.desk-on .mine-desk .mc-week { margin-bottom: 6px; font-size: 13px; font-weight: 700; }
+  html.desk-on .mine-desk .mc-grid { gap: 4px; }
+  html.desk-on .mine-desk .mc-cell { display: grid; grid-template-columns: auto 1fr; grid-template-rows: auto 1fr; align-content: start; align-items: start; justify-items: start; gap: 4px 6px; min-height: 96px; padding: 8px 10px; text-align: left; box-shadow: inset 0 1px 0 var(--line); }
+  html.desk-on .mine-desk .mc-cell.blank { box-shadow: none; }
+  html.desk-on .mine-desk .mc-cell b { font-size: 14px; }
+  html.desk-on .mine-desk .mc-today { justify-self: end; font-size: 12px; font-weight: 700; color: var(--ink); }
+  html.desk-on .mine-desk .mc-cell.today { box-shadow: inset 0 0 0 2px var(--ink-soft); }
+  html.desk-on .mine-desk .mc-names { grid-column: 1 / -1; justify-self: stretch; display: grid; gap: 2px; min-width: 0; }
+  html.desk-on .mine-desk .mc-names i { overflow: hidden; font-size: 13.5px; font-style: normal; font-weight: 700; line-height: 1.35; color: var(--ink); white-space: nowrap; text-overflow: ellipsis; }
+  html.desk-on .mine-desk .mc-names i.more { font-size: 12.5px; font-weight: 600; color: var(--ink-soft); }
+  html.desk-on .mine-desk .mc-cell.on { box-shadow: none; transition: background-color .12s ease-out; }
+  html.desk-on .mine-desk .mc-cell.on:hover { background: #CCDFD5; }
+  html.desk-on .mine-desk .mc-cell.on:focus-visible { outline: 3px solid var(--primary); outline-offset: 1px; }
+  html.desk-on .mine-desk .mc-cell.on.today { box-shadow: inset 0 0 0 2px var(--ink-soft); }
+  html.desk-on .mine-desk .mc-cell.on.sel, html.desk-on .mine-desk .mc-cell.on.sel:hover { background: var(--shell); }
+  html.desk-on .mine-desk .mc-cell.on.sel.today { box-shadow: inset 0 0 0 2px var(--shell), inset 0 0 0 4px #fff; }
+  html.desk-on .mine-desk .mc-cell.sel .mc-names i, html.desk-on .mine-desk .mc-cell.sel .mc-today { color: #fff; }
+  html.desk-on .mine-desk .mc-cell.sel .mc-names i.more { color: var(--shell-soft); }
+
+  /* 右欄：那天溜的狗一列一隻（移過有底色，點了開詳細資訊）、這個月的統計 */
+  html.desk-on .mine-side h3 { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 10px; font-size: 17px; font-weight: 800; }
+  html.desk-on .mine-side h3 small { font-size: 13px; font-weight: 600; color: var(--ink-soft); }
+  html.desk-on .md-list { display: grid; margin: 0 -8px; padding: 0; list-style: none; }
+  html.desk-on .md-row { display: grid; grid-template-columns: 36px minmax(0, 1fr) auto; grid-template-rows: auto auto; column-gap: 10px; align-items: center; width: 100%; min-height: 46px; padding: 5px 8px; border: none; border-radius: 3px; background: none; color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+  html.desk-on .md-row .thumb { grid-row: 1 / 3; width: 36px; height: 36px; border-radius: 2px; }
+  html.desk-on .md-row .md-name { overflow: hidden; font-size: 15px; font-weight: 800; white-space: nowrap; text-overflow: ellipsis; }
+  html.desk-on .md-row .md-cage { grid-column: 2; font-size: 13px; color: var(--ink-soft); }
+  html.desk-on .md-row .md-times { grid-column: 3; grid-row: 1 / 3; font-size: 13px; color: var(--ink-soft); }
+  html.desk-on button.md-row:hover { background: var(--surface-soft); }
+  html.desk-on button.md-row:hover .md-name { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+  html.desk-on button.md-row:focus-visible { outline: 3px solid var(--primary); outline-offset: -1px; }
+  html.desk-on .md-row.gone { cursor: default; }
+  html.desk-on .md-row.gone .md-name { color: var(--ink-soft); }
+  html.desk-on .ms-list { display: grid; margin: 0; }
+  html.desk-on .ms-list > div { display: grid; grid-template-columns: 64px minmax(0, 1fr); align-items: baseline; gap: 8px; padding: 7px 0; border-bottom: 1px solid #E6EBE8; }
+  html.desk-on .ms-list > div:first-child { padding-top: 0; }
+  html.desk-on .ms-list dt { font-size: 13px; color: var(--ink-soft); }
+  html.desk-on .ms-list dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px; margin: 0; font-size: 14px; }
+  html.desk-on .ms-list dd b { font-size: 20px; font-weight: 900; line-height: 1.1; }
+  html.desk-on .ms-list dd small { margin-left: auto; font-size: 12.5px; color: var(--ink-soft); }
+  html.desk-on .ms-list .ms-fav { font-weight: 800; }
+  html.desk-on .ms-all { margin: 10px 0 0; font-size: 13.5px; color: var(--ink-soft); }
+  html.desk-on .ms-all b { font-size: 15px; color: var(--ink); }
+
+  /* 還沒設定是誰：表單放在主內容，一張白紙、寬度跟一般設定表單差不多 */
+  html.desk-on .mine-setup { max-width: 640px; }
+  html.desk-on .mine-setup .who-box { margin: 0; padding: 24px 28px; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line) !important; }
+  html.desk-on .mine-setup .who-box h3 { font-size: 20px; }
+  html.desk-on .mine-setup .who-box p { font-size: 15px; }
+  html.desk-on .mine-desk.solo > .status-msg { max-width: 640px; padding: 32px 0; text-align: left; }
+
+  /* 搜尋：一天一張卡，排成好幾欄 */
+  html.desk-on .mine-found { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 12px; align-items: start; }
+  html.desk-on .mine-found .visit { margin: 0; }
+  html.desk-on .mine-found .mine-dog:hover .bname { color: var(--primary); text-decoration: underline; text-underline-offset: 3px; }
+}

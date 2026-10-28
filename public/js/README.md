@@ -51,6 +51,7 @@
 | `find.js` | 找狗照片、搜尋與平面圖；籠位在哪一區用 `SITE.zones` | app、detail、ui-kit、dog-status、walk-ui、overlays、site-config、page-state | index |
 | `group-stage.js` | 可以一起溜的狗群畫面；從詳細資訊進來時停在有這隻狗的群（`focusGroupOf`） | app、detail、ui-kit、dog-status、dates、api、walk-ui、page-state | index |
 | `desk.js` | 電腦版簡報、全表／最近 30 天與側欄，明確啟動後啟用寬螢幕呈現；補資料由管理網站取代（#568） | app、detail、sheet-append、ui-kit、dog-status、dates、api、site-config、find、walk-ui、page-state | index |
+| `desk-mine.js` | 電腦版我溜過：標題列（名字＋修改）、月曆每格寫當天溜的狗名（最多 2 個，其餘「＋N」）、右欄選中那天的狗與月曆那個月的統計；還沒設定是誰時表單放主內容。手機照舊是 app.js 的 `myWalksHtml` | app、ui-kit、dates、welcome、page-state | index |
 | `cards.js` | 圖鑑、開卡與已出所狗卡，保留卡片專用格式 | dates、api、store、site-config、overlays、identity、page-state | cards |
 | `edit-values.js` | `editsValue`：編輯紀錄改前／改後的文字，純函式 | 無 | edits、admin（建置複製） |
 | `edits.js` | 編輯紀錄清單 | api、store、edit-values | edits |
