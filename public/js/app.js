@@ -10,7 +10,7 @@ import { findPageHtml, whereKnown, whereOpen } from './find.js';
 import { BQWalkUI } from './walk-ui.js';
 import { BQWalks } from './walk-flow.js';
 import { BQFavorites } from './favorites.js';
-import { INFO_PAGES, analysisPageHtml, hideAnalysis, restoreInfoPage, shareFromInfo } from './analysis.js';
+import { INFO_PAGES, hideAnalysis, renderInfoPage, restoreInfoPage, shareFromInfo } from './analysis.js';
 import { groupStageHtml, receiveGroupData, refreshGroupStage } from './group-stage.js';
 import { BQTour } from './tour.js';
 import { deskClearChecked, deskOn, deskWalkHtml } from './desk.js';
@@ -1020,7 +1020,9 @@ function renderMain() {
   // #273 資訊分類與子頁。
   if (appState.analysisOpen) {
     buildTabs(appState.loadState === 'ready' ? { walk: appState.allDogs.filter(d => matchesSearch(d, appState.searchQuery.trim())).length, mine: myWalksCount('') } : {});
-    if (!(canShow('updates') && analysisState.infoPage === 'updates' && main.querySelector('#infoEdits'))) main.innerHTML = analysisPageHtml(today);
+    // 更新紀錄的 iframe 不重畫（重畫會重新載入）；手機、電腦版切換時才換
+    const keepEdits = canShow('updates') && analysisState.infoPage === 'updates' && main.querySelector('#infoEdits') && !!main.querySelector('.info-desk') === deskOn();
+    if (!keepEdits) renderInfoPage(main, today);
     return;
   }
   if (appState.activeTab === 'groups') {

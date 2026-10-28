@@ -69,13 +69,11 @@ module.exports = async (browser, base) => {
       await frame();
       assert.deepEqual(await look(), walkLook, `${id} 的頁首與左邊線跟溜狗表一樣`);
     }
-    // 資訊子頁：頁首不換，「回資訊」在內容最上面
-    await page.locator('[data-info-page="stay"]').click();
-    await page.locator('#main [data-info-back]').waitFor();
+    // 資訊子頁：頁首不換；電腦版是左邊子頁清單＋右邊內容（細節在 tests/desk-info.cjs）
+    await page.locator('#main [data-info-page="quality"]').click();
+    await page.locator('#main [data-info-page="quality"][aria-current="page"]').waitFor();
     assert.equal((await look()).search, walkLook.search, '資訊子頁搜尋框位置不變');
     assert(await page.locator('header.app h1').isVisible(), '資訊子頁仍是網站名稱');
-    await page.locator('#main [data-info-back]').click();
-    await page.locator('[data-info-page="stay"]').waitFor();
 
     // #2：勾了的狗被換區藏起來就拿掉；換分頁回來勾選清掉
     await tab('walk').click();
