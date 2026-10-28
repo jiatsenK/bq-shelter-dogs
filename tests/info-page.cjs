@@ -1,5 +1,16 @@
 const assert = require('node:assert/strict');
-const fixture = require('./fixtures/dogs.json');
+const sample = require('./fixtures/dogs.json');
+
+// #739 入所多久分布：照今天往回推編號，讓 11 根有空的、超過 5 隻的、10 年以上的（入所日都取月初再多退一個月，不踩滿年的邊界）
+const STAY_YEARS = [0, 3, 3, 3, 3, 3, 3, 3, 8, 11, 12, 5];
+const intakeId = (years, months) => {
+  const d = new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth() - months - 1);
+  d.setFullYear(d.getFullYear() - years);
+  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}0101`;
+};
+const fixture = { ...sample, dogs: sample.dogs.map((d, i) => ({ ...d, id: intakeId(STAY_YEARS[i], i % 8), formerIds: undefined })) };
 
 module.exports = async (browser, base) => {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
@@ -56,6 +67,51 @@ module.exports = async (browser, base) => {
         assert(await page.locator('[data-info-page="' + key + '"]').evaluate(el => el === document.activeElement), '返回分類恢復焦點');
       }
     }
+    // #739 入所多久分布：0～9 每年一格＋10+，點長條在下面列名單
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.locator('[data-info-page="stay"]').click();
+    const bars = page.locator('[data-stay-bucket]');
+    assert.deepEqual(await bars.locator('.a-col-l').allTextContents(), ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10+'], '固定 11 根');
+    const counts = (await bars.locator('.a-col-v').allTextContents()).map(Number);
+    assert.deepEqual(counts, [1, 0, 0, 7, 0, 1, 0, 0, 1, 0, 2]);
+    assert.equal(counts.reduce((s, n) => s + n, 0), sample.dogs.length, '隻數加總＝有入所日的狗');
+    await page.getByText('單位：滿幾年（0＝未滿 1 年）', { exact: true }).waitFor();
+    await page.getByText('點長條看是哪些狗', { exact: true }).waitFor();
+    assert.equal(await page.locator('#main .a-h-icon, #main .a-hero-title .icon').count(), 0, '在所統計沒有標題圖示');
+    assert.equal(await page.locator('#analysisBack').evaluate(el => getComputedStyle(el).boxShadow), 'none', '回資訊沒有外框');
+    assert.equal(await page.locator('.a-pick').count(), 0, '一開始不列名單');
+    assert(await page.getByRole('button', { name: '滿 1 年，0 隻', exact: true }).isDisabled(), '0 隻的長條不能選');
+    const three = page.getByRole('button', { name: '滿 3 年，7 隻', exact: true });
+    assert.equal(await three.getAttribute('aria-pressed'), 'false');
+    await three.focus();
+    await page.keyboard.press('Enter');
+    const pick = page.locator('.a-pick');
+    await pick.waitFor();
+    assert.equal(await page.getByRole('button', { name: '滿 3 年，7 隻', exact: true }).getAttribute('aria-pressed'), 'true', '鍵盤選得到');
+    assert.equal((await pick.locator('h3').innerText()).replace(/\s+/g, ' '), '滿 3 年 7 隻 · 久的排前面');
+    const pickNames = () => pick.locator('.a-dog-name').allTextContents();
+    assert.deepEqual(await pickNames(), ['測試狗8', '測試狗7', '測試狗6', '測試狗5', '測試狗4'], '先列 5 隻、久的排前面');
+    await pick.getByRole('button', { name: '看全部 7 隻', exact: true }).click();
+    assert.deepEqual(await pickNames(), ['測試狗8', '測試狗7', '測試狗6', '測試狗5', '測試狗4', '測試狗3', '測試狗2']);
+    await page.getByRole('button', { name: '滿 3 年，7 隻', exact: true }).click();
+    assert.equal(await pick.count(), 0, '再點同一根收起');
+    await page.getByRole('button', { name: '滿 10 年以上，2 隻', exact: true }).click();
+    assert.equal((await pick.locator('h3').innerText()).replace(/\s+/g, ' '), '10 年以上 2 隻 · 久的排前面');
+    assert.deepEqual(await pickNames(), ['測試狗11', '測試狗10']);
+    assert.equal(await pick.getByRole('button', { name: /看全部/ }).count(), 0, '5 隻以內不放看全部');
+    await pick.locator('.a-dog').first().click();
+    await page.waitForFunction(() => document.documentElement.classList.contains('detail-open'));
+    assert.equal(await page.locator('#detailName').innerText(), '測試狗11', '點狗名開詳細資訊');
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !document.documentElement.classList.contains('detail-open'));
+    await pick.getByRole('button', { name: '收起', exact: true }).click();
+    assert.equal(await pick.count(), 0, '收起');
+    await page.setViewportSize({ width: 320, height: 844 });
+    await page.getByRole('button', { name: '滿 5 年，1 隻', exact: true }).click();
+    const widths = await bars.evaluateAll(els => els.map(el => el.getBoundingClientRect().width));
+    assert(Math.min(...widths) >= 24, `整欄點擊範圍至少 24px（${Math.min(...widths).toFixed(1)}）`);
+    assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '320px 選了長條也不橫向溢出');
+    await page.locator('#analysisBack').click();
     await page.locator('[data-info-page="stay"]').click();
     await page.goBack();
     await page.locator('[data-info-page="stay"]').waitFor();
