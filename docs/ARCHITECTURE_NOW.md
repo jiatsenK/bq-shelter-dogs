@@ -1,11 +1,14 @@
 # 資料流現況
 
-資料在哪、誰寫、誰同步，以本檔為入口。最後核對：2026-10-26，main `811a9b5`；正式庫已套 migration 0000–0009，志工站與管理站都已部署（2026-10-25）。開關與排程的即時值以自動產生的 `docs/adr/README.md` 為準；決定的理由看 ADR。
+資料在哪、誰寫、誰同步，以本檔為入口。最後核對：2026-10-28，main `c2da5f0`（逐項對照程式碼，見 [2026-10-28-architecture-data-flow.md](research/2026-10-28-architecture-data-flow.md)）。repo 的 migration 到 `0016`；正式庫實際套到哪一版，以 `node scripts/d1-migrations.mjs check --target production` 為準，本檔不記。開關與排程的即時值以自動產生的 `docs/adr/README.md` 為準；決定的理由看 ADR。
+
+架構圖：[系統架構](diagrams/architecture.html)（誰連誰、排程）、[環境與部署](diagrams/environments.html)（正式／測試／預覽各綁什麼）。改了本檔的架構或排程，圖也要跟著改。
 
 ## 改版終點（K 2026-10-24）
 
 - **D1 是唯一正本**：網站讀 D1，網站上的操作先寫 D1。
 - **試算表只剩人工輸入介面**：管理者直接改表，Apps Script（GAS）把改到的列推給 Worker。網站不讀表。
+  - 例外（現況，尚未到終點）：志工網站的「加備註」「新增異動紀錄」仍由 Worker 經 GAS 直接寫表，不先存 D1、失敗不重試；程式寫表不觸發編輯觸發，D1 要等下一次狗清單保險掃描才收到（`worker/src/index.js` 的 note／log 分支）。
 - **不再有 gviz 讀表、不再用 GitHub Actions 同步資料**。
 - 前端整理完（#471 系列）。
 
@@ -23,7 +26,7 @@
 | 休養、介紹、開卡、常溜、固定照顧、活動 | 網站 | 只存 D1，不碰試算表 | 見各 ADR |
 | 合併重複的狗（試算表改編號多出來的，#621） | 管理網站 | 只存 D1，可在修改紀錄取消合併 | `worker/src/dog-merge.js` |
 | 離所 | 管理者把狗搬到試算表「已出所」 | GAS 編輯觸發送 D1，以狗 ID 記在 `v3_dog_departures`（#560）；沒編號的狗還不能記離所（`worker/src/dog-list.js` 的 `applyDeparted`） | `worker/src/dog-list.js` |
-| 功能顯示、志工可編輯 | 管理網站 | 只存 D1 `v3_feature_settings`（十項開關＋revision），改動記在 `v3_feature_settings_log`（#565） | `docs/operations/feature-settings.md` |
+| 功能顯示、志工可編輯 | 管理網站 | 只存 D1 `v3_feature_settings`（九項開關＋revision，清單在 `worker/src/feature-settings.js` 的 `SETTING_KEYS`；舊的 `editFormer` 已退役，讀取時拿掉），改動記在 `v3_feature_settings_log`（#565） | `docs/operations/feature-settings.md` |
 | 狗資料（介紹、休養、固定照顧、出入所紀錄（含舊編號，ADR 0021）、照片、性別） | 志工網站或管理網站 | 只存 D1；每隻狗帶 revision，衝突回 409，修改和紀錄同一次寫入（#566）。試算表送來的狗名、編號、籠位、備註、離所在管理網站只能看 | `worker/src/dog-edit.js`、`docs/operations/dog-editing.md` |
 | 照片 | 志工／Access 管理網站 | 共用前端縮圖，R2 不可覆寫版本＋D1 CAS 引用及紀錄；舊固定路徑相容，Actions 只供人工補圖（#566 承接 #546 契約） | `worker/src/dog-photo.js`、`public/js/photo-images.js` |
 | 志工名字建議 `/walkers` | — | 讀 D1（#519） | ADR 0019 |
@@ -70,6 +73,8 @@ Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，
 `bq-shelter-dogs-test`（`wrangler.test-site.jsonc`，#498）：程式跟正式版同一份，只接測試 D1、測試照片空間 `bq-shelter-photos-test`、測試試算表；不擋寫入，可以按溜了。main 有推送時「部署到測試網站」（`.github/workflows/deploy-test-site.yml`）先對測試庫套 migration 再部署；合併前要實測某個分支，到 Actions 手動指定分支跑，之後 main 再推送會換回 main。金鑰跟正式版不同，設在測試 Worker 上，workflow 不帶。
 
 測試網站長得跟正式版不一樣（K 2026-10-26）：設定帶 `SITE_ENV=test`，網頁也先經過 Worker（`run_worker_first` 列了每一頁），`worker/src/test-site.js` 在送出前給 `<html>` 加 `data-site="test"`、標題加「測試｜」、換網址列顏色、主畫面圖示（`public/icons/*-test.*`）與 `manifest-test.webmanifest`；各頁 CSS 依這個屬性把頁首換成測試紫並加「測試版」標籤。正式版不設 `SITE_ENV`、網頁不經過 Worker，不受影響。`public/` 新增網頁要加進 `run_worker_first`（`worker/test/test-site.test.mjs` 會抓）。
+
+測試網站和 PR 預覽共用同一個測試 D1：手動跑「準備預覽資料庫」（`seed-preview-db.yml`）會用正式 D1 整份覆蓋測試 D1，測試網站上實測的資料也會一起不見；測試照片空間不動。
 - 流程細節與「先加後刪」見 `docs/agents/data-changes.md`。
 
 ## Worker 開關

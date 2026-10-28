@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>志工溜狗表 環境與部署</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&family=Noto+Sans+TC:wght@400;500;600&family=Noto+Serif+TC:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #eb6c36;
+      --font-sans:     'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif TC', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1280px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 1.5rem;
+    }
+    .note {
+      margin-top: 1rem;
+      font-size: 0.8rem;
+      color: var(--color-muted);
+    }
+    svg { width: 100%; min-width: 1280px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Deployment · bq-shelter-dogs</p>
+    <h1>志工溜狗表 環境與部署</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1280 720" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="environments-title environments-desc">
+        <title id="environments-title">志工溜狗表 環境與部署</title>
+        <desc id="environments-desc">正式環境有志工網站與管理網站兩個 Worker，共用正式 D1 與 R2；測試網站與 PR 預覽共用測試 D1 與 R2；只有志工網站與測試網站連試算表，seed 會把正式 D1 整份複製到測試 D1。</desc>
+        <defs>
+          <style>
+            .n  { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 13px; font-weight: 600; fill: #2d3142; text-anchor: middle; }
+            .s  { font-family: 'Geist Mono', monospace; font-size: 9px; fill: #4f5d75; text-anchor: middle; }
+            .zh { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 12px; fill: #4f5d75; text-anchor: middle; }
+            .t  { font-family: 'Geist Mono', monospace; font-size: 7px; text-anchor: middle; letter-spacing: 0.08em; }
+            .al { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 12px; font-weight: 500; text-anchor: middle; }
+            .am { font-family: 'Geist Mono', monospace; font-size: 8px; text-anchor: middle; letter-spacing: 0.08em; }
+            .z  { font-family: 'Geist Mono', monospace; font-size: 7px; fill: rgba(45,49,66,0.40); letter-spacing: 0.14em; }
+            .lg { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 12px; fill: #4f5d75; }
+            .cb { font-family: 'Instrument Serif', 'Noto Serif TC', serif; font-style: italic; font-size: 14px; fill: #4f5d75; }
+          </style>
+          <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r="0.9" fill="rgba(45,49,66,0.10)"/>
+          </pattern>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-accent" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#eb6c36"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto-start-reverse"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+        <rect width="100%" height="100%" fill="url(#dots)" opacity="0.55"/>
+
+        <!-- Zones -->
+        <rect x="56" y="72" width="1168" height="280" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="68" y="76" width="72" height="12" rx="2" fill="#f5f5f5"/>
+        <text class="z" x="72" y="85">PRODUCTION</text>
+
+        <rect x="56" y="368" width="1168" height="272" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <rect x="68" y="372" width="32" height="12" rx="2" fill="#f5f5f5"/>
+        <text class="z" x="72" y="381">TEST</text>
+
+        <!-- Arrows -->
+        <!-- 正式志工網站 ↔ 正式 GAS -->
+        <line x1="320" y1="136" x2="960" y2="136" stroke="#2e5aa8" stroke-width="1.2" marker-start="url(#arrow-link)" marker-end="url(#arrow-link)"/>
+        <!-- 正式志工網站 → 正式 D1·R2 -->
+        <path d="M 320,168 H 444 Q 452,168 452,176 V 192 Q 452,200 460,200 H 600" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- 管理網站 → 正式 D1·R2 -->
+        <path d="M 320,280 H 460 Q 468,280 468,272 V 240 Q 468,232 476,232 H 600" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- 測試網站 ↔ 測試 GAS -->
+        <line x1="320" y1="432" x2="960" y2="432" stroke="#2e5aa8" stroke-width="1.2" marker-start="url(#arrow-link)" marker-end="url(#arrow-link)"/>
+        <!-- 測試網站 → 測試 D1·R2 -->
+        <path d="M 320,464 H 444 Q 452,464 452,472 Q 452,480 460,480 H 600" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- PR 預覽 → 測試 D1·R2 -->
+        <path d="M 320,568 H 460 Q 468,568 468,560 V 520 Q 468,512 476,512 H 600" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <!-- seed-preview-db：正式 D1 整份覆蓋測試 D1（手動），跳過測試 GAS 線 -->
+        <path d="M 720,264 V 424 a 8,8 0 0,0 0,16 V 448" fill="none" stroke="#eb6c36" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-accent)"/>
+
+        <!-- Arrow labels -->
+        <rect x="604" y="112" width="68" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="638" y="124" fill="#2e5aa8">寫回／掃描</text>
+
+        <rect x="604" y="408" width="68" height="16" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="638" y="420" fill="#2e5aa8">寫回／掃描</text>
+
+        <rect x="728" y="300" width="100" height="12" rx="2" fill="#f5f5f5"/>
+        <text class="am" x="778" y="309" fill="#eb6c36">SEED-PREVIEW-DB</text>
+
+        <!-- Annotations -->
+        <text class="cb" x="864" y="264">seed：正式 D1 整份蓋掉測試 D1，</text>
+        <text class="cb" x="864" y="284">測試網站上的實測資料也會不見</text>
+
+        <text class="cb" x="864" y="584">管理網站與 PR 預覽都不連試算表；</text>
+        <text class="cb" x="864" y="604">改到共用程式時，管理網站要另外手動部署</text>
+
+        <!-- Node: 正式志工網站 -->
+        <rect x="80" y="104" width="240" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="80" y="104" width="240" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="88" y="112" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text class="t" x="110" y="121" fill="#2d3142">WORKER</text>
+        <text class="n" x="200" y="148">志工網站</text>
+        <text class="s" x="200" y="166">bq-shelter-dogs</text>
+        <text class="zh" x="200" y="186">main 推送自動部署 · 2 個排程</text>
+
+        <!-- Node: 管理網站 -->
+        <rect x="80" y="232" width="240" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="80" y="232" width="240" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="88" y="240" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text class="t" x="110" y="249" fill="#2d3142">WORKER</text>
+        <text class="n" x="200" y="276">管理網站</text>
+        <text class="s" x="200" y="294">bq-shelter-dogs-admin</text>
+        <text class="zh" x="200" y="314">只能手動部署 · Access 保護</text>
+
+        <!-- Node: 正式 D1·R2（focal） -->
+        <rect x="600" y="168" width="240" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="600" y="168" width="240" height="96" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <rect x="608" y="176" width="36" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text class="t" x="626" y="185" fill="#eb6c36">D1 R2</text>
+        <text class="n" x="720" y="212">正式 D1 · R2</text>
+        <text class="s" x="720" y="230">bq-shelter-dogs · bq-shelter-photos</text>
+        <text class="zh" x="720" y="250">migration 只能手動套用</text>
+
+        <!-- Node: 正式試算表 + GAS -->
+        <rect x="960" y="104" width="240" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="960" y="104" width="240" height="96" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <rect x="968" y="112" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text class="t" x="982" y="121" fill="#7a8399">GAS</text>
+        <text class="n" x="1080" y="148">正式試算表 ＋ Apps Script</text>
+        <text class="s" x="1080" y="166">sheet-write.gs</text>
+        <text class="zh" x="1080" y="186">管理者人工改表</text>
+
+        <!-- Node: 測試網站 -->
+        <rect x="80" y="400" width="240" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="80" y="400" width="240" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="88" y="408" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text class="t" x="110" y="417" fill="#2d3142">WORKER</text>
+        <text class="n" x="200" y="444">測試網站</text>
+        <text class="s" x="200" y="462">bq-shelter-dogs-test</text>
+        <text class="zh" x="200" y="482">main 推送自動部署 · 1 個排程</text>
+
+        <!-- Node: PR 預覽 -->
+        <rect x="80" y="520" width="240" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="80" y="520" width="240" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="88" y="528" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text class="t" x="110" y="537" fill="#2d3142">WORKER</text>
+        <text class="n" x="200" y="564">PR 預覽</text>
+        <text class="s" x="200" y="582">bq-shelter-dogs-preview</text>
+        <text class="zh" x="200" y="602">PR 加 preview 標籤 · 擋寫入</text>
+
+        <!-- Node: 測試 D1·R2 -->
+        <rect x="600" y="448" width="240" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="600" y="448" width="240" height="96" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <rect x="608" y="456" width="36" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+        <text class="t" x="626" y="465" fill="#4f5d75">D1 R2</text>
+        <text class="n" x="720" y="492">測試 D1 · R2</text>
+        <text class="s" x="720" y="510">bq-shelter-dogs-test · photos-test</text>
+        <text class="zh" x="720" y="530">部署時自動套 migration</text>
+
+        <!-- Node: 測試試算表 + GAS -->
+        <rect x="960" y="400" width="240" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="960" y="400" width="240" height="96" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <rect x="968" y="408" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text class="t" x="982" y="417" fill="#7a8399">GAS</text>
+        <text class="n" x="1080" y="444">測試試算表 ＋ Apps Script</text>
+        <text class="s" x="1080" y="462">sheet-write.gs</text>
+        <text class="zh" x="1080" y="482">金鑰另外設在測試 Worker</text>
+
+        <!-- Legend -->
+        <line x1="40" y1="656" x2="1240" y2="656" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text x="40" y="676" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+
+        <rect x="40" y="692" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="lg" x="60" y="701">Worker</text>
+        <rect x="132" y="692" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <text class="lg" x="152" y="701">正式資料</text>
+        <rect x="224" y="692" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <text class="lg" x="244" y="701">測試資料</text>
+        <rect x="316" y="692" width="14" height="10" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text class="lg" x="336" y="701">Google 服務</text>
+
+        <line x1="440" y1="697" x2="468" y2="697" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text class="lg" x="476" y="701">HTTP 呼叫</text>
+        <line x1="568" y1="697" x2="596" y2="697" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text class="lg" x="604" y="701">讀寫資料</text>
+        <line x1="680" y1="697" x2="708" y2="697" stroke="#eb6c36" stroke-width="1.2" stroke-dasharray="4,3" marker-end="url(#arrow-accent)"/>
+        <text class="lg" x="716" y="701">手動整份覆蓋</text>
+      </svg>
+    </div>
+    <p class="note">依程式碼核對（main c2da5f0），細節與各 workflow 觸發條件見 docs/research/2026-10-28-architecture-data-flow.md 第 3 節。未畫：r2-thumbs（手動補縮圖到正式 R2）、tests、pr-guard、release-please。</p>
+  </div>
+</body>
+</html>
