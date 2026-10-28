@@ -10,7 +10,7 @@ module.exports = async (browser, base) => {
   data.dogs = data.dogs.slice(0, 8).map((d, i) => ({ ...d, name: `桌面${i + 1}`, cage: i < 4 ? `新A0${i + 1}` : `舊B0${i + 1}`,
     note: i === 0 ? '勿溜，治療中' : '', covered: false, walkedDate: '2026-10-01', walkers: [] }));
   data.groups = {};
-  data.groupColumns = [{ column: 4, label: '桌面群', names: data.dogs.slice(0, 3).map(d => d.name) }];
+  data.groupColumns = [{ column: 4, label: '桌面群', names: data.dogs.slice(0, 3).map(d => d.name) }, { column: 5, label: '下午群', names: data.dogs.slice(4, 7).map(d => d.name) }];
   const d1 = require('./fixtures/fake-d1-walks.cjs')({ today: () => day });
   let mode = 'ok'; // fail：/api/walk 全部回 503
   const context = await browser.newContext({ viewport: { width: 1280, height: 900 }, timezoneId: 'Asia/Taipei', serviceWorkers: 'block' });
@@ -135,15 +135,52 @@ module.exports = async (browser, base) => {
     await row('桌面2').locator('[data-desk-open]').click();
     await page.locator('#detail [data-detail-groups]').click();
     await page.locator('#tabs [data-tab="groups"][aria-current="page"]').waitFor();
-    await page.locator('#groupPage h2', { hasText: '桌面群' }).waitFor();
+    await page.locator('#groupPage .gw-group.selected', { hasText: '桌面群' }).waitFor();
     assert.equal(await page.locator('#detailBackdrop').isVisible(), false, '詳細資訊關掉');
 
     // #9：勿溜只提醒：常溜狗群顯示警示原文，整群溜了照樣登記這隻
     assert.match(await page.locator('.gw-dog', { hasText: '桌面1' }).locator('.gw-warn').textContent(), /勿溜，治療中/);
-    assert.equal(await page.locator('.gw-restrictions').textContent(), '', '勿溜不列在不登記');
+    assert.equal(await page.locator('.gw-group.selected .gw-restrictions').count(), 0, '勿溜不列在不登記');
     await page.locator('#gwWalk').click();
     await page.locator('#gwWalk.done').waitFor();
     assert.equal(d1.rows.has(data.dogs[0].id || '名:桌面1'), true, '勿溜的狗也登記了');
-    console.log('critique P1／P2 電腦版頁首、外框、右側詳細資訊、勾選、登記失敗、狗群入口、勿溜只提醒通過');
+
+    // 常溜狗群寬版（K 2026-10-29）：所有群並排、主內容撐滿＋右欄 300px，左邊線 24、上緣 20（不再是手機的 28／4）
+    for (const width of [1280, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await frame();
+      const box = await page.evaluate(() => {
+        const r = el => el.getBoundingClientRect();
+        const cards = [...document.querySelectorAll('#groupPage .gw-group')].map(c => [Math.round(r(c).left), Math.round(r(c).top)]);
+        return { main: Math.round(r(document.querySelector('.gw-desk-main')).width), side: Math.round(r(document.querySelector('.gw-side-col')).width),
+          left: Math.round(r(document.querySelector('#groupPage h2')).left), top: Math.round(r(document.querySelector('#groupPage')).top), cards,
+          row: Math.round(r(document.querySelector('.gw-group:last-child .gw-dog')).height), scroll: document.documentElement.scrollWidth <= innerWidth };
+      });
+      assert(box.main > 480, `${width}px 主內容寬 ${box.main} 不卡在 480`);
+      assert.equal(box.side, 300, `${width}px 右欄 300`);
+      assert.deepEqual([box.left, box.top], [24, 64 + 20], `${width}px 左邊線 24、上緣 20`);
+      assert.equal(box.cards.length, 2, '兩群都畫出來');
+      assert(box.cards[0][1] === box.cards[1][1] && box.cards[1][0] > box.cards[0][0], `${width}px 兩群並排`);
+      assert(box.row >= 40 && box.row <= 46, `${width}px 一列 40～46px（${box.row}）`);
+      assert(box.scroll, `${width}px 沒有橫向捲動`);
+    }
+    // 點群卡選中，右欄跟著換；滑鼠移過的列有底色
+    assert.match(await page.locator('.gw-side-col h2').first().textContent(), /桌面群/);
+    await page.locator('.gw-group [data-gw-pick]', { hasText: '下午群' }).click();
+    await page.locator('.gw-group.selected', { hasText: '下午群' }).waitFor();
+    assert.match(await page.locator('.gw-side-col h2').first().textContent(), /下午群/, '右欄換成選中的群');
+    assert.equal(await page.locator('#gwWalk').count(), 1, '只有選中的群帶 #gwWalk');
+    const hoverRow = page.locator('.gw-group.selected .gw-dog').first();
+    await hoverRow.hover();
+    assert.notEqual(await hoverRow.evaluate(el => getComputedStyle(el).backgroundColor), 'rgba(0, 0, 0, 0)', '列有滑鼠移過底色');
+    // 沒選中的群照樣顯示已溜；有狗沒溜只在選中的群、登記走同一套
+    await page.locator('.gw-group', { hasText: '桌面群' }).locator('[data-gw-action="undo"]').waitFor();
+    await page.locator('.gw-group.selected [data-gw-action="except"]').click();
+    await page.locator('.gw-group.selected .gw-dog', { hasText: '桌面6' }).click();
+    await page.locator('.gw-group.selected [data-gw-action="walk"]', { hasText: '溜了 2 隻' }).click();
+    await page.locator('.gw-group.selected #gwFeedback', { hasText: '已登記' }).waitFor(); // 登記中也有字（處理中…），要等結果
+    assert.equal(d1.rows.has(data.dogs[4].id || '名:桌面5'), true, '有狗沒溜：桌面5 登記了');
+    assert.equal(d1.rows.has(data.dogs[5].id || '名:桌面6'), false, '有狗沒溜：桌面6 拿掉不登記');
+    console.log('critique P1／P2 電腦版頁首、外框、右側詳細資訊、勾選、登記失敗、狗群入口、勿溜只提醒、常溜狗群寬版通過');
   } finally { await context.close(); }
 };

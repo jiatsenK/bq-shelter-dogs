@@ -137,7 +137,8 @@ async function deskLoadWalks() {
     deskState.deskWalkDays = new Map();
   }
   deskState.deskWalksLoading = false;
-  if (appState.activeTab === 'walk' && deskOn()) render();
+  // 常溜狗群電腦版的右欄也用這份紀錄（近 30 天溜了幾天）
+  if ((appState.activeTab === 'walk' || appState.activeTab === 'groups') && deskOn()) render();
 }
 
 function deskRowHtml(dog, today, days) {

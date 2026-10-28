@@ -2424,6 +2424,64 @@ main:has(> #groupPage) { padding-top: 4px; }
   #groupPage { overflow: clip; }
   .gw-walkbar { position: sticky; bottom: var(--bottom-bar-height, 64px); z-index: 4; margin-inline: -4px; padding-top: 20px; background: linear-gradient(to bottom, transparent, var(--bg) 16px); }
 }
+/* 電腦版常溜狗群（≥1100px，K 2026-10-29）：所有群並排成群卡、群多往下排；主內容撐滿＋右欄 300px（跟溜狗表同一個 .desk-side）。
+   左邊線、上緣對齊其他頁（24px／20px），不沿用手機的 4px；手機版的樣式全部不動 */
+@media (min-width: 1100px) {
+  html.desk-on main:has(> #groupPage) { max-width: none; padding: 20px 24px 120px; }
+  html.desk-on #groupPage.gw-desk { max-width: none; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; padding: 0; overflow: visible; }
+  html.desk-on .gw-desk-head { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 16px; margin: 0 0 14px; }
+  html.desk-on .gw-desk-head h2 { margin: 0; font-size: 20px; font-weight: 800; }
+  html.desk-on .gw-desk-head h2 small { margin-left: 8px; font-size: 14px; font-weight: 600; color: var(--ink-soft); }
+  html.desk-on #groupPage .gw-search-note { margin: 0; text-align: left; }
+  html.desk-on .gw-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 16px; }
+  /* 群卡：白底細框，選中的群框線加粗成檔案綠（跟 30 天表今天那欄同一種框）；搜尋時沒有這隻狗的群變淡 */
+  html.desk-on .gw-group { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--line); background: var(--surface); }
+  html.desk-on .gw-group.selected { border-color: var(--shell); box-shadow: 0 0 0 1px var(--shell); }
+  html.desk-on .gw-group.miss { opacity: .45; }
+  html.desk-on .gw-group-head { margin: 0; }
+  html.desk-on #groupPage .gw-group-head button { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 0 14px; color: var(--ink); font-size: 17px; font-weight: 800; text-align: left; }
+  html.desk-on .gw-group-head span { overflow-wrap: anywhere; }
+  html.desk-on .gw-group-head small { font-size: 13px; font-weight: 400; color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+  html.desk-on #groupPage .gw-group-head button:hover span { text-decoration: underline; text-underline-offset: 4px; }
+  html.desk-on #groupPage .gw-group-head button:focus-visible, html.desk-on #groupPage .gw-dog:focus-visible { outline-offset: -3px; }
+  /* 一列一隻 44px：天數色籤 62px｜籠位｜狗名，警示原文接在狗名下面（列跟著長高） */
+  html.desk-on .gw-group .gw-cards { border-top: 1px solid var(--line); background: none; }
+  html.desk-on #groupPage .gw-dog { grid-template-columns: 62px 64px minmax(0, 1fr) auto; column-gap: 12px; min-height: 44px; padding: 0 10px 0 0; background: none; }
+  html.desk-on #groupPage .gw-dog:last-child { border-bottom: 0; }
+  html.desk-on #groupPage .gw-dog:hover { background: #F7F9F8; }
+  html.desk-on #groupPage .gw-dog:active { background: var(--surface-soft); }
+  html.desk-on .gw-dog .r-date { font-size: 13px; }
+  html.desk-on .gw-dog .r-date b { font-size: 18px; }
+  html.desk-on .gw-dog .r-date.sage b { font-size: 16px; }
+  html.desk-on .gw-group .gw-cage { font-size: 14px; font-weight: 700; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  html.desk-on .gw-group .gw-who { gap: 0; padding-block: 5px; }
+  html.desk-on .gw-group .gw-name { font-size: 16px; font-weight: 800; }
+  html.desk-on .gw-group .gw-warn { font-size: 13px; }
+  html.desk-on .gw-group .gw-warn .icon { width: 14px; height: 14px; margin-top: 2px; }
+  html.desk-on .gw-group .gw-check { width: 36px; height: 36px; }
+  html.desk-on .gw-group .gw-check::before { width: 22px; height: 22px; }
+  html.desk-on .gw-group .gw-check.on::before { background-size: 16px; }
+  /* 動作在群卡最下面、靠左；卡片同一排等高，按鈕對齊同一條線 */
+  html.desk-on .gw-group .gw-actions { flex-direction: row; justify-content: flex-start; gap: 16px; margin-top: auto; padding: 12px 14px; border-top: 1px solid var(--line); }
+  html.desk-on #groupPage #gwWalk, html.desk-on #groupPage .gw-walk { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 112px; min-height: 40px; padding: 0 18px; border-radius: 3px; background: var(--primary); color: #fff; font-size: 15px; font-weight: 800; }
+  html.desk-on #groupPage #gwWalk.done, html.desk-on #groupPage .gw-walk.done { background: var(--green-bg); color: var(--green-text); }
+  html.desk-on #groupPage .gw-walk:not(:disabled):hover { filter: brightness(1.08); }
+  html.desk-on #groupPage .gw-group [data-gw-action="except"] { min-height: 40px; font-size: 14px; }
+  html.desk-on .gw-group #gwFeedback, html.desk-on .gw-group .gw-restrictions { margin: 0; padding: 0 14px 12px; font-size: 13px; }
+  html.desk-on .gw-group .gw-secondary-actions { min-height: 0; padding: 0 14px 12px; }
+  html.desk-on #groupPage #gwSource { justify-content: flex-start; text-align: left; }
+  /* 右欄：選中那一群近 30 天、有警示的狗、名單在哪改 */
+  html.desk-on #groupPage .gw-side-col button { min-height: 0; min-width: 0; color: var(--ink); }
+  html.desk-on #groupPage .gw-side-col button:hover { text-decoration: underline; text-underline-offset: 3px; }
+  html.desk-on .gws-total { margin: 0 0 10px; font-size: 13px; color: var(--ink-soft); }
+  html.desk-on .gws-total b { margin-right: 4px; font-size: 28px; font-weight: 900; color: var(--ink); }
+  html.desk-on .gws-total small { display: block; font-size: 12px; }
+  html.desk-on .gws-counts { display: grid; margin: 0; padding: 0; list-style: none; }
+  html.desk-on .gws-counts li { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; padding: 5px 0; border-top: 1px solid #E6EBE8; font-size: 13px; color: var(--ink-soft); }
+  html.desk-on #groupPage .gws-counts button { padding: 0; font-size: 15px; font-weight: 700; text-align: left; }
+  html.desk-on #groupPage .gw-side-col .ds-rest button { font-size: 15px; font-weight: 800; }
+  html.desk-on .gws-warn mark { background: none; color: var(--red-text); font-weight: 700; }
+}
 
 @media (max-width: 1099px) {
   .analysis-open header.app { position: fixed; inset: 0 0 auto; }

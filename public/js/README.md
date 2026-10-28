@@ -49,7 +49,7 @@
 | `share.js` | `shareSite`：分享網站先用分享選單，不行就複製，都不行回 manual 由畫面顯示網址；navigator 由呼叫端帶入，不碰 DOM（ADR 0023） | 無 | index、Node |
 | `activities.js` | 活動紀錄與已出所狗卡編輯 | app、ui-kit、analysis、dates、api、walk-ui、page-state | index |
 | `find.js` | 找狗照片、搜尋與平面圖；籠位在哪一區用 `SITE.zones` | app、detail、ui-kit、dog-status、walk-ui、overlays、site-config、page-state | index |
-| `group-stage.js` | 可以一起溜的狗群畫面；從詳細資訊進來時停在有這隻狗的群（`focusGroupOf`） | app、detail、ui-kit、dog-status、dates、api、walk-ui、page-state | index |
+| `group-stage.js` | 可以一起溜的狗群畫面；從詳細資訊進來時停在有這隻狗的群（`focusGroupOf`）；電腦版所有群並排成群卡＋右欄（選中那一群近 30 天、有警示的狗） | app、detail、ui-kit、dog-status、dates、api、walk-ui、desk、page-state | index |
 | `desk.js` | 電腦版簡報、全表／最近 30 天與側欄，明確啟動後啟用寬螢幕呈現；補資料由管理網站取代（#568） | app、detail、sheet-append、ui-kit、dog-status、dates、api、site-config、find、walk-ui、page-state | index |
 | `cards.js` | 圖鑑、開卡與已出所狗卡，保留卡片專用格式 | dates、api、store、site-config、overlays、identity、page-state | cards |
 | `edit-values.js` | `editsValue`：編輯紀錄改前／改後的文字，純函式 | 無 | edits、admin（建置複製） |
