@@ -2485,3 +2485,69 @@ html[data-site="test"] .brand h1::after {
   content: "測試版"; display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 3px;
   background: var(--tab-amber); color: #2A1230; font-size: 13px; font-weight: 800; letter-spacing: 0; line-height: 1.4; vertical-align: 3px; white-space: nowrap;
 }
+
+/* ── 電腦版找狗與在哪（≥1100px，critique 2026-10-28 P1，K 2026-10-29 解除 480 單欄）──
+   找狗：工具列＋平面圖撐滿主內容＋右欄 300px（js/find-desk.js）；列表跟溜狗表全表同一套表格（46px 一列）。
+   在哪：籠位旁的小卡（js/find.js wherePlace 算位置），不從下面滑出、沒有拖曳把手。手機、導覽中照舊 */
+@media (min-width: 1100px) {
+  html.desk-on main:has(> .desk-find) { max-width: none; padding: 20px 24px 120px; }
+  /* 頁首多了「找狗」：1280px 以下分頁拿掉圖示，五格加搜尋框、圖鑑、編輯紀錄仍是一行 */
+  @media (max-width: 1279px) { html.desk-on .tabs button .icon { display: none; } }
+  html.desk-on .desk-find { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; }
+  html.desk-on .df-main { min-width: 0; }
+  html.desk-on .desk-find .dt-view button small { margin-left: 4px; font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+  html.desk-on .desk-find .dt-view button:hover { color: var(--ink); }
+  html.desk-on .desk-find .dt-view button:focus-visible, html.desk-on .desk-find .dt-chip:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  html.desk-on .df-map .dt-hint { margin-left: 0; margin-right: auto; }
+
+  /* 平面圖：跟全表一樣站在 2px 檔案綠線上，整張圖放進一個畫面高（不用捲就看到全圖） */
+  html.desk-on .desk-find .find-map-card { padding: 16px 20px; border-radius: 0; background: var(--surface); box-shadow: inset 0 0 0 1px var(--line); border-top: 2px solid var(--shell); }
+  html.desk-on .desk-find .df-main .find-map { max-width: none; max-height: max(360px, calc(100vh - var(--app-header-height, 64px) - 170px)); }
+  html.desk-on .desk-find .find-map-hint { display: none; }
+  html.desk-on .desk-find .find-map-foot:not(:has(.find-map-all)) { display: none; }
+  html.desk-on .desk-find .find-map:not(.mini) .fm-zone:hover > rect:first-child { stroke: var(--shell); }
+  html.desk-on .desk-find .fm-cg:hover rect { stroke: var(--ink); }
+
+  /* 右欄：選中那一區的狗，一列 44px：籠位｜狗名｜天數 */
+  html.desk-on .df-panel h2 { justify-content: flex-start; gap: 8px; align-items: center; }
+  html.desk-on .df-panel h2 small { margin-left: auto; white-space: nowrap; }
+  html.desk-on .df-panel h2 .icon { width: 16px; height: 16px; color: var(--ink-soft); }
+  html.desk-on .df-rows { margin: 0 -16px -14px; padding: 0; list-style: none; }
+  html.desk-on .df-row { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 44px; padding: 0 16px; border-top: 1px solid #E6EBE8; cursor: pointer; }
+  html.desk-on .df-row:hover { background: #F7F9F8; }
+  html.desk-on .df-who { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
+  html.desk-on .df-who .df-name { overflow: hidden; text-overflow: ellipsis; padding: 4px 0; }
+  html.desk-on .df-row .dr-day { min-width: 52px; }
+  html.desk-on .df-name:focus-visible, html.desk-on .desk-find .dr-cage:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  html.desk-on .desk-find .dr-cage mark, html.desk-on .desk-find .df-name mark, html.desk-on .desk-find .df-id mark { background: #FFE58A; color: inherit; border-radius: 2px; }
+
+  /* 列表：區名一列，下面一隻狗一列；整列點了開詳細資訊 */
+  html.desk-on .df-table .dr-cagec { width: 96px; }
+  html.desk-on .df-table .dr-name { width: 200px; }
+  html.desk-on .df-table .df-id { width: 120px; font-size: 13px; color: var(--ink-soft); }
+  html.desk-on .df-table tbody .df-zone th { height: 38px; padding: 10px 10px 0; border-bottom: 1px solid var(--line); background: var(--surface); text-align: left; font-size: 15px; font-weight: 800; color: var(--ink); }
+  html.desk-on .df-table tbody:first-of-type .df-zone th { padding-top: 0; }
+  html.desk-on .df-table .df-zone .find-dot { display: inline-block; margin-right: 8px; vertical-align: 1px; }
+  html.desk-on .df-table .df-zone small { margin-left: 8px; font-size: 12px; font-weight: 500; color: var(--ink-soft); }
+  html.desk-on .df-minimap .find-map { max-width: none; max-height: none; }
+  html.desk-on .df-minimap .fm-zone:hover > rect:first-child { stroke: var(--shell); }
+
+  /* 在哪：籠位旁的小卡 */
+  html.desk-on:not(.tour-open) .where-backdrop:not([hidden]) { display: block; background: transparent; }
+  html.desk-on:not(.tour-open) .where-sheet {
+    position: fixed; left: var(--where-x, calc(50% - 200px)); top: var(--where-y, 80px);
+    width: 400px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px);
+    padding: 12px 16px 16px; border-radius: 4px;
+    box-shadow: 0 0 0 1px var(--line), 0 12px 32px rgba(20, 33, 28, 0.2);
+    animation: where-pop 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  html.desk-on:not(.tour-open) .where-grab { display: none; }
+  html.desk-on:not(.tour-open) .where-head h2 { font-size: 18px; }
+  /* 小卡的地圖固定 220px 高、照那一區置中，那一區以外的地方露出周圍的區（底色補滿，不留白） */
+  html.desk-on:not(.tour-open) .where-map .find-map { height: 220px; max-height: none; background: var(--fm-bg); }
+  html.desk-on:not(.tour-open) .where-how { margin: 10px 2px; font-size: 15px; }
+  html.desk-on:not(.tour-open) .where-btn { min-height: 44px; font-size: 15px; }
+  html.desk-on:not(.tour-open) .where-btn:hover { filter: brightness(0.96); }
+  @keyframes where-pop { from { opacity: 0; transform: translateY(-4px); } }
+}
+@media (min-width: 1100px) and (prefers-reduced-motion: reduce) { html.desk-on .where-sheet { animation: none; } }
