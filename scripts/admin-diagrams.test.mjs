@@ -16,7 +16,7 @@ test('CSS 每個選擇器都加範圍', () => {
   assert.equal(scopeCss('/* 註解 */\n .n { fill: red; }\n.a, .b{fill:blue}', '#d'), '#d .n { fill: red; }\n#d .a, #d .b { fill:blue }');
 });
 
-test('六張圖都抽得出來：沒有 <style>、沒有 style 屬性、id 不撞', async () => {
+test('每張圖都抽得出來：沒有 <style>、沒有 style 屬性、id 不撞', async () => {
   const ids = new Set();
   const diagrams = [];
   for (const name of DIAGRAMS) {

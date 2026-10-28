@@ -14,6 +14,8 @@ export const WATCH = [
   [/^worker\/src\/(dog-list|walk-reconcile)\.js$/, ['sheet-sync-sequence']],
   [/^worker\/src\/(dog-photo|r2)\.js$/, ['data-flows', 'daily-schedule']],
   [/^worker\/src\/admin\//, ['architecture', 'data-flows']],
+  // 程式架構圖畫的是 worker/src 模組誰匯入誰，任何 Worker 程式改了都可能要改
+  [/^worker\/src\//, ['code-architecture']],
   [/^apps-script\//, ['architecture', 'writeback-sequence', 'sheet-sync-sequence', 'daily-schedule']],
   [/^migrations\//, ['data-flows']],
   [/^\.github\/workflows\/(deploy-[^/]+|preview-cloudflare|seed-preview-db|d1-migrations)\.yml$/, ['environments']],

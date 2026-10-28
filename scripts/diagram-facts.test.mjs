@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile, access } from 'node:fs/promises';
+import { readFile, readdir, access } from 'node:fs/promises';
 import { DIAGRAMS, DIAGRAM_TITLES as TITLES, plainText } from './admin-diagrams.mjs';
 
 // 架構圖事實核對（K 2026-10-28）：圖是手工畫的，程式改了名稱、時間、次數而圖沒跟著改，這裡會失敗。
@@ -26,7 +26,7 @@ const gasScans = JSON.parse(gas.match(/(\[\[\d+, \d+\](?:, \[\d+, \d+\])*\])\.fo
 const scanTimes = twHours(scanCron.split(' ')[1]).map(h => `${pad(h)}:${pad(scanCron.split(' ')[0])}`);
 const gasTimes = gasScans.map(([h, m]) => `${pad(h)}:${pad(m)}`);
 
-test('六張圖都在，標題對得上', async () => {
+test('每張圖都在，標題對得上', async () => {
   for (const name of DIAGRAMS) assert.ok((await read(`docs/diagrams/${name}.html`)).includes(TITLES[name]), name);
 });
 
@@ -129,4 +129,18 @@ test('圖上的寫回端點、GAS 動作與待通知名稱都還在', async () =
 test('PR 預覽要加 preview 標籤', async () => {
   assert.match(await read('.github/workflows/preview-cloudflare.yml'), /contains\(github\.event\.pull_request\.labels\.\*\.name, 'preview'\)/, '.github/workflows/preview-cloudflare.yml 的預覽標籤變了，請改環境圖');
   await shows('environments', 'PR 加 preview 標籤', '.github/workflows/preview-cloudflare.yml 看 preview 標籤');
+});
+
+test('程式架構：Worker 每支程式都在圖上，圖上的檔名與依據行號都還在', async () => {
+  const all = await text('code-architecture');
+  const files = async dir => (await readdir(new URL(`../${dir}/`, import.meta.url))).filter(f => f.endsWith('.js'));
+  const [root, admin] = [await files('worker/src'), await files('worker/src/admin')];
+  for (const f of [...root, ...admin]) assert.ok(all.includes(f), `worker/src 新增了 ${f}，「程式架構」圖沒畫也沒列在「沒畫」；請改圖（docs/diagrams/code-architecture.html）`);
+  const known = new Set([...root, ...admin, ...await files('public/js'), ...await files('admin/public/js')]);
+  for (const [f] of all.matchAll(/[\w-]+\.js\b/g)) assert.ok(known.has(f), `「程式架構」圖上的 ${f} 已經不在了，請改圖`);
+  // 依據寫成「路徑:行號」：檔案要在、行號不能超過檔案長度（行號位移看不出來，改到相關程式時要人工重對）
+  for (const [, path, spec] of all.matchAll(/([\w./-]+\/[\w.-]+|[\w.-]+\.jsonc):(\d+(?:-\d+)?(?:、\d+(?:-\d+)?)*)/g)) {
+    const lines = (await read(path)).split('\n').length;
+    for (const n of spec.split(/[、-]/).map(Number)) assert.ok(n <= lines, `「程式架構」圖的依據 ${path}:${n} 超過檔案長度 ${lines} 行，程式改過了，請重新核對`);
+  }
 });
