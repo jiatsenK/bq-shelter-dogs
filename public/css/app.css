@@ -616,9 +616,12 @@ html.lightbox-open { overflow: hidden; }
 
 /* 公母 */
 .a-split { display: flex; height: 30px; border-radius: 10px; overflow: hidden; gap: 2px; margin-bottom: 10px; font-size: 13px; font-weight: 700; color: #fff; }
-.a-split span { display: flex; align-items: center; justify-content: center; white-space: nowrap; min-width: 44px; }
+.a-split > span { display: flex; align-items: center; justify-content: center; white-space: nowrap; min-width: 44px; }
 .a-split .male { background: var(--primary); }
 .a-split .female { background: var(--red-text); }
+/* 比例條裡的性別圖示（sexMark，#93）跟數字一樣白色，不吃上面的底色；平均那行的圖示貼齊前面的空白 */
+.a-split .sex.male, .a-split .sex.female { color: inherit; background: none; margin: 0 3px 0 0; }
+.a-sex-line .sex { margin-left: 0; }
 
 /* 資料完整度 */
 .a-miss { border-top: 1px solid var(--line); font-size: 14px; }

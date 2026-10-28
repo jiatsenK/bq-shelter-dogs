@@ -1,6 +1,6 @@
 import { canShow, settingsNotice, shareUrl } from './feature-settings.js';
 import { BQDates } from './dates.js';
-import { apiData, computeStatus, photoSrc, photoThumb, render, switchTab } from './app.js';
+import { apiData, computeStatus, photoSrc, photoThumb, render, sexMark, switchTab } from './app.js';
 import { DEPARTURE_LABELS, renderDetail, showDetail } from './detail.js';
 import { esc, icon, searchKey, ymdText } from './ui-kit.js';
 import { activitiesState, analysisState, appState } from './page-state.js';
@@ -318,12 +318,13 @@ function analysisHtml(dogs, today, page = 'stay') {
   const known = sex.male.count + sex.female.count;
   const mPct = known ? sex.male.count / known * 100 : 50;
   // 2026-10-08 distill：兩張數字卡改成一行平均（中位數、滿 1 年隻數拿掉）
-  const sexAvg = (mark, cls, g) => `<span class="${cls}">${mark}</span> ${g.count ? `<b>${yearsText(g.avgDays)}</b> 年` : '沒有資料'}`;
+  // ♂♀ 用 sexMark 的內嵌圖示，不寫文字符號：iPhone 內建字型沒有 ♂♀，會換字型而下沉（#93）
+  const sexAvg = (mark, g) => `${sexMark({ sex: mark })} ${g.count ? `<b>${yearsText(g.avgDays)}</b> 年` : '沒有資料'}`;
   out.push(section('公母在所時間差異', `只算有性別資料的狗；${sex.missing} 隻沒有性別資料`,
     `<div class="a-split" title="公 ${sex.male.count} 隻、母 ${sex.female.count} 隻">
-       <span class="male" style="width:${mPct}%">♂ ${sex.male.count}</span><span class="female" style="width:${100 - mPct}%">♀ ${sex.female.count}</span>
+       <span class="male" style="width:${mPct}%">${sexMark({ sex: '♂' })}${sex.male.count}</span><span class="female" style="width:${100 - mPct}%">${sexMark({ sex: '♀' })}${sex.female.count}</span>
      </div>
-     <p class="a-sex-line">平均在所　${sexAvg('♂', 'male', sex.male)}　${sexAvg('♀', 'female', sex.female)}</p>`, 'group'));
+     <p class="a-sex-line">平均在所　${sexAvg('♂', sex.male)}　${sexAvg('♀', sex.female)}</p>`, 'group'));
 
   return out.join('');
 }

@@ -32,7 +32,13 @@ module.exports = async (browser, base) => {
       for (const key of ['stay', 'departures', 'activities', 'quality', 'updates']) {
         await page.locator('[data-info-page="' + key + '"]').click();
         assert(!/超過 \d+ 天沒溜|本月溜狗/.test(await page.locator('#main').innerText()));
-        if (key === 'stay') await page.getByRole('heading', { name: '入所多久分布', exact: true }).waitFor();
+        if (key === 'stay') {
+          await page.getByRole('heading', { name: '入所多久分布', exact: true }).waitFor();
+          // iPhone 內建字型沒有 ♂♀，文字符號會換字型而下沉（#93）；性別一律用 sexMark 的內嵌圖示
+          assert(!/[♂♀]/.test(await page.locator('#main').innerText()), '在所統計不寫文字 ♂♀');
+          assert.equal(await page.locator('.a-split .sex.male svg.icon, .a-split .sex.female svg.icon').count(), 2, '公母比例條用性別圖示');
+          assert.equal(await page.locator('.a-sex-line .sex.male svg.icon, .a-sex-line .sex.female svg.icon').count(), 2, '公母平均在所用性別圖示');
+        }
         if (key === 'departures') await page.getByText('還沒有離所紀錄', { exact: true }).waitFor();
         if (key === 'activities') await page.getByText('還沒有活動紀錄', { exact: true }).waitFor();
         if (key === 'quality') await page.getByRole('heading', { name: '狗的資料完整度', exact: true }).waitFor();
