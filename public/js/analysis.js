@@ -580,7 +580,7 @@ function shareSiteHtml() {
   const url = shareUrl();
   if (!url || !canShow('share')) return '';
   const manual = analysisState.shareManual ? `<label class="share-manual"><span>長按下面的網址複製</span><input type="text" readonly value="${esc(url)}" data-share-url></label>` : '';
-  return `<div class="share-site"><button type="button" data-share-site><strong>分享給其他志工</strong><span>把網站傳到 LINE 或其他 App</span></button>${manual}</div>`;
+  return `<div class="share-site"><button type="button" data-share-site><strong>分享網站連結</strong><span>把網站傳到 LINE 或其他 App</span></button>${manual}</div>`;
 }
 
 let sharing = false;

@@ -23,7 +23,7 @@ module.exports = async (browser,base) => {
  try {
   await page.goto(base+'/admin/public/settings.html');
   await page.getByText('已讀取版本 1。調整後按儲存。').waitFor();
-  assert.equal(await page.locator('input[type=checkbox]').count(),10,'舊編號併進出入所紀錄（#639）；加分享給其他志工（ADR 0023）');
+  assert.equal(await page.locator('input[type=checkbox]').count(),10,'舊編號併進出入所紀錄（#639）；加分享網站連結（ADR 0023）');
   await page.getByText('到目前為止：分享 5 次、複製連結 2 次',{exact:false}).waitFor();
   assert.deepEqual(await page.locator('#share-counts li').allTextContents(),['10/28　分享 2、複製 1','10/27　分享 3、複製 0'],'ADR 0023 分享次數放在開關旁');
   assert.equal(await page.locator('#save-settings').isDisabled(),true);

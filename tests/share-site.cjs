@@ -50,7 +50,7 @@ module.exports = async (browser, base) => {
     const { context, page, posts } = await open();
     await page.locator('[data-share-site]').waitFor();
     const items = await page.locator('.info-home strong').allTextContents();
-    assert.deepEqual(items.slice(-2), ['分享給其他志工', '使用說明'], '分享在使用說明前面');
+    assert.deepEqual(items.slice(-2), ['分享網站連結', '使用說明'], '分享在使用說明前面');
     await page.locator('[data-share-site]').click();
     await page.waitForFunction(() => window.__shared.length === 1);
     assert.deepEqual(await page.evaluate(() => window.__shared[0]), { text: '來去板橋動物之家遛狗吧 🐕', url: SHARE_URL });
