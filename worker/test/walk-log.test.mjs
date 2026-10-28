@@ -221,3 +221,16 @@ test('沒有溜狗狀態的狗：試算表日期改回較早一天，只記一�
       [['sheet', { date: '2026-10-01', walker: '' }, { date: '2026-09-20', walker: '甲,乙' }]]);
   } finally { env.DB.close(); }
 });
+
+test('沒有溜狗狀態的狗：表上「甲,乙」，甲在網站重按溜了不多記；丙再按照常記一筆', async () => {
+  const env = await setup();
+  try {
+    await applyDogListRows(env.DB, [listRow(day(), '甲,乙')], env);
+    await post(env, request('walk-0001', '甲'));
+    assert.deepEqual((await logs(env)).map(l => l.source), ['sheet']);
+    await post(env, request('walk-0002', '丙'));
+    assert.deepEqual((await logs(env)).map(l => [l.source, l.editor, l.before, l.after]), [
+      ['sheet', '甲,乙', { date: '2026-10-01', walker: '' }, { date: day(), walker: '甲,乙' }],
+      ['volunteer', '丙', { date: day(), walker: '甲、乙' }, { date: day(), walker: '甲、乙、丙' }]]);
+  } finally { env.DB.close(); }
+});

@@ -207,9 +207,10 @@ export async function acceptWalk(db, input, env, now = Date.now()) {
     const history = effectiveDate === input.operationDate ? walkDay(db, old.dog_id, effectiveDate, dog, codes) : [dropDay(db, old.dog_id, input.operationDate)];
     const historyCost = HISTORY_ROW_COST * ((old.effective_date === input.operationDate ? countOf(old) : 0) + codes.length);
     const before = { date: old.effective_date, walker: old.walker };
-    // 按溜了：操作者是這次按的人（一起溜就全部）；已經在今天名單裡、名單沒變就不記
+    // 按溜了：操作者是這次按的人（一起溜就全部）；已經在今天名單裡、名單沒變就不記。
+    // 名單照拆開的名字比（#707）：沒有溜狗狀態的狗改前是表上原文，可能用逗號或空白分隔
     const logs = editor ? [walkLog(db, { at, kind: input.action === 'undo' ? 'walkundo' : 'walkedit', source: 'volunteer', code: editor.code, name: editor.name, dogId: old.dog_id, number: dog.id, before, after: result.current })]
-      : before.date !== effectiveDate || before.walker !== walker ? [walkLog(db, { at, source: 'volunteer', code: added.length === 1 ? await walkerCode(added[0].name, env.WALKER_KEY) : '',
+      : before.date !== effectiveDate || names(before.walker).join('、') !== walker ? [walkLog(db, { at, source: 'volunteer', code: added.length === 1 ? await walkerCode(added[0].name, env.WALKER_KEY) : '',
         name: added.map(m => m.name).join('、'), dogId: old.dog_id, number: dog.id, before, after: result.current })] : [];
     try {
       await db.batch([
