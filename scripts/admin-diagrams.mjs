@@ -3,11 +3,12 @@ import { execFileSync } from 'node:child_process';
 // 管理網站「系統架構圖」頁：正本是 docs/diagrams/*.html，建置時抽出圖、說明與 git 版本資訊，不另存一份。
 // 管理網站 CSP 是 style-src 'self'，所以圖裡的 <style> 拆成外部 CSS（每張圖各自加範圍，避免同名 class 互相蓋）；
 // 字型也不能連 Google Fonts，改用 admin/public/vendor/fonts/ 自架的拉丁字型，中文用電腦內建字型。
-// 順序：先看整體，再看兩條資料路線，最後看排程與環境（K 2026-10-28）。
+// 順序：先看整體，再看兩條資料路線，再看排程與環境，最後是程式模組怎麼分（K 2026-10-28）。
 // 標題是每張圖 <h1> 裡一定有的字，事實核對與 PR 提醒共用
 export const DIAGRAM_TITLES = {
   'architecture': '系統架構', 'data-flows': '各類資料的流向', 'writeback-sequence': '網站登記寫回試算表',
   'sheet-sync-sequence': '試算表改動回到 D1', 'daily-schedule': '一天裡的排程', 'environments': '環境與部署',
+  'code-architecture': '程式架構',
 };
 export const DIAGRAMS = Object.keys(DIAGRAM_TITLES);
 
@@ -27,7 +28,7 @@ const matchOne = (html, re, what, name) => {
   return match[1];
 };
 
-// 每張圖的 id 都加上圖名，六張放同一頁時 #arrow、#dots 才不會指到別張圖的
+// 每張圖的 id 都加上圖名，全部放同一頁時 #arrow、#dots 才不會指到別張圖的
 export function prefixIds(svg, name) {
   return svg
     .replace(/\bid="([^"]+)"/g, (_, id) => `id="${name}--${id}"`)

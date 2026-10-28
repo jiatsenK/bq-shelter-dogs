@@ -68,7 +68,8 @@
         "rule": "tiny-text",
         "value": "*",
         "files": [
-          "docs/diagrams/environments.html"
+          "docs/diagrams/environments.html",
+          "docs/diagrams/code-architecture.html"
         ],
         "createdAt": "2026-10-28T03:41:28.072Z",
         "reason": "Claude: diagram-design skill mandates this typography and 7-9px mono tags/sublabels in SVG diagrams"
@@ -77,7 +78,8 @@
         "rule": "overused-font",
         "value": "geist",
         "files": [
-          "docs/diagrams/environments.html"
+          "docs/diagrams/environments.html",
+          "docs/diagrams/code-architecture.html"
         ],
         "createdAt": "2026-10-28T03:41:28.283Z",
         "reason": "Claude: diagram-design skill mandates this typography and 7-9px mono tags/sublabels in SVG diagrams"
@@ -86,7 +88,8 @@
         "rule": "overused-font",
         "value": "geist mono",
         "files": [
-          "docs/diagrams/environments.html"
+          "docs/diagrams/environments.html",
+          "docs/diagrams/code-architecture.html"
         ],
         "createdAt": "2026-10-28T03:41:28.454Z",
         "reason": "Claude: diagram-design skill mandates this typography and 7-9px mono tags/sublabels in SVG diagrams"
@@ -95,7 +98,8 @@
         "rule": "overused-font",
         "value": "instrument serif",
         "files": [
-          "docs/diagrams/environments.html"
+          "docs/diagrams/environments.html",
+          "docs/diagrams/code-architecture.html"
         ],
         "createdAt": "2026-10-28T03:41:28.628Z",
         "reason": "Claude: diagram-design skill mandates this typography and 7-9px mono tags/sublabels in SVG diagrams"

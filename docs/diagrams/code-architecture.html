@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>志工溜狗表 程式架構</title>
+  <link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500;600&family=Noto+Serif:ital@0;1&family=Noto+Sans+TC:wght@400;500;600&family=Noto+Serif+TC:wght@400&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --color-paper:   #f5f5f5;
+      --color-ink:     #2d3142;
+      --color-muted:   #4f5d75;
+      --color-accent:  #eb6c36;
+      --font-sans:     'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', system-ui, sans-serif;
+      --font-serif:    'Instrument Serif', 'Noto Serif TC', 'Noto Serif', serif;
+      --font-mono:     'Geist Mono', ui-monospace, monospace;
+    }
+    body {
+      font-family: var(--font-sans);
+      background: var(--color-paper);
+      color: var(--color-ink);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+    }
+    .frame { max-width: 1280px; width: 100%; }
+    .diagram-container { width: 100%; overflow-x: auto; }
+    .eyebrow {
+      font-family: var(--font-mono);
+      font-size: 0.66rem;
+      font-weight: 500;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      color: var(--color-muted);
+      margin-bottom: 0.5rem;
+    }
+    h1 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.5rem, 2.4vw + 0.75rem, 2rem);
+      font-weight: 400;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      margin-bottom: 1.5rem;
+    }
+    .note {
+      margin-top: 1rem;
+      font-size: 0.8rem;
+      color: var(--color-muted);
+    }
+    svg { width: 100%; min-width: 1280px; display: block; }
+    @media print {
+      .diagram-container { overflow-x: visible; }
+      svg { min-width: 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="frame">
+    <p class="eyebrow">Code architecture · bq-shelter-dogs</p>
+    <h1>志工溜狗表 程式架構</h1>
+
+    <div class="diagram-container">
+      <svg viewBox="0 0 1280 800" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="code-title code-desc">
+        <title id="code-title">志工溜狗表 程式架構</title>
+        <desc id="code-desc">兩個 Worker 裡的模組誰呼叫誰：志工網站 Worker 由 index.js 分派到讀取打包、溜狗登記與寫回、狗清單同步、試算表呼叫、志工身分；管理網站 Worker 由 admin/index.js 分派到管理查詢；狗資料與照片、設定活動分享排程紀錄兩組模組兩個 Worker 都匯入。</desc>
+        <defs>
+          <style>
+            .n  { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 13px; font-weight: 600; fill: #2d3142; text-anchor: middle; }
+            .s  { font-family: 'Geist Mono', 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', monospace; font-size: 9px; fill: #4f5d75; text-anchor: middle; }
+            .zh { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 11px; fill: #4f5d75; text-anchor: middle; }
+            .t  { font-family: 'Geist Mono', monospace; font-size: 7px; text-anchor: middle; letter-spacing: 0.08em; }
+            .c  { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 8px; text-anchor: middle; }
+            .al { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 11px; font-weight: 500; text-anchor: middle; }
+            .am { font-family: 'Geist Mono', monospace; font-size: 8px; text-anchor: middle; letter-spacing: 0.08em; }
+            .z  { font-family: 'Geist Mono', 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', monospace; font-size: 7px; fill: rgba(45,49,66,0.55); letter-spacing: 0.14em; }
+            .lg { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 12px; fill: #4f5d75; }
+          </style>
+          <pattern id="dots" width="22" height="22" patternUnits="userSpaceOnUse">
+            <circle cx="1" cy="1" r="0.9" fill="rgba(45,49,66,0.10)"/>
+          </pattern>
+          <marker id="arrow" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#4f5d75"/></marker>
+          <marker id="arrow-link" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#2e5aa8"/></marker>
+          <marker id="arrow-open" markerWidth="8" markerHeight="6" refX="7" refY="3" orient="auto"><polyline points="0 0, 8 3, 0 6" fill="none" stroke="#4f5d75" stroke-width="1.2"/></marker>
+        </defs>
+
+        <rect width="100%" height="100%" fill="#f5f5f5"/>
+        <rect width="100%" height="100%" fill="url(#dots)" opacity="0.55"/>
+
+        <!-- Zones：部署單位與共用 -->
+        <rect x="40" y="116" width="720" height="474" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.14)" stroke-width="0.8"/>
+        <rect x="580" y="120" width="168" height="12" rx="2" fill="#f5f5f5"/>
+        <text class="z" x="584" y="129">志工網站 WORKER · bq-shelter-dogs</text>
+
+        <rect x="1020" y="116" width="220" height="284" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.14)" stroke-width="0.8"/>
+        <rect x="1032" y="384" width="200" height="12" rx="2" fill="#f5f5f5"/>
+        <text class="z" x="1036" y="393">管理網站 WORKER · bq-shelter-dogs-admin</text>
+
+        <rect x="780" y="248" width="220" height="312" rx="8" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.14)" stroke-width="0.8" stroke-dasharray="4,3"/>
+        <rect x="904" y="544" width="88" height="12" rx="2" fill="#f5f5f5"/>
+        <text class="z" x="908" y="553">共用：兩個都匯入</text>
+
+        <!-- Arrows (behind nodes) -->
+        <!-- 進入：志工網站前端 → 進入點（HTTPS /api） -->
+        <line x1="154" y1="92" x2="154" y2="148" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <!-- 進入：Cloudflare 排程 → 進入點（虛線） -->
+        <line x1="416" y1="92" x2="416" y2="148" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow-open)"/>
+        <!-- 進入：Apps Script → 進入點（/walk-writeback） -->
+        <path d="M 64,645 H 24 V 172 H 64" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <!-- 進入：管理網站前端 → 管理入口 -->
+        <line x1="1130" y1="92" x2="1130" y2="148" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+
+        <!-- 進入點 → 各模組 -->
+        <line x1="154" y1="220" x2="154" y2="268" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="416" y1="220" x2="416" y2="268" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="644" y1="220" x2="644" y2="268" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 64,206 H 52 V 472 H 64" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 534,220 V 400 H 580 V 424" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 736,180 H 860 V 268" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 736,210 H 768 V 456 H 796" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- 志工網站內部 -->
+        <line x1="244" y1="300" x2="316" y2="300" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="316" y1="340" x2="244" y2="340" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="200" y1="364" x2="200" y2="424" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 244,352 H 280 V 444 H 552" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 500,364 V 480 H 552" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="660" y1="364" x2="660" y2="424" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 716,364 V 488 H 796" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 470,364 V 560 H 860 V 520" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- 管理網站 -->
+        <line x1="1130" y1="232" x2="1130" y2="280" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 1036,164 H 940 V 92" fill="none" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <path d="M 1036,200 H 920 V 268" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <path d="M 1224,200 H 1256 V 500 H 984" fill="none" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <line x1="1036" y1="328" x2="984" y2="328" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- 對外：試算表呼叫 → Apps Script、狗資料與照片 → R2 -->
+        <line x1="154" y1="520" x2="154" y2="610" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <line x1="890" y1="520" x2="890" y2="610" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+        <!-- Arrow labels -->
+        <rect x="174" y="114" width="92" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="220" y="125" fill="#2e5aa8">讀、登記（/api）</text>
+        <rect x="438" y="114" width="56" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="466" y="125" fill="#4f5d75">排程觸發</text>
+        <text class="al" transform="rotate(-90 16 410)" x="16" y="410" fill="#2e5aa8">回呼、送改動（/walk-writeback）</text>
+        <rect x="1144" y="114" width="64" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="am" x="1176" y="124" fill="#2e5aa8">/api/manage</text>
+
+        <text class="al" x="210" y="248" fill="#4f5d75">登記、寫回端點</text>
+        <text class="al" x="470" y="248" fill="#4f5d75">送來的列、指紋</text>
+        <text class="al" x="690" y="248" fill="#4f5d75">讀打包</text>
+        <text class="al" x="104" y="398" fill="#4f5d75">加備註、異動</text>
+        <text class="al" x="557" y="394" fill="#4f5d75">身分</text>
+        <rect x="764" y="166" width="88" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="808" y="177" fill="#4f5d75">設定、活動、分享</text>
+        <rect x="726" y="392" width="84" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="768" y="403" fill="#4f5d75">改狗資料、照片</text>
+
+        <text class="al" x="280" y="292" fill="#4f5d75">溜狗日</text>
+        <text class="al" x="280" y="332" fill="#4f5d75">溜了紀錄</text>
+        <text class="al" x="222" y="398" fill="#4f5d75">寫回</text>
+        <rect x="358" y="430" width="44" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="380" y="441" fill="#4f5d75">查身分</text>
+        <rect x="506" y="464" width="40" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="526" y="475" fill="#4f5d75">連名字</text>
+        <text class="al" x="624" y="394" fill="#4f5d75">換名字</text>
+        <rect x="732" y="470" width="48" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="756" y="481" fill="#4f5d75">出入所表</text>
+        <rect x="614" y="553" width="52" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="640" y="564" fill="#4f5d75">整批寫狗</text>
+
+        <text class="al" x="1160" y="260" fill="#4f5d75">查詢</text>
+        <rect x="962" y="150" width="62" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="993" y="161" fill="#2e5aa8">取驗章公鑰</text>
+        <rect x="950" y="186" width="60" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="980" y="197" fill="#4f5d75">設定、分享</text>
+        <rect x="1088" y="486" width="96" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="1136" y="497" fill="#4f5d75">改狗、照片、合併</text>
+        <text class="al" x="1010" y="320" fill="#4f5d75">讀寫</text>
+
+        <rect x="170" y="560" width="84" height="14" rx="2" fill="#f5f5f5"/>
+        <text class="al" x="212" y="571" fill="#2e5aa8">HTTPS 送動作</text>
+        <text class="al" x="924" y="571" fill="#4f5d75">照片檔</text>
+
+        <!-- Node: 志工網站前端（畫面） -->
+        <rect x="64" y="32" width="180" height="60" rx="6" fill="#f5f5f5"/>
+        <rect x="64" y="32" width="180" height="60" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <rect x="72" y="40" width="28" height="12" rx="2" fill="transparent" stroke="rgba(122,131,153,0.40)" stroke-width="0.8"/>
+        <text class="t" x="86" y="49" fill="#7a8399">PAGE</text>
+        <text class="n" x="154" y="66">志工網站前端</text>
+        <text class="s" x="154" y="82">public/js/api.js</text>
+
+        <!-- Node: Cloudflare 排程 -->
+        <rect x="316" y="32" width="200" height="60" rx="6" fill="#f5f5f5"/>
+        <rect x="316" y="32" width="200" height="60" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <rect x="324" y="40" width="32" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text class="t" x="340" y="49" fill="#7a8399">CRON</text>
+        <text class="n" x="416" y="66">Cloudflare 排程</text>
+        <text class="s" x="416" y="82">wrangler.jsonc triggers</text>
+
+        <!-- Node: Cloudflare Access -->
+        <rect x="796" y="32" width="188" height="60" rx="6" fill="#f5f5f5"/>
+        <rect x="796" y="32" width="188" height="60" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <rect x="804" y="40" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text class="t" x="818" y="49" fill="#7a8399">EXT</text>
+        <text class="n" x="890" y="66">Cloudflare Access</text>
+        <text class="zh" x="890" y="82">登入與簽章公鑰</text>
+
+        <!-- Node: 管理網站前端（畫面） -->
+        <rect x="1036" y="32" width="188" height="60" rx="6" fill="#f5f5f5"/>
+        <rect x="1036" y="32" width="188" height="60" rx="6" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <rect x="1044" y="40" width="28" height="12" rx="2" fill="transparent" stroke="rgba(122,131,153,0.40)" stroke-width="0.8"/>
+        <text class="t" x="1058" y="49" fill="#7a8399">PAGE</text>
+        <text class="n" x="1130" y="66">管理網站前端</text>
+        <text class="s" x="1130" y="82">admin/public/js/api.js</text>
+
+        <!-- Node: 進入點與路由 -->
+        <rect x="64" y="148" width="672" height="72" rx="6" fill="#f5f5f5"/>
+        <rect x="64" y="148" width="672" height="72" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="72" y="156" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text class="t" x="94" y="165" fill="#2d3142">MODULE</text>
+        <rect x="644" y="156" width="28" height="12" rx="2" fill="transparent" stroke="rgba(46,90,168,0.50)" stroke-width="0.8"/>
+        <text class="c" x="658" y="165" fill="#2e5aa8">紀錄</text>
+        <rect x="676" y="156" width="24" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text class="t" x="688" y="165" fill="#eb6c36">D1</text>
+        <text class="n" x="400" y="178">進入點與路由</text>
+        <text class="s" x="400" y="194">［模組・worker/src/index.js］</text>
+        <text class="zh" x="400" y="211">收 /api 與寫回端點、分派排程，再交給下面各模組</text>
+
+        <!-- Node: 溜狗登記與寫回 -->
+        <rect x="64" y="268" width="180" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="64" y="268" width="180" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="72" y="276" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text class="t" x="94" y="285" fill="#2d3142">MODULE</text>
+        <rect x="152" y="276" width="28" height="12" rx="2" fill="transparent" stroke="rgba(46,90,168,0.50)" stroke-width="0.8"/>
+        <text class="c" x="166" y="285" fill="#2e5aa8">紀錄</text>
+        <rect x="184" y="276" width="24" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text class="t" x="196" y="285" fill="#eb6c36">D1</text>
+        <text class="n" x="154" y="308">溜狗登記與寫回</text>
+        <text class="s" x="154" y="324">［模組・walk-accept.js、walk-retry.js、</text>
+        <text class="s" x="154" y="336">walk-reconcile.js、today.js］</text>
+        <text class="zh" x="154" y="354">先存 D1，背景寫回、重試</text>
+
+        <!-- Node: 狗清單同步 -->
+        <rect x="316" y="268" width="200" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="316" y="268" width="200" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="324" y="276" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text class="t" x="346" y="285" fill="#2d3142">MODULE</text>
+        <rect x="424" y="276" width="28" height="12" rx="2" fill="transparent" stroke="rgba(46,90,168,0.50)" stroke-width="0.8"/>
+        <text class="c" x="438" y="285" fill="#2e5aa8">紀錄</text>
+        <rect x="456" y="276" width="24" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text class="t" x="468" y="285" fill="#eb6c36">D1</text>
+        <text class="n" x="416" y="308">狗清單同步</text>
+        <text class="s" x="416" y="324">［模組・dog-list.js、</text>
+        <text class="s" x="416" y="336">departure-rules.js］</text>
+        <text class="zh" x="416" y="354">試算表送來的列寫進 D1、比指紋</text>
+
+        <!-- Node: 讀取打包 -->
+        <rect x="552" y="268" width="184" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="552" y="268" width="184" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="560" y="276" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text class="t" x="582" y="285" fill="#2d3142">MODULE</text>
+        <rect x="704" y="276" width="24" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text class="t" x="716" y="285" fill="#eb6c36">D1</text>
+        <text class="n" x="644" y="308">讀取打包</text>
+        <text class="s" x="644" y="324">［模組・packs.js、compact.js、</text>
+        <text class="s" x="644" y="336">departed.js、walk-summary.js］</text>
+        <text class="zh" x="644" y="354">把 D1 打包成網站要讀的資料</text>
+
+        <!-- Node: 試算表呼叫 -->
+        <rect x="64" y="424" width="180" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="64" y="424" width="180" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="72" y="432" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text class="t" x="94" y="441" fill="#2d3142">MODULE</text>
+        <text class="n" x="154" y="464">試算表呼叫</text>
+        <text class="s" x="154" y="480">［模組・sheet-write.js］</text>
+        <text class="zh" x="154" y="504">呼叫 Apps Script 的唯一出口</text>
+
+        <!-- Node: 志工身分 -->
+        <rect x="552" y="424" width="148" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="552" y="424" width="148" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="560" y="432" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text class="t" x="582" y="441" fill="#2d3142">MODULE</text>
+        <rect x="640" y="432" width="28" height="12" rx="2" fill="transparent" stroke="rgba(46,90,168,0.50)" stroke-width="0.8"/>
+        <text class="c" x="654" y="441" fill="#2e5aa8">紀錄</text>
+        <rect x="672" y="432" width="24" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text class="t" x="684" y="441" fill="#eb6c36">D1</text>
+        <text class="n" x="626" y="464">志工身分</text>
+        <text class="s" x="626" y="480">［模組・identity.js］</text>
+        <text class="zh" x="626" y="504">名字、代號、更名合併</text>
+
+        <!-- Node: 設定・活動・分享・排程紀錄（共用） -->
+        <rect x="796" y="268" width="188" height="108" rx="6" fill="#f5f5f5"/>
+        <rect x="796" y="268" width="188" height="108" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="804" y="276" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text class="t" x="826" y="285" fill="#2d3142">MODULE</text>
+        <rect x="952" y="276" width="24" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text class="t" x="964" y="285" fill="#eb6c36">D1</text>
+        <text class="n" x="890" y="306">設定・活動・分享</text>
+        <text class="s" x="890" y="321">［模組・feature-settings.js、</text>
+        <text class="s" x="890" y="333">activities.js、share-counts.js、</text>
+        <text class="s" x="890" y="345">cron-status.js］</text>
+        <text class="zh" x="890" y="364">功能開關、活動、分享次數、排程紀錄</text>
+
+        <!-- Node: 狗資料與照片（共用） -->
+        <rect x="796" y="424" width="188" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="796" y="424" width="188" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="804" y="432" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text class="t" x="826" y="441" fill="#2d3142">MODULE</text>
+        <rect x="920" y="432" width="28" height="12" rx="2" fill="transparent" stroke="rgba(46,90,168,0.50)" stroke-width="0.8"/>
+        <text class="c" x="934" y="441" fill="#2e5aa8">紀錄</text>
+        <rect x="952" y="432" width="24" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text class="t" x="964" y="441" fill="#eb6c36">D1</text>
+        <text class="n" x="890" y="464">狗資料與照片</text>
+        <text class="s" x="890" y="480">［模組・dog-edit.js、dog-photo.js、</text>
+        <text class="s" x="890" y="492">dog-merge.js、stays.js、r2.js］</text>
+        <text class="zh" x="890" y="510">改狗資料、照片、合併、出入所</text>
+
+        <!-- Node: 管理入口與登入驗證 -->
+        <rect x="1036" y="148" width="188" height="84" rx="6" fill="#f5f5f5"/>
+        <rect x="1036" y="148" width="188" height="84" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="1044" y="156" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text class="t" x="1066" y="165" fill="#2d3142">MODULE</text>
+        <text class="n" x="1130" y="186">管理入口與登入驗證</text>
+        <text class="s" x="1130" y="202">［模組・admin/index.js、access.js］</text>
+        <text class="zh" x="1130" y="222">驗 Access 簽章、分派請求</text>
+
+        <!-- Node: 管理查詢 -->
+        <rect x="1036" y="280" width="188" height="96" rx="6" fill="#f5f5f5"/>
+        <rect x="1036" y="280" width="188" height="96" rx="6" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <rect x="1044" y="288" width="44" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.40)" stroke-width="0.8"/>
+        <text class="t" x="1066" y="297" fill="#2d3142">MODULE</text>
+        <rect x="1160" y="288" width="28" height="12" rx="2" fill="transparent" stroke="rgba(46,90,168,0.50)" stroke-width="0.8"/>
+        <text class="c" x="1174" y="297" fill="#2e5aa8">紀錄</text>
+        <rect x="1192" y="288" width="24" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text class="t" x="1204" y="297" fill="#eb6c36">D1</text>
+        <text class="n" x="1130" y="320">管理查詢</text>
+        <text class="s" x="1130" y="336">［模組・admin/checks.js、dogs.js、</text>
+        <text class="s" x="1130" y="348">edits.js、links.js、activities.js］</text>
+        <text class="zh" x="1130" y="366">資料檢查、狗清單、編輯紀錄</text>
+
+        <!-- Node: Apps Script -->
+        <rect x="64" y="610" width="180" height="70" rx="6" fill="#f5f5f5"/>
+        <rect x="64" y="610" width="180" height="70" rx="6" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <rect x="72" y="618" width="28" height="12" rx="2" fill="transparent" stroke="rgba(45,49,66,0.22)" stroke-width="0.8"/>
+        <text class="t" x="86" y="627" fill="#7a8399">GAS</text>
+        <text class="n" x="154" y="650">Apps Script</text>
+        <text class="s" x="154" y="666">apps-script/sheet-write.gs</text>
+
+        <!-- Node: D1 -->
+        <rect x="316" y="610" width="420" height="70" rx="6" fill="#f5f5f5"/>
+        <rect x="316" y="610" width="420" height="70" rx="6" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <rect x="324" y="618" width="24" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text class="t" x="336" y="627" fill="#eb6c36">D1</text>
+        <text class="n" x="526" y="646">D1 資料庫</text>
+        <text class="zh" x="526" y="666">標 D1 的模組直接讀寫（env.DB），線省略不畫</text>
+
+        <!-- Node: R2 -->
+        <rect x="796" y="610" width="188" height="70" rx="6" fill="#f5f5f5"/>
+        <rect x="796" y="610" width="188" height="70" rx="6" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <rect x="804" y="618" width="24" height="12" rx="2" fill="transparent" stroke="rgba(79,93,117,0.50)" stroke-width="0.8"/>
+        <text class="t" x="816" y="627" fill="#4f5d75">R2</text>
+        <text class="n" x="890" y="650">R2 照片</text>
+        <text class="s" x="890" y="666">bq-shelter-photos</text>
+
+        <!-- Legend -->
+        <line x1="40" y1="712" x2="1240" y2="712" stroke="rgba(45,49,66,0.10)" stroke-width="0.8"/>
+        <text x="40" y="732" fill="#4f5d75" font-size="8" font-family="'Geist Mono', monospace" letter-spacing="0.18em">LEGEND</text>
+
+        <rect x="40" y="748" width="14" height="10" rx="2" fill="#ffffff" stroke="#2d3142" stroke-width="1"/>
+        <text class="lg" x="60" y="757">模組（我寫的程式）</text>
+        <rect x="180" y="748" width="14" height="10" rx="2" fill="rgba(79,93,117,0.10)" stroke="#7a8399" stroke-width="1"/>
+        <text class="lg" x="200" y="757">網頁前端</text>
+        <rect x="268" y="748" width="14" height="10" rx="2" fill="rgba(235,108,54,0.08)" stroke="#eb6c36" stroke-width="1"/>
+        <text class="lg" x="288" y="757">D1</text>
+        <rect x="316" y="748" width="14" height="10" rx="2" fill="rgba(45,49,66,0.05)" stroke="#4f5d75" stroke-width="1"/>
+        <text class="lg" x="336" y="757">R2</text>
+        <rect x="364" y="748" width="14" height="10" rx="2" fill="rgba(45,49,66,0.03)" stroke="rgba(45,49,66,0.30)" stroke-width="1"/>
+        <text class="lg" x="384" y="757">外部服務</text>
+
+        <line x1="460" y1="753" x2="488" y2="753" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
+        <text class="lg" x="496" y="757">匯入並呼叫</text>
+        <line x1="572" y1="753" x2="600" y2="753" stroke="#2e5aa8" stroke-width="1.2" marker-end="url(#arrow-link)"/>
+        <text class="lg" x="608" y="757">HTTP 呼叫</text>
+        <line x1="684" y1="753" x2="712" y2="753" stroke="#4f5d75" stroke-width="1.2" stroke-dasharray="5,4" marker-end="url(#arrow-open)"/>
+        <text class="lg" x="720" y="757">排程觸發</text>
+
+        <rect x="796" y="747" width="24" height="12" rx="2" fill="transparent" stroke="rgba(235,108,54,0.50)" stroke-width="0.8"/>
+        <text class="t" x="808" y="756" fill="#eb6c36">D1</text>
+        <text class="lg" x="826" y="757">直接讀寫 D1</text>
+        <rect x="914" y="747" width="28" height="12" rx="2" fill="transparent" stroke="rgba(46,90,168,0.50)" stroke-width="0.8"/>
+        <text class="c" x="928" y="756" fill="#2e5aa8">紀錄</text>
+        <text class="lg" x="948" y="757">匯入 editlog.js，修改紀錄同批寫進 D1</text>
+
+        <rect x="40" y="770" width="14" height="10" rx="2" fill="rgba(45,49,66,0.02)" stroke="rgba(45,49,66,0.14)" stroke-width="0.8"/>
+        <text class="lg" x="60" y="779">實線框＝一個部署單位（Worker）；虛線框＝兩個 Worker 都匯入的共用模組</text>
+      </svg>
+    </div>
+    <p class="note">依程式碼核對（main e8031ed）。框是部署單位：志工網站 Worker 從 worker/src/index.js 進入（wrangler.jsonc:9），管理網站 Worker 從 worker/src/admin/index.js 進入（wrangler.admin.jsonc:10）；共用框是兩個 Worker 都匯入的 worker/src 模組。每條線的依據：志工網站前端 → 進入點 public/js/api.js:32-33；Cloudflare 排程 → 進入點 wrangler.jsonc:42、worker/src/index.js:803；Apps Script → 進入點 apps-script/sheet-write.gs:65；管理網站前端 → 管理入口 admin/public/js/api.js:3；進入點 → 溜狗登記與寫回 worker/src/index.js:11-13；進入點 → 狗清單同步 worker/src/index.js:19；進入點 → 讀取打包 worker/src/index.js:9、21、23；進入點 → 試算表呼叫 worker/src/index.js:7；進入點 → 志工身分 worker/src/index.js:5；進入點 → 設定・活動・分享 worker/src/index.js:3-4、10、14；進入點 → 狗資料與照片 worker/src/index.js:1-2、6、17；溜狗登記與寫回 → 狗清單同步 worker/src/walk-accept.js:7；狗清單同步 → 溜狗登記與寫回 worker/src/dog-list.js:14；溜狗登記與寫回 → 試算表呼叫 worker/src/walk-accept.js:5、worker/src/walk-reconcile.js:2；溜狗登記與寫回 → 志工身分 worker/src/walk-accept.js:3；狗清單同步 → 志工身分 worker/src/dog-list.js:13；狗清單同步 → 狗資料與照片 worker/src/dog-list.js:1；讀取打包 → 志工身分 worker/src/compact.js:1；讀取打包 → 狗資料與照片 worker/src/compact.js:2；試算表呼叫 → Apps Script worker/src/sheet-write.js:32；狗資料與照片 → R2 worker/src/r2.js:36；管理入口 → 管理查詢 worker/src/admin/index.js:7、9-12；管理入口 → Cloudflare Access worker/src/admin/access.js:28；管理入口 → 設定・活動・分享 worker/src/admin/index.js:5、8、13；管理入口 → 狗資料與照片 worker/src/admin/index.js:1-4、14；管理查詢 → 設定・活動・分享 worker/src/admin/activities.js:3、worker/src/admin/checks.js:4。標 D1 的模組直接讀寫 D1，例如 worker/src/index.js:350、worker/src/walk-accept.js:11、worker/src/dog-list.js:30、worker/src/packs.js:69、worker/src/identity.js:6、worker/src/feature-settings.js:13、worker/src/dog-edit.js:10、worker/src/admin/checks.js:27；標紀錄的模組匯入 worker/src/editlog.js，修改紀錄跟資料同一批寫進 D1：worker/src/index.js:20、worker/src/walk-accept.js:2、worker/src/dog-list.js:9、worker/src/identity.js:1、worker/src/dog-edit.js:2、worker/src/admin/edits.js:5、worker/src/admin/activities.js:5。沒畫：同一框內的匯入（例如 walk-retry.js 呼叫 walk-reconcile.js）；小工具 sync-plan.js（台灣日期）、sheet-read.js（拆名字）、test-site.js（測試網站換外觀）；管理查詢只拿常數的 STOPPED_AT、EXTRA_KEY（worker/src/admin/checks.js:3、5）。各模組怎麼拆、前端模組見 public/js/README.md；整體架構見 architecture.html。</p>
+  </div>
+</body>
+</html>

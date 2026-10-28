@@ -65,7 +65,7 @@
     <div class="diagram-container">
       <svg viewBox="0 0 1280 728" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="data-flows-title data-flows-desc">
         <title id="data-flows-title">各類資料的流向</title>
-        <desc id="data-flows-desc">五類資料各一道：網站登記的今日溜狗先存 D1 再寫回試算表；人工改表經 Apps Script 回到 D1；網站新增的備註與異動紀錄直接寫表、等保險掃描才進 D1；照片存 R2 並在 D1 記指標；其餘狗資料只存 D1。</desc>
+        <desc id="data-flows-desc">五類資料各一道：網站登記的今日溜狗先存 D1 再寫回試算表；人工改表經 Apps Script 回到 D1；網站新增的備註與異動紀錄直接寫表、等保險掃描才進 D1；照片存 R2 並在 D1 記指標；其餘狗資料、活動、功能開關與分享次數只存 D1。</desc>
         <defs>
           <style>
             .n  { font-family: 'Geist', 'Noto Sans TC', 'PingFang TC', 'Microsoft JhengHei', sans-serif; font-size: 13px; font-weight: 600; fill: #2d3142; text-anchor: middle; }
@@ -108,7 +108,7 @@
         <text class="ls" x="40" y="368">例外：不先存 D1</text>
         <text class="ln" x="40" y="462">照片</text>
         <text class="ls" x="40" y="480">志工（開關開啟時）或管理者</text>
-        <text class="ln" x="40" y="574">狗資料、活動、功能開關</text>
+        <text class="ln" x="40" y="574">狗資料、活動、開關、分享次數</text>
         <text class="ls" x="40" y="592">志工（看開關）或管理者</text>
         <!-- Arrows -->
         <line x1="468" y1="128" x2="526" y2="128" stroke="#4f5d75" stroke-width="1.2" marker-end="url(#arrow)"/>
@@ -251,7 +251,7 @@
         <text class="lg" x="742" y="704">例外：要等掃描</text>
       </svg>
     </div>
-    <p class="note">依程式碼核對（main c2da5f0），各類資料的端點、資料表與行號見 docs/research/2026-10-28-architecture-data-flow.md 第 2 節。網站讀資料一律讀 D1（照片讀 R2），不讀試算表。修改紀錄跟著每個寫入動作同批寫進 D1，沒另外畫；保留 14 天（合併狗快照永久保留），每天 09:23 清一次。沒縮圖時網站顯示原圖，補縮圖要手動跑 r2-thumbs；照片垃圾桶每月 1 日清 30 天以上的。</p>
+    <p class="note">依程式碼核對（main e8031ed），各類資料的端點、資料表與行號見 docs/research/2026-10-28-architecture-data-flow.md 第 2 節。網站讀資料一律讀 D1（照片讀 R2），不讀試算表。修改紀錄跟著每個寫入動作同批寫進 D1，沒另外畫；保留 14 天（合併狗快照永久保留），每天 09:23 清一次。沒縮圖時網站顯示原圖，補縮圖要手動跑 r2-thumbs；照片垃圾桶每月 1 日清 30 天以上的。分享次數（ADR 0023）是志工網站分享成功時記一筆，只存 D1（worker/src/share-counts.js:7-13）。</p>
   </div>
 </body>
 </html>

@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-// 管理網站系統架構圖頁（K 2026-10-28）：六張圖在正式 CSP 下顯示、字型自架、箭頭指到同一張圖自己的 marker。
+// 管理網站系統架構圖頁（K 2026-10-28）：全部架構圖在正式 CSP 下顯示、字型自架、箭頭指到同一張圖自己的 marker。
 module.exports = async (browser, base) => {
   const { ADMIN_CSP } = await import('../worker/src/admin/index.js');
   const { DIAGRAMS } = await import('../scripts/admin-diagrams.mjs');
@@ -24,10 +24,10 @@ module.exports = async (browser, base) => {
   try {
     await page.goto(`${base}/admin/public/diagrams.html`);
     await page.waitForFunction(n => document.querySelectorAll('#diagrams svg').length === n, DIAGRAMS.length);
-    assert.deepEqual(await page.locator('#diagrams section').evaluateAll(s => s.map(x => x.id)), DIAGRAMS.map(n => `diagram-${n}`), '順序：整體 → 資料路線 → 排程與環境');
+    assert.deepEqual(await page.locator('#diagrams section').evaluateAll(s => s.map(x => x.id)), DIAGRAMS.map(n => `diagram-${n}`), '順序：整體 → 資料路線 → 排程與環境 → 程式架構');
     assert.deepEqual(await page.locator('#diagram-jump a').evaluateAll(a => a.map(x => x.getAttribute('href'))), DIAGRAMS.map(n => `#diagram-${n}`));
     assert.equal(await page.locator('#diagram-jump a').first().textContent(), '志工溜狗表 系統架構');
-    assert.match(await page.locator('#diagram-status').textContent(), /共 6 張/);
+    assert.match(await page.locator('#diagram-status').textContent(), new RegExp(`共 ${DIAGRAMS.length} 張`));
     for (const text of await page.locator('.diagram-version').allTextContents()) assert.match(text, /^(第 \d+ 版 · \d{4}\/\d{2}\/\d{2} 更新|版本與日期要正式部署後才看得到)$/);
     assert.equal(await page.locator('#diagrams .data-note').count(), DIAGRAMS.length);
 
@@ -54,7 +54,7 @@ module.exports = async (browser, base) => {
 
     assert.deepEqual(await page.evaluate(() => window.cspViolations), []);
     assert.deepEqual(errors, []);
-    console.log('系統架構圖：六張圖照順序、正式 CSP 下樣式與字型生效、marker 不串圖、讀取失敗提示');
+    console.log('系統架構圖：每張圖照順序、正式 CSP 下樣式與字型生效、marker 不串圖、讀取失敗提示');
   } finally {
     await context.close();
   }

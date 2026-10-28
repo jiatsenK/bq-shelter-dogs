@@ -6,8 +6,8 @@ import { DIAGRAMS } from './admin-diagrams.mjs';
 
 test('改到架構相關檔案、沒改對應的圖才提醒', () => {
   assert.deepEqual(affectedDiagrams(['public/js/app.js', 'README.md']), []);
-  assert.deepEqual(affectedDiagrams(['worker/src/walk-retry.js']).map(d => d.name), ['writeback-sequence', 'daily-schedule']);
-  assert.deepEqual(affectedDiagrams(['worker/src/walk-retry.js', 'docs/diagrams/daily-schedule.html']).map(d => d.name), ['writeback-sequence'], '改了的圖不再提醒');
+  assert.deepEqual(affectedDiagrams(['worker/src/walk-retry.js']).map(d => d.name), ['writeback-sequence', 'daily-schedule', 'code-architecture']);
+  assert.deepEqual(affectedDiagrams(['worker/src/walk-retry.js', 'docs/diagrams/daily-schedule.html']).map(d => d.name), ['writeback-sequence', 'code-architecture'], '改了的圖不再提醒');
   const [arch] = affectedDiagrams(['wrangler.jsonc', 'wrangler.admin.jsonc', 'apps-script/sheet-write.gs']);
   assert.deepEqual(arch, { name: 'architecture', title: '系統架構', files: ['wrangler.jsonc', 'wrangler.admin.jsonc', 'apps-script/sheet-write.gs'] });
   assert.equal(affectedDiagrams(['docs/ARCHITECTURE_NOW.md']).length, DIAGRAMS.length);
