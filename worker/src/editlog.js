@@ -60,12 +60,33 @@ export function editorHeader(request) {
   try { return decodeURIComponent(request.headers.get('X-Editor') || ''); } catch (e) { return ''; }
 }
 
-// 記一筆；記失敗不影響編輯本身（編輯已經存好了）。source：volunteer＝志工網站、access＝管理網站、sheet＝試算表（#672）
-export async function logEdit(db, { editor, kind, dogId = null, dogNumber = '', before = null, after = null, source = 'volunteer' }, now = Date.now()) {
+// 修改紀錄的來源（#672）：access＝管理網站、volunteer＝志工網站、sheet＝試算表。v3_edit_log.source 沒有 CHECK，允許的值以這裡為準
+export const EDIT_SOURCES = ['access', 'volunteer', 'sheet'];
+const checkSource = source => {
+  if (!EDIT_SOURCES.includes(source)) throw new Error(`修改紀錄來源不對：${source}`);
+};
+
+// 寫修改紀錄的 SQL 只在這裡（#709，worker/test/edit-log-single.test.mjs 擋第二處 INSERT INTO v3_edit_log）；回傳要放進呼叫端 batch 的句子。
+// source 必填；帶 actor（{ requestId, subject, email }）時另記一列 v3_dog_edit_actors，來源記在那列，v3_edit_log.source 照舊留 NULL。
+// when：[條件 SQL, ...參數]，寫入當下條件成立才記（跟同一批的 guard 一起用）；沒給就直接 VALUES 寫
+export function editLogWrites(db, { at, code = '', name, kind, dogId = null, number = '', before, after, source, actor = null }, [when, ...args] = []) {
+  checkSource(source);
+  // exprs：每欄的值（? 或 SQL 運算式）
+  const values = exprs => when ? `SELECT ${exprs.join(',')} WHERE ${when}` : `VALUES(${exprs.join(',')})`;
+  const writes = [db.prepare(`INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json,source) ${values(Array(9).fill('?'))}`)
+    .bind(at, code, name, kind, dogId, number || '', JSON.stringify(before), JSON.stringify(after), actor ? null : source, ...args)];
+  if (actor) writes.push(db.prepare(`INSERT INTO v3_dog_edit_actors(request_id,log_id,actor_subject,actor_email,source) ${values(['?', 'last_insert_rowid()', '?', '?', '?'])}`)
+    .bind(actor.requestId, actor.subject, actor.email, source, ...args));
+  return writes;
+}
+
+// 記一筆；記失敗不影響編輯本身（編輯已經存好了）。來源沒傳或不對直接丟錯，不吞掉
+export async function logEdit(db, { editor, kind, dogId = null, dogNumber = '', before = null, after = null, source }, now = Date.now()) {
+  checkSource(source);
   if (!db || !editor) return false;
   try {
-    await db.prepare('INSERT INTO v3_edit_log(at,editor_code,editor_name,kind,dog_id,dog_number,before_json,after_json,source) VALUES(?,?,?,?,?,?,?,?,?)')
-      .bind(new Date(now).toISOString(), editor.code || '', editor.name, kind, dogId, dogNumber || '', JSON.stringify(before), JSON.stringify(after), source).run();
+    const [write] = editLogWrites(db, { at: new Date(now).toISOString(), code: editor.code || '', name: editor.name, kind, dogId, number: dogNumber, before, after, source });
+    await write.run();
     return true;
   } catch (e) {
     console.error('edit log', e);

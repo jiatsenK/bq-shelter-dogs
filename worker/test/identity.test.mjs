@@ -30,6 +30,9 @@ test('固定志工身分：兩裝置與舊名字在更名後找到同一人，�
  const old=await call(env,'/identity',{name:'小明'});const fresh=await call(env,'/identity',{name:'明明'});
  assert.equal(old.identity.name,'明明');assert.equal(fresh.identity.volunteerId,a.identity.volunteerId);assert.deepEqual(old.identity.codes,fresh.identity.codes);
  const edits=await call(env,'/edits');assert.equal(edits.edits[0].kind,'volunteer_rename');assert.equal(edits.edits[0].editorName,'小明');
+ const row=await DB.prepare("SELECT editor_code,editor_name,dog_id,dog_number,before_json,after_json,source FROM v3_edit_log WHERE kind='volunteer_rename'").first();
+ assert.deepEqual({...row},{editor_code:a.identity.codes[0],editor_name:'小明',dog_id:null,dog_number:'',source:'volunteer',
+  before_json:JSON.stringify({volunteerId:a.identity.volunteerId,name:'小明'}),after_json:JSON.stringify({volunteerId:a.identity.volunteerId,name:'明明'})});
 });
 test('名字衝突須確認才合併，聯集常溜與開卡、保留最早日期及兩邊歷史，舊代號重試安全',async t=>{
  const DB=fakeD1();t.after(()=>DB.close());await createCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};

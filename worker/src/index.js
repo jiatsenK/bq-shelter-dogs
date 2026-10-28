@@ -308,7 +308,7 @@ async function activities(request, env, origin) {
     if (method === 'POST') after = await createActivity(env.DB, act);
     else if (method === 'PUT') ({ before, after } = await updateActivity(env.DB, id, revision, act));
     else ({ before } = await deleteActivity(env.DB, id, revision));
-    await logEdit(env.DB, { editor, kind: 'activity', before: activityLog(before), after: activityLog(after) }, now);
+    await logEdit(env.DB, { editor, kind: 'activity', before: activityLog(before), after: activityLog(after), source: 'volunteer' }, now);
     return reply(200, { ok: true, activity: after, ...(method === 'DELETE' ? { deleted: id } : {}) }, origin);
   } catch (e) {
     if (e instanceof ActivityError) return fail(e.status, e.message, origin);
@@ -607,7 +607,7 @@ async function writeWalks(request, env, origin, ctx) {
   const results = Array.isArray(out.results) ? out.results : [];
   // 備註、異動紀錄是只追加的編輯，記進編輯紀錄（ADR 0004）；名字用送來的 walker
   const editor = await editorOf(body.walker, cfg.walkerKey);
-  await logEdit(env && env.DB, { editor, kind: action === 'note' ? 'note' : 'sheetlog', dogNumber: action === 'note' ? dogs[0].id || '' : '', before: null, after: body.text });
+  await logEdit(env && env.DB, { editor, kind: action === 'note' ? 'note' : 'sheetlog', dogNumber: action === 'note' ? dogs[0].id || '' : '', before: null, after: body.text, source: 'volunteer' });
   return reply(200, { ok: true, today: out.today, results }, origin);
 }
 
