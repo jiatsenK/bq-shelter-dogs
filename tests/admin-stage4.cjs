@@ -5,6 +5,14 @@ const path = require('node:path');
 // #567 管理網站第 4 階段：活動紀錄、待補清單（原資料檢查）、修改紀錄、網站更新（#624 從更新紀錄拆出）。API 全部用隔離的假回應，不碰正式資料。
 module.exports = async (browser, base) => {
   const { ADMIN_CSP } = await import('../worker/src/admin/index.js');
+  const RELEASES_URL = 'https://api.github.com/repos/jiatsenK/bq-shelter-dogs/releases?per_page=30';
+  const releases = [
+    { tag_name: 'v9.3.0', html_url: 'https://github.com/o/r/releases/tag/v9.3.0', draft: false, prerelease: false, published_at: '2026-10-22T08:53:10Z',
+      body: '## [9.3.0](https://github.com/o/r/compare/v9.2.1...v9.3.0) (2026-10-22)\n\n\n### 新功能\n\n* 名單修改與復原先存 D1 ([#457](https://github.com/o/r/issues/457)) ([a8edd13](https://github.com/o/r/commit/a8edd13))\n\n### 修正\n\n* 狗群換群箭頭固定位置 ([#443](https://github.com/o/r/issues/443))\n' },
+    { tag_name: 'v9.2.1', html_url: 'https://github.com/o/r/releases/tag/v9.2.1', draft: false, prerelease: false, published_at: '2026-10-22T08:51:08Z', body: '' },
+    { tag_name: 'v9.4.0', html_url: 'https://github.com/o/r/releases/tag/v9.4.0', draft: true, prerelease: false, published_at: null, body: '' },
+  ];
+  let releasesCode = 200;
   const A = 'a'.repeat(32), B = 'b'.repeat(32), C = 'c'.repeat(32), D = 'd'.repeat(32);
   const dogs = [
     { dogId: A, number: '2026010101', name: '阿福', cage: 'A1', note: '', intro: '親人', sex: 'male', onMain: true, status: 'main', formerNumber: '', departure: null, fixedCare: false, rest: null, photoUrl: null, walkedDate: '2026-10-01' },
@@ -23,6 +31,7 @@ module.exports = async (browser, base) => {
   });
   await context.route('**/*', async route => {
     const req = route.request(), url = new URL(req.url());
+    if (req.url() === RELEASES_URL) return route.fulfill({ status: releasesCode, headers: { 'Access-Control-Allow-Origin': '*' }, json: releasesCode === 200 ? releases : { message: 'API rate limit exceeded' } });
     if (url.origin !== base) return route.abort();
     const page = url.pathname.match(/^\/admin\/public\/(activities|checks|updates|releases)\.html$/);
     if (page) return route.fulfill({ body: fs.readFileSync(path.join(__dirname, `../admin/public/${page[1]}.html`)), headers: { 'Content-Type': 'text/html', 'Content-Security-Policy': ADMIN_CSP } });
@@ -173,9 +182,16 @@ module.exports = async (browser, base) => {
 
     // 網站更新
     await page.goto(`${base}/admin/public/releases.html`);
-    const releases = JSON.parse(fs.readFileSync(path.join(__dirname, '../public/website-updates.json'), 'utf8'));
-    await page.waitForFunction(n => document.querySelectorAll('#releases li').length === n, releases.length);
+    await page.waitForFunction(() => document.querySelectorAll('#releases > li').length === 2);
+    assert.deepEqual(await page.locator('#releases > li > time').allTextContents(), ['v9.3.0 · 2026-10-22', 'v9.2.1 · 2026-10-22'], '草稿不列，日期是台灣日期');
+    assert.deepEqual(await page.locator('#releases > li').first().locator('ul li').allTextContents(), ['名單修改與復原先存 D1', '狗群換群箭頭固定位置'], '拿掉 PR／commit 連結');
+    assert.equal(await page.locator('#releases > li').nth(1).locator('p').textContent(), '這版沒有列出改動。');
+    assert.equal(await page.locator('#releases a[href="https://github.com/o/r/releases/tag/v9.3.0"][target="_blank"]').count(), 1);
     await page.getByText('更新紀錄顯示中', { exact: false }).waitFor();
+    releasesCode = 403;
+    await page.locator('#reload').click();
+    await page.getByText('GitHub 暫時限制讀取次數', { exact: false }).waitFor();
+    releasesCode = 200;
 
     // 網站連結：正式版／測試版各一列，有網址就新分頁開，沒設定寫出要設哪個 Secret
     await page.goto(`${base}/admin/public/links.html`);

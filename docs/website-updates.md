@@ -1,6 +1,8 @@
 # 資訊頁網站更新紀錄
 
-`public/website-updates.json` 隨網站靜態檔一起提供，只放經確認已正式上線的志工版更新。資訊 → 更新紀錄 → 網站更新讀取此檔；資料編輯仍由 `edits.html`／`GET /api/edits` 提供，兩者不混存。
+`public/website-updates.json` 隨網站靜態檔一起提供，只放經確認已正式上線的志工版更新。志工網站的資訊 → 更新紀錄 → 網站更新讀取此檔；資料編輯仍由 `edits.html`／`GET /api/edits` 提供，兩者不混存。
+
+> 2026-10-28 K 決定：管理網站的「網站更新」頁（`admin/public/releases.html`）不再讀這份檔，改讀 GitHub Releases（release-please 發版時自動產生，Release PR 合併後馬上打 tag），不用重新部署管理網站。下面「不自動匯出 Git 歷史」只管這份志工版白話紀錄。
 
 每次正式改版的發布準備，維護者在部署版本中加入日期與簡短說明，以新到舊排序：
 

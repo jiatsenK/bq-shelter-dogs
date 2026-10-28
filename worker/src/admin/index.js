@@ -14,7 +14,8 @@ import { isPhotoKey, isTomb, isThumbKey, r2Versions } from '../r2.js';
 
 const verifyAccess = createAccessVerifier();
 // Tabler uses data-image SVGs for select chevrons; executable content remains same-origin only.
-export const ADMIN_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
+// 網站更新頁直接讀 GitHub Releases，connect-src 多放 api.github.com。
+export const ADMIN_CSP = "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self' https://api.github.com; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'";
 const json = (data, status = 200) => Response.json(data, { status });
 const sameOrigin = (request, env) => request.headers.get('Origin') === env.ADMIN_ORIGIN && request.headers.get('Sec-Fetch-Site') !== 'cross-site';
 function protectedResponse(response, method) {

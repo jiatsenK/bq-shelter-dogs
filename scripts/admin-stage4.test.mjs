@@ -108,3 +108,21 @@ test('#684 停止重試的狗：格式驗證、舊版 Worker 沒回當成沒有�
   assert.equal(stoppedStatus([]), '目前沒有停止重試的狗。');
   assert.match(stoppedStatus([dog, dog]), /^2 隻狗.*已停止重試/);
 });
+
+test('網站更新：GitHub Releases 轉成版本清單', async () => {
+  const { toReleaseEntries, noteText } = await import('../admin/public/js/release-notes.js');
+  assert.equal(noteText('名單修改 ([#457](https://x/457)) ([#469](https://x/469)) ([a8edd13](https://x/a8))'), '名單修改');
+  assert.equal(noteText('存登記名字（[#407](https://x/407)） ([#410](https://x/410))'), '存登記名字（#407）');
+  const body = '## [9.3.0](https://x/compare) (2026-10-22)\n\n\n### 新功能\n\n* 甲 ([#1](https://x/1))\n* 乙\n\n### 修正\n\n* 丙 ([abc1234](https://x/c))\n';
+  const base = { html_url: 'https://x/r', draft: false, prerelease: false };
+  const entries = toReleaseEntries([
+    { ...base, tag_name: 'v9.2.1', published_at: '2026-10-21T16:30:00Z', body: '' },
+    { ...base, tag_name: 'v9.3.0', published_at: '2026-10-22T08:53:10Z', body },
+    { ...base, tag_name: 'v9.4.0', draft: true, published_at: null, body },
+    { ...base, tag_name: 'v9.4.0-rc', prerelease: true, published_at: '2026-10-23T00:00:00Z', body },
+  ]);
+  assert.deepEqual(entries.map(e => [e.version, e.date]), [['v9.3.0', '2026-10-22'], ['v9.2.1', '2026-10-22']], '新到舊、台灣日期、草稿與預先發布不列');
+  assert.deepEqual(entries[0].sections, [{ title: '新功能', items: ['甲', '乙'] }, { title: '修正', items: ['丙'] }]);
+  assert.deepEqual(entries[1].sections, []);
+  for (const bad of [{}, null, [{ tag_name: 1, html_url: 'x' }], [{ ...base, tag_name: 'v1', published_at: '壞掉' }]]) assert.equal(toReleaseEntries(bad), null);
+});

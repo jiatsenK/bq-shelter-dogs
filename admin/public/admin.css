@@ -164,6 +164,8 @@ h1 { margin: 0 0 8px; font-size: var(--admin-text-page); line-height: 1.3; }
 .release-list { padding-left: 20px; margin: 0; display: grid; gap: 12px; max-width: 90ch; }
 .release-list time { color: var(--admin-muted); font-size: var(--admin-text-meta); font-variant-numeric: tabular-nums; }
 .release-list p { margin: 4px 0 0; line-height: 1.7; }
+.release-list .release-section { font-weight: 600; margin-top: 8px; }
+.release-list ul { margin: 4px 0 0; padding-left: 20px; line-height: 1.7; }
 /* 系統架構圖：圖照原本寬度畫，視窗窄時在框內左右捲，不擠壓字（K 2026-10-28 只在電腦看） */
 .diagram-jump { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0 0 24px; }
 .diagram-card { scroll-margin-top: 16px; }

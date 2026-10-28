@@ -5,9 +5,13 @@
 name: 版本號
 
 # #329：不再每次推到 main 都跑（一次 1 分鐘），改成每週一台灣 9:00 更新一次 Release PR；急著發版就在 Actions 頁手動按 Run workflow
+# 管理網站「網站更新」頁讀 GitHub Releases：Release PR 合併（只有它會改 .release-please-manifest.json）就馬上跑一次打 tag、建 Release，不用等到下週一
 on:
   schedule:
     - cron: '0 1 * * 1'
+  push:
+    branches: [main]
+    paths: ['.release-please-manifest.json']
   workflow_dispatch:
 
 permissions:
