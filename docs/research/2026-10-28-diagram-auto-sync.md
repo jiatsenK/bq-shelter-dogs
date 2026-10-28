@@ -1,5 +1,7 @@
 # 架構圖跟著程式更新：自動產生、CI 核對與版本顯示（2026-10-28）
 
+> **2026-10-28 更新（K 決定，推翻第 5 點與第 6 節「手工圖保留、不導入 Mermaid」）**：架構圖改成跟 K 其他專案同一套，只留一份 `docs/ARCHITECTURE.md`，照 agent-hub `docs/rules/architecture-diagrams.md` 用 Mermaid 畫；`docs/diagrams/*.html` 七張手工圖刪除。原因：所有專案用同一套畫法與格式，agent-hub 的專案總覽頁才能直接讀進來對照，不用為這個專案另外維護一種圖。事實核對（第 3 節）與 PR 提醒（第 5 節做法）照舊，改成讀 `docs/ARCHITECTURE.md`；管理網站（第 2.4 節表格第 3 列的做法）在建置時用無頭瀏覽器把 Mermaid 畫成 SVG、樣式拆成外部 CSS。以下內容保留當時的研究原文。
+
 2026-10-28（台灣時間）。問題（K）：`docs/diagrams/` 的 6 張架構圖（architecture、environments、writeback-sequence、sheet-sync-sequence、daily-schedule、data-flows）是 AI 手工排版的 HTML/SVG。希望程式或設定改了，圖能跟著改；做不到的話，至少在圖上看得到「放上去的日期＋第幾版」。這些圖之後要放進管理網站（`admin/public/`）。
 
 只讀研究，沒有改任何既有檔案、沒有 commit、沒有開瀏覽器。程式以 `main`（`8cca77b`）為準，行號都是這一版的行號。外部說法附官方文件或原始碼連結；標「推論」的是我依來源推出來、還沒實測的。

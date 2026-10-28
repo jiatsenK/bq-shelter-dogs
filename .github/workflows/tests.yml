@@ -9,7 +9,7 @@
 #   每個步驟各自設時限，加總（2＋9＋5 分鐘）小於 job 的 17 分鐘，job 時限只當最後防線；網頁測試每個套件另有 150 秒時限（scripts/suite-timeout.cjs）
 name: 測試
 
-# 只改文件（docs/、根目錄的 .md）不跑（#305）；但架構圖（docs/diagrams/）要跑，scripts/diagram-facts.test.mjs 核對圖跟程式（K 2026-10-28）。repo 沒有設必要檢查（私人 repo 免費方案不能設），跳過不會卡住 PR
+# 只改文件（docs/、根目錄的 .md）不跑（#305）；但架構圖（docs/ARCHITECTURE.md）要跑，scripts/diagram-facts.test.mjs 核對圖跟程式（K 2026-10-28）。repo 沒有設必要檢查（私人 repo 免費方案不能設），跳過不會卡住 PR
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
@@ -19,7 +19,7 @@ on:
       - '!docs/**'
       - '!*.md'
       - '!.claude/**'
-      - 'docs/diagrams/**'
+      - 'docs/ARCHITECTURE.md'
   workflow_dispatch:
 
 permissions:

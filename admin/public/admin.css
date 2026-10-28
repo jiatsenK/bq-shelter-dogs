@@ -170,12 +170,16 @@ h1 { margin: 0 0 8px; font-size: var(--admin-text-page); line-height: 1.3; }
 .release-list p { margin: 4px 0 0; line-height: 1.7; }
 .release-list .release-section { font-weight: 600; margin-top: 8px; }
 .release-list ul { margin: 4px 0 0; padding-left: 20px; line-height: 1.7; }
-/* 系統架構圖：圖照原本寬度畫，視窗窄時在框內左右捲，不擠壓字（K 2026-10-28 只在電腦看） */
+/* 系統架構圖：正本 docs/ARCHITECTURE.md，圖的寬度由 shared/diagrams.css 依每張圖原寸給；視窗窄時在框內左右捲，不擠壓字（K 2026-10-28 只在電腦看） */
 .diagram-jump { display: flex; flex-wrap: wrap; gap: 8px 20px; margin: 0 0 24px; }
 .diagram-card { scroll-margin-top: 16px; }
-.diagram-version { color: var(--admin-muted); font-size: var(--admin-text-meta); font-variant-numeric: tabular-nums; margin: 0 0 16px; }
-.diagram-frame { overflow-x: auto; background: #f5f5f5; border-radius: 4px; }
-.diagram-frame svg { display: block; width: 100%; min-width: 1120px; height: auto; }
+.diagram-version, .diagram-source { color: var(--admin-muted); font-size: var(--admin-text-meta); font-variant-numeric: tabular-nums; margin: 0 0 8px; }
+.diagram-source { margin-bottom: 16px; }
+.diagram-frame { overflow-x: auto; background: #fff; border: 1px solid #e6e8eb; border-radius: 4px; padding: 16px; margin-bottom: 16px; }
+.diagram-frame svg { display: block; height: auto; margin: 0 auto; }
+.diagram-missing { padding: 16px; background: #fff7e6; border-radius: 4px; }
+.diagram-notes { margin: 0; padding-left: 20px; line-height: 1.8; max-width: 120ch; }
+.diagram-notes code { font-size: 0.875em; color: var(--admin-muted); background: none; padding: 0; white-space: normal; word-break: break-all; }
 @media (max-width: 900px) {
   .admin-page-header { flex-wrap: wrap; }
   .check-card { padding: 16px; }

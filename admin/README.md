@@ -20,7 +20,7 @@
 | `worker/src/admin/activities.js`、`checks.js`、`edits.js` | #567 活動寫入（共用 activities.js＋同交易紀錄）、#518 掃描清單、資料編輯紀錄搜尋 |
 | `worker/src/admin/links.js`、`admin/public/links.html`、`js/links.js` | 網站連結頁：正式版／測試版的志工網站、試算表與 GAS 網址。值由部署時 `--var` 帶入（`SITE_URL`、`TEST_SITE_URL` 從 `WORKERS_SUBDOMAIN` 組；`SHEET_URL`、`TEST_SHEET_URL`、`GAS_URL`、`TEST_GAS_URL` 是同名 GitHub Secret，沒設就顯示還沒設定） |
 | `admin/public/activities.html`、`checks.html`、`updates.html`、`releases.html` | #567 活動紀錄、待補清單、修改紀錄；#624 網站更新拆到 `releases.html`（K 2026-10-28 起讀 GitHub Releases）。純規則在 `activity-model.js`、`data-checks.js`、`edit-log.js`、`release-notes.js` |
-| `admin/public/diagrams.html`、`js/diagrams.js`、`scripts/admin-diagrams.mjs` | 系統架構圖頁（K 2026-10-28）：正本是 `docs/diagrams/*.html`，建置時抽成 `shared/diagrams.json`、`shared/diagrams.css`（圖裡的 `<style>` 拆成外部檔並加範圍、id 加圖名，CSP 才不擋、多張同頁不串）。第幾版＝main 上改過該檔的 commit 數、日期＝最後一次 commit，淺層 clone 數不出來就不顯示，所以「部署管理網站」抓完整歷史。拉丁字型自架在 `vendor/fonts/`（Fontsource 5.3.0，OFL，授權檔同資料夾），中文用電腦內建字型 |
+| `admin/public/diagrams.html`、`js/diagrams.js`、`scripts/admin-diagrams.mjs` | 系統架構圖頁（K 2026-10-28）：正本是 `docs/ARCHITECTURE.md`（Mermaid）。建置時用 Playwright 的無頭 Chromium 載入 `scripts/vendor/mermaid/mermaid.min.js`（Mermaid 11.4.1，MIT，授權檔同資料夾）把圖畫成 SVG，抽成 `shared/diagrams.json`、`shared/diagrams.css`（SVG 的 `<style>` 拆成外部檔並加範圍、style 屬性換成 class，CSP 才不擋）；原始碼沒變就沿用上次畫好的。沒有無頭瀏覽器時不擋建置，該張圖改顯示 GitHub 連結，所以「部署管理網站」會先裝 Playwright。第幾版＝main 上改過該檔的 commit 數、日期＝最後一次 commit，淺層 clone 數不出來就不顯示，所以「部署管理網站」抓完整歷史。拉丁字型 Geist 自架在 `vendor/fonts/`（Fontsource 5.3.0，OFL，授權檔同資料夾），建置量字寬和頁面顯示用同一個字型；中文用電腦內建字型 |
 
 先跑 `node scripts/build-admin-assets.mjs` 可產出共用資產；不要手動改產出檔。Tabler 1.4.0 CSS 固定存於 `public/vendor/`，不載入其 JavaScript 或外部字型。上游：https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css；MIT 授權與檔頭一併保留。
 

@@ -1,16 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, readdir, access } from 'node:fs/promises';
-import { DIAGRAMS, DIAGRAM_TITLES as TITLES, plainText } from './admin-diagrams.mjs';
+import { DOC, DIAGRAMS, DIAGRAM_TITLES as TITLES, diagramSections, sectionText } from './admin-diagrams.mjs';
 
-// 架構圖事實核對（K 2026-10-28）：圖是手工畫的，程式改了名稱、時間、次數而圖沒跟著改，這裡會失敗。
+// 架構圖事實核對（K 2026-10-28）：docs/ARCHITECTURE.md 的圖與說明是人寫的，程式改了名稱、時間、次數而文件沒跟著改，這裡會失敗。
 // 只比得了寫死在設定或程式裡的值；箭頭方向、步驟先後要人看（docs/research/2026-10-28-diagram-auto-sync.md 第 3.3 節）。
 const read = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const jsonc = text => JSON.parse(text.replace(/^\s*\/\/.*$/gm, ''));
-// 每個標籤前面先補空白，不同 <text> 的字才不會黏在一起
-const text = async name => plainText((await read(`docs/diagrams/${name}.html`)).match(/<body[\s\S]*<\/body>/)[0].replace(/</g, ' <'));
+// 每段的文字：標題、Mermaid 原始碼、說明（scripts/admin-diagrams.mjs 的 sectionText）
+const sections = diagramSections(await read(DOC));
+const text = async name => sectionText(sections.find(s => s.name === name));
 const shows = async (name, value, why) => {
-  assert.ok((await text(name)).includes(value), `「${TITLES[name]}」圖上找不到「${value}」：${why}。請改圖（docs/diagrams/${name}.html）或確認程式是不是改錯了`);
+  assert.ok((await text(name)).includes(value), `${DOC} 的「${TITLES[name]}」段落找不到「${value}」：${why}。請改這一段，或確認程式是不是改錯了`);
 };
 const pad = n => String(n).padStart(2, '0');
 const twHours = field => field.split(',').map(h => (Number(h) + 8) % 24);
@@ -26,8 +27,9 @@ const gasScans = JSON.parse(gas.match(/(\[\[\d+, \d+\](?:, \[\d+, \d+\])*\])\.fo
 const scanTimes = twHours(scanCron.split(' ')[1]).map(h => `${pad(h)}:${pad(scanCron.split(' ')[0])}`);
 const gasTimes = gasScans.map(([h, m]) => `${pad(h)}:${pad(m)}`);
 
-test('每張圖都在，標題對得上', async () => {
-  for (const name of DIAGRAMS) assert.ok((await read(`docs/diagrams/${name}.html`)).includes(TITLES[name]), name);
+test('每段都在、標題對得上，主圖／上線圖／流程／元件都有 Mermaid 圖', async () => {
+  assert.deepEqual(sections.map(s => s.title), DIAGRAMS.map(name => TITLES[name]));
+  for (const s of sections) assert.equal(!!s.mermaid, /^(主圖|上線圖|流程|元件)/.test(s.title), `「${s.title}」${s.mermaid ? '不該' : '要'}有 Mermaid 圖`);
 });
 
 test('Worker、D1、R2 名稱跟 wrangler 設定一致', async () => {
@@ -42,8 +44,7 @@ test('Worker、D1、R2 名稱跟 wrangler 設定一致', async () => {
   await shows('environments', testSite.name, 'wrangler.test-site.jsonc 的測試網站 Worker 名稱');
   await shows('environments', preview.name, 'wrangler.preview-db.jsonc 的 PR 預覽 Worker 名稱');
   await shows('environments', testSite.d1_databases[0].database_name, 'wrangler.test-site.jsonc 的測試 D1 名稱');
-  // 圖上框太窄，測試照片空間省略了共同的「bq-shelter-」開頭
-  await shows('environments', testSite.r2_buckets[0].bucket_name.replace(/^bq-shelter-/, ''), 'wrangler.test-site.jsonc 的測試照片空間名稱（省略 bq-shelter- 開頭）');
+  await shows('environments', testSite.r2_buckets[0].bucket_name, 'wrangler.test-site.jsonc 的測試照片空間名稱');
   await shows('writeback-sequence', prod.name, 'wrangler.jsonc 的志工網站 Worker 名稱');
 });
 
@@ -72,7 +73,7 @@ test('今日溜狗保險掃描的台灣時間', async () => {
 
 test('照片垃圾桶：每月 1 日、30 天以上', async () => {
   const { TRASH_DAYS } = await import('../worker/src/r2.js');
-  assert.ok(worker.includes('d.getUTCDate() === 1 && d.getUTCHours() === 1'), 'worker/src/index.js 清照片垃圾桶的日子變了，請改「一天裡的排程」「系統架構」兩張圖的「每月 1 日」');
+  assert.ok(worker.includes('d.getUTCDate() === 1 && d.getUTCHours() === 1'), 'worker/src/index.js 清照片垃圾桶的日子變了，請改「一天裡的排程」「主圖」兩段的「每月 1 日」');
   await shows('daily-schedule', `每月 1 日這次順便清照片垃圾桶（${TRASH_DAYS} 天以上）`, `worker/src/r2.js 的 TRASH_DAYS 是 ${TRASH_DAYS}`);
   await shows('architecture', '每月 1 日清照片垃圾桶', 'worker/src/index.js 的 trashDue');
   await shows('data-flows', `照片垃圾桶每月 1 日清 ${TRASH_DAYS} 天以上的`, `worker/src/r2.js 的 TRASH_DAYS 是 ${TRASH_DAYS}`);
@@ -131,16 +132,28 @@ test('PR 預覽要加 preview 標籤', async () => {
   await shows('environments', 'PR 加 preview 標籤', '.github/workflows/preview-cloudflare.yml 看 preview 標籤');
 });
 
-test('程式架構：Worker 每支程式都在圖上，圖上的檔名與依據行號都還在', async () => {
+test('程式架構：Worker 每支程式都在元件圖段落，段落裡的檔名都還在', async () => {
   const all = await text('code-architecture');
   const files = async dir => (await readdir(new URL(`../${dir}/`, import.meta.url))).filter(f => f.endsWith('.js'));
   const [root, admin] = [await files('worker/src'), await files('worker/src/admin')];
-  for (const f of [...root, ...admin]) assert.ok(all.includes(f), `worker/src 新增了 ${f}，「程式架構」圖沒畫也沒列在「沒畫」；請改圖（docs/diagrams/code-architecture.html）`);
+  for (const f of [...root, ...admin]) assert.ok(all.includes(f), `worker/src 新增了 ${f}，「程式架構」圖沒畫也沒列在「沒畫」；請改 ${DOC} 的元件圖`);
   const known = new Set([...root, ...admin, ...await files('public/js'), ...await files('admin/public/js')]);
-  for (const [f] of all.matchAll(/[\w-]+\.js\b/g)) assert.ok(known.has(f), `「程式架構」圖上的 ${f} 已經不在了，請改圖`);
-  // 依據寫成「路徑:行號」：檔案要在、行號不能超過檔案長度（行號位移看不出來，改到相關程式時要人工重對）
-  for (const [, path, spec] of all.matchAll(/([\w./-]+\/[\w.-]+|[\w.-]+\.jsonc):(\d+(?:-\d+)?(?:、\d+(?:-\d+)?)*)/g)) {
-    const lines = (await read(path)).split('\n').length;
-    for (const n of spec.split(/[、-]/).map(Number)) assert.ok(n <= lines, `「程式架構」圖的依據 ${path}:${n} 超過檔案長度 ${lines} 行，程式改過了，請重新核對`);
+  for (const [f] of all.matchAll(/[\w-]+\.js\b/g)) assert.ok(known.has(f), `「程式架構」圖上的 ${f} 已經不在了，請改 ${DOC} 的元件圖`);
+});
+
+test('每段說明的依據：檔案都在、行號不超過檔案長度', async () => {
+  // 依據寫成 `路徑:行號`（多個行號用逗號、範圍用 -）；行號位移看不出來，改到相關程式時要人工重對
+  let count = 0;
+  for (const s of sections) {
+    for (const note of s.notes) {
+      for (const [, code] of note.matchAll(/`([^`]+)`/g)) {
+        const m = code.match(/^([\w.-]+(?:\/[\w.-]+)+|[\w.-]+\.jsonc?):(\d[\d, -]*)$/);
+        if (!m) continue;
+        count++;
+        const lines = (await read(m[1]).catch(() => assert.fail(`「${s.title}」的依據 ${code}：找不到 ${m[1]}`))).replace(/\r?\n$/, '').split(/\r?\n/).length;
+        for (const n of m[2].split(/[\s,-]+/).filter(Boolean).map(Number)) assert.ok(n <= lines, `「${s.title}」的依據 ${m[1]}:${n} 超過檔案長度 ${lines} 行，程式改過了，請重新核對`);
+      }
+    }
   }
+  assert.ok(count > 100, `依據太少（${count} 筆），解析可能壞了`);
 });
