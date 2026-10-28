@@ -26,5 +26,5 @@ test('網頁測試逾時：計時器不讓程序在套件跑完後多等', () =>
   const result = spawnSync(process.execPath, ['-e', script], { encoding: 'utf8', timeout: 5000 });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trim(), '1');
-  assert.ok(Date.now() - started < 5000);
+  assert.ok(Date.now() - started < 3000, '計時器要 unref，不能讓程序等滿 60 秒');
 });
