@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { walkerCode } from '../src/editlog.js';
-import { reconcileWalk } from '../src/walk-accept.js';
+import { todayWalks } from '../src/today-walks/index.js';
 import { setup, request, post, day } from './walk-fixture.mjs';
 
 // 稽核第 4 項（K 2026-10-26）：網站按溜了在同一批寫入裡記進溜狗紀錄，不等保險掃描。
@@ -59,14 +59,14 @@ test('網站記了今天後人工改回較早的日子：溜狗紀錄刪掉今�
   const env = await setup();
   try {
     await post(env, request('history-manual-walk'));
-    const out = await reconcileWalk(env.DB, dog, { date: '2026-09-01', walker: '甲' }, env);
+    const [out] = await todayWalks(env).observe([{ dog, current: { date: '2026-09-01', walker: '甲' } }]);
     assert.equal(out.changed, true);
     assert.deepEqual(await history(env, day()), []);
   } finally { env.DB.close(); }
   const cleared = await setup();
   try {
     await post(cleared, request('history-clear-walk'));
-    await reconcileWalk(cleared.DB, dog, { date: '', walker: '' }, cleared);
+    await todayWalks(cleared).observe([{ dog, current: { date: '', walker: '' } }]);
     assert.deepEqual(await history(cleared, day()), await codes('甲'));
   } finally { cleared.DB.close(); }
 });

@@ -4,8 +4,8 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import worker from '../src/index.js';
-import { dispatchWalk } from '../src/walk-accept.js';
-import { walkFingerprint } from '../src/walk-reconcile.js';
+import { todayWalks } from '../src/today-walks/index.js';
+import { walkFingerprint } from '../src/today-walks/scan.js';
 import { setup, request, post, current } from './walk-fixture.mjs';
 
 const source = readFileSync(new URL('../../apps-script/sheet-write.gs', import.meta.url), 'utf8');
@@ -140,7 +140,7 @@ test('一次派送失敗可靠留存；可信讀回才完成，舊回執不清�
   try {
     assert.equal((await post(env, request('delivery-0001'))).status, 200);
     globalThis.fetch = async () => { throw new Error('response-lost'); };
-    await dispatchWalk(env.DB, { id: '9001', name: '測試狗' }, env);
+    await todayWalks(env).dispatch([{ id: '9001', name: '測試狗' }]);
     assert.equal((await current(env)).walks[0].syncStatus, 'retry');
     assert.equal((await current(env)).walks[0].walker, '甲');
     const old = await env.DB.prepare('SELECT * FROM v3_walk_outbox WHERE version=1').first();
@@ -166,10 +166,10 @@ test('同狗已有派送執行中，較新版本不能另外取得派送者', as
   globalThis.fetch = () => { if (++count > 1) return Promise.reject(new Error('second sender')); return new Promise((_,reject) => { release = () => reject(new Error('lost')); }); };
   try {
     await post(env, request('sender-0001'));
-    const first = dispatchWalk(env.DB, { id:'9001', name:'測試狗' }, env);
+    const first = todayWalks(env).dispatch([{ id:'9001', name:'測試狗' }]);
     while (!release) await new Promise(resolve => setImmediate(resolve));
     await post(env, request('sender-0002','乙'));
-    await dispatchWalk(env.DB, { id:'9001', name:'測試狗' }, env);
+    await todayWalks(env).dispatch([{ id:'9001', name:'測試狗' }]);
     assert.equal(count,1);
     release(); await first;
   } finally { release?.(); globalThis.fetch = real; }

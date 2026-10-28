@@ -25,7 +25,7 @@ module.exports = function fakeD1Walks({ today, prior = () => ({ date: '', walker
       else {
         const same = old && old.walkedDate === today();
         if (!same) before.set(key, old ? { date: old.walkedDate, walker: old.walker } : prior(d));
-        // 同一天再登記（一起溜的人）接在原名單後面，跟 worker/src/walk-accept.js 一樣
+        // 同一天再登記（一起溜的人）接在原名單後面，跟 worker/src/today-walks/accept.js 一樣
         const split = s => String(s || '').split('、').filter(Boolean);
         const people = body.action === 'walk' && same ? [...split(old.walker), ...split(body.walker)] : split(body.walker);
         current = { date: today(), walker: [...new Set(people)].join('、') };

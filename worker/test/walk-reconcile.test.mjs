@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { setup, post, request, current, day } from './walk-fixture.mjs';
 import { resolveIdentity } from '../src/identity.js';
-import { scanWalks, walkFingerprint } from '../src/walk-reconcile.js';
+import { todayWalks } from '../src/today-walks/index.js';
+import { walkFingerprint } from '../src/today-walks/scan.js';
+
+// 保險掃描一輪（排程才跑，測試直接開功能）
+const scanWalks = env => todayWalks({ ...env, WALK_RETRY_ENABLED: 'true' }).scan();
 
 async function machine(env, action, body) {
   const response = await worker.fetch(new Request(`https://worker.example/api/walk-writeback/${action}`, {
@@ -71,7 +75,7 @@ test('掃描回應只有 HTTP 200 或 ok、沒有整份四欄，不能宣稱已�
   try {
     await baseline(env,'甲');
     globalThis.fetch=async ()=>Response.json({ ok:true });
-    await assert.rejects(scanWalks(env,Date.now()),/不完整/);
+    await assert.rejects(scanWalks(env),/不完整/);
   } finally { globalThis.fetch=real; env.DB.close(); }
 });
 
@@ -185,7 +189,7 @@ test('保險掃描按狗送指紋，讀寫量不隨歷史增加；沒有不同�
     globalThis.fetch=async (_url,init)=>{ sent.push(JSON.parse(init.body)); return Response.json({ ok:true,rows:[] }); };
     const sample=async ()=>{
       const before=(await env.DB.prepare('SELECT total_changes() n').first()).n,read=env.DB.stats.rowsRead;
-      await scanWalks(env,Date.now());
+      await scanWalks(env);
       return { reads:env.DB.stats.rowsRead-read,writes:(await env.DB.prepare('SELECT total_changes() n').first()).n-before };
     };
     const small=await sample();
@@ -214,7 +218,7 @@ test('#676 保險掃描先掃在所的狗再用主鍵查寫回紀錄，結果跟
     const queries=[];
     env.DB.prepare=sql=>{ queries.push(sql); return prepare(sql); };
     globalThis.fetch=async ()=>Response.json({ ok:true,rows:[] });
-    await scanWalks(env,Date.now());
+    await scanWalks(env);
     env.DB.prepare=prepare;
     const sql=queries.find(q=>q.includes('FROM v3_walk_state s'));
     const plan=(await prepare(`EXPLAIN QUERY PLAN ${sql}`).all()).results.map(p=>p.detail).join(';');
@@ -226,16 +230,23 @@ test('#676 保險掃描先掃在所的狗再用主鍵查寫回紀錄，結果跟
   } finally { env.DB.prepare=prepare; globalThis.fetch=real; env.DB.close(); }
 });
 
-test('還有差異沒收完（未決派送）base 不變，下次掃描同一隻還會被找出來', async () => {
+// #746 起保險掃描跟改表通知同一套規則，還沒派送的 pending 也收下人工修改；已交給 GAS、結果不明的派送才留給派送自己收尾
+test('還有差異沒收完（派送結果不明）base 不變，下次掃描同一隻還會被找出來', async () => {
   const env=await setup(),real=globalThis.fetch;
   try {
     await baseline(env,'甲');
     await post(env,request('pending-sig-0002','乙'));
     const sent=[];
-    globalThis.fetch=async (_url,init)=>{ sent.push(JSON.parse(init.body).fingerprints); return Response.json({ ok:true,rows:[{ dog,current:{ date:'2026-09-01',walker:'丁' } }] }); };
-    await scanWalks(env,Date.now());
-    await scanWalks(env,Date.now());
+    globalThis.fetch=async (_url,init)=>{
+      const body=JSON.parse(init.body);
+      if (body.action!=='walkScan') throw new Error('lost');
+      sent.push(body.fingerprints); return Response.json({ ok:true,rows:[{ dog,current:{ date:'2026-09-01',walker:'丁' } }] });
+    };
+    await todayWalks(env).dispatch([dog]);
+    await scanWalks(env);
+    await scanWalks(env);
     assert.equal((await current(env)).walks[0].walker,'甲、乙');
+    assert.equal((await current(env)).walks[0].syncStatus,'retry');
     assert.deepEqual(sent[1],sent[0]);
   } finally { globalThis.fetch=real; env.DB.close(); }
 });

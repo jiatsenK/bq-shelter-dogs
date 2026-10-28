@@ -69,7 +69,7 @@ const fakeD1 = (() => {
       else {
         const same = old && old.walkedDate === today();
         if (!same) before.set(key, old ? { date: old.walkedDate, walker: old.walker } : d1Base(dog));
-        // 同一天再登記（一起溜的人）接在原名單後面，跟 worker/src/walk-accept.js 一樣
+        // 同一天再登記（一起溜的人）接在原名單後面，跟 worker/src/today-walks/accept.js 一樣
         const people = body.action === 'walk' && same ? [...splitWalkers(old.walker), ...splitWalkers(body.walker)] : splitWalkers(body.walker);
         current = { date: today(), walker: [...new Set(people)].join('、') };
       }

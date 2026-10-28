@@ -1,9 +1,9 @@
 // ADR 0016：撤銷溜了不靠手機的復原證據，Worker 從 D1 溜狗紀錄找上一次（previousWalk）。
-// #558 起舊版 POST /walk 的復原退場，只剩 D1 接受流程（walk-accept.js）用它，這裡直接測函式
+// #558 起舊版 POST /walk 的復原退場，只剩 D1 接受流程（today-walks/accept.js）用它，這裡直接測函式
 // 執行：node --test worker/test/undo-revert.test.mjs
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { previousWalk } from '../src/today.js';
+import { previousWalk } from '../src/today-walks/read.js';
 import { fakeD1 } from './fakes.mjs';
 import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 

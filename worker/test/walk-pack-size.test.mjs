@@ -2,7 +2,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setup, day } from './walk-fixture.mjs';
-import { readAcceptedWalks } from '../src/walk-accept.js';
+import { todayWalks } from '../src/today-walks/index.js';
 
 const CHUNK_BYTES = 1_000_000;
 
@@ -17,7 +17,7 @@ test('2,000 隻狗、每隻五個名字的資料包仍是一段，版本與內�
   }
   const pack = await DB.prepare('SELECT version,payload FROM v3_walk_pack WHERE id=1').first();
   assert.ok(new TextEncoder().encode(pack.payload).length < CHUNK_BYTES, '超過分段上限就要改用既有分段');
-  const out = await readAcceptedWalks(DB, day());
+  const out = await todayWalks({ DB }).today();
   assert.equal(out.version, pack.version);
   assert.equal(out.walks.length, 2000);
   assert.ok(out.walks.every(w => w.walked && w.syncStatus === 'pending'));

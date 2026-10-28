@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { setup, request, post, current, day } from './walk-fixture.mjs';
 import { readFile } from 'node:fs/promises';
-import { guard } from '../src/walk-accept.js';
+import { readdir } from 'node:fs/promises';
+import { guard } from '../src/today-walks/shared.js';
 test.beforeEach(() => worker.testing.resetState());
 test('D1 接受後立即讀到日期、名單與同步中，不必等 Google', async () => {
   const env = await setup();
@@ -136,9 +137,10 @@ test('#681 guard 成立不寫列；不成立或 NULL 整批回復；溜狗 guard
     assert.equal(await count(), 1, '擋下的 batch 整批回復');
     assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_walk_guard').first()).n, 0);
   } finally { env.DB.close(); }
-  for (const file of ['walk-accept.js', 'walk-reconcile.js']) {
-    const code = await readFile(new URL(`../src/${file}`, import.meta.url), 'utf8');
-    assert.equal(code.match(/INSERT INTO v3_walk_guard/g)?.length || 0, file === 'walk-accept.js' ? 1 : 0, `${file} 的 guard 要用 guard()`);
+  const dir = new URL('../src/today-walks/', import.meta.url);
+  for (const file of (await readdir(dir)).filter(f => f.endsWith('.js'))) {
+    const code = await readFile(new URL(file, dir), 'utf8');
+    assert.equal(code.match(/INSERT INTO v3_walk_guard/g)?.length || 0, file === 'shared.js' ? 1 : 0, `${file} 的 guard 要用 guard()`);
     assert.doesNotMatch(code, /DELETE FROM v3_walk_guard/, `${file} 不用再清 guard`);
   }
 });

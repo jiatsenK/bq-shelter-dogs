@@ -5,7 +5,8 @@ import assert from 'node:assert/strict';
 import { readFile, readdir } from 'node:fs/promises';
 
 const SRC = new URL('../src/', import.meta.url);
-const sources = await Promise.all((await readdir(SRC)).filter(f => f.endsWith('.js'))
+// worker/src 底下全部 .js（含子資料夾），檔名用相對路徑，例如 today-walks/scan.js
+const sources = await Promise.all((await readdir(SRC, { recursive: true })).map(f => f.replaceAll('\\', '/')).filter(f => f.endsWith('.js'))
   .map(async f => [f, await readFile(new URL(f, SRC), 'utf8')]));
 
 // 「不整張讀」：沒帶 WHERE／LIMIT 的 SELECT、DELETE。SQL 裡有 ${…} 的（條件另外組）不判斷。
@@ -23,9 +24,9 @@ const FULL_SCAN_OK = {
   'identity.js: DELETE FROM v3_identity_guard': '更名／合併 batch 的交易檢查表；同一 batch 只插入 1 列並清空，筆數不隨志工總數成長',
   'packs.js: SELECT number,name,walked_date,walker_codes FROM v3_sheet_main': '#679 溜狗日期包只在 walked 版本變更、需要重建時讀主清單（約 120 列）；沒變只讀 1 列版本號',
   'packs.js: SELECT year,seq,vers,body FROM v3_walk_summaries': 'ADR 0013：yearSummaries 只在記憶體缺少摘要或月份版本變更才讀，按年存分段摘要，不讀溜狗歷史整表',
-  'index.js: SELECT row_index, number, name, walked_date, walker FROM v3_sheet_main': '#519 /walkers 要每隻狗的誰遛的，約 300 列；每個 Worker 1 分鐘最多讀一次（取代每分鐘讀 gviz）',
-  'index.js: SELECT dog_key, effective_date, walker FROM v3_walk_state': '#519 同上，最多一隻狗一列',
-  'walk-reconcile.js: SELECT s.*,o.status FROM v3_walk_state s': 'scanWalks 只在每日三次 cron 保險掃描跑，用每隻狗 base 值算指紋（ADR 0018）；不在網站請求跑',
+  'today-walks/read.js: SELECT row_index, number, name, walked_date, walker FROM v3_sheet_main': '#519 /walkers 要每隻狗的誰遛的，約 300 列；每個 Worker 1 分鐘最多讀一次（取代每分鐘讀 gviz）',
+  'today-walks/read.js: SELECT dog_key, effective_date, walker FROM v3_walk_state': '#519 同上，最多一隻狗一列',
+  'today-walks/scan.js: SELECT s.*,o.status FROM v3_walk_state s': 'scanWalks 只在每日三次 cron 保險掃描跑，用每隻狗 base 值算指紋（ADR 0018）；不在網站請求跑',
 };
 
 test('D1 不整張讀：沒帶條件的 SELECT／DELETE 都要列在已知例外', () => {
@@ -56,4 +57,19 @@ test('#512 不再有 gviz 讀表、舊同步程式；Worker 不 import scripts/'
   assert.deepEqual(files.map(([f]) => f).filter(f => /^scripts\/(sync-|fixed-care-sync)/.test(f)), [], '舊同步程式已刪');
   assert.deepEqual(files.filter(([, code]) => /\/gviz\/tq|gvizTable|fetchGviz/.test(code)).map(([f]) => f), [], 'gviz 讀表');
   assert.deepEqual(sources.filter(([, code]) => /from '\.\.\/\.\.\/scripts\//.test(code)).map(([f]) => f), [], 'Worker 程式不依賴 scripts/');
+});
+
+// #746：今日溜狗紀錄 module 只有一個入口。worker/src、scripts 的程式（不含測試）只能 import today-walks/index.js；
+// 測試可以直接測內部檔（例如 guard、previousWalk、walkFingerprint）。
+test('#746 today-walks/ 以外只 import today-walks/index.js', async () => {
+  const root = new URL('../../', import.meta.url);
+  const list = async dir => (await readdir(new URL(dir, root), { recursive: true })).map(f => `${dir}${f.replaceAll('\\', '/')}`)
+    .filter(f => /\.(mjs|cjs|js)$/.test(f) && !/\.test\.mjs$/.test(f) && !f.includes('node_modules/'));
+  const files = [...await list('worker/src/'), ...await list('scripts/')].filter(f => !f.startsWith('worker/src/today-walks/'));
+  const bad = [];
+  for (const file of files) {
+    const code = await readFile(new URL(file, root), 'utf8');
+    for (const [, spec] of code.matchAll(/(?:from|import\()\s*['"]([^'"]*today-walks\/[^'"]*)['"]/g)) if (!spec.endsWith('today-walks/index.js')) bad.push(`${file} → ${spec}`);
+  }
+  assert.deepEqual(bad, [], '改成 import today-walks/index.js；要用的東西沒有入口就在 index.js 開一個');
 });
