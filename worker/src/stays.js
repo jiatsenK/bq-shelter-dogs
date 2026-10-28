@@ -8,7 +8,7 @@
 export const STAYS_MAX = 100;
 export const STAY_REASON_MAX = 40;
 // 離所原因（GLOSSARY）
-export const DEPARTURE_REASON_TEXT = { adopt: '認養', death: '死亡', other: '其他', unknown: '待確認' };
+export const DEPARTURE_REASON_TEXT = { adopt: '認養', death: '離世', other: '其他', unknown: '待確認' };
 
 function validYmd(text) {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false;

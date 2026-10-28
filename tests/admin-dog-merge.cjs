@@ -26,7 +26,7 @@ module.exports = async (browser, base) => {
       dogs = dogs.filter(d => d.dogId !== S);
       return route.fulfill({ json: { logId: 12, target: { dogId: T, revision: 8 } } });
     }
-    if (request.method() === 'GET') return route.fulfill({ json: { dogId: S, revision: 3, intro: '', sex: '', sexCopies: [], fixedCare: false, rest: null, numbers: [], currentNumbers: [], stays: [], photo: null, intakeEvents: [] } });
+    if (request.method() === 'GET') return route.fulfill({ json: { dogId: S, revision: 3, intro: '', sex: '', sexCopies: [], fixedCare: false, rest: null, numbers: [], currentNumbers: [], stays: [], photo: null } });
     return route.fulfill({ status: 500, json: { error: '測試沒預期的寫入' } });
   });
   const page = await context.newPage(), errors = [];

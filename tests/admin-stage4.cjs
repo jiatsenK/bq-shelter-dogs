@@ -123,6 +123,7 @@ module.exports = async (browser, base) => {
     await page.getByText('主清單上共 2 隻', { exact: false }).waitFor();
     assert.match(await page.locator('#complete-list').textContent(), /缺編號1 隻/);
     assert.match(await page.locator('#complete-list').textContent(), /缺照片2 隻/);
+    assert.match(await page.locator('#complete-list').textContent(), /缺介紹還沒寫狗自己的介紹/, 'ADR 0022：缺介紹的意思寫出來');
     // #624 項目連到已篩選的狗資料表，狗名直接開抽屜
     await page.locator('#complete-list summary', { hasText: '缺編號' }).click();
     assert.equal(await page.getByRole('link', { name: '在狗資料表看這 1 隻' }).getAttribute('href'), './?care=missingNumber');

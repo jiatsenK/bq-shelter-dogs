@@ -81,9 +81,8 @@ test('管理者／管理者、志工／管理者同版本只接受一筆；公�
   assert.equal(race.find((r) => r.status === 'rejected').reason.status, 409);
   assert.ok(!JSON.stringify(await readEdits(db)).includes(actor.email));
 });
-test('欄位白名單及驗證；無編號性別；介紹不動事件；不能搶編號或刪目前編號', async (t) => {
+test('欄位白名單及驗證；無編號性別；不能搶編號或刪目前編號', async (t) => {
   const db = await setup(t);
-  await db.prepare('INSERT INTO v3_intake_events VALUES(?,0,?,?,?)').bind(dogId, '', '2020-01-01', '歷史').run();
   for (const [field, value, status] of [
     ['name', '改名', 400],
     ['sex', '猜測', 400],
@@ -107,7 +106,7 @@ test('欄位白名單及驗證；無編號性別；介紹不動事件；不能�
   before = await readDogEdit(db, dogId);
   assert.equal(before.sex, '');
   await saveDogEdit(db, dogId, { revision: before.revision, field: 'intro', value: '新介紹' }, { actor });
-  assert.equal((await readDogEdit(db, dogId)).intakeEvents[0].event, '歷史');
+  assert.equal((await readDogEdit(db, dogId)).intakeEvents, undefined);
   await db.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind('2020010101', dogId).run();
   await db
     .prepare('INSERT INTO v3_sheet_main(row_index,dog_id,number,name) VALUES(0,?,?,?)')

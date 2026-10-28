@@ -48,14 +48,9 @@ function bqStay(intake, today) {
   return y ? (m ? `${y}年${m}個月` : `${y}年`) : `${Math.max(1, m)}個月`;
 }
 
-// 收容所的話取講個性的一兩句：跳過開頭的日期、從哪裡來，最多 40 個字
+// 收容所的話取介紹開頭一句，最多 40 個字；介紹只寫狗自己（ADR 0022），不用再跳過入所經過
 function bqQuote(intro) {
-  const parts = String(intro || '').split(/[,，。；;！!？?\n]+/).map(s => s.trim()).filter(Boolean);
-  const skip = s => /^\d{4}年|^\d+\/\d+|進來|進板收|拾獲|通報|送進|帶進|入所|捕捉/.test(s);
-  const keep = parts.filter(s => !skip(s));
-  if (!keep.length) return '';
-  let out = keep[0];
-  for (const p of keep.slice(1)) { if ([...out].length + [...p].length > 38) break; out += '，' + p; }
+  const out = String(intro || '').split(/[。！!？?\n]+/).map(s => s.trim()).find(Boolean) || '';
   return [...out].length > 40 ? [...out].slice(0, 39).join('') + '…' : out;
 }
 

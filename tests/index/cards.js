@@ -7,7 +7,7 @@ async function runCardsTests() {
   const data = {
     photoVersions: { 'photos/2017041502.jpg': 'abc' },
     dogs: [
-      { id: '2017041502', name: '老將', cage: '新A07', sex: 'female', intro: '2017年4月15日,從板橋進來,個性溫和,喜歡散步' },
+      { id: '2017041502', name: '老將', cage: '新A07', sex: 'female', intro: '個性溫和，喜歡散步。怕機車聲' },
       { id: '2026090101', name: '新人', cage: 'C區13', sex: 'male', intro: '' },
       { id: '2022061001', name: '中堅', cage: '舊B05', intro: '' },
       { id: '', name: '(阿拉丁)', cage: '舊B16' },
@@ -57,9 +57,9 @@ async function runCardsTests() {
     eq([by['中堅'].monthOut, by['老將'].monthOut, by['新人'].monthOut], [2, 1, 0], '本月出賽：');
     eq([C.bqStay(new Date(2017, 3, 15), TODAY), C.bqStay(new Date(2026, 8, 1), TODAY), C.bqStay(new Date(2026, 8, 30), TODAY), C.bqStay(null, TODAY)], ['9年5個月', '1個月', '9天', '—'], '在所：');
   });
-  await check('球員卡：照片版本號；收容所的話跳過日期和從哪裡來', () => {
+  await check('球員卡：照片版本號；收容所的話取介紹開頭一句（ADR 0022）', () => {
     eq([by['老將'].photo, by['老將'].hasPhoto, by['新人'].hasPhoto], ['photos/2017041502.jpg?v=abc', true, false], '照片：');
-    eq(C.bqQuote('2017年4月15日,從板橋進來,個性溫和,喜歡散步'), '個性溫和，喜歡散步', '一句話：');
+    eq([by['老將'].quote, C.bqQuote('2017年4月15日從板橋被拾獲入所。親人'), C.bqQuote(''), [...C.bqQuote('很'.repeat(50))].length], ['個性溫和，喜歡散步', '2017年4月15日從板橋被拾獲入所', '', 40], '一句話：');
   });
   await check('球員卡年度獎項：出門王、資深球星、新人王都是資料算的', () => {
     eq(C.bqAwards(players, TODAY).map(a => [a.title, a.who.name, a.value]), [['出門王', '中堅', 2], ['資深球星', '老將', 9], ['新人王', '新人', 38]]);
