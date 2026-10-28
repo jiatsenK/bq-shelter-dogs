@@ -9,7 +9,7 @@ import { readEdits } from '../src/editlog.js';
 // 留下的狗 T：主清單上的米香（2026082501）。被併的 S：試算表先打名字時多出來、沒編號的米香（#621）。
 const T = 'a'.repeat(32), S = 'b'.repeat(32), OTHER = 'c'.repeat(32);
 const actor = { subject: 'verified', email: 'private@example.org' };
-const TABLES = ['v3_dogs', 'v3_dog_numbers', 'v3_walks', 'v3_intros', 'v3_rest', 'v3_stays', 'v3_intake_events', 'v3_photos', 'v3_dog_departures',
+const TABLES = ['v3_dogs', 'v3_dog_numbers', 'v3_walks', 'v3_intros', 'v3_rest', 'v3_stays', 'v3_photos', 'v3_dog_departures',
   'v3_activity_dogs', 'v3_volunteer_favorites', 'v3_volunteer_cards', 'v3_card_opened', 'v3_walk_state', 'v3_sheet_main'];
 async function setup(t) {
   const db = fakeD1();
@@ -23,7 +23,6 @@ async function setup(t) {
   await run("INSERT INTO v3_walks(dog_id,walk_date,position,walker_code,dog_number,dog_name) VALUES(?,'2026-09-22',0,'w2','','米香'),(?,'2026-09-26',0,'w2','','米香'),(?,'2026-09-26',1,'w3','','米香'),(?,'2026-09-30',0,'w9','','米香')", S, S, S, S);
   await run("INSERT INTO v3_intros VALUES(?,'留下那隻的介紹'),(?,'被併那隻的介紹')", T, S);
   await run("INSERT INTO v3_rest VALUES(?,'2099-01-01','腳傷')", S);
-  await run("INSERT INTO v3_intake_events(dog_id,position,number,event_date,event) VALUES(?,0,'2026082501','2026-08-25','入所'),(?,0,'','2026-08-24','先登記名字')", T, S);
   await run("INSERT INTO v3_photos(object_key,dog_id,thumb_key,is_primary) VALUES('photos/v/t.jpg',?,NULL,1),('photos/v/s.jpg',?,NULL,1)", T, S);
   await run("INSERT INTO v3_volunteers(volunteer_id,name,last_seen) VALUES('v1','小明','2026-10-01'),('v2','小華','2026-10-01')");
   await run("INSERT INTO v3_volunteer_favorites(volunteer_id,dog_id,added_on) VALUES('v1',?,'2026-09-01'),('v1',?,'2026-09-20'),('v2',?,'2026-09-21')", T, S, S);
@@ -48,7 +47,7 @@ test('合併預覽：列出會搬過去的，兩邊都有的留下那隻的', as
   const p = await previewMerge(db, T, S);
   assert.equal(p.target.number, '2026082501');
   assert.equal(p.source.number, '');
-  assert.deepEqual(p.moved, { 溜狗紀錄: 4, 休養: 1, 入所事件: 1, 照片: 1, 活動出席: 1, 常溜: 1 }, '同一天兩邊都有溜狗也全部搬過去');
+  assert.deepEqual(p.moved, { 溜狗紀錄: 4, 休養: 1, 照片: 1, 活動出席: 1, 常溜: 1 }, '同一天兩邊都有溜狗也全部搬過去');
   assert.deepEqual(p.kept, { 介紹: 1, 常溜: 1 });
   assert.deepEqual(p.lost, { 介紹: '被併那隻的介紹' }, '只留一份、會丟掉的內容先列出來');
   await assert.rejects(previewMerge(db, T, T), e => e.status === 400);
@@ -70,7 +69,6 @@ test('合併：被併那隻的資料搬到留下那隻、被併那隻刪掉；�
   const edit = await readDogEdit(db, T);
   assert.equal(edit.intro, '留下那隻的介紹');
   assert.deepEqual(edit.rest, { until: '2099-01-01', reason: '腳傷' });
-  assert.deepEqual(edit.intakeEvents.map(e => e.event), ['入所', '先登記名字']);
   assert.equal(edit.photo.key, 'photos/v/t.jpg', '留下那隻的主照片不變');
   // 同一天同一位志工只記一次
   assert.equal(await db.prepare("SELECT COUNT(*) AS n FROM v3_walks WHERE dog_id=? AND walk_date='2026-09-30'").bind(T).first('n'), 2);
@@ -93,7 +91,7 @@ test('合併：被併那隻的資料搬到留下那隻、被併那隻刪掉；�
   assert.equal(pub.kindLabel, '合併狗');
   assert.equal(pub.before.snapshot, undefined, '公開紀錄不帶整份快照');
   assert.equal(pub.after.rows, undefined);
-  assert.deepEqual(pub.before.counts, { 溜狗紀錄: 4, 介紹: 1, 休養: 1, 入所事件: 1, 照片: 1, 活動出席: 1, 常溜: 2 });
+  assert.deepEqual(pub.before.counts, { 溜狗紀錄: 4, 介紹: 1, 休養: 1, 照片: 1, 活動出席: 1, 常溜: 2 });
   assert.equal(pub.before.name, '米香');
 });
 
@@ -135,6 +133,21 @@ test('取消合併：照快照整筆拆回來，兩隻狗都回到合併前；�
   await assert.rejects(unmergeDogs(db, T, { logId, revision: (await readDogEdit(db, T)).revision }, { actor }), e => e.status === 409);
   await unmergeDogs(db, T, { logId: again.logId, revision: (await readDogEdit(db, T)).revision }, { actor });
   assert.deepEqual(await dump(db), original);
+});
+
+test('入所事件不再搬（ADR 0022，#667）：被併那隻留著的列刪掉不擋合併；舊快照裡有入所事件也能取消合併', async t => {
+  const { db, run } = await setup(t);
+  await run("INSERT INTO v3_intake_events(dog_id,position,number,event_date,event) VALUES(?,0,'','2026-08-24','先登記名字')", S);
+  assert.equal((await previewMerge(db, T, S)).moved.入所事件, undefined, '預覽不列入所事件');
+  const { logId } = await merge(db);
+  assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM v3_intake_events').first('n'), 0, '沒搬到留下那隻，被併那隻的也刪掉');
+  // #667 以前的合併紀錄：快照與搬過去的列都有 v3_intake_events
+  const event = { dog_id: S, position: 0, number: '', event_date: '2026-08-24', event: '先登記名字' };
+  await run(`UPDATE v3_edit_log SET before_json=json_set(before_json,'$.snapshot.rows.v3_intake_events',json(?)),
+    after_json=json_set(after_json,'$.rows.v3_intake_events',json(?)) WHERE id=?`, JSON.stringify([event]), JSON.stringify([{ ...event, dog_id: T }]), logId);
+  await unmergeDogs(db, T, { logId, revision: (await readDogEdit(db, T)).revision }, { actor });
+  assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM v3_dogs WHERE dog_id=?').bind(S).first('n'), 1, '被併那隻拆回來');
+  assert.equal(await db.prepare('SELECT COUNT(*) AS n FROM v3_intake_events').first('n'), 0, '舊快照的入所事件不插回');
 });
 
 test('取消合併：合併後留下那隻又改過的列不動，其他照樣拆回來', async t => {

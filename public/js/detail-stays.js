@@ -8,7 +8,7 @@ import { NEED_EDITOR, editorName, render } from './app.js';
 import { detailEdits, renderDetail } from './detail.js';
 
 // 出入所紀錄（#333、#639，ADR 0011、0021）：一個編號一筆，查不到編號的那次編號空著。
-// 閱讀時一行一件事（K 2026-10-26）：日期、入所／離所、原因，照日期排；入所介紹的逐次事件（入所、退回、轉所）也排進來當入所。
+// 閱讀時一行一件事（K 2026-10-26）：日期、入所／離所、原因，照日期排。
 // 有編號那筆的入所日就是編號前 8 碼；離所日有離所紀錄就照它（不能改），離所原因也照它，沒有就手填。原因欄是入所原因。補舊編號＝新增一筆填編號，刪掉那一筆＝刪掉那個舊編號；
 // 目前編號、有離所紀錄的編號不能刪。誰都能改（要先選名字，ADR 0004），離所的狗也可以改（ADR 0011）。
 // 整張表一次存（Worker 的 /stays），連同打開時看到的表一起送，別人剛改過會被擋下來
@@ -18,24 +18,14 @@ const canStays = dog => canEdit('editStays') && !!(dog.id && appState.UPLOAD_URL
 const kept = (dog, row) => !!row.number && (row.departed || (!dog.departure && row.number === dog.id));
 // 只有編號、沒有其他紀錄時沒什麼好列，只留「補」的入口
 const plain = rows => rows.every(r => r.number && !r.out && !r.reason && !r.outReason) && rows.length <= 1;
-// #392 盤點的舊資料：這兩種原因記的是那次怎麼離所，還沒搬到離所原因的（#651）先照離所原因列
-const ENDING = ['整修移所', '領養後退養'];
-const sameText = value => String(value || '').replace(/[\s。]+/g, '');
 
-// 出入所紀錄 → 一行一件事 [{ date, kind: '入所'|'離所', reason }]；閱讀時不逐行重複編號（#285），編號在改的表單裡；events 是入所介紹整理出的逐次事件（intakePresentation）
-function stayLines(dog, events = []) {
+// 出入所紀錄 → 一行一件事 [{ date, kind: '入所'|'離所', reason }]；閱讀時不逐行重複編號（#285），編號在改的表單裡。
+// 只列出入所表（ADR 0022）：入所經過已從介紹搬進入所原因，不再從介紹抓句子
+function stayLines(dog) {
   const lines = [];
   for (const r of BQDates.stayRows(dog)) {
-    const legacy = !r.departed && r.out && !r.outReason && ENDING.includes(r.reason);
-    lines.push({ date: r.in, kind: '入所', reason: legacy ? '' : r.reason });
-    if (r.departed || r.out) lines.push({ date: r.out, kind: '離所', reason: r.departed ? r.departure : legacy ? r.reason : r.outReason || '' });
-  }
-  for (const e of events) {
-    const reason = String(e.event || '').replace(/入所$/, '');
-    const same = lines.find(l => l.kind === '入所' && l.date && l.date === e.date);
-    // 同一天的入所：事件寫得比較完整（開頭就是手填的入所原因）就用事件那句，不然另列一行
-    if (same && sameText(reason).startsWith(sameText(same.reason))) same.reason = reason;
-    else lines.push({ date: e.date, kind: '入所', reason });
+    lines.push({ date: r.in, kind: '入所', reason: r.reason });
+    if (r.departed || r.out) lines.push({ date: r.out, kind: '離所', reason: r.departed ? r.departure : r.outReason || '' });
   }
   // 同一天照原本順序（先離所再入所）；沒日期的排最後
   return lines.map((l, i) => [l, i]).sort(([a, i], [b, j]) => (a.date || '9999').localeCompare(b.date || '9999') || i - j).map(([l]) => l);
@@ -44,12 +34,11 @@ function stayLinesHtml(lines) {
   return `<ul class="intake-list stay-lines">${lines.map(l => `<li>${l.date ? `<time datetime="${esc(l.date)}">${esc(l.date.replace(/-/g, '/'))}</time>` : '<span class="intake-date-empty">日期未確認</span>'}<span class="stay-kind">${l.kind}</span>${l.reason ? `<span class="intake-event">${esc(l.reason)}</span>` : ''}</li>`).join('')}</ul>`;
 }
 // 閱讀時的出入所紀錄：{ list（沒東西好列是 ''）, button（不能改是 ''）}
-function staysView(dog, events) {
-  const rows = BQDates.stayRows(dog);
-  const shown = !(plain(rows) && !events.length);
+function staysView(dog) {
+  const shown = !plain(BQDates.stayRows(dog));
   // 跟介紹的筆一樣（K 2026-10-26 統一圖示）
   const button = canStays(dog) ? `<button type="button" class="intro-heading-edit" id="staysEdit" aria-label="${shown ? '改' : '補'}出入所紀錄">${icon('write')}</button>` : '';
-  return { list: shown ? stayLinesHtml(stayLines(dog, events)) : '', button };
+  return { list: shown ? stayLinesHtml(stayLines(dog)) : '', button };
 }
 
 function staysSectionHtml(dog) {

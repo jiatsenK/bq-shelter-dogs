@@ -1,5 +1,4 @@
 import { cleanStayTable, stayTable, storedStays } from './stays.js';
-import { cleanIntakeEvents } from './intake.js';
 
 export const editError = (status, message) => Object.assign(new Error(message), { status });
 const conflict = () => editError(409, '這隻狗的資料已變更，草稿仍保留；請重新讀取後核對再儲存');
@@ -39,7 +38,6 @@ export async function readDogEdit(db, dogId) {
     (SELECT json_group_array(number) FROM v3_sheet_main WHERE dog_id=d.dog_id AND number<>'') AS current_numbers,
     (SELECT json_group_array(json_object('number',number,'date',departed_date,'reason',reason)) FROM v3_dog_departures WHERE dog_id=d.dog_id AND number<>'') AS departures,
     '[]' AS sex_copies,
-    (SELECT json_group_array(json_object('number',number,'date',event_date,'event',event)) FROM (SELECT number,event_date,event FROM v3_intake_events WHERE dog_id=d.dog_id ORDER BY position)) AS events,
     (SELECT json_object('key',object_key,'thumb',thumb_key) FROM v3_photos WHERE dog_id=d.dog_id AND is_primary=1) AS photo
     FROM v3_dogs d JOIN v3_dog_edit_state s USING(dog_id) WHERE d.dog_id=?`
     )
@@ -61,7 +59,6 @@ export async function readDogEdit(db, dogId) {
     currentNumbers: JSON.parse(row.current_numbers),
     departures,
     sexCopies: JSON.parse(row.sex_copies),
-    intakeEvents: JSON.parse(row.events),
     photo: JSON.parse(row.photo)
   };
 }
@@ -141,7 +138,7 @@ export async function saveDogEdit(
   db,
   dogId,
   input,
-  { actor, editor, photo = false, photoBefore, dogNumber, events } = {}
+  { actor, editor, photo = false, photoBefore, dogNumber } = {}
 ) {
   if (!input || Object.keys(input).sort().join(',') !== 'field,revision,value' || !Number.isSafeInteger(input.revision))
     throw editError(400, '請重新讀取後再改');
@@ -152,18 +149,7 @@ export async function saveDogEdit(
   const field = input.field,
     now = Date.now();
   const value = field === 'photo' && photo ? input.value : cleanDogValue(field, input.value, before, now, { admin: Boolean(actor) });
-  let nextEvents;
-  if (events !== undefined) {
-    if (field !== 'intro' || actor) throw editError(400, '此操作不修改逐次入所事件');
-    nextEvents = cleanIntakeEvents(events);
-    if (!nextEvents || nextEvents.some((e) => e.number && !before.numbers.includes(e.number)))
-      throw editError(400, '事件格式或編號不對');
-  }
-  if (
-    json(before[field]) === json(value) &&
-    (nextEvents === undefined || json(before.intakeEvents) === json(nextEvents))
-  )
-    return before;
+  if (json(before[field]) === json(value)) return before;
   // 出入所表改到的編號：跟舊編號（/former）同一套寫法
   const nextNumbers =
     field === 'numbers' ? value : field === 'stays' ? value.filter((r) => r.number).map((r) => r.number) : null;
@@ -189,17 +175,6 @@ export async function saveDogEdit(
         [dogId, value]
       )
     );
-  if (nextEvents !== undefined) {
-    writes.push(statement(`DELETE FROM v3_intake_events WHERE dog_id=? AND ${guard}`, [dogId]));
-    nextEvents.forEach((event, position) =>
-      writes.push(
-        statement(
-          `INSERT INTO v3_intake_events(dog_id,position,number,event_date,event) SELECT ?,?,?,?,? WHERE ${guard}`,
-          [dogId, position, event.number, event.date, event.event]
-        )
-      )
-    );
-  }
   if (field === 'sex' || field === 'fixedCare')
     writes.push(
       statement(`UPDATE v3_dogs SET ${field === 'sex' ? 'sex' : 'fixed_care'}=? WHERE dog_id=? AND ${guard}`, [
@@ -265,22 +240,8 @@ export async function saveDogEdit(
         kind,
         dogId,
         dogNumber ?? before.currentNumbers[0] ?? '',
-        json(
-          nextEvents === undefined
-            ? field === 'photo'
-              ? photoBefore
-              : field === 'stays' && !before.stays.length
-                ? null
-                : before[field]
-            : { text: before.intro, events: before.intakeEvents }
-        ),
-        json(
-          nextEvents === undefined
-            ? field === 'stays' && !value.length
-              ? null
-              : value
-            : { text: value, events: nextEvents }
-        )
+        json(field === 'photo' ? photoBefore : field === 'stays' && !before.stays.length ? null : before[field]),
+        json(field === 'stays' && !value.length ? null : value)
       ]
     )
   );

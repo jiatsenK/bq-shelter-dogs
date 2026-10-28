@@ -24,7 +24,7 @@ module.exports = async function verifyDetailEditing(browser, baseUrl) {
     else if (req.method() === 'PUT' && endpoint.startsWith('intro/')) {
       const body = req.postDataJSON();
       if (failIntro) return route.fulfill({ status: 503, json: { ok: false, error: '測試：暫時無法儲存，請稍後再試' } });
-      data = { ok: true, intro: body.text, intakeEvents: body.events || [] };
+      data = { ok: true, intro: body.text };
     }
     return route.fulfill({ json: data });
   });
@@ -93,30 +93,18 @@ module.exports = async function verifyDetailEditing(browser, baseUrl) {
     await page.locator('[data-append-back]').click();
     await assertFieldVisible('#appendText');
     await page.locator('[data-append-cancel]').click();
-    // 多次入所可讀、逐筆新增、儲存失敗後資料不消失。
+    // 介紹儲存失敗後打的字不消失，再存一次成功（ADR 0022：表單只有一個文字框）
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.evaluate(() => { detailDog.intakeEvents = [
-      { number: '2021021703', date: '2021-02-17', event: '迷路入所' },
-      { number: '2021021703', date: '2026-01-02', event: '領養退回' },
-    ]; renderDetail(); });
-    // 舊編號那次也列成入所（出入所紀錄跟逐次事件同一串，K 2026-10-26）
-    assert.deepEqual(await page.locator('.intake-list time').allTextContents(), ['2015/08/18', '2021/02/17', '2026/01/02']);
     await page.locator('#introEdit').click();
-    await page.locator('#intakeAdd').click();
-    const reason = page.locator('[data-intake-row="2"][data-intake-field="event"]');
-    await reason.fill('第三次入所的原因');
-    await page.setViewportSize({ width: 390, height: 480 });
-    await assertFieldVisible('[data-intake-row="2"][data-intake-field="event"]');
+    await page.locator('#introText').fill('第二次改的介紹');
+    failIntro = true;
     await page.locator('[form="introForm"]').click();
     await page.locator('#introForm [role="alert"]').waitFor();
-    assert.equal(await reason.inputValue(), '第三次入所的原因');
-    assert.equal(await reason.evaluate(el => el === document.activeElement), true);
-    await assertFieldVisible('[data-intake-row="2"][data-intake-field="event"]');
+    assert.equal(await page.locator('#introText').inputValue(), '第二次改的介紹');
     failIntro = false;
     await page.locator('[form="introForm"]').click();
     await page.locator('#introForm').waitFor({ state: 'detached' });
-    assert.equal(await page.locator('.intake-list li').count(), 4);
-    assert.match(await page.locator('.intake-list').textContent(), /第三次入所的原因/);
+    assert.equal(await page.locator('#detail [data-section="intro"] .content').textContent(), '第二次改的介紹');
     assert.equal(await page.locator('#detail .info .warn-note').count(), 0);
     assert.equal(await page.locator('#detail #staysEdit').count(), 1);
     assert.equal(await page.locator('#detail [data-section=walks]').count(), 1);
@@ -130,6 +118,6 @@ module.exports = async function verifyDetailEditing(browser, baseUrl) {
     await page.locator('#restUntil').focus();
     await assertFieldVisible('#restUntil');
     await page.locator('#restCancel').click();
-    console.log('詳細狗卡編輯：可見高度／平移、失敗焦點與游標、備註預覽、休養切欄、多次入所及桌面通過');
+    console.log('詳細狗卡編輯：可見高度／平移、失敗焦點與游標、備註預覽、休養切欄、介紹存失敗再存及桌面通過');
   } finally { await context.close(); }
 };

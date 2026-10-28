@@ -24,7 +24,6 @@ export function parseDogsData(data) {
     // 出入所表（#333、#639，ADR 0011、0021）：每次在所一列，number 查不到編號是空字串、out 還在所是空字串；
     // reason＝入所原因；departed＝離所日照離所紀錄（不能在網站改），departure 是離所原因；沒有離所紀錄的離所原因手填在 outReason。沒給的狗用 BQDates.stayRows 從編號排出來
     ...(Array.isArray(d.stays) ? { stays: d.stays.filter(r => r && typeof r === 'object').map(r => ({ number: text(r.number), in: text(r.in), out: text(r.out), reason: text(r.reason), ...(r.departed === true ? { departed: true, departure: text(r.departure) } : r.outReason ? { outReason: text(r.outReason) } : {}) })) } : {}),
-    ...(Array.isArray(d.intakeEvents) ? { intakeEvents: d.intakeEvents.map(e => ({ number: text(e.number), date: text(e.date), event: text(e.event) })) } : {}),
   }));
   let groups = null;
   if (data.groups && typeof data.groups === 'object' && !Array.isArray(data.groups)) {

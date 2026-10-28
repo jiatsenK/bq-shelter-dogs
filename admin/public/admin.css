@@ -130,6 +130,7 @@ h1 { margin: 0 0 8px; font-size: 1.75rem; line-height: 1.3; }
 .check-item { padding: 12px; border: 1px solid var(--admin-border); border-radius: 4px; }
 .check-item > summary, .check-item.ok { display: flex; justify-content: space-between; gap: 12px; cursor: pointer; }
 .check-item.ok { cursor: default; color: var(--admin-muted); }
+.check-hint { display: block; color: var(--admin-muted); font-size: .875rem; }
 .check-dogs { margin: 12px 0 0; padding-left: 20px; columns: 2 16rem; }
 .edit-actor { min-width: 140px; }
 .edit-actor .identity { margin-top: 4px; }

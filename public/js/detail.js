@@ -15,7 +15,7 @@ import { computeStatus, effectiveWalkDate, openLightbox, photoThumb, render, res
 import { sheetAppendHtml } from './sheet-append.js';
 import { fixedCareHtml, toggleFixedCare } from './detail-fixed-care.js';
 import { closeRestEdit, openRestEdit, restAdminHtml, restInput, restNoteHtml, saveRest } from './detail-rest.js';
-import { closeIntroEdit, introBarHtml, introInput, introOf, introRowClick, introSectionHtml, openIntroEdit, saveIntro } from './detail-intro.js';
+import { closeIntroEdit, introBarHtml, introInput, introOf, introSectionHtml, openIntroEdit, saveIntro } from './detail-intro.js';
 import { closeStaysEdit, openStaysEdit, saveStays, staysInput, staysRowClick } from './detail-stays.js';
 import { closeOverlay, pushOverlay, registerOverlay } from './overlays.js';
 
@@ -271,7 +271,6 @@ function wireDetail(box) {
   if (box.bqWired) return;
   box.bqWired = true;
   box.addEventListener('click', e => staysRowClick(e, box));
-  box.addEventListener('click', e => introRowClick(e, box));
   // 打的字記在各自的編輯狀態，重畫不會不見
   box.addEventListener('input', e => {
     if (staysInput(e) || introInput(e, box)) return;

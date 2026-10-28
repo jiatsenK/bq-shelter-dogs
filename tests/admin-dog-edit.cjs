@@ -22,7 +22,7 @@ module.exports = async (browser, base) => {
     { dogId: D, name: '花花', number: '2020010104', cage: 'D4', note: '', intro: '', sex: 'female', sexMismatch: false, onMain: true, status: 'main', formerNumber: '', departure: null, fixedCare: false, rest: null, photoUrl: null, walkedDate: '2026-10-21' }
   ];
   const stay = (n, extra = {}) => ({ number: n, in: `${n.slice(0, 4)}-${n.slice(4, 6)}-${n.slice(6, 8)}`, out: '', reason: '', ...extra });
-  const snap = (dog) => ({ dogId: dog.dogId, revision: 1, intro: dog.intro, sex: dog.sex, sexCopies: [], fixedCare: false, rest: null, numbers: [dog.number], currentNumbers: [dog.number], stays: [stay(dog.number)], photo: null, intakeEvents: [] });
+  const snap = (dog) => ({ dogId: dog.dogId, revision: 1, intro: dog.intro, sex: dog.sex, sexCopies: [], fixedCare: false, rest: null, numbers: [dog.number], currentNumbers: [dog.number], stays: [stay(dog.number)], photo: null });
   const snapshots = Object.fromEntries(dogs.map((dog) => [dog.dogId, snap(dog)]));
   // 球球有離所過的舊編號：後端帶的 departed 不算進草稿比較，打開不能顯示「改了出入所紀錄」
   snapshots[C].numbers = ['2019120101', '2020010103'];
@@ -80,6 +80,7 @@ module.exports = async (browser, base) => {
     assert.match(await drawer.locator('.drawer-head').textContent(), /阿福.*2020010101.*A1/);
     assert.match(await drawer.locator('[data-field="intro"] .edit-field-head').textContent(), /3 字/);
     assert.equal(await page.locator('#edit-intro').getAttribute('maxlength'), '1000');
+    assert.match(await page.locator('#edit-intro-hint').textContent(), /入所經過寫在出入所紀錄/);
     assert.equal(await save.isDisabled(), true);
     assert.equal(await page.locator('.drawer-dirty').textContent(), '沒有修改。');
 

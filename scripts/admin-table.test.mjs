@@ -127,7 +127,7 @@ test('狀態分頁：在所／已出所／待核對各自篩選，數量不受�
   assert.equal(maintenance(dogs[2]).includes('缺編號'), false, '有舊編號不算缺編號');
   assert.equal(maintenance(dogs[3]).includes('缺編號'), true);
   assert.equal(departureLabel(dogs[2].departure), '2026-10-01 離所（認養）');
-  assert.equal(departureLabel({ date: '', reason: 'death' }), '日期待確認 離所（死亡）');
+  assert.equal(departureLabel({ date: '', reason: 'death' }), '日期待確認 離所（離世）');
   assert.equal(departureLabel({ date: '2026-01-01', reason: 'unknown' }), '2026-01-01 離所（待確認）', '原因未定照名詞表寫待確認');
 });
 test('合併狗：誰留下、候選順序、預覽文字、可能重複配對、紀錄文字', async () => {
