@@ -8,6 +8,12 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const source = fileURLToPath(new URL('.', import.meta.url));
+const legacyShell = process.platform === 'win32' ? join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe') : null;
+// Windows 常只有內建 5.1；沒有 pwsh 時改用它，避免子程序啟動失敗（#708）。
+const checkShell = process.env.BQ_CHECK_PWSH
+  || (legacyShell && spawnSync('pwsh', ['-NoProfile', '-Command', 'exit 0']).error ? legacyShell : 'pwsh');
+// Windows 的執行原則可能擋 -File；Linux 沒有這個限制。
+const shellArgs = process.platform === 'win32' ? ['-NoProfile', '-ExecutionPolicy', 'Bypass'] : ['-NoProfile'];
 function fixture(t) {
   const root = mkdtempSync(join(tmpdir(), 'bq-check-'));
   assert.ok(resolve(root).startsWith(resolve(tmpdir()) + sep), 'fixture 必須留在系統暫存目錄');
@@ -28,7 +34,7 @@ function fixture(t) {
   assert.equal(run('git', ['add', '.']).status, 0);
   assert.equal(run('git', ['-c', 'user.name=Test', '-c', 'user.email=test@example.invalid', 'commit', '-qm', 'fixture']).status, 0);
   return { root, run,
-    check: (...args) => run(process.env.BQ_CHECK_PWSH || 'pwsh', ['-NoProfile', '-File', 'scripts/check-local.ps1', ...args]),
+    check: (...args) => run(checkShell, [...shellArgs, '-File', 'scripts/check-local.ps1', ...args]),
     records: () => readdirSync(join(root, '.scratch/checks')).filter(f => f.endsWith('.json')).sort().map(f => JSON.parse(readFileSync(join(root, '.scratch/checks', f), 'utf8'))) };
 }
 const passed = result => assert.equal(result.status, 0, `${result.stdout}\n${result.stderr}`);
@@ -121,7 +127,6 @@ test('全套保留兩種 runner，Node 失敗則停止；執行中改檔不算�
 
 test('Windows PowerShell 5.1 能傳遞中文原因與空的重跑原因', { skip: process.platform !== 'win32' }, t => {
   const f = fixture(t);
-  const legacyShell = join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe');
   passed(f.run(legacyShell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/check-local.ps1', '-NodeTest', 'scripts/a.test.mjs', '-Reason', '確認中文原因']));
   const record = f.records().at(-1);
   assert.equal(record.reason, '確認中文原因');
@@ -132,7 +137,6 @@ test('Windows PowerShell 5.1 能傳遞中文原因與空的重跑原因', { skip
 
 test('Windows PowerShell 5.1 遇到 stderr 仍寫完整 UTF-8 日誌與實際退出碼', { skip: process.platform !== 'win32' }, t => {
   const f = fixture(t);
-  const legacyShell = join(process.env.SystemRoot, 'System32/WindowsPowerShell/v1.0/powershell.exe');
   const check = (...args) => f.run(legacyShell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', 'scripts/check-local.ps1', ...args]);
   const unknown = check('-NodeTest', 'scripts/missing.test.mjs', '-Reason', '驗證錯字');
   assert.notEqual(unknown.status, 0);
