@@ -18,3 +18,4 @@ export const unmergeDog = (dogId, body) => call(`/api/manage/dogs/${encodeURICom
 export const searchEdits = query => call(`/api/manage/edits${query ? `?${query}` : ''}`);
 export const readSiteLinks = () => call('/api/manage/links');
 export const readWebsiteUpdates = () => settle(fetch('./shared/website-updates.json', { cache: 'no-cache', redirect: 'error', signal: AbortSignal.timeout(15000) }));
+export const readDiagrams = () => settle(fetch('./shared/diagrams.json', { cache: 'no-cache', redirect: 'error', signal: AbortSignal.timeout(15000) }));
