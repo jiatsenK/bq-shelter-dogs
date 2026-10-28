@@ -84,22 +84,22 @@ module.exports = async (browser, base) => {
     }
     await page.setViewportSize({ width: 320, height: 568 });
     // Chromium 沒有 Android 系統字級開關：把已計算字級加倍，保留真實文件流與操作。
-    const enlarged = await page.evaluate(() => ['body', '#groupPage', '.gw-heading h2', '.gw-heading small', '.gw-tile strong', '.gw-cage', '#searchInput', '.gw-pages', '#gwSource'].map(selector => {
+    const enlarged = await page.evaluate(() => ['body', '#groupPage', '.gw-heading h2', '.gw-heading small', '.gw-name', '.gw-cage', '.r-date', '#searchInput', '#gwSource'].map(selector => {
       const size = parseFloat(getComputedStyle(document.querySelector(selector)).fontSize);
       return `${selector} { font-size: ${size * 2}px !important; }`;
     }).join('\n'));
     await page.addStyleTag({ content: enlarged });
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 568 });
-      await page.waitForFunction(() => getComputedStyle(document.querySelector('.gw-tile strong')).fontSize === '28px');
-      assert.equal(await page.locator('.gw-tile strong').first().evaluate(el => getComputedStyle(el).fontSize), '28px', '重新排版後仍維持兩倍狗名字級');
+      await page.waitForFunction(() => getComputedStyle(document.querySelector('.gw-name')).fontSize === '32px');
+      assert.equal(await page.locator('.gw-name').first().evaluate(el => getComputedStyle(el).fontSize), '32px', '重新排版後仍維持兩倍狗名字級');
       const layout = await page.locator('#groupStage').evaluate(el => ({ height: el.clientHeight, content: el.scrollHeight }));
       assert(layout.content <= layout.height + 1, '大字群組應自然增高，不把狗卡壓在內捲動區：' + JSON.stringify(layout));
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '大字不產生水平捲動');
       for (const tile of await page.locator('.front [data-gw-dog]').all()) {
         await tile.scrollIntoViewIfNeeded();
         assert(await tile.evaluate(el => {
-          const name = el.querySelector('strong'), cage = el.querySelector('.gw-cage');
+          const name = el.querySelector('.gw-name'), cage = el.querySelector('.gw-cage');
           return [name, cage].every(e => e.scrollHeight <= e.clientHeight + 1);
         }), '狗名與籠位沒有被固定行高裁切');
       }

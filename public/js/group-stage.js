@@ -1,5 +1,5 @@
 import { appState, groupStageState } from './page-state.js';
-import { applyDogsData, effectiveWalkDate, init, loadDogsData, loadWalkerName, photoThumbSrc, render, restOf, walkRegistration, walkedNow } from './app.js';
+import { applyDogsData, dayChip, effectiveWalkDate, init, loadDogsData, loadWalkerName, photoThumbSrc, render, restOf, sexMark, walkRegistration, walkedNow } from './app.js';
 import { showDetail } from './detail.js';
 import { esc, icon, matchesSearch } from './ui-kit.js';
 import { walkKey } from './dog-status.js';
@@ -81,10 +81,11 @@ async function loadGroupStage(retry = false) {
 function refreshGroupStage() {
   if (groupStageState.groupStageData?.state === 'ready' && Date.now() - groupStageState.groupStageData.checkedAt >= 30000 && !groupStageState.groupBusy) loadGroupStage(true);
 }
+// #738：一列一隻（每列 50px）：天數色籤（同溜狗表列表）｜照片｜名字＋性別＋籠位；整列點開詳細資訊
 function groupTile(dog, index, rear) {
   const blocked = groupBlocked(dog);
   const excluded = groupExcluded.has(dog.name);
-  return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}${appState.searchQuery.trim() && !matchesSearch(dog, appState.searchQuery.trim()) ? ' miss' : ''}" data-gw-dog="${index}" ${rear ? 'tabindex="-1"' : ''} ${!rear && groupStageState.groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${groupStageState.groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}"><span class="gw-tile"><span class="gw-cage">${esc(dog.cage || '待確認')}</span><span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><strong>${esc(dog.name)}</strong></span>${dog.unavailable ? '' : BQWalkUI.walkSyncHtml(dog)}</button>`;
+  return `<button type="button" class="gw-dog${excluded ? ' excluded' : ''}${appState.searchQuery.trim() && !matchesSearch(dog, appState.searchQuery.trim()) ? ' miss' : ''}" data-gw-dog="${index}" ${rear ? 'tabindex="-1"' : ''} ${!rear && groupStageState.groupExcept ? `aria-pressed="${excluded}"` : ''} aria-label="${esc(dog.name)}，${esc(blocked || groupDateLabel(dog))}${groupStageState.groupExcept ? excluded ? '，已排除，點選恢復' : '，點選排除' : '，查看精確日期'}">${dayChip(dog, new Date())}<span class="gw-photo">${dog.id ? `<img src="${esc(photoThumbSrc(dog))}" alt="" draggable="false" onerror="this.hidden=true">` : ''}</span><span class="gw-who"><span class="gw-line"><strong class="gw-name">${esc(dog.name)}</strong>${dog.unavailable ? '' : sexMark(dog)}<span class="gw-cage">${esc(dog.cage || '待確認')}</span></span>${dog.unavailable ? '' : BQWalkUI.walkSyncHtml(dog)}</span></button>`;
 }
 function groupStageHtml() {
   const identity = loadWalkerName();
@@ -112,12 +113,11 @@ function groupStageHtml() {
     : `<button type="button" id="gwWalk" ${!selected.length || groupStageState.groupBusy ? 'disabled' : ''}>${groupStageState.groupBusy ? '登記中…' : groupStageState.groupExcept ? `登記其餘 ${selected.length} 隻` : `整群溜了 · ${selected.length} 隻`}</button><button type="button" data-gw-action="except" aria-pressed="${groupStageState.groupExcept}">${groupStageState.groupExcept ? '取消' : '有狗沒溜'}</button>`;
   const layers = group ? `<div class="gw-layer front" data-column="${group.column}"><div class="gw-cards">${dogs.map((d, i) => groupTile(d, i, false)).join('')}</div></div>` : '';
   return `<section id="groupPage" data-navigation-scope aria-busy="${groupStageState.groupBusy}">
-    <div class="gw-heading"><h2>${esc(group?.label || '還沒有狗群')}<small>${dogs.length} 隻</small></h2></div>
+    <div class="gw-heading"><h2>${esc(group?.label || '還沒有狗群')}<small>${dogs.length} 隻 · 第 ${groups.length ? index + 1 : 0}／${groups.length} 群</small></h2></div>
     ${searchNote ? `<p class="gw-search-note" role="status">${esc(searchNote)}</p>` : ''}
     <p class="section-hint">要改請到試算表「常遛狗群」分頁</p>
 
-    <div class="gw-stage-wrap"><div id="groupStage" class="gw-stage" style="--rows:${Math.max(1, Math.ceil((dogs.length + 2) / 4))}" aria-label="目前狗群">${layers}</div></div>
-    <div class="gw-pages"><span>${groups.length ? index + 1 : 0} / ${groups.length}</span></div>
+    <div id="groupStage" class="gw-stage" aria-label="目前狗群">${layers}</div>
     <p id="gwFeedback" role="status">${esc(groupStageState.groupBusy ? '處理中…' : groupStageState.groupFeedback)}</p>
     ${group ? `<p class="gw-restrictions">${dogs.some(groupBlocked) ? `不登記：${dogs.filter(groupBlocked).map(d => `${esc(d.name)}（${esc(groupBlocked(d))}）`).join('、')}` : ''}</p>` : ''}
     <div class="gw-secondary-actions">
