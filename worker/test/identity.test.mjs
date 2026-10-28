@@ -137,7 +137,7 @@ test('名字對照的版本號由程式加 1：建立、更名、合併各加一
  let race=null;
  const tag=(st,sql)=>({...st,sql,bind:(...args)=>tag(st.bind(...args),sql)});
  const racing={...env,DB:{...DB,prepare:sql=>tag(DB.prepare(sql),sql),async batch(list){
-  if(race&&list.some(s=>/v3_identity_guard SELECT/.test(s.sql||''))){const f=race;race=null;await f();}
+  if(race&&list.some(s=>/v3_identity_revision WHERE id=1\)=\?/.test(s.sql||''))){const f=race;race=null;await f();}
   return DB.batch(list);
  }}};
  race=()=>call(env,'/identity/rename',{code:a.codes[0],name:'甲三',operationId:'other-device'});
@@ -153,6 +153,16 @@ test('名字對照的版本號由程式加 1：建立、更名、合併各加一
  const fresh=await call(env,'/identity/merge-preview',{code:a.codes[0],targetCode:b.codes[0]});r=await revision();
  assert.equal((await call(env,'/identity/merge',{...body,token:fresh.token,operationId:'merge-ok'})).status,200);assert.equal(await revision(),r+1,'合併');
  assert.equal((await call(env,'/identity',{name:'甲'})).identity.volunteerId,b.volunteerId);
+});
+// #745 版本列不見時 guard 也要擋（以前 SELECT 不到列、guard 插 0 列就放行）
+test('送出前版本列不見：更名被擋、名字不變',async t=>{
+ worker.testing.resetState();const DB=fakeD1();t.after(()=>DB.close());await createCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
+ const a=(await call(env,'/identity',{name:'甲'})).identity;
+ let race=()=>DB.prepare('DELETE FROM v3_identity_revision').run();
+ const racing={...env,DB:{...DB,async batch(list){if(race){const f=race;race=null;await f();}return DB.batch(list);}}};
+ assert.equal((await call(racing,'/identity/rename',{code:a.codes[0],name:'甲二',operationId:'no-revision'})).status,409);
+ assert.equal(race,null,'版本列確實在讀完後被刪');
+ assert.equal((await DB.prepare('SELECT name FROM v3_volunteers WHERE volunteer_id=?').bind(a.volunteerId).first()).name,'甲');
 });
 test('#680 依志工找名字走索引；身分查詢合成一句，回應與分開查相同', async t => {
  const DB=fakeD1();t.after(()=>DB.close());await createCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};

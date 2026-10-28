@@ -8,7 +8,8 @@
 // - 免費方案每次呼叫最多 50 次 D1 查詢：兩隻狗一起讀（每張表 1 句），每張表都有資料時合併與取消合併都在 50 句以內（dog-merge.test.mjs 量）。
 // - 讀寫都用 dog_id 篩；SCAN_OK 這幾張表沒有 dog_id 開頭的索引，會整張掃。合併是管理者偶爾按的操作、這幾張表都小，
 //   不為它加索引（加索引每次寫入都多寫一列）；dog-merge.test.mjs 用查詢計畫確認其他表都走索引（CODING_STANDARDS.md D1）。
-import { editError } from './dog-edit.js';
+import { dogRevisionIs, editError } from './dog-edit.js';
+import { batchIf, isConflict } from './conditional-batch.js';
 import { editLogWrites } from './editlog.js';
 import { joinStays, withoutStays } from './stays.js';
 
@@ -126,9 +127,6 @@ export async function previewMerge(db, targetId, sourceId) {
   };
 }
 
-function guard(db, id, dogId, revision) {
-  return db.prepare('INSERT INTO v3_dog_edit_guard(id,valid) VALUES(?,EXISTS(SELECT 1 FROM v3_dog_edit_state WHERE dog_id=? AND revision=?))').bind(id, dogId, revision);
-}
 function logStatements(db, kind, targetId, number, before, after, actor, requestId) {
   return editLogWrites(db, { at: new Date().toISOString(), name: '管理者', kind, dogId: targetId, number, before, after, source: 'access',
     actor: { requestId, subject: actor.subject, email: actor.email } });
@@ -137,10 +135,10 @@ function checkInput(input, keys, actor) {
   if (!input || Object.keys(input).sort().join(',') !== keys || !Number.isSafeInteger(input.revision)) throw editError(400, '請重新預覽後再合併');
   if (!actor?.subject || !actor?.email) throw editError(403, '操作者未確認');
 }
-// 寫入被約束擋下（guard 版本不對、外鍵、主鍵撞到）整批不寫，回 409 讓管理者重新讀取
-async function runBatch(db, writes, message) {
-  try { return await db.batch(writes); }
-  catch (error) { if (/CHECK|FOREIGN KEY|UNIQUE|constraint/i.test(error.message)) throw editError(409, message); throw error; }
+// 寫入被約束擋下（版本不對、外鍵、主鍵撞到）整批不寫，回 409 讓管理者重新讀取
+async function runBatch(db, conditions, writes, message) {
+  try { return await batchIf(db, conditions, writes); }
+  catch (error) { if (isConflict(error)) throw editError(409, message); throw error; }
 }
 
 export async function mergeDogs(db, targetId, input, { actor } = {}) {
@@ -148,8 +146,8 @@ export async function mergeDogs(db, targetId, input, { actor } = {}) {
   if (typeof input.sourceId !== 'string' || !Number.isSafeInteger(input.sourceRevision)) throw editError(400, '請重新預覽後再合併');
   const { target, source, rows, moved, notMoved, replaced } = await plan(db, targetId, input.sourceId);
   if (target.revision !== input.revision || source.revision !== input.sourceRevision) throw conflict();
-  const sourceId = source.dog_id, ids = [crypto.randomUUID(), crypto.randomUUID()], requestId = crypto.randomUUID();
-  const writes = [guard(db, ids[0], targetId, input.revision), guard(db, ids[1], sourceId, input.sourceRevision)];
+  const sourceId = source.dog_id, requestId = crypto.randomUUID();
+  const writes = [];
   for (const { table } of TABLES) {
     if (rows[table].length) writes.push(deleteRows(db, table, rows[table]));
     if (replaced[table]) writes.push(deleteRows(db, table, replaced[table]));
@@ -168,9 +166,8 @@ export async function mergeDogs(db, targetId, input, { actor } = {}) {
   writes.push(...logStatements(db, 'merge', targetId, target.shown,
     { name: source.name, numbers: source.numbers, counts: counts(rows), snapshot: { dog: sourceDog, rows } },
     { sourceId, name: target.name, number: target.shown, moved: counts({ ...moved, v3_walk_state: rows.v3_walk_state }), kept: counts(notMoved), rows: moved, replaced },
-    actor, requestId),
-  db.prepare('DELETE FROM v3_dog_edit_guard WHERE id IN (?,?)').bind(...ids));
-  const result = await runBatch(db, writes, '合併沒寫成：兩隻狗的資料在預覽後有變動，或有資料撞在一起；資料沒有改，請重新預覽再試');
+    actor, requestId));
+  const result = await runBatch(db, [dogRevisionIs(targetId, input.revision), dogRevisionIs(sourceId, input.sourceRevision)], writes, '合併沒寫成：兩隻狗的資料在預覽後有變動，或有資料撞在一起；資料沒有改，請重新預覽再試');
   return { logId: result[logAt].meta.last_row_id, target: { ...publicDog(target), revision: null } };
 }
 
@@ -190,13 +187,12 @@ export async function unmergeDogs(db, targetId, input, { actor } = {}) {
   const [target] = await dogsOf(db, targetId);
   if (!target) throw editError(404, '找不到這隻狗，請重新讀取');
   if (target.revision !== input.revision) throw editError(409, '這隻狗的資料已變更，請重新讀取再取消合併');
-  const id = crypto.randomUUID(), requestId = crypto.randomUUID();
+  const requestId = crypto.randomUUID();
   // 出入所紀錄（ADR 0021）：合併後留下那隻又改過那一列時，拿掉被併那隻的部分，不讓兩隻重複
   const staysNow = rows.v3_stays?.length && after.rows.v3_stays?.length
     ? await db.prepare('SELECT stays_json FROM v3_stays WHERE dog_id=?').bind(targetId).first('stays_json') : null;
   const staysEdited = staysNow && staysNow !== after.rows.v3_stays[0].stays_json;
-  const writes = [guard(db, id, targetId, input.revision),
-    db.prepare('INSERT INTO v3_dogs(dog_id,name,sex,fixed_care) VALUES(?,?,?,?)').bind(dog.dog_id, dog.name, dog.sex, dog.fixed_care)];
+  const writes = [db.prepare('INSERT INTO v3_dogs(dog_id,name,sex,fixed_care) VALUES(?,?,?,?)').bind(dog.dog_id, dog.name, dog.sex, dog.fixed_care)];
   for (const { table } of TABLES) {
     if (after.rows[table]?.length) writes.push(deleteRows(db, table, after.rows[table]));
     if (rows[table]?.length) writes.push(insertRows(db, table, rows[table]));
@@ -213,9 +209,8 @@ export async function unmergeDogs(db, targetId, input, { actor } = {}) {
   writes.push(db.prepare('UPDATE v3_dog_edit_state SET revision=revision+1 WHERE dog_id=?').bind(targetId));
   writes.push(...logStatements(db, 'unmerge', targetId, target.shown,
     { name: target.name, number: target.shown, mergeLogId: log.id },
-    { sourceId: dog.dog_id, name: dog.name, numbers: before.numbers, counts: before.counts }, actor, requestId),
-  db.prepare('DELETE FROM v3_dog_edit_guard WHERE id=?').bind(id));
+    { sourceId: dog.dog_id, name: dog.name, numbers: before.numbers, counts: before.counts }, actor, requestId));
   // 原本的列插不回去（例如編號後來給了別隻）時整批不寫
-  await runBatch(db, writes, '合併後這些資料又被改到別處，不能自動取消；資料沒有改，請重新讀取確認');
+  await runBatch(db, [dogRevisionIs(targetId, input.revision)], writes, '合併後這些資料又被改到別處，不能自動取消；資料沒有改，請重新讀取確認');
   return { target: { ...publicDog(target), revision: null }, source: { dogId: dog.dog_id, name: dog.name } };
 }

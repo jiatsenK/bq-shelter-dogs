@@ -69,6 +69,7 @@ CREATE TABLE IF NOT EXISTS v3_walk_pack (
 );
 INSERT OR IGNORE INTO v3_walk_pack VALUES(1,0,'{}');
 -- 交易 guard：比較版本失敗必須整筆回復，不能留下去重結果或工作。條件不成立才插 0 讓 CHECK 失敗，成立時不寫任何列，表一直是空的（#681）。
+-- 活動、身分、狗編輯與合併的有條件 batch（worker/src/conditional-batch.js，#745）也暫用這張。
 CREATE TABLE IF NOT EXISTS v3_walk_guard (ok INTEGER NOT NULL CHECK(ok=1));
 -- 保守計量包含索引與觸發器；不是帳號分析用量的替代品。retry：其中寫回重試的部分，另有每日上限（#685）。
 CREATE TABLE IF NOT EXISTS v3_walk_write_budget (day TEXT PRIMARY KEY, reserved INTEGER NOT NULL, retry INTEGER NOT NULL DEFAULT 0);
@@ -244,7 +245,7 @@ CREATE TABLE IF NOT EXISTS v3_activity_dogs (
   PRIMARY KEY(activity_id,position)
 );
 CREATE INDEX IF NOT EXISTS v3_activity_dogs_dog ON v3_activity_dogs(dog_id);
--- 在 batch 內檢查活動沒被別人改過；失敗時整批回復（同 v3_identity_guard）
+-- 在 batch 內檢查活動沒被別人改過；失敗時整批回復（#745 起不再使用，改用 worker/src/conditional-batch.js；等 #746 合併後的 PR 一起 DROP）
 CREATE TABLE IF NOT EXISTS v3_activity_guard (valid INTEGER NOT NULL CHECK(valid=1));
 -- 活動紀錄版本號（ADR 0009 的做法）：兩張表有新增、修改、刪除就加 1，Worker 每次只讀這 1 列，沒變就回記憶體裡的名單
 CREATE TABLE IF NOT EXISTS v3_activity_versions (id INTEGER PRIMARY KEY CHECK(id=1), ver INTEGER NOT NULL DEFAULT 0);
@@ -287,7 +288,7 @@ CREATE TABLE IF NOT EXISTS v3_identity_operations (
  request_json TEXT NOT NULL,
  identity_id TEXT NOT NULL REFERENCES v3_volunteers(volunteer_id)
 );
--- 在 batch 內檢查前置條件；失敗時連同編輯紀錄回復。
+-- 在 batch 內檢查前置條件；失敗時連同編輯紀錄回復（#745 起不再使用，改用 worker/src/conditional-batch.js；等 #746 合併後的 PR 一起 DROP）
 CREATE TABLE IF NOT EXISTS v3_identity_guard (valid INTEGER NOT NULL CHECK(valid=1));
 -- 名字對照的樂觀鎖：worker/src/identity.js 的 linkIdentityName、更名、合併在自己的 batch 加 1（#556 起不用觸發器）
 CREATE TABLE IF NOT EXISTS v3_identity_revision (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL);
@@ -529,6 +530,7 @@ CREATE TRIGGER IF NOT EXISTS packs_v3_dog_edit_state_DELETE AFTER DELETE ON v3_d
 
 -- Existing cached payloads predate CAS and current-sex fields. Invalidate once.
 
+-- 狗編輯 GAS 交易檢查（#745 起不再使用，改用 worker/src/conditional-batch.js；等 #746 合併後的 PR 一起 DROP）
 CREATE TABLE IF NOT EXISTS v3_dog_edit_guard (id TEXT PRIMARY KEY, valid INTEGER NOT NULL CHECK(valid=1));
 
 CREATE TRIGGER IF NOT EXISTS packs_v3_photos_INSERT AFTER INSERT ON v3_photos BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_dog_departures d WHERE d.dog_id=NEW.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_dog_departures d WHERE d.dog_id=NEW.dog_id); END;

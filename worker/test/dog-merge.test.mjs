@@ -259,7 +259,8 @@ test('D1 不整張掃：合併與取消合併的每一句都用 dog_id 走索引
   const scans = new Set();
   for (const [sql, args] of seen) {
     for (const { detail } of (await db.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...args).all()).results) {
-      const table = detail.match(/^SCAN (\w+)/)?.[1];
+      // SCAN CONSTANT ROW：有條件 batch 的 guard（INSERT … SELECT 0 WHERE …）不讀表
+      const table = detail.match(/^SCAN (?!CONSTANT ROW)(\w+)/)?.[1];
       if (table && table !== 'json_each') scans.add(table);
     }
   }

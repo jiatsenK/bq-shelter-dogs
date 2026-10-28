@@ -84,6 +84,30 @@ test('刪除：整場連出席名單一起刪，記改前內容；舊 revision�
   assert.equal((await call(env, 'DELETE', `/activities/${activity.id}`, { editor: ME, revision: 1 })).status, 404);
 });
 
+// #745 讀完到寫入之間被別人刪掉：guard 擋下缺列（以前沒狗的修改會靜靜放行、回 200 加一筆紀錄）
+test('讀完後活動被別人刪掉：修改回 409 不留紀錄；刪除照舊回成功', async () => {
+  const env = await makeEnv();
+  let race = null;
+  // 只在送出有 guard 的那個 batch 前插進刪除（讀取也走 batch）
+  const tag = (st, sql) => ({ ...st, sql, bind: (...args) => tag(st.bind(...args), sql) });
+  const racing = { ...env, DB: { ...env.DB, prepare: sql => tag(env.DB.prepare(sql), sql), async batch(list) {
+    if (race && list.some(s => /v3_walk_guard/.test(s.sql || ''))) { const f = race; race = null; await f(); }
+    return env.DB.batch(list);
+  } } };
+  const add = async () => (await call(env, 'POST', '/activities', { editor: ME, date: '2026-10-11', kind: 'kids', dogs: [] })).body.activity;
+  const gone = id => () => env.DB.prepare('DELETE FROM v3_activities WHERE activity_id=?').bind(id).run();
+  const first = await add();
+  race = gone(first.id);
+  const r = await call(racing, 'PUT', `/activities/${first.id}`, { editor: ME, revision: 1, date: '2026-10-13', kind: 'adoption', dogs: [] });
+  assert.deepEqual([r.status, r.body.error], [409, '這場活動剛被別人改過，請重新整理後再改']);
+  assert.equal(race, null, '刪除確實插在讀取與寫入之間');
+  assert.equal((await logs(env)).length, 1, '只有新增那一筆');
+  const second = await add();
+  race = gone(second.id);
+  assert.equal((await call(racing, 'DELETE', `/activities/${second.id}`, { editor: ME, revision: 1 })).status, 200);
+  assert.equal(race, null);
+});
+
 test('沒選名字、日期／類型不對、找不到的編號都擋，D1 沒變；預覽版不能存', async () => {
   const env = await makeEnv();
   const bad = async (body, status) => assert.equal((await call(env, 'POST', '/activities', body)).status, status, JSON.stringify(body));
@@ -113,7 +137,7 @@ test('寫入出錯時整批回復：出席名單寫不進去，活動本身也�
   assert.equal(r.status, 500);
   const [after] = await list(env);
   assert.deepEqual([after.date, after.kind, after.revision, after.dogs.map(d => d.name)], ['2026-10-11', 'kids', 1, ['阿福']]);
-  assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_activity_guard').first('n'), 0);
+  assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_walk_guard').first('n'), 0);
 });
 
 // CODING_STANDARDS「附讀寫量測試」：先用小資料跑，再塞大量無關資料跑，讀寫量一樣

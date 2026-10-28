@@ -1,10 +1,13 @@
 import { walkerCode, walkerNameKey, editLogWrites } from './editlog.js';
+import { batchIf } from './conditional-batch.js';
 
 export class IdentityError extends Error {
   constructor(status, message, details = {}) { super(message); this.status = status; this.details = details; }
 }
 const rows = async (db, sql, ...args) => (await db.prepare(sql).bind(...args).all()).results || [];
 const one = (db, sql, ...args) => db.prepare(sql).bind(...args).first();
+// 更名／合併送出時身分資料還是讀到的那一版（#745）；版本列不見也擋，route 回 409
+const revisionIs = revision => ({ sql: '(SELECT revision FROM v3_identity_revision WHERE id=1)=?', args: [revision] });
 
 // 身分查詢合成一句（#680）：從代號或志工 ID 起頭、追一層轉址（合併時已把轉址改指最後的目標），帶出志工與全部名字；
 // 依志工找名字走 v3_identity_names_volunteer 索引。每個名字一列，沒有名字時也有一列（code 是 NULL）。
@@ -72,8 +75,7 @@ export async function renameIdentity(db, { code, name, operationId }, key) {
   }
   const before = { volunteerId: source.volunteerId, name: source.name };
   const after = { volunteerId: source.volunteerId, name };
-  await db.batch([
-    db.prepare('INSERT INTO v3_identity_guard SELECT CASE WHEN revision=? THEN 1 ELSE 0 END FROM v3_identity_revision WHERE id=1').bind(revision),
+  await batchIf(db, [revisionIs(revision)], [
     db.prepare('INSERT INTO v3_identity_operations VALUES(?,?,?)').bind(operationId, signature, source.volunteerId),
     db.prepare('INSERT INTO v3_volunteer_cards(volunteer_id,dog_id,opened_on) SELECT ?,dog_id,opened_on FROM v3_card_opened WHERE walker_code=? AND NOT EXISTS(SELECT 1 FROM v3_identity_names WHERE code=?) ON CONFLICT(volunteer_id,dog_id) DO UPDATE SET opened_on=MIN(v3_volunteer_cards.opened_on,excluded.opened_on)')
       .bind(source.volunteerId, nextCode, nextCode),
@@ -81,7 +83,6 @@ export async function renameIdentity(db, { code, name, operationId }, key) {
     db.prepare('UPDATE v3_volunteers SET name=? WHERE volunteer_id=?').bind(name, source.volunteerId),
     ...editLogWrites(db, { at: new Date().toISOString(), code, name: source.name, kind: 'volunteer_rename', before, after, source: 'volunteer' }),
     db.prepare('UPDATE v3_identity_revision SET revision=revision+1 WHERE id=1'),
-    db.prepare('DELETE FROM v3_identity_guard'),
   ]);
   return identityOf(db, source.volunteerId);
 }
@@ -133,8 +134,7 @@ export async function mergeIdentity(db, input, key) {
   if (await stateToken(state, key) !== input.token) throw new IdentityError(409, '資料已變動，請重新檢視');
   const { source, target } = state;
   const before = { source: await summary(db, source), target: await summary(db, target) };
-  await db.batch([
-    db.prepare('INSERT INTO v3_identity_guard SELECT CASE WHEN revision=? THEN 1 ELSE 0 END FROM v3_identity_revision WHERE id=1').bind(state.revision),
+  await batchIf(db, [revisionIs(state.revision)], [
     db.prepare('INSERT INTO v3_identity_operations VALUES(?,?,?)').bind(operationId, signature, target.volunteerId),
     ...[['v3_volunteer_favorites','added_on'],['v3_volunteer_cards','opened_on']].flatMap(([table, date]) => [
       db.prepare(`INSERT INTO ${table}(volunteer_id,dog_id,${date}) SELECT ?,dog_id,${date} FROM ${table} WHERE volunteer_id=? ON CONFLICT(volunteer_id,dog_id) DO UPDATE SET ${date}=MIN(${table}.${date},excluded.${date})`).bind(target.volunteerId, source.volunteerId),
@@ -146,7 +146,6 @@ export async function mergeIdentity(db, input, key) {
     db.prepare('INSERT INTO v3_identity_redirects VALUES(?,?)').bind(source.volunteerId, target.volunteerId),
     ...editLogWrites(db, { at: new Date().toISOString(), code, name: source.name, kind: 'volunteer_merge', before, after: { volunteerId: target.volunteerId, name: target.name }, source: 'volunteer' }),
     db.prepare('UPDATE v3_identity_revision SET revision=revision+1 WHERE id=1'),
-    db.prepare('DELETE FROM v3_identity_guard'),
   ]);
   return identityOf(db, target.volunteerId);
 }
