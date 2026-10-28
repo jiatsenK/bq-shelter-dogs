@@ -111,17 +111,20 @@ export async function listWalkLog(db, env, dog, old, sheet, at) {
   return statements.length ? [...writeBudget(db, env, cost), ...statements] : [];
 }
 
-const MAIN_DOG = dog => `SELECT dog_id,walked_date,walker_codes,row_index FROM v3_sheet_main WHERE ${dog.id ? 'number=?' : "number='' AND name=?"}`;
+const MAIN_DOG = dog => `SELECT dog_id,walked_date,walker,walker_codes,row_index FROM v3_sheet_main WHERE ${dog.id ? 'number=?' : "number='' AND name=?"}`;
 async function uniqueMainDog(db,dog) {
   const matches = await rows(db, MAIN_DOG(dog), dog.id || dog.name);
   if (matches.length !== 1) throw new WalkError(409, '找不到唯一的主清單狗');
   return matches[0];
 }
+// 基準值的溜狗人用主清單存的試算表原文（#707）：代號換名字再以「、」接起來，表上用逗號、空白分隔或名字換不回代號時，
+// 比對會把沒改的表當成人工改表，跟狗清單同步各記一筆。原文還沒補填（NULL，#519）才退回用代號換名字
 async function seedState(db, dog, today) {
   const seed = await uniqueMainDog(db,dog);
-  const people = await rows(db, 'SELECT n.name FROM v3_sheet_main m, json_each(m.walker_codes) w LEFT JOIN v3_identity_names n ON n.code=w.value WHERE m.row_index=? ORDER BY w.key', seed.row_index);
+  const walker = seed.walker ?? (await rows(db, 'SELECT n.name FROM v3_sheet_main m, json_each(m.walker_codes) w LEFT JOIN v3_identity_names n ON n.code=w.value WHERE m.row_index=? ORDER BY w.key', seed.row_index))
+    .map(p => p.name).filter(Boolean).join('、');
   const previous = seed.walked_date === today ? await previousWalk(db, dog, today) : null;
-  return { dog_id: seed.dog_id, effective_date: seed.walked_date || '', walker: people.map(p => p.name).filter(Boolean).join('、'), version: 0, main: seed,
+  return { dog_id: seed.dog_id, effective_date: seed.walked_date || '', walker, version: 0, main: seed,
     ...(previous ? { previous_date: previous.date.date || '', previous_walker: previous.walker } : {}) };
 }
 
@@ -201,9 +204,10 @@ export async function acceptWalk(db, input, env, now = Date.now()) {
     const history = effectiveDate === input.operationDate ? walkDay(db, old.dog_id, effectiveDate, dog, codes) : [dropDay(db, old.dog_id, input.operationDate)];
     const historyCost = HISTORY_ROW_COST * ((old.effective_date === input.operationDate ? countOf(old) : 0) + codes.length);
     const before = { date: old.effective_date, walker: old.walker };
-    // 按溜了：操作者是這次按的人（一起溜就全部）；已經在今天名單裡、名單沒變就不記
+    // 按溜了：操作者是這次按的人（一起溜就全部）；已經在今天名單裡、名單沒變就不記。
+    // 名單照拆開的名字比（#707）：沒有溜狗狀態的狗改前是表上原文，可能用逗號或空白分隔
     const logs = editor ? editLogWrites(db, { at, kind: input.action === 'undo' ? 'walkundo' : 'walkedit', source: 'volunteer', code: editor.code, name: editor.name, dogId: old.dog_id, number: dog.id, before, after: result.current })
-      : before.date !== effectiveDate || before.walker !== walker ? editLogWrites(db, { at, kind: 'walk', source: 'volunteer', code: added.length === 1 ? await walkerCode(added[0].name, env.WALKER_KEY) : '',
+      : before.date !== effectiveDate || names(before.walker).join('、') !== walker ? editLogWrites(db, { at, kind: 'walk', source: 'volunteer', code: added.length === 1 ? await walkerCode(added[0].name, env.WALKER_KEY) : '',
         name: added.map(m => m.name).join('、'), dogId: old.dog_id, number: dog.id, before, after: result.current }) : [];
     try {
       await db.batch([

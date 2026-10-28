@@ -179,3 +179,58 @@ test('有溜狗狀態的狗：狗清單同步不記，網站寫回後狗清單�
     assert.deepEqual((await logs(env)).map(l => [l.source, l.editor]), [['volunteer', '甲'], ['sheet', '丙']]);
   } finally { env.DB.close(); }
 });
+
+// #707：多人用逗號或空白分隔、或代號換不回名字時，比對的基準值要跟表上一字不差，不能用代號換名字再以「、」接起來
+for (const walker of ['甲,乙', '甲 乙']) {
+  test(`沒有溜狗狀態的狗：表上寫「${walker}」，狗清單同步先跑、比對後跑，只記一筆`, async () => {
+    const env = await setup();
+    try {
+      await applyDogListRows(env.DB, [listRow(day(), walker)], env);
+      await reconcileWalk(env.DB, dog, { date: day(), walker }, env);
+      assert.deepEqual((await logs(env)).map(l => [l.source, l.editor, l.after]), [['sheet', walker, { date: day(), walker }]]);
+    } finally { env.DB.close(); }
+  });
+
+  test(`沒有溜狗狀態的狗：表上寫「${walker}」，比對先跑、狗清單同步後跑，只記一筆`, async () => {
+    const env = await setup();
+    try {
+      await reconcileWalk(env.DB, dog, { date: day(), walker }, env);
+      await applyDogListRows(env.DB, [listRow(day(), walker)], env);
+      assert.deepEqual((await logs(env)).map(l => [l.source, l.editor]), [['sheet', walker]]);
+    } finally { env.DB.close(); }
+  });
+}
+
+test('沒有溜狗狀態的狗：代號換不回名字，狗清單同步先跑、比對後跑，只記一筆', async () => {
+  const env = await setup();
+  try {
+    await applyDogListRows(env.DB, [listRow(day(), '丙')], env);
+    // 同名多個身分時 linkIdentityName 失敗、名單沒有對照（dog-list.js walkersOf）
+    await env.DB.prepare("DELETE FROM v3_identity_names WHERE name='丙'").run();
+    await reconcileWalk(env.DB, dog, { date: day(), walker: '丙' }, env);
+    assert.deepEqual((await logs(env)).map(l => [l.source, l.editor]), [['sheet', '丙']]);
+  } finally { env.DB.close(); }
+});
+
+test('沒有溜狗狀態的狗：試算表日期改回較早一天，只記一筆', async () => {
+  const env = await setup();
+  try {
+    await applyDogListRows(env.DB, [listRow('2026-09-20', '甲,乙')], env);
+    await reconcileWalk(env.DB, dog, { date: '2026-09-20', walker: '甲,乙' }, env);
+    assert.deepEqual((await logs(env)).map(l => [l.source, l.before, l.after]),
+      [['sheet', { date: '2026-10-01', walker: '' }, { date: '2026-09-20', walker: '甲,乙' }]]);
+  } finally { env.DB.close(); }
+});
+
+test('沒有溜狗狀態的狗：表上「甲,乙」，甲在網站重按溜了不多記；丙再按照常記一筆', async () => {
+  const env = await setup();
+  try {
+    await applyDogListRows(env.DB, [listRow(day(), '甲,乙')], env);
+    await post(env, request('walk-0001', '甲'));
+    assert.deepEqual((await logs(env)).map(l => l.source), ['sheet']);
+    await post(env, request('walk-0002', '丙'));
+    assert.deepEqual((await logs(env)).map(l => [l.source, l.editor, l.before, l.after]), [
+      ['sheet', '甲,乙', { date: '2026-10-01', walker: '' }, { date: day(), walker: '甲,乙' }],
+      ['volunteer', '丙', { date: day(), walker: '甲、乙' }, { date: day(), walker: '甲、乙、丙' }]]);
+  } finally { env.DB.close(); }
+});
