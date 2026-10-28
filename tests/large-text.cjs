@@ -91,24 +91,22 @@ module.exports = async (browser, base) => {
     await page.addStyleTag({ content: enlarged });
     for (const width of [320, 390]) {
       await page.setViewportSize({ width, height: 568 });
-      await page.waitForFunction(() => getComputedStyle(document.querySelector('.gw-name')).fontSize === '32px');
-      assert.equal(await page.locator('.gw-name').first().evaluate(el => getComputedStyle(el).fontSize), '32px', '重新排版後仍維持兩倍狗名字級');
+      await page.waitForFunction(() => getComputedStyle(document.querySelector('.gw-name')).fontSize === '38px');
+      assert.equal(await page.locator('.gw-name').first().evaluate(el => getComputedStyle(el).fontSize), '38px', '重新排版後仍維持兩倍狗名字級');
       const layout = await page.locator('#groupStage').evaluate(el => ({ height: el.clientHeight, content: el.scrollHeight }));
       assert(layout.content <= layout.height + 1, '大字群組應自然增高，不把狗卡壓在內捲動區：' + JSON.stringify(layout));
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '大字不產生水平捲動');
       for (const tile of await page.locator('.front [data-gw-dog]').all()) {
         await tile.scrollIntoViewIfNeeded();
-        assert(await tile.evaluate(el => {
-          const name = el.querySelector('.gw-name'), cage = el.querySelector('.gw-cage');
-          return [name, cage].every(e => e.scrollHeight <= e.clientHeight + 1);
-        }), '狗名與籠位沒有被固定行高裁切');
+        const clip = await tile.evaluate(el => ['.gw-name', '.gw-cage'].map(s => el.querySelector(s)).map(e => [e.textContent, e.scrollHeight, e.clientHeight]));
+        assert(clip.every(([, scroll, client]) => scroll <= client + 1), '狗名與籠位沒有被固定行高裁切：' + JSON.stringify(clip));
       }
       await page.locator('#gwWalk').evaluate(el => el.scrollIntoView({ block: 'center', behavior: 'instant' }));
       const action = await page.locator('#gwWalk').boundingBox(), bar = await page.locator('#bottomBar').boundingBox();
       assert(action.y + action.height <= bar.y, '整群登記按鈕可捲到導覽列上方：' + JSON.stringify({ width, action, bar }));
-      const [prev, next] = await Promise.all(['.gw-side.prev', '.gw-side.next'].map(s => page.locator(s).boundingBox()));
-      const sameRow = b => b.y < action.y + action.height && b.y + b.height > action.y;
-      assert(prev.x + prev.width <= action.x && next.x >= action.x + action.width && sameRow(prev) && sameRow(next), '#443 大字時換群箭頭仍在「溜了」兩側：' + JSON.stringify({ width, prev, action, next }));
+      const [prev, title, next] = await Promise.all(['.gw-side.prev', '.gw-heading h2', '.gw-side.next'].map(s => page.locator(s).boundingBox()));
+      const sameRow = b => b.y < title.y + title.height && b.y + b.height > title.y;
+      assert(prev.x + prev.width <= title.x && next.x >= title.x + title.width && sameRow(prev) && sameRow(next), '#443 大字時換群箭頭仍在群名兩側：' + JSON.stringify({ width, prev, title, next }));
       if (process.env.CAPTURE_400) {
         await page.evaluate(() => scrollTo(0, 0));
         await page.screenshot({ path: `docs/design/issue-400/groups-large-${width}.png`, fullPage: true });

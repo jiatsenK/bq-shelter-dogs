@@ -2326,59 +2326,57 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .act-buttons button:disabled, .act-kinds button:disabled { opacity: .55; cursor: default; }
 .act-edit:focus-visible, .act-kinds button:focus-visible, .act-buttons button:focus-visible, .act-chip button:focus-visible, .act-pick:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
 .analysis-open .a-miss summary, .analysis-open .dep-filters input, .analysis-open .dep-filters select { min-height: 44px; min-width: 44px; }
-/* 常溜狗群（#738，K 2026-10-28）：跟溜狗表同一種列。一列一隻、每列 50px：天數色籤 64px（同列表模式 .r-date）｜照片 40px｜名字＋性別＋籠位；
-   正式資料最大一群 10 隻，390×844 不用滑。底部白底浮條：‹ 上一群｜整群溜了（實心綠）｜有狗沒溜（綠色底線字）｜下一群 › */
+/* 常溜狗群（#738，K 2026-10-28 定 D 版）：跟溜狗表同一種列。一列一隻、每列 56px：天數色籤 68px（同列表模式 .r-date）｜照片 44px｜名字＋性別＋籠位。
+   換群箭頭在群名兩側；「整群溜了」接在最後一隻狗下面，狗多到超出畫面時黏在底部分類列上方，不放白底橫條 */
 #groupPage { max-width: 480px; margin: auto; padding: 0 4px 24px; overflow: hidden; position: relative; color: var(--ink); }
 #groupPage button, #groupPage input, #groupPage summary { min-height: 44px; min-width: 44px; font: inherit; }
 #groupPage button { cursor: pointer; color: var(--primary); border: 0; background: transparent; }
 #groupPage button:disabled { opacity: .45; cursor: default; }
 #groupPage button:focus-visible, #groupPage summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-/* 標題緊接搜尋欄；群名 20px，旁邊灰字「N 隻 · 第 i／n 群」 */
-.gw-heading { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-.gw-heading h2 { margin: 2px 4px 0; font-size: 20px; font-weight: 800; line-height: 1.4; overflow-wrap: anywhere; }
-.gw-heading small { margin-left: 8px; font-size: 13px; font-weight: 400; color: var(--ink-soft); white-space: nowrap; }
-#groupPage .section-hint { margin-bottom: 6px; }
+/* 標題緊接搜尋欄：‹ 群名（20px）＋灰字「N 隻 · 第 i／n 群」 ›；箭頭只留綠色箭頭，點擊區 44px */
+.gw-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gw-heading h2 { flex: 1; min-width: 0; margin: 0; font-size: 20px; font-weight: 800; line-height: 1.35; text-align: center; overflow-wrap: anywhere; }
+.gw-heading small { display: block; font-size: 13px; font-weight: 400; color: var(--ink-soft); }
+#groupPage .gw-side { flex: none; width: 44px; height: 48px; display: grid; place-items: center; padding: 0; color: var(--primary); }
+.gw-side svg { width: 26px; height: 26px; }
+#groupPage .section-hint { justify-content: center; margin-bottom: 6px; text-align: center; }
 /* 狗群頁沒有「全部／我的常溜」那排，main 上緣跟其他頁一樣只留 4px，標題貼近搜尋欄 */
 main:has(> #groupPage) { padding-top: 4px; }
-.gw-search-note { margin: 0 4px 4px; font-size: 14px; color: var(--ink-soft); }
+.gw-search-note { margin: 0 4px 4px; font-size: 14px; color: var(--ink-soft); text-align: center; }
 .gw-cards { display: grid; border-top: 1px solid var(--line); background: var(--surface); }
-#groupPage .gw-dog { display: grid; grid-template-columns: 64px 40px minmax(0, 1fr); align-items: center; column-gap: 10px; width: 100%; min-height: 50px; padding: 0 12px 0 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: left; user-select: none; }
+#groupPage .gw-dog { display: grid; grid-template-columns: 68px 44px minmax(0, 1fr); align-items: center; column-gap: 12px; width: 100%; min-height: 56px; padding: 0 12px 0 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: left; user-select: none; }
 #groupPage .gw-dog:active { background: var(--surface-soft); }
 #groupPage .gw-dog:focus-visible { outline-offset: -3px; }
-.gw-photo { width: 40px; height: 40px; background: var(--primary-soft); overflow: hidden; }
+.gw-dog .r-date { font-size: 15px; }
+.gw-dog .r-date b { font-size: 26px; }
+.gw-dog .r-date.sage b { font-size: 20px; }
+.gw-photo { width: 44px; height: 44px; background: var(--primary-soft); overflow: hidden; }
 .gw-photo img { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 .gw-who { min-width: 0; padding-block: 4px; }
 .gw-line { display: flex; flex-wrap: wrap; align-items: center; column-gap: 8px; }
-.gw-name { font-size: 16px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
-.gw-nm { display: inline-flex; align-items: center; }
-.gw-cage { color: var(--ink-soft); font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.gw-name { font-size: 19px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.gw-name .sex { vertical-align: -0.15em; }
+.gw-cage { color: var(--ink-soft); font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .gw-who .walk-sync { display: block; }
 .gw-dog.excluded .gw-photo { opacity: .35; }
 .gw-dog.excluded .gw-name { text-decoration: line-through; }
 /* 搜尋時沒對到的狗變淡，對到的照常 */
 .gw-dog.miss { opacity: .3; }
-.gw-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px; }
-#groupPage #gwWalk { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 48px; padding: 0 12px; border-radius: 3px; background: var(--primary); color: #fff; font-weight: 800; }
+/* 「整群溜了」實心綠＋「有狗沒溜」綠色底線字，兩個一組置中 */
+.gw-walkbar { padding: 12px 0 8px; }
+.gw-actions { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 20px; }
+#groupPage #gwWalk { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 168px; min-height: 52px; padding: 0 28px; border-radius: 3px; background: var(--primary); color: #fff; font-size: 18px; font-weight: 800; }
 /* 已溜：跟溜狗表的「已溜」同色，再按一次復原 */
 #groupPage #gwWalk.done { background: var(--green-bg); color: var(--green-text); }
-#groupPage [data-gw-action="except"] { width: calc(4em + 8px); padding: 0 4px; font-weight: 600; white-space: nowrap; text-decoration: underline; text-underline-offset: 4px; }
-/* 窄螢幕放不下一排時「有狗沒溜」換到下一行，箭頭跟「整群溜了」仍對齊上面那行；已溜時留同大小的空位，浮條高度、箭頭位置不變 */
-.gw-actions:has(#gwWalk.done)::after { content: ""; width: calc(4em + 8px); height: 44px; }
+#groupPage [data-gw-action="except"] { padding: 0 4px; font-weight: 600; white-space: nowrap; text-decoration: underline; text-underline-offset: 4px; }
 #gwFeedback, .gw-restrictions { margin-inline: 4px; font-size: 14px; overflow-wrap: anywhere; }
 #gwFeedback:empty, .gw-restrictions:empty { display: none; }
-/* 換群箭頭在浮條左右兩端、只留綠色箭頭；跟「整群溜了」隔 16px 免得誤按換群（#387） */
-.gw-walkbar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; margin-inline: -4px; padding: 6px 0; background: var(--surface); box-shadow: 0 -1px 0 var(--line), 0 -4px 12px #1f5c4d14; }
-.gw-walkbar .gw-actions { flex: 1; min-width: 0; }
-#groupPage .gw-side { flex: none; width: 44px; height: 48px; display: grid; place-items: center; padding: 0; color: var(--primary); }
-.gw-side svg { width: 24px; height: 24px; }
-/* #443：手機換群箭頭停在同一個位置（#395）。狗群頁至少撐滿表頭到底部分類列之間，浮條推到最下面並黏在分類列上方；
-   狗多或大字時整頁照常捲閱，捲到底浮條回到所有內容之後 */
+/* 手機：狗多到超出畫面時「整群溜了」停在底部分類列上方，上緣淡出到底色、沒有白色橫條；捲到底回到清單結尾 */
 @media (max-width: 1099px) {
   /* overflow: clip 不像 hidden 會變成捲動容器，sticky 才會對畫面黏住 */
-  #groupPage { overflow: clip; display: flex; flex-direction: column; min-height: calc(100dvh - var(--app-header-height, 64px) - var(--bottom-bar-height, 64px)); }
-  .gw-walkbar { margin-top: auto; position: sticky; bottom: var(--bottom-bar-height, 64px); z-index: 4; }
+  #groupPage { overflow: clip; }
+  .gw-walkbar { position: sticky; bottom: var(--bottom-bar-height, 64px); z-index: 4; margin-inline: -4px; padding-top: 20px; background: linear-gradient(to bottom, transparent, var(--bg) 16px); }
 }
-@media (min-width: 1100px) { .gw-walkbar { margin-top: 12px; box-shadow: none; } }
 
 @media (max-width: 1099px) {
   .analysis-open header.app { position: fixed; inset: 0 0 auto; }
