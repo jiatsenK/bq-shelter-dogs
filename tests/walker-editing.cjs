@@ -41,6 +41,8 @@ module.exports = async (browser, base) => {
     return route.fulfill({ json: out });
   });
   const page = await context.newPage();
+  // 重開網頁：詳細資訊開著時網址是 #dog/<編號>（ADR 0024），reload 會留在那隻狗；這裡要的是重新打開網站
+  const reopen = options => page.goto(page.url().split('#')[0], options);
   page.setDefaultTimeout(5000);
   await page.clock.install({ time: new Date('2026-10-18T02:00:00Z') });
   const pathIs = (r, endpoint) => new URL(r.url()).pathname.endsWith('/api/' + endpoint);
@@ -66,7 +68,7 @@ module.exports = async (browser, base) => {
     await page.locator('[data-with-ok]').click();
     await page.waitForFunction(() => document.querySelector('.last-walk')?.textContent.includes('同行乙'));
     assert.equal(walkerOf(data.dogs[0]), '測試志工、同行乙');
-    await page.reload({ waitUntil: 'networkidle' });
+    await reopen({ waitUntil: 'networkidle' });
     await openDog();
     assert.equal(await page.locator('#whoAdd').count(), 1, '重開後仍能編輯');
     assert.match(await lastWalk(), /同行乙/);
@@ -88,14 +90,14 @@ module.exports = async (browser, base) => {
     assert.match(await page.locator('.last-walk').textContent(), /沒網路/);
     await context.setOffline(false);
     await page.evaluate(() => localStorage.removeItem('bq-walker-name'));
-    await page.reload({ waitUntil: 'networkidle' });
+    await reopen({ waitUntil: 'networkidle' });
     await openDog();
     assert.equal(await page.locator('#whoAdd').count(), 0, '未選身分不提供寫入入口');
     assert.match(await page.locator('.last-walk').textContent(), /選好.*名字/);
     await page.evaluate(() => localStorage.setItem('bq-walker-name', '測試志工'));
     data.dogs[1].walkedDate = '2026-10-17';
     d1.set(data.dogs[1].id, '同行甲', '2026-10-17');
-    await page.reload({ waitUntil: 'networkidle' });
+    await reopen({ waitUntil: 'networkidle' });
     await page.locator('#main [data-dog="1"]').first().click();
     holdWrite = true;
     const ordinarySent = page.waitForRequest(r => r.url().endsWith('/api/walk') && r.method() === 'POST');
@@ -107,7 +109,7 @@ module.exports = async (browser, base) => {
     await page.locator('#whoAdd').waitFor();
     // 模擬重開後尚未登記的另一隻狗，再驗證整群入口。
     d1.set(data.dogs[1].id, '同行甲', '2026-10-17');
-    await page.reload({ waitUntil: 'networkidle' });
+    await reopen({ waitUntil: 'networkidle' });
     await page.locator('[data-tab="groups"]').click();
     await page.locator('#gwWalk').waitFor();
     holdWrite = true;
@@ -121,7 +123,7 @@ module.exports = async (browser, base) => {
     await page.locator('[data-gw-dog="1"]').click();
     assert.equal(await page.locator('#whoAdd').count(), 1, '整群成功後與一般登記同樣可編輯');
     await page.clock.setSystemTime(new Date('2026-10-19T02:00:00Z'));
-    await page.reload({ waitUntil: 'networkidle' });
+    await reopen({ waitUntil: 'networkidle' });
     await openDog();
     assert.equal(await page.locator('#whoAdd').count(), 0, '隔天不開放昨天名單編輯');
     assert.doesNotMatch(await page.locator('.last-walk').textContent(), /僅能編輯已確認的今天溜狗人/, '刪除提示後不顯示該文案，昨天名單仍不可編輯');
@@ -129,7 +131,7 @@ module.exports = async (browser, base) => {
     for (const endpoint of ['walkers', 'today']) {
       delayedRead = endpoint; releaseRead = null;
       const first = page.waitForResponse(r => pathIs(r, endpoint === 'walkers' ? 'today' : 'walkers'));
-      await page.reload({ waitUntil: 'domcontentloaded' });
+      await reopen({ waitUntil: 'domcontentloaded' });
       await first;
       if (endpoint === 'walkers') {
         await openDog();

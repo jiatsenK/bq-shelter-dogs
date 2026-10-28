@@ -58,7 +58,7 @@ async function runMyWalksTests() {
       eq(eachDay(), [['2026/09/24（四）', ['紀錄戊', '紀錄甲'], '2 隻'], ['2026/09/22（二）', ['紀錄乙'], '1 隻'], ['2026/09/18（五）', ['已離所狗'], '1 隻']], '點哪天看那天：');
       eq(main.querySelectorAll('.mine-dog.gone').length, 1, '離所：');
       eq(main.querySelector('.mine-dog.gone').tagName, 'DIV', '離所的狗不能點：');
-      eq(document.querySelector('#tabs button[data-tab="mine"] .n').textContent, '4', '分類數字：');
+      eq(document.querySelector('#tabs [data-tab="mine"] .n').textContent, '4', '分類數字：');
       eq(main.querySelectorAll('.walk-btn, .card').length, 0, '這頁不放狗卡與已遛按鈕：');
       if (/上次遛狗/.test(main.textContent)) throw new Error('這頁不顯示大家的上次遛狗');
       if (/紀錄丙/.test(main.textContent)) throw new Error('別人遛的不該出現');
@@ -174,7 +174,7 @@ async function runMyWalksTests() {
       setup();
       saveMyCodes([]); render();
       eq(!!document.getElementById('whoForm'), true, '設定框：');
-      eq(document.querySelector('#tabs button[data-tab="mine"] .n').textContent, '', '分類數字：');
+      eq(document.querySelector('#tabs [data-tab="mine"] .n').textContent, '', '分類數字：');
       eq(main.querySelectorAll('.visit').length, 0, '不列紀錄：');
       eq(document.getElementById('whoClear'), null, '沒設定過不顯示清除：');
       UPLOAD_URL = 'https://worker.test';
@@ -190,7 +190,7 @@ async function runMyWalksTests() {
       try { stored = localStorage.getItem(WALKER_CODES_KEY) || ''; } catch (e) { /* 無痕模式 */ }
       if (stored.includes('測試志工')) throw new Error('名字不該存在手機');
       eq(main.querySelectorAll('.mc-cell.on').length, 3, '設定後列出我的紀錄：');
-      eq(document.querySelector('#tabs button[data-tab="mine"] .n').textContent, '4', '分類數字：');
+      eq(document.querySelector('#tabs [data-tab="mine"] .n').textContent, '4', '分類數字：');
     });
     await check('#267 更名保留身分；名字衝突先顯示摘要，取消不合併，再次確認才合併', async () => {
       const json = body => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });

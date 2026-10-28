@@ -9,6 +9,7 @@ import { BQDates } from './dates.js';
 import { BQApi } from './api.js';
 import { BQWalkUI } from './walk-ui.js';
 import { whereKnown, whereOpen } from './find.js';
+import { dogHash, routeControl } from './routes.js';
 
 // 電腦版溜狗表（K 2026-10-10，選「簡報＋全表」，全表可切「最近 30 天」）：寬螢幕（≥1100px）時溜狗表改成
 // 上面今天的簡報（紅黃綠各幾隻、各區狀況），下面像試算表的全表（勾好幾隻一次登記溜了），右邊異動紀錄和休養中。
@@ -181,7 +182,7 @@ function deskRowHtml(dog, today, days) {
   return `<tr class="dr${deskChecked.has(key) ? ' checked' : ''}${flag ? ' flagged' : ''}" data-desk-dog="${idx}">
     <td class="dr-ck">${check}</td>
     <td class="dr-dayc">${tag}</td>
-    <td class="dr-name"><button type="button" data-desk-open="${idx}" aria-haspopup="dialog">${esc(dog.name)}</button>${flag ? `<span class="dr-warn" title="${esc(flag.keywords.join('、'))}">注意</span>` : ''}${dog.homeCage ? '<small>暫住</small>' : ''}${status ? `<span class="dr-sub">${status}</span>` : ''}</td>
+    <td class="dr-name">${routeControl(true, dogHash(dog), `data-desk-open="${idx}" aria-haspopup="dialog"`, esc(dog.name))}${flag ? `<span class="dr-warn" title="${esc(flag.keywords.join('、'))}">注意</span>` : ''}${dog.homeCage ? '<small>暫住</small>' : ''}${status ? `<span class="dr-sub">${status}</span>` : ''}</td>
     <td class="dr-cagec">${cage}</td>
     <td class="dr-date num">${date ? `${date.getMonth() + 1}/${date.getDate()}` : ''}</td>
     <td class="dr-who">${esc(who)}</td>

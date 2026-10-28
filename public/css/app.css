@@ -102,7 +102,7 @@ header.app {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
 }
-.tabs button {
+.tabs :is(button, a) {
   position: relative;
   border: none;
   background: none;
@@ -112,20 +112,21 @@ header.app {
   padding: 5px 2px 3px;
   border-radius: 12px;
   cursor: pointer;
+  text-decoration: none;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; line-height: 1.2;
 }
-.tabs button .icon { font-size: 23px; }
-.tabs button .t { font-size: 12px; font-weight: 500; white-space: nowrap; }
-.tabs button .n {
+.tabs :is(button, a) .icon { font-size: 23px; }
+.tabs :is(button, a) .t { font-size: 12px; font-weight: 500; white-space: nowrap; }
+.tabs :is(button, a) .n {
   position: absolute; top: 2px; left: calc(50% + 9px);
   font-size: 11px; font-weight: 700; line-height: 17px; min-width: 17px; padding: 0 5px;
   border-radius: 9px; background: var(--muted-bg); color: var(--ink-soft);
 }
-.tabs button .n:empty { display: none; }
-.tabs button.active { color: var(--primary); }
-.tabs button.active .t { font-weight: 700; }
-.tabs button.active .n { background: var(--primary); color: #fff; }
-.tabs button:active { background: var(--primary-soft); }
+.tabs :is(button, a) .n:empty { display: none; }
+.tabs :is(button, a).active { color: var(--primary); }
+.tabs :is(button, a).active .t { font-weight: 700; }
+.tabs :is(button, a).active .n { background: var(--primary); color: #fff; }
+.tabs :is(button, a):active { background: var(--primary-soft); }
 
 main { padding: 14px 14px calc(96px + env(safe-area-inset-bottom, 0px)); max-width: 480px; margin: 0 auto; }
 /* 左右滑動換分類由 js/app.js 處理，瀏覽器只負責上下捲動；內容少時下方空白處也要能滑 */
@@ -1138,9 +1139,9 @@ header.app { background: rgba(255, 255, 255, 0.92); -webkit-backdrop-filter: blu
 .sync-btn, .analysis-btn { background: transparent !important; color: var(--primary) !important; }
 .bottom-bar { box-shadow: 0 -0.5px 0 rgba(60, 60, 67, 0.29); background: rgba(249, 249, 249, 0.94); }
 .tabs { grid-template-columns: repeat(3, 1fr); }
-.tabs button .n { background: transparent; color: var(--ink-soft); font-weight: 500; }
-.tabs button.active .n { background: transparent; color: var(--primary); }
-.tabs button:active { background: transparent; opacity: .6; }
+.tabs :is(button, a) .n { background: transparent; color: var(--ink-soft); font-weight: 500; }
+.tabs :is(button, a).active .n { background: transparent; color: var(--primary); }
+.tabs :is(button, a):active { background: transparent; opacity: .6; }
 .card { border-radius: 12px; padding: 8px 8px 8px 8px; gap: 12px; margin-bottom: 8px; }
 .card .thumb { width: 64px; height: 64px; border-radius: 10px; }
 .card .name { font-size: 17px; font-weight: 600; }
@@ -1381,8 +1382,8 @@ html.onboard-open { overflow: hidden; }
 .seg button { width: 48px; height: 40px; border-radius: 8px; }
 
 /* 分頁、找狗 */
-.tabs button .t { font-size: 13px; }
-.tabs button .n { font-size: 12px; }
+.tabs :is(button, a) .t { font-size: 13px; }
+.tabs :is(button, a) .n { font-size: 12px; }
 .find-view button { min-height: 44px; }
 .find-chips { flex-wrap: wrap; overflow: visible; }
 .find-chip { min-height: 40px; padding: 0 12px; font-size: 14px; display: inline-flex; align-items: center; }
@@ -1469,13 +1470,13 @@ header.app .sync-btn:active, header.app .analysis-btn:active, .analysis-open hea
 /* 底部分類列：抽屜標籤，選中的那格是白底綠字的標籤 */
 .bottom-bar { background: var(--shell); box-shadow: none; -webkit-backdrop-filter: none; backdrop-filter: none; padding-top: 6px; }
 .tabs { gap: 6px; }
-.tabs button { color: var(--shell-soft); border-radius: 3px; }
-.tabs button .n { color: var(--shell-soft); }
-.tabs button.active { background: #fff; color: var(--shell); }
-.tabs button.active .n { color: var(--shell); }
-.tabs button:active { opacity: 1; background: var(--shell-deep); }
-.tabs button.active:active { background: #fff; }
-.tabs button:focus-visible { outline: 3px solid var(--tab-amber); outline-offset: 1px; }
+.tabs :is(button, a) { color: var(--shell-soft); border-radius: 3px; }
+.tabs :is(button, a) .n { color: var(--shell-soft); }
+.tabs :is(button, a).active { background: #fff; color: var(--shell); }
+.tabs :is(button, a).active .n { color: var(--shell); }
+.tabs :is(button, a):active { opacity: 1; background: var(--shell-deep); }
+.tabs :is(button, a).active:active { background: #fff; }
+.tabs :is(button, a):focus-visible { outline: 3px solid var(--tab-amber); outline-offset: 1px; }
 
 /* 溜狗表上面一排：索引分頁，站在一條深綠線上 */
 .walk-tools { align-items: flex-end; border-bottom: 2px solid var(--shell); margin: 0 0 10px; }
@@ -1843,8 +1844,8 @@ header.app { top: calc(-1 * var(--brand-h, 0px)); }
 .seg button { color: var(--ink-soft); opacity: 0.8; }
 .seg button.on { color: var(--shell); opacity: 1; }
 /* 底部列：選中的不是白色方塊，是上緣一條白線加白字 */
-.tabs button.active, .tabs button.active:active { background: transparent; color: #fff; box-shadow: inset 0 3px 0 #fff; border-radius: 0; }
-.tabs button.active .n { color: #fff; }
+.tabs :is(button, a).active, .tabs :is(button, a).active:active { background: transparent; color: #fff; box-shadow: inset 0 3px 0 #fff; border-radius: 0; }
+.tabs :is(button, a).active .n { color: #fff; }
 /* 拇指按得到：頁首更新、分析 44px；名字按鈕至少 44px 寬 */
 header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 .with-name { min-width: 44px; justify-content: center; }
@@ -2074,13 +2075,13 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .desk-on .bottom-bar { position: static; padding: 0; background: none; box-shadow: none; display: flex; align-items: flex-end; }
   .desk-on .bottom-inner { max-width: none; margin: 0; }
   .desk-on .tabs { display: flex; gap: 4px; }
-  .desk-on .tabs button { flex-direction: row; gap: 8px; min-height: 0; height: 48px; padding: 0 18px; border-radius: 4px 4px 0 0; color: var(--shell-soft); }
-  .desk-on .tabs button .icon { font-size: 18px; }
-  .desk-on .tabs button .t { font-size: 15px; font-weight: 700; }
-  .desk-on .tabs button .n { position: static; font-size: 13px; font-weight: 600; padding: 0; min-width: 0; background: none; color: inherit; }
-  .desk-on .tabs button:hover { color: #fff; }
-  .desk-on .tabs button.active { background: var(--bg); color: var(--ink); }
-  .desk-on .tabs button.active .n { color: var(--ink-soft); }
+  .desk-on .tabs :is(button, a) { flex-direction: row; gap: 8px; min-height: 0; height: 48px; padding: 0 18px; border-radius: 4px 4px 0 0; color: var(--shell-soft); }
+  .desk-on .tabs :is(button, a) .icon { font-size: 18px; }
+  .desk-on .tabs :is(button, a) .t { font-size: 15px; font-weight: 700; }
+  .desk-on .tabs :is(button, a) .n { position: static; font-size: 13px; font-weight: 600; padding: 0; min-width: 0; background: none; color: inherit; }
+  .desk-on .tabs :is(button, a):hover { color: #fff; }
+  .desk-on .tabs :is(button, a).active { background: var(--bg); color: var(--ink); }
+  .desk-on .tabs :is(button, a).active .n { color: var(--ink-soft); }
   /* 搜尋框最寬 300px，頁首放不下時先縮搜尋框，整排維持一行（critique 2026-10-28 #1） */
   .desk-on .search { flex: 0 1 300px; min-width: 180px; margin: 0 0 0 auto; width: auto; align-self: center; }
   /* 圖鑑入口：搜尋框右邊，頁首上安靜的一顆 */
@@ -2182,8 +2183,8 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
   .dr-day { display: inline-flex; align-items: center; justify-content: center; gap: 1px; min-width: 62px; height: 28px; padding: 0 6px; border-radius: 2px; font-size: 13px; font-weight: 800; white-space: nowrap; }
   .dr-day b { font-size: 18px; font-weight: 900; line-height: 1; }
   .desk-table .dr-name { width: 150px; white-space: nowrap; }
-  .dr-name button { padding: 6px 0; border: none; background: none; color: var(--ink); font: inherit; font-size: 16px; font-weight: 800; cursor: pointer; }
-  .dr-name button:hover { text-decoration: underline; text-underline-offset: 3px; }
+  .dr-name :is(button, a) { display: inline-block; padding: 6px 0; border: none; background: none; color: var(--ink); font: inherit; font-size: 16px; font-weight: 800; text-decoration: none; cursor: pointer; }
+  .dr-name :is(button, a):hover { text-decoration: underline; text-underline-offset: 3px; }
   .dr-name small { margin-left: 6px; font-size: 12px; color: var(--ink-soft); }
   /* 狗名下面一行：沒登記到（#643，紅字可以按，按了再登記一次）、寫回試算表中／失敗 */
   .dr-sub { display: block; margin-top: -4px; padding-bottom: 4px; }
@@ -2291,13 +2292,13 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 
 /* #373：四格共用導覽與既有狗群內容。 */
 .tabs { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.tabs button { min-width: 44px; min-height: 44px; padding-inline: 2px; }
+.tabs :is(button, a) { min-width: 44px; min-height: 44px; padding-inline: 2px; }
 .groups-frame { display: block; width: 100%; height: calc(100dvh - 160px - env(safe-area-inset-bottom, 0px)); min-height: 300px; border: 0; }
 @media (min-width: 1100px) {
   /* 頁首固定一行、64px（critique 2026-10-28 #1：1100～1350px 換兩行蓋住表頭）；表頭、右欄黏住的位置讀 --app-header-height */
   .desk-on .header-inner { flex-wrap: nowrap; height: 64px; gap: 16px; }
   .desk-on .brand { min-height: 64px; }
-  .desk-on .tabs button { padding-inline: 10px; }
+  .desk-on .tabs :is(button, a) { padding-inline: 10px; }
   @media (max-width: 1279px) { .desk-on .brand .sub .updated { display: none; } .desk-on .header-inner { gap: 12px; } }
 
   /* 每一頁同一個頁首（#6）：常溜狗群、資訊也是網站名稱、更新鈕、同一排入口；資訊沒有搜尋就留空位，搜尋框不跳位置 */
@@ -2325,11 +2326,11 @@ header.app .sync-btn, header.app .analysis-btn { width: 44px; height: 44px; }
 }
 @media (min-width: 1100px) and (prefers-reduced-motion: reduce) { html.desk-on .detail { animation: none; } }
 /* #273 資訊分類沿用既有白紙、細線及安全區。 */
-.info-home button { display: grid; gap: 6px; width: 100%; padding: 20px 0; min-height: 80px; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
-.info-home button strong { font-size: 18px; }
-.info-home button span { color: var(--ink-soft); font-size: 14px; }
-.info-home button:hover { background: var(--surface-soft); }
-.info-home button:focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
+.info-home :is(button, a) { display: grid; gap: 6px; width: 100%; padding: 20px 0; min-height: 80px; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: left; font: inherit; text-decoration: none; cursor: pointer; }
+.info-home :is(button, a) strong { font-size: 18px; }
+.info-home :is(button, a) span { color: var(--ink-soft); font-size: 14px; }
+.info-home :is(button, a):hover { background: var(--surface-soft); }
+.info-home :is(button, a):focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
 /* ADR 0023 分享網站只在手機版；分享、複製都不行時顯示網址讓人長按複製 */
 .desk-on .share-site { display: none; }
 .share-manual { display: grid; gap: 8px; padding: 14px 0 20px; border-bottom: 1px solid var(--line); color: var(--ink-soft); font-size: 14px; }

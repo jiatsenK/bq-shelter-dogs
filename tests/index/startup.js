@@ -2,7 +2,7 @@
 async function runSerialTests() {
   const saved = [allDogs, groupMap, activeTab, searchQuery, loadState, loadWarning];
   const main = document.getElementById('main');
-  const tabNames = () => [...document.querySelectorAll('#tabs button .t')].map(t => t.textContent);
+  const tabNames = () => [...document.querySelectorAll('#tabs [data-tab] .t')].map(t => t.textContent);
   const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.firstChild.textContent);
   const tick = () => new Promise(r => setTimeout(r, 0));
   const json = body => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
@@ -25,9 +25,9 @@ async function runSerialTests() {
       const done = init();
       eq(tabNames(), ['溜狗表', '常溜狗群', '我溜過', '資訊'], '讀取中就有分類：');
       eq(main.textContent.trim(), '讀取中…', '讀取中：');
-      document.querySelector('#tabs button[data-tab="mine"]').click();
+      document.querySelector('#tabs [data-tab="mine"]').click();
       eq(activeTab, 'mine', '讀取中也能切到我溜過：');
-      document.querySelector('#tabs button[data-tab="walk"]').click();
+      document.querySelector('#tabs [data-tab="walk"]').click();
       eq(main.textContent.trim(), '讀取中…', '切回溜狗表仍在讀取：');
       release(); await done; await tick();
       eq(calls.filter(c => c[0] !== 'walkers')[0][0], 'dogs', '讀的資料（#141 溜狗人名字另外跟 Worker 拿）：');

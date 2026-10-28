@@ -78,7 +78,7 @@ async function runAnalysisTests() {
       const doc = new DOMParser().parseFromString(INDEX_HTML, 'text/html');
       const btn = doc.querySelector('header .brand #analysisBtn');
       if (btn) throw new Error('分析入口已移到底部資訊');
-      eq([...document.querySelectorAll('#tabs button')].map(b => b.dataset.tab), ['walk', 'groups', 'mine', 'info'], '分析不佔分類：');
+      eq([...document.querySelectorAll('#tabs [data-tab]')].map(b => b.dataset.tab), ['walk', 'groups', 'mine', 'info'], '分析不佔分類：');
       showAnalysis();
       eq([analysisOpen, document.documentElement.classList.contains('analysis-open'), activeTab], [true, true, 'mine'], '打開分析：');
       eq(document.querySelectorAll('[data-info-page]').length, 5, '資訊五類（含活動 #270）：');
