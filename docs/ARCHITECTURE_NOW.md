@@ -2,7 +2,7 @@
 
 資料在哪、誰寫、誰同步，以本檔為入口。最後核對：2026-10-28，main `c2da5f0`（逐項對照程式碼，見 [2026-10-28-architecture-data-flow.md](research/2026-10-28-architecture-data-flow.md)）。repo 的 migration 到 `0016`；正式庫實際套到哪一版，以 `node scripts/d1-migrations.mjs check --target production` 為準，本檔不記。開關與排程的即時值以自動產生的 `docs/adr/README.md` 為準；決定的理由看 ADR。
 
-架構圖：[系統架構](diagrams/architecture.html)（誰連誰、排程）、[環境與部署](diagrams/environments.html)（正式／測試／預覽各綁什麼）。改了本檔的架構或排程，圖也要跟著改。
+架構圖：[系統架構](diagrams/architecture.html)（誰連誰、排程）、[環境與部署](diagrams/environments.html)（正式／測試／預覽各綁什麼）；細節：[網站登記寫回試算表](diagrams/writeback-sequence.html)、[試算表改動回到 D1](diagrams/sheet-sync-sequence.html)、[一天裡的排程](diagrams/daily-schedule.html)、[各類資料的流向](diagrams/data-flows.html)。改了本檔的架構或排程，圖也要跟著改。
 
 ## 改版終點（K 2026-10-24）
 
