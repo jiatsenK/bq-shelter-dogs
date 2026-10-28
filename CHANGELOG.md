@@ -1,5 +1,12 @@
 # Changelog
 
+## [9.4.0](https://github.com/jiatsenK/bq-shelter-dogs/compare/v9.3.0...v9.4.0) (2026-10-26)
+
+
+### 新功能
+
+* add protected read-only admin site ([#564](https://github.com/jiatsenK/bq-shelter-dogs/issues/564)) ([#570](https://github.com/jiatsenK/bq-shelter-dogs/issues/570)) ([0cfa0cc](https://github.com/jiatsenK/bq-shelter-dogs/commit/0cfa0cc829e959ed9b020bcef7a35f2c6300a171))
+
 ## [9.3.0](https://github.com/jiatsenK/bq-shelter-dogs/compare/v9.2.1...v9.3.0) (2026-10-22)
 
 
