@@ -1,5 +1,12 @@
 # Changelog
 
+## [9.4.1](https://github.com/jiatsenK/bq-shelter-dogs/compare/v9.4.0...v9.4.1) (2026-10-28)
+
+
+### 修正
+
+* 網站更新改讀 GitHub Releases，拿掉志工網站人工寫的那份 ([#731](https://github.com/jiatsenK/bq-shelter-dogs/issues/731)) ([0a576ce](https://github.com/jiatsenK/bq-shelter-dogs/commit/0a576ce8d1181b1806ecb625e9d57a4bba839ab9))
+
 ## [9.4.0](https://github.com/jiatsenK/bq-shelter-dogs/compare/v9.3.0...v9.4.0) (2026-10-26)
 
 
