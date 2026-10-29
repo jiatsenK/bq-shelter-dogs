@@ -1,6 +1,6 @@
 # 架構圖：志工溜狗表
 
-> 核對日：2026-10-29｜依據 commit：`d2895ac`（溜狗測試改跑真的 Apps Script 在分支 `claude/748-real-apps-script-tests`，#748；main 是 `b9c1e1f`）
+> 核對日：2026-10-29｜依據 commit：`13d7532`
 > 改到圖上的元件、連線、排程或部署方式時，在同一個 PR 更新這份檔案。規則見 agent-hub `docs/rules/architecture-diagrams.md`。
 > 名稱、排程時間、重試次數、端點跟程式不一致時 `scripts/diagram-facts.test.mjs` 會失敗；PR 改到架構相關檔案卻沒改對應段落，「架構圖重畫提醒」會在 PR 留言。管理網站「系統架構圖」頁也是從這份檔案產生。
 
