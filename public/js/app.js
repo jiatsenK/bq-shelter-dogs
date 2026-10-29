@@ -14,6 +14,7 @@ import { INFO_PAGES, analysisPageHtml, hideAnalysis, restoreInfoPage, shareFromI
 import { groupStageHtml, receiveGroupData, refreshGroupStage } from './group-stage.js';
 import { BQTour } from './tour.js';
 import { deskClearChecked, deskOn, deskWalkHtml } from './desk.js';
+import { deskMineHtml } from './desk-mine.js';
 import { esc, highlightNote, icon, matchesSearch, monthDay, pad2, searchKey } from './ui-kit.js';
 import { dogStatus, restFrom, sortDue, specialFlag, walkKey } from './dog-status.js';
 import { closeDetail, renderDetail, showDetail } from './detail.js';
@@ -346,6 +347,8 @@ function myWalksHtml(today, query) {
   if (appState.myWalksState === 'error' && !confirmedToday) {
     return `<div class="status-msg">溜狗紀錄讀不到，請確認網路後按「重新讀取」。<br><button class="retry-btn" id="mineRetry">重新讀取</button></div>`;
   }
+  // 電腦版（critique 2026-10-28）：月曆撐寬、右欄放當天明細和統計，在 js/desk-mine.js
+  if (deskOn()) return deskMineHtml(today, query);
   if (BQWelcome.needsSetup()) return BQWelcome.setupHtml();
   // #138 之前設定的只有代號、沒記名字：請他再輸入一次，按溜了才能寫進試算表
   const named = !!loadWalkerName();
