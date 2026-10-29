@@ -2,7 +2,7 @@
 async function runSerialTests() {
   const saved = [allDogs, groupMap, activeTab, searchQuery, loadState, loadWarning];
   const main = document.getElementById('main');
-  const tabNames = () => [...document.querySelectorAll('#tabs button .t')].map(t => t.textContent);
+  const tabNames = () => [...document.querySelectorAll('#tabs [data-tab] .t')].map(t => t.textContent);
   const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.firstChild.textContent);
   const tick = () => new Promise(r => setTimeout(r, 0));
   const json = body => new Response(JSON.stringify(body), { headers: { 'Content-Type': 'application/json' } });
@@ -23,11 +23,11 @@ async function runSerialTests() {
       let release;
       const calls = install(() => new Promise(r => { release = () => r(json(DATA)); }));
       const done = init();
-      eq(tabNames(), ['溜狗表', '常遛狗群', '我溜過', '資訊'], '讀取中就有分類：');
+      eq(tabNames(), ['溜狗表', '常溜狗群', '我溜過', '資訊'], '讀取中就有分類：');
       eq(main.textContent.trim(), '讀取中…', '讀取中：');
-      document.querySelector('#tabs button[data-tab="mine"]').click();
+      document.querySelector('#tabs [data-tab="mine"]').click();
       eq(activeTab, 'mine', '讀取中也能切到我溜過：');
-      document.querySelector('#tabs button[data-tab="walk"]').click();
+      document.querySelector('#tabs [data-tab="walk"]').click();
       eq(main.textContent.trim(), '讀取中…', '切回溜狗表仍在讀取：');
       release(); await done; await tick();
       eq(calls.filter(c => c[0] !== 'walkers')[0][0], 'dogs', '讀的資料（#141 溜狗人名字另外跟 Worker 拿）：');
@@ -47,7 +47,7 @@ async function runSerialTests() {
       for (const fake of [() => new Response(JSON.stringify({ ok: false, code: 'db', error: '資料庫暫時讀不到狗的資料，請稍後再試' }), { status: 503 }), () => new Response('Not Found', { status: 404 }), () => { throw new TypeError('Failed to fetch'); }, () => new Response('{壞掉')]) {
         install(fake);
         await init();
-        eq(tabNames(), ['溜狗表', '常遛狗群', '我溜過', '資訊'], '分類：');
+        eq(tabNames(), ['溜狗表', '常溜狗群', '我溜過', '資訊'], '分類：');
         eq(main.querySelector('.status-msg').firstChild.textContent, '狗的資料讀不到，請確認網路後按「重新讀取」。', '錯誤訊息：');
         eq(document.querySelectorAll('#main .card').length, 0, '沒有狗卡：');
       }

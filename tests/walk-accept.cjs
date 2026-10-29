@@ -86,7 +86,8 @@ module.exports = async (browser, base) => {
     assert.equal(await page.locator('.last-walk .walk-sync').textContent(),'寫回試算表中');
     assert.equal(await page.getByText(/已寫進試算表/).count(),0);
     await page.reload({ waitUntil:'networkidle' });
-    await page.locator('#main .card[data-dog="0"]').click();
+    // 網址還是這隻狗（ADR 0024 #dog/<編號>），重新整理後詳細資訊直接打開
+    await page.locator('#detailBackdrop').waitFor();
     fs.mkdirSync('.scratch/checks',{ recursive:true });
     await page.screenshot({ path:'.scratch/checks/457-mobile.png',fullPage:true });
     await page.setViewportSize({ width:1440,height:1000 });

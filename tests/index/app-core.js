@@ -92,7 +92,7 @@ function runTests() {
       ];
       groupMap = {};
       const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
-      const counts = () => [...document.querySelectorAll('#tabs button .n')].map(n => n.textContent);
+      const counts = () => [...document.querySelectorAll('#tabs [data-tab] .n')].map(n => n.textContent);
       const mainText = () => document.getElementById('main').textContent;
       try {
         searchQuery = '搜尋';
@@ -222,6 +222,7 @@ function runTests() {
       eq(hit('不要跟小白一起遛'), ['不要']);
       eq(hit('勿溜，治療中'), ['勿溜']);
       eq(hit('勿蹓'), ['勿溜'], '舊有異體字照樣算：');
+      eq([hit('目前不可帶出'), hit('禁止遛')], [['不可帶出'], ['禁止溜']], '常溜狗群以前擋的字眼也算警示（K 2026-10-29）：');
       eq(hit('親人，好牽，會撒嬌'), null, '一般備註：');
       const box = document.createElement('div');
       for (const note of ['不親狗，請單獨遛', '會攻擊黑色狗', '不要跟小白一起遛', '勿溜，治療中']) {
@@ -381,8 +382,8 @@ function runTests() {
         allDogs = [{ cage: 'A01', id: '1', name: '測試甲', walkedDate: null, covered: false, note: '' }];
         groupMap = {}; activeTab = 'walk'; searchQuery = '';
         render();
-        const tabs = () => [...document.querySelectorAll('#tabs button')];
-        eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '常遛狗群', '我溜過', '資訊'], '分類（#99 加找狗）：');
+        const tabs = () => [...document.querySelectorAll('#tabs [data-tab]')];
+        eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '常溜狗群', '我溜過', '資訊'], '分類（#99 加找狗）：');
         eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '', '', ''], '數字（遛狗紀錄還沒讀；找狗不放數字）：');
         const active = () => tabs().filter(b => b.classList.contains('active')).map(b => b.dataset.tab);
         eq(active(), ['walk'], '預設：');
@@ -405,7 +406,7 @@ function runTests() {
         target.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, touches: [start], changedTouches: [start] }));
         target.dispatchEvent(new TouchEvent('touchend', { bubbles: true, touches: [], changedTouches: [end] }));
       };
-      const active = () => [...document.querySelectorAll('#tabs button.active')].map(b => b.dataset.tab);
+      const active = () => [...document.querySelectorAll('#tabs [data-tab].active')].map(b => b.dataset.tab);
       try {
         allDogs = [{ cage: 'A01', id: '1', name: '測試甲', walkedDate: null, covered: false, note: '' }];
         groupMap = {}; activeTab = 'walk'; searchQuery = '';

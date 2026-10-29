@@ -30,6 +30,7 @@
 | [0021](0021-stays-carry-number.md) | 一個編號就是一筆出入所紀錄 | 部分或全部被 [0022](0022-intro-is-the-dog-stays-hold-history.md) 修訂，一起讀、以新的為準 |
 | [0022](0022-intro-is-the-dog-stays-hold-history.md) | 介紹只寫狗自己，出入所經過記在出入所紀錄 | 現行 |
 | [0023](0023-share-site-and-share-count.md) | 分享網站：正式網址不進 repo，分享次數只記每天總數 | 現行 |
+| [0024](0024-volunteer-site-urls.md) | 志工網站的網址：每個分頁、資訊子頁、每隻狗都有自己的 hash | 現行 |
 
 ## 網站開關
 

@@ -78,7 +78,7 @@ module.exports = async (browser, base) => {
         await check('在哪', '#whereSheet');
         await page.keyboard.press('Escape');
         await page.locator('#whereSheet').waitFor({ state: 'hidden' });
-        for (const [tab, name, ready] of [['groups', '常遛狗群', '#groupStage'], ['mine', '我溜過', '#main'], ['info', '資訊', '#main .a-card']]) {
+        for (const [tab, name, ready] of [['groups', '常溜狗群', '#groupStage'], ['mine', '我溜過', '#main'], ['info', '資訊', '#main .a-card']]) {
           await page.locator(`#tabs [data-tab="${tab}"]`).tap();
           await page.locator(ready).first().waitFor();
           await check(name);

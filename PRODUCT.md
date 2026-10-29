@@ -18,12 +18,12 @@ web
 
 ## Operating Context
 
-- 資料來自志工共用的 Google 試算表，定時同步成 `data/dogs.json`；網站和 `/api` 在同一個 Cloudflare Worker。流程見 `docs/PROJECT_GOALS.md`「資料載入」。
+- 資料的唯一正本是 D1；試算表只剩管理者輸入，由 Apps Script 推給 Worker。網站和 `/api` 在同一個 Cloudflare Worker。資料在哪、誰寫、怎麼同步見 `docs/ARCHITECTURE_NOW.md`。
 - 志工使用說明：`docs/VOLUNTEER_GUIDE.md`。
 
 ## Capabilities and Constraints
 
-- 寫回試算表只限主清單的「遛狗日期」和「誰遛的」兩欄，新功能不能加寫入（`AGENTS.md`）。介面上不要出現看起來能改試算表其他內容的元素。
+- 網站寫回試算表的範圍照 `docs/adr/0006-sheet-write-scope.md`：主清單的「遛狗日期」「誰遛的」，備註欄與異動紀錄只追加。範圍外的新寫入要先改那份 ADR；介面上不要出現看起來能改範圍外內容的元素。
 - repo 裡的公開資料（data/walks.json 等）不放志工名字，用代號；網站畫面可以顯示試算表上的志工名字（溜狗人、名字選單），名字本來就在志工共用的試算表裡（K 2026-10-09）。
 - 固定名詞照 `GLOSSARY.md`，畫面上的字也一樣。
 

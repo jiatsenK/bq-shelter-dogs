@@ -140,7 +140,10 @@ module.exports = async (browser, base) => {
     assert(Math.abs(await sideTop() - beforeWalk) <= 1, '#443 按下溜了變「已溜」後箭頭不移動');
     for (const width of [320, 390, 1280]) {
       await page.setViewportSize({ width, height: 844 });
-      await page.getByRole('button', { name: '上一群', exact: true }).click();
+      // 1280 是電腦版（所有群並排，沒有換群箭頭，用滑鼠不套 44px；寬版另見 tests/desk-layout.cjs），這裡只查溢出與狗列完整
+      const desk = width >= 1100;
+      if (!desk) await page.getByRole('button', { name: '上一群', exact: true }).click();
+      else await page.locator('.gw-group').first().waitFor();
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '無水平溢出');
       await page.mouse.move(0, 0);
       await page.waitForTimeout(350);
@@ -148,6 +151,7 @@ module.exports = async (browser, base) => {
         const b = el.getBoundingClientRect(), root = document.getElementById('groupPage').getBoundingClientRect();
         return b.left >= root.left && b.right <= root.right;
       })), '狗列完整可見');
+      if (desk) continue;
       for (const el of await page.locator('#groupPage button:visible').all()) {
         if (await el.evaluate(e => !!e.closest('[inert]'))) continue;
         const b = await el.boundingBox(); assert(b.width >= 44 && b.height >= 44, '點擊區44px');
@@ -181,7 +185,8 @@ module.exports = async (browser, base) => {
         await page.getByRole('button', { name: '下一群', exact: true }).click();
       }
     }
-    await page.setViewportSize({ width: 1280, height: 844 });
+    // 滑鼠操作一次一群的版面：1100 起改成所有群並排（tests/desk-layout.cjs），這裡用 1099（還是一次一群）
+    await page.setViewportSize({ width: 1099, height: 844 });
     await page.locator('.gw-side.next').focus();
     await page.keyboard.press('ArrowLeft');
     assert.equal(await page.locator('[data-tab="groups"][aria-current="page"]').count(), 1);

@@ -18,9 +18,9 @@ const BQTour = (() => {
   const TOUR_STEPS = [
     { target: ['#main .card[data-dog]', '#main .row-dog[data-dog]', '#main .desk-table tbody tr'], title: '溜狗表', text: '依照上次溜狗時間排序，越久沒溜的狗會排越前面。' },
     { target: ['#main .card[data-dog] .last', '#main .row-dog[data-dog] .r-date', '#main .desk-table tbody .dr-day'], title: '上次溜狗天數', text: '顯示距離上次溜狗的天數過了幾天。' },
-    { target: ['#main .card[data-dog] .name', '#main .row-dog[data-dog] .r-name', '#main .desk-table tbody .dr-name button'], title: '狗資料', text: '點狗卡，可以查看照片和詳細紀錄。', deskText: '點擊名稱，可以查看照片和詳細紀錄。', demo: 'detail' },
+    { target: ['#main .card[data-dog] .name', '#main .row-dog[data-dog] .r-name', '#main .desk-table tbody .dr-name [data-desk-open]'], title: '狗資料', text: '點狗卡，可以查看照片和詳細紀錄。', deskText: '點擊名稱，可以查看照片和詳細紀錄。', demo: 'detail' },
     { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn', '#main .desk-table tbody .dr-ck'], title: '溜狗登記', text: '溜完按「溜了」，就會自動記錄日期和名字。', deskText: '勾選溜過的狗（可以勾好幾隻），再按下面的「今天 溜了」，就會一起記錄日期和名字。', demo: 'walk' },
-    { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn', '#main .desk-table tbody .dr-name button'], title: '取消登記', text: '如果按錯，再按一次「已溜」就可以取消。', deskText: '如果登記錯了，按提示條的「復原」，或點狗名打開詳細資訊按「已溜」取消。', demo: 'unwalk' },
+    { target: ['#main .card[data-dog] .walk-btn', '#main .row-dog[data-dog] .walk-btn', '#main .desk-table tbody .dr-name [data-desk-open]'], title: '取消登記', text: '如果按錯，再按一次「已溜」就可以取消。', deskText: '如果登記錯了，按提示條的「復原」，或點狗名打開詳細資訊按「已溜」取消。', demo: 'unwalk' },
     { target: ['#main .card[data-dog] .cage-pill', '#main .row-dog[data-dog] .r-cage', '#main .desk-table tbody .dr-cage'], title: '籠位查詢', text: '點擊籠位，就能在平面圖查看位置。', demo: 'where' },
     { target: ['#main .walk-tools .seg', '#main .dt-view'], title: '照片／列表', text: '右上角可以切換：有照片的狗卡，或一列一隻、比較好掃過去的列表。', deskTitle: '全表／最近 30 天', deskText: '全表下面可以切換「最近 30 天」，看每隻狗這一個月哪幾天有出門。', demo: 'view' },
     { target: ['#tabs [data-tab="mine"]'], title: '我溜過', text: '查看自己溜過的狗。', demo: 'tab' },

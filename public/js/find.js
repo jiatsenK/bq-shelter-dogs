@@ -5,6 +5,7 @@ import { closeOverlay, forgetOverlay, pushOverlay, registerOverlay, trapFocus } 
 import { esc, icon, monthDay, searchKey } from './ui-kit.js';
 import { AMBER_DAYS, specialFlag, walkKey } from './dog-status.js';
 import { BQWalkUI } from './walk-ui.js';
+import { SITE } from './site-config.js';
 
 // 找狗（#99）：照片圖鑑＋全域搜尋＋平面圖分區。K 2026-09-26 看過原型後同意。
 // 溜狗表是決定「接下來遛誰」；找狗是現場「眼前這隻是誰、在哪」，所以不顯示未遛天數、沒有「已遛」按鈕。
@@ -14,12 +15,14 @@ import { BQWalkUI } from './walk-ui.js';
 // 籠位 → 平面圖分區（K 2026-09-26 確認：新A／新B／新獨＝新犬舍區，舊A／舊B＝舊犬舍區，母幼＝幼母犬舍區，
 // C區（原本叫幼犬舍區，K 2026-09-28 改成跟後台一樣叫 C區），住院區＝隔離區）。對不到的籠位歸「其他籠位」（沒有 rect），放在圖下方的提示框。
 // rect 是平面圖上的位置 [x, y, 寬, 高]，照所內看板重畫（viewBox 380×600）；順序＝照片分段的順序（圖上由上到下）
+// 哪一籠在哪一區用 SITE.zones 的比對（js/site-config.js，電腦版、圖鑑同一份；critique 2026-10-28 #11）
+const siteZone = key => SITE.zones.find(z => z.key === key).test;
 const FIND_ZONES = [
-  { key: 'new', name: '新犬舍區', short: '新犬舍', test: c => /^新/.test(c), rect: [230, 0, 150, 240] },
-  { key: 'iso', name: '隔離區', short: '隔離', test: c => /^住院/.test(c), rect: [140, 40, 90, 200] },
-  { key: 'mom', name: '幼母犬舍區', short: '幼母犬舍', test: c => /^母幼/.test(c), rect: [0, 270, 250, 80] },
-  { key: 'pup', name: 'C區', short: 'C區', test: c => /^C/.test(c), rect: [250, 270, 130, 80] },
-  { key: 'old', name: '舊犬舍區', short: '舊犬舍', test: c => /^舊/.test(c), rect: [0, 350, 250, 250] },
+  { key: 'new', name: '新犬舍區', short: '新犬舍', test: siteZone('new'), rect: [230, 0, 150, 240] },
+  { key: 'iso', name: '隔離區', short: '隔離', test: siteZone('ward'), rect: [140, 40, 90, 200] },
+  { key: 'mom', name: '幼母犬舍區', short: '幼母犬舍', test: siteZone('mom'), rect: [0, 270, 250, 80] },
+  { key: 'pup', name: 'C區', short: 'C區', test: siteZone('c'), rect: [250, 270, 130, 80] },
+  { key: 'old', name: '舊犬舍區', short: '舊犬舍', test: siteZone('old'), rect: [0, 350, 250, 250] },
 ];
 const FIND_FACILITIES = [
   // K 2026-09-28 用圖示；2026-10-09 K 覺得空框裡一個圖示很突兀，改成虛線框＋小字（不是犬舍、不能點）
@@ -304,7 +307,8 @@ function findMapTitle() {
   return s;
 }
 
-function findMapHtml(query) {
+// 平面圖那張卡（圖＋提示＋圖上找不到的籠位）；手機接在下面列狗，電腦版（js/find-desk.js）狗列在右欄
+function findMapCardHtml(query) {
   const unmapped = appState.allDogs.some(d => findZoneOf(d) === 'other') ? [findZoneInfo('other')] : [];
   const selected = findState.findZone === 'all' ? null : findState.findZone;
   const searching = !!searchKey(query);
@@ -319,7 +323,7 @@ function findMapHtml(query) {
     .replace(/viewBox="[^"]*"/, `viewBox="${from.join(' ')}" data-to="${box.join(' ')}"`);
   findState.findMapShown = box;
   requestAnimationFrame(findMapAnimate);
-  let html = `<div class="find-map-card">
+  return `<div class="find-map-card">
     ${svg}
     <div class="find-map-foot">
       <p class="find-map-hint">${selected ? '點籠子看那籠的狗。' : '點一區放大看籠子。'}</p>
@@ -328,6 +332,14 @@ function findMapHtml(query) {
     ${unmapped.length ? `<div class="find-unmapped">這些籠位還不知道在圖上哪裡：${unmapped.map(z =>
       `<button type="button" data-find-zone="${z.key}" aria-pressed="${findState.findZone === z.key}">${esc(z.name)} ${appState.allDogs.filter(d => findZoneOf(d) === z.key && findMatches(d, query)).length} 隻</button>`).join('')}</div>` : ''}
   </div>`;
+}
+
+function findMapHtml(query) {
+  const selected = findState.findZone === 'all' ? null : findState.findZone;
+  const searching = !!searchKey(query);
+  const hits = searching && !selected ? findList(query, 'all') : [];
+  const overview = !selected && !searching;
+  let html = findMapCardHtml(query);
   if (selected) {
     const list = findList(query).filter(d => !findState.findCage || findCageOf(d) === findState.findCage);
     const z = findZoneInfo(selected);
@@ -339,10 +351,7 @@ function findMapHtml(query) {
   } else if (overview) {
     // 平面圖下面原本一大塊空白：放最久沒溜的狗（黃、紅、沒紀錄），點籠位看在哪、按溜了直接登記
     const today = new Date();
-    const due = dueDogs(appState.allDogs, today).filter(d => {
-      const st = computeStatus(d, today);
-      return st.kind === 'unknown' || (st.kind === 'dated' && st.days >= AMBER_DAYS);
-    }).slice(0, 5);
+    const due = findLongUnwalked(today).slice(0, 5);
     if (due.length) html += `<div class="find-zone-head"><h2>最久沒溜的狗</h2><span>點籠位看在哪</span></div>` + due.map(d => dogCard(d, today)).join('');
   } else if (searching) {
     // 搜尋（#113）：上面平面圖標出找到的籠子，下面列出找到的狗
@@ -351,6 +360,14 @@ function findMapHtml(query) {
       : `<div class="status-msg">找不到「${esc(query)}」<br>試試狗名的一個字、編號後四碼，或籠位（例：新A03）。</div>`;
   }
   return html;
+}
+
+// 最久沒溜的狗（黃、紅、沒紀錄），照溜狗表的順序；手機平面圖下面、電腦版右欄共用
+function findLongUnwalked(today) {
+  return dueDogs(appState.allDogs, today).filter(d => {
+    const st = computeStatus(d, today);
+    return st.kind === 'unknown' || (st.kind === 'dated' && st.days >= AMBER_DAYS);
+  });
 }
 
 // 選了一區就把平面圖放大到那一區（K 2026-09-28：選位置之後動畫放大）。
@@ -395,9 +412,12 @@ function findMapAnimate() {
 // 開始搜尋時搜全部的狗（介面評估 P2：之前選的區還留著，搜到的比分頁上的數字少）；我的常溜照舊只搜常溜
 
 findState.findLastQuery = '';
-function findPageHtml(query) {
+function findQueryStart(query) {
   if (searchKey(query) && !searchKey(findState.findLastQuery) && findState.findZone !== 'fav') { findState.findZone = 'all'; findState.findCage = null; }
   findState.findLastQuery = query;
+}
+function findPageHtml(query) {
+  findQueryStart(query);
   const bar = findChipsHtml(query);
   const fav = findState.findZone === 'fav'; // 我的常溜一律用列表（#155）
   if (!fav && (findState.findView === 'map' || searchKey(query))) return bar + findMapHtml(query); // 搜尋時列表、平面圖都是地圖在上、結果在下
@@ -626,9 +646,40 @@ function whereOpen(dog, opener) {
   whereRender();
   whereBackdropEl().hidden = false;
   document.documentElement.classList.add('where-open');
+  wherePlace();
   pushOverlay('where');
   const first = document.querySelector('#whereSheet .where-btn.primary') || document.getElementById('whereDetail');
   if (first) first.focus({ preventScroll: true });
+}
+
+// 打開在哪的籠位被重畫換掉時，找畫面上這隻狗的籠位：手機狗卡／列表、電腦版全表與找狗都算
+function whereAnchor(dog) {
+  const i = appState.allDogs.indexOf(dog);
+  return document.querySelector(`#main [data-dog="${i}"] [data-where], #main [data-where][data-dog-i="${i}"]`);
+}
+
+// 電腦版（≥1100px，critique 2026-10-28 P1）：在哪是籠位旁的小卡，不從下面滑出。
+// 先放籠位右邊、放不下放左邊（詳細資訊抽屜裡的籠位就落在抽屜左邊），上緣對齊籠位、超出畫面往回推；
+// 兩邊都放不下才放上下。沒有籠位按鈕（導覽示範）就置中。手機、導覽中不算位置，照舊從下面滑出（CSS 只認 html.desk-on）
+function wherePlace() {
+  const sheet = document.getElementById('whereSheet');
+  const root = document.documentElement;
+  if (!sheet || !root.classList.contains('desk-on') || root.classList.contains('tour-open')) return;
+  const m = 16, gap = 8, W = sheet.offsetWidth, H = sheet.offsetHeight, vw = innerWidth, vh = innerHeight;
+  const clampY = y => Math.max(m, Math.min(vh - m - H, y));
+  const opener = findState.whereOpener && findState.whereOpener.isConnected ? findState.whereOpener : whereAnchor(findState.whereDog);
+  let x = (vw - W) / 2, y = clampY((vh - H) / 2);
+  if (opener) {
+    const r = opener.getBoundingClientRect();
+    if (r.right + gap + W <= vw - m) { x = r.right + gap; y = clampY(r.top - 12); }
+    else if (r.left - gap - W >= m) { x = r.left - gap - W; y = clampY(r.top - 12); }
+    else {
+      x = Math.max(m, Math.min(vw - m - W, r.left));
+      y = r.bottom + gap + H <= vh - m ? r.bottom + gap : clampY(r.top - gap - H);
+    }
+  }
+  sheet.style.setProperty('--where-x', `${Math.round(x)}px`);
+  sheet.style.setProperty('--where-y', `${Math.round(y)}px`);
 }
 
 function whereHide() {
@@ -639,8 +690,7 @@ function whereHide() {
   box.hidden = true;
   box.querySelector('.where-sheet').innerHTML = '';
   document.documentElement.classList.remove('where-open');
-  const card = document.querySelector(`#main [data-dog="${appState.allDogs.indexOf(dog)}"] [data-where]`);
-  const back = findState.whereOpener && findState.whereOpener.isConnected ? findState.whereOpener : card;
+  const back = findState.whereOpener && findState.whereOpener.isConnected ? findState.whereOpener : whereAnchor(dog);
   if (back) back.focus({ preventScroll: true });
   findState.whereOpener = null;
 }
@@ -650,7 +700,7 @@ function whereClose() {
 }
 registerOverlay('where', { isOpen: () => !!findState.whereDog, hide: whereHide });
 
-export { FIND_ZONES, FIND_FACILITIES, FIND_MAP_TURN, FIND_MAP_W, FIND_MAP_H, findTurn, findLabel, findZoneOf, findZoneInfo, findMatches, findSorted, findList, findMark, findDogHtml, findCageRowsHtml, findChipsHtml, findRowsHtml, FIND_MAP_GAP, FIND_MAP_PAD, FIND_OUTLINE, findFromLand, findToLand, findCageLayout, FIND_CAGES, FIND_CAGE_FS, findCageOf, findBandLabel, findMapSvg, findMapSvgNow, findMapTitle, findMapHtml, findMapBox, findMapAnimate, findPageHtml, findPickCage, FIND_ZOOM_STEPS, findZoomOpen, findZoomRender, findZoomShow, findZoomHide, findZoomClose, findZoomPick, whereBackdropEl, whereKnown, whereDirections, whereMapSvg, whereHtml, whereRender, whereOpen, whereHide, whereClose };
+export { FIND_ZONES, FIND_FACILITIES, FIND_MAP_TURN, FIND_MAP_W, FIND_MAP_H, findTurn, findLabel, findZoneOf, findZoneInfo, findMatches, findSorted, findList, findMark, findDogHtml, findCageRowsHtml, findChipsHtml, findRowsHtml, FIND_MAP_GAP, FIND_MAP_PAD, FIND_OUTLINE, findFromLand, findToLand, findCageLayout, FIND_CAGES, FIND_CAGE_FS, findCageOf, findBandLabel, findMapSvg, findMapSvgNow, findMapTitle, findMapCardHtml, findMapHtml, findLongUnwalked, findMapBox, findMapAnimate, findQueryStart, findPageHtml, findPickCage, FIND_ZOOM_STEPS, findZoomOpen, findZoomRender, findZoomShow, findZoomHide, findZoomClose, findZoomPick, whereBackdropEl, whereKnown, whereDirections, whereMapSvg, whereHtml, whereRender, whereOpen, wherePlace, whereHide, whereClose };
 export { findState } from './page-state.js';
 
 export function bindFind() {
@@ -730,4 +780,6 @@ export function bindFind() {
     if (e.key === 'Escape') { whereClose(); return; }
     trapFocus(e, [...document.querySelectorAll('#whereSheet button')]);
   });
+  // 等 desk.js 換好 desk-on、重畫完再算（從手機寬拉到電腦寬時 resize 比 media change 先到）
+  window.addEventListener('resize', () => { if (findState.whereDog) requestAnimationFrame(wherePlace); });
 }

@@ -41,6 +41,8 @@ module.exports = async (browser, base) => {
     return route.fulfill({ json: endpoint === 'rest' ? { rest: {} } : { ok: true, source: 'd1', walks: [], walkers: [] } });
   });
   const page = await ctx.newPage(); page.setDefaultTimeout(6000);
+  // 重開網頁：網址會記著資訊子頁與詳細資訊（ADR 0024），reload 會留在原畫面；這裡要的是重新打開網站
+  const reopen = options => page.goto(page.url().split('#')[0], options);
   page.on('pageerror', e => console.error(e.message));
   const openActivities = async () => {
     await page.locator('[data-tab="info"]').click();
@@ -117,7 +119,7 @@ module.exports = async (browser, base) => {
     assert.deepEqual(writes.at(-1), { method: 'DELETE', id: 'b'.repeat(31) + '1', body: { editor: '測試志工', revision: 1 } });
 
     // 重新整理後仍正確（從伺服器讀）
-    await page.reload();
+    await reopen();
     await openActivities();
     assert.deepEqual(await titles(), ['2026/10/11（日） 認養會']);
     assert.deepEqual(await page.locator('.act-item .act-dogs li').allTextContents(), ['舊名單阿福（還沒對上狗）', '測試狗3']);
@@ -131,7 +133,7 @@ module.exports = async (browser, base) => {
 
     // 沒選名字：請先選名字，不送出
     await page.evaluate(() => { sessionStorage.setItem('test-no-name', '1'); localStorage.removeItem('bq-walker-name'); });
-    await page.reload();
+    await reopen();
     await openActivities();
     const before = writes.length;
     await page.getByRole('button', { name: '＋ 新增活動' }).click();

@@ -24,6 +24,8 @@ module.exports = async (browser, base) => {
     return route.fulfill({ json: endpoint === 'dogs' ? data : endpoint === 'rest' ? { rest: {} } : { ok: true, source: 'd1', walks: [], walkers: [] } });
   });
   const page = await context.newPage(); page.setDefaultTimeout(6000);
+  // 重開網頁：詳細資訊開著時網址是 #dog/<編號>（ADR 0024），reload 會留在那隻狗；這裡要的是重新打開網站
+  const reopen = options => page.goto(page.url().split('#')[0], options);
   // 一行一件事、同一天同一種事不重複
   const lines = async section => {
     const rows = await section.locator('.stay-lines li').allTextContents();
@@ -103,7 +105,7 @@ module.exports = async (browser, base) => {
     for (const test of cases) {
       Object.assign(data.dogs[0], { intakeEvents: [] }, test);
       await page.setViewportSize({ width: 390, height: 844 });
-      await page.reload();
+      await reopen();
       await page.locator('#main .card').first().click();
       assert.deepEqual(await lines(section), test.expected);
       assert.equal(await section.locator('.content').count(), test.intro ? 1 : 0);
