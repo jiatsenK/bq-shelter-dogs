@@ -13,7 +13,6 @@ const sources = await Promise.all((await readdir(SRC, { recursive: true })).map(
 // 已知例外：鍵是「檔名: SQL 開頭」，值寫為什麼可以，或要修的票號。修掉就把這一行刪掉。
 const FULL_SCAN_OK = {
   'activities.js: SELECT activity_id, activity_date, kind, revision FROM v3_activities': 'readActivities 只在活動版本號變更或 Worker 冷啟動時重建清單；同版本使用記憶體快取',
-  'activities.js: DELETE FROM v3_activity_guard': '活動更新／刪除 batch 的交易檢查表；同一 batch 只插入 1 列並清空，筆數不隨活動總數成長',
   "compact.js: SELECT m.row_index, m.dog_id, m.number, m.name, m.cage, m.note, m.walked_date, m.walker_codes, c.sex AS dog_sex, COALESCE(i.intro, '') AS d1_intro, c.fixed_care, es.revision AS edit_revision, p.object_key AS photo_key FROM v3_sheet_main m": 'ADR 0009／0014：readDogsPayload 只在 small 版本變更、需要重建在所資料包時讀取',
   'compact.js: SELECT column_index, label, names FROM v3_sheet_group_columns': 'ADR 0009／0014：readDogsPayload 只在 small 版本變更、需要重建在所資料包時讀取',
   'compact.js: SELECT label, text FROM v3_sheet_changes': 'ADR 0009／0014：readDogsPayload 只在 small 版本變更、需要重建在所資料包時讀取',
@@ -21,7 +20,6 @@ const FULL_SCAN_OK = {
   'dog-list.js: SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,m.walker_codes,s.revision FROM v3_sheet_main m': 'GAS 編輯觸發／保險掃描補送（≤10 單位一批）才跑；網站讀取與登記不跑，applyGroup 需完整主清單核對狗名（#501）',
   'dog-list.js: SELECT row_index,label,text FROM v3_sheet_changes': 'GAS 只在主清單下方異動紀錄被編輯或掃描發現指紋不同才讀（#501）；只寫有變的段（#554）',
   'identity.js: SELECT volunteer_id,name FROM v3_volunteers': 'linkIdentityName 僅首次遇到尚無對照的代號才核對既有名字（NFKC）；已有代號由 code 索引返回，不在一般身分請求跑',
-  'identity.js: DELETE FROM v3_identity_guard': '更名／合併 batch 的交易檢查表；同一 batch 只插入 1 列並清空，筆數不隨志工總數成長',
   'packs.js: SELECT number,name,walked_date,walker_codes FROM v3_sheet_main': '#679 溜狗日期包只在 walked 版本變更、需要重建時讀主清單（約 120 列）；沒變只讀 1 列版本號',
   'packs.js: SELECT year,seq,vers,body FROM v3_walk_summaries': 'ADR 0013：yearSummaries 只在記憶體缺少摘要或月份版本變更才讀，按年存分段摘要，不讀溜狗歷史整表',
   'today-walks/read.js: SELECT row_index, number, name, walked_date, walker FROM v3_sheet_main': '#519 /walkers 要每隻狗的誰遛的，約 300 列；每個 Worker 1 分鐘最多讀一次（取代每分鐘讀 gviz）',

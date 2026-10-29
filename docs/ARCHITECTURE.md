@@ -85,7 +85,7 @@ flowchart LR
 - 人工改表：管理者改主清單、已出所、常遛狗群，Apps Script 記下待通知送給志工網站寫進 D1，ACK 才清（`apps-script/sheet-write.gs:317-343`；`worker/src/index.js:848-873`）。D1 裡是試算表內容的複本。見「流程｜試算表改動回到 D1」。
 - 備註、異動紀錄・網站新增：例外，不先存 D1。志工網站等 Apps Script 追加完才回志工，失敗不重試（`worker/src/index.js:565-581`；`apps-script/sheet-write.gs:48-55`）。程式寫表不會觸發編輯觸發，所以要等下一次狗清單保險掃描才進 D1，最久約 10 小時（`apps-script/sheet-write.gs:275`）。
 - 照片：志工（照片開關開啟時）或管理者上傳原圖＋前端做好的縮圖，存 R2，D1 記主照片指標；換掉的先備份到 `trash/`，照片垃圾桶每月 1 日清 30 天以上的（`worker/src/dog-photo.js:64-91`；`worker/src/r2.js:8-10`）。沒縮圖時網站顯示原圖，補縮圖要手動跑 r2-thumbs（`.github/workflows/r2-thumbs.yml:1-5`）。
-- 狗資料（介紹、休養、固定照顧、出入所）、活動、功能開關、分享次數：志工（看功能開關）或管理者寫，只存 D1、不寫回試算表；狗資料寫入前先比對版本（`worker/src/dog-edit.js:20-26`；`worker/src/feature-settings.js:39`；`worker/src/share-counts.js:7-13`）。
+- 狗資料（介紹、休養、固定照顧、出入所）、活動、功能開關、分享次數：志工（看功能開關）或管理者寫，只存 D1、不寫回試算表；狗資料寫入前先比對版本（`worker/src/dog-edit.js:17-19`、`worker/src/conditional-batch.js:5-11`；`worker/src/feature-settings.js:39`；`worker/src/share-counts.js:7-13`）。
 - 修改紀錄跟著每個寫入動作同一批寫進 D1，來源分志工、試算表、管理者三種（`worker/src/editlog.js:64-84`）；保留 14 天（合併狗快照永久保留），每天 09:23 那次排程清一次（`worker/src/editlog.js:97-102`）。
 
 ## 一天裡的排程
@@ -330,9 +330,9 @@ flowchart LR
 - 志工網站框內（今日溜狗紀錄在共用框，管理網站也讀它的停住清單）：今日溜狗紀錄 → 狗清單同步（`worker/src/today-walks/version.js:4`）；狗清單同步 → 今日溜狗紀錄（`worker/src/dog-list.js:14`）；今日溜狗紀錄 → 試算表呼叫（`worker/src/today-walks/index.js:7`、`worker/src/today-walks/dispatch.js:4`）；今日溜狗紀錄 → 志工身分（`worker/src/today-walks/accept.js:3`）；狗清單同步 → 志工身分（`worker/src/dog-list.js:13`）；讀取打包 → 志工身分（`worker/src/compact.js:1`）。
 - 往共用與外部：狗清單同步 → 狗資料與照片（`worker/src/dog-list.js:1`）；讀取打包 → 狗資料與照片（`worker/src/compact.js:2`）；試算表呼叫 → Apps Script（`worker/src/sheet-write.js:32`）；狗資料與照片 → R2（`worker/src/r2.js:36`）。
 - 管理網站：管理入口 → 管理查詢（`worker/src/admin/index.js:7, 9-10, 12-13`）；管理入口 → Cloudflare Access（`worker/src/admin/access.js:28`）；管理入口 → 設定・活動・分享（`worker/src/admin/index.js:5, 8, 14`）；管理入口 → 狗資料與照片（`worker/src/admin/index.js:1-4, 15`）；管理入口 → 今日溜狗紀錄（`worker/src/admin/index.js:11`、`worker/src/admin/index.js:117`）；管理查詢 → 設定・活動・分享（`worker/src/admin/activities.js:3`、`worker/src/admin/checks.js:4`）。
-- D1 的線省略不畫：進入點、今日溜狗紀錄、狗清單同步、讀取打包、志工身分、設定・活動・分享、狗資料與照片、管理查詢都直接讀寫 D1（例如 `worker/src/today-walks/shared.js:10`、`worker/src/packs.js:69`、`worker/src/identity.js:6`、`worker/src/feature-settings.js:13`、`worker/src/dog-edit.js:26`、`worker/src/admin/checks.js:27`）。
+- D1 的線省略不畫：進入點、今日溜狗紀錄、狗清單同步、讀取打包、志工身分、設定・活動・分享、狗資料與照片、管理查詢都直接讀寫 D1（例如 `worker/src/today-walks/shared.js:10`、`worker/src/packs.js:69`、`worker/src/identity.js:7`、`worker/src/feature-settings.js:13`、`worker/src/dog-edit.js:11`、`worker/src/admin/checks.js:27`）。
 - 修改紀錄 editlog.js 也省略不畫：寫資料的模組都匯入它，紀錄跟資料同一批寫進 D1（`worker/src/index.js:18`、`worker/src/today-walks/version.js:3`、`worker/src/dog-list.js:9`、`worker/src/identity.js:1`、`worker/src/dog-edit.js:2`、`worker/src/admin/edits.js:5`、`worker/src/admin/activities.js:5`）。
-- 沒畫：同一框內的匯入（例如 today-walks/ 裡 scan.js 呼叫 observe.js）；小工具 sync-plan.js（台灣日期）、sheet-read.js（拆名字）、test-site.js（測試網站換外觀）；只拿常數的匯入：狗清單同步拿讀取打包的 SYNCED_AT_KEY（`worker/src/dog-list.js:12`），管理查詢拿 EXTRA_KEY（`worker/src/admin/checks.js:3`）。各前端模組怎麼拆見 `public/js/README.md`。
+- 沒畫：同一框內的匯入（例如 today-walks/ 裡 scan.js 呼叫 observe.js）；小工具 sync-plan.js（台灣日期）、sheet-read.js（拆名字）、test-site.js（測試網站換外觀）、conditional-batch.js（有條件 batch：活動、身分、狗資料與合併送出時資料沒被別人改過才寫，`worker/src/activities.js:5`、`worker/src/identity.js:2`、`worker/src/dog-edit.js:3`、`worker/src/dog-merge.js:12`）；只拿常數的匯入：狗清單同步拿讀取打包的 SYNCED_AT_KEY（`worker/src/dog-list.js:12`），管理查詢拿 EXTRA_KEY（`worker/src/admin/checks.js:3`）。各前端模組怎麼拆見 `public/js/README.md`。
 
 ## 決策｜志工溜狗表
 

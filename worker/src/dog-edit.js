@@ -1,5 +1,6 @@
 import { cleanStayTable, stayTable, storedStays } from './stays.js';
 import { editLogWrites } from './editlog.js';
+import { batchIf } from './conditional-batch.js';
 
 export const editError = (status, message) => Object.assign(new Error(message), { status });
 const conflict = () => editError(409, '這隻狗的資料已變更，草稿仍保留；請重新讀取後核對再儲存');
@@ -13,19 +14,9 @@ export async function dogIdentity(db, key) {
 }
 // GAS may have prepared a change while a human removed an old number. Check
 // its observed identity version inside the same D1 transaction as those writes.
-export async function guardedDogBatch(db, expected, statements) {
-  if (!expected) return db.batch(statements);
-  const id = crypto.randomUUID();
-  const result = await db.batch([
-    db
-      .prepare(
-        'INSERT INTO v3_dog_edit_guard(id,valid) VALUES(?,EXISTS(SELECT 1 FROM v3_dog_edit_state WHERE dog_id=? AND revision=?))'
-      )
-      .bind(id, expected.dog_id, expected.revision),
-    ...statements,
-    db.prepare('DELETE FROM v3_dog_edit_guard WHERE id=?').bind(id)
-  ]);
-  return result.slice(1, -1);
+export const dogRevisionIs = (dogId, revision) => ({ sql: 'EXISTS(SELECT 1 FROM v3_dog_edit_state WHERE dog_id=? AND revision=?)', args: [dogId, revision] });
+export function guardedDogBatch(db, expected, statements) {
+  return batchIf(db, expected ? [dogRevisionIs(expected.dog_id, expected.revision)] : [], statements);
 }
 // A single statement provides the complete editable snapshot and its CAS version.
 export async function readDogEdit(db, dogId) {

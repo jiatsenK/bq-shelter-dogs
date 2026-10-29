@@ -2,6 +2,8 @@
 // 任何人選好名字就能新增、修改、刪除（ADR 0004），index.js 記編輯紀錄。不寫試算表，同步不碰。
 // 出席的狗用永久 ID（dog_id）；舊名單對不上的只存名字（dog_id 是 NULL），之後再接上。
 
+import { batchIf, isConflict } from './conditional-batch.js';
+
 export const ACTIVITY_KINDS = { kids: '動保小小兵', adoption: '認養會' };
 export const ACTIVITY_MAX_DOGS = 60;
 const DOG_NAME_MAX = 20;
@@ -139,37 +141,38 @@ async function readUnchanged(db, id, revision) {
   if (before.revision !== revision) throw new ActivityError(409, CHANGED);
   return before;
 }
-const guard = (db, id, revision) => db.prepare('INSERT INTO v3_activity_guard SELECT CASE WHEN revision=? THEN 1 ELSE 0 END FROM v3_activities WHERE activity_id=?').bind(revision, id);
-
-async function batchUnlessChanged(db, statements) {
+// 送出時還是同一版才寫（#745）：讀完後被改、被刪都整批回復
+async function batchUnlessChanged(db, id, revision, statements) {
   try {
-    return await db.batch(statements);
+    return await batchIf(db, [{ sql: unchangedWhen, args: [id, revision] }], statements);
   } catch (e) {
-    if (/CHECK constraint|FOREIGN KEY/i.test(e.message)) throw new ActivityError(409, CHANGED);
+    if (isConflict(e)) throw new ActivityError(409, CHANGED);
     throw e;
   }
 }
 
 export async function updateActivity(db, id, revision, { date, kind, dogs }, audit) {
   const before = await readUnchanged(db, id, revision);
-  await batchUnlessChanged(db, [
-    guard(db, id, revision),
+  await batchUnlessChanged(db, id, revision, [
     ...auditOf(audit, { before, after: { date, kind, dogs } }, unchangedWhen, [id, revision]),
     db.prepare('UPDATE v3_activities SET activity_date=?, kind=?, revision=revision+1 WHERE activity_id=?').bind(date, kind, id),
     db.prepare('DELETE FROM v3_activity_dogs WHERE activity_id=?').bind(id),
     ...insertDogs(db, id, dogs),
-    db.prepare('DELETE FROM v3_activity_guard'),
   ]);
   return { before, after: await readActivity(db, id) };
 }
 
 export async function deleteActivity(db, id, revision, audit) {
   const before = await readUnchanged(db, id, revision);
-  const statements = [guard(db, id, revision), ...auditOf(audit, { before, after: null }, unchangedWhen, [id, revision])];
-  const removeAt = statements.push(db.prepare('DELETE FROM v3_activities WHERE activity_id=?').bind(id)) - 1;
-  statements.push(db.prepare('DELETE FROM v3_activity_guard'));
-  const results = await batchUnlessChanged(db, statements);
-  // 讀完到寫入之間被別人刪掉：什麼都沒刪，不回成功（只在管理網站檢查，志工網站行為不變）
-  if (audit && !results[removeAt].meta.changes) throw new ActivityError(404, '找不到這場活動（可能已經被刪掉），請重新整理');
+  try {
+    await batchUnlessChanged(db, id, revision, [
+      ...auditOf(audit, { before, after: null }, unchangedWhen, [id, revision]),
+      db.prepare('DELETE FROM v3_activities WHERE activity_id=?').bind(id),
+    ]);
+  } catch (e) {
+    // 讀完到寫入之間被別人刪掉：管理網站回 404，志工網站照舊回成功
+    if (e.status !== 409 || await readActivity(db, id)) throw e;
+    if (audit) throw new ActivityError(404, '找不到這場活動（可能已經被刪掉），請重新整理');
+  }
   return { before };
 }
