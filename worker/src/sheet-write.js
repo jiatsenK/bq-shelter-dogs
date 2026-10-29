@@ -21,7 +21,8 @@ export class SheetWriteError extends Error {
 }
 
 // 送一個動作給小程式，回小程式的回應（ok 一定是 true）；任何失敗都丟 SheetWriteError，訊息可以直接給志工看
-export async function callSheet(env, body) {
+// send：送出 HTTP 的方式，正式就是 fetch；測試換成跑真的 sheet-write.gs（worker/test/apps-script.mjs，#748）
+export async function callSheet(env, body, send = fetch) {
   if (!SHEET_ACTIONS.has(body && body.action)) throw new Error(`小程式沒有這個動作：${body && body.action}`);
   const url = env && env.SHEET_WRITE_URL ? String(env.SHEET_WRITE_URL) : '';
   if (!url) throw new SheetWriteError('還沒設定寫入試算表', 503, 'off');
@@ -29,7 +30,7 @@ export async function callSheet(env, body) {
   let res, out = null;
   try {
     // Apps Script 回應會先轉址到 googleusercontent.com，fetch 會自己跟過去
-    res = await fetch(url, {
+    res = await send(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

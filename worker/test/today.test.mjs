@@ -6,33 +6,28 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { fakeD1 } from './fakes.mjs';
 import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
+import { appsScript } from './apps-script.mjs';
 
 const SITE = 'https://bq-shelter-dogs.example.workers.dev';
 
+// 接真的 sheet-write.gs（apps-script.mjs）；主清單有籠位、備註欄，備註、異動紀錄才寫得進去。小程式沒設金鑰
+let gas;
 async function makeEnv() {
   const DB = fakeD1();
   await createCompactDatabase(DB);
-  return { DB, SHEET_WRITE_URL: 'https://script.example/exec' };
+  const env = { DB, SHEET_WRITE_URL: 'https://script.example/exec' };
+  gas = appsScript(env, { header: ['籠位', '編號', '犬名', '遛狗日期', '誰遛的', '備註'], rows: [['A1', '9001', '甲', '2026/10/1', '', '']], key: '' });
+  return env;
 }
-let calls = [];
-test.beforeEach(t => {
-  worker.testing.resetState();
-  const real = globalThis.fetch;
-  calls = [];
-  globalThis.fetch = async (url, init = {}) => {
-    calls.push(JSON.parse(init.body));
-    return new Response(JSON.stringify({ ok: true, results: [] }));
-  };
-  t.after(() => { globalThis.fetch = real; });
-});
+test.beforeEach(() => worker.testing.resetState());
 
 let ip = 0;
 const post = async (env, body) => {
-  const res = await worker.fetch(new Request(`${SITE}/api/walk`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'application/json', 'CF-Connecting-IP': `9.9.9.${++ip}` }, body: JSON.stringify(body) }), env);
+  const res = await gas.worker.fetch(new Request(`${SITE}/api/walk`, { method: 'POST', headers: { Origin: SITE, 'Content-Type': 'application/json', 'CF-Connecting-IP': `9.9.9.${++ip}` }, body: JSON.stringify(body) }), env);
   return { status: res.status, body: await res.json() };
 };
 const get = async (env, path) => {
-  const res = await worker.fetch(new Request(`${SITE}/api${path}`, { headers: { Origin: SITE } }), env);
+  const res = await gas.worker.fetch(new Request(`${SITE}/api${path}`, { headers: { Origin: SITE } }), env);
   return { status: res.status, body: await res.json() };
 };
 const oldTable = async env => ({
@@ -55,7 +50,7 @@ test('舊網頁按溜了、修改、復原（沒帶 requestId）：回 410 請�
     assert.equal(r.body.ok, false);
     assert.match(r.body.error, /重新整理/);
   }
-  assert.deepEqual(calls, []);
+  assert.deepEqual(gas.calls, []);
   assert.deepEqual(await oldTable(env), before);
 });
 
@@ -70,7 +65,10 @@ test('備註、異動紀錄沒有 requestId 照常走試算表，不受影響', 
   const env = await makeEnv();
   assert.equal((await post(env, { action: 'note', walker: 'K', text: '很乖', dogs: [{ id: '9001', name: '甲' }] })).status, 200);
   assert.equal((await post(env, { action: 'log', walker: 'K', text: '移籠' })).status, 200);
-  assert.deepEqual(calls.map(c => c.action), ['note', 'log']);
+  assert.deepEqual(gas.calls.map(c => c.action), ['note', 'log']);
+  const [, dog, log] = gas.values();
+  assert.match(dog[5], /很乖（K）$/);
+  assert.deepEqual([log[0], log[1].endsWith('移籠（K）')], ['備註1', true]);
 });
 
 test('GET /today 不帶 source=d1：回 410 請重新整理，不讀 v3_today_walks；帶 source=d1 照常', async () => {

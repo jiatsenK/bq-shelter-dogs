@@ -17,8 +17,6 @@ test('#519 GET /walkers 從 D1 回每隻狗的誰遛的、日期與名字；最�
     DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(2,'d2','9002','甜甜','2026-09-01'),(3,'d3','','新來的',NULL)"),
     DB.prepare('UPDATE v3_sheet_main SET walker_codes=json_array(?,?) WHERE row_index=2').bind(await code('丙'), await code('甲')),
   ]);
-  const fetched = [];
-  globalThis.fetch = async url => { fetched.push(String(url)); throw new Error('不該連網路'); };
   assert.equal((await post(env, request('walkers-0001', '乙'))).status, 200);
   worker.testing.resetState();
 
@@ -29,7 +27,7 @@ test('#519 GET /walkers 從 D1 回每隻狗的誰遛的、日期與名字；最�
   assert.deepEqual(body.names, ['乙', '丙', '甲'], '今天遛的在前，同一天照表上順序');
   assert.ok(Date.parse(body.readAt));
   assert.equal(body.codes[await code('乙')], '乙');
-  assert.ok(!fetched.some(u => u.includes('docs.google.com')), '不讀試算表 gviz');
+  // 不讀試算表 gviz：standards.test.mjs #512 擋整個 worker/src
 });
 
 test('#519 GET /walkers：沒接資料庫回 off', async () => {

@@ -521,7 +521,7 @@ function cleanWalkDog(d, action) {
   return out;
 }
 
-async function writeWalks(request, env, origin, ctx) {
+async function writeWalks(request, env, origin, ctx, sheet = callSheet) {
   const cfg = config(env);
   const ip = request.headers.get('CF-Connecting-IP') || 'unknown';
   if (!allow(`walk:${ip}`, WALK_LIMITS, Date.now())) return fail(429, '太頻繁了，請稍等一下再試', origin);
@@ -549,7 +549,7 @@ async function writeWalks(request, env, origin, ctx) {
   if (dogs.some(d => !d)) return fail(400, '狗的資料不對', origin);
   if (accepted) {
     if (!shortText(input.walker, action === 'edit' ? 200 : WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, '要先選好身分', origin);
-    const walks = todayWalks(env);
+    const walks = todayWalks(env, { sheet });
     try {
       const result = await walks.accept({ ...input, dogs });
       // 沒有執行背景工作的 context 時仍保留 pending，不能等待 Google 才回接受。
@@ -569,7 +569,7 @@ async function writeWalks(request, env, origin, ctx) {
 
   let out;
   try {
-    out = await callSheet(env, body);
+    out = await sheet(env, body);
   } catch (e) {
     return sheetFail(e, origin);
   }
@@ -637,7 +637,7 @@ async function openedCards(request, env, origin) {
 // fetch 先做完共同的事（同網址或允許的來源、OPTIONS、預覽版不能寫），再查這張表：
 // 方法不對回 405 wrongMethod；run 丟錯回 crash（[狀態, 訊息, 額外欄位]），寫進日誌。
 // method 是 null 的，方法由 run 自己分（GET 讀、POST 寫）。改一隻狗的資料另外查 DOG_EDITS。
-// run(c)：c = { request, env, origin, path, url, cfg, ctx }（path 已拿掉 /api）
+// run(c)：c = { request, env, origin, path, url, cfg, ctx, sheet }（path 已拿掉 /api；sheet 見 createWorker）
 const DB_DOWN = { code: 'db' };
 const needDb = env => { if (!env || !env.DB) throw new Error('沒有 D1'); return env.DB; };
 const yearParam = (url, pattern, message) => {
@@ -736,7 +736,7 @@ const SITE_ROUTES = {
   '/walkers': { method: 'GET', wrongMethod: '溜狗人名字只能用 GET /walkers 讀', crash: [502, '暫時讀不到溜狗人'],
     run: ({ env, origin }) => getWalkers(env, origin) },
   '/walk': { method: 'POST', wrongMethod: '寫入試算表只能用 POST /walk', crash: [500, '寫入試算表發生錯誤'],
-    run: ({ request, env, origin, ctx }) => writeWalks(request, env, origin, ctx) },
+    run: ({ request, env, origin, ctx, sheet }) => writeWalks(request, env, origin, ctx, sheet) },
   '/walk/result': { method: 'GET', wrongMethod: '只能讀取登記結果', crash: [503, '暫時讀不到登記結果'],
     async run({ env, origin, url }) {
       if (!env?.DB) return fail(405, '只能讀取登記結果', origin);
@@ -759,17 +759,17 @@ async function siteRoute(route, c) {
   }
 }
 
-export default {
+const entry = {
   // 自動測試用（worker/test/worker.test.mjs）；Cloudflare 只會用到下面的 fetch 和 scheduled
   testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, maintenance },
 
   // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 wrangler.jsonc 的 triggers）
   // RETRY_CRON 寫回重試；SCAN_CRON 保險掃描，每天第一次順便清修改紀錄、每月 1 日第一次再清照片垃圾桶；沒帶 cron（測試）跑溜狗兩件。
   // 每件跑完或出錯都記時間給管理網站看（worker/src/cron-status.js）
-  async scheduled(event, env, ctx) {
+  async scheduled(event, env, ctx, sheet) {
     const now = event && event.scheduledTime ? event.scheduledTime : Date.now();
     const cron = event && event.cron;
-    const walks = todayWalks(env, { now: () => now });
+    const walks = todayWalks(env, { sheet, now: () => now });
     const retry = () => recordRun(env, 'retry', now, () => walks.dispatchDue());
     const scan = () => recordRun(env, 'scan', now, () => walks.scan());
     if (!cron) ctx.waitUntil(scan().then(retry));
@@ -781,7 +781,7 @@ export default {
     }
   },
 
-  async fetch(request, env, ctx) {
+  async fetch(request, env, ctx, sheet) {
     const cfg = config(env);
     const url = new URL(request.url);
     const origin = request.headers.get('Origin') || '';
@@ -910,7 +910,7 @@ export default {
     }
 
     const route = Object.hasOwn(SITE_ROUTES, path) ? SITE_ROUTES[path] : null;
-    if (route) return siteRoute(route, { request, env, origin: allowed, path, url, cfg, ctx });
+    if (route) return siteRoute(route, { request, env, origin: allowed, path, url, cfg, ctx, sheet });
     // 改一隻狗的資料（DOG_EDITS）：/rest/編號、/fixed-care/編號、/intro/編號、/former/編號、/stays/編號
     const editName = (path.match(/^\/([^/]+)\/[^/]*$/) || [])[1]; // 編號空白也接住，回「狗狗編號格式不對」
     const dogEdit = editName && Object.hasOwn(DOG_EDITS, editName) ? DOG_EDITS[editName] : null;
@@ -952,3 +952,13 @@ export default {
     }
   },
 };
+
+// 建立 Worker（#748）：sheet 是叫 Apps Script 小程式的方式（今日溜狗紀錄寫回、保險掃描用的 todayWalks sheet，還有備註、異動紀錄），
+// 正式就是 sheet-write.js 的 callSheet；測試換成跑真的 apps-script/sheet-write.gs 的共用 fixture（worker/test/apps-script.mjs）。
+// Cloudflare 用下面預設的那一份
+export const createWorker = ({ sheet = callSheet } = {}) => ({
+  ...entry,
+  scheduled: (event, env, ctx) => entry.scheduled(event, env, ctx, sheet),
+  fetch: (request, env, ctx) => entry.fetch(request, env, ctx, sheet),
+});
+export default createWorker();

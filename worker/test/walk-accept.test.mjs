@@ -2,18 +2,18 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { setup, request, post, current, day } from './walk-fixture.mjs';
+import { appsScript } from './apps-script.mjs';
 import { readFile } from 'node:fs/promises';
 import { readdir } from 'node:fs/promises';
 test.beforeEach(() => worker.testing.resetState());
 test('D1 接受後立即讀到日期、名單與同步中，不必等 Google', async () => {
-  const env = await setup();
+  const env = await setup(), gas = appsScript(env);
   const tasks = [];
-  const real = globalThis.fetch;
-  // 背景派送可能在測試結束後才呼叫 fetch：先放行的話，晚到的呼叫也立刻失敗，不會卡住。
+  // 背景派送卡在網路上：先放行的話，晚到的呼叫也立刻失敗，不會卡住。
   let release, released = false;
-  globalThis.fetch = () => new Promise((_, reject) => { release = () => reject(new Error('Google unavailable')); if (released) release(); });
+  gas.network = () => new Promise((_, reject) => { release = () => reject(new Error('Google unavailable')); if (released) release(); });
   try {
-    const out = await post(env, request('request-0001'), { waitUntil: p => tasks.push(p) });
+    const out = await post(env, request('request-0001'), { waitUntil: p => tasks.push(p) }, gas.worker);
     assert.equal(out.status, 200);
     assert.equal(out.body.results[0].status, 'written');
     assert.equal(out.body.results[0].accepted, true);
@@ -22,7 +22,7 @@ test('D1 接受後立即讀到日期、名單與同步中，不必等 Google', a
     assert.equal(data.walks[0].walkedDate, day());
     assert.ok(['pending','dispatching'].includes(data.walks[0].syncStatus));
     assert.equal(tasks.length, 1);
-  } finally { released = true; release?.(); await Promise.all(tasks); globalThis.fetch = real; env.DB.close(); }
+  } finally { released = true; release?.(); await Promise.all(tasks); env.DB.close(); }
 });
 
 test('同狗並行保留兩人；同識別重送零寫入；內容不同拒絕', async () => {
@@ -57,16 +57,18 @@ test('接受交易任一步失敗皆回復；預算不足不留半份狀態', as
 // #591：寫入預算只看單次上限與每日保留量，不查 Cloudflare 帳號用量，也不每次記警告
 test('#591 預算不查帳號用量、不記警告；每日保留量照擋', async () => {
   const env = { ...await setup(), CLOUDFLARE_API_TOKEN: 't', CLOUDFLARE_ACCOUNT_ID: 'a' };
-  const real = globalThis.fetch, warn = console.warn, calls = [], warns = [];
-  globalThis.fetch = async url => { calls.push(String(url)); return Response.json({}); };
+  const warn = console.warn, warns = [];
   console.warn = (...a) => warns.push(a.join(' '));
   try {
+    // Worker 程式沒有任何地方叫 Cloudflare 的 API 查用量
+    const src = new URL('../src/', import.meta.url);
+    for (const file of (await readdir(src, { recursive: true })).filter(f => f.endsWith('.js')))
+      assert.doesNotMatch(await readFile(new URL(file.replaceAll('\\', '/'), src), 'utf8'), /api\.cloudflare\.com/, file);
     assert.equal((await post(env, request('budget-0101'))).status, 200);
-    assert.deepEqual(calls.filter(u => u.includes('api.cloudflare.com')), []);
     assert.deepEqual(warns.filter(w => w.includes('walk-budget')), []);
     const reserved = (await env.DB.prepare('SELECT reserved FROM v3_walk_write_budget').first()).reserved;
     assert.equal((await post({ ...env, SYNC_DAILY_BUDGET: String(reserved) }, request('budget-0102', '乙'))).status, 503);
-  } finally { console.warn = warn; globalThis.fetch = real; env.DB.close(); }
+  } finally { console.warn = warn; env.DB.close(); }
 });
 
 test('空白拆名沿用既有規則與固定身分；午夜保留最新狀態且拒絕重放昨天操作', async () => {
