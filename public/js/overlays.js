@@ -40,6 +40,11 @@ export function forgetOverlay(name) {
   if (history.state && history.state[keyOf(name)]) history.replaceState(null, '');
 }
 
+// 換掉目前這一筆，不新增（電腦版資訊換過子頁再轉成手機按回資訊）
+export function replacePage(state) {
+  history.replaceState(state, '');
+}
+
 // 頁籤、資訊子頁：先把目前這頁記好，再多一筆新的，返回回到 current
 export function pushPage(current, next) {
   history.replaceState(current, '');
