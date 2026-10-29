@@ -36,9 +36,13 @@ test('不成立、NULL、資料列不見都擋下，整批回復', async t => {
   assert.equal(await guardRows(db), 0);
 });
 
-test('沒有條件時照常寫；外鍵擋下算衝突，其他錯誤不算', async t => {
+test('沒有條件時照常寫；外鍵擋下算衝突，NOT NULL 等程式錯誤不算；UNIQUE 要呼叫端指定才算', async t => {
   const db = await makeDb(t);
   assert.equal((await batchIf(db, [], [write(db)]))[0].meta.changes, 1);
   await assert.rejects(batchIf(db, [], [db.prepare("INSERT INTO v3_activity_dogs(activity_id,position,name) VALUES('missing',0,'狗')")]), e => isConflict(e));
+  await assert.rejects(batchIf(db, [], [db.prepare("INSERT INTO v3_activities(activity_id,activity_date,kind) VALUES('a',NULL,'kids')")]), e => !isConflict(e) && !isConflict(e, { unique: true }), 'NOT NULL');
   await assert.rejects(batchIf(db, [], [db.prepare('SELECT * FROM no_such_table')]), e => !isConflict(e));
+  const duplicate = () => batchIf(db, [], [db.prepare('INSERT INTO t VALUES (1, 0)')]);
+  await assert.rejects(duplicate(), e => !isConflict(e), 'UNIQUE 預設不算');
+  await assert.rejects(duplicate(), e => isConflict(e, { unique: true }), 'UNIQUE 指定後算');
 });

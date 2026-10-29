@@ -138,7 +138,7 @@ function checkInput(input, keys, actor) {
 // 寫入被約束擋下（版本不對、外鍵、主鍵撞到）整批不寫，回 409 讓管理者重新讀取
 async function runBatch(db, conditions, writes, message) {
   try { return await batchIf(db, conditions, writes); }
-  catch (error) { if (isConflict(error)) throw editError(409, message); throw error; }
+  catch (error) { if (isConflict(error, { unique: true })) throw editError(409, message); throw error; }
 }
 
 export async function mergeDogs(db, targetId, input, { actor } = {}) {

@@ -154,15 +154,35 @@ test('名字對照的版本號由程式加 1：建立、更名、合併各加一
  assert.equal((await call(env,'/identity/merge',{...body,token:fresh.token,operationId:'merge-ok'})).status,200);assert.equal(await revision(),r+1,'合併');
  assert.equal((await call(env,'/identity',{name:'甲'})).identity.volunteerId,b.volunteerId);
 });
-// #745 版本列不見時 guard 也要擋（以前 SELECT 不到列、guard 插 0 列就放行）
-test('送出前版本列不見：更名被擋、名字不變',async t=>{
+// #745 版本列不見、版本是 NULL 時 guard 也要擋（以前 SELECT 不到列、guard 插 0 列就放行）
+test('送出前版本列不見或是 NULL：更名、合併都被擋，資料不變',async t=>{
  worker.testing.resetState();const DB=fakeD1();t.after(()=>DB.close());await createCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};
- const a=(await call(env,'/identity',{name:'甲'})).identity;
- let race=()=>DB.prepare('DELETE FROM v3_identity_revision').run();
- const racing={...env,DB:{...DB,async batch(list){if(race){const f=race;race=null;await f();}return DB.batch(list);}}};
- assert.equal((await call(racing,'/identity/rename',{code:a.codes[0],name:'甲二',operationId:'no-revision'})).status,409);
- assert.equal(race,null,'版本列確實在讀完後被刪');
- assert.equal((await DB.prepare('SELECT name FROM v3_volunteers WHERE volunteer_id=?').bind(a.volunteerId).first()).name,'甲');
+ const a=(await call(env,'/identity',{name:'甲'})).identity, b=(await call(env,'/identity',{name:'乙'})).identity;
+ // 只在送出有條件的那個 batch（guard 句是 … IS NOT 1）前插進 race；讀取不受影響
+ let race=null;
+ const tag=(st,sql)=>({...st,sql,bind:(...args)=>tag(st.bind(...args),sql)});
+ const racing={...env,DB:{...DB,prepare:sql=>tag(DB.prepare(sql),sql),async batch(list){
+  if(race&&list.some(s=>/IS NOT 1$/.test(s.sql||''))){const f=race;race=null;await f();}
+  return DB.batch(list);
+ }}};
+ const restore=()=>DB.batch([DB.prepare('DROP TABLE v3_identity_revision'),DB.prepare('CREATE TABLE v3_identity_revision (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL)'),DB.prepare('INSERT INTO v3_identity_revision VALUES(1,100)')]);
+ const missing=()=>DB.prepare('DELETE FROM v3_identity_revision').run();
+ // 正式表的 revision 是 NOT NULL；換成允許 NULL 的表模擬「條件算出 NULL」
+ const nulled=()=>DB.batch([DB.prepare('DROP TABLE v3_identity_revision'),DB.prepare('CREATE TABLE v3_identity_revision (id INTEGER PRIMARY KEY, revision INTEGER)'),DB.prepare('INSERT INTO v3_identity_revision VALUES(1,NULL)')]);
+ const nameOf=async id=>(await DB.prepare('SELECT name FROM v3_volunteers WHERE volunteer_id=?').bind(id).first()).name;
+ for(const [label,f,op] of [['版本列不見',missing,'missing'],['版本是 NULL',nulled,'null']]){
+  await restore();race=f;
+  assert.equal((await call(racing,'/identity/rename',{code:a.codes[0],name:'甲二',operationId:'rename-'+op})).status,409,label);
+  assert.equal(race,null,label+'：確實插在讀取與寫入之間');
+  assert.equal(await nameOf(a.volunteerId),'甲',label);
+  await restore();
+  const preview=await call(env,'/identity/merge-preview',{code:a.codes[0],targetCode:b.codes[0]});assert.equal(preview.status,200);
+  race=f;
+  assert.equal((await call(racing,'/identity/merge',{code:a.codes[0],targetCode:b.codes[0],token:preview.token,confirm:true,operationId:'merge-'+op})).status,409,label);
+  assert.equal(race,null,label+'：合併確實插在讀取與寫入之間');
+  assert.equal(await nameOf(a.volunteerId),'甲',label+'：沒有合併');
+  assert.equal((await DB.prepare('SELECT COUNT(*) AS n FROM v3_identity_redirects').first()).n,0,label);
+ }
 });
 test('#680 依志工找名字走索引；身分查詢合成一句，回應與分開查相同', async t => {
  const DB=fakeD1();t.after(()=>DB.close());await createCompactDatabase(DB);const env={DB,WALKER_KEY:'test-key'};

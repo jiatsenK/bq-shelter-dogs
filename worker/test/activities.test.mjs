@@ -88,10 +88,10 @@ test('刪除：整場連出席名單一起刪，記改前內容；舊 revision�
 test('讀完後活動被別人刪掉：修改回 409 不留紀錄；刪除照舊回成功', async () => {
   const env = await makeEnv();
   let race = null;
-  // 只在送出有 guard 的那個 batch 前插進刪除（讀取也走 batch）
+  // 只在送出有條件的那個 batch（guard 句是 … IS NOT 1）前插進刪除；讀取也走 batch
   const tag = (st, sql) => ({ ...st, sql, bind: (...args) => tag(st.bind(...args), sql) });
   const racing = { ...env, DB: { ...env.DB, prepare: sql => tag(env.DB.prepare(sql), sql), async batch(list) {
-    if (race && list.some(s => /v3_walk_guard/.test(s.sql || ''))) { const f = race; race = null; await f(); }
+    if (race && list.some(s => /IS NOT 1$/.test(s.sql || ''))) { const f = race; race = null; await f(); }
     return env.DB.batch(list);
   } } };
   const add = async () => (await call(env, 'POST', '/activities', { editor: ME, date: '2026-10-11', kind: 'kids', dogs: [] })).body.activity;
