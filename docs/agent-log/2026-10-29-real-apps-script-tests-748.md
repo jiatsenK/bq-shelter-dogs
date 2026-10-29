@@ -2,7 +2,7 @@
 
 - Agent：Claude Code（Opus 5.5），分支 `claude/748-real-apps-script-tests`
 - 依據：#748（2026-10-29 架構檢視跟 K 定的三張票的第 3 張，接在 #746、#747 之後）
-- 相關 PR：（開 PR 後補上）
+- 相關 PR：#764
 
 ## 做了什麼
 
