@@ -40,7 +40,7 @@ module.exports = async (browser, base) => {
     await page.locator('.desk-table').waitFor();
 
     // 頁首「找狗」：排在資訊前面，點了標示目前頁；1100 也還是一行 64px
-    assert.deepEqual(await page.locator('#tabs button').evaluateAll(bs => bs.map(b => b.dataset.tab)), ['walk', 'groups', 'mine', 'find', 'info'], '電腦版五格');
+    assert.deepEqual(await page.locator('#tabs [data-tab]').evaluateAll(bs => bs.map(b => b.dataset.tab)), ['walk', 'groups', 'mine', 'find', 'info'], '電腦版五格');
     await page.locator('#tabs [data-tab="find"]').click();
     await page.locator('#main .desk-find').waitFor();
     assert.deepEqual(await page.locator('#tabs [aria-current="page"]').evaluateAll(bs => bs.map(b => b.dataset.tab)), ['find'], '找狗頁籤標示目前頁');

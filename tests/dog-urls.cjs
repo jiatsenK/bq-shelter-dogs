@@ -61,19 +61,22 @@ module.exports = async (browser, base) => {
     assert.equal(await hash(page), '#walk', '網址退回溜狗表');
     assert.equal(await page.locator('.alert-box, .status-msg:not(.sr-only)').count(), 0, '不顯示錯誤');
 
-    // 直接打開 #info/stay：資訊子頁；回資訊到資訊首頁，不會離開網站
-    await page.goto(base + '/public/index.html#info/stay');
-    await page.locator('.info-subhead h2', { hasText: '在所統計' }).waitFor();
+    // 直接打開 #info/departures：電腦版資訊左邊清單＋右邊子頁；換子頁網址跟著換，返回回到上一個子頁，不會離開網站
+    await page.goto(base + '/public/index.html#info/departures');
+    await page.locator('.info-title', { hasText: '離所紀錄' }).waitFor();
     assert.equal(await page.locator('#tabs [data-tab="info"][aria-current="page"]').count(), 1, '資訊分頁亮起');
-    await page.locator('[data-info-back]').click();
-    await page.locator('[data-info-page="stay"]').waitFor();
-    assert.equal(await hash(page), '#info', '回資訊首頁');
+    assert.equal(await page.locator('.info-nav [data-info-page="stay"]').getAttribute('href'), '#info/stay', '子頁清單是真連結');
+    await page.locator('.info-nav [data-info-page="stay"]').click();
+    await page.locator('.info-title', { hasText: '在所統計' }).waitFor();
+    assert.equal(await hash(page), '#info/stay', '換子頁網址跟著換');
+    await page.goBack();
+    await page.locator('.info-title', { hasText: '離所紀錄' }).waitFor();
+    assert.equal(await hash(page), '#info/departures', '返回回到上一個子頁');
     assert(page.url().startsWith(base + '/public/index.html'), '還在網站裡');
-    assert.equal(await page.locator('[data-info-page="stay"]').getAttribute('href'), '#info/stay', '子頁入口是真連結');
 
-    // 頁籤是真連結；一般點擊在原頁切換、網址跟著換
+    // 頁籤是真連結（電腦版多一格找狗）；一般點擊在原頁切換、網址跟著換
     assert.deepEqual(await page.locator('#tabs [data-tab]').evaluateAll(els => els.map(el => [el.tagName, el.getAttribute('href')])),
-      [['A', '#walk'], ['A', '#groups'], ['A', '#mine'], ['A', '#info']], '電腦版頁籤是 <a href>');
+      [['A', '#walk'], ['A', '#groups'], ['A', '#mine'], ['A', '#find'], ['A', '#info']], '電腦版頁籤是 <a href>');
     await page.locator('#tabs [data-tab="walk"]').click();
     await page.locator('.desk-table').waitFor();
     assert.equal(await page.evaluate(() => window.__lastClick.defaultPrevented), true, '一般點擊攔下來在原頁開');

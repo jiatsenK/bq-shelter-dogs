@@ -57,9 +57,9 @@ module.exports = async (browser, base) => {
       assert(nav.width >= 200 && nav.width <= 220, `${width}px 子頁清單 200～220（${nav.width}）`);
       assert(body.left >= nav.right && Math.abs(body.top - nav.top) < 20, `${width}px 子頁清單與內容並排`);
       assert(body.width > 480, `${width}px 內容不卡 480（${body.width}）`);
-      const rows = await page.locator('#main .info-nav button').evaluateAll(els => els.map(el => Math.round(el.getBoundingClientRect().height)));
+      const rows = await page.locator('#main .info-nav :is(a, button)').evaluateAll(els => els.map(el => Math.round(el.getBoundingClientRect().height)));
       assert(rows.every(h => h >= 38 && h <= 44), `${width}px 清單一列約 40px（${rows}）`);
-      assert.deepEqual(await page.locator('#main .info-nav button').allInnerTexts(), ['在所統計', '離所紀錄', '活動紀錄', '資料檢查', '更新紀錄', '使用說明']);
+      assert.deepEqual(await page.locator('#main .info-nav :is(a, button)').allInnerTexts(), ['在所統計', '離所紀錄', '活動紀錄', '資料檢查', '更新紀錄', '使用說明']);
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}px 沒有橫向捲動`);
     }
 
@@ -84,8 +84,11 @@ module.exports = async (browser, base) => {
       await page.locator(`#main .info-nav [data-info-page="${key}"]`).click();
       await page.locator(`#main .info-nav [data-info-page="${key}"][aria-current="page"]`).waitFor();
       assert.equal(await page.locator('#main .info-title').innerText(), title);
-      assert(await page.locator(`#main [data-info-page="${key}"]`).evaluate(el => el === document.activeElement), `${title} 焦點留在清單`);
-      assert((await box('#main .info-body .a-card')).width > 480, `${title} 不卡 480`);
+      // 子頁清單是連結（ADR 0024）：資料讀完會再重畫一次，等畫面穩定再量焦點與寬度
+      await page.waitForFunction(k => document.activeElement === document.querySelector(`#main [data-info-page="${k}"]`), key, { timeout: 3000 })
+        .catch(() => assert.fail(`${title} 焦點留在清單`));
+      await page.waitForFunction(() => document.querySelector('#main .info-body .a-card')?.getBoundingClientRect().width > 480, null, { timeout: 3000 })
+        .catch(() => assert.fail(`${title} 不卡 480`));
     }
     await page.goBack();
     await page.locator('#main .info-nav [data-info-page="activities"][aria-current="page"]').waitFor();

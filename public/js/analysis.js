@@ -429,7 +429,7 @@ function infoDeskPage() {
 }
 // 資訊整頁畫進內容區。電腦版左邊清單跟內容一起重畫（資料讀完、背景更新），焦點原本在清單上就放回同一項
 function renderInfoPage(main, today) {
-  const nav = document.activeElement?.closest?.('#main .info-nav button');
+  const nav = document.activeElement?.closest?.('#main .info-nav :is(a, button)');
   const key = nav && (nav.dataset.infoPage ? `[data-info-page="${nav.dataset.infoPage}"]` : '[data-open-guide]');
   main.innerHTML = analysisPageHtml(today);
   if (key) main.querySelector(`.info-nav ${key}`)?.focus({ preventScroll: true });
@@ -437,7 +437,7 @@ function renderInfoPage(main, today) {
 function infoDeskHtml(today) {
   const page = infoDeskPage();
   const nav = Object.entries(INFO_PAGES).filter(([id]) => canShow(id))
-    .map(([id, title]) => `<button type="button" data-info-page="${id}"${id === page ? ' aria-current="page"' : ''}>${title}</button>`).join('');
+    .map(([id, title]) => routeControl(true, pageHash('info', id), `data-info-page="${id}"${id === page ? ' aria-current="page"' : ''}`, title)).join(''); // 電腦版子頁清單是真連結（ADR 0024）
   const body = page && canShow(page) ? `<h2 class="info-title">${esc(INFO_PAGES[page])}</h2>${infoSubPageHtml(today, page)}` : `<p role="status">${settingsNotice()}</p>`;
   return `<div class="info-desk"><nav class="info-nav" aria-label="資訊分類">${nav}<button type="button" data-open-guide>使用說明</button></nav><div class="info-body">${body}</div></div>`;
 }
@@ -663,7 +663,8 @@ function openInfoPage(page) {
   // 手機從分類清單進子頁；電腦版從另一個子頁換過來，返回要回到那個子頁。
   // infoChain：這一筆是電腦版換子頁留下的，上一筆是另一個子頁、不是分類清單（infoBack 用）
   const desk = deskOn();
-  const current = { ...history.state, infoPage: desk ? analysisState.infoPage : '', infoChain: desk && !!history.state?.infoChain };
+  // 直接打開 #info/<子頁> 時目前這筆還不是頁籤紀錄（ADR 0024 的 landing）：補成資訊頁籤，返回才會換回子頁、不會關掉資訊
+  const current = { bqNavigation: true, tab: 'info', base: appState.activeTab, ...history.state, infoPage: desk ? analysisState.infoPage : '', infoChain: desk && !!history.state?.infoChain };
   analysisState.infoPage = page;
   analysisState.stayPick = null;
   pushPage(current, { ...current, infoPage: page, infoChain: desk });
