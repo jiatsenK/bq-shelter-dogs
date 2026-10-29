@@ -4,7 +4,7 @@
 
 ## 頁面入口與初始化
 
-- `index.html` → `main.js`：匯入整個主頁模組圖；模組定義與狀態初始化完成後，依原本順序呼叫 app、analysis、group-stage、find、activities 的事件綁定，再啟動 desk 與 app。循環引用只在互動時使用，事件綁定不靠 import 評估順序。頁首提前抓狗清單的內嵌程式保留，`api.js` 接手該請求。
+- `index.html` → `main.js`：匯入整個主頁模組圖；模組定義與狀態初始化完成後，依原本順序呼叫 app、analysis、group-stage、find、find-desk、activities 的事件綁定，再啟動 desk 與 app。循環引用只在互動時使用，事件綁定不靠 import 評估順序。頁首提前抓狗清單的內嵌程式保留，`api.js` 接手該請求。
 - `cards.html` → `cards-entry.js`：載入 `cards.js` 與共用模組，再啟動圖鑑。
 - `edits.html` → `edits.js`：載入共用模組，再讀取編輯紀錄。
 - `groups.html` 仍轉址至主頁；保留的 `groups.js` 也改為 ES module，沒有頁面載入。
@@ -34,7 +34,8 @@
 | `sheet-append.js` | 加備註（詳細資訊）與新增異動紀錄（電腦版右欄）：預覽、送出與整頁事件委派 | app、detail、api、dates、ui-kit、walk-ui、page-state | index |
 | `detail-viewport.js` | 詳細資訊編輯欄位的可見範圍 | 無 | index |
 | `keyboard-viewport.js` | 螢幕鍵盤開啟時的欄位與面板定位 | 無 | index |
-| `overlays.js` | 返回鍵與焦點圈：覆蓋層（平面圖放大、裁切、燈箱、在哪、詳細資訊）註冊怎麼判斷開著／怎麼關，按返回的關閉順序集中在 `BACK_ORDER`；開一層、關一層、換掉歷史紀錄、頁籤／資訊子頁的歷史紀錄、`trapFocus` | 無 | index、cards、Node |
+| `overlays.js` | 返回鍵與焦點圈：覆蓋層（平面圖放大、裁切、燈箱、在哪、詳細資訊）註冊怎麼判斷開著／怎麼關，按返回的關閉順序集中在 `BACK_ORDER`；開一層、關一層、換掉歷史紀錄、頁籤／資訊子頁的歷史紀錄（帶呼叫端算好的網址，打開網頁那一筆標 `bqLanding`，ADR 0024）、`trapFocus` | 無 | index、cards、Node |
+| `routes.js` | 志工網站網址（ADR 0024）：`#walk`、`#info/<子頁>`、`#dog/<編號>` 和畫面狀態互換、判斷一般點擊與 Ctrl／⌘ 點擊、電腦版真連結手機按鈕的 `routeControl` | 無 | index、Node |
 | `walk-registration.js` | `createWalkRegistration`：D1 接受流程的登記、同行人、復原與今日紀錄核對規則，純 ES module（#558 起沒有寫回試算表的舊路徑） | 無 | index、Node |
 | `walk-flow.js` | `BQWalks`：不碰 DOM 的排隊登記、核對、復原、提示及同行人手機紀錄 | store、walk-registration（日期介面由呼叫端注入） | index、Node |
 | `identity.js` | 志工身分：`identityRequest`（/identity 請求與錯誤）、`refreshIdentity`（用登記名字換最新的名字與代號；送出前後手機上的名字和代號都沒變才存，不然回 `changed`）。設定名字、常溜同步、圖鑑共用，各頁的讀、存與被改過時的反應由呼叫端帶入 | api | index、cards、Node |
@@ -44,13 +45,15 @@
 | `photo-images.js` | 裁切結果轉成上傳用的原圖與縮圖 | 無 | index、admin（建置複製） |
 | `favorites.js` | `BQFavorites`：常溜實例、舊鍵搬移、逐隻增刪、離線佇列與身分同步；切回網頁 5 分鐘內不重抓 | app、detail、dog-status、api、store、identity、walk-ui、page-state | index |
 | `walk-ui.js` | `BQWalkUI`：今日登記／復原的畫面、提示條、同行人、溜狗人編輯；沒登記到的判斷與說法（`walkFailure`，狗卡和電腦版全表共用） | app、detail、ui-kit、dog-status、dates、walk-flow、welcome、page-state | index |
-| `app.js` | 主頁資料、狗卡、燈箱、頁籤、溜狗操作與整頁事件綁定；詳細資訊在 detail.js；返回鍵交給 overlays.js，app.js 只處理都沒開覆蓋層時的頁籤切換 | 共用模組、dog-data、所有主頁功能模組、page-state | index |
-| `analysis.js` | 分析、離所名冊與資訊頁；資訊頁的「分享網站連結」（ADR 0023）；電腦版資訊子頁的「回資訊」在內容最上面（`infoBack` 跟頁首共用） | app、detail、ui-kit、dates、api、site-config、dog-data、activities、overlays、share、walk-ui、desk、feature-settings、page-state | index |
+| `app.js` | 主頁資料、狗卡、燈箱、頁籤、溜狗操作與整頁事件綁定；詳細資訊在 detail.js；返回鍵交給 overlays.js，app.js 只處理都沒開覆蓋層時的頁籤切換；打開網頁時照網址決定畫面、render 後網址跟著畫面、站內連結的點擊、`/` 跳搜尋框（ADR 0024） | 共用模組、dog-data、所有主頁功能模組、page-state | index |
+| `analysis.js` | 分析、離所名冊與資訊頁；資訊頁的「分享網站連結」（ADR 0023）；電腦版資訊是設定頁式（`infoDeskHtml`：左邊子頁清單、右邊內容，沒選子頁時打開第一個，沒有「回資訊」） | app、detail、ui-kit、dates、api、site-config、dog-data、activities、overlays、share、walk-ui、desk、feature-settings、page-state | index |
 | `share.js` | `shareSite`：分享網站先用分享選單，不行就複製，都不行回 manual 由畫面顯示網址；navigator 由呼叫端帶入，不碰 DOM（ADR 0023） | 無 | index、Node |
 | `activities.js` | 活動紀錄與已出所狗卡編輯 | app、ui-kit、analysis、dates、api、walk-ui、page-state | index |
-| `find.js` | 找狗照片、搜尋與平面圖；籠位在哪一區用 `SITE.zones` | app、detail、ui-kit、dog-status、walk-ui、overlays、site-config、page-state | index |
-| `group-stage.js` | 可以一起溜的狗群畫面；從詳細資訊進來時停在有這隻狗的群（`focusGroupOf`） | app、detail、ui-kit、dog-status、dates、api、walk-ui、page-state | index |
+| `find.js` | 找狗照片、搜尋與平面圖；籠位在哪一區用 `SITE.zones`；在哪面板在電腦版是籠位旁的小卡（`wherePlace` 算位置） | app、detail、ui-kit、dog-status、walk-ui、overlays、site-config、page-state | index |
+| `group-stage.js` | 可以一起溜的狗群畫面；從詳細資訊進來時停在有這隻狗的群（`focusGroupOf`）；電腦版所有群並排成群卡＋右欄（選中那一群近 30 天、有警示的狗） | app、detail、ui-kit、dog-status、dates、api、walk-ui、desk、page-state | index |
+| `find-desk.js` | 電腦版找狗（≥1100px）：工具列、平面圖撐滿＋右欄 300px 列那一區的狗、列表表格；手機照舊用 find.js | app、detail、ui-kit、dog-status、desk、find、page-state | index |
 | `desk.js` | 電腦版簡報、全表／最近 30 天與側欄，明確啟動後啟用寬螢幕呈現；補資料由管理網站取代（#568） | app、detail、sheet-append、ui-kit、dog-status、dates、api、site-config、find、walk-ui、page-state | index |
+| `desk-mine.js` | 電腦版我溜過：標題列（名字＋修改）、月曆每格寫當天溜的狗名（最多 2 個，其餘「＋N」）、右欄選中那天的狗與月曆那個月的統計；還沒設定是誰時表單放主內容。手機照舊是 app.js 的 `myWalksHtml` | app、ui-kit、dates、welcome、page-state | index |
 | `cards.js` | 圖鑑、開卡與已出所狗卡，保留卡片專用格式 | dates、api、store、site-config、overlays、identity、page-state | cards |
 | `edit-values.js` | `editsValue`：編輯紀錄改前／改後的文字，純函式 | 無 | edits、admin（建置複製） |
 | `edits.js` | 編輯紀錄清單 | api、store、edit-values | edits |

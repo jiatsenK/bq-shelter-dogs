@@ -8,10 +8,11 @@ import { BQApi } from './api.js';
 import { SITE } from './site-config.js';
 import { activitySectionHtml, loadActivities } from './activities.js';
 import { parseDogsData } from './dog-data.js';
-import { backFrom, pushPage } from './overlays.js';
+import { backFrom, pushPage, replacePage } from './overlays.js';
 import { shareSite } from './share.js';
 import { BQWalkUI } from './walk-ui.js';
 import { deskOn } from './desk.js';
+import { pageHash, routeControl } from './routes.js';
 
 // 分析頁（V5-4 #59、V5-5 #60）：目前 dogs.json 就能算的犬隻統計，加上 #56 累積的遛狗歷史與每日快照。
 // 統計都寫成純函式（輸入狗清單與今天日期，輸出數字），tests/index.html 直接測；畫面只負責把結果畫成 CSS／SVG 資訊圖表（大數字、圓環、直條圖）。
@@ -273,8 +274,8 @@ function dogRow(r, right, { rank, line } = {}) {
   </button>`;
 }
 
-function section(title, hint, body, iconId) {
-  return `<section class="a-card"><h2>${iconId ? `<span class="a-h-icon">${icon(iconId)}</span>` : ''}${esc(title)}</h2>${hint ? `<p class="a-hint">${hint}</p>` : ''}${body}</section>`;
+function section(title, hint, body, iconId, cls = '') {
+  return `<section class="a-card${cls ? ` ${cls}` : ''}"><h2>${iconId ? `<span class="a-h-icon">${icon(iconId)}</span>` : ''}${esc(title)}</h2>${hint ? `<p class="a-hint">${hint}</p>` : ''}${body}</section>`;
 }
 
 function dogNames(dogs) {
@@ -293,6 +294,8 @@ function analysisHtml(dogs, today, page = 'stay') {
   if (page === 'quality') return dataChecksHtml(rows);
   const noIntake = rows.filter(r => !r.intake);
   const avgStay = average(rows.filter(r => r.intake).map(r => r.stayDays));
+  // 電腦版（K 2026-10-29）：同樣的區塊排成兩欄；看不出入所日期的狗名收起來，Top 10 改成表格
+  const wide = deskOn();
   const out = [];
 
   // 最上面三格大數字（V7 #114 白底；2026-10-08 拿掉「在所滿 1 年 %」，下面圓環已經有）
@@ -302,7 +305,8 @@ function analysisHtml(dogs, today, page = 'stay') {
       ${kpi(rows.length, '隻', '目前在所')}
       ${kpi(avgStay == null ? '–' : yearsText(avgStay), '年', '平均在所')}
     </div>
-    <div class="a-hero-note">入所日期取編號（含舊編號）前 8 碼和出入所紀錄裡最早的那天${noIntake.length ? `；${noIntake.length} 隻編號看不出入所日期，不列入時間統計（${dogNames(noIntake.map(r => r.dog))}）` : ''}</div>
+    <div class="a-hero-note">入所日期取編號（含舊編號）前 8 碼和出入所紀錄裡最早的那天${noIntake.length && !wide ? `；${noIntake.length} 隻編號看不出入所日期，不列入時間統計（${dogNames(noIntake.map(r => r.dog))}）` : ''}</div>
+    ${noIntake.length && wide ? `<details class="a-noin"><summary>${noIntake.length} 隻編號看不出入所日期，不列入時間統計<span class="a-noin-more"></span></summary><p>${dogNames(noIntake.map(r => r.dog))}</p></details>` : ''}
   </section>`);
 
   // #739 點長條在下面同一張白卡列那一格的狗（analysisState.stayPick：{ bucket, all }，換子頁時清掉）
@@ -310,11 +314,11 @@ function analysisHtml(dogs, today, page = 'stay') {
   const pick = analysisState.stayPick && dist[analysisState.stayPick.bucket]?.count ? analysisState.stayPick : null;
   out.push(section('入所多久分布', '點長條看是哪些狗',
     columnChart(dist, pick ? pick.bucket : -1) + '<p class="a-unit">單位：滿幾年（0＝未滿 1 年）</p>' +
-    (pick ? stayPickHtml(dist, pick) : '')));
+    (pick ? stayPickHtml(dist, pick) : ''), '', 'a-dist'));
 
   const top = longestStay(rows);
   out.push(section('在所最久 Top 10', '點狗名看詳細資訊',
-    `<div class="a-list">${top.map((r, i) => dogRow(r, stayYears(r), { rank: i + 1 })).join('')}</div>`));
+    wide ? topTableHtml(top) : `<div class="a-list">${top.map((r, i) => dogRow(r, stayYears(r), { rank: i + 1 })).join('')}</div>`, '', 'a-top'));
 
   const zones = zoneAverages(rows);
   const zMax = Math.max(1, ...zones.map(z => z.avgDays));
@@ -338,7 +342,21 @@ function analysisHtml(dogs, today, page = 'stay') {
      </div>
      <p class="a-sex-line">平均在所　${sexAvg('♂', sex.male)}　${sexAvg('♀', sex.female)}</p>`));
 
-  return out.join('');
+  return wide ? `<div class="a-wide">${out.join('')}</div>` : out.join('');
+}
+
+// 電腦版 Top 10：名次、狗名、籠位、入所日、在所年數各一欄；狗名是按鈕，點了開詳細資訊
+function topTableHtml(top) {
+  return `<table class="a-table">
+    <thead><tr><th scope="col">名次</th><th scope="col">狗名</th><th scope="col">籠位</th><th scope="col">入所</th><th scope="col" class="num">在所</th></tr></thead>
+    <tbody>${top.map((r, i) => `<tr>
+      <td><span class="a-rank r${i + 1}">${i + 1}</span></td>
+      <td><button type="button" class="a-t-dog" data-adog="${appState.allDogs.indexOf(r.dog)}">${esc(r.dog.name)}</button></td>
+      <td>${esc(r.dog.cage || '')}</td>
+      <td>${r.intake.getFullYear()}/${r.intake.getMonth() + 1}/${r.intake.getDate()}</td>
+      <td class="num">${stayYears(r)}</td>
+    </tr>`).join('')}</tbody>
+  </table>`;
 }
 
 function dataChecksHtml(rows) {
@@ -391,17 +409,37 @@ function walkHistorySection(dog, today) {
 
 // 分析頁整頁：「← 分析」在頁首（index.html 的 .head-back、.head-title，K 2026-10-09）；資料還沒好時顯示讀取中或失敗
 function analysisPageHtml(today) {
+  if (deskOn()) return infoDeskHtml(today);
   if (!canShow(analysisState.infoPage)) return `<p role="status">${settingsNotice()}</p>`;
   if (!analysisState.infoPage) return infoHomeHtml();
-  // 電腦版頁首每頁一樣（DESIGN_GUIDE 電腦版，K 2026-10-29）：子頁的「回資訊＋標題」放在內容最上面，不換掉網站名稱；手機在頁首
-  return (deskOn() ? `<div class="info-subhead"><button type="button" data-info-back>${icon('back')}回資訊</button><h2>${esc(INFO_PAGES[analysisState.infoPage])}</h2></div>` : '') + infoSubPageHtml(today);
+  return infoSubPageHtml(today, analysisState.infoPage);
 }
-function infoSubPageHtml(today) {
-  if (analysisState.infoPage === 'departures') return departureSectionHtml(today);
-  if (analysisState.infoPage === 'activities') return activitySectionHtml();
-  if (analysisState.infoPage === 'updates') return infoUpdatesHtml();
-  if (appState.loadState === 'ready') return analysisHtml(appState.allDogs, today, analysisState.infoPage);
+function infoSubPageHtml(today, page) {
+  if (page === 'departures') return departureSectionHtml(today);
+  if (page === 'activities') return activitySectionHtml();
+  if (page === 'updates') return infoUpdatesHtml();
+  if (appState.loadState === 'ready') return analysisHtml(appState.allDogs, today, page);
   return `<div class="status-msg">${appState.loadState === 'error' ? '狗的資料讀不到，請確認網路後重新整理。' : '讀取中…'}</div>`;
+}
+
+// 電腦版資訊（K 2026-10-29）：設定頁式，左邊子頁清單、右邊內容；頁首每頁一樣，不需要「回資訊」。
+// 還沒選子頁（剛進資訊）就打開第一個，不先出一頁大卡片；手機照舊是分類清單（infoHomeHtml）＋頁首的「回資訊」
+function infoDeskPage() {
+  return analysisState.infoPage || Object.keys(INFO_PAGES).find(id => canShow(id)) || '';
+}
+// 資訊整頁畫進內容區。電腦版左邊清單跟內容一起重畫（資料讀完、背景更新），焦點原本在清單上就放回同一項
+function renderInfoPage(main, today) {
+  const nav = document.activeElement?.closest?.('#main .info-nav :is(a, button)');
+  const key = nav && (nav.dataset.infoPage ? `[data-info-page="${nav.dataset.infoPage}"]` : '[data-open-guide]');
+  main.innerHTML = analysisPageHtml(today);
+  if (key) main.querySelector(`.info-nav ${key}`)?.focus({ preventScroll: true });
+}
+function infoDeskHtml(today) {
+  const page = infoDeskPage();
+  const nav = Object.entries(INFO_PAGES).filter(([id]) => canShow(id))
+    .map(([id, title]) => routeControl(true, pageHash('info', id), `data-info-page="${id}"${id === page ? ' aria-current="page"' : ''}`, title)).join(''); // 電腦版子頁清單是真連結（ADR 0024）
+  const body = page && canShow(page) ? `<h2 class="info-title">${esc(INFO_PAGES[page])}</h2>${infoSubPageHtml(today, page)}` : `<p role="status">${settingsNotice()}</p>`;
+  return `<div class="info-desk"><nav class="info-nav" aria-label="資訊分類">${nav}<button type="button" data-open-guide>使用說明</button></nav><div class="info-body">${body}</div></div>`;
 }
 
 // 打開分析頁：手機按「返回」會回到原本的分類（跟詳細資訊一樣用 history）
@@ -589,7 +627,7 @@ function infoHomeHtml() {
   const dep = !analysisState.departuresData || analysisState.departuresData.state === 'loading' ? '離所紀錄讀取中…' : analysisState.departuresData.state === 'error' ? '離所紀錄讀取失敗' : analysisState.departuresData.list.length ? `共 ${analysisState.departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
   const act = activitiesState.activitiesData.state === 'loading' ? '活動紀錄讀取中…' : activitiesState.activitiesData.state === 'error' ? '活動紀錄讀取失敗' : activitiesState.activitiesData.list.length ? `共 ${activitiesState.activitiesData.list.length} 場活動` : '還沒有活動紀錄';
   const summary = { stay: dogs, departures: dep, activities: act, quality: '查看缺照片、介紹及其他資料', updates: '誰、什麼時候改了哪些資料' };
-  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).filter(([id]) => canShow(id)).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}${shareSiteHtml()}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
+  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).filter(([id]) => canShow(id)).map(([id, title]) => routeControl(deskOn(), pageHash('info', id), `data-info-page="${id}"`, `<strong>${title}</strong><span>${esc(summary[id])}</span>`)).join('')}${shareSiteHtml()}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
 }
 
 // ADR 0023 分享網站：只在手機版（電腦版由 CSS 藏起來）；分享和複製都不行時把網址放進可選取的欄位
@@ -621,31 +659,40 @@ function infoUpdatesHtml() {
 }
 
 function openInfoPage(page) {
-  if (!Object.hasOwn(INFO_PAGES, page)) return;
-  const current = { ...history.state, infoPage: '' };
+  if (!Object.hasOwn(INFO_PAGES, page) || (deskOn() && page === infoDeskPage())) return;
+  // 手機從分類清單進子頁；電腦版從另一個子頁換過來，返回要回到那個子頁。
+  // infoChain：這一筆是電腦版換子頁留下的，上一筆是另一個子頁、不是分類清單（infoBack 用）
+  const desk = deskOn();
+  // 直接打開 #info/<子頁> 時目前這筆還不是頁籤紀錄（ADR 0024 的 landing）：補成資訊頁籤，返回才會換回子頁、不會關掉資訊
+  const current = { bqNavigation: true, tab: 'info', base: appState.activeTab, ...history.state, infoPage: desk ? analysisState.infoPage : '', infoChain: desk && !!history.state?.infoChain };
   analysisState.infoPage = page;
   analysisState.stayPick = null;
-  pushPage(current, { ...current, infoPage: page });
+  pushPage(current, { ...current, infoPage: page, infoChain: desk });
   render();
   window.scrollTo(0, 0);
-  // 電腦版的「回資訊」在內容最上面（頁首不換），手機在頁首
-  (document.querySelector('#main [data-info-back]') || document.getElementById('analysisBack')).focus();
+  // 手機焦點到頁首的「回資訊」；電腦版沒有回資訊，留在左邊清單剛按的那一項
+  (deskOn() ? document.querySelector(`#main [data-info-page="${page}"]`) : document.getElementById('analysisBack'))?.focus();
 }
 
 function restoreInfoPage(page) {
   const previous = analysisState.infoPage;
   analysisState.infoPage = Object.hasOwn(INFO_PAGES, page) ? page : '';
   render();
-  if (!analysisState.infoPage && previous) document.querySelector(`[data-info-page="${previous}"]`)?.focus();
+  // 電腦版回到預設的第一個子頁，焦點放在清單上目前那一項
+  if (!analysisState.infoPage && previous) document.querySelector(deskOn() ? '#main [data-info-page][aria-current]' : `[data-info-page="${previous}"]`)?.focus();
 }
 
-export { LONG_STAY_MONTHS, STAY_BUCKETS, intakeDate, monthsBetween, daysBetween, analysisRows, zoneOf, formatStay, average, median, dated, stayDistribution, longestStay, zoneAverages, longStayShare, sexComparison, dataCompleteness, checkPhotos, dogKey, parseWalks, historyStartDates, historySpan, recentStart, dogWalkHistory, loadHistory, STAY_PICK_FIRST, yearsText, columnChart, stayPickHtml, dogRow, section, dogNames, kpi, analysisHtml, dataChecksHtml, mdText, walkHistorySection, analysisPageHtml, showAnalysis, hideAnalysis, closeAnalysis, analysisBtn, analysisBack, DEPARTURE_ORDER, DEPARTURE_COLORS, departureDetails, depRosterDefault, parseDeparturesData, loadDepartures, departureDetail, departureYears, filterDepartures, stackedYears, departureRow, departureListHtml, departureRosterHtml, departureSectionHtml, refreshDepartureList, INFO_PAGES, infoHomeHtml, shareFromInfo, infoUpdatesHtml, openInfoPage, restoreInfoPage };
+export { LONG_STAY_MONTHS, STAY_BUCKETS, intakeDate, monthsBetween, daysBetween, analysisRows, zoneOf, formatStay, average, median, dated, stayDistribution, longestStay, zoneAverages, longStayShare, sexComparison, dataCompleteness, checkPhotos, dogKey, parseWalks, historyStartDates, historySpan, recentStart, dogWalkHistory, loadHistory, STAY_PICK_FIRST, yearsText, columnChart, stayPickHtml, dogRow, section, dogNames, kpi, analysisHtml, dataChecksHtml, mdText, walkHistorySection, analysisPageHtml, showAnalysis, hideAnalysis, closeAnalysis, analysisBtn, analysisBack, DEPARTURE_ORDER, DEPARTURE_COLORS, departureDetails, depRosterDefault, parseDeparturesData, loadDepartures, departureDetail, departureYears, filterDepartures, stackedYears, departureRow, departureListHtml, departureRosterHtml, departureSectionHtml, refreshDepartureList, INFO_PAGES, infoDeskPage, renderInfoPage, infoDeskHtml, topTableHtml, infoHomeHtml, shareFromInfo, infoUpdatesHtml, openInfoPage, restoreInfoPage };
 export { analysisState } from './page-state.js';
 
-// 頁首「回資訊／回溜狗表」與電腦版內容上方的「回資訊」共用：子頁回資訊首頁、資訊首頁回原本的分頁、常溜狗群回進來前的分頁
+// 頁首「回資訊／回溜狗表」：子頁回資訊首頁、資訊首頁回原本的分頁、常溜狗群回進來前的分頁
 function infoBack() {
   if (appState.analysisOpen && analysisState.infoPage) {
-    backFrom(s => s?.infoPage, () => restoreInfoPage(''));
+    // 電腦版換子頁留下的紀錄（iPad 橫放換過子頁再轉直）：上一筆是另一個子頁，直接回分類清單
+    if (history.state?.infoChain) {
+      replacePage({ ...history.state, infoPage: '', infoChain: false });
+      restoreInfoPage('');
+    } else backFrom(s => s?.infoPage, () => restoreInfoPage(''));
   } else if (appState.analysisOpen) closeAnalysis();
   else if (appState.activeTab === 'groups') {
     backFrom(s => s && s.bqNavigation, () => switchTab(appState.groupsReturnTab, false));
@@ -655,7 +702,6 @@ function infoBack() {
 export function bindAnalysis() {
   if (analysisBtn) analysisBtn.addEventListener('click', () => (appState.analysisOpen ? closeAnalysis() : showAnalysis()));
   if (analysisBack) analysisBack.addEventListener('click', infoBack);
-  document.getElementById('main').addEventListener('click', e => { if (e.target.closest?.('[data-info-back]')) infoBack(); });
   // #739 入所多久分布：點長條列名單、再點同一根或「收起」收回；重畫後焦點留在剛按的地方
   document.getElementById('main').addEventListener('click', e => {
     if (!appState.analysisOpen || !e.target.closest) return;
@@ -673,7 +719,7 @@ export function bindAnalysis() {
     target?.focus();
   });
   document.getElementById('main').addEventListener('click', e => {
-    const row = e.target.closest('#main .a-dog[data-adog]');
+    const row = e.target.closest('#main [data-adog]');
     const dog = row && appState.allDogs[row.dataset.adog];
     if (dog) showDetail(dog);
   });

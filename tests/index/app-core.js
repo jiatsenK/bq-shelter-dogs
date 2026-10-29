@@ -92,7 +92,7 @@ function runTests() {
       ];
       groupMap = {};
       const names = () => [...document.querySelectorAll('#main .card .name')].map(n => n.textContent);
-      const counts = () => [...document.querySelectorAll('#tabs button .n')].map(n => n.textContent);
+      const counts = () => [...document.querySelectorAll('#tabs [data-tab] .n')].map(n => n.textContent);
       const mainText = () => document.getElementById('main').textContent;
       try {
         searchQuery = '搜尋';
@@ -382,7 +382,7 @@ function runTests() {
         allDogs = [{ cage: 'A01', id: '1', name: '測試甲', walkedDate: null, covered: false, note: '' }];
         groupMap = {}; activeTab = 'walk'; searchQuery = '';
         render();
-        const tabs = () => [...document.querySelectorAll('#tabs button')];
+        const tabs = () => [...document.querySelectorAll('#tabs [data-tab]')];
         eq(tabs().map(b => b.querySelector('.t').textContent), ['溜狗表', '常溜狗群', '我溜過', '資訊'], '分類（#99 加找狗）：');
         eq(tabs().map(b => b.querySelector('.n').textContent), ['1', '', '', ''], '數字（遛狗紀錄還沒讀；找狗不放數字）：');
         const active = () => tabs().filter(b => b.classList.contains('active')).map(b => b.dataset.tab);
@@ -406,7 +406,7 @@ function runTests() {
         target.dispatchEvent(new TouchEvent('touchstart', { bubbles: true, touches: [start], changedTouches: [start] }));
         target.dispatchEvent(new TouchEvent('touchend', { bubbles: true, touches: [], changedTouches: [end] }));
       };
-      const active = () => [...document.querySelectorAll('#tabs button.active')].map(b => b.dataset.tab);
+      const active = () => [...document.querySelectorAll('#tabs [data-tab].active')].map(b => b.dataset.tab);
       try {
         allDogs = [{ cage: 'A01', id: '1', name: '測試甲', walkedDate: null, covered: false, note: '' }];
         groupMap = {}; activeTab = 'walk'; searchQuery = '';

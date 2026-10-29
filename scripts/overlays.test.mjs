@@ -11,15 +11,16 @@ function fakePage() {
   let at = 0;
   const listeners = [];
   const calls = [];
+  const urls = []; // 每一筆換到的網址（ADR 0024）；沒給網址記 undefined
   const history = {
     get state() { return entries[at]; },
-    pushState(state) { entries.splice(at + 1); entries.push(state); at++; calls.push(['push', state]); },
-    replaceState(state) { entries[at] = state; calls.push(['replace', state]); },
+    pushState(state, title, url) { entries.splice(at + 1); entries.push(state); at++; calls.push(['push', state]); urls.push(['push', url]); },
+    replaceState(state, title, url) { entries[at] = state; calls.push(['replace', state]); urls.push(['replace', url]); },
     back() { calls.push(['back']); if (at > 0) at--; for (const fn of listeners) fn({ state: entries[at] }); },
   };
   const window = { addEventListener: (type, fn) => { if (type === 'popstate') listeners.push(fn); } };
   const document = { activeElement: null };
-  return { globals: { history, window, document }, entries, calls, document };
+  return { globals: { history, window, document }, entries, calls, urls, document };
 }
 
 async function load() {
@@ -85,14 +86,14 @@ test('pushPage 先記好目前這頁再多一筆；backFrom 是自己這頁才�
   const { overlays, globals, calls, entries } = await load();
   overlays.bindOverlays(() => {});
   overlays.pushPage({ bqNavigation: true, tab: 'walk' }, { bqNavigation: true, tab: 'info' });
-  assert.deepEqual(entries, [{ bqNavigation: true, tab: 'walk' }, { bqNavigation: true, tab: 'info' }]);
+  assert.deepEqual(plain(entries), [{ bqNavigation: true, tab: 'walk' }, { bqNavigation: true, tab: 'info' }]);
   let other = 0;
   overlays.backFrom(s => s?.infoPage, () => other++);
   assert.equal(other, 1);
   overlays.backFrom(s => s && s.bqNavigation, () => other++);
   assert.equal(other, 1);
   assert.equal(calls.at(-1)[0], 'back');
-  assert.deepEqual(globals.history.state, { bqNavigation: true, tab: 'walk' });
+  assert.deepEqual(plain(globals.history.state), { bqNavigation: true, tab: 'walk' });
 });
 
 function keyEvent(key, shiftKey = false) {
@@ -142,4 +143,47 @@ test('焦點圈 edgesOnly：中間交給瀏覽器，只在頭尾或焦點在外�
   document.activeElement = null;
   overlays.trapFocus(keyEvent('Tab', true), list, { edgesOnly: true });
   assert.equal(document.activeElement, list[2]);
+});
+
+test('網址（ADR 0024）：覆蓋層帶自己的網址，已經是這層就不再多一筆；換內容只換網址', async () => {
+  const { overlays, globals, urls, entries } = await load();
+  overlays.registerOverlay('detail', layer());
+  overlays.pushOverlay('detail', '#dog/1');
+  overlays.replaceOverlayUrl('detail', '#dog/2');
+  overlays.pushOverlay('detail', '#dog/2');
+  assert.deepEqual(urls, [['push', '#dog/1'], ['replace', '#dog/2'], ['replace', '#dog/2']]);
+  assert.equal(entries.length, 2, '只多一筆');
+  assert.equal(overlays.overlayOnTop(), true);
+  overlays.pushOverlay('lightbox');
+  assert.deepEqual(urls.at(-1), ['push', undefined], '燈箱不帶網址，維持底下那一頁');
+  globals.history.replaceState({ bqNavigation: true, tab: 'walk' });
+  assert.equal(overlays.overlayOnTop(), false);
+});
+
+test('網址（ADR 0024）：頁面紀錄照狀態算網址；打開網頁那一筆留著 bqLanding，網站裡的「回…」不走出網站', async () => {
+  const { overlays, globals, urls, entries, calls } = await load();
+  overlays.bindOverlays(() => {}, s => (s.tab ? `#${s.tab}${s.infoPage ? '/' + s.infoPage : ''}` : undefined));
+  globals.history.replaceState({ bqNavigation: true, tab: 'info', infoPage: 'stay', bqLanding: true });
+  let otherwise = 0;
+  overlays.backFrom(s => s.infoPage, () => otherwise++);
+  assert.equal(otherwise, 1, 'landing 那筆不按上一頁');
+  assert(!calls.some(c => c[0] === 'back'));
+  overlays.pushPage({ bqNavigation: true, tab: 'info', infoPage: '' }, { ...globals.history.state, infoPage: 'departures' });
+  assert.deepEqual(plain(entries), [
+    { bqNavigation: true, tab: 'info', infoPage: '', bqLanding: true },
+    { bqNavigation: true, tab: 'info', infoPage: 'departures' },
+  ], '目前這筆仍是 landing，新的那筆不是');
+  assert.deepEqual(urls.slice(-2), [['replace', '#info'], ['push', '#info/departures']]);
+  overlays.backFrom(s => s.infoPage, () => otherwise++);
+  assert.equal(otherwise, 1);
+  assert(calls.some(c => c[0] === 'back'), '網站自己多的那筆照常按上一頁');
+});
+
+test('網址寫不進去（srcdoc 這類文件）時照樣記狀態', async () => {
+  const { overlays, globals, entries } = await load();
+  const push = globals.history.pushState;
+  globals.history.pushState = (state, title, url) => { if (url) throw new Error('SecurityError'); push(state, title, url); };
+  overlays.registerOverlay('detail', layer());
+  overlays.pushOverlay('detail', '#dog/1');
+  assert.deepEqual(plain(entries.at(-1)), { bqDetail: true });
 });

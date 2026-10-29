@@ -9,6 +9,7 @@ import { BQDates } from './dates.js';
 import { BQApi } from './api.js';
 import { BQWalkUI } from './walk-ui.js';
 import { whereKnown, whereOpen } from './find.js';
+import { dogHash, routeControl } from './routes.js';
 
 // 電腦版溜狗表（K 2026-10-10，選「簡報＋全表」，全表可切「最近 30 天」）：寬螢幕（≥1100px）時溜狗表改成
 // 上面今天的簡報（紅黃綠各幾隻、各區狀況），下面像試算表的全表（勾好幾隻一次登記溜了），右邊異動紀錄和休養中。
@@ -137,7 +138,16 @@ async function deskLoadWalks() {
     deskState.deskWalkDays = new Map();
   }
   deskState.deskWalksLoading = false;
-  if (appState.activeTab === 'walk' && deskOn()) render();
+  // 常溜狗群電腦版的右欄也用這份紀錄（近 30 天溜了幾天）
+  if ((appState.activeTab === 'walk' || appState.activeTab === 'groups') && deskOn()) render();
+}
+
+// 天數色籤（全表、電腦版找狗共用）：休養、固定、今天／X天、沒紀錄
+function deskDayTag(s) {
+  return s.kind === 'rest' ? `<span class="dr-day rest">休養</span>`
+    : s.kind === 'covered' ? `<span class="dr-day sage">固定</span>`
+    : s.kind === 'dated' ? (s.days < 0 ? '<span class="dr-day none">？</span>' : `<span class="dr-day ${s.level}">${s.days === 0 ? '今天' : `<b class="num">${s.days}</b>天`}</span>`)
+    : '<span class="dr-day none">沒紀錄</span>';
 }
 
 function deskRowHtml(dog, today, days) {
@@ -148,10 +158,7 @@ function deskRowHtml(dog, today, days) {
   const rest = s.kind === 'rest';
   const done = walkedNow(dog, today);
   const pending = BQWalkUI.walkPendingNow(dog);
-  const tag = s.kind === 'rest' ? `<span class="dr-day rest">休養</span>`
-    : s.kind === 'covered' ? `<span class="dr-day sage">固定</span>`
-    : s.kind === 'dated' ? (s.days < 0 ? '<span class="dr-day none">？</span>' : `<span class="dr-day ${s.level}">${s.days === 0 ? '今天' : `<b class="num">${s.days}</b>天`}</span>`)
-    : '<span class="dr-day none">沒紀錄</span>';
+  const tag = deskDayTag(s);
   // 跟手機「溜了」按鈕同一份登記狀態（walk-ui.js 的 walkButton）：#643 沒登記到留紅字到成功或再按，寫回試算表中／失敗也標出來
   const failed = !pending && BQWalkUI.walkFailure(dog);
   const check = pending ? '<span class="dr-state">登記中</span>'
@@ -181,7 +188,7 @@ function deskRowHtml(dog, today, days) {
   return `<tr class="dr${deskChecked.has(key) ? ' checked' : ''}${flag ? ' flagged' : ''}" data-desk-dog="${idx}">
     <td class="dr-ck">${check}</td>
     <td class="dr-dayc">${tag}</td>
-    <td class="dr-name"><button type="button" data-desk-open="${idx}" aria-haspopup="dialog">${esc(dog.name)}</button>${flag ? `<span class="dr-warn" title="${esc(flag.keywords.join('、'))}">注意</span>` : ''}${dog.homeCage ? '<small>暫住</small>' : ''}${status ? `<span class="dr-sub">${status}</span>` : ''}</td>
+    <td class="dr-name">${routeControl(true, dogHash(dog), `data-desk-open="${idx}" aria-haspopup="dialog"`, esc(dog.name))}${flag ? `<span class="dr-warn" title="${esc(flag.keywords.join('、'))}">注意</span>` : ''}${dog.homeCage ? '<small>暫住</small>' : ''}${status ? `<span class="dr-sub">${status}</span>` : ''}</td>
     <td class="dr-cagec">${cage}</td>
     <td class="dr-date num">${date ? `${date.getMonth() + 1}/${date.getDate()}` : ''}</td>
     <td class="dr-who">${esc(who)}</td>
@@ -356,5 +363,5 @@ if (typeof document !== 'undefined' && document.getElementById('main')) {
 }
 }
 
-export { DESK_MEDIA, deskOn, DESK_ZONES, deskZoneOf, deskBucket, deskNoteParts, deskChecked, deskNatural, deskSorted, deskSortDir, deskBriefHtml, deskToolsHtml, deskDays, deskDayWalk, deskLoadWalks, deskRowHtml, deskTableHtml, deskSideHtml, deskBatchHtml, deskWalkHtml, deskClearChecked, deskPlaceTabs, startDesk };
+export { DESK_MEDIA, deskOn, DESK_ZONES, deskZoneOf, deskBucket, deskNoteParts, deskChecked, deskNatural, deskSorted, deskSortDir, deskBriefHtml, deskToolsHtml, deskDays, deskDayWalk, deskLoadWalks, deskDayTag, deskRowHtml, deskTableHtml, deskSideHtml, deskBatchHtml, deskWalkHtml, deskClearChecked, deskPlaceTabs, startDesk };
 export { deskState } from './page-state.js';

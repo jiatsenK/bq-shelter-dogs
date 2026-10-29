@@ -62,14 +62,18 @@ module.exports = async (browser, base) => {
           assert(!(await frame.locator('.hint').isVisible()), '#421 資料編輯不放說明文字');
         }
         assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), '頁面不橫向溢出');
-        // 手機的「回資訊」在頁首；電腦版頁首每頁一樣，「回資訊」在內容最上面（K 2026-10-29）
-        await page.locator('#analysisBack:visible, #main [data-info-back]:visible').click();
-        await page.locator('[data-info-page="' + key + '"]').waitFor();
+        // 手機的「回資訊」在頁首；電腦版是左邊子頁清單、沒有回資訊，焦點留在清單選中的那一項（K 2026-10-29）
+        if (width < 1100) {
+          await page.locator('#analysisBack').click();
+          await page.locator('[data-info-page="' + key + '"]').waitFor();
+        } else assert.equal(await page.locator('#main [data-info-page="' + key + '"]').getAttribute('aria-current'), 'page', '電腦版清單標示目前子頁');
         assert(await page.locator('[data-info-page="' + key + '"]').evaluate(el => el === document.activeElement), '返回分類恢復焦點');
       }
     }
     // #739 入所多久分布：0～9 每年一格＋10+，點長條在下面列名單
     await page.setViewportSize({ width: 390, height: 844 });
+    // 電腦版最後停在更新紀錄子頁，縮成手機後先回資訊
+    await page.locator('#analysisBack').click();
     await page.locator('[data-info-page="stay"]').click();
     const bars = page.locator('[data-stay-bucket]');
     assert.deepEqual(await bars.locator('.a-col-l').allTextContents(), ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10+'], '固定 11 根');
