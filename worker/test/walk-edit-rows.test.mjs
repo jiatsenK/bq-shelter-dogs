@@ -83,7 +83,9 @@ test('#500 沒有待寫回時，重試排程不讀試算表；D1 只寫一列跑
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
 
-test('#500 保險掃描沒有不同的狗只問一次就結束；重試排程不掃（稽核第 5 項：正式版只剩兩個排程）', async () => {
+test('#500 保險掃描沒有不同的狗只問一次就結束；重試排程不掃（稽核第 5 項：正式版只剩兩個排程）', async t => {
+  // 固定在台灣 13:23 那次：UTC 1 點是當天第一次掃描，會順便清修改紀錄、多記一列 cron_editlog（edit-log-prune.test.mjs 驗）
+  t.mock.timers.enable({ apis:['Date'], now:Date.parse('2026-10-22T05:23:00Z') });
   const env = { ...await setup(), WALK_RETRY_ENABLED:'true' }, real = globalThis.fetch;
   const actions = [];
   globalThis.fetch = async (url, init) => {
