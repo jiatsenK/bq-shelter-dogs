@@ -25,7 +25,7 @@ async function runDeskTests() {
     await check('電腦版：簡報各幾隻、全表一列一隻（警示字紅色）、異動紀錄新的在上面', () => {
       const doc = new DOMParser().parseFromString(deskWalkHtml(TODAY, '', dueDogs(allDogs, TODAY)), 'text/html');
       eq([...doc.querySelectorAll('.db-count b')].map(b => b.textContent), ['1', '1', '1', '1'], '紅、黃、綠、沒紀錄：');
-      eq([...doc.querySelectorAll('tbody .dr-name button')].map(b => b.textContent), ['桌無', '桌紅', '桌黃', '桌綠'], '跟手機溜狗表同一個順序：');
+      eq([...doc.querySelectorAll('tbody .dr-name [data-desk-open]')].map(b => b.textContent), ['桌無', '桌紅', '桌黃', '桌綠'], '跟手機溜狗表同一個順序：');
       eq(doc.querySelectorAll('[data-desk-check]').length, 4, '每隻都能勾：');
       eq(doc.querySelector('tr.flagged .dr-note mark').textContent, '攻擊', '警示字：');
       eq([...doc.querySelectorAll('.ds-notes li')].map(li => li.textContent), ['10/1阿湯移至C區35', '1/7新獨10奈威移至新B03休養'], '新的在上面：');
@@ -98,7 +98,7 @@ async function runDeskTests() {
       try {
         deskView = 'sheet'; deskSort = 'days'; deskSortRev = false; deskZone = 'all';
         activeTab = 'walk'; searchQuery = ''; render();
-        const rows = () => [...main.querySelectorAll('.desk-table tbody tr.dr .dr-name button')].map(b => b.textContent);
+        const rows = () => [...main.querySelectorAll('.desk-table tbody tr.dr .dr-name [data-desk-open]')].map(b => b.textContent);
         const head = k => main.querySelector(`[data-desk-sort="${k}"]`).closest('th');
         const days = rows();
         eq([head('days').getAttribute('aria-sort'), head('days').classList.contains('desc')], ['descending', true], '天數預設最久的在上面：');

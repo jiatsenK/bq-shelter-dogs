@@ -18,7 +18,8 @@ import { fixedCareHtml, toggleFixedCare } from './detail-fixed-care.js';
 import { closeRestEdit, openRestEdit, restAdminHtml, restInput, restNoteHtml, saveRest } from './detail-rest.js';
 import { closeIntroEdit, introBarHtml, introInput, introOf, introSectionHtml, openIntroEdit, saveIntro } from './detail-intro.js';
 import { closeStaysEdit, openStaysEdit, saveStays, staysInput, staysRowClick } from './detail-stays.js';
-import { closeOverlay, forgetOverlay, pushOverlay, registerOverlay } from './overlays.js';
+import { closeOverlay, forgetOverlay, pushOverlay, registerOverlay, replaceOverlayUrl } from './overlays.js';
+import { dogHash } from './routes.js';
 
 const detailEdits = BQDetailEditor.create(renderDetail);
 
@@ -361,8 +362,10 @@ function showDetail(dog, remember = true) {
   detailEditorViewport.sync();
   document.documentElement.classList.add('detail-open');
   document.getElementById('detail').scrollTop = 0;
-  // 手機按「返回」時只關掉詳細資訊，不離開網頁
-  if (!wasOpen) pushOverlay('detail');
+  // 手機按「返回」時只關掉詳細資訊，不離開網頁。在所的狗網址換成 #dog/<編號>（ADR 0024）；換看別隻只換網址
+  const url = appState.allDogs.includes(dog) ? dogHash(dog) : '';
+  if (!wasOpen) pushOverlay('detail', url);
+  else replaceOverlayUrl('detail', url);
   const first = document.getElementById('detailClose') || document.querySelector('#detail .photo-bar button');
   if (first) first.focus({ preventScroll: true });
 }

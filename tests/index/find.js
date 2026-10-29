@@ -183,7 +183,7 @@ async function runWhereTests() {
       if (!bar || bar.compareDocumentPosition(doc.getElementById('main')) & Node.DOCUMENT_POSITION_FOLLOWING) throw new Error('底部列要在內容區後面');
       if (doc.querySelector('header #tabs, #bottomBar #searchInput')) throw new Error('分類不放頁首；搜尋框 2026-10-04 起在頁首、不在底部列');
       buildTabs({});
-      eq([...document.querySelectorAll('#tabs button')].map(b => !!b.querySelector('svg.icon')), [true, true, true, true], '每個分類都有圖示：');
+      eq([...document.querySelectorAll('#tabs [data-tab]')].map(b => !!b.querySelector('svg.icon')), [true, true, true, true], '每個分類都有圖示：');
     });
     await check('#111 找路的話：舊犬舍由下往上數、新犬舍由左往右數，不分籠的區說進去找', () => {
       const how = cage => whereDirections({ cage }).how;

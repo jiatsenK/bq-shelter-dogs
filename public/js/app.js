@@ -20,7 +20,8 @@ import { esc, highlightNote, icon, matchesSearch, monthDay, pad2, searchKey } fr
 import { dogStatus, restFrom, sortDue, specialFlag, walkKey } from './dog-status.js';
 import { closeDetail, renderDetail, showDetail } from './detail.js';
 import { bindSheetAppend } from './sheet-append.js';
-import { bindOverlays, closeOverlay, pushOverlay, pushPage, registerOverlay, trapFocus } from './overlays.js';
+import { anyOverlayOpen, bindOverlays, closeOverlay, overlayOnTop, pushOverlay, pushPage, registerOverlay, trapFocus, writeHistory } from './overlays.js';
+import { pageHash, parseHash, plainClick, routeControl } from './routes.js';
 
 // 狗狗資料：試算表同步進 D1（#245），網站從 Worker 的 /api/dogs 讀；前端不直接連試算表（#32）
 // 照片上傳服務（Cloudflare Worker，#47／#48）的網址。這裡只放網址，GitHub 寫入權限只在 Worker 裡，網站碰不到
@@ -37,11 +38,13 @@ const WALKER_CODES_KEY = BQStore.keys.walkerCodes;
 const WALKER_CODE_PATTERN = /^[0-9a-f]{12}$/; // 跟 Worker 的 WALKER_CODE_LENGTH 一致
 // 這間收容所的設定在 js/site-config.js（K 2026-10-10：以後其他收容所要用，只改那個檔）；天數色標與警示關鍵字見 js/dog-status.js
 
-// 圖鑑（cards.html）的「去設定」連到 index.html#mine，直接打開我溜過
+// 圖鑑（cards.html）的「去設定」連到 index.html#mine，直接打開我溜過；其他網址見 js/routes.js（ADR 0024）
 
 appState.allDogs = [];
 appState.groupMap = {};
-appState.activeTab = typeof location !== 'undefined' && ['#mine', '#find', '#groups'].includes(location.hash) ? location.hash.slice(1) : 'walk';
+const landingRoute = typeof location !== 'undefined' ? parseHash(location.hash) : null;
+appState.activeTab = landingRoute && landingRoute.tab !== 'info' ? landingRoute.tab : 'walk';
+appState.landingDogId = ''; // 打開網頁時網址是 #dog/<編號>：狗的資料讀到後打開這隻
 appState.groupsReturnTab = 'walk';
 appState.detailDog = null; // 詳細資訊正在看的狗
 appState.detailOpener = null;
@@ -192,7 +195,7 @@ async function loadMyWalks() {
   if (appState.activeTab !== 'mine' && !appState.analysisOpen && n) {
     const count = myWalksCount('');
     n.textContent = mineTabNumber(count);
-    n.closest('button').setAttribute('aria-label', mineTabLabel(count));
+    n.closest('[data-tab]').setAttribute('aria-label', mineTabLabel(count));
   } else {
     render();
   }
@@ -836,12 +839,14 @@ function buildTabs(counts) {
   const tabsEl = document.getElementById('tabs');
   const focusedTab = tabsEl.contains(document.activeElement) && document.activeElement.dataset.tab;
   const selected = appState.analysisOpen ? 'info' : appState.activeTab;
+  // 電腦版頁首的頁籤是真連結（ADR 0024），手機底部維持按鈕
+  const desk = typeof deskOn === 'function' && deskOn();
   tabsEl.innerHTML = shownTabs().map(t => {
     const n = t.id === 'mine' ? mineTabNumber(counts.mine) : counts[t.id] != null ? counts[t.id] : t.note || '';
     const label = t.id === 'mine' ? ` aria-label="${mineTabLabel(counts.mine)}"` : n === '' ? '' : ` aria-label="${t.label}，${n} 隻"`;
-    return `<button type="button" data-tab="${t.id}" class="${selected === t.id ? 'active' : ''}"${selected === t.id ? ' aria-current="page"' : ''}${label}>${icon(t.icon)}<span class="t">${t.label}</span><span class="n">${n}</span></button>`;
+    return routeControl(desk, pageHash(t.id), `data-tab="${t.id}" class="${selected === t.id ? 'active' : ''}"${selected === t.id ? ' aria-current="page"' : ''}${label}`, `${icon(t.icon)}<span class="t">${t.label}</span><span class="n">${n}</span>`);
   }).join('');
-  tabsEl.querySelectorAll('button').forEach(btn => {
+  tabsEl.querySelectorAll('[data-tab]').forEach(btn => {
     btn.addEventListener('click', () => switchTab(btn.dataset.tab));
   });
   if (focusedTab) tabsEl.querySelector(`[data-tab="${focusedTab}"]`)?.focus({ preventScroll: true });
@@ -869,7 +874,7 @@ function switchTab(id, pushHistory = true) {
   if (changed) deskClearChecked();
   const prevFocus = document.activeElement;
   render();
-  const btn = document.querySelector(`#tabs button[data-tab="${id}"]`);
+  const btn = document.querySelector(`#tabs [data-tab="${id}"]`);
   // 焦點原本在頁籤上就跟著移；原焦點被重繪拿掉（如返回鈕）時，觸控以外才補到頁籤。
   // 觸控時主動 focus 會被 iOS 當成鍵盤焦點而留下橘框（#420）
   const focusRemoved = prevFocus && prevFocus !== document.body && !prevFocus.isConnected;
@@ -888,7 +893,19 @@ function render() {
   if (appState.loadState === 'ready' && appState.activeTab === 'walk' && !appState.analysisOpen && appState.restState === 'error') {
     mainEl.insertAdjacentHTML('afterbegin', `<div class="alert-box warn" role="status"><span>休養設定暫時讀不到，帶出前請確認。已讀到的設定會保留。<br><button type="button" class="retry-btn" id="restRetry">重讀休養設定</button></span></div>`);
   }
+  syncPageUrl();
   BQTour.queue();
+}
+
+// 網址跟著畫面（ADR 0024）：沒走歷史紀錄就換了畫面（例如打開網頁那一筆的「回資訊」）時補正網址，不多一筆。
+// 最上面是覆蓋層時網址屬於那一層（詳細資訊的 #dog/<編號>），不動
+function syncPageUrl() {
+  if (typeof history === 'undefined' || typeof location === 'undefined' || overlayOnTop()) return;
+  const tab = appState.analysisOpen ? 'info' : appState.activeTab;
+  const infoPage = appState.analysisOpen && typeof analysisState.infoPage === 'string' ? analysisState.infoPage : '';
+  const want = pageHash(tab, infoPage);
+  if (location.hash === want || (!location.hash && want === '#walk')) return;
+  writeHistory('replaceState', history.state && history.state.bqNavigation ? { ...history.state, tab, infoPage } : history.state, want);
 }
 
 // 讀取中（#78）：先畫幾張灰色卡片骨架，版面不會等資料來才突然跳出來；文字留給螢幕閱讀器
@@ -1159,6 +1176,35 @@ function applyDogsData(data, { groupCheck = false } = {}) {
   if (!groupCheck) appState.favorites.syncFavs();
   if (!withToday) loadTodayWalks();
   if (appState.detailDog) renderDetail();
+  openLandingDog();
+}
+
+// 網址是 #dog/<編號>（ADR 0024）：讀到狗的資料就打開那隻；找不到就只留溜狗表，不報錯。
+// 開頭畫面、操作教學開著時不疊上去（兩個都蓋住整個畫面，教學自己也會開詳細資訊）
+function openLandingDog() {
+  const id = appState.landingDogId;
+  if (!id || appState.loadState !== 'ready') return;
+  appState.landingDogId = '';
+  const dog = appState.allDogs.find(d => d.id === id);
+  const covered = ['onboard-open', 'tour-open'].some(c => document.documentElement.classList.contains(c));
+  if (dog && !covered && !appState.detailDog) showDetail(dog);
+}
+
+// 在網址列自己改 hash、往前回到已經關掉的詳細資訊：照網址換畫面
+function showRoute(route) {
+  if (route.tab === 'info') {
+    if (!appState.analysisOpen) switchTab('info', false);
+    restoreInfoPage(Object.hasOwn(INFO_PAGES, route.infoPage) ? route.infoPage : '');
+  } else if (!route.dogId) switchTab(route.tab, false);
+  if (!route.dogId) return;
+  // 跟打開網頁時一樣：這一筆換成底下的分頁，詳細資訊再多一筆，返回只關詳細資訊、找不到的狗不留在網址上。
+  // 往前回到已經關掉的詳細資訊那筆時不換，pushOverlay 會直接沿用這一筆
+  if (!(history.state && history.state.bqDetail)) {
+    const tab = appState.analysisOpen ? 'info' : appState.activeTab;
+    writeHistory('replaceState', navigationState(tab), pageHash(tab, appState.analysisOpen ? analysisState.infoPage : ''));
+  }
+  appState.landingDogId = route.dogId;
+  openLandingDog();
 }
 
 // 頁首的資料時間；沒網路時改寫「沒網路・資料 10/8 09:01」，志工才知道看的是舊資料、溜了寫不進試算表
@@ -1225,14 +1271,42 @@ export function bindApp() {
   bindSheetAppend();
   // 覆蓋層（平面圖放大、裁切、燈箱、在哪、詳細資訊）由 overlays.js 先關；都沒開才換頁籤
   bindOverlays(e => {
+    const route = parseHash(location.hash);
     if (e.state && e.state.bqNavigation) {
       appState.activeTab = e.state.base || 'walk';
       appState.groupsReturnTab = e.state.returnTab || 'walk';
       switchTab(e.state.tab, false);
       if (e.state.tab === 'info') restoreInfoPage(e.state.infoPage || '');
     }
+    else if (route && (route.dogId || !e.state)) showRoute(route);
     else if (appState.analysisOpen) hideAnalysis();
     else if (appState.activeTab === 'groups') switchTab(appState.groupsReturnTab, false);
+  }, state => (state.tab ? pageHash(state.tab, state.infoPage || '') : undefined));
+  // 打開網頁的那一筆（ADR 0024）：照網址開資訊子頁、記下要打開的狗；標成 bqLanding，網站裡的「回…」不會走出網站。
+  // 網址是狗的話這一筆換成 #walk，打開詳細資訊時再多一筆 #dog/<編號>，按返回只關詳細資訊
+  if (landingRoute && landingRoute.tab === 'info') {
+    appState.analysisOpen = true;
+    analysisState.infoPage = Object.hasOwn(INFO_PAGES, landingRoute.infoPage) ? landingRoute.infoPage : '';
+  }
+  appState.landingDogId = landingRoute ? landingRoute.dogId : '';
+  writeHistory('replaceState', { ...navigationState(appState.analysisOpen ? 'info' : appState.activeTab), bqLanding: true }, landingRoute && landingRoute.dogId ? pageHash('walk') : undefined);
+  // 站內連結（ADR 0024）：一般點擊留在原頁、交給各自的 click 處理；加了 Ctrl、⌘、Shift、Alt 交給瀏覽器開新分頁，這頁不接
+  document.addEventListener('click', e => {
+    const link = e.target.closest && e.target.closest('a[href^="#"]:is([data-tab], [data-desk-open], [data-info-page])');
+    if (!link) return;
+    if (plainClick(e)) e.preventDefault();
+    else e.stopPropagation();
+  }, true);
+  // 「/」跳到搜尋框：正在打字、有覆蓋層、開頭畫面或教學開著、這頁沒有搜尋框（資訊）時不搶
+  document.addEventListener('keydown', e => {
+    if (e.key !== '/' || e.ctrlKey || e.metaKey || e.altKey || e.isComposing || e.defaultPrevented) return;
+    const t = e.target;
+    if (t && (t.isContentEditable || (t.closest && t.closest('input, textarea, select')))) return;
+    if (anyOverlayOpen() || ['onboard-open', 'tour-open'].some(c => document.documentElement.classList.contains(c))) return;
+    if (!searchInput || searchInput.disabled || !searchInput.getClientRects().length || getComputedStyle(searchInput).visibility === 'hidden') return;
+    e.preventDefault();
+    searchInput.focus();
+    searchInput.select();
   });
   document.getElementById('detailBackdrop').addEventListener('click', e => {
     if (e.target.id === 'detailBackdrop') closeDetail();

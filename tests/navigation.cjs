@@ -77,7 +77,7 @@ module.exports = async function verifyNavigation(browser, baseUrl) {
     for (const width of [320, 390, 1100, 1280]) {
       await page.setViewportSize({ width, height: 844 });
       await page.evaluate(() => new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r))));
-      for (const tab of await page.locator('#tabs button').all()) {
+      for (const tab of await page.locator('#tabs [data-tab]').all()) {
         const box = await tab.boundingBox();
         assert(box && box.width >= 44 && box.height >= 44, '點擊區至少 44px');
         assert(await tab.locator('.t').evaluate(el => el.scrollWidth <= el.clientWidth), '名稱完整顯示');

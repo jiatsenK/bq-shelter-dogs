@@ -12,6 +12,7 @@ import { backFrom, pushPage, replacePage } from './overlays.js';
 import { shareSite } from './share.js';
 import { BQWalkUI } from './walk-ui.js';
 import { deskOn } from './desk.js';
+import { pageHash, routeControl } from './routes.js';
 
 // 分析頁（V5-4 #59、V5-5 #60）：目前 dogs.json 就能算的犬隻統計，加上 #56 累積的遛狗歷史與每日快照。
 // 統計都寫成純函式（輸入狗清單與今天日期，輸出數字），tests/index.html 直接測；畫面只負責把結果畫成 CSS／SVG 資訊圖表（大數字、圓環、直條圖）。
@@ -626,7 +627,7 @@ function infoHomeHtml() {
   const dep = !analysisState.departuresData || analysisState.departuresData.state === 'loading' ? '離所紀錄讀取中…' : analysisState.departuresData.state === 'error' ? '離所紀錄讀取失敗' : analysisState.departuresData.list.length ? `共 ${analysisState.departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
   const act = activitiesState.activitiesData.state === 'loading' ? '活動紀錄讀取中…' : activitiesState.activitiesData.state === 'error' ? '活動紀錄讀取失敗' : activitiesState.activitiesData.list.length ? `共 ${activitiesState.activitiesData.list.length} 場活動` : '還沒有活動紀錄';
   const summary = { stay: dogs, departures: dep, activities: act, quality: '查看缺照片、介紹及其他資料', updates: '誰、什麼時候改了哪些資料' };
-  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).filter(([id]) => canShow(id)).map(([id, title]) => `<button type="button" data-info-page="${id}"><strong>${title}</strong><span>${esc(summary[id])}</span></button>`).join('')}${shareSiteHtml()}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
+  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).filter(([id]) => canShow(id)).map(([id, title]) => routeControl(deskOn(), pageHash('info', id), `data-info-page="${id}"`, `<strong>${title}</strong><span>${esc(summary[id])}</span>`)).join('')}${shareSiteHtml()}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
 }
 
 // ADR 0023 分享網站：只在手機版（電腦版由 CSS 藏起來）；分享和複製都不行時把網址放進可選取的欄位
