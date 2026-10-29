@@ -103,7 +103,9 @@ module.exports = async (browser, base) => {
     // 縮成手機：照舊是頁首「回資訊」＋分類清單
     await page.setViewportSize({ width: 390, height: 844 });
     await page.locator('#analysisBack').waitFor();
-    assert.equal(await page.locator('#main .info-desk').count(), 0, '手機不用電腦版版面');
+    // 跨 1100px 會整頁重畫，CI 機器較慢：等重畫完再判斷
+    await page.waitForFunction(() => !document.querySelector('#main .info-desk'), null, { timeout: 3000 })
+      .catch(() => assert.fail('手機不用電腦版版面'));
     await page.locator('#infoEdits').waitFor();
     await page.locator('#analysisBack').click();
     await page.locator('#main .info-home [data-info-page="stay"]').waitFor();
