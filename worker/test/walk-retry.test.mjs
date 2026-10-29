@@ -1,9 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
-import { dispatchWalk, dispatchWalks, RETRY_LIMIT, STOPPED_AT } from '../src/walk-accept.js';
-import { readStoppedWalks } from '../src/admin/checks.js';
-import { retryWalks } from '../src/walk-retry.js';
+import { todayWalks } from '../src/today-walks/index.js';
+import { RETRY_LIMIT, STOPPED_AT } from '../src/today-walks/dispatch.js';
+import { DISPATCH_COST } from '../src/today-walks/budget.js';
 import { setup, request, post, current } from './walk-fixture.mjs';
 
 async function machine(env, action, body) {
@@ -118,7 +118,7 @@ test('#684 試算表明確拒絕（金鑰、試算表 ID、權限、沒設定）
         assert.equal((await current(env)).walks[0].syncStatus, 'retry');
         for (const minutes of [1, 60, 24 * 60]) { worker.testing.resetState(); await tick(env, start + minutes * 60000); }
         assert.equal(calls.length, sent, '停住後排程不再呼叫試算表');
-        const [dog] = await readStoppedWalks(env.DB);
+        const [dog] = await todayWalks(env).stopped();
         assert.deepEqual(dog, { number:'9001',name:'測試狗',dogId:'dog',date:request('x').operationDate,failures:1,reason });
       } finally { env.DB.close(); }
     }
@@ -147,7 +147,7 @@ test('#684 其他錯誤第 10 次失敗後停；這隻狗再登記就換新版�
     assert.equal((await job(env)).next_attempt_at, STOPPED_AT);
     await tick(env, now + 86400000);
     assert.equal(calls.length, RETRY_LIMIT, '第 10 次失敗後不再試');
-    const [dog] = await readStoppedWalks(env.DB);
+    const [dog] = await todayWalks(env).stopped();
     assert.deepEqual([dog.failures, dog.reason], [RETRY_LIMIT, '連不上試算表，請稍後再試']);
     const version = (await current(env)).walks[0].version;
     assert.equal((await post(env, request('limit-00002','乙',{ dogs:[{ id:'9001',name:'測試狗',expectedVersion:version }] }))).status, 200);
@@ -155,7 +155,7 @@ test('#684 其他錯誤第 10 次失敗後停；這隻狗再登記就換新版�
     await tick(env, now + 86400000 + 60000);
     assert.equal(calls.length, RETRY_LIMIT + 1, '新版本照常派送');
     assert.deepEqual([(await job(env)).failures, (await job(env)).next_attempt_at === STOPPED_AT], [1, false]);
-    assert.deepEqual(await readStoppedWalks(env.DB), [], '舊版本已被取代，不再列出');
+    assert.deepEqual(await todayWalks(env).stopped(), [], '舊版本已被取代，不再列出');
   } finally { globalThis.fetch = real; env.DB.close(); }
 });
 
@@ -164,8 +164,8 @@ const budgetRow = env => env.DB.prepare('SELECT reserved,retry FROM v3_walk_writ
 test('#685 重試用量超過每日上限時延到隔天（UTC 午夜），第一次派送不算重試', async t => {
   const start = Date.parse('2026-10-22T02:00:00Z');
   t.mock.timers.enable({ apis:['Date'],now:start });
-  // 上限只夠一次重試（每次派送預留 96 列）
-  const env = { ...await setup(),WALK_RETRY_ENABLED:'true',SYNC_RETRY_DAILY_BUDGET:'96' }, real = globalThis.fetch, calls = [];
+  // 上限只夠一次重試（每次派送預留 DISPATCH_COST 列，today-walks/budget.js）
+  const env = { ...await setup(),WALK_RETRY_ENABLED:'true',SYNC_RETRY_DAILY_BUDGET:String(DISPATCH_COST) }, real = globalThis.fetch, calls = [];
   worker.testing.resetState();
   globalThis.fetch = failingSheet(() => { throw new Error('lost'); }, calls);
   try {
@@ -174,7 +174,7 @@ test('#685 重試用量超過每日上限時延到隔天（UTC 午夜），第�
     assert.deepEqual([calls.length, (await budgetRow(env)).retry], [1, 0], '第一次派送只扣總預算');
     let now = Date.parse((await job(env)).next_attempt_at);
     worker.testing.resetState(); await tick(env, now);
-    assert.deepEqual([calls.length, (await budgetRow(env)).retry], [2, 96]);
+    assert.deepEqual([calls.length, (await budgetRow(env)).retry], [2, DISPATCH_COST]);
     now = Date.parse((await job(env)).next_attempt_at);
     worker.testing.resetState(); await tick(env, now);
     assert.equal(calls.length, 2, '上限用完不再呼叫試算表');
@@ -412,7 +412,7 @@ test('恢復派送 B 逾時但舊 A 才取得接收端鎖，A 再中斷仍能下
   let a;
   try {
     await post(env,request('race-recovery-1'));
-    a=dispatchWalk(env.DB,{ id:'9001',name:'測試狗' },env);
+    a=todayWalks(env).dispatch([{ id:'9001',name:'測試狗' }]);
     while (!stopA) await new Promise(resolve=>setImmediate(resolve));
     t.mock.timers.setTime(now+60000);
     const b=tick(env,now+60000);
@@ -440,7 +440,7 @@ test('UTC 午夜前的預留不能繞過隔日預算，晚到回執保留待確�
   };
   try {
     await post(env,request('utc-budget-0001'));
-    a=dispatchWalk(env.DB,{ id:'9001',name:'測試狗' },env);
+    a=todayWalks(env).dispatch([{ id:'9001',name:'測試狗' }]);
     while(!stop)await new Promise(resolve=>setImmediate(resolve));
     const target=await machine(env,'target',{ dog:wake.dog,dispatchId:wake.dispatchId,current:{ date:'2026-10-01',walker:'' } });
     t.mock.timers.setTime(now+120000);
@@ -526,8 +526,8 @@ test('#498 十隻到期工作依單次預算拆批合併派送，不退回逐隻
   };
   try {
     await addDogs(env,10,'chunk');
-    await retryWalks(env,now);
-    assert.ok(batches.length>=2 && batches.every(n=>n>1 && n*96<=500),`批次 ${batches}`);
+    await todayWalks(env,{ now:()=>now }).dispatchDue();
+    assert.ok(batches.length>=2 && batches.every(n=>n>1 && n*DISPATCH_COST<=500),`批次 ${batches}`);
     assert.equal(batches.reduce((a,b)=>a+b,0),10);
     const rows=(await env.DB.prepare("SELECT o.status FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version").all()).results;
     assert.ok(rows.length===10 && rows.every(r=>r.status==='synced'));
@@ -543,10 +543,10 @@ test('#498 寫回重試不掃表；沒有待處理工作就不呼叫 Apps Script
   globalThis.fetch=async (_url,init)=>{ actions.push(JSON.parse(init.body).action); throw new Error('lost'); };
   try {
     await post(env,request('noscan-0001'));
-    await retryWalks(env,now);
+    await todayWalks(env,{ now:()=>now }).dispatchDue();
     assert.deepEqual(actions,['walkWake']);
     actions.length=0;
-    await retryWalks(env,now);
+    await todayWalks(env,{ now:()=>now }).dispatchDue();
     assert.deepEqual(actions,[]);
   } finally { globalThis.fetch=real;env.DB.close(); }
 });
@@ -562,7 +562,7 @@ test('#498 預算拒絕不退回逐隻派送，工作留待下一輪', async t =
     await addDogs(env,3,'budget');
     // 每日剩餘只夠一隻：合併批次被拒時不能改逐隻偷跑。
     const reserved=(await env.DB.prepare('SELECT reserved FROM v3_walk_write_budget').first()).reserved;
-    await assert.rejects(retryWalks({ ...env,SYNC_DAILY_BUDGET:String(reserved+100) },now),/budget/,'排程記成失敗，管理網站看得到');
+    await assert.rejects(todayWalks({ ...env,SYNC_DAILY_BUDGET:String(reserved+100) },{ now:()=>now }).dispatchDue(),/budget/,'排程記成失敗，管理網站看得到');
     assert.equal(wake,0);
     assert.equal((await env.DB.prepare("SELECT COUNT(*) n FROM v3_walk_outbox WHERE status='pending'").first()).n,3);
   } finally { globalThis.fetch=real;env.DB.close(); }
@@ -579,16 +579,16 @@ test('#498 遠端失敗分得出：沒設定、連不上（結果不明）、試
   try {
     await addDogs(env,2,'remote');
     globalThis.fetch=async ()=>{ throw new Error('down'); };
-    await dispatchWalk(env.DB,{ id:'9200',name:'remote狗0' },env,now);
+    await todayWalks(env,{ now:()=>now }).dispatch([{ id:'9200',name:'remote狗0' }]);
     assert.match(await error('9200'),/^writeback-unconfirmed/);
     globalThis.fetch=async (_url,init)=>{
       const body=JSON.parse(init.body);
       return Response.json({ ok:true,results:body.items.map(item=>({ ok:false,dispatchId:item.dispatchId,error:'找不到唯一的狗' })) });
     };
-    await dispatchWalks(env.DB,[{ dog:{ id:'9200',name:'remote狗0' },recovery:null },{ dog:{ id:'9201',name:'remote狗1' },recovery:null }],env,now+10*60000);
+    await todayWalks(env,{ now:()=>now+10*60000 }).dispatch([{ id:'9200',name:'remote狗0' },{ id:'9201',name:'remote狗1' }]);
     assert.match(await error('9200'),/^writeback-rejected/);
     assert.match(await error('9201'),/^writeback-rejected/);
     const reserved=(await env.DB.prepare('SELECT reserved FROM v3_walk_write_budget').first()).reserved;
-    await assert.rejects(retryWalks({ ...env,SYNC_DAILY_BUDGET:String(reserved+1) },now+60*60000),/budget/);
+    await assert.rejects(todayWalks({ ...env,SYNC_DAILY_BUDGET:String(reserved+1) },{ now:()=>now+60*60000 }).dispatchDue(),/budget/);
   } finally { console.warn=warn;globalThis.fetch=real;env.DB.close(); }
 });

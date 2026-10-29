@@ -8,9 +8,7 @@ import { callSheet, SheetWriteError } from './sheet-write.js';
 import { splitNames } from './sheet-read.js';
 import { readDepartedCards } from './departed.js';
 import { ActivityError, activityLog, cleanActivity, createActivity, deleteActivity, readActivities, resolveDogs, updateActivity } from './activities.js';
-import { acceptWalk, dispatchWalk, readAcceptedWalks, withTodayWalks, writebackTarget, confirmWalk, reconcileWalk } from './walk-accept.js';
-import { reconcileEditedRows } from './walk-reconcile.js';
-import { retryWalks, scanTick } from './walk-retry.js';
+import { todayWalks, withTodayWalks } from './today-walks/index.js';
 import { recordRun } from './cron-status.js';
 // 板收志工溜狗表：網站＋D1 API、R2 照片；我的備註 #252 退役。
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；這裡的 /api/admin 只給 GitHub Action，用 ADMIN_KEY；管理者用的管理網站是另一個 Worker（worker/src/admin/、wrangler.admin.jsonc，ADR 0020）。試算表只寫原有兩欄。
@@ -179,7 +177,7 @@ async function getDogs(env, origin) {
     return off();
   }
   try {
-    Object.assign(data, withTodayWalks(data.dogs, await readAcceptedWalks(env.DB, taiwanYmd(Date.now()))));
+    Object.assign(data, withTodayWalks(data.dogs, await todayWalks(env).today()));
   } catch (e) { console.error('dogs-today', e); } // 讀不到今日溜狗就照試算表複本給，網站再自己讀 /today
   if (r2.r2On(env)) {
     try {
@@ -451,10 +449,10 @@ async function walkerCodes(request, env, origin) {
 }
 
 // ── POST /walk：溜了／修改／復原與備註、異動紀錄 ──
-// 溜了／修改／復原先存 D1（ADR 0018），再由 dispatchWalk 叫 Apps Script 的 walkWake 寫回；舊版直寫小程式已退場（#597）。
+// 溜了／修改／復原先存 D1（ADR 0018），再由今日溜狗紀錄 module（today-walks/）背景派送，叫 Apps Script 的 walkWake 寫回；舊版直寫小程式已退場（#597）。
 // note／log 檢查完帶上金鑰（SHEET_WRITE_KEY）轉給 Google Apps Script 小程式（apps-script/sheet-write.gs，K 用自己的帳號部署）。
 // ── 溜狗人名字（#141）：GET /walkers ──
-// 名字不進 repo（dogs.json 只有代號），網站打開時跟這裡拿：#519 起從 D1 讀（readWalkersD1），不連 Google，
+// 名字不進 repo（dogs.json 只有代號），網站打開時跟這裡拿：#519 起從 D1 讀（今日溜狗紀錄 module 的 walkers()，主清單的狗有溜狗狀態就用它），不連 Google，
 // 回 { walkers: { 狗的 key: 誰遛的 }, names: [主清單上的名字，最近出現的在前], older: [以前看過、現在表上沒有的名字] }；狗的 key 跟網站 walkKey 一樣（有編號用編號，沒有用「名:犬名」）。
 // 1 分鐘內重複讀用快取。沒接 DB 回 503 + code: 'off'
 // K 2026-10-20：不管在網站按還是直接改試算表，其他手機 1 分鐘內要看到（原本 5 分鐘）。手機每分鐘只輪詢今日紀錄（/today）；/walkers 在打開網頁、按「更新」、恢復連線時才抓
@@ -462,38 +460,6 @@ const WALKERS_CACHE_MS = 60 * 1000;
 // 看過的名字寫資料庫很花寫入額度（每個名字一列），快取改 1 分鐘後另外限制：名單沒變就 30 分鐘才記一次
 const WALKER_NAMES_REMEMBER_MS = 30 * 60 * 1000;
 let walkerNamesRemembered = null; // { at, names: 'a,b', older }
-// 主清單每隻狗：有今日溜狗狀態（v3_walk_state）用它，沒有用主清單的遛狗日期與「誰遛的」原文（沒補填的用名單代號換回名字，跟 walk-accept 的 seedState 一樣）。
-// 回 { walkers: { 狗的 key: 名單 }, dates: { 狗的 key: 'YYYY-MM-DD' 或 '' }, names: [最近出現的在前，同一天照名單順序] }
-export async function readWalkersD1(db) {
-  const [main, states] = await db.batch([
-    db.prepare('SELECT row_index, number, name, walked_date, walker FROM v3_sheet_main ORDER BY row_index'),
-    db.prepare('SELECT dog_key, effective_date, walker FROM v3_walk_state'),
-  ]);
-  // 代號換名字只給還沒補填原文（walker 是 NULL）的狗；正式庫已經沒有 NULL，平常不讀這段 JOIN（#554，原本一次白讀 772 列）
-  const people = (main.results || []).some(r => r.walker == null)
-    ? await db.prepare('SELECT m.row_index, n.name FROM v3_sheet_main m, json_each(m.walker_codes) w LEFT JOIN v3_identity_names n ON n.code=w.value WHERE m.walker IS NULL ORDER BY m.row_index, w.key').all()
-    : { results: [] };
-  const namesOf = new Map();
-  for (const p of people.results || []) {
-    if (!p.name) continue;
-    if (!namesOf.has(p.row_index)) namesOf.set(p.row_index, []);
-    namesOf.get(p.row_index).push(p.name);
-  }
-  const stateOf = new Map((states.results || []).map(s => [s.dog_key, s]));
-  const walkers = {}, dates = {}, lastSeen = new Map(); // 名字 → 最近一次 { date, i: 名單裡第幾位 }
-  for (const r of main.results || []) {
-    const key = r.number || `名:${r.name}`;
-    const s = stateOf.get(key);
-    // 主清單存了「誰遛的」原文就用原文（#519）；還沒補填（NULL）才用代號換名字
-    const text = s ? s.walker || '' : r.walker ?? (namesOf.get(r.row_index) || []).join('、');
-    const date = (s ? s.effective_date : r.walked_date) || '';
-    walkers[key] = text;
-    dates[key] = date;
-    splitNames(text).forEach((n, i) => { const prev = lastSeen.get(n); if (!prev || date > prev.date || (date === prev.date && i < prev.i)) lastSeen.set(n, { date, i }); });
-  }
-  const names = [...lastSeen].sort((x, y) => y[1].date.localeCompare(x[1].date) || x[1].i - y[1].i || x[0].localeCompare(y[0], 'zh-Hant')).map(([n]) => n);
-  return { walkers, dates, names };
-}
 // 看過的名字記進資料庫（K 2026-10-12）：回「以前看過、現在表上沒有」的名字，最近看到的在前（older）。
 // 沒接資料庫或資料庫出錯就回空的，名字清單照舊只有表上現在的
 const WALKER_NAMES_MAX = 300;
@@ -528,7 +494,7 @@ async function getWalkers(env, allowed, now = Date.now()) {
   const cfg = config(env);
   if (!env || !env.DB) return reply(503, { ok: false, code: 'off', error: '還沒接資料庫' }, allowed);
   if (!walkersCache || now - walkersCache.at > WALKERS_CACHE_MS) {
-    const data = await readWalkersD1(env.DB);
+    const data = await todayWalks(env).walkers();
     const key = data.names.join(',');
     const r = walkerNamesRemembered;
     const older = r && r.names === key && now - r.at < WALKER_NAMES_REMEMBER_MS ? r.older : await rememberWalkerNames(env, data.names, now);
@@ -583,15 +549,16 @@ async function writeWalks(request, env, origin, ctx) {
   if (dogs.some(d => !d)) return fail(400, '狗的資料不對', origin);
   if (accepted) {
     if (!shortText(input.walker, action === 'edit' ? 200 : WALKER_NAME_MAX_CHARS) || !input.walker.trim()) return fail(400, '要先選好身分', origin);
+    const walks = todayWalks(env);
     try {
-      const result = await acceptWalk(env?.DB, { ...input, dogs }, env);
+      const result = await walks.accept({ ...input, dogs });
       // 沒有執行背景工作的 context 時仍保留 pending，不能等待 Google 才回接受。
-      if (ctx?.waitUntil) ctx.waitUntil(dispatchWalk(env.DB, dogs[0], env).catch(e => console.error('walk-dispatch', e.message)));
-      return reply(200, { ok: true, source: 'd1', today: input.operationDate, results: [result], snapshot: await readAcceptedWalks(env.DB, taiwanYmd(Date.now())) }, origin);
+      if (ctx?.waitUntil) ctx.waitUntil(walks.dispatch([dogs[0]]).catch(e => console.error('walk-dispatch', e.message)));
+      return reply(200, { ok: true, source: 'd1', today: input.operationDate, results: [result], snapshot: await walks.today() }, origin);
     } catch (e) {
       if (e.current) return reply(409, { ok: false, source: 'd1', error: e.message,
         results: [{ ...dogs[0], status: 'changed', version: e.version, current: e.current }],
-        snapshot: await readAcceptedWalks(env.DB, taiwanYmd(Date.now())) }, origin);
+        snapshot: await walks.today() }, origin);
       return fail(e.status || 503, e.status ? e.message : '登記尚未接受，請用原請求再試', origin);
     }
   }
@@ -757,7 +724,7 @@ const SITE_ROUTES = {
   '/today': { method: 'GET', wrongMethod: '只能用 GET /today 讀', crash: [503, '暫時讀不到今日溜狗紀錄', DB_DOWN],
     async run({ env, origin, url }) {
       if (url.searchParams.get('source') !== 'd1') return fail(410, '網頁版本太舊，請重新整理更新網頁', origin);
-      return reply(200, { ok: true, ...await readAcceptedWalks(env.DB, taiwanYmd(Date.now())) }, origin);
+      return reply(200, { ok: true, ...await todayWalks(env).today() }, origin);
     } },
   '/rest': { method: 'GET', wrongMethod: '休養設定只能用 GET /rest 讀', crash: [503, '暫時讀不到休養設定', DB_DOWN],
     run: async ({ env, origin }) => reply(200, { ok: true, rest: await readSmall(env.DB, 'rest') }, origin) },
@@ -775,10 +742,9 @@ const SITE_ROUTES = {
       if (!env?.DB) return fail(405, '只能讀取登記結果', origin);
       const id = url.searchParams.get('requestId') || '';
       if (!/^[A-Za-z0-9_-]{8,100}$/.test(id)) return fail(400, '請求識別不對', origin);
-      const found = await env.DB.prepare('SELECT result_json FROM v3_walk_requests WHERE request_id=?').bind(id).first();
-      if (!found) return fail(404, '尚未找到接受結果', origin);
-      const result = JSON.parse(found.result_json);
-      return reply(200, { ok: true, source: 'd1', today: result.operationDate, results: [result], snapshot: await readAcceptedWalks(env.DB, taiwanYmd(Date.now())) }, origin);
+      const walks = todayWalks(env), result = await walks.result(id);
+      if (!result) return fail(404, '尚未找到接受結果', origin);
+      return reply(200, { ok: true, source: 'd1', today: result.operationDate, results: [result], snapshot: await walks.today() }, origin);
     } },
 };
 
@@ -803,8 +769,9 @@ export default {
   async scheduled(event, env, ctx) {
     const now = event && event.scheduledTime ? event.scheduledTime : Date.now();
     const cron = event && event.cron;
-    const retry = () => recordRun(env, 'retry', now, () => retryWalks(env, now));
-    const scan = () => recordRun(env, 'scan', now, () => scanTick(env, now));
+    const walks = todayWalks(env, { now: () => now });
+    const retry = () => recordRun(env, 'retry', now, () => walks.dispatchDue());
+    const scan = () => recordRun(env, 'scan', now, () => walks.scan());
     if (!cron) ctx.waitUntil(scan().then(retry));
     else if (cron === RETRY_CRON) ctx.waitUntil(retry());
     else if (cron === SCAN_CRON) {
@@ -888,20 +855,28 @@ export default {
           if (!fp || typeof fp !== 'object' || Array.isArray(fp) || Object.values(fp).some(v => typeof v !== 'string')) return fail(400, '指紋格式不對', '');
           return reply(200, { ok: true, ...await scanDogList(env.DB, fp) }, '');
         }
+        const walks = todayWalks(env);
+        // 有人編輯（#500，ADR 0018）：GAS 在同一 script lock 內直接讀出受影響的列送來，Worker 只比這幾隻，不回頭讀整張表。
+        // 換籠、出現在「已出所」等非溜狗欄位由狗清單編輯觸發另外送（/dog-list），這裡只回 ack。
+        // ack：Worker 已持久接手（更新、無差異，或已記進 v3_walk_conflicts）；D1 失敗或功能開關 D1_WALK_NOTIFY 沒開回 false，讓 GAS 保留待通知版本，開啟後補送。
         if (path.endsWith('/rows')) {
           if (!Array.isArray(input.rows) || input.rows.length > EDIT_ROWS_MAX) return fail(400,`每批最多 ${EDIT_ROWS_MAX} 列`,'');
-          return reply(200,{ ok:true, results:await reconcileEditedRows(env.DB,input.rows,env) },'');
+          const on = env.D1_WALK_NOTIFY === '1', walkRows = input.rows.filter(row => row.sheet === 'main' && row.current);
+          const observed = on ? await walks.observe(walkRows) : [];
+          const results = input.rows.map(row => {
+            if (!walkRows.includes(row)) return { ok:true, ack:true };
+            if (!on) return { ok:false, ack:false, error:'今日溜狗編輯同步尚未啟用' };
+            const result = observed[walkRows.indexOf(row)];
+            return result.ok ? { ok:true, ack:true, ...result } : result;
+          });
+          return reply(200,{ ok:true, results },'');
         }
         if (path.endsWith('/observe')) {
           if (!Array.isArray(input.observations) || input.observations.length > 10) return fail(400,'每批最多比對十隻狗','');
-          const results = [];
-          for (const observation of input.observations) {
-            try { results.push({ ok:true, ...await reconcileWalk(env.DB,observation.dog,observation.current,env) }); }
-            catch (error) { results.push({ ok:false, error:error.status ? error.message : '比較失敗，保留待處理' }); }
-          }
+          const results = (await walks.observe(input.observations)).map(({ ack, ...result }) => result);
           return reply(200,{ ok:true, results },'');
         }
-        const result = path.endsWith('/target') ? await writebackTarget(env.DB, input, env) : await confirmWalk(env.DB, input, env);
+        const result = path.endsWith('/target') ? await walks.target(input) : await walks.receipt(input);
         return reply(200, { ok: true, ...result }, '');
       } catch (e) { return fail(e.status || 503, e.status ? e.message : '寫回尚未確認', ''); }
     }

@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
-import { dispatchWalk } from '../src/walk-accept.js';
+import { todayWalks } from '../src/today-walks/index.js';
 import { setup, post, request } from './walk-fixture.mjs';
 
 // 只數最外層的往返：batch 算一次，batch 裡的敘述不另外算。
@@ -35,7 +35,7 @@ test('派送一隻狗：Cron 端 ≤ 3 次 D1 往返，拿目標 ≤ 2 次，回
   };
   try {
     assert.equal((await post({ ...base, SYNC_DAILY_BUDGET: '1000000' }, request('trips-00001'))).status, 200);
-    await dispatchWalk(c.DB, { id: '9001', name: '測試狗' }, env, Date.now());
+    await todayWalks(env).dispatch([{ id: '9001', name: '測試狗' }]);
   } finally { globalThis.fetch = real; }
   assert.equal(await base.DB.prepare("SELECT status FROM v3_walk_outbox WHERE dog_key='9001' ORDER BY version DESC").first('status'), 'synced');
   assert.equal(await base.DB.prepare("SELECT COUNT(*) n FROM v3_walk_delivery").first('n'), 0);

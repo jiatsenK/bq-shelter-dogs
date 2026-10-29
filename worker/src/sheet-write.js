@@ -1,7 +1,7 @@
 // 寫試算表（ADR 0006）：Worker 只透過 K 部署的 Apps Script 小程式（apps-script/sheet-write.gs）改試算表，
 // 所有呼叫都經過這裡，小程式能做哪些動作就看 SHEET_ACTIONS：
 // - note／log：追加一隻狗的備註、新增一筆異動紀錄（#239、#281）
-// - walkWake／walkWakeBatch／walkScan：新登記流程寫回（單隻、合併最多 10 隻）、讀回主清單（walk-accept.js、walk-reconcile.js）
+// - walkWake／walkWakeBatch／walkScan：新登記流程寫回（單隻、合併最多 10 隻）、讀回主清單（today-walks/：dispatch.js、scan.js）
 // 舊版直寫 walk／edit／undo 已退場（#597），小程式收到只回「請重新整理網頁」
 export const SHEET_ACTIONS = new Set(['note', 'log', 'walkWake', 'walkWakeBatch', 'walkScan']);
 const TIMEOUT_MS = 20 * 1000;

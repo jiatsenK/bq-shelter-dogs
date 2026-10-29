@@ -2,7 +2,7 @@
 
 日期：2026-10-16（K 決定，#302）
 
-> 已由 [ADR 0018](0018-today-walks-d1-event-sync.md) 修訂：試算表抄到 D1 的整批同步已退役（#501、#512），「差異同步」這段只留作歷史。寫入預算還在用：網站登記寫回試算表前照 `SYNC_MAX_ROWS`、`SYNC_DAILY_BUDGET` 檢查（`worker/src/walk-accept.js` 的 `writeBudget`），超過時回 503，不再讓 GitHub Action 失敗。
+> 已由 [ADR 0018](0018-today-walks-d1-event-sync.md) 修訂：試算表抄到 D1 的整批同步已退役（#501、#512），「差異同步」這段只留作歷史。寫入預算還在用：網站登記寫回試算表前照 `SYNC_MAX_ROWS`、`SYNC_DAILY_BUDGET` 檢查（`worker/src/today-walks/budget.js` 的 `reserve`；#746 起保留量依要寫的表自動算），超過時回 503，不再讓 GitHub Action 失敗。
 
 ## 背景
 

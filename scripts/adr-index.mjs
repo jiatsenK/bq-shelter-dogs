@@ -40,7 +40,9 @@ export async function buildIndex() {
   const varsBlock = (wrangler.match(/"vars"\s*:\s*\{([\s\S]*?)\}/) || [, ''])[1];
   const vars = Object.fromEntries([...varsBlock.matchAll(/^\s*"(\w+)"\s*:\s*"([^"]*)"/gm)].map(m => [m[1], m[2]]));
   const crons = (wrangler.match(/"crons"\s*:\s*\[([^\]]*)\]/) || [, ''])[1].match(/"[^"]+"/g) || [];
-  const src = (await readdir(new URL('worker/src/', ROOT))).filter(f => f.endsWith('.js'));
+  // 志工網站 Worker 的程式，含子資料夾（例如 today-walks/，#746）；admin/ 是管理 Worker，設定在 wrangler.admin.jsonc，不列
+  const src = (await readdir(new URL('worker/src/', ROOT), { recursive: true })).map(f => f.replaceAll('\\', '/'))
+    .filter(f => f.endsWith('.js') && !f.startsWith('admin/'));
   const envNames = new Set();
   for (const f of src) for (const m of (await read(`worker/src/${f}`)).matchAll(/\benv\??\.([A-Z][A-Z0-9_]+)/g)) envNames.add(m[1]);
   const bindings = new Set([...wrangler.matchAll(/"binding"\s*:\s*"(\w+)"/g)].map(m => m[1]));

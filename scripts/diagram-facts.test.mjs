@@ -96,15 +96,15 @@ test('Apps Script：每 10 分鐘補送、狗清單保險掃描時間、跟 Work
 });
 
 test('寫回重試間隔與上限', async () => {
-  const accept = await read('worker/src/walk-accept.js');
-  const { RETRY_LIMIT } = await import('../worker/src/walk-accept.js');
-  const delays = JSON.parse(accept.match(/\+ (\[[\d,]+\])\[Math\.min\(failures - 1,\d+\)\] \* 60000/)[1]);
-  await shows('writeback-sequence', `間隔 ${delays.join('、')} 分鐘`, `worker/src/walk-accept.js 的重試間隔是 ${delays.join('、')} 分鐘`);
-  await shows('writeback-sequence', `第 ${RETRY_LIMIT} 次失敗`, `worker/src/walk-accept.js 的 RETRY_LIMIT 是 ${RETRY_LIMIT}`);
-  assert.match(await read('worker/src/walk-retry.js'), /LIMIT 10`\)/, 'worker/src/walk-retry.js 每輪撿的數量變了，請改排程圖「每輪最多 10 隻」');
-  await shows('daily-schedule', '每輪最多 10 隻', 'worker/src/walk-retry.js 每輪 LIMIT 10');
-  assert.match(accept, /Math\.min\(10, /, 'worker/src/walk-accept.js 合併每批的上限變了，請改寫回圖「每批最多 10 隻」');
-  await shows('writeback-sequence', '每批最多 10 隻', 'worker/src/walk-accept.js 合併每批最多 10 隻');
+  const dispatch = await read('worker/src/today-walks/dispatch.js');
+  const { RETRY_LIMIT } = await import('../worker/src/today-walks/dispatch.js');
+  const delays = JSON.parse(dispatch.match(/BACKOFF_MINUTES = (\[[\d, ]+\])/)[1]);
+  await shows('writeback-sequence', `間隔 ${delays.join('、')} 分鐘`, `worker/src/today-walks/dispatch.js 的重試間隔是 ${delays.join('、')} 分鐘`);
+  await shows('writeback-sequence', `第 ${RETRY_LIMIT} 次失敗`, `worker/src/today-walks/dispatch.js 的 RETRY_LIMIT 是 ${RETRY_LIMIT}`);
+  assert.match(dispatch, /LIMIT 10`\)/, 'worker/src/today-walks/dispatch.js 每輪撿的數量變了，請改排程圖「每輪最多 10 隻」');
+  await shows('daily-schedule', '每輪最多 10 隻', 'worker/src/today-walks/dispatch.js 每輪 LIMIT 10');
+  assert.match(dispatch, /Math\.min\(10, /, 'worker/src/today-walks/dispatch.js 合併每批的上限變了，請改寫回圖「每批最多 10 隻」');
+  await shows('writeback-sequence', '每批最多 10 隻', 'worker/src/today-walks/dispatch.js 合併每批最多 10 隻');
 });
 
 test('圖上的寫回端點、GAS 動作與待通知名稱都還在', async () => {
@@ -135,9 +135,10 @@ test('PR 預覽要加 preview 標籤', async () => {
 test('程式架構：Worker 每支程式都在元件圖段落，段落裡的檔名都還在', async () => {
   const all = await text('code-architecture');
   const files = async dir => (await readdir(new URL(`../${dir}/`, import.meta.url))).filter(f => f.endsWith('.js'));
-  const [root, admin] = [await files('worker/src'), await files('worker/src/admin')];
+  const [root, admin, walks] = [await files('worker/src'), await files('worker/src/admin'), await files('worker/src/today-walks')];
   for (const f of [...root, ...admin]) assert.ok(all.includes(f), `worker/src 新增了 ${f}，「程式架構」圖沒畫也沒列在「沒畫」；請改 ${DOC} 的元件圖`);
-  const known = new Set([...root, ...admin, ...await files('public/js'), ...await files('admin/public/js')]);
+  // 今日溜狗紀錄 module（#746）整個資料夾畫成一個方塊，裡面的檔不用一一列
+  const known = new Set([...root, ...admin, ...walks, ...await files('public/js'), ...await files('admin/public/js')]);
   for (const [f] of all.matchAll(/[\w-]+\.js\b/g)) assert.ok(known.has(f), `「程式架構」圖上的 ${f} 已經不在了，請改 ${DOC} 的元件圖`);
 });
 

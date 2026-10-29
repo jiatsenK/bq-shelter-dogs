@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { setPackChunkBytes, swapPackCache, readSmall, readWalksPacked, yearVersions, recentStart } from '../src/packs.js';
 import { readDogsPayload, readWalks, readDepartures, readRest, readSyncedAt } from '../src/compact.js';
-import { readAcceptedWalks, withTodayWalks } from '../src/walk-accept.js';
+import { todayWalks, withTodayWalks } from '../src/today-walks/index.js';
 import { fakeD1 } from './fakes.mjs';
 import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 import { importCompactDogs, importCompactProfiles, importCompactDepartures } from './compact-fixtures.mjs';
@@ -45,7 +45,7 @@ async function direct(DB, path) {
   if (path === '/dogs') {
     const { version, ...rest } = await readDogsPayload(DB);
     const out = { ok: true, version, syncedAt: await readSyncedAt(DB), ...rest };
-    return Object.assign(out, withTodayWalks(out.dogs, await readAcceptedWalks(DB, taiwanToday())));
+    return Object.assign(out, withTodayWalks(out.dogs, await todayWalks({ DB }).today()));
   }
   if (path === '/walks') {
     const { version, historyStart, walks } = await readWalks(DB);

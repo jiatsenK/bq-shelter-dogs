@@ -11,8 +11,8 @@ const MARK = '<!-- diagram-reminder -->';
 export const WATCH = [
   [/^wrangler[^/]*\.jsonc$/, ['architecture', 'environments', 'daily-schedule']],
   [/^worker\/src\/index\.js$/, ['architecture', 'daily-schedule', 'writeback-sequence', 'sheet-sync-sequence']],
-  [/^worker\/src\/(walk-accept|walk-retry|sheet-write)\.js$/, ['writeback-sequence', 'daily-schedule']],
-  [/^worker\/src\/(dog-list|walk-reconcile)\.js$/, ['sheet-sync-sequence']],
+  [/^worker\/src\/(today-walks\/(accept|dispatch|receipt|version|budget|index)|sheet-write)\.js$/, ['writeback-sequence', 'daily-schedule']],
+  [/^worker\/src\/(dog-list|today-walks\/(observe|scan))\.js$/, ['sheet-sync-sequence']],
   [/^worker\/src\/(dog-photo|r2)\.js$/, ['data-flows', 'daily-schedule']],
   [/^worker\/src\/admin\//, ['architecture', 'data-flows']],
   // 元件圖畫的是 worker/src 模組誰匯入誰，任何 Worker 程式改了都可能要改
