@@ -83,7 +83,7 @@ async function runFindTests() {
     await check('#99 平面圖：每區顯示隻數，對不到的籠位放在圖下方', () => {
       findView = 'map'; findZone = 'all'; activeTab = 'find';
       render();
-      eq(document.querySelector('#main g[data-find-zone="iso"]').getAttribute('aria-label'), '隔離區 1 隻');
+      eq(document.querySelector('#main g[data-find-zone="iso"]').getAttribute('aria-label'), '住院區 1 隻');
       eq(document.querySelector('#main g[data-find-zone="new"]').getAttribute('aria-label'), '新犬舍區 3 隻');
       if (!document.querySelector('#main .find-unmapped [data-find-zone="other"]')) throw new Error('沒有「其他籠位」按鈕');
       for (const id of ['i-grid', 'i-map']) {
@@ -110,7 +110,7 @@ async function runFindTests() {
       eq(box.querySelector('.find-zoom-pct').textContent, '150%', '放大一級：');
       eq(box.querySelector('.find-zoom-map').style.width, '150%', '地圖寬度：');
       box.querySelector('g[data-find-zone="iso"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
-      eq([box.hidden, findZone, findView, activeTab], [true, 'iso', 'map', 'find'], '點隔離區：');
+      eq([box.hidden, findZone, findView, activeTab], [true, 'iso', 'map', 'find'], '點住院區：');
       const pageMap = document.querySelector('#main svg.find-map');
       if (!pageMap) throw new Error('頁面上沒有平面圖：' + document.getElementById('main').innerHTML.slice(0, 200));
       const [, , mw, mh] = pageMap.getAttribute('viewBox').split(' ').map(Number);
@@ -194,7 +194,7 @@ async function runWhereTests() {
       eq(how('新B04'), '新犬舍上排，從左邊數第 4 籠', '新B04：');
       eq(how('新A2'), '新犬舍中間排，從左邊數第 2 籠', '新A2：');
       eq(how('新獨11'), '新犬舍下排小籠，從左邊數第 11 籠', '新獨11：');
-      eq(how('住院區'), '隔離區不分籠，進去找「住院區」', '住院區：');
+      eq(how('住院區'), '住院區不分籠，進去找「住院區」', '住院區：');
       // #646 有畫籠子的區但籠位對不到圖上：不說不分籠
       eq(how('新5B'), '圖上找不到「新5B」，請到新犬舍區找', '新犬舍格式解析不出來：');
       eq(how('舊A99'), '圖上找不到「舊A99」，請到舊犬舍區找', '舊犬舍圖上沒有的籠：');

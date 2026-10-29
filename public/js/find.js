@@ -13,13 +13,13 @@ import { SITE } from './site-config.js';
 // showDetail、closeDetail、switchTab、render、activeTab，透過具名 import 使用。
 
 // 籠位 → 平面圖分區（K 2026-09-26 確認：新A／新B／新獨＝新犬舍區，舊A／舊B＝舊犬舍區，母幼＝幼母犬舍區，
-// C區（原本叫幼犬舍區，K 2026-09-28 改成跟後台一樣叫 C區），住院區＝隔離區）。對不到的籠位歸「其他籠位」（沒有 rect），放在圖下方的提示框。
+// C區（原本叫幼犬舍區，K 2026-09-28 改成跟後台一樣叫 C區），住院區（K 2026-10-29 從隔離區改叫住院區））。對不到的籠位歸「其他籠位」（沒有 rect），放在圖下方的提示框。
 // rect 是平面圖上的位置 [x, y, 寬, 高]，照所內看板重畫（viewBox 380×600）；順序＝照片分段的順序（圖上由上到下）
 // 哪一籠在哪一區用 SITE.zones 的比對（js/site-config.js，電腦版、圖鑑同一份；critique 2026-10-28 #11）
 const siteZone = key => SITE.zones.find(z => z.key === key).test;
 const FIND_ZONES = [
   { key: 'new', name: '新犬舍區', short: '新犬舍', test: siteZone('new'), rect: [230, 0, 150, 240] },
-  { key: 'iso', name: '隔離區', short: '隔離', test: siteZone('ward'), rect: [140, 40, 90, 200] },
+  { key: 'iso', name: '住院區', short: '住院', test: siteZone('ward'), rect: [140, 40, 90, 200] },
   { key: 'mom', name: '幼母犬舍區', short: '幼母犬舍', test: siteZone('mom'), rect: [0, 270, 250, 80] },
   { key: 'pup', name: 'C區', short: 'C區', test: siteZone('c'), rect: [250, 270, 130, 80] },
   { key: 'old', name: '舊犬舍區', short: '舊犬舍', test: siteZone('old'), rect: [0, 350, 250, 250] },
