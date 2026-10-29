@@ -28,14 +28,14 @@ const SITE = {
   ],
 
   // 犬舍分區：照籠位開頭分（match 是正規表示式，比對去掉空白的籠位）。
-  // name：電腦版簡報、分區分頁，區名照 GLOSSARY「區」（隔離區、C區，跟找狗同一個叫法，critique 2026-10-28 #11）；team、color：圖鑑的隊名和隊色（中明度，上面放白字）。
+  // name：電腦版簡報、分區分頁，區名照 GLOSSARY「區」（住院區、C區，跟找狗同一個叫法，critique 2026-10-28 #11；K 2026-10-29 隔離區改叫住院區）；team、color：圖鑑的隊名和隊色（中明度，上面放白字）。
   // 找狗的平面圖位置與籠位排法還在 js/find.js（FIND_ZONES 用這裡的 test 判斷籠位在哪一區）。
   zones: [
     { key: 'new', name: '新犬舍', match: '^新', team: '新犬舍隊', color: '#1F5C9E' },
     { key: 'old', name: '舊犬舍', match: '^舊', team: '舊犬舍隊', color: '#0F6B6B' },
     { key: 'mom', name: '幼母犬舍', match: '^母幼', team: '幼母隊', color: '#875700' },
     { key: 'c', name: 'C區', match: '^C', flags: 'i', team: 'C區隊', color: '#2F7A45' },
-    { key: 'ward', name: '隔離區', match: '^住院', team: '隔離區隊', color: '#6E4A9E' },
+    { key: 'ward', name: '住院區', match: '^住院', team: '住院區隊', color: '#6E4A9E' },
   ],
   // 不在上面任何一區的狗，在圖鑑算這一隊
   freeTeam: { key: 'free', team: '自由球員', color: '#55605B' },
