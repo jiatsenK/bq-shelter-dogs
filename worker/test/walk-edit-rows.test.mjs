@@ -10,9 +10,10 @@ const rows = (env, body, key = env.SHEET_WRITE_KEY) => worker.fetch(new Request(
   method:'POST', headers:{ 'X-Sheet-Write-Key':key }, body:JSON.stringify(body),
 }), env);
 const writes = async env => (await env.DB.prepare('SELECT total_changes() n').first()).n;
-async function run(env, cron) {
+// at：排程時間。保險掃描在 UTC 1 點（台灣 09:23）會順便清修改紀錄、多寫一列；比寫入次數的測試要帶固定時間，不然台灣 9 點那一小時會失敗
+async function run(env, cron, at = Date.now()) {
   const tasks = [];
-  await worker.scheduled({ scheduledTime:Date.now(), cron }, env, { waitUntil:p => tasks.push(p) });
+  await worker.scheduled({ scheduledTime:at, cron }, env, { waitUntil:p => tasks.push(p) });
   await Promise.allSettled(tasks);
 }
 
@@ -100,7 +101,8 @@ test('#500 保險掃描沒有不同的狗只問一次就結束；重試排程不
     }
     actions.length = 0;
     const before = await writes(env);
-    await run(env, '23 1,5,15 * * *');
+    const afternoon = new Date(); afternoon.setUTCHours(5, 23, 0, 0); // 台灣 13:23 那次：不是當天第一次掃描
+    await run(env, '23 1,5,15 * * *', afternoon.getTime());
     assert.deepEqual(actions, ['walkScan']);
     assert.equal(await writes(env), before + 1, '只多記一列跑完時間');
     assert.ok((await cronRow(env, 'scan')).okAt);
