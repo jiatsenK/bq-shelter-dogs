@@ -1,6 +1,6 @@
 # 架構圖：志工溜狗表
 
-> 核對日：2026-10-29｜依據 commit：`bdae376`（今日溜狗紀錄 module 在分支 `claude/today-walks-module-746-ae9a87`，#746）
+> 核對日：2026-10-29｜依據 commit：`652d71a`（狗清單同步交出溜狗欄在分支 `claude/zealous-austin-77bd66`，#747）
 > 改到圖上的元件、連線、排程或部署方式時，在同一個 PR 更新這份檔案。規則見 agent-hub `docs/rules/architecture-diagrams.md`。
 > 名稱、排程時間、重試次數、端點跟程式不一致時 `scripts/diagram-facts.test.mjs` 會失敗；PR 改到架構相關檔案卻沒改對應段落，「架構圖重畫提醒」會在 PR 留言。管理網站「系統架構圖」頁也是從這份檔案產生。
 
@@ -68,7 +68,7 @@ flowchart LR
 
 - 志工網站和 API 是同一個 Worker `bq-shelter-dogs`：網頁是 `public/` 的靜態檔，`/api/*`、`/photos/*` 先進 Worker（`wrangler.jsonc:8-16`）；`/api` 去掉前綴後分派，照片從 R2 讀（`worker/src/index.js:795-813`）。
 - 網站讀資料一律讀 D1、照片讀 R2，不讀試算表；`worker/src/sheet-read.js` 只剩拆名字的函式（`worker/src/sheet-read.js:1-9`）。
-- 按溜了、修改、復原：先在同一個 D1 批次寫狀態、待寫回清單與修改紀錄（`worker/src/today-walks/version.js:64-68`），回成功給志工後才在背景寫回試算表（`worker/src/index.js:552-557`），細節見「流程｜網站登記寫回試算表」。
+- 按溜了、修改、復原：先在同一個 D1 批次寫狀態、待寫回清單與修改紀錄（`worker/src/today-walks/version.js:81-82`），回成功給志工後才在背景寫回試算表（`worker/src/index.js:552-557`），細節見「流程｜網站登記寫回試算表」。
 - 例外：加備註、新增異動紀錄是 Worker 同步請 Apps Script 直接寫表，不先存 D1，失敗就回錯誤給志工、不重試；寫成功後 D1 只多一筆修改紀錄（`worker/src/index.js:565-581`）。
 - 志工網站對試算表的呼叫都經過 `callSheet`，動作只有 note、log、walkWake、walkWakeBatch、walkScan（`worker/src/sheet-write.js:6`、`worker/src/sheet-write.js:24-46`）。
 - Apps Script 打志工網站的 `/api/walk-writeback/` 六個端點（target、receipt、observe、rows、dog-list、dog-list-scan），帶 `X-Sheet-Write-Key` 標頭；Worker 驗金鑰，PR 預覽版一律拒收（`apps-script/sheet-write.gs:61-72`；`worker/src/index.js:836-843`）。
@@ -81,22 +81,22 @@ flowchart LR
 ## 各類資料的流向
 
 - 網站讀資料一律讀 D1（照片讀 R2），不讀試算表；試算表是人工改狗清單的地方，改動由 Apps Script 送進 D1（`worker/src/index.js:795-813`；`apps-script/sheet-write.gs:1-4`）。
-- 今日溜狗・網站登記：志工按溜了、修改、復原，先存 D1 的狀態與待寫回清單，再背景寫回試算表「遛狗日期」「誰遛的」兩欄並讀回確認（`worker/src/today-walks/version.js:64-68`；`apps-script/sheet-write.gs:132-154`）。見「流程｜網站登記寫回試算表」。
+- 今日溜狗・網站登記：志工按溜了、修改、復原，先存 D1 的狀態與待寫回清單，再背景寫回試算表「遛狗日期」「誰遛的」兩欄並讀回確認（`worker/src/today-walks/version.js:81-82`；`apps-script/sheet-write.gs:132-154`）。見「流程｜網站登記寫回試算表」。
 - 人工改表：管理者改主清單、已出所、常遛狗群，Apps Script 記下待通知送給志工網站寫進 D1，ACK 才清（`apps-script/sheet-write.gs:317-343`；`worker/src/index.js:848-873`）。D1 裡是試算表內容的複本。見「流程｜試算表改動回到 D1」。
 - 備註、異動紀錄・網站新增：例外，不先存 D1。志工網站等 Apps Script 追加完才回志工，失敗不重試（`worker/src/index.js:565-581`；`apps-script/sheet-write.gs:48-55`）。程式寫表不會觸發編輯觸發，所以要等下一次狗清單保險掃描才進 D1，最久約 10 小時（`apps-script/sheet-write.gs:275`）。
 - 照片：志工（照片開關開啟時）或管理者上傳原圖＋前端做好的縮圖，存 R2，D1 記主照片指標；換掉的先備份到 `trash/`，照片垃圾桶每月 1 日清 30 天以上的（`worker/src/dog-photo.js:64-91`；`worker/src/r2.js:8-10`）。沒縮圖時網站顯示原圖，補縮圖要手動跑 r2-thumbs（`.github/workflows/r2-thumbs.yml:1-5`）。
-- 狗資料（介紹、休養、固定照顧、出入所）、活動、功能開關、分享次數：志工（看功能開關）或管理者寫，只存 D1、不寫回試算表；狗資料寫入前先比對版本（`worker/src/dog-edit.js:17-19`、`worker/src/conditional-batch.js:5-11`；`worker/src/feature-settings.js:39`；`worker/src/share-counts.js:7-13`）。
+- 狗資料（介紹、休養、固定照顧、出入所）、活動、功能開關、分享次數：志工（看功能開關）或管理者寫，只存 D1、不寫回試算表；狗資料寫入前先比對版本（`worker/src/dog-edit.js:17-21`、`worker/src/conditional-batch.js:5-11`；`worker/src/feature-settings.js:39`；`worker/src/share-counts.js:7-13`）。
 - 修改紀錄跟著每個寫入動作同一批寫進 D1，來源分志工、試算表、管理者三種（`worker/src/editlog.js:64-84`）；保留 14 天（合併狗快照永久保留），每天 09:23 那次排程清一次（`worker/src/editlog.js:97-102`）。
 
 ## 一天裡的排程
 
 - Cloudflare 排程用 UTC，下面都換成台灣時間（UTC+8）。志工網站 Worker 有 2 個排程：`5-59/10 * * * *` 與 `23 1,5,15 * * *`，改這裡要一起改程式裡的常數（`wrangler.jsonc:37-43`；`worker/src/index.js:26-27`）。
-- 每 10 分鐘（每小時 :05 起）寫回重試：撿到期、中斷的寫回工作重派，每輪最多 10 隻（`worker/src/today-walks/dispatch.js:34-55`）。
-- 09:23、13:23、23:23 今日溜狗保險掃描：Worker 呼叫 Apps Script 讀主清單比指紋，不一樣才找出不同的狗（`worker/src/today-walks/index.js:41-44`；`worker/src/today-walks/scan.js:15-37`）。
+- 每 10 分鐘（每小時 :05 起）寫回重試：撿到期、中斷的寫回工作重派，每輪最多 10 隻（`worker/src/today-walks/dispatch.js:35-56`）。
+- 09:23、13:23、23:23 今日溜狗保險掃描：Worker 呼叫 Apps Script 讀主清單比指紋，不一樣才找出不同的狗（`worker/src/today-walks/index.js:43-46`；`worker/src/today-walks/scan.js:15-37`）。
 - 每天第一次掃描（09:23）這次也清 14 天前的修改紀錄（合併快照保留）；每月 1 日這次順便清照片垃圾桶（30 天以上）（`worker/src/index.js:28-30`、`worker/src/index.js:777-781`；`worker/src/r2.js:186`）。
 - Apps Script 時間觸發（專案時區 Asia/Taipei）：flushWalkEdits、flushDogList 每 10 分鐘補送待通知，起點由 Google 決定；dogListScan 在約 09:43、約 13:53、約 23:53 做狗清單保險掃描，Google 只保證在那個小時內，前後可能差 15 分鐘（`apps-script/sheet-write.gs:305-315`）。
 - 兩種保險掃描跟 Worker 錯開 20～30 分鐘，方向相反：今日溜狗是 Worker 呼叫 Apps Script 讀表，狗清單是 Apps Script 把指紋送給 Worker（`apps-script/sheet-write.gs:498-523`）。
-- 日界線：今日溜狗用台灣日期，00:00 換日；寫入預算以 UTC 日期算，台灣 08:00 重置（`worker/src/today-walks/shared.js:11`、`worker/src/today-walks/shared.js:13`）。
+- 日界線：今日溜狗用台灣日期，00:00 換日；寫入預算以 UTC 日期算，台灣 08:00 重置（`worker/src/today-walks/shared.js:16`、`worker/src/today-walks/shared.js:18`）。
 - 測試網站只有每 10 分鐘那條；PR 預覽、管理網站沒有排程（`wrangler.test-site.jsonc:38-40`；`wrangler.preview-db.jsonc:9`）。每週一 09:00 的版本號整理（release-please）不碰資料（`.github/workflows/release-please.yml:9-11`）。
 
 ## 上線圖｜志工溜狗表
@@ -213,11 +213,11 @@ flowchart TB
   classDef ext stroke:#8a63c9,stroke-width:2px
 ```
 
-- 志工網站 Worker `bq-shelter-dogs` 先在一個 D1 批次寫好狀態、請求、待寫回清單、溜狗紀錄、修改紀錄（`worker/src/today-walks/version.js:64-68`），回應之後才用 `waitUntil` 在背景派送（`worker/src/index.js:552-557`）。
-- 派送：單隻用 walkWake，多隻合併成 walkWakeBatch，每批最多 10 隻（`worker/src/today-walks/dispatch.js:29-32`、`worker/src/today-walks/dispatch.js:114-120`）；Apps Script 收到後走 `writeLatestWalk`（`apps-script/sheet-write.gs:45-47`）。
+- 志工網站 Worker `bq-shelter-dogs` 先在一個 D1 批次寫好狀態、請求、待寫回清單、溜狗紀錄、修改紀錄（`worker/src/today-walks/version.js:81-82`），回應之後才用 `waitUntil` 在背景派送（`worker/src/index.js:552-557`）。
+- 派送：單隻用 walkWake，多隻合併成 walkWakeBatch，每批最多 10 隻（`worker/src/today-walks/dispatch.js:30-33`、`worker/src/today-walks/dispatch.js:112-118`）；Apps Script 收到後走 `writeLatestWalk`（`apps-script/sheet-write.gs:45-47`）。
 - Apps Script（`apps-script/sheet-write.gs` 的 writeLatestWalk）：先問 /target；寫前再讀一次，發現人工改過就 /observe 並停寫；寫兩欄、讀回比對，一致才 /receipt（`apps-script/sheet-write.gs:132-154`）。Worker 收 /target、/receipt、/observe 在 `worker/src/index.js:858-880`。
-- 失敗就改成待重試，間隔 1、2、4、8、15 分鐘；第 10 次失敗、或試算表明確拒絕（金鑰、試算表 ID、權限）就停，不再重派（`worker/src/today-walks/dispatch.js:14-21`、`worker/src/today-walks/dispatch.js:147-156`；`worker/src/sheet-write.js:48-54`）。停住的狗列在管理網站「待補清單」（`worker/src/admin/index.js:117`）。
-- 每 10 分鐘的排程撿到期的、中斷超過 60 秒的派送重派，每輪最多 10 隻（`worker/src/today-walks/dispatch.js:34-55`）。重試每天另有寫入上限，用完延到隔天（`worker/src/today-walks/dispatch.js:23-26`；`wrangler.jsonc:30-31`）。
+- 失敗就改成待重試，間隔 1、2、4、8、15 分鐘；第 10 次失敗、或試算表明確拒絕（金鑰、試算表 ID、權限）就停，不再重派（`worker/src/today-walks/dispatch.js:15-22`、`worker/src/today-walks/dispatch.js:146-155`；`worker/src/sheet-write.js:48-54`）。停住的狗列在管理網站「待補清單」（`worker/src/admin/index.js:117`）。
+- 每 10 分鐘的排程撿到期的、中斷超過 60 秒的派送重派，每輪最多 10 隻（`worker/src/today-walks/dispatch.js:35-56`）。重試每天另有寫入上限，用完延到隔天（`worker/src/today-walks/dispatch.js:24-27`；`wrangler.jsonc:30-31`）。
 - 例外：加備註、新增異動紀錄不走這條，是 Worker 同步請 Apps Script 直接寫表，失敗不重試（`worker/src/index.js:565-581`）。
 
 ## 流程｜試算表改動回到 D1
@@ -296,8 +296,7 @@ flowchart LR
   entry -->|身分| identity
   entry -->|設定、活動、分享| settings
   entry -->|改狗資料、照片| dogdata
-  walk -->|溜狗日| doglist
-  doglist -->|溜了紀錄| walk
+  doglist -->|溜狗欄觀測值、新狗溜狗日| walk
   walk -->|寫回| sheetcall
   walk -->|查身分| identity
   doglist -->|連名字| identity
@@ -327,12 +326,12 @@ flowchart LR
 - 框是部署單位：志工網站 Worker 從 `worker/src/index.js` 進入（`wrangler.jsonc:9`），管理網站 Worker 從 `worker/src/admin/index.js` 進入（`wrangler.admin.jsonc:10`）。「共用」框是兩個 Worker 都匯入的 `worker/src/` 模組；只被一個 Worker 用的，即使被好幾個模組呼叫也畫在那個 Worker 框裡。
 - 外面進來的線：志工網站前端 → 進入點（`public/js/api.js:32-33`）；Cloudflare 排程 → 進入點（`wrangler.jsonc:42`、`worker/src/index.js:769`）；Apps Script → 進入點（`apps-script/sheet-write.gs:65`）；管理網站前端 → 管理入口（`admin/public/js/api.js:3`）。
 - 進入點往下：今日溜狗紀錄（`worker/src/index.js:11`）；狗清單同步（`worker/src/index.js:17`）；讀取打包（`worker/src/index.js:9, 19, 21`）；試算表呼叫（`worker/src/index.js:7`）；志工身分（`worker/src/index.js:5`）；設定・活動・分享（`worker/src/index.js:3-4, 10, 12`）；狗資料與照片（`worker/src/index.js:1-2, 6, 15`）。
-- 志工網站框內（今日溜狗紀錄在共用框，管理網站也讀它的停住清單）：今日溜狗紀錄 → 狗清單同步（`worker/src/today-walks/version.js:4`）；狗清單同步 → 今日溜狗紀錄（`worker/src/dog-list.js:14`）；今日溜狗紀錄 → 試算表呼叫（`worker/src/today-walks/index.js:7`、`worker/src/today-walks/dispatch.js:4`）；今日溜狗紀錄 → 志工身分（`worker/src/today-walks/accept.js:3`）；狗清單同步 → 志工身分（`worker/src/dog-list.js:13`）；讀取打包 → 志工身分（`worker/src/compact.js:1`）。
+- 志工網站框內（今日溜狗紀錄在共用框，管理網站也讀它的停住清單）：狗清單同步 → 今日溜狗紀錄（`worker/src/dog-list.js:15`；溜狗欄有變先交觀測值，溜狗紀錄只由今日溜狗紀錄寫，#747）；今日溜狗紀錄 → 試算表呼叫（`worker/src/today-walks/index.js:8`、`worker/src/today-walks/dispatch.js:4`）；今日溜狗紀錄 → 志工身分（`worker/src/today-walks/accept.js:3`）；狗清單同步 → 志工身分（`worker/src/dog-list.js:14`）；讀取打包 → 志工身分（`worker/src/compact.js:1`）。
 - 往共用與外部：狗清單同步 → 狗資料與照片（`worker/src/dog-list.js:1`）；讀取打包 → 狗資料與照片（`worker/src/compact.js:2`）；試算表呼叫 → Apps Script（`worker/src/sheet-write.js:32`）；狗資料與照片 → R2（`worker/src/r2.js:36`）。
 - 管理網站：管理入口 → 管理查詢（`worker/src/admin/index.js:7, 9-10, 12-13`）；管理入口 → Cloudflare Access（`worker/src/admin/access.js:28`）；管理入口 → 設定・活動・分享（`worker/src/admin/index.js:5, 8, 14`）；管理入口 → 狗資料與照片（`worker/src/admin/index.js:1-4, 15`）；管理入口 → 今日溜狗紀錄（`worker/src/admin/index.js:11`、`worker/src/admin/index.js:117`）；管理查詢 → 設定・活動・分享（`worker/src/admin/activities.js:3`、`worker/src/admin/checks.js:4`）。
-- D1 的線省略不畫：進入點、今日溜狗紀錄、狗清單同步、讀取打包、志工身分、設定・活動・分享、狗資料與照片、管理查詢都直接讀寫 D1（例如 `worker/src/today-walks/shared.js:10`、`worker/src/packs.js:69`、`worker/src/identity.js:7`、`worker/src/feature-settings.js:13`、`worker/src/dog-edit.js:11`、`worker/src/admin/checks.js:27`）。
-- 修改紀錄 editlog.js 也省略不畫：寫資料的模組都匯入它，紀錄跟資料同一批寫進 D1（`worker/src/index.js:18`、`worker/src/today-walks/version.js:3`、`worker/src/dog-list.js:9`、`worker/src/identity.js:1`、`worker/src/dog-edit.js:2`、`worker/src/admin/edits.js:5`、`worker/src/admin/activities.js:5`）。
-- 沒畫：同一框內的匯入（例如 today-walks/ 裡 scan.js 呼叫 observe.js）；小工具 sync-plan.js（台灣日期）、sheet-read.js（拆名字）、test-site.js（測試網站換外觀）、conditional-batch.js（有條件 batch：活動、身分、狗資料與合併送出時資料沒被別人改過才寫，`worker/src/activities.js:5`、`worker/src/identity.js:2`、`worker/src/dog-edit.js:3`、`worker/src/dog-merge.js:12`）；只拿常數的匯入：狗清單同步拿讀取打包的 SYNCED_AT_KEY（`worker/src/dog-list.js:12`），管理查詢拿 EXTRA_KEY（`worker/src/admin/checks.js:3`）。各前端模組怎麼拆見 `public/js/README.md`。
+- D1 的線省略不畫：進入點、今日溜狗紀錄、狗清單同步、讀取打包、志工身分、設定・活動・分享、狗資料與照片、管理查詢都直接讀寫 D1（例如 `worker/src/today-walks/shared.js:15`、`worker/src/packs.js:69`、`worker/src/identity.js:7`、`worker/src/feature-settings.js:13`、`worker/src/dog-edit.js:11`、`worker/src/admin/checks.js:27`）。
+- 修改紀錄 editlog.js 也省略不畫：寫資料的模組都匯入它，紀錄跟資料同一批寫進 D1（`worker/src/index.js:18`、`worker/src/today-walks/version.js:4`、`worker/src/dog-list.js:10`、`worker/src/identity.js:1`、`worker/src/dog-edit.js:2`、`worker/src/admin/edits.js:5`、`worker/src/admin/activities.js:5`）。
+- 沒畫：同一框內的匯入（例如 today-walks/ 裡 scan.js 呼叫 observe.js）；小工具 sync-plan.js（台灣日期）、sheet-read.js（拆名字）、test-site.js（測試網站換外觀）、conditional-batch.js（有條件 batch：活動、身分、狗資料與合併送出時資料沒被別人改過才寫，今日溜狗紀錄的版本核對與寫入預算也是，`worker/src/activities.js:5`、`worker/src/identity.js:2`、`worker/src/dog-edit.js:3`、`worker/src/dog-merge.js:12`、`worker/src/today-walks/budget.js:4`、`worker/src/today-walks/dispatch.js:5`）；只拿常數的匯入：狗清單同步拿讀取打包的 SYNCED_AT_KEY（`worker/src/dog-list.js:13`），管理查詢拿 EXTRA_KEY（`worker/src/admin/checks.js:3`）。各前端模組怎麼拆見 `public/js/README.md`。
 
 ## 決策｜志工溜狗表
 
@@ -407,7 +406,7 @@ quadrantChart
 ```
 
 - **R1 Apps Script 沒貼新版**：`sheet-write.gs` 沒有自動部署，要 K 手動貼到 Google，正式、測試各一份；repo 改了卻沒貼，線上寫表、編輯觸發的行為就跟程式不一樣，測試也測不到。依據：`apps-script/sheet-write.gs:1-2`。處理：修，做法待討論（例如寫回回呼帶版本號，對不上時在管理網站提醒）。
-- **R2 寫回停住的狗**：試算表明確拒絕（金鑰、試算表 ID、權限錯）就停，其他錯誤第 10 次失敗後停；停住的狗列在管理網站「資料檢查」，設定修好後怎麼重送還沒做。依據：`worker/src/today-walks/dispatch.js:14-17`、https://github.com/jiatsenK/bq-shelter-dogs/issues/675。處理：修，照 #675。
+- **R2 寫回停住的狗**：試算表明確拒絕（金鑰、試算表 ID、權限錯）就停，其他錯誤第 10 次失敗後停；停住的狗列在管理網站「資料檢查」，設定修好後怎麼重送還沒做。依據：`worker/src/today-walks/dispatch.js:15-18`、https://github.com/jiatsenK/bq-shelter-dogs/issues/675。處理：修，照 #675。
 - **R3 D1 寫入額度用完**：免費額度整個 Cloudflare 帳號每天 10 萬列，2026-10-16 用完過，用完後按溜了、常溜、開卡都會失敗。現在寫回前先照每日預算檢查，重試另有自己的上限，用完延到隔天，影響已經壓低。依據：`wrangler.jsonc:29-31`、[ADR 0008](adr/0008-diff-sync-and-write-budget.md)。處理：接受，額度變緊時再調 `SYNC_DAILY_BUDGET`。
 - **R4 管理網站忘了部署**：管理網站只能手動部署；改到兩站共用的程式時志工網站自動部署，管理網站要另外按，忘了按兩站就跑不同版本。依據：`.github/workflows/deploy-admin.yml:1-11`。處理：觀察，改到共用模組的 PR 在內文提醒。
 - **R5 備註晚約 10 小時進 D1**：網站新增的備註、異動紀錄是程式寫表，不會觸發編輯觸發，要等下一次狗清單保險掃描才進 D1。依據：`apps-script/sheet-write.gs:275`。處理：觀察，網站送出成功時試算表已經寫好；志工反映網站上看不到剛加的備註再處理。

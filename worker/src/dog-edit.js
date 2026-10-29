@@ -15,8 +15,9 @@ export async function dogIdentity(db, key) {
 // GAS may have prepared a change while a human removed an old number. Check
 // its observed identity version inside the same D1 transaction as those writes.
 export const dogRevisionIs = (dogId, revision) => ({ sql: 'EXISTS(SELECT 1 FROM v3_dog_edit_state WHERE dog_id=? AND revision=?)', args: [dogId, revision] });
-export function guardedDogBatch(db, expected, statements) {
-  return batchIf(db, expected ? [dogRevisionIs(expected.dog_id, expected.revision)] : [], statements);
+// conditions：同一批其他要成立的條件（狗清單同步建狗時今日溜狗紀錄給的溜狗紀錄條件與寫入預算）
+export function guardedDogBatch(db, expected, statements, conditions = []) {
+  return batchIf(db, [...expected ? [dogRevisionIs(expected.dog_id, expected.revision)] : [], ...conditions], statements);
 }
 // A single statement provides the complete editable snapshot and its CAS version.
 export async function readDogEdit(db, dogId) {

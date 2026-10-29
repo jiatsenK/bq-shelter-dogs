@@ -19,8 +19,8 @@
 | 資料 | 寫入來源 | 進 D1 的方式 | 程式 |
 |---|---|---|---|
 | 今日溜狗（網站按溜了、復原、改溜狗人） | 網站 | 先存 D1（PR #533 起；舊的直接寫回試算表路徑已刪），再由 Worker 寫回試算表兩欄 | `worker/src/today-walks/`（今日溜狗紀錄 module，入口 `index.js`） |
-| 今日溜狗（人工改試算表） | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/rows`，Worker 只比那幾隻；保險掃描用同一套規則收下（#746） | `apps-script/sheet-write.gs`、`worker/src/today-walks/observe.js` |
-| 溜狗紀錄（每狗每天一筆；圖鑑、我溜過讀） | 網站、管理者 | 網站按溜了／改溜狗人／復原：跟今日溜狗同一批寫（稽核第 4 項，K 2026-10-26），不等保險掃描。人工改表：狗清單編輯觸發照表寫。改回較早日子時刪掉較新那天，清空日期不刪 | `worker/src/today-walks/version.js`、`worker/src/dog-list.js` |
+| 今日溜狗（人工改試算表） | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/rows`，Worker 只比那幾隻；狗清單同步發現溜狗欄變了也交同一筆觀測值（#747）；保險掃描用同一套規則收下（#746） | `apps-script/sheet-write.gs`、`worker/src/today-walks/observe.js`、`worker/src/dog-list.js` |
+| 溜狗紀錄（每狗每天一筆；圖鑑、我溜過讀） | 網站、管理者 | 只由今日溜狗紀錄 module 寫（ADR 0018 補充，#747），跟今日溜狗同一批：網站按溜了／改溜狗人／復原照名單重寫今天或刪掉今天（稽核第 4 項，K 2026-10-26）；人工改表收下時，改到新的一天或同一天換人照表上名單重寫那天，改回較早的日子刪掉較新那天、那天照表寫，清空日期不刪。狗清單同步不寫，只把溜狗欄交給 module（見下方「人工改溜狗欄的先後」）；新建進主清單的狗那天還沒有才寫，寫法也由 module 給 | `worker/src/today-walks/version.js`、`worker/src/today-walks/observe.js` |
 | 狗清單：主清單、已出所、常遛狗群 | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/dog-list`，只寫有變的欄（#501）。網站讀 `/api/dogs` 時，遛狗日期以今日溜狗為準並附上今日紀錄（只在回應時換，不寫表；K 2026-10-26）。Worker 端遛狗日期、遛狗人另存溜狗日期包（`v3_pack_versions.walked`），只改這兩欄不讓在所資料包重算（#679） | `worker/src/dog-list.js`、`worker/src/today-walks/read.js` 的 `withTodayWalks` |
 | 常溜狗群（網站狗群頁） | 管理者在試算表「常遛狗群」改 | GAS 編輯觸發送 D1（一欄一列 `v3_sheet_group_columns`，#559）；網站只讀（#474） | `worker/src/dog-list.js` |
 | 休養、介紹、開卡、常溜、固定照顧、活動 | 網站 | 只存 D1，不碰試算表 | 見各 ADR |
@@ -31,6 +31,8 @@
 | 照片 | 志工／Access 管理網站 | 共用前端縮圖，R2 不可覆寫版本＋D1 CAS 引用及紀錄；舊固定路徑相容，Actions 只供人工補圖（#566 承接 #546 契約） | `worker/src/dog-photo.js`、`public/js/photo-images.js` |
 | 分享次數（ADR 0023） | 志工網站分享成功時 `POST /api/share` | 只存 D1 `v3_share_counts`（每天、每種方式一列，只記次數不記人）與 `v3_share_totals`（總數，一種方式一列）；管理網站志工網站設定頁讀 | `worker/src/share-counts.js` |
 | 志工名字建議 `/walkers` | — | 讀 D1（#519） | ADR 0019 |
+
+**人工改溜狗欄的先後**（#747）：GAS 同一次編輯先送改表通知（`/rows`）、再送狗清單（`/dog-list`），兩邊都把表上的值當成一筆觀測值交給今日溜狗紀錄。狗清單同步要在更新主清單複本之前交：沒有溜狗狀態的狗，基準值取自主清單複本，先更新就看不出有改。晚到的看到跟基準值一樣就不動；同時到時 version guard 只讓一個寫成，另一個不 ack，GAS 補送時就沒差異。溜狗紀錄寫一次、修改紀錄記一筆，跟哪個先到無關（`worker/test/dog-list-walks.test.mjs`）。
 
 GAS 送不出去時把待送內容留在指令碼屬性（`WALK_EDITS_PENDING`、`DOG_LIST_PENDING`），每 10 分鐘補送；Worker 確認收到才清。
 

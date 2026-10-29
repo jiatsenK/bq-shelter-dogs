@@ -4,7 +4,6 @@ import worker from '../src/index.js';
 import { setup, request, post, current, day } from './walk-fixture.mjs';
 import { readFile } from 'node:fs/promises';
 import { readdir } from 'node:fs/promises';
-import { guard } from '../src/today-walks/shared.js';
 test.beforeEach(() => worker.testing.resetState());
 test('D1 接受後立即讀到日期、名單與同步中，不必等 Google', async () => {
   const env = await setup();
@@ -121,26 +120,12 @@ test('#408 無關資料增加十倍，既有單狗接受與冷讀的讀寫列數
   env.DB.close();
 });
 
-// #681：guard 條件成立時一列都不寫；不成立或是 NULL（例如子查詢沒結果）都讓整批回復，不能寫成 WHERE NOT(條件)。
-test('#681 guard 成立不寫列；不成立或 NULL 整批回復；溜狗 guard 都走同一個寫法', async () => {
-  const env = await setup();
-  try {
-    const count = async () => (await env.DB.prepare('SELECT COUNT(*) AS n FROM guard_probe').first()).n;
-    await env.DB.prepare('CREATE TABLE guard_probe (n INTEGER)').run();
-    const write = () => env.DB.prepare('INSERT INTO guard_probe VALUES(1)');
-    const before = (await env.DB.prepare('SELECT total_changes() AS n').first()).n;
-    await env.DB.batch([guard(env.DB, '?=1', 1), write()]);
-    assert.equal((await env.DB.prepare('SELECT total_changes() AS n').first()).n - before, 1, '通過時 guard 不寫列');
-    for (const [condition, args] of [['?=1', [0]], ['(SELECT version FROM v3_walk_state WHERE dog_key=?)=1', ['沒有這隻']], ['NULL', []]]) {
-      await assert.rejects(env.DB.batch([write(), guard(env.DB, condition, ...args), write()]), /CHECK constraint/, condition);
-    }
-    assert.equal(await count(), 1, '擋下的 batch 整批回復');
-    assert.equal((await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_walk_guard').first()).n, 0);
-  } finally { env.DB.close(); }
+// #681、#747：溜狗的 guard 與寫入預算都是有條件 batch（conditional-batch.js）的條件；條件成立、不成立、NULL 的語意在 conditional-batch.test.mjs。
+test('#747 今日溜狗紀錄的 guard 都走有條件 batch，不自己寫 guard 表、不自己分類約束錯誤', async () => {
   const dir = new URL('../src/today-walks/', import.meta.url);
   for (const file of (await readdir(dir)).filter(f => f.endsWith('.js'))) {
     const code = await readFile(new URL(file, dir), 'utf8');
-    assert.equal(code.match(/INSERT INTO v3_walk_guard/g)?.length || 0, file === 'shared.js' ? 1 : 0, `${file} 的 guard 要用 guard()`);
-    assert.doesNotMatch(code, /DELETE FROM v3_walk_guard/, `${file} 不用再清 guard`);
+    assert.doesNotMatch(code, /v3_(walk|batch)_guard/, `${file} 的條件要交給 batchIf`);
+    assert.doesNotMatch(code, /constraint/i, `${file} 的約束錯誤要用 isConflict 判斷`);
   }
 });

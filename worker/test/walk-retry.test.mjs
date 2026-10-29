@@ -335,7 +335,7 @@ test('預算拒絕時不半寫、不派送，停用與預覽環境不執行新�
     assert.equal(wake,0);
     assert.equal((await current(env)).walks[0].syncStatus,'pending');
     assert.equal((await env.DB.prepare('SELECT reserved FROM v3_walk_write_budget').first()).reserved,before);
-    assert.equal((await env.DB.prepare('SELECT COUNT(*) n FROM v3_walk_guard').first()).n,0);
+    assert.equal((await env.DB.prepare('SELECT COUNT(*) n FROM v3_batch_guard').first()).n,0);
     await tick({ ...env,WALK_RETRY_ENABLED:undefined },now);
     await tick({ ...env,PREVIEW:'true' },now);
     assert.equal(wake,0);

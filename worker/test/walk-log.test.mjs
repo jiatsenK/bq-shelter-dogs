@@ -148,18 +148,20 @@ test('沒有溜狗狀態的狗：先比對再狗清單同步，只記一筆', as
   } finally { env.DB.close(); }
 });
 
-test('沒有溜狗狀態的狗：比對讀完基準值後、寫入前狗清單同步搶先，只記一筆', async () => {
+test('沒有溜狗狀態的狗：比對讀完基準值後、寫入前狗清單同步搶先，晚的被版本擋下不 ack，補送時一樣，只記一筆', async () => {
   const env = await setup();
   try {
     const db = env.DB, batch = db.batch.bind(db);
     let raced = false;
-    // 比對收下那一批（寫 v3_walk_state 的那批）送出前，先讓狗清單同步寫完
+    // 比對收下那一批（寫 v3_walk_state 的那批）送出前，先讓狗清單同步寫完（它也交同一筆觀測值）
     db.batch = async statements => {
-      if (!raced && statements.length >= 8) { raced = true; await applyDogListRows(db, [listRow(day(), '丙')], env); }
+      if (!raced && statements.length >= 8) { raced = true; assert.equal((await applyDogListRows(db, [listRow(day(), '丙')], env))[0].ok, true); }
       return batch(statements);
     };
-    await reconcileWalk(db, dog, { date: day(), walker: '丙' }, env);
+    const [late] = await todayWalks(env).observe([{ dog, current: { date: day(), walker: '丙' } }]);
     assert.equal(raced, true);
+    assert.deepEqual([late.ok, late.ack], [false, false], 'GAS 保留待通知、之後補送');
+    assert.equal((await reconcileWalk(db, dog, { date: day(), walker: '丙' }, env)).changed, false, '補送時跟基準值一樣');
     assert.deepEqual((await logs(env)).map(l => [l.source, l.editor]), [['sheet', '丙']]);
   } finally { env.DB.close(); }
 });

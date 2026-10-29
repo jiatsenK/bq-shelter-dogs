@@ -16,7 +16,7 @@ async function makeDb(t) {
 const revisionIs = (id, revision) => ({ sql: '(SELECT revision FROM t WHERE id=?)=?', args: [id, revision] });
 const write = db => db.prepare('UPDATE t SET revision=99 WHERE id=1');
 const revision = db => db.prepare('SELECT revision FROM t WHERE id=1').first('revision');
-const guardRows = db => db.prepare('SELECT COUNT(*) AS n FROM v3_walk_guard').first('n');
+const guardRows = db => db.prepare('SELECT COUNT(*) AS n FROM v3_batch_guard').first('n');
 
 test('條件成立：整批寫，回傳只有呼叫端那幾句的結果，guard 表不留列', async t => {
   const db = await makeDb(t);

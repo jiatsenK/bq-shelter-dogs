@@ -6,6 +6,7 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { todayWalks } from '../src/today-walks/index.js';
 import { ROW_COST, DISPATCH_COST, costOf } from '../src/today-walks/budget.js';
+import { batchIf } from '../src/conditional-batch.js';
 import { setup, post, request, day } from './walk-fixture.mjs';
 
 const dog = { id: '9001', name: '測試狗' };
@@ -80,7 +81,7 @@ test('志工接受：溜了、同日加人、修改、復原的保留量都 ≥ 
   } finally { env.DB.close(); }
 });
 
-test('收下人工改表：同日刪人、改回較早的日子（刪溜狗紀錄＋修改紀錄）、清空、保險掃描、記衝突', async () => {
+test('收下人工改表：同日刪人、改回較早的日子（刪較新那天、寫那天、修改紀錄）、清空、改到新的一天、保險掃描、記衝突', async () => {
   const env = await setup(); worker.testing.resetState();
   const real = globalThis.fetch, sheet = { cells: {} };
   globalThis.fetch = fakeSheet(env, sheet);
@@ -92,6 +93,7 @@ test('收下人工改表：同日刪人、改回較早的日子（刪溜狗紀�
     await measure(env, '同日人工刪人、網站加的人留著', () => observe({ date: day(), walker: '丙' }));
     await measure(env, '人工改回較早的日子', () => observe({ date: '2026-09-01', walker: '甲' }));
     await measure(env, '人工清空', () => observe({ date: '', walker: '' }));
+    await measure(env, '人工改到新的一天（照表寫那天＋修改紀錄）', () => observe({ date: '2026-09-05', walker: '甲、乙' }));
     sheet.scan = [{ dog, current: { date: '2026-09-02', walker: '乙、丁' } }];
     await measure(env, '保險掃描收下', async () => assert.equal((await todayWalks({ ...env, WALK_RETRY_ENABLED: 'true' }).scan()).changed, 1));
     await env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(2,'dog','9001','測試狗','2026-10-01')").run();
@@ -177,13 +179,13 @@ test('狗清單同步先寫了那天別的列：溜狗紀錄照當天實際列�
   } finally { env.DB.close(); }
 });
 
-test('狗清單同步記「溜了／試算表」（listWalkLog）的保留量 ≥ 實際寫入', async () => {
+test('狗清單同步新建的狗：那天溜狗紀錄（listed）的保留量 ≥ 實際寫入；那天已經有就不寫', async () => {
   const env = await setup(); worker.testing.resetState();
   try {
-    const old = await env.DB.prepare("SELECT dog_id,walked_date,walker FROM v3_sheet_main WHERE number='9001'").first();
-    const statements = await todayWalks(env).listWalkLog(dog, old, { date: '2026-10-15', walker: '乙' });
-    assert.ok(statements.length > 0, '沒有溜狗狀態的狗，表上改了要記');
-    await measure(env, '狗清單同步記一筆溜了／試算表', () => env.DB.batch(statements));
-    assert.equal(await env.DB.prepare("SELECT COUNT(*) AS n FROM v3_edit_log WHERE source='sheet'").first('n'), 1);
+    const listed = await todayWalks(env).listed('dog', dog, { date: '2026-10-15', walker: '甲、乙' });
+    assert.ok(listed.statements.length > 0);
+    await measure(env, '新建的狗照表寫那天', () => batchIf(env.DB, listed.conditions, listed.statements));
+    assert.equal(await env.DB.prepare("SELECT COUNT(*) AS n FROM v3_walks WHERE dog_id='dog' AND walk_date='2026-10-15'").first('n'), 2);
+    assert.deepEqual(await todayWalks(env).listed('dog', dog, { date: '2026-10-15', walker: '丙' }), { conditions: [], statements: [] });
   } finally { env.DB.close(); }
 });
