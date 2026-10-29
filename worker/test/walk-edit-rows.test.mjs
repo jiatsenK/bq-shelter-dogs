@@ -3,33 +3,33 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import worker from '../src/index.js';
-import { setup, post, request, current, day } from './walk-fixture.mjs';
+import { appsScript } from './apps-script.mjs';
+import { setup, post, request, current, day, tick, addDog } from './walk-fixture.mjs';
 
 const dog = { id:'9001', name:'測試狗' };
+// 送來的列不合規格時 Worker 怎麼回（小程式不會這樣送，直接打 /rows）
 const rows = (env, body, key = env.SHEET_WRITE_KEY) => worker.fetch(new Request('https://worker.example/api/walk-writeback/rows', {
   method:'POST', headers:{ 'X-Sheet-Write-Key':key }, body:JSON.stringify(body),
 }), env);
 const writes = async env => (await env.DB.prepare('SELECT total_changes() n').first()).n;
-// at：排程時間。保險掃描在 UTC 1 點（台灣 09:23）會順便清修改紀錄、多寫一列；比寫入次數的測試要帶固定時間，不然台灣 9 點那一小時會失敗
-async function run(env, cron, at = Date.now()) {
-  const tasks = [];
-  await worker.scheduled({ scheduledTime:at, cron }, env, { waitUntil:p => tasks.push(p) });
-  await Promise.allSettled(tasks);
+// 人工改那隻狗的格子，跑真的編輯觸發；回 Worker 對那一列的結果
+async function edit(gas, change, id = dog.id) {
+  await gas.edit(id, change);
+  return gas.posts.findLast(p => p.action === 'rows');
 }
 
 test('#500 改一格只送那一列：Worker 依送來的值更新，不讀整張表', async () => {
-  const env = { ...await setup(), D1_WALK_NOTIFY:'1' }, real = globalThis.fetch;
+  const env = { ...await setup(), D1_WALK_NOTIFY:'1' }, gas = appsScript(env);
   worker.testing.resetState();
-  const outside = [];
-  globalThis.fetch = async url => { outside.push(String(url)); return Response.json({ ok:true }); };
   try {
-    assert.equal((await rows(env, { rows:[{ sheet:'main', dog, current:{ date:day(), walker:'乙' } }] }, 'forged')).status, 403);
-    const response = await rows(env, { rows:[{ sheet:'main', dog, current:{ date:day(), walker:'乙' } }] });
-    assert.equal(response.status, 200);
-    assert.deepEqual((await response.json()).results.map(r => r.ack), [true]);
+    const sent = await edit(gas, { date:day(), walker:'乙' });
+    assert.deepEqual(sent.body.rows, [{ sheet:'main', dog, other:false, current:{ date:day(), walker:'乙' } }]);
+    assert.deepEqual(sent.out.results.map(r => r.ack), [true]);
     assert.equal((await current(env)).walks[0].walker, '乙');
-    assert.deepEqual(outside, [], '不回頭向試算表讀整張表');
-  } finally { globalThis.fetch = real; env.DB.close(); }
+    assert.deepEqual(gas.calls, [], '不回頭向試算表讀整張表');
+    assert.equal(gas.props().WALK_EDITS_PENDING, JSON.stringify({ seq:1, items:{} }), 'Worker 接手後小程式清掉待通知');
+    assert.equal((await gas.resend(sent, {}, 'forged')).status, 403);
+  } finally { env.DB.close(); }
 });
 
 test('#500 換籠、移到「已出所」的列在這裡只回 ack，由狗清單編輯觸發另外送（#501）', async () => {
@@ -44,108 +44,87 @@ test('#500 換籠、移到「已出所」的列在這裡只回 ack，由狗清�
 });
 
 test('#500 無法確認的列仍回 ack（已記衝突）；D1 寫不進去才讓 GAS 保留待通知', async () => {
-  const env = { ...await setup(), D1_WALK_NOTIFY:'1' };
+  const env = { ...await setup(), D1_WALK_NOTIFY:'1' }, gas = appsScript(env, { rows:[['9001','測試狗','2026/10/1',''],['7777','不在','','']] });
   worker.testing.resetState();
   try {
-    const bad = await (await rows(env, { rows:[{ sheet:'main', dog:{ id:'7777', name:'不在' }, current:{ date:'', walker:'' } }] })).json();
+    const bad = (await edit(gas, { date:'', walker:'' }, '7777')).out;
     assert.equal(bad.results[0].ack, true);
     assert.equal(bad.results[0].ok, false);
     const batch = env.DB.batch.bind(env.DB);
     env.DB.batch = async () => { throw new Error('D1 down'); };
-    const down = await (await rows(env, { rows:[{ sheet:'main', dog, current:{ date:day(), walker:'乙' } }] })).json();
+    const down = (await edit(gas, { date:day(), walker:'乙' })).out;
     env.DB.batch = batch;
     assert.equal(down.results[0].ack, false);
+    assert.ok(JSON.parse(gas.props().WALK_EDITS_PENDING).items['9001'], '小程式保留待通知，下次補送');
     assert.equal((await rows(env, { rows:Array.from({ length:51 }, () => ({ sheet:'main', dog })) })).status, 400);
   } finally { env.DB.close(); }
 });
 
 test('#500 功能開關關閉時不動今日溜狗，也不確認（GAS 保留待開啟後補送）', async () => {
-  const env = await setup();
+  const env = await setup(), gas = appsScript(env);
   worker.testing.resetState();
   try {
-    const out = await (await rows(env, { rows:[{ sheet:'main', dog, current:{ date:day(), walker:'乙' } }, { sheet:'departed', dog }] })).json();
-    assert.deepEqual(out.results.map(r => r.ack), [false, true]);
+    const out = (await edit(gas, { date:day(), walker:'乙' })).out;
+    assert.deepEqual(out.results.map(r => r.ack), [false]);
     assert.equal(await env.DB.prepare('SELECT dog_key FROM v3_walk_state').first(), null);
+    assert.ok(JSON.parse(gas.props().WALK_EDITS_PENDING).items['9001']);
+    const moved = await (await rows(env, { rows:[{ sheet:'departed', dog }] })).json();
+    assert.deepEqual(moved.results.map(r => r.ack), [true], '非溜狗欄照常回 ack');
   } finally { env.DB.close(); }
 });
 
 const cronRow = async (env, job) => JSON.parse((await env.DB.prepare('SELECT value FROM v3_sync_state WHERE key=?').bind(`cron_${job}`).first('value')) || 'null');
 
 test('#500 沒有待寫回時，重試排程不讀試算表；D1 只寫一列跑完時間（稽核第 5 項）', async () => {
-  const env = { ...await setup(), WALK_RETRY_ENABLED:'true' }, real = globalThis.fetch;
-  const outside = [];
-  globalThis.fetch = async url => { outside.push(String(url)); return Response.json({ ok:true, rows:[] }); };
+  const env = { ...await setup(), WALK_RETRY_ENABLED:'true' }, gas = appsScript(env);
   try {
     const before = await writes(env);
-    await run(env, '5-59/10 * * * *');
-    assert.deepEqual(outside, []);
+    await tick(gas, env, Date.now(), '5-59/10 * * * *');
+    assert.deepEqual(gas.calls, []);
     assert.equal(await writes(env), before + 1);
     assert.ok((await cronRow(env, 'retry')).okAt);
-  } finally { globalThis.fetch = real; env.DB.close(); }
+  } finally { env.DB.close(); }
 });
 
 test('#500 保險掃描沒有不同的狗只問一次就結束；重試排程不掃（稽核第 5 項：正式版只剩兩個排程）', async t => {
   // 固定在台灣 13:23 那次：UTC 1 點是當天第一次掃描，會順便清修改紀錄、多記一列 cron_editlog（edit-log-prune.test.mjs 驗）
   t.mock.timers.enable({ apis:['Date'], now:Date.parse('2026-10-22T05:23:00Z') });
-  const env = { ...await setup(), WALK_RETRY_ENABLED:'true' }, real = globalThis.fetch;
-  const actions = [];
-  globalThis.fetch = async (url, init) => {
-    const body = init?.body ? JSON.parse(init.body) : {};
-    actions.push(body.action || String(url));
-    return Response.json({ ok:true, rows: body.fingerprints ? [] : [{ dog, current:{ date:'2026-10-01', walker:'' } }] });
-  };
+  const env = { ...await setup(), WALK_RETRY_ENABLED:'true' }, gas = appsScript(env);
+  const actions = () => gas.calls.map(body => body.action);
   try {
     await post(env, request('scan-0001', '甲'));
     for (const cron of ['17 2 1 * *', '43 1 * * *', '5-59/10 * * * *']) {
-      actions.length = 0;
-      await run(env, cron);
-      assert.ok(!actions.includes('walkScan'), cron);
+      gas.calls.length = 0;
+      await tick(gas, env, Date.now(), cron);
+      assert.ok(!actions().includes('walkScan'), cron);
     }
-    actions.length = 0;
+    assert.equal((await current(env)).walks[0].syncStatus, 'synced', '重試排程寫回了');
+    gas.calls.length = 0;
     const before = await writes(env);
     const afternoon = new Date(); afternoon.setUTCHours(5, 23, 0, 0); // 台灣 13:23 那次：不是當天第一次掃描
-    await run(env, '23 1,5,15 * * *', afternoon.getTime());
-    assert.deepEqual(actions, ['walkScan']);
+    await tick(gas, env, afternoon.getTime(), '23 1,5,15 * * *');
+    assert.deepEqual(actions(), ['walkScan']);
     assert.equal(await writes(env), before + 1, '只多記一列跑完時間');
     assert.ok((await cronRow(env, 'scan')).okAt);
     const crons = config => JSON.parse(readFileSync(new URL(`../../${config}`, import.meta.url), 'utf8').match(/"crons":\s*(\[[^\]]*\])/)[1]);
     assert.deepEqual(crons('wrangler.jsonc'), ['5-59/10 * * * *', '23 1,5,15 * * *']);
     assert.deepEqual(crons('wrangler.test-site.jsonc'), ['5-59/10 * * * *'], '帳號免費方案上限 5 個：測試網站只留寫回重試');
-  } finally { globalThis.fetch = real; env.DB.close(); }
+  } finally { env.DB.close(); }
 });
 
 test('#500 11 隻整群逐狗接受並各自寫回；部分失敗只重試未成功者', async t => {
   const now = Date.parse('2026-10-22T02:00:00Z');
   t.mock.timers.enable({ apis:['Date'], now });
-  const env = { ...await setup(), WALK_RETRY_ENABLED:'true' }, real = globalThis.fetch;
+  const env = { ...await setup(), WALK_RETRY_ENABLED:'true' }, gas = appsScript(env);
   worker.testing.resetState();
-  const machine = async (action, body) => (await worker.fetch(new Request(`https://worker.example/api/walk-writeback/${action}`, {
-    method:'POST', headers:{ 'X-Sheet-Write-Key':env.SHEET_WRITE_KEY }, body:JSON.stringify(body) }), env)).json();
-  const cells = {}, wakes = [];
-  let broken = '9203';
-  globalThis.fetch = async (_url, init) => {
-    const body = JSON.parse(init.body), items = body.items || [{ dog:body.dog, dispatchId:body.dispatchId }];
-    const results = [];
-    for (const item of items) {
-      wakes.push(item.dog.id);
-      if (item.dog.id === broken) { results.push({ ok:false, dispatchId:item.dispatchId, error:'找不到唯一的狗' }); continue; }
-      const target = await machine('target', { dog:item.dog, dispatchId:item.dispatchId, current:cells[item.dog.id] || { date:'2026-10-01', walker:'' } });
-      cells[item.dog.id] = target.current;
-      const receipt = { dogKey:item.dog.id, version:target.version, dispatchId:target.dispatchId, current:target.current };
-      results.push({ ok:true, ...receipt, ...await machine('receipt', receipt) });
-    }
-    return body.items ? Response.json({ ok:true, results }) : Response.json(results[0]);
-  };
+  const wakes = () => gas.calls.flatMap(body => (body.items || [body]).map(item => item.dog.id));
   try {
     const tasks = [], ctx = { waitUntil:p => tasks.push(p) };
     for (let i = 0; i < 11; i++) {
-      const id = String(9200 + i), dogId = `group-${i}`, name = `整群狗${i}`;
-      await env.DB.batch([
-        env.DB.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId, name),
-        env.DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?)').bind(id, dogId),
-        env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(?,?,?,?,'2026-10-01')").bind(i + 2, dogId, id, name),
-      ]);
-      const out = await post(env, request(`group-req-${String(i).padStart(4, '0')}`, '甲', { dogs:[{ id, name }] }), ctx);
+      const id = String(9200 + i), name = `整群狗${i}`;
+      // 9203 一開始不在表上：小程式找不到唯一的狗
+      await addDog(env, id === '9203' ? null : gas, { id, dogId:`group-${i}`, name, row:i + 2 });
+      const out = await post(env, request(`group-req-${String(i).padStart(4, '0')}`, '甲', { dogs:[{ id, name }] }), ctx, gas.worker);
       assert.equal(out.status, 200);
       assert.equal(out.body.results[0].accepted, true);
     }
@@ -154,37 +133,38 @@ test('#500 11 隻整群逐狗接受並各自寫回；部分失敗只重試未成
     let now11 = await status();
     assert.equal(Object.values(now11).filter(s => s === 'synced').length, 10);
     assert.equal(now11['9203'], 'retry');
-    wakes.length = 0; broken = '';
+    gas.calls.length = 0;
+    gas.add('9203', '整群狗3');
     t.mock.timers.setTime(now + 2 * 60000);
-    await run(env, '5-59/10 * * * *');
-    assert.deepEqual(wakes, ['9203'], '只重試未成功的那隻');
+    await tick(gas, env, Date.now(), '5-59/10 * * * *');
+    assert.deepEqual(wakes(), ['9203'], '只重試未成功的那隻');
     now11 = await status();
     assert.ok(Object.values(now11).every(s => s === 'synced'));
-  } finally { globalThis.fetch = real; env.DB.close(); }
+  } finally { env.DB.close(); }
 });
 
 test('人工連改兩格（先改人名再改日期）：上一次記改之前的值，不記改一半的狀態', async () => {
-  const env = { ...await setup(), D1_WALK_NOTIFY:'1' };
+  const env = { ...await setup(), D1_WALK_NOTIFY:'1' }, gas = appsScript(env);
   worker.testing.resetState();
   const state = () => env.DB.prepare("SELECT version,effective_date,walker,previous_date,previous_walker FROM v3_walk_state WHERE number='9001'").first();
   try {
-    await rows(env, { rows:[{ sheet:'main', dog, current:{ date:'2026-10-01', walker:'甲' } }] });
+    await edit(gas, { walker:'甲' });
     await env.DB.prepare("UPDATE v3_walk_outbox SET next_attempt_at='2000-01-01T00:00:00.000Z'").run();
-    await rows(env, { rows:[{ sheet:'main', dog, current:{ date:'2026-10-01', walker:'乙' } }] });
-    await rows(env, { rows:[{ sheet:'main', dog, current:{ date:day(), walker:'乙' } }] });
+    await edit(gas, { walker:'乙' });
+    await edit(gas, { date:day() });
     assert.deepEqual({ ...await state() }, { version:3, effective_date:day(), walker:'乙', previous_date:'2026-10-01', previous_walker:'甲' });
   } finally { env.DB.close(); }
 });
 
 test('人工改表相隔超過合併時間：照一般規則，上一次記前一版', async () => {
-  const env = { ...await setup(), D1_WALK_NOTIFY:'1' };
+  const env = { ...await setup(), D1_WALK_NOTIFY:'1' }, gas = appsScript(env);
   worker.testing.resetState();
   const state = () => env.DB.prepare("SELECT previous_date,previous_walker FROM v3_walk_state WHERE number='9001'").first();
   try {
-    await rows(env, { rows:[{ sheet:'main', dog, current:{ date:'2026-10-01', walker:'甲' } }] });
-    await rows(env, { rows:[{ sheet:'main', dog, current:{ date:'2026-10-01', walker:'乙' } }] });
+    await edit(gas, { walker:'甲' });
+    await edit(gas, { walker:'乙' });
     await env.DB.prepare("UPDATE v3_walk_outbox SET next_attempt_at='2000-01-01T00:00:00.000Z'").run();
-    await rows(env, { rows:[{ sheet:'main', dog, current:{ date:day(), walker:'乙' } }] });
+    await edit(gas, { date:day() });
     assert.deepEqual({ ...await state() }, { previous_date:'2026-10-01', previous_walker:'乙' });
   } finally { env.DB.close(); }
 });

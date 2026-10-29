@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import worker from '../src/index.js';
 import { setup, request, post as postWalk, day } from './walk-fixture.mjs';
-import { walkDay } from '../src/today-walks/version.js';
+import { todayWalks } from '../src/today-walks/index.js';
 import { walkerCode } from '../src/editlog.js';
 import { removeFormerNumber } from '../src/compact.js';
 
@@ -456,25 +456,33 @@ test('#682 溜狗紀錄照位置比：順序不同算有變、人數變少刪多
   worker.testing.resetState();
   const [甲, 乙, 丙] = await Promise.all(['甲', '乙', '丙'].map(n => walkerCode(n, 'test')));
   const dog = { id:'9001', name:'測試狗' }, date = '2026-10-05';
-  const write = async (codes, d = dog) => {
+  // 人工把那天（比主清單上次溜的晚）改成這份名單，交給今日溜狗紀錄 module 寫溜狗紀錄
+  const write = async (walker, d = dog) => {
     const before = await writes(env), version = await walkVersion(env);
-    await env.DB.batch(walkDay(env.DB, 'dog', date, d, codes));
+    const [result] = await todayWalks(env).observe([{ dog:d, current:{ date, walker } }]);
+    assert.equal(result.ok, true);
     return { changes: await writes(env) - before, invalidated: JSON.stringify(await walkVersion(env)) !== JSON.stringify(version) };
   };
-  const day5 = async () => (await walkRows(env)).map(r => [r.position, r.walker_code, r.dog_number, r.dog_name]);
+  const day5 = async () => (await walkRows(env)).filter(r => r.walk_date === date).map(r => [r.position, r.walker_code, r.dog_number, r.dog_name]);
   try {
-    await write([甲, 乙]);
-    assert.deepEqual(await write([甲, 乙]), { changes:0, invalidated:false }, '同一份名單寫 0 列');
-    await write([乙, 甲]);
+    await write('甲、乙');
+    assert.deepEqual(await write('甲、乙'), { changes:0, invalidated:false }, '同一份名單寫 0 列');
+    await write('乙、甲');
     assert.deepEqual(await day5(), [[0, 乙, '9001', '測試狗'], [1, 甲, '9001', '測試狗']], '順序不同照位置改寫');
-    await write([乙]);
+    await write('乙');
     assert.deepEqual(await day5(), [[0, 乙, '9001', '測試狗']], '人數變少刪掉多出的位置');
-    await write([]);
+    await write('');
     assert.deepEqual(await day5(), [[0, null, '9001', '測試狗']]);
-    assert.deepEqual(await write([]), { changes:0, invalidated:false }, '沒有溜狗人：null 對 null 算一樣');
+    assert.deepEqual(await write(''), { changes:0, invalidated:false }, '沒有溜狗人：null 對 null 算一樣');
+    // 狗清單同步把這隻狗換成新編號、新狗名
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO v3_dog_numbers VALUES('9100','dog')"),
+      env.DB.prepare("UPDATE v3_sheet_main SET number='9100',name='改名了' WHERE dog_id='dog'"),
+    ]);
     const renamed = { id:'9100', name:'改名了' };
-    assert.deepEqual(await write([], renamed), { changes:0, invalidated:false }, '名單一樣、狗改名換編號不寫');
-    await write([丙, 甲], renamed);
+    assert.equal((await write('', renamed)).invalidated, false, '名單一樣、狗改名換編號不寫那天');
+    assert.deepEqual(await day5(), [[0, null, '9001', '測試狗']]);
+    await write('丙、甲', renamed);
     assert.deepEqual(await day5(), [[0, 丙, '9001', '測試狗'], [1, 甲, '9001', '測試狗']], '那天的編號和狗名照第一次記的（#248）');
   } finally { env.DB.close(); }
 });

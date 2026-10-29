@@ -4,7 +4,8 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { recordRun } from '../src/cron-status.js';
 import { readCronStatus } from '../src/admin/checks.js';
-import { setup, post, request } from './walk-fixture.mjs';
+import { setup, post, request, tick } from './walk-fixture.mjs';
+import { appsScript } from './apps-script.mjs';
 
 const row = async (env, job) => JSON.parse((await env.DB.prepare('SELECT value FROM v3_sync_state WHERE key=?').bind(`cron_${job}`).first('value')) || 'null');
 async function run(env, cron, at) {
@@ -34,22 +35,21 @@ test('跑完記 okAt；出錯記 failAt 與訊息、保留上次 okAt；功能�
 });
 
 test('排程：保險掃描讀試算表失敗、寫回重試讀 D1 失敗都記成失敗，不當成跑完', async () => {
-  const env = { ...await setup(), WALK_RETRY_ENABLED:'true' }, real = globalThis.fetch;
-  globalThis.fetch = async () => Response.json({ ok:true });
+  const env = { ...await setup(), WALK_RETRY_ENABLED:'true' }, gas = appsScript(env);
   try {
     await post(env, request('cron-0001', '甲'));
-    globalThis.fetch = async () => { throw new Error('network'); };
-    await run(env, '23 1,5,15 * * *', T);
+    gas.network = () => Promise.reject(new Error('network'));
+    await tick(gas, env, T, '23 1,5,15 * * *');
     const scan = await row(env, 'scan');
     assert.equal(scan.okAt, undefined);
     assert.equal(scan.failAt, '2026-10-26T05:53:00.000Z');
     assert.match(scan.error, /主清單直接讀回失敗/);
     const prepare = env.DB.prepare.bind(env.DB);
     env.DB.prepare = sql => (/v3_walk_delivery/.test(sql) ? { bind() { return { all:async () => { throw new Error('D1 busy'); } }; } } : prepare(sql));
-    await run(env, '5-59/10 * * * *', T);
+    await tick(gas, env, T, '5-59/10 * * * *');
     env.DB.prepare = prepare;
     assert.deepEqual(await row(env, 'retry'), { failAt:'2026-10-26T05:53:00.000Z', error:'D1 busy' });
-  } finally { globalThis.fetch = real; env.DB.close(); }
+  } finally { env.DB.close(); }
 });
 
 test('預覽版、功能沒開：排程不跑也不記', async () => {

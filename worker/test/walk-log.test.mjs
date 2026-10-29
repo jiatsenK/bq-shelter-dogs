@@ -4,7 +4,6 @@ import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { setup, post, request, day } from './walk-fixture.mjs';
 import { todayWalks } from '../src/today-walks/index.js';
-import { costOf } from '../src/today-walks/budget.js';
 import { searchEdits } from '../src/admin/edits.js';
 import { applyDogListRows } from '../src/dog-list.js';
 
@@ -43,14 +42,12 @@ test('網站按溜了記一筆「溜了／志工網站」，改前改後是上�
   } finally { env.DB.close(); }
 });
 
-test('一起溜時操作者列出全部溜狗人；每日寫入預算算進修改紀錄', async () => {
+// 每日寫入預算算進修改紀錄：today-walks-budget.test.mjs 數每種登記實際寫的列（含 v3_edit_log）確認保留量夠
+test('一起溜時操作者列出全部溜狗人', async () => {
   const env = await setup();
   try {
     await post(env, request('group-0001', '甲、乙'));
     assert.equal((await logs(env))[0].editor, '甲、乙');
-    // 今日溜狗（狀態、請求、outbox 兩列）＋修改紀錄＋溜狗紀錄兩人各一列（#746 起依要寫的表算，today-walks/budget.js）
-    const expected = costOf([['v3_walk_state', 1], ['v3_walk_requests', 1], ['v3_walk_outbox', 2], ['v3_edit_log', 1], ['v3_walks', 2]]);
-    assert.equal((await env.DB.prepare('SELECT reserved FROM v3_walk_write_budget').first()).reserved, expected);
   } finally { env.DB.close(); }
 });
 
