@@ -141,6 +141,14 @@ async function deskLoadWalks() {
   if ((appState.activeTab === 'walk' || appState.activeTab === 'groups') && deskOn()) render();
 }
 
+// 天數色籤（全表、電腦版找狗共用）：休養、固定、今天／X天、沒紀錄
+function deskDayTag(s) {
+  return s.kind === 'rest' ? `<span class="dr-day rest">休養</span>`
+    : s.kind === 'covered' ? `<span class="dr-day sage">固定</span>`
+    : s.kind === 'dated' ? (s.days < 0 ? '<span class="dr-day none">？</span>' : `<span class="dr-day ${s.level}">${s.days === 0 ? '今天' : `<b class="num">${s.days}</b>天`}</span>`)
+    : '<span class="dr-day none">沒紀錄</span>';
+}
+
 function deskRowHtml(dog, today, days) {
   const s = computeStatus(dog, today);
   const key = walkKey(dog);
@@ -149,10 +157,7 @@ function deskRowHtml(dog, today, days) {
   const rest = s.kind === 'rest';
   const done = walkedNow(dog, today);
   const pending = BQWalkUI.walkPendingNow(dog);
-  const tag = s.kind === 'rest' ? `<span class="dr-day rest">休養</span>`
-    : s.kind === 'covered' ? `<span class="dr-day sage">固定</span>`
-    : s.kind === 'dated' ? (s.days < 0 ? '<span class="dr-day none">？</span>' : `<span class="dr-day ${s.level}">${s.days === 0 ? '今天' : `<b class="num">${s.days}</b>天`}</span>`)
-    : '<span class="dr-day none">沒紀錄</span>';
+  const tag = deskDayTag(s);
   // 跟手機「溜了」按鈕同一份登記狀態（walk-ui.js 的 walkButton）：#643 沒登記到留紅字到成功或再按，寫回試算表中／失敗也標出來
   const failed = !pending && BQWalkUI.walkFailure(dog);
   const check = pending ? '<span class="dr-state">登記中</span>'
@@ -357,5 +362,5 @@ if (typeof document !== 'undefined' && document.getElementById('main')) {
 }
 }
 
-export { DESK_MEDIA, deskOn, DESK_ZONES, deskZoneOf, deskBucket, deskNoteParts, deskChecked, deskNatural, deskSorted, deskSortDir, deskBriefHtml, deskToolsHtml, deskDays, deskDayWalk, deskLoadWalks, deskRowHtml, deskTableHtml, deskSideHtml, deskBatchHtml, deskWalkHtml, deskClearChecked, deskPlaceTabs, startDesk };
+export { DESK_MEDIA, deskOn, DESK_ZONES, deskZoneOf, deskBucket, deskNoteParts, deskChecked, deskNatural, deskSorted, deskSortDir, deskBriefHtml, deskToolsHtml, deskDays, deskDayWalk, deskLoadWalks, deskDayTag, deskRowHtml, deskTableHtml, deskSideHtml, deskBatchHtml, deskWalkHtml, deskClearChecked, deskPlaceTabs, startDesk };
 export { deskState } from './page-state.js';

@@ -4,7 +4,7 @@
 
 ## 頁面入口與初始化
 
-- `index.html` → `main.js`：匯入整個主頁模組圖；模組定義與狀態初始化完成後，依原本順序呼叫 app、analysis、group-stage、find、activities 的事件綁定，再啟動 desk 與 app。循環引用只在互動時使用，事件綁定不靠 import 評估順序。頁首提前抓狗清單的內嵌程式保留，`api.js` 接手該請求。
+- `index.html` → `main.js`：匯入整個主頁模組圖；模組定義與狀態初始化完成後，依原本順序呼叫 app、analysis、group-stage、find、find-desk、activities 的事件綁定，再啟動 desk 與 app。循環引用只在互動時使用，事件綁定不靠 import 評估順序。頁首提前抓狗清單的內嵌程式保留，`api.js` 接手該請求。
 - `cards.html` → `cards-entry.js`：載入 `cards.js` 與共用模組，再啟動圖鑑。
 - `edits.html` → `edits.js`：載入共用模組，再讀取編輯紀錄。
 - `groups.html` 仍轉址至主頁；保留的 `groups.js` 也改為 ES module，沒有頁面載入。
@@ -48,8 +48,9 @@
 | `analysis.js` | 分析、離所名冊與資訊頁；資訊頁的「分享網站連結」（ADR 0023）；電腦版資訊子頁的「回資訊」在內容最上面（`infoBack` 跟頁首共用） | app、detail、ui-kit、dates、api、site-config、dog-data、activities、overlays、share、walk-ui、desk、feature-settings、page-state | index |
 | `share.js` | `shareSite`：分享網站先用分享選單，不行就複製，都不行回 manual 由畫面顯示網址；navigator 由呼叫端帶入，不碰 DOM（ADR 0023） | 無 | index、Node |
 | `activities.js` | 活動紀錄與已出所狗卡編輯 | app、ui-kit、analysis、dates、api、walk-ui、page-state | index |
-| `find.js` | 找狗照片、搜尋與平面圖；籠位在哪一區用 `SITE.zones` | app、detail、ui-kit、dog-status、walk-ui、overlays、site-config、page-state | index |
+| `find.js` | 找狗照片、搜尋與平面圖；籠位在哪一區用 `SITE.zones`；在哪面板在電腦版是籠位旁的小卡（`wherePlace` 算位置） | app、detail、ui-kit、dog-status、walk-ui、overlays、site-config、page-state | index |
 | `group-stage.js` | 可以一起溜的狗群畫面；從詳細資訊進來時停在有這隻狗的群（`focusGroupOf`）；電腦版所有群並排成群卡＋右欄（選中那一群近 30 天、有警示的狗） | app、detail、ui-kit、dog-status、dates、api、walk-ui、desk、page-state | index |
+| `find-desk.js` | 電腦版找狗（≥1100px）：工具列、平面圖撐滿＋右欄 300px 列那一區的狗、列表表格；手機照舊用 find.js | app、detail、ui-kit、dog-status、desk、find、page-state | index |
 | `desk.js` | 電腦版簡報、全表／最近 30 天與側欄，明確啟動後啟用寬螢幕呈現；補資料由管理網站取代（#568） | app、detail、sheet-append、ui-kit、dog-status、dates、api、site-config、find、walk-ui、page-state | index |
 | `desk-mine.js` | 電腦版我溜過：標題列（名字＋修改）、月曆每格寫當天溜的狗名（最多 2 個，其餘「＋N」）、右欄選中那天的狗與月曆那個月的統計；還沒設定是誰時表單放主內容。手機照舊是 app.js 的 `myWalksHtml` | app、ui-kit、dates、welcome、page-state | index |
 | `cards.js` | 圖鑑、開卡與已出所狗卡，保留卡片專用格式 | dates、api、store、site-config、overlays、identity、page-state | cards |

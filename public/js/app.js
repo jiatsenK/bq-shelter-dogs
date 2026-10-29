@@ -7,6 +7,7 @@ import { BQDates } from './dates.js';
 import { BQWelcome } from './welcome.js';
 import { BQPhoto } from './photo.js';
 import { findPageHtml, whereKnown, whereOpen } from './find.js';
+import { findDeskHtml } from './find-desk.js';
 import { BQWalkUI } from './walk-ui.js';
 import { BQWalks } from './walk-flow.js';
 import { BQFavorites } from './favorites.js';
@@ -826,13 +827,16 @@ const TABS = [
   { id: 'mine', label: '我溜過', icon: 'paw' }, // #58 取代原本的「相關資訊（編輯中）」
   { id: 'info', label: '資訊', icon: 'chart' },
 ];
+// 找狗只在電腦版頁首佔一格，排在資訊前面（critique 2026-10-28 P1：進找狗時要看得到目前在哪頁）；手機底部照舊四格
+const DESK_FIND_TAB = { id: 'find', label: '找狗', icon: 'pin' };
+const shownTabs = () => (deskOn() ? [...TABS.slice(0, -1), DESK_FIND_TAB, TABS[TABS.length - 1]] : TABS);
 
 // counts：各分類要顯示的數字；沒有數字的分類留白
 function buildTabs(counts) {
   const tabsEl = document.getElementById('tabs');
   const focusedTab = tabsEl.contains(document.activeElement) && document.activeElement.dataset.tab;
   const selected = appState.analysisOpen ? 'info' : appState.activeTab;
-  tabsEl.innerHTML = TABS.map(t => {
+  tabsEl.innerHTML = shownTabs().map(t => {
     const n = t.id === 'mine' ? mineTabNumber(counts.mine) : counts[t.id] != null ? counts[t.id] : t.note || '';
     const label = t.id === 'mine' ? ` aria-label="${mineTabLabel(counts.mine)}"` : n === '' ? '' : ` aria-label="${t.label}，${n} 隻"`;
     return `<button type="button" data-tab="${t.id}" class="${selected === t.id ? 'active' : ''}"${selected === t.id ? ' aria-current="page"' : ''}${label}>${icon(t.icon)}<span class="t">${t.label}</span><span class="n">${n}</span></button>`;
@@ -852,7 +856,7 @@ function navigationState(tab) {
   return { bqNavigation: true, tab, base: appState.activeTab, returnTab: appState.groupsReturnTab, infoPage: typeof analysisState.infoPage === 'undefined' ? '' : analysisState.infoPage };
 }
 function switchTab(id, pushHistory = true) {
-  // find 保留給舊入口與操作教學，底部不再佔一格。
+  // find 在手機保留給舊入口與操作教學，底部不佔一格；電腦版頁首有「找狗」（DESK_FIND_TAB）
   if (id !== 'find' && !TABS.some(t => t.id === id)) return;
   const changed = id !== (appState.analysisOpen ? 'info' : appState.activeTab);
   const before = pushHistory && changed ? navigationState(appState.analysisOpen ? 'info' : appState.activeTab) : null;
@@ -1061,7 +1065,8 @@ function renderMain() {
   searchInput.placeholder = '狗名、編號或籠位';
   if (appState.activeTab === 'find') {
     // 找狗（#99）搜尋全部的狗：犬名、編號、籠位都算
-    main.innerHTML = findPageHtml(q);
+    // 電腦版（≥1100px）：平面圖撐滿、右欄列狗，在 js/find-desk.js
+    main.innerHTML = deskOn() ? findDeskHtml(q) : findPageHtml(q);
     return;
   }
   if (appState.activeTab === 'mine') {
