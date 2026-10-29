@@ -60,6 +60,20 @@ test('保險掃描同一天合併：表上拿掉的人拿掉，網站還沒寫�
   } finally { env.DB.close(); }
 });
 
+// 以前保險掃描遇到還沒派送的 pending 一律先不收（base 不變、等派送的 target 收）；#746 起跟改表通知一樣直接收下人工改的日期。
+// 已交給 Apps Script 的派送仍不收、base 不變：walk-reconcile.test.mjs「還有差異沒收完（派送結果不明）」
+test('保險掃描遇到還沒派送的網站登記：人工改了日期就照表收下，取代還沒寫回的那一版', async () => {
+  const env = await setup(); worker.testing.resetState();
+  try {
+    await baseline(env);
+    await post(env, request('scan-pending-0002', '乙'));
+    assert.deepEqual(await scan(env, [{ dog, current: { date: '2026-09-01', walker: '丁' } }]), { changed: 1, deferred: 0 });
+    const walk = (await current(env)).walks[0];
+    assert.deepEqual([walk.walkedDate, walk.walker, walk.syncStatus], ['2026-09-01', '丁', 'synced']);
+    assert.equal(await env.DB.prepare("SELECT COUNT(*) AS n FROM v3_walk_outbox WHERE dog_key='9001' AND status='pending'").first('n'), 0, '舊的 pending 被取代，不會再寫回');
+  } finally { env.DB.close(); }
+});
+
 test('保險掃描連改：先改人名（改表通知）再改日期（掃描補到），上一次記連改前的值', async () => {
   const env = await setup(); worker.testing.resetState();
   try {

@@ -3,18 +3,23 @@
 import { splitNames } from '../sheet-read.js';
 import { one, rows, keyOf, MAIN_DOG, WalkError } from './shared.js';
 
-// main.walker 是 NULL（#519 還沒補填原文）時用 codeNames（名單代號換回的名字）。
-export function currentWalk(state, main, codeNames = []) {
-  if (state) return { date: state.effective_date || '', walker: state.walker || '' };
-  return { date: main.walked_date || '', walker: main.walker ?? codeNames.join('、') };
+// 四個讀的地方（readAcceptedWalks、withTodayWalks、readWalkers、seedState）都經過 currentWalk。
+// 溜狗狀態有三種來源列，先各自換成 { date, walker } 再交給規則：
+//   v3_walk_state 一列（stateWalk）、溜狗資料包 v3_walk_pack 的一隻（packWalk，內容就是溜狗狀態）、主清單一列或狗清單的一隻（mainWalk）。
+export const stateWalk = row => row && { date: row.effective_date || '', walker: row.walker || '' };
+export const packWalk = w => w && { date: w.walkedDate || '', walker: w.walker || '' };
+// 主清單的「誰遛的」原文是 NULL（#519 還沒補填）時用 codeNames（名單代號換回的名字）；狗清單的狗只有日期（walkedDate）
+export const mainWalk = (row, codeNames = []) => row && { date: row.walked_date ?? row.walkedDate ?? '', walker: row.walker ?? codeNames.join('、') };
+export function currentWalk(state, main) {
+  return state || main || { date: '', walker: '' };
 }
 
 export async function readAcceptedWalks(db, today) {
-  // 版本與內容在同一列，冷讀也只讀一列；午夜只換 today 判定。資料包只放網站接管過的狗（walk_pack 觸發器照 v3_walk_state 寫）。
+  // 版本與內容在同一列，冷讀也只讀一列；午夜只換 today 判定。資料包只放網站接管過的狗（walk_pack 觸發器照 v3_walk_state 寫），所以沒有主清單那一邊。
   const pack = await one(db, 'SELECT version,payload FROM v3_walk_pack WHERE id=1');
   if (!pack) throw new Error('沒有溜狗資料包');
   return { version: pack.version, date: today, source: 'd1', walks: Object.values(JSON.parse(pack.payload))
-    .map(w => ({ ...w, walked: w.walkedDate === today })) };
+    .map(w => ({ ...w, walked: currentWalk(packWalk(w), null).date === today })) };
 }
 
 // 狗清單的遛狗日期是試算表複本，要等狗清單保險掃描才更新；今日溜狗（ADR 0018）是正本，
@@ -26,7 +31,8 @@ export function withTodayWalks(dogs, today) {
     const w = byKey.get(keyOf(dog));
     if (!w) return dog;
     onList.add(w.key);
-    const { date } = currentWalk({ effective_date: w.walkedDate, walker: w.walker }, dog);
+    // 狗清單的狗只帶日期，所以這裡只換日期
+    const { date } = currentWalk(packWalk(w), mainWalk(dog));
     return date === dog.walkedDate ? dog : { ...dog, walkedDate: date || null };
   });
   return { dogs: merged, today: { ...today, walks: today.walks.filter(w => onList.has(w.key)) } };
@@ -53,7 +59,7 @@ export async function readWalkers(db) {
   const walkers = {}, dates = {}, lastSeen = new Map(); // 名字 → 最近一次 { date, i: 名單裡第幾位 }
   for (const r of main.results || []) {
     const key = keyOf({ id: r.number, name: r.name });
-    const { date, walker } = currentWalk(stateOf.get(key), r, namesOf.get(r.row_index));
+    const { date, walker } = currentWalk(stateWalk(stateOf.get(key)), mainWalk(r, namesOf.get(r.row_index)));
     walkers[key] = walker;
     dates[key] = date;
     splitNames(walker).forEach((n, i) => { const prev = lastSeen.get(n); if (!prev || date > prev.date || (date === prev.date && i < prev.i)) lastSeen.set(n, { date, i }); });
@@ -75,7 +81,7 @@ export async function seedState(db, dog, today) {
   const seed = await uniqueMainDog(db, dog);
   const codeNames = seed.walker == null ? (await rows(db, 'SELECT n.name FROM v3_sheet_main m, json_each(m.walker_codes) w LEFT JOIN v3_identity_names n ON n.code=w.value WHERE m.row_index=? ORDER BY w.key', seed.row_index))
     .map(p => p.name).filter(Boolean) : [];
-  const { date, walker } = currentWalk(null, seed, codeNames);
+  const { date, walker } = currentWalk(null, mainWalk(seed, codeNames));
   const previous = date === today ? await previousWalk(db, dog, today) : null;
   return { dog_id: seed.dog_id, effective_date: date, walker, version: 0, main: seed,
     ...(previous ? { previous_date: previous.date.date || '', previous_walker: previous.walker } : {}) };

@@ -13,7 +13,7 @@ import { dispatchWalks, dueWalks, writebackTarget, STOPPED_AT } from './dispatch
 import { scanWalks } from './scan.js';
 import { readAcceptedWalks, readWalkers, readStoppedWalks, withTodayWalks } from './read.js';
 
-export { withTodayWalks, listWalkLog };
+export { withTodayWalks };
 
 // 保險掃描與寫回重試：功能沒開、預覽版、沒接 D1 都不跑（回 false，排程紀錄就不記，見 cron-status.js）
 const background = env => env.WALK_RETRY_ENABLED === 'true' && !env.PREVIEW && !!env.DB;
@@ -47,6 +47,8 @@ export function todayWalks(env, { sheet = callSheet, now = Date.now } = {}) {
       const found = await one(db, 'SELECT result_json FROM v3_walk_requests WHERE request_id=?', requestId);
       return found ? JSON.parse(found.result_json) : null;
     },
+    // 狗清單同步改到還沒有溜狗狀態的狗的溜狗欄：記「溜了／試算表」（#700）的敘述，放進狗清單同步同一批
+    listWalkLog: (dog, old, sheet) => listWalkLog(db, env, now(), dog, old, sheet),
     today: () => readAcceptedWalks(db, taiwanDay(now())),
     walkers: () => readWalkers(db),
     stopped: () => readStoppedWalks(db, STOPPED_AT),

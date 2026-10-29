@@ -2,7 +2,7 @@
 // 依單次寫入上限拆批，批量只是內部執行方式。預算拒絕或 D1 故障就停下留待下一輪（往外丟 DispatchError），
 // 只有版本競爭才逐隻重來各自判斷。
 import { REFUSED_CODES } from '../sheet-write.js';
-import { guard, keyOf, same, one, reads, CURRENT_JOB, WalkError } from './shared.js';
+import { guard, keyOf, same, one, reads, budgetDay, CURRENT_JOB, WalkError } from './shared.js';
 import { costOf, reserve, retryBudget, transitionBudget, DISPATCH_COST, FAILURE, GRANT } from './budget.js';
 import { confirmWalk } from './receipt.js';
 import { observeOne, knownIntermediate } from './observe.js';
@@ -55,7 +55,7 @@ export async function dueWalks(db, now) {
 }
 
 async function dispatchBatch(db, env, sheet, now, items) {
-  const at = new Date(now).toISOString(), day = at.slice(0, 10);
+  const at = new Date(now).toISOString(), day = budgetDay(now);
   const found = await reads(db, ...items.flatMap(({ dog, recovery }) => [
     ['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', keyOf(dog)],
     [`${CURRENT_JOB} AND (o.status IN ('pending','retry','unconfirmed') OR (?=1 AND o.status='dispatching'))`, keyOf(dog), Number(!!recovery)]]),
@@ -78,6 +78,7 @@ async function dispatchBatch(db, env, sheet, now, items) {
   }
   if (!jobs.length) return;
   let claimed;
+  const CLAIM_STATEMENTS = 4; // 每隻：guard、v3_walk_retry、v3_walk_delivery、認領 outbox
   try { claimed = await db.batch([
     ...reserve(db, env, DISPATCH_COST * jobs.length + costOf([]), now, DISPATCH_COST * jobs.filter(retrying).length),
     ...jobs.flatMap(j => [
@@ -102,8 +103,8 @@ async function dispatchBatch(db, env, sheet, now, items) {
     if (jobs.length > 1) for (const { dog, recovery } of jobs) await dispatchBatch(db, env, sheet, now, [{ dog, recovery }]);
     return;
   }
-  const offset = claimed.length - jobs.length * 4; // 每隻 4 句，第 4 句是認領的 UPDATE … RETURNING
-  const mine = jobs.filter((j, i) => claimed[offset + i * 4 + 3].results?.length);
+  const offset = claimed.length - jobs.length * CLAIM_STATEMENTS; // 預算的敘述在前面，最後一句是認領的 UPDATE … RETURNING
+  const mine = jobs.filter((j, i) => claimed[offset + (i + 1) * CLAIM_STATEMENTS - 1].results?.length);
   const lost = jobs.filter(j => !mine.includes(j));
   if (lost.length) await db.batch(lost.map(j => db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(j.key, j.dispatchId)));
   if (!mine.length) return;

@@ -1,7 +1,7 @@
 // 收試算表觀測值：改表通知（GAS 編輯觸發 /rows、寫前再讀 /observe、target）與保險掃描用同一套規則收下人工修改（ADR 0018 補充，#746）。
 // 僅接受同鎖 GAS 直接讀值；通知內容與 gviz 都不能當成觀測值。
 import { editLogWrites } from '../editlog.js';
-import { names, keyOf, same, one, rows, reads, taiwanDay, CURRENT_JOB, RETRY, MAIN_DOG, WalkError } from './shared.js';
+import { names, keyOf, same, one, rows, reads, taiwanDay, scanCanTake, CURRENT_JOB, RETRY, MAIN_DOG, WalkError } from './shared.js';
 import { seedState } from './read.js';
 import { sourceMembers } from './accept.js';
 import { writeVersion, previousOf } from './version.js';
@@ -20,13 +20,14 @@ function sheetWalkLog(old, sheet, after, number, at, when) {
 // #700：網站上還沒有溜狗狀態的狗，網站沒寫回過（登記會先建狀態），表上溜狗欄變了一定是人工改表。
 // 狗清單同步常比今日溜狗比對先把新值寫進主清單，比對拿主清單當基準值就看不出有改，所以由狗清單同步在同一批記（dog-list.js applyMain）。
 // 比對先收下時狀態已建，這裡就不記；比對讀完基準值後才被狗清單同步搶先時，比對那邊看主清單已變就不記（compare），兩邊只會記一筆。
-// old：主清單改前那列；sheet：表上新的 { date, walker }
-export async function listWalkLog(db, env, dog, old, sheet, at) {
+// old：主清單改前那列；sheet：表上新的 { date, walker }。回要放進狗清單同步那一批的敘述（含預算）
+export async function listWalkLog(db, env, now, dog, old, sheet) {
+  const at = new Date(now).toISOString();
   const key = keyOf(dog);
   if (await one(db, 'SELECT 1 FROM v3_walk_state WHERE dog_key=?', key)) return [];
   const logs = sheetWalkLog({ dog_id: old.dog_id, effective_date: old.walked_date || '', walker: old.walker ?? '' }, sheet, sheet, dog.id, at,
     ['NOT EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=?)', key]);
-  return logs.length ? [...reserve(db, env, costOf([['v3_edit_log', 1]]), Date.parse(at)), ...logs.flatMap(l => editLogWrites(db, l.entry, l.when))] : [];
+  return logs.length ? [...reserve(db, env, costOf([['v3_edit_log', 1]]), now), ...logs.flatMap(l => editLogWrites(db, l.entry, l.when))] : [];
 }
 
 async function baselineVersion(db, key) {
@@ -68,7 +69,7 @@ async function compare(db, env, now, dog, observed, seen, expected) {
     ['SELECT dog_key FROM v3_walk_conflicts WHERE dog_key=?', key], [CURRENT_JOB, key],
     ['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', key], [RETRY, key]);
   seen.conflict = !!conflict;
-  if (expected !== undefined && ((stateRow?.version || 0) !== expected || (currentJob && !['synced', 'pending'].includes(currentJob.status)))) return { changed: false, deferred: true };
+  if (expected !== undefined && ((stateRow?.version || 0) !== expected || (currentJob && !scanCanTake(currentJob.status)))) return { changed: false, deferred: true };
   const old = stateRow || await seedState(db, dog, taiwanDay(now));
   if (mains.length !== 1 || mains[0].dog_id !== old.dog_id) throw new WalkError(409, '找不到唯一的主清單狗');
   const base = { date: old.base_date ?? old.effective_date, walker: old.base_walker ?? old.walker };

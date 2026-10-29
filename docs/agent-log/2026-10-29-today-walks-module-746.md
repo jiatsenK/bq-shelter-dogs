@@ -16,17 +16,19 @@
 
 - 三個走 `worker.fetch` 的既有測試改了內容（票上要求不改，但跟其他驗收條件衝突）：
   - `walk-log.test.mjs`「每日寫入預算算進修改紀錄」、`walk-retry.test.mjs`「#685 重試用量…」寫死了舊的手算保留量（48、96），改成用 `costOf`／`DISPATCH_COST` 算。
-  - `walk-reconcile.test.mjs`「還有差異沒收完」原本測「pending 不收」，跟新規則（同日合併要收 pending）衝突；改成測「派送結果不明不收」。
+  - `walk-reconcile.test.mjs`「還有差異沒收完」原本測「pending 不收」，跟新規則衝突：同日合併只會發生在網站登記還沒寫回（pending）的時候，掃描要收 pending 才合併得到。「base 不變、下次再找出來」這條保護仍在，只是適用對象變成已交給 Apps Script 的派送，所以情境改成「派送結果不明不收」。pending 的新行為另有 `today-walks-scan.test.mjs`「遇到還沒派送的網站登記」。
 - 新的保留量比舊常數小（例如一次派送 96 → 71、一次溜了 32＋8＋4n → 約 27＋2＋6n）；每列成本照結構算，SQLite `total_changes()` 測試確認都夠。
-- `apps-script/sheet-write.gs:531` 註解仍寫 `walk-reconcile.js`，為了不動 GAS 檔沒改（只是註解）。
-- 時鐘統一用 `now()`（排程傳排程時間）；只有寫回退避保留 `max(now, 現在)`，叫 Apps Script 花的時間不能讓重試提早到期（審查指出後補回）。
+- 溜狗紀錄那天原本有幾列，寫前照 `v3_walks` 實際列數算（狗清單同步可能已經照表寫了別的名單），同一批用 guard 確認列數沒變多（第二輪審查）。
+- `apps-script/sheet-write.gs:531` 只改註解（指向 `today-walks/scan.js`），程式沒變，不用重新部署 Apps Script。
+- 時鐘統一用 `now()`（排程傳排程時間），狗清單同步記溜了也改走 module 的 `listWalkLog()`；只有寫回退避保留 `max(now, 現在)`，叫 Apps Script 花的時間不能讓重試提早到期（審查指出後補回）。
 
 ## 審查（Standards／Spec 兩軸，固定基準 main）
 
 - 已補修：`scripts/adr-index.mjs` 只讀 `worker/src` 第一層，搬家後 `docs/adr/README.md` 少了 4 個環境變數 → 改讀子資料夾（不含 admin/）；`/walk/result` 改走 module 的 `result()`；保險掃描比對時重查目前工作的狀態（讀表期間剛被派送的不收）；退避時鐘；`dispatch.js` 改用 `same()`、`read.js` 改用 `keyOf`；預算測試補「清掉衝突」。
-- 沒改、留給之後判斷：測試檔仍可 import 內部檔（standards 測試只管 worker/src、scripts 的程式）；`listWalkLog`（狗清單同步）與中斷後恢復派送沒有單獨的 total_changes 測試；`date`＋`walker` 一對、`shared.js` 什麼都放等寫法建議。
-- `scripts/diagram-reminder.test.mjs` 在這台 Windows 上 main 原本就失敗（同一份 main 另開 worktree 也一樣），不是這次造成。
+- 第二輪（PR #752 的兩軸審查）已補修：溜狗紀錄預算照實際列數＋guard，補「狗清單同步先寫了那天別的列」測試；四個讀的地方都經過 `currentWalk`（各來源先換成 `{ date, walker }`）；`listWalkLog` 走 module 時鐘並補預算測試；pending 新行為測試；`budgetDay`、`scanCanTake` 收成一個地方；派送認領的敘述數取名；`accept.js` 同名變數改名；GAS 註解。
+- 沒改、留給之後判斷：測試檔仍可 import 內部檔（#748 收）；中斷後恢復派送沒有單獨的 total_changes 測試（跟一般派送同一份保留量）；SQL 裡的狀態清單（要跟部分索引的條件字面一致，抽成變數反而容易讓查詢不走索引）；`v3_walk_delivery`／`v3_walk_baselines` 的寫法各寫幾次；`D1_WALK_NOTIFY` 判斷留在 `/rows` 路由（只有這條路由看這個開關）；`previousWalk` 回兩種形狀（`undo-revert.test.mjs` 鎖住的舊契約）。
+- 本機時間相依的失敗，都不是這次造成：`scripts/diagram-reminder.test.mjs` 在這台 Windows 上新開的 main worktree 會失敗（換行字元），最後一輪本機已通過；`walk-edit-rows.test.mjs`「#500 保險掃描沒有不同的狗…」在 UTC 01 點（台灣 09 點）跑會多一列修改紀錄清理的排程紀錄而失敗，其他時間會過。
 
 ## 相關 PR
 
-- （開好後補）
+- https://github.com/jiatsenK/bq-shelter-dogs/pull/752

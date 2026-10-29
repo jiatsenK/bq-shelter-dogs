@@ -2,10 +2,8 @@
 // 一個 D1 batch（交易）：version guard、寫入預算、取代未完成工作、插入 outbox、上一次、溜狗紀錄、修改紀錄，一起成功或一起回復。
 import { editLogWrites } from '../editlog.js';
 import { walkDay } from '../dog-list.js';
-import { guard, names } from './shared.js';
+import { guard } from './shared.js';
 import { costOf, reserve } from './budget.js';
-
-const countOf = state => state.members_json ? JSON.parse(state.members_json).length : names(state.walker).length;
 
 // 「上一次」：同一天只換人，沿用原本的上一次；換了日期，上一次就是改前的值。
 // before：人工一格一格改時（observe.js 的 beforeManualEdits）這串連改之前那一版，記它不記改一半的狀態。
@@ -17,10 +15,16 @@ export function previousOf(old, sameDay, before = null) {
 // 溜狗紀錄（v3_walks，圖鑑／我溜過讀）跟著今日溜狗紀錄同一批寫（稽核第 4 項，K 2026-10-26）。
 // history：'rewrite'＝照新名單重寫新的那天（codes 是名單代號）；'drop'＝刪掉改前那天（復原、人工改回較早的日子）；null＝不動。
 // 清空日期不刪（同 dog-list.js）。人工改的新那天仍由狗清單同步照表寫。
-function historyWrites(db, old, next, history, codes) {
+// 那天原本有幾列不能從溜狗狀態推（狗清單同步可能已經照表寫了別的名單），寫前照 v3_walks 實際列數算預算，
+// 同一批再用 guard 確認列數沒有變多，保留量才是真的上界。
+async function historyWrites(db, old, next, history, codes) {
   if (!old.dog_id || !history) return { statements: [], rows: 0 };
-  if (history === 'drop') return { statements: [db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(old.dog_id, old.effective_date)], rows: Math.max(1, countOf(old)) };
-  return { statements: walkDay(db, old.dog_id, next.date, next.dog, codes), rows: (old.effective_date === next.date ? countOf(old) : 0) + codes.length };
+  const date = history === 'drop' ? old.effective_date : next.date;
+  const existing = (await db.prepare('SELECT COUNT(*) AS n FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(old.dog_id, date).first())?.n || 0;
+  const unchanged = guard(db, '(SELECT COUNT(*) FROM v3_walks WHERE dog_id=? AND walk_date=?)<=?', old.dog_id, date, existing);
+  if (history === 'drop') return { statements: [unchanged, db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(old.dog_id, date)], rows: existing };
+  // 重寫：刪掉多出來的位置、照名單一位一位寫，最多動到「原本的列＋新名單」那麼多列
+  return { statements: [unchanged, ...walkDay(db, old.dog_id, date, next.dog, codes)], rows: existing + Math.max(1, codes.length) };
 }
 
 // next：{ dog, key, date, walker, members, operationDate, at, status }
@@ -52,7 +56,7 @@ export async function writeVersion(db, env, now, { old, next, previous, base = n
     statements.push(db.prepare('INSERT INTO v3_walk_baselines VALUES(?,?) ON CONFLICT(dog_key) DO UPDATE SET version=excluded.version').bind(next.key, version));
     writes.push(['v3_walk_baselines', 1]);
   }
-  const walked = historyWrites(db, old, next, history, codes);
+  const walked = await historyWrites(db, old, next, history, codes);
   statements.push(...walked.statements);
   writes.push(['v3_walks', walked.rows]);
   for (const { entry, when } of logs) statements.push(...editLogWrites(db, entry, when));

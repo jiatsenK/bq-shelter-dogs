@@ -528,7 +528,7 @@ function orderDogListKeys(keys) {
   var rank = function (k) { return ['main', 'departed', 'groups', 'notes'].indexOf(k.split(':')[0]); };
   return keys.slice().sort(function (a, b) { return rank(a) - rank(b); });
 }
-// 保險掃描：一隻狗的指紋 = hash(JSON [日期, 名單])，要跟 worker/src/walk-reconcile.js 的 walkFingerprint 完全一樣。
+// 保險掃描：一隻狗的指紋 = hash(JSON [日期, 名單])，要跟 worker/src/today-walks/scan.js 的 walkFingerprint 完全一樣。
 // 只回 D1 有記、指紋不同的狗；同一隻在表上出現兩次時都不回（Worker 本來就不比對重複的狗）。
 function walkScanRows(rows, fingerprints, hash) {
   var count = {};

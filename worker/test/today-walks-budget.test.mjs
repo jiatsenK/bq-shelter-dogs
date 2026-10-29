@@ -5,7 +5,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { todayWalks } from '../src/today-walks/index.js';
-import { ROW_COST, DISPATCH_COST } from '../src/today-walks/budget.js';
+import { ROW_COST, DISPATCH_COST, costOf } from '../src/today-walks/budget.js';
 import { setup, post, request, day } from './walk-fixture.mjs';
 
 const dog = { id: '9001', name: '測試狗' };
@@ -152,4 +152,38 @@ test('重試用完當天上限，延到隔天也保留夠', async () => {
     const capped = { ...env, WALK_RETRY_ENABLED: 'true', SYNC_RETRY_DAILY_BUDGET: '0' };
     await measure(env, '重試延到隔天（只改 next_attempt_at）', () => todayWalks(capped, { now: () => Date.parse(due) }).dispatchDue());
   } finally { globalThis.fetch = real; env.DB.close(); }
+});
+
+// total_changes() 不含索引，上面的量法抓不到「溜狗紀錄少算幾列」；這裡直接比保留量跟照實際列數算出來的成本
+test('狗清單同步先寫了那天別的列：溜狗紀錄照當天實際列數保留', async () => {
+  const env = await setup(); worker.testing.resetState();
+  const extra = n => env.DB.batch(Array.from({ length: n }, (_, i) =>
+    env.DB.prepare('INSERT INTO v3_walks(dog_id,walk_date,position,walker_code) VALUES(?,?,?,?) ON CONFLICT DO NOTHING').bind('dog', day(), i + 1, `sheet-${i}`)));
+  const walksOf = async () => (await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_walks WHERE dog_id=? AND walk_date=?').bind('dog', day()).first()).n;
+  try {
+    await post(env, request('cost-list-0001'));
+    await extra(3); // 狗清單同步照表寫了「甲＋三個人」，今日溜狗紀錄還只知道甲
+    const rows = await walksOf();
+    assert.equal(rows, 4);
+    const undo = request('cost-list-undo', '甲', { action: 'undo', dogs: [{ ...dog, expectedVersion: 1 }] });
+    const { kept } = await measure(env, '復原刪掉那天全部列', async () => assert.equal((await post(env, undo)).status, 200));
+    assert.equal(await walksOf(), 0);
+    assert.ok(kept >= costOf([['v3_walk_state', 1], ['v3_walk_requests', 1], ['v3_walk_outbox', 2], ['v3_edit_log', 1], ['v3_walks', rows]]), `保留 ${kept} 列，沒算到那天的 ${rows} 列溜狗紀錄`);
+    await post(env, request('cost-list-0002', '乙'));
+    await extra(3);
+    const before = await walksOf();
+    const { kept: rewrite } = await measure(env, '同日再加人，重寫那天', async () => assert.equal((await post(env, request('cost-list-0003', '丙'))).status, 200));
+    assert.ok(rewrite >= costOf([['v3_walk_state', 1], ['v3_walk_requests', 1], ['v3_walk_outbox', 2], ['v3_edit_log', 1], ['v3_walks', before + 2]]));
+  } finally { env.DB.close(); }
+});
+
+test('狗清單同步記「溜了／試算表」（listWalkLog）的保留量 ≥ 實際寫入', async () => {
+  const env = await setup(); worker.testing.resetState();
+  try {
+    const old = await env.DB.prepare("SELECT dog_id,walked_date,walker FROM v3_sheet_main WHERE number='9001'").first();
+    const statements = await todayWalks(env).listWalkLog(dog, old, { date: '2026-10-15', walker: '乙' });
+    assert.ok(statements.length > 0, '沒有溜狗狀態的狗，表上改了要記');
+    await measure(env, '狗清單同步記一筆溜了／試算表', () => env.DB.batch(statements));
+    assert.equal(await env.DB.prepare("SELECT COUNT(*) AS n FROM v3_edit_log WHERE source='sheet'").first('n'), 1);
+  } finally { env.DB.close(); }
 });

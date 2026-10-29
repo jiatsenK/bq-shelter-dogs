@@ -33,12 +33,12 @@ export async function acceptWalk(db, env, now, input) {
   if (!['walk', 'edit', 'undo'].includes(input.action) || !Array.isArray(input.dogs) || input.dogs.length !== 1) throw new WalkError(400, '此入口只接受單狗操作');
   const dog = input.dogs[0], key = keyOf(dog);
   const fingerprint = JSON.stringify({ action: input.action, operationDate: input.operationDate, walker: input.walker, editor: input.editor, dog });
-  const previous = () => one(db, 'SELECT fingerprint,result_json FROM v3_walk_requests WHERE request_id=?', input.requestId);
+  const stored = () => one(db, 'SELECT fingerprint,result_json FROM v3_walk_requests WHERE request_id=?', input.requestId);
   const replay = old => {
     if (old.fingerprint !== fingerprint) throw new WalkError(409, '相同請求識別不能更改內容');
     return JSON.parse(old.result_json);
   };
-  const existing = await previous();
+  const existing = await stored();
   if (existing) return replay(existing);
   const added = await membersOf(db, input.walker, env.WALKER_KEY);
   if (!added.length) throw new WalkError(400, '要先選好身分');
@@ -89,7 +89,7 @@ export async function acceptWalk(db, env, now, input) {
         request: { id: input.requestId, fingerprint, result } });
       return result;
     } catch (error) {
-      const duplicate = await previous();
+      const duplicate = await stored();
       if (duplicate) return replay(duplicate);
       const latest = await one(db, 'SELECT version FROM v3_walk_state WHERE dog_key=?', key);
       if ((latest?.version || 0) === old.version) throw error;

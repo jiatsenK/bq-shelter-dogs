@@ -68,7 +68,7 @@ flowchart LR
 
 - 志工網站和 API 是同一個 Worker `bq-shelter-dogs`：網頁是 `public/` 的靜態檔，`/api/*`、`/photos/*` 先進 Worker（`wrangler.jsonc:8-16`）；`/api` 去掉前綴後分派，照片從 R2 讀（`worker/src/index.js:795-813`）。
 - 網站讀資料一律讀 D1、照片讀 R2，不讀試算表；`worker/src/sheet-read.js` 只剩拆名字的函式（`worker/src/sheet-read.js:1-9`）。
-- 按溜了、修改、復原：先在同一個 D1 批次寫狀態、待寫回清單與修改紀錄（`worker/src/today-walks/version.js:60-64`），回成功給志工後才在背景寫回試算表（`worker/src/index.js:552-557`），細節見「流程｜網站登記寫回試算表」。
+- 按溜了、修改、復原：先在同一個 D1 批次寫狀態、待寫回清單與修改紀錄（`worker/src/today-walks/version.js:64-68`），回成功給志工後才在背景寫回試算表（`worker/src/index.js:552-557`），細節見「流程｜網站登記寫回試算表」。
 - 例外：加備註、新增異動紀錄是 Worker 同步請 Apps Script 直接寫表，不先存 D1，失敗就回錯誤給志工、不重試；寫成功後 D1 只多一筆修改紀錄（`worker/src/index.js:565-581`）。
 - 志工網站對試算表的呼叫都經過 `callSheet`，動作只有 note、log、walkWake、walkWakeBatch、walkScan（`worker/src/sheet-write.js:6`、`worker/src/sheet-write.js:24-46`）。
 - Apps Script 打志工網站的 `/api/walk-writeback/` 六個端點（target、receipt、observe、rows、dog-list、dog-list-scan），帶 `X-Sheet-Write-Key` 標頭；Worker 驗金鑰，PR 預覽版一律拒收（`apps-script/sheet-write.gs:61-72`；`worker/src/index.js:836-843`）。
@@ -81,7 +81,7 @@ flowchart LR
 ## 各類資料的流向
 
 - 網站讀資料一律讀 D1（照片讀 R2），不讀試算表；試算表是人工改狗清單的地方，改動由 Apps Script 送進 D1（`worker/src/index.js:795-813`；`apps-script/sheet-write.gs:1-4`）。
-- 今日溜狗・網站登記：志工按溜了、修改、復原，先存 D1 的狀態與待寫回清單，再背景寫回試算表「遛狗日期」「誰遛的」兩欄並讀回確認（`worker/src/today-walks/version.js:60-64`；`apps-script/sheet-write.gs:132-154`）。見「流程｜網站登記寫回試算表」。
+- 今日溜狗・網站登記：志工按溜了、修改、復原，先存 D1 的狀態與待寫回清單，再背景寫回試算表「遛狗日期」「誰遛的」兩欄並讀回確認（`worker/src/today-walks/version.js:64-68`；`apps-script/sheet-write.gs:132-154`）。見「流程｜網站登記寫回試算表」。
 - 人工改表：管理者改主清單、已出所、常遛狗群，Apps Script 記下待通知送給志工網站寫進 D1，ACK 才清（`apps-script/sheet-write.gs:317-343`；`worker/src/index.js:848-873`）。D1 裡是試算表內容的複本。見「流程｜試算表改動回到 D1」。
 - 備註、異動紀錄・網站新增：例外，不先存 D1。志工網站等 Apps Script 追加完才回志工，失敗不重試（`worker/src/index.js:565-581`；`apps-script/sheet-write.gs:48-55`）。程式寫表不會觸發編輯觸發，所以要等下一次狗清單保險掃描才進 D1，最久約 10 小時（`apps-script/sheet-write.gs:275`）。
 - 照片：志工（照片開關開啟時）或管理者上傳原圖＋前端做好的縮圖，存 R2，D1 記主照片指標；換掉的先備份到 `trash/`，照片垃圾桶每月 1 日清 30 天以上的（`worker/src/dog-photo.js:64-91`；`worker/src/r2.js:8-10`）。沒縮圖時網站顯示原圖，補縮圖要手動跑 r2-thumbs（`.github/workflows/r2-thumbs.yml:1-5`）。
@@ -96,7 +96,7 @@ flowchart LR
 - 每天第一次掃描（09:23）這次也清 14 天前的修改紀錄（合併快照保留）；每月 1 日這次順便清照片垃圾桶（30 天以上）（`worker/src/index.js:28-30`、`worker/src/index.js:777-781`；`worker/src/r2.js:186`）。
 - Apps Script 時間觸發（專案時區 Asia/Taipei）：flushWalkEdits、flushDogList 每 10 分鐘補送待通知，起點由 Google 決定；dogListScan 在約 09:43、約 13:53、約 23:53 做狗清單保險掃描，Google 只保證在那個小時內，前後可能差 15 分鐘（`apps-script/sheet-write.gs:305-315`）。
 - 兩種保險掃描跟 Worker 錯開 20～30 分鐘，方向相反：今日溜狗是 Worker 呼叫 Apps Script 讀表，狗清單是 Apps Script 把指紋送給 Worker（`apps-script/sheet-write.gs:498-523`）。
-- 日界線：今日溜狗用台灣日期，00:00 換日；寫入預算以 UTC 日期算，台灣 08:00 重置（`worker/src/today-walks/shared.js:11`、`worker/src/today-walks/budget.js:48`）。
+- 日界線：今日溜狗用台灣日期，00:00 換日；寫入預算以 UTC 日期算，台灣 08:00 重置（`worker/src/today-walks/shared.js:11`、`worker/src/today-walks/shared.js:13`）。
 - 測試網站只有每 10 分鐘那條；PR 預覽、管理網站沒有排程（`wrangler.test-site.jsonc:38-40`；`wrangler.preview-db.jsonc:9`）。每週一 09:00 的版本號整理（release-please）不碰資料（`.github/workflows/release-please.yml:9-11`）。
 
 ## 上線圖｜志工溜狗表
@@ -213,10 +213,10 @@ flowchart TB
   classDef ext stroke:#8a63c9,stroke-width:2px
 ```
 
-- 志工網站 Worker `bq-shelter-dogs` 先在一個 D1 批次寫好狀態、請求、待寫回清單、溜狗紀錄、修改紀錄（`worker/src/today-walks/version.js:60-64`），回應之後才用 `waitUntil` 在背景派送（`worker/src/index.js:552-557`）。
-- 派送：單隻用 walkWake，多隻合併成 walkWakeBatch，每批最多 10 隻（`worker/src/today-walks/dispatch.js:29-32`、`worker/src/today-walks/dispatch.js:113-119`）；Apps Script 收到後走 `writeLatestWalk`（`apps-script/sheet-write.gs:45-47`）。
+- 志工網站 Worker `bq-shelter-dogs` 先在一個 D1 批次寫好狀態、請求、待寫回清單、溜狗紀錄、修改紀錄（`worker/src/today-walks/version.js:64-68`），回應之後才用 `waitUntil` 在背景派送（`worker/src/index.js:552-557`）。
+- 派送：單隻用 walkWake，多隻合併成 walkWakeBatch，每批最多 10 隻（`worker/src/today-walks/dispatch.js:29-32`、`worker/src/today-walks/dispatch.js:114-120`）；Apps Script 收到後走 `writeLatestWalk`（`apps-script/sheet-write.gs:45-47`）。
 - Apps Script（`apps-script/sheet-write.gs` 的 writeLatestWalk）：先問 /target；寫前再讀一次，發現人工改過就 /observe 並停寫；寫兩欄、讀回比對，一致才 /receipt（`apps-script/sheet-write.gs:132-154`）。Worker 收 /target、/receipt、/observe 在 `worker/src/index.js:858-880`。
-- 失敗就改成待重試，間隔 1、2、4、8、15 分鐘；第 10 次失敗、或試算表明確拒絕（金鑰、試算表 ID、權限）就停，不再重派（`worker/src/today-walks/dispatch.js:14-21`、`worker/src/today-walks/dispatch.js:146-154`；`worker/src/sheet-write.js:48-54`）。停住的狗列在管理網站「待補清單」（`worker/src/admin/index.js:117`）。
+- 失敗就改成待重試，間隔 1、2、4、8、15 分鐘；第 10 次失敗、或試算表明確拒絕（金鑰、試算表 ID、權限）就停，不再重派（`worker/src/today-walks/dispatch.js:14-21`、`worker/src/today-walks/dispatch.js:147-156`；`worker/src/sheet-write.js:48-54`）。停住的狗列在管理網站「待補清單」（`worker/src/admin/index.js:117`）。
 - 每 10 分鐘的排程撿到期的、中斷超過 60 秒的派送重派，每輪最多 10 隻（`worker/src/today-walks/dispatch.js:34-55`）。重試每天另有寫入上限，用完延到隔天（`worker/src/today-walks/dispatch.js:23-26`；`wrangler.jsonc:30-31`）。
 - 例外：加備註、新增異動紀錄不走這條，是 Worker 同步請 Apps Script 直接寫表，失敗不重試（`worker/src/index.js:565-581`）。
 

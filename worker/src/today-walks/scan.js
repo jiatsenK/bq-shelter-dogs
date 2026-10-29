@@ -1,6 +1,6 @@
 // 保險掃描（ADR 0018 第 5 點）：按狗送指紋，Apps Script 只回指紋不同的狗，Worker 只比那幾隻。
 // 收下人工修改跟改表通知同一套規則（observe.js，#746）：沒用過網站的名字、同一天名單合併、連改前的「上一次」、v3_walk_baselines、失敗記進 v3_walk_conflicts。
-import { keyOf } from './shared.js';
+import { keyOf, scanCanTake } from './shared.js';
 import { observeAll } from './observe.js';
 
 // 一隻狗的指紋：D1 記的「表上值」（base_date／base_walker）；要跟 apps-script/sheet-write.gs 的 walkScanRows 算法完全一樣。
@@ -28,9 +28,9 @@ export async function scanWalks(db, env, sheet, now) {
     const key = keyOf(row.dog);
     byKey.set(key, byKey.has(key) ? null : row);
   }
-  // 已交給 GAS 的派送（派送中、結果不明、等重試）由派送自己在同鎖 target／回執收尾，掃描不插手，免得把結果不明記成衝突。
+  // 已交給 GAS 的派送不插手（scanCanTake），免得把結果不明記成衝突。
   const differ = observed.filter(s => byKey.get(s.dog_key));
-  const items = differ.filter(s => s.status === 'synced' || s.status === 'pending').map(s => ({ ...byKey.get(s.dog_key), version: s.version }));
+  const items = differ.filter(s => scanCanTake(s.status)).map(s => ({ ...byKey.get(s.dog_key), version: s.version }));
   const results = await observeAll(db, env, now, items, { source: 'scan' });
   for (const [i, r] of results.entries()) if (!r.ok) console.warn('walk-scan:', keyOf(items[i].dog), r.error);
   return { changed: results.filter(r => r.changed).length, deferred: differ.length - items.length + results.filter(r => !r.ok || r.deferred).length };

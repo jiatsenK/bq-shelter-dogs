@@ -11,7 +11,7 @@ import { judgeDeparture, nameKey } from './departure-rules.js';
 import { taiwanYmd } from './sync-plan.js';
 import { SYNCED_AT_KEY } from './compact.js';
 import { linkIdentityName } from './identity.js';
-import { listWalkLog } from './today-walks/index.js';
+import { todayWalks } from './today-walks/index.js';
 
 export const DOG_LIST_ROWS_MAX = 10; // 每列最多 3–4 次 D1 往返（溜狗欄有變再查一次溜狗狀態，#700），守住每次呼叫 50 次查詢
 const FP_KEY = 'dog_list_fp';
@@ -102,8 +102,8 @@ async function applyMain(db, row, list, env, fp) {
     // 改回較早的日子（K 2026-10-24，例如 Ctrl+Z）：那天照表上名單重寫，表上不再寫的較新那天刪掉
     if (date && (!old.walked_date || date > old.walked_date || (date === old.walked_date && codesChanged))) out.push(...walkDay(db, old.dog_id, date, dog, codes));
     else if (date && date < old.walked_date) out.push(db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(old.dog_id, old.walked_date), ...walkDay(db, old.dog_id, date, dog, codes));
-    // 網站上還沒有溜狗狀態的狗，日期或溜狗人（照代號比，#519 補填原文不算）改了記「溜了／試算表」（#700，today-walks/observe.js listWalkLog）
-    if (changed.includes('walked_date') || (keyed ? codesChanged : changed.includes('walker'))) out.push(...await listWalkLog(db, env, dog, old, { date: date || '', walker: next.walker }, new Date().toISOString()));
+    // 網站上還沒有溜狗狀態的狗，日期或溜狗人（照代號比，#519 補填原文不算）改了記「溜了／試算表」（#700，今日溜狗紀錄 module 的 listWalkLog）
+    if (changed.includes('walked_date') || (keyed ? codesChanged : changed.includes('walker'))) out.push(...await todayWalks({ ...env, DB: db }).listWalkLog(dog, old, { date: date || '', walker: next.walker }));
     Object.assign(old, next);
   } else {
     const identified=dog.id?await db.prepare('SELECT n.dog_id,s.revision FROM v3_dog_numbers n JOIN v3_dog_edit_state s USING(dog_id) WHERE number=?').bind(dog.id).first():await db.prepare("SELECT w.dog_id,s.revision FROM v3_walks w JOIN v3_dog_edit_state s USING(dog_id) WHERE dog_number='' AND dog_name=? LIMIT 1").bind(dog.name).first();

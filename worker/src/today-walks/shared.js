@@ -9,6 +9,11 @@ export const rows = async (db, sql, ...args) => (await db.prepare(sql).bind(...a
 // 多個讀取併成一次 D1 往返（#460：Worker CPU 跟往返次數成正比）；回傳每個查詢的結果列。
 export const reads = async (db, ...queries) => (await db.batch(queries.map(([sql, ...args]) => db.prepare(sql).bind(...args)))).map(r => r.results || []);
 export const taiwanDay = ms => new Date(ms + 8 * 3600000).toISOString().slice(0, 10);
+// 寫入預算的日子：D1 帳號額度 UTC 午夜重置，跟今日溜狗的台灣日期不同
+export const budgetDay = ms => new Date(ms).toISOString().slice(0, 10);
+// 保險掃描只收「沒有交給 Apps Script」的這一版：人工收下的（synced）或還沒派送的（pending）；
+// 派送中、結果不明、等重試的由派送自己在同鎖 target／回執收尾
+export const scanCanTake = status => status === 'synced' || status === 'pending';
 export const CURRENT_JOB = 'SELECT o.* FROM v3_walk_outbox o JOIN v3_walk_state s ON s.dog_key=o.dog_key AND s.version=o.version WHERE o.dog_key=?';
 export const RETRY = 'SELECT dispatch_id,reserved_day FROM v3_walk_retry WHERE dog_key=?';
 export const MAIN_DOG = dog => `SELECT dog_id,walked_date,walker,walker_codes,row_index FROM v3_sheet_main WHERE ${dog.id ? 'number=?' : "number='' AND name=?"}`;
