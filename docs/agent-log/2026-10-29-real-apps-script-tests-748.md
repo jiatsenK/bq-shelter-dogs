@@ -20,6 +20,7 @@
   - `dog-list`：#682 的 `walkDay` 測試改走 `observe`。
   - `scripts/diagram-facts.test.mjs`：`RETRY_LIMIT` 改從原始碼文字讀。
 - `standards.test.mjs`：「today-walks/ 以外只 import index.js」拿掉 `*.test.mjs` 排除，範圍加上 `worker/test/`。
+- `docs/ARCHITECTURE.md`：元件圖的進入點加上「建立時決定用哪個試算表呼叫」，進入點到今日溜狗紀錄的線改成交出試算表呼叫；說明補 `createWorker({ sheet })` 與測試 fixture 的依據、`sheet-write.js` 行號往後移一行、`dispatch.js:4` 改列在只拿常數的匯入；R1 改寫成測試跑的是 repo 裡那份。正式環境的方塊與線不變。
 
 ## 例外與要注意的
 
