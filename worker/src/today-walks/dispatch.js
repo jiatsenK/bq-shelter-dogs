@@ -2,8 +2,9 @@
 // 依單次寫入上限拆批，批量只是內部執行方式。預算拒絕或 D1 故障就停下留待下一輪（往外丟 DispatchError），
 // 只有版本競爭才逐隻重來各自判斷。
 import { REFUSED_CODES } from '../sheet-write.js';
-import { guard, keyOf, same, one, reads, budgetDay, CURRENT_JOB, WalkError } from './shared.js';
-import { costOf, reserve, retryBudget, transitionBudget, DISPATCH_COST, FAILURE, GRANT } from './budget.js';
+import { isConflict } from '../conditional-batch.js';
+import { keyOf, same, one, reads, when, budgetDay, CURRENT_JOB, WalkError } from './shared.js';
+import { costOf, budgetedBatch, retryBudget, transitionCost, DISPATCH_COST, FAILURE, GRANT } from './budget.js';
 import { confirmWalk } from './receipt.js';
 import { observeOne, knownIntermediate } from './observe.js';
 
@@ -72,24 +73,22 @@ async function dispatchBatch(db, env, sheet, now, items) {
   }
   if (deferred.length) {
     const tomorrow = new Date(Date.parse(day) + 86400000).toISOString();
-    try { await db.batch([...reserve(db, env, costOf([['v3_walk_outbox', deferred.length]]), now),
-      ...deferred.map(j => db.prepare("UPDATE v3_walk_outbox SET next_attempt_at=? WHERE dog_key=? AND version=? AND status IN ('retry','unconfirmed')").bind(tomorrow, j.key, j.job.version))]); }
-    catch (error) { throw new DispatchError(error instanceof WalkError || /CHECK constraint/i.test(error.message) ? 'budget' : 'd1', error); }
+    try { await budgetedBatch(db, env, now, { cost: costOf([['v3_walk_outbox', deferred.length]]),
+      statements: deferred.map(j => db.prepare("UPDATE v3_walk_outbox SET next_attempt_at=? WHERE dog_key=? AND version=? AND status IN ('retry','unconfirmed')").bind(tomorrow, j.key, j.job.version)) }); }
+    catch (error) { throw new DispatchError(error instanceof WalkError || isConflict(error) ? 'budget' : 'd1', error); }
   }
   if (!jobs.length) return;
   let claimed;
-  const CLAIM_STATEMENTS = 4; // 每隻：guard、v3_walk_retry、v3_walk_delivery、認領 outbox
-  try { claimed = await db.batch([
-    ...reserve(db, env, DISPATCH_COST * jobs.length + costOf([]), now, DISPATCH_COST * jobs.filter(retrying).length),
-    ...jobs.flatMap(j => [
-      guard(db, "COALESCE((SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?),'')=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?)", j.key, j.recoverId, j.key, j.job.version),
+  const CLAIM_STATEMENTS = 3; // 每隻：v3_walk_retry、v3_walk_delivery、認領 outbox
+  try { claimed = await budgetedBatch(db, env, now, { cost: DISPATCH_COST * jobs.length + costOf([]), retry: DISPATCH_COST * jobs.filter(retrying).length,
+    conditions: jobs.map(j => when("COALESCE((SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?),'')=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?)", j.key, j.recoverId, j.key, j.job.version)),
+    statements: jobs.flatMap(j => [
       db.prepare('INSERT INTO v3_walk_retry(dog_key,version,failures,dispatch_id,reserved_day) VALUES(?,?,0,?,?) ON CONFLICT(dog_key) DO UPDATE SET failures=CASE WHEN version=excluded.version THEN failures ELSE 0 END,version=excluded.version,dispatch_id=excluded.dispatch_id,reserved_day=excluded.reserved_day').bind(j.key, j.job.version, j.dispatchId, day),
       db.prepare('INSERT INTO v3_walk_delivery VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET dispatch_id=excluded.dispatch_id,started_at=excluded.started_at').bind(j.key, j.dispatchId, at),
       db.prepare("UPDATE v3_walk_outbox SET status='dispatching',dispatch_id=?,error='' WHERE dog_key=? AND version=? AND (status IN ('pending','retry','unconfirmed') OR (?=1 AND status='dispatching')) RETURNING version").bind(j.dispatchId, j.key, j.job.version, Number(!!j.recovery)),
-    ]),
-  ]); } catch (error) {
+    ]) }); } catch (error) {
     if (error instanceof WalkError) throw new DispatchError('budget', error); // 單次上限，寫入前就擋下
-    // 整批沒寫進去。重讀：狀態都沒變＝guard 只剩每日預算會擋，否則是 D1 故障；逐隻重跑只會繞過預算。
+    // 整批沒寫進去。重讀：狀態都沒變＝條件只剩每日預算會擋，否則是 D1 故障；逐隻重跑只會繞過預算。
     let latest;
     try { latest = await reads(db, ...jobs.flatMap(j => [['SELECT dispatch_id FROM v3_walk_delivery WHERE dog_key=?', j.key],
       ['SELECT version FROM v3_walk_state WHERE dog_key=?', j.key]])); }
@@ -98,13 +97,12 @@ async function dispatchBatch(db, env, sheet, now, items) {
       const [[delivery], [state]] = [latest[2 * i], latest[2 * i + 1]];
       return (delivery?.dispatch_id || '') === (j.delivery?.dispatch_id || '') && state?.version === j.job.version;
     });
-    if (unchanged) throw new DispatchError(/CHECK constraint/i.test(error.message) ? 'budget' : 'd1', error);
+    if (unchanged) throw new DispatchError(isConflict(error) ? 'budget' : 'd1', error);
     // 有一隻的狀態在讀和認領之間變了（版本競爭）：多隻就逐隻重來各自判斷；單隻已被別人處理，不用再派。
     if (jobs.length > 1) for (const { dog, recovery } of jobs) await dispatchBatch(db, env, sheet, now, [{ dog, recovery }]);
     return;
   }
-  const offset = claimed.length - jobs.length * CLAIM_STATEMENTS; // 預算的敘述在前面，最後一句是認領的 UPDATE … RETURNING
-  const mine = jobs.filter((j, i) => claimed[offset + (i + 1) * CLAIM_STATEMENTS - 1].results?.length);
+  const mine = jobs.filter((j, i) => claimed[(i + 1) * CLAIM_STATEMENTS - 1].results?.length); // 每隻最後一句是認領的 UPDATE … RETURNING
   const lost = jobs.filter(j => !mine.includes(j));
   if (lost.length) await db.batch(lost.map(j => db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(j.key, j.dispatchId)));
   if (!mine.length) return;
@@ -144,18 +142,19 @@ async function dispatchBatch(db, env, sheet, now, items) {
     failed.push({ j, version: stuck.version, failures, error });
   }
   const statements = [];
+  let cost = 0;
   for (const { j, version, failures, error } of failed) {
     // 退避從「現在」起算：排程的 now 固定在排程時間，叫 Apps Script 可能已經花了幾十秒，不能讓重試提早到期
     const next = refused || failures >= RETRY_LIMIT ? STOPPED_AT
       : new Date(Math.max(now, Date.now()) + BACKOFF_MINUTES[Math.min(failures - 1, BACKOFF_MINUTES.length - 1)] * 60000).toISOString();
-    statements.push(...await transitionBudget(db, env, now, j.key, j.dispatchId, FAILURE, prepaid(j)),
-      db.prepare('UPDATE v3_walk_retry SET version=?,failures=? WHERE dog_key=? AND dispatch_id=?').bind(version, failures, j.key, j.dispatchId),
+    cost += await transitionCost(db, now, j.key, j.dispatchId, FAILURE, prepaid(j));
+    statements.push(db.prepare('UPDATE v3_walk_retry SET version=?,failures=? WHERE dog_key=? AND dispatch_id=?').bind(version, failures, j.key, j.dispatchId),
       db.prepare("UPDATE v3_walk_outbox SET status='retry',error=?,next_attempt_at=? WHERE dog_key=? AND dispatch_id=? AND status='dispatching'")
         .bind(String(error).slice(0, 100), next, j.key, j.dispatchId));
   }
   // 成功、失敗都放掉這次的派送識別；回執已確認的早就刪了，只刪還握著的，都刪了就省掉這次往返。
   statements.push(...held.map(j => db.prepare('DELETE FROM v3_walk_delivery WHERE dog_key=? AND dispatch_id=?').bind(j.key, j.dispatchId)));
-  if (statements.length) await db.batch(statements);
+  if (statements.length) await budgetedBatch(db, env, now, { cost, statements });
 }
 
 // 發 target：GAS 在 script lock 內直接讀表後才呼叫。觀測到不同值時先照改表通知的規則比對，絕不盲寫。
@@ -184,11 +183,11 @@ export async function writebackTarget(db, env, now, input) {
     if (granted) return { version: state.version, dispatchId: input.dispatchId, current: target };
   }
   // 舊喚醒也只取目前版本；在 script lock 中授予目前版本派送識別。
-  await db.batch([
-    guard(db, 'EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?)', key, state.version),
-    ...await transitionBudget(db, env, now, key, input.dispatchId, GRANT, snap ? snap.retry : undefined),
-    db.prepare('INSERT INTO v3_walk_delivery VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET dispatch_id=excluded.dispatch_id,started_at=excluded.started_at').bind(key, input.dispatchId, new Date(now).toISOString()),
-    db.prepare("UPDATE v3_walk_outbox SET dispatch_id=?,status='dispatching' WHERE dog_key=? AND version=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?)").bind(input.dispatchId, key, state.version, key, state.version),
-  ]);
+  await budgetedBatch(db, env, now, { cost: await transitionCost(db, now, key, input.dispatchId, GRANT, snap ? snap.retry : undefined),
+    conditions: [when('EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?)', key, state.version)],
+    statements: [
+      db.prepare('INSERT INTO v3_walk_delivery VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET dispatch_id=excluded.dispatch_id,started_at=excluded.started_at').bind(key, input.dispatchId, new Date(now).toISOString()),
+      db.prepare("UPDATE v3_walk_outbox SET dispatch_id=?,status='dispatching' WHERE dog_key=? AND version=? AND EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=? AND version=?)").bind(input.dispatchId, key, state.version, key, state.version),
+    ] });
   return { version: state.version, dispatchId: input.dispatchId, current: target };
 }

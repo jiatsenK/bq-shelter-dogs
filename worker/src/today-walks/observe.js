@@ -1,33 +1,28 @@
-// 收試算表觀測值：改表通知（GAS 編輯觸發 /rows、寫前再讀 /observe、target）與保險掃描用同一套規則收下人工修改（ADR 0018 補充，#746）。
+// 收試算表觀測值：改表通知（GAS 編輯觸發 /rows、寫前再讀 /observe、target）、狗清單同步交來的溜狗欄（#747）與保險掃描用同一套規則收下人工修改（ADR 0018 補充，#746）。
 // 僅接受同鎖 GAS 直接讀值；通知內容與 gviz 都不能當成觀測值。
-import { editLogWrites } from '../editlog.js';
-import { names, keyOf, same, one, rows, reads, taiwanDay, scanCanTake, CURRENT_JOB, RETRY, MAIN_DOG, WalkError } from './shared.js';
+// 改表通知和狗清單同步會收到同一筆觀測值：晚到的看到跟基準值一樣就不動；同時到時 version guard 只讓一個寫成，另一個回失敗，GAS 補送時就沒差異。
+import { names, keyOf, same, sameNames, one, rows, reads, taiwanDay, codesOf, scanCanTake, CURRENT_JOB, RETRY, MAIN_DOG, WalkError } from './shared.js';
 import { seedState } from './read.js';
 import { sourceMembers } from './accept.js';
 import { writeVersion, previousOf } from './version.js';
-import { costOf, reserve } from './budget.js';
+import { costOf, budgetedBatch } from './budget.js';
 import { confirmWalk } from './receipt.js';
 
-// 修改紀錄（#672，ADR 0004 修訂）：收下人工改表時，表上有日期、且收下後日期或溜狗人變了才記（清空日期不記；改回較早一天記成那天）。
+// 修改紀錄（#672，ADR 0004 修訂）：收下人工改表時，表上有日期、且收下後日期或溜狗人（照拆開的名字比）變了才記（清空日期不記；改回較早一天記成那天）。
 // 操作者只能寫表上的溜狗人（sheet）；改後是收下後的值（after，同日跟網站名單合併時會多網站上的人）。
-// 網站寫回又讀回的值在比對時就認出來、不會走到收下，所以不會重複記。when：[條件 SQL, ...參數]，寫入當下條件成立才記（#700）
-function sheetWalkLog(old, sheet, after, number, at, when) {
-  if (!sheet.date || (after.date === old.effective_date && after.walker === old.walker)) return [];
-  return [{ entry: { at, kind: 'walk', source: 'sheet', name: sheet.walker, dogId: old.dog_id, number,
-    before: { date: old.effective_date, walker: old.walker }, after: { date: after.date, walker: after.walker } }, when }];
+// 網站寫回又讀回的值在比對時就認出來、不會走到收下，所以不會重複記。
+function sheetWalkLog(old, sheet, after, number, at) {
+  if (!sheet.date || (after.date === old.effective_date && sameNames(after.walker, old.walker))) return [];
+  return [{ at, kind: 'walk', source: 'sheet', name: sheet.walker, dogId: old.dog_id, number,
+    before: { date: old.effective_date, walker: old.walker }, after: { date: after.date, walker: after.walker } }];
 }
 
-// #700：網站上還沒有溜狗狀態的狗，網站沒寫回過（登記會先建狀態），表上溜狗欄變了一定是人工改表。
-// 狗清單同步常比今日溜狗比對先把新值寫進主清單，比對拿主清單當基準值就看不出有改，所以由狗清單同步在同一批記（dog-list.js applyMain）。
-// 比對先收下時狀態已建，這裡就不記；比對讀完基準值後才被狗清單同步搶先時，比對那邊看主清單已變就不記（compare），兩邊只會記一筆。
-// old：主清單改前那列；sheet：表上新的 { date, walker }。回要放進狗清單同步那一批的敘述（含預算）
-export async function listWalkLog(db, env, now, dog, old, sheet) {
-  const at = new Date(now).toISOString();
-  const key = keyOf(dog);
-  if (await one(db, 'SELECT 1 FROM v3_walk_state WHERE dog_key=?', key)) return [];
-  const logs = sheetWalkLog({ dog_id: old.dog_id, effective_date: old.walked_date || '', walker: old.walker ?? '' }, sheet, sheet, dog.id, at,
-    ['NOT EXISTS(SELECT 1 FROM v3_walk_state WHERE dog_key=?)', key]);
-  return logs.length ? [...reserve(db, env, costOf([['v3_edit_log', 1]]), now), ...logs.flatMap(l => editLogWrites(db, l.entry, l.when))] : [];
+// 溜狗紀錄（ADR 0018 補充）：改到新的一天或同一天換人，照收下的名單重寫那天；改回較早的日子，刪掉原本較新那天、那天照名單寫；
+// 清空日期不刪。收下的值跟目前一樣（例如網站登記過、表上剛好也是那份）就不動。
+async function sheetWalks(old, current, target, secret) {
+  if (!target.date || !old.dog_id || same(target, current)) return {};
+  const earlier = old.effective_date && target.date < old.effective_date;
+  return { rewrite: target.date, drop: earlier ? old.effective_date : null, codes: await codesOf(target.walker, secret) };
 }
 
 async function baselineVersion(db, key) {
@@ -105,12 +100,8 @@ async function compare(db, env, now, dog, observed, seen, expected) {
   let before = sameDay ? null : await beforeManualEdits(db, key, old.version, now);
   // 改回連改前的日期：那一版就是現在的值，當「上一次」沒有意義，照一般規則。
   if (before?.target_date === target.date) before = null;
-  // 沒有溜狗狀態（基準值從主清單推）：主清單的日期或代號在讀完後被狗清單同步改了，就是它記過了（listWalkLog），這裡不再記
-  const unchanged = old.main ? ['EXISTS(SELECT 1 FROM v3_sheet_main WHERE row_index=? AND walked_date IS ? AND walker_codes=?)', old.main.row_index, old.main.walked_date, old.main.walker_codes] : undefined;
-  // 改回較早的日子：溜狗紀錄刪掉原本較新那天；清空日期不刪
-  const drop = old.dog_id && target.date && old.effective_date && target.date < old.effective_date;
   const version = await writeVersion(db, env, now, { old, previous: previousOf(old, sameDay, before), base: observed,
-    history: drop ? 'drop' : null, logs: sheetWalkLog(old, observed, target, dog.id, at, unchanged),
+    walks: await sheetWalks(old, current, target, env.WALKER_KEY), logs: sheetWalkLog(old, observed, target, dog.id, at),
     next: { dog, key, date: target.date, walker: target.walker, members, operationDate: taiwanDay(now), at, status: same(target, observed) ? 'synced' : 'pending' } });
   return { changed: true, version, current: target };
 }
@@ -121,25 +112,25 @@ const validDog = dog => dog && typeof dog.id === 'string' && typeof dog.name ===
 // 一隻狗的觀測值：比對失敗記進 v3_walk_conflicts（管理者查得到、GAS 不用再送），之後比對成功就清掉。
 export async function observeOne(db, env, now, dog, observed, seen = {}, expected) {
   if (!validDog(dog)) throw new WalkError(400, '狗的識別不完整');
-  const key = keyOf(dog), conflictCost = costOf([['v3_walk_conflicts', 1]]);
+  const key = keyOf(dog), cost = costOf([['v3_walk_conflicts', 1]]);
   try {
     const result = await compare(db, env, now, dog, observed, seen, expected);
     if (seen.conflict && !result.deferred) {
-      await db.batch([...reserve(db, env, conflictCost, now), db.prepare('DELETE FROM v3_walk_conflicts WHERE dog_key=?').bind(key)]);
+      await budgetedBatch(db, env, now, { cost, statements: [db.prepare('DELETE FROM v3_walk_conflicts WHERE dog_key=?').bind(key)] });
     }
     return result;
   } catch (error) {
     const observation = JSON.stringify(observed ?? null), reason = error.status ? error.message : '比較失敗，保留待處理';
     const previous = await one(db, 'SELECT observation,error FROM v3_walk_conflicts WHERE dog_key=?', key);
     if (previous?.observation !== observation || previous?.error !== reason) {
-      await db.batch([...reserve(db, env, conflictCost, now), db.prepare('INSERT INTO v3_walk_conflicts VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET observation=excluded.observation,error=excluded.error').bind(key, observation, reason)]);
+      await budgetedBatch(db, env, now, { cost, statements: [db.prepare('INSERT INTO v3_walk_conflicts VALUES(?,?,?) ON CONFLICT(dog_key) DO UPDATE SET observation=excluded.observation,error=excluded.error').bind(key, observation, reason)] });
     }
     throw error;
   }
 }
 
 // 一批觀測值，逐隻比對，一隻失敗不影響其他隻。items：[{ dog, current, version? }]
-// source：'edit'＝改表通知；'scan'＝保險掃描（帶讀表前的 version，每輪最多收 SCAN_LIMIT 隻，其餘留給下一輪）。
+// source：'edit'＝改表通知（狗清單同步交來的也算）；'scan'＝保險掃描（帶讀表前的 version，每輪最多收 SCAN_LIMIT 隻，其餘留給下一輪）。
 // 回每隻 { ok:true, changed, version, current } 或 { ok:false, ack, error }；ack＝已記進 v3_walk_conflicts，GAS 不用再送。
 export const SCAN_LIMIT = 10;
 export async function observeAll(db, env, now, items, { source = 'edit' } = {}) {

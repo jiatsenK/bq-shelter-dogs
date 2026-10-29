@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import worker from '../src/index.js';
 import { setup, request, post as postWalk, day } from './walk-fixture.mjs';
-import { walkDay } from '../src/dog-list.js';
+import { walkDay } from '../src/today-walks/version.js';
 import { walkerCode } from '../src/editlog.js';
 import { removeFormerNumber } from '../src/compact.js';
 

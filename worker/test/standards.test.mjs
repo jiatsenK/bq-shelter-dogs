@@ -71,3 +71,12 @@ test('#746 today-walks/ 以外只 import today-walks/index.js', async () => {
   }
   assert.deepEqual(bad, [], '改成 import today-walks/index.js；要用的東西沒有入口就在 index.js 開一個');
 });
+
+// #747：溜狗紀錄（v3_walks）與溜狗類修改紀錄只由今日溜狗紀錄 module 寫（ADR 0018 補充）。
+// 狗清單同步發現溜狗欄變了，交觀測值或拿 module 給的敘述放進同一批，自己不寫 SQL、不記溜狗類修改紀錄。
+test('#747 狗清單同步不寫溜狗紀錄、不記溜狗類修改紀錄', () => {
+  const code = sources.find(([file]) => file === 'dog-list.js')[1];
+  assert.doesNotMatch(code, /(INSERT\s+INTO|UPDATE|DELETE\s+FROM|REPLACE\s+INTO)\s+v3_walks\b/i, '溜狗紀錄交給 today-walks/index.js');
+  assert.doesNotMatch(code, /\bwalkDay\b|listWalkLog/, '溜狗紀錄的寫法在 today-walks/version.js');
+  assert.doesNotMatch(code, /kind\s*:\s*['"]walk/, '溜狗類修改紀錄由今日溜狗紀錄 module 記');
+});

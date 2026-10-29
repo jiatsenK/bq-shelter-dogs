@@ -1,13 +1,15 @@
 // 今日溜狗紀錄（GLOSSARY；ADR 0018）：網站登記先存 D1，再寫回試算表兩欄；人工改表由 GAS 送來比對。
 // 這裡是 module 唯一入口，外面只 import 這個檔（worker/test/standards.test.mjs 會擋 import 內部檔）。
-// 寫新版本只有一個轉換（version.js）；保險掃描跟改表通知同一套規則收下人工修改（observe.js）；寫入預算依要寫的表自動算（budget.js）。
+// 寫新版本只有一個轉換（version.js）；保險掃描、改表通知、狗清單同步交來的溜狗欄同一套規則收下人工修改（observe.js）；寫入預算依要寫的表自動算（budget.js）。
+// 溜狗紀錄（v3_walks）與溜狗類修改紀錄只由這個 module 寫（ADR 0018 補充，#747）。
 //
 // 建立：todayWalks(env, { sheet, now })。sheet 是叫 Apps Script 小程式的函式（預設 sheet-write.js 的 callSheet），
 // now 是時鐘（預設 Date.now；排程傳排程時間）。每個入口只收領域資料。
 import { callSheet } from '../sheet-write.js';
 import { one, taiwanDay } from './shared.js';
 import { acceptWalk } from './accept.js';
-import { observeAll, listWalkLog } from './observe.js';
+import { observeAll } from './observe.js';
+import { listedWalk, numberWalks } from './version.js';
 import { confirmWalk } from './receipt.js';
 import { dispatchWalks, dueWalks, writebackTarget, STOPPED_AT } from './dispatch.js';
 import { scanWalks } from './scan.js';
@@ -23,7 +25,7 @@ export function todayWalks(env, { sheet = callSheet, now = Date.now } = {}) {
   return {
     // 溜了／修改／復原（input：requestId、operationDate、action、walker、editor、dogs[1]）→ 接受結果；不接受丟 WalkError（status、current）
     accept: input => acceptWalk(db, env, now(), input),
-    // 試算表觀測值（[{ dog, current, version? }]），source：'edit' 改表通知、'scan' 保險掃描 → 每隻一筆結果
+    // 試算表觀測值（[{ dog, current, version? }]），source：'edit' 改表通知（狗清單同步交來的溜狗欄也是）、'scan' 保險掃描 → 每隻一筆結果
     observe: (items, { source = 'edit' } = {}) => observeAll(db, env, now(), items, { source }),
     // GAS 在 script lock 內讀到的表上值 → 這次要寫的目標（或 skip）
     target: input => writebackTarget(db, env, now(), input),
@@ -47,8 +49,10 @@ export function todayWalks(env, { sheet = callSheet, now = Date.now } = {}) {
       const found = await one(db, 'SELECT result_json FROM v3_walk_requests WHERE request_id=?', requestId);
       return found ? JSON.parse(found.result_json) : null;
     },
-    // 狗清單同步改到還沒有溜狗狀態的狗的溜狗欄：記「溜了／試算表」（#700）的敘述，放進狗清單同步同一批
-    listWalkLog: (dog, old, sheet) => listWalkLog(db, env, now(), dog, old, sheet),
+    // 狗清單同步新建進主清單的狗：表上那天溜狗紀錄還沒有才寫 → { conditions, statements }，放進建狗那一批（version.js 的 listedWalk）
+    listed: (dogId, dog, current) => listedWalk(db, env, now(), dogId, dog, current),
+    // 狗清單同步替沒編號的狗補上編號：溜狗紀錄跟著補編號的敘述，放進同一批
+    numbered: (dogId, number) => numberWalks(db, dogId, number),
     today: () => readAcceptedWalks(db, taiwanDay(now())),
     walkers: () => readWalkers(db),
     stopped: () => readStoppedWalks(db, STOPPED_AT),

@@ -137,7 +137,7 @@ test('寫入出錯時整批回復：出席名單寫不進去，活動本身也�
   assert.equal(r.status, 500);
   const [after] = await list(env);
   assert.deepEqual([after.date, after.kind, after.revision, after.dogs.map(d => d.name)], ['2026-10-11', 'kids', 1, ['阿福']]);
-  assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_walk_guard').first('n'), 0);
+  assert.equal(await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_batch_guard').first('n'), 0);
 });
 
 // CODING_STANDARDS「附讀寫量測試」：先用小資料跑，再塞大量無關資料跑，讀寫量一樣

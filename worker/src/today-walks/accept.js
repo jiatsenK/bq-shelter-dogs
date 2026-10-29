@@ -1,7 +1,7 @@
 // 志工接受（#456）：API 成功承諾止於 D1 原子接受；Google 寫回由持久工作追蹤（dispatch.js）。
 import { walkerCode, editorOf } from '../editlog.js';
 import { identityByCode } from '../identity.js';
-import { names, keyOf, one, taiwanDay, WalkError, changedWalk } from './shared.js';
+import { names, keyOf, one, sameNames, taiwanDay, WalkError, changedWalk } from './shared.js';
 import { seedState, previousWalk } from './read.js';
 import { writeVersion, previousOf } from './version.js';
 
@@ -79,12 +79,12 @@ export async function acceptWalk(db, env, now, input) {
     const codes = today ? [...new Set(await Promise.all(members.map(m => walkerCode(m.name, env.WALKER_KEY))))] : [];
     const before = { date: old.effective_date, walker: old.walker };
     // 按溜了：操作者是這次按的人（一起溜就全部）；已經在今天名單裡、名單沒變就不記。
-    // 名單照拆開的名字比（#707）：沒有溜狗狀態的狗改前是表上原文，可能用逗號或空白分隔
-    const logs = editor ? [{ entry: { at, kind: input.action === 'undo' ? 'walkundo' : 'walkedit', source: 'volunteer', code: editor.code, name: editor.name, dogId: old.dog_id, number: dog.id, before, after: result.current } }]
-      : before.date !== effectiveDate || names(before.walker).join('、') !== walker ? [{ entry: { at, kind: 'walk', source: 'volunteer', code: added.length === 1 ? await walkerCode(added[0].name, env.WALKER_KEY) : '',
-        name: added.map(m => m.name).join('、'), dogId: old.dog_id, number: dog.id, before, after: result.current } }] : [];
+    // 名單照拆開的名字比（#707）
+    const logs = editor ? [{ at, kind: input.action === 'undo' ? 'walkundo' : 'walkedit', source: 'volunteer', code: editor.code, name: editor.name, dogId: old.dog_id, number: dog.id, before, after: result.current }]
+      : before.date !== effectiveDate || !sameNames(before.walker, walker) ? [{ at, kind: 'walk', source: 'volunteer', code: added.length === 1 ? await walkerCode(added[0].name, env.WALKER_KEY) : '',
+        name: added.map(m => m.name).join('、'), dogId: old.dog_id, number: dog.id, before, after: result.current }] : [];
     try {
-      await writeVersion(db, env, now, { old, previous: prev, history: today ? 'rewrite' : 'drop', codes, logs,
+      await writeVersion(db, env, now, { old, previous: prev, walks: today ? { rewrite: effectiveDate, codes } : { drop: old.effective_date }, logs,
         next: { dog, key, date: effectiveDate, walker, members, operationDate: input.operationDate, at, status: 'pending' },
         request: { id: input.requestId, fingerprint, result } });
       return result;

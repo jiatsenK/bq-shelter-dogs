@@ -5,6 +5,7 @@ import { guardedDogBatch } from './dog-edit.js';
 // - 每天三次保險掃描：GAS 送每個單位的指紋，Worker 回不一樣的（D1 還沒有指紋就全部要），GAS 再分批只送那幾個。
 // - D1 有、試算表沒有的只列出來（v3_sync_state 的 dog_list_extra，含每次掃描時間），不自動刪；管理網站資料檢查顯示（#567）。
 // 指紋只是「上次收過哪一版」，存在 v3_sync_state 一列 JSON；遺失只會讓下一次掃描多送幾列，不影響資料。
+// - 溜狗欄（日期、誰遛的）只更新主清單複本；有變就先當成一筆觀測值交給今日溜狗紀錄 module，溜狗紀錄、溜狗修改紀錄都由 module 寫（#747）。
 import { splitNames } from './sheet-read.js';
 import { walkerCode, editLogWrites } from './editlog.js';
 import { judgeDeparture, nameKey } from './departure-rules.js';
@@ -13,7 +14,9 @@ import { SYNCED_AT_KEY } from './compact.js';
 import { linkIdentityName } from './identity.js';
 import { todayWalks } from './today-walks/index.js';
 
-export const DOG_LIST_ROWS_MAX = 10; // 每列最多 3–4 次 D1 往返（溜狗欄有變再查一次溜狗狀態，#700），守住每次呼叫 50 次查詢
+// 每列 3–4 次 D1 往返；溜狗欄有變另外交給今日溜狗紀錄比對（改表通知通常先到，這裡比對到一樣只多 1 次往返；
+// 狗清單先到時比對收下約 10 次往返，超過每次呼叫 50 次查詢的那幾列 D1 失敗、不 ack，GAS 補送時前面收過的就一樣了）
+export const DOG_LIST_ROWS_MAX = 10;
 const FP_KEY = 'dog_list_fp';
 export const EXTRA_KEY = 'dog_list_extra';
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
@@ -52,19 +55,13 @@ async function walkersOf(walker, env, db) {
   return { codes, keyed: !!key };
 }
 
-// 溜狗紀錄一隻狗一天一組（同一天以最後一次為準，跟當初從 GitHub JSON 匯入時合併的規則一樣）；網站按溜了也用這個（today-walks/version.js）
-// 只寫不一樣的位置（#682，ADR 0008）：網站登記過的狗，保險掃描再送同一份名單時寫入 0 列、溜狗紀錄資料包不失效。
-// - 名單照位置比，順序不同算有變；沒有溜狗人存一列 null，用 IS NOT 比，null 對 null 算一樣；人數變少刪掉多出的位置。
-// - 那天的編號和狗名照第一次記的（#248），之後改名、換編號不改那天，加人也沿用。
-export function walkDay(db, dogId, date, dog, codes) {
-  const list = codes.length ? codes : [null];
-  return [
-    db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=? AND position>=?').bind(dogId, date, list.length),
-    ...list.map((code, i) => db.prepare(`INSERT INTO v3_walks(dog_id,walk_date,position,walker_code,dog_number,dog_name)
-      SELECT ?1,?2,?3,?4,COALESCE((SELECT dog_number FROM v3_walks WHERE dog_id=?1 AND walk_date=?2 AND position=0),?5),COALESCE((SELECT dog_name FROM v3_walks WHERE dog_id=?1 AND walk_date=?2 AND position=0),?6) WHERE true
-      ON CONFLICT(dog_id,walk_date,position) DO UPDATE SET walker_code=excluded.walker_code,walker_name=NULL WHERE walker_code IS NOT excluded.walker_code`)
-      .bind(dogId, date, i, code, dog.id, dog.name)),
-  ];
+// 溜狗欄有變（#747）：在更新主清單複本之前，把表上的值當成一筆改表觀測值交給今日溜狗紀錄。
+// 沒有溜狗狀態的狗，今日溜狗紀錄的基準值取自主清單複本；先更新複本就看不出有改。
+// 改表通知同一次編輯也會送同一筆，晚到的看到一樣就不動；被 version guard 擋下（同時到）或 D1 失敗就不 ack，GAS 補送時再比。
+// 已記進今日溜狗紀錄的待處理（ack）照常更新複本，其他欄不卡在這裡。
+async function handOverWalk(env, db, dog, current) {
+  const [result] = await todayWalks({ ...env, DB: db }).observe([{ dog, current }]);
+  if (!result.ok && !result.ack) throw new Error(result.error);
 }
 const dropMainRow = (db, rowIndex) => [db.prepare('DELETE FROM v3_sheet_main WHERE row_index=?').bind(rowIndex)];
 // 離所用狗 ID 記（#560，v3_dog_departures）；同步只處理有編號的離所，沒編號的是只有名字的已出所狗卡，不動
@@ -78,7 +75,7 @@ async function applyMain(db, row, list, env, fp) {
   const { codes, keyed } = await walkersOf(row.walker, env, db);
   let old = findMain(list, dog);
   const out = [];
-  let returnedLog = null;
+  let returnedLog = null, listed = { conditions: [], statements: [] };
   let expected=null,targetDogId=null;
   // 新增狗常先打名字、後補編號：主清單上同名沒編號的那隻就是牠，補上編號，不另建一隻（2026-10-24 驗收時多出一隻沒編號的 TEST）
   const unnumbered = !old && dog.id && list.find(m => m.number === '' && m.name === dog.name);
@@ -86,7 +83,7 @@ async function applyMain(db, row, list, env, fp) {
     old = unnumbered;
     out.push(db.prepare('UPDATE v3_sheet_main SET number=? WHERE row_index=?').bind(dog.id, old.row_index),
       db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, old.dog_id),
-      db.prepare("UPDATE v3_walks SET dog_number=? WHERE dog_id=? AND dog_number=''").bind(dog.id, old.dog_id));
+      ...todayWalks({ ...env, DB: db }).numbered(old.dog_id, dog.id));
     old.number = dog.id;
     delete fp[`main:名:${dog.name}`];
   }
@@ -98,12 +95,13 @@ async function applyMain(db, row, list, env, fp) {
     const codesChanged = changed.includes('walker_codes');
     if (changed.length) out.push(db.prepare(`UPDATE v3_sheet_main SET ${changed.map(c => `${c}=?`).join(',')} WHERE row_index=?`).bind(...changed.map(c => next[c]), old.row_index));
     if (next.name !== old.name) out.push(db.prepare('UPDATE v3_dogs SET name=? WHERE dog_id=?').bind(dog.name, old.dog_id));
-    // 日期變新、或同一天換人才記一筆；清空不記也不刪（同 newWalks）
-    // 改回較早的日子（K 2026-10-24，例如 Ctrl+Z）：那天照表上名單重寫，表上不再寫的較新那天刪掉
-    if (date && (!old.walked_date || date > old.walked_date || (date === old.walked_date && codesChanged))) out.push(...walkDay(db, old.dog_id, date, dog, codes));
-    else if (date && date < old.walked_date) out.push(db.prepare('DELETE FROM v3_walks WHERE dog_id=? AND walk_date=?').bind(old.dog_id, old.walked_date), ...walkDay(db, old.dog_id, date, dog, codes));
-    // 網站上還沒有溜狗狀態的狗，日期或溜狗人（照代號比，#519 補填原文不算）改了記「溜了／試算表」（#700，今日溜狗紀錄 module 的 listWalkLog）
-    if (changed.includes('walked_date') || (keyed ? codesChanged : changed.includes('walker'))) out.push(...await todayWalks({ ...env, DB: db }).listWalkLog(dog, old, { date: date || '', walker: next.walker }));
+    // 日期或溜狗人（照代號比，#519 補填原文不算）改了：先交給今日溜狗紀錄，再更新複本。
+    // 同一次才補上編號的狗，主清單複本還找不到這個編號、交不了觀測值，照新建的狗處理（那天還沒有才寫）
+    const current = { date: date || '', walker: next.walker };
+    if (changed.includes('walked_date') || (keyed ? codesChanged : changed.includes('walker'))) {
+      if (unnumbered === old) listed = await todayWalks({ ...env, DB: db }).listed(old.dog_id, dog, current);
+      else await handOverWalk(env, db, dog, current);
+    }
     Object.assign(old, next);
   } else {
     const identified=dog.id?await db.prepare('SELECT n.dog_id,s.revision FROM v3_dog_numbers n JOIN v3_dog_edit_state s USING(dog_id) WHERE number=?').bind(dog.id).first():await db.prepare("SELECT w.dog_id,s.revision FROM v3_walks w JOIN v3_dog_edit_state s USING(dog_id) WHERE dog_number='' AND dog_name=? LIMIT 1").bind(dog.name).first();
@@ -126,11 +124,13 @@ async function applyMain(db, row, list, env, fp) {
     // 又回到主清單（例：誤移、退養回來）不算離所；換了新編號回來的，舊離所註明用哪個編號回所
     if (dog.id) out.push(dropDeparture(db, dog.id),
       db.prepare("UPDATE v3_dog_departures SET returned_number=? WHERE dog_id=? AND number NOT IN (?,'') AND COALESCE(returned_number,'')<>?").bind(dog.id, dogId, dog.id, dog.id));
-    if (date && !(await db.prepare('SELECT 1 FROM v3_walks WHERE dog_id=? AND walk_date=? LIMIT 1').bind(dogId, date).first())) out.push(...walkDay(db, dogId, date, dog, codes));
+    // 表上那天溜狗紀錄還沒有才寫（今日溜狗紀錄給的敘述，跟建狗同一批；主清單複本還沒有這隻，沒有基準值可交觀測值）
+    listed = await todayWalks({ ...env, DB: db }).listed(dogId, dog, { date: date || '', walker: text(row.walker) });
     list.push({ row_index: rowIndex, dog_id: dogId, number: dog.id, name: dog.name, cage, note, walked_date: date, walker: text(row.walker), walker_codes: JSON.stringify(codes) });
   }
   if(returnedLog)out.push(...editLogWrites(db,{at:new Date().toISOString(),name:returnedLog.editor.name,kind:returnedLog.kind,dogId:returnedLog.dogId,number:returnedLog.dogNumber,before:returnedLog.before,after:returnedLog.after,source:'sheet'}));
-  if(out.length){const result=await guardedDogBatch(db,expected,[...out,db.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(targetDogId)]);const revision=result.at(-1).results[0]?.revision;for(const item of list)if(item.dog_id===targetDogId)item.revision=revision;}
+  out.push(...listed.statements);
+  if(out.length){const result=await guardedDogBatch(db,expected,[...out,db.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(targetDogId)],listed.conditions);const revision=result.at(-1).results[0]?.revision;for(const item of list)if(item.dog_id===targetDogId)item.revision=revision;}
   return out.length > 0;
 }
 

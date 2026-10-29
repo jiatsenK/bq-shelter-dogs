@@ -1,7 +1,12 @@
 // 今日溜狗紀錄 module 內共用的小工具（ADR 0018）。module 外面只 import ./index.js（worker/test/standards.test.mjs 會擋）。
 import { splitNames } from '../sheet-read.js';
+import { walkerCode } from '../editlog.js';
 
 export const names = text => [...new Set(splitNames(text))];
+// 名單 → 溜狗紀錄用的代號（重複的只留一個；沒有 WALKER_KEY 算不出代號就是空的，溜狗紀錄記一列沒有溜狗人）
+export const codesOf = async (text, secret) => [...new Set((await Promise.all(names(text).map(name => walkerCode(name, secret)))).filter(Boolean))];
+// 名單照拆開的名字比（#707）：沒有溜狗狀態的狗改前是表上原文，可能用逗號或空白分隔
+export const sameNames = (a, b) => names(a).join('、') === names(b).join('、');
 export const keyOf = dog => dog.id || `名:${dog.name}`;
 export const same = (a, b) => a.date === b.date && a.walker === b.walker;
 export const one = (db, sql, ...args) => db.prepare(sql).bind(...args).first();
@@ -18,9 +23,8 @@ export const CURRENT_JOB = 'SELECT o.* FROM v3_walk_outbox o JOIN v3_walk_state 
 export const RETRY = 'SELECT dispatch_id,reserved_day FROM v3_walk_retry WHERE dog_key=?';
 export const MAIN_DOG = dog => `SELECT dog_id,walked_date,walker,walker_codes,row_index FROM v3_sheet_main WHERE ${dog.id ? 'number=?' : "number='' AND name=?"}`;
 
-// 交易 guard（#681）：條件不成立或是 NULL 才插一列 0，違反 CHECK(ok=1) 讓整個 batch 回復；成立時一列都不寫，batch 結尾也不用清。
-// 要用 IS NOT 1，不能寫 WHERE NOT(條件)：條件是 NULL 時 NOT 也是 NULL，guard 會靜靜放行。
-export const guard = (db, condition, ...args) => db.prepare(`INSERT INTO v3_walk_guard SELECT 0 WHERE (${condition}) IS NOT 1`).bind(...args);
+// 交易條件（#681、#747）：給 conditional-batch.js 的 batchIf，條件成立（算出 1）才整批寫；不成立、NULL 都整批回復
+export const when = (sql, ...args) => ({ sql, args });
 
 export class WalkError extends Error {
   constructor(status, message) { super(message); this.status = status; }
