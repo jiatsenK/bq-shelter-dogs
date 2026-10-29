@@ -10,7 +10,7 @@
 // - gas.cutOff()：下一次送到小程式後 Worker 那邊被停掉，小程式照常跑完、Worker 等不到回應也沒收尾；回傳小程式跑完的 promise
 // - gas.beforeWorker(action, body)：小程式每次要呼叫 Worker 前先跑（例如讓時間走到隔天）；gas.sheetError：開試算表時丟的錯（ID 錯、沒權限）
 // - gas.calls：Worker 送給小程式的內容；gas.posts：小程式送給 Worker 的呼叫與回應（stopAt 停下沒送出的標 stopped）；
-//   gas.resend(post) 把一筆再送一次（晚到的舊回執）
+//   gas.resend(post) 把一筆再送一次（晚到的舊回執）；gas.run(body) 直接跑小程式的動作（不經 Worker）
 //
 // 小程式的 UrlFetchApp 是同步的、worker.fetch 是非同步的：每次執行先同步跑，碰到還沒拿到回應的 Worker 呼叫就停下，
 // 把表、指令碼屬性還原成這次執行開始時的樣子，等 Worker 回應後從頭重跑；拿過的回應照順序重播，重跑送的內容不同就報錯。
@@ -23,17 +23,18 @@ import { createWorker } from '../src/index.js';
 import { callSheet } from '../src/sheet-write.js';
 
 const script = new vm.Script(readFileSync(new URL('../../apps-script/sheet-write.gs', import.meta.url), 'utf8'), { filename: 'sheet-write.gs' });
-export const HEADER = ['編號', '犬名', '遛狗日期', '誰遛的'];
+const HEADER = ['編號', '犬名', '遛狗日期', '誰遛的'];
 const WORKER_URL = 'https://worker.example';
 class Suspend extends Error {}
 class Stopped extends Error {}
 const clone = value => structuredClone(value);
 
-// rows：主清單表頭下的列（預設表頭 HEADER：編號、犬名、遛狗日期、誰遛的；要測備註、異動紀錄就傳 header 加上籠位、備註）；key：小程式自己的 WRITE_KEY（跟 Worker 的 SHEET_WRITE_KEY 不同就是金鑰錯）；
+// rows：主清單表頭下的列（預設表頭 HEADER；要測備註、異動紀錄就傳 header 加上籠位、備註）；
+// key：小程式自己的 WRITE_KEY（跟 Worker 的 SHEET_WRITE_KEY 不同就是金鑰錯）；
 // onRead(values, n, { full })：這次執行第 n 次讀主清單前呼叫（full：整張讀），用來模擬「讀表之間有人手動改」
 export function appsScript(env, { header = HEADER, rows = [['9001', '測試狗', '2026/10/1', '']], key = 'test-secret', onRead } = {}) {
   const col = Object.fromEntries(['編號', '犬名', '遛狗日期', '誰遛的'].map(h => [h, header.indexOf(h)]));
-  const state = { values: [[...header], ...rows.map(r => [...r])], props: { SHEET_ID: 'test', WRITE_KEY: key, WALK_WORKER_URL: WORKER_URL }, writes: [], logs: [] };
+  const state = { values: [[...header], ...rows.map(r => [...r])], props: { SHEET_ID: 'test', WRITE_KEY: key, WALK_WORKER_URL: WORKER_URL }, writes: [] };
   const restore = saved => Object.assign(state, clone(saved));
   // 執行中的起點：測試在執行途中人工改表，重跑時也要看得到
   const running = new Set();
@@ -65,9 +66,9 @@ export function appsScript(env, { header = HEADER, rows = [['9001', '測試狗',
       }),
     };
     const lock = scriptLock => ({ waitLock: () => { if (scriptLock) scriptLocks++; }, tryLock: () => true, releaseLock: () => { if (scriptLock) scriptLocks--; } });
-    const log = level => (...args) => { if (!attempt.pending) state.logs.push([level, args.map(String).join(' ')]); };
+    const quiet = () => {};
     return {
-      console: { log: log('log'), info: log('info'), warn: log('warn'), error: log('error') },
+      console: { log: quiet, info: quiet, warn: quiet, error: quiet },
       PropertiesService: { getScriptProperties: () => ({ getProperty: k => state.props[k] ?? null, setProperty: (k, v) => { state.props[k] = String(v); } }) },
       LockService: { getScriptLock: () => lock(true), getUserLock: () => lock(false) },
       SpreadsheetApp: { openById: () => { if (gas.sheetError) throw new Error(gas.sheetError); return { getSheetByName: name => name === '主清單' ? main : null }; }, flush: () => {} },
@@ -157,7 +158,6 @@ export function appsScript(env, { header = HEADER, rows = [['9001', '測試狗',
   gas.stopAfter = action => { stop = { action, before: false }; };
   gas.values = () => clone(state.values);
   gas.writes = () => clone(state.writes);
-  gas.logs = () => clone(state.logs);
   gas.mark = () => state.props.SHEET_EDIT_MARK;
   gas.props = () => clone(state.props);
   gas.replace = rows => change(s => { s.values = [[...header], ...rows.map(r => [...r])]; });
@@ -175,17 +175,17 @@ export function appsScript(env, { header = HEADER, rows = [['9001', '測試狗',
     });
   };
   // 人工改表：改格子後跑編輯觸發（onWalkSheetEdit），範圍是那一列的遛狗日期到誰遛的
-  gas.edit = (id, change) => {
-    gas.set(id, change);
+  gas.edit = (id, cells) => {
+    gas.set(id, cells);
     const row = rowOf(id) + 1;
     return run(g => g.onWalkSheetEdit({ range: { getSheet: () => g.SpreadsheetApp.openById().getSheetByName('主清單'),
       getRow: () => row, getNumRows: () => 1, getColumn: () => col.遛狗日期 + 1, getLastColumn: () => col.誰遛的 + 1 } }));
   };
   // 直接跑小程式的動作（不經 Worker 的 callSheet），回小程式的回應（轉成 JSON 再讀回，跟走 HTTP 一樣）
   gas.run = async body => JSON.parse(await run(g => JSON.stringify(g.handleRequest(body))));
-  gas.resend = async (post, change = {}, key = state.props.WRITE_KEY) => {
+  gas.resend = async (post, override = {}, key = state.props.WRITE_KEY) => {
     const res = await gas.worker.fetch(new Request(`${WORKER_URL}/api/walk-writeback/${post.action}`, { method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Sheet-Write-Key': key }, body: JSON.stringify({ ...post.body, ...change }) }), env);
+      headers: { 'Content-Type': 'application/json', 'X-Sheet-Write-Key': key }, body: JSON.stringify({ ...post.body, ...override }) }), env);
     return { status: res.status, ...await res.json() };
   };
   return gas;

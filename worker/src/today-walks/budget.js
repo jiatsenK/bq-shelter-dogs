@@ -5,7 +5,7 @@ import { batchIf } from '../conditional-batch.js';
 import { budgetDay, WalkError } from './shared.js';
 
 // 每寫一列的保守上界＝表本身 1 列＋每個索引（含主鍵、UNIQUE）1 列＋觸發器連帶寫的列（同一種操作觸發的全部加起來）；AUTOINCREMENT 另加序號 1 列。
-// worker/test/today-walks-budget.test.mjs 照 db/compact-schema.sql 重算這張表，並用 total_changes() 確認每種轉換的保留量夠。
+// worker/test/today-walks-budget.test.mjs 照 db/compact-schema.sql 算每列成本、用觸發器數每種轉換實際寫的列，確認保留量夠（不讀這張表，少算就失敗）。
 export const ROW_COST = {
   v3_walk_state: 3, // 主鍵＋walk_pack 觸發器
   v3_walk_requests: 2,

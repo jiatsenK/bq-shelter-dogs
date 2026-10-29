@@ -61,7 +61,7 @@ async function costEnv(extra = {}) {
 test('志工接受：溜了、同日加人、修改、復原的保留量都 ≥ 實際寫入', async () => {
   const env = await costEnv(); worker.testing.resetState();
   try {
-    await measure(env, '第一次溜了（從主清單建狀態）', async () => assert.equal((await post(env, request('cost-walk-0001'))).status, 200));
+    await measure(env, '第一次溜了（兩人一起，從主清單建狀態）', async () => assert.equal((await post(env, request('cost-walk-0001', '甲、乙'))).status, 200));
     await measure(env, '同一天加一起溜的人', async () => assert.equal((await post(env, request('cost-walk-0002', '乙、丙'))).status, 200));
     const edit = request('cost-edit-0003', '乙', { action: 'edit', editor: '甲', dogs: [{ ...dog, expectedVersion: 2 }] });
     await measure(env, '改溜狗人（三人改一人，刪多的溜狗紀錄）', async () => assert.equal((await post(env, edit)).status, 200));

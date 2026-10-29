@@ -97,7 +97,7 @@ test('Apps Script：每 10 分鐘補送、狗清單保險掃描時間、跟 Work
 
 test('寫回重試間隔與上限', async () => {
   const dispatch = await read('worker/src/today-walks/dispatch.js');
-  const { RETRY_LIMIT } = await import('../worker/src/today-walks/dispatch.js');
+  const RETRY_LIMIT = Number(dispatch.match(/RETRY_LIMIT = (\d+)/)[1]);
   const delays = JSON.parse(dispatch.match(/BACKOFF_MINUTES = (\[[\d, ]+\])/)[1]);
   await shows('writeback-sequence', `間隔 ${delays.join('、')} 分鐘`, `worker/src/today-walks/dispatch.js 的重試間隔是 ${delays.join('、')} 分鐘`);
   await shows('writeback-sequence', `第 ${RETRY_LIMIT} 次失敗`, `worker/src/today-walks/dispatch.js 的 RETRY_LIMIT 是 ${RETRY_LIMIT}`);

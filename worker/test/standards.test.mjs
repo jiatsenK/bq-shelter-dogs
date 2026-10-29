@@ -57,13 +57,13 @@ test('#512 不再有 gviz 讀表、舊同步程式；Worker 不 import scripts/'
   assert.deepEqual(sources.filter(([, code]) => /from '\.\.\/\.\.\/scripts\//.test(code)).map(([f]) => f), [], 'Worker 程式不依賴 scripts/');
 });
 
-// #746：今日溜狗紀錄 module 只有一個入口。worker/src、scripts 的程式（不含測試）只能 import today-walks/index.js；
-// 測試可以直接測內部檔（例如 guard、previousWalk、walkFingerprint）。
+// #746：今日溜狗紀錄 module 只有一個入口。worker/src、scripts 的程式只能 import today-walks/index.js；
+// #748 起測試也一樣，走入口測（寫回接真的 sheet-write.gs，worker/test/apps-script.mjs），不直接測內部檔。
 test('#746 today-walks/ 以外只 import today-walks/index.js', async () => {
   const root = new URL('../../', import.meta.url);
   const list = async dir => (await readdir(new URL(dir, root), { recursive: true })).map(f => `${dir}${f.replaceAll('\\', '/')}`)
-    .filter(f => /\.(mjs|cjs|js)$/.test(f) && !/\.test\.mjs$/.test(f) && !f.includes('node_modules/'));
-  const files = [...await list('worker/src/'), ...await list('scripts/')].filter(f => !f.startsWith('worker/src/today-walks/'));
+    .filter(f => /\.(mjs|cjs|js)$/.test(f) && !f.includes('node_modules/'));
+  const files = [...await list('worker/src/'), ...await list('worker/test/'), ...await list('scripts/')].filter(f => !f.startsWith('worker/src/today-walks/'));
   const bad = [];
   for (const file of files) {
     const code = await readFile(new URL(file, root), 'utf8');
