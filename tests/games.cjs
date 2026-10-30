@@ -35,7 +35,7 @@ const BLOCKED = [CHANGED.id, PENDING.id, NO_FACE.id, DEPARTED];
 const KEYS = ['showActivities', 'showQuality', 'showUpdates', 'editIntro', 'editPhoto', 'editRest', 'editActivity', 'editFixedCare', 'editStays', 'showShare'];
 
 module.exports = async (browser, base) => {
-  async function open({ colorScheme = 'light', width = 390, brokenPhotos = false } = {}) {
+  async function open({ colorScheme = 'light', width = 390, brokenPhotos = false, slowPhotoMs = 0 } = {}) {
     const context = await browser.newContext({ viewport: { width, height: 844 }, colorScheme, serviceWorkers: 'block' });
     await context.addInitScript(() => {
       localStorage.setItem('bq-onboarded', '1');
@@ -43,7 +43,7 @@ module.exports = async (browser, base) => {
       window.__BQ_FEATURE_TEST__ = true;
     });
     const photos = [];
-    await context.route('**/*', route => {
+    await context.route('**/*', async route => {
       const u = new URL(route.request().url());
       if (u.origin !== base) return route.abort();
       assert.equal(route.request().method() === 'GET' || route.request().method() === 'HEAD', true, '小遊戲不寫入');
@@ -52,6 +52,7 @@ module.exports = async (browser, base) => {
         photos.push(photo[1]);
         if (brokenPhotos && !u.pathname.includes('/thumbs/')) return route.fulfill({ status: 404, body: '' });
         const i = Number(photo[1].slice(-2));
+        if (slowPhotoMs && !u.pathname.includes('/thumbs/')) await new Promise(r => setTimeout(r, slowPhotoMs));
         return route.fulfill({ contentType: 'image/png', body: png([(i * 53) % 256, (i * 97) % 256, (i * 151) % 256]) });
       }
       if (u.pathname.endsWith('/data/dog-faces.json')) return route.fulfill({ json: faces });
@@ -168,6 +169,31 @@ module.exports = async (browser, base) => {
     await page.locator('#gHub').waitFor();
     await page.locator('#gBack').click();
     await page.waitForURL(/index\.html#info$/);
+    assert.deepEqual(errors, []);
+    await context.close();
+  }
+
+  // 照片慢：答完換下一題、新照片還沒讀完時，畫面不能出現沒戴裝飾的狗（上一隻沒變裝的樣子或新的一隻都不行）
+  {
+    const { context, page, errors } = await open({ slowPhotoMs: 1500 });
+    await page.goto(base + '/public/games.html#dressup');
+    await page.waitForFunction(() => document.querySelectorAll('#gDeco svg').length > 0);
+    await page.locator('#gOpts').getByRole('button', { name: await answerOf(page), exact: true }).click();
+    const bare = await page.evaluate(() => new Promise(resolve => {
+      const seen = [], t0 = performance.now();
+      const look = () => {
+        const pic = document.getElementById('gPic'), css = getComputedStyle(pic);
+        // 新照片還沒讀完時 naturalWidth 是 0，但瀏覽器照樣顯示上一張照片（或讀到一半的新照片），所以只看照片有沒有顯示
+        const showing = !pic.hidden && css.visibility !== 'hidden' && css.opacity !== '0';
+        const decos = document.querySelectorAll('#gDeco svg').length;
+        if (showing && !decos) seen.push(document.getElementById('gNo').textContent);
+        if (document.getElementById('gNo').textContent === '2' && decos) return resolve(seen);
+        if (performance.now() - t0 > 6000) return resolve(['逾時']);
+        requestAnimationFrame(look);
+      };
+      look();
+    }));
+    assert.deepEqual(bare, [], '換題時出現沒戴裝飾的狗');
     assert.deepEqual(errors, []);
     await context.close();
   }
