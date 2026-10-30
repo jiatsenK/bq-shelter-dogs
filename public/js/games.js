@@ -36,11 +36,23 @@ async function loadDogs() {
   ]);
   if (!res.ok) throw new Error(res.message || `HTTP ${res.status}`);
   S.dogs = playableDogs(res.data, faces);
+  deskHeadUpdated(res.data && res.data.syncedAt);
   // 長相算完才開放開始，第一題的選項就是長得像的狗；縮圖讀不到的那隻選項用隨機
   await Promise.all(S.dogs.map(d => loadImg(d.thumb).then(img => { S.sigs[d.id] = signature(img); }).catch(() => {})));
 }
 
 const LOW_MS = 3000; // 剩 3 秒計時條變紅
+
+// 電腦版五格頁首（games.html 的 .g-desk-head）：今天日期、資料時間，寫法跟志工網站頁首一樣（app.js 的 renderMain、renderUpdatedLabel）
+const pad2 = n => String(n).padStart(2, '0');
+function deskHeadDate() {
+  const d = new Date();
+  $('dateLabel').textContent = `${d.getMonth() + 1}月${d.getDate()}日 (${'日一二三四五六'[d.getDay()]})`;
+}
+function deskHeadUpdated(at) {
+  const t = at ? new Date(at) : null;
+  $('updatedLabel').textContent = t && !isNaN(t) ? `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${pad2(t.getHours())}:${pad2(t.getMinutes())}` : '';
+}
 
 // 10 格：這局每一題答對、答錯；current 是正在答的那題（結算時不標）
 function drawSteps(el, current = -1) {
@@ -292,6 +304,7 @@ function bind() {
     if (e.state && e.state.game) { if (!playing()) start(); } else showHub();
   }, state => (state.game ? GAME_HASH : location.pathname + location.search));
   $('gDressUp').addEventListener('click', () => { pushPage({}, { game: 'dressup' }); start(); });
+  $('syncBtn').addEventListener('click', () => location.reload()); // 這頁只讀狗清單，更新就是重新讀一次
   $('gAgain').addEventListener('click', start);
   $('gShot').addEventListener('click', openShot);
   $('gSheetClose').addEventListener('click', () => closeOverlay('gameShot'));
@@ -307,6 +320,7 @@ function bind() {
 
 export async function startGames() {
   bind();
+  deskHeadDate();
   showBest();
   const fromLink = location.hash === GAME_HASH;
   // 打開網頁的那一筆一律是選單；從分享連結（#dressup）進來的，讀完資料再多一筆遊戲，返回回到選單

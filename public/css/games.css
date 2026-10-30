@@ -105,12 +105,18 @@ a { color: var(--primary); }
 .g-sheet-in { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 420px; max-height: 100%; overflow: auto; padding: 16px; background: var(--surface); }
 .g-sheet-in img { display: block; width: 100%; }
 
-/* 電腦版（≥1100px，跟志工網站同一個分界）：照片在左、題目與按鈕在右，不把手機版直接放大 */
+/* 電腦版（≥1100px，跟志工網站同一個分界）：頁首是志工網站的五格頁首（games.html 的 .g-desk-head，樣式在 app.css／desk.css）；
+   內容跟其他頁從同一條左邊線開始（最寬 1440px、左右 24px），綠色返回列變成內容裡的標題列。照片在左、題目與按鈕在右，不把手機版直接放大 */
+@media (max-width: 1099.98px) { .g-desk-head { display: none; } }
 @media (min-width: 1100px) {
-  .g-head-in, .g-main { max-width: 1040px; }
-  .g-head-in { padding-inline: 32px; }
-  .g-main { padding-inline: 32px; }
-  .g-screen { padding-top: 32px; }
+  body { background: var(--bg); }
+  .g-head { padding: 0; background: none; color: var(--ink); }
+  .g-head-in { max-width: none; margin: 0; padding: 20px 24px 0; }
+  .g-head h1 { font-size: 22px; font-weight: 900; }
+  .g-back { color: var(--ink); }
+  .g-back:focus-visible { outline-color: var(--primary); }
+  html.desk-on main.g-main { max-width: none; min-height: 0; margin: 0; padding: 0 24px 40px; } /* 蓋過 desk.css 給一般頁面的 528px（資訊頁也是這樣蓋） */
+  .g-screen { max-width: 1040px; padding-top: 12px; }
   .g-feature { display: grid; grid-template-columns: 460px 1fr; }
   .g-feature-text { justify-content: center; gap: 10px; padding: 40px; }
   .g-feature h2 { font-size: 34px; }
@@ -127,7 +133,8 @@ a { color: var(--primary); }
 
 /* 測試網站（worker/src/test-site.js 加 data-site="test"）：頁首換測試紫、標題旁「測試版」，跟溜狗表一樣 */
 html[data-site="test"] { --shell: #5A2A5E; } /* 分享截圖的頁首也跟著換 */
-html[data-site="test"] .g-head h1::after { content: "測試版"; display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 3px; background: #F2B21B; color: #2A1230; font-size: 13px; font-weight: 800; line-height: 1.4; vertical-align: 2px; }
+/* 電腦版的「測試版」在五格頁首（app.css），這裡只給手機的綠色返回列 */
+@media (max-width: 1099.98px) { html[data-site="test"] .g-head h1::after { content: "測試版"; display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 3px; background: #F2B21B; color: #2A1230; font-size: 13px; font-weight: 800; line-height: 1.4; vertical-align: 2px; } }
 
 @media (prefers-reduced-motion: reduce) {
   .g-stage { transform: none !important; }

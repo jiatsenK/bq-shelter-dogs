@@ -17,7 +17,7 @@
 ## 例外與要注意的
 
 - 分享截圖（1080×1440）沒改。
-- 小遊戲頁仍是獨立頁首加返回，沒有套電腦版五格頁首（DESIGN_GUIDE 電腦版「每一頁同一個頁首」）；要套的話另外討論。
+- 電腦版五格頁首：K 開 PR 後決定「改用五格頁首」，見下方「後續修改」。
 - 封面多讀一張原圖（隨機那隻狗）。
 
 ## 審查與測試
@@ -25,8 +25,16 @@
 - code-review 兩軸（基準 4297ce25）：
   - Standards：開始鈕滑過寫死的新綠色拿掉；`dress()` 的 callback 改成選填物件，三個元素用 `photoEls()` 取；10 格「正在答」改成明確傳題號；剩 3 秒改用 `LIMIT_MS` 算；`tests/games.cjs` 補選單、遊戲中、結算的點擊目標（44px、隔 8px），電腦版改 1440 寬並查頁首 64px、返回鍵與內容同一條左邊線。
   - Spec：DESIGN_GUIDE 補紅綠只限遊戲頁的例外、答對答錯用 `--green-text`、按鈕用 `--primary`；答錯照片一排幾張、電腦版「開始玩」不撐滿照實作改寫規格。
-  - 沒改：小遊戲頁不套電腦版五格頁首（DESIGN_GUIDE 電腦版「每一頁同一個頁首」），等 K 決定；`::selection`、底部安全區這些小調整保留。
+  - 沒改：`::selection`、底部安全區這些小調整保留。電腦版頁首交給 K 決定（見後續修改）。
 - games、es-modules、test-site 套件通過，最後跑 `-Full`。
+
+## 後續修改：電腦版改用五格頁首（K 2026-10-30）
+
+- `public/games.html`：加跟 `index.html` 電腦版資訊頁一樣的頁首（站名、日期與資料時間、更新鈕、五格分頁停在「資訊」、空的搜尋位置、圖鑑），圖示 symbol 從 index.html 複製需要的 6 個；`app.css`、`desk.css` 用 `media="(min-width: 1100px)"` 載入，手機不載；head 裡一段小程式依寬度切 `desk-on analysis-open head-shared`，跟資訊頁同一組 class。
+- `public/css/games.css`：手機藏五格頁首；電腦版綠色返回列變內容裡的標題列，`html.desk-on main.g-main` 蓋掉 desk.css 給一般頁面的 528px，內容從 24px 左邊線開始。測試網站的「測試版」標籤電腦版由 app.css 的 `.brand h1` 負責，games.css 只留手機的。
+- `public/js/games.js`：頁首日期、資料時間（`/api/dogs` 的 `syncedAt`）、更新鈕重新整理。
+- `tests/games.cjs`：手機不顯示五格頁首；1440 寬五格分頁文字、「資訊」是目前頁、頁首 64px 深綠、資料時間格式、內容在 24px。
+- 沒做：資訊頁左邊的子頁清單（在所統計、離所紀錄…）沒搬，那些子頁受志工功能設定控制，要搬得一起讀設定。
 
 ## 相關 PR
 

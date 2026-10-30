@@ -107,6 +107,7 @@ module.exports = async (browser, base) => {
     assert.equal(await page.locator('.g-credit a[href*="creativecommons.org/licenses/by-nc/4.0"]').count(), 1, '模型授權標註');
     assert.equal(await visible(page, 'gPlay'), false, '藏起來的畫面真的不顯示');
     assert.equal(await visible(page, 'gEnd'), false);
+    assert.equal(await page.locator('.g-desk-head').isVisible(), false, '手機不顯示電腦版五格頁首');
 
     await page.locator('#gDressUp').click();
     assert.equal(new URL(page.url()).hash, '#dressup');
@@ -213,13 +214,20 @@ module.exports = async (browser, base) => {
     const { context, page } = await open({ colorScheme: 'dark', width: 1440 });
     await page.goto(base + '/public/games.html');
     await page.locator('#gDressUp:not([disabled])').waitFor();
-    const look = await page.evaluate(() => ({ bg: getComputedStyle(document.body).backgroundColor, ink: getComputedStyle(document.body).color, main: document.querySelector('.g-main').getBoundingClientRect().width }));
+    const look = await page.evaluate(() => ({ bg: getComputedStyle(document.body).backgroundColor, ink: getComputedStyle(document.body).color, game: document.getElementById('gHub').getBoundingClientRect().width }));
     assert.equal(look.bg, 'rgb(227, 233, 229)');
     assert.equal(look.ink, 'rgb(22, 33, 29)');
-    assert(look.main > 480 && look.main <= 1040, `遊戲寬度：${look.main}`);
-    const line = await page.evaluate(() => ({ head: document.querySelector('.g-head').getBoundingClientRect().height,
+    assert(look.game > 480 && look.game <= 1040, `遊戲寬度：${look.game}`);
+    // 電腦版頁首跟志工網站一樣：五格分頁停在「資訊」、64px、頁首深綠
+    assert.equal(await page.locator('.g-head-in').isVisible(), true);
+    assert.deepEqual(await page.locator('.g-desk-head .tabs a .t').allTextContents(), ['溜狗表', '常溜狗群', '我溜過', '找狗', '資訊']);
+    assert.equal(await page.locator('.g-desk-head .tabs [aria-current="page"]').getAttribute('href'), 'index.html#info');
+    assert.match(await page.locator('#updatedLabel').innerText(), /^資料更新 \d+\/\d+ \d\d:\d\d$/);
+    const line = await page.evaluate(() => ({ head: document.querySelector('.g-desk-head').getBoundingClientRect().height, shell: getComputedStyle(document.querySelector('.g-desk-head')).backgroundColor,
       back: document.getElementById('gBack').getBoundingClientRect().left + 10, content: document.querySelector('.g-feature').getBoundingClientRect().left }));
     assert.equal(line.head, 64, '頁首 64px');
+    assert.equal(line.shell, 'rgb(31, 92, 77)');
+    assert.equal(line.content, 24, '內容跟其他頁從同一條左邊線（24px）開始');
     assert(Math.abs(line.back - line.content) <= 1, `返回鍵與內容同一條左邊線：${line.back}、${line.content}`);
     await page.locator('#gDressUp').click();
     await page.waitForFunction(() => document.querySelectorAll('#gDeco svg').length > 0);
