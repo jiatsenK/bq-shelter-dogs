@@ -630,9 +630,9 @@ function infoHomeHtml() {
   return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).filter(([id]) => canShow(id)).map(([id, title]) => routeControl(deskOn(), pageHash('info', id), `data-info-page="${id}"`, `<strong>${title}</strong><span>${esc(summary[id])}</span>`)).join('')}${gamesLink(true)}${shareSiteHtml()}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
 }
 
-// #795 小遊戲：不是資訊子頁，是另一頁（games.html），手機和電腦版都是一般連結
+// #795 小遊戲：不是資訊子頁，是另一頁（games.html）。跟其他入口一樣，電腦版是真連結、手機是按鈕（ADR 0024）
 function gamesLink(withSummary) {
-  return `<a href="games.html" data-games>${withSummary ? '<strong>小遊戲</strong><span>認認看變裝後的狗是誰，更多遊戲準備中</span>' : '小遊戲'}</a>`;
+  return routeControl(deskOn(), 'games.html', 'data-games', withSummary ? '<strong>小遊戲</strong><span>認認看變裝後的狗是誰，更多遊戲準備中</span>' : '小遊戲');
 }
 
 // ADR 0023 分享網站：只在手機版（電腦版由 CSS 藏起來）；分享和複製都不行時把網址放進可選取的欄位

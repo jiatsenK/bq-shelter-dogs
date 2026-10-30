@@ -7,7 +7,7 @@
 
 - 新頁 `public/games.html`＋`css/games.css`＋`js/games-entry.js`、`js/games.js`、`js/dress-up.js`：小遊戲選單（狗狗變裝秀、更多遊戲・準備中、模型來源與授權）、遊戲中、結算在同一頁切換。網址 `games.html` 是選單、`#dressup` 是遊戲；返回鍵與左上角返回走 overlays.js（遊戲中、結算回選單，選單回資訊頁）。分享截圖也註冊成覆蓋層，返回鍵先關它。
 - `overlays.js`：`BACK_ORDER` 多 `gameShot`；新增 `leaveTo`，從資訊頁點進來的就走上一頁，直接打開的照網址換頁。
-- 資訊頁入口：手機分類清單在「分享網站連結」前多「小遊戲」，電腦版左邊清單在「使用說明」前多「小遊戲」，兩邊都是一般連結 `games.html`（不是資訊子頁）。
+- 資訊頁入口：手機分類清單在「分享網站連結」前多「小遊戲」（按鈕，跟其他列一樣，ADR 0024 手機不用連結），電腦版左邊清單在「使用說明」前多「小遊戲」（連結 `games.html`）。不是資訊子頁。
 - `scripts/dog-faces.py`：讀正式站 `/api/dogs` 與照片原圖，模型執行時下載到 `.scratch/dog-faces/model/`，照票上的門檻篩選，輸出 `public/data/dog-faces.json`（一隻狗一行），印出可以出題與不收的數量、原因，並畫對照表 `.scratch/dog-faces/sheet-*.png`。`/api` 只收同網站要求，腳本帶 `Origin`。正式網址不寫進 repo（#493），用 `--site` 傳。
 - `public/data/dog-faces.json`：10/30 用正式站實跑，117 隻有編號、有照片，97 隻可以出題；不收的：側臉 12、模型結果不穩 6、照片太小 2。跟原型結果一樣。
 - 測試：`tests/games.cjs`（加進 `run-browser-tests.cjs`），`scripts/dog-faces.test.mjs` 檢查臉部位置檔格式。
