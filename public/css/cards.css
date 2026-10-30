@@ -33,7 +33,7 @@ html.bq-modal-open { overflow: hidden; }
 .bq-patch svg { width: clamp(30px, 2.6vw, 40px); height: clamp(30px, 2.6vw, 40px); color: var(--navy); }
 .bq-patch span { font: 900 clamp(13px, 1.1vw, 16px)/1.15 var(--cjk); letter-spacing: .12em; }
 .bq-mast h1 { margin: 0; font: 900 clamp(40px, 4.4vw, 68px)/1 var(--cjk); letter-spacing: .04em; color: var(--gold); }
-/* 標題「板橋動物之家 圖鑑」用 Noto Sans TC 900（K 2026-10-30）；「圖鑑」粉筆白 */
+/* 標題「狗狗 圖鑑」用 Noto Sans TC 900（K 2026-10-30：不直接寫收容所正式名稱）；「圖鑑」粉筆白 */
 .bq-year { color: var(--chalk); }
 .bq-mast-r { display: flex; align-items: flex-end; gap: 36px; }
 .bq-app-link { color: var(--sky); font-size: 14px; font-weight: 700; letter-spacing: .1em; text-decoration: none; display: inline-flex; align-items: center; gap: 6px; min-height: 44px; border-bottom: 1px solid rgba(198, 210, 232, .4); }
