@@ -347,11 +347,11 @@ export async function syncDogList(db, rows, mainKeys, env, now = Date.now()) {
 }
 export const applyDogListRows = async (db, rows, env, now) => (await syncDogList(db, rows, null, env, now)).results;
 
-// 主清單複本和暫住紀錄（#772）一次往返讀；暫住紀錄的 number 是 ''，單位 key 跟主清單沒編號的列一樣是 main:名:犬名
+// 主清單複本和暫住紀錄（#772）兩句一起送（不用 batch：寫入的 batch 才是 version guard 那一批）；暫住紀錄的 number 是 ''，單位 key 跟主清單沒編號的列一樣是 main:名:犬名
 async function readSheetRows(db) {
-  const [main, stays] = await db.batch([
-    db.prepare('SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,m.walker_codes,m.missing_at,s.revision FROM v3_sheet_main m JOIN v3_dog_edit_state s USING(dog_id) ORDER BY m.row_index'),
-    db.prepare("SELECT name,'' AS number,dog_id,cage,note,missing_at FROM v3_sheet_stays"),
+  const [main, stays] = await Promise.all([
+    db.prepare('SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,m.walker_codes,m.missing_at,s.revision FROM v3_sheet_main m JOIN v3_dog_edit_state s USING(dog_id) ORDER BY m.row_index').all(),
+    db.prepare("SELECT name,'' AS number,dog_id,cage,note,missing_at FROM v3_sheet_stays").all(),
   ]);
   return { list: main.results, stays: stays.results };
 }
