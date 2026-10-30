@@ -134,7 +134,7 @@ module.exports = async (browser, base) => {
 
     // 分享只有一個「分享結果」：截圖和網址一起分享
     const gameUrl = `${base}/public/games.html#dressup`;
-    assert.deepEqual(await page.locator('#gEnd button, #gEnd a').allTextContents(), ['再玩一次', '分享結果']);
+    assert.deepEqual(await page.locator('#gEnd button, #gEnd a:not(#gMissed a)').allTextContents(), ['再玩一次', '分享結果']);
     // 手機能分享檔案：直接叫出分享，帶截圖和含網址的文字，不開截圖視窗
     await page.evaluate(() => {
       window.__shared = [];
