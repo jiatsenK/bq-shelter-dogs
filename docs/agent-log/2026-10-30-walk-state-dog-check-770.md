@@ -16,8 +16,10 @@
 
 ## 審查與測試
 
-- Standards／Spec 兩軸審查（固定基準 main）沒有要補修的。留給之後判斷：主清單核對沒放進 `writeVersion` 的交易條件，讀到寫之間剛好有狗清單同步改主清單時理論上仍會通過，跟 `observe.js` 同樣的設計。
-- 本機完整測試：node 627 項只有 `scripts/diagram-reminder.test.mjs` 失敗（新 worktree 的 `docs/ARCHITECTURE.md` 是 CRLF，#746 紀錄寫過的已知狀況，跟這次無關），網頁測試 255 項全過。
+- 第一輪審查（開 PR 前）沒有要補修的。
+- 第二輪 code-review 技能兩軸審查（固定基準 main，開 PR 後 K 改成自動等 CI 與合併）：Spec 指出測試只比狀態碼，已補成也比對錯誤訊息，確認是主清單核對擋下來的。
+- 沒改、留給之後判斷：主清單核對跟 `observe.js`、`read.js` 的 `uniqueMainDog` 寫法重複，之後要改核對規則時可以抽成共用；沒有溜狗狀態時 `seedState` 會再讀一次主清單；核對沒放進 `writeVersion` 的交易條件，讀到寫之間剛好有狗清單同步改主清單時理論上仍會通過；狗 ID 對不上時錯誤訊息仍是「找不到唯一的主清單狗」。這幾點都跟 `observe.js` 同樣的設計。
+- 本機完整測試：新 worktree 的 `docs/ARCHITECTURE.md` 是 CRLF，`scripts/diagram-reminder.test.mjs` 會失敗（#746 紀錄寫過）；改成 LF 後完整測試全過。
 
 ## 相關 PR
 

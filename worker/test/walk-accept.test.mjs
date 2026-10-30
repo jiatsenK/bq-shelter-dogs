@@ -163,6 +163,8 @@ test('#770 溜狗狀態的狗 ID 跟主清單這隻不同時，網站登記回�
       request('warm-undo-0004', '甲', { action: 'undo', dogs: [{ ...warm, expectedVersion: version }] })]) {
       const out = await post(env, body, ctx, gas.worker);
       assert.equal(out.status, 409, `${residual} ${body.action}`);
+      // 是主清單核對擋下來的，不是版本對不上（changedWalk）之類的其他衝突
+      assert.equal(out.body.error, '找不到唯一的主清單狗', `${residual} ${body.action}`);
     }
     await Promise.all(tasks);
     assert.deepEqual(await snapshot(), before, residual);
