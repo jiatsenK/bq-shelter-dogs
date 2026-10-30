@@ -207,6 +207,8 @@ function bqPhoto(p, src) {
   if (p.hasPhoto === false) return miss;
   return `<img src="${bqEsc(src)}" alt="" decoding="async" loading="lazy" onerror="this.outerHTML=this.dataset.miss" data-miss="${bqEsc(miss)}">`;
 }
+// 卡號、徽章的年份跟著今天走（K 2026-10-30：明年自動換）
+function bqYY() { return String(BQ.today.getFullYear()).slice(2); }
 function bqDate(d) { return d ? `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}` : '—'; }
 
 // 一張卡：正面照片、背號、區名、名字、籠位；背面資料。
@@ -227,7 +229,7 @@ function bqCardHtml(p, opts = {}) {
       </span>
       <span class="bq-back" aria-hidden="true">
         <span class="bq-back-top"><b>${bqEsc(p.name)}</b><span>#${bqEsc(p.number)}</span></span>
-        <span class="bq-set">BQ26・${bqEsc(p.number.padStart(3, '0'))}/${BQ.players.length || '—'}・${bqEsc(p.team.name)}</span>
+        <span class="bq-set">BQ${bqYY()}・${bqEsc(p.number.padStart(3, '0'))}/${BQ.players.length || '—'}・${bqEsc(p.team.name)}</span>
         <span class="bq-stats">
           <span><em>入所</em><b>${bqDate(p.intake)}</b></span>
           <span><em>在所</em><b>${bqEsc(p.stay)}</b></span>
@@ -521,7 +523,7 @@ function bqRenderAwards() {
       <button type="button" class="bq-trophy-ph" data-open="${bqEsc(a.who.id)}" aria-label="看 ${bqEsc(a.who.name)} 的卡">${bqPhoto(a.who, a.who.photo)}</button>
       <span class="bq-ribbon">${bqEsc(a.title)}</span>
       <div class="bq-trophy-tx"><div><h3>${bqEsc(a.who.name)}</h3><p>${bqEsc(a.note)}・${bqEsc(a.who.cage)}</p></div><p class="bq-trophy-n"><b>${a.value}</b>${a.unit}</p></div>
-      <p class="bq-trophy-set">BQ26 年度獎項 ${i + 1}/3・#${bqEsc(a.who.number)} ${bqEsc(a.who.team.name)}</p>
+      <p class="bq-trophy-set">BQ${bqYY()} 年度獎項 ${i + 1}/3・#${bqEsc(a.who.number)} ${bqEsc(a.who.team.name)}</p>
     </div>
   </article>`).join('');
 }
@@ -668,6 +670,7 @@ async function bqInit() {
       if (result.status === 'changed') BQ.codes = bqLoadCodes(BQ.storage);
     }
   } catch (e) { /* 離線或伺服器出錯：保留原來的名字對照 */ }
+  document.querySelectorAll('[data-bq=year]').forEach(el => { el.textContent = BQ.today.getFullYear(); });
   bqBind();
   bqRenderAlumni();
   bqLoadAlumni(); // 已出所跟開卡無關，自己讀，在所資料讀不到也照樣顯示
@@ -706,5 +709,5 @@ async function bqInit() {
   await bqSyncOpened();
 }
 
-export { BQ_CODES_KEY, BQ_OPENED_KEY, BQ_CODE_PATTERN, BQ_PACK_SIZE, BQ_TEAMS, BQ_FREE, BQ_TIERS, bqTeamOf, bqTier, bqStay, bqQuote, bqMonthOut, bqPlayers, bqAwards, BQ_DEPART_REASONS, bqAlumni, bqLoadCodes, bqMineFrom, bqFetchMine, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, bqEsc, BQ_DOG, BQ_PAW, bqPhoto, bqDate, bqCardHtml, bqAlumniCardHtml, BQ, bqRemoteOpened, bqSyncOpened, bqOpenedSet, bqGotCount, bqRenderProgress, bqFan, bqShowHand, bqRenderCta, bqRenderAgain, bqRenderAll, bqLater, bqClearTimers, bqFocusFirstCard, bqSkip, bqDeal, bqRefreshOpened, bqOpenField, bqCloseField, bqOpenPack, bqOpenAll, bqTilt, bqUntilt, bqRenderAwards, bqRenderBinder, bqRenderAlumni, bqLoadAlumni, bqOpen, bqShowModal, bqOpenAlumni, bqClose, bqBind, bqInit };
+export { BQ_CODES_KEY, BQ_OPENED_KEY, BQ_CODE_PATTERN, BQ_PACK_SIZE, BQ_TEAMS, BQ_FREE, BQ_TIERS, bqTeamOf, bqTier, bqStay, bqQuote, bqMonthOut, bqPlayers, bqAwards, BQ_DEPART_REASONS, bqAlumni, bqLoadCodes, bqMineFrom, bqFetchMine, bqLoadOpened, bqSaveOpened, bqOpenedIds, bqMarkOpened, bqPending, bqEsc, BQ_DOG, BQ_PAW, bqPhoto, bqYY, bqDate, bqCardHtml, bqAlumniCardHtml, BQ, bqRemoteOpened, bqSyncOpened, bqOpenedSet, bqGotCount, bqRenderProgress, bqFan, bqShowHand, bqRenderCta, bqRenderAgain, bqRenderAll, bqLater, bqClearTimers, bqFocusFirstCard, bqSkip, bqDeal, bqRefreshOpened, bqOpenField, bqCloseField, bqOpenPack, bqOpenAll, bqTilt, bqUntilt, bqRenderAwards, bqRenderBinder, bqRenderAlumni, bqLoadAlumni, bqOpen, bqShowModal, bqOpenAlumni, bqClose, bqBind, bqInit };
 export { cardsState } from './page-state.js';

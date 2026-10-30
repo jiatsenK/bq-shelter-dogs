@@ -64,6 +64,9 @@ async function runCardsTests() {
   await check('圖鑑年度獎項：出門王、最資深、最新入所都是資料算的', () => {
     eq(C.bqAwards(players, TODAY).map(a => [a.title, a.who.name, a.value]), [['出門王', '中堅', 2], ['最資深', '老將', 9], ['最新入所', '新人', 38]]);
   });
+  await check('圖鑑年份跟著今天：卡號 BQ 後面是今年的末兩碼', () => {
+    eq(C.bqYY(), String(C.BQ.today.getFullYear()).slice(2));
+  });
   const ME = 'aaaaaaaaaaaa', ME2 = 'bbbbbbbbbbbb', OTHER = 'cccccccccccc';
   await check('圖鑑：我溜過的狗讀 Worker 的彙總（#344），不再另加手機記的試算表寫入', () => {
     const mine = C.bqMineFrom({ '2022061001': { times: 2, first: '2026-10-01', last: '2026-10-03' }, '2017041502': { times: 1, first: '2026-10-09', last: '2026-10-09' }, bad: { times: 1, first: 'x', last: 'y' } });
