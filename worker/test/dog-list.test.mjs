@@ -118,7 +118,7 @@ test('#501 常遛狗群一欄、異動紀錄整段：只換送來的那欄', asy
   } finally { env.DB.close(); }
 });
 
-test('#501 保險掃描：指紋一樣不要資料；不一樣只要那幾列；D1 有、試算表沒有的只列出來', async () => {
+test('#501 保險掃描：指紋一樣不要資料；不一樣只要那幾列；D1 有、試算表沒有的只回給 GAS', async () => {
   const env = await setup();
   worker.testing.resetState();
   const scan = async fingerprints => (await (await post(env, 'dog-list-scan', { fingerprints })).json());
@@ -129,14 +129,12 @@ test('#501 保險掃描：指紋一樣不要資料；不一樣只要那幾列；
     const before = await writes(env);
     const same = await scan({ 'main:9001':'h1', 'groups:0':'g' });
     assert.deepEqual(same.want, []);
-    assert.equal(await writes(env), before + 1, '指紋一樣不寫資料，只更新掃描時間 1 列（#567）');
-    assert.ok(JSON.parse((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_extra'").first()).value).checkedAt);
+    assert.equal(await writes(env), before, '指紋一樣什麼都不寫（#774 起不再記 dog_list_extra）');
     await send(env, [main({ dog:{ id:'9002', name:'走了' }, hash:'x' })]);
     const diff = await scan({ 'main:9001':'h9', 'groups:0':'g' });
     assert.deepEqual(diff.want, ['main:9001']);
     assert.deepEqual(diff.extra, ['main:9002']);
     assert.equal((await mainRows(env)).length, 2, '不自動刪');
-    assert.match((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_extra'").first()).value, /9002/);
   } finally { env.DB.close(); }
 });
 

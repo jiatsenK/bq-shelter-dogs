@@ -14,6 +14,7 @@ import { dogRevisionIs, editError } from './dog-edit.js';
 import { batchIf, isConflict } from './conditional-batch.js';
 import { editLogWrites } from './editlog.js';
 import { joinStays, withoutStays } from './stays.js';
+import { mergedPairWrites } from './dog-pairs.js';
 
 export const SCAN_OK = {
   v3_photos: '只有主照片的部分索引；一隻狗只有幾張新照片',
@@ -189,7 +190,9 @@ async function writeMerge(db, { target, source, rows, moved, notMoved, replaced 
   writes.push(db.prepare('DELETE FROM v3_dog_edit_state WHERE dog_id=?').bind(sourceId),
     db.prepare('DELETE FROM v3_dogs WHERE dog_id=?').bind(sourceId),
     // 溜狗紀錄不帶版本觸發器：明確加一次，留下那隻開著的草稿才會被擋
-    db.prepare('UPDATE v3_dog_edit_state SET revision=revision+1 WHERE dog_id=?').bind(targetId));
+    db.prepare('UPDATE v3_dog_edit_state SET revision=revision+1 WHERE dog_id=?').bind(targetId),
+    // 資料頁「可能是同一隻」的這一組（#774）記成已合併；取消合併不改回來，同一組不再出現
+    ...mergedPairWrites(db, targetId, sourceId, new Date().toISOString()));
   const sourceDog = { dog_id: source.dog_id, name: source.name, sex: source.sex, fixed_care: source.fixed_care };
   const logAt = writes.length;
   writes.push(...logStatements(db, kind, targetId, target.shown,

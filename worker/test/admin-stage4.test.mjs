@@ -2,11 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { memoryD1 } from '../../scripts/memory-d1.mjs';
 import worker from '../src/admin/index.js';
-import { scanDogList } from '../src/dog-list.js';
-import { readSheetGaps } from '../src/admin/checks.js';
 import { searchEdits } from '../src/admin/edits.js';
 
-// #567 管理網站第 4 階段：活動紀錄、資料檢查（#518）、資料編輯紀錄搜尋。隔離記憶體 D1，不碰正式資料。
+// #567 管理網站第 4 階段：活動紀錄、資料編輯紀錄搜尋。隔離記憶體 D1，不碰正式資料。
 const origin = 'https://manage.example.org';
 const issuer = 'https://shelter.cloudflareaccess.com';
 const keys = await crypto.subtle.generateKey({ name: 'RSASSA-PKCS1-v1_5', modulusLength: 2048, publicExponent: new Uint8Array([1, 0, 1]), hash: 'SHA-256' }, true, ['sign', 'verify']);
@@ -37,7 +35,7 @@ async function setup(t) {
 
 test('#567 新管理路徑：未登入一律 401，不讀 D1', async () => {
   const forbidden = () => { throw Error('unauthorized resource read'); };
-  for (const path of ['/api/manage/activities', '/api/manage/activities/' + 'c'.repeat(32), '/api/manage/data-checks', '/api/manage/cron-status', '/api/manage/edits', '/api/manage/share-counts', '/activities.html', '/checks.html', '/updates.html']) {
+  for (const path of ['/api/manage/activities', '/api/manage/activities/' + 'c'.repeat(32), '/api/manage/cron-status', '/api/manage/edits', '/api/manage/share-counts', '/activities.html', '/checks.html', '/updates.html']) {
     const res = await worker.fetch(request(path), { ...env, DB: { prepare: forbidden }, ASSETS: { fetch: forbidden } });
     assert.equal(res.status, 401, path);
   }
@@ -102,57 +100,6 @@ test('#567 活動：管理者新增／修改／刪除共用驗證與 revision，
   const text = await publicEdits.text();
   assert.match(text, /管理者/);
   assert.doesNotMatch(text, /manager@example|manager-id/);
-});
-
-test('#518 網站有、試算表沒有：每次掃描記掃描時間，清單沒變不改記錄時間', async t => {
-  const { DB } = await setup(t);
-  const t0 = Date.parse('2026-10-25T01:43:00Z');
-  await DB.prepare("INSERT INTO v3_sync_state(key,value) VALUES('dog_list_fp',?)").bind(JSON.stringify({ 'main:2026010101': 'h1', 'main:2026010202': 'h2' })).run();
-  await DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage,note) VALUES(1,?,'2026010202','小黑','B3','')").bind('b'.repeat(32)).run();
-  assert.deepEqual((await scanDogList(DB, { 'main:2026010101': 'h1' }, t0)).extra, ['main:2026010202']);
-  const first = JSON.parse((await DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_extra'").first()).value);
-  assert.deepEqual(first, { at: '2026-10-25T01:43:00.000Z', checkedAt: '2026-10-25T01:43:00.000Z', keys: ['main:2026010202'] });
-  // 隔不到 10 分鐘：小黑還是候選、沒確認（#771），清單沒變
-  await scanDogList(DB, { 'main:2026010101': 'h1' }, t0 + 5 * 60000);
-  const second = JSON.parse((await DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_extra'").first()).value);
-  assert.equal(second.at, first.at, '清單沒變，記錄時間不動');
-  assert.equal(second.checkedAt, '2026-10-25T01:48:00.000Z');
-});
-
-test('#518 資料檢查 API：清單對上狗、標示過期／未記錄／讀取失敗，只讀不寫', async t => {
-  const { DB, bindings, jwt } = await setup(t);
-  const at = '2026-10-25T01:43:00.000Z';
-  await DB.prepare("INSERT INTO v3_dog_departures(dog_id,number,name,departed_date) VALUES(?,'2026010202','小黑','2026-10-01')").bind('b'.repeat(32)).run();
-  await DB.prepare("INSERT INTO v3_sync_state(key,value) VALUES('dog_list_extra',?)").bind(JSON.stringify({ at, checkedAt: at, keys: ['departed:2026010202', 'groups:C', 'main:2026010101', 'main:名:無編號'] })).run();
-  const writes = [];
-  const measured = { prepare(sql) { if (!/^\s*(SELECT|WITH)/i.test(sql)) writes.push(sql); return DB.prepare(sql); }, batch: s => DB.batch(s) };
-  const gaps = await readSheetGaps(measured, Date.parse(at) + 3600000);
-  assert.equal(writes.length, 0, '資料檢查只讀，不自動刪狗、記離所或合併');
-  assert.equal(gaps.state, 'ok');
-  assert.equal(gaps.stale, false);
-  assert.equal(gaps.recordedAt, at);
-  assert.equal(gaps.checkedAt, at);
-  assert.deepEqual(gaps.items.map(i => [i.sheet, i.number, i.name, i.dogId]), [
-    ['departed', '2026010202', '小黑', 'b'.repeat(32)],
-    ['groups', '', 'C', null],
-    ['main', '2026010101', '阿福', 'a'.repeat(32)],
-    ['main', '', '無編號', null],
-  ]);
-  assert.equal((await readSheetGaps(DB, Date.parse(at) + 25 * 3600000)).stale, true, '超過一天沒掃描算過期');
-
-  await DB.prepare("UPDATE v3_sync_state SET value=? WHERE key='dog_list_extra'").bind(JSON.stringify({ at, keys: [] })).run();
-  const legacy = await readSheetGaps(DB, Date.parse(at));
-  assert.equal(legacy.checkedAt, null, '舊格式沒有掃描時間，不冒充');
-  assert.equal(legacy.stale, true);
-  await DB.prepare("UPDATE v3_sync_state SET value='{broken' WHERE key='dog_list_extra'").run();
-  assert.equal((await readSheetGaps(DB)).state, 'error');
-  await DB.prepare("DELETE FROM v3_sync_state WHERE key='dog_list_extra'").run();
-  assert.equal((await readSheetGaps(DB)).state, 'never');
-
-  const res = await worker.fetch(request('/api/manage/data-checks', jwt), bindings);
-  assert.equal(res.status, 200);
-  assert.equal((await res.json()).sheetGaps.state, 'never');
-  assert.equal((await worker.fetch(request('/api/manage/data-checks', jwt), { ...bindings, DB: { prepare() { throw Error('secret detail'); } } })).status, 503);
 });
 
 test('#567 資料編輯紀錄：搜尋涵蓋全部、白名單篩選、台灣日期、游標分頁，資料多 10 倍讀取量不變', async t => {

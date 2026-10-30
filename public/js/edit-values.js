@@ -25,6 +25,8 @@ export function editsValue(kind, v) {
     return `${dog(v.name, v.numbers)}：${counts(v.counts)}`;
   }
   if (kind === 'stay-start' || kind === 'stay-end') return `暫住 ${v.cage}`;
+  // #774 不是同一隻：改前＝待核對那隻，改後＝表上那隻
+  if (kind === 'not_same') return v.cage ? `跟 ${v.name || '未命名'}（${v.cage}）不是同一隻` : (v.name || '未命名');
   if (kind === 'rest') return `休養到 ${v.until}${v.reason ? `（${v.reason}）` : ''}`;
   if (kind === 'group') return `${v.label || '（沒有群名）'}：${(v.names || []).join('、') || '（沒有狗）'}`;
   if (kind === 'activity') return `${v.date} ${{ kids: '動保小小兵', adoption: '認養會' }[v.kind] || v.kind}：${(v.dogs || []).join('、') || '（沒有狗）'}`;
