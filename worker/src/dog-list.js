@@ -103,6 +103,16 @@ function sameCageCandidate(list, cage, { present, departing }) {
   return found.length === 1 ? found[0] : null;
 }
 
+// 搬籠清舊列常先清編號、再清名字：中間那幾秒是同名、同備註、沒編號的列（2026-10-30 皮蛋舊A13，ADR 0025）。
+// 同名同備註、有編號的那隻還在表上（present 有），這列就是牠搬走留下的，不另建一隻沒照片的狗。
+// 有編號那列不在表上是清掉編號再打回（#773），照常建狗、同籠自動合併；備註空白不判斷，同名新狗照樣建
+function leftBehind(dog, note, list, present) {
+  if (dog.id || !note || !present) return false;
+  return list.some(m => m.number && m.name === dog.name && m.note === note && present.has(rowKey(m)));
+}
+// applyMain 不收的列：照樣 ack，但不記指紋，保險掃描下次再送來重新判斷（有編號那隻離開表上或備註改了，就照一般規則建狗）
+const HELD = 'held';
+
 // merge：這次請求的自動合併狀態 { present, departing, done, waiting }（見 syncDogList）
 async function applyMain(db, row, list, stays, env, fp, now, merge) {
   const dog = cleanDog(row.dog), cage = text(row.cage), note = text(row.note).replace(/\r\n?/g, '\n');
@@ -115,9 +125,7 @@ async function applyMain(db, row, list, stays, env, fp, now, merge) {
   const target = stay ? null : stayTarget(dog, list);
   if (stay && legacy) { await db.batch(dropMainRow(db, legacy.row_index)); list.splice(list.indexOf(legacy), 1); }
   if (stay || (target && !legacy)) return await applyStay(db, { name: dog.name, cage, note }, stays, target) || !!(stay && legacy);
-  // 搬籠清舊列常先清編號、再清名字：中間那幾秒是同名、同備註、沒編號的列。主清單上已經有一隻有編號、
-  // 犬名和備註都一樣的狗，這列就是牠搬走留下的，不另建一隻沒照片的狗（2026-10-30 皮蛋舊A13）。備註空白不算，同名新狗照樣建
-  if (!dog.id && !legacy && note && list.some(m => m.number && m.name === dog.name && m.note === note)) return false;
+  if (!legacy && leftBehind(dog, note, list, merge?.present)) return HELD;
   const date = YMD.test(text(row.date)) ? text(row.date) : null;
   const { codes, keyed } = await walkersOf(row.walker, env, db);
   let old = findMain(list, dog);
@@ -389,8 +397,9 @@ export async function syncDogList(db, rows, mainKeys, env, now = Date.now()) {
         : row.sheet === 'groups' ? await applyGroup(db, row, nextList)
         : await applyNotes(db, row);
       list=nextList;stays=nextStays;fp=nextFp;
-      if (typeof row.hash === 'string' && row.hash) fp[key] = row.hash;
-      results.push({ ok: true, ack: true, key, changed });
+      const held = changed === HELD;
+      if (typeof row.hash === 'string' && row.hash && !held) fp[key] = row.hash;
+      results.push({ ok: true, ack: true, key, changed: !held && changed });
     } catch (error) {
       results.push({ ok: false, ack: !!error.status, key, error: error.status ? error.message : '狗清單更新失敗，保留待處理' });
     }

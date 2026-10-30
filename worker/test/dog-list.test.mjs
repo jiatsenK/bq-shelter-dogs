@@ -254,7 +254,7 @@ test('#501 新增狗先打名字、後補編號：補到同一隻，不多出一
   } finally { env.DB.close(); }
 });
 
-test('搬籠清舊列先清編號（2026-10-30 皮蛋）：同名同備註沒編號的列不另建狗，網站上那隻照片照舊；備註不同或空白照樣建', async () => {
+test('搬籠清舊列先清編號（2026-10-30 皮蛋）：同名同備註沒編號的列不另建狗、不記指紋，網站上那隻照片照舊', async () => {
   const env = await setup();
   worker.testing.resetState();
   try {
@@ -264,12 +264,31 @@ test('搬籠清舊列先清編號（2026-10-30 皮蛋）：同名同備註沒編
     await env.DB.prepare("INSERT INTO v3_photos(object_key,dog_id,thumb_key,is_primary) VALUES('photos/aaaa.jpg',?,'photos/thumbs/aaaa.jpg',1)").bind(dogId).run();
     const dogs = async () => (await env.DB.prepare('SELECT COUNT(*) n FROM v3_dogs').first()).n;
     const before = await dogs();
-    assert.deepEqual((await send(env, [{ ...main({ dog:{ id:'', name:'測試狗' }, cage:'舊A13', note, date:'' }), hash:'g1' }])).map(r => r.ack), [true]);
+    const left = (extra, mainKeys = ['main:9001', 'main:名:測試狗']) => post(env, 'dog-list', { rows:[{ ...main({ dog:{ id:'', name:'測試狗' }, cage:'舊A13', note, date:'', ...extra }), hash:'g1' }], mainKeys });
+    assert.deepEqual((await (await left()).json()).results.map(r => [r.ack, r.changed]), [[true, false]]);
     assert.equal(await dogs(), before, '不建新狗');
     assert.deepEqual((await readDogsPayload(env.DB)).dogs.filter(d => d.name === '測試狗').map(d => [d.cage, d.photoVersion]), [['新A08', 'aaaa']]);
-    await send(env, [{ ...main({ dog:{ id:'', name:'測試狗' }, cage:'舊A13', note:'另一隻', date:'' }), hash:'g2' }]);
-    assert.equal(await dogs(), before + 1, '備註不同是同名的另一隻');
+    const fp = JSON.parse((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_fp'").first()).value);
+    assert.equal(fp['main:名:測試狗'], undefined, '不記指紋，保險掃描下次再判斷');
+    await left({ note:'' });
+    assert.equal(await dogs(), before + 1, '備註空白不判斷，同名新狗照樣建');
   } finally { env.DB.close(); }
+});
+
+test('搬籠清舊列：備註不同，或有編號那列不在表上（清掉編號再打回，#773），照樣建狗', async () => {
+  const note = '2026/4/29洗澡（巧芸）';
+  // 表上有一列沒編號的「測試狗」：回傳主清單複本上沒編號那列的籠位，沒收就是 []
+  const unnumbered = async (extra, mainKeys) => {
+    const env = await setup();
+    worker.testing.resetState();
+    try {
+      await send(env, [main({ cage:'新A08', note })]);
+      await post(env, 'dog-list', { rows:[{ ...main({ dog:{ id:'', name:'測試狗' }, cage:'舊A13', note, date:'', ...extra }), hash:'g1' }], mainKeys });
+      return (await env.DB.prepare("SELECT cage FROM v3_sheet_main WHERE number='' AND name='測試狗'").all()).results.map(r => r.cage);
+    } finally { env.DB.close(); }
+  };
+  assert.deepEqual(await unnumbered({ note:'另一隻' }, ['main:9001', 'main:名:測試狗']), ['舊A13'], '備註不同是同名的另一隻');
+  assert.deepEqual(await unnumbered({ cage:'新A08' }, ['main:名:測試狗']), ['新A08'], '有編號那列不在表上：是清掉編號的牠，照一般規則處理');
 });
 
 test('#519 試算表「誰遛的」填了新名字：記進志工名單，/walkers 換得回名字（2026-10-24 實測「123」換不回來）', async () => {
