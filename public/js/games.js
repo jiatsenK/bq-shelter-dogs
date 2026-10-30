@@ -37,14 +37,43 @@ async function loadDogs() {
   ]);
   if (!res.ok) throw new Error(res.message || `HTTP ${res.status}`);
   S.dogs = playableDogs(res.data, faces);
+  deskHeadUpdated(res.data && res.data.syncedAt);
   // 長相算完才開放開始，第一題的選項就是長得像的狗；縮圖讀不到的那隻選項用隨機
   await Promise.all(S.dogs.map(d => loadImg(d.thumb).then(img => { S.sigs[d.id] = signature(img); }).catch(() => {})));
 }
+
+const LOW_MS = 3000; // 剩 3 秒計時條變紅
+
+// 電腦版五格頁首（games.html 的 .g-desk-head）：今天日期、資料時間，寫法跟志工網站頁首一樣（app.js 的 renderMain、renderUpdatedLabel）
+const pad2 = n => String(n).padStart(2, '0');
+function deskHeadDate() {
+  const d = new Date();
+  $('dateLabel').textContent = `${d.getMonth() + 1}月${d.getDate()}日 (${'日一二三四五六'[d.getDay()]})`;
+}
+function deskHeadUpdated(at) {
+  const t = at ? new Date(at) : null;
+  $('updatedLabel').textContent = t && !isNaN(t) ? `資料更新 ${t.getMonth() + 1}/${t.getDate()} ${pad2(t.getHours())}:${pad2(t.getMinutes())}` : '';
+}
+
+// 10 格：這局每一題答對、答錯；current 是正在答的那題（結算時不標）
+function drawSteps(el, current = -1) {
+  el.innerHTML = S.qs.map((q, i) => `<li class="${q.result || (i === current ? 'now' : '')}"></li>`).join('');
+}
+
+// 一組照片（方框、照片、裝飾層），id 前綴是 gStage／gPic／gDeco 或 gCoverStage／gCoverPic／gCoverDeco
+const photoEls = (cover = '') => ({ stage: $(`g${cover}Stage`), pic: $(`g${cover}Pic`), deco: $(`g${cover}Deco`) });
 
 function show(id) {
   for (const s of ['gHub', 'gPlay', 'gEnd']) $(s).hidden = s !== id;
   $('gTitle').textContent = id === 'gHub' ? '小遊戲' : '狗狗變裝秀';
   window.scrollTo(0, 0);
+}
+
+// 選單的「你的最高分」，還沒玩過不顯示
+function showBest() {
+  const best = readBest();
+  $('gHubBest').hidden = !best;
+  $('gHubBestScore').textContent = best;
 }
 
 // 停掉倒數和下一題，之後不會再跳題
@@ -65,7 +94,7 @@ function start() {
   if (!S.dogs.length) return;
   stop();
   S.i = 0; S.score = 0; S.right = 0; S.missed = [];
-  S.qs = shuffle(S.dogs).slice(0, Q_COUNT).map(dog => ({ dog, opts: null, decos: [] }));
+  S.qs = shuffle(S.dogs).slice(0, Q_COUNT).map(dog => ({ dog, opts: null, decos: [], result: '' }));
   $('gScore').textContent = '0';
   $('gCount').textContent = S.qs.length;
   show('gPlay');
@@ -79,37 +108,50 @@ function decoSvg(key, attrs) {
 }
 const decoOnPhoto = p => decoSvg(p.key, `aria-hidden="true" data-deco="${p.key}" style="left:${p.left}%;top:${p.top}%;width:${p.width}%;height:${p.height}%;transform-origin:${p.ox * 100}% ${p.oy * 100}%;transform:rotate(${p.deg}deg)"`);
 
+// 照片拉近狗臉、戴上裝飾；遊戲中和選單封面共用。live() 是 false 時（已經換題、回選單）照片晚到也不動畫面
+function dress({ stage, pic, deco }, dog, { live = () => true, done = () => {}, fail = () => {} } = {}) {
+  deco.innerHTML = '';
+  stage.style.transform = ''; stage.style.transformOrigin = '';
+  // 照片讀完、戴好裝飾才顯示：換 src 後瀏覽器會繼續顯示上一張（或讀到一半的新照片），不藏就會露出沒變裝的狗（#798）
+  pic.hidden = true;
+  pic.onload = () => {
+    if (!live()) return;
+    const size = [pic.naturalWidth, pic.naturalHeight];
+    const zoom = zoomToFace(size, dog.face), decos = dressUp(size, dog.face);
+    stage.style.transformOrigin = `${zoom.o[0]}% ${zoom.o[1]}%`;
+    stage.style.transform = `translate(${zoom.t[0]}%,${zoom.t[1]}%) scale(${zoom.k}) rotate(${zoom.deg}deg)`;
+    deco.innerHTML = decos.map(decoOnPhoto).join('');
+    pic.hidden = false;
+    done(zoom, decos);
+  };
+  pic.onerror = () => {
+    if (!live()) return;
+    fail();
+  };
+  pic.src = dog.photo;
+}
+
+// 選單封面：隨機一隻變裝狗，讀不到照片就留淺綠底
+function cover() {
+  const dog = S.dogs[Math.floor(Math.random() * S.dogs.length)];
+  dress(photoEls('Cover'), dog);
+}
+
 function ask() {
   const q = S.qs[S.i], round = S.round;
   const current = () => round === S.round && S.qs[S.i] === q; // 照片晚到時已經換題或回選單，就不動畫面
   q.opts = optionNames(q.dog, S.dogs, S.sigs);
   $('gNo').textContent = S.i + 1;
-  const pic = $('gPic'), stage = $('gStage');
-  $('gDeco').innerHTML = '';
+  drawSteps($('gSteps'), S.i);
+  $('gPhoto').classList.remove('revealed');
   $('gPicErr').hidden = true;
-  stage.style.transform = ''; stage.style.transformOrigin = '';
-  // 照片讀完、戴好裝飾才顯示：換 src 後瀏覽器會繼續顯示上一張（或讀到一半的新照片），不藏就會露出沒變裝的狗
-  pic.hidden = true;
   // 倒數從照片出現（或確定讀不到）才開始，照片慢不吃作答時間
   const go = () => { S.locked = false; S.t0 = performance.now(); tick(); };
-  pic.onload = () => {
-    if (!current()) return;
-    const size = [pic.naturalWidth, pic.naturalHeight];
-    const z = zoomToFace(size, q.dog.face);
-    q.zoom = z;
-    q.decos = dressUp(size, q.dog.face);
-    stage.style.transformOrigin = `${z.o[0]}% ${z.o[1]}%`;
-    stage.style.transform = `translate(${z.t[0]}%,${z.t[1]}%) scale(${z.k}) rotate(${z.deg}deg)`;
-    $('gDeco').innerHTML = q.decos.map(decoOnPhoto).join('');
-    pic.hidden = false;
-    go();
-  };
-  pic.onerror = () => {
-    if (!current()) return;
-    $('gPicErr').hidden = false;
-    go();
-  };
-  pic.src = q.dog.photo;
+  dress(photoEls(), q.dog, {
+    live: current,
+    done: (zoom, decos) => { q.zoom = zoom; q.decos = decos; go(); },
+    fail: () => { $('gPicErr').hidden = false; go(); },
+  });
   $('gSay').textContent = ''; $('gSay').className = 'g-say';
   $('gOpts').innerHTML = '';
   for (const name of q.opts) {
@@ -119,12 +161,14 @@ function ask() {
     $('gOpts').appendChild(b);
   }
   $('gBar').style.transform = 'scaleX(1)';
+  $('gTimer').classList.remove('low');
 }
 
 function tick() {
   const left = Math.max(0, 1 - (performance.now() - S.t0) / LIMIT_MS);
   $('gBar').style.transform = `scaleX(${left})`;
-  $('gBar').parentElement.setAttribute('aria-valuenow', Math.ceil(left * LIMIT_MS / 1000));
+  $('gTimer').setAttribute('aria-valuenow', Math.ceil(left * LIMIT_MS / 1000));
+  $('gTimer').classList.toggle('low', left * LIMIT_MS <= LOW_MS);
   if (left <= 0) return answer(null);
   S.raf = requestAnimationFrame(tick);
 }
@@ -135,6 +179,10 @@ function answer(name) {
   cancelAnimationFrame(S.raf);
   const q = S.qs[S.i], ok = name === q.dog.name;
   if (ok) { S.right++; S.score += points(performance.now() - S.t0); } else S.missed.push(q.dog);
+  q.result = ok ? 'ok' : 'no';
+  drawSteps($('gSteps'), S.i);
+  // 卸妝：裝飾拿掉、照片退回整張，看清楚是哪隻
+  if (!$('gPic').hidden) $('gPhoto').classList.add('revealed');
   $('gScore').textContent = S.score;
   for (const b of $('gOpts').children) {
     if (b.textContent === q.dog.name) b.classList.add('ok');
@@ -148,7 +196,7 @@ function answer(name) {
     if (round !== S.round) return;
     S.i++;
     if (S.i < S.qs.length) ask(); else finish();
-  }, ok ? 900 : 1600);
+  }, ok ? 1300 : 2000);
 }
 
 function finish() {
@@ -156,6 +204,7 @@ function finish() {
   show('gEnd');
   $('gEndScore').textContent = S.score;
   $('gEndLine').textContent = `認出 ${S.right} / ${S.qs.length} 隻`;
+  drawSteps($('gEndSteps'));
   $('gMissed').innerHTML = '';
   // 沒認出的狗點下去打開溜狗表那隻的詳細資訊（#dog/<編號>）
   for (const d of S.missed) {
@@ -169,9 +218,11 @@ function finish() {
     $('gMissed').appendChild(a);
   }
   $('gMissedWrap').hidden = !S.missed.length;
-  const best = readBest();
-  if (S.score > best) writeBest(S.score);
-  $('gBest').textContent = S.score > best ? '新紀錄！' : `你的最高分是 ${best}`;
+  const best = readBest(), isNew = S.score > best;
+  if (isNew) writeBest(S.score);
+  $('gBest').textContent = isNew ? '新紀錄！' : `你的最高分是 ${best}`;
+  $('gBest').classList.toggle('new', isNew);
+  showBest();
   $('gShare').textContent = '分享結果';
   prepareShot();
 }
@@ -292,6 +343,7 @@ function bind() {
     if (e.state && e.state.game) { if (!playing()) start(); } else showHub();
   }, state => (state.game ? GAME_HASH : location.pathname + location.search));
   $('gDressUp').addEventListener('click', () => { pushPage({}, { game: 'dressup' }); start(); });
+  $('syncBtn').addEventListener('click', () => location.reload()); // 這頁只讀狗清單，更新就是重新讀一次
   $('gAgain').addEventListener('click', start);
   $('gShare').addEventListener('click', shareResult);
   $('gSheetClose').addEventListener('click', () => closeOverlay('gameShot'));
@@ -307,6 +359,8 @@ function bind() {
 
 export async function startGames() {
   bind();
+  deskHeadDate();
+  showBest();
   const fromLink = location.hash === GAME_HASH;
   // 打開網頁的那一筆一律是選單；從分享連結（#dressup）進來的，讀完資料再多一筆遊戲，返回回到選單
   writeHistory('replaceState', { bqLanding: true }, location.pathname + location.search);
@@ -318,7 +372,8 @@ export async function startGames() {
     return;
   }
   if (!S.dogs.length) { $('gHubNote').textContent = '目前沒有可以出題的狗狗。'; return; }
-  $('gHubNote').textContent = `每題 10 秒，答得越快分數越高・目前有 ${S.dogs.length} 隻狗狗可以出題`;
+  $('gHubNote').textContent = `目前有 ${S.dogs.length} 隻狗狗可以出題`;
   $('gDressUp').disabled = false;
+  cover();
   if (fromLink) { pushPage({}, { game: 'dressup' }); start(); }
 }
