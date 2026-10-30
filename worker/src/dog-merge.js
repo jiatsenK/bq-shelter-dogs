@@ -45,6 +45,8 @@ const TABLES = [
   { table: 'v3_volunteer_favorites', label: '常溜', move: (row, { mine }) => (mine.some(k => k.volunteer_id === row.volunteer_id) ? null : row) },
   { table: 'v3_volunteer_cards', label: '開卡', move: (row, { mine }) => (mine.some(k => k.volunteer_id === row.volunteer_id) ? null : row) },
   { table: 'v3_card_opened', label: '開卡（舊代號）', move: (row, { mine }) => (mine.some(k => k.walker_code === row.walker_code) ? null : row) },
+  // 暫住紀錄（#772）以表上的暫住列為主鍵，跟著搬到留下那隻
+  { table: 'v3_sheet_stays', label: '暫住', move: row => row },
 ];
 // 今日溜狗狀態以 dog_key（編號或名字）為主鍵、出站佇列掛在它上面，不能刪掉重建；只改 dog_id
 const WALK_STATE = { table: 'v3_walk_state', label: '今日溜狗狀態' };
