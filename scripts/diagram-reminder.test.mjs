@@ -15,7 +15,7 @@ test('改到架構相關檔案、沒改對應的段落才提醒', () => {
 
 test('從 patch 找出 docs/ARCHITECTURE.md 改到哪幾段', async () => {
   assert.deepEqual(changedLines('@@ -3,2 +3,3 @@\n a\n-b\n+c\n+d\n@@ -20 +21 @@\n-x\n+y'), [4, 4, 5, 21, 21]);
-  const markdown = await readFile(new URL(`../${DOC}`, import.meta.url), 'utf8');
+  const markdown = (await readFile(new URL(`../${DOC}`, import.meta.url), 'utf8')).replace(/\r\n/g, '\n');
   const lines = markdown.split('\n');
   const at = title => lines.indexOf(`## ${title}`) + 1;
   assert.deepEqual(touchedSections(markdown, [1, 2]), [], '開頭不算任何一段');
