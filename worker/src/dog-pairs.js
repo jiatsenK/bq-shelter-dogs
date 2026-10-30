@@ -38,9 +38,12 @@ export const newDogPairs = (db, dogId, cage, now) => db.prepare(`INSERT OR IGNOR
   AND NOT EXISTS(SELECT 1 FROM v3_dog_departures WHERE dog_id=g.dog_id)`)
   .bind(dogId, new Date(now).toISOString(), cage, new Date(now - GONE_KEEP_MS).toISOString(), dogId);
 
-// 合併狗時一起寫：併掉的是這一組的待核對那隻、留下表上那隻，就記成已合併（從抽屜選同一組合併也算）
-export const mergedPair = (db, targetId, sourceId, at) =>
-  db.prepare("UPDATE v3_dog_pairs SET status='merged',decided_at=? WHERE gone_dog_id=? AND dog_id=? AND status='pending'").bind(at, sourceId, targetId);
+// 合併狗時一起寫：併掉的是這一組的待核對那隻、留下表上那隻，就記成已合併（從抽屜選同一組合併也算）。
+// 併掉的那隻不再是待核對，籠位紀錄一起刪：取消合併拆回來後也不會再跟同籠新狗配對
+export const mergedPairWrites = (db, targetId, sourceId, at) => [
+  db.prepare("UPDATE v3_dog_pairs SET status='merged',decided_at=? WHERE gone_dog_id=? AND dog_id=? AND status='pending'").bind(at, sourceId, targetId),
+  db.prepare('DELETE FROM v3_sheet_gone WHERE dog_id=?').bind(sourceId),
+];
 
 // 等確認的配對：待核對那隻還在、不在主清單、沒有離所紀錄，表上那隻還在主清單。一句、最新在上
 const PENDING = `FROM v3_dog_pairs p JOIN v3_dogs g ON g.dog_id=p.gone_dog_id

@@ -6,6 +6,7 @@ import worker from '../src/index.js';
 import { appsScript, CAGE_HEADER } from './apps-script.mjs';
 import { manageApi } from './manage-fixture.mjs';
 import { setup } from './walk-fixture.mjs';
+import { readPairs, rejectPair } from '../src/dog-pairs.js';
 
 const SITE = 'https://bq-shelter-dogs.example.workers.dev';
 const MINUTE = 60000;
@@ -133,4 +134,45 @@ test('#774 配對 API 只給管理網站：別的來源不能按不是同一隻�
   assert.equal((await manage('/api/manage/dog-pairs/abc/not-same', { method: 'POST', body: {} })).status, 404);
   assert.equal((await manage(`/api/manage/dog-pairs/${'a'.repeat(32)}/${'b'.repeat(32)}/not-same`, { method: 'POST', body: {} })).status, 404);
   assert.equal((await manage('/api/manage/dog-pairs', { method: 'POST', body: {} })).status, 405);
+});
+
+// CODING_STANDARDS「D1 不整張讀」：配對相關的每一句（同步時的確認與新建狗、資料頁讀配對、不是同一隻）都走索引，
+// 塞了大量無關的狗、離所紀錄、已處理的配對、別籠的籠位紀錄也一樣。量法同 dog-merge.test.mjs：攔下 SQL 看查詢計畫
+test('#774 D1 不整張掃：配對的讀寫都走索引，等確認的配對只掃部分索引', async t => {
+  const { env, gas, later } = await start(t);
+  const db = env.DB;
+  for (let i = 0; i < 200; i++) {
+    const id = i.toString(16).padStart(32, 'e');
+    await db.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(id, `無關${i}`).run();
+    await db.prepare("INSERT INTO v3_dog_departures(dog_id,number,name,departed_date) VALUES(?,?,?,'2026-01-01')").bind(id, `8${i}`, `無關${i}`).run();
+    await db.prepare("INSERT INTO v3_sheet_gone(dog_id,cage,gone_at) VALUES(?,?,'2026-01-01T00:00:00.000Z')").bind(id, `Z${i}`).run();
+    await db.prepare("INSERT INTO v3_dog_pairs(gone_dog_id,dog_id,status,created_at) VALUES(?,'dog','not_same','2026-01-01T00:00:00.000Z')").bind(id).run();
+  }
+  const seen = [];
+  const recording = {
+    prepare: sql => {
+      const stmt = db.prepare(sql);
+      return { ...stmt, bind: (...args) => { seen.push([sql, args]); return stmt.bind(...args); },
+        first: (...a) => { seen.push([sql, []]); return stmt.first(...a); }, all: (...a) => { seen.push([sql, []]); return stmt.all(...a); } };
+    },
+    batch: statements => db.batch(statements),
+  };
+  env.DB = recording;
+  await removeWhite(gas, later);
+  await gas.edit(4, { cage: 'A02', id: '9010', name: '阿白' });
+  const { pairs: [pair] } = await readPairs(recording);
+  await rejectPair(recording, pair.goneDogId, pair.dogId, { actor: { subject: 's', email: 'e@example.org' } });
+  env.DB = db;
+  const ours = seen.filter(([sql]) => /v3_dog_pairs|v3_sheet_gone/.test(sql));
+  assert.ok(ours.length >= 5, '確認、新建狗、讀配對、不是同一隻都攔到');
+  const scans = new Set();
+  for (const [sql, args] of ours) {
+    for (const { detail } of (await db.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind(...args).all()).results) {
+      // 等確認的配對：部分索引只有等確認的列；有條件 batch 的 guard 不讀表
+      if (/^SCAN (CONSTANT ROW|\w+ USING (COVERING )?INDEX v3_dog_pairs_pending)/.test(detail)) continue;
+      const table = detail.match(/^SCAN (\w+)/)?.[1];
+      if (table) scans.add(`${table}：${detail}`);
+    }
+  }
+  assert.deepEqual([...scans], []);
 });

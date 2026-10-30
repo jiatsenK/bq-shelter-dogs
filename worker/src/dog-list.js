@@ -3,7 +3,7 @@ import { guardedDogBatch } from './dog-edit.js';
 // - GAS 編輯觸發只送受影響的列：主清單、已出所的狗（編號＋那一列）、常遛狗群的一欄、異動紀錄整段；Worker 只改那幾隻、只寫有變的欄。
 // - 換籠、離所看狗新出現在哪裡：出現在「已出所」就記離所並從主清單移走；又出現在主清單就不算離所。
 // - 每天三次保險掃描：GAS 送每個單位的指紋，Worker 回不一樣的（D1 還沒有指紋就全部要），GAS 再分批只送那幾個。
-// - D1 有、試算表沒有的列出來（v3_sync_state 的 dog_list_extra，含每次掃描時間）；管理網站資料檢查顯示（#567）。
+// - D1 有、試算表沒有的單位回給 GAS 記在執行紀錄；主清單的列改由下面的候選處理，管理網站改看「可能是同一隻」（#774）。
 // - 主清單的列消失（#771，ADR 0025）：GAS 每次送狗清單、保險掃描送指紋都帶著表上主清單的全部單位 key，
 //   複本有、表上沒有的列先當候選，確認後才移出主清單複本（狗的資料不刪，變成待核對），見 reconcileMissing。
 //   確認時與之後同籠新建狗時，跟可能是同一隻的狗配成一組給管理者決定（#774，dog-pairs.js）。
@@ -22,7 +22,6 @@ import { goneWrites, newDogPairs } from './dog-pairs.js';
 // 狗清單先到時比對收下約 10 次往返，超過每次呼叫 50 次查詢的那幾列 D1 失敗、不 ack，GAS 補送時前面收過的就一樣了）
 export const DOG_LIST_ROWS_MAX = 10;
 const FP_KEY = 'dog_list_fp';
-export const EXTRA_KEY = 'dog_list_extra';
 // 候選第一次不見後至少隔這麼久，再收到清單還是不見才確認。GAS 一次執行最多 6 分鐘，所以確認用的一定是另一次執行讀的表；
 // 每 10 分鐘補送會在還有候選時再送一次清單，實際約 10～20 分鐘確認
 export const MISSING_CONFIRM_MS = 10 * 60000;
@@ -346,12 +345,7 @@ export async function scanDogList(db, fingerprints, now = Date.now()) {
   for (const k of stale) delete fp[k];
   if (JSON.stringify(fp) !== before) await putState(db, FP_KEY, JSON.stringify(fp)).run();
   if (confirmed) await putState(db, SYNCED_AT_KEY, syncedAt(now)).run();
+  // D1 有、試算表沒有：只回給 GAS 記在執行紀錄（#774 起管理網站不再讀 dog_list_extra，不再寫）
   const extra = missing.filter(k => !stale.has(k)).sort();
-  let prev = {};
-  try { prev = JSON.parse(await state(db, EXTRA_KEY) || '{}'); } catch { /* 讀不懂就重記 */ }
-  // #567 管理網站要分辨「過期」：每次掃描都記 checkedAt（一天三次、1 列），at 只在清單變了才換
-  const at = new Date(now).toISOString();
-  const changed = !Array.isArray(prev.keys) || !sameList(prev.keys, extra) || !prev.at;
-  await putState(db, EXTRA_KEY, JSON.stringify({ at: changed ? at : prev.at, checkedAt: at, keys: extra })).run();
   return { want, extra, candidates };
 }

@@ -8,7 +8,7 @@ import { createAccessVerifier } from './access.js';
 import { readManageDogs } from './dogs.js';
 import { readActivities } from '../activities.js';
 import { writeActivity } from './activities.js';
-import { readSheetGaps, readCronStatus } from './checks.js';
+import { readCronStatus } from './checks.js';
 import { todayWalks } from '../today-walks/index.js';
 import { searchEdits } from './edits.js';
 import { readSiteLinks } from './links.js';
@@ -122,7 +122,6 @@ export default {
         const photos = env.PHOTOS ? (await r2Versions(env)).versions : {};
         response = json({ dogs: await readManageDogs(env.DB, photos) });
       }
-      else if (path === '/api/manage/data-checks') response = json({ sheetGaps: await readSheetGaps(env.DB) });
       else if (path === '/api/manage/cron-status') response = json({ jobs: await readCronStatus(env.DB), stopped: await todayWalks(env).stopped() });
       else if (path === '/api/manage/links') response = json(readSiteLinks(env));
       else if (path === '/api/manage/share-counts') response = json(await readShareCounts(env.DB));
