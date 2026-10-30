@@ -429,7 +429,7 @@
   html.desk-on .info-nav :is(a, button)[aria-current="page"] { background: var(--surface); color: var(--ink); font-weight: 800; box-shadow: inset 0 0 0 1px var(--line); }
   html.desk-on .info-nav :is(a, button):focus-visible { outline: 3px solid var(--primary); outline-offset: -3px; }
   /* 「使用說明」不是子頁（回溜狗表開導覽），跟上面隔一條線 */
-  html.desk-on .info-nav [data-open-guide] { margin-top: 8px; box-shadow: 0 -1px 0 var(--line); border-radius: 0 0 3px 3px; }
+  html.desk-on .info-nav [data-games] { margin-top: 8px; box-shadow: 0 -1px 0 var(--line); } /* 小遊戲、使用說明不是資訊子頁，跟上面分開 */
   html.desk-on .info-body { min-width: 0; max-width: 1200px; }
   html.desk-on .info-title { margin: 6px 0 14px; font-size: 22px; font-weight: 800; line-height: 1.3; }
 

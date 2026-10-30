@@ -1410,6 +1410,7 @@ export function bindApp() {
     else if (e.target.closest('[data-mine-day]')) { appState.mineDay = e.target.closest('[data-mine-day]').dataset.mineDay; render(); const b = document.querySelector('#main .mc-cell.sel'); if (b) b.focus({ preventScroll: true }); }
     else if (e.target.closest('[data-open-guide]')) openGuide();
     else if (e.target.closest('[data-share-site]')) shareFromInfo();
+    else if (e.target.closest('button[data-games]')) location.assign('games.html'); // 手機的小遊戲入口是按鈕（#795），電腦版是連結、瀏覽器自己換頁
 
   });
   BQWelcome.bindSetup();

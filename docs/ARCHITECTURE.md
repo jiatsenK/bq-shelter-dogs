@@ -1,6 +1,6 @@
 # 架構圖：志工溜狗表
 
-> 核對日：2026-10-30｜依據 commit：`05d31f0`
+> 核對日：2026-10-30｜依據 commit：`37b8509`
 > 改到圖上的元件、連線、排程或部署方式時，在同一個 PR 更新這份檔案。規則見 agent-hub `docs/rules/architecture-diagrams.md`。
 > 名稱、排程時間、重試次數、端點跟程式不一致時 `scripts/diagram-facts.test.mjs` 會失敗；PR 改到架構相關檔案卻沒改對應段落，「架構圖重畫提醒」會在 PR 留言。管理網站「系統架構圖」頁也是從這份檔案產生。
 
@@ -173,7 +173,7 @@ flowchart LR
 - 測試網站與 PR 預覽共用測試 D1；「準備預覽資料庫」會把正式 D1 整份蓋掉測試 D1，測試網站上的實測資料也會不見（`wrangler.test-site.jsonc:1-3`；`.github/workflows/seed-preview-db.yml:1-17`）。
 - 正式與測試 Worker 名稱、D1、R2：`wrangler.jsonc:8-26`、`wrangler.admin.jsonc:9-26`、`wrangler.test-site.jsonc:10-26`、`wrangler.preview-db.jsonc:6-12`。
 - Apps Script 沒有自動部署：`apps-script/sheet-write.gs` 由 K 貼到 Google 部署成網頁應用程式，正式、測試各一份（`apps-script/sheet-write.gs:1-8`）；測試 Worker 的試算表金鑰另外設定，workflow 不帶（`.github/workflows/deploy-test-site.yml:7-8`）。
-- 沒畫：r2-thumbs（手動補縮圖到正式 R2）、pr-guard（重複 PR 提醒）、release-please（版本號）。
+- 沒畫：r2-thumbs（手動補縮圖到正式 R2）、pr-guard（重複 PR 提醒）、release-please（版本號）、`scripts/dog-faces.py`（小遊戲的臉部位置：K 在本機手動跑，讀正式站 `/api/dogs` 和照片，模型執行時從 Hugging Face 下載，產生 `public/data/dog-faces.json` 再開 PR，#795）。
 
 ## 流程｜網站登記寫回試算表
 

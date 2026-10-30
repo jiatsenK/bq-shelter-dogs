@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="zh-Hant-TW">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<title>小遊戲｜板收志工溜狗表</title>
+<meta name="description" content="狗狗變裝秀：考驗乾爹乾媽們，在狗狗們變裝後，還能認出幾成？">
+<meta name="theme-color" content="#1F5C4D">
+<link rel="icon" href="icons/icon-v2.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon-v2.png">
+<link rel="stylesheet" href="css/games.css">
+<script type="module" src="js/games-entry.js"></script>
+</head>
+<body>
+<!-- 小遊戲（#795）：資訊頁的「小遊戲」進來；選單、遊戲中、結算在同一頁切換（js/games.js），網址 games.html 是選單、#dressup 是狗狗變裝秀 -->
+<header class="g-head">
+  <div class="g-head-in">
+    <a class="g-back" id="gBack" href="index.html#info" aria-label="回資訊"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></a>
+    <h1 id="gTitle">小遊戲</h1>
+  </div>
+</header>
+
+<main class="g-main">
+  <section id="gHub" class="g-screen" aria-labelledby="gTitle">
+    <div class="g-games">
+      <button class="g-game" id="gDressUp" type="button" disabled><strong>狗狗變裝秀</strong><span>考驗乾爹乾媽們，在狗狗們變裝後，還能認出幾成？</span></button>
+      <div class="g-game g-soon"><strong>更多遊戲</strong><span>準備中</span></div>
+    </div>
+    <p class="g-note" id="gHubNote" role="status">狗狗資料讀取中…</p>
+    <p class="g-credit">狗臉位置由 <a href="https://huggingface.co/hugocornellier/dog-face-landmarks">dog-face-landmarks</a> 模型標出，模型以 <a href="https://github.com/martvelge/DogFLW">DogFLW</a> 資料集（Martvel 等，2025）訓練，採 <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a> 授權，僅供非商業使用。</p>
+  </section>
+
+  <section id="gPlay" class="g-screen" hidden aria-label="狗狗變裝秀">
+    <div class="g-hud"><span>第 <b id="gNo">1</b> / <span id="gCount">10</span> 題</span><span>分數 <b id="gScore">0</b></span></div>
+    <div class="g-timer" role="progressbar" aria-label="剩下的時間" aria-valuemin="0" aria-valuemax="10"><i id="gBar"></i></div>
+    <div class="g-photo"><div class="g-stage" id="gStage"><img id="gPic" alt="要猜的狗"><div class="g-deco" id="gDeco"></div></div><p class="g-photo-err" id="gPicErr" hidden>照片讀不到，看名字猜猜看</p></div>
+    <p class="g-say" id="gSay" aria-live="polite"></p>
+    <div class="g-opts" id="gOpts"></div>
+  </section>
+
+  <section id="gEnd" class="g-screen" hidden aria-label="結算">
+    <div class="g-result">
+      <span class="g-note">狗狗變裝秀</span>
+      <div class="g-big" id="gEndScore">0</div>
+      <span id="gEndLine"></span>
+      <span class="g-note" id="gBest"></span>
+    </div>
+    <div id="gMissedWrap" class="g-missed-wrap" hidden>
+      <h2>這幾隻再認識一下</h2>
+      <div class="g-missed" id="gMissed"></div>
+    </div>
+    <div class="g-row">
+      <button class="g-btn" id="gAgain" type="button">再玩一次</button>
+      <button class="g-link" id="gShot" type="button">分享截圖</button>
+      <a class="g-link" id="gLine" target="_blank" rel="noopener">分享到 LINE</a>
+    </div>
+    <p class="g-note g-center">想連圖片一起傳，先存圖再到 LINE 傳照片</p>
+  </section>
+</main>
+
+<div class="g-sheet" id="gSheet" role="dialog" aria-modal="true" aria-label="分享截圖" hidden><div class="g-sheet-in">
+  <img id="gSheetImg" alt="這局的分數和變裝狗狗">
+  <p class="g-note">長按圖片可以存到手機</p>
+  <div class="g-row">
+    <button class="g-btn" id="gSheetShare" type="button" hidden>分享</button>
+    <button class="g-link" id="gSheetClose" type="button">關閉</button>
+  </div>
+</div></div>
+</body>
+</html>

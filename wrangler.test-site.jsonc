@@ -17,7 +17,7 @@
     "binding": "ASSETS",
     // 網頁也先經過 Worker（SITE_ENV=test）：換成紫色頁首、「測試｜」標題、測試版主畫面圖示（worker/src/test-site.js）。
     // public/ 新增網頁要加在這裡（tests 會檢查）；.html 會被轉到沒有副檔名的網址，兩種都列
-    "run_worker_first": ["/api/*", "/api", "/photos/*", "/", "/index.html", "/groups", "/groups.html", "/cards", "/cards.html", "/edits", "/edits.html"]
+    "run_worker_first": ["/api/*", "/api", "/photos/*", "/", "/index.html", "/groups", "/groups.html", "/cards", "/cards.html", "/edits", "/edits.html", "/games", "/games.html"]
   },
   // 從 bq-shelter-photos 複製的測試照片空間；在測試網站換照片、刪照片都不會動到正式照片
   "r2_buckets": [{ "binding": "PHOTOS", "bucket_name": "bq-shelter-photos-test" }],

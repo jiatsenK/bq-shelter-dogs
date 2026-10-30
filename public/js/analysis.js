@@ -430,7 +430,7 @@ function infoDeskPage() {
 // 資訊整頁畫進內容區。電腦版左邊清單跟內容一起重畫（資料讀完、背景更新），焦點原本在清單上就放回同一項
 function renderInfoPage(main, today) {
   const nav = document.activeElement?.closest?.('#main .info-nav :is(a, button)');
-  const key = nav && (nav.dataset.infoPage ? `[data-info-page="${nav.dataset.infoPage}"]` : '[data-open-guide]');
+  const key = nav && (nav.dataset.infoPage ? `[data-info-page="${nav.dataset.infoPage}"]` : nav.matches('[data-games]') ? '[data-games]' : '[data-open-guide]');
   main.innerHTML = analysisPageHtml(today);
   if (key) main.querySelector(`.info-nav ${key}`)?.focus({ preventScroll: true });
 }
@@ -439,7 +439,7 @@ function infoDeskHtml(today) {
   const nav = Object.entries(INFO_PAGES).filter(([id]) => canShow(id))
     .map(([id, title]) => routeControl(true, pageHash('info', id), `data-info-page="${id}"${id === page ? ' aria-current="page"' : ''}`, title)).join(''); // 電腦版子頁清單是真連結（ADR 0024）
   const body = page && canShow(page) ? `<h2 class="info-title">${esc(INFO_PAGES[page])}</h2>${infoSubPageHtml(today, page)}` : `<p role="status">${settingsNotice()}</p>`;
-  return `<div class="info-desk"><nav class="info-nav" aria-label="資訊分類">${nav}<button type="button" data-open-guide>使用說明</button></nav><div class="info-body">${body}</div></div>`;
+  return `<div class="info-desk"><nav class="info-nav" aria-label="資訊分類">${nav}${gamesLink(false)}<button type="button" data-open-guide>使用說明</button></nav><div class="info-body">${body}</div></div>`;
 }
 
 // 打開分析頁：手機按「返回」會回到原本的分類（跟詳細資訊一樣用 history）
@@ -627,7 +627,12 @@ function infoHomeHtml() {
   const dep = !analysisState.departuresData || analysisState.departuresData.state === 'loading' ? '離所紀錄讀取中…' : analysisState.departuresData.state === 'error' ? '離所紀錄讀取失敗' : analysisState.departuresData.list.length ? `共 ${analysisState.departuresData.list.length} 筆離所紀錄` : '還沒有離所紀錄';
   const act = activitiesState.activitiesData.state === 'loading' ? '活動紀錄讀取中…' : activitiesState.activitiesData.state === 'error' ? '活動紀錄讀取失敗' : activitiesState.activitiesData.list.length ? `共 ${activitiesState.activitiesData.list.length} 場活動` : '還沒有活動紀錄';
   const summary = { stay: dogs, departures: dep, activities: act, quality: '查看缺照片、介紹及其他資料', updates: '誰、什麼時候改了哪些資料' };
-  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).filter(([id]) => canShow(id)).map(([id, title]) => routeControl(deskOn(), pageHash('info', id), `data-info-page="${id}"`, `<strong>${title}</strong><span>${esc(summary[id])}</span>`)).join('')}${shareSiteHtml()}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
+  return `<section class="a-card info-home" aria-label="資訊分類">${Object.entries(INFO_PAGES).filter(([id]) => canShow(id)).map(([id, title]) => routeControl(deskOn(), pageHash('info', id), `data-info-page="${id}"`, `<strong>${title}</strong><span>${esc(summary[id])}</span>`)).join('')}${gamesLink(true)}${shareSiteHtml()}<button type="button" data-open-guide><strong>使用說明</strong><span>回到溜狗表，從第一步再看一次</span></button></section>`;
+}
+
+// #795 小遊戲：不是資訊子頁，是另一頁（games.html）。跟其他入口一樣，電腦版是真連結、手機是按鈕（ADR 0024）
+function gamesLink(withSummary) {
+  return routeControl(deskOn(), 'games.html', 'data-games', withSummary ? '<strong>小遊戲</strong><span>認認看變裝後的狗是誰，更多遊戲準備中</span>' : '小遊戲');
 }
 
 // ADR 0023 分享網站：只在手機版（電腦版由 CSS 藏起來）；分享和複製都不行時把網址放進可選取的欄位
