@@ -150,6 +150,19 @@ module.exports = async (browser, base) => {
     const shotTexts = await page.evaluate(() => window.__shotTexts);
     assert(shotTexts.includes(gameUrl.replace(/^https?:\/\//, '')), `截圖印遊戲網址：${shotTexts.join('、')}`);
 
+    // 自己取消分享：不開截圖視窗；其他原因分享失敗：改開截圖視窗
+    const shareFails = name => page.evaluate(n => { navigator.share = async () => { throw new DOMException('x', n); }; }, name);
+    await shareFails('AbortError');
+    await page.locator('#gShare').click();
+    await page.waitForTimeout(300);
+    assert.equal(await visible(page, 'gSheet'), false, '取消分享不開截圖視窗');
+    await shareFails('NotAllowedError');
+    await page.locator('#gShare').click();
+    await page.locator('#gSheet').waitFor();
+    assert.equal(await visible(page, 'gSheetShare'), true, '視窗裡可以再按一次分享');
+    await page.goBack();
+    await page.locator('#gSheet').waitFor({ state: 'hidden' });
+
     // 不能分享檔案（電腦、舊瀏覽器）：開截圖視窗，可以存圖、拿網址
     await page.evaluate(() => { navigator.canShare = undefined; });
     await page.locator('#gShare').click();

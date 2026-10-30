@@ -8,7 +8,7 @@ const $ = id => document.getElementById(id);
 const BEST_KEY = 'bq-game-dressup-best';
 const GAME_HASH = '#dressup';
 const INTRO = '考驗乾爹乾媽們，在狗狗們變裝後，還能認出幾成？';
-const S = { dogs: [], sigs: {}, qs: [], i: 0, score: 0, right: 0, missed: [], t0: 0, raf: 0, next: 0, locked: true, round: 0, shot: null, shotUrl: '' };
+const S = { dogs: [], sigs: {}, qs: [], i: 0, score: 0, right: 0, missed: [], t0: 0, raf: 0, next: 0, locked: true, round: 0, shot: null, shotUrl: '', shotReady: null };
 
 // 最高分只記在這支手機；讀寫不了（無痕、被擋）就當沒有紀錄
 function readBest() { try { return Number(localStorage.getItem(BEST_KEY)) || 0; } catch (e) { return 0; } }
@@ -231,8 +231,10 @@ async function shotCanvas() {
 
 // 截圖在結算一出來就先畫，按「分享結果」時馬上能叫出手機的分享（等太久瀏覽器會當成不是使用者按的）
 async function makeShot() {
+  const round = S.round;
   const c = await shotCanvas();
   const blob = await new Promise((resolve, reject) => c.toBlob(x => (x ? resolve(x) : reject(new Error('toBlob'))), 'image/png'));
+  if (round !== S.round) return; // 畫到一半就再玩一次了，不能蓋掉新一局的截圖
   S.shot = new File([blob], 'dog-dressup.png', { type: 'image/png' });
   if (S.shotUrl) URL.revokeObjectURL(S.shotUrl);
   S.shotUrl = URL.createObjectURL(blob);
