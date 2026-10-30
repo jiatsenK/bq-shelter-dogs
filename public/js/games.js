@@ -169,7 +169,8 @@ function finish() {
   const best = readBest();
   if (S.score > best) writeBest(S.score);
   $('gBest').textContent = S.score > best ? '新紀錄！' : `你的最高分是 ${best}`;
-  $('gLine').href = 'https://line.me/R/share?text=' + encodeURIComponent(shareText());
+  $('gShare').textContent = '分享結果';
+  prepareShot();
 }
 
 // ---- 分享截圖：分數和這局前四隻變裝狗畫成一張 1080×1440 的圖（不寫名字，看圖的人才能猜），最下面印遊戲網址 ----
@@ -221,36 +222,62 @@ async function shotCanvas() {
   // 網址印在圖上，圖被存下來、轉傳也找得到遊戲；太長就縮小字到放得下
   const url = gameUrl().replace(/^https?:\/\//, '');
   let px = 36;
-  do { ctx.font = font(700, px); } while (ctx.measureText(url).width > W - 144 && --px > 20);
+  ctx.font = font(700, px);
+  while (ctx.measureText(url).width > W - 144 && px > 20) ctx.font = font(700, --px);
   ctx.fillStyle = v('--primary');
   ctx.fillText(url, W / 2, H - 36);
   return c;
 }
 
-async function openShot() {
-  const b = $('gShot');
+// 截圖在結算一出來就先畫，按「分享結果」時馬上能叫出手機的分享（等太久瀏覽器會當成不是使用者按的）
+async function makeShot() {
+  const c = await shotCanvas();
+  const blob = await new Promise((resolve, reject) => c.toBlob(x => (x ? resolve(x) : reject(new Error('toBlob'))), 'image/png'));
+  S.shot = new File([blob], 'dog-dressup.png', { type: 'image/png' });
+  if (S.shotUrl) URL.revokeObjectURL(S.shotUrl);
+  S.shotUrl = URL.createObjectURL(blob);
+}
+
+const canShareShot = () => !!(navigator.canShare && navigator.canShare({ files: [S.shot] }));
+const shareShot = () => navigator.share({ files: [S.shot], title: '狗狗變裝秀', text: shareText() });
+
+// 分享結果：截圖和網址（文字裡、也印在圖上）一起交給手機的分享；不能分享檔案（電腦、舊瀏覽器）就打開截圖讓人存
+async function shareResult() {
+  const b = $('gShare'), round = S.round;
   b.disabled = true; b.textContent = '產生中…';
   try {
-    const c = await shotCanvas();
-    const blob = await new Promise((resolve, reject) => c.toBlob(x => (x ? resolve(x) : reject(new Error('toBlob'))), 'image/png'));
-    S.shot = new File([blob], 'dog-dressup.png', { type: 'image/png' });
-    if (S.shotUrl) URL.revokeObjectURL(S.shotUrl);
-    S.shotUrl = URL.createObjectURL(blob);
-    $('gSheetImg').src = S.shotUrl;
-    $('gSheetShare').hidden = !(navigator.canShare && navigator.canShare({ files: [S.shot] }));
-    $('gSheet').hidden = false;
-    pushOverlay('gameShot');
-    b.textContent = '分享截圖';
-    ($('gSheetShare').hidden ? $('gSheetClose') : $('gSheetShare')).focus();
+    await S.shotReady;
   } catch (e) {
     console.error(e);
-    b.textContent = '截圖失敗，再試一次';
-  } finally { b.disabled = false; }
+    b.disabled = false; b.textContent = '截圖失敗，再試一次';
+    prepareShot();
+    return;
+  }
+  b.disabled = false; b.textContent = '分享結果';
+  if (round !== S.round) return;
+  if (canShareShot()) {
+    try { await shareShot(); return; } catch (e) { if (e.name === 'AbortError') return; } // 自己取消就算了；其他失敗改開截圖
+  }
+  openSheet();
+}
+
+function prepareShot() {
+  S.shotReady = makeShot();
+  S.shotReady.catch(() => {}); // 失敗等按分享結果時再說
+}
+
+function openSheet() {
+  $('gSheetImg').src = S.shotUrl;
+  $('gSheetUrl').textContent = $('gSheetUrl').href = gameUrl();
+  $('gSheetShare').hidden = !canShareShot();
+  $('gSheet').hidden = false;
+  pushOverlay('gameShot');
+  ($('gSheetShare').hidden ? $('gSheetClose') : $('gSheetShare')).focus();
 }
 
 function hideShot() {
   $('gSheet').hidden = true;
-  $('gShot').focus({ preventScroll: true });
+  $('gShare').focus({ preventScroll: true });
 }
 
 function bind() {
@@ -261,9 +288,9 @@ function bind() {
   }, state => (state.game ? GAME_HASH : location.pathname + location.search));
   $('gDressUp').addEventListener('click', () => { pushPage({}, { game: 'dressup' }); start(); });
   $('gAgain').addEventListener('click', start);
-  $('gShot').addEventListener('click', openShot);
+  $('gShare').addEventListener('click', shareResult);
   $('gSheetClose').addEventListener('click', () => closeOverlay('gameShot'));
-  $('gSheetShare').addEventListener('click', () => navigator.share({ files: [S.shot], title: '狗狗變裝秀', text: shareText() }).catch(() => {}));
+  $('gSheetShare').addEventListener('click', () => shareShot().catch(() => {}));
   $('gSheet').addEventListener('keydown', e => { if (e.key === 'Escape') closeOverlay('gameShot'); });
   // 左上角返回：遊戲中、結算回選單；選單回資訊頁
   $('gBack').addEventListener('click', e => {
