@@ -1,12 +1,12 @@
 import { BQDates } from '../shared/dates.js';
+import { DEPARTURE_REASON_LABELS } from '../shared/edit-values.js';
 
 const collator = new Intl.Collator('zh-Hant', { numeric: true, sensitivity: 'base' });
 export const sexLabel = sex => ({ male: '公', female: '母' })[sex] || '待確認';
 // 狀態（K 2026-10-26）：在主清單＝在所；有離所紀錄＝已出所（同試算表分頁名）；兩邊都沒有＝待核對（不叫待確認，那是離所原因與性別用的詞）
 export const STATUS_LABELS = { main: '在所', departed: '已出所', unknown: '待核對' };
 export const STATUS_TABS = ['main', 'departed', 'unknown', 'all'];
-const reasonLabels = { adopt: '認養', death: '離世', other: '其他' };
-export const departureLabel = departure => departure ? `${departure.date || '日期待確認'} 離所（${reasonLabels[departure.reason] || '待確認'}）` : '';
+export const departureLabel = departure => departure ? `${departure.date || '日期待確認'} 離所（${DEPARTURE_REASON_LABELS[departure.reason] || '待確認'}）` : '';
 // 不在所的狗狗名下那一行：離所日期與原因，或「待核對」
 export const statusText = dog => (dog.departure ? departureLabel(dog.departure) : STATUS_LABELS[dog.status]);
 // 不在所的狗沒有目前編號，用最新的舊編號顯示、排序

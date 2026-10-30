@@ -1,6 +1,7 @@
 import { readDogEdit, saveDogEdit } from '../dog-edit.js';
 import { previewMerge, mergeDogs, unmergeDogs } from '../dog-merge.js';
 import { readPairs, rejectPair } from '../dog-pairs.js';
+import { departDog } from '../dog-depart.js';
 import { photoInput, saveDogPhoto, restoreDogPhoto, listDogTrash, readDogTrash } from '../dog-photo.js';
 import { TRASH_DAYS } from '../r2.js';
 import { readSettings, saveSettings } from '../feature-settings.js';
@@ -78,14 +79,14 @@ export default {
           }
         } else response = json({ error: '請使用 GET 或 PUT' }, 405);
        } else if (/^\/api\/manage\/dogs\//.test(path)) {
-        const match=path.match(/^\/api\/manage\/dogs\/([a-f0-9]{32})(?:\/(photo|trash|restore|merge|unmerge)(?:\/([0-9]{13}-[a-f0-9]{4}))?)?$/);
+        const match=path.match(/^\/api\/manage\/dogs\/([a-f0-9]{32})(?:\/(photo|trash|restore|merge|unmerge|depart)(?:\/([0-9]{13}-[a-f0-9]{4}))?)?$/);
         if(!match) response=json({error:'找不到狗資料'},404);
         else {
           const [,dogId,action,trashId]=match;
           if(['GET','HEAD'].includes(request.method)&&action==='trash'&&trashId) {const item=await readDogTrash(env,dogId,trashId);response=item?new Response(item.bytes,{headers:{'Content-Type':'image/jpeg'}}):json({error:'找不到這隻狗的備份'},404);}
           // 合併狗（K 2026-10-26）：GET 預覽 ?source=被併的那隻；POST merge／unmerge 寫入
           else if(['GET','HEAD'].includes(request.method)&&action==='merge') response=json(await previewMerge(env.DB,dogId,new URL(request.url).searchParams.get('source')||''));
-          else if(['GET','HEAD'].includes(request.method)&&action==='unmerge') response=json({error:'請使用 POST'},405);
+          else if(['GET','HEAD'].includes(request.method)&&(action==='unmerge'||action==='depart')) response=json({error:'請使用 POST'},405);
           else if(['GET','HEAD'].includes(request.method)) response=json(action==='trash'?{days:TRASH_DAYS,trash:await listDogTrash(env,dogId)}:await readDogEdit(env.DB,dogId));
           else if(!sameOrigin(request,env)) response=json({error:'請從管理網站儲存'},403);
           else if(action==='photo' && request.method==='POST') response=json(await saveDogPhoto(env,dogId,Number(request.headers.get('X-Dog-Revision')),await photoInput(request),{actor},new URL(request.url).origin));
@@ -97,6 +98,8 @@ export default {
             else response=json(await restoreDogPhoto(env,dogId,input.revision,input.trashId,{actor},new URL(request.url).origin));
           } else if(action==='merge'&&request.method==='POST') response=json(await mergeDogs(env.DB,dogId,await settingsInput(request),{actor}));
           else if(action==='unmerge'&&request.method==='POST') response=json(await unmergeDogs(env.DB,dogId,await settingsInput(request),{actor}));
+          // 待核對的狗記成已出所（K 2026-10-30）
+          else if(action==='depart'&&request.method==='POST') response=json(await departDog(env.DB,dogId,await settingsInput(request),{actor}));
           else response=json({error:'方法不支援'},405);
         }
       } else if (path === '/api/manage/activities' || path.startsWith('/api/manage/activities/')) {

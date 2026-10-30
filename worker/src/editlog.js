@@ -28,6 +28,7 @@ export const KIND_LABELS = {
   'stay-end': '暫住結束', // #772：暫住列消失、確認後
   pair: '可能是同一隻', // #775：確認消失或同籠新建狗時系統配的一組（#774），等管理者按合併或不是同一隻
   not_same: '不是同一隻', // #774 資料頁「可能是同一隻」按的
+  depart: '記成已出所', // K 2026-10-30：待核對的狗由管理者記離所
 };
 // 系統自動判斷（#775，ADR 0025）：資料頁「系統自動判斷」列表、編輯抽屜、修改紀錄頁的類別篩選都看這幾種
 export const JUDGE_KINDS = ['automerge', 'stay-start', 'stay-end', 'pair', 'not_same'];

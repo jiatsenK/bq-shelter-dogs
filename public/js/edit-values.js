@@ -3,6 +3,9 @@
 // 合併狗的筆數：{ 溜狗紀錄: 3 } → 「溜狗紀錄 3 筆」（管理網站預覽也用）
 export const countsText = c => Object.entries(c || {}).map(([k, n]) => `${k} ${n} 筆`).join('、');
 
+// 離所原因（v3_dog_departures.reason）的字：記成已出所的紀錄、管理網站狗表與抽屜共用
+export const DEPARTURE_REASON_LABELS = { adopt: '認養', death: '離世', other: '其他' };
+
 // 改前／改後內容寫成一行字
 export function editsValue(kind, v) {
   if (kind === 'sex') return ({ male: '公', female: '母', '': '待確認' })[v] || '待確認';
@@ -29,6 +32,8 @@ export function editsValue(kind, v) {
   // #775 可能是同一隻：改前＝消失的那列，改後＝表上那隻
   if (kind === 'pair') return `${v.name || '未命名'}${v.number ? ` ${v.number}` : ''}（${v.cage || '籠位不明'}）`;
   if (kind === 'not_same') return v.cage ? `跟 ${v.name || '未命名'}（${v.cage}）不是同一隻` : (v.name || '未命名');
+  // 記成已出所：改後＝離所日、原因與用哪個編號記
+  if (kind === 'depart') return `${v.date} 離所（${DEPARTURE_REASON_LABELS[v.reason] || '待確認'}），編號 ${v.number}`;
   if (kind === 'rest') return `休養到 ${v.until}${v.reason ? `（${v.reason}）` : ''}`;
   if (kind === 'group') return `${v.label || '（沒有群名）'}：${(v.names || []).join('、') || '（沒有狗）'}`;
   if (kind === 'activity') return `${v.date} ${{ kids: '動保小小兵', adoption: '認養會' }[v.kind] || v.kind}：${(v.dogs || []).join('、') || '（沒有狗）'}`;

@@ -16,6 +16,7 @@ import {
   stayRow
 } from './dog-edit-model.js';
 import { mergeCandidates, mergeSides, mergePreviewText } from './dog-merge.js';
+import { departSection } from './dog-depart.js';
 import { shownNumber } from './dog-table.js';
 import { searchEdits } from './api.js';
 import { parseEditPage } from './edit-log.js';
@@ -185,7 +186,7 @@ function judgeSection(dogId, current) {
   });
   return wrap;
 }
-export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [], onMerged = () => {} }) {
+export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [], onMerged = () => {}, onDeparted = () => {} }) {
   let dog = null,
     snapshot = null,
     busy = false,
@@ -194,6 +195,7 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
     previewUrl = null,
     previewed = new Map(),
     sections = {},
+    depart = null,
     loadSeq = 0;
   const base = () => `/api/manage/dogs/${encodeURIComponent(dog.dogId)}`;
 
@@ -211,9 +213,10 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
   form.noValidate = true;
   const fields = el('fieldset', undefined, 'drawer-fields');
   const body = el('div', undefined, 'drawer-body');
+  const departHost = el('div');
   const mergeHost = el('div');
   const judgeHost = el('div');
-  body.append(fields, mergeHost, judgeHost);
+  body.append(fields, departHost, mergeHost, judgeHost);
   const dirtyLine = el('p', '', 'drawer-dirty');
   dirtyLine.id = 'drawer-dirty';
   const save = el('button', '儲存', 'btn btn-primary');
@@ -622,6 +625,7 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
       return false;
     }
     snapshot = result.data;
+    depart?.fill(snapshot);
     if (!preserve || !Object.keys(sections).length) {
       sections = {};
       fields.replaceChildren();
@@ -730,7 +734,8 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
     get dogId() {
       return root.hidden ? null : dog?.dogId;
     },
-    open(nextDog, { notice = '', force = false, mergeWith = '' } = {}) {
+    // departing（待核對的狗名下按「記成已出所」）：捲到記成已出所那一段
+    open(nextDog, { notice = '', force = false, mergeWith = '', departing = false } = {}) {
       if (!root.hidden && dog && !force && !mayLeave()) return false;
       dog = nextDog;
       snapshot = null;
@@ -746,6 +751,17 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
           onMerged(message);
         }, mergeWith)
       );
+      // 待核對的狗才能記成已出所（K 2026-10-30）；記完跟合併一樣關抽屜、重讀狗表
+      depart = dog.status === 'unknown' ? departSection({
+        send: (body) => call(`${base()}/depart`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }),
+        revision: () => snapshot?.revision,
+        onDeparted: (message) => {
+          leaveArmed = true;
+          api.close();
+          onDeparted(message);
+        }
+      }) : null;
+      departHost.replaceChildren(...(depart ? [depart.node] : []));
       judgeHost.replaceChildren(judgeSection(dog.dogId, () => (root.hidden ? null : dog?.dogId)));
       body.scrollTop = 0;
       reload.hidden = true;
@@ -759,6 +775,7 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
       document.body.classList.add('drawer-open');
       root.querySelector('#drawer-title').focus();
       if (mergeWith) mergeHost.scrollIntoView?.({ block: 'nearest' });
+      if (departing && depart) departHost.scrollIntoView?.({ block: 'nearest' });
       load().then((ok) => {
         if (ok && dog === nextDog)
           status.textContent = notice ? `${notice}現在編輯${dog.name || '未命名'}。` : '改完按「儲存」；出入所紀錄、照片要先預覽。';
@@ -773,7 +790,7 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
       if (previewUrl) URL.revokeObjectURL(previewUrl);
       previewUrl = null;
       const closed = dog.dogId;
-      dog = snapshot = null;
+      dog = snapshot = depart = null;
       onClose(closed);
       return true;
     }
