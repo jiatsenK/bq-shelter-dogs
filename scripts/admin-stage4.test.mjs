@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { buildAdminAssets } from './build-admin-assets.mjs';
 await buildAdminAssets();
 const { parseActivities, filterActivities, activityPayload, sameActivity, describeActivity, matchDog } = await import('../admin/public/js/activity-model.js');
-const { completeness, careLink, parseSheetGaps, gapStatus, parseCronStatus, cronStatus, parseStoppedWalks, stoppedStatus } = await import('../admin/public/js/data-checks.js');
+const { completeness, careLink, parseCronStatus, cronStatus, parseStoppedWalks, stoppedStatus } = await import('../admin/public/js/data-checks.js');
 const { editQuery, parseEditPage, formatWhen, sourceLabel, valueText } = await import('../admin/public/js/edit-log.js');
 
 const A = 'a'.repeat(32), B = 'b'.repeat(32);
@@ -38,7 +38,7 @@ test('#567 活動加狗：只接受明確對上的狗，不猜同名', () => {
   assert.equal(matchDog(dogs, '不存在'), null);
 });
 
-test('#567 待補清單（原資料檢查）：主清單上的狗，缺漏規則同志工資料完整度；#518 狀態分缺漏／讀取失敗／過期', async () => {
+test('#567 待補清單（原資料檢查）：主清單上的狗，缺漏規則同志工資料完整度', async () => {
   const base = { dogId: A, number: '2026010101', name: '阿福', cage: 'A1', note: '', intro: '介紹', sex: 'male', onMain: true, status: 'main', formerNumber: '', departure: null, fixedCare: false, rest: null, photoUrl: '/photos/2026010101.jpg', walkedDate: '2026-10-01' };
   const dogs = [base, { ...base, dogId: B, number: '', intro: ' ', sex: '', photoUrl: null, walkedDate: '' }, { ...base, dogId: 'e'.repeat(32), number: '12345', onMain: true }, { ...base, dogId: 'f'.repeat(32), number: '', onMain: false, status: 'unknown' }];
   const result = completeness(dogs);
@@ -58,14 +58,6 @@ test('#567 待補清單（原資料檢查）：主清單上的狗，缺漏規則
   }
   assert.equal(careLink('missingIntro'), './?care=missingIntro');
   assert.equal(careLink('missingIntro', A), `./?care=missingIntro&dog=${A}`);
-
-  const ok = parseSheetGaps({ sheetGaps: { state: 'ok', recordedAt: '2026-10-25T01:43:00.000Z', checkedAt: '2026-10-25T05:53:00.000Z', stale: false, total: 1, items: [{ sheet: 'main', key: 'main:1', number: '1', name: '阿福', dogId: A, cage: 'A1' }] } });
-  assert.match(gapStatus(ok), /10\/25 13:53/);
-  assert.match(gapStatus({ ...ok, stale: true }), /過期/);
-  assert.match(gapStatus({ ...ok, checkedAt: null, stale: true }), /掃描時間還沒記錄/);
-  assert.match(gapStatus(parseSheetGaps({ sheetGaps: { state: 'never', items: [], total: 0 } })), /還沒有掃描紀錄/);
-  assert.match(gapStatus(parseSheetGaps({ sheetGaps: { state: 'error', items: [], total: 0 } })), /讀不懂/);
-  assert.throws(() => parseSheetGaps({ sheetGaps: { state: 'ok', items: [{ sheet: 'main' }] } }));
 });
 
 test('#567 更新紀錄：查詢字串白名單、時間用台灣時間、來源標示', () => {

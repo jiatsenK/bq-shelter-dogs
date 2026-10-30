@@ -10,11 +10,13 @@ export const readActivities = () => call('/api/manage/activities');
 export const createActivity = body => call('/api/manage/activities', 'POST', body);
 export const updateActivity = (id, body) => call(`/api/manage/activities/${id}`, 'PUT', body);
 export const deleteActivity = (id, revision) => call(`/api/manage/activities/${id}`, 'DELETE', { revision });
-export const readDataChecks = () => call('/api/manage/data-checks');
 export const readCronStatus = () => call('/api/manage/cron-status');
 // 取消合併狗：先讀留下那隻的版本再送（K 2026-10-26）
 export const readDog = dogId => call(`/api/manage/dogs/${encodeURIComponent(dogId)}`);
 export const unmergeDog = (dogId, body) => call(`/api/manage/dogs/${encodeURIComponent(dogId)}/unmerge`, 'POST', body);
+// #774 可能是同一隻：等確認的配對；不是同一隻。合併走上面的合併狗
+export const readPairs = () => call('/api/manage/dog-pairs');
+export const rejectPair = (goneDogId, dogId) => call(`/api/manage/dog-pairs/${encodeURIComponent(goneDogId)}/${encodeURIComponent(dogId)}/not-same`, 'POST', {});
 export const searchEdits = query => call(`/api/manage/edits${query ? `?${query}` : ''}`);
 export const readSiteLinks = () => call('/api/manage/links');
 // 網站更新：公開 repo 的 GitHub Releases，不帶登入（每個 IP 每小時 60 次，管理者手動開頁夠用）

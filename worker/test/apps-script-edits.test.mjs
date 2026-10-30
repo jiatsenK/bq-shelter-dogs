@@ -5,7 +5,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
 import { appsScript, CAGE_HEADER } from './apps-script.mjs';
-import { manageApi } from './manage-fixture.mjs';
 import { setup } from './walk-fixture.mjs';
 
 const SITE = 'https://bq-shelter-dogs.example.workers.dev';
@@ -58,7 +57,7 @@ test('#769 先清空一格、下一次執行再打字：兩次編輯觸發，用
   assert.deepEqual(await dogs(env), [['9001', '測試狗', 'A01'], ['9002', '小黑', 'A02']]);
 });
 
-test('#769 刪列：刪整列不跑編輯觸發；清空到表上一隻都不剩，沒有單位也沒有主清單 key，不送也不當成消失；保險掃描把網站多的列出來', async t => {
+test('#769 刪列：刪整列不跑編輯觸發；清空到表上一隻都不剩，沒有單位也沒有主清單 key，不送也不當成消失；保險掃描把網站多的列回給小程式', async t => {
   const { env, gas } = await start(t);
   const posts = dogListPosts(gas).length;
   gas.remove('9001');
@@ -68,10 +67,9 @@ test('#769 刪列：刪整列不跑編輯觸發；清空到表上一隻都不剩
   assert.deepEqual(await dogs(env), [['9001', '測試狗', 'A01'], ['9002', '小白', 'A02']], '表上沒有任何狗，多半是讀錯表，網站照舊');
 
   await gas.scan();
-  const manage = await manageApi(t, env);
-  const { status, body } = await manage('/api/manage/data-checks');
-  assert.equal(status, 200);
-  assert.deepEqual(body.sheetGaps.items.map(x => [x.key, x.name]), [['main:9001', '測試狗'], ['main:9002', '小白']]);
+  // #774 起管理網站不再讀這份清單，只回給小程式記在執行紀錄
+  const scan = gas.posts.filter(p => p.action === 'dog-list-scan').at(-1);
+  assert.deepEqual(scan.out.extra, ['main:9001', 'main:9002']);
 });
 
 test('#769 補送：改表那次執行在送狗清單前被停掉，下一次 10 分鐘補送才送到', async t => {
