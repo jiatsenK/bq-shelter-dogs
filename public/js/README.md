@@ -4,7 +4,7 @@
 
 ## 頁面入口與初始化
 
-- `index.html` → `main.js`：匯入整個主頁模組圖；模組定義與狀態初始化完成後，依原本順序呼叫 app、analysis、group-stage、find、find-desk、activities 的事件綁定，再啟動 desk 與 app。循環引用只在互動時使用，事件綁定不靠 import 評估順序。頁首提前抓狗清單的內嵌程式保留，`api.js` 接手該請求。
+- `index.html` → `main.js`：匯入整個主頁模組圖；模組定義與狀態初始化完成後，依原本順序呼叫 app、analysis、group-stage、find、find-desk、activities 的事件綁定，再啟動 desk 與 app。循環引用只在互動時使用，事件綁定不靠 import 評估順序。頁首提前抓狗清單的內嵌程式保留，`api.js` 接手該請求。頁首另外用 `modulepreload` 列出 main.js 的整個模組圖（#788），一次抓齊；新增、刪除或改匯入主頁模組時要同步這份清單，`scripts/frontend-modules.test.mjs` 會比對。
 - `cards.html` → `cards-entry.js`：載入 `cards.js` 與共用模組，再啟動圖鑑。
 - `edits.html` → `edits.js`：載入共用模組，再讀取編輯紀錄。
 - `groups.html` 仍轉址至主頁；保留的 `groups.js` 也改為 ES module，沒有頁面載入。

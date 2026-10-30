@@ -436,10 +436,12 @@ export async function readWalksYear(db, today, year) {
 
 // 狗清單：回新物件，呼叫的人加 photoVersions 不會改到快取；同步時間另外讀 1 列合進來，欄位順序跟直接讀表一樣
 export async function readDogsPacked(db) {
+  const syncedAt = readSyncedAt(db);
+  syncedAt.catch(() => {});
   const dogs = await readSmall(db, 'dogs');
   if (!dogs) throw new Error('v3_sheet_main 沒有資料');
   const { version, ...rest } = dogs;
-  return { version, syncedAt: await readSyncedAt(db), ...rest };
+  return { version, syncedAt: await syncedAt, ...rest };
 }
 
 // 狀態頁：從資料包數主清單和溜狗紀錄，不整表 COUNT(*)；沒變時只讀 2 列版本號（small、溜狗紀錄）
