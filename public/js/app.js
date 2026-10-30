@@ -459,7 +459,7 @@ function thumbAttrs(thumb, full) {
 
 // 大照片先用縮圖（#791）：原圖長邊 1280px，第一次看要等一陣子；狗卡上的縮圖多半已經載好，先撐住位置，原圖到了再換。
 // 這裡就開始下載原圖；已在快取（complete）就直接用原圖，重畫時不會閃一下模糊。測試的假 DOM 沒有 Image，照舊用原圖
-function sharpReady(full) {
+function preloadSharp(full) {
   if (typeof Image !== 'function') return true;
   const img = new Image();
   img.src = full;
@@ -490,7 +490,7 @@ function photoThumb(dog, size = 56, zoom = false, eager = false, big = false) {
   const tag = zoom ? 'button' : 'div';
   const attrs = zoom ? ` type="button" class="thumb zoom" data-zoom aria-label="放大 ${esc(dog.name)} 的照片"` : ' class="thumb"';
   const full = photoSrc(dog);
-  const blurFirst = big && photoThumbSrc(dog) !== full && !sharpReady(full); // 呼叫的人畫完要叫 sharpenPhotos
+  const blurFirst = big && photoThumbSrc(dog) !== full && !preloadSharp(full); // 呼叫的人畫完要叫 sharpenPhotos
   const src = big && !blurFirst ? full : photoThumbSrc(dog);
   return `
     <${tag}${attrs}>
@@ -564,7 +564,7 @@ function showLightboxPhoto() {
   const thumb = photoThumbSrc(v.dog);
   // 原圖還沒到先放縮圖（#791）；沒有縮圖就改回原圖
   img.onerror = null;
-  if (thumb === v.src || sharpReady(v.src)) img.src = v.src;
+  if (thumb === v.src || preloadSharp(v.src)) img.src = v.src;
   else {
     img.onerror = () => { img.onerror = null; if (appState.lightboxView === v) img.src = v.src; };
     img.src = thumb;

@@ -400,6 +400,10 @@ async function runThumbTests() {
         pending.filter(p => p.url === 'photos/9402.jpg' && p.onload).forEach(p => p.load());
         eq(big.getAttribute('src'), 'photos/9402.jpg', '放大照片原圖載好換上：');
         closeLightbox();
+        openLightbox({ name: '沒縮圖狗', id: '9403' });
+        big.dispatchEvent(new Event('error'));
+        eq(big.getAttribute('src'), 'photos/9403.jpg', '放大照片縮圖讀不到改用原圖：');
+        closeLightbox();
       } finally {
         window.Image = RealImage;
         box.remove();
