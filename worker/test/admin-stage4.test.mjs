@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { memoryD1 } from '../../scripts/memory-d1.mjs';
 import worker from '../src/admin/index.js';
-import { searchEdits } from '../src/admin/edits.js';
+import { searchEdits, JUDGE_SQL } from '../src/admin/edits.js';
 
 // #567 管理網站第 4 階段：活動紀錄、資料編輯紀錄搜尋。隔離記憶體 D1，不碰正式資料。
 const origin = 'https://manage.example.org';
@@ -156,6 +156,17 @@ test('#567 資料編輯紀錄：搜尋涵蓋全部、白名單篩選、台灣日
   assert.equal(await readsOf('size=25'), small);
   const plan = (await DB.prepare("EXPLAIN QUERY PLAN SELECT l.id FROM v3_edit_log l LEFT JOIN v3_dog_edit_actors a ON a.log_id=l.id LEFT JOIN v3_dogs d ON d.dog_id=l.dog_id WHERE l.id<? ORDER BY l.id DESC LIMIT 26").bind(999999).all()).results.map(r => r.detail).join(' | ');
   assert.doesNotMatch(plan, /TEMP B-TREE/, plan);
+  // #775 系統自動判斷（資料頁列表、編輯抽屜每開一次就查）：走部分索引只讀判斷紀錄，一般紀錄多 10 倍讀到的列數一樣
+  const DOG = 'a'.repeat(32);
+  for (const [kind, after] of [['automerge', { sourceId: 'e'.repeat(32) }], ['pair', { dogId: DOG }], ['stay-start', { cage: 'A01' }]]) {
+    await insert.bind('2026-10-30T00:00:00.000Z', '', '系統自動判斷', kind, 'f'.repeat(32), '', 'null', JSON.stringify(after)).run();
+  }
+  const judged = [await readsOf('kind=judge&size=25'), await readsOf(`kind=judge&dog=${DOG}`)];
+  for (let i = 0; i < 12000; i++) await insert.bind('2025-01-01T00:00:00.000Z', '', '更早的無關紀錄', 'walk', null, '', 'null', 'null').run();
+  assert.deepEqual([await readsOf('kind=judge&size=25'), await readsOf(`kind=judge&dog=${DOG}`)], judged);
+  const judgePlan = (await DB.prepare(`EXPLAIN QUERY PLAN SELECT l.id FROM v3_edit_log l LEFT JOIN v3_dog_edit_actors a ON a.log_id=l.id LEFT JOIN v3_dogs d ON d.dog_id=l.dog_id WHERE ${JUDGE_SQL} ORDER BY l.id DESC LIMIT 26`).all()).results.map(r => r.detail).join(' | ');
+  assert.match(judgePlan, /v3_edit_log_judge/, judgePlan);
+  assert.doesNotMatch(judgePlan, /TEMP B-TREE/, judgePlan);
 
   for (const bad of ['kind=drop', 'size=500', 'order=random', 'cursor=0', 'cursor=x', 'page=2', 'from=2026-13-01', 'q=' + 'x'.repeat(101), 'source=root', 'sort=at']) {
     await assert.rejects(searchEdits(DB, new URLSearchParams(bad)), e => e.status === 400, bad);

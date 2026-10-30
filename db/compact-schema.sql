@@ -240,6 +240,8 @@ CREATE TABLE IF NOT EXISTS v3_edit_log (
   after_json TEXT,
   source TEXT
 );
+-- #775 系統自動判斷那幾種的部分索引（種類跟 worker/src/editlog.js JUDGE_KINDS 一字不差）
+CREATE INDEX IF NOT EXISTS v3_edit_log_judge ON v3_edit_log(id) WHERE kind IN ('automerge','stay-start','stay-end','pair','not_same');
 -- 活動紀錄（#270，ADR 0002）：一場一列，類型固定兩種（kids＝動保小小兵、adoption＝認養會）。網站寫，同步不碰。
 -- revision 每改一次加 1，兩支手機同時改時後送的會被擋下（不互相蓋掉）
 CREATE TABLE IF NOT EXISTS v3_activities (

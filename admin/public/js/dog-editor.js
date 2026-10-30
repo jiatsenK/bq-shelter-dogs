@@ -18,8 +18,9 @@ import {
 import { mergeCandidates, mergeSides, mergePreviewText } from './dog-merge.js';
 import { shownNumber } from './dog-table.js';
 import { searchEdits } from './api.js';
-import { parseEditPage, formatWhen } from './edit-log.js';
-import { judgeQuery, judgementText } from './judgements.js';
+import { parseEditPage } from './edit-log.js';
+import { judgeQuery } from './judgements.js';
+import { judgeItem } from './judge-item.js';
 import { BQDates } from '../shared/dates.js';
 
 // #624 右側抽屜：六個欄位全部展開（#639 編號併進出入所紀錄）；介紹、休養、固定照顧、性別改完直接可存（行內標改前→改後），
@@ -180,13 +181,7 @@ function judgeSection(dogId, current) {
       return;
     }
     note.textContent = page.edits.length ? `時間為台灣時間。${page.next ? '只列最新 25 筆，更早的到修改紀錄查。' : ''}` : '這隻狗沒有系統自動判斷的紀錄。';
-    list.replaceChildren(...page.edits.map((e) => {
-      const item = el('li');
-      const time = el('time', formatWhen(e.at));
-      time.dateTime = e.at;
-      item.append(time, el('div', judgementText(e), 'judge-text'));
-      return item;
-    }));
+    list.replaceChildren(...page.edits.map((e) => judgeItem(e)));
   });
   return wrap;
 }

@@ -2,7 +2,9 @@
 // 紀錄就是修改紀錄（/api/manage/edits?kind=judge），種類見 worker/src/editlog.js JUDGE_KINDS；改前／改後的樣子見各寫入處。
 import { editQuery } from './edit-log.js';
 
-export const judgeQuery = ({ dog = '', cursor = null, size = 25 } = {}) => editQuery({ kind: 'judge', dog, cursor, size });
+// 管理 API 的類別值（worker/src/admin/edits.js）；資料頁也拿它當「系統自動判斷」按鈕的狀態
+export const JUDGE = 'judge';
+export const judgeQuery = ({ dog = '', cursor = null, size = 25 } = {}) => editQuery({ kind: JUDGE, dog, cursor, size });
 const dog = (name, number) => `${name || '未命名'}${number ? ` ${number}` : ''}`;
 const at = cage => (cage ? `${cage} ` : '');
 export function judgementText(e) {

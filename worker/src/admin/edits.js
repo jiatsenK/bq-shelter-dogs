@@ -4,8 +4,11 @@
 // Access 身分（actor_email）只回後台，公開的 /api/edits 不帶。
 import { EDIT_SOURCES, JUDGE_KINDS, KIND_LABELS } from '../editlog.js';
 
-// #775 類別篩選多一個「系統自動判斷」：一次查 JUDGE_KINDS 那幾種（資料頁列表、編輯抽屜也用）
+// #775 類別篩選多一個「系統自動判斷」：一次查 JUDGE_KINDS 那幾種（資料頁列表、編輯抽屜也用）。
+// 種類寫成字面值：SQLite 要看得出條件跟部分索引 v3_edit_log_judge（migration 0023）一樣才會用它，綁參數看不出來。
+// 走這個索引時只讀判斷紀錄（自動合併一週幾筆、其他 14 天清掉），帶狗也是在這些列裡找
 const JUDGE = 'judge';
+export const JUDGE_SQL = `l.kind IN (${JUDGE_KINDS.map(k => `'${k}'`).join(',')})`;
 const PARAMS = new Set(['q', 'kind', 'dog', 'actor', 'source', 'from', 'to', 'order', 'cursor', 'size']);
 const SIZES = [25, 50, 100];
 const SOURCES = [...EDIT_SOURCES, 'legacy']; // legacy：沒有來源的舊紀錄，只用來篩選
@@ -42,7 +45,7 @@ function whereOf(f) {
     const q = like(f.q);
     add("(l.editor_name LIKE ? ESCAPE '\\' OR l.dog_number LIKE ? ESCAPE '\\' OR COALESCE(d.name,'') LIKE ? ESCAPE '\\' OR COALESCE(l.before_json,'') LIKE ? ESCAPE '\\' OR COALESCE(l.after_json,'') LIKE ? ESCAPE '\\')", q, q, q, q, q);
   }
-  if (f.kind === JUDGE) add(`l.kind IN (${JUDGE_KINDS.map(() => '?').join(',')})`, ...JUDGE_KINDS);
+  if (f.kind === JUDGE) add(JUDGE_SQL);
   else if (f.kind) add('l.kind=?', f.kind);
   if (f.source) add("COALESCE(a.source,l.source,'legacy')=?", f.source);
   if (f.actor) add("(l.editor_name LIKE ? ESCAPE '\\' OR COALESCE(a.actor_email,'') LIKE ? ESCAPE '\\')", like(f.actor), like(f.actor));

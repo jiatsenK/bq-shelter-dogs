@@ -1,16 +1,15 @@
 import { createDogDrawer } from './dog-editor.js';
 import { readDogs, readPairs, rejectPair, searchEdits } from './api.js';
 import { parsePairs, pairText } from './dog-merge.js';
-import { parseEditPage, formatWhen } from './edit-log.js';
-import { judgeQuery, judgementText } from './judgements.js';
-import { unmergeButton } from './unmerge-button.js';
+import { parseEditPage } from './edit-log.js';
+import { JUDGE, judgeQuery } from './judgements.js';
+import { judgeItem } from './judge-item.js';
 import { parseManageDogs, selectDogs, orderDogs, maintenance, sexLabel, CARE_FILTERS, STATUS_LABELS, STATUS_TABS, statusCounts, statusText, shownNumber } from './dog-table.js';
 
 const byId = id => document.getElementById(id);
 // 狀態分頁預設在所（K 2026-10-26）；清除條件不換分頁
 const state = { dogs: [], loaded: false, status: 'main', page: 1, pageSize: 25, sort: 'number', direction: 'asc', pairs: new Map(), pairCount: null };
 // #775「系統自動判斷」不是狗的狀態：按下去換成判斷紀錄列表（修改紀錄裡系統判斷的那幾種），一次 50 筆，「載入更早的紀錄」接著讀
-const JUDGE = 'judge';
 const judge = { edits: [], next: null, loaded: false, failed: '', seq: 0 };
 const status = byId('status');
 const FILTER_IDS = ['query', 'sex', 'care'];
@@ -174,19 +173,11 @@ async function loadJudgements(more = false) {
   judge.loaded = true;
   render();
 }
-// 一筆一句；自動合併判斷錯了直接取消合併，拆回來之後狗表與紀錄一起重讀
-function judgeItem(e) {
-  const item = element('li');
-  const time = element('time', formatWhen(e.at));
-  time.dateTime = e.at;
-  item.append(time, element('div', judgementText(e), 'judge-text'));
-  if (e.kind === 'automerge' && e.dogId) item.append(unmergeButton(e, () => load()));
-  return item;
-}
 function renderJudgements() {
   byId('table-region').hidden = true;
   byId('pagination').hidden = true;
-  byId('judgements').replaceChildren(...judge.edits.map(judgeItem));
+  // 自動合併判斷錯了直接取消合併，拆回來之後狗表與紀錄一起重讀
+  byId('judgements').replaceChildren(...judge.edits.map(e => judgeItem(e, { onUnmerged: () => load() })));
   byId('judge-more').hidden = !judge.next;
   const pairs = state.pairCount === null ? '' : `等確認的可能是同一隻 ${state.pairCount} 組。`;
   status.dataset.error = String(Boolean(judge.failed));

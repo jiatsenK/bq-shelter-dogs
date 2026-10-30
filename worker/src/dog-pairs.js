@@ -1,7 +1,7 @@
 // 可能是同一隻（#774，ADR 0025）：確認消失的一般狗跟表上可能是同一隻的狗配成一組，管理者在資料頁按「合併」或「不是同一隻」。
 // - 確認消失時（dog-list.js reconcileMissing）：同籠位、還在表上，而且同名或剛新出現（added_at 不早於第一次不見前 NEW_BEFORE_MS）的狗。
 // - 確認之後才在同籠新建狗（dog-list.js applyMain）：GONE_KEEP_MS 內在這個籠位確認消失、還是待核對的狗。
-// 這兩種寫入都放進呼叫端原本的 batch；INSERT OR IGNORE，按過「不是同一隻」的那一列留著，同一組不再建立。
+// 這兩種寫入都放進呼叫端原本的 batch（新建狗那種多讀一次 v3_sheet_gone，見 newDogPairs）；INSERT OR IGNORE，按過「不是同一隻」的那一列留著，同一組不再建立。
 // 每建一組記一筆修改紀錄「可能是同一隻」（#775 資料頁「系統自動判斷」列表）：紀錄排在配對前面，條件加「這一組還沒有」，跟配對同進同出。
 // 合併照現有的合併狗（dog-merge.js），合併時把這一組記成已合併；配對本身不搬資料。
 import { batchIf, isConflict } from './conditional-batch.js';
