@@ -38,6 +38,15 @@
         ],
         "createdAt": "2026-10-30T08:58:23.263Z",
         "reason": "Claude: 遊戲照片與分享截圖的 img 由 games.js 填 src，所在畫面開始時是 hidden"
+      },
+      {
+        "rule": "dark-glow",
+        "value": "*",
+        "files": [
+          "public/games.html"
+        ],
+        "createdAt": "2026-10-30T10:17:04.892Z",
+        "reason": "Claude: games.html 沒有任何 shadow；命中的是新連結的共用 app.css／desk.css 既有規則（導覽聚光燈 0 0 0 9999px 遮罩、選中框 0 0 0 1px/3px 外框），都是實線外框不是發光，小遊戲頁也不用那些元件"
       }
     ]
   }
