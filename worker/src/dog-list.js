@@ -6,6 +6,8 @@ import { guardedDogBatch } from './dog-edit.js';
 // - D1 有、試算表沒有的列出來（v3_sync_state 的 dog_list_extra，含每次掃描時間）；管理網站資料檢查顯示（#567）。
 // - 主清單的列消失（#771，ADR 0025）：GAS 每次送狗清單、保險掃描送指紋都帶著表上主清單的全部單位 key，
 //   複本有、表上沒有的列先當候選，確認後才移出主清單複本（狗的資料不刪，變成待核對），見 reconcileMissing。
+// - 同籠自動合併（#773，ADR 0025）：要新建狗時，同一個籠位剛好只有一個不在表上、非暫住的列，就是同一隻：照常建新狗，
+//   再由合併模組的系統入口把那一列移出主清單、併到新狗（修改紀錄「系統自動合併」，可以取消合併）。見 sameCageCandidate。
 // 指紋只是「上次收過哪一版」，存在 v3_sync_state 一列 JSON；遺失只會讓下一次掃描多送幾列，不影響資料。
 // - 溜狗欄（日期、誰遛的）只更新主清單複本；有變就先當成一筆觀測值交給今日溜狗紀錄 module，溜狗紀錄、溜狗修改紀錄都由 module 寫（#747）。
 import { splitNames } from './sheet-read.js';
@@ -15,6 +17,7 @@ import { taiwanYmd } from './sync-plan.js';
 import { SYNCED_AT_KEY } from './compact.js';
 import { linkIdentityName } from './identity.js';
 import { todayWalks } from './today-walks/index.js';
+import { autoMergeDogs } from './dog-merge.js';
 
 // 每列 3–4 次 D1 往返；溜狗欄有變另外交給今日溜狗紀錄比對（改表通知通常先到，這裡比對到一樣只多 1 次往返；
 // 狗清單先到時比對收下約 10 次往返，超過每次呼叫 50 次查詢的那幾列 D1 失敗、不 ack，GAS 補送時前面收過的就一樣了）
@@ -45,6 +48,10 @@ const putState = (db, key, value) => db.prepare('INSERT INTO v3_sync_state(key,v
 const readFp = async db => { try { return JSON.parse(await state(db, FP_KEY) || '{}'); } catch { return {}; } };
 const sameList = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 const findMain = (list, dog) => list.find(m => (dog.id ? m.number === dog.id : m.number === '' && m.name === dog.name));
+// 括號暫用名：整個名字用括號包起來（半形、全形混用都算），例 `(乳白)`、`(皮蛋）`
+const bracketed = name => /^[(（].*[)）]$/.test(name);
+// 暫住列（GLOSSARY 暫住、ADR 0025）：沒編號、括號名、括號裡去掉空白後跟主清單上某一隻有編號的狗同名
+const isStayRow = (m, list) => !m.number && bracketed(m.name) && list.some(o => o.number && o.name === m.name.slice(1, -1).replace(/\s+/g, ''));
 const newId = () => [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
 
 // 「誰遛的」→ 代號
@@ -77,7 +84,16 @@ const dropMainRow = (db, rowIndex) => [db.prepare('DELETE FROM v3_sheet_main WHE
 // 離所用狗 ID 記（#560，v3_dog_departures）；同步只處理有編號的離所，沒編號的是只有名字的已出所狗卡，不動
 const dropDeparture = (db, number) => db.prepare('DELETE FROM v3_dog_departures WHERE number=?').bind(number);
 
-async function applyMain(db, row, list, env, fp) {
+// 同籠自動合併的候選（#773）：這個籠位不在表上（present 沒有）、非暫住的列剛好一隻才算；超過一隻或籠位不同就不猜。
+// present：GAS 讀表那一刻主清單的全部單位 key；沒送（舊版小程式）或看起來像讀錯表時是 null，不找
+function sameCageCandidate(list, cage, present) {
+  if (!present) return null;
+  const found = list.filter(m => m.cage === cage && !present.has(rowKey(m)) && !isStayRow(m, list));
+  return found.length === 1 ? found[0] : null;
+}
+
+// merge：這次請求的自動合併狀態 { present, done, waiting }（見 syncDogList）
+async function applyMain(db, row, list, env, fp, merge) {
   const dog = cleanDog(row.dog), cage = text(row.cage), note = text(row.note).replace(/\r\n?/g, '\n');
   // 犬隻資料列一定有犬名和籠位；表尾提示文字不算狗（同 parseMainList）
   if (!dog.name || !cage || dog.name === '犬名') return false;
@@ -86,13 +102,15 @@ async function applyMain(db, row, list, env, fp) {
   let old = findMain(list, dog);
   const out = [];
   let returnedLog = null, listed = { conditions: [], statements: [] };
-  let expected=null,targetDogId=null;
+  let expected=null,targetDogId=null,candidate=null;
   // 新增狗常先打名字、後補編號：主清單上同名沒編號的那隻就是牠，補上編號，不另建一隻（2026-10-24 驗收時多出一隻沒編號的 TEST）
   const unnumbered = !old && dog.id && list.find(m => m.number === '' && m.name === dog.name);
-  if (unnumbered && !(await db.prepare('SELECT 1 FROM v3_dog_numbers WHERE number=?').bind(dog.id).first())) {
+  // 編號已經是這隻的（清掉編號又打回，中間被同籠自動合併併回來，#773）也一樣，只是不再記一次編號
+  const owner = unnumbered && await db.prepare('SELECT dog_id FROM v3_dog_numbers WHERE number=?').bind(dog.id).first('dog_id');
+  if (unnumbered && (!owner || owner === unnumbered.dog_id)) {
     old = unnumbered;
     out.push(db.prepare('UPDATE v3_sheet_main SET number=? WHERE row_index=?').bind(dog.id, old.row_index),
-      db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, old.dog_id),
+      ...(owner ? [] : [db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, old.dog_id)]),
       ...todayWalks({ ...env, DB: db }).numbered(old.dog_id, dog.id));
     old.number = dog.id;
     delete fp[`main:名:${dog.name}`];
@@ -114,7 +132,8 @@ async function applyMain(db, row, list, env, fp) {
     }
     Object.assign(old, next);
   } else {
-    const identified=dog.id?await db.prepare('SELECT n.dog_id,s.revision FROM v3_dog_numbers n JOIN v3_dog_edit_state s USING(dog_id) WHERE number=?').bind(dog.id).first():await db.prepare("SELECT w.dog_id,s.revision FROM v3_walks w JOIN v3_dog_edit_state s USING(dog_id) WHERE dog_number='' AND dog_name=? LIMIT 1").bind(dog.name).first();
+    // 沒編號的括號暫用名不拿溜狗紀錄的名字找回舊狗：顏色暫用名會重複用，下一隻 `(乳白)` 不是上一隻（#773）
+    const identified=dog.id?await db.prepare('SELECT n.dog_id,s.revision FROM v3_dog_numbers n JOIN v3_dog_edit_state s USING(dog_id) WHERE number=?').bind(dog.id).first():bracketed(dog.name)?null:await db.prepare("SELECT w.dog_id,s.revision FROM v3_walks w JOIN v3_dog_edit_state s USING(dog_id) WHERE dog_number='' AND dog_name=? LIMIT 1").bind(dog.name).first();
     let dogId=identified?.dog_id;expected=identified;
     let returned = null;
     if (!dogId && dog.id) returned = await returnedDog(db, dog, list);
@@ -123,6 +142,9 @@ async function applyMain(db, row, list, env, fp) {
       returnedLog = { editor: { name: '試算表（自動認回所）', code: '' }, kind: 'former', dogId, dogNumber: dog.id, before: { number: returned.number }, after: { number: dog.id, formerNumber: returned.number } };
       out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
     } else if (!dogId) {
+      candidate = sameCageCandidate(list, cage, merge?.present);
+      // 一次請求只自動合併一隻（每次呼叫 50 次查詢）；第二隻不建狗、不 ack，GAS 補送時再來，候選這次也先不確認
+      if (candidate && merge.done) { merge.waiting.add(candidate.dog_id); throw new Error('這次已經自動合併過一隻，下一次再處理'); }
       dogId = newId();
       out.push(db.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId, dog.name));
       if (dog.id) out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
@@ -141,7 +163,22 @@ async function applyMain(db, row, list, env, fp) {
   if(returnedLog)out.push(...editLogWrites(db,{at:new Date().toISOString(),name:returnedLog.editor.name,kind:returnedLog.kind,dogId:returnedLog.dogId,number:returnedLog.dogNumber,before:returnedLog.before,after:returnedLog.after,source:'sheet'}));
   out.push(...listed.statements);
   if(out.length){const result=await guardedDogBatch(db,expected,[...out,db.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(targetDogId)],listed.conditions);const revision=result.at(-1).results[0]?.revision;for(const item of list)if(item.dog_id===targetDogId)item.revision=revision;}
+  if (candidate) await mergeCandidate(db, list, fp, merge, targetDogId, candidate);
   return out.length > 0;
+}
+
+// 新狗已經建好：把候選移出主清單、併到新狗。合併失敗（讀取後版本變了）就不合併，候選照一般規則確認、變成待核對
+async function mergeCandidate(db, list, fp, merge, dogId, candidate) {
+  merge.done = true;
+  const target = list.find(m => m.dog_id === dogId);
+  try {
+    const { revision } = await autoMergeDogs(db, dogId, { revision: target.revision, sourceId: candidate.dog_id, sourceRevision: candidate.revision, mainRow: candidate });
+    list.splice(list.indexOf(candidate), 1);
+    delete fp[rowKey(candidate)];
+    target.revision = revision;
+  } catch (e) {
+    console.warn('dog-list automerge:', e.message);
+  }
 }
 
 // 狗回所會拿新編號，沒人會在網站上連舊編號（K 2026-10-24）：離所紀錄裡剛好一筆同名、主清單上沒別的同名，就是同一隻。
@@ -230,6 +267,9 @@ async function applyNotes(db, row) {
   return out.length > 0;
 }
 
+// 一次少了一半以上的狗，多半是讀錯表或整張清空重貼：不當成消失，也不猜同籠自動合併
+const looksWrong = (gone, list) => gone.length * 2 > list.length;
+
 // 主清單的列消失（#771，ADR 0025）。mainKeys：GAS 讀表那一刻主清單的全部單位 key；list：已套用這次送來的列之後的主清單複本。
 // - 複本有、表上沒有：標成候選（missing_at 記第一次不見的時間），網站照常顯示，資料都不動。
 // - 候選又出現在表上：清掉 missing_at，不記紀錄（先清空犬名再打回、改到一半的暫時狀態）。
@@ -237,16 +277,17 @@ async function applyNotes(db, row) {
 // 表上沒有任何主清單 key（讀不到表頭）或一次少了一半以上的狗，多半是讀錯表或整張清空重貼，不當成消失。
 // 每句都帶讀到時的 missing_at 當條件：同時有別的請求改過這一列就不動，下一次清單再看。
 // 回傳還有沒有候選（GAS 有就在下一次 10 分鐘補送再送一次清單）。
-async function reconcileMissing(db, list, mainKeys, now, fp) {
+// waiting：等下一次請求自動合併的候選（#773），這次不確認
+async function reconcileMissing(db, list, mainKeys, now, fp, waiting = new Set()) {
   if (!Array.isArray(mainKeys) || !mainKeys.length) return false;
   const present = new Set(mainKeys);
   const gone = list.filter(m => !present.has(rowKey(m)));
-  const suspicious = gone.length * 2 > list.length;
+  const suspicious = looksWrong(gone, list);
   const due = m => now - Date.parse(m.missing_at) >= MISSING_CONFIRM_MS;
   // 取消排最前面：沒處理到的仍在表上，只是晚一點清，不會被確認（確認只看這次不在表上的列）
   const work = [
     ...list.filter(m => m.missing_at && present.has(rowKey(m))).map(m => ['back', m]),
-    ...(suspicious ? [] : gone.filter(m => m.missing_at && due(m)).map(m => ['confirm', m])),
+    ...(suspicious ? [] : gone.filter(m => m.missing_at && due(m) && !waiting.has(m.dog_id)).map(m => ['confirm', m])),
     ...(suspicious ? [] : gone.filter(m => !m.missing_at).map(m => ['mark', m])),
   ];
   if (suspicious && gone.length) console.warn(`dog-list: 表上少了 ${gone.length}/${list.length} 隻，不當成消失`);
@@ -262,7 +303,7 @@ async function reconcileMissing(db, list, mainKeys, now, fp) {
     if (what === 'confirm') { list.splice(list.indexOf(m), 1); delete fp[rowKey(m)]; } else m.missing_at = what === 'mark' ? at : null;
   });
   // 被當成讀錯表時不叫 GAS 一直重送；下一次有人改表或保險掃描再看
-  return !suspicious && (skipped || work.length > doing.length || list.some(m => m.missing_at));
+  return !suspicious && (skipped || waiting.size > 0 || work.length > doing.length || list.some(m => m.missing_at));
 }
 
 // ack：Worker 已接手（更新或無差異）；D1 失敗回 false，GAS 保留待通知下次補送。
@@ -273,12 +314,15 @@ export async function syncDogList(db, rows, mainKeys, env, now = Date.now()) {
   // 主清單約 300 列，每批讀一次換來逐列不必各查一次（每次呼叫 50 次查詢上限）
   let list = await readMain(db);
   const results = [];
+  // 同籠自動合併（#773）：present＝表上主清單的全部 key；done＝這次已經合併過一隻；waiting＝留給下一次的候選
+  const present = Array.isArray(mainKeys) && mainKeys.length ? new Set(mainKeys) : null;
+  const merge = { present: present && !looksWrong(list.filter(m => !present.has(rowKey(m))), list) ? present : null, done: false, waiting: new Set() };
   for (const row of rows) {
     const key = row && unitKey(row);
     if (!key) { results.push({ ok: false, ack: true, error: '看不懂的列' }); continue; }
     try {
       const nextList=list.map(item=>({...item})),nextFp={...fp};
-      const changed = row.sheet === 'main' ? await applyMain(db, row, nextList, env, nextFp)
+      const changed = row.sheet === 'main' ? await applyMain(db, row, nextList, env, nextFp, merge)
         : row.sheet === 'departed' ? await applyDeparted(db, row, nextList, now, nextFp)
         : row.sheet === 'groups' ? await applyGroup(db, row, nextList)
         : await applyNotes(db, row);
@@ -289,7 +333,7 @@ export async function syncDogList(db, rows, mainKeys, env, now = Date.now()) {
       results.push({ ok: false, ack: !!error.status, key, error: error.status ? error.message : '狗清單更新失敗，保留待處理' });
     }
   }
-  const { candidates, confirmed } = await missingOf(db, list, mainKeys, now, fp);
+  const { candidates, confirmed } = await missingOf(db, list, mainKeys, now, fp, merge.waiting);
   // 有改到資料才更新「資料更新」時間（ADR 0014 的 synced_at，網站頁首與手機待確認的溜狗都看它）；台灣時間，格式同舊同步
   const touched = confirmed || results.some(r => r.changed);
   const writes = [
@@ -303,10 +347,10 @@ export const applyDogListRows = async (db, rows, env, now) => (await syncDogList
 
 const readMain = async db => (await db.prepare('SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,m.walker_codes,m.missing_at,s.revision FROM v3_sheet_main m JOIN v3_dog_edit_state s USING(dog_id)').all()).results;
 // 消失的處理出錯不影響已收下的列：當成還有候選，GAS 下一次補送再送清單
-async function missingOf(db, list, mainKeys, now, fp) {
+async function missingOf(db, list, mainKeys, now, fp, waiting) {
   const count = list.length;
   try {
-    const candidates = await reconcileMissing(db, list, mainKeys, now, fp);
+    const candidates = await reconcileMissing(db, list, mainKeys, now, fp, waiting);
     return { candidates, confirmed: list.length < count };
   } catch (e) {
     console.warn('dog-list missing:', e.message);

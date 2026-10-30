@@ -22,10 +22,11 @@ export const KIND_LABELS = {
   walkundo: '撤銷溜了',
   walkedit: '溜狗名單',
   merge: '合併狗',
+  automerge: '系統自動合併', // #773：狗清單同步認定同籠的候選就是新建的狗（ADR 0025），可以取消合併
   unmerge: '取消合併',
 };
 // 合併狗的紀錄存整份快照（snapshot、rows）給管理網站取消合併用；公開的編輯紀錄只看摘要
-const MERGE_KINDS = new Set(['merge', 'unmerge']);
+const MERGE_KINDS = new Set(['merge', 'automerge', 'unmerge']);
 export const slimMergeValue = v => (v && typeof v === 'object' ? (({ snapshot, rows, ...rest }) => rest)(v) : v);
 export const EDITS_DEFAULT = 100;
 export const EDITS_MAX = 500;
