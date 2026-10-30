@@ -8,4 +8,4 @@
   - `public/js/README.md`：`routes.js` 的載入頁面加上 games。
   - `tests/games.cjs`：檢查三隻沒認出的狗連結指到各自的 `#dog/<編號>`。
 - 例外與未完成：同一個分頁開啟，從狗卡按返回會回到 `games.html#dressup`；瀏覽器沒保留頁面時會重開一局，不會回到原本的結算畫面。
-- 相關 PR：待開。
+- 相關 PR：#799
