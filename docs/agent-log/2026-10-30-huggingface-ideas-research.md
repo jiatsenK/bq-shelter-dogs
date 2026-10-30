@@ -5,7 +5,8 @@
 - 硬體：Windows 11 筆電，RTX 3070 Laptop GPU（8GB VRAM），系統 Python 3.13。
 - 做了什麼：只查一手來源（Hugging Face 模型卡、官方 GitHub、Hugging Face 與 Cloudflare 官方文件），每個論點附連結。標「估算」的是我依官方數字自己算的，標「未查證」的是找不到一手來源。
 - 沒有改程式、沒有寫 D1。
-- 相關：只加文件的 PR（分支 `docs/dog-game-research`）收進 repo；狗狗變裝秀上線規格見 #795。
+- 相關 PR：分支 `docs/dog-game-research` 的只加文件 PR，跟 `2026-10-30-dog-face-decoration-research.md` 同一個 PR 收進 repo。後來做成的狗狗變裝秀，上線規格見 #795。
+- 例外與未完成：沒有實際試用任何一項，待確認的事項在第 7 節。
 
 ## 1. 先講結論
 
