@@ -169,6 +169,10 @@ async function databaseStatus(env) {
 async function getDogs(env, origin) {
   const off = () => fail(503, '資料庫暫時讀不到狗的資料，請稍後再試', origin, { code: 'db' });
   if (!env || !env.DB) return off();
+  // 狗清單、今日溜狗、照片版本號三段同時讀（#788），不用一段等一段
+  const startNow = read => { const p = Promise.resolve().then(read); p.catch(() => {}); return p; }; // 錯誤留到下面 await 時照原本方式處理
+  const today = startNow(() => todayWalks(env).today());
+  const photos = r2.r2On(env) ? startNow(() => r2.r2Versions(env)) : null;
   let data;
   try {
     data = await readDogsPacked(env.DB);
@@ -177,11 +181,11 @@ async function getDogs(env, origin) {
     return off();
   }
   try {
-    Object.assign(data, withTodayWalks(data.dogs, await todayWalks(env).today()));
+    Object.assign(data, withTodayWalks(data.dogs, await today));
   } catch (e) { console.error('dogs-today', e); } // 讀不到今日溜狗就照試算表複本給，網站再自己讀 /today
-  if (r2.r2On(env)) {
+  if (photos) {
     try {
-      const { versions } = await r2.r2Versions(env);
+      const { versions } = await photos;
       data.photoVersions = {...versions};
       for(const dog of data.dogs||[]){if(dog.photoVersion){const key=dog.id||dog.dogId;data.photoVersions['photos/'+key+'.jpg']=dog.photoVersion;data.photoVersions['photos/thumbs/'+key+'.jpg']=dog.photoVersion;}}
     } catch (e) { /* 沒有版本號只是照片可能用到快取，狗的資料照給 */ }

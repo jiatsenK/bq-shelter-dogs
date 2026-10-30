@@ -61,6 +61,7 @@ Google 試算表 → GitHub Action 定期同步 → data/dogs.json → Cloudflar
 ```text
 public/index.html        ← 只有頁面基本結構
 public/css/app.css       ← 主要樣式
+public/css/desk.css      ← 電腦版（≥1100px）樣式，手機不擋畫面（#788）
 public/js/app.js         ← 分類、搜尋、滑動、localStorage、資料載入與渲染
 data/dogs.json    ← 試算表同步後的狗狗資料
 dogs/{編號}.md     ← 狗卡資訊

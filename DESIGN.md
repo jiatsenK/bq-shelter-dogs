@@ -4,7 +4,7 @@
 
 | 目標 | 現行規格 | 實作來源 |
 |---|---|---|
-| 志工版 `public/index.html`、常溜狗群、其他志工頁 | [視覺指引](docs/DESIGN_GUIDE.md) | `public/css/app.css`；桌機 `public/js/desk.js` |
+| 志工版 `public/index.html`、常溜狗群、其他志工頁 | [視覺指引](docs/DESIGN_GUIDE.md) | `public/css/app.css`；桌機 `public/css/desk.css`（≥1100px 樣式，#788）、`public/js/desk.js` |
 | 圖鑑 `public/cards.html` | [球員卡規格](docs/design/cards.md) | `public/css/cards.css`、`public/js/cards.js` |
 | 管理網站 `admin/public/index.html` | [管理網站規格](docs/design/admin.md) | `admin/public/admin.css`、`admin/public/js/` |
 

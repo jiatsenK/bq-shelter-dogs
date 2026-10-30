@@ -76,3 +76,21 @@ test('志工身分更新只在 identity.js 呼叫 /identity（#623 R8）', async
   const hits = Object.entries(files).filter(([file, source]) => file !== 'identity.js' && /BQApi\.identity\(/.test(source)).map(([file]) => file);
   assert.deepEqual(hits, []);
 });
+
+// 首頁預載（#788）：index.html 的 modulepreload 要剛好是 main.js 匯入到的整個模組圖，多了白抓、少了又要多等一輪
+test('index.html 預載的模組跟 main.js 的模組圖一致（#788）', async () => {
+  const files = await frontendFiles();
+  const graph = new Set();
+  const queue = ['main.js'];
+  while (queue.length) {
+    const file = queue.shift();
+    if (graph.has(file)) continue;
+    assert.ok(files[file], `匯入了不存在的 ${file}`);
+    graph.add(file);
+    for (const m of files[file].matchAll(/^(?:import|export) (?:[^;]*? from )?'\.\/([\w-]+\.js)';/gm)) queue.push(m[1]);
+  }
+  const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
+  const preloaded = [...html.matchAll(/<link rel="modulepreload" href="js\/([\w-]+\.js)">/g)].map(m => m[1]);
+  assert.equal(new Set(preloaded).size, preloaded.length, '預載清單有重複');
+  assert.deepEqual([...preloaded].sort(), [...graph].sort());
+});

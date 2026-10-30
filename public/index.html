@@ -15,6 +15,49 @@
      放在 css 前面，不然要等 css 下載完才會執行 -->
 <script>try { window.__dogsEarly = fetch('api/dogs', { cache: 'no-cache' }); window.__dogsEarly.catch(function () {}); } catch (e) {}</script>
 <link rel="stylesheet" href="css/app.css">
+<!-- 電腦版樣式（#788）：手機寬度不符合 media，不會擋住畫面；電腦打開時照常先載完再畫 -->
+<link rel="stylesheet" href="css/desk.css" media="(min-width: 1100px)">
+<!-- 首頁整個模組圖（#788）：瀏覽器讀到這裡就一起抓，不用 main.js 載完才發現 app.js、再一輪才發現下一批；scripts/frontend-modules.test.mjs 檢查跟實際匯入一致 -->
+<link rel="modulepreload" href="js/main.js">
+<link rel="modulepreload" href="js/app.js">
+<link rel="modulepreload" href="js/analysis.js">
+<link rel="modulepreload" href="js/group-stage.js">
+<link rel="modulepreload" href="js/find.js">
+<link rel="modulepreload" href="js/find-desk.js">
+<link rel="modulepreload" href="js/activities.js">
+<link rel="modulepreload" href="js/desk.js">
+<link rel="modulepreload" href="js/keyboard-viewport.js">
+<link rel="modulepreload" href="js/feature-settings.js">
+<link rel="modulepreload" href="js/api.js">
+<link rel="modulepreload" href="js/store.js">
+<link rel="modulepreload" href="js/page-state.js">
+<link rel="modulepreload" href="js/dog-data.js">
+<link rel="modulepreload" href="js/dates.js">
+<link rel="modulepreload" href="js/welcome.js">
+<link rel="modulepreload" href="js/photo.js">
+<link rel="modulepreload" href="js/walk-ui.js">
+<link rel="modulepreload" href="js/walk-flow.js">
+<link rel="modulepreload" href="js/favorites.js">
+<link rel="modulepreload" href="js/tour.js">
+<link rel="modulepreload" href="js/desk-mine.js">
+<link rel="modulepreload" href="js/ui-kit.js">
+<link rel="modulepreload" href="js/dog-status.js">
+<link rel="modulepreload" href="js/detail.js">
+<link rel="modulepreload" href="js/sheet-append.js">
+<link rel="modulepreload" href="js/overlays.js">
+<link rel="modulepreload" href="js/routes.js">
+<link rel="modulepreload" href="js/site-config.js">
+<link rel="modulepreload" href="js/share.js">
+<link rel="modulepreload" href="js/api-response.js">
+<link rel="modulepreload" href="js/identity.js">
+<link rel="modulepreload" href="js/photo-images.js">
+<link rel="modulepreload" href="js/walk-registration.js">
+<link rel="modulepreload" href="js/detail-editor.js">
+<link rel="modulepreload" href="js/detail-viewport.js">
+<link rel="modulepreload" href="js/detail-fixed-care.js">
+<link rel="modulepreload" href="js/detail-rest.js">
+<link rel="modulepreload" href="js/detail-intro.js">
+<link rel="modulepreload" href="js/detail-stays.js">
 </head>
 <body>
 
