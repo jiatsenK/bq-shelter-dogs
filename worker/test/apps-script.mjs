@@ -13,7 +13,8 @@
 // - gas.paste(target, [cells, cells…])：從 target 那列往下一次改好幾列，跑一次編輯觸發，範圍涵蓋全部改到的列與欄
 // - gas.clear(target)：選整列按 Delete 清空內容，跑編輯觸發（範圍是整列）
 // - gas.remove(target)：刪掉整列。Google 刪列只跑「變更時」觸發、不跑「編輯時」觸發，小程式只裝編輯觸發，所以不跑任何執行
-// - gas.timer()：跑每 10 分鐘的補送（flushWalkEdits、flushDogList 各自一次執行）
+// - gas.timer()：跑每 10 分鐘的補送（flushWalkEdits、flushDogList 各自一次執行）。列消失的候選要隔 10 分鐘才確認（#771），
+//   測試用 t.mock.timers 讓 Worker 的時間往前走（小程式在自己的 vm 裡，不受影響）
 // - gas.scan()：跑保險掃描（dogListScan）
 // - gas.during(when, target, cells)：在下一次執行跑到 when 時插入一次人工改表（改格子、換表上變動記號），
 //   那次執行結束後再跑這次改表的編輯觸發；那次執行沒跑到 when 就失敗。when：{ afterRead: n }（第 n 次讀主清單之後）或 { after: action }（拿到 Worker
@@ -110,8 +111,7 @@ export function appsScript(env, { header = HEADER, rows = [['9001', '測試狗',
         formatDate: (date, zone, format) => { assert.deepEqual([zone, format], ['Asia/Taipei', 'yyyy-MM-dd']); return new Date(date.getTime() + 8 * 3600000).toISOString().slice(0, 10); } },
       UrlFetchApp: { fetch(url, options) {
         if (attempt.pending) throw new Suspend();
-        // 保險掃描送指紋（dog-list-scan）現在是放開 script lock 後才送（#768 要改成鎖內核對記號再送）
-        if (!url.endsWith('/dog-list-scan')) assert.ok(scriptLocks > 0, '呼叫 Worker 要拿著 script lock');
+        assert.ok(scriptLocks > 0, '呼叫 Worker 要拿著 script lock');
         const request = { url, key: options.headers['X-Sheet-Write-Key'], payload: options.payload };
         if (attempt.i < replay.length) {
           const got = replay[attempt.i++];

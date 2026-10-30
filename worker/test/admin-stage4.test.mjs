@@ -112,10 +112,11 @@ test('#518 網站有、試算表沒有：每次掃描記掃描時間，清單沒
   assert.deepEqual((await scanDogList(DB, { 'main:2026010101': 'h1' }, t0)).extra, ['main:2026010202']);
   const first = JSON.parse((await DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_extra'").first()).value);
   assert.deepEqual(first, { at: '2026-10-25T01:43:00.000Z', checkedAt: '2026-10-25T01:43:00.000Z', keys: ['main:2026010202'] });
-  await scanDogList(DB, { 'main:2026010101': 'h1' }, t0 + 4 * 3600000);
+  // 隔不到 10 分鐘：小黑還是候選、沒確認（#771），清單沒變
+  await scanDogList(DB, { 'main:2026010101': 'h1' }, t0 + 5 * 60000);
   const second = JSON.parse((await DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_extra'").first()).value);
   assert.equal(second.at, first.at, '清單沒變，記錄時間不動');
-  assert.equal(second.checkedAt, '2026-10-25T05:43:00.000Z');
+  assert.equal(second.checkedAt, '2026-10-25T01:48:00.000Z');
 });
 
 test('#518 資料檢查 API：清單對上狗、標示過期／未記錄／讀取失敗，只讀不寫', async t => {

@@ -14,7 +14,7 @@ import { recordRun } from './cron-status.js';
 // 網站上的編輯不用通關碼，改記編輯紀錄（ADR 0004）；這裡的 /api/admin 只給 GitHub Action，用 ADMIN_KEY；管理者用的管理網站是另一個 Worker（worker/src/admin/、wrangler.admin.jsonc，ADR 0020）。試算表只寫原有兩欄。
 import * as r2 from './r2.js';
 import { taiwanYmd } from './sync-plan.js';
-import { applyDogListRows, scanDogList, DOG_LIST_ROWS_MAX } from './dog-list.js';
+import { syncDogList, scanDogList, DOG_LIST_ROWS_MAX } from './dog-list.js';
 import { editorOf, editorHeader, logEdit, pruneEdits, readEdits, walkerCode, walkerNameKey } from './editlog.js';
 import { dogIdsFor, readFavorites, saveFavorite, openedBooks } from './compact.js';
 import { isTestSite, testSiteResponse } from './test-site.js';
@@ -848,7 +848,10 @@ const entry = {
         // 狗清單（#501）：GAS 只送受影響的列；保險掃描只送指紋
         if (path.endsWith('/dog-list')) {
           if (!Array.isArray(input.rows) || input.rows.length > DOG_LIST_ROWS_MAX) return fail(400, `每批最多 ${DOG_LIST_ROWS_MAX} 列`, '');
-          return reply(200, { ok: true, results: await applyDogListRows(env.DB, input.rows, env) }, '');
+          // 表上主清單的全部單位 key（#771）：舊版小程式沒送就不找消失的列
+          const mainKeys = input.mainKeys ?? null;
+          if (mainKeys !== null && (!Array.isArray(mainKeys) || mainKeys.some(k => typeof k !== 'string'))) return fail(400, '主清單 key 格式不對', '');
+          return reply(200, { ok: true, ...await syncDogList(env.DB, input.rows, mainKeys, env) }, '');
         }
         if (path.endsWith('/dog-list-scan')) {
           const fp = input.fingerprints;

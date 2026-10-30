@@ -24,13 +24,14 @@
 | [0015](0015-website-fixed-care.md) | 有人固定照顧完全由網站設定 | 現行 |
 | [0016](0016-undo-walk-from-server-history.md) | 撤銷溜了改由伺服器找回上一次，不再限登記的那支手機 | 現行 |
 | [0017](0017-frontend-es-modules.md) | 前端分段整理，最後改成 ES module | 現行 |
-| [0018](0018-today-walks-d1-event-sync.md) | 今日溜狗以 D1 為準，有人編輯才同步、只送改動 | 現行 |
+| [0018](0018-today-walks-d1-event-sync.md) | 今日溜狗以 D1 為準，有人編輯才同步、只送改動 | 部分或全部被 [0025](0025-sheet-rows-missing-candidates.md) 修訂，一起讀、以新的為準 |
 | [0019](0019-walker-names-in-d1.md) | 「誰遛的」原文存進 D1，公開檔案仍只放代號 | 現行 |
 | [0020](0020-independent-admin-site.md) | 獨立管理網站與可控制的志工編輯 | 現行 |
 | [0021](0021-stays-carry-number.md) | 一個編號就是一筆出入所紀錄 | 部分或全部被 [0022](0022-intro-is-the-dog-stays-hold-history.md) 修訂，一起讀、以新的為準 |
 | [0022](0022-intro-is-the-dog-stays-hold-history.md) | 介紹只寫狗自己，出入所經過記在出入所紀錄 | 現行 |
 | [0023](0023-share-site-and-share-count.md) | 分享網站：正式網址不進 repo，分享次數只記每天總數 | 現行 |
 | [0024](0024-volunteer-site-urls.md) | 志工網站的網址：每個分頁、資訊子頁、每隻狗都有自己的 hash | 現行 |
+| [0025](0025-sheet-rows-missing-candidates.md) | 試算表上消失的列先當候選，確認後移出主清單 | 現行 |
 
 ## 網站開關
 

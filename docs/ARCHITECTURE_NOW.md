@@ -1,6 +1,6 @@
 # 資料流現況
 
-資料在哪、誰寫、誰同步，以本檔為入口。最後核對：2026-10-28，main `c2da5f0`（逐項對照程式碼，見 [2026-10-28-architecture-data-flow.md](research/2026-10-28-architecture-data-flow.md)）。repo 的 migration 到 `0017`；正式庫實際套到哪一版，以 `node scripts/d1-migrations.mjs check --target production` 為準，本檔不記。開關與排程的即時值以自動產生的 `docs/adr/README.md` 為準；決定的理由看 ADR。
+資料在哪、誰寫、誰同步，以本檔為入口。最後核對：2026-10-28，main `c2da5f0`（逐項對照程式碼，見 [2026-10-28-architecture-data-flow.md](research/2026-10-28-architecture-data-flow.md)）。repo 的 migration 到 `0020`；正式庫實際套到哪一版，以 `node scripts/d1-migrations.mjs check --target production` 為準，本檔不記。開關與排程的即時值以自動產生的 `docs/adr/README.md` 為準；決定的理由看 ADR。
 
 架構圖：[ARCHITECTURE.md](ARCHITECTURE.md)（Mermaid，跟其他專案同一套畫法）：主圖（誰連誰）、各類資料的流向、一天裡的排程、上線圖（正式／測試／預覽各綁什麼）、網站登記寫回試算表、試算表改動回到 D1、程式架構（worker/src 模組誰呼叫誰）。改了本檔的架構或排程，那份也要跟著改：名稱、時間、次數跟程式不一致時 `scripts/diagram-facts.test.mjs` 會失敗；PR 改到架構相關檔案卻沒改對應段落，「架構圖重畫提醒」（`scripts/diagram-reminder.mjs`）會在 PR 留言。管理網站「系統架構圖」頁也從那份產生（建置時把 Mermaid 畫成 SVG，顯示第幾版與更新日期，見 `admin/README.md`）。
 
@@ -44,7 +44,7 @@ Apps Script 同一次執行會沿用第一次讀到的表內容，之後別人�
 |---|---|---|
 | 每 10 分鐘（錯開 5 分） | 網站登記寫回試算表的重試；沒工作就結束、不讀表 | Worker cron |
 | 09:23、13:23、23:23 | 今日溜狗保險掃描：按狗比指紋，只回不同的狗（#525）；排在 GAS `dogListScan` 可能跑的時段之前，避免搶鎖 | Worker cron → GAS `walkScan` |
-| 09:43、13:53、23:53（Google 前後差 15 分鐘） | 狗清單保險掃描：「D1 有、表沒有」只記錄不刪，每次記掃描時間；管理網站「資料檢查」顯示（#518／#567） | GAS 時間觸發 `dogListScan` |
+| 09:43、13:53、23:53（Google 前後差 15 分鐘） | 狗清單保險掃描：指紋表的主清單 key 也拿來找消失的列（見下方「主清單的列消失」）；「D1 有、表沒有」每次記掃描時間，管理網站「資料檢查」顯示（#518／#567） | GAS 時間觸發 `dogListScan` |
 | 每天 09:23 | 修改紀錄清理（ADR 0004 修訂），跟那次保險掃描同一個排程：`v3_edit_log` 超過 14 天的刪掉（連同 `v3_dog_edit_actors`），合併狗、取消合併的快照永久保留；只有 `editlog.js` 的 `pruneEdits` 會刪 | Worker cron |
 | 每月 1 日 09:23 | 照片垃圾桶清理，跟那次保險掃描同一個排程：`trash/` 標記滿 30 天的備份刪掉；`photos/` 32 碼舊原圖與縮圖只在 D1 `v3_photos` 記得它、且 `is_primary=0` 時一起刪，並刪掉那列（D1 沒這列就不碰，防測試 D1 配正式 R2）；固定路徑 `photos/{編號}.jpg` 不刪。只剩縮圖的備份照代號開頭的時間清。一筆出錯記下來、接著清下一筆，出錯那筆的備份留到下個月；結果記在 `v3_sync_state.trash_purged`（`{at, purged, failed, errors}`），有失敗時 `cron_trash` 記成出錯（實際保留 30～約 61 天）。R2 不設 Lifecycle 刪除規則（K 2026-10-26） | Worker cron |
 
@@ -54,7 +54,7 @@ Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，
 
 重試另有每天上限（#685，ADR 0018 補充）：`v3_walk_write_budget` 每天一列，`reserved` 是全部保留量（跟 `SYNC_DAILY_BUDGET` 比），`retry` 是其中寫回重試的部分（跟 `SYNC_RETRY_DAILY_BUDGET` 比，`wrangler.jsonc` 設 10,000 列，K 2026-10-27 定）。失敗過的工作再派送才算重試；第一次派送、中斷後的恢復派送不算。上限用完時，`today-walks/dispatch.js` 的 `dispatchBatch` 把那些工作的 `next_attempt_at` 改成隔天 UTC 午夜，同一輪的第一次派送照送。
 
-**注意：試算表主清單刪掉的列，D1 不會跟著刪。** 例如暫時籠位的「(狗名)」列刪掉後，網站還會照舊顯示暫時籠位。K 2026-10-26 決定再發生時才處理。
+**主清單的列消失**（#771，ADR 0025；取代 K 2026-10-26「刪列再發生才處理」）：GAS 每次送狗清單（`/dog-list` 的 `mainKeys`）、保險掃描送指紋，都附上讀表那一刻主清單的全部單位 key；改到主清單卻算不出單位（例：清空最後一隻狗那列）也送一次。Worker 套用完這批列後，主清單複本有、表上沒有的列標成候選（`v3_sheet_main.missing_at` 記第一次不見的時間），網站照常顯示；候選又出現就清掉，不記紀錄。第一次不見後隔 `MISSING_CONFIRM_MS`（10 分鐘，GAS 一次執行最多 6 分鐘）以上再收到清單還是不見，才確認：整列移出主清單複本，狗的資料（溜狗紀錄、照片、介紹）不刪，管理網站顯示待核對，可以合併。Worker 回 `candidates: true` 時 GAS 記在指令碼屬性 `DOG_LIST_CANDIDATES`，下一次 10 分鐘補送沒有待送也再送一次清單，所以實際約 10～20 分鐘確認。一次請求最多處理 `MISSING_MAX`（10）個，其餘留給下一次；表上一個主清單 key 都沒有，或一次少了一半以上的狗，當成讀錯表，不處理。保險掃描送指紋前也在 script lock 內核對表上變動記號（讀表後有人改過就整次不送）。Google 刪整列不跑編輯觸發，要等下一次有人改表、補送或保險掃描才送到清單。程式在 `worker/src/dog-list.js` 的 `reconcileMissing`。暫住列、自動合併、可能是同一隻的配對是 #768 後面的票。
 
 ## 管理網站（ADR 0020）
 
