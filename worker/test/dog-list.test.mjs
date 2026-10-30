@@ -200,24 +200,27 @@ test('#501 GAS 整理的單位與 Worker 對得上：第一次全送，第二次
   } finally { env.DB.close(); }
 });
 
-// 2026-10-30 正式表：群名列下面有人在一欄多打一格附註，最後一列只剩那一格，其他群的群名不能因此變空
-test('常遛狗群群名列下面只有一欄多一格：其他欄群名照舊，那一欄用最下面那格', async () => {
+// 2026-10-30 正式表：群名列下面有人在一欄多打一格附註，舊規則把那列當群名列，其他群名全被當狗名、網站只剩一群
+test('常遛狗群群名列：不是犬名的格子最多的那列；下面多打的附註、已離所的狗、只有一群有群名都不會判錯', async () => {
   const { readFile } = await import('node:fs/promises');
   const vm = await import('node:vm');
   const ctx = {};
   vm.createContext(ctx);
   vm.runInContext(await readFile(new URL('../../apps-script/sheet-write.gs', import.meta.url), 'utf8'), ctx);
-  const groups = [[2, 2, 1], ['松果', '黑皮', '部長'], ['朵兒', '瓜瓜', ''], ['', '新五', '20260910測試'], ['', '', '20261029 測試加入暖暖']];
-  const units = vm.runInContext('dogListUnits', ctx)({ groups }, d => d, t => t.length);
-  const view = Object.fromEntries(Object.values(units).filter(u => u.sheet === 'groups').map(u => [u.column, { label: u.label, names: [...u.names] }]));
-  assert.deepEqual(view, {
-    0: { label: '', names: ['松果', '朵兒'] },
-    1: { label: '新五', names: ['黑皮', '瓜瓜'] },
-    2: { label: '20261029 測試加入暖暖', names: ['部長'] },
+  const dogs = ['松果', '朵兒', '黑皮', '瓜瓜', '斑斑', 'JOJO', '部長', 'c', 'd', 'e'];
+  const main = [['籠位', '編號', '犬名'], ...dogs.map((name, i) => ['A01', String(9001 + i), name])];
+  const noDate = d => d, sizeHash = t => t.length;
+  const groupsOf = groups => Object.fromEntries(Object.values(vm.runInContext('dogListUnits', ctx)({ main, groups }, noDate, sizeHash))
+    .filter(u => u.sheet === 'groups').map(u => [u.column, [u.label, [...u.names]]]));
+  // 正式表的樣子：沒群名的欄、群名列下面有字的欄（含沒群名的那欄）、群裡有不在主清單的（花田）、英文大小寫不同
+  assert.deepEqual(groupsOf([[2, 4, 1], ['松果', '黑皮', '部長'], ['JoJo', '瓜瓜', ''], ['', '斑斑', ''], ['', '(花田)', ''],
+    ['', '新五', '20260910測試'], ['', '', '20261029 測試加入暖暖'], ['附註', '', '']]), {
+    0: ['', ['松果', 'JoJo']], 1: ['新五', ['黑皮', '瓜瓜', '斑斑', '(花田)']], 2: ['20260910測試', ['部長']],
   });
-  // 只有一群有群名：最下面那格是群名，不把上面兩欄都有狗的那列當群名列
-  const one = vm.runInContext('dogListUnits', ctx)({ groups: [[2, 1], ['松果', '黑皮'], ['朵兒', ''], ['新十', '']] }, d => d, t => t.length);
-  assert.deepEqual([one['groups:0'].label, [...one['groups:0'].names], one['groups:1'].label], ['新十', ['松果', '朵兒'], '']);
+  // 只有一群有群名、那群的狗比較多：上面兩欄都有狗的列不是群名列
+  assert.deepEqual(groupsOf([[3, 2], ['松果', '黑皮'], ['c', 'd'], ['e', ''], ['新十', '']]), {
+    0: ['新十', ['松果', 'c', 'e']], 1: ['', ['黑皮', 'd']],
+  });
 });
 
 // 狗回所會拿新編號，沒人會在網站上連舊編號：離所紀錄裡剛好一筆同名、主清單沒別的同名，就認定是同一隻（K 2026-10-24，取代 #252「有編號絕不按名字合併」）

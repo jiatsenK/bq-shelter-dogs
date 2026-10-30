@@ -254,25 +254,29 @@ function planAppend(values, header, req, today) {
   };
 }
 
+// 跟 Worker 對狗群犬名的方式一樣：去空白、英文不分大小寫
+function groupNameKey(name) { return String(name).replace(/\s+/g, '').toLowerCase(); }
+
 // ── 常遛狗群（K 2026-10-16）：每一欄是一群；上面有一列數量（數字），最下面一列是群名，中間是狗名 ──
 // #474：只供 GAS 編輯觸發與保險掃描判讀分頁，網站寫入已移除。
-function groupLayout(values) {
+// dogNames：{ 主清單犬名（groupNameKey 過）: true }，用來分辨群名列
+function groupLayout(values, dogNames) {
   var isNumber = function (v) { return typeof v === 'number' || /^\d+$/.test(cellText(v)); };
   var countRow = -1;
   for (var r = 0; r < Math.min(values.length, 10); r++) {
     var filled = values[r].filter(function (v) { return cellText(v) !== ''; });
     if (filled.length && filled.every(isNumber)) { countRow = r; break; }
   }
-  var cols = function (row) { var out = []; values[row].forEach(function (v, i) { if (cellText(v) !== '') out.push(i); }); return out; };
+  var textsOf = function (row) { return values[row].map(cellText).filter(function (t) { return t !== '' && !/^\d+$/.test(t); }); };
   var labelRow = values.length - 1;
-  while (labelRow > countRow && !cols(labelRow).length) labelRow--;
-  // 群名列下面同一欄接著多打的單格是那一欄的附註，群名列還是上面那列（2026-10-30 K14 多一格，其他群名全被當狗名）
-  var tail = cols(labelRow);
-  if (tail.length === 1) {
-    for (var up = labelRow - 1; up > countRow + 1 && cellText(values[up][tail[0]]) !== ''; up--) {
-      var above = cols(up);
-      if (above.length >= 2) { labelRow = up; break; }
-      if (above.length !== 1) break;
+  while (labelRow > countRow && !textsOf(labelRow).length) labelRow--;
+  // 群名列是不是犬名的格子最多的那列（一樣多取下面那列）：群名列下面有人多打附註、狗群裡有已離所的狗都不會被當群名列
+  // （2026-10-30 K14 多一格，舊規則取最下面有字的列，其他群名全被當狗名）。不知道犬名（主清單讀不到）就照舊取最下面有字的列
+  if (Object.keys(dogNames).length) {
+    var best = 0;
+    for (var row = countRow + 1; row < values.length; row++) {
+      var others = textsOf(row).filter(function (t) { return dogNames[groupNameKey(t)] !== true; }).length;
+      if (others && others >= best) { best = others; labelRow = row; }
     }
   }
   if (countRow === -1 || labelRow <= countRow + 1) return null;
@@ -625,7 +629,9 @@ function dogListUnits(sheets, ymd, hash) {
         dates: dateCols.map(function (i) { return dateText(drow[i]); }).filter(Boolean) });
     }
   }
-  var groups = sheets.groups || [], layout = groups.length ? groupLayout(groups) : null;
+  var dogNames = {};
+  Object.keys(units).forEach(function (k) { if (units[k].sheet === 'main') dogNames[groupNameKey(units[k].dog.name)] = true; });
+  var groups = sheets.groups || [], layout = groups.length ? groupLayout(groups, dogNames) : null;
   if (layout) {
     for (var col = 0; col < layout.width; col++) {
       var names = [];
@@ -633,10 +639,7 @@ function dogListUnits(sheets, ymd, hash) {
         var n = cellText(groups[r][col]);
         if (n && !/^\d+$/.test(n) && names.indexOf(n) === -1) names.push(n);
       }
-      // 群名：群名列以下這一欄最下面有字的那格
-      var label = '';
-      for (r = layout.labelRow; r < groups.length; r++) if (cellText(groups[r][col])) label = cellText(groups[r][col]);
-      add('groups:' + col, { sheet: 'groups', column: col, names: names, label: label });
+      add('groups:' + col, { sheet: 'groups', column: col, names: names, label: cellText(groups[layout.labelRow][col]) });
     }
   }
   return units;
