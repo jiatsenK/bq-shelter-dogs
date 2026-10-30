@@ -23,6 +23,8 @@ export const KIND_LABELS = {
   walkedit: '溜狗名單',
   merge: '合併狗',
   unmerge: '取消合併',
+  'stay-start': '暫住開始', // #772：試算表出現暫住列（不建狗）
+  'stay-end': '暫住結束', // #772：暫住列消失、確認後
   not_same: '不是同一隻', // #774 資料頁「可能是同一隻」按的
 };
 // 合併狗的紀錄存整份快照（snapshot、rows）給管理網站取消合併用；公開的編輯紀錄只看摘要

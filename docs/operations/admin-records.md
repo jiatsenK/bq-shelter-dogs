@@ -33,7 +33,7 @@ npx.cmd wrangler d1 execute bq-shelter-dogs --remote --command "SELECT a.activit
 
 ## 可能是同一隻（#774，ADR 0025）
 
-- 配對怎麼來：試算表上消失的列確認移出主清單時，同籠有新出現的狗、或同籠同名的狗還在表上，就建一組；確認後 7 天內同籠新建狗也建一組（`worker/src/dog-pairs.js`，跟狗清單同步同一個 batch，不多花 D1 往返）。表：`v3_sheet_gone`（確認時的籠位）、`v3_dog_pairs`（狀態 pending／merged／not_same）。migration `0021`。
+- 配對怎麼來：試算表上消失的列確認移出主清單時，同籠有新出現的狗、或同籠同名的狗還在表上，就建一組；確認後 7 天內同籠新建狗也建一組（`worker/src/dog-pairs.js`，跟狗清單同步同一個 batch，不多花 D1 往返）。表：`v3_sheet_gone`（確認時的籠位）、`v3_dog_pairs`（狀態 pending／merged／not_same）。migration `0022`。
 - API（只有 Access 管理者）：GET `/api/manage/dog-pairs` 回 `{ count, pairs }`，只列等確認、待核對那隻還在而且不在主清單也沒有離所紀錄、表上那隻還在主清單的組，最新在上，1 個查詢。POST `/api/manage/dog-pairs/{待核對那隻}/{表上那隻}/not-same`（同來源）記成不是同一隻，同一批寫修改紀錄 `not_same`（Access 身分記在 `v3_dog_edit_actors`）；已經不是等確認回 404／409。
 - 合併：沿用 `/api/manage/dogs/{表上那隻}/merge`（預覽、帶兩隻版本、按兩次才寫），合併的同一批把這組記成 merged；取消合併照舊在修改紀錄按，那組不會再列出。
 - 資料頁：待核對的狗名下顯示「可能跟 ○○（籠位）是同一隻」，旁邊「合併」（開抽屜、選好那一隻直接預覽）和「不是同一隻」（按兩次才送，成功後那組從畫面拿掉）。配對讀不到時表格照常，表格上方另外說明。
