@@ -200,6 +200,26 @@ test('#501 GAS 整理的單位與 Worker 對得上：第一次全送，第二次
   } finally { env.DB.close(); }
 });
 
+// 2026-10-30 正式表：群名列下面有人在一欄多打一格附註，最後一列只剩那一格，其他群的群名不能因此變空
+test('常遛狗群群名列下面只有一欄多一格：其他欄群名照舊，那一欄用最下面那格', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const vm = await import('node:vm');
+  const ctx = {};
+  vm.createContext(ctx);
+  vm.runInContext(await readFile(new URL('../../apps-script/sheet-write.gs', import.meta.url), 'utf8'), ctx);
+  const groups = [[2, 2, 1], ['松果', '黑皮', '部長'], ['朵兒', '瓜瓜', ''], ['', '新五', '20260910測試'], ['', '', '20261029 測試加入暖暖']];
+  const units = vm.runInContext('dogListUnits', ctx)({ groups }, d => d, t => t.length);
+  const view = Object.fromEntries(Object.values(units).filter(u => u.sheet === 'groups').map(u => [u.column, { label: u.label, names: [...u.names] }]));
+  assert.deepEqual(view, {
+    0: { label: '', names: ['松果', '朵兒'] },
+    1: { label: '新五', names: ['黑皮', '瓜瓜'] },
+    2: { label: '20261029 測試加入暖暖', names: ['部長'] },
+  });
+  // 只有一群有群名：最下面那格是群名，不把上面兩欄都有狗的那列當群名列
+  const one = vm.runInContext('dogListUnits', ctx)({ groups: [[2, 1], ['松果', '黑皮'], ['朵兒', ''], ['新十', '']] }, d => d, t => t.length);
+  assert.deepEqual([one['groups:0'].label, [...one['groups:0'].names], one['groups:1'].label], ['新十', ['松果', '朵兒'], '']);
+});
+
 // 狗回所會拿新編號，沒人會在網站上連舊編號：離所紀錄裡剛好一筆同名、主清單沒別的同名，就認定是同一隻（K 2026-10-24，取代 #252「有編號絕不按名字合併」）
 test('#501 新編號回所：同名的唯一一筆離所認成同一隻，連上新編號、註明回所並記編輯紀錄；同名多筆不合併', async () => {
   const env = await setup();

@@ -263,8 +263,18 @@ function groupLayout(values) {
     var filled = values[r].filter(function (v) { return cellText(v) !== ''; });
     if (filled.length && filled.every(isNumber)) { countRow = r; break; }
   }
+  var cols = function (row) { var out = []; values[row].forEach(function (v, i) { if (cellText(v) !== '') out.push(i); }); return out; };
   var labelRow = values.length - 1;
-  while (labelRow > countRow && values[labelRow].every(function (v) { return cellText(v) === ''; })) labelRow--;
+  while (labelRow > countRow && !cols(labelRow).length) labelRow--;
+  // 群名列下面同一欄接著多打的單格是那一欄的附註，群名列還是上面那列（2026-10-30 K14 多一格，其他群名全被當狗名）
+  var tail = cols(labelRow);
+  if (tail.length === 1) {
+    for (var up = labelRow - 1; up > countRow + 1 && cellText(values[up][tail[0]]) !== ''; up--) {
+      var above = cols(up);
+      if (above.length >= 2) { labelRow = up; break; }
+      if (above.length !== 1) break;
+    }
+  }
   if (countRow === -1 || labelRow <= countRow + 1) return null;
   return { countRow: countRow, labelRow: labelRow, first: countRow + 1, width: values[0].length };
 }
@@ -623,7 +633,10 @@ function dogListUnits(sheets, ymd, hash) {
         var n = cellText(groups[r][col]);
         if (n && !/^\d+$/.test(n) && names.indexOf(n) === -1) names.push(n);
       }
-      add('groups:' + col, { sheet: 'groups', column: col, names: names, label: cellText(groups[layout.labelRow][col]) });
+      // 群名：群名列以下這一欄最下面有字的那格
+      var label = '';
+      for (r = layout.labelRow; r < groups.length; r++) if (cellText(groups[r][col])) label = cellText(groups[r][col]);
+      add('groups:' + col, { sheet: 'groups', column: col, names: names, label: label });
     }
   }
   return units;
