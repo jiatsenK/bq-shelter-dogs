@@ -12,7 +12,7 @@ import { BQWalkUI } from './walk-ui.js';
 import { whereKnown, whereOpen } from './find.js';
 import { walkHistorySection } from './analysis.js';
 import { focusGroupOf } from './group-stage.js';
-import { computeStatus, effectiveWalkDate, openLightbox, photoThumb, render, restOf, searchInput, sexMark, switchTab, walkedNow, walkedToday, walkerList, warnNote } from './app.js';
+import { computeStatus, effectiveWalkDate, openLightbox, photoThumb, render, restOf, searchInput, sexMark, sharpenPhotos, switchTab, walkedNow, walkedToday, walkerList, warnNote } from './app.js';
 import { sheetAppendHtml } from './sheet-append.js';
 import { fixedCareHtml, toggleFixedCare } from './detail-fixed-care.js';
 import { closeRestEdit, openRestEdit, restAdminHtml, restInput, restNoteHtml, saveRest } from './detail-rest.js';
@@ -323,6 +323,7 @@ function renderDetail() {
   // 重畫後留在原本捲到的位置（K 2026-10-10：補完資料「整個卡片就會跳掉」）；換看別隻時 showDetail 會自己捲回最上面
   const top = box.scrollTop;
   box.innerHTML = detailHtml(appState.detailDog, new Date());
+  sharpenPhotos(box);
   box.scrollTop = top;
   labelPhotoPick(box);
   if (focused) {

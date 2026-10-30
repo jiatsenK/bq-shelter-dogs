@@ -357,7 +357,7 @@ async function runThumbTests() {
       box.innerHTML = photoThumb(dog);
       eq([box.querySelector('img').getAttribute('src'), box.querySelector('img').dataset.full], ['photos/thumbs/9401.jpg', 'photos/9401.jpg'], '縮圖、備用原圖：');
       box.innerHTML = photoThumb(dog, 56, true, false, true);
-      eq(box.querySelector('img').getAttribute('src'), 'photos/9401.jpg', '詳細資訊大照片用原圖：');
+      eq([box.querySelector('img').getAttribute('src'), box.querySelector('img').dataset.sharp], ['photos/thumbs/9401.jpg', 'photos/9401.jpg'], '詳細資訊大照片原圖還沒到，先用縮圖（#791）：');
       photoOverrides['9401'] = 'blob:local-photo';
       box.innerHTML = photoThumb(dog);
       eq([box.querySelector('img').getAttribute('src'), box.querySelector('img').dataset.full], ['blob:local-photo', undefined], '剛上傳：');
@@ -373,6 +373,41 @@ async function runThumbTests() {
       img.dispatchEvent(new Event('error'));
       eq([img.style.display, box.querySelector('.thumb').classList.contains('no-photo')], ['none', true], '都讀不到：');
       box.remove();
+    });
+    await check('#791 大照片：原圖在快取直接用；還沒到先放縮圖，原圖載好才換上', async () => {
+      delete photoOverrides['9401'];
+      const RealImage = window.Image;
+      const cached = new Set(), pending = [];
+      // 假的 Image：cached 裡的網址當作已在快取；其他的等測試呼叫 load() 才算下載完
+      window.Image = class {
+        set src(url) { this.url = url; this.complete = cached.has(url); this.naturalWidth = this.complete ? 1280 : 0; if (!this.complete) pending.push(this); }
+        load() { cached.add(this.url); this.onload && this.onload(); }
+      };
+      const box = document.createElement('div');
+      document.body.appendChild(box);
+      try {
+        box.innerHTML = photoThumb(dog, 480, true, true, true);
+        sharpenPhotos(box);
+        const img = box.querySelector('img');
+        eq([img.getAttribute('src'), img.hasAttribute('data-sharp')], ['photos/thumbs/9401.jpg', false], '原圖還沒到：');
+        pending.filter(p => p.onload).forEach(p => p.load());
+        eq([img.getAttribute('src'), img.hasAttribute('data-full')], ['photos/9401.jpg', false], '原圖載好換上：');
+        box.innerHTML = photoThumb(dog, 480, true, true, true);
+        eq([box.querySelector('img').getAttribute('src'), box.querySelector('img').hasAttribute('data-sharp')], ['photos/9401.jpg', false], '重畫時原圖已在快取，直接用原圖：');
+        openLightbox({ name: '放大狗', id: '9402' });
+        const big = document.querySelector('#lightbox img');
+        eq(big.getAttribute('src'), 'photos/thumbs/9402.jpg', '放大照片原圖還沒到：');
+        pending.filter(p => p.url === 'photos/9402.jpg' && p.onload).forEach(p => p.load());
+        eq(big.getAttribute('src'), 'photos/9402.jpg', '放大照片原圖載好換上：');
+        closeLightbox();
+        openLightbox({ name: '沒縮圖狗', id: '9403' });
+        big.dispatchEvent(new Event('error'));
+        eq(big.getAttribute('src'), 'photos/9403.jpg', '放大照片縮圖讀不到改用原圖：');
+        closeLightbox();
+      } finally {
+        window.Image = RealImage;
+        box.remove();
+      }
     });
   } finally {
     [photoOverrides['9401']] = saved;
