@@ -131,3 +131,44 @@ test('#747 今日溜狗紀錄的 guard 都走有條件 batch，不自己寫 guar
     assert.doesNotMatch(code, /constraint/i, `${file} 的約束錯誤要用 isConflict 判斷`);
   }
 });
+
+// #770：暖暖沒編號時被溜過，溜狗狀態 key 是名字那一份；補編號後狀態還指向有編號那隻，
+// 網站上殘留的沒編號暖暖（主清單另一隻、或已不在主清單）按溜了、改溜狗人、復原都回衝突，D1 不寫、不派送寫回。
+test('#770 溜狗狀態的狗 ID 跟主清單這隻不同時，網站登記回衝突', async () => {
+  for (const residual of ['主清單另一隻', '不在主清單']) {
+    const env = await setup(), gas = appsScript(env);
+    const warm = { id: '', name: '暖暖' };
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('warm','暖暖')"),
+      env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,walked_date) VALUES(2,'warm','','暖暖','2026-10-01')"),
+    ]);
+    const first = await post(env, request('warm-walk-0001', '甲', { dogs: [warm] }));
+    assert.equal(first.status, 200);
+    // 表上補了編號：主清單那一列換成有編號的暖暖，溜狗狀態還是名字那一份
+    const sheet = [env.DB.prepare("UPDATE v3_sheet_main SET number='9002' WHERE dog_id='warm'"), env.DB.prepare("INSERT INTO v3_dog_numbers VALUES('9002','warm')")];
+    if (residual === '主清單另一隻') sheet.push(env.DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('residual','暖暖')"),
+      env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name) VALUES(3,'residual','','暖暖')"));
+    await env.DB.batch(sheet);
+    const snapshot = async () => ({
+      state: await env.DB.prepare('SELECT dog_id,version,walker FROM v3_walk_state ORDER BY dog_key').all(),
+      walks: await env.DB.prepare('SELECT dog_id,walk_date,position,walker_code FROM v3_walks ORDER BY dog_id,walk_date,position').all(),
+      outbox: await env.DB.prepare('SELECT dog_key,version,status FROM v3_walk_outbox ORDER BY dog_key,version').all(),
+      log: await env.DB.prepare('SELECT COUNT(*) AS n FROM v3_edit_log').first(),
+    });
+    const before = await snapshot();
+    const tasks = [], ctx = { waitUntil: p => tasks.push(p) };
+    const version = first.body.results[0].version;
+    for (const body of [request('warm-walk-0002', '乙', { dogs: [warm] }),
+      request('warm-edit-0003', '乙', { action: 'edit', editor: '甲', dogs: [{ ...warm, expectedVersion: version }] }),
+      request('warm-undo-0004', '甲', { action: 'undo', dogs: [{ ...warm, expectedVersion: version }] })]) {
+      const out = await post(env, body, ctx, gas.worker);
+      assert.equal(out.status, 409, `${residual} ${body.action}`);
+    }
+    await Promise.all(tasks);
+    assert.deepEqual(await snapshot(), before, residual);
+    assert.equal(gas.calls.length, 0);
+    // 有編號的暖暖（同一隻）照常登記
+    assert.equal((await post(env, request('warm-walk-0005', '乙', { dogs: [{ id: '9002', name: '暖暖' }] }))).status, 200);
+    env.DB.close();
+  }
+});
