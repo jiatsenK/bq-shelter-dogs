@@ -108,8 +108,8 @@ module.exports = async (browser, base) => {
       for (const name of opts) assert(!['換照片狗', '（暫定）', '沒算位置'].includes(name), `不能出題的狗不當選項：${name}`);
       const pick = i <= 7 ? answer : opts.find(n => n !== answer);
       if (pick !== answer) missed.push(answer);
-      await page.locator('#gOpts button', { hasText: pick }).click();
-      await page.locator('#gSay', { hasText: pick === answer ? '答對了！' : `牠是${answer}` }).waitFor();
+      await page.locator('#gOpts').getByRole('button', { name: pick, exact: true }).click();
+      await page.locator('#gSay', { hasText: new RegExp(`^${pick === answer ? '答對了！' : `牠是${answer}`}$`) }).waitFor();
     }
     await page.locator('#gEnd').waitFor();
     assert.equal(await visible(page, 'gPlay'), false);
