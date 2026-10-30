@@ -148,6 +148,15 @@ test('#773 同一批裡小白搬到已出所、同籠打上新狗：小白記離
   assert.equal(all.find(d => d.name === '新狗').status, 'main');
 });
 
+test('#773 同籠的暫住列也剛刪掉：暫住列不算候選（#772 存在暫住紀錄），(乳白) 照樣自動合併', async t => {
+  const rows = [...ROWS.slice(0, 2), ['新A01', '', '（測試狗)', '', '', ''], ...ROWS.slice(2)];
+  const { env, gas, manage } = await start(t, rows);
+  await withHistory(env, manage);
+  gas.remove('名:（測試狗)');
+  await gas.edit('名:(乳白)', { name: '暖暖' });
+  await assertMerged(env, manage);
+});
+
 test('#773 在修改紀錄按取消合併：拆回兩隻，(乳白) 變待核對', async t => {
   const { env, gas, manage } = await start(t);
   const milk = await withHistory(env, manage);
