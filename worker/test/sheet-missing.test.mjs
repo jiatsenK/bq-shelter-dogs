@@ -145,7 +145,8 @@ test('#771 超過單次上限的消失留給下一次，每次請求的 D1 查�
   gas.beforeWorker = () => { counts.push(0); };
   const gone = many.slice(0, 12).map(r => r[1]);
   for (const id of gone) gas.remove(id);
-  await gas.edit('7029', { note: '打針' });
+  // 最重的一次：同一批送滿 10 列，又有 10 個以上的消失要標
+  await gas.paste('7020', Array.from({ length: 10 }, () => ({ note: '打針' })));
   await gas.timer(); // 第一次只標了 MISSING_MAX 隻，還有候選：補送再送一次清單，標剩下的
   later(11);
   await gas.timer();

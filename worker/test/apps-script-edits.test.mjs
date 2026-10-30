@@ -58,13 +58,13 @@ test('#769 先清空一格、下一次執行再打字：兩次編輯觸發，用
   assert.deepEqual(await dogs(env), [['9001', '測試狗', 'A01'], ['9002', '小黑', 'A02']]);
 });
 
-test('#769 刪列：刪整列不跑編輯觸發、清空最後一列算不出單位也送清單；表上一隻都不剩不當成消失，保險掃描把網站多的列出來', async t => {
+test('#769 刪列：刪整列不跑編輯觸發；清空到表上一隻都不剩，沒有單位也沒有主清單 key，不送也不當成消失；保險掃描把網站多的列出來', async t => {
   const { env, gas } = await start(t);
   const posts = dogListPosts(gas).length;
   gas.remove('9001');
   assert.equal(dogListPosts(gas).length, posts, 'Google 刪整列不跑編輯觸發，小程式沒有執行');
   await gas.clear(2);
-  assert.equal(dogListPosts(gas).length, posts + 1, '清空的那列沒有犬名、編號，沒有單位，照樣送一次清單（#771）');
+  assert.equal(dogListPosts(gas).length, posts, '表上一隻狗都沒有，沒東西可告訴 Worker（還有狗時清空最後一列照樣送，見 sheet-missing.test.mjs）');
   assert.deepEqual(await dogs(env), [['9001', '測試狗', 'A01'], ['9002', '小白', 'A02']], '表上沒有任何狗，多半是讀錯表，網站照舊');
 
   await gas.scan();

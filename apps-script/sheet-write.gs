@@ -476,10 +476,15 @@ function flushDogList() {
       var units = dogListUnits(dogListSheets(), ymdOf, dogListHash);
       // 單位已經不在表上（例：狗改了編號、整列刪掉）就沒有列可送，照樣送清單，Worker 從清單看出哪些列不見了
       var rows = sent.map(function (s) { return units[s.key]; });
-      var out = walkWorker(props, 'dog-list', { rows: rows.filter(Boolean), mainKeys: mainKeysOf(units) });
+      var live = rows.filter(Boolean), mainKeys = mainKeysOf(units);
+      var got = [], i = 0;
+      // 沒有列、表上也沒有主清單 key（例：主清單沒有籠位欄）就沒東西可告訴 Worker
+      if (live.length || mainKeys.length) {
+        var out = walkWorker(props, 'dog-list', { rows: live, mainKeys: mainKeys });
+        rememberCandidates(props, out);
+        got = out.results || [];
+      }
       listed = true;
-      rememberCandidates(props, out);
-      var got = out.results || [], i = 0;
       results = rows.map(function (r) { return r ? got[i++] : { ack: true }; });
     } catch (err) {
       console.warn('flushDogList: 保留待通知：' + (err && err.message ? err.message : err));

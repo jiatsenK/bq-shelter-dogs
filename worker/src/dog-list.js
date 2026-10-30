@@ -30,6 +30,8 @@ const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 const dogKey = dog => dog.id || `名:${dog.name}`;
 const rowKey = m => `main:${m.number || `名:${m.name}`}`;
+// 「資料更新」時間（ADR 0014 的 synced_at）：台灣時間，格式同舊同步
+const syncedAt = now => `${new Date(now + 8 * 3600000).toISOString().slice(0, 19)}+08:00`;
 export function unitKey(row) {
   if (row.sheet === 'main' || row.sheet === 'departed') return `${row.sheet}:${dogKey(row.dog)}`;
   if (row.sheet === 'groups') return `groups:${row.column}`;
@@ -250,13 +252,17 @@ async function reconcileMissing(db, list, mainKeys, now, fp) {
   if (suspicious && gone.length) console.warn(`dog-list: 表上少了 ${gone.length}/${list.length} 隻，不當成消失`);
   const doing = work.slice(0, MISSING_MAX), at = new Date(now).toISOString();
   const same = 'row_index=? AND dog_id=? AND missing_at IS ?';
-  if (doing.length) await db.batch(doing.map(([what, m]) => what === 'confirm'
+  const done = doing.length ? await db.batch(doing.map(([what, m]) => what === 'confirm'
     ? db.prepare(`DELETE FROM v3_sheet_main WHERE ${same}`).bind(m.row_index, m.dog_id, m.missing_at)
-    : db.prepare(`UPDATE v3_sheet_main SET missing_at=? WHERE ${same}`).bind(what === 'mark' ? at : null, m.row_index, m.dog_id, m.missing_at ?? null)));
-  for (const [what, m] of doing) {
+    : db.prepare(`UPDATE v3_sheet_main SET missing_at=? WHERE ${same}`).bind(what === 'mark' ? at : null, m.row_index, m.dog_id, m.missing_at ?? null))) : [];
+  let skipped = false;
+  doing.forEach(([what, m], i) => {
+    // 條件沒對上（別的請求改過這一列）就沒寫到，複本照讀到的樣子，下一次清單再看
+    if (!done[i]?.meta?.changes) { skipped = true; return; }
     if (what === 'confirm') { list.splice(list.indexOf(m), 1); delete fp[rowKey(m)]; } else m.missing_at = what === 'mark' ? at : null;
-  }
-  return work.length > doing.length || list.some(m => m.missing_at);
+  });
+  // 被當成讀錯表時不叫 GAS 一直重送；下一次有人改表或保險掃描再看
+  return !suspicious && (skipped || work.length > doing.length || list.some(m => m.missing_at));
 }
 
 // ack：Worker 已接手（更新或無差異）；D1 失敗回 false，GAS 保留待通知下次補送。
@@ -288,7 +294,7 @@ export async function syncDogList(db, rows, mainKeys, env, now = Date.now()) {
   const touched = confirmed || results.some(r => r.changed);
   const writes = [
     ...(JSON.stringify(fp) !== before ? [putState(db, FP_KEY, JSON.stringify(fp))] : []),
-    ...(touched ? [putState(db, SYNCED_AT_KEY, `${new Date(now + 8 * 3600000).toISOString().slice(0, 19)}+08:00`)] : []),
+    ...(touched ? [putState(db, SYNCED_AT_KEY, syncedAt(now))] : []),
   ];
   if (writes.length) await db.batch(writes).catch(e => console.warn('dog-list state:', e.message));
   return { results, candidates };
@@ -315,7 +321,7 @@ export async function scanDogList(db, fingerprints, now = Date.now()) {
   const before = JSON.stringify(fp);
   const { candidates, confirmed } = await missingOf(db, await readMain(db), Object.keys(fingerprints).filter(k => k.startsWith('main:')), now, fp);
   // #519 補填「誰遛的」原文：主清單 walker 還是 NULL 的狗指紋一樣也要，補好就不再要
-  const unfilled = new Set((await db.prepare("SELECT number, name FROM v3_sheet_main WHERE walker IS NULL").all()).results.map(r => `main:${r.number || `名:${r.name}`}`));
+  const unfilled = new Set((await db.prepare("SELECT number, name FROM v3_sheet_main WHERE walker IS NULL").all()).results.map(rowKey));
   const want = Object.keys(fingerprints).filter(k => fp[k] !== fingerprints[k] || unfilled.has(k));
   // #528 舊指紋：回所的狗（同一隻 main: 這次有送）、D1 已經沒有這隻狗的資料，只刪指紋，不算 D1 有、試算表沒有
   const missing = Object.keys(fp).filter(k => !(k in fingerprints));
@@ -331,7 +337,7 @@ export async function scanDogList(db, fingerprints, now = Date.now()) {
   }
   for (const k of stale) delete fp[k];
   if (JSON.stringify(fp) !== before) await putState(db, FP_KEY, JSON.stringify(fp)).run();
-  if (confirmed) await putState(db, SYNCED_AT_KEY, `${new Date(now + 8 * 3600000).toISOString().slice(0, 19)}+08:00`).run();
+  if (confirmed) await putState(db, SYNCED_AT_KEY, syncedAt(now)).run();
   const extra = missing.filter(k => !stale.has(k)).sort();
   let prev = {};
   try { prev = JSON.parse(await state(db, EXTRA_KEY) || '{}'); } catch { /* 讀不懂就重記 */ }
