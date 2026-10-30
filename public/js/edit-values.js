@@ -24,6 +24,7 @@ export function editsValue(kind, v) {
     if (v.mergeLogId) return `${dog(v.name, [v.number].filter(Boolean))}，取消第 ${v.mergeLogId} 筆合併`;
     return `${dog(v.name, v.numbers)}：${counts(v.counts)}`;
   }
+  if (kind === 'stay-start' || kind === 'stay-end') return `暫住 ${v.cage}`;
   if (kind === 'rest') return `休養到 ${v.until}${v.reason ? `（${v.reason}）` : ''}`;
   if (kind === 'group') return `${v.label || '（沒有群名）'}：${(v.names || []).join('、') || '（沒有狗）'}`;
   if (kind === 'activity') return `${v.date} ${{ kids: '動保小小兵', adoption: '認養會' }[v.kind] || v.kind}：${(v.dogs || []).join('、') || '（沒有狗）'}`;

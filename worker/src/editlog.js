@@ -24,6 +24,8 @@ export const KIND_LABELS = {
   merge: '合併狗',
   automerge: '系統自動合併', // #773：狗清單同步認定同籠的候選就是新建的狗（ADR 0025），可以取消合併
   unmerge: '取消合併',
+  'stay-start': '暫住開始', // #772：試算表出現暫住列（不建狗）
+  'stay-end': '暫住結束', // #772：暫住列消失、確認後
 };
 // 合併狗的紀錄存整份快照（snapshot、rows）給管理網站取消合併用；公開的編輯紀錄只看摘要
 const MERGE_KINDS = new Set(['merge', 'automerge', 'unmerge']);

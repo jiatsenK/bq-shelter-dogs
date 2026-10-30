@@ -18,11 +18,13 @@ const BOOLEANS = new Set(['covered']);
 export async function readDogsPayload(db) {
   // 介紹是 D1 自己存的（#250 網站改了馬上看得到），不用主清單複本上同步帶來的那份
   // 「誰遛的」代號、狗群都是所屬那一列的 JSON（#559）
-  const [main, former, groups, notes] = await db.batch([
+  // 暫住紀錄（#772）照舊當成沒編號的一列送出（網站 mergeTempCages 合到那隻狗），接在主清單後面
+  const [main, former, groups, notes, stays] = await db.batch([
     db.prepare("SELECT m.row_index, m.dog_id, m.number, m.name, m.cage, m.note, m.walked_date, m.walker_codes, c.sex AS dog_sex, COALESCE(i.intro, '') AS d1_intro, c.fixed_care, es.revision AS edit_revision, p.object_key AS photo_key FROM v3_sheet_main m LEFT JOIN v3_intros i USING(dog_id) JOIN v3_dogs c USING(dog_id) JOIN v3_dog_edit_state es USING(dog_id) LEFT JOIN v3_photos p ON p.dog_id=m.dog_id AND p.is_primary=1 ORDER BY m.row_index"),
     db.prepare("SELECT m.row_index, n.number FROM v3_sheet_main m JOIN v3_dog_numbers n USING(dog_id) WHERE n.number <> m.number ORDER BY m.row_index, n.number"),
     db.prepare('SELECT column_index, label, names FROM v3_sheet_group_columns ORDER BY column_index'),
     db.prepare('SELECT label, text FROM v3_sheet_changes ORDER BY row_index'),
+    db.prepare('SELECT name, cage, note FROM v3_sheet_stays ORDER BY name'),
   ]);
   const rows = main.results || [];
   if (!rows.length) throw new Error('v3_sheet_main 沒有資料');
@@ -48,6 +50,7 @@ export async function readDogsPayload(db) {
     if (staysOf.has(row.dog_id)) dog.stays = staysOf.get(row.dog_id);
     return dog;
   });
+  for (const s of stays.results || []) dogs.push({ editRevision: 0, cage: s.cage, id: '', name: s.name, walkedDate: null, covered: false, note: s.note, sex: '', intro: '', walkers: [] });
   return {
     version: 1, // 格式版本；主清單的 version 欄全是 1，不再讀（#557）
     dogs,

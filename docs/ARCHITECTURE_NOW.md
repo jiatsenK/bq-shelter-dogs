@@ -24,7 +24,7 @@
 | 狗清單：主清單、已出所、常遛狗群 | 管理者 | GAS 編輯觸發 → `POST /api/walk-writeback/dog-list`，只寫有變的欄（#501）。網站讀 `/api/dogs` 時，遛狗日期以今日溜狗為準並附上今日紀錄（只在回應時換，不寫表；K 2026-10-26）。Worker 端遛狗日期、遛狗人另存溜狗日期包（`v3_pack_versions.walked`），只改這兩欄不讓在所資料包重算（#679） | `worker/src/dog-list.js`、`worker/src/today-walks/read.js` 的 `withTodayWalks` |
 | 常溜狗群（網站狗群頁） | 管理者在試算表「常遛狗群」改 | GAS 編輯觸發送 D1（一欄一列 `v3_sheet_group_columns`，#559）；網站只讀（#474） | `worker/src/dog-list.js` |
 | 休養、介紹、開卡、常溜、固定照顧、活動 | 網站 | 只存 D1，不碰試算表 | 見各 ADR |
-| 合併重複的狗（試算表改編號多出來的，#621） | 管理網站；同籠自動合併由狗清單同步（#773） | 只存 D1，可在修改紀錄取消合併 | `worker/src/dog-merge.js` |
+| 合併重複的狗（試算表改編號多出來的，#621） | 管理網站 | 只存 D1，可在修改紀錄取消合併 | `worker/src/dog-merge.js` |
 | 離所 | 管理者把狗搬到試算表「已出所」 | GAS 編輯觸發送 D1，以狗 ID 記在 `v3_dog_departures`（#560）；沒編號的狗還不能記離所（`worker/src/dog-list.js` 的 `applyDeparted`） | `worker/src/dog-list.js` |
 | 功能顯示、志工可編輯 | 管理網站 | 只存 D1 `v3_feature_settings`（十項開關＋revision，清單在 `worker/src/feature-settings.js` 的 `SETTING_KEYS`；舊的 `editFormer` 已退役，讀取時拿掉；後加的 `showShare` 那列沒有時讀成關閉，ADR 0023），改動記在 `v3_feature_settings_log`（#565） | `docs/operations/feature-settings.md` |
 | 狗資料（介紹、休養、固定照顧、出入所紀錄（含舊編號，ADR 0021）、照片、性別） | 志工網站或管理網站 | 只存 D1；每隻狗帶 revision，衝突回 409，修改和紀錄同一次寫入（#566）。試算表送來的狗名、編號、籠位、備註、離所在管理網站只能看 | `worker/src/dog-edit.js`、`docs/operations/dog-editing.md` |
@@ -45,7 +45,7 @@ Apps Script 同一次執行會沿用第一次讀到的表內容，之後別人�
 | 每 10 分鐘（錯開 5 分） | 網站登記寫回試算表的重試；沒工作就結束、不讀表 | Worker cron |
 | 09:23、13:23、23:23 | 今日溜狗保險掃描：按狗比指紋，只回不同的狗（#525）；排在 GAS `dogListScan` 可能跑的時段之前，避免搶鎖 | Worker cron → GAS `walkScan` |
 | 09:43、13:53、23:53（Google 前後差 15 分鐘） | 狗清單保險掃描：指紋表的主清單 key 也拿來找消失的列（見下方「主清單的列消失」）；「D1 有、表沒有」每次記掃描時間，管理網站「資料檢查」顯示（#518／#567） | GAS 時間觸發 `dogListScan` |
-| 每天 09:23 | 修改紀錄清理（ADR 0004 修訂），跟那次保險掃描同一個排程：`v3_edit_log` 超過 14 天的刪掉（連同 `v3_dog_edit_actors`），合併狗、系統自動合併、取消合併的快照永久保留；只有 `editlog.js` 的 `pruneEdits` 會刪 | Worker cron |
+| 每天 09:23 | 修改紀錄清理（ADR 0004 修訂），跟那次保險掃描同一個排程：`v3_edit_log` 超過 14 天的刪掉（連同 `v3_dog_edit_actors`），合併狗、取消合併的快照永久保留；只有 `editlog.js` 的 `pruneEdits` 會刪 | Worker cron |
 | 每月 1 日 09:23 | 照片垃圾桶清理，跟那次保險掃描同一個排程：`trash/` 標記滿 30 天的備份刪掉；`photos/` 32 碼舊原圖與縮圖只在 D1 `v3_photos` 記得它、且 `is_primary=0` 時一起刪，並刪掉那列（D1 沒這列就不碰，防測試 D1 配正式 R2）；固定路徑 `photos/{編號}.jpg` 不刪。只剩縮圖的備份照代號開頭的時間清。一筆出錯記下來、接著清下一筆，出錯那筆的備份留到下個月；結果記在 `v3_sync_state.trash_purged`（`{at, purged, failed, errors}`），有失敗時 `cron_trash` 記成出錯（實際保留 30～約 61 天）。R2 不設 Lifecycle 刪除規則（K 2026-10-26） | Worker cron |
 
 Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，2026-10-26）：正式版 2 個（`5-59/10 * * * *`、`23 1,5,15 * * *`），測試網站只有寫回重試 1 個，預覽與管理 Worker 都不設。Worker 的四件排程工作每次跑完或出錯都記在 D1 `v3_sync_state` 的 `cron_retry`、`cron_scan`、`cron_trash`、`cron_editlog`（寫回重試每 10 分鐘寫這一列），管理網站「資料檢查」的「排程」顯示最後一次跑完的時間與最近失敗。
@@ -54,7 +54,9 @@ Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，
 
 重試另有每天上限（#685，ADR 0018 補充）：`v3_walk_write_budget` 每天一列，`reserved` 是全部保留量（跟 `SYNC_DAILY_BUDGET` 比），`retry` 是其中寫回重試的部分（跟 `SYNC_RETRY_DAILY_BUDGET` 比，`wrangler.jsonc` 設 10,000 列，K 2026-10-27 定）。失敗過的工作再派送才算重試；第一次派送、中斷後的恢復派送不算。上限用完時，`today-walks/dispatch.js` 的 `dispatchBatch` 把那些工作的 `next_attempt_at` 改成隔天 UTC 午夜，同一輪的第一次派送照送。
 
-**主清單的列消失**（#771，ADR 0025；取代 K 2026-10-26「刪列再發生才處理」）：GAS 每次送狗清單（`/dog-list` 的 `mainKeys`）、保險掃描送指紋，都附上讀表那一刻主清單的全部單位 key；改到主清單卻算不出單位（例：清空最後一隻狗那列）也送一次。Worker 套用完這批列後，主清單複本有、表上沒有的列標成候選（`v3_sheet_main.missing_at` 記第一次不見的時間），網站照常顯示；候選又出現就清掉，不記紀錄。第一次不見後隔 `MISSING_CONFIRM_MS`（10 分鐘，GAS 一次執行最多 6 分鐘）以上再收到清單還是不見，才確認：整列移出主清單複本，狗的資料（溜狗紀錄、照片、介紹）不刪，管理網站顯示待核對，可以合併。Worker 回 `candidates: true` 時 GAS 記在指令碼屬性 `DOG_LIST_CANDIDATES`，下一次 10 分鐘補送沒有待送也再送一次清單，所以實際約 10～20 分鐘確認。一次請求最多處理 `MISSING_MAX`（10）個，其餘留給下一次；表上一個主清單 key 都沒有，或一次少了一半以上的狗，當成讀錯表，不處理。保險掃描送指紋前也在 script lock 內核對表上變動記號（讀表後有人改過就整次不送）。Google 刪整列不跑編輯觸發，要等下一次有人改表、補送或保險掃描才送到清單。程式在 `worker/src/dog-list.js` 的 `reconcileMissing`。同籠自動合併（#773）：要新建狗時，同一個籠位剛好只有一個不在表上、非暫住的列，就建新狗後由 `dog-merge.js` 的 `autoMergeDogs` 把那一列移出主清單、併到新狗（修改紀錄「系統自動合併」，可取消合併）；沒編號的括號暫用名不再用溜狗紀錄的名字找回舊狗。暫住列、可能是同一隻的配對是 #768 後面的票。
+**主清單的列消失**（#771，ADR 0025；取代 K 2026-10-26「刪列再發生才處理」）：GAS 每次送狗清單（`/dog-list` 的 `mainKeys`）、保險掃描送指紋，都附上讀表那一刻主清單的全部單位 key；改到主清單卻算不出單位（例：清空最後一隻狗那列）也送一次。Worker 套用完這批列後，主清單複本有、表上沒有的列標成候選（`v3_sheet_main.missing_at` 記第一次不見的時間），網站照常顯示；候選又出現就清掉，不記紀錄。第一次不見後隔 `MISSING_CONFIRM_MS`（10 分鐘，GAS 一次執行最多 6 分鐘）以上再收到清單還是不見，才確認：整列移出主清單複本，狗的資料（溜狗紀錄、照片、介紹）不刪，管理網站顯示待核對，可以合併。Worker 回 `candidates: true` 時 GAS 記在指令碼屬性 `DOG_LIST_CANDIDATES`，下一次 10 分鐘補送沒有待送也再送一次清單，所以實際約 10～20 分鐘確認。一次請求最多處理 `MISSING_MAX`（10）個，其餘留給下一次；表上一個主清單 key 都沒有，或一次少了一半以上的狗，當成讀錯表，不處理。保險掃描送指紋前也在 script lock 內核對表上變動記號（讀表後有人改過就整次不送）。Google 刪整列不跑編輯觸發，要等下一次有人改表、補送或保險掃描才送到清單。程式在 `worker/src/dog-list.js` 的 `reconcileMissing`。同籠自動合併（#773）：要新建狗時，同一個籠位剛好只有一個不在表上、非暫住的列，就建新狗後由 `dog-merge.js` 的 `autoMergeDogs` 把那一列移出主清單、併到新狗（修改紀錄「系統自動合併」，可取消合併）；沒編號的括號暫用名不再用溜狗紀錄的名字找回舊狗。可能是同一隻的配對是 #768 後面的票。
+
+**暫住列**（#772，ADR 0025）：主清單上「(皮蛋）」這種列（沒編號、犬名用括號包起來、括號裡去掉空白是主清單上一隻有編號的狗）不建狗，存成暫住紀錄 `v3_sheet_stays`（哪一隻、暫住哪一籠），修改紀錄記「暫住開始」。在所資料包照舊把這一列當成沒編號的一列、接在狗清單後面送出，志工網站照舊合到那隻狗（`public/js/app.js` 的 `mergeTempCages`）。暫住列消失照上面的候選規則確認，確認後刪掉暫住紀錄、記「暫住結束」。有編號的括號列、括號裡不是在所狗名的列（「(乳白)」暫用名）照舊當新狗。上線時 migration `0021` 把主清單複本上的暫住列轉成暫住紀錄，沒有其他資料的假狗刪掉。程式在 `worker/src/dog-list.js` 的 `applyStay`。
 
 ## 管理網站（ADR 0020）
 
