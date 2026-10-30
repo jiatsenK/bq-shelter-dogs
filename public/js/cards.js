@@ -19,8 +19,8 @@ const BQ_PACK_SIZE = 5;
 
 // 卡面色帶照犬舍分區（K 2026-10-30 不用球隊說法）；顏色是卡面色帶和圖鑑每區的標
 // 分區、區名、區色在 js/site-config.js（cards.html 先載入）
-const BQ_TEAMS = SITE.zones.map(z => ({ key: z.key, name: z.team, test: z.test, color: z.color }));
-const BQ_FREE = { key: SITE.freeTeam.key, name: SITE.freeTeam.team, test: () => true, color: SITE.freeTeam.color };
+const BQ_TEAMS = SITE.zones.map(z => ({ key: z.key, name: z.name, test: z.test, color: z.color }));
+const BQ_FREE = { ...SITE.otherZone, test: () => true };
 
 // 卡的等級看在所多久：等越久的狗卡越閃，讓最久的被看見
 const BQ_TIERS = [
@@ -106,7 +106,7 @@ function bqAwards(players, today = new Date()) {
   const out = [];
   if (walker) out.push({ key: 'walker', title: '出門王', who: walker, value: walker.monthOut, unit: '天', note: `${today.getMonth() + 1} 月出門最多天` });
   if (oldest) out.push({ key: 'veteran', title: '最資深', who: oldest, value: Math.floor(oldest.years), unit: '年', note: `${oldest.intake.getFullYear()} 年入所，等最久` });
-  if (newest && newest !== oldest) out.push({ key: 'rookie', title: '新來的', who: newest, value: Math.max(1, Math.round((today - newest.intake) / 86400000)), unit: '天', note: '最近才入所' });
+  if (newest && newest !== oldest) out.push({ key: 'rookie', title: '最新入所', who: newest, value: Math.max(1, Math.round((today - newest.intake) / 86400000)), unit: '天', note: '剛來不久' });
   return out;
 }
 

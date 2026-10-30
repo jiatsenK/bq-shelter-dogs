@@ -12,7 +12,7 @@ K 2026-10-10：「我希望網站當主人（未來），讓這個網站以後�
 | `days.amber`、`days.red` | 天數紅黃綠的門檻（溜狗表、列表、電腦版、找狗、分析） |
 | `warnKeywords` | 備註警示關鍵字 |
 | `zones`（key、name、match、team、color） | 電腦版簡報和分區分頁、圖鑑的隊伍和隊色 |
-| `freeTeam` | 圖鑑裡不屬於任何一區的狗 |
+| `otherZone` | 圖鑑裡不屬於任何一區的狗（卡面寫「其他」） |
 
 `public/index.html`、`public/cards.html` 都在其他程式前面載入這個檔；測試（`tests/index.html`）也是。
 

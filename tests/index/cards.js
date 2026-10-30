@@ -61,8 +61,8 @@ async function runCardsTests() {
     eq([by['老將'].photo, by['老將'].hasPhoto, by['新人'].hasPhoto], ['photos/2017041502.jpg?v=abc', true, false], '照片：');
     eq([by['老將'].quote, C.bqQuote('2017年4月15日從板橋被拾獲入所。親人'), C.bqQuote(''), [...C.bqQuote('很'.repeat(50))].length], ['個性溫和，喜歡散步', '2017年4月15日從板橋被拾獲入所', '', 40], '一句話：');
   });
-  await check('球員卡年度獎項：出門王、最資深、新來的都是資料算的', () => {
-    eq(C.bqAwards(players, TODAY).map(a => [a.title, a.who.name, a.value]), [['出門王', '中堅', 2], ['最資深', '老將', 9], ['新來的', '新人', 38]]);
+  await check('圖鑑年度獎項：出門王、最資深、最新入所都是資料算的', () => {
+    eq(C.bqAwards(players, TODAY).map(a => [a.title, a.who.name, a.value]), [['出門王', '中堅', 2], ['最資深', '老將', 9], ['最新入所', '新人', 38]]);
   });
   const ME = 'aaaaaaaaaaaa', ME2 = 'bbbbbbbbbbbb', OTHER = 'cccccccccccc';
   await check('圖鑑：我溜過的狗讀 Worker 的彙總（#344），不再另加手機記的試算表寫入', () => {
