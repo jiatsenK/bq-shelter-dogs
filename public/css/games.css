@@ -30,8 +30,7 @@ a { color: var(--primary); }
 .g-center { text-align: center; }
 
 /* 主要動作實心綠、次要動作綠色底線字（DESIGN_GUIDE「原則・按鈕強調」） */
-.g-btn { min-height: 52px; padding: 0 28px; border: 2px solid var(--primary); border-radius: 0; background: var(--primary); color: #fff; font: inherit; font-size: 18px; font-weight: 800; letter-spacing: .04em; cursor: pointer; transition: background-color .15s, border-color .15s; }
-.g-btn:hover:not(:disabled) { background: #174A3E; border-color: #174A3E; }
+.g-btn { min-height: 52px; padding: 0 28px; border: 2px solid var(--primary); border-radius: 0; background: var(--primary); color: #fff; font: inherit; font-size: 18px; font-weight: 800; letter-spacing: .04em; cursor: pointer; }
 .g-btn:disabled { background: var(--surface-soft); border-color: var(--line); color: var(--ink-soft); cursor: default; }
 .g-link { display: inline-grid; place-items: center; min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--primary); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
 .g-link:disabled { color: var(--ink-soft); cursor: default; }
@@ -132,5 +131,5 @@ html[data-site="test"] .g-head h1::after { content: "測試版"; display: inline
 
 @media (prefers-reduced-motion: reduce) {
   .g-stage { transform: none !important; }
-  .g-photo.revealed :is(.g-stage, .g-deco), .g-btn, .g-opts button { transition: none; }
+  .g-photo.revealed :is(.g-stage, .g-deco), .g-opts button { transition: none; }
 }

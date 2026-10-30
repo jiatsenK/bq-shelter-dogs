@@ -22,7 +22,11 @@
 
 ## 審查與測試
 
-- （見下方補充）
+- code-review 兩軸（基準 4297ce25）：
+  - Standards：開始鈕滑過寫死的新綠色拿掉；`dress()` 的 callback 改成選填物件，三個元素用 `photoEls()` 取；10 格「正在答」改成明確傳題號；剩 3 秒改用 `LIMIT_MS` 算；`tests/games.cjs` 補選單、遊戲中、結算的點擊目標（44px、隔 8px），電腦版改 1440 寬並查頁首 64px、返回鍵與內容同一條左邊線。
+  - Spec：DESIGN_GUIDE 補紅綠只限遊戲頁的例外、答對答錯用 `--green-text`、按鈕用 `--primary`；答錯照片一排幾張、電腦版「開始玩」不撐滿照實作改寫規格。
+  - 沒改：小遊戲頁不套電腦版五格頁首（DESIGN_GUIDE 電腦版「每一頁同一個頁首」），等 K 決定；`::selection`、底部安全區這些小調整保留。
+- games、es-modules、test-site 套件通過，最後跑 `-Full`。
 
 ## 相關 PR
 

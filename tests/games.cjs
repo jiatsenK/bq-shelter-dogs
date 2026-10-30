@@ -70,6 +70,20 @@ module.exports = async (browser, base) => {
 
   const answerOf = async page => NAMES[(await page.locator('#gPic').getAttribute('src')).match(/photos\/(\d+)\.jpg/)[1]];
   const visible = async (page, id) => page.locator('#' + id).isVisible();
+  // 單手操作（DESIGN_GUIDE）：看得到的按鈕、連結至少 44×44、相鄰至少隔 8px；授權標註是內文裡的連結，不算
+  const touchTargets = async (page, screen) => {
+    const bad = await page.evaluate(id => {
+      const els = [...document.querySelectorAll(`#${id} :is(button, a)`)].filter(e => e.offsetParent && !e.closest('.g-credit'));
+      const r = els.map(e => e.getBoundingClientRect()), name = e => e.id || e.textContent.trim();
+      const out = r.flatMap((b, i) => (Math.min(b.width, b.height) < 44 ? [`${name(els[i])} ${Math.round(b.width)}×${Math.round(b.height)}`] : []));
+      for (let i = 0; i < r.length; i++) for (let j = i + 1; j < r.length; j++) {
+        const gap = Math.max(r[j].left - r[i].right, r[i].left - r[j].right, r[j].top - r[i].bottom, r[i].top - r[j].bottom);
+        if (gap < 8) out.push(`${name(els[i])} ↔ ${name(els[j])} 隔 ${Math.round(gap)}px`);
+      }
+      return out;
+    }, screen);
+    assert.deepEqual(bad, [], `${screen} 點擊目標`);
+  };
 
   // 資訊頁 → 小遊戲選單 → 玩一局 → 結算 → 分享 → 返回
   {
@@ -89,6 +103,7 @@ module.exports = async (browser, base) => {
     assert.equal(await page.locator('#gHubBest').isVisible(), false, '還沒玩過不顯示最高分');
     await page.waitForFunction(() => document.querySelectorAll('#gCoverDeco svg').length > 0); // 封面是一隻變裝狗
     assert.equal((await page.locator('.g-soon').innerText()).replace(/\s+/g, ''), '更多遊戲準備中');
+    await touchTargets(page, 'gHub');
     assert.equal(await page.locator('.g-credit a[href*="creativecommons.org/licenses/by-nc/4.0"]').count(), 1, '模型授權標註');
     assert.equal(await visible(page, 'gPlay'), false, '藏起來的畫面真的不顯示');
     assert.equal(await visible(page, 'gEnd'), false);
@@ -110,6 +125,7 @@ module.exports = async (browser, base) => {
       assert(opts.includes(answer), '答案在選項裡');
       assert.equal(new Set(opts).size, 4, '選項名字不重複');
       for (const name of opts) assert(!['換照片狗', '（暫定）', '沒算位置'].includes(name), `不能出題的狗不當選項：${name}`);
+      if (i === 1) await touchTargets(page, 'gPlay');
       const pick = i <= 7 ? answer : opts.find(n => n !== answer);
       if (pick !== answer) missed.push(answer);
       await page.locator('#gOpts').getByRole('button', { name: pick, exact: true }).click();
@@ -125,6 +141,7 @@ module.exports = async (browser, base) => {
     assert.equal(await page.locator('#gBest').innerText(), '新紀錄！');
     assert.equal(await page.locator('#gEndSteps li.ok').count(), 7);
     assert.equal(await page.locator('#gEndSteps li.no').count(), 3);
+    await touchTargets(page, 'gEnd');
     assert.equal(await page.evaluate(() => localStorage.getItem('bq-game-dressup-best')), String(score));
     assert.deepEqual(await page.locator('#gMissed figcaption').allTextContents(), missed);
     assert.equal(await page.locator('#gMissed img').count(), 3);
@@ -193,13 +210,17 @@ module.exports = async (browser, base) => {
 
   // 深色模式和電腦版：照樣是淺色、看得清楚；電腦版照片在左、選項在右；電腦版資訊頁也有入口
   {
-    const { context, page } = await open({ colorScheme: 'dark', width: 1280 });
+    const { context, page } = await open({ colorScheme: 'dark', width: 1440 });
     await page.goto(base + '/public/games.html');
     await page.locator('#gDressUp:not([disabled])').waitFor();
     const look = await page.evaluate(() => ({ bg: getComputedStyle(document.body).backgroundColor, ink: getComputedStyle(document.body).color, main: document.querySelector('.g-main').getBoundingClientRect().width }));
     assert.equal(look.bg, 'rgb(227, 233, 229)');
     assert.equal(look.ink, 'rgb(22, 33, 29)');
     assert(look.main > 480 && look.main <= 1040, `遊戲寬度：${look.main}`);
+    const line = await page.evaluate(() => ({ head: document.querySelector('.g-head').getBoundingClientRect().height,
+      back: document.getElementById('gBack').getBoundingClientRect().left + 10, content: document.querySelector('.g-feature').getBoundingClientRect().left }));
+    assert.equal(line.head, 64, '頁首 64px');
+    assert(Math.abs(line.back - line.content) <= 1, `返回鍵與內容同一條左邊線：${line.back}、${line.content}`);
     await page.locator('#gDressUp').click();
     await page.waitForFunction(() => document.querySelectorAll('#gDeco svg').length > 0);
     const [photo, opts] = await page.evaluate(() => ['.g-photo', '#gOpts'].map(s => document.querySelector('#gPlay ' + s).getBoundingClientRect().toJSON()));

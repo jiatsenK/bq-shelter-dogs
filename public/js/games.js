@@ -40,10 +40,15 @@ async function loadDogs() {
   await Promise.all(S.dogs.map(d => loadImg(d.thumb).then(img => { S.sigs[d.id] = signature(img); }).catch(() => {})));
 }
 
-// 10 格：這局每一題答對、答錯、正在答
-function drawSteps(el) {
-  el.innerHTML = S.qs.map((q, i) => `<li class="${q.result || (i === S.i && !$('gPlay').hidden ? 'now' : '')}"></li>`).join('');
+const LOW_MS = 3000; // 剩 3 秒計時條變紅
+
+// 10 格：這局每一題答對、答錯；current 是正在答的那題（結算時不標）
+function drawSteps(el, current = -1) {
+  el.innerHTML = S.qs.map((q, i) => `<li class="${q.result || (i === current ? 'now' : '')}"></li>`).join('');
 }
+
+// 一組照片（方框、照片、裝飾層），id 前綴是 gStage／gPic／gDeco 或 gCoverStage／gCoverPic／gCoverDeco
+const photoEls = (cover = '') => ({ stage: $(`g${cover}Stage`), pic: $(`g${cover}Pic`), deco: $(`g${cover}Deco`) });
 
 function show(id) {
   for (const s of ['gHub', 'gPlay', 'gEnd']) $(s).hidden = s !== id;
@@ -91,7 +96,7 @@ function decoSvg(key, attrs) {
 const decoOnPhoto = p => decoSvg(p.key, `aria-hidden="true" data-deco="${p.key}" style="left:${p.left}%;top:${p.top}%;width:${p.width}%;height:${p.height}%;transform-origin:${p.ox * 100}% ${p.oy * 100}%;transform:rotate(${p.deg}deg)"`);
 
 // 照片拉近狗臉、戴上裝飾；遊戲中和選單封面共用。live() 是 false 時（已經換題、回選單）照片晚到也不動畫面
-function dress({ stage, pic, deco }, dog, live, done, fail) {
+function dress({ stage, pic, deco }, dog, { live = () => true, done = () => {}, fail = () => {} } = {}) {
   deco.innerHTML = '';
   stage.style.transform = ''; stage.style.transformOrigin = '';
   pic.hidden = false;
@@ -115,7 +120,7 @@ function dress({ stage, pic, deco }, dog, live, done, fail) {
 // 選單封面：隨機一隻變裝狗，讀不到照片就留淺綠底
 function cover() {
   const dog = S.dogs[Math.floor(Math.random() * S.dogs.length)];
-  dress({ stage: $('gCoverStage'), pic: $('gCoverPic'), deco: $('gCoverDeco') }, dog, () => true, () => {}, () => {});
+  dress(photoEls('Cover'), dog);
 }
 
 function ask() {
@@ -123,14 +128,16 @@ function ask() {
   const current = () => round === S.round && S.qs[S.i] === q; // 照片晚到時已經換題或回選單，就不動畫面
   q.opts = optionNames(q.dog, S.dogs, S.sigs);
   $('gNo').textContent = S.i + 1;
-  drawSteps($('gSteps'));
+  drawSteps($('gSteps'), S.i);
   $('gPhoto').classList.remove('revealed');
   $('gPicErr').hidden = true;
   // 倒數從照片出現（或確定讀不到）才開始，照片慢不吃作答時間
   const go = () => { S.locked = false; S.t0 = performance.now(); tick(); };
-  dress({ stage: $('gStage'), pic: $('gPic'), deco: $('gDeco') }, q.dog, current,
-    (zoom, decos) => { q.zoom = zoom; q.decos = decos; go(); },
-    () => { $('gPicErr').hidden = false; go(); });
+  dress(photoEls(), q.dog, {
+    live: current,
+    done: (zoom, decos) => { q.zoom = zoom; q.decos = decos; go(); },
+    fail: () => { $('gPicErr').hidden = false; go(); },
+  });
   $('gSay').textContent = ''; $('gSay').className = 'g-say';
   $('gOpts').innerHTML = '';
   for (const name of q.opts) {
@@ -147,7 +154,7 @@ function tick() {
   const left = Math.max(0, 1 - (performance.now() - S.t0) / LIMIT_MS);
   $('gBar').style.transform = `scaleX(${left})`;
   $('gTimer').setAttribute('aria-valuenow', Math.ceil(left * LIMIT_MS / 1000));
-  $('gTimer').classList.toggle('low', left <= .3);
+  $('gTimer').classList.toggle('low', left * LIMIT_MS <= LOW_MS);
   if (left <= 0) return answer(null);
   S.raf = requestAnimationFrame(tick);
 }
@@ -159,7 +166,7 @@ function answer(name) {
   const q = S.qs[S.i], ok = name === q.dog.name;
   if (ok) { S.right++; S.score += points(performance.now() - S.t0); } else S.missed.push(q.dog);
   q.result = ok ? 'ok' : 'no';
-  drawSteps($('gSteps'));
+  drawSteps($('gSteps'), S.i);
   // 卸妝：裝飾拿掉、照片退回整張，看清楚是哪隻
   if (!$('gPic').hidden) $('gPhoto').classList.add('revealed');
   $('gScore').textContent = S.score;
@@ -195,10 +202,10 @@ function finish() {
     $('gMissed').appendChild(f);
   }
   $('gMissedWrap').hidden = !S.missed.length;
-  const best = readBest();
-  if (S.score > best) writeBest(S.score);
-  $('gBest').textContent = S.score > best ? '新紀錄！' : `你的最高分是 ${best}`;
-  $('gBest').classList.toggle('new', S.score > best);
+  const best = readBest(), isNew = S.score > best;
+  if (isNew) writeBest(S.score);
+  $('gBest').textContent = isNew ? '新紀錄！' : `你的最高分是 ${best}`;
+  $('gBest').classList.toggle('new', isNew);
   showBest();
   $('gLine').href = 'https://line.me/R/share?text=' + encodeURIComponent(shareText());
 }
