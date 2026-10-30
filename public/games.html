@@ -66,18 +66,16 @@
     </div>
     <div class="g-actions">
       <button class="g-btn" id="gAgain" type="button">再玩一次</button>
-      <div class="g-row">
-        <button class="g-link" id="gShot" type="button">分享截圖</button>
-        <a class="g-link" id="gLine" target="_blank" rel="noopener">分享到 LINE</a>
-      </div>
-      <p class="g-note g-center">想連圖片一起傳，先存圖再到 LINE 傳照片</p>
+      <button class="g-link" id="gShare" type="button">分享結果</button>
     </div>
   </section>
 </main>
 
-<div class="g-sheet" id="gSheet" role="dialog" aria-modal="true" aria-label="分享截圖" hidden><div class="g-sheet-in">
+<!-- 分享結果：手機能分享檔案時直接叫出分享（截圖＋網址），不能時才開這層讓人存圖、拿網址 -->
+<div class="g-sheet" id="gSheet" role="dialog" aria-modal="true" aria-label="分享結果" hidden><div class="g-sheet-in">
   <img id="gSheetImg" alt="這局的分數和變裝狗狗">
-  <p class="g-note">長按圖片可以存到手機</p>
+  <p class="g-note">長按圖片可以存到手機，網址傳給朋友就能玩</p>
+  <a class="g-sheet-url" id="gSheetUrl" target="_blank" rel="noopener"></a>
   <div class="g-row">
     <button class="g-btn" id="gSheetShare" type="button" hidden>分享</button>
     <button class="g-link" id="gSheetClose" type="button">關閉</button>

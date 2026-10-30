@@ -96,7 +96,7 @@ a { color: var(--primary); }
 .g-missed-wrap { display: flex; flex-direction: column; gap: 12px; padding: 20px; border-top: 1px solid var(--line); }
 .g-missed-wrap h2 { margin: 0; font-size: 17px; }
 .g-missed { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 12px 10px; }
-.g-missed figure { margin: 0; display: grid; gap: 4px; font-size: 14px; font-weight: 700; text-align: center; }
+.g-missed a { display: grid; gap: 4px; color: var(--primary); font-size: 14px; font-weight: 700; text-align: center; text-decoration: underline; text-underline-offset: 3px; }
 .g-missed img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: var(--primary-soft); }
 .g-actions { display: flex; flex-direction: column; gap: 10px; }
 .g-actions .g-btn { width: 100%; }
@@ -104,6 +104,7 @@ a { color: var(--primary); }
 .g-sheet { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .6); }
 .g-sheet-in { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 420px; max-height: 100%; overflow: auto; padding: 16px; background: var(--surface); }
 .g-sheet-in img { display: block; width: 100%; }
+.g-sheet-url { color: var(--primary); font-weight: 700; overflow-wrap: anywhere; user-select: all; }
 
 /* 電腦版（≥1100px，跟志工網站同一個分界）：照片在左、題目與按鈕在右，不把手機版直接放大 */
 @media (min-width: 1100px) {
