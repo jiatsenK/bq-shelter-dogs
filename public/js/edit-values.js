@@ -16,7 +16,7 @@ export function editsValue(kind, v) {
     const person = p => p.name + '（常溜 ' + p.favorites + '、開卡 ' + p.cards + '、溜狗來源紀錄 ' + p.walkRows + '）';
     return v.source ? person(v.source) + ' ＋ ' + person(v.target) : v.name;
   }
-  if (kind === 'merge' || kind === 'unmerge') {
+  if (kind === 'merge' || kind === 'automerge' || kind === 'unmerge') {
     // 合併狗（管理網站）：改前＝被併那隻與牠的資料筆數；改後＝併到哪隻、搬了什麼（取消合併反過來）
     const counts = c => countsText(c) || '沒有資料';
     const dog = (name, numbers) => `${name || '未命名'}（${(numbers || []).join('、') || '無編號'}）`;

@@ -42,7 +42,7 @@ function renderRow(e) {
   if (e.actorEmail) who.append(element('div', e.actorEmail, 'identity'));
   const value = v => { const cell = element('td', undefined, 'edit-value'); cell.append(element('pre', valueText(e.kind, v))); return cell; };
   const after = value(e.after);
-  if (e.kind === 'merge' && e.dogId) after.append(unmergeButton(e));
+  if ((e.kind === 'merge' || e.kind === 'automerge') && e.dogId) after.append(unmergeButton(e));
   row.append(select, when, element('td', e.kindLabel || e.kind), element('td', dog), who, value(e.before), after);
   return row;
 }
