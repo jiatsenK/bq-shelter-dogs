@@ -7,7 +7,7 @@ import worker from '../src/index.js';
 import { setup, request, post as postWalk, day } from './walk-fixture.mjs';
 import { todayWalks } from '../src/today-walks/index.js';
 import { walkerCode } from '../src/editlog.js';
-import { removeFormerNumber } from '../src/compact.js';
+import { removeFormerNumber, readDogsPayload } from '../src/compact.js';
 
 const post = (env, action, body, key = env.SHEET_WRITE_KEY) => worker.fetch(new Request(`https://worker.example/api/walk-writeback/${action}`, {
   method:'POST', headers:{ 'X-Sheet-Write-Key':key }, body:JSON.stringify(body),
@@ -275,6 +275,43 @@ test('#501 新增狗先打名字、後補編號：補到同一隻，不多出一
     const fp = JSON.parse((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_fp'").first()).value);
     assert.equal(fp['main:名:先打名'], undefined, '舊的名字單位不留，掃描不會列成多出來的');
   } finally { env.DB.close(); }
+});
+
+test('搬籠清舊列先清編號（2026-10-30 皮蛋）：同名同備註沒編號的列不另建狗、不記指紋，網站上那隻照片照舊', async () => {
+  const env = await setup();
+  worker.testing.resetState();
+  try {
+    const note = '2026/4/29洗澡（巧芸）';
+    await send(env, [main({ cage:'新A08', note })]);
+    const dogId = (await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='9001'").first()).dog_id;
+    await env.DB.prepare("INSERT INTO v3_photos(object_key,dog_id,thumb_key,is_primary) VALUES('photos/aaaa.jpg',?,'photos/thumbs/aaaa.jpg',1)").bind(dogId).run();
+    const dogs = async () => (await env.DB.prepare('SELECT COUNT(*) n FROM v3_dogs').first()).n;
+    const before = await dogs();
+    const left = (extra, mainKeys = ['main:9001', 'main:名:測試狗']) => post(env, 'dog-list', { rows:[{ ...main({ dog:{ id:'', name:'測試狗' }, cage:'舊A13', note, date:'', ...extra }), hash:'g1' }], mainKeys });
+    assert.deepEqual((await (await left()).json()).results.map(r => [r.ack, r.changed]), [[true, false]]);
+    assert.equal(await dogs(), before, '不建新狗');
+    assert.deepEqual((await readDogsPayload(env.DB)).dogs.filter(d => d.name === '測試狗').map(d => [d.cage, d.photoVersion]), [['新A08', 'aaaa']]);
+    const fp = JSON.parse((await env.DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_fp'").first()).value);
+    assert.equal(fp['main:名:測試狗'], undefined, '不記指紋，保險掃描下次再判斷');
+    await left({ note:'' });
+    assert.equal(await dogs(), before + 1, '備註空白不判斷，同名新狗照樣建');
+  } finally { env.DB.close(); }
+});
+
+test('搬籠清舊列：備註不同，或有編號那列不在表上（清掉編號再打回，#773），照樣建狗', async () => {
+  const note = '2026/4/29洗澡（巧芸）';
+  // 表上有一列沒編號的「測試狗」：回傳主清單複本上沒編號那列的籠位，沒收就是 []
+  const unnumbered = async (extra, mainKeys) => {
+    const env = await setup();
+    worker.testing.resetState();
+    try {
+      await send(env, [main({ cage:'新A08', note })]);
+      await post(env, 'dog-list', { rows:[{ ...main({ dog:{ id:'', name:'測試狗' }, cage:'舊A13', note, date:'', ...extra }), hash:'g1' }], mainKeys });
+      return (await env.DB.prepare("SELECT cage FROM v3_sheet_main WHERE number='' AND name='測試狗'").all()).results.map(r => r.cage);
+    } finally { env.DB.close(); }
+  };
+  assert.deepEqual(await unnumbered({ note:'另一隻' }, ['main:9001', 'main:名:測試狗']), ['舊A13'], '備註不同是同名的另一隻');
+  assert.deepEqual(await unnumbered({ cage:'新A08' }, ['main:名:測試狗']), ['新A08'], '有編號那列不在表上：是清掉編號的牠，照一般規則處理');
 });
 
 test('#519 試算表「誰遛的」填了新名字：記進志工名單，/walkers 換得回名字（2026-10-24 實測「123」換不回來）', async () => {
