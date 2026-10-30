@@ -36,7 +36,7 @@
 | `detail-viewport.js` | 詳細資訊編輯欄位的可見範圍 | 無 | index |
 | `keyboard-viewport.js` | 螢幕鍵盤開啟時的欄位與面板定位 | 無 | index |
 | `overlays.js` | 返回鍵與焦點圈：覆蓋層（平面圖放大、裁切、燈箱、在哪、詳細資訊、小遊戲的分享截圖）註冊怎麼判斷開著／怎麼關，按返回的關閉順序集中在 `BACK_ORDER`；開一層、關一層、換掉歷史紀錄、頁籤／資訊子頁的歷史紀錄（帶呼叫端算好的網址，打開網頁那一筆標 `bqLanding`，ADR 0024）、離開這頁回志工網站另一頁（`leaveTo`）、`trapFocus` | 無 | index、cards、games、Node |
-| `routes.js` | 志工網站網址（ADR 0024）：`#walk`、`#info/<子頁>`、`#dog/<編號>` 和畫面狀態互換、判斷一般點擊與 Ctrl／⌘ 點擊、電腦版真連結手機按鈕的 `routeControl` | 無 | index、Node |
+| `routes.js` | 志工網站網址（ADR 0024）：`#walk`、`#info/<子頁>`、`#dog/<編號>` 和畫面狀態互換、判斷一般點擊與 Ctrl／⌘ 點擊、電腦版真連結手機按鈕的 `routeControl` | 無 | index、games、Node |
 | `walk-registration.js` | `createWalkRegistration`：D1 接受流程的登記、同行人、復原與今日紀錄核對規則，純 ES module（#558 起沒有寫回試算表的舊路徑） | 無 | index、Node |
 | `walk-flow.js` | `BQWalks`：不碰 DOM 的排隊登記、核對、復原、提示及同行人手機紀錄 | store、walk-registration（日期介面由呼叫端注入） | index、Node |
 | `identity.js` | 志工身分：`identityRequest`（/identity 請求與錯誤）、`refreshIdentity`（用登記名字換最新的名字與代號；送出前後手機上的名字和代號都沒變才存，不然回 `changed`）。設定名字、常溜同步、圖鑑共用，各頁的讀、存與被改過時的反應由呼叫端帶入 | api | index、cards、Node |
@@ -57,7 +57,7 @@
 | `desk-mine.js` | 電腦版我溜過：標題列（名字＋修改）、月曆每格寫當天溜的狗名（最多 2 個，其餘「＋N」）、右欄選中那天的狗與月曆那個月的統計；還沒設定是誰時表單放主內容。手機照舊是 app.js 的 `myWalksHtml` | app、ui-kit、dates、welcome、page-state | index |
 | `cards.js` | 圖鑑、開卡與已出所狗卡，保留卡片專用格式 | dates、api、store、site-config、overlays、identity、page-state | cards |
 | `dress-up.js` | 狗狗變裝秀（#795）的規則：能出題的狗（`playableDogs`：在所、有編號與照片、名字不是括號開頭，臉部位置檔 `data/dog-faces.json` 的照片版本跟 `/api/dogs` 一樣）、選項（長相最像的狗）、拉近狗臉、19 種裝飾的位置；不碰 DOM | 無 | games |
-| `games.js` | 小遊戲頁：選單、狗狗變裝秀（遊戲中、結算、最高分）、分享截圖與分享到 LINE；返回鍵與網址（`games.html`、`#dressup`）走 overlays.js | api、overlays、dress-up | games |
+| `games.js` | 小遊戲頁：選單、狗狗變裝秀（遊戲中、結算、最高分）、分享結果（截圖＋網址一起交給手機的分享，不能分享檔案時開截圖視窗）；返回鍵與網址（`games.html`、`#dressup`）走 overlays.js | api、overlays、dress-up | games |
 | `games-entry.js` | 小遊戲頁入口 | games | games |
 | `edit-values.js` | `editsValue`：編輯紀錄改前／改後的文字，純函式 | 無 | edits、admin（建置複製） |
 | `edits.js` | 編輯紀錄清單 | api、store、edit-values | edits |
