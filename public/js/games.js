@@ -172,7 +172,7 @@ function finish() {
   $('gLine').href = 'https://line.me/R/share?text=' + encodeURIComponent(shareText());
 }
 
-// ---- 分享截圖：分數和這局前四隻變裝狗畫成一張 1080×1440 的圖（不寫名字，看圖的人才能猜）----
+// ---- 分享截圖：分數和這局前四隻變裝狗畫成一張 1080×1440 的圖（不寫名字，看圖的人才能猜），最下面印遊戲網址 ----
 
 // 照遊戲畫面的方式畫一隻狗：照片裁成正方形、拉近狗臉，再把裝飾一個個轉成圖片貼上
 async function drawDog(ctx, q, x, y, size) {
@@ -213,11 +213,17 @@ async function shotCanvas() {
   ctx.fillStyle = v('--shell-soft'); ctx.font = font(400, 34); ctx.fillText(INTRO, 72, 190);
   ctx.fillStyle = v('--ink'); ctx.font = font(900, 150); ctx.fillText(String(S.score), 72, 420);
   ctx.font = font(700, 50); ctx.fillText(`認出 ${S.right} / ${S.qs.length} 隻`, 72, 500);
-  const size = 380, gap = 40, x0 = (W - size * 2 - gap) / 2, y0 = 545;
+  const size = 360, gap = 30, x0 = (W - size * 2 - gap) / 2, y0 = 545;
   const qs = S.qs.slice(0, 4);
   for (let i = 0; i < qs.length; i++) await drawDog(ctx, qs[i], x0 + (i % 2) * (size + gap), y0 + Math.floor(i / 2) * (size + gap), size);
   ctx.fillStyle = v('--ink-soft'); ctx.font = font(400, 34); ctx.textAlign = 'center';
-  ctx.fillText('你認得出牠們是誰嗎？', W / 2, H - 44);
+  ctx.fillText('你認得出牠們是誰嗎？', W / 2, H - 90);
+  // 網址印在圖上，圖被存下來、轉傳也找得到遊戲；太長就縮小字到放得下
+  const url = gameUrl().replace(/^https?:\/\//, '');
+  let px = 36;
+  do { ctx.font = font(700, px); } while (ctx.measureText(url).width > W - 144 && --px > 20);
+  ctx.fillStyle = v('--primary');
+  ctx.fillText(url, W / 2, H - 36);
   return c;
 }
 

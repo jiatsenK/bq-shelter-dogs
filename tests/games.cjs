@@ -127,10 +127,18 @@ module.exports = async (browser, base) => {
     assert.equal(line.origin + line.pathname, 'https://line.me/R/share');
     assert.equal(line.searchParams.get('text'), `我在「狗狗變裝秀」認出 7 / 10 隻變裝的板收狗狗，拿到 ${score} 分！換你來試試 ${base}/public/games.html#dressup`);
 
+    // 記下截圖上寫了哪些字：要印遊戲網址，圖被存下來轉傳也找得到
+    await page.evaluate(() => {
+      window.__shotTexts = [];
+      const fill = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) { window.__shotTexts.push(String(text)); return fill.call(this, text, ...rest); };
+    });
     await page.locator('#gShot').click();
     await page.locator('#gSheet').waitFor();
     await page.waitForFunction(() => document.getElementById('gSheetImg').naturalWidth > 0);
     assert.deepEqual(await page.evaluate(() => [document.getElementById('gSheetImg').naturalWidth, document.getElementById('gSheetImg').naturalHeight]), [1080, 1440]);
+    const shotTexts = await page.evaluate(() => window.__shotTexts);
+    assert(shotTexts.includes(`${base.replace(/^https?:\/\//, '')}/public/games.html#dressup`), `截圖印遊戲網址：${shotTexts.join('、')}`);
     await page.goBack(); // 手機返回鍵先關截圖
     await page.locator('#gSheet').waitFor({ state: 'hidden' });
     assert.equal(await visible(page, 'gEnd'), true);
