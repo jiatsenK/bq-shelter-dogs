@@ -328,7 +328,7 @@ flowchart LR
 - 進入點往下：今日溜狗紀錄（`worker/src/index.js:11`）；狗清單同步（`worker/src/index.js:17`）；讀取打包（`worker/src/index.js:9, 19, 21`）；試算表呼叫（`worker/src/index.js:7`）；志工身分（`worker/src/index.js:5`）；設定・活動・分享（`worker/src/index.js:3-4, 10, 12`）；狗資料與照片（`worker/src/index.js:1-2, 6, 15`）。
 - 志工網站框內（今日溜狗紀錄在共用框，管理網站也讀它的停住清單）：狗清單同步 → 今日溜狗紀錄（`worker/src/dog-list.js:15`；溜狗欄有變先交觀測值，溜狗紀錄只由今日溜狗紀錄寫，#747）；今日溜狗紀錄 → 試算表呼叫（`worker/src/today-walks/index.js:35-46`，呼叫進入點交進來的 sheet；沒交時預設 callSheet，`worker/src/today-walks/index.js:8`、`worker/src/today-walks/index.js:23`）；今日溜狗紀錄 → 志工身分（`worker/src/today-walks/accept.js:3`）；狗清單同步 → 志工身分（`worker/src/dog-list.js:14`）；讀取打包 → 志工身分（`worker/src/compact.js:1`）。
 - 試算表呼叫可替換（#748）：進入點用 `createWorker({ sheet })` 建立，Cloudflare 用的那一份就是 callSheet（`worker/src/index.js:959-964`）；同一個 sheet 交給網站登記、排程的今日溜狗紀錄，也拿來加備註、異動紀錄（`worker/src/index.js:552`、`worker/src/index.js:572`、`worker/src/index.js:772`）；寫回端點用的今日溜狗紀錄不碰試算表，沒交 sheet（`worker/src/index.js:858`）。
-- 測試把試算表呼叫換成 `worker/test/apps-script.mjs`：vm 載入真的 `apps-script/sheet-write.gs`，小程式的 UrlFetchApp 接回同一個 Worker、同一個 D1（`worker/test/apps-script.mjs:25`、`worker/test/apps-script.mjs:80`、`worker/test/apps-script.mjs:119`、`worker/test/apps-script.mjs:151`），所以溜狗測試不再手寫 GAS 寫回協定，也不換 `globalThis.fetch`。
+- 測試把試算表呼叫換成 `worker/test/apps-script.mjs`：vm 載入真的 `apps-script/sheet-write.gs`，小程式的 UrlFetchApp 接回同一個 Worker、同一個 D1（`worker/test/apps-script.mjs:39`、`worker/test/apps-script.mjs:108`、`worker/test/apps-script.mjs:153`、`worker/test/apps-script.mjs:201`），所以溜狗測試不再手寫 GAS 寫回協定，也不換 `globalThis.fetch`。
 - 往共用與外部：狗清單同步 → 狗資料與照片（`worker/src/dog-list.js:1`）；讀取打包 → 狗資料與照片（`worker/src/compact.js:2`）；試算表呼叫 → Apps Script（`worker/src/sheet-write.js:33`）；狗資料與照片 → R2（`worker/src/r2.js:36`）。
 - 管理網站：管理入口 → 管理查詢（`worker/src/admin/index.js:7, 9-10, 12-13`）；管理入口 → Cloudflare Access（`worker/src/admin/access.js:28`）；管理入口 → 設定・活動・分享（`worker/src/admin/index.js:5, 8, 14`）；管理入口 → 狗資料與照片（`worker/src/admin/index.js:1-4, 15`）；管理入口 → 今日溜狗紀錄（`worker/src/admin/index.js:11`、`worker/src/admin/index.js:117`）；管理查詢 → 設定・活動・分享（`worker/src/admin/activities.js:3`、`worker/src/admin/checks.js:4`）。
 - D1 的線省略不畫：進入點、今日溜狗紀錄、狗清單同步、讀取打包、志工身分、設定・活動・分享、狗資料與照片、管理查詢都直接讀寫 D1（例如 `worker/src/today-walks/shared.js:15`、`worker/src/packs.js:69`、`worker/src/identity.js:7`、`worker/src/feature-settings.js:13`、`worker/src/dog-edit.js:11`、`worker/src/admin/checks.js:27`）。
@@ -423,6 +423,6 @@ quadrantChart
 - `worker/src/dog-list.js`：試算表送來的狗清單寫進 D1、保險掃描比指紋
 - `worker/src/admin/index.js`：管理網站 Worker 的進入點與權限檢查
 - `apps-script/sheet-write.gs`：貼到 Google 的 Apps Script，寫表、編輯觸發、時間觸發
-- `worker/test/apps-script.mjs`：溜狗測試的共用 fixture，在 Node 跑真的 sheet-write.gs、接回 Worker
+- `worker/test/apps-script.mjs`：溜狗與狗清單同步測試的共用 fixture，在 Node 跑真的 sheet-write.gs、接回 Worker，可模擬管理者改表（改格子、貼上、刪列、補送、保險掃描）
 - `wrangler.jsonc`：正式志工網站的綁定與排程；其他環境見 `wrangler.admin.jsonc`、`wrangler.test-site.jsonc`、`wrangler.preview-db.jsonc`
 - `docs/ARCHITECTURE_NOW.md`：資料在哪、誰寫、怎麼同步的文字說明
