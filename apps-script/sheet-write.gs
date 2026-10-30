@@ -326,6 +326,8 @@ function onWalkSheetEdit(e) {
   var header = kind === 'groups' ? null : findHeader(values);
   // 狗清單（#501）：主清單、已出所、常遛狗群改到的單位都記下來送 Worker
   var units = dogListKeysForEdit(kind, values, header, range.getRow() - 1, range.getNumRows(), range.getColumn() - 1, range.getLastColumn() - 1);
+  // 改到主清單卻算不出單位（例：清空最後一隻狗那列）：也送一次清單，Worker 才知道那列不見了（#771）
+  if (kind === 'main' && header && !units.length) units = [DOG_LIST_RECHECK];
   if (units.length) updateDogListPending(function (p) {
     var next = { seq: p ? p.seq : 0, items: p ? p.items : {} };
     units.forEach(function (k) { next.seq++; next.items[k] = { seq: next.seq }; });
@@ -438,7 +440,11 @@ function editPayload(snapshot, items) {
 // 單位：主清單一隻狗（main:編號，沒編號用 main:名:犬名）、已出所一隻狗（departed:…）、常遛狗群一欄（groups:欄）、主清單下方異動紀錄整段（notes）。
 // 每天台灣 09:43、13:53、23:53（dogListScan）送每個單位的指紋，Worker 回不一樣的，再分批只送那幾個；D1 是空的時就等於全部重送。
 // 也可以在 Apps Script 編輯器手動執行 dogListScan 補漏或重新灌資料。觸發器由 installWalkEditTriggers 一起建立。
+// 列消失（#771，ADR 0025）：每次送狗清單都附上表上主清單的全部單位 key（mainKeys），Worker 拿來找消失的列、先當候選再確認。
+// Worker 回「還有候選」就記在 DOG_LIST_CANDIDATES，下一次 10 分鐘補送沒有待送也再送一次清單。
 var DOG_LIST_PENDING = 'DOG_LIST_PENDING';
+var DOG_LIST_CANDIDATES = 'DOG_LIST_CANDIDATES';
+var DOG_LIST_RECHECK = 'list'; // 待送裡的假單位：沒有列要送、只要送一次清單
 var DOG_LIST_BATCH = 10; // 跟 Worker 的 DOG_LIST_ROWS_MAX 一樣
 var DOG_LIST_ROUNDS = 10; // 一次觸發最多送 10 批，其餘留給下次
 var DOG_LIST_SCAN_ROUNDS = 60; // 保險掃描一次最多 600 個單位（約 3 分鐘），沒送完下一次掃描接著補
@@ -456,6 +462,7 @@ function dogListHash(text) {
 
 function flushDogList() {
   var props = PropertiesService.getScriptProperties();
+  var listed = false; // 這次執行送過清單了：只為了候選再送，同一次執行讀到的表一樣，不重送
   for (var round = 0; round < DOG_LIST_ROUNDS; round++) {
     var sent, results;
     var lock = LockService.getScriptLock();
@@ -464,19 +471,21 @@ function flushDogList() {
       if (sheetChangedSinceRead(props)) { console.info('flushDogList: 讀表後有人改過，交給較新的執行送'); return; }
       var pending = JSON.parse(props.getProperty(DOG_LIST_PENDING) || 'null');
       var keys = pending ? Object.keys(pending.items) : [];
-      if (!keys.length) return;
+      if (!keys.length && (listed || props.getProperty(DOG_LIST_CANDIDATES) !== '1')) return;
       sent = keys.slice(0, DOG_LIST_BATCH).map(function (k) { return { key: k, seq: pending.items[k].seq }; });
       var units = dogListUnits(dogListSheets(), ymdOf, dogListHash);
-      // 單位已經不在表上（例：狗改了編號、整列刪掉）就沒東西可送，直接清；保險掃描會把 D1 多出來的列出來
+      // 單位已經不在表上（例：狗改了編號、整列刪掉）就沒有列可送，照樣送清單，Worker 從清單看出哪些列不見了
       var rows = sent.map(function (s) { return units[s.key]; });
-      var live = rows.filter(Boolean);
-      var got = live.length ? walkWorker(props, 'dog-list', { rows: live }).results || [] : [];
-      var i = 0;
+      var out = walkWorker(props, 'dog-list', { rows: rows.filter(Boolean), mainKeys: mainKeysOf(units) });
+      listed = true;
+      rememberCandidates(props, out);
+      var got = out.results || [], i = 0;
       results = rows.map(function (r) { return r ? got[i++] : { ack: true }; });
     } catch (err) {
       console.warn('flushDogList: 保留待通知：' + (err && err.message ? err.message : err));
       return;
     } finally { lock.releaseLock(); }
+    if (!sent.length) return;
     updateDogListPending(function (p) { return clearSent(p, sent, results); });
     if (results.some(function (r) { return !r || !r.ack; })) return;
   }
@@ -492,19 +501,34 @@ function updateDogListPending(change) {
   } finally { lock.releaseLock(); }
 }
 
+// Worker 回的「還有候選」記下來，只在拿著 script lock、剛送完清單時改（最後一次送出的回應為準）
+function rememberCandidates(props, out) {
+  props.setProperty(DOG_LIST_CANDIDATES, out && out.candidates ? '1' : '0');
+}
+function mainKeysOf(units) {
+  return Object.keys(units).filter(function (k) { return k.indexOf('main:') === 0; });
+}
+
 // 保險掃描：只送指紋，Worker 回要哪些；主清單先送（狗群要用主清單的犬名對）
-// 讀表、每一批的「核對記號 → 送出」都拿著 script lock（跟網站寫回同一把），核對完到送出之間網站寫回插不進來（#701）。
+// 讀表、送指紋、每一批的「核對記號 → 送出」都拿著 script lock（跟網站寫回同一把），核對完到送出之間網站寫回插不進來（#701）。
+// 指紋表就是表上全部的單位，Worker 拿它找消失的列（#771），所以送指紋前也核對記號：讀表後有人改過就整次不送，
+// 不然剛新增、已由編輯觸發送到的列會被舊指紋當成消失。
 // 每批不重讀表：同一次執行再讀也是第一次的內容；記號沒變就表示一開始讀到的仍是表上現在的值。
 function dogListScan() {
   var props = PropertiesService.getScriptProperties();
   var lock = LockService.getScriptLock();
-  var units;
+  var units, out;
   lock.waitLock(15000);
-  try { rememberSheetMark(props); units = dogListUnits(dogListSheets(), ymdOf, dogListHash); } finally { lock.releaseLock(); }
-  var fingerprints = {};
-  Object.keys(units).forEach(function (k) { fingerprints[k] = units[k].hash; });
-  var out = walkWorker(props, 'dog-list-scan', { fingerprints: fingerprints });
-  if (out.extra && out.extra.length) console.warn('dogListScan: D1 有、試算表沒有（只列出來，不自動刪）：' + out.extra.join('、'));
+  try {
+    rememberSheetMark(props);
+    units = dogListUnits(dogListSheets(), ymdOf, dogListHash);
+    if (sheetChangedSinceRead(props)) { console.warn('dogListScan: 讀表後有人改表，下次掃描再補'); return; }
+    var fingerprints = {};
+    Object.keys(units).forEach(function (k) { fingerprints[k] = units[k].hash; });
+    out = walkWorker(props, 'dog-list-scan', { fingerprints: fingerprints });
+    rememberCandidates(props, out);
+  } finally { lock.releaseLock(); }
+  if (out.extra && out.extra.length) console.warn('dogListScan: D1 有、試算表沒有：' + out.extra.join('、'));
   var want = orderDogListKeys(out.want || []);
   for (var round = 0; round < DOG_LIST_SCAN_ROUNDS && want.length; round++) {
     var stop = '';

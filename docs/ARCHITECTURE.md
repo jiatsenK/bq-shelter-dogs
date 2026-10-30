@@ -1,6 +1,6 @@
 # 架構圖：志工溜狗表
 
-> 核對日：2026-10-29｜依據 commit：`13d7532`
+> 核對日：2026-10-30｜依據 commit：`8794e3f`
 > 改到圖上的元件、連線、排程或部署方式時，在同一個 PR 更新這份檔案。規則見 agent-hub `docs/rules/architecture-diagrams.md`。
 > 名稱、排程時間、重試次數、端點跟程式不一致時 `scripts/diagram-facts.test.mjs` 會失敗；PR 改到架構相關檔案卻沒改對應段落，「架構圖重畫提醒」會在 PR 留言。管理網站「系統架構圖」頁也是從這份檔案產生。
 
@@ -226,13 +226,16 @@ flowchart TB
 flowchart TB
   a["管理者改主清單、已出所、常遛狗群"]
   b["編輯觸發 onWalkSheetEdit<br/>記進待通知 WALK_EDITS_PENDING、DOG_LIST_PENDING"]
-  c["立刻送給志工網站<br/>今日溜狗 /rows、狗清單 /dog-list"]
+  c["立刻送給志工網站<br/>今日溜狗 /rows、狗清單 /dog-list<br/>狗清單附上表上主清單全部 key"]
   d["志工網站寫進 D1<br/>回 ACK"]
+  m{"主清單複本有、表上沒有？"}
+  n["標成候選<br/>網站照常顯示"]
+  o["隔 10 分鐘以上再收到清單還是不見<br/>移出主清單，狗變待核對"]
   e{"收到 ACK？"}
   f["清掉待通知"]
   g["留著<br/>每 10 分鐘補送"]
   s["每天約 09:43、13:53、23:53 狗清單保險掃描<br/>dogListScan，前後可能差 15 分鐘"]
-  t["送全表指紋 /dog-list-scan"]
+  t["script lock 內核對變動記號<br/>送全表指紋 /dog-list-scan"]
   u["志工網站回不一樣的單位"]
   v["分批補送 /dog-list<br/>補進 D1"]
 
@@ -240,10 +243,14 @@ flowchart TB
   e -->|有| f
   e -->|沒有| g
   g -.-> c
+  d --> m
+  t --> m
+  m -->|是| n
+  n -.->|還有候選：10 分鐘補送再送清單| o
   s -.-> t --> u --> v
 
   class a ui
-  class b,c,d,e,f,g,s,t,u,v code
+  class b,c,d,e,f,g,m,n,o,s,t,u,v code
   classDef person stroke:#5b6b78,stroke-width:2px
   classDef ui stroke:#2f7fd0,stroke-width:2px
   classDef code stroke:#d9822b,stroke-width:2px
@@ -256,7 +263,8 @@ flowchart TB
 - 志工網站收 /rows、/dog-list、/dog-list-scan（`worker/src/index.js:848-873`）；/rows 要 `D1_WALK_NOTIFY` 開著才收進 D1，否則回 ack false 讓 Apps Script 留著（`worker/src/index.js:861-872`；`wrangler.jsonc:32-33`）。
 - 狗清單保險掃描：每天約 09:43、13:53、23:53 狗清單保險掃描，先送全表指紋，志工網站回不一樣的單位，再分批補送（`apps-script/sheet-write.gs:498-523`；`worker/src/dog-list.js:256-285`）。
 - 程式寫表不會觸發編輯觸發：網站新增的備註、異動紀錄，要等下一次保險掃描才進 D1，最久約 10 小時（`apps-script/sheet-write.gs:275`）。
-- 保險掃描只補不刪：D1 有、試算表沒有的，只列出來、在管理網站「待補清單」顯示（`worker/src/dog-list.js:6`、`worker/src/dog-list.js:278-285`）。
+- 列消失（#771，ADR 0025）：送狗清單、保險掃描送指紋都附上表上主清單的全部 key。主清單複本有、表上沒有的列先標成候選（`v3_sheet_main.missing_at`），又出現就取消；隔 10 分鐘以上再收到清單還是不見才確認，移出主清單，狗的資料不刪、管理網站顯示待核對。志工網站回「還有候選」時，Apps Script 的 10 分鐘補送沒有待送也再送一次清單（指令碼屬性 DOG_LIST_CANDIDATES）。一次請求最多處理 10 個；表上一次少一半以上的狗不當成消失（`worker/src/dog-list.js` 的 `reconcileMissing`；`apps-script/sheet-write.gs` 的 `flushDogList`、`dogListScan`）。
+- 保險掃描送指紋前在 script lock 內核對表上變動記號，讀表後有人改過就整次不送，剛新增的列不會被舊指紋當成消失。D1 有、試算表沒有的也列在管理網站「待補清單」（`worker/src/dog-list.js` 的 `scanDogList`）。
 
 ## 元件｜志工溜狗表｜程式架構
 

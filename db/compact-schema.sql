@@ -113,7 +113,8 @@ CREATE TABLE IF NOT EXISTS v3_sheet_main (
   note TEXT NOT NULL DEFAULT '',
   walked_date TEXT,
   walker TEXT, -- 試算表「誰遛的」原文（#519）；NULL＝還沒補填，保險掃描會要這隻
-  walker_codes TEXT NOT NULL DEFAULT '[]' -- 「誰遛的」代號 JSON 陣列，照名單順序（#559，取代 v3_sheet_main_walkers）
+  walker_codes TEXT NOT NULL DEFAULT '[]', -- 「誰遛的」代號 JSON 陣列，照名單順序（#559，取代 v3_sheet_main_walkers）
+  missing_at TEXT -- 試算表上不見的候選：第一次不見的時間（ISO）；NULL＝表上還在（#771，ADR 0025）
 );
 CREATE INDEX IF NOT EXISTS v3_sheet_main_number ON v3_sheet_main(number);
 CREATE INDEX IF NOT EXISTS v3_sheet_main_name ON v3_sheet_main(name) WHERE number='';

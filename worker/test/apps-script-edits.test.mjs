@@ -1,6 +1,6 @@
 // #769：Apps Script fixture 的改表操作示範（#768 新狗與暫住的身分辨認從這個接縫測）。
 // 管理者照平常的方式改主清單（帶籠位），跑真的 sheet-write.gs、真的 Worker 與 D1，只看志工網站與管理網站 API 讀到什麼。
-// 這裡斷言的是目前的行為（列消失還不處理），#768 改行為時跟著改。
+// 列消失的候選與確認（#771）在 sheet-missing.test.mjs。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import worker from '../src/index.js';
@@ -58,14 +58,14 @@ test('#769 先清空一格、下一次執行再打字：兩次編輯觸發，用
   assert.deepEqual(await dogs(env), [['9001', '測試狗', 'A01'], ['9002', '小黑', 'A02']]);
 });
 
-test('#769 刪列：刪整列不跑編輯觸發、清空最後一列算不出單位；保險掃描把網站多的列出來', async t => {
+test('#769 刪列：刪整列不跑編輯觸發、清空最後一列算不出單位也送清單；表上一隻都不剩不當成消失，保險掃描把網站多的列出來', async t => {
   const { env, gas } = await start(t);
-  const posts = gas.posts.length; // 補充斷言，見 dogListPosts
+  const posts = dogListPosts(gas).length;
   gas.remove('9001');
-  assert.equal(gas.posts.length, posts, 'Google 刪整列不跑編輯觸發，小程式沒有執行');
+  assert.equal(dogListPosts(gas).length, posts, 'Google 刪整列不跑編輯觸發，小程式沒有執行');
   await gas.clear(2);
-  assert.equal(gas.posts.length, posts, '清空的那列沒有犬名、編號，沒有單位可送');
-  assert.deepEqual(await dogs(env), [['9001', '測試狗', 'A01'], ['9002', '小白', 'A02']], '目前列消失不處理，網站照舊');
+  assert.equal(dogListPosts(gas).length, posts + 1, '清空的那列沒有犬名、編號，沒有單位，照樣送一次清單（#771）');
+  assert.deepEqual(await dogs(env), [['9001', '測試狗', 'A01'], ['9002', '小白', 'A02']], '表上沒有任何狗，多半是讀錯表，網站照舊');
 
   await gas.scan();
   const manage = await manageApi(t, env);

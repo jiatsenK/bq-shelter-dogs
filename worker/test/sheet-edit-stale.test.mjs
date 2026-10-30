@@ -159,8 +159,8 @@ test('較早的執行被擋下時，待通知留給較新的執行送，不清�
 test('#701 保險掃描核對記號後、送出前網站寫回同一隻狗：不能送出舊名單', () => {
   const w = world();
   const S = w.execution('S');
-  // 第 1 次讀記號是讀表前記下，第 2 次是送第一批前核對；核對讀完，網站寫回就來
-  w.hooks.mark.push(null, () => w.writeback(1, '志工乙'));
+  // 第 1 次讀記號是讀表前記下，第 2 次是送指紋前核對（#771），第 3 次是送第一批前核對；核對讀完，網站寫回就來
+  w.hooks.mark.push(null, null, () => w.writeback(1, '志工乙'));
   S.dogListScan();
   assert.equal(w.values[1][4], '志工乙', '網站寫回最後還是要寫進表');
   assert.ok(w.sent.dogList.length > 0);

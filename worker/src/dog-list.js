@@ -3,7 +3,9 @@ import { guardedDogBatch } from './dog-edit.js';
 // - GAS 編輯觸發只送受影響的列：主清單、已出所的狗（編號＋那一列）、常遛狗群的一欄、異動紀錄整段；Worker 只改那幾隻、只寫有變的欄。
 // - 換籠、離所看狗新出現在哪裡：出現在「已出所」就記離所並從主清單移走；又出現在主清單就不算離所。
 // - 每天三次保險掃描：GAS 送每個單位的指紋，Worker 回不一樣的（D1 還沒有指紋就全部要），GAS 再分批只送那幾個。
-// - D1 有、試算表沒有的只列出來（v3_sync_state 的 dog_list_extra，含每次掃描時間），不自動刪；管理網站資料檢查顯示（#567）。
+// - D1 有、試算表沒有的列出來（v3_sync_state 的 dog_list_extra，含每次掃描時間）；管理網站資料檢查顯示（#567）。
+// - 主清單的列消失（#771，ADR 0025）：GAS 每次送狗清單、保險掃描送指紋都帶著表上主清單的全部單位 key，
+//   複本有、表上沒有的列先當候選，確認後才移出主清單複本（狗的資料不刪，變成待核對），見 reconcileMissing。
 // 指紋只是「上次收過哪一版」，存在 v3_sync_state 一列 JSON；遺失只會讓下一次掃描多送幾列，不影響資料。
 // - 溜狗欄（日期、誰遛的）只更新主清單複本；有變就先當成一筆觀測值交給今日溜狗紀錄 module，溜狗紀錄、溜狗修改紀錄都由 module 寫（#747）。
 import { splitNames } from './sheet-read.js';
@@ -19,9 +21,15 @@ import { todayWalks } from './today-walks/index.js';
 export const DOG_LIST_ROWS_MAX = 10;
 const FP_KEY = 'dog_list_fp';
 export const EXTRA_KEY = 'dog_list_extra';
+// 候選第一次不見後至少隔這麼久，再收到清單還是不見才確認。GAS 一次執行最多 6 分鐘，所以確認用的一定是另一次執行讀的表；
+// 每 10 分鐘補送會在還有候選時再送一次清單，實際約 10～20 分鐘確認
+export const MISSING_CONFIRM_MS = 10 * 60000;
+// 一次請求最多處理幾個消失（標候選、取消、確認合計，同一個 batch），其餘留給下一次清單；守住每次呼叫 50 次查詢
+export const MISSING_MAX = 10;
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 const dogKey = dog => dog.id || `名:${dog.name}`;
+const rowKey = m => `main:${m.number || `名:${m.name}`}`;
 export function unitKey(row) {
   if (row.sheet === 'main' || row.sheet === 'departed') return `${row.sheet}:${dogKey(row.dog)}`;
   if (row.sheet === 'groups') return `groups:${row.column}`;
@@ -220,12 +228,44 @@ async function applyNotes(db, row) {
   return out.length > 0;
 }
 
+// 主清單的列消失（#771，ADR 0025）。mainKeys：GAS 讀表那一刻主清單的全部單位 key；list：已套用這次送來的列之後的主清單複本。
+// - 複本有、表上沒有：標成候選（missing_at 記第一次不見的時間），網站照常顯示，資料都不動。
+// - 候選又出現在表上：清掉 missing_at，不記紀錄（先清空犬名再打回、改到一半的暫時狀態）。
+// - 候選隔 MISSING_CONFIRM_MS 以上還是不見：確認，整列移出主清單複本（同離所的 dropMainRow），狗的資料不刪，管理網站顯示待核對。
+// 表上沒有任何主清單 key（讀不到表頭）或一次少了一半以上的狗，多半是讀錯表或整張清空重貼，不當成消失。
+// 每句都帶讀到時的 missing_at 當條件：同時有別的請求改過這一列就不動，下一次清單再看。
+// 回傳還有沒有候選（GAS 有就在下一次 10 分鐘補送再送一次清單）。
+async function reconcileMissing(db, list, mainKeys, now, fp) {
+  if (!Array.isArray(mainKeys) || !mainKeys.length) return false;
+  const present = new Set(mainKeys);
+  const gone = list.filter(m => !present.has(rowKey(m)));
+  const suspicious = gone.length * 2 > list.length;
+  const due = m => now - Date.parse(m.missing_at) >= MISSING_CONFIRM_MS;
+  // 取消排最前面：沒處理到的仍在表上，只是晚一點清，不會被確認（確認只看這次不在表上的列）
+  const work = [
+    ...list.filter(m => m.missing_at && present.has(rowKey(m))).map(m => ['back', m]),
+    ...(suspicious ? [] : gone.filter(m => m.missing_at && due(m)).map(m => ['confirm', m])),
+    ...(suspicious ? [] : gone.filter(m => !m.missing_at).map(m => ['mark', m])),
+  ];
+  if (suspicious && gone.length) console.warn(`dog-list: 表上少了 ${gone.length}/${list.length} 隻，不當成消失`);
+  const doing = work.slice(0, MISSING_MAX), at = new Date(now).toISOString();
+  const same = 'row_index=? AND dog_id=? AND missing_at IS ?';
+  if (doing.length) await db.batch(doing.map(([what, m]) => what === 'confirm'
+    ? db.prepare(`DELETE FROM v3_sheet_main WHERE ${same}`).bind(m.row_index, m.dog_id, m.missing_at)
+    : db.prepare(`UPDATE v3_sheet_main SET missing_at=? WHERE ${same}`).bind(what === 'mark' ? at : null, m.row_index, m.dog_id, m.missing_at ?? null)));
+  for (const [what, m] of doing) {
+    if (what === 'confirm') { list.splice(list.indexOf(m), 1); delete fp[rowKey(m)]; } else m.missing_at = what === 'mark' ? at : null;
+  }
+  return work.length > doing.length || list.some(m => m.missing_at);
+}
+
 // ack：Worker 已接手（更新或無差異）；D1 失敗回 false，GAS 保留待通知下次補送。
-export async function applyDogListRows(db, rows, env, now = Date.now()) {
+// mainKeys（#771）：GAS 讀表那一刻主清單的全部單位 key，套用完這批列之後拿來找消失的列；candidates＝還有候選。
+export async function syncDogList(db, rows, mainKeys, env, now = Date.now()) {
   let fp = await readFp(db);
   const before = JSON.stringify(fp);
   // 主清單約 300 列，每批讀一次換來逐列不必各查一次（每次呼叫 50 次查詢上限）
-  let list = (await db.prepare('SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,m.walker_codes,s.revision FROM v3_sheet_main m JOIN v3_dog_edit_state s USING(dog_id)').all()).results;
+  let list = await readMain(db);
   const results = [];
   for (const row of rows) {
     const key = row && unitKey(row);
@@ -243,19 +283,37 @@ export async function applyDogListRows(db, rows, env, now = Date.now()) {
       results.push({ ok: false, ack: !!error.status, key, error: error.status ? error.message : '狗清單更新失敗，保留待處理' });
     }
   }
+  const { candidates, confirmed } = await missingOf(db, list, mainKeys, now, fp);
   // 有改到資料才更新「資料更新」時間（ADR 0014 的 synced_at，網站頁首與手機待確認的溜狗都看它）；台灣時間，格式同舊同步
-  const touched = results.some(r => r.changed);
+  const touched = confirmed || results.some(r => r.changed);
   const writes = [
     ...(JSON.stringify(fp) !== before ? [putState(db, FP_KEY, JSON.stringify(fp))] : []),
     ...(touched ? [putState(db, SYNCED_AT_KEY, `${new Date(now + 8 * 3600000).toISOString().slice(0, 19)}+08:00`)] : []),
   ];
   if (writes.length) await db.batch(writes).catch(e => console.warn('dog-list state:', e.message));
-  return results;
+  return { results, candidates };
+}
+export const applyDogListRows = async (db, rows, env, now) => (await syncDogList(db, rows, null, env, now)).results;
+
+const readMain = async db => (await db.prepare('SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,m.walker_codes,m.missing_at,s.revision FROM v3_sheet_main m JOIN v3_dog_edit_state s USING(dog_id)').all()).results;
+// 消失的處理出錯不影響已收下的列：當成還有候選，GAS 下一次補送再送清單
+async function missingOf(db, list, mainKeys, now, fp) {
+  const count = list.length;
+  try {
+    const candidates = await reconcileMissing(db, list, mainKeys, now, fp);
+    return { candidates, confirmed: list.length < count };
+  } catch (e) {
+    console.warn('dog-list missing:', e.message);
+    return { candidates: true, confirmed: false };
+  }
 }
 
-// 保險掃描：fingerprints { 單位: 指紋 }。回 want（要 GAS 送的）、extra（D1 有、試算表沒有，只列出來）
+// 保險掃描：fingerprints { 單位: 指紋 }。回 want（要 GAS 送的）、extra（D1 有、試算表沒有）、candidates（還有候選，#771）
+// 指紋表的 main: 就是表上主清單的全部單位 key，跟狗清單同步一樣拿來找消失的列（GAS 在 script lock 內核對變動記號後才送）
 export async function scanDogList(db, fingerprints, now = Date.now()) {
   const fp = await readFp(db);
+  const before = JSON.stringify(fp);
+  const { candidates, confirmed } = await missingOf(db, await readMain(db), Object.keys(fingerprints).filter(k => k.startsWith('main:')), now, fp);
   // #519 補填「誰遛的」原文：主清單 walker 還是 NULL 的狗指紋一樣也要，補好就不再要
   const unfilled = new Set((await db.prepare("SELECT number, name FROM v3_sheet_main WHERE walker IS NULL").all()).results.map(r => `main:${r.number || `名:${r.name}`}`));
   const want = Object.keys(fingerprints).filter(k => fp[k] !== fingerprints[k] || unfilled.has(k));
@@ -271,10 +329,9 @@ export async function scanDogList(db, fingerprints, now = Date.now()) {
       .bind(...numbers, ...names).all()).results.map(r => r.number || `名:${r.name}`));
     keys.filter(k => !found.has(k)).forEach(k => stale.add(`${sheet}:${k}`));
   }
-  if (stale.size) {
-    for (const k of stale) delete fp[k];
-    await putState(db, FP_KEY, JSON.stringify(fp)).run();
-  }
+  for (const k of stale) delete fp[k];
+  if (JSON.stringify(fp) !== before) await putState(db, FP_KEY, JSON.stringify(fp)).run();
+  if (confirmed) await putState(db, SYNCED_AT_KEY, `${new Date(now + 8 * 3600000).toISOString().slice(0, 19)}+08:00`).run();
   const extra = missing.filter(k => !stale.has(k)).sort();
   let prev = {};
   try { prev = JSON.parse(await state(db, EXTRA_KEY) || '{}'); } catch { /* 讀不懂就重記 */ }
@@ -282,5 +339,5 @@ export async function scanDogList(db, fingerprints, now = Date.now()) {
   const at = new Date(now).toISOString();
   const changed = !Array.isArray(prev.keys) || !sameList(prev.keys, extra) || !prev.at;
   await putState(db, EXTRA_KEY, JSON.stringify({ at: changed ? at : prev.at, checkedAt: at, keys: extra })).run();
-  return { want, extra };
+  return { want, extra, candidates };
 }
