@@ -29,6 +29,15 @@
         ],
         "createdAt": "2026-10-28T06:30:35.842Z",
         "reason": "Claude 判讀：diagrams.html、diagrams.js、admin.css 沒有動畫或自動捲動；被抓到的 .animated-dots 是 vendor Tabler CSS（同 links.html 的既有判讀）"
+      },
+      {
+        "rule": "broken-image",
+        "value": "*",
+        "files": [
+          "public/games.html"
+        ],
+        "createdAt": "2026-10-30T08:58:23.263Z",
+        "reason": "Claude: 遊戲照片與分享截圖的 img 由 games.js 填 src，所在畫面開始時是 hidden"
       }
     ]
   }

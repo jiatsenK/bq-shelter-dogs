@@ -3,7 +3,7 @@
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
-const SUITES = ['es-modules', 'walk-accept', 'walk-d1-entries', 'walk-order-undo', 'walk-feedback', 'walk-failed-state', 'read-policy', 'startup-stability', 'walker-editing', 'intake-presentation', 'info-page', 'share-site', 'activities', 'departed-cards', 'fixed-care',
+const SUITES = ['es-modules', 'walk-accept', 'walk-d1-entries', 'walk-order-undo', 'walk-feedback', 'walk-failed-state', 'read-policy', 'startup-stability', 'walker-editing', 'intake-presentation', 'info-page', 'share-site', 'games', 'activities', 'departed-cards', 'fixed-care',
   'group-cache', 'group-walks', 'dog-urls', 'mine-page', 'large-text', 'touch-targets', 'navigation', 'desk-layout', 'desk-info', 'desk-find', 'desk-mine', 'tab-focus', 'name-tap', 'keyboard-viewport', 'index', 'detail-editing', 'admin', 'admin-dog-edit', 'admin-dog-merge', 'admin-dog-pairs', 'admin-judgements', 'feature-settings', 'admin-stage4', 'admin-hide-edits', 'admin-diagrams', 'test-site'];
 
 const ROOT = path.resolve(__dirname, '..');

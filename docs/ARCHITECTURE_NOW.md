@@ -31,6 +31,7 @@
 | 照片 | 志工／Access 管理網站 | 共用前端縮圖，R2 不可覆寫版本＋D1 CAS 引用及紀錄；舊固定路徑相容，Actions 只供人工補圖（#566 承接 #546 契約） | `worker/src/dog-photo.js`、`public/js/photo-images.js` |
 | 分享次數（ADR 0023） | 志工網站分享成功時 `POST /api/share` | 只存 D1 `v3_share_counts`（每天、每種方式一列，只記次數不記人）與 `v3_share_totals`（總數，一種方式一列）；管理網站志工網站設定頁讀 | `worker/src/share-counts.js` |
 | 志工名字建議 `/walkers` | — | 讀 D1（#519） | ADR 0019 |
+| 小遊戲的臉部位置（#795） | K 在本機跑 `scripts/dog-faces.py` | 讀正式站 `/api/dogs` 與照片原圖，算好存成 repo 裡的靜態檔 `public/data/dog-faces.json`（編號 → 照片版本＋六個點），跟一般程式一樣開 PR 部署。不寫 D1、不自動更新；照片換過沒重跑的狗，前端比對照片版本後不出題。最高分只存手機 localStorage | `scripts/dog-faces.py`、`public/js/dress-up.js` |
 
 **人工改溜狗欄的先後**（#747）：GAS 同一次編輯先送改表通知（`/rows`）、再送狗清單（`/dog-list`），兩邊都把表上的值當成一筆觀測值交給今日溜狗紀錄。狗清單同步要在更新主清單複本之前交：沒有溜狗狀態的狗，基準值取自主清單複本，先更新就看不出有改。晚到的看到跟基準值一樣就不動；同時到時 version guard 只讓一個寫成，另一個不 ack，GAS 補送時就沒差異。溜狗紀錄寫一次、修改紀錄記一筆，跟哪個先到無關（`worker/test/dog-list-walks.test.mjs`）。
 

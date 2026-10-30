@@ -19,3 +19,5 @@ admin/public/shared/
 
 # 介紹搬家核對表（#665）：含原文地址，不可以提交
 .scratch/intro-split/
+# 狗狗變裝秀臉部位置腳本（scripts/dog-faces.py）的模型、照片與對照表
+.scratch/dog-faces/

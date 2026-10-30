@@ -9,6 +9,7 @@ const BACK_ORDER = [
   ['lightbox', 'bqPhoto'],    // 燈箱（app.js）
   ['where', 'bqWhere'],       // 在哪面板（find.js）
   ['detail', 'bqDetail'],     // 詳細資訊（detail.js）
+  ['gameShot', 'bqGameShot'], // 小遊戲的分享截圖（games.js）
 ];
 const STATE_KEY = Object.fromEntries(BACK_ORDER);
 const layers = {};
@@ -85,6 +86,19 @@ export function pushPage(current, next) {
 export function backFrom(ours, otherwise) {
   if (ours(history.state) && !history.state.bqLanding) history.back();
   else otherwise();
+}
+
+// 離開這一頁回到志工網站的另一頁（小遊戲選單回資訊，ADR 0024）：剛從那一頁點進來的（referrer 是同一頁，index.html 也認 /），
+// 走上一頁，返回鍵不會又回到這裡；從 LINE 之類的地方直接打開的，照網址換頁
+export function leaveTo(url, cameFrom = document.referrer) {
+  let back = false;
+  try {
+    const to = new URL(url, location.href), from = new URL(cameFrom);
+    const page = u => u.pathname.replace(/\/index\.html$/, '/');
+    back = history.length > 1 && !!history.state?.bqLanding && from.origin === to.origin && page(from) === page(to);
+  } catch (e) { back = false; }
+  if (back) history.back();
+  else location.assign(url);
 }
 
 // 返回鍵：先關最上面的覆蓋層；都沒開才交給 navigate（頁籤、資訊子頁）。

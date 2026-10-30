@@ -7,6 +7,7 @@
 - `index.html` → `main.js`：匯入整個主頁模組圖；模組定義與狀態初始化完成後，依原本順序呼叫 app、analysis、group-stage、find、find-desk、activities 的事件綁定，再啟動 desk 與 app。循環引用只在互動時使用，事件綁定不靠 import 評估順序。頁首提前抓狗清單的內嵌程式保留，`api.js` 接手該請求。頁首另外用 `modulepreload` 列出 main.js 的整個模組圖（#788），一次抓齊；新增、刪除或改匯入主頁模組時要同步這份清單，`scripts/frontend-modules.test.mjs` 會比對。
 - `cards.html` → `cards-entry.js`：載入 `cards.js` 與共用模組，再啟動圖鑑。
 - `edits.html` → `edits.js`：載入共用模組，再讀取編輯紀錄。
+- `games.html` → `games-entry.js`：啟動小遊戲（#795），資訊頁的「小遊戲」連進來。
 - `groups.html` 仍轉址至主頁；保留的 `groups.js` 也改為 ES module，沒有頁面載入。
 
 ## 模組責任與依賴
@@ -16,8 +17,8 @@
 | 檔案 | 責任／介面 | 依賴 | 使用頁面 |
 | --- | --- | --- | --- |
 | `dates.js` | `BQDates`：日期解析、編號日期（`idDay`）與最早入所日、只有編號的狗排出入所表（`stayRows`，#639）、本地日期鍵、台灣今天 | 無 | index、cards、Node、admin（建置複製） |
-| `api.js` | `BQApi`：每個 API 端點一個函式，統一錯誤形狀，接手提前讀狗清單 | api-response | index、cards、edits |
-| `api-response.js` | `settle`：純 API 回應／錯誤解析，不讀頁面狀態 | 無 | index、cards、edits、admin（建置複製） |
+| `api.js` | `BQApi`：每個 API 端點一個函式，統一錯誤形狀，接手提前讀狗清單 | api-response | index、cards、edits、games |
+| `api-response.js` | `settle`：純 API 回應／錯誤解析，不讀頁面狀態 | 無 | index、cards、edits、games、admin（建置複製） |
 | `feature-settings.js` | 志工功能設定、載入與 fail-closed UI gate；初始化／手動更新讀取，不輪詢。匯出 `SETTING_KEYS`，與後端、管理網站、D1 初始值的鍵名由 `scripts/feature-setting-keys.test.mjs` 比對 | api | index、edits、Node |
 | `store.js` | `BQStore`：手機資料鍵、字串／JSON 讀寫與記憶體備援，可注入儲存空間 | 無 | index、cards、edits |
 | `site-config.js` | `SITE`：收容所設定、警示、區域 | 無 | index、cards |
@@ -34,7 +35,7 @@
 | `sheet-append.js` | 加備註（詳細資訊）與新增異動紀錄（電腦版右欄）：預覽、送出與整頁事件委派 | app、detail、api、dates、ui-kit、walk-ui、page-state | index |
 | `detail-viewport.js` | 詳細資訊編輯欄位的可見範圍 | 無 | index |
 | `keyboard-viewport.js` | 螢幕鍵盤開啟時的欄位與面板定位 | 無 | index |
-| `overlays.js` | 返回鍵與焦點圈：覆蓋層（平面圖放大、裁切、燈箱、在哪、詳細資訊）註冊怎麼判斷開著／怎麼關，按返回的關閉順序集中在 `BACK_ORDER`；開一層、關一層、換掉歷史紀錄、頁籤／資訊子頁的歷史紀錄（帶呼叫端算好的網址，打開網頁那一筆標 `bqLanding`，ADR 0024）、`trapFocus` | 無 | index、cards、Node |
+| `overlays.js` | 返回鍵與焦點圈：覆蓋層（平面圖放大、裁切、燈箱、在哪、詳細資訊、小遊戲的分享截圖）註冊怎麼判斷開著／怎麼關，按返回的關閉順序集中在 `BACK_ORDER`；開一層、關一層、換掉歷史紀錄、頁籤／資訊子頁的歷史紀錄（帶呼叫端算好的網址，打開網頁那一筆標 `bqLanding`，ADR 0024）、離開這頁回志工網站另一頁（`leaveTo`）、`trapFocus` | 無 | index、cards、games、Node |
 | `routes.js` | 志工網站網址（ADR 0024）：`#walk`、`#info/<子頁>`、`#dog/<編號>` 和畫面狀態互換、判斷一般點擊與 Ctrl／⌘ 點擊、電腦版真連結手機按鈕的 `routeControl` | 無 | index、Node |
 | `walk-registration.js` | `createWalkRegistration`：D1 接受流程的登記、同行人、復原與今日紀錄核對規則，純 ES module（#558 起沒有寫回試算表的舊路徑） | 無 | index、Node |
 | `walk-flow.js` | `BQWalks`：不碰 DOM 的排隊登記、核對、復原、提示及同行人手機紀錄 | store、walk-registration（日期介面由呼叫端注入） | index、Node |
@@ -55,6 +56,9 @@
 | `desk.js` | 電腦版簡報、全表／最近 30 天與側欄，明確啟動後啟用寬螢幕呈現；補資料由管理網站取代（#568） | app、detail、sheet-append、ui-kit、dog-status、dates、api、site-config、find、walk-ui、page-state | index |
 | `desk-mine.js` | 電腦版我溜過：標題列（名字＋修改）、月曆每格寫當天溜的狗名（最多 2 個，其餘「＋N」）、右欄選中那天的狗與月曆那個月的統計；還沒設定是誰時表單放主內容。手機照舊是 app.js 的 `myWalksHtml` | app、ui-kit、dates、welcome、page-state | index |
 | `cards.js` | 圖鑑、開卡與已出所狗卡，保留卡片專用格式 | dates、api、store、site-config、overlays、identity、page-state | cards |
+| `dress-up.js` | 狗狗變裝秀（#795）的規則：能出題的狗（`playableDogs`：在所、有編號與照片、名字不是括號開頭，臉部位置檔 `data/dog-faces.json` 的照片版本跟 `/api/dogs` 一樣）、選項（長相最像的狗）、拉近狗臉、19 種裝飾的位置；不碰 DOM | 無 | games |
+| `games.js` | 小遊戲頁：選單、狗狗變裝秀（遊戲中、結算、最高分）、分享截圖與分享到 LINE；返回鍵與網址（`games.html`、`#dressup`）走 overlays.js | api、overlays、dress-up | games |
+| `games-entry.js` | 小遊戲頁入口 | games | games |
 | `edit-values.js` | `editsValue`：編輯紀錄改前／改後的文字，純函式 | 無 | edits、admin（建置複製） |
 | `edits.js` | 編輯紀錄清單 | api、store、edit-values | edits |
 | `groups.js` | 舊獨立狗群頁只讀 | api、page-state | 無 |

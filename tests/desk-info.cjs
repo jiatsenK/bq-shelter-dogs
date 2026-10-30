@@ -59,7 +59,7 @@ module.exports = async (browser, base) => {
       assert(body.width > 480, `${width}px 內容不卡 480（${body.width}）`);
       const rows = await page.locator('#main .info-nav :is(a, button)').evaluateAll(els => els.map(el => Math.round(el.getBoundingClientRect().height)));
       assert(rows.every(h => h >= 38 && h <= 44), `${width}px 清單一列約 40px（${rows}）`);
-      assert.deepEqual(await page.locator('#main .info-nav :is(a, button)').allInnerTexts(), ['在所統計', '離所紀錄', '活動紀錄', '資料檢查', '更新紀錄', '使用說明']);
+      assert.deepEqual(await page.locator('#main .info-nav :is(a, button)').allInnerTexts(), ['在所統計', '離所紀錄', '活動紀錄', '資料檢查', '更新紀錄', '小遊戲', '使用說明'], '#795 小遊戲在使用說明前面');
       assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `${width}px 沒有橫向捲動`);
     }
 
