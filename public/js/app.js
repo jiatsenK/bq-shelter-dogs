@@ -457,6 +457,29 @@ function thumbAttrs(thumb, full) {
   return thumb === full ? `src="${esc(full)}"` : `src="${esc(thumb)}" data-full="${esc(full)}"`;
 }
 
+// 大照片先用縮圖（#791）：原圖長邊 1280px，第一次看要等一陣子；狗卡上的縮圖多半已經載好，先撐住位置，原圖到了再換。
+// 這裡就開始下載原圖；已在快取（complete）就直接用原圖，重畫時不會閃一下模糊。測試的假 DOM 沒有 Image，照舊用原圖
+function sharpReady(full) {
+  if (typeof Image !== 'function') return true;
+  const img = new Image();
+  img.src = full;
+  return img.complete && img.naturalWidth > 0;
+}
+// 原圖下載完才呼叫 swap；讀不到就留著縮圖
+function whenSharp(full, swap) {
+  const img = new Image();
+  img.onload = swap;
+  img.src = full;
+}
+// 畫好的 HTML 裡標了 data-sharp 的照片：原圖到了，還在畫面上就換上
+function sharpenPhotos(root) {
+  for (const img of root.querySelectorAll('img[data-sharp]')) {
+    const full = img.dataset.sharp;
+    img.removeAttribute('data-sharp');
+    whenSharp(full, () => { if (img.isConnected) { img.src = full; img.removeAttribute('data-full'); } });
+  }
+}
+
 // zoom：詳細資訊上方的照片做成按鈕，點了用燈箱放大（#46）；照片讀不到就標 no-photo，按了不放大
 // big：詳細資訊的大照片（#112）直接用原圖，縮圖放大會糊
 function photoThumb(dog, size = 56, zoom = false, eager = false, big = false) {
@@ -466,9 +489,12 @@ function photoThumb(dog, size = 56, zoom = false, eager = false, big = false) {
   }
   const tag = zoom ? 'button' : 'div';
   const attrs = zoom ? ` type="button" class="thumb zoom" data-zoom aria-label="放大 ${esc(dog.name)} 的照片"` : ' class="thumb"';
+  const full = photoSrc(dog);
+  const blurFirst = big && photoThumbSrc(dog) !== full && !sharpReady(full); // 呼叫的人畫完要叫 sharpenPhotos
+  const src = big && !blurFirst ? full : photoThumbSrc(dog);
   return `
     <${tag}${attrs}>
-      <img ${thumbAttrs(big ? photoSrc(dog) : photoThumbSrc(dog), photoSrc(dog))} alt="" width="${size}" height="${size}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"
+      <img ${thumbAttrs(src, full)}${blurFirst ? ` data-sharp="${esc(full)}"` : ''} alt="" width="${size}" height="${size}" ${eager ? 'fetchpriority="high"' : 'loading="lazy"'} decoding="async"
            onload="this.classList.add('loaded')"
            onerror="${thumbFallback} this.style.display='none'; this.nextElementSibling.style.display='flex'; this.parentNode.classList.add('no-photo'); this.parentNode.disabled = true;">
       <div class="thumb-fallback">${icon('paw')}</div>
@@ -535,7 +561,15 @@ function showLightboxPhoto() {
   const v = appState.lightboxView;
   if (!el || !v) return;
   const img = el.querySelector('img');
-  img.src = v.src;
+  const thumb = photoThumbSrc(v.dog);
+  // 原圖還沒到先放縮圖（#791）；沒有縮圖就改回原圖
+  img.onerror = null;
+  if (thumb === v.src || sharpReady(v.src)) img.src = v.src;
+  else {
+    img.onerror = () => { img.onerror = null; if (appState.lightboxView === v) img.src = v.src; };
+    img.src = thumb;
+    whenSharp(v.src, () => { if (appState.lightboxView === v) { img.onerror = null; img.src = v.src; } });
+  }
   img.alt = `${v.dog.name} 的照片`;
   const bar = el.querySelector('.lightbox-bar');
   bar.innerHTML = appState.UPLOAD_URL && appState.detailDog === v.dog && !v.dog.departure ? `<button type="button" class="lightbox-delete" id="mainCropBtn">${icon('crop')}裁切</button>` : '';
@@ -1263,7 +1297,7 @@ if (!window.__BQ_TEST__) {
 }
 }
 
-export { FIRST_SCREEN_CARDS, WALKER_CODES_KEY, WALKER_CODE_PATTERN, saveIdentity, currentIdentity, mergeTempCages, loadDogsData, fetchDogsData, parseMyWalks, apiData, fetchWalks, walkYears, recentStartMonth, missingWalkYears, loadWalkYear, loadMyWalks, currentMyWalks, myWalksCount, mineTabNumber, mineTabLabel, loadMyCodes, saveMyCodes, walkerCodesFor, dogOfWalk, walkDateLabel, myWalkGroups, myVisitCard, myMonthStats, myProgressHtml, myWalksHtml, myCalendarState, myCalendarHtml, effectiveWalkDate, computeStatus, restOf, versioned, photoOverrides, photoSrc, photoThumbSrc, thumbFallback, thumbAttrs, photoThumb, lightboxOpen, insidePhoto, openLightbox, showLightboxPhoto, hideLightbox, closeLightbox, lastWalk, cardMeta, tempCageText, sexMark, warnNote, walkedNow, walkedToday, WALKER_NAME_KEY, WALKER_NAME_SEP, allWalkerNames, isOffline, setWalkerNamesOffline, loadWalkerNames, TODAY_POLL_MS, TODAY_REFETCH_MS, fetchWalkStatus, loadTodayWalks, refreshTodayWalks, canonicalWalker, splitWalkers, walkerList, loadCompanions, loadWalkWith, addWalkWith, clearWalkWith, firstWalkerName, loadWalkerName, saveWalkerName, myAliasIn, walkRegistration, d1Base, NEED_EDITOR, editorName, editorHeaders, dogCard, loadRest, cardFromEvent, TABS, buildTabs, switchTab, mainEl, render, skeletonHtml, appHeader, syncHeaderShadow, appBrand, syncHeaderTuck, stickyTopBottom, bottomBarEl, syncBottomBar, dueDogs, WALK_FAV_KEY, loadWalkFav, saveWalkFav, walkFilterHtml, WALK_VIEW_KEY, loadWalkView, saveWalkView, walkToolsHtml, dayChip, walkRow, renderMain, searchInput, searchClear, syncSearchClear, openGuide, init, applyDogsData, renderUpdatedLabel, freshWalkList, refreshData, syncBtn, startApp };
+export { FIRST_SCREEN_CARDS, WALKER_CODES_KEY, WALKER_CODE_PATTERN, saveIdentity, currentIdentity, mergeTempCages, loadDogsData, fetchDogsData, parseMyWalks, apiData, fetchWalks, walkYears, recentStartMonth, missingWalkYears, loadWalkYear, loadMyWalks, currentMyWalks, myWalksCount, mineTabNumber, mineTabLabel, loadMyCodes, saveMyCodes, walkerCodesFor, dogOfWalk, walkDateLabel, myWalkGroups, myVisitCard, myMonthStats, myProgressHtml, myWalksHtml, myCalendarState, myCalendarHtml, effectiveWalkDate, computeStatus, restOf, versioned, photoOverrides, photoSrc, photoThumbSrc, thumbFallback, thumbAttrs, sharpenPhotos, photoThumb, lightboxOpen, insidePhoto, openLightbox, showLightboxPhoto, hideLightbox, closeLightbox, lastWalk, cardMeta, tempCageText, sexMark, warnNote, walkedNow, walkedToday, WALKER_NAME_KEY, WALKER_NAME_SEP, allWalkerNames, isOffline, setWalkerNamesOffline, loadWalkerNames, TODAY_POLL_MS, TODAY_REFETCH_MS, fetchWalkStatus, loadTodayWalks, refreshTodayWalks, canonicalWalker, splitWalkers, walkerList, loadCompanions, loadWalkWith, addWalkWith, clearWalkWith, firstWalkerName, loadWalkerName, saveWalkerName, myAliasIn, walkRegistration, d1Base, NEED_EDITOR, editorName, editorHeaders, dogCard, loadRest, cardFromEvent, TABS, buildTabs, switchTab, mainEl, render, skeletonHtml, appHeader, syncHeaderShadow, appBrand, syncHeaderTuck, stickyTopBottom, bottomBarEl, syncBottomBar, dueDogs, WALK_FAV_KEY, loadWalkFav, saveWalkFav, walkFilterHtml, WALK_VIEW_KEY, loadWalkView, saveWalkView, walkToolsHtml, dayChip, walkRow, renderMain, searchInput, searchClear, syncSearchClear, openGuide, init, applyDogsData, renderUpdatedLabel, freshWalkList, refreshData, syncBtn, startApp };
 export { appState } from './page-state.js';
 export { parseDogsData } from './dog-data.js';
 
