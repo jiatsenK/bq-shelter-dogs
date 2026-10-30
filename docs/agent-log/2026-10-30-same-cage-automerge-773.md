@@ -17,6 +17,12 @@
 - D1 查詢次數照官方文件數往返（`db.batch()` 整批算 1 次）；#771 的測試數句數比較保守，自動合併的 batch 句數多，所以新測試用往返次數。
 - 擁有者要做：部署志工 Worker 與管理網站（取消合併按鈕認新種類）；沒有 migration，Apps Script 不用重新部署。
 
+## 審查與測試
+
+- code-review 技能兩軸審查（基準 `ee7b4ef8`）：
+  - Standards：`SCAN_OK` 的理由補上自動合併的觸發頻率；可取消的合併種類在 `dog-merge.js` 收成兩個常數；`looksWrong` 改名 `looksLikeWrongSheet`；`writeMerge` 的 `before／after` 改成 `prepend／append`（跟紀錄的改前改後撞名）。沒改：`list／fp／merge` 一起傳（跟既有 `applyMain` 的參數寫法一致）、前端兩處 `kind` 判斷（共用檔是建置複製，worker 的清單拿不到）。
+  - Spec：同一批裡有編號的狗搬到已出所、同籠又打上新狗時，會把要離所的那隻當候選併掉、離所紀錄沒寫。改成這次一起送來的已出所編號不算候選，補測試。合併失敗不是 409 時記成錯誤。沒改：自動合併保留主照片（為了「照片接著用」，ADR 已記）、一次請求只合併一隻、`rowsOf` 改 batch 也影響管理者合併（只少查詢次數，結果一樣）。
+
 ## 相關 PR
 
 - （開 PR 後補上）

@@ -7,6 +7,7 @@ import worker from '../src/index.js';
 import { appsScript, CAGE_HEADER } from './apps-script.mjs';
 import { manageApi } from './manage-fixture.mjs';
 import { setup } from './walk-fixture.mjs';
+import { syncDogList } from '../src/dog-list.js';
 
 const SITE = 'https://bq-shelter-dogs.example.workers.dev';
 const MINUTE = 60000;
@@ -130,6 +131,21 @@ test('#773 同籠兩個候選：一次把兩隻都改名，不自動合併', asy
   assert.deepEqual(await edits(manage, 'automerge'), []);
   const names = (await dogs(env)).map(d => d[1]);
   for (const name of ['暖暖', '黑妞', '(乳白)', '(黑)']) assert.ok(names.includes(name), `${name} 還在（候選期間照常顯示）`);
+});
+
+test('#773 同一批裡小白搬到已出所、同籠打上新狗：小白記離所，不被當成候選併掉', async t => {
+  const { env, manage } = await start(t);
+  // GAS 同一批先送主清單、再送已出所（orderDogListKeys）；表上主清單已經沒有小白
+  const mainKeys = ['main:9001', 'main:名:(乳白)', 'main:名:新狗', 'main:9003'];
+  const { results } = await syncDogList(env.DB, [
+    { sheet: 'main', dog: { id: '', name: '新狗' }, cage: 'A02', date: '', walker: '', note: '' },
+    { sheet: 'departed', dog: { id: '9002', name: '小白' }, texts: ['認養'], dates: [] },
+  ], mainKeys, env);
+  assert.ok(results.every(r => r.ok), JSON.stringify(results));
+  assert.deepEqual(await edits(manage, 'automerge'), []);
+  const all = await manageDogs(manage);
+  assert.equal(all.find(d => d.name === '小白').status, 'departed');
+  assert.equal(all.find(d => d.name === '新狗').status, 'main');
 });
 
 test('#773 在修改紀錄按取消合併：拆回兩隻，(乳白) 變待核對', async t => {

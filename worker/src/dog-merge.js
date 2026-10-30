@@ -7,7 +7,8 @@
 // - 一個 D1 batch：每張表固定 1–2 句（整批列用 json_each 帶進去），不隨列數變多；各表既有觸發器讓資料包失效。
 // - 免費方案每次呼叫最多 50 次 D1 查詢：兩隻狗一起讀（每張表 1 句，全部放在同一個 batch，只算 1 次查詢），每張表都有資料時合併與取消合併都在 50 句以內（dog-merge.test.mjs 量）。
 // - 系統自動合併（#773，ADR 0025）：狗清單同步認定同籠的候選就是新建的那隻時呼叫 autoMergeDogs，候選同一批移出主清單。
-// - 讀寫都用 dog_id 篩；SCAN_OK 這幾張表沒有 dog_id 開頭的索引，會整張掃。合併是管理者偶爾按的操作、這幾張表都小，
+// - 讀寫都用 dog_id 篩；SCAN_OK 這幾張表沒有 dog_id 開頭的索引，會整張掃。合併是管理者偶爾按的操作；自動合併（#773）只在新狗進到
+//   剛好有一個候選的籠位時跑一次（新狗一週幾隻），不是每次狗清單同步都跑。這幾張表都小，
 //   不為它加索引（加索引每次寫入都多寫一列）；dog-merge.test.mjs 用查詢計畫確認其他表都走索引（CODING_STANDARDS.md D1）。
 import { dogRevisionIs, editError } from './dog-edit.js';
 import { batchIf, isConflict } from './conditional-batch.js';
@@ -54,6 +55,7 @@ const HEX = /^[a-f0-9]{32}$/;
 export const SYSTEM_NAME = '系統自動判斷';
 // 可以取消的合併紀錄：管理者合併、系統自動合併
 const MERGED = "kind IN ('merge','automerge')";
+const MERGED_OR_UNDONE = "kind IN ('merge','automerge','unmerge')";
 
 const json = JSON.stringify;
 const marks = ids => ids.map(() => '?').join(',');
@@ -164,14 +166,15 @@ export async function mergeDogs(db, targetId, input, { actor } = {}) {
 export async function autoMergeDogs(db, targetId, { revision, sourceId, sourceRevision, mainRow }) {
   const planned = await plan(db, targetId, sourceId, { auto: true });
   const drop = db.prepare('DELETE FROM v3_sheet_main WHERE row_index=? AND dog_id=?').bind(mainRow.row_index, sourceId);
-  const result = await writeMerge(db, planned, { revision, sourceRevision }, { kind: 'automerge', before: [drop], after: [db.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(targetId)] });
+  const result = await writeMerge(db, planned, { revision, sourceRevision }, { kind: 'automerge', prepend: [drop], append: [db.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(targetId)] });
   return { logId: result.logId, revision: result.results.at(-1).results[0]?.revision };
 }
 
-async function writeMerge(db, { target, source, rows, moved, notMoved, replaced }, input, { kind, actor = null, before = [], after = [] }) {
+// prepend／append：放在這批合併寫入前後的句子（自動合併先移出主清單、最後讀回留下那隻的版本）
+async function writeMerge(db, { target, source, rows, moved, notMoved, replaced }, input, { kind, actor = null, prepend = [], append = [] }) {
   if (target.revision !== input.revision || source.revision !== input.sourceRevision) throw conflict();
   const targetId = target.dog_id, sourceId = source.dog_id, requestId = crypto.randomUUID();
-  const writes = [...before];
+  const writes = [...prepend];
   for (const { table } of TABLES) {
     if (rows[table].length) writes.push(deleteRows(db, table, rows[table]));
     if (replaced[table]) writes.push(deleteRows(db, table, replaced[table]));
@@ -190,7 +193,7 @@ async function writeMerge(db, { target, source, rows, moved, notMoved, replaced 
   writes.push(...logStatements(db, kind, targetId, target.shown,
     { name: source.name, numbers: source.numbers, counts: counts(rows), snapshot: { dog: sourceDog, rows } },
     { sourceId, name: target.name, number: target.shown, moved: counts({ ...moved, v3_walk_state: rows.v3_walk_state }), kept: counts(notMoved), rows: moved, replaced },
-    actor, requestId), ...after);
+    actor, requestId), ...append);
   const results = await runBatch(db, [dogRevisionIs(targetId, input.revision), dogRevisionIs(sourceId, input.sourceRevision)], writes, '合併沒寫成：兩隻狗的資料在預覽後有變動，或有資料撞在一起；資料沒有改，請重新預覽再試');
   return { logId: results[logAt].meta.last_row_id, results };
 }
@@ -206,7 +209,7 @@ export async function unmergeDogs(db, targetId, input, { actor } = {}) {
   const before = JSON.parse(log.before_json), after = JSON.parse(log.after_json);
   const { dog, rows } = before.snapshot;
   if (await db.prepare('SELECT 1 FROM v3_dogs WHERE dog_id=?').bind(dog.dog_id).first()) throw editError(409, '這筆合併已經取消過了');
-  if (await db.prepare("SELECT 1 FROM v3_edit_log WHERE id>? AND kind IN ('merge','automerge','unmerge') AND json_extract(after_json,'$.sourceId')=?").bind(log.id, dog.dog_id).first())
+  if (await db.prepare(`SELECT 1 FROM v3_edit_log WHERE id>? AND ${MERGED_OR_UNDONE} AND json_extract(after_json,'$.sourceId')=?`).bind(log.id, dog.dog_id).first())
     throw editError(409, '這隻狗之後又合併或取消過，請從最新一筆處理');
   const [target] = await dogsOf(db, targetId);
   if (!target) throw editError(404, '找不到這隻狗，請重新讀取');
