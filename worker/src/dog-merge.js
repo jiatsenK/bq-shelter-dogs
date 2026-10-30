@@ -12,7 +12,7 @@
 //   不為它加索引（加索引每次寫入都多寫一列）；dog-merge.test.mjs 用查詢計畫確認其他表都走索引（CODING_STANDARDS.md D1）。
 import { dogRevisionIs, editError } from './dog-edit.js';
 import { batchIf, isConflict } from './conditional-batch.js';
-import { editLogWrites } from './editlog.js';
+import { editLogWrites, SYSTEM_EDITOR } from './editlog.js';
 import { joinStays, withoutStays } from './stays.js';
 import { mergedPairWrites } from './dog-pairs.js';
 
@@ -55,7 +55,6 @@ const TABLES = [
 // 今日溜狗狀態以 dog_key（編號或名字）為主鍵、出站佇列掛在它上面，不能刪掉重建；只改 dog_id
 const WALK_STATE = { table: 'v3_walk_state', label: '今日溜狗狀態' };
 const HEX = /^[a-f0-9]{32}$/;
-export const SYSTEM_NAME = '系統自動判斷';
 // 可以取消的合併紀錄：管理者合併、系統自動合併
 const MERGED = "kind IN ('merge','automerge')";
 const MERGED_OR_UNDONE = "kind IN ('merge','automerge','unmerge')";
@@ -143,7 +142,7 @@ export async function previewMerge(db, targetId, sourceId) {
 // actor：Access 管理者；null＝系統自動合併（來源試算表，操作者記「系統自動判斷」）
 function logStatements(db, kind, targetId, number, before, after, actor, requestId) {
   return editLogWrites(db, { at: new Date().toISOString(), kind, dogId: targetId, number, before, after,
-    ...(actor ? { name: '管理者', source: 'access', actor: { requestId, subject: actor.subject, email: actor.email } } : { name: SYSTEM_NAME, source: 'sheet' }) });
+    ...(actor ? { name: '管理者', source: 'access', actor: { requestId, subject: actor.subject, email: actor.email } } : { name: SYSTEM_EDITOR, source: 'sheet' }) });
 }
 function checkInput(input, keys, actor) {
   if (!input || Object.keys(input).sort().join(',') !== keys || !Number.isSafeInteger(input.revision)) throw editError(400, '請重新預覽後再合併');
@@ -165,16 +164,17 @@ export async function mergeDogs(db, targetId, input, { actor } = {}) {
 
 // 系統自動合併（#773，ADR 0025）：不需要 Access 身分，紀錄種類 automerge（永久保留，管理網站照樣可以取消合併）。
 // mainRow：被併那隻（候選）在主清單複本的那一列，同一批先移出主清單再合併。版本在讀取後變了就 409、整批不寫，候選照常留著。
+// 紀錄的改前多記候選那一列的籠位（#775 資料頁「系統自動判斷」寫「舊B06 (乳白) 改成 暖暖」）。
 // 回傳留下那隻合併後的版本（狗清單同步同一次請求後面的列還要用）
 export async function autoMergeDogs(db, targetId, { revision, sourceId, sourceRevision, mainRow }) {
   const planned = await plan(db, targetId, sourceId, { auto: true });
   const drop = db.prepare('DELETE FROM v3_sheet_main WHERE row_index=? AND dog_id=?').bind(mainRow.row_index, sourceId);
-  const result = await writeMerge(db, planned, { revision, sourceRevision }, { kind: 'automerge', prepend: [drop], append: [db.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(targetId)] });
+  const result = await writeMerge(db, planned, { revision, sourceRevision }, { kind: 'automerge', cage: mainRow.cage, prepend: [drop], append: [db.prepare('SELECT revision FROM v3_dog_edit_state WHERE dog_id=?').bind(targetId)] });
   return { logId: result.logId, revision: result.results.at(-1).results[0]?.revision };
 }
 
-// prepend／append：放在這批合併寫入前後的句子（自動合併先移出主清單、最後讀回留下那隻的版本）
-async function writeMerge(db, { target, source, rows, moved, notMoved, replaced }, input, { kind, actor = null, prepend = [], append = [] }) {
+// prepend／append：放在這批合併寫入前後的句子（自動合併先移出主清單、最後讀回留下那隻的版本）；cage：自動合併時候選的籠位
+async function writeMerge(db, { target, source, rows, moved, notMoved, replaced }, input, { kind, actor = null, cage, prepend = [], append = [] }) {
   if (target.revision !== input.revision || source.revision !== input.sourceRevision) throw conflict();
   const targetId = target.dog_id, sourceId = source.dog_id, requestId = crypto.randomUUID();
   const writes = [...prepend];
@@ -196,7 +196,7 @@ async function writeMerge(db, { target, source, rows, moved, notMoved, replaced 
   const sourceDog = { dog_id: source.dog_id, name: source.name, sex: source.sex, fixed_care: source.fixed_care };
   const logAt = writes.length;
   writes.push(...logStatements(db, kind, targetId, target.shown,
-    { name: source.name, numbers: source.numbers, counts: counts(rows), snapshot: { dog: sourceDog, rows } },
+    { name: source.name, numbers: source.numbers, ...(cage ? { cage } : {}), counts: counts(rows), snapshot: { dog: sourceDog, rows } },
     { sourceId, name: target.name, number: target.shown, moved: counts({ ...moved, v3_walk_state: rows.v3_walk_state }), kept: counts(notMoved), rows: moved, replaced },
     actor, requestId), ...append);
   const results = await runBatch(db, [dogRevisionIs(targetId, input.revision), dogRevisionIs(sourceId, input.sourceRevision)], writes, '合併沒寫成：兩隻狗的資料在預覽後有變動，或有資料撞在一起；資料沒有改，請重新預覽再試');

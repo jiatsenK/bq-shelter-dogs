@@ -17,6 +17,10 @@ import {
 } from './dog-edit-model.js';
 import { mergeCandidates, mergeSides, mergePreviewText } from './dog-merge.js';
 import { shownNumber } from './dog-table.js';
+import { searchEdits } from './api.js';
+import { parseEditPage } from './edit-log.js';
+import { judgeQuery } from './judgements.js';
+import { judgeItem } from './judge-item.js';
 import { BQDates } from '../shared/dates.js';
 
 // #624 右側抽屜：六個欄位全部展開（#639 編號併進出入所紀錄）；介紹、休養、固定照顧、性別改完直接可存（行內標改前→改後），
@@ -155,6 +159,32 @@ function mergeSection(dog, dogs, onMerged, mergeWith) {
   }
   return wrap;
 }
+// #775 抽屜底下：跟這隻狗有關的系統自動判斷（紀錄掛在牠身上，或配對、合併的另一邊是牠），最新 25 筆。
+// current()：抽屜現在開的狗；讀回來時已經換別隻就不畫
+function judgeSection(dogId, current) {
+  const wrap = el('section', undefined, 'judge-section');
+  wrap.setAttribute('aria-labelledby', 'judge-title');
+  const heading = el('h3', '系統自動判斷');
+  heading.id = 'judge-title';
+  const note = el('p', '正在讀取…', 'text-secondary');
+  note.setAttribute('role', 'status');
+  const list = el('ol', undefined, 'judge-list');
+  wrap.append(heading, note, list);
+  searchEdits(judgeQuery({ dog: dogId })).then((result) => {
+    if (current() !== dogId) return;
+    let page;
+    try {
+      if (!result.ok) throw Error();
+      page = parseEditPage(result.data);
+    } catch {
+      note.textContent = '系統自動判斷的紀錄讀不到，重新開這隻狗再試。';
+      return;
+    }
+    note.textContent = page.edits.length ? `時間為台灣時間。${page.next ? '只列最新 25 筆，更早的到修改紀錄查。' : ''}` : '這隻狗沒有系統自動判斷的紀錄。';
+    list.replaceChildren(...page.edits.map((e) => judgeItem(e)));
+  });
+  return wrap;
+}
 export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [], onMerged = () => {} }) {
   let dog = null,
     snapshot = null,
@@ -182,7 +212,8 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
   const fields = el('fieldset', undefined, 'drawer-fields');
   const body = el('div', undefined, 'drawer-body');
   const mergeHost = el('div');
-  body.append(fields, mergeHost);
+  const judgeHost = el('div');
+  body.append(fields, mergeHost, judgeHost);
   const dirtyLine = el('p', '', 'drawer-dirty');
   dirtyLine.id = 'drawer-dirty';
   const save = el('button', '儲存', 'btn btn-primary');
@@ -715,6 +746,7 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
           onMerged(message);
         }, mergeWith)
       );
+      judgeHost.replaceChildren(judgeSection(dog.dogId, () => (root.hidden ? null : dog?.dogId)));
       body.scrollTop = 0;
       reload.hidden = true;
       delete status.dataset.error;

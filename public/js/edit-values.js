@@ -26,6 +26,8 @@ export function editsValue(kind, v) {
   }
   if (kind === 'stay-start' || kind === 'stay-end') return `暫住 ${v.cage}`;
   // #774 不是同一隻：改前＝待核對那隻，改後＝表上那隻
+  // #775 可能是同一隻：改前＝消失的那列，改後＝表上那隻
+  if (kind === 'pair') return `${v.name || '未命名'}${v.number ? ` ${v.number}` : ''}（${v.cage || '籠位不明'}）`;
   if (kind === 'not_same') return v.cage ? `跟 ${v.name || '未命名'}（${v.cage}）不是同一隻` : (v.name || '未命名');
   if (kind === 'rest') return `休養到 ${v.until}${v.reason ? `（${v.reason}）` : ''}`;
   if (kind === 'group') return `${v.label || '（沒有群名）'}：${(v.names || []).join('、') || '（沒有狗）'}`;

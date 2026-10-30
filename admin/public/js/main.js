@@ -1,11 +1,16 @@
 import { createDogDrawer } from './dog-editor.js';
-import { readDogs, readPairs, rejectPair } from './api.js';
+import { readDogs, readPairs, rejectPair, searchEdits } from './api.js';
 import { parsePairs, pairText } from './dog-merge.js';
+import { parseEditPage } from './edit-log.js';
+import { JUDGE, judgeQuery } from './judgements.js';
+import { judgeItem } from './judge-item.js';
 import { parseManageDogs, selectDogs, orderDogs, maintenance, sexLabel, CARE_FILTERS, STATUS_LABELS, STATUS_TABS, statusCounts, statusText, shownNumber } from './dog-table.js';
 
 const byId = id => document.getElementById(id);
 // 狀態分頁預設在所（K 2026-10-26）；清除條件不換分頁
-const state = { dogs: [], loaded: false, status: 'main', page: 1, pageSize: 25, sort: 'number', direction: 'asc', pairs: new Map() };
+const state = { dogs: [], loaded: false, status: 'main', page: 1, pageSize: 25, sort: 'number', direction: 'asc', pairs: new Map(), pairCount: null };
+// #775「系統自動判斷」不是狗的狀態：按下去換成判斷紀錄列表（修改紀錄裡系統判斷的那幾種），一次 50 筆，「載入更早的紀錄」接著讀
+const judge = { edits: [], next: null, loaded: false, failed: '', seq: 0 };
 const status = byId('status');
 const FILTER_IDS = ['query', 'sex', 'care'];
 let searchTimer;
@@ -145,11 +150,39 @@ function pairLine(dog, pair) {
     }
     const left = state.pairs.get(dog.dogId).filter(p => p !== pair);
     if (left.length) state.pairs.set(dog.dogId, left); else state.pairs.delete(dog.dogId);
+    if (state.pairCount) state.pairCount--;
     render();
     status.textContent = `已記下：${dog.name || '未命名'}跟 ${pair.name || '未命名'}（${pair.cage}）不是同一隻，之後不再列出。`;
   });
   line.append(element('span', pairText(pair)), merge, reject);
   return line;
+}
+async function loadJudgements(more = false) {
+  const seq = ++judge.seq;
+  if (!more) Object.assign(judge, { edits: [], next: null, loaded: false, failed: '' });
+  byId('judge-more').disabled = true;
+  render();
+  const result = await searchEdits(judgeQuery({ cursor: more ? judge.next : null, size: 50 }));
+  if (seq !== judge.seq) return;
+  byId('judge-more').disabled = false;
+  try {
+    if (!result.ok) throw Error(result.data?.error || '系統自動判斷的紀錄讀不到，請按「重新讀取」再試。');
+    const page = parseEditPage(result.data);
+    Object.assign(judge, { edits: [...judge.edits, ...page.edits], next: page.next, failed: '' });
+  } catch (error) { judge.failed = error.message; }
+  judge.loaded = true;
+  render();
+}
+function renderJudgements() {
+  byId('table-region').hidden = true;
+  byId('pagination').hidden = true;
+  // 自動合併判斷錯了直接取消合併，拆回來之後狗表與紀錄一起重讀
+  byId('judgements').replaceChildren(...judge.edits.map(e => judgeItem(e, { onUnmerged: () => load() })));
+  byId('judge-more').hidden = !judge.next;
+  const pairs = state.pairCount === null ? '' : `等確認的可能是同一隻 ${state.pairCount} 組。`;
+  status.dataset.error = String(Boolean(judge.failed));
+  status.textContent = judge.failed || (!judge.loaded ? '正在讀取系統自動判斷的紀錄…'
+    : `${judge.edits.length ? `系統自動判斷 ${judge.edits.length} 筆${judge.next ? '，還有更早的' : ''}。` : '還沒有系統自動判斷的紀錄。'}${pairs}時間為台灣時間。`);
 }
 // 篩選條件放進網址（待補清單連過來、重新整理都保留）；dog 參數只在進頁時用來開抽屜
 function syncUrl() {
@@ -164,7 +197,7 @@ function syncUrl() {
 }
 function readUrl() {
   const params = new URLSearchParams(location.search);
-  if (STATUS_TABS.includes(params.get('status'))) state.status = params.get('status');
+  if ([...STATUS_TABS, JUDGE].includes(params.get('status'))) state.status = params.get('status');
   const allowed = { sex: ['', 'male', 'female', 'unknown'], care: ['', ...Object.keys(CARE_FILTERS)] };
   if (params.has('query')) byId('query').value = params.get('query').slice(0, 200);
   for (const [id, values] of Object.entries(allowed)) if (values.includes(params.get(id))) byId(id).value = params.get(id);
@@ -172,15 +205,20 @@ function readUrl() {
 }
 function render() {
   if (!state.loaded) return;
-  const result = selectDogs(state.dogs, filters());
-  state.page = result.page;
-  const counts = statusCounts(state.dogs);
+  // 系統自動判斷的數字只算等確認的配對；配對讀不到就不寫數字
+  const counts = { ...statusCounts(state.dogs), [JUDGE]: state.pairCount ?? '' };
   for (const button of document.querySelectorAll('[data-status]')) {
     const active = button.dataset.status === state.status;
     button.setAttribute('aria-pressed', String(active));
     button.classList.toggle('btn-primary', active);
     button.querySelector('[data-count]').textContent = counts[button.dataset.status];
   }
+  const judging = state.status === JUDGE;
+  byId('filters').hidden = judging;
+  byId('judge-region').hidden = !judging;
+  if (judging) return renderJudgements();
+  const result = selectDogs(state.dogs, filters());
+  state.page = result.page;
   byId('dogs').replaceChildren(...result.rows.map(renderRow));
   byId('table-region').hidden = !result.total;
   byId('pagination').hidden = !result.total;
@@ -219,10 +257,11 @@ async function load(openId) {
     // 配對讀不到不擋狗資料表，另外說一聲
     try {
       if (!pairs.ok) throw Error();
-      state.pairs = parsePairs(pairs.data).byGone;
+      ({ byGone: state.pairs, count: state.pairCount } = parsePairs(pairs.data));
       byId('pair-note').hidden = true;
     } catch {
       state.pairs = new Map();
+      state.pairCount = null;
       byId('pair-note').hidden = false;
     }
     state.loaded = true;
@@ -231,6 +270,7 @@ async function load(openId) {
       if (index >= 0) state.page = Math.floor(index / state.pageSize) + 1;
     }
     render();
+    if (state.status === JUDGE) loadJudgements();
     const target = openId && state.dogs.find(dog => dog.dogId === openId);
     if (target) openDog(target);
     else if (openId) status.textContent += ' 找不到網址指定的那隻狗。';
@@ -248,7 +288,12 @@ byId('query').addEventListener('input', () => {
   searchTimer = setTimeout(filtersChanged, 180);
 });
 for (const id of ['sex', 'care']) byId(id).addEventListener('change', filtersChanged);
-for (const button of document.querySelectorAll('[data-status]')) button.addEventListener('click', () => { state.status = button.dataset.status; filtersChanged(); });
+for (const button of document.querySelectorAll('[data-status]')) button.addEventListener('click', () => {
+  state.status = button.dataset.status;
+  filtersChanged();
+  if (state.status === JUDGE) loadJudgements();
+});
+byId('judge-more').addEventListener('click', () => loadJudgements(true));
 byId('filters').addEventListener('reset', () => { clearTimeout(searchTimer); setTimeout(filtersChanged, 0); });
 byId('page-size').addEventListener('change', event => { state.pageSize = Number(event.target.value); state.page = 1; render(); });
 for (const button of document.querySelectorAll('[data-sort]')) button.addEventListener('click', () => {

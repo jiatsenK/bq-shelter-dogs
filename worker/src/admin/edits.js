@@ -2,8 +2,13 @@
 // 參數全走白名單，任何未知參數回 400。每次請求 1 個查詢：照主鍵（id）順序走，游標接續、LIMIT 一頁＋1 判斷有沒有下一頁，
 // 不算總數。沒有篩選時只讀一頁的列；有篩選時 SQLite 沿主鍵往下找到湊滿一頁為止，符合的很少時最多走完整張表（搜尋全部的代價，見 docs/operations/admin-records.md）。
 // Access 身分（actor_email）只回後台，公開的 /api/edits 不帶。
-import { EDIT_SOURCES, KIND_LABELS } from '../editlog.js';
+import { EDIT_SOURCES, JUDGE_KINDS, KIND_LABELS } from '../editlog.js';
 
+// #775 類別篩選多一個「系統自動判斷」：一次查 JUDGE_KINDS 那幾種（資料頁列表、編輯抽屜也用）。
+// 種類寫成字面值：SQLite 要看得出條件跟部分索引 v3_edit_log_judge（migration 0023）一樣才會用它，綁參數看不出來。
+// 走這個索引時只讀判斷紀錄（自動合併一週幾筆、其他 14 天清掉），帶狗也是在這些列裡找
+const JUDGE = 'judge';
+export const JUDGE_SQL = `l.kind IN (${JUDGE_KINDS.map(k => `'${k}'`).join(',')})`;
 const PARAMS = new Set(['q', 'kind', 'dog', 'actor', 'source', 'from', 'to', 'order', 'cursor', 'size']);
 const SIZES = [25, 50, 100];
 const SOURCES = [...EDIT_SOURCES, 'legacy']; // legacy：沒有來源的舊紀錄，只用來篩選
@@ -24,7 +29,7 @@ export function editFilters(params) {
   const f = { q: text('q'), dog: text('dog'), actor: text('actor'), kind: params.get('kind') || '', source: params.get('source') || '',
     from: params.get('from') || '', to: params.get('to') || '', order: params.get('order') || 'newest',
     cursor: params.has('cursor') ? Number(params.get('cursor')) : null, size: Number(params.get('size') || 25) };
-  if (f.kind && !Object.hasOwn(KIND_LABELS, f.kind)) throw bad('紀錄類型不對');
+  if (f.kind && f.kind !== JUDGE && !Object.hasOwn(KIND_LABELS, f.kind)) throw bad('紀錄類型不對');
   if (f.source && !SOURCES.includes(f.source)) throw bad('操作來源不對');
   if (!['newest', 'oldest'].includes(f.order)) throw bad('排序方式不對');
   if (!SIZES.includes(f.size)) throw bad('每頁筆數只能是 25、50、100');
@@ -40,10 +45,13 @@ function whereOf(f) {
     const q = like(f.q);
     add("(l.editor_name LIKE ? ESCAPE '\\' OR l.dog_number LIKE ? ESCAPE '\\' OR COALESCE(d.name,'') LIKE ? ESCAPE '\\' OR COALESCE(l.before_json,'') LIKE ? ESCAPE '\\' OR COALESCE(l.after_json,'') LIKE ? ESCAPE '\\')", q, q, q, q, q);
   }
-  if (f.kind) add('l.kind=?', f.kind);
+  if (f.kind === JUDGE) add(JUDGE_SQL);
+  else if (f.kind) add('l.kind=?', f.kind);
   if (f.source) add("COALESCE(a.source,l.source,'legacy')=?", f.source);
   if (f.actor) add("(l.editor_name LIKE ? ESCAPE '\\' OR COALESCE(a.actor_email,'') LIKE ? ESCAPE '\\')", like(f.actor), like(f.actor));
-  if (f.dog) add('(l.dog_number=? OR l.dog_id=? OR d.name=? OR l.dog_id IN (SELECT dog_id FROM v3_dog_numbers WHERE number=?))', f.dog, f.dog, f.dog, f.dog);
+  // 狗：編號、永久 ID、名字。改後記著另一隻狗的紀錄（可能是同一隻、不是同一隻的表上那隻，合併的被併那隻）也算跟牠有關（#775 編輯抽屜）
+  if (f.dog) add(`(l.dog_number=? OR l.dog_id=? OR d.name=? OR l.dog_id IN (SELECT dog_id FROM v3_dog_numbers WHERE number=?)
+    OR l.after_json LIKE ? ESCAPE '\\' OR l.after_json LIKE ? ESCAPE '\\')`, f.dog, f.dog, f.dog, f.dog, like(`"dogId":${JSON.stringify(f.dog)}`), like(`"sourceId":${JSON.stringify(f.dog)}`));
   if (f.from) add('l.at>=?', taipeiStart(f.from));
   if (f.to) add('l.at<?', taipeiStart(f.to, 1));
   if (f.cursor !== null) add(f.order === 'oldest' ? 'l.id>?' : 'l.id<?', f.cursor);
@@ -52,7 +60,7 @@ function whereOf(f) {
 
 const FROM = 'FROM v3_edit_log l LEFT JOIN v3_dog_edit_actors a ON a.log_id=l.id LEFT JOIN v3_dogs d ON d.dog_id=l.dog_id';
 const parse = s => { try { return JSON.parse(s); } catch { return null; } };
-const kinds = Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label }));
+const kinds = [{ value: JUDGE, label: '系統自動判斷（全部）' }, ...Object.entries(KIND_LABELS).map(([value, label]) => ({ value, label }))];
 
 export async function searchEdits(db, params) {
   const f = editFilters(params);

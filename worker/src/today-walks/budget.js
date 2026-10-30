@@ -16,7 +16,7 @@ export const ROW_COST = {
   v3_walk_write_budget: 2,
   v3_walk_conflicts: 2,
   v3_walks: 6, // 主鍵＋日期、無編號兩個索引＋walkpack 觸發器（UPDATE 兩句）
-  v3_edit_log: 2, // AUTOINCREMENT 序號
+  v3_edit_log: 3, // AUTOINCREMENT 序號＋系統自動判斷的部分索引（#775；溜了不在索引裡，照保守上界算）
 };
 
 // writes：[[表, 列數], …]；保留量本身也寫一列 v3_walk_write_budget，一起算進去。

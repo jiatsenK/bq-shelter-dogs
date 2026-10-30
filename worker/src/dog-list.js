@@ -167,7 +167,7 @@ async function applyMain(db, row, list, stays, env, fp, now, merge) {
       out.push(db.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId, dog.name));
       if (dog.id) out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
       // 這個籠位最近確認消失的狗可能就是牠（刪列後過一陣子才新增，#774）：列成可能是同一隻，同一批
-      out.push(newDogPairs(db, dogId, cage, now));
+      out.push(...await newDogPairs(db, { dog_id: dogId, name: dog.name, number: dog.id, cage }, now));
     } else out.push(db.prepare('UPDATE v3_dogs SET name=? WHERE dog_id=? AND name<>?').bind(dog.name, dogId, dog.name));
     targetDogId=dogId;
     const rowIndex = Math.max(-1, ...list.map(m => m.row_index)) + 1, addedAt = new Date(now).toISOString();

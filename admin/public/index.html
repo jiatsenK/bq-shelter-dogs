@@ -46,8 +46,10 @@
           <button type="button" class="btn btn-primary" data-status="main" aria-pressed="true">在所 <span data-count="main"></span></button>
           <button type="button" class="btn" data-status="departed" aria-pressed="false">已出所 <span data-count="departed"></span></button>
           <button type="button" class="btn" data-status="unknown" aria-pressed="false">待核對 <span data-count="unknown"></span></button>
+          <button type="button" class="btn" data-status="judge" aria-pressed="false" aria-describedby="judge-count-note">系統自動判斷 <span data-count="judge"></span></button>
           <button type="button" class="btn" data-status="all" aria-pressed="false">全部 <span data-count="all"></span></button>
         </div>
+        <p id="judge-count-note" class="visually-hidden">數字是等確認的「可能是同一隻」組數</p>
         <form class="table-filters" id="filters" role="search">
           <div class="search-field"><label class="form-label" for="query">搜尋狗資料</label><input class="form-control" id="query" type="search" placeholder="狗名、編號、籠位、介紹或永久 ID" maxlength="200" autocomplete="off"></div>
           <div><label class="form-label" for="sex">性別</label><select class="form-select" id="sex"><option value="">全部</option><option value="male">公</option><option value="female">母</option><option value="unknown">待確認</option></select></div>
@@ -72,13 +74,19 @@
             <tbody id="dogs"></tbody>
           </table>
         </div>
+        <section id="judge-region" class="judge-region" aria-labelledby="judge-heading" hidden>
+          <h2 id="judge-heading" class="visually-hidden">系統自動判斷紀錄</h2>
+          <p class="text-secondary">試算表的列消失或出現時，系統怎麼判斷，最新在上。自動合併判斷錯了，按「取消合併」拆回兩隻；可能是同一隻的配對，到「待核對」那隻的名字下按「合併」或「不是同一隻」。自動合併的紀錄永久保留，其他保留 14 天。</p>
+          <ol id="judgements" class="judge-list"></ol>
+          <button type="button" class="btn" id="judge-more" hidden>載入更早的紀錄</button>
+        </section>
         <footer class="table-footer" id="pagination" hidden>
           <span id="count"></span>
           <label class="page-size" for="page-size">每頁<select id="page-size" class="form-select"><option>25</option><option>50</option><option>100</option></select>隻</label>
           <div class="page-controls"><button type="button" class="btn" id="previous">上一頁</button><span id="page-number"></span><button type="button" class="btn" id="next">下一頁</button></div>
         </footer>
       </section>
-      <p class="data-note">在所＝在試算表主清單上；已出所＝有離所紀錄；待核對＝不在主清單也沒有離所紀錄，多半是試算表改編號時多出來的重複，或試算表上消失的列，可在編輯抽屜底下併到同一隻。系統覺得可能是同一隻的，狗名下直接有「合併」和「不是同一隻」。不在所的狗顯示最新的舊編號。缺照片依照片紀錄判斷，實際檔案讀不到時會另外提示。</p>
+      <p class="data-note">在所＝在試算表主清單上；已出所＝有離所紀錄；待核對＝不在主清單也沒有離所紀錄，多半是試算表改編號時多出來的重複，或試算表上消失的列，可在編輯抽屜底下併到同一隻。系統覺得可能是同一隻的，狗名下直接有「合併」和「不是同一隻」；系統每一次判斷都列在「系統自動判斷」。不在所的狗顯示最新的舊編號。缺照片依照片紀錄判斷，實際檔案讀不到時會另外提示。</p>
     </main>
     <aside id="dog-drawer" class="dog-drawer" role="dialog" aria-modal="false" aria-labelledby="drawer-title" hidden></aside>
   </div>
