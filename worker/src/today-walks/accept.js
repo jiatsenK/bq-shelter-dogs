@@ -1,7 +1,7 @@
 // 志工接受（#456）：API 成功承諾止於 D1 原子接受；Google 寫回由持久工作追蹤（dispatch.js）。
 import { walkerCode, editorOf } from '../editlog.js';
 import { identityByCode } from '../identity.js';
-import { names, keyOf, one, sameNames, taiwanDay, WalkError, changedWalk } from './shared.js';
+import { names, keyOf, one, reads, sameNames, taiwanDay, WalkError, changedWalk, MAIN_DOG } from './shared.js';
 import { seedState, previousWalk } from './read.js';
 import { writeVersion, previousOf } from './version.js';
 
@@ -47,7 +47,11 @@ export async function acceptWalk(db, env, now, input) {
   if (modifying && !editor) throw new WalkError(400, '要先選好身分');
   if (editor) await membersOf(db, editor.name, env.WALKER_KEY);
   for (let attempt = 0; attempt < 8; attempt++) {
-    const old = await one(db, 'SELECT * FROM v3_walk_state WHERE dog_key=?', key) || await seedState(db, dog, input.operationDate);
+    const [[stateRow], mains] = await reads(db, ['SELECT * FROM v3_walk_state WHERE dog_key=?', key], [MAIN_DOG(dog), dog.id || dog.name]);
+    const old = stateRow || await seedState(db, dog, input.operationDate);
+    // 溜狗狀態記的狗要是主清單上這隻（#770，同 observe.js 收觀測值）：補編號後名字那一份狀態指向有編號那隻，
+    // 殘留的沒編號同名狗不能沿用它的狀態，否則溜狗紀錄寫到別隻、寫回試算表也對不到列
+    if (mains.length !== 1 || mains[0].dog_id !== old.dog_id) throw new WalkError(409, '找不到唯一的主清單狗');
     if (modifying && (dog.expectedVersion !== old.version || old.effective_date !== input.operationDate)) throw changedWalk(old);
     let members = old.effective_date === input.operationDate
       ? old.members_json ? JSON.parse(old.members_json) : await sourceMembers(db, old.walker, env.WALKER_KEY) : [];
