@@ -17,7 +17,7 @@ const FULL_SCAN_OK = {
   'compact.js: SELECT column_index, label, names FROM v3_sheet_group_columns': 'ADR 0009／0014：readDogsPayload 只在 small 版本變更、需要重建在所資料包時讀取',
   'compact.js: SELECT label, text FROM v3_sheet_changes': 'ADR 0009／0014：readDogsPayload 只在 small 版本變更、需要重建在所資料包時讀取',
   'compact.js: SELECT dog_id,walk_date,walker_code,dog_number,dog_name FROM v3_walks': 'readWalks 僅供離線對照與測試；正式 API 使用 packs.js 按月／按年讀取',
-  'dog-list.js: SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,m.walker_codes,m.missing_at,s.revision FROM v3_sheet_main m': 'GAS 編輯觸發／保險掃描補送（≤10 單位一批）與保險掃描送指紋才跑；網站讀取與登記不跑，applyGroup 需完整主清單核對狗名（#501），找消失的列要跟表上全部 key 比（#771）',
+  'dog-list.js: SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,m.walker_codes,m.missing_at,m.added_at,s.revision FROM v3_sheet_main m': 'GAS 編輯觸發／保險掃描補送（≤10 單位一批）與保險掃描送指紋才跑；網站讀取與登記不跑，applyGroup 需完整主清單核對狗名（#501），找消失的列要跟表上全部 key 比（#771）',
   'dog-list.js: SELECT row_index,label,text FROM v3_sheet_changes': 'GAS 只在主清單下方異動紀錄被編輯或掃描發現指紋不同才讀（#501）；只寫有變的段（#554）',
   'identity.js: SELECT volunteer_id,name FROM v3_volunteers': 'linkIdentityName 僅首次遇到尚無對照的代號才核對既有名字（NFKC）；已有代號由 code 索引返回，不在一般身分請求跑',
   'packs.js: SELECT number,name,walked_date,walker_codes FROM v3_sheet_main': '#679 溜狗日期包只在 walked 版本變更、需要重建時讀主清單（約 120 列）；沒變只讀 1 列版本號',

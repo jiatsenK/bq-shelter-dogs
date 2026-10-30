@@ -281,7 +281,7 @@ flowchart LR
   r2[("R2 照片<br/>［資料存放］<br/>bq-shelter-photos")]
   subgraph SHARED["共用：兩個 Worker 都匯入"]
     settings["設定・活動・分享<br/>［模組・feature-settings.js、activities.js、<br/>share-counts.js、cron-status.js］<br/>功能開關、活動、分享次數、排程紀錄"]
-    dogdata["狗資料與照片<br/>［模組・dog-edit.js、dog-photo.js、<br/>dog-merge.js、stays.js、r2.js］<br/>改狗資料、照片、合併、出入所"]
+    dogdata["狗資料與照片<br/>［模組・dog-edit.js、dog-photo.js、<br/>dog-merge.js、dog-pairs.js、stays.js、r2.js］<br/>改狗資料、照片、合併、出入所、可能是同一隻"]
     walk["今日溜狗紀錄<br/>［模組・today-walks/，入口 index.js］<br/>先存 D1，背景寫回、重試、收人工改表"]
   end
   subgraph VW["志工網站 Worker"]
