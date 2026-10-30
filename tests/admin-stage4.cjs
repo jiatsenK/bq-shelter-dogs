@@ -38,10 +38,10 @@ module.exports = async (browser, base) => {
     if (url.pathname === '/api/manage/links') return route.fulfill({ json: { site: 'https://site.example.org/', testSite: 'https://test.example.org/', sheet: 'https://docs.google.com/spreadsheets/d/abc/edit', testSheet: 'https://docs.google.com/spreadsheets/d/xyz/edit', gas: 'https://script.google.com/macros/s/abc/exec', testGas: null } });
     if (url.pathname === '/api/manage/settings') return route.fulfill({ json: { revision: 2, values: { showActivities: false, showQuality: true, showUpdates: true, editActivity: true } } });
     if (url.pathname === '/api/manage/dogs') return route.fulfill({ status: dogsCode, json: dogsCode === 200 ? { dogs } : { error: '狗資料暫時讀不到' } });
-    if (url.pathname === '/api/manage/data-checks') return route.fulfill({ status: checksCode, json: checksCode === 200 ? { sheetGaps: { state: 'ok', recordedAt: '2026-10-24T01:43:00.000Z', checkedAt: '2026-10-24T15:53:00.000Z', stale: true, total: 2, items: [
-      { sheet: 'main', key: 'main:2026010202', number: '2026010202', name: '小花', dogId: 'e'.repeat(32), cage: 'C3' },
-      { sheet: 'departed', key: 'departed:名:無名', number: '', name: '無名', dogId: null, cage: '' },
-    ] } } : { error: '管理資料暫時無法讀取，請稍後重試' } });
+    if (url.pathname === '/api/manage/dog-pairs') return route.fulfill({ status: checksCode, json: checksCode === 200 ? { count: 2, pairs: [
+      { goneDogId: 'e'.repeat(32), dogId: A, createdAt: '2026-10-24T01:43:00.000Z', goneName: '小花', name: '阿福', number: '2026010101', cage: 'C3' },
+      { goneDogId: 'f'.repeat(32), dogId: A, createdAt: '2026-10-24T01:40:00.000Z', goneName: '無名', name: '阿福', number: '2026010101', cage: 'C3' },
+    ] } : { error: '管理資料暫時無法讀取，請稍後重試' } });
     if (url.pathname === '/api/manage/cron-status') return route.fulfill({ status: checksCode, json: checksCode === 200 ? { jobs: [
       { job: 'retry', state: 'ok', okAt: '2026-10-26T05:45:00.000Z', failAt: null, error: '', stale: false },
       { job: 'scan', state: 'ok', okAt: '2026-10-25T15:53:00.000Z', failAt: '2026-10-26T01:53:00.000Z', error: '主清單直接讀回失敗', stale: false },
@@ -124,11 +124,9 @@ module.exports = async (browser, base) => {
 
     // 待補清單
     await page.goto(`${base}/admin/public/checks.html`);
-    await page.getByText('共 2 筆', { exact: false }).waitFor();
-    assert.match(await status('gap-status'), /已過期/);
-    assert.match(await status('gap-status'), /最後掃描 2026\/10\/24 23:53/);
-    assert.equal(await page.locator('#gaps tr').count(), 2);
-    assert.match(await page.locator('#gaps').textContent(), /D1 已找不到這筆/);
+    // #774「網站有、試算表沒有」改成可能是同一隻的組數，連到狗資料的待核對
+    await page.getByText('有 2 組可能是同一隻。').waitFor();
+    assert.equal(await page.getByRole('link', { name: '到狗資料的待核對處理' }).getAttribute('href'), './?status=unknown');
     await page.getByText('主清單上共 2 隻', { exact: false }).waitFor();
     assert.match(await page.locator('#complete-list').textContent(), /缺編號1 隻/);
     assert.match(await page.locator('#complete-list').textContent(), /缺照片2 隻/);
@@ -143,11 +141,11 @@ module.exports = async (browser, base) => {
     assert.match(await page.locator('#cron-jobs').textContent(), /2026\/10\/26 09:53 失敗：主清單直接讀回失敗/);
     checksCode = 503; dogsCode = 503;
     await page.locator('#reload').click();
-    await page.getByText('這不代表沒有差異', { exact: false }).waitFor();
+    await page.getByText('這不代表沒有，請重新讀取', { exact: false }).waitFor();
     await page.getByText('不代表沒有缺漏', { exact: false }).waitFor();
     await page.getByText('這不代表排程有在跑', { exact: false }).waitFor();
     assert.equal(await page.locator('#cron-region').isHidden(), true);
-    assert.equal(await page.locator('#gap-region').isHidden(), true);
+    assert.equal(await page.locator('#pair-link').isHidden(), true);
     checksCode = 200; dogsCode = 200;
 
     // 修改紀錄

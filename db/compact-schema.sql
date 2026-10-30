@@ -114,7 +114,8 @@ CREATE TABLE IF NOT EXISTS v3_sheet_main (
   walked_date TEXT,
   walker TEXT, -- 試算表「誰遛的」原文（#519）；NULL＝還沒補填，保險掃描會要這隻
   walker_codes TEXT NOT NULL DEFAULT '[]', -- 「誰遛的」代號 JSON 陣列，照名單順序（#559，取代 v3_sheet_main_walkers）
-  missing_at TEXT -- 試算表上不見的候選：第一次不見的時間（ISO）；NULL＝表上還在（#771，ADR 0025）
+  missing_at TEXT, -- 試算表上不見的候選：第一次不見的時間（ISO）；NULL＝表上還在（#771，ADR 0025）
+  added_at TEXT -- 狗清單同步新建這一列的時間（ISO）；NULL＝#774 之前就在表上。判斷「可能是同一隻」的新出現用
 );
 CREATE INDEX IF NOT EXISTS v3_sheet_main_number ON v3_sheet_main(number);
 CREATE INDEX IF NOT EXISTS v3_sheet_main_name ON v3_sheet_main(name) WHERE number='';
@@ -533,3 +534,20 @@ CREATE TRIGGER IF NOT EXISTS packs_v3_photos_INSERT AFTER INSERT ON v3_photos BE
 CREATE TRIGGER IF NOT EXISTS packs_v3_photos_UPDATE AFTER UPDATE ON v3_photos BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id IN (OLD.dog_id,NEW.dog_id)); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_dog_departures d WHERE d.dog_id IN (OLD.dog_id,NEW.dog_id)))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_dog_departures d WHERE d.dog_id IN (OLD.dog_id,NEW.dog_id)); END;
 
 CREATE TRIGGER IF NOT EXISTS packs_v3_photos_DELETE AFTER DELETE ON v3_photos BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); UPDATE v3_departure_versions SET years=(SELECT json_group_object(j.key, j.value+(j.key IN (SELECT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END FROM v3_dog_departures d WHERE d.dog_id=OLD.dog_id))) FROM json_each(years) j) WHERE id=1 AND EXISTS(SELECT 1 FROM v3_dog_departures d WHERE d.dog_id=OLD.dog_id); END;
+-- 確認消失時那隻狗的籠位：之後同籠新建狗時拿來配對（主清單複本那一列已經刪掉）
+CREATE TABLE IF NOT EXISTS v3_sheet_gone (
+ dog_id TEXT PRIMARY KEY NOT NULL,
+ cage TEXT NOT NULL,
+ gone_at TEXT NOT NULL
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS v3_sheet_gone_cage ON v3_sheet_gone(cage, gone_at);
+-- 配對：gone_dog_id＝確認消失、待核對的那隻（合併時被併掉）；dog_id＝表上那隻（留下）。按過「不是同一隻」的列留著，同一組不再建立
+CREATE TABLE IF NOT EXISTS v3_dog_pairs (
+ gone_dog_id TEXT NOT NULL,
+ dog_id TEXT NOT NULL,
+ status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','merged','not_same')),
+ created_at TEXT NOT NULL,
+ decided_at TEXT,
+ PRIMARY KEY(gone_dog_id, dog_id)
+) WITHOUT ROWID;
+CREATE INDEX IF NOT EXISTS v3_dog_pairs_pending ON v3_dog_pairs(created_at) WHERE status='pending';

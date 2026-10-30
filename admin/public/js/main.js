@@ -1,10 +1,11 @@
 import { createDogDrawer } from './dog-editor.js';
-import { readDogs } from './api.js';
+import { readDogs, readPairs, rejectPair } from './api.js';
+import { parsePairs, pairText } from './dog-merge.js';
 import { parseManageDogs, selectDogs, orderDogs, maintenance, sexLabel, CARE_FILTERS, STATUS_LABELS, STATUS_TABS, statusCounts, statusText, shownNumber } from './dog-table.js';
 
 const byId = id => document.getElementById(id);
 // 狀態分頁預設在所（K 2026-10-26）；清除條件不換分頁
-const state = { dogs: [], loaded: false, status: 'main', page: 1, pageSize: 25, sort: 'number', direction: 'asc' };
+const state = { dogs: [], loaded: false, status: 'main', page: 1, pageSize: 25, sort: 'number', direction: 'asc', pairs: new Map() };
 const status = byId('status');
 const FILTER_IDS = ['query', 'sex', 'care'];
 let searchTimer;
@@ -94,6 +95,7 @@ function renderRow(dog) {
   const name = element('td', undefined, 'dog-name');
   name.append(element('div', dog.name || '未命名'));
   if (dog.status !== 'main') name.append(element('small', statusText(dog), 'text-secondary'));
+  for (const pair of state.pairs.get(dog.dogId) || []) name.append(pairLine(dog, pair));
   const intro = element('td', undefined, 'intro-cell col-wide');
   if (dog.intro) {
     const detail = element('details');
@@ -112,6 +114,42 @@ function renderRow(dog) {
     element('td', dog.cage || '—', 'col-wide'), element('td', sexLabel(dog.sex), 'col-wide'), intro, care,
     element('td', dog.dogId, 'identity col-wide'));
   return row;
+}
+// #774 待核對的狗名下：系統配的「可能是同一隻」。合併開抽屜、先選好那一隻預覽（照現有合併，按兩次才寫入）；
+// 不是同一隻按兩次才送，這一組之後不再出現
+function pairLine(dog, pair) {
+  const line = element('div', undefined, 'pair-line');
+  const merge = element('button', '合併', 'btn btn-sm');
+  merge.type = 'button';
+  merge.setAttribute('aria-label', `${pairText(pair)}：合併`);
+  merge.addEventListener('click', () => openDog(state.dogs.find(d => d.dogId === dog.dogId), { mergeWith: pair.dogId }));
+  const reject = element('button', '不是同一隻', 'btn btn-sm');
+  reject.type = 'button';
+  reject.setAttribute('aria-label', `${pairText(pair)}：不是同一隻`);
+  let armed = false;
+  reject.addEventListener('click', async () => {
+    if (!armed) {
+      armed = true;
+      reject.textContent = '確定不是同一隻';
+      reject.setAttribute('aria-label', `${pairText(pair)}：確定不是同一隻`);
+      reject.className = 'btn btn-sm btn-danger';
+      return;
+    }
+    reject.disabled = merge.disabled = true;
+    const response = await rejectPair(pair.goneDogId, pair.dogId);
+    status.dataset.error = String(!response.ok);
+    if (!response.ok) {
+      reject.disabled = merge.disabled = false;
+      status.textContent = response.data?.error || '沒有記成不是同一隻，請重新讀取再試。';
+      return;
+    }
+    const left = state.pairs.get(dog.dogId).filter(p => p !== pair);
+    if (left.length) state.pairs.set(dog.dogId, left); else state.pairs.delete(dog.dogId);
+    render();
+    status.textContent = `已記下：${dog.name || '未命名'}跟 ${pair.name || '未命名'}（${pair.cage}）不是同一隻，之後不再列出。`;
+  });
+  line.append(element('span', pairText(pair)), merge, reject);
+  return line;
 }
 // 篩選條件放進網址（待補清單連過來、重新整理都保留）；dog 參數只在進頁時用來開抽屜
 function syncUrl() {
@@ -171,13 +209,22 @@ async function load(openId) {
   byId('refresh').disabled = true;
   status.dataset.error = 'false';
   status.textContent = '正在讀取狗資料…';
-  const response = await readDogs();
+  const [response, pairs] = await Promise.all([readDogs(), readPairs()]);
   try {
     if (!response.ok) {
       if ([401, 403].includes(response.status)) throw Error('管理登入已失效，請重新整理頁面以登入。');
       throw Error('狗資料暫時無法讀取，請按「重新讀取」再試；若仍失敗，請重新整理頁面確認登入。');
     }
     state.dogs = parseManageDogs(response.data);
+    // 配對讀不到不擋狗資料表，另外說一聲
+    try {
+      if (!pairs.ok) throw Error();
+      state.pairs = parsePairs(pairs.data).byGone;
+      byId('pair-note').hidden = true;
+    } catch {
+      state.pairs = new Map();
+      byId('pair-note').hidden = false;
+    }
     state.loaded = true;
     if (openId) {
       const index = orderDogs(state.dogs, filters()).findIndex(dog => dog.dogId === openId);

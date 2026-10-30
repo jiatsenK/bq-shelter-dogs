@@ -1,5 +1,7 @@
 # 活動紀錄、待補清單、修改紀錄與網站更新（#567）
 
+> 2026-10-30 #774：待補清單的「網站有、試算表沒有」改成「可能是同一隻」（見下方〈可能是同一隻〉）。`/api/manage/data-checks` 與 `dog_list_extra` 還在，畫面不再讀。
+
 > 2026-10-26 #624：管理網站頁名改了，API 與契約不變。「資料檢查」→「待補清單」（完整度各項連到已篩選的狗資料表，狗名直接開編輯抽屜）；「更新紀錄」拆成「修改紀錄」（`updates.html`，資料編輯）與「網站更新」（`releases.html`）。志工網站的頁名不變。
 
 2026-10-26。基準 main `8d62135`（含 #564–#566）。依 #562、#567、ADR 0020（草稿 PR #584）。沒有新增 migration、資料表或排程。
@@ -26,9 +28,19 @@ npx.cmd wrangler d1 execute bq-shelter-dogs --remote --command "SELECT a.activit
 ## 待補清單 `checks.html`（原資料檢查）
 
 - 主清單資料完整度：沿用志工 `dataCompleteness` 規則（沒有編號、編號看不出入所日期、沒有溜狗日期、沒有性別、沒有入所介紹、沒有照片），只算主清單上的狗；資料用 `/api/manage/dogs`（多回 `walkedDate`，同一個 SELECT）。照片看 D1 照片引用／R2 清單，命名為「沒有照片紀錄」，不逐張 HEAD 下載；沒有實物巡檢。
-- 網站有、試算表沒有（#518）：GET `/api/manage/data-checks` 只讀 `v3_sync_state` 的 `dog_list_extra`，主清單／已出所的鍵各用最多 ceil(N/90) 個 SELECT 對回狗名、籠位、永久 ID（最多顯示 200 筆）。不刪狗、不記離所、不合併。
+- 可能是同一隻（#774，取代下一條的畫面）：讀 GET `/api/manage/dog-pairs` 的 `count`，顯示「有 N 組可能是同一隻」並連到狗資料 `./?status=unknown`；讀不到明說「不代表沒有」。
+- （#774 起畫面不再顯示）網站有、試算表沒有（#518）：GET `/api/manage/data-checks` 只讀 `v3_sync_state` 的 `dog_list_extra`，主清單／已出所的鍵各用最多 ceil(N/90) 個 SELECT 對回狗名、籠位、永久 ID（最多顯示 200 筆）。不刪狗、不記離所、不合併。
 - 狀態分開：讀取失敗（API 錯）、讀不懂（紀錄壞掉）、從未掃描、過期（最後掃描超過 24 小時）、正常。前兩者明說「不代表沒有差異／缺漏」。
 - 掃描時間：`scanDogList` 每次掃描都把 `checkedAt` 寫進 `dog_list_extra`（`at` 仍只在清單變動時換）。一天三次、每次 1 列，取代原本「指紋一樣就不寫 D1」。志工 Worker 部署前的舊格式沒有 `checkedAt`，頁面顯示「掃描時間還沒記錄」並視為無法確認是否過期。
+
+## 可能是同一隻（#774，ADR 0025）
+
+- 配對怎麼來：試算表上消失的列確認移出主清單時，同籠有新出現的狗、或同籠同名的狗還在表上，就建一組；確認後 7 天內同籠新建狗也建一組（`worker/src/dog-pairs.js`，跟狗清單同步同一個 batch，不多花 D1 往返）。表：`v3_sheet_gone`（確認時的籠位）、`v3_dog_pairs`（狀態 pending／merged／not_same）。migration `0021`。
+- API（只有 Access 管理者）：GET `/api/manage/dog-pairs` 回 `{ count, pairs }`，只列等確認、待核對那隻還在而且不在主清單也沒有離所紀錄、表上那隻還在主清單的組，最新在上，1 個查詢。POST `/api/manage/dog-pairs/{待核對那隻}/{表上那隻}/not-same`（同來源）記成不是同一隻，同一批寫修改紀錄 `not_same`（Access 身分記在 `v3_dog_edit_actors`）；已經不是等確認回 404／409。
+- 合併：沿用 `/api/manage/dogs/{表上那隻}/merge`（預覽、帶兩隻版本、按兩次才寫），合併的同一批把這組記成 merged；取消合併照舊在修改紀錄按，那組不會再列出。
+- 資料頁：待核對的狗名下顯示「可能跟 ○○（籠位）是同一隻」，旁邊「合併」（開抽屜、選好那一隻直接預覽）和「不是同一隻」（按兩次才送，成功後那組從畫面拿掉）。配對讀不到時表格照常，表格上方另外說明。
+- 修改紀錄：`not_same` 顯示「不是同一隻」，內容「跟 ○○（籠位）不是同一隻」；保留 14 天（只有合併、取消合併永久保留）。
+- 網頁測試：`tests/admin-dog-pairs.cjs`；Worker 測試：`worker/test/dog-pairs.test.mjs`（Apps Script fixture，刪列後新增、先新增後刪、暖暖殘留合併與取消、不是同一隻不再出現）。
 
 ## 修改紀錄 `updates.html`、網站更新 `releases.html`（原更新紀錄）
 

@@ -1,5 +1,6 @@
 import { readDogEdit, saveDogEdit } from '../dog-edit.js';
 import { previewMerge, mergeDogs, unmergeDogs } from '../dog-merge.js';
+import { readPairs, rejectPair } from '../dog-pairs.js';
 import { photoInput, saveDogPhoto, restoreDogPhoto, listDogTrash, readDogTrash } from '../dog-photo.js';
 import { TRASH_DAYS } from '../r2.js';
 import { readSettings, saveSettings } from '../feature-settings.js';
@@ -105,6 +106,14 @@ export default {
         else if (!sameOrigin(request, env)) response = json({ error: '請從管理網站儲存' }, 403);
         else if (request.headers.get('Content-Type')?.split(';')[0].trim() !== 'application/json') response = json({ error: '請使用 JSON' }, 415);
         else response = json(await writeActivity(env.DB, request.method, match[1], await settingsInput(request, 16000), actor));
+      } else if (path === '/api/manage/dog-pairs' || path.startsWith('/api/manage/dog-pairs/')) {
+        // 可能是同一隻（#774）：GET 列等確認的配對；POST …/{待核對那隻}/{表上那隻}/not-same 記成不是同一隻。合併走 /dogs/{表上那隻}/merge
+        const match = path.match(/^\/api\/manage\/dog-pairs(?:\/([a-f0-9]{32})\/([a-f0-9]{32})\/not-same)?$/);
+        if (!match) response = json({ error: '找不到這組配對' }, 404);
+        else if (!match[1]) response = ['GET', 'HEAD'].includes(request.method) ? json(await readPairs(env.DB)) : json({ error: '請使用 GET' }, 405);
+        else if (request.method !== 'POST') response = json({ error: '請使用 POST' }, 405);
+        else if (!sameOrigin(request, env)) response = json({ error: '請從管理網站儲存' }, 403);
+        else response = json(await rejectPair(env.DB, match[1], match[2], { actor }));
       } else if (!['GET', 'HEAD'].includes(request.method)) {
         response = json({ error: '此階段僅提供唯讀查詢' }, 405);
         response.headers.set('Allow', 'GET, HEAD');

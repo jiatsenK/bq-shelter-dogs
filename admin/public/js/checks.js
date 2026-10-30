@@ -1,36 +1,28 @@
-import { readDogs, readDataChecks, readCronStatus } from './api.js';
+import { readDogs, readPairs, readCronStatus } from './api.js';
 import { parseManageDogs, statusText, shownNumber } from './dog-table.js';
-import { completeness, careLink, parseSheetGaps, gapStatus, SHEET_LABELS, CRON_LABELS, parseCronStatus, cronStatus, parseStoppedWalks, stoppedStatus } from './data-checks.js';
+import { completeness, careLink, CRON_LABELS, parseCronStatus, cronStatus, parseStoppedWalks, stoppedStatus } from './data-checks.js';
 import { showVolunteerState } from './volunteer-state.js';
-import { possibleDuplicates } from './dog-merge.js';
+import { possibleDuplicates, parsePairs } from './dog-merge.js';
 import { byId, element } from './dom.js';
 
 // #567 待補清單（原資料檢查）頁：每個區塊各自讀取、各自顯示失敗；讀不到時明說「無法判斷」，不當成沒有缺漏。
 const failed = (node, text) => { node.dataset.error = 'true'; node.textContent = text; };
 
-function renderGaps(result) {
-  const status = byId('gap-status'), region = byId('gap-region');
-  status.removeAttribute('data-error'); region.hidden = true;
-  let gaps;
+// #774 可能是同一隻：只顯示組數，連到狗資料的待核對（狗名下按合併或不是同一隻）
+function renderPairs(result) {
+  const status = byId('pair-status'), link = byId('pair-link');
+  status.removeAttribute('data-error'); link.hidden = true;
+  let count;
   try {
     if (!result.ok) throw Error(result.data?.error);
-    gaps = parseSheetGaps(result.data);
+    ({ count } = parsePairs(result.data));
   } catch (error) {
-    failed(status, `${error.message || '掃描清單讀取失敗'}。這不代表沒有差異，請重新讀取。`);
+    failed(status, `${error.message || '配對讀取失敗'}。這不代表沒有，請重新讀取。`);
     return;
   }
-  if (gaps.state === 'error') failed(status, gapStatus(gaps));
-  else status.textContent = gaps.state === 'ok'
-    ? `${gaps.total ? `共 ${gaps.total} 筆${gaps.total > gaps.items.length ? `（只顯示前 ${gaps.items.length} 筆）` : ''}` : '目前沒有網站有、試算表沒有的資料'}。${gapStatus(gaps)}`
-    : gapStatus(gaps);
-  if (gaps.stale) status.dataset.stale = 'true'; else status.removeAttribute('data-stale');
-  byId('gaps').replaceChildren(...gaps.items.map(item => {
-    const row = document.createElement('tr');
-    row.append(element('td', SHEET_LABELS[item.sheet] || item.sheet), element('td', item.number || '—', 'dog-number'),
-      element('td', item.name || '—', 'dog-name'), element('td', item.cage || '—'), element('td', item.dogId || 'D1 已找不到這筆', 'identity'));
-    return row;
-  }));
-  region.hidden = !gaps.items.length;
+  status.textContent = count ? `有 ${count} 組可能是同一隻。` : '目前沒有可能是同一隻的狗。';
+  if (count) status.dataset.stale = 'true'; else status.removeAttribute('data-stale');
+  link.hidden = !count;
 }
 
 function renderCompleteness(result) {
@@ -145,13 +137,13 @@ function renderStopped(data) {
 
 async function load() {
   byId('reload').disabled = true;
-  byId('gap-status').textContent = '正在讀取掃描清單…';
+  byId('pair-status').textContent = '正在讀取配對…';
   byId('complete-status').textContent = '正在讀取狗資料…';
   byId('dup-status').textContent = '正在讀取狗資料…';
   byId('cron-status').textContent = '正在讀取排程紀錄…';
   byId('stopped-status').textContent = '正在讀取停止重試的狗…';
-  const [gaps, dogs, cron] = await Promise.all([readDataChecks(), readDogs(), readCronStatus()]);
-  renderGaps(gaps);
+  const [pairs, dogs, cron] = await Promise.all([readPairs(), readDogs(), readCronStatus()]);
+  renderPairs(pairs);
   renderDuplicates(renderCompleteness(dogs));
   renderCron(cron);
   byId('reload').disabled = false;

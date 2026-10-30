@@ -30,6 +30,18 @@ export function mergePreviewText(p) {
     ...Object.entries(p.lost || {}).map(([label, value]) => `不採用被併那隻的${label}：${value}`),
   ].join('\n');
 }
+// #774 可能是同一隻：系統在試算表列消失時配的組（/api/manage/dog-pairs），依待核對那隻分組
+const HEX = /^[a-f0-9]{32}$/;
+export function parsePairs(data) {
+  if (!data || !Array.isArray(data.pairs) || !Number.isSafeInteger(data.count)) throw Error('配對資料格式不正確');
+  const byGone = new Map();
+  for (const p of data.pairs) {
+    if (!p || !HEX.test(p.goneDogId) || !HEX.test(p.dogId) || ['name', 'number', 'cage'].some(k => typeof p[k] !== 'string')) throw Error('配對資料格式不正確');
+    byGone.set(p.goneDogId, [...(byGone.get(p.goneDogId) || []), p]);
+  }
+  return { count: data.count, byGone };
+}
+export const pairText = p => `可能跟 ${p.name || '未命名'}（${p.cage || '籠位不明'}）是同一隻`;
 // 待補清單：名字一樣、一隻在所一隻不在所的配對（#621 改編號多出來的狗多半長這樣）
 export function possibleDuplicates(dogs) {
   const byName = new Map();

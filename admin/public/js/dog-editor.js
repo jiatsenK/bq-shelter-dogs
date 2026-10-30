@@ -53,7 +53,8 @@ export function trashLabel(deletedAt, days) {
   return `${taiwan(at)} 換掉，${taiwan(run).slice(0, 10)} 清理時刪除`;
 }
 // 合併重複的狗（K 2026-10-26）：選另一隻→預覽→按兩次確認；成功前不改任何資料。放在欄位外面，不算進抽屜的草稿
-function mergeSection(dog, dogs, onMerged) {
+// mergeWith（#774 資料頁「可能是同一隻」按合併）：先選好那一隻、直接預覽
+function mergeSection(dog, dogs, onMerged, mergeWith) {
   const wrap = el('section', undefined, 'merge-section');
   wrap.setAttribute('aria-labelledby', 'merge-title');
   const heading = el('h3', '合併重複的狗');
@@ -148,6 +149,10 @@ function mergeSection(dog, dogs, onMerged) {
     }
     onMerged(`已把「${gone}」併到「${planned.target.name || '未命名'} ${planned.target.number || ''}」。要拆回來，到修改紀錄找這筆「合併狗」按「取消合併」。`);
   });
+  if (mergeWith && candidates.some((c) => c.dogId === mergeWith)) {
+    select.value = mergeWith;
+    preview.click();
+  }
   return wrap;
 }
 export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [], onMerged = () => {} }) {
@@ -694,7 +699,7 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
     get dogId() {
       return root.hidden ? null : dog?.dogId;
     },
-    open(nextDog, { notice = '', force = false } = {}) {
+    open(nextDog, { notice = '', force = false, mergeWith = '' } = {}) {
       if (!root.hidden && dog && !force && !mayLeave()) return false;
       dog = nextDog;
       snapshot = null;
@@ -708,7 +713,7 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
           leaveArmed = true;
           api.close();
           onMerged(message);
-        })
+        }, mergeWith)
       );
       body.scrollTop = 0;
       reload.hidden = true;
@@ -721,6 +726,7 @@ export function createDogDrawer(root, { onSaved, onNext, onClose, dogs = () => [
       root.hidden = false;
       document.body.classList.add('drawer-open');
       root.querySelector('#drawer-title').focus();
+      if (mergeWith) mergeHost.scrollIntoView?.({ block: 'nearest' });
       load().then((ok) => {
         if (ok && dog === nextDog)
           status.textContent = notice ? `${notice}現在編輯${dog.name || '未命名'}。` : '改完按「儲存」；出入所紀錄、照片要先預覽。';
