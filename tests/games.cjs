@@ -119,8 +119,11 @@ module.exports = async (browser, base) => {
     assert(score >= 700 && score <= 1400, `分數：${score}`);
     assert.equal(await page.locator('#gBest').innerText(), '新紀錄！');
     assert.equal(await page.evaluate(() => localStorage.getItem('bq-game-dressup-best')), String(score));
-    assert.deepEqual(await page.locator('#gMissed figcaption').allTextContents(), missed);
+    assert.deepEqual(await page.locator('#gMissed a').allTextContents(), missed);
     assert.equal(await page.locator('#gMissed img').count(), 3);
+    // 沒認出的狗連到溜狗表那隻的詳細資訊
+    const ids = Object.fromEntries(ALL.map(d => [d.name, d.id]));
+    assert.deepEqual(await page.locator('#gMissed a').evaluateAll(as => as.map(a => a.getAttribute('href'))), missed.map(n => `index.html#dog/${ids[n]}`));
     for (const id of BLOCKED) assert(!photos.includes(id), `不能出題的狗不讀照片：${id}`);
 
     const line = new URL(await page.locator('#gLine').getAttribute('href'));
