@@ -87,7 +87,8 @@ function ask() {
   $('gDeco').innerHTML = '';
   $('gPicErr').hidden = true;
   stage.style.transform = ''; stage.style.transformOrigin = '';
-  pic.hidden = false;
+  // 照片讀完、戴好裝飾才顯示：換 src 後瀏覽器會繼續顯示上一張（或讀到一半的新照片），不藏就會露出沒變裝的狗
+  pic.hidden = true;
   // 倒數從照片出現（或確定讀不到）才開始，照片慢不吃作答時間
   const go = () => { S.locked = false; S.t0 = performance.now(); tick(); };
   pic.onload = () => {
@@ -99,11 +100,11 @@ function ask() {
     stage.style.transformOrigin = `${z.o[0]}% ${z.o[1]}%`;
     stage.style.transform = `translate(${z.t[0]}%,${z.t[1]}%) scale(${z.k}) rotate(${z.deg}deg)`;
     $('gDeco').innerHTML = q.decos.map(decoOnPhoto).join('');
+    pic.hidden = false;
     go();
   };
   pic.onerror = () => {
     if (!current()) return;
-    pic.hidden = true;
     $('gPicErr').hidden = false;
     go();
   };
