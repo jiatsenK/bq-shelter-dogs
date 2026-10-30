@@ -7,7 +7,7 @@ import { BQApi } from './api.js';
 import { cardsState } from './page-state.js';
 
 // 板收圖鑑（cards.html）：電腦版溜狗表頁首「圖鑑」進來（K 2026-10-10）。
-// 每隻狗一張球員卡，你溜過的才拿得到；上次來之後新溜的狗包成卡包自己撕。沒溜過的狗也看得到，只是還沒有卡。
+// 每隻狗一張卡，你溜過的才拿得到；上次來之後新溜的狗包成卡包自己撕。沒溜過的狗也看得到，只是還沒有卡。
 // 「你是誰」用溜狗表「我溜過」設定的代號；開卡紀錄存 D1、localStorage 備援，不寫試算表、不顯示志工名字。
 // 純函式在前面（tests/index.html 會測），畫面在後面。
 
@@ -17,8 +17,8 @@ const BQ_OPENED_KEY = BQStore.keys.zukan; // 撕開過的卡：{ v: 1, codes: { 
 const BQ_CODE_PATTERN = /^[0-9a-f]{12}$/;
 const BQ_PACK_SIZE = 5;
 
-// 隊伍照犬舍分；顏色是卡面色帶和圖鑑的隊伍標
-// 分區、隊名、隊色在 js/site-config.js（cards.html 先載入）
+// 卡面色帶照犬舍分區（K 2026-10-30 不用球隊說法）；顏色是卡面色帶和圖鑑每區的標
+// 分區、區名、區色在 js/site-config.js（cards.html 先載入）
 const BQ_TEAMS = SITE.zones.map(z => ({ key: z.key, name: z.team, test: z.test, color: z.color }));
 const BQ_FREE = { key: SITE.freeTeam.key, name: SITE.freeTeam.team, test: () => true, color: SITE.freeTeam.color };
 
@@ -68,7 +68,7 @@ function bqMonthOut(walks, today) {
   return out;
 }
 
-// dogs.json → 球員；沒有編號的列（試算表的「(阿拉丁)」暫住標記、還沒建檔的）不算
+// dogs.json → 卡；沒有編號的列（試算表的「(阿拉丁)」暫住標記、還沒建檔的）不算
 function bqPlayers(data, walks, today = new Date()) {
   if (!data || !Array.isArray(data.dogs)) throw new Error('dogs.json 格式不對');
   const pv = data.photoVersions && typeof data.photoVersions === 'object' ? data.photoVersions : {};
@@ -91,7 +91,7 @@ function bqPlayers(data, walks, today = new Date()) {
       thumb: ver(thumb), photo: ver(full),
     };
   });
-  // 背號照入隊順序：1 號是最資深的；沒有入所日期的排最後
+  // 背號照入所順序：1 號是最資深的；沒有入所日期的排最後
   [...players].sort((a, b) => (a.intake ? a.intake.getTime() : Infinity) - (b.intake ? b.intake.getTime() : Infinity) || a.id.localeCompare(b.id))
     .forEach((p, i) => { p.number = String(i + 1); });
   return players;
@@ -105,8 +105,8 @@ function bqAwards(players, today = new Date()) {
   const walker = players.reduce((m, p) => (p.monthOut > (m ? m.monthOut : 0) ? p : m), null);
   const out = [];
   if (walker) out.push({ key: 'walker', title: '出門王', who: walker, value: walker.monthOut, unit: '天', note: `${today.getMonth() + 1} 月出門最多天` });
-  if (oldest) out.push({ key: 'veteran', title: '資深球星', who: oldest, value: Math.floor(oldest.years), unit: '年', note: `${oldest.intake.getFullYear()} 年入隊，等最久` });
-  if (newest && newest !== oldest) out.push({ key: 'rookie', title: '新人王', who: newest, value: Math.max(1, Math.round((today - newest.intake) / 86400000)), unit: '天', note: '最新入隊' });
+  if (oldest) out.push({ key: 'veteran', title: '最資深', who: oldest, value: Math.floor(oldest.years), unit: '年', note: `${oldest.intake.getFullYear()} 年入所，等最久` });
+  if (newest && newest !== oldest) out.push({ key: 'rookie', title: '新來的', who: newest, value: Math.max(1, Math.round((today - newest.intake) / 86400000)), unit: '天', note: '最近才入所' });
   return out;
 }
 
@@ -209,7 +209,7 @@ function bqPhoto(p, src) {
 }
 function bqDate(d) { return d ? `${d.getFullYear()}.${d.getMonth() + 1}.${d.getDate()}` : '—'; }
 
-// 一張卡：正面照片、背號、隊伍、名字、守備位置（籠位）；背面資料。
+// 一張卡：正面照片、背號、區名、名字、籠位；背面資料。
 // locked：還沒溜過的狗，灰卡、不閃，背面寫溜過就拿得到
 function bqCardHtml(p, opts = {}) {
   const { fresh = false, tag = 'div', big = false, mine = null } = opts;
@@ -222,15 +222,15 @@ function bqCardHtml(p, opts = {}) {
         <span class="bq-ph">${bqPhoto(p, big ? p.photo : p.thumb)}<span class="bq-no">${bqEsc(p.number)}</span>${fresh ? '<span class="bq-new">NEW</span>' : ''}</span>
         <span class="bq-band">${bqEsc(p.team.name)}<span>${bqEsc(tierName)}</span></span>
         <span class="bq-nm">${bqEsc(p.name)}</span>
-        <span class="bq-pos"><span>守備位置 <b>${bqEsc(p.cage)}</b></span><span>${bqEsc(p.sex)}</span></span>
+        <span class="bq-pos"><span>籠位 <b>${bqEsc(p.cage)}</b></span><span>${bqEsc(p.sex)}</span></span>
         <span class="bq-holo" aria-hidden="true"></span><span class="bq-glare" aria-hidden="true"></span>
       </span>
       <span class="bq-back" aria-hidden="true">
         <span class="bq-back-top"><b>${bqEsc(p.name)}</b><span>#${bqEsc(p.number)}</span></span>
         <span class="bq-set">BQ26・${bqEsc(p.number.padStart(3, '0'))}/${BQ.players.length || '—'}・${bqEsc(p.team.name)}</span>
         <span class="bq-stats">
-          <span><em>入隊</em><b>${bqDate(p.intake)}</b></span>
-          <span><em>球齡</em><b>${bqEsc(p.stay)}</b></span>
+          <span><em>入所</em><b>${bqDate(p.intake)}</b></span>
+          <span><em>在所</em><b>${bqEsc(p.stay)}</b></span>
           <span><em>本月出門</em><b><i>${p.monthOut}</i> 天</b></span>
           ${mine ? `<span><em>你溜過</em><b><i>${mine.times}</i> 天</b></span>` : ''}
         </span>
@@ -518,7 +518,7 @@ function bqRenderAwards() {
   const box = document.getElementById('bqAwards');
   box.innerHTML = bqAwards(BQ.players, BQ.today).map((a, i) => `<article class="bq-trophy" style="--team:${a.who.team.color}">
     <div class="bq-trophy-in">
-      <button type="button" class="bq-trophy-ph" data-open="${bqEsc(a.who.id)}" aria-label="看 ${bqEsc(a.who.name)} 的球員卡">${bqPhoto(a.who, a.who.photo)}</button>
+      <button type="button" class="bq-trophy-ph" data-open="${bqEsc(a.who.id)}" aria-label="看 ${bqEsc(a.who.name)} 的卡">${bqPhoto(a.who, a.who.photo)}</button>
       <span class="bq-ribbon">${bqEsc(a.title)}</span>
       <div class="bq-trophy-tx"><div><h3>${bqEsc(a.who.name)}</h3><p>${bqEsc(a.note)}・${bqEsc(a.who.cage)}</p></div><p class="bq-trophy-n"><b>${a.value}</b>${a.unit}</p></div>
       <p class="bq-trophy-set">BQ26 年度獎項 ${i + 1}/3・#${bqEsc(a.who.number)} ${bqEsc(a.who.team.name)}</p>

@@ -18,7 +18,7 @@ K 2026-10-10：「我希望網站當主人（未來），讓這個網站以後�
 
 ## 還沒收進去，換收容所時要另外改
 
-- **靜態檔裡的站名**：`public/index.html` 的 `<title>`、頁首 `<h1>`、`apple-mobile-web-app-title`；`public/manifest.webmanifest` 的 name／short_name／description；`public/cards.html` 的標題、說明、卡包上的字（「板收圖鑑」「BQ ALL-STARS」）。
+- **靜態檔裡的站名**：`public/index.html` 的 `<title>`、頁首 `<h1>`、`apple-mobile-web-app-title`；`public/manifest.webmanifest` 的 name／short_name／description；`public/cards.html` 的標題、說明、卡包上的字（「板收圖鑑」「板橋動物之家」）。
 - **找狗的平面圖**：`public/js/find.js` 的 `FIND_ZONES`（各區在平面圖上的位置）、`FIND_FACILITIES`、`FIND_OUTLINE`、`findCageLayout()`（每一籠排在哪）。這是最大的一塊，每間收容所都不一樣。
 - **試算表的長相**：`apps-script/sheet-write.gs` 的分頁名稱（「主清單」「已出所」）、欄位標題的認法與寫回的兩欄；`worker/src/departure-rules.js` 的離所原因關鍵字（`DEPARTURE_KEYWORDS`）。主人換成網站（資料庫）之後這一塊就不需要了。
 - **編號規則**：編號前 8 碼是入所日期（`public/js/app.js` 的 `idDate`、`public/js/cards.js` 的 `bqIntake`）。
