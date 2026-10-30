@@ -22,40 +22,56 @@
 </header>
 
 <main class="g-main">
-  <section id="gHub" class="g-screen" aria-labelledby="gTitle">
-    <div class="g-games">
-      <button class="g-game" id="gDressUp" type="button" disabled><strong>狗狗變裝秀</strong><span>考驗乾爹乾媽們，在狗狗們變裝後，還能認出幾成？</span></button>
-      <div class="g-game g-soon"><strong>更多遊戲</strong><span>準備中</span></div>
+  <section id="gHub" class="g-screen g-hub" aria-labelledby="gTitle">
+    <div class="g-feature">
+      <div class="g-photo g-cover" aria-hidden="true"><div class="g-stage" id="gCoverStage"><img id="gCoverPic" alt=""><div class="g-deco" id="gCoverDeco"></div></div></div>
+      <div class="g-feature-text">
+        <h2>狗狗變裝秀</h2>
+        <p class="g-intro">考驗乾爹乾媽們，在狗狗們變裝後，還能認出幾成？</p>
+        <p class="g-rules">一局 10 題・每題 10 秒・答得越快分數越高</p>
+        <p class="g-note" id="gHubNote" role="status">狗狗資料讀取中…</p>
+        <p class="g-hub-best" id="gHubBest" hidden>你的最高分 <b id="gHubBestScore">0</b></p>
+        <button class="g-btn g-start" id="gDressUp" type="button" disabled>開始玩</button>
+      </div>
     </div>
-    <p class="g-note" id="gHubNote" role="status">狗狗資料讀取中…</p>
+    <p class="g-soon"><strong>更多遊戲</strong><span>準備中</span></p>
     <p class="g-credit">狗臉位置由 <a href="https://huggingface.co/hugocornellier/dog-face-landmarks">dog-face-landmarks</a> 模型標出，模型以 <a href="https://github.com/martvelge/DogFLW">DogFLW</a> 資料集（Martvel 等，2025）訓練，採 <a href="https://creativecommons.org/licenses/by-nc/4.0/">CC BY-NC 4.0</a> 授權，僅供非商業使用。</p>
   </section>
 
-  <section id="gPlay" class="g-screen" hidden aria-label="狗狗變裝秀">
-    <div class="g-hud"><span>第 <b id="gNo">1</b> / <span id="gCount">10</span> 題</span><span>分數 <b id="gScore">0</b></span></div>
-    <div class="g-timer" role="progressbar" aria-label="剩下的時間" aria-valuemin="0" aria-valuemax="10"><i id="gBar"></i></div>
-    <div class="g-photo"><div class="g-stage" id="gStage"><img id="gPic" alt="要猜的狗"><div class="g-deco" id="gDeco"></div></div><p class="g-photo-err" id="gPicErr" hidden>照片讀不到，看名字猜猜看</p></div>
-    <p class="g-say" id="gSay" aria-live="polite"></p>
+  <section id="gPlay" class="g-screen g-play" hidden aria-label="狗狗變裝秀">
+    <div class="g-hud">
+      <span>第 <b id="gNo">1</b> / <span id="gCount">10</span> 題</span>
+      <ol class="g-steps" id="gSteps" aria-hidden="true"></ol>
+      <span>分數 <b id="gScore">0</b></span>
+    </div>
+    <div class="g-board">
+      <div class="g-timer" id="gTimer" role="progressbar" aria-label="剩下的時間" aria-valuemin="0" aria-valuemax="10"><i id="gBar"></i></div>
+      <div class="g-photo" id="gPhoto"><div class="g-stage" id="gStage"><img id="gPic" alt="要猜的狗"><div class="g-deco" id="gDeco"></div></div><p class="g-photo-err" id="gPicErr" hidden>照片讀不到，看名字猜猜看</p><p class="g-say" id="gSay" aria-live="polite"></p></div>
+    </div>
     <div class="g-opts" id="gOpts"></div>
   </section>
 
-  <section id="gEnd" class="g-screen" hidden aria-label="結算">
-    <div class="g-result">
-      <span class="g-note">狗狗變裝秀</span>
-      <div class="g-big" id="gEndScore">0</div>
-      <span id="gEndLine"></span>
-      <span class="g-note" id="gBest"></span>
+  <section id="gEnd" class="g-screen g-end" hidden aria-label="結算">
+    <div class="g-paper">
+      <div class="g-result">
+        <div class="g-score"><span class="g-big" id="gEndScore">0</span><span>分</span></div>
+        <span class="g-end-line" id="gEndLine"></span>
+        <ol class="g-steps" id="gEndSteps" aria-hidden="true"></ol>
+        <span class="g-best" id="gBest"></span>
+      </div>
+      <div id="gMissedWrap" class="g-missed-wrap" hidden>
+        <h2>這幾隻再認識一下</h2>
+        <div class="g-missed" id="gMissed"></div>
+      </div>
     </div>
-    <div id="gMissedWrap" class="g-missed-wrap" hidden>
-      <h2>這幾隻再認識一下</h2>
-      <div class="g-missed" id="gMissed"></div>
-    </div>
-    <div class="g-row">
+    <div class="g-actions">
       <button class="g-btn" id="gAgain" type="button">再玩一次</button>
-      <button class="g-link" id="gShot" type="button">分享截圖</button>
-      <a class="g-link" id="gLine" target="_blank" rel="noopener">分享到 LINE</a>
+      <div class="g-row">
+        <button class="g-link" id="gShot" type="button">分享截圖</button>
+        <a class="g-link" id="gLine" target="_blank" rel="noopener">分享到 LINE</a>
+      </div>
+      <p class="g-note g-center">想連圖片一起傳，先存圖再到 LINE 傳照片</p>
     </div>
-    <p class="g-note g-center">想連圖片一起傳，先存圖再到 LINE 傳照片</p>
   </section>
 </main>
 

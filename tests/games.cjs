@@ -83,8 +83,12 @@ module.exports = async (browser, base) => {
     await entry.click();
     await page.waitForURL(/games\.html$/);
     await page.locator('#gDressUp:not([disabled])').waitFor();
-    assert.equal(await page.locator('#gDressUp').innerText(), '狗狗變裝秀\n考驗乾爹乾媽們，在狗狗們變裝後，還能認出幾成？');
-    assert.equal(await page.locator('.g-soon').innerText(), '更多遊戲\n準備中');
+    assert.equal(await page.locator('#gDressUp').innerText(), '開始玩');
+    assert.equal(await page.locator('.g-feature h2').innerText(), '狗狗變裝秀');
+    assert.equal(await page.locator('.g-intro').innerText(), '考驗乾爹乾媽們，在狗狗們變裝後，還能認出幾成？');
+    assert.equal(await page.locator('#gHubBest').isVisible(), false, '還沒玩過不顯示最高分');
+    await page.waitForFunction(() => document.querySelectorAll('#gCoverDeco svg').length > 0); // 封面是一隻變裝狗
+    assert.equal((await page.locator('.g-soon').innerText()).replace(/\s+/g, ''), '更多遊戲準備中');
     assert.equal(await page.locator('.g-credit a[href*="creativecommons.org/licenses/by-nc/4.0"]').count(), 1, '模型授權標註');
     assert.equal(await visible(page, 'gPlay'), false, '藏起來的畫面真的不顯示');
     assert.equal(await visible(page, 'gEnd'), false);
@@ -110,6 +114,8 @@ module.exports = async (browser, base) => {
       if (pick !== answer) missed.push(answer);
       await page.locator('#gOpts').getByRole('button', { name: pick, exact: true }).click();
       await page.locator('#gSay', { hasText: new RegExp(`^${pick === answer ? '答對了！' : `牠是${answer}`}$`) }).waitFor();
+      assert.equal(await page.locator('#gPhoto').getAttribute('class'), 'g-photo revealed', '答完卸妝');
+      assert.equal(await page.locator(`#gSteps li:nth-child(${i})`).getAttribute('class'), pick === answer ? 'ok' : 'no', '10 格記答對答錯');
     }
     await page.locator('#gEnd').waitFor();
     assert.equal(await visible(page, 'gPlay'), false);
@@ -117,6 +123,8 @@ module.exports = async (browser, base) => {
     const score = Number(await page.locator('#gEndScore').innerText());
     assert(score >= 700 && score <= 1400, `分數：${score}`);
     assert.equal(await page.locator('#gBest').innerText(), '新紀錄！');
+    assert.equal(await page.locator('#gEndSteps li.ok').count(), 7);
+    assert.equal(await page.locator('#gEndSteps li.no').count(), 3);
     assert.equal(await page.evaluate(() => localStorage.getItem('bq-game-dressup-best')), String(score));
     assert.deepEqual(await page.locator('#gMissed figcaption').allTextContents(), missed);
     assert.equal(await page.locator('#gMissed img').count(), 3);
@@ -141,6 +149,7 @@ module.exports = async (browser, base) => {
     await page.locator('#gBack').click();
     await page.locator('#gHub').waitFor();
     assert.equal(new URL(page.url()).hash, '');
+    assert.equal(await page.locator('#gHubBest').innerText(), `你的最高分 ${score}`, '選單顯示最高分');
     await page.waitForTimeout(2000);
     assert.equal(await visible(page, 'gPlay'), false, '返回後不會再跳題');
     assert.equal(await visible(page, 'gEnd'), false);
@@ -182,7 +191,7 @@ module.exports = async (browser, base) => {
     await context.close();
   }
 
-  // 深色模式和電腦版：照樣是淺色、看得清楚；遊戲維持手機寬度置中；電腦版資訊頁也有入口
+  // 深色模式和電腦版：照樣是淺色、看得清楚；電腦版照片在左、選項在右；電腦版資訊頁也有入口
   {
     const { context, page } = await open({ colorScheme: 'dark', width: 1280 });
     await page.goto(base + '/public/games.html');
@@ -190,7 +199,12 @@ module.exports = async (browser, base) => {
     const look = await page.evaluate(() => ({ bg: getComputedStyle(document.body).backgroundColor, ink: getComputedStyle(document.body).color, main: document.querySelector('.g-main').getBoundingClientRect().width }));
     assert.equal(look.bg, 'rgb(227, 233, 229)');
     assert.equal(look.ink, 'rgb(22, 33, 29)');
-    assert(look.main <= 480, `遊戲寬度：${look.main}`);
+    assert(look.main > 480 && look.main <= 1040, `遊戲寬度：${look.main}`);
+    await page.locator('#gDressUp').click();
+    await page.waitForFunction(() => document.querySelectorAll('#gDeco svg').length > 0);
+    const [photo, opts] = await page.evaluate(() => ['.g-photo', '#gOpts'].map(s => document.querySelector('#gPlay ' + s).getBoundingClientRect().toJSON()));
+    assert(opts.left >= photo.right && opts.top < photo.bottom, '電腦版選項在照片右邊');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, '沒有橫向捲動');
     await page.goto(base + '/public/index.html#info');
     await page.locator('.info-nav [data-games]').waitFor();
     assert.equal(await page.locator('.info-nav [data-games]').getAttribute('href'), 'games.html');

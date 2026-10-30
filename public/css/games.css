@@ -1,4 +1,5 @@
-/* 小遊戲（#795）：跟志工網站同一套病歷夾配色，變數名稱和值照 app.css 檔尾「視覺主題：病歷夾色籤」的 :root（那份改色要跟著改），手機單欄、最寬 480px，電腦版也維持手機寬度置中。
+/* 小遊戲（#795）：跟志工網站同一套病歷夾配色，變數名稱和值照 app.css 檔尾「視覺主題：病歷夾色籤」的 :root（那份改色要跟著改）。
+   手機單欄、最寬 480px；電腦版（≥1100px）照片在左、題目在右。直角、沒有陰影，跟溜狗表的紙夾一樣。
    網站沒有深色版，這頁固定淺色（color-scheme: light），手機開深色模式也照樣看得清楚 */
 :root {
   color-scheme: light;
@@ -7,11 +8,13 @@
   --shell: #1F5C4D; --shell-soft: #B5CFC4; --tab-amber: #F2B21B;
   --green-text: #1E6B3C; --green-bg: #DFF0E4; --red-text: #B3121F; --red-bg: #FBE3E4;
   --font: -apple-system, BlinkMacSystemFont, "PingFang TC", "Noto Sans TC", "Noto Sans CJK TC", "Microsoft JhengHei", system-ui, sans-serif;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.6 var(--font); }
 [hidden] { display: none !important; } /* 原型曾被 display:flex 蓋掉 hidden：所有藏起來的畫面都要真的不顯示 */
 a { color: var(--primary); }
+::selection { background: var(--primary-soft); color: var(--ink); }
 
 .g-head { background: var(--shell); color: #fff; padding: max(10px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left)); }
 .g-head-in { max-width: 480px; margin: 0 auto; display: flex; align-items: center; gap: 4px; min-height: 44px; }
@@ -20,59 +23,114 @@ a { color: var(--primary); }
 .g-back svg { width: 24px; height: 24px; }
 .g-back:focus-visible { outline: 3px solid var(--tab-amber); outline-offset: -3px; }
 
-.g-main { max-width: 480px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-right)) 32px max(16px, env(safe-area-inset-left)); }
+.g-main { max-width: 480px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-right)) max(32px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
 .g-screen { display: flex; flex-direction: column; gap: 16px; padding-top: 20px; }
 :is(button, a):focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
-
-.g-games { display: flex; flex-direction: column; background: var(--surface); }
-.g-game { display: grid; gap: 6px; width: 100%; min-height: 80px; padding: 18px 16px; border: 0; border-bottom: 1px solid var(--line); background: var(--surface); color: var(--ink); text-align: left; font: inherit; cursor: pointer; }
-.g-game strong { font-size: 18px; }
-.g-game span { color: var(--ink-soft); font-size: 14px; }
-button.g-game:hover { background: var(--surface-soft); }
-button.g-game:disabled { cursor: default; opacity: .6; }
-.g-soon { cursor: default; border-bottom: 0; }
-.g-soon strong { color: var(--ink-soft); }
 .g-note { margin: 0; font-size: 14px; color: var(--ink-soft); }
 .g-center { text-align: center; }
-.g-credit { margin: 24px 0 0; font-size: 12px; color: var(--ink-soft); }
 
-.g-hud { display: flex; justify-content: space-between; align-items: baseline; color: var(--ink-soft); font-size: 14px; }
-.g-hud b { color: var(--ink); font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
-.g-timer { height: 8px; background: var(--line); border-radius: 99px; overflow: hidden; }
-.g-timer i { display: block; height: 100%; background: var(--tab-amber); transform-origin: left; }
-.g-photo { position: relative; aspect-ratio: 1 / 1; overflow: hidden; border-radius: 2px; background: var(--primary-soft); }
+/* 主要動作實心綠、次要動作綠色底線字（DESIGN_GUIDE「原則・按鈕強調」） */
+.g-btn { min-height: 52px; padding: 0 28px; border: 2px solid var(--primary); border-radius: 0; background: var(--primary); color: #fff; font: inherit; font-size: 18px; font-weight: 800; letter-spacing: .04em; cursor: pointer; transition: background-color .15s, border-color .15s; }
+.g-btn:hover:not(:disabled) { background: #174A3E; border-color: #174A3E; }
+.g-btn:disabled { background: var(--surface-soft); border-color: var(--line); color: var(--ink-soft); cursor: default; }
+.g-link { display: inline-grid; place-items: center; min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--primary); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
+.g-link:disabled { color: var(--ink-soft); cursor: default; }
+.g-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 28px; }
+
+/* 照片：正方形，拉近狗臉後戴裝飾；遊戲中和選單封面共用 */
+.g-photo { position: relative; aspect-ratio: 1 / 1; overflow: hidden; background: var(--primary-soft); }
 .g-stage { position: absolute; inset: 0; }
 .g-stage img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.g-stage img:not([src]) { visibility: hidden; }
 .g-deco { position: absolute; inset: 0; pointer-events: none; }
 .g-deco svg { position: absolute; overflow: visible; }
 .g-photo-err { position: absolute; inset: 0; margin: 0; display: grid; place-items: center; padding: 16px; text-align: center; color: var(--ink-soft); }
-.g-say { min-height: 26px; margin: 0; text-align: center; font-weight: 700; }
-.g-say.ok { color: var(--green-text); }
-.g-say.no { color: var(--red-text); }
+
+/* 選單：一個遊戲一張封面，封面是隨機一隻變裝狗（不寫名字），開始鈕在拇指按得到的地方 */
+.g-feature { display: flex; flex-direction: column; background: var(--surface); }
+.g-feature-text { display: flex; flex-direction: column; gap: 6px; padding: 18px 20px 20px; }
+.g-feature h2 { margin: 0; font-size: 26px; font-weight: 900; letter-spacing: .04em; line-height: 1.3; }
+.g-intro { margin: 0; }
+.g-rules { margin: 4px 0 0; font-size: 14px; font-weight: 700; color: var(--primary); }
+.g-hub-best { margin: 0; font-size: 14px; color: var(--ink-soft); }
+.g-hub-best b { color: var(--ink); font-size: 16px; font-variant-numeric: tabular-nums; }
+.g-start { margin-top: 12px; width: 100%; }
+.g-soon { display: flex; align-items: baseline; gap: 10px; margin: 0; padding: 14px 20px; border: 1px dashed var(--line); color: var(--ink-soft); font-size: 14px; }
+.g-soon strong { font-size: 16px; }
+.g-credit { margin: 8px 0 0; font-size: 12px; color: var(--ink-soft); }
+
+/* 遊戲中：題數、10 格（這局每題答對答錯）、分數一排；計時條貼在照片上緣，剩 3 秒變紅；答完卸妝、退回整張照片，答案寫在照片下緣 */
+.g-hud { display: grid; grid-template-columns: auto 1fr auto; align-items: center; column-gap: 16px; color: var(--ink-soft); font-size: 14px; white-space: nowrap; }
+.g-hud b { color: var(--ink); font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.g-steps { display: flex; gap: 4px; margin: 0; padding: 0; list-style: none; }
+.g-steps li { flex: 1; height: 6px; background: var(--line); }
+.g-steps li.now { background: var(--ink); }
+.g-steps li.ok { background: var(--green-text); }
+.g-steps li.no { background: var(--red-text); }
+.g-board { display: flex; flex-direction: column; }
+.g-timer { height: 8px; background: var(--line); overflow: hidden; }
+.g-timer i { display: block; height: 100%; background: var(--tab-amber); transform-origin: left; }
+.g-timer.low i { background: var(--red-text); }
+.g-say { position: absolute; left: 0; right: 0; bottom: 0; margin: 0; padding: 12px 16px; color: #fff; font-size: 18px; font-weight: 800; text-align: center; letter-spacing: .04em; }
+.g-say:empty { display: none; }
+.g-say.ok { background: var(--green-text); }
+.g-say.no { background: var(--red-text); }
+.g-photo.revealed .g-stage { transform: none !important; transition: transform .7s var(--ease-out); }
+.g-photo.revealed .g-deco { opacity: 0; transform: translateY(-6%); transition: opacity .3s ease-out, transform .45s var(--ease-out); }
 .g-opts { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-.g-opts button { min-height: 56px; padding: 12px 8px; border: 2px solid var(--line); border-radius: 3px; background: var(--surface); color: var(--ink); font: inherit; font-size: 18px; font-weight: 700; cursor: pointer; }
+.g-opts button { min-height: 60px; padding: 12px 8px; border: 2px solid var(--line); border-radius: 0; background: var(--surface); color: var(--ink); font: inherit; font-size: 19px; font-weight: 800; cursor: pointer; transition: background-color .15s, border-color .15s; }
 .g-opts button:hover:not(:disabled) { border-color: var(--primary); }
+.g-opts button:disabled { cursor: default; color: var(--ink-soft); }
 .g-opts button.ok { background: var(--green-bg); border-color: var(--green-text); color: var(--green-text); }
 .g-opts button.no { background: var(--red-bg); border-color: var(--red-text); color: var(--red-text); }
 
-.g-result { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 20px; background: var(--surface); text-align: center; }
-.g-big { font-size: 56px; font-weight: 900; line-height: 1; font-variant-numeric: tabular-nums; }
-.g-missed-wrap { display: flex; flex-direction: column; gap: 10px; padding: 16px; background: var(--surface); }
-.g-missed-wrap h2 { margin: 0; font-size: 18px; }
-.g-missed { display: flex; flex-wrap: wrap; gap: 10px; }
-.g-missed figure { margin: 0; width: 76px; display: grid; gap: 2px; font-size: 14px; text-align: center; }
-.g-missed img { width: 76px; height: 76px; object-fit: cover; border-radius: 2px; background: var(--primary-soft); }
-.g-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 20px; }
-.g-btn { min-height: 48px; padding: 0 24px; border: 2px solid var(--primary); border-radius: 3px; background: var(--primary); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
-.g-link { display: inline-grid; place-items: center; min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--primary); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 4px; cursor: pointer; }
-.g-link:disabled { color: var(--ink-soft); cursor: default; }
+/* 結算：一張白紙，分數與 10 格結果，細線下面是答錯的狗；動作在最下面拇指按得到 */
+.g-paper { background: var(--surface); }
+.g-result { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 28px 20px 24px; text-align: center; }
+.g-score { display: flex; align-items: baseline; gap: 6px; font-size: 18px; font-weight: 800; }
+.g-big { font-size: 72px; font-weight: 900; line-height: 1; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.g-end-line { font-size: 18px; font-weight: 700; }
+.g-result .g-steps { align-self: stretch; width: 100%; max-width: 280px; margin: 6px auto 4px; }
+.g-result .g-steps li { height: 10px; }
+.g-best { font-size: 14px; color: var(--ink-soft); }
+.g-best.new { padding: 2px 10px; background: var(--primary); color: #fff; font-weight: 800; }
+.g-missed-wrap { display: flex; flex-direction: column; gap: 12px; padding: 20px; border-top: 1px solid var(--line); }
+.g-missed-wrap h2 { margin: 0; font-size: 17px; }
+.g-missed { display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 12px 10px; }
+.g-missed figure { margin: 0; display: grid; gap: 4px; font-size: 14px; font-weight: 700; text-align: center; }
+.g-missed img { width: 100%; aspect-ratio: 1 / 1; object-fit: cover; background: var(--primary-soft); }
+.g-actions { display: flex; flex-direction: column; gap: 10px; }
+.g-actions .g-btn { width: 100%; }
 
 .g-sheet { position: fixed; inset: 0; z-index: 10; display: grid; place-items: center; padding: 16px; background: rgba(0, 0, 0, .6); }
 .g-sheet-in { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 420px; max-height: 100%; overflow: auto; padding: 16px; background: var(--surface); }
 .g-sheet-in img { display: block; width: 100%; }
 
+/* 電腦版（≥1100px，跟志工網站同一個分界）：照片在左、題目與按鈕在右，不把手機版直接放大 */
+@media (min-width: 1100px) {
+  .g-head-in, .g-main { max-width: 1040px; }
+  .g-head-in { padding-inline: 32px; }
+  .g-main { padding-inline: 32px; }
+  .g-screen { padding-top: 32px; }
+  .g-feature { display: grid; grid-template-columns: 460px 1fr; }
+  .g-feature-text { justify-content: center; gap: 10px; padding: 40px; }
+  .g-feature h2 { font-size: 34px; }
+  .g-intro { font-size: 18px; }
+  .g-start { align-self: flex-start; width: auto; min-width: 220px; }
+  .g-play { display: grid; grid-template-columns: minmax(0, 560px) minmax(300px, 1fr); grid-template-rows: auto 1fr; grid-template-areas: "board hud" "board opts"; align-items: start; gap: 24px 40px; }
+  .g-board { grid-area: board; }
+  .g-hud { grid-area: hud; }
+  .g-opts { grid-area: opts; grid-template-columns: 1fr; }
+  .g-opts button { min-height: 64px; padding-inline: 20px; text-align: left; }
+  .g-missed { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+  .g-end { display: grid; grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 24px 40px; }
+}
+
 /* 測試網站（worker/src/test-site.js 加 data-site="test"）：頁首換測試紫、標題旁「測試版」，跟溜狗表一樣 */
 html[data-site="test"] { --shell: #5A2A5E; } /* 分享截圖的頁首也跟著換 */
 html[data-site="test"] .g-head h1::after { content: "測試版"; display: inline-block; margin-left: 8px; padding: 2px 8px; border-radius: 3px; background: #F2B21B; color: #2A1230; font-size: 13px; font-weight: 800; line-height: 1.4; vertical-align: 2px; }
 
-@media (prefers-reduced-motion: reduce) { .g-stage { transform: none !important; } }
+@media (prefers-reduced-motion: reduce) {
+  .g-stage { transform: none !important; }
+  .g-photo.revealed :is(.g-stage, .g-deco), .g-btn, .g-opts button { transition: none; }
+}

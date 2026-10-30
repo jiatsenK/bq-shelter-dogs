@@ -40,10 +40,22 @@ async function loadDogs() {
   await Promise.all(S.dogs.map(d => loadImg(d.thumb).then(img => { S.sigs[d.id] = signature(img); }).catch(() => {})));
 }
 
+// 10 格：這局每一題答對、答錯、正在答
+function drawSteps(el) {
+  el.innerHTML = S.qs.map((q, i) => `<li class="${q.result || (i === S.i && !$('gPlay').hidden ? 'now' : '')}"></li>`).join('');
+}
+
 function show(id) {
   for (const s of ['gHub', 'gPlay', 'gEnd']) $(s).hidden = s !== id;
   $('gTitle').textContent = id === 'gHub' ? '小遊戲' : '狗狗變裝秀';
   window.scrollTo(0, 0);
+}
+
+// 選單的「你的最高分」，還沒玩過不顯示
+function showBest() {
+  const best = readBest();
+  $('gHubBest').hidden = !best;
+  $('gHubBestScore').textContent = best;
 }
 
 // 停掉倒數和下一題，之後不會再跳題
@@ -64,7 +76,7 @@ function start() {
   if (!S.dogs.length) return;
   stop();
   S.i = 0; S.score = 0; S.right = 0; S.missed = [];
-  S.qs = shuffle(S.dogs).slice(0, Q_COUNT).map(dog => ({ dog, opts: null, decos: [] }));
+  S.qs = shuffle(S.dogs).slice(0, Q_COUNT).map(dog => ({ dog, opts: null, decos: [], result: '' }));
   $('gScore').textContent = '0';
   $('gCount').textContent = S.qs.length;
   show('gPlay');
@@ -78,36 +90,47 @@ function decoSvg(key, attrs) {
 }
 const decoOnPhoto = p => decoSvg(p.key, `aria-hidden="true" data-deco="${p.key}" style="left:${p.left}%;top:${p.top}%;width:${p.width}%;height:${p.height}%;transform-origin:${p.ox * 100}% ${p.oy * 100}%;transform:rotate(${p.deg}deg)"`);
 
+// 照片拉近狗臉、戴上裝飾；遊戲中和選單封面共用。live() 是 false 時（已經換題、回選單）照片晚到也不動畫面
+function dress({ stage, pic, deco }, dog, live, done, fail) {
+  deco.innerHTML = '';
+  stage.style.transform = ''; stage.style.transformOrigin = '';
+  pic.hidden = false;
+  pic.onload = () => {
+    if (!live()) return;
+    const size = [pic.naturalWidth, pic.naturalHeight];
+    const zoom = zoomToFace(size, dog.face), decos = dressUp(size, dog.face);
+    stage.style.transformOrigin = `${zoom.o[0]}% ${zoom.o[1]}%`;
+    stage.style.transform = `translate(${zoom.t[0]}%,${zoom.t[1]}%) scale(${zoom.k}) rotate(${zoom.deg}deg)`;
+    deco.innerHTML = decos.map(decoOnPhoto).join('');
+    done(zoom, decos);
+  };
+  pic.onerror = () => {
+    if (!live()) return;
+    pic.hidden = true;
+    fail();
+  };
+  pic.src = dog.photo;
+}
+
+// 選單封面：隨機一隻變裝狗，讀不到照片就留淺綠底
+function cover() {
+  const dog = S.dogs[Math.floor(Math.random() * S.dogs.length)];
+  dress({ stage: $('gCoverStage'), pic: $('gCoverPic'), deco: $('gCoverDeco') }, dog, () => true, () => {}, () => {});
+}
+
 function ask() {
   const q = S.qs[S.i], round = S.round;
   const current = () => round === S.round && S.qs[S.i] === q; // 照片晚到時已經換題或回選單，就不動畫面
   q.opts = optionNames(q.dog, S.dogs, S.sigs);
   $('gNo').textContent = S.i + 1;
-  const pic = $('gPic'), stage = $('gStage');
-  $('gDeco').innerHTML = '';
+  drawSteps($('gSteps'));
+  $('gPhoto').classList.remove('revealed');
   $('gPicErr').hidden = true;
-  stage.style.transform = ''; stage.style.transformOrigin = '';
-  pic.hidden = false;
   // 倒數從照片出現（或確定讀不到）才開始，照片慢不吃作答時間
   const go = () => { S.locked = false; S.t0 = performance.now(); tick(); };
-  pic.onload = () => {
-    if (!current()) return;
-    const size = [pic.naturalWidth, pic.naturalHeight];
-    const z = zoomToFace(size, q.dog.face);
-    q.zoom = z;
-    q.decos = dressUp(size, q.dog.face);
-    stage.style.transformOrigin = `${z.o[0]}% ${z.o[1]}%`;
-    stage.style.transform = `translate(${z.t[0]}%,${z.t[1]}%) scale(${z.k}) rotate(${z.deg}deg)`;
-    $('gDeco').innerHTML = q.decos.map(decoOnPhoto).join('');
-    go();
-  };
-  pic.onerror = () => {
-    if (!current()) return;
-    pic.hidden = true;
-    $('gPicErr').hidden = false;
-    go();
-  };
-  pic.src = q.dog.photo;
+  dress({ stage: $('gStage'), pic: $('gPic'), deco: $('gDeco') }, q.dog, current,
+    (zoom, decos) => { q.zoom = zoom; q.decos = decos; go(); },
+    () => { $('gPicErr').hidden = false; go(); });
   $('gSay').textContent = ''; $('gSay').className = 'g-say';
   $('gOpts').innerHTML = '';
   for (const name of q.opts) {
@@ -117,12 +140,14 @@ function ask() {
     $('gOpts').appendChild(b);
   }
   $('gBar').style.transform = 'scaleX(1)';
+  $('gTimer').classList.remove('low');
 }
 
 function tick() {
   const left = Math.max(0, 1 - (performance.now() - S.t0) / LIMIT_MS);
   $('gBar').style.transform = `scaleX(${left})`;
-  $('gBar').parentElement.setAttribute('aria-valuenow', Math.ceil(left * LIMIT_MS / 1000));
+  $('gTimer').setAttribute('aria-valuenow', Math.ceil(left * LIMIT_MS / 1000));
+  $('gTimer').classList.toggle('low', left <= .3);
   if (left <= 0) return answer(null);
   S.raf = requestAnimationFrame(tick);
 }
@@ -133,6 +158,10 @@ function answer(name) {
   cancelAnimationFrame(S.raf);
   const q = S.qs[S.i], ok = name === q.dog.name;
   if (ok) { S.right++; S.score += points(performance.now() - S.t0); } else S.missed.push(q.dog);
+  q.result = ok ? 'ok' : 'no';
+  drawSteps($('gSteps'));
+  // 卸妝：裝飾拿掉、照片退回整張，看清楚是哪隻
+  if (!$('gPic').hidden) $('gPhoto').classList.add('revealed');
   $('gScore').textContent = S.score;
   for (const b of $('gOpts').children) {
     if (b.textContent === q.dog.name) b.classList.add('ok');
@@ -146,7 +175,7 @@ function answer(name) {
     if (round !== S.round) return;
     S.i++;
     if (S.i < S.qs.length) ask(); else finish();
-  }, ok ? 900 : 1600);
+  }, ok ? 1300 : 2000);
 }
 
 function finish() {
@@ -154,6 +183,7 @@ function finish() {
   show('gEnd');
   $('gEndScore').textContent = S.score;
   $('gEndLine').textContent = `認出 ${S.right} / ${S.qs.length} 隻`;
+  drawSteps($('gEndSteps'));
   $('gMissed').innerHTML = '';
   for (const d of S.missed) {
     const f = document.createElement('figure');
@@ -168,6 +198,8 @@ function finish() {
   const best = readBest();
   if (S.score > best) writeBest(S.score);
   $('gBest').textContent = S.score > best ? '新紀錄！' : `你的最高分是 ${best}`;
+  $('gBest').classList.toggle('new', S.score > best);
+  showBest();
   $('gLine').href = 'https://line.me/R/share?text=' + encodeURIComponent(shareText());
 }
 
@@ -268,6 +300,7 @@ function bind() {
 
 export async function startGames() {
   bind();
+  showBest();
   const fromLink = location.hash === GAME_HASH;
   // 打開網頁的那一筆一律是選單；從分享連結（#dressup）進來的，讀完資料再多一筆遊戲，返回回到選單
   writeHistory('replaceState', { bqLanding: true }, location.pathname + location.search);
@@ -279,7 +312,8 @@ export async function startGames() {
     return;
   }
   if (!S.dogs.length) { $('gHubNote').textContent = '目前沒有可以出題的狗狗。'; return; }
-  $('gHubNote').textContent = `每題 10 秒，答得越快分數越高・目前有 ${S.dogs.length} 隻狗狗可以出題`;
+  $('gHubNote').textContent = `目前有 ${S.dogs.length} 隻狗狗可以出題`;
   $('gDressUp').disabled = false;
+  cover();
   if (fromLink) { pushPage({}, { game: 'dressup' }); start(); }
 }
