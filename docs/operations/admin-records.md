@@ -1,5 +1,7 @@
 # 活動紀錄、待補清單、修改紀錄與網站更新（#567）
 
+> 2026-10-30 #775：資料頁新增「系統自動判斷」列表、編輯抽屜底下列這隻狗的判斷，修改紀錄頁類別篩選多「系統自動判斷（全部）」（見下方〈系統自動判斷〉）。
+
 > 2026-10-30 #774：待補清單的「網站有、試算表沒有」改成「可能是同一隻」（見下方〈可能是同一隻〉）。`/api/manage/data-checks` 拿掉，保險掃描不再寫 `dog_list_extra`（D1 有、試算表沒有的單位只回給 Apps Script 記在執行紀錄）。正式庫裡舊的那一列留著不影響，之後要清另開 migration。
 
 > 2026-10-26 #624：管理網站頁名改了，API 與契約不變。「資料檢查」→「待補清單」（完整度各項連到已篩選的狗資料表，狗名直接開編輯抽屜）；「更新紀錄」拆成「修改紀錄」（`updates.html`，資料編輯）與「網站更新」（`releases.html`）。志工網站的頁名不變。
@@ -37,14 +39,23 @@ npx.cmd wrangler d1 execute bq-shelter-dogs --remote --command "SELECT a.activit
 - API（只有 Access 管理者）：GET `/api/manage/dog-pairs` 回 `{ count, pairs }`，只列等確認、待核對那隻還在而且不在主清單也沒有離所紀錄、表上那隻還在主清單的組，最新在上，1 個查詢。POST `/api/manage/dog-pairs/{待核對那隻}/{表上那隻}/not-same`（同來源）記成不是同一隻，同一批寫修改紀錄 `not_same`（Access 身分記在 `v3_dog_edit_actors`）；已經不是等確認回 404／409。
 - 合併：沿用 `/api/manage/dogs/{表上那隻}/merge`（預覽、帶兩隻版本、按兩次才寫），合併的同一批把這組記成 merged；取消合併照舊在修改紀錄按，那組不會再列出。
 - 資料頁：待核對的狗名下顯示「可能跟 ○○（籠位）是同一隻」，旁邊「合併」（開抽屜、選好那一隻直接預覽）和「不是同一隻」（按兩次才送，成功後那組從畫面拿掉）。配對讀不到時表格照常，表格上方另外說明。
-- 修改紀錄：`not_same` 顯示「不是同一隻」，內容「跟 ○○（籠位）不是同一隻」；保留 14 天（只有合併、取消合併永久保留）。
+- 修改紀錄：`not_same` 顯示「不是同一隻」，內容「跟 ○○（籠位）不是同一隻」；保留 14 天（只有合併、取消合併永久保留）。#775 起建立配對時另記一筆 `pair`「可能是同一隻」（見下一段）。
 - 網頁測試：`tests/admin-dog-pairs.cjs`；Worker 測試：`worker/test/dog-pairs.test.mjs`（Apps Script fixture，刪列後新增、先新增後刪、暖暖殘留合併與取消、不是同一隻不再出現）。
+
+## 系統自動判斷（#775，ADR 0025）
+
+- 記在哪：沿用修改紀錄 `v3_edit_log`，操作者「系統自動判斷」、來源試算表（不是同一隻是管理者按的，來源管理網站）。種類與保留：系統自動合併 `automerge`（永久）、暫住開始 `stay-start`、暫住結束 `stay-end`、可能是同一隻 `pair`、不是同一隻 `not_same`（都 14 天，跟一般修改紀錄一樣）。`pair` 在配對建立的同一批寫入，同一組只記一次；改前＝消失那列（犬名、編號、籠位），改後＝表上那隻。自動合併的改前多記候選那一列的籠位（#775 之前的紀錄沒有，畫面就不寫籠位）。
+- API：沿用 GET `/api/manage/edits`。`kind=judge` 一次查上面五種（參數白名單多這個值，類別清單第一個選項「系統自動判斷（全部）」）；`dog` 除了編號、永久 ID、狗名，也比對改後記的另一隻狗（`dogId`、`sourceId`），所以配對的表上那隻、合併的被併那隻都查得到。每次仍是 1 個查詢；帶條件時沿主鍵找到湊滿一頁的代價同上面〈修改紀錄〉的例外。
+- 資料頁：狀態按鈕「待核對」旁邊「系統自動判斷 N」，N 是等確認的配對組數（`/api/manage/dog-pairs` 的 `count`，讀不到就不寫數字），不是紀錄筆數。按下去表格與篩選收起來，換成判斷紀錄列表：最新在上、一次 50 筆，「載入更早的紀錄」接著讀；每筆寫時間（台灣時間）和一句話，例如「舊B06 (乳白) 改成 暖暖，判斷為同一隻，已合併」「A02 小白 9002 消失，同籠有 阿白 9010，判斷可能是同一隻，等管理者確認」。系統自動合併那筆有「取消合併」（按兩次，跟修改紀錄頁同一個元件 `unmerge-button.js`），拆回後狗表與列表重讀。網址 `?status=judge` 直接開列表。一句話怎麼寫在 `admin/public/js/judgements.js`。
+- 編輯抽屜：「合併重複的狗」下面「系統自動判斷」，列跟這隻狗有關的最新 25 筆（`kind=judge&dog=<永久 ID>`），更早的到修改紀錄頁用同樣條件查。只看不改。
+- 限制：配對等超過 14 天還沒處理，那筆「可能是同一隻」紀錄會被清掉，但配對照樣掛在待核對那隻狗名下、按鈕數字照算。
+- 網頁測試：`tests/admin-judgements.cjs`；Worker 測試：`worker/test/judgements.test.mjs`（Apps Script fixture，四種紀錄一次走完、帶狗只列牠的、同一組不重記）。
 
 ## 修改紀錄 `updates.html`、網站更新 `releases.html`（原更新紀錄）
 
 - 網站更新（K 2026-10-28 改）：頁面在瀏覽器直接讀公開 repo 的 GitHub Releases（`api.github.com/repos/…/releases`，不帶登入，每個 IP 每小時 60 次），release-please 發版就有，不用重新部署管理網站；CSP 的 `connect-src` 因此多放 `https://api.github.com`。純規則在 `admin/public/js/release-notes.js`：草稿與預先發布不列、日期換台灣日期、拿掉每條結尾的 PR／commit 連結，版本號連到 GitHub 的 Release 頁。不存 D1。同一天 K 決定不再人工寫：`public/website-updates.json`、`docs/website-updates.md` 刪掉，志工網站資訊 → 更新紀錄只剩資料編輯。
 - Release PR 合併就會改 `.release-please-manifest.json`，`release-please.yml` 照這個路徑馬上跑一次打 tag、建 Release；平常仍每週一 9:00 跑一次整理 Release PR。
-- 資料編輯：GET `/api/manage/edits`，參數白名單 `q`（操作者、編號、狗名、改前改後文字，`%`／`_` 視為文字）、`kind`（`KIND_LABELS`）、`dog`（編號、舊編號、永久 ID 或狗名）、`actor`（名字或管理者 email）、`source`（access／volunteer／legacy）、`from`／`to`（台灣日期）、`order`（newest／oldest）、`cursor`（上一頁最後一筆的 id）、`size`（25／50／100）；未知參數或超過 100 字回 400。
+- 資料編輯：GET `/api/manage/edits`，參數白名單 `q`（操作者、編號、狗名、改前改後文字，`%`／`_` 視為文字）、`kind`（`KIND_LABELS`，或 `judge`＝系統自動判斷那幾種，#775）、`dog`（編號、舊編號、永久 ID 或狗名；#775 起也比對改後記的另一隻狗）、`actor`（名字或管理者 email）、`source`（access／volunteer／legacy）、`from`／`to`（台灣日期）、`order`（newest／oldest）、`cursor`（上一頁最後一筆的 id）、`size`（25／50／100）；未知參數或超過 100 字回 400。
 - 查詢在 D1 涵蓋整張 `v3_edit_log`，每次 1 個查詢：照主鍵順序、游標接續、`LIMIT` 一頁＋1 判斷下一頁，不算總筆數（CODING_STANDARDS「量不能隨資料變大」）。不帶條件的載入與換頁只讀一頁的列，測試證明紀錄多 10 倍讀取列數不變、查詢計畫不排序整張表。
 - 例外（待 K 確認）：帶搜尋文字或篩選時，SQLite 沿主鍵往下找到湊滿一頁；符合的很少時最多走完整張表。這是 #567「搜尋涵蓋分頁完整範圍」的必要代價，只在管理者手動搜尋時發生，文字輸入 300 ms 節流；若要再壓低需另開票加索引或全文檢索。
 - 管理者 email 只出現在管理 API；志工 `/api/edits` 仍只回 editorName「管理者」與來源，不含 Access 身分（測試覆蓋）。

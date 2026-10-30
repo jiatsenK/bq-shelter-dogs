@@ -60,6 +60,8 @@ Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，
 
 **可能是同一隻**（#774，ADR 0025）：確認消失的同一個 batch 記下那隻狗的籠位（`v3_sheet_gone`），同籠還在表上的狗如果同名、或是新出現的（`v3_sheet_main.added_at` 不早於第一次不見前一小時；#774 之前就在表上的列是 NULL），就記一組配對（`v3_dog_pairs`，狀態 pending／merged／not_same）。確認後 7 天內同籠新建狗，也跟這隻配對（同一批寫入）。管理網站資料頁待核對的狗名下顯示「可能跟 ○○（籠位）是同一隻」：「合併」開抽屜照現有合併狗（`mergeDogs` 同一批把這組記成 merged）；「不是同一隻」記成 not_same，修改紀錄記一筆（kind `not_same`，保留 14 天），按過的那組 `INSERT OR IGNORE` 不再建立。待補清單只顯示組數、連到資料頁待核對。程式在 `worker/src/dog-pairs.js`。
 
+**系統自動判斷紀錄**（#775，ADR 0025）：自動合併、暫住開始與結束、可能是同一隻（建配對同一批記 kind `pair`）、不是同一隻都在 `v3_edit_log`，沒有另外的表。管理網站資料頁「系統自動判斷」與編輯抽屜讀 `/api/manage/edits?kind=judge`（抽屜加 `dog`），按鈕數字讀等確認的配對數。
+
 ## 管理網站（ADR 0020）
 
 - 獨立的管理 Worker `bq-shelter-dogs-admin`（`wrangler.admin.jsonc`、`worker/src/admin/`、`admin/public/`），網址 `https://bq-shelter-dogs-admin.<子網域>.workers.dev`，整個 host 由 Cloudflare Access 擋住、程式再驗 Access 簽章。直接讀寫正式 D1 和 R2（設定、狗資料、照片、活動），沒有自己的排程、沒有密鑰；三個 vars 都在 `wrangler.admin.jsonc`，repo 就是線上設定。

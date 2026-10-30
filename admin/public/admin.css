@@ -82,6 +82,13 @@ h1 { margin: 0 0 8px; font-size: var(--admin-text-page); line-height: 1.3; }
 /* #774 待核對的狗名下：可能是同一隻，旁邊兩個按鈕；窄螢幕換行 */
 .pair-line { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-weight: 400; font-size: var(--admin-text-meta); }
 .pair-line span { flex-basis: 100%; overflow-wrap: anywhere; }
+/* #775 系統自動判斷：資料頁列表與抽屜底下共用 */
+.judge-region { display: grid; gap: 12px; padding: 0 24px 24px; }
+.judge-region > p { max-width: 72ch; margin: 0; }
+.judge-region > .btn { justify-self: start; }
+.judge-list { display: grid; gap: 0; margin: 0; padding: 0; list-style: none; }
+.judge-list li { padding: 12px 0; border-top: 1px solid var(--admin-border); overflow-wrap: anywhere; }
+.judge-list time { display: block; color: var(--admin-muted); font-size: var(--admin-text-meta); font-variant-numeric: tabular-nums; }
 /* 維護狀態欄留足三個標籤一行的寬度：抽屜開關時換行一樣，列高不變 */
 .maintenance { min-width: 240px; max-width: 280px; }
 .state-label { display: inline-block; padding: 3px 7px; margin: 2px 4px 2px 0; border: 1px solid var(--admin-border); border-radius: 4px; font-size: var(--admin-text-meta); white-space: nowrap; }
@@ -107,6 +114,7 @@ h1 { margin: 0 0 8px; font-size: var(--admin-text-page); line-height: 1.3; }
   .admin-content { padding: 24px 16px; }
   .table-filters { padding: 16px; gap: 12px; }
   .status-tabs { padding: 16px 16px 0; }
+  .judge-region { padding: 0 16px 16px; }
   .search-field { flex-basis: 100%; min-width: 0 !important; }
   .table-filters > div:not(.search-field) { flex: 1; min-width: 96px; }
   .table-footer { padding: 16px; gap: 16px; }
@@ -130,6 +138,8 @@ h1 { margin: 0 0 8px; font-size: var(--admin-text-page); line-height: 1.3; }
 .merge-section { display: grid; gap: 12px; max-width: 72ch; margin: 24px 0 16px; padding-top: 24px; border-top: 1px solid var(--admin-border); }
 .merge-section h3 { margin: 0; }
 .merge-section .btn { justify-self: start; }
+.judge-section { display: grid; gap: 8px; max-width: 72ch; margin: 0 0 16px; padding-top: 24px; border-top: 1px solid var(--admin-border); }
+.judge-section h3 { margin: 0; }
 .merge-preview { color: #182433; font: inherit; white-space: pre-wrap; overflow-wrap: anywhere; padding: 12px; margin: 0; background: #f5f7fa; }
 .unmerge-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 .stay-row { display: grid; gap: 8px; padding: 16px; border: 1px solid #dce1e7; }
