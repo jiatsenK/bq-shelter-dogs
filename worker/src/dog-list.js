@@ -22,6 +22,7 @@ import { linkIdentityName } from './identity.js';
 import { todayWalks } from './today-walks/index.js';
 import { goneWrites, newDogPairs } from './dog-pairs.js';
 import { autoMergeDogs } from './dog-merge.js';
+import { pendingDog, pendingDepartureWrite } from './dog-depart.js';
 
 // 每列 3–4 次 D1 往返；溜狗欄有變另外交給今日溜狗紀錄比對（改表通知通常先到，這裡比對到一樣只多 1 次往返；
 // 狗清單先到時比對收下約 10 次往返，超過每次呼叫 50 次查詢的那幾列 D1 失敗、不 ack，GAS 補送時前面收過的就一樣了）
@@ -256,7 +257,15 @@ async function applyDeparted(db, row, list, now, fp) {
   } else {
     // 已經記過離所：志工之後補上原因或日期就改過來
     const prev = await db.prepare('SELECT reason,matched,departed_date,date_source,flags_json FROM v3_dog_departures WHERE number=?').bind(dog.id).first();
-    if (!prev) return false;
+    if (!prev) {
+      // 主清單那列先確認消失、之後才收到已出所這列（先複製到已出所再刪主清單那列，GAS 那時不送已出所那列）：
+      // 這個編號的狗是待核對就照樣記離所，不然會一直卡在待核對（K 2026-10-30）。帶這隻狗的版本擋，主清單複本不動
+      const pending = await db.prepare(`SELECT n.dog_id,s.revision FROM v3_dog_numbers n JOIN v3_dog_edit_state s USING(dog_id) WHERE n.number=? AND ${pendingDog('n.dog_id')}`).bind(dog.id).first();
+      if (!pending) return false;
+      await guardedDogBatch(db, pending, [pendingDepartureWrite(db, { dogId: pending.dog_id, number: dog.id, date: judged.date || todayYmd,
+        dateSource: judged.date ? judged.dateSource : 'seen', today: todayYmd, reason: judged.reason, matched: judged.matched || '', flags: judged.flags || [] })]);
+      return true;
+    }
     // 管理者手動修正過的離所日（#663，date_source='manual'）不再跟著試算表改
     const keep = !judged.date || prev.date_source === 'manual';
     const date = keep ? prev.departed_date : judged.date, source = keep ? prev.date_source : judged.dateSource;

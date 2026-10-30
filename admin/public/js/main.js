@@ -34,8 +34,12 @@ const drawer = createDogDrawer(byId('dog-drawer'), {
   },
   // 合併要從整張狗表挑另一隻；合併完被併的那隻消失，整張重讀
   dogs: () => state.dogs,
-  onMerged: message => load().then(() => { status.textContent = `${message} ${status.textContent}`; }),
+  onMerged: message => reloadWith(message),
+  // 記成已出所：那隻狗換到已出所分頁，整張重讀
+  onDeparted: message => reloadWith(message),
 });
+// 整張狗表重讀，結果訊息排在讀完的狀態前面
+const reloadWith = message => load().then(() => { status.textContent = `${message} ${status.textContent}`; });
 const rowOf = dogId => [...byId('dogs').rows].find(row => row.dataset.dogId === dogId);
 const editButton = dogId => rowOf(dogId)?.querySelector('.edit-button');
 function markSelected(dogId) {
@@ -101,6 +105,7 @@ function renderRow(dog) {
   name.append(element('div', dog.name || '未命名'));
   if (dog.status !== 'main') name.append(element('small', statusText(dog), 'text-secondary'));
   for (const pair of state.pairs.get(dog.dogId) || []) name.append(pairLine(dog, pair));
+  if (dog.status === 'unknown') name.append(departLine(dog));
   const intro = element('td', undefined, 'intro-cell col-wide');
   if (dog.intro) {
     const detail = element('details');
@@ -155,6 +160,16 @@ function pairLine(dog, pair) {
     status.textContent = `已記下：${dog.name || '未命名'}跟 ${pair.name || '未命名'}（${pair.cage}）不是同一隻，之後不再列出。`;
   });
   line.append(element('span', pairText(pair)), merge, reject);
+  return line;
+}
+// 待核對的狗名下：不是重複、是出所沒記到的，開抽屜填離所日與原因（K 2026-10-30）
+function departLine(dog) {
+  const line = element('div', undefined, 'pair-line');
+  const depart = element('button', '記成已出所', 'btn btn-sm');
+  depart.type = 'button';
+  depart.setAttribute('aria-label', `${dog.name || '未命名'}：記成已出所`);
+  depart.addEventListener('click', () => openDog(state.dogs.find(d => d.dogId === dog.dogId), { departing: true }));
+  line.append(depart);
   return line;
 }
 async function loadJudgements(more = false) {

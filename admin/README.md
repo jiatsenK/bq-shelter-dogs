@@ -17,6 +17,7 @@
 | `admin/public/js/dog-table.js` | 格式驗證、搜尋、篩選、排序、有界分頁及維護標示 |
 | `admin/public/js/main.js` | DOM、讀取／重試與事件；篩選條件放網址（`?care=`、`?dog=` 開抽屜）；不存手機個人資料 |
 | `admin/public/js/dog-editor.js`、`dog-edit-model.js` | #624 右側編輯抽屜（DOM、依序儲存）與純規則（欄位順序、哪些要預覽、待補、介紹差異） |
+| `admin/public/js/dog-depart.js` | 抽屜裡「記成已出所」那段（只有待核對的狗有，ADR 0026） |
 | `worker/src/admin/activities.js`、`checks.js`、`edits.js` | #567 活動寫入（共用 activities.js＋同交易紀錄）、#518 掃描清單、資料編輯紀錄搜尋 |
 | `worker/src/admin/links.js`、`admin/public/links.html`、`js/links.js` | 網站連結頁：正式版／測試版的志工網站、試算表與 GAS 網址。值由部署時 `--var` 帶入（`SITE_URL`、`TEST_SITE_URL` 從 `WORKERS_SUBDOMAIN` 組；`SHEET_URL`、`TEST_SHEET_URL`、`GAS_URL`、`TEST_GAS_URL` 是同名 GitHub Secret，沒設就顯示還沒設定） |
 | `admin/public/js/judgements.js`、`judge-item.js`、`unmerge-button.js` | #775 系統自動判斷一筆一句（純規則）與一筆的畫面（資料頁列表與編輯抽屜共用）；取消合併按鈕（修改紀錄頁與資料頁共用） |

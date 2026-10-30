@@ -31,7 +31,8 @@
 | [0022](0022-intro-is-the-dog-stays-hold-history.md) | 介紹只寫狗自己，出入所經過記在出入所紀錄 | 現行 |
 | [0023](0023-share-site-and-share-count.md) | 分享網站：正式網址不進 repo，分享次數只記每天總數 | 現行 |
 | [0024](0024-volunteer-site-urls.md) | 志工網站的網址：每個分頁、資訊子頁、每隻狗都有自己的 hash | 現行 |
-| [0025](0025-sheet-rows-missing-candidates.md) | 試算表上消失的列先當候選，確認後移出主清單 | 現行 |
+| [0025](0025-sheet-rows-missing-candidates.md) | 試算表上消失的列先當候選，確認後移出主清單 | 部分或全部被 [0026](0026-pending-dogs-can-depart.md) 修訂，一起讀、以新的為準 |
+| [0026](0026-pending-dogs-can-depart.md) | 待核對的狗可以記成已出所 | 現行 |
 
 ## 網站開關
 

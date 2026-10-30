@@ -25,7 +25,7 @@
 | 常溜狗群（網站狗群頁） | 管理者在試算表「常遛狗群」改 | GAS 編輯觸發送 D1（一欄一列 `v3_sheet_group_columns`，#559）；網站只讀（#474） | `worker/src/dog-list.js` |
 | 休養、介紹、開卡、常溜、固定照顧、活動 | 網站 | 只存 D1，不碰試算表 | 見各 ADR |
 | 合併重複的狗（試算表改編號多出來的，#621） | 管理網站 | 只存 D1，可在修改紀錄取消合併 | `worker/src/dog-merge.js` |
-| 離所 | 管理者把狗搬到試算表「已出所」 | GAS 編輯觸發送 D1，以狗 ID 記在 `v3_dog_departures`（#560）；沒編號的狗還不能記離所（`worker/src/dog-list.js` 的 `applyDeparted`） | `worker/src/dog-list.js` |
+| 離所 | 管理者把狗搬到試算表「已出所」 | GAS 編輯觸發送 D1，以狗 ID 記在 `v3_dog_departures`（#560）；主清單那列已經確認消失的，用編號找到待核對的狗照樣記（ADR 0026）。沒編號的狗還不能記離所（`worker/src/dog-list.js` 的 `applyDeparted`）。待核對的狗管理者也可以在管理網站記成已出所 | `worker/src/dog-list.js`、`worker/src/dog-depart.js` |
 | 功能顯示、志工可編輯 | 管理網站 | 只存 D1 `v3_feature_settings`（十項開關＋revision，清單在 `worker/src/feature-settings.js` 的 `SETTING_KEYS`；舊的 `editFormer` 已退役，讀取時拿掉；後加的 `showShare` 那列沒有時讀成關閉，ADR 0023），改動記在 `v3_feature_settings_log`（#565） | `docs/operations/feature-settings.md` |
 | 狗資料（介紹、休養、固定照顧、出入所紀錄（含舊編號，ADR 0021）、照片、性別） | 志工網站或管理網站 | 只存 D1；每隻狗帶 revision，衝突回 409，修改和紀錄同一次寫入（#566）。試算表送來的狗名、編號、籠位、備註、離所在管理網站只能看 | `worker/src/dog-edit.js`、`docs/operations/dog-editing.md` |
 | 照片 | 志工／Access 管理網站 | 共用前端縮圖，R2 不可覆寫版本＋D1 CAS 引用及紀錄；舊固定路徑相容，Actions 只供人工補圖（#566 承接 #546 契約） | `worker/src/dog-photo.js`、`public/js/photo-images.js` |

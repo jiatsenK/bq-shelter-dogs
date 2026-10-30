@@ -1,6 +1,6 @@
 # 架構圖：志工溜狗表
 
-> 核對日：2026-10-30｜依據 commit：`20e4dd2`
+> 核對日：2026-10-30｜依據 commit：`05d31f0`
 > 改到圖上的元件、連線、排程或部署方式時，在同一個 PR 更新這份檔案。規則見 agent-hub `docs/rules/architecture-diagrams.md`。
 > 名稱、排程時間、重試次數、端點跟程式不一致時 `scripts/diagram-facts.test.mjs` 會失敗；PR 改到架構相關檔案卻沒改對應段落，「架構圖重畫提醒」會在 PR 留言。管理網站「系統架構圖」頁也是從這份檔案產生。
 
@@ -268,6 +268,7 @@ flowchart TB
 - 列消失（#771，ADR 0025）：送狗清單、保險掃描送指紋都附上表上主清單的全部 key。主清單複本有、表上沒有的列先標成候選（`v3_sheet_main.missing_at`），又出現就取消；隔 10 分鐘以上再收到清單還是不見才確認，移出主清單，狗的資料不刪、管理網站顯示待核對。志工網站回「還有候選」時，Apps Script 的 10 分鐘補送沒有待送也再送一次清單（指令碼屬性 DOG_LIST_CANDIDATES）。一次請求最多處理 10 個；表上一次少一半以上的狗不當成消失（`worker/src/dog-list.js` 的 `reconcileMissing`；`apps-script/sheet-write.gs` 的 `flushDogList`、`dogListScan`）。
 - 暫住列（#772，ADR 0025）：沒編號、犬名用括號包起來、括號裡是主清單上一隻有編號的狗（例「(皮蛋）」），不建狗，存成暫住紀錄 `v3_sheet_stays`（哪一隻、暫住哪一籠），修改紀錄記暫住開始。在所資料包照舊把這一列接在狗清單後面送出，志工網站合到那隻狗。暫住列消失照上一點的候選規則確認，確認後刪掉暫住紀錄、記暫住結束（`worker/src/dog-list.js` 的 `applyStay`、`reconcileMissing`）。
 - 可能是同一隻（#774）：確認的同一批記下那隻狗的籠位（`v3_sheet_gone`），同籠有新出現的狗（一小時前到確認之間新建的列）、或同籠同名的狗還在表上，就記一組配對（`v3_dog_pairs`）；確認後 7 天內同籠新建狗也配對。管理網站資料頁待核對的狗名下按「合併」（現有合併狗）或「不是同一隻」，按過的那組不再建立（`worker/src/dog-pairs.js`）。
+- 已出所那列晚到（ADR 0026）：主清單那列已經確認消失才收到已出所那列（先複製到已出所再刪主清單那列時，Apps Script 那時不送已出所那列），用編號找到待核對的狗照樣記離所。待核對的狗管理者也可以在管理網站按「記成已出所」（`worker/src/dog-list.js` 的 `applyDeparted`、`worker/src/dog-depart.js`）。
 - 保險掃描送指紋前在 script lock 內核對表上變動記號，讀表後有人改過就整次不送，剛新增的列不會被舊指紋當成消失。D1 有、試算表沒有的單位只回給 Apps Script 記在執行紀錄；主清單消失的列由上面的候選處理，管理網站看「可能是同一隻」（`worker/src/dog-list.js` 的 `scanDogList`）。
 
 ## 元件｜志工溜狗表｜程式架構
@@ -282,7 +283,7 @@ flowchart LR
   r2[("R2 照片<br/>［資料存放］<br/>bq-shelter-photos")]
   subgraph SHARED["共用：兩個 Worker 都匯入"]
     settings["設定・活動・分享<br/>［模組・feature-settings.js、activities.js、<br/>share-counts.js、cron-status.js］<br/>功能開關、活動、分享次數、排程紀錄"]
-    dogdata["狗資料與照片<br/>［模組・dog-edit.js、dog-photo.js、<br/>dog-merge.js、dog-pairs.js、stays.js、r2.js］<br/>改狗資料、照片、合併、出入所、可能是同一隻"]
+    dogdata["狗資料與照片<br/>［模組・dog-edit.js、dog-photo.js、<br/>dog-merge.js、dog-pairs.js、dog-depart.js、<br/>stays.js、r2.js］<br/>改狗資料、照片、合併、出入所、可能是同一隻、記成已出所"]
     walk["今日溜狗紀錄<br/>［模組・today-walks/，入口 index.js］<br/>先存 D1，背景寫回、重試、收人工改表"]
   end
   subgraph VW["志工網站 Worker"]
