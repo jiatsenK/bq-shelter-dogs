@@ -90,6 +90,12 @@ module.exports = async (browser, base) => {
     assert.equal(await visible(page, 'gPlay'), false, '藏起來的畫面真的不顯示');
     assert.equal(await visible(page, 'gEnd'), false);
 
+    // 記下截圖上寫了哪些字（截圖在結算一出來就畫）
+    await page.evaluate(() => {
+      window.__shotTexts = [];
+      const fill = CanvasRenderingContext2D.prototype.fillText;
+      CanvasRenderingContext2D.prototype.fillText = function (text, ...rest) { window.__shotTexts.push(String(text)); return fill.call(this, text, ...rest); };
+    });
     await page.locator('#gDressUp').click();
     assert.equal(new URL(page.url()).hash, '#dressup');
     const missed = [];
@@ -126,14 +132,49 @@ module.exports = async (browser, base) => {
     assert.deepEqual(await page.locator('#gMissed a').evaluateAll(as => as.map(a => a.getAttribute('href'))), missed.map(n => `index.html#dog/${ids[n]}`));
     for (const id of BLOCKED) assert(!photos.includes(id), `不能出題的狗不讀照片：${id}`);
 
-    const line = new URL(await page.locator('#gLine').getAttribute('href'));
-    assert.equal(line.origin + line.pathname, 'https://line.me/R/share');
-    assert.equal(line.searchParams.get('text'), `我在「狗狗變裝秀」認出 7 / 10 隻變裝的板收狗狗，拿到 ${score} 分！換你來試試 ${base}/public/games.html#dressup`);
+    // 分享只有一個「分享結果」：截圖和網址一起分享
+    const gameUrl = `${base}/public/games.html#dressup`;
+    assert.deepEqual(await page.locator('#gEnd button, #gEnd a:not(#gMissed a)').allTextContents(), ['再玩一次', '分享結果']);
+    // 手機能分享檔案：直接叫出分享，帶截圖和含網址的文字，不開截圖視窗
+    await page.evaluate(() => {
+      window.__shared = [];
+      navigator.canShare = data => !!(data && data.files && data.files.length);
+      navigator.share = async data => { window.__shared.push({ names: data.files.map(f => `${f.name} ${f.type}`), size: data.files[0].size, text: data.text }); };
+    });
+    await page.locator('#gShare').click();
+    await page.waitForFunction(() => window.__shared.length === 1);
+    const shared = (await page.evaluate(() => window.__shared))[0];
+    assert.deepEqual(shared.names, ['dog-dressup.png image/png']);
+    assert(shared.size > 1000, `截圖有內容：${shared.size}`);
+    assert.equal(shared.text, `我在「狗狗變裝秀」認出 7 / 10 隻變裝的板收狗狗，拿到 ${score} 分！換你來試試 ${gameUrl}`);
+    assert.equal(await visible(page, 'gSheet'), false);
+    assert.equal(await page.locator('#gShare').innerText(), '分享結果');
+    // 截圖上印遊戲網址，圖被存下來轉傳也找得到
+    const shotTexts = await page.evaluate(() => window.__shotTexts);
+    assert(shotTexts.includes(gameUrl.replace(/^https?:\/\//, '')), `截圖印遊戲網址：${shotTexts.join('、')}`);
 
-    await page.locator('#gShot').click();
+    // 自己取消分享：不開截圖視窗；其他原因分享失敗：改開截圖視窗
+    const shareFails = name => page.evaluate(n => { navigator.share = async () => { throw new DOMException('x', n); }; }, name);
+    await shareFails('AbortError');
+    await page.locator('#gShare').click();
+    await page.waitForTimeout(300);
+    assert.equal(await visible(page, 'gSheet'), false, '取消分享不開截圖視窗');
+    await shareFails('NotAllowedError');
+    await page.locator('#gShare').click();
+    await page.locator('#gSheet').waitFor();
+    assert.equal(await visible(page, 'gSheetShare'), true, '視窗裡可以再按一次分享');
+    await page.goBack();
+    await page.locator('#gSheet').waitFor({ state: 'hidden' });
+
+    // 不能分享檔案（電腦、舊瀏覽器）：開截圖視窗，可以存圖、拿網址
+    await page.evaluate(() => { navigator.canShare = undefined; });
+    await page.locator('#gShare').click();
     await page.locator('#gSheet').waitFor();
     await page.waitForFunction(() => document.getElementById('gSheetImg').naturalWidth > 0);
     assert.deepEqual(await page.evaluate(() => [document.getElementById('gSheetImg').naturalWidth, document.getElementById('gSheetImg').naturalHeight]), [1080, 1440]);
+    assert.equal(await page.locator('#gSheetUrl').innerText(), gameUrl);
+    assert.equal(await page.locator('#gSheetUrl').getAttribute('href'), gameUrl);
+    assert.equal(await visible(page, 'gSheetShare'), false);
     await page.goBack(); // 手機返回鍵先關截圖
     await page.locator('#gSheet').waitFor({ state: 'hidden' });
     assert.equal(await visible(page, 'gEnd'), true);

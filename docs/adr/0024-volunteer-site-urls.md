@@ -13,7 +13,7 @@
 | `#info` | 資訊首頁 |
 | `#info/<子頁>` | 資訊子頁，子頁名稱就是 `INFO_PAGES` 的鍵：`stay`、`departures`、`activities`、`quality`、`updates` |
 | `#dog/<編號>` | 那隻狗的詳細資訊，疊在目前分頁上；直接打開時疊在溜狗表上 |
-| `games.html`、`games.html#dressup` | 小遊戲選單、狗狗變裝秀（#795，另一頁）；分享到 LINE 用 `#dressup`，打開就開始一局 |
+| `games.html`、`games.html#dressup` | 小遊戲選單、狗狗變裝秀（#795，另一頁）；分享結果的網址用 `#dressup`，打開就開始一局 |
 
 - **用 hash，不用路徑**：網站是 Worker 給的靜態檔，hash 不會送到伺服器，不用改 Worker 路由，也不會多算 Worker 請求（ADR 0023 不讓每次開頁經過 Worker 的理由相同）。
 - **編號是 `dog.id`**（試算表的編號），用 `encodeURIComponent` 包起來。沒有編號的狗、已離所的狗（不在 `appState.allDogs`）不給網址，詳細資訊開著時網址留在原本那一頁。

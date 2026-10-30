@@ -57,7 +57,7 @@
 | `desk-mine.js` | 電腦版我溜過：標題列（名字＋修改）、月曆每格寫當天溜的狗名（最多 2 個，其餘「＋N」）、右欄選中那天的狗與月曆那個月的統計；還沒設定是誰時表單放主內容。手機照舊是 app.js 的 `myWalksHtml` | app、ui-kit、dates、welcome、page-state | index |
 | `cards.js` | 圖鑑、開卡與已出所狗卡，保留卡片專用格式 | dates、api、store、site-config、overlays、identity、page-state | cards |
 | `dress-up.js` | 狗狗變裝秀（#795）的規則：能出題的狗（`playableDogs`：在所、有編號與照片、名字不是括號開頭，臉部位置檔 `data/dog-faces.json` 的照片版本跟 `/api/dogs` 一樣）、選項（長相最像的狗）、拉近狗臉、19 種裝飾的位置；不碰 DOM | 無 | games |
-| `games.js` | 小遊戲頁：選單、狗狗變裝秀（遊戲中、結算、最高分）、分享截圖與分享到 LINE；返回鍵與網址（`games.html`、`#dressup`）走 overlays.js | api、overlays、dress-up | games |
+| `games.js` | 小遊戲頁：選單、狗狗變裝秀（遊戲中、結算、最高分）、分享結果（截圖＋網址一起交給手機的分享，不能分享檔案時開截圖視窗）；返回鍵與網址（`games.html`、`#dressup`）走 overlays.js | api、overlays、dress-up | games |
 | `games-entry.js` | 小遊戲頁入口 | games | games |
 | `edit-values.js` | `editsValue`：編輯紀錄改前／改後的文字，純函式 | 無 | edits、admin（建置複製） |
 | `edits.js` | 編輯紀錄清單 | api、store、edit-values | edits |
