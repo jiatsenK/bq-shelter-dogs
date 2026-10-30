@@ -57,10 +57,10 @@
 **Body Font:** Noto Sans TC（Google Fonts，500／700／900），後備蘋方、微軟正黑體
 **Label/Mono Font:** 數字都用 Anton，不另用等寬字
 
-**Character:** 窄高的 Anton 像球衣背號和計分板，只拿來寫背號、年份等數字；中文（含大標「板橋動物之家」、區名）用 Noto Sans TC 的 900 撐出卡片的粗黑感。全站只有這一頁載網路字型；志工版照舊用系統字。
+**Character:** 窄高的 Anton 像球衣背號和計分板，只拿來寫背號、年份等數字；中文（含大標、區名）用 Noto Sans TC 的 900 撐出卡片的粗黑感。全站只有這一頁載網路字型；志工版照舊用系統字。
 
 #### Hierarchy
-- **Display**（Anton 400, clamp(44px, 5vw, 76px), 行高 .95, 字距 .01em）：左上「板橋動物之家 2026」（K 2026-10-30 改，原本 BQ ALL-STARS），中文用 Noto Sans TC 900 燙金、年份 Anton 粉筆白；左邊徽章寫「板收 圖鑑」。
+- **Display**（Anton 400, clamp(44px, 5vw, 76px), 行高 .95, 字距 .01em）：左上「板橋動物之家 圖鑑」（K 2026-10-30 改，原本 BQ ALL-STARS 2026），Noto Sans TC 900，「板橋動物之家」燙金、「圖鑑」粉筆白；左邊徽章寫「板收 2026」。
 - **背號與計數**（Anton 400）：卡面背號（卡寬 22%）、圖鑑進度（40px）、獎項數字（64px）、圖鑑頁數（22px）、卡套背號（26px）、NEW、×N。
 - **Headline**（Noto Sans TC 900, clamp(32px, 3.2vw, 46px), 行高 1.1, 字距 .06em）：「年度獎項」「圖鑑」段落標題。
 - **狗名**（900, 卡寬 12%, 行高 1.05, `skewX(-8deg)`）：卡面的斜體粗黑狗名。斜體是用 skew 做的，Noto Sans TC 沒有斜體。
