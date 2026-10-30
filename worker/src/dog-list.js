@@ -115,6 +115,9 @@ async function applyMain(db, row, list, stays, env, fp, now, merge) {
   const target = stay ? null : stayTarget(dog, list);
   if (stay && legacy) { await db.batch(dropMainRow(db, legacy.row_index)); list.splice(list.indexOf(legacy), 1); }
   if (stay || (target && !legacy)) return await applyStay(db, { name: dog.name, cage, note }, stays, target) || !!(stay && legacy);
+  // 搬籠清舊列常先清編號、再清名字：中間那幾秒是同名、同備註、沒編號的列。主清單上已經有一隻有編號、
+  // 犬名和備註都一樣的狗，這列就是牠搬走留下的，不另建一隻沒照片的狗（2026-10-30 皮蛋舊A13）。備註空白不算，同名新狗照樣建
+  if (!dog.id && !legacy && note && list.some(m => m.number && m.name === dog.name && m.note === note)) return false;
   const date = YMD.test(text(row.date)) ? text(row.date) : null;
   const { codes, keyed } = await walkersOf(row.walker, env, db);
   let old = findMain(list, dog);
