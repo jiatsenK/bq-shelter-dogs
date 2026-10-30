@@ -91,10 +91,13 @@ async function applyMain(db, row, list, stays, env, fp) {
   const dog = cleanDog(row.dog), cage = text(row.cage), note = text(row.note).replace(/\r\n?/g, '\n');
   // 犬隻資料列一定有犬名和籠位；表尾提示文字不算狗（同 parseMainList）
   if (!dog.name || !cage || dog.name === '犬名') return false;
-  // 已經是暫住紀錄的列照舊當暫住（那隻狗之後離開主清單也是）；上線轉換前就建成狗的舊暫住列（複本上有）照一般列處理
+  // 已經是暫住紀錄的列照舊當暫住（那隻狗之後離開主清單也是）。上線轉換前就建成狗的舊暫住列（複本上有、沒有暫住紀錄）照一般列處理；
+  // 兩邊都有（migration 0021 套完、新程式部署前，舊程式又建了一隻）就移出主清單複本，同一個 key 不送兩份，那隻假狗變待核對
   const stay = !dog.id && stays.find(s => s.name === dog.name);
+  const legacy = findMain(list, dog);
   const target = stay ? null : stayTarget(dog, list);
-  if (stay || (target && !findMain(list, dog))) return applyStay(db, { name: dog.name, cage, note }, stays, target);
+  if (stay && legacy) { await db.batch(dropMainRow(db, legacy.row_index)); list.splice(list.indexOf(legacy), 1); }
+  if (stay || (target && !legacy)) return await applyStay(db, { name: dog.name, cage, note }, stays, target) || !!(stay && legacy);
   const date = YMD.test(text(row.date)) ? text(row.date) : null;
   const { codes, keyed } = await walkersOf(row.walker, env, db);
   let old = findMain(list, dog);
@@ -288,12 +291,12 @@ async function reconcileMissing(db, { list, stays }, mainKeys, now, fp) {
   const where = m => (isStay(m) ? ['v3_sheet_stays', 'name=? AND missing_at IS ?', m.name, m.missing_at ?? null]
     : ['v3_sheet_main', 'row_index=? AND dog_id=? AND missing_at IS ?', m.row_index, m.dog_id, m.missing_at ?? null]);
   // 每個工作一句；暫住結束的修改紀錄排在那句前面，用同一個條件（紀錄還在、沒被別的請求改過才記）
-  const statements = [], index = [];
+  const statements = [], workAt = [];
   for (const [what, m] of doing) {
     const [table, same, ...args] = where(m);
     if (what === 'confirm' && isStay(m)) statements.push(...editLogWrites(db, { at, name: '試算表', kind: 'stay-end', dogId: m.dog_id,
       number: list.find(d => d.dog_id === m.dog_id)?.number || '', before: { cage: m.cage }, after: null, source: 'sheet' }, [`EXISTS(SELECT 1 FROM ${table} WHERE ${same})`, ...args]));
-    index.push(statements.length);
+    workAt.push(statements.length);
     statements.push(what === 'confirm' ? db.prepare(`DELETE FROM ${table} WHERE ${same}`).bind(...args)
       : db.prepare(`UPDATE ${table} SET missing_at=? WHERE ${same}`).bind(what === 'mark' ? at : null, ...args));
   }
@@ -301,7 +304,7 @@ async function reconcileMissing(db, { list, stays }, mainKeys, now, fp) {
   let skipped = false, confirmed = false;
   doing.forEach(([what, m], i) => {
     // 條件沒對上（別的請求改過這一列）就沒寫到，複本照讀到的樣子，下一次清單再看
-    if (!done[index[i]]?.meta?.changes) { skipped = true; return; }
+    if (!done[workAt[i]]?.meta?.changes) { skipped = true; return; }
     if (what === 'confirm') { const from = isStay(m) ? stays : list; from.splice(from.indexOf(m), 1); delete fp[rowKey(m)]; confirmed = true; } else m.missing_at = what === 'mark' ? at : null;
   });
   // 被當成讀錯表時不叫 GAS 一直重送；下一次有人改表或保險掃描再看
@@ -314,7 +317,7 @@ export async function syncDogList(db, rows, mainKeys, env, now = Date.now()) {
   let fp = await readFp(db);
   const before = JSON.stringify(fp);
   // 主清單約 300 列，每批讀一次換來逐列不必各查一次（每次呼叫 50 次查詢上限）
-  let { list, stays } = await readMain(db);
+  let { list, stays } = await readSheetRows(db);
   const results = [];
   for (const row of rows) {
     const key = row && unitKey(row);
@@ -345,9 +348,9 @@ export async function syncDogList(db, rows, mainKeys, env, now = Date.now()) {
 export const applyDogListRows = async (db, rows, env, now) => (await syncDogList(db, rows, null, env, now)).results;
 
 // 主清單複本和暫住紀錄（#772）一次往返讀；暫住紀錄的 number 是 ''，單位 key 跟主清單沒編號的列一樣是 main:名:犬名
-async function readMain(db) {
+async function readSheetRows(db) {
   const [main, stays] = await db.batch([
-    db.prepare('SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,m.walker_codes,m.missing_at,s.revision FROM v3_sheet_main m JOIN v3_dog_edit_state s USING(dog_id)'),
+    db.prepare('SELECT m.row_index,m.dog_id,m.number,m.name,m.cage,m.note,m.walked_date,m.walker,m.walker_codes,m.missing_at,s.revision FROM v3_sheet_main m JOIN v3_dog_edit_state s USING(dog_id) ORDER BY m.row_index'),
     db.prepare("SELECT name,'' AS number,dog_id,cage,note,missing_at FROM v3_sheet_stays"),
   ]);
   return { list: main.results, stays: stays.results };
@@ -367,7 +370,7 @@ async function missingOf(db, rows, mainKeys, now, fp) {
 export async function scanDogList(db, fingerprints, now = Date.now()) {
   const fp = await readFp(db);
   const before = JSON.stringify(fp);
-  const { candidates, confirmed } = await missingOf(db, await readMain(db), Object.keys(fingerprints).filter(k => k.startsWith('main:')), now, fp);
+  const { candidates, confirmed } = await missingOf(db, await readSheetRows(db), Object.keys(fingerprints).filter(k => k.startsWith('main:')), now, fp);
   // #519 補填「誰遛的」原文：主清單 walker 還是 NULL 的狗指紋一樣也要，補好就不再要
   const unfilled = new Set((await db.prepare("SELECT number, name FROM v3_sheet_main WHERE walker IS NULL").all()).results.map(rowKey));
   const want = Object.keys(fingerprints).filter(k => fp[k] !== fingerprints[k] || unfilled.has(k));

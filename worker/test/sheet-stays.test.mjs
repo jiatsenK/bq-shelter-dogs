@@ -95,3 +95,13 @@ test('#772 上線轉換：主清單複本上的「(皮蛋）」假狗轉成暫�
   assert.ok(!(await dogs(env)).some(d => d[1] === '(皮蛋）'));
   assert.deepEqual(await stayLogs(manage), [['暫住結束', '9002', { cage: 'A01' }, null]]);
 });
+
+test('#772 migration 套完、新程式部署前舊程式又建了一隻假狗：下一次收到那一列就移出主清單複本，不送兩份', async t => {
+  const { env, gas, manage } = await start(t);
+  await gas.edit(5, { cage: 'A01', name: '(皮蛋）' });
+  await env.DB.prepare("INSERT INTO v3_dogs(dog_id,name) VALUES('fake1','(皮蛋）')").run();
+  await env.DB.prepare("INSERT INTO v3_sheet_main(row_index,dog_id,number,name,cage) VALUES(90,'fake1','','(皮蛋）','A01')").run();
+  await gas.edit('名:(皮蛋）', { note: '剛動完手術' });
+  assert.deepEqual((await dogs(env)).filter(d => d[1] === '(皮蛋）'), [['', '(皮蛋）', 'A01']]);
+  assert.equal((await stayLogs(manage)).length, 1);
+});
