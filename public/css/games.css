@@ -60,7 +60,7 @@ button.g-game:disabled { cursor: default; opacity: .6; }
 .g-missed-wrap { display: flex; flex-direction: column; gap: 10px; padding: 16px; background: var(--surface); }
 .g-missed-wrap h2 { margin: 0; font-size: 18px; }
 .g-missed { display: flex; flex-wrap: wrap; gap: 10px; }
-.g-missed figure { margin: 0; width: 76px; display: grid; gap: 2px; font-size: 14px; text-align: center; }
+.g-missed a { width: 76px; display: grid; gap: 2px; color: var(--primary); font-size: 14px; font-weight: 700; text-align: center; text-decoration: underline; text-underline-offset: 3px; }
 .g-missed img { width: 76px; height: 76px; object-fit: cover; border-radius: 2px; background: var(--primary-soft); }
 .g-row { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 8px 20px; }
 .g-btn { min-height: 48px; padding: 0 24px; border: 2px solid var(--primary); border-radius: 3px; background: var(--primary); color: #fff; font: inherit; font-weight: 700; cursor: pointer; }

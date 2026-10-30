@@ -2,6 +2,7 @@
 // 網址：games.html 是選單、games.html#dressup 是狗狗變裝秀；返回鍵一層一層回去，選單再返回回資訊頁（ADR 0024 的規則）
 import { BQApi } from './api.js';
 import { bindOverlays, backFrom, closeOverlay, leaveTo, pushOverlay, pushPage, registerOverlay, replacePage, writeHistory } from './overlays.js';
+import { dogHash } from './routes.js';
 import { DECOS, LIMIT_MS, Q_COUNT, dressUp, optionNames, playableDogs, points, shuffle, zoomToFace } from './dress-up.js';
 
 const $ = id => document.getElementById(id);
@@ -156,14 +157,16 @@ function finish() {
   $('gEndScore').textContent = S.score;
   $('gEndLine').textContent = `認出 ${S.right} / ${S.qs.length} 隻`;
   $('gMissed').innerHTML = '';
+  // 沒認出的狗點下去打開溜狗表那隻的詳細資訊（#dog/<編號>）
   for (const d of S.missed) {
-    const f = document.createElement('figure');
+    const a = document.createElement('a');
+    a.href = 'index.html' + dogHash(d);
     const img = document.createElement('img');
-    img.src = d.thumb; img.alt = d.name;
-    const c = document.createElement('figcaption');
+    img.src = d.thumb; img.alt = '';
+    const c = document.createElement('span');
     c.textContent = d.name;
-    f.append(img, c);
-    $('gMissed').appendChild(f);
+    a.append(img, c);
+    $('gMissed').appendChild(a);
   }
   $('gMissedWrap').hidden = !S.missed.length;
   const best = readBest();

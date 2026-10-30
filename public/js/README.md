@@ -36,7 +36,7 @@
 | `detail-viewport.js` | 詳細資訊編輯欄位的可見範圍 | 無 | index |
 | `keyboard-viewport.js` | 螢幕鍵盤開啟時的欄位與面板定位 | 無 | index |
 | `overlays.js` | 返回鍵與焦點圈：覆蓋層（平面圖放大、裁切、燈箱、在哪、詳細資訊、小遊戲的分享截圖）註冊怎麼判斷開著／怎麼關，按返回的關閉順序集中在 `BACK_ORDER`；開一層、關一層、換掉歷史紀錄、頁籤／資訊子頁的歷史紀錄（帶呼叫端算好的網址，打開網頁那一筆標 `bqLanding`，ADR 0024）、離開這頁回志工網站另一頁（`leaveTo`）、`trapFocus` | 無 | index、cards、games、Node |
-| `routes.js` | 志工網站網址（ADR 0024）：`#walk`、`#info/<子頁>`、`#dog/<編號>` 和畫面狀態互換、判斷一般點擊與 Ctrl／⌘ 點擊、電腦版真連結手機按鈕的 `routeControl` | 無 | index、Node |
+| `routes.js` | 志工網站網址（ADR 0024）：`#walk`、`#info/<子頁>`、`#dog/<編號>` 和畫面狀態互換、判斷一般點擊與 Ctrl／⌘ 點擊、電腦版真連結手機按鈕的 `routeControl` | 無 | index、games、Node |
 | `walk-registration.js` | `createWalkRegistration`：D1 接受流程的登記、同行人、復原與今日紀錄核對規則，純 ES module（#558 起沒有寫回試算表的舊路徑） | 無 | index、Node |
 | `walk-flow.js` | `BQWalks`：不碰 DOM 的排隊登記、核對、復原、提示及同行人手機紀錄 | store、walk-registration（日期介面由呼叫端注入） | index、Node |
 | `identity.js` | 志工身分：`identityRequest`（/identity 請求與錯誤）、`refreshIdentity`（用登記名字換最新的名字與代號；送出前後手機上的名字和代號都沒變才存，不然回 `changed`）。設定名字、常溜同步、圖鑑共用，各頁的讀、存與被改過時的反應由呼叫端帶入 | api | index、cards、Node |
