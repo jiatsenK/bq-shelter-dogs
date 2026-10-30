@@ -264,6 +264,7 @@ flowchart TB
 - 狗清單保險掃描：每天約 09:43、13:53、23:53 狗清單保險掃描，先送全表指紋，志工網站回不一樣的單位，再分批補送（`apps-script/sheet-write.gs:498-523`；`worker/src/dog-list.js:256-285`）。
 - 程式寫表不會觸發編輯觸發：網站新增的備註、異動紀錄，要等下一次保險掃描才進 D1，最久約 10 小時（`apps-script/sheet-write.gs:275`）。
 - 列消失（#771，ADR 0025）：送狗清單、保險掃描送指紋都附上表上主清單的全部 key。主清單複本有、表上沒有的列先標成候選（`v3_sheet_main.missing_at`），又出現就取消；隔 10 分鐘以上再收到清單還是不見才確認，移出主清單，狗的資料不刪、管理網站顯示待核對。志工網站回「還有候選」時，Apps Script 的 10 分鐘補送沒有待送也再送一次清單（指令碼屬性 DOG_LIST_CANDIDATES）。一次請求最多處理 10 個；表上一次少一半以上的狗不當成消失（`worker/src/dog-list.js` 的 `reconcileMissing`；`apps-script/sheet-write.gs` 的 `flushDogList`、`dogListScan`）。
+- 暫住列（#772，ADR 0025）：沒編號、犬名用括號包起來、括號裡是主清單上一隻有編號的狗（例「(皮蛋）」），不建狗，存成暫住紀錄 `v3_sheet_stays`（哪一隻、暫住哪一籠），修改紀錄記暫住開始。在所資料包照舊把這一列接在狗清單後面送出，志工網站合到那隻狗。暫住列消失照上一點的候選規則確認，確認後刪掉暫住紀錄、記暫住結束（`worker/src/dog-list.js` 的 `applyStay`、`reconcileMissing`）。
 - 保險掃描送指紋前在 script lock 內核對表上變動記號，讀表後有人改過就整次不送，剛新增的列不會被舊指紋當成消失。D1 有、試算表沒有的也列在管理網站「待補清單」（`worker/src/dog-list.js` 的 `scanDogList`）。
 
 ## 元件｜志工溜狗表｜程式架構

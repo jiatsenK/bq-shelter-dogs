@@ -122,6 +122,16 @@ CREATE INDEX IF NOT EXISTS v3_sheet_main_name ON v3_sheet_main(name) WHERE numbe
 CREATE INDEX IF NOT EXISTS v3_sheet_main_dog ON v3_sheet_main(dog_id);
 -- 保險掃描找還沒補填「誰遛的」原文的列不整張掃；平常是空的（#678）
 CREATE INDEX IF NOT EXISTS v3_sheet_main_walker_null ON v3_sheet_main(row_index) WHERE walker IS NULL;
+-- 暫住紀錄（#772，ADR 0025）：主清單上「(皮蛋）」這種暫住列，不建狗、不進主清單複本。一列一個暫住列，用表上的犬名原文當 key（單位 key 是 main:名:犬名）。
+-- 哪一隻狗（dog_id）、暫住哪一籠；missing_at 跟主清單複本一樣是消失的候選，確認後刪掉這列＝暫住結束
+CREATE TABLE IF NOT EXISTS v3_sheet_stays (
+  name TEXT PRIMARY KEY NOT NULL,
+  dog_id TEXT NOT NULL REFERENCES v3_dogs(dog_id) ON DELETE RESTRICT,
+  cage TEXT NOT NULL,
+  note TEXT NOT NULL DEFAULT '',
+  missing_at TEXT
+);
+CREATE INDEX IF NOT EXISTS v3_sheet_stays_dog ON v3_sheet_stays(dog_id);
 CREATE TABLE IF NOT EXISTS v3_sheet_changes (
   row_index INTEGER PRIMARY KEY,
   label TEXT NOT NULL DEFAULT '',
@@ -406,6 +416,10 @@ CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_main_DELETE AFTER DELETE ON v3_sheet
 CREATE TRIGGER IF NOT EXISTS walked_v3_sheet_main_INSERT AFTER INSERT ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET walked=walked+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS walked_v3_sheet_main_UPDATE AFTER UPDATE OF row_index,number,name,walked_date,walker_codes ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET walked=walked+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS walked_v3_sheet_main_DELETE AFTER DELETE ON v3_sheet_main BEGIN UPDATE v3_pack_versions SET walked=walked+1 WHERE id=1; END;
+-- 暫住紀錄（#772）跟主清單一起送進在所資料包
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_stays_INSERT AFTER INSERT ON v3_sheet_stays BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_stays_UPDATE AFTER UPDATE OF name,cage,note ON v3_sheet_stays BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
+CREATE TRIGGER IF NOT EXISTS packs_v3_sheet_stays_DELETE AFTER DELETE ON v3_sheet_stays BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1; END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_intros_INSERT AFTER INSERT ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=NEW.dog_id); END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_intros_UPDATE AFTER UPDATE ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id IN (OLD.dog_id,NEW.dog_id)); END;
 CREATE TRIGGER IF NOT EXISTS packs_v3_intros_DELETE AFTER DELETE ON v3_intros BEGIN UPDATE v3_pack_versions SET small=small+1 WHERE id=1 AND EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=OLD.dog_id); END;
