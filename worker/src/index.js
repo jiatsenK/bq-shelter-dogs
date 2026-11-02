@@ -1,4 +1,5 @@
 import { dogIdentity, readDogEdit, saveDogEdit, cleanDogValue, validFormer } from './dog-edit.js';
+import { runAlerts } from './sync-alerts.js';
 import { photoInput, saveDogPhoto } from './dog-photo.js';
 import { readSettings, requireVolunteerEdit, settingForWrite } from './feature-settings.js';
 import { SHARE_METHODS, countShare } from './share-counts.js';
@@ -768,7 +769,7 @@ const entry = {
   testing: { r2, MAX_BYTES, resetState, allowUpload, isJpeg, cleanNote, walkerCode, maintenance },
 
   // Cloudflare Cron Trigger 時間到會呼叫這裡（時間在 wrangler.jsonc 的 triggers）
-  // RETRY_CRON 寫回重試；SCAN_CRON 保險掃描，每天第一次順便清修改紀錄、每月 1 日第一次再清照片垃圾桶；沒帶 cron（測試）跑溜狗兩件。
+  // RETRY_CRON 寫回重試；SCAN_CRON 保險掃描與異常通知（#809），每天第一次順便清修改紀錄、每月 1 日第一次再清照片垃圾桶；沒帶 cron（測試）跑溜狗兩件。
   // 每件跑完或出錯都記時間給管理網站看（worker/src/cron-status.js）
   async scheduled(event, env, ctx, sheet) {
     const now = event && event.scheduledTime ? event.scheduledTime : Date.now();
@@ -780,6 +781,7 @@ const entry = {
     else if (cron === RETRY_CRON) ctx.waitUntil(retry());
     else if (cron === SCAN_CRON) {
       ctx.waitUntil(scan());
+      ctx.waitUntil(recordRun(env, 'alert', now, () => runAlerts(env, now)));
       if (firstScanOfDay(now)) ctx.waitUntil(recordRun(env, 'editlog', now, () => pruneEdits(env.DB, now)));
       if (trashDue(now) && r2.r2On(env)) ctx.waitUntil(recordRun(env, 'trash', now, () => maintenance(env, now)));
     }

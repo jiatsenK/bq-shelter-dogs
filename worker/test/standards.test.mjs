@@ -12,6 +12,8 @@ const sources = await Promise.all((await readdir(SRC, { recursive: true })).map(
 // 「不整張讀」：沒帶 WHERE／LIMIT 的 SELECT、DELETE。SQL 裡有 ${…} 的（條件另外組）不判斷。
 // 已知例外：鍵是「檔名: SQL 開頭」，值寫為什麼可以，或要修的票號。修掉就把這一行刪掉。
 const FULL_SCAN_OK = {
+  'sync-alerts.js: SELECT name,COUNT(*) AS n FROM v3_sheet_main': '#809 異常通知只在每日三次保險掃描跑，主清單約 300 列',
+  'sync-alerts.js: SELECT dog_id,MIN(name) AS name,COUNT(*) AS n FROM v3_sheet_main': '#809 同上',
   'activities.js: SELECT activity_id, activity_date, kind, revision FROM v3_activities': 'readActivities 只在活動版本號變更或 Worker 冷啟動時重建清單；同版本使用記憶體快取',
   "compact.js: SELECT m.row_index, m.dog_id, m.number, m.name, m.cage, m.note, m.walked_date, m.walker_codes, c.sex AS dog_sex, COALESCE(i.intro, '') AS d1_intro, c.fixed_care, es.revision AS edit_revision, p.object_key AS photo_key FROM v3_sheet_main m": 'ADR 0009／0014：readDogsPayload 只在 small 版本變更、需要重建在所資料包時讀取',
   'compact.js: SELECT column_index, label, names FROM v3_sheet_group_columns': 'ADR 0009／0014：readDogsPayload 只在 small 版本變更、需要重建在所資料包時讀取',

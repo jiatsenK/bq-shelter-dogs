@@ -25,6 +25,7 @@ export const CRON_LABELS = {
   scan: { name: '保險掃描', every: '每天 09:23、13:23、23:23' },
   trash: { name: '照片垃圾桶', every: '每月 1 日 09:23' },
   editlog: { name: '修改紀錄清理', every: '每天 09:23（清 14 天前的）' },
+  alert: { name: '異常通知', every: '每天 09:23、13:23、23:23（沒設 Telegram 不跑）' },
 };
 
 export function parseCronStatus(data) {
