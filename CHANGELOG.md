@@ -1,5 +1,12 @@
 # Changelog
 
+## [9.4.2](https://github.com/jiatsenK/bq-shelter-dogs/compare/v9.4.1...v9.4.2) (2026-11-02)
+
+
+### 修正
+
+* 樂觀鎖 guard 收成一個有條件 batch，資料列不見也擋（[#745](https://github.com/jiatsenK/bq-shelter-dogs/issues/745)） ([#751](https://github.com/jiatsenK/bq-shelter-dogs/issues/751)) ([9410b7b](https://github.com/jiatsenK/bq-shelter-dogs/commit/9410b7b543ec6f13381647d47d4ce7aefee4e76c))
+
 ## [9.4.1](https://github.com/jiatsenK/bq-shelter-dogs/compare/v9.4.0...v9.4.1) (2026-10-28)
 
 
