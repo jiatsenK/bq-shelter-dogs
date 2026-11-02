@@ -82,3 +82,9 @@ test('#747 狗清單同步不寫溜狗紀錄、不記溜狗類修改紀錄', () 
   assert.doesNotMatch(code, /\bwalkDay\b|listWalkLog/, '溜狗紀錄的寫法在 today-walks/version.js');
   assert.doesNotMatch(code, /kind\s*:\s*['"]walk/, '溜狗類修改紀錄由今日溜狗紀錄 module 記');
 });
+
+// #802：記離所和對編號取 MAX／MIN 只在狗的狀態 module
+test('#802 記離所與顯示編號的 SQL 只在 dog-standing.js', () => {
+  const misplaced = sources.filter(([file, code]) => file !== 'dog-standing.js' && (/INSERT\s+INTO\s+v3_dog_departures/i.test(code) || /(?:MAX|MIN)\s*\(\s*(?:n\.)?number\s*\)\s+FROM\s+v3_dog_numbers/i.test(code))).map(([file]) => file);
+  assert.deepEqual(misplaced, [], '狀態、顯示編號、記離所改用 dog-standing.js（ADR 0027）');
+});

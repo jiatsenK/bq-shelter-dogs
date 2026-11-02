@@ -13,6 +13,7 @@
 import { dogRevisionIs, editError } from './dog-edit.js';
 import { batchIf, isConflict } from './conditional-batch.js';
 import { editLogWrites, SYSTEM_EDITOR } from './editlog.js';
+import { shownNumber } from './dog-standing.js';
 import { joinStays, withoutStays } from './stays.js';
 import { mergedPairWrites } from './dog-pairs.js';
 
@@ -64,7 +65,7 @@ const marks = ids => ids.map(() => '?').join(',');
 const all = async (db, sql, ...args) => (await db.prepare(sql).bind(...args).all()).results || [];
 // 一句讀兩隻（或一隻）狗：名字、revision、目前編號、所有編號
 async function dogsOf(db, ...ids) {
-  const found = await all(db, `SELECT d.dog_id,d.name,d.sex,d.fixed_care,s.revision,
+  const found = await all(db, `SELECT d.dog_id,d.name,d.sex,d.fixed_care,s.revision,${shownNumber('d.dog_id')} AS shown_number,
     (SELECT number FROM v3_sheet_main WHERE dog_id=d.dog_id ORDER BY row_index LIMIT 1) AS current_number,
     (SELECT json_group_array(number) FROM (SELECT number FROM v3_dog_numbers WHERE dog_id=d.dog_id ORDER BY number)) AS numbers
     FROM v3_dogs d JOIN v3_dog_edit_state s USING(dog_id) WHERE d.dog_id IN (${marks(ids)})`, ...ids);
@@ -73,7 +74,7 @@ async function dogsOf(db, ...ids) {
     if (!dog) return null;
     const numbers = JSON.parse(dog.numbers);
     // 顯示用的編號：在所用目前編號，不在所用最新的舊編號
-    return { ...dog, onMain: dog.current_number !== null, numbers, shown: dog.current_number || numbers.at(-1) || '' };
+    return { ...dog, onMain: dog.current_number !== null, numbers, shown: dog.shown_number || '' };
   });
 }
 // 每張表一句，兩隻狗的列一起讀再分開；整組放同一個 batch，只算 1 次查詢（狗清單同步裡的自動合併也要守住每次呼叫 50 次）

@@ -3,6 +3,7 @@
 // 出席的狗用永久 ID（dog_id）；舊名單對不上的只存名字（dog_id 是 NULL），之後再接上。
 
 import { batchIf, isConflict } from './conditional-batch.js';
+import { shownNumber } from './dog-standing.js';
 
 export const ACTIVITY_KINDS = { kids: '動保小小兵', adoption: '認養會' };
 export const ACTIVITY_MAX_DOGS = 60;
@@ -72,7 +73,7 @@ export async function resolveDogs(db, dogs) {
 
 // 狗現在的編號：最新的那個（編號前 8 碼是入所日，主清單上的就是最新的）；照 v3_numbers_dog 索引找，沒有編號是 ''
 const DOG_ROWS = `SELECT a.activity_id, a.position, a.dog_id, COALESCE(d.name, a.name) AS name,
-  COALESCE((SELECT MAX(n.number) FROM v3_dog_numbers n WHERE n.dog_id=a.dog_id), '') AS number
+  COALESCE(${shownNumber('a.dog_id')}, '') AS number
   FROM v3_activity_dogs a LEFT JOIN v3_dogs d USING(dog_id)`;
 
 function shape(rows, dogRows) {

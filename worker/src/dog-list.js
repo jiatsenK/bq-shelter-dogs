@@ -22,7 +22,7 @@ import { linkIdentityName } from './identity.js';
 import { todayWalks } from './today-walks/index.js';
 import { goneWrites, newDogPairs } from './dog-pairs.js';
 import { autoMergeDogs } from './dog-merge.js';
-import { pendingDog, pendingDepartureWrite } from './dog-depart.js';
+import { pendingDog, pendingDepartureWrite, departureFromMainRow } from './dog-standing.js';
 
 // 每列 3–4 次 D1 往返；溜狗欄有變另外交給今日溜狗紀錄比對（改表通知通常先到，這裡比對到一樣只多 1 次往返；
 // 狗清單先到時比對收下約 10 次往返，超過每次呼叫 50 次查詢的那幾列 D1 失敗、不 ack，GAS 補送時前面收過的就一樣了）
@@ -252,17 +252,7 @@ async function applyDeparted(db, row, list, now, fp) {
   const old = findMain(list, dog);
   const out = [];
   if (old) {
-    {
-      const former = (await db.prepare('SELECT number FROM v3_dog_numbers WHERE dog_id=? AND number<>? ORDER BY number').bind(old.dog_id, dog.id).all()).results.map(r => r.number);
-      const groups = (await db.prepare('SELECT DISTINCT b.value AS name FROM v3_sheet_group_columns g, json_each(g.names) a, json_each(g.names) b WHERE a.value=? AND b.value<>? ORDER BY g.column_index,b.key').bind(old.name, old.name).all()).results.map(r => r.name);
-      // 性別在 v3_dogs、入所介紹在 v3_intros（#250）；主清單不再存這兩欄（#557）
-      const extra = await db.prepare('SELECT d.sex, i.intro FROM v3_dogs d LEFT JOIN v3_intros i USING(dog_id) WHERE d.dog_id=?').bind(old.dog_id).first();
-      out.push(dropDeparture(db, dog.id));
-      out.push(db.prepare(`INSERT INTO v3_dog_departures(dog_id,number,name,departed_date,date_source,seen_date,reason,matched,flags_json,last_number,last_name,last_cage,last_walked_date,last_note,last_sex,last_intro,former_json,groups_json)
-        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(old.dog_id, dog.id, old.name, judged.date || todayYmd, judged.date ? judged.dateSource : 'seen', todayYmd,
-        judged.reason, judged.matched || '', JSON.stringify(judged.flags || []), dog.id, old.name, old.cage, old.walked_date, old.note, extra?.sex || '', extra?.intro || '',
-        JSON.stringify(former), JSON.stringify(groups)));
-    }
+    out.push(...await departureFromMainRow(db, { row: old, number: dog.id, date: judged.date || todayYmd, dateSource: judged.date ? judged.dateSource : 'seen', today: todayYmd, reason: judged.reason, matched: judged.matched, flags: judged.flags }));
     out.push(...dropMainRow(db, old.row_index));
 
   } else {
