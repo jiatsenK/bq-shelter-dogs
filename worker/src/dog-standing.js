@@ -24,6 +24,9 @@ export function pendingDepartureWrite(db, { dogId, number, date, dateSource, tod
     .bind(number, date, dateSource, today, reason, matched, JSON.stringify(flags), number, number, dogId);
 }
 
+// 離所用狗 ID 記（#560，v3_dog_departures）；同步只處理有編號的離所，沒編號的是只有名字的已出所狗卡，不動
+export const dropDeparture = (db, number) => db.prepare('DELETE FROM v3_dog_departures WHERE number=?').bind(number);
+
 // 主清單上的狗記離所：先讀舊編號、同欄的狗、性別與介紹，回傳「刪同編號的舊離所、加新離所」兩句，呼叫端同一批移走主清單那列。row：主清單複本那列
 export async function departureFromMainRow(db, { row, number, date, dateSource, today, reason, matched, flags }) {
   const former = (await db.prepare('SELECT number FROM v3_dog_numbers WHERE dog_id=? AND number<>? ORDER BY number').bind(row.dog_id, number).all()).results.map(r => r.number);
@@ -31,7 +34,7 @@ export async function departureFromMainRow(db, { row, number, date, dateSource, 
   // 性別在 v3_dogs、入所介紹在 v3_intros（#250）；主清單不再存這兩欄（#557）
   const extra = await db.prepare('SELECT d.sex, i.intro FROM v3_dogs d LEFT JOIN v3_intros i USING(dog_id) WHERE d.dog_id=?').bind(row.dog_id).first();
   return [
-    db.prepare('DELETE FROM v3_dog_departures WHERE number=?').bind(number),
+    dropDeparture(db, number),
     db.prepare(`${INSERT_DEPARTURE}
       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`).bind(row.dog_id, number, row.name, date, dateSource, today,
       reason, matched || '', JSON.stringify(flags || []), number, row.name, row.cage, row.walked_date, row.note, extra?.sex || '', extra?.intro || '',

@@ -10,7 +10,7 @@ import { guardedDogBatch } from './dog-edit.js';
 //   消失照同一套候選規則確認，確認後暫住結束。在所資料包照舊送出這一列，網站合到那隻狗（public/js/app.js 的 mergeTempCages）。
 //   確認時與之後同籠新建狗時，跟可能是同一隻的狗配成一組給管理者決定（#774，dog-pairs.js）。
 // - 同籠自動合併（#773，ADR 0025）：要新建狗時，同一個籠位剛好只有一個不在表上、非暫住的列，就是同一隻：照常建新狗，
-//   再由合併模組的系統入口把那一列移出主清單、併到新狗（修改紀錄「系統自動合併」，可以取消合併）。見 sameCageCandidate。
+//   再由合併模組的系統入口把那一列移出主清單、併到新狗（修改紀錄「系統自動合併」，可以取消合併）。候選怎麼找見 main-row.js。
 // 指紋只是「上次收過哪一版」，存在 v3_sync_state 一列 JSON；遺失只會讓下一次掃描多送幾列，不影響資料。
 // - 溜狗欄（日期、誰遛的）只更新主清單複本；有變就先當成一筆觀測值交給今日溜狗紀錄 module，溜狗紀錄、溜狗修改紀錄都由 module 寫（#747）。
 import { splitNames } from './sheet-read.js';
@@ -22,7 +22,8 @@ import { linkIdentityName } from './identity.js';
 import { todayWalks } from './today-walks/index.js';
 import { goneWrites, newDogPairs } from './dog-pairs.js';
 import { autoMergeDogs } from './dog-merge.js';
-import { pendingDog, pendingDepartureWrite, departureFromMainRow } from './dog-standing.js';
+import { pendingDog, pendingDepartureWrite, departureFromMainRow, dropDeparture } from './dog-standing.js';
+import { identifyRow, rowKey, findMain } from './main-row.js';
 
 // 每列 3–4 次 D1 往返；溜狗欄有變另外交給今日溜狗紀錄比對（改表通知通常先到，這裡比對到一樣只多 1 次往返；
 // 狗清單先到時比對收下約 10 次往返，超過每次呼叫 50 次查詢的那幾列 D1 失敗、不 ack，GAS 補送時前面收過的就一樣了）
@@ -36,7 +37,6 @@ export const MISSING_MAX = 10;
 const YMD = /^\d{4}-\d{2}-\d{2}$/;
 
 const dogKey = dog => dog.id || `名:${dog.name}`;
-const rowKey = m => `main:${m.number || `名:${m.name}`}`;
 // 「資料更新」時間（ADR 0014 的 synced_at）：台灣時間，格式同舊同步
 const syncedAt = now => `${new Date(now + 8 * 3600000).toISOString().slice(0, 19)}+08:00`;
 export function unitKey(row) {
@@ -51,17 +51,6 @@ const state = async (db, key) => (await db.prepare('SELECT value FROM v3_sync_st
 const putState = (db, key, value) => db.prepare('INSERT INTO v3_sync_state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(key, value);
 const readFp = async db => { try { return JSON.parse(await state(db, FP_KEY) || '{}'); } catch { return {}; } };
 const sameList = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
-const findMain = (list, dog) => list.find(m => (dog.id ? m.number === dog.id : m.number === '' && m.name === dog.name));
-// 暫住判斷（#772）：沒編號、犬名整個用括號包起來（半形全形混用都算）、括號裡去掉空白後跟主清單上一隻有編號的狗同名。
-// 有編號的括號列一律是新狗。回傳那隻狗在主清單複本的列，不是暫住列回 null（migrations/0021 上線轉換用同一套判斷）
-const STAY_NAME = /^[(（](.+)[)）]$/;
-const bare = name => name.replace(/\s/g, '');
-export function stayTarget(dog, list) {
-  const inner = !dog.id && STAY_NAME.exec(dog.name);
-  return inner ? list.find(m => m.number && bare(m.name) === bare(inner[1])) || null : null;
-}
-// 括號暫用名（#773）：沒編號時不拿溜狗紀錄的名字找回舊狗
-const bracketed = name => STAY_NAME.test(name);
 const newId = () => [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
 
 // 「誰遛的」→ 代號
@@ -91,56 +80,33 @@ async function handOverWalk(env, db, dog, current) {
   if (!result.ok && !result.ack) throw new Error(result.error);
 }
 const dropMainRow = (db, rowIndex) => [db.prepare('DELETE FROM v3_sheet_main WHERE row_index=?').bind(rowIndex)];
-// 離所用狗 ID 記（#560，v3_dog_departures）；同步只處理有編號的離所，沒編號的是只有名字的已出所狗卡，不動
-const dropDeparture = (db, number) => db.prepare('DELETE FROM v3_dog_departures WHERE number=?').bind(number);
 
-// 同籠自動合併的候選（#773）：這個籠位不在表上（present 沒有）、非暫住的列剛好一隻才算；超過一隻或籠位不同就不猜。
-// 暫住列存在暫住紀錄、不在主清單複本；複本上還有上線轉換前建成狗的舊暫住列，用 stayTarget 排除。
-// present：GAS 讀表那一刻主清單的全部單位 key；沒送（舊版小程式）或看起來像讀錯表時是 null，不找。
-// departing：這次一起送來的已出所編號。GAS 先送主清單的列，搬到已出所的狗這時還在主清單複本、不在表上，不能被當成候選併掉
-function sameCageCandidate(list, cage, { present, departing }) {
-  if (!present) return null;
-  const found = list.filter(m => m.cage === cage && !present.has(rowKey(m)) && !departing.has(m.number) && !stayTarget({ id: m.number, name: m.name }, list));
-  return found.length === 1 ? found[0] : null;
-}
-
-// 搬籠清舊列常先清編號、再清名字：中間那幾秒是同名、同備註、沒編號的列（2026-10-30 皮蛋舊A13，ADR 0025）。
-// 同名同備註、有編號的那隻還在表上（present 有），這列就是牠搬走留下的，不另建一隻沒照片的狗。
-// 有編號那列不在表上是清掉編號再打回（#773），照常建狗、同籠自動合併；備註空白不判斷，同名新狗照樣建
-function leftBehind(dog, note, list, present) {
-  if (dog.id || !note || !present) return false;
-  return list.some(m => m.number && m.name === dog.name && m.note === note && present.has(rowKey(m)));
-}
 // applyMain 不收的列：照樣 ack，但不記指紋，保險掃描下次再送來重新判斷（有編號那隻離開表上或備註改了，就照一般規則建狗）
 const HELD = 'held';
 
+// 這列是哪隻狗由主清單列認狗（main-row.js）判斷，這裡照判斷結果寫入。
 // merge：這次請求的自動合併狀態 { present, departing, done, waiting }（見 syncDogList）
 async function applyMain(db, row, list, stays, env, fp, now, merge) {
   const dog = cleanDog(row.dog), cage = text(row.cage), note = text(row.note).replace(/\r\n?/g, '\n');
-  // 犬隻資料列一定有犬名和籠位；表尾提示文字不算狗（同 parseMainList）
-  if (!dog.name || !cage || dog.name === '犬名') return false;
-  // 已經是暫住紀錄的列照舊當暫住（那隻狗之後離開主清單也是）。上線轉換前就建成狗的舊暫住列（複本上有、沒有暫住紀錄）照一般列處理；
-  // 兩邊都有（migration 0021 套完、新程式部署前，舊程式又建了一隻）就移出主清單複本，同一個 key 不送兩份，那隻假狗變待核對
-  const stay = !dog.id && stays.find(s => s.name === dog.name);
-  const legacy = findMain(list, dog);
-  const target = stay ? null : stayTarget(dog, list);
-  if (stay && legacy) { await db.batch(dropMainRow(db, legacy.row_index)); list.splice(list.indexOf(legacy), 1); }
-  if (stay || (target && !legacy)) return await applyStay(db, { name: dog.name, cage, note }, stays, target) || !!(stay && legacy);
-  if (!legacy && leftBehind(dog, note, list, merge?.present)) return HELD;
+  const identified = await identifyRow(db, { dog, cage, note }, { list, stays, merge });
+  if (identified.kind === 'skip') return false;
+  if (identified.kind === 'stay') {
+    const { target, dropLegacy } = identified;
+    if (dropLegacy) { await db.batch(dropMainRow(db, dropLegacy.row_index)); list.splice(list.indexOf(dropLegacy), 1); }
+    return await applyStay(db, { name: dog.name, cage, note }, stays, target) || !!dropLegacy;
+  }
+  if (identified.kind === 'held') return HELD;
+  if (identified.kind === 'wait') { merge.waiting.add(identified.candidate.dog_id); throw new Error('這次已經自動合併過一隻，下一次再處理'); }
   const date = YMD.test(text(row.date)) ? text(row.date) : null;
   const { codes, keyed } = await walkersOf(row.walker, env, db);
-  let old = findMain(list, dog);
+  const old = identified.kind === 'listed' ? identified.row : null;
   const out = [];
   let returnedLog = null, listed = { conditions: [], statements: [] };
-  let expected=null,targetDogId=null,candidate=null;
-  // 新增狗常先打名字、後補編號：主清單上同名沒編號的那隻就是牠，補上編號，不另建一隻（2026-10-24 驗收時多出一隻沒編號的 TEST）
-  const unnumbered = !old && dog.id && list.find(m => m.number === '' && m.name === dog.name);
-  // 編號已經是這隻的（清掉編號又打回，中間被同籠自動合併併回來，#773）也一樣，只是不再記一次編號
-  const owner = unnumbered && await db.prepare('SELECT dog_id FROM v3_dog_numbers WHERE number=?').bind(dog.id).first('dog_id');
-  if (unnumbered && (!owner || owner === unnumbered.dog_id)) {
-    old = unnumbered;
+  let expected=null,targetDogId=null;
+  const candidate = identified.kind === 'new' ? identified.candidate : null;
+  if (identified.fillNumber) {
     out.push(db.prepare('UPDATE v3_sheet_main SET number=? WHERE row_index=?').bind(dog.id, old.row_index),
-      ...(owner ? [] : [db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, old.dog_id)]),
+      ...(identified.numberOwned ? [] : [db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, old.dog_id)]),
       ...todayWalks({ ...env, DB: db }).numbered(old.dog_id, dog.id));
     old.number = dog.id;
     delete fp[`main:名:${dog.name}`];
@@ -157,24 +123,18 @@ async function applyMain(db, row, list, stays, env, fp, now, merge) {
     // 同一次才補上編號的狗，主清單複本還找不到這個編號、交不了觀測值，照新建的狗處理（那天還沒有才寫）
     const current = { date: date || '', walker: next.walker };
     if (changed.includes('walked_date') || (keyed ? codesChanged : changed.includes('walker'))) {
-      if (unnumbered === old) listed = await todayWalks({ ...env, DB: db }).listed(old.dog_id, dog, current);
+      if (identified.fillNumber) listed = await todayWalks({ ...env, DB: db }).listed(old.dog_id, dog, current);
       else await handOverWalk(env, db, dog, current);
     }
     Object.assign(old, next);
   } else {
-    // 沒編號的括號暫用名不拿溜狗紀錄的名字找回舊狗：顏色暫用名會重複用，下一隻 `(乳白)` 不是上一隻（#773）
-    const identified=dog.id?await db.prepare('SELECT n.dog_id,s.revision FROM v3_dog_numbers n JOIN v3_dog_edit_state s USING(dog_id) WHERE number=?').bind(dog.id).first():bracketed(dog.name)?null:await db.prepare("SELECT w.dog_id,s.revision FROM v3_walks w JOIN v3_dog_edit_state s USING(dog_id) WHERE dog_number='' AND dog_name=? LIMIT 1").bind(dog.name).first();
-    let dogId=identified?.dog_id;expected=identified;
-    let returned = null;
-    if (!dogId && dog.id) returned = await returnedDog(db, dog, list);
+    let dogId=identified.dog?.dog_id;expected=identified.dog || null;
+    const returned = identified.kind === 'returned' ? identified.dog : null;
     if (returned) {
       dogId = returned.dog_id;expected=returned;
       returnedLog = { editor: { name: '試算表（自動認回所）', code: '' }, kind: 'former', dogId, dogNumber: dog.id, before: { number: returned.number }, after: { number: dog.id, formerNumber: returned.number } };
       out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
     } else if (!dogId) {
-      candidate = merge && sameCageCandidate(list, cage, merge);
-      // 一次請求只自動合併一隻（每次呼叫 50 次查詢）；第二隻不建狗、不 ack，GAS 補送時再來，候選這次也先不確認
-      if (candidate && merge.done) { merge.waiting.add(candidate.dog_id); throw new Error('這次已經自動合併過一隻，下一次再處理'); }
       dogId = newId();
       out.push(db.prepare('INSERT INTO v3_dogs(dog_id,name) VALUES(?,?)').bind(dogId, dog.name));
       if (dog.id) out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
@@ -229,14 +189,6 @@ async function applyStay(db, next, stays, target) {
     ...editLogWrites(db, { at: new Date().toISOString(), name: '試算表', kind: 'stay-start', dogId: item.dog_id, number: target.number, before: null, after: { cage: item.cage }, source: 'sheet' })]);
   stays.push(item);
   return true;
-}
-
-// 狗回所會拿新編號，沒人會在網站上連舊編號（K 2026-10-24）：離所紀錄裡剛好一筆同名、主清單上沒別的同名，就是同一隻。
-// 認錯可在網站「舊編號」拆開（編輯紀錄記為系統自動）。同名多筆不猜，當新狗。
-async function returnedDog(db, dog, list) {
-  if (list.some(m => m.name === dog.name)) return null;
-  const found = (await db.prepare("SELECT d.number,d.dog_id,s.revision FROM v3_dog_departures d JOIN v3_dog_edit_state s USING(dog_id) WHERE name=? AND number<>'' LIMIT 2").bind(dog.name).all()).results;
-  return found.length === 1 ? found[0] : null;
 }
 
 async function applyDeparted(db, row, list, now, fp) {

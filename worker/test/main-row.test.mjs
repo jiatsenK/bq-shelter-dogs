@@ -113,7 +113,8 @@ test('#803 認得的狗：照編號，或沒編號照溜狗紀錄的名字；括
   const { db, known, walked } = await database(t);
   await known('d1', '小白', '9001');
   const byNumber = await identify(db, row('9001', '小白'));
-  assert.deepEqual([byNumber.kind, byNumber.dog.dog_id, byNumber.dog.revision], ['known', 'd1', 1]);
+  const revision = await db.prepare("SELECT revision FROM v3_dog_edit_state WHERE dog_id='d1'").first('revision');
+  assert.deepEqual([byNumber.kind, byNumber.dog.dog_id, byNumber.dog.revision], ['known', 'd1', revision]);
   await walked('d2', '阿福');
   await walked('d3', '(乳白)');
   const byWalk = await identify(db, row('', '阿福'));
