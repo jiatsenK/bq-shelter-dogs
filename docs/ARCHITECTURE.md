@@ -269,7 +269,7 @@ flowchart TB
 - 暫住列（#772，ADR 0025）：沒編號、犬名用括號包起來、括號裡是主清單上一隻有編號的狗（例「(皮蛋）」），不建狗，存成暫住紀錄 `v3_sheet_stays`（哪一隻、暫住哪一籠），修改紀錄記暫住開始。在所資料包照舊把這一列接在狗清單後面送出，志工網站合到那隻狗。暫住列消失照上一點的候選規則確認，確認後刪掉暫住紀錄、記暫住結束（`worker/src/dog-list.js` 的 `applyStay`、`reconcileMissing`）。
 - 搬籠清舊列（ADR 0025）：沒編號的列，犬名和備註（不是空白）都跟主清單上一隻有編號的狗相同，而且有編號那列這次還在表上，是搬籠時舊列先清編號的中間狀態，不建狗、不寫資料，也不記指紋，保險掃描下次再判斷（`worker/src/dog-list.js` 的 `leftBehind`）。
 - 可能是同一隻（#774）：確認的同一批記下那隻狗的籠位（`v3_sheet_gone`），同籠有新出現的狗（一小時前到確認之間新建的列）、或同籠同名的狗還在表上，就記一組配對（`v3_dog_pairs`）；確認後 7 天內同籠新建狗也配對。管理網站資料頁待核對的狗名下按「合併」（現有合併狗）或「不是同一隻」，按過的那組不再建立（`worker/src/dog-pairs.js`）。
-- 已出所那列晚到（ADR 0026）：主清單那列已經確認消失才收到已出所那列（先複製到已出所再刪主清單那列時，Apps Script 那時不送已出所那列），用編號找到待核對的狗照樣記離所。待核對的狗管理者也可以在管理網站按「記成已出所」（`worker/src/dog-list.js` 的 `applyDeparted`、`worker/src/dog-depart.js`）。
+- 已出所那列晚到（ADR 0026）：主清單那列已經確認消失才收到已出所那列（先複製到已出所再刪主清單那列時，Apps Script 那時不送已出所那列），用編號找到待核對的狗照樣記離所。待核對的狗管理者也可以在管理網站按「記成已出所」（`worker/src/dog-list.js` 的 `applyDeparted`、`worker/src/dog-depart.js`，兩邊的寫法都在 `worker/src/dog-standing.js`）。
 - 保險掃描送指紋前在 script lock 內核對表上變動記號，讀表後有人改過就整次不送，剛新增的列不會被舊指紋當成消失。D1 有、試算表沒有的單位只回給 Apps Script 記在執行紀錄；主清單消失的列由上面的候選處理，管理網站看「可能是同一隻」（`worker/src/dog-list.js` 的 `scanDogList`）。
 
 ## 元件｜志工溜狗表｜程式架構
@@ -325,6 +325,8 @@ flowchart LR
   aentry -->|改狗、照片、合併| dogdata
   aentry -->|停住的寫回| walk
   aquery -->|活動、排程紀錄| settings
+  aquery -->|狗的狀態、顯示編號| dogdata
+  settings -->|顯示編號| dogdata
 
   class vfront,afront ui
   class entry,walk,doglist,packs,sheetcall,identity,aentry,aquery,settings,dogdata,gas code
@@ -343,7 +345,7 @@ flowchart LR
 - 志工網站框內（今日溜狗紀錄在共用框，管理網站也讀它的停住清單）：狗清單同步 → 今日溜狗紀錄（`worker/src/dog-list.js:22`；溜狗欄有變先交觀測值，溜狗紀錄只由今日溜狗紀錄寫，#747）；今日溜狗紀錄 → 試算表呼叫（`worker/src/today-walks/index.js:35-46`，呼叫進入點交進來的 sheet；沒交時預設 callSheet，`worker/src/today-walks/index.js:8`、`worker/src/today-walks/index.js:23`）；今日溜狗紀錄 → 志工身分（`worker/src/today-walks/accept.js:3`）；狗清單同步 → 志工身分（`worker/src/dog-list.js:17`）；讀取打包 → 志工身分（`worker/src/compact.js:1`）。
 - 試算表呼叫可替換（#748）：進入點用 `createWorker({ sheet })` 建立，Cloudflare 用的那一份就是 callSheet（`worker/src/index.js:959-964`）；同一個 sheet 交給網站登記、排程的今日溜狗紀錄，也拿來加備註、異動紀錄（`worker/src/index.js:552`、`worker/src/index.js:572`、`worker/src/index.js:772`）；寫回端點用的今日溜狗紀錄不碰試算表，沒交 sheet（`worker/src/index.js:858`）。
 - 測試把試算表呼叫換成 `worker/test/apps-script.mjs`：vm 載入真的 `apps-script/sheet-write.gs`，小程式的 UrlFetchApp 接回同一個 Worker、同一個 D1（`worker/test/apps-script.mjs:39`、`worker/test/apps-script.mjs:108`、`worker/test/apps-script.mjs:153`、`worker/test/apps-script.mjs:201`），所以溜狗測試不再手寫 GAS 寫回協定，也不換 `globalThis.fetch`。
-- 往共用與外部：狗清單同步 → 狗資料與照片（`worker/src/dog-list.js:1`；記離所走狗的狀態 module，`worker/src/dog-list.js:25`）；讀取打包 → 狗資料與照片（`worker/src/compact.js:2`）；試算表呼叫 → Apps Script（`worker/src/sheet-write.js:33`）；狗資料與照片 → R2（`worker/src/r2.js:36`）。
+- 往共用與外部：狗清單同步 → 狗資料與照片（`worker/src/dog-list.js:1`；記離所走狗的狀態 module，`worker/src/dog-list.js:25`）；設定・活動・分享 → 狗資料與照片（顯示編號，`worker/src/activities.js:6`）；管理查詢 → 狗資料與照片（狀態、顯示編號，`worker/src/admin/dogs.js:1`）；讀取打包 → 狗資料與照片（`worker/src/compact.js:2`）；試算表呼叫 → Apps Script（`worker/src/sheet-write.js:33`）；狗資料與照片 → R2（`worker/src/r2.js:36`）。
 - 管理網站：管理入口 → 管理查詢（`worker/src/admin/index.js:8, 10-11, 13-14`）；管理入口 → Cloudflare Access（`worker/src/admin/access.js:28`）；管理入口 → 設定・活動・分享（`worker/src/admin/index.js:6, 9, 15`）；管理入口 → 狗資料與照片（`worker/src/admin/index.js:1-5, 16`）；管理入口 → 今日溜狗紀錄（`worker/src/admin/index.js:12`、`worker/src/admin/index.js:125`）；管理查詢 → 設定・活動・分享（`worker/src/admin/activities.js:3`、`worker/src/admin/checks.js:1`）。
 - D1 的線省略不畫：進入點、今日溜狗紀錄、狗清單同步、讀取打包、志工身分、設定・活動・分享、狗資料與照片、管理查詢都直接讀寫 D1（例如 `worker/src/today-walks/shared.js:15`、`worker/src/packs.js:69`、`worker/src/identity.js:7`、`worker/src/feature-settings.js:13`、`worker/src/dog-edit.js:11`、`worker/src/admin/checks.js:9`）。
 - 修改紀錄 editlog.js 也省略不畫：寫資料的模組都匯入它，紀錄跟資料同一批寫進 D1（`worker/src/index.js:18`、`worker/src/today-walks/version.js:4`、`worker/src/dog-list.js:17`、`worker/src/identity.js:1`、`worker/src/dog-edit.js:2`、`worker/src/admin/edits.js:5`、`worker/src/admin/activities.js:5`）。

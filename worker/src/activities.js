@@ -71,7 +71,7 @@ export async function resolveDogs(db, dogs) {
   return out;
 }
 
-// 狗現在的編號：最新的那個（編號前 8 碼是入所日，主清單上的就是最新的）；照 v3_numbers_dog 索引找，沒有編號是 ''
+// 狗的顯示編號（ADR 0027）；沒有編號是 ''
 const DOG_ROWS = `SELECT a.activity_id, a.position, a.dog_id, COALESCE(d.name, a.name) AS name,
   COALESCE(${shownNumber('a.dog_id')}, '') AS number
   FROM v3_activity_dogs a LEFT JOIN v3_dogs d USING(dog_id)`;
