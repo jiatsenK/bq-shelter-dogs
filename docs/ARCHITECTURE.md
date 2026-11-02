@@ -263,7 +263,7 @@ flowchart TB
 - 編輯觸發只處理主清單、已出所、常遛狗群三個分頁，改到的單位記進待通知再立刻送（`apps-script/sheet-write.gs:317-343`）。今日溜狗走 /rows（`apps-script/sheet-write.gs:357-381`），狗清單（主清單、已出所、常遛狗群、異動紀錄）走 /dog-list（`apps-script/sheet-write.gs:457-483`）。
 - 待通知分別存在 Apps Script 指令碼屬性 WALK_EDITS_PENDING、DOG_LIST_PENDING，收到 ACK 才清；送不出去就留著，每 10 分鐘補送（`apps-script/sheet-write.gs:278`、`apps-script/sheet-write.gs:441`；`apps-script/sheet-write.gs:311-313`）。
 - 志工網站收 /rows、/dog-list、/dog-list-scan（`worker/src/index.js:848-873`）；/rows 要 `D1_WALK_NOTIFY` 開著才收進 D1，否則回 ack false 讓 Apps Script 留著（`worker/src/index.js:861-872`；`wrangler.jsonc:32-33`）。
-- 狗清單保險掃描：每天約 09:43、13:53、23:53 狗清單保險掃描，先送全表指紋，志工網站回不一樣的單位，再分批補送（`apps-script/sheet-write.gs:498-523`；`worker/src/dog-list.js:390-415`）。
+- 狗清單保險掃描：每天約 09:43、13:53、23:53 狗清單保險掃描，先送全表指紋，志工網站回不一樣的單位，再分批補送（`apps-script/sheet-write.gs:498-523`；`worker/src/dog-list.js:389-414`）。
 - 程式寫表不會觸發編輯觸發：網站新增的備註、異動紀錄，要等下一次保險掃描才進 D1，最久約 10 小時（`apps-script/sheet-write.gs:275`）。
 - 列消失（#771，ADR 0025）：送狗清單、保險掃描送指紋都附上表上主清單的全部 key。主清單複本有、表上沒有的列先標成候選（`v3_sheet_main.missing_at`），又出現就取消；隔 10 分鐘以上再收到清單還是不見才確認，移出主清單，狗的資料不刪、管理網站顯示待核對。志工網站回「還有候選」時，Apps Script 的 10 分鐘補送沒有待送也再送一次清單（指令碼屬性 DOG_LIST_CANDIDATES）。一次請求最多處理 10 個；表上一次少一半以上的狗不當成消失（`worker/src/dog-list.js` 的 `reconcileMissing`；`apps-script/sheet-write.gs` 的 `flushDogList`、`dogListScan`）。
 - 暫住列（#772，ADR 0025）：沒編號、犬名用括號包起來、括號裡是主清單上一隻有編號的狗（例「(皮蛋）」），不建狗，存成暫住紀錄 `v3_sheet_stays`（哪一隻、暫住哪一籠），修改紀錄記暫住開始。在所資料包照舊把這一列接在狗清單後面送出，志工網站合到那隻狗。暫住列消失照上一點的候選規則確認，確認後刪掉暫住紀錄、記暫住結束（`worker/src/dog-list.js` 的 `applyStay`、`reconcileMissing`）。
