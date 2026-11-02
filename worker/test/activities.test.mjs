@@ -181,3 +181,12 @@ test('寫入量：修改只跟這場的狗數有關，不隨其他場次變多',
   for (let i = 0; i < 40; i++) await call(env, 'POST', '/activities', { editor: ME, date: '2025-01-01', kind: 'adoption', dogs: [{ name: `狗${i}` }] }, `9.9.9.${i}`);
   assert.equal(await writesOfUpdate(), small);
 });
+
+// ADR 0027：在所的狗顯示主清單的編號，不是最大的那個
+test('#802 活動名單：在所的狗有更大的編號，還是顯示主清單的編號', async () => {
+  const env = await makeEnv();
+  const dogId = await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='2024032902'").first('dog_id');
+  await env.DB.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind('9999999999', dogId).run();
+  await call(env, 'POST', '/activities', { editor: ME, date: '2026-10-11', kind: 'adoption', dogs: [{ number: '2024032902' }] });
+  assert.equal((await list(env))[0].dogs[0].number, '2024032902');
+});

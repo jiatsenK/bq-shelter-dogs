@@ -43,8 +43,8 @@ test('確認消失之後才收到已出所那列：照樣記離所，待核對�
   const white = await statusOf(manage, '小白');
   assert.equal(white.status, 'departed');
   assert.deepEqual({ date: white.departure.date, reason: white.departure.reason }, { date: '2026-10-20', reason: 'adopt' });
-  const row = await env.DB.prepare("SELECT last_cage,last_name,date_source,former_json FROM v3_dog_departures WHERE number='9002'").first();
-  assert.deepEqual({ ...row }, { last_cage: 'A02', last_name: '小白', date_source: 'note', former_json: '[]' }, '籠位從確認消失時記的抄');
+  const row = await env.DB.prepare("SELECT last_cage,last_name,date_source,former_json,groups_json,last_walked_date FROM v3_dog_departures WHERE number='9002'").first();
+  assert.deepEqual({ ...row }, { last_cage: 'A02', last_name: '小白', date_source: 'note', former_json: '[]', groups_json: '[]', last_walked_date: '2026-10-28' }, '籠位從確認消失時記的抄');
   // 在主清單上的狗照舊記離所、從主清單移走
   await departed(env, { id: '9001', name: '測試狗' });
   assert.equal((await statusOf(manage, '測試狗')).status, 'departed');

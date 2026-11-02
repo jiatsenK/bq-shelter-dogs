@@ -71,12 +71,13 @@ test('#501 出現在「已出所」：記離所（原因照共用規則）、從
   const env = await setup();
   worker.testing.resetState();
   try {
+    await env.DB.prepare('INSERT INTO v3_sheet_group_columns(column_index,names) VALUES(0,?)').bind(JSON.stringify(['測試狗','隔壁狗'])).run();
     await send(env, [main({ cage:'A01', note:'親人' })]);
     const results = await send(env, [{ sheet:'departed', hash:'d1', dog:{ id:'9001', name:'測試狗' }, texts:['9001', '測試狗', '2026/10/20被認養'], dates:[] }]);
     assert.deepEqual(results.map(r => r.ack), [true]);
     assert.deepEqual(await mainRows(env), []);
-    const d = await env.DB.prepare("SELECT reason,matched,departed_date,date_source,last_cage,last_note FROM v3_dog_departures WHERE number='9001'").first();
-    assert.deepEqual({ ...d }, { reason:'adopt', matched:'被認養', departed_date:'2026-10-20', date_source:'note', last_cage:'A01', last_note:'親人' });
+    const d = await env.DB.prepare("SELECT reason,matched,departed_date,date_source,last_cage,last_note,groups_json,last_walked_date FROM v3_dog_departures WHERE number='9001'").first();
+    assert.deepEqual({ ...d }, { reason:'adopt', matched:'被認養', departed_date:'2026-10-20', date_source:'note', last_cage:'A01', last_note:'親人', groups_json:'["隔壁狗"]', last_walked_date:'2026-10-01' });
     // 沒編號的狗記不了離所，不從主清單移走
     await send(env, [main({ dog:{ id:'', name:'無號' }, cage:'Z1' }), { sheet:'departed', hash:'d2', dog:{ id:'', name:'無號' }, texts:['無號', '被認養'], dates:[] }]);
     assert.deepEqual((await mainRows(env)).map(r => r.name), ['無號']);

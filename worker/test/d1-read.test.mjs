@@ -237,10 +237,12 @@ test('狀態頁：顯示新資料庫有沒有接上、狗和主清單幾筆；�
 // #260 網站不再讀 data/walks.json、data/departures.json、data/history/
 test('GET /api/walks：形狀跟 walks.json 一樣，帶開始記錄日；沒記人的舊紀錄沒有 walkers', async () => {
   const DB = await seededDb();
+  // /walks 只回近期：日期跟著今天走，寫死日期過一陣子就超出範圍
+  const daysAgo = n => new Date(Date.now() + 8 * 3600e3 - n * 86400e3).toISOString().slice(0, 10);
   const walks = [
-    { id: '2026051203', name: '圓仔', date: '2026-09-01' },
-    { id: '2025022703', name: '滿滿', date: '2026-10-14', walkers: ['e9c69473e76f', 'aaaaaaaaaaaa'] },
-    { id: '', name: '沒編號', date: '2026-10-15', walkers: ['da53fbdda293'] },
+    { id: '2026051203', name: '圓仔', date: daysAgo(3) },
+    { id: '2025022703', name: '滿滿', date: daysAgo(2), walkers: ['e9c69473e76f', 'aaaaaaaaaaaa'] },
+    { id: '', name: '沒編號', date: daysAgo(1), walkers: ['da53fbdda293'] },
   ];
   await importCompactProfiles(DB, { walks: { version: 1, walks } });
   const body = await (await get('/walks', { DB })).json();

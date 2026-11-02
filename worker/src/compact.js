@@ -1,5 +1,6 @@
 import { identitiesForCodes } from './identity.js';
 import { readStayTables } from './stays.js';
+import { shownNumber } from './dog-standing.js';
 // 精簡 D1（v3_ 表，#245／#247）：網站要的狗清單從這裡讀，形狀跟原本的 data/dogs.json 一樣。
 // 表結構見 db/compact-schema.sql
 
@@ -127,9 +128,7 @@ export async function saveFavorite(db, codes, dogId, on, date) {
 
 // 開卡讀回：每個代號 → { 編號: 開卡日 }。編號用主清單上現在的那個，已出所的狗用它最大的編號
 export async function openedBooks(db, codes) {
-  const sql = `SELECT COALESCE(
-      (SELECT m.number FROM v3_sheet_main m WHERE m.dog_id = c.dog_id AND m.number <> '' ORDER BY m.row_index LIMIT 1),
-      (SELECT MAX(n.number) FROM v3_dog_numbers n WHERE n.dog_id = c.dog_id)) AS id, c.opened_on
+  const sql = `SELECT ${shownNumber('c.dog_id')} AS id, c.opened_on
     FROM v3_volunteer_cards c WHERE c.volunteer_id = ?`;
   const people = await Promise.all(codes.map(async code => (await identitiesForCodes(db, [code]))[0]));
   const rows = await db.batch(people.map(p => db.prepare(sql).bind(p.volunteerId)));
@@ -139,9 +138,7 @@ export async function openedBooks(db, codes) {
 }
 
 // 主清單上現在的編號優先，已出所的狗用最大的編號
-const NUMBER_OF = `COALESCE(
-  (SELECT m.number FROM v3_sheet_main m WHERE m.dog_id = t.dog_id AND m.number <> '' ORDER BY m.row_index LIMIT 1),
-  (SELECT MAX(n.number) FROM v3_dog_numbers n WHERE n.dog_id = t.dog_id))`;
+const NUMBER_OF = shownNumber('t.dog_id');
 
 // 休養設定（#250）：編號 → { until, reason }，跟原本的 data/rest.json 一樣（不含 updatedAt），依編號排。
 // scope（ADR 0014）：沒給是全部；'main' 是主清單上的狗；出所年份（departureYear）是那年離所、現在不在主清單上的狗

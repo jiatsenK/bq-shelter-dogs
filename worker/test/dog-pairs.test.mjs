@@ -176,3 +176,15 @@ test('#774 D1 不整張掃：配對的讀寫都走索引，等確認的配對只
   }
   assert.deepEqual([...scans], []);
 });
+
+// ADR 0027：配對修改紀錄寫顯示編號，不在主清單的狗是最大的編號（原本是最小的）
+test('#802 有兩個編號的待核對狗：同籠新建狗時，修改紀錄寫較大的編號', async t => {
+  const { env, gas, later } = await start(t);
+  const dogId = await env.DB.prepare("SELECT dog_id FROM v3_dog_numbers WHERE number='9002'").first('dog_id');
+  await env.DB.prepare("INSERT INTO v3_dog_numbers(number,dog_id) VALUES('9102',?)").bind(dogId).run();
+  await removeWhite(gas, later);
+  await gas.edit(4, { cage: 'A02', id: '9010', name: '阿白' });
+  const log = await env.DB.prepare("SELECT dog_number,before_json FROM v3_edit_log WHERE kind='pair' AND dog_id=?").bind(dogId).first();
+  assert.equal(log.dog_number, '9102');
+  assert.equal(JSON.parse(log.before_json).number, '9102');
+});

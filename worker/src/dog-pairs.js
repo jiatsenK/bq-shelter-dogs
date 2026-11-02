@@ -8,6 +8,7 @@ import { batchIf, isConflict } from './conditional-batch.js';
 import { editError } from './dog-edit.js';
 import { editLogWrites, SYSTEM_EDITOR } from './editlog.js';
 import { nameKey } from './departure-rules.js';
+import { pendingDog, shownNumber } from './dog-standing.js';
 
 // 先新增另一隻、才刪舊的那列（複製一列改好再刪舊的）：新的那隻在舊的第一次不見前一小時內加的也算「新出現」。
 // 再早加的多半是原本就同籠的狗
@@ -40,11 +41,10 @@ export function goneWrites(db, m, list, at) {
 
 // 同籠新建狗 dog（{ dog_id, name, number, cage }）時一起寫的句子：最近在這個籠位確認消失、還是待核對（狗還在、不在主清單、沒有離所紀錄）的狗。
 // 紀錄要寫進待核對那隻的名字，先讀一次 v3_sheet_gone（照籠位走索引，只有新建狗才讀；新狗一週幾隻）
-const STILL_GONE = `EXISTS(SELECT 1 FROM v3_dogs WHERE dog_id=g.dog_id) AND NOT EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=g.dog_id)
-  AND NOT EXISTS(SELECT 1 FROM v3_dog_departures WHERE dog_id=g.dog_id)`;
+const STILL_GONE = `EXISTS(SELECT 1 FROM v3_dogs WHERE dog_id=g.dog_id) AND ${pendingDog('g.dog_id')}`;
 export async function newDogPairs(db, dog, now) {
   const at = new Date(now).toISOString();
-  const { results = [] } = await db.prepare(`SELECT g.dog_id,g.cage,d.name,(SELECT MIN(number) FROM v3_dog_numbers WHERE dog_id=g.dog_id) AS number
+  const { results = [] } = await db.prepare(`SELECT g.dog_id,g.cage,d.name,${shownNumber('g.dog_id')} AS number
     FROM v3_sheet_gone g JOIN v3_dogs d ON d.dog_id=g.dog_id WHERE g.cage=? AND g.gone_at>=? AND g.dog_id<>? AND ${STILL_GONE}`)
     .bind(dog.cage, new Date(now - GONE_KEEP_MS).toISOString(), dog.dog_id).all();
   const still = `EXISTS(SELECT 1 FROM v3_sheet_gone g WHERE g.dog_id=? AND ${STILL_GONE})`;
@@ -62,8 +62,7 @@ export const mergedPairWrites = (db, targetId, sourceId, at) => [
 // 等確認的配對：待核對那隻還在、不在主清單、沒有離所紀錄，表上那隻還在主清單。一句、最新在上
 const PENDING = `FROM v3_dog_pairs p JOIN v3_dogs g ON g.dog_id=p.gone_dog_id
   JOIN v3_sheet_main m ON m.row_index=(SELECT MIN(row_index) FROM v3_sheet_main WHERE dog_id=p.dog_id)
-  WHERE p.status='pending' AND NOT EXISTS(SELECT 1 FROM v3_sheet_main WHERE dog_id=p.gone_dog_id)
-  AND NOT EXISTS(SELECT 1 FROM v3_dog_departures WHERE dog_id=p.gone_dog_id)`;
+  WHERE p.status='pending' AND ${pendingDog('p.gone_dog_id')}`;
 export async function readPairs(db) {
   const { results = [] } = await db.prepare(`SELECT p.gone_dog_id,p.dog_id,p.created_at,g.name AS gone_name,m.name,m.number,m.cage ${PENDING} ORDER BY p.created_at DESC,p.gone_dog_id,p.dog_id`).all();
   const pairs = results.map(r => ({ goneDogId: r.gone_dog_id, dogId: r.dog_id, createdAt: r.created_at, goneName: r.gone_name, name: r.name, number: r.number, cage: r.cage }));
