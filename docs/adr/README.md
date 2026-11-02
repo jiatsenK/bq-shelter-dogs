@@ -33,6 +33,7 @@
 | [0024](0024-volunteer-site-urls.md) | 志工網站的網址：每個分頁、資訊子頁、每隻狗都有自己的 hash | 現行 |
 | [0025](0025-sheet-rows-missing-candidates.md) | 試算表上消失的列先當候選，確認後移出主清單 | 部分或全部被 [0026](0026-pending-dogs-can-depart.md) 修訂，一起讀、以新的為準 |
 | [0026](0026-pending-dogs-can-depart.md) | 待核對的狗可以記成已出所 | 現行 |
+| [0027](0027-shown-number-rule.md) | 顯示編號的規則只有一份 | 現行 |
 
 ## 網站開關
 
