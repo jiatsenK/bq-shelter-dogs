@@ -100,6 +100,9 @@ async function runMyWalksTests() {
       searchQuery = '';
     });
     await check('#346 月曆翻到上個月 1 號以前才按年拿，網址帶那年版本號；拿回來併進月曆', async () => {
+      // 近期範圍跟著今天走：時間固定在 2026/10/1，假資料的 9 月才算近期
+      const realDate = Date;
+      window.Date = class extends realDate { constructor(...a) { super(...(a.length ? a : [2026, 9, 1, 10])); } static now() { return +new realDate(2026, 9, 1, 10); } };
       setup();
       walksData = { ...WALKS, years: { 2025: '4', 2026: '9.2026-09-26.1' } };
       render();
@@ -128,7 +131,7 @@ async function runMyWalksTests() {
       await tick(); await tick();
       eq([calls[1], heads()], [['2025', '4'], ['2025/12/30（二）']], '跨年拿前一年：');
       eq(nav()[0].disabled, true, '都拿過了，最早有紀錄就不能再翻：');
-      } finally { restoreApi(); walksData = WALKS; }
+      } finally { restoreApi(); walksData = WALKS; window.Date = realDate; }
     });
     await check('#58 點狗開原本的詳細資訊；搜尋只篩這頁', () => {
       setup();
