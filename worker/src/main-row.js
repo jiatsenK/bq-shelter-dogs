@@ -34,6 +34,7 @@ function leftBehind(dog, note, list, present) {
 
 // 狗回所會拿新編號，沒人會在網站上連舊編號（K 2026-10-24）：離所紀錄裡剛好一筆同名、主清單上沒別的同名，就是同一隻。
 // 認錯可在網站「舊編號」拆開（編輯紀錄記為系統自動）。同名多筆不猜，當新狗。
+// 這句沒有索引可用（#807）：只有表上出現認不得的新編號才跑
 async function returnedDog(db, dog, list) {
   if (list.some(m => m.name === dog.name)) return null;
   const found = (await db.prepare("SELECT d.number,d.dog_id,s.revision FROM v3_dog_departures d JOIN v3_dog_edit_state s USING(dog_id) WHERE name=? AND number<>'' LIMIT 2").bind(dog.name).all()).results;
@@ -52,16 +53,16 @@ async function returnedDog(db, dog, list) {
 // 9. 同籠有候選但這次已自動合併過，等下一次。
 // 10. 其餘是新狗，交回同籠候選或 null。
 export async function identifyRow(db, { dog, cage, note }, { list, stays, merge }) {
-  // 犬隻資料列一定有犬名和籠位；表尾提示文字不算狗（同 parseMainList）
+  // 犬隻資料列一定有犬名和籠位；表頭和表尾提示文字不算狗
   if (!dog.name || !cage || dog.name === '犬名') return { kind: 'skip' };
   // 已經是暫住紀錄的列照舊當暫住（那隻狗之後離開主清單也是）。上線轉換前就建成狗的舊暫住列（複本上有、沒有暫住紀錄）照一般列處理；
   // 兩邊都有（migration 0021 套完、新程式部署前，舊程式又建了一隻）就移出主清單複本，同一個 key 不送兩份，那隻假狗變待核對
-  const legacy = findMain(list, dog);
-  if (!dog.id && stays.find(s => s.name === dog.name)) return { kind: 'stay', target: null, dropLegacy: legacy || null };
+  const onCopy = findMain(list, dog);
+  if (!dog.id && stays.find(s => s.name === dog.name)) return { kind: 'stay', target: null, dropLegacy: onCopy || null };
   const target = stayTarget(dog, list);
-  if (target && !legacy) return { kind: 'stay', target, dropLegacy: null };
-  if (!legacy && leftBehind(dog, note, list, merge?.present)) return { kind: 'held' };
-  if (legacy) return { kind: 'listed', row: legacy, fillNumber: false, numberOwned: false };
+  if (target && !onCopy) return { kind: 'stay', target, dropLegacy: null };
+  if (!onCopy && leftBehind(dog, note, list, merge?.present)) return { kind: 'held' };
+  if (onCopy) return { kind: 'listed', row: onCopy, fillNumber: false, numberOwned: false };
   // 新增狗常先打名字、後補編號：主清單上同名沒編號的那隻就是牠，補上編號，不另建一隻（2026-10-24 驗收時多出一隻沒編號的 TEST）
   const unnumbered = dog.id && list.find(m => m.number === '' && m.name === dog.name);
   // 編號已經是這隻的（清掉編號又打回，中間被同籠自動合併併回來，#773）也一樣，只是不再記一次編號

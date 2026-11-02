@@ -131,7 +131,6 @@ async function applyMain(db, row, list, stays, env, fp, now, merge) {
     let dogId=identified.dog?.dog_id;expected=identified.dog || null;
     const returned = identified.kind === 'returned' ? identified.dog : null;
     if (returned) {
-      dogId = returned.dog_id;expected=returned;
       returnedLog = { editor: { name: '試算表（自動認回所）', code: '' }, kind: 'former', dogId, dogNumber: dog.id, before: { number: returned.number }, after: { number: dog.id, formerNumber: returned.number } };
       out.push(db.prepare('INSERT INTO v3_dog_numbers(number,dog_id) VALUES(?,?)').bind(dog.id, dogId));
     } else if (!dogId) {

@@ -2,15 +2,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { identifyRow } from '../src/main-row.js';
+import { identifyRow, rowKey } from '../src/main-row.js';
 import { fakeD1 } from './fakes.mjs';
 import { createCompactDatabase } from '../../scripts/compact-schema.mjs';
 
 // 主清單複本的一列
 const main = (dog_id, number, name, cage = 'Z9', note = '') => ({ row_index: Number(dog_id.slice(1)), dog_id, number, name, cage, note, revision: 1 });
-const key = m => `main:${m.number || `名:${m.name}`}`;
 // 這次請求的自動合併狀態（見 syncDogList）。present 預設表上有全部的 list
-const mergeOf = (list, extra = {}) => ({ present: new Set(list.map(key)), departing: new Set(), done: false, waiting: new Set(), ...extra });
+const mergeOf = (list, extra = {}) => ({ present: new Set(list.map(rowKey)), departing: new Set(), done: false, waiting: new Set(), ...extra });
 
 async function database(t) {
   const db = fakeD1();
@@ -45,6 +44,7 @@ test('#803 暫住：已有暫住紀錄的列照舊是暫住，那隻狗離開主
   const { db } = await database(t);
   const stay = { name: '(皮蛋)', dog_id: 'd1', cage: 'A01', note: '', missing_at: null };
   assert.deepEqual(await identify(db, row('', '(皮蛋)'), [], [stay]), { kind: 'stay', target: null, dropLegacy: null });
+  assert.deepEqual(await identify(db, row('', '(皮蛋)'), [main('d1', '9001', '皮蛋')], [stay]), { kind: 'stay', target: null, dropLegacy: null }, '那隻狗還在主清單也不再找一次');
 });
 
 test('#803 暫住：暫住紀錄和舊暫住列都有，舊列要移出主清單複本', async t => {
