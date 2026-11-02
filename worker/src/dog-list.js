@@ -29,6 +29,8 @@ import { identifyRow, rowKey, findMain } from './main-row.js';
 // 狗清單先到時比對收下約 10 次往返，超過每次呼叫 50 次查詢的那幾列 D1 失敗、不 ack，GAS 補送時前面收過的就一樣了）
 export const DOG_LIST_ROWS_MAX = 10;
 const FP_KEY = 'dog_list_fp';
+// 同一列連續失敗幾次（#809）：{ 單位 key: { count, error } }，異常通知（sync-alerts.js）讀；沒有失敗就沒有這一列
+export const SYNC_FAIL_KEY = 'dog_list_fail';
 // 候選第一次不見後至少隔這麼久，再收到清單還是不見才確認。GAS 一次執行最多 6 分鐘，所以確認用的一定是另一次執行讀的表；
 // 每 10 分鐘補送會在還有候選時再送一次清單，實際約 10～20 分鐘確認
 export const MISSING_CONFIRM_MS = 10 * 60000;
@@ -47,9 +49,10 @@ export function unitKey(row) {
 }
 const text = v => String(v ?? '').trim();
 const cleanDog = dog => ({ id: text(dog && dog.id), name: text(dog && dog.name) });
-const state = async (db, key) => (await db.prepare('SELECT value FROM v3_sync_state WHERE key=?').bind(key).first('value')) || '';
-const putState = (db, key, value) => db.prepare('INSERT INTO v3_sync_state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(key, value);
+export const state = async (db, key) => (await db.prepare('SELECT value FROM v3_sync_state WHERE key=?').bind(key).first('value')) || '';
+export const putState = (db, key, value) => db.prepare('INSERT INTO v3_sync_state(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value').bind(key, value);
 const readFp = async db => { try { return JSON.parse(await state(db, FP_KEY) || '{}'); } catch { return {}; } };
+const readFailures = async db => { try { return JSON.parse(await state(db, SYNC_FAIL_KEY) || '{}'); } catch { return {}; } };
 const sameList = (a, b) => a.length === b.length && a.every((v, i) => v === b[i]);
 const newId = () => [...crypto.getRandomValues(new Uint8Array(16))].map(b => b.toString(16).padStart(2, '0')).join('');
 
@@ -96,7 +99,7 @@ async function applyMain(db, row, list, stays, env, fp, now, merge) {
     return await applyStay(db, { name: dog.name, cage, note }, stays, target) || !!dropLegacy;
   }
   if (identified.kind === 'held') return HELD;
-  if (identified.kind === 'wait') { merge.waiting.add(identified.candidate.dog_id); throw new Error('這次已經自動合併過一隻，下一次再處理'); }
+  if (identified.kind === 'wait') { merge.waiting.add(identified.candidate.dog_id); throw Object.assign(new Error('這次已經自動合併過一隻，下一次再處理'), { retryLater: true }); }
   const date = YMD.test(text(row.date)) ? text(row.date) : null;
   const { codes, keyed } = await walkersOf(row.walker, env, db);
   const old = identified.kind === 'listed' ? identified.row : null;
@@ -329,6 +332,9 @@ export async function syncDogList(db, rows, mainKeys, env, now = Date.now()) {
   // 主清單約 300 列，每批讀一次換來逐列不必各查一次（每次呼叫 50 次查詢上限）
   let { list, stays } = await readSheetRows(db);
   const results = [];
+  // 同一列連續失敗記下來給異常通知（#809）；等下一次合併是正常流程，不算失敗
+  const failures = await readFailures(db);
+  const failuresBefore = JSON.stringify(failures);
   // 同籠自動合併（#773）：present＝表上主清單的全部 key；departing＝這次的已出所編號；done＝這次已經合併過一隻；waiting＝留給下一次的候選
   const present = Array.isArray(mainKeys) && mainKeys.length ? new Set(mainKeys) : null;
   const sheetRows = [...list, ...stays];
@@ -350,7 +356,9 @@ export async function syncDogList(db, rows, mainKeys, env, now = Date.now()) {
       const held = changed === HELD;
       if (typeof row.hash === 'string' && row.hash && !held) fp[key] = row.hash;
       results.push({ ok: true, ack: true, key, changed: !held && changed });
+      delete failures[key];
     } catch (error) {
+      if (!error.status && !error.retryLater) failures[key] = { count: (failures[key]?.count || 0) + 1, error: String(error.message).slice(0, 200) };
       results.push({ ok: false, ack: !!error.status, key, error: error.status ? error.message : '狗清單更新失敗，保留待處理' });
     }
   }
@@ -360,6 +368,8 @@ export async function syncDogList(db, rows, mainKeys, env, now = Date.now()) {
   const writes = [
     ...(JSON.stringify(fp) !== before ? [putState(db, FP_KEY, JSON.stringify(fp))] : []),
     ...(touched ? [putState(db, SYNCED_AT_KEY, syncedAt(now))] : []),
+    ...(JSON.stringify(failures) === failuresBefore ? [] : Object.keys(failures).length ? [putState(db, SYNC_FAIL_KEY, JSON.stringify(failures))]
+      : [db.prepare('DELETE FROM v3_sync_state WHERE key=?').bind(SYNC_FAIL_KEY)]),
   ];
   if (writes.length) await db.batch(writes).catch(e => console.warn('dog-list state:', e.message));
   return { results, candidates };

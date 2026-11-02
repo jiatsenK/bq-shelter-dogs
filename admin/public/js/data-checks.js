@@ -25,6 +25,7 @@ export const CRON_LABELS = {
   scan: { name: '保險掃描', every: '每天 09:23、13:23、23:23' },
   trash: { name: '照片垃圾桶', every: '每月 1 日 09:23' },
   editlog: { name: '修改紀錄清理', every: '每天 09:23（清 14 天前的）' },
+  alert: { name: '異常通知', every: '每天 09:23、13:23、23:23（沒設 Telegram 不跑）' },
 };
 
 export function parseCronStatus(data) {
@@ -37,6 +38,7 @@ export function parseCronStatus(data) {
 
 // 每件工作一行：最後一次跑完、最近失敗（比最後跑完還新才算現在有問題）、是否過期
 export function cronStatus(j) {
+  if (j.state === 'never' && j.job === 'alert') return { last: '還沒有紀錄', problem: '沒設 Telegram 就不會跑', bad: false };
   if (j.state === 'never') return { last: '還沒有紀錄', problem: j.job === 'trash' ? '每月 1 日才跑，第一次跑完後才會出現' : '志工網站更新後下一次排程跑完才會出現', bad: j.job !== 'trash' };
   if (j.state === 'error') return { last: '紀錄讀不懂', problem: '不能當成有在跑；請聯絡維護者', bad: true };
   const failing = j.failAt && (!j.okAt || Date.parse(j.failAt) > Date.parse(j.okAt));

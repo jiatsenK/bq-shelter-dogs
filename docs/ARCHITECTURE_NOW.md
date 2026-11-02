@@ -97,6 +97,8 @@ Cloudflare 排程上限算整個帳號，免費方案 5 個（稽核第 5 項，
 | `D1_WALK_NOTIFY` | `1` | 人工改表的今日溜狗是否寫進 D1；沒設時 GAS 會一直補送失敗 |
 | `WALK_RETRY_ENABLED` | `true` | 保險掃描與寫回重試；沒設時兩者都不跑 |
 
+異常通知（#809）：`TELEGRAM_BOT_TOKEN`、`TELEGRAM_CHAT_ID` 是 GitHub Secrets，部署時帶上去，沒設就不通知（`worker/src/sync-alerts.js`）。
+
 開關不要再放 Cloudflare 密鑰：密鑰只放金鑰類的值，同名密鑰與 vars 不能並存。
 
 ## 已退役，不要照著做
