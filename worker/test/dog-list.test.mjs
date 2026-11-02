@@ -422,7 +422,7 @@ test('#528 保險掃描清掉舊指紋：回所的狗（主清單有）、D1 已
 });
 
 test('#512 狗清單（取代舊同步）不擁有 fixed_care：收列時不讀不寫網站的固定照顧設定', () => {
-  assert.doesNotMatch(readFileSync(new URL('../src/dog-list.js', import.meta.url), 'utf8'), /fixed_care/);
+  for (const file of ['dog-list.js', 'main-row.js']) assert.doesNotMatch(readFileSync(new URL(`../src/${file}`, import.meta.url), 'utf8'), /fixed_care/);
 });
 
 // #554：異動紀錄改一格只寫有變的那段，不再整段刪掉重寫（21 段原本約 84 列寫入）
