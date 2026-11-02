@@ -17,8 +17,9 @@ async function start(t, { sendOk = true, env: extra = { TELEGRAM_BOT_TOKEN: 'tok
   const sent = [];
   const real = globalThis.fetch;
   t.after(() => { globalThis.fetch = real; });
-  const box = { ok: sendOk };
+  const box = { ok: sendOk, down: false };
   globalThis.fetch = async (url, init) => {
+    if (box.down) throw new Error(`連線失敗 ${url}`);
     sent.push({ url: String(url), body: JSON.parse(init.body) });
     return new Response('{}', { status: box.ok ? 200 : 500 });
   };
@@ -144,12 +145,19 @@ test('#809 狗清單同步連續失敗 3 次才通知，成功一次就重算', 
   const fail = () => DB.prepare("SELECT value FROM v3_sync_state WHERE key='dog_list_fail'").first('value');
   await syncDogList(DB, [row], null, env, NOW);
   await syncDogList(DB, [row], null, env, NOW);
-  assert.equal(JSON.parse(await fail()).count, 2);
+  assert.equal(JSON.parse(await fail())['main:9001'].count, 2);
+  // 別的列成功、空的批次都不重算這一列
+  await syncDogList(DB, [], null, env, NOW);
+  await syncDogList(DB, [{ ...row, dog: { id: '', name: '別隻' } }], null, env, NOW);
+  assert.equal(JSON.parse(await fail())['main:9001'].count, 2);
   await scan();
   assert.deepEqual(sent, [], '兩次還不通知');
   await syncDogList(DB, [row], null, env, NOW);
   await scan();
-  assert.match(texts(sent), /狗清單同步連續失敗 3 次/);
+  assert.match(texts(sent), /狗清單同步連續失敗 3 次（main:9001）/);
+  await syncDogList(DB, [row], null, env, NOW);
+  await scan();
+  assert.equal(sent.length, 1, '次數增加不再發');
   broken = false;
   await syncDogList(DB, [row], null, env, NOW);
   assert.equal(await fail(), null, '成功就清掉');
@@ -171,7 +179,77 @@ test('#809 第二隻自動合併等下一次，不算同步失敗', async t => {
 
 test('#809 訊息太長截斷，列出還有幾項', () => {
   const issues = Array.from({ length: 300 }, (_, i) => ({ key: String(i), text: `待核對：一隻名字有點長的狗狗編號第 ${i} 隻` }));
-  const text = alertMessage(issues);
+  const { text, shown } = alertMessage(issues);
+  assert.ok(shown.length > 0 && shown.length < 300);
   assert.ok(text.length < 4096);
-  assert.match(text, /還有 \d+ 項沒列出/);
+  assert.match(text, /還有 \d+ 項，下次掃描再送/);
+});
+
+test('#809 一則放不下的下次掃描再送，每項都會送到', async t => {
+  const { sent, scan, dog } = await start(t);
+  for (let i = 0; i < 300; i++) await dog(`d${i}`, `一隻名字有點長的狗狗第 ${i} 隻`, String(100000 + i));
+  await scan();
+  await scan();
+  await scan();
+  await scan();
+  const all = texts(sent);
+  for (let i = 0; i < 300; i++) assert.ok(all.includes(`第 ${i} 隻`), `第 ${i} 隻沒送到`);
+  const count = sent.length;
+  await scan();
+  assert.equal(sent.length, count, '都送過就不再送');
+});
+
+test('#809 同名的數量變了都再通知', async t => {
+  const { DB, sent, scan, dog, onMain } = await start(t);
+  for (const id of ['a', 'b', 'c']) await dog(id, '小白', `900${id}`);
+  await onMain('a', '小白', '900a');
+  await onMain('b', '小白', '900b');
+  await scan();
+  assert.match(sent[0].body.text, /2 隻同名/);
+  assert.match(sent[0].body.text, /待核對：小白（900c）/);
+  await onMain('c', '小白', '900c');
+  await scan();
+  assert.equal(sent.length, 2);
+  assert.match(sent[1].body.text, /3 隻同名/);
+  await DB.prepare("DELETE FROM v3_sheet_main WHERE dog_id='a'").run();
+  await scan();
+  assert.equal(sent.length, 3, '數量變了都算新問題');
+});
+
+test('#809 可能是同一隻：通知一次，處理後不再出現', async t => {
+  const { DB, sent, scan, dog, onMain } = await start(t);
+  await dog('gone', '舊狗', '8001');
+  await dog('kept', '新狗', '9001');
+  await onMain('kept', '新狗', '9001');
+  await DB.prepare("UPDATE v3_sheet_main SET cage='A01' WHERE dog_id='kept'").run();
+  await DB.prepare("INSERT INTO v3_dog_pairs(gone_dog_id,dog_id,created_at) VALUES('gone','kept','2026-11-01T00:00:00.000Z')").run();
+  await scan();
+  assert.match(texts(sent), /可能是同一隻：舊狗、新狗（9001）（A01）/);
+  const count = sent.length;
+  await scan();
+  assert.equal(sent.length, count);
+});
+
+test('#809 寫回停止重試：通知一次', async t => {
+  const { DB, sent, scan, dog, onMain } = await start(t);
+  await dog('a', '小白', '9001');
+  await onMain('a', '小白', '9001');
+  await DB.prepare("INSERT INTO v3_walk_state(dog_key,dog_id,number,name,version,effective_date,walker,members_json,base_date,base_walker,previous_date,previous_walker,updated_at) VALUES('9001','a','9001','小白',1,'2026-11-01','甲','[]','','','','','2026-11-01T00:00:00.000Z')").run();
+  await DB.prepare("INSERT INTO v3_walk_outbox(dog_key,version,operation_date,target_date,target_walker,status,next_attempt_at,error) VALUES('9001',1,'2026-11-01','2026-11-01','甲','retry','9999-12-31T00:00:00.000Z','')").run();
+  await scan();
+  assert.match(texts(sent), /寫回試算表停止重試：小白（9001） 2026-11-01/);
+  await scan();
+  assert.equal(sent.length, 1);
+});
+
+test('#809 連不上 Telegram：排程紀錄不帶 token，下次再送', async t => {
+  const { DB, sent, box, scan, dog } = await start(t);
+  await dog('d', '阿福', '9004');
+  box.down = true;
+  await scan();
+  const record = JSON.parse(await DB.prepare("SELECT value FROM v3_sync_state WHERE key='cron_alert'").first('value'));
+  assert.equal(record.error, '連不上 Telegram');
+  box.down = false;
+  await scan(NOW + 3600000);
+  assert.equal(sent.length, 1);
 });

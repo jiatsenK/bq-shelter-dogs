@@ -17,6 +17,7 @@ flowchart LR
   access["Cloudflare Access<br/>［別人的服務］<br/>登入、簽章公鑰"]
   gh["GitHub Releases<br/>［別人的服務］<br/>版本說明"]
   gtrig["Google 時間觸發<br/>［別人的服務］"]
+  tg["Telegram<br/>［別人的服務］<br/>異常通知"]
   subgraph SYS["志工溜狗表"]
     subgraph VW["志工網站 Worker"]
       vweb["志工網站<br/>［畫面・HTML/JS］<br/>狗清單、按溜了、照片"]
@@ -45,6 +46,7 @@ flowchart LR
   gtrig -.->|排程| gas
   gas -.->|補送、狗清單掃描| vapi
   cron -.->|排程| vapi
+  vapi -.->|有新問題才通知| tg
   mgr -->|開管理網站| access
   access -->|登入後放行| aweb
   aweb -->|讀寫（JSON）| aapi
@@ -57,7 +59,7 @@ flowchart LR
   class vweb,aweb ui
   class vapi,aapi,gas code
   class d1,r2,sheet data
-  class cron,gtrig,access,gh ext
+  class cron,gtrig,access,gh,tg ext
   classDef person stroke:#5b6b78,stroke-width:2px
   classDef ui stroke:#2f7fd0,stroke-width:2px
   classDef code stroke:#d9822b,stroke-width:2px
@@ -93,7 +95,7 @@ flowchart LR
 - Cloudflare 排程用 UTC，下面都換成台灣時間（UTC+8）。志工網站 Worker 有 2 個排程：`5-59/10 * * * *` 與 `23 1,5,15 * * *`，改這裡要一起改程式裡的常數（`wrangler.jsonc:37-43`；`worker/src/index.js:26-27`）。
 - 每 10 分鐘（每小時 :05 起）寫回重試：撿到期、中斷的寫回工作重派，每輪最多 10 隻（`worker/src/today-walks/dispatch.js:35-56`）。
 - 09:23、13:23、23:23 今日溜狗保險掃描：Worker 呼叫 Apps Script 讀主清單比指紋，不一樣才找出不同的狗（`worker/src/today-walks/index.js:43-46`；`worker/src/today-walks/scan.js:15-37`）。
-- 同一個排程也跑異常通知：檢查主清單同名、同一隻兩列、待核對、可能是同一隻、狗清單同步連續失敗、寫回停止重試、排程過期，有新問題推 Telegram，同一個問題只通知一次，沒設 Telegram 不跑（`worker/src/sync-alerts.js:70-81`、#809）。
+- 同一個排程也跑異常通知：檢查主清單同名、同一隻兩列、待核對、可能是同一隻、狗清單同步連續失敗、寫回停止重試、排程過期，有新問題推 Telegram，同一個問題只通知一次，沒設 Telegram 不跑（`worker/src/sync-alerts.js:81-93`、#809）。
 - 每天第一次掃描（09:23）這次也清 14 天前的修改紀錄（合併快照保留）；每月 1 日這次順便清照片垃圾桶（30 天以上）（`worker/src/index.js:28-30`、`worker/src/index.js:777-781`；`worker/src/r2.js:186`）。
 - Apps Script 時間觸發（專案時區 Asia/Taipei）：flushWalkEdits、flushDogList 每 10 分鐘補送待通知，起點由 Google 決定；dogListScan 在約 09:43、約 13:53、約 23:53 做狗清單保險掃描，Google 只保證在那個小時內，前後可能差 15 分鐘（`apps-script/sheet-write.gs:305-315`）。
 - 兩種保險掃描跟 Worker 錯開 20～30 分鐘，方向相反：今日溜狗是 Worker 呼叫 Apps Script 讀表，狗清單是 Apps Script 把指紋送給 Worker（`apps-script/sheet-write.gs:498-523`）。
@@ -348,9 +350,9 @@ flowchart LR
 - 測試把試算表呼叫換成 `worker/test/apps-script.mjs`：vm 載入真的 `apps-script/sheet-write.gs`，小程式的 UrlFetchApp 接回同一個 Worker、同一個 D1（`worker/test/apps-script.mjs:39`、`worker/test/apps-script.mjs:108`、`worker/test/apps-script.mjs:153`、`worker/test/apps-script.mjs:201`），所以溜狗測試不再手寫 GAS 寫回協定，也不換 `globalThis.fetch`。
 - 往共用與外部：狗清單同步 → 狗資料與照片（`worker/src/dog-list.js:1`；記離所走狗的狀態 module，`worker/src/dog-list.js:25`）；設定・活動・分享 → 狗資料與照片（顯示編號，`worker/src/activities.js:6`）；管理查詢 → 狗資料與照片（狀態、顯示編號，`worker/src/admin/dogs.js:1`）；讀取打包 → 狗資料與照片（`worker/src/compact.js:2`）；試算表呼叫 → Apps Script（`worker/src/sheet-write.js:33`）；狗資料與照片 → R2（`worker/src/r2.js:36`）。
 - 管理網站：管理入口 → 管理查詢（`worker/src/admin/index.js:8, 10-11, 13-14`）；管理入口 → Cloudflare Access（`worker/src/admin/access.js:28`）；管理入口 → 設定・活動・分享（`worker/src/admin/index.js:6, 9, 15`）；管理入口 → 狗資料與照片（`worker/src/admin/index.js:1-5, 16`）；管理入口 → 今日溜狗紀錄（`worker/src/admin/index.js:12`、`worker/src/admin/index.js:125`）；管理查詢 → 設定・活動・分享（`worker/src/admin/activities.js:3`、`worker/src/admin/checks.js:1`）。
-- D1 的線省略不畫：進入點、今日溜狗紀錄、狗清單同步、讀取打包、志工身分、設定・活動・分享、狗資料與照片、管理查詢都直接讀寫 D1（例如 `worker/src/today-walks/shared.js:15`、`worker/src/packs.js:69`、`worker/src/identity.js:7`、`worker/src/feature-settings.js:13`、`worker/src/dog-edit.js:11`、`worker/src/admin/checks.js:9`）。
+- D1 的線省略不畫：進入點、今日溜狗紀錄、狗清單同步、讀取打包、志工身分、設定・活動・分享、狗資料與照片、管理查詢都直接讀寫 D1（例如 `worker/src/today-walks/shared.js:15`、`worker/src/packs.js:69`、`worker/src/identity.js:7`、`worker/src/feature-settings.js:13`、`worker/src/dog-edit.js:11`、`worker/src/admin/dogs.js:7`）。
 - 修改紀錄 editlog.js 也省略不畫：寫資料的模組都匯入它，紀錄跟資料同一批寫進 D1（`worker/src/index.js:18`、`worker/src/today-walks/version.js:4`、`worker/src/dog-list.js:17`、`worker/src/identity.js:1`、`worker/src/dog-edit.js:2`、`worker/src/admin/edits.js:5`、`worker/src/admin/activities.js:5`）。
-- 異常通知 sync-alerts.js 也省略不畫：進入點排程呼叫，讀狗的狀態、配對、今日溜狗停住清單與排程紀錄，往外只送 Telegram（`worker/src/index.js:2`、`worker/src/sync-alerts.js:5-8`）。
+- 異常通知 sync-alerts.js 也省略不畫：進入點排程呼叫，讀狗的狀態、配對、今日溜狗停住清單、排程紀錄與狗清單同步記的連續失敗，往外只送 Telegram（`worker/src/index.js:2`、`worker/src/sync-alerts.js:7-11`）。
 - 沒畫：同一框內的匯入（例如 today-walks/ 裡 scan.js 呼叫 observe.js）；小工具 sync-plan.js（台灣日期）、sheet-read.js（拆名字）、test-site.js（測試網站換外觀）、conditional-batch.js（有條件 batch：活動、身分、狗資料與合併送出時資料沒被別人改過才寫，今日溜狗紀錄的版本核對與寫入預算也是，`worker/src/activities.js:5`、`worker/src/identity.js:2`、`worker/src/dog-edit.js:3`、`worker/src/dog-merge.js:12`、`worker/src/today-walks/budget.js:4`、`worker/src/today-walks/dispatch.js:5`）；只拿常數的匯入：狗清單同步拿讀取打包的 SYNCED_AT_KEY（`worker/src/dog-list.js:16`），今日溜狗紀錄拿試算表呼叫的 REFUSED_CODES 判斷要不要停（`worker/src/today-walks/dispatch.js:4`）。各前端模組怎麼拆見 `public/js/README.md`。
 
 ## 決策｜志工溜狗表
