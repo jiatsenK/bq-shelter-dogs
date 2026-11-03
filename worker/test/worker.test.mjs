@@ -430,7 +430,7 @@ test('出入所紀錄路由：405、415、413、壞 JSON、沒接 D1、限流 42
   assert.equal(await status(put({ ip: '9.9.9.3' }), broken), 503);
 });
 
-// #804 改狗資料存到一半 D1 出錯：要回說得出哪裡存不進去的 500，不是只有 {"ok":false}
+// #804 改狗資料 D1 出錯：要回說得出哪裡存不進去的 500，不是只有 {"ok":false}
 test('#804 改狗資料 D1 出錯回 500 和對應訊息', async t => {
   const { createCompactDatabase } = await import('../../scripts/compact-schema.mjs');
   const { importCompactDogs } = await import('./compact-fixtures.mjs');
