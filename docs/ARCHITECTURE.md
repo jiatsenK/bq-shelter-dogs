@@ -77,7 +77,7 @@ flowchart LR
 - 排程：Worker 每 10 分鐘重試寫回；09:23、13:23、23:23 掃描今日溜狗，每天第一次順便清修改紀錄，每月 1 日清照片垃圾桶（`wrangler.jsonc:41-43`；`worker/src/index.js:26-30`、`worker/src/index.js:769-782`）。Apps Script 排程：每 10 分鐘補送待通知，約 09:43、13:53、23:53 狗清單保險掃描（`apps-script/sheet-write.gs:305-315`）。時間細節見「一天裡的排程」。
 - 管理網站是另一個 Worker `bq-shelter-dogs-admin`，跟志工網站綁同一個正式 D1 與 R2（`wrangler.admin.jsonc:9-26`；`wrangler.jsonc:19-26`）。每個請求先驗 Access 簽章，公鑰向 Access 取（`worker/src/admin/index.js:61-66`；`worker/src/admin/access.js:28`）。
 - 管理網站不連試算表：程式裡沒有 `callSheet`，只碰 D1、R2；試算表與 Apps Script 只放連結給人點（`worker/src/admin/index.js:67-122`；`worker/src/admin/links.js:1-13`）。
-- 管理網站「網站更新」頁在瀏覽器直接讀公開 repo 的 GitHub Releases，不經 Worker；管理網站 CSP 的 connect-src 因此多放 api.github.com（`admin/public/js/api.js:20-22`；`worker/src/admin/index.js:17-19`）。
+- 管理網站「網站更新」頁在瀏覽器直接讀公開 repo 的 GitHub Releases，不經 Worker；管理網站 CSP 的 connect-src 因此多放 api.github.com（`admin/public/js/api.js:22-24`；`worker/src/admin/index.js:22`）。
 - 沒畫：GitHub Actions 的 `r2-thumbs` 用 `ADMIN_KEY` 打志工網站 `/api/admin/` 補縮圖（`worker/src/index.js:828-835`；`.github/workflows/r2-thumbs.yml:1-9`）。
 
 ## 各類資料的流向

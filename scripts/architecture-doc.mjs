@@ -12,10 +12,9 @@ export const DIAGRAM_TITLES = {
 };
 export const DIAGRAMS = Object.keys(DIAGRAM_TITLES);
 
-// ARCHITECTURE.md → { checked, commit, sections: [{ title, mermaid, notes[], start, end }] }；start／end 是段落的行號（從 1 算）
+// ARCHITECTURE.md → { sections: [{ title, mermaid, notes[], start, end }] }；start／end 是段落的行號（從 1 算）
 export function parseDoc(markdown) {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n');
-  const meta = (markdown.match(/核對日：(\d{4}-\d{2}-\d{2})｜依據 commit：`([0-9a-f]+)`/) || []).slice(1);
   const sections = [];
   let section = null, fence = null, block = [];
   lines.forEach((line, i) => {
@@ -35,7 +34,7 @@ export function parseDoc(markdown) {
     const item = section && line.match(/^\s*[-*] (.*)$/);
     if (item) section.notes.push(item[1]);
   });
-  return { checked: meta[0] || null, commit: meta[1] || null, sections };
+  return { sections };
 }
 
 // 依 DIAGRAM_TITLES 取出各段，找不到就丟錯（標題改了要一起改上面的表）
@@ -50,4 +49,3 @@ export function diagramSections(markdown) {
 
 // 給事實核對比對的純文字：標題、Mermaid 原始碼（<br/> 換成空白）、說明，去掉反引號
 export const sectionText = s => [s.title, (s.mermaid || '').replace(/<br\s*\/?>/g, ' '), ...s.notes].join('\n').replace(/`/g, '');
-
