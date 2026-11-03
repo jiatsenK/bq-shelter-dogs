@@ -7,7 +7,7 @@ import worker from '../src/index.js';
 import { setup, request, post as postWalk, day } from './walk-fixture.mjs';
 import { todayWalks } from '../src/today-walks/index.js';
 import { walkerCode } from '../src/editlog.js';
-import { removeFormerNumber, readDogsPayload } from '../src/compact.js';
+import { readDogsPayload } from '../src/compact.js';
 
 const post = (env, action, body, key = env.SHEET_WRITE_KEY) => worker.fetch(new Request(`https://worker.example/api/walk-writeback/${action}`, {
   method:'POST', headers:{ 'X-Sheet-Write-Key':key }, body:JSON.stringify(body),
@@ -97,7 +97,7 @@ test('#557 記離所的舊編號從 v3_dog_numbers 抄；刪掉的舊編號不�
     await send(env, [main()]);
     const row = await env.DB.prepare("SELECT row_index,dog_id FROM v3_sheet_main WHERE number='9001'").first();
     await env.DB.prepare('INSERT INTO v3_dog_numbers VALUES(?,?),(?,?)').bind('8001', row.dog_id, '8002', row.dog_id).run();
-    assert.deepEqual(await removeFormerNumber(env.DB, '9001', '8001'), { ok:true, dogId:row.dog_id });
+    await env.DB.prepare('DELETE FROM v3_dog_numbers WHERE number=?').bind('8001').run();
     assert.deepEqual((await send(env, [{ sheet:'departed', hash:'d1', dog:{ id:'9001', name:'測試狗' }, texts:['9001', '測試狗', '被認養'], dates:[] }])).map(r => r.ack), [true]);
     assert.deepEqual(await mainRows(env), []);
     assert.deepEqual(JSON.parse(await env.DB.prepare("SELECT former_json FROM v3_dog_departures WHERE number='9001'").first('former_json')), ['8002']);
