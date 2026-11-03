@@ -150,61 +150,6 @@ export async function readRest(db, scope) {
 }
 export const sortedRest = entries => Object.fromEntries(entries.sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0)));
 
-// 固定照顧是狗的網站設定，不由試算表同步提供（ADR 0015）。
-export async function saveFixedCare(db, number, enabled) {
-  const dogId = (await dogIdsFor(db, [number])).get(number)
-    || (/^[a-f0-9]{32}$/.test(number) ? await db.prepare('SELECT dog_id FROM v3_dogs WHERE dog_id=?').bind(number).first('dog_id') : null);
-  if (!dogId) return null;
-  const before = Boolean(await db.prepare('SELECT fixed_care FROM v3_dogs WHERE dog_id=?').bind(dogId).first('fixed_care'));
-  if (before !== enabled) {
-    await db.prepare('UPDATE v3_dogs SET fixed_care=? WHERE dog_id=?').bind(Number(enabled), dogId).run();
-  }
-  return { dogId, before };
-}
-
-// 寫休養：rest 是 null 就結束休養。編號不認得回 null，存好回 { dogId, before }（改前的設定，編輯紀錄用）
-export async function saveRest(db, number, rest) {
-  const dogId = (await dogIdsFor(db, [number])).get(number);
-  if (!dogId) return null;
-  const old = await db.prepare('SELECT until_date, reason FROM v3_rest WHERE dog_id=?').bind(dogId).first();
-  const before = old ? { until: old.until_date, reason: old.reason } : null;
-  if (rest) await db.prepare('INSERT INTO v3_rest(dog_id,until_date,reason) VALUES(?,?,?) ON CONFLICT(dog_id) DO UPDATE SET until_date=excluded.until_date,reason=excluded.reason').bind(dogId, rest.until, rest.reason).run();
-  else await db.prepare('DELETE FROM v3_rest WHERE dog_id=?').bind(dogId).run();
-  return { dogId, before };
-}
-
-// 刪舊編號：只能刪這隻狗的，不能刪主清單上現在用的編號
-export async function removeFormerNumber(db, number, former) {
-  const ids = await dogIdsFor(db, [number, former]);
-  const dogId = ids.get(number);
-  if (!dogId) return { status: 404, error: '找不到這個編號的狗' };
-  if (ids.get(former) !== dogId) return { status: 404, error: '這隻狗沒有這個舊編號' };
-  if (await db.prepare('SELECT 1 FROM v3_sheet_main WHERE number=?').bind(former).first()) return { status: 409, error: '這是主清單上現在用的編號，不能刪' };
-  await db.prepare('DELETE FROM v3_dog_numbers WHERE number=?').bind(former).run();
-  return { ok: true, dogId };
-}
-
-// 出入所紀錄（#333，ADR 0011）：整份覆蓋，空陣列就刪掉這一列。before 是送出的人改之前看到的內容，
-// 跟 D1 現在的不一樣（別人剛改過）就回 409，用條件式 SQL 確保兩支手機同時送也不會蓋掉。
-// 回 { ok, dogId, before } 或 { status, error }；before 是 null 表示原本沒有紀錄
-export async function saveStays(db, number, before, stays) {
-  const dogId = (await dogIdsFor(db, [number])).get(number);
-  if (!dogId) return { status: 404, error: '找不到這個編號的狗' };
-  const conflict = { status: 409, error: '別人剛改過，請重新整理再改' };
-  const old = before.length ? JSON.stringify(before) : null;
-  const next = stays.length ? JSON.stringify(stays) : null;
-  if (old === next) {
-    const now = await db.prepare('SELECT stays_json FROM v3_stays WHERE dog_id=?').bind(dogId).first('stays_json');
-    return (now ?? null) === old ? { ok: true, dogId, before: old && before } : conflict;
-  }
-  let r;
-  if (!old) r = await db.prepare('INSERT INTO v3_stays(dog_id,stays_json) VALUES(?,?) ON CONFLICT(dog_id) DO NOTHING').bind(dogId, next).run();
-  else if (!next) r = await db.prepare('DELETE FROM v3_stays WHERE dog_id=? AND stays_json=?').bind(dogId, old).run();
-  else r = await db.prepare('UPDATE v3_stays SET stays_json=? WHERE dog_id=? AND stays_json=?').bind(next, dogId, old).run();
-  if (!r.meta || !r.meta.changes) return conflict;
-  return { ok: true, dogId, before: old && before };
-}
-
 // 出所年份（ADR 0014）：出所日的前 4 個字，日期不明是 'none'；跟 db/compact-schema.sql 觸發器的 CASE 一樣
 export const departureYear = date => (date ? date.slice(0, 4) : 'none');
 // 那一年的離所紀錄（WHERE 條件）：走 departed_date 索引。year 只會是版本號 JSON 的鍵，用 JSON 字串放進 SQL

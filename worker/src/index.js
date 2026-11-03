@@ -929,7 +929,7 @@ const entry = {
         return await editDog(request, env, allowed, dogEdit);
       } catch (e) {
         console.error(dogEdit.kind, e);
-        return fail(500, dogEdit.crash, allowed);
+        return fail(500, `${dogEdit.label}暫時存不進去，請稍後再試`, allowed);
       }
     }
     // 活動紀錄（#270）
