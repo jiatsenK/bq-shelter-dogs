@@ -429,3 +429,34 @@ test('出入所紀錄路由：405、415、413、壞 JSON、沒接 D1、限流 42
   const broken = { ...env, DB: { prepare() { throw new Error('D1 壞了'); } } };
   assert.equal(await status(put({ ip: '9.9.9.3' }), broken), 503);
 });
+
+// #804 改狗資料 D1 出錯：要回說得出哪裡存不進去的 500，不是只有 {"ok":false}
+test('#804 改狗資料 D1 出錯回 500 和對應訊息', async t => {
+  const { createCompactDatabase } = await import('../../scripts/compact-schema.mjs');
+  const { importCompactDogs } = await import('./compact-fixtures.mjs');
+  t.mock.method(console, 'error', () => {});
+  resetState();
+  const db = fakeD1();
+  await createCompactDatabase(db);
+  await importCompactDogs(db, { syncedAt: '2026-10-15T12:00:00+08:00', dogs: [{ id: '2024032902', name: '測試狗' }] });
+  // 只弄壞認狗那一句：功能開關讀不到是另一條路（回 503），要讀得到才走得到改狗資料
+  const DB = {
+    prepare: sql => { if (sql.includes('UNION SELECT dog_id FROM v3_dog_numbers')) throw new Error('D1 壞了'); return db.prepare(sql); },
+    batch: statements => db.batch(statements),
+  };
+  const env = { ALLOWED_ORIGINS: ORIGIN, DB, WALKER_KEY: 'k' };
+  for (const [method, kind, error] of [
+    ['PUT', 'rest', '休養設定暫時存不進去，請稍後再試'],
+    ['PUT', 'fixed-care', '固定照顧設定暫時存不進去，請稍後再試'],
+    ['PUT', 'intro', '介紹暫時存不進去，請稍後再試'],
+    ['POST', 'former', '舊編號暫時存不進去，請稍後再試'],
+    ['DELETE', 'former', '舊編號暫時存不進去，請稍後再試'],
+    ['PUT', 'stays', '出入所紀錄暫時存不進去，請稍後再試'],
+  ]) {
+    const res = await worker.fetch(new Request(`https://w.example/${kind}/2024032902`, {
+      method, headers: { Origin: ORIGIN, 'Content-Type': 'application/json' }, body: JSON.stringify({ editor: '小明' }),
+    }), env);
+    assert.equal(res.status, 500, `${method} ${kind}`);
+    assert.equal((await res.json()).error, error, `${method} ${kind}`);
+  }
+});
