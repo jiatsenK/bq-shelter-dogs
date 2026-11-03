@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { affectedDiagrams, reminderBody, changedLines, touchedSections, WATCH } from './diagram-reminder.mjs';
-import { DOC, DIAGRAMS, DIAGRAM_TITLES } from './admin-diagrams.mjs';
+import { DOC, DIAGRAMS, DIAGRAM_TITLES } from './architecture-doc.mjs';
 
 test('改到架構相關檔案、沒改對應的段落才提醒', () => {
   assert.deepEqual(affectedDiagrams(['public/js/app.js', 'README.md']), []);

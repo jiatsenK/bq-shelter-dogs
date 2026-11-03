@@ -2,7 +2,7 @@
 
 資料在哪、誰寫、誰同步，以本檔為入口。最後核對：2026-10-28，main `c2da5f0`（逐項對照程式碼，見 [2026-10-28-architecture-data-flow.md](research/2026-10-28-architecture-data-flow.md)）。repo 的 migration 到 `0020`；正式庫實際套到哪一版，以 `node scripts/d1-migrations.mjs check --target production` 為準，本檔不記。開關與排程的即時值以自動產生的 `docs/adr/README.md` 為準；決定的理由看 ADR。
 
-架構圖：[ARCHITECTURE.md](ARCHITECTURE.md)（Mermaid，跟其他專案同一套畫法）：主圖（誰連誰）、各類資料的流向、一天裡的排程、上線圖（正式／測試／預覽各綁什麼）、網站登記寫回試算表、試算表改動回到 D1、程式架構（worker/src 模組誰呼叫誰）。改了本檔的架構或排程，那份也要跟著改：名稱、時間、次數跟程式不一致時 `scripts/diagram-facts.test.mjs` 會失敗；PR 改到架構相關檔案卻沒改對應段落，「架構圖重畫提醒」（`scripts/diagram-reminder.mjs`）會在 PR 留言。管理網站「系統架構圖」頁也從那份產生（建置時把 Mermaid 畫成 SVG，顯示第幾版與更新日期，見 `admin/README.md`）。
+架構圖：[ARCHITECTURE.md](ARCHITECTURE.md)（Mermaid，跟其他專案同一套畫法）：主圖（誰連誰）、各類資料的流向、一天裡的排程、上線圖（正式／測試／預覽各綁什麼）、網站登記寫回試算表、試算表改動回到 D1、程式架構（worker/src 模組誰呼叫誰）。改了本檔的架構或排程，那份也要跟著改：名稱、時間、次數跟程式不一致時 `scripts/diagram-facts.test.mjs` 會失敗；PR 改到架構相關檔案卻沒改對應段落，「架構圖重畫提醒」（`scripts/diagram-reminder.mjs`）會在 PR 留言。agent-hub 的架構總覽頁也從那份產生，管理網站不放架構圖（K 2026-11-03）。
 
 ## 改版終點（K 2026-10-24）
 

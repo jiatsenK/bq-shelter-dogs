@@ -4,10 +4,10 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
-import { DOC, DIAGRAMS, DIAGRAM_TITLES as TITLES, parseDoc } from './admin-diagrams.mjs';
+import { DOC, DIAGRAMS, DIAGRAM_TITLES as TITLES, parseDoc } from './architecture-doc.mjs';
 
 const MARK = '<!-- diagram-reminder -->';
-// 哪些檔案改了，哪幾段可能要跟著改（代號見 scripts/admin-diagrams.mjs 的 DIAGRAM_TITLES）
+// 哪些檔案改了，哪幾段可能要跟著改（代號見 scripts/architecture-doc.mjs 的 DIAGRAM_TITLES）
 export const WATCH = [
   [/^wrangler[^/]*\.jsonc$/, ['architecture', 'environments', 'daily-schedule']],
   [/^worker\/src\/index\.js$/, ['architecture', 'daily-schedule', 'writeback-sequence', 'sheet-sync-sequence']],

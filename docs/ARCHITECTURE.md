@@ -1,8 +1,8 @@
 # 架構圖：志工溜狗表
 
-> 核對日：2026-11-02｜依據 commit：`a20b54a`
+> 核對日：2026-11-03｜依據 commit：`a51e8f7`
 > 改到圖上的元件、連線、排程或部署方式時，在同一個 PR 更新這份檔案。規則見 agent-hub `docs/rules/architecture-diagrams.md`。
-> 名稱、排程時間、重試次數、端點跟程式不一致時 `scripts/diagram-facts.test.mjs` 會失敗；PR 改到架構相關檔案卻沒改對應段落，「架構圖重畫提醒」會在 PR 留言。管理網站「系統架構圖」頁也是從這份檔案產生。
+> 名稱、排程時間、重試次數、端點跟程式不一致時 `scripts/diagram-facts.test.mjs` 會失敗；PR 改到架構相關檔案卻沒改對應段落，「架構圖重畫提醒」會在 PR 留言。
 
 一句話：收容所志工用手機看狗清單、登記溜狗；管理者用管理網站改狗資料，也照舊在 Google 試算表改狗清單。網站只讀 Cloudflare D1，試算表的改動由 Apps Script 送進 D1，網站登記的溜狗再寫回試算表。
 技術：Cloudflare Worker、D1、R2、Cloudflare Access、Apps Script、Google 試算表、GitHub Actions
@@ -170,7 +170,7 @@ flowchart LR
 
 - 志工網站：main 推送且改到 `public/`、`worker/src/`、`wrangler.jsonc`、`migrations/` 等才自動部署，也可手動；只准 main（`.github/workflows/deploy-cloudflare.yml:13-31`、`.github/workflows/deploy-cloudflare.yml:44-46`）。部署前正式 D1 有還沒套的 migration 就停，部署時帶正式金鑰，部署後打正式站 API 檢查（`.github/workflows/deploy-cloudflare.yml:93-119`）。
 - 正式 D1 的 migration 只能手動按「套用 D1 migration」，套完接著呼叫上面的部署；不會順便部署管理網站（`.github/workflows/d1-migrations.yml:1-14`、`.github/workflows/d1-migrations.yml:50-54`）。
-- 管理網站只能手動部署、只部署 main；改到兩站共用的程式時，志工網站自動部署，管理網站要另外按（`.github/workflows/deploy-admin.yml:1-15`、`.github/workflows/deploy-admin.yml:24-27`）。部署時 `wrangler.admin.jsonc` 的 build 先產生架構圖頁等共用檔（`wrangler.admin.jsonc:14`）。
+- 管理網站只能手動部署、只部署 main；改到兩站共用的程式時，志工網站自動部署，管理網站要另外按（`.github/workflows/deploy-admin.yml:1-15`、`.github/workflows/deploy-admin.yml:24-27`）。部署時 `wrangler.admin.jsonc` 的 build 先產生共用檔（`wrangler.admin.jsonc:14`）。
 - 測試網站：main 推送時跟正式版一起部署，也可手動指定分支；部署前自動對測試庫套 migration，不帶金鑰，保留測試 Worker 上原有的（`.github/workflows/deploy-test-site.yml:1-27`、`.github/workflows/deploy-test-site.yml:68-81`）。只有每 10 分鐘那個排程（`wrangler.test-site.jsonc:38-40`）。
 - PR 預覽：PR 加 preview 標籤、改到網站或 Worker 才跑；先驗證只綁測試 D1、測試 R2、只有 WALKER_KEY，再自動套 migration，用 versions upload 上傳預覽版本並帶 PREVIEW 變數擋寫入（`.github/workflows/preview-cloudflare.yml:15-23`、`.github/workflows/preview-cloudflare.yml:37-40`、`.github/workflows/preview-cloudflare.yml:66-90`）。PR 預覽沒有排程（`wrangler.preview-db.jsonc:9`）。
 - 測試網站與 PR 預覽共用測試 D1；「準備預覽資料庫」會把正式 D1 整份蓋掉測試 D1，測試網站上的實測資料也會不見（`wrangler.test-site.jsonc:1-3`；`.github/workflows/seed-preview-db.yml:1-17`）。
@@ -422,7 +422,6 @@ quadrantChart
   "R3 D1 寫入額度用完": [0.15, 0.45]
   "R4 管理網站忘了部署": [0.7, 0.4]
   "R5 備註晚約 10 小時進 D1": [0.8, 0.2]
-  "R6 架構圖頁沒畫成 SVG": [0.35, 0.15]
   "R7 備註寫表失敗不重試": [0.2, 0.3]
   "R8 測試 D1 被整份蓋掉": [0.15, 0.1]
 ```
@@ -432,7 +431,6 @@ quadrantChart
 - **R3 D1 寫入額度用完**：免費額度整個 Cloudflare 帳號每天 10 萬列，2026-10-16 用完過，用完後按溜了、常溜、開卡都會失敗。現在寫回前先照每日預算檢查，重試另有自己的上限，用完延到隔天，影響已經壓低。依據：`wrangler.jsonc:29-31`、[ADR 0008](adr/0008-diff-sync-and-write-budget.md)。處理：接受，額度變緊時再調 `SYNC_DAILY_BUDGET`。
 - **R4 管理網站忘了部署**：管理網站只能手動部署；改到兩站共用的程式時志工網站自動部署，管理網站要另外按，忘了按兩站就跑不同版本。依據：`.github/workflows/deploy-admin.yml:1-11`。處理：觀察，改到共用模組的 PR 在內文提醒。
 - **R5 備註晚約 10 小時進 D1**：網站新增的備註、異動紀錄是程式寫表，不會觸發編輯觸發，要等下一次狗清單保險掃描才進 D1。依據：`apps-script/sheet-write.gs:275`。處理：觀察，網站送出成功時試算表已經寫好；志工反映網站上看不到剛加的備註再處理。
-- **R6 架構圖頁沒畫成 SVG**：部署管理網站時無頭瀏覽器沒裝起來，「系統架構圖」頁改顯示 GitHub 連結，只在 workflow 留警告。依據：`.github/workflows/deploy-admin.yml:61`、`scripts/build-admin-assets.mjs:52-55`。處理：接受，部署後看一次那一頁就知道，GitHub 上的圖照常能看。
 - **R7 備註寫表失敗不重試**：加備註、新增異動紀錄是同步請 Apps Script 直接寫，失敗就回錯誤給志工，不存 D1、不重試。依據：`worker/src/index.js:565-581`。處理：接受，志工看到錯誤再送一次。
 - **R8 測試 D1 被整份蓋掉**：「準備預覽資料庫」把正式 D1 整份蓋掉測試 D1，測試網站上的實測資料也會不見。依據：`.github/workflows/seed-preview-db.yml:1-4`。處理：接受，只能手動跑。
 
