@@ -372,6 +372,7 @@ DELETE FROM v3_packs WHERE part='walks';
 CREATE TABLE IF NOT EXISTS v3_departure_versions (id INTEGER PRIMARY KEY CHECK(id=1), years TEXT NOT NULL DEFAULT '{}');
 CREATE INDEX IF NOT EXISTS v3_dog_departures_date ON v3_dog_departures(departed_date);
 CREATE INDEX IF NOT EXISTS v3_dog_departures_number ON v3_dog_departures(number);
+CREATE INDEX IF NOT EXISTS v3_dog_departures_name ON v3_dog_departures(name);
 INSERT INTO v3_departure_versions(id,years) SELECT 1,(SELECT COALESCE(json_group_object(k,1),'{}') FROM (SELECT DISTINCT CASE WHEN COALESCE(d.departed_date,'')='' THEN 'none' ELSE substr(d.departed_date,1,4) END AS k FROM v3_dog_departures d)) WHERE NOT EXISTS(SELECT 1 FROM v3_departure_versions WHERE id=1);
 -- 觸發器內容換了，名字改成 packs_（同步只跑 IF NOT EXISTS，同名的舊觸發器不會被換掉）；舊的 pack_ 拿掉，
 -- 舊的 small 資料包（含離所）也拿掉，在所資料包改存 main。之後每次同步這幾行都沒東西可刪

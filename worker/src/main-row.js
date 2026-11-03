@@ -34,7 +34,6 @@ function leftBehind(dog, note, list, present) {
 
 // 狗回所會拿新編號，沒人會在網站上連舊編號（K 2026-10-24）：離所紀錄裡剛好一筆同名、主清單上沒別的同名，就是同一隻。
 // 認錯可在網站「舊編號」拆開（編輯紀錄記為系統自動）。同名多筆不猜，當新狗。
-// 這句沒有索引可用（#807）：只有表上出現認不得的新編號才跑
 async function returnedDog(db, dog, list) {
   if (list.some(m => m.name === dog.name)) return null;
   const found = (await db.prepare("SELECT d.number,d.dog_id,s.revision FROM v3_dog_departures d JOIN v3_dog_edit_state s USING(dog_id) WHERE name=? AND number<>'' LIMIT 2").bind(dog.name).all()).results;
