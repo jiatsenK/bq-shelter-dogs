@@ -1,13 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile, readdir, access } from 'node:fs/promises';
-import { DOC, DIAGRAMS, DIAGRAM_TITLES as TITLES, diagramSections, sectionText } from './admin-diagrams.mjs';
+import { DOC, DIAGRAMS, DIAGRAM_TITLES as TITLES, diagramSections, sectionText } from './architecture-doc.mjs';
 
 // 架構圖事實核對（K 2026-10-28）：docs/ARCHITECTURE.md 的圖與說明是人寫的，程式改了名稱、時間、次數而文件沒跟著改，這裡會失敗。
 // 只比得了寫死在設定或程式裡的值；箭頭方向、步驟先後要人看（docs/research/2026-10-28-diagram-auto-sync.md 第 3.3 節）。
 const read = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const jsonc = text => JSON.parse(text.replace(/^\s*\/\/.*$/gm, ''));
-// 每段的文字：標題、Mermaid 原始碼、說明（scripts/admin-diagrams.mjs 的 sectionText）
+// 每段的文字：標題、Mermaid 原始碼、說明（scripts/architecture-doc.mjs 的 sectionText）
 const sections = diagramSections(await read(DOC));
 const text = async name => sectionText(sections.find(s => s.name === name));
 const shows = async (name, value, why) => {

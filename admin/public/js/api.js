@@ -22,4 +22,3 @@ export const readSiteLinks = () => call('/api/manage/links');
 // 網站更新：公開 repo 的 GitHub Releases，不帶登入（每個 IP 每小時 60 次，管理者手動開頁夠用）
 export const RELEASES_URL = 'https://api.github.com/repos/jiatsenK/bq-shelter-dogs/releases?per_page=30';
 export const readReleases = () => settle(fetch(RELEASES_URL, { cache: 'no-cache', credentials: 'omit', redirect: 'error', signal: AbortSignal.timeout(15000) }));
-export const readDiagrams = () => settle(fetch('./shared/diagrams.json', { cache: 'no-cache', redirect: 'error', signal: AbortSignal.timeout(15000) }));
