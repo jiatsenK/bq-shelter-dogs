@@ -176,7 +176,7 @@ test('#803 規則的先後', async t => {
 });
 
 // 本機計數只算回傳的列，看不出掃了多少，所以看查詢計畫；SQL 從實際的呼叫抓，不另外抄一份
-test('#807 回所判斷走 name 索引，離所紀錄變多也不掃整張表', async t => {
+test('#807 回所判斷的查詢計畫走 name 索引，不掃整張表', async t => {
   const { db, departed } = await database(t);
   await departed('d1', '小白', '8001');
   const seen = [];
@@ -185,7 +185,8 @@ test('#807 回所判斷走 name 索引，離所紀錄變多也不掃整張表', 
   const sql = seen.find(s => s.includes('FROM v3_dog_departures'));
   assert.ok(sql, '回所判斷要查離所紀錄');
   const plan = (await db.prepare(`EXPLAIN QUERY PLAN ${sql}`).bind('小白').all()).results.map(p => p.detail).join(' | ');
-  assert.match(plan, /v3_dog_departures_name/, plan);
+  assert.match(plan, /SEARCH d USING INDEX v3_dog_departures_name/, plan);
+  assert.doesNotMatch(plan, /SCAN/, plan);
 });
 
 test('#803 只判斷不寫資料', () => {
